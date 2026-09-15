@@ -38,7 +38,7 @@ add_library(object_fps_domain STATIC
 add_library(ObjectFPS::Domain ALIAS object_fps_domain)
 target_include_directories(object_fps_domain PUBLIC "${OBJECT_FPS_INCLUDE_DIR}")
 if(TARGET GYO::Engine)
-    target_link_libraries(object_fps_domain PUBLIC GYO::Engine)
+    target_link_libraries(object_fps_domain PUBLIC GYO::Engine GYO::Ui)
 else()
     target_include_directories(
         object_fps_domain
@@ -66,6 +66,7 @@ if(TARGET GYO::Engine)
             GYO::PlatformSDL
             GYO::Render
             GYO::Text
+            GYO::UiRenderer
     )
     target_compile_features(object_fps_app_support PUBLIC cxx_std_20)
     set_target_properties(object_fps_app_support PROPERTIES CXX_EXTENSIONS OFF)
@@ -139,6 +140,7 @@ endif()
 if(BUILD_TESTING)
     add_executable(object_fps_headless_tests
         tests/TestMain.cpp
+        tests/App/ObjectFpsPresentationTests.cpp
         tests/App/ObjectFpsUiTests.cpp
         tests/Collision/CollisionTests.cpp
         tests/Collision/CombatCollisionTests.cpp
@@ -157,6 +159,14 @@ if(BUILD_TESTING)
         tests/World/WorldTests.cpp
     )
     target_link_libraries(object_fps_headless_tests PRIVATE ObjectFPS::Domain)
+    target_sources(object_fps_headless_tests PRIVATE
+        src/App/ObjectFpsPresentation.cpp
+    )
+    target_link_libraries(object_fps_headless_tests PRIVATE
+        GYO::Render
+        GYO::Text
+        GYO::UiRenderer
+    )
     target_include_directories(object_fps_headless_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     target_compile_features(object_fps_headless_tests PRIVATE cxx_std_20)
     target_compile_definitions(

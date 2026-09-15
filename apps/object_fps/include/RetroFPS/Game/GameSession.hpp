@@ -45,16 +45,13 @@ struct GameFrameInput final {
     bool fireHeld{};
     bool firePressed{};
     bool reloadPressed{};
-    bool menuPreviousPressed{};
-    bool menuNextPressed{};
-    bool confirmPressed{};
     bool backPressed{};
-    bool pointerPrimaryPressed{};
-    std::optional<std::size_t> hoveredMenuItem;
     bool focusLost{};
 };
 
 struct StartCampaignCommand final {};
+struct OpenControlsCommand final {};
+struct CloseControlsCommand final {};
 struct PauseCommand final {};
 struct ResumeCommand final {};
 struct ReturnToMainMenuCommand final {};
@@ -62,6 +59,8 @@ struct RequestQuitCommand final {};
 
 using GameSessionCommand = std::variant<
     StartCampaignCommand,
+    OpenControlsCommand,
+    CloseControlsCommand,
     PauseCommand,
     ResumeCommand,
     ReturnToMainMenuCommand,
@@ -153,7 +152,6 @@ struct PlayerSnapshot final {
 
 struct GameSessionSnapshot final {
     GameScreen screen{GameScreen::MainMenu};
-    std::size_t selectedMenuItem{};
     StageTransitionPhase transitionPhase{StageTransitionPhase::Idle};
     float fadeOpacity{};
     std::optional<ActiveStageSnapshot> activeStage;

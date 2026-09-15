@@ -2,9 +2,9 @@
 
 GYO is a **Reusable C++ Game Runtime**. It turns infrastructure capabilities from SDL, operating-system APIs, and graphics APIs into reusable game mechanisms. A game supplies policy and content; optional external controllers may observe or influence the runtime only through neutral public seams.
 
-GYO is not an editor ecosystem and is not intended to become a small Godot, Unity, or Unreal. The repository grows from concrete game-runtime needs, not from speculative framework completeness.
+GYO is not a monolithic editor ecosystem and is not intended to become a small Godot, Unity, or Unreal. Bounded tools are independent executables built around concrete runtime data standards; the repository still grows from demonstrated game needs rather than speculative framework completeness.
 
-`Object_FPS` is the current conformance vertical slice. It is used to check whether GYO's runtime skeleton is practical: the game is refactored to follow GYO input actions, asset identity/loading, render submission/device contracts, lifecycle, and typed runtime boundary directly. GYO is the standard being verified; GYO never depends on Object_FPS-specific policy or data.
+`apps/object_fps` is the current in-repository conformance vertical slice. It is used to check whether GYO's runtime skeleton is practical: the game package follows GYO input actions, asset identity/loading, render submission/device contracts, lifecycle, and typed runtime boundary directly. GYO is the standard being verified; GYO never depends on Object_FPS-specific policy or data.
 
 See [docs/architecture.md](docs/architecture.md) for ownership and dependency rules.
 
@@ -30,7 +30,7 @@ GYO-Engine/
 │  ├─ sdl3_image/                                [this milestone; optional PNG decode]
 │  ├─ sdl3_ttf/                                  [this milestone; optional font rasterization]
 │  ├─ nlohmann_json/                             [implemented; asset catalogs]
-│  ├─ imgui/                                     [implemented; Sandbox only]
+│  ├─ imgui/                                     [implemented; Sandbox/editor chrome]
 │  └─ doctest/                                   [implemented; tests only]
 │
 ├─ engine/                                       reusable, backend-neutral mechanisms
@@ -95,6 +95,11 @@ GYO-Engine/
 │  │  └─ opengl/                                 [on demand; not created]
 │  └─ tests/                                     [this milestone]
 │
+├─ ui/                                           [this milestone; closed JSON UI v1]
+│  ├─ include/ui/                                document/codec/runtime/renderer seams
+│  ├─ src/                                       layout, binding, focus, draw-list bridge
+│  └─ tests/                                     codec/runtime/renderer coverage
+│
 ├─ framework/                                    reusable game-domain policy [on demand]
 │  ├─ stage/
 │  ├─ combat/
@@ -106,7 +111,7 @@ GYO-Engine/
 │  └─ object_fps/                                [this milestone; active conformance slice]
 │     ├─ include/RetroFPS/                       Object_FPS policy/domain types
 │     ├─ src/                                    adapters use GYO contracts directly
-│     │  └─ App/ObjectFpsUi.cpp                  game-owned menu/HUD layout and hit testing
+│     │  └─ App/ObjectFpsUi.cpp                  game bindings/actions + C++ HUD policy
 │     └─ tests/                                  headless game-policy and UI-command tests
 │
 ├─ assets/                                       game-owned runtime content
@@ -118,8 +123,8 @@ GYO-Engine/
 │  │  └─ textures/
 │  └─ <game_id>/                                 [on demand; one isolated root per game]
 │
-├─ tools/                                        [on demand; not created]
-│  └─ import/                                    source asset -> engine-ready asset
+├─ tools/                                        independent, optional executables
+│  └─ editor/                                    [this milestone; JSON UI authoring tool]
 │
 └─ tests/
    ├─ engine_tests/                              [implemented + this milestone]
@@ -161,6 +166,7 @@ Build switches are responsibility-based:
 | `GYO_BUILD_RUNTIME` | `OFF` | Builds the standalone SDL window/clear-present composition root. |
 | `GYO_BUILD_SANDBOX` | `OFF` | Adds the optional ImGui/JSON demonstration app. |
 | `GYO_BUILD_OBJECT_FPS` | `ON` | Adds the Object_FPS GYO-conformance game, its isolated assets, and required optional adapters. |
+| `GYO_BUILD_UI_EDITOR` | `OFF` | Adds the independent SDLRenderer/ImGui JSON UI editor target. For an editor-only graph, also set the default-on `GYO_BUILD_OBJECT_FPS=OFF`; the editor itself never links ObjectFPS, Input, Sandbox, or SDL_GPU. |
 | `GYO_BUILD_SDL_GPU_BACKEND` | `OFF` | Builds the current Windows/MSVC SDL_GPU implementation of `IRenderDevice`. |
 | `GYO_BUILD_SDL_IMAGE_LOADER` | `OFF` | Builds the SDL_image-backed runtime PNG texture loader. |
 | `GYO_BUILD_SDL_TTF_ADAPTER` | `OFF` | Builds the SDL_ttf implementation of the neutral text-rasterizer contract; Object_FPS also selects it. |
@@ -183,7 +189,7 @@ Current examples:
 - `FontLoader` keeps encoded font bytes in a backend-neutral `FontAsset`; `ITextRasterizer` converts a borrowed font byte span and one UTF-8 text run into an owning CPU-side RGBA8 `TextBitmap`; the optional SDL_ttf adapter implements that contract without exposing `TTF_Font`, `SDL_Surface`, or `SDL_Texture`. The render device uploads the bitmap and the existing sprite submission path draws it.
 - Object_FPS projects its immutable game snapshot into GYO `RenderQueue` submissions. `IRenderDevice` owns opaque render handles and executes the queue; backend-native SDL_GPU, D3D12, or shader details remain private to the backend.
 
-This is deliberately not a general UI framework. GYO does not currently provide widgets, focus traversal, layout trees, a glyph-atlas manager, rich text, wrapping, or a global text cache. Those remain deferred until a concrete consumer establishes their ownership and performance requirements.
+`GYO::Ui` is now a deliberately closed v1 standard: JSON codec/validation, RectTransform layout, typed bindings/actions, focus/hit testing, buttons, sliders, fixed-step lists and an ordered draw list. `GYO::UiRenderer` resolves font/texture assets, keeps a bounded whole-run text cache, and submits only Overlay sprites. Rich text, shaping, localization, Flex/Grid, scripts and a widget/plugin ABI remain out of scope. See [docs/ui_toolchain.md](docs/ui_toolchain.md).
 
 ## Object_FPS is a conformance consumer
 
@@ -205,22 +211,22 @@ The current maps and CSV files are conformance fixtures, not hard-coded engine k
 
 ### Visible MVP flow
 
-Object_FPS now owns and renders the content, layout, colors, selected state, and actions for:
+Object_FPS owns the content, authored layout data, binding values and action consequences for:
 
 - MainMenu: Start Game, Controls, and Quit.
 - Controls: visible input instructions and Back.
-- Pause: Resume, Main Menu, and Quit over the game view.
+- Pause: Gamma, Exposure, Resume, Main Menu, and Quit over the game view.
 - Results: campaign outcome, room results, and return to Main Menu.
 - Playing HUD: crosshair, HP, magazine/reserve ammunition, reload state, and current stage status.
 
-Keyboard action navigation and absolute-pointer menu hit testing use the same game-owned layout definitions. GYO supplies input actions, font/text rasterization, texture ownership, and render submission; it does not know what an Object_FPS menu item means.
+The four non-playing screens load once from `assets/object_fps/ui/screens.json`; there is no compiled fallback, live link or hot reload. `UiRuntime` owns selection, focus, pointer capture and hit testing. Object_FPS maps opaque action ids to its typed commands, while Playing HUD policy remains C++ and emits the same `UiDrawList`. GYO still does not know what an Object_FPS menu action means.
 
 Two executable smoke paths cover different boundaries:
 
 - `object_fps.smoke` enters Playing and verifies a world frame can be submitted and presented.
 - `object_fps.menu_smoke` uses ordinary MainMenu startup and fails if the first menu frame has no visible UI submission.
 
-Headless `ObjectFpsUi` tests additionally verify screen text, HUD commands, viewport-scaled layout, menu hit targets, and rejection of invalid pointer coordinates without depending on SDL_ttf or a render backend.
+Headless `ObjectFpsUi` tests parse the real JSON asset and verify Japanese labels, all four canvases, Results bindings, C++ HUD composition, action-id behavior after JSON reordering, and same-frame slider updates without SDL_ttf or a render backend.
 
 ## Runtime Boundary and Weaver
 

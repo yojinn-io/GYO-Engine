@@ -18,6 +18,10 @@ std::optional<Key> ToKey(const SDL_Scancode scancode) noexcept {
         return Key::S;
     case SDL_SCANCODE_D:
         return Key::D;
+    case SDL_SCANCODE_LEFT:
+        return Key::Left;
+    case SDL_SCANCODE_RIGHT:
+        return Key::Right;
     case SDL_SCANCODE_UP:
         return Key::Up;
     case SDL_SCANCODE_DOWN:

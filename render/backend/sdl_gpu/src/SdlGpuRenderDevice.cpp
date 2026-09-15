@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "SdlGpuEmbeddedShaders.hpp"
+#include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
 
 namespace Engine::Render::Backend::SdlGpu {
@@ -29,6 +30,8 @@ namespace {
 using Microsoft::WRL::ComPtr;
 
 constexpr SDL_GPUTextureFormat kDepthFormat = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+constexpr SDL_GPUTextureFormat kSceneColorFormat =
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
 
 struct Matrix4 final {
     float values[4][4]{};
@@ -45,8 +48,15 @@ struct alignas(16) FragmentUniforms final {
     float padding[3]{};
 };
 
+struct alignas(16) SceneColorUniforms final {
+    float exposureEv{};
+    float gammaAdjustment{1.0F};
+    float padding[2]{};
+};
+
 static_assert(sizeof(VertexUniforms) == 64);
 static_assert(sizeof(FragmentUniforms) == 48);
+static_assert(sizeof(SceneColorUniforms) == 16);
 
 [[nodiscard]] Matrix4 Identity() noexcept {
     Matrix4 result{};
@@ -316,9 +326,10 @@ struct SdlGpuRenderDevice::Impl final {
     bool debugMode{};
 
     SDL_GPUTextureFormat swapchainFormat{SDL_GPU_TEXTUREFORMAT_INVALID};
+    SDL_GPUTexture* sceneColorTexture{};
     SDL_GPUTexture* depthTexture{};
-    std::uint32_t depthWidth{};
-    std::uint32_t depthHeight{};
+    std::uint32_t frameTargetWidth{};
+    std::uint32_t frameTargetHeight{};
 
     SDL_GPUSampler* linearClampSampler{};
     SDL_GPUSampler* linearWrapSampler{};
@@ -328,7 +339,9 @@ struct SdlGpuRenderDevice::Impl final {
     SDL_GPUGraphicsPipeline* alphaBackPipeline{};
     SDL_GPUGraphicsPipeline* alphaDoublePipeline{};
     SDL_GPUGraphicsPipeline* skyPipeline{};
-    SDL_GPUGraphicsPipeline* spritePipeline{};
+    SDL_GPUGraphicsPipeline* sceneSpritePipeline{};
+    SDL_GPUGraphicsPipeline* overlaySpritePipeline{};
+    SDL_GPUGraphicsPipeline* scenePostPipeline{};
 
     std::vector<MeshSlot> meshes{};
     std::vector<std::uint32_t> freeMeshes{};
@@ -374,10 +387,16 @@ struct SdlGpuRenderDevice::Impl final {
             slot = {};
         }
 
+        if (sceneColorTexture != nullptr) {
+            SDL_ReleaseGPUTexture(device, sceneColorTexture);
+            sceneColorTexture = nullptr;
+        }
         if (depthTexture != nullptr) {
             SDL_ReleaseGPUTexture(device, depthTexture);
             depthTexture = nullptr;
         }
+        frameTargetWidth = 0;
+        frameTargetHeight = 0;
 
         const std::array pipelines{
             opaqueBackPipeline,
@@ -385,7 +404,9 @@ struct SdlGpuRenderDevice::Impl final {
             alphaBackPipeline,
             alphaDoublePipeline,
             skyPipeline,
-            spritePipeline,
+            sceneSpritePipeline,
+            overlaySpritePipeline,
+            scenePostPipeline,
         };
         for (SDL_GPUGraphicsPipeline* pipeline : pipelines) {
             if (pipeline != nullptr) {
@@ -397,7 +418,9 @@ struct SdlGpuRenderDevice::Impl final {
         alphaBackPipeline = nullptr;
         alphaDoublePipeline = nullptr;
         skyPipeline = nullptr;
-        spritePipeline = nullptr;
+        sceneSpritePipeline = nullptr;
+        overlaySpritePipeline = nullptr;
+        scenePostPipeline = nullptr;
 
         if (linearClampSampler != nullptr) {
             SDL_ReleaseGPUSampler(device, linearClampSampler);
@@ -418,7 +441,9 @@ struct SdlGpuRenderDevice::Impl final {
 
     [[nodiscard]] Base::Result<SDL_GPUShader*, RenderError> CreateShader(
         const std::vector<std::uint8_t>& bytecode,
-        SDL_GPUShaderStage stage) {
+        SDL_GPUShaderStage stage,
+        Uint32 samplerCount,
+        Uint32 uniformBufferCount) {
         using Result = Base::Result<SDL_GPUShader*, RenderError>;
 
         SDL_GPUShaderCreateInfo info{};
@@ -427,8 +452,8 @@ struct SdlGpuRenderDevice::Impl final {
         info.entrypoint = "main";
         info.format = SDL_GPU_SHADERFORMAT_DXBC;
         info.stage = stage;
-        info.num_samplers = stage == SDL_GPU_SHADERSTAGE_FRAGMENT ? 1U : 0U;
-        info.num_uniform_buffers = 1;
+        info.num_samplers = samplerCount;
+        info.num_uniform_buffers = uniformBufferCount;
 
         SDL_GPUShader* shader = SDL_CreateGPUShader(device, &info);
         if (shader == nullptr) {
@@ -445,7 +470,8 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUCullMode cullMode,
         bool blend,
         bool hasDepth,
-        bool depthWrite) {
+        bool depthWrite,
+        SDL_GPUTextureFormat targetFormat) {
         SDL_GPUVertexBufferDescription vertexBuffer{};
         vertexBuffer.slot = 0;
         vertexBuffer.pitch = sizeof(Vertex3D);
@@ -467,7 +493,7 @@ struct SdlGpuRenderDevice::Impl final {
         };
 
         SDL_GPUColorTargetDescription colorTarget{};
-        colorTarget.format = swapchainFormat;
+        colorTarget.format = targetFormat;
         if (blend) {
             colorTarget.blend_state.enable_blend = true;
             colorTarget.blend_state.src_color_blendfactor =
@@ -505,6 +531,25 @@ struct SdlGpuRenderDevice::Impl final {
         return SDL_CreateGPUGraphicsPipeline(device, &info);
     }
 
+    [[nodiscard]] SDL_GPUGraphicsPipeline* CreateScenePostPipeline(
+        SDL_GPUShader* vertexShader,
+        SDL_GPUShader* fragmentShader) {
+        SDL_GPUColorTargetDescription colorTarget{};
+        colorTarget.format = swapchainFormat;
+
+        SDL_GPUGraphicsPipelineCreateInfo info{};
+        info.vertex_shader = vertexShader;
+        info.fragment_shader = fragmentShader;
+        info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+        info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+        info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        info.target_info.color_target_descriptions = &colorTarget;
+        info.target_info.num_color_targets = 1;
+        return SDL_CreateGPUGraphicsPipeline(device, &info);
+    }
+
     [[nodiscard]] Base::Result<void, RenderError> CreatePipelines() {
         using Result = Base::Result<void, RenderError>;
 
@@ -526,40 +571,92 @@ struct SdlGpuRenderDevice::Impl final {
             return Result::Err(std::move(fragmentBytecode).error());
         }
 
+        auto scenePostVertexBytecode = CompileShader(
+            EmbeddedShaders::kScenePostVertexSource,
+            EmbeddedShaders::kScenePostVertexName.data(),
+            "vs_5_1",
+            debugMode);
+        if (!scenePostVertexBytecode) {
+            return Result::Err(std::move(scenePostVertexBytecode).error());
+        }
+
+        auto scenePostFragmentBytecode = CompileShader(
+            EmbeddedShaders::kScenePostFragmentSource,
+            EmbeddedShaders::kScenePostFragmentName.data(),
+            "ps_5_1",
+            debugMode);
+        if (!scenePostFragmentBytecode) {
+            return Result::Err(std::move(scenePostFragmentBytecode).error());
+        }
+
         auto vertexResult = CreateShader(
-            vertexBytecode.value(), SDL_GPU_SHADERSTAGE_VERTEX);
+            vertexBytecode.value(), SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
         if (!vertexResult) {
             return Result::Err(std::move(vertexResult).error());
         }
         SDL_GPUShader* vertexShader = vertexResult.value();
 
         auto fragmentResult = CreateShader(
-            fragmentBytecode.value(), SDL_GPU_SHADERSTAGE_FRAGMENT);
+            fragmentBytecode.value(), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
         if (!fragmentResult) {
             SDL_ReleaseGPUShader(device, vertexShader);
             return Result::Err(std::move(fragmentResult).error());
         }
         SDL_GPUShader* fragmentShader = fragmentResult.value();
 
-        opaqueBackPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, false, true, true);
-        opaqueDoublePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, false, true, true);
-        alphaBackPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, true, true, true);
-        alphaDoublePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, true, true);
-        skyPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_FRONT, false, true, false);
-        spritePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, false, false);
+        auto scenePostVertexResult = CreateShader(
+            scenePostVertexBytecode.value(), SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
+        if (!scenePostVertexResult) {
+            SDL_ReleaseGPUShader(device, fragmentShader);
+            SDL_ReleaseGPUShader(device, vertexShader);
+            return Result::Err(std::move(scenePostVertexResult).error());
+        }
+        SDL_GPUShader* scenePostVertexShader = scenePostVertexResult.value();
 
+        auto scenePostFragmentResult = CreateShader(
+            scenePostFragmentBytecode.value(), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
+        if (!scenePostFragmentResult) {
+            SDL_ReleaseGPUShader(device, scenePostVertexShader);
+            SDL_ReleaseGPUShader(device, fragmentShader);
+            SDL_ReleaseGPUShader(device, vertexShader);
+            return Result::Err(std::move(scenePostFragmentResult).error());
+        }
+        SDL_GPUShader* scenePostFragmentShader =
+            scenePostFragmentResult.value();
+
+        opaqueBackPipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, false, true, true,
+            kSceneColorFormat);
+        opaqueDoublePipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, false, true, true,
+            kSceneColorFormat);
+        alphaBackPipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, true, true, true,
+            kSceneColorFormat);
+        alphaDoublePipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, true, true,
+            kSceneColorFormat);
+        skyPipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_FRONT, false, true, false,
+            kSceneColorFormat);
+        sceneSpritePipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, false, false,
+            kSceneColorFormat);
+        overlaySpritePipeline = CreatePipeline(
+            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, false, false,
+            swapchainFormat);
+        scenePostPipeline = CreateScenePostPipeline(
+            scenePostVertexShader, scenePostFragmentShader);
+
+        SDL_ReleaseGPUShader(device, scenePostFragmentShader);
+        SDL_ReleaseGPUShader(device, scenePostVertexShader);
         SDL_ReleaseGPUShader(device, fragmentShader);
         SDL_ReleaseGPUShader(device, vertexShader);
 
         if (opaqueBackPipeline == nullptr || opaqueDoublePipeline == nullptr ||
             alphaBackPipeline == nullptr || alphaDoublePipeline == nullptr ||
-            skyPipeline == nullptr || spritePipeline == nullptr) {
+            skyPipeline == nullptr || sceneSpritePipeline == nullptr ||
+            overlaySpritePipeline == nullptr || scenePostPipeline == nullptr) {
             return Result::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create a built-in graphics pipeline"));
@@ -610,14 +707,22 @@ struct SdlGpuRenderDevice::Impl final {
                 device, window, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
             presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
         }
+        if (!SDL_WindowSupportsGPUSwapchainComposition(
+                device,
+                window,
+                SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR)) {
+            return Result::Err(MakeError(
+                RenderErrorCode::BackendUnavailable,
+                "SDL_GPU: Direct3D 12 does not support a linear SDR swapchain"));
+        }
         if (!SDL_SetGPUSwapchainParameters(
                 device,
                 window,
-                SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR,
                 presentMode)) {
             return Result::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
-                "SDL_GPU: failed to configure the swapchain"));
+                "SDL_GPU: failed to configure a linear SDR swapchain"));
         }
         if (!SDL_SetGPUAllowedFramesInFlight(device, 2)) {
             return Result::Err(MakeSdlError(
@@ -626,6 +731,24 @@ struct SdlGpuRenderDevice::Impl final {
         }
 
         swapchainFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
+        if (swapchainFormat != SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB &&
+            swapchainFormat != SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB) {
+            return Result::Err(MakeError(
+                RenderErrorCode::BackendUnavailable,
+                "SDL_GPU: linear SDR swapchain did not provide an sRGB target"));
+        }
+        constexpr SDL_GPUTextureUsageFlags kSceneColorUsage =
+            SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+            SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        if (!SDL_GPUTextureSupportsFormat(
+                device,
+                kSceneColorFormat,
+                SDL_GPU_TEXTURETYPE_2D,
+                kSceneColorUsage)) {
+            return Result::Err(MakeError(
+                RenderErrorCode::ResourceCreationFailed,
+                "SDL_GPU: linear scene color target format is unsupported"));
+        }
         auto pipelinesResult = CreatePipelines();
         if (!pipelinesResult) {
             return pipelinesResult;
@@ -1086,37 +1209,62 @@ struct SdlGpuRenderDevice::Impl final {
         return Result::Ok();
     }
 
-    [[nodiscard]] Base::Result<void, RenderError> EnsureDepthTarget(
+    [[nodiscard]] Base::Result<void, RenderError> EnsureFrameTargets(
         std::uint32_t width,
         std::uint32_t height) {
         using Result = Base::Result<void, RenderError>;
-        if (depthTexture != nullptr && depthWidth == width && depthHeight == height) {
+        if (sceneColorTexture != nullptr && depthTexture != nullptr &&
+            frameTargetWidth == width && frameTargetHeight == height) {
             return Result::Ok();
         }
-        if (depthTexture != nullptr) {
-            SDL_ReleaseGPUTexture(device, depthTexture);
-            depthTexture = nullptr;
+
+        SDL_GPUTextureCreateInfo sceneInfo{};
+        sceneInfo.type = SDL_GPU_TEXTURETYPE_2D;
+        sceneInfo.format = kSceneColorFormat;
+        sceneInfo.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+                          SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        sceneInfo.width = width;
+        sceneInfo.height = height;
+        sceneInfo.layer_count_or_depth = 1;
+        sceneInfo.num_levels = 1;
+        sceneInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        SDL_GPUTexture* newSceneColor =
+            SDL_CreateGPUTexture(device, &sceneInfo);
+        if (newSceneColor == nullptr) {
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::ResourceCreationFailed,
+                "SDL_GPU: failed to create the linear scene color target"));
         }
 
-        SDL_GPUTextureCreateInfo info{};
-        info.type = SDL_GPU_TEXTURETYPE_2D;
-        info.format = kDepthFormat;
-        info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-        info.width = width;
-        info.height = height;
-        info.layer_count_or_depth = 1;
-        info.num_levels = 1;
-        info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        depthTexture = SDL_CreateGPUTexture(device, &info);
-        if (depthTexture == nullptr) {
-            depthWidth = 0;
-            depthHeight = 0;
+        SDL_GPUTextureCreateInfo depthInfo{};
+        depthInfo.type = SDL_GPU_TEXTURETYPE_2D;
+        depthInfo.format = kDepthFormat;
+        depthInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+        depthInfo.width = width;
+        depthInfo.height = height;
+        depthInfo.layer_count_or_depth = 1;
+        depthInfo.num_levels = 1;
+        depthInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        SDL_GPUTexture* newDepth = SDL_CreateGPUTexture(device, &depthInfo);
+        if (newDepth == nullptr) {
+            SDL_ReleaseGPUTexture(device, newSceneColor);
             return Result::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create the depth target"));
         }
-        depthWidth = width;
-        depthHeight = height;
+
+        SDL_GPUTexture* oldSceneColor = sceneColorTexture;
+        SDL_GPUTexture* oldDepth = depthTexture;
+        sceneColorTexture = newSceneColor;
+        depthTexture = newDepth;
+        frameTargetWidth = width;
+        frameTargetHeight = height;
+        if (oldSceneColor != nullptr) {
+            SDL_ReleaseGPUTexture(device, oldSceneColor);
+        }
+        if (oldDepth != nullptr) {
+            SDL_ReleaseGPUTexture(device, oldDepth);
+        }
         return Result::Ok();
     }
 
@@ -1151,6 +1299,13 @@ struct SdlGpuRenderDevice::Impl final {
             return Result::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: clear color must be finite"));
+        }
+        const SceneColorTransform sceneColor =
+            queue.Frame().sceneColorTransform;
+        if (!IsValidSceneColorTransform(sceneColor)) {
+            return Result::Err(MakeError(
+                RenderErrorCode::InvalidArgument,
+                "SDL_GPU: scene color transform is outside supported bounds"));
         }
         if (!queue.Meshes().empty()) {
             if (!queue.Camera()) {
@@ -1227,7 +1382,8 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUCommandBuffer* command,
         SDL_GPURenderPass* pass,
         const SpriteSubmission& submission,
-        const Matrix4& pixelProjection) {
+        const Matrix4& pixelProjection,
+        SDL_GPUGraphicsPipeline* pipeline) {
         if (submission.destinationPixels.width == 0.0F ||
             submission.destinationPixels.height == 0.0F ||
             submission.sourceUv.width == 0.0F ||
@@ -1249,7 +1405,7 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_PushGPUFragmentUniformData(
             command, 0, &fragmentUniforms, sizeof(fragmentUniforms));
 
-        SDL_BindGPUGraphicsPipeline(pass, spritePipeline);
+        SDL_BindGPUGraphicsPipeline(pass, pipeline);
         const SDL_GPUBufferBinding vertexBinding{mesh.vertexBuffer, 0};
         const SDL_GPUBufferBinding indexBinding{mesh.indexBuffer, 0};
         SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
@@ -1261,6 +1417,27 @@ struct SdlGpuRenderDevice::Impl final {
         };
         SDL_BindGPUFragmentSamplers(pass, 0, &textureBinding, 1);
         SDL_DrawGPUIndexedPrimitives(pass, mesh.indexCount, 1, 0, 0, 0);
+    }
+
+    void DrawScenePost(
+        SDL_GPUCommandBuffer* command,
+        SDL_GPURenderPass* pass,
+        const SceneColorTransform& transform) {
+        const SceneColorUniforms uniforms{
+            transform.exposureEv,
+            transform.gammaAdjustment,
+            {},
+        };
+        SDL_PushGPUFragmentUniformData(
+            command, 0, &uniforms, sizeof(uniforms));
+
+        SDL_BindGPUGraphicsPipeline(pass, scenePostPipeline);
+        const SDL_GPUTextureSamplerBinding sceneBinding{
+            sceneColorTexture,
+            linearClampSampler,
+        };
+        SDL_BindGPUFragmentSamplers(pass, 0, &sceneBinding, 1);
+        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
     }
 
     [[nodiscard]] Base::Result<PresentStatus, RenderError> Render(
@@ -1300,22 +1477,23 @@ struct SdlGpuRenderDevice::Impl final {
             return Result::Ok(PresentStatus::Skipped);
         }
 
-        auto depth = EnsureDepthTarget(width, height);
-        if (!depth) {
+        auto frameTargets = EnsureFrameTargets(width, height);
+        if (!frameTargets) {
             // Once a swapchain texture is acquired SDL forbids cancellation.
             // Submit the otherwise empty buffer before surfacing the error.
             static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-            return Result::Err(std::move(depth).error());
+            return Result::Err(std::move(frameTargets).error());
         }
 
         const Color clear = queue.Frame().clearColor;
-        SDL_GPUColorTargetInfo colorTarget{};
-        colorTarget.texture = swapchainTexture;
-        colorTarget.clear_color = {
+        SDL_GPUColorTargetInfo sceneTarget{};
+        sceneTarget.texture = sceneColorTexture;
+        sceneTarget.clear_color = {
             clear.red, clear.green, clear.blue, clear.alpha,
         };
-        colorTarget.load_op = SDL_GPU_LOADOP_CLEAR;
-        colorTarget.store_op = SDL_GPU_STOREOP_STORE;
+        sceneTarget.load_op = SDL_GPU_LOADOP_CLEAR;
+        sceneTarget.store_op = SDL_GPU_STOREOP_STORE;
+        sceneTarget.cycle = true;
 
         SDL_GPUDepthStencilTargetInfo depthTarget{};
         depthTarget.texture = depthTexture;
@@ -1327,7 +1505,7 @@ struct SdlGpuRenderDevice::Impl final {
         depthTarget.cycle = true;
 
         SDL_GPURenderPass* scenePass =
-            SDL_BeginGPURenderPass(command, &colorTarget, 1, &depthTarget);
+            SDL_BeginGPURenderPass(command, &sceneTarget, 1, &depthTarget);
         if (scenePass == nullptr) {
             static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
             return Result::Err(MakeSdlError(
@@ -1348,22 +1526,80 @@ struct SdlGpuRenderDevice::Impl final {
         }
         SDL_EndGPURenderPass(scenePass);
 
-        if (!queue.Sprites().empty()) {
-            colorTarget.load_op = SDL_GPU_LOADOP_LOAD;
-            SDL_GPURenderPass* spritePass =
-                SDL_BeginGPURenderPass(command, &colorTarget, 1, nullptr);
-            if (spritePass == nullptr) {
+        bool hasSceneSprites = false;
+        bool hasOverlaySprites = false;
+        for (const SpriteSubmission& submission : queue.Sprites()) {
+            hasSceneSprites = hasSceneSprites ||
+                submission.layer == CompositeLayer::Scene;
+            hasOverlaySprites = hasOverlaySprites ||
+                submission.layer == CompositeLayer::Overlay;
+        }
+        const Matrix4 spriteProjection = PixelProjection(
+            static_cast<float>(width), static_cast<float>(height));
+
+        if (hasSceneSprites) {
+            sceneTarget.load_op = SDL_GPU_LOADOP_LOAD;
+            sceneTarget.cycle = false;
+            SDL_GPURenderPass* sceneSpritePass =
+                SDL_BeginGPURenderPass(command, &sceneTarget, 1, nullptr);
+            if (sceneSpritePass == nullptr) {
                 static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
                 return Result::Err(MakeSdlError(
                     RenderErrorCode::SubmissionFailed,
-                    "SDL_GPU: failed to begin the sprite render pass"));
+                    "SDL_GPU: failed to begin the scene sprite render pass"));
             }
-            const Matrix4 projection = PixelProjection(
-                static_cast<float>(width), static_cast<float>(height));
             for (const SpriteSubmission& submission : queue.Sprites()) {
-                DrawSprite(command, spritePass, submission, projection);
+                if (submission.layer == CompositeLayer::Scene) {
+                    DrawSprite(
+                        command,
+                        sceneSpritePass,
+                        submission,
+                        spriteProjection,
+                        sceneSpritePipeline);
+                }
             }
-            SDL_EndGPURenderPass(spritePass);
+            SDL_EndGPURenderPass(sceneSpritePass);
+        }
+
+        SDL_GPUColorTargetInfo swapchainTarget{};
+        swapchainTarget.texture = swapchainTexture;
+        swapchainTarget.load_op = SDL_GPU_LOADOP_DONT_CARE;
+        swapchainTarget.store_op = SDL_GPU_STOREOP_STORE;
+        SDL_GPURenderPass* scenePostPass =
+            SDL_BeginGPURenderPass(command, &swapchainTarget, 1, nullptr);
+        if (scenePostPass == nullptr) {
+            static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::SubmissionFailed,
+                "SDL_GPU: failed to begin the scene color post-process pass"));
+        }
+        DrawScenePost(
+            command,
+            scenePostPass,
+            queue.Frame().sceneColorTransform);
+        SDL_EndGPURenderPass(scenePostPass);
+
+        if (hasOverlaySprites) {
+            swapchainTarget.load_op = SDL_GPU_LOADOP_LOAD;
+            SDL_GPURenderPass* overlayPass =
+                SDL_BeginGPURenderPass(command, &swapchainTarget, 1, nullptr);
+            if (overlayPass == nullptr) {
+                static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
+                return Result::Err(MakeSdlError(
+                    RenderErrorCode::SubmissionFailed,
+                    "SDL_GPU: failed to begin the overlay sprite render pass"));
+            }
+            for (const SpriteSubmission& submission : queue.Sprites()) {
+                if (submission.layer == CompositeLayer::Overlay) {
+                    DrawSprite(
+                        command,
+                        overlayPass,
+                        submission,
+                        spriteProjection,
+                        overlaySpritePipeline);
+                }
+            }
+            SDL_EndGPURenderPass(overlayPass);
         }
 
         if (!SDL_SubmitGPUCommandBuffer(command)) {

@@ -39,7 +39,25 @@ TEST_CASE("RenderQueue stores neutral mesh and sprite submissions in order") {
     CHECK(queue.Meshes()[1].surface == SurfaceMode::AlphaMasked);
     REQUIRE(queue.Sprites().size() == 1);
     CHECK(queue.Sprites()[0].destinationPixels.x == doctest::Approx(10.0F));
+    CHECK(queue.Sprites()[0].layer == CompositeLayer::Overlay);
     CHECK(queue.Camera().has_value());
+}
+
+TEST_CASE("RenderQueue preserves explicit scene and overlay sprite layers") {
+    RenderQueue queue;
+
+    SpriteSubmission scene;
+    scene.destinationPixels = {0.0F, 0.0F, 10.0F, 10.0F};
+    scene.layer = CompositeLayer::Scene;
+    REQUIRE(queue.Submit(scene));
+
+    SpriteSubmission overlay;
+    overlay.destinationPixels = {10.0F, 0.0F, 10.0F, 10.0F};
+    REQUIRE(queue.Submit(overlay));
+
+    REQUIRE(queue.Sprites().size() == 2);
+    CHECK(queue.Sprites()[0].layer == CompositeLayer::Scene);
+    CHECK(queue.Sprites()[1].layer == CompositeLayer::Overlay);
 }
 
 TEST_CASE("Sprite source UV maps visual top-left for full textures") {
@@ -94,6 +112,10 @@ TEST_CASE("RenderQueue rejects invalid handles and non-finite presentation data"
     sprite.destinationPixels.width = 10.0F;
     sprite.tint.alpha = std::numeric_limits<float>::quiet_NaN();
     CHECK_FALSE(queue.Submit(sprite));
+
+    sprite.tint.alpha = 1.0F;
+    sprite.layer = static_cast<CompositeLayer>(255);
+    CHECK_FALSE(queue.Submit(sprite));
 }
 
 TEST_CASE("RenderQueue reset clears per-frame state without changing capacity semantics") {
@@ -103,12 +125,23 @@ TEST_CASE("RenderQueue reset clears per-frame state without changing capacity se
     sprite.destinationPixels = {0.0F, 0.0F, 1.0F, 1.0F};
     REQUIRE(queue.Submit(sprite));
 
-    queue.Reset({Color{1.0F, 0.0F, 0.0F, 1.0F}});
+    queue.Reset({
+        Color{1.0F, 0.0F, 0.0F, 1.0F},
+        SceneColorTransform{1.25F, 1.1F},
+    });
 
     CHECK_FALSE(queue.Camera().has_value());
     CHECK(queue.Meshes().empty());
     CHECK(queue.Sprites().empty());
     CHECK(queue.Frame().clearColor.red == doctest::Approx(1.0F));
+    CHECK(queue.Frame().sceneColorTransform.exposureEv == doctest::Approx(1.25F));
+    CHECK(queue.Frame().sceneColorTransform.gammaAdjustment == doctest::Approx(1.1F));
+}
+
+TEST_CASE("Scene color transform defaults are identity") {
+    const FrameDescription frame;
+    CHECK(frame.sceneColorTransform.exposureEv == doctest::Approx(0.0F));
+    CHECK(frame.sceneColorTransform.gammaAdjustment == doctest::Approx(1.0F));
 }
 
 TEST_CASE("Resource handles carry type-safe index and generation values") {

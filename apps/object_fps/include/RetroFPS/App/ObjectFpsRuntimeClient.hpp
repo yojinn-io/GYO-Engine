@@ -25,6 +25,8 @@ class SdlPlatform;
 namespace fps {
 
 struct ObjectFpsRuntimeClientConfig final {
+    Engine::Asset::AssetId uiDocument{
+        Engine::Asset::AssetId::FromString("object_fps.ui.screens")};
     bool startCampaignImmediately{};
     bool stopAfterFirstPlayingFrame{};
     bool stopAfterFirstMenuFrame{};
@@ -71,6 +73,7 @@ public:
 
     [[nodiscard]] const std::string& LastError() const noexcept;
     [[nodiscard]] int ExitCode() const noexcept;
+    [[nodiscard]] const ObjectFpsDisplaySettings& DisplaySettings() const noexcept;
 
 private:
     struct Impl;

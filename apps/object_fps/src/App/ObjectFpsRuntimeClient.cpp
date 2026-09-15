@@ -3,9 +3,13 @@
 #include "RetroFPS/App/ObjectFpsUi.hpp"
 
 #include "engine/asset/AssetManager.hpp"
+#include "engine/asset/AssetRequest.hpp"
+#include "engine/asset/AssetType.hpp"
+#include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/input/InputActionMap.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
+#include "ui/UiDocumentCodec.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -31,6 +35,10 @@ struct ObjectFpsBindings final {
     InputActionId menuPrevious{
         InputActionId::FromString("object_fps.menu.previous")};
     InputActionId menuNext{InputActionId::FromString("object_fps.menu.next")};
+    InputActionId menuAdjustPrevious{
+        InputActionId::FromString("object_fps.menu.adjust_previous")};
+    InputActionId menuAdjustNext{
+        InputActionId::FromString("object_fps.menu.adjust_next")};
     InputActionId confirm{InputActionId::FromString("object_fps.menu.confirm")};
     InputActionId back{InputActionId::FromString("object_fps.menu.back")};
 };
@@ -54,6 +62,8 @@ struct ObjectFpsBindings final {
     map.Bind(bindings.menuPrevious, Key::Up);
     map.Bind(bindings.menuNext, Key::S);
     map.Bind(bindings.menuNext, Key::Down);
+    map.Bind(bindings.menuAdjustPrevious, Key::Left);
+    map.Bind(bindings.menuAdjustNext, Key::Right);
     map.Bind(bindings.confirm, Key::Enter);
     map.Bind(bindings.back, Key::Escape);
     return map;
@@ -70,39 +80,19 @@ struct ObjectFpsRuntimeClient::Impl final {
     ObjectFpsBindings bindings;
     Engine::Input::InputActionMap actionMap{MakeActionMap(bindings)};
     GameSession session;
+    ObjectFpsUi ui;
+    ObjectFpsDisplaySettings displaySettings;
+    Engine::Ui::UiDrawList uiDrawList;
     std::vector<GameSessionCommand> pendingCommands;
     std::string lastError;
     int exitCode{};
     bool initialized{};
     bool previousFocused{};
-    float previousPointerX{};
-    float previousPointerY{};
-    bool hasPreviousAbsolutePointer{};
 
-    [[nodiscard]] GameFrameInput TranslateInput(
+    [[nodiscard]] GameFrameInput TranslateGameInput(
         const Engine::Input::InputActionFrame& actions,
         const Engine::Input::PhysicalInputFrame& physical) noexcept {
         const Engine::Input::InputActionState fire = actions.Action(bindings.fire);
-        const bool pointerPrimaryPressed =
-            physical.Get(Engine::Input::MouseButton::Left).pressed;
-        std::optional<std::size_t> hoveredMenuItem;
-        if (!physical.pointer.relativeMode && physical.windowFocused) {
-            const bool pointerMoved = !hasPreviousAbsolutePointer ||
-                physical.pointer.x != previousPointerX ||
-                physical.pointer.y != previousPointerY;
-            if (pointerMoved || pointerPrimaryPressed) {
-                hoveredMenuItem = ObjectFpsUi::HitTest(
-                    session.Snapshot().screen,
-                    physical.pointer.x,
-                    physical.pointer.y,
-                    {0.0F, 0.0F, config.viewportWidth, config.viewportHeight});
-            }
-            previousPointerX = physical.pointer.x;
-            previousPointerY = physical.pointer.y;
-            hasPreviousAbsolutePointer = true;
-        } else {
-            hasPreviousAbsolutePointer = false;
-        }
         GameFrameInput translated;
         translated.moveForward = actions.Axis(bindings.moveForward);
         translated.moveRight = actions.Axis(bindings.moveRight);
@@ -113,15 +103,77 @@ struct ObjectFpsRuntimeClient::Impl final {
         translated.fireHeld = fire.held;
         translated.firePressed = fire.pressed;
         translated.reloadPressed = actions.Action(bindings.reload).pressed;
-        translated.menuPreviousPressed =
-            actions.Action(bindings.menuPrevious).pressed;
-        translated.menuNextPressed = actions.Action(bindings.menuNext).pressed;
-        translated.confirmPressed = actions.Action(bindings.confirm).pressed;
-        translated.backPressed = actions.Action(bindings.back).pressed;
-        translated.pointerPrimaryPressed = pointerPrimaryPressed;
-        translated.hoveredMenuItem = hoveredMenuItem;
+        // Non-playing Escape is consumed by UiRuntime's canvas cancel action.
+        translated.backPressed =
+            session.Snapshot().screen == GameScreen::Playing &&
+            actions.Action(bindings.back).pressed;
         translated.focusLost = previousFocused && !physical.windowFocused;
         return translated;
+    }
+
+    [[nodiscard]] Engine::Ui::UiInputFrame TranslateUiInput(
+        const Engine::Input::InputActionFrame& actions,
+        const Engine::Input::PhysicalInputFrame& physical) const noexcept {
+        const Engine::Input::ButtonState& pointer =
+            physical.Get(Engine::Input::MouseButton::Left);
+        Engine::Ui::UiInputFrame translated;
+        translated.focusPreviousPressed =
+            actions.Action(bindings.menuPrevious).pressed;
+        translated.focusNextPressed = actions.Action(bindings.menuNext).pressed;
+        translated.adjustPreviousPressed =
+            actions.Action(bindings.menuAdjustPrevious).pressed;
+        translated.adjustNextPressed =
+            actions.Action(bindings.menuAdjustNext).pressed;
+        translated.activatePressed = actions.Action(bindings.confirm).pressed;
+        translated.cancelPressed = actions.Action(bindings.back).pressed;
+        translated.pointerAvailable =
+            !physical.pointer.relativeMode && physical.windowFocused;
+        translated.pointerPixels = {
+            physical.pointer.x,
+            physical.pointer.y,
+        };
+        translated.pointerPrimaryPressed = pointer.pressed;
+        translated.pointerPrimaryHeld = pointer.held;
+        translated.pointerPrimaryReleased = pointer.released;
+        return translated;
+    }
+
+    [[nodiscard]] bool InitializeUi(std::string& error) {
+        if (!config.uiDocument.IsValid()) {
+            error = "Object_FPS UI document asset id is invalid";
+            return false;
+        }
+        const auto loaded = assets->Load(
+            config.uiDocument,
+            Engine::Asset::AssetRequest::WithTypeHint(
+                Engine::Asset::AssetType::Text()));
+        if (!loaded) {
+            error = "failed to load Object_FPS UI JSON '" +
+                    config.uiDocument.debugName + "': " + loaded.error().message;
+            return false;
+        }
+        const Engine::Asset::AssetHandle handle = loaded.value();
+        const auto text = assets->GetSharedConst<
+            Engine::Asset::Loaders::TextAsset>(handle);
+        if (!text) {
+            assets->Release(handle);
+            error = "Object_FPS UI asset loaded without a TextAsset payload";
+            return false;
+        }
+        auto parsed = Engine::Ui::UiDocumentCodec::Parse(
+            text->text,
+            config.uiDocument.debugName);
+        assets->Release(handle);
+        if (!parsed) {
+            error = "invalid Object_FPS UI JSON: " + parsed.error().message;
+            if (!parsed.error().jsonPointer.empty()) {
+                error += " at " + parsed.error().jsonPointer;
+            }
+            return false;
+        }
+        auto document = std::make_shared<const Engine::Ui::UiDocument>(
+            std::move(parsed.value()));
+        return ui.Initialize(std::move(document), error);
     }
 };
 
@@ -150,6 +202,9 @@ bool ObjectFpsRuntimeClient::Initialize(
     impl_->lastError.clear();
     if (!impl_->presentation->IsInitialized()) {
         error = "ObjectFpsRuntimeClient requires initialized GYO presentation";
+        return false;
+    }
+    if (!impl_->InitializeUi(error)) {
         return false;
     }
     if (!impl_->session.Initialize(std::move(content), config, error)) {
@@ -181,10 +236,25 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Update(
     const Engine::Input::PhysicalInputFrame& physical = impl_->input->Snapshot();
     const Engine::Input::InputActionFrame actions =
         impl_->actionMap.Evaluate(physical);
-    const GameFrameInput gameInput = impl_->TranslateInput(actions, physical);
+    const Engine::Ui::UiInputFrame uiInput =
+        impl_->TranslateUiInput(actions, physical);
+    const GameFrameInput gameInput =
+        impl_->TranslateGameInput(actions, physical);
 
     impl_->assets->BeginFrame(frame.frameIndex);
     impl_->assets->Update();
+
+    if (!impl_->ui.Update(
+            impl_->session.Snapshot(),
+            uiInput,
+            {impl_->config.viewportWidth, impl_->config.viewportHeight},
+            impl_->displaySettings,
+            impl_->pendingCommands,
+            impl_->lastError)) {
+        impl_->pendingCommands.clear();
+        impl_->exitCode = 1;
+        return Engine::Runtime::RuntimeControl::Stop;
+    }
 
     const float deltaSeconds = static_cast<float>(
         std::clamp(frame.deltaSeconds, 0.0, 0.05));
@@ -220,7 +290,17 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Update(
 
 Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Render(
     const Engine::Runtime::FrameContext& frame) {
-    if (!impl_->presentation->Present(impl_->session.Snapshot(), impl_->lastError)) {
+    if (!impl_->ui.Compose(
+            impl_->session.Snapshot(),
+            impl_->displaySettings,
+            {impl_->config.viewportWidth, impl_->config.viewportHeight},
+            impl_->uiDrawList,
+            impl_->lastError) ||
+        !impl_->presentation->Present(
+            impl_->session.Snapshot(),
+            impl_->displaySettings,
+            impl_->uiDrawList,
+            impl_->lastError)) {
         impl_->exitCode = 1;
         return Engine::Runtime::RuntimeControl::Stop;
     }
@@ -258,6 +338,11 @@ const std::string& ObjectFpsRuntimeClient::LastError() const noexcept {
 
 int ObjectFpsRuntimeClient::ExitCode() const noexcept {
     return impl_->exitCode;
+}
+
+const ObjectFpsDisplaySettings&
+ObjectFpsRuntimeClient::DisplaySettings() const noexcept {
+    return impl_->displaySettings;
 }
 
 } // namespace fps

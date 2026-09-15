@@ -145,6 +145,17 @@ void TestSessionCommandsSnapshotsAndEvents(TestContext& context) {
         session.Snapshot().screen == GameScreen::MainMenu,
         "rejected command leaves query state unchanged");
 
+    const GameSessionCommand openControls = OpenControlsCommand{};
+    context.Expect(
+        session.Advance(0.0F, {}, std::span{&openControls, 1}, error) &&
+            session.Snapshot().screen == GameScreen::Controls,
+        "OpenControls is accepted as an opaque-UI semantic command");
+    const GameSessionCommand closeControls = CloseControlsCommand{};
+    context.Expect(
+        session.Advance(0.0F, {}, std::span{&closeControls, 1}, error) &&
+            session.Snapshot().screen == GameScreen::MainMenu,
+        "CloseControls returns to MainMenu without a menu-index switch");
+
     const GameSessionCommand start = StartCampaignCommand{};
     context.Expect(
         session.Advance(0.0F, {}, std::span{&start, 1}, error),
@@ -249,12 +260,53 @@ void TestInvalidDeltaDoesNotAdvance(TestContext& context) {
         "negative delta is rejected at the game-policy boundary");
 }
 
+void TestFocusLossSurvivesTransitionInputLock(TestContext& context) {
+    const std::shared_ptr<const CampaignContent> content = MakeContent(context, 1);
+    if (!content) {
+        return;
+    }
+
+    GameSession session;
+    GameSessionConfig config;
+    config.fadeOutSeconds = 0.1F;
+    config.fadeInSeconds = 0.1F;
+    std::string error;
+    context.Expect(
+        session.Initialize(content, config, error),
+        "focus-loss transition session initializes");
+
+    const GameSessionCommand start = StartCampaignCommand{};
+    context.Expect(
+        session.Advance(0.0F, {}, std::span{&start, 1}, error),
+        "focus-loss transition starts a campaign");
+
+    GameFrameInput focusLost;
+    focusLost.focusLost = true;
+    context.Expect(
+        session.Advance(0.05F, focusLost, {}, error) &&
+            session.Snapshot().transitionPhase != StageTransitionPhase::Idle,
+        "focus loss is accepted while fade input is locked");
+    context.Expect(
+        session.Advance(0.05F, {}, {}, error) &&
+            session.Snapshot().screen == GameScreen::Playing,
+        "the stage commits after the focus-loss edge");
+    context.Expect(
+        session.Advance(0.1F, {}, {}, error) &&
+            session.Snapshot().transitionPhase == StageTransitionPhase::Idle,
+        "the fade completes before safety input is delivered");
+    context.Expect(
+        session.Advance(0.0F, {}, {}, error) &&
+            session.Snapshot().screen == GameScreen::Paused,
+        "latched focus loss pauses the first stable Playing frame");
+}
+
 } // namespace
 
 void RunGameSessionTests(TestContext& context) {
     TestContentCardinality(context);
     TestSessionCommandsSnapshotsAndEvents(context);
     TestInvalidDeltaDoesNotAdvance(context);
+    TestFocusLossSurvivesTransitionInputLock(context);
 }
 
 } // namespace fps::tests

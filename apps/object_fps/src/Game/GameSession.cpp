@@ -220,6 +220,7 @@ struct GameSession::Impl final {
     std::uint64_t nextEventSequence{1};
     bool movementReleaseRequired{};
     bool fireReleaseRequired{};
+    bool focusLossPending{};
     bool quitRequested{};
 
     template <class Payload>
@@ -306,6 +307,7 @@ struct GameSession::Impl final {
         nextEventSequence = 1;
         movementReleaseRequired = false;
         fireReleaseRequired = false;
+        focusLossPending = false;
         quitRequested = false;
         RefreshSnapshot();
         return true;
@@ -422,6 +424,26 @@ struct GameSession::Impl final {
                     }
                     ResetRun(error);
                     return error.empty() && BeginStageTransition(0, error);
+                } else if constexpr (std::is_same_v<Command, OpenControlsCommand>) {
+                    if (flow.GetScreen() != GameScreen::MainMenu ||
+                        transition.phase != StageTransitionPhase::Idle) {
+                        error = "OpenControls is only legal from the idle main menu";
+                        return false;
+                    }
+                    const GameScreen previous = flow.GetScreen();
+                    flow.OpenControls();
+                    EmitScreenChange(previous);
+                    return true;
+                } else if constexpr (std::is_same_v<Command, CloseControlsCommand>) {
+                    if (flow.GetScreen() != GameScreen::Controls ||
+                        transition.phase != StageTransitionPhase::Idle) {
+                        error = "CloseControls is only legal from Controls";
+                        return false;
+                    }
+                    const GameScreen previous = flow.GetScreen();
+                    flow.CloseControls();
+                    EmitScreenChange(previous);
+                    return true;
                 } else if constexpr (std::is_same_v<Command, PauseCommand>) {
                     if (flow.GetScreen() != GameScreen::Playing ||
                         transition.phase != StageTransitionPhase::Idle) {
@@ -475,6 +497,12 @@ struct GameSession::Impl final {
         }
 
         try {
+            // Window focus loss is a safety input, not menu navigation. Keep
+            // the edge across a fade/commit input lock so the first stable
+            // Playing frame still pauses even though the SDL edge occurred
+            // while transition input was suppressed.
+            focusLossPending = focusLossPending || input.focusLost;
+
             for (const GameSessionCommand& command : commands) {
                 std::string rejection;
                 if (!ApplyCommand(command, rejection)) {
@@ -494,46 +522,16 @@ struct GameSession::Impl final {
 
             const GameScreen previousScreen = flow.GetScreen();
             const GameFlowResult flowResult = flow.Update({
-                input.menuPreviousPressed,
-                input.menuNextPressed,
-                input.confirmPressed,
                 input.backPressed,
-                input.focusLost,
-                input.pointerPrimaryPressed,
-                input.hoveredMenuItem,
+                focusLossPending,
             });
+            focusLossPending = false;
             if (previousScreen == GameScreen::Paused &&
                 flow.GetScreen() == GameScreen::Playing) {
                 movementReleaseRequired = true;
                 fireReleaseRequired = true;
             }
             EmitScreenChange(previousScreen);
-
-            switch (flowResult.action) {
-            case GameFlowAction::None:
-                break;
-            case GameFlowAction::RequestStartGame:
-                ResetRun(error);
-                if (!error.empty() || !BeginStageTransition(0, error)) {
-                    return false;
-                }
-                RefreshSnapshot();
-                return true;
-            case GameFlowAction::RequestMainMenu:
-                if (!transition.Begin({DestinationKind::MainMenu, 0})) {
-                    error = "main-menu transition was rejected";
-                    return false;
-                }
-                RefreshSnapshot();
-                return true;
-            case GameFlowAction::QuitGame:
-                if (!quitRequested) {
-                    quitRequested = true;
-                    Emit(QuitRequestedEvent{});
-                }
-                RefreshSnapshot();
-                return true;
-            }
 
             if (flowResult.simulateGameplay && stage) {
                 GameFrameInput gameplayInput = input;
@@ -880,7 +878,6 @@ struct GameSession::Impl final {
     void RefreshSnapshot() {
         snapshot = {};
         snapshot.screen = flow.GetScreen();
-        snapshot.selectedMenuItem = flow.GetSelectedItem();
         snapshot.transitionPhase = transition.phase;
         snapshot.fadeOpacity = transition.opacity;
         snapshot.campaignOutcome = campaign.GetOutcome();

@@ -20,6 +20,9 @@ struct Float3 final {
 };
 
 struct Color final {
+    // Render colors are linear RGB with straight (unassociated) alpha. Color
+    // assets intended for display must be decoded from sRGB before they are
+    // supplied as clear colors or submission tints.
     float red{1.0F};
     float green{1.0F};
     float blue{1.0F};
@@ -86,6 +89,14 @@ enum class SamplerMode {
     LinearWrap,
 };
 
+// Scene sprites are composited with world meshes before the per-frame scene
+// color transform. Overlay sprites are composited afterwards, so UI and other
+// display-referred content are not affected by scene exposure or gamma.
+enum class CompositeLayer {
+    Scene,
+    Overlay,
+};
+
 struct UvTransform final {
     Float2 scale{1.0F, 1.0F};
     Float2 offset{};
@@ -124,10 +135,22 @@ struct SpriteSubmission final {
     float rotationRadians{};
     Color tint{};
     SamplerMode sampler{SamplerMode::LinearClamp};
+    CompositeLayer layer{CompositeLayer::Overlay};
+};
+
+// A relative adjustment applied to the linear scene before its standard sRGB
+// render-target conversion. gammaAdjustment=1 is the identity; values above
+// one brighten midtones. Exposure is measured in stops (EV), so +1 doubles
+// linear scene intensity. The portable accepted range is exposure in [-8, 8]
+// and gamma adjustment in [0.25, 4].
+struct SceneColorTransform final {
+    float exposureEv{};
+    float gammaAdjustment{1.0F};
 };
 
 struct FrameDescription final {
     Color clearColor{0.0F, 0.0F, 0.0F, 1.0F};
+    SceneColorTransform sceneColorTransform{};
 };
 
 enum class PresentStatus {

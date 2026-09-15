@@ -1,6 +1,8 @@
 set(GYO_SDL_GPU_SHADER_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/unlit.vert.hlsl"
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/unlit.frag.hlsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene_post.vert.hlsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene_post.frag.hlsl"
 )
 
 # The standalone HLSL files are the only shader sources. Generate a private
@@ -16,6 +18,14 @@ file(READ
 file(READ
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/unlit.frag.hlsl"
     GYO_SDL_GPU_UNLIT_FRAGMENT_SOURCE
+)
+file(READ
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene_post.vert.hlsl"
+    GYO_SDL_GPU_SCENE_POST_VERTEX_SOURCE
+)
+file(READ
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene_post.frag.hlsl"
+    GYO_SDL_GPU_SCENE_POST_FRAGMENT_SOURCE
 )
 set(GYO_SDL_GPU_GENERATED_INCLUDE_DIRECTORY
     "${CMAKE_CURRENT_BINARY_DIR}/generated"

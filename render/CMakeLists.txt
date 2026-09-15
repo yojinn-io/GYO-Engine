@@ -1,4 +1,5 @@
 add_library(gyo_render STATIC
+    src/ColorTransform.cpp
     src/PrimitiveMesh.cpp
     src/RenderQueue.cpp
 )
@@ -15,7 +16,7 @@ target_link_libraries(gyo_render PUBLIC
 
 target_compile_features(gyo_render PUBLIC cxx_std_20)
 
-if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX)
+if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_UI_EDITOR)
     add_subdirectory(backend/sdl)
 endif()
 

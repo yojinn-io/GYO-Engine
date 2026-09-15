@@ -1,67 +1,135 @@
 #include "RetroFPS/App/ObjectFpsUi.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
+#include <utility>
 
 namespace fps {
 namespace {
 
 constexpr float kReferenceWidth = 1280.0F;
 constexpr float kReferenceHeight = 720.0F;
+constexpr std::string_view kUiFont = "object_fps.font.ui";
 
-constexpr UiColor kBackdrop{0.025F, 0.035F, 0.055F, 1.0F};
-constexpr UiColor kPanel{0.055F, 0.075F, 0.11F, 0.94F};
-constexpr UiColor kOverlay{0.01F, 0.015F, 0.025F, 0.78F};
-constexpr UiColor kButton{0.11F, 0.14F, 0.19F, 0.96F};
-constexpr UiColor kSelection{0.13F, 0.48F, 0.68F, 1.0F};
-constexpr UiColor kAccent{0.25F, 0.82F, 0.95F, 1.0F};
-constexpr UiColor kText{0.92F, 0.96F, 1.0F, 1.0F};
-constexpr UiColor kMutedText{0.59F, 0.67F, 0.75F, 1.0F};
-constexpr UiColor kDanger{0.93F, 0.25F, 0.22F, 1.0F};
-constexpr UiColor kHealth{0.18F, 0.78F, 0.35F, 1.0F};
-constexpr UiColor kBarTrack{0.08F, 0.10F, 0.13F, 0.96F};
+struct UiActionContractEntry final {
+    std::string_view id;
+    Engine::Ui::UiActionPayloadType payload;
+};
 
-struct UiLayout final {
-    UiRect viewport;
+constexpr std::array<UiActionContractEntry, 8> kUiActionContract{{
+    {"object_fps.start_game", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.open_controls", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.close_controls", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.resume", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.return_main_menu", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.quit", Engine::Ui::UiActionPayloadType::None},
+    {"object_fps.set_gamma", Engine::Ui::UiActionPayloadType::Number},
+    {"object_fps.set_exposure", Engine::Ui::UiActionPayloadType::Number},
+}};
+
+constexpr Engine::Ui::UiColor kPanel{0.055F, 0.075F, 0.11F, 0.94F};
+constexpr Engine::Ui::UiColor kAccent{0.25F, 0.82F, 0.95F, 1.0F};
+constexpr Engine::Ui::UiColor kText{0.92F, 0.96F, 1.0F, 1.0F};
+constexpr Engine::Ui::UiColor kDanger{0.93F, 0.25F, 0.22F, 1.0F};
+constexpr Engine::Ui::UiColor kHealth{0.18F, 0.78F, 0.35F, 1.0F};
+constexpr Engine::Ui::UiColor kBarTrack{0.08F, 0.10F, 0.13F, 0.96F};
+
+[[nodiscard]] std::string FormatUiError(const Engine::Ui::UiError& value) {
+    std::string result = value.message;
+    if (!value.source.empty()) {
+        result += " [" + value.source + ']';
+    }
+    if (!value.jsonPointer.empty()) {
+        result += " at " + value.jsonPointer;
+    }
+    return result;
+}
+
+[[nodiscard]] constexpr std::string_view PayloadTypeName(
+    const Engine::Ui::UiActionPayloadType payload) noexcept {
+    switch (payload) {
+    case Engine::Ui::UiActionPayloadType::None:
+        return "none";
+    case Engine::Ui::UiActionPayloadType::Number:
+        return "number";
+    }
+    return "unknown";
+}
+
+[[nodiscard]] bool ValidateActionContract(
+    const Engine::Ui::UiDocument& document,
+    std::string& error) {
+    std::array<bool, kUiActionContract.size()> declared{};
+    for (const Engine::Ui::UiActionDeclaration& action : document.actions) {
+        const auto expected = std::find_if(
+            kUiActionContract.begin(),
+            kUiActionContract.end(),
+            [&action](const UiActionContractEntry& candidate) {
+                return candidate.id == action.id;
+            });
+        if (expected == kUiActionContract.end()) {
+            error = "Object_FPS UI action contract contains unsupported action '" +
+                    action.id + "'";
+            return false;
+        }
+        const std::size_t index = static_cast<std::size_t>(
+            std::distance(kUiActionContract.begin(), expected));
+        if (declared[index]) {
+            error = "Object_FPS UI action contract declares action '" +
+                    action.id + "' more than once";
+            return false;
+        }
+        if (action.payload != expected->payload) {
+            error = "Object_FPS UI action '" + action.id +
+                    "' must declare payload '" +
+                    std::string(PayloadTypeName(expected->payload)) +
+                    "' (found '" +
+                    std::string(PayloadTypeName(action.payload)) + "')";
+            return false;
+        }
+        declared[index] = true;
+    }
+
+    for (std::size_t index = 0; index < kUiActionContract.size(); ++index) {
+        if (!declared[index]) {
+            error = "Object_FPS UI action contract is missing required action '" +
+                    std::string(kUiActionContract[index].id) + "'";
+            return false;
+        }
+    }
+    return true;
+}
+
+struct HudLayout final {
     float scale{};
     float offsetX{};
     float offsetY{};
 };
 
-[[nodiscard]] bool IsFiniteRect(const UiRect rect) noexcept {
-    return std::isfinite(rect.x) && std::isfinite(rect.y) &&
-           std::isfinite(rect.width) && std::isfinite(rect.height) &&
-           rect.width > 0.0F && rect.height > 0.0F;
-}
-
-[[nodiscard]] std::optional<UiLayout> MakeLayout(const UiRect viewport) noexcept {
-    if (!IsFiniteRect(viewport)) {
+[[nodiscard]] std::optional<HudLayout> MakeHudLayout(
+    const Engine::Ui::UiViewport viewport) noexcept {
+    if (!std::isfinite(viewport.width) || !std::isfinite(viewport.height) ||
+        viewport.width <= 0.0F || viewport.height <= 0.0F) {
         return std::nullopt;
     }
-
     const float scale = std::min(
         viewport.width / kReferenceWidth,
         viewport.height / kReferenceHeight);
-    if (!std::isfinite(scale) || scale <= 0.0F) {
-        return std::nullopt;
-    }
-
-    const float contentWidth = kReferenceWidth * scale;
-    const float contentHeight = kReferenceHeight * scale;
-    return UiLayout{
-        viewport,
+    return HudLayout{
         scale,
-        viewport.x + (viewport.width - contentWidth) * 0.5F,
-        viewport.y + (viewport.height - contentHeight) * 0.5F,
+        (viewport.width - kReferenceWidth * scale) * 0.5F,
+        (viewport.height - kReferenceHeight * scale) * 0.5F,
     };
 }
 
-[[nodiscard]] UiRect Place(
-    const UiLayout& layout,
+[[nodiscard]] Engine::Ui::UiRect Place(
+    const HudLayout& layout,
     const float x,
     const float y,
     const float width,
@@ -74,177 +142,36 @@ struct UiLayout final {
     };
 }
 
-[[nodiscard]] bool Contains(
-    const UiRect rect,
-    const float x,
-    const float y) noexcept {
-    return std::isfinite(x) && std::isfinite(y) && x >= rect.x && y >= rect.y &&
-           x < rect.x + rect.width && y < rect.y + rect.height;
-}
-
-[[nodiscard]] std::size_t MenuItemCount(const GameScreen screen) noexcept {
-    switch (screen) {
-    case GameScreen::MainMenu:
-    case GameScreen::Paused:
-        return 3;
-    case GameScreen::Controls:
-    case GameScreen::Results:
-        return 1;
-    case GameScreen::Playing:
-        return 0;
-    }
-    return 0;
-}
-
-[[nodiscard]] float MenuTop(const GameScreen screen) noexcept {
-    switch (screen) {
-    case GameScreen::MainMenu:
-        return 340.0F;
-    case GameScreen::Controls:
-        return 594.0F;
-    case GameScreen::Paused:
-        return 300.0F;
-    case GameScreen::Results:
-        return 592.0F;
-    case GameScreen::Playing:
-        return 0.0F;
-    }
-    return 0.0F;
-}
-
-[[nodiscard]] std::vector<UiRect> MenuItemRects(
-    const GameScreen screen,
-    const UiLayout& layout) {
-    constexpr float width = 360.0F;
-    constexpr float height = 52.0F;
-    constexpr float gap = 14.0F;
-    const std::size_t count = MenuItemCount(screen);
-    std::vector<UiRect> result;
-    result.reserve(count);
-    for (std::size_t index = 0; index < count; ++index) {
-        const float y = MenuTop(screen) +
-                        static_cast<float>(index) * (height + gap);
-        result.push_back(Place(
-            layout,
-            (kReferenceWidth - width) * 0.5F,
-            y,
-            width,
-            height));
-    }
-    return result;
-}
-
-void AddQuad(ObjectFpsUiFrame& frame, const UiRect bounds, const UiColor color) {
-    const std::size_t drawOrder = frame.quads.size() + frame.texts.size();
-    frame.quads.push_back({bounds, color, drawOrder});
+void AddQuad(
+    Engine::Ui::UiDrawList& drawList,
+    const Engine::Ui::UiRect bounds,
+    const Engine::Ui::UiColor color) {
+    drawList.commands.emplace_back(Engine::Ui::UiQuadDraw{bounds, color});
 }
 
 void AddText(
-    ObjectFpsUiFrame& frame,
+    Engine::Ui::UiDrawList& drawList,
     std::string text,
-    const UiRect bounds,
+    const Engine::Ui::UiRect bounds,
     const float sizePixels,
-    const UiColor color = kText,
-    const UiTextAlignment alignment = UiTextAlignment::Left) {
-    const std::size_t drawOrder = frame.quads.size() + frame.texts.size();
-    frame.texts.push_back({
-        std::move(text),
-        bounds,
-        sizePixels,
-        color,
-        alignment,
-        drawOrder,
-    });
-}
-
-void AddMenuItems(
-    ObjectFpsUiFrame& frame,
-    const GameSessionSnapshot& snapshot,
-    const UiLayout& layout,
-    const std::vector<std::string_view>& labels) {
-    const std::vector<UiRect> rects = MenuItemRects(snapshot.screen, layout);
-    const std::size_t count = std::min(rects.size(), labels.size());
-    for (std::size_t index = 0; index < count; ++index) {
-        AddQuad(
-            frame,
-            rects[index],
-            index == snapshot.selectedMenuItem ? kSelection : kButton);
-        AddText(
-            frame,
-            std::string{labels[index]},
-            rects[index],
-            24.0F * layout.scale,
-            kText,
-            UiTextAlignment::Center);
-    }
-}
-
-void AddMainMenu(
-    ObjectFpsUiFrame& frame,
-    const GameSessionSnapshot& snapshot,
-    const UiLayout& layout) {
-    AddQuad(frame, layout.viewport, kBackdrop);
-    AddQuad(frame, Place(layout, 360.0F, 100.0F, 560.0F, 500.0F), kPanel);
-    AddText(
-        frame,
-        "OBJECT FPS",
-        Place(layout, 360.0F, 150.0F, 560.0F, 68.0F),
-        48.0F * layout.scale,
-        kAccent,
-        UiTextAlignment::Center);
-    AddText(
-        frame,
-        "GYO RUNTIME CONFORMANCE GAME",
-        Place(layout, 360.0F, 224.0F, 560.0F, 34.0F),
-        18.0F * layout.scale,
-        kMutedText,
-        UiTextAlignment::Center);
-    AddMenuItems(frame, snapshot, layout, {"START GAME", "CONTROLS", "QUIT"});
-}
-
-void AddControls(
-    ObjectFpsUiFrame& frame,
-    const GameSessionSnapshot& snapshot,
-    const UiLayout& layout) {
-    AddQuad(frame, layout.viewport, kBackdrop);
-    AddQuad(frame, Place(layout, 270.0F, 70.0F, 740.0F, 580.0F), kPanel);
-    AddText(
-        frame,
-        "CONTROLS",
-        Place(layout, 310.0F, 112.0F, 660.0F, 60.0F),
-        40.0F * layout.scale,
-        kAccent,
-        UiTextAlignment::Center);
-
-    constexpr std::string_view labels[] = {
-        "W / S    MOVE FORWARD / BACK",
-        "A / D    STRAFE LEFT / RIGHT",
-        "MOUSE    LOOK",
-        "LMB      FIRE",
-        "R        RELOAD",
-        "ESC      PAUSE",
-    };
-    for (std::size_t index = 0; index < std::size(labels); ++index) {
-        AddText(
-            frame,
-            std::string{labels[index]},
-            Place(
-                layout,
-                390.0F,
-                210.0F + static_cast<float>(index) * 50.0F,
-                500.0F,
-                34.0F),
-            21.0F * layout.scale,
-            kText,
-            UiTextAlignment::Left);
-    }
-    AddMenuItems(frame, snapshot, layout, {"BACK"});
+    const Engine::Ui::UiColor color = kText,
+    const Engine::Ui::UiHorizontalAlign horizontal =
+        Engine::Ui::UiHorizontalAlign::Left) {
+    Engine::Ui::UiTextDraw draw;
+    draw.boundsPixels = bounds;
+    draw.utf8 = std::move(text);
+    draw.fontAssetId = std::string{kUiFont};
+    draw.pointSizePixels = sizePixels;
+    draw.color = color;
+    draw.horizontalAlign = horizontal;
+    draw.verticalAlign = Engine::Ui::UiVerticalAlign::Center;
+    drawList.commands.emplace_back(std::move(draw));
 }
 
 void AddHud(
-    ObjectFpsUiFrame& frame,
+    Engine::Ui::UiDrawList& drawList,
     const GameSessionSnapshot& snapshot,
-    const UiLayout& layout) {
+    const HudLayout& layout) {
     const float health = snapshot.player.has_value() ? snapshot.player->health : 0.0F;
     const float maximumHealth = snapshot.player.has_value()
         ? snapshot.player->maximumHealth
@@ -253,205 +180,353 @@ void AddHud(
         ? std::clamp(health / maximumHealth, 0.0F, 1.0F)
         : 0.0F;
 
-    AddQuad(frame, Place(layout, 32.0F, 626.0F, 290.0F, 62.0F), kPanel);
+    AddQuad(drawList, Place(layout, 32.0F, 626.0F, 290.0F, 62.0F), kPanel);
     AddText(
-        frame,
-        "HP " + std::to_string(static_cast<std::uint32_t>(std::max(health, 0.0F))),
+        drawList,
+        "HP " + std::to_string(
+            static_cast<std::uint32_t>(std::max(health, 0.0F))),
         Place(layout, 48.0F, 637.0F, 94.0F, 28.0F),
         20.0F * layout.scale);
-    AddQuad(frame, Place(layout, 142.0F, 644.0F, 160.0F, 16.0F), kBarTrack);
+    AddQuad(drawList, Place(layout, 142.0F, 644.0F, 160.0F, 16.0F), kBarTrack);
     AddQuad(
-        frame,
+        drawList,
         Place(layout, 142.0F, 644.0F, 160.0F * healthRatio, 16.0F),
         healthRatio <= 0.25F ? kDanger : kHealth);
 
-    AddQuad(frame, Place(layout, 1000.0F, 626.0F, 248.0F, 62.0F), kPanel);
+    AddQuad(drawList, Place(layout, 1000.0F, 626.0F, 248.0F, 62.0F), kPanel);
     AddText(
-        frame,
+        drawList,
         std::to_string(snapshot.weapon.magazineAmmo) + " / " +
             std::to_string(snapshot.weapon.reserveAmmo),
         Place(layout, 1016.0F, 637.0F, 216.0F, 32.0F),
         25.0F * layout.scale,
         kText,
-        UiTextAlignment::Right);
+        Engine::Ui::UiHorizontalAlign::Right);
 
     if (snapshot.weapon.reloading) {
-        const float progress = std::clamp(snapshot.weapon.reloadProgress, 0.0F, 1.0F);
+        const float progress = std::clamp(
+            snapshot.weapon.reloadProgress,
+            0.0F,
+            1.0F);
         AddText(
-            frame,
+            drawList,
             "RELOADING",
             Place(layout, 500.0F, 624.0F, 280.0F, 30.0F),
             18.0F * layout.scale,
             kAccent,
-            UiTextAlignment::Center);
-        AddQuad(frame, Place(layout, 520.0F, 662.0F, 240.0F, 10.0F), kBarTrack);
+            Engine::Ui::UiHorizontalAlign::Center);
+        AddQuad(drawList, Place(layout, 520.0F, 662.0F, 240.0F, 10.0F), kBarTrack);
         AddQuad(
-            frame,
+            drawList,
             Place(layout, 520.0F, 662.0F, 240.0F * progress, 10.0F),
             kAccent);
     }
 
     if (snapshot.activeStage.has_value()) {
         const ActiveStageSnapshot& stage = *snapshot.activeStage;
-        AddQuad(frame, Place(layout, 28.0F, 24.0F, 430.0F, 48.0F), kPanel);
+        AddQuad(drawList, Place(layout, 28.0F, 24.0F, 430.0F, 48.0F), kPanel);
         AddText(
-            frame,
+            drawList,
             "STAGE " + std::to_string(stage.ordinal + 1U) + " / " +
                 std::to_string(stage.stageCount) + "  " + stage.levelName,
             Place(layout, 44.0F, 32.0F, 398.0F, 32.0F),
-            18.0F * layout.scale,
-            kText,
-            UiTextAlignment::Left);
+            18.0F * layout.scale);
     }
 
-    const float expansion = std::clamp(snapshot.weapon.crosshairExpansion, 0.0F, 48.0F);
+    const float expansion = std::clamp(
+        snapshot.weapon.crosshairExpansion,
+        0.0F,
+        48.0F);
     const float gap = 8.0F + expansion;
     constexpr float armLength = 14.0F;
     constexpr float thickness = 3.0F;
     constexpr float centerX = kReferenceWidth * 0.5F;
     constexpr float centerY = kReferenceHeight * 0.5F;
-    AddQuad(frame, Place(
+    AddQuad(drawList, Place(
         layout, centerX - gap - armLength, centerY - thickness * 0.5F,
         armLength, thickness), kText);
-    AddQuad(frame, Place(
+    AddQuad(drawList, Place(
         layout, centerX + gap, centerY - thickness * 0.5F,
         armLength, thickness), kText);
-    AddQuad(frame, Place(
+    AddQuad(drawList, Place(
         layout, centerX - thickness * 0.5F, centerY - gap - armLength,
         thickness, armLength), kText);
-    AddQuad(frame, Place(
+    AddQuad(drawList, Place(
         layout, centerX - thickness * 0.5F, centerY + gap,
         thickness, armLength), kText);
 }
 
-void AddPause(
-    ObjectFpsUiFrame& frame,
+[[nodiscard]] Engine::Ui::UiBindingTable MakeBindings(
     const GameSessionSnapshot& snapshot,
-    const UiLayout& layout) {
-    AddHud(frame, snapshot, layout);
-    AddQuad(frame, layout.viewport, kOverlay);
-    AddQuad(frame, Place(layout, 390.0F, 120.0F, 500.0F, 440.0F), kPanel);
-    AddText(
-        frame,
-        "PAUSED",
-        Place(layout, 420.0F, 165.0F, 440.0F, 62.0F),
-        42.0F * layout.scale,
-        kAccent,
-        UiTextAlignment::Center);
-    AddMenuItems(frame, snapshot, layout, {"RESUME", "MAIN MENU", "QUIT"});
-}
+    const ObjectFpsDisplaySettings& displaySettings) {
+    Engine::Ui::UiBindingTable result;
+    result.emplace("display.exposure_ev", static_cast<double>(displaySettings.exposureEv));
+    result.emplace("display.gamma", static_cast<double>(displaySettings.gammaAdjustment));
 
-void AddResults(
-    ObjectFpsUiFrame& frame,
-    const GameSessionSnapshot& snapshot,
-    const UiLayout& layout) {
-    AddQuad(frame, layout.viewport, kBackdrop);
-    AddQuad(frame, Place(layout, 250.0F, 54.0F, 780.0F, 620.0F), kPanel);
-
-    std::string title = "RUN COMPLETE";
-    UiColor titleColor = kAccent;
-    if (snapshot.campaignOutcome == CampaignOutcome::PlayerDied) {
-        title = "YOU DIED";
-        titleColor = kDanger;
-    } else if (snapshot.campaignOutcome == CampaignOutcome::InProgress) {
-        title = "RUN ENDED";
-        titleColor = kMutedText;
+    std::string outcome = "in_progress";
+    if (snapshot.campaignOutcome == CampaignOutcome::Completed) {
+        outcome = "completed";
+    } else if (snapshot.campaignOutcome == CampaignOutcome::PlayerDied) {
+        outcome = "player_died";
     }
-    AddText(
-        frame,
-        std::move(title),
-        Place(layout, 300.0F, 90.0F, 680.0F, 62.0F),
-        42.0F * layout.scale,
-        titleColor,
-        UiTextAlignment::Center);
+    result.emplace("results.outcome", std::move(outcome));
 
-    std::size_t totalKills = 0;
-    std::size_t visitedRooms = 0;
+    std::int64_t totalKills = 0;
+    std::int64_t visitedRooms = 0;
+    Engine::Ui::UiList rooms;
     for (const CampaignRoomStats& room : snapshot.campaignRooms) {
-        totalKills += room.kills;
-        visitedRooms += room.visited ? 1U : 0U;
-    }
-    AddText(
-        frame,
-        "ROOMS " + std::to_string(visitedRooms) + " / " +
-            std::to_string(snapshot.campaignRooms.size()),
-        Place(layout, 390.0F, 190.0F, 500.0F, 36.0F),
-        22.0F * layout.scale,
-        kText,
-        UiTextAlignment::Center);
-    AddText(
-        frame,
-        "KILLS " + std::to_string(totalKills),
-        Place(layout, 390.0F, 232.0F, 500.0F, 36.0F),
-        22.0F * layout.scale,
-        kText,
-        UiTextAlignment::Center);
-
-    float rowY = 302.0F;
-    for (const CampaignRoomStats& room : snapshot.campaignRooms) {
-        if (!room.visited || rowY > 520.0F) {
+        totalKills += static_cast<std::int64_t>(room.kills);
+        if (!room.visited) {
             continue;
         }
-        AddText(
-            frame,
-            room.levelName + "   " + std::to_string(room.kills) + " KILLS",
-            Place(layout, 390.0F, rowY, 500.0F, 28.0F),
-            17.0F * layout.scale,
-            kMutedText,
-            UiTextAlignment::Center);
-        rowY += 34.0F;
+        ++visitedRooms;
+        Engine::Ui::UiListItem item;
+        item.fields.emplace("name", room.levelName);
+        item.fields.emplace("kills", static_cast<std::int64_t>(room.kills));
+        rooms.items.push_back(std::move(item));
     }
-    AddMenuItems(frame, snapshot, layout, {"MAIN MENU"});
+    result.emplace("results.visited_rooms", visitedRooms);
+    result.emplace(
+        "results.total_rooms",
+        static_cast<std::int64_t>(snapshot.campaignRooms.size()));
+    result.emplace("results.total_kills", totalKills);
+    result.emplace("results.rooms", std::move(rooms));
+    return result;
+}
+
+[[nodiscard]] float Quantize(
+    const double value,
+    const float minimum,
+    const float maximum,
+    const float step) noexcept {
+    if (!std::isfinite(value)) {
+        return minimum;
+    }
+    const double clamped = std::clamp(
+        value,
+        static_cast<double>(minimum),
+        static_cast<double>(maximum));
+    const double index = std::round(
+        (clamped - static_cast<double>(minimum)) /
+        static_cast<double>(step));
+    return static_cast<float>(std::clamp(
+        static_cast<double>(minimum) + index * static_cast<double>(step),
+        static_cast<double>(minimum),
+        static_cast<double>(maximum)));
+}
+
+[[nodiscard]] std::optional<std::string_view> CanvasFor(
+    const GameScreen screen) noexcept {
+    switch (screen) {
+    case GameScreen::MainMenu:
+        return "main_menu";
+    case GameScreen::Controls:
+        return "controls";
+    case GameScreen::Paused:
+        return "pause";
+    case GameScreen::Results:
+        return "results";
+    case GameScreen::Playing:
+        return std::nullopt;
+    }
+    return std::nullopt;
 }
 
 } // namespace
 
-ObjectFpsUiFrame ObjectFpsUi::Build(
-    const GameSessionSnapshot& snapshot,
-    const UiRect viewport) {
-    ObjectFpsUiFrame frame;
-    const std::optional<UiLayout> layout = MakeLayout(viewport);
-    if (!layout.has_value()) {
-        return frame;
-    }
+struct ObjectFpsUi::Impl final {
+    Engine::Ui::UiRuntime runtime;
+    std::optional<GameScreen> activeScreen;
+    bool initialized{};
 
-    switch (snapshot.screen) {
-    case GameScreen::MainMenu:
-        AddMainMenu(frame, snapshot, *layout);
-        break;
-    case GameScreen::Controls:
-        AddControls(frame, snapshot, *layout);
-        break;
-    case GameScreen::Playing:
-        AddHud(frame, snapshot, *layout);
-        break;
-    case GameScreen::Paused:
-        AddPause(frame, snapshot, *layout);
-        break;
-    case GameScreen::Results:
-        AddResults(frame, snapshot, *layout);
-        break;
+    [[nodiscard]] bool EnsureCanvas(
+        const GameScreen screen,
+        std::string& error) {
+        if (activeScreen == screen) {
+            return true;
+        }
+        const std::optional<std::string_view> canvas = CanvasFor(screen);
+        if (!canvas.has_value()) {
+            activeScreen = screen;
+            return true;
+        }
+        auto activated = runtime.ActivateCanvas(*canvas);
+        if (!activated) {
+            error = FormatUiError(activated.error());
+            return false;
+        }
+        activeScreen = screen;
+        return true;
     }
-    return frame;
-}
+};
 
-std::optional<std::size_t> ObjectFpsUi::HitTest(
-    const GameScreen screen,
-    const float x,
-    const float y,
-    const UiRect viewport) noexcept {
-    const std::optional<UiLayout> layout = MakeLayout(viewport);
-    if (!layout.has_value()) {
-        return std::nullopt;
+ObjectFpsUi::ObjectFpsUi()
+    : impl_(std::make_unique<Impl>()) {}
+
+ObjectFpsUi::~ObjectFpsUi() = default;
+ObjectFpsUi::ObjectFpsUi(ObjectFpsUi&&) noexcept = default;
+ObjectFpsUi& ObjectFpsUi::operator=(ObjectFpsUi&&) noexcept = default;
+
+bool ObjectFpsUi::Initialize(
+    std::shared_ptr<const Engine::Ui::UiDocument> document,
+    std::string& error) {
+    error.clear();
+    impl_->runtime.Reset();
+    impl_->activeScreen.reset();
+    impl_->initialized = false;
+    if (!document) {
+        error = "ObjectFpsUi requires a non-null UI document";
+        return false;
     }
-
-    const std::vector<UiRect> rects = MenuItemRects(screen, *layout);
-    for (std::size_t index = 0; index < rects.size(); ++index) {
-        if (Contains(rects[index], x, y)) {
-            return index;
+    if (!ValidateActionContract(*document, error)) {
+        return false;
+    }
+    auto initialized = impl_->runtime.Initialize(std::move(document));
+    if (!initialized) {
+        error = FormatUiError(initialized.error());
+        return false;
+    }
+    // Object_FPS requires all four authored screens. This is intentionally a
+    // strict one-time load with no compiled fallback.
+    for (const std::string_view canvas : {
+             std::string_view{"main_menu"},
+             std::string_view{"controls"},
+             std::string_view{"pause"},
+             std::string_view{"results"}}) {
+        auto activated = impl_->runtime.ActivateCanvas(canvas);
+        if (!activated) {
+            error = "required Object_FPS UI canvas '" + std::string(canvas) +
+                    "' is unavailable: " + FormatUiError(activated.error());
+            impl_->runtime.Reset();
+            return false;
         }
     }
-    return std::nullopt;
+    impl_->initialized = true;
+    return true;
+}
+
+bool ObjectFpsUi::Update(
+    const GameSessionSnapshot& snapshot,
+    const Engine::Ui::UiInputFrame& input,
+    const Engine::Ui::UiViewport viewport,
+    ObjectFpsDisplaySettings& displaySettings,
+    std::vector<GameSessionCommand>& commands,
+    std::string& error) {
+    error.clear();
+    if (!impl_->initialized) {
+        error = "ObjectFpsUi is not initialized";
+        return false;
+    }
+    if (!impl_->EnsureCanvas(snapshot.screen, error)) {
+        return false;
+    }
+    if (snapshot.screen == GameScreen::Playing ||
+        snapshot.transitionPhase != StageTransitionPhase::Idle) {
+        return true;
+    }
+
+    const Engine::Ui::UiBindingTable bindings =
+        MakeBindings(snapshot, displaySettings);
+    auto updated = impl_->runtime.Update(input, bindings, viewport);
+    if (!updated) {
+        error = FormatUiError(updated.error());
+        return false;
+    }
+
+    for (const Engine::Ui::UiActionEvent& event : updated.value()) {
+        if (event.action == "object_fps.start_game") {
+            commands.emplace_back(StartCampaignCommand{});
+        } else if (event.action == "object_fps.open_controls") {
+            commands.emplace_back(OpenControlsCommand{});
+        } else if (event.action == "object_fps.close_controls") {
+            commands.emplace_back(CloseControlsCommand{});
+        } else if (event.action == "object_fps.resume") {
+            commands.emplace_back(ResumeCommand{});
+        } else if (event.action == "object_fps.return_main_menu") {
+            commands.emplace_back(ReturnToMainMenuCommand{});
+        } else if (event.action == "object_fps.quit") {
+            commands.emplace_back(RequestQuitCommand{});
+        } else if (event.action == "object_fps.set_gamma") {
+            const double* value = std::get_if<double>(&event.payload);
+            if (value == nullptr) {
+                error = "set_gamma UI action omitted its declared number payload";
+                return false;
+            }
+            displaySettings.gammaAdjustment = Quantize(
+                *value,
+                ObjectFpsDisplaySettings::kMinimumGammaAdjustment,
+                ObjectFpsDisplaySettings::kMaximumGammaAdjustment,
+                ObjectFpsDisplaySettings::kGammaStep);
+        } else if (event.action == "object_fps.set_exposure") {
+            const double* value = std::get_if<double>(&event.payload);
+            if (value == nullptr) {
+                error = "set_exposure UI action omitted its declared number payload";
+                return false;
+            }
+            displaySettings.exposureEv = Quantize(
+                *value,
+                ObjectFpsDisplaySettings::kMinimumExposureEv,
+                ObjectFpsDisplaySettings::kMaximumExposureEv,
+                ObjectFpsDisplaySettings::kExposureStepEv);
+        } else {
+            error = "Object_FPS UI emitted unknown action '" + event.action + "'";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ObjectFpsUi::Compose(
+    const GameSessionSnapshot& snapshot,
+    const ObjectFpsDisplaySettings& displaySettings,
+    const Engine::Ui::UiViewport viewport,
+    Engine::Ui::UiDrawList& drawList,
+    std::string& error) {
+    error.clear();
+    drawList.commands.clear();
+    if (!impl_->initialized) {
+        error = "ObjectFpsUi is not initialized";
+        return false;
+    }
+    if (!impl_->EnsureCanvas(snapshot.screen, error)) {
+        return false;
+    }
+
+    const std::optional<HudLayout> hudLayout = MakeHudLayout(viewport);
+    if (!hudLayout.has_value()) {
+        error = "ObjectFpsUi requires a finite positive viewport";
+        return false;
+    }
+    if (snapshot.screen == GameScreen::Playing ||
+        snapshot.screen == GameScreen::Paused) {
+        AddHud(drawList, snapshot, *hudLayout);
+    }
+    if (snapshot.screen == GameScreen::Playing) {
+        return true;
+    }
+
+    const Engine::Ui::UiBindingTable bindings =
+        MakeBindings(snapshot, displaySettings);
+    auto composed = impl_->runtime.Compose(bindings, viewport);
+    if (!composed) {
+        error = FormatUiError(composed.error());
+        return false;
+    }
+    Engine::Ui::UiDrawList authored = std::move(composed.value());
+    drawList.commands.insert(
+        drawList.commands.end(),
+        std::make_move_iterator(authored.commands.begin()),
+        std::make_move_iterator(authored.commands.end()));
+    return true;
+}
+
+bool ObjectFpsUi::IsInitialized() const noexcept {
+    return impl_->initialized;
+}
+
+const Engine::Ui::UiInteractionState& ObjectFpsUi::InteractionState()
+    const noexcept {
+    return impl_->runtime.InteractionState();
 }
 
 } // namespace fps

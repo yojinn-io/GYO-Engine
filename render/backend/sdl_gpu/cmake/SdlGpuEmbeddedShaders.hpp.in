@@ -12,4 +12,12 @@ inline constexpr std::string_view kUnlitFragmentName = "unlit.frag.hlsl";
 inline constexpr std::string_view kUnlitFragmentSource = R"gyo_hlsl(
 @GYO_SDL_GPU_UNLIT_FRAGMENT_SOURCE@)gyo_hlsl";
 
+inline constexpr std::string_view kScenePostVertexName = "scene_post.vert.hlsl";
+inline constexpr std::string_view kScenePostVertexSource = R"gyo_hlsl(
+@GYO_SDL_GPU_SCENE_POST_VERTEX_SOURCE@)gyo_hlsl";
+
+inline constexpr std::string_view kScenePostFragmentName = "scene_post.frag.hlsl";
+inline constexpr std::string_view kScenePostFragmentSource = R"gyo_hlsl(
+@GYO_SDL_GPU_SCENE_POST_FRAGMENT_SOURCE@)gyo_hlsl";
+
 } // namespace Engine::Render::Backend::SdlGpu::EmbeddedShaders

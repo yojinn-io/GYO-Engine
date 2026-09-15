@@ -253,6 +253,31 @@ Must Not Own:
 
 The current request is intentionally one complete UTF-8 run at one point size. It is a real, bounded mechanism, not a claim of a universal font-layout or retained-text system.
 
+### Closed data-driven UI standard (`this milestone`)
+
+```yaml
+Module: GYO::Ui + GYO::UiRenderer
+Owns:
+  - gyo.ui JSON v1 codec/validation and canonical serialization
+  - RectTransform evaluation, ordered draw/clip/hit-test traversal
+  - typed binding resolution, focus, pointer capture, buttons and sliders
+  - bounded whole-run font texture and image-asset resolution for UiDrawList
+Does:
+  - emit opaque typed actions without executing game behavior
+  - submit every UI image, quad and text run as CompositeLayer::Overlay
+Depends On:
+  - GYO Engine assets, neutral Text and Render mechanisms
+Must Not Depend On:
+  - Object_FPS, a concrete game screen, ImGui, SDL, or editor policy
+Must Not Become:
+  - a scripting host, custom-widget ABI, Flex/Grid engine, animation system,
+    rich-text/shaping/localization framework, or plugin ecosystem
+```
+
+JSON colors are sRGB `#RRGGBBAA` and are decoded to linear RGB without
+transforming alpha. Runtime Render colors use linear RGB and straight alpha.
+See `docs/ui_toolchain.md` for the complete v1 boundary and editor workflow.
+
 ### SDL_ttf text raster adapter (`this milestone`, optional)
 
 ```yaml
@@ -450,17 +475,18 @@ Owns:
   - FPS campaign, world, player, weapon, enemy, collision, and presentation policy
   - Object_FPS-specific Snapshot, Command, and Event payloads
   - Object_FPS catalog, CSV definitions, maps, textures, and selected UI font
-  - screen/HUD strings, layout rectangles, colors, alignment, menu selection, hit testing, and resulting game behavior
+  - screen/HUD wording, authored JSON layout, binding values, action mapping, and resulting game behavior
 Does:
   - implement IRuntimeClient and the typed IRuntimePort specialization
   - map GYO InputActionFrame values into game commands/policy
   - load assets through GYO AssetId/AssetHandle/AssetManager
   - project immutable game snapshots into GYO RenderQueue submissions
-  - build game-owned UI quad/text commands and rasterize whole text runs through GYO::Text
-  - upload neutral TextBitmap values through IRenderDevice and submit them as tinted sprites
+  - load its immutable screens.json document once with no compiled fallback
+  - map UiRuntime action ids to typed game commands and display-setting values
+  - emit its C++ Playing HUD and JSON screens as one ordered UiDrawList
   - select concrete adapters at the application composition edge
 Depends On:
-  - GYO public Runtime, Input, Asset, Text, and Render mechanisms
+  - GYO public Runtime, Input, Asset, Text, Render, Ui, and UiRenderer mechanisms
   - selected optional SDL adapters/backends in its composition root
 Must Not Depend On:
   - KamataEngine
@@ -472,7 +498,7 @@ Must Not Be Depended On By:
 
 The current three maps are data/content fixtures. Their number, IDs, and order are campaign data, not GYO engine constants.
 
-Object_FPS owns its UI policy; `ObjectFpsUi` materializes the strings, rectangles, colors, alignment, selection hit regions, and screen-specific commands, while Object_FPS game flow retains the consequences of those selections. It is not an engine UI framework. `ObjectFpsPresentation` translates the commands into neutral text raster requests and sprite submissions, caches whole-run textures by `{UTF-8, pointSize}`, and supplies color only as sprite tint. Neither class makes SDL_ttf or SDL_GPU types part of game-facing state.
+Object_FPS owns UI policy and data, while GYO owns the reusable JSON/layout/interaction/render mechanisms. `UiRuntime` owns focus, selection, pointer capture and hit testing and emits opaque actions; the Object_FPS adapter maps those ids to semantic commands. GameFlow retains transition legality and effects and no longer switches on menu indices. `UiRenderer` owns whole-run texture caching and Overlay submission, so neither game class exposes SDL_ttf or SDL_GPU types.
 
 The `object_fps.menu_smoke` test starts the ordinary Main Menu path, presents its first frame, and requires at least one visible mesh/sprite submission. This protects against regressing to a clear-only startup frame; it is not a pixel-perfect rendering test.
 
@@ -504,6 +530,21 @@ Must Not Become:
   - an editor or a requirement for ordinary games
 ```
 
+```yaml
+Module: tools/editor/gyo_ui_editor
+Owns:
+  - standalone ImGui editor chrome and in-memory edit/undo state
+  - canonical atomic export of one gyo.ui JSON document
+  - optional read-only mounting of an app AssetCatalog for preview validation
+Depends On:
+  - GYO::Ui, SDLRenderer/ImGui host, and optional asset preview adapters
+Must Not Depend On:
+  - Object_FPS, Input, SDL_GPU, Sandbox, or an app's native types
+Must Not Do:
+  - copy assets, edit a catalog, publish into an app asset root, serialize native
+    paths, or create project/meta/autosave/cache/imgui.ini sidecars
+```
+
 ## 7. Current target/dependency model
 
 The intended target direction is:
@@ -526,8 +567,14 @@ GYO::RenderBackendSDL -> GYO::Engine + concrete SDL platform adapter + SDL3
 GYO::RenderBackendSDLGPU (optional)
   -> GYO::Render + concrete SDL platform adapter + SDL3
 
+GYO::Ui -> GYO::Engine
+GYO::UiRenderer -> GYO::Ui + GYO::Render + GYO::Text
+
+gyo_ui_editor (optional)
+  -> GYO::Ui + SDLRenderer/ImGui; optional read-only asset preview adapters
+
 Object_FPS (optional)
-  -> GYO Runtime + Input + Asset + Text + Render public mechanisms
+  -> GYO Runtime + Input + Asset + Text + Render + Ui public mechanisms
   -> selected SDL, SDL_image, SDL_ttf, and SDL_GPU adapters at the composition root
 
 GYO modules -X-> Object_FPS
@@ -536,7 +583,7 @@ GYO modules -X-> Weaver
 
 The `GYO_BUILD_OBJECT_FPS` option controls the conformance game. Enabling it selects the current SDL_image PNG loader, SDL_ttf raster adapter, and Windows/MSVC SDL_GPU implementation needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core.
 
-Third-party source population uses the active build tree. ImGui is selected only for Sandbox; SDL_image is selected only for the image loader/Object_FPS path; SDL_ttf is selected only for the text adapter/Object_FPS path; doctest is selected only when testing is enabled.
+`GYO_BUILD_UI_EDITOR` is off by default and independently selects its SDLRenderer/ImGui host and optional preview loaders. It does not select Object_FPS, Input, SDL_GPU, or Sandbox. Third-party source population uses the active build tree; doctest remains test-only and ImGui demo code remains Sandbox-only.
 
 ## 8. Platform and graphics backend strategy
 
@@ -597,7 +644,7 @@ catalog font entry
   -> SpriteSubmission
 ```
 
-The SDL_ttf adapter ends at `TextBitmap`; it neither creates GPU resources nor submits rendering. Object_FPS currently owns the whole-run texture cache and alignment/color policy in its presentation layer. Its text textures use the neutral linear RGBA upload path, while UI color is applied through `SpriteSubmission::tint` so differently colored instances can reuse the same `{UTF-8, pointSize}` bitmap.
+The SDL_ttf adapter ends at `TextBitmap`; it neither creates GPU resources nor submits rendering. `GYO::UiRenderer` owns the bounded whole-run texture cache and alignment/render bridge. Text textures use the neutral linear RGBA upload path, while UI color is applied through `SpriteSubmission::tint` so differently colored instances can reuse a cached `{font AssetId, UTF-8, pointSize}` bitmap.
 
 Names describe the actual pipeline. A component that parses runtime stage/map data is a Loader, Parser, or Deserializer, not an Importer. Development import tools remain absent until a real authoring pipeline requires them.
 
@@ -721,7 +768,8 @@ The following are intentionally not created or generalized in this milestone:
 - Universal 2D/3D transforms, renderer algorithms, or physics data models
 - Development import pipeline and asset authoring tools
 - Reusable game Framework policy extracted prematurely from Object_FPS
-- Editor, node tree, universal ECS, visual scripting, or plugin framework
+- A universal editor ecosystem, shared node tree, universal ECS, visual scripting,
+  or editor/plugin ABI beyond the bounded standalone UI JSON editor
 - Weaver and all causal/narrative functionality
 
 Deferral is deliberate. The present vertical slice does not yet establish stable responsibilities for these abstractions, and GYO must not claim functionality that only exists in the architecture vision.

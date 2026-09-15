@@ -5,12 +5,13 @@
     { "id": "object_fps.data.enemy_animation_clips", "type": "text", "path": "data/enemy_animation_clips.csv" },
     { "id": "object_fps.data.weapons", "type": "text", "path": "data/weapons.csv" },
     { "id": "object_fps.data.levels", "type": "text", "path": "data/levels.csv" },
+    { "id": "object_fps.ui.screens", "type": "text", "path": "ui/screens.json" },
 
     { "id": "object_fps.map.room_01", "type": "text", "path": "maps/mvp_map.txt" },
     { "id": "object_fps.map.room_02", "type": "text", "path": "maps/mvp_map_02.txt" },
     { "id": "object_fps.map.room_03", "type": "text", "path": "maps/mvp_map_03.txt" },
 
-    { "id": "object_fps.font.ui", "type": "font", "path": "fonts/PressStart2P-Regular.ttf" },
+    { "id": "object_fps.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf" },
 
     { "id": "object_fps.texture.enemy.blood_dog", "type": "texture", "path": "textures/enemies/blood_dog_sheet_full.png" },
     { "id": "object_fps.texture.enemy.spitter", "type": "texture", "path": "textures/enemies/spitter_sheet_full.png" },

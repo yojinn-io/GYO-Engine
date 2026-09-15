@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/App/ObjectFpsUi.hpp"
 #include "RetroFPS/Game/CampaignContent.hpp"
 #include "RetroFPS/Game/GameSession.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
@@ -31,8 +32,6 @@ struct ObjectFpsPresentationConfig final {
         Engine::Asset::AssetId::FromString("object_fps.texture.world.wall")};
     Engine::Asset::AssetId skyTexture{
         Engine::Asset::AssetId::FromString("object_fps.texture.sky.default")};
-    Engine::Asset::AssetId uiFont{
-        Engine::Asset::AssetId::FromString("object_fps.font.ui")};
     WorldSettings world{};
     float viewportWidth{1280.0F};
     float viewportHeight{720.0F};
@@ -61,6 +60,8 @@ public:
 
     [[nodiscard]] bool Present(
         const GameSessionSnapshot& snapshot,
+        const ObjectFpsDisplaySettings& displaySettings,
+        const Engine::Ui::UiDrawList& uiDrawList,
         std::string& error);
 
     [[nodiscard]] bool IsInitialized() const noexcept;

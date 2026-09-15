@@ -1,5 +1,6 @@
 add_executable(gyo_render_tests
     test_main.cpp
+    ColorTransformTests.cpp
     PrimitiveMeshTests.cpp
     RenderQueueTests.cpp
 )

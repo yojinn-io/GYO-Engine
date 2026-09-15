@@ -88,6 +88,10 @@ Base::Result<void, RenderError> RenderQueue::Submit(
         submission.sourceUv.width < 0.0F || submission.sourceUv.height < 0.0F) {
         return Result::Err(Invalid("RenderQueue: sprite rectangles cannot have negative dimensions"));
     }
+    if (submission.layer != CompositeLayer::Scene &&
+        submission.layer != CompositeLayer::Overlay) {
+        return Result::Err(Invalid("RenderQueue: sprite composite layer is invalid"));
+    }
 
     sprites_.push_back(submission);
     return Result::Ok();

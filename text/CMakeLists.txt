@@ -11,7 +11,7 @@ target_link_libraries(gyo_text INTERFACE
 
 target_compile_features(gyo_text INTERFACE cxx_std_20)
 
-if(GYO_BUILD_SDL_TTF_ADAPTER OR GYO_BUILD_OBJECT_FPS)
+if(GYO_BUILD_SDL_TTF_ADAPTER OR GYO_BUILD_OBJECT_FPS OR GYO_BUILD_UI_EDITOR)
     if(NOT TARGET SDL3_ttf::SDL3_ttf)
         message(FATAL_ERROR
             "The SDL_ttf text adapter requires the SDL3_ttf::SDL3_ttf target")

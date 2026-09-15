@@ -10,6 +10,8 @@ enum class Key : std::size_t {
     A,
     S,
     D,
+    Left,
+    Right,
     Up,
     Down,
     R,
