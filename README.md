@@ -219,26 +219,34 @@ redistributable files do not block development configuration or compilation.
 
 [The Actions workflow](.github/workflows/cross-platform.yml) builds Object_FPS,
 the UI editor and shader bundles on Windows x64/MSVC, Ubuntu 24.04 x64/GCC 14,
-and macOS 15 ARM64/Xcode 16.4. Branch pushes, pull requests and manual runs use
+and macOS 15 ARM64/Xcode 16.4. Branch pushes, pull requests and manual runs of
+the cross-platform workflow use
 the quick path: compile, install and run `--startup-smoke-test` against real
 packaged content on all three platforms, then render one shader-readback case on
-Linux through Vulkan, Mesa Lavapipe and Xvfb. Release events additionally run the
+Linux through Vulkan, Mesa Lavapipe and Xvfb. **Prepare Release** additionally runs the
 full CPU/headless, shader, core-only and isolated-deployment checks, packaged
 gameplay headless smoke, and all eight Linux rendering diagnostics. Missing
 software Vulkan, timeouts and failed cases fail the job. Physical GPU and
 interactive acceptance remain separate; Windows/macOS hosted jobs do not claim
 a rendered frame.
 
-The `CI validation` job requires all three native jobs to succeed, including
-their required smoke tests; failed, cancelled or skipped jobs cannot pass this
-gate. A `v*` tag push or a manually published GitHub Release then uploads the
-three `.tar.gz` packages and their three SHA-256 files as Release assets.
-Publication checks the exact tag commit, default-branch ancestry, package
-platform, source revision and recorded smoke results. Ordinary pushes, pull
-requests and **Run workflow** only produce Actions artifacts. Tag/release events
-for the same tag share a lock, rebuild and revalidate, then preserve verified
-existing assets; conflicts fail without overwriting assets or release text.
-Only the gated publication job has `contents: write` permission.
+To release from GitHub, open **Actions → Prepare Release → Run workflow**, select
+the source branch, enter a version such as `v1.0.1`, and choose `prerelease` if
+needed. The run fixes the selected commit SHA and calls the shared
+`build-and-validate.yml` with the full release profile. Only after every platform
+passes does the final write-enabled job create the version tag and a **Draft
+Release** with three `.tar.gz` packages and three SHA-256 files. Open the Draft
+link in the Actions Summary, review its notes/assets, then click **Publish release**.
+Neither that publication nor a tag push triggers another build.
+
+Ordinary branch/PR runs and manual runs of the quick workflow produce Actions
+artifacts only. Same-version Draft retries preserve verified assets and user
+notes; an existing tag must match the exact commit, and a public version cannot
+be replaced. Rerun the original execution to retain its SHA; a new **Run workflow**
+may select a newer branch commit. Merge the new workflows into the default
+branch first so the manual button is available; existing runs still use their
+original workflow definitions. Full GUI instructions:
+[正體中文](docs/releasing.zh-Hant.md) · [日本語](docs/releasing.ja.md).
 The macOS package targets 13.3 or newer; the application and Metallib use the
 same deployment target. CSV decimal parsing uses an explicit decimal grammar
 and the classic C++ locale, including float range checks, because Xcode 16.4

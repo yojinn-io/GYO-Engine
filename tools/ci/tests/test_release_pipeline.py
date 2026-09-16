@@ -15,7 +15,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, publish,
+from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, prepare_draft,
                               verify_remote_tag)
 from release_support import (ARCHIVE_ROOT, METADATA_PATH, PLATFORMS, Package,
                              ReleaseError, archive_name, checksum_document,
@@ -78,8 +78,8 @@ def packages(**kwargs):
 
 
 class FakeGit:
-    def __init__(self, head=COMMIT, tag=COMMIT, ancestor=True):
-        self.head, self.tag, self.ancestor = head, tag, ancestor
+    def __init__(self, head=COMMIT, tag=None):
+        self.head, self.tag = head, tag
         self.calls = []
 
     def __call__(self, *args):
@@ -87,21 +87,21 @@ class FakeGit:
         if args == ("rev-parse", "HEAD"):
             return self.head
         if args[0] == "check-ref-format":
-            if "\n" in args[1] or ".." in args[1]:
+            if "\n" in args[1] or ".." in args[1] or args[1].endswith("/"):
                 raise ReleaseError("Invalid ref")
             return ""
         if args[0] == "rev-parse":
             return self.tag
-        if args[0] == "merge-base":
-            if not self.ancestor:
-                raise ReleaseError("Commit is not on the default branch")
-            return ""
+        if args[0] == "tag":
+            return args[2] if self.tag is not None else ""
         raise AssertionError(args)
 
 
 class FakeApi:
     def __init__(self, *, release=True, commit=COMMIT):
-        self.release = ({"id": 42, "tag_name": "v1.2.3", "draft": False,
+        self.repository = "test/repo"
+        self.release = ({"id": 42, "tag_name": "v1.2.3", "draft": True, "target_commitish": COMMIT,
+                         "html_url": "https://github.com/test/repo/releases/tag/untagged-example",
                          "prerelease": False, "name": "User title", "body": "User release notes"}
                         if release else None)
         self.commit = commit
@@ -112,9 +112,13 @@ class FakeApi:
         self.upload_attempts = 0
         self.fail_upload_at = None
         self.race_create = False
+        self.race_tag = False
         self.race_upload = False
         self.annotated = False
         self.move_after_upload = False
+        self.publish_after_upload = False
+        self.publish_on_refresh = False
+        self.other_releases = []
 
     def add_asset(self, name, data):
         asset_id = len(self.content) + 1
@@ -123,19 +127,32 @@ class FakeApi:
 
     def request(self, method, path, data=None):
         self.calls.append((method, path, data))
-        if path.startswith("/git/ref/tags/"):
+        if method == "GET" and path.startswith("/git/ref/tags/"):
+            if self.commit is None:
+                raise ApiError(404, "Not found")
             return {"object": {"type": "tag" if self.annotated else "commit", "sha": self.commit}}
         if path.startswith("/git/tags/"):
             return {"object": {"type": "commit", "sha": self.commit}}
-        if path.startswith("/releases/tags/"):
-            if self.release is None:
-                raise ApiError(404, "Not found")
+        if method == "POST" and path == "/git/refs":
+            self.mutations.append((method, path, data))
+            self.commit = data["sha"]
+            if self.race_tag:
+                raise ApiError(422, "Concurrent tag created")
+            return {"object": {"type": "commit", "sha": self.commit}}
+        if method == "GET" and path.startswith("/releases?"):
+            page = int(path.rsplit("page=", 1)[1])
+            releases = self.other_releases + ([self.release] if self.release else [])
+            return copy.deepcopy(releases[(page - 1) * 100:page * 100])
+        if method == "GET" and path == "/releases/42":
+            if self.publish_on_refresh:
+                self.release["draft"] = False
             return copy.deepcopy(self.release)
         if method == "GET" and path.startswith("/releases/42/assets?"):
             return list(self.assets.values())
         if method == "POST" and path == "/releases":
             self.mutations.append((method, path, data))
-            self.release = {"id": 42, **data}
+            self.release = {"id": 42, "html_url": "https://github.com/test/repo/releases/tag/untagged-example",
+                            **data}
             if self.race_create:
                 raise ApiError(422, "Already exists")
             return copy.deepcopy(self.release)
@@ -154,53 +171,62 @@ class FakeApi:
         self.mutations.append(("UPLOAD", name, data))
         if self.move_after_upload:
             self.commit = OTHER_COMMIT
+        if self.publish_after_upload:
+            self.release["draft"] = False
         if self.race_upload:
             raise ApiError(422, "Concurrent upload completed")
 
 
 class PrepareTests(unittest.TestCase):
-    def event(self, **changes):
-        return {"ref": "refs/tags/v1.2.3", "repository": {"default_branch": "master"}, **changes}
+    def event(self, version="v1.2.3", prerelease=False):
+        return {"inputs": {"version": version, "prerelease": prerelease}}
 
-    def test_branch_pull_request_and_manual_are_ci_only(self):
-        for name, event in (("push", self.event(ref="refs/heads/master")),
-                            ("push", self.event(ref="refs/tags/test")),
-                            ("push", self.event(deleted=True)),
-                            ("pull_request", {}), ("workflow_dispatch", {})):
-            with self.subTest(event=name, payload=event):
-                result = prepare_event(name, event, COMMIT, FakeGit())
-                self.assertEqual(result, {"publish": "false", "tag": "", "commit": COMMIT,
-                                          "release_id": ""})
+    def prepare(self, event=None, git=None, ref="refs/heads/feature/rendering", name="workflow_dispatch"):
+        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit())
 
-    def test_version_tag_checks_default_branch_ancestry(self):
+    def test_manual_branch_request_is_bound_to_event_commit(self):
         git = FakeGit()
-        result = prepare_event("push", self.event(), COMMIT, git)
-        self.assertEqual(result["publish"], "true")
-        self.assertEqual(result["tag"], "v1.2.3")
-        self.assertIn(("merge-base", "--is-ancestor", COMMIT, "refs/remotes/origin/master"), git.calls)
+        self.assertEqual(self.prepare(git=git),
+                         {"tag": "v1.2.3", "commit": COMMIT, "prerelease": "false"})
+        self.assertIn(("check-ref-format", "refs/heads/feature/rendering"), git.calls)
+        self.assertFalse(any(args[0] == "merge-base" for args in git.calls))
 
-    def test_formal_and_prerelease_published_events_are_supported(self):
-        for prerelease in (False, True):
-            event = self.event(action="published", release={"id": 42, "tag_name": "v1.2.3",
-                                                           "draft": False, "prerelease": prerelease})
-            result = prepare_event("release", event, COMMIT, FakeGit())
-            self.assertEqual(result["release_id"], "42")
-            self.assertEqual(result["publish"], "true")
+    def test_only_explicit_manual_dispatch_is_accepted(self):
+        for name in ("push", "pull_request", "release", "schedule"):
+            with self.subTest(name=name), self.assertRaises(ReleaseError):
+                self.prepare(name=name)
 
-    def test_wrong_checkout_moved_tag_and_foreign_branch_fail(self):
-        for git in (FakeGit(head=OTHER_COMMIT), FakeGit(tag=OTHER_COMMIT), FakeGit(ancestor=False)):
+    def test_branch_selection_rejects_tags_and_invalid_refs(self):
+        for ref in ("refs/tags/v1.2.3", "main", "refs/heads/../bad", "refs/heads/",
+                    "refs/heads/main\ninjected=true"):
+            with self.subTest(ref=ref), self.assertRaises(ReleaseError):
+                self.prepare(ref=ref)
+
+    def test_new_tag_and_matching_existing_tag_are_allowed(self):
+        for tag in (None, COMMIT):
+            with self.subTest(tag=tag):
+                self.assertEqual(self.prepare(git=FakeGit(tag=tag))["commit"], COMMIT)
+
+    def test_wrong_checkout_and_conflicting_version_fail(self):
+        for git in (FakeGit(head=OTHER_COMMIT), FakeGit(tag=OTHER_COMMIT)):
             with self.subTest(git=git), self.assertRaises(ReleaseError):
-                prepare_event("push", self.event(), COMMIT, git)
+                self.prepare(git=git)
 
-    def test_invalid_event_metadata_fails(self):
-        bad_release = {"id": 42, "tag_name": "v1.2.3", "draft": False}
-        for event in (self.event(action="created", release=bad_release),
-                      self.event(action="published", release={**bad_release, "draft": True}),
-                      self.event(action="published", release={**bad_release, "id": 0}),
-                      self.event(action="published", release={**bad_release, "tag_name": "v1\ninjection=true"}),
-                      self.event(action="published", release=bad_release, repository={})):
-            with self.subTest(event=event), self.assertRaises(ReleaseError):
-                prepare_event("release", event, COMMIT, FakeGit())
+    def test_semver_and_prerelease_form_validation(self):
+        for version in ("v0.0.0", "v1.2.3", "v1.2.3-rc.1", "v1.2.3+build.007",
+                        "v1.2.3-alpha.1+sha.abc"):
+            for value in (True, False, "true", "false"):
+                with self.subTest(version=version, value=value):
+                    result = self.prepare(self.event(version, value))
+                    self.assertEqual(result["tag"], version)
+                    self.assertEqual(result["prerelease"], str(value).lower())
+        for version in ("", "1.2.3", "v01.2.3", "v1.2", "v1.2.3-01", "v1.2.3-rc..1",
+                        "v1.2.3\ninjected=true", "v1.2.3 ", "v1.2.3/extra", 123):
+            with self.subTest(version=version), self.assertRaises(ReleaseError):
+                self.prepare(self.event(version))
+        for value in ("yes", "False", "1", 1, None):
+            with self.subTest(value=value), self.assertRaises(ReleaseError):
+                self.prepare(self.event(prerelease=value))
 
 
 class PackageTests(unittest.TestCase):
@@ -264,15 +290,15 @@ class PackageTests(unittest.TestCase):
         # Exercise the real subprocess entry point, including embedded Python's isolated path.
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
-        event_path.write_text(json.dumps({"ref": "refs/heads/main"}), encoding="utf-8")
+        event_path.write_text(json.dumps({"inputs": {"version": "v9876.5432.10101", "prerelease": "false"}}), encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(Path(__file__).resolve().parents[1] / "release_pipeline.py"),
-            "prepare", "--event-path", str(event_path), "--event-name", "push",
+            "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch", "--ref", "refs/heads/main",
             "--commit", commit, "--output", str(output_path),
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
-                         f"publish=false\ntag=\ncommit={commit}\nrelease_id=\n")
+                         f"tag=v9876.5432.10101\ncommit={commit}\nprerelease=false\n")
 
     def test_missing_platform_and_unexpected_file_fail(self):
         self.write_packages(packages()[:2])
@@ -342,48 +368,81 @@ class PackageTests(unittest.TestCase):
             validate_archive(item.name, item.data, item.platform, COMMIT)
 
 
-class PublishTests(unittest.TestCase):
+class DraftTests(unittest.TestCase):
     def setUp(self):
         redirect = contextlib.redirect_stdout(io.StringIO())
         redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)
 
-    def test_create_after_validation_and_upload_all_six(self):
-        api = FakeApi(release=False)
-        publish(api, "v1.2.3", COMMIT, "", packages())
+    def test_new_version_creates_tag_then_draft_then_six_assets(self):
+        api = FakeApi(release=False, commit=None)
+        result = prepare_draft(api, "v1.2.3", COMMIT, True, packages())
+        self.assertEqual(result, {
+            "release_id": "42", "release_url": api.release["html_url"], "tag": "v1.2.3", "commit": COMMIT})
         self.assertEqual(len(api.assets), 6)
-        self.assertEqual(api.mutations[0][0], "POST")
+        self.assertEqual(api.mutations[0], ("POST", "/git/refs", {"ref": "refs/tags/v1.2.3", "sha": COMMIT}))
+        self.assertEqual(api.mutations[1][1], "/releases")
+        self.assertTrue(api.release["draft"])
+        self.assertTrue(api.release["prerelease"])
         self.assertEqual(api.release["target_commitish"], COMMIT)
+        self.assertFalse(any(method in ("PATCH", "DELETE") for method, _, _ in api.calls))
 
-    def test_repeated_publish_preserves_user_notes_and_verified_packages(self):
+    def test_existing_tag_is_never_recreated_or_moved(self):
+        api = FakeApi(release=False)
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertEqual(api.mutations[0][1], "/releases")
+        self.assertFalse(any(path == "/git/refs" for _, path, _ in api.calls))
+
+    def test_repeated_preparation_preserves_notes_prerelease_and_existing_archives(self):
         api = FakeApi()
         original_release = copy.deepcopy(api.release)
-        publish(api, "v1.2.3", COMMIT, "42", packages(timestamp=1))
+        prepare_draft(api, "v1.2.3", COMMIT, True, packages(timestamp=1))
         initial_mutations = len(api.mutations)
-        publish(api, "v1.2.3", COMMIT, "42", packages(timestamp=2))
+        prepare_draft(api, "v1.2.3", COMMIT, True, packages(timestamp=2))
         self.assertEqual(len(api.mutations), initial_mutations)
         self.assertEqual(api.release, original_release)
 
-    def test_incomplete_matrix_or_bad_package_causes_no_api_calls(self):
-        for inputs in (packages()[:2], [package(commit=OTHER_COMMIT), *packages()[1:]]):
-            api = FakeApi(release=False)
+    def test_branch_target_commitish_is_allowed_with_exact_existing_tag(self):
+        api = FakeApi()
+        api.release["target_commitish"] = "master"
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(api.release["target_commitish"], "master")
+
+    def test_missing_platform_or_invalid_archive_never_creates_a_tag(self):
+        for inputs in (packages()[:2], [package(commit=OTHER_COMMIT), *packages()[1:]],
+                       [package(omit=("bin/gyo_object_fps.exe",)), *packages()[1:]]):
+            api = FakeApi(release=False, commit=None)
             with self.subTest(inputs=inputs), self.assertRaises(ReleaseError):
-                publish(api, "v1.2.3", COMMIT, "", inputs)
+                prepare_draft(api, "v1.2.3", COMMIT, False, inputs)
             self.assertEqual(api.calls, [])
             self.assertEqual(api.mutations, [])
 
-    def test_moved_tag_and_mismatched_release_id_prevent_mutations(self):
-        for api, expected in ((FakeApi(commit=OTHER_COMMIT), ""), (FakeApi(), "41"),
-                              (FakeApi(release=False), "42")):
-            with self.subTest(expected=expected), self.assertRaises(ReleaseError):
-                publish(api, "v1.2.3", COMMIT, expected, packages())
-            self.assertEqual(api.mutations, [])
+    def test_invalid_version_fails_before_any_api_call(self):
+        api = FakeApi(release=False, commit=None)
+        with self.assertRaises(ReleaseError):
+            prepare_draft(api, "bad/version", COMMIT, False, packages())
+        self.assertEqual(api.calls, [])
 
-    def test_draft_release_is_not_changed(self):
-        api = FakeApi()
-        api.release["draft"] = True
-        with self.assertRaisesRegex(ReleaseError, "draft"):
-            publish(api, "v1.2.3", COMMIT, "", packages())
+    def test_published_or_immutable_release_blocks_tag_creation_and_uploads(self):
+        for missing_tag in (False, True):
+            for field, value in (("draft", False), ("immutable", True)):
+                api = FakeApi(commit=None if missing_tag else COMMIT)
+                api.release[field] = value
+                with self.subTest(field=field, missing_tag=missing_tag), self.assertRaisesRegex(ReleaseError, "published or immutable"):
+                    prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+                self.assertEqual(api.mutations, [])
+
+    def test_existing_draft_without_tag_is_not_guessed_from_target_commitish(self):
+        api = FakeApi(commit=None)
+        with self.assertRaisesRegex(ReleaseError, "no version tag"):
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertEqual(api.mutations, [])
+
+    def test_moved_tag_prevents_mutation(self):
+        api = FakeApi(commit=OTHER_COMMIT)
+        with self.assertRaisesRegex(ReleaseError, "different commit"):
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages())
         self.assertEqual(api.mutations, [])
 
     def test_existing_wrong_commit_or_corrupt_checksum_blocks_all_uploads(self):
@@ -393,27 +452,17 @@ class PublishTests(unittest.TestCase):
             api.add_asset(item.name, item.data)
             api.add_asset(item.name + ".sha256", item.checksum_data if wrong_commit else b"corrupt")
             with self.subTest(wrong_commit=wrong_commit), self.assertRaises(ReleaseError):
-                publish(api, "v1.2.3", COMMIT, "", packages())
+                prepare_draft(api, "v1.2.3", COMMIT, False, packages())
             self.assertEqual(api.mutations, [])
 
-    def test_metadata_only_remote_asset_is_not_reused_or_overwritten(self):
-        for platform in PLATFORMS:
-            api = FakeApi()
-            item = package(platform, omit=tuple(package_contents(platform)))
-            api.add_asset(item.name, item.data)
-            api.add_asset(item.name + ".sha256", item.checksum_data)
-            with self.subTest(platform=platform), self.assertRaisesRegex(ReleaseError, "Missing required"):
-                publish(api, "v1.2.3", COMMIT, "", packages())
-            self.assertEqual(api.mutations, [])
-
-    def test_interrupted_upload_recovers_checksum_from_existing_archive(self):
+    def test_interrupted_upload_recovers_checksum_without_replacing_archive(self):
         api = FakeApi()
         api.fail_upload_at = 2
         with self.assertRaises(ApiError):
-            publish(api, "v1.2.3", COMMIT, "", packages(timestamp=1))
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=1))
         self.assertEqual(len(api.assets), 1)
         api.fail_upload_at = None
-        publish(api, "v1.2.3", COMMIT, "", packages(timestamp=2))
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
         self.assertEqual(len(api.assets), 6)
         self.assertEqual(len(api.mutations), 6)
 
@@ -422,29 +471,53 @@ class PublishTests(unittest.TestCase):
         item = package(timestamp=1)
         api.add_asset(item.name + ".sha256", item.checksum_data)
         with self.assertRaises(ReleaseError):
-            publish(api, "v1.2.3", COMMIT, "", packages(timestamp=2))
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
         self.assertEqual(api.mutations, [])
-        publish(api, "v1.2.3", COMMIT, "", [item, *packages()[1:]])
+        prepare_draft(api, "v1.2.3", COMMIT, False, [item, *packages()[1:]])
         self.assertEqual(len(api.assets), 6)
 
     def test_tag_is_rechecked_between_uploads(self):
         api = FakeApi()
         api.move_after_upload = True
         with self.assertRaisesRegex(ReleaseError, "moved"):
-            publish(api, "v1.2.3", COMMIT, "", packages())
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages())
         self.assertEqual(len(api.mutations), 1)
 
-    def test_create_and_upload_races_are_idempotent(self):
-        api = FakeApi(release=False)
-        api.race_create = api.race_upload = True
-        publish(api, "v1.2.3", COMMIT, "", packages())
+    def test_premature_human_publish_stops_before_the_next_upload(self):
+        for before_first in (True, False):
+            api = FakeApi()
+            api.publish_on_refresh = before_first
+            api.publish_after_upload = not before_first
+            with self.subTest(before_first=before_first), self.assertRaisesRegex(ReleaseError, "published or immutable"):
+                prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+            self.assertEqual(len(api.mutations), 0 if before_first else 1)
+
+    def test_tag_draft_and_asset_creation_races_are_idempotent(self):
+        api = FakeApi(release=False, commit=None)
+        api.race_tag = api.race_create = api.race_upload = True
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages())
         self.assertEqual(len(api.assets), 6)
+        self.assertTrue(api.release["draft"])
 
     def test_annotated_tag_is_peeled(self):
         api = FakeApi()
         api.annotated = True
         verify_remote_tag(api, "v1.2.3", COMMIT)
         self.assertTrue(any(path.startswith("/git/tags/") for _, path, _ in api.calls))
+
+    def test_draft_discovery_paginates_without_tag_endpoint(self):
+        api = FakeApi()
+        api.other_releases = [{"id": 100 + index, "tag_name": f"other-{index}"} for index in range(100)]
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertTrue(any("page=2" in path for _, path, _ in api.calls))
+        self.assertFalse(any(path.startswith("/releases/tags/") for _, path, _ in api.calls))
+
+    def test_duplicate_drafts_fail_without_mutations(self):
+        api = FakeApi()
+        api.other_releases = [copy.deepcopy(api.release)]
+        with self.assertRaisesRegex(ReleaseError, "Multiple releases"):
+            prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertEqual(api.mutations, [])
 
 
 class TransportTests(unittest.TestCase):

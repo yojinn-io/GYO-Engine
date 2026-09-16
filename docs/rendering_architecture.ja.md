@@ -218,17 +218,19 @@ CI は `dumpbin` で Windows EXE/DLL の参照する VC runtime が同梱され�
 
 GitHub Actions は Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 で Object_FPS、UI editor、shader をビルドします。3 job は独立しており、1 つの失敗で他を停止しません。ログ、manifest、ネイティブ package をアップロードします。
 
-ブランチ push、pull request、**Run workflow** は quick 経路で、コンパイル、実際の内容による起動確認、shader 描画1件を実行します。完全なゲームルールと8件の描画検証は Release イベントで実行します。`v*` tag push も Release 経路です。
+`cross-platform.yml` のブランチ push、pull request、手動実行は quick 経路で、コンパイル、実際の内容による起動確認、shader 描画1件を実行します。GUI の **Prepare Release** は完全な release profile を使います。両方の入口が `build-and-validate.yml` を共有し、固定 commit SHA を渡します。Tag push と `release.published` は再ビルドを起動しません。
 
 ```text
-prepare: イベントと固定 commit の検証
+quick／Prepare Release: 入力と固定 commit の検証
+  → 共通 build-and-validate.yml（quick または release profile）
   → Windows／Linux／macOS: build + install + startup smoke
   → Release のみ: CPU/headless + shader + core-only + 独立配布の失敗検証
   → Release のみ: 3プラットフォーム gameplay headless
   → Linux Vulkan/Lavapipe: quick は shader 1件／Release は全8件
   → 3プラットフォーム: package + SHA-256 + Actions artifacts
-  → CI validation: 3プラットフォームすべて成功
-  → 公開イベントのみ: 3プラットフォームの Release assets を検証・アップロード
+  → 3プラットフォームすべて成功
+  → Prepare Release のみ: tag + Draft Release + 添付6件を作成
+  → 利用者が Draft を確認して Publish release（再ビルドなし）
 ```
 
 | 検証 | Platform | 実際の範囲 |
@@ -241,21 +243,24 @@ prepare: イベントと固定 commit の検証
 
 Linux で Lavapipe がない場合、device の生成失敗、描画失敗、タイムアウトはいずれも job の失敗になります。「GPU がなければスキップして成功」とする経路はありません。Helper はログに記録された実際の driver／shader 形式が要求と一致することも確認し、`summary.json` に結果を保存します。`vulkan-info.log` は ICD と Vulkan device 情報を記録します。これでソフトウェア Vulkan の描画経路を確認し、物理 GPU は別途検証します。
 
-固定名の `CI validation` job が `prepare` と3プラットフォームの matrix を集約します。必須 job の失敗、キャンセル、スキップは合格にならず、branch protection の必須チェックに指定できます。Quick 経路では設計どおり Release 専用の重い処理を実行せず、Summary にモードと未実行項目を明記します。これらを完全な検証済みとは扱いません。
+共通の検証フローが3プラットフォームの matrix を集約し、必須 job が失敗、キャンセル、スキップした場合は Draft 作成へ進みません。Quick 経路では設計どおり Release 専用の重い処理を実行せず、Summary にモードと未実行項目を明記します。完全な検証済みとは扱いません。Branch protection には、quick フローで実際に表示される集約チェック名を指定してください。
 
 ### 9.2 Release イベントとアップロード方針
 
 | イベント | 3プラットフォームのビルドと smoke | Release 添付 |
 |---|---|---|
 | ブランチ push、pull request | Quick 経路 | アップロードせず、Actions artifacts を保存 |
-| 手動 **Run workflow** | Quick 経路 | tag を選択した手動実行でもアップロードしない |
-| `v*` tag push | 完全な Release 経路 | 全件成功後、その tag の Release を作成／利用してアップロード |
-| GitHub **Publish release**（`release.published`） | 完全な Release 経路 | 全件成功後、その Release に追加。正式版とプレリリースの両方が対象 |
+| 通常の cross-platform workflow を手動実行 | Quick 経路 | tag を選択した手動実行でもアップロードしない |
+| **Prepare Release**：ブランチ、version、prerelease を選択 | 完全な Release 経路 | 全件成功後、tag と Draft Release を作り6ファイルを添付 |
+| Tag push（`v*` を含む） | 起動しない | Release の作成もアップロードもしない |
+| GitHub **Publish release**（`release.published`） | 再ビルドしない | 準備済み Draft と添付を公開 |
 | Release の下書き保存 | 起動しない | アップロードしない |
 
-公開には tag がイベントの正確な commit を指し、その commit がデフォルトブランチの履歴に含まれることが必要です。3プラットフォームの検証がすべて成功した場合にのみ publisher に進み、この job だけが `contents: write` を持ちます。添付は `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` と各 `.tar.gz.sha256`、計6ファイルです。
+**Actions → Prepare Release → Run workflow** でソースブランチを選び、`v1.0.1` などのバージョンと prerelease を指定します。開始時点の commit SHA を固定し、3プラットフォームがすべて成功してから `contents: write` を持つ Draft job に進みます。事前検証やビルドはリモート tag／Release を作りません。新 tag は固定 SHA を指し、同名 tag がある場合は完全一致が必要で、移動はしません。添付は `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` と各 `.tar.gz.sha256`、計6ファイルです。
 
-同じ tag の push と Release イベントはロックを共有し、実行中の公開をキャンセルしません。重複イベントも再ビルド・再検証します。アップロード時にリモート tag、ファイルのハッシュ、ソース／smoke 情報を再確認し、検証済みの添付を保持して不足分だけを追加します。競合はエラーになり、既存添付を上書きせず、利用者が書いた Release のタイトルや説明も変更しません。通常のブランチ／PR の古い実行は、新しい実行でキャンセルできます。
+同じバージョンの Prepare Release 実行と再実行はロックを共有し、アップロード中の処理をキャンセルしません。Draft の不足添付だけを補い、検証済みファイルと手書きのタイトル／説明を保持します。同じバージョンが公開済みなら変更を拒否し、新しい番号が必要です。イベント SHA を保つには元の実行を再実行してください。新しく **Run workflow** を押すと、更新されたブランチの commit を選ぶ場合があります。
+
+手動入口を表示するには新 workflows を先にデフォルトブランチへマージし、選択するソースブランチにも含めます。既存実行の再実行は元の workflow を使います。GUI 操作、失敗時の復旧、Draft の確認は[バージョン公開ガイド](releasing.ja.md)を参照してください。最後に利用者が **Publish release** を押し、この操作では再ビルドしません。
 
 ### 9.3 ダウンロード後の実機確認
 
@@ -304,7 +309,7 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 | 新 helper と既存 Windows package | ローカルの D3D12／DXIL と Vulkan／SPIR-V で `--suite ci` が各 3/3、Vulkan の `--suite quick` が 1/1 合格。既存 package での確認であり、新 hosted フローの合格証拠ではない |
 | 新 Windows 実行ファイルの CPU 回帰 | MSVC 再ビルド成功。startup smoke、gameplay headless smoke、package、domain headless が計 4/4 合格。無効な SDL video／GPU driver を指定し、ウィンドウや GPU が不要であることを確認 |
 | 新 Windows インストール済み package | TEMP 作業ディレクトリーから startup／gameplay smoke に合格。通常の配布検査と common／builtin shader／game shader の3欠落検査が期待どおり。Vulkan `full` 8/8、D3D12 `quick` 1/1 合格 |
-| 新 push／Release フロー | Quick 経路を GitHub で実行し、Linux は成功。Windows package の修正は次の実行待ち。完全な Release 経路は未検証 |
+| CI／Release フロー | 以前の quick 経路には hosted 記録あり。今回の共通検証フローと GUI Prepare Release／Draft 作成は新しい GitHub 実行による検証待ち |
 
 既存の Windows Mark-23／ジャンプ検証を、新レンダリング設計の検証結果として流用しません。今回のビルドログ、Actions summary、実機出力を合格の証拠とします。
 

@@ -15,6 +15,10 @@ PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64")
 ARCHIVE_ROOT = "gyo-object-fps"
 METADATA_PATH = f"{ARCHIVE_ROOT}/build_metadata.json"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
+VERSION_PATTERN = re.compile(
+    r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\Z")
 
 
 class ReleaseError(RuntimeError):
@@ -34,47 +38,47 @@ def git(*args: str) -> str:
     return result.stdout.strip()
 
 
-def prepare_event(event_name: str, event: dict, commit: str, git_command=git) -> dict:
-    """Classify an event and verify the immutable commit used by every job."""
+def validate_version(version: str) -> str:
+    match = VERSION_PATTERN.fullmatch(version) if isinstance(version, str) else None
+    if match is None:
+        raise ReleaseError("Version must use v-prefixed SemVer, for example v1.2.3 or v1.2.3-rc.1")
+    if match.group(1):
+        for identifier in match.group(1).split("."):
+            if identifier.isdigit() and len(identifier) > 1 and identifier.startswith("0"):
+                raise ReleaseError("Numeric SemVer prerelease identifiers may not have leading zeroes")
+    return version
+
+
+def parse_boolean(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in ("true", "false"):
+        return value == "true"
+    raise ReleaseError("Prerelease must be the boolean true or false")
+
+
+def prepare_event(event_name: str, event: dict, commit: str, ref: str, git_command=git) -> dict:
+    """Validate a GUI workflow dispatch without creating a tag or release."""
+    if event_name != "workflow_dispatch":
+        raise ReleaseError("Prepare Release only accepts an explicit workflow_dispatch event")
     validate_commit(commit)
     if git_command("rev-parse", "HEAD") != commit:
         raise ReleaseError("The checked-out commit does not match the event commit")
-    output = {"publish": "false", "tag": "", "commit": commit, "release_id": ""}
-    tag = ""
-    if event_name == "release":
-        release = event.get("release", {})
-        if event.get("action") != "published" or release.get("draft", True):
-            raise ReleaseError("Only published, non-draft release events may publish assets")
-        tag = release.get("tag_name", "")
-        release_id = release.get("id")
-        if not isinstance(release_id, int) or isinstance(release_id, bool) or release_id <= 0:
-            raise ReleaseError("Release event is missing its positive numeric release ID")
-        output["release_id"] = str(release_id)
-    elif event_name == "push":
-        ref = event.get("ref", "")
-        if event.get("deleted", False):
-            return output
-        if ref.startswith("refs/tags/v"):
-            tag = ref.removeprefix("refs/tags/")
-    elif event_name not in ("pull_request", "workflow_dispatch"):
-        raise ReleaseError(f"Unsupported CI event: {event_name}")
-    if not tag:
-        if event_name == "release":
-            raise ReleaseError("Published release is missing its tag")
-        return output
-    if not isinstance(tag, str) or any(ord(char) < 32 or ord(char) == 127 for char in tag):
-        raise ReleaseError("Release tag contains invalid characters")
+    if (not isinstance(ref, str) or not ref.startswith("refs/heads/")
+            or any(ord(char) < 32 or ord(char) == 127 for char in ref)):
+        raise ReleaseError("Select a branch in Prepare Release; tag refs are not accepted")
+    git_command("check-ref-format", ref)
+    inputs = event.get("inputs", {})
+    if not isinstance(inputs, dict):
+        raise ReleaseError("Missing Prepare Release form inputs")
+    tag = validate_version(inputs.get("version", ""))
+    prerelease = parse_boolean(inputs.get("prerelease", False))
     git_command("check-ref-format", f"refs/tags/{tag}")
-    if git_command("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") != commit:
-        raise ReleaseError("Release tag does not point to the exact event commit")
-    default_branch = event.get("repository", {}).get("default_branch", "")
-    if not isinstance(default_branch, str) or not default_branch:
-        raise ReleaseError("Event is missing the repository default branch")
-    default_ref = f"refs/remotes/origin/{default_branch}"
-    git_command("check-ref-format", default_ref)
-    git_command("merge-base", "--is-ancestor", commit, default_ref)
-    output.update(publish="true", tag=tag)
-    return output
+    existing = git_command("tag", "--list", tag)
+    if existing:
+        if existing != tag or git_command("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") != commit:
+            raise ReleaseError("Existing version tag does not point to the exact selected commit")
+    return {"tag": tag, "commit": commit, "prerelease": str(prerelease).lower()}
 
 
 def archive_name(platform: str) -> str:

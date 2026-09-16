@@ -1,0 +1,378 @@
+name: Build and validate
+
+on:
+  workflow_call:
+    inputs:
+      source_commit:
+        description: Exact source commit captured by the caller
+        required: true
+        type: string
+      profile:
+        description: quick or release acceptance
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Validate source and CI helpers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+      - name: Verify the immutable commit and acceptance profile
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          ACCEPTANCE_PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$(git rev-parse HEAD)" != "$SOURCE_COMMIT" ]; then
+            echo '::error::The checkout must match the full source commit SHA.'
+            exit 1
+          fi
+          case "$ACCEPTANCE_PROFILE" in
+            quick|release) ;;
+            *) echo '::error::Unknown acceptance profile.'; exit 1 ;;
+          esac
+      - name: Test package, draft preparation and smoke failure policies
+        run: python -m unittest discover -s tools/ci/tests -v
+
+  native:
+    name: ${{ matrix.platform }} / build, tests, smoke, package
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-2025
+            preset: ci-windows
+            toolchain: msvc-vs2026
+            cc: cl
+            cxx: cl
+            parallel: 4
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            preset: ci-linux
+            toolchain: gcc-14
+            cc: gcc-14
+            cxx: g++-14
+            parallel: 4
+          - platform: macos-arm64
+            runner: macos-15
+            preset: ci-macos
+            toolchain: appleclang-xcode16.4
+            cc: /usr/bin/clang
+            cxx: /usr/bin/clang++
+            parallel: 2
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PRESET: ${{ matrix.preset }}
+      # VsDevCmd owns Platform (= x64); Windows env names are case-insensitive.
+      GYO_PACKAGE_PLATFORM: ${{ matrix.platform }}
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      ACCEPTANCE_PROFILE: ${{ inputs.profile }}
+      GPU_SMOKE_SUITE: ${{ inputs.profile == 'release' && 'full' || 'quick' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+          lfs: true
+
+      - name: Initialize MSVC x64
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 ninja-build pkg-config \
+            libasound2-dev libpulse-dev libudev-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+            libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+            libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libdbus-1-dev \
+            mesa-vulkan-drivers vulkan-tools xvfb xauth
+          # SDL 3.4 enables XTest by default and requires its development files.
+          pkg-config --modversion xtst
+
+      - name: Select Xcode and verify offline Metal compilation
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ "$(uname -m)" != "arm64" ]; then
+            echo "::error::ci-macos requires the macos-15 ARM64 runner; review the matrix label."
+            exit 1
+          fi
+          xcode_developer=/Applications/Xcode_16.4.app/Contents/Developer
+          if [ ! -d "$xcode_developer" ]; then
+            echo "::error::Pinned Xcode 16.4 is absent. Review actions/runner-images macos-15-arm64, then update the selected Xcode, toolchain cache key and docs together."
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode_developer"
+          xcodebuild -version
+          xcrun -sdk macosx metal -v
+          printf '#include <metal_stdlib>\nusing namespace metal;\nkernel void probe() {}\n' > "$RUNNER_TEMP/gyo-metal-probe.metal"
+          xcrun -sdk macosx metal -c "$RUNNER_TEMP/gyo-metal-probe.metal" -o "$RUNNER_TEMP/gyo-metal-probe.air"
+          xcrun -sdk macosx metallib "$RUNNER_TEMP/gyo-metal-probe.air" -o "$RUNNER_TEMP/gyo-metal-probe.metallib"
+
+      - name: Record toolchain
+        id: tools
+        run: |
+          New-Item -ItemType Directory -Force "build/$env:PRESET/logs" | Out-Null
+          cmake --version
+          ninja --version
+          python --version
+          if ($IsWindows) {
+            "compiler=$env:VCToolsVersion" >> $env:GITHUB_OUTPUT
+          } else {
+            $compiler = (& $env:CXX --version | Select-Object -First 1) -replace '[^a-zA-Z0-9.-]', '_'
+            "compiler=$compiler" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Cache pinned native shader tools
+        uses: actions/cache@v6
+        with:
+          path: build/${{ matrix.preset }}/host-tools
+          key: shader-tools-v1-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.tools.outputs.compiler }}-${{ hashFiles('tools/shader_pipeline/**', 'cmake/GyoShaders.cmake', 'engine/include/engine/base/Sha256.hpp', 'engine/src/base/Sha256.cpp') }}
+
+      - name: Configure complete application graph
+        id: configure
+        run: |
+          cmake --preset $env:PRESET 2>&1 | Tee-Object "build/$env:PRESET/logs/configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Object_FPS, UI editor, tests and native shaders
+        id: build
+        run: |
+          cmake --build --preset $env:PRESET 2>&1 | Tee-Object "build/$env:PRESET/logs/build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run CPU, headless and shader tests
+        id: tests
+        if: inputs.profile == 'release'
+        run: |
+          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run host shader reflection and rejection tests
+        id: shaders
+        if: always() && inputs.profile == 'release' && steps.build.outcome == 'success'
+        run: |
+          ctest --test-dir "build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/shader-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and test core with optional modules disabled
+        id: core
+        if: always() && inputs.profile == 'release' && steps.tools.outcome == 'success'
+        run: |
+          cmake --preset core -B "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir "build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install the application
+        id: package
+        run: |
+          cmake --install "build/$env:PRESET" --prefix "$env:GITHUB_WORKSPACE/build/$env:PRESET/stage" 2>&1 | Tee-Object "build/$env:PRESET/logs/install.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate release deployment and missing-content failures
+        id: package_validation
+        if: inputs.profile == 'release'
+        run: |
+          python tools/ci/validate_package.py --stage "build/$env:PRESET/stage" --logs "build/$env:PRESET/logs" 2>&1 | Tee-Object "build/$env:PRESET/logs/package-validation.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Start the packaged application from an unrelated directory
+        id: smoke
+        timeout-minutes: 2
+        run: |
+          $packageRoot = (Resolve-Path "build/$env:PRESET/stage").Path
+          $logRoot = (Resolve-Path "build/$env:PRESET/logs").Path
+          $executable = if ($IsWindows) { 'gyo_object_fps.exe' } else { 'gyo_object_fps' }
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & "$packageRoot/bin/$executable" --startup-smoke-test 2>&1 | Tee-Object "$logRoot/startup-smoke.log"
+            if ($LASTEXITCODE -ne 0) { throw "Packaged startup failed with exit $LASTEXITCODE" }
+          } finally { Pop-Location }
+          @{
+            source_revision = $env:SOURCE_COMMIT
+            platform = $env:GYO_PACKAGE_PLATFORM
+            profile = $env:ACCEPTANCE_PROFILE
+            startup = 'passed'
+            headless = 'not_run'
+            rendering = @{ status = 'not_run'; reason = 'Physical GPU acceptance remains manual' }
+          } | ConvertTo-Json -Depth 5 | Set-Content "$logRoot/smoke-summary.json" -Encoding utf8
+
+      - name: Exercise release gameplay (jump, pause, shooting and reload)
+        id: gameplay
+        if: inputs.profile == 'release'
+        timeout-minutes: 2
+        run: |
+          $packageRoot = (Resolve-Path "build/$env:PRESET/stage").Path
+          $logRoot = (Resolve-Path "build/$env:PRESET/logs").Path
+          $executable = if ($IsWindows) { 'gyo_object_fps.exe' } else { 'gyo_object_fps' }
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & "$packageRoot/bin/$executable" --headless-smoke-test 2>&1 | Tee-Object "$logRoot/headless-smoke.log"
+            if ($LASTEXITCODE -ne 0) { throw "Release gameplay smoke failed with exit $LASTEXITCODE" }
+          } finally { Pop-Location }
+          $reportPath = "$logRoot/smoke-summary.json"
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $report.headless = 'passed'
+          $report | ConvertTo-Json -Depth 5 | Set-Content $reportPath -Encoding utf8
+
+      - name: Render the shader probe (release also runs full GPU diagnostics)
+        id: gpu_smoke
+        timeout-minutes: 20
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SDL_VIDEODRIVER: x11
+          SDL_AUDIODRIVER: dummy
+          SDL_LOGGING: '*=info'
+        run: |
+          set -euo pipefail
+          mapfile -t icds < <(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)
+          if [ "${#icds[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one Mesa Lavapipe ICD, found ${#icds[@]}"
+            exit 1
+          fi
+          export VK_DRIVER_FILES="${icds[0]}"
+          export VK_ICD_FILENAMES="$VK_DRIVER_FILES"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/gyo-xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf 'Lavapipe ICD: %s\n' "$VK_DRIVER_FILES" > "build/$PRESET/logs/vulkan-info.log"
+          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary >> "build/$PRESET/logs/vulkan-info.log" 2>&1
+          xvfb-run -a -s '-screen 0 1920x1080x24' python tools/ci/manual_gpu_smoke.py \
+            --package "build/$PRESET/stage" --driver vulkan --suite "$GPU_SMOKE_SUITE" --timeout 120 \
+            --output "build/$PRESET/logs/gpu-smoke" 2>&1 | tee "build/$PRESET/logs/gpu-smoke.log"
+      - name: Record successful software rendering smoke
+        if: runner.os == 'Linux'
+        run: |
+          $reportPath = "build/$env:PRESET/logs/smoke-summary.json"
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $gpu = Get-Content "build/$env:PRESET/logs/gpu-smoke/summary.json" -Raw | ConvertFrom-Json
+          $expectedCount = if ($env:GPU_SMOKE_SUITE -eq 'full') { 8 } else { 1 }
+          if ($gpu.passed -ne $true -or $gpu.suite -ne $env:GPU_SMOKE_SUITE -or
+              $gpu.requested_driver -ne 'vulkan' -or @($gpu.cases).Count -ne $expectedCount -or
+              @($gpu.cases | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw 'Rendering smoke summary does not match the required suite'
+          }
+          $report.rendering = @{
+            status = 'passed'; driver = 'vulkan'; implementation = 'mesa-lavapipe'
+            suite = $gpu.suite; case_count = @($gpu.cases).Count
+          }
+          $report | ConvertTo-Json -Depth 5 | Set-Content $reportPath -Encoding utf8
+
+      - name: Archive the verified platform package
+        id: archive
+        run: |
+          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --output "build/$env:PRESET/gyo-object-fps-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --smoke-report "build/$env:PRESET/logs/smoke-summary.json" 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload native package for manual GPU acceptance
+        if: success() && steps.archive.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gyo-object-fps-${{ matrix.platform }}
+          # A job retry replaces this run's artifact; Release assets are verified separately.
+          overwrite: true
+          path: |
+            build/${{ matrix.preset }}/gyo-object-fps-*.tar.gz
+            build/${{ matrix.preset }}/gyo-object-fps-*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diagnostics-${{ matrix.platform }}
+          overwrite: true
+          path: |
+            build/${{ matrix.preset }}/logs
+            build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/${{ matrix.preset }}/Testing/Temporary
+            build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
+            build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
+            build/${{ matrix.preset }}/host-tools/Testing/Temporary
+            build/${{ matrix.preset }}/shaders/**/manifest.json
+            build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Summarize acceptance boundary
+        if: always()
+        env:
+          CONFIGURE_RESULT: ${{ steps.configure.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          TEST_RESULT: ${{ steps.tests.outcome }}
+          SHADER_RESULT: ${{ steps.shaders.outcome }}
+          CORE_RESULT: ${{ steps.core.outcome }}
+          PACKAGE_RESULT: ${{ steps.package.outcome }}
+          PACKAGE_VALIDATION_RESULT: ${{ steps.package_validation.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          GAMEPLAY_RESULT: ${{ steps.gameplay.outcome }}
+          GPU_SMOKE_RESULT: ${{ steps.gpu_smoke.outcome }}
+          ARCHIVE_RESULT: ${{ steps.archive.outcome }}
+        run: |
+          @"
+          ## $env:GYO_PACKAGE_PLATFORM / $env:ACCEPTANCE_PROFILE
+          | Check | Result |
+          | --- | --- |
+          | Configure | $env:CONFIGURE_RESULT |
+          | Object_FPS, UI editor and shader compilation | $env:BUILD_RESULT |
+          | CPU / headless / shader tests | $env:TEST_RESULT |
+          | Host shader reflection / negative tests | $env:SHADER_RESULT |
+          | Optional modules disabled | $env:CORE_RESULT |
+          | Install package | $env:PACKAGE_RESULT |
+          | Release deployment and missing-content failures | $env:PACKAGE_VALIDATION_RESULT |
+          | Packaged application startup | $env:SMOKE_RESULT |
+          | Release gameplay smoke | $env:GAMEPLAY_RESULT |
+          | Linux Vulkan rendering ($env:GPU_SMOKE_SUITE, software Lavapipe) | $env:GPU_SMOKE_RESULT |
+          | Verified archive and checksum | $env:ARCHIVE_RESULT |
+          | Physical GPU / interactive acceptance | Run manually on target hardware |
+
+          Download the platform archive and run its manual_gpu_smoke.py on a local GPU.
+          Native shader compilation is not evidence of successful GPU rendering.
+          Quick runs skip release-only test suites; they check build, startup and one shader render.
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+  validation:
+    name: CI validation
+    needs: [prepare, native]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all three platforms and smoke tests to pass
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          if [ "$PREPARE_RESULT" != success ] || [ "$NATIVE_RESULT" != success ]; then
+            echo '::error::Event checks and every platform build/test/smoke/package must succeed; skipped or cancelled jobs do not pass.'
+            exit 1
+          fi
+          echo 'All three platform packages and required smoke tests passed.' >> "$GITHUB_STEP_SUMMARY"
+

@@ -792,13 +792,22 @@ jumping, pause/resume, shooting and reload, and all eight Linux render cases.
 This software rendering check is distinct from physical GPU and interactive
 acceptance, which remain manual on target hardware.
 
-The aggregate `CI validation` job requires every platform's build, tests, smoke
-and packaging to succeed. Release publication runs only after this gate, for a
-`v*` tag push or `release.published`, and attaches all three archives and checksums.
+`cross-platform.yml` supplies quick branch/PR/manual validation;
+`prepare-release.yml` supplies the **Prepare Release** GUI with version and
+prerelease inputs. Both call `build-and-validate.yml` using an exact source SHA
+and a quick/release profile. Every required platform job must pass before the
+release caller's write-enabled job creates a tag and Draft Release with all
+three archives/checksums. The user publishes the prepared Draft after review;
+tag pushes and `release.published` do not rebuild.
+
 Exact commit, platform and smoke provenance live in `build_metadata.json` and
-are rechecked with the remote tag before upload. Only the publisher can write
-repository contents; same-tag publication is serialized and preserves verified
-existing assets. Ordinary branch/PR/manual runs publish Actions artifacts only.
+are rechecked before upload. Existing tags may only match the fixed commit;
+same-version retries are serialized, preserve verified Draft assets and user
+notes, and refuse an already-public version. Ordinary branch/PR/quick manual
+runs produce Actions artifacts only. Reruns retain the original event SHA and
+workflow; a new manual dispatch can select a later branch commit. See the
+[Traditional Chinese](releasing.zh-Hant.md) and [Japanese](releasing.ja.md) release
+guides for the GUI steps and recovery procedure.
 No workflow file or compiler success is evidence of physical GPU correctness.
 The current validation status lives in section 10 of the paired rendering guides.
 

@@ -218,17 +218,19 @@ CI 另用 `dumpbin` 確認 Windows EXE/DLL 引用的 VC runtime 均已打包；L
 
 GitHub Actions 在 Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 建置 Object_FPS、UI editor 與 shader。三個 job 相互獨立；一個平台失敗不取消其他平台。工作流程上傳日誌、manifest 與原生套件。
 
-分支 push、pull request 與 **Run workflow** 走快速路徑：編譯、實際內容啟動、一次簡單 shader 渲染。完整遊戲規則與八項渲染驗收留到 Release 事件；`v*` tag push 也屬於 Release 路徑。
+`cross-platform.yml` 的分支 push、pull request 與手動執行走快速路徑：編譯、實際內容啟動、一次簡單 shader 渲染。GUI 的 **Prepare Release** 則使用完整 release profile。兩個入口共用 `build-and-validate.yml`，傳入固定 commit SHA；推送 tag 與 `release.published` 都不啟動重建。
 
 ```text
-prepare: 驗證事件與固定 commit
+quick／Prepare Release: 驗證輸入與固定 commit
+  → 共用 build-and-validate.yml（quick 或 release profile）
   → Windows／Linux／macOS: build + install + startup smoke
   → 僅 Release: CPU/headless + shader + core-only + 隔離部署負向檢查
   → 僅 Release: 三平台 gameplay headless
   → Linux Vulkan/Lavapipe: quick 單項 shader／Release 完整八項渲染
   → 三平台: 封裝 + SHA-256 + Actions artifacts
-  → CI validation: 三平台全部成功
-  → 僅發佈事件: 驗證並上傳三平台 Release assets
+  → 三平台全部成功
+  → 僅 Prepare Release: 建立 tag + Draft Release + 六個附件
+  → 使用者檢查 Draft 後 Publish release（不重建）
 ```
 
 | 檢查 | 平台 | 實際邊界 |
@@ -241,21 +243,24 @@ prepare: 驗證事件與固定 commit
 
 Linux 缺少 Lavapipe、無法建立 device、渲染失敗或逾時都讓 job 失敗；沒有「找不到 GPU 就跳過並回報成功」的路徑。Helper 也要求日誌中的實際 driver／shader 格式符合請求，將結果寫入 `summary.json`。`vulkan-info.log` 記錄 ICD 與 Vulkan 裝置資訊。這證明軟體 Vulkan 渲染路徑可以運作，實體顯示卡仍需驗收。
 
-固定名稱的 `CI validation` job 匯總 `prepare` 與三平台 matrix；任何必要 job 失敗、取消或跳過都不能通過，可作為 branch protection 的必要檢查。快速路徑依設計不執行 Release 專屬重型步驟，Summary 明列模式與未執行項目，不將它們視為完整驗收。
+共用驗證流程匯總三平台 matrix，任何必要 job 失敗、取消或跳過都不能進入建立 Draft 的階段。快速路徑依設計不執行 Release 專屬重型步驟，Summary 明列模式與未執行項目，不將它們視為完整驗收。若設定 branch protection，請使用 quick 流程實際顯示的彙總檢查名稱。
 
 ### 9.2 Release 事件與上傳政策
 
 | 事件 | 三平台建置與 smoke | Release 附件 |
 |---|---|---|
 | 分支 push、pull request | 快速路徑 | 不上傳，保留 Actions artifacts |
-| 手動 **Run workflow** | 快速路徑 | 不上傳，包括選擇 tag 的手動執行 |
-| `v*` tag push | 完整 Release 路徑 | 全部成功後建立／使用該 tag 的 Release 並上傳 |
-| GitHub **Publish release**（`release.published`） | 完整 Release 路徑 | 全部成功後附加至該 Release；正式版與預發行版都適用 |
+| 手動執行一般 cross-platform workflow | 快速路徑 | 不上傳，包括選擇 tag 的手動執行 |
+| 手動 **Prepare Release**：選分支、version、prerelease | 完整 Release 路徑 | 全部成功後建立 tag 與 Draft Release，附上六個檔案 |
+| Tag push（包含 `v*`） | 不觸發 | 不建立 Release，也不上傳 |
+| GitHub **Publish release**（`release.published`） | 不重建 | 公開已備妥的 Draft 與附件 |
 | 儲存 Release 草稿 | 不觸發 | 不上傳 |
 
-發佈前要求 tag 指向本次事件的確切 commit，且 commit 屬於預設分支歷史。三平台驗收全數成功後才進入 publisher；只有此 job 取得 `contents: write`。附件為 `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` 及各自的 `.tar.gz.sha256`，共六個檔案。
+在 **Actions → Prepare Release → Run workflow** 選來源分支，輸入 `v1.0.1` 等版本與 prerelease 選項。執行固定當下 commit SHA，三平台驗收全數成功後才進入取得 `contents: write` 的 Draft job；事前驗證與建置不建立遠端 tag 或 Release。新 tag 指向固定 SHA；既有同名 tag 必須完全相同，不會被移動。附件為 `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` 及各自的 `.tar.gz.sha256`，共六個檔案。
 
-相同 tag 的 push 與 Release 事件共用鎖，不取消正在執行的發佈。重複事件仍重新建置與驗收；上傳時重新讀取遠端 tag、檔案雜湊與來源／smoke 資料，保留已驗證附件，只補缺少的檔案。衝突會報錯，不覆寫既有附件，也不修改使用者寫的 Release 標題或說明。一般分支／PR 的舊執行則可被新執行取消。
+同一版本的 Prepare Release 執行與重跑共用鎖，不取消正在上傳的工作。工具只補 Draft 缺少的附件，保留已驗證檔案與手寫標題／說明；同版本已公開時拒絕修改，需使用新版本號。請重跑原執行以保留事件 SHA；再次按新的 **Run workflow** 可能選到已前進的分支 commit。
+
+先把新 workflows 合併至預設分支，GitHub 才顯示手動入口；選定來源分支也需包含它們。既有執行的重跑仍使用原 workflow。完整 GUI 操作、失敗恢復與 Draft 檢查見[版本發佈指南](releasing.zh-Hant.md)。本流程最後由使用者按 **Publish release**，此動作不再重建。
 
 ### 9.3 下載後的實機驗收
 
@@ -304,7 +309,7 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 | 新 helper 對既有 Windows 套件 | `--suite ci` 在本機 D3D12／DXIL 與 Vulkan／SPIR-V 各 3/3 通過，`--suite quick` 在 Vulkan 1/1 通過；使用既有套件，並非新 hosted 流程的通過證據 |
 | 新 Windows 執行檔的 CPU 回歸 | MSVC 重建通過；startup smoke、gameplay headless smoke、package、domain headless 共 4/4 通過。設定無效 SDL video／GPU driver，確認這些路徑不依賴視窗或 GPU |
 | 新 Windows 安裝套件驗收 | 從 TEMP 工作目錄執行 startup／gameplay smoke 通過；部署正向與缺少 common／builtin shader／game shader 三項負向結果正確；Vulkan `full` 8/8、D3D12 `quick` 1/1 通過 |
-| 新 push／Release 流程 | Quick 路徑已在 GitHub 執行，Linux 成功；Windows 封裝修正待新執行。完整 Release 路徑尚未驗證 |
+| CI／Release 流程 | 先前 quick 路徑已有 hosted 記錄；本次共用驗證流程與 GUI Prepare Release／Draft 建立尚待新的 GitHub 執行驗證 |
 
 既有 Windows Mark-23／跳躍驗收不等同於新渲染架構驗收。請以此次建置日誌、Actions summary 與實機輸出作為具體通過證據。
 

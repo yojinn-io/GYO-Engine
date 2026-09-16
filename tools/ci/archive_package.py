@@ -75,7 +75,8 @@ def main() -> None:
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     source_root = Path(__file__).resolve().parents[2]
-    for name in ("rendering_architecture.zh-Hant.md", "rendering_architecture.ja.md", "architecture.md"):
+    for name in ("rendering_architecture.zh-Hant.md", "rendering_architecture.ja.md", "architecture.md",
+                 "releasing.zh-Hant.md", "releasing.ja.md"):
         shutil.copyfile(source_root / "docs" / name, stage / name)
     shutil.copyfile(source_root / "tools/ci/manual_gpu_smoke.py", stage / "manual_gpu_smoke.py")
     (stage / "build_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")

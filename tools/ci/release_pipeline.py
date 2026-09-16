@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare exact-commit CI events and append verified three-platform release assets."""
+"""Validate a manual release request and prepare a verified, unpublished draft."""
 
 import argparse
 import json
@@ -14,8 +14,8 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, load_packages,
-                             prepare_event, validate_archive, validate_checksum,
-                             validate_commit)
+                             parse_boolean, prepare_event, validate_archive, validate_checksum,
+                             validate_commit, validate_version)
 
 
 class ApiError(ReleaseError):
@@ -40,7 +40,8 @@ class GitHubApi:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
             raise ReleaseError("GH_REPO must be an owner/repository name")
         if not token:
-            raise ReleaseError("GH_TOKEN is required only by the gated publish step")
+            raise ReleaseError("GH_TOKEN is required only by the gated draft preparation step")
+        self.repository = repository
         self.prefix = f"/repos/{repository}"
         self.token = token
         self.opener = urllib.request.build_opener(SafeRedirectHandler())
@@ -80,39 +81,59 @@ class GitHubApi:
                              "POST", data, content_type)
 
 
-def verify_remote_tag(api, tag: str, commit: str) -> None:
-    reference = api.request("GET", "/git/ref/tags/" + urllib.parse.quote(tag, safe=""))
+def remote_tag_commit(api, tag: str) -> str | None:
+    try:
+        reference = api.request("GET", "/git/ref/tags/" + urllib.parse.quote(tag, safe=""))
+    except ApiError as error:
+        if error.status == 404:
+            return None
+        raise
     obj = reference.get("object", {})
     for _ in range(16):
         if obj.get("type") == "commit":
-            if obj.get("sha") != commit:
-                raise ReleaseError("Remote release tag moved away from the verified event commit")
-            return
+            return validate_commit(obj.get("sha", ""))
         if obj.get("type") != "tag" or not re.fullmatch(r"[0-9a-f]{40}", obj.get("sha", "")):
             raise ReleaseError("Release tag does not resolve to a commit")
         obj = api.request("GET", "/git/tags/" + obj["sha"]).get("object", {})
     raise ReleaseError("Too many nested annotated tags")
 
 
+def verify_remote_tag(api, tag: str, commit: str) -> None:
+    if remote_tag_commit(api, tag) != commit:
+        raise ReleaseError("Remote version tag is missing or moved away from the verified commit")
+
+
 def find_release(api, tag: str):
-    try:
-        return api.request("GET", "/releases/tags/" + urllib.parse.quote(tag, safe=""))
-    except ApiError as error:
-        if error.status == 404:
-            return None
-        raise
+    # The tag endpoint is not sufficient for drafts. Authenticated release lists
+    # include drafts for a token with push access; examine every page for conflicts.
+    matches = []
+    for page in range(1, 101):
+        batch = api.request("GET", f"/releases?per_page=100&page={page}")
+        matches.extend(release for release in batch if release.get("tag_name") == tag)
+        if len(batch) < 100:
+            if len(matches) > 1:
+                raise ReleaseError("Multiple releases use this version tag; resolve the conflict manually")
+            return matches[0] if matches else None
+    raise ReleaseError("Too many releases to safely identify the requested draft")
 
 
-def verify_release(release: dict, tag: str, expected_id: str) -> int:
+def verify_draft(release: dict, tag: str, expected_id: int | None = None) -> int:
     release_id = release.get("id")
     if (release.get("tag_name") != tag or not isinstance(release_id, int)
             or isinstance(release_id, bool) or release_id <= 0):
         raise ReleaseError("GitHub returned a different or invalid release")
-    if expected_id and str(release_id) != expected_id:
-        raise ReleaseError("Release ID no longer matches the published event")
-    if release.get("draft", True):
-        raise ReleaseError("Refusing to attach assets to an unpublished draft release")
+    if expected_id is not None and release_id != expected_id:
+        raise ReleaseError("Draft release ID changed during preparation")
+    if release.get("draft") is not True or release.get("immutable", False):
+        raise ReleaseError("This version is already published or immutable; no release assets will be changed")
     return release_id
+
+
+def refresh_draft(api, release_id: int, tag: str, commit: str) -> dict:
+    release = api.request("GET", f"/releases/{release_id}")
+    verify_draft(release, tag, release_id)
+    verify_remote_tag(api, tag, commit)
+    return release
 
 
 def release_assets(api, release_id: int) -> dict:
@@ -153,57 +174,96 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
     return uploads
 
 
-def publish(api, tag: str, commit: str, expected_release_id: str, packages: list[Package]) -> int:
+def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[Package]) -> dict:
     validate_commit(commit)
+    validate_version(tag)
+    prerelease = parse_boolean(prerelease)
     if sorted(package.platform for package in packages) != sorted(PLATFORMS):
-        raise ReleaseError("Publishing requires exactly one package for each of the three platforms")
+        raise ReleaseError("Draft preparation requires exactly one package for each of the three platforms")
     for package in packages:
         if package.name != archive_name(package.platform):
             raise ReleaseError("Package filename does not match its platform")
         validate_checksum(package.name, package.data, package.checksum_data)
         validate_archive(package.name, package.data, package.platform, commit)
-    if not tag or any(ord(char) < 32 or ord(char) == 127 for char in tag):
-        raise ReleaseError("Invalid release tag")
-    verify_remote_tag(api, tag, commit)
     release = find_release(api, tag)
-    if release is None and expected_release_id:
-        raise ReleaseError("The release from the published event no longer exists")
     if release is not None:
-        release_id = verify_release(release, tag, expected_release_id)
+        release_id = verify_draft(release, tag)
+        # Inspect every existing package before creating a missing tag or uploading anything.
         uploads = plan_uploads(api, release_assets(api, release_id), packages, commit)
-    else:
-        # All platform archives were validated by load_packages before this first remote write.
+    resolved = remote_tag_commit(api, tag)
+    if resolved is not None and resolved != commit:
+        raise ReleaseError("Existing version tag points to a different commit; tags are never moved")
+    if resolved is None and release is not None:
+        # target_commitish is not authoritative once a release has a tag. If
+        # somebody removed that tag, do not guess its prior identity from a branch.
+        raise ReleaseError("Existing draft has no version tag; restore its verified tag or use a new version")
+    if resolved is None:
+        # This is the first possible remote mutation, after complete package and draft checks.
         try:
-            release = api.request("POST", "/releases", {
-                "tag_name": tag, "target_commitish": commit, "name": tag,
-                "draft": False, "prerelease": "-" in tag, "generate_release_notes": True,
-            })
+            api.request("POST", "/git/refs", {"ref": f"refs/tags/{tag}", "sha": commit})
         except ApiError as error:
-            if error.status != 422:
+            if error.status in (403, 404):
+                raise ReleaseError("Cannot create the version tag with this repository token. "
+                                   "A branch changing workflow files may require an explicitly configured "
+                                   "token with Contents and Workflows write permissions.") from error
+            if error.status != 422:  # Another run may have created the identical ref.
                 raise
-            release = find_release(api, tag)
-            if release is None:
-                raise
-        release_id = verify_release(release, tag, expected_release_id)
+        verify_remote_tag(api, tag, commit)
+    if release is None:
+        # Recheck for a release created while the tag request was in flight.
+        release = find_release(api, tag)
+        if release is None:
+            try:
+                release = api.request("POST", "/releases", {
+                    "tag_name": tag, "target_commitish": commit, "name": tag,
+                    "draft": True, "prerelease": prerelease, "generate_release_notes": True,
+                })
+            except ApiError as error:
+                if error.status in (403, 404):
+                    raise ReleaseError("Cannot create the release draft with this repository token. "
+                                       "A branch changing workflow files may require an explicitly configured "
+                                       "token with Contents and Workflows write permissions.") from error
+                if error.status != 422:
+                    raise
+                release = find_release(api, tag)
+                if release is None:
+                    raise
+        release_id = verify_draft(release, tag)
         uploads = plan_uploads(api, release_assets(api, release_id), packages, commit)
     for name, data in uploads:
-        verify_remote_tag(api, tag, commit)
+        # The human Publish button can be clicked while this job is active.
+        # Stop immediately if the draft became public; never PATCH it back to draft.
+        refresh_draft(api, release_id, tag, commit)
         try:
             api.upload(release_id, name, data)
         except ApiError as error:
             if error.status != 422:
                 raise
-            # A concurrent publisher may have completed this exact asset. Never delete/replace it.
+            # A concurrent upload may have completed this exact asset. Never delete/replace it.
+            refresh_draft(api, release_id, tag, commit)
             current = release_assets(api, release_id).get(name)
             if current is None or api.download(current["id"]) != data:
-                raise ReleaseError(f"Release asset already exists with different bytes: {name}") from error
-        print(f"Verified release asset: {name}")
-    verify_remote_tag(api, tag, commit)
+                raise ReleaseError(f"Draft asset already exists with different bytes: {name}") from error
+        print(f"Verified draft asset: {name}")
+    refresh_draft(api, release_id, tag, commit)
     remaining = plan_uploads(api, release_assets(api, release_id), packages, commit)
     if remaining:
-        raise ReleaseError("Release is still missing required platform assets after upload")
-    print(f"Release {tag} ({release_id}) contains all three verified platform packages")
-    return release_id
+        raise ReleaseError("Draft is still missing required platform assets after upload")
+    release = refresh_draft(api, release_id, tag, commit)
+    release_url = release.get("html_url", "")
+    parsed_url = urllib.parse.urlsplit(release_url)
+    if (parsed_url.scheme != "https" or parsed_url.netloc != "github.com"
+            or not parsed_url.path.startswith(f"/{api.repository}/releases/")
+            or any(ord(char) < 32 or ord(char) == 127 for char in release_url)):
+        raise ReleaseError("GitHub returned an unexpected draft release URL")
+    print(f"Draft {tag} ({release_id}) is ready with all three packages; publish it manually in GitHub")
+    return {"release_id": str(release_id), "release_url": release_url, "tag": tag, "commit": commit}
+
+
+def write_outputs(path: Path, result: dict) -> None:
+    with path.open("a", encoding="utf-8") as stream:
+        for key, value in result.items():
+            stream.write(f"{key}={value}\n")
 
 
 def main() -> None:
@@ -213,25 +273,25 @@ def main() -> None:
     prepare.add_argument("--event-path", type=Path, required=True)
     prepare.add_argument("--event-name", required=True)
     prepare.add_argument("--commit", required=True)
+    prepare.add_argument("--ref", required=True)
     prepare.add_argument("--output", type=Path, required=True)
-    publisher = commands.add_parser("publish")
-    publisher.add_argument("--tag", required=True)
-    publisher.add_argument("--commit", required=True)
-    publisher.add_argument("--release-id", default="")
-    publisher.add_argument("--package-directory", type=Path, required=True)
+    draft = commands.add_parser("draft")
+    draft.add_argument("--tag", required=True)
+    draft.add_argument("--commit", required=True)
+    draft.add_argument("--prerelease", choices=("true", "false"), required=True)
+    draft.add_argument("--package-directory", type=Path, required=True)
+    draft.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "prepare":
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
-            result = prepare_event(args.event_name, event, args.commit)
-            with args.output.open("a", encoding="utf-8") as stream:
-                for key, value in result.items():
-                    stream.write(f"{key}={value}\n")
-            print(json.dumps(result))
+            result = prepare_event(args.event_name, event, args.commit, args.ref)
         else:
             packages = load_packages(args.package_directory, args.commit)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
-            publish(api, args.tag, args.commit, args.release_id, packages)
+            result = prepare_draft(api, args.tag, args.commit, parse_boolean(args.prerelease), packages)
+        write_outputs(args.output, result)
+        print(json.dumps(result))
     except (ReleaseError, OSError, ValueError) as error:
         parser.exit(1, f"Release validation failed: {error}\n")
 
