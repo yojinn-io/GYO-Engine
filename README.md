@@ -289,24 +289,25 @@ builds failed on the dependencies and API compatibility issues described above;
 the [subsequent run](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457)
 passed Windows and macOS; macOS passed CPU/headless/shader tests (13/13), host
 shader tests (3/3), core-only tests (7/7), Metallib build and deployment checks.
-Linux exposed the offline SDL console-build requirement now fixed in the working tree. Linux
-needs another run; the new push/release workflow and physical Linux/macOS GPU
-execution remain unverified. Detailed evidence and log paths are recorded in
-the rendering guides.
-The new push/release workflow has not yet run on GitHub. Its smoke helper passes
-eight subprocess policy tests and the three-case `--suite ci` against
-the existing local Windows package on both Vulkan and D3D12; this does not
-establish Linux Lavapipe or new hosted workflow success. `--suite quick` renders
-one shader case and also passes locally on Vulkan; `--suite ci` covers
-shader/world/menu; `--suite full` (the default) runs all eight GPU diagnostics
-on target hardware.
+The [latest quick run](https://github.com/yojinn-io/GYO-Engine/actions/runs/35097049659)
+passes Linux build, packaged startup, Lavapipe shader rendering and archive creation.
+Windows builds and starts successfully, but archive creation fails because MSVC
+overwrites the workflow's `PLATFORM` variable with `x64`. Packaging now uses
+`GYO_PACKAGE_PLATFORM` to preserve `windows-x64`; this fix awaits another CI run.
+The actual workflow startup/archive blocks pass locally after MSVC initialization,
+including archive naming, embedded platform metadata and SHA-256 verification.
+The latest macOS job is not yet confirmed. Full release CI and physical
+Linux/macOS GPU acceptance remain unverified. Detailed logs are in the guides.
+The smoke helper passes eight subprocess policy tests. `--suite quick` renders
+one shader case; `--suite ci` covers shader/world/menu; `--suite full` (the
+default) runs all eight GPU diagnostics on target hardware.
 The newly rebuilt Windows executable passes startup smoke, gameplay headless
 smoke, package and domain headless tests (4/4), with invalid SDL video/GPU driver
 settings to confirm these paths do not require a window or GPU.
 The fresh installed package also passes startup/gameplay smoke from another
 working directory, positive and three missing-content deployment checks,
-Vulkan `--suite full` (8/8) and D3D12 `--suite quick` (1/1). These remain local
-Windows results; Linux Lavapipe and the new hosted workflow await execution.
+Vulkan `--suite full` (8/8) and D3D12 `--suite quick` (1/1). These are local
+Windows results; Linux hosted CI has verified only the quick rendering case.
 
 The existing CLion MSVC profile also passes with its bundled CMake 4.1.2,
 Ninja and VS18 cl 14.51: Object_FPS and UI editor build, four regression tests,

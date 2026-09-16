@@ -294,17 +294,17 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 | CLion の既存 MSVC profile | CMake 4.1.2＋Ninja＋VS18 cl 14.51 Release。元の `cmake-build-msvc` で configure、host ツール自動構築、Object_FPS／UI editor ビルド成功 |
 | CLion 回帰・配布検証 | CMake 方針／CRT 2/2、headless／render／package／CRT 4/4、ゲーム／メニュー／shader GPU 3/3 合格（`direct3d12`＋DXIL）。release install、独立 package、3 欠落ケース、CRT 検査も合格 |
 | 今回の CI 互換性修正のローカル回帰 | Windows Object_FPS と host ツールの再ビルド成功。CMake／render／headless／package／GPU 合計 7/7、host 3/3。CSV 専用検証は MSVC と MinGW GCC で各 192 assertions 合格 |
-| GitHub Windows x64 | 初回 CI 合格：CPU 13/13、shader host 3/3、core-only 7/7、配布検証 |
+| GitHub Windows x64 | 以前の全体 CI は合格。最新 quick run 35097049659 はビルド、インストール、startup が成功したが、MSVC が `PLATFORM=x64` に上書きして archive 引数が失敗。`GYO_PACKAGE_PLATFORM` に変更済み、次の CI 待ち |
 | GitHub Linux／macOS core-only | 両 platform とも 7/7 合格 |
-| GitHub Linux 全体ビルド | 初回は XTest 開発パッケージ不足で失敗。後続 run 35093916457 はこの問題を解消したが、host SDL の console-build 宣言不足で configure 失敗。`SDL_UNIX_CONSOLE_BUILD=ON` を追加済み、次の CI 待ち |
-| GitHub macOS 全体ビルド | 初回の浮動小数点解析／Cocoa リンクを修正。後続 run 35093916457 は CPU/headless/shader 13/13、host shader 3/3、core-only 7/7、Metallib ビルド、インストール、配布検証に合格 |
-| Linux／macOS GPU 確認 | 各 platform の実機実行待ち |
+| GitHub Linux ビルドと quick smoke | run 35097049659 はビルド、配布版 startup、Lavapipe の shader 描画1件、package に成功。以前の XTest／console-build 問題は解消 |
+| GitHub macOS 全体ビルド | run 35093916457 は CPU/headless/shader 13/13、host shader 3/3、core-only 7/7、Metallib、インストール、配布検証に合格。最新 quick run の macOS 結果は未確認 |
+| Linux／macOS 物理 GPU 検証 | 各 platform の実機実行待ち。Linux のソフトウェア Vulkan quick smoke は合格 |
 | 新 smoke helper のケースと失敗経路 | 実際の subprocess を使う8件が合格。quick の1件限定、非ゼロ終了、タイムアウト、起動失敗、GPU 未作成で exit 0、driver／shader 不一致、結果の集約を検証 |
 | CI helper 全体と workflow の静的検査 | 公開方針、package 内容、smoke を含む helper 49件に合格。actionlint 1.7.12 と `git diff --check` も合格 |
 | 新 helper と既存 Windows package | ローカルの D3D12／DXIL と Vulkan／SPIR-V で `--suite ci` が各 3/3、Vulkan の `--suite quick` が 1/1 合格。既存 package での確認であり、新 hosted フローの合格証拠ではない |
 | 新 Windows 実行ファイルの CPU 回帰 | MSVC 再ビルド成功。startup smoke、gameplay headless smoke、package、domain headless が計 4/4 合格。無効な SDL video／GPU driver を指定し、ウィンドウや GPU が不要であることを確認 |
 | 新 Windows インストール済み package | TEMP 作業ディレクトリーから startup／gameplay smoke に合格。通常の配布検査と common／builtin shader／game shader の3欠落検査が期待どおり。Vulkan `full` 8/8、D3D12 `quick` 1/1 合格 |
-| 新 push／Release フロー | 実装済み、GitHub では未実行。Linux Lavapipe と新3プラットフォーム配布 smoke は実際のフローによる検証待ち |
+| 新 push／Release フロー | Quick 経路を GitHub で実行し、Linux は成功。Windows package の修正は次の実行待ち。完全な Release 経路は未検証 |
 
 既存の Windows Mark-23／ジャンプ検証を、新レンダリング設計の検証結果として流用しません。今回のビルドログ、Actions summary、実機出力を合格の証拠とします。
 
@@ -312,7 +312,11 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 
 後続は [Actions run 35093916457](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457) です。Windows と [macOS job](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457/job/104786488372) は成功し、macOS は Metallib、全テスト、配布検証を含みます。Linux ログはオフライン SDL の console-build 設定不足を示しました。どちらも新 quick／Release フローを導入する前の履歴であり、macOS の物理 GPU は未検証です。
 
+最新 [quick run 35097049659](https://github.com/yojinn-io/GYO-Engine/actions/runs/35097049659) は Linux の startup、shader 描画、package を検証しました。Windows の MSVC 初期化はツールチェーン用の `Platform=x64` を設定し、Windows 環境変数は大文字・小文字を区別しません。Package の識別には `GYO_PACKAGE_PLATFORM=windows-x64` を使い、報告と archive 引数への影響を避けます。
+
 上記 engine GPU smoke は frame のライフサイクル、動的 mesh、ViewModel 深度、カリング、UV、行列投影、alpha ブレンド、色処理を実際に検証しています。Object_FPS は両ドライバー、3 アスペクト比、各 7 カメラ条件で、銃口／tracer マーカーの中心差が 0.0000 ピクセル、数値参照投影との最大誤差が 0.3823 ピクセルでした。
+
+Windows のプラットフォーム変数修正は、ローカルで MSVC を初期化した後に workflow の startup／archive ブロックを直接実行して確認しました。アーカイブ名、埋め込まれたプラットフォーム情報、SHA-256 はすべて合格です。記録は `build/ci-platform-env-check/result.log` にあり、修正後の GitHub 結果は新しい commit の CI で確認します。
 
 ローカルのビルドは `build/render-cross-vs18`、package はその `stage` にあります。`ctest --test-dir build/render-cross-vs18 -C RelWithDebInfo -L cpu --output-on-failure` で再検証でき、GPU と配布には第 8、9 節の helper を使います。今回の証拠は次の場所に保存しています。
 

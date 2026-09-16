@@ -80,7 +80,8 @@ jobs:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
-      PLATFORM: ${{ matrix.platform }}
+      # VsDevCmd owns Platform (= x64); Windows env names are case-insensitive.
+      GYO_PACKAGE_PLATFORM: ${{ matrix.platform }}
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
       CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
@@ -217,7 +218,7 @@ jobs:
           } finally { Pop-Location }
           @{
             source_revision = $env:SOURCE_COMMIT
-            platform = $env:PLATFORM
+            platform = $env:GYO_PACKAGE_PLATFORM
             profile = $env:ACCEPTANCE_PROFILE
             startup = 'passed'
             headless = 'not_run'
@@ -289,7 +290,7 @@ jobs:
       - name: Archive the verified platform package
         id: archive
         run: |
-          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --output "build/$env:PRESET/gyo-object-fps-$env:PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:PLATFORM --smoke-report "build/$env:PRESET/logs/smoke-summary.json" 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
+          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --output "build/$env:PRESET/gyo-object-fps-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --smoke-report "build/$env:PRESET/logs/smoke-summary.json" 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload native package for manual GPU acceptance
@@ -337,7 +338,7 @@ jobs:
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
         run: |
           @"
-          ## $env:PLATFORM / $env:ACCEPTANCE_PROFILE
+          ## $env:GYO_PACKAGE_PLATFORM / $env:ACCEPTANCE_PROFILE
           | Check | Result |
           | --- | --- |
           | Configure | $env:CONFIGURE_RESULT |
