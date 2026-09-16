@@ -783,11 +783,24 @@ end-user runtime dependencies.
 
 The GitHub Actions matrix builds the complete Object_FPS and UI editor graphs,
 executes CPU/headless and offline shader tests, and validates isolated installed
-packages on Windows x64, Linux x64 and macOS ARM64. GPU tests are separately
-labelled and run on an actual graphics-capable machine. Hosted CI provides
-packages and diagnostic logs; no workflow file or compiler success is presented
-as evidence of visual correctness. The current validation status lives in
-section 10 of the paired rendering guides.
+packages on Windows x64, Linux x64 and macOS ARM64. Branch/PR/manual CI uses a
+quick path: compile, install, load the real packaged catalog/campaign/model with
+`--startup-smoke-test` on all three platforms, then run one shader-readback render
+on Linux through Vulkan and Mesa Lavapipe under Xvfb. Release CI adds the full
+CPU/shader/core/package-negative tests, gameplay `--headless-smoke-test` for
+jumping, pause/resume, shooting and reload, and all eight Linux render cases.
+This software rendering check is distinct from physical GPU and interactive
+acceptance, which remain manual on target hardware.
+
+The aggregate `CI validation` job requires every platform's build, tests, smoke
+and packaging to succeed. Release publication runs only after this gate, for a
+`v*` tag push or `release.published`, and attaches all three archives and checksums.
+Exact commit, platform and smoke provenance live in `build_metadata.json` and
+are rechecked with the remote tag before upload. Only the publisher can write
+repository contents; same-tag publication is serialized and preserves verified
+existing assets. Ordinary branch/PR/manual runs publish Actions artifacts only.
+No workflow file or compiler success is evidence of physical GPU correctness.
+The current validation status lives in section 10 of the paired rendering guides.
 
 ## 9. Asset identity, runtime loading, importing, and GPU resources
 

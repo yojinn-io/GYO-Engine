@@ -83,7 +83,7 @@ if(TARGET GYO::Engine)
     if(TARGET GYO::AssetSdlImage AND
        TARGET GYO::RenderBackendSDLGPU AND
        TARGET GYO::TextBackendSDLTTF)
-        add_executable(gyo_object_fps main.cpp diagnostics/MuzzleProbe.cpp)
+        add_executable(gyo_object_fps main.cpp diagnostics/MuzzleProbe.cpp diagnostics/HeadlessSmoke.cpp)
         target_link_libraries(
             gyo_object_fps
             PRIVATE
@@ -150,6 +150,12 @@ if(TARGET GYO::Engine)
         endif()
 
         if(BUILD_TESTING)
+            add_test(NAME object_fps.startup_smoke COMMAND gyo_object_fps --startup-smoke-test)
+            set_tests_properties(object_fps.startup_smoke PROPERTIES LABELS "cpu;smoke;startup" TIMEOUT 30
+                WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
+            add_test(NAME object_fps.headless_smoke COMMAND gyo_object_fps --headless-smoke-test)
+            set_tests_properties(object_fps.headless_smoke PROPERTIES LABELS "cpu;smoke;gameplay" TIMEOUT 30
+                WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
             add_test(NAME object_fps.smoke COMMAND gyo_object_fps --smoke-test)
             set_tests_properties(object_fps.smoke PROPERTIES TIMEOUT 30)
             add_test(

@@ -185,6 +185,8 @@ macOS CI package の deployment target は **13.3** を維持し、ゲームと 
 
 Ubuntu では SDL が既定で有効にする XTest の検出用に `libxtst-dev` が必要です。CI は `pkg-config --modversion xtst` で確認します。オフライン shader ツール用 SDL は video と dialog の両方を無効にし、macOS の静的リンクで未ビルドの Cocoa window symbol を参照しないようにします。ゲーム用 SDL の設定は host ツールとは独立しています。[SDL Linux 依存パッケージ](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
 
+オフライン host ツールは `SDL_UNIX_CONSOLE_BUILD=ON` も明示します。X11／Wayland video を意図的に使わないため、console build であることを SDL に伝える必要があります。指定しないと Linux configure は video backend の不在をエラーとします。この設定は shader host 用 SDL だけに適用し、ゲームは独自のグラフィックス backend をビルドします。
+
 <a id="r08"></a>
 ## 8. 配布とファイル欠落時の処理
 
@@ -203,23 +205,70 @@ stage/
 
 GitHub artifact は Unix の実行権限を保つ tar.gz と SHA-256 チェックサムを含みます。実機確認用のネイティブ package であり、macOS 署名／公証や Linux ディストリビューション間の互換性は保証しません。Linux package は実行先のグラフィックスドライバーとシステムライブラリを利用します。
 
+`build_metadata.json` は `source_revision`、`platform`、`ci_smoke` を記録します。Quick CI の package は3プラットフォームの起動確認と Linux の shader 描画1件を記録します。Release package は、さらに3プラットフォームの gameplay headless smoke と Linux Lavapipe の描画8件すべての合格を必要とします。Package ツールは commit／platform が異なる報告を拒否します。Release アップロード前にこの情報、アーカイブ内容、SHA-256 を再検証します。Quick CI や通常のローカル package は、完全な Release 検証に合格した入力には使えません。
+
 Windows package は Release／RelWithDebInfo を使い、`cmake/GyoMsvcRuntime.cmake` が選択したコンパイラーのインストール位置から対応する MSVC 再配布可能 DLL を探し、`bin/` に配置します。IDE 同梱 CMake の Visual Studio バージョン一覧には依存しません。`GYO_MSVC_REDIST_DIR` で再配布ファイルのルートを指定することもできます。DLL が見つからなくても開発用 configure／build は続行でき、release install の時点で不足と対処方法を報告します。Debug CRT は配布せず、今回の package は Windows 10+ のシステム UCRT を前提にします。ゲームの実行に Visual Studio、shader コンパイラー、SDK は不要です。
 
 CI は `dumpbin` で Windows EXE/DLL の参照する VC runtime が同梱されていることを確認します。Linux は `ldd` で SDL3 が package の `lib/` に解決されること、macOS は `otool` で相対 install name と RPATH を確認します。これらはビルド機の検証ツールです。Windows で `tools/ci/validate_package.py` を実行する際は `--dumpbin /absolute/path/to/dumpbin.exe` で指定できます。
 
 <a id="r09"></a>
-## 9. Object_FPS の実機受け入れ確認
+## 9. Object_FPS の CI、Release、実機受け入れ確認
 
-GitHub Actions は Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 で Object_FPS、UI editor、shader をビルドし、CPU/headless、shader、配布を検証します。3 job は独立しており、1 つの失敗で他を停止しません。ログ、manifest、ネイティブ package をアップロードします。
+### 9.1 毎回の push で必要な検証
 
-Hosted CI の成功を GPU 合格とは扱いません。対応 package の tar.gz を展開し、グラフィカルデスクトップのある実機で実行します。
+GitHub Actions は Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 で Object_FPS、UI editor、shader をビルドします。3 job は独立しており、1 つの失敗で他を停止しません。ログ、manifest、ネイティブ package をアップロードします。
+
+ブランチ push、pull request、**Run workflow** は quick 経路で、コンパイル、実際の内容による起動確認、shader 描画1件を実行します。完全なゲームルールと8件の描画検証は Release イベントで実行します。`v*` tag push も Release 経路です。
+
+```text
+prepare: イベントと固定 commit の検証
+  → Windows／Linux／macOS: build + install + startup smoke
+  → Release のみ: CPU/headless + shader + core-only + 独立配布の失敗検証
+  → Release のみ: 3プラットフォーム gameplay headless
+  → Linux Vulkan/Lavapipe: quick は shader 1件／Release は全8件
+  → 3プラットフォーム: package + SHA-256 + Actions artifacts
+  → CI validation: 3プラットフォームすべて成功
+  → 公開イベントのみ: 3プラットフォームの Release assets を検証・アップロード
+```
+
+| 検証 | Platform | 実際の範囲 |
+|---|---|---|
+| `--startup-smoke-test` | Windows／Linux／macOS、quick と Release | 別の作業ディレクトリーから配布版を起動し、catalog／campaign／FBX モデルの構成を実際に読み込む。ウィンドウと GPU は作らない |
+| `manual_gpu_smoke.py --suite quick` | Linux、quick CI | Xvfb の表示環境で Mesa Lavapipe Vulkan を強制選択し、カスタム shader の赤／青描画と読み戻しを1回実行 |
+| `--headless-smoke-test` | Windows／Linux／macOS、Release のみ | メニュー、開始、取り出し、ジャンプ、一時停止／再開、着地、1回の射撃、リロード完了も検査。ウィンドウと GPU は作らない |
+| `manual_gpu_smoke.py --suite full` | Linux、Release のみ | shader、世界、メニュー、武器、リロード、3比率の銃口診断、計8件 |
+| 物理 GPU／対話操作 | 各プラットフォームの実機 | 全8件の GPU 診断と手動操作。Windows／macOS の hosted runner はこの項目の合格を主張しない |
+
+Linux で Lavapipe がない場合、device の生成失敗、描画失敗、タイムアウトはいずれも job の失敗になります。「GPU がなければスキップして成功」とする経路はありません。Helper はログに記録された実際の driver／shader 形式が要求と一致することも確認し、`summary.json` に結果を保存します。`vulkan-info.log` は ICD と Vulkan device 情報を記録します。これでソフトウェア Vulkan の描画経路を確認し、物理 GPU は別途検証します。
+
+固定名の `CI validation` job が `prepare` と3プラットフォームの matrix を集約します。必須 job の失敗、キャンセル、スキップは合格にならず、branch protection の必須チェックに指定できます。Quick 経路では設計どおり Release 専用の重い処理を実行せず、Summary にモードと未実行項目を明記します。これらを完全な検証済みとは扱いません。
+
+### 9.2 Release イベントとアップロード方針
+
+| イベント | 3プラットフォームのビルドと smoke | Release 添付 |
+|---|---|---|
+| ブランチ push、pull request | Quick 経路 | アップロードせず、Actions artifacts を保存 |
+| 手動 **Run workflow** | Quick 経路 | tag を選択した手動実行でもアップロードしない |
+| `v*` tag push | 完全な Release 経路 | 全件成功後、その tag の Release を作成／利用してアップロード |
+| GitHub **Publish release**（`release.published`） | 完全な Release 経路 | 全件成功後、その Release に追加。正式版とプレリリースの両方が対象 |
+| Release の下書き保存 | 起動しない | アップロードしない |
+
+公開には tag がイベントの正確な commit を指し、その commit がデフォルトブランチの履歴に含まれることが必要です。3プラットフォームの検証がすべて成功した場合にのみ publisher に進み、この job だけが `contents: write` を持ちます。添付は `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` と各 `.tar.gz.sha256`、計6ファイルです。
+
+同じ tag の push と Release イベントはロックを共有し、実行中の公開をキャンセルしません。重複イベントも再ビルド・再検証します。アップロード時にリモート tag、ファイルのハッシュ、ソース／smoke 情報を再確認し、検証済みの添付を保持して不足分だけを追加します。競合はエラーになり、既存添付を上書きせず、利用者が書いた Release のタイトルや説明も変更しません。通常のブランチ／PR の古い実行は、新しい実行でキャンセルできます。
+
+### 9.3 ダウンロード後の実機確認
+
+Actions artifacts または Release から対応 package をダウンロードし、tar.gz を展開して、グラフィカルデスクトップのある実機で実行します。
 
 ```sh
 python manual_gpu_smoke.py --package /absolute/path/to/gyo-object-fps \
-  --driver vulkan --output /absolute/path/to/diagnostics
+  --driver vulkan --suite full --output /absolute/path/to/diagnostics
 ```
 
 macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` をそれぞれ確認します。Python helper はカスタム shader の赤／青ピクセル読み戻し、世界、メニュー、武器、Reload 全体、16:9／4:3／21:9 の銃口投影 smoke を実行し、終了コード、ログ、診断画像を保存します。各項目の制限は 120 秒です。Python がない場合は `bin/gyo_object_fps --gpu-driver metal --muzzle-smoke-test --capture-dir /absolute/path/to/captures` などを直接実行できます。
+
+`--suite full` はデフォルトの全8件、`--suite quick` は shader 描画1件です。`--suite ci` は shader、world、menu の3件を手動で選ぶために残しています。`--timeout` は各項目の秒数上限です。1件でも失敗すると helper は非ゼロで終了しますが、残りのケースも実行して結果を保存します。
 
 制限環境で Python の一時ディレクトリーを利用できない場合、両方の検証 helper に `--work-directory /absolute/path/to/new-work` を指定できます。このディレクトリーは未作成である必要があり、検証後も調査用に残ります。配布検証では `--stage` の外側を指定します。
 
@@ -247,13 +296,21 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 | 今回の CI 互換性修正のローカル回帰 | Windows Object_FPS と host ツールの再ビルド成功。CMake／render／headless／package／GPU 合計 7/7、host 3/3。CSV 専用検証は MSVC と MinGW GCC で各 192 assertions 合格 |
 | GitHub Windows x64 | 初回 CI 合格：CPU 13/13、shader host 3/3、core-only 7/7、配布検証 |
 | GitHub Linux／macOS core-only | 両 platform とも 7/7 合格 |
-| GitHub Linux 全体ビルド | 初回は XTest 開発パッケージ不足で configure 失敗。依存を追加済み、修正後の CI 待ち |
-| GitHub macOS 全体ビルド | 初回は浮動小数点解析のコンパイルと host SDL Cocoa のリンクに失敗。修正済み、修正後の CI 待ち |
+| GitHub Linux 全体ビルド | 初回は XTest 開発パッケージ不足で失敗。後続 run 35093916457 はこの問題を解消したが、host SDL の console-build 宣言不足で configure 失敗。`SDL_UNIX_CONSOLE_BUILD=ON` を追加済み、次の CI 待ち |
+| GitHub macOS 全体ビルド | 初回の浮動小数点解析／Cocoa リンクを修正。後続 run 35093916457 は CPU/headless/shader 13/13、host shader 3/3、core-only 7/7、Metallib ビルド、インストール、配布検証に合格 |
 | Linux／macOS GPU 確認 | 各 platform の実機実行待ち |
+| 新 smoke helper のケースと失敗経路 | 実際の subprocess を使う8件が合格。quick の1件限定、非ゼロ終了、タイムアウト、起動失敗、GPU 未作成で exit 0、driver／shader 不一致、結果の集約を検証 |
+| CI helper 全体と workflow の静的検査 | 公開方針、package 内容、smoke を含む helper 49件に合格。actionlint 1.7.12 と `git diff --check` も合格 |
+| 新 helper と既存 Windows package | ローカルの D3D12／DXIL と Vulkan／SPIR-V で `--suite ci` が各 3/3、Vulkan の `--suite quick` が 1/1 合格。既存 package での確認であり、新 hosted フローの合格証拠ではない |
+| 新 Windows 実行ファイルの CPU 回帰 | MSVC 再ビルド成功。startup smoke、gameplay headless smoke、package、domain headless が計 4/4 合格。無効な SDL video／GPU driver を指定し、ウィンドウや GPU が不要であることを確認 |
+| 新 Windows インストール済み package | TEMP 作業ディレクトリーから startup／gameplay smoke に合格。通常の配布検査と common／builtin shader／game shader の3欠落検査が期待どおり。Vulkan `full` 8/8、D3D12 `quick` 1/1 合格 |
+| 新 push／Release フロー | 実装済み、GitHub では未実行。Linux Lavapipe と新3プラットフォーム配布 smoke は実際のフローによる検証待ち |
 
 既存の Windows Mark-23／ジャンプ検証を、新レンダリング設計の検証結果として流用しません。今回のビルドログ、Actions summary、実機出力を合格の証拠とします。
 
 初回 hosted の記録は [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797) です。この実行は修正前の commit を使っています。古い job の再実行も同じ版を使うため、修正を commit／push し、新しい commit で検証を開始します。
+
+後続は [Actions run 35093916457](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457) です。Windows と [macOS job](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457/job/104786488372) は成功し、macOS は Metallib、全テスト、配布検証を含みます。Linux ログはオフライン SDL の console-build 設定不足を示しました。どちらも新 quick／Release フローを導入する前の履歴であり、macOS の物理 GPU は未検証です。
 
 上記 engine GPU smoke は frame のライフサイクル、動的 mesh、ViewModel 深度、カリング、UV、行列投影、alpha ブレンド、色処理を実際に検証しています。Object_FPS は両ドライバー、3 アスペクト比、各 7 カメラ条件で、銃口／tracer マーカーの中心差が 0.0000 ピクセル、数値参照投影との最大誤差が 0.3823 ピクセルでした。
 
@@ -265,6 +322,12 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 - `build/render-neutral-vs18/test-results.xml`、`build/shader-host-vs18/Testing/Temporary/LastTest.log`：独立 core と host ツールの検証。
 - `build/clion-configure.log`、`build/clion-build.log`、`build/clion-regression-tests.log`、`build/clion-host-tests.log`、`build/clion-gpu-tests.xml`、`build/clion-package-logs/`：既存 CLion profile の修正検証。
 - `build/ci-portability-build.log`、`build/ci-portability-tests.xml`、`build/ci-portability-host-tests.xml`：今回の Linux／macOS CI 互換性修正に対する Windows 回帰。元の失敗ログは `build/ci-35079389797-logs/`。
+- `build/ci-35093916457-linux.log`：後続 hosted Linux のオフライン SDL console-build 設定エラー。
+- `build/ci-35093916457-macos.log`：後続 hosted macOS のビルド、Metallib、13/13＋3/3＋7/7 テストと配布の成功記録。
+- `build/ci-smoke-support/windows-{d3d12,vulkan}/summary.json`：新 helper と既存 Windows package による3件の診断。
+- `build/ci-smoke-support/windows-vulkan-quick/summary.json`：新 quick suite の shader 描画1件。
+- `build/ci-release-smoke-tests.log`、`build/ci-release-smoke-tests.xml`：新 Windows 実行ファイルの 4/4 CPU 回帰。新しいインストール済み package は `build/ci-release-stage/`。
+- `build/ci-release-gpu/vulkan/summary.json`、`build/ci-release-gpu/d3d12-quick/summary.json`：新 package のローカル Vulkan 8件と D3D12 1件の描画検証。Linux Lavapipe の合格証拠ではありません。
 
 今回の範囲は共通 HLSL、オフライン shader bundle、中立な Renderer/device 境界、3 プラットフォームのビルド手順です。Compute shader、GPU skinning、PBR、任意の material graph、shader hot reload、完全な RenderGraph、device-loss 自動復旧、バイナリープラグイン ABI は含みません。
 

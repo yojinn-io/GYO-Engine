@@ -1,6 +1,7 @@
 #include "RetroFPS/App/CampaignContentLoader.hpp"
 #include "RetroFPS/App/ObjectFpsPresentation.hpp"
 #include "RetroFPS/App/ObjectFpsRuntimeClient.hpp"
+#include "diagnostics/HeadlessSmoke.hpp"
 #include "diagnostics/MuzzleProbe.hpp"
 
 #include "engine/asset/AssetCatalog.hpp"
@@ -306,53 +307,11 @@ int main(int argc, char* argv[]) {
     Engine::Render::ShaderLibrary shaders;
     if (!LoadShaders(executableRoot, shaders)) return 1;
     if (HasArgument(argc, argv, "--validate-package")) return ValidatePackage(executableRoot, shaders);
+    const bool headlessSmoke = HasArgument(argc, argv, "--headless-smoke-test");
+    if (headlessSmoke && ValidatePackage(executableRoot, shaders) != 0) return 1;
 
-    SdlGpu::SdlGpuOptions gpuOptions;
-    gpuOptions.availableShaderFormats = shaders.CompleteFormats();
-    gpuOptions.driver = GYO_DEFAULT_GPU_DRIVER;
-    for (int index=1;index<argc;++index) {
-        if (std::string_view(argv[index]) != "--gpu-driver") continue;
-        if (++index >= argc) { LogError(std::string{"--gpu-driver requires auto, d3d12, vulkan or metal"}); return 2; }
-        gpuOptions.driver = argv[index];
-    }
-
-    SdlPlatform::SdlPlatformOptions platformOptions;
-    platformOptions.title = "Object_FPS — GYO Runtime Conformance Game";
-    platformOptions.width = 1280;
-    platformOptions.height = 720;
-    if (HasArgument(argc, argv, "--preview-4x3")) platformOptions.width = 960;
-    if (HasArgument(argc, argv, "--preview-21x9")) platformOptions.width = 1680;
-    platformOptions.resizable = false;
-
-    auto platformResult = SdlPlatform::SdlPlatform::Create(platformOptions);
-    if (!platformResult) {
-        LogError(platformResult.error());
-        return 1;
-    }
-    auto platform = std::move(platformResult).value();
-
-    auto renderResult = SdlGpu::SdlGpuRenderDevice::Create(*platform, gpuOptions);
-    if (!renderResult) {
-        LogError(renderResult.error());
-        return 1;
-    }
-    auto renderDevice = std::move(renderResult).value();
-    Engine::Render::Renderer renderer;
-    const auto rendererReady = renderer.Initialize(*renderDevice, shaders);
-    if (!rendererReady) { LogError(rendererReady.error()); return 1; }
-    const auto activeFormat = Engine::Render::ShaderFormatName(*renderer.ActiveShaderFormat());
-    SDL_Log("GYO GPU: driver=%s, shader=%.*s, available_formats=%u, bundle=%s",
-        renderDevice->GetInfo().driver.c_str(), static_cast<int>(activeFormat.size()), activeFormat.data(),
-        renderDevice->GetInfo().shaderFormats, shaders.Version().c_str());
-    if (HasArgument(argc, argv, "--shader-smoke-test")) return RunShaderProbe(*platform, renderer);
-
-    auto textRasterizerResult = SdlTtf::SdlTtfTextRasterizer::Create();
-    if (!textRasterizerResult) {
-        LogError(textRasterizerResult.error());
-        return 1;
-    }
-    auto textRasterizer = std::move(textRasterizerResult).value();
-
+    // CPU content loading is shared by interactive startup and both packaged
+    // smoke modes. All paths resolve assets relative to the executable.
     const std::filesystem::path assetRoot = executableRoot / "assets" / "object_fps";
     Asset::Resolver::AssetPathResolver::Options resolverOptions;
     resolverOptions.assetsRoot = assetRoot.string();
@@ -428,6 +387,72 @@ int main(int argc, char* argv[]) {
     }
     auto content = std::make_shared<const fps::CampaignContent>(
         std::move(*contentResult.content));
+
+    if (headlessSmoke) {
+        std::string report;
+        std::string error;
+        if (!RunHeadlessSmoke(content, report, error)) { LogError(error); return 1; }
+        SDL_Log("%s", report.c_str());
+        return 0;
+    }
+
+    if (HasArgument(argc, argv, "--startup-smoke-test")) {
+        // The same startup path has decoded game data, maps, weapon settings
+        // and FBX-derived muzzle calibration, and checked shader artifacts.
+        // Push validation stops here; gameplay simulation belongs to the
+        // separate headless smoke and graphics to the shader/GPU probes.
+        SDL_Log("Startup smoke passed: stages=%zu, weapons=%zu, shader_programs=%zu, "
+                "bundle=%s, window=none, gpu=none",
+            content->Stages().size(), content->Data().weapons.GetDefinitions().size(),
+            shaders.ProgramIds().size(), shaders.Version().c_str());
+        return 0;
+    }
+
+    SdlGpu::SdlGpuOptions gpuOptions;
+    gpuOptions.availableShaderFormats = shaders.CompleteFormats();
+    gpuOptions.driver = GYO_DEFAULT_GPU_DRIVER;
+    for (int index=1;index<argc;++index) {
+        if (std::string_view(argv[index]) != "--gpu-driver") continue;
+        if (++index >= argc) { LogError(std::string{"--gpu-driver requires auto, d3d12, vulkan or metal"}); return 2; }
+        gpuOptions.driver = argv[index];
+    }
+
+    SdlPlatform::SdlPlatformOptions platformOptions;
+    platformOptions.title = "Object_FPS — GYO Runtime Conformance Game";
+    platformOptions.width = 1280;
+    platformOptions.height = 720;
+    if (HasArgument(argc, argv, "--preview-4x3")) platformOptions.width = 960;
+    if (HasArgument(argc, argv, "--preview-21x9")) platformOptions.width = 1680;
+    platformOptions.resizable = false;
+
+    auto platformResult = SdlPlatform::SdlPlatform::Create(platformOptions);
+    if (!platformResult) {
+        LogError(platformResult.error());
+        return 1;
+    }
+    auto platform = std::move(platformResult).value();
+
+    auto renderResult = SdlGpu::SdlGpuRenderDevice::Create(*platform, gpuOptions);
+    if (!renderResult) {
+        LogError(renderResult.error());
+        return 1;
+    }
+    auto renderDevice = std::move(renderResult).value();
+    Engine::Render::Renderer renderer;
+    const auto rendererReady = renderer.Initialize(*renderDevice, shaders);
+    if (!rendererReady) { LogError(rendererReady.error()); return 1; }
+    const auto activeFormat = Engine::Render::ShaderFormatName(*renderer.ActiveShaderFormat());
+    SDL_Log("GYO GPU: driver=%s, shader=%.*s, available_formats=%u, bundle=%s",
+        renderDevice->GetInfo().driver.c_str(), static_cast<int>(activeFormat.size()), activeFormat.data(),
+        renderDevice->GetInfo().shaderFormats, shaders.Version().c_str());
+    if (HasArgument(argc, argv, "--shader-smoke-test")) return RunShaderProbe(*platform, renderer);
+
+    auto textRasterizerResult = SdlTtf::SdlTtfTextRasterizer::Create();
+    if (!textRasterizerResult) {
+        LogError(textRasterizerResult.error());
+        return 1;
+    }
+    auto textRasterizer = std::move(textRasterizerResult).value();
 
     if (HasArgument(argc, argv, "--muzzle-smoke-test")) {
         return RunMuzzleProbe(*platform, *renderDevice, renderer, assets, *content,

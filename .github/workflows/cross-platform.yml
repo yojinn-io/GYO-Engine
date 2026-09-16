@@ -1,20 +1,53 @@
-name: Cross-platform build and package
+name: Cross-platform build, smoke and release
+run-name: ${{ github.event_name }} / ${{ github.ref_name }}
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 concurrency:
-  group: cross-platform-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Tag pushes and publishing that same release share a lock through upload.
+  # Ordinary branch/PR runs may supersede an older build; release uploads may not.
+  group: ${{ (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')) && format('gyo-release-workflow-{0}', github.ref_name) || format('gyo-ci-{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  prepare:
+    name: Validate event and CI helpers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      publish: ${{ steps.event.outputs.publish }}
+      tag: ${{ steps.event.outputs.tag }}
+      commit: ${{ steps.event.outputs.commit }}
+      release_id: ${{ steps.event.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test event, package, publishing and smoke failure policies
+        run: python -m unittest discover -s tools/ci/tests -v
+      - name: Resolve the exact source commit and publication intent
+        id: event
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_COMMIT: ${{ github.sha }}
+        run: >-
+          python tools/ci/release_pipeline.py prepare
+          --event-path "$GITHUB_EVENT_PATH" --event-name "$EVENT_NAME"
+          --commit "$EVENT_COMMIT" --output "$GITHUB_OUTPUT"
+
   native:
-    name: ${{ matrix.platform }} / build, CPU, shaders, package
+    name: ${{ matrix.platform }} / build, tests, smoke, package
+    needs: prepare
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -51,10 +84,14 @@ jobs:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
       CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
+      SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}
+      ACCEPTANCE_PROFILE: ${{ needs.prepare.outputs.publish == 'true' && 'release' || 'quick' }}
+      GPU_SMOKE_SUITE: ${{ needs.prepare.outputs.publish == 'true' && 'full' || 'quick' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           lfs: true
 
@@ -73,7 +110,8 @@ jobs:
             libasound2-dev libpulse-dev libudev-dev libx11-dev libxext-dev \
             libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
             libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
-            libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libdbus-1-dev
+            libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libdbus-1-dev \
+            mesa-vulkan-drivers vulkan-tools xvfb xauth
           # SDL 3.4 enables XTest by default and requires its development files.
           pkg-config --modversion xtst
 
@@ -131,20 +169,21 @@ jobs:
 
       - name: Run CPU, headless and shader tests
         id: tests
+        if: needs.prepare.outputs.publish == 'true'
         run: |
           ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run host shader reflection and rejection tests
         id: shaders
-        if: always() && steps.build.outcome == 'success'
+        if: always() && needs.prepare.outputs.publish == 'true' && steps.build.outcome == 'success'
         run: |
           ctest --test-dir "build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and test core with optional modules disabled
         id: core
-        if: always() && steps.tools.outcome == 'success'
+        if: always() && needs.prepare.outputs.publish == 'true' && steps.tools.outcome == 'success'
         run: |
           cmake --preset core -B "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -153,20 +192,109 @@ jobs:
           ctest --test-dir "build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install and validate from an unrelated working directory
+      - name: Install the application
         id: package
-        if: always() && steps.build.outcome == 'success'
         run: |
           cmake --install "build/$env:PRESET" --prefix "$env:GITHUB_WORKSPACE/build/$env:PRESET/stage" 2>&1 | Tee-Object "build/$env:PRESET/logs/install.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate release deployment and missing-content failures
+        id: package_validation
+        if: needs.prepare.outputs.publish == 'true'
+        run: |
           python tools/ci/validate_package.py --stage "build/$env:PRESET/stage" --logs "build/$env:PRESET/logs" 2>&1 | Tee-Object "build/$env:PRESET/logs/package-validation.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --output "build/$env:PRESET/gyo-object-fps-$env:PLATFORM.tar.gz" --revision $env:GITHUB_SHA 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
+      - name: Start the packaged application from an unrelated directory
+        id: smoke
+        timeout-minutes: 2
+        run: |
+          $packageRoot = (Resolve-Path "build/$env:PRESET/stage").Path
+          $logRoot = (Resolve-Path "build/$env:PRESET/logs").Path
+          $executable = if ($IsWindows) { 'gyo_object_fps.exe' } else { 'gyo_object_fps' }
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & "$packageRoot/bin/$executable" --startup-smoke-test 2>&1 | Tee-Object "$logRoot/startup-smoke.log"
+            if ($LASTEXITCODE -ne 0) { throw "Packaged startup failed with exit $LASTEXITCODE" }
+          } finally { Pop-Location }
+          @{
+            source_revision = $env:SOURCE_COMMIT
+            platform = $env:PLATFORM
+            profile = $env:ACCEPTANCE_PROFILE
+            startup = 'passed'
+            headless = 'not_run'
+            rendering = @{ status = 'not_run'; reason = 'Physical GPU acceptance remains manual' }
+          } | ConvertTo-Json -Depth 5 | Set-Content "$logRoot/smoke-summary.json" -Encoding utf8
+
+      - name: Exercise release gameplay (jump, pause, shooting and reload)
+        id: gameplay
+        if: needs.prepare.outputs.publish == 'true'
+        timeout-minutes: 2
+        run: |
+          $packageRoot = (Resolve-Path "build/$env:PRESET/stage").Path
+          $logRoot = (Resolve-Path "build/$env:PRESET/logs").Path
+          $executable = if ($IsWindows) { 'gyo_object_fps.exe' } else { 'gyo_object_fps' }
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & "$packageRoot/bin/$executable" --headless-smoke-test 2>&1 | Tee-Object "$logRoot/headless-smoke.log"
+            if ($LASTEXITCODE -ne 0) { throw "Release gameplay smoke failed with exit $LASTEXITCODE" }
+          } finally { Pop-Location }
+          $reportPath = "$logRoot/smoke-summary.json"
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $report.headless = 'passed'
+          $report | ConvertTo-Json -Depth 5 | Set-Content $reportPath -Encoding utf8
+
+      - name: Render the shader probe (release also runs full GPU diagnostics)
+        id: gpu_smoke
+        timeout-minutes: 20
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SDL_VIDEODRIVER: x11
+          SDL_AUDIODRIVER: dummy
+          SDL_LOGGING: '*=info'
+        run: |
+          set -euo pipefail
+          mapfile -t icds < <(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)
+          if [ "${#icds[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one Mesa Lavapipe ICD, found ${#icds[@]}"
+            exit 1
+          fi
+          export VK_DRIVER_FILES="${icds[0]}"
+          export VK_ICD_FILENAMES="$VK_DRIVER_FILES"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/gyo-xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf 'Lavapipe ICD: %s\n' "$VK_DRIVER_FILES" > "build/$PRESET/logs/vulkan-info.log"
+          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary >> "build/$PRESET/logs/vulkan-info.log" 2>&1
+          xvfb-run -a -s '-screen 0 1920x1080x24' python tools/ci/manual_gpu_smoke.py \
+            --package "build/$PRESET/stage" --driver vulkan --suite "$GPU_SMOKE_SUITE" --timeout 120 \
+            --output "build/$PRESET/logs/gpu-smoke" 2>&1 | tee "build/$PRESET/logs/gpu-smoke.log"
+      - name: Record successful software rendering smoke
+        if: runner.os == 'Linux'
+        run: |
+          $reportPath = "build/$env:PRESET/logs/smoke-summary.json"
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $gpu = Get-Content "build/$env:PRESET/logs/gpu-smoke/summary.json" -Raw | ConvertFrom-Json
+          $expectedCount = if ($env:GPU_SMOKE_SUITE -eq 'full') { 8 } else { 1 }
+          if ($gpu.passed -ne $true -or $gpu.suite -ne $env:GPU_SMOKE_SUITE -or
+              $gpu.requested_driver -ne 'vulkan' -or @($gpu.cases).Count -ne $expectedCount -or
+              @($gpu.cases | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw 'Rendering smoke summary does not match the required suite'
+          }
+          $report.rendering = @{
+            status = 'passed'; driver = 'vulkan'; implementation = 'mesa-lavapipe'
+            suite = $gpu.suite; case_count = @($gpu.cases).Count
+          }
+          $report | ConvertTo-Json -Depth 5 | Set-Content $reportPath -Encoding utf8
+
+      - name: Archive the verified platform package
+        id: archive
+        run: |
+          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --output "build/$env:PRESET/gyo-object-fps-$env:PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:PLATFORM --smoke-report "build/$env:PRESET/logs/smoke-summary.json" 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload native package for manual GPU acceptance
-        if: always() && steps.package.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        if: success() && steps.archive.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gyo-object-fps-${{ matrix.platform }}
           path: |
@@ -178,7 +306,7 @@ jobs:
 
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: diagnostics-${{ matrix.platform }}
           path: |
@@ -202,9 +330,14 @@ jobs:
           SHADER_RESULT: ${{ steps.shaders.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
           PACKAGE_RESULT: ${{ steps.package.outcome }}
+          PACKAGE_VALIDATION_RESULT: ${{ steps.package_validation.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          GAMEPLAY_RESULT: ${{ steps.gameplay.outcome }}
+          GPU_SMOKE_RESULT: ${{ steps.gpu_smoke.outcome }}
+          ARCHIVE_RESULT: ${{ steps.archive.outcome }}
         run: |
           @"
-          ## $env:PLATFORM
+          ## $env:PLATFORM / $env:ACCEPTANCE_PROFILE
           | Check | Result |
           | --- | --- |
           | Configure | $env:CONFIGURE_RESULT |
@@ -212,9 +345,66 @@ jobs:
           | CPU / headless / shader tests | $env:TEST_RESULT |
           | Host shader reflection / negative tests | $env:SHADER_RESULT |
           | Optional modules disabled | $env:CORE_RESULT |
-          | Isolated deployment and missing-content failures | $env:PACKAGE_RESULT |
-          | GPU / interactive acceptance | Not run on hosted CI; use the native package |
+          | Install package | $env:PACKAGE_RESULT |
+          | Release deployment and missing-content failures | $env:PACKAGE_VALIDATION_RESULT |
+          | Packaged application startup | $env:SMOKE_RESULT |
+          | Release gameplay smoke | $env:GAMEPLAY_RESULT |
+          | Linux Vulkan rendering ($env:GPU_SMOKE_SUITE, software Lavapipe) | $env:GPU_SMOKE_RESULT |
+          | Verified archive and checksum | $env:ARCHIVE_RESULT |
+          | Physical GPU / interactive acceptance | Run manually on target hardware |
 
           Download the platform archive and run its manual_gpu_smoke.py on a local GPU.
           Native shader compilation is not evidence of successful GPU rendering.
+          Quick runs skip release-only test suites; they check build, startup and one shader render.
           "@ >> $env:GITHUB_STEP_SUMMARY
+
+  validation:
+    name: CI validation
+    needs: [prepare, native]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all three platforms and smoke tests to pass
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          if [ "$PREPARE_RESULT" != success ] || [ "$NATIVE_RESULT" != success ]; then
+            echo '::error::Event checks and every platform build/test/smoke/package must succeed; skipped or cancelled jobs do not pass.'
+            exit 1
+          fi
+          echo 'All three platform packages and required smoke tests passed.' >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Publish verified three-platform assets
+    needs: [prepare, native, validation]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: gyo-release-upload-${{ needs.prepare.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gyo-object-fps-*
+          path: release-packages
+          merge-multiple: true
+      - name: Recheck tag, provenance and checksums; upload missing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          args=(publish --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --package-directory release-packages)
+          if [ -n "$RELEASE_ID" ]; then args+=(--release-id "$RELEASE_ID"); fi
+          python tools/ci/release_pipeline.py "${args[@]}"

@@ -63,6 +63,8 @@
 *.gcda
 *.gcno
 coverage/
+__pycache__/
+*.py[cod]
 
 # FetchContent caches. Match them at any depth because a CMake profile with a
 # mis-scoped FETCHCONTENT_BASE_DIR can otherwise place one dependency's build

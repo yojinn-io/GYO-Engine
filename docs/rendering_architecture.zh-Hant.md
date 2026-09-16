@@ -185,6 +185,8 @@ macOS CI 套件的 deployment target 維持 **13.3**，遊戲與 Metallib 使用
 
 Ubuntu 需安裝 `libxtst-dev`，供 SDL 預設啟用的 XTest 偵測使用；CI 以 `pkg-config --modversion xtst` 確認套件。離線 shader 工具的 SDL 同時停用 video 與 dialog，避免 macOS 靜態連結引用未編入的 Cocoa 視窗符號。遊戲的 SDL 設定獨立於 host 工具。[SDL Linux 相依套件](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
 
+離線 host 工具還明確設定 `SDL_UNIX_CONSOLE_BUILD=ON`。它刻意不使用 X11／Wayland video，必須告知 SDL 這是 console build，否則 Linux configure 會將缺少視訊後端視為錯誤。此設定只作用於 shader host 的 SDL；遊戲仍建置自己的圖形後端。
+
 <a id="r08"></a>
 ## 8. 部署與缺少檔案的處理
 
@@ -203,23 +205,70 @@ stage/
 
 GitHub artifact 使用 tar.gz 保留 Unix 執行權限，附 SHA-256 校驗檔。這是供驗收的原生套件，不包含 macOS 簽章／公證或跨發行版 Linux 相容性承諾。Linux 套件仍使用目標系統的圖形驅動與系統函式庫。
 
+`build_metadata.json` 記錄 `source_revision`、`platform` 與 `ci_smoke`。快速 CI 封裝記錄三平台啟動檢查與 Linux 單項 shader 渲染；Release 封裝另外要求三平台 gameplay headless smoke 及 Linux Lavapipe 八項渲染全部通過。封裝程式拒絕與 commit／平台不符的報告。Release 上傳前再次核對這些資料、壓縮檔內容與 SHA-256；快速 CI 或一般本機封裝不能作為已通過完整 Release 驗收的輸入。
+
 Windows 套件使用 Release／RelWithDebInfo，由 `cmake/GyoMsvcRuntime.cmake` 依選定編譯器的安裝位置找到對應 MSVC 可散佈 DLL，放在 `bin/`，避免依賴 IDE 內附 CMake 的 Visual Studio 版本清單。可用 `GYO_MSVC_REDIST_DIR` 明確指定散佈檔根目錄。若找不到 DLL，開發用 configure／build 仍可進行，只有 release install 會報錯並提示如何補齊。不散佈 Debug CRT；本次套件以 Windows 10+ 的系統 UCRT 為基準。使用者執行遊戲不需要 Visual Studio、shader 編譯器或 SDK。
 
 CI 另用 `dumpbin` 確認 Windows EXE/DLL 引用的 VC runtime 均已打包；Linux 用 `ldd` 檢查 SDL3 從套件 `lib/` 解析；macOS 用 `otool` 檢查相對 install name 與 RPATH。這些是建置機器的檢查工具。Windows 本機執行 `tools/ci/validate_package.py` 時可透過 `--dumpbin /absolute/path/to/dumpbin.exe` 指定工具。
 
 <a id="r09"></a>
-## 9. Object_FPS 的實機驗收
+## 9. Object_FPS 的 CI、Release 與實機驗收
 
-GitHub Actions 在 Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 建置完整 Object_FPS、UI editor 與 shader，執行 CPU/headless、shader 與部署檢查。三個 job 相互獨立；一個平台失敗不取消其他平台。工作流程上傳日誌、manifest 與原生套件。
+### 9.1 每次 push 的必要驗收
 
-Hosted CI 沒有宣稱 GPU 驗收通過。下載對應套件，解開 tar.gz，在有圖形桌面的目標機器執行：
+GitHub Actions 在 Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 建置 Object_FPS、UI editor 與 shader。三個 job 相互獨立；一個平台失敗不取消其他平台。工作流程上傳日誌、manifest 與原生套件。
+
+分支 push、pull request 與 **Run workflow** 走快速路徑：編譯、實際內容啟動、一次簡單 shader 渲染。完整遊戲規則與八項渲染驗收留到 Release 事件；`v*` tag push 也屬於 Release 路徑。
+
+```text
+prepare: 驗證事件與固定 commit
+  → Windows／Linux／macOS: build + install + startup smoke
+  → 僅 Release: CPU/headless + shader + core-only + 隔離部署負向檢查
+  → 僅 Release: 三平台 gameplay headless
+  → Linux Vulkan/Lavapipe: quick 單項 shader／Release 完整八項渲染
+  → 三平台: 封裝 + SHA-256 + Actions artifacts
+  → CI validation: 三平台全部成功
+  → 僅發佈事件: 驗證並上傳三平台 Release assets
+```
+
+| 檢查 | 平台 | 實際邊界 |
+|---|---|---|
+| `--startup-smoke-test` | Windows／Linux／macOS，快速與 Release | 從其他工作目錄啟動部署版，實際載入 catalog／campaign／FBX 模型組裝；不建立視窗或 GPU |
+| `manual_gpu_smoke.py --suite quick` | Linux，快速 CI | Xvfb 提供顯示環境，強制 Mesa Lavapipe Vulkan；執行一次自訂 shader 紅／藍渲染與讀回 |
+| `--headless-smoke-test` | Windows／Linux／macOS，僅 Release | 另檢查選單、開始、拔槍、跳躍、暫停／恢復、落地、單次射擊與換彈完成；不建立視窗或 GPU |
+| `manual_gpu_smoke.py --suite full` | Linux，僅 Release | shader、世界、選單、武器、換彈與三種比例的槍口診斷，共八項 |
+| 實體 GPU／互動驗收 | 各平台實機 | 完整八項 GPU 診斷及手動操作；Windows／macOS hosted runner 不宣稱已通過此項 |
+
+Linux 缺少 Lavapipe、無法建立 device、渲染失敗或逾時都讓 job 失敗；沒有「找不到 GPU 就跳過並回報成功」的路徑。Helper 也要求日誌中的實際 driver／shader 格式符合請求，將結果寫入 `summary.json`。`vulkan-info.log` 記錄 ICD 與 Vulkan 裝置資訊。這證明軟體 Vulkan 渲染路徑可以運作，實體顯示卡仍需驗收。
+
+固定名稱的 `CI validation` job 匯總 `prepare` 與三平台 matrix；任何必要 job 失敗、取消或跳過都不能通過，可作為 branch protection 的必要檢查。快速路徑依設計不執行 Release 專屬重型步驟，Summary 明列模式與未執行項目，不將它們視為完整驗收。
+
+### 9.2 Release 事件與上傳政策
+
+| 事件 | 三平台建置與 smoke | Release 附件 |
+|---|---|---|
+| 分支 push、pull request | 快速路徑 | 不上傳，保留 Actions artifacts |
+| 手動 **Run workflow** | 快速路徑 | 不上傳，包括選擇 tag 的手動執行 |
+| `v*` tag push | 完整 Release 路徑 | 全部成功後建立／使用該 tag 的 Release 並上傳 |
+| GitHub **Publish release**（`release.published`） | 完整 Release 路徑 | 全部成功後附加至該 Release；正式版與預發行版都適用 |
+| 儲存 Release 草稿 | 不觸發 | 不上傳 |
+
+發佈前要求 tag 指向本次事件的確切 commit，且 commit 屬於預設分支歷史。三平台驗收全數成功後才進入 publisher；只有此 job 取得 `contents: write`。附件為 `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` 及各自的 `.tar.gz.sha256`，共六個檔案。
+
+相同 tag 的 push 與 Release 事件共用鎖，不取消正在執行的發佈。重複事件仍重新建置與驗收；上傳時重新讀取遠端 tag、檔案雜湊與來源／smoke 資料，保留已驗證附件，只補缺少的檔案。衝突會報錯，不覆寫既有附件，也不修改使用者寫的 Release 標題或說明。一般分支／PR 的舊執行則可被新執行取消。
+
+### 9.3 下載後的實機驗收
+
+從 Actions artifacts 或 Release 下載對應套件，解開 tar.gz，在有圖形桌面的目標機器執行：
 
 ```sh
 python manual_gpu_smoke.py --package /absolute/path/to/gyo-object-fps \
-  --driver vulkan --output /absolute/path/to/diagnostics
+  --driver vulkan --suite full --output /absolute/path/to/diagnostics
 ```
 
 macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver vulkan`。Python helper 逐項執行自訂 shader 紅／藍色讀回、世界、選單、武器、完整換彈，以及 16:9／4:3／21:9 槍口投影 smoke，保留各項 exit code、日誌和診斷影像；每項最多 120 秒。不具有 Python 的電腦也能直接執行 `bin/gyo_object_fps --gpu-driver metal --muzzle-smoke-test --capture-dir /absolute/path/to/captures` 等對應指令。
+
+`--suite full` 為預設的完整八項；`--suite quick` 只渲染一項 shader；`--suite ci` 保留為手動選擇 shader、world、menu 三項的工具。`--timeout` 調整各項秒數上限。任一項失敗使 helper 退出碼非零，其餘案例仍執行並保留結果。
 
 若受限環境無法使用 Python 臨時目錄，可替兩個驗收 helper 加上 `--work-directory /absolute/path/to/new-work`。該目錄必須尚不存在，驗收後會保留供檢查；部署檢查的工作目錄須放在 `--stage` 之外。
 
@@ -247,13 +296,21 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 | 本次 CI 相容性修正的本機回歸 | Windows Object_FPS 與 host 工具重建通過；CMake／render／headless／package／GPU 合計 7/7、host 3/3；CSV 專項在 MSVC 與 MinGW GCC 各 192 assertions 通過 |
 | GitHub Windows x64 | 首輪 CI 通過：CPU 13/13、shader host 3/3、core-only 7/7 及部署檢查 |
 | GitHub Linux／macOS core-only | 兩平台各 7/7 通過 |
-| GitHub Linux 完整建置 | 首輪因缺少 XTest 開發套件而在 configure 失敗；已補套件，待修正後 CI |
-| GitHub macOS 完整建置 | 首輪在浮點解析編譯及 host SDL Cocoa 連結失敗；已修正，待修正後 CI |
+| GitHub Linux 完整建置 | 首輪因缺少 XTest 開發套件而失敗；後續 run 35093916457 已越過此問題，但 host SDL 缺少 console-build 宣告而 configure 失敗。已補 `SDL_UNIX_CONSOLE_BUILD=ON`，待下一輪 CI |
+| GitHub macOS 完整建置 | 首輪的浮點解析／Cocoa 連結問題已修正；後續 run 35093916457 通過：CPU/headless/shader 13/13、host shader 3/3、core-only 7/7、Metallib 建置、安裝與部署檢查 |
 | Linux／macOS GPU 驗收 | 尚待各平台實機執行 |
+| 新 smoke helper 的案例與錯誤路徑 | 八項真實 subprocess 測試通過：quick 僅渲染一項、非零退出、逾時、無法啟動、未建立 GPU 卻退出 0、driver／shader 不符及結果彙整 |
+| 完整 CI helper 與 workflow 靜態檢查 | 49 項 helper 測試通過，包含發佈政策、封裝內容與 smoke；actionlint 1.7.12 與 `git diff --check` 通過 |
+| 新 helper 對既有 Windows 套件 | `--suite ci` 在本機 D3D12／DXIL 與 Vulkan／SPIR-V 各 3/3 通過，`--suite quick` 在 Vulkan 1/1 通過；使用既有套件，並非新 hosted 流程的通過證據 |
+| 新 Windows 執行檔的 CPU 回歸 | MSVC 重建通過；startup smoke、gameplay headless smoke、package、domain headless 共 4/4 通過。設定無效 SDL video／GPU driver，確認這些路徑不依賴視窗或 GPU |
+| 新 Windows 安裝套件驗收 | 從 TEMP 工作目錄執行 startup／gameplay smoke 通過；部署正向與缺少 common／builtin shader／game shader 三項負向結果正確；Vulkan `full` 8/8、D3D12 `quick` 1/1 通過 |
+| 新 push／Release 流程 | 已實作，尚未在 GitHub 執行；Linux Lavapipe 與新三平台部署 smoke 待該流程實際驗證 |
 
 既有 Windows Mark-23／跳躍驗收不等同於新渲染架構驗收。請以此次建置日誌、Actions summary 與實機輸出作為具體通過證據。
 
 首輪 hosted 記錄為 [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797)。該次執行的是修正前 commit；重新執行舊 job 仍會使用舊版本，需將修正提交並推送後，由新 commit 觸發驗收。
+
+後續記錄為 [Actions run 35093916457](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457)：Windows 與 [macOS job](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457/job/104786488372) 成功，macOS 包含 Metallib、完整測試與部署檢查；Linux 日誌確認離線 SDL 的 console-build 設定缺失。這兩次都是新 quick／Release 流程落地前的歷史證據；macOS 實體 GPU 仍未驗證。
 
 上述 engine GPU smoke 實際涵蓋 frame 生命週期、動態 mesh、ViewModel 深度、剔除、UV、矩陣投影、alpha 混合與色彩處理。Object_FPS 在兩種驅動、三種寬高比、各 7 組攝影機情境中，槍口／tracer 標記中心差為 0.0000 像素，數值參考投影最大誤差為 0.3823 像素。
 
@@ -265,6 +322,12 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 - `build/render-neutral-vs18/test-results.xml`、`build/shader-host-vs18/Testing/Temporary/LastTest.log`：獨立核心與 host 工具驗收。
 - `build/clion-configure.log`、`build/clion-build.log`、`build/clion-regression-tests.log`、`build/clion-host-tests.log`、`build/clion-gpu-tests.xml`、`build/clion-package-logs/`：既有 CLion profile 的修正驗收。
 - `build/ci-portability-build.log`、`build/ci-portability-tests.xml`、`build/ci-portability-host-tests.xml`：本次 Linux／macOS CI 相容性修正的 Windows 回歸；原失敗日誌在 `build/ci-35079389797-logs/`。
+- `build/ci-35093916457-linux.log`：後續 hosted Linux 的離線 SDL console-build 配置錯誤。
+- `build/ci-35093916457-macos.log`：後續 hosted macOS 的建置、Metallib、13/13＋3/3＋7/7 測試與部署成功記錄。
+- `build/ci-smoke-support/windows-{d3d12,vulkan}/summary.json`：新 helper 對既有 Windows 部署包的三項診斷。
+- `build/ci-smoke-support/windows-vulkan-quick/summary.json`：新 quick suite 的單項 shader 渲染。
+- `build/ci-release-smoke-tests.log`、`build/ci-release-smoke-tests.xml`：新 Windows 執行檔的 4/4 CPU 回歸；新安裝套件位於 `build/ci-release-stage/`。
+- `build/ci-release-gpu/vulkan/summary.json`、`build/ci-release-gpu/d3d12-quick/summary.json`：新安裝套件的本機 Vulkan 八項與 D3D12 單項渲染驗收，尚不代表 Linux Lavapipe 通過。
 
 本輪範圍包含共用 HLSL、離線 shader bundle、中立 Renderer/device 邊界與三平台建置流程。Compute shader、GPU skinning、PBR、任意 material graph、shader hot reload、完整 RenderGraph、device-loss 自動復原，以及二進位外掛 ABI 均未納入。
 

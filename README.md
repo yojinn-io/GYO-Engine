@@ -219,8 +219,26 @@ redistributable files do not block development configuration or compilation.
 
 [The Actions workflow](.github/workflows/cross-platform.yml) builds Object_FPS,
 the UI editor and shader bundles on Windows x64/MSVC, Ubuntu 24.04 x64/GCC 14,
-and macOS 15 ARM64/Xcode 16.4. It tests isolated deployment, uploads diagnostics
-and native archives, and explicitly leaves GPU acceptance to local machines.
+and macOS 15 ARM64/Xcode 16.4. Branch pushes, pull requests and manual runs use
+the quick path: compile, install and run `--startup-smoke-test` against real
+packaged content on all three platforms, then render one shader-readback case on
+Linux through Vulkan, Mesa Lavapipe and Xvfb. Release events additionally run the
+full CPU/headless, shader, core-only and isolated-deployment checks, packaged
+gameplay headless smoke, and all eight Linux rendering diagnostics. Missing
+software Vulkan, timeouts and failed cases fail the job. Physical GPU and
+interactive acceptance remain separate; Windows/macOS hosted jobs do not claim
+a rendered frame.
+
+The `CI validation` job requires all three native jobs to succeed, including
+their required smoke tests; failed, cancelled or skipped jobs cannot pass this
+gate. A `v*` tag push or a manually published GitHub Release then uploads the
+three `.tar.gz` packages and their three SHA-256 files as Release assets.
+Publication checks the exact tag commit, default-branch ancestry, package
+platform, source revision and recorded smoke results. Ordinary pushes, pull
+requests and **Run workflow** only produce Actions artifacts. Tag/release events
+for the same tag share a lock, rebuild and revalidate, then preserve verified
+existing assets; conflicts fail without overwriting assets or release text.
+Only the gated publication job has `contents: write` permission.
 The macOS package targets 13.3 or newer; the application and Metallib use the
 same deployment target. CSV decimal parsing uses an explicit decimal grammar
 and the classic C++ locale, including float range checks, because Xcode 16.4
@@ -228,7 +246,10 @@ does not provide floating-point `std::from_chars`. A deployment target alone
 does not establish that an SDK implements a library API.
 Ubuntu builds require `libxtst-dev` for SDL's enabled XTest support. The offline
 shader tool disables SDL dialogs together with video so its headless static SDL
-build does not reference Cocoa window symbols on macOS.
+build does not reference Cocoa window symbols on macOS. That offline SDL build
+also sets `SDL_UNIX_CONSOLE_BUILD=ON`: Linux configuration otherwise rejects
+an intentional build without X11/Wayland video. The application's SDL video
+configuration is unchanged.
 See the [acceptance guide](docs/rendering_architecture.zh-Hant.md#r09)
 for downloadable-package checks and manual smoke commands.
 
@@ -244,7 +265,12 @@ is not packaged, and Windows 10+ provides UCRT. End users do not need Visual Stu
 shader compilers or an SDK. CI checks imported VC DLLs and Unix library paths
 so a developer machine's installed libraries cannot hide incomplete packaging.
 `--validate-package` verifies the installed assets and shader
-bundles without creating a window or GPU. `--gpu-driver d3d12|vulkan|metal`
+bundles without creating a window or GPU. `--startup-smoke-test` loads the real
+catalog/campaign/model composition and exits before window/GPU creation.
+`--headless-smoke-test` additionally exercises menu/start/draw,
+jump/pause/resume/landing, one shot and reload completion. Each archive records
+its canonical `platform`, source revision and `ci_smoke` in `build_metadata.json`.
+`--gpu-driver d3d12|vulkan|metal`
 forces a runtime driver and reports failure if that driver or its shader format
 is unavailable.
 
@@ -260,8 +286,27 @@ also builds and runs headless/render tests without any shader compiler.
 The [first hosted run](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797)
 passed Windows and all three core-only configurations. Full Linux and macOS
 builds failed on the dependencies and API compatibility issues described above;
-their fixes await another hosted run. Linux/macOS GPU execution remains
-unverified. Detailed evidence and log paths are recorded in the rendering guides.
+the [subsequent run](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457)
+passed Windows and macOS; macOS passed CPU/headless/shader tests (13/13), host
+shader tests (3/3), core-only tests (7/7), Metallib build and deployment checks.
+Linux exposed the offline SDL console-build requirement now fixed in the working tree. Linux
+needs another run; the new push/release workflow and physical Linux/macOS GPU
+execution remain unverified. Detailed evidence and log paths are recorded in
+the rendering guides.
+The new push/release workflow has not yet run on GitHub. Its smoke helper passes
+eight subprocess policy tests and the three-case `--suite ci` against
+the existing local Windows package on both Vulkan and D3D12; this does not
+establish Linux Lavapipe or new hosted workflow success. `--suite quick` renders
+one shader case and also passes locally on Vulkan; `--suite ci` covers
+shader/world/menu; `--suite full` (the default) runs all eight GPU diagnostics
+on target hardware.
+The newly rebuilt Windows executable passes startup smoke, gameplay headless
+smoke, package and domain headless tests (4/4), with invalid SDL video/GPU driver
+settings to confirm these paths do not require a window or GPU.
+The fresh installed package also passes startup/gameplay smoke from another
+working directory, positive and three missing-content deployment checks,
+Vulkan `--suite full` (8/8) and D3D12 `--suite quick` (1/1). These remain local
+Windows results; Linux Lavapipe and the new hosted workflow await execution.
 
 The existing CLion MSVC profile also passes with its bundled CMake 4.1.2,
 Ninja and VS18 cl 14.51: Object_FPS and UI editor build, four regression tests,
@@ -347,6 +392,8 @@ The four non-playing screens load once from `assets/object_fps/ui/screens.json`;
 
 Executable smoke paths cover different boundaries:
 
+- `--startup-smoke-test` verifies real installed content loading without creating a window or GPU. Quick and release CI execute this installed binary from an unrelated working directory on all three platforms.
+- `--headless-smoke-test` also verifies gameplay startup, jumping, pause/resume, shooting and reload timing without a window or GPU; release CI runs this heavier scenario.
 - `object_fps.smoke` enters Playing and verifies a world frame can be submitted and presented.
 - `object_fps.menu_smoke` uses ordinary MainMenu startup and fails if the first menu frame has no visible UI submission.
 - `object_fps.viewmodel_smoke` presents each Mark-23 action at its start, middle and end. Use `--viewmodel-smoke-test --capture-dir <directory>` to save diagnostic scene frames, optionally with `--preview-4x3` or `--preview-21x9`.
