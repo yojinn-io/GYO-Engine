@@ -9,6 +9,10 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
 set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
 set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
+# SDL 3.4 enables native dialogs independently of video. Cocoa dialogs call
+# window functions omitted by SDL_VIDEO=OFF, so keep this headless host tool
+# on SDL's dummy dialog implementation on every platform.
+set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 set(SDL_RENDER OFF CACHE BOOL "" FORCE)
 set(SDL_GPU OFF CACHE BOOL "" FORCE)
 set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)

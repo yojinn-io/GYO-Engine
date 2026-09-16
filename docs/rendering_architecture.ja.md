@@ -181,7 +181,9 @@ ctest --preset core
 
 CLion では既存の MSVC CMake profile を使い、**Reload CMake Project** を実行してから `gyo_object_fps` target を選んで実行します。ネイティブ shader ツールの子ビルドは、その profile で選択したコンパイラーと Ninja のパスを引き継ぎます。再配布 DLL の検出のために IDE profile を作り直す必要はありません。
 
-macOS CI package の deployment target は **13.3** で、ゲームと Metallib に同じ値を使います。既存のゲームデータ解析は浮動小数点 `std::from_chars` を使い、Apple の libc++ 対応表では macOS 13.3 が最低バージョンです。Shader がコンパイルできても、アプリ全体をそれ以前に対応すると扱うことはできません。[Apple C++ 対応表](https://developer.apple.com/xcode/cpp/)
+macOS CI package の deployment target は **13.3** を維持し、ゲームと Metallib に同じ値を使います。最低実行 OS バージョンと SDK が API を提供するかどうかは別の条件です。Xcode 16.4 には浮動小数点 `std::from_chars` の overload がないため、CSV は十進数／指数の構文を明示的に検査し、`std::locale::classic()` で float に変換します。有限値、範囲、非ゼロ値のゼロへのアンダーフロー、文字列全体の検査を維持し、表現可能な非正規化数も扱います。システムのロケールは小数点の解釈に影響しません。
+
+Ubuntu では SDL が既定で有効にする XTest の検出用に `libxtst-dev` が必要です。CI は `pkg-config --modversion xtst` で確認します。オフライン shader ツール用 SDL は video と dialog の両方を無効にし、macOS の静的リンクで未ビルドの Cocoa window symbol を参照しないようにします。ゲーム用 SDL の設定は host ツールとは独立しています。[SDL Linux 依存パッケージ](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
 
 <a id="r08"></a>
 ## 8. 配布とファイル欠落時の処理
@@ -242,10 +244,16 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 | Object_FPS の `NONE` 構成 | 存在しない shader ツールを指定してもビルド成功。43 target に SDL_GPU、shader host、bundle はなく、headless／render 2/2 合格 |
 | CLion の既存 MSVC profile | CMake 4.1.2＋Ninja＋VS18 cl 14.51 Release。元の `cmake-build-msvc` で configure、host ツール自動構築、Object_FPS／UI editor ビルド成功 |
 | CLion 回帰・配布検証 | CMake 方針／CRT 2/2、headless／render／package／CRT 4/4、ゲーム／メニュー／shader GPU 3/3 合格（`direct3d12`＋DXIL）。release install、独立 package、3 欠落ケース、CRT 検査も合格 |
-| GitHub の 3 プラットフォーム workflow | 未実行 |
-| Linux／macOS ネイティブビルドと GPU 確認 | 各プラットフォームでの実行待ち |
+| 今回の CI 互換性修正のローカル回帰 | Windows Object_FPS と host ツールの再ビルド成功。CMake／render／headless／package／GPU 合計 7/7、host 3/3。CSV 専用検証は MSVC と MinGW GCC で各 192 assertions 合格 |
+| GitHub Windows x64 | 初回 CI 合格：CPU 13/13、shader host 3/3、core-only 7/7、配布検証 |
+| GitHub Linux／macOS core-only | 両 platform とも 7/7 合格 |
+| GitHub Linux 全体ビルド | 初回は XTest 開発パッケージ不足で configure 失敗。依存を追加済み、修正後の CI 待ち |
+| GitHub macOS 全体ビルド | 初回は浮動小数点解析のコンパイルと host SDL Cocoa のリンクに失敗。修正済み、修正後の CI 待ち |
+| Linux／macOS GPU 確認 | 各 platform の実機実行待ち |
 
 既存の Windows Mark-23／ジャンプ検証を、新レンダリング設計の検証結果として流用しません。今回のビルドログ、Actions summary、実機出力を合格の証拠とします。
+
+初回 hosted の記録は [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797) です。この実行は修正前の commit を使っています。古い job の再実行も同じ版を使うため、修正を commit／push し、新しい commit で検証を開始します。
 
 上記 engine GPU smoke は frame のライフサイクル、動的 mesh、ViewModel 深度、カリング、UV、行列投影、alpha ブレンド、色処理を実際に検証しています。Object_FPS は両ドライバー、3 アスペクト比、各 7 カメラ条件で、銃口／tracer マーカーの中心差が 0.0000 ピクセル、数値参照投影との最大誤差が 0.3823 ピクセルでした。
 
@@ -256,6 +264,7 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 - `build/render-cross-vs18/validation-none-{configure,build,ctest,restore}.log`：バックエンド無効化と AUTO 復帰の確認。
 - `build/render-neutral-vs18/test-results.xml`、`build/shader-host-vs18/Testing/Temporary/LastTest.log`：独立 core と host ツールの検証。
 - `build/clion-configure.log`、`build/clion-build.log`、`build/clion-regression-tests.log`、`build/clion-host-tests.log`、`build/clion-gpu-tests.xml`、`build/clion-package-logs/`：既存 CLion profile の修正検証。
+- `build/ci-portability-build.log`、`build/ci-portability-tests.xml`、`build/ci-portability-host-tests.xml`：今回の Linux／macOS CI 互換性修正に対する Windows 回帰。元の失敗ログは `build/ci-35079389797-logs/`。
 
 今回の範囲は共通 HLSL、オフライン shader bundle、中立な Renderer/device 境界、3 プラットフォームのビルド手順です。Compute shader、GPU skinning、PBR、任意の material graph、shader hot reload、完全な RenderGraph、device-loss 自動復旧、バイナリープラグイン ABI は含みません。
 

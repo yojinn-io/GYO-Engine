@@ -4,6 +4,8 @@
 #include "RetroFPS/Data/GameData.hpp"
 
 #include <cstddef>
+#include <limits>
+#include <locale>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -233,9 +235,94 @@ void TestWeaponActionTimingData(TestContext& context) {
                    "hide_seconds", "non-finite hide duration is rejected by catalog validation");
 }
 
+[[nodiscard]] GameDataLoadResult ParseWithRecoil(const std::string_view value) {
+    const std::string weapons = ReplaceOnce(
+        kValidWeapons, ",1.5,false,", "," + std::string{value} + ",false,");
+    return ParseWith(kValidEnemies, kValidEnemyAnimations, weapons, MakeLevels(1));
+}
+
+void TestPortableDecimalParsing(TestContext& context) {
+    struct DecimalCase {
+        std::string_view text;
+        float expected;
+    };
+    constexpr DecimalCase accepted[] = {
+        {"1.5", 1.5f}, {".5", 0.5f}, {"1.", 1.0f}, {"001.50", 1.5f},
+        {"15e-1", 1.5f}, {"1.5E+1", 15.0f}, {"0", 0.0f}, {"-0.0", -0.0f},
+        {"0e9999", 0.0f}, {"0e-9999", 0.0f},
+        {"3.40282346638528859811704183484516925440e38", std::numeric_limits<float>::max()},
+        {"3.4028235e38", std::numeric_limits<float>::max()},
+        {"1.17549435082228750796873653722224568e-38", std::numeric_limits<float>::min()},
+        {"1.40129846432481707092372958328991613e-45", std::numeric_limits<float>::denorm_min()},
+        {"1e-45", std::numeric_limits<float>::denorm_min()},
+    };
+    for (const auto& test : accepted) {
+        const auto result = ParseWithRecoil(test.text);
+        context.Expect(result.Succeeded(), std::string{"decimal catalog accepts "} + std::string{test.text});
+        if (result.catalog) {
+            const auto* weapon = result.catalog->weapons.GetDefaultWeapon();
+            context.Expect(weapon && weapon->recoilDegrees == test.expected,
+                           "decimal conversion preserves the rounded float including subnormals");
+            if (test.text == "-0.0") {
+                context.Expect(weapon && std::signbit(weapon->recoilDegrees),
+                               "negative zero retains its sign");
+            }
+        }
+    }
+
+    constexpr std::string_view rejected[] = {
+        "", ".", "-", "-.", "+1.5", " 1.5", "1.5 ", "\t1.5",
+        "1.5suffix", "1.2.3", "1e", "1e+", "1e-", "1e2e3", "--1",
+        "0x1.8p0", "nan", "NaN", "inf", "-infinity", "3.4028236e38",
+        "1e9999", "1e-46", "-1e-46", "1e-9999", "\"1,5\"",
+    };
+    for (const auto text : rejected) {
+        const auto result = ParseWithRecoil(text);
+        ExpectRejected(context, result, "expected a finite decimal number",
+                       std::string{"decimal catalog rejects "} + std::string{text});
+        context.Expect(result.error.find("weapons.csv line 2, column 5, field 'recoil'") != std::string::npos,
+                       "invalid decimals retain file, line, column and field diagnostics");
+    }
+    ExpectRejected(context, ParseWithRecoil("-1.5"), "value must be non-negative",
+                   "negative decimal syntax reaches the field's domain validation");
+}
+
+class CommaDecimalPunctuation final : public std::numpunct<char> {
+protected:
+    char do_decimal_point() const override { return ','; }
+    char do_thousands_sep() const override { return '.'; }
+    std::string do_grouping() const override { return "\3"; }
+};
+
+class ScopedNumericLocale final {
+public:
+    ScopedNumericLocale()
+        : previous_(std::locale::global(std::locale{std::locale::classic(), new CommaDecimalPunctuation})) {}
+    ~ScopedNumericLocale() { std::locale::global(previous_); }
+    ScopedNumericLocale(const ScopedNumericLocale&) = delete;
+    ScopedNumericLocale& operator=(const ScopedNumericLocale&) = delete;
+private:
+    std::locale previous_;
+};
+
+void TestDecimalLocaleIndependence(TestContext& context) {
+    const ScopedNumericLocale locale;
+    const auto result = ParseWithRecoil("1.5e+1");
+    context.Expect(result.Succeeded(), "catalog decimals do not inherit a comma-decimal global locale");
+    if (result.catalog) {
+        const auto* weapon = result.catalog->weapons.GetDefaultWeapon();
+        context.Expect(weapon && weapon->recoilDegrees == 15.0f,
+                       "dot remains a decimal point rather than a grouping separator");
+    }
+    ExpectRejected(context, ParseWithRecoil("\"1,5\""), "expected a finite decimal number",
+                   "locale-specific decimals are rejected even when the active locale accepts them");
+}
+
 } // namespace
 
 void RunGameDataCatalogTests(TestContext& context) {
+    TestPortableDecimalParsing(context);
+    TestDecimalLocaleIndependence(context);
     TestWeaponActionTimingData(context);
     TestCsvSyntax(context);
     TestCatalogValuesAndAssetIds(context);

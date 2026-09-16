@@ -17,7 +17,7 @@ option(GYO_BUILD_SANDBOX "Build the optional ImGui/JSON sandbox application" OFF
 option(GYO_BUILD_OBJECT_FPS "Build the Object_FPS GYO conformance game" ON)
 option(GYO_BUILD_UI_EDITOR "Build the standalone GYO JSON UI editor" ON)
 if(APPLE AND GYO_BUILD_OBJECT_FPS AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.3")
-    message(FATAL_ERROR "Object_FPS requires macOS 13.3+ for floating-point std::from_chars")
+    message(FATAL_ERROR "Object_FPS uses macOS 13.3 as its minimum supported deployment target")
 endif()
 option(
     GYO_BUILD_SDL_GPU_BACKEND

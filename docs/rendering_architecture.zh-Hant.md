@@ -181,7 +181,9 @@ ctest --preset core
 
 CLion 可沿用現有 MSVC CMake profile，執行 **Reload CMake Project**，再選擇並執行 `gyo_object_fps` target。原生 shader 工具的子建置沿用該 profile 選定的編譯器與 Ninja 路徑；不必為了散佈 DLL 的偵測重建 IDE profile。
 
-macOS CI 套件的 deployment target 是 **13.3**，遊戲與 Metallib 使用相同值。現有遊戲資料解析使用浮點 `std::from_chars`，Apple 的 libc++ 相容性表列出 macOS 13.3 為其最低版本；不能只因 shader 可編譯就把整個程式標為支援更舊版本。[Apple C++ 支援表](https://developer.apple.com/xcode/cpp/)
+macOS CI 套件的 deployment target 維持 **13.3**，遊戲與 Metallib 使用相同值。最低執行系統版本與 SDK 是否提供某個 API 是兩項獨立條件：Xcode 16.4 實際沒有浮點 `std::from_chars` overload，因此 CSV 改用明確的十進位／指數語法檢查，再以 `std::locale::classic()` 解析為 float。解析保留有限值、範圍、非零值下溢與完整字串檢查，並涵蓋可表示的次正規數；系統語系不改變資料中的小數點。
+
+Ubuntu 需安裝 `libxtst-dev`，供 SDL 預設啟用的 XTest 偵測使用；CI 以 `pkg-config --modversion xtst` 確認套件。離線 shader 工具的 SDL 同時停用 video 與 dialog，避免 macOS 靜態連結引用未編入的 Cocoa 視窗符號。遊戲的 SDL 設定獨立於 host 工具。[SDL Linux 相依套件](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
 
 <a id="r08"></a>
 ## 8. 部署與缺少檔案的處理
@@ -242,10 +244,16 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 | Object_FPS 的 `NONE` 配置 | 指定不存在的 shader 工具仍可建置；43 個 target 無 SDL_GPU、shader host 或 bundle；headless／render 2/2 通過 |
 | CLion 既有 MSVC profile | CMake 4.1.2＋Ninja＋VS18 cl 14.51 Release，原 `cmake-build-msvc` 配置、host 工具自動建置、Object_FPS／UI editor 建置通過 |
 | CLion 回歸與部署 | CMake 政策／CRT 2/2、headless／render／package／CRT 4/4、遊戲／選單／shader GPU 3/3 通過（`direct3d12`＋DXIL）；release 安裝、隔離套件及 3 項缺檔、CRT 檢查通過 |
-| GitHub 三平台 workflow | 尚未執行 |
-| Linux／macOS 原生與 GPU 驗收 | 尚待各平台執行 |
+| 本次 CI 相容性修正的本機回歸 | Windows Object_FPS 與 host 工具重建通過；CMake／render／headless／package／GPU 合計 7/7、host 3/3；CSV 專項在 MSVC 與 MinGW GCC 各 192 assertions 通過 |
+| GitHub Windows x64 | 首輪 CI 通過：CPU 13/13、shader host 3/3、core-only 7/7 及部署檢查 |
+| GitHub Linux／macOS core-only | 兩平台各 7/7 通過 |
+| GitHub Linux 完整建置 | 首輪因缺少 XTest 開發套件而在 configure 失敗；已補套件，待修正後 CI |
+| GitHub macOS 完整建置 | 首輪在浮點解析編譯及 host SDL Cocoa 連結失敗；已修正，待修正後 CI |
+| Linux／macOS GPU 驗收 | 尚待各平台實機執行 |
 
 既有 Windows Mark-23／跳躍驗收不等同於新渲染架構驗收。請以此次建置日誌、Actions summary 與實機輸出作為具體通過證據。
+
+首輪 hosted 記錄為 [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797)。該次執行的是修正前 commit；重新執行舊 job 仍會使用舊版本，需將修正提交並推送後，由新 commit 觸發驗收。
 
 上述 engine GPU smoke 實際涵蓋 frame 生命週期、動態 mesh、ViewModel 深度、剔除、UV、矩陣投影、alpha 混合與色彩處理。Object_FPS 在兩種驅動、三種寬高比、各 7 組攝影機情境中，槍口／tracer 標記中心差為 0.0000 像素，數值參考投影最大誤差為 0.3823 像素。
 
@@ -256,6 +264,7 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 - `build/render-cross-vs18/validation-none-{configure,build,ctest,restore}.log`：停用後端及恢復 AUTO 的檢查。
 - `build/render-neutral-vs18/test-results.xml`、`build/shader-host-vs18/Testing/Temporary/LastTest.log`：獨立核心與 host 工具驗收。
 - `build/clion-configure.log`、`build/clion-build.log`、`build/clion-regression-tests.log`、`build/clion-host-tests.log`、`build/clion-gpu-tests.xml`、`build/clion-package-logs/`：既有 CLion profile 的修正驗收。
+- `build/ci-portability-build.log`、`build/ci-portability-tests.xml`、`build/ci-portability-host-tests.xml`：本次 Linux／macOS CI 相容性修正的 Windows 回歸；原失敗日誌在 `build/ci-35079389797-logs/`。
 
 本輪範圍包含共用 HLSL、離線 shader bundle、中立 Renderer/device 邊界與三平台建置流程。Compute shader、GPU skinning、PBR、任意 material graph、shader hot reload、完整 RenderGraph、device-loss 自動復原，以及二進位外掛 ABI 均未納入。
 

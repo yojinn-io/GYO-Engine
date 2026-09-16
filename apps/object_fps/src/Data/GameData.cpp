@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -188,12 +190,56 @@ void ValidateHeader(
     const std::string_view catalogName,
     const data::CsvRecord& record,
     const std::string_view fieldName) {
+    // Keep from_chars' decimal grammar: no whitespace, leading '+', hex, or
+    // non-finite spellings. Do not depend on the process-wide numeric locale.
+    std::size_t index = 0;
+    if (!text.empty() && text.front() == '-') {
+        ++index;
+    }
+    bool hasSignificandDigit = false;
+    bool hasNonzeroSignificand = false;
+    const auto consumeDigits = [&](const bool significand) {
+        const std::size_t begin = index;
+        while (index < text.size() && text[index] >= '0' && text[index] <= '9') {
+            if (significand) {
+                hasSignificandDigit = true;
+                hasNonzeroSignificand |= text[index] != '0';
+            }
+            ++index;
+        }
+        return index != begin;
+    };
+    consumeDigits(true);
+    if (index < text.size() && text[index] == '.') {
+        ++index;
+        consumeDigits(true);
+    }
+    bool validExponent = true;
+    if (index < text.size() && (text[index] == 'e' || text[index] == 'E')) {
+        ++index;
+        if (index < text.size() && (text[index] == '+' || text[index] == '-')) {
+            ++index;
+        }
+        validExponent = consumeDigits(false);
+    }
+    if (!hasSignificandDigit || !validExponent || index != text.size()) {
+        ThrowFieldError(catalogName, record, fieldName, "expected a finite decimal number");
+    }
+
+    // Xcode 16's libc++ has no floating-point from_chars overload. Classic-locale
+    // num_get is available on every supported toolchain and converts directly
+    // to float, avoiding a second rounding through double.
     float value = 0.0f;
-    const char* const begin = text.data();
-    const char* const end = begin + text.size();
-    const std::from_chars_result result =
-        std::from_chars(begin, end, value, std::chars_format::general);
-    if (text.empty() || result.ec != std::errc{} || result.ptr != end || !std::isfinite(value)) {
+    std::istringstream stream{text};
+    stream.imbue(std::locale::classic());
+    stream >> std::noskipws >> value;
+    // libc++ may flag underflow even when the result is a representable
+    // subnormal (or rounds up to the smallest normal). Keep those results, but
+    // reject overflow and nonzero input that underflows all the way to zero.
+    const bool representableUnderflow =
+        value != 0.0f && std::abs(value) <= std::numeric_limits<float>::min();
+    if (!stream.eof() || stream.bad() || (stream.fail() && !representableUnderflow) ||
+        !std::isfinite(value) || (value == 0.0f && hasNonzeroSignificand)) {
         ThrowFieldError(catalogName, record, fieldName, "expected a finite decimal number");
     }
     return value;

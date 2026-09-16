@@ -221,10 +221,15 @@ redistributable files do not block development configuration or compilation.
 the UI editor and shader bundles on Windows x64/MSVC, Ubuntu 24.04 x64/GCC 14,
 and macOS 15 ARM64/Xcode 16.4. It tests isolated deployment, uploads diagnostics
 and native archives, and explicitly leaves GPU acceptance to local machines.
-The macOS package targets 13.3 or newer for the game's floating-point
-`std::from_chars`; the application and Metallib use the same deployment target.
-Adding the workflow does not mean that a hosted run or Linux/macOS GPU test has
-already passed. See the [acceptance guide](docs/rendering_architecture.zh-Hant.md#r09)
+The macOS package targets 13.3 or newer; the application and Metallib use the
+same deployment target. CSV decimal parsing uses an explicit decimal grammar
+and the classic C++ locale, including float range checks, because Xcode 16.4
+does not provide floating-point `std::from_chars`. A deployment target alone
+does not establish that an SDK implements a library API.
+Ubuntu builds require `libxtst-dev` for SDL's enabled XTest support. The offline
+shader tool disables SDL dialogs together with video so its headless static SDL
+build does not reference Cocoa window symbols on macOS.
+See the [acceptance guide](docs/rendering_architecture.zh-Hant.md#r09)
 for downloadable-package checks and manual smoke commands.
 
 Installed content lives next to the executable under `stage/bin/assets` and
@@ -252,8 +257,11 @@ Both explicit D3D12/DXIL and Vulkan/SPIR-V pass the engine numeric GPU smoke
 and all eight Object_FPS GPU cases. Isolated package validation, missing-content
 rejection and app-local CRT dependency checks pass. The `NONE` configuration
 also builds and runs headless/render tests without any shader compiler.
-GitHub Actions and native Linux/macOS execution remain unverified; detailed
-evidence and log paths are recorded in the rendering guides.
+The [first hosted run](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797)
+passed Windows and all three core-only configurations. Full Linux and macOS
+builds failed on the dependencies and API compatibility issues described above;
+their fixes await another hosted run. Linux/macOS GPU execution remains
+unverified. Detailed evidence and log paths are recorded in the rendering guides.
 
 The existing CLion MSVC profile also passes with its bundled CMake 4.1.2,
 Ninja and VS18 cl 14.51: Object_FPS and UI editor build, four regression tests,
