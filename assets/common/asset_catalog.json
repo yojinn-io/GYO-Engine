@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "common.texture.white", "type": "texture", "path": "white1x1.png" }
+  ]
+}

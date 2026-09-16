@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps.model.mark23",
+  "materials": {
+    "Hand_D": "object_fps.texture.mark23.hand",
+    "Glove_D": "object_fps.texture.mark23.glove",
+    "Mark23_D": "object_fps.texture.mark23.gun"
+  },
+  "clips": { "Idle": "Idle", "Shoot": "Shoot", "Reload": "Reload", "Draw": "Draw", "Hide": "Hide" },
+  "anchor_node": "main_j",
+  "muzzle": {
+    "node": "main_j",
+    "local_position_meters": [0.003179880, 0.089686641, -0.213802223]
+  },
+  "sampler": "linear_wrap",
+  "offset_meters": [0.12, -0.18, 0.55],
+  "rotation_degrees": [0.0, 180.0, 0.0],
+  "scale": 1.0,
+  "vertical_fov_degrees": 55.0,
+  "near_clip": 0.01,
+  "far_clip": 5.0
+}

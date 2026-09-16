@@ -8,6 +8,22 @@ namespace fps {
 
 class WeaponController;
 
+enum class WeaponAction : std::uint8_t { Draw, Idle, Shoot, Reload, Hide, Holstered };
+
+struct WeaponPresentationSnapshot final {
+    WeaponDefinitionId weaponId{};
+    WeaponAction action{WeaponAction::Holstered};
+    float elapsedSeconds{};
+    float durationSeconds{};
+    std::uint64_t revision{};
+};
+
+struct WeaponActionEvent final {
+    WeaponDefinitionId weaponId{};
+    WeaponAction action{WeaponAction::Holstered};
+    std::uint64_t revision{};
+};
+
 class WeaponState final {
 public:
     WeaponState() noexcept = default;
@@ -20,10 +36,13 @@ public:
     [[nodiscard]] float GetFireCooldownSeconds() const noexcept {
         return fireCooldownSeconds_;
     }
-    [[nodiscard]] bool IsReloading() const noexcept { return reloading_; }
+    [[nodiscard]] bool IsReloading() const noexcept { return action_ == WeaponAction::Reload; }
     [[nodiscard]] float GetReloadElapsedSeconds() const noexcept {
-        return reloadElapsedSeconds_;
+        return IsReloading() ? actionElapsedSeconds_ : 0.0f;
     }
+    [[nodiscard]] WeaponAction GetAction() const noexcept { return action_; }
+    [[nodiscard]] float GetActionElapsedSeconds() const noexcept { return actionElapsedSeconds_; }
+    [[nodiscard]] std::uint64_t GetActionRevision() const noexcept { return actionRevision_; }
     [[nodiscard]] float GetRecoilDegrees() const noexcept { return recoilDegrees_; }
     [[nodiscard]] bool IsInitialized() const noexcept { return initialized_; }
 
@@ -34,9 +53,10 @@ private:
     std::uint32_t magazineAmmo_ = 0;
     std::uint32_t reserveAmmo_ = 0;
     float fireCooldownSeconds_ = 0.0f;
-    float reloadElapsedSeconds_ = 0.0f;
+    float actionElapsedSeconds_ = 0.0f;
+    WeaponAction action_ = WeaponAction::Holstered;
+    std::uint64_t actionRevision_ = 0;
     float recoilDegrees_ = 0.0f;
-    bool reloading_ = false;
     bool initialized_ = false;
 };
 

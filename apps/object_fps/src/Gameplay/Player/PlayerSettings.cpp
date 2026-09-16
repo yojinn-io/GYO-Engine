@@ -42,6 +42,15 @@ bool ValidatePlayerSettings(
         return false;
     }
 
+    if (!std::isfinite(settings.jumpHeight) || settings.jumpHeight <= 0.0f ||
+        !std::isfinite(settings.gravity) || settings.gravity <= 0.0f) {
+        error = "player jump height and gravity must be finite and greater than zero";
+        return false;
+    }
+    if (!std::isfinite(std::sqrt(2.0f * settings.gravity * settings.jumpHeight))) {
+        error = "player jump impulse must be finite";
+        return false;
+    }
     return true;
 }
 

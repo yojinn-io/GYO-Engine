@@ -18,6 +18,7 @@ struct PlayerControlInput final {
     float lookDeltaX{};
     float lookDeltaY{};
     bool lookEnabled{};
+    bool jumpPressed{};
 };
 
 class PlayerController final {

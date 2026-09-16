@@ -307,9 +307,75 @@ void TestInvalidPlayerSettings(TestContext& context) {
     context.Expect(!error.empty(), "spawn collision initialization reports an error");
 }
 
+void TestJumpBodyAndFrameIndependence(TestContext& context) {
+    const GridMap map = MakeOpenMovementMap(context);
+    PlayerController controller;
+    Player coarse, fine;
+    ExpectPlayerInitialized(context, controller, coarse, map, {});
+    ExpectPlayerInitialized(context, controller, fine, map, {});
+    PlayerControlInput jump;
+    jump.jumpPressed = true;
+    controller.Update(coarse, jump, 0.0f, map, {});
+    controller.Update(fine, jump, 0.0f, map, {});
+    const float ascent = std::sqrt(2.0f * controller.GetSettings().jumpHeight /
+                                  controller.GetSettings().gravity);
+    controller.Update(coarse, {}, ascent, map, {});
+    for (int index = 0; index < 20; ++index) controller.Update(fine, {}, ascent / 20.0f, map, {});
+    context.Expect(!coarse.IsGrounded() && NearlyEqual(coarse.GetFeetY(), 0.6f) &&
+                       NearlyEqual(coarse.GetFeetY(), fine.GetFeetY()) &&
+                       NearlyEqual(coarse.GetVerticalVelocity(), 0.0f),
+                   "capsule feet reach configured jump apex independent of timestep");
+    context.Expect(NearlyEqual(coarse.GetEyePosition(1.6f).y, coarse.GetFeetY() + 1.6f),
+                   "world camera eye follows capsule feet with unchanged relative eye offset");
+    controller.Update(coarse, jump, 0.05f, map, {});
+    context.Expect(coarse.GetFeetY() < 0.6f && coarse.GetVerticalVelocity() < 0.0f,
+                   "midair jump press cannot create a second impulse");
+    const float feetBeforeInvalid = coarse.GetFeetY();
+    controller.Update(coarse, jump, -1.0f, map, {});
+    context.Expect(NearlyEqual(coarse.GetFeetY(), feetBeforeInvalid),
+                   "invalid timestep cannot advance a jumping capsule");
+    controller.Update(coarse, {}, 100.0f, map, {});
+    context.Expect(coarse.IsGrounded() && coarse.GetFeetY() == 0.0f &&
+                       coarse.GetVerticalVelocity() == 0.0f,
+                   "large timestep lands without tunneling below the floor");
+    controller.Update(coarse, jump, 0.1f, map, {});
+    context.Expect(!coarse.IsGrounded() && coarse.GetFeetY() > 0.0f,
+                   "a fresh press can jump again after landing");
+    const GridMap narrow = ParseValidMap(context, "#####\n#P.D#\n#####");
+    Player wallPlayer;
+    ExpectPlayerInitialized(context, controller, wallPlayer, narrow, {});
+    controller.Update(wallPlayer, jump, 0.0f, narrow, {});
+    PlayerControlInput towardWall;
+    towardWall.moveRight = -1.0f;
+    controller.Update(wallPlayer, towardWall, 0.1f, narrow, {});
+    context.Expect(!wallPlayer.IsGrounded() &&
+                       wallPlayer.GetPositionXZ().x >= 1.25f &&
+                       !GridCollision::OverlapsSolid(narrow, wallPlayer.GetPositionXZ(), 0.25f),
+                   "airborne horizontal motion stops at the wall instead of bypassing it");
+    Player blockedPlayer;
+    ExpectPlayerInitialized(context, controller, blockedPlayer, map, {});
+    const Float2 spawn = blockedPlayer.GetPositionXZ();
+    const CircleObstacle enemy{{spawn.x + 0.6f, spawn.z}, 0.25f};
+    controller.Update(blockedPlayer, jump, 0.0f, map, {});
+    towardWall.moveRight = 1.0f;
+    controller.Update(blockedPlayer, towardWall, 0.1f, map, {}, {&enemy, 1});
+    context.Expect(!blockedPlayer.IsGrounded() && blockedPlayer.GetPositionXZ().x <= spawn.x + 0.101f,
+                   "airborne horizontal movement retains dynamic enemy blockers");
+    std::string error;
+    PlayerSettings invalid;
+    invalid.gravity = 0.0f;
+    context.Expect(!controller.Configure(invalid, error), "zero jump gravity is rejected");
+    invalid = {}; invalid.jumpHeight = (std::numeric_limits<float>::quiet_NaN)();
+    context.Expect(!controller.Configure(invalid, error), "non-finite jump height is rejected");
+    ExpectPlayerInitialized(context, controller, coarse, map, {});
+    context.Expect(coarse.IsGrounded() && coarse.GetFeetY() == 0.0f,
+                   "stage spawn resets vertical motion");
+}
+
 } // namespace
 
 void RunPlayerControllerTests(TestContext& context) {
+    TestJumpBodyAndFrameIndependence(context);
     TestPlanarMovement(context);
     TestSemanticMovementInput(context);
     TestYawAndPitch(context);

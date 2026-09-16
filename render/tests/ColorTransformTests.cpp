@@ -67,21 +67,21 @@ TEST_CASE("CPU reference keeps Overlay unchanged while Scene is adjusted") {
     RenderQueue queue;
     SpriteSubmission scene{};
     scene.destinationPixels = {0.0F, 0.0F, 1.0F, 1.0F};
-    scene.tint = sample;
+    scene.material.tint = sample;
     scene.layer = CompositeLayer::Scene;
     REQUIRE(queue.Submit(scene));
 
     SpriteSubmission overlay{};
     overlay.destinationPixels = {1.0F, 0.0F, 1.0F, 1.0F};
-    overlay.tint = sample;
+    overlay.material.tint = sample;
     overlay.layer = CompositeLayer::Overlay;
     REQUIRE(queue.Submit(overlay));
 
     REQUIRE(queue.Sprites().size() == 2);
     const auto referenceComposite = [transform](const SpriteSubmission& sprite) {
         return sprite.layer == CompositeLayer::Scene
-            ? ApplySceneColorTransform(sprite.tint, transform)
-            : sprite.tint;
+            ? ApplySceneColorTransform(sprite.material.tint, transform)
+            : sprite.material.tint;
     };
     const Color displayedScene = referenceComposite(queue.Sprites()[0]);
     const Color displayedOverlay = referenceComposite(queue.Sprites()[1]);

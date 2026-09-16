@@ -12,3 +12,4 @@ target_link_libraries(gyo_ui_tests PRIVATE
 )
 
 add_test(NAME gyo_ui_tests COMMAND gyo_ui_tests)
+target_include_directories(gyo_ui_tests PRIVATE "${PROJECT_SOURCE_DIR}/tests/support")

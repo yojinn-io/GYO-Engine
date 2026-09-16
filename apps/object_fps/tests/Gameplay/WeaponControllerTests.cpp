@@ -19,7 +19,7 @@ namespace {
         7,
         2.0f,
         automatic,
-        Engine::Asset::AssetId::FromString("object_fps.texture.test.weapon"),
+        Engine::Asset::AssetId::FromString("object_fps.weapon.test"),
         0.10f,
         1.0f,
     };
@@ -43,6 +43,7 @@ void ConfigureAndInitialize(
     if (!initialized) {
         throw std::runtime_error("weapon test state initialization failed: " + error);
     }
+    controller.Update(state, {}, definition.drawSeconds);
 }
 
 void TestInitialStateAndSemiAutomaticFire(TestContext& context) {
@@ -323,9 +324,67 @@ void TestValidationAndInvalidDelta(TestContext& context) {
         "invalid delta clears frame events but freezes weapon state");
 }
 
+void TestAuthoritativeActions(TestContext& context) {
+    WeaponController controller;
+    WeaponState state;
+    const WeaponDefinition definition = MakeDefinition();
+    std::string error;
+    context.Expect(controller.Configure(definition, error) && controller.Initialize(state, error),
+                   "animated weapon initializes without rendering resources");
+    auto snapshot = controller.MakePresentationSnapshot(state);
+    context.Expect(snapshot.action == WeaponAction::Draw && snapshot.revision == 1 &&
+                       NearlyEqual(snapshot.durationSeconds, definition.drawSeconds),
+                   "initial draw exposes authoritative timing and revision");
+    controller.Update(state, {true, true, true, true}, definition.drawSeconds);
+    context.Expect(state.GetAction() == WeaponAction::Idle && state.GetMagazineAmmo() == 5 &&
+                       controller.GetShotEvents().empty(),
+                   "draw completion ignores queued weapon inputs");
+    controller.Update(state, {false, true, false, false}, 0.0f);
+    const auto shot = controller.MakePresentationSnapshot(state);
+    context.Expect(shot.action == WeaponAction::Shoot && state.GetMagazineAmmo() == 4 &&
+                       controller.GetShotEvents().size() == 1 && controller.GetActionEvents().size() == 1,
+                   "accepted shot synchronizes ammo, action snapshot and events");
+    controller.Update(state, {false, true, false, false}, definition.fireIntervalSeconds);
+    context.Expect(state.GetMagazineAmmo() == 3 && state.GetAction() == WeaponAction::Shoot &&
+                       state.GetActionRevision() > shot.revision,
+                   "consecutive legal shots restart the clip with a new revision");
+    controller.Update(state, {false, true, true, true}, 0.0f);
+    context.Expect(state.GetAction() == WeaponAction::Hide && state.GetMagazineAmmo() == 3,
+                   "holster has priority over reload and fire");
+    controller.Update(state, {true, true, true, true}, definition.hideSeconds * 0.5f);
+    const auto hiding = controller.MakePresentationSnapshot(state);
+    controller.ResetVisualFeedback(state);
+    context.Expect(state.GetAction() == WeaponAction::Hide &&
+                       NearlyEqual(state.GetActionElapsedSeconds(), hiding.elapsedSeconds),
+                   "room visual reset preserves equip action timing");
+    controller.Update(state, {true, true, true, true}, definition.hideSeconds * 0.5f);
+    controller.Update(state, {true, true, true, false}, 10.0f);
+    context.Expect(state.GetAction() == WeaponAction::Holstered && state.GetMagazineAmmo() == 3 &&
+                       controller.GetShotEvents().empty(),
+                   "hidden weapon stays hidden and cannot fire or reload");
+    controller.Update(state, {false, false, false, true}, 0.0f);
+    controller.Update(state, {}, definition.drawSeconds);
+    controller.Update(state, {false, true, true, false}, 0.0f);
+    context.Expect(state.GetAction() == WeaponAction::Reload && state.GetMagazineAmmo() == 3,
+                   "reload starts after draw and takes priority over shooting");
+    controller.Update(state, {true, true, false, true}, definition.reloadSeconds * 0.5f);
+    snapshot = controller.MakePresentationSnapshot(state);
+    context.Expect(snapshot.action == WeaponAction::Reload && state.GetMagazineAmmo() == 3,
+                   "reload is non-interruptible and does not refill early");
+    controller.Update(state, {}, (std::numeric_limits<float>::quiet_NaN)());
+    context.Expect(state.GetActionRevision() == snapshot.revision &&
+                       NearlyEqual(state.GetActionElapsedSeconds(), snapshot.elapsedSeconds),
+                   "invalid update freezes action state and time");
+    controller.Update(state, {true, true, true, true}, definition.reloadSeconds * 0.5f);
+    context.Expect(state.GetAction() == WeaponAction::Idle && state.GetMagazineAmmo() == 5 &&
+                       state.GetReserveAmmo() == 5 && controller.GetShotEvents().empty(),
+                   "reload completion transfers missing rounds exactly once without acting on input");
+}
+
 } // namespace
 
 void RunWeaponControllerTests(TestContext& context) {
+    TestAuthoritativeActions(context);
     TestInitialStateAndSemiAutomaticFire(context);
     TestAutomaticFireAndNoAutomaticReload(context);
     TestManualReloadAndAmmoTransfer(context);

@@ -36,6 +36,13 @@ namespace Engine::Asset {
                      Catalog::CatalogParser& parser,
                      const Resolver::AssetPathResolver& resolver);
 
+        // Append an independently rooted catalog. Validation failure leaves all
+        // existing entries (and pointers returned by Find) unchanged.
+        Base::Result<void, AssetError>
+        AppendFromFile(std::string_view catalogJsonPath,
+                       Catalog::CatalogParser& parser,
+                       const Resolver::AssetPathResolver& resolver);
+
         const Catalog::CatalogEntry* Find(const AssetId& id) const noexcept;
 
         // 任意：watch登録したい場合などに全件列挙

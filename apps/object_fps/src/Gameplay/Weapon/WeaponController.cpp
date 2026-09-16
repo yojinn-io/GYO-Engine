@@ -34,6 +34,11 @@ namespace {
         error = "weapon reload duration must be finite and greater than zero";
         return false;
     }
+    if (!std::isfinite(definition.drawSeconds) || definition.drawSeconds <= 0.0f ||
+        !std::isfinite(definition.hideSeconds) || definition.hideSeconds <= 0.0f) {
+        error = "weapon draw/hide duration must be finite and greater than zero";
+        return false;
+    }
     return true;
 }
 
@@ -70,6 +75,8 @@ bool WeaponController::Configure(
     configured_ = true;
     shotEvents_.clear();
     shotEvents_.reserve(1);
+    actionEvents_.clear();
+    actionEvents_.reserve(2);
     return true;
 }
 
@@ -92,6 +99,8 @@ bool WeaponController::Initialize(
     state.reserveAmmo_ = definition_.reserveAmmo;
     state.initialized_ = true;
     shotEvents_.clear();
+    actionEvents_.clear();
+    BeginAction(state, WeaponAction::Draw);
     return true;
 }
 
@@ -101,95 +110,99 @@ void WeaponController::ResetVisualFeedback(WeaponState& state) const noexcept {
     }
 }
 
+float WeaponController::ActionDuration(const WeaponAction action) const noexcept {
+    switch (action) {
+    case WeaponAction::Draw: return definition_.drawSeconds;
+    case WeaponAction::Shoot: return definition_.fireIntervalSeconds;
+    case WeaponAction::Reload: return definition_.reloadSeconds;
+    case WeaponAction::Hide: return definition_.hideSeconds;
+    default: return 0.0f;
+    }
+}
+
+void WeaponController::BeginAction(WeaponState& state, const WeaponAction action) {
+    state.action_ = action;
+    state.actionElapsedSeconds_ = 0.0f;
+    ++state.actionRevision_;
+    actionEvents_.push_back({definition_.id, action, state.actionRevision_});
+}
+
 void WeaponController::Update(
-    WeaponState& state,
-    const WeaponControlInput& input,
-    const float deltaSeconds) {
+    WeaponState& state, const WeaponControlInput& input, const float deltaSeconds) {
     shotEvents_.clear();
+    actionEvents_.clear();
     if (!configured_ || !state.initialized_ || state.weaponId_ != definition_.id ||
         !std::isfinite(deltaSeconds) || deltaSeconds < 0.0f) {
         return;
     }
 
-    state.fireCooldownSeconds_ =
-        (std::max)(0.0f, state.fireCooldownSeconds_ - deltaSeconds);
-    state.recoilDegrees_ = (std::max)(
-        0.0f,
-        state.recoilDegrees_ -
-            settings_.recoilRecoveryDegreesPerSecond * deltaSeconds);
+    state.fireCooldownSeconds_ = (std::max)(0.0f, state.fireCooldownSeconds_ - deltaSeconds);
+    state.recoilDegrees_ = (std::max)(0.0f, state.recoilDegrees_ -
+        settings_.recoilRecoveryDegreesPerSecond * deltaSeconds);
+    const float duration = ActionDuration(state.action_);
+    if (duration > 0.0f) {
+        state.actionElapsedSeconds_ = (std::min)(duration, state.actionElapsedSeconds_ + deltaSeconds);
+    }
 
-    if (state.reloading_) {
-        state.reloadElapsedSeconds_ = (std::min)(
-            definition_.reloadSeconds,
-            state.reloadElapsedSeconds_ + deltaSeconds);
-        if (state.reloadElapsedSeconds_ >= definition_.reloadSeconds) {
-            const std::uint32_t missingAmmo =
-                definition_.magazineCapacity - state.magazineAmmo_;
-            const std::uint32_t transferredAmmo =
-                (std::min)(missingAmmo, state.reserveAmmo_);
-            state.magazineAmmo_ += transferredAmmo;
-            state.reserveAmmo_ -= transferredAmmo;
-            state.reloadElapsedSeconds_ = 0.0f;
-            state.reloading_ = false;
+    // Reload/equip transitions are intentionally non-interruptible. Commands
+    // received during them are discarded, including their completion frame.
+    if (state.action_ == WeaponAction::Reload || state.action_ == WeaponAction::Draw ||
+        state.action_ == WeaponAction::Hide) {
+        if (state.actionElapsedSeconds_ >= duration) {
+            const WeaponAction completed = state.action_;
+            if (completed == WeaponAction::Reload) {
+                const std::uint32_t missing = definition_.magazineCapacity - state.magazineAmmo_;
+                const std::uint32_t transferred = (std::min)(missing, state.reserveAmmo_);
+                state.magazineAmmo_ += transferred;
+                state.reserveAmmo_ -= transferred;
+            }
+            BeginAction(state, completed == WeaponAction::Hide ? WeaponAction::Holstered : WeaponAction::Idle);
         }
         return;
     }
-
-    if (input.reloadPressed &&
-        state.magazineAmmo_ < definition_.magazineCapacity &&
-        state.reserveAmmo_ > 0) {
-        state.reloading_ = true;
-        state.reloadElapsedSeconds_ = 0.0f;
+    if (state.action_ == WeaponAction::Shoot && state.actionElapsedSeconds_ >= duration) {
+        BeginAction(state, WeaponAction::Idle);
+    }
+    if (input.holsterTogglePressed) {
+        BeginAction(state, state.action_ == WeaponAction::Holstered ? WeaponAction::Draw : WeaponAction::Hide);
         return;
     }
-
-    const bool fireRequested = definition_.automatic
-                                   ? input.fireHeld
-                                   : input.firePressed;
-    if (!fireRequested || state.fireCooldownSeconds_ > 0.0f ||
-        state.magazineAmmo_ == 0) {
+    if (state.action_ == WeaponAction::Holstered) {
         return;
     }
-
+    if (input.reloadPressed && state.magazineAmmo_ < definition_.magazineCapacity && state.reserveAmmo_ > 0) {
+        BeginAction(state, WeaponAction::Reload);
+        return;
+    }
+    const bool fireRequested = definition_.automatic ? input.fireHeld : input.firePressed;
+    if (!fireRequested || state.fireCooldownSeconds_ > 0.0f || state.magazineAmmo_ == 0) {
+        return;
+    }
     --state.magazineAmmo_;
     state.fireCooldownSeconds_ = definition_.fireIntervalSeconds;
-    state.recoilDegrees_ = (std::min)(
-        settings_.maximumAccumulatedRecoilDegrees,
-        state.recoilDegrees_ + definition_.recoilDegrees);
-    shotEvents_.push_back({
-        definition_.id,
-        definition_.damage,
-        definition_.recoilDegrees,
-        state.magazineAmmo_,
-    });
+    state.recoilDegrees_ = (std::min)(settings_.maximumAccumulatedRecoilDegrees,
+                                    state.recoilDegrees_ + definition_.recoilDegrees);
+    BeginAction(state, WeaponAction::Shoot);
+    shotEvents_.push_back({definition_.id, definition_.damage, definition_.recoilDegrees, state.magazineAmmo_});
 }
 
-WeaponHudSnapshot WeaponController::MakeHudSnapshot(
-    const WeaponState& state) const {
+WeaponPresentationSnapshot WeaponController::MakePresentationSnapshot(const WeaponState& state) const {
     if (!configured_ || !state.initialized_ || state.weaponId_ != definition_.id) {
         return {};
     }
+    return {state.weaponId_, state.action_, state.actionElapsedSeconds_,
+            ActionDuration(state.action_), state.actionRevision_};
+}
 
-    const float reloadProgress = state.reloading_
-                                     ? std::clamp(
-                                           state.reloadElapsedSeconds_ /
-                                               definition_.reloadSeconds,
-                                           0.0f,
-                                           1.0f)
-                                     : 0.0f;
-    return {
-        state.weaponId_,
-        state.magazineAmmo_,
-        state.reserveAmmo_,
-        state.reloading_,
-        reloadProgress,
-        state.recoilDegrees_,
-        std::clamp(
-            state.recoilDegrees_ /
-                settings_.maximumAccumulatedRecoilDegrees,
-            0.0f,
-            1.0f),
-    };
+WeaponHudSnapshot WeaponController::MakeHudSnapshot(const WeaponState& state) const {
+    if (!configured_ || !state.initialized_ || state.weaponId_ != definition_.id) {
+        return {};
+    }
+    const float reloadProgress = state.IsReloading()
+        ? std::clamp(state.actionElapsedSeconds_ / definition_.reloadSeconds, 0.0f, 1.0f) : 0.0f;
+    return {state.weaponId_, state.magazineAmmo_, state.reserveAmmo_, state.IsReloading(),
+            reloadProgress, state.recoilDegrees_,
+            std::clamp(state.recoilDegrees_ / settings_.maximumAccumulatedRecoilDegrees, 0.0f, 1.0f)};
 }
 
 } // namespace fps

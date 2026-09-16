@@ -77,6 +77,7 @@ Repository ownership follows the same rule:
 ```text
 apps/object_fps/       Object_FPS code and composition
 assets/object_fps/     Object_FPS catalog and runtime content
+assets/common/         explicitly shared primitives with their own catalog/root
 
 apps/<game_id>/        another game's code
 assets/<game_id>/      that game's isolated runtime content
@@ -93,6 +94,8 @@ There is no shared global bucket where every game's stages, textures, or data ac
 | Font bytes and SDL_ttf | encoded `FontAsset`, neutral text-raster request/bitmap contract | which strings, sizes, rectangles, colors, alignment, selection, and actions a screen uses |
 | SDL_GPU or another graphics API | opaque render handles, resource creation, render queue execution | which world surfaces, enemies, projectiles, and overlays are submitted |
 | Host clock and event pump | deterministic runtime lifecycle | state transition and gameplay update policy |
+| FBX decoder | owning ModelAsset, baked clip sampling and CPU skinning | weapon clip mapping, timing, material AssetIds and placement |
+| Geometric intersection math | world-positioned capsule, ray and swept-sphere queries | grid blocking, grounded state, jump gravity and attack rules |
 
 An abstraction is admitted only when current code gives it a concrete responsibility and a real caller. “Might be useful later” is not sufficient.
 
@@ -110,7 +113,9 @@ This exploration milestone builds a small but connected runtime skeleton:
 - `SdlPlatform` owns SDL process/window/event lifecycle.
 - GYO input owns physical-frame and action-map semantics; `SdlInput` is only the SDL event adapter.
 - GYO render owns opaque handles, primitive mesh data, `RenderQueue`, and `IRenderDevice`; concrete SDL rendering stays under `render/backend/`.
-- The optional Windows/MSVC SDL_GPU backend exercises mesh, texture, sprite, and 3D submission without leaking native handles into game-facing contracts.
+- A neutral `Renderer` prepares mesh/sprite/3D passes and delegates GPU commands to an optional SDL_GPU device. Offline common HLSL bundles support target-specific DXIL, SPIR-V and Metallib without exposing native handles or shader compilers to game-facing contracts.
+- `GYO::Model` supplies skeletal clip sampling and CPU skinning; the optional `GYO::AssetUfbx` adapter converts FBX bytes to this owning format.
+- `GYO::Collision` supplies capsule, ray/AABB and swept-sphere primitives. Object_FPS owns its flat-floor jumping and grid collision policy.
 - `apps/object_fps` and `assets/object_fps` exercise those mechanisms as the active, separately removable concrete game vertical slice, including game-owned screen/HUD policy projected through the neutral Text and Render seams.
 - `apps/runtime` remains a small standalone SDL clear/present composition root, while `apps/sandbox` keeps optional ImGui demonstration concerns separate.
 
@@ -122,7 +127,7 @@ ProcessEvents(frame) -> Update(frame) -> Render(frame)
 
 `FrameContext` carries the frame index and delta time. `RuntimeControl::Stop` terminates at the phase that requests it.
 
-This milestone does **not** claim a complete ordinary-game engine. It includes only bounded whole-run text rasterization and sprite presentation, not a general text-layout ecosystem. Scene management, audio playback, animation, physics, navigation, generalized world/entity queries, remote control, and Weaver remain outside the implemented set.
+This milestone includes bounded text rasterization, mesh/sprite presentation, skeletal animation and primitive collision queries. General scene management, audio playback, animation graphs/blending, full physics, navigation, generalized world/entity queries, remote control, and Weaver remain outside the implemented set.
 
 ## 6. Responsibility map
 
@@ -376,7 +381,66 @@ Must Not Depend On:
 
 SDL events may cross between concrete SDL adapters at the composition edge, but do not enter the neutral runtime port or game-policy interfaces.
 
+### Model and skeletal animation (`this milestone`)
+
+`GYO::Model` owns CPU `ModelAsset` data, node hierarchy, material names, mesh
+parts, inverse binds, four normalized skin weights per vertex, TRS clip tracks,
+pose sampling and linear blend skinning. Model math uses column-major matrices
+and column vectors in metres, +Y up and +Z forward. Render conversion is explicit;
+no backend matrix convention leaks into Model. UV seam vertices retain the
+weights of their source control vertex.
+UVs use a top-left origin and retain values outside [0,1]; material presentation
+chooses wrap/clamp sampling. Clamping or wrapping each vertex during import
+would change interpolation across texture tile boundaries.
+
+`GYO::AssetUfbx` is an optional `IAssetLoader` adapter pinned to ufbx v0.23.0.
+It parses bytes supplied by AssetManager, normalizes coordinates/units and FBX
+geometry/bind transforms, and bakes named animation clips to neutral tracks.
+Already sampled animation at or above ufbx's 19.5 Hz threshold keeps its authored
+poses; sparse nonlinear curves may be resampled at 60 Hz. Playback interpolates
+quaternion poses. Forcing Euler subframe resampling on already-baked animation
+can introduce branch flips even when adjacent authored orientations are close.
+Importer IO is disabled: source texture/cache paths never bypass catalog roots.
+Unsupported influence counts fail clearly. Public model/animation interfaces
+contain no ufbx, SDL or GPU types. Core Engine does not depend on Model or ufbx.
+
+Loaded models are shared immutable assets. Each presentation instance owns its
+pose, reusable skinning output and render handles. Sampling takes an explicit
+time and does not advance a clock. Object_FPS owns clip selection, action timing,
+material AssetIds and its fixed Idle-derived weapon anchor. GPU skinning,
+animation graphs, crossfades, retargeting and PBR remain deferred.
+
+### Collision primitives (`this milestone`)
+
+`GYO::Collision` owns world-positioned upright capsules, ray/capsule and ray/AABB
+queries, and swept-sphere/capsule intersection. It depends only on the standard
+library and knows no map, character controller, weapon or damage rule.
+Object_FPS `CombatCollision` adapts those queries to grid walls and targets.
+
 ### Neutral render mechanism (`this milestone`)
+
+`Renderer` owns scene preparation independently of device execution.
+`MeshLayer::World` is the default. `MeshLayer::ViewModel` uses its own camera and
+fresh depth while retaining the world scene color. Execution order is world
+meshes and Scene sprites, ViewModel meshes, scene exposure/gamma, then Overlay
+sprites. Viewmodel placement/FOV is application policy; Render does not know
+what a weapon or an equip action means.
+Exterior triangle winding is preserved by model import and primitive generation.
+Under GYO's +Z left-handed projection it reaches the render target as clockwise;
+the SDL_GPU mesh pipeline uses that front-face convention. Opaque surfaces cull
+backs, Sky culls fronts, and double-sided material rendering is explicit.
+
+`IRenderDevice::UpdateMeshVertices` consumes vertices synchronously for an
+existing handle with fixed vertex count and index topology. Backends may report
+UnsupportedOperation; SDL_GPU implements it using cycled vertex/staging buffers
+so an earlier GPU frame is not overwritten. Pose evaluation belongs to Model,
+not Render. CPU skinning does not recreate GPU meshes each frame.
+
+`Renderer` additionally offers an opt-in one-frame scene readback through the
+device's neutral texture readback operation for
+diagnostics. It returns owning sRGB8 RGBA pixels after World/Scene/ViewModel and
+before exposure/gamma/Overlay; it is not a final swapchain screenshot. A fence
+wait occurs only on requested capture frames, never on ordinary presentation.
 
 ```yaml
 Module: GYO::Render
@@ -384,13 +448,16 @@ Owns:
   - opaque generational MeshHandle and TextureHandle values
   - backend-neutral mesh/image descriptions
   - FrameDescription, camera, mesh, and sprite submissions
+  - MaterialDesc with a namespaced shader program ID
   - RenderQueue validation and primitive mesh generation
-  - IRenderDevice resource and frame-execution contract
+  - ShaderLibrary owning immutable CPU artifacts and validated bundle metadata
+  - Renderer camera/matrix preparation, ordered passes and device-bound pipeline resources
+  - IRenderDevice resource, acquired-frame and prepared-frame execution contract
 Does:
   - describe what a game-facing presentation layer submits
   - separate CPU assets/submission from backend resource implementation
 Depends On:
-  - Engine Base Result/Error values
+  - Engine Base Result/Error values and source/resolver contracts for shader bytes
   - C++ standard library
 Must Not Depend On:
   - Text rasterizers or layout policy
@@ -420,33 +487,62 @@ Must Not Depend On:
 
 This adapter is distinct from the neutral `IRenderDevice` contract and from the SDL_GPU backend.
 
-### SDL_GPU render backend (`this milestone`, optional Windows/MSVC)
+### SDL_GPU render backend (`this milestone`, optional)
 
 ```yaml
 Module: GYO::RenderBackendSDLGPU
 Owns:
-  - SDL_GPU device, swapchain, pipelines, uploads, and backend resources
-  - translation of opaque GYO handles and RenderQueue submissions
+  - SDL_GPU device, swapchain, native pipelines, uploads and resource synchronization
+  - translation of opaque GYO handles and PreparedFrame commands
 Does:
-  - implement IRenderDevice for the current mesh/sprite/3D vertical slice
-  - compile backend-owned standalone HLSL sources into the current DXBC pipeline
+  - implement IRenderDevice for the current bounded raster pipeline
+  - consume already-compiled shader artifacts for the selected native driver
 Depends On:
   - GYO::Render
   - concrete SDL platform/window integration
-  - SDL_GPU and private Windows shader/backend details
+  - SDL_GPU
 Must Not Depend On:
   - Object_FPS state or asset catalog policy
   - SDL_ttf or text-layout policy
+  - an HLSL compiler or game-specific shader source paths
   - Weaver
 Must Not Expose:
   - SDL_GPU, D3D12, command-buffer, descriptor, or shader handles through GYO APIs
 ```
 
-The HLSL files under `render/backend/sdl_gpu/shaders/` are the only shader sources. CMake reads them into a generated, backend-private build-tree header so static-library consumers do not depend on a working directory or runtime file deployment; `D3DCompile` remains a private SDL_GPU initialization detail. Editing either HLSL file triggers CMake regeneration and recompilation of the backend.
+Built-in HLSL belongs to `render/shaders/builtin/`, its shared data declarations
+to `render/shaders/common/RasterAbi.hlsli`, and game-specific HLSL to the game.
+`tools/shader_pipeline` is a separate native host toolchain pinned to DXC,
+SDL_shadercross and SPIRV-Cross versions. It compiles, reflects and packages
+shader programs at build time; the runtime no longer embeds HLSL or invokes
+`D3DCompile`. macOS finishes offline MSL compilation with the selected Xcode's
+Metal tools. Shader sources, interface versions, resource counts and byte sizes
+must match the `gyo.raster.v1` contract.
+The shared HLSL declares logical resources; its compilation profile supplies
+SDL-specific physical bindings. Source-stage entrypoints are explicit bundle
+spec fields (default `main`), while runtime manifests retain the generated
+artifact's real entrypoint, including any Metal translation rename.
+
+`ShaderLibrary` atomically appends namespaced bundles and retains immutable CPU
+bytes. `Renderer` resolves a `MaterialDesc` program ID for the device's usable
+format and creates device-local pipelines. Game bundles do not add game IDs to
+the adapter. CPU shader ownership never includes GPU handles. Invalid or missing
+programs, resources and formats fail explicitly instead of choosing a fallback
+material that could hide content errors.
+
+The frame contract is `AcquireFrame` -> `SubmitFrame` or `AbandonFrame`. An
+acquired token is consumed once; minimization can return no frame. Renderer
+owns ordered World/Scene, ViewModel, scene-post and Overlay passes and their
+resizable targets. The adapter owns native resource lifetime and in-flight
+synchronization. Renderer resources must be reset before their device dies.
 
 `SpriteSubmission::sourceUv` uses a visual top-left origin. The SDL_GPU path converts that rectangle once through `MakeSpriteUvTransform`, including atlas sub-rectangles, because its shared XY quad reaches screen-top at `v=1`. Text rasterization and texture upload preserve row order and must not compensate for backend sprite orientation.
 
-Its Windows/MSVC limitation is an implementation constraint of this optional backend, not a platform requirement of GYO Core.
+The same adapter routes through SDL_GPU's D3D12, Vulkan or Metal driver. This is
+a portable source/API contract, not a stable cross-compiler plugin ABI. See the
+paired rendering guides in [繁體中文](rendering_architecture.zh-Hant.md) and
+[日本語](rendering_architecture.ja.md) for pipeline fundamentals, exact bundle
+ownership, build switches and the distinction between CI and GPU acceptance.
 
 ### SDL platform adapter (`this milestone`)
 
@@ -497,6 +593,53 @@ Must Not Be Depended On By:
 ```
 
 The current three maps are data/content fixtures. Their number, IDs, and order are campaign data, not GYO engine constants.
+
+#### Model-derived weapon shot geometry
+
+Object_FPS uses `LoadWeaponPresentationDefinition` for weapon placement and muzzle
+calibration. It reads the model, clip mapping, fixed Idle anchor, placement and
+local muzzle metadata from the weapon presentation JSON. The loader samples
+Shoot at local time zero, transforms the muzzle through its model node, subtracts
+the fixed Idle anchor and applies the same scale, rotation and offset used to
+draw the weapon. It then stores pure numeric per-weapon `WeaponShotGeometry` in
+`CampaignContent`. Gameplay consumes those values without model assets, poses,
+GPU handles or a dependency on the presentation renderer. GYO supplies model
+sampling and transform mechanisms; the socket choice and firing rules remain
+Object_FPS content and policy.
+
+Mark-23's muzzle is the center of the barrel's inner 18-vertex ring, expressed
+in `main_j` local metres as `(0.003179880, 0.089686641, -0.213802223)`.
+The barrel belongs to `main_j`; `side_j` moves the sliding part and would move
+the shot origin with slide recoil. The fixed anchor is evaluated from Idle
+once, while the muzzle is evaluated at Shoot zero. Animation playback keeps
+that same anchor throughout the action.
+
+The world and ViewModel cameras share aspect ratio but use vertical FOVs of
+60 and 55 degrees. To preserve the muzzle's screen position when expressing it
+in the world camera, multiply its camera-space x and y by
+`tan(worldFov / 2) / tan(viewModelFov / 2)` and retain z. This is a projection
+bridge after placement, not an extra rotation or a normalized direction.
+Changing JSON placement or weapon FOV recomputes shot geometry on content load;
+weapon cadence, damage and reload timing remain in the existing gameplay/CSV
+data. There is no second hand-tuned muzzle offset to synchronize.
+
+On an accepted shot, the aim and physical hit are resolved from the camera
+before adding that shot's new recoil. The calibrated physical muzzle is clamped
+against the world before its muzzle-to-aim query, so nearby walls can retract
+the origin and real obstructions still block damage. Damage is applied once.
+The cosmetic tracer is created after recoil establishes the camera used for
+that rendered frame and after already-live projectiles have advanced. Its birth
+frame therefore starts at the calibrated muzzle instead of moving by a full
+delta immediately. Its visual path is clamped/clipped against the world and
+cannot introduce another damage event or replace the resolved physical hit.
+
+See [the muzzle calibration note](dev_logs/2026_09_15_model_muzzle_calibration.md)
+for the derivation, calibration workflow and validation status. The GPU probe
+compares a world-space marker with a raw bone-space muzzle point after the GPU
+applies the weapon placement. This independently checks the CPU placement and
+FOV bridge across three aspect ratios and seven camera cases per ratio. Gameplay
+tests cover firing, recoil and tracer lifetime; the marker probe does not deal
+damage or simulate a shot.
 
 Object_FPS owns UI policy and data, while GYO owns the reusable JSON/layout/interaction/render mechanisms. `UiRuntime` owns focus, selection, pointer capture and hit testing and emits opaque actions; the Object_FPS adapter maps those ids to semantic commands. GameFlow retains transition legality and effects and no longer switches on menu indices. `UiRenderer` owns whole-run texture caching and Overlay submission, so neither game class exposes SDL_ttf or SDL_GPU types.
 
@@ -555,6 +698,10 @@ GYO::Engine -> nlohmann_json
 GYO::AssetSdlImage (optional)
   -> GYO::Engine + SDL3_image + SDL3
 
+GYO::Model -> GYO::Engine
+GYO::AssetUfbx (optional) -> GYO::Model + private ufbx
+GYO::Collision -> C++ standard library
+
 GYO::Text -> GYO::Engine
 GYO::TextBackendSDLTTF (optional)
   -> GYO::Text + SDL3_ttf + SDL3
@@ -581,9 +728,9 @@ GYO modules -X-> Object_FPS
 GYO modules -X-> Weaver
 ```
 
-The `GYO_BUILD_OBJECT_FPS` option controls the conformance game. Enabling it selects the current SDL_image PNG loader, SDL_ttf raster adapter, and Windows/MSVC SDL_GPU implementation needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core.
+The `GYO_BUILD_OBJECT_FPS` option controls the conformance game. Enabling it selects the SDL_image PNG loader, SDL_ttf raster adapter, and (with `GYO_RENDER_DEVICE=AUTO`) SDL_GPU device needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core. The `core` preset disables optional games, editor and adapters and selects `GYO_RENDER_DEVICE=NONE`.
 
-`GYO_BUILD_UI_EDITOR` is off by default and independently selects its SDLRenderer/ImGui host and optional preview loaders. It does not select Object_FPS, Input, SDL_GPU, or Sandbox. Third-party source population uses the active build tree; doctest remains test-only and ImGui demo code remains Sandbox-only.
+`GYO_BUILD_UI_EDITOR` is on by default and independently selects its SDLRenderer/ImGui host and optional preview loaders. It does not select Object_FPS, Input, SDL_GPU, or Sandbox. Third-party source population uses the active build tree; doctest remains test-only and ImGui demo code remains Sandbox-only.
 
 ## 8. Platform and graphics backend strategy
 
@@ -607,6 +754,41 @@ Win32 belongs under `platform/` only when a requirement cannot be met through th
 
 The presence of SDL in more than one adapter does not make those adapters one module. They share infrastructure, not responsibility.
 
+`GYO_RENDER_DEVICE=AUTO|SDL_GPU|NONE` chooses the compiled device integration.
+`GYO_GPU_DRIVER=AUTO|D3D12|VULKAN|METAL` supplies the default runtime policy;
+Object_FPS can override it with `--gpu-driver`. `GYO_SHADER_BUNDLE=AUTO` emits
+DXIL and SPIR-V for Windows, SPIR-V for Linux, and Metallib for macOS. Explicit
+format lists and forced drivers must be compatible with the target system.
+CMake uses `CMAKE_SYSTEM_NAME`, not the host OS, to make target decisions. Host
+shader tools are built separately; cross builds supply a native executable.
+
+AUTO considers only fully supplied shader formats and usable SDL_GPU drivers.
+An explicitly selected driver does not silently fall back. Startup diagnostics
+identify the selected driver and format; packaging a format is not proof that
+the target machine can run that driver. The installed program reads assets and
+shader bundles relative to its executable and must reject missing deployment
+content even when a source checkout exists nearby.
+
+The Windows acceptance archive uses Release/RelWithDebInfo and app-local MSVC
+redistributable DLLs discovered by `cmake/GyoMsvcRuntime.cmake` relative to the
+selected compiler installation. This avoids depending on an IDE-bundled
+CMake's list of known Visual Studio releases. `GYO_MSVC_REDIST_DIR` can provide
+an explicit redistributable root. Missing redistributables fail release
+installation, while development configuration and compilation remain available.
+Debug CRT is not distributed; Windows 10+ supplies UCRT. Package validation
+inspects VC DLL imports with `dumpbin` and Unix linking with `ldd`/`otool`,
+preventing build-machine runtime installations or absolute build paths from
+masking incomplete packages. These inspection tools are CI requirements, not
+end-user runtime dependencies.
+
+The GitHub Actions matrix builds the complete Object_FPS and UI editor graphs,
+executes CPU/headless and offline shader tests, and validates isolated installed
+packages on Windows x64, Linux x64 and macOS ARM64. GPU tests are separately
+labelled and run on an actual graphics-capable machine. Hosted CI provides
+packages and diagnostic logs; no workflow file or compiler success is presented
+as evidence of visual correctness. The current validation status lives in
+section 10 of the paired rendering guides.
+
 ## 9. Asset identity, runtime loading, importing, and GPU resources
 
 These are separate responsibilities:
@@ -626,6 +808,19 @@ Renderer resource creation
 ```
 
 `NativeFileAssetSource` owns only the first native-file read after path resolution. The SDL_image loader owns only image decoding. `AssetManager` owns identity, lookup, records, cache/lifetime, and loader dispatch. `IRenderDevice` owns GPU resource creation from an `ImageView` or `MeshView`.
+
+`AssetCatalog::AppendFromFile` validates an independently rooted catalog before
+merging entries. Duplicate IDs and invalid paths leave existing entries and
+their references unchanged. Object_FPS composes game and common catalogs with
+separate restricted resolvers. Both roots ship beside the executable; once a
+deployed game catalog is found, missing common/model content is an error, not a
+request to silently read source-tree content. The door explicitly loads
+`common.texture.white` from the supplied PNG.
+
+The bounded FBX runtime path is bytes -> optional UfbxModelLoader -> owning
+ModelAsset -> explicit-time pose/CPU skinning -> fixed-topology vertex update.
+Material names map to catalog texture IDs in game presentation data. The
+model remains CPU-only even after the application creates GPU resources.
 
 Hashed public IDs use their numeric value as identity. `debugName` is diagnostic metadata only and never changes equality or hashing; invalid IDs/types use value zero. This rule also applies to input action/axis IDs so named mechanisms behave consistently across maps and frame views.
 
@@ -671,7 +866,27 @@ Scene and Stage must not independently evolve duplicate load, update, spawn, unl
 
 GYO may share cross-cutting mechanisms between 2D and 3D: asset identity/lifetime, runtime lifecycle, input actions, audio/text mechanisms when implemented, render resource ownership rules, and the typed runtime boundary. It does not force algorithm or data-model unification. Separate `SpriteRenderer`/`MeshRenderer`, `Camera2D`/`Camera3D`, `Transform2D`/`Transform3D`, and `Physics2D`/`Physics3D` remain valid.
 
-Collision grows from real needs. AABB, circle, hitbox, trigger, and grid tests do not justify an empty complete-physics abstraction. Bodies, response, integration, and queries belong to Physics only when those responsibilities exist. Object_FPS collision remains game policy until reuse proves a neutral engine mechanism.
+Collision grows from real needs. The implemented neutral capsule/ray/swept-sphere
+queries do not imply a complete physics abstraction. Object_FPS retains grid
+blocking, its flat-floor vertical integration and grounded/jump eligibility.
+Player feet Y is authoritative; camera world Y is feet Y plus eye offset, and
+the same feet Y moves the combat capsule, muzzle/aim origin and enemy target.
+The single jump uses 0.6 m height and 18 m/s² gravity. XZ wall/enemy blocking
+remains active in the air; elevated floors, stairs and wall-top landing are absent.
+
+WeaponController owns Draw/Idle/Shoot/Reload/Hide/Holstered state, ammo and
+timers. Its immutable WeaponPresentationSnapshot includes action, elapsed time,
+duration and revision. Render samples that state without feeding animation
+completion back to gameplay. Pauses/fades freeze simulation; new stages reset
+player vertical state while retaining weapon action/ammo. New campaigns reset
+the weapon to Draw. Object_FPS provides Space for jumping and H for holstering.
+
+For firing, Object_FPS first acquires the camera aim point, then constrains its
+model-derived muzzle along the camera-to-muzzle segment to the first world obstruction
+with a 1 mm clearance. The existing muzzle-to-aim query still resolves the hit.
+This prevents the calibrated muzzle from starting inside or beyond a nearby
+wall while preserving genuine corner/front-wall blocking. Grid-specific segment
+clamping belongs to Object_FPS; primitive ray intersection remains in Collision.
 
 ## 11. Runtime Boundary
 
@@ -749,7 +964,7 @@ This milestone does not implement Weaver, a Weaver adapter, world model, causal 
 - Text growth must extend the neutral raster/pixel boundary or add an optional adapter; it must not make Render or Asset depend on SDL_ttf.
 - Adding Render3D features, Physics3D, Navigation, or an external controller should mostly add code in its own module/backend/adapter.
 - Removing Object_FPS, Physics, Render3D, tools, or an external controller must not break unrelated Engine, Asset, Input, or base Runtime behavior.
-- Public install/export packaging can be added after a real external consumer stabilizes the public surface; no empty packaging facade is required now.
+- Object_FPS executable/asset/shader deployment is included for native acceptance. Public SDK install/export packaging remains deferred until an external consumer stabilizes the public surface.
 
 ## 14. Deliberately deferred decisions
 
@@ -762,9 +977,9 @@ The following are intentionally not created or generalized in this milestone:
 - Glyph-atlas packing, incremental atlas texture updates, per-glyph batching, SDF text, or a renderer-native text path
 - A GYO-owned general shaping/layout API for wrapping, bidirectional/script/language policy, fallback fonts, caret/selection, or rich text
 - A generic `TextManager`; the current concrete raster request, adapter, and game-owned cache do not justify a global text service locator
-- Animation, navigation, or physics modules
+- Animation graphs/blending, navigation, and complete physics modules
 - General material system, RenderGraph, GPU asset cache shared across devices, or renderer-wide `EverythingManager`
-- Non-Windows SDL_GPU support and dedicated DX12, Vulkan, or OpenGL backends
+- Dedicated native DX12, Vulkan, Metal, or OpenGL adapters beyond SDL_GPU
 - Universal 2D/3D transforms, renderer algorithms, or physics data models
 - Development import pipeline and asset authoring tools
 - Reusable game Framework policy extracted prematurely from Object_FPS

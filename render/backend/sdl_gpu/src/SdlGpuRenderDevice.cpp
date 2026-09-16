@@ -1,206 +1,19 @@
 #include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
-
 #include <SDL3/SDL_gpu.h>
-
-#include <d3dcompiler.h>
-#include <wrl/client.h>
-
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <limits>
-#include <numbers>
-#include <span>
-#include <string>
-#include <string_view>
 #include <thread>
 #include <utility>
-#include <vector>
-
-#include "SdlGpuEmbeddedShaders.hpp"
-#include "render/ColorTransform.hpp"
-#include "render/PrimitiveMesh.hpp"
-
 namespace Engine::Render::Backend::SdlGpu {
 namespace {
-
-using Microsoft::WRL::ComPtr;
-
-constexpr SDL_GPUTextureFormat kDepthFormat = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
-constexpr SDL_GPUTextureFormat kSceneColorFormat =
-    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
-
-struct Matrix4 final {
-    float values[4][4]{};
-};
-
-struct alignas(16) VertexUniforms final {
-    Matrix4 worldViewProjection{};
-};
-
-struct alignas(16) FragmentUniforms final {
-    float tint[4]{};
-    float uvScaleOffset[4]{};
-    float alphaCutoff{-1.0F};
-    float padding[3]{};
-};
-
-struct alignas(16) SceneColorUniforms final {
-    float exposureEv{};
-    float gammaAdjustment{1.0F};
-    float padding[2]{};
-};
-
-static_assert(sizeof(VertexUniforms) == 64);
-static_assert(sizeof(FragmentUniforms) == 48);
-static_assert(sizeof(SceneColorUniforms) == 16);
-
-[[nodiscard]] Matrix4 Identity() noexcept {
-    Matrix4 result{};
-    result.values[0][0] = 1.0F;
-    result.values[1][1] = 1.0F;
-    result.values[2][2] = 1.0F;
-    result.values[3][3] = 1.0F;
-    return result;
-}
-
-[[nodiscard]] Matrix4 Multiply(const Matrix4& left, const Matrix4& right) noexcept {
-    Matrix4 result{};
-    for (std::size_t row = 0; row < 4; ++row) {
-        for (std::size_t column = 0; column < 4; ++column) {
-            for (std::size_t inner = 0; inner < 4; ++inner) {
-                result.values[row][column] +=
-                    left.values[row][inner] * right.values[inner][column];
-            }
-        }
-    }
-    return result;
-}
-
-[[nodiscard]] Matrix4 Translation(Float3 value) noexcept {
-    Matrix4 result = Identity();
-    result.values[3][0] = value.x;
-    result.values[3][1] = value.y;
-    result.values[3][2] = value.z;
-    return result;
-}
-
-[[nodiscard]] Matrix4 Scale(Float3 value) noexcept {
-    Matrix4 result = Identity();
-    result.values[0][0] = value.x;
-    result.values[1][1] = value.y;
-    result.values[2][2] = value.z;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationX(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[1][1] = cosine;
-    result.values[1][2] = sine;
-    result.values[2][1] = -sine;
-    result.values[2][2] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationY(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[0][0] = cosine;
-    result.values[0][2] = -sine;
-    result.values[2][0] = sine;
-    result.values[2][2] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationZ(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[0][0] = cosine;
-    result.values[0][1] = sine;
-    result.values[1][0] = -sine;
-    result.values[1][1] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 WorldMatrix(const Transform3D& transform) noexcept {
-    Matrix4 result = Scale(transform.scale);
-    result = Multiply(result, RotationX(transform.rotationRadians.x));
-    result = Multiply(result, RotationY(transform.rotationRadians.y));
-    result = Multiply(result, RotationZ(transform.rotationRadians.z));
-    return Multiply(result, Translation(transform.translation));
-}
-
-[[nodiscard]] Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
-    Matrix4 result = Translation({
-        -camera.position.x,
-        -camera.position.y,
-        -camera.position.z,
-    });
-    result = Multiply(result, RotationZ(-camera.rotationRadians.z));
-    result = Multiply(result, RotationY(-camera.rotationRadians.y));
-    return Multiply(result, RotationX(-camera.rotationRadians.x));
-}
-
-[[nodiscard]] Matrix4 ProjectionMatrix(
-    const PerspectiveCamera3D& camera,
-    float aspectRatio) noexcept {
-    Matrix4 result{};
-    const float yScale = 1.0F /
-                         std::tan(camera.verticalFieldOfViewRadians * 0.5F);
-    const float xScale = yScale / aspectRatio;
-    const float depthRange = camera.farClip - camera.nearClip;
-    result.values[0][0] = xScale;
-    result.values[1][1] = yScale;
-    result.values[2][2] = camera.farClip / depthRange;
-    result.values[2][3] = 1.0F;
-    result.values[3][2] =
-        -(camera.nearClip * camera.farClip) / depthRange;
-    return result;
-}
-
-[[nodiscard]] Matrix4 SpriteWorldMatrix(
-    const SpriteSubmission& sprite) noexcept {
-    const Float3 localPivotTranslation{
-        0.5F - sprite.pivotNormalized.x,
-        0.5F - sprite.pivotNormalized.y,
-        0.0F,
-    };
-    const Float3 anchor{
-        sprite.destinationPixels.x +
-            sprite.pivotNormalized.x * sprite.destinationPixels.width,
-        sprite.destinationPixels.y +
-            sprite.pivotNormalized.y * sprite.destinationPixels.height,
-        0.0F,
-    };
-
-    Matrix4 result = Translation(localPivotTranslation);
-    result = Multiply(result, Scale({
-        sprite.destinationPixels.width,
-        sprite.destinationPixels.height,
-        1.0F,
-    }));
-    result = Multiply(result, RotationZ(sprite.rotationRadians));
-    return Multiply(result, Translation(anchor));
-}
-
-[[nodiscard]] Matrix4 PixelProjection(float width, float height) noexcept {
-    Matrix4 result{};
-    result.values[0][0] = 2.0F / width;
-    result.values[1][1] = -2.0F / height;
-    result.values[2][2] = 1.0F;
-    result.values[3][0] = -1.0F;
-    result.values[3][1] = 1.0F;
-    result.values[3][3] = 1.0F;
-    return result;
-}
-
+constexpr auto kDepthFormat = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+// Unique across device instances: a frame from a second SDL device must not
+// accidentally match the first frame serial of this device.
+std::atomic<std::uint64_t> nextFrameToken{1};
 [[nodiscard]] bool IsFinite(float value) noexcept {
     return std::isfinite(value);
 }
@@ -235,76 +48,47 @@ static_assert(sizeof(SceneColorUniforms) == 16);
     return value;
 }
 
-[[nodiscard]] Base::Result<std::vector<std::uint8_t>, RenderError> CompileShader(
-    std::string_view source,
-    const char* sourceName,
-    const char* target,
-    bool debugMode) {
-    using Result = Base::Result<std::vector<std::uint8_t>, RenderError>;
 
-    UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-    flags |= debugMode
-                 ? (D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION)
-                 : D3DCOMPILE_OPTIMIZATION_LEVEL3;
-
-    ComPtr<ID3DBlob> bytecode;
-    ComPtr<ID3DBlob> diagnostics;
-    const HRESULT result = D3DCompile(
-        source.data(),
-        source.size(),
-        sourceName,
-        nullptr,
-        nullptr,
-        "main",
-        target,
-        flags,
-        0,
-        &bytecode,
-        &diagnostics);
-
-    if (FAILED(result) || !bytecode) {
-        std::string detail;
-        if (diagnostics && diagnostics->GetBufferPointer()) {
-            detail.assign(
-                static_cast<const char*>(diagnostics->GetBufferPointer()),
-                diagnostics->GetBufferSize());
-        }
-        return Result::Err(MakeError(
-            RenderErrorCode::ShaderCompilationFailed,
-            std::string("SDL_GPU: failed to compile ") + sourceName +
-                " as " + target,
-            std::move(detail)));
+SDL_GPUShaderFormat ToSdlFormats(ShaderFormatMask formats) {
+    SDL_GPUShaderFormat value = 0;
+    if (formats & FormatBit(ShaderFormat::DXIL)) value |= SDL_GPU_SHADERFORMAT_DXIL;
+    if (formats & FormatBit(ShaderFormat::SPIRV)) value |= SDL_GPU_SHADERFORMAT_SPIRV;
+    if (formats & FormatBit(ShaderFormat::Metallib)) value |= SDL_GPU_SHADERFORMAT_METALLIB;
+    return value;
+}
+ShaderFormatMask FromSdlFormats(SDL_GPUShaderFormat formats) {
+    ShaderFormatMask value = 0;
+    if (formats & SDL_GPU_SHADERFORMAT_DXIL) value |= FormatBit(ShaderFormat::DXIL);
+    if (formats & SDL_GPU_SHADERFORMAT_SPIRV) value |= FormatBit(ShaderFormat::SPIRV);
+    if (formats & SDL_GPU_SHADERFORMAT_METALLIB) value |= FormatBit(ShaderFormat::Metallib);
+    return value;
+}
+SDL_GPUTextureFormat ToSdlFormat(TextureFormat format) {
+    switch (format) {
+    case TextureFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    case TextureFormat::Rgba8SRgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    case TextureFormat::Bgra8Unorm: return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+    case TextureFormat::Bgra8SRgb: return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB;
+    case TextureFormat::Rgba16Float: return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+    case TextureFormat::Depth32Float: return SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
     }
-
-    const auto* begin = static_cast<const std::uint8_t*>(bytecode->GetBufferPointer());
-    return Result::Ok(std::vector<std::uint8_t>(
-        begin,
-        begin + bytecode->GetBufferSize()));
+    return SDL_GPU_TEXTUREFORMAT_INVALID;
 }
-
-[[nodiscard]] FragmentUniforms MakeFragmentUniforms(
-    Color tint,
-    UvTransform uv,
-    float alphaCutoff) noexcept {
-    FragmentUniforms uniforms{};
-    uniforms.tint[0] = tint.red;
-    uniforms.tint[1] = tint.green;
-    uniforms.tint[2] = tint.blue;
-    uniforms.tint[3] = tint.alpha;
-    uniforms.uvScaleOffset[0] = uv.scale.x;
-    uniforms.uvScaleOffset[1] = uv.scale.y;
-    uniforms.uvScaleOffset[2] = uv.offset.x;
-    uniforms.uvScaleOffset[3] = uv.offset.y;
-    uniforms.alphaCutoff = alphaCutoff;
-    return uniforms;
+SDL_GPULoadOp ToLoad(AttachmentLoad load) {
+    switch(load) {
+    case AttachmentLoad::Clear: return SDL_GPU_LOADOP_CLEAR;
+    case AttachmentLoad::Load: return SDL_GPU_LOADOP_LOAD;
+    case AttachmentLoad::DontCare: return SDL_GPU_LOADOP_DONT_CARE;
+    }
+    return SDL_GPU_LOADOP_DONT_CARE;
 }
-
 } // namespace
-
 struct SdlGpuRenderDevice::Impl final {
     struct MeshSlot final {
         SDL_GPUBuffer* vertexBuffer{};
         SDL_GPUBuffer* indexBuffer{};
+        SDL_GPUTransferBuffer* vertexTransfer{};
+        std::uint32_t vertexCount{};
         std::uint32_t indexCount{};
         std::uint32_t generation{1};
         bool live{};
@@ -313,47 +97,50 @@ struct SdlGpuRenderDevice::Impl final {
 
     struct TextureSlot final {
         SDL_GPUTexture* texture{};
+        TextureDesc description{};
         std::uint32_t generation{1};
         bool live{};
         bool reserved{};
     };
 
+
+    struct PipelineSlot final {
+        SDL_GPUGraphicsPipeline* pipeline{};
+        PipelineDesc description;
+        ShaderResourceLayout vertexResources, fragmentResources;
+        std::uint32_t generation{1};
+        bool live{};
+    };
+    struct ShaderSlot final {
+        SDL_GPUShader* shader{};
+        ShaderStage stage{};
+        ShaderFormat format{};
+        ShaderResourceLayout resources;
+        std::uint32_t generation{1};
+        bool live{};
+    };
     Platform::Sdl::SdlPlatform* platform{};
     SDL_Window* window{};
     SDL_GPUDevice* device{};
     bool windowClaimed{};
-    std::thread::id ownerThread{};
     bool debugMode{};
-
+    std::thread::id ownerThread{};
+    RenderDeviceInfo info;
     SDL_GPUTextureFormat swapchainFormat{SDL_GPU_TEXTUREFORMAT_INVALID};
-    SDL_GPUTexture* sceneColorTexture{};
-    SDL_GPUTexture* depthTexture{};
-    std::uint32_t frameTargetWidth{};
-    std::uint32_t frameTargetHeight{};
-
     SDL_GPUSampler* linearClampSampler{};
     SDL_GPUSampler* linearWrapSampler{};
-
-    SDL_GPUGraphicsPipeline* opaqueBackPipeline{};
-    SDL_GPUGraphicsPipeline* opaqueDoublePipeline{};
-    SDL_GPUGraphicsPipeline* alphaBackPipeline{};
-    SDL_GPUGraphicsPipeline* alphaDoublePipeline{};
-    SDL_GPUGraphicsPipeline* skyPipeline{};
-    SDL_GPUGraphicsPipeline* sceneSpritePipeline{};
-    SDL_GPUGraphicsPipeline* overlaySpritePipeline{};
-    SDL_GPUGraphicsPipeline* scenePostPipeline{};
-
-    std::vector<MeshSlot> meshes{};
-    std::vector<std::uint32_t> freeMeshes{};
-    std::vector<TextureSlot> textures{};
-    std::vector<std::uint32_t> freeTextures{};
-    MeshHandle spriteQuad{};
-    TextureHandle whiteTexture{};
-
-    ~Impl() {
-        Shutdown();
-    }
-
+    std::vector<MeshSlot> meshes;
+    std::vector<std::uint32_t> freeMeshes;
+    std::vector<TextureSlot> textures;
+    std::vector<std::uint32_t> freeTextures;
+    std::vector<PipelineSlot> pipelines;
+    std::vector<std::uint32_t> freePipelines;
+    std::vector<ShaderSlot> shaders;
+    std::vector<std::uint32_t> freeShaders;
+    SDL_GPUCommandBuffer* frameCommand{};
+    SDL_GPUTexture* frameSwapchain{};
+    AcquiredFrame activeFrame{};
+    ~Impl() { Shutdown(); }
     [[nodiscard]] Base::Result<void, RenderError> CheckThread() const {
         using Result = Base::Result<void, RenderError>;
         if (std::this_thread::get_id() != ownerThread) {
@@ -364,114 +151,32 @@ struct SdlGpuRenderDevice::Impl final {
         return Result::Ok();
     }
 
+
     void Shutdown() noexcept {
-        if (device == nullptr) {
-            return;
-        }
-
+        if (!device) return;
+        if (frameCommand) AbandonFrame(activeFrame);
         static_cast<void>(SDL_WaitForGPUIdle(device));
-
-        for (MeshSlot& slot : meshes) {
-            if (slot.vertexBuffer != nullptr) {
-                SDL_ReleaseGPUBuffer(device, slot.vertexBuffer);
-            }
-            if (slot.indexBuffer != nullptr) {
-                SDL_ReleaseGPUBuffer(device, slot.indexBuffer);
-            }
-            slot = {};
+        for (auto& slot : meshes) {
+            if (slot.vertexBuffer) SDL_ReleaseGPUBuffer(device, slot.vertexBuffer);
+            if (slot.indexBuffer) SDL_ReleaseGPUBuffer(device, slot.indexBuffer);
+            if (slot.vertexTransfer) SDL_ReleaseGPUTransferBuffer(device, slot.vertexTransfer);
         }
-        for (TextureSlot& slot : textures) {
-            if (slot.texture != nullptr) {
-                SDL_ReleaseGPUTexture(device, slot.texture);
-            }
-            slot = {};
-        }
-
-        if (sceneColorTexture != nullptr) {
-            SDL_ReleaseGPUTexture(device, sceneColorTexture);
-            sceneColorTexture = nullptr;
-        }
-        if (depthTexture != nullptr) {
-            SDL_ReleaseGPUTexture(device, depthTexture);
-            depthTexture = nullptr;
-        }
-        frameTargetWidth = 0;
-        frameTargetHeight = 0;
-
-        const std::array pipelines{
-            opaqueBackPipeline,
-            opaqueDoublePipeline,
-            alphaBackPipeline,
-            alphaDoublePipeline,
-            skyPipeline,
-            sceneSpritePipeline,
-            overlaySpritePipeline,
-            scenePostPipeline,
-        };
-        for (SDL_GPUGraphicsPipeline* pipeline : pipelines) {
-            if (pipeline != nullptr) {
-                SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
-            }
-        }
-        opaqueBackPipeline = nullptr;
-        opaqueDoublePipeline = nullptr;
-        alphaBackPipeline = nullptr;
-        alphaDoublePipeline = nullptr;
-        skyPipeline = nullptr;
-        sceneSpritePipeline = nullptr;
-        overlaySpritePipeline = nullptr;
-        scenePostPipeline = nullptr;
-
-        if (linearClampSampler != nullptr) {
-            SDL_ReleaseGPUSampler(device, linearClampSampler);
-            linearClampSampler = nullptr;
-        }
-        if (linearWrapSampler != nullptr) {
-            SDL_ReleaseGPUSampler(device, linearWrapSampler);
-            linearWrapSampler = nullptr;
-        }
-
-        if (windowClaimed && window != nullptr) {
-            SDL_ReleaseWindowFromGPUDevice(device, window);
-            windowClaimed = false;
-        }
-        SDL_DestroyGPUDevice(device);
-        device = nullptr;
+        for (auto& slot : textures) if (slot.texture) SDL_ReleaseGPUTexture(device, slot.texture);
+        for (auto& slot : pipelines) if (slot.pipeline) SDL_ReleaseGPUGraphicsPipeline(device, slot.pipeline);
+        for (auto& slot : shaders) if (slot.shader) SDL_ReleaseGPUShader(device, slot.shader);
+        if (linearClampSampler) SDL_ReleaseGPUSampler(device, linearClampSampler);
+        if (linearWrapSampler) SDL_ReleaseGPUSampler(device, linearWrapSampler);
+        if (windowClaimed) SDL_ReleaseWindowFromGPUDevice(device, window);
+        SDL_DestroyGPUDevice(device); device = nullptr;
     }
-
-    [[nodiscard]] Base::Result<SDL_GPUShader*, RenderError> CreateShader(
-        const std::vector<std::uint8_t>& bytecode,
-        SDL_GPUShaderStage stage,
-        Uint32 samplerCount,
-        Uint32 uniformBufferCount) {
-        using Result = Base::Result<SDL_GPUShader*, RenderError>;
-
-        SDL_GPUShaderCreateInfo info{};
-        info.code_size = bytecode.size();
-        info.code = bytecode.data();
-        info.entrypoint = "main";
-        info.format = SDL_GPU_SHADERFORMAT_DXBC;
-        info.stage = stage;
-        info.num_samplers = samplerCount;
-        info.num_uniform_buffers = uniformBufferCount;
-
-        SDL_GPUShader* shader = SDL_CreateGPUShader(device, &info);
-        if (shader == nullptr) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::ShaderCompilationFailed,
-                "SDL_GPU: failed to create a shader"));
-        }
-        return Result::Ok(shader);
-    }
-
-    [[nodiscard]] SDL_GPUGraphicsPipeline* CreatePipeline(
+    [[nodiscard]] SDL_GPUGraphicsPipeline* CreateNativePipeline(
         SDL_GPUShader* vertexShader,
         SDL_GPUShader* fragmentShader,
         SDL_GPUCullMode cullMode,
         bool blend,
         bool hasDepth,
         bool depthWrite,
-        SDL_GPUTextureFormat targetFormat) {
+        SDL_GPUTextureFormat targetFormat, bool vertexInput, bool clockwiseFrontFace) {
         SDL_GPUVertexBufferDescription vertexBuffer{};
         vertexBuffer.slot = 0;
         vertexBuffer.pitch = sizeof(Vertex3D);
@@ -511,14 +216,15 @@ struct SdlGpuRenderDevice::Impl final {
         info.vertex_shader = vertexShader;
         info.fragment_shader = fragmentShader;
         info.vertex_input_state.vertex_buffer_descriptions = &vertexBuffer;
-        info.vertex_input_state.num_vertex_buffers = 1;
+        info.vertex_input_state.num_vertex_buffers = vertexInput ? 1 : 0;
         info.vertex_input_state.vertex_attributes = attributes.data();
         info.vertex_input_state.num_vertex_attributes =
-            static_cast<Uint32>(attributes.size());
+            vertexInput ? static_cast<Uint32>(attributes.size()) : 0;
         info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
         info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
         info.rasterizer_state.cull_mode = cullMode;
-        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+        info.rasterizer_state.front_face = clockwiseFrontFace
+            ? SDL_GPU_FRONTFACE_CLOCKWISE : SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
         info.rasterizer_state.enable_depth_clip = true;
         info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
         info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
@@ -529,139 +235,6 @@ struct SdlGpuRenderDevice::Impl final {
         info.target_info.has_depth_stencil_target = hasDepth;
         info.target_info.depth_stencil_format = kDepthFormat;
         return SDL_CreateGPUGraphicsPipeline(device, &info);
-    }
-
-    [[nodiscard]] SDL_GPUGraphicsPipeline* CreateScenePostPipeline(
-        SDL_GPUShader* vertexShader,
-        SDL_GPUShader* fragmentShader) {
-        SDL_GPUColorTargetDescription colorTarget{};
-        colorTarget.format = swapchainFormat;
-
-        SDL_GPUGraphicsPipelineCreateInfo info{};
-        info.vertex_shader = vertexShader;
-        info.fragment_shader = fragmentShader;
-        info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-        info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-        info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
-        info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        info.target_info.color_target_descriptions = &colorTarget;
-        info.target_info.num_color_targets = 1;
-        return SDL_CreateGPUGraphicsPipeline(device, &info);
-    }
-
-    [[nodiscard]] Base::Result<void, RenderError> CreatePipelines() {
-        using Result = Base::Result<void, RenderError>;
-
-        auto vertexBytecode = CompileShader(
-            EmbeddedShaders::kUnlitVertexSource,
-            EmbeddedShaders::kUnlitVertexName.data(),
-            "vs_5_1",
-            debugMode);
-        if (!vertexBytecode) {
-            return Result::Err(std::move(vertexBytecode).error());
-        }
-
-        auto fragmentBytecode = CompileShader(
-            EmbeddedShaders::kUnlitFragmentSource,
-            EmbeddedShaders::kUnlitFragmentName.data(),
-            "ps_5_1",
-            debugMode);
-        if (!fragmentBytecode) {
-            return Result::Err(std::move(fragmentBytecode).error());
-        }
-
-        auto scenePostVertexBytecode = CompileShader(
-            EmbeddedShaders::kScenePostVertexSource,
-            EmbeddedShaders::kScenePostVertexName.data(),
-            "vs_5_1",
-            debugMode);
-        if (!scenePostVertexBytecode) {
-            return Result::Err(std::move(scenePostVertexBytecode).error());
-        }
-
-        auto scenePostFragmentBytecode = CompileShader(
-            EmbeddedShaders::kScenePostFragmentSource,
-            EmbeddedShaders::kScenePostFragmentName.data(),
-            "ps_5_1",
-            debugMode);
-        if (!scenePostFragmentBytecode) {
-            return Result::Err(std::move(scenePostFragmentBytecode).error());
-        }
-
-        auto vertexResult = CreateShader(
-            vertexBytecode.value(), SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
-        if (!vertexResult) {
-            return Result::Err(std::move(vertexResult).error());
-        }
-        SDL_GPUShader* vertexShader = vertexResult.value();
-
-        auto fragmentResult = CreateShader(
-            fragmentBytecode.value(), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
-        if (!fragmentResult) {
-            SDL_ReleaseGPUShader(device, vertexShader);
-            return Result::Err(std::move(fragmentResult).error());
-        }
-        SDL_GPUShader* fragmentShader = fragmentResult.value();
-
-        auto scenePostVertexResult = CreateShader(
-            scenePostVertexBytecode.value(), SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
-        if (!scenePostVertexResult) {
-            SDL_ReleaseGPUShader(device, fragmentShader);
-            SDL_ReleaseGPUShader(device, vertexShader);
-            return Result::Err(std::move(scenePostVertexResult).error());
-        }
-        SDL_GPUShader* scenePostVertexShader = scenePostVertexResult.value();
-
-        auto scenePostFragmentResult = CreateShader(
-            scenePostFragmentBytecode.value(), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
-        if (!scenePostFragmentResult) {
-            SDL_ReleaseGPUShader(device, scenePostVertexShader);
-            SDL_ReleaseGPUShader(device, fragmentShader);
-            SDL_ReleaseGPUShader(device, vertexShader);
-            return Result::Err(std::move(scenePostFragmentResult).error());
-        }
-        SDL_GPUShader* scenePostFragmentShader =
-            scenePostFragmentResult.value();
-
-        opaqueBackPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, false, true, true,
-            kSceneColorFormat);
-        opaqueDoublePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, false, true, true,
-            kSceneColorFormat);
-        alphaBackPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_BACK, true, true, true,
-            kSceneColorFormat);
-        alphaDoublePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, true, true,
-            kSceneColorFormat);
-        skyPipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_FRONT, false, true, false,
-            kSceneColorFormat);
-        sceneSpritePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, false, false,
-            kSceneColorFormat);
-        overlaySpritePipeline = CreatePipeline(
-            vertexShader, fragmentShader, SDL_GPU_CULLMODE_NONE, true, false, false,
-            swapchainFormat);
-        scenePostPipeline = CreateScenePostPipeline(
-            scenePostVertexShader, scenePostFragmentShader);
-
-        SDL_ReleaseGPUShader(device, scenePostFragmentShader);
-        SDL_ReleaseGPUShader(device, scenePostVertexShader);
-        SDL_ReleaseGPUShader(device, fragmentShader);
-        SDL_ReleaseGPUShader(device, vertexShader);
-
-        if (opaqueBackPipeline == nullptr || opaqueDoublePipeline == nullptr ||
-            alphaBackPipeline == nullptr || alphaDoublePipeline == nullptr ||
-            skyPipeline == nullptr || sceneSpritePipeline == nullptr ||
-            overlaySpritePipeline == nullptr || scenePostPipeline == nullptr) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::ResourceCreationFailed,
-                "SDL_GPU: failed to create a built-in graphics pipeline"));
-        }
-        return Result::Ok();
     }
 
     [[nodiscard]] SDL_GPUSampler* CreateSampler(SDL_GPUSamplerAddressMode address) {
@@ -685,15 +258,22 @@ struct SdlGpuRenderDevice::Impl final {
         ownerThread = std::this_thread::get_id();
         debugMode = options.debugMode;
 
-        device = SDL_CreateGPUDevice(
-            SDL_GPU_SHADERFORMAT_DXBC,
-            options.debugMode,
-            "direct3d12");
-        if (device == nullptr) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::BackendUnavailable,
-                "SDL_GPU: Direct3D 12 device creation failed"));
-        }
+        ShaderFormatMask formats = options.availableShaderFormats & AllShaderFormats;
+        const char* driver = nullptr;
+        if (options.driver == "d3d12") { driver = "direct3d12"; formats &= FormatBit(ShaderFormat::DXIL); }
+        else if (options.driver == "vulkan") { driver = "vulkan"; formats &= FormatBit(ShaderFormat::SPIRV); }
+        else if (options.driver == "metal") { driver = "metal"; formats &= FormatBit(ShaderFormat::Metallib); }
+        else if (options.driver != "auto") return Result::Err(MakeError(RenderErrorCode::InvalidArgument,
+            "SDL_GPU: driver must be auto, d3d12, vulkan or metal"));
+        if (!formats) return Result::Err(MakeError(RenderErrorCode::BackendUnavailable,
+            "SDL_GPU: selected driver has no complete shader artifact format"));
+        device = SDL_CreateGPUDevice(ToSdlFormats(formats), options.debugMode, driver);
+        if (!device) return Result::Err(MakeSdlError(RenderErrorCode::BackendUnavailable,
+            "SDL_GPU: device creation failed for driver " + options.driver));
+        info.shaderFormats = FromSdlFormats(SDL_GetGPUShaderFormats(device)) & formats;
+        info.driver = SDL_GetGPUDeviceDriver(device);
+        if (!info.shaderFormats) return Result::Err(MakeError(RenderErrorCode::BackendUnavailable,
+            "SDL_GPU: driver does not accept packaged shader formats"));
         if (!SDL_ClaimWindowForGPUDevice(device, window)) {
             return Result::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
@@ -713,7 +293,7 @@ struct SdlGpuRenderDevice::Impl final {
                 SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR)) {
             return Result::Err(MakeError(
                 RenderErrorCode::BackendUnavailable,
-                "SDL_GPU: Direct3D 12 does not support a linear SDR swapchain"));
+                "SDL_GPU: driver does not support a linear SDR swapchain"));
         }
         if (!SDL_SetGPUSwapchainParameters(
                 device,
@@ -737,22 +317,6 @@ struct SdlGpuRenderDevice::Impl final {
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: linear SDR swapchain did not provide an sRGB target"));
         }
-        constexpr SDL_GPUTextureUsageFlags kSceneColorUsage =
-            SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
-            SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        if (!SDL_GPUTextureSupportsFormat(
-                device,
-                kSceneColorFormat,
-                SDL_GPU_TEXTURETYPE_2D,
-                kSceneColorUsage)) {
-            return Result::Err(MakeError(
-                RenderErrorCode::ResourceCreationFailed,
-                "SDL_GPU: linear scene color target format is unsupported"));
-        }
-        auto pipelinesResult = CreatePipelines();
-        if (!pipelinesResult) {
-            return pipelinesResult;
-        }
 
         linearClampSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE);
         linearWrapSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
@@ -762,29 +326,8 @@ struct SdlGpuRenderDevice::Impl final {
                 "SDL_GPU: failed to create built-in samplers"));
         }
 
-        const std::array<std::uint8_t, 4> whitePixels{255, 255, 255, 255};
-        const ImageView whiteImage{
-            1,
-            1,
-            4,
-            std::as_bytes(std::span{whitePixels}),
-            TextureColorSpace::Linear,
-        };
-        auto whiteResult = CreateTextureInternal(whiteImage, true);
-        if (!whiteResult) {
-            return Result::Err(std::move(whiteResult).error());
-        }
-        whiteTexture = whiteResult.value();
-
-        const MeshData quad = MakeUnitQuadXY();
-        auto quadResult = CreateMeshInternal(quad.View(), true);
-        if (!quadResult) {
-            return Result::Err(std::move(quadResult).error());
-        }
-        spriteQuad = quadResult.value();
         return Result::Ok();
     }
-
     [[nodiscard]] Base::Result<MeshSlot*, RenderError> FindMesh(MeshHandle handle) {
         using Result = Base::Result<MeshSlot*, RenderError>;
         if (!handle || handle.Index() >= meshes.size()) {
@@ -816,11 +359,6 @@ struct SdlGpuRenderDevice::Impl final {
                 "SDL_GPU: stale texture handle"));
         }
         return Result::Ok(&slot);
-    }
-
-    [[nodiscard]] Base::Result<TextureSlot*, RenderError> ResolveTexture(
-        TextureHandle handle) {
-        return FindTexture(handle ? handle : whiteTexture);
     }
 
     [[nodiscard]] Base::Result<void, RenderError> UploadBuffers(
@@ -932,6 +470,14 @@ struct SdlGpuRenderDevice::Impl final {
                     "SDL_GPU: mesh index lies outside the vertex array"));
             }
         }
+        for (const Vertex3D& vertex : mesh.vertices) {
+            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv.x) ||
+                !IsFinite(vertex.uv.y)) {
+                return Result::Err(MakeError(
+                    RenderErrorCode::InvalidArgument,
+                    "SDL_GPU: mesh vertices must be finite"));
+            }
+        }
 
         const auto vertexBytes = std::as_bytes(mesh.vertices);
         const auto indexBytes = std::as_bytes(mesh.indices);
@@ -982,6 +528,7 @@ struct SdlGpuRenderDevice::Impl final {
         MeshSlot& slot = meshes[slotIndex];
         slot.vertexBuffer = vertexBuffer;
         slot.indexBuffer = indexBuffer;
+        slot.vertexCount = static_cast<std::uint32_t>(mesh.vertices.size());
         slot.indexCount = static_cast<std::uint32_t>(mesh.indices.size());
         slot.live = true;
         slot.reserved = reserved;
@@ -1132,6 +679,9 @@ struct SdlGpuRenderDevice::Impl final {
         }
         TextureSlot& slot = textures[slotIndex];
         slot.texture = texture;
+        slot.description = {image.width, image.height,
+            image.colorSpace == TextureColorSpace::SRgb ? TextureFormat::Rgba8SRgb : TextureFormat::Rgba8Unorm,
+            true, false, false};
         slot.live = true;
         slot.reserved = reserved;
         return Result::Ok(TextureHandle::FromParts(slotIndex, slot.generation));
@@ -1157,6 +707,86 @@ struct SdlGpuRenderDevice::Impl final {
         return CreateTextureInternal(image, false);
     }
 
+    [[nodiscard]] Base::Result<void, RenderError> UpdateMeshVertices(
+        MeshHandle handle, std::span<const Vertex3D> vertices) {
+        using Result = Base::Result<void, RenderError>;
+        auto thread = CheckThread();
+        if (!thread) {
+            return thread;
+        }
+        auto found = FindMesh(handle);
+        if (!found) {
+            return Result::Err(std::move(found).error());
+        }
+        MeshSlot& slot = *found.value();
+        if (slot.reserved) {
+            return Result::Err(MakeError(
+                RenderErrorCode::InvalidHandle,
+                "SDL_GPU: backend-owned mesh cannot be updated"));
+        }
+        if (vertices.size() != slot.vertexCount) {
+            return Result::Err(MakeError(
+                RenderErrorCode::InvalidArgument,
+                "SDL_GPU: vertex updates must preserve the mesh vertex count"));
+        }
+        for (const Vertex3D& vertex : vertices) {
+            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv.x) ||
+                !IsFinite(vertex.uv.y)) {
+                return Result::Err(MakeError(
+                    RenderErrorCode::InvalidArgument,
+                    "SDL_GPU: updated mesh vertices must be finite"));
+            }
+        }
+        const auto bytes = std::as_bytes(vertices);
+        // Allocate staging storage once per updated mesh. Both staging and
+        // destination cycling preserve resources still used by earlier frames.
+        if (slot.vertexTransfer == nullptr) {
+            SDL_GPUTransferBufferCreateInfo info{};
+            info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            info.size = static_cast<Uint32>(bytes.size());
+            slot.vertexTransfer = SDL_CreateGPUTransferBuffer(device, &info);
+            if (slot.vertexTransfer == nullptr) {
+                return Result::Err(MakeSdlError(
+                    RenderErrorCode::ResourceCreationFailed,
+                    "SDL_GPU: failed to create a vertex update transfer buffer"));
+            }
+        }
+        void* mapped = SDL_MapGPUTransferBuffer(device, slot.vertexTransfer, true);
+        if (mapped == nullptr) {
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::ResourceCreationFailed,
+                "SDL_GPU: failed to map a vertex update transfer buffer"));
+        }
+        std::memcpy(mapped, bytes.data(), bytes.size());
+        SDL_UnmapGPUTransferBuffer(device, slot.vertexTransfer);
+
+        SDL_GPUCommandBuffer* command = SDL_AcquireGPUCommandBuffer(device);
+        if (command == nullptr) {
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::SubmissionFailed,
+                "SDL_GPU: failed to acquire a vertex update command buffer"));
+        }
+        SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(command);
+        if (copy == nullptr) {
+            static_cast<void>(SDL_CancelGPUCommandBuffer(command));
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::SubmissionFailed,
+                "SDL_GPU: failed to begin a vertex update copy pass"));
+        }
+        const SDL_GPUTransferBufferLocation source{slot.vertexTransfer, 0};
+        const SDL_GPUBufferRegion destination{
+            slot.vertexBuffer, 0, static_cast<Uint32>(bytes.size()),
+        };
+        SDL_UploadToGPUBuffer(copy, &source, &destination, true);
+        SDL_EndGPUCopyPass(copy);
+        if (!SDL_SubmitGPUCommandBuffer(command)) {
+            return Result::Err(MakeSdlError(
+                RenderErrorCode::SubmissionFailed,
+                "SDL_GPU: vertex update submission failed"));
+        }
+        return Result::Ok();
+    }
+
     [[nodiscard]] Base::Result<void, RenderError> ReleaseMesh(MeshHandle handle) {
         using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread();
@@ -1175,8 +805,13 @@ struct SdlGpuRenderDevice::Impl final {
         }
         SDL_ReleaseGPUBuffer(device, slot.indexBuffer);
         SDL_ReleaseGPUBuffer(device, slot.vertexBuffer);
+        if (slot.vertexTransfer != nullptr) {
+            SDL_ReleaseGPUTransferBuffer(device, slot.vertexTransfer);
+        }
         slot.indexBuffer = nullptr;
         slot.vertexBuffer = nullptr;
+        slot.vertexTransfer = nullptr;
+        slot.vertexCount = 0;
         slot.indexCount = 0;
         slot.live = false;
         slot.generation = NextGeneration(slot.generation);
@@ -1209,451 +844,301 @@ struct SdlGpuRenderDevice::Impl final {
         return Result::Ok();
     }
 
-    [[nodiscard]] Base::Result<void, RenderError> EnsureFrameTargets(
-        std::uint32_t width,
-        std::uint32_t height) {
+    Base::Result<TextureHandle, RenderError> CreateTexture(const TextureDesc& description) {
+        using Result = Base::Result<TextureHandle, RenderError>;
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        const auto format = ToSdlFormat(description.format);
+        if (!description.width || !description.height || format == SDL_GPU_TEXTUREFORMAT_INVALID ||
+            (description.depthTarget && (description.colorTarget || description.format != TextureFormat::Depth32Float)) ||
+            (!description.depthTarget && description.format == TextureFormat::Depth32Float))
+            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid texture descriptor"));
+        SDL_GPUTextureUsageFlags usage = 0;
+        if (description.sampled) usage |= SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        if (description.colorTarget) usage |= SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        if (description.depthTarget) usage |= SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+        if (!usage || !SDL_GPUTextureSupportsFormat(device, format, SDL_GPU_TEXTURETYPE_2D, usage))
+            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported texture format/usage"));
+        SDL_GPUTextureCreateInfo create{};
+        create.type = SDL_GPU_TEXTURETYPE_2D; create.format = format; create.usage = usage;
+        create.width = description.width; create.height = description.height;
+        create.layer_count_or_depth = 1; create.num_levels = 1; create.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        auto* texture = SDL_CreateGPUTexture(device, &create);
+        if (!texture) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: texture creation failed"));
+        std::uint32_t index;
+        if (freeTextures.empty()) { index = static_cast<std::uint32_t>(textures.size()); textures.emplace_back(); }
+        else { index = freeTextures.back(); freeTextures.pop_back(); }
+        auto& slot = textures[index]; slot.texture = texture; slot.description = description;
+        slot.live = true; slot.reserved = false;
+        return Result::Ok(TextureHandle::FromParts(index, slot.generation));
+    }
+
+    Base::Result<ShaderHandle, RenderError> CreateShader(const ShaderArtifact& artifact) {
+        using Result = Base::Result<ShaderHandle, RenderError>;
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        if ((artifact.stage != ShaderStage::Vertex && artifact.stage != ShaderStage::Fragment) ||
+            (artifact.format != ShaderFormat::DXIL && artifact.format != ShaderFormat::SPIRV && artifact.format != ShaderFormat::Metallib))
+            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid shader stage or format"));
+        if (artifact.code.empty() || artifact.entrypoint.empty() ||
+            !(info.shaderFormats & FormatBit(artifact.format)) || artifact.resources.storageTextures ||
+            artifact.resources.storageBuffers || artifact.resources.uniformBufferSizes.size() > 4 ||
+            (artifact.stage == ShaderStage::Vertex && artifact.resources.samplers))
+            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported shader artifact or binding layout"));
+        SDL_GPUShaderCreateInfo create{};
+        create.code_size = artifact.code.size(); create.code = reinterpret_cast<const Uint8*>(artifact.code.data());
+        create.entrypoint = artifact.entrypoint.c_str(); create.format = ToSdlFormats(FormatBit(artifact.format));
+        create.stage = artifact.stage == ShaderStage::Vertex ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
+        create.num_samplers = artifact.resources.samplers;
+        create.num_uniform_buffers = static_cast<Uint32>(artifact.resources.uniformBufferSizes.size());
+        auto* shader = SDL_CreateGPUShader(device, &create);
+        if (!shader) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: shader creation failed"));
+        std::uint32_t index;
+        if (freeShaders.empty()) { index = static_cast<std::uint32_t>(shaders.size()); shaders.emplace_back(); }
+        else { index = freeShaders.back(); freeShaders.pop_back(); }
+        auto& slot = shaders[index]; slot.shader = shader; slot.resources = artifact.resources;
+        slot.stage = artifact.stage; slot.format = artifact.format; slot.live = true;
+        return Result::Ok(ShaderHandle::FromParts(index, slot.generation));
+    }
+    Base::Result<ShaderSlot*, RenderError> FindShader(ShaderHandle handle) {
+        using Result = Base::Result<ShaderSlot*, RenderError>;
+        if (!handle || handle.Index() >= shaders.size() || !shaders[handle.Index()].live ||
+            shaders[handle.Index()].generation != handle.Generation())
+            return Result::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale shader handle"));
+        return Result::Ok(&shaders[handle.Index()]);
+    }
+    Base::Result<void, RenderError> ReleaseShader(ShaderHandle handle) {
         using Result = Base::Result<void, RenderError>;
-        if (sceneColorTexture != nullptr && depthTexture != nullptr &&
-            frameTargetWidth == width && frameTargetHeight == height) {
-            return Result::Ok();
+        auto thread = CheckThread(); if (!thread) return thread;
+        auto found = FindShader(handle); if (!found) return Result::Err(found.error());
+        auto& slot = *found.value(); SDL_ReleaseGPUShader(device, slot.shader);
+        slot.shader = nullptr; slot.live = false; slot.resources = {}; slot.generation = NextGeneration(slot.generation);
+        freeShaders.push_back(handle.Index()); return Result::Ok();
+    }
+    Base::Result<PipelineHandle, RenderError> CreatePipeline(const PipelineDesc& description) {
+        using Result = Base::Result<PipelineHandle, RenderError>;
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        auto vertex = FindShader(description.vertexShader); if (!vertex) return Result::Err(vertex.error());
+        auto fragment = FindShader(description.fragmentShader); if (!fragment) return Result::Err(fragment.error());
+        if (vertex.value()->stage != ShaderStage::Vertex || fragment.value()->stage != ShaderStage::Fragment ||
+            vertex.value()->format != fragment.value()->format ||
+            ToSdlFormat(description.colorFormat) == SDL_GPU_TEXTUREFORMAT_INVALID ||
+            description.colorFormat == TextureFormat::Depth32Float ||
+            (description.cull != CullMode::None && description.cull != CullMode::Front && description.cull != CullMode::Back) ||
+            (description.depthWrite && !description.depthTest))
+            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid pipeline descriptor"));
+        const auto cull = description.cull == CullMode::None ? SDL_GPU_CULLMODE_NONE :
+            description.cull == CullMode::Front ? SDL_GPU_CULLMODE_FRONT : SDL_GPU_CULLMODE_BACK;
+        auto* pipeline = CreateNativePipeline(vertex.value()->shader, fragment.value()->shader, cull, description.blend,
+            description.depthTest, description.depthWrite, ToSdlFormat(description.colorFormat), description.vertexInput,
+            description.clockwiseFrontFace);
+        if (!pipeline) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: pipeline creation failed"));
+        std::uint32_t index;
+        if (freePipelines.empty()) { index = static_cast<std::uint32_t>(pipelines.size()); pipelines.emplace_back(); }
+        else { index = freePipelines.back(); freePipelines.pop_back(); }
+        auto& slot = pipelines[index]; slot.pipeline = pipeline; slot.description = description; slot.live = true;
+        slot.vertexResources = vertex.value()->resources; slot.fragmentResources = fragment.value()->resources;
+        return Result::Ok(PipelineHandle::FromParts(index, slot.generation));
+    }
+    Base::Result<PipelineSlot*, RenderError> FindPipeline(PipelineHandle handle) {
+        using Result = Base::Result<PipelineSlot*, RenderError>;
+        if (!handle || handle.Index() >= pipelines.size() || !pipelines[handle.Index()].live ||
+            pipelines[handle.Index()].generation != handle.Generation())
+            return Result::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale pipeline handle"));
+        return Result::Ok(&pipelines[handle.Index()]);
+    }
+    Base::Result<void, RenderError> ReleasePipeline(PipelineHandle handle) {
+        using Result = Base::Result<void, RenderError>;
+        auto thread = CheckThread(); if (!thread) return thread;
+        auto found = FindPipeline(handle); if (!found) return Result::Err(found.error());
+        auto& slot = *found.value(); SDL_ReleaseGPUGraphicsPipeline(device, slot.pipeline);
+        slot.pipeline = nullptr; slot.live = false; slot.description = {}; slot.generation = NextGeneration(slot.generation);
+        freePipelines.push_back(handle.Index()); return Result::Ok();
+    }
+    Base::Result<std::optional<AcquiredFrame>, RenderError> AcquireFrame() {
+        using Result = Base::Result<std::optional<AcquiredFrame>, RenderError>;
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        if (frameCommand) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: a frame is already acquired"));
+        auto* command = SDL_AcquireGPUCommandBuffer(device);
+        if (!command) return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
+        SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
+        if (!SDL_WaitAndAcquireGPUSwapchainTexture(command, window, &swapchain, &width, &height)) {
+            static_cast<void>(SDL_CancelGPUCommandBuffer(command));
+            return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain acquisition failed"));
         }
-
-        SDL_GPUTextureCreateInfo sceneInfo{};
-        sceneInfo.type = SDL_GPU_TEXTURETYPE_2D;
-        sceneInfo.format = kSceneColorFormat;
-        sceneInfo.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
-                          SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        sceneInfo.width = width;
-        sceneInfo.height = height;
-        sceneInfo.layer_count_or_depth = 1;
-        sceneInfo.num_levels = 1;
-        sceneInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        SDL_GPUTexture* newSceneColor =
-            SDL_CreateGPUTexture(device, &sceneInfo);
-        if (newSceneColor == nullptr) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::ResourceCreationFailed,
-                "SDL_GPU: failed to create the linear scene color target"));
+        if (!swapchain || !width || !height) {
+            if (swapchain) static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
+            else static_cast<void>(SDL_CancelGPUCommandBuffer(command));
+            return Result::Ok(std::nullopt);
         }
-
-        SDL_GPUTextureCreateInfo depthInfo{};
-        depthInfo.type = SDL_GPU_TEXTURETYPE_2D;
-        depthInfo.format = kDepthFormat;
-        depthInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-        depthInfo.width = width;
-        depthInfo.height = height;
-        depthInfo.layer_count_or_depth = 1;
-        depthInfo.num_levels = 1;
-        depthInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        SDL_GPUTexture* newDepth = SDL_CreateGPUTexture(device, &depthInfo);
-        if (newDepth == nullptr) {
-            SDL_ReleaseGPUTexture(device, newSceneColor);
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::ResourceCreationFailed,
-                "SDL_GPU: failed to create the depth target"));
-        }
-
-        SDL_GPUTexture* oldSceneColor = sceneColorTexture;
-        SDL_GPUTexture* oldDepth = depthTexture;
-        sceneColorTexture = newSceneColor;
-        depthTexture = newDepth;
-        frameTargetWidth = width;
-        frameTargetHeight = height;
-        if (oldSceneColor != nullptr) {
-            SDL_ReleaseGPUTexture(device, oldSceneColor);
-        }
-        if (oldDepth != nullptr) {
-            SDL_ReleaseGPUTexture(device, oldDepth);
+        auto token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
+        if (!token) token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
+        activeFrame = {token, width, height, swapchainFormat == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
+            ? TextureFormat::Rgba8SRgb : TextureFormat::Bgra8SRgb};
+        frameCommand = command; frameSwapchain = swapchain;
+        return Result::Ok(activeFrame);
+    }
+    void AbandonFrame(const AcquiredFrame& frame) noexcept {
+        if (!frameCommand || frame.token != activeFrame.token || std::this_thread::get_id() != ownerThread) return;
+        static_cast<void>(SDL_SubmitGPUCommandBuffer(frameCommand));
+        frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
+    }
+    Base::Result<void, RenderError> Validate(const PreparedFrame& prepared) {
+        using Result = Base::Result<void, RenderError>;
+        for (const auto& pass : prepared.passes) {
+            TextureFormat colorFormat = activeFrame.colorFormat;
+            std::uint32_t width = activeFrame.width, height = activeFrame.height;
+            if (!IsFinite(pass.clearColor) || !IsFinite(pass.clearDepth) || pass.clearDepth < 0 || pass.clearDepth > 1)
+                return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment clear value"));
+            const auto validLoad = [](AttachmentLoad load) {
+                return load == AttachmentLoad::Clear || load == AttachmentLoad::Load || load == AttachmentLoad::DontCare;
+            };
+            if (!validLoad(pass.colorLoad) || !validLoad(pass.depthLoad))
+                return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment load operation"));
+            if (pass.color) {
+                auto found = FindTexture(pass.color); if (!found) return Result::Err(found.error());
+                const auto& desc = found.value()->description;
+                if (!desc.colorTarget) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: color attachment is not a render target"));
+                colorFormat = desc.format; width = desc.width; height = desc.height;
+            }
+            if (pass.depth) {
+                auto found = FindTexture(pass.depth); if (!found) return Result::Err(found.error());
+                const auto& desc = found.value()->description;
+                if (!desc.depthTarget || desc.width != width || desc.height != height)
+                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: incompatible depth attachment"));
+            }
+            for (const auto& draw : pass.draws) {
+                auto pipeline = FindPipeline(draw.pipeline); if (!pipeline) return Result::Err(pipeline.error());
+                const auto& desc = pipeline.value()->description;
+                if (desc.colorFormat != colorFormat || desc.depthTest != static_cast<bool>(pass.depth) ||
+                    desc.vertexInput != static_cast<bool>(draw.mesh) || (!draw.mesh && !draw.vertexCount))
+                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: draw pipeline/attachment/vertex mismatch"));
+                if (draw.mesh) { auto found = FindMesh(draw.mesh); if (!found) return Result::Err(found.error()); }
+                const auto uniformsMatch = [](const auto& supplied, const auto& sizes) {
+                    if (supplied.size() != sizes.size()) return false;
+                    for (std::size_t i = 0; i < sizes.size(); ++i) if (supplied[i].size() != sizes[i]) return false;
+                    return true;
+                };
+                if (!uniformsMatch(draw.vertexUniforms, pipeline.value()->vertexResources.uniformBufferSizes) ||
+                    !uniformsMatch(draw.fragmentUniforms, pipeline.value()->fragmentResources.uniformBufferSizes) ||
+                    draw.fragmentTextures.size() != pipeline.value()->fragmentResources.samplers)
+                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: shader resource bindings disagree with artifact metadata"));
+                for (const auto& binding : draw.fragmentTextures) {
+                    auto texture = FindTexture(binding.texture); if (!texture) return Result::Err(texture.error());
+                    if (!texture.value()->description.sampled || binding.texture == pass.color || binding.texture == pass.depth ||
+                        (binding.sampler != SamplerMode::LinearClamp && binding.sampler != SamplerMode::LinearWrap))
+                        return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid sampled texture binding"));
+                }
+            }
         }
         return Result::Ok();
     }
-
-    [[nodiscard]] SDL_GPUGraphicsPipeline* PipelineFor(
-        const MeshSubmission& submission) const noexcept {
-        switch (submission.surface) {
-        case SurfaceMode::Opaque:
-            return submission.doubleSided
-                       ? opaqueDoublePipeline
-                       : opaqueBackPipeline;
-        case SurfaceMode::AlphaMasked:
-            return submission.doubleSided
-                       ? alphaDoublePipeline
-                       : alphaBackPipeline;
-        case SurfaceMode::Sky:
-            return skyPipeline;
-        }
-        return opaqueBackPipeline;
-    }
-
-    [[nodiscard]] SDL_GPUSampler* SamplerFor(SamplerMode mode) const noexcept {
-        return mode == SamplerMode::LinearWrap
-                   ? linearWrapSampler
-                   : linearClampSampler;
-    }
-
-    [[nodiscard]] Base::Result<void, RenderError> ValidateQueue(
-        const RenderQueue& queue) {
-        using Result = Base::Result<void, RenderError>;
-        const Color clear = queue.Frame().clearColor;
-        if (!IsFinite(clear)) {
-            return Result::Err(MakeError(
-                RenderErrorCode::InvalidArgument,
-                "SDL_GPU: clear color must be finite"));
-        }
-        const SceneColorTransform sceneColor =
-            queue.Frame().sceneColorTransform;
-        if (!IsValidSceneColorTransform(sceneColor)) {
-            return Result::Err(MakeError(
-                RenderErrorCode::InvalidArgument,
-                "SDL_GPU: scene color transform is outside supported bounds"));
-        }
-        if (!queue.Meshes().empty()) {
-            if (!queue.Camera()) {
-                return Result::Err(MakeError(
-                    RenderErrorCode::InvalidArgument,
-                    "SDL_GPU: mesh submissions require a camera"));
-            }
-            const PerspectiveCamera3D& camera = *queue.Camera();
-            if (!IsFinite(camera.position) || !IsFinite(camera.rotationRadians) ||
-                !IsFinite(camera.verticalFieldOfViewRadians) ||
-                camera.verticalFieldOfViewRadians <= 0.0F ||
-                camera.verticalFieldOfViewRadians >= std::numbers::pi_v<float> ||
-                !IsFinite(camera.nearClip) || camera.nearClip <= 0.0F ||
-                !IsFinite(camera.farClip) || camera.farClip <= camera.nearClip) {
-                return Result::Err(MakeError(
-                    RenderErrorCode::InvalidArgument,
-                    "SDL_GPU: camera parameters are invalid"));
-            }
-        }
-        for (const MeshSubmission& submission : queue.Meshes()) {
-            auto mesh = FindMesh(submission.mesh);
-            if (!mesh) {
-                return Result::Err(std::move(mesh).error());
-            }
-            auto texture = ResolveTexture(submission.texture);
-            if (!texture) {
-                return Result::Err(std::move(texture).error());
-            }
-        }
-        for (const SpriteSubmission& submission : queue.Sprites()) {
-            auto texture = ResolveTexture(submission.texture);
-            if (!texture) {
-                return Result::Err(std::move(texture).error());
-            }
-        }
-        return Result::Ok();
-    }
-
-    void DrawMesh(
-        SDL_GPUCommandBuffer* command,
-        SDL_GPURenderPass* pass,
-        const MeshSubmission& submission,
-        const Matrix4& viewProjection) {
-        MeshSlot& mesh = *FindMesh(submission.mesh).value();
-        TextureSlot& texture = *ResolveTexture(submission.texture).value();
-
-        const VertexUniforms vertexUniforms{
-            Multiply(WorldMatrix(submission.transform), viewProjection),
-        };
-        const float alphaCutoff =
-            submission.surface == SurfaceMode::AlphaMasked ? 0.01F : -1.0F;
-        const FragmentUniforms fragmentUniforms = MakeFragmentUniforms(
-            submission.tint, submission.uv, alphaCutoff);
-        SDL_PushGPUVertexUniformData(
-            command, 0, &vertexUniforms, sizeof(vertexUniforms));
-        SDL_PushGPUFragmentUniformData(
-            command, 0, &fragmentUniforms, sizeof(fragmentUniforms));
-
-        SDL_BindGPUGraphicsPipeline(pass, PipelineFor(submission));
-        const SDL_GPUBufferBinding vertexBinding{mesh.vertexBuffer, 0};
-        const SDL_GPUBufferBinding indexBinding{mesh.indexBuffer, 0};
-        SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
-        SDL_BindGPUIndexBuffer(
-            pass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-        const SDL_GPUTextureSamplerBinding textureBinding{
-            texture.texture,
-            SamplerFor(submission.sampler),
-        };
-        SDL_BindGPUFragmentSamplers(pass, 0, &textureBinding, 1);
-        SDL_DrawGPUIndexedPrimitives(pass, mesh.indexCount, 1, 0, 0, 0);
-    }
-
-    void DrawSprite(
-        SDL_GPUCommandBuffer* command,
-        SDL_GPURenderPass* pass,
-        const SpriteSubmission& submission,
-        const Matrix4& pixelProjection,
-        SDL_GPUGraphicsPipeline* pipeline) {
-        if (submission.destinationPixels.width == 0.0F ||
-            submission.destinationPixels.height == 0.0F ||
-            submission.sourceUv.width == 0.0F ||
-            submission.sourceUv.height == 0.0F) {
-            return;
-        }
-
-        MeshSlot& mesh = *FindMesh(spriteQuad).value();
-        TextureSlot& texture = *ResolveTexture(submission.texture).value();
-        const VertexUniforms vertexUniforms{
-            Multiply(SpriteWorldMatrix(submission), pixelProjection),
-        };
-        const FragmentUniforms fragmentUniforms = MakeFragmentUniforms(
-            submission.tint,
-            MakeSpriteUvTransform(submission.sourceUv),
-            -1.0F);
-        SDL_PushGPUVertexUniformData(
-            command, 0, &vertexUniforms, sizeof(vertexUniforms));
-        SDL_PushGPUFragmentUniformData(
-            command, 0, &fragmentUniforms, sizeof(fragmentUniforms));
-
-        SDL_BindGPUGraphicsPipeline(pass, pipeline);
-        const SDL_GPUBufferBinding vertexBinding{mesh.vertexBuffer, 0};
-        const SDL_GPUBufferBinding indexBinding{mesh.indexBuffer, 0};
-        SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
-        SDL_BindGPUIndexBuffer(
-            pass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-        const SDL_GPUTextureSamplerBinding textureBinding{
-            texture.texture,
-            SamplerFor(submission.sampler),
-        };
-        SDL_BindGPUFragmentSamplers(pass, 0, &textureBinding, 1);
-        SDL_DrawGPUIndexedPrimitives(pass, mesh.indexCount, 1, 0, 0, 0);
-    }
-
-    void DrawScenePost(
-        SDL_GPUCommandBuffer* command,
-        SDL_GPURenderPass* pass,
-        const SceneColorTransform& transform) {
-        const SceneColorUniforms uniforms{
-            transform.exposureEv,
-            transform.gammaAdjustment,
-            {},
-        };
-        SDL_PushGPUFragmentUniformData(
-            command, 0, &uniforms, sizeof(uniforms));
-
-        SDL_BindGPUGraphicsPipeline(pass, scenePostPipeline);
-        const SDL_GPUTextureSamplerBinding sceneBinding{
-            sceneColorTexture,
-            linearClampSampler,
-        };
-        SDL_BindGPUFragmentSamplers(pass, 0, &sceneBinding, 1);
-        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
-    }
-
-    [[nodiscard]] Base::Result<PresentStatus, RenderError> Render(
-        const RenderQueue& queue) {
+    Base::Result<PresentStatus, RenderError> SubmitFrame(const AcquiredFrame& frame, const PreparedFrame& prepared) {
         using Result = Base::Result<PresentStatus, RenderError>;
-
-        auto thread = CheckThread();
-        if (!thread) {
-            return Result::Err(std::move(thread).error());
-        }
-        auto validation = ValidateQueue(queue);
-        if (!validation) {
-            return Result::Err(std::move(validation).error());
-        }
-
-        SDL_GPUCommandBuffer* command = SDL_AcquireGPUCommandBuffer(device);
-        if (command == nullptr) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::SubmissionFailed,
-                "SDL_GPU: failed to acquire a render command buffer"));
-        }
-
-        SDL_GPUTexture* swapchainTexture = nullptr;
-        Uint32 width = 0;
-        Uint32 height = 0;
-        if (!SDL_WaitAndAcquireGPUSwapchainTexture(
-                command, window, &swapchainTexture, &width, &height)) {
-            static_cast<void>(SDL_CancelGPUCommandBuffer(command));
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::SubmissionFailed,
-                "SDL_GPU: failed to acquire the swapchain texture"));
-        }
-        if (swapchainTexture == nullptr || width == 0 || height == 0) {
-            // A minimized window can legitimately provide no texture. No
-            // swapchain texture is referenced, so cancellation is valid.
-            static_cast<void>(SDL_CancelGPUCommandBuffer(command));
-            return Result::Ok(PresentStatus::Skipped);
-        }
-
-        auto frameTargets = EnsureFrameTargets(width, height);
-        if (!frameTargets) {
-            // Once a swapchain texture is acquired SDL forbids cancellation.
-            // Submit the otherwise empty buffer before surfacing the error.
-            static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-            return Result::Err(std::move(frameTargets).error());
-        }
-
-        const Color clear = queue.Frame().clearColor;
-        SDL_GPUColorTargetInfo sceneTarget{};
-        sceneTarget.texture = sceneColorTexture;
-        sceneTarget.clear_color = {
-            clear.red, clear.green, clear.blue, clear.alpha,
-        };
-        sceneTarget.load_op = SDL_GPU_LOADOP_CLEAR;
-        sceneTarget.store_op = SDL_GPU_STOREOP_STORE;
-        sceneTarget.cycle = true;
-
-        SDL_GPUDepthStencilTargetInfo depthTarget{};
-        depthTarget.texture = depthTexture;
-        depthTarget.clear_depth = 1.0F;
-        depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;
-        depthTarget.store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
-        depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthTarget.cycle = true;
-
-        SDL_GPURenderPass* scenePass =
-            SDL_BeginGPURenderPass(command, &sceneTarget, 1, &depthTarget);
-        if (scenePass == nullptr) {
-            static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::SubmissionFailed,
-                "SDL_GPU: failed to begin the scene render pass"));
-        }
-
-        if (!queue.Meshes().empty()) {
-            const PerspectiveCamera3D& camera = *queue.Camera();
-            const Matrix4 viewProjection = Multiply(
-                ViewMatrix(camera),
-                ProjectionMatrix(
-                    camera,
-                    static_cast<float>(width) / static_cast<float>(height)));
-            for (const MeshSubmission& submission : queue.Meshes()) {
-                DrawMesh(command, scenePass, submission, viewProjection);
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        if (!frameCommand || !frame.token || frame.token != activeFrame.token)
+            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid or consumed frame token"));
+        auto valid = Validate(prepared);
+        if (!valid) { AbandonFrame(frame); return Result::Err(valid.error()); }
+        for (const auto& preparedPass : prepared.passes) {
+            SDL_GPUColorTargetInfo color{};
+            color.texture = preparedPass.color ? FindTexture(preparedPass.color).value()->texture : frameSwapchain;
+            color.clear_color = {preparedPass.clearColor.red, preparedPass.clearColor.green, preparedPass.clearColor.blue, preparedPass.clearColor.alpha};
+            color.load_op = ToLoad(preparedPass.colorLoad);
+            color.store_op = preparedPass.storeColor ? SDL_GPU_STOREOP_STORE : SDL_GPU_STOREOP_DONT_CARE;
+            color.cycle = preparedPass.color && preparedPass.colorLoad != AttachmentLoad::Load;
+            SDL_GPUDepthStencilTargetInfo depth{};
+            if (preparedPass.depth) {
+                depth.texture = FindTexture(preparedPass.depth).value()->texture;
+                depth.clear_depth = preparedPass.clearDepth; depth.load_op = ToLoad(preparedPass.depthLoad);
+                depth.store_op = preparedPass.storeDepth ? SDL_GPU_STOREOP_STORE : SDL_GPU_STOREOP_DONT_CARE;
+                depth.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE; depth.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+                depth.cycle = preparedPass.depthLoad != AttachmentLoad::Load;
             }
-        }
-        SDL_EndGPURenderPass(scenePass);
-
-        bool hasSceneSprites = false;
-        bool hasOverlaySprites = false;
-        for (const SpriteSubmission& submission : queue.Sprites()) {
-            hasSceneSprites = hasSceneSprites ||
-                submission.layer == CompositeLayer::Scene;
-            hasOverlaySprites = hasOverlaySprites ||
-                submission.layer == CompositeLayer::Overlay;
-        }
-        const Matrix4 spriteProjection = PixelProjection(
-            static_cast<float>(width), static_cast<float>(height));
-
-        if (hasSceneSprites) {
-            sceneTarget.load_op = SDL_GPU_LOADOP_LOAD;
-            sceneTarget.cycle = false;
-            SDL_GPURenderPass* sceneSpritePass =
-                SDL_BeginGPURenderPass(command, &sceneTarget, 1, nullptr);
-            if (sceneSpritePass == nullptr) {
-                static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-                return Result::Err(MakeSdlError(
-                    RenderErrorCode::SubmissionFailed,
-                    "SDL_GPU: failed to begin the scene sprite render pass"));
-            }
-            for (const SpriteSubmission& submission : queue.Sprites()) {
-                if (submission.layer == CompositeLayer::Scene) {
-                    DrawSprite(
-                        command,
-                        sceneSpritePass,
-                        submission,
-                        spriteProjection,
-                        sceneSpritePipeline);
+            auto* pass = SDL_BeginGPURenderPass(frameCommand, &color, 1, preparedPass.depth ? &depth : nullptr);
+            if (!pass) { auto error = MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: render pass creation failed"); AbandonFrame(frame); return Result::Err(std::move(error)); }
+            for (const auto& draw : preparedPass.draws) {
+                SDL_BindGPUGraphicsPipeline(pass, FindPipeline(draw.pipeline).value()->pipeline);
+                for (Uint32 i = 0; i < draw.vertexUniforms.size(); ++i)
+                    SDL_PushGPUVertexUniformData(frameCommand, i, draw.vertexUniforms[i].data(), static_cast<Uint32>(draw.vertexUniforms[i].size()));
+                for (Uint32 i = 0; i < draw.fragmentUniforms.size(); ++i)
+                    SDL_PushGPUFragmentUniformData(frameCommand, i, draw.fragmentUniforms[i].data(), static_cast<Uint32>(draw.fragmentUniforms[i].size()));
+                for (Uint32 i = 0; i < draw.fragmentTextures.size(); ++i) {
+                    const auto& binding = draw.fragmentTextures[i];
+                    const SDL_GPUTextureSamplerBinding sampler{FindTexture(binding.texture).value()->texture,
+                        binding.sampler == SamplerMode::LinearWrap ? linearWrapSampler : linearClampSampler};
+                    SDL_BindGPUFragmentSamplers(pass, i, &sampler, 1);
                 }
+                if (draw.mesh) {
+                    const auto& mesh = *FindMesh(draw.mesh).value();
+                    const SDL_GPUBufferBinding vertex{mesh.vertexBuffer, 0}, index{mesh.indexBuffer, 0};
+                    SDL_BindGPUVertexBuffers(pass, 0, &vertex, 1);
+                    SDL_BindGPUIndexBuffer(pass, &index, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                    SDL_DrawGPUIndexedPrimitives(pass, mesh.indexCount, 1, 0, 0, 0);
+                } else SDL_DrawGPUPrimitives(pass, draw.vertexCount, 1, 0, 0);
             }
-            SDL_EndGPURenderPass(sceneSpritePass);
+            SDL_EndGPURenderPass(pass);
         }
-
-        SDL_GPUColorTargetInfo swapchainTarget{};
-        swapchainTarget.texture = swapchainTexture;
-        swapchainTarget.load_op = SDL_GPU_LOADOP_DONT_CARE;
-        swapchainTarget.store_op = SDL_GPU_STOREOP_STORE;
-        SDL_GPURenderPass* scenePostPass =
-            SDL_BeginGPURenderPass(command, &swapchainTarget, 1, nullptr);
-        if (scenePostPass == nullptr) {
-            static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::SubmissionFailed,
-                "SDL_GPU: failed to begin the scene color post-process pass"));
-        }
-        DrawScenePost(
-            command,
-            scenePostPass,
-            queue.Frame().sceneColorTransform);
-        SDL_EndGPURenderPass(scenePostPass);
-
-        if (hasOverlaySprites) {
-            swapchainTarget.load_op = SDL_GPU_LOADOP_LOAD;
-            SDL_GPURenderPass* overlayPass =
-                SDL_BeginGPURenderPass(command, &swapchainTarget, 1, nullptr);
-            if (overlayPass == nullptr) {
-                static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
-                return Result::Err(MakeSdlError(
-                    RenderErrorCode::SubmissionFailed,
-                    "SDL_GPU: failed to begin the overlay sprite render pass"));
-            }
-            for (const SpriteSubmission& submission : queue.Sprites()) {
-                if (submission.layer == CompositeLayer::Overlay) {
-                    DrawSprite(
-                        command,
-                        overlayPass,
-                        submission,
-                        spriteProjection,
-                        overlaySpritePipeline);
-                }
-            }
-            SDL_EndGPURenderPass(overlayPass);
-        }
-
-        if (!SDL_SubmitGPUCommandBuffer(command)) {
-            return Result::Err(MakeSdlError(
-                RenderErrorCode::SubmissionFailed,
-                "SDL_GPU: render submission failed"));
-        }
+        auto* command = frameCommand; frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
+        if (!SDL_SubmitGPUCommandBuffer(command)) return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: frame submission failed"));
         return Result::Ok(PresentStatus::Presented);
+    }
+    Base::Result<TextureReadback, RenderError> ReadTexture(TextureHandle handle) {
+        using Result = Base::Result<TextureReadback, RenderError>;
+        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        auto found = FindTexture(handle); if (!found) return Result::Err(found.error());
+        if (frameCommand) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback requires a submitted frame"));
+        const auto& desc = found.value()->description;
+        if (desc.format == TextureFormat::Depth32Float)
+            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: depth readback is unsupported"));
+        const std::uint32_t bpp = desc.format == TextureFormat::Rgba16Float ? 8U : 4U;
+        const std::uint64_t pitch = (static_cast<std::uint64_t>(desc.width) * bpp + 255U) & ~255ULL;
+        const std::uint64_t total = pitch * desc.height;
+        if (total > std::numeric_limits<Uint32>::max())
+            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback exceeds transfer limits"));
+        TextureReadback output{desc.width, desc.height, static_cast<std::uint32_t>(pitch), desc.format, {}};
+        output.bytes.resize(static_cast<std::size_t>(total));
+        SDL_GPUTransferBufferCreateInfo create{}; create.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD; create.size = static_cast<Uint32>(total);
+        auto* transfer = SDL_CreateGPUTransferBuffer(device, &create);
+        if (!transfer) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback transfer allocation failed"));
+        auto* command = SDL_AcquireGPUCommandBuffer(device);
+        if (!command) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback command acquisition failed")); }
+        auto* copy = SDL_BeginGPUCopyPass(command);
+        if (!copy) { static_cast<void>(SDL_CancelGPUCommandBuffer(command)); SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback copy pass failed")); }
+        SDL_GPUTextureRegion source{}; source.texture = found.value()->texture; source.w = desc.width; source.h = desc.height; source.d = 1;
+        SDL_GPUTextureTransferInfo destination{}; destination.transfer_buffer = transfer; destination.pixels_per_row = static_cast<Uint32>(pitch / bpp); destination.rows_per_layer = desc.height;
+        SDL_DownloadFromGPUTexture(copy, &source, &destination); SDL_EndGPUCopyPass(copy);
+        auto* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(command);
+        if (!fence) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback submission failed")); }
+        const bool waited = SDL_WaitForGPUFences(device, true, &fence, 1); SDL_ReleaseGPUFence(device, fence);
+        if (!waited) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback wait failed")); }
+        const void* data = SDL_MapGPUTransferBuffer(device, transfer, false);
+        if (!data) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback mapping failed")); }
+        std::memcpy(output.bytes.data(), data, output.bytes.size()); SDL_UnmapGPUTransferBuffer(device, transfer);
+        SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Ok(std::move(output));
     }
 };
 
-Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError>
-SdlGpuRenderDevice::Create(
-    Platform::Sdl::SdlPlatform& platform,
-    const SdlGpuOptions& options) {
+Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError> SdlGpuRenderDevice::Create(
+    Platform::Sdl::SdlPlatform& platform, const SdlGpuOptions& options) {
     using Result = Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError>;
-
-    auto impl = std::make_unique<Impl>();
-    auto initialized = impl->Initialize(platform, options);
-    if (!initialized) {
-        return Result::Err(std::move(initialized).error());
-    }
-    return Result::Ok(std::unique_ptr<SdlGpuRenderDevice>(
-        new SdlGpuRenderDevice(std::move(impl))));
+    auto impl = std::make_unique<Impl>(); auto initialized = impl->Initialize(platform, options);
+    if (!initialized) return Result::Err(initialized.error());
+    return Result::Ok(std::unique_ptr<SdlGpuRenderDevice>(new SdlGpuRenderDevice(std::move(impl))));
 }
-
-SdlGpuRenderDevice::SdlGpuRenderDevice(std::unique_ptr<Impl> impl) noexcept
-    : impl_(std::move(impl)) {}
-
+SdlGpuRenderDevice::SdlGpuRenderDevice(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
 SdlGpuRenderDevice::~SdlGpuRenderDevice() = default;
-
-Base::Result<MeshHandle, RenderError> SdlGpuRenderDevice::CreateMesh(
-    const MeshView& mesh) {
-    return impl_->CreateMesh(mesh);
-}
-
-Base::Result<TextureHandle, RenderError> SdlGpuRenderDevice::CreateTexture(
-    const ImageView& image) {
-    return impl_->CreateTexture(image);
-}
-
-Base::Result<void, RenderError> SdlGpuRenderDevice::ReleaseMesh(
-    MeshHandle handle) {
-    return impl_->ReleaseMesh(handle);
-}
-
-Base::Result<void, RenderError> SdlGpuRenderDevice::ReleaseTexture(
-    TextureHandle handle) {
-    return impl_->ReleaseTexture(handle);
-}
-
-Base::Result<PresentStatus, RenderError> SdlGpuRenderDevice::Render(
-    const RenderQueue& queue) {
-    return impl_->Render(queue);
-}
-
+RenderDeviceInfo SdlGpuRenderDevice::GetInfo() const { return impl_->info; }
+Base::Result<ShaderHandle, RenderError> SdlGpuRenderDevice::CreateShader(const ShaderArtifact& artifact) { return impl_->CreateShader(artifact); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::ReleaseShader(ShaderHandle handle) { return impl_->ReleaseShader(handle); }
+Base::Result<MeshHandle, RenderError> SdlGpuRenderDevice::CreateMesh(const MeshView& mesh) { return impl_->CreateMesh(mesh); }
+Base::Result<TextureHandle, RenderError> SdlGpuRenderDevice::CreateTexture(const ImageView& image) { return impl_->CreateTexture(image); }
+Base::Result<TextureHandle, RenderError> SdlGpuRenderDevice::CreateTexture(const TextureDesc& description) { return impl_->CreateTexture(description); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::UpdateMeshVertices(MeshHandle handle, std::span<const Vertex3D> vertices) { return impl_->UpdateMeshVertices(handle, vertices); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::ReleaseMesh(MeshHandle handle) { return impl_->ReleaseMesh(handle); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::ReleaseTexture(TextureHandle handle) { return impl_->ReleaseTexture(handle); }
+Base::Result<PipelineHandle, RenderError> SdlGpuRenderDevice::CreatePipeline(const PipelineDesc& description) { return impl_->CreatePipeline(description); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::ReleasePipeline(PipelineHandle handle) { return impl_->ReleasePipeline(handle); }
+Base::Result<std::optional<AcquiredFrame>, RenderError> SdlGpuRenderDevice::AcquireFrame() { return impl_->AcquireFrame(); }
+Base::Result<PresentStatus, RenderError> SdlGpuRenderDevice::SubmitFrame(const AcquiredFrame& frame, const PreparedFrame& prepared) { return impl_->SubmitFrame(frame, prepared); }
+void SdlGpuRenderDevice::AbandonFrame(const AcquiredFrame& frame) noexcept { impl_->AbandonFrame(frame); }
+Base::Result<TextureReadback, RenderError> SdlGpuRenderDevice::ReadTexture(TextureHandle handle) { return impl_->ReadTexture(handle); }
 } // namespace Engine::Render::Backend::SdlGpu

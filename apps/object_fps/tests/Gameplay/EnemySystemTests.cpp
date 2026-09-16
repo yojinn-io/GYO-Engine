@@ -959,9 +959,47 @@ void TestPlayerBlockingAndEnemyOverlap(TestContext& context) {
         "enemies ignore one another and may overlap on a shared path");
 }
 
+void TestElevatedEnemyTargets(TestContext& context) {
+    const GridMap map = ParseValidMap(context, "P....D");
+    const Float2 position = map.GetSpawnPosition();
+    std::string error;
+    EnemyDefinition melee = MakeDefinition("short_melee", EnemyKind::Melee);
+    melee.hitboxHeight = 0.4f;
+    const auto makeMelee = [&]() {
+        EnemySystem system;
+        context.Expect(system.Initialize(map, position, 0.25f, 1.0f, {}, error),
+                       "vertical melee test initializes");
+        context.Expect(system.Spawn(map, position, 0.25f, {1.0f, 0.5f}, melee, error).Spawned(),
+                       "vertical melee fixture spawns outside player circle");
+        return system;
+    };
+    EnemySystem grounded = makeMelee();
+    EnemySystem jumping = makeMelee();
+    const EnemyTarget ground{position, 0.25f, 1.8f, 0.0f};
+    const EnemyTarget air{position, 0.25f, 1.8f, 0.6f};
+    grounded.Update(map, ground, 0.01f);
+    jumping.Update(map, ground, 0.01f);
+    grounded.Update(map, ground, 0.15f);
+    jumping.Update(map, air, 0.15f);
+    context.Expect(grounded.GetAttackEvents().size() == 1 && jumping.GetAttackEvents().empty(),
+                   "melee event rechecks vertical overlap when player jumps during windup");
+    EnemySystem ranged;
+    context.Expect(ranged.Initialize(map, position, 0.25f, 1.0f, {}, error),
+                   "elevated ranged-target test initializes");
+    context.Expect(ranged.Spawn(map, position, 0.25f, {4.5f, 0.5f},
+                       MakeDefinition("ranged_height", EnemyKind::Ranged), error).Spawned(),
+                   "elevated ranged-target fixture spawns");
+    ranged.Update(map, air, 0.01f);
+    ranged.Update(map, air, 0.10f);
+    const auto events = ranged.GetAttackEvents();
+    context.Expect(events.size() == 1 && NearlyEqual(events[0].target.y, 1.5f),
+                   "ranged attack aims at feet Y plus half capsule height");
+}
+
 } // namespace
 
 void RunEnemySystemTests(TestContext& context) {
+    TestElevatedEnemyTargets(context);
     TestSettingsValidation(context);
     TestInitializationSnapshotsAndDeath(context);
     TestDataDrivenSpawnDamageFlashAndRetire(context);

@@ -1,0 +1,5 @@
+add_library(gyo_asset_ufbx STATIC src/UfbxModelLoader.cpp)
+add_library(GYO::AssetUfbx ALIAS gyo_asset_ufbx)
+target_include_directories(gyo_asset_ufbx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(gyo_asset_ufbx PUBLIC GYO::Model PRIVATE gyo_ufbx)
+target_compile_features(gyo_asset_ufbx PUBLIC cxx_std_20)

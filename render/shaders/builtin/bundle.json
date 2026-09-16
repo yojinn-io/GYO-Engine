@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "include_directory": "../common",
+  "programs": [
+    {"id": "builtin/unlit", "interface": "unlit", "vertex": "unlit.vert.hlsl", "vertex_entrypoint": "main", "fragment": "unlit.frag.hlsl", "fragment_entrypoint": "main"},
+    {"id": "builtin/scene_post", "interface": "scene_post", "vertex": "scene_post.vert.hlsl", "vertex_entrypoint": "main", "fragment": "scene_post.frag.hlsl", "fragment_entrypoint": "main"}
+  ]
+}

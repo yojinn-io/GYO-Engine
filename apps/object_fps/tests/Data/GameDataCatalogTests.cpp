@@ -28,8 +28,8 @@ constexpr std::string_view kValidEnemyAnimations =
     "ranged_basic,dead,0,2730,4,0.1,,,\n";
 
 constexpr std::string_view kValidWeapons =
-    "weapon_id,damage,magazine_size,reserve_ammo,recoil,automatic,fire_interval_seconds,reload_seconds,texture_asset_id\n"
-    "starter_pistol,25,12,48,1.5,false,0.2,1.5,object_fps.texture.weapon.starter_pistol\n";
+    "weapon_id,damage,magazine_size,reserve_ammo,recoil,automatic,fire_interval_seconds,reload_seconds,draw_seconds,hide_seconds,presentation_asset_id\n"
+    "starter_pistol,25,12,48,1.5,false,0.3333333333,3.7333333333,0.8333333333,0.3666666667,object_fps.weapon.mark23\n";
 
 [[nodiscard]] std::string MakeLevels(const std::size_t count) {
     std::ostringstream csv;
@@ -118,9 +118,9 @@ void TestCatalogValuesAndAssetIds(TestContext& context) {
     const WeaponDefinition* weapon = catalog.weapons.GetDefaultWeapon();
     context.Expect(
         weapon != nullptr &&
-            weapon->textureAssetId == Engine::Asset::AssetId::FromString(
-                "object_fps.texture.weapon.starter_pistol"),
-        "weapon definitions retain opaque texture IDs");
+            weapon->presentationAssetId == Engine::Asset::AssetId::FromString(
+                "object_fps.weapon.mark23"),
+        "weapon definitions retain opaque presentation IDs");
     const auto levels = catalog.levels.GetDefinitions();
     context.Expect(
         levels.size() == 2 && levels[0].id == "room_0" && levels[1].id == "room_1",
@@ -154,7 +154,7 @@ void TestVariableCampaignCardinality(TestContext& context) {
 void TestAssetIdValidation(TestContext& context) {
     const std::string pathLike = ReplaceOnce(
         kValidWeapons,
-        "object_fps.texture.weapon.starter_pistol",
+        "object_fps.weapon.mark23",
         "../gun.png");
     ExpectRejected(
         context,
@@ -216,9 +216,27 @@ void TestScalarAndAnimationValidation(TestContext& context) {
         "each enemy requires every runtime animation state");
 }
 
+void TestWeaponActionTimingData(TestContext& context) {
+    const auto parsed = ParseWith(MakeLevels(1));
+    if (!parsed.catalog) return;
+    const auto* weapon = parsed.catalog->weapons.GetDefaultWeapon();
+    context.Expect(weapon && NearlyEqual(weapon->fireIntervalSeconds, 10.0f / 30.0f) &&
+                       NearlyEqual(weapon->reloadSeconds, 112.0f / 30.0f) &&
+                       NearlyEqual(weapon->drawSeconds, 25.0f / 30.0f) &&
+                       NearlyEqual(weapon->hideSeconds, 11.0f / 30.0f),
+                   "weapon catalog retains native mark23 action durations");
+    const auto zeroDraw = ReplaceOnce(kValidWeapons, ",0.8333333333,", ",0,");
+    ExpectRejected(context, ParseWith(kValidEnemies, kValidEnemyAnimations, zeroDraw, MakeLevels(1)),
+                   "draw_seconds", "zero draw duration is rejected by catalog validation");
+    const auto invalidHide = ReplaceOnce(kValidWeapons, ",0.3666666667,", ",nan,");
+    ExpectRejected(context, ParseWith(kValidEnemies, kValidEnemyAnimations, invalidHide, MakeLevels(1)),
+                   "hide_seconds", "non-finite hide duration is rejected by catalog validation");
+}
+
 } // namespace
 
 void RunGameDataCatalogTests(TestContext& context) {
+    TestWeaponActionTimingData(context);
     TestCsvSyntax(context);
     TestCatalogValuesAndAssetIds(context);
     TestVariableCampaignCardinality(context);

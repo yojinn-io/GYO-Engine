@@ -23,7 +23,7 @@ TEST_CASE("RenderQueue stores neutral mesh and sprite submissions in order") {
 
     MeshSubmission first{};
     first.mesh = MeshHandle::FromParts(4, 2);
-    first.tint.red = 0.25F;
+    first.material.tint.red = 0.25F;
     MeshSubmission second{};
     second.mesh = MeshHandle::FromParts(7, 3);
     second.surface = SurfaceMode::AlphaMasked;
@@ -102,6 +102,7 @@ TEST_CASE("RenderQueue rejects invalid handles and non-finite presentation data"
     CHECK_FALSE(queue.Submit(mesh));
 
     mesh.mesh = MeshHandle::FromParts(0, 1);
+    queue.SetCamera(PerspectiveCamera3D{});
     mesh.transform.translation.x = std::numeric_limits<float>::infinity();
     CHECK_FALSE(queue.Submit(mesh));
 
@@ -110,10 +111,10 @@ TEST_CASE("RenderQueue rejects invalid handles and non-finite presentation data"
     CHECK_FALSE(queue.Submit(sprite));
 
     sprite.destinationPixels.width = 10.0F;
-    sprite.tint.alpha = std::numeric_limits<float>::quiet_NaN();
+    sprite.material.tint.alpha = std::numeric_limits<float>::quiet_NaN();
     CHECK_FALSE(queue.Submit(sprite));
 
-    sprite.tint.alpha = 1.0F;
+    sprite.material.tint.alpha = 1.0F;
     sprite.layer = static_cast<CompositeLayer>(255);
     CHECK_FALSE(queue.Submit(sprite));
 }
@@ -121,6 +122,7 @@ TEST_CASE("RenderQueue rejects invalid handles and non-finite presentation data"
 TEST_CASE("RenderQueue reset clears per-frame state without changing capacity semantics") {
     RenderQueue queue;
     queue.SetCamera(PerspectiveCamera3D{});
+    queue.SetViewModelCamera(PerspectiveCamera3D{});
     SpriteSubmission sprite{};
     sprite.destinationPixels = {0.0F, 0.0F, 1.0F, 1.0F};
     REQUIRE(queue.Submit(sprite));
@@ -131,11 +133,85 @@ TEST_CASE("RenderQueue reset clears per-frame state without changing capacity se
     });
 
     CHECK_FALSE(queue.Camera().has_value());
+    CHECK_FALSE(queue.ViewModelCamera().has_value());
     CHECK(queue.Meshes().empty());
     CHECK(queue.Sprites().empty());
     CHECK(queue.Frame().clearColor.red == doctest::Approx(1.0F));
     CHECK(queue.Frame().sceneColorTransform.exposureEv == doctest::Approx(1.25F));
     CHECK(queue.Frame().sceneColorTransform.gammaAdjustment == doctest::Approx(1.1F));
+}
+
+TEST_CASE("Mesh layers require independent valid cameras and retain layer identity") {
+    RenderQueue queue;
+    MeshSubmission world;
+    world.mesh = MeshHandle::FromParts(1, 1);
+    MeshSubmission viewModel = world;
+    viewModel.layer = MeshLayer::ViewModel;
+
+    CHECK(world.layer == MeshLayer::World);
+    CHECK_FALSE(queue.Submit(world));
+    CHECK_FALSE(queue.Submit(viewModel));
+    CHECK(queue.Meshes().empty());
+
+    PerspectiveCamera3D viewModelCamera;
+    viewModelCamera.verticalFieldOfViewRadians = 0.9F;
+    queue.SetViewModelCamera(viewModelCamera);
+    REQUIRE(queue.Submit(viewModel));
+    CHECK_FALSE(queue.Submit(world));
+    queue.SetCamera(PerspectiveCamera3D{});
+    REQUIRE(queue.Submit(world));
+    CHECK(queue.Meshes()[0].layer == MeshLayer::ViewModel);
+    CHECK(queue.Meshes()[1].layer == MeshLayer::World);
+    CHECK(queue.ViewModelCamera()->verticalFieldOfViewRadians == doctest::Approx(0.9F));
+    CHECK(queue.Camera()->verticalFieldOfViewRadians != doctest::Approx(0.9F));
+
+    queue.ClearViewModelCamera();
+    CHECK_FALSE(queue.Submit(viewModel));
+    CHECK(queue.Camera().has_value());
+    queue.SetViewModelCamera(viewModelCamera);
+    queue.ClearCamera();
+    CHECK_FALSE(queue.Submit(world));
+    REQUIRE(queue.Submit(viewModel));
+
+    MeshSubmission invalid = viewModel;
+    invalid.layer = static_cast<MeshLayer>(255);
+    CHECK_FALSE(queue.Submit(invalid));
+}
+
+TEST_CASE("Mesh submission validates the selected camera projection and finite pose") {
+    RenderQueue queue;
+    MeshSubmission mesh;
+    mesh.mesh = MeshHandle::FromParts(1, 1);
+    for (const MeshLayer layer : {MeshLayer::World, MeshLayer::ViewModel}) {
+        mesh.layer = layer;
+        const auto setCamera = [&](const PerspectiveCamera3D& camera) {
+            if (layer == MeshLayer::World) queue.SetCamera(camera);
+            else queue.SetViewModelCamera(camera);
+        };
+        PerspectiveCamera3D camera;
+        camera.nearClip = 0.0F;
+        setCamera(camera);
+        CHECK_FALSE(queue.Submit(mesh));
+        camera = {};
+        camera.farClip = camera.nearClip;
+        setCamera(camera);
+        CHECK_FALSE(queue.Submit(mesh));
+        camera = {};
+        camera.verticalFieldOfViewRadians = 4.0F;
+        setCamera(camera);
+        CHECK_FALSE(queue.Submit(mesh));
+        camera = {};
+        camera.position.y = std::numeric_limits<float>::quiet_NaN();
+        setCamera(camera);
+        CHECK_FALSE(queue.Submit(mesh));
+        camera = {};
+        camera.rotationRadians.x = std::numeric_limits<float>::infinity();
+        setCamera(camera);
+        CHECK_FALSE(queue.Submit(mesh));
+        setCamera({});
+        REQUIRE(queue.Submit(mesh));
+    }
+    CHECK(queue.Meshes().size() == 2);
 }
 
 TEST_CASE("Scene color transform defaults are identity") {
@@ -152,6 +228,18 @@ TEST_CASE("Resource handles carry type-safe index and generation values") {
     CHECK(mesh.Generation() == 8);
     CHECK_FALSE(MeshHandle{}.IsValid());
     CHECK(texture.Index() == mesh.Index());
+}
+
+TEST_CASE("Material shader IDs and raster states reject empty or unsupported values") {
+    RenderQueue queue; queue.SetCamera({});
+    MeshSubmission mesh; mesh.mesh = MeshHandle::FromParts(1,1);
+    mesh.material.shader.clear(); CHECK_FALSE(queue.Submit(mesh));
+    mesh.material.shader = "builtin/unlit";
+    mesh.surface = static_cast<SurfaceMode>(255); CHECK_FALSE(queue.Submit(mesh));
+    mesh.surface = SurfaceMode::Opaque;
+    mesh.material.sampler = static_cast<SamplerMode>(255); CHECK_FALSE(queue.Submit(mesh));
+    SpriteSubmission sprite; sprite.material.sampler = static_cast<SamplerMode>(255);
+    CHECK_FALSE(queue.Submit(sprite));
 }
 
 } // namespace

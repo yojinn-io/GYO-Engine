@@ -1,6 +1,7 @@
 #include "render/RenderQueue.hpp"
 
 #include <cmath>
+#include <numbers>
 #include <string>
 #include <string_view>
 
@@ -38,6 +39,15 @@ namespace {
            IsFinite(transform.scale);
 }
 
+[[nodiscard]] bool IsValid(const PerspectiveCamera3D& camera) noexcept {
+    return IsFinite(camera.position) && IsFinite(camera.rotationRadians) &&
+           IsFinite(camera.verticalFieldOfViewRadians) &&
+           camera.verticalFieldOfViewRadians > 0.0F &&
+           camera.verticalFieldOfViewRadians < std::numbers::pi_v<float> &&
+           IsFinite(camera.nearClip) && camera.nearClip > 0.0F &&
+           IsFinite(camera.farClip) && camera.farClip > camera.nearClip;
+}
+
 } // namespace
 
 RenderQueue::RenderQueue(const FrameDescription& frame)
@@ -46,6 +56,7 @@ RenderQueue::RenderQueue(const FrameDescription& frame)
 void RenderQueue::Reset(const FrameDescription& frame) {
     frame_ = frame;
     camera_.reset();
+    viewModelCamera_.reset();
     meshes_.clear();
     sprites_.clear();
 }
@@ -58,6 +69,14 @@ void RenderQueue::ClearCamera() noexcept {
     camera_.reset();
 }
 
+void RenderQueue::SetViewModelCamera(const PerspectiveCamera3D& camera) {
+    viewModelCamera_ = camera;
+}
+
+void RenderQueue::ClearViewModelCamera() noexcept {
+    viewModelCamera_.reset();
+}
+
 Base::Result<void, RenderError> RenderQueue::Submit(
     const MeshSubmission& submission) {
     using Result = Base::Result<void, RenderError>;
@@ -65,11 +84,26 @@ Base::Result<void, RenderError> RenderQueue::Submit(
     if (!submission.mesh) {
         return Result::Err(Invalid("RenderQueue: mesh submission requires a valid mesh handle"));
     }
-    if (!IsValid(submission.transform) || !IsFinite(submission.tint) ||
+    if (submission.layer != MeshLayer::World &&
+        submission.layer != MeshLayer::ViewModel) {
+        return Result::Err(Invalid("RenderQueue: mesh layer is invalid"));
+    }
+    const auto& camera = submission.layer == MeshLayer::ViewModel
+        ? viewModelCamera_ : camera_;
+    if (!camera || !IsValid(*camera)) {
+        return Result::Err(Invalid(
+            "RenderQueue: mesh submission requires a valid camera for its layer"));
+    }
+    if (!IsValid(submission.transform) || !IsFinite(submission.material.tint) ||
         !IsFinite(submission.uv.scale) || !IsFinite(submission.uv.offset)) {
         return Result::Err(Invalid("RenderQueue: mesh submission contains non-finite values"));
     }
 
+    if (submission.material.shader.empty()) return Result::Err(Invalid("RenderQueue: shader ID is empty"));
+    if (submission.surface != SurfaceMode::Opaque && submission.surface != SurfaceMode::AlphaMasked && submission.surface != SurfaceMode::Sky)
+        return Result::Err(Invalid("RenderQueue: mesh surface mode is invalid"));
+    if (submission.material.sampler != SamplerMode::LinearClamp && submission.material.sampler != SamplerMode::LinearWrap)
+        return Result::Err(Invalid("RenderQueue: material sampler is invalid"));
     meshes_.push_back(submission);
     return Result::Ok();
 }
@@ -80,7 +114,7 @@ Base::Result<void, RenderError> RenderQueue::Submit(
 
     if (!IsFinite(submission.destinationPixels) || !IsFinite(submission.sourceUv) ||
         !IsFinite(submission.pivotNormalized) ||
-        !IsFinite(submission.rotationRadians) || !IsFinite(submission.tint)) {
+        !IsFinite(submission.rotationRadians) || !IsFinite(submission.material.tint)) {
         return Result::Err(Invalid("RenderQueue: sprite submission contains non-finite values"));
     }
     if (submission.destinationPixels.width < 0.0F ||
@@ -93,6 +127,9 @@ Base::Result<void, RenderError> RenderQueue::Submit(
         return Result::Err(Invalid("RenderQueue: sprite composite layer is invalid"));
     }
 
+    if (submission.material.shader.empty()) return Result::Err(Invalid("RenderQueue: shader ID is empty"));
+    if (submission.material.sampler != SamplerMode::LinearClamp && submission.material.sampler != SamplerMode::LinearWrap)
+        return Result::Err(Invalid("RenderQueue: material sampler is invalid"));
     sprites_.push_back(submission);
     return Result::Ok();
 }
@@ -103,6 +140,10 @@ const FrameDescription& RenderQueue::Frame() const noexcept {
 
 const std::optional<PerspectiveCamera3D>& RenderQueue::Camera() const noexcept {
     return camera_;
+}
+
+const std::optional<PerspectiveCamera3D>& RenderQueue::ViewModelCamera() const noexcept {
+    return viewModelCamera_;
 }
 
 std::span<const MeshSubmission> RenderQueue::Meshes() const noexcept {

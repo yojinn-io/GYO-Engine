@@ -16,7 +16,11 @@
     { "id": "object_fps.texture.enemy.blood_dog", "type": "texture", "path": "textures/enemies/blood_dog_sheet_full.png" },
     { "id": "object_fps.texture.enemy.spitter", "type": "texture", "path": "textures/enemies/spitter_sheet_full.png" },
     { "id": "object_fps.texture.sky.default", "type": "texture", "path": "textures/sky/sky_sphere.png" },
-    { "id": "object_fps.texture.weapon.starter_pistol", "type": "texture", "path": "textures/weapons/gun.png" },
+    { "id": "object_fps.weapon.mark23", "type": "text", "path": "data/mark23_viewmodel.json" },
+    { "id": "object_fps.model.mark23", "type": "model", "path": "model/mark-23/source/Mark23.fbx" },
+    { "id": "object_fps.texture.mark23.hand", "type": "texture", "path": "model/mark-23/textures/Hand_D.png" },
+    { "id": "object_fps.texture.mark23.glove", "type": "texture", "path": "model/mark-23/textures/Glove_D.png" },
+    { "id": "object_fps.texture.mark23.gun", "type": "texture", "path": "model/mark-23/textures/Mark23_D.png" },
     { "id": "object_fps.texture.world.floor", "type": "texture", "path": "textures/world/map_floor.png" },
     { "id": "object_fps.texture.world.wall", "type": "texture", "path": "textures/world/map_wall.png" }
   ]

@@ -53,6 +53,27 @@ namespace Engine::Asset {
     }
 
     Base::Result<void, AssetError>
+    AssetCatalog::AppendFromFile(std::string_view catalogJsonPath,
+                                Catalog::CatalogParser& parser,
+                                const Resolver::AssetPathResolver& resolver) {
+        AssetCatalog pending;
+        auto loaded = pending.LoadFromFile(catalogJsonPath, parser, resolver);
+        if (!loaded) return loaded;
+        for (const auto& [id, entry] : pending.map_) {
+            if (map_.contains(id)) {
+                return Base::Result<void, AssetError>::Err(AssetError::Make(
+                    AssetErrorCode::InvalidCatalogEntry,
+                    "AssetCatalog: duplicated id across catalogs", id.debugName));
+            }
+        }
+        // Reserve before transferring nodes; rehashing preserves references to
+        // existing elements. Parse/path/duplicate errors never mutate map_.
+        map_.reserve(map_.size() + pending.map_.size());
+        map_.merge(pending.map_);
+        return Base::Result<void, AssetError>::Ok();
+    }
+
+    Base::Result<void, AssetError>
     AssetCatalog::BuildFromRaw_(const std::vector<Catalog::RawCatalogEntry>& raw,
                                 const Resolver::AssetPathResolver& resolver) {
         for (const auto& r : raw) {

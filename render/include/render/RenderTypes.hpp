@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 
 #include "render/RenderHandle.hpp"
 
@@ -102,6 +103,13 @@ struct UvTransform final {
     Float2 offset{};
 };
 
+// ViewModel meshes use their own camera and a fresh depth buffer after the
+// world and Scene sprites, before the scene color transform and Overlay UI.
+enum class MeshLayer {
+    World,
+    ViewModel,
+};
+
 // Sprite source rectangles use normalized texture coordinates with (x, y) at
 // the visual top-left. The shared XY quad reaches the top of screen space from
 // its v=1 vertices, so its V coordinate must be inverted inside that rectangle.
@@ -115,26 +123,30 @@ struct UvTransform final {
     };
 }
 
+struct MaterialDesc final {
+    std::string shader{"builtin/unlit"};
+    TextureHandle texture{}; // invalid selects the renderer's white texture
+    Color tint{};
+    SamplerMode sampler{SamplerMode::LinearClamp};
+};
+
 struct MeshSubmission final {
     MeshHandle mesh{};
-    TextureHandle texture{}; // invalid selects the backend's white texture
+    MaterialDesc material{};
     Transform3D transform{};
-    Color tint{};
     UvTransform uv{};
     SurfaceMode surface{SurfaceMode::Opaque};
-    SamplerMode sampler{SamplerMode::LinearClamp};
     bool doubleSided{};
+    MeshLayer layer{MeshLayer::World};
 };
 
 struct SpriteSubmission final {
-    TextureHandle texture{}; // invalid selects the backend's white texture
+    MaterialDesc material{};
     Rect destinationPixels{};
     // Normalized texture rectangle whose origin is the visual top-left.
     Rect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
     Float2 pivotNormalized{};
     float rotationRadians{};
-    Color tint{};
-    SamplerMode sampler{SamplerMode::LinearClamp};
     CompositeLayer layer{CompositeLayer::Overlay};
 };
 

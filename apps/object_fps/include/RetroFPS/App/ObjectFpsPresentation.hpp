@@ -17,6 +17,8 @@ class AssetManager;
 
 namespace Engine::Render {
 class IRenderDevice;
+class Renderer;
+class RenderQueue;
 }
 
 namespace Engine::Text {
@@ -30,6 +32,8 @@ struct ObjectFpsPresentationConfig final {
         Engine::Asset::AssetId::FromString("object_fps.texture.world.floor")};
     Engine::Asset::AssetId wallTexture{
         Engine::Asset::AssetId::FromString("object_fps.texture.world.wall")};
+    Engine::Asset::AssetId doorTexture{
+        Engine::Asset::AssetId::FromString("common.texture.white")};
     Engine::Asset::AssetId skyTexture{
         Engine::Asset::AssetId::FromString("object_fps.texture.sky.default")};
     WorldSettings world{};
@@ -52,6 +56,7 @@ public:
 
     [[nodiscard]] bool Initialize(
         Engine::Render::IRenderDevice& renderDevice,
+        Engine::Render::Renderer& renderer,
         Engine::Text::ITextRasterizer& textRasterizer,
         Engine::Asset::AssetManager& assets,
         std::shared_ptr<const CampaignContent> content,
@@ -63,6 +68,15 @@ public:
         const ObjectFpsDisplaySettings& displaySettings,
         const Engine::Ui::UiDrawList& uiDrawList,
         std::string& error);
+
+    // Prepare the CPU submission independently of frame execution, also used
+    // by deterministic headless conformance tests and capture diagnostics.
+    [[nodiscard]] bool PrepareFrame(
+        const GameSessionSnapshot& snapshot,
+        const ObjectFpsDisplaySettings& displaySettings,
+        const Engine::Ui::UiDrawList& uiDrawList,
+        std::string& error);
+    [[nodiscard]] const Engine::Render::RenderQueue& PreparedQueue() const noexcept;
 
     [[nodiscard]] bool IsInitialized() const noexcept;
     [[nodiscard]] std::size_t LastVisibleSubmissionCount() const noexcept;

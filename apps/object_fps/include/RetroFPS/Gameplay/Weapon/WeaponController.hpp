@@ -12,6 +12,7 @@ struct WeaponControlInput final {
     bool fireHeld{};
     bool firePressed{};
     bool reloadPressed{};
+    bool holsterTogglePressed{};
 };
 
 [[nodiscard]] bool ValidateWeaponControllerSettings(
@@ -40,6 +41,11 @@ public:
     [[nodiscard]] std::span<const ShotEvent> GetShotEvents() const noexcept {
         return shotEvents_;
     }
+    [[nodiscard]] std::span<const WeaponActionEvent> GetActionEvents() const noexcept {
+        return actionEvents_;
+    }
+    [[nodiscard]] WeaponPresentationSnapshot MakePresentationSnapshot(
+        const WeaponState& state) const;
     [[nodiscard]] WeaponHudSnapshot MakeHudSnapshot(
         const WeaponState& state) const;
     [[nodiscard]] const WeaponDefinition& GetDefinition() const noexcept {
@@ -51,10 +57,13 @@ public:
     [[nodiscard]] bool IsConfigured() const noexcept { return configured_; }
 
 private:
+    void BeginAction(WeaponState& state, WeaponAction action);
+    [[nodiscard]] float ActionDuration(WeaponAction action) const noexcept;
     WeaponDefinition definition_{};
     WeaponControllerSettings settings_{};
     bool configured_ = false;
     std::vector<ShotEvent> shotEvents_;
+    std::vector<WeaponActionEvent> actionEvents_;
 };
 
 } // namespace fps

@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <span>
 #include <string>
@@ -32,6 +33,7 @@ struct GameSessionConfig final {
     ProjectileSettings projectiles{};
     float fadeOutSeconds{0.4F};
     float fadeInSeconds{0.4F};
+    float worldVerticalFovRadians{std::numbers::pi_v<float> / 3.0F};
 };
 
 // Semantic game input. Physical bindings belong to the app's GYO
@@ -47,6 +49,10 @@ struct GameFrameInput final {
     bool reloadPressed{};
     bool backPressed{};
     bool focusLost{};
+    bool jumpPressed{};
+    bool jumpHeld{};
+    bool holsterTogglePressed{};
+    bool holsterToggleHeld{};
 };
 
 struct StartCampaignCommand final {};
@@ -117,7 +123,9 @@ using GameSessionEventPayload = std::variant<
     PlayerDamagedEvent,
     CampaignFinishedEvent,
     QuitRequestedEvent,
-    CommandRejectedEvent>;
+    CommandRejectedEvent,
+    ShotEvent,
+    WeaponActionEvent>;
 
 struct GameSessionEvent final {
     std::uint64_t sequence{};
@@ -148,6 +156,10 @@ struct PlayerSnapshot final {
     float pitchRadians{};
     float health{};
     float maximumHealth{};
+    float feetY{};
+    float verticalVelocity{};
+    bool grounded{true};
+    float bodyHeight{};
 };
 
 struct GameSessionSnapshot final {
@@ -157,11 +169,13 @@ struct GameSessionSnapshot final {
     std::optional<ActiveStageSnapshot> activeStage;
     std::optional<PlayerSnapshot> player;
     WeaponHudSnapshot weapon;
+    WeaponPresentationSnapshot weaponPresentation;
     std::vector<EnemySnapshot> enemies;
     std::vector<ProjectileSnapshot> projectiles;
     CampaignOutcome campaignOutcome{CampaignOutcome::InProgress};
     std::vector<CampaignRoomStats> campaignRooms;
     bool quitRequested{};
+    float worldVerticalFovRadians{std::numbers::pi_v<float> / 3.0F};
 };
 
 class GameSession final {

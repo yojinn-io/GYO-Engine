@@ -1,4 +1,5 @@
 #include "RetroFPS/App/CampaignContentLoader.hpp"
+#include "RetroFPS/App/WeaponPresentationDefinition.hpp"
 
 #include "RetroFPS/Data/GameData.hpp"
 #include "RetroFPS/World/GridMapLoader.hpp"
@@ -103,7 +104,17 @@ CampaignContentBuildResult CampaignContentLoader::Load(
         maps.push_back(std::move(*map.map));
     }
 
-    return CampaignContent::Build(std::move(*data.catalog), std::move(maps));
+    WeaponShotGeometryMap shotGeometry;
+    for (const WeaponDefinition& weapon : data.catalog->weapons.GetDefinitions()) {
+        const auto presentation = LoadWeaponPresentationDefinition(
+            assets, weapon.presentationAssetId, error);
+        if (!presentation) {
+            return {std::nullopt, "failed to load weapon '" + weapon.id + "': " + error};
+        }
+        shotGeometry.emplace(weapon.id, presentation->shotGeometry);
+    }
+    return CampaignContent::Build(
+        std::move(*data.catalog), std::move(maps), std::move(shotGeometry));
 }
 
 } // namespace fps

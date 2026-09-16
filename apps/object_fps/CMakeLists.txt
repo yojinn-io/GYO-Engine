@@ -38,7 +38,7 @@ add_library(object_fps_domain STATIC
 add_library(ObjectFPS::Domain ALIAS object_fps_domain)
 target_include_directories(object_fps_domain PUBLIC "${OBJECT_FPS_INCLUDE_DIR}")
 if(TARGET GYO::Engine)
-    target_link_libraries(object_fps_domain PUBLIC GYO::Engine GYO::Ui)
+    target_link_libraries(object_fps_domain PUBLIC GYO::Engine GYO::Ui GYO::Collision)
 else()
     target_include_directories(
         object_fps_domain
@@ -50,6 +50,8 @@ if(TARGET GYO::Engine)
     add_library(object_fps_app_support STATIC
         src/App/CampaignContentLoader.cpp
         src/App/ObjectFpsPresentation.cpp
+        src/App/WeaponViewModel.cpp
+        src/App/WeaponPresentationDefinition.cpp
         src/App/ObjectFpsRuntimeClient.cpp
     )
     add_library(ObjectFPS::AppSupport ALIAS object_fps_app_support)
@@ -59,14 +61,14 @@ if(TARGET GYO::Engine)
     )
     target_link_libraries(
         object_fps_app_support
-        PUBLIC ObjectFPS::Domain GYO::Engine
+        PUBLIC ObjectFPS::Domain GYO::Engine GYO::Model GYO::Render
         PRIVATE
             GYO::Input
             GYO::InputBackendSDL
             GYO::PlatformSDL
-            GYO::Render
             GYO::Text
             GYO::UiRenderer
+            nlohmann_json::nlohmann_json
     )
     target_compile_features(object_fps_app_support PUBLIC cxx_std_20)
     set_target_properties(object_fps_app_support PROPERTIES CXX_EXTENSIONS OFF)
@@ -81,12 +83,13 @@ if(TARGET GYO::Engine)
     if(TARGET GYO::AssetSdlImage AND
        TARGET GYO::RenderBackendSDLGPU AND
        TARGET GYO::TextBackendSDLTTF)
-        add_executable(gyo_object_fps main.cpp)
+        add_executable(gyo_object_fps main.cpp diagnostics/MuzzleProbe.cpp)
         target_link_libraries(
             gyo_object_fps
             PRIVATE
                 ObjectFPS::AppSupport
                 GYO::AssetSdlImage
+                GYO::AssetUfbx
                 GYO::InputBackendSDL
                 GYO::PlatformSDL
                 GYO::RenderBackendSDLGPU
@@ -96,19 +99,49 @@ if(TARGET GYO::Engine)
         target_compile_definitions(
             gyo_object_fps
             PRIVATE
-                OBJECT_FPS_ASSET_ROOT="${OBJECT_FPS_ASSET_ROOT}"
+                GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}"
                 NOMINMAX
         )
         set_target_properties(gyo_object_fps PROPERTIES CXX_EXTENSIONS OFF)
 
-        add_custom_command(TARGET gyo_object_fps POST_BUILD
+        include("${PROJECT_SOURCE_DIR}/cmake/GyoShaders.cmake")
+        gyo_add_shader_bundle(gyo_object_fps_shaders
+            SPEC "${CMAKE_CURRENT_SOURCE_DIR}/shaders/bundle.json"
+            OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/shaders/object_fps")
+
+        # Stage content on every game build, including JSON/texture-only edits.
+        # CMP0112 NEW keeps TARGET_FILE_DIR from creating the inverse target
+        # dependency; gyo_object_fps can safely depend on this staging target.
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0112 NEW)
+        add_custom_target(object_fps_assets
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:gyo_object_fps>/assets"
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${OBJECT_FPS_ASSET_ROOT}"
                 "$<TARGET_FILE_DIR:gyo_object_fps>/assets/object_fps"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${OBJECT_FPS_ASSET_ROOT}/../common"
+                "$<TARGET_FILE_DIR:gyo_object_fps>/assets/common"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${PROJECT_BINARY_DIR}/shaders/builtin"
+                "$<TARGET_FILE_DIR:gyo_object_fps>/shaders/builtin"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${gyo_object_fps_shaders_DIRECTORY}"
+                "$<TARGET_FILE_DIR:gyo_object_fps>/shaders/object_fps"
+            DEPENDS gyo_builtin_shaders gyo_object_fps_shaders
+            COMMENT "Staging Object_FPS, common assets and compiled shader bundles"
+            VERBATIM
         )
+        cmake_policy(POP)
+        add_dependencies(gyo_object_fps object_fps_assets)
         gyo_copy_runtime_dlls(gyo_object_fps)
+
+        install(TARGETS gyo_object_fps RUNTIME DESTINATION bin)
+        install(DIRECTORY "${OBJECT_FPS_ASSET_ROOT}" "${OBJECT_FPS_ASSET_ROOT}/../common"
+            DESTINATION bin/assets)
+        install(DIRECTORY "${PROJECT_BINARY_DIR}/shaders/builtin/" DESTINATION bin/shaders/builtin)
+        install(DIRECTORY "${gyo_object_fps_shaders_DIRECTORY}/" DESTINATION bin/shaders/object_fps)
 
         if(MSVC)
             target_compile_options(gyo_object_fps PRIVATE /W4 /permissive- /utf-8)
@@ -124,6 +157,23 @@ if(TARGET GYO::Engine)
                 COMMAND gyo_object_fps --menu-smoke-test
             )
             set_tests_properties(object_fps.menu_smoke PROPERTIES TIMEOUT 30)
+            add_test(NAME object_fps.viewmodel_smoke COMMAND gyo_object_fps --viewmodel-smoke-test)
+            set_tests_properties(object_fps.viewmodel_smoke PROPERTIES TIMEOUT 30)
+            add_test(NAME object_fps.reload_smoke COMMAND gyo_object_fps --reload-smoke-test)
+            set_tests_properties(object_fps.reload_smoke PROPERTIES TIMEOUT 60)
+            add_test(NAME object_fps.muzzle_smoke COMMAND gyo_object_fps --muzzle-smoke-test)
+            add_test(NAME object_fps.muzzle_smoke_4x3 COMMAND gyo_object_fps --muzzle-smoke-test --preview-4x3)
+            add_test(NAME object_fps.muzzle_smoke_21x9 COMMAND gyo_object_fps --muzzle-smoke-test --preview-21x9)
+            set_tests_properties(object_fps.muzzle_smoke object_fps.muzzle_smoke_4x3
+                object_fps.muzzle_smoke_21x9 PROPERTIES TIMEOUT 60)
+            add_test(NAME object_fps.shader_smoke COMMAND gyo_object_fps --shader-smoke-test)
+            set_tests_properties(object_fps.smoke object_fps.menu_smoke
+                object_fps.viewmodel_smoke object_fps.reload_smoke object_fps.muzzle_smoke
+                object_fps.muzzle_smoke_4x3 object_fps.muzzle_smoke_21x9 object_fps.shader_smoke
+                PROPERTIES LABELS gpu RUN_SERIAL TRUE)
+            add_test(NAME object_fps.package COMMAND gyo_object_fps --validate-package)
+            set_tests_properties(object_fps.package PROPERTIES LABELS "cpu;shader" TIMEOUT 60
+                WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
         endif()
     endif()
 endif()
@@ -161,13 +211,20 @@ if(BUILD_TESTING)
     target_link_libraries(object_fps_headless_tests PRIVATE ObjectFPS::Domain)
     target_sources(object_fps_headless_tests PRIVATE
         src/App/ObjectFpsPresentation.cpp
+        src/App/WeaponViewModel.cpp
+        src/App/WeaponPresentationDefinition.cpp
+        src/App/CampaignContentLoader.cpp
     )
     target_link_libraries(object_fps_headless_tests PRIVATE
         GYO::Render
         GYO::Text
         GYO::UiRenderer
+        GYO::Model
+        GYO::AssetUfbx
+        nlohmann_json::nlohmann_json
     )
     target_include_directories(object_fps_headless_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    target_include_directories(object_fps_headless_tests PRIVATE "${PROJECT_SOURCE_DIR}/tests/support")
     target_compile_features(object_fps_headless_tests PRIVATE cxx_std_20)
     target_compile_definitions(
         object_fps_headless_tests

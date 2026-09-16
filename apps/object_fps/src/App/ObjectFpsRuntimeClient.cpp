@@ -32,6 +32,8 @@ struct ObjectFpsBindings final {
     InputAxisId lookY{InputAxisId::FromString("object_fps.look.y")};
     InputActionId fire{InputActionId::FromString("object_fps.fire")};
     InputActionId reload{InputActionId::FromString("object_fps.reload")};
+    InputActionId jump{InputActionId::FromString("object_fps.jump")};
+    InputActionId holster{InputActionId::FromString("object_fps.holster")};
     InputActionId menuPrevious{
         InputActionId::FromString("object_fps.menu.previous")};
     InputActionId menuNext{InputActionId::FromString("object_fps.menu.next")};
@@ -58,6 +60,8 @@ struct ObjectFpsBindings final {
     map.BindPointerAxis(bindings.lookY, PointerAxis::DeltaY);
     map.Bind(bindings.fire, MouseButton::Left);
     map.Bind(bindings.reload, Key::R);
+    map.Bind(bindings.jump, Key::Space);
+    map.Bind(bindings.holster, Key::H);
     map.Bind(bindings.menuPrevious, Key::W);
     map.Bind(bindings.menuPrevious, Key::Up);
     map.Bind(bindings.menuNext, Key::S);
@@ -103,6 +107,10 @@ struct ObjectFpsRuntimeClient::Impl final {
         translated.fireHeld = fire.held;
         translated.firePressed = fire.pressed;
         translated.reloadPressed = actions.Action(bindings.reload).pressed;
+        translated.jumpPressed = actions.Action(bindings.jump).pressed;
+        translated.jumpHeld = actions.Action(bindings.jump).held;
+        translated.holsterTogglePressed = actions.Action(bindings.holster).pressed;
+        translated.holsterToggleHeld = actions.Action(bindings.holster).held;
         // Non-playing Escape is consumed by UiRuntime's canvas cancel action.
         translated.backPressed =
             session.Snapshot().screen == GameScreen::Playing &&

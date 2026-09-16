@@ -1,6 +1,7 @@
 #include "RetroFPS/App/ObjectFpsPresentation.hpp"
 
 #include "RetroFPS/App/ObjectFpsUi.hpp"
+#include "RetroFPS/App/WeaponViewModel.hpp"
 #include "RetroFPS/Rendering/EnemyRenderSettings.hpp"
 #include "RetroFPS/Rendering/MapGeometryGenerator.hpp"
 
@@ -12,6 +13,7 @@
 #include "render/IRenderDevice.hpp"
 #include "render/PrimitiveMesh.hpp"
 #include "render/RenderQueue.hpp"
+#include "render/Renderer.hpp"
 #include "ui/UiRenderer.hpp"
 
 #include <algorithm>
@@ -20,7 +22,6 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
-#include <numbers>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -58,6 +59,7 @@ struct ObjectFpsPresentation::Impl final {
     };
 
     Engine::Render::IRenderDevice* renderDevice{};
+    Engine::Render::Renderer* renderer{};
     Engine::Asset::AssetManager* assets{};
     std::shared_ptr<const CampaignContent> content;
     ObjectFpsPresentationConfig config;
@@ -66,6 +68,7 @@ struct ObjectFpsPresentation::Impl final {
     Engine::Render::MeshHandle cube;
     Engine::Render::MeshHandle skySphere;
     std::unordered_map<Engine::Asset::AssetId, TextureResource> textures;
+    std::unordered_map<Engine::Asset::AssetId, std::unique_ptr<WeaponViewModel>> weapons;
     std::vector<MapGeometry> stageGeometry;
     Engine::Render::RenderQueue queue;
     Engine::Ui::UiRenderer uiRenderer;
@@ -77,6 +80,7 @@ struct ObjectFpsPresentation::Impl final {
     void Reset() noexcept {
         uiRenderer.Reset();
         queue.Reset();
+        weapons.clear();
         if (renderDevice != nullptr) {
             for (const auto& [id, texture] : textures) {
                 static_cast<void>(id);
@@ -112,6 +116,7 @@ struct ObjectFpsPresentation::Impl final {
         content.reset();
         assets = nullptr;
         renderDevice = nullptr;
+        renderer = nullptr;
         lastVisibleSubmissionCount = 0;
         initialized = false;
     }
@@ -228,56 +233,54 @@ struct ObjectFpsPresentation::Impl final {
 
         const TextureResource* floor = FindTexture(config.floorTexture);
         const TextureResource* wall = FindTexture(config.wallTexture);
-        if (floor == nullptr || wall == nullptr) {
+        const TextureResource* door = FindTexture(config.doorTexture);
+        if (floor == nullptr || wall == nullptr || door == nullptr) {
             error = "Object_FPS world textures are not initialized";
             return false;
         }
 
         const PlayerSnapshot& player = *snapshot.player;
         queue.SetCamera({
-            {player.position.x, player.eyeHeight, player.position.z},
+            {player.position.x, player.feetY + player.eyeHeight, player.position.z},
             {player.pitchRadians, player.yawRadians, 0.0F},
-            std::numbers::pi_v<float> / 3.0F,
+            snapshot.worldVerticalFovRadians,
             0.05F,
             100.0F,
         });
 
         const TextureResource* sky = FindTexture(config.skyTexture);
-        if (sky != nullptr &&
-            !Submit({
-                skySphere,
-                sky->gpu,
-                {{player.position.x, player.eyeHeight, player.position.z}, {}, {60, 60, 60}},
-                {},
-                {},
-                Engine::Render::SurfaceMode::Sky,
-                Engine::Render::SamplerMode::LinearWrap,
-                true,
-            }, error)) {
-            return false;
+        if (sky != nullptr) {
+            Engine::Render::MeshSubmission submission;
+            submission.mesh = skySphere;
+            submission.material.texture = sky->gpu;
+            submission.material.sampler = Engine::Render::SamplerMode::LinearWrap;
+            submission.transform = {{player.position.x, player.feetY + player.eyeHeight, player.position.z}, {}, {60,60,60}};
+            submission.surface = Engine::Render::SurfaceMode::Sky;
+            submission.doubleSided = true;
+            if (!Submit(submission, error)) return false;
         }
 
         const MapGeometry& geometry = stageGeometry[snapshot.activeStage->ordinal];
         for (const SurfaceInstance& surface : geometry.surfaces) {
             Engine::Render::MeshSubmission submission;
             submission.transform = ConvertTransform(surface.transform);
-            submission.sampler = Engine::Render::SamplerMode::LinearWrap;
+            submission.material.sampler = Engine::Render::SamplerMode::LinearWrap;
             submission.doubleSided = true;
             switch (surface.type) {
             case SurfaceType::Floor:
                 submission.mesh = quadXz;
-                submission.texture = floor->gpu;
+                submission.material.texture = floor->gpu;
                 break;
             case SurfaceType::Wall:
                 submission.mesh = quadXy;
-                submission.texture = wall->gpu;
+                submission.material.texture = wall->gpu;
                 break;
             case SurfaceType::Door:
                 if (!snapshot.activeStage->doorVisible) {
                     continue;
                 }
                 submission.mesh = cube;
-                submission.texture = wall->gpu;
+                submission.material.texture = door->gpu;
                 break;
             }
             if (!Submit(submission, error)) {
@@ -316,63 +319,45 @@ struct ObjectFpsPresentation::Impl final {
                 }
             }
             const float flash = enemy.hitFlashRemainingSeconds > 0.0F ? 1.5F : 1.0F;
-            if (!Submit({
-                quadXy,
-                texture->gpu,
-                {
+            Engine::Render::MeshSubmission submission;
+            submission.mesh = quadXy;
+            submission.material.texture = texture->gpu;
+            submission.transform = {
                     {enemy.position.x, pose.centerY, enemy.position.z},
                     {0.0F, pose.yawRadians, 0.0F},
                     {pose.width, pose.height, 1.0F},
-                },
-                {flash, flash, flash, 1.0F},
-                uv,
-                Engine::Render::SurfaceMode::AlphaMasked,
-                Engine::Render::SamplerMode::LinearClamp,
-                true,
-            }, error)) {
-                return false;
-            }
+                };
+            submission.material.tint = {flash, flash, flash, 1.0F};
+            submission.uv = uv;
+            submission.surface = Engine::Render::SurfaceMode::AlphaMasked;
+            submission.doubleSided = true;
+            if (!Submit(submission, error)) return false;
         }
 
         for (const ProjectileSnapshot& projectile : snapshot.projectiles) {
             const float diameter = projectile.radius * 2.0F;
-            if (!Submit({
-                cube,
-                {},
-                {
+            Engine::Render::MeshSubmission submission;
+            submission.mesh = cube;
+            submission.transform = {
                     {projectile.position.x, projectile.position.y, projectile.position.z},
                     {},
                     {diameter, diameter, diameter},
-                },
-                projectile.kind == ProjectileKind::EnemyBullet
+                };
+            submission.material.tint = projectile.kind == ProjectileKind::EnemyBullet
                     ? Engine::Render::Color{1.0F, 0.25F, 0.1F, 1.0F}
-                    : Engine::Render::Color{1.0F, 0.9F, 0.2F, 1.0F},
-            }, error)) {
-                return false;
-            }
+                    : Engine::Render::Color{1.0F, 0.9F, 0.2F, 1.0F};
+            if (!Submit(submission, error)) return false;
         }
 
         const WeaponDefinition* weapon =
-            content->Data().weapons.FindById(snapshot.weapon.weaponId);
+            content->Data().weapons.FindById(snapshot.weaponPresentation.weaponId);
         if (weapon != nullptr) {
-            const TextureResource* texture = FindTexture(weapon->textureAssetId);
-            if (texture != nullptr) {
-                const float width = config.viewportWidth * 0.34F;
-                const float height = config.viewportHeight * 0.44F;
-                Engine::Render::SpriteSubmission weaponSprite;
-                weaponSprite.texture = texture->gpu;
-                weaponSprite.destinationPixels = {
-                    (config.viewportWidth - width) * 0.5F,
-                    config.viewportHeight - height,
-                    width,
-                    height,
-                };
-                weaponSprite.sampler = Engine::Render::SamplerMode::LinearClamp;
-                weaponSprite.layer = Engine::Render::CompositeLayer::Scene;
-                if (!Submit(weaponSprite, error)) {
-                    return false;
-                }
+            const auto found = weapons.find(weapon->presentationAssetId);
+            if (found == weapons.end()) {
+                error = "weapon presentation asset was not initialized";
+                return false;
             }
+            if (!found->second->Submit(snapshot.weaponPresentation, queue, error)) return false;
         }
         return true;
     }
@@ -388,6 +373,7 @@ ObjectFpsPresentation& ObjectFpsPresentation::operator=(
 
 bool ObjectFpsPresentation::Initialize(
     Engine::Render::IRenderDevice& renderDevice,
+    Engine::Render::Renderer& renderer,
     Engine::Text::ITextRasterizer& textRasterizer,
     Engine::Asset::AssetManager& assets,
     std::shared_ptr<const CampaignContent> content,
@@ -403,6 +389,7 @@ bool ObjectFpsPresentation::Initialize(
         return false;
     }
     impl_->renderDevice = &renderDevice;
+    impl_->renderer = &renderer;
     impl_->assets = &assets;
     impl_->content = std::move(content);
     impl_->config = config;
@@ -440,21 +427,28 @@ bool ObjectFpsPresentation::Initialize(
     std::vector<Engine::Asset::AssetId> textureIds{
         config.floorTexture,
         config.wallTexture,
+        config.doorTexture,
         config.skyTexture,
     };
     for (const EnemyDefinition& enemy :
          impl_->content->Data().enemies.GetDefinitions()) {
         textureIds.push_back(enemy.textureAssetId);
     }
-    for (const WeaponDefinition& weapon :
-         impl_->content->Data().weapons.GetDefinitions()) {
-        textureIds.push_back(weapon.textureAssetId);
-    }
     for (const Engine::Asset::AssetId& id : textureIds) {
         if (!impl_->LoadTexture(id, error)) {
             impl_->Reset();
             return false;
         }
+    }
+
+    for (const WeaponDefinition& weapon : impl_->content->Data().weapons.GetDefinitions()) {
+        if (impl_->weapons.contains(weapon.presentationAssetId)) continue;
+        auto viewmodel = std::make_unique<WeaponViewModel>();
+        if (!viewmodel->Initialize(renderDevice, assets, weapon.presentationAssetId, error)) {
+            impl_->Reset();
+            return false;
+        }
+        impl_->weapons.emplace(weapon.presentationAssetId, std::move(viewmodel));
     }
 
     try {
@@ -473,7 +467,7 @@ bool ObjectFpsPresentation::Initialize(
     return true;
 }
 
-bool ObjectFpsPresentation::Present(
+bool ObjectFpsPresentation::PrepareFrame(
     const GameSessionSnapshot& snapshot,
     const ObjectFpsDisplaySettings& displaySettings,
     const Engine::Ui::UiDrawList& uiDrawList,
@@ -531,7 +525,7 @@ bool ObjectFpsPresentation::Present(
             impl_->config.viewportWidth,
             impl_->config.viewportHeight,
         };
-        fade.tint = {
+        fade.material.tint = {
             0.0F,
             0.0F,
             0.0F,
@@ -545,7 +539,20 @@ bool ObjectFpsPresentation::Present(
     impl_->lastVisibleSubmissionCount =
         impl_->queue.Meshes().size() + impl_->queue.Sprites().size();
 
-    auto result = impl_->renderDevice->Render(impl_->queue);
+    return true;
+}
+
+const Engine::Render::RenderQueue& ObjectFpsPresentation::PreparedQueue() const noexcept {
+    return impl_->queue;
+}
+
+bool ObjectFpsPresentation::Present(
+    const GameSessionSnapshot& snapshot,
+    const ObjectFpsDisplaySettings& displaySettings,
+    const Engine::Ui::UiDrawList& uiDrawList,
+    std::string& error) {
+    if (!PrepareFrame(snapshot, displaySettings, uiDrawList, error)) return false;
+    auto result = impl_->renderer->Render(impl_->queue);
     if (!result) {
         error = "GYO render device failed to present Object_FPS: " +
                 result.error().message;

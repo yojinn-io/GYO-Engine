@@ -1,0 +1,105 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 30, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "BUILD_TESTING": "ON",
+        "GYO_BUILD_RUNTIME": "OFF",
+        "GYO_BUILD_SANDBOX": "OFF"
+      }
+    },
+    {
+      "name": "object-fps",
+      "displayName": "Object_FPS and UI editor, native GPU defaults",
+      "inherits": "base",
+      "cacheVariables": {
+        "GYO_BUILD_OBJECT_FPS": "ON",
+        "GYO_BUILD_UI_EDITOR": "ON",
+        "GYO_RENDER_DEVICE": "AUTO",
+        "GYO_GPU_DRIVER": "AUTO",
+        "GYO_SHADER_BUNDLE": "AUTO"
+      }
+    },
+    {
+      "name": "core",
+      "displayName": "Backend-neutral modules and tests",
+      "inherits": "base",
+      "cacheVariables": {
+        "GYO_BUILD_OBJECT_FPS": "OFF",
+        "GYO_BUILD_UI_EDITOR": "OFF",
+        "GYO_BUILD_SDL_GPU_BACKEND": "OFF",
+        "GYO_BUILD_SDL_IMAGE_LOADER": "OFF",
+        "GYO_BUILD_SDL_TTF_ADAPTER": "OFF",
+        "GYO_BUILD_UFBX_LOADER": "OFF",
+        "GYO_RENDER_DEVICE": "NONE"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "inherits": "object-fps",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" }
+    },
+    {
+      "name": "ci-linux",
+      "inherits": "object-fps",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+      "cacheVariables": { "CMAKE_C_COMPILER": "gcc-14", "CMAKE_CXX_COMPILER": "g++-14" }
+    },
+    {
+      "name": "ci-macos",
+      "inherits": "object-fps",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "object-fps", "configurePreset": "object-fps" },
+    { "name": "core", "configurePreset": "core" },
+    { "name": "ci-windows", "configurePreset": "ci-windows" },
+    { "name": "ci-linux", "configurePreset": "ci-linux" },
+    { "name": "ci-macos", "configurePreset": "ci-macos" }
+  ],
+  "testPresets": [
+    {
+      "name": "object-fps",
+      "configurePreset": "object-fps",
+      "output": { "outputOnFailure": true },
+      "filter": { "include": { "label": "cpu|shader" } },
+      "execution": { "noTestsAction": "error" }
+    },
+    {
+      "name": "core",
+      "configurePreset": "core",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "inherits": "object-fps"
+    },
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "inherits": "object-fps"
+    },
+    {
+      "name": "ci-macos",
+      "configurePreset": "ci-macos",
+      "inherits": "object-fps"
+    }
+  ]
+}

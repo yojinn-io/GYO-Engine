@@ -107,8 +107,10 @@ void TestRealJsonScreensAndHud(TestContext& context) {
     context.Expect(
         ui.Compose(snapshot, settings, kViewport, drawList, error) &&
             HasText(drawList, "CONTROLS") && HasText(drawList, "MOVE FORWARD") &&
+            HasText(drawList, "LMB      FIRE") && HasText(drawList, "R        RELOAD") &&
+            HasText(drawList, "SPACE    JUMP") && HasText(drawList, "H        HOLSTER / DRAW") &&
             HasText(drawList, "BACK"),
-        "Controls is supplied by the real JSON");
+        "Controls renders the authored movement, weapon, jump and holster instructions");
 
     snapshot.screen = GameScreen::Playing;
     snapshot.player = PlayerSnapshot{{}, 1.6F, 0.0F, 0.0F, 72.0F, 100.0F};

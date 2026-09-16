@@ -17,6 +17,8 @@ enum class Key : std::size_t {
     R,
     Enter,
     Escape,
+    Space,
+    H,
     Count,
 };
 

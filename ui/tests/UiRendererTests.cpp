@@ -12,6 +12,7 @@
 #include "engine/asset/loaders/FontLoader.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "render/IRenderDevice.hpp"
+#include "RenderDeviceStub.hpp"
 #include "render/RenderQueue.hpp"
 #include "text/ITextRasterizer.hpp"
 #include "ui/UiRenderer.hpp"
@@ -52,7 +53,7 @@ public:
     }
 };
 
-class FakeRenderDevice final : public Render::IRenderDevice {
+class FakeRenderDevice final : public Gyo::Tests::RenderDeviceStub {
 public:
     std::size_t createTextureCount{};
     std::vector<Render::TextureColorSpace> uploadedColorSpaces;
@@ -87,11 +88,6 @@ public:
         return Base::Result<void, Render::RenderError>::Ok();
     }
 
-    Base::Result<Render::PresentStatus, Render::RenderError> Render(
-        const Render::RenderQueue&) override {
-        return Base::Result<Render::PresentStatus, Render::RenderError>::Ok(
-            Render::PresentStatus::Presented);
-    }
 };
 
 struct RendererFixture final {
@@ -170,7 +166,7 @@ TEST_CASE("UiRenderer CPU-clips sprites and always submits Overlay") {
     CHECK(sprite.sourceUv.x == doctest::Approx(0.25F));
     CHECK(sprite.sourceUv.y == doctest::Approx(0.25F));
     CHECK(sprite.sourceUv.width == doctest::Approx(0.5F));
-    CHECK(sprite.tint.green == doctest::Approx(0.25F));
+    CHECK(sprite.material.tint.green == doctest::Approx(0.25F));
 }
 
 TEST_CASE("UiRenderer rejects use before initialization") {
@@ -207,7 +203,7 @@ TEST_CASE("UiRenderer caches whole UTF-8 runs and evicts retained LRU textures")
     CHECK(fixture.rasterizer.callCount == 1);
     CHECK(fixture.renderDevice.createTextureCount == 1);
     REQUIRE(queue.Sprites().size() == 2);
-    CHECK(queue.Sprites()[0].texture == queue.Sprites()[1].texture);
+    CHECK(queue.Sprites()[0].material.texture == queue.Sprites()[1].material.texture);
     CHECK(queue.Sprites()[0].layer == Render::CompositeLayer::Overlay);
     CHECK(fixture.renderDevice.uploadedColorSpaces[0] ==
           Render::TextureColorSpace::Linear);

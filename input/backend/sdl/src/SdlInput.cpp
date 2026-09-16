@@ -33,6 +33,10 @@ std::optional<Key> ToKey(const SDL_Scancode scancode) noexcept {
         return Key::Enter;
     case SDL_SCANCODE_ESCAPE:
         return Key::Escape;
+    case SDL_SCANCODE_SPACE:
+        return Key::Space;
+    case SDL_SCANCODE_H:
+        return Key::H;
     default:
         return std::nullopt;
     }

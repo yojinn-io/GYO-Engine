@@ -700,7 +700,7 @@ void EnemySystem::Update(
         throw std::invalid_argument(
             "enemy update player collision radius must be finite and greater than zero");
     }
-    if (!std::isfinite(player.hitboxHeight) || player.hitboxHeight <= 0.0f) {
+    if (!std::isfinite(player.feetY) || !std::isfinite(player.hitboxHeight) || player.hitboxHeight <= 0.0f) {
         throw std::invalid_argument(
             "enemy update player hitbox height must be finite and greater than zero");
     }
@@ -767,7 +767,9 @@ void EnemySystem::Update(
                     enemy.definition.hitboxRadius,
                     playerPosition,
                     playerCollisionRadius);
-                if (eventSurfaceDistance > settings_.meleeAttackSurfaceDistance ||
+                if (player.feetY >= enemy.definition.hitboxHeight ||
+                    player.feetY + player.hitboxHeight <= 0.0f ||
+                    eventSurfaceDistance > settings_.meleeAttackSurfaceDistance ||
                     !HasWallLineOfSight(
                         map, enemy.position, playerPosition, cellSize_)) {
                     return;
@@ -804,7 +806,7 @@ void EnemySystem::Update(
                 origin,
                 {
                     playerPosition.x,
-                    player.hitboxHeight * 0.5f,
+                    player.feetY + player.hitboxHeight * 0.5f,
                     playerPosition.z,
                 },
                 enemy.definition.damage,
@@ -874,7 +876,8 @@ void EnemySystem::Update(
 
         if (enemy.kind == EnemyKind::Melee) {
             if (surfaceDistance <= settings_.meleeAttackSurfaceDistance &&
-                hasLineOfSight) {
+                player.feetY < enemy.definition.hitboxHeight &&
+                player.feetY + player.hitboxHeight > 0.0f && hasLineOfSight) {
                 clearNavigation(enemy);
                 if (enemy.attackCooldownSeconds <= 0.0f) {
                     enterAttack(enemy);

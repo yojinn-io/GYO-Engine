@@ -8,7 +8,8 @@ namespace fps {
 
 CampaignContentBuildResult CampaignContent::Build(
     GameDataCatalog catalog,
-    std::vector<GridMap> orderedMaps) {
+    std::vector<GridMap> orderedMaps,
+    WeaponShotGeometryMap weaponShotGeometry) {
     const std::span<const LevelDefinition> definitions =
         catalog.levels.GetDefinitions();
     if (definitions.empty()) {
@@ -19,6 +20,20 @@ CampaignContentBuildResult CampaignContent::Build(
             std::nullopt,
             "campaign map count must match the data-defined stage count",
         };
+    }
+
+    for (const WeaponDefinition& weapon : catalog.weapons.GetDefinitions()) {
+        const auto found = weaponShotGeometry.find(weapon.id);
+        if (found == weaponShotGeometry.end()) {
+            return {std::nullopt, "campaign weapon requires shot geometry: " + weapon.id};
+        }
+        const WeaponShotGeometry& geometry = found->second;
+        const Float3 muzzle = geometry.muzzleViewCameraPosition;
+        if (!std::isfinite(muzzle.x) || !std::isfinite(muzzle.y) ||
+            !std::isfinite(muzzle.z) || muzzle.z <= 0.0F ||
+            !IsValidWeaponVerticalFov(geometry.viewModelVerticalFovRadians)) {
+            return {std::nullopt, "campaign weapon shot geometry requires a finite forward muzzle and FOV in (0, pi): " + weapon.id};
+        }
     }
 
     std::unordered_set<LevelDefinitionId> identifiers;
@@ -41,6 +56,7 @@ CampaignContentBuildResult CampaignContent::Build(
     CampaignContent content;
     content.data_ = std::move(catalog);
     content.stages_ = std::move(stages);
+    content.weaponShotGeometry_ = std::move(weaponShotGeometry);
     return {std::move(content), {}};
 }
 
@@ -50,6 +66,14 @@ const CampaignStageContent* CampaignContent::FindStage(
         if (stage.definition.id == levelId) {
             return &stage;
         }
+    }
+    return nullptr;
+}
+
+const WeaponShotGeometry* CampaignContent::FindWeaponShotGeometry(
+    const std::string_view weaponId) const noexcept {
+    for (const auto& [id, geometry] : weaponShotGeometry_) {
+        if (id == weaponId) return &geometry;
     }
     return nullptr;
 }

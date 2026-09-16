@@ -11,6 +11,8 @@ struct PlayerSettings final {
     float movementSpeed = 3.0f;
     float mouseSensitivity = 0.0025f;
     float maxPitchDegrees = 89.0f;
+    float jumpHeight = 0.6f;
+    float gravity = 18.0f;
 };
 
 [[nodiscard]] bool ValidatePlayerSettings(

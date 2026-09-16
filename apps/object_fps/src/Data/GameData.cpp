@@ -60,7 +60,9 @@ const std::vector<std::string> kWeaponHeader{
     "automatic",
     "fire_interval_seconds",
     "reload_seconds",
-    "texture_asset_id",
+    "draw_seconds",
+    "hide_seconds",
+    "presentation_asset_id",
 };
 const std::vector<std::string> kLevelHeader{
     "level_id",
@@ -651,8 +653,12 @@ void ParseEnemyAnimations(
             record.fields[6], kWeaponCatalogName, record, kWeaponHeader[6]);
         definition.reloadSeconds = ParseFloat(
             record.fields[7], kWeaponCatalogName, record, kWeaponHeader[7]);
-        definition.textureAssetId = ParseRuntimeAssetId(
+        definition.drawSeconds = ParseFloat(
             record.fields[8], kWeaponCatalogName, record, kWeaponHeader[8]);
+        definition.hideSeconds = ParseFloat(
+            record.fields[9], kWeaponCatalogName, record, kWeaponHeader[9]);
+        definition.presentationAssetId = ParseRuntimeAssetId(
+            record.fields[10], kWeaponCatalogName, record, kWeaponHeader[10]);
 
         ValidatePositive(definition.damage, kWeaponCatalogName, record, kWeaponHeader[1]);
         if (definition.magazineCapacity == 0) {
@@ -665,6 +671,8 @@ void ParseEnemyAnimations(
             definition.fireIntervalSeconds, kWeaponCatalogName, record, kWeaponHeader[6]);
         ValidatePositive(
             definition.reloadSeconds, kWeaponCatalogName, record, kWeaponHeader[7]);
+        ValidatePositive(definition.drawSeconds, kWeaponCatalogName, record, kWeaponHeader[8]);
+        ValidatePositive(definition.hideSeconds, kWeaponCatalogName, record, kWeaponHeader[9]);
         definitions.push_back(std::move(definition));
     }
     return definitions;

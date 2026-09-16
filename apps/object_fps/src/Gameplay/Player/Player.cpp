@@ -22,6 +22,9 @@ void Player::Reset(
     const float yawRadians,
     const float pitchRadians) noexcept {
     positionXZ_ = spawnPosition;
+    feetY_ = 0.0f;
+    verticalVelocity_ = 0.0f;
+    grounded_ = true;
     yawRadians_ = yawRadians;
     pitchRadians_ = pitchRadians;
     recoilPitchRadians_ = 0.0f;

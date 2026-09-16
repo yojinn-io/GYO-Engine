@@ -396,14 +396,14 @@ UiResult<void> UiRenderer::Submit(
                 sprite.layer = Render::CompositeLayer::Overlay;
                 if constexpr (std::is_same_v<T, UiQuadDraw>) {
                     sprite.destinationPixels = ConvertRect(draw.destinationPixels);
-                    sprite.tint = ConvertColor(draw.color);
+                    sprite.material.tint = ConvertColor(draw.color);
                 } else if constexpr (std::is_same_v<T, UiImageDraw>) {
                     auto image = impl_->ResolveImage(draw.textureAssetId);
                     if (!image) return UiResult<void>::Err(std::move(image).error());
-                    sprite.texture = image.value()->gpu;
+                    sprite.material.texture = image.value()->gpu;
                     sprite.destinationPixels = ConvertRect(draw.destinationPixels);
                     sprite.sourceUv = ConvertRect(draw.sourceUv);
-                    sprite.tint = ConvertColor(draw.tint);
+                    sprite.material.tint = ConvertColor(draw.tint);
                 } else {
                     if (draw.utf8.empty()) return UiResult<void>::Ok();
                     if (!std::isfinite(draw.pointSizePixels) || draw.pointSizePixels <= 0.0F) {
@@ -425,14 +425,14 @@ UiResult<void> UiRenderer::Submit(
                     } else if (draw.verticalAlign == UiVerticalAlign::Bottom) {
                         y += draw.boundsPixels.height - static_cast<float>(text.value()->height);
                     }
-                    sprite.texture = text.value()->gpu;
+                    sprite.material.texture = text.value()->gpu;
                     sprite.destinationPixels = {
                         x,
                         y,
                         static_cast<float>(text.value()->width),
                         static_cast<float>(text.value()->height),
                     };
-                    sprite.tint = ConvertColor(draw.color);
+                    sprite.material.tint = ConvertColor(draw.color);
                 }
                 if (!ClipSprite(sprite, draw.clipPixels)) {
                     return UiResult<void>::Ok();

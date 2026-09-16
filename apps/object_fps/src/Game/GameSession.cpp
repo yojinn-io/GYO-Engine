@@ -27,9 +27,6 @@ namespace fps {
 namespace {
 
 constexpr float kMaximumShotDistance = 50.0F;
-constexpr float kMuzzleForwardOffset = 0.35F;
-constexpr float kMuzzleRightOffset = 0.28F;
-constexpr float kMuzzleDownOffset = 0.22F;
 constexpr float kLengthEpsilon = 0.000001F;
 
 struct ViewBasis final {
@@ -207,6 +204,7 @@ struct GameSession::Impl final {
     EnemyDefinition meleeDefinition;
     EnemyDefinition rangedDefinition;
     WeaponDefinition weaponDefinition;
+    WeaponShotGeometry weaponShotGeometry;
     std::unique_ptr<StageRuntime> stage;
     PlayerController playerController;
     PlayerCombatState playerCombat;
@@ -220,6 +218,8 @@ struct GameSession::Impl final {
     std::uint64_t nextEventSequence{1};
     bool movementReleaseRequired{};
     bool fireReleaseRequired{};
+    bool jumpReleaseRequired{};
+    bool holsterReleaseRequired{};
     bool focusLossPending{};
     bool quitRequested{};
 
@@ -252,6 +252,11 @@ struct GameSession::Impl final {
             return false;
         }
 
+        if (!IsValidWeaponVerticalFov(requestedConfig.worldVerticalFovRadians)) {
+            error = "GameSession world vertical FOV must be finite and in (0, pi).";
+            return false;
+        }
+
         content = std::move(requestedContent);
         config = requestedConfig;
         const GameDataCatalog& data = content->Data();
@@ -273,6 +278,12 @@ struct GameSession::Impl final {
         meleeDefinition = *melee;
         rangedDefinition = *ranged;
         weaponDefinition = *weapon;
+        const WeaponShotGeometry* geometry = content->FindWeaponShotGeometry(weapon->id);
+        if (geometry == nullptr) {
+            error = "Configured starting weapon shot geometry is missing.";
+            return false;
+        }
+        weaponShotGeometry = *geometry;
 
         if (!playerController.Configure(config.player, error) ||
             !weaponController.Configure(weaponDefinition, config.weapon, error) ||
@@ -307,6 +318,8 @@ struct GameSession::Impl final {
         nextEventSequence = 1;
         movementReleaseRequired = false;
         fireReleaseRequired = false;
+        jumpReleaseRequired = false;
+        holsterReleaseRequired = false;
         focusLossPending = false;
         quitRequested = false;
         RefreshSnapshot();
@@ -384,9 +397,14 @@ struct GameSession::Impl final {
         if (!weaponController.Initialize(weaponState, error)) {
             return;
         }
+        for (const WeaponActionEvent& action : weaponController.GetActionEvents()) {
+            Emit(action);
+        }
         campaign.ResetRun();
         movementReleaseRequired = true;
         fireReleaseRequired = true;
+        jumpReleaseRequired = true;
+        holsterReleaseRequired = true;
     }
 
     [[nodiscard]] bool BeginStageTransition(
@@ -464,6 +482,8 @@ struct GameSession::Impl final {
                     flow.EnterPlaying();
                     movementReleaseRequired = true;
                     fireReleaseRequired = true;
+                    jumpReleaseRequired = true;
+                    holsterReleaseRequired = true;
                     EmitScreenChange(previous);
                     return true;
                 } else {
@@ -530,6 +550,8 @@ struct GameSession::Impl final {
                 flow.GetScreen() == GameScreen::Playing) {
                 movementReleaseRequired = true;
                 fireReleaseRequired = true;
+                jumpReleaseRequired = true;
+                holsterReleaseRequired = true;
             }
             EmitScreenChange(previousScreen);
 
@@ -548,6 +570,14 @@ struct GameSession::Impl final {
                     }
                     gameplayInput.fireHeld = false;
                     gameplayInput.firePressed = false;
+                }
+                if (jumpReleaseRequired) {
+                    if (!input.jumpHeld) jumpReleaseRequired = false;
+                    gameplayInput.jumpPressed = false;
+                }
+                if (holsterReleaseRequired) {
+                    if (!input.holsterToggleHeld) holsterReleaseRequired = false;
+                    gameplayInput.holsterTogglePressed = false;
                 }
                 UpdateGameplay(gameplayInput, deltaSeconds, error);
                 if (!error.empty()) {
@@ -590,6 +620,8 @@ struct GameSession::Impl final {
             flow.EnterPlaying();
             movementReleaseRequired = true;
             fireReleaseRequired = true;
+            jumpReleaseRequired = true;
+            holsterReleaseRequired = true;
             EmitScreenChange(previous);
             Emit(StageEnteredEvent{
                 item.definition.id,
@@ -627,6 +659,7 @@ struct GameSession::Impl final {
                 input.lookDeltaX,
                 input.lookDeltaY,
                 input.lookEnabled,
+                input.jumpPressed,
             },
             deltaSeconds,
             stage->world.GetMap(),
@@ -639,6 +672,7 @@ struct GameSession::Impl final {
                 stage->player.GetPositionXZ(),
                 playerController.GetSettings().collisionRadius,
                 playerController.GetSettings().bodyHeight,
+                stage->player.GetFeetY(),
             },
             deltaSeconds);
 
@@ -650,10 +684,16 @@ struct GameSession::Impl final {
             stage->player, recoveredRecoil));
         weaponController.Update(
             weaponState,
-            {input.fireHeld, input.firePressed, input.reloadPressed},
+            {input.fireHeld, input.firePressed, input.reloadPressed, input.holsterTogglePressed},
             deltaSeconds);
+        for (const WeaponActionEvent& action : weaponController.GetActionEvents()) {
+            Emit(action);
+        }
+        std::vector<Float3> resolvedShotPoints;
+        resolvedShotPoints.reserve(weaponController.GetShotEvents().size());
         for (const ShotEvent& shot : weaponController.GetShotEvents()) {
-            ResolvePlayerShot(shot);
+            Emit(shot);
+            resolvedShotPoints.push_back(ResolvePlayerShot(shot));
         }
         static_cast<void>(playerController.SetVerticalRecoilDegrees(
             stage->player, weaponState.GetRecoilDegrees()));
@@ -662,12 +702,15 @@ struct GameSession::Impl final {
             stage->player.GetPositionXZ(),
             playerController.GetSettings().bodyHeight,
             playerController.GetSettings().collisionRadius,
+            stage->player.GetFeetY(),
         };
-        for (const PlayerProjectileHit& hit : stage->projectiles.Update(
-                 stage->world.GetMap(),
-                 stage->world.GetSettings(),
-                 playerCapsule,
-                 deltaSeconds)) {
+        const std::span<const PlayerProjectileHit> projectileHits = stage->projectiles.Update(
+            stage->world.GetMap(), stage->world.GetSettings(), playerCapsule, deltaSeconds);
+        // Existing projectiles advance before these new cosmetics are born.
+        // Use the final camera (including this shot's recoil), but retain the
+        // authoritative pre-recoil impact and never apply damage a second time.
+        for (const Float3 point : resolvedShotPoints) SpawnPlayerShotTracer(point);
+        for (const PlayerProjectileHit& hit : projectileHits) {
             ApplyPlayerDamage(hit.damage);
             if (playerCombat.IsDead()) {
                 BeginDeathResults(error);
@@ -722,13 +765,38 @@ struct GameSession::Impl final {
         }
     }
 
-    void ResolvePlayerShot(const ShotEvent& shot) {
-        const Float2 position = stage->player.GetPositionXZ();
-        const Float3 cameraOrigin{
-            position.x,
-            playerController.GetSettings().eyeHeight,
-            position.z,
-        };
+    [[nodiscard]] Float3 ResolvePlayerMuzzle() const {
+        const Float3 cameraOrigin = stage->player.GetEyePosition(
+            playerController.GetSettings().eyeHeight);
+        const ViewBasis basis = MakeViewBasis(
+            stage->player.GetYawRadians(), stage->player.GetPitchRadians());
+        const Float3 cameraMuzzle = ResolveWeaponMuzzleCameraPosition(
+            weaponShotGeometry, config.worldVerticalFovRadians);
+        Float3 muzzle = AddScaled(cameraOrigin, basis.forward, cameraMuzzle.z);
+        muzzle = AddScaled(muzzle, basis.right, cameraMuzzle.x);
+        muzzle = AddScaled(muzzle, basis.up, cameraMuzzle.y);
+        // Authored offsets may extend past the body's collision radius. Keep
+        // the ray's origin on the camera side of adjacent world geometry.
+        return CombatCollision::ClampSegmentToWorld(
+            stage->world.GetMap(), stage->world.GetSettings(), cameraOrigin, muzzle);
+    }
+
+    void SpawnPlayerShotTracer(const Float3 resolvedPoint) {
+        const Float3 muzzle = ResolvePlayerMuzzle();
+        const Float3 direction = Subtract(resolvedPoint, muzzle);
+        const float distance = Length(direction);
+        if (distance <= kLengthEpsilon) return;
+        // Camera recoil can move the cosmetic path behind a corner even though
+        // the shot was valid. Clip only against the world, not enemy capsules.
+        const std::optional<CombatHit> worldHit = CombatCollision::Raycast(
+            stage->world.GetMap(), stage->world.GetSettings(), muzzle, direction, distance);
+        static_cast<void>(stage->projectiles.SpawnPlayerTracer(
+            muzzle, worldHit.has_value() ? worldHit->position : resolvedPoint));
+    }
+
+    [[nodiscard]] Float3 ResolvePlayerShot(const ShotEvent& shot) {
+        const Float3 cameraOrigin = stage->player.GetEyePosition(
+            playerController.GetSettings().eyeHeight);
         const ViewBasis basis = MakeViewBasis(
             stage->player.GetYawRadians(), stage->player.GetPitchRadians());
         const std::vector<CombatTarget> targets =
@@ -746,9 +814,7 @@ struct GameSession::Impl final {
                                           cameraOrigin,
                                           basis.forward,
                                           kMaximumShotDistance);
-        Float3 muzzle = AddScaled(cameraOrigin, basis.forward, kMuzzleForwardOffset);
-        muzzle = AddScaled(muzzle, basis.right, kMuzzleRightOffset);
-        muzzle = AddScaled(muzzle, basis.up, -kMuzzleDownOffset);
+        const Float3 muzzle = ResolvePlayerMuzzle();
 
         std::optional<CombatHit> resolvedHit;
         Float3 resolvedPoint = aimPoint;
@@ -788,7 +854,7 @@ struct GameSession::Impl final {
                 Emit(EnemyDestroyedEvent{resolvedHit->targetId, std::move(definitionId)});
             }
         }
-        static_cast<void>(stage->projectiles.SpawnPlayerTracer(muzzle, resolvedPoint));
+        return resolvedPoint;
     }
 
     void BeginDeathResults(std::string& error) {
@@ -882,9 +948,11 @@ struct GameSession::Impl final {
         snapshot.fadeOpacity = transition.opacity;
         snapshot.campaignOutcome = campaign.GetOutcome();
         snapshot.quitRequested = quitRequested;
+        snapshot.worldVerticalFovRadians = config.worldVerticalFovRadians;
         snapshot.campaignRooms.assign(
             campaign.GetRooms().begin(), campaign.GetRooms().end());
         snapshot.weapon = weaponController.MakeHudSnapshot(weaponState);
+        snapshot.weaponPresentation = weaponController.MakePresentationSnapshot(weaponState);
 
         if (!stage || !content || stage->contentIndex >= content->Stages().size()) {
             return;
@@ -904,6 +972,10 @@ struct GameSession::Impl final {
             stage->player.GetPitchRadians(),
             playerCombat.GetHealth(),
             playerCombat.GetMaximumHealth(),
+            stage->player.GetFeetY(),
+            stage->player.GetVerticalVelocity(),
+            stage->player.IsGrounded(),
+            playerController.GetSettings().bodyHeight,
         };
         snapshot.enemies.assign(
             stage->enemies.GetSnapshots().begin(),

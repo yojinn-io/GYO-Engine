@@ -19,6 +19,8 @@ public:
     void Reset(const FrameDescription& frame = {});
     void SetCamera(const PerspectiveCamera3D& camera);
     void ClearCamera() noexcept;
+    void SetViewModelCamera(const PerspectiveCamera3D& camera);
+    void ClearViewModelCamera() noexcept;
 
     [[nodiscard]] Base::Result<void, RenderError> Submit(
         const MeshSubmission& submission);
@@ -27,12 +29,14 @@ public:
 
     [[nodiscard]] const FrameDescription& Frame() const noexcept;
     [[nodiscard]] const std::optional<PerspectiveCamera3D>& Camera() const noexcept;
+    [[nodiscard]] const std::optional<PerspectiveCamera3D>& ViewModelCamera() const noexcept;
     [[nodiscard]] std::span<const MeshSubmission> Meshes() const noexcept;
     [[nodiscard]] std::span<const SpriteSubmission> Sprites() const noexcept;
 
 private:
     FrameDescription frame_{};
     std::optional<PerspectiveCamera3D> camera_{};
+    std::optional<PerspectiveCamera3D> viewModelCamera_{};
     std::vector<MeshSubmission> meshes_{};
     std::vector<SpriteSubmission> sprites_{};
 };

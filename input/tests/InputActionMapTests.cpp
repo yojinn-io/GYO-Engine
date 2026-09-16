@@ -47,6 +47,24 @@ TEST_CASE("unknown actions and axes are neutral") {
     CHECK(frame.Axis(InputAxisId::FromString("missing")) == 0.0f);
 }
 
+TEST_CASE("space and H preserve independent action edges") {
+    const InputActionId primary = InputActionId::FromString("primary");
+    const InputActionId secondary = InputActionId::FromString("secondary");
+    InputActionMap map;
+    map.Bind(primary, Key::Space);
+    map.Bind(secondary, Key::H);
+    PhysicalInputFrame physical;
+    physical.keys[static_cast<std::size_t>(Key::Space)] = {true, true, false};
+    physical.keys[static_cast<std::size_t>(Key::H)] = {false, false, true};
+    const auto frame = map.Evaluate(physical);
+    CHECK(frame.Action(primary).held);
+    CHECK(frame.Action(primary).pressed);
+    CHECK_FALSE(frame.Action(primary).released);
+    CHECK_FALSE(frame.Action(secondary).held);
+    CHECK_FALSE(frame.Action(secondary).pressed);
+    CHECK(frame.Action(secondary).released);
+}
+
 TEST_CASE("action and axis identity ignore diagnostic names") {
     const InputActionId actionA{42, "first"};
     const InputActionId actionB{42, "second"};

@@ -62,9 +62,11 @@ struct WeaponDefinition final {
     std::uint32_t reserveAmmo = 0;
     float recoilDegrees = 0.0f;
     bool automatic = false;
-    Engine::Asset::AssetId textureAssetId;
+    Engine::Asset::AssetId presentationAssetId;
     float fireIntervalSeconds = 0.0f;
     float reloadSeconds = 0.0f;
+    float drawSeconds = 25.0f / 30.0f;
+    float hideSeconds = 11.0f / 30.0f;
 };
 
 struct LevelDefinition final {

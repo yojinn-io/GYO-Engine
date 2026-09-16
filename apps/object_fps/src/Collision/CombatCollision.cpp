@@ -1,5 +1,7 @@
 #include "RetroFPS/Collision/CombatCollision.hpp"
 
+#include "engine/collision/Collision.hpp"
+
 #include "RetroFPS/World/GridMap.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
 
@@ -51,146 +53,16 @@ void ValidateQuery(
     }
 }
 
-void ValidateCapsule(const VerticalCapsule& capsule) {
-    if (!std::isfinite(capsule.centerXZ.x) || !std::isfinite(capsule.centerXZ.z) ||
-        !std::isfinite(capsule.height) || !std::isfinite(capsule.radius) ||
-        capsule.radius <= 0.0f || capsule.height < capsule.radius * 2.0f) {
-        throw std::invalid_argument(
-            "combat capsule must be finite, positive, and at least two radii high");
-    }
-}
-
 [[nodiscard]] Float3 Normalize(const Float3 value) noexcept {
     const float length = Length(value);
     return {value.x / length, value.y / length, value.z / length};
 }
 
-[[nodiscard]] std::optional<float> RaySphere(
-    const Float3 origin,
-    const Float3 direction,
-    const float maximumDistance,
-    const Float3 center,
-    const float radius) noexcept {
-    const Float3 offset{origin.x - center.x, origin.y - center.y, origin.z - center.z};
-    const float halfB = offset.x * direction.x + offset.y * direction.y +
-                        offset.z * direction.z;
-    const float c = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z -
-                    radius * radius;
-    const float discriminant = halfB * halfB - c;
-    if (discriminant < 0.0f) {
-        return std::nullopt;
-    }
-
-    const float root = std::sqrt((std::max)(0.0f, discriminant));
-    float distance = -halfB - root;
-    if (distance < 0.0f) {
-        distance = -halfB + root;
-    }
-    if (distance < 0.0f || distance > maximumDistance) {
-        return std::nullopt;
-    }
-    return distance;
+[[nodiscard]] Engine::Collision::Float3 ToCollision(const Float3 value) noexcept {
+    return {value.x, value.y, value.z};
 }
-
-[[nodiscard]] std::optional<float> RayAabb(
-    const Float3 origin,
-    const Float3 direction,
-    const float maximumDistance,
-    const Float3 minimum,
-    const Float3 maximum) noexcept {
-    float entry = 0.0f;
-    float exit = maximumDistance;
-    const std::array<float, 3> origins{origin.x, origin.y, origin.z};
-    const std::array<float, 3> directions{direction.x, direction.y, direction.z};
-    const std::array<float, 3> minima{minimum.x, minimum.y, minimum.z};
-    const std::array<float, 3> maxima{maximum.x, maximum.y, maximum.z};
-
-    for (std::size_t axis = 0; axis < origins.size(); ++axis) {
-        if (std::fabs(directions[axis]) <= kEpsilon) {
-            if (origins[axis] < minima[axis] || origins[axis] > maxima[axis]) {
-                return std::nullopt;
-            }
-            continue;
-        }
-
-        float first = (minima[axis] - origins[axis]) / directions[axis];
-        float second = (maxima[axis] - origins[axis]) / directions[axis];
-        if (first > second) {
-            std::swap(first, second);
-        }
-        entry = (std::max)(entry, first);
-        exit = (std::min)(exit, second);
-        if (entry > exit) {
-            return std::nullopt;
-        }
-    }
-
-    if (exit < 0.0f || entry > maximumDistance) {
-        return std::nullopt;
-    }
-    return (std::max)(0.0f, entry);
-}
-
-[[nodiscard]] std::optional<float> RayCapsuleUnchecked(
-    const Float3 origin,
-    const Float3 direction,
-    const float maximumDistance,
-    const VerticalCapsule& capsule,
-    const float sweepRadius) noexcept {
-    const float radius = capsule.radius + sweepRadius;
-    const float segmentBottom = capsule.radius;
-    const float segmentTop = capsule.height - capsule.radius;
-    const float closestHeight = std::clamp(origin.y, segmentBottom, segmentTop);
-    const float overlapX = origin.x - capsule.centerXZ.x;
-    const float overlapY = origin.y - closestHeight;
-    const float overlapZ = origin.z - capsule.centerXZ.z;
-    if (overlapX * overlapX + overlapY * overlapY + overlapZ * overlapZ <=
-        radius * radius) {
-        return 0.0f;
-    }
-    float closest = (std::numeric_limits<float>::max)();
-
-    const float offsetX = origin.x - capsule.centerXZ.x;
-    const float offsetZ = origin.z - capsule.centerXZ.z;
-    const float a = direction.x * direction.x + direction.z * direction.z;
-    if (a > kEpsilon) {
-        const float halfB = offsetX * direction.x + offsetZ * direction.z;
-        const float c = offsetX * offsetX + offsetZ * offsetZ - radius * radius;
-        const float discriminant = halfB * halfB - a * c;
-        if (discriminant >= 0.0f) {
-            const float root = std::sqrt((std::max)(0.0f, discriminant));
-            const std::array<float, 2> roots{
-                (-halfB - root) / a,
-                (-halfB + root) / a,
-            };
-            for (const float distance : roots) {
-                if (distance < 0.0f || distance > maximumDistance) {
-                    continue;
-                }
-                const float height = origin.y + direction.y * distance;
-                if (height >= segmentBottom && height <= segmentTop) {
-                    closest = (std::min)(closest, distance);
-                }
-            }
-        }
-    }
-
-    const std::array<Float3, 2> ends{{
-        {capsule.centerXZ.x, segmentBottom, capsule.centerXZ.z},
-        {capsule.centerXZ.x, segmentTop, capsule.centerXZ.z},
-    }};
-    for (const Float3 end : ends) {
-        const std::optional<float> hit =
-            RaySphere(origin, direction, maximumDistance, end, radius);
-        if (hit.has_value()) {
-            closest = (std::min)(closest, *hit);
-        }
-    }
-
-    if (closest == (std::numeric_limits<float>::max)()) {
-        return std::nullopt;
-    }
-    return closest;
+[[nodiscard]] Engine::Collision::VerticalCapsule ToCollision(const VerticalCapsule& capsule) noexcept {
+    return {{capsule.centerXZ.x, capsule.feetY, capsule.centerXZ.z}, capsule.height, capsule.radius};
 }
 
 } // namespace
@@ -235,7 +107,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
                 static_cast<float>(row + 1) * worldSettings.cellSize + sweepRadius,
             };
             const std::optional<float> distance =
-                RayAabb(origin, normalized, maximumDistance, minimum, maximum);
+                Engine::Collision::RaycastAabb(ToCollision(origin), ToCollision(normalized), maximumDistance, {ToCollision(minimum), ToCollision(maximum)});
             if (distance.has_value()) {
                 consider(CombatHitKind::Wall, *distance);
             }
@@ -250,8 +122,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
     }
 
     for (const CombatTarget& target : targets) {
-        ValidateCapsule(target.capsule);
-        const std::optional<float> distance = RayCapsuleUnchecked(
+        const std::optional<float> distance = RaycastCapsule(
             origin, normalized, maximumDistance, target.capsule, sweepRadius);
         if (distance.has_value()) {
             consider(CombatHitKind::Target, *distance, target.id);
@@ -260,50 +131,47 @@ std::optional<CombatHit> CombatCollision::Raycast(
     return closest;
 }
 
-std::optional<float> CombatCollision::RaycastCapsule(
+Float3 CombatCollision::ClampSegmentToWorld(
+    const GridMap& map,
+    const WorldSettings& worldSettings,
     const Float3 origin,
-    const Float3 direction,
-    const float maximumDistance,
-    const VerticalCapsule& capsule,
-    const float sweepRadius) {
-    ValidateQuery(origin, direction, maximumDistance, sweepRadius);
-    ValidateCapsule(capsule);
-    return RayCapsuleUnchecked(
-        origin, Normalize(direction), maximumDistance, capsule, sweepRadius);
+    const Float3 desiredEnd,
+    const float clearance) {
+    if (!IsFinite(origin) || !IsFinite(desiredEnd) ||
+        !std::isfinite(clearance) || clearance <= 0.0f) {
+        throw std::invalid_argument(
+            "world segment endpoints must be finite and clearance positive");
+    }
+    const Float3 delta{
+        desiredEnd.x - origin.x,
+        desiredEnd.y - origin.y,
+        desiredEnd.z - origin.z,
+    };
+    const float distance = Length(delta);
+    if (!std::isfinite(distance)) {
+        throw std::invalid_argument("world segment length must be finite");
+    }
+    if (distance <= kEpsilon) {
+        return origin;
+    }
+    const auto hit = Raycast(map, worldSettings, origin, delta, distance);
+    return hit ? AddScaled(origin, Normalize(delta),
+                           (std::max)(0.0f, hit->distance - clearance))
+               : desiredEnd;
+}
+
+std::optional<float> CombatCollision::RaycastCapsule(
+    const Float3 origin, const Float3 direction, const float maximumDistance,
+    const VerticalCapsule& capsule, const float sweepRadius) {
+    return Engine::Collision::RaycastCapsule(
+        ToCollision(origin), ToCollision(direction), maximumDistance, ToCollision(capsule), sweepRadius);
 }
 
 std::optional<float> CombatCollision::SweepSegmentAgainstCapsule(
-    const Float3 start,
-    const Float3 end,
-    const float sweepRadius,
+    const Float3 start, const Float3 end, const float sweepRadius,
     const VerticalCapsule& capsule) {
-    if (!IsFinite(start) || !IsFinite(end)) {
-        throw std::invalid_argument("combat sweep endpoints must be finite");
-    }
-    if (!std::isfinite(sweepRadius) || sweepRadius < 0.0f) {
-        throw std::invalid_argument(
-            "combat sweep radius must be finite and non-negative");
-    }
-    ValidateCapsule(capsule);
-    const Float3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
-    const float length = Length(delta);
-    if (length <= kEpsilon) {
-        const Float3 capsuleCenter{
-            capsule.centerXZ.x,
-            (std::clamp)(start.y, capsule.radius, capsule.height - capsule.radius),
-            capsule.centerXZ.z,
-        };
-        const float dx = start.x - capsuleCenter.x;
-        const float dy = start.y - capsuleCenter.y;
-        const float dz = start.z - capsuleCenter.z;
-        const float radius = capsule.radius + sweepRadius;
-        return dx * dx + dy * dy + dz * dz <= radius * radius
-                   ? std::optional<float>{0.0f}
-                   : std::nullopt;
-    }
-    const std::optional<float> distance =
-        RaycastCapsule(start, delta, length, capsule, sweepRadius);
-    return distance.has_value() ? std::optional<float>{*distance / length} : std::nullopt;
+    return Engine::Collision::SweepSphereAgainstCapsule(
+        ToCollision(start), ToCollision(end), sweepRadius, ToCollision(capsule));
 }
 
 } // namespace fps

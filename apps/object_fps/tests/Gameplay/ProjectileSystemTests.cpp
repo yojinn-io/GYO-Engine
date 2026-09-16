@@ -72,9 +72,26 @@ void TestEnemyProjectileLifetimeCapsTravel(TestContext& context) {
         "enemy projectile retires when its lifetime is exhausted");
 }
 
+void TestAirborneCapsuleProjectileIntegration(TestContext& context) {
+    const GridMap map = ParseProjectileMap(context, "P...D");
+    const VerticalCapsule airborne{{2.5f, 0.5f}, 1.8f, 0.25f, 0.6f};
+    ProjectileSystem projectiles;
+    context.Expect(projectiles.Configure({}), "airborne projectile test configures");
+    static_cast<void>(projectiles.SpawnEnemyProjectile(
+        {0.5f, 0.25f, 0.5f}, {4.5f, 0.25f, 0.5f}, 10.0f));
+    context.Expect(projectiles.Update(map, {}, airborne, 0.5f).empty(),
+                   "projectile system uses elevated capsule and lets low bullet pass underneath");
+    projectiles.Clear();
+    static_cast<void>(projectiles.SpawnEnemyProjectile(
+        {0.5f, 1.2f, 0.5f}, {4.5f, 1.2f, 0.5f}, 10.0f));
+    context.Expect(projectiles.Update(map, {}, airborne, 0.5f).size() == 1,
+                   "projectile system still hits airborne player at body height");
+}
+
 } // namespace
 
 void RunProjectileSystemTests(TestContext& context) {
+    TestAirborneCapsuleProjectileIntegration(context);
     TestEnemyProjectileSweep(context);
     TestWallBlocksAndTracerExpires(context);
     TestEnemyProjectileLifetimeCapsTravel(context);

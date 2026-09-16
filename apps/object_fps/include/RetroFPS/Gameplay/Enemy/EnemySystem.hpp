@@ -69,6 +69,7 @@ struct EnemyTarget final {
     Float2 position{};
     float collisionRadius = 0.0f;
     float hitboxHeight = 0.0f;
+    float feetY = 0.0f;
 };
 
 enum class EnemySpawnStatus : std::uint8_t {

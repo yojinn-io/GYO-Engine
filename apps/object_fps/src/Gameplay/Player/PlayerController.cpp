@@ -95,8 +95,31 @@ void PlayerController::Update(
         static_cast<void>(SetVerticalRecoilDegrees(player, recoilDegrees));
     }
 
-    if (!std::isfinite(deltaSeconds) || deltaSeconds <= 0.0f) {
+    if (!std::isfinite(deltaSeconds) || deltaSeconds < 0.0f) {
         return;
+    }
+
+    // A semantic press starts one jump. Horizontal grid blocking remains active
+    // in the air; this flat-floor controller never steps over walls or enemies.
+    if (input.jumpPressed && player.grounded_) {
+        player.verticalVelocity_ = std::sqrt(2.0f * settings_.gravity * settings_.jumpHeight);
+        player.grounded_ = false;
+    }
+    if (!player.grounded_) {
+        // Integrate constant acceleration analytically so jump height and flight
+        // time do not depend on render/update cadence.
+        const double elapsed = deltaSeconds;
+        const double feet = player.feetY_ + player.verticalVelocity_ * elapsed -
+                            0.5 * settings_.gravity * elapsed * elapsed;
+        const double velocity = player.verticalVelocity_ - settings_.gravity * elapsed;
+        if (feet <= 0.0 && deltaSeconds > 0.0f) {
+            player.feetY_ = 0.0f;
+            player.verticalVelocity_ = 0.0f;
+            player.grounded_ = true;
+        } else {
+            player.feetY_ = static_cast<float>(feet);
+            player.verticalVelocity_ = static_cast<float>(velocity);
+        }
     }
 
     const Float2 direction =

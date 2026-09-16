@@ -2,7 +2,10 @@
   "schema": "gyo.ui",
   "version": 1,
   "design_canvas": {
-    "size": [1280, 720],
+    "size": [
+      1280.0,
+      720.0
+    ],
     "scale_mode": "fit"
   },
   "fonts": {
@@ -72,7 +75,11 @@
     {
       "id": "results.outcome",
       "type": "enum",
-      "values": ["completed", "player_died", "in_progress"],
+      "values": [
+        "completed",
+        "player_died",
+        "in_progress"
+      ],
       "preview": "completed"
     },
     {
@@ -118,17 +125,36 @@
       "id": "main_menu",
       "backdrop_color": "backdrop",
       "default_focus": "main_start",
-      "focus_order": ["main_start", "main_controls", "main_quit"],
+      "focus_order": [
+        "main_start",
+        "main_controls",
+        "main_quit"
+      ],
       "children": [
         {
           "type": "panel",
           "id": "main_panel",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 100.0],
-            "size_delta": [560.0, 500.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              100.0
+            ],
+            "size_delta": [
+              560.0,
+              500.0
+            ]
           },
           "color": {
             "color": "panel"
@@ -138,11 +164,26 @@
           "type": "text",
           "id": "main_title",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 150.0],
-            "size_delta": [560.0, 68.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.03333333507180214
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              150.0
+            ],
+            "size_delta": [
+              560.0,
+              68.0
+            ]
           },
           "text": {
             "literal": "OBJECT FPS v2"
@@ -158,11 +199,26 @@
           "type": "button",
           "id": "main_start",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 340.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              340.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "ゲームスタート"
@@ -171,6 +227,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.start_game",
           "background": {
             "normal": "button",
@@ -182,11 +240,26 @@
           "type": "button",
           "id": "main_controls",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 406.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              406.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "説明"
@@ -195,6 +268,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.open_controls",
           "background": {
             "normal": "button",
@@ -206,11 +281,26 @@
           "type": "button",
           "id": "main_quit",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 472.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              472.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "終わり"
@@ -219,6 +309,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.quit",
           "background": {
             "normal": "button",
@@ -230,14 +322,29 @@
           "type": "text",
           "id": "text_1",
           "rect": {
-            "anchor_min": [0.46875, 0.3444444537162781],
-            "anchor_max": [0.5250000357627869, 0.3444444537162781],
-            "pivot": [0.4516129791736603, 0.0],
-            "position": [0.0, 0.0],
-            "size_delta": [240.0, 72.0]
+            "anchor_min": [
+              0.46875,
+              0.3444444537162781
+            ],
+            "anchor_max": [
+              0.5250000357627869,
+              0.3444444537162781
+            ],
+            "pivot": [
+              0.4516129791736603,
+              0.0
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              240.0,
+              72.0
+            ]
           },
           "text": {
-            "literal": "this is test [text]"
+            "literal": ""
           },
           "point_size": 24.0,
           "text_color": {
@@ -253,17 +360,34 @@
       "backdrop_color": "backdrop",
       "default_focus": "controls_back",
       "cancel_action": "object_fps.close_controls",
-      "focus_order": ["controls_back"],
+      "focus_order": [
+        "controls_back"
+      ],
       "children": [
         {
           "type": "panel",
           "id": "controls_panel",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 70.0],
-            "size_delta": [740.0, 580.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              70.0
+            ],
+            "size_delta": [
+              740.0,
+              580.0
+            ]
           },
           "color": {
             "color": "panel"
@@ -273,11 +397,26 @@
           "type": "text",
           "id": "controls_title",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 112.0],
-            "size_delta": [660.0, 60.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              112.0
+            ],
+            "size_delta": [
+              660.0,
+              60.0
+            ]
           },
           "text": {
             "literal": "CONTROLS"
@@ -293,11 +432,26 @@
           "type": "text",
           "id": "controls_move_forward",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 210.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              202.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "W / S    MOVE FORWARD / BACK"
@@ -313,11 +467,26 @@
           "type": "text",
           "id": "controls_strafe",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 260.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              244.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "A / D    STRAFE LEFT / RIGHT"
@@ -333,11 +502,26 @@
           "type": "text",
           "id": "controls_look",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 310.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              286.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "MOUSE    LOOK"
@@ -353,11 +537,26 @@
           "type": "text",
           "id": "controls_fire",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 360.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              328.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "LMB      FIRE"
@@ -373,11 +572,26 @@
           "type": "text",
           "id": "controls_reload",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 410.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              370.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "R        RELOAD"
@@ -391,13 +605,98 @@
         },
         {
           "type": "text",
+          "id": "controls_jump",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              412.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "SPACE    JUMP"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_holster",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              454.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "H        HOLSTER / DRAW"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
           "id": "controls_pause",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 460.0],
-            "size_delta": [500.0, 34.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              496.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
           },
           "text": {
             "literal": "ESC      PAUSE"
@@ -413,11 +712,26 @@
           "type": "button",
           "id": "controls_back",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 594.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              594.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "BACK"
@@ -426,6 +740,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.close_controls",
           "background": {
             "normal": "button",
@@ -452,11 +768,26 @@
           "type": "panel",
           "id": "pause_panel",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 52.0],
-            "size_delta": [580.0, 616.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              52.0
+            ],
+            "size_delta": [
+              580.0,
+              616.0
+            ]
           },
           "color": {
             "color": "panel"
@@ -466,11 +797,26 @@
           "type": "text",
           "id": "pause_title",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 82.0],
-            "size_delta": [500.0, 62.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              82.0
+            ],
+            "size_delta": [
+              500.0,
+              62.0
+            ]
           },
           "text": {
             "literal": "PAUSED"
@@ -486,11 +832,26 @@
           "type": "horizontal_slider",
           "id": "pause_gamma",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 164.0],
-            "size_delta": [460.0, 72.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              164.0
+            ],
+            "size_delta": [
+              460.0,
+              72.0
+            ]
           },
           "text": {
             "literal": "GAMMA"
@@ -523,11 +884,26 @@
           "type": "horizontal_slider",
           "id": "pause_exposure",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 250.0],
-            "size_delta": [460.0, 72.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              250.0
+            ],
+            "size_delta": [
+              460.0,
+              72.0
+            ]
           },
           "text": {
             "literal": "EXPOSURE EV"
@@ -560,11 +936,26 @@
           "type": "button",
           "id": "pause_resume",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 358.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              358.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "RESUME"
@@ -573,6 +964,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.resume",
           "background": {
             "normal": "button",
@@ -584,11 +977,26 @@
           "type": "button",
           "id": "pause_main_menu",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 424.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              424.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "MAIN MENU"
@@ -597,6 +1005,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.return_main_menu",
           "background": {
             "normal": "button",
@@ -608,11 +1018,26 @@
           "type": "button",
           "id": "pause_quit",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 490.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              490.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "QUIT"
@@ -621,6 +1046,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.quit",
           "background": {
             "normal": "button",
@@ -634,17 +1061,34 @@
       "id": "results",
       "backdrop_color": "backdrop",
       "default_focus": "results_main_menu",
-      "focus_order": ["results_main_menu"],
+      "focus_order": [
+        "results_main_menu"
+      ],
       "children": [
         {
           "type": "panel",
           "id": "results_panel",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 54.0],
-            "size_delta": [780.0, 620.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              54.0
+            ],
+            "size_delta": [
+              780.0,
+              620.0
+            ]
           },
           "color": {
             "color": "panel"
@@ -654,11 +1098,26 @@
           "type": "text",
           "id": "results_title",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 90.0],
-            "size_delta": [680.0, 62.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              90.0
+            ],
+            "size_delta": [
+              680.0,
+              62.0
+            ]
           },
           "text": {
             "select": {
@@ -688,11 +1147,26 @@
           "type": "text",
           "id": "results_rooms_summary",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 190.0],
-            "size_delta": [500.0, 36.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              190.0
+            ],
+            "size_delta": [
+              500.0,
+              36.0
+            ]
           },
           "text": {
             "compose": {
@@ -726,11 +1200,26 @@
           "type": "text",
           "id": "results_kills_summary",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 232.0],
-            "size_delta": [500.0, 36.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              232.0
+            ],
+            "size_delta": [
+              500.0,
+              36.0
+            ]
           },
           "text": {
             "compose": {
@@ -757,28 +1246,65 @@
           "type": "fixed_step_list",
           "id": "results_room_list",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 302.0],
-            "size_delta": [500.0, 238.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              302.0
+            ],
+            "size_delta": [
+              500.0,
+              238.0
+            ]
           },
           "binding": "results.rooms",
           "max_items": 7,
-          "item_step": [0.0, 34.0],
+          "item_step": [
+            0.0,
+            34.0
+          ],
           "template": [
             {
               "type": "text",
               "id": "results_room_name",
               "rect": {
-                "anchor_min": [0.0, 0.0],
-                "anchor_max": [0.0, 0.0],
-                "pivot": [0.0, 0.0],
-                "position": [0.0, 0.0],
-                "size_delta": [320.0, 28.0]
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  0.0,
+                  0.0
+                ],
+                "pivot": [
+                  0.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  320.0,
+                  28.0
+                ]
               },
               "text": {
-                "item_field": "name"
+                "item_field": "name",
+                "format": {
+                  "decimals": 0,
+                  "show_plus": false
+                }
               },
               "point_size": 17.0,
               "text_color": {
@@ -791,11 +1317,26 @@
               "type": "text",
               "id": "results_room_kills",
               "rect": {
-                "anchor_min": [1.0, 0.0],
-                "anchor_max": [1.0, 0.0],
-                "pivot": [1.0, 0.0],
-                "position": [0.0, 0.0],
-                "size_delta": [180.0, 28.0]
+                "anchor_min": [
+                  1.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  0.0
+                ],
+                "pivot": [
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  180.0,
+                  28.0
+                ]
               },
               "text": {
                 "compose": {
@@ -824,11 +1365,26 @@
           "type": "button",
           "id": "results_main_menu",
           "rect": {
-            "anchor_min": [0.5, 0.0],
-            "anchor_max": [0.5, 0.0],
-            "pivot": [0.5, 0.0],
-            "position": [0.0, 592.0],
-            "size_delta": [360.0, 52.0]
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              592.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
           },
           "text": {
             "literal": "MAIN MENU"
@@ -837,6 +1393,8 @@
           "text_color": {
             "color": "text"
           },
+          "horizontal_align": "center",
+          "vertical_align": "center",
           "action": "object_fps.return_main_menu",
           "background": {
             "normal": "button",

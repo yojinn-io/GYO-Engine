@@ -13,6 +13,7 @@ enum class RenderErrorCode {
     ShaderCompilationFailed,
     ResourceCreationFailed,
     SubmissionFailed,
+    UnsupportedOperation,
 };
 
 using RenderError = Base::Error<RenderErrorCode>;

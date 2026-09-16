@@ -48,9 +48,13 @@ private:
 
 struct MeshHandleTag;
 struct TextureHandleTag;
+struct PipelineHandleTag;
+struct ShaderHandleTag;
 
 using MeshHandle = ResourceHandle<MeshHandleTag>;
 using TextureHandle = ResourceHandle<TextureHandleTag>;
+using PipelineHandle = ResourceHandle<PipelineHandleTag>;
+using ShaderHandle = ResourceHandle<ShaderHandleTag>;
 
 } // namespace Engine::Render
 
