@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps.model.character.superhero_male",
+  "material_overrides": {
+    "MI_Eyes": { "texture_asset_id": "object_fps.texture.character.male.eyes", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" },
+    "MI_Hair_1": { "texture_asset_id": "object_fps.texture.character.male.hair", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" },
+    "MI_Superhero_Male": { "texture_asset_id": "object_fps.texture.character.male.body", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" }
+  }
+}

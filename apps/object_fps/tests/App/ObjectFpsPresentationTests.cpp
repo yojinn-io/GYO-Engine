@@ -89,10 +89,17 @@ constexpr std::string_view kMap =
 class PpmAssetSource final : public Engine::Asset::Loading::IAssetSource {
 public:
     std::optional<std::string> presentationOverride;
+    std::optional<std::string> animationSetOverride;
     std::size_t modelReadCount{};
 
     Engine::Base::Result<std::vector<std::byte>, Engine::Asset::AssetError>
     ReadAll(std::string_view path) override {
+        if (path.find("mark23") != std::string_view::npos &&
+            path.ends_with("viewmodel.animset.json") && animationSetOverride) {
+            const auto bytes = std::as_bytes(std::span(animationSetOverride->data(), animationSetOverride->size()));
+            return Engine::Base::Result<std::vector<std::byte>, Engine::Asset::AssetError>::Ok(
+                std::vector<std::byte>(bytes.begin(), bytes.end()));
+        }
         if (path.ends_with("mark23_viewmodel.json") && presentationOverride) {
             const auto bytes = std::as_bytes(std::span(presentationOverride->data(), presentationOverride->size()));
             return Engine::Base::Result<std::vector<std::byte>, Engine::Asset::AssetError>::Ok(
@@ -288,7 +295,7 @@ struct AssetFixture final {
 
 [[nodiscard]] nlohmann::json ReadWeaponPresentationConfig() {
     const auto path = std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} /
-                      "data/mark23_viewmodel.json";
+                      "weapons/mark23/viewmodel/mark23_viewmodel.json";
     std::ifstream stream(path);
     return nlohmann::json::parse(stream);
 }
@@ -450,8 +457,93 @@ void TestSharedPlacementAndDefinitionErrors(TestContext& context) {
     reject("muzzle behind the viewmodel camera fails validation", [](auto& config) { config["offset_meters"] = {0, 0, -2}; });
     reject("zero placement scale fails validation", [](auto& config) { config["scale"] = 0; });
     reject("invalid viewmodel FOV fails validation", [](auto& config) { config["vertical_fov_degrees"] = 0; });
-    reject("missing Shoot clip fails before shot geometry is created", [](auto& config) { config["clips"]["Shoot"] = "missing_shoot"; });
+    reject("missing Shoot clip fails before shot geometry is created", [](auto& config) {
+        config.erase("animation_set_asset_id");
+        config["clips"] = {{"Idle", "Idle"}, {"Shoot", "missing_shoot"}, {"Reload", "Reload"},
+                           {"Draw", "Draw"}, {"Hide", "Hide"}};
+    });
     reject("missing material binding fails shared definition loading", [](auto& config) { config["materials"].erase("Mark23_D"); });
+    reject("unknown material slot is diagnosed", [](auto& config) { config["materials"]["Typo"] = "common.texture.white"; });
+    reject("both animation forms are rejected", [](auto& config) { config["clips"] = {{"Idle", "Idle"}}; });
+    reject("missing both animation forms is rejected", [](auto& config) { config.erase("animation_set_asset_id"); });
+}
+
+void TestExternalAnimationSetAndIndependentInstances(TestContext& context) {
+    const auto id = Engine::Asset::AssetId::FromString("object_fps.weapon.mark23");
+    AssetFixture fixture;
+    std::string error;
+    if (!fixture.Initialize(error)) { context.Fail(error); return; }
+    const auto external = LoadWeaponPresentationDefinition(fixture.assets, id, error);
+    context.Expect(static_cast<bool>(external), error.empty() ? "external Mark23 animation set loads" : error);
+    if (!external) return;
+
+    auto legacyConfig = ReadWeaponPresentationConfig();
+    legacyConfig.erase("animation_set_asset_id");
+    legacyConfig["clips"] = {{"Idle", "Idle"}, {"Shoot", "Shoot"}, {"Reload", "Reload"},
+                             {"Draw", "Draw"}, {"Hide", "Hide"}};
+    AssetFixture legacyFixture;
+    legacyFixture.source.presentationOverride = legacyConfig.dump();
+    if (!legacyFixture.Initialize(error)) { context.Fail(error); return; }
+    const auto legacy = LoadWeaponPresentationDefinition(legacyFixture.assets, id, error);
+    context.Expect(static_cast<bool>(legacy), "legacy inline weapon animations remain supported");
+    if (legacy) {
+        context.Expect(legacy->clips == external->clips &&
+            legacy->materialTextureAssetIds == external->materialTextureAssetIds &&
+            SamePoint({legacy->muzzleLocalPosition.x, legacy->muzzleLocalPosition.y, legacy->muzzleLocalPosition.z},
+                      {external->muzzleLocalPosition.x, external->muzzleLocalPosition.y, external->muzzleLocalPosition.z}),
+            "inline and external animation selectors preserve clips, materials and muzzle");
+    }
+
+    const auto animsetPath = std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} /
+        "weapons/mark23/viewmodel/viewmodel.animset.json";
+    std::ifstream animsetStream(animsetPath);
+    auto incompleteSet = nlohmann::json::parse(animsetStream);
+    incompleteSet["clips"].erase("Shoot");
+    AssetFixture incomplete;
+    incomplete.source.animationSetOverride = incompleteSet.dump();
+    if (!incomplete.Initialize(error)) { context.Fail(error); return; }
+    context.Expect(!LoadWeaponPresentationDefinition(incomplete.assets, id, error) &&
+        error.find("Shoot") != std::string::npos && error.find(id.debugName) != std::string::npos,
+        "external set must provide every weapon action with a contextual diagnostic");
+
+    CapturingRenderDevice device;
+    WeaponViewModel first, second;
+    if (!first.Initialize(device, fixture.assets, id, error) ||
+        !second.Initialize(device, fixture.assets, id, error)) { context.Fail(error); return; }
+    context.Expect(fixture.source.modelReadCount == 1,
+        "two viewmodels and their animation references share one imported model");
+    Engine::Render::RenderQueue secondQueue;
+    WeaponPresentationSnapshot idle;
+    idle.action = WeaponAction::Idle;
+    context.Expect(second.Submit(idle, secondQueue, error), "second viewmodel submits its own Idle pose");
+    const auto secondMuzzle = second.GetMuzzleViewCameraPosition();
+    std::unordered_map<Engine::Render::MeshHandle, std::vector<Engine::Render::Vertex3D>> saved;
+    for (const auto& mesh : secondQueue.Meshes()) saved.emplace(mesh.mesh, device.vertices.at(mesh.mesh));
+    context.Expect(!saved.empty(), "independence test captures real Mark23 meshes");
+    Engine::Render::RenderQueue firstQueue;
+    WeaponPresentationSnapshot shoot;
+    shoot.action = WeaponAction::Shoot;
+    shoot.durationSeconds = 10.0F / 30.0F;
+    shoot.elapsedSeconds = 4.0F / 30.0F;
+    context.Expect(first.Submit(shoot, firstQueue, error), "first viewmodel advances independently to Shoot");
+    context.Expect(!SamePoint(first.GetMuzzleViewCameraPosition(), secondMuzzle) &&
+        SamePoint(second.GetMuzzleViewCameraPosition(), secondMuzzle),
+        "advancing the first viewmodel leaves the second muzzle and playback pose unchanged");
+    bool unchanged = true;
+    for (const auto& [handle, before] : saved) {
+        const auto& after = device.vertices.at(handle);
+        unchanged = unchanged && before.size() == after.size();
+        for (std::size_t i = 0; i < before.size() && i < after.size(); ++i) {
+            unchanged = unchanged && SamePoint(before[i].position, after[i].position) &&
+                NearlyEqual(before[i].uv.x, after[i].uv.x) && NearlyEqual(before[i].uv.y, after[i].uv.y);
+        }
+    }
+    context.Expect(unchanged, "second viewmodel GPU vertex buffers are not overwritten by the first");
+    for (const auto& mesh : firstQueue.Meshes()) {
+        const auto color = mesh.material.tint;
+        context.Expect(color.red == 1 && color.green == 1 && color.blue == 1 && color.alpha == 1,
+            "Mark23 explicit texture bindings retain white tint");
+    }
 }
 
 void TestSceneAndOverlaySubmissionOrder(TestContext& context) {
@@ -671,6 +763,7 @@ void TestSceneAndOverlaySubmissionOrder(TestContext& context) {
 void RunObjectFpsPresentationTests(TestContext& context) {
     TestModelDerivedMuzzle(context);
     TestSharedPlacementAndDefinitionErrors(context);
+    TestExternalAnimationSetAndIndependentInstances(context);
     TestSceneAndOverlaySubmissionOrder(context);
 }
 

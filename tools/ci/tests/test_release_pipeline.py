@@ -2,6 +2,7 @@
 
 import copy
 import contextlib
+import http.client
 import io
 import json
 from pathlib import Path
@@ -10,13 +11,15 @@ import subprocess
 import sys
 import tarfile
 import unittest
+from unittest.mock import Mock, patch
+import urllib.error
 import urllib.request
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, prepare_draft,
-                              verify_remote_tag)
+from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, TransientApiError,
+                              prepare_draft, retry_after_seconds, verify_remote_tag)
 from release_support import (ARCHIVE_ROOT, METADATA_PATH, PLATFORMS, Package,
                              ReleaseError, archive_name, checksum_document,
                              load_packages, prepare_event, validate_archive)
@@ -521,6 +524,62 @@ class DraftTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_transient_http_preserves_status_delay_and_safe_operation(self):
+        api = GitHubApi("test/repo", "not-a-real-token")
+        api.opener = Mock()
+        api.opener.open.side_effect = urllib.error.HTTPError(
+            "https://uploads.github.com/private?signature=secret", 504,
+            "Gateway timeout; request body=private", {"Retry-After": "12"}, None)
+        with self.assertRaises(ApiError) as failure:
+            api.upload(42, "private-name.tar.gz", b"private file payload")
+        self.assertEqual(failure.exception.status, 504)
+        self.assertEqual(failure.exception.retry_after, 12)
+        self.assertIn("POST uploads.github.com/repos/test/repo/releases/42/assets", str(failure.exception))
+        for secret in ("not-a-real-token", "signature", "request body", "private-name", "file payload"):
+            self.assertNotIn(secret, str(failure.exception))
+        # Transport must not blindly replay an ambiguous POST.
+        self.assertEqual(api.opener.open.call_count, 1)
+
+    def test_timeout_reset_and_incomplete_body_are_normalized(self):
+        for error in (TimeoutError("secret URL"), ConnectionResetError("secret URL"),
+                      http.client.IncompleteRead(b"secret partial bytes", 100),
+                      urllib.error.URLError(TimeoutError("secret URL"))):
+            for phase in ("open", "read"):
+                with self.subTest(error=type(error).__name__, phase=phase):
+                    api = GitHubApi("test/repo", "token")
+                    api.opener = Mock()
+                    if phase == "open":
+                        api.opener.open.side_effect = error
+                    else:
+                        response = Mock()
+                        response.read.side_effect = error
+                        manager = Mock()
+                        manager.__enter__ = Mock(return_value=response)
+                        manager.__exit__ = Mock(return_value=False)
+                        api.opener.open.return_value = manager
+                    with self.assertRaises(TransientApiError) as failure:
+                        api.download(123)
+                    self.assertIn("GET api.github.com/repos/test/repo/releases/assets/123", str(failure.exception))
+                    self.assertNotIn("secret", str(failure.exception))
+
+    def test_permanent_connection_failure_is_not_classified_as_transient(self):
+        api = GitHubApi("test/repo", "token")
+        api.opener = Mock()
+        api.opener.open.side_effect = urllib.error.URLError("certificate verification failed; secret URL")
+        with self.assertRaises(ReleaseError) as failure:
+            api.request("GET", "/releases")
+        self.assertNotIsInstance(failure.exception, TransientApiError)
+        self.assertNotIn("secret", str(failure.exception))
+
+    def test_retry_after_supports_seconds_and_http_dates(self):
+        self.assertEqual(retry_after_seconds("17"), 17)
+        with patch("release_pipeline.time.time", return_value=0):
+            self.assertEqual(retry_after_seconds("Thu, 01 Jan 1970 00:00:25 GMT"), 25)
+        with patch("release_pipeline.time.time", return_value=100):
+            self.assertEqual(retry_after_seconds("Thu, 01 Jan 1970 00:00:25 GMT"), 0)
+        for value in (None, "", "unknown", "-1"):
+            self.assertIsNone(retry_after_seconds(value))
+
     def test_redirect_removes_authorization(self):
         request = urllib.request.Request("https://api.github.com/repos/test/repo/releases/assets/1",
                                          headers={"Authorization": "Bearer not-a-real-secret"})

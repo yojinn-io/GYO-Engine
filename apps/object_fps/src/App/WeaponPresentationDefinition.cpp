@@ -1,4 +1,5 @@
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/App/AnimationSetDefinition.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -90,13 +91,36 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
             throw std::runtime_error("unsupported weapon presentation version");
         }
         auto definition = std::make_shared<WeaponPresentationDefinition>();
+        const auto modelId = ReadAssetId(config.at("model_asset_id"));
         definition->model = LoadShared<Engine::Model::ModelAsset>(
-            assets, ReadAssetId(config.at("model_asset_id")), Engine::Asset::AssetType::FromString("model"));
-        for (std::size_t slot = 0; slot < kActions.size(); ++slot) {
-            const auto name = config.at("clips").at(kActions[slot]).get<std::string>();
-            const auto clip = definition->model->FindClip(name);
-            if (!clip) throw std::runtime_error("model is missing animation '" + name + "'");
-            definition->clips[slot] = *clip;
+            assets, modelId, Engine::Asset::AssetType::FromString("model"));
+        if (config.contains("clips") == config.contains("animation_set_asset_id")) {
+            throw std::runtime_error("provide exactly one of clips or animation_set_asset_id");
+        }
+        if (config.contains("animation_set_asset_id")) {
+            std::string bindingError;
+            const auto animationSet = LoadAnimationSetDefinition(
+                assets, ReadAssetId(config.at("animation_set_asset_id")), bindingError);
+            if (!animationSet || !ValidateAnimationSetBinding(
+                    *animationSet, modelId, definition->model, bindingError)) {
+                throw std::runtime_error(bindingError);
+            }
+            for (std::size_t slot = 0; slot < kActions.size(); ++slot) {
+                const auto clip = animationSet->clips.find(kActions[slot]);
+                if (clip == animationSet->clips.end()) {
+                    throw std::runtime_error("animation set is missing weapon action '" +
+                                             std::string(kActions[slot]) + "'");
+                }
+                definition->clips[slot] = clip->second.clipIndex;
+            }
+        } else {
+            for (std::size_t slot = 0; slot < kActions.size(); ++slot) {
+                const auto name = config.at("clips").at(kActions[slot]).get<std::string>();
+                const auto clip = definition->model->FindClip(name);
+                if (!clip) throw std::runtime_error("model '" + modelId.debugName +
+                                                   "' is missing animation '" + name + "'");
+                definition->clips[slot] = *clip;
+            }
         }
         const auto anchor = definition->model->FindNode(config.at("anchor_node").get<std::string>());
         if (!anchor) throw std::runtime_error("model is missing the viewmodel anchor node");
@@ -124,8 +148,18 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
         const auto sampler = config.value("sampler", "linear_clamp");
         if (sampler == "linear_wrap") definition->sampler = Engine::Render::SamplerMode::LinearWrap;
         else if (sampler != "linear_clamp") throw std::runtime_error("unsupported viewmodel sampler '" + sampler + "'");
+        const auto& materials = config.at("materials");
+        if (!materials.is_object()) throw std::runtime_error("materials must be a slot-to-texture object");
+        for (const auto& [slot, value] : materials.items()) {
+            bool found = false;
+            for (const auto& material : definition->model->materials) {
+                if (material.name == slot) { found = true; break; }
+            }
+            if (!found) throw std::runtime_error("model '" + modelId.debugName +
+                                                "' has no material slot '" + slot + "'");
+        }
         for (const auto& material : definition->model->materials) {
-            definition->materialTextureAssetIds.push_back(ReadAssetId(config.at("materials").at(material.name)));
+            definition->materialTextureAssetIds.push_back(ReadAssetId(materials.at(material.name)));
         }
 
         Engine::Model::Pose pose;

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "clips": {
+    "idle": { "model_asset_id": "object_fps.model.animation.ual1_mannequin", "clip": "Armature|Idle_Loop" },
+    "walk": { "model_asset_id": "object_fps.model.animation.ual1_mannequin", "clip": "Armature|Walk_Loop" },
+    "run": { "model_asset_id": "object_fps.model.animation.ual1_mannequin", "clip": "Armature|Jog_Fwd_Loop" }
+  }
+}

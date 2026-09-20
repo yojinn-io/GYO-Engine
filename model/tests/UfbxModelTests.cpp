@@ -48,6 +48,25 @@ Objects: {
 Connections: { C: "OO",1,2 C: "OO",2,0 }
 )fbx";
 
+std::vector<std::byte> MaterialTriangle(
+    const std::string_view properties,const std::string_view templateProperties={}) {
+    std::string source(kRigidTriangle);
+    if(!templateProperties.empty()) {
+        source.insert(source.find("Objects:"),
+            "Definitions: { Version: 100 Count: 1\n"
+            " ObjectType: \"Material\" { Count: 1\n"
+            "  PropertyTemplate: \"FbxSurfaceLambert\" { Properties70: {\n"+
+            std::string(templateProperties)+"\n } } } }\n");
+    }
+    source.insert(source.find("\n}\nConnections:"),
+        "\n Material: 3, \"Material::Surface\", \"\" {\n"
+        "  Version: 102 ShadingModel: \"lambert\" MultiLayer: 0\n"
+        "  Properties70: {\n"+std::string(properties)+"\n }\n }\n");
+    source.insert(source.rfind('}')," C: \"OO\",3,2\n");
+    const auto bytes=std::as_bytes(std::span(source.data(),source.size()));
+    return {bytes.begin(),bytes.end()};
+}
+
 std::vector<std::byte> ReadModel() {
     std::ifstream input(GYO_MARK23_FBX,std::ios::binary|std::ios::ate);
     if(!input) throw std::runtime_error("Mark23 regression fixture cannot be opened");
@@ -113,6 +132,7 @@ TEST_CASE("unskinned FBX without materials or UVs keeps rigid geometric transfor
     REQUIRE(model->meshes.size()==1);
     REQUIRE(model->materials.size()==1);
     CHECK(model->materials[0].name=="Default");
+    CHECK(model->materials[0].baseColorLinear==std::array<float,4>{1,1,1,1});
     CHECK(model->meshes[0].joints.empty());
     CHECK(model->clips.empty());
     Pose pose;REQUIRE(MakeDefaultPose(*model,pose));
@@ -130,6 +150,65 @@ TEST_CASE("unskinned FBX without materials or UVs keeps rigid geometric transfor
     }
     CHECK(minX==doctest::Approx(0.5));CHECK(maxX==doctest::Approx(1.5));
     CHECK(minY==doctest::Approx(0.25));CHECK(maxY==doctest::Approx(1.25));
+}
+
+TEST_CASE("FBX diffuse colors preserve linear RGB and apply authored factors once") {
+    const auto bytes=MaterialTriangle(
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",0.75,0.5,0.25\n"
+        "P: \"DiffuseFactor\", \"Number\", \"\", \"A\",0.8");
+    const auto model=LoadModel(bytes);
+    REQUIRE(model->materials.size()==1);
+    const auto& color=model->materials[0].baseColorLinear;
+    CHECK(color[0]==doctest::Approx(0.6));
+    CHECK(color[1]==doctest::Approx(0.4));
+    CHECK(color[2]==doctest::Approx(0.2));
+    CHECK(color[3]==1);
+}
+
+TEST_CASE("FBX material templates provide defaults and local factors override them") {
+    constexpr std::string_view defaults=
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",0.75,0.5,0.25\n"
+        "P: \"DiffuseFactor\", \"Number\", \"\", \"A\",0.8";
+    auto model=LoadModel(MaterialTriangle({},defaults));
+    REQUIRE(model->materials.size()==1);
+    CHECK(model->materials[0].baseColorLinear[0]==doctest::Approx(0.6));
+    model=LoadModel(MaterialTriangle(
+        "P: \"DiffuseFactor\", \"Number\", \"\", \"A\",0.4",defaults));
+    CHECK(model->materials[0].baseColorLinear[0]==doctest::Approx(0.3));
+}
+
+TEST_CASE("FBX missing diffuse color stays white and missing factor preserves color") {
+    for(const auto properties:{std::string_view{},std::string_view{
+        "P: \"DiffuseFactor\", \"Number\", \"\", \"A\",0.8"}}) {
+        const auto model=LoadModel(MaterialTriangle(properties));
+        REQUIRE(model->materials.size()==1);
+        CHECK(model->materials[0].baseColorLinear==std::array<float,4>{1,1,1,1});
+    }
+    const auto model=LoadModel(MaterialTriangle(
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",0.75,0.5,0.25"));
+    CHECK(model->materials[0].baseColorLinear==std::array<float,4>{0.75F,0.5F,0.25F,1});
+    const auto black=LoadModel(MaterialTriangle(
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",0,0,0"));
+    CHECK(black->materials[0].baseColorLinear==std::array<float,4>{0,0,0,1});
+}
+
+TEST_CASE("FBX four-component diffuse color retains straight alpha independently of factor") {
+    const auto model=LoadModel(MaterialTriangle(
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",0.75,0.5,0.25,0.4\n"
+        "P: \"DiffuseFactor\", \"Number\", \"\", \"A\",0.8"));
+    const auto& color=model->materials[0].baseColorLinear;
+    CHECK(color[0]==doctest::Approx(0.6));
+    CHECK(color[3]==doctest::Approx(0.4));
+}
+
+TEST_CASE("FBX diffuse values outside finite float storage fail with a material diagnostic") {
+    const auto bytes=MaterialTriangle(
+        "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1e39,0.5,0.25");
+    Ufbx::UfbxModelLoader loader;
+    const auto loaded=loader.Load({bytes.data(),bytes.size()},{});
+    REQUIRE_FALSE(loaded);
+    CHECK(loaded.error().message.find("Surface")!=std::string::npos);
+    CHECK(loaded.error().message.find("non-finite base color")!=std::string::npos);
 }
 
 TEST_CASE("out of range FBX indices and truncated binary input fail cleanly") {

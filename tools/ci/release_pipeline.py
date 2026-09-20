@@ -2,11 +2,14 @@
 """Validate a manual release request and prepare a verified, unpublished draft."""
 
 import argparse
+from email.utils import parsedate_to_datetime
+import http.client
 import json
 import os
 from pathlib import Path
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,9 +22,29 @@ from release_support import (PLATFORMS, Package, ReleaseError, archive_name, che
 
 
 class ApiError(ReleaseError):
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, retry_after: float | None = None):
         super().__init__(f"GitHub API returned HTTP {status}: {message}")
         self.status = status
+        self.retry_after = retry_after
+
+
+class TransientApiError(ReleaseError):
+    """An incomplete response whose remote effects must be reconciled before retrying."""
+
+
+RETRY_DELAYS = (2, 4, 8)
+TRANSIENT_HTTP_STATUS = frozenset((500, 502, 503, 504))
+
+
+def retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    if value.isascii() and value.isdecimal():
+        return float(value)
+    try:
+        return max(0, parsedate_to_datetime(value).timestamp() - time.time())
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -50,6 +73,7 @@ class GitHubApi:
                  content_type: str = "application/json", binary: bool = False):
         if host not in ("api.github.com", "uploads.github.com") or not path.startswith(self.prefix + "/"):
             raise ReleaseError("Refusing an unexpected GitHub API endpoint")
+        operation = f"{method} {host}{urllib.parse.urlsplit(path).path}"
         request = urllib.request.Request(f"https://{host}{path}", data=data, method=method, headers={
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/octet-stream" if binary else "application/vnd.github+json",
@@ -62,9 +86,14 @@ class GitHubApi:
                 result = response.read()
         except urllib.error.HTTPError as error:
             # Deliberately omit headers, request data and response URLs from diagnostics.
-            raise ApiError(error.code, error.reason) from None
+            raise ApiError(error.code, operation,
+                           retry_after_seconds(error.headers.get("Retry-After") if error.headers else None)) from None
         except urllib.error.URLError as error:
-            raise ReleaseError(f"GitHub API connection failed: {error.reason}") from None
+            if isinstance(error.reason, (TimeoutError, ConnectionError, http.client.IncompleteRead)):
+                raise TransientApiError(f"{operation}: {type(error.reason).__name__}") from None
+            raise ReleaseError(f"{operation}: connection failed ({type(error.reason).__name__})") from None
+        except (TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
+            raise TransientApiError(f"{operation}: {type(error).__name__}") from None
         return result if binary else json.loads(result)
 
     def request(self, method: str, path: str, data=None):
@@ -157,6 +186,12 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
         archive_asset = assets.get(package.name)
         checksum_name = package.name + ".sha256"
         checksum_asset = assets.get(checksum_name)
+        for asset in (archive_asset, checksum_asset):
+            if asset and asset.get("state") != "uploaded":
+                raise TransientApiError(
+                    f"Incomplete GitHub upload: {asset.get('name')} (state={asset.get('state')}). "
+                    "If it remains incomplete, inspect the draft and remove only the failed upload "
+                    "placeholder before rerunning the failed job; no asset was deleted automatically")
         if archive_asset:
             existing = api.download(archive_asset["id"])
             validate_archive(package.name, existing, package.platform, commit)
@@ -188,7 +223,7 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
     release = find_release(api, tag)
     if release is not None:
         release_id = verify_draft(release, tag)
-        # Inspect every existing package before creating a missing tag or uploading anything.
+        # Inspect every existing package before uploading anything.
         uploads = plan_uploads(api, release_assets(api, release_id), packages, commit)
     resolved = remote_tag_commit(api, tag)
     if resolved is not None and resolved != commit:
@@ -234,6 +269,7 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
         # The human Publish button can be clicked while this job is active.
         # Stop immediately if the draft became public; never PATCH it back to draft.
         refresh_draft(api, release_id, tag, commit)
+        print(f"Uploading draft asset: {name}", flush=True)
         try:
             api.upload(release_id, name, data)
         except ApiError as error:
@@ -258,6 +294,33 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
         raise ReleaseError("GitHub returned an unexpected draft release URL")
     print(f"Draft {tag} ({release_id}) is ready with all three packages; publish it manually in GitHub")
     return {"release_id": str(release_id), "release_url": release_url, "tag": tag, "commit": commit}
+
+
+def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
+                               packages: list[Package], *, sleep=time.sleep) -> dict:
+    # A failed POST may already have succeeded remotely. Restart reconciliation,
+    # never the individual POST: verify the tag, draft and existing packages again.
+    attempts = len(RETRY_DELAYS) + 1
+    for attempt in range(attempts):
+        try:
+            return prepare_draft(api, tag, commit, prerelease, packages)
+        except (ApiError, TransientApiError) as error:
+            if isinstance(error, ApiError) and error.status not in TRANSIENT_HTTP_STATUS:
+                raise
+            if attempt == len(RETRY_DELAYS):
+                raise ReleaseError(
+                    f"Release API recovery exhausted after {attempts} attempts: {error}. "
+                    "Verified assets were preserved; rerun the failed job after the service recovers") from error
+            delay = max(RETRY_DELAYS[attempt], getattr(error, "retry_after", None) or 0)
+            if delay > 60:
+                raise ReleaseError(
+                    f"GitHub requested a {delay:g}s retry delay, beyond automatic recovery: {error}. "
+                    "Rerun the failed job after that delay") from error
+            print(f"Release API attempt {attempt + 1}/{attempts} failed: {error}. "
+                  f"Retrying in {delay:g}s; rechecking tag, draft and uploaded checksums before any write",
+                  file=sys.stderr, flush=True)
+            sleep(delay)
+    raise AssertionError("Unreachable retry state")
 
 
 def write_outputs(path: Path, result: dict) -> None:
@@ -289,7 +352,7 @@ def main() -> None:
         else:
             packages = load_packages(args.package_directory, args.commit)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
-            result = prepare_draft(api, args.tag, args.commit, parse_boolean(args.prerelease), packages)
+            result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease), packages)
         write_outputs(args.output, result)
         print(json.dumps(result))
     except (ReleaseError, OSError, ValueError) as error:

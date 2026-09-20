@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "clips": {
+    "Idle": { "model_asset_id": "object_fps.model.mark23", "clip": "Idle" },
+    "Shoot": { "model_asset_id": "object_fps.model.mark23", "clip": "Shoot" },
+    "Reload": { "model_asset_id": "object_fps.model.mark23", "clip": "Reload" },
+    "Draw": { "model_asset_id": "object_fps.model.mark23", "clip": "Draw" },
+    "Hide": { "model_asset_id": "object_fps.model.mark23", "clip": "Hide" }
+  }
+}

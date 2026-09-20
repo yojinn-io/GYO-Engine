@@ -71,7 +71,22 @@ std::shared_ptr<ModelAsset> Import(const ufbx_scene& scene) {
             pending.emplace_back(node->children[i-1],index);
     }
 
-    for(const auto* material:scene.materials) model->materials.push_back({String(material->name)});
+    for(const auto* material:scene.materials) {
+        Material imported{String(material->name)};
+        const auto& color=material->fbx.diffuse_color;
+        if(color.has_value) {
+            // ufbx resolves authored/template properties but does not multiply
+            // the diffuse factor into the color. Apply it to RGB once; alpha
+            // remains straight, and a missing factor is the identity.
+            const auto& diffuseFactor=material->fbx.diffuse_factor;
+            const double factor=diffuseFactor.has_value?diffuseFactor.value_real:1.0;
+            const auto value=color.value_vec4;
+            imported.baseColorLinear={static_cast<float>(value.x*factor),
+                static_cast<float>(value.y*factor),static_cast<float>(value.z*factor),
+                static_cast<float>(value.w)};
+        }
+        model->materials.push_back(std::move(imported));
+    }
     const std::size_t defaultMaterial=model->materials.size();
     // A fallback material exists only if a mesh actually needs it.
     bool usedDefault=false;

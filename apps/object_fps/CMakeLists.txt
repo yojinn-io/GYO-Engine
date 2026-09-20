@@ -48,6 +48,8 @@ endif()
 
 if(TARGET GYO::Engine)
     add_library(object_fps_app_support STATIC
+        src/App/AnimationSetDefinition.cpp
+        src/App/CharacterPresentationDefinition.cpp
         src/App/CampaignContentLoader.cpp
         src/App/ObjectFpsPresentation.cpp
         src/App/WeaponViewModel.cpp
@@ -196,6 +198,7 @@ endif()
 if(BUILD_TESTING)
     add_executable(object_fps_headless_tests
         tests/TestMain.cpp
+        tests/App/AssetPresentationDefinitionTests.cpp
         tests/App/ObjectFpsPresentationTests.cpp
         tests/App/ObjectFpsUiTests.cpp
         tests/Collision/CollisionTests.cpp
@@ -216,6 +219,8 @@ if(BUILD_TESTING)
     )
     target_link_libraries(object_fps_headless_tests PRIVATE ObjectFPS::Domain)
     target_sources(object_fps_headless_tests PRIVATE
+        src/App/AnimationSetDefinition.cpp
+        src/App/CharacterPresentationDefinition.cpp
         src/App/ObjectFpsPresentation.cpp
         src/App/WeaponViewModel.cpp
         src/App/WeaponPresentationDefinition.cpp
@@ -229,6 +234,11 @@ if(BUILD_TESTING)
         GYO::AssetUfbx
         nlohmann_json::nlohmann_json
     )
+    if(TARGET GYO::AssetSdlImage)
+        target_link_libraries(object_fps_headless_tests PRIVATE GYO::AssetSdlImage)
+        target_compile_definitions(object_fps_headless_tests PRIVATE OBJECT_FPS_TEST_SDL_IMAGE=1)
+        gyo_copy_runtime_dlls(object_fps_headless_tests)
+    endif()
     target_include_directories(object_fps_headless_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     target_include_directories(object_fps_headless_tests PRIVATE "${PROJECT_SOURCE_DIR}/tests/support")
     target_compile_features(object_fps_headless_tests PRIVATE cxx_std_20)

@@ -41,6 +41,9 @@ struct Material final {
     // Stable source material name. Applications map this to catalog AssetIds;
     // model loaders never open paths embedded in authoring files.
     std::string name;
+    // Linear RGB with straight alpha, independent of a renderer or texture.
+    // Missing source color keeps the neutral white multiplier.
+    std::array<float, 4> baseColorLinear{1.0F, 1.0F, 1.0F, 1.0F};
 };
 
 struct SkinJoint final {

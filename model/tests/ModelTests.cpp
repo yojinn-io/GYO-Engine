@@ -93,6 +93,24 @@ TEST_CASE("rigid vertices preserve geometric transforms and normals") {
     CHECK(vertices[1].normal.y==doctest::Approx(1));
 }
 
+TEST_CASE("model materials retain renderer-neutral linear colors and reject non-finite components") {
+    auto model=MakeModel();
+    CHECK(model.materials[0].baseColorLinear==std::array<float,4>{1,1,1,1});
+    model.materials[0].baseColorLinear={0.25F,0.5F,0.75F,0.4F};
+    REQUIRE(ValidateModel(model));
+    for(std::size_t component=0;component<4;++component) {
+        for(const float invalid:{std::numeric_limits<float>::infinity(),
+                                 std::numeric_limits<float>::quiet_NaN()}) {
+            auto invalidModel=model;
+            invalidModel.materials[0].baseColorLinear[component]=invalid;
+            const auto validation=ValidateModel(invalidModel);
+            REQUIRE_FALSE(validation);
+            CHECK(validation.error().find("diffuse")!=std::string::npos);
+            CHECK(validation.error().find("non-finite base color")!=std::string::npos);
+        }
+    }
+}
+
 TEST_CASE("invalid hierarchy, animation and skin data fail with diagnostics") {
     auto model=MakeModel();
     model.nodes[0].parentIndex=1;

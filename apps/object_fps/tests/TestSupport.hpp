@@ -66,5 +66,6 @@ void RunCampaignRunStateTests(TestContext& context);
 void RunGameSessionTests(TestContext& context);
 void RunObjectFpsUiTests(TestContext& context);
 void RunObjectFpsPresentationTests(TestContext& context);
+void RunAssetPresentationDefinitionTests(TestContext& context);
 
 } // namespace fps::tests

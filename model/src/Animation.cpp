@@ -96,6 +96,11 @@ Vec3 TransformNormal(const Matrix4& matrix,const Vec3 normal) {
 
 Result ValidateModel(const ModelAsset& model) {
     if(model.nodes.empty()) return Result::Err("Model requires at least one node.");
+    for(const auto& material:model.materials) {
+        if(!std::all_of(material.baseColorLinear.begin(),material.baseColorLinear.end(),
+            [](float component){return std::isfinite(component);}))
+            return Result::Err("Model material '"+material.name+"' has a non-finite base color.");
+    }
     for(std::size_t i=0;i<model.nodes.size();++i) {
         const auto& node=model.nodes[i];
         if((node.parentIndex&&*node.parentIndex>=i)||!Finite(node.localTransform))

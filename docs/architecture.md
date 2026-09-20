@@ -383,7 +383,8 @@ SDL events may cross between concrete SDL adapters at the composition edge, but 
 
 ### Model and skeletal animation (`this milestone`)
 
-`GYO::Model` owns CPU `ModelAsset` data, node hierarchy, material names, mesh
+`GYO::Model` owns CPU `ModelAsset` data, node hierarchy, material names and linear
+base colors, mesh
 parts, inverse binds, four normalized skin weights per vertex, TRS clip tracks,
 pose sampling and linear blend skinning. Model math uses column-major matrices
 and column vectors in metres, +Y up and +Z forward. Render conversion is explicit;
@@ -401,7 +402,9 @@ poses; sparse nonlinear curves may be resampled at 60 Hz. Playback interpolates
 quaternion poses. Forcing Euler subframe resampling on already-baked animation
 can introduce branch flips even when adjacent authored orientations are close.
 Importer IO is disabled: source texture/cache paths never bypass catalog roots.
-Unsupported influence counts fail clearly. Public model/animation interfaces
+The importer keeps the four largest skin influences and normalizes them; this
+is an approximation when a source vertex has more than four influences.
+Public model/animation interfaces
 contain no ufbx, SDL or GPU types. Core Engine does not depend on Model or ufbx.
 
 Loaded models are shared immutable assets. Each presentation instance owns its
@@ -843,6 +846,10 @@ The bounded FBX runtime path is bytes -> optional UfbxModelLoader -> owning
 ModelAsset -> explicit-time pose/CPU skinning -> fixed-topology vertex update.
 Material names map to catalog texture IDs in game presentation data. The
 model remains CPU-only even after the application creates GPU resources.
+
+Object_FPS's [3D asset structure](architecture/3d-assets.md) documents its complete
+source archive, selected runtime models, AnimationSet/character definitions,
+material bindings and same-source animation compatibility boundary.
 
 Hashed public IDs use their numeric value as identity. `debugName` is diagnostic metadata only and never changes equality or hashing; invalid IDs/types use value zero. This rule also applies to input action/axis IDs so named mechanisms behave consistently across maps and frame views.
 

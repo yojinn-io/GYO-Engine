@@ -16,7 +16,7 @@ struct TestSuite {
 
 int main() {
     fps::tests::TestContext context;
-    constexpr std::array<TestSuite, 17> suites = {{
+    constexpr std::array<TestSuite, 18> suites = {{
         {"World", fps::tests::RunWorldTests},
         {"Collision", fps::tests::RunCollisionTests},
         {"Collision.Combat", fps::tests::RunCombatCollisionTests},
@@ -34,6 +34,7 @@ int main() {
         {"Game.Session", fps::tests::RunGameSessionTests},
         {"App.ObjectFpsUi", fps::tests::RunObjectFpsUiTests},
         {"App.ObjectFpsPresentation", fps::tests::RunObjectFpsPresentationTests},
+        {"App.AssetPresentationDefinition", fps::tests::RunAssetPresentationDefinitionTests},
     }};
 
     for (const TestSuite& suite : suites) {
@@ -52,7 +53,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "All 17 core suites passed (" << context.GetAssertionCount()
+    std::cout << "All " << suites.size() << " core suites passed (" << context.GetAssertionCount()
               << " assertions).\n";
     return 0;
 }
