@@ -5,15 +5,15 @@ import io
 import os
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ci_workspace import TemporaryDirectory
 
 from release_pipeline import ApiError, TransientApiError, main, prepare_draft_with_retries
 from release_support import ReleaseError
-from test_release_pipeline import COMMIT, OTHER_COMMIT, FakeApi, packages
+from test_release_pipeline import COMMIT, OTHER_COMMIT, FakeApi, packages, EXPECTED_PAIRS
 
 
 class ReleaseRetryTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class ReleaseRetryTests(unittest.TestCase):
 
     def run_draft(self, api, *, sleep=None):
         return prepare_draft_with_retries(
-            api, "v1.2.3", COMMIT, False, self.items,
+            api, "v1.2.3", COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS,
             sleep=self.delays.append if sleep is None else sleep)
 
     def test_transient_read_recovers_and_reports_the_retry(self):
@@ -147,7 +147,7 @@ class ReleaseRetryTests(unittest.TestCase):
     def test_corrupt_local_package_does_not_retry_or_contact_api(self):
         api = FakeApi()
         item = self.items[0]
-        self.items[0] = type(item)(item.platform, item.name, item.data, b"bad checksum")
+        self.items[0] = type(item)(item.app, item.platform, item.name, item.data, b"bad checksum")
         with self.assertRaisesRegex(ReleaseError, "SHA256 mismatch"):
             self.run_draft(api)
         self.assertEqual(self.delays, [])
@@ -259,7 +259,7 @@ class ReleaseRetryTests(unittest.TestCase):
         def retry_without_sleep(*args, **kwargs):
             return prepare_draft_with_retries(*args, **kwargs, sleep=self.delays.append)
 
-        with tempfile.TemporaryDirectory() as temporary:
+        with TemporaryDirectory() as temporary:
             output = Path(temporary) / "github-output.txt"
             package_directory = Path(temporary) / "packages"
             argv = ["release_pipeline.py", "draft", "--tag", "v1.2.3", "--commit", COMMIT,
@@ -268,12 +268,14 @@ class ReleaseRetryTests(unittest.TestCase):
             with patch.object(sys, "argv", argv), \
                     patch.dict(os.environ, {"GH_REPO": "test/repo", "GH_TOKEN": "unit-test-token"}), \
                     patch("release_pipeline.load_packages", return_value=self.items) as load, \
+                    patch("release_pipeline.export_registry", return_value=EXPECTED_PAIRS), \
+                    patch("release_support.git", return_value=COMMIT), \
                     patch("release_pipeline.GitHubApi", return_value=api), \
                     patch.object(api, "request", side_effect=fail_once), \
                     patch("release_pipeline.prepare_draft_with_retries", side_effect=retry_without_sleep) as recovery:
                 main()
-            load.assert_called_once_with(package_directory, COMMIT)
-            recovery.assert_called_once_with(api, "v1.2.3", COMMIT, False, self.items)
+            load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS)
+            recovery.assert_called_once_with(api, "v1.2.3", COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS)
             self.assertEqual(output.read_text(encoding="utf-8").splitlines(), [
                 "release_id=42", "release_url=" + api.release["html_url"],
                 "tag=v1.2.3", "commit=" + COMMIT])

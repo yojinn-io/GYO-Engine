@@ -1,5 +1,6 @@
 add_library(engine STATIC)
 add_library(GYO::Engine ALIAS engine)
+target_compile_features(engine PUBLIC cxx_std_20)
 
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

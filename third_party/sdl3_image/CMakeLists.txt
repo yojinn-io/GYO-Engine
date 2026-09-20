@@ -1,6 +1,6 @@
 include(FetchContent)
 
-# Object_FPS currently needs only PNG decoding. Keep SDL_image optional
+# The current image capability provides PNG decoding. Keep SDL_image optional
 # and avoid pulling unrelated codec stacks into the runtime build.
 set(SDLIMAGE_INSTALL OFF CACHE BOOL "" FORCE)
 set(SDLIMAGE_DEPS_SHARED OFF CACHE BOOL "" FORCE)

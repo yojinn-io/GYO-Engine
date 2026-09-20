@@ -11,9 +11,8 @@ import subprocess
 import tarfile
 
 
-PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64")
-ARCHIVE_ROOT = "gyo-object-fps"
-METADATA_PATH = f"{ARCHIVE_ROOT}/build_metadata.json"
+from package_contract import (PLATFORMS, manifest_path, required_files, validate_app,
+                              validate_app_namespace, validate_evidence, validate_manifest)
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 VERSION_PATTERN = re.compile(
     r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -81,15 +80,27 @@ def prepare_event(event_name: str, event: dict, commit: str, ref: str, git_comma
     return {"tag": tag, "commit": commit, "prerelease": str(prerelease).lower()}
 
 
-def archive_name(platform: str) -> str:
+def archive_name(app: str, platform: str) -> str:
+    validate_app(app)
     if platform not in PLATFORMS:
         raise ReleaseError(f"Unexpected package platform: {platform}")
-    return f"gyo-object-fps-{platform}.tar.gz"
+    return f"gyo-{app}-{platform}.tar.gz"
 
 
-def expected_asset_names() -> set[str]:
-    return {name for platform in PLATFORMS
-            for name in (archive_name(platform), archive_name(platform) + ".sha256")}
+def expected_asset_names(expected_pairs: list[tuple[str, str]]) -> set[str]:
+    return {name for app, platform in expected_pairs
+            for name in (archive_name(app, platform), archive_name(app, platform) + ".sha256")}
+
+
+def validate_expected_pairs(expected_pairs: list[tuple[str, str]]) -> set[tuple[str, str]]:
+    pairs = set(expected_pairs)
+    if not pairs:
+        raise ReleaseError("Prepare Release requires at least one enabled app/platform tuple")
+    if len(pairs) != len(expected_pairs):
+        raise ReleaseError("Duplicate expected app/platform tuple")
+    for app, platform in pairs:
+        archive_name(app, platform)
+    return pairs
 
 
 def checksum(data: bytes) -> str:
@@ -105,104 +116,95 @@ def validate_checksum(archive: str, data: bytes, document: bytes) -> None:
         raise ReleaseError(f"SHA256 mismatch or invalid checksum filename: {archive}")
 
 
-def _safe_member_name(name: str) -> None:
+def _safe_member_name(name: str, root: str) -> None:
     path = PurePosixPath(name)
     if (not name or "\\" in name or ":" in name or path.is_absolute()
-            or ".." in path.parts or not path.parts or path.parts[0] != ARCHIVE_ROOT):
+            or ".." in path.parts or not path.parts or path.parts[0] != root):
         raise ReleaseError(f"Unsafe archive member: {name!r}")
 
 
-def validate_archive(name: str, data: bytes, platform: str, commit: str) -> None:
-    """Inspect tar members without extracting anything to the filesystem."""
+def validate_archive(name: str, data: bytes, app: str, platform: str, commit: str) -> None:
+    """Inspect tar members without extracting or executing package content."""
     validate_commit(commit)
-    executable = f"{ARCHIVE_ROOT}/bin/gyo_object_fps" + (".exe" if platform == "windows-x64" else "")
-    required_files = {
-        executable,
-        f"{ARCHIVE_ROOT}/bin/assets/common/asset_catalog.json",
-        f"{ARCHIVE_ROOT}/bin/assets/object_fps/asset_catalog.json",
-        f"{ARCHIVE_ROOT}/bin/shaders/builtin/manifest.json",
-        f"{ARCHIVE_ROOT}/bin/shaders/object_fps/manifest.json",
-    }
+    if name != archive_name(app, platform):
+        raise ReleaseError("Package filename does not match its app/platform")
+    root = f"gyo-{app}"
+    metadata_path = f"{root}/build_metadata.json"
+    contract_path = f"{root}/{manifest_path(app)}"
     try:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-            seen = set()
-            metadata = None
+            seen = {}
+            documents = {}
             for index, member in enumerate(archive):
                 if index >= 100_000:
                     raise ReleaseError(f"Too many archive members: {name}")
-                _safe_member_name(member.name)
+                _safe_member_name(member.name, root)
                 normalized = str(PurePosixPath(member.name))
                 if normalized in seen:
                     raise ReleaseError(f"Duplicate archive member: {member.name}")
-                seen.add(normalized)
+                seen[normalized] = member
                 if member.issym() or member.islnk():
                     if "\\" in member.linkname or ":" in member.linkname:
                         raise ReleaseError(f"Unsafe archive link: {member.name}")
                     destination = (posixpath.join(posixpath.dirname(member.name), member.linkname)
                                    if member.issym() else member.linkname)
-                    _safe_member_name(posixpath.normpath(destination))
+                    _safe_member_name(posixpath.normpath(destination), root)
                 elif not (member.isfile() or member.isdir()):
                     raise ReleaseError(f"Unsupported special archive member: {member.name}")
-                if normalized in required_files:
-                    if not member.isfile() or member.size <= 0:
-                        raise ReleaseError(f"Required package file must be nonempty and regular: {member.name}")
-                    if normalized == executable and platform != "windows-x64" and not member.mode & 0o100:
-                        raise ReleaseError(f"Package executable lacks owner execute permission: {member.name}")
-                if normalized == METADATA_PATH:
-                    if not member.isfile() or member.size > 64 * 1024:
-                        raise ReleaseError(f"Invalid build metadata member: {name}")
-                    stream = archive.extractfile(member)
-                    metadata = json.loads(stream.read())
-            if missing := sorted(required_files - seen):
+                if normalized in (metadata_path, contract_path):
+                    if not member.isfile() or not 0 < member.size <= 256 * 1024:
+                        raise ReleaseError(f"Metadata/manifest must be nonempty and regular: {member.name}")
+                    documents[normalized] = json.loads(archive.extractfile(member).read())
+            if contract_path not in documents:
+                raise ReleaseError(f"Missing required package manifest in {name}")
+            validate_app_namespace((str(PurePosixPath(path).relative_to(root)) for path in seen), app)
+            manifest = validate_manifest(documents[contract_path], app, platform)
+            required = {f"{root}/{relative}" for relative in required_files(manifest)}
+            if missing := sorted(required - seen.keys()):
                 raise ReleaseError(f"Missing required package files in {name}: {missing}")
+            for relative in required:
+                member = seen[relative]
+                if not member.isfile() or member.size <= 0:
+                    raise ReleaseError(f"Required package file must be nonempty and regular: {relative}")
+            executable = seen[f"{root}/{manifest['executable']}"]
+            if platform != "windows-x64" and not executable.mode & 0o100:
+                raise ReleaseError(f"Package executable lacks owner execute permission: {executable.name}")
+            metadata = documents.get(metadata_path)
             if not isinstance(metadata, dict):
                 raise ReleaseError(f"Missing build_metadata.json: {name}")
-            if metadata.get("source_revision") != commit or metadata.get("platform") != platform:
-                raise ReleaseError(f"Package provenance does not match {platform} at {commit}: {name}")
-            smoke = metadata.get("ci_smoke", {})
-            if (not isinstance(smoke, dict) or smoke.get("source_revision") != commit
-                    or smoke.get("platform") != platform or smoke.get("profile") != "release"
-                    or smoke.get("startup") != "passed" or smoke.get("headless") != "passed"):
-                raise ReleaseError(f"Missing successful release startup/gameplay smoke evidence: {name}")
-            rendering = smoke.get("rendering", {})
-            if not isinstance(rendering, dict):
-                raise ReleaseError(f"Invalid rendering smoke evidence: {name}")
-            if platform == "linux-x64":
-                if (rendering.get("status") != "passed"
-                        or rendering.get("driver") != "vulkan" or rendering.get("suite") != "full"
-                        or rendering.get("implementation") != "mesa-lavapipe"
-                        or type(rendering.get("case_count")) is not int
-                        or rendering["case_count"] != 8):
-                    raise ReleaseError(f"Missing successful Linux Vulkan CI smoke evidence: {name}")
-            elif rendering.get("status") != "not_run":
-                raise ReleaseError(f"Hosted Windows/macOS package may not claim physical GPU acceptance: {name}")
-    except (tarfile.TarError, OSError, ValueError, UnicodeError) as error:
+            if (metadata.get("source_revision") != commit or metadata.get("app") != app
+                    or metadata.get("platform") != platform):
+                raise ReleaseError(f"Package provenance does not match {app}/{platform} at {commit}: {name}")
+            validate_evidence(metadata.get("ci_smoke"), manifest, commit, "release")
+    except (tarfile.TarError, OSError, ValueError, UnicodeError, TypeError) as error:
         raise ReleaseError(f"Invalid package archive {name}: {error}") from error
 
 
 @dataclass(frozen=True)
 class Package:
+    app: str
     platform: str
     name: str
     data: bytes
     checksum_data: bytes
 
 
-def load_packages(directory: Path, commit: str) -> list[Package]:
+def load_packages(directory: Path, commit: str, expected_pairs: list[tuple[str, str]]) -> list[Package]:
     validate_commit(commit)
+    pairs = validate_expected_pairs(expected_pairs)
     if not directory.is_dir():
         raise ReleaseError(f"Package directory does not exist: {directory}")
-    names = {path.name for path in directory.iterdir() if path.is_file()}
-    if names != expected_asset_names():
-        missing = sorted(expected_asset_names() - names)
-        extra = sorted(names - expected_asset_names())
-        raise ReleaseError(f"Expected all three platform packages and checksums; missing={missing}, extra={extra}")
+    names = {path.name for path in directory.iterdir()}
+    expected = expected_asset_names(expected_pairs)
+    if names != expected:
+        raise ReleaseError(f"Expected every configured app/platform package and checksum; "
+                           f"missing={sorted(expected - names)}, extra={sorted(names - expected)}")
     packages = []
-    for platform in PLATFORMS:
-        name = archive_name(platform)
+    for app, platform in sorted(pairs):
+        name = archive_name(app, platform)
         data = (directory / name).read_bytes()
         document = (directory / (name + ".sha256")).read_bytes()
         validate_checksum(name, data, document)
-        validate_archive(name, data, platform, commit)
-        packages.append(Package(platform, name, data, document))
+        validate_archive(name, data, app, platform, commit)
+        packages.append(Package(app, platform, name, data, document))
     return packages

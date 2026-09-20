@@ -8,13 +8,15 @@
 
 | 操作 | 実行内容 | リモートの結果 |
 |---|---|---|
-| ブランチ push／pull request | Quick：3プラットフォームのビルドと内容読み込み、Linux の shader 描画1件 | Actions artifacts |
+| ブランチ push／pull request | Quick：3プラットフォームの engine／Editor baseline と CSV 選択 app の独立ビルド・検証 | Actions artifacts |
 | 通常の cross-platform workflow を手動実行 | 同じ quick 検証 | Actions artifacts |
-| **Prepare Release** を手動実行 | 3プラットフォームの完全な検証 | 成功後にバージョン tag、Draft Release、6件の添付を作成 |
+| **Prepare Release** を手動実行 | Baseline と選択 app × platform の完全な検証 | 成功後にバージョン tag、Draft Release、計算した添付集合を作成 |
 | Tag push | 上記ビルドを起動しない | Release を自動作成しない |
 | **Publish release** | 準備済みの Draft を公開 | 再ビルドしない |
 
 両方の入口は `build-and-validate.yml` を共有し、quick と release は検証範囲が異なります。Tag はソースの commit を固定し、Release は説明とダウンロード添付を提供します。
+
+`config/engine/projects.csv` はローカルと CI 共通の選択元です。各行の `enabled` とターゲット欄が両方有効な場合だけ app matrix に含めます。`description` と `version` は個人の記録であり、ここで入力する Release 版を決めません。App のない platform も engine と Editor をテストしますが、package は作りません。全 app が無効でも通常 CI は成功できますが、**Prepare Release** は空の成果物集合を事前検証で拒否します。
 
 ## 2. 初回利用の前に
 
@@ -30,27 +32,27 @@
 2. リポジトリーの **Actions → Prepare Release → Run workflow** を開きます。
 3. ブランチ選択欄でソースブランチを選びます。実行開始時の完全な commit SHA を固定するため、その後の新しい commit は今回の package に混ざりません。
 4. **version** に `v1.0.1` などを入力します。候補版は `v1.1.0-rc.1` などを使い、プレリリースとして扱う場合は **prerelease** を選択して **Run workflow** を実行します。
-5. 3プラットフォームの完全な検証を待ちます。まず Actions artifacts を生成し、すべての必須検査に成功した後、最後の job が tag、Draft Release、添付を作成します。
+5. 3プラットフォームの baseline と全選択 app × platform の完全な検証を待ちます。まず Actions artifacts を生成し、すべての必須検査に成功した後、最後の job が tag、Draft Release、添付を作成します。
 6. 実行結果の **Summary** を開き、Draft Release のリンクを選びます。
-7. バージョン、ソース commit、6件の添付、プレリリース設定を確認し、タイトルと変更内容を編集します。
+7. バージョン、ソース commit、CSV から計算した全添付、プレリリース設定を確認し、タイトルと変更内容を編集します。
 8. 確認後に **Publish release** を押します。既存の添付を公開し、完全なビルドをもう一度起動することはありません。
 
 ## 4. 完全な検証と添付
 
-Release profile は3プラットフォームのビルド、CPU/headless、shader 契約、core-only、独立配布とファイル欠落の失敗検査、配布版 startup／gameplay smoke、Linux Lavapipe の描画診断8件を含みます。必須 job が1件でも失敗、キャンセル、スキップした場合、Draft 作成へ進みません。
+Release profile は3プラットフォームの engine と UI editor を必ずテストし、同じ source commit の CSV から app × platform matrix（Windows x64、Linux x64、macOS ARM64）を生成します。各組み合わせは独立したビルドディレクトリーでその app だけを選び、Editor を無効にして build、test、install、manifest 検証、package 化を実行します。Editor を app package に含めず、GPU／shader が不要な app は対応処理を実行しません。
 
-Draft には次の3アーカイブと各 `.sha256`、計6件の添付が必要です。
+各 app は必須の配布版 startup テストを登録します。共通 runner は package 外から、生成した `share/gyo/apps/<name>/manifest.json` のコマンドを profile／platform／GPU 条件に従って実行します。失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Object_FPS が gameplay、内容欠落、Linux quick の GPU 1件と release の8件を所有します。[App 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)を参照してください。
+
+各組み合わせは archive と checksum を1つずつ持ち、**添付数は選択した組み合わせ数の2倍**です。
 
 ```text
-gyo-object-fps-windows-x64.tar.gz
-gyo-object-fps-windows-x64.tar.gz.sha256
-gyo-object-fps-linux-x64.tar.gz
-gyo-object-fps-linux-x64.tar.gz.sha256
-gyo-object-fps-macos-arm64.tar.gz
-gyo-object-fps-macos-arm64.tar.gz.sha256
+gyo-<name>-<platform>.tar.gz
+gyo-<name>-<platform>.tar.gz.sha256
 ```
 
-アップロード前に checksum、package の必須内容、ソース commit、platform、`build_metadata.json` の release 検証記録を確認します。Windows／macOS の hosted CI は物理 GPU を検証せず、Linux の Lavapipe はソフトウェア Vulkan です。公開前の実機確認は[描画の検証ガイド](rendering_architecture.ja.md#r09)を参照してください。
+Archive は `gyo-<name>` という単一ルートに、その app と必要な依存関係を含みます。CSV の `object_fps` はアンダースコアを保持し、`object-fps` に変換しません。Release は同じ source SHA の CSV から期待集合を再構築し、不足・余分・重複した package を拒否します。アップロード前に checksum、archive の安全性、必須内容、app、platform、source SHA、release profile、完全な検証証拠を照合します。Quick の証拠は release の代わりになりません。必須 job の失敗・キャンセル・スキップ時は Draft を作成しません。
+
+Windows／macOS hosted CI は物理 GPU を検証せず、Linux Lavapipe はソフトウェア Vulkan です。各 app の手動実機結果を別に記録し、ビルド成功から推定しません。CSV、能力解決、manifest、CI のデータの流れは[設計文書](architecture.md#build-project-management)を参照してください。
 
 ## 5. 失敗、再実行、既存バージョン
 
@@ -80,4 +82,4 @@ Draft 準備で HTTP 500／502／503／504、ネットワークのタイムア�
 
 今回の実装とローカルテストは、GitHub で Release を作成・公開した証拠にはなりません。各バージョンの検証証拠は、実際の **Prepare Release** の Summary、3プラットフォームの結果、Draft の添付で確認してください。
 
-以前のフローでは3つの workflows の actionlint 1.7.12 と両言語ガイドの package 検査に合格しました。今回の自動復旧修正後、`tools/ci` の全80件に合格し、実際の Bash による gate の16状態組み合わせと、書き込み成功後に応答がタイムアウトする復旧ケースを含みます。GitHub API は mock を使い、リモート Release は作成していません。この結果はリモート API の復旧や hosted Draft 準備の成功を示すものではありません。同じ Actions 実行の再実行では artifacts を置き換えられますが、Release 添付は不足分だけを補い、上書きしません。
+以下はリファクタリング前の履歴であり、CSV matrix の hosted 検証を示しません。以前のフローでは3つの workflows の actionlint 1.7.12 と両言語ガイドの package 検査に合格しました。当時の自動復旧修正後、`tools/ci` の全80件に合格し、実際の Bash による gate の16状態組み合わせと、書き込み成功後に応答がタイムアウトする復旧ケースを含みます。GitHub API は mock を使い、リモート Release は作成していません。この結果はリモート API の復旧や hosted Draft 準備の成功を示すものではありません。同じ Actions 実行の再実行では artifacts を置き換えられますが、Release 添付は不足分だけを補い、上書きしません。

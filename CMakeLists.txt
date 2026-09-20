@@ -12,45 +12,19 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(GYO_BUILD_RUNTIME "Build the minimal standalone runtime application" OFF)
-option(GYO_BUILD_SANDBOX "Build the optional ImGui/JSON sandbox application" OFF)
-option(GYO_BUILD_OBJECT_FPS "Build the Object_FPS GYO conformance game" ON)
 option(GYO_BUILD_UI_EDITOR "Build the standalone GYO JSON UI editor" ON)
-if(APPLE AND GYO_BUILD_OBJECT_FPS AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.3")
-    message(FATAL_ERROR "Object_FPS uses macOS 13.3 as its minimum supported deployment target")
-endif()
-option(
-    GYO_BUILD_SDL_GPU_BACKEND
-    "Build the optional SDL_GPU render backend (legacy explicit enable)"
-    OFF
-)
-option(
-    GYO_BUILD_SDL_TTF_ADAPTER
-    "Build the optional SDL_ttf-backed text rasterizer"
-    OFF
-)
 
 include(CTest)
-include(cmake/GyoRenderOptions.cmake)
+include(cmake/GyoApps.cmake)
+include(cmake/GyoAppPackaging.cmake)
+gyo_configure_apps()
+gyo_resolve_components(${GYO_REQUESTED_COMPONENTS})
 
 if(APPLE)
     set(CMAKE_INSTALL_RPATH "@executable_path/../lib")
 elseif(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 endif()
-
-# Runtime DLL deployment is shared by applications and standalone tools.  Keep
-# it at the composition root so neither side needs to depend on the other.
-function(gyo_copy_runtime_dlls target)
-    if(WIN32)
-        add_custom_command(TARGET ${target} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:${target}>
-                $<TARGET_FILE_DIR:${target}>
-            COMMAND_EXPAND_LISTS
-        )
-    endif()
-endfunction()
 
 # Keep dependency sources private to each build tree. Disconnected updates still
 # allow the first population, but do not mutate an already populated dependency.
@@ -62,18 +36,13 @@ add_subdirectory(engine)
 add_subdirectory(model)
 add_subdirectory(collision)
 add_subdirectory(text)
-add_subdirectory(render)
-add_subdirectory(ui)
-
-if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS OR
-   GYO_ENABLE_SDL_GPU OR GYO_BUILD_UI_EDITOR)
+if(GYO_ENABLE_SDL_PLATFORM)
     add_subdirectory(platform)
 endif()
-
-if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_OBJECT_FPS)
-    add_subdirectory(input)
-    add_subdirectory(apps)
-endif()
+add_subdirectory(input)
+add_subdirectory(render)
+add_subdirectory(ui)
+add_subdirectory(apps)
 
 if(GYO_BUILD_UI_EDITOR)
     add_subdirectory(tools)
@@ -83,26 +52,41 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
     add_test(NAME cmake.render_options
         COMMAND ${CMAKE_COMMAND} -P "${PROJECT_SOURCE_DIR}/tests/cmake/RenderOptionsTests.cmake")
+    add_test(NAME cmake.components
+        COMMAND ${CMAKE_COMMAND} -P "${PROJECT_SOURCE_DIR}/tests/cmake/ComponentTests.cmake")
+    add_test(NAME cmake.app_registry
+        COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppRegistryTests.cmake")
+    add_test(NAME cmake.app_composition
+        COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppCompositionTests.cmake")
+    add_test(NAME cmake.app_packaging
+        COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppPackagingTests.cmake")
     add_test(NAME cmake.msvc_runtime
         COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
             "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
             -P "${PROJECT_SOURCE_DIR}/tests/cmake/MsvcRuntimeTests.cmake")
 endif()
 
-# SDL_image/SDL_ttf and their selected codecs are static. SDL's shared
-# runtime is packaged explicitly; platform GPU drivers remain system-owned.
-if(TARGET SDL3-shared AND GYO_ENABLE_SDL_GPU)
-    install(TARGETS SDL3-shared RUNTIME DESTINATION bin LIBRARY DESTINATION lib)
+gyo_finalize_app_packages()
+
+# CI reads the configured graph, never guesses shader requirements from app names
+# or the presence of restored cache directories.
+set(_gyo_shader_bundles false)
+set(_gyo_shader_host_tools false)
+if(TARGET gyo_builtin_shaders)
+    set(_gyo_shader_bundles true)
 endif()
-if(TARGET gyo_ui_editor)
-    install(TARGETS gyo_ui_editor RUNTIME DESTINATION bin)
+if(TARGET gyo_shader_host_tools)
+    set(_gyo_shader_host_tools true)
 endif()
-if(MSVC AND (TARGET gyo_object_fps OR TARGET gyo_ui_editor))
-    # App-local release CRT makes the package usable without Visual Studio.
-    # Windows 10+ supplies UCRT; debug CRT is not redistributed.
-    include(cmake/GyoMsvcRuntime.cmake)
-    gyo_install_msvc_runtime()
-endif()
+file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json"
+    "{\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools}}\n")
 
 # Every test has an explicit execution class. Backends and shader helpers
 # label their tests at registration; existing deterministic tests default CPU.

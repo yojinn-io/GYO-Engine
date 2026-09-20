@@ -147,6 +147,8 @@ Overlay / HUD → Present
 <a id="r07"></a>
 ## 7. CMake 自動選擇與明確覆寫
 
+專案選取來自 `config/engine/projects.csv` 的 `enabled` 與目標平台欄位。`GYO_APPS=AUTO` 使用此集合，空值不建 apps，名稱或分號清單只能縮小集合，不能繞過停用設定。需求由各 app 的 `CMakeLists.txt` 宣告，根建置先收集，再建立能力與 app targets；詳見[建置設計](architecture.md#build-project-management)。選到需要 GPU 的 app 時，`GYO_RENDER_DEVICE=NONE` 是配置錯誤。
+
 | 設定 | 值 | 意義 |
 |---|---|---|
 | `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE` | 選擇 device 實作；`NONE` 用於無 GPU 的建置 |
@@ -166,10 +168,10 @@ Windows 的 AUTO bundle 同時包含 DXIL／SPIR-V，因此可以驗證兩種驅
 
 ```sh
 # 原生建置：Windows 需先進入 x64 MSVC 開發環境；另需 Ninja。
-cmake --preset object-fps
-cmake --build --preset object-fps
-ctest --preset object-fps
-cmake --install build/object-fps --prefix /absolute/path/to/stage
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+cmake --install build/dev --prefix /absolute/path/to/stage
 
 # 無遊戲、無 SDL adapter、無 FBX adapter 的核心建置
 cmake --preset core
@@ -177,7 +179,7 @@ cmake --build --preset core
 ctest --preset core
 ```
 
-`object-fps` test preset 只執行 `cpu|shader` 標籤；GPU 測試需在具有可用顯示與 GPU 的環境另行執行。`ci-windows`、`ci-linux`、`ci-macos` 明確固定 CI 的編譯器／架構入口。
+`dev` test preset 只執行 `cpu|shader` 標籤；GPU 測試需在具有可用顯示與 GPU 的環境另行執行。`ci-windows`、`ci-linux`、`ci-macos` 明確固定 CI 的編譯器／架構入口。
 
 CLion 可沿用現有 MSVC CMake profile，執行 **Reload CMake Project**，再選擇並執行 `gyo_object_fps` target。原生 shader 工具的子建置沿用該 profile 選定的編譯器與 Ninja 路徑；不必為了散佈 DLL 的偵測重建 IDE profile。
 
@@ -188,101 +190,49 @@ Ubuntu 需安裝 `libxtst-dev`，供 SDL 預設啟用的 XTest 偵測使用；CI
 離線 host 工具還明確設定 `SDL_UNIX_CONSOLE_BUILD=ON`。它刻意不使用 X11／Wayland video，必須告知 SDL 這是 console build，否則 Linux configure 會將缺少視訊後端視為錯誤。此設定只作用於 shader host 的 SDL；遊戲仍建置自己的圖形後端。
 
 <a id="r08"></a>
-## 8. 部署與缺少檔案的處理
+## 8. App 隔離部署與套件契約
+
+每個 app × 平台 CI job 使用獨立建置目錄，只選該 app 並關閉 Editor。app 自己維護 executable、內容、shader、安裝與額外驗收；共用部署處理其實際需要的動態庫、RPATH 與 MSVC CRT。
 
 ```text
 stage/
-├─ bin/
-│  ├─ gyo_object_fps[.exe]
-│  ├─ gyo_ui_editor[.exe]
-│  ├─ assets/common/ + assets/object_fps/
-│  ├─ shaders/builtin/manifest.json + shader artifacts
-│  └─ shaders/object_fps/manifest.json + shader artifacts
-└─ lib/  Linux／macOS 的非系統動態庫（Windows DLL 放在 bin/）
+├─ bin/<app executable> + app-owned content + Windows DLLs
+├─ lib/                         Linux/macOS non-system libraries
+└─ share/gyo/apps/<name>/manifest.json
 ```
 
-啟動以 executable 所在位置解析部署內容，不依賴目前工作目錄。`--validate-package` 不建立視窗或 GPU：驗證部署資產、shader bundle 與讀入流程。CI 會複製到獨立暫存目錄後啟動，再暫時移走 common 資產、內建 shader manifest、遊戲 shader manifest，逐一確認失敗，避免源碼目錄的檔案掩蓋缺漏。
+CMake 在建置目錄生成 manifest，app 不必人工維護另一份清單。它包含必要檔案、強制的安裝後 startup 命令，以及依 quick／release、平台與 GPU 需求選取的額外驗收。共用 runner 從安裝包以外的工作目錄執行；失敗、逾時或缺少必要證據都阻擋產包。資產與 shader 相對 executable 定位，不以來源目錄掩蓋缺檔。Object_FPS 的內容負向與玩法檢查見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
 
-GitHub artifact 使用 tar.gz 保留 Unix 執行權限，附 SHA-256 校驗檔。這是供驗收的原生套件，不包含 macOS 簽章／公證或跨發行版 Linux 相容性承諾。Linux 套件仍使用目標系統的圖形驅動與系統函式庫。
+每個選中組合輸出 `gyo-<name>-<platform>.tar.gz` 與 `.tar.gz.sha256`，archive 根為 `gyo-<name>`。Tar 保留 Unix 執行權限。這是原生驗收套件，不含 macOS 簽章／公證或跨 Linux 發行版相容性承諾；目標系統仍提供圖形驅動與系統庫。封裝記錄 app、目標平台、來源 SHA、profile 及驗收證據。Release 從同一 commit 的 CSV 重建預期集合並核對完整證據，quick 或普通本機包不能冒充 release。
 
-`build_metadata.json` 記錄 `source_revision`、`platform` 與 `ci_smoke`。快速 CI 封裝記錄三平台啟動檢查與 Linux 單項 shader 渲染；Release 封裝另外要求三平台 gameplay headless smoke 及 Linux Lavapipe 八項渲染全部通過。封裝程式拒絕與 commit／平台不符的報告。Release 上傳前再次核對這些資料、壓縮檔內容與 SHA-256；快速 CI 或一般本機封裝不能作為已通過完整 Release 驗收的輸入。
+Windows Release／RelWithDebInfo 的 `cmake/GyoMsvcRuntime.cmake` 依選定編譯器找對應可散佈 DLL，放在 `bin/`。`GYO_MSVC_REDIST_DIR` 可指定根目錄；缺少 DLL 不阻擋開發配置／編譯，但 release install 明確失敗。不散佈 Debug CRT，Windows 10+ 提供 UCRT。使用者不需要 Visual Studio、shader 編譯器或 SDK。
 
-Windows 套件使用 Release／RelWithDebInfo，由 `cmake/GyoMsvcRuntime.cmake` 依選定編譯器的安裝位置找到對應 MSVC 可散佈 DLL，放在 `bin/`，避免依賴 IDE 內附 CMake 的 Visual Studio 版本清單。可用 `GYO_MSVC_REDIST_DIR` 明確指定散佈檔根目錄。若找不到 DLL，開發用 configure／build 仍可進行，只有 release install 會報錯並提示如何補齊。不散佈 Debug CRT；本次套件以 Windows 10+ 的系統 UCRT 為基準。使用者執行遊戲不需要 Visual Studio、shader 編譯器或 SDK。
-
-CI 另用 `dumpbin` 確認 Windows EXE/DLL 引用的 VC runtime 均已打包；Linux 用 `ldd` 檢查 SDL3 從套件 `lib/` 解析；macOS 用 `otool` 檢查相對 install name 與 RPATH。這些是建置機器的檢查工具。Windows 本機執行 `tools/ci/validate_package.py` 時可透過 `--dumpbin /absolute/path/to/dumpbin.exe` 指定工具。
+CI 使用 `dumpbin` 檢查 Windows VC runtime 引用，`ldd` 檢查 Linux 套件庫解析，`otool` 檢查 macOS install name／RPATH。工具只屬於建置機；Windows 本機驗收可用 `--dumpbin /absolute/path/to/dumpbin.exe` 指定位置。
 
 <a id="r09"></a>
-## 9. Object_FPS 的 CI、Release 與實機驗收
+## 9. 通用 CI、Release 與 app 驗收
 
-### 9.1 每次 push 的必要驗收
-
-GitHub Actions 在 Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 建置 Object_FPS、UI editor 與 shader。三個 job 相互獨立；一個平台失敗不取消其他平台。工作流程上傳日誌、manifest 與原生套件。
-
-`cross-platform.yml` 的分支 push、pull request 與手動執行走快速路徑：編譯、實際內容啟動、一次簡單 shader 渲染。GUI 的 **Prepare Release** 則使用完整 release profile。兩個入口共用 `build-and-validate.yml`，傳入固定 commit SHA；推送 tag 與 `release.published` 都不啟動重建。
+三平台固定建置並測試引擎與 UI editor。固定來源 SHA 的 CSV 另生成 app × 已啟用平台矩陣，沿用 Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4；每個 app job 只有自己的套件，Editor 不隨 app 發行。
 
 ```text
-quick／Prepare Release: 驗證輸入與固定 commit
-  → 共用 build-and-validate.yml（quick 或 release profile）
-  → Windows／Linux／macOS: build + install + startup smoke
-  → 僅 Release: CPU/headless + shader + core-only + 隔離部署負向檢查
-  → 僅 Release: 三平台 gameplay headless
-  → Linux Vulkan/Lavapipe: quick 單項 shader／Release 完整八項渲染
-  → 三平台: 封裝 + SHA-256 + Actions artifacts
-  → 三平台全部成功
-  → 僅 Prepare Release: 建立 tag + Draft Release + 六個附件
-  → 使用者檢查 Draft 後 Publish release（不重建）
+固定來源 SHA → CMake 解析 CSV → 三平台引擎／Editor baseline
+                              → app × 平台獨立建置／安裝
+                              → manifest 的 quick／release 驗收
+                              → archive + SHA-256 + Actions artifacts
+全部必要檢查成功 → Prepare Release 建立 tag／Draft／預期附件
+                → 使用者 Publish release（不重建）
 ```
 
-| 檢查 | 平台 | 實際邊界 |
-|---|---|---|
-| `--startup-smoke-test` | Windows／Linux／macOS，快速與 Release | 從其他工作目錄啟動部署版，實際載入 catalog／campaign／FBX 模型組裝；不建立視窗或 GPU |
-| `manual_gpu_smoke.py --suite quick` | Linux，快速 CI | Xvfb 提供顯示環境，強制 Mesa Lavapipe Vulkan；執行一次自訂 shader 紅／藍渲染與讀回 |
-| `--headless-smoke-test` | Windows／Linux／macOS，僅 Release | 另檢查選單、開始、拔槍、跳躍、暫停／恢復、落地、單次射擊與換彈完成；不建立視窗或 GPU |
-| `manual_gpu_smoke.py --suite full` | Linux，僅 Release | shader、世界、選單、武器、換彈與三種比例的槍口診斷，共八項 |
-| 實體 GPU／互動驗收 | 各平台實機 | 完整八項 GPU 診斷及手動操作；Windows／macOS hosted runner 不宣稱已通過此項 |
+沒有 app 的平台仍測試引擎與工具，不產包；全部停用的一般 CI 仍可成功，Prepare Release 前置檢查則拒絕空產物。無 GPU／shader 需求的 app 不執行對應步驟。必要 GPU 驗收缺少驅動、失敗或逾時會失敗，不能以跳過冒充成功。
 
-Linux 缺少 Lavapipe、無法建立 device、渲染失敗或逾時都讓 job 失敗；沒有「找不到 GPU 就跳過並回報成功」的路徑。Helper 也要求日誌中的實際 driver／shader 格式符合請求，將結果寫入 `summary.json`。`vulkan-info.log` 記錄 ICD 與 Vulkan 裝置資訊。這證明軟體 Vulkan 渲染路徑可以運作，實體顯示卡仍需驗收。
+`cross-platform.yml` 的 push／PR／手動執行使用 quick；`prepare-release.yml` 使用完整 release。兩者共用 `build-and-validate.yml` 並傳入固定 SHA。Release 驗證 app、平台、SHA、profile、必要檔案與完整證據，拒絕缺包、多包或 quick 證據。相同版本 Draft 重試保留已驗證附件及手寫說明；tag 必須指向相同 commit，已公開版本不可覆寫。推 tag 或 Publish release 不重新建置。操作與恢復見[發佈指南](releasing.zh-Hant.md)。
 
-共用驗證流程匯總三平台 matrix，任何必要 job 失敗、取消或跳過都不能進入建立 Draft 的階段。快速路徑依設計不執行 Release 專屬重型步驟，Summary 明列模式與未執行項目，不將它們視為完整驗收。若設定 branch protection，請使用 quick 流程實際顯示的彙總檢查名稱。
-
-### 9.2 Release 事件與上傳政策
-
-| 事件 | 三平台建置與 smoke | Release 附件 |
-|---|---|---|
-| 分支 push、pull request | 快速路徑 | 不上傳，保留 Actions artifacts |
-| 手動執行一般 cross-platform workflow | 快速路徑 | 不上傳，包括選擇 tag 的手動執行 |
-| 手動 **Prepare Release**：選分支、version、prerelease | 完整 Release 路徑 | 全部成功後建立 tag 與 Draft Release，附上六個檔案 |
-| Tag push（包含 `v*`） | 不觸發 | 不建立 Release，也不上傳 |
-| GitHub **Publish release**（`release.published`） | 不重建 | 公開已備妥的 Draft 與附件 |
-| 儲存 Release 草稿 | 不觸發 | 不上傳 |
-
-在 **Actions → Prepare Release → Run workflow** 選來源分支，輸入 `v1.0.1` 等版本與 prerelease 選項。執行固定當下 commit SHA，三平台驗收全數成功後才進入取得 `contents: write` 的 Draft job；事前驗證與建置不建立遠端 tag 或 Release。新 tag 指向固定 SHA；既有同名 tag 必須完全相同，不會被移動。附件為 `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` 及各自的 `.tar.gz.sha256`，共六個檔案。
-
-同一版本的 Prepare Release 執行與重跑共用鎖，不取消正在上傳的工作。工具只補 Draft 缺少的附件，保留已驗證檔案與手寫標題／說明；同版本已公開時拒絕修改，需使用新版本號。請重跑原執行以保留事件 SHA；再次按新的 **Run workflow** 可能選到已前進的分支 commit。
-
-先把新 workflows 合併至預設分支，GitHub 才顯示手動入口；選定來源分支也需包含它們。既有執行的重跑仍使用原 workflow。完整 GUI 操作、失敗恢復與 Draft 檢查見[版本發佈指南](releasing.zh-Hant.md)。本流程最後由使用者按 **Publish release**，此動作不再重建。
-
-### 9.3 下載後的實機驗收
-
-從 Actions artifacts 或 Release 下載對應套件，解開 tar.gz，在有圖形桌面的目標機器執行：
-
-```sh
-python manual_gpu_smoke.py --package /absolute/path/to/gyo-object-fps \
-  --driver vulkan --suite full --output /absolute/path/to/diagnostics
-```
-
-macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver vulkan`。Python helper 逐項執行自訂 shader 紅／藍色讀回、世界、選單、武器、完整換彈，以及 16:9／4:3／21:9 槍口投影 smoke，保留各項 exit code、日誌和診斷影像；每項最多 120 秒。不具有 Python 的電腦也能直接執行 `bin/gyo_object_fps --gpu-driver metal --muzzle-smoke-test --capture-dir /absolute/path/to/captures` 等對應指令。
-
-`--suite full` 為預設的完整八項；`--suite quick` 只渲染一項 shader；`--suite ci` 保留為手動選擇 shader、world、menu 三項的工具。`--timeout` 調整各項秒數上限。任一項失敗使 helper 退出碼非零，其餘案例仍執行並保留結果。
-
-若受限環境無法使用 Python 臨時目錄，可替兩個驗收 helper 加上 `--work-directory /absolute/path/to/new-work`。該目錄必須尚不存在，驗收後會保留供檢查；部署檢查的工作目錄須放在 `--stage` 之外。
-
-另外手動檢查：滑鼠／鍵盤、Space 跳躍、R 換彈、H 收槍／拔槍、手指與槍身遮擋、貼牆射擊、曝光與 HUD、視窗縮放／最小化，以及 UI editor。回報 OS、CPU 架構、GPU／驅動、套件 commit、指定／實際後端與 `summary.json`，才能區分建置、資料和 GPU 問題。
-
-若在目標機器從原始碼建置，可用 `ctest --test-dir build/object-fps -L gpu --output-on-failure` 跑完整 engine＋game GPU 集合。獨立的 `render.sdl_gpu_mesh_smoke` 另以讀回數值檢查 UV／子矩形、深度與剔除、sRGB／線性色彩、alpha、非對稱矩陣，以及 13×7 後處理；此測試 executable 不包含在 Object_FPS 下載套件中。
+Object_FPS 的 startup／gameplay／缺檔與 Linux quick 一項、release 八項 GPU 驗收由 app 自己註冊；命令、套件內容及完整實機程序已移至[Object_FPS 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。共享 runner 不保存這些遊戲專屬規則。Windows／macOS hosted runner 不宣稱實體 GPU 通過，Linux Lavapipe 是軟體 Vulkan。各 app 的硬體與互動驗收須另有實機證據。
 
 <a id="r10"></a>
 ## 10. 驗證狀態、限制與參考
+
+以下保留 2026-09-16 舊建置配置的歷史證據，未用來宣稱本次 CSV／app 矩陣通過。舊 Object_FPS `NONE` 配置已由新的必要 GPU 宣告取代；目前選中此 app 並設定 `NONE` 會配置失敗。
 
 截至 2026-09-16，本次實作的本機證據如下：
 

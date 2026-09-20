@@ -10,7 +10,9 @@ target_include_directories(gyo_input PUBLIC
 
 target_compile_features(gyo_input PUBLIC cxx_std_20)
 
-add_subdirectory(backend/sdl)
+if(GYO_ENABLE_SDL_INPUT)
+    add_subdirectory(backend/sdl)
+endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

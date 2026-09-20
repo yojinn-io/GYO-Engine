@@ -8,13 +8,15 @@
 
 | 操作 | 執行內容 | 遠端結果 |
 |---|---|---|
-| 分支 push／pull request | Quick：三平台編譯與內容啟動、Linux 一次 shader 渲染 | Actions artifacts |
+| 分支 push／pull request | Quick：三平台引擎／Editor baseline，加上 CSV 選中 app 的獨立建置與驗收 | Actions artifacts |
 | 手動執行一般 cross-platform workflow | 相同 quick 驗收 | Actions artifacts |
-| 手動執行 **Prepare Release** | 三平台完整驗收 | 成功後建立版本 tag、Draft Release 與六個附件 |
+| 手動執行 **Prepare Release** | Baseline 與選中 app × 平台的完整驗收 | 成功後建立版本 tag、Draft Release 與計算出的附件集合 |
 | 推送 tag | 不觸發上述建置 | 不自動建立 Release |
 | **Publish release** | 公開已準備好的 Draft | 不重新建置 |
 
 兩個入口共用 `build-and-validate.yml`；quick 與 release 的差別是驗收範圍。Tag 固定原始碼 commit，Release 提供版本說明與下載附件。
+
+`config/engine/projects.csv` 是本機與 CI 的共同來源。每列只有 `enabled` 與目標平台欄位都啟用才進入 app 矩陣；`description`、`version` 是個人備註，不決定這裡輸入的 Release 版本。沒有 app 的平台仍測試引擎與 Editor、不產包；全部停用時一般 CI 仍可成功，**Prepare Release** 會在前置檢查拒絕空產物集合。
 
 ## 2. 第一次使用前
 
@@ -30,27 +32,27 @@
 2. 開啟儲存庫的 **Actions → Prepare Release → Run workflow**。
 3. 在分支選單選擇來源分支。這次執行會固定當下的完整 commit SHA；後續分支的新 commit 不會混入本次套件。
 4. 填寫 **version**，例如 `v1.0.1`；候選版可用 `v1.1.0-rc.1`。需要預發行標記時勾選 **prerelease**，再執行 **Run workflow**。
-5. 等三平台完整驗收通過。過程中先產生 Actions artifacts；所有必要檢查成功後，最後一個 job 才建立 tag、Draft Release 並上傳附件。
+5. 等三平台 baseline 與全部選中 app × 平台的完整驗收通過。過程中先產生 Actions artifacts；所有必要檢查成功後，最後一個 job 才建立 tag、Draft Release 並上傳附件。
 6. 開啟執行結果的 **Summary**，點選 Draft Release 連結。
-7. 檢查版本、來源 commit、六個附件及預發行狀態；編輯版本標題與更新說明。
+7. 檢查版本、來源 commit、CSV 所計算出的全部附件及預發行狀態；編輯版本標題與更新說明。
 8. 確認後按 **Publish release**。這一步公開既有附件，不會啟動另一輪完整建置。
 
 ## 4. 完整驗收與附件
 
-Release profile 包含三平台建置、CPU/headless、shader 契約、core-only、隔離部署與缺檔負向檢查、部署版 startup／gameplay smoke，以及 Linux Lavapipe 八項渲染診斷。任一必要 job 失敗、取消或跳過，均不能進入建立 Draft 的階段。
+Release profile 固定測試三平台引擎與 UI editor，並為同一來源 commit 的 CSV 產生 app × 平台矩陣（Windows x64、Linux x64、macOS ARM64）。每個組合用隔離建置目錄，只選自己的 app、關閉 Editor，完成建置、測試、安裝、manifest 驗收與封裝。Editor 不放入 app 包，無 GPU／shader 需求的 app 不執行對應處理。
 
-Draft 應包含下列三個壓縮檔，及各自的 `.sha256`，共六個附件：
+每個 app 必須註冊安裝後 startup 測試；共用 runner 從包外工作目錄執行生成的 `share/gyo/apps/<name>/manifest.json` 所宣告的命令，按 profile／平台／GPU 條件驗收。失敗、逾時或缺少必要證據都阻擋產包。Object_FPS 自己維護 gameplay、缺檔、Linux quick 一項與 release 八項 GPU 規則，詳見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
+
+每個選中組合有一個壓縮檔與一個 checksum，**附件數是選中組合數乘以二**：
 
 ```text
-gyo-object-fps-windows-x64.tar.gz
-gyo-object-fps-windows-x64.tar.gz.sha256
-gyo-object-fps-linux-x64.tar.gz
-gyo-object-fps-linux-x64.tar.gz.sha256
-gyo-object-fps-macos-arm64.tar.gz
-gyo-object-fps-macos-arm64.tar.gz.sha256
+gyo-<name>-<platform>.tar.gz
+gyo-<name>-<platform>.tar.gz.sha256
 ```
 
-上傳前會核對 checksum、套件必要內容、來源 commit、平台及 `build_metadata.json` 中的 release 驗收記錄。Windows／macOS hosted CI 不執行實體 GPU 驗收；Linux 的 Lavapipe 是軟體 Vulkan。正式發佈前的實機檢查方式見[渲染驗收文件](rendering_architecture.zh-Hant.md#r09)。
+Archive 只有一個 `gyo-<name>` 根目錄，包含該 app 與必要依賴。例如 CSV 的 `object_fps` 名稱保留底線，不改成 `object-fps`。Release 使用相同來源 SHA 的 CSV 重建預期集合，拒絕缺包、多包或重複身份；上傳前核對 checksum、封存檔安全、必要內容、app、平台、來源 SHA、release profile 與完整驗收證據。Quick 證據不能冒充完整 release。必要 job 失敗、取消或跳過，均不能進入 Draft 階段。
+
+Windows／macOS hosted CI 不執行實體 GPU 驗收；Linux Lavapipe 是軟體 Vulkan。各 app 的手動實機結果另記錄，不由編譯成功推定。CSV、能力解析、manifest 與 CI 資料流詳見[設計文件](architecture.md#build-project-management)。
 
 ## 5. 失敗、重跑與已存在的版本
 
@@ -80,4 +82,4 @@ Draft 準備遇到 HTTP 500／502／503／504，或網路逾時、連線重設�
 
 本輪實作與本機測試不等於已在 GitHub 建立或公開 Release。請以實際 **Prepare Release** 的 Summary、三平台結果及 Draft 附件作為該版本的驗收證據。
 
-先前流程已通過三個 workflows 的 actionlint 1.7.12 與雙語指南封裝檢查。本次自動恢復修正後，`tools/ci` 全部 80 項測試通過，包含 16 種實際 Bash 驗收 gate 狀態組合，以及請求已寫入但回應逾時的恢復案例。GitHub API 使用 mock，沒有建立遠端 Release；這些結果不能代表遠端 API 已恢復或 hosted Draft 準備已成功。同一次 Actions 執行的重跑可替換其 artifacts；Release 附件仍只補缺檔、不覆寫。
+以下為重構前的歷史證據，不代表 CSV 矩陣已完成 hosted 驗證：先前流程已通過三個 workflows 的 actionlint 1.7.12 與雙語指南封裝檢查。當時的自動恢復修正後，`tools/ci` 全部 80 項測試通過，包含 16 種實際 Bash 驗收 gate 狀態組合，以及請求已寫入但回應逾時的恢復案例。GitHub API 使用 mock，沒有建立遠端 Release；這些結果不能代表遠端 API 已恢復或 hosted Draft 準備已成功。同一次 Actions 執行的重跑可替換其 artifacts；Release 附件仍只補缺檔、不覆寫。

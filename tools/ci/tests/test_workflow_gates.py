@@ -115,8 +115,8 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn("SOURCE_COMMIT: ${{ inputs.source_commit }}", native)
         upload = step_using(native, "actions/upload-artifact")
         download = step_using(draft, "actions/download-artifact")
-        self.assertIn("name: gyo-object-fps-${{ matrix.platform }}", upload)
-        self.assertIn("pattern: gyo-object-fps-*", download)
+        self.assertIn("name: gyo-package-${{ matrix.app }}-${{ matrix.platform }}", upload)
+        self.assertIn("pattern: gyo-package-*", download)
         self.assertNotRegex(download, r"(?m)^\s*(run-id|repository|github-token):")
 
     def test_workflow_commands_match_the_release_helper_cli(self):
@@ -132,6 +132,26 @@ class WorkflowGateTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 for option in required_options:
                     self.assertIn(option, result.stdout)
+
+    def test_shader_work_is_gated_by_current_build_graph(self):
+        native = job_block(self.shared, "native")
+        self.assertIn('gyo-build.json" -Raw | ConvertFrom-Json', native)
+        steps = re.split(r"(?m)^      - ", native)
+        for marker, field in (("xcrun -sdk macosx metal -v", "has_shader_bundles"),
+                              ("uses: actions/cache@", "has_shader_tools"),
+                              ('ctest --test-dir "build/$env:PRESET/host-tools"', "has_shader_tools")):
+            step = next(step for step in steps if marker in step)
+            self.assertIn(f"steps.configure.outputs.{field} == 'true'", step)
+            self.assertNotIn("exit 0", step)
+
+    def test_tools_are_excluded_from_app_packages_and_baseline_is_always_tested(self):
+        native = job_block(self.shared, "native")
+        self.assertIn("$editor = if ($env:GYO_APP) { 'OFF' } else { 'ON' }", native)
+        self.assertIn('"-DGYO_APPS=$env:GYO_APP"', native)
+        self.assertIn("if: inputs.profile == 'release' || matrix.app == ''", native)
+        for step in re.split(r"(?m)^      - ", native):
+            if "cmake --install" in step or "python tools/ci/archive_package.py" in step:
+                self.assertIn("if: matrix.app != ''", step)
 
 
 if __name__ == "__main__":

@@ -8,5 +8,6 @@ FetchContent_Declare(
 
 set(DOCTEST_WITH_TESTS OFF CACHE BOOL "" FORCE)
 set(DOCTEST_WITH_MAIN OFF CACHE BOOL "" FORCE)
+set(DOCTEST_NO_INSTALL ON CACHE BOOL "Keep test headers and CMake exports out of application packages" FORCE)
 
 FetchContent_MakeAvailable(doctest)

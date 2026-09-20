@@ -147,6 +147,8 @@ Overlay / HUD → Present
 <a id="r07"></a>
 ## 7. CMake の自動選択と明示的な上書き
 
+App は `config/engine/projects.csv` の `enabled` とターゲット欄で選択します。`GYO_APPS=AUTO` はその集合、空値は app なし、名前またはセミコロンリストは部分集合を指定します。無効な app を上書きして有効にはできません。各 app の `CMakeLists.txt` が要求を宣言し、ルートは収集後に能力と app targets を構築します。[ビルド設計](architecture.md#build-project-management)を参照してください。GPU が必須の app と `GYO_RENDER_DEVICE=NONE` の組み合わせは配置エラーです。
+
 | 設定 | 値 | 意味 |
 |---|---|---|
 | `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE` | device 実装。`NONE` は GPU なしのビルド用 |
@@ -166,10 +168,10 @@ Windows の AUTO bundle は DXIL／SPIR-V の両方を含むので、両ドラ�
 
 ```sh
 # ネイティブビルド。Windows は先に x64 MSVC 開発環境を開き、Ninja も用意する。
-cmake --preset object-fps
-cmake --build --preset object-fps
-ctest --preset object-fps
-cmake --install build/object-fps --prefix /absolute/path/to/stage
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+cmake --install build/dev --prefix /absolute/path/to/stage
 
 # ゲーム、SDL adapter、FBX adapter を含めない core ビルド
 cmake --preset core
@@ -177,7 +179,7 @@ cmake --build --preset core
 ctest --preset core
 ```
 
-`object-fps` test preset は `cpu|shader` ラベルだけを実行します。GPU テストは使用可能なディスプレイと GPU を持つ環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のコンパイラー／アーキテクチャを明示します。
+`dev` test preset は `cpu|shader` ラベルだけを実行します。GPU テストは使用可能なディスプレイと GPU を持つ環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のコンパイラー／アーキテクチャを明示します。
 
 CLion では既存の MSVC CMake profile を使い、**Reload CMake Project** を実行してから `gyo_object_fps` target を選んで実行します。ネイティブ shader ツールの子ビルドは、その profile で選択したコンパイラーと Ninja のパスを引き継ぎます。再配布 DLL の検出のために IDE profile を作り直す必要はありません。
 
@@ -188,101 +190,49 @@ Ubuntu では SDL が既定で有効にする XTest の検出用に `libxtst-dev
 オフライン host ツールは `SDL_UNIX_CONSOLE_BUILD=ON` も明示します。X11／Wayland video を意図的に使わないため、console build であることを SDL に伝える必要があります。指定しないと Linux configure は video backend の不在をエラーとします。この設定は shader host 用 SDL だけに適用し、ゲームは独自のグラフィックス backend をビルドします。
 
 <a id="r08"></a>
-## 8. 配布とファイル欠落時の処理
+## 8. App ごとの配布と package 契約
+
+各 app × platform の CI job は独立したビルドディレクトリーでその app だけを選び、Editor を無効にします。App が executable、内容、shader、install、追加検証を所有し、共通の配布処理が必要な動的ライブラリ、RPATH、MSVC CRT を扱います。
 
 ```text
 stage/
-├─ bin/
-│  ├─ gyo_object_fps[.exe]
-│  ├─ gyo_ui_editor[.exe]
-│  ├─ assets/common/ + assets/object_fps/
-│  ├─ shaders/builtin/manifest.json + shader artifacts
-│  └─ shaders/object_fps/manifest.json + shader artifacts
-└─ lib/  Linux／macOS の非システム動的ライブラリ（Windows DLL は bin/）
+├─ bin/<app executable> + app-owned content + Windows DLLs
+├─ lib/                         Linux/macOS non-system libraries
+└─ share/gyo/apps/<name>/manifest.json
 ```
 
-実行ファイルの位置から配布データを解決し、カレントディレクトリに依存しません。`--validate-package` はウィンドウや GPU を作らず、配布 asset、shader bundle、読み込みを検証します。CI は独立した一時ディレクトリに複製して起動し、common asset、内蔵 shader manifest、ゲーム shader manifest を一時的に取り除いて各失敗を確認します。ソースディレクトリのファイルで欠落を隠さないためです。
+CMake がビルドディレクトリーに manifest を生成するため、別の手動リストは不要です。必須ファイル、必須の配布版 startup コマンド、quick／release・platform・GPU の条件に応じた追加検証を含みます。共通 runner は package 外の作業ディレクトリーから実行し、失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Asset と shader は executable から解決し、source tree で欠落を隠しません。Object_FPS の内容欠落・ゲームプレイ検査は[app 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)にあります。
 
-GitHub artifact は Unix の実行権限を保つ tar.gz と SHA-256 チェックサムを含みます。実機確認用のネイティブ package であり、macOS 署名／公証や Linux ディストリビューション間の互換性は保証しません。Linux package は実行先のグラフィックスドライバーとシステムライブラリを利用します。
+各組み合わせは `gyo-<name>-<platform>.tar.gz` と `.tar.gz.sha256` を生成し、archive ルートは `gyo-<name>` です。Tar は Unix 実行権限を保持します。ネイティブ検証用 package であり、macOS の署名／公証や Linux ディストリビューション間の互換性を保証しません。ターゲット OS のグラフィックスドライバーとシステムライブラリを使用します。App、platform、source SHA、profile、検証証拠を記録し、Release は同じ commit の CSV から期待集合を再構築して照合します。Quick／通常のローカル package を release 証拠として使えません。
 
-`build_metadata.json` は `source_revision`、`platform`、`ci_smoke` を記録します。Quick CI の package は3プラットフォームの起動確認と Linux の shader 描画1件を記録します。Release package は、さらに3プラットフォームの gameplay headless smoke と Linux Lavapipe の描画8件すべての合格を必要とします。Package ツールは commit／platform が異なる報告を拒否します。Release アップロード前にこの情報、アーカイブ内容、SHA-256 を再検証します。Quick CI や通常のローカル package は、完全な Release 検証に合格した入力には使えません。
+Windows Release／RelWithDebInfo は `cmake/GyoMsvcRuntime.cmake` が選択コンパイラーから対応する再配布 DLL を探して `bin/` に配置します。`GYO_MSVC_REDIST_DIR` でルートを指定できます。不足しても開発用配置／ビルドは可能ですが release install は明示的に失敗します。Debug CRT は配布せず、Windows 10+ の UCRT を使います。利用者に Visual Studio、shader コンパイラー、SDK は不要です。
 
-Windows package は Release／RelWithDebInfo を使い、`cmake/GyoMsvcRuntime.cmake` が選択したコンパイラーのインストール位置から対応する MSVC 再配布可能 DLL を探し、`bin/` に配置します。IDE 同梱 CMake の Visual Studio バージョン一覧には依存しません。`GYO_MSVC_REDIST_DIR` で再配布ファイルのルートを指定することもできます。DLL が見つからなくても開発用 configure／build は続行でき、release install の時点で不足と対処方法を報告します。Debug CRT は配布せず、今回の package は Windows 10+ のシステム UCRT を前提にします。ゲームの実行に Visual Studio、shader コンパイラー、SDK は不要です。
-
-CI は `dumpbin` で Windows EXE/DLL の参照する VC runtime が同梱されていることを確認します。Linux は `ldd` で SDL3 が package の `lib/` に解決されること、macOS は `otool` で相対 install name と RPATH を確認します。これらはビルド機の検証ツールです。Windows で `tools/ci/validate_package.py` を実行する際は `--dumpbin /absolute/path/to/dumpbin.exe` で指定できます。
+CI は `dumpbin` で Windows の VC runtime 参照、`ldd` で Linux の package 内ライブラリ解決、`otool` で macOS の install name／RPATH を確認します。ビルド機用のツールであり、Windows のローカル検証では `--dumpbin /absolute/path/to/dumpbin.exe` で指定できます。
 
 <a id="r09"></a>
-## 9. Object_FPS の CI、Release、実機受け入れ確認
+## 9. 共通 CI、Release、app の検証
 
-### 9.1 毎回の push で必要な検証
-
-GitHub Actions は Windows x64／MSVC、Ubuntu 24.04 x64／GCC 14、macOS 15 ARM64／Xcode 16.4 で Object_FPS、UI editor、shader をビルドします。3 job は独立しており、1 つの失敗で他を停止しません。ログ、manifest、ネイティブ package をアップロードします。
-
-`cross-platform.yml` のブランチ push、pull request、手動実行は quick 経路で、コンパイル、実際の内容による起動確認、shader 描画1件を実行します。GUI の **Prepare Release** は完全な release profile を使います。両方の入口が `build-and-validate.yml` を共有し、固定 commit SHA を渡します。Tag push と `release.published` は再ビルドを起動しません。
+3プラットフォームで engine と UI editor を必ずビルド・テストします。固定 source SHA の CSV から app × 有効 platform の matrix を別に生成し、Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4 を使います。各 app job の package はその app だけを含み、Editor は含めません。
 
 ```text
-quick／Prepare Release: 入力と固定 commit の検証
-  → 共通 build-and-validate.yml（quick または release profile）
-  → Windows／Linux／macOS: build + install + startup smoke
-  → Release のみ: CPU/headless + shader + core-only + 独立配布の失敗検証
-  → Release のみ: 3プラットフォーム gameplay headless
-  → Linux Vulkan/Lavapipe: quick は shader 1件／Release は全8件
-  → 3プラットフォーム: package + SHA-256 + Actions artifacts
-  → 3プラットフォームすべて成功
-  → Prepare Release のみ: tag + Draft Release + 添付6件を作成
-  → 利用者が Draft を確認して Publish release（再ビルドなし）
+固定 source SHA → CMake で CSV 解析 → 3プラットフォーム engine／Editor baseline
+                                    → app × platform 独立 build／install
+                                    → manifest の quick／release 検証
+                                    → archive + SHA-256 + Actions artifacts
+必須検査がすべて成功 → Prepare Release で tag／Draft／期待する添付を作成
+                     → 利用者が Publish release（再ビルドなし）
 ```
 
-| 検証 | Platform | 実際の範囲 |
-|---|---|---|
-| `--startup-smoke-test` | Windows／Linux／macOS、quick と Release | 別の作業ディレクトリーから配布版を起動し、catalog／campaign／FBX モデルの構成を実際に読み込む。ウィンドウと GPU は作らない |
-| `manual_gpu_smoke.py --suite quick` | Linux、quick CI | Xvfb の表示環境で Mesa Lavapipe Vulkan を強制選択し、カスタム shader の赤／青描画と読み戻しを1回実行 |
-| `--headless-smoke-test` | Windows／Linux／macOS、Release のみ | メニュー、開始、取り出し、ジャンプ、一時停止／再開、着地、1回の射撃、リロード完了も検査。ウィンドウと GPU は作らない |
-| `manual_gpu_smoke.py --suite full` | Linux、Release のみ | shader、世界、メニュー、武器、リロード、3比率の銃口診断、計8件 |
-| 物理 GPU／対話操作 | 各プラットフォームの実機 | 全8件の GPU 診断と手動操作。Windows／macOS の hosted runner はこの項目の合格を主張しない |
+App のない platform も engine と tool をテストし、package は作りません。全 app が無効でも通常 CI は成功できますが、Prepare Release は空の成果物集合を事前検証で拒否します。GPU／shader が不要な app は対応処理を実行しません。必須 GPU 検証ではドライバー不足、失敗、タイムアウトを成功扱いのスキップにできません。
 
-Linux で Lavapipe がない場合、device の生成失敗、描画失敗、タイムアウトはいずれも job の失敗になります。「GPU がなければスキップして成功」とする経路はありません。Helper はログに記録された実際の driver／shader 形式が要求と一致することも確認し、`summary.json` に結果を保存します。`vulkan-info.log` は ICD と Vulkan device 情報を記録します。これでソフトウェア Vulkan の描画経路を確認し、物理 GPU は別途検証します。
+`cross-platform.yml` の push／PR／手動実行は quick、`prepare-release.yml` は完全な release profile を使います。両方が固定 SHA を `build-and-validate.yml` に渡します。Release は app、platform、SHA、profile、必須ファイル、完全な証拠を照合し、過不足のある package 集合や quick 証拠を拒否します。同じ版の Draft 再試行は検証済み添付と手書きの説明を保持し、tag の commit 一致を要求し、公開済み版を上書きしません。Tag push と Publish release は再ビルドを起動しません。操作と復旧は[公開ガイド](releasing.ja.md)を参照してください。
 
-共通の検証フローが3プラットフォームの matrix を集約し、必須 job が失敗、キャンセル、スキップした場合は Draft 作成へ進みません。Quick 経路では設計どおり Release 専用の重い処理を実行せず、Summary にモードと未実行項目を明記します。完全な検証済みとは扱いません。Branch protection には、quick フローで実際に表示される集約チェック名を指定してください。
-
-### 9.2 Release イベントとアップロード方針
-
-| イベント | 3プラットフォームのビルドと smoke | Release 添付 |
-|---|---|---|
-| ブランチ push、pull request | Quick 経路 | アップロードせず、Actions artifacts を保存 |
-| 通常の cross-platform workflow を手動実行 | Quick 経路 | tag を選択した手動実行でもアップロードしない |
-| **Prepare Release**：ブランチ、version、prerelease を選択 | 完全な Release 経路 | 全件成功後、tag と Draft Release を作り6ファイルを添付 |
-| Tag push（`v*` を含む） | 起動しない | Release の作成もアップロードもしない |
-| GitHub **Publish release**（`release.published`） | 再ビルドしない | 準備済み Draft と添付を公開 |
-| Release の下書き保存 | 起動しない | アップロードしない |
-
-**Actions → Prepare Release → Run workflow** でソースブランチを選び、`v1.0.1` などのバージョンと prerelease を指定します。開始時点の commit SHA を固定し、3プラットフォームがすべて成功してから `contents: write` を持つ Draft job に進みます。事前検証やビルドはリモート tag／Release を作りません。新 tag は固定 SHA を指し、同名 tag がある場合は完全一致が必要で、移動はしません。添付は `gyo-object-fps-{windows-x64,linux-x64,macos-arm64}.tar.gz` と各 `.tar.gz.sha256`、計6ファイルです。
-
-同じバージョンの Prepare Release 実行と再実行はロックを共有し、アップロード中の処理をキャンセルしません。Draft の不足添付だけを補い、検証済みファイルと手書きのタイトル／説明を保持します。同じバージョンが公開済みなら変更を拒否し、新しい番号が必要です。イベント SHA を保つには元の実行を再実行してください。新しく **Run workflow** を押すと、更新されたブランチの commit を選ぶ場合があります。
-
-手動入口を表示するには新 workflows を先にデフォルトブランチへマージし、選択するソースブランチにも含めます。既存実行の再実行は元の workflow を使います。GUI 操作、失敗時の復旧、Draft の確認は[バージョン公開ガイド](releasing.ja.md)を参照してください。最後に利用者が **Publish release** を押し、この操作では再ビルドしません。
-
-### 9.3 ダウンロード後の実機確認
-
-Actions artifacts または Release から対応 package をダウンロードし、tar.gz を展開して、グラフィカルデスクトップのある実機で実行します。
-
-```sh
-python manual_gpu_smoke.py --package /absolute/path/to/gyo-object-fps \
-  --driver vulkan --suite full --output /absolute/path/to/diagnostics
-```
-
-macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` をそれぞれ確認します。Python helper はカスタム shader の赤／青ピクセル読み戻し、世界、メニュー、武器、Reload 全体、16:9／4:3／21:9 の銃口投影 smoke を実行し、終了コード、ログ、診断画像を保存します。各項目の制限は 120 秒です。Python がない場合は `bin/gyo_object_fps --gpu-driver metal --muzzle-smoke-test --capture-dir /absolute/path/to/captures` などを直接実行できます。
-
-`--suite full` はデフォルトの全8件、`--suite quick` は shader 描画1件です。`--suite ci` は shader、world、menu の3件を手動で選ぶために残しています。`--timeout` は各項目の秒数上限です。1件でも失敗すると helper は非ゼロで終了しますが、残りのケースも実行して結果を保存します。
-
-制限環境で Python の一時ディレクトリーを利用できない場合、両方の検証 helper に `--work-directory /absolute/path/to/new-work` を指定できます。このディレクトリーは未作成である必要があり、検証後も調査用に残ります。配布検証では `--stage` の外側を指定します。
-
-手動ではマウス／キーボード、Space ジャンプ、R リロード、H 収納／取り出し、指と銃の遮蔽、壁際の射撃、exposure と HUD、リサイズ／最小化、UI editor を確認します。OS、CPU アーキテクチャ、GPU／ドライバー、package の commit、要求した／実際のバックエンド、`summary.json` を添えて報告すると、ビルド・データ・GPU のどの問題かを区別できます。
-
-実機でソースからビルドした場合は `ctest --test-dir build/object-fps -L gpu --output-on-failure` で engine＋game の GPU テスト全体を実行できます。独立した `render.sdl_gpu_mesh_smoke` は、UV／部分矩形、深度とカリング、sRGB／線形色、alpha、非対称行列、13×7 後処理も読み戻し値で検証します。このテスト executable は Object_FPS のダウンロード package には含めません。
+Object_FPS が startup／gameplay／欠落検査、Linux quick の GPU 1件と release の8件を登録します。コマンド、package 内容、実機確認は[Object_FPS 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)に移しました。共通 runner はゲーム固有の規則を持ちません。Windows／macOS hosted runner は物理 GPU の合格を主張せず、Linux Lavapipe はソフトウェア Vulkan です。各 app のハードウェア・対話操作は実機の証拠で確認します。
 
 <a id="r10"></a>
 ## 10. 検証状況、制限、参考資料
+
+以下は2026-09-16の旧ビルド構成の履歴であり、今回の CSV／app matrix の合格証拠ではありません。以前の Object_FPS `NONE` 構成は現在の必須 GPU 宣言で置き換わり、選択時の `NONE` は配置エラーです。
 
 2026-09-16 時点の、今回の実装に対するローカル検証結果です。
 

@@ -22,6 +22,10 @@ Likewise, the game owns wording, hierarchy, binding values and the consequence
 of changing a display setting. GYO owns font assets, text rasterization/cache,
 layout and render submission.
 
+The three-platform CI baseline builds/tests the editor independently. Editor is
+not installed into app-only release packages. Its standalone and GUI-OFF paths
+remain available. See [project management](architecture.md#build-project-management).
+
 ## JSON v1
 
 A document has `schema: "gyo.ui"`, `version: 1`, one reference canvas, font
@@ -66,17 +70,21 @@ not part of gameplay snapshots and are not serialized.
 
 ## Editor workflow
 
-The option is off by default. Because the repository currently defaults its
-conformance game on, use the complete editor-only configuration below when
-you want the tool without any app target:
+The independent `GYO_BUILD_UI_EDITOR` option is on by default. App selection
+comes from `config/engine/projects.csv`; use an empty `GYO_APPS` to build the
+editor without app targets:
 
 ```sh
-cmake -S . -B build-ui-editor -DGYO_BUILD_UI_EDITOR=ON -DGYO_BUILD_OBJECT_FPS=OFF -DGYO_BUILD_RUNTIME=OFF -DGYO_BUILD_SANDBOX=OFF
+cmake -S . -B build-ui-editor -DGYO_BUILD_UI_EDITOR=ON -DGYO_APPS=
 cmake --build build-ui-editor --target gyo_ui_editor
 ```
 
+The repository-independent entry is `cmake -S tools/editor -B build-ui-editor-standalone`.
+Add `-DGYO_UI_EDITOR_BUILD_GUI=OFF` for the command-line validation build; it does
+not request the GUI host or its SDL/ImGui preview adapters.
+
 The standalone target is `gyo_ui_editor` and does not link ObjectFPS, Input,
-SDL_GPU, or Sandbox. ImGui supplies editor chrome. Canvas rectangles, clipping,
+or SDL_GPU. ImGui supplies editor chrome. Canvas rectangles, clipping,
 ordering and hit testing come from the shared GYO UI evaluator.
 
 ```text

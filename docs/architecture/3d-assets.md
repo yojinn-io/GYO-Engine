@@ -254,12 +254,14 @@ apps/object_fps/art_source/source_inventory.json`. `--copy` refuses existing
 files with different hashes. The utility's raw metadata inspection does not
 certify engine loading or rendering.
 
-Use the repository's normal validation commands:
+Enable `object_fps` and the target platform in `config/engine/projects.csv`, then
+use the generic preset with an explicit app selection so asset verification
+cannot silently configure another app:
 
 ```powershell
-cmake --preset object-fps
-cmake --build --preset object-fps
-ctest --preset object-fps
+cmake --preset dev -DGYO_APPS=object_fps
+cmake --build --preset dev
+ctest --preset dev
 ```
 
 The required regression coverage includes Mark23 ViewModel/reload/muzzle GPU
@@ -268,7 +270,10 @@ while `art_source` is absent. Build/GPU outcomes are recorded in the task's
 implementation report; commands listed here are instructions, not claims that
 every environment has already passed them.
 
-### Verified implementation (2026-09-20, Windows)
+### Historical verified implementation (2026-09-20, Windows)
+
+These results predate the CSV project-management migration. The old preset and
+build paths below identify that historical run; use `dev` for current commands.
 
 - Configured `cmake --preset object-fps` with the installed MSVC toolchain and
   existing local FetchContent source caches; `cmake --build --preset object-fps`

@@ -19,7 +19,7 @@ target_link_libraries(gyo_render PRIVATE nlohmann_json::nlohmann_json)
 
 target_compile_features(gyo_render PUBLIC cxx_std_20)
 
-if(GYO_BUILD_RUNTIME OR GYO_BUILD_SANDBOX OR GYO_BUILD_UI_EDITOR)
+if(GYO_ENABLE_SDL_RENDERER)
     add_subdirectory(backend/sdl)
 endif()
 

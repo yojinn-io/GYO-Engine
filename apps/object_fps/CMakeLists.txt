@@ -1,3 +1,13 @@
+if(COMMAND gyo_app_requirements)
+    gyo_app_requirements(COMPONENTS SDL_GPU SDL_INPUT SDL_IMAGE SDL_TTF UFBX)
+    if(GYO_APP_DISCOVERY)
+        return()
+    endif()
+endif()
+if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.3")
+    message(FATAL_ERROR "Object_FPS uses macOS 13.3 as its minimum supported deployment target")
+endif()
+
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     cmake_minimum_required(VERSION 3.25)
     project(ObjectFPSDomain LANGUAGES CXX)
@@ -137,9 +147,24 @@ if(TARGET GYO::Engine)
         )
         cmake_policy(POP)
         add_dependencies(gyo_object_fps object_fps_assets)
-        gyo_copy_runtime_dlls(gyo_object_fps)
-
-        install(TARGETS gyo_object_fps RUNTIME DESTINATION bin)
+        gyo_register_app_package(TARGET gyo_object_fps STARTUP_ARGS --startup-smoke-test
+            REQUIRED_FILES
+                bin/assets/common/asset_catalog.json
+                bin/assets/object_fps/asset_catalog.json
+                bin/shaders/builtin/manifest.json
+                bin/shaders/object_fps/manifest.json
+                manual_gpu_smoke.py validate_content.py)
+        gyo_add_app_package_check(NAME gameplay PROFILES release TIMEOUT 90
+            COMMAND "@EXECUTABLE@" --headless-smoke-test)
+        gyo_add_app_package_check(NAME content PROFILES release TIMEOUT 420
+            COMMAND "@PYTHON@" "@PACKAGE_ROOT@/validate_content.py"
+                --stage "@PACKAGE_ROOT@" --logs "@LOG_ROOT@/content")
+        gyo_add_app_package_check(NAME rendering GPU PLATFORMS linux-x64 TIMEOUT 1100
+            COMMAND "@PYTHON@" "@PACKAGE_ROOT@/manual_gpu_smoke.py"
+                --package "@PACKAGE_ROOT@" --driver "@DRIVER@" --suite "@GPU_SUITE@"
+                --timeout 120 --output "@LOG_ROOT@/rendering")
+        install(PROGRAMS ci/manual_gpu_smoke.py ci/validate_content.py DESTINATION .)
+        install(DIRECTORY docs/ DESTINATION docs OPTIONAL)
         install(DIRECTORY "${OBJECT_FPS_ASSET_ROOT}" "${OBJECT_FPS_ASSET_ROOT}/../common"
             DESTINATION bin/assets)
         install(DIRECTORY "${PROJECT_BINARY_DIR}/shaders/builtin/" DESTINATION bin/shaders/builtin)
@@ -152,6 +177,13 @@ if(TARGET GYO::Engine)
         endif()
 
         if(BUILD_TESTING)
+            find_package(Python3 COMPONENTS Interpreter QUIET)
+            if(Python3_Interpreter_FOUND)
+                add_test(NAME object_fps.package_tools
+                    COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+                        -s "${CMAKE_CURRENT_SOURCE_DIR}/ci/tests" -v)
+                set_tests_properties(object_fps.package_tools PROPERTIES LABELS cpu TIMEOUT 90)
+            endif()
             add_test(NAME object_fps.startup_smoke COMMAND gyo_object_fps --startup-smoke-test)
             set_tests_properties(object_fps.startup_smoke PROPERTIES LABELS "cpu;smoke;startup" TIMEOUT 30
                 WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -196,6 +228,12 @@ else()
 endif()
 
 if(BUILD_TESTING)
+    add_executable(object_fps_model_tests tests/Model/Mark23ModelTests.cpp)
+    target_link_libraries(object_fps_model_tests PRIVATE GYO::AssetUfbx gyo_ufbx doctest::doctest)
+    target_compile_definitions(object_fps_model_tests PRIVATE
+        GYO_MARK23_FBX="${OBJECT_FPS_ASSET_ROOT}/weapons/mark23/viewmodel/Mark23.fbx")
+    add_test(NAME object_fps.model_assets COMMAND object_fps_model_tests)
+
     add_executable(object_fps_headless_tests
         tests/TestMain.cpp
         tests/App/AssetPresentationDefinitionTests.cpp

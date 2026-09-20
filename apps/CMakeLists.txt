@@ -1,11 +1,3 @@
-if(GYO_BUILD_RUNTIME)
-    add_subdirectory(runtime)
-endif()
-
-if(GYO_BUILD_SANDBOX)
-    add_subdirectory(sandbox)
-endif()
-
-if(GYO_BUILD_OBJECT_FPS)
-    add_subdirectory(object_fps)
-endif()
+foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
+    add_subdirectory("${GYO_CURRENT_APP}")
+endforeach()

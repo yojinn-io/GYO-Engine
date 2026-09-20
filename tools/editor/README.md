@@ -5,6 +5,22 @@
 the engine's asset/text adapters; it never links an application such as
 Object_FPS or an SDL_GPU backend.
 
+`GYO_BUILD_UI_EDITOR` is independent and enabled by default. Select no apps for
+an editor-only root build:
+
+```sh
+cmake -S . -B build-ui-editor -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
+cmake --build build-ui-editor --config Debug --target gyo_ui_editor
+```
+
+For the standalone entry, use `cmake -S tools/editor -B build-ui-editor-standalone`.
+Add `-DGYO_UI_EDITOR_BUILD_GUI=OFF` for command-line validation without the GUI
+host and preview adapters. CI builds/tests the
+editor in the baseline on every platform; app packages disable and omit it.
+App selection lives in `config/engine/projects.csv`, not in editor settings.
+See the [build design](../../docs/architecture.md#build-project-management) and
+[UI toolchain](../../docs/ui_toolchain.md).
+
 Typical workflow:
 
 ```text

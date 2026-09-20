@@ -37,13 +37,3 @@ target_link_libraries(imgui_sdl3_sdlrenderer3 PUBLIC
 )
 
 add_library(imgui::sdl3_sdlrenderer3 ALIAS imgui_sdl3_sdlrenderer3)
-
-if(GYO_BUILD_SANDBOX)
-    add_library(imgui_demo STATIC
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    )
-
-    target_link_libraries(imgui_demo PUBLIC imgui::core)
-
-    add_library(imgui::demo ALIAS imgui_demo)
-endif()

@@ -1,3 +1,15 @@
+option(GYO_UI_EDITOR_BUILD_GUI "Build the SDL3/ImGui editor host" ON)
+set(_gyo_editor_components "")
+if(GYO_UI_EDITOR_BUILD_GUI)
+    set(_gyo_editor_components SDL_RENDERER SDL_IMAGE SDL_TTF IMGUI)
+endif()
+if(COMMAND gyo_app_requirements)
+    gyo_app_requirements(COMPONENTS ${_gyo_editor_components})
+    if(GYO_APP_DISCOVERY)
+        return()
+    endif()
+endif()
+
 cmake_minimum_required(VERSION 3.30)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
@@ -12,11 +24,16 @@ get_filename_component(
     ABSOLUTE
 )
 
-option(GYO_UI_EDITOR_BUILD_GUI "Build the SDL3/ImGui editor host" ON)
+include("${GYO_UI_EDITOR_REPOSITORY_ROOT}/cmake/GyoRuntimeDeployment.cmake")
 
 # Standalone configuration is intentionally local to tools/editor. The normal
 # repository integration may provide these targets before adding this folder.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    include("${GYO_UI_EDITOR_REPOSITORY_ROOT}/cmake/GyoComponents.cmake")
+    gyo_resolve_components(${_gyo_editor_components})
+    if(GYO_ENABLE_SDL_GPU)
+        message(FATAL_ERROR "The standalone UI editor uses SDLRenderer or CLI mode. Configure the repository root to build SDL_GPU backends.")
+    endif()
     set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
     if(NOT TARGET nlohmann_json::nlohmann_json)
         add_subdirectory(
@@ -64,8 +81,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # focused test build.
     set(_gyo_ui_editor_saved_build_testing "${BUILD_TESTING}")
     set(BUILD_TESTING OFF)
-    if(GYO_UI_EDITOR_BUILD_GUI)
-        set(GYO_BUILD_SDL_TTF_ADAPTER ON)
+    if(GYO_ENABLE_SDL_PLATFORM AND NOT TARGET GYO::PlatformSDL)
+        add_subdirectory(
+            "${GYO_UI_EDITOR_REPOSITORY_ROOT}/platform/sdl"
+            "${CMAKE_CURRENT_BINARY_DIR}/deps/platform_sdl"
+        )
     endif()
     if(NOT TARGET GYO::Text)
         add_subdirectory(
@@ -88,20 +108,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     endif()
     set(BUILD_TESTING "${_gyo_ui_editor_saved_build_testing}")
 
-    if(GYO_UI_EDITOR_BUILD_GUI)
-        if(NOT TARGET GYO::PlatformSDL)
-            add_subdirectory(
-                "${GYO_UI_EDITOR_REPOSITORY_ROOT}/platform/sdl"
-                "${CMAKE_CURRENT_BINARY_DIR}/deps/platform_sdl"
-            )
-        endif()
-        if(NOT TARGET GYO::RenderBackendSDL)
-            add_subdirectory(
-                "${GYO_UI_EDITOR_REPOSITORY_ROOT}/render/backend/sdl"
-                "${CMAKE_CURRENT_BINARY_DIR}/deps/render_backend_sdl"
-            )
-        endif()
-    endif()
 endif()
 
 add_library(gyo_ui_editor_core STATIC
@@ -160,16 +166,7 @@ if(GYO_UI_EDITOR_BUILD_GUI)
         GYO_UI_EDITOR_WITH_GUI=1
     )
 
-    if(COMMAND gyo_copy_runtime_dlls)
-        gyo_copy_runtime_dlls(gyo_ui_editor)
-    elseif(WIN32)
-        add_custom_command(TARGET gyo_ui_editor POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:gyo_ui_editor>
-                $<TARGET_FILE_DIR:gyo_ui_editor>
-            COMMAND_EXPAND_LISTS
-        )
-    endif()
+    gyo_copy_runtime_dlls(gyo_ui_editor)
 else()
     target_sources(gyo_ui_editor PRIVATE src/EditorGuiUnavailable.cpp)
     target_compile_definitions(gyo_ui_editor PRIVATE

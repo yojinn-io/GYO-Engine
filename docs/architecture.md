@@ -117,7 +117,7 @@ This exploration milestone builds a small but connected runtime skeleton:
 - `GYO::Model` supplies skeletal clip sampling and CPU skinning; the optional `GYO::AssetUfbx` adapter converts FBX bytes to this owning format.
 - `GYO::Collision` supplies capsule, ray/AABB and swept-sphere primitives. Object_FPS owns its flat-floor jumping and grid collision policy.
 - `apps/object_fps` and `assets/object_fps` exercise those mechanisms as the active, separately removable concrete game vertical slice, including game-owned screen/HUD policy projected through the neutral Text and Render seams.
-- `apps/runtime` remains a small standalone SDL clear/present composition root, while `apps/sandbox` keeps optional ImGui demonstration concerns separate.
+- `apps/runtime` remains a small standalone SDL clear/present composition root; the UI authoring tool is an independent executable.
 
 `RuntimeLoop` calls an injected `IRuntimeClient` in this order:
 
@@ -475,7 +475,7 @@ This is a bounded frame queue, not a full RenderGraph, material framework, or ge
 ```yaml
 Module: GYO::RenderBackendSDL
 Owns:
-  - SDL_Renderer lifecycle for the minimal runtime/sandbox path
+  - SDL_Renderer lifecycle for the minimal runtime path
   - clear and present
 Does:
   - support the existing small SDL composition roots
@@ -648,7 +648,7 @@ Object_FPS owns UI policy and data, while GYO owns the reusable JSON/layout/inte
 
 The `object_fps.menu_smoke` test starts the ordinary Main Menu path, presents its first frame, and requires at least one visible mesh/sprite submission. This protects against regressing to a clear-only startup frame; it is not a pixel-perfect rendering test.
 
-### Runtime and Sandbox applications (`this milestone`)
+### Runtime application and independent authoring tool (`this milestone`)
 
 ```yaml
 Module: apps/runtime
@@ -659,21 +659,7 @@ Does:
 Depends On:
   - GYO runtime and selected SDL adapters
 Must Not Depend On:
-  - Object_FPS, Sandbox, ImGui, or Weaver
-```
-
-```yaml
-Module: apps/sandbox
-Owns:
-  - optional demonstration and experimentation composition
-Does:
-  - host ImGui/JSON sample behavior without making it a runtime dependency
-Depends On:
-  - selected GYO/SDL mechanisms and optional demo libraries
-Must Not Depend On:
-  - Object_FPS or Weaver
-Must Not Become:
-  - an editor or a requirement for ordinary games
+  - Object_FPS, ImGui, or Weaver
 ```
 
 ```yaml
@@ -685,7 +671,7 @@ Owns:
 Depends On:
   - GYO::Ui, SDLRenderer/ImGui host, and optional asset preview adapters
 Must Not Depend On:
-  - Object_FPS, Input, SDL_GPU, Sandbox, or an app's native types
+  - Object_FPS, Input, SDL_GPU, or an app's native types
 Must Not Do:
   - copy assets, edit a catalog, publish into an app asset root, serialize native
     paths, or create project/meta/autosave/cache/imgui.ini sidecars
@@ -731,9 +717,193 @@ GYO modules -X-> Object_FPS
 GYO modules -X-> Weaver
 ```
 
-The `GYO_BUILD_OBJECT_FPS` option controls the conformance game. Enabling it selects the SDL_image PNG loader, SDL_ttf raster adapter, and (with `GYO_RENDER_DEVICE=AUTO`) SDL_GPU device needed by this vertical slice. Disabling Object_FPS removes the concrete game without changing GYO Core. The `core` preset disables optional games, editor and adapters and selects `GYO_RENDER_DEVICE=NONE`.
+<a id="build-project-management"></a>
+### Engine project selection and dependency discovery
 
-`GYO_BUILD_UI_EDITOR` is on by default and independently selects its SDLRenderer/ImGui host and optional preview loaders. It does not select Object_FPS, Input, SDL_GPU, or Sandbox. Third-party source population uses the active build tree; doctest remains test-only and ImGui demo code remains Sandbox-only.
+`config/engine/projects.csv` is the only app selection registry. It is Engine
+configuration, not game runtime data. The header is exactly:
+
+```csv
+name,description,version,enabled,windows,linux,macos
+```
+
+A name identifies `apps/<name>` relative to the repository root. Description and
+version are human-maintained metadata, not build options, target versions,
+package versions or release tags. UTF-8, optional BOM, CRLF, quoted CSV fields,
+embedded commas/escaped quotes and empty descriptions/versions are supported.
+Invalid headers, field counts, names, duplicate names and boolean values fail
+with diagnostics. Boolean fields accept `1/0` and `true/false`. A selected app
+must have its directory and `CMakeLists.txt`.
+
+Selection is `enabled AND target-platform`, using `CMAKE_SYSTEM_NAME` rather
+than the host platform. `GYO_APPS=AUTO` selects that set, an empty value selects
+none, and a semicolon list selects an explicit subset. Unknown, disabled or
+platform-incompatible requests fail rather than silently bypassing the CSV.
+There is no duplicate app list in presets, shared modules, CI or documentation.
+CSV changes are configuration dependencies. Every configure resets derived
+requirements instead of retaining a disabled app's previous requirements in the
+cache. The same native CMake parser supplies JSON to CI through `cmake -P`;
+local CMake configuration does not require Python. Export the registry with:
+
+```sh
+cmake -DGYO_OUTPUT=/absolute/path/to/projects.json -P cmake/ExportAppRegistry.cmake
+```
+
+`GYO_REGISTRY_FILE` exists for isolated parser/test fixtures; ordinary builds and
+CI use the Engine registry at the fixed repository path.
+
+The build has three phases:
+
+```text
+CSV selection + explicit adapter options + enabled tool requirements
+  -> discover selected app requirements in isolated variable scopes
+  -> resolve capabilities and construct third-party / engine targets
+  -> add selected app subdirectories once and validate package registration
+```
+
+Each app starts its own `CMakeLists.txt` with requirements before any target or
+other build side effects:
+
+```cmake
+gyo_app_requirements(COMPONENTS SDL_RENDERER)
+if(GYO_APP_DISCOVERY)
+    return()
+endif()
+
+# App-owned targets, links, content, tests, installation and package checks.
+```
+
+Discovery reads only this declaration. Normal `add_subdirectory()` then creates
+the app targets once. A discovery pass must not create targets, register tests,
+or install files. The root orchestrates phases; apps own their requirements and
+policy. Adding an app that uses existing capabilities changes only its app
+directory and the CSV. Adding a genuinely new engine capability may also extend
+the resolver and its adapter; a new app name never justifies a shared-module
+branch.
+
+The bounded capabilities are SDL platform, SDLRenderer, SDL_GPU, SDL input,
+SDL_image, SDL_ttf, ufbx and ImGui. The resolver closes their actual dependencies,
+combines explicit backend/adapter options, and exposes derived requirements to
+`third_party`, Render, Text and other consumers. Derived state does not rewrite
+user cache options. Input core is neutral and always available; its SDL backend
+and backend-specific tests are conditional. A selected app requiring SDL_GPU
+conflicts with `GYO_RENDER_DEVICE=NONE` and fails at configure time.
+
+Runtime declares SDLRenderer. Object_FPS declares GPU, input, image, text and
+FBX requirements in its own directory. These examples describe consumers; they
+are not a registry maintained by the root. `GYO_BUILD_UI_EDITOR` remains an
+independent, default-on option. Its GUI configuration requests its own
+SDLRenderer/ImGui and preview adapters. Editor-only configuration uses
+`GYO_APPS=`; standalone Editor and GUI-OFF paths remain available. Platform,
+validation, optional-test and standalone guards remain meaningful `if` branches.
+macOS deployment target setup remains before `project()`.
+
+The generic `dev` preset selects the CSV set; `core` selects no apps, tools or
+optional adapters and sets `GYO_RENDER_DEVICE=NONE`. `ci-windows`, `ci-linux`
+and `ci-macos` are generic native toolchain entries. The former
+`GYO_BUILD_RUNTIME`, `GYO_BUILD_OBJECT_FPS` and `GYO_BUILD_SANDBOX` options are
+removed. Caches containing them receive explicit migration instructions: remove
+the legacy entries or use a fresh build tree, then select apps with the CSV and
+`GYO_APPS`. No compatibility precedence or app-name aliases are retained.
+
+For an existing CLion profile, open **Settings > Build, Execution, Deployment >
+CMake** and replace the removed app `-D` options with `-DGYO_APPS=AUTO` in
+**CMake options**. Keep the profile's Editor options, toolchain and build type.
+Clearing the cache alone is insufficient when the IDE still passes the legacy
+options on every configure. After updating the profile, use **Reset Cache and
+Reload Project**, or remove all three entries from the existing build tree and
+reconfigure from the repository root in the same toolchain environment:
+
+```sh
+cmake -S . -B <existing-build> -U GYO_BUILD_RUNTIME -U GYO_BUILD_OBJECT_FPS -U GYO_BUILD_SANDBOX -DGYO_APPS=AUTO
+```
+
+Replace `<existing-build>` with the profile's build directory; this preserves
+the remaining cached configuration and downloaded dependencies.
+
+<a id="app-package-contract"></a>
+### App package contract and shared deployment
+
+Every selected app registers its primary executable, mandatory installed startup
+test, arguments, environment, timeout and required installed files with the
+package helper. Additional app-owned acceptance commands declare applicable
+quick/release profiles, platforms and GPU needs. Commands remain argument arrays,
+not interpolated shell text. An enabled app without a startup check fails
+configuration; each required executed check must produce valid success evidence.
+
+The app-facing helper interface is:
+
+```cmake
+gyo_register_app_package(
+    TARGET MyApp
+    STARTUP_ARGS --smoke-test
+    STARTUP_ENVIRONMENT SDL_VIDEODRIVER=dummy
+    STARTUP_TIMEOUT 15
+    REQUIRED_FILES bin/assets/my_app/catalog.json)
+
+gyo_add_app_package_check(
+    NAME content
+    COMMAND "@PYTHON@" "@PACKAGE_ROOT@/check_content.py" "@PACKAGE_ROOT@"
+    PROFILES release
+    PLATFORMS windows-x64 linux-x64 macos-arm64
+    TIMEOUT 30)
+```
+
+Registration installs the executable and runtime dependencies and creates the
+mandatory startup check. Additional checks accept `ENVIRONMENT` and `GPU` when
+needed. Supported command placeholders are `@PACKAGE_ROOT@`, `@EXECUTABLE@`,
+`@LOG_ROOT@`, `@PYTHON@`, `@PROFILE@`, `@GPU_SUITE@` and `@DRIVER@`; they are
+expanded as individual arguments. Declare required files relative to the stage.
+
+CMake generates `packages/<app>/<config>/manifest.json` in the build tree and installs it as
+`share/gyo/apps/<app>/manifest.json`; it is not a second hand-maintained registry.
+App targets, content, shaders, install rules and specialized validators stay in
+the app directory. Generic runners consume the manifest without knowing game
+flags, asset names, gameplay assertions or GPU case counts. Runtime registers
+its existing `--smoke-test`; Object_FPS owns its gameplay, missing-content and
+GPU diagnostics under its own `ci/` directory and [acceptance documentation](../apps/object_fps/docs/acceptance.ja.md).
+
+Shared deployment follows actual install targets: SDL shared libraries,
+Windows DLL copying and MSVC CRT, and Unix install names/RPATH are handled once
+for all apps. App-only CI disables Editor and builds one app in one isolated
+build tree. Its stage and archive contain only that app and required dependencies;
+no unrelated executable, assets or editor are included. Startup runs from a
+working directory outside the installed package, preventing source/build paths
+from masking missing deployed content.
+Both staging and archive validation reject another app's installation registry;
+use a fresh install prefix for each app rather than packaging a combined local
+installation. Test-framework headers and CMake exports are not installed.
+
+<a id="app-ci-data-flow"></a>
+### CI and release data flow
+
+```text
+fixed source SHA
+  -> same-commit CSV parsed by CMake
+  -> baseline engine + Editor build/tests on all three platforms
+  -> selected app × enabled platform isolated jobs
+       -> configure -> build -> install -> manifest-driven acceptance
+       -> gyo-<name>-<platform>.tar.gz + .tar.gz.sha256
+  -> validate the exact expected set and release evidence
+  -> Prepare Release only: tag + Draft -> user publishes
+```
+
+Supported package identities are `windows-x64`, `linux-x64` and `macos-arm64`.
+Registration checks the target architecture as well as the operating system;
+unsupported architectures fail explicitly instead of receiving a false identity.
+Each archive has one `gyo-<name>` root. The baseline has no app package. A
+platform with no selected apps still runs engine/tool checks; normal CI succeeds
+with an entirely empty selection, while Prepare Release rejects empty products
+in preflight. Apps without GPU/shader requirements do not run those steps.
+
+The source SHA is fixed before matrix generation and reused for checkout,
+build metadata, acceptance and release. Release recomputes expected packages
+from that commit's CSV, checking exact app/platform membership, source identity,
+release profile, required files, complete acceptance evidence, checksums and
+archive safety. Missing or extra packages and quick-only evidence are errors.
+An existing draft may retain unrelated manual attachments, but unexpected managed
+app archives/checksums block the operation without being deleted.
+The final write-enabled job runs only after every required gate passes.
 
 ## 8. Platform and graphics backend strategy
 
@@ -784,35 +954,29 @@ preventing build-machine runtime installations or absolute build paths from
 masking incomplete packages. These inspection tools are CI requirements, not
 end-user runtime dependencies.
 
-The GitHub Actions matrix builds the complete Object_FPS and UI editor graphs,
-executes CPU/headless and offline shader tests, and validates isolated installed
-packages on Windows x64, Linux x64 and macOS ARM64. Branch/PR/manual CI uses a
-quick path: compile, install, load the real packaged catalog/campaign/model with
-`--startup-smoke-test` on all three platforms, then run one shader-readback render
-on Linux through Vulkan and Mesa Lavapipe under Xvfb. Release CI adds the full
-CPU/shader/core/package-negative tests, gameplay `--headless-smoke-test` for
-jumping, pause/resume, shooting and reload, and all eight Linux render cases.
-This software rendering check is distinct from physical GPU and interactive
-acceptance, which remain manual on target hardware.
+The shared CI matrix follows the [project-management data flow](#app-ci-data-flow).
+Baseline jobs build/test neutral modules and Editor on all three platforms;
+app jobs build separate install packages and run the checks declared by that app.
+Object_FPS's software Vulkan quick/release coverage and physical GPU procedures
+are app-owned, documented in [日本語](../apps/object_fps/docs/acceptance.ja.md) and
+[繁體中文](../apps/object_fps/docs/acceptance.zh-Hant.md). GPU validation is required
+only where the manifest requires it; a required GPU check may not become a
+successful skip when no driver is available.
 
 `cross-platform.yml` supplies quick branch/PR/manual validation;
 `prepare-release.yml` supplies the **Prepare Release** GUI with version and
-prerelease inputs. Both call `build-and-validate.yml` using an exact source SHA
-and a quick/release profile. Every required platform job must pass before the
-release caller's write-enabled job creates a tag and Draft Release with all
-three archives/checksums. The user publishes the prepared Draft after review;
-tag pushes and `release.published` do not rebuild.
+prerelease inputs. Both call `build-and-validate.yml` with an exact source SHA
+and profile. The user's Release version is independent of the CSV metadata.
+Existing tags must match that SHA. Same-version retries are serialized, preserve
+verified Draft assets and user notes, and refuse already-public versions.
+Ordinary runs produce Actions artifacts. Reruns retain their event SHA and
+workflow; a new dispatch may select a later commit. Publishing the Draft and tag
+pushes do not rebuild. See [繁體中文](releasing.zh-Hant.md) and
+[日本語](releasing.ja.md) for GUI steps and recovery.
 
-Exact commit, platform and smoke provenance live in `build_metadata.json` and
-are rechecked before upload. Existing tags may only match the fixed commit;
-same-version retries are serialized, preserve verified Draft assets and user
-notes, and refuse an already-public version. Ordinary branch/PR/quick manual
-runs produce Actions artifacts only. Reruns retain the original event SHA and
-workflow; a new manual dispatch can select a later branch commit. See the
-[Traditional Chinese](releasing.zh-Hant.md) and [Japanese](releasing.ja.md) release
-guides for the GUI steps and recovery procedure.
-No workflow file or compiler success is evidence of physical GPU correctness.
-The current validation status lives in section 10 of the paired rendering guides.
+Compiler success is not physical GPU evidence. Section 10 of the paired rendering
+guides records historical results for their stated configurations; it does not
+assert the new project registry or new app matrix has passed hosted CI.
 
 ## 9. Asset identity, runtime loading, importing, and GPU resources
 
@@ -993,7 +1157,7 @@ This milestone does not implement Weaver, a Weaver adapter, world model, causal 
 - Text growth must extend the neutral raster/pixel boundary or add an optional adapter; it must not make Render or Asset depend on SDL_ttf.
 - Adding Render3D features, Physics3D, Navigation, or an external controller should mostly add code in its own module/backend/adapter.
 - Removing Object_FPS, Physics, Render3D, tools, or an external controller must not break unrelated Engine, Asset, Input, or base Runtime behavior.
-- Object_FPS executable/asset/shader deployment is included for native acceptance. Public SDK install/export packaging remains deferred until an external consumer stabilizes the public surface.
+- App executable/content/shader deployment is included for native acceptance. Public SDK install/export packaging remains deferred until an external consumer stabilizes the public surface.
 
 ## 14. Deliberately deferred decisions
 

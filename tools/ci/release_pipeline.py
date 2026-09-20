@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, load_packages,
                              parse_boolean, prepare_event, validate_archive, validate_checksum,
-                             validate_commit, validate_version)
+                             validate_commit, validate_version, validate_expected_pairs)
+from app_registry import export_registry
 
 
 class ApiError(ReleaseError):
@@ -34,6 +35,9 @@ class TransientApiError(ReleaseError):
 
 RETRY_DELAYS = (2, 4, 8)
 TRANSIENT_HTTP_STATUS = frozenset((500, 502, 503, 504))
+MANAGED_PACKAGE_ASSET = re.compile(
+    r"gyo-[a-z][a-z0-9_]*-(?:" + "|".join(re.escape(platform) for platform in PLATFORMS)
+    + r")\.tar\.gz(?:\.sha256)?\Z")
 
 
 def retry_after_seconds(value: str | None) -> float | None:
@@ -181,6 +185,11 @@ def release_assets(api, release_id: int) -> dict:
 
 def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> list[tuple[str, bytes]]:
     """Verify existing assets before any mutation, tolerating nondeterministic rebuild bytes."""
+    expected = {name for package in packages for name in (package.name, package.name + ".sha256")}
+    unexpected = sorted(name for name in assets if MANAGED_PACKAGE_ASSET.fullmatch(name) and name not in expected)
+    if unexpected:
+        raise ReleaseError(f"Draft contains unexpected managed application package assets: {unexpected}. "
+                           "No assets were deleted or replaced.")
     uploads = []
     for package in packages:
         archive_asset = assets.get(package.name)
@@ -194,7 +203,7 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
                     "placeholder before rerunning the failed job; no asset was deleted automatically")
         if archive_asset:
             existing = api.download(archive_asset["id"])
-            validate_archive(package.name, existing, package.platform, commit)
+            validate_archive(package.name, existing, package.app, package.platform, commit)
             if checksum_asset:
                 validate_checksum(package.name, existing, api.download(checksum_asset["id"]))
             else:
@@ -209,17 +218,20 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
     return uploads
 
 
-def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[Package]) -> dict:
+def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[Package], *,
+                  expected_pairs: list[tuple[str, str]]) -> dict:
     validate_commit(commit)
     validate_version(tag)
     prerelease = parse_boolean(prerelease)
-    if sorted(package.platform for package in packages) != sorted(PLATFORMS):
-        raise ReleaseError("Draft preparation requires exactly one package for each of the three platforms")
+    expected = validate_expected_pairs(expected_pairs)
+    actual = [(package.app, package.platform) for package in packages]
+    if len(actual) != len(set(actual)) or set(actual) != expected:
+        raise ReleaseError("Draft preparation requires exactly the configured app/platform packages")
     for package in packages:
-        if package.name != archive_name(package.platform):
+        if package.name != archive_name(package.app, package.platform):
             raise ReleaseError("Package filename does not match its platform")
         validate_checksum(package.name, package.data, package.checksum_data)
-        validate_archive(package.name, package.data, package.platform, commit)
+        validate_archive(package.name, package.data, package.app, package.platform, commit)
     release = find_release(api, tag)
     if release is not None:
         release_id = verify_draft(release, tag)
@@ -292,18 +304,18 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
             or not parsed_url.path.startswith(f"/{api.repository}/releases/")
             or any(ord(char) < 32 or ord(char) == 127 for char in release_url)):
         raise ReleaseError("GitHub returned an unexpected draft release URL")
-    print(f"Draft {tag} ({release_id}) is ready with all three packages; publish it manually in GitHub")
+    print(f"Draft {tag} ({release_id}) is ready with {len(packages)} verified application packages; publish it manually in GitHub")
     return {"release_id": str(release_id), "release_url": release_url, "tag": tag, "commit": commit}
 
 
 def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
-                               packages: list[Package], *, sleep=time.sleep) -> dict:
+                               packages: list[Package], *, expected_pairs: list[tuple[str, str]], sleep=time.sleep) -> dict:
     # A failed POST may already have succeeded remotely. Restart reconciliation,
     # never the individual POST: verify the tag, draft and existing packages again.
     attempts = len(RETRY_DELAYS) + 1
     for attempt in range(attempts):
         try:
-            return prepare_draft(api, tag, commit, prerelease, packages)
+            return prepare_draft(api, tag, commit, prerelease, packages, expected_pairs=expected_pairs)
         except (ApiError, TransientApiError) as error:
             if isinstance(error, ApiError) and error.status not in TRANSIENT_HTTP_STATUS:
                 raise
@@ -338,21 +350,31 @@ def main() -> None:
     prepare.add_argument("--commit", required=True)
     prepare.add_argument("--ref", required=True)
     prepare.add_argument("--output", type=Path, required=True)
+    prepare.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
     draft = commands.add_parser("draft")
     draft.add_argument("--tag", required=True)
     draft.add_argument("--commit", required=True)
     draft.add_argument("--prerelease", choices=("true", "false"), required=True)
     draft.add_argument("--package-directory", type=Path, required=True)
     draft.add_argument("--output", type=Path, required=True)
+    draft.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
     args = parser.parse_args()
     try:
         if args.command == "prepare":
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
             result = prepare_event(args.event_name, event, args.commit, args.ref)
+            validate_expected_pairs(export_registry(args.registry))
         else:
-            packages = load_packages(args.package_directory, args.commit)
+            # The checkout is fixed by the workflow. Rebuild expectations from its
+            # CMake registry, never from downloaded artifacts or their manifests.
+            from release_support import git
+            if git("rev-parse", "HEAD") != args.commit:
+                raise ReleaseError("Draft checkout does not match the selected source commit")
+            expected = export_registry(args.registry)
+            packages = load_packages(args.package_directory, args.commit, expected)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
-            result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease), packages)
+            result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease),
+                                                packages, expected_pairs=expected)
         write_outputs(args.output, result)
         print(json.dumps(result))
     except (ReleaseError, OSError, ValueError) as error:

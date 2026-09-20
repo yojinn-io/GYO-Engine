@@ -19,61 +19,105 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, TransientApiError,
-                              prepare_draft, retry_after_seconds, verify_remote_tag)
-from release_support import (ARCHIVE_ROOT, METADATA_PATH, PLATFORMS, Package,
-                             ReleaseError, archive_name, checksum_document,
-                             load_packages, prepare_event, validate_archive)
+                              prepare_draft as _prepare_draft, retry_after_seconds, verify_remote_tag)
+from release_support import (PLATFORMS, Package,
+                             ReleaseError, archive_name as _archive_name, checksum_document,
+                             load_packages as _load_packages, prepare_event, validate_archive as _validate_archive)
+from package_contract import manifest_digest, manifest_path, required_checks
 
 
 COMMIT = "a" * 40
 OTHER_COMMIT = "b" * 40
 
 
-def package_contents(platform):
-    # Match the deployed directory layout. These short file payloads are unit
-    # fixtures, not binaries to execute; real package smoke runs in CI.
-    executable = "bin/gyo_object_fps" + (".exe" if platform == "windows-x64" else "")
+APP = "sample_app"
+ARCHIVE_ROOT = "gyo-" + APP
+METADATA_PATH = ARCHIVE_ROOT + "/build_metadata.json"
+EXPECTED_PAIRS = [(APP, platform) for platform in PLATFORMS]
+
+
+def archive_name(platform, app=APP):
+    return _archive_name(app, platform)
+
+
+def validate_archive(name, data, platform, commit, app=APP):
+    return _validate_archive(name, data, app, platform, commit)
+
+
+def load_packages(directory, commit):
+    return _load_packages(directory, commit, EXPECTED_PAIRS)
+
+
+def prepare_draft(*args):
+    return _prepare_draft(*args, expected_pairs=EXPECTED_PAIRS)
+
+
+def manifest(platform="windows-x64", app=APP):
+    executable = "bin/sample" + (".exe" if platform == "windows-x64" else "")
     return {
-        executable: b"unit-test executable fixture\n",
-        "bin/assets/common/asset_catalog.json": b'{"assets":[]}\n',
-        "bin/assets/object_fps/asset_catalog.json": b'{"assets":[]}\n',
-        "bin/shaders/builtin/manifest.json": b'{"programs":[]}\n',
-        "bin/shaders/object_fps/manifest.json": b'{"programs":[]}\n',
+        "schema_version": 1, "app": app, "platform": platform, "executable": executable,
+        "required_files": ["bin/data/config.json"], "runtime_dependencies": [],
+        "checks": [
+            {"name": "startup", "command": ["@EXECUTABLE@", "--startup"],
+             "environment": [], "timeout": 30, "profiles": ["quick", "release"],
+             "platforms": list(PLATFORMS), "gpu": False},
+            {"name": "content", "command": ["@EXECUTABLE@", "--validate"],
+             "environment": [], "timeout": 30, "profiles": ["release"],
+             "platforms": list(PLATFORMS), "gpu": False},
+            {"name": "render", "command": ["@EXECUTABLE@", "--render"],
+             "environment": [], "timeout": 30, "profiles": ["quick", "release"],
+             "platforms": ["linux-x64"], "gpu": True},
+        ],
     }
 
 
-def package(platform="windows-x64", commit=COMMIT, *, extra=(), metadata_changes=None,
+def evidence(contract, commit=COMMIT, profile="release"):
+    return {"app": contract["app"], "platform": contract["platform"], "source_revision": commit,
+            "profile": profile, "manifest_sha256": manifest_digest(contract),
+            "checks": [{"name": check["name"], "passed": True, "exit_code": 0}
+                       for check in required_checks(contract, profile)]}
+
+
+def package_contents(platform, app=APP):
+    contract = manifest(platform, app)
+    return {
+        contract["executable"]: b"unit-test executable fixture",
+        "bin/data/config.json": b'{"content":"fixture"}',
+        manifest_path(app): json.dumps(contract).encode(),
+    }
+
+
+def package(platform="windows-x64", commit=COMMIT, *, app=APP, extra=(), extra_files=(), metadata_changes=None,
             timestamp=0, omit=(), empty=(), executable_mode=0o755):
-    metadata = {
-        "source_revision": commit, "platform": platform,
-        "ci_smoke": {"source_revision": commit, "platform": platform, "headless": "passed",
-                     "profile": "release", "startup": "passed",
-                     "rendering": ({"status": "passed", "driver": "vulkan", "suite": "full",
-                                    "implementation": "mesa-lavapipe", "case_count": 8}
-                                   if platform == "linux-x64" else {"status": "not_run"})},
-    }
+    contract = manifest(platform, app)
+    metadata = {"app": app, "source_revision": commit, "platform": platform,
+                "ci_smoke": evidence(contract, commit)}
     metadata.update(metadata_changes or {})
     output = io.BytesIO()
+    root = "gyo-" + app
     with tarfile.open(fileobj=output, mode="w:gz") as archive:
         data = json.dumps(metadata).encode()
-        member = tarfile.TarInfo(METADATA_PATH)
-        member.mtime = timestamp
-        member.size = len(data)
+        member = tarfile.TarInfo(root + "/build_metadata.json")
+        member.mtime, member.size = timestamp, len(data)
         archive.addfile(member, io.BytesIO(data))
-        for path, data in package_contents(platform).items():
+        for path, data in package_contents(platform, app).items():
             if path in omit:
                 continue
-            member = tarfile.TarInfo(f"{ARCHIVE_ROOT}/{path}")
+            member = tarfile.TarInfo(f"{root}/{path}")
             member.mtime = timestamp
-            member.mode = executable_mode if path.startswith("bin/gyo_object_fps") else 0o644
+            member.mode = executable_mode if path == contract["executable"] else 0o644
             data = b"" if path in empty else data
             member.size = len(data)
             archive.addfile(member, io.BytesIO(data))
         for member in extra:
             archive.addfile(member)
-    name = archive_name(platform)
+        for path, data in extra_files:
+            member = tarfile.TarInfo(f"{root}/{path}")
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+    name = archive_name(platform, app)
     data = output.getvalue()
-    return Package(platform, name, data, checksum_document(name, data))
+    return Package(app, platform, name, data, checksum_document(name, data))
 
 
 def packages(**kwargs):
@@ -293,11 +337,15 @@ class PackageTests(unittest.TestCase):
         # Exercise the real subprocess entry point, including embedded Python's isolated path.
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
+        registry = self.work / "projects.csv"
+        registry.write_text("name,description,version,enabled,windows,linux,macos\n"
+                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
         event_path.write_text(json.dumps({"inputs": {"version": "v9876.5432.10101", "prerelease": "false"}}), encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(Path(__file__).resolve().parents[1] / "release_pipeline.py"),
             "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch", "--ref", "refs/heads/main",
             "--commit", commit, "--output", str(output_path),
+            "--registry", str(registry),
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
@@ -325,28 +373,49 @@ class PackageTests(unittest.TestCase):
             with self.subTest(metadata=metadata), self.assertRaises(ReleaseError):
                 validate_archive(item.name, item.data, item.platform, COMMIT)
 
-    def test_linux_requires_gpu_ci_evidence(self):
-        smoke = {"source_revision": COMMIT, "platform": "linux-x64", "headless": "passed",
-                 "profile": "release", "startup": "passed"}
-        for rendering in ({}, {"status": "not_run"},
-                          {"status": "passed", "driver": "d3d12", "suite": "full", "case_count": 8},
-                          {"status": "passed", "driver": "vulkan", "suite": "full", "case_count": 7},
-                          {"status": "passed", "driver": "vulkan", "suite": "quick", "case_count": 1,
-                           "implementation": "mesa-lavapipe"}):
-            item = package("linux-x64", metadata_changes={"ci_smoke": {**smoke, "rendering": rendering}})
-            with self.subTest(rendering=rendering), self.assertRaisesRegex(ReleaseError, "Vulkan"):
+    def test_declared_gpu_check_cannot_be_missing_failed_or_skipped(self):
+        contract = manifest("linux-x64")
+        for changed in ([], [{"name": "render", "passed": False, "exit_code": 7}],
+                        [{"name": "render", "passed": True, "exit_code": 7}]):
+            smoke = evidence(contract)
+            smoke["checks"] = [row for row in smoke["checks"] if row["name"] != "render"] + changed
+            item = package("linux-x64", metadata_changes={"ci_smoke": smoke})
+            with self.subTest(changed=changed), self.assertRaises(ReleaseError):
                 validate_archive(item.name, item.data, item.platform, COMMIT)
 
     def test_quick_packages_cannot_be_published(self):
-        smoke = {"source_revision": COMMIT, "platform": "windows-x64", "headless": "not_run",
-                 "profile": "quick", "startup": "passed", "rendering": {"status": "not_run"}}
-        item = package(metadata_changes={"ci_smoke": smoke})
-        with self.assertRaisesRegex(ReleaseError, "release startup/gameplay"):
+        item = package(metadata_changes={"ci_smoke": evidence(manifest(), profile="quick")})
+        with self.assertRaisesRegex(ReleaseError, "identity/profile"):
+            validate_archive(item.name, item.data, item.platform, COMMIT)
+
+    def test_dynamic_matrix_supports_multiple_apps_and_asymmetric_platforms(self):
+        inputs = [package("linux-x64"), package("windows-x64", app="second_app")]
+        self.write_packages(inputs)
+        expected = [(item.app, item.platform) for item in inputs]
+        self.assertEqual(len(_load_packages(self.work, COMMIT, expected)), 2)
+        api = FakeApi(release=False, commit=None)
+        _prepare_draft(api, "v1.2.3", COMMIT, False, inputs, expected_pairs=expected)
+        self.assertEqual(len(api.assets), 4)
+        for wrong in (expected[:-1], expected + [("second_app", "macos-arm64")], []):
+            with self.subTest(wrong=wrong), self.assertRaises(ReleaseError):
+                _load_packages(self.work, COMMIT, wrong)
+
+    def test_duplicate_app_platform_packages_fail_before_remote_access(self):
+        inputs = [*packages(), package()]
+        api = FakeApi(release=False, commit=None)
+        with self.assertRaises(ReleaseError):
+            prepare_draft(api, "v1.2.3", COMMIT, False, inputs)
+        self.assertEqual(api.calls, [])
+
+    def test_archive_rejects_another_app_installation_even_with_valid_own_evidence(self):
+        other = json.dumps(manifest(app="other_app")).encode()
+        item = package(extra_files=[(manifest_path("other_app"), other)])
+        with self.assertRaisesRegex(ReleaseError, "another app installation: other_app"):
             validate_archive(item.name, item.data, item.platform, COMMIT)
 
     def test_path_traversal_absolute_and_duplicate_members_fail(self):
-        for name in ("../escape", "/absolute", "gyo-object-fps/../../escape", "other/file",
-                     "gyo-object-fps\\escape", "C:/escape", METADATA_PATH):
+        for name in ("../escape", "/absolute", "gyo-sample_app/../../escape", "other/file",
+                     "gyo-sample_app\\escape", "C:/escape", METADATA_PATH):
             item = package(extra=[tarfile.TarInfo(name)])
             with self.subTest(name=name), self.assertRaises(ReleaseError):
                 validate_archive(item.name, item.data, item.platform, COMMIT)
@@ -396,6 +465,47 @@ class DraftTests(unittest.TestCase):
         self.assertEqual(api.mutations[0][1], "/releases")
         self.assertFalse(any(path == "/git/refs" for _, path, _ in api.calls))
 
+    def test_unexpected_managed_assets_block_all_remote_mutation(self):
+        extra = package(app="other_app", commit=OTHER_COMMIT)
+        for names in ((extra.name,), (extra.name + ".sha256",),
+                      (extra.name, extra.name + ".sha256")):
+            api = FakeApi()
+            for name in names:
+                api.add_asset(name, extra.data if name == extra.name else b"invalid checksum")
+            original_assets = copy.deepcopy(api.assets)
+            with self.subTest(names=names), self.assertRaisesRegex(ReleaseError, "unexpected managed"):
+                prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+            self.assertEqual(api.mutations, [])
+            self.assertEqual(api.assets, original_assets)
+
+    def test_unmanaged_attachments_are_preserved(self):
+        api = FakeApi()
+        attachments = {"release-notes.md": b"manual notes", "user-data.tar.gz": b"user attachment"}
+        for name, data in attachments.items():
+            api.add_asset(name, data)
+        prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertEqual(len(api.assets), 6 + len(attachments))
+        for name, data in attachments.items():
+            self.assertEqual(api.download(api.assets[name]["id"]), data)
+        self.assertFalse(any(method in ("PATCH", "DELETE") for method, _, _ in api.calls))
+
+    def test_final_verification_rejects_managed_assets_added_during_upload(self):
+        api = FakeApi()
+        upload = api.upload
+        extra = package(app="other_app", commit=OTHER_COMMIT)
+
+        def upload_with_unexpected_asset(release_id, name, data):
+            result = upload(release_id, name, data)
+            if api.upload_attempts == 6:
+                api.add_asset(extra.name, extra.data)
+            return result
+
+        with patch.object(api, "upload", side_effect=upload_with_unexpected_asset):
+            with self.assertRaisesRegex(ReleaseError, "unexpected managed"):
+                prepare_draft(api, "v1.2.3", COMMIT, False, packages())
+        self.assertIn(extra.name, api.assets)
+        self.assertFalse(any(method in ("PATCH", "DELETE") for method, _, _ in api.calls))
+
     def test_repeated_preparation_preserves_notes_prerelease_and_existing_archives(self):
         api = FakeApi()
         original_release = copy.deepcopy(api.release)
@@ -414,7 +524,7 @@ class DraftTests(unittest.TestCase):
 
     def test_missing_platform_or_invalid_archive_never_creates_a_tag(self):
         for inputs in (packages()[:2], [package(commit=OTHER_COMMIT), *packages()[1:]],
-                       [package(omit=("bin/gyo_object_fps.exe",)), *packages()[1:]]):
+                       [package(omit=("bin/sample.exe",)), *packages()[1:]]):
             api = FakeApi(release=False, commit=None)
             with self.subTest(inputs=inputs), self.assertRaises(ReleaseError):
                 prepare_draft(api, "v1.2.3", COMMIT, False, inputs)

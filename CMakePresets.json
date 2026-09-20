@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 30, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
@@ -11,16 +15,14 @@
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "BUILD_TESTING": "ON",
-        "GYO_BUILD_RUNTIME": "OFF",
-        "GYO_BUILD_SANDBOX": "OFF"
+        "GYO_APPS": "AUTO"
       }
     },
     {
-      "name": "object-fps",
-      "displayName": "Object_FPS and UI editor, native GPU defaults",
+      "name": "dev",
+      "displayName": "CSV-selected applications and UI editor",
       "inherits": "base",
       "cacheVariables": {
-        "GYO_BUILD_OBJECT_FPS": "ON",
         "GYO_BUILD_UI_EDITOR": "ON",
         "GYO_RENDER_DEVICE": "AUTO",
         "GYO_GPU_DRIVER": "AUTO",
@@ -32,31 +34,49 @@
       "displayName": "Backend-neutral modules and tests",
       "inherits": "base",
       "cacheVariables": {
-        "GYO_BUILD_OBJECT_FPS": "OFF",
         "GYO_BUILD_UI_EDITOR": "OFF",
         "GYO_BUILD_SDL_GPU_BACKEND": "OFF",
         "GYO_BUILD_SDL_IMAGE_LOADER": "OFF",
         "GYO_BUILD_SDL_TTF_ADAPTER": "OFF",
         "GYO_BUILD_UFBX_LOADER": "OFF",
-        "GYO_RENDER_DEVICE": "NONE"
+        "GYO_RENDER_DEVICE": "NONE",
+        "GYO_APPS": ""
       }
     },
     {
       "name": "ci-windows",
-      "inherits": "object-fps",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
-      "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" }
+      "inherits": "dev",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
     },
     {
       "name": "ci-linux",
-      "inherits": "object-fps",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
-      "cacheVariables": { "CMAKE_C_COMPILER": "gcc-14", "CMAKE_CXX_COMPILER": "g++-14" }
+      "inherits": "dev",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14"
+      }
     },
     {
       "name": "ci-macos",
-      "inherits": "object-fps",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "inherits": "dev",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
       "cacheVariables": {
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
@@ -66,40 +86,67 @@
     }
   ],
   "buildPresets": [
-    { "name": "object-fps", "configurePreset": "object-fps" },
-    { "name": "core", "configurePreset": "core" },
-    { "name": "ci-windows", "configurePreset": "ci-windows" },
-    { "name": "ci-linux", "configurePreset": "ci-linux" },
-    { "name": "ci-macos", "configurePreset": "ci-macos" }
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "core",
+      "configurePreset": "core"
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows"
+    },
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux"
+    },
+    {
+      "name": "ci-macos",
+      "configurePreset": "ci-macos"
+    }
   ],
   "testPresets": [
     {
-      "name": "object-fps",
-      "configurePreset": "object-fps",
-      "output": { "outputOnFailure": true },
-      "filter": { "include": { "label": "cpu|shader" } },
-      "execution": { "noTestsAction": "error" }
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "label": "cpu|shader"
+        }
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     },
     {
       "name": "core",
       "configurePreset": "core",
-      "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error" }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     },
     {
       "name": "ci-windows",
       "configurePreset": "ci-windows",
-      "inherits": "object-fps"
+      "inherits": "dev"
     },
     {
       "name": "ci-linux",
       "configurePreset": "ci-linux",
-      "inherits": "object-fps"
+      "inherits": "dev"
     },
     {
       "name": "ci-macos",
       "configurePreset": "ci-macos",
-      "inherits": "object-fps"
+      "inherits": "dev"
     }
   ]
 }
