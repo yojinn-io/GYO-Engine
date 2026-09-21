@@ -4,6 +4,13 @@ Object_FPS keeps complete vendor sources and a small set of runtime assets. The
 game still uses sprites for enemies; the new character definitions provide a
 loadable 3D presentation boundary, not a replacement enemy controller or scene.
 
+For a new app or independent copy, follow the [manual app guide](../creating_apps.md).
+Copy private runtime content to `assets/<new_name>` and use the app's generated
+`Gyo::AppConfig::Assets` path. Existing catalog AssetIds and animation/material
+references are internal data contracts; they do not need a global rename when
+the deployment identity changes. Keep `assets/common` shared unless a resource
+is deliberately moved into the copy's private content.
+
 ## Directories and responsibility
 
 ```text
@@ -259,9 +266,9 @@ use the generic preset with an explicit app selection so asset verification
 cannot silently configure another app:
 
 ```powershell
-cmake --preset dev -DGYO_APPS=object_fps
-cmake --build --preset dev
-ctest --preset dev
+cmake --preset test -DGYO_APPS=object_fps
+cmake --build --preset test
+ctest --preset test
 ```
 
 The required regression coverage includes Mark23 ViewModel/reload/muzzle GPU
@@ -273,7 +280,7 @@ every environment has already passed them.
 ### Historical verified implementation (2026-09-20, Windows)
 
 These results predate the CSV project-management migration. The old preset and
-build paths below identify that historical run; use `dev` for current commands.
+build paths below identify that historical run; use `test` for current quality commands.
 
 - Configured `cmake --preset object-fps` with the installed MSVC toolchain and
   existing local FetchContent source caches; `cmake --build --preset object-fps`

@@ -153,7 +153,6 @@ CSV で選択した app と独立した UI editor をビルドします。
 ```sh
 cmake --preset dev
 cmake --build --preset dev
-ctest --preset dev
 cmake --install build/dev --prefix /absolute/path/to/stage
 ```
 
@@ -172,7 +171,17 @@ cmake -S . -B build-ui-editor -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
 cmake --build build-ui-editor --config Debug --target gyo_ui_editor
 ```
 
-既存の engine 能力を使う app の追加・削除は、自身のディレクトリーと CSV だけを変更します。App の `CMakeLists.txt` が要求、target、asset、install、配布検証を宣言し、共通モジュールや CI は app 名の一覧を持ちません。CSV 変更は再構成を起動し、要求を再計算します。以前の app 別ビルドオプションは廃止し、古い cache には移行方法を表示します。新しいビルドツリーを使うか、指示された旧 cache 項目を削除して CSV と `GYO_APPS` に移行してください。
+既存の engine 能力を使う app の追加・削除は、自身のコードディレクトリー、専用アセット、CSV だけを変更します。App の `CMakeLists.txt` が要求、target、asset、通常の install を宣言し、品質・配布検証は別の adapter が登録します。共通モジュールや CI は app 名の一覧を持ちません。CSV 変更は再構成を起動し、要求を再計算します。以前の app 別ビルドオプションは廃止し、古い cache には移行方法を表示します。新しいビルドツリーを使うか、指示された旧 cache 項目を削除して CSV と `GYO_APPS` に移行してください。
+
+新しい app はゼロから作るか、既存の `apps/<name>` と専用の `assets/<name>` を手動コピーして始められます。[App 作成ガイド](docs/creating_apps.md)に両方の手順があります。`gyo_app_project()` が CSV／ディレクトリーから識別子を決め、`OUT_TARGET` の戻り値で target 名の固定記述を避けます。非公開の `gyo/AppConfig.hpp` がソースルートを含まない配布パスを提供します。共通 helper は通常の target 設定と内容の配置を担当し、内部 asset／shader ID とゲーム方針は app が所有します。作成／clone ツールや別のプロジェクト台帳は追加しません。
+
+通常の `dev` は `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF` です。テスト・CI・受け入れ検証のファイルが物理的になくても、製品の構成・ビルド・実行・インストールが成立する必要があります。`MAIN` は startup 検査や package manifest なしで実行ファイルと依存ライブラリを配置します。品質管理とプロジェクト／CI 管理は、任意の `tests/Tests.cmake`、`packaging/Package.cmake` を通して製品 target を利用します。品質検査は別に有効にします。
+
+```sh
+cmake --preset test
+cmake --build --preset test
+ctest --preset test
+```
 
 | オプション | 既定値 | 作用 |
 |---|---:|---|
@@ -187,13 +196,14 @@ cmake --build build-ui-editor --config Debug --target gyo_ui_editor
 | `GYO_BUILD_SDL_IMAGE_LOADER` | `OFF` | 任意の PNG ローダーを明示要求。 |
 | `GYO_BUILD_SDL_TTF_ADAPTER` | `OFF` | 任意の SDL_ttf テキストラスタライザーを明示要求。 |
 | `GYO_BUILD_UFBX_LOADER` | `OFF` | 任意の ufbx モデルローダーを明示要求。中立 Model／Collision は独立。 |
-| `BUILD_TESTING` | `ON` | doctest と結合テストを CTest に登録。 |
+| `BUILD_TESTING` | `OFF` | 外部の品質 adapter、doctest、CTest を有効化。`test` preset で ON。 |
+| `GYO_ENABLE_PACKAGING` | `OFF` | Package manifest と厳格な配布検証を有効化。CI が明示的に ON。 |
 
 App の要求と明示的な adapter 選択を統合しますが、ユーザーの cache オプションは書き換えません。Engine、Input、Model、Collision、Text、Render、UI は具体的なゲームから独立します。App、tool、任意 adapter を無効にすれば SDL、SDL_image、SDL_ttf、ImGui を必要としません。
 
 ### 描画とネイティブ開発
 
-GPU app は共通 HLSL をオフラインで変換し、Windows は DXIL と SPIR-V、Linux は SPIR-V、macOS は Metallib を使います。ランタイムに HLSL コンパイラーはありません。Host ツールはビルドツリー内で別途構築し、macOS は選択 Xcode の Metal tools も必要です。`dev` のテストは CPU／headless と shader を対象にし、GPU テストは利用可能な display と GPU のある環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のネイティブツールチェーン入口です。
+GPU app は共通 HLSL をオフラインで変換し、Windows は DXIL と SPIR-V、Linux は SPIR-V、macOS は Metallib を使います。ランタイムに HLSL コンパイラーはありません。Host ツールはビルドツリー内で別途構築し、macOS は選択 Xcode の Metal tools も必要です。`test` のテストは CPU／headless と shader を対象にし、GPU テストは利用可能な display と GPU のある環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のネイティブツールチェーン入口です。
 
 CLion は既存の MSVC profile のまま CMake を再読込し、対象 app を選べます。Shader host の子ビルドは同じコンパイラーと Ninja を使います。任意の再配布ファイルがなくても、開発用構成・ビルドは可能です。macOS は `project()` 前に deployment target 13.3 を設定し、app と Metallib で共通にします。最低 OS 版は SDK の API 実装を保証しません。Xcode 16.4 に浮動小数点 `std::from_chars` がないため、ゲームの CSV 数値は十進構文と classic C++ locale、float 範囲検査で解析します。
 
@@ -203,7 +213,7 @@ Ubuntu は SDL の XTest 用に `libxtst-dev` が必要です。オフライン 
 
 [GitHub Actions](.github/workflows/cross-platform.yml) は Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4 で engine と UI editor を常にビルド・テストします。別に、固定 source commit の CSV から app × platform matrix を作ります。組み合わせごとに独立したビルドツリーと install stage を用い、対象 app と必要依存だけを含めます。Editor は app package に入りません。GPU／shader 不要の app はその処理を実行しません。
 
-有効な app は配布版の startup テストを登録します。共通 runner は生成した `share/gyo/apps/<app>/manifest.json` を使い、package 外の作業ディレクトリーから実行します。App 固有の検証は quick／release、platform、GPU 条件で選択します。失敗、タイムアウト、必須証拠の欠落は package 化を阻止します。Object_FPS の startup、gameplay、欠落、Linux Lavapipe 検査は[app 検証ガイド](apps/object_fps/docs/acceptance.ja.md)を参照してください。App のない platform も engine／tool をテストします。全 app 無効は通常 CI で有効ですが、Prepare Release は事前に空集合を拒否します。
+CI が品質・package 化を明示的に有効にします。その配布操作の対象 app は package adapter で配布版 startup テストを登録します。共通 runner は生成した `share/gyo/apps/<app>/manifest.json` を使い、package 外の作業ディレクトリーから実行します。App 固有の検証は quick／release、platform、GPU 条件で選択します。失敗、タイムアウト、必須証拠の欠落は package 化を阻止します。Object_FPS の startup、gameplay、欠落、Linux Lavapipe 検査は[app 検証ガイド](apps/object_fps/docs/acceptance.ja.md)を参照してください。App のない platform も engine／tool をテストします。全 app 無効は通常 CI で有効ですが、Prepare Release は事前に空集合を拒否します。
 
 各組み合わせは `gyo-<name>-<platform>.tar.gz` と `.tar.gz.sha256` を生成し、archive 内には単一の `gyo-<name>` ルートを持ちます。Release は同じ commit の CSV から期待集合を計算し、app、platform、source SHA、release profile、必須ファイル、完全な証拠、checksum を検査します。Quick 証拠を release 証拠として使えません。Archive の安全性、相対 library path、依存検査も必須です。
 
@@ -276,6 +286,8 @@ GYO lifecycle + input actions + assets + render contracts + runtime port
 非 Playing の4画面は `assets/object_fps/ui/screens.json` から一度だけ読みます。コンパイル済み fallback、live link、hot reload はありません。`UiRuntime` が selection、focus、pointer capture、hit testing を担当し、Object_FPS が不透明 action ID を型付き command に変換します。Playing HUD の方針は C++ のまま同じ `UiDrawList` を出力します。GYO は Object_FPS の menu action の意味を知りません。
 
 実行ファイルの smoke 経路は異なる境界を検査します。
+
+`test` preset または `GYO_ENABLE_PACKAGING=ON` が任意の検証診断を組み込みます。通常の `dev` は起動の健全性確認と対話的 preview を保持し、他の smoke／検証フラグには診断が利用できないことを返します。そのソースは `apps/object_fps/tests/diagnostics/` にあり、製品ビルドの入力ではありません。
 
 - `--startup-smoke-test` は window／GPU を作らず配布内容を読み込みます。Quick と release は3プラットフォームの対象 package を別の作業ディレクトリーから起動します。
 - `--headless-smoke-test` は window／GPU なしでゲーム開始、jump、pause／resume、射撃、reload 時間も検査します。Release はこの重いケースを実行します。

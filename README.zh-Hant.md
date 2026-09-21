@@ -153,7 +153,6 @@ GYO-Engine/
 ```sh
 cmake --preset dev
 cmake --build --preset dev
-ctest --preset dev
 cmake --install build/dev --prefix /absolute/path/to/stage
 ```
 
@@ -172,7 +171,17 @@ cmake -S . -B build-ui-editor -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
 cmake --build build-ui-editor --config Debug --target gyo_ui_editor
 ```
 
-新增或移除使用既有引擎能力的 app，只修改自己的目錄與 CSV。它的 `CMakeLists.txt` 宣告需求、target、資產、安裝與套件驗收；共用模組及 CI 不維護 app 名稱清單。CSV 修改觸發重新配置與需求重算。舊的逐 app 建置開關已移除，舊 cache 會收到遷移指引。使用新的建置目錄，或移除錯誤訊息指出的舊項目，再使用 CSV 與 `GYO_APPS`。
+新增或移除使用既有引擎能力的 app，只修改自己的程式目錄、私有資產與 CSV。它的 `CMakeLists.txt` 宣告需求、target、資產與普通安裝；品質與套件驗收由獨立 adapter 註冊，共用模組及 CI 不維護 app 名稱清單。CSV 修改觸發重新配置與需求重算。舊的逐 app 建置開關已移除，舊 cache 會收到遷移指引。使用新的建置目錄，或移除錯誤訊息指出的舊項目，再使用 CSV 與 `GYO_APPS`。
+
+新 app 可從零建立，也可手動複製既有 `apps/<name>` 與私有的 `assets/<name>`；[建立 app 指南](docs/creating_apps.md)提供兩種完整流程。`gyo_app_project()` 從 CSV／目錄取得身份，透過 `OUT_TARGET` 回傳值避免硬編碼 target 名稱，私有 `gyo/AppConfig.hpp` 提供不含來源根目錄的部署路徑。共用 helper 管理一般 target 設定與內容部署，內部 asset／shader IDs 及遊戲政策仍由 app 擁有。不新增建立／clone 工具或另一份專案清單。
+
+普通 `dev` 預設 `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`。即使測試、CI、驗收檔案實際不存在，產品仍須可配置、建置、執行與安裝。`MAIN` 自動安裝執行檔及依賴，不需要 startup 檢查或 package manifest。品質管理與專案／CI 管理由外部可選的 `tests/Tests.cmake`、`packaging/Package.cmake` 使用產品 targets；品質檢查另行啟用：
+
+```sh
+cmake --preset test
+cmake --build --preset test
+ctest --preset test
+```
 
 | 選項 | 預設 | 作用 |
 |---|---:|---|
@@ -187,13 +196,14 @@ cmake --build build-ui-editor --config Debug --target gyo_ui_editor
 | `GYO_BUILD_SDL_IMAGE_LOADER` | `OFF` | 明確請求選用 PNG 載入器。 |
 | `GYO_BUILD_SDL_TTF_ADAPTER` | `OFF` | 明確請求選用 SDL_ttf 文字光柵化器。 |
 | `GYO_BUILD_UFBX_LOADER` | `OFF` | 明確請求選用 ufbx 模型載入器；中立 Model／Collision 保持獨立。 |
-| `BUILD_TESTING` | `ON` | 將 doctest 與整合測試加入 CTest。 |
+| `BUILD_TESTING` | `OFF` | 啟用品質 adapters、doctest 與 CTest；`test` preset 設為 ON。 |
+| `GYO_ENABLE_PACKAGING` | `OFF` | 啟用 package manifest 與嚴格部署驗收；CI 明確設為 ON。 |
 
 App 需求與明確 adapter 選項合併，但不改寫使用者 cache 選項。中立的 Engine、Input、Model、Collision、Text、Render、UI 不依賴具體遊戲。Apps、tools 與選用 adapters 全部停用時，不需要 SDL、SDL_image、SDL_ttf 或 ImGui。
 
 ### 渲染與原生開發
 
-GPU app 使用共用 HLSL 離線編譯：Windows 產出 DXIL 與 SPIR-V，Linux 產出 SPIR-V，macOS 產出 Metallib。Runtime 不含 HLSL 編譯器。原生 shader 工具在建置目錄內獨立建置，macOS 另需所選 Xcode 的 Metal tools。`dev` 測試 preset 執行 CPU／headless 與 shader 測試；GPU 測試需在可用顯示與 GPU 環境另跑。`ci-windows`、`ci-linux`、`ci-macos` 提供 CI 原生工具鏈入口。
+GPU app 使用共用 HLSL 離線編譯：Windows 產出 DXIL 與 SPIR-V，Linux 產出 SPIR-V，macOS 產出 Metallib。Runtime 不含 HLSL 編譯器。原生 shader 工具在建置目錄內獨立建置，macOS 另需所選 Xcode 的 Metal tools。`test` 測試 preset 執行 CPU／headless 與 shader 測試；GPU 測試需在可用顯示與 GPU 環境另跑。`ci-windows`、`ci-linux`、`ci-macos` 提供 CI 原生工具鏈入口。
 
 CLion 可保留 MSVC profile、重新載入 CMake，再選取需要的 app target。Shader host 子建置使用該 profile 的編譯器與 Ninja 路徑。缺少選用散佈檔不阻擋開發配置或編譯。macOS 在 `project()` 前設定 deployment target 13.3，app 與 Metallib 一致。最低 OS 版本不能證明 SDK 已實作某個 API；Xcode 16.4 沒有浮點 `std::from_chars`，因此遊戲 CSV 數值使用明確十進位語法、classic C++ locale 與 float 範圍檢查。
 
@@ -203,7 +213,7 @@ Ubuntu 的 SDL XTest 支援需要 `libxtst-dev`。離線 host 工具停用 SDL v
 
 [GitHub Actions](.github/workflows/cross-platform.yml) 固定在 Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4 建置並測試引擎與 UI editor。另外由固定來源 commit 的 CSV 產生 app × 平台矩陣。各組合使用獨立建置目錄與安裝區，只包含自身 app 與必要依賴；Editor 不放入 app 包。無 GPU／shader 需求的 app 不執行相應步驟。
 
-每個啟用 app 都註冊安裝後 startup 測試。共用 runner 使用生成的 `share/gyo/apps/<app>/manifest.json`，從安裝包外的工作目錄執行；app 專屬驗收依 quick／release、平台與 GPU 需求選擇。失敗、逾時或缺少必要證據都阻擋產包。Object_FPS 保留 startup、gameplay、缺檔與 Linux Lavapipe 驗收，見[app 驗收指南](apps/object_fps/docs/acceptance.zh-Hant.md)。沒有 app 的平台仍跑引擎／工具檢查；全部停用的一般 CI 仍有效，但 Prepare Release 在前置檢查拒絕空集合。
+CI 明確啟用品質與封裝；該次封裝選中的 app 由 package adapter 註冊安裝後 startup 測試。共用 runner 使用生成的 `share/gyo/apps/<app>/manifest.json`，從安裝包外的工作目錄執行；app 專屬驗收依 quick／release、平台與 GPU 需求選擇。失敗、逾時或缺少必要證據都阻擋產包。Object_FPS 保留 startup、gameplay、缺檔與 Linux Lavapipe 驗收，見[app 驗收指南](apps/object_fps/docs/acceptance.zh-Hant.md)。沒有 app 的平台仍跑引擎／工具檢查；全部停用的一般 CI 仍有效，但 Prepare Release 在前置檢查拒絕空集合。
 
 各組合產出 `gyo-<name>-<platform>.tar.gz` 與 `.tar.gz.sha256`，archive 只有一個 `gyo-<name>` 根目錄。Release 從相同 commit 的 CSV 計算預期集合，檢查 app、平台、來源 SHA、release profile、必要檔案、完整驗收證據與 checksum。Quick 證據不能替代 release 證據；archive 安全、相對庫路徑及依賴檢查也都是必要關卡。
 
@@ -276,6 +286,8 @@ Object_FPS 擁有以下內容、佈局資料、binding 值與 action 結果：
 四個非 Playing 畫面只從 `assets/object_fps/ui/screens.json` 載入一次，沒有編譯內建 fallback、live link 或 hot reload。`UiRuntime` 負責 selection、focus、pointer capture、hit testing；Object_FPS 將不透明 action IDs 映射成型別化 commands。Playing HUD 政策維持 C++ 並輸出同一個 `UiDrawList`，GYO 不知道 Object_FPS menu action 的意義。
 
 執行檔的 smoke 路徑檢查不同邊界：
+
+`test` preset 或 `GYO_ENABLE_PACKAGING=ON` 才加入可選的驗收診斷。一般 `dev` 保留啟動健康檢查與互動 preview；其他 smoke／驗證旗標會回報診斷不可用。其原始碼位於 `apps/object_fps/tests/diagnostics/`，不屬於產品建置輸入。
 
 - `--startup-smoke-test` 不建立視窗／GPU，驗證真正的部署內容載入。Quick 與 release 從不相關工作目錄啟動三平台對應的安裝程式。
 - `--headless-smoke-test` 另外驗證遊戲開始、跳躍、暫停／恢復、射擊與換彈時間，不依賴視窗／GPU；release 執行此較重情境。

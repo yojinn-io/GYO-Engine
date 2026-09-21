@@ -2,31 +2,36 @@
 """Check Object_FPS content and rejection of incomplete installed packages."""
 
 import argparse
-import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from package_info import load_package_info
 
-MISSING_CONTENT = (
-    ("missing-common", "bin/assets/common"),
-    ("missing-builtin-shaders", "bin/shaders/builtin/manifest.json"),
-    ("missing-game-shaders", "bin/shaders/object_fps/manifest.json"),
-)
+
+def missing_content(app: str) -> tuple[tuple[str, str], ...]:
+    return (
+        ("missing-common", "bin/assets/common"),
+        ("missing-builtin-shaders", "bin/shaders/builtin/manifest.json"),
+        ("missing-game-shaders", f"bin/shaders/{app}/manifest.json"),
+    )
 
 
 def validate(stage: Path, logs: Path) -> None:
     stage = stage.resolve(strict=True)
     logs = logs.resolve()
     logs.mkdir(parents=True, exist_ok=True)
-    manifest = json.loads((stage / "share/gyo/apps/object_fps/manifest.json").read_text(encoding="utf-8"))
-    with tempfile.TemporaryDirectory(prefix="object-fps-content-") as temporary:
+    load_package_info(stage)
+    with tempfile.TemporaryDirectory(prefix="gyo-app-content-") as temporary:
         isolated = Path(temporary)
         package = isolated / "package"
         work = isolated / "unrelated-working-directory"
         work.mkdir()
         shutil.copytree(stage, package, symlinks=True)
+        manifest = load_package_info(package)
         command = [str(package / manifest["executable"]), "--validate-package"]
 
         def check(name: str, expected_success: bool) -> None:
@@ -39,7 +44,7 @@ def validate(stage: Path, logs: Path) -> None:
                 raise RuntimeError(f"Content check '{name}' returned {result.returncode}")
 
         check("complete", True)
-        for name, relative in MISSING_CONTENT:
+        for name, relative in missing_content(manifest["app"]):
             target = package / relative
             if not target.exists():
                 raise RuntimeError(f"Expected staged content is absent: {relative}")

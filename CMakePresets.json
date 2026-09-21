@@ -14,7 +14,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "BUILD_TESTING": "ON",
+        "BUILD_TESTING": "OFF",
+        "GYO_ENABLE_PACKAGING": "OFF",
         "GYO_APPS": "AUTO"
       }
     },
@@ -30,10 +31,19 @@
       }
     },
     {
+      "name": "test",
+      "displayName": "Applications and quality checks",
+      "inherits": "dev",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
       "name": "core",
       "displayName": "Backend-neutral modules and tests",
       "inherits": "base",
       "cacheVariables": {
+        "BUILD_TESTING": "ON",
         "GYO_BUILD_UI_EDITOR": "OFF",
         "GYO_BUILD_SDL_GPU_BACKEND": "OFF",
         "GYO_BUILD_SDL_IMAGE_LOADER": "OFF",
@@ -45,39 +55,42 @@
     },
     {
       "name": "ci-windows",
-      "inherits": "dev",
+      "inherits": "test",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
       },
       "cacheVariables": {
+        "GYO_ENABLE_PACKAGING": "ON",
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl"
       }
     },
     {
       "name": "ci-linux",
-      "inherits": "dev",
+      "inherits": "test",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       },
       "cacheVariables": {
+        "GYO_ENABLE_PACKAGING": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14"
       }
     },
     {
       "name": "ci-macos",
-      "inherits": "dev",
+      "inherits": "test",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Darwin"
       },
       "cacheVariables": {
+        "GYO_ENABLE_PACKAGING": "ON",
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -89,6 +102,10 @@
     {
       "name": "dev",
       "configurePreset": "dev"
+    },
+    {
+      "name": "test",
+      "configurePreset": "test"
     },
     {
       "name": "core",
@@ -109,8 +126,8 @@
   ],
   "testPresets": [
     {
-      "name": "dev",
-      "configurePreset": "dev",
+      "name": "test",
+      "configurePreset": "test",
       "output": {
         "outputOnFailure": true
       },
@@ -136,17 +153,17 @@
     {
       "name": "ci-windows",
       "configurePreset": "ci-windows",
-      "inherits": "dev"
+      "inherits": "test"
     },
     {
       "name": "ci-linux",
       "configurePreset": "ci-linux",
-      "inherits": "dev"
+      "inherits": "test"
     },
     {
       "name": "ci-macos",
       "configurePreset": "ci-macos",
-      "inherits": "dev"
+      "inherits": "test"
     }
   ]
 }

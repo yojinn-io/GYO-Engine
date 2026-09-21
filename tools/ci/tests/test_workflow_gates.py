@@ -1,6 +1,7 @@
 """Exercise the release workflow's actual final gate without GitHub API calls."""
 
 import itertools
+import json
 import os
 from pathlib import Path
 import re
@@ -147,11 +148,49 @@ class WorkflowGateTests(unittest.TestCase):
     def test_tools_are_excluded_from_app_packages_and_baseline_is_always_tested(self):
         native = job_block(self.shared, "native")
         self.assertIn("$editor = if ($env:GYO_APP) { 'OFF' } else { 'ON' }", native)
+        self.assertIn("$packaging = if ($env:GYO_APP) { 'ON' } else { 'OFF' }", native)
+        self.assertIn('-DBUILD_TESTING=ON "-DGYO_ENABLE_PACKAGING=$packaging"', native)
         self.assertIn('"-DGYO_APPS=$env:GYO_APP"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.app == ''", native)
         for step in re.split(r"(?m)^      - ", native):
             if "cmake --install" in step or "python tools/ci/archive_package.py" in step:
                 self.assertIn("if: matrix.app != ''", step)
+
+    def test_real_app_copy_is_a_fatal_windows_release_baseline_check(self):
+        native = job_block(self.shared, "native")
+        step = next(step for step in re.split(r"(?m)^      - ", native)
+                    if "python tools/ci/tests/app_copy_integration.py" in step)
+        self.assertIn("if: runner.os == 'Windows' && matrix.app == '' && inputs.profile == 'release'", step)
+        self.assertIn('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }', step)
+        self.assertIn('--logs "build/$env:PRESET/logs/app-copy"', step)
+        self.assertNotIn("continue-on-error", step)
+        upload = step_using(native, "actions/upload-artifact")
+        self.assertNotIn("app-copy", upload)
+
+    def test_presets_separate_products_quality_and_engineering(self):
+        document = json.loads((ROOT / "CMakePresets.json").read_text(encoding="utf-8"))
+        presets = {preset["name"]: preset for preset in document["configurePresets"]}
+        def cache(name):
+            preset = presets[name]
+            parents = preset.get("inherits", [])
+            if isinstance(parents, str):
+                parents = [parents]
+            values = {}
+            for parent in reversed(parents):
+                values.update(cache(parent))
+            values.update(preset.get("cacheVariables", {}))
+            return values
+        for name, expected in (("dev", ("OFF", "OFF")), ("test", ("ON", "OFF")),
+                               ("core", ("ON", "OFF")), ("ci-windows", ("ON", "ON")),
+                               ("ci-linux", ("ON", "ON")), ("ci-macos", ("ON", "ON"))):
+            with self.subTest(preset=name):
+                values = cache(name)
+                self.assertEqual((values["BUILD_TESTING"], values["GYO_ENABLE_PACKAGING"]), expected)
+        tests = {preset["name"]: preset for preset in document["testPresets"]}
+        self.assertNotIn("dev", tests)
+        self.assertEqual(tests["test"]["configurePreset"], "test")
+        for platform in ("windows", "linux", "macos"):
+            self.assertEqual(tests["ci-" + platform]["inherits"], "test")
 
 
 if __name__ == "__main__":

@@ -758,7 +758,8 @@ The build has three phases:
 CSV selection + explicit adapter options + enabled tool requirements
   -> discover selected app requirements in isolated variable scopes
   -> resolve capabilities and construct third-party / engine targets
-  -> add selected app subdirectories once and validate package registration
+  -> add selected product app subdirectories once
+  -> externally requested quality / packaging adapters consume completed targets
 ```
 
 Each app starts its own `CMakeLists.txt` with requirements before any target or
@@ -770,14 +771,14 @@ if(GYO_APP_DISCOVERY)
     return()
 endif()
 
-# App-owned targets, links, content, tests, installation and package checks.
+# Product-owned targets, links, content and ordinary installation.
 ```
 
 Discovery reads only this declaration. Normal `add_subdirectory()` then creates
 the app targets once. A discovery pass must not create targets, register tests,
 or install files. The root orchestrates phases; apps own their requirements and
-policy. Adding an app that uses existing capabilities changes only its app
-directory and the CSV. Adding a genuinely new engine capability may also extend
+policy. Adding an app that uses existing capabilities changes only its code
+directory, any private `assets/<name>` content, and the CSV. Adding a genuinely new engine capability may also extend
 the resolver and its adapter; a new app name never justifies a shared-module
 branch.
 
@@ -798,9 +799,12 @@ SDLRenderer/ImGui and preview adapters. Editor-only configuration uses
 validation, optional-test and standalone guards remain meaningful `if` branches.
 macOS deployment target setup remains before `project()`.
 
-The generic `dev` preset selects the CSV set; `core` selects no apps, tools or
+The generic `dev` preset selects the CSV set with testing and packaging disabled.
+`test` selects the same apps and explicitly enables testing; `core` enables
+neutral-module tests and selects no apps, tools or
 optional adapters and sets `GYO_RENDER_DEVICE=NONE`. `ci-windows`, `ci-linux`
-and `ci-macos` are generic native toolchain entries. The former
+and `ci-macos` are generic native toolchain entries that explicitly enable testing
+and packaging. The former
 `GYO_BUILD_RUNTIME`, `GYO_BUILD_OBJECT_FPS` and `GYO_BUILD_SANDBOX` options are
 removed. Caches containing them receive explicit migration instructions: remove
 the legacy entries or use a fresh build tree, then select apps with the CSV and
@@ -821,25 +825,113 @@ cmake -S . -B <existing-build> -U GYO_BUILD_RUNTIME -U GYO_BUILD_OBJECT_FPS -U G
 Replace `<existing-build>` with the profile's build directory; this preserves
 the remaining cached configuration and downloaded dependencies.
 
+<a id="app-project-contract"></a>
+### App-local targets, generated identity and content
+
+The [manual app guide](creating_apps.md) covers both creating an app from scratch
+and independently copying an existing app's code and assets. Both remain inside
+this repository's root build; no creation/clone utility, second project JSON or
+standalone/new-repository system is introduced. The CSV selects projects; it
+does not describe targets, dependencies or content relationships.
+
+After the requirement/discovery header, `gyo_app_project()` obtains identity from
+the selected `apps/<name>` directory. The directory must match the CSV name.
+`DISPLAY_NAME` optionally overrides the human-facing title, otherwise it equals
+the identity. `ASSET_ROOT` optionally overrides the source content root: relative
+paths resolve against the app source directory, and absolute paths are allowed.
+The default source root is `<repository>/assets/<name>`.
+
+`gyo_app_add_library` and `gyo_app_add_executable` accept explicit source files,
+ordinary GYO libraries, and declared optional components. They centralize C++20,
+compiler settings, the local include directory and executable DLL staging.
+`gyo_app_link_components` links optional capabilities already declared during
+discovery; it does not bypass that phase. All helper-created targets are owned
+by their app. A `MAIN` executable is named `gyo_<name>`; other roles use
+`gyo_<name>-<role>`. Product code links and deploys through `OUT_TARGET` handles,
+avoiding project-name references or globally colliding aliases. `MAIN` installs
+the executable and runtime dependencies independently of package registration.
+External quality/package adapters retrieve roles with
+`gyo_app_get_target(main OUT_TARGET app)` or the matching role; they do not depend
+on temporary variables in product CMake.
+Object_FPS's pure gameplay/package/GPU probes live in `tests/diagnostics/`.
+Only its optional quality or release adapter attaches those sources and their
+private diagnostic definition to the main target. The ordinary executable keeps
+startup health and interactive preview without requiring the diagnostic files;
+unavailable validation flags fail explicitly. Release-only builds need those
+acceptance implementations, but not the unit-test framework.
+Executable output is `<app-binary-dir>/bin` (plus the configuration directory
+for multi-configuration generators), separate from raw shader bundle output.
+`gyo_app_add_test` prefixes CTest names with `<name>.`, defaults to the `cpu`
+label and honours `BUILD_TESTING`. Duplicate roles/names fail explicitly.
+
+The app binary directory's private `generated/gyo/AppConfig.hpp` provides
+`Gyo::AppConfig::{Id, DisplayName, Assets, Shaders, CommonAssets, BuiltinShaders}`.
+Asset/shader values are executable-relative paths (`assets/<name>`,
+`shaders/<name>`, `assets/common`, `shaders/builtin`), with no source-root string.
+The generated include directory is private to each app target and does not
+become an engine public API. Copying an app therefore changes deployment
+identity without editing C++ path literals or renaming domain types.
+
+`gyo_app_deploy_content` groups optional assets, common assets, an app shader
+specification and builtin shaders. It stages the requested content on app builds,
+installs the same directory layout, and records content metadata for outside
+consumers. Optional `OUT_REQUIRED_FILES` and `OUT_STAGE_TARGET` remain available;
+ordinary product declarations need neither. `ASSETS` requires the selected source root's
+`asset_catalog.json`; missing required content is a configuration error. App
+shader compilation uses `<app-binary-dir>/shaders`, normally
+`<build>/apps/<name>/shaders`; executable-relative deployment remains
+`shaders/<name>`. Builtin shaders remain `<build>/shaders/builtin` and
+`shaders/builtin` respectively. Conflicting source content for a shared
+destination is rejected; identical common assets can be shared deliberately.
+
+App code, catalog contents, internal AssetId/UI-action/shader namespaces,
+gameplay tests and source lists remain app-owned. A manual copy preserves its
+internal IDs until a separate coordinated code/data migration is wanted; it
+copies private code/content and retains common resources as shared dependencies.
+The helpers do not rewrite catalogs, infer gameplay or move FPS concepts into
+Engine. Existing app directories and user selection/ignore settings are not
+rewritten as part of creating another app.
+
+<a id="product-quality-management"></a>
+### Product, quality and project/CI management
+
+The product layer consists of executable/library targets, runtime content,
+public runtime APIs and ordinary installation. Product `CMakeLists.txt` and
+`sources.cmake` do not enumerate or include quality sources, CTest registrations,
+CI helpers, acceptance validators or package adapters. A product must configure,
+build, run and install with **all of those files physically absent**, not merely
+with their tests skipped. Root defaults are `BUILD_TESTING=OFF` and
+`GYO_ENABLE_PACKAGING=OFF`.
+
+Quality consumes product targets. When explicitly enabled, engine-managed deferred
+integration loads optional `tests/Tests.cmake` in an isolated function within the
+app source/binary directory. Test source groups belong in `tests/sources.cmake`.
+Assertions may legitimately know game policy, but the product never depends on
+their source lists, doctest or Python. Tests query product roles and content
+metadata through the engine interface. Existing executable self-diagnostic flags
+remain runtime APIs and do not imply a dependency on external quality files.
+
+Project/CI management selects apps and requests operations; it is not part of
+the product. `GYO_ENABLE_PACKAGING=ON` loads `packaging/Package.cmake` externally
+and requires the requested app package contract. Ordinary product configuration
+accepts missing adapters; explicit packaging fails if its required adapter or
+acceptance implementation is missing. The axes are independent. No engine or
+management file branches on a specific game name to choose its quality behavior.
+
 <a id="app-package-contract"></a>
 ### App package contract and shared deployment
 
-Every selected app registers its primary executable, mandatory installed startup
-test, arguments, environment, timeout and required installed files with the
-package helper. Additional app-owned acceptance commands declare applicable
-quick/release profiles, platforms and GPU needs. Commands remain argument arrays,
-not interpolated shell text. An enabled app without a startup check fails
-configuration; each required executed check must produce valid success evidence.
-
-The app-facing helper interface is:
+Only an explicitly requested `GYO_ENABLE_PACKAGING=ON` operation requires a
+package adapter, finite installed startup check and its acceptance evidence.
+This requirement belongs to packaging management, not to product compilation,
+runtime startup or ordinary installation. Register the contract in the optional
+`packaging/Package.cmake`, after the product exists:
 
 ```cmake
 gyo_register_app_package(
-    TARGET MyApp
     STARTUP_ARGS --smoke-test
     STARTUP_ENVIRONMENT SDL_VIDEODRIVER=dummy
-    STARTUP_TIMEOUT 15
-    REQUIRED_FILES bin/assets/my_app/catalog.json)
+    STARTUP_TIMEOUT 15)
 
 gyo_add_app_package_check(
     NAME content
@@ -849,19 +941,26 @@ gyo_add_app_package_check(
     TIMEOUT 30)
 ```
 
-Registration installs the executable and runtime dependencies and creates the
-mandatory startup check. Additional checks accept `ENVIRONMENT` and `GPU` when
-needed. Supported command placeholders are `@PACKAGE_ROOT@`, `@EXECUTABLE@`,
-`@LOG_ROOT@`, `@PYTHON@`, `@PROFILE@`, `@GPU_SUITE@` and `@DRIVER@`; they are
-expanded as individual arguments. Declare required files relative to the stage.
+The main executable and required content are discovered from product metadata;
+`TARGET` and explicit `REQUIRED_FILES` remain available for legacy or additional
+requirements. Target/runtime install registration is idempotent and `MAIN`
+already installs the ordinary product. Additional checks accept `ENVIRONMENT`
+and `GPU`. Commands remain argument arrays with supported placeholders
+`@PACKAGE_ROOT@`, `@EXECUTABLE@`, `@LOG_ROOT@`, `@PYTHON@`, `@PROFILE@`,
+`@GPU_SUITE@` and `@DRIVER@`. Failed, timed-out or missing required evidence blocks
+that packaging operation.
 
-CMake generates `packages/<app>/<config>/manifest.json` in the build tree and installs it as
-`share/gyo/apps/<app>/manifest.json`; it is not a second hand-maintained registry.
-App targets, content, shaders, install rules and specialized validators stay in
-the app directory. Generic runners consume the manifest without knowing game
-flags, asset names, gameplay assertions or GPU case counts. Runtime registers
-its existing `--smoke-test`; Object_FPS owns its gameplay, missing-content and
-GPU diagnostics under its own `ci/` directory and [acceptance documentation](../apps/object_fps/docs/acceptance.ja.md).
+Packaging mode generates `packages/<app>/<config>/manifest.json` and installs
+it as `share/gyo/apps/<app>/manifest.json`; normal product mode does not require
+or generate this quality contract. Runtime's package adapter consumes its
+existing `--smoke-test`. Object_FPS keeps its optional gameplay/content/GPU
+validators in `tests/package/` and registers them in `packaging/Package.cmake`;
+see its [acceptance guide](../apps/object_fps/docs/acceptance.ja.md).
+Those validators use app-owned `package_info.py` to find exactly one installed
+app manifest and read the executable path. Python validators are installed only
+for the requested package acceptance operation, never required to build or run
+the product. Detailed optional examples follow the product-first
+[app guide](creating_apps.md#quality).
 
 Shared deployment follows actual install targets: SDL shared libraries,
 Windows DLL copying and MSVC CRT, and Unix install names/RPATH are handled once
@@ -880,6 +979,7 @@ installation. Test-framework headers and CMake exports are not installed.
 ```text
 fixed source SHA
   -> same-commit CSV parsed by CMake
+  -> explicitly enable the quality/packaging operations CI needs
   -> baseline engine + Editor build/tests on all three platforms
   -> selected app × enabled platform isolated jobs
        -> configure -> build -> install -> manifest-driven acceptance
@@ -904,6 +1004,14 @@ archive safety. Missing or extra packages and quick-only evidence are errors.
 An existing draft may retain unrelated manual attachments, but unexpected managed
 app archives/checksums block the operation without being deleted.
 The final write-enabled job runs only after every required gate passes.
+
+Three-platform daily baseline checks cover the project-helper contracts. The
+Windows release baseline also runs a real app-copy integration fixture: separate
+code/assets, independent catalog/shader edits, a combined build/test graph, then
+isolated app installs, manifest checks and archive validation. Temporary copied
+app packages remain test outputs and are not uploaded as release artifacts.
+The fixture is `tools/ci/tests/app_copy_integration.py`; procedures and evidence
+boundaries are in the [app guide](creating_apps.md#manual-copy).
 
 ## 8. Platform and graphics backend strategy
 
@@ -995,6 +1103,21 @@ Development import
 Renderer resource creation
   CPU runtime asset -> selected render backend -> opaque render handle
 ```
+
+The build system deploys entire content roots and compiles shader specifications;
+it does not identify individual models, textures or other game files. Filenames,
+asset types and relative locations belong to the catalog. App and test code
+select `AssetId`s through that catalog and `AssetManager`, rather than receiving
+per-asset or source-root compiler definitions from CMake.
+
+Asset-consuming tests resolve the same staged, executable-relative
+`Gyo::AppConfig` roots as the app. Optional test adapters read the main target's `GYO_APP_CONTENT_STAGE_TARGET`
+property (`OUT_STAGE_TARGET` is also available); test executables depend on it
+and share the app's binary output directory, allowing independent test builds
+without compiling the main game. Low-level truncated-input or native-loader
+reference tests may read raw bytes through catalog lookup and `IAssetSource`;
+they retain the catalog identity and bounded root resolution instead of encoding
+a private file layout in CMake.
 
 `NativeFileAssetSource` owns only the first native-file read after path resolution. The SDL_image loader owns only image decoding. `AssetManager` owns identity, lookup, records, cache/lifetime, and loader dispatch. `IRenderDevice` owns GPU resource creation from an `ImageView` or `MeshView`.
 

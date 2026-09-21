@@ -39,6 +39,8 @@
 
 ## 4. 完全な検証と添付
 
+Release は外部のプロジェクト／CI 管理の操作です。通常製品の既定値は `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`。テスト・CI・検証ファイルがなくても build／run／install は可能でなければなりません。CI は必要な軸を明示的に有効にし、`tests/Tests.cmake` と `packaging/Package.cmake` を製品の外から読みます。Package 契約や必須証拠の不足は、その明示的な封装／発行操作を失敗にしますが、通常の製品構成のエラーにはしません。
+
 Release profile は3プラットフォームの engine と UI editor を必ずテストし、同じ source commit の CSV から app × platform matrix（Windows x64、Linux x64、macOS ARM64）を生成します。各組み合わせは独立したビルドディレクトリーでその app だけを選び、Editor を無効にして build、test、install、manifest 検証、package 化を実行します。Editor を app package に含めず、GPU／shader が不要な app は対応処理を実行しません。
 
 各 app は必須の配布版 startup テストを登録します。共通 runner は package 外から、生成した `share/gyo/apps/<name>/manifest.json` のコマンドを profile／platform／GPU 条件に従って実行します。失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Object_FPS が gameplay、内容欠落、Linux quick の GPU 1件と release の8件を所有します。[App 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)を参照してください。
@@ -53,6 +55,8 @@ gyo-<name>-<platform>.tar.gz.sha256
 Archive は `gyo-<name>` という単一ルートに、その app と必要な依存関係を含みます。CSV の `object_fps` はアンダースコアを保持し、`object-fps` に変換しません。Release は同じ source SHA の CSV から期待集合を再構築し、不足・余分・重複した package を拒否します。アップロード前に checksum、archive の安全性、必須内容、app、platform、source SHA、release profile、完全な検証証拠を照合します。Quick の証拠は release の代わりになりません。必須 job の失敗・キャンセル・スキップ時は Draft を作成しません。
 
 Windows／macOS hosted CI は物理 GPU を検証せず、Linux Lavapipe はソフトウェア Vulkan です。各 app の手動実機結果を別に記録し、ビルド成功から推定しません。CSV、能力解決、manifest、CI のデータの流れは[設計文書](architecture.md#build-project-management)を参照してください。
+
+新しい app は[手動作成・コピー手順](creating_apps.md)で追加し、その CSV 行とターゲットを有効にします。`gyo_app_project()` と target／content helpers が新しい識別子を使うため、Release workflow に app 名を追加する必要はありません。内部 AssetId や shader ID の一括改名もしません。日常の baseline は3プラットフォームで helper 契約を検査し、Windows release baseline は実 app コピーの同時ビルドと個別配布の回帰検証も行います。テスト用コピーは scratch tree だけに存在し、その archive は添付としてアップロードしません。Release の期待集合は常に元の source commit の CSV から決まります。
 
 ## 5. 失敗、再実行、既存バージョン
 

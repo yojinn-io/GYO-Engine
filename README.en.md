@@ -168,7 +168,6 @@ Build the apps selected by the CSV together with the independent UI editor:
 ```sh
 cmake --preset dev
 cmake --build --preset dev
-ctest --preset dev
 cmake --install build/dev --prefix /absolute/path/to/stage
 ```
 
@@ -191,12 +190,33 @@ cmake --build build-ui-editor --config Debug --target gyo_ui_editor
 ```
 
 Adding or removing an app using existing engine capabilities changes only its
-own directory and the CSV. Its `CMakeLists.txt` declares requirements, targets,
-assets, installation and package acceptance. Common modules and CI do not keep
+code directory, private assets and the CSV. Its `CMakeLists.txt` declares requirements, targets,
+assets and ordinary installation. Quality and package acceptance are separate adapters. Common modules and CI do not keep
 an app-name list. CSV edits trigger reconfiguration and recompute requirements.
 The former per-app build options are removed; existing caches receive migration
 instructions. Use a fresh build tree or remove the reported legacy cache entries,
 then use the CSV and `GYO_APPS`.
+
+New apps can start from scratch or by manually copying an existing
+`apps/<name>` plus its private `assets/<name>`. The [app creation guide](docs/creating_apps.md)
+provides both procedures. `gyo_app_project()` derives identity from the CSV/directory;
+`OUT_TARGET` handles avoid hard-coded target names, and private `gyo/AppConfig.hpp`
+provides deployment paths without source roots. Shared helpers handle normal target
+settings and content deployment; internal asset/shader IDs and gameplay remain app-owned.
+There is no project creation/clone tool or additional project registry.
+
+Ordinary `dev` builds default to `BUILD_TESTING=OFF` and
+`GYO_ENABLE_PACKAGING=OFF`. Product code must configure, build, run and install
+with all testing, CI and acceptance files absent. `MAIN` installs its executable
+and runtime dependencies without any startup check or package manifest. Quality
+and project/CI management consume product targets through optional adapters:
+`tests/Tests.cmake` and `packaging/Package.cmake`. Enable quality separately:
+
+```sh
+cmake --preset test
+cmake --build --preset test
+ctest --preset test
+```
 
 | Option | Default | Effect |
 |---|---:|---|
@@ -211,7 +231,8 @@ then use the CSV and `GYO_APPS`.
 | `GYO_BUILD_SDL_IMAGE_LOADER` | `OFF` | Explicitly request the optional PNG loader. |
 | `GYO_BUILD_SDL_TTF_ADAPTER` | `OFF` | Explicitly request the optional SDL_ttf text rasterizer. |
 | `GYO_BUILD_UFBX_LOADER` | `OFF` | Explicitly request the optional ufbx model loader; neutral Model/Collision remain independent. |
-| `BUILD_TESTING` | `ON` | Register doctest and integration targets with CTest. |
+| `BUILD_TESTING` | `OFF` | Opt into external quality adapters, doctest and CTest; the `test` preset enables it. |
+| `GYO_ENABLE_PACKAGING` | `OFF` | Opt into package manifests and strict installed acceptance; CI enables it explicitly. |
 
 App requirements are combined with explicit adapter choices without rewriting
 user cache options. Neutral Engine, Input, Model, Collision, Text, Render and UI
@@ -223,7 +244,7 @@ disabled, their build does not require SDL, SDL_image, SDL_ttf or ImGui.
 GPU apps use shared HLSL compiled offline to DXIL and SPIR-V on Windows, SPIR-V
 on Linux and Metallib on macOS. The runtime has no HLSL compiler. Native shader
 tools build separately inside the build tree; macOS requires the selected
-Xcode's Metal tools. The `dev` test preset runs CPU/headless and shader tests;
+Xcode's Metal tools. The `test` preset runs CPU/headless and shader tests;
 GPU tests require a usable display and GPU and run separately. `ci-windows`,
 `ci-linux`, and `ci-macos` select native CI toolchains.
 
@@ -250,7 +271,8 @@ app × platform matrix. Each combination has an isolated build tree and install
 stage containing that app and its required dependencies; Editor is not in app
 packages. Apps without GPU/shader requirements do not run those steps.
 
-Every enabled app registers an installed startup test. The common runner uses
+CI explicitly enables quality and packaging. Each app selected for that packaging
+operation supplies a package adapter with an installed startup test. The common runner uses
 the generated `share/gyo/apps/<app>/manifest.json` and executes from outside the
 installed package. App-specific acceptance commands select quick/release,
 platform and GPU requirements. Failure, timeout or missing required evidence
@@ -382,6 +404,8 @@ analysis, ownership boundaries, validation and current limitations.
 The four non-playing screens load once from `assets/object_fps/ui/screens.json`; there is no compiled fallback, live link or hot reload. `UiRuntime` owns selection, focus, pointer capture and hit testing. Object_FPS maps opaque action ids to its typed commands, while Playing HUD policy remains C++ and emits the same `UiDrawList`. GYO still does not know what an Object_FPS menu action means.
 
 Executable smoke paths cover different boundaries:
+
+The `test` preset or `GYO_ENABLE_PACKAGING=ON` attaches optional acceptance diagnostics. Ordinary `dev` builds retain startup health checks and interactive preview; other smoke/validation flags report that diagnostics are unavailable. Their sources live under `apps/object_fps/tests/diagnostics/` and are not product build inputs.
 
 - `--startup-smoke-test` verifies real installed content loading without creating a window or GPU. Quick and release CI execute this installed binary from an unrelated working directory on all three platforms.
 - `--headless-smoke-test` also verifies gameplay startup, jumping, pause/resume, shooting and reload timing without a window or GPU; release CI runs this heavier scenario.

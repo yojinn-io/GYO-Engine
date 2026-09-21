@@ -1,8 +1,10 @@
 #include "RetroFPS/App/CampaignContentLoader.hpp"
 #include "RetroFPS/App/ObjectFpsPresentation.hpp"
 #include "RetroFPS/App/ObjectFpsRuntimeClient.hpp"
-#include "diagnostics/HeadlessSmoke.hpp"
-#include "diagnostics/MuzzleProbe.hpp"
+#if defined(OBJECT_FPS_WITH_DIAGNOSTICS)
+#include "ObjectFpsDiagnostics.hpp"
+#endif
+#include "gyo/AppConfig.hpp"
 
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
@@ -87,9 +89,9 @@ void LogError(const std::string& message) {
 
 bool LoadShaders(const std::filesystem::path& root, Engine::Render::ShaderLibrary& library) {
     Engine::Asset::Loading::NativeFileAssetSource source;
-    for (const auto* name : {"builtin", "object_fps"}) {
+    for (const auto* path : {Gyo::AppConfig::BuiltinShaders, Gyo::AppConfig::Shaders}) {
         Engine::Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (root / "shaders" / name).string();
+        options.assetsRoot = (root / path).string();
         const auto loaded = library.AppendBundle(source,
             Engine::Asset::Resolver::AssetPathResolver(options));
         if (!loaded) { LogError(loaded.error()); return false; }
@@ -106,62 +108,6 @@ bool LoadShaders(const std::filesystem::path& root, Engine::Render::ShaderLibrar
         }
     }
     return true;
-}
-
-int ValidatePackage(const std::filesystem::path& root, const Engine::Render::ShaderLibrary& shaders) {
-    namespace Asset = Engine::Asset;
-    Asset::AssetCatalog catalog;
-    Asset::Catalog::CatalogParser parser;
-    Asset::Loading::NativeFileAssetSource source;
-    for (const auto* name : {"object_fps", "common"}) {
-        const auto assetRoot = root / "assets" / name;
-        Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = assetRoot.string();
-        const auto loaded = catalog.AppendFromFile((assetRoot / "asset_catalog.json").string(),
-            parser, Asset::Resolver::AssetPathResolver(options));
-        if (!loaded) { LogError(loaded.error()); return 1; }
-    }
-    for (const auto* entry : catalog.Entries()) {
-        const auto bytes = source.ReadAll(entry->resolvedPath);
-        if (!bytes) { LogError(bytes.error()); return 1; }
-        if (bytes.value().empty()) { LogError(std::string{"empty package asset: "} + entry->resolvedPath); return 1; }
-    }
-    SDL_Log("Package validation passed: assets=%zu, shader programs=%zu, formats=%u, bundle=%s",
-        catalog.Entries().size(), shaders.ProgramIds().size(), shaders.CompleteFormats(), shaders.Version().c_str());
-    return 0;
-}
-
-int RunShaderProbe(Engine::Platform::Sdl::SdlPlatform& platform, Engine::Render::Renderer& renderer) {
-    namespace Render = Engine::Render;
-    Render::RenderQueue queue;
-    Render::SpriteSubmission left;
-    left.destinationPixels = {16,16,64,64};
-    left.material.tint = {1,0,0,1};
-    left.layer = Render::CompositeLayer::Scene;
-    auto right = left;
-    right.destinationPixels.x = 112;
-    right.material.shader = "game/object_fps/channel_swap";
-    if (!queue.Submit(left) || !queue.Submit(right)) return 1;
-    renderer.RequestSceneCapture();
-    for (int attempt=0;attempt<180;++attempt) {
-        if (platform.PumpEvents() == Engine::Runtime::RuntimeControl::Stop) return 1;
-        const auto presented = renderer.Render(queue);
-        if (!presented) { LogError(presented.error()); return 1; }
-        const auto capture = renderer.TakeSceneCapture();
-        if (!capture) { SDL_Delay(16); continue; }
-        const auto sample = [&](std::uint32_t x, std::uint32_t y, std::size_t channel) {
-            return capture->rgba8[(static_cast<std::size_t>(y) * capture->width + x) * 4 + channel];
-        };
-        if (capture->width < 176 || capture->height < 80 ||
-            sample(48,48,0) < 240 || sample(48,48,2) > 10 ||
-            sample(144,48,2) < 240 || sample(144,48,0) > 10) {
-            LogError(std::string{"Game Shader smoke failed: expected red builtin and blue game quad"}); return 1;
-        }
-        SDL_Log("Game Shader smoke passed: builtin red, game/object_fps/channel_swap blue");
-        return 0;
-    }
-    LogError(std::string{"Game Shader smoke could not acquire a frame"});
-    return 1;
 }
 
 // Bounded validation mode: real assets and GPU presentation with explicit
@@ -302,17 +248,33 @@ int main(int argc, char* argv[]) {
     namespace SdlGpu = Engine::Render::Backend::SdlGpu;
     namespace SdlTtf = Engine::Text::Backend::SdlTtf;
 
+#if !defined(OBJECT_FPS_WITH_DIAGNOSTICS)
+    // A product-only build must reject unavailable validation modes instead of
+    // silently entering the interactive game and hanging an external runner.
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view argument = argv[index];
+        if (argument != "--startup-smoke-test" &&
+            (argument == "--validate-package" || argument == "--smoke-test" ||
+             argument.ends_with("-smoke-test"))) {
+            LogError(std::string{"Optional diagnostics are not enabled: "} + std::string{argument});
+            return 2;
+        }
+    }
+#endif
+
     const auto executableRoot = ExecutableRoot();
     if (executableRoot.empty()) { LogError(std::string{"cannot locate executable directory"}); return 1; }
     Engine::Render::ShaderLibrary shaders;
     if (!LoadShaders(executableRoot, shaders)) return 1;
+#if defined(OBJECT_FPS_WITH_DIAGNOSTICS)
     if (HasArgument(argc, argv, "--validate-package")) return ValidatePackage(executableRoot, shaders);
     const bool headlessSmoke = HasArgument(argc, argv, "--headless-smoke-test");
     if (headlessSmoke && ValidatePackage(executableRoot, shaders) != 0) return 1;
+#endif
 
     // CPU content loading is shared by interactive startup and both packaged
     // smoke modes. All paths resolve assets relative to the executable.
-    const std::filesystem::path assetRoot = executableRoot / "assets" / "object_fps";
+    const std::filesystem::path assetRoot = executableRoot / Gyo::AppConfig::Assets;
     Asset::Resolver::AssetPathResolver::Options resolverOptions;
     resolverOptions.assetsRoot = assetRoot.string();
     resolverOptions.allowAbsolutePath = false;
@@ -328,7 +290,7 @@ int main(int argc, char* argv[]) {
     }
 
     Asset::Resolver::AssetPathResolver::Options commonOptions;
-    const std::filesystem::path commonRoot = assetRoot.parent_path() / "common";
+    const std::filesystem::path commonRoot = executableRoot / Gyo::AppConfig::CommonAssets;
     commonOptions.assetsRoot = commonRoot.string();
     Asset::Resolver::AssetPathResolver commonResolver(std::move(commonOptions));
     const auto commonCatalog = catalog.AppendFromFile(
@@ -388,6 +350,7 @@ int main(int argc, char* argv[]) {
     auto content = std::make_shared<const fps::CampaignContent>(
         std::move(*contentResult.content));
 
+#if defined(OBJECT_FPS_WITH_DIAGNOSTICS)
     if (headlessSmoke) {
         std::string report;
         std::string error;
@@ -395,6 +358,7 @@ int main(int argc, char* argv[]) {
         SDL_Log("%s", report.c_str());
         return 0;
     }
+#endif
 
     if (HasArgument(argc, argv, "--startup-smoke-test")) {
         // The same startup path has decoded game data, maps, weapon settings
@@ -418,7 +382,7 @@ int main(int argc, char* argv[]) {
     }
 
     SdlPlatform::SdlPlatformOptions platformOptions;
-    platformOptions.title = "Object_FPS — GYO Runtime Conformance Game";
+    platformOptions.title = Gyo::AppConfig::DisplayName;
     platformOptions.width = 1280;
     platformOptions.height = 720;
     if (HasArgument(argc, argv, "--preview-4x3")) platformOptions.width = 960;
@@ -445,7 +409,9 @@ int main(int argc, char* argv[]) {
     SDL_Log("GYO GPU: driver=%s, shader=%.*s, available_formats=%u, bundle=%s",
         renderDevice->GetInfo().driver.c_str(), static_cast<int>(activeFormat.size()), activeFormat.data(),
         renderDevice->GetInfo().shaderFormats, shaders.Version().c_str());
+#if defined(OBJECT_FPS_WITH_DIAGNOSTICS)
     if (HasArgument(argc, argv, "--shader-smoke-test")) return RunShaderProbe(*platform, renderer);
+#endif
 
     auto textRasterizerResult = SdlTtf::SdlTtfTextRasterizer::Create();
     if (!textRasterizerResult) {
@@ -454,10 +420,12 @@ int main(int argc, char* argv[]) {
     }
     auto textRasterizer = std::move(textRasterizerResult).value();
 
+#if defined(OBJECT_FPS_WITH_DIAGNOSTICS)
     if (HasArgument(argc, argv, "--muzzle-smoke-test")) {
         return RunMuzzleProbe(*platform, *renderDevice, renderer, assets, *content,
             CaptureDirectory(argc, argv));
     }
+#endif
 
     const bool smokeTest = HasArgument(argc, argv, "--smoke-test");
     const bool menuSmokeTest = HasArgument(argc, argv, "--menu-smoke-test");

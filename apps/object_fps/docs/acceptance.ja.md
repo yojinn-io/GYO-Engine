@@ -4,18 +4,26 @@
 
 ## 1. App が所有する契約
 
-Object_FPS の `CMakeLists.txt` が SDL_GPU、input、image、ttf、ufbx を要求し、自身の asset、shader、install、検証コマンドを登録します。Engine の `config/engine/projects.csv` で app とターゲットを有効にします。共通 CI は生成済み package manifest を読み、ゲーム名やゲームプレイの規則を持ちません。
+Object_FPS の製品 `CMakeLists.txt` は SDL_GPU、input、image、ttf、ufbx の要求、製品 target、asset／shader と通常 install だけを宣言します。品質は `tests/Tests.cmake`、配布検証の登録は `packaging/Package.cmake`、実装は `tests/package/` に置き、外部から必要時だけ有効にします。これらや CI ファイルが存在しなくても製品を build／run／install できる必要があります。
+
+以下は**品質と封装を明示的に要求する**手順です。普通の開発は `dev` preset（`BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`）を使い、startup check や package manifest は不要です。起動の健全性確認と対話的 preview は製品機能です。他の検証診断は任意の adapter が `tests/diagnostics/` の実装を追加し、通常ビルドはこれらをコンパイルせず、ファイルも必要としません。封装だけを要求する場合は doctest が不要です。まず Engine の `config/engine/projects.csv` で app とターゲットを有効にします。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
-cmake --build --preset dev
-ctest --preset dev
-cmake --install build/dev --prefix /absolute/path/to/stage
+cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF -DGYO_ENABLE_PACKAGING=ON
+cmake --build --preset test
+ctest --preset test
+cmake --install build/test --prefix /absolute/path/to/stage
 ```
 
 Package は `bin/gyo_object_fps`、`bin/assets/common`、`bin/assets/object_fps`、`bin/shaders/builtin`、`bin/shaders/object_fps`、必要な動的ライブラリ、生成した `share/gyo/apps/object_fps/manifest.json`、app の検証ツールを含みます。UI editor は含めません。Archive は `gyo-object_fps-<platform>.tar.gz`、ルートは `gyo-object_fps` です。
 
 `--validate-package` はウィンドウや GPU を作らず、配布 asset、shader bundle、読み込みを検査します。Release の app 固有チェックは独立した場所から完全な package を実行し、common asset、内蔵 shader manifest、ゲーム shader manifest を順に除去して、各欠落を正しく拒否することを確認します。Source tree からの補完は許可しません。App の宣言が GPU を必要とするため `GYO_RENDER_DEVICE=NONE` は配置時のエラーです。Headless 検証は実行モードであり、コンパイル依存関係を省略する仕組みではありません。
+
+以下のパスと直接実行コマンドは元の `object_fps` の例です。手動コピーは[共通の作成ガイド](../../../docs/creating_apps.md#manual-copy)に従います。App は `gyo_app_project()` と private `gyo/AppConfig.hpp` から現在の識別子を受け取り、各 target を `OUT_TARGET` で参照します。`gyo_app_deploy_content` が shader を `build/test/apps/<name>/shaders` に生成し、実行ファイル相対の `assets/<name>`／`shaders/<name>` に配置します。実行ファイルのビルド出力は app binary directory の `bin`（複数構成では構成サブディレクトリー付き）です。`assets/common` と内蔵 shader は共有し、内部 `object_fps.*` AssetIds や `game/object_fps/channel_swap` はコピーのために変更しません。
+
+配布版 validator は同梱の `package_info.py` で唯一の `share/gyo/apps/*/manifest.json` を発見し、app と実行ファイルパスを読みます。`manual_gpu_smoke.py`／`validate_content.py` と同じ場所にこの helper をインストールしてください。コピー先の実行ファイル名を推測する必要はありません。元 app とコピーは別々の install prefix で検証し、他方の manifest や内容を混在させません。
+
+CMake は内容ルート全体の配置と shader spec のコンパイルを担当し、個別の FBX 名や source-root をテストのコンパイル定義に入れません。Model テストは配置済みの `Gyo::AppConfig` ルートから catalog を読み、`AssetId` と `AssetManager` で資産を取得します。低レベルの切断データ／native loader 比較だけは catalog と `IAssetSource` を通して生バイトを読みます。外部 test adapter は `gyo_app_get_target` と `GYO_APP_CONTENT_STAGE_TARGET` から共通の配置 target を取得して依存するため、ゲーム本体をビルドせず単独でも実行準備できます。
 
 ## 2. Quick、Release、実機の境界
 
@@ -48,7 +56,6 @@ macOS は `--driver metal`、Windows は `--driver d3d12` と `--driver vulkan` 
 
 手動ではマウス／キーボード、Space ジャンプ、R リロード、H 収納／取り出し、指と銃の遮蔽、壁際の射撃、exposure と HUD、リサイズ／最小化を確認します。UI editor は別のツールビルドで確認します。OS、CPU アーキテクチャ、GPU／ドライバー、package の commit、要求した／実際のバックエンド、`summary.json` を添えて報告すると、ビルド・データ・GPU のどの問題かを区別できます。
 
-実機でソースからビルドした場合は `ctest --test-dir build/dev -L gpu --output-on-failure` で engine＋game の GPU テスト全体を実行できます。独立した `render.sdl_gpu_mesh_smoke` は、UV／部分矩形、深度とカリング、sRGB／線形色、alpha、非対称行列、13×7 後処理も読み戻し値で検証します。このテスト executable は Object_FPS のダウンロード package には含めません。
+実機でソースからビルドした場合は `ctest --test-dir build/test -L gpu --output-on-failure` で engine＋game の GPU テスト全体を実行できます。独立した `render.sdl_gpu_mesh_smoke` は、UV／部分矩形、深度とカリング、sRGB／線形色、alpha、非対称行列、13×7 後処理も読み戻し値で検証します。このテスト executable は Object_FPS のダウンロード package には含めません。
 
-ソースの helper は `apps/object_fps/ci/manual_gpu_smoke.py`、インストール済み package のルートにも `manual_gpu_smoke.py` を置きます。上記の script をその絶対パスに置き換えて実行できます。実機の結果と CI のソフトウェア Vulkan の証拠を分けて記録します。[以前の検証結果](../../../docs/rendering_architecture.ja.md#r10) は新しい registry／matrix の hosted CI 合格を意味しません。
-
+ソースの helper は `apps/object_fps/tests/package/manual_gpu_smoke.py`、インストール済み package のルートにも `manual_gpu_smoke.py` を置きます。上記の script をその絶対パスに置き換えて実行できます。実機の結果と CI のソフトウェア Vulkan の証拠を分けて記録します。[以前の検証結果](../../../docs/rendering_architecture.ja.md#r10) は新しい registry／matrix の hosted CI 合格を意味しません。

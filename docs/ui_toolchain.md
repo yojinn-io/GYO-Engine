@@ -22,6 +22,10 @@ Likewise, the game owns wording, hierarchy, binding values and the consequence
 of changing a display setting. GYO owns font assets, text rasterization/cache,
 layout and render submission.
 
+Ordinary root builds use `BUILD_TESTING=OFF` and `GYO_ENABLE_PACKAGING=OFF`;
+quality/CI files are not product dependencies. The `test` preset enables quality
+separately, while CI explicitly requests the axes it needs.
+
 The three-platform CI baseline builds/tests the editor independently. Editor is
 not installed into app-only release packages. Its standalone and GUI-OFF paths
 remain available. See [project management](architecture.md#build-project-management).

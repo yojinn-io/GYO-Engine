@@ -21,7 +21,7 @@ function(_gyo_require_shader_tool out_command out_dependency)
         set(executable "${GYO_SHADER_HOST_BUILD_DIR}/bin/gyo_shader_tool")
     endif()
     if(NOT TARGET gyo_shader_host_tools)
-        set(host_args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON)
+        set(host_args -DCMAKE_BUILD_TYPE=Release "-DBUILD_TESTING=${BUILD_TESTING}")
         # Native IDE profiles often select compilers and Ninja by absolute
         # path without exporting CC/CXX or adding every tool to PATH.
         # ExternalProject inherits the generator, but not these cache values.

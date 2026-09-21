@@ -1,4 +1,5 @@
 #include "../TestSupport.hpp"
+#include "../TestAssets.hpp"
 
 #include "RetroFPS/App/ObjectFpsPresentation.hpp"
 #include "RetroFPS/App/ObjectFpsUi.hpp"
@@ -236,7 +237,7 @@ struct AssetFixture final {
             return false;
         }
 
-        const std::filesystem::path assetRoot{RETROFPS_TEST_RESOURCE_ROOT};
+        const auto assetRoot = TestAssetRoot();
         Engine::Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = assetRoot.string();
         Engine::Asset::Resolver::AssetPathResolver resolver(std::move(options));
@@ -248,10 +249,11 @@ struct AssetFixture final {
             return false;
         }
         Engine::Asset::Resolver::AssetPathResolver::Options commonOptions;
-        commonOptions.assetsRoot = (assetRoot.parent_path() / "common").string();
+        const auto commonRoot = TestCommonAssetRoot();
+        commonOptions.assetsRoot = commonRoot.string();
         Engine::Asset::Resolver::AssetPathResolver commonResolver(commonOptions);
         const auto common = catalog.AppendFromFile(
-            (assetRoot.parent_path() / "common/asset_catalog.json").string(), parser, commonResolver);
+            (commonRoot / "asset_catalog.json").string(), parser, commonResolver);
         if (!common) { error = common.error().message; return false; }
         return true;
     }
@@ -281,8 +283,7 @@ struct AssetFixture final {
 
 [[nodiscard]] std::shared_ptr<const Engine::Ui::UiDocument> LoadUiDocument(
     TestContext& context) {
-    const std::filesystem::path path =
-        std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} / "ui" / "screens.json";
+    const auto path = TestAssetPath("object_fps.ui.screens");
     std::ifstream stream(path, std::ios::binary);
     std::ostringstream buffer;
     buffer << stream.rdbuf();
@@ -294,8 +295,7 @@ struct AssetFixture final {
 }
 
 [[nodiscard]] nlohmann::json ReadWeaponPresentationConfig() {
-    const auto path = std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} /
-                      "weapons/mark23/viewmodel/mark23_viewmodel.json";
+    const auto path = TestAssetPath("object_fps.weapon.mark23");
     std::ifstream stream(path);
     return nlohmann::json::parse(stream);
 }
@@ -494,8 +494,7 @@ void TestExternalAnimationSetAndIndependentInstances(TestContext& context) {
             "inline and external animation selectors preserve clips, materials and muzzle");
     }
 
-    const auto animsetPath = std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} /
-        "weapons/mark23/viewmodel/viewmodel.animset.json";
+    const auto animsetPath = TestAssetPath("object_fps.animset.mark23.viewmodel");
     std::ifstream animsetStream(animsetPath);
     auto incompleteSet = nlohmann::json::parse(animsetStream);
     incompleteSet["clips"].erase("Shoot");

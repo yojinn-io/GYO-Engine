@@ -131,7 +131,8 @@ jobs:
         id: configure
         run: |
           $editor = if ($env:GYO_APP) { 'OFF' } else { 'ON' }
-          cmake --preset $env:PRESET "-DGYO_APPS=$env:GYO_APP" "-DGYO_BUILD_UI_EDITOR=$editor" 2>&1 | Tee-Object "build/$env:PRESET/logs/configure.log"
+          $packaging = if ($env:GYO_APP) { 'ON' } else { 'OFF' }
+          cmake --preset $env:PRESET "-DGYO_APPS=$env:GYO_APP" "-DGYO_BUILD_UI_EDITOR=$editor" -DBUILD_TESTING=ON "-DGYO_ENABLE_PACKAGING=$packaging" 2>&1 | Tee-Object "build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $build = Get-Content "build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
           "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
@@ -183,6 +184,14 @@ jobs:
           cmake --build "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir "build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify independent real application copies
+        id: app_copy
+        if: runner.os == 'Windows' && matrix.app == '' && inputs.profile == 'release'
+        timeout-minutes: 60
+        run: |
+          python tools/ci/tests/app_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/$env:PRESET-app-copy" --reuse-cache "build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/$env:PRESET/logs/app-copy" 2>&1 | Tee-Object "build/$env:PRESET/logs/app-copy.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install this application
@@ -280,6 +289,7 @@ jobs:
           BUILD_RESULT: ${{ steps.build.outcome }}
           TEST_RESULT: ${{ steps.tests.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
+          APP_COPY_RESULT: ${{ steps.app_copy.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
         run: |
@@ -291,6 +301,7 @@ jobs:
           | Build | $env:BUILD_RESULT |
           | CPU / shader tests | $env:TEST_RESULT |
           | Core baseline | $env:CORE_RESULT |
+          | Independent app copy (Windows release baseline) | $env:APP_COPY_RESULT |
           | Installed application acceptance | $env:SMOKE_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
 

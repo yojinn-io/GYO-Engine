@@ -1,6 +1,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+#include "../TestAssets.hpp"
+#include "engine/asset/AssetManager.hpp"
+#include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "model/backend/ufbx/UfbxModelLoader.hpp"
 #include "model/Animation.hpp"
 #include <ufbx.h>
@@ -10,7 +13,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -21,19 +23,33 @@
 using namespace Engine::Model;
 
 namespace {
+constexpr const char* kModelAsset = "object_fps.model.mark23";
+
 std::vector<std::byte> ReadModel() {
-    std::ifstream input(GYO_MARK23_FBX,std::ios::binary|std::ios::ate);
-    if(!input) throw std::runtime_error("Mark23 regression fixture cannot be opened");
-    std::vector<std::byte> bytes(static_cast<std::size_t>(input.tellg()));
-    input.seekg(0);input.read(reinterpret_cast<char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
-    return bytes;
+    Engine::Asset::Loading::NativeFileAssetSource source;
+    auto result=source.ReadAll(fps::tests::TestAssetPath(kModelAsset).string());
+    if(!result) throw std::runtime_error(result.error().message + " " + result.error().detail);
+    return std::move(result).value();
 }
 
-std::shared_ptr<ModelAsset> LoadModel(const std::vector<std::byte>& bytes) {
-    Ufbx::UfbxModelLoader loader;
-    auto result=loader.Load({bytes.data(),bytes.size()},{});
-    if(!result) throw std::runtime_error(result.error().message);
-    return result.value().ShareAs<ModelAsset>();
+std::shared_ptr<const ModelAsset> LoadModel() {
+    auto catalog=fps::tests::LoadTestCatalog();
+    Engine::Asset::Loading::NativeFileAssetSource source;
+    Engine::Asset::Loading::LoaderRegistry registry;
+    const auto registered=registry.Register(std::make_unique<Ufbx::UfbxModelLoader>());
+    if(!registered) throw std::runtime_error(registered.error().message);
+    Engine::Asset::Loading::AssetPipeline pipeline{source,registry};
+    Engine::Asset::Core::AssetStorage storage;
+    Engine::Asset::Core::AssetLifetime lifetime;
+    Engine::Asset::Core::AssetCachePolicy policy{{}};
+    Engine::Asset::AssetManager assets{catalog,pipeline,storage,lifetime,policy};
+    auto result=assets.Load(Engine::Asset::AssetId::FromString(kModelAsset),
+        Engine::Asset::AssetRequest::WithTypeHint(Engine::Asset::AssetType::FromString("model")));
+    if(!result) throw std::runtime_error(result.error().message + " " + result.error().detail);
+    auto model=assets.GetSharedConst<ModelAsset>(result.value());
+    assets.Release(result.value());
+    if(!model) throw std::runtime_error("Mark23 asset did not produce a model payload");
+    return model;
 }
 
 using Scene=std::unique_ptr<ufbx_scene,decltype(&ufbx_free_scene)>;
@@ -75,8 +91,7 @@ TEST_CASE("truncated Mark23 binary input fails cleanly") {
 }
 
 TEST_CASE("Mark23 retains five clips, material splits and normalized four-weight skinning") {
-    const auto bytes=ReadModel();
-    const auto model=LoadModel(bytes);
+    const auto model=LoadModel();
     REQUIRE(model);
     REQUIRE(ValidateModel(*model));
     REQUIRE(model->meshes.size()==5);
@@ -107,7 +122,7 @@ TEST_CASE("Mark23 retains five clips, material splits and normalized four-weight
 
 TEST_CASE("Mark23 preserves tiled UV coordinates for repeat sampling") {
     const auto bytes=ReadModel();
-    const auto model=LoadModel(bytes);
+    const auto model=LoadModel();
     auto reference=ReferenceScene(bytes);
     bool hasNegativeV=false,hasUAboveOne=false;
     for(const auto& mesh:model->meshes) {
@@ -147,7 +162,7 @@ TEST_CASE("Mark23 preserves tiled UV coordinates for repeat sampling") {
 
 TEST_CASE("baked neutral sampling and CPU skinning retain every native FBX frame") {
     const auto bytes=ReadModel();
-    const auto model=LoadModel(bytes);
+    const auto model=LoadModel();
     auto reference=ReferenceScene(bytes);
     Pose pose;
     std::vector<SkinnedVertex> output;
@@ -207,7 +222,7 @@ TEST_CASE("baked neutral sampling and CPU skinning retain every native FBX frame
 
 TEST_CASE("Reload wrist subframes follow native quaternion poses through Euler branch changes") {
     const auto bytes=ReadModel();
-    const auto model=LoadModel(bytes);
+    const auto model=LoadModel();
     auto reference=ReferenceScene(bytes);
     const auto clip=model->FindClip("Reload");REQUIRE(clip);
     const auto* stack=ufbx_find_anim_stack(reference.get(),"Reload");REQUIRE(stack);

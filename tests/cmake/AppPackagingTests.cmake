@@ -49,10 +49,15 @@ elseif(TEST_MODE STREQUAL "check-zero")
     gyo_register_app_package(TARGET packaging_fixture)
     gyo_add_app_package_check(NAME zero COMMAND "@EXECUTABLE@" TIMEOUT 0)
 else()
+    # Content metadata is automatic; legacy explicit repeats must stay unique
+    # without splitting a semicolon-bearing filename into multiple paths.
+    set_target_properties(packaging_fixture PROPERTIES
+        GYO_APP_REQUIRED_FILES "bin/data\;set.json;bin/auto.json")
     gyo_register_app_package(TARGET packaging_fixture
         STARTUP_ARGS "one two" "semi;colon" "" "tail" ""
         STARTUP_ENVIRONMENT "VALUE=one;two" "EMPTY="
-        STARTUP_TIMEOUT 7 REQUIRED_FILES "bin/data;set.json")
+        STARTUP_TIMEOUT 7 REQUIRED_FILES "bin/data;set.json" "bin/extra.json"
+            "bin/data;set.json" "bin/extra.json")
     gyo_add_app_package_check(NAME direct
         COMMAND "@EXECUTABLE@" "one two" "semi;colon" "" "tail" ""
         ENVIRONMENT "VALUE=one;two" "EMPTY=" TIMEOUT 11)
@@ -62,7 +67,7 @@ get_property(manifest GLOBAL PROPERTY GYO_APP_sample_PACKAGE)
 file(WRITE "${CMAKE_BINARY_DIR}/review-manifest.json" "${manifest}\n")
 ]=])
 
-set(generator_args "")
+set(generator_args -DGYO_ENABLE_PACKAGING=ON)
 if(GENERATOR)
     list(APPEND generator_args -G "${GENERATOR}")
 endif()
@@ -129,9 +134,13 @@ function(run_fixture name success system processor expected_platform)
         expect_equal("${empty_value}" "EMPTY=" "${name}/check ${check} empty environment")
     endforeach()
     string(JSON required_count LENGTH "${manifest}" required_files)
-    expect_equal("${required_count}" 2 "${name}/required path count")
+    expect_equal("${required_count}" 4 "${name}/unique required path count")
     string(JSON required_path GET "${manifest}" required_files 1)
     expect_equal("${required_path}" "bin/data;set.json" "${name}/semicolon path")
+    string(JSON auto_path GET "${manifest}" required_files 2)
+    string(JSON extra_path GET "${manifest}" required_files 3)
+    expect_equal("${auto_path}" "bin/auto.json" "${name}/automatic content path")
+    expect_equal("${extra_path}" "bin/extra.json" "${name}/deduplicated explicit path")
     string(JSON startup_timeout GET "${manifest}" checks 0 timeout)
     string(JSON direct_timeout GET "${manifest}" checks 1 timeout)
     string(JSON maximum_timeout GET "${manifest}" checks 2 timeout)

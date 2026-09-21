@@ -13,10 +13,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(GYO_BUILD_UI_EDITOR "Build the standalone GYO JSON UI editor" ON)
+option(BUILD_TESTING "Enable the optional quality-management build" OFF)
+option(GYO_ENABLE_PACKAGING "Enable release manifests and acceptance contracts" OFF)
 
 include(CTest)
 include(cmake/GyoApps.cmake)
 include(cmake/GyoAppPackaging.cmake)
+include(cmake/GyoAppProject.cmake)
 gyo_configure_apps()
 gyo_resolve_components(${GYO_REQUESTED_COMPONENTS})
 
@@ -67,12 +70,23 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
             "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
             -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppPackagingTests.cmake")
+    add_test(NAME cmake.app_project
+        COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppProjectTests.cmake")
+    add_test(NAME cmake.app_tooling
+        COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+            "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            -P "${PROJECT_SOURCE_DIR}/tests/cmake/AppToolingTests.cmake")
     add_test(NAME cmake.msvc_runtime
         COMMAND ${CMAKE_COMMAND} "-DGENERATOR=${CMAKE_GENERATOR}"
             "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
             -P "${PROJECT_SOURCE_DIR}/tests/cmake/MsvcRuntimeTests.cmake")
 endif()
 
+gyo_finalize_app_installation()
 gyo_finalize_app_packages()
 
 # CI reads the configured graph, never guesses shader requirements from app names

@@ -125,6 +125,8 @@ flowchart TD
 
 原始 HLSL 入口名稱與產物入口不一定相同；例如轉成 MSL 後可能改名。工具把產物的真實入口寫入 runtime manifest，Renderer/device 讀取該值。
 
+App target 與內容註冊方式見[手動建立 app 指南](creating_apps.md)。`gyo_app_deploy_content` 將 app shader 產生於 `<build>/apps/<name>/shaders`，再部署到執行檔相對的 `shaders/<name>` 與安裝區的 `bin/shaders/<name>`。執行檔輸出在 app binary directory 的 `bin`（多配置 generator 另有配置子目錄）；內建 shader 仍在 `<build>/shaders/builtin` 產生。App 透過私有 `Gyo::AppConfig::Shaders`／`BuiltinShaders` 取得路徑，不埋入來源根目錄或原 app 名稱。手動複製時保留內部 shader ID 與 ABI，獨立 shader 原始碼與 bundle 使用新部署位置，不進行全域字串取代。
+
 <a id="r06"></a>
 ## 6. 一幀與資源生命週期
 
@@ -170,8 +172,12 @@ Windows 的 AUTO bundle 同時包含 DXIL／SPIR-V，因此可以驗證兩種驅
 # 原生建置：Windows 需先進入 x64 MSVC 開發環境；另需 Ninja。
 cmake --preset dev
 cmake --build --preset dev
-ctest --preset dev
 cmake --install build/dev --prefix /absolute/path/to/stage
+
+# 品質檢查另行啟用；普通 dev 只建置產品。
+cmake --preset test
+cmake --build --preset test
+ctest --preset test
 
 # 無遊戲、無 SDL adapter、無 FBX adapter 的核心建置
 cmake --preset core
@@ -179,9 +185,9 @@ cmake --build --preset core
 ctest --preset core
 ```
 
-`dev` test preset 只執行 `cpu|shader` 標籤；GPU 測試需在具有可用顯示與 GPU 的環境另行執行。`ci-windows`、`ci-linux`、`ci-macos` 明確固定 CI 的編譯器／架構入口。
+`test` test preset 只執行 `cpu|shader` 標籤；GPU 測試需在具有可用顯示與 GPU 的環境另行執行。`ci-windows`、`ci-linux`、`ci-macos` 明確固定 CI 的編譯器／架構入口。
 
-CLion 可沿用現有 MSVC CMake profile，執行 **Reload CMake Project**，再選擇並執行 `gyo_object_fps` target。原生 shader 工具的子建置沿用該 profile 選定的編譯器與 Ninja 路徑；不必為了散佈 DLL 的偵測重建 IDE profile。
+CLion 可沿用現有 MSVC CMake profile，執行 **Reload CMake Project**，再選擇並執行 CSV 已啟用的 `gyo_<name>` target。原生 shader 工具的子建置沿用該 profile 選定的編譯器與 Ninja 路徑；不必為了散佈 DLL 的偵測重建 IDE profile。
 
 macOS CI 套件的 deployment target 維持 **13.3**，遊戲與 Metallib 使用相同值。最低執行系統版本與 SDK 是否提供某個 API 是兩項獨立條件：Xcode 16.4 實際沒有浮點 `std::from_chars` overload，因此 CSV 改用明確的十進位／指數語法檢查，再以 `std::locale::classic()` 解析為 float。解析保留有限值、範圍、非零值下溢與完整字串檢查，並涵蓋可表示的次正規數；系統語系不改變資料中的小數點。
 
@@ -192,16 +198,18 @@ Ubuntu 需安裝 `libxtst-dev`，供 SDL 預設啟用的 XTest 偵測使用；CI
 <a id="r08"></a>
 ## 8. App 隔離部署與套件契約
 
+普通產品 build／install 預設 `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`，即使測試、CI、驗收檔案不存在也須成立。以下契約屬於明確啟用的部署驗收；CI 將所需軸設為 ON，由外部 `tests/Tests.cmake`、`packaging/Package.cmake` 使用產品 targets。產品 CMake 不 include 這些檔案，普通 install 不需要 package manifest 或 Python validator。Shader bundle 的 runtime manifest 是渲染資料，仍屬產品內容。
+
 每個 app × 平台 CI job 使用獨立建置目錄，只選該 app 並關閉 Editor。app 自己維護 executable、內容、shader、安裝與額外驗收；共用部署處理其實際需要的動態庫、RPATH 與 MSVC CRT。
 
 ```text
 stage/
 ├─ bin/<app executable> + app-owned content + Windows DLLs
 ├─ lib/                         Linux/macOS non-system libraries
-└─ share/gyo/apps/<name>/manifest.json
+└─ share/gyo/apps/<name>/manifest.json  (GYO_ENABLE_PACKAGING=ON)
 ```
 
-CMake 在建置目錄生成 manifest，app 不必人工維護另一份清單。它包含必要檔案、強制的安裝後 startup 命令，以及依 quick／release、平台與 GPU 需求選取的額外驗收。共用 runner 從安裝包以外的工作目錄執行；失敗、逾時或缺少必要證據都阻擋產包。資產與 shader 相對 executable 定位，不以來源目錄掩蓋缺檔。Object_FPS 的內容負向與玩法檢查見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
+`GYO_ENABLE_PACKAGING=ON` 時 CMake 在建置目錄生成 package manifest，app 不必人工維護另一份清單。它包含必要檔案、強制的安裝後 startup 命令，以及依 quick／release、平台與 GPU 需求選取的額外驗收。共用 runner 從安裝包以外的工作目錄執行；失敗、逾時或缺少必要證據都阻擋產包。資產與 shader 相對 executable 定位，不以來源目錄掩蓋缺檔。Object_FPS 的內容負向與玩法檢查見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
 
 每個選中組合輸出 `gyo-<name>-<platform>.tar.gz` 與 `.tar.gz.sha256`，archive 根為 `gyo-<name>`。Tar 保留 Unix 執行權限。這是原生驗收套件，不含 macOS 簽章／公證或跨 Linux 發行版相容性承諾；目標系統仍提供圖形驅動與系統庫。封裝記錄 app、目標平台、來源 SHA、profile 及驗收證據。Release 從同一 commit 的 CSV 重建預期集合並核對完整證據，quick 或普通本機包不能冒充 release。
 
@@ -228,6 +236,8 @@ CI 使用 `dumpbin` 檢查 Windows VC runtime 引用，`ldd` 檢查 Linux 套件
 `cross-platform.yml` 的 push／PR／手動執行使用 quick；`prepare-release.yml` 使用完整 release。兩者共用 `build-and-validate.yml` 並傳入固定 SHA。Release 驗證 app、平台、SHA、profile、必要檔案與完整證據，拒絕缺包、多包或 quick 證據。相同版本 Draft 重試保留已驗證附件及手寫說明；tag 必須指向相同 commit，已公開版本不可覆寫。推 tag 或 Publish release 不重新建置。操作與恢復見[發佈指南](releasing.zh-Hant.md)。
 
 Object_FPS 的 startup／gameplay／缺檔與 Linux quick 一項、release 八項 GPU 驗收由 app 自己註冊；命令、套件內容及完整實機程序已移至[Object_FPS 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。共享 runner 不保存這些遊戲專屬規則。Windows／macOS hosted runner 不宣稱實體 GPU 通過，Linux Lavapipe 是軟體 Vulkan。各 app 的硬體與互動驗收須另有實機證據。
+
+三平台日常 baseline 也檢查 project helper 契約。Windows release baseline 另在獨立 scratch tree 建立真實 app 複本，與原 app 同時建置／測試，再分別安裝，驗證 asset／shader／manifest 隔離。這是 [app_copy_integration.py](../tools/ci/tests/app_copy_integration.py) 回歸測試，不是建立 app 的工具；臨時 app 的 archive 不成為 Release 附件。
 
 <a id="r10"></a>
 ## 10. 驗證狀態、限制與參考

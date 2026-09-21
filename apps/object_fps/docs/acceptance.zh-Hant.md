@@ -4,18 +4,26 @@
 
 ## 1. App 自有契約
 
-Object_FPS 的 `CMakeLists.txt` 宣告 SDL_GPU、input、image、ttf 與 ufbx 需求，並註冊自己的資產、shader、安裝與驗收命令。先在 Engine 的 `config/engine/projects.csv` 啟用此 app 及目標平台；共用 CI 只讀生成的 package manifest，不知道遊戲名稱或玩法。
+Object_FPS 的產品 `CMakeLists.txt` 只宣告 SDL_GPU、input、image、ttf、ufbx 需求、產品 targets、asset／shader 與普通安裝。品質由 `tests/Tests.cmake` 註冊，部署驗收由 `packaging/Package.cmake` 註冊、`tests/package/` 實作，外部按需啟用；即使這些檔案與 CI 檔案不存在，產品仍須能 build／run／install。
+
+以下是**明確要求品質檢查與封裝**的操作。普通開發使用 `dev` preset（`BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`），不需要 startup check 或 package manifest。啟動健康檢查與互動 preview 是產品功能；其他驗收診斷由可選 adapter 加入 `tests/diagnostics/` 的實作，一般建置不編譯也不需要這些檔案。只要求封裝時不需要 doctest。先在 Engine 的 `config/engine/projects.csv` 啟用此 app 與目標平台。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
-cmake --build --preset dev
-ctest --preset dev
-cmake --install build/dev --prefix /absolute/path/to/stage
+cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF -DGYO_ENABLE_PACKAGING=ON
+cmake --build --preset test
+ctest --preset test
+cmake --install build/test --prefix /absolute/path/to/stage
 ```
 
 套件包含 `bin/gyo_object_fps`、`bin/assets/common`、`bin/assets/object_fps`、`bin/shaders/builtin`、`bin/shaders/object_fps`、必要動態庫、生成的 `share/gyo/apps/object_fps/manifest.json`，以及本 app 的驗收工具。UI editor 不在套件中。Archive 使用 `gyo-object_fps-<platform>.tar.gz`，根目錄為 `gyo-object_fps`。
 
 `--validate-package` 不建立視窗或 GPU，驗證安裝資產、shader bundle 與讀入流程。Release 的 app 自有驗收從獨立位置執行完整套件，依序移走 common 資產、內建 shader manifest、遊戲 shader manifest，要求每項缺檔正確失敗；不能回到 source tree 補檔。遊戲需要 GPU 的建置宣告，因此 `GYO_RENDER_DEVICE=NONE` 會在配置時拒絕；headless 檢查是執行模式，並非缺少編譯依賴的替代方式。
+
+以下路徑與直接執行指令以原始 `object_fps` 為例；手動複製依[共用建立指南](../../../docs/creating_apps.md#manual-copy)。App 由 `gyo_app_project()` 與私有 `gyo/AppConfig.hpp` 取得目前身份，各 target 以 `OUT_TARGET` 回傳值參照。`gyo_app_deploy_content` 將 shader 產生於 `build/test/apps/<name>/shaders`，再部署成執行檔相對的 `assets/<name>`／`shaders/<name>`；執行檔建置輸出在 app binary directory 的 `bin`（多配置另加配置子目錄）。`assets/common` 與內建 shader 保持共用，內部 `object_fps.*` AssetIds 或 `game/object_fps/channel_swap` 不因複製而改名。
+
+部署驗收工具透過同包的 `package_info.py` 尋找唯一的 `share/gyo/apps/*/manifest.json`，讀取 app 身份與 executable 路徑。此 helper 必須與 `manual_gpu_smoke.py`／`validate_content.py` 一起安裝，不猜測複本的執行檔名稱。原 app 與複本分別使用獨立 install prefix，不能混入對方 manifest 或內容。
+
+CMake 只負責整個內容根目錄部署與 shader spec 編譯，不把個別 FBX 檔名或來源根目錄寫入測試編譯定義。Model 測試由已部署的 `Gyo::AppConfig` 根目錄載入 catalog，透過 `AssetId` 與 `AssetManager` 取得資產；低階截斷資料／native loader 比較才經 catalog 與 `IAssetSource` 讀取原始位元組。外部 test adapter 透過 `gyo_app_get_target` 與 `GYO_APP_CONTENT_STAGE_TARGET` 取得並依賴共用部署 target，因此可單獨建置並備妥內容，不必編譯遊戲主程式。
 
 ## 2. Quick、Release 與實機邊界
 
@@ -48,7 +56,6 @@ macOS 使用 `--driver metal`，Windows 分別測 `--driver d3d12` 和 `--driver
 
 另外手動檢查：滑鼠／鍵盤、Space 跳躍、R 換彈、H 收槍／拔槍、手指與槍身遮擋、貼牆射擊、曝光與 HUD、視窗縮放／最小化。UI editor 另在工具建置中驗收。回報 OS、CPU 架構、GPU／驅動、套件 commit、指定／實際後端與 `summary.json`，才能區分建置、資料和 GPU 問題。
 
-若在目標機器從原始碼建置，可用 `ctest --test-dir build/dev -L gpu --output-on-failure` 跑完整 engine＋game GPU 集合。獨立的 `render.sdl_gpu_mesh_smoke` 另以讀回數值檢查 UV／子矩形、深度與剔除、sRGB／線性色彩、alpha、非對稱矩陣，以及 13×7 後處理；此測試 executable 不包含在 Object_FPS 下載套件中。
+若在目標機器從原始碼建置，可用 `ctest --test-dir build/test -L gpu --output-on-failure` 跑完整 engine＋game GPU 集合。獨立的 `render.sdl_gpu_mesh_smoke` 另以讀回數值檢查 UV／子矩形、深度與剔除、sRGB／線性色彩、alpha、非對稱矩陣，以及 13×7 後處理；此測試 executable 不包含在 Object_FPS 下載套件中。
 
-原始碼中的 helper 位於 `apps/object_fps/ci/manual_gpu_smoke.py`；安裝包根目錄保留 `manual_gpu_smoke.py`，可將上述命令中的 script 改成其絕對路徑。發行前的實機結果與 CI 軟體 Vulkan 證據分開記錄。過去結果保留在[歷史驗證](../../../docs/rendering_architecture.zh-Hant.md#r10)，不代表新 registry／matrix 已在 hosted CI 通過。
-
+原始碼中的 helper 位於 `apps/object_fps/tests/package/manual_gpu_smoke.py`；安裝包根目錄保留 `manual_gpu_smoke.py`，可將上述命令中的 script 改成其絕對路徑。發行前的實機結果與 CI 軟體 Vulkan 證據分開記錄。過去結果保留在[歷史驗證](../../../docs/rendering_architecture.zh-Hant.md#r10)，不代表新 registry／matrix 已在 hosted CI 通過。

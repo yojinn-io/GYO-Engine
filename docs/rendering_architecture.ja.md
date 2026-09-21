@@ -125,6 +125,8 @@ flowchart TD
 
 HLSL の入口名と成果物の入口名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物の入口を runtime manifest に記録し、Renderer/device はその値を使います。
 
+App の target と内容の登録は [手動の app 作成ガイド](creating_apps.md)に従います。`gyo_app_deploy_content` は app shader を `<build>/apps/<name>/shaders` に生成し、実行ファイル相対の `shaders/<name>`、インストール先の `bin/shaders/<name>` へ配置します。実行ファイルは app binary directory の `bin`（複数構成 generator は構成サブディレクトリー付き）に出力します。内蔵 shader は引き続き `<build>/shaders/builtin` で生成します。App は非公開の `Gyo::AppConfig::Shaders`／`BuiltinShaders` を使い、ソースルートや元 app 名を埋め込みません。コピー時も内部 shader ID と ABI を一括置換せず、独立した shader ソースと bundle を新しい配置先で扱います。
+
 <a id="r06"></a>
 ## 6. フレームとリソースのライフサイクル
 
@@ -170,8 +172,12 @@ Windows の AUTO bundle は DXIL／SPIR-V の両方を含むので、両ドラ�
 # ネイティブビルド。Windows は先に x64 MSVC 開発環境を開き、Ninja も用意する。
 cmake --preset dev
 cmake --build --preset dev
-ctest --preset dev
 cmake --install build/dev --prefix /absolute/path/to/stage
+
+# 品質検査は別に有効化。通常の dev は製品のみ。
+cmake --preset test
+cmake --build --preset test
+ctest --preset test
 
 # ゲーム、SDL adapter、FBX adapter を含めない core ビルド
 cmake --preset core
@@ -179,9 +185,9 @@ cmake --build --preset core
 ctest --preset core
 ```
 
-`dev` test preset は `cpu|shader` ラベルだけを実行します。GPU テストは使用可能なディスプレイと GPU を持つ環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のコンパイラー／アーキテクチャを明示します。
+`test` test preset は `cpu|shader` ラベルだけを実行します。GPU テストは使用可能なディスプレイと GPU を持つ環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のコンパイラー／アーキテクチャを明示します。
 
-CLion では既存の MSVC CMake profile を使い、**Reload CMake Project** を実行してから `gyo_object_fps` target を選んで実行します。ネイティブ shader ツールの子ビルドは、その profile で選択したコンパイラーと Ninja のパスを引き継ぎます。再配布 DLL の検出のために IDE profile を作り直す必要はありません。
+CLion では既存の MSVC CMake profile を使い、**Reload CMake Project** を実行してから CSV で有効にした `gyo_<name>` target を選んで実行します。ネイティブ shader ツールの子ビルドは、その profile で選択したコンパイラーと Ninja のパスを引き継ぎます。再配布 DLL の検出のために IDE profile を作り直す必要はありません。
 
 macOS CI package の deployment target は **13.3** を維持し、ゲームと Metallib に同じ値を使います。最低実行 OS バージョンと SDK が API を提供するかどうかは別の条件です。Xcode 16.4 には浮動小数点 `std::from_chars` の overload がないため、CSV は十進数／指数の構文を明示的に検査し、`std::locale::classic()` で float に変換します。有限値、範囲、非ゼロ値のゼロへのアンダーフロー、文字列全体の検査を維持し、表現可能な非正規化数も扱います。システムのロケールは小数点の解釈に影響しません。
 
@@ -192,16 +198,18 @@ Ubuntu では SDL が既定で有効にする XTest の検出用に `libxtst-dev
 <a id="r08"></a>
 ## 8. App ごとの配布と package 契約
 
+通常の製品 build／install は `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF` で、テスト・CI・受け入れ検証のファイルがなくても成立します。以下は明示的に有効にした配布検証の契約です。CI は必要な軸を ON にし、外部の `tests/Tests.cmake` と `packaging/Package.cmake` が製品 target を利用します。App の製品 CMake はこれらを include せず、通常 install に package manifest や Python validator は不要です。Shader bundle の runtime manifest は描画データなので製品に属します。
+
 各 app × platform の CI job は独立したビルドディレクトリーでその app だけを選び、Editor を無効にします。App が executable、内容、shader、install、追加検証を所有し、共通の配布処理が必要な動的ライブラリ、RPATH、MSVC CRT を扱います。
 
 ```text
 stage/
 ├─ bin/<app executable> + app-owned content + Windows DLLs
 ├─ lib/                         Linux/macOS non-system libraries
-└─ share/gyo/apps/<name>/manifest.json
+└─ share/gyo/apps/<name>/manifest.json  (GYO_ENABLE_PACKAGING=ON)
 ```
 
-CMake がビルドディレクトリーに manifest を生成するため、別の手動リストは不要です。必須ファイル、必須の配布版 startup コマンド、quick／release・platform・GPU の条件に応じた追加検証を含みます。共通 runner は package 外の作業ディレクトリーから実行し、失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Asset と shader は executable から解決し、source tree で欠落を隠しません。Object_FPS の内容欠落・ゲームプレイ検査は[app 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)にあります。
+`GYO_ENABLE_PACKAGING=ON` では CMake がビルドディレクトリーに package manifest を生成するため、別の手動リストは不要です。必須ファイル、必須の配布版 startup コマンド、quick／release・platform・GPU の条件に応じた追加検証を含みます。共通 runner は package 外の作業ディレクトリーから実行し、失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Asset と shader は executable から解決し、source tree で欠落を隠しません。Object_FPS の内容欠落・ゲームプレイ検査は[app 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)にあります。
 
 各組み合わせは `gyo-<name>-<platform>.tar.gz` と `.tar.gz.sha256` を生成し、archive ルートは `gyo-<name>` です。Tar は Unix 実行権限を保持します。ネイティブ検証用 package であり、macOS の署名／公証や Linux ディストリビューション間の互換性を保証しません。ターゲット OS のグラフィックスドライバーとシステムライブラリを使用します。App、platform、source SHA、profile、検証証拠を記録し、Release は同じ commit の CSV から期待集合を再構築して照合します。Quick／通常のローカル package を release 証拠として使えません。
 
@@ -228,6 +236,8 @@ App のない platform も engine と tool をテストし、package は作り�
 `cross-platform.yml` の push／PR／手動実行は quick、`prepare-release.yml` は完全な release profile を使います。両方が固定 SHA を `build-and-validate.yml` に渡します。Release は app、platform、SHA、profile、必須ファイル、完全な証拠を照合し、過不足のある package 集合や quick 証拠を拒否します。同じ版の Draft 再試行は検証済み添付と手書きの説明を保持し、tag の commit 一致を要求し、公開済み版を上書きしません。Tag push と Publish release は再ビルドを起動しません。操作と復旧は[公開ガイド](releasing.ja.md)を参照してください。
 
 Object_FPS が startup／gameplay／欠落検査、Linux quick の GPU 1件と release の8件を登録します。コマンド、package 内容、実機確認は[Object_FPS 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)に移しました。共通 runner はゲーム固有の規則を持ちません。Windows／macOS hosted runner は物理 GPU の合格を主張せず、Linux Lavapipe はソフトウェア Vulkan です。各 app のハードウェア・対話操作は実機の証拠で確認します。
+
+日常の3プラットフォーム baseline は project helper の契約も検査します。Windows の release baseline は実際の app コピーを独立 scratch tree に作り、元 app と同時にビルド・テストした後、それぞれを単独で配布して asset／shader／manifest の分離を検証します。これは [app_copy_integration.py](../tools/ci/tests/app_copy_integration.py) という回帰テストであり、app 作成コマンドではありません。一時 app の archive は Release 添付にしません。
 
 <a id="r10"></a>
 ## 10. 検証状況、制限、参考資料

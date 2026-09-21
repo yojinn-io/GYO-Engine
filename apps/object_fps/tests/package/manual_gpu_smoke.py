@@ -10,7 +10,11 @@ from pathlib import Path
 import platform
 import re
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from package_info import load_package_info
 
 
 CASES = (
@@ -93,12 +97,13 @@ def main(argv: list[str] | None = None) -> int:
     if not 0 < args.timeout <= 3600:
         parser.error("--timeout must be greater than 0 and at most 3600 seconds")
     package = args.package.resolve(strict=True)
+    try:
+        manifest = load_package_info(package)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    name = "gyo_object_fps.exe" if platform.system() == "Windows" else "gyo_object_fps"
-    executable = package / "bin" / name
-    if not executable.is_file():
-        parser.error(f"Executable is absent: {executable}")
+    executable = package / manifest["executable"]
     if args.work_directory is not None:
         retained = args.work_directory.resolve()
         if retained.is_relative_to(package):
@@ -119,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     (output / "summary.json").write_text(json.dumps({
         "os": platform.platform(), "architecture": platform.machine(),
         "requested_driver": args.driver, "suite": args.suite, "passed": passed,
-        "package": str(package), "cases": results,
+        "package": str(package), "app": manifest["app"], "cases": results,
         "build_metadata": json.loads(metadata.read_text(encoding="utf-8")) if metadata.is_file() else None,
     }, indent=2), encoding="utf-8")
     return 0 if passed else 1

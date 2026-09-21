@@ -1,3 +1,3 @@
 name,description,version,enabled,windows,linux,macos
-object_fps,第一人稱遊戲,,1,1,1,1
-runtime,最小執行範例,,0,1,1,1
+object_fps,fps mvp,v1,0,1,1,1
+runtime,smoke_test,,0,1,1,1

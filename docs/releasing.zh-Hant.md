@@ -39,6 +39,8 @@
 
 ## 4. 完整驗收與附件
 
+Release 是外部專案／CI 管理操作。普通產品預設 `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`；測試、CI、驗收檔案不存在時仍須能 build／run／install。CI 明確開啟所需軸，由產品外部載入 `tests/Tests.cmake` 與 `packaging/Package.cmake`。Package 契約或必要證據不足，只會讓該次明確要求的封裝／發行操作失敗，不使普通產品配置失效。
+
 Release profile 固定測試三平台引擎與 UI editor，並為同一來源 commit 的 CSV 產生 app × 平台矩陣（Windows x64、Linux x64、macOS ARM64）。每個組合用隔離建置目錄，只選自己的 app、關閉 Editor，完成建置、測試、安裝、manifest 驗收與封裝。Editor 不放入 app 包，無 GPU／shader 需求的 app 不執行對應處理。
 
 每個 app 必須註冊安裝後 startup 測試；共用 runner 從包外工作目錄執行生成的 `share/gyo/apps/<name>/manifest.json` 所宣告的命令，按 profile／平台／GPU 條件驗收。失敗、逾時或缺少必要證據都阻擋產包。Object_FPS 自己維護 gameplay、缺檔、Linux quick 一項與 release 八項 GPU 規則，詳見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
@@ -53,6 +55,8 @@ gyo-<name>-<platform>.tar.gz.sha256
 Archive 只有一個 `gyo-<name>` 根目錄，包含該 app 與必要依賴。例如 CSV 的 `object_fps` 名稱保留底線，不改成 `object-fps`。Release 使用相同來源 SHA 的 CSV 重建預期集合，拒絕缺包、多包或重複身份；上傳前核對 checksum、封存檔安全、必要內容、app、平台、來源 SHA、release profile 與完整驗收證據。Quick 證據不能冒充完整 release。必要 job 失敗、取消或跳過，均不能進入 Draft 階段。
 
 Windows／macOS hosted CI 不執行實體 GPU 驗收；Linux Lavapipe 是軟體 Vulkan。各 app 的手動實機結果另記錄，不由編譯成功推定。CSV、能力解析、manifest 與 CI 資料流詳見[設計文件](architecture.md#build-project-management)。
+
+新增 app 依[手動建立／複製流程](creating_apps.md)，再啟用對應 CSV 列與目標平台。`gyo_app_project()` 與 target／content helpers 會使用新身份，因此不用在 Release workflow 另增 app 名稱，也不用全域改名內部 AssetId 或 shader ID。日常 baseline 在三平台驗證 helper 契約；Windows release baseline 另跑真實 app 複本的同時建置與分別部署回歸。測試複本僅存在 scratch tree，其 archive 不上傳為附件；發行預期集合始終來自原來源 commit 的 CSV。
 
 ## 5. 失敗、重跑與已存在的版本
 

@@ -80,8 +80,8 @@ Thumbs.db
 Desktop.ini
 
 # 3d model
-/apps/object_fps/art_source/
-/apps/object_fps/tools/
+/apps/object_fps*/art_source/
+/apps/object_fps*/tools/
 
 
 

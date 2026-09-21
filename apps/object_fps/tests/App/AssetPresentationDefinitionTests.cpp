@@ -1,4 +1,5 @@
 #include "../TestSupport.hpp"
+#include "../TestAssets.hpp"
 
 #include "RetroFPS/App/AnimationSetDefinition.hpp"
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
@@ -93,7 +94,7 @@ struct DefinitionFixture final {
             error = "asset definition test loaders failed to register";
             return false;
         }
-        const std::filesystem::path root{RETROFPS_TEST_RESOURCE_ROOT};
+        const auto root = TestAssetRoot();
         Engine::Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = root.string();
         Engine::Asset::Resolver::AssetPathResolver resolver(std::move(options));

@@ -1,4 +1,5 @@
 #include "../TestSupport.hpp"
+#include "../TestAssets.hpp"
 
 #include "RetroFPS/App/ObjectFpsUi.hpp"
 
@@ -22,8 +23,7 @@ constexpr Engine::Ui::UiViewport kViewport{1280.0F, 720.0F};
 
 [[nodiscard]] std::shared_ptr<Engine::Ui::UiDocument> LoadDocument(
     TestContext& context) {
-    const std::filesystem::path path =
-        std::filesystem::path{RETROFPS_TEST_RESOURCE_ROOT} / "ui" / "screens.json";
+    const auto path = TestAssetPath("object_fps.ui.screens");
     std::ifstream stream(path, std::ios::binary);
     const std::string json{
         std::istreambuf_iterator<char>{stream},
