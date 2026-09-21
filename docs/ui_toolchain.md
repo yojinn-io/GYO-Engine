@@ -10,7 +10,7 @@ apps/<game> policy + assets
 GYO::Ui --------------------> JSON, layout, bindings, focus, hit-test, actions
 GYO::UiRenderer ------------> AssetManager, text rasterizer, RenderQueue Overlay
 
-tools/editor/gyo_ui_editor --> GYO::Ui + optional read-only app AssetCatalog
+tools/ui_editor/gyo_ui_editor --> GYO::Ui + optional read-only app AssetCatalog
         X
         +-------------------- no app dependency, catalog writes, or publishing
 ```
@@ -22,13 +22,9 @@ Likewise, the game owns wording, hierarchy, binding values and the consequence
 of changing a display setting. GYO owns font assets, text rasterization/cache,
 layout and render submission.
 
-Ordinary root builds use `BUILD_TESTING=OFF` and `GYO_ENABLE_PACKAGING=OFF`;
-quality/CI files are not product dependencies. The `test` preset enables quality
-separately, while CI explicitly requests the axes it needs.
+Ordinary game builds have testing, package acceptance and design tools disabled. The editor is explicitly selected for local authoring and is a fixed GUI toolchain product in every release platform, even when the game registry is empty. Engine libraries are statically linked into the editor; game archives do not include it.
 
-The three-platform CI baseline builds/tests the editor independently. Editor is
-not installed into app-only release packages. Its standalone and GUI-OFF paths
-remain available. See [project management](architecture.md#build-project-management).
+Tests live under `tests/ui_editor` and common engine validation under `tests/common`. The standalone editor entry forwards to the root build graph. See [project management](architecture.md#build-project-management).
 
 ## JSON v1
 
@@ -74,18 +70,17 @@ not part of gameplay snapshots and are not serialized.
 
 ## Editor workflow
 
-The independent `GYO_BUILD_UI_EDITOR` option is on by default. App selection
-comes from `config/engine/projects.csv`; use an empty `GYO_APPS` to build the
-editor without app targets:
+Select the editor independently of the CSV-selected games:
 
 ```sh
-cmake -S . -B build-ui-editor -DGYO_BUILD_UI_EDITOR=ON -DGYO_APPS=
-cmake --build build-ui-editor --target gyo_ui_editor
+cmake --preset dev -DGYO_BUILD_UI_EDITOR=ON -DGYO_APPS=
+cmake --build --preset dev --target gyo_ui_editor
 ```
 
-The repository-independent entry is `cmake -S tools/editor -B build-ui-editor-standalone`.
-Add `-DGYO_UI_EDITOR_BUILD_GUI=OFF` for the command-line validation build; it does
-not request the GUI host or its SDL/ImGui preview adapters.
+The assembled executable is under `build/target/toolchain/bin`. The optional
+`cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the
+same repository graph. `-DGYO_UI_EDITOR_BUILD_GUI=OFF` provides local command-line
+validation only; release toolchain archives always build the GUI.
 
 The standalone target is `gyo_ui_editor` and does not link ObjectFPS, Input,
 or SDL_GPU. ImGui supplies editor chrome. Canvas rectangles, clipping,
@@ -112,6 +107,7 @@ intentionally explicit:
 Editor export to an external working location
         -> author manually copies JSON into apps' asset root
         -> author manually adds the app catalog entry
+        -> local/CI build automatically assembles content.json into the product
 ```
 
 Future tools remain separate executables. A map editor may use a different

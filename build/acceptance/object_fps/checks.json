@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "startup",
+      "command": [
+        "@PROBE@",
+        "--startup-smoke-test"
+      ],
+      "profiles": [
+        "quick",
+        "release"
+      ],
+      "timeout": 90,
+      "environment": [],
+      "platforms": [
+        "windows-x64",
+        "linux-x64",
+        "macos-arm64"
+      ],
+      "gpu": false
+    },
+    {
+      "name": "gameplay",
+      "command": [
+        "@PROBE@",
+        "--headless-smoke-test"
+      ],
+      "profiles": [
+        "release"
+      ],
+      "timeout": 90,
+      "environment": [],
+      "platforms": [
+        "windows-x64",
+        "linux-x64",
+        "macos-arm64"
+      ],
+      "gpu": false
+    },
+    {
+      "name": "content",
+      "command": [
+        "@PYTHON@",
+        "@ACCEPTANCE_ROOT@/object_fps/validate_content.py",
+        "--stage",
+        "@PACKAGE_ROOT@",
+        "--probe",
+        "@PROBE@",
+        "--logs",
+        "@LOG_ROOT@/content"
+      ],
+      "profiles": [
+        "release"
+      ],
+      "timeout": 420,
+      "environment": [],
+      "platforms": [
+        "windows-x64",
+        "linux-x64",
+        "macos-arm64"
+      ],
+      "gpu": false
+    },
+    {
+      "name": "rendering",
+      "command": [
+        "@PYTHON@",
+        "@ACCEPTANCE_ROOT@/object_fps/manual_gpu_smoke.py",
+        "--package",
+        "@PACKAGE_ROOT@",
+        "--probe",
+        "@PROBE@",
+        "--driver",
+        "@DRIVER@",
+        "--suite",
+        "@GPU_SUITE@",
+        "--timeout",
+        "120",
+        "--output",
+        "@LOG_ROOT@/rendering"
+      ],
+      "profiles": [
+        "release"
+      ],
+      "platforms": [
+        "linux-x64"
+      ],
+      "gpu": true,
+      "timeout": 1100,
+      "environment": []
+    }
+  ]
+}

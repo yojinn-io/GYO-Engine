@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "editor_cli",
+      "command": [
+        "@PYTHON@",
+        "@ACCEPTANCE_ROOT@/ui_editor/validate_cli.py",
+        "--executable",
+        "@EXECUTABLE@"
+      ],
+      "environment": [],
+      "profiles": [
+        "quick",
+        "release"
+      ],
+      "platforms": [
+        "windows-x64",
+        "linux-x64",
+        "macos-arm64"
+      ],
+      "gpu": false,
+      "timeout": 120
+    }
+  ]
+}

@@ -9,7 +9,12 @@
 *.sln.docstates
 
 # CLion and CMake build trees
-/build/
+/build/*
+!/build/cmake/
+!/build/ci/
+!/build/acceptance/
+!/build/assemble_runtime.py
+!/build/workspace.py
 /build-*/
 /cmake-build-*/
 /out/
@@ -78,10 +83,4 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# 3d model
-/apps/object_fps*/art_source/
-/apps/object_fps*/tools/
-
-
 

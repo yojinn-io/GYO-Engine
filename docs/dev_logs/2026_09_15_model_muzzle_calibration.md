@@ -1,5 +1,7 @@
 # 2026-09-15：由 Mark-23 模型校準槍口
 
+> Historical record: this document preserves the implementation, commands and results from its original date. Paths and ownership may predate the current architecture; use [the current architecture](../architecture.md) and [build guide](../creating_apps.md) for present instructions. These results do not validate later revisions.
+
 ## 目的與狀態
 
 讓射擊起點跟隨實際槍管位置，並讓射擊當幀的曳光從畫面中的槍口開始。

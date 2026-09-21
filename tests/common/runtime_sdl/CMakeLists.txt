@@ -1,0 +1,5 @@
+add_executable(gyo_runtime_smoke main.cpp)
+target_link_libraries(gyo_runtime_smoke PRIVATE GYO::Engine GYO::PlatformSDL GYO::RenderBackendSDL)
+gyo_copy_runtime_dlls(gyo_runtime_smoke)
+add_test(NAME runtime.sdl_smoke COMMAND gyo_runtime_smoke --smoke-test)
+set_tests_properties(runtime.sdl_smoke PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 15)

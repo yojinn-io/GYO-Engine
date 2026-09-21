@@ -26,6 +26,7 @@ set(APP_DOMAIN_SOURCES
 )
 
 set(APP_SUPPORT_SOURCES
+    src/App/ObjectFpsApplication.cpp
     src/App/AnimationSetDefinition.cpp
     src/App/CharacterPresentationDefinition.cpp
     src/App/CampaignContentLoader.cpp

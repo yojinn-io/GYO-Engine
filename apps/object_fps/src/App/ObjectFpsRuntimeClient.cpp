@@ -218,9 +218,6 @@ bool ObjectFpsRuntimeClient::Initialize(
     if (!impl_->session.Initialize(std::move(content), config, error)) {
         return false;
     }
-    if (impl_->config.startCampaignImmediately) {
-        impl_->pendingCommands.emplace_back(StartCampaignCommand{});
-    }
     impl_->initialized = true;
     return true;
 }
@@ -313,19 +310,7 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Render(
         return Engine::Runtime::RuntimeControl::Stop;
     }
     static_cast<void>(frame);
-    if (impl_->config.stopAfterFirstMenuFrame &&
-        impl_->session.Snapshot().screen == GameScreen::MainMenu) {
-        if (impl_->presentation->LastVisibleSubmissionCount() == 0) {
-            impl_->lastError =
-                "ordinary Object_FPS startup produced no visible MainMenu submission";
-            impl_->exitCode = 1;
-        }
-        return Engine::Runtime::RuntimeControl::Stop;
-    }
-    return impl_->config.stopAfterFirstPlayingFrame &&
-            impl_->session.Snapshot().screen == GameScreen::Playing
-        ? Engine::Runtime::RuntimeControl::Stop
-        : Engine::Runtime::RuntimeControl::Continue;
+    return Engine::Runtime::RuntimeControl::Continue;
 }
 
 const GameSessionSnapshot& ObjectFpsRuntimeClient::Query() const noexcept {

@@ -42,25 +42,25 @@ jobs:
           esac
       - name: Export the authoritative project selection
         id: registry
-        run: python tools/ci/app_registry.py --output "$GITHUB_OUTPUT"
+        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT"
       - name: Test package, draft preparation and smoke failure policies
-        run: python -m unittest discover -s tools/ci/tests -v
+        run: python -m unittest discover -s tests/common/ci -v
 
   native:
-    name: ${{ matrix.app || 'core-tools' }} / ${{ matrix.platform }}
+    name: ${{ matrix.product }} / ${{ matrix.platform }}
     needs: prepare
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      # Three core/tool entries always exist, including an entirely empty app registry.
+      # Three toolchain products always exist, including an entirely empty app registry.
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     defaults:
       run:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
-      GYO_APP: ${{ matrix.app }}
+      GYO_PRODUCT: ${{ matrix.product }}
       # VsDevCmd owns Platform (= x64); Windows env names are case-insensitive.
       GYO_PACKAGE_PLATFORM: ${{ matrix.platform }}
       CC: ${{ matrix.cc }}
@@ -116,7 +116,7 @@ jobs:
       - name: Record toolchain
         id: tools
         run: |
-          New-Item -ItemType Directory -Force "build/$env:PRESET/logs" | Out-Null
+          New-Item -ItemType Directory -Force "build/target/_build/$env:PRESET/logs" | Out-Null
           cmake --version
           ninja --version
           python --version
@@ -127,14 +127,14 @@ jobs:
             "compiler=$compiler" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Configure this application or the tool baseline
+      - name: Configure the selected product and engine verification
         id: configure
         run: |
-          $editor = if ($env:GYO_APP) { 'OFF' } else { 'ON' }
-          $packaging = if ($env:GYO_APP) { 'ON' } else { 'OFF' }
-          cmake --preset $env:PRESET "-DGYO_APPS=$env:GYO_APP" "-DGYO_BUILD_UI_EDITOR=$editor" -DBUILD_TESTING=ON "-DGYO_ENABLE_PACKAGING=$packaging" 2>&1 | Tee-Object "build/$env:PRESET/logs/configure.log"
+          $editor = if ($env:GYO_PRODUCT -eq 'toolchain') { 'ON' } else { 'OFF' }
+          $apps = if ($env:GYO_PRODUCT -eq 'toolchain') { '' } else { $env:GYO_PRODUCT }
+          cmake --preset $env:PRESET "-DGYO_APPS=$apps" "-DGYO_BUILD_UI_EDITOR=$editor" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON -DGYO_UI_EDITOR_BUILD_GUI=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $build = Get-Content "build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
+          $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
           "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "has_shader_bundles=$($build.shader_bundles.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
@@ -152,76 +152,76 @@ jobs:
         if: steps.configure.outputs.has_shader_tools == 'true'
         uses: actions/cache@v6
         with:
-          path: build/${{ matrix.preset }}/host-tools
-          key: shader-tools-v1-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.tools.outputs.compiler }}-${{ hashFiles('tools/shader_pipeline/**', 'cmake/GyoShaders.cmake', 'engine/include/engine/base/Sha256.hpp', 'engine/src/base/Sha256.cpp') }}
+          path: build/target/_build/${{ matrix.preset }}/host-tools
+          key: shader-tools-v1-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.tools.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
 
       - name: Build the selected graph and its tests
         id: build
         run: |
-          cmake --build --preset $env:PRESET 2>&1 | Tee-Object "build/$env:PRESET/logs/build.log"
+          cmake --build --preset $env:PRESET 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run CPU, headless and shader tests
         id: tests
-        if: inputs.profile == 'release' || matrix.app == ''
+        if: inputs.profile == 'release' || matrix.kind == 'toolchain'
         run: |
-          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/tests.log"
+          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run host shader reflection and rejection tests
         id: shaders
         if: always() && inputs.profile == 'release' && steps.build.outcome == 'success' && steps.configure.outputs.has_shader_tools == 'true'
         run: |
-          ctest --test-dir "build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/shader-tests.log"
+          ctest --test-dir "build/target/_build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and test core with optional modules disabled
         id: core
-        if: always() && matrix.app == '' && steps.tools.outcome == 'success'
+        if: always() && matrix.kind == 'toolchain' && steps.tools.outcome == 'success'
         run: |
-          cmake --preset core -B "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-configure.log"
+          cmake --preset core -B "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build "build/$env:PRESET-core" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-build.log"
+          cmake --build "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir "build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/$env:PRESET/logs/core-tests.log"
+          ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Verify independent real application copies
+      - name: Verify independent copied game fixtures
         id: app_copy
-        if: runner.os == 'Windows' && matrix.app == '' && inputs.profile == 'release'
+        if: runner.os == 'Windows' && matrix.kind == 'toolchain' && inputs.profile == 'release'
         timeout-minutes: 60
         run: |
-          python tools/ci/tests/app_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/$env:PRESET-app-copy" --reuse-cache "build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/$env:PRESET/logs/app-copy" 2>&1 | Tee-Object "build/$env:PRESET/logs/app-copy.log"
+          python tests/common/ci/app_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/target/_build/$env:PRESET-app-copy" --reuse-cache "build/target/_build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/target/_build/$env:PRESET/logs/app-copy" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/app-copy.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install this application
+      - name: Assemble the selected product package
         id: package
-        if: matrix.app != ''
         run: |
-          cmake --install "build/$env:PRESET" --prefix "$env:GITHUB_WORKSPACE/build/$env:PRESET/stage" 2>&1 | Tee-Object "build/$env:PRESET/logs/install.log"
+          cmake --install "build/target/_build/$env:PRESET" --component $env:GYO_PRODUCT --prefix "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/stage" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/install.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/ci/run_package_checks.py --inspect --stage "build/$env:PRESET/stage" --app $env:GYO_APP --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/$env:PRESET/logs" >> $env:GITHUB_OUTPUT
+          python build/acceptance/common/run_package_checks.py --inspect --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/target/_build/$env:PRESET/logs" >> $env:GITHUB_OUTPUT
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate installed native dependencies
         id: package_validation
-        if: matrix.app != ''
         run: |
-          python tools/ci/validate_package.py --stage "build/$env:PRESET/stage" --app $env:GYO_APP --logs "build/$env:PRESET/logs" 2>&1 | Tee-Object "build/$env:PRESET/logs/package-linkage-check.log"
+          python build/acceptance/common/validate_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/package-linkage-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run required installed startup and application checks
+      - name: Run installed product acceptance
         id: smoke
-        if: matrix.app != ''
         timeout-minutes: 20
         run: |
-          python tools/ci/run_package_checks.py --stage "build/$env:PRESET/stage" --app $env:GYO_APP --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/$env:PRESET/logs" 2>&1 | Tee-Object "build/$env:PRESET/logs/installed-checks.log"
+          $probeArgs = @()
+          $probeDirectory = "build/target/_build/$env:PRESET/acceptance/$env:GYO_PRODUCT/bin"
+          if (Test-Path $probeDirectory) { $probeArgs = @("--probe-directory", $probeDirectory) }
+          python build/acceptance/common/run_package_checks.py @probeArgs --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/installed-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run application-declared Linux GPU checks
+      - name: Run common engine or declared product Linux GPU checks
         id: gpu_smoke
         timeout-minutes: 20
-        if: runner.os == 'Linux' && matrix.app != '' && steps.package.outputs.has_gpu == 'true'
+        if: runner.os == 'Linux' && (matrix.kind == 'toolchain' || steps.package.outputs.has_gpu == 'true')
         shell: bash
         env:
           SDL_VIDEODRIVER: x11
@@ -239,28 +239,35 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/gyo-xdg-runtime"
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
-          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary > "build/$PRESET/logs/vulkan-info.log" 2>&1
-          xvfb-run -a -s '-screen 0 1920x1080x24' python tools/ci/run_package_checks.py \
-            --gpu --driver vulkan --stage "build/$PRESET/stage" --app "$GYO_APP" \
-            --platform "$GYO_PACKAGE_PLATFORM" --revision "$SOURCE_COMMIT" --profile "$ACCEPTANCE_PROFILE" \
-            --logs "build/$PRESET/logs" 2>&1 | tee "build/$PRESET/logs/installed-gpu-checks.log"
+          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary > "build/target/_build/$PRESET/logs/vulkan-info.log" 2>&1
+          if [ "$GYO_PRODUCT" = toolchain ]; then
+            xvfb-run -a -s '-screen 0 1920x1080x24' ctest \
+              --test-dir "build/target/_build/$PRESET" -L gpu -R '^render\.' \
+              --no-tests=error --output-on-failure \
+              --output-junit "$GITHUB_WORKSPACE/build/target/_build/$PRESET/logs/common-gpu-tests.xml" \
+              2>&1 | tee "build/target/_build/$PRESET/logs/common-gpu-tests.log"
+          else
+            xvfb-run -a -s '-screen 0 1920x1080x24' python build/acceptance/common/run_package_checks.py \
+              --gpu --driver vulkan --probe-directory "build/target/_build/$PRESET/acceptance/$GYO_PRODUCT/bin" --stage "build/target/_build/$PRESET/stage" --product "$GYO_PRODUCT" \
+              --platform "$GYO_PACKAGE_PLATFORM" --revision "$SOURCE_COMMIT" --profile "$ACCEPTANCE_PROFILE" \
+              --logs "build/target/_build/$PRESET/logs" 2>&1 | tee "build/target/_build/$PRESET/logs/installed-gpu-checks.log"
+          fi
 
-      - name: Archive the verified application package
+      - name: Archive the verified product package
         id: archive
-        if: matrix.app != ''
         run: |
-          python tools/ci/archive_package.py --stage "build/$env:PRESET/stage" --app $env:GYO_APP --output "build/$env:PRESET/gyo-$env:GYO_APP-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --smoke-report "build/$env:PRESET/logs/acceptance.json" 2>&1 | Tee-Object "build/$env:PRESET/logs/archive.log"
+          python build/ci/common/archive_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --output "build/target/_build/$env:PRESET/gyo-$env:GYO_PRODUCT-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --smoke-report "build/target/_build/$env:PRESET/logs/acceptance.json" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/archive.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload this app and platform package
+      - name: Upload this product and platform package
         if: success() && steps.archive.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: gyo-package-${{ matrix.app }}-${{ matrix.platform }}
+          name: gyo-package-${{ matrix.product }}-${{ matrix.platform }}
           overwrite: true
           path: |
-            build/${{ matrix.preset }}/gyo-${{ matrix.app }}-${{ matrix.platform }}.tar.gz
-            build/${{ matrix.preset }}/gyo-${{ matrix.app }}-${{ matrix.platform }}.tar.gz.sha256
+            build/target/_build/${{ matrix.preset }}/gyo-${{ matrix.product }}-${{ matrix.platform }}.tar.gz
+            build/target/_build/${{ matrix.preset }}/gyo-${{ matrix.product }}-${{ matrix.platform }}.tar.gz.sha256
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -269,17 +276,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostics-${{ matrix.app || 'core-tools' }}-${{ matrix.platform }}
+          name: diagnostics-${{ matrix.product }}-${{ matrix.platform }}
           overwrite: true
           path: |
-            build/${{ matrix.preset }}/logs
-            build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
-            build/${{ matrix.preset }}/Testing/Temporary
-            build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
-            build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
-            build/${{ matrix.preset }}/host-tools/Testing/Temporary
-            build/${{ matrix.preset }}/shaders/**/manifest.json
-            build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/logs
+            build/target/_build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/Testing/Temporary
+            build/target/_build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/host-tools/Testing/Temporary
+            build/target/_build/${{ matrix.preset }}/shaders/**/manifest.json
+            build/target/_build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: warn
           retention-days: 14
 
@@ -291,9 +298,10 @@ jobs:
           CORE_RESULT: ${{ steps.core.outcome }}
           APP_COPY_RESULT: ${{ steps.app_copy.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          GPU_RESULT: ${{ steps.gpu_smoke.outcome }}
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
         run: |
-          $entry = if ($env:GYO_APP) { $env:GYO_APP } else { 'core/tools baseline (no package)' }
+          $entry = $env:GYO_PRODUCT
           @"
           ## $entry / $env:GYO_PACKAGE_PLATFORM / $env:ACCEPTANCE_PROFILE
           | Check | Result |
@@ -302,10 +310,11 @@ jobs:
           | CPU / shader tests | $env:TEST_RESULT |
           | Core baseline | $env:CORE_RESULT |
           | Independent app copy (Windows release baseline) | $env:APP_COPY_RESULT |
-          | Installed application acceptance | $env:SMOKE_RESULT |
+          | Installed product acceptance | $env:SMOKE_RESULT |
+          | Linux software GPU / engine baseline | $env:GPU_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
 
-          Package checks are declared by each application. Physical GPU acceptance remains manual.
+          Package checks are declared by the central product acceptance contract. Physical GPU acceptance remains manual.
           Quick artifacts cannot substitute for release acceptance.
           "@ >> $env:GITHUB_STEP_SUMMARY
 

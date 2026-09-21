@@ -27,9 +27,6 @@ namespace fps {
 struct ObjectFpsRuntimeClientConfig final {
     Engine::Asset::AssetId uiDocument{
         Engine::Asset::AssetId::FromString("object_fps.ui.screens")};
-    bool startCampaignImmediately{};
-    bool stopAfterFirstPlayingFrame{};
-    bool stopAfterFirstMenuFrame{};
     float viewportWidth{1280.0F};
     float viewportHeight{720.0F};
 };

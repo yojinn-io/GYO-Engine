@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "assets": [
-    { "id": "player_tex", "type": "texture", "path": "textures/player.png" },
-    { "id": "bgm_title",  "type": "sound",   "path": "audio/title.ogg" }
-  ]
-}

@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "display_name": "GYO UI Editor",
+  "components": ["SDL_RENDERER", "SDL_IMAGE", "SDL_TTF", "IMGUI"]
+}

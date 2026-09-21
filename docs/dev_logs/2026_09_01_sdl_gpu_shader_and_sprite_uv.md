@@ -1,5 +1,7 @@
 # 為何拆出 SDL_GPU HLSL，並在 Sprite 邊界修正貼圖方向
 
+> Historical record: this document preserves the implementation, commands and results from its original date. Paths and ownership may predate the current architecture; use [the current architecture](../architecture.md) and [build guide](../creating_apps.md) for present instructions. These results do not validate later revisions.
+
 ## 修改的起點
 
 Object_FPS 的文字已經經過 FontAsset、SDL_ttf、RGBA bitmap 與 GPU upload 成功出現在畫面上，但每個 glyph 都上下顛倒。這代表資料確實走完整條路徑，卻也暴露出兩個先前沒有被具體內容驗證的問題：Sprite UV 方向錯誤，以及 SDL_GPU shader source 仍直接內嵌在 C++ implementation。

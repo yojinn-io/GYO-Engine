@@ -1,0 +1,46 @@
+#pragma once
+
+#include "gyo/AppConfig.hpp"
+#include "engine/asset/AssetCatalog.hpp"
+#include "engine/asset/ContentManifest.hpp"
+
+#include <SDL3/SDL_filesystem.h>
+
+#include <filesystem>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace fps::tests {
+
+// Tests use the same deployed roots as the app, with no source-tree fallback.
+inline std::filesystem::path TestContentRoot(const char* relative) {
+    const char* executableRoot = SDL_GetBasePath();
+    if (!executableRoot) throw std::runtime_error("Cannot locate the test executable's content root");
+    return std::filesystem::path{executableRoot} / relative;
+}
+
+inline std::filesystem::path TestAssetRoot() {
+    return TestContentRoot(Gyo::AppConfig::Assets);
+}
+
+inline Engine::Asset::AssetCatalog LoadTestCatalog() {
+    const auto root = TestAssetRoot();
+    auto manifest = Engine::Asset::ContentManifest::Load(root);
+    if (!manifest) throw std::runtime_error(manifest.error().message + " " + manifest.error().detail);
+    auto catalog = manifest.value().LoadCatalogs(root);
+    if (!catalog) throw std::runtime_error(catalog.error().message + " " + catalog.error().detail);
+    return std::move(catalog).value();
+}
+
+// Direct fixture reads (JSON mutation and native decoder reference bytes) still
+// resolve identity through the catalog; filenames belong only to content data.
+inline std::filesystem::path TestAssetPath(std::string_view name) {
+    static const auto catalog = LoadTestCatalog();
+    const auto* entry = catalog.Find(Engine::Asset::AssetId::FromString(name));
+    if (!entry) throw std::runtime_error("Missing test catalog entry: " + std::string{name});
+    return entry->resolvedPath;
+}
+
+} // namespace fps::tests

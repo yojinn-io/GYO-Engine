@@ -41,6 +41,7 @@
     { "id": "object_fps.model.weapon.animated_pistol.viewmodel", "type": "model", "path": "weapons/animated_pistol/viewmodel/Pistol.fbx" },
     { "id": "object_fps.animset.weapon.animated_pistol.viewmodel", "type": "text", "path": "weapons/animated_pistol/viewmodel/viewmodel.animset.json" },
     { "id": "object_fps.texture.world.floor", "type": "texture", "path": "textures/world/map_floor.png" },
-    { "id": "object_fps.texture.world.wall", "type": "texture", "path": "textures/world/map_wall.png" }
+    { "id": "object_fps.texture.world.wall", "type": "texture", "path": "textures/world/map_wall.png" },
+    { "id": "common.texture.white", "type": "texture", "path": "textures/common/white1x1.png" }
   ]
 }

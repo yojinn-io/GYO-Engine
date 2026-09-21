@@ -43,7 +43,7 @@ flowchart TD
     G --> H
 ```
 
-ツールはバージョン固定の DXC、SDL_shadercross、SPIRV-Cross を使います。固定値とチェックサムは `tools/shader_pipeline/cmake/Dependencies.cmake` にあります。Windows／Linux は固定 DXC 配布物を利用し、macOS は固定 DXC ソースをネイティブビルドした後、選択した Xcode のツールで Metallib を生成します。MSL は中間成果物であり、MSL の生成だけで Metal の GPU 検証を完了したとは扱いません。
+ツールはバージョン固定の DXC、SDL_shadercross、SPIRV-Cross を使います。固定値とチェックサムは `engine/render/shaders/pipeline/cmake/Dependencies.cmake` にあります。Windows／Linux は固定 DXC 配布物を利用し、macOS は固定 DXC ソースをネイティブビルドした後、選択した Xcode のツールで Metallib を生成します。MSL は中間成果物であり、MSL の生成だけで Metal の GPU 検証を完了したとは扱いません。
 
 Shader ツールはビルドを実行する host 用、ゲームは実行先の target 用です。ネイティブビルドでは build tree の `host-tools` にツールを構築します。クロスコンパイル時は host 上で実行できる `GYO_SHADER_TOOL_EXECUTABLE` を指定します。取得物、ツール、中間コード、bundle は build tree に置きます。配布したゲームに DXC、shadercross、Xcode は不要です。
 
@@ -87,7 +87,7 @@ flowchart TD
 | シーン後処理 uniform | exposure と gamma を float4 に格納、16 bytes、fragment の論理 uniform スロット 0 |
 | 色 | 線形 RGB で計算し、色テクスチャを sRGB デコード。最後に sRGB render target が表示用変換 |
 
-`render/shaders/common/RasterAbi.hlsli` に共通 HLSL 宣言を置きます。コンパイルツールはリフレクションで対応インターフェースのリソース数と uniform サイズを検証し、契約と形式の情報を manifest に記録します。バージョン不一致、欠けたプログラム、不完全な形式、ID 重複、不正パスは明示的に失敗し、別の shader に置き換えて隠しません。
+`engine/render/shaders/common/RasterAbi.hlsli` に共通 HLSL 宣言を置きます。コンパイルツールはリフレクションで対応インターフェースのリソース数と uniform サイズを検証し、契約と形式の情報を manifest に記録します。バージョン不一致、欠けたプログラム、不完全な形式、ID 重複、不正パスは明示的に失敗し、別の shader に置き換えて隠しません。
 
 共通宣言は論理リソースマクロを使い、公開 ABI に SDL の register／descriptor 規則を固定しません。ツールの SDL_GPU profile が、vertex uniform を `b0/space1`、fragment texture／sampler を `t0/space2`／`s0/space2`、fragment uniform を `b0/space3` に割り当て、SPIR-V／Metal への対応も処理します。Device adapter を交換するときの物理バインドはツールと adapter の責務です。
 
@@ -102,20 +102,20 @@ flowchart TD
 | `builtin/scene_post` | GYO Render | シーンの exposure と gamma |
 | `game/object_fps/channel_swap` | Object_FPS | 同じ `unlit` 契約を使うカスタム shader の検証用サンプル |
 
-内蔵ソースは `render/shaders/builtin/`、ゲームのソースは `apps/object_fps/shaders/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
+内蔵ソースは `engine/render/shaders/builtin/`、ゲームのソースは `assets/object_fps/shaders/source/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
 
 `MaterialDesc` は shader ID でプログラムを指定し、texture、tint、sampler を渡します。Shader ID は C++ 関数ポインターではなく、shader がゲーム状態を変更する権限も持ちません。データ設定で選べるのはエンジンが対応済みの能力です。
 
-例えば `apps/object_fps/shaders/bundle.json` では各ステージのエントリーポイントを明示します。省略時は `main` です。
+例えば `assets/object_fps/shaders/source/bundle.json` では各ステージのエントリーポイントを明示します。省略時は `main` です。
 
 ```json
 {
   "version": 1,
-  "include_directory": "../../../render/shaders/common",
+  "include_directory": "../../../../engine/render/shaders/common",
   "programs": [{
     "id": "game/object_fps/channel_swap",
     "interface": "unlit",
-    "vertex": "../../../render/shaders/builtin/unlit.vert.hlsl",
+    "vertex": "../../../../engine/render/shaders/builtin/unlit.vert.hlsl",
     "vertex_entrypoint": "main",
     "fragment": "channel_swap.frag.hlsl",
     "fragment_entrypoint": "main"
@@ -125,7 +125,7 @@ flowchart TD
 
 HLSL の入口名と成果物の入口名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物の入口を runtime manifest に記録し、Renderer/device はその値を使います。
 
-App の target と内容の登録は [手動の app 作成ガイド](creating_apps.md)に従います。`gyo_app_deploy_content` は app shader を `<build>/apps/<name>/shaders` に生成し、実行ファイル相対の `shaders/<name>`、インストール先の `bin/shaders/<name>` へ配置します。実行ファイルは app binary directory の `bin`（複数構成 generator は構成サブディレクトリー付き）に出力します。内蔵 shader は引き続き `<build>/shaders/builtin` で生成します。App は非公開の `Gyo::AppConfig::Shaders`／`BuiltinShaders` を使い、ソースルートや元 app 名を埋め込みません。コピー時も内部 shader ID と ABI を一括置換せず、独立した shader ソースと bundle を新しい配置先で扱います。
+ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook が資産組立とオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、`shaders/builtin` と `shaders/game` を含みます。Runtime はこの一つの資産 root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
 
 <a id="r06"></a>
 ## 6. フレームとリソースのライフサイクル
@@ -147,97 +147,46 @@ Overlay / HUD → Present
 アニメーションは固定サイズの頂点内容を更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は exposure／gamma／Overlay より前のシーンであり、最終スクリーンショットではありません。
 
 <a id="r07"></a>
-## 7. CMake の自動選択と明示的な上書き
+## 7. ビルドの選択
 
-App は `config/engine/projects.csv` の `enabled` とターゲット欄で選択します。`GYO_APPS=AUTO` はその集合、空値は app なし、名前またはセミコロンリストは部分集合を指定します。無効な app を上書きして有効にはできません。各 app の `CMakeLists.txt` が要求を宣言し、ルートは収集後に能力と app targets を構築します。[ビルド設計](architecture.md#build-project-management)を参照してください。GPU が必須の app と `GYO_RENDER_DEVICE=NONE` の組み合わせは配置エラーです。
+`engine/config/projects.csv` の enabled と OS 列がゲーム集合を決めます。`GYO_APPS=AUTO` は全選択ゲーム、空文字はゲームなし、明示リストは CSV に従う部分集合です。各製品の `project.json` から optional components を収集して、一つの engine graph を組み立てます。ゲーム CMake に discovery pass や資産ルールは置きません。
 
-| 設定 | 値 | 意味 |
-|---|---|---|
-| `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE` | device 実装。`NONE` は GPU なしのビルド用 |
-| `GYO_GPU_DRIVER` | `AUTO`／`D3D12`／`VULKAN`／`METAL` | 配布プログラムのデフォルトドライバー方針 |
-| `GYO_SHADER_BUNDLE` | `AUTO` または形式リスト | ビルド・配布する shader 形式。例：`"DXIL;SPIRV"` |
-| `GYO_SHADER_TOOL_EXECUTABLE` | host executable の絶対パス | クロスコンパイルなどで使うネイティブ shader ツールの上書き |
+| 設定 | 値と用途 |
+|---|---|
+| `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE`。GPU 必須ゲームを選んだ場合 `NONE` は不可 |
+| `GYO_GPU_DRIVER` | `AUTO`／`D3D12`／`VULKAN`／`METAL`。製品の既定 driver |
+| `GYO_SHADER_BUNDLE` | `AUTO` または `DXIL;SPIRV` などの形式リスト |
+| `GYO_SHADER_TOOL_EXECUTABLE` | host で実行できる既存 compiler の絶対パス |
 
-| ターゲット | `AUTO` の shader bundle | 対応ドライバー |
-|---|---|---|
-| Windows | DXIL＋SPIR-V | D3D12、Vulkan |
-| Linux | SPIR-V | Vulkan |
-| macOS | Metallib | Metal |
-
-CMake は `CMAKE_SYSTEM_NAME` で**ターゲット**を判定します。Preset の `hostSystemName` 条件は CI のネイティブビルド入口を制限するだけです。実行時の `--gpu-driver d3d12|vulkan|metal` でドライバーを指定できます。AUTO は提供可能な完全な shader 形式と SDL_GPU の利用可能なドライバーで選択します。強制指定したドライバーが使えない場合、他のドライバーで問題を隠さず失敗します。
-
-Windows の AUTO bundle は DXIL／SPIR-V の両方を含むので、両ドライバーを検証できます。DXIL だけの package は Vulkan に切り替えられません。矛盾するターゲット／ドライバー／形式の組み合わせは配置時または起動時に拒否します。CMake だけでは利用者の GPU とドライバーの動作まで保証できません。
+Windows の AUTO は DXIL と SPIR-V、Linux は SPIR-V、macOS は Metallib を生成します。Metallib には native macOS と Apple Metal tools が必要で、最低 OS バージョンを app と揃えます。Host と target の compiler は分離します。
 
 ```sh
-# ネイティブビルド。Windows は先に x64 MSVC 開発環境を開き、Ninja も用意する。
-cmake --preset dev
-cmake --build --preset dev
-cmake --install build/dev --prefix /absolute/path/to/stage
-
-# 品質検査は別に有効化。通常の dev は製品のみ。
-cmake --preset test
-cmake --build --preset test
-ctest --preset test
-
-# ゲーム、SDL adapter、FBX adapter を含めない core ビルド
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --build --preset dev --target gyo_object_fps
 cmake --preset core
 cmake --build --preset core
 ctest --preset core
 ```
 
-`test` test preset は `cpu|shader` ラベルだけを実行します。GPU テストは使用可能なディスプレイと GPU を持つ環境で別途実行します。`ci-windows`、`ci-linux`、`ci-macos` は CI 用のコンパイラー／アーキテクチャを明示します。
-
-CLion では既存の MSVC CMake profile を使い、**Reload CMake Project** を実行してから CSV で有効にした `gyo_<name>` target を選んで実行します。ネイティブ shader ツールの子ビルドは、その profile で選択したコンパイラーと Ninja のパスを引き継ぎます。再配布 DLL の検出のために IDE profile を作り直す必要はありません。
-
-macOS CI package の deployment target は **13.3** を維持し、ゲームと Metallib に同じ値を使います。最低実行 OS バージョンと SDK が API を提供するかどうかは別の条件です。Xcode 16.4 には浮動小数点 `std::from_chars` の overload がないため、CSV は十進数／指数の構文を明示的に検査し、`std::locale::classic()` で float に変換します。有限値、範囲、非ゼロ値のゼロへのアンダーフロー、文字列全体の検査を維持し、表現可能な非正規化数も扱います。システムのロケールは小数点の解釈に影響しません。
-
-Ubuntu では SDL が既定で有効にする XTest の検出用に `libxtst-dev` が必要です。CI は `pkg-config --modversion xtst` で確認します。オフライン shader ツール用 SDL は video と dialog の両方を無効にし、macOS の静的リンクで未ビルドの Cocoa window symbol を参照しないようにします。ゲーム用 SDL の設定は host ツールとは独立しています。[SDL Linux 依存パッケージ](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
-
-オフライン host ツールは `SDL_UNIX_CONSOLE_BUILD=ON` も明示します。X11／Wayland video を意図的に使わないため、console build であることを SDL に伝える必要があります。指定しないと Linux configure は video backend の不在をエラーとします。この設定は shader host 用 SDL だけに適用し、ゲームは独自のグラフィックス backend をビルドします。
+Cache は `build/target/_build/<preset>`、実行可能なゲームは `build/target/<game>/bin` です。古い cache を移動・上書きしません。利用者が runtime 資産と catalog を準備した後は、本機と CI の build が同じ資産組立／shader compile を自動実行します。
 
 <a id="r08"></a>
-## 8. App ごとの配布と package 契約
+## 8. 製品と配置
 
-通常の製品 build／install は `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF` で、テスト・CI・受け入れ検証のファイルがなくても成立します。以下は明示的に有効にした配布検証の契約です。CI は必要な軸を ON にし、外部の `tests/Tests.cmake` と `packaging/Package.cmake` が製品 target を利用します。App の製品 CMake はこれらを include せず、通常 install に package manifest や Python validator は不要です。Shader bundle の runtime manifest は描画データなので製品に属します。
+エンジンはゲームとツールに静的リンクします。各ゲームは `bin/assets/<game>` に内蔵 shader を含めて全資産を持ち、別の `assets/common` や包外 shader に依存しません。必要な native runtime libraries は共通製品配置で扱います。
 
-各 app × platform の CI job は独立したビルドディレクトリーでその app だけを選び、Editor を無効にします。App が executable、内容、shader、install、追加検証を所有し、共通の配布処理が必要な動的ライブラリ、RPATH、MSVC CRT を扱います。
+Product manifest は `share/gyo/products/<product>/manifest.json` で、product/kind、executables、必要ファイル、検査を記録します。ゲーム archive は `gyo-<game>-<platform>.tar.gz`、toolchain は `gyo-toolchain-<platform>.tar.gz` です。それぞれ対応する一つの root directory を持ちます。ゲーム包には UI editor、CI scripts、tests、diagnostic executable を含めません。
 
-```text
-stage/
-├─ bin/<app executable> + app-owned content + Windows DLLs
-├─ lib/                         Linux/macOS non-system libraries
-└─ share/gyo/apps/<name>/manifest.json  (GYO_ENABLE_PACKAGING=ON)
-```
-
-`GYO_ENABLE_PACKAGING=ON` では CMake がビルドディレクトリーに package manifest を生成するため、別の手動リストは不要です。必須ファイル、必須の配布版 startup コマンド、quick／release・platform・GPU の条件に応じた追加検証を含みます。共通 runner は package 外の作業ディレクトリーから実行し、失敗、タイムアウト、必須証拠の欠落で package 化を停止します。Asset と shader は executable から解決し、source tree で欠落を隠しません。Object_FPS の内容欠落・ゲームプレイ検査は[app 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)にあります。
-
-各組み合わせは `gyo-<name>-<platform>.tar.gz` と `.tar.gz.sha256` を生成し、archive ルートは `gyo-<name>` です。Tar は Unix 実行権限を保持します。ネイティブ検証用 package であり、macOS の署名／公証や Linux ディストリビューション間の互換性を保証しません。ターゲット OS のグラフィックスドライバーとシステムライブラリを使用します。App、platform、source SHA、profile、検証証拠を記録し、Release は同じ commit の CSV から期待集合を再構築して照合します。Quick／通常のローカル package を release 証拠として使えません。
-
-Windows Release／RelWithDebInfo は `cmake/GyoMsvcRuntime.cmake` が選択コンパイラーから対応する再配布 DLL を探して `bin/` に配置します。`GYO_MSVC_REDIST_DIR` でルートを指定できます。不足しても開発用配置／ビルドは可能ですが release install は明示的に失敗します。Debug CRT は配布せず、Windows 10+ の UCRT を使います。利用者に Visual Studio、shader コンパイラー、SDK は不要です。
-
-CI は `dumpbin` で Windows の VC runtime 参照、`ldd` で Linux の package 内ライブラリ解決、`otool` で macOS の install name／RPATH を確認します。ビルド機用のツールであり、Windows のローカル検証では `--dumpbin /absolute/path/to/dumpbin.exe` で指定できます。
+`build/acceptance/<game>` が独立 acceptance executable を作り、`build/acceptance/common` と project 固有 adapter が製品外部から検証します。検証用の一時コピーに probe を配置し、同じ実行ファイル相対の資産を読ませることはありますが、正式 archive には含めません。
 
 <a id="r09"></a>
-## 9. 共通 CI、Release、app の検証
+## 9. Engine 統合と検証
 
-3プラットフォームで engine と UI editor を必ずビルド・テストします。固定 source SHA の CSV から app × 有効 platform の matrix を別に生成し、Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4 を使います。各 app job の package はその app だけを含み、Editor は含めません。
+対応する各 platform は engine＋GUI UI editor の toolchain を必ず生成し、CSV が選んだゲームを追加します。ゲームがなくても toolchain があるため Prepare Release は成功できます。必須の製品／platform の失敗、取消、skip は Draft 準備を阻止します。Engine SDK や source archive は生成しません。
 
-```text
-固定 source SHA → CMake で CSV 解析 → 3プラットフォーム engine／Editor baseline
-                                    → app × platform 独立 build／install
-                                    → manifest の quick／release 検証
-                                    → archive + SHA-256 + Actions artifacts
-必須検査がすべて成功 → Prepare Release で tag／Draft／期待する添付を作成
-                     → 利用者が Publish release（再ビルドなし）
-```
+Quick と Release は同じ製品／資産組立を使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。
 
-App のない platform も engine と tool をテストし、package は作りません。全 app が無効でも通常 CI は成功できますが、Prepare Release は空の成果物集合を事前検証で拒否します。GPU／shader が不要な app は対応処理を実行しません。必須 GPU 検証ではドライバー不足、失敗、タイムアウトを成功扱いのスキップにできません。
-
-`cross-platform.yml` の push／PR／手動実行は quick、`prepare-release.yml` は完全な release profile を使います。両方が固定 SHA を `build-and-validate.yml` に渡します。Release は app、platform、SHA、profile、必須ファイル、完全な証拠を照合し、過不足のある package 集合や quick 証拠を拒否します。同じ版の Draft 再試行は検証済み添付と手書きの説明を保持し、tag の commit 一致を要求し、公開済み版を上書きしません。Tag push と Publish release は再ビルドを起動しません。操作と復旧は[公開ガイド](releasing.ja.md)を参照してください。
-
-Object_FPS が startup／gameplay／欠落検査、Linux quick の GPU 1件と release の8件を登録します。コマンド、package 内容、実機確認は[Object_FPS 検証ガイド](../apps/object_fps/docs/acceptance.ja.md)に移しました。共通 runner はゲーム固有の規則を持ちません。Windows／macOS hosted runner は物理 GPU の合格を主張せず、Linux Lavapipe はソフトウェア Vulkan です。各 app のハードウェア・対話操作は実機の証拠で確認します。
-
-日常の3プラットフォーム baseline は project helper の契約も検査します。Windows の release baseline は実際の app コピーを独立 scratch tree に作り、元 app と同時にビルド・テストした後、それぞれを単独で配布して asset／shader／manifest の分離を検証します。これは [app_copy_integration.py](../tools/ci/tests/app_copy_integration.py) という回帰テストであり、app 作成コマンドではありません。一時 app の archive は Release 添付にしません。
+Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance` が所有し、ゲーム `main` へ注入しません。ゲーム本体は通常操作と `--gpu-driver` を持ち、診断、capture、対話的 viewmodel preview は外側の tests／design tool が所有します。[Object_FPS 検証](object_fps/acceptance.ja.md)と[公開手順](releasing.ja.md)を参照してください。
 
 <a id="r10"></a>
 ## 10. 検証状況、制限、参考資料

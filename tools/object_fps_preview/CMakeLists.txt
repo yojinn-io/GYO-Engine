@@ -1,0 +1,20 @@
+# A game-specific design tool is optional and depends on the selected game.
+gyo_get_app_target(object_fps app_support support)
+add_executable(gyo_object_fps_preview main.cpp ViewmodelPreview.cpp)
+target_compile_features(gyo_object_fps_preview PRIVATE cxx_std_20)
+target_include_directories(gyo_object_fps_preview PRIVATE "${PROJECT_BINARY_DIR}/apps/object_fps/generated")
+target_link_libraries(gyo_object_fps_preview PRIVATE ${support} GYO::PlatformSDL GYO::UiRenderer)
+set_target_properties(gyo_object_fps_preview PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/previews/object_fps/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(gyo_object_fps_preview PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_${config} "${PROJECT_BINARY_DIR}/previews/object_fps/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(gyo_object_fps_preview PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(gyo_object_fps_preview PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(gyo_object_fps_preview)
+gyo_stage_app_content(gyo_object_fps_preview object_fps "${PROJECT_BINARY_DIR}/previews/object_fps")

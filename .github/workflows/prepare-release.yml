@@ -45,7 +45,7 @@ jobs:
           SOURCE_COMMIT: ${{ github.sha }}
           SOURCE_REF: ${{ github.ref }}
         run: |
-          python tools/ci/release_pipeline.py prepare \
+          python build/ci/common/release_pipeline.py prepare \
             --event-path "$GITHUB_EVENT_PATH" --event-name "$EVENT_NAME" \
             --commit "$SOURCE_COMMIT" --ref "$SOURCE_REF" --output "$GITHUB_OUTPUT"
       - name: Record the release candidate
@@ -94,7 +94,7 @@ jobs:
           SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}
           RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
         run: |
-          python tools/ci/release_pipeline.py draft \
+          python build/ci/common/release_pipeline.py draft \
             --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --prerelease "$RELEASE_PRERELEASE" \
             --package-directory release-packages --output "$GITHUB_OUTPUT"
       - name: Show the draft for manual publication
@@ -103,5 +103,5 @@ jobs:
           SOURCE_COMMIT: ${{ steps.draft.outputs.commit }}
           RELEASE_URL: ${{ steps.draft.outputs.release_url }}
         run: |
-          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every configured app/platform archive and SHA-256 file is verified.\n- Review the notes and downloads, then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
+          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every fixed toolchain and configured game/platform archive and SHA-256 file is verified.\n- Review the notes and downloads, then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
             "$RELEASE_TAG" "$RELEASE_URL" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"

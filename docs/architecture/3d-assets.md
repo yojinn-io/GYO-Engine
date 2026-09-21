@@ -1,50 +1,34 @@
 # Object_FPS 3D assets
 
-Object_FPS keeps complete vendor sources and a small set of runtime assets. The
-game still uses sprites for enemies; the new character definitions provide a
-loadable 3D presentation boundary, not a replacement enemy controller or scene.
+Object_FPS owns prepared runtime models and game-specific presentation definitions. Complete vendor archives and working DCC projects are kept outside `apps/` and runtime asset roots. They are manual authoring inputs, not game build or release dependencies. This workstation keeps the historical Object_FPS archive under `D:/common/3DModel/temp/gyo-engine/object_fps/art_source`; that local path is not required by another checkout. The game still uses enemy sprites; the 3D character definitions provide a loadable presentation boundary rather than a replacement scene/controller.
 
-For a new app or independent copy, follow the [manual app guide](../creating_apps.md).
-Copy private runtime content to `assets/<new_name>` and use the app's generated
-`Gyo::AppConfig::Assets` path. Existing catalog AssetIds and animation/material
-references are internal data contracts; they do not need a global rename when
-the deployment identity changes. Keep `assets/common` shared unless a resource
-is deliberately moved into the copy's private content.
+For an independent variant, copy game code and runtime content following the [manual game guide](../creating_apps.md). Existing AssetIds, clip names and animation/material references remain internal data contracts. Deployment identity changes do not require global renaming.
 
 ## Directories and responsibility
 
 ```text
+external authoring storage/            complete vendor archives and DCC work
 apps/object_fps/
-  art_source/
-    vendor/<pack>/...                 complete original inner directory trees
-    source_inventory.json            paths, hashes, contents and decisions
-  tools/inventory_3d_sources.py       offline archive/identity/metadata utility
-  include/RetroFPS/App/               game-specific presentation definitions
-  src/App/                           definition loading and viewmodel assembly
+  include/RetroFPS/App/                game presentation definition contracts
+  src/App/                            definitions and viewmodel assembly
 assets/object_fps/
+  content.json                        catalogs and shader assembly declaration
   asset_catalog.json
-  characters/superhero_male/          FullBody FBX, character.json, textures/
-  characters/superhero_female/        FullBody FBX, character.json, textures/
-  animations/ual_mannequin/           UAL1_Standard.fbx + its mannequin definition
-                                     + locomotion.animset.json
-  weapons/ultimate_pistol_1/world/    static Pistol_1.fbx
-  weapons/animated_pistol/viewmodel/  Pistol.fbx + viewmodel.animset.json
-  weapons/mark23/viewmodel/           Mark23.fbx, textures/, mark23_viewmodel.json
-                                     + viewmodel.animset.json
+  characters/superhero_male/           FBX, character.json, textures/
+  characters/superhero_female/         FBX, character.json, textures/
+  animations/ual_mannequin/            model and animation-set definitions
+  weapons/ultimate_pistol_1/world/     static Pistol_1.fbx
+  weapons/animated_pistol/viewmodel/   Pistol.fbx and viewmodel.animset.json
+  weapons/mark23/viewmodel/            FBX, textures and presentation definitions
+  textures/common/white1x1.png         game-owned reusable texture copy
+  shaders/source/                     game shader source inputs
+engine/model/                         neutral model/animation and FBX adapter
+engine/render/shaders/pipeline/       offline compiler
 ```
 
-Dedicated textures stay beside their character or weapon. The two small eye
-texture copies intentionally stay local to their character packages. Nothing is
-promoted into `shared/` merely because it might eventually be shared. Existing
-2D enemy, world, UI, font and map assets keep their locations. The FBX files are
-copied without conversion; meshes, nodes, skin bindings and clips remain in the
-original container. World weapons and first-person viewmodels are separate.
+Dedicated textures stay beside their character or weapon. Small duplicated eye textures intentionally remain character-local. FBX files are copied without conversion; meshes, nodes, skins and clips stay in their original container. World weapons and first-person viewmodels remain separate assets.
 
-`apps/object_fps/CMakeLists.txt` stages and installs `assets/object_fps` and
-`assets/common`; it does not stage the app's source directory. Therefore
-`art_source` is outside both runtime asset roots. Do not extend staging to the
-entire application directory. The local `art_source/.gitignore` allows vendor
-Wavefront `.obj` models despite the repository's compiler-object ignore rule.
+Authors prepare runtime copies and catalog entries manually. The generic build hook then invokes asset assembly from `content.json` for both local and CI builds. Game CMake does not select files or implement copy/install rules. The assembled product reads only `build/target/object_fps/bin/assets/object_fps`, including compiled `shaders/builtin` and `shaders/game`; it never falls back to source art or mounts a separate `assets/common` directory. `common.texture.white` remains a logical ID in the game's own catalog.
 
 ## Asset IDs and definitions
 
@@ -154,12 +138,12 @@ come from `animation_set_asset_id`. Legacy inline `clips` is accepted for old
 definitions, but a definition must choose exactly one of those two forms. The
 existing Mark23 texture bindings retain white tint.
 
-## Inventory, skeleton limits and source-only material
+## Historical source inventory and current model limits
 
-The archive contains **511 files / 1,076,255,418 bytes**, including 189 FBX,
+The historical 2026-09-20 source inventory recorded **511 files / 1,076,255,418 bytes**, including 189 FBX,
 72 Blender files, 10 Blender backups, 61 OBJ/MTL pairs, 18 glTF/BIN pairs,
 5 GLB, 66 PNG and the supplied references, readmes and licenses. Each entry in
-`apps/object_fps/art_source/source_inventory.json` records the original absolute
+The historical inventory at `apps/object_fps/art_source/source_inventory.json` recorded the original absolute
 path, repository-relative archive path, bytes, SHA-256, runtime copies and
 source-only reason. Runtime mappings also identify their catalog IDs and types.
 Binary FBX entries include mesh/bone/material/clip metadata and material templates,
@@ -224,58 +208,21 @@ documents, not a replacement license or a claim about unprovided terms.
 
 ## Adding and verifying assets
 
-1. Keep the complete incoming pack under `apps/object_fps/art_source/vendor` with
-   its license and original inner paths. Record hashes, actual materials/clips,
-   source bindings and source-only reasons. Keep working DCC projects outside
-   runtime roots; do not create empty directories or placeholder assets.
-2. Choose only runtime-needed files and place them by ownership. For a character,
-   put its FBX and dedicated PNGs under `characters/<name>/`; register one Model
-   ID and each texture ID in `asset_catalog.json`. Preserve the source container.
-3. Add a text `character.json` with `model_asset_id` and optional overrides keyed
-   by the actual imported material slots. For a reference-pose-only model, omit
-   the AnimationSet field. Load it with `LoadCharacterPresentationDefinition`.
-4. For an additional UAL1 semantic, add a selector to
-   `animations/ual_mannequin/locomotion.animset.json`, using an exact clip name
-   from the inventory and the existing canonical model ID. To create a different
-   animation library, keep its own mannequin/rig and use same-file assembly
-   until explicit cross-file binding is available.
-5. For a first-person weapon, keep the gun, any supplied arms and matching clips
-   under `weapons/<name>/viewmodel/`. Use a separate `world/` asset when needed.
-   The current WeaponViewModel requires the established five actions and anchor/
-   muzzle definition; Animated Pistol's three-action set is loadable inventory
-   content, not a drop-in Mark23 gameplay replacement.
-6. Validate through AssetManager/ufbx before admitting the model as usable:
-   reference pose, material slots, exact clips, finite CPU skinning, constant
-   material fallback, missing-reference diagnostics, independent poses at two
-   times and unchanged shared material defaults. A failed model stays source-only
-   with its error recorded. Avoid widening the importer merely to fit the pack.
+1. Keep original archives and licenses in external authoring storage. Record source paths/hashes and selection decisions there; do not copy complete packs into the game project.
+2. Prepare only the runtime FBX/textures required by the game. Preserve the original FBX container, put character/world/viewmodel variants in their respective asset directories, and register each runtime file in `asset_catalog.json`.
+3. Add game definition JSON with `model_asset_id`, optional material overrides and animation-set IDs. Select exact source clip names and retain the same-source ownership checks described above.
+4. Keep `content.json` as the asset assembly declaration. A normal local build automatically prepares the same executable-relative asset tree used by CI.
+5. Enable game tests separately. Model/definition tests live under `tests/object_fps`, and diagnostics use `gyo_object_fps_acceptance`; no test source is injected into the game executable.
 
-To verify the original archive and runtime copies (without rewriting files):
-
-```powershell
-python apps/object_fps/tools/inventory_3d_sources.py --source-root D:\common\3DModel\temp
-```
-
-The initial copy used the same command with `--copy --output
-apps/object_fps/art_source/source_inventory.json`. `--copy` refuses existing
-files with different hashes. The utility's raw metadata inspection does not
-certify engine loading or rendering.
-
-Enable `object_fps` and the target platform in `config/engine/projects.csv`, then
-use the generic preset with an explicit app selection so asset verification
-cannot silently configure another app:
-
-```powershell
-cmake --preset test -DGYO_APPS=object_fps
+```sh
+cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
 cmake --build --preset test
 ctest --preset test
 ```
 
-The required regression coverage includes Mark23 ViewModel/reload/muzzle GPU
-smokes and a staging/install inspection confirming every catalog path exists
-while `art_source` is absent. Build/GPU outcomes are recorded in the task's
-implementation report; commands listed here are instructions, not claims that
-every environment has already passed them.
+First enable the game and intended platforms in `engine/config/projects.csv`. Test generated content from the assembled product, including missing-file failures; runtime loading must work without any source art or checkout path. GPU appearance checks are separate from model import and definition tests. See [Object_FPS acceptance](../object_fps/acceptance.zh-Hant.md).
+
+The following dated evidence is preserved exactly as historical context. Its paths, executable switches and ownership describe the old tree; they are not current commands or proof that this refactor passed.
 
 ### Historical verified implementation (2026-09-20, Windows)
 

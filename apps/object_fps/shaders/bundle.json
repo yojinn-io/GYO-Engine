@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "include_directory": "../../../render/shaders/common",
-  "programs": [
-    {"id": "game/object_fps/channel_swap", "interface": "unlit", "vertex": "../../../render/shaders/builtin/unlit.vert.hlsl", "vertex_entrypoint": "main", "fragment": "channel_swap.frag.hlsl", "fragment_entrypoint": "main"}
-  ]
-}

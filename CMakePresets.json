@@ -10,7 +10,7 @@
       "name": "base",
       "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "binaryDir": "${sourceDir}/build/target/_build/${presetName}",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -21,10 +21,10 @@
     },
     {
       "name": "dev",
-      "displayName": "CSV-selected applications and UI editor",
+      "displayName": "CSV-selected game products",
       "inherits": "base",
       "cacheVariables": {
-        "GYO_BUILD_UI_EDITOR": "ON",
+        "GYO_BUILD_UI_EDITOR": "OFF",
         "GYO_RENDER_DEVICE": "AUTO",
         "GYO_GPU_DRIVER": "AUTO",
         "GYO_SHADER_BUNDLE": "AUTO"
@@ -32,10 +32,12 @@
     },
     {
       "name": "test",
-      "displayName": "Applications and quality checks",
+      "displayName": "Engine, selected games and UI editor quality checks",
       "inherits": "dev",
       "cacheVariables": {
-        "BUILD_TESTING": "ON"
+        "BUILD_TESTING": "ON",
+        "GYO_TEST_PROFILE": "full",
+        "GYO_BUILD_UI_EDITOR": "ON"
       }
     },
     {
@@ -50,7 +52,8 @@
         "GYO_BUILD_SDL_TTF_ADAPTER": "OFF",
         "GYO_BUILD_UFBX_LOADER": "OFF",
         "GYO_RENDER_DEVICE": "NONE",
-        "GYO_APPS": ""
+        "GYO_APPS": "",
+        "GYO_TEST_PROFILE": "core"
       }
     },
     {

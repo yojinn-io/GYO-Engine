@@ -43,7 +43,7 @@ flowchart TD
     G --> H
 ```
 
-工具使用固定版本的 DXC、SDL_shadercross、SPIRV-Cross；版本與校驗碼位於 `tools/shader_pipeline/cmake/Dependencies.cmake`。Windows／Linux 使用固定 DXC 發行包，macOS 原生建置固定 DXC 原始碼，再透過所選 Xcode 的工具產生 Metallib。MSL 是建置中間產物，不能把產出 MSL 誤記為已完成 Metal GPU 驗證。
+工具使用固定版本的 DXC、SDL_shadercross、SPIRV-Cross；版本與校驗碼位於 `engine/render/shaders/pipeline/cmake/Dependencies.cmake`。Windows／Linux 使用固定 DXC 發行包，macOS 原生建置固定 DXC 原始碼，再透過所選 Xcode 的工具產生 Metallib。MSL 是建置中間產物，不能把產出 MSL 誤記為已完成 Metal GPU 驗證。
 
 Shader 工具屬於建置主機（host），遊戲屬於執行目標（target）。原生建置會在 build tree 的 `host-tools` 建置工具；交叉編譯必須提供可在主機執行的 `GYO_SHADER_TOOL_EXECUTABLE`。下載、工具、中間碼與 bundle 都留在 build tree。已部署遊戲不需要 DXC、shadercross 或 Xcode。
 
@@ -87,7 +87,7 @@ flowchart TD
 | 場景後處理 uniform | exposure 與 gamma 位於一個 float4，共 16 bytes，fragment 邏輯 uniform 槽 0 |
 | 顏色 | 線性 RGB 運算，顏色貼圖使用 sRGB 解碼；最後由 sRGB render target 做顯示轉換 |
 
-`render/shaders/common/RasterAbi.hlsli` 是共用 HLSL 宣告。編譯工具以反射資料檢查已支援介面的資源數量與 uniform 大小，再把契約與格式資料寫入 manifest。版本不符、缺少程式、格式不完整、重複 ID 或非法路徑都應明確失敗，不能默默改用別的 shader。
+`engine/render/shaders/common/RasterAbi.hlsli` 是共用 HLSL 宣告。編譯工具以反射資料檢查已支援介面的資源數量與 uniform 大小，再把契約與格式資料寫入 manifest。版本不符、缺少程式、格式不完整、重複 ID 或非法路徑都應明確失敗，不能默默改用別的 shader。
 
 共用宣告使用邏輯資源巨集，不在公開 ABI 寫死 SDL register／descriptor 規則。工具的 SDL_GPU profile 注入實際映射：vertex uniform 為 `b0/space1`，fragment texture／sampler 為 `t0/space2`／`s0/space2`，fragment uniform 為 `b0/space3`；再處理 SPIR-V／Metal 的對應。更換裝置 adapter 時，物理綁定是工具與 adapter 的責任。
 
@@ -102,20 +102,20 @@ flowchart TD
 | `builtin/scene_post` | GYO Render | 場景曝光與 gamma |
 | `game/object_fps/channel_swap` | Object_FPS | 使用同一 `unlit` 契約的自訂 shader 驗證樣本 |
 
-內建來源位於 `render/shaders/builtin/`，遊戲來源位於 `apps/object_fps/shaders/`。各自有 `bundle.json` 建置規格和獨立 runtime bundle。遊戲增加 shader ID 不需要把遊戲名稱或檔案路徑放進 GYO 後端。
+內建來源位於 `engine/render/shaders/builtin/`，遊戲來源位於 `assets/object_fps/shaders/source/`。各自有 `bundle.json` 建置規格和獨立 runtime bundle。遊戲增加 shader ID 不需要把遊戲名稱或檔案路徑放進 GYO 後端。
 
 `MaterialDesc` 按 shader ID 指定程式，並提供 texture、tint 與 sampler；shader ID 不是 C++ 函式指標，也不授權 shader 改變遊戲狀態。資料設定只能選擇引擎已支援的介面能力。
 
-例如 `apps/object_fps/shaders/bundle.json` 明確指定各階段入口；省略時預設 `main`：
+例如 `assets/object_fps/shaders/source/bundle.json` 明確指定各階段入口；省略時預設 `main`：
 
 ```json
 {
   "version": 1,
-  "include_directory": "../../../render/shaders/common",
+  "include_directory": "../../../../engine/render/shaders/common",
   "programs": [{
     "id": "game/object_fps/channel_swap",
     "interface": "unlit",
-    "vertex": "../../../render/shaders/builtin/unlit.vert.hlsl",
+    "vertex": "../../../../engine/render/shaders/builtin/unlit.vert.hlsl",
     "vertex_entrypoint": "main",
     "fragment": "channel_swap.frag.hlsl",
     "fragment_entrypoint": "main"
@@ -125,7 +125,7 @@ flowchart TD
 
 原始 HLSL 入口名稱與產物入口不一定相同；例如轉成 MSL 後可能改名。工具把產物的真實入口寫入 runtime manifest，Renderer/device 讀取該值。
 
-App target 與內容註冊方式見[手動建立 app 指南](creating_apps.md)。`gyo_app_deploy_content` 將 app shader 產生於 `<build>/apps/<name>/shaders`，再部署到執行檔相對的 `shaders/<name>` 與安裝區的 `bin/shaders/<name>`。執行檔輸出在 app binary directory 的 `bin`（多配置 generator 另有配置子目錄）；內建 shader 仍在 `<build>/shaders/builtin` 產生。App 透過私有 `Gyo::AppConfig::Shaders`／`BuiltinShaders` 取得路徑，不埋入來源根目錄或原 app 名稱。手動複製時保留內部 shader ID 與 ABI，獨立 shader 原始碼與 bundle 使用新部署位置，不進行全域字串取代。
+遊戲的 `assets/<name>/content.json` 宣告 catalog 與 shader bundles；CMake 透過共通 hook 自動呼叫資產組裝與離線編譯。組裝結果位於 `build/target/<name>/bin/assets/<name>/`，包含 `shaders/builtin` 與 `shaders/game`。Runtime 只讀取這一個資產根，部署 manifest 不含 build-only source 路徑，也不回退至 checkout。手動複製遊戲時保留內部 shader ID 與 ABI，見[建立遊戲](creating_apps.md)。
 
 <a id="r06"></a>
 ## 6. 一幀與資源生命週期
@@ -147,97 +147,46 @@ Overlay / HUD → Present
 動畫每幀更新固定大小的頂點內容，保留 mesh handle 與 index topology。診斷讀回只在明確請求時等待 GPU，日常呈現不進行這種同步。Scene capture 是曝光／gamma／Overlay 之前的場景資料，並非最終螢幕截圖。
 
 <a id="r07"></a>
-## 7. CMake 自動選擇與明確覆寫
+## 7. 建置選擇
 
-專案選取來自 `config/engine/projects.csv` 的 `enabled` 與目標平台欄位。`GYO_APPS=AUTO` 使用此集合，空值不建 apps，名稱或分號清單只能縮小集合，不能繞過停用設定。需求由各 app 的 `CMakeLists.txt` 宣告，根建置先收集，再建立能力與 app targets；詳見[建置設計](architecture.md#build-project-management)。選到需要 GPU 的 app 時，`GYO_RENDER_DEVICE=NONE` 是配置錯誤。
+`engine/config/projects.csv` 的 enabled 與平台欄位決定遊戲集合；`GYO_APPS=AUTO` 使用全部選中遊戲，空值不建遊戲，明確清單只能選擇符合 CSV 的子集。各產品 `project.json` 宣告 optional components，根建置先收集需求再建立同一份 engine graph。遊戲 CMake 不再執行 discovery pass 或維護資產規則。
 
-| 設定 | 值 | 意義 |
-|---|---|---|
-| `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE` | 選擇 device 實作；`NONE` 用於無 GPU 的建置 |
-| `GYO_GPU_DRIVER` | `AUTO`／`D3D12`／`VULKAN`／`METAL` | 部署程式的預設驅動政策 |
-| `GYO_SHADER_BUNDLE` | `AUTO` 或格式清單 | 建置並部署哪些 shader 格式，例如 `"DXIL;SPIRV"` |
-| `GYO_SHADER_TOOL_EXECUTABLE` | host executable 的絕對路徑 | 覆寫原生 shader 工具，供交叉編譯等情況使用 |
+| 設定 | 值與用途 |
+|---|---|
+| `GYO_RENDER_DEVICE` | `AUTO`／`SDL_GPU`／`NONE`；選中必要 GPU 遊戲時不能用 `NONE` |
+| `GYO_GPU_DRIVER` | `AUTO`／`D3D12`／`VULKAN`／`METAL`；產品的預設 driver |
+| `GYO_SHADER_BUNDLE` | `AUTO` 或格式清單，如 `DXIL;SPIRV` |
+| `GYO_SHADER_TOOL_EXECUTABLE` | 已建置、可在 host 執行的 compiler 絕對路徑 |
 
-| 目標平台 | `AUTO` 的 shader bundle | 可用驅動 |
-|---|---|---|
-| Windows | DXIL＋SPIR-V | D3D12、Vulkan |
-| Linux | SPIR-V | Vulkan |
-| macOS | Metallib | Metal |
-
-CMake 使用 `CMAKE_SYSTEM_NAME` 判斷**目標**平台；preset 的 `hostSystemName` 條件只用來限制 CI 原生建置入口。執行時 `--gpu-driver d3d12|vulkan|metal` 可明確覆寫驅動。AUTO 依可提供的完整 shader 格式與 SDL_GPU 可用驅動選擇；強制指定不可用的驅動必須失敗，不以另一個驅動掩蓋問題。
-
-Windows 的 AUTO bundle 同時包含 DXIL／SPIR-V，因此可以驗證兩種驅動。僅包 DXIL 就不能退回 Vulkan。錯誤的平台／驅動／格式組合會在配置或啟動時被拒絕；CMake 無法預先保證玩家 GPU 與驅動可用。
+Windows AUTO 產生 DXIL 與 SPIR-V；Linux 產生 SPIR-V；macOS 產生 Metallib。Metallib 需要原生 macOS 與 Apple Metal tools；部署最低版本與 app 一致。Host compiler 與 target compiler 保持分離。
 
 ```sh
-# 原生建置：Windows 需先進入 x64 MSVC 開發環境；另需 Ninja。
-cmake --preset dev
-cmake --build --preset dev
-cmake --install build/dev --prefix /absolute/path/to/stage
-
-# 品質檢查另行啟用；普通 dev 只建置產品。
-cmake --preset test
-cmake --build --preset test
-ctest --preset test
-
-# 無遊戲、無 SDL adapter、無 FBX adapter 的核心建置
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --build --preset dev --target gyo_object_fps
 cmake --preset core
 cmake --build --preset core
 ctest --preset core
 ```
 
-`test` test preset 只執行 `cpu|shader` 標籤；GPU 測試需在具有可用顯示與 GPU 的環境另行執行。`ci-windows`、`ci-linux`、`ci-macos` 明確固定 CI 的編譯器／架構入口。
-
-CLion 可沿用現有 MSVC CMake profile，執行 **Reload CMake Project**，再選擇並執行 CSV 已啟用的 `gyo_<name>` target。原生 shader 工具的子建置沿用該 profile 選定的編譯器與 Ninja 路徑；不必為了散佈 DLL 的偵測重建 IDE profile。
-
-macOS CI 套件的 deployment target 維持 **13.3**，遊戲與 Metallib 使用相同值。最低執行系統版本與 SDK 是否提供某個 API 是兩項獨立條件：Xcode 16.4 實際沒有浮點 `std::from_chars` overload，因此 CSV 改用明確的十進位／指數語法檢查，再以 `std::locale::classic()` 解析為 float。解析保留有限值、範圍、非零值下溢與完整字串檢查，並涵蓋可表示的次正規數；系統語系不改變資料中的小數點。
-
-Ubuntu 需安裝 `libxtst-dev`，供 SDL 預設啟用的 XTest 偵測使用；CI 以 `pkg-config --modversion xtst` 確認套件。離線 shader 工具的 SDL 同時停用 video 與 dialog，避免 macOS 靜態連結引用未編入的 Cocoa 視窗符號。遊戲的 SDL 設定獨立於 host 工具。[SDL Linux 相依套件](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
-
-離線 host 工具還明確設定 `SDL_UNIX_CONSOLE_BUILD=ON`。它刻意不使用 X11／Wayland video，必須告知 SDL 這是 console build，否則 Linux configure 會將缺少視訊後端視為錯誤。此設定只作用於 shader host 的 SDL；遊戲仍建置自己的圖形後端。
+Build cache 位於 `build/target/_build/<preset>`；可執行遊戲在 `build/target/<game>/bin`。舊 cache 不搬移或覆寫。預先準備 runtime 資產與 catalog 是作者工作，之後本機／CI build 都自動組裝內容與編譯 shader。
 
 <a id="r08"></a>
-## 8. App 隔離部署與套件契約
+## 8. 產品與部署
 
-普通產品 build／install 預設 `BUILD_TESTING=OFF`、`GYO_ENABLE_PACKAGING=OFF`，即使測試、CI、驗收檔案不存在也須成立。以下契約屬於明確啟用的部署驗收；CI 將所需軸設為 ON，由外部 `tests/Tests.cmake`、`packaging/Package.cmake` 使用產品 targets。產品 CMake 不 include 這些檔案，普通 install 不需要 package manifest 或 Python validator。Shader bundle 的 runtime manifest 是渲染資料，仍屬產品內容。
+引擎靜態連結進遊戲與工具。各遊戲獨立擁有 `bin/assets/<game>`，包含所需 builtin shader，不依賴 `assets/common` 或包外 shader 目錄。Native runtime libraries 由共通產品部署處理。
 
-每個 app × 平台 CI job 使用獨立建置目錄，只選該 app 並關閉 Editor。app 自己維護 executable、內容、shader、安裝與額外驗收；共用部署處理其實際需要的動態庫、RPATH 與 MSVC CRT。
+Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 product/kind、executables、必要檔案與檢查。Game archive 為 `gyo-<game>-<platform>.tar.gz`，toolchain archive 為 `gyo-toolchain-<platform>.tar.gz`；各自只有一個對應根目錄。遊戲包不含 UI editor、CI scripts、tests 或 diagnostic executable。
 
-```text
-stage/
-├─ bin/<app executable> + app-owned content + Windows DLLs
-├─ lib/                         Linux/macOS non-system libraries
-└─ share/gyo/apps/<name>/manifest.json  (GYO_ENABLE_PACKAGING=ON)
-```
-
-`GYO_ENABLE_PACKAGING=ON` 時 CMake 在建置目錄生成 package manifest，app 不必人工維護另一份清單。它包含必要檔案、強制的安裝後 startup 命令，以及依 quick／release、平台與 GPU 需求選取的額外驗收。共用 runner 從安裝包以外的工作目錄執行；失敗、逾時或缺少必要證據都阻擋產包。資產與 shader 相對 executable 定位，不以來源目錄掩蓋缺檔。Object_FPS 的內容負向與玩法檢查見[app 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。
-
-每個選中組合輸出 `gyo-<name>-<platform>.tar.gz` 與 `.tar.gz.sha256`，archive 根為 `gyo-<name>`。Tar 保留 Unix 執行權限。這是原生驗收套件，不含 macOS 簽章／公證或跨 Linux 發行版相容性承諾；目標系統仍提供圖形驅動與系統庫。封裝記錄 app、目標平台、來源 SHA、profile 及驗收證據。Release 從同一 commit 的 CSV 重建預期集合並核對完整證據，quick 或普通本機包不能冒充 release。
-
-Windows Release／RelWithDebInfo 的 `cmake/GyoMsvcRuntime.cmake` 依選定編譯器找對應可散佈 DLL，放在 `bin/`。`GYO_MSVC_REDIST_DIR` 可指定根目錄；缺少 DLL 不阻擋開發配置／編譯，但 release install 明確失敗。不散佈 Debug CRT，Windows 10+ 提供 UCRT。使用者不需要 Visual Studio、shader 編譯器或 SDK。
-
-CI 使用 `dumpbin` 檢查 Windows VC runtime 引用，`ldd` 檢查 Linux 套件庫解析，`otool` 檢查 macOS install name／RPATH。工具只屬於建置機；Windows 本機驗收可用 `--dumpbin /absolute/path/to/dumpbin.exe` 指定位置。
+`build/acceptance/<game>` 產生獨立 acceptance executable；`build/acceptance/common` 與 project 專屬 adapter 從產品外部執行檢查。測試暫存副本可把 probe 放在 executable 旁，使其使用完全相同的相對資產路徑；probe 不會加入正式 archive。
 
 <a id="r09"></a>
-## 9. 通用 CI、Release 與 app 驗收
+## 9. Engine 整合與驗收
 
-三平台固定建置並測試引擎與 UI editor。固定來源 SHA 的 CSV 另生成 app × 已啟用平台矩陣，沿用 Windows x64／MSVC、Linux x64／GCC 14、macOS ARM64／Xcode 16.4；每個 app job 只有自己的套件，Editor 不隨 app 發行。
+每個支援平台固定建置 engine＋GUI UI editor toolchain，再加入 CSV 選中的 games。沒有遊戲仍有 toolchain 產物，可以成功 Prepare Release；任何必要產品或平台失敗、取消或跳過，都不能準備 Draft。沒有 Engine SDK 或 source archive。
 
-```text
-固定來源 SHA → CMake 解析 CSV → 三平台引擎／Editor baseline
-                              → app × 平台獨立建置／安裝
-                              → manifest 的 quick／release 驗收
-                              → archive + SHA-256 + Actions artifacts
-全部必要檢查成功 → Prepare Release 建立 tag／Draft／預期附件
-                → 使用者 Publish release（不重建）
-```
+Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度由外部 contract 決定。Linux toolchain job 固定使用 Xvfb／Lavapipe 驗證共通引擎 GPU 渲染，沒有 app 時也執行；遊戲 job 另執行 contract 宣告的 GPU checks。這是軟體 Vulkan 證據，不是實體 GPU 驗證。Windows/macOS hosted 結果也不能取代實機測試。
 
-沒有 app 的平台仍測試引擎與工具，不產包；全部停用的一般 CI 仍可成功，Prepare Release 前置檢查則拒絕空產物。無 GPU／shader 需求的 app 不執行對應步驟。必要 GPU 驗收缺少驅動、失敗或逾時會失敗，不能以跳過冒充成功。
-
-`cross-platform.yml` 的 push／PR／手動執行使用 quick；`prepare-release.yml` 使用完整 release。兩者共用 `build-and-validate.yml` 並傳入固定 SHA。Release 驗證 app、平台、SHA、profile、必要檔案與完整證據，拒絕缺包、多包或 quick 證據。相同版本 Draft 重試保留已驗證附件及手寫說明；tag 必須指向相同 commit，已公開版本不可覆寫。推 tag 或 Publish release 不重新建置。操作與恢復見[發佈指南](releasing.zh-Hant.md)。
-
-Object_FPS 的 startup／gameplay／缺檔與 Linux quick 一項、release 八項 GPU 驗收由 app 自己註冊；命令、套件內容及完整實機程序已移至[Object_FPS 驗收指南](../apps/object_fps/docs/acceptance.zh-Hant.md)。共享 runner 不保存這些遊戲專屬規則。Windows／macOS hosted runner 不宣稱實體 GPU 通過，Linux Lavapipe 是軟體 Vulkan。各 app 的硬體與互動驗收須另有實機證據。
-
-三平台日常 baseline 也檢查 project helper 契約。Windows release baseline 另在獨立 scratch tree 建立真實 app 複本，與原 app 同時建置／測試，再分別安裝，驗證 asset／shader／manifest 隔離。這是 [app_copy_integration.py](../tools/ci/tests/app_copy_integration.py) 回歸測試，不是建立 app 的工具；臨時 app 的 archive 不成為 Release 附件。
+Object_FPS 的 startup/headless/GPU probe 位於獨立 `gyo_<game>_acceptance`，不注入遊戲 `main`。遊戲執行檔保留正常遊戲操作與 `--gpu-driver`；診斷、截圖、互動 viewmodel preview 由外部 tests／design tool 擁有。詳見 [Object_FPS 驗收](object_fps/acceptance.zh-Hant.md)及[版本發佈](releasing.zh-Hant.md)。
 
 <a id="r10"></a>
 ## 10. 驗證狀態、限制與參考

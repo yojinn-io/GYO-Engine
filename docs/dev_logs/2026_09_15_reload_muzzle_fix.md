@@ -1,5 +1,7 @@
 # 2026-09-15：換彈局部抽動與貼牆吞彈修復
 
+> Historical record: this document preserves the implementation, commands and results from its original date. Paths and ownership may predate the current architecture; use [the current architecture](../architecture.md) and [build guide](../creating_apps.md) for present instructions. These results do not validate later revisions.
+
 ## 換彈局部抽動
 
 症狀是每次換彈都在短暫區段出現手指、手腕或彈匣抽動。

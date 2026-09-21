@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "include_directory": "../../../../engine/render/shaders/common",
+  "programs": [
+    {
+      "id": "game/test/channel_swap",
+      "interface": "unlit",
+      "vertex": "../../../../engine/render/shaders/builtin/unlit.vert.hlsl",
+      "fragment": "channel_swap.frag.hlsl"
+    }
+  ]
+}

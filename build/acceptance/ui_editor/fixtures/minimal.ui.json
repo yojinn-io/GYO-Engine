@@ -1,0 +1,29 @@
+{
+  "schema": "gyo.ui",
+  "version": 1,
+  "design_canvas": {
+    "size": [
+      1280.0,
+      720.0
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "default": "font.default"
+  },
+  "default_font": "default",
+  "colors": {
+    "transparent": "#00000000",
+    "white": "#FFFFFFFF"
+  },
+  "actions": [],
+  "bindings": [],
+  "canvases": [
+    {
+      "id": "main",
+      "backdrop_color": "transparent",
+      "focus_order": [],
+      "children": []
+    }
+  ]
+}

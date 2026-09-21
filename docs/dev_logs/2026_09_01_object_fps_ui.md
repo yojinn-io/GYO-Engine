@@ -1,5 +1,7 @@
 # 為何以 Object_FPS 建立 GYO Text 與可見 UI 閉環
 
+> Historical record: this document preserves the implementation, commands and results from its original date. Paths and ownership may predate the current architecture; use [the current architecture](../architecture.md) and [build guide](../creating_apps.md) for present instructions. These results do not validate later revisions.
+
 ## 這次修改要回答的問題
 
 Object_FPS 已經能進入遊戲並呈現世界，但普通啟動時缺少可見選單。這暴露的不是「少幾個畫面」而已，而是一個責任問題：文字究竟應由 GYO、SDL_ttf、Render backend，還是遊戲自己負責？

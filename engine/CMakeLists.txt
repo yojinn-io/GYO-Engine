@@ -3,50 +3,54 @@ add_library(GYO::Engine ALIAS engine)
 target_compile_features(engine PUBLIC cxx_std_20)
 
 target_include_directories(engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/base/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/asset/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/include
 )
 
 target_sources(engine
     PRIVATE
     # runtime
-    src/runtime/RuntimeLoop.cpp
+    runtime/src/RuntimeLoop.cpp
 
     # base
     # io/fs
-    src/io/fs/DirectoryIterator.cpp
-    src/io/fs/MountTable.cpp
-    src/io/fs/Vfs.cpp
+    io/src/fs/DirectoryIterator.cpp
+    io/src/fs/MountTable.cpp
+    io/src/fs/Vfs.cpp
     # io/helpers
-    src/io/helpers/ReadAllBytes.cpp
-    src/io/helpers/ReadAllText.cpp
-    src/io/helpers/WriteAllBytes.cpp
-    src/io/helpers/WriteAllText.cpp
+    io/src/helpers/ReadAllBytes.cpp
+    io/src/helpers/ReadAllText.cpp
+    io/src/helpers/WriteAllBytes.cpp
+    io/src/helpers/WriteAllText.cpp
     # io/path
-    src/io/path/PathUtils.cpp
-    src/io/path/Uri.cpp
+    io/src/path/PathUtils.cpp
+    io/src/path/Uri.cpp
     # io/stream
-    src/io/stream/MemoryStream.cpp
-    src/io/stream/SpanStream.cpp
-    src/io/stream/BufferedStream.cpp
-    src/io/stream/StreamReader.cpp
-    src/io/stream/StreamWriter.cpp
+    io/src/stream/MemoryStream.cpp
+    io/src/stream/SpanStream.cpp
+    io/src/stream/BufferedStream.cpp
+    io/src/stream/StreamReader.cpp
+    io/src/stream/StreamWriter.cpp
 
     # asset/catalog
-    src/asset/catalog/CatalogParser.cpp
+    asset/src/catalog/CatalogParser.cpp
     # asset/loaders
-    src/asset/loaders/BinaryLoader.cpp
-    src/asset/loaders/FontLoader.cpp
-    src/asset/loaders/SoundLoader.cpp
-    src/asset/loaders/TextLoader.cpp
-    src/asset/loaders/TextureLoader.cpp
+    asset/src/loaders/BinaryLoader.cpp
+    asset/src/loaders/FontLoader.cpp
+    asset/src/loaders/SoundLoader.cpp
+    asset/src/loaders/TextLoader.cpp
+    asset/src/loaders/TextureLoader.cpp
     # asset/
-    src/asset/AssetCatalog.cpp
-    src/asset/AssetManager.cpp
-    src/asset/AssetPathResolver.cpp
-    src/asset/AssetPipeline.cpp
-    src/asset/AssetWatcher.cpp
-    src/asset/LoaderRegistry.cpp
-    src/asset/NativeFileAssetSource.cpp
+    asset/src/ContentManifest.cpp
+    asset/src/AssetCatalog.cpp
+    asset/src/AssetManager.cpp
+    asset/src/AssetPathResolver.cpp
+    asset/src/AssetPipeline.cpp
+    asset/src/AssetWatcher.cpp
+    asset/src/LoaderRegistry.cpp
+    asset/src/NativeFileAssetSource.cpp
 )
 target_link_libraries(engine PRIVATE
     nlohmann_json::nlohmann_json
@@ -56,7 +60,7 @@ target_link_libraries(engine PRIVATE
 # backend-neutral and continues to configure without SDL or SDL_image.
 if(TARGET SDL3_image::SDL3_image)
     add_library(gyo_asset_sdl_image STATIC
-        src/asset/loaders/sdl_image/SdlImageTextureLoader.cpp
+        asset/src/loaders/sdl_image/SdlImageTextureLoader.cpp
     )
     add_library(GYO::AssetSdlImage ALIAS gyo_asset_sdl_image)
 
@@ -65,3 +69,13 @@ if(TARGET SDL3_image::SDL3_image)
         PRIVATE SDL3_image::SDL3_image SDL3::SDL3
     )
 endif()
+
+add_subdirectory(model)
+add_subdirectory(collision)
+add_subdirectory(text)
+if(GYO_ENABLE_SDL_PLATFORM)
+    add_subdirectory(platform)
+endif()
+add_subdirectory(input)
+add_subdirectory(render)
+add_subdirectory(ui)
