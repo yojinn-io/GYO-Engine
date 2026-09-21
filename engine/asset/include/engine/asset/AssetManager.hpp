@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <deque>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "engine/asset/AssetError.hpp"
@@ -66,8 +65,16 @@ namespace Engine::Asset {
         // ---- Public API ----
 
         // Load:
-        // - Sync: その場で読み込み、失敗なら Err(AssetError)
-        // - Async: キューへ積み、すぐ Ok(handle) を返す（後で Ready になる）
+        // Sync completes an existing compatible queued operation immediately.
+        // Async returns a reserved generation: Loading -> Ready or Failed.
+        // KeepOldIfAny failure keeps previous handles Ready; the async candidate
+        // is Failed. Sync fallback returns the previous Ready handle instead.
+        // Compatible queued requests merge. Conflicting requests return
+        // RequestInProgress. Nonzero priority/TTL return UnsupportedRequest.
+        // Auto may return the published Ready asset while a reload is pending.
+        // The most recent failed generation remains queryable until another
+        // failure or record eviction. New generations never wrap/reuse tokens;
+        // an exhausted ID returns GenerationExhausted when a new load is needed.
         Base::Result<AssetHandle, AssetError> Load(const AssetId& id, const AssetRequest& request);
 
         // 参照カウント（AssetStorage.refCount）操作
@@ -112,17 +119,16 @@ namespace Engine::Asset {
         void Unwatch(const AssetId& id);
 
     private:
-        struct PendingLoad final {
-            AssetId id;
-            AssetRequest req;
-            bool hadReadyAsset = false;
-        };
-
-    private:
-        // ---- internal helpers ----
         struct ResolvedEntry final {
             AssetType type{};
             std::string resolvedPath;
+        };
+
+        struct PendingLoad final {
+            AssetId id;
+            AssetRequest req;
+            ResolvedEntry entry;
+            std::uint32_t generation = 0;
         };
 
         // AssetCatalog から (type, resolvedPath) を引く
@@ -132,13 +138,11 @@ namespace Engine::Asset {
         Core::AssetRecord& GetOrCreateRecord_(const AssetId& id, const ResolvedEntry& e);
 
         // 実ロード（Sync）
-        Base::Result<void, AssetError> DoLoadSync_(Core::AssetRecord& rec,
-                                                   const ResolvedEntry& e,
-                                                   const AssetRequest& req,
-                                                   bool hadReadyAsset);
+        Base::Result<void, AssetError> CompleteLoad_(const PendingLoad& job);
 
         // Async キュー操作
-        void EnqueueLoad_(const AssetId& id, const AssetRequest& req);
+        static bool Compatible_(const PendingLoad& job, const ResolvedEntry& entry,
+                                const AssetRequest& request);
         void ProcessQueue_();
 
         // Hot reload
@@ -161,7 +165,6 @@ namespace Engine::Asset {
         std::uint64_t frame_ = 0;
 
         std::deque<PendingLoad> queue_;
-        std::unordered_set<AssetId> queued_; // 重複防止
     };
 
 } // namespace Engine::Asset

@@ -18,7 +18,6 @@ def missing_content(app: str) -> tuple[tuple[str, str], ...]:
     return (
         ("missing-common", f"bin/assets/{app}/textures/common/white1x1.png"),
         ("missing-builtin-shaders", f"bin/assets/{app}/shaders/builtin/manifest.json"),
-        ("missing-game-shaders", f"bin/assets/{app}/shaders/game/manifest.json"),
     )
 
 

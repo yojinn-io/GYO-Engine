@@ -41,6 +41,8 @@
 
 本機與 CI 共用產品組裝：`build/assemble_runtime.py` 依 `assets/<game>/content.json` 驗證並組裝準備好的資產，CMake generic hook 自動呼叫。離線 shader compiler 位於 `engine/render/shaders/pipeline`。普通遊戲只需要產品 build，不需要 CI/tests 或 package acceptance。
 
+組裝器與套件驗證共用 `build/content_contract.py`；C++ runtime 與 Editor 以同一組 fixtures 驗證原生解析器。Catalog 必須有整數 `version: 1`、合法 entry 與整個內容集合內唯一的 ID。不存在的資產目錄同步為空內容；目錄存在但描述檔缺失或無效則失敗，保留上次成功輸出。Object_FPS 僅部署實際使用的 builtin shaders，自訂 shader 驗證樣本屬於公共 GPU 測試。
+
 生成的 product manifest 位於 `share/gyo/products/<product>/manifest.json`。Schema 2 包含 product、kind、executables、required_files、runtime_dependencies、checks。共通 runner 位於 `build/acceptance/common/run_package_checks.py`，native linkage 檢查位於同目錄的 `validate_package.py`；遊戲特殊規則在 `build/acceptance/<game>`，不放在遊戲程式碼中。
 
 診斷 executable 從 `build/acceptance/<game>` 產生，位於 build tree 的 `acceptance/<game>/bin`。驗收 runner 可以在產品的臨時副本中放入 probe，讓它讀取同一份 executable-relative 資產；正式產品／archive 不含 probe 或 Python 驗收程式。遊戲 runtime 僅讀 `bin/assets/<game>`，內建與遊戲 shader 同樣位於此根下。

@@ -7,6 +7,7 @@ using Engine::Asset::Catalog::CatalogParser;
 TEST_CASE("CatalogParser: valid json") {
     CatalogParser p;
     const char* json = R"({
+      "version":1,
       "assets":[
         {"id":"ui.title","type":"text","path":"ui/title.txt"},
         {"id":"sfx.hit","type":"sound","path":"audio/hit.wav"}
@@ -31,7 +32,7 @@ TEST_CASE("CatalogParser: invalid schema") {
 
 TEST_CASE("CatalogParser: missing fields") {
     CatalogParser p;
-    const char* json = R"({ "assets":[ {"id":"a","type":"text"} ] })";
+    const char* json = R"({ "version":1,"assets":[ {"id":"a","type":"text"} ] })";
     auto r = p.Parse(json, "mem://catalog.json");
     CHECK(!r);
     CHECK(r.error().code == Engine::Asset::AssetErrorCode::InvalidCatalogEntry);

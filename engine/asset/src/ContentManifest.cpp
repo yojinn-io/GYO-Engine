@@ -16,11 +16,17 @@ bool IsRelativeContentPath(const std::string& path) {
     if (path.empty() || path == "." || path.front() == '/' ||
         path.find('\\') != std::string::npos || path.find(':') != std::string::npos ||
         std::any_of(path.begin(), path.end(), [](unsigned char value) { return value < 32; })) return false;
-    const std::filesystem::path relative(path);
-    for (const auto& part : relative) {
-        if (part == ".." || part == ".") return false;
+    // Validate the serialized contract independently of host filesystem rules.
+    // Empty segments also reject trailing and repeated separators.
+    std::size_t start = 0;
+    while (true) {
+        const auto end = path.find('/', start);
+        const auto part = std::string_view(path).substr(start,
+            end == std::string::npos ? std::string::npos : end - start);
+        if (part.empty() || part == ".." || part == ".") return false;
+        if (end == std::string::npos) return true;
+        start = end + 1;
     }
-    return relative.generic_string() == path && !relative.has_root_path();
 }
 
 bool IsBundleName(const std::string& name) {

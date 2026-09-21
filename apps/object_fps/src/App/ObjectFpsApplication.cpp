@@ -81,7 +81,7 @@ bool ObjectFpsApplication::InitializeContent(const std::filesystem::path& assetR
     for (const auto format : {Engine::Render::ShaderFormat::DXIL,
              Engine::Render::ShaderFormat::SPIRV, Engine::Render::ShaderFormat::Metallib}) {
         if (!(impl_->shaders.CompleteFormats() & Engine::Render::FormatBit(format))) continue;
-        for (const auto* id : {"builtin/unlit", "builtin/scene_post", "game/object_fps/channel_swap"}) {
+        for (const auto* id : {"builtin/unlit", "builtin/scene_post"}) {
             const auto program = impl_->shaders.FindProgram(id, format);
             if (!program) { error = Explain(program.error()); return false; }
         }

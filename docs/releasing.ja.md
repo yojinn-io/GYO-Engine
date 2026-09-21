@@ -41,6 +41,8 @@ Platform は `windows-x64`、`linux-x64`、`macos-arm64` です。Archive ごと
 
 本機と CI は同じ製品組立を使います。`build/assemble_runtime.py` は `assets/<game>/content.json` に従って準備済み資産を検証・配置し、generic CMake hook から自動呼出しされます。Offline shader compiler は `engine/render/shaders/pipeline` が所有します。通常のゲーム build に CI/tests や package acceptance は不要です。
 
+組立と package 検証は `build/content_contract.py` を共有し、C++ runtime と Editor の native parser は共通 fixtures で検証します。Catalog には整数の `version: 1`、有効な entry、内容集合全体で一意な ID が必要です。資産ディレクトリがなければ空内容として同期します。ディレクトリが存在して descriptor が欠落・不正なら失敗し、直前の成功出力を保持します。Object_FPS は実際に使う builtin shaders のみを配布し、カスタム shader の検証サンプルは共通 GPU テストが所有します。
+
 生成される product manifest は `share/gyo/products/<product>/manifest.json` です。Schema 2 は product、kind、executables、required_files、runtime_dependencies、checks を持ちます。共通 runner は `build/acceptance/common/run_package_checks.py`、native linkage 検査は同じ場所の `validate_package.py` です。ゲーム固有規則は `build/acceptance/<game>` に置きます。
 
 診断 executable は `build/acceptance/<game>` から生成し、build tree の `acceptance/<game>/bin` に置きます。Runner が製品の一時コピーに probe を配置する場合も、正式 archive に probe や Python 検証コードを入れません。Runtime は `bin/assets/<game>` だけを読み、内蔵／ゲーム shader もその中にあります。

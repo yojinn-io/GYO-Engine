@@ -32,8 +32,8 @@ struct AssetRequest final {
         KeepOldIfAny       // Reload が失敗したら旧キャッシュを維持する
     };
 
-    // 要求の優先度（キューを持つなら使う）
-    // 数字が大きいほど高優先度、のように運用してOK
+    // Reserved hint: the current FIFO manager rejects nonzero priority with
+    // UnsupportedRequest before changing state or performing IO.
     std::int32_t priority = 0;
 
     // mode / sync / fallback
@@ -54,7 +54,7 @@ struct AssetRequest final {
 
     // cache/policy hint（任意）
     // - pin: 強制保持したい場合（AssetLifetime.Pin と連動させる）
-    // - keepAliveFrames: この要求だけTTLを上書きしたい場合（0=デフォルト運用）
+    // - keepAliveFramesOverride: reserved; only zero is currently supported.
     bool pin = false;
     std::uint64_t keepAliveFramesOverride = 0;
 

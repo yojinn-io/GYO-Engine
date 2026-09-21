@@ -22,7 +22,7 @@ public:
 
     void Clear() {
         for (const auto& [id, record] : records_) {
-            RetireGeneration_(id, record->generation);
+            RetireGeneration_(id, record->lastIssuedGeneration);
         }
         records_.clear();
     }
@@ -57,8 +57,11 @@ public:
         rec->state = AssetState::Unloaded;
         if (const auto retired = retiredGenerations_.find(id);
             retired != retiredGenerations_.end()) {
-            rec->generation = NextGeneration_(retired->second);
+            // This record is not published yet. The next reservation advances
+            // beyond the retired high-water mark, without wrapping on exhaustion.
+            rec->generation = retired->second;
         }
+        rec->lastIssuedGeneration = rec->generation;
 
         auto* ptr = rec.get();
         records_.emplace(id, std::move(rec));
@@ -76,26 +79,27 @@ public:
     bool CanEvict(const AssetId& id) const noexcept {
         const auto* r = Find(id);
         if (!r) return false;
-        return r->refCount == 0;
+        return r->refCount == 0 && !r->IsLoading();
     }
 
     void EraseIf(const AssetId& id, bool force = false) {
         auto it = records_.find(id);
         if (it == records_.end()) return;
 
-        if (force || it->second->refCount == 0) {
-            RetireGeneration_(id, it->second->generation);
+        if (force || (it->second->refCount == 0 && !it->second->IsLoading())) {
+            RetireGeneration_(id, it->second->lastIssuedGeneration);
             records_.erase(it);
         }
     }
 
-private:
-    static std::uint32_t NextGeneration_(std::uint32_t generation) noexcept {
-        ++generation;
-        // AssetHandle reserves zero for Invalid().
-        return generation == 0 ? 1 : generation;
+    bool CanReserveGeneration(const AssetId& id) const noexcept {
+        const auto maximum = (std::numeric_limits<std::uint32_t>::max)();
+        if (const auto* record = Find(id)) return record->lastIssuedGeneration != maximum;
+        const auto retired = retiredGenerations_.find(id);
+        return retired == retiredGenerations_.end() || retired->second != maximum;
     }
 
+private:
     void RetireGeneration_(const AssetId& id, std::uint32_t generation) {
         retiredGenerations_[id] = generation;
     }

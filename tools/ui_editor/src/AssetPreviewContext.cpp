@@ -1,11 +1,11 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
+#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 
 #include <SDL3/SDL.h>
 
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
-#include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/core/AssetCachePolicy.hpp"
 #include "engine/asset/core/AssetLifetime.hpp"
 #include "engine/asset/core/AssetStorage.hpp"
@@ -16,10 +16,10 @@
 #include "engine/asset/loading/AssetPipeline.hpp"
 #include "engine/asset/loading/LoaderRegistry.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
-#include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
 
 #include <cmath>
+#include <cassert>
 #include <cstddef>
 #include <algorithm>
 #include <limits>
@@ -104,10 +104,11 @@ struct AssetPreviewContext::Impl final {
     }};
     Engine::Asset::AssetManager assets{
         catalog, pipeline, storage, lifetime, cache};
-    std::unique_ptr<Engine::Text::Backend::SdlTtf::SdlTtfTextRasterizer> rasterizer;
+    std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer;
     SDL_Renderer* renderer{};
     bool initialized{};
     bool mounted{};
+    bool frameActive{};
     std::unordered_map<std::string, TextureEntry> textures;
     std::unordered_map<std::string, FontEntry> fonts;
     std::unordered_map<std::string, TextEntry> text;
@@ -153,10 +154,17 @@ AssetPreviewContext::AssetPreviewContext(AssetPreviewContext&&) noexcept = defau
 AssetPreviewContext& AssetPreviewContext::operator=(AssetPreviewContext&&) noexcept = default;
 
 bool AssetPreviewContext::Initialize(SDL_Renderer& renderer, std::string& error) {
+    auto rasterizer = Engine::Text::Backend::SdlTtf::SdlTtfTextRasterizer::Create();
+    if (!rasterizer) { error = Describe(rasterizer.error()); return false; }
+    return Initialize(renderer, std::move(rasterizer).value(), error);
+}
+
+bool AssetPreviewContext::Initialize(SDL_Renderer& renderer,
+    std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer, std::string& error) {
     error.clear();
-    if (impl_->initialized) {
-        impl_->renderer = &renderer;
-        return true;
+    if (impl_->initialized || !rasterizer) {
+        error = "asset preview requires a rasterizer and may be initialized only once";
+        return false;
     }
     auto font = impl_->loaders.Register(
         std::make_unique<Engine::Asset::Loaders::FontLoader>());
@@ -170,51 +178,57 @@ bool AssetPreviewContext::Initialize(SDL_Renderer& renderer, std::string& error)
         error = Describe(image.error());
         return false;
     }
-    auto rasterizer =
-        Engine::Text::Backend::SdlTtf::SdlTtfTextRasterizer::Create();
-    if (!rasterizer) {
-        error = Describe(rasterizer.error());
-        return false;
-    }
-    impl_->rasterizer = std::move(rasterizer).value();
+    impl_->rasterizer = std::move(rasterizer);
     impl_->renderer = &renderer;
     impl_->initialized = true;
     return true;
 }
 
 bool AssetPreviewContext::Mount(
-    const std::filesystem::path& catalogPath,
-    const std::filesystem::path& assetRoot,
-    std::string& error) {
+    const ReadOnlyAssetCatalog& catalog, std::string& error) {
     error.clear();
     if (!impl_->initialized || impl_->renderer == nullptr) {
         error = "asset preview context is not initialized";
         return false;
     }
-    impl_->Clear();
-    Engine::Asset::Resolver::AssetPathResolver::Options options;
-    options.assetsRoot = assetRoot.string();
-    options.allowAbsolutePath = false;
-    options.allowEscapeAssetsRoot = false;
-    Engine::Asset::Resolver::AssetPathResolver resolver(std::move(options));
-    Engine::Asset::Catalog::CatalogParser parser;
-    auto loaded = impl_->catalog.LoadFromFile(catalogPath.string(), parser, resolver);
-    if (!loaded) {
-        error = Describe(loaded.error());
+    if (impl_->frameActive || !catalog.IsMounted()) {
+        error = "preview mount requires a parsed catalog outside an active frame";
         return false;
     }
+    // Copy the validated snapshot before retiring the old state. No file is
+    // parsed twice, and allocation failure cannot clear a working mount.
+    auto candidate = catalog.ParsedCatalog();
+    impl_->Clear();
+    impl_->catalog = std::move(candidate);
     impl_->mounted = true;
     return true;
 }
 
-void AssetPreviewContext::Unmount() noexcept { impl_->Clear(); }
+bool AssetPreviewContext::Unmount() noexcept {
+    if (impl_->frameActive) return false;
+    impl_->Clear();
+    return true;
+}
+void AssetPreviewContext::BeginFrame() {
+    assert(!impl_->frameActive);
+    if (impl_->frameActive) return;
+    constexpr std::size_t maximumTextEntries = 256U;
+    while (impl_->text.size() > maximumTextEntries) {
+        const auto oldest = std::min_element(impl_->text.begin(), impl_->text.end(),
+            [](const auto& left, const auto& right) { return left.second.lastUse < right.second.lastUse; });
+        SDL_DestroyTexture(oldest->second.texture);
+        impl_->text.erase(oldest);
+    }
+    impl_->frameActive = true;
+}
+void AssetPreviewContext::EndFrame() noexcept { impl_->frameActive = false; }
 bool AssetPreviewContext::IsMounted() const noexcept { return impl_->mounted; }
 
 SDL_Texture* AssetPreviewContext::Texture(
     const std::string_view assetId,
     std::string& error) {
     error.clear();
-    if (!impl_->mounted || impl_->renderer == nullptr) return nullptr;
+    if (!impl_->frameActive || !impl_->mounted || impl_->renderer == nullptr) return nullptr;
     const std::string key{assetId};
     if (const auto found = impl_->textures.find(key);
         found != impl_->textures.end()) {
@@ -258,7 +272,7 @@ TextTextureView AssetPreviewContext::Text(
     const float pointSize,
     std::string& error) {
     error.clear();
-    if (!impl_->mounted || impl_->renderer == nullptr ||
+    if (!impl_->frameActive || !impl_->mounted || impl_->renderer == nullptr ||
         impl_->rasterizer == nullptr || utf8.empty() ||
         !std::isfinite(pointSize) || pointSize <= 0.0F) {
         return {};
@@ -312,21 +326,6 @@ TextTextureView AssetPreviewContext::Text(
         pixels.rowPitch,
         error);
     if (texture == nullptr) return {};
-    constexpr std::size_t maximumTextEntries = 256U;
-    if (impl_->text.size() >= maximumTextEntries) {
-        const auto oldest = std::min_element(
-            impl_->text.begin(),
-            impl_->text.end(),
-            [](const auto& left, const auto& right) {
-                return left.second.lastUse < right.second.lastUse;
-            });
-        if (oldest != impl_->text.end()) {
-            if (oldest->second.texture != nullptr) {
-                SDL_DestroyTexture(oldest->second.texture);
-            }
-            impl_->text.erase(oldest);
-        }
-    }
     const Impl::TextEntry entry{
         texture,
         static_cast<float>(pixels.width),

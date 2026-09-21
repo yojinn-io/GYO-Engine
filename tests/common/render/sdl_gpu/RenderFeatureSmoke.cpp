@@ -41,6 +41,23 @@ bool Pixel(const SceneCapture& image, unsigned x, unsigned y,
     }
     return true;
 }
+bool CheckCustomShader(Renderer& renderer) {
+    RenderQueue queue;
+    SpriteSubmission builtin;
+    builtin.destinationPixels = {8, 8, 48, 48};
+    builtin.material.tint = {1, 0, 0, 1};
+    builtin.layer = CompositeLayer::Scene;
+    auto custom = builtin;
+    custom.destinationPixels.x = 80;
+    custom.material.shader = "game/test/channel_swap";
+    if (!queue.Submit(builtin) || !queue.Submit(custom)) return false;
+    renderer.RequestSceneCapture();
+    const auto rendered = renderer.Render(queue);
+    if (!rendered) { std::cerr << rendered.error().message << '\n'; return false; }
+    const auto image = renderer.TakeSceneCapture();
+    return image && Pixel(*image, 24, 24, {255, 0, 0, 255}, "builtin shader") &&
+        Pixel(*image, 96, 24, {0, 0, 255, 255}, "custom channel-swap shader");
+}
 bool CheckUvBlendAndTextureColor(IRenderDevice& device, Renderer& renderer) {
     Resources resources{device};
     const std::array<std::uint8_t,16> colors{255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
@@ -143,6 +160,9 @@ bool CheckPostColor(IRenderDevice& device,const ShaderLibrary& library) {
 } // namespace
 bool CheckRenderFeaturePixels(Engine::Render::IRenderDevice& device,Engine::Render::Renderer& renderer,
     const Engine::Render::ShaderLibrary& library) {
+    if (!CheckCustomShader(renderer)) {
+        std::cerr << "custom shader smoke failed\n"; return false;
+    }
     if (!CheckUvBlendAndTextureColor(device,renderer)) {
         std::cerr << "UV/blend/texture color smoke failed\n"; return false;
     }

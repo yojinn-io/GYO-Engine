@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import subprocess
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
@@ -13,7 +14,7 @@ from workspace import TemporaryDirectory
 from archive_package import package_metadata
 from test_release_pipeline import APP, COMMIT, evidence, manifest, package_contents, package
 from app_registry import release_products
-from release_support import validate_archive, PLATFORMS
+from release_support import validate_archive, PLATFORMS, ReleaseError
 from package_contract import installed_required_files
 from package_contract import manifest_path
 
@@ -95,10 +96,41 @@ class ArchiveMetadataTests(unittest.TestCase):
         assets = stage / f"bin/assets/{APP}"
         assets.mkdir(parents=True)
         (assets / "content.json").write_text(json.dumps({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]}))
-        (assets / "catalog.json").write_text(json.dumps({"version":1,"assets":[{"id":"new","path":"new.bin"}]}))
+        (assets / "catalog.json").write_text(json.dumps({"version":1,"assets":[{"id":"new","type":"binary","path":"new.bin"}]}))
         contract = manifest()
         contract["required_files"].append(f"bin/assets/{APP}/content.json")
         self.assertIn(f"bin/assets/{APP}/new.bin", installed_required_files(stage, contract))
+
+    def test_installed_and_archived_content_decode_shared_raw_json_strictly(self):
+        cases = json.loads((ROOT / "tests/common/fixtures/asset_contract/raw_cases.json").read_text(encoding="utf-8"))["cases"]
+        content_root = f"bin/assets/{APP}"
+        contract = manifest()
+        contract["required_files"].append(content_root + "/content.json")
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                documents = {
+                    content_root + "/content.json": b'{"version":1,"catalogs":["catalog.json"],"shader_bundles":[]}',
+                    content_root + "/catalog.json": b'{"version":1,"assets":[]}',
+                }
+                name = "catalog.json" if case["kind"] == "catalog" else "content.json"
+                documents[content_root + "/" + name] = case["text"].encode("utf-8")
+                stage = Path(self.workspace.name) / case["name"]
+                for name, data in documents.items():
+                    path = stage / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                # Produce matching evidence even for invalid JSON, so validation
+                # must reject the raw content rather than a stale checksum.
+                with patch("test_release_pipeline.manifest", return_value=contract):
+                    archive = package(extra_files=documents.items())
+                if case["valid"]:
+                    installed_required_files(stage, contract)
+                    validate_archive(archive.name, archive.data, APP, "windows-x64", COMMIT)
+                else:
+                    with self.assertRaises(ValueError):
+                        installed_required_files(stage, contract)
+                    with self.assertRaises(ReleaseError):
+                        validate_archive(archive.name, archive.data, APP, "windows-x64", COMMIT)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ namespace Engine::IO::Stream {
         IoResult<bool> ReadLine(std::string& outLine, std::size_t maxLineBytes = 4096);
 
     private:
+        IoResult<std::size_t> ReadSome(void* dst, std::size_t bytes);
         IoResult<std::size_t> FillLineBuffer();
 
     private:

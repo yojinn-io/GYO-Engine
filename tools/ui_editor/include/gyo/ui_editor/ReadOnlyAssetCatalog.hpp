@@ -7,6 +7,8 @@
 #include <string_view>
 #include <vector>
 
+#include "engine/asset/AssetCatalog.hpp"
+
 namespace Gyo::Tools::UiEditor {
 
 struct CatalogAsset final {
@@ -20,6 +22,8 @@ struct CatalogAsset final {
 // publishing the exported UI JSON and registering it remains an app-author step.
 class ReadOnlyAssetCatalog final {
 public:
+    [[nodiscard]] bool MountRoot(
+        const std::filesystem::path& assetRoot, std::string& error);
     [[nodiscard]] bool Mount(
         const std::filesystem::path& catalogPath,
         const std::filesystem::path& assetRoot,
@@ -27,15 +31,20 @@ public:
     void Unmount() noexcept;
 
     [[nodiscard]] bool IsMounted() const noexcept;
+    // Empty for a complete content-root mount; otherwise the explicit catalog.
     [[nodiscard]] const std::filesystem::path& CatalogPath() const noexcept;
     [[nodiscard]] const std::filesystem::path& AssetRoot() const noexcept;
     [[nodiscard]] std::span<const CatalogAsset> Assets() const noexcept;
     [[nodiscard]] const CatalogAsset* Find(std::string_view id) const noexcept;
+    [[nodiscard]] const Engine::Asset::AssetCatalog& ParsedCatalog() const noexcept;
 
 private:
+    void Commit(Engine::Asset::AssetCatalog catalog,
+        const std::filesystem::path& catalogPath, const std::filesystem::path& assetRoot);
     std::filesystem::path catalogPath_;
     std::filesystem::path assetRoot_;
     std::vector<CatalogAsset> assets_;
+    Engine::Asset::AssetCatalog catalog_;
 };
 
 } // namespace Gyo::Tools::UiEditor

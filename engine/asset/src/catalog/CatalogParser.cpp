@@ -16,14 +16,19 @@ namespace Engine::Asset::Catalog {
                 AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: JSON parse failed", std::string(sourceName)));
         }
 
-        if (!j.is_object() || !j.contains("assets") || !j["assets"].is_array()) {
+        if (!j.is_object() || !j.contains("version") || !j["version"].is_number_integer() ||
+            j["version"] != 1 || !j.contains("assets") || !j["assets"].is_array()) {
             return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: invalid schema (need { assets: [] })", std::string(sourceName)));
+                AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: expected integer version 1 and assets array", std::string(sourceName)));
         }
 
         std::vector<RawCatalogEntry> out;
         for (const auto& a : j["assets"]) {
-            if (!a.is_object()) continue;
+            if (!a.is_object()) {
+                return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
+                    AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
+                        "CatalogParser: asset entry must be an object", std::string(sourceName)));
+            }
 
             RawCatalogEntry e;
             if (a.contains("id")   && a["id"].is_string())   e.id   = a["id"].get<std::string>();

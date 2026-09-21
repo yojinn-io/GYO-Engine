@@ -16,7 +16,7 @@ def mirror_sources(repository, destination):
     copied = []
     for name in sorted(set(inputs.decode("utf-8").split("\0"))):
         path = Path(name)
-        include = name in ("CMakeLists.txt", "CMakePresets.json") or name.startswith(("engine/", "third_party/", "build/cmake/")) or name in ("build/assemble_runtime.py", "build/workspace.py")
+        include = name in ("CMakeLists.txt", "CMakePresets.json") or name.startswith(("engine/", "third_party/", "build/cmake/")) or name in ("build/assemble_runtime.py", "build/content_contract.py", "build/workspace.py")
         original = repository / path
         if not include or not original.is_file() or original.is_symlink():
             continue

@@ -344,6 +344,9 @@ int main(int argc, char** argv) {
     ShaderLibrary library;
     auto bundle = library.AppendBundle(source, Engine::Asset::Resolver::AssetPathResolver(resolverOptions));
     if (!bundle) { std::cerr << bundle.error().message << ' ' << bundle.error().detail << '\n'; return 1; }
+    resolverOptions.assetsRoot = GYO_TEST_CUSTOM_SHADER_BUNDLE;
+    bundle = library.AppendBundle(source, Engine::Asset::Resolver::AssetPathResolver(resolverOptions));
+    if (!bundle) { std::cerr << bundle.error().message << ' ' << bundle.error().detail << '\n'; return 1; }
     Backend::SdlGpu::SdlGpuOptions gpuOptions;
     gpuOptions.driver=requestedDriver;
     gpuOptions.availableShaderFormats = library.CompleteFormats();

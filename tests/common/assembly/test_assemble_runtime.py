@@ -71,6 +71,19 @@ class AssemblyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unexpected shader"):
             self.run_assembly({"other":self.root})
 
+    def test_catalog_requires_runtime_identity_and_type(self):
+        for field in ("id", "type"):
+            original = self.catalog["assets"][0].pop(field)
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.run_assembly()
+            self.catalog["assets"][0][field] = original
+
+    def test_catalog_identity_is_unique_across_all_declared_catalogs(self):
+        self.content["catalogs"].append("second.json")
+        (self.assets / "second.json").write_text(json.dumps(self.catalog), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self.run_assembly()
+
     def test_content_schema_matches_runtime_and_output_paths_do_not_overlap(self):
         original = dict(self.content)
         for change in ({"version":True}, {"catalogs":["asset_catalog.json", "asset_catalog.json"]},

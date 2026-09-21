@@ -27,7 +27,12 @@ namespace Engine::Asset {
         ParseFailed,
 
         // internal
-        InternalError
+        InternalError,
+
+        // request admission (append to preserve existing diagnostic codes)
+        UnsupportedRequest,
+        RequestInProgress,
+        GenerationExhausted
     };
 
     // AssetError：AssetRecord に保持する失敗理由
@@ -68,6 +73,9 @@ namespace Engine::Asset {
         case AssetErrorCode::InvalidCatalogEntry:return "InvalidCatalogEntry";
         case AssetErrorCode::InvalidPath:        return "InvalidPath";
         case AssetErrorCode::PathEscapesRoot:    return "PathEscapesRoot";
+        case AssetErrorCode::UnsupportedRequest:return "UnsupportedRequest";
+        case AssetErrorCode::RequestInProgress: return "RequestInProgress";
+        case AssetErrorCode::GenerationExhausted:return "GenerationExhausted";
         case AssetErrorCode::SourceNotFound:     return "SourceNotFound";
         case AssetErrorCode::SourceReadFailed:   return "SourceReadFailed";
         case AssetErrorCode::UnsupportedType:    return "UnsupportedType";

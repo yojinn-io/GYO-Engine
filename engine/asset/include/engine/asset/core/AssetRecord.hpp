@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -30,7 +31,17 @@ namespace Engine::Asset::Core {
         AssetState state = AssetState::Unloaded;
 
         // 世代：AssetHandle の stale 検出に使える（AssetManager側で運用）
-        std::uint32_t generation = 1;
+        std::uint32_t generation = 0;
+
+        // Never roll this back when a replacement fails. Otherwise a later
+        // request could reuse an already issued candidate handle (ABA).
+        std::uint32_t lastIssuedGeneration = 0;
+        std::uint32_t candidateGeneration = 0;
+        AssetState candidateState = AssetState::Unloaded;
+        // One bounded failure outcome survives new candidates and successful
+        // publication; the next failed operation replaces it.
+        std::uint32_t failedGeneration = 0;
+        AssetError failedError{};
 
         // 実体（型消去）
         AnyAsset asset{};
@@ -50,7 +61,22 @@ namespace Engine::Asset::Core {
         // ---- helpers ----
         bool IsReady() const noexcept { return state == AssetState::Ready; }
         bool IsFailed() const noexcept { return state == AssetState::Failed; }
-        bool IsLoading() const noexcept { return state == AssetState::Loading; }
+        bool IsLoading() const noexcept { return candidateState == AssetState::Loading; }
+
+        AssetState StateFor(std::uint32_t handleGeneration) const noexcept {
+            if (handleGeneration == 0) return AssetState::Unloaded;
+            if (handleGeneration == generation) return state;
+            if (handleGeneration == candidateGeneration) return candidateState;
+            if (handleGeneration == failedGeneration) return AssetState::Failed;
+            return AssetState::Unloaded;
+        }
+
+        const AssetError* ErrorFor(std::uint32_t handleGeneration) const noexcept {
+            if (handleGeneration == 0) return nullptr;
+            if (handleGeneration == generation) return error.ok() ? nullptr : &error;
+            if (handleGeneration == failedGeneration) return &failedError;
+            return nullptr;
+        }
 
         void AddReference(std::uint32_t handleGeneration) {
             ++refCount;
@@ -73,15 +99,18 @@ namespace Engine::Asset::Core {
             return true;
         }
 
-        void AdvanceGeneration() noexcept {
-            ++generation;
-            // AssetHandle reserves zero for Invalid().
-            if (generation == 0) {
-                generation = 1;
-            }
+        std::uint32_t ReserveGeneration() noexcept {
+            if (lastIssuedGeneration == (std::numeric_limits<std::uint32_t>::max)()) return 0;
+            ++lastIssuedGeneration;
+            candidateGeneration = lastIssuedGeneration;
+            candidateState = AssetState::Loading;
+            return candidateGeneration;
         }
 
-        void MarkLoading() noexcept { state = AssetState::Loading; }
+        void ClearCandidate() {
+            candidateGeneration = 0;
+            candidateState = AssetState::Unloaded;
+        }
 
         void SetReady(AnyAsset a) {
             asset = std::move(a);

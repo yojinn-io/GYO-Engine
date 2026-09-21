@@ -88,9 +88,6 @@ CommandLineResult ParseCommandLine(
     if (sawValidate && options.outputPath.has_value()) {
         return {std::nullopt, "--validate cannot be combined with --output"};
     }
-    if (options.assetRoot.has_value() && !options.catalogPath.has_value()) {
-        options.catalogPath = *options.assetRoot / "asset_catalog.json";
-    }
     if (options.catalogPath.has_value() && !options.assetRoot.has_value()) {
         options.assetRoot = options.catalogPath->parent_path();
         if (options.assetRoot->empty()) {
@@ -111,7 +108,10 @@ Usage:
                 [--asset-catalog <catalog.json>] [--asset-root <directory>]
   gyo_ui_editor --help
 
-The catalog is mounted read-only for AssetId pickers and preview. Export never
+--asset-root alone loads content.json and every declared catalog, without a
+fallback. Explicit --asset-catalog selects only that catalog; --asset-root then
+sets its asset directory (otherwise the catalog's parent directory is used).
+Content is mounted read-only for AssetId pickers and preview. Export never
 copies assets, edits a catalog, or publishes into the mounted asset root.
 
 Exit status: 0 success/valid, 2 command-line usage, 3 file or catalog I/O,

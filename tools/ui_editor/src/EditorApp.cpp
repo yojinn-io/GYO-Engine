@@ -547,21 +547,11 @@ EditorApp::EditorApp(
 
 bool EditorApp::Initialize(std::string& error) {
     error.clear();
-    if (options_.catalogPath.has_value()) {
-        if (!catalog_.Mount(
-                *options_.catalogPath,
-                options_.assetRoot.value_or(options_.catalogPath->parent_path()),
-                error)) {
-            return false;
-        }
-        if (!previewAssets_.Mount(
-                *options_.catalogPath,
-                options_.assetRoot.value_or(options_.catalogPath->parent_path()),
-                error)) {
-            catalog_.Unmount();
-            return false;
-        }
-        CopyPath(catalogPath_, *options_.catalogPath);
+    singleCatalogMode_ = options_.catalogPath.has_value();
+    if (options_.assetRoot.has_value()) {
+        if (!MountCatalog(options_.catalogPath.value_or(std::filesystem::path{}),
+                *options_.assetRoot, error)) return false;
+        CopyPath(catalogPath_, catalog_.CatalogPath());
         CopyPath(assetRoot_, catalog_.AssetRoot());
     }
     if (options_.inputPath.has_value()) {
@@ -583,13 +573,40 @@ bool EditorApp::Initialize(std::string& error) {
     return true;
 }
 
-void EditorApp::Draw() {
-    // Catalog remount destroys transient SDL textures. Apply it at the next
-    // frame boundary, before any ImGui draw command can reference the old set.
+void EditorApp::ApplyPendingAssetChanges() {
     if (pendingCatalogMount_) {
         pendingCatalogMount_ = false;
-        MountCatalog(pendingCatalogPath_, pendingAssetRoot_);
+        std::string error;
+        if (MountCatalog(pendingCatalogPath_, pendingAssetRoot_, error)) {
+            statusMessage_ = "Mounted read-only content: " + catalog_.AssetRoot().string();
+        } else {
+            statusMessage_ = "Asset mount failed: " + error;
+        }
+        RefreshDiagnostics();
     }
+    if (pendingCatalogUnmount_) {
+        pendingCatalogUnmount_ = false;
+        if (previewAssets_.Unmount()) {
+            catalog_.Unmount();
+            statusMessage_ = "Unmounted content";
+            RefreshDiagnostics();
+        }
+    }
+}
+
+void EditorApp::RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot) {
+    pendingCatalogPath_ = catalogPath.string();
+    pendingAssetRoot_ = assetRoot.string();
+    pendingCatalogMount_ = true;
+    pendingCatalogUnmount_ = false;
+}
+
+void EditorApp::RequestAssetUnmount() {
+    pendingCatalogMount_ = false;
+    pendingCatalogUnmount_ = true;
+}
+
+void EditorApp::Draw() {
     const ImGuiIO& io = ImGui::GetIO();
     if (io.KeyCtrl && !io.WantTextInput) {
         if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
@@ -666,13 +683,11 @@ void EditorApp::DrawMainMenu() {
             showExportDialog_ = true;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Mount Read-Only Catalog...")) {
+        if (ImGui::MenuItem("Mount Read-Only Content...")) {
             showCatalogDialog_ = true;
         }
-        if (catalog_.IsMounted() && ImGui::MenuItem("Unmount Catalog")) {
-            catalog_.Unmount();
-            previewAssets_.Unmount();
-            RefreshDiagnostics();
+        if (catalog_.IsMounted() && ImGui::MenuItem("Unmount Content")) {
+            RequestAssetUnmount();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit")) {
@@ -1961,18 +1976,25 @@ void EditorApp::DrawDialogs() {
     }
 
     if (showCatalogDialog_) {
-        ImGui::OpenPopup("Mount Read-Only Catalog");
+        ImGui::OpenPopup("Mount Read-Only Content");
         showCatalogDialog_ = false;
     }
     if (ImGui::BeginPopupModal(
-            "Mount Read-Only Catalog", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::InputText("Catalog", catalogPath_.data(), catalogPath_.size());
+            "Mount Read-Only Content", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Checkbox("Single catalog (partial content)", &singleCatalogMode_);
+        if (singleCatalogMode_) {
+            ImGui::InputText("Catalog", catalogPath_.data(), catalogPath_.size());
+        } else {
+            ImGui::TextUnformatted("Load content.json and all declared catalogs from Asset Root.");
+        }
         ImGui::InputText("Asset Root", assetRoot_.data(), assetRoot_.size());
         if (ImGui::Button("Mount")) {
-            pendingCatalogPath_ = catalogPath_.data();
-            pendingAssetRoot_ = assetRoot_.data();
-            pendingCatalogMount_ = true;
-            ImGui::CloseCurrentPopup();
+            if (singleCatalogMode_ && catalogPath_[0] == '\0') {
+                statusMessage_ = "Single catalog mode requires a catalog path";
+            } else {
+                RequestAssetMount(singleCatalogMode_ ? catalogPath_.data() : "", assetRoot_.data());
+                ImGui::CloseCurrentPopup();
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) {
@@ -2065,7 +2087,9 @@ void EditorApp::DrawDialogs() {
         if (!catalog_.IsMounted()) {
             ImGui::TextDisabled("Mount an app AssetCatalog first.");
         } else {
-            ImGui::Text("Read-only: %s", catalog_.CatalogPath().string().c_str());
+            const auto source = catalog_.CatalogPath().empty()
+                ? catalog_.AssetRoot() / "content.json" : catalog_.CatalogPath();
+            ImGui::Text("Read-only: %s", source.string().c_str());
             ImGui::BeginChild("assets", {620.0F, 320.0F}, true);
             for (const CatalogAsset& asset : catalog_.Assets()) {
                 const char* expectedType =
@@ -2177,19 +2201,20 @@ void EditorApp::ExportDocument(
     }
 }
 
-void EditorApp::MountCatalog(
-    const std::string& catalogPath,
-    const std::string& assetRoot) {
-    std::string error;
-    if (!catalog_.Mount(catalogPath, assetRoot, error)) {
-        statusMessage_ = std::move(error);
-    } else if (!previewAssets_.Mount(catalogPath, assetRoot, error)) {
-        catalog_.Unmount();
-        statusMessage_ = "Preview asset mount failed: " + error;
-    } else {
-        statusMessage_ = "Mounted catalog read-only: " + catalogPath;
+bool EditorApp::MountCatalog(const std::filesystem::path& catalogPath,
+    const std::filesystem::path& assetRoot, std::string& error) {
+    ReadOnlyAssetCatalog candidate;
+    auto root = assetRoot;
+    if (root.empty() && !catalogPath.empty()) {
+        root = catalogPath.parent_path();
+        if (root.empty()) root = ".";
     }
-    RefreshDiagnostics();
+    const bool loaded = catalogPath.empty()
+        ? candidate.MountRoot(root, error)
+        : candidate.Mount(catalogPath, root, error);
+    if (!loaded || !previewAssets_.Mount(candidate, error)) return false;
+    catalog_ = std::move(candidate);
+    return true;
 }
 
 } // namespace Gyo::Tools::UiEditor

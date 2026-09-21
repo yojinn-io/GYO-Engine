@@ -10,7 +10,7 @@ apps/<game> policy + assets
 GYO::Ui --------------------> JSON, layout, bindings, focus, hit-test, actions
 GYO::UiRenderer ------------> AssetManager, text rasterizer, RenderQueue Overlay
 
-tools/ui_editor/gyo_ui_editor --> GYO::Ui + optional read-only app AssetCatalog
+tools/ui_editor/gyo_ui_editor --> GYO::Ui + optional read-only content snapshot
         X
         +-------------------- no app dependency, catalog writes, or publishing
 ```
@@ -93,12 +93,35 @@ gyo_ui_editor --validate <json>
               [--asset-catalog <catalog.json>] [--asset-root <dir>]
 ```
 
+`--asset-root <dir>` loads that root's `content.json` and every catalog it
+declares. Missing or invalid manifests fail the mount; the editor does not
+guess `asset_catalog.json`. The merged catalog uses the same engine loader as
+the game, including duplicate-ID and path validation. It is parsed once per
+mount: the asset list, document validation and preview consume the same
+snapshot. A failed replacement preserves the previous complete mount.
+
+Explicit `--asset-catalog <file>` selects a single catalog as a partial view.
+Its root defaults to the catalog's parent; an explicit `--asset-root` overrides
+that directory. This mode does not load or merge `content.json`, even when one
+exists. The GUI's **Mount Read-Only Content** dialog offers the same root and
+single-catalog modes. Use a complete root when a document references assets
+from multiple catalogs.
+
 The editor writes one canonical UTF-8 JSON file (two-space indentation, LF,
 one trailing newline) using an atomic replace. It does not write `.meta`, a
 project file, autosave, preview cache, or `imgui.ini`. A mounted app catalog is
 read-only and pickers save only `AssetId`; native paths are never serialized.
 Without a catalog, unresolved asset ids are warnings. With a catalog, missing
-or wrong-typed assets block export.
+or wrong-typed assets block export. Changes to catalogs or preview assets on
+disk take effect after an explicit remount; there is no implicit reload.
+
+Preview textures remain alive for the complete ImGui frame. Mount and unmount
+requests are applied before the next frame starts; text-cache eviction also
+runs at that boundary, after the previous frame has been presented. A frame
+with more than 256 unique text runs may temporarily exceed the cache budget.
+Cancelling a frame discards its unsubmitted draw commands before retiring
+preview resources. Windowless SDL software-renderer tests cover this lifecycle
+with the real ImGui renderer backend and a deterministic text rasterizer.
 
 Export into the mounted app asset root is rejected. The release workflow is
 intentionally explicit:

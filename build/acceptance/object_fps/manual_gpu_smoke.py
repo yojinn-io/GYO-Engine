@@ -19,7 +19,6 @@ from workspace import TemporaryDirectory
 
 
 CASES = (
-    ("custom-shader", ["--shader-smoke-test"]),
     ("world", ["--smoke-test"]),
     ("menu", ["--menu-smoke-test"]),
     ("viewmodel", ["--viewmodel-smoke-test"]),
@@ -28,6 +27,11 @@ CASES = (
     ("muzzle-4x3", ["--muzzle-smoke-test", "--preview-4x3"]),
     ("muzzle-21x9", ["--muzzle-smoke-test", "--preview-21x9"]),
 )
+SUITES = {
+    "quick": ("viewmodel",),
+    "ci": ("viewmodel", "world", "menu"),
+    "full": ("world", "menu", "viewmodel", "reload", "muzzle-16x9", "muzzle-4x3", "muzzle-21x9"),
+}
 DRIVERS = {"d3d12": ("direct3d12", "dxil"), "vulkan": ("vulkan", "spirv"),
            "metal": ("metal", "metallib")}
 GPU_INFO = re.compile(r"GYO GPU: driver=([^,\s]+), shader=([^,\s]+), "
@@ -73,7 +77,8 @@ def run_case(case: str, command: list[str], working: Path, output: Path,
 
 def run_suite(executable: list[str], working: Path, output: Path,
               driver: str, suite: str, timeout: float) -> list[dict]:
-    cases = CASES[:1] if suite == "quick" else CASES[:3] if suite == "ci" else CASES
+    flags_by_case = dict(CASES)
+    cases = [(name, flags_by_case[name]) for name in SUITES[suite]]
     results = []
     for case, flags in cases:
         command = [*executable, "--gpu-driver", driver, *flags,
@@ -90,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--driver", required=True, choices=("d3d12", "vulkan", "metal"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--suite", choices=("quick", "ci", "full"), default="full",
-                        help="quick: one shader readback; ci: shader, world and menu; full: all eight diagnostics")
+                        help="quick: viewmodel readback; ci: viewmodel, world and menu; full: all seven game diagnostics")
     parser.add_argument("--timeout", type=float, default=120,
                         help="Maximum seconds per diagnostic (default: 120)")
     parser.add_argument("--work-directory", type=Path,

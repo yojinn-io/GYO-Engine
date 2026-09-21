@@ -100,20 +100,20 @@ flowchart TD
 |---|---|---|
 | `builtin/unlit` | GYO Render | 網格與 sprite 的貼圖、tint、alpha cutoff |
 | `builtin/scene_post` | GYO Render | 場景曝光與 gamma |
-| `game/object_fps/channel_swap` | Object_FPS | 使用同一 `unlit` 契約的自訂 shader 驗證樣本 |
+| `game/test/channel_swap` | tests/common | 使用同一 `unlit` 契約的自訂 shader 驗證樣本 |
 
-內建來源位於 `engine/render/shaders/builtin/`，遊戲來源位於 `assets/object_fps/shaders/source/`。各自有 `bundle.json` 建置規格和獨立 runtime bundle。遊戲增加 shader ID 不需要把遊戲名稱或檔案路徑放進 GYO 後端。
+內建來源位於 `engine/render/shaders/builtin/`，共通驗證樣本位於 `tests/common/shader_pipeline/fixtures/`。各自有 `bundle.json` 建置規格和獨立 runtime bundle。共通 GPU 測試比較內建紅色與自訂藍色像素；樣本不隨遊戲部署，也不是啟動必要資源。遊戲增加 shader ID 不需要把遊戲名稱或檔案路徑放進 GYO 後端。
 
 `MaterialDesc` 按 shader ID 指定程式，並提供 texture、tint 與 sampler；shader ID 不是 C++ 函式指標，也不授權 shader 改變遊戲狀態。資料設定只能選擇引擎已支援的介面能力。
 
-例如 `assets/object_fps/shaders/source/bundle.json` 明確指定各階段入口；省略時預設 `main`：
+例如 `tests/common/shader_pipeline/fixtures/bundle.json` 明確指定各階段入口；省略時預設 `main`：
 
 ```json
 {
   "version": 1,
   "include_directory": "../../../../engine/render/shaders/common",
   "programs": [{
-    "id": "game/object_fps/channel_swap",
+    "id": "game/test/channel_swap",
     "interface": "unlit",
     "vertex": "../../../../engine/render/shaders/builtin/unlit.vert.hlsl",
     "vertex_entrypoint": "main",
@@ -125,7 +125,7 @@ flowchart TD
 
 原始 HLSL 入口名稱與產物入口不一定相同；例如轉成 MSL 後可能改名。工具把產物的真實入口寫入 runtime manifest，Renderer/device 讀取該值。
 
-遊戲的 `assets/<name>/content.json` 宣告 catalog 與 shader bundles；CMake 透過共通 hook 自動呼叫資產組裝與離線編譯。組裝結果位於 `build/target/<name>/bin/assets/<name>/`，包含 `shaders/builtin` 與 `shaders/game`。Runtime 只讀取這一個資產根，部署 manifest 不含 build-only source 路徑，也不回退至 checkout。手動複製遊戲時保留內部 shader ID 與 ABI，見[建立遊戲](creating_apps.md)。
+遊戲的 `assets/<name>/content.json` 宣告 catalog 與 shader bundles；CMake 透過共通 hook 自動呼叫資產組裝與離線編譯。組裝結果位於 `build/target/<name>/bin/assets/<name>/`，Object_FPS 目前僅包含 `shaders/builtin`；實際使用自訂 shader 的遊戲才宣告其他 bundle。Runtime 只讀取這一個資產根，部署 manifest 不含 build-only source 路徑，也不回退至 checkout。手動複製遊戲時保留內部 shader ID 與 ABI，見[建立遊戲](creating_apps.md)。
 
 <a id="r06"></a>
 ## 6. 一幀與資源生命週期

@@ -76,7 +76,7 @@ Authors manually prepare engine-ready content from source art or editor exports 
 }
 ```
 
-An SDL_GPU game additionally lists its compiled bundles:
+An SDL_GPU game additionally lists its compiled bundles. Include a `game` bundle only when the game actually uses custom shaders; Object_FPS currently needs only `builtin`. A game with custom shaders can use:
 
 ```json
 {
@@ -99,7 +99,11 @@ An SDL_GPU game additionally lists its compiled bundles:
 
 Sources are relative to the source content manifest. Shader bundle specs retain their own relative source/include paths. The build compiles requested formats and assembles catalogs, content and compiled shaders automatically. Deployed metadata omits build-only `source` paths. Nothing in the game CMake file enumerates individual assets or shader files.
 
-The runtime root is exclusively `bin/assets/<game>/`, with compiled builtin and game shaders underneath. A game that needs reusable content owns its deployed copy; it does not mount `assets/common` beside its private root. Asset IDs remain logical content identifiers, so a texture can retain `common.texture.white` while being stored in the game's own catalog/root.
+The runtime root is exclusively `bin/assets/<game>/`, with the declared compiled shaders underneath. A game that needs reusable content owns its deployed copy; it does not mount `assets/common` beside its private root. Asset IDs remain logical content identifiers, so a texture can retain `common.texture.white` while being stored in the game's own catalog/root.
+
+Each catalog must contain integer `version: 1` and an `assets` array. Entries are objects with nonempty string `id`, `type` and `path`; IDs cannot repeat within or across catalogs. Paths must be normalized relative deployment paths and cannot collide with metadata or declared shader directories. Custom types, additional fields and two IDs sharing one file are allowed. Assembly, package validation and native runtime parsing enforce these same rules.
+
+No asset directory means empty content. Incremental builds detect asset-root or descriptor additions/removals, and build/install synchronization removes only that game's obsolete deployed content. If the directory exists but `content.json` is missing or invalid, the operation fails and preserves the last successful content. Keep `build/content_contract.py` with `build/assemble_runtime.py` when making a minimal source copy; ordinary builds do not require the CI directory.
 
 ## Reproduce assembly by hand, then use the script
 

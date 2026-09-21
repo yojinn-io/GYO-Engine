@@ -50,13 +50,52 @@ void TestCommandLine() {
     Expect(static_cast<bool>(parsed), "valid editor command line parses");
     if (parsed) {
         Expect(
-            parsed.options->catalogPath ==
-                std::filesystem::path{"app-assets"} / "asset_catalog.json",
-            "asset-root derives the read-only catalog path");
+            !parsed.options->catalogPath.has_value() &&
+                parsed.options->assetRoot == std::filesystem::path{"app-assets"},
+            "asset-root selects the content manifest without guessing a catalog");
     }
 
     constexpr std::string_view invalid[]{"--validate", "a.json", "--output", "b.json"};
     Expect(!ParseCommandLine(invalid), "validate rejects an output path");
+    constexpr std::string_view local[]{"--asset-catalog", "catalog.json"};
+    const auto single = ParseCommandLine(local);
+    Expect(single && single.options->catalogPath == "catalog.json" &&
+        single.options->assetRoot == ".", "explicit catalog retains the local-root mode");
+    constexpr std::string_view both[]{"--asset-root", "assets", "--asset-catalog", "elsewhere/catalog.json"};
+    const auto explicitRoot = ParseCommandLine(both);
+    Expect(explicitRoot && explicitRoot.options->assetRoot == "assets" &&
+        explicitRoot.options->catalogPath == "elsewhere/catalog.json", "explicit catalog overrides manifest selection");
+}
+
+void TestContentManifestMount(const std::filesystem::path& root) {
+    const auto assets = root / "manifest-assets";
+    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+        R"({"version":1,"catalogs":["fonts.json","images.json"],"shader_bundles":[]})")), "write content manifest");
+    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "fonts.json",
+        R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write font catalog");
+    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json",
+        R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.bmp"}]})")), "write image catalog");
+    ReadOnlyAssetCatalog catalog;
+    std::string error;
+    Expect(catalog.MountRoot(assets, error), "mount all manifest catalogs");
+    Expect(catalog.IsMounted() && catalog.CatalogPath().empty() && catalog.Assets().size() == 2,
+        "root mode exposes the complete content snapshot");
+    const auto refs = UiDocumentBridge::AssetReferences(nlohmann::json{
+        {"fonts", {{"default", "font.default"}}}, {"image", {{"texture_asset", "texture.logo"}}}});
+    Expect(!HasErrors(ValidateCatalogReferences(refs, &catalog)), "font and image references resolve across catalogs");
+    for (const auto bad : {
+            R"({"version":1,"assets":[{"id":"font.default","type":"texture","path":"image.bmp"}]})",
+            R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"../escape.bmp"}]})",
+            "broken"}) {
+        Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json", bad)), "replace candidate catalog");
+        Expect(!catalog.MountRoot(assets, error), "invalid candidate is rejected");
+        Expect(catalog.Find("texture.logo") != nullptr && catalog.Find("font.default") != nullptr,
+            "failed candidate preserves the previous complete snapshot");
+    }
+    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+        R"({"version":1,"catalogs":["missing.json"],"shader_bundles":[]})")), "declare missing catalog");
+    Expect(!catalog.MountRoot(assets, error), "missing declared catalog does not partially mount");
+    Expect(catalog.Assets().size() == 2, "missing file preserves old mount");
 }
 
 void TestDefaultAndUndo() {
@@ -219,6 +258,7 @@ int main() {
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);
     TestReadOnlyCatalogAndExportGuard(temporary.path);
+    TestContentManifestMount(temporary.path);
     if (failures != 0) {
         std::cerr << failures << " editor core test(s) failed\n";
         return 1;

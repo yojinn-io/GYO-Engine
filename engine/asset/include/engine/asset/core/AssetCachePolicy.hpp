@@ -50,7 +50,7 @@ public:
                      const AssetLifetime& lifetime,
                      std::uint64_t nowFrame) const noexcept {
         // ロード中は触らない
-        if (rec.state == AssetState::Loading) return false;
+        if (rec.IsLoading()) return false;
 
         // KeepForever は絶対に破棄しない
         if (opt_.mode == Mode::KeepForever) return false;

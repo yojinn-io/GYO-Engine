@@ -10,12 +10,22 @@ StreamReader::StreamReader(IStream& s) : s_(s) {
     lbuf_.resize(4096);
 }
 
+IoResult<std::size_t> StreamReader::ReadSome(void* dst, std::size_t bytes) {
+    if (lpos_ < llen_) {
+        const auto count = (std::min)(bytes, llen_ - lpos_);
+        if (count != 0) std::memcpy(dst, lbuf_.data() + lpos_, count);
+        lpos_ += count;
+        return IoResult<std::size_t>::Ok(count);
+    }
+    return s_.Read(dst, bytes);
+}
+
 IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
     std::size_t done = 0;
     auto* out = static_cast<std::byte*>(dst);
 
     while (done < bytes) {
-        auto rr = s_.Read(out + done, bytes - done);
+        auto rr = ReadSome(out + done, bytes - done);
         if (!rr) return rr;
 
         const std::size_t n = rr.value();
@@ -30,8 +40,6 @@ IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
 }
 
 IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes) {
-    if (maxBytes == 0) maxBytes = 0; // 0 は無制限扱い（呼び出し側で opt.maxBytes を渡す想定）
-
     std::vector<std::byte> out;
     out.reserve(64 * 1024);
 
@@ -39,7 +47,7 @@ IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes
     tmp.resize(64 * 1024);
 
     for (;;) {
-        auto rr = s_.Read(tmp.data(), tmp.size());
+        auto rr = ReadSome(tmp.data(), tmp.size());
         if (!rr) return IoResult<std::vector<std::byte>>::Err(rr.error());
 
         const std::size_t n = rr.value();

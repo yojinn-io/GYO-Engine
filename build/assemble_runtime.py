@@ -8,92 +8,47 @@ conversion or source-tree fallback occurs here.
 
 import argparse
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import shutil
+import sys
 
-
-def relative(value):
-    if (not isinstance(value, str) or not value or "\\" in value or ":" in value
-            or any(ord(character) < 32 for character in value) or PurePosixPath(value).is_absolute() or ".." in PurePosixPath(value).parts
-            or str(PurePosixPath(value)) != value or value == "."):
-        raise ValueError(f"Expected a normalized content-relative path: {value!r}")
-    return value
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from content_contract import decode_json, relative_path, validate_content, catalog_files, shader_files
 
 
 def document(path):
-    value = json.loads(path.read_text(encoding="utf-8-sig"))
+    value = decode_json(path.read_text(encoding="utf-8-sig"), str(path))
     if not isinstance(value, dict):
         raise ValueError(f"Expected a JSON object: {path}")
     return value
 
 
 def regular(root, path):
-    result = root / relative(path)
+    result = root / relative_path(path)
     if not result.is_file() or result.is_symlink() or not result.resolve().is_relative_to(root.resolve()):
         raise ValueError(f"Required runtime source is absent or outside its root: {result}")
     return result
 
 
 def content_files(assets, shaders):
-    content = document(regular(assets, "content.json"))
-    if (type(content.get("version")) is not int or content["version"] != 1
-            or not isinstance(content.get("catalogs"), list)
-            or not isinstance(content.get("shader_bundles"), list)):
-        raise ValueError(f"{assets / 'content.json'}: expected integer version 1, catalogs and shader_bundles arrays")
-    files = {}
-    catalog_names = set()
-    for catalog_name in content["catalogs"]:
-        relative(catalog_name)
-        if catalog_name == "content.json" or catalog_name in catalog_names:
-            raise ValueError(f"Duplicate or reserved catalog path: {catalog_name}")
-        catalog_names.add(catalog_name)
-        catalog_path = regular(assets, catalog_name)
-        files[relative(catalog_name)] = catalog_path
-        catalog = document(catalog_path)
-        if type(catalog.get("version")) is not int or catalog["version"] != 1 or not isinstance(catalog.get("assets"), list):
-            raise ValueError(f"{catalog_path}: expected version 1 and assets array")
-        for entry in catalog["assets"]:
-            if not isinstance(entry, dict):
-                raise ValueError(f"{catalog_path}: invalid asset entry")
-            asset_path = relative(entry.get("path"))
-            if asset_path == "content.json":
-                raise ValueError("Asset paths cannot replace content.json")
-            files[asset_path] = regular(assets, asset_path)
+    content = validate_content(document(regular(assets, "content.json")))
+    names = catalog_files(content, lambda name: document(regular(assets, name)))
+    files = {name: regular(assets, name) for name in names}
     bundles = content["shader_bundles"]
-    if not isinstance(bundles, list):
-        raise ValueError("content.json shader_bundles must be an array")
-    names, outputs, runtime_bundles = set(), set(), []
     for bundle in bundles:
-        if not isinstance(bundle, dict):
-            raise ValueError("content.json shader_bundles entries must be objects")
-        name, output = bundle.get("name"), relative(bundle.get("path"))
-        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", name) or name in names:
-            raise ValueError(f"Invalid or duplicate shader bundle name: {name!r}")
-        if output in outputs or any(output.startswith(p + "/") or p.startswith(output + "/") for p in outputs):
-            raise ValueError(f"Overlapping shader output: {output}")
-        for occupied in {*files, "content.json"}:
-            if output == occupied or occupied.startswith(output + "/") or output.startswith(occupied + "/"):
-                raise ValueError(f"Shader output overlaps catalog content: {output} / {occupied}")
-        names.add(name)
-        outputs.add(output)
+        name, output = bundle["name"], bundle["path"]
         if name not in shaders:
             raise ValueError(f"Missing compiled shader bundle --shader {name}=<directory>")
         source = shaders[name].resolve(strict=True)
         shader_manifest = document(regular(source, "manifest.json"))
-        shader_files = {"manifest.json"}
-        for program in shader_manifest.get("programs", []):
-            for variant in program.get("variants", []):
-                for stage in ("vertex", "fragment"):
-                    if stage in variant:
-                        shader_files.add(relative(variant[stage].get("file")))
-        for shader_path in sorted(shader_files):
+        for shader_path in sorted(shader_files(shader_manifest)):
             destination = output + "/" + shader_path
             files[destination] = regular(source, shader_path)
-        runtime_bundles.append({"name": name, "path": output})
+    names = {bundle["name"] for bundle in bundles}
     if set(shaders) != names:
         raise ValueError(f"Unexpected shader bundle arguments: {sorted(set(shaders) - names)}")
-    return files, {"version": 1, "catalogs": content["catalogs"], "shader_bundles": runtime_bundles}
+    return files, content
 
 
 def assemble(product, kind, stage, assets=None, shaders=None, executable=None):

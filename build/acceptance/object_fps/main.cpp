@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
             SDL_Log("Acceptance: --validate-package, --startup-smoke-test, --headless-smoke-test, "
-                    "--shader-smoke-test, --smoke-test, --menu-smoke-test, --viewmodel-smoke-test, "
+                    "--smoke-test, --menu-smoke-test, --viewmodel-smoke-test, "
                     "--reload-smoke-test, --muzzle-smoke-test; --gpu-driver DRIVER, --capture-dir DIR, "
                     "--preview-4x3, --preview-21x9");
             return 0;
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
         else if (argument == "--preview-4x3") options.width = 960;
         else if (argument == "--preview-21x9") options.width = 1680;
         else if (argument == "--validate-package" || argument == "--startup-smoke-test" ||
-            argument == "--headless-smoke-test" || argument == "--shader-smoke-test" ||
+            argument == "--headless-smoke-test" ||
             argument == "--smoke-test" || argument == "--menu-smoke-test" ||
             argument == "--viewmodel-smoke-test" || argument == "--reload-smoke-test" ||
             argument == "--muzzle-smoke-test") {
@@ -95,7 +95,6 @@ int main(int argc, char* argv[]) {
         options.session.fadeInSeconds = 0.0001F;
     }
     if (!application.InitializeGraphics(options, error)) return Fail(error);
-    if (mode == "--shader-smoke-test") return RunShaderProbe(application.Platform(), application.Renderer());
     if (mode == "--muzzle-smoke-test") return RunMuzzleProbe(application.Platform(), application.RenderDevice(),
         application.Renderer(), application.Assets(), *application.Content(), capture);
     if (mode == "--viewmodel-smoke-test" || mode == "--reload-smoke-test") {

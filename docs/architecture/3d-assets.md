@@ -21,14 +21,13 @@ assets/object_fps/
   weapons/animated_pistol/viewmodel/   Pistol.fbx and viewmodel.animset.json
   weapons/mark23/viewmodel/            FBX, textures and presentation definitions
   textures/common/white1x1.png         game-owned reusable texture copy
-  shaders/source/                     game shader source inputs
 engine/model/                         neutral model/animation and FBX adapter
 engine/render/shaders/pipeline/       offline compiler
 ```
 
 Dedicated textures stay beside their character or weapon. Small duplicated eye textures intentionally remain character-local. FBX files are copied without conversion; meshes, nodes, skins and clips stay in their original container. World weapons and first-person viewmodels remain separate assets.
 
-Authors prepare runtime copies and catalog entries manually. The generic build hook then invokes asset assembly from `content.json` for both local and CI builds. Game CMake does not select files or implement copy/install rules. The assembled product reads only `build/target/object_fps/bin/assets/object_fps`, including compiled `shaders/builtin` and `shaders/game`; it never falls back to source art or mounts a separate `assets/common` directory. `common.texture.white` remains a logical ID in the game's own catalog.
+Authors prepare runtime copies and catalog entries manually. The generic build hook then invokes asset assembly from `content.json` for both local and CI builds. Game CMake does not select files or implement copy/install rules. The assembled product reads only `build/target/object_fps/bin/assets/object_fps`, including compiled `shaders/builtin`; it never falls back to source art or mounts a separate `assets/common` directory. `common.texture.white` remains a logical ID in the game's own catalog.
 
 ## Asset IDs and definitions
 

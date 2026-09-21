@@ -230,19 +230,25 @@ public:
     }
 
     RuntimeControl Update(const FrameContext&) override {
+        editor_.ApplyPendingAssetChanges();
+        previewAssets_.BeginFrame();
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         editor_.Draw();
-        return editor_.WantsExit()
-            ? RuntimeControl::Stop
-            : RuntimeControl::Continue;
+        if (editor_.WantsExit()) {
+            ImGui::EndFrame();
+            previewAssets_.EndFrame();
+            return RuntimeControl::Stop;
+        }
+        return RuntimeControl::Continue;
     }
 
     RuntimeControl Render(const FrameContext&) override {
         ImGui::Render();
         auto cleared = renderer_.Clear(Color{12, 14, 18, 255});
         if (!cleared) {
+            previewAssets_.EndFrame();
             LogError("clear failed", cleared.error());
             exitCode_ = 1;
             return RuntimeControl::Stop;
@@ -251,6 +257,7 @@ public:
         ImGui_ImplSDLRenderer3_RenderDrawData(
             ImGui::GetDrawData(), renderer_.NativeRenderer());
         auto presented = renderer_.Present();
+        previewAssets_.EndFrame();
         if (!presented) {
             LogError("present failed", presented.error());
             exitCode_ = 1;

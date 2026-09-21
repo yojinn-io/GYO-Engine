@@ -80,27 +80,36 @@ class GpuSmokeTests(unittest.TestCase):
     def test_ci_suite_continues_after_failure_and_retains_all_results(self):
         self.script.write_text(
             f"import sys\nprint({GPU_LINE!r})\n"
-            "raise SystemExit(9 if '--shader-smoke-test' in sys.argv else 0)\n",
+            "raise SystemExit(9 if '--viewmodel-smoke-test' in sys.argv else 0)\n",
             encoding="utf-8")
         with redirect_stdout(io.StringIO()):
             results = SMOKE.run_suite([sys.executable, str(self.script)], self.root,
                                       self.root, "vulkan", "ci", 5)
-        self.assertEqual([item["case"] for item in results], ["custom-shader", "world", "menu"])
+        self.assertEqual([item["case"] for item in results], ["viewmodel", "world", "menu"])
         self.assertEqual([item["passed"] for item in results], [False, True, True])
         self.assertEqual(len(list(self.root.glob("*.log"))), 3)
         self.assertFalse(all(item["passed"] for item in results))
 
-    def test_quick_suite_runs_only_the_shader_render(self):
+    def test_quick_suite_runs_only_the_viewmodel_readback(self):
         self.script.write_text(
             f"import sys\nprint({GPU_LINE!r})\n"
-            "raise SystemExit(0 if '--shader-smoke-test' in sys.argv else 37)\n",
+            "raise SystemExit(0 if '--viewmodel-smoke-test' in sys.argv else 37)\n",
             encoding="utf-8")
         with redirect_stdout(io.StringIO()):
             results = SMOKE.run_suite([sys.executable, str(self.script)], self.root,
                                       self.root, "vulkan", "quick", 5)
-        self.assertEqual([item["case"] for item in results], ["custom-shader"])
+        self.assertEqual([item["case"] for item in results], ["viewmodel"])
         self.assertTrue(results[0]["passed"])
-        self.assertEqual([path.name for path in self.root.glob("*.log")], ["custom-shader.log"])
+        self.assertEqual([path.name for path in self.root.glob("*.log")], ["viewmodel.log"])
+
+    def test_full_suite_keeps_all_seven_game_diagnostics(self):
+        self.script.write_text(f"print({GPU_LINE!r})\n", encoding="utf-8")
+        with redirect_stdout(io.StringIO()):
+            results = SMOKE.run_suite([sys.executable, str(self.script)], self.root,
+                                      self.root, "vulkan", "full", 5)
+        self.assertEqual([item["case"] for item in results],
+                         ["world", "menu", "viewmodel", "reload", "muzzle-16x9", "muzzle-4x3", "muzzle-21x9"])
+        self.assertTrue(all(item["passed"] for item in results))
 
 
 if __name__ == "__main__":

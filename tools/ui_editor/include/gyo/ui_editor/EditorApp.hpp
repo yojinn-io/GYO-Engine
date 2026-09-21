@@ -19,6 +19,10 @@ public:
     EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets);
 
     [[nodiscard]] bool Initialize(std::string& error);
+    // Apply queued mount/unmount only before the host opens the next frame.
+    void ApplyPendingAssetChanges();
+    void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
+    void RequestAssetUnmount();
     void Draw();
     [[nodiscard]] bool WantsExit() const noexcept;
 
@@ -46,7 +50,8 @@ private:
     void OpenDocument(const std::string& path);
     void SaveDocument(bool overwriteExternal = false);
     void ExportDocument(const std::string& path, bool overwriteExternal = false);
-    void MountCatalog(const std::string& catalogPath, const std::string& assetRoot);
+    [[nodiscard]] bool MountCatalog(const std::filesystem::path& catalogPath,
+        const std::filesystem::path& assetRoot, std::string& error);
 
     CommandLineOptions options_;
     AssetPreviewContext& previewAssets_;
@@ -63,6 +68,8 @@ private:
     std::string pendingAssetRoot_;
     bool pendingOverwriteIsExport_{};
     bool pendingCatalogMount_{};
+    bool pendingCatalogUnmount_{};
+    bool singleCatalogMode_{};
     bool previewMode_{};
     bool gizmoTransactionActive_{};
     bool showGrid_{true};

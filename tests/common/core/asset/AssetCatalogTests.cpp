@@ -29,6 +29,7 @@ TEST_CASE("AssetCatalog: build entries with resolvedPath") {
     fs::path catalogPath = assetsRoot / "asset_catalog.json";
 
     WriteText(catalogPath, R"({
+      "version":1,
       "assets":[
         {"id":"ui.title","type":"text","path":"ui/title.txt"}
       ]
@@ -57,6 +58,7 @@ TEST_CASE("AssetCatalog: duplicate id should fail") {
     fs::path catalogPath = assetsRoot / "asset_catalog.json";
 
     WriteText(catalogPath, R"({
+      "version":1,
       "assets":[
         {"id":"a","type":"text","path":"a.txt"},
         {"id":"a","type":"text","path":"b.txt"}
@@ -78,9 +80,9 @@ TEST_CASE("AssetCatalog: independently rooted append is atomic and preserves ent
     const fs::path tmp = fs::temp_directory_path() / "gyo_catalog_composition_tests";
     const fs::path gameFile = tmp / "game.json";
     const fs::path commonFile = tmp / "common.json";
-    WriteText(gameFile, R"({"assets":[
+    WriteText(gameFile, R"({"version":1,"assets":[
         {"id":"game.wall","type":"texture","path":"wall.png"}]})");
-    WriteText(commonFile, R"({"assets":[
+    WriteText(commonFile, R"({"version":1,"assets":[
         {"id":"common.white","type":"texture","path":"white.png"}]})");
     AssetPathResolver::Options gameOptions;
     gameOptions.assetsRoot = (tmp / "game").string();
@@ -99,12 +101,12 @@ TEST_CASE("AssetCatalog: independently rooted append is atomic and preserves ent
           AssetPathResolver::NormalizePath((tmp / "common/white.png").string()));
 
     SUBCASE("late duplicate cannot leave earlier additions behind") {
-        WriteText(commonFile, R"({"assets":[
+        WriteText(commonFile, R"({"version":1,"assets":[
             {"id":"new.texture","type":"texture","path":"new.png"},
             {"id":"game.wall","type":"texture","path":"other.png"}]})");
     }
     SUBCASE("late path escape cannot leave earlier additions behind") {
-        WriteText(commonFile, R"({"assets":[
+        WriteText(commonFile, R"({"version":1,"assets":[
             {"id":"new.texture","type":"texture","path":"new.png"},
             {"id":"escape","type":"texture","path":"../outside.png"}]})");
     }

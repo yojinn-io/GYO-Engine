@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from package_contract import PLATFORMS, manifest_path, validate_evidence, validate_manifest, required_checks
+from package_contract import PLATFORMS, manifest_path, validate_evidence, validate_manifest, required_checks, required_files, installed_required_files
 from run_package_checks import run_checks
 from test_release_pipeline import APP, COMMIT, manifest
 from release_support import archive_name, validate_archive
@@ -105,6 +105,37 @@ class InstalledCheckTests(unittest.TestCase):
             contract = {**self.contract, **change}
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate_manifest(contract, APP, "linux-x64")
+
+    def test_generic_package_rejects_catalog_the_runtime_cannot_load(self):
+        assets = self.stage / "bin/assets" / APP
+        assets.mkdir(parents=True)
+        (assets / "content.json").write_text(json.dumps({
+            "version": 1, "catalogs": ["catalog.json"], "shader_bundles": []}))
+        (assets / "catalog.json").write_text(json.dumps({
+            "version": 1, "assets": [{"path": "data.txt"}]}))
+        (assets / "data.txt").write_text("present")
+        self.contract["required_files"].append(f"bin/assets/{APP}/content.json")
+        self.contract["checks"] = []
+        with self.assertRaises(ValueError):
+            installed_required_files(self.stage, self.contract)
+
+    def test_package_content_uses_shared_runtime_contract_fixtures(self):
+        cases = json.loads((ROOT / "tests/common/fixtures/asset_contract/cases.json").read_text(encoding="utf-8"))["cases"]
+        root = f"bin/assets/{APP}"
+        self.contract["required_files"].append(root + "/content.json")
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                documents = {root + "/content.json": case["content"]}
+                documents.update((root + "/" + name, catalog) for name, catalog in case["catalogs"].items())
+                if isinstance(case["content"], dict):
+                    for bundle in case["content"]["shader_bundles"]:
+                        documents[root + "/" + bundle["path"] + "/manifest.json"] = {"programs": []}
+                if case["valid"]:
+                    files = required_files(self.contract, documents.__getitem__)
+                    self.assertIn(root + "/content.json", files)
+                else:
+                    with self.assertRaises(ValueError):
+                        required_files(self.contract, documents.__getitem__)
 
     def test_runner_and_archiver_cli_produce_a_verifiable_release(self):
         self.contract["platform"] = "windows-x64"

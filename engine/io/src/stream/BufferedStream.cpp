@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace Engine::IO::Stream {
 
@@ -257,11 +258,25 @@ namespace Engine::IO::Stream {
         auto fr = FlushWriteBuffer();
         if (!fr) return IoResult<std::uint64_t>::Err(fr.error());
 
-        // read buffer は無効化（位置が飛ぶので）
-        rpos_ = 0;
-        rlen_ = 0;
-
-        return inner_->Seek(offset, whence);
+        // Current is relative to our logical cursor, not the end of read-ahead.
+        if (whence == SeekWhence::Current) {
+            const auto unread = rlen_ - rpos_;
+            const auto maximum = (std::numeric_limits<std::int64_t>::max)();
+            const auto minimum = (std::numeric_limits<std::int64_t>::min)();
+            if (unread > static_cast<std::uint64_t>(maximum) ||
+                offset < minimum + static_cast<std::int64_t>(unread)) {
+                return IoResult<std::uint64_t>::Err(IoError::Make(
+                    Engine::IO::IoErrorCode::SeekFailed,
+                    "BufferedStream: relative seek offset overflow"));
+            }
+            offset -= static_cast<std::int64_t>(unread);
+        }
+        auto result = inner_->Seek(offset, whence);
+        if (result) {
+            rpos_ = 0;
+            rlen_ = 0;
+        }
+        return result;
     }
 
     IoResult<std::uint64_t> BufferedStream::Size() const {

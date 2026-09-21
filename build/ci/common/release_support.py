@@ -17,6 +17,7 @@ import tarfile
 
 from package_contract import (PLATFORMS, manifest_path, required_files, validate_product,
                               validate_product_namespace, validate_evidence, validate_manifest, inventory_digest)
+from content_contract import decode_json
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 VERSION_PATTERN = re.compile(
     r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -171,7 +172,8 @@ def validate_archive(name: str, data: bytes, product: str, platform: str, commit
                 raise ReleaseError(f"Missing required package manifest in {name}")
             manifest = validate_manifest(documents[contract_path], product, platform)
             validate_product_namespace((str(PurePosixPath(path).relative_to(root)) for path in seen), product, manifest)
-            required = {f"{root}/{relative}" for relative in required_files(manifest, lambda relative: json.loads(archive.extractfile(f"{root}/{relative}").read()))}
+            required = {f"{root}/{relative}" for relative in required_files(manifest,
+                lambda relative: decode_json(archive.extractfile(f"{root}/{relative}").read(), relative))}
             if missing := sorted(required - seen.keys()):
                 raise ReleaseError(f"Missing required package files in {name}: {missing}")
             for relative in required:

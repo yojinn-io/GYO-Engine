@@ -36,12 +36,12 @@ int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
 
     ReadOnlyAssetCatalog catalog;
     const ReadOnlyAssetCatalog* catalogPointer = nullptr;
-    if (options.catalogPath.has_value()) {
+    if (options.assetRoot.has_value()) {
         std::string error;
-        if (!catalog.Mount(
-                *options.catalogPath,
-                options.assetRoot.value_or(options.catalogPath->parent_path()),
-                error)) {
+        const bool mounted = options.catalogPath.has_value()
+            ? catalog.Mount(*options.catalogPath, *options.assetRoot, error)
+            : catalog.MountRoot(*options.assetRoot, error);
+        if (!mounted) {
             std::cerr << "error: failed to mount catalog: " << error << '\n';
             return 3;
         }

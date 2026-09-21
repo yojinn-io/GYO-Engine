@@ -102,7 +102,7 @@ class InstalledPackageTests(unittest.TestCase):
             with self.subTest(executable=executable):
                 self.manifest["executables"][self.app] = executable
                 self.write_manifest()
-                with self.assertRaisesRegex(ValueError, "package-relative"):
+                with self.assertRaisesRegex(ValueError, "normalized content-relative path"):
                     load_package_info(self.stage)
 
     def test_rejects_missing_executable_and_directory(self):
@@ -128,7 +128,7 @@ class InstalledPackageTests(unittest.TestCase):
     def test_gpu_cli_uses_manifest_executable_as_one_argument(self):
         output = self.root / "gpu logs"
         work = self.root / "unrelated cwd"
-        results = [{"passed": True, "case": "custom-shader"}]
+        results = [{"passed": True, "case": "viewmodel"}]
         with patch.object(gpu, "run_suite", return_value=results) as run_suite:
             result = gpu.main(["--package", str(self.stage), "--probe", str(self.stage / self.relative_executable), "--driver", "vulkan",
                                "--output", str(output), "--suite", "quick",
@@ -180,12 +180,11 @@ class InstalledPackageTests(unittest.TestCase):
         with patch.object(content, "TemporaryDirectory", return_value=nullcontext(str(isolated))), \
                 patch.object(content.subprocess, "run", side_effect=run), redirect_stdout(io.StringIO()):
             content.validate(self.stage, self.root / "content logs", self.stage / self.relative_executable)
-        self.assertEqual(seen_missing, [[], ["missing-common"], ["missing-builtin-shaders"],
-                                        ["missing-game-shaders"]])
+        self.assertEqual(seen_missing, [[], ["missing-common"], ["missing-builtin-shaders"]])
         for _, relative in content.missing_content(self.app):
             self.assertTrue((self.stage / relative).exists())
             self.assertTrue((isolated / "package" / relative).exists())
-        self.assertEqual(len(list((self.root / "content logs").glob("*.log"))), 4)
+        self.assertEqual(len(list((self.root / "content logs").glob("*.log"))), 3)
 
     def test_content_rejects_false_success_and_restores_hidden_content(self):
         isolated = self.prepare_content()

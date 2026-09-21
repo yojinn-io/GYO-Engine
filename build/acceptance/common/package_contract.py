@@ -5,7 +5,10 @@ import json
 from pathlib import Path, PurePosixPath
 
 import re
+import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from content_contract import decode_json, relative_path, validate_content, catalog_files, shader_files
 
 PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64")
 PROFILES = ("quick", "release")
@@ -15,16 +18,6 @@ def validate_product(product: str) -> str:
     if not isinstance(product, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", product):
         raise ValueError(f"Invalid product name: {product!r}")
     return product
-
-
-def relative_path(value: str) -> str:
-    if (not isinstance(value, str) or not value or "\\" in value or ":" in value
-            or any(ord(c) < 32 for c in value)):
-        raise ValueError(f"Invalid package-relative path: {value!r}")
-    path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or str(path) != value or value == ".":
-        raise ValueError(f"Invalid package-relative path: {value!r}")
-    return value
 
 
 def manifest_path(product: str) -> str:
@@ -179,32 +172,16 @@ def required_files(manifest: dict, read_document=None) -> set[str]:
     content_path = f"bin/assets/{manifest['product']}/content.json"
     if read_document is None or content_path not in required:
         return required
-    content = read_document(content_path)
+    content = validate_content(read_document(content_path))
     root = str(PurePosixPath(content_path).parent)
-    if (type(content.get("version")) is not int or content["version"] != 1
-            or not isinstance(content.get("catalogs"), list)
-            or not isinstance(content.get("shader_bundles"), list)):
-        raise ValueError("Invalid installed content descriptor")
-    for name in content["catalogs"]:
-        path = root + "/" + relative_path(name)
-        required.add(path)
-        catalog = read_document(path)
-        if type(catalog.get("version")) is not int or catalog["version"] != 1 or not isinstance(catalog.get("assets"), list):
-            raise ValueError("Invalid installed asset catalog")
-        for entry in catalog["assets"]:
-            required.add(root + "/" + relative_path(entry.get("path")))
+    required.update(root + "/" + name for name in catalog_files(
+        content, lambda name: read_document(root + "/" + name)))
     for bundle in content["shader_bundles"]:
-        bundle_root = root + "/" + relative_path(bundle.get("path"))
+        bundle_root = root + "/" + bundle["path"]
         path = bundle_root + "/manifest.json"
-        required.add(path)
-        shader = read_document(path)
-        for program in shader.get("programs", []):
-            for variant in program.get("variants", []):
-                for stage in ("vertex", "fragment"):
-                    if stage in variant:
-                        required.add(bundle_root + "/" + relative_path(variant[stage].get("file")))
+        required.update(bundle_root + "/" + name for name in shader_files(read_document(path)))
     return required
 
 
 def installed_required_files(stage: Path, manifest: dict) -> set[str]:
-    return required_files(manifest, lambda name: json.loads((stage / name).read_text(encoding="utf-8-sig")))
+    return required_files(manifest, lambda name: decode_json((stage / name).read_text(encoding="utf-8-sig"), name))

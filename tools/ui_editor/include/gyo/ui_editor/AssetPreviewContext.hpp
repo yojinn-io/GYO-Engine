@@ -7,8 +7,10 @@
 
 struct SDL_Renderer;
 struct SDL_Texture;
+namespace Engine::Text { class ITextRasterizer; }
 
 namespace Gyo::Tools::UiEditor {
+class ReadOnlyAssetCatalog;
 
 struct TextTextureView final {
     SDL_Texture* texture{};
@@ -29,11 +31,18 @@ public:
     AssetPreviewContext& operator=(const AssetPreviewContext&) = delete;
 
     [[nodiscard]] bool Initialize(SDL_Renderer& renderer, std::string& error);
+    [[nodiscard]] bool Initialize(SDL_Renderer& renderer,
+        std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer, std::string& error);
     [[nodiscard]] bool Mount(
-        const std::filesystem::path& catalogPath,
-        const std::filesystem::path& assetRoot,
-        std::string& error);
-    void Unmount() noexcept;
+        const ReadOnlyAssetCatalog& catalog, std::string& error);
+    [[nodiscard]] bool Unmount() noexcept;
+
+    // Textures returned within a frame survive until EndFrame. Call EndFrame
+    // only after presentation, or after discarding an unsubmitted ImGui frame.
+    // Mount/unmount are rejected while a frame is active. LRU trim occurs at
+    // BeginFrame, so even a frame with more than 256 text runs remains valid.
+    void BeginFrame();
+    void EndFrame() noexcept;
 
     [[nodiscard]] bool IsMounted() const noexcept;
     [[nodiscard]] SDL_Texture* Texture(

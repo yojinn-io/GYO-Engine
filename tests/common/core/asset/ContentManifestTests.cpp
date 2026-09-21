@@ -48,7 +48,7 @@ TEST_CASE("Content manifest loads only its own catalogs and reports absent conte
     auto manifest = ContentManifest::Load(fixture.root);
     REQUIRE(manifest);
     CHECK_FALSE(manifest.value().LoadCatalogs(fixture.root));
-    fixture.Write("catalog.json", R"({"assets":[{"id":"test.asset","type":"text","path":"missing.txt"}]})");
+    fixture.Write("catalog.json", R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"missing.txt"}]})");
     auto catalog = manifest.value().LoadCatalogs(fixture.root);
     REQUIRE(catalog);
     const auto* entry = catalog.value().Find(Engine::Asset::AssetId::FromString("test.asset"));
@@ -58,9 +58,9 @@ TEST_CASE("Content manifest loads only its own catalogs and reports absent conte
     CHECK_FALSE(source.ReadAll(entry->resolvedPath));
     fixture.Write("missing.txt", "present");
     CHECK(source.ReadAll(entry->resolvedPath));
-    fixture.Write("catalog.json", R"({"assets":[{"id":"test.asset","type":"text","path":"../outside.txt"}]})");
+    fixture.Write("catalog.json", R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"../outside.txt"}]})");
     CHECK_FALSE(manifest.value().LoadCatalogs(fixture.root));
-    fixture.Write("catalog.json", R"({"assets":[{"id":"test.asset","type":"text","path":"content.json"}]})");
+    fixture.Write("catalog.json", R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"content.json"}]})");
     CHECK_FALSE(manifest.value().LoadCatalogs(fixture.root));
 }
 

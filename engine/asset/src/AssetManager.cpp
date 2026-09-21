@@ -1,349 +1,261 @@
 #include "engine/asset/AssetManager.hpp"
 
-#include "engine/asset/AssetCatalog.hpp" // AssetCatalog 実装に合わせて include
+#include "engine/asset/AssetCatalog.hpp"
+
+#include <algorithm>
 
 namespace Engine::Asset {
 
-    AssetManager::AssetManager(AssetCatalog& catalog,
-                               Loading::AssetPipeline& pipeline,
-                               Core::AssetStorage& storage,
-                               Core::AssetLifetime& lifetime,
-                               Core::AssetCachePolicy& cachePolicy,
-                               Core::AssetStatistics* stats,
-                               HotReload::AssetWatcher* watcher)
-        : catalog_(catalog)
-        , pipeline_(pipeline)
-        , storage_(storage)
-        , lifetime_(lifetime)
-        , cachePolicy_(cachePolicy)
-        , stats_(stats)
-        , watcher_(watcher) {}
+AssetManager::AssetManager(AssetCatalog& catalog,
+                           Loading::AssetPipeline& pipeline,
+                           Core::AssetStorage& storage,
+                           Core::AssetLifetime& lifetime,
+                           Core::AssetCachePolicy& cachePolicy,
+                           Core::AssetStatistics* stats,
+                           HotReload::AssetWatcher* watcher)
+    : catalog_(catalog), pipeline_(pipeline), storage_(storage), lifetime_(lifetime),
+      cachePolicy_(cachePolicy), stats_(stats), watcher_(watcher) {}
 
-    void AssetManager::SetOptions(Options opt) { opt_ = opt; }
-    const AssetManager::Options& AssetManager::GetOptions() const noexcept { return opt_; }
+void AssetManager::SetOptions(Options opt) { opt_ = opt; }
+const AssetManager::Options& AssetManager::GetOptions() const noexcept { return opt_; }
+void AssetManager::BeginFrame(std::uint64_t frameIndex) { frame_ = frameIndex; }
 
-    void AssetManager::BeginFrame(std::uint64_t frameIndex) {
-        frame_ = frameIndex;
+void AssetManager::Update() {
+    if (opt_.enableHotReload && watcher_) ProcessHotReload_();
+    ProcessQueue_();
+}
+
+Base::Result<AssetHandle, AssetError>
+AssetManager::Load(const AssetId& id, const AssetRequest& request) {
+    using Result = Base::Result<AssetHandle, AssetError>;
+    // Reserved hints must never silently change the request's meaning, including
+    // on cache hits. Reject before catalog access, records, pinning or references.
+    if (request.priority != 0 || request.keepAliveFramesOverride != 0) {
+        return Result::Err(AssetError::Make(AssetErrorCode::UnsupportedRequest,
+            "AssetManager: nonzero priority and per-request TTL are not supported"));
+    }
+    if (stats_) stats_->OnLoadRequest();
+    auto entry = ResolveEntry_(id, request);
+    if (!entry) return Result::Err(std::move(entry.error()));
+
+    auto pending = std::find_if(queue_.begin(), queue_.end(),
+        [&](const PendingLoad& job) { return job.id == id; });
+    const auto* existing = storage_.Find(id);
+    if (pending != queue_.end() && (!existing || !existing->IsLoading() ||
+        existing->candidateGeneration != pending->generation)) {
+        // Low-level forced eviction/Clear retires all issued generations. Do
+        // not let the old queue entry attach its handle to a new incarnation.
+        queue_.erase(pending);
+        pending = queue_.end();
+    }
+    const bool cached = existing && existing->IsReady() && !request.IsReload();
+    if (pending == queue_.end() && !cached && !storage_.CanReserveGeneration(id)) {
+        return Result::Err(AssetError::Make(AssetErrorCode::GenerationExhausted,
+            "AssetManager: all handle generations for this asset have been issued"));
+    }
+    auto& record = GetOrCreateRecord_(id, entry.value());
+    const auto acquire = [&](std::uint32_t generation) {
+        record.AddReference(generation);
+        lifetime_.Touch(id, frame_);
+        return Result::Ok(AssetHandle::Make(id, generation));
+    };
+
+    // A normal lookup can keep using the published asset during replacement.
+    // An explicit different path is not allowed to overwrite a pending request.
+    if (record.IsReady() && !request.IsReload() &&
+        (pending == queue_.end() || (record.resolvedPath == entry.value().resolvedPath &&
+                                    record.type == entry.value().type))) {
+        if (request.pin) lifetime_.Pin(id);
+        if (stats_) stats_->OnCacheHit(id);
+        return acquire(record.generation);
     }
 
-    void AssetManager::Update() {
-        if (opt_.enableHotReload && watcher_) {
-            ProcessHotReload_();
+    if (pending != queue_.end()) {
+        if (!Compatible_(*pending, entry.value(), request)) {
+            return Result::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
+                "AssetManager: another request for this asset is already queued"));
         }
-        ProcessQueue_();
+        if (request.pin) lifetime_.Pin(id);
+        if (request.IsAsync()) return acquire(pending->generation);
+
+        // The queue is polled on this thread: promote the existing operation,
+        // remove it first, and execute it exactly once with its original inputs.
+        PendingLoad job = std::move(*pending);
+        queue_.erase(pending);
+        auto completed = CompleteLoad_(job);
+        if (!completed && !(request.fallback == AssetRequest::Fallback::KeepOldIfAny && record.IsReady()))
+            return Result::Err(std::move(completed.error()));
+        return acquire(record.generation);
     }
 
-    // ---------------- public API ----------------
+    if (request.pin) lifetime_.Pin(id);
+    if (!record.IsReady() && stats_) stats_->OnCacheMiss();
+    PendingLoad job{id, request, std::move(entry.value()), record.ReserveGeneration()};
+    if (request.IsAsync()) {
+        const auto generation = job.generation;
+        queue_.push_back(std::move(job));
+        return acquire(generation);
+    }
 
-    Base::Result<AssetHandle, AssetError>
-    AssetManager::Load(const AssetId& id, const AssetRequest& request) {
-        if (stats_) stats_->OnLoadRequest();
+    auto completed = CompleteLoad_(job);
+    if (!completed && !(request.fallback == AssetRequest::Fallback::KeepOldIfAny && record.IsReady()))
+        return Result::Err(std::move(completed.error()));
+    return acquire(record.generation);
+}
 
-        // 1) catalog から解決
-        auto entryR = ResolveEntry_(id, request);
-        if (!entryR) return Base::Result<AssetHandle, AssetError>::Err(std::move(entryR.error()));
-        const ResolvedEntry e = std::move(entryR.value());
+bool AssetManager::Acquire(const AssetHandle& handle) {
+    auto* record = FindRecord_(handle);
+    if (!record || record->StateFor(handle.generation()) == AssetState::Unloaded) return false;
+    record->AddReference(handle.generation());
+    lifetime_.Touch(handle.id(), frame_);
+    return true;
+}
 
-        // 2) record 準備
-        Core::AssetRecord& rec = GetOrCreateRecord_(id, e);
+void AssetManager::Release(const AssetHandle& handle) {
+    if (auto* record = FindRecord_(handle)) {
+        // Stale handles still balance their own generation's references.
+        (void)record->ReleaseReference(handle.generation());
+    }
+}
 
-        // 3) 既に Ready で reload しないなら、キャッシュヒット
-        const bool wantReload = request.IsReload();
-        if (rec.IsReady() && !wantReload) {
-            if (stats_) stats_->OnCacheHit(id);
-            lifetime_.Touch(id, frame_);
+AssetState AssetManager::GetState(const AssetHandle& handle) const {
+    const auto* record = FindRecordConst_(handle);
+    return record ? record->StateFor(handle.generation()) : AssetState::Unloaded;
+}
 
-            // Acquire 相当
-            rec.AddReference(rec.generation);
+const AssetError* AssetManager::GetError(const AssetHandle& handle) const {
+    const auto* record = FindRecordConst_(handle);
+    return record ? record->ErrorFor(handle.generation()) : nullptr;
+}
 
-            // typed handle を使いたい場合は、Load<T>() を別途用意して MakeTyped<T>() を返すのが自然
-            return Base::Result<AssetHandle, AssetError>::Ok(
-                AssetHandle::Make(id, rec.generation)
-            );
+bool AssetManager::EvictIfPossible(const AssetId& id) {
+    auto* record = storage_.Find(id);
+    if (!record || record->IsLoading()) return false;
+    if (!cachePolicy_.IsEvictable(*record, lifetime_, frame_)) return false;
+    lifetime_.OnEvicted(id);
+    if (stats_) stats_->OnEvict(id);
+    storage_.EraseIf(id, true);
+    return true;
+}
+
+void AssetManager::Watch(const AssetId& id, std::string resolvedPath) {
+    if (watcher_) watcher_->Watch(id, std::move(resolvedPath));
+}
+
+void AssetManager::Unwatch(const AssetId& id) {
+    if (watcher_) watcher_->Unwatch(id);
+}
+
+Base::Result<AssetManager::ResolvedEntry, AssetError>
+AssetManager::ResolveEntry_(const AssetId& id, const AssetRequest& request) {
+    using Result = Base::Result<ResolvedEntry, AssetError>;
+    if (stats_) stats_->OnCatalogLookup();
+    const auto* entry = catalog_.Find(id);
+    if (!entry) {
+        if (stats_) stats_->OnCatalogMiss();
+        return Result::Err(AssetError::Make(AssetErrorCode::CatalogNotFound,
+            "AssetCatalog: id not found"));
+    }
+    if (request.useTypeHint && request.expectedType.value != 0 && request.expectedType != entry->type) {
+        return Result::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
+            "AssetRequest: expectedType mismatch"));
+    }
+    ResolvedEntry resolved{entry->type,
+        request.overridePath.empty() ? entry->resolvedPath : request.overridePath};
+    if (resolved.resolvedPath.empty()) {
+        return Result::Err(AssetError::Make(AssetErrorCode::InvalidPath,
+            "AssetCatalog: resolvedPath is empty"));
+    }
+    return Result::Ok(std::move(resolved));
+}
+
+Core::AssetRecord& AssetManager::GetOrCreateRecord_(const AssetId& id, const ResolvedEntry& entry) {
+    return storage_.GetOrCreate(id, entry.type, entry.resolvedPath);
+}
+
+bool AssetManager::Compatible_(const PendingLoad& job, const ResolvedEntry& entry,
+                               const AssetRequest& request) {
+    // Scheduling and pinning do not change the bytes/loader operation. Type
+    // hints have already been checked against the catalog before this point.
+    return job.entry.type == entry.type && job.entry.resolvedPath == entry.resolvedPath &&
+           job.req.mode == request.mode && job.req.fallback == request.fallback &&
+           job.req.tag == request.tag;
+}
+
+Base::Result<void, AssetError> AssetManager::CompleteLoad_(const PendingLoad& job) {
+    using Result = Base::Result<void, AssetError>;
+    auto* record = storage_.Find(job.id);
+    // A forcibly removed record must not be recreated by a stale queued job.
+    if (!record || !record->IsLoading() || record->candidateGeneration != job.generation) {
+        return Result::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
+            "AssetManager: queued generation is no longer pending"));
+    }
+    const bool hadReadyAsset = record->IsReady();
+    Loading::LoadContext context;
+    context.id = job.id;
+    context.type = job.entry.type;
+    context.resolvedPath = job.entry.resolvedPath;
+    context.request = &job.req;
+    context.statistics = stats_;
+    context.nowFrame = frame_;
+    auto loaded = pipeline_.Load(context);
+    if (job.req.IsReload() && hadReadyAsset && stats_) stats_->OnReload(job.id);
+
+    if (!loaded) {
+        const auto error = std::move(loaded.error());
+        record->failedGeneration = job.generation;
+        record->failedError = error;
+        record->ClearCandidate();
+        if (job.req.fallback == AssetRequest::Fallback::KeepOldIfAny && hadReadyAsset) {
+            // Published generation stays readable. The candidate has its own
+            // failure so its caller can observe this load's actual outcome.
+            record->error = error;
+        } else {
+            record->generation = job.generation;
+            record->SetFailed(error);
         }
-
-        if (!rec.IsReady() && !wantReload) {
-            if (stats_) stats_->OnCacheMiss();
-        }
-
-        // 4) pin / TTL（必要ならここで適用）
-        if (request.pin) {
-            lifetime_.Pin(id);
-        }
-        if (request.keepAliveFramesOverride != 0) {
-            // keepAliveFramesOverride は policy 側に “この要求だけ” 反映したいが、
-            // ここでは “情報として保持” する場所がないため、運用で policy を切り替えるか、
-            // lifetime 側に別mapを持たせて拡張するのがよい。
-        }
-
-        // 5) Async ならキューへ
-        if (request.IsAsync()) {
-            // すでに Loading 中なら二重投入しない
-            if (!rec.IsLoading()) {
-                EnqueueLoad_(id, request);
-                rec.MarkLoading();
-                if (stats_) stats_->OnLoadStart();
-            }
-
-            // Acquire 相当：呼んだ側はこのhandleを保持する前提
-            rec.AddReference(rec.generation);
-
-            return Base::Result<AssetHandle, AssetError>::Ok(
-                AssetHandle::Make(id, rec.generation)
-            );
-        }
-
-        // 6) Sync：その場でロード
-        auto loadR = DoLoadSync_(rec, e, request, rec.IsReady());
-        if (!loadR) {
-            // reload fallback が KeepOldIfAny で、旧データがある場合は rec が Ready のまま
-            // その場合は “成功としてhandleを返す” のが開発UX的に強い
-            if (request.fallback == AssetRequest::Fallback::KeepOldIfAny && rec.IsReady()) {
-                // 失敗理由は rec.error に残す（※ Ready でも error を持つのは「例外運用」）
-                return Base::Result<AssetHandle, AssetError>::Ok(
-                    AssetHandle::Make(id, rec.generation)
-                );
-            }
-            return Base::Result<AssetHandle, AssetError>::Err(std::move(loadR.error()));
-        }
-
-        // Touch / Loaded
-        lifetime_.OnLoaded(id, frame_);
-
-        // Acquire 相当
-        rec.AddReference(rec.generation);
-
-        return Base::Result<AssetHandle, AssetError>::Ok(
-            AssetHandle::Make(id, rec.generation)
-        );
+        return Result::Err(error);
     }
 
-    bool AssetManager::Acquire(const AssetHandle& h) {
-        Core::AssetRecord* rec = FindRecord_(h);
-        if (!rec) return false;
-        if (rec->generation != h.generation()) return false;
-        rec->AddReference(rec->generation);
-        lifetime_.Touch(h.id(), frame_);
-        return true;
+    record->generation = job.generation;
+    record->type = job.entry.type;
+    record->resolvedPath = job.entry.resolvedPath;
+    record->ClearCandidate();
+    record->SetReady(std::move(loaded.value()));
+    lifetime_.OnLoaded(job.id, frame_);
+    return Result::Ok();
+}
+
+void AssetManager::ProcessQueue_() {
+    auto budget = opt_.maxLoadsPerFrame;
+    while (budget > 0 && !queue_.empty()) {
+        PendingLoad job = std::move(queue_.front());
+        queue_.pop_front();
+        (void)CompleteLoad_(job);
+        --budget;
     }
+}
 
-    void AssetManager::Release(const AssetHandle& h) {
-        Core::AssetRecord* rec = FindRecord_(h);
-        if (!rec) return;
-
-        // A successful reload deliberately makes old handles stale for reads.
-        // Their Load/Acquire references still have to be released, however.
-        // AssetRecord keeps generation-scoped counts so a stale or repeated
-        // release cannot consume a reference owned by the current generation.
-        (void)rec->ReleaseReference(h.generation());
-        // 解放後の eviction は「上位が EvictIfPossible を呼ぶ」運用にしておく（自動evictは後で）
+void AssetManager::ProcessHotReload_() {
+    for (const auto& change : watcher_->Poll()) {
+        auto request = AssetRequest::Reload();
+        request.sync = AssetRequest::SyncWith::Async;
+        request.overridePath = change.resolvedPath;
+        request.fallback = opt_.reloadKeepOldIfAny ? AssetRequest::Fallback::KeepOldIfAny
+                                                  : AssetRequest::Fallback::None;
+        // Use exactly the public admission, reservation and merge rules. The
+        // watcher owns no handle reference; the pending operation blocks eviction.
+        auto queued = Load(change.id, request);
+        if (queued) Release(queued.value());
     }
+}
 
-    AssetState AssetManager::GetState(const AssetHandle& h) const {
-        const Core::AssetRecord* rec = FindRecordConst_(h);
-        if (!rec) return AssetState::Unloaded;
-        if (rec->generation != h.generation()) return AssetState::Unloaded; // stale は Unloaded 扱い
-        return rec->state;
-    }
+Core::AssetRecord* AssetManager::FindRecord_(const AssetHandle& handle) {
+    return storage_.Find(handle.id());
+}
 
-    const AssetError* AssetManager::GetError(const AssetHandle& h) const {
-        const Core::AssetRecord* rec = FindRecordConst_(h);
-        if (!rec) return nullptr;
-        if (rec->generation != h.generation()) return nullptr;
-        if (rec->error.ok()) return nullptr;
-        return &rec->error;
-    }
-
-    bool AssetManager::EvictIfPossible(const AssetId& id) {
-        Core::AssetRecord* rec = storage_.Find(id);
-        if (!rec) return false;
-
-        if (!cachePolicy_.IsEvictable(*rec, lifetime_, frame_)) return false;
-
-        // record を消す前に lifetime/statistics を更新
-        lifetime_.OnEvicted(id);
-        if (stats_) stats_->OnEvict(id);
-
-        // 強制で erase
-        storage_.EraseIf(id, true);
-        return true;
-    }
-
-    void AssetManager::Watch(const AssetId& id, std::string resolvedPath) {
-        if (!watcher_) return;
-        watcher_->Watch(id, std::move(resolvedPath));
-    }
-
-    void AssetManager::Unwatch(const AssetId& id) {
-        if (!watcher_) return;
-        watcher_->Unwatch(id);
-    }
-
-    // ---------------- internal helpers ----------------
-
-    Base::Result<AssetManager::ResolvedEntry, AssetError>
-    AssetManager::ResolveEntry_(const AssetId& id, const AssetRequest& req) {
-        if (stats_) stats_->OnCatalogLookup();
-
-        // CatalogEntry { AssetType type; std::string resolvedPath; } が引ける
-        const auto* entry = catalog_.Find(id); //
-        if (!entry) {
-            if (stats_) stats_->OnCatalogMiss();
-            return Base::Result<ResolvedEntry, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::CatalogNotFound, "AssetCatalog: id not found")
-            );
-        }
-
-        // type hint check
-        if (req.useTypeHint && req.expectedType.value != 0) {
-            if (req.expectedType.value != entry->type.value) {
-                return Base::Result<ResolvedEntry, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::InvalidCatalogEntry, "AssetRequest: expectedType mismatch")
-                );
-            }
-        }
-
-        ResolvedEntry out;
-        out.type = entry->type;
-
-        // override path がある場合：ここでは “resolvedPath として扱う”
-        // 必要ならここで AssetPathResolver を通して正規化してOK（設計上はCatalog側が担当）
-        out.resolvedPath = req.overridePath.empty() ? entry->resolvedPath : req.overridePath;
-
-        if (out.resolvedPath.empty()) {
-            return Base::Result<ResolvedEntry, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::InvalidPath, "AssetCatalog: resolvedPath is empty")
-            );
-        }
-
-        return Base::Result<ResolvedEntry, AssetError>::Ok(std::move(out));
-    }
-
-    Core::AssetRecord& AssetManager::GetOrCreateRecord_(const AssetId& id, const ResolvedEntry& e) {
-        // 初回だけ type/path がセットされる（既存なら保持）
-        return storage_.GetOrCreate(id, e.type, e.resolvedPath);
-    }
-
-    Base::Result<void, AssetError>
-    AssetManager::DoLoadSync_(Core::AssetRecord& rec,
-                              const ResolvedEntry& e,
-                              const AssetRequest& req,
-                              bool hadReadyAsset) {
-        // ForceReload のときは “読み込み前に Loading へ”
-        rec.MarkLoading();
-
-        Loading::LoadContext ctx;
-        ctx.id = rec.id;
-        ctx.type = e.type;
-        ctx.resolvedPath = e.resolvedPath;
-        ctx.request = &req;
-        ctx.statistics = stats_;
-        ctx.nowFrame = frame_;
-
-        auto r = pipeline_.Load(ctx);
-        if (!r) {
-            // Reload + KeepOldIfAny + 旧データあり => 旧キャッシュ維持
-            if (req.fallback == AssetRequest::Fallback::KeepOldIfAny && hadReadyAsset) {
-                // 旧 asset は rec.asset に残っているので state を Ready に戻す
-                // ただしエラー情報は “最後のreload失敗” として残しておく（デバッグ優先）
-                rec.state = AssetState::Ready;
-                rec.error = std::move(r.error());
-                if (stats_) stats_->OnReload(rec.id);
-                return Base::Result<void, AssetError>::Ok();
-            }
-
-            // A destructive reload invalidated a previously readable payload.
-            // Retire that generation even though no replacement was produced;
-            // otherwise a later recovery load could resurrect old handles.
-            if (req.IsReload() && hadReadyAsset) {
-                rec.AdvanceGeneration();
-            }
-
-            rec.SetFailed(std::move(r.error()));
-            return Base::Result<void, AssetError>::Err(rec.error);
-        }
-
-        // 成功：AnyAsset を格納
-        // Reload で既に Ready だった場合のみ generation を進める（stale handle を弾く）
-        if (req.IsReload() && hadReadyAsset) {
-            rec.AdvanceGeneration();
-            if (stats_) stats_->OnReload(rec.id);
-        }
-
-        rec.SetReady(std::move(r.value()));
-        // resolvedPath を record に持たせておく（便利）
-        if (rec.resolvedPath.empty()) rec.resolvedPath = e.resolvedPath;
-
-        return Base::Result<void, AssetError>::Ok();
-    }
-
-    void AssetManager::EnqueueLoad_(const AssetId& id, const AssetRequest& req) {
-        // 重複投入を防ぐ（同じIDがキューにいるならスキップ）
-        if (queued_.find(id) != queued_.end()) return;
-
-        const Core::AssetRecord* record = storage_.Find(id);
-        queue_.push_back(PendingLoad{ id, req, record != nullptr && record->IsReady() });
-        queued_.insert(id);
-    }
-
-    void AssetManager::ProcessQueue_() {
-        if (queue_.empty()) return;
-
-        std::uint32_t budget = opt_.maxLoadsPerFrame;
-        while (budget > 0 && !queue_.empty()) {
-            PendingLoad job = std::move(queue_.front());
-            queue_.pop_front();
-            queued_.erase(job.id);
-
-            // catalog resolve
-            auto entryR = ResolveEntry_(job.id, job.req);
-            if (!entryR) {
-                // catalog 失敗：record があれば Failed に落とす
-                if (auto* rec = storage_.Find(job.id)) {
-                    rec->SetFailed(std::move(entryR.error()));
-                }
-                --budget;
-                continue;
-            }
-
-            const ResolvedEntry e = std::move(entryR.value());
-            Core::AssetRecord& rec = GetOrCreateRecord_(job.id, e);
-
-            // 実ロード（sync実行）
-            (void)DoLoadSync_(rec, e, job.req, job.hadReadyAsset);
-
-            // 成功なら寿命更新
-            if (rec.IsReady()) lifetime_.OnLoaded(rec.id, frame_);
-
-            --budget;
-        }
-    }
-
-    void AssetManager::ProcessHotReload_() {
-        if (!watcher_) return;
-
-        auto changes = watcher_->Poll();
-        if (changes.empty()) return;
-
-        for (auto& c : changes) {
-            AssetRequest r = AssetRequest::Reload();
-            r.sync = AssetRequest::SyncWith::Async;
-            r.fallback = opt_.reloadKeepOldIfAny ? AssetRequest::Fallback::KeepOldIfAny
-                                                : AssetRequest::Fallback::None;
-            EnqueueLoad_(c.id, r);
-        }
-    }
-
-    Core::AssetRecord* AssetManager::FindRecord_(const AssetHandle& h) {
-        Core::AssetRecord* rec = storage_.Find(h.id());
-        if (!rec) return nullptr;
-        return rec;
-    }
-
-    const Core::AssetRecord* AssetManager::FindRecordConst_(const AssetHandle& h) const {
-        const Core::AssetRecord* rec = storage_.Find(h.id());
-        if (!rec) return nullptr;
-        return rec;
-    }
+const Core::AssetRecord* AssetManager::FindRecordConst_(const AssetHandle& handle) const {
+    return storage_.Find(handle.id());
+}
 
 } // namespace Engine::Asset

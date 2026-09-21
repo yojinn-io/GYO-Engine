@@ -57,18 +57,23 @@ if(GYO_UI_EDITOR_BUILD_GUI)
                 "gyo_ui_editor GUI requires the ${_target} target")
         endif()
     endforeach()
-    target_sources(gyo_ui_editor PRIVATE
+    add_library(gyo_ui_editor_preview STATIC
         src/AssetPreviewContext.cpp
         src/EditorApp.cpp
-        src/ImGuiSdlRendererHost.cpp
         src/PreviewAdapter.cpp
     )
-    target_link_libraries(gyo_ui_editor PRIVATE
-        GYO::PlatformSDL
-        GYO::RenderBackendSDL
+    target_link_libraries(gyo_ui_editor_preview PUBLIC
+        gyo_ui_editor_core
+        SDL3::SDL3
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
+    )
+    target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp)
+    target_link_libraries(gyo_ui_editor PRIVATE
+        gyo_ui_editor_preview
+        GYO::PlatformSDL
+        GYO::RenderBackendSDL
         imgui::sdl3_sdlrenderer3
     )
     target_compile_definitions(gyo_ui_editor PRIVATE
@@ -88,9 +93,16 @@ if(MSVC)
     target_compile_options(gyo_ui_editor PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_ui_editor_core PRIVATE NOMINMAX)
     target_compile_definitions(gyo_ui_editor PRIVATE NOMINMAX)
+    if(TARGET gyo_ui_editor_preview)
+        target_compile_options(gyo_ui_editor_preview PRIVATE /W4 /permissive- /utf-8)
+        target_compile_definitions(gyo_ui_editor_preview PRIVATE NOMINMAX)
+    endif()
 else()
     target_compile_options(gyo_ui_editor_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gyo_ui_editor PRIVATE -Wall -Wextra -Wpedantic)
+    if(TARGET gyo_ui_editor_preview)
+        target_compile_options(gyo_ui_editor_preview PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 set(_gyo_editor_components "")

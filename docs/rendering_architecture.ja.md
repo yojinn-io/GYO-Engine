@@ -100,20 +100,20 @@ flowchart TD
 |---|---|---|
 | `builtin/unlit` | GYO Render | mesh と sprite のテクスチャ、tint、alpha cutoff |
 | `builtin/scene_post` | GYO Render | シーンの exposure と gamma |
-| `game/object_fps/channel_swap` | Object_FPS | 同じ `unlit` 契約を使うカスタム shader の検証用サンプル |
+| `game/test/channel_swap` | tests/common | 同じ `unlit` 契約を使うカスタム shader の検証用サンプル |
 
-内蔵ソースは `engine/render/shaders/builtin/`、ゲームのソースは `assets/object_fps/shaders/source/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
+内蔵ソースは `engine/render/shaders/builtin/`、共通検証サンプルは `tests/common/shader_pipeline/fixtures/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。共通 GPU テストが内蔵 shader の赤とカスタム shader の青の画素を比較します。検証用サンプルをゲームに配布せず、ゲーム起動時にも要求しません。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
 
 `MaterialDesc` は shader ID でプログラムを指定し、texture、tint、sampler を渡します。Shader ID は C++ 関数ポインターではなく、shader がゲーム状態を変更する権限も持ちません。データ設定で選べるのはエンジンが対応済みの能力です。
 
-例えば `assets/object_fps/shaders/source/bundle.json` では各ステージのエントリーポイントを明示します。省略時は `main` です。
+例えば `tests/common/shader_pipeline/fixtures/bundle.json` では各ステージのエントリーポイントを明示します。省略時は `main` です。
 
 ```json
 {
   "version": 1,
   "include_directory": "../../../../engine/render/shaders/common",
   "programs": [{
-    "id": "game/object_fps/channel_swap",
+    "id": "game/test/channel_swap",
     "interface": "unlit",
     "vertex": "../../../../engine/render/shaders/builtin/unlit.vert.hlsl",
     "vertex_entrypoint": "main",
@@ -125,7 +125,7 @@ flowchart TD
 
 HLSL の入口名と成果物の入口名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物の入口を runtime manifest に記録し、Renderer/device はその値を使います。
 
-ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook が資産組立とオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、`shaders/builtin` と `shaders/game` を含みます。Runtime はこの一つの資産 root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
+ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook が資産組立とオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、Object_FPS は現在 `shaders/builtin` のみを含みます。実際にカスタム shader を使うゲームだけが追加 bundle を宣言します。Runtime はこの一つの資産 root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
 
 <a id="r06"></a>
 ## 6. フレームとリソースのライフサイクル

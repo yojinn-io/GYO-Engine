@@ -1,6 +1,7 @@
 add_executable(engine_tests
     test_main.cpp
     asset/ContentManifestTests.cpp
+    asset/AssetContentContractTests.cpp
     asset/AssetIdTests.cpp
     asset/AssetTypeTests.cpp
     asset/CatalogParserTests.cpp
@@ -11,12 +12,17 @@ add_executable(engine_tests
     asset/NativeFileAssetSourceTests.cpp
     runtime/RuntimeLoopTests.cpp
     runtime/RuntimePortTests.cpp
+    io/BufferedStreamTests.cpp
+    io/StreamReaderTests.cpp
 )
 
 target_link_libraries(engine_tests PRIVATE
     GYO::Engine
     doctest::doctest
+    nlohmann_json::nlohmann_json
 )
+target_compile_definitions(engine_tests PRIVATE
+    GYO_ASSET_CONTRACT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/../fixtures/asset_contract/cases.json")
 
 add_test(NAME engine_tests COMMAND engine_tests)
 

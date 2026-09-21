@@ -102,9 +102,25 @@ Authors decide which source material becomes runtime content. Source archives an
 
 `assets/<game>/content.json` lists catalogs and shader bundles. Build-only shader `source` fields identify input specs. The deployed content descriptor contains only relative runtime paths; build-only shader source fields are omitted. Runtime loading does not require the source tree. A game owns all of its deployed resources, including copies of reusable content and compiled builtin shaders. Runtime loading uses only `bin/assets/<game>/`; there is no separate shared mount or source-tree fallback.
 
-The current Object_FPS runtime layout includes `asset_catalog.json`, gameplay data, models, textures, UI/font assets, `shaders/builtin` and `shaders/game`. Its white texture retains the internal ID `common.texture.white` but is a game-owned file. Existing AssetIds and shader IDs are content contracts, not deployment directory names; a manual game copy does not need global identifier replacement.
+The current Object_FPS runtime layout includes `asset_catalog.json`, gameplay data, models, textures, UI/font assets and `shaders/builtin`. Custom shader validation belongs to `tests/common`, using its own channel-swap fixture; the game does not ship or require it. Its white texture retains the internal ID `common.texture.white` but is a game-owned file. Existing AssetIds and shader IDs are content contracts, not deployment directory names; a manual game copy does not need global identifier replacement.
+
+Python assembly and package validation share the pure data rules in `build/content_contract.py`. Runtime and Editor use native C++ parsing, checked against the same valid/invalid fixtures. Every catalog requires integer `version: 1`, an `assets` array, and object entries with nonempty string `id`, `type` and `path`. IDs must be unique across the entire content collection. Normalized relative paths, reserved names and shader-directory overlaps use the same rules. Custom types, additional fields and distinct IDs referring to one file remain supported.
+
+Every selected game's content is synchronized on build and install. A missing source asset directory means empty content and removes only that product's previous deployed assets. An existing directory with a missing or invalid descriptor fails and preserves the last successful output. The shared hook watches asset-root and descriptor additions/removals so an incremental build reconfigures when needed.
+
+Editor full-content mounting parses `content.json` and its catalogs once. Validation, asset lists and previews use that same snapshot; a failed replacement keeps the previous mount. Mount changes and text-cache eviction occur at frame boundaries before drawing commands borrow textures. See [UI toolchain](ui_toolchain.md) for explicit full-content and single-catalog modes.
 
 `AssetManager` owns IDs/handles, catalog lookup, records, cache/lifetime and loader dispatch. Loaders create CPU values only. `NativeFileAssetSource` reads catalog-resolved bytes. `IRenderDevice` owns GPU upload, residency, synchronization and disposal. Shader compilers run at build time, never at game startup. See [rendering](rendering_architecture.zh-Hant.md) and [3D assets](architecture/3d-assets.md) for the concrete data contracts.
+
+### Asset requests and logical IO position
+
+An asynchronous reload reserves a new generation when queued. Its returned handle is `Loading` and unreadable while the published handle remains readable. Success makes that same candidate `Ready` and invalidates the old handle. Failure makes the candidate `Failed`: `KeepOldIfAny` preserves the published handle, while the other policy invalidates it. Synchronous fallback retains the existing behavior of returning the old handle on a failed replacement. Issued generations are never reused after failure or eviction; releases of stale handles still balance their references.
+
+There is at most one pending request per AssetId. Equal requests coalesce; a synchronous request can complete the pending work immediately without a second load during `Update()`. Conflicting resolved path, mode, fallback, type or tag returns `RequestInProgress`. Sync mode and pin are not content differences. Ordinary `Auto` cache hits may still return the published version during reload, and pending work prevents eviction. Only the current candidate and most recent failed candidate retain query state.
+
+The public priority and TTL-override fields remain reserved. Non-default `priority` or `keepAliveFramesOverride` returns `UnsupportedRequest` before IO, queueing, reference changes or pin changes. Supported pin requests apply to both initial loads and cache hits. Exhausting the generation counter returns `GenerationExhausted` rather than reusing handles; existing cache hits and pending requests remain usable. Queue, synchronous and watcher completion share the same publication/failure rules; no background scheduler is introduced.
+
+Buffered IO exposes one logical read position. Relative seeks account for unread prefetch, preserve buffered bytes when the underlying seek fails and reject offset overflow. `StreamReader` consumes leftover line-buffer bytes before all binary, integer and whole-content reads; mixing these operations never skips prefetched input.
 
 ## Tests and release products
 
@@ -119,6 +135,8 @@ The release workflow fixes a source SHA, derives the complete expected product/p
 ## Architecture changes and verification
 
 The reorganization resolves observed ownership conflicts: duplicated root/editor dependency composition, asset deployment policy embedded in CMake, tests injected into game binaries, and CI framed around individual apps. Module aliases and neutral C++ interfaces are retained while their physical directories move below `engine/`.
+
+The contract repair addresses three additional observed pressures: divergent Python content validators, Editor re-reading catalogs independently of validation, and a test shader required by normal gameplay. Validation rules now have one Python owner with shared C++ fixtures, Editor consumes one parsed snapshot, and shader validation belongs to common tests. No top-level subsystem or reverse engine-to-game dependency is added; runtime does not depend on Python.
 
 Structural verification checks one-way dependencies, absence of test/CI code in products, CSV-only game selection, single-app and zero-app builds, manual-copy isolation, and self-contained executable-relative content. Functional verification includes engine tests, editor validation, asset/shader failure cases, game diagnostics and installed-product execution. A successful build does not prove physical GPU support on an untested machine.
 
