@@ -1,0 +1,1373 @@
+{
+  "schema": "gyo.ui",
+  "version": 1,
+  "design_canvas": {
+    "size": [
+      1280.0,
+      720.0
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "object_fps_v2.font.ui"
+  },
+  "default_font": "ui",
+  "colors": {
+    "accent": "#40D1F2FF",
+    "backdrop": "#18202FFF",
+    "bar_fill": "#39C75AFF",
+    "button": "#354253F5",
+    "danger": "#ED4038FF",
+    "focused": "#217AADFF",
+    "muted_text": "#96ABBFFF",
+    "overlay": "#101520C7",
+    "panel": "#293647F0",
+    "pressed": "#2A98CDFF",
+    "text": "#EBF5FFFF",
+    "track": "#202831F5",
+    "white": "#FFFFFFFF"
+  },
+  "actions": [
+    {
+      "id": "object_fps_v2.start_game",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.open_controls",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.close_controls",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.resume",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.return_main_menu",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.quit",
+      "payload": "none"
+    },
+    {
+      "id": "object_fps_v2.set_gamma",
+      "payload": "number"
+    },
+    {
+      "id": "object_fps_v2.set_exposure",
+      "payload": "number"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "display.gamma",
+      "type": "number",
+      "preview": 1.0
+    },
+    {
+      "id": "display.exposure_ev",
+      "type": "number",
+      "preview": 0.0
+    },
+    {
+      "id": "results.outcome",
+      "type": "enum",
+      "values": [
+        "completed",
+        "player_died",
+        "in_progress"
+      ],
+      "preview": "completed"
+    },
+    {
+      "id": "results.visited_rooms",
+      "type": "integer",
+      "preview": 3
+    },
+    {
+      "id": "results.total_rooms",
+      "type": "integer",
+      "preview": 3
+    },
+    {
+      "id": "results.total_kills",
+      "type": "integer",
+      "preview": 12
+    },
+    {
+      "id": "results.rooms",
+      "type": "list<object>",
+      "item_fields": {
+        "kills": "integer",
+        "name": "string"
+      },
+      "preview": [
+        {
+          "kills": 4,
+          "name": "ROOM 01"
+        },
+        {
+          "kills": 5,
+          "name": "ROOM 02"
+        },
+        {
+          "kills": 3,
+          "name": "ROOM 03"
+        }
+      ]
+    }
+  ],
+  "canvases": [
+    {
+      "id": "main_menu",
+      "backdrop_color": "backdrop",
+      "default_focus": "main_start",
+      "focus_order": [
+        "main_start",
+        "main_controls",
+        "main_quit"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "main_panel",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              100.0
+            ],
+            "size_delta": [
+              560.0,
+              500.0
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "main_title",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.03333333507180214
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              150.0
+            ],
+            "size_delta": [
+              560.0,
+              68.0
+            ]
+          },
+          "text": {
+            "literal": "OBJECT FPS v2"
+          },
+          "point_size": 48.0,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "main_start",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              340.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "ゲームスタート"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.start_game",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "main_controls",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              406.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "説明"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.open_controls",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "main_quit",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              472.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "終わり"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.quit",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "backdrop_color": "backdrop",
+      "default_focus": "controls_back",
+      "cancel_action": "object_fps_v2.close_controls",
+      "focus_order": [
+        "controls_back"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "controls_panel",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              70.0
+            ],
+            "size_delta": [
+              740.0,
+              580.0
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "controls_title",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              112.0
+            ],
+            "size_delta": [
+              660.0,
+              60.0
+            ]
+          },
+          "text": {
+            "literal": "CONTROLS"
+          },
+          "point_size": 40.0,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_move_forward",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              202.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "W / S    MOVE FORWARD / BACK"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_strafe",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              244.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "A / D    STRAFE LEFT / RIGHT"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_look",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              286.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "MOUSE    LOOK"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_fire",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              328.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "LMB      FIRE"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_reload",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              370.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "R        RELOAD"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_jump",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              412.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "SPACE    JUMP"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_holster",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              454.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "H        HOLSTER / DRAW"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "controls_pause",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              496.0
+            ],
+            "size_delta": [
+              500.0,
+              34.0
+            ]
+          },
+          "text": {
+            "literal": "ESC      PAUSE"
+          },
+          "point_size": 21.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "controls_back",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.011111111380159855
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              594.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "BACK"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.close_controls",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pause",
+      "backdrop_color": "overlay",
+      "default_focus": "pause_resume",
+      "cancel_action": "object_fps_v2.resume",
+      "focus_order": [
+        "pause_gamma",
+        "pause_exposure",
+        "pause_resume",
+        "pause_main_menu",
+        "pause_quit"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "pause_panel",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              52.0
+            ],
+            "size_delta": [
+              580.0,
+              616.0
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "pause_title",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              82.0
+            ],
+            "size_delta": [
+              500.0,
+              62.0
+            ]
+          },
+          "text": {
+            "literal": "PAUSED"
+          },
+          "point_size": 42.0,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "horizontal_slider",
+          "id": "pause_gamma",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              164.0
+            ],
+            "size_delta": [
+              460.0,
+              72.0
+            ]
+          },
+          "text": {
+            "literal": "GAMMA"
+          },
+          "point_size": 18.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "top",
+          "action": "object_fps_v2.set_gamma",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          },
+          "binding": "display.gamma",
+          "minimum": 0.75,
+          "maximum": 1.5,
+          "step": 0.05,
+          "value_format": {
+            "decimals": 2,
+            "show_plus": false
+          },
+          "track_color": "track",
+          "fill_color": "accent",
+          "thumb_color": "white"
+        },
+        {
+          "type": "horizontal_slider",
+          "id": "pause_exposure",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              250.0
+            ],
+            "size_delta": [
+              460.0,
+              72.0
+            ]
+          },
+          "text": {
+            "literal": "EXPOSURE EV"
+          },
+          "point_size": 18.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "top",
+          "action": "object_fps_v2.set_exposure",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          },
+          "binding": "display.exposure_ev",
+          "minimum": -2.0,
+          "maximum": 2.0,
+          "step": 0.1,
+          "value_format": {
+            "decimals": 1,
+            "show_plus": true
+          },
+          "track_color": "track",
+          "fill_color": "accent",
+          "thumb_color": "white"
+        },
+        {
+          "type": "button",
+          "id": "pause_resume",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              358.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "RESUME"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.resume",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "pause_main_menu",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              424.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "MAIN MENU"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.return_main_menu",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "pause_quit",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              490.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "QUIT"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.quit",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "results",
+      "backdrop_color": "backdrop",
+      "default_focus": "results_main_menu",
+      "focus_order": [
+        "results_main_menu"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "results_panel",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              54.0
+            ],
+            "size_delta": [
+              780.0,
+              620.0
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "results_title",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              90.0
+            ],
+            "size_delta": [
+              680.0,
+              62.0
+            ]
+          },
+          "text": {
+            "select": {
+              "binding": "results.outcome",
+              "cases": {
+                "completed": "RUN COMPLETE",
+                "in_progress": "RUN ENDED",
+                "player_died": "YOU DIED"
+              }
+            }
+          },
+          "point_size": 42.0,
+          "text_color": {
+            "select": {
+              "binding": "results.outcome",
+              "cases": {
+                "completed": "accent",
+                "in_progress": "muted_text",
+                "player_died": "danger"
+              }
+            }
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "results_rooms_summary",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              190.0
+            ],
+            "size_delta": [
+              500.0,
+              36.0
+            ]
+          },
+          "text": {
+            "compose": {
+              "format": "ROOMS {visited} / {total}",
+              "placeholders": {
+                "total": {
+                  "binding": "results.total_rooms",
+                  "format": {
+                    "decimals": 0,
+                    "show_plus": false
+                  }
+                },
+                "visited": {
+                  "binding": "results.visited_rooms",
+                  "format": {
+                    "decimals": 0,
+                    "show_plus": false
+                  }
+                }
+              }
+            }
+          },
+          "point_size": 22.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "results_kills_summary",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              232.0
+            ],
+            "size_delta": [
+              500.0,
+              36.0
+            ]
+          },
+          "text": {
+            "compose": {
+              "format": "KILLS {kills}",
+              "placeholders": {
+                "kills": {
+                  "binding": "results.total_kills",
+                  "format": {
+                    "decimals": 0,
+                    "show_plus": false
+                  }
+                }
+              }
+            }
+          },
+          "point_size": 22.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "fixed_step_list",
+          "id": "results_room_list",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              302.0
+            ],
+            "size_delta": [
+              500.0,
+              238.0
+            ]
+          },
+          "binding": "results.rooms",
+          "max_items": 7,
+          "item_step": [
+            0.0,
+            34.0
+          ],
+          "template": [
+            {
+              "type": "text",
+              "id": "results_room_name",
+              "rect": {
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  0.0,
+                  0.0
+                ],
+                "pivot": [
+                  0.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  320.0,
+                  28.0
+                ]
+              },
+              "text": {
+                "item_field": "name",
+                "format": {
+                  "decimals": 0,
+                  "show_plus": false
+                }
+              },
+              "point_size": 17.0,
+              "text_color": {
+                "color": "muted_text"
+              },
+              "horizontal_align": "left",
+              "vertical_align": "center"
+            },
+            {
+              "type": "text",
+              "id": "results_room_kills",
+              "rect": {
+                "anchor_min": [
+                  1.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  0.0
+                ],
+                "pivot": [
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  180.0,
+                  28.0
+                ]
+              },
+              "text": {
+                "compose": {
+                  "format": "{kills} KILLS",
+                  "placeholders": {
+                    "kills": {
+                      "item_field": "kills",
+                      "format": {
+                        "decimals": 0,
+                        "show_plus": false
+                      }
+                    }
+                  }
+                }
+              },
+              "point_size": 17.0,
+              "text_color": {
+                "color": "muted_text"
+              },
+              "horizontal_align": "right",
+              "vertical_align": "center"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "results_main_menu",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.0
+            ],
+            "anchor_max": [
+              0.5,
+              0.0
+            ],
+            "pivot": [
+              0.5,
+              0.0
+            ],
+            "position": [
+              0.0,
+              592.0
+            ],
+            "size_delta": [
+              360.0,
+              52.0
+            ]
+          },
+          "text": {
+            "literal": "MAIN MENU"
+          },
+          "point_size": 24.0,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "object_fps_v2.return_main_menu",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ]
+    }
+  ]
+}

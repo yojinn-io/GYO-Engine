@@ -1,0 +1,38 @@
+# Explicit game source groups. These are project-local, not an engine recipe.
+
+set(APP_DOMAIN_SOURCES
+    src/App/ObjectFpsUi.cpp
+    src/Collision/CombatCollision.cpp
+    src/Collision/GridCollision.cpp
+    src/Data/Csv.cpp
+    src/Data/GameData.cpp
+    src/Game/CampaignRunState.cpp
+    src/Game/CampaignContent.cpp
+    src/Game/GameFlow.cpp
+    src/Game/GameSession.cpp
+    src/Gameplay/Combat/ProjectileSystem.cpp
+    src/Gameplay/Enemy/EnemySpawnDirector.cpp
+    src/Gameplay/Enemy/EnemySystem.cpp
+    src/Gameplay/Player/PlanarMovement.cpp
+    src/Gameplay/Player/Player.cpp
+    src/Gameplay/Player/PlayerCombatState.cpp
+    src/Gameplay/Player/PlayerController.cpp
+    src/Gameplay/Player/PlayerSettings.cpp
+    src/Gameplay/Weapon/WeaponController.cpp
+    src/Rendering/MapGeometryGenerator.cpp
+    src/World/GridMap.cpp
+    src/World/GridMapLoader.cpp
+    src/World/World.cpp
+)
+
+set(APP_SUPPORT_SOURCES
+    src/App/ObjectFpsApplication.cpp
+    src/App/AnimationSetDefinition.cpp
+    src/App/CharacterPresentationDefinition.cpp
+    src/App/CampaignContentLoader.cpp
+    src/App/ObjectFpsPresentation.cpp
+    src/App/WeaponViewModel.cpp
+    src/App/WeaponPresentationDefinition.cpp
+    src/App/ObjectFpsRuntimeClient.cpp
+)
+

@@ -1,0 +1,4 @@
+level_id,level_name,map_asset_id,next_level_id,ranged_enemy_count,melee_enemy_count,active_enemy_limit,clear_kill_count
+room_01,ROOM 1,object_fps_v2.map.room_01,room_02,2,2,2,3
+room_02,ROOM 2,object_fps_v2.map.room_02,room_03,3,3,3,5
+room_03,ROOM 3,object_fps_v2.map.room_03,,3,3,3,5
