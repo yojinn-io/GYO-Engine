@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "clips": {
+    "idle": {
+      "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+      "clip": "Armature|Idle_Loop"
+    },
+    "move": {
+      "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+      "clip": "Armature|Jog_Fwd_Loop"
+    },
+    "attack": {
+      "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+      "clip": "Armature|Spell_Simple_Shoot"
+    },
+    "dead": {
+      "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+      "clip": "Armature|Death01"
+    }
+  }
+}

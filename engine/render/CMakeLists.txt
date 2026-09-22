@@ -34,3 +34,6 @@ if(GYO_ENABLE_SDL_GPU)
 endif()
 
 
+
+# Narrow model/render bridge; neither core module depends on the other.
+add_subdirectory(model)

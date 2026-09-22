@@ -85,7 +85,8 @@ Base::Result<void, RenderError> RenderQueue::Submit(
         return Result::Err(Invalid("RenderQueue: mesh submission requires a valid mesh handle"));
     }
     if (submission.layer != MeshLayer::World &&
-        submission.layer != MeshLayer::ViewModel) {
+        submission.layer != MeshLayer::ViewModel &&
+        submission.layer != MeshLayer::WorldOverlay) {
         return Result::Err(Invalid("RenderQueue: mesh layer is invalid"));
     }
     const auto& camera = submission.layer == MeshLayer::ViewModel

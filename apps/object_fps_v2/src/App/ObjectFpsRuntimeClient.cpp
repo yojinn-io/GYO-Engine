@@ -241,6 +241,10 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Update(
     const Engine::Input::PhysicalInputFrame& physical = impl_->input->Snapshot();
     const Engine::Input::InputActionFrame actions =
         impl_->actionMap.Evaluate(physical);
+    if (physical.windowFocused && physical.Get(Engine::Input::Key::F3).pressed) {
+        impl_->displaySettings.showCollisionVolumes =
+            !impl_->displaySettings.showCollisionVolumes;
+    }
     const Engine::Ui::UiInputFrame uiInput =
         impl_->TranslateUiInput(actions, physical);
     const GameFrameInput gameInput =

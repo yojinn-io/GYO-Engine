@@ -2,7 +2,7 @@
 
 #include "RetroFPS/App/ObjectFpsUi.hpp"
 #include "RetroFPS/App/WeaponViewModel.hpp"
-#include "RetroFPS/Rendering/EnemyRenderSettings.hpp"
+#include "RetroFPS/App/EnemyPresentation.hpp"
 #include "RetroFPS/Rendering/MapGeometryGenerator.hpp"
 
 #include "engine/asset/AssetHandle.hpp"
@@ -69,6 +69,7 @@ struct ObjectFpsPresentation::Impl final {
     Engine::Render::MeshHandle skySphere;
     std::unordered_map<Engine::Asset::AssetId, TextureResource> textures;
     std::unordered_map<Engine::Asset::AssetId, std::unique_ptr<WeaponViewModel>> weapons;
+    EnemyPresentation enemies;
     std::vector<MapGeometry> stageGeometry;
     Engine::Render::RenderQueue queue;
     Engine::Ui::UiRenderer uiRenderer;
@@ -81,6 +82,7 @@ struct ObjectFpsPresentation::Impl final {
         uiRenderer.Reset();
         queue.Reset();
         weapons.clear();
+        enemies.Reset();
         if (renderDevice != nullptr) {
             for (const auto& [id, texture] : textures) {
                 static_cast<void>(id);
@@ -288,52 +290,6 @@ struct ObjectFpsPresentation::Impl final {
             }
         }
 
-        for (const EnemySnapshot& enemy : snapshot.enemies) {
-            const EnemyDefinition* definition =
-                content->Data().enemies.FindById(enemy.definitionId);
-            if (definition == nullptr) {
-                continue;
-            }
-            const TextureResource* texture = FindTexture(definition->textureAssetId);
-            if (texture == nullptr) {
-                continue;
-            }
-            const EnemyBillboardPose pose = ResolveEnemyBillboardPose(
-                *definition, enemy.position, player.position);
-            Engine::Render::UvTransform uv;
-            const EnemyAnimationClipDefinition& clip =
-                GetEnemyAnimationClip(*definition, enemy.state);
-            const auto frame = ResolveEnemyAnimationFrame(
-                clip, enemy.state, enemy.stateElapsedSeconds);
-            if (frame) {
-                const auto atlas = ResolveEnemyAtlasUv(
-                    clip,
-                    definition->frameWidthPixels,
-                    definition->frameHeightPixels,
-                    *frame,
-                    texture->width,
-                    texture->height);
-                if (atlas) {
-                    uv.scale = {atlas->scaleX, atlas->scaleY};
-                    uv.offset = {atlas->offsetX, atlas->offsetY};
-                }
-            }
-            const float flash = enemy.hitFlashRemainingSeconds > 0.0F ? 1.5F : 1.0F;
-            Engine::Render::MeshSubmission submission;
-            submission.mesh = quadXy;
-            submission.material.texture = texture->gpu;
-            submission.transform = {
-                    {enemy.position.x, pose.centerY, enemy.position.z},
-                    {0.0F, pose.yawRadians, 0.0F},
-                    {pose.width, pose.height, 1.0F},
-                };
-            submission.material.tint = {flash, flash, flash, 1.0F};
-            submission.uv = uv;
-            submission.surface = Engine::Render::SurfaceMode::AlphaMasked;
-            submission.doubleSided = true;
-            if (!Submit(submission, error)) return false;
-        }
-
         for (const ProjectileSnapshot& projectile : snapshot.projectiles) {
             const float diameter = projectile.radius * 2.0F;
             Engine::Render::MeshSubmission submission;
@@ -430,10 +386,6 @@ bool ObjectFpsPresentation::Initialize(
         config.doorTexture,
         config.skyTexture,
     };
-    for (const EnemyDefinition& enemy :
-         impl_->content->Data().enemies.GetDefinitions()) {
-        textureIds.push_back(enemy.textureAssetId);
-    }
     for (const Engine::Asset::AssetId& id : textureIds) {
         if (!impl_->LoadTexture(id, error)) {
             impl_->Reset();
@@ -463,6 +415,7 @@ bool ObjectFpsPresentation::Initialize(
         impl_->Reset();
         return false;
     }
+    if (!impl_->enemies.Initialize(renderDevice, assets, impl_->content->Data().enemies, error)) { impl_->Reset(); return false; }
     impl_->initialized = true;
     return true;
 }
@@ -509,6 +462,8 @@ bool ObjectFpsPresentation::PrepareFrame(
         !impl_->SubmitWorld(snapshot, error)) {
         return false;
     }
+
+    if (!impl_->enemies.Submit(snapshot, impl_->queue, displaySettings.showCollisionVolumes, error)) return false;
 
     auto uiSubmitted = impl_->uiRenderer.Submit(uiDrawList, impl_->queue);
     if (!uiSubmitted) {

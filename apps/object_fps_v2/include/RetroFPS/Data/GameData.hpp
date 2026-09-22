@@ -5,6 +5,7 @@
 #include "engine/asset/AssetId.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -17,26 +18,7 @@ using EnemyDefinitionId = std::string;
 using WeaponDefinitionId = std::string;
 using LevelDefinitionId = std::string;
 
-struct EnemyAnimationPixelPoint final {
-    std::uint32_t x = 0;
-    std::uint32_t y = 0;
-};
-
-struct EnemyAnimationClipDefinition final {
-    std::uint32_t originXpx = 0;
-    std::uint32_t originYpx = 0;
-    std::uint32_t frameCount = 0;
-    float secondsPerFrame = 0.0f;
-    std::optional<std::uint32_t> eventFrameIndex;
-    std::optional<EnemyAnimationPixelPoint> muzzlePixel;
-};
-
-struct EnemyAnimationSetDefinition final {
-    EnemyAnimationClipDefinition idle;
-    EnemyAnimationClipDefinition moving;
-    EnemyAnimationClipDefinition attacking;
-    EnemyAnimationClipDefinition dead;
-};
+struct EnemyRig;
 
 struct EnemyDefinition final {
     EnemyDefinitionId id;
@@ -47,12 +29,8 @@ struct EnemyDefinition final {
     float defense = 0.0f;
     float hitboxRadius = 0.0f;
     float hitboxHeight = 0.0f;
-    float renderWidth = 0.0f;
-    float renderHeight = 0.0f;
-    Engine::Asset::AssetId textureAssetId;
-    std::uint32_t frameWidthPixels = 0;
-    std::uint32_t frameHeightPixels = 0;
-    EnemyAnimationSetDefinition animations;
+    Engine::Asset::AssetId presentationAssetId;
+    std::shared_ptr<const EnemyRig> rig;
 };
 
 struct WeaponDefinition final {
@@ -90,6 +68,7 @@ public:
 
 private:
     friend class GameDataLoader;
+    friend class CampaignContentLoader;
     std::vector<EnemyDefinition> definitions_;
 };
 
@@ -137,7 +116,6 @@ class GameDataLoader final {
 public:
     [[nodiscard]] static GameDataLoadResult Parse(
         std::string_view enemiesCsv,
-        std::string_view enemyAnimationClipsCsv,
         std::string_view weaponsCsv,
         std::string_view levelsCsv);
 };

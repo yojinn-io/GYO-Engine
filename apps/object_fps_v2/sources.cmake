@@ -2,6 +2,8 @@
 
 set(APP_DOMAIN_SOURCES
     src/App/ObjectFpsUi.cpp
+    src/Collision/CharacterCollision.cpp
+    src/Gameplay/Enemy/EnemyRig.cpp
     src/Collision/CombatCollision.cpp
     src/Collision/GridCollision.cpp
     src/Data/Csv.cpp
@@ -26,6 +28,8 @@ set(APP_DOMAIN_SOURCES
 )
 
 set(APP_SUPPORT_SOURCES
+    src/App/EnemyPresentation.cpp
+    src/App/EnemyPresentationDefinition.cpp
     src/App/ObjectFpsApplication.cpp
     src/App/AnimationSetDefinition.cpp
     src/App/CharacterPresentationDefinition.cpp

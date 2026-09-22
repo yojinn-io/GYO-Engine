@@ -64,6 +64,7 @@ flowchart TD
 | 要素 | 担当すること | 担当しないこと |
 |---|---|---|
 | Object_FPS | 物体、カメラ、材質の shader ID、武器動作 | SDL_GPU コマンド、shader 形式の選択 |
+| `ModelRenderer` | モデル／材質の共有、実例ごとの CPU スキニング、動的 mesh の更新と解放 | アニメーション時計、骨格の命中領域、ゲーム状態 |
 | `RenderQueue`／`MaterialDesc` | 中立な形状、材質、描画要求 | Native handle、ファイルのコンパイル |
 | `ShaderLibrary` | bundle の原子的な追加、manifest の検証、不変 shader bytes の保持 | GPU pipeline やテクスチャの生成 |
 | `Renderer` | カメラと行列、世界／武器／後処理／HUD の順序、pipeline 選択と画面リソース | ドライバーの詳細、ゲームの命中判定 |
@@ -132,6 +133,8 @@ HLSL の入口名と成果物の入口名は必ずしも同じではありませ
 
 ```text
 World meshes + Scene sprites
+        ↓ シーンの色を保持、世界カメラ、深度 attachment なし
+WorldOverlay meshes（要求がなければ省略）
         ↓ シーンの色を保持して深度をクリア
 ViewModel meshes
         ↓ シーンの exposure／gamma
@@ -142,9 +145,19 @@ Overlay / HUD → Present
 
 世界と武器は別のカメラを使います。武器 pass で深度をクリアしても、手と銃の間の遮蔽は保たれます。`Renderer` が `PreparedFrame` を構築し、device は明示された pass、attachment、draw を実行します。
 
+`MeshLayer::WorldOverlay` は世界座標の透視診断レイヤーで、深度テストも書き込みも行いません。
+`MakeWireBox`／`MakeWireCapsule` は細い三角形 mesh を生成し、既存 shader と triangle-list を使います。
+入力は形状の数値だけで、Render は Collision に依存しません。F3 と色の意味は v2 App が所有します。
+世界 overlay の要求がなければ、既存 pass の流れは変わりません。
+
+`GYO::ModelRenderer` は `Model + Render` に依存する独立 library です。
+v2 の武器と敵が確定済み Pose を渡し、別のアニメーション時計は進めません。
+モデルと材質は共有でき、動的頂点と mesh handle は実例ごとに管理します。
+v1 の既存表示経路に移行を要求しません。[v2 敵の契約](object_fps_v2/enemies.zh-Hant.md)も参照してください。
+
 最小化中の `AcquireFrame` は frame なしを返せます。取得できた token は `SubmitFrame` または `AbandonFrame` で一度だけ消費します。送信時の CPU データは呼び出し中に消費し、GPU がまだ使うリソースの保護はバックエンドが担当します。画面サイズ変更時は render target を再生成し、終了時は Renderer の device リソースを解放してから device を破棄します。
 
-アニメーションは固定サイズの頂点内容を更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は exposure／gamma／Overlay より前のシーンであり、最終スクリーンショットではありません。
+アニメーションは固定サイズの頂点内容を更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は WorldOverlay と武器を含みますが、exposure／gamma／画面 Overlay／HUD より前のシーンであり、最終スクリーンショットではありません。
 
 <a id="r07"></a>
 ## 7. ビルドの選択

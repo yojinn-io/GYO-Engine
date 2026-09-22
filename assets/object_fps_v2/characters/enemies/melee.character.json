@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+  "animation_set_asset_id": "object_fps_v2.enemy.melee.animations",
+  "material_overrides": {
+    "M_Main": {
+      "base_color_linear": [
+        0.7,
+        0.055,
+        0.03,
+        1
+      ]
+    },
+    "M_Joints": {
+      "base_color_linear": [
+        0.1,
+        0.11,
+        0.13,
+        1
+      ]
+    }
+  }
+}

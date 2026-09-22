@@ -13,8 +13,6 @@ namespace fps {
 struct CampaignDataAssetIds final {
     Engine::Asset::AssetId enemies =
         Engine::Asset::AssetId::FromString("object_fps_v2.data.enemies");
-    Engine::Asset::AssetId enemyAnimationClips =
-        Engine::Asset::AssetId::FromString("object_fps_v2.data.enemy_animation_clips");
     Engine::Asset::AssetId weapons =
         Engine::Asset::AssetId::FromString("object_fps_v2.data.weapons");
     Engine::Asset::AssetId levels =

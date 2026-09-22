@@ -182,11 +182,11 @@ TEST_CASE("Mesh submission validates the selected camera projection and finite p
     RenderQueue queue;
     MeshSubmission mesh;
     mesh.mesh = MeshHandle::FromParts(1, 1);
-    for (const MeshLayer layer : {MeshLayer::World, MeshLayer::ViewModel}) {
+    for (const MeshLayer layer : {MeshLayer::World, MeshLayer::ViewModel, MeshLayer::WorldOverlay}) {
         mesh.layer = layer;
         const auto setCamera = [&](const PerspectiveCamera3D& camera) {
-            if (layer == MeshLayer::World) queue.SetCamera(camera);
-            else queue.SetViewModelCamera(camera);
+            if (layer == MeshLayer::ViewModel) queue.SetViewModelCamera(camera);
+            else queue.SetCamera(camera);
         };
         PerspectiveCamera3D camera;
         camera.nearClip = 0.0F;
@@ -211,7 +211,21 @@ TEST_CASE("Mesh submission validates the selected camera projection and finite p
         setCamera({});
         REQUIRE(queue.Submit(mesh));
     }
-    CHECK(queue.Meshes().size() == 2);
+    CHECK(queue.Meshes().size() == 3);
+}
+
+TEST_CASE("World overlay submissions require the world camera and preserve legacy layer values") {
+    CHECK(static_cast<int>(MeshLayer::World) == 0);
+    CHECK(static_cast<int>(MeshLayer::ViewModel) == 1);
+    RenderQueue queue;
+    queue.SetViewModelCamera({});
+    MeshSubmission mesh;
+    mesh.mesh = MeshHandle::FromParts(1, 1);
+    mesh.layer = MeshLayer::WorldOverlay;
+    CHECK_FALSE(queue.Submit(mesh));
+    queue.SetCamera({});
+    REQUIRE(queue.Submit(mesh));
+    CHECK(queue.Meshes().front().layer == MeshLayer::WorldOverlay);
 }
 
 TEST_CASE("Scene color transform defaults are identity") {

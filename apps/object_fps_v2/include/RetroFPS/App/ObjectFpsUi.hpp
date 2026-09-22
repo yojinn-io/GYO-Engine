@@ -24,6 +24,7 @@ struct ObjectFpsDisplaySettings final {
 
     float exposureEv{};
     float gammaAdjustment{1.0F};
+    bool showCollisionVolumes{};
 };
 
 // Object_FPS owns the contents, bindings and consequences of its UI. GYO owns

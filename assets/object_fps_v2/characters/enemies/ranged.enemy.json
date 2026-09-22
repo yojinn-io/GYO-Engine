@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "character_asset_id": "object_fps_v2.enemy.ranged.character",
+  "hurt_regions": [
+    {
+      "id": "head",
+      "start": {
+        "node": "Head",
+        "offset": [0.0, 0.121383, 0.005830]
+      },
+      "end": {
+        "node": "Head",
+        "offset": [0.0, 0.121383, 0.005830]
+      },
+      "radius": 0.16
+    },
+    {
+      "id": "torso",
+      "start": {
+        "node": "spine_01"
+      },
+      "end": {
+        "node": "spine_03"
+      },
+      "radius": 0.19
+    },
+    {
+      "id": "pelvis",
+      "start": {
+        "node": "pelvis"
+      },
+      "end": {
+        "node": "spine_01"
+      },
+      "radius": 0.17
+    },
+    {
+      "id": "upper_arm_l",
+      "start": {
+        "node": "upperarm_l"
+      },
+      "end": {
+        "node": "lowerarm_l"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "forearm_l",
+      "start": {
+        "node": "lowerarm_l"
+      },
+      "end": {
+        "node": "hand_l"
+      },
+      "radius": 0.065
+    },
+    {
+      "id": "thigh_l",
+      "start": {
+        "node": "thigh_l"
+      },
+      "end": {
+        "node": "calf_l"
+      },
+      "radius": 0.1
+    },
+    {
+      "id": "calf_l",
+      "start": {
+        "node": "calf_l"
+      },
+      "end": {
+        "node": "foot_l"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "upper_arm_r",
+      "start": {
+        "node": "upperarm_r"
+      },
+      "end": {
+        "node": "lowerarm_r"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "forearm_r",
+      "start": {
+        "node": "lowerarm_r"
+      },
+      "end": {
+        "node": "hand_r"
+      },
+      "radius": 0.065
+    },
+    {
+      "id": "thigh_r",
+      "start": {
+        "node": "thigh_r"
+      },
+      "end": {
+        "node": "calf_r"
+      },
+      "radius": 0.1
+    },
+    {
+      "id": "calf_r",
+      "start": {
+        "node": "calf_r"
+      },
+      "end": {
+        "node": "foot_r"
+      },
+      "radius": 0.075
+    }
+  ],
+  "attack": {
+    "point": {
+      "node": "hand_l"
+    },
+    "radius": 0.12,
+    "release_seconds": 0.1
+  }
+}

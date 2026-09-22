@@ -1,4 +1,5 @@
 #include "RetroFPS/Collision/CombatCollision.hpp"
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 
 #include "engine/collision/Collision.hpp"
 
@@ -86,32 +87,24 @@ std::optional<CombatHit> CombatCollision::Raycast(
     const auto consider = [&closest, origin, normalized](
                               const CombatHitKind kind,
                               const float distance,
-                              const CombatTargetId targetId = 0) {
+                              const CombatTargetId targetId = 0, const std::string& region = {}) {
         if (!closest.has_value() || distance < closest->distance) {
-            closest = CombatHit{kind, AddScaled(origin, normalized, distance), distance, targetId};
+            closest = CombatHit{kind, AddScaled(origin, normalized, distance), distance, targetId, region};
         }
     };
 
-    for (std::size_t row = 0; row < map.GetHeight(); ++row) {
-        for (std::size_t column = 0; column < map.GetWidth(); ++column) {
-            if (!map.IsSolid(static_cast<std::ptrdiff_t>(row),
-                             static_cast<std::ptrdiff_t>(column))) {
-                continue;
-            }
-            const float minimumX = static_cast<float>(column) * worldSettings.cellSize - sweepRadius;
-            const float minimumZ = static_cast<float>(row) * worldSettings.cellSize - sweepRadius;
-            const Float3 minimum{minimumX, -sweepRadius, minimumZ};
-            const Float3 maximum{
-                static_cast<float>(column + 1) * worldSettings.cellSize + sweepRadius,
-                worldSettings.wallHeight + sweepRadius,
-                static_cast<float>(row + 1) * worldSettings.cellSize + sweepRadius,
-            };
-            const std::optional<float> distance =
-                Engine::Collision::RaycastAabb(ToCollision(origin), ToCollision(normalized), maximumDistance, {ToCollision(minimum), ToCollision(maximum)});
-            if (distance.has_value()) {
-                consider(CombatHitKind::Wall, *distance);
-            }
+    for (const auto& box : BuildWorldCollisionBoxes(map,worldSettings)) {
+        std::optional<float> distance;
+        if(sweepRadius>0) {
+            const Engine::Collision::VerticalCapsule sphere{
+                {origin.x,origin.y-sweepRadius,origin.z},2*sweepRadius,sweepRadius};
+            const auto contact=Engine::Collision::SweepVerticalCapsuleAgainstAabb(sphere,
+                {normalized.x*maximumDistance,normalized.y*maximumDistance,normalized.z*maximumDistance},box);
+            if(contact) distance=contact->fraction*maximumDistance;
+        } else {
+            distance=Engine::Collision::RaycastAabb(ToCollision(origin),ToCollision(normalized),maximumDistance,box);
         }
+        if(distance) consider(CombatHitKind::Wall,*distance);
     }
 
     if (normalized.y < -kEpsilon && origin.y >= sweepRadius) {
@@ -122,10 +115,10 @@ std::optional<CombatHit> CombatCollision::Raycast(
     }
 
     for (const CombatTarget& target : targets) {
-        const std::optional<float> distance = RaycastCapsule(
-            origin, normalized, maximumDistance, target.capsule, sweepRadius);
+        const std::optional<float> distance = Engine::Collision::RaycastCapsule(
+            ToCollision(origin), ToCollision(normalized), maximumDistance, target.capsule, sweepRadius);
         if (distance.has_value()) {
-            consider(CombatHitKind::Target, *distance, target.id);
+            consider(CombatHitKind::Target, *distance, target.id, target.region);
         }
     }
     return closest;

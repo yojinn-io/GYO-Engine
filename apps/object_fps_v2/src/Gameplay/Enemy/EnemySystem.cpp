@@ -1,4 +1,5 @@
 #include "RetroFPS/Gameplay/Enemy/EnemySystem.hpp"
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 
 #include <algorithm>
 #include <array>
@@ -23,9 +24,9 @@ constexpr float kWaypointTolerance = 0.025f;
 }
 
 [[nodiscard]] float ClipDurationSeconds(
-    const EnemyAnimationClipDefinition& clip) noexcept {
-    const double duration =
-        static_cast<double>(clip.frameCount) * clip.secondsPerFrame;
+    const EnemyDefinition& definition, const EnemyState state) noexcept {
+    const double duration = definition.rig->model->clips[
+        definition.rig->clips[static_cast<std::size_t>(state)]].durationSeconds;
     return static_cast<float>((std::min)(
         duration, static_cast<double>((std::numeric_limits<float>::max)())));
 }
@@ -34,7 +35,7 @@ constexpr float kWaypointTolerance = 0.025f;
     const EnemyDefinition& definition) noexcept {
     return (std::max)(
         kEnemyHitFlashSeconds,
-        ClipDurationSeconds(definition.animations.dead));
+        ClipDurationSeconds(definition, EnemyState::Dead));
 }
 
 [[nodiscard]] float Distance(const Float2 left, const Float2 right) noexcept {
@@ -306,30 +307,28 @@ struct OpenNodeCompare final {
 }
 
 [[nodiscard]] Float2 MoveToward(
-    const GridMap& map,
     const Float2 position,
     const Float2 target,
     const float maximumDistance,
     const float radius,
-    const CircleObstacle& playerObstacle,
-    const float cellSize) {
+    const float height,
+    std::span<const Engine::Collision::Aabb> walls,
+    std::span<const Engine::Collision::VerticalCapsule> actors) {
     const float targetDistance = Distance(position, target);
     if (targetDistance <= kPositionEpsilon || maximumDistance <= 0.0f) {
         return position;
     }
-    if (GridCollision::OverlapsCircle(position, radius, playerObstacle)) {
-        return position;
-    }
-
     const float distanceToMove = (std::min)(maximumDistance, targetDistance);
     const float scale = distanceToMove / targetDistance;
-    const Float2 displacement{
+    const Float3 displacement{
         (target.x - position.x) * scale,
+        0.0f,
         (target.z - position.z) * scale,
     };
-    const std::span<const CircleObstacle> obstacles{&playerObstacle, 1};
-    return GridCollision::MoveCircle(
-        map, position, displacement, radius, obstacles, cellSize);
+    const auto moved = MoveCharacterBody({{position.x, 0, position.z}, height, radius},
+        displacement, walls, actors, true);
+    // This product's enemy locomotion stays on its authored flat floor.
+    return {moved.x, moved.z};
 }
 
 [[nodiscard]] bool ValidatePositive(
@@ -406,7 +405,9 @@ bool EnemySystem::Initialize(
     const float playerCollisionRadius,
     const float cellSize,
     EnemySettings settings,
-    std::string& error) {
+    std::string& error,
+    const float wallHeight,
+    const float playerHitboxHeight) {
     Reset();
     error.clear();
 
@@ -423,6 +424,11 @@ bool EnemySystem::Initialize(
     }
     if (!std::isfinite(cellSize) || cellSize <= 0.0f) {
         error = "EnemySystem cell size must be finite and greater than zero.";
+        return false;
+    }
+    if (!std::isfinite(wallHeight) || wallHeight <= 0.0f ||
+        !std::isfinite(playerHitboxHeight) || playerHitboxHeight < playerCollisionRadius * 2.0f) {
+        error = "EnemySystem world wall height and player capsule height must be valid.";
         return false;
     }
     if (map.GetWidth() == 0 || map.GetHeight() == 0 ||
@@ -446,6 +452,8 @@ bool EnemySystem::Initialize(
 
     settings_ = std::move(settings);
     cellSize_ = cellSize;
+    wallHeight_ = wallHeight;
+    playerHitboxHeight_ = playerHitboxHeight;
     mapWidth_ = map.GetWidth();
     mapHeight_ = map.GetHeight();
     nextEnemyId_ = 1;
@@ -457,111 +465,68 @@ bool EnemySystem::ValidateDefinition(
     const EnemyDefinition& definition,
     std::string& error) const {
     error.clear();
-    if (definition.id.empty()) {
-        error = "Enemy definition ID must be non-empty.";
-        return false;
-    }
-    if (definition.kind != EnemyKind::Melee &&
-        definition.kind != EnemyKind::Ranged) {
-        error = "Enemy definition kind is unsupported.";
+    if (definition.id.empty() ||
+        (definition.kind != EnemyKind::Melee && definition.kind != EnemyKind::Ranged)) {
+        error = "Enemy definition requires a valid ID and supported kind.";
         return false;
     }
     if (!std::isfinite(definition.damage) || definition.damage <= 0.0f ||
-        !std::isfinite(definition.attackIntervalSeconds) ||
-        definition.attackIntervalSeconds <= 0.0f ||
+        !std::isfinite(definition.attackIntervalSeconds) || definition.attackIntervalSeconds <= 0.0f ||
         !std::isfinite(definition.maxHealth) || definition.maxHealth <= 0.0f ||
         !std::isfinite(definition.defense) || definition.defense < 0.0f ||
-        !std::isfinite(definition.hitboxRadius) ||
-        definition.hitboxRadius <= 0.0f ||
-        !std::isfinite(definition.hitboxHeight) ||
-        definition.hitboxHeight < definition.hitboxRadius * 2.0f ||
-        !std::isfinite(definition.renderWidth) ||
-        definition.renderWidth <= 0.0f ||
-        !std::isfinite(definition.renderHeight) ||
-        definition.renderHeight <= 0.0f ||
-        definition.frameWidthPixels == 0 ||
-        definition.frameHeightPixels == 0 ||
-        !definition.textureAssetId.IsValid()) {
-        error = "Enemy definition combat, hitbox, render, frame, and texture values must be valid.";
+        !std::isfinite(definition.hitboxRadius) || definition.hitboxRadius <= 0.0f ||
+        !std::isfinite(definition.hitboxHeight) || definition.hitboxHeight < definition.hitboxRadius * 2.0f ||
+        !definition.presentationAssetId.IsValid() || !definition.rig || !definition.rig->model) {
+        error = "Enemy definition requires valid combat values, body capsule, and resolved 3D rig.";
         return false;
     }
-
-    const auto validateClip = [&definition, &error](
-                                  const EnemyAnimationClipDefinition& clip,
-                                  const char* const state,
-                                  const bool isAttack) {
-        if (clip.frameCount == 0 ||
-            !std::isfinite(clip.secondsPerFrame) ||
-            clip.secondsPerFrame <= 0.0f) {
-            error = "Enemy definition ";
-            error += state;
-            error += " animation values must be valid.";
+    const auto& rig = *definition.rig;
+    if (!std::isfinite(rig.scale) || rig.scale <= 0 ||
+        !std::isfinite(rig.transitionSeconds) || rig.transitionSeconds < 0 ||
+        !std::isfinite(rig.anchor.x) || !std::isfinite(rig.anchor.y) || !std::isfinite(rig.anchor.z)) {
+        error = "Enemy rig calibration and transition duration must be finite and valid.";
+        return false;
+    }
+    for (const auto clip : rig.clips) {
+        if (clip >= rig.model->clips.size() ||
+            !std::isfinite(rig.model->clips[clip].durationSeconds) ||
+            rig.model->clips[clip].durationSeconds <= 0) {
+            error = "Enemy rig requires valid idle, move, attack and death clips.";
             return false;
         }
-
-        const std::uint64_t right =
-            static_cast<std::uint64_t>(clip.originXpx) +
-            static_cast<std::uint64_t>(definition.frameWidthPixels) *
-                clip.frameCount;
-        const std::uint64_t bottom =
-            static_cast<std::uint64_t>(clip.originYpx) +
-            definition.frameHeightPixels;
-        if (right > (std::numeric_limits<std::uint32_t>::max)() ||
-            bottom > (std::numeric_limits<std::uint32_t>::max)()) {
-            error = "Enemy definition animation rectangle exceeds supported pixel coordinates.";
-            return false;
-        }
-
-        if (!isAttack) {
-            if (clip.eventFrameIndex.has_value() || clip.muzzlePixel.has_value()) {
-                error = "Only an enemy attack animation may define an event frame or muzzle.";
-                return false;
-            }
-            return true;
-        }
-        if (!clip.eventFrameIndex.has_value() ||
-            *clip.eventFrameIndex >= clip.frameCount) {
-            error = "Enemy definition attack event frame must be inside the attack animation.";
-            return false;
-        }
-        if (definition.kind == EnemyKind::Melee) {
-            if (clip.muzzlePixel.has_value()) {
-                error = "A melee enemy attack animation must not define a muzzle.";
-                return false;
-            }
-            return true;
-        }
-        if (!clip.muzzlePixel.has_value() ||
-            clip.muzzlePixel->x >= definition.frameWidthPixels ||
-            clip.muzzlePixel->y >= definition.frameHeightPixels) {
-            error = "A ranged enemy attack animation requires an in-frame muzzle coordinate.";
-            return false;
-        }
-        return true;
+    }
+    const double duration = rig.model->clips[rig.clips[2]].durationSeconds;
+    if (definition.attackIntervalSeconds + 0.000001 < duration ||
+        !std::isfinite(rig.attackBeginSeconds) || !std::isfinite(rig.attackEndSeconds) ||
+        rig.attackBeginSeconds < 0 || rig.attackEndSeconds < rig.attackBeginSeconds ||
+        rig.attackEndSeconds > duration || !std::isfinite(rig.releaseSeconds) ||
+        rig.releaseSeconds < 0 || rig.releaseSeconds > duration) {
+        error = "Enemy attack interval, active window and release event must fit the attack clip.";
+        return false;
+    }
+    const auto validPoint = [&rig](const EnemyBonePoint& point) {
+        return point.node < rig.model->nodes.size() && std::isfinite(point.offset.x) &&
+            std::isfinite(point.offset.y) && std::isfinite(point.offset.z);
     };
-    if (!validateClip(definition.animations.idle, "idle", false) ||
-        !validateClip(definition.animations.moving, "moving", false) ||
-        !validateClip(definition.animations.attacking, "attacking", true) ||
-        !validateClip(definition.animations.dead, "dead", false)) {
+    if (rig.hurtRegions.empty() || !validPoint(rig.attackPoint) ||
+        !std::isfinite(rig.attackRadius) || rig.attackRadius <= 0) {
+        error = "Enemy rig requires hurt regions and a valid attack attachment.";
         return false;
     }
-
-    const float attackStateSeconds =
-        ClipDurationSeconds(definition.animations.attacking);
-    if (!std::isfinite(attackStateSeconds) || attackStateSeconds <= 0.0f) {
-        error = "Enemy definition attack animation duration is unsupported.";
-        return false;
-    }
-    if (definition.attackIntervalSeconds < attackStateSeconds) {
-        error = "Enemy definition attack interval must not be shorter than its attack state duration.";
-        return false;
+    for (const auto& region : rig.hurtRegions) {
+        if (region.id.empty() || !validPoint(region.start) || !validPoint(region.end) ||
+            !std::isfinite(region.radius) || region.radius <= 0) {
+            error = "Enemy hurt regions require a name, valid bone endpoints and positive radius.";
+            return false;
+        }
     }
     return true;
 }
-
 void EnemySystem::Reset() noexcept {
     settings_ = {};
     cellSize_ = 1.0f;
+    wallHeight_ = 2.5f;
+    playerHitboxHeight_ = 1.8f;
     mapWidth_ = 0;
     mapHeight_ = 0;
     nextEnemyId_ = 1;
@@ -602,31 +567,30 @@ EnemySpawnResult EnemySystem::Spawn(
     }
 
     try {
-        if (GridCollision::OverlapsSolid(
-                map,
-                spawnPosition,
-                definition.hitboxRadius,
-                cellSize_) ||
-            GridCollision::OverlapsCircle(
-                spawnPosition,
-                definition.hitboxRadius,
-                {playerPosition, playerCollisionRadius})) {
-            return {EnemySpawnStatus::Blocked, 0};
-        }
-        for (const CircleObstacle& obstacle : CollectOccupiedColliders()) {
-            if (GridCollision::OverlapsCircle(
-                    spawnPosition,
-                    definition.hitboxRadius,
-                    obstacle)) {
-                return {EnemySpawnStatus::Blocked, 0};
+        const auto walls = BuildWorldCollisionBoxes(map, {cellSize_, wallHeight_});
+        std::vector<Engine::Collision::VerticalCapsule> occupied{
+            {{playerPosition.x, 0, playerPosition.z}, playerHitboxHeight_, playerCollisionRadius}};
+        for (const auto& other : enemies_) {
+            if (other.state != EnemyState::Dead || other.stateElapsedSeconds < DeadVisibilitySeconds(other.definition)) {
+                occupied.push_back({{other.position.x, 0, other.position.z},
+                    other.definition.hitboxHeight, other.definition.hitboxRadius});
             }
+        }
+        if (!map.TryGetCoordinateAtPosition(spawnPosition, cellSize_) ||
+            !CanPlaceCharacterBody({{spawnPosition.x, 0, spawnPosition.z},
+                definition.hitboxHeight, definition.hitboxRadius}, walls, occupied)) {
+            return {EnemySpawnStatus::Blocked, 0};
         }
 
         RuntimeEnemy enemy{};
         enemy.id = nextEnemyId_++;
         enemy.kind = definition.kind;
         enemy.position = spawnPosition;
+        enemy.yawRadians = std::atan2(playerPosition.x - spawnPosition.x, playerPosition.z - spawnPosition.z);
         enemy.definition = definition;
+        enemy.animation = Engine::Model::AnimationInstance(definition.rig->model);
+        const auto animation = enemy.animation.Play(definition.rig->clips[0], Engine::Model::PlaybackMode::Loop);
+        if (!animation) throw std::runtime_error("Enemy idle animation: " + animation.error());
         enemy.health = definition.maxHealth;
         enemy.repathElapsedSeconds = settings_.repathIntervalSeconds;
         const EnemyId spawnedId = enemy.id;
@@ -700,7 +664,7 @@ void EnemySystem::Update(
         throw std::invalid_argument(
             "enemy update player collision radius must be finite and greater than zero");
     }
-    if (!std::isfinite(player.feetY) || !std::isfinite(player.hitboxHeight) || player.hitboxHeight <= 0.0f) {
+    if (!std::isfinite(player.feetY) || !std::isfinite(player.hitboxHeight) || player.hitboxHeight < playerCollisionRadius * 2.0f) {
         throw std::invalid_argument(
             "enemy update player hitbox height must be finite and greater than zero");
     }
@@ -715,16 +679,11 @@ void EnemySystem::Update(
         throw std::invalid_argument("enemy update player position is outside the map");
     }
 
-    const CircleObstacle playerObstacle{
-        playerPosition,
-        playerCollisionRadius,
-    };
-
-    const auto setState = [](RuntimeEnemy& enemy, const EnemyState state) noexcept {
-        if (enemy.state != state) {
-            enemy.state = state;
-            enemy.stateElapsedSeconds = 0.0f;
-        }
+    const auto walls = BuildWorldCollisionBoxes(map, {cellSize_, wallHeight_});
+    const Engine::Collision::VerticalCapsule playerBody{
+        {playerPosition.x, player.feetY, playerPosition.z}, player.hitboxHeight, playerCollisionRadius};
+    const auto setState = [this](RuntimeEnemy& enemy, const EnemyState state) {
+        SetState(enemy, state);
     };
     const auto clearNavigation = [](RuntimeEnemy& enemy) noexcept {
         enemy.navigationPurpose = NavigationPurpose::None;
@@ -745,122 +704,31 @@ void EnemySystem::Update(
         enemy.repathElapsedSeconds = 0.0f;
         enemy.stuckElapsedSeconds = 0.0f;
     };
-    const auto emitAttackEvent =
-        [this,
-         &map,
-         playerPosition,
-         playerCollisionRadius,
-         &player](RuntimeEnemy& enemy) {
-            if (enemy.attackEventEmitted) {
-                return;
-            }
-            enemy.attackEventEmitted = true;
-
-            Float3 origin{
-                enemy.position.x,
-                enemy.definition.hitboxHeight * 0.5f,
-                enemy.position.z,
-            };
-            if (enemy.kind == EnemyKind::Melee) {
-                const float eventSurfaceDistance = SurfaceDistance(
-                    enemy.position,
-                    enemy.definition.hitboxRadius,
-                    playerPosition,
-                    playerCollisionRadius);
-                if (player.feetY >= enemy.definition.hitboxHeight ||
-                    player.feetY + player.hitboxHeight <= 0.0f ||
-                    eventSurfaceDistance > settings_.meleeAttackSurfaceDistance ||
-                    !HasWallLineOfSight(
-                        map, enemy.position, playerPosition, cellSize_)) {
-                    return;
-                }
-            } else {
-                const EnemyAnimationPixelPoint muzzle =
-                    *enemy.definition.animations.attacking.muzzlePixel;
-                const float deltaX = playerPosition.x - enemy.position.x;
-                const float deltaZ = playerPosition.z - enemy.position.z;
-                const float distance = std::hypot(deltaX, deltaZ);
-                const Float2 forward =
-                    distance > kPositionEpsilon
-                        ? Float2{deltaX / distance, deltaZ / distance}
-                        : Float2{0.0f, 1.0f};
-                const Float2 right{forward.z, -forward.x};
-                const float horizontalOffset =
-                    (static_cast<float>(muzzle.x) /
-                         static_cast<float>(enemy.definition.frameWidthPixels) -
-                     0.5f) *
-                    enemy.definition.renderWidth;
-                origin.x += right.x * horizontalOffset;
-                origin.z += right.z * horizontalOffset;
-                origin.y =
-                    (1.0f -
-                     static_cast<float>(muzzle.y) /
-                         static_cast<float>(enemy.definition.frameHeightPixels)) *
-                    enemy.definition.renderHeight;
-            }
-
-            attackEvents_.push_back({
-                enemy.id,
-                enemy.definition.id,
-                enemy.kind,
-                origin,
-                {
-                    playerPosition.x,
-                    player.feetY + player.hitboxHeight * 0.5f,
-                    playerPosition.z,
-                },
-                enemy.definition.damage,
-            });
-        };
-    const auto enterAttack =
-        [this, &setState, &emitAttackEvent](RuntimeEnemy& enemy) {
+    const auto enterAttack = [&setState, &clearNavigation, playerPosition](RuntimeEnemy& enemy) {
         setState(enemy, EnemyState::Attacking);
+        enemy.yawRadians = std::atan2(playerPosition.x - enemy.position.x, playerPosition.z - enemy.position.z);
         enemy.attackEventEmitted = false;
         enemy.attackCooldownSeconds = enemy.definition.attackIntervalSeconds;
-        enemy.path.clear();
-        enemy.nextWaypointIndex = 0;
-        enemy.navigationPurpose = NavigationPurpose::None;
-        enemy.lastPlayerCell.reset();
-        enemy.repathElapsedSeconds = 0.0f;
-        enemy.stuckElapsedSeconds = 0.0f;
-        if (*enemy.definition.animations.attacking.eventFrameIndex == 0) {
-            emitAttackEvent(enemy);
-        }
+        clearNavigation(enemy);
     };
-
     for (RuntimeEnemy& enemy : enemies_) {
         SubtractElapsed(enemy.hitFlashRemainingSeconds, deltaSeconds);
-        if (enemy.state == EnemyState::Dead) {
-            AddElapsed(enemy.stateElapsedSeconds, deltaSeconds);
-            continue;
-        }
-
-        enemy.attackCooldownSeconds =
-            (std::max)(0.0f, enemy.attackCooldownSeconds - deltaSeconds);
+        if (enemy.state == EnemyState::Dead) continue;
+        SubtractElapsed(enemy.attackCooldownSeconds, deltaSeconds);
         AddElapsed(enemy.repathElapsedSeconds, deltaSeconds);
-
         if (enemy.state == EnemyState::Attacking) {
-            const float previousElapsedSeconds = enemy.stateElapsedSeconds;
-            AddElapsed(enemy.stateElapsedSeconds, deltaSeconds);
-            const float eventSeconds =
-                static_cast<float>(
-                    *enemy.definition.animations.attacking.eventFrameIndex) *
-                enemy.definition.animations.attacking.secondsPerFrame;
-            if (!enemy.attackEventEmitted &&
-                previousElapsedSeconds <= eventSeconds &&
-                enemy.stateElapsedSeconds >= eventSeconds) {
-                emitAttackEvent(enemy);
-            }
-            const float attackStateSeconds = ClipDurationSeconds(
-                enemy.definition.animations.attacking);
-            if (enemy.stateElapsedSeconds < attackStateSeconds) {
-                continue;
-            }
+            if (!enemy.animation.IsFinished()) continue;
             setState(enemy, EnemyState::Idle);
-        } else {
-            AddElapsed(enemy.stateElapsedSeconds, deltaSeconds);
         }
-
+        // Stable insertion/ID order sees already-resolved earlier actors and
+        // previous positions of later actors. No enemy is allowed to pass through another.
+        std::vector<Engine::Collision::VerticalCapsule> actors{playerBody};
+        actors.reserve(enemies_.size());
+        for (const auto& other : enemies_) {
+            if (other.id != enemy.id && other.state != EnemyState::Dead)
+                actors.push_back({{other.position.x, 0, other.position.z},
+                    other.definition.hitboxHeight, other.definition.hitboxRadius});
+        }
         const float surfaceDistance = SurfaceDistance(
             enemy.position,
             enemy.definition.hitboxRadius,
@@ -891,13 +759,11 @@ void EnemySystem::Update(
                 clearNavigation(enemy);
                 movementRequested = true;
                 enemy.position = MoveToward(
-                    map,
                     enemy.position,
                     playerPosition,
                     settings_.meleeSpeed * deltaSeconds,
                     enemy.definition.hitboxRadius,
-                    playerObstacle,
-                    cellSize_);
+                    enemy.definition.hitboxHeight, walls, actors);
             } else if (enemyCell.has_value()) {
                 const bool needsPath =
                     enemy.navigationPurpose != NavigationPurpose::Chase ||
@@ -1161,13 +1027,11 @@ void EnemySystem::Update(
                 movementRequested = true;
                 const Float2 beforeStep = enemy.position;
                 enemy.position = MoveToward(
-                    map,
                     enemy.position,
                     waypoint,
                     movementBudget,
                     enemy.definition.hitboxRadius,
-                    playerObstacle,
-                    cellSize_);
+                    enemy.definition.hitboxHeight, walls, actors);
                 const float movedDistance = Distance(beforeStep, enemy.position);
                 if (movedDistance <= kPositionEpsilon) {
                     break;
@@ -1184,6 +1048,9 @@ void EnemySystem::Update(
             }
         }
 
+        if (Distance(previousPosition, enemy.position) > kPositionEpsilon) {
+            enemy.yawRadians = std::atan2(enemy.position.x - previousPosition.x, enemy.position.z - previousPosition.z);
+        }
         const float movedDistance = Distance(previousPosition, enemy.position);
         if (movementRequested && movedDistance <= kPositionEpsilon) {
             AddElapsed(enemy.stuckElapsedSeconds, deltaSeconds);
@@ -1197,7 +1064,110 @@ void EnemySystem::Update(
                 : EnemyState::Idle);
     }
 
+    for (auto& enemy : enemies_) AdvanceAnimation(enemy, player, walls, deltaSeconds);
     RefreshSnapshots();
+}
+
+void EnemySystem::SetState(RuntimeEnemy& enemy, const EnemyState state) {
+    if (enemy.state == state) return;
+    const auto& rig = *enemy.definition.rig;
+    const auto mode = state == EnemyState::Idle || state == EnemyState::Moving
+        ? Engine::Model::PlaybackMode::Loop : Engine::Model::PlaybackMode::Clamp;
+    const auto result = enemy.animation.Play(rig.clips[static_cast<std::size_t>(state)], mode, rig.transitionSeconds);
+    if (!result) throw std::runtime_error("Enemy animation transition: " + result.error());
+    enemy.state = state;
+    enemy.stateElapsedSeconds = 0;
+    enemy.attackShape.reset();
+}
+
+void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& player,
+    const std::span<const Engine::Collision::Aabb> walls, const float deltaSeconds) {
+    // Preserve the complete blend state, so an event inside a long simulation
+    // tick samples precisely the same pose as advancing normally to that time.
+    auto eventAnimation = enemy.animation;
+    const auto advance = enemy.animation.Advance(deltaSeconds);
+    if (!advance) throw std::runtime_error("Enemy animation advance: " + advance.error());
+    AddElapsed(enemy.stateElapsedSeconds, deltaSeconds);
+    enemy.attackShape.reset();
+    if (enemy.state != EnemyState::Attacking) return;
+
+    const auto& rig = *enemy.definition.rig;
+    const double previous = advance.value().previousSeconds;
+    const double current = advance.value().currentSeconds;
+    const auto pointAt = [&](const double seconds) {
+        const auto result = eventAnimation.Advance((std::max)(0.0, seconds - eventAnimation.TimeSeconds()));
+        if (!result) throw std::runtime_error("Enemy attack pose: " + result.error());
+        return EnemyBoneWorldPoint(rig, eventAnimation.CurrentPose(), rig.attackPoint, enemy.position, enemy.yawRadians);
+    };
+    const auto emit = [&](const Float3 origin) {
+        enemy.attackEventEmitted = true;
+        attackEvents_.push_back({enemy.id, enemy.definition.id, enemy.kind, origin,
+            {player.position.x, player.feetY + player.hitboxHeight * 0.5f, player.position.z}, enemy.definition.damage});
+    };
+    if (enemy.kind == EnemyKind::Ranged) {
+        if (!enemy.attackEventEmitted && previous <= rig.releaseSeconds && current >= rig.releaseSeconds) {
+            const auto origin = pointAt(rig.releaseSeconds);
+            // A hand on the far side of a wall must not spawn a projectile through it.
+            const Engine::Collision::Float3 from{enemy.position.x, origin.y, enemy.position.z};
+            const Engine::Collision::Float3 direction{origin.x-from.x, 0, origin.z-from.z};
+            const float length = std::hypot(direction.x, direction.z);
+            bool blocked = false;
+            if (length > kPositionEpsilon)
+                for (const auto& wall : walls)
+                    if (Engine::Collision::RaycastAabb(from, direction, length, wall)) { blocked = true; break; }
+            enemy.attackEventEmitted = true;
+            if (!blocked) emit(origin);
+        }
+        return;
+    }
+
+    const double begin = (std::max)(previous, rig.attackBeginSeconds);
+    const double end = (std::min)(current, rig.attackEndSeconds);
+    if (end < begin || current < rig.attackBeginSeconds || previous > rig.attackEndSeconds) return;
+    const Engine::Collision::VerticalCapsule playerBody{{player.position.x, player.feetY, player.position.z},
+        player.hitboxHeight, player.collisionRadius};
+    const float radius = rig.attackRadius * rig.scale;
+    Float3 from = pointAt(begin);
+    const std::size_t steps = (std::max)(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
+    for (std::size_t step = 1; step <= steps; ++step) {
+        const auto to = pointAt(begin + (end - begin) * static_cast<double>(step) / static_cast<double>(steps));
+        const Engine::Collision::Float3 start{from.x,from.y,from.z}, finish{to.x,to.y,to.z};
+        const Engine::Collision::Capsule swept{start,finish,radius};
+        // The debug shape is the same latest active hand segment used here.
+        if (current <= rig.attackEndSeconds) enemy.attackShape = swept;
+        if (!enemy.attackEventEmitted) {
+            const auto hit = Engine::Collision::SweepSphereAgainstCapsule(start, finish, radius, playerBody);
+            if (hit) {
+                const Engine::Collision::Float3 displacement{finish.x-start.x,finish.y-start.y,finish.z-start.z};
+                const Engine::Collision::VerticalCapsule sphere{{start.x,start.y-radius,start.z},2*radius,radius};
+                const Float3 impact{from.x+(to.x-from.x)* *hit,from.y+(to.y-from.y)* *hit,from.z+(to.z-from.z)* *hit};
+                const Engine::Collision::Float3 shoulder{enemy.position.x,impact.y,enemy.position.z};
+                const Engine::Collision::Float3 reach{impact.x-shoulder.x,0,impact.z-shoulder.z};
+                const float reachLength = std::hypot(reach.x, reach.z);
+                bool blocked = false;
+                for (const auto& wall : walls) {
+                    const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(sphere, displacement, wall);
+                    if ((contact && contact->fraction <= *hit) ||
+                        (reachLength > kPositionEpsilon && Engine::Collision::RaycastAabb(shoulder, reach, reachLength, wall))) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (!blocked) emit(impact);
+            }
+        }
+        from = to;
+    }
+}
+
+std::vector<Engine::Collision::VerticalCapsule> EnemySystem::CollectAliveBodies() const {
+    std::vector<Engine::Collision::VerticalCapsule> result;
+    result.reserve(enemies_.size());
+    for (const auto& enemy : enemies_) {
+        if (enemy.state != EnemyState::Dead)
+            result.push_back({{enemy.position.x,0,enemy.position.z},enemy.definition.hitboxHeight,enemy.definition.hitboxRadius});
+    }
+    return result;
 }
 
 std::vector<CircleObstacle> EnemySystem::CollectAliveColliders() const {
@@ -1240,7 +1210,7 @@ std::size_t EnemySystem::GetAliveCount() const noexcept {
 
 EnemyDamageResult EnemySystem::ApplyDamage(
     const EnemyId id,
-    const float rawDamage) noexcept {
+    const float rawDamage) {
     EnemyDamageResult result{};
     result.rawDamage = rawDamage;
     if (!std::isfinite(rawDamage) || rawDamage <= 0.0f) {
@@ -1262,11 +1232,7 @@ EnemyDamageResult EnemySystem::ApplyDamage(
             MarkDead(enemy);
         }
 
-        snapshots_[index].state = enemy.state;
-        snapshots_[index].health = enemy.health;
-        snapshots_[index].hitFlashRemainingSeconds =
-            enemy.hitFlashRemainingSeconds;
-        snapshots_[index].stateElapsedSeconds = enemy.stateElapsedSeconds;
+        UpdateSnapshot(enemy, snapshots_[index]);
         result.applied = true;
         result.killed = enemy.state == EnemyState::Dead;
         result.appliedDamage = healthBefore - enemy.health;
@@ -1276,7 +1242,7 @@ EnemyDamageResult EnemySystem::ApplyDamage(
     return result;
 }
 
-bool EnemySystem::Kill(const EnemyId id) noexcept {
+bool EnemySystem::Kill(const EnemyId id) {
     for (std::size_t index = 0; index < enemies_.size(); ++index) {
         RuntimeEnemy& enemy = enemies_[index];
         if (enemy.id != id || enemy.state == EnemyState::Dead) {
@@ -1285,17 +1251,13 @@ bool EnemySystem::Kill(const EnemyId id) noexcept {
         enemy.health = 0.0f;
         enemy.hitFlashRemainingSeconds = kEnemyHitFlashSeconds;
         MarkDead(enemy);
-        snapshots_[index].state = enemy.state;
-        snapshots_[index].health = enemy.health;
-        snapshots_[index].hitFlashRemainingSeconds =
-            enemy.hitFlashRemainingSeconds;
-        snapshots_[index].stateElapsedSeconds = enemy.stateElapsedSeconds;
+        UpdateSnapshot(enemy, snapshots_[index]);
         return true;
     }
     return false;
 }
 
-void EnemySystem::MarkDead(RuntimeEnemy& enemy) noexcept {
+void EnemySystem::MarkDead(RuntimeEnemy& enemy) {
     // An attack event can be emitted by Update and then the same enemy can be
     // killed by the player's shot before Game consumes this frame's queue.
     // Dead enemies must not deal that already-queued damage or spawn a bullet.
@@ -1304,8 +1266,7 @@ void EnemySystem::MarkDead(RuntimeEnemy& enemy) noexcept {
         [&enemy](const EnemyAttackEvent& event) {
             return event.enemyId == enemy.id;
         });
-    enemy.state = EnemyState::Dead;
-    enemy.stateElapsedSeconds = 0.0f;
+    SetState(enemy, EnemyState::Dead);
     enemy.attackCooldownSeconds = 0.0f;
     enemy.repathElapsedSeconds = 0.0f;
     enemy.stuckElapsedSeconds = 0.0f;
@@ -1318,22 +1279,29 @@ void EnemySystem::MarkDead(RuntimeEnemy& enemy) noexcept {
 void EnemySystem::RefreshSnapshots() {
     snapshots_.resize(enemies_.size());
     for (std::size_t index = 0; index < enemies_.size(); ++index) {
-        const RuntimeEnemy& enemy = enemies_[index];
-        EnemySnapshot& snapshot = snapshots_[index];
-        snapshot.id = enemy.id;
-        snapshot.definitionId = enemy.definition.id;
-        snapshot.kind = enemy.kind;
-        snapshot.state = enemy.state;
-        snapshot.position = enemy.position;
-        snapshot.collisionRadius = enemy.definition.hitboxRadius;
-        snapshot.hitboxHeight = enemy.definition.hitboxHeight;
-        snapshot.health = enemy.health;
-        snapshot.maxHealth = enemy.definition.maxHealth;
-        snapshot.defense = enemy.definition.defense;
-        snapshot.hitFlashRemainingSeconds =
-            enemy.hitFlashRemainingSeconds;
-        snapshot.stateElapsedSeconds = enemy.stateElapsedSeconds;
+        UpdateSnapshot(enemies_[index], snapshots_[index]);
     }
+}
+
+void EnemySystem::UpdateSnapshot(const RuntimeEnemy& enemy, EnemySnapshot& snapshot) const {
+    snapshot.id = enemy.id;
+    snapshot.definitionId = enemy.definition.id;
+    snapshot.kind = enemy.kind;
+    snapshot.state = enemy.state;
+    snapshot.position = enemy.position;
+    snapshot.collisionRadius = enemy.definition.hitboxRadius;
+    snapshot.hitboxHeight = enemy.definition.hitboxHeight;
+    snapshot.health = enemy.health;
+    snapshot.maxHealth = enemy.definition.maxHealth;
+    snapshot.defense = enemy.definition.defense;
+    snapshot.hitFlashRemainingSeconds = enemy.hitFlashRemainingSeconds;
+    snapshot.stateElapsedSeconds = enemy.stateElapsedSeconds;
+    snapshot.yawRadians = enemy.yawRadians;
+    snapshot.pose = enemy.animation.CurrentPose();
+    snapshot.body = {{enemy.position.x,0,enemy.position.z},enemy.definition.hitboxHeight,enemy.definition.hitboxRadius};
+    snapshot.hurtboxes = enemy.state == EnemyState::Dead ? std::vector<EnemyHurtbox>{} :
+        BuildEnemyHurtboxes(*enemy.definition.rig, snapshot.pose, enemy.position, enemy.yawRadians);
+    snapshot.attackShape = enemy.attackShape;
 }
 
 } // namespace fps

@@ -1,6 +1,6 @@
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "RetroFPS/Gameplay/Player/PlayerController.hpp"
 
-#include "RetroFPS/Collision/GridCollision.hpp"
 #include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
 #include "RetroFPS/Gameplay/Player/Player.hpp"
 #include "RetroFPS/World/GridMap.hpp"
@@ -45,11 +45,10 @@ bool PlayerController::Initialize(
 
     try {
         const Float2 spawnPosition = map.GetSpawnPosition(worldSettings.cellSize);
-        if (GridCollision::OverlapsSolid(
-                map,
-                spawnPosition,
-                settings_.collisionRadius,
-                worldSettings.cellSize)) {
+        const auto walls = BuildWorldCollisionBoxes(map, worldSettings);
+        if (!CanPlaceCharacterBody(
+                {{spawnPosition.x, 0, spawnPosition.z}, settings_.bodyHeight, settings_.collisionRadius},
+                walls, {})) {
             error = "Player spawn overlaps a solid map cell.";
             return false;
         }
@@ -72,7 +71,7 @@ void PlayerController::Update(
     const float deltaSeconds,
     const GridMap& map,
     const WorldSettings& worldSettings,
-    const std::span<const CircleObstacle> dynamicBlockers) const {
+    const std::span<const Engine::Collision::VerticalCapsule> dynamicBlockers) const {
     float yawRadians = player.GetYawRadians();
     float pitchRadians = player.GetAimPitchRadians();
     const float recoilDegrees = player.GetRecoilDegrees();
@@ -99,8 +98,33 @@ void PlayerController::Update(
         return;
     }
 
-    // A semantic press starts one jump. Horizontal grid blocking remains active
-    // in the air; this flat-floor controller never steps over walls or enemies.
+    const auto start = player.GetPositionXZ();
+    const auto walls = BuildWorldCollisionBoxes(map, worldSettings);
+    const auto isSupported = [&](const Engine::Collision::VerticalCapsule& body) {
+        if (body.feet.y <= 0.0001F) {
+            return true;
+        }
+        constexpr Engine::Collision::Float3 probe{0.0F, -0.002F, 0.0F};
+        for (const auto& wall : walls) {
+            const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, probe, wall);
+            if (contact && contact->normal.y > 0.5F) {
+                return true;
+            }
+        }
+        for (const auto& actor : dynamicBlockers) {
+            const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstCapsule(body, probe, actor);
+            if (contact && contact->normal.y > 0.5F) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const float previousFeetY = player.feetY_;
+    if (player.grounded_) {
+        player.grounded_ = isSupported({{start.x, previousFeetY, start.z},
+            settings_.bodyHeight, settings_.collisionRadius});
+    }
+    // Preserve the jump policy while sweeping the complete body in 3D.
     if (input.jumpPressed && player.grounded_) {
         player.verticalVelocity_ = std::sqrt(2.0f * settings_.gravity * settings_.jumpHeight);
         player.grounded_ = false;
@@ -129,13 +153,22 @@ void PlayerController::Update(
         direction.z * settings_.movementSpeed * deltaSeconds,
     };
 
-    player.SetPositionXZ(GridCollision::MoveCircle(
-        map,
-        player.GetPositionXZ(),
-        displacement,
-        settings_.collisionRadius,
-        dynamicBlockers,
-        worldSettings.cellSize));
+    const float desiredY=player.feetY_;
+    const auto moved=MoveCharacterBody({{start.x,previousFeetY,start.z},settings_.bodyHeight,settings_.collisionRadius},
+        {displacement.x,desiredY-previousFeetY,displacement.z},walls,dynamicBlockers);
+    player.SetPositionXZ({moved.x,moved.z});
+    player.feetY_=moved.y;
+    if (std::abs(moved.y-desiredY)>0.0001F) {
+        player.verticalVelocity_=0;
+    }
+    // A body can lose its support by walking off another actor. A ceiling
+    // contact also stops vertical motion, but cannot establish ground contact.
+    player.grounded_ = player.verticalVelocity_ <= 0.0F &&
+        isSupported({{moved.x, moved.y, moved.z}, settings_.bodyHeight, settings_.collisionRadius});
+    if (player.grounded_) {
+        player.verticalVelocity_ = 0.0F;
+    }
+
 }
 
 bool PlayerController::SetVerticalRecoilDegrees(

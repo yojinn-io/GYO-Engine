@@ -25,4 +25,19 @@ struct MeshData final {
     std::uint32_t verticalSegments,
     std::uint32_t horizontalSegments);
 
+// World-space wire outlines made from closed thin triangle prisms. They use
+// the ordinary unlit triangle pipeline, including on backends without lines.
+[[nodiscard]] Base::Result<MeshData, RenderError> MakeWireBox(
+    Float3 minimum,
+    Float3 maximum,
+    float lineThickness = 0.012F);
+// Endpoints are the centers of the hemispheres, not the outer capsule tips.
+// Coincident endpoints produce a sphere outline.
+[[nodiscard]] Base::Result<MeshData, RenderError> MakeWireCapsule(
+    Float3 segmentStart,
+    Float3 segmentEnd,
+    float radius,
+    float lineThickness = 0.012F,
+    std::uint32_t segments = 16);
+
 } // namespace Engine::Render

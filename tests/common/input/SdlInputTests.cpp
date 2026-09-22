@@ -9,7 +9,7 @@
 
 using namespace Engine::Input;
 
-TEST_CASE("SDL space and H events retain press hold release and focus semantics") {
+TEST_CASE("SDL space H and F3 events retain press hold release and focus semantics") {
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
@@ -17,6 +17,7 @@ TEST_CASE("SDL space and H events retain press hold release and focus semantics"
     const std::array bindings{
         std::pair{SDL_SCANCODE_SPACE, Key::Space},
         std::pair{SDL_SCANCODE_H, Key::H},
+        std::pair{SDL_SCANCODE_F3, Key::F3},
     };
 
     for (const auto& [scancode, key] : bindings) {
@@ -57,7 +58,7 @@ TEST_CASE("SDL space and H events retain press hold release and focus semantics"
         CHECK_FALSE(input.Snapshot().Get(key).released);
     }
 
-    // Focus loss releases both keys so an interrupted jump/holster press
+    // Focus loss releases keys so interrupted jump/holster/debug presses
     // cannot remain held after returning to an application.
     input.BeginFrame();
     for (const auto& [scancode, key] : bindings) {

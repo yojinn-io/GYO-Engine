@@ -6,6 +6,7 @@
 #include "engine/asset/AssetRequest.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "model/Animation.hpp"
+#include "model_renderer/ModelRenderer.hpp"
 #include "render/IRenderDevice.hpp"
 
 #include <algorithm>
@@ -32,21 +33,17 @@ struct WeaponViewModel::Impl final {
     Engine::Render::IRenderDevice* device{};
     Engine::Asset::AssetManager* assets{};
     std::vector<Engine::Asset::AssetHandle> assetHandles;
-    std::vector<Engine::Render::TextureHandle> textures;
-    std::vector<Engine::Render::MeshHandle> meshes;
+    std::shared_ptr<Engine::ModelRenderer::ModelResource> modelResource;
+    std::unique_ptr<Engine::ModelRenderer::ModelInstance> modelInstance;
     std::shared_ptr<const WeaponPresentationDefinition> definition;
     Engine::Model::Pose pose;
     Engine::Render::Float3 muzzleViewCameraPosition{};
-    std::vector<Engine::Model::SkinnedVertex> skinned;
-    std::vector<Engine::Render::Vertex3D> vertices;
     std::size_t lastClip{static_cast<std::size_t>(-1)};
     double lastTime{-1.0};
 
     ~Impl() {
-        if (device) {
-            for (auto handle : meshes) static_cast<void>(device->ReleaseMesh(handle));
-            for (auto handle : textures) static_cast<void>(device->ReleaseTexture(handle));
-        }
+        modelInstance.reset();
+        modelResource.reset();
         if (assets) for (auto handle : assetHandles) assets->Release(handle);
     }
 
@@ -72,26 +69,12 @@ struct WeaponViewModel::Impl final {
         muzzleViewCameraPosition = EvaluateWeaponMuzzleViewCameraPosition(*definition, pose);
     }
 
-    void Skin(std::size_t mesh) {
-        const auto result = Engine::Model::SkinMesh(*definition->model, mesh, pose, skinned);
-        if (!result) throw std::runtime_error(result.error());
-        vertices.resize(skinned.size());
-        for (std::size_t index = 0; index < skinned.size(); ++index) {
-            const auto& source = skinned[index];
-            vertices[index] = {
-                {source.position.x - definition->idleAnchor.x,
-                 source.position.y - definition->idleAnchor.y,
-                 source.position.z - definition->idleAnchor.z},
-                {source.uv.x, source.uv.y},
-            };
-        }
-    }
-
     void Initialize(const Engine::Asset::AssetId& id) {
         std::string error;
         definition = LoadWeaponPresentationDefinition(*assets, id, error);
         if (!definition) throw std::runtime_error(error);
         Evaluate(definition->clips[0], 0.0);
+        std::vector<Engine::ModelRenderer::ModelMaterial> materials;
         for (const auto& textureId : definition->materialTextureAssetIds) {
             const auto texture = Load<Engine::Asset::Loaders::TextureAsset>(
                 textureId, Engine::Asset::AssetType::Texture());
@@ -99,19 +82,21 @@ struct WeaponViewModel::Impl final {
                 static_cast<std::size_t>(texture->width) * texture->height * 4U) {
                 throw std::runtime_error("viewmodel texture has invalid decoded pixels");
             }
-            const auto uploaded = device->CreateTexture({
+            Engine::ModelRenderer::ModelMaterial material;
+            material.texture = Engine::Render::ImageView{
                 texture->width, texture->height, texture->width * 4U,
                 std::as_bytes(std::span<const std::uint8_t>(texture->rgba)),
-                Engine::Render::TextureColorSpace::SRgb});
-            if (!uploaded) throw std::runtime_error(uploaded.error().message);
-            textures.push_back(uploaded.value());
+                Engine::Render::TextureColorSpace::SRgb};
+            material.sampler = definition->sampler;
+            materials.push_back(material);
         }
-        for (std::size_t mesh = 0; mesh < definition->model->meshes.size(); ++mesh) {
-            Skin(mesh);
-            const auto created = device->CreateMesh({vertices, definition->model->meshes[mesh].indices});
-            if (!created) throw std::runtime_error(created.error().message);
-            meshes.push_back(created.value());
-        }
+        auto resource = Engine::ModelRenderer::ModelResource::Create(*device, definition->model, materials);
+        if (!resource) throw std::runtime_error(resource.error());
+        modelResource = std::move(resource.value());
+        auto instance = Engine::ModelRenderer::ModelInstance::Create(modelResource, pose,
+            {-definition->idleAnchor.x, -definition->idleAnchor.y, -definition->idleAnchor.z});
+        if (!instance) throw std::runtime_error(instance.error());
+        modelInstance = std::move(instance.value());
         lastClip = definition->clips[0];
         lastTime = 0.0;
     }
@@ -131,27 +116,17 @@ struct WeaponViewModel::Impl final {
             ? 0.0 : definition->model->clips[clip].durationSeconds * progress;
         if (clip != lastClip || time != lastTime) {
             Evaluate(clip, time);
-            for (std::size_t mesh = 0; mesh < meshes.size(); ++mesh) {
-                Skin(mesh);
-                const auto updated = device->UpdateMeshVertices(meshes[mesh], vertices);
-                if (!updated) throw std::runtime_error(updated.error().message);
-            }
+            const auto updated = modelInstance->UpdatePose(pose);
+            if (!updated) throw std::runtime_error(updated.error());
             lastClip = clip;
             lastTime = time;
         }
         queue.SetViewModelCamera(definition->camera);
-        for (std::size_t mesh = 0; mesh < meshes.size(); ++mesh) {
-            Engine::Render::MeshSubmission submission;
-            submission.mesh = meshes[mesh];
-            submission.material.texture = textures.at(definition->model->meshes[mesh].materialIndex);
-            submission.transform = definition->placement;
-            submission.material.sampler = definition->sampler;
-            submission.layer = Engine::Render::MeshLayer::ViewModel;
-            const auto submitted = queue.Submit(submission);
-            if (!submitted) {
-                error = submitted.error().message;
-                return false;
-            }
+        const auto submitted = modelInstance->Submit(queue, definition->placement,
+            Engine::Render::MeshLayer::ViewModel);
+        if (!submitted) {
+            error = submitted.error();
+            return false;
         }
         return true;
     }

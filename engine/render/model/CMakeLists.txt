@@ -1,0 +1,5 @@
+add_library(gyo_model_renderer STATIC src/ModelRenderer.cpp)
+add_library(GYO::ModelRenderer ALIAS gyo_model_renderer)
+target_include_directories(gyo_model_renderer PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(gyo_model_renderer PUBLIC GYO::Model GYO::Render)
+target_compile_features(gyo_model_renderer PUBLIC cxx_std_20)

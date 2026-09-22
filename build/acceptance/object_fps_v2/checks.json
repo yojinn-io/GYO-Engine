@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "startup",
+      "command": ["@PROBE:main@", "--startup-smoke-test"],
+      "profiles": ["quick", "release"],
+      "timeout": 90,
+      "environment": [],
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64"],
+      "gpu": false
+    },
+    {
+      "name": "enemy_wave",
+      "command": ["@PROBE:main@", "--headless-smoke-test"],
+      "profiles": ["release"],
+      "timeout": 120,
+      "environment": [],
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64"],
+      "gpu": false
+    },
+    {
+      "name": "skeletal_rendering",
+      "command": ["@PROBE:main@", "--smoke-test", "--gpu-driver", "@DRIVER@", "--output", "@LOG_ROOT@/enemy-rendering"],
+      "profiles": ["release"],
+      "timeout": 180,
+      "environment": [],
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64"],
+      "gpu": true
+    }
+  ]
+}

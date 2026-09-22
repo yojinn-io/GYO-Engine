@@ -2,9 +2,9 @@ gyo_app_project()
 include(sources.cmake)
 
 gyo_app_add_library(domain OUT_TARGET domain SOURCES ${APP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Ui GYO::Collision)
+    PUBLIC_LIBRARIES GYO::Engine GYO::Ui GYO::Collision GYO::Model)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES ${APP_SUPPORT_SOURCES}
-    PUBLIC_LIBRARIES ${domain} GYO::Engine GYO::Model GYO::Render
+    PUBLIC_LIBRARIES ${domain} GYO::Engine GYO::Model GYO::Render GYO::ModelRenderer
     PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app

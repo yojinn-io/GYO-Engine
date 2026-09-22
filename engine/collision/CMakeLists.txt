@@ -1,4 +1,4 @@
-add_library(gyo_collision STATIC src/Collision.cpp)
+add_library(gyo_collision STATIC src/Collision.cpp src/CapsuleQueries.cpp)
 add_library(GYO::Collision ALIAS gyo_collision)
 target_include_directories(gyo_collision PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(gyo_collision PUBLIC cxx_std_20)

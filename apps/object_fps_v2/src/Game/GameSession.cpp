@@ -1,3 +1,4 @@
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "RetroFPS/Game/GameSession.hpp"
 
 #include "RetroFPS/Collision/CombatCollision.hpp"
@@ -74,10 +75,8 @@ struct ViewBasis final {
     targets.reserve(snapshots.size());
     for (const EnemySnapshot& enemy : snapshots) {
         if (enemy.state != EnemyState::Dead) {
-            targets.push_back({
-                enemy.id,
-                {enemy.position, enemy.hitboxHeight, enemy.collisionRadius},
-            });
+            for (const auto& region : enemy.hurtboxes)
+                targets.push_back({enemy.id,region.shape,region.region});
         }
     }
     return targets;
@@ -354,7 +353,7 @@ struct GameSession::Impl final {
                     playerController.GetSettings().collisionRadius,
                     candidate->world.GetSettings().cellSize,
                     config.enemies,
-                    error)) {
+                    error, config.world.wallHeight, config.player.bodyHeight)) {
                 error = "Stage '" + item.definition.id + "' enemies: " + error;
                 return nullptr;
             }
@@ -649,8 +648,7 @@ struct GameSession::Impl final {
         const float deltaSeconds,
         std::string& error) {
         const Float2 previousPlayerPosition = stage->player.GetPositionXZ();
-        const std::vector<CircleObstacle> blockers =
-            stage->enemies.CollectAliveColliders();
+        const auto blockers = stage->enemies.CollectAliveBodies();
         playerController.Update(
             stage->player,
             {
@@ -976,7 +974,9 @@ struct GameSession::Impl final {
             stage->player.GetVerticalVelocity(),
             stage->player.IsGrounded(),
             playerController.GetSettings().bodyHeight,
+            playerController.GetSettings().collisionRadius,
         };
+        snapshot.worldCollisionBoxes = BuildWorldCollisionBoxes(stage->world.GetMap(),stage->world.GetSettings());
         snapshot.enemies.assign(
             stage->enemies.GetSnapshots().begin(),
             stage->enemies.GetSnapshots().end());

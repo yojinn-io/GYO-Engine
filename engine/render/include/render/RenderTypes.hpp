@@ -108,6 +108,8 @@ struct UvTransform final {
 enum class MeshLayer {
     World,
     ViewModel,
+    // World camera, no depth test/write, after Scene and before ViewModel/UI.
+    WorldOverlay,
 };
 
 // Sprite source rectangles use normalized texture coordinates with (x, y) at

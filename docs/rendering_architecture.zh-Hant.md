@@ -64,6 +64,7 @@ flowchart TD
 | 元件 | 負責 | 不負責 |
 |---|---|---|
 | Object_FPS | 決定物件、相機、材質 shader ID、武器動作 | SDL_GPU 命令、shader 格式選擇 |
+| `ModelRenderer` | 共用模型／材質資源、每實例 CPU 蒙皮、動態 mesh 更新與回收 | 動畫時鐘、骨骼受擊區或遊戲狀態 |
 | `RenderQueue`／`MaterialDesc` | 中立的幾何、材質與畫面提交資料 | Native handle 或檔案編譯 |
 | `ShaderLibrary` | 原子載入 bundle、驗證 manifest、保存不可變 shader bytes | 建立 GPU pipeline 或紋理 |
 | `Renderer` | 攝影機與矩陣、世界／武器／後處理／HUD 順序、pipeline 選用與畫面資源 | 平台驅動細節或遊戲命中規則 |
@@ -132,6 +133,8 @@ flowchart TD
 
 ```text
 World meshes + Scene sprites
+        ↓ 保留場景顏色，使用世界相機，沒有深度附件
+WorldOverlay meshes（無提交時省略）
         ↓ 保留場景顏色，重新清除深度
 ViewModel meshes
         ↓ 場景曝光／gamma
@@ -142,9 +145,19 @@ Overlay / HUD → Present
 
 世界與武器使用各自相機；武器 pass 清除深度後，手與槍之間仍正常遮擋。`Renderer` 產生 `PreparedFrame`，device 只執行其中明確描述的 pass、附件與 draw。
 
+`MeshLayer::WorldOverlay` 是世界座標的透視除錯層，不測試或寫入深度。
+`MakeWireBox`／`MakeWireCapsule` 以細三角網格沿用現有 shader 與 triangle-list，
+只接受幾何數值，Render 不依賴 Collision。v2 的 F3 開關與顏色語義由 App 擁有。
+未提交世界 overlay 時，原有 pass 流程不變。
+
+`GYO::ModelRenderer` 是依賴 `Model + Render` 的獨立 library。
+v2 武器與敵人提供已決定的 Pose，它不取樣另一個動畫時鐘；
+模型與材質可共用，動態頂點與 mesh handle 由各實例持有。
+v1 的既有呈現路徑不強制遷移。詳見 [v2 敵人契約](object_fps_v2/enemies.zh-Hant.md)。
+
 `AcquireFrame` 在視窗最小化時可以沒有 frame；成功取得的 token 必須經 `SubmitFrame` 或 `AbandonFrame` 恰好消耗一次。提交使用的 CPU 資料在呼叫期間被消費；後端負責保護尚在 GPU 執行的資源。畫面大小改變時重建對應 render target，清理時先解除 Renderer 的 device 資源，再銷毀 device。
 
-動畫每幀更新固定大小的頂點內容，保留 mesh handle 與 index topology。診斷讀回只在明確請求時等待 GPU，日常呈現不進行這種同步。Scene capture 是曝光／gamma／Overlay 之前的場景資料，並非最終螢幕截圖。
+動畫每幀更新固定大小的頂點內容，保留 mesh handle 與 index topology。診斷讀回只在明確請求時等待 GPU，日常呈現不進行這種同步。Scene capture 包含 WorldOverlay 與武器，但在曝光／gamma／螢幕 Overlay／HUD 之前，並非最終螢幕截圖。
 
 <a id="r07"></a>
 ## 7. 建置選擇

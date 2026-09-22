@@ -1,5 +1,6 @@
 #include "RetroFPS/App/CampaignContentLoader.hpp"
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/App/EnemyPresentationDefinition.hpp"
 
 #include "RetroFPS/Data/GameData.hpp"
 #include "RetroFPS/World/GridMapLoader.hpp"
@@ -62,11 +63,6 @@ CampaignContentBuildResult CampaignContentLoader::Load(
     if (!enemies) {
         return {std::nullopt, std::move(error)};
     }
-    const std::optional<std::string> animations =
-        LoadText(assets, ids.enemyAnimationClips, error);
-    if (!animations) {
-        return {std::nullopt, std::move(error)};
-    }
     const std::optional<std::string> weapons = LoadText(assets, ids.weapons, error);
     if (!weapons) {
         return {std::nullopt, std::move(error)};
@@ -77,12 +73,17 @@ CampaignContentBuildResult CampaignContentLoader::Load(
     }
 
     GameDataLoadResult data = GameDataLoader::Parse(
-        *enemies, *animations, *weapons, *levels);
+        *enemies, *weapons, *levels);
     if (!data) {
         return {
             std::nullopt,
             "failed to deserialize Object_FPS game data: " + data.error,
         };
+    }
+
+    for (auto& enemy : data.catalog->enemies.definitions_) {
+        enemy.rig = LoadEnemyRig(assets, enemy, error);
+        if (!enemy.rig) return {std::nullopt, error};
     }
 
     std::vector<GridMap> maps;

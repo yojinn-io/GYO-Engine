@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Gameplay/Player/PlayerSettings.hpp"
 
+#include "engine/collision/Collision.hpp"
 #include <span>
 #include <string>
 
@@ -37,7 +38,7 @@ public:
         float deltaSeconds,
         const GridMap& map,
         const WorldSettings& worldSettings,
-        std::span<const CircleObstacle> dynamicBlockers = {}) const;
+        std::span<const Engine::Collision::VerticalCapsule> dynamicBlockers = {}) const;
 
     // WeaponState owns the temporal recoil/recovery curve. Call this once per
     // simulated gameplay frame with its current non-negative recoil amount.

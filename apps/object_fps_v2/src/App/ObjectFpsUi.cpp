@@ -168,6 +168,32 @@ void AddText(
     drawList.commands.emplace_back(std::move(draw));
 }
 
+void AddCollisionLegend(
+    Engine::Ui::UiDrawList& drawList,
+    const ObjectFpsDisplaySettings& settings,
+    const HudLayout& layout) {
+    AddQuad(drawList, Place(layout, 952.0F, 24.0F, 296.0F,
+        settings.showCollisionVolumes ? 154.0F : 36.0F), kPanel);
+    AddText(drawList,
+        settings.showCollisionVolumes ? "F3  COLLISION: ON" : "F3  COLLISION: OFF",
+        Place(layout, 968.0F, 28.0F, 264.0F, 28.0F), 16.0F * layout.scale);
+    if (!settings.showCollisionVolumes) return;
+    const std::array<std::pair<std::string_view, Engine::Ui::UiColor>, 4> entries{{
+        {"BODY CAPSULE", {0.1F, 1.0F, 0.2F, 1.0F}},
+        {"BONE HURTBOX", {1.0F, 0.9F, 0.05F, 1.0F}},
+        {"ACTIVE ATTACK", {1.0F, 0.15F, 0.1F, 1.0F}},
+        {"WORLD BOX", {0.1F, 0.9F, 1.0F, 1.0F}},
+    }};
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+        const float y = 62.0F + static_cast<float>(index) * 27.0F;
+        AddQuad(drawList, Place(layout, 969.0F, y + 8.0F, 16.0F, 8.0F),
+            entries[index].second);
+        AddText(drawList, std::string(entries[index].first),
+            Place(layout, 995.0F, y, 235.0F, 24.0F), 15.0F * layout.scale,
+            entries[index].second);
+    }
+}
+
 void AddHud(
     Engine::Ui::UiDrawList& drawList,
     const GameSessionSnapshot& snapshot,
@@ -503,6 +529,7 @@ bool ObjectFpsUi::Compose(
         AddHud(drawList, snapshot, *hudLayout);
     }
     if (snapshot.screen == GameScreen::Playing) {
+        AddCollisionLegend(drawList, displaySettings, *hudLayout);
         return true;
     }
 
@@ -518,6 +545,9 @@ bool ObjectFpsUi::Compose(
         drawList.commands.end(),
         std::make_move_iterator(authored.commands.begin()),
         std::make_move_iterator(authored.commands.end()));
+    if (snapshot.screen == GameScreen::Paused) {
+        AddCollisionLegend(drawList, displaySettings, *hudLayout);
+    }
     return true;
 }
 

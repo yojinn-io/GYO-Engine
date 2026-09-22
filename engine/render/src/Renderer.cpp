@@ -311,9 +311,10 @@ struct Renderer::Impl final {
             if (mesh.layer != layer) continue;
             const bool sky = mesh.surface == SurfaceMode::Sky;
             const bool masked = mesh.surface == SurfaceMode::AlphaMasked;
+            const bool overlay = layer == MeshLayer::WorldOverlay;
             const CullMode cull = sky ? CullMode::Front : mesh.doubleSided ? CullMode::None : CullMode::Back;
             auto pipeline = Pipeline(mesh.material.shader, TextureFormat::Rgba16Float,
-                cull, masked, true, !sky);
+                cull, masked, !overlay, !overlay && !sky);
             if (!pipeline) return Result::Err(pipeline.error());
             pass.draws.push_back(Draw(mesh.material, mesh.mesh, pipeline.value(),
                 Multiply(WorldMatrix(mesh.transform), viewProjection), mesh.uv, masked ? 0.01F : -1.0F));
@@ -421,6 +422,12 @@ Base::Result<PresentStatus, RenderError> Renderer::Render(const RenderQueue& que
     auto r = state.Sprites(sceneSprites, queue, CompositeLayer::Scene, TextureFormat::Rgba16Float);
     if (!r) return Result::Err(r.error());
     if (!sceneSprites.draws.empty()) prepared.passes.push_back(std::move(sceneSprites));
+    if (std::any_of(queue.Meshes().begin(), queue.Meshes().end(), [](const auto& m) { return m.layer == MeshLayer::WorldOverlay; })) {
+        PreparedPass worldOverlay; worldOverlay.color = state.scene;
+        r = state.Meshes(worldOverlay, queue, MeshLayer::WorldOverlay, *queue.Camera());
+        if (!r) return Result::Err(r.error());
+        prepared.passes.push_back(std::move(worldOverlay));
+    }
     if (std::any_of(queue.Meshes().begin(), queue.Meshes().end(), [](const auto& m) { return m.layer == MeshLayer::ViewModel; })) {
         PreparedPass viewmodel; viewmodel.color = state.scene; viewmodel.depth = state.depth;
         r = state.Meshes(viewmodel, queue, MeshLayer::ViewModel, *queue.ViewModelCamera());

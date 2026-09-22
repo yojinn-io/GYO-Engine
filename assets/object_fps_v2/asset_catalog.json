@@ -1,8 +1,13 @@
 {
   "version": 1,
   "assets": [
+    { "id": "object_fps_v2.enemy.melee.animations", "type": "text", "path": "characters/enemies/melee.animset.json" },
+    { "id": "object_fps_v2.enemy.melee.character", "type": "text", "path": "characters/enemies/melee.character.json" },
+    { "id": "object_fps_v2.enemy.melee", "type": "text", "path": "characters/enemies/melee.enemy.json" },
+    { "id": "object_fps_v2.enemy.ranged.animations", "type": "text", "path": "characters/enemies/ranged.animset.json" },
+    { "id": "object_fps_v2.enemy.ranged.character", "type": "text", "path": "characters/enemies/ranged.character.json" },
+    { "id": "object_fps_v2.enemy.ranged", "type": "text", "path": "characters/enemies/ranged.enemy.json" },
     { "id": "object_fps_v2.data.enemies", "type": "text", "path": "data/enemies.csv" },
-    { "id": "object_fps_v2.data.enemy_animation_clips", "type": "text", "path": "data/enemy_animation_clips.csv" },
     { "id": "object_fps_v2.data.weapons", "type": "text", "path": "data/weapons.csv" },
     { "id": "object_fps_v2.data.levels", "type": "text", "path": "data/levels.csv" },
     { "id": "object_fps_v2.ui.screens", "type": "text", "path": "ui/screens.json" },
@@ -13,8 +18,6 @@
 
     { "id": "object_fps_v2.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf" },
 
-    { "id": "object_fps_v2.texture.enemy.blood_dog", "type": "texture", "path": "textures/enemies/blood_dog_sheet_full.png" },
-    { "id": "object_fps_v2.texture.enemy.spitter", "type": "texture", "path": "textures/enemies/spitter_sheet_full.png" },
     { "id": "object_fps_v2.texture.sky.default", "type": "texture", "path": "textures/sky/sky_sphere.png" },
     { "id": "object_fps_v2.weapon.mark23", "type": "text", "path": "weapons/mark23/viewmodel/mark23_viewmodel.json" },
     { "id": "object_fps_v2.model.mark23", "type": "model", "path": "weapons/mark23/viewmodel/Mark23.fbx" },

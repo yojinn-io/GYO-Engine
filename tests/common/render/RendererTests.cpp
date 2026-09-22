@@ -152,6 +152,32 @@ TEST_CASE("Renderer skips minimized frames and captures only requested successfu
     auto capture=renderer.TakeSceneCapture(); REQUIRE(capture); CHECK(capture->width==100); CHECK(capture->rgba8[0]==188); CHECK(capture->rgba8[3]==255);
     CHECK_FALSE(renderer.TakeSceneCapture()); REQUIRE(renderer.Render(RenderQueue{})); CHECK(device.reads==1);
 }
+TEST_CASE("World overlay uses world camera without depth between Scene and ViewModel") {
+    auto library = Library(); Device device; Renderer renderer;
+    REQUIRE(renderer.Initialize(device, library));
+    auto queue = AllLayers();
+    MeshSubmission debug = queue.Meshes().front();
+    debug.layer = MeshLayer::WorldOverlay;
+    REQUIRE(queue.Submit(debug));
+    REQUIRE(renderer.Render(queue));
+    const auto& passes = device.captured.passes;
+    REQUIRE(passes.size() == 6);
+    REQUIRE(passes[2].draws.size() == 1);
+    CHECK(passes[2].color == passes[0].color);
+    CHECK(passes[2].colorLoad == AttachmentLoad::Load);
+    CHECK_FALSE(passes[2].depth);
+    const auto& pipeline = device.pipelines.at(passes[2].draws.front().pipeline);
+    CHECK_FALSE(pipeline.depthTest);
+    CHECK_FALSE(pipeline.depthWrite);
+    CHECK(passes[2].draws.front().vertexUniforms == passes[0].draws.front().vertexUniforms);
+    CHECK(passes[3].depth == passes[0].depth);
+    CHECK(passes[3].depthLoad == AttachmentLoad::Clear);
+    CHECK_FALSE(passes[5].color); // Overlay UI is still the final swapchain pass.
+
+    auto normal = AllLayers();
+    REQUIRE(renderer.Render(normal));
+    CHECK(device.captured.passes.size() == 5); // No empty debug pass when disabled.
+}
 TEST_CASE("Renderer abandons acquired frames on preparation failure and consumes failed submissions once") {
     auto library=Library(); Device device; Renderer renderer; REQUIRE(renderer.Initialize(device,library));
     device.failTargets=true; CHECK_FALSE(renderer.Render(RenderQueue{})); CHECK(device.abandons==1); CHECK(device.submissions==0);

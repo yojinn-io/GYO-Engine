@@ -133,3 +133,88 @@ TEST_CASE("invalid hierarchy, animation and skin data fail with diagnostics") {
     model.nodes[0].localTransform.rotation.x=std::numeric_limits<float>::max();
     CHECK_FALSE(ValidateModel(model));
 }
+
+TEST_CASE("animation instances are explicitly clocked and independent") {
+    auto model=std::make_shared<const ModelAsset>(MakeModel());
+    AnimationInstance first(model),second(model);
+    CHECK_FALSE(first.Advance(0.1));
+    REQUIRE(first.Play(0,PlaybackMode::Clamp));
+    REQUIRE(second.Play(0,PlaybackMode::Loop));
+    auto interval=first.Advance(1.25);
+    REQUIRE(interval);
+    CHECK(interval.value().Crossed(1.0));
+    CHECK_FALSE(interval.value().Crossed(1.5));
+    CHECK(first.CurrentPose().localTransforms[1].translation.y==doctest::Approx(2.25));
+    CHECK(second.CurrentPose().localTransforms[1].translation.y==1);
+    REQUIRE(first.Advance(5));
+    CHECK(first.IsFinished());
+    CHECK(first.TimeSeconds()==2);
+    interval=first.Advance(1);
+    REQUIRE(interval);
+    CHECK_FALSE(interval.value().Crossed(2));
+    interval=second.Advance(4.25);
+    REQUIRE(interval);
+    CHECK(interval.value().Crossed(1));
+    CHECK(interval.value().Crossed(0));
+    CHECK(second.CurrentPose().localTransforms[1].translation.y==doctest::Approx(1.25));
+    CHECK_FALSE(second.IsFinished());
+    const auto pose=second.CurrentPose();
+    CHECK_FALSE(second.Advance(-1));
+    CHECK_FALSE(second.Advance(std::numeric_limits<double>::infinity()));
+    CHECK(second.TimeSeconds()==4.25);
+    CHECK(second.CurrentPose().localTransforms[1].translation.y==pose.localTransforms[1].translation.y);
+}
+
+TEST_CASE("interrupted transitions preserve the current pose and can be copied for event sampling") {
+    auto model=std::make_shared<ModelAsset>(MakeModel());
+    model->clips.push_back({"high",1,{{1,{{0,{0,10,0}}},{},{}}}});
+    model->clips.push_back({"low",1,{{1,{{0,{0,-2,0}}},{},{}}}});
+    AnimationInstance instance(model);
+    REQUIRE(instance.Play(0,PlaybackMode::Clamp));
+    REQUIRE(instance.Advance(1));
+    REQUIRE(instance.Play(1,PlaybackMode::Clamp,1));
+    CHECK(instance.CurrentPose().localTransforms[1].translation.y==2);
+    REQUIRE(instance.Advance(0.25));
+    CHECK(instance.CurrentPose().localTransforms[1].translation.y==4);
+    REQUIRE(instance.Play(2,PlaybackMode::Clamp,0.5));
+    CHECK(instance.CurrentPose().localTransforms[1].translation.y==4);
+    auto eventSampler=instance;
+    REQUIRE(eventSampler.Advance(0.25));
+    CHECK(eventSampler.CurrentPose().localTransforms[1].translation.y==1);
+    CHECK(instance.TimeSeconds()==0);
+    CHECK(instance.CurrentPose().localTransforms[1].translation.y==4);
+    REQUIRE(instance.Advance(0.5));
+    CHECK(instance.CurrentPose().localTransforms[1].translation.y==-2);
+    CHECK(TransformPoint(instance.CurrentPose().globalTransforms[1],{}).x==2);
+}
+
+TEST_CASE("pose blends retain hierarchy and normalize shortest-arc rotations") {
+    const auto model=MakeModel();
+    Pose from,to,output;
+    REQUIRE(MakeDefaultPose(model,from));
+    to=from;
+    to.localTransforms[0].translation={4,0,0};
+    const float a=std::sqrt(0.5F);
+    from.localTransforms[1].rotation={0,0,a,a};
+    to.localTransforms[1].rotation={0,0,-a,-a};
+    REQUIRE(BlendPoses(model,from,to,0.5F,output));
+    const auto point=TransformPoint(output.globalTransforms[1],{1,0,0});
+    CHECK(point.x==doctest::Approx(3));
+    CHECK(point.y==doctest::Approx(2));
+    REQUIRE(BlendPoses(model,from,to,1,to));
+    CHECK(to.localTransforms[0].translation.x==4);
+    CHECK_FALSE(BlendPoses(model,from,to,-0.1F,output));
+    to.localTransforms.clear();
+    CHECK_FALSE(BlendPoses(model,from,to,0.5F,output));
+}
+
+TEST_CASE("playback intervals report an event once across exact and wrapped boundaries") {
+    CHECK(PlaybackInterval{0,0.5,2,PlaybackMode::Clamp}.Crossed(0.5));
+    CHECK_FALSE(PlaybackInterval{0.5,0.6,2,PlaybackMode::Clamp}.Crossed(0.5));
+    CHECK(PlaybackInterval{1.8,2.2,2,PlaybackMode::Loop}.Crossed(0.1));
+    CHECK_FALSE(PlaybackInterval{1.8,2.2,2,PlaybackMode::Loop}.Crossed(0.3));
+    CHECK_FALSE(PlaybackInterval{0,1,2,PlaybackMode::Clamp}.Crossed(0));
+    AnimationInstance empty;
+    CHECK_FALSE(empty.Play(0,PlaybackMode::Loop));
+    CHECK_FALSE(empty.Advance(0));
+}

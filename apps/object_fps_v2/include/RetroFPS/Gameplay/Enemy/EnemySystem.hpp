@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Collision/GridCollision.hpp"
 #include "RetroFPS/Data/GameData.hpp"
+#include "RetroFPS/Gameplay/Enemy/EnemyRig.hpp"
 #include "RetroFPS/Math/Vector.hpp"
 #include "RetroFPS/World/GridMap.hpp"
 
@@ -54,6 +55,11 @@ struct EnemySnapshot final {
     float defense = 0.0f;
     float hitFlashRemainingSeconds = 0.0f;
     float stateElapsedSeconds = 0.0f;
+    float yawRadians{};
+    Engine::Model::Pose pose;
+    Engine::Collision::VerticalCapsule body;
+    std::vector<EnemyHurtbox> hurtboxes;
+    std::optional<Engine::Collision::Capsule> attackShape;
 };
 
 struct EnemyAttackEvent final {
@@ -95,7 +101,7 @@ struct EnemyDamageResult final {
     float remainingHealth = 0.0f;
 };
 
-// Engine-independent enemy simulation. The map remains owned by the caller;
+// CPU-only simulation using Engine animation and geometry. The map remains owned by the caller;
 // Initialize and Update therefore both receive the map used by the current
 // level session.
 class EnemySystem final {
@@ -109,7 +115,9 @@ public:
         float playerCollisionRadius,
         float cellSize,
         EnemySettings settings,
-        std::string& error);
+        std::string& error,
+        float wallHeight = 2.5f,
+        float playerHitboxHeight = 1.8f);
     void Reset() noexcept;
 
     [[nodiscard]] EnemySpawnResult Spawn(
@@ -135,14 +143,15 @@ public:
         return attackEvents_;
     }
     [[nodiscard]] std::vector<CircleObstacle> CollectAliveColliders() const;
+    [[nodiscard]] std::vector<Engine::Collision::VerticalCapsule> CollectAliveBodies() const;
     // Includes live instances and dead instances whose death animation remains
     // visible, so a wave spawner cannot reuse an occupied slot.
     [[nodiscard]] std::vector<CircleObstacle> CollectOccupiedColliders() const;
 
     // Applies max(1, raw damage - definition defense). Unknown/dead enemies and
     // invalid raw damage return an unapplied result.
-    [[nodiscard]] EnemyDamageResult ApplyDamage(EnemyId id, float rawDamage) noexcept;
-    [[nodiscard]] bool Kill(EnemyId id) noexcept;
+    [[nodiscard]] EnemyDamageResult ApplyDamage(EnemyId id, float rawDamage);
+    [[nodiscard]] bool Kill(EnemyId id);
 
     [[nodiscard]] const EnemySettings& GetSettings() const noexcept { return settings_; }
     [[nodiscard]] float GetCellSize() const noexcept { return cellSize_; }
@@ -163,6 +172,9 @@ private:
         EnemyKind kind = EnemyKind::Melee;
         EnemyState state = EnemyState::Idle;
         Float2 position{};
+        float yawRadians{};
+        Engine::Model::AnimationInstance animation;
+        std::optional<Engine::Collision::Capsule> attackShape;
         EnemyDefinition definition{};
         float health = 0.0f;
         float hitFlashRemainingSeconds = 0.0f;
@@ -180,11 +192,17 @@ private:
     [[nodiscard]] bool ValidateDefinition(
         const EnemyDefinition& definition,
         std::string& error) const;
-    void MarkDead(RuntimeEnemy& enemy) noexcept;
+    void SetState(RuntimeEnemy& enemy, EnemyState state);
+    void MarkDead(RuntimeEnemy& enemy);
+    void AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& player,
+        std::span<const Engine::Collision::Aabb> walls, float deltaSeconds);
+    void UpdateSnapshot(const RuntimeEnemy& enemy, EnemySnapshot& snapshot) const;
     void RefreshSnapshots();
 
     EnemySettings settings_{};
     float cellSize_ = 1.0f;
+    float wallHeight_ = 2.5f;
+    float playerHitboxHeight_ = 1.8f;
     std::size_t mapWidth_ = 0;
     std::size_t mapHeight_ = 0;
     EnemyId nextEnemyId_ = 1;

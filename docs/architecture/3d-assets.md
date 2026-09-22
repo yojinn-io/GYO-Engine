@@ -1,5 +1,11 @@
 # Object_FPS 3D assets
 
+This page describes the original `object_fps` (v1) asset assembly. Its sprite
+enemy behavior remains supported. `object_fps_v2` now uses the UAL mannequin for
+animated enemies, with simulation-owned poses, skeletal hurt capsules and the
+shared `GYO::ModelRenderer`. Its separate enemy data contract and F3 collision
+inspection are documented in [v2 enemies](../object_fps_v2/enemies.zh-Hant.md).
+
 Object_FPS owns prepared runtime models and game-specific presentation definitions. Complete vendor archives and working DCC projects are kept outside `apps/` and runtime asset roots. They are manual authoring inputs, not game build or release dependencies. This workstation keeps the historical Object_FPS archive under `D:/common/3DModel/temp/gyo-engine/object_fps/art_source`; that local path is not required by another checkout. The game still uses enemy sprites; the 3D character definitions provide a loadable presentation boundary rather than a replacement scene/controller.
 
 For an independent variant, copy game code and runtime content following the [manual game guide](../creating_apps.md). Existing AssetIds, clip names and animation/material references remain internal data contracts. Deployment identity changes do not require global renaming.

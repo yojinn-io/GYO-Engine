@@ -29,7 +29,7 @@ namespace {
            std::isfinite(definition.defense) && definition.defense >= 0.0f &&
            std::isfinite(definition.hitboxHeight) &&
            definition.hitboxHeight > 0.0f &&
-           definition.textureAssetId.IsValid();
+           definition.presentationAssetId.IsValid() && static_cast<bool>(definition.rig);
 }
 
 } // namespace

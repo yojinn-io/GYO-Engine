@@ -2,6 +2,8 @@
 
 #include "RetroFPS/Math/Vector.hpp"
 
+#include "engine/collision/Collision.hpp"
+#include <string>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -22,7 +24,8 @@ struct VerticalCapsule final {
 
 struct CombatTarget final {
     CombatTargetId id = 0;
-    VerticalCapsule capsule{};
+    Engine::Collision::Capsule capsule{};
+    std::string region;
 };
 
 enum class CombatHitKind {
@@ -36,6 +39,7 @@ struct CombatHit final {
     Float3 position{};
     float distance = 0.0f;
     CombatTargetId targetId = 0;
+    std::string region;
 };
 
 // Game world queries compose reusable GYO collision primitives.

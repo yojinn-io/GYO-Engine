@@ -23,7 +23,6 @@ namespace fps {
 namespace {
 
 constexpr std::string_view kEnemyCatalogName{"enemies.csv"};
-constexpr std::string_view kEnemyAnimationCatalogName{"enemy_animation_clips.csv"};
 constexpr std::string_view kWeaponCatalogName{"weapons.csv"};
 constexpr std::string_view kLevelCatalogName{"levels.csv"};
 
@@ -36,22 +35,7 @@ const std::vector<std::string> kEnemyHeader{
     "defense",
     "hitbox_radius",
     "hitbox_height",
-    "render_width",
-    "render_height",
-    "texture_asset_id",
-    "frame_width_px",
-    "frame_height_px",
-};
-const std::vector<std::string> kEnemyAnimationHeader{
-    "enemy_id",
-    "state",
-    "origin_x_px",
-    "origin_y_px",
-    "frame_count",
-    "seconds_per_frame",
-    "event_frame_index",
-    "muzzle_x_px",
-    "muzzle_y_px",
+    "presentation_asset_id",
 };
 const std::vector<std::string> kWeaponHeader{
     "weapon_id",
@@ -119,8 +103,7 @@ void ValidateHeader(
     const std::vector<std::string>* header = nullptr;
     if (catalogName == kEnemyCatalogName) {
         header = &kEnemyHeader;
-    } else if (catalogName == kEnemyAnimationCatalogName) {
-        header = &kEnemyAnimationHeader;
+
     } else if (catalogName == kWeaponCatalogName) {
         header = &kWeaponHeader;
     } else if (catalogName == kLevelCatalogName) {
@@ -362,10 +345,6 @@ void ValidateNonNegative(
             record.fields[6], kEnemyCatalogName, record, kEnemyHeader[6]);
         definition.hitboxHeight = ParseFloat(
             record.fields[7], kEnemyCatalogName, record, kEnemyHeader[7]);
-        definition.renderWidth = ParseFloat(
-            record.fields[8], kEnemyCatalogName, record, kEnemyHeader[8]);
-        definition.renderHeight = ParseFloat(
-            record.fields[9], kEnemyCatalogName, record, kEnemyHeader[9]);
         ValidatePositive(definition.damage, kEnemyCatalogName, record, kEnemyHeader[2]);
         ValidatePositive(
             definition.attackIntervalSeconds, kEnemyCatalogName, record, kEnemyHeader[3]);
@@ -373,22 +352,9 @@ void ValidateNonNegative(
         ValidateNonNegative(definition.defense, kEnemyCatalogName, record, kEnemyHeader[5]);
         ValidatePositive(definition.hitboxRadius, kEnemyCatalogName, record, kEnemyHeader[6]);
         ValidatePositive(definition.hitboxHeight, kEnemyCatalogName, record, kEnemyHeader[7]);
-        ValidatePositive(definition.renderWidth, kEnemyCatalogName, record, kEnemyHeader[8]);
-        ValidatePositive(definition.renderHeight, kEnemyCatalogName, record, kEnemyHeader[9]);
-        definition.textureAssetId = ParseRuntimeAssetId(
-            record.fields[10], kEnemyCatalogName, record, kEnemyHeader[10]);
-        definition.frameWidthPixels = ParseUnsigned(
-            record.fields[11], kEnemyCatalogName, record, kEnemyHeader[11]);
-        definition.frameHeightPixels = ParseUnsigned(
-            record.fields[12], kEnemyCatalogName, record, kEnemyHeader[12]);
-        if (definition.frameWidthPixels == 0) {
-            ThrowFieldError(
-                kEnemyCatalogName, record, kEnemyHeader[11], "value must be greater than zero");
-        }
-        if (definition.frameHeightPixels == 0) {
-            ThrowFieldError(
-                kEnemyCatalogName, record, kEnemyHeader[12], "value must be greater than zero");
-        }
+        if (definition.hitboxHeight < 2*definition.hitboxRadius)
+            ThrowFieldError(kEnemyCatalogName, record, kEnemyHeader[7], "capsule height must include both hemispheres");
+        definition.presentationAssetId = ParseRuntimeAssetId(record.fields[8], kEnemyCatalogName, record, kEnemyHeader[8]);
         definitions.push_back(std::move(definition));
     }
 
@@ -396,276 +362,6 @@ void ValidateNonNegative(
         throw GameDataError("enemy CSV must contain exactly one melee and one ranged definition");
     }
     return definitions;
-}
-
-enum class EnemyAnimationState : std::uint8_t {
-    Idle = 0,
-    Moving = 1,
-    Attacking = 2,
-    Dead = 3,
-};
-
-[[nodiscard]] EnemyAnimationState ParseEnemyAnimationState(
-    const std::string& text,
-    const data::CsvRecord& record) {
-    if (text == "idle") {
-        return EnemyAnimationState::Idle;
-    }
-    if (text == "move") {
-        return EnemyAnimationState::Moving;
-    }
-    if (text == "attack") {
-        return EnemyAnimationState::Attacking;
-    }
-    if (text == "dead") {
-        return EnemyAnimationState::Dead;
-    }
-    ThrowFieldError(
-        kEnemyAnimationCatalogName,
-        record,
-        kEnemyAnimationHeader[1],
-        "expected exactly 'idle', 'move', 'attack', or 'dead'");
-}
-
-[[nodiscard]] std::string_view EnemyAnimationStateName(const EnemyAnimationState state) noexcept {
-    switch (state) {
-    case EnemyAnimationState::Idle:
-        return "idle";
-    case EnemyAnimationState::Moving:
-        return "move";
-    case EnemyAnimationState::Attacking:
-        return "attack";
-    case EnemyAnimationState::Dead:
-        return "dead";
-    }
-    return "unknown";
-}
-
-[[nodiscard]] EnemyAnimationClipDefinition& SelectEnemyAnimationClip(
-    EnemyAnimationSetDefinition& animations,
-    const EnemyAnimationState state) noexcept {
-    switch (state) {
-    case EnemyAnimationState::Idle:
-        return animations.idle;
-    case EnemyAnimationState::Moving:
-        return animations.moving;
-    case EnemyAnimationState::Attacking:
-        return animations.attacking;
-    case EnemyAnimationState::Dead:
-        return animations.dead;
-    }
-    return animations.idle;
-}
-
-void ValidateAnimationRectangle(
-    const EnemyDefinition& enemy,
-    const EnemyAnimationClipDefinition& clip,
-    const data::CsvRecord& record) {
-    constexpr std::uint64_t kMaxPixelCoordinate =
-        std::numeric_limits<std::uint32_t>::max();
-    constexpr std::uint64_t kMaxArithmeticValue =
-        std::numeric_limits<std::uint64_t>::max();
-    const std::uint64_t originX = clip.originXpx;
-    const std::uint64_t originY = clip.originYpx;
-    const std::uint64_t frameWidth = enemy.frameWidthPixels;
-    const std::uint64_t frameHeight = enemy.frameHeightPixels;
-    const std::uint64_t frameCount = clip.frameCount;
-
-    if (frameCount != 0 && frameWidth > kMaxArithmeticValue / frameCount) {
-        ThrowFieldError(
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[4],
-            "atlas rectangle arithmetic overflows an unsigned 64-bit integer");
-    }
-    const std::uint64_t stripWidth = frameWidth * frameCount;
-    if (originX > kMaxArithmeticValue - stripWidth ||
-        originY > kMaxArithmeticValue - frameHeight) {
-        ThrowFieldError(
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[2],
-            "atlas rectangle arithmetic overflows an unsigned 64-bit integer");
-    }
-    if (originX + stripWidth > kMaxPixelCoordinate ||
-        originY + frameHeight > kMaxPixelCoordinate) {
-        ThrowFieldError(
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[2],
-            "atlas rectangle arithmetic overflows unsigned 32-bit pixel coordinates");
-    }
-}
-
-void ParseEnemyAnimations(
-    const data::CsvDocument& document,
-    std::vector<EnemyDefinition>& enemies) {
-    ValidateHeader(document, kEnemyAnimationHeader, kEnemyAnimationCatalogName);
-
-    std::unordered_map<EnemyDefinitionId, std::size_t> enemyIndices;
-    enemyIndices.reserve(enemies.size());
-    for (std::size_t index = 0; index < enemies.size(); ++index) {
-        enemyIndices.emplace(enemies[index].id, index);
-    }
-
-    std::vector<std::uint8_t> seenStates(enemies.size(), 0);
-    for (const data::CsvRecord& record : document.records) {
-        const EnemyDefinitionId enemyId = ParseDefinitionId(
-            record.fields[0],
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[0]);
-        const auto enemyFound = enemyIndices.find(enemyId);
-        if (enemyFound == enemyIndices.end()) {
-            ThrowFieldError(
-                kEnemyAnimationCatalogName,
-                record,
-                kEnemyAnimationHeader[0],
-                "referenced enemy ID does not exist");
-        }
-
-        EnemyDefinition& enemy = enemies[enemyFound->second];
-        const EnemyAnimationState state = ParseEnemyAnimationState(record.fields[1], record);
-        const std::uint8_t stateBit =
-            static_cast<std::uint8_t>(1U << static_cast<std::uint8_t>(state));
-        if ((seenStates[enemyFound->second] & stateBit) != 0) {
-            ThrowFieldError(
-                kEnemyAnimationCatalogName,
-                record,
-                kEnemyAnimationHeader[1],
-                "duplicate animation state for enemy");
-        }
-
-        EnemyAnimationClipDefinition clip;
-        clip.originXpx = ParseUnsigned(
-            record.fields[2],
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[2]);
-        clip.originYpx = ParseUnsigned(
-            record.fields[3],
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[3]);
-        clip.frameCount = ParseUnsigned(
-            record.fields[4],
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[4]);
-        if (clip.frameCount == 0) {
-            ThrowFieldError(
-                kEnemyAnimationCatalogName,
-                record,
-                kEnemyAnimationHeader[4],
-                "value must be greater than zero");
-        }
-        clip.secondsPerFrame = ParseFloat(
-            record.fields[5],
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[5]);
-        ValidatePositive(
-            clip.secondsPerFrame,
-            kEnemyAnimationCatalogName,
-            record,
-            kEnemyAnimationHeader[5]);
-
-        if (state == EnemyAnimationState::Attacking) {
-            if (record.fields[6].empty()) {
-                ThrowFieldError(
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[6],
-                    "attack animation requires an event frame index");
-            }
-            clip.eventFrameIndex = ParseUnsigned(
-                record.fields[6],
-                kEnemyAnimationCatalogName,
-                record,
-                kEnemyAnimationHeader[6]);
-            if (*clip.eventFrameIndex >= clip.frameCount) {
-                ThrowFieldError(
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[6],
-                    "event frame index must be less than frame count");
-            }
-        } else if (!record.fields[6].empty()) {
-            ThrowFieldError(
-                kEnemyAnimationCatalogName,
-                record,
-                kEnemyAnimationHeader[6],
-                "event frame index must be empty for non-attack animations");
-        }
-
-        const bool hasMuzzleX = !record.fields[7].empty();
-        const bool hasMuzzleY = !record.fields[8].empty();
-        const bool needsMuzzle =
-            state == EnemyAnimationState::Attacking && enemy.kind == EnemyKind::Ranged;
-        if (needsMuzzle) {
-            if (!hasMuzzleX || !hasMuzzleY) {
-                ThrowFieldError(
-                    kEnemyAnimationCatalogName,
-                    record,
-                    !hasMuzzleX ? kEnemyAnimationHeader[7] : kEnemyAnimationHeader[8],
-                    "ranged attack animation requires both muzzle pixel coordinates");
-            }
-            const EnemyAnimationPixelPoint muzzle{
-                ParseUnsigned(
-                    record.fields[7],
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[7]),
-                ParseUnsigned(
-                    record.fields[8],
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[8]),
-            };
-            if (muzzle.x >= enemy.frameWidthPixels) {
-                ThrowFieldError(
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[7],
-                    "muzzle x coordinate must be inside one animation frame");
-            }
-            if (muzzle.y >= enemy.frameHeightPixels) {
-                ThrowFieldError(
-                    kEnemyAnimationCatalogName,
-                    record,
-                    kEnemyAnimationHeader[8],
-                    "muzzle y coordinate must be inside one animation frame");
-            }
-            clip.muzzlePixel = muzzle;
-        } else if (hasMuzzleX || hasMuzzleY) {
-            ThrowFieldError(
-                kEnemyAnimationCatalogName,
-                record,
-                hasMuzzleX ? kEnemyAnimationHeader[7] : kEnemyAnimationHeader[8],
-                "muzzle coordinates must be empty except for ranged attack animations");
-        }
-
-        ValidateAnimationRectangle(enemy, clip, record);
-        SelectEnemyAnimationClip(enemy.animations, state) = clip;
-        seenStates[enemyFound->second] |= stateBit;
-    }
-
-    constexpr std::uint8_t kAllStates = 0x0F;
-    for (std::size_t enemyIndex = 0; enemyIndex < enemies.size(); ++enemyIndex) {
-        if (seenStates[enemyIndex] == kAllStates) {
-            continue;
-        }
-        for (std::uint8_t stateIndex = 0; stateIndex < 4; ++stateIndex) {
-            const std::uint8_t stateBit = static_cast<std::uint8_t>(1U << stateIndex);
-            if ((seenStates[enemyIndex] & stateBit) == 0) {
-                throw GameDataError(
-                    "enemy_animation_clips.csv is missing state '" +
-                    std::string{EnemyAnimationStateName(
-                        static_cast<EnemyAnimationState>(stateIndex))} +
-                    "' for enemy '" + enemies[enemyIndex].id + "'");
-            }
-        }
-    }
 }
 
 [[nodiscard]] std::vector<WeaponDefinition> ParseWeapons(
@@ -851,7 +547,6 @@ void ParseEnemyAnimations(
 
 [[nodiscard]] ParsedCatalogData BuildCatalogData(
     const data::CsvDocument& enemies,
-    const data::CsvDocument& enemyAnimations,
     const data::CsvDocument& weapons,
     const data::CsvDocument& levels) {
     ParsedCatalogData parsed{
@@ -859,7 +554,6 @@ void ParseEnemyAnimations(
         ParseWeapons(weapons),
         ParseLevels(levels),
     };
-    ParseEnemyAnimations(enemyAnimations, parsed.enemies);
     return parsed;
 }
 
@@ -916,18 +610,14 @@ const LevelDefinition* LevelCatalog::GetStartLevel() const noexcept {
 
 GameDataLoadResult GameDataLoader::Parse(
     const std::string_view enemiesCsv,
-    const std::string_view enemyAnimationClipsCsv,
     const std::string_view weaponsCsv,
     const std::string_view levelsCsv) {
     try {
         const data::CsvParseResult enemyResult = data::Csv::Parse(enemiesCsv);
-        const data::CsvParseResult enemyAnimationResult =
-            data::Csv::Parse(enemyAnimationClipsCsv);
         const data::CsvParseResult weaponResult = data::Csv::Parse(weaponsCsv);
         const data::CsvParseResult levelResult = data::Csv::Parse(levelsCsv);
         ParsedCatalogData parsed = BuildCatalogData(
             RequireDocument(enemyResult, "enemy"),
-            RequireDocument(enemyAnimationResult, "enemy animation"),
             RequireDocument(weaponResult, "weapon"),
             RequireDocument(levelResult, "level"));
 

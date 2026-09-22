@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
+  "animation_set_asset_id": "object_fps_v2.enemy.ranged.animations",
+  "material_overrides": {
+    "M_Main": {
+      "base_color_linear": [
+        0.035,
+        0.17,
+        0.75,
+        1
+      ]
+    },
+    "M_Joints": {
+      "base_color_linear": [
+        0.1,
+        0.11,
+        0.13,
+        1
+      ]
+    }
+  }
+}
