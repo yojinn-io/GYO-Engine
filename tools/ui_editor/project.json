@@ -1,5 +1,21 @@
 {
   "version": 1,
   "display_name": "GYO UI Editor",
-  "components": ["SDL_RENDERER", "SDL_IMAGE", "SDL_TTF", "IMGUI"]
+  "default_variant": "gui",
+  "requires_apps": {},
+  "variants": {
+    "gui": {
+      "components": [
+        "SDL_RENDERER",
+        "SDL_IMAGE",
+        "SDL_TTF",
+        "IMGUI"
+      ],
+      "packageable": true
+    },
+    "cli": {
+      "components": [],
+      "packageable": false
+    }
+  }
 }

@@ -214,7 +214,7 @@ documents, not a replacement license or a claim about unprovided terms.
 5. Enable game tests separately. Model/definition tests live under `tests/object_fps`, and diagnostics use `gyo_object_fps_acceptance`; no test source is injected into the game executable.
 
 ```sh
-cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset test -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset test
 ctest --preset test
 ```

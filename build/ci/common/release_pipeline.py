@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, load_packages,
                              parse_boolean, prepare_event, validate_archive, validate_checksum,
                              validate_commit, validate_version, validate_expected_pairs)
-from app_registry import release_products
+from app_registry import release_products, export_tools
 
 
 class ApiError(ReleaseError):
@@ -354,6 +354,8 @@ def main() -> None:
     prepare.add_argument("--ref", required=True)
     prepare.add_argument("--output", type=Path, required=True)
     prepare.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
+    prepare.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
+    prepare.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
     draft = commands.add_parser("draft")
     draft.add_argument("--tag", required=True)
     draft.add_argument("--commit", required=True)
@@ -361,8 +363,11 @@ def main() -> None:
     draft.add_argument("--package-directory", type=Path, required=True)
     draft.add_argument("--output", type=Path, required=True)
     draft.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
+    draft.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
+    draft.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
     args = parser.parse_args()
     try:
+        selected_tools = export_tools(args.tool_registry, repository_root=args.repository_root)
         if args.command == "prepare":
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
             result = prepare_event(args.event_name, event, args.commit, args.ref)
@@ -374,7 +379,10 @@ def main() -> None:
             if git("rev-parse", "HEAD") != args.commit:
                 raise ReleaseError("Draft checkout does not match the selected source commit")
             expected = release_products(args.registry)
-            packages = load_packages(args.package_directory, args.commit, expected)
+            tool_owners = {platform: {tool.split(":", 1)[0] for tool in tools}
+                           for platform, tools in selected_tools.items()}
+            packages = load_packages(args.package_directory, args.commit, expected,
+                                     expected_tool_owners=tool_owners)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
             result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease),
                                                 packages, expected_pairs=expected)

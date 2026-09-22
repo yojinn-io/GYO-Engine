@@ -10,7 +10,7 @@ GYO is a C++20 game engine with explicit runtime, asset, input, collision, model
 |---|---|
 | `apps/` | Game source and minimal project declarations |
 | `assets/<game>/` | Prepared runtime content, catalogs and `content.json` |
-| `engine/` | All reusable engine modules, adapters and `config/projects.csv` |
+| `engine/` | All reusable engine modules, adapters, `config/projects.csv` and `config/tools.csv` |
 | `tools/` | Design support; currently the UI editor |
 | `tests/common`, `tests/<project>` | Common engine and project-specific validation |
 | `build/cmake`, `build/ci` | Build, integration, packaging and acceptance support |
@@ -26,7 +26,7 @@ Use CMake 3.30+, a C++20 compiler and Ninja. Windows builds need an initialized 
 Enable the intended game and OS columns in `engine/config/projects.csv`, then run from the repository root:
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps
 ```
 
@@ -45,7 +45,7 @@ Use the `test` preset for selected-game tests. GPU tests require a suitable grap
 ## Design tools and content
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
+cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
@@ -55,7 +55,7 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 
 ## Integration and releases
 
-The registry determines the selected games; directory discovery does not. A selected game failure fails engine integration. Every supported release platform has a fixed toolchain archive containing the GUI UI editor linked with the engine; enabled games have separate archives. Zero selected games is a valid release. These products are runnable binaries and dependencies, not an engine SDK or source-code package.
+`projects.csv` selects games and `tools.csv` selects design tools; directory discovery does not. Every supported release platform has a toolchain archive containing its release-selected tools (currently UI Editor GUI); enabled games have separate archives. A failed selected game, tool or required check fails engine integration. Zero selected games is a valid release. These products are runnable binaries and dependencies, not an engine SDK or source-code package.
 
 `Prepare Release` fixes a commit, builds and validates the complete product set, and prepares the tag and Draft Release. Publishing the Draft is a separate user action. Game packages contain only their game, assets and runtime dependencies; tests and acceptance tools run outside them.
 
@@ -63,6 +63,7 @@ The registry determines the selected games; directory discovery does not. A sele
 
 - [Architecture and responsibility boundaries](docs/architecture.md)
 - [UI standard and authoring workflow](docs/ui_toolchain.md)
+- [Tool registration, selection and CMake migration](docs/tool_projects.md)
 - [Rendering and shader contract](docs/rendering_architecture.zh-Hant.md)
 - [3D asset ownership and animation limits](docs/architecture/3d-assets.md)
 - [Release procedure](docs/releasing.zh-Hant.md)

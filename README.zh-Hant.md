@@ -10,8 +10,8 @@ GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Input、Collision、
 |---|---|
 | `apps/` | 遊戲程式碼與最小專案宣告 |
 | `assets/<game>/` | 準備完成的 runtime 內容、catalog 與 `content.json` |
-| `engine/` | 所有引擎模組、adapter 與 `config/projects.csv` |
-| `tools/` | 設計支援，目前是 UI editor |
+| `engine/` | 所有引擎模組、adapter、`config/projects.csv` 與 `config/tools.csv` |
+| `tools/` | 設計支援，包含 UI editor 與本機遊戲 preview |
 | `tests/common`、`tests/<project>` | 共通引擎測試與專案專屬驗證 |
 | `build/cmake`、`build/ci` | 編譯、整合、封裝及驗收支援 |
 | `build/target/` | Git 忽略的建置樹、可執行產品與報告 |
@@ -26,7 +26,7 @@ GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Input、Collision、
 在 `engine/config/projects.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps
 ```
 
@@ -45,7 +45,7 @@ ctest --preset core
 ## 設計工具與資產
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
+cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
@@ -55,7 +55,7 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 
 ## 整合與發佈
 
-Registry 決定遊戲集合，不從目錄數量推測。任何選中遊戲失敗都會讓 Engine 整合失敗。每個支援平台固定產生含 GUI UI editor 與其靜態連結引擎的 toolchain archive，再為 CSV 啟用遊戲產生獨立 archive。零遊戲仍可成功發佈。配布物是可執行產品與必要依賴，沒有 Engine SDK 或原始碼套件。
+`projects.csv` 決定遊戲集合，`tools.csv` 決定設計工具集合，不從目錄數量推測。每個支援平台產生由 release 選取工具組成的 toolchain archive（目前為 UI Editor GUI），再為啟用遊戲產生獨立 archive。任何選中遊戲、工具或必要驗收失敗都會讓 Engine 整合失敗。零遊戲仍可成功發佈。配布物是可執行產品與必要依賴，沒有 Engine SDK 或原始碼套件。
 
 `Prepare Release` 固定 commit，建置並驗證完整產品集合，再準備 tag 與 Draft Release。公開 Draft 是使用者的獨立操作。遊戲包只包含遊戲、資產與 runtime 依賴；驗收工具從產品外部執行。
 
@@ -63,6 +63,7 @@ Registry 決定遊戲集合，不從目錄數量推測。任何選中遊戲失�
 
 - [整體架構與責任邊界](docs/architecture.md)
 - [UI 標準與設計流程](docs/ui_toolchain.md)
+- [工具登錄、選取與舊 CMake 設定遷移](docs/tool_projects.md)
 - [渲染與 shader 契約](docs/rendering_architecture.zh-Hant.md)
 - [3D 資產與動畫限制](docs/architecture/3d-assets.md)
 - [發佈程序](docs/releasing.zh-Hant.md)

@@ -11,7 +11,8 @@ import unittest
 import uuid
 
 
-MODULE_PATH = Path(__file__).resolve().parents[3] / "build/acceptance/object_fps/manual_gpu_smoke.py"
+OWNER = Path(__file__).resolve().parents[1].name
+MODULE_PATH = Path(__file__).resolve().parents[3] / "build/acceptance" / OWNER / "manual_gpu_smoke.py"
 sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("manual_gpu_smoke", MODULE_PATH)
 SMOKE = importlib.util.module_from_spec(SPEC)

@@ -13,6 +13,7 @@ GYO-Engine/
     runtime/, asset/          frame lifecycle and CPU asset management
     collision/                geometric queries
     config/projects.csv       integrated game selection
+    config/tools.csv          design-tool default/release/platform selection
     input/                    neutral input and adapters
     model/                    owning models, animation, FBX adapter
     platform/                 SDL host/window/event lifetime
@@ -20,7 +21,7 @@ GYO-Engine/
       shaders/pipeline/       offline shader compiler and its host dependencies
     text/                     neutral raster contract and font adapter
     ui/                       JSON UI, layout, actions, render bridge
-  tools/ui_editor/            design support; independent GUI/CLI executable
+  tools/<tool>/              design support; independent or game-specific local tools
   tests/
     common/                   engine, build-contract and common integration tests
     <project>/                project-specific unit and component tests
@@ -41,7 +42,7 @@ GYO-Engine/
 
 Every workflow progresses through **manual operation → script → tool → platform**. First make the inputs, ordered operations, outputs and failure conditions understandable and repeatable by hand. A script then performs those same operations; a design tool edits their stable data contracts. A platform is justified only after the tool and workflow have matured through actual use.
 
-This refactor stops at the maturity each existing workflow supports. Runtime assembly automates prepared-file copying and validation; it does not create an asset-authoring platform. The UI editor remains a separate design product that edits/export data. It never embeds its own implementation into a game. JSON/CSV move project choices into explicit, editable data; each fact still has one owner: CSV selects games, project metadata selects capabilities, and asset metadata selects content.
+This refactor stops at the maturity each existing workflow supports. Runtime assembly automates prepared-file copying and validation; it does not create an asset-authoring platform. The UI editor remains a separate design product that edits/exports data. It never embeds its own implementation into a game. JSON/CSV move project choices into explicit, editable data; each fact still has one owner: registries select games and tools, project metadata selects capabilities, and asset metadata selects content.
 
 ## Runtime boundaries
 
@@ -77,11 +78,13 @@ name,description,version,enabled,windows,linux,macos
 
 `GYO_APPS=AUTO` selects enabled games supported by the target OS. An empty value selects none. An explicit semicolon-separated subset must obey the same CSV policy. App directories are never enumerated as a substitute for the registry. A selected missing or broken app fails the integration; an unselected directory has no effect.
 
-Each product has a small `project.json` declaring engine components and an optional display name. The root reads that data before building dependencies, then adds each selected product once. Game CMake files declare only game targets, sources and links. They do not implement requirement-discovery passes, asset recipes, test registration or release contracts.
+Each game has a small `project.json` declaring engine components and an optional display name. Tool descriptors declare a default variant, each variant's components/packageability, and any named app dependencies. `engine/config/tools.csv` owns enabled/default/release/platform selection. `GYO_TOOLS=` selects none, `AUTO` selects the platform's enabled default tools, and an explicit semicolon-separated `id[:variant]` list selects permitted tools. A tool's required app must already be selected by `GYO_APPS`; tools never silently enable games. The root resolves game, tool and common-test requirements before composing the engine, then adds each selected owner once. Game CMake files declare only game targets, sources and links. They do not implement requirement-discovery passes, asset recipes, test registration or release contracts.
 
-The normal `dev` product configuration disables `BUILD_TESTING`, `GYO_ENABLE_PACKAGING` and the UI editor. A single selected game can therefore build and run without `tests/` or CI files. The `test`/CI configurations opt into the outer validation layer. `tools/ui_editor` also offers a thin standalone entry that forwards to this same root graph; it does not rebuild an independent copy of the engine composition rules.
+The normal `dev` product configuration disables `BUILD_TESTING`, `GYO_ENABLE_PACKAGING` and design tools. A single selected game can therefore build and run without `tests/`, tool sources or CI files. The `test` configuration selects default tools; CI explicitly selects the release tools exported from the same CMake registry parser. `tools/ui_editor` also offers a thin standalone entry that forwards to this same root graph; it does not rebuild an independent copy of the engine composition rules.
 
-Game executables and their complete runnable content are assembled under `build/target/<game>/bin`. Tool executables are assembled under `build/target/toolchain/bin`. CMake cache, object files, host tools and transient validation state remain under `build/target/_build/` or other generated target subdirectories. The generated output root may be overridden for isolated validation.
+Game executables and their complete runnable content are assembled under `build/target/<game>/bin`. Packageable design tools are assembled under `build/target/toolchain/bin`. Non-packageable variants and the game-dependent Object_FPS preview are local tools under `build/target/_tools/<owner>/bin` and never join a release archive. CMake cache, object files, host tools and transient validation state remain under `build/target/_build/` or other generated target subdirectories. The generated output root may be overridden for isolated validation.
+
+Game support obtains generated app configuration through `gyo_use_app_config(target app)`, privately for exactly one app per target. It does not construct another owner's generated directory or publish every game's same-named `gyo/AppConfig.hpp` to consumers. See [tool registration](tool_projects.md) for data and manual steps.
 
 See [creating and copying games](creating_apps.md) for commands and the minimum project files.
 
@@ -126,17 +129,21 @@ Buffered IO exposes one logical read position. Relative seeks account for unread
 
 Unit and engine capability tests live under root `tests/`. `tests/common` uses engine-owned fixtures, and `tests/<game>` contains game tests. Separate acceptance executables and their checks belong to `build/acceptance/<game>`. Product executables do not receive injected test source files or diagnostics compile definitions. UI editor tests live in `tests/ui_editor` and are registered only when that product is selected and testing is enabled.
 
-Release integration is engine-centered. Each supported platform always produces a toolchain archive containing the GUI UI editor linked with the engine and its required runtime libraries. CSV-selected games produce additional isolated game archives. An empty registry, or no app source directory, still permits a successful engine/toolchain release. One failed selected game or required platform blocks the release as a whole.
+Release integration is engine-centered. Each supported platform always produces a toolchain archive containing the release tools selected by `tools.csv`, currently the UI editor's GUI variant. Every release tool must have executable acceptance for quick and release profiles on its selected platforms. Local tools and app-dependent previews cannot be release tools. CSV-selected games produce additional isolated game archives. An empty game registry, or no app source directory, still permits an engine/toolchain release; an empty release-tool selection fails. One failed selected game, tool or required platform blocks the release as a whole.
 
 There is no engine SDK or source-code archive in this release contract. Toolchain archives do not include game source/assets. Game archives contain the runnable game and its own assets/dependencies; CI scripts, diagnostic executables, tests, build tools and source art are excluded. Acceptance tools run from outside the product archive, with common and project-specific contracts owned by `build/acceptance/`.
 
-The release workflow fixes a source SHA, derives the complete expected product/platform set, builds and validates it, then prepares the existing tag/Draft process. Linux toolchain integration always runs common engine GPU rendering tests under Xvfb/Lavapipe, including when no games are selected. Game jobs additionally run the checks declared for their platform and profile. Acceptance evidence binds the actual product file and link contents; archive verification independently checks that inventory along with product membership and source identity. Quick validation is not full release evidence. See the [release guide](releasing.zh-Hant.md).
+The release workflow fixes a source SHA, derives the complete expected product/platform and tool-owner sets, builds and validates them, then prepares the existing tag/Draft process. Linux toolchain integration always runs common engine GPU rendering tests under Xvfb/Lavapipe, including when no games are selected. Every product, including toolchain, also runs its declared GPU checks independently. Acceptance evidence binds the actual product file and link contents; archive verification checks that inventory, exact tool membership and source identity. Quick validation is not full release evidence. See the [release guide](releasing.zh-Hant.md).
+
+Product manifest schema 3 records a nonempty build `configuration`, executable owner/role/path and per-executable native dependencies, deployed native files, content requirements and owner-scoped checks. The native dependency union schedules copying only; it does not require an SDL-free executable to link SDL. Package validation accepts only declared product files, regardless of filename prefixes. CMake generates an external acceptance context whose configuration must match the product manifest; it resolves owner script roots and registered probes without changing commands or check selection. Checks, evidence and log names use `owner.name`. The context and probes are not installed.
 
 ## Architecture changes and verification
 
 The reorganization resolves observed ownership conflicts: duplicated root/editor dependency composition, asset deployment policy embedded in CMake, tests injected into game binaries, and CI framed around individual apps. Module aliases and neutral C++ interfaces are retained while their physical directories move below `engine/`.
 
 The contract repair addresses three additional observed pressures: divergent Python content validators, Editor re-reading catalogs independently of validation, and a test shader required by normal gameplay. Validation rules now have one Python owner with shared C++ fixtures, Editor consumes one parsed snapshot, and shader validation belongs to common tests. No top-level subsystem or reverse engine-to-game dependency is added; runtime does not depend on Python.
+
+The build-boundary repair addresses repeated concrete-tool branches in composition, packaging and CI, inferred acceptance target names, and generated-header path leakage. Selection and requirements move to owner data; reusable build code composes those declarations. Packaging/acceptance remain development support and games still own their rules. Fixing only the preview conditional would leave the same special cases in component resolution, package checks and common tests. This changes the build graph and support interfaces, adds no top-level subsystem, and introduces no engine-to-game dependency or plugin framework.
 
 Structural verification checks one-way dependencies, absence of test/CI code in products, CSV-only game selection, single-app and zero-app builds, manual-copy isolation, and self-contained executable-relative content. Functional verification includes engine tests, editor validation, asset/shader failure cases, game diagnostics and installed-product execution. A successful build does not prove physical GPU support on an untested machine.
 

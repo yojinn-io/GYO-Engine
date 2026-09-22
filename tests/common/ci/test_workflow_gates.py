@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import tempfile
 import unittest
 
 
@@ -147,8 +148,9 @@ class WorkflowGateTests(unittest.TestCase):
 
     def test_every_platform_packages_toolchain_without_games(self):
         native = job_block(self.shared, "native")
-        self.assertIn("$editor = if ($env:GYO_PRODUCT -eq 'toolchain') { 'ON' } else { 'OFF' }", native)
-        self.assertIn("-DGYO_ENABLE_PACKAGING=ON -DGYO_UI_EDITOR_BUILD_GUI=ON", native)
+        self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
+        self.assertIn('"-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS"', native)
+        self.assertNotRegex(native, r"GYO_BUILD_UI_EDITOR|GYO_UI_EDITOR_BUILD_GUI|GYO_BUILD_OBJECT_FPS_PREVIEW")
         self.assertIn('"-DGYO_APPS=$apps"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.kind == 'toolchain'", native)
         for step in re.split(r"(?m)^      - ", native):
@@ -177,6 +179,50 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn("set -euo pipefail", step)
         self.assertIn("common-gpu-tests.xml", step)
         self.assertNotIn("continue-on-error", step)
+
+    def test_toolchain_and_declared_product_gpu_checks_are_independent(self):
+        native = job_block(self.shared, "native")
+        step = next(step for step in re.split(r"(?m)^      - ", native)
+                    if "id: gpu_smoke" in step)
+        self.assertIn("HAS_PRODUCT_GPU: ${{ steps.package.outputs.has_gpu }}", step)
+        self.assertIn('if [ "$HAS_PRODUCT_GPU" = true ]; then', step)
+        self.assertNotRegex(step, r"(?m)^\s*else\s*$")
+        self.assertIn("--context", step)
+        self.assertNotIn("--probe-directory", native)
+        self.assertNotIn("GPU_SMOKE_SUITE", native)
+
+    def test_actual_gpu_branches_run_both_and_propagate_either_failure(self):
+        bash = find_bash()
+        if bash is None:
+            self.skipTest("Native Bash is unavailable")
+        native = job_block(self.shared, "native")
+        step = next(step for step in re.split(r"(?m)^      - ", native) if "id: gpu_smoke" in step)
+        start = step.index('          if [ "$GYO_PRODUCT" = toolchain ]; then')
+        script = textwrap.dedent(step[start:]).strip()
+        # Run the workflow's actual branch selection with external GPU processes
+        # substituted; the scripts and failure propagation are not duplicated.
+        prefix = '''set -euo pipefail
+xvfb-run() {
+  case " $* " in
+    *" ctest "*) printf 'baseline\\n' >> calls; return "$BASELINE_STATUS" ;;
+    *" python "*) printf 'product\\n' >> calls; return "$PRODUCT_STATUS" ;;
+    *) return 99 ;;
+  esac
+}
+'''
+        for baseline, product in ((0, 0), (1, 0), (0, 1)):
+            with self.subTest(baseline=baseline, product=product), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "build/target/_build/test/logs").mkdir(parents=True)
+                environment = dict(os.environ, GYO_PRODUCT="toolchain", HAS_PRODUCT_GPU="true",
+                    PRESET="test", GITHUB_WORKSPACE=".", GYO_PACKAGE_PLATFORM="linux-x64", GYO_BUILD_CONFIG="Release",
+                    SOURCE_COMMIT="0" * 40, ACCEPTANCE_PROFILE="release",
+                    BASELINE_STATUS=str(baseline), PRODUCT_STATUS=str(product))
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", prefix + script],
+                    cwd=root, env=environment, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode == 0, baseline == product == 0, result.stderr)
+                calls = (root / "calls").read_text().splitlines()
+                self.assertEqual(calls, ["baseline"] if baseline else ["baseline", "product"])
 
     def test_presets_separate_products_quality_and_engineering(self):
         document = json.loads((ROOT / "CMakePresets.json").read_text(encoding="utf-8"))

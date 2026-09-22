@@ -129,7 +129,7 @@ expect_bad_csv(long_record "${header}\napp,,,true,true,true,true,extra\n" "exact
 expect_bad_csv(empty_last_field "${header}\napp,,,true,true,true,\n" "Invalid boolean")
 expect_bad_csv(bad_name "${header}\n../app,,,true,true,true,true\n" "Invalid app name")
 expect_bad_csv(uppercase_name "${header}\nApp,,,true,true,true,true\n" "Invalid app name")
-foreach(reserved common toolchain ui_editor)
+foreach(reserved common toolchain)
     expect_bad_csv("reserved_${reserved}" "${header}\n${reserved},,,true,true,true,true\n" "Reserved app name")
     expect_bad_csv("reserved_disabled_${reserved}" "${header}\n${reserved},,,false,false,false,false\n" "Reserved app name")
 endforeach()

@@ -5,9 +5,9 @@
       "name": "editor_cli",
       "command": [
         "@PYTHON@",
-        "@ACCEPTANCE_ROOT@/ui_editor/validate_cli.py",
+        "@CHECK_ROOT@/validate_cli.py",
         "--executable",
-        "@EXECUTABLE@"
+        "@EXECUTABLE:main@"
       ],
       "environment": [],
       "profiles": [

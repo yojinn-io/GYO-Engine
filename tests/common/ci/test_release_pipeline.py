@@ -26,7 +26,7 @@ from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, Transien
 from release_support import (PLATFORMS, Package,
                              ReleaseError, archive_name as _archive_name, checksum_document,
                              load_packages as _load_packages, prepare_event, validate_archive as _validate_archive)
-from package_contract import manifest_digest, manifest_path, required_checks, inventory_digest
+from package_contract import check_identity, manifest_digest, manifest_path, required_checks, inventory_digest
 
 
 COMMIT = "a" * 40
@@ -58,16 +58,17 @@ def prepare_draft(*args):
 def manifest(platform="windows-x64", product=APP):
     executable = "bin/sample" + (".exe" if platform == "windows-x64" else "")
     return {
-        "schema_version": 2, "product": product, "kind": "toolchain" if product == "toolchain" else "app", "platform": platform, "executables": {product: executable},
-        "required_files": ["bin/data/config.json"], "runtime_dependencies": [],
+        "schema_version": 3, "configuration": "Release", "product": product, "kind": "toolchain" if product == "toolchain" else "app", "platform": platform,
+        "executables": {f"{product}.main": {"owner": product, "role": "main", "path": executable, "runtime_dependencies": []}},
+        "required_files": ["bin/data/config.json"], "native_files": [],
         "checks": [
-            {"name": "startup", "command": ["@EXECUTABLE@", "--startup"],
+            {"owner": product, "name": "startup", "command": ["@EXECUTABLE:main@", "--startup"],
              "environment": [], "timeout": 30, "profiles": ["quick", "release"],
              "platforms": list(PLATFORMS), "gpu": False},
-            {"name": "content", "command": ["@EXECUTABLE@", "--validate"],
+            {"owner": product, "name": "content", "command": ["@EXECUTABLE:main@", "--validate"],
              "environment": [], "timeout": 30, "profiles": ["release"],
              "platforms": list(PLATFORMS), "gpu": False},
-            {"name": "render", "command": ["@EXECUTABLE@", "--render"],
+            {"owner": product, "name": "render", "command": ["@EXECUTABLE:main@", "--render"],
              "environment": [], "timeout": 30, "profiles": ["quick", "release"],
              "platforms": ["linux-x64"], "gpu": True},
         ],
@@ -78,18 +79,19 @@ def evidence(contract, commit=COMMIT, profile="release"):
     return {"product": contract["product"], "kind": contract["kind"], "platform": contract["platform"], "source_revision": commit,
             "profile": profile, "manifest_sha256": manifest_digest(contract),
             "package_sha256": inventory_digest({name:{"sha256":hashlib.sha256(data).hexdigest()} for name,data in {
-                next(iter(contract["executables"].values())): b"unit-test executable fixture",
+                next(iter(contract["executables"].values()))["path"]: b"unit-test executable fixture",
                 "bin/data/config.json": b'{"content":"fixture"}',
                 manifest_path(contract["product"]): json.dumps(contract).encode(),
             }.items()}),
-            "checks": [{"name": check["name"], "passed": True, "exit_code": 0}
-                       for check in [{"name":"package_files"}, *required_checks(contract, profile)]]}
+            "context_sha256": None,
+            "checks": [{"name": name, "passed": True, "exit_code": 0}
+                       for name in ["package_files", *map(check_identity, required_checks(contract, profile))]]}
 
 
 def package_contents(platform, product=APP):
     contract = manifest(platform, product)
     return {
-        next(iter(contract["executables"].values())): b"unit-test executable fixture",
+        next(iter(contract["executables"].values()))["path"]: b"unit-test executable fixture",
         "bin/data/config.json": b'{"content":"fixture"}',
         manifest_path(product): json.dumps(contract).encode(),
     }
@@ -123,7 +125,7 @@ def package(platform="windows-x64", commit=COMMIT, *, product=APP, extra=(), ext
                 continue
             member = tarfile.TarInfo(f"{root}/{path}")
             member.mtime = timestamp
-            member.mode = executable_mode if path == next(iter(contract["executables"].values())) else 0o644
+            member.mode = executable_mode if path == next(iter(contract["executables"].values()))["path"] else 0o644
             data = b"" if path in empty else data
             member.size = len(data)
             archive.addfile(member, io.BytesIO(data))
@@ -295,6 +297,13 @@ class PrepareTests(unittest.TestCase):
 
 
 class PackageTests(unittest.TestCase):
+    def test_undeclared_files_are_rejected_at_every_package_location(self):
+        for path in (f"bin/assets/{APP}/nested/rogue.exe", "share/extra/rogue.exe", "rogue"):
+            with self.subTest(path=path):
+                item = package(extra_files=[(path, b"unregistered program")])
+                with self.assertRaisesRegex(ReleaseError, "Unregistered"):
+                    validate_archive(item.name, item.data, item.platform, COMMIT)
+
     def setUp(self):
         self.root = Path(__file__).resolve().parents[3] / "build" / "release-policy-tests"
         self.root.mkdir(parents=True, exist_ok=True)
@@ -339,7 +348,7 @@ class PackageTests(unittest.TestCase):
                     member.type = kind
                     member.linkname = (METADATA_PATH if kind == tarfile.LNKTYPE else "fixture-target")
                     item = package(platform, omit=(path,), extra=(member,))
-                    with self.subTest(platform=platform, path=path, kind=kind), self.assertRaisesRegex(ReleaseError, "nonempty and regular"):
+                    with self.subTest(platform=platform, path=path, kind=kind), self.assertRaisesRegex(ReleaseError, "nonempty and regular|Only native files"):
                         validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_unix_executable_requires_owner_execute_mode(self):
@@ -393,10 +402,10 @@ class PackageTests(unittest.TestCase):
 
     def test_declared_gpu_check_cannot_be_missing_failed_or_skipped(self):
         contract = manifest("linux-x64")
-        for changed in ([], [{"name": "render", "passed": False, "exit_code": 7}],
-                        [{"name": "render", "passed": True, "exit_code": 7}]):
+        for changed in ([], [{"name": f"{APP}.render", "passed": False, "exit_code": 7}],
+                        [{"name": f"{APP}.render", "passed": True, "exit_code": 7}]):
             smoke = evidence(contract)
-            smoke["checks"] = [row for row in smoke["checks"] if row["name"] != "render"] + changed
+            smoke["checks"] = [row for row in smoke["checks"] if row["name"] != f"{APP}.render"] + changed
             item = package("linux-x64", metadata_changes={"ci_smoke": smoke})
             with self.subTest(changed=changed), self.assertRaises(ReleaseError):
                 validate_archive(item.name, item.data, item.platform, COMMIT)
@@ -441,8 +450,33 @@ class PackageTests(unittest.TestCase):
     def test_relative_library_symlinks_are_allowed(self):
         link = tarfile.TarInfo(f"{ARCHIVE_ROOT}/lib/libSDL3.dylib")
         link.type, link.linkname = tarfile.SYMTYPE, "libSDL3.0.dylib"
-        item = package(extra=[link])
+        contract = manifest()
+        contract["native_files"] = ["lib/libSDL3.dylib", "lib/libSDL3.0.dylib"]
+        with patch("test_release_pipeline.manifest", return_value=contract):
+            item = package(extra=[link], extra_files=[("lib/libSDL3.0.dylib", b"native library")])
         validate_archive(item.name, item.data, item.platform, COMMIT)
+
+    def test_declared_native_link_requires_a_confined_regular_target(self):
+        contract = manifest()
+        contract["native_files"] = ["lib/first.so", "lib/second.so"]
+        first = tarfile.TarInfo(f"{ARCHIVE_ROOT}/lib/first.so")
+        first.type, first.linkname = tarfile.SYMTYPE, "second.so"
+        second = tarfile.TarInfo(f"{ARCHIVE_ROOT}/lib/second.so")
+        second.type, second.linkname = tarfile.SYMTYPE, "first.so"
+        for members in ([first], [first, second]):
+            with patch("test_release_pipeline.manifest", return_value=contract):
+                item = package(extra=members)
+            with self.subTest(count=len(members)), self.assertRaises(ReleaseError):
+                validate_archive(item.name, item.data, item.platform, COMMIT)
+
+    def test_toolchain_archive_requires_exact_selected_tool_owners(self):
+        item = package(product="toolchain")
+        _validate_archive(item.name, item.data, item.product, item.platform, COMMIT,
+                          expected_tool_owners={"toolchain"})
+        for expected in ({"first", "second"}, {"toolchain", "missing"}, set()):
+            with self.subTest(expected=expected), self.assertRaises(ReleaseError):
+                _validate_archive(item.name, item.data, item.product, item.platform, COMMIT,
+                                  expected_tool_owners=expected)
 
     def test_escaping_links_and_special_devices_fail(self):
         for target in ("../../escape", "/tmp/escape", "C:\\escape"):

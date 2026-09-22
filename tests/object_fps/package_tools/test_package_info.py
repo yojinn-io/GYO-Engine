@@ -13,7 +13,8 @@ from unittest.mock import patch
 import uuid
 
 
-SCRIPTS = Path(__file__).resolve().parents[3] / "build/acceptance/object_fps"
+OWNER = Path(__file__).resolve().parents[1].name
+SCRIPTS = Path(__file__).resolve().parents[3] / "build/acceptance" / OWNER
 sys.path.insert(0, str(SCRIPTS))
 import manual_gpu_smoke as gpu
 from package_info import load_package_info
@@ -30,9 +31,11 @@ class InstalledPackageTests(unittest.TestCase):
         self.relative_executable = "bin/Planet Builder.exe"
         self.manifest_path = self.stage / "share/gyo/products" / self.app / "manifest.json"
         self.manifest_path.parent.mkdir(parents=True)
-        self.manifest = {"schema_version": 2, "product": self.app, "kind":"app",
-                         "platform":"windows-x64", "executables": {self.app: self.relative_executable},
-                         "required_files":[], "runtime_dependencies":[], "checks":[]}
+        self.manifest = {"schema_version": 3, "configuration":"Release", "product": self.app, "kind":"app",
+                         "platform":"windows-x64", "executables": {self.app + ".main": {
+                             "owner":self.app, "role":"main", "path":self.relative_executable,
+                             "runtime_dependencies":[]}},
+                         "required_files":[], "native_files":[], "checks":[]}
         executable = self.stage / self.relative_executable
         executable.parent.mkdir(parents=True)
         executable.write_bytes(b"executable test fixture")
@@ -51,10 +54,9 @@ class InstalledPackageTests(unittest.TestCase):
         self.assertEqual(contract["version"], 1)
         for platform in PLATFORMS:
             with self.subTest(platform=platform):
-                package = {**self.manifest, "product":"object_fps", "platform":platform,
-                           "executables":{"object_fps":"bin/gyo_object_fps"},
-                           "checks":contract["checks"]}
-                validate_manifest(package, "object_fps", platform)
+                package = {**self.manifest, "platform":platform,
+                           "checks":[dict(check, owner=self.app) for check in contract["checks"]]}
+                validate_manifest(package, self.app, platform)
                 self.assertEqual({check["name"] for check in required_checks(package, "quick")}, {"startup"})
                 expected = {"startup", "gameplay", "content"}
                 if platform == "linux-x64":
@@ -64,7 +66,7 @@ class InstalledPackageTests(unittest.TestCase):
     def test_discovers_unfamiliar_app_and_actual_executable_name(self):
         result = load_package_info(self.stage)
         self.assertEqual(result["product"], self.app)
-        self.assertEqual(result["executables"][self.app], self.relative_executable)
+        self.assertEqual(result["executables"][self.app + ".main"]["path"], self.relative_executable)
 
     def test_external_clis_run_from_an_unrelated_directory(self):
         for script in ("manual_gpu_smoke.py", "validate_content.py"):
@@ -72,6 +74,46 @@ class InstalledPackageTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, "-I", str(SCRIPTS / script), "--help"],
                                         cwd=self.root, capture_output=True, text=True, timeout=15)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_copied_support_works_without_the_original_owner(self):
+        repository = Path(__file__).resolve().parents[3]
+        copied = self.root / "independent source copy"
+        owner = "variant_clone"
+        copied_tests = copied / "tests" / owner / "package_tools"
+        copied_acceptance = copied / "build/acceptance" / owner
+        ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+        shutil.copytree(Path(__file__).resolve().parent, copied_tests, ignore=ignore)
+        shutil.copytree(SCRIPTS, copied_acceptance, ignore=ignore)
+        shutil.copytree(repository / "build/acceptance/common", copied / "build/acceptance/common", ignore=ignore)
+        for source in (repository / "build").glob("*.py"):
+            shutil.copy2(source, copied / "build" / source.name)
+        self.assertFalse((copied / "tests" / OWNER).exists())
+        self.assertFalse((copied / "build/acceptance" / OWNER).exists())
+
+        # The child cannot see this checkout on sys.path, and its explicit test
+        # list excludes this copy test so it cannot recurse into itself.
+        command = (
+            "import json, pathlib, sys, unittest; "
+            "sys.path.insert(0, sys.argv[1]); "
+            "import test_package_info as checks; "
+            "assert checks.OWNER == sys.argv[2]; "
+            "assert checks.SCRIPTS == pathlib.Path(sys.argv[3]); "
+            "assert pathlib.Path(checks.content.__file__).parent == checks.SCRIPTS; "
+            "contract = json.loads((checks.SCRIPTS / 'checks.json').read_text(encoding='utf-8')); "
+            "assert all('/' + sys.argv[4] + '/' not in arg for check in contract['checks'] for arg in check['command']); "
+            "names = ['test_gpu_smoke', "
+            "'test_package_info.InstalledPackageTests.test_repository_acceptance_contract_is_valid_and_selects_explicit_platforms', "
+            "'test_package_info.InstalledPackageTests.test_discovers_unfamiliar_app_and_actual_executable_name', "
+            "'test_package_info.InstalledPackageTests.test_external_clis_run_from_an_unrelated_directory', "
+            "'test_package_info.InstalledPackageTests.test_content_checks_follow_manifest_and_preserve_original_install']; "
+            "suite = unittest.defaultTestLoader.loadTestsFromNames(names); "
+            "result = unittest.TextTestRunner(verbosity=2).run(suite); "
+            "sys.exit(0 if result.wasSuccessful() else 1)"
+        )
+        result = subprocess.run([sys.executable, "-I", "-c", command, str(copied_tests), owner,
+                                 str(copied_acceptance), OWNER], cwd=self.root,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_missing_and_ambiguous_manifest_fail(self):
         self.manifest_path.unlink()
@@ -100,7 +142,7 @@ class InstalledPackageTests(unittest.TestCase):
                            "bin\\game.exe", "bin//game.exe", "./bin/game.exe", "bin/game\n.exe",
                            None, ["bin/game.exe"]):
             with self.subTest(executable=executable):
-                self.manifest["executables"][self.app] = executable
+                self.manifest["executables"][self.app + ".main"]["path"] = executable
                 self.write_manifest()
                 with self.assertRaisesRegex(ValueError, "normalized content-relative path"):
                     load_package_info(self.stage)
@@ -108,7 +150,7 @@ class InstalledPackageTests(unittest.TestCase):
     def test_rejects_missing_executable_and_directory(self):
         for executable in ("bin/missing.exe", "bin"):
             with self.subTest(executable=executable):
-                self.manifest["executables"][self.app] = executable
+                self.manifest["executables"][self.app + ".main"]["path"] = executable
                 self.write_manifest()
                 with self.assertRaises(ValueError):
                     load_package_info(self.stage)

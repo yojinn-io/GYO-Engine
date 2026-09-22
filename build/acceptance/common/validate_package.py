@@ -16,59 +16,68 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from workspace import TemporaryDirectory
 
-from package_contract import load_manifest, installed_required_files
+from package_contract import (decode_json, load_manifest, installed_required_files, valid_installed_file,
+                              validate_product_namespace)
 
 
 def validate_linkage(stage: Path, product: str, logs: Path, dumpbin: str | None = None) -> None:
     stage, logs = stage.resolve(strict=True), logs.resolve()
     logs.mkdir(parents=True, exist_ok=True)
     manifest = load_manifest(stage, product)
+    validate_product_namespace((path.relative_to(stage).as_posix() for path in stage.rglob("*")
+                                if path.is_file() or path.is_symlink()), product, manifest,
+                               lambda name: decode_json((stage / name).read_text(encoding="utf-8-sig"), name))
     for relative in installed_required_files(stage, manifest):
-        path = stage / relative
-        if not path.is_file() or path.is_symlink() or not path.stat().st_size:
-            raise RuntimeError(f"Required package file must be nonempty and regular: {relative}")
+        if not valid_installed_file(stage, relative, manifest):
+            raise RuntimeError(f"Required package file must be nonempty and confined to the package: {relative}")
     with TemporaryDirectory(prefix="gyo-package-linkage-") as temporary:
         package = Path(temporary) / "package"
         shutil.copytree(stage, package, symlinks=True)
-        for executable_path in manifest["executables"].values():
+        windows_linkage = {}
+        if platform.system() == "Windows":
+            dumpbin = dumpbin or shutil.which("dumpbin")
+            if not dumpbin:
+                raise RuntimeError("Windows linkage checks require an MSVC environment or --dumpbin")
+            binaries = [*[entry["path"] for entry in manifest["executables"].values()], *manifest["native_files"]]
+            files = {Path(path).name.lower(): package / path for path in binaries}
+            missing = set()
+            for relative in binaries:
+                binary = package / relative
+                result = subprocess.run([dumpbin, "/nologo", "/dependents", str(binary)], text=True,
+                                        check=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, timeout=30)
+                windows_linkage[relative] = result.stdout
+                for dependency in re.findall(r"^\s*((?:msvcp|vcruntime|concrt)[a-z0-9_]*\.dll)\s*$",
+                                             result.stdout, re.IGNORECASE | re.MULTILINE):
+                    if dependency.lower() not in files:
+                        missing.add(f"{relative} -> {dependency}")
+            (logs / "package-native-linkage.log").write_text("\n".join(windows_linkage.values()), encoding="utf-8")
+            if missing:
+                raise RuntimeError("Package is missing product-local MSVC runtime DLLs:\n" + "\n".join(sorted(missing)))
+
+        for role, entry in manifest["executables"].items():
+            executable_path = entry["path"]
             executable = str(package / executable_path)
+            log = logs / ("package-linkage-" + role + ".log")
             if platform.system() == "Windows":
-                dumpbin = dumpbin or shutil.which("dumpbin")
-                if not dumpbin:
-                    raise RuntimeError("Windows linkage checks require an MSVC environment or --dumpbin")
-                files = {path.name.lower(): path for path in (package / "bin").iterdir() if path.is_file()}
-                missing, linkage = set(), []
-                for name, binary in sorted(files.items()):
-                    if binary.suffix.lower() not in (".exe", ".dll"):
-                        continue
-                    result = subprocess.run([dumpbin, "/nologo", "/dependents", str(binary)], text=True,
-                                            check=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT, timeout=30)
-                    linkage.append(result.stdout)
-                    for dependency in re.findall(r"^\s*((?:msvcp|vcruntime|concrt)[a-z0-9_]*\.dll)\s*$",
-                                                 result.stdout, re.IGNORECASE | re.MULTILINE):
-                        if dependency.lower() not in files:
-                            missing.add(f"{name} -> {dependency}")
-                (logs / ("package-linkage-" + Path(executable_path).name + ".log")).write_text("\n".join(linkage), encoding="utf-8")
-                if missing:
-                    raise RuntimeError("Package is missing product-local MSVC runtime DLLs:\n" + "\n".join(sorted(missing)))
-                if "SDL3" in manifest["runtime_dependencies"] and "sdl3.dll" not in files:
+                log.write_text(windows_linkage[executable_path], encoding="utf-8")
+                if "SDL3" in entry["runtime_dependencies"] and "sdl3.dll" not in files:
                     raise RuntimeError("Package is missing SDL3.dll")
             elif platform.system() == "Linux":
                 result = subprocess.run(["ldd", executable], text=True, check=True, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, timeout=30)
-                (logs / ("package-linkage-" + Path(executable_path).name + ".log")).write_text(result.stdout, encoding="utf-8")
+                log.write_text(result.stdout, encoding="utf-8")
                 if "not found" in result.stdout:
                     raise RuntimeError(f"Installed dependency is unresolved:\n{result.stdout}")
-                if "SDL3" in manifest["runtime_dependencies"]:
+                if "SDL3" in entry["runtime_dependencies"]:
                     sdl = re.search(r"libSDL3[^\n]*=>\s+(.*?)\s+\(", result.stdout)
                     if not sdl or not Path(sdl.group(1)).resolve().is_relative_to(package / "lib"):
                         raise RuntimeError(f"SDL3 did not resolve inside the package:\n{result.stdout}")
             elif platform.system() == "Darwin":
                 dependencies = subprocess.check_output(["otool", "-L", executable], text=True, timeout=30)
                 commands = subprocess.check_output(["otool", "-l", executable], text=True, timeout=30)
-                (logs / ("package-linkage-" + Path(executable_path).name + ".log")).write_text(dependencies + "\n" + commands, encoding="utf-8")
-                if "SDL3" in manifest["runtime_dependencies"]:
+                log.write_text(dependencies + "\n" + commands, encoding="utf-8")
+                if "SDL3" in entry["runtime_dependencies"]:
                     if not re.search(r"@rpath/libSDL3[^\n]*\.dylib", dependencies):
                         raise RuntimeError("SDL3 does not use a relocatable install name")
                     if "path @executable_path/../lib (offset" not in commands:

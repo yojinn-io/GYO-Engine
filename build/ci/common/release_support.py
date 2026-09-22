@@ -128,7 +128,8 @@ def _safe_member_name(name: str, root: str) -> None:
         raise ReleaseError(f"Unsafe archive member: {name!r}")
 
 
-def validate_archive(name: str, data: bytes, product: str, platform: str, commit: str) -> None:
+def validate_archive(name: str, data: bytes, product: str, platform: str, commit: str,
+                     *, expected_tool_owners: set[str] | None = None) -> None:
     """Inspect tar members without extracting or executing package content."""
     validate_commit(commit)
     if name != archive_name(product, platform):
@@ -171,17 +172,35 @@ def validate_archive(name: str, data: bytes, product: str, platform: str, commit
             if contract_path not in documents:
                 raise ReleaseError(f"Missing required package manifest in {name}")
             manifest = validate_manifest(documents[contract_path], product, platform)
-            validate_product_namespace((str(PurePosixPath(path).relative_to(root)) for path in seen), product, manifest)
-            required = {f"{root}/{relative}" for relative in required_files(manifest,
-                lambda relative: decode_json(archive.extractfile(f"{root}/{relative}").read(), relative))}
+            def read_document(relative):
+                return decode_json(archive.extractfile(f"{root}/{relative}").read(), relative)
+            validate_product_namespace((str(PurePosixPath(path).relative_to(root))
+                for path, member in seen.items() if not member.isdir()), product, manifest, read_document)
+            if product == "toolchain" and expected_tool_owners is not None:
+                owners = {executable["owner"] for executable in manifest["executables"].values()}
+                if owners != expected_tool_owners:
+                    raise ReleaseError(f"Toolchain owners do not match the source registry: "
+                        f"missing={sorted(expected_tool_owners - owners)}, extra={sorted(owners - expected_tool_owners)}")
+            required = {f"{root}/{relative}" for relative in required_files(manifest, read_document)}
             if missing := sorted(required - seen.keys()):
                 raise ReleaseError(f"Missing required package files in {name}: {missing}")
             for relative in required:
                 member = seen[relative]
+                if member.issym() or member.islnk():
+                    if str(PurePosixPath(relative).relative_to(root)) not in manifest["native_files"]:
+                        raise ReleaseError(f"Only native files may be linked: {relative}")
+                    visited = set()
+                    while member.issym() or member.islnk():
+                        if member.name in visited:
+                            raise ReleaseError(f"Cyclic native library link: {relative}")
+                        visited.add(member.name)
+                        destination = (posixpath.join(posixpath.dirname(member.name), member.linkname)
+                                       if member.issym() else member.linkname)
+                        member = seen[posixpath.normpath(destination)]
                 if not member.isfile() or member.size <= 0:
                     raise ReleaseError(f"Required package file must be nonempty and regular: {relative}")
-            for executable_path in manifest["executables"].values():
-                executable = seen[f"{root}/{executable_path}"]
+            for description in manifest["executables"].values():
+                executable = seen[f"{root}/{description['path']}"]
                 if platform != "windows-x64" and not executable.mode & 0o100:
                     raise ReleaseError(f"Package executable lacks owner execute permission: {executable.name}")
             metadata = documents.get(metadata_path)
@@ -204,7 +223,8 @@ class Package:
     checksum_data: bytes
 
 
-def load_packages(directory: Path, commit: str, expected_pairs: list[tuple[str, str]]) -> list[Package]:
+def load_packages(directory: Path, commit: str, expected_pairs: list[tuple[str, str]],
+                  *, expected_tool_owners: dict[str, set[str]] | None = None) -> list[Package]:
     validate_commit(commit)
     pairs = validate_expected_pairs(expected_pairs)
     if not directory.is_dir():
@@ -220,6 +240,7 @@ def load_packages(directory: Path, commit: str, expected_pairs: list[tuple[str, 
         data = (directory / name).read_bytes()
         document = (directory / (name + ".sha256")).read_bytes()
         validate_checksum(name, data, document)
-        validate_archive(name, data, product, platform, commit)
+        validate_archive(name, data, product, platform, commit,
+            expected_tool_owners=expected_tool_owners[platform] if expected_tool_owners is not None else None)
         packages.append(Package(product, platform, name, data, document))
     return packages

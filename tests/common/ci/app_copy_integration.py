@@ -55,7 +55,7 @@ def main():
     source = work / "source"
     mirror_sources(repository, source)
     create_copy(source, repository / "tests/common/fixtures/copy_game")
-    options = ["-DCMAKE_BUILD_TYPE=Release", "-DGYO_BUILD_UI_EDITOR=OFF"]
+    options = ["-DCMAKE_BUILD_TYPE=Release", "-DGYO_TOOLS="]
     if args.reuse_cache:
         for line in args.reuse_cache.read_text(encoding="utf-8-sig").splitlines():
             if ":" not in line or "=" not in line:

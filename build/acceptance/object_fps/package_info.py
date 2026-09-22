@@ -16,8 +16,8 @@ def load_package_info(package: Path) -> dict:
     manifest = load_manifest(package, path.parent.name)
     if manifest["kind"] != "app":
         raise ValueError("Game acceptance requires an app product")
-    for relative in manifest["executables"].values():
-        target = package / relative
+    for executable in manifest["executables"].values():
+        target = package / executable["path"]
         if not target.is_file() or target.is_symlink() or not target.resolve().is_relative_to(package):
             raise ValueError("Installed executable must be a regular file inside the package")
     return manifest

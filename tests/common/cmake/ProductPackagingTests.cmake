@@ -14,7 +14,7 @@ if(PLATFORM)
 endif()
 file(MAKE_DIRECTORY "${source}/build/acceptance/sample")
 file(WRITE "${source}/build/acceptance/sample/checks.json" [=[
-{"version":1,"checks":[{"name":"content","command":["@PROBE@","--validate-package"],"environment":[],"profiles":["release"],"platforms":["windows-x64","linux-x64","macos-arm64"],"gpu":false,"timeout":90}]}
+{"version":1,"checks":[{"name":"content","command":["@PROBE:main@","--validate-package"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64"],"gpu":false,"timeout":90}]}
 ]=])
 file(WRITE "${source}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.30)
@@ -31,17 +31,21 @@ if(TEST_SYSTEM STREQUAL Darwin)
 endif()
 add_executable(sample IMPORTED GLOBAL)
 set_target_properties(sample PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/game-binary"
-    GYO_PRODUCT_ROLE sample GYO_PRODUCT_REQUIRED_FILES "bin/assets/sample/content.json")
+    GYO_PRODUCT_OWNER sample GYO_PRODUCT_ROLE main GYO_PRODUCT_COMPONENTS SDL_GPU
+    GYO_PRODUCT_REQUIRED_FILES "bin/assets/sample/content.json")
 set_property(GLOBAL PROPERTY GYO_PRODUCTS sample)
 set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_KIND app)
 set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_TARGETS sample)
-set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_COMPONENTS SDL_GPU)
+set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_OWNERS sample)
+add_executable(probe IMPORTED GLOBAL)
+set_target_properties(probe PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/unusual-diagnostic")
+gyo_register_acceptance_probe(OWNER sample ROLE main TARGET probe)
 if(TEST_POLICY)
     set(GYO_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/${TEST_POLICY}")
     set_property(GLOBAL PROPERTY GYO_PRODUCTS toolchain)
     set_property(GLOBAL PROPERTY GYO_PRODUCT_toolchain_KIND toolchain)
     set_property(GLOBAL PROPERTY GYO_PRODUCT_toolchain_TARGETS sample)
-    set_property(TARGET sample PROPERTY GYO_PRODUCT_ROLE ui_editor)
+    set_property(GLOBAL PROPERTY GYO_PRODUCT_toolchain_OWNERS sample)
 endif()
 gyo_finalize_product_packages()
 ]=])
@@ -68,20 +72,31 @@ foreach(case "Windows|AMD64|windows-x64" "Linux|x86_64|linux-x64" "Darwin|arm64|
     file(READ "${binary}/packages/sample/Debug/manifest.json" manifest)
     string(JSON version GET "${manifest}" schema_version)
     string(JSON platform GET "${manifest}" platform)
-    string(JSON executable GET "${manifest}" executables sample)
+    string(JSON executable GET "${manifest}" executables sample.main path)
     string(JSON required GET "${manifest}" required_files 1)
     string(JSON name GET "${manifest}" checks 0 name)
     string(JSON command GET "${manifest}" checks 0 command 0)
-    string(JSON dependency GET "${manifest}" runtime_dependencies 0)
-    if(NOT version EQUAL 2 OR NOT platform STREQUAL expected OR NOT executable STREQUAL "bin/game-binary" OR
+    string(JSON dependency GET "${manifest}" executables sample.main runtime_dependencies 0)
+    string(JSON owner GET "${manifest}" checks 0 owner)
+    file(READ "${binary}/packages/sample/Debug/acceptance-context.json" context)
+    string(JSON probe_path GET "${context}" owners sample probes main path)
+    string(JSON configuration GET "${context}" configuration)
+    if(NOT version EQUAL 3 OR NOT platform STREQUAL expected OR NOT executable STREQUAL "bin/game-binary" OR
         NOT required STREQUAL "bin/assets/sample/content.json" OR NOT name STREQUAL content OR
-        NOT command STREQUAL "@PROBE@" OR NOT dependency STREQUAL SDL3)
+        NOT command STREQUAL "@PROBE:main@" OR NOT dependency STREQUAL SDL3 OR NOT owner STREQUAL sample OR
+        NOT probe_path MATCHES "/unusual-diagnostic$" OR NOT configuration STREQUAL Debug)
         message(FATAL_ERROR "Incorrect data-driven product contract: ${manifest}")
     endif()
 endforeach()
-file(MAKE_DIRECTORY "${source}/empty/build/acceptance/ui_editor")
-file(WRITE "${source}/empty/build/acceptance/ui_editor/checks.json" "{\"version\":1,\"checks\":[]}\n")
-foreach(policy missing empty)
+file(MAKE_DIRECTORY "${source}/empty/build/acceptance/sample" "${source}/partial/build/acceptance/sample"
+    "${source}/unrelated/build/acceptance/sample")
+file(WRITE "${source}/empty/build/acceptance/sample/checks.json" "{\"version\":1,\"checks\":[]}\n")
+file(READ "${source}/build/acceptance/sample/checks.json" checks)
+string(REPLACE "@PROBE:main@" "@PYTHON@" unrelated "${checks}")
+file(WRITE "${source}/unrelated/build/acceptance/sample/checks.json" "${unrelated}")
+string(REPLACE "\"quick\",\"release\"" "\"release\"" checks "${checks}")
+file(WRITE "${source}/partial/build/acceptance/sample/checks.json" "${checks}")
+foreach(policy missing empty partial unrelated)
     execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${work}/policy-${policy}"
         ${generator_args} "-DGYO_TEST_REPOSITORY=${repository}"
         -DTEST_SYSTEM=Windows -DTEST_ARCH=AMD64 "-DTEST_POLICY=${policy}"
@@ -90,4 +105,4 @@ foreach(policy missing empty)
         message(FATAL_ERROR "Toolchain without a complete acceptance contract was allowed: ${stdout}${stderr}")
     endif()
 endforeach()
-message(STATUS "Product packaging: explicit platform, manifest v2 and independent acceptance contract passed")
+message(STATUS "Product packaging: manifest v3, owner-scoped checks, registered probes and release coverage passed")

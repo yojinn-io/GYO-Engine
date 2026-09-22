@@ -11,7 +11,7 @@
 先在 `engine/config/projects.csv` 啟用遊戲與目標平台，再明確建立驗證配置：
 
 ```sh
-cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF -DGYO_ENABLE_PACKAGING=ON
+cmake --preset test -DGYO_APPS=object_fps -DGYO_TOOLS= -DGYO_ENABLE_PACKAGING=ON
 cmake --build --preset test
 ctest --preset test
 cmake --install build/target/_build/test --prefix build/target/acceptance-stage/object_fps --component object_fps
@@ -26,7 +26,7 @@ cmake --install build/target/_build/test --prefix build/target/acceptance-stage/
 以下範例在 Windows 使用上一節 install 產生的獨立驗收產品，包含 generated product manifest。將 `FULL_COMMIT_SHA` 換成本次完整 commit；其他平台換用對應 platform 名稱。
 
 ```sh
-python build/acceptance/common/run_package_checks.py --stage build/target/acceptance-stage/object_fps --product object_fps --platform windows-x64 --revision FULL_COMMIT_SHA --profile release --logs build/target/acceptance/object_fps --probe-directory build/target/_build/test/acceptance/object_fps/bin
+python build/acceptance/common/run_package_checks.py --stage build/target/acceptance-stage/object_fps --product object_fps --platform windows-x64 --revision FULL_COMMIT_SHA --profile release --logs build/target/acceptance/object_fps --context build/target/_build/test/packages/object_fps/RelWithDebInfo/acceptance-context.json
 ```
 
 Runner 在外部工作目錄驗證產品，必要時建立隔離副本並把 probe 暫時放在副本的 bin，使它使用與遊戲相同的資產路徑。失敗、逾時或缺少必要證據都使驗收失敗。Probe 不會寫進正式 archive。

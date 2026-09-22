@@ -10,8 +10,8 @@ GYO は C++20 のゲームエンジンです。Runtime、Asset、Input、Collisi
 |---|---|
 | `apps/` | ゲームのコードと最小限のプロジェクト宣言 |
 | `assets/<game>/` | 準備済み runtime コンテンツ、catalog、`content.json` |
-| `engine/` | エンジン全モジュール、adapter、`config/projects.csv` |
-| `tools/` | 設計支援。現在は UI editor |
+| `engine/` | エンジン全モジュール、adapter、`config/projects.csv` と `config/tools.csv` |
+| `tools/` | 設計支援。UI editor と本機専用のゲーム preview |
 | `tests/common`、`tests/<project>` | エンジン共通とプロジェクト固有の検証 |
 | `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受入検証の支援 |
 | `build/target/` | Git 管理外のビルドツリー、実行可能な製品、ログ |
@@ -26,7 +26,7 @@ CMake 3.30 以降、C++20 compiler、Ninja を使用します。Windows は x64 
 `engine/config/projects.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps
 ```
 
@@ -45,7 +45,7 @@ ctest --preset core
 ## 設計ツールと資産
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
+cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
@@ -55,7 +55,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 
 ## 統合と公開
 
-ゲーム選択は registry に従い、ディレクトリ数から推測しません。選択されたゲームが失敗すると Engine 統合全体が失敗します。各対応プラットフォームは、エンジンをリンクした GUI UI editor を含む固定 toolchain archive を生成し、有効なゲームは別 archive を生成します。ゲーム 0 件でも公開できます。配布物は実行ファイルと必要な依存物であり、Engine SDK やソースコードのパッケージではありません。
+ゲーム選択は `projects.csv`、ツール選択は `tools.csv` に従い、ディレクトリ数から推測しません。各対応プラットフォームは release 選択されたツール（現在は UI Editor GUI）の toolchain archive を生成し、有効なゲームは別 archive を生成します。選択されたゲーム、ツール、必須検証の失敗は Engine 統合全体を失敗させます。ゲーム 0 件でも公開できます。配布物は実行ファイルと必要な依存物であり、Engine SDK やソースコードのパッケージではありません。
 
 `Prepare Release` は commit を固定し、全製品をビルド・検証して tag と Draft Release を準備します。Draft の公開は利用者の別操作です。ゲーム包に入るのはゲーム、資産、runtime 依存物だけで、検証ツールは外側から実行します。
 
@@ -63,6 +63,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 
 - [全体構造と責務](docs/architecture.md)
 - [UI 標準と編集手順](docs/ui_toolchain.md)
+- [ツール登録・選択と旧 CMake 設定の移行](docs/tool_projects.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [3D 資産とアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)

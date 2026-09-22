@@ -24,7 +24,7 @@
       "displayName": "CSV-selected game products",
       "inherits": "base",
       "cacheVariables": {
-        "GYO_BUILD_UI_EDITOR": "OFF",
+        "GYO_TOOLS": "",
         "GYO_RENDER_DEVICE": "AUTO",
         "GYO_GPU_DRIVER": "AUTO",
         "GYO_SHADER_BUNDLE": "AUTO"
@@ -32,12 +32,12 @@
     },
     {
       "name": "test",
-      "displayName": "Engine, selected games and UI editor quality checks",
+      "displayName": "Engine, selected games and default tools quality checks",
       "inherits": "dev",
       "cacheVariables": {
         "BUILD_TESTING": "ON",
         "GYO_TEST_PROFILE": "full",
-        "GYO_BUILD_UI_EDITOR": "ON"
+        "GYO_TOOLS": "AUTO"
       }
     },
     {
@@ -46,7 +46,7 @@
       "inherits": "base",
       "cacheVariables": {
         "BUILD_TESTING": "ON",
-        "GYO_BUILD_UI_EDITOR": "OFF",
+        "GYO_TOOLS": "",
         "GYO_BUILD_SDL_GPU_BACKEND": "OFF",
         "GYO_BUILD_SDL_IMAGE_LOADER": "OFF",
         "GYO_BUILD_SDL_TTF_ADAPTER": "OFF",

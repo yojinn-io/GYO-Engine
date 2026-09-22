@@ -161,7 +161,7 @@ Overlay / HUD → Present
 Windows AUTO 產生 DXIL 與 SPIR-V；Linux 產生 SPIR-V；macOS 產生 Metallib。Metallib 需要原生 macOS 與 Apple Metal tools；部署最低版本與 app 一致。Host compiler 與 target compiler 保持分離。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps
 cmake --preset core
 cmake --build --preset core
@@ -182,7 +182,7 @@ Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 produ
 <a id="r09"></a>
 ## 9. Engine 整合與驗收
 
-每個支援平台固定建置 engine＋GUI UI editor toolchain，再加入 CSV 選中的 games。沒有遊戲仍有 toolchain 產物，可以成功 Prepare Release；任何必要產品或平台失敗、取消或跳過，都不能準備 Draft。沒有 Engine SDK 或 source archive。
+每個支援平台固定建置 engine 與 `tools.csv` 選中的 release 工具鏈（目前為 UI Editor GUI），再加入 `projects.csv` 選中的 games。公共 GPU baseline 與各產品自行宣告的 GPU checks 分別執行。沒有遊戲仍有 toolchain 產物，可以成功 Prepare Release；任何必要工具、遊戲、驗收或平台失敗、取消或跳過，都不能準備 Draft。沒有 Engine SDK 或 source archive。工具模式與登錄見[工具指南](tool_projects.md)。
 
 Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度由外部 contract 決定。Linux toolchain job 固定使用 Xvfb／Lavapipe 驗證共通引擎 GPU 渲染，沒有 app 時也執行；遊戲 job 另執行 contract 宣告的 GPU checks。這是軟體 Vulkan 證據，不是實體 GPU 驗證。Windows/macOS hosted 結果也不能取代實機測試。
 

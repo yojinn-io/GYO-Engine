@@ -22,7 +22,7 @@ Likewise, the game owns wording, hierarchy, binding values and the consequence
 of changing a display setting. GYO owns font assets, text rasterization/cache,
 layout and render submission.
 
-Ordinary game builds have testing, package acceptance and design tools disabled. The editor is explicitly selected for local authoring and is a fixed GUI toolchain product in every release platform, even when the game registry is empty. Engine libraries are statically linked into the editor; game archives do not include it.
+Ordinary game builds have testing, package acceptance and design tools disabled. The editor is explicitly selected for local authoring; `engine/config/tools.csv` currently selects its GUI variant for every release platform, even when the game registry is empty. Engine libraries are statically linked into the editor; game archives do not include it.
 
 Tests live under `tests/ui_editor` and common engine validation under `tests/common`. The standalone editor entry forwards to the root build graph. See [project management](architecture.md#build-project-management).
 
@@ -73,14 +73,16 @@ not part of gameplay snapshots and are not serialized.
 Select the editor independently of the CSV-selected games:
 
 ```sh
-cmake --preset dev -DGYO_BUILD_UI_EDITOR=ON -DGYO_APPS=
+cmake --preset dev -DGYO_TOOLS=ui_editor -DGYO_APPS=
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
 The assembled executable is under `build/target/toolchain/bin`. The optional
 `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the
-same repository graph. `-DGYO_UI_EDITOR_BUILD_GUI=OFF` provides local command-line
-validation only; release toolchain archives always build the GUI.
+same repository graph. `-DGYO_TOOLS=ui_editor:cli` provides local command-line
+validation only, under `build/target/_tools/ui_editor/bin`; it is not packageable.
+The GUI default and both variants' component requirements live in the tool's
+`project.json`, not central CMake conditions. See [registering tools](tool_projects.md).
 
 The standalone target is `gyo_ui_editor` and does not link ObjectFPS, Input,
 or SDL_GPU. ImGui supplies editor chrome. Canvas rectangles, clipping,

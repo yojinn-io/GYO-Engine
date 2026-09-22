@@ -1,4 +1,4 @@
-foreach(suite AppRegistry Component RenderOptions MsvcRuntime ProjectComposition ProductPackaging)
+foreach(suite AppRegistry ToolRegistry AcceptanceToken Component RenderOptions MsvcRuntime ProjectComposition ProductPackaging)
     add_test(NAME "cmake.${suite}"
         COMMAND "${CMAKE_COMMAND}"
             "-DGENERATOR=${CMAKE_GENERATOR}"
@@ -8,3 +8,4 @@ foreach(suite AppRegistry Component RenderOptions MsvcRuntime ProjectComposition
             -P "${CMAKE_CURRENT_SOURCE_DIR}/${suite}Tests.cmake")
     set_tests_properties("cmake.${suite}" PROPERTIES LABELS "cpu;build" TIMEOUT 180)
 endforeach()
+set_tests_properties(cmake.ProjectComposition PROPERTIES TIMEOUT 600)

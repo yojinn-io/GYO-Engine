@@ -11,7 +11,7 @@
 `engine/config/projects.csv` でゲームと対象 OS を有効にして、検証を明示的に選びます。
 
 ```sh
-cmake --preset test -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF -DGYO_ENABLE_PACKAGING=ON
+cmake --preset test -DGYO_APPS=object_fps -DGYO_TOOLS= -DGYO_ENABLE_PACKAGING=ON
 cmake --build --preset test
 ctest --preset test
 cmake --install build/target/_build/test --prefix build/target/acceptance-stage/object_fps --component object_fps
@@ -26,7 +26,7 @@ Product manifest は `share/gyo/products/object_fps/manifest.json` です。外�
 以下は前節の install で作った独立検証製品（generated product manifest を含む）を Windows で検査する例です。`FULL_COMMIT_SHA` を対象の完全な commit に置き換え、他 OS では platform 名を変えます。
 
 ```sh
-python build/acceptance/common/run_package_checks.py --stage build/target/acceptance-stage/object_fps --product object_fps --platform windows-x64 --revision FULL_COMMIT_SHA --profile release --logs build/target/acceptance/object_fps --probe-directory build/target/_build/test/acceptance/object_fps/bin
+python build/acceptance/common/run_package_checks.py --stage build/target/acceptance-stage/object_fps --product object_fps --platform windows-x64 --revision FULL_COMMIT_SHA --profile release --logs build/target/acceptance/object_fps --context build/target/_build/test/packages/object_fps/RelWithDebInfo/acceptance-context.json
 ```
 
 Runner は外部 working directory から検証します。必要な時は隔離コピーの bin に probe を一時配置し、ゲームと同じ資産パスを使用します。異常、timeout、必要証拠の欠落は失敗であり、probe は正式 archive に入りません。

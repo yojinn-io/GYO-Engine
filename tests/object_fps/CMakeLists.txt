@@ -20,7 +20,7 @@ target_link_libraries(${model} PRIVATE ${support} gyo_ufbx GYO::AssetUfbx GYO::P
 
 foreach(target ${headless} ${model})
     target_compile_features(${target} PRIVATE cxx_std_20)
-    target_include_directories(${target} PRIVATE "${GYO_APP_BINARY_DIR}/generated")
+    gyo_use_app_config(${target} "${GYO_CURRENT_APP}")
     set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${test_stage}/bin")
     foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
         set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${test_stage}/bin")

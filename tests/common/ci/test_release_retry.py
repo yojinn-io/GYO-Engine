@@ -271,12 +271,14 @@ class ReleaseRetryTests(unittest.TestCase):
                     patch.dict(os.environ, {"GH_REPO": "test/repo", "GH_TOKEN": "unit-test-token"}), \
                     patch("release_pipeline.load_packages", return_value=self.items) as load, \
                     patch("release_pipeline.release_products", return_value=EXPECTED_PAIRS), \
+                    patch("release_pipeline.export_tools", return_value={"windows-x64": ["alpha:native"]}), \
                     patch("release_support.git", return_value=COMMIT), \
                     patch("release_pipeline.GitHubApi", return_value=api), \
                     patch.object(api, "request", side_effect=fail_once), \
                     patch("release_pipeline.prepare_draft_with_retries", side_effect=retry_without_sleep) as recovery:
                 main()
-            load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS)
+            load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS,
+                                         expected_tool_owners={"windows-x64": {"alpha"}})
             recovery.assert_called_once_with(api, "v1.2.3", COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS)
             self.assertEqual(output.read_text(encoding="utf-8").splitlines(), [
                 "release_id=42", "release_url=" + api.release["html_url"],

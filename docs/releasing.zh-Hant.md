@@ -6,7 +6,7 @@
 
 ## 1. 產品集合
 
-每個支援平台固定產生 toolchain 產品，包含靜態連結引擎的 GUI UI editor 及必要 runtime libraries。`engine/config/projects.csv` 再選擇額外遊戲；每列只有 enabled 與目標平台欄位同時啟用才參與。`description`、`version` 是備註，不決定 Release 版本。
+每個支援平台固定產生 toolchain 產品，內容由 `engine/config/tools.csv` 的 enabled、release 與平台欄位決定；目前選中 UI Editor 的 GUI 預設模式及必要 runtime libraries。每個發佈工具必須可封裝、不依賴遊戲，並提供涵蓋該平台 quick／release 的執行驗收；空工具集合或缺少驗收直接失敗。本機 CLI 與 Object_FPS preview 不進入發佈包。`engine/config/projects.csv` 再選擇額外遊戲；每列只有 enabled 與目標平台欄位同時啟用才參與。兩份 CSV 都由同一套 CMake 解析器匯出選取結果；`description`、`version` 是備註，不決定 Release 版本。
 
 | 產品 | 壓縮檔 | 封存根目錄 |
 |---|---|---|
@@ -43,15 +43,15 @@
 
 組裝器與套件驗證共用 `build/content_contract.py`；C++ runtime 與 Editor 以同一組 fixtures 驗證原生解析器。Catalog 必須有整數 `version: 1`、合法 entry 與整個內容集合內唯一的 ID。不存在的資產目錄同步為空內容；目錄存在但描述檔缺失或無效則失敗，保留上次成功輸出。Object_FPS 僅部署實際使用的 builtin shaders，自訂 shader 驗證樣本屬於公共 GPU 測試。
 
-生成的 product manifest 位於 `share/gyo/products/<product>/manifest.json`。Schema 2 包含 product、kind、executables、required_files、runtime_dependencies、checks。共通 runner 位於 `build/acceptance/common/run_package_checks.py`，native linkage 檢查位於同目錄的 `validate_package.py`；遊戲特殊規則在 `build/acceptance/<game>`，不放在遊戲程式碼中。
+生成的 product manifest 位於 `share/gyo/products/<product>/manifest.json`。Schema 3 要求非空的建置 configuration，context 必須與它一致。Executable 以 `owner.role` 登錄，各自記錄 owner、role、path、runtime_dependencies；另有 required_files、native_files 及 owner 所屬的 checks。Native 依賴聯集只決定複製哪些檔案，linkage 檢查逐一使用程式自己的需求，因此同包的 SDL GUI 與無 SDL CLI 可以共存。共通 runner 位於 `build/acceptance/common/run_package_checks.py`，native linkage 檢查位於同目錄的 `validate_package.py`；專屬規則在 `build/acceptance/<owner>`。
 
-診斷 executable 從 `build/acceptance/<game>` 產生，位於 build tree 的 `acceptance/<game>/bin`。驗收 runner 可以在產品的臨時副本中放入 probe，讓它讀取同一份 executable-relative 資產；正式產品／archive 不含 probe 或 Python 驗收程式。遊戲 runtime 僅讀 `bin/assets/<game>`，內建與遊戲 shader 同樣位於此根下。
+診斷 executable 由 owner 明確註冊角色。CMake 生成 `<build>/packages/<product>/<configuration>/acceptance-context.json`，使用 `--context` 傳給 runner；context 綁定 manifest 與建置配置，只解析 `@CHECK_ROOT@`、`@PROBE:<role>@` 所需的外部位置，不改變檢查命令或集合。`@EXECUTABLE:<role>@` 依 owner 查找產品，檢查與日誌以 `owner.name` 識別。Runner 可以在產品臨時副本中放入 probe，但不能覆寫正式程式；正式產品不包含 context、probe 或 Python 驗收程式。遊戲 runtime 僅讀 `bin/assets/<game>`。
 
-Quick 與 Release 由 checks 的 profile 控制產品驗收深度。Linux toolchain job 固定以 Xvfb／Lavapipe 執行共通引擎的 GPU 渲染測試，即使沒有遊戲亦然；遊戲 job 另執行其 contract 宣告的 GPU checks。缺少所需能力、逾時或錯誤皆為失敗。軟體 Vulkan 結果與 Windows/macOS hosted 建置不代表實體 GPU 已驗證。Object_FPS 的外部驗收見[專案指南](object_fps/acceptance.zh-Hant.md)。
+Quick 與 Release 由 checks 的 profile 控制產品驗收深度，GPU suite 參數也由 owner 自己的配置指定。Linux toolchain job 固定以 Xvfb／Lavapipe 執行共通引擎 GPU 渲染測試，即使沒有遊戲亦然；所有產品（包含 toolchain）另執行其 contract 宣告的 GPU checks，兩者不是互斥分支。缺少所需能力、逾時或錯誤皆為失敗。軟體 Vulkan 結果與 Windows/macOS hosted 建置不代表實體 GPU 已驗證。Object_FPS 的外部驗收見[專案指南](object_fps/acceptance.zh-Hant.md)。
 
-封裝與 Draft 階段重新推導同一來源 SHA 的完整預期集合，驗證每項 product/platform、checksum、archive 路徑安全、manifest、必要內容及 Release profile 證據。缺包、多包、重复身份或 Quick-only 證據都不接受。
+封裝與 Draft 階段重新推導同一來源 SHA 的完整預期集合，驗證每項 product/platform、工具 owner 集合、checksum、archive 路徑安全、manifest、必要內容及 Release profile 證據。缺包、多包、工具子集冒充完整工具鏈、重複身份或 Quick-only 證據都不接受。
 
-`acceptance.json` 的 `package_sha256` 綁定產品內所有檔案的內容與符號連結目標，僅排除封裝時生成的根目錄 `build_metadata.json`。CPU、GPU 驗收與封裝之間若內容變更便拒絕，archive 驗證會再獨立計算相同摘要。產品隔離檢查同時拒絕其他遊戲的資產、其他 product manifest，以及未登錄的 `gyo_*`／`.exe` 程式。
+`acceptance.json` 的 `package_sha256` 綁定產品內所有檔案的內容與符號連結目標，僅排除封裝時生成的根目錄 `build_metadata.json`。CPU、GPU 驗收與封裝之間若內容變更便拒絕，archive 驗證會再獨立計算相同摘要。產品隔離依據登錄程式、原生庫與內容清單，拒絕任何未登錄檔案，不再依賴 `gyo_` 或副檔名猜測。只有宣告的 native files 可使用限定在套件內的符號連結。
 
 ## 4. 失敗與重跑
 

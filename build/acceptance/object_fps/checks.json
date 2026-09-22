@@ -4,7 +4,7 @@
     {
       "name": "startup",
       "command": [
-        "@PROBE@",
+        "@PROBE:main@",
         "--startup-smoke-test"
       ],
       "profiles": [
@@ -23,7 +23,7 @@
     {
       "name": "gameplay",
       "command": [
-        "@PROBE@",
+        "@PROBE:main@",
         "--headless-smoke-test"
       ],
       "profiles": [
@@ -42,11 +42,11 @@
       "name": "content",
       "command": [
         "@PYTHON@",
-        "@ACCEPTANCE_ROOT@/object_fps/validate_content.py",
+        "@CHECK_ROOT@/validate_content.py",
         "--stage",
         "@PACKAGE_ROOT@",
         "--probe",
-        "@PROBE@",
+        "@PROBE:main@",
         "--logs",
         "@LOG_ROOT@/content"
       ],
@@ -66,15 +66,15 @@
       "name": "rendering",
       "command": [
         "@PYTHON@",
-        "@ACCEPTANCE_ROOT@/object_fps/manual_gpu_smoke.py",
+        "@CHECK_ROOT@/manual_gpu_smoke.py",
         "--package",
         "@PACKAGE_ROOT@",
         "--probe",
-        "@PROBE@",
+        "@PROBE:main@",
         "--driver",
         "@DRIVER@",
         "--suite",
-        "@GPU_SUITE@",
+        "full",
         "--timeout",
         "120",
         "--output",

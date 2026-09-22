@@ -317,41 +317,6 @@
             "focused": "focused",
             "pressed": "pressed"
           }
-        },
-        {
-          "type": "text",
-          "id": "text_1",
-          "rect": {
-            "anchor_min": [
-              0.46875,
-              0.3444444537162781
-            ],
-            "anchor_max": [
-              0.5250000357627869,
-              0.3444444537162781
-            ],
-            "pivot": [
-              0.4516129791736603,
-              0.0
-            ],
-            "position": [
-              0.0,
-              0.0
-            ],
-            "size_delta": [
-              240.0,
-              72.0
-            ]
-          },
-          "text": {
-            "literal": ""
-          },
-          "point_size": 24.0,
-          "text_color": {
-            "color": "white"
-          },
-          "horizontal_align": "center",
-          "vertical_align": "center"
         }
       ]
     },
@@ -718,7 +683,7 @@
             ],
             "anchor_max": [
               0.5,
-              0.0
+              0.011111111380159855
             ],
             "pivot": [
               0.5,

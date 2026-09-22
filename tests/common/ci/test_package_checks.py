@@ -33,9 +33,10 @@ class InstalledCheckTests(unittest.TestCase):
             "assert os.environ['GYO_CHECK_VALUE'] == 'one two;three'\n"
             "print('ARGS:', repr(sys.argv[1:]), flush=True)\n", encoding="utf-8")
         self.contract = manifest("linux-x64")
+        self.contract["required_files"].append("probe.py")
         for check in self.contract["checks"]:
             check["command"] = ["@PYTHON@", "@PACKAGE_ROOT@/probe.py", "a b; $(not-a-shell)",
-                                "@PROFILE@", "@GPU_SUITE@", "@DRIVER@"]
+                                "@PROFILE@", "full", "@DRIVER@"]
             check["environment"] = ["GYO_CHECK_VALUE=one two;three"]
         for relative in ("bin/sample", "bin/data/config.json"):
             path = self.stage / relative
@@ -53,18 +54,6 @@ class InstalledCheckTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             return run_checks(self.stage, APP, "linux-x64", COMMIT, "release", self.logs, **kwargs)
 
-    def test_repository_toolchain_contract_is_valid_on_every_platform(self):
-        contract = json.loads((ROOT / "build/acceptance/ui_editor/checks.json").read_text(encoding="utf-8"))
-        self.assertEqual(contract["version"], 1)
-        for platform in PLATFORMS:
-            with self.subTest(platform=platform):
-                package = manifest(platform, product="toolchain")
-                package["executables"] = {"ui_editor":"bin/gyo_ui_editor"}
-                package["checks"] = contract["checks"]
-                validate_manifest(package, "toolchain", platform)
-                for profile in ("quick", "release"):
-                    self.assertEqual({check["name"] for check in required_checks(package, profile)}, {"editor_cli"})
-
     def test_real_argv_environment_isolation_and_gpu_merge(self):
         self.assertTrue(self.run_checks())
         partial = json.loads((self.logs / "acceptance.json").read_text())
@@ -73,8 +62,8 @@ class InstalledCheckTests(unittest.TestCase):
         self.assertTrue(self.run_checks(gpu=True, driver="vulkan"))
         report = json.loads((self.logs / "acceptance.json").read_text())
         validate_evidence(report, self.contract, COMMIT, "release")
-        self.assertIn("a b; $(not-a-shell)", (self.logs / "startup.log").read_text())
-        self.assertIn("'release', 'full', 'vulkan'", (self.logs / "render.log").read_text())
+        self.assertIn("a b; $(not-a-shell)", (self.logs / f"{APP}.startup.log").read_text())
+        self.assertIn("'release', 'full', 'vulkan'", (self.logs / f"{APP}.render.log").read_text())
 
     def test_nonzero_and_missing_commands_are_failures_and_continue(self):
         self.contract["checks"][0]["command"] = ["@PYTHON@", "-c", "raise SystemExit(17)"]
@@ -87,8 +76,8 @@ class InstalledCheckTests(unittest.TestCase):
         self.contract["checks"][0].update(timeout=0.2, command=["@PYTHON@", "-c",
             "import time; print('started', flush=True); time.sleep(20)"])
         self.assertFalse(self.run_checks())
-        self.assertIn("started", (self.logs / "startup.log").read_text())
-        self.assertIn("timed out", (self.logs / "startup.log").read_text())
+        self.assertIn("started", (self.logs / f"{APP}.startup.log").read_text())
+        self.assertIn("timed out", (self.logs / f"{APP}.startup.log").read_text())
 
     def test_gpu_cannot_merge_another_manifest_or_missing_startup(self):
         with self.assertRaises(ValueError):
@@ -137,9 +126,54 @@ class InstalledCheckTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         required_files(self.contract, documents.__getitem__)
 
+    def write_declared_content(self):
+        root = f"bin/assets/{APP}"
+        documents = {
+            root + "/content.json": {"version": 1, "catalogs": ["catalog.json"],
+                "shader_bundles": [{"name": "builtin", "path": "shaders/builtin"}]},
+            root + "/catalog.json": {"version": 1, "assets": [
+                {"id": "data", "type": "custom", "path": "nested/data.bin"}]},
+            root + "/shaders/builtin/manifest.json": {"programs": [{"variants": [
+                {"vertex": {"file": "dxil/vertex.bin"}, "fragment": {"file": "dxil/fragment.bin"}}]}]},
+        }
+        for relative, document in documents.items():
+            path = self.stage / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(document), encoding="utf-8")
+        for relative in ("nested/data.bin", "shaders/builtin/dxil/vertex.bin", "shaders/builtin/dxil/fragment.bin"):
+            path = self.stage / root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"declared artifact")
+        self.contract["required_files"].append(root + "/content.json")
+        self.contract["checks"] = []
+        return self.stage / root
+
+    def test_declared_catalog_and_shader_inventory_is_accepted(self):
+        self.write_declared_content()
+        self.assertTrue(self.run_checks())
+
+    def test_undeclared_programs_nested_in_product_assets_are_rejected(self):
+        assets = self.write_declared_content()
+        for relative in ("nested/rogue.exe", "shaders/builtin/dxil/rogue"):
+            path = assets / relative
+            path.write_bytes(b"undeclared executable")
+            with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, "Unregistered file"):
+                self.run_checks()
+            path.unlink()
+
+    def test_undeclared_programs_outside_runtime_directories_are_rejected(self):
+        for relative in ("rogue", "share/extra/rogue.exe"):
+            path = self.stage / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"undeclared executable")
+            with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, "Unregistered file"):
+                self.run_checks()
+            path.unlink()
+
     def test_runner_and_archiver_cli_produce_a_verifiable_release(self):
         self.contract["platform"] = "windows-x64"
-        self.contract["executables"] = {APP: "bin/sample.exe"}
+        self.contract["executables"][f"{APP}.main"]["path"] = "bin/sample.exe"
+        (self.stage / "bin/sample").unlink()
         self.contract["required_files"].append("probe.py")
         for relative in ("bin/sample.exe", "bin/data/config.json"):
             path = self.stage / relative
@@ -173,10 +207,168 @@ class InstalledCheckTests(unittest.TestCase):
         probe = probes / "diagnostic.py"
         probe.write_text("from pathlib import Path; assert (Path(__file__).parent / 'data/config.json').is_file()")
         self.contract["checks"] = [self.contract["checks"][0]]
-        self.contract["checks"][0]["command"] = ["@PYTHON@", "@PACKAGE_ROOT@/bin/diagnostic.py"]
-        self.assertTrue(self.run_checks(probe_directory=probes))
+        self.contract["checks"][0]["command"] = ["@PYTHON@", "@PROBE:main@"]
+        context = self.write_context(probe=probe)
+        self.assertTrue(self.run_checks(context=context))
         self.assertFalse((self.stage / "bin/diagnostic.py").exists())
         self.assertTrue(probe.exists())
+
+    def write_context(self, probe=None):
+        self.write_manifest()
+        document = {"schema_version": 1, "product": APP, "platform": "linux-x64",
+                    "configuration": "Release", "manifest": copy.deepcopy(self.contract),
+                    "owners": {APP: {"root": str(self.root), "probes": {}}}}
+        if probe:
+            document["owners"][APP]["probes"]["main"] = {"path": str(probe), "runtime_files": []}
+        path = self.root / "context.json"
+        path.write_text(json.dumps(document))
+        return path
+
+    def test_context_is_required_for_probe_and_cannot_change_manifest_or_gpu_identity(self):
+        self.contract["checks"][0]["command"] = ["@PYTHON@", "@CHECK_ROOT@/external.py"]
+        (self.root / "external.py").write_text("print('external check')")
+        with self.assertRaisesRegex(ValueError, "context"):
+            self.run_checks()
+        context = self.write_context()
+        self.assertTrue(self.run_checks(context=context))
+        with self.assertRaisesRegex(ValueError, "different package/profile"):
+            self.run_checks(gpu=True, driver="vulkan")
+        document = json.loads(context.read_text())
+        document["manifest"]["checks"][0]["timeout"] += 1
+        context.write_text(json.dumps(document))
+        with self.assertRaisesRegex(ValueError, "context"):
+            self.run_checks(context=context)
+
+    def test_legacy_and_unknown_role_tokens_are_rejected(self):
+        for token in ("@EXECUTABLE@", "@PROBE@", "@GPU_SUITE@", "@ACCEPTANCE_ROOT@", "@EXECUTABLE:missing@"):
+            self.contract["checks"][0]["command"] = [token]
+            with self.subTest(token=token), self.assertRaises(ValueError):
+                validate_manifest(self.contract, APP, "linux-x64")
+
+    def test_foreign_platform_roles_do_not_require_current_platform_targets(self):
+        check = copy.deepcopy(self.contract["checks"][0])
+        check.update(name="foreign_target", platforms=["windows-x64"], command=["@EXECUTABLE:windows_only@"])
+        self.contract["checks"].append(check)
+        validate_manifest(self.contract, APP, "linux-x64")
+        check["platforms"] = ["linux-x64"]
+        with self.assertRaisesRegex(ValueError, "Unregistered executable role"):
+            validate_manifest(self.contract, APP, "linux-x64")
+        check.update(platforms=["windows-x64"], command=["@EXECUTABLE@"])
+        with self.assertRaisesRegex(ValueError, "Unsupported acceptance token"):
+            validate_manifest(self.contract, APP, "linux-x64")
+
+    def test_explicit_context_is_checked_even_when_checks_do_not_need_it(self):
+        for field, value in (("product", "other"), ("platform", "macos-arm64"),
+                             ("configuration", ""), ("owners", {"unregistered": {}})):
+            context = self.write_context()
+            document = json.loads(context.read_text())
+            document[field] = value
+            context.write_text(json.dumps(document))
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "context"):
+                self.run_checks(context=context)
+
+    def test_probe_cannot_replace_a_product_even_when_its_bytes_match(self):
+        probe = self.root / "sample"
+        probe.write_bytes((self.stage / "bin/sample").read_bytes())
+        self.contract["checks"] = [self.contract["checks"][0]]
+        self.contract["checks"][0]["command"] = ["@PYTHON@", "@PROBE:main@"]
+        with self.assertRaisesRegex(ValueError, "overwrite"):
+            self.run_checks(context=self.write_context(probe=probe))
+
+    def test_probe_role_missing_from_context_is_not_guessed(self):
+        self.contract["checks"] = [self.contract["checks"][0]]
+        self.contract["checks"][0]["command"] = ["@PROBE:main@"]
+        with self.assertRaisesRegex(ValueError, "no requested probe role"):
+            self.run_checks(context=self.write_context())
+
+    def test_probe_dependencies_can_reuse_equal_product_libraries_only(self):
+        probe = self.root / "unconventional.py"
+        probe.write_text("print('probe')")
+        dependency = self.root / "native.dll"
+        dependency.write_text("library")
+        (self.stage / "bin/native.dll").write_text("library")
+        self.contract["native_files"] = ["bin/native.dll"]
+        self.contract["checks"] = [self.contract["checks"][0]]
+        self.contract["checks"][0]["command"] = ["@PYTHON@", "@PROBE:main@"]
+        context = self.write_context(probe=probe)
+        document = json.loads(context.read_text())
+        document["owners"][APP]["probes"]["main"]["runtime_files"] = [str(dependency)]
+        context.write_text(json.dumps(document))
+        self.assertTrue(self.run_checks(context=context))
+        dependency.write_text("different library")
+        with self.assertRaisesRegex(ValueError, "overwrite"):
+            self.run_checks(context=context)
+
+    def test_two_tools_same_roles_and_check_names_do_not_depend_on_order(self):
+        product = "toolchain"
+        self.contract.update(product=product, kind=product)
+        executables, checks = {}, []
+        for owner in ("first", "second"):
+            (self.stage / "bin" / f"{owner}.py").write_text("print('" + owner + "')")
+            executables[f"{owner}.main"] = dict(owner=owner, role="main", path=f"bin/{owner}.py", runtime_dependencies=[])
+            check = copy.deepcopy(self.contract["checks"][0])
+            check.update(owner=owner, command=["@PYTHON@", "@EXECUTABLE:main@"])
+            checks.append(check)
+        self.contract.update(executables=executables, checks=checks)
+        (self.stage / "bin/sample").unlink()
+        old_manifest = self.stage / manifest_path(APP)
+        old_manifest.unlink()
+        old_manifest.parent.rmdir()
+        path = self.stage / manifest_path(product)
+        path.parent.mkdir(parents=True)
+        for reverse in (False, True):
+            if reverse:
+                self.contract["executables"] = dict(reversed(list(executables.items())))
+                self.contract["checks"] = list(reversed(checks))
+            path.write_text(json.dumps(self.contract))
+            with self.subTest(reverse=reverse), redirect_stdout(io.StringIO()):
+                self.assertTrue(run_checks(self.stage, product, "linux-x64", COMMIT, "release", self.logs))
+            report = json.loads((self.logs / "acceptance.json").read_text())
+            validate_evidence(report, self.contract, COMMIT, "release")
+            for owner in ("first", "second"):
+                self.assertEqual((self.logs / f"{owner}.startup.log").read_text().strip(), owner)
+
+    def test_context_configuration_change_cannot_merge_cpu_and_gpu_evidence(self):
+        context = self.write_context()
+        self.assertTrue(self.run_checks(context=context))
+        document = json.loads(context.read_text())
+        document["configuration"] = "Debug"
+        context.write_text(json.dumps(document))
+        with self.assertRaisesRegex(ValueError, "context does not match"):
+            self.run_checks(gpu=True, driver="vulkan", context=context)
+
+    def test_context_configuration_mismatch_is_rejected_before_any_cpu_check(self):
+        context = self.write_context()
+        document = json.loads(context.read_text())
+        document["configuration"] = "Debug"
+        context.write_text(json.dumps(document))
+        with self.assertRaisesRegex(ValueError, "context does not match"):
+            self.run_checks(context=context)
+        self.assertFalse((self.logs / "acceptance.json").exists())
+
+    def test_manifest_configuration_is_required_and_nonempty(self):
+        for configuration in (None, "", "  ", False):
+            invalid = dict(self.contract, configuration=configuration)
+            with self.subTest(configuration=configuration), self.assertRaisesRegex(ValueError, "configuration"):
+                validate_manifest(invalid, APP, "linux-x64")
+        invalid = dict(self.contract)
+        invalid.pop("configuration")
+        with self.assertRaisesRegex(ValueError, "configuration"):
+            validate_manifest(invalid, APP, "linux-x64")
+
+    def test_two_probe_roles_with_the_same_filename_are_rejected(self):
+        self.contract["checks"] = [self.contract["checks"][0]]
+        self.contract["checks"][0]["command"] = ["@PYTHON@", "@PROBE:main@", "@PROBE:other@"]
+        first, second = self.root / "one/diagnostic.py", self.root / "two/diagnostic.py"
+        for path in (first, second):
+            path.parent.mkdir()
+            path.write_text("print('equal bytes')")
+        context = self.write_context(probe=first)
+        document = json.loads(context.read_text())
+        document["owners"][APP]["probes"]["other"] = {"path": str(second), "runtime_files": []}
+        context.write_text(json.dumps(document))
+        with self.assertRaisesRegex(ValueError, "overwrite another probe"):
+            self.run_checks(context=context)
 
     def test_gpu_merge_rejects_changed_product_bytes_after_cpu_acceptance(self):
         self.assertTrue(self.run_checks())

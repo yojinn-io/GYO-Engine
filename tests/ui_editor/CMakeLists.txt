@@ -14,6 +14,11 @@ add_test(NAME gyo_ui_editor.content_cli
         -P "${CMAKE_CURRENT_SOURCE_DIR}/EditorCliTests.cmake")
 set_tests_properties(gyo_ui_editor.content_cli PROPERTIES LABELS "cpu;editor" TIMEOUT 30)
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME gyo_ui_editor.acceptance_contract
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_acceptance_contract.py")
+set_tests_properties(gyo_ui_editor.acceptance_contract PROPERTIES LABELS "cpu;editor" TIMEOUT 30)
+
 if(TARGET gyo_ui_editor_preview)
     add_executable(gyo_ui_editor_preview_tests PreviewAssetTests.cpp)
     target_link_libraries(gyo_ui_editor_preview_tests PRIVATE

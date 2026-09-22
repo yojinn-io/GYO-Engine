@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "display_name": "Object FPS Design Preview",
+  "default_variant": "default",
+  "requires_apps": {
+    "game": "object_fps"
+  },
+  "variants": {
+    "default": {
+      "components": [
+        "SDL_PLATFORM"
+      ],
+      "packageable": false
+    }
+  }
+}

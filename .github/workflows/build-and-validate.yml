@@ -61,6 +61,7 @@ jobs:
     env:
       PRESET: ${{ matrix.preset }}
       GYO_PRODUCT: ${{ matrix.product }}
+      GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}
       # VsDevCmd owns Platform (= x64); Windows env names are case-insensitive.
       GYO_PACKAGE_PLATFORM: ${{ matrix.platform }}
       CC: ${{ matrix.cc }}
@@ -68,7 +69,6 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
       SOURCE_COMMIT: ${{ inputs.source_commit }}
       ACCEPTANCE_PROFILE: ${{ inputs.profile }}
-      GPU_SMOKE_SUITE: ${{ inputs.profile == 'release' && 'full' || 'quick' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,11 +130,11 @@ jobs:
       - name: Configure the selected product and engine verification
         id: configure
         run: |
-          $editor = if ($env:GYO_PRODUCT -eq 'toolchain') { 'ON' } else { 'OFF' }
           $apps = if ($env:GYO_PRODUCT -eq 'toolchain') { '' } else { $env:GYO_PRODUCT }
-          cmake --preset $env:PRESET "-DGYO_APPS=$apps" "-DGYO_BUILD_UI_EDITOR=$editor" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON -DGYO_UI_EDITOR_BUILD_GUI=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
+          cmake --preset $env:PRESET "-DGYO_APPS=$apps" "-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
+          "GYO_BUILD_CONFIG=$($build.configuration)" >> $env:GITHUB_ENV
           "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "has_shader_bundles=$($build.shader_bundles.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
@@ -212,18 +212,16 @@ jobs:
         id: smoke
         timeout-minutes: 20
         run: |
-          $probeArgs = @()
-          $probeDirectory = "build/target/_build/$env:PRESET/acceptance/$env:GYO_PRODUCT/bin"
-          if (Test-Path $probeDirectory) { $probeArgs = @("--probe-directory", $probeDirectory) }
-          python build/acceptance/common/run_package_checks.py @probeArgs --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/installed-checks.log"
+          python build/acceptance/common/run_package_checks.py --context "build/target/_build/$env:PRESET/packages/$env:GYO_PRODUCT/$env:GYO_BUILD_CONFIG/acceptance-context.json" --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/installed-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run common engine or declared product Linux GPU checks
+      - name: Run common engine and declared product Linux GPU checks
         id: gpu_smoke
         timeout-minutes: 20
         if: runner.os == 'Linux' && (matrix.kind == 'toolchain' || steps.package.outputs.has_gpu == 'true')
         shell: bash
         env:
+          HAS_PRODUCT_GPU: ${{ steps.package.outputs.has_gpu }}
           SDL_VIDEODRIVER: x11
           SDL_AUDIODRIVER: dummy
           SDL_LOGGING: '*=info'
@@ -246,9 +244,10 @@ jobs:
               --no-tests=error --output-on-failure \
               --output-junit "$GITHUB_WORKSPACE/build/target/_build/$PRESET/logs/common-gpu-tests.xml" \
               2>&1 | tee "build/target/_build/$PRESET/logs/common-gpu-tests.log"
-          else
+          fi
+          if [ "$HAS_PRODUCT_GPU" = true ]; then
             xvfb-run -a -s '-screen 0 1920x1080x24' python build/acceptance/common/run_package_checks.py \
-              --gpu --driver vulkan --probe-directory "build/target/_build/$PRESET/acceptance/$GYO_PRODUCT/bin" --stage "build/target/_build/$PRESET/stage" --product "$GYO_PRODUCT" \
+              --gpu --driver vulkan --context "build/target/_build/$PRESET/packages/$GYO_PRODUCT/$GYO_BUILD_CONFIG/acceptance-context.json" --stage "build/target/_build/$PRESET/stage" --product "$GYO_PRODUCT" \
               --platform "$GYO_PACKAGE_PLATFORM" --revision "$SOURCE_COMMIT" --profile "$ACCEPTANCE_PROFILE" \
               --logs "build/target/_build/$PRESET/logs" 2>&1 | tee "build/target/_build/$PRESET/logs/installed-gpu-checks.log"
           fi

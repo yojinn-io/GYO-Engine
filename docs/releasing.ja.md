@@ -6,7 +6,7 @@ GitHub Actions の **Prepare Release** で必要な製品を検証し、Draft �
 
 ## 1. 製品集合
 
-各対応 platform は、エンジンを静的リンクした GUI UI editor と必要な runtime libraries を含む toolchain 製品を必ず生成します。`engine/config/projects.csv` は追加ゲームを選択します。enabled と対象 OS が両方有効な行だけを採用し、description/version は備考として扱います。
+各対応 platform は toolchain 製品を必ず生成し、その内容は `engine/config/tools.csv` の enabled、release、platform フラグで選びます。現在は UI Editor の GUI 既定 variant と必要な runtime libraries です。公開ツールには packageable、ゲーム非依存、対象 platform の quick／release 両方の実行検証を要求し、空集合や検証不足は失敗です。ローカル CLI と Object_FPS preview は含めません。`engine/config/projects.csv` は追加ゲームを選びます。両 registry は CMake の共通 CSV parser から選択結果を export し、description/version は備考として扱います。
 
 | 製品 | Archive | Archive root |
 |---|---|---|
@@ -43,15 +43,15 @@ Platform は `windows-x64`、`linux-x64`、`macos-arm64` です。Archive ごと
 
 組立と package 検証は `build/content_contract.py` を共有し、C++ runtime と Editor の native parser は共通 fixtures で検証します。Catalog には整数の `version: 1`、有効な entry、内容集合全体で一意な ID が必要です。資産ディレクトリがなければ空内容として同期します。ディレクトリが存在して descriptor が欠落・不正なら失敗し、直前の成功出力を保持します。Object_FPS は実際に使う builtin shaders のみを配布し、カスタム shader の検証サンプルは共通 GPU テストが所有します。
 
-生成される product manifest は `share/gyo/products/<product>/manifest.json` です。Schema 2 は product、kind、executables、required_files、runtime_dependencies、checks を持ちます。共通 runner は `build/acceptance/common/run_package_checks.py`、native linkage 検査は同じ場所の `validate_package.py` です。ゲーム固有規則は `build/acceptance/<game>` に置きます。
+生成される product manifest は `share/gyo/products/<product>/manifest.json` です。Schema 3 は空でない build configuration を要求し、context の configuration も一致させます。Executable は `owner.role` で登録し、各 entry が owner、role、path、runtime_dependencies を持ちます。ほかに required_files、native_files、owner ごとの checks を記録します。依存物の和集合はコピー対象の決定だけに使い、linkage は実行ファイルごとの要求で検査するため、SDL GUI と SDL 不要の CLI を同じ package に配置できます。共通 runner は `build/acceptance/common/run_package_checks.py`、native linkage 検査は同じ場所の `validate_package.py` です。専用規則は `build/acceptance/<owner>` に置きます。
 
-診断 executable は `build/acceptance/<game>` から生成し、build tree の `acceptance/<game>/bin` に置きます。Runner が製品の一時コピーに probe を配置する場合も、正式 archive に probe や Python 検証コードを入れません。Runtime は `bin/assets/<game>` だけを読み、内蔵／ゲーム shader もその中にあります。
+診断 executable は owner が role を明示登録します。CMake が生成する `<build>/packages/<product>/<configuration>/acceptance-context.json` を `--context` で runner に渡します。Context は manifest と build configuration に結び付き、`@CHECK_ROOT@`、`@PROBE:<role>@` の外部位置だけを解決し、検証コマンドや集合を変えません。`@EXECUTABLE:<role>@` は owner ごとの製品を参照し、検証・ログ名は `owner.name` です。Runner は製品の一時コピーへ probe を置けますが正式実行ファイルを上書きしません。製品には context、probe、Python 検証コードを含めません。Runtime は `bin/assets/<game>` だけを読みます。
 
-Quick と Release の製品検証範囲は checks の profile が決めます。Linux toolchain job はゲームがなくても、Xvfb／Lavapipe で共通エンジンの GPU 描画テストを実行します。ゲーム job はその契約に宣言された GPU checks を別に実行します。必要能力の欠落、timeout、異常は失敗です。Software Vulkan と Windows/macOS hosted の結果は実物 GPU の検証ではありません。[Object_FPS の外部検証](object_fps/acceptance.ja.md)も参照してください。
+Quick と Release の範囲や GPU suite は owner の checks が決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画テストを実行します。Toolchain を含む全製品は、自身の契約に宣言された GPU checks も独立に実行し、共通 baseline との排他的な分岐にしません。必要能力の欠落、timeout、異常は失敗です。Software Vulkan と Windows/macOS hosted の結果は実物 GPU の検証ではありません。[Object_FPS の外部検証](object_fps/acceptance.ja.md)も参照してください。
 
-封装と Draft 準備は同じ source SHA から完全な期待集合を再計算します。Product/platform、checksum、archive path の安全性、manifest、必要内容、Release profile の証拠を確認し、欠落、余分な製品、重複 identity、Quick-only 証拠を拒否します。
+封装と Draft 準備は同じ source SHA から完全な期待集合を再計算します。Product/platform、tool owner 集合、checksum、archive path の安全性、manifest、必要内容、Release profile の証拠を確認します。欠落、余分な製品、一部のツールだけを含む toolchain、重複 identity、Quick-only 証拠を拒否します。
 
-`acceptance.json` の `package_sha256` は製品内の全ファイル内容とシンボリックリンク先を結び付け、封装時に生成する root の `build_metadata.json` だけを除外します。CPU／GPU 検証と封装の間の内容変更を拒否し、archive 検査でも同じ digest を独立に再計算します。製品隔離検査は別ゲームの資産、別 product manifest、未登録の `gyo_*`／`.exe` 実行ファイルも拒否します。
+`acceptance.json` の `package_sha256` は製品内の全ファイル内容とシンボリックリンク先を結び付け、封装時に生成する root の `build_metadata.json` だけを除外します。CPU／GPU 検証と封装の間の内容変更を拒否し、archive 検査でも同じ digest を独立に再計算します。製品隔離は登録済み実行ファイル、native files、コンテンツの一覧に従い、接頭辞や拡張子によらず未登録ファイルを拒否します。シンボリックリンクは宣言済み native files に限り、参照先を package 内に制限します。
 
 ## 4. 失敗と再実行
 

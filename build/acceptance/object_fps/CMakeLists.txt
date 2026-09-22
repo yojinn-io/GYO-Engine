@@ -3,7 +3,8 @@ set(probe "gyo_${GYO_CURRENT_APP}_acceptance")
 add_executable(${probe} main.cpp diagnostics/HeadlessSmoke.cpp
     diagnostics/MuzzleProbe.cpp diagnostics/PackageProbes.cpp diagnostics/VisualProbe.cpp)
 target_compile_features(${probe} PRIVATE cxx_std_20)
-target_include_directories(${probe} PRIVATE "${GYO_APP_BINARY_DIR}/generated")
+gyo_use_app_config(${probe} "${GYO_CURRENT_APP}")
+gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE main TARGET ${probe})
 target_link_libraries(${probe} PRIVATE ${support} GYO::PlatformSDL GYO::RenderBackendSDLGPU)
 set_target_properties(${probe} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/acceptance/${GYO_CURRENT_APP}/bin")

@@ -4,7 +4,7 @@ Games are source projects inside the engine repository. Build them through the r
 
 ## Minimal game project
 
-Use a lowercase name matching `[a-z][a-z0-9_]*`. The names `common`, `toolchain` and `ui_editor` are reserved for engine test/tool/product ownership and cannot appear as game IDs, even in disabled CSV rows. A small game needs:
+Use a lowercase name matching `[a-z][a-z0-9_]*`. The names `common` and `toolchain` are reserved for shared test/product ownership. Registered game and tool owners must not collide; concrete tool names are read from the tool registry rather than hardcoded in the game parser. A small game needs:
 
 ```text
 apps/my_game/
@@ -54,7 +54,7 @@ my_game,My game,,1,1,1,1
 `description` and `version` are notes. Only `enabled` and the target platform flag select a game. `AUTO` selects all enabled games for the target; a supplied list selects a permitted subset. Unknown, disabled or platform-disabled names are errors. A directory alone never opts a game into CI.
 
 ```sh
-cmake --preset dev -DGYO_APPS=my_game -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=my_game -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_my_game
 ```
 
@@ -139,10 +139,10 @@ For shader-enabled content, supply the declared compiled bundles, for example `-
 
 Do not globally rename C++ namespaces, AssetIds, shader IDs, clip names or definition references merely to change deployment identity. They can remain the same until the variant's gameplay/content actually needs different values. The copied game does not carry tests, CI, acceptance scripts, source-art archives or editor tools.
 
-To integrate variant-specific validation later, add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
+To integrate variant-specific validation later, copy or add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Use `GYO_CURRENT_APP` and `gyo_use_app_config(target app)` to obtain that app's generated configuration privately, and `@CHECK_ROOT@` in acceptance commands to resolve the declaring owner's script directory. Python tests derive their acceptance owner from their own location. These support copies must keep working after the original support is removed. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
 
 ## Validation boundaries
 
 Engine tests belong to `tests/common`, game unit/component tests to `tests/<game>`, and separate acceptance executables to `build/acceptance/<game>`. Tests may link the game's reusable libraries. They must not inject testing sources or macros into the shipped game executable.
 
-Release always includes the GUI UI editor toolchain for each supported platform, then adds CSV-selected games. A selected game failing to configure, build or pass required validation fails the complete integration. With no selected games, the engine/toolchain release still succeeds. See [architecture](architecture.md) and [release procedure](releasing.zh-Hant.md).
+Release includes the tools selected by `engine/config/tools.csv` for each supported platform (currently UI Editor GUI), then adds CSV-selected games. A selected game or tool failing to configure, build or pass required validation fails the complete integration. With no selected games, the engine/toolchain release still succeeds. A new game without dedicated checks receives the common package/content/native checks; every release tool must provide executable acceptance. See [architecture](architecture.md) and [release procedure](releasing.zh-Hant.md).

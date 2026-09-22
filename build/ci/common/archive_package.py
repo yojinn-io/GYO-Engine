@@ -16,7 +16,8 @@ import tarfile
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from package_contract import (PLATFORMS, load_manifest, installed_required_files,
-                              validate_product_namespace, validate_evidence, package_digest)
+                              validate_product_namespace, validate_evidence, package_digest, valid_installed_file)
+from content_contract import decode_json
 
 
 def native_platform() -> str:
@@ -54,12 +55,12 @@ def main() -> None:
     stage = args.stage.resolve(strict=True)
     manifest = load_manifest(stage, args.product, args.platform or native_platform())
     validate_product_namespace((path.relative_to(stage).as_posix()
-                            for path in stage.rglob("*")), args.product, manifest)
+                            for path in stage.rglob("*") if path.is_file() or path.is_symlink()), args.product, manifest,
+                            lambda name: decode_json((stage / name).read_text(encoding="utf-8-sig"), name))
     metadata = package_metadata(args.revision, manifest, args.smoke_report, package_sha256=package_digest(stage))
     for relative in installed_required_files(stage, manifest):
-        path = stage / relative
-        if not path.is_file() or path.is_symlink() or path.stat().st_size == 0:
-            raise ValueError(f"Required package file must be nonempty and regular: {relative}")
+        if not valid_installed_file(stage, relative, manifest):
+            raise ValueError(f"Required package file must be nonempty and confined to the package: {relative}")
     output = args.output.resolve()
     if output.is_relative_to(stage):
         raise ValueError("Archive output must be outside its installed stage")

@@ -161,7 +161,7 @@ Overlay / HUD → Present
 Windows の AUTO は DXIL と SPIR-V、Linux は SPIR-V、macOS は Metallib を生成します。Metallib には native macOS と Apple Metal tools が必要で、最低 OS バージョンを app と揃えます。Host と target の compiler は分離します。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_BUILD_UI_EDITOR=OFF
+cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps
 cmake --preset core
 cmake --build --preset core
@@ -182,7 +182,7 @@ Product manifest は `share/gyo/products/<product>/manifest.json` で、product/
 <a id="r09"></a>
 ## 9. Engine 統合と検証
 
-対応する各 platform は engine＋GUI UI editor の toolchain を必ず生成し、CSV が選んだゲームを追加します。ゲームがなくても toolchain があるため Prepare Release は成功できます。必須の製品／platform の失敗、取消、skip は Draft 準備を阻止します。Engine SDK や source archive は生成しません。
+対応する各 platform は engine と `tools.csv` が選んだ release ツール（現在は UI Editor GUI）の toolchain を生成し、`projects.csv` が選んだゲームを追加します。共通 GPU baseline と各製品の宣言済み GPU checks は別々に実行します。ゲームがなくても toolchain があるため Prepare Release は成功できます。必須のツール、ゲーム、検証、platform の失敗、取消、skip は Draft 準備を阻止します。Engine SDK や source archive は生成しません。[ツール登録ガイド](tool_projects.md)も参照してください。
 
 Quick と Release は同じ製品／資産組立を使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。
 

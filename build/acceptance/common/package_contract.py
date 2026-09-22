@@ -24,19 +24,18 @@ def manifest_path(product: str) -> str:
     return f"share/gyo/products/{validate_product(product)}/manifest.json"
 
 
-def validate_product_namespace(paths, product: str, manifest=None) -> None:
-    """Reject mixed installations, stale game assets and unregistered program binaries."""
+def validate_product_namespace(paths, product: str, manifest=None, read_document=None) -> None:
+    """Validate file/link paths (not directories) against the installed inventory."""
     validate_product(product)
-    executables = set(manifest["executables"].values()) if manifest is not None else None
+    registered = required_files(manifest, read_document) if manifest is not None else None
     for path in paths:
         parts = PurePosixPath(path).parts
         if len(parts) > 3 and parts[:3] == ("share", "gyo", "products") and parts[3] != product:
             raise ValueError(f"Isolated package for {product} contains another product installation: {parts[3]}")
         if len(parts) > 2 and parts[:2] == ("bin", "assets") and parts[2] != product:
             raise ValueError(f"Isolated package for {product} contains another product's assets: {parts[2]}")
-        if executables is not None and len(parts) == 2 and parts[0] == "bin":
-            if (parts[1].lower().endswith(".exe") or parts[1].startswith("gyo_")) and path not in executables:
-                raise ValueError(f"Unregistered executable in {product} package: {path}")
+        if registered is not None and path != "build_metadata.json" and path not in registered:
+            raise ValueError(f"Unregistered file in {product} package: {path}")
 
 
 def inventory_digest(entries: dict) -> str:
@@ -68,40 +67,70 @@ def validate_manifest(manifest: dict, product: str, platform: str) -> dict:
     if platform not in PLATFORMS:
         raise ValueError(f"Unsupported package platform: {platform}")
     if (not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int
-            or manifest["schema_version"] != 2 or manifest.get("product") != product
+            or manifest["schema_version"] != 3 or manifest.get("product") != product
             or manifest.get("platform") != platform):
         raise ValueError("Package manifest schema or product/platform identity does not match")
     kind = manifest.get("kind")
     if kind not in ("app", "toolchain") or (kind == "toolchain") != (product == "toolchain"):
         raise ValueError("Package kind does not match its product identity")
+    configuration = manifest.get("configuration")
+    if not isinstance(configuration, str) or not configuration.strip():
+        raise ValueError("Package configuration must be a nonempty string")
     executables = manifest.get("executables")
     if not isinstance(executables, dict) or not executables:
-        raise ValueError("Package executables must be a nonempty name/path object")
-    for name, path in executables.items():
-        validate_product(name)
+        raise ValueError("Package executables must be a nonempty owner/role object")
+    paths, owners = set(), set()
+    for name, executable in executables.items():
+        if not isinstance(executable, dict):
+            raise ValueError("Package executable must describe owner, role, path and runtime dependencies")
+        owner, role = executable.get("owner"), executable.get("role")
+        validate_product(owner)
+        validate_product(role)
+        if name != f"{owner}.{role}" or (kind == "app" and owner != product):
+            raise ValueError("Package executable key must match its owner.role")
+        owners.add(owner)
+        path = executable.get("path")
         relative_path(path)
         if not path.startswith("bin/"):
             raise ValueError("Package executables must be under bin/")
+        normalized = path.casefold() if platform == "windows-x64" else path
+        if normalized in paths:
+            raise ValueError(f"Duplicate package executable path: {path}")
+        paths.add(normalized)
+        dependencies = executable.get("runtime_dependencies")
+        if (not isinstance(dependencies, list) or any(item != "SDL3" for item in dependencies)
+                or len(dependencies) != len(set(dependencies))):
+            raise ValueError("Unsupported executable runtime_dependencies in package manifest")
     required = manifest.get("required_files")
     if not isinstance(required, list) or not all(isinstance(path, str) for path in required):
         raise ValueError("Manifest required_files must be an array of relative paths")
     for path in required:
         relative_path(path)
-    dependencies = manifest.get("runtime_dependencies")
-    if (not isinstance(dependencies, list) or len(dependencies) != len(set(dependencies))
-            or any(item != "SDL3" for item in dependencies)):
-        raise ValueError("Unsupported runtime_dependencies in package manifest")
+    native = manifest.get("native_files")
+    if not isinstance(native, list) or any(not isinstance(path, str) for path in native):
+        raise ValueError("Manifest native_files must be an array of relative paths")
+    for path in native:
+        relative_path(path)
+        if PurePosixPath(path).parts[0] not in ("bin", "lib"):
+            raise ValueError("Native payloads must be under bin/ or lib/")
+        normalized = path.casefold() if platform == "windows-x64" else path
+        if normalized in paths:
+            raise ValueError(f"Duplicate native or executable path: {path}")
+        paths.add(normalized)
+    if "runtime_dependencies" in manifest:
+        raise ValueError("Package-wide runtime_dependencies have been replaced by executable dependencies")
     checks = manifest.get("checks")
     if not isinstance(checks, list):
         raise ValueError("Manifest checks must be an array")
     names = set()
     for check in checks:
         if (not isinstance(check, dict) or not isinstance(check.get("name"), str)
-                or not re.fullmatch(r"[A-Za-z0-9_.-]+", check["name"]) or check["name"] in names):
+                or not re.fullmatch(r"[A-Za-z0-9_.-]+", check["name"])):
             raise ValueError("Package checks must have unique, safe names")
-        if check["name"] == "package_files":
-            raise ValueError("package_files is reserved for the mandatory integrity check")
-        names.add(check["name"])
+        owner = validate_product(check.get("owner"))
+        if owner not in owners or check_identity(check) in names:
+            raise ValueError("Package checks must have a registered owner and unique owner.name")
+        names.add(check_identity(check))
         command = check.get("command")
         if not isinstance(command, list) or not command or any(not isinstance(arg, str) for arg in command):
             raise ValueError(f"Invalid argv for package check {check['name']}")
@@ -122,7 +151,21 @@ def validate_manifest(manifest: dict, product: str, platform: str) -> dict:
         timeout = check.get("timeout")
         if type(timeout) not in (int, float) or not 0 < timeout <= 3600:
             raise ValueError("Package check timeout must be greater than zero and at most 3600 seconds")
+        for argument in [*command, *environment]:
+            for token in re.findall(r"@[A-Z_]+(?::[^@]*)?@", argument):
+                if token in ("@PACKAGE_ROOT@", "@LOG_ROOT@", "@PYTHON@", "@PROFILE@", "@DRIVER@", "@CHECK_ROOT@"):
+                    continue
+                match = re.fullmatch(r"@(EXECUTABLE|PROBE):([a-z][a-z0-9_]*)@", token)
+                if not match:
+                    raise ValueError(f"Unsupported acceptance token: {token}")
+                if (platform in check["platforms"] and match[1] == "EXECUTABLE"
+                        and f"{owner}.{match[2]}" not in executables):
+                    raise ValueError(f"Unregistered executable role: {owner}.{match[2]}")
     return manifest
+
+
+def check_identity(check: dict) -> str:
+    return f"{check['owner']}.{check['name']}"
 
 
 def load_manifest(stage: Path, product: str, platform: str | None = None) -> dict:
@@ -154,10 +197,19 @@ def validate_evidence(evidence: dict, manifest: dict, revision: str, profile: st
         raise ValueError("Acceptance evidence requires the package content digest")
     if package_sha256 is not None and digest != package_sha256:
         raise ValueError("Package content changed after acceptance")
+    context_digest = evidence.get("context_sha256")
+    if context_digest is not None and (not isinstance(context_digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", context_digest)):
+        raise ValueError("Invalid acceptance context digest")
+    needs_context = any(re.search(r"@(CHECK_ROOT|PROBE:[a-z][a-z0-9_]*)@", arg)
+                        for check in required_checks(manifest, profile)
+                        for arg in [*check["command"], *check["environment"]])
+    if needs_context and context_digest is None:
+        raise ValueError("Acceptance evidence requires its external context digest")
     results = evidence.get("checks")
     if not isinstance(results, list) or any(not isinstance(result, dict) for result in results):
         raise ValueError("Acceptance evidence checks must be an array")
-    expected = {"package_files", *[check["name"] for check in required_checks(manifest, profile)]}
+    expected = {"package_files", *[check_identity(check) for check in required_checks(manifest, profile)]}
     names = [result.get("name") for result in results]
     if len(names) != len(set(names)) or set(names) != expected:
         raise ValueError("Acceptance evidence must contain exactly the required package checks")
@@ -168,7 +220,8 @@ def validate_evidence(evidence: dict, manifest: dict, revision: str, profile: st
 
 def required_files(manifest: dict, read_document=None) -> set[str]:
     """Derive runtime requirements from installed data, never a second CMake asset list."""
-    required = {*manifest["executables"].values(), manifest_path(manifest["product"]), *manifest["required_files"]}
+    required = {*[entry["path"] for entry in manifest["executables"].values()],
+                manifest_path(manifest["product"]), *manifest["required_files"], *manifest["native_files"]}
     content_path = f"bin/assets/{manifest['product']}/content.json"
     if read_document is None or content_path not in required:
         return required
@@ -185,3 +238,14 @@ def required_files(manifest: dict, read_document=None) -> set[str]:
 
 def installed_required_files(stage: Path, manifest: dict) -> set[str]:
     return required_files(manifest, lambda name: decode_json((stage / name).read_text(encoding="utf-8-sig"), name))
+
+
+def valid_installed_file(stage: Path, relative: str, manifest: dict) -> bool:
+    """Only declared native libraries may use package-local symbolic links."""
+    path = stage / relative
+    try:
+        if not path.is_file() or not path.stat().st_size or not path.resolve(strict=True).is_relative_to(stage.resolve()):
+            return False
+        return not path.is_symlink() or relative in manifest["native_files"]
+    except (OSError, RuntimeError):
+        return False

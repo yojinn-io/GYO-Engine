@@ -114,6 +114,11 @@ class ArchiveMetadataTests(unittest.TestCase):
                 }
                 name = "catalog.json" if case["kind"] == "catalog" else "content.json"
                 documents[content_root + "/" + name] = case["text"].encode("utf-8")
+                if case["kind"] == "content" and case["valid"]:
+                    # An empty-content decoding fixture must not accidentally
+                    # include an undeclared catalog in its package inventory.
+                    if "catalog.json" not in json.loads(case["text"])["catalogs"]:
+                        documents.pop(content_root + "/catalog.json")
                 stage = Path(self.workspace.name) / case["name"]
                 for name, data in documents.items():
                     path = stage / name
