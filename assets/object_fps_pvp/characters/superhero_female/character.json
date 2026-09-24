@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.character.superhero_female",
+  "material_overrides": {
+    "MI_Eyes": { "texture_asset_id": "object_fps_pvp.texture.character.female.eyes", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" },
+    "MI_Hair_2": { "texture_asset_id": "object_fps_pvp.texture.character.female.hair", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" },
+    "MI_Superhero_Female": { "texture_asset_id": "object_fps_pvp.texture.character.female.body", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "clips": {
+    "fire": { "model_asset_id": "object_fps_pvp.model.weapon.animated_pistol.viewmodel", "clip": "PistolArmature|Fire" },
+    "reload": { "model_asset_id": "object_fps_pvp.model.weapon.animated_pistol.viewmodel", "clip": "PistolArmature|Reload" },
+    "slide": { "model_asset_id": "object_fps_pvp.model.weapon.animated_pistol.viewmodel", "clip": "PistolArmature|Slide" }
+  }
+}

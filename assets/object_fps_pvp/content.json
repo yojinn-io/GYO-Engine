@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "catalogs": [
+    "asset_catalog.json"
+  ],
+  "shader_bundles": [
+    {
+      "name": "builtin",
+      "source": "../../engine/render/shaders/builtin/bundle.json",
+      "path": "shaders/builtin"
+    }
+  ]
+}

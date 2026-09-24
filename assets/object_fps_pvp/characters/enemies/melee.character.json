@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.character.superhero_male",
+  "material_overrides": {
+    "MI_Eyes": {
+      "texture_asset_id": "object_fps_pvp.texture.character.male.eyes",
+      "base_color_linear": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "sampler": "linear_clamp"
+    },
+    "MI_Hair_1": {
+      "texture_asset_id": "object_fps_pvp.texture.character.male.hair",
+      "base_color_linear": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "sampler": "linear_clamp"
+    },
+    "MI_Superhero_Male": {
+      "texture_asset_id": "object_fps_pvp.texture.character.male.body",
+      "base_color_linear": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "sampler": "linear_clamp"
+    }
+  },
+  "accessories": [
+    {
+      "character_asset_id": "object_fps_pvp.hair.simple_parted",
+      "node": "Head",
+      "source_node": "Head"
+    }
+  ],
+  "animation_set_asset_id": "object_fps_pvp.enemy.melee.animations",
+  "animation_binding": {
+    "mode": "compatible_reference_pose",
+    "translation_scale": 1.0,
+    "ignored_source_nodes": [
+      "Mannequin"
+    ]
+  }
+}

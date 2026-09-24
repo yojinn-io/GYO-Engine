@@ -29,6 +29,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3_ttf)
 
+# Upstream's static target exports only SDL headers and lets its consumer choose
+# the SDL library. GYO has already selected SDL3::SDL3; declare that real link
+# dependency here so one-pass linkers place its import/archive after SDL_ttf.
+if(TARGET SDL3_ttf-static)
+    target_link_libraries(SDL3_ttf-static PRIVATE SDL3::SDL3)
+endif()
+
 if(_gyo_restore_build_shared_libs)
     set(BUILD_SHARED_LIBS "${_gyo_saved_build_shared_libs}")
 else()

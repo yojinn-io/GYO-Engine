@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "display_name": "Object_FPS_PVP",
+  "components": [
+    "SDL_GPU",
+    "SDL_INPUT",
+    "SDL_TTF"
+  ]
+}

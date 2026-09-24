@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "wire",
+      "command": ["@PROBE:network@", "--self-test"],
+      "profiles": ["quick", "release"],
+      "timeout": 15,
+      "environment": [],
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64"],
+      "gpu": false
+    }
+  ]
+}

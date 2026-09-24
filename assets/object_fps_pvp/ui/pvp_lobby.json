@@ -1,0 +1,43 @@
+{
+  "schema": "gyo.ui", "version": 1,
+  "design_canvas": {"size": [1280, 720], "scale_mode": "fit"},
+  "fonts": {"ui": "object_fps_pvp.font.ui"}, "default_font": "ui",
+  "colors": {
+    "backdrop": "#101724FF", "panel": "#1D2A3AFF", "accent": "#66D9EFFF",
+    "text": "#EAF1FAFF", "muted": "#A3B7CBFF", "button": "#2B4159FF",
+    "focused": "#285F84FF", "pressed": "#307EA2FF"
+  },
+  "actions": [
+    {"id": "pvp.edit_address", "payload": "none"},
+    {"id": "pvp.refresh", "payload": "none"},
+    {"id": "pvp.create", "payload": "none"},
+    {"id": "pvp.join", "payload": "none"},
+    {"id": "pvp.leave", "payload": "none"},
+    {"id": "pvp.quit", "payload": "none"}
+  ],
+  "bindings": [
+    {"id": "address", "type": "string", "preview": "127.0.0.1:8080"},
+    {"id": "room", "type": "string", "preview": "No room found. Refresh or create one."},
+    {"id": "status", "type": "string", "preview": "Ready"},
+    {"id": "hint", "type": "string", "preview": "Click the address to edit. Enter confirms."}
+  ],
+  "canvases": [{
+    "id": "lobby", "backdrop_color": "backdrop", "default_focus": "refresh",
+    "focus_order": ["address", "refresh", "create", "join", "leave", "quit"],
+    "children": [
+      {"type": "panel", "id": "panel", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [180, 64], "size_delta": [920, 592]}, "color": {"color": "panel"}},
+      {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 88], "size_delta": [840, 56]}, "text": {"literal": "OBJECT FPS / PVP"}, "point_size": 36, "text_color": {"color": "accent"}, "vertical_align": "center"},
+      {"type": "text", "id": "subtitle", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 148], "size_delta": [840, 36]}, "text": {"literal": "LAN Arena  /  2 players"}, "point_size": 20, "text_color": {"color": "muted"}, "vertical_align": "center"},
+      {"type": "text", "id": "address_label", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 204], "size_delta": [840, 26]}, "text": {"literal": "GATEWAY ADDRESS"}, "point_size": 16, "text_color": {"color": "muted"}},
+      {"type": "button", "id": "address", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 238], "size_delta": [840, 48]}, "text": {"binding": "address"}, "point_size": 23, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.edit_address", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "text", "id": "hint", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 294], "size_delta": [840, 30]}, "text": {"binding": "hint"}, "point_size": 15, "text_color": {"color": "muted"}},
+      {"type": "text", "id": "room", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 342], "size_delta": [840, 36]}, "text": {"binding": "room"}, "point_size": 20, "text_color": {"color": "text"}, "vertical_align": "center"},
+      {"type": "button", "id": "refresh", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 398], "size_delta": [260, 50]}, "text": {"literal": "Refresh"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.refresh", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "button", "id": "create", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [510, 398], "size_delta": [260, 50]}, "text": {"literal": "Create + Join"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.create", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "button", "id": "join", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [800, 398], "size_delta": [260, 50]}, "text": {"literal": "Join Room"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.join", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "text", "id": "status", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 466], "size_delta": [840, 60]}, "text": {"binding": "status"}, "point_size": 16, "text_color": {"color": "accent"}},
+      {"type": "button", "id": "leave", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [220, 562], "size_delta": [260, 48]}, "text": {"literal": "Leave / Cancel"}, "point_size": 20, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.leave", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "button", "id": "quit", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [800, 562], "size_delta": [260, 48]}, "text": {"literal": "Quit"}, "point_size": 20, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.quit", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}}
+    ]
+  }]
+}

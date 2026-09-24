@@ -1,0 +1,16 @@
+include(FetchContent)
+FetchContent_Declare(gyo_asio_source
+    GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+    GIT_TAG asio-1-38-2 GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(gyo_asio_source)
+add_library(gyo_asio INTERFACE)
+add_library(asio::asio ALIAS gyo_asio)
+target_include_directories(gyo_asio SYSTEM INTERFACE "${gyo_asio_source_SOURCE_DIR}/include")
+target_compile_definitions(gyo_asio INTERFACE ASIO_STANDALONE ASIO_NO_DEPRECATED)
+if(WIN32)
+    target_compile_definitions(gyo_asio INTERFACE _WIN32_WINNT=0x0A00 WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(gyo_asio INTERFACE ws2_32 mswsock)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(gyo_asio INTERFACE Threads::Threads)
+endif()

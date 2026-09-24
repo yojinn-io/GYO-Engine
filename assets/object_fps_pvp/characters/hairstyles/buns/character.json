@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.hair.buns",
+  "material_overrides": {
+    "MI_Hair_2": {
+      "texture_asset_id": "object_fps_pvp.texture.character.female.hair",
+      "base_color_linear": [1, 1, 1, 1],
+      "sampler": "linear_clamp"
+    }
+  }
+}

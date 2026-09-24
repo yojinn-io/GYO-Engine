@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "clips": {
+    "idle": {
+      "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin",
+      "clip": "Armature|Idle_Loop"
+    },
+    "move": {
+      "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin",
+      "clip": "Armature|Jog_Fwd_Loop"
+    },
+    "attack": {
+      "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin",
+      "clip": "Armature|Punch_Jab"
+    },
+    "dead": {
+      "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin",
+      "clip": "Armature|Death01"
+    }
+  }
+}

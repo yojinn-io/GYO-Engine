@@ -1,0 +1,2 @@
+weapon_id,damage,magazine_size,reserve_ammo,recoil,automatic,fire_interval_seconds,reload_seconds,draw_seconds,hide_seconds,presentation_asset_id
+starter_pistol,25,12,48,1.5,false,0.3333333333,1.50,0.8333333333,0.3666666667,object_fps_pvp.weapon.mark23

@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "character_asset_id": "object_fps_pvp.enemy.ranged.character",
+  "hurt_regions": [
+    {
+      "id": "head",
+      "damage_multiplier": 2.0,
+      "start": {
+        "node": "Head",
+        "offset": [
+          0,
+          0.103493,
+          -0.008712
+        ]
+      },
+      "end": {
+        "node": "Head",
+        "offset": [
+          0,
+          0.103493,
+          -0.008712
+        ]
+      },
+      "radius": 0.16
+    },
+    {
+      "id": "torso",
+      "damage_multiplier": 1.0,
+      "start": {
+        "node": "spine_01"
+      },
+      "end": {
+        "node": "spine_03"
+      },
+      "radius": 0.19
+    },
+    {
+      "id": "pelvis",
+      "damage_multiplier": 1.0,
+      "start": {
+        "node": "pelvis"
+      },
+      "end": {
+        "node": "spine_01"
+      },
+      "radius": 0.17
+    },
+    {
+      "id": "upper_arm_l",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "upperarm_l"
+      },
+      "end": {
+        "node": "lowerarm_l"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "forearm_l",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "lowerarm_l"
+      },
+      "end": {
+        "node": "hand_l"
+      },
+      "radius": 0.065
+    },
+    {
+      "id": "thigh_l",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "thigh_l"
+      },
+      "end": {
+        "node": "calf_l"
+      },
+      "radius": 0.1
+    },
+    {
+      "id": "calf_l",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "calf_l"
+      },
+      "end": {
+        "node": "foot_l"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "upper_arm_r",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "upperarm_r"
+      },
+      "end": {
+        "node": "lowerarm_r"
+      },
+      "radius": 0.075
+    },
+    {
+      "id": "forearm_r",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "lowerarm_r"
+      },
+      "end": {
+        "node": "hand_r"
+      },
+      "radius": 0.065
+    },
+    {
+      "id": "thigh_r",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "thigh_r"
+      },
+      "end": {
+        "node": "calf_r"
+      },
+      "radius": 0.1
+    },
+    {
+      "id": "calf_r",
+      "damage_multiplier": 0.75,
+      "start": {
+        "node": "calf_r"
+      },
+      "end": {
+        "node": "foot_r"
+      },
+      "radius": 0.075
+    }
+  ],
+  "attack": {
+    "release_seconds": 0.0,
+    "transition_seconds": 0.0
+  },
+  "weapon": {
+    "character_asset_id": "object_fps_pvp.weapon.ultimate_pistol_1.world",
+    "node": "hand_r",
+    "translation": [
+      0,
+      0.081245,
+      -0.035426
+    ],
+    "rotation_xyzw": [
+      -0.45120211,
+      -0.5444416,
+      0.45120211,
+      0.5444416
+    ],
+    "scale": 0.14,
+    "muzzle": [
+      1.479757,
+      0.56304,
+      0
+    ]
+  }
+}

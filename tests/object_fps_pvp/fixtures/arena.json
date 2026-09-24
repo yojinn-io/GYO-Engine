@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "synthetic_contract_arena",
+  "width": 12,
+  "depth": 12,
+  "cell_size": 1,
+  "movement_speed": 3,
+  "body_height": 1.8,
+  "radius": 0.25,
+  "eye_height": 1.6,
+  "walls": [
+    {"min": [-1, 0, -1], "max": [0, 3, 13]},
+    {"min": [12, 0, -1], "max": [13, 3, 13]},
+    {"min": [0, 0, -1], "max": [12, 3, 0]},
+    {"min": [0, 0, 12], "max": [12, 3, 13]}
+  ],
+  "spawns": [
+    {"position": [2, 0, 2], "yaw": 0},
+    {"position": [9, 0, 2], "yaw": 3.14159265}
+  ]
+}

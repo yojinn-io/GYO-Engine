@@ -1,3 +1,4 @@
 name,description,version,enabled,windows,linux,macos
 object_fps,fps mvp,v1,0,1,1,1
-object_fps_v2,fps mvp,v2,1,1,1,1
+object_fps_v2,fps mvp,v2,0,1,1,1
+object_fps_pvp,fps mvp,v3,1,1,1,1

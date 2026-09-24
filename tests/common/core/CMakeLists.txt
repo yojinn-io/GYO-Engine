@@ -11,6 +11,7 @@ add_executable(engine_tests
     asset/AssetManagerTests.cpp
     asset/NativeFileAssetSourceTests.cpp
     runtime/RuntimeLoopTests.cpp
+    runtime/FixedTickRuntimeTests.cpp
     runtime/RuntimePortTests.cpp
     io/BufferedStreamTests.cpp
     io/StreamReaderTests.cpp

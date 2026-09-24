@@ -24,6 +24,7 @@ GYO-Engine/
     text/                     neutral raster contract and font adapter
     ui/                       JSON UI, layout, actions, render bridge
   tools/<tool>/              design support; independent or game-specific local tools
+  services/gyo_gateway/      reusable Go HTTP, session and transport mechanisms
   tests/
     common/                   engine, build-contract and common integration tests
     <project>/                project-specific unit and component tests
@@ -68,6 +69,71 @@ Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters r
 The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No new umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization.
 
 `RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. `IRuntimePort<Snapshot, Command, Event>` is a typed observation/intent boundary; each game retains ownership of its payloads and legality rules. Borrowed observations remain valid only until the runtime advances.
+
+### Fixed simulation time and product hosts
+
+`Engine::Runtime::FixedTickRuntime` owns the conversion of caller-supplied elapsed
+time into fixed simulation steps. `TickSettings` selects the rate and bounded
+catch-up; `TickContext` carries the simulated tick ID and constant delta. The
+runtime owns its accumulator and tick ID. `Advance(elapsed, callback)` returns
+the number of executed steps, discarded excess time and time until the next
+step. IDs start at 1 and count executed steps only. Excess whole-step debt is
+discarded after the catch-up limit; fractional time is retained.
+
+The fixed-step core does not read a clock, sleep, own threads, expose `Run()`,
+or depend on network or gameplay. The product host owns process lifetime,
+monotonic clock, waiting, cancellation and the decision to reset a match.
+
+Object_FPS_PVP uses its `MatchRuntimeHost::Run()` to call this engine mechanism
+at 60 Hz. The host processes ordered join/leave controls, consumes each player's
+latest input, updates `PvpMatch` and captures a full state every third authority
+tick. Publication is coalesced after one `Advance` call. IPC exchanges owning
+values through bounded handoff; it does not invoke world updates or advance the
+simulation clock. Local tests drive the same host via `Advance` without IPC.
+
+The PvP client has an independent 60 Hz input-sampling clock. Client tick IDs
+and authority tick IDs are **not synchronized clocks**; no direct subtraction,
+execution-time mapping or latency estimate is valid. Presentation continues to
+use `RuntimeLoop` frames. Object_FPS v1 and v2 remain on their existing variable
+frame gameplay paths in this change; they have not been migrated to fixed
+simulation ticks.
+
+### Network infrastructure and Object_FPS_PVP ownership
+
+```text
+PvP client → client protocol → PvP Go composition / ObjectFPS adapter
+                                        ↓ runtime protocol over local TCP
+                                  PvP C++ IPC host
+                                        ↓ owning commands / latest input
+                                  MatchRuntimeHost → PvpMatch
+                                        ↓              ↓
+                              GYO FixedTickRuntime   GYO Collision
+```
+
+`services/gyo_gateway` is a Go module providing HTTP server configuration,
+session credentials/endpoint checks, framed TCP connections with deadlines and
+error returns, and transport framing/ordering mechanisms.
+It does not import product code or define Room, Match, player or FPS rules.
+The PvP Go module owns the executable, one-room policy, capacity, HTTP routes,
+Session → PlayerId mapping, runtime link lifecycle and adapter. The engine does
+not depend on this service module, Go, sockets or either wire protocol.
+
+`match_domain` contains the product's pure movement/collision policy and owning
+world values. It does not reuse the client-oriented `PlayerController`, camera,
+mouse settings or Campaign. Map-to-geometry conversion remains separate from
+the numeric collision functions. The client and runtime protocols are distinct,
+versioned Object_FPS_PVP contracts; neither is a universal GYO protocol.
+
+The new service top-level directory, fixed-step engine API, product host/domain
+split and native `match` executable role are explicit architecture deltas. The
+implementation pressure is a world that must run without a window or network,
+plus a gateway that must translate inputs without owning gameplay. Putting a
+timer in IPC, reusing the entire client controller or placing Room in common
+transport would violate these boundaries. Network dependencies are selected by
+the product; ordinary engine-only builds do not require them. Gateway output is
+staged separately from native product archives. See the
+[PvP network design](object_fps_pvp/network-architecture.zh-Hant.md) for contracts,
+startup and validation procedures.
 
 ### Model, collision and rendering boundaries
 
@@ -151,6 +217,12 @@ Buffered IO exposes one logical read position. Relative seeks account for unread
 ## Tests and release products
 
 Unit and engine capability tests live under root `tests/`. `tests/common` uses engine-owned fixtures, and `tests/<game>` contains game tests. Separate acceptance executables and their checks belong to `build/acceptance/<game>`. Product executables do not receive injected test source files or diagnostics compile definitions. UI editor tests live in `tests/ui_editor` and are registered only when that product is selected and testing is enabled.
+
+These central source directories apply to C++ tests and cross-process acceptance.
+Go unit tests follow Go's package-local `*_test.go` convention in
+`services/gyo_gateway` and the PvP Go packages. They retain the enclosing module's
+ownership, do not join production binaries and run through each module's
+`go test ./...`; this exception does not move acceptance orchestration into apps.
 
 Release integration is engine-centered. Each supported platform always produces a toolchain archive containing the release tools selected by `tools.csv`, currently the UI editor's GUI variant. Every release tool must have executable acceptance for quick and release profiles on its selected platforms. Local tools and app-dependent previews cannot be release tools. CSV-selected games produce additional isolated game archives. An empty game registry, or no app source directory, still permits an engine/toolchain release; an empty release-tool selection fails. One failed selected game, tool or required platform blocks the release as a whole.
 
