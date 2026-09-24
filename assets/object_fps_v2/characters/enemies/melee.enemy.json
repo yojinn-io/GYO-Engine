@@ -4,18 +4,28 @@
   "hurt_regions": [
     {
       "id": "head",
+      "damage_multiplier": 2.0,
       "start": {
         "node": "Head",
-        "offset": [0.0, 0.121383, 0.005830]
+        "offset": [
+          0,
+          0.094935,
+          -0.019193
+        ]
       },
       "end": {
         "node": "Head",
-        "offset": [0.0, 0.121383, 0.005830]
+        "offset": [
+          0,
+          0.094935,
+          -0.019193
+        ]
       },
       "radius": 0.16
     },
     {
       "id": "torso",
+      "damage_multiplier": 1.0,
       "start": {
         "node": "spine_01"
       },
@@ -26,6 +36,7 @@
     },
     {
       "id": "pelvis",
+      "damage_multiplier": 1.0,
       "start": {
         "node": "pelvis"
       },
@@ -36,6 +47,7 @@
     },
     {
       "id": "upper_arm_l",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "upperarm_l"
       },
@@ -46,6 +58,7 @@
     },
     {
       "id": "forearm_l",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "lowerarm_l"
       },
@@ -56,6 +69,7 @@
     },
     {
       "id": "thigh_l",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "thigh_l"
       },
@@ -66,6 +80,7 @@
     },
     {
       "id": "calf_l",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "calf_l"
       },
@@ -76,6 +91,7 @@
     },
     {
       "id": "upper_arm_r",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "upperarm_r"
       },
@@ -86,6 +102,7 @@
     },
     {
       "id": "forearm_r",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "lowerarm_r"
       },
@@ -96,6 +113,7 @@
     },
     {
       "id": "thigh_r",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "thigh_r"
       },
@@ -106,6 +124,7 @@
     },
     {
       "id": "calf_r",
+      "damage_multiplier": 0.75,
       "start": {
         "node": "calf_r"
       },

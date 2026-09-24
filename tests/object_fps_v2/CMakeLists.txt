@@ -5,7 +5,8 @@ add_custom_target(${test_content})
 gyo_stage_app_content(${test_content} "${GYO_CURRENT_APP}" "${test_stage}")
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp AssetIntegrationTests.cpp PresentationTests.cpp
-    EnemySystemTests.cpp App/DebugUiTests.cpp App/DebugRuntimeTests.cpp)
+    EnemySystemTests.cpp EnemyAttachmentTests.cpp CharacterAccessoryTests.cpp RegionShotTests.cpp
+    App/DebugUiTests.cpp App/DebugRuntimeTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_link_libraries(${tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL GYO::InputBackendSDL GYO::UiRenderer doctest::doctest)

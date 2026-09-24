@@ -147,13 +147,13 @@ Overlay / HUD → Present
 
 `MeshLayer::WorldOverlay` は世界座標の透視診断レイヤーで、深度テストも書き込みも行いません。
 `MakeWireBox`／`MakeWireCapsule` は細い三角形 mesh を生成し、既存 shader と triangle-list を使います。
-入力は形状の数値だけで、Render は Collision に依存しません。F3 と色の意味は v2 App が所有します。
+入力は形状の数値だけで、Render は Collision に依存しません。表示の制御と色の意味は呼び出し側が所有します。
 世界 overlay の要求がなければ、既存 pass の流れは変わりません。
 
 `GYO::ModelRenderer` は `Model + Render` に依存する独立 library です。
-v2 の武器と敵が確定済み Pose を渡し、別のアニメーション時計は進めません。
+呼び出し側が確定済み Pose を渡し、別のアニメーション時計は進めません。
 モデルと材質は共有でき、動的頂点と mesh handle は実例ごとに管理します。
-v1 の既存表示経路に移行を要求しません。[v2 敵の契約](object_fps_v2/enemies.zh-Hant.md)も参照してください。
+製品がこれらの機能をどう利用するかは、各製品のアーキテクチャとデータ契約の文書に記録します。
 
 最小化中の `AcquireFrame` は frame なしを返せます。取得できた token は `SubmitFrame` または `AbandonFrame` で一度だけ消費します。送信時の CPU データは呼び出し中に消費し、GPU がまだ使うリソースの保護はバックエンドが担当します。画面サイズ変更時は render target を再生成し、終了時は Renderer の device リソースを解放してから device を破棄します。
 

@@ -11,6 +11,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fps {
@@ -148,9 +149,11 @@ public:
     // visible, so a wave spawner cannot reuse an occupied slot.
     [[nodiscard]] std::vector<CircleObstacle> CollectOccupiedColliders() const;
 
-    // Applies max(1, raw damage - definition defense). Unknown/dead enemies and
-    // invalid raw damage return an unapplied result.
-    [[nodiscard]] EnemyDamageResult ApplyDamage(EnemyId id, float rawDamage);
+    // Applies max(1, raw damage * the rig's region multiplier - definition defense).
+    // Empty region uses multiplier 1 for direct damage. Unknown regions/enemies,
+    // dead enemies and invalid raw damage return an unapplied result.
+    [[nodiscard]] EnemyDamageResult ApplyDamage(
+        EnemyId id, float rawDamage, std::string_view region = {});
     [[nodiscard]] bool Kill(EnemyId id);
 
     [[nodiscard]] const EnemySettings& GetSettings() const noexcept { return settings_; }

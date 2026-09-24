@@ -844,7 +844,7 @@ struct GameSession::Impl final {
                 }
             }
             const EnemyDamageResult damage = stage->enemies.ApplyDamage(
-                resolvedHit->targetId, shot.damage);
+                resolvedHit->targetId, shot.damage, resolvedHit->region);
             if (damage.killed) {
                 const LevelDefinition& definition =
                     content->Stages()[stage->contentIndex].definition;

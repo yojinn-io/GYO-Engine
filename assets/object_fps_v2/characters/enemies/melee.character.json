@@ -1,23 +1,51 @@
 {
   "version": 1,
-  "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
-  "animation_set_asset_id": "object_fps_v2.enemy.melee.animations",
+  "model_asset_id": "object_fps_v2.model.character.superhero_male",
   "material_overrides": {
-    "M_Main": {
+    "MI_Eyes": {
+      "texture_asset_id": "object_fps_v2.texture.character.male.eyes",
       "base_color_linear": [
-        0.7,
-        0.055,
-        0.03,
+        1,
+        1,
+        1,
         1
-      ]
+      ],
+      "sampler": "linear_clamp"
     },
-    "M_Joints": {
+    "MI_Hair_1": {
+      "texture_asset_id": "object_fps_v2.texture.character.male.hair",
       "base_color_linear": [
-        0.1,
-        0.11,
-        0.13,
+        1,
+        1,
+        1,
         1
-      ]
+      ],
+      "sampler": "linear_clamp"
+    },
+    "MI_Superhero_Male": {
+      "texture_asset_id": "object_fps_v2.texture.character.male.body",
+      "base_color_linear": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "sampler": "linear_clamp"
     }
+  },
+  "accessories": [
+    {
+      "character_asset_id": "object_fps_v2.hair.simple_parted",
+      "node": "Head",
+      "source_node": "Head"
+    }
+  ],
+  "animation_set_asset_id": "object_fps_v2.enemy.melee.animations",
+  "animation_binding": {
+    "mode": "compatible_reference_pose",
+    "translation_scale": 1.0,
+    "ignored_source_nodes": [
+      "Mannequin"
+    ]
   }
 }

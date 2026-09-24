@@ -69,9 +69,9 @@ void InspectEnemyRig(const Engine::Model::ModelAsset& model,std::ostream& output
         for(const auto& vertex:vertices) {minimum=std::min(minimum,vertex.position.y);maximum=std::max(maximum,vertex.position.y);}
     }
     output<<"reference_height="<<maximum-minimum<<" reference_feet="<<minimum<<" scale_to_1.6="<<1.6F/(maximum-minimum)<<"\n";
-    for(const char* name:{"Armature|Punch_Jab","Armature|Spell_Simple_Shoot","Armature|Death01"}) {
+    for(const char* name:{"Armature|Punch_Jab","Armature|Pistol_Shoot","Armature|Death01"}) {
         const auto clip=model.FindClip(name);
-        if(!clip) throw std::runtime_error(std::string("missing clip ")+name);
+        if(!clip) continue;
         const double duration=model.clips[*clip].durationSeconds;
         output<<"clip="<<name<<" duration="<<duration<<"\n";
         if(std::string_view(name)=="Armature|Death01") continue;
@@ -90,7 +90,13 @@ void InspectEnemyRig(const Engine::Model::ModelAsset& model,std::ostream& output
                 auto& e=extrema[h];
                 if(p.z<e.min) {e.min=p.z;e.minTime=time;}
                 if(p.z>e.max) {e.max=p.z;e.maxTime=time;}
-                if(frame%8==0) output<<"sample="<<time<<" hand="<<hands[h]<<" position="<<p.x<<","<<p.y<<","<<p.z<<"\n";
+                if(frame%8==0) {
+                    output<<"sample="<<time<<" hand="<<hands[h]<<" position="<<p.x<<","<<p.y<<","<<p.z;
+                    const auto& m=pose.globalTransforms[*node].values;
+                    output<<" x_axis="<<m[0]<<","<<m[1]<<","<<m[2]
+                        <<" y_axis="<<m[4]<<","<<m[5]<<","<<m[6]
+                        <<" z_axis="<<m[8]<<","<<m[9]<<","<<m[10]<<"\n";
+                }
             }
         }
         for(std::size_t h=0;h<hands.size();++h) {

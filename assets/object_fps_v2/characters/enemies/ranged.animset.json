@@ -3,7 +3,7 @@
   "clips": {
     "idle": {
       "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
-      "clip": "Armature|Idle_Loop"
+      "clip": "Armature|Pistol_Idle_Loop"
     },
     "move": {
       "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
@@ -11,7 +11,7 @@
     },
     "attack": {
       "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",
-      "clip": "Armature|Spell_Simple_Shoot"
+      "clip": "Armature|Pistol_Shoot"
     },
     "dead": {
       "model_asset_id": "object_fps_v2.model.animation.ual1_mannequin",

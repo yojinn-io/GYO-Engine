@@ -62,7 +62,7 @@ bool ValidateAnimationSetBinding(
         const auto location = "clip '" + semantic + "' in model '" + reference.modelAssetId.debugName + "'";
         if (reference.modelAssetId != modelAssetId) {
             error = location + " cannot bind to model '" + modelAssetId.debugName +
-                    "': cross-source animation binding is unsupported (no retargeting)";
+                    "': cross-source clips require explicit compatible_reference_pose assembly";
             return false;
         }
         if (reference.model != model || reference.model.owner_before(model) ||

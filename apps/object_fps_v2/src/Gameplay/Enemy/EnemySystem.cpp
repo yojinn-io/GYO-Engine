@@ -10,6 +10,7 @@
 #include <queue>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -513,10 +514,21 @@ bool EnemySystem::ValidateDefinition(
         error = "Enemy rig requires hurt regions and a valid attack attachment.";
         return false;
     }
+    std::unordered_set<std::string_view> regionIds;
     for (const auto& region : rig.hurtRegions) {
         if (region.id.empty() || !validPoint(region.start) || !validPoint(region.end) ||
             !std::isfinite(region.radius) || region.radius <= 0) {
-            error = "Enemy hurt regions require a name, valid bone endpoints and positive radius.";
+            error = "Enemy '" + definition.id + "' hurt region '" + region.id +
+                "' requires a name, valid bone endpoints and positive radius.";
+            return false;
+        }
+        if (!regionIds.insert(region.id).second) {
+            error = "Enemy '" + definition.id + "' has duplicate hurt region '" + region.id + "'.";
+            return false;
+        }
+        if (!std::isfinite(region.damageMultiplier) || region.damageMultiplier <= 0) {
+            error = "Enemy '" + definition.id + "' hurt region '" + region.id +
+                "' damage_multiplier must be finite and positive.";
             return false;
         }
     }
@@ -1073,7 +1085,8 @@ void EnemySystem::SetState(RuntimeEnemy& enemy, const EnemyState state) {
     const auto& rig = *enemy.definition.rig;
     const auto mode = state == EnemyState::Idle || state == EnemyState::Moving
         ? Engine::Model::PlaybackMode::Loop : Engine::Model::PlaybackMode::Clamp;
-    const auto result = enemy.animation.Play(rig.clips[static_cast<std::size_t>(state)], mode, rig.transitionSeconds);
+    const auto transition = state == EnemyState::Attacking ? rig.attackTransitionSeconds : rig.transitionSeconds;
+    const auto result = enemy.animation.Play(rig.clips[static_cast<std::size_t>(state)], mode, transition);
     if (!result) throw std::runtime_error("Enemy animation transition: " + result.error());
     enemy.state = state;
     enemy.stateElapsedSeconds = 0;
@@ -1107,7 +1120,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     if (enemy.kind == EnemyKind::Ranged) {
         if (!enemy.attackEventEmitted && previous <= rig.releaseSeconds && current >= rig.releaseSeconds) {
             const auto origin = pointAt(rig.releaseSeconds);
-            // A hand on the far side of a wall must not spawn a projectile through it.
+            // A muzzle on the far side of a wall must not spawn a projectile through it.
             const Engine::Collision::Float3 from{enemy.position.x, origin.y, enemy.position.z};
             const Engine::Collision::Float3 direction{origin.x-from.x, 0, origin.z-from.z};
             const float length = std::hypot(direction.x, direction.z);
@@ -1210,7 +1223,8 @@ std::size_t EnemySystem::GetAliveCount() const noexcept {
 
 EnemyDamageResult EnemySystem::ApplyDamage(
     const EnemyId id,
-    const float rawDamage) {
+    const float rawDamage,
+    const std::string_view region) {
     EnemyDamageResult result{};
     result.rawDamage = rawDamage;
     if (!std::isfinite(rawDamage) || rawDamage <= 0.0f) {
@@ -1223,10 +1237,24 @@ EnemyDamageResult EnemySystem::ApplyDamage(
             continue;
         }
 
-        const float resolvedDamage =
-            (std::max)(1.0f, rawDamage - enemy.definition.defense);
+        float multiplier = 1.0F;
+        if (!region.empty()) {
+            const auto& regions = enemy.definition.rig->hurtRegions;
+            const auto found = std::find_if(regions.begin(), regions.end(),
+                [region](const EnemyHurtRegion& candidate) { return candidate.id == region; });
+            if (found == regions.end()) {
+                return result;
+            }
+            multiplier = found->damageMultiplier;
+        }
+
+        // Two finite floats can overflow when multiplied as floats. Resolve in
+        // double and clamp to remaining health before converting back.
+        const double resolvedDamage = (std::max)(1.0,
+            static_cast<double>(rawDamage) * multiplier - enemy.definition.defense);
         const float healthBefore = enemy.health;
-        enemy.health = (std::max)(0.0f, enemy.health - resolvedDamage);
+        enemy.health = static_cast<float>((std::max)(0.0,
+            static_cast<double>(healthBefore) - resolvedDamage));
         enemy.hitFlashRemainingSeconds = kEnemyHitFlashSeconds;
         if (enemy.health <= 0.0f) {
             MarkDead(enemy);

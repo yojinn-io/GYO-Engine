@@ -147,13 +147,13 @@ Overlay / HUD → Present
 
 `MeshLayer::WorldOverlay` 是世界座標的透視除錯層，不測試或寫入深度。
 `MakeWireBox`／`MakeWireCapsule` 以細三角網格沿用現有 shader 與 triangle-list，
-只接受幾何數值，Render 不依賴 Collision。v2 的 F3 開關與顏色語義由 App 擁有。
+只接受幾何數值，Render 不依賴 Collision。顯示控制與顏色語義由呼叫端擁有。
 未提交世界 overlay 時，原有 pass 流程不變。
 
 `GYO::ModelRenderer` 是依賴 `Model + Render` 的獨立 library。
-v2 武器與敵人提供已決定的 Pose，它不取樣另一個動畫時鐘；
+呼叫端提供已決定的 Pose，它不取樣另一個動畫時鐘；
 模型與材質可共用，動態頂點與 mesh handle 由各實例持有。
-v1 的既有呈現路徑不強制遷移。詳見 [v2 敵人契約](object_fps_v2/enemies.zh-Hant.md)。
+產品如何使用這些能力，記錄於各產品自己的架構與資料契約文件。
 
 `AcquireFrame` 在視窗最小化時可以沒有 frame；成功取得的 token 必須經 `SubmitFrame` 或 `AbandonFrame` 恰好消耗一次。提交使用的 CPU 資料在呼叫期間被消費；後端負責保護尚在 GPU 執行的資源。畫面大小改變時重建對應 render target，清理時先解除 Renderer 的 device 資源，再銷毀 device。
 

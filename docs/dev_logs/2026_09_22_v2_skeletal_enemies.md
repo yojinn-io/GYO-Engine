@@ -1,8 +1,8 @@
 # 2026-09-22：v2 骨架敵人與碰撞可視化
 
 本次實作範圍是 Object_FPS v2 的 3D 敵人、共用模型呈現、角色膠囊查詢與 F3 除錯顯示。
-操作與資料契約見 [v2 敵人文件](../object_fps_v2/enemies.zh-Hant.md)，
-責任分配見 [整體架構](../architecture.md)與[渲染架構](../rendering_architecture.zh-Hant.md)。
+遊戲責任分配、操作與資料契約見 [v2 敵人文件](../object_fps_v2/enemies.zh-Hant.md)，
+Engine 共用邊界見 [整體架構](../architecture.md)與[渲染架構](../rendering_architecture.zh-Hant.md)。
 
 ## Architecture Delta
 

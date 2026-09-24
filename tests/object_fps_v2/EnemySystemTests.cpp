@@ -8,8 +8,11 @@
 #include "RetroFPS/World/GridMapLoader.hpp"
 
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <ostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 using namespace fps;
@@ -66,6 +69,18 @@ EnemyDefinition Definition(EnemyKind kind = EnemyKind::Melee) {
             rig};
 }
 
+EnemyDefinition DamageDefinition(EnemyKind kind = EnemyKind::Melee) {
+    auto definition = Definition(kind);
+    definition.maxHealth = 100;
+    definition.defense = 5;
+    auto rig = std::make_shared<EnemyRig>(*definition.rig);
+    rig->hurtRegions = {{"head", {0, {0, 1.4f, 0}}, {0, {0, 1.5f, 0}}, 0.12f, 2.0f},
+                        {"torso", {0, {0, 0.3f, 0}}, {0, {0, 1.3f, 0}}, 0.15f, 1.0f},
+                        {"arm", {1, {}}, {1, {}}, 0.08f, 0.75f}};
+    definition.rig = rig;
+    return definition;
+}
+
 void Initialize(EnemySystem &enemies, const GridMap &map) {
     std::string error;
     REQUIRE_MESSAGE(enemies.Initialize(map, map.GetSpawnPosition(), 0.25f, 1, {}, error), error);
@@ -102,10 +117,12 @@ TEST_CASE("v2 melee hand window sweeps crossed poses once and death cancels queu
     // A second instance demonstrates death between simulation and consumption.
     enemies.Reset();
     Initialize(enemies, map);
-    const auto second = Spawn(enemies, map, {6.5f, 4.95f}, Definition());
+    auto lethalDefinition = DamageDefinition();
+    lethalDefinition.maxHealth = 10;
+    const auto second = Spawn(enemies, map, {6.5f, 4.95f}, lethalDefinition);
     enemies.Update(map, PlayerTarget(map), 0.4f); // crosses the entire active window
     REQUIRE(enemies.GetAttackEvents().size() == 1);
-    const auto damage = enemies.ApplyDamage(second, 100);
+    const auto damage = enemies.ApplyDamage(second, 8, "head");
     REQUIRE(damage.killed);
     CHECK(enemies.GetAttackEvents().empty());
     CHECK(enemies.CollectAliveBodies().empty());
@@ -297,6 +314,172 @@ TEST_CASE("v2 invalid rig data fails at spawn with an actionable diagnostic") {
     CHECK(enemies.GetSnapshots().empty());
 }
 
+TEST_CASE("v2 region damage multiplies weapon damage before defense and preserves direct damage") {
+    const auto map = Room();
+    struct DamageCase {
+        std::string_view region;
+        float expected;
+    };
+    for (const auto &test : {DamageCase{"head", 45}, DamageCase{"torso", 20},
+                             DamageCase{"arm", 13.75f}, DamageCase{"", 20}}) {
+        CAPTURE(test.region);
+        EnemySystem enemies;
+        Initialize(enemies, map);
+        const auto id = Spawn(enemies, map, {3.5f, 3.5f}, DamageDefinition());
+        const auto result = enemies.ApplyDamage(id, 25, test.region);
+        REQUIRE(result.applied);
+        CHECK_FALSE(result.killed);
+        CHECK(result.rawDamage == 25);
+        CHECK(result.appliedDamage == doctest::Approx(test.expected));
+        CHECK(result.remainingHealth == doctest::Approx(100 - test.expected));
+        CHECK(enemies.GetSnapshots()[0].health == doctest::Approx(result.remainingHealth));
+        CHECK(enemies.GetSnapshots()[0].hitFlashRemainingSeconds == kEnemyHitFlashSeconds);
+    }
+
+    // Existing synthetic definitions omit the appended multiplier field.
+    EnemySystem enemies;
+    Initialize(enemies, map);
+    auto legacy = Definition();
+    legacy.maxHealth = 100;
+    legacy.defense = 5;
+    REQUIRE(legacy.rig->hurtRegions[1].damageMultiplier == 1);
+    const auto id = Spawn(enemies, map, {3.5f, 3.5f}, legacy);
+    CHECK(enemies.ApplyDamage(id, 25, "hand").appliedDamage == doctest::Approx(20));
+    CHECK(enemies.ApplyDamage(id, 25).appliedDamage == doctest::Approx(20));
+}
+
+TEST_CASE("v2 region damage floors after defense and reports only remaining health on overkill") {
+    const auto map = Room();
+    EnemySystem enemies;
+    Initialize(enemies, map);
+    const auto id = Spawn(enemies, map, {3.5f, 3.5f}, DamageDefinition());
+    const auto minimum = enemies.ApplyDamage(id, 1, "arm");
+    CHECK(minimum.applied);
+    CHECK(minimum.appliedDamage == 1);
+    CHECK(minimum.remainingHealth == 99);
+    const auto overkill = enemies.ApplyDamage(id, 1000, "head");
+    CHECK(overkill.applied);
+    CHECK(overkill.killed);
+    CHECK(overkill.rawDamage == 1000);
+    CHECK(overkill.appliedDamage == 99);
+    CHECK(overkill.remainingHealth == 0);
+    CHECK(enemies.GetSnapshots()[0].state == EnemyState::Dead);
+    CHECK(enemies.GetSnapshots()[0].hurtboxes.empty());
+    const auto dead = enemies.ApplyDamage(id, 25, "head");
+    CHECK_FALSE(dead.applied);
+    CHECK_FALSE(dead.killed);
+    CHECK(dead.rawDamage == 25);
+    CHECK(dead.appliedDamage == 0);
+}
+
+TEST_CASE("v2 finite region damage products are safely clamped to health") {
+    const auto map = Room();
+    for (const auto multiplier : {1.5f, (std::numeric_limits<float>::max)()}) {
+        CAPTURE(multiplier);
+        EnemySystem enemies;
+        Initialize(enemies, map);
+        auto definition = DamageDefinition();
+        definition.maxHealth = (std::numeric_limits<float>::max)();
+        definition.defense = (std::numeric_limits<float>::max)();
+        auto rig = std::make_shared<EnemyRig>(*definition.rig);
+        rig->hurtRegions[0].damageMultiplier = multiplier;
+        definition.rig = rig;
+        const auto id = Spawn(enemies, map, {3.5f, 3.5f}, definition);
+        const auto result = enemies.ApplyDamage(id, (std::numeric_limits<float>::max)(), "head");
+        REQUIRE(result.applied);
+        CHECK(std::isfinite(result.rawDamage));
+        CHECK(std::isfinite(result.appliedDamage));
+        if (multiplier == 1.5f) {
+            // The product exceeds float range, but defense brings it back into range.
+            CHECK_FALSE(result.killed);
+            CHECK(result.appliedDamage / definition.maxHealth == doctest::Approx(0.5f));
+            CHECK(result.remainingHealth / definition.maxHealth == doctest::Approx(0.5f));
+        } else {
+            CHECK(result.killed);
+            CHECK(result.appliedDamage == definition.maxHealth);
+            CHECK(result.remainingHealth == 0);
+        }
+    }
+}
+
+TEST_CASE("v2 rejected damage does not change health pose flash or pending attacks") {
+    const auto map = Room();
+    EnemySystem enemies;
+    Initialize(enemies, map);
+    const auto id = Spawn(enemies, map, {6.5f, 2.0f}, DamageDefinition(EnemyKind::Ranged));
+    enemies.Update(map, PlayerTarget(map), 0.4f);
+    REQUIRE(enemies.GetAttackEvents().size() == 1);
+    const auto before = enemies.GetSnapshots()[0];
+    for (const auto raw : {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
+                           -std::numeric_limits<float>::infinity(),
+                           std::numeric_limits<float>::quiet_NaN()}) {
+        CAPTURE(raw);
+        const auto result = enemies.ApplyDamage(id, raw, "head");
+        CHECK_FALSE(result.applied);
+        CHECK_FALSE(result.killed);
+        CHECK(result.appliedDamage == 0);
+    }
+    CHECK_FALSE(enemies.ApplyDamage(id, 25, "missing").applied);
+    CHECK_FALSE(enemies.ApplyDamage(id + 1, 25, "head").applied);
+    const auto &after = enemies.GetSnapshots()[0];
+    CHECK(after.health == before.health);
+    CHECK(after.hitFlashRemainingSeconds == before.hitFlashRemainingSeconds);
+    CHECK(after.stateElapsedSeconds == before.stateElapsedSeconds);
+    CHECK(after.pose.globalTransforms[1].values == before.pose.globalTransforms[1].values);
+    CHECK(enemies.GetAttackEvents().size() == 1);
+}
+
+TEST_CASE("v2 lethal region damage cancels ranged releases before and after the event") {
+    const auto map = Room();
+    for (const auto time : {0.05f, 0.4f}) {
+        CAPTURE(time);
+        EnemySystem enemies;
+        Initialize(enemies, map);
+        const auto id = Spawn(enemies, map, {6.5f, 2.0f}, DamageDefinition(EnemyKind::Ranged));
+        enemies.Update(map, PlayerTarget(map), time);
+        REQUIRE(enemies.GetSnapshots()[0].state == EnemyState::Attacking);
+        CHECK(enemies.GetAttackEvents().size() == (time < 0.2f ? 0 : 1));
+        REQUIRE(enemies.ApplyDamage(id, 60, "head").killed);
+        CHECK(enemies.GetAttackEvents().empty());
+        CHECK(enemies.GetSnapshots()[0].hurtboxes.empty());
+        enemies.Update(map, PlayerTarget(map), 0.4f);
+        CHECK(enemies.GetAttackEvents().empty());
+    }
+}
+
+TEST_CASE("v2 invalid region multipliers and duplicate identifiers report enemy and region") {
+    const auto map = Room();
+    EnemySystem enemies;
+    Initialize(enemies, map);
+    for (const auto multiplier : {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
+                                  -std::numeric_limits<float>::infinity(),
+                                  std::numeric_limits<float>::quiet_NaN()}) {
+        CAPTURE(multiplier);
+        auto definition = DamageDefinition();
+        auto rig = std::make_shared<EnemyRig>(*definition.rig);
+        rig->hurtRegions[0].damageMultiplier = multiplier;
+        definition.rig = rig;
+        std::string error;
+        const auto result =
+            enemies.Spawn(map, map.GetSpawnPosition(), 0.25f, {3.5f, 3.5f}, definition, error);
+        CHECK(result.status == EnemySpawnStatus::Invalid);
+        CHECK(error.find(definition.id) != std::string::npos);
+        CHECK(error.find("head") != std::string::npos);
+        CHECK(enemies.GetSnapshots().empty());
+    }
+    auto duplicate = DamageDefinition();
+    auto rig = std::make_shared<EnemyRig>(*duplicate.rig);
+    rig->hurtRegions.push_back(rig->hurtRegions.front());
+    duplicate.rig = rig;
+    std::string error;
+    const auto result =
+        enemies.Spawn(map, map.GetSpawnPosition(), 0.25f, {3.5f, 3.5f}, duplicate, error);
+    CHECK(result.status == EnemySpawnStatus::Invalid);
+    CHECK(error.find(duplicate.id) != std::string::npos);
+    CHECK(error.find("head") != std::string::npos);
+    CHECK(enemies.GetSnapshots().empty());
+}
+
 TEST_CASE("v2 character adapter sweeps and slides real bodies past rounded corners") {
     const std::vector<Engine::Collision::Aabb> walls{{{0, 0, 0}, {1, 3, 1}}};
     const auto moved = MoveCharacterBody({{-1, 0, 0.25f}, 1.8f, 0.25f}, {2, 0, 0.5f}, walls, {});
@@ -369,6 +552,29 @@ TEST_CASE("v2 combat chooses a single nearest bone region including limbs outsid
     const auto wall = CombatCollision::Raycast(map, {}, {5, 1, 0.5f}, {0, 0, 1}, 6, overlap);
     REQUIRE(wall);
     CHECK(wall->kind == CombatHitKind::Wall);
+}
+
+TEST_CASE("v2 overlapping hurt regions apply only the nearest region damage once") {
+    const auto map = Room();
+    EnemySystem enemies;
+    Initialize(enemies, map);
+    auto definition = DamageDefinition();
+    auto rig = std::make_shared<EnemyRig>(*definition.rig);
+    rig->hurtRegions[0].start = rig->hurtRegions[1].start;
+    rig->hurtRegions[0].end = rig->hurtRegions[1].end;
+    rig->hurtRegions[0].radius = 0.25f;
+    definition.rig = rig;
+    const auto id = Spawn(enemies, map, {5, 4}, definition);
+    std::vector<CombatTarget> targets;
+    for (const auto &region : enemies.GetSnapshots()[0].hurtboxes)
+        targets.push_back({id, region.shape, region.region});
+    const auto hit = CombatCollision::Raycast(map, {}, {5, 1, 2}, {0, 0, 1}, 6, targets);
+    REQUIRE(hit);
+    REQUIRE(hit->kind == CombatHitKind::Target);
+    CHECK(hit->region == "head");
+    const auto damage = enemies.ApplyDamage(hit->targetId, 25, hit->region);
+    CHECK(damage.appliedDamage == 45);
+    CHECK(enemies.GetSnapshots()[0].health == 55);
 }
 
 TEST_CASE("v2 player lands on actors and resumes falling after walking off") {

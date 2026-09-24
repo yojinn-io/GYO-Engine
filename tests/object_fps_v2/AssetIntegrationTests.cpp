@@ -1,15 +1,84 @@
 #include <doctest/doctest.h>
 #include "TestAssets.hpp"
 #include "RetroFPS/App/EnemyPresentationDefinition.hpp"
+#include "RetroFPS/App/CharacterPresentationDefinition.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "RetroFPS/Collision/CombatCollision.hpp"
 #include "RetroFPS/World/GridMapLoader.hpp"
+#include "engine/asset/AssetCatalog.hpp"
+#include "engine/asset/AssetManager.hpp"
+#include "engine/asset/loaders/TextLoader.hpp"
+#include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
+#include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "model/backend/ufbx/UfbxModelLoader.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <ostream>
+#include <span>
+#include <string_view>
 
 using namespace fps;
 using namespace fps::tests;
+
+namespace {
+// Keep malformed JSON in an isolated pipeline. All other bytes come from the
+// deployed v2 catalog, and the shared production application is never mutated.
+class EnemyDefinitionAssetSource final : public Engine::Asset::Loading::IAssetSource {
+public:
+    std::string overridePath;
+    std::string overrideText;
+
+    Engine::Base::Result<Engine::Asset::Loading::ByteBuffer, Engine::Asset::AssetError>
+    ReadAll(std::string_view path) override {
+        if (path == overridePath) {
+            const auto bytes = std::as_bytes(std::span(overrideText.data(), overrideText.size()));
+            return Engine::Base::Result<Engine::Asset::Loading::ByteBuffer, Engine::Asset::AssetError>::Ok(
+                Engine::Asset::Loading::ByteBuffer(bytes.begin(), bytes.end()));
+        }
+        Engine::Asset::Loading::NativeFileAssetSource native;
+        return native.ReadAll(path);
+    }
+};
+
+struct EnemyDefinitionFixture final {
+    Engine::Asset::AssetCatalog catalog = ProductionApplication().Catalog();
+    Engine::Asset::Loading::LoaderRegistry registry;
+    EnemyDefinitionAssetSource source;
+    Engine::Asset::Loading::AssetPipeline pipeline{source, registry};
+    Engine::Asset::Core::AssetStorage storage;
+    Engine::Asset::Core::AssetLifetime lifetime;
+    Engine::Asset::Core::AssetCachePolicy policy{{}};
+    Engine::Asset::AssetManager assets{catalog, pipeline, storage, lifetime, policy};
+
+    EnemyDefinitionFixture() {
+        if (!registry.Register(std::make_unique<Engine::Asset::Loaders::TextLoader>()) ||
+            !registry.Register(std::make_unique<Engine::Asset::Loaders::SdlImage::SdlImageTextureLoader>()) ||
+            !registry.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>()))
+            throw std::runtime_error("enemy definition fixture loaders failed to register");
+    }
+
+    void Override(const EnemyDefinition& enemy, std::string regions) {
+        const auto* entry = catalog.Find(enemy.presentationAssetId);
+        if (!entry) throw std::runtime_error("enemy definition fixture asset is absent");
+        source.overridePath = entry->resolvedPath;
+        source.overrideText = R"({"version":1,"character_asset_id":"object_fps_v2.enemy.melee.character",
+            "hurt_regions":[)" + std::move(regions) + R"(],"attack":{"point":{"node":"hand_l"},
+            "radius":0.12,"begin_seconds":0.1,"end_seconds":0.2}})";
+        auto request = Engine::Asset::AssetRequest::WithTypeHint(Engine::Asset::AssetType::Text());
+        request.mode = Engine::Asset::AssetRequest::Mode::ForceReload;
+        const auto loaded = assets.Load(enemy.presentationAssetId, request);
+        if (!loaded) throw std::runtime_error(loaded.error().message);
+        assets.Release(loaded.value());
+    }
+};
+
+std::string HeadRegion(std::string_view multiplier = {}) {
+    std::string result = R"({"id":"head","start":{"node":"Head"},"end":{"node":"Head"},"radius":0.16)";
+    if (!multiplier.empty()) result += ",\"damage_multiplier\":" + std::string(multiplier);
+    return result + '}';
+}
+}
 
 TEST_CASE("v2 deployed campaign resolves two complete 1.6 metre skeletal enemies") {
     const auto& content=*ProductionApplication().Content();
@@ -20,11 +89,21 @@ TEST_CASE("v2 deployed campaign resolves two complete 1.6 metre skeletal enemies
         REQUIRE(enemy.rig);
         const auto& rig=*enemy.rig;
         CHECK(enemy.hitboxHeight==doctest::Approx(1.6F));
-        CHECK(rig.hurtRegions.size()>=11);
-        CHECK(rig.model->clips[rig.clips[0]].name=="Armature|Idle_Loop");
+        REQUIRE(rig.hurtRegions.size()==11);
+        for (const std::string_view id : {"head", "torso", "pelvis", "upper_arm_l", "forearm_l",
+                "thigh_l", "calf_l", "upper_arm_r", "forearm_r", "thigh_r", "calf_r"}) {
+            const auto region = std::find_if(rig.hurtRegions.begin(), rig.hurtRegions.end(),
+                [&](const auto& candidate) { return candidate.id == id; });
+            REQUIRE(region != rig.hurtRegions.end());
+            const float expected = id == "head" ? 2.0F : id == "torso" || id == "pelvis" ? 1.0F : 0.75F;
+            CHECK(region->damageMultiplier == doctest::Approx(expected));
+        }
+        CHECK(rig.model->clips[rig.clips[0]].name==(enemy.kind==EnemyKind::Melee?
+            "Armature|Idle_Loop":"Armature|Pistol_Idle_Loop"));
         CHECK(rig.model->clips[rig.clips[1]].name=="Armature|Jog_Fwd_Loop");
         CHECK(rig.model->clips[rig.clips[2]].name==(enemy.kind==EnemyKind::Melee?
-            "Armature|Punch_Jab":"Armature|Spell_Simple_Shoot"));
+            "Armature|Punch_Jab":"Armature|Pistol_Shoot"));
+        CHECK(rig.weapon.has_value()==(enemy.kind==EnemyKind::Ranged));
         CHECK(rig.model->clips[rig.clips[3]].name=="Armature|Death01");
         CHECK(rig.model->clips[rig.clips[2]].durationSeconds<=enemy.attackIntervalSeconds);
         CHECK(enemy.attackIntervalSeconds==doctest::Approx(enemy.kind==EnemyKind::Melee?0.9:1.25));
@@ -42,6 +121,47 @@ TEST_CASE("v2 deployed campaign resolves two complete 1.6 metre skeletal enemies
         CHECK(minimum==doctest::Approx(0).epsilon(1e-5));
         CHECK(maximum==doctest::Approx(1.6).epsilon(1e-5));
     }
+}
+
+TEST_CASE("enemy hurt region data defaults old multipliers and rejects ambiguous or invalid damage data") {
+    const auto& definitions = ProductionApplication().Content()->Data().enemies.GetDefinitions();
+    const auto found = std::find_if(definitions.begin(), definitions.end(),
+        [](const auto& enemy) { return enemy.kind == EnemyKind::Melee; });
+    REQUIRE(found != definitions.end());
+    const auto& enemy = *found;
+    EnemyDefinitionFixture fixture;
+    std::string error;
+
+    fixture.Override(enemy, HeadRegion());
+    const auto legacy = LoadEnemyRig(fixture.assets, enemy, error);
+    REQUIRE_MESSAGE(legacy, error);
+    REQUIRE(legacy->hurtRegions.size() == 1);
+    CHECK(legacy->hurtRegions.front().damageMultiplier == 1.0F);
+
+    fixture.Override(enemy, HeadRegion("2.5"));
+    const auto configured = LoadEnemyRig(fixture.assets, enemy, error);
+    REQUIRE_MESSAGE(configured, error);
+    CHECK(configured->hurtRegions.front().damageMultiplier == 2.5F);
+
+    // Both exponents are valid JSON/double input, but cannot be stored as a
+    // finite positive float. Exercise value validation, not JSON syntax errors.
+    for (const std::string_view invalid : {"0", "-1", "1e100", "1e-100", "\"2\"", "true", "null", "[]", "{}"}) {
+        CAPTURE(invalid);
+        fixture.Override(enemy, HeadRegion(invalid));
+        CHECK_FALSE(LoadEnemyRig(fixture.assets, enemy, error));
+        CHECK(error.find(enemy.id) != std::string::npos);
+        CHECK(error.find(enemy.presentationAssetId.debugName) != std::string::npos);
+        CHECK(error.find("head") != std::string::npos);
+        CHECK(error.find("damage_multiplier") != std::string::npos);
+    }
+
+    fixture.Override(enemy, HeadRegion("2") + ',' + HeadRegion("1"));
+    CHECK_FALSE(LoadEnemyRig(fixture.assets, enemy, error));
+    CHECK(error.find(enemy.id) != std::string::npos);
+    CHECK(error.find("head") != std::string::npos);
+    CHECK(error.find("duplicate") != std::string::npos);
+    // The previous successful rig is immutable and unaffected by later loads.
+    CHECK(configured->hurtRegions.front().damageMultiplier == 2.5F);
 }
 
 TEST_CASE("production skeletal hurtboxes track sampled bones with the rendered instance transform") {
@@ -69,6 +189,49 @@ TEST_CASE("production skeletal hurtboxes track sampled bones with the rendered i
         moved=moved||std::abs(a.x-b.x)+std::abs(a.y-b.y)+std::abs(a.z-b.z)>0.01F;
     }
     CHECK(moved);
+}
+
+TEST_CASE("human enemy animation assembly preserves character geometry and cached reference models") {
+    auto& application=ProductionApplication();
+    for(const auto& enemy:application.Content()->Data().enemies.GetDefinitions()) {
+        const auto& rig=*enemy.rig;
+        const std::string character=enemy.kind==EnemyKind::Melee?"superhero_male":"superhero_female";
+        std::string error;
+        const auto source=LoadCharacterPresentationDefinition(application.Assets(),
+            Engine::Asset::AssetId::FromString("object_fps_v2.character."+character),error);
+        REQUIRE_MESSAGE(source,error);
+        CHECK(source->model!=rig.model);
+        CHECK(source->model->clips.empty());
+        REQUIRE(source->model->meshes.size()==rig.model->meshes.size());
+        REQUIRE(source->model->nodes.size()==rig.model->nodes.size());
+        REQUIRE(rig.model->materials.size()==3);
+        CHECK(rig.model->materials.back().name.find(enemy.kind==EnemyKind::Melee?
+            "Male":"Female")!=std::string::npos);
+        Engine::Model::Pose sourcePose,reference;
+        REQUIRE(Engine::Model::MakeDefaultPose(*source->model,sourcePose));
+        REQUIRE(Engine::Model::MakeDefaultPose(*rig.model,reference));
+        for(std::size_t node=0;node<reference.globalTransforms.size();++node)
+            CHECK(reference.globalTransforms[node].values==sourcePose.globalTransforms[node].values);
+        std::vector<Engine::Model::SkinnedVertex> before,after;
+        for(std::size_t mesh=0;mesh<rig.model->meshes.size();++mesh) {
+            REQUIRE(Engine::Model::SkinMesh(*source->model,mesh,sourcePose,before));
+            REQUIRE(Engine::Model::SkinMesh(*rig.model,mesh,reference,after));
+            REQUIRE(before.size()==after.size());
+            for(std::size_t v=0;v<before.size();++v) {
+                CHECK(before[v].position.x==after[v].position.x);
+                CHECK(before[v].position.y==after[v].position.y);
+                CHECK(before[v].position.z==after[v].position.z);
+            }
+        }
+        for(auto clip:rig.clips) {
+            for(double time:{0.0,rig.model->clips[clip].durationSeconds*0.5}) {
+                Engine::Model::Pose pose;
+                REQUIRE(Engine::Model::SamplePose(*rig.model,clip,time,Engine::Model::PlaybackMode::Clamp,pose));
+                for(const auto& matrix:pose.globalTransforms)
+                    for(float value:matrix.values) CHECK(std::isfinite(value));
+            }
+        }
+    }
 }
 
 TEST_CASE("head hurtbox covers the visible upper skull rather than just the neck joint") {
@@ -117,7 +280,7 @@ TEST_CASE("invalid enemy presentation references and incompatible attack timing 
     CHECK(error.find("cooldown")!=std::string::npos);
 }
 
-TEST_CASE("production attack clips connect the melee fist and release from the forward casting hand") {
+TEST_CASE("production attack clips connect the melee fist and release from the attached pistol muzzle") {
     const auto parsed=GridMapLoader::Parse(
         "############\n#P........R#\n#..........#\n#..........#\n#..........#\n"
         "#..........#\n#..........#\n#..........#\n#M........D#\n############\n");
@@ -141,10 +304,11 @@ TEST_CASE("production attack clips connect the melee fist and release from the f
         CHECK(events.front().origin.z>position.z+0.1F);
         if(!melee) {
             const auto& rig=*definition.rig;
-            CHECK(rig.model->nodes[rig.attackPoint.node].name=="hand_l");
+            REQUIRE(rig.weapon);
+            CHECK(rig.model->nodes[rig.attackPoint.node].name=="hand_r");
             Engine::Model::AnimationInstance playerAnimation(rig.model);
             REQUIRE(playerAnimation.Play(rig.clips[0],Engine::Model::PlaybackMode::Loop));
-            REQUIRE(playerAnimation.Play(rig.clips[2],Engine::Model::PlaybackMode::Clamp,rig.transitionSeconds));
+            REQUIRE(playerAnimation.Play(rig.clips[2],Engine::Model::PlaybackMode::Clamp,rig.attackTransitionSeconds));
             REQUIRE(playerAnimation.Advance(rig.releaseSeconds));
             const auto expected=EnemyBoneWorldPoint(rig,playerAnimation.CurrentPose(),rig.attackPoint,position,0);
             CHECK(events.front().origin.x==doctest::Approx(expected.x).epsilon(1e-4));

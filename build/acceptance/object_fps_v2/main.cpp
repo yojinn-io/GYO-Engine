@@ -32,26 +32,19 @@ namespace {
 void Require(bool value,const std::string& error) { if(!value) throw std::runtime_error(error); }
 
 void Inspect(const std::filesystem::path& root,const std::filesystem::path& output) {
-    auto manifest=Engine::Asset::ContentManifest::Load(root);
-    Require(bool(manifest),manifest?"":manifest.error().message);
-    auto catalog=manifest.value().LoadCatalogs(root);
-    Require(bool(catalog),catalog?"":catalog.error().message);
-    const auto* entry=catalog.value().Find(Engine::Asset::AssetId::FromString("object_fps_v2.model.animation.ual1_mannequin"));
-    Require(entry!=nullptr,"UAL mannequin is absent from the deployed v2 catalog");
-    Engine::Asset::Loading::NativeFileAssetSource source;
-    auto bytes=source.ReadAll(entry->resolvedPath);
-    Require(bool(bytes),bytes?"":bytes.error().message);
-    Engine::Model::Ufbx::UfbxModelLoader loader;
-    auto asset=loader.Load(bytes.value(),{});
-    Require(bool(asset),asset?"":asset.error().message+" "+asset.error().detail);
-    const auto* model=asset.value().As<Engine::Model::ModelAsset>();
-    Require(model!=nullptr,"UAL loader did not return a model");
-    if(output.empty()) InspectEnemyRig(*model,std::cout);
-    else {
+    fps::ObjectFpsApplication application;
+    std::string error;
+    Require(application.InitializeContent(root,error),error);
+    std::ofstream report;
+    if(!output.empty()) {
         std::filesystem::create_directories(output);
-        std::ofstream report(output/"rig-inspection.txt");
+        report.open(output/"rig-inspection.txt");
         Require(bool(report),"Cannot create rig inspection report");
-        InspectEnemyRig(*model,report);
+    }
+    auto& stream=output.empty()?std::cout:report;
+    for(const auto& enemy:application.Content()->Data().enemies.GetDefinitions()) {
+        stream<<"enemy="<<enemy.id<<"\n";
+        InspectEnemyRig(*enemy.rig->model,stream);
     }
 }
 
@@ -196,7 +189,8 @@ void Visuals(fps::ObjectFpsApplication& application,const std::filesystem::path&
     const std::array states{fps::EnemyState::Idle,fps::EnemyState::Moving,fps::EnemyState::Attacking,fps::EnemyState::Dead};
     const std::array names{"idle","move","attack","death"};
     std::size_t captures=0;double skinMs=0;std::size_t vertexBytes=0;
-    for(std::size_t state=0;state<states.size();++state) for(int sample=0;sample<3;++sample) {
+    for(std::size_t state=0;state<states.size();++state)
+        for(int sample=0;sample<(state==2?4:3);++sample) {
         snapshot.enemies.clear();
         for(std::size_t index=0;index<definitions.size();++index) {
             const auto& definition=definitions[index];const auto& rig=*definition.rig;
@@ -207,6 +201,9 @@ void Visuals(fps::ObjectFpsApplication& application,const std::filesystem::path&
             double time=duration*sample*0.5;
             if(state==2&&sample==1) time=definition.kind==fps::EnemyKind::Melee?
                 (rig.attackBeginSeconds+rig.attackEndSeconds)*0.5:rig.releaseSeconds;
+            if(state==2&&sample==2) time=definition.kind==fps::EnemyKind::Ranged?
+                std::min(duration,rig.releaseSeconds+1.0/30.0):duration*0.5;
+            if(state==2&&sample==3) time=duration;
             enemy.stateElapsedSeconds=static_cast<float>(time);
             const auto posed=Engine::Model::SamplePose(*rig.model,rig.clips[state],time,Engine::Model::PlaybackMode::Clamp,enemy.pose);
             Require(bool(posed),posed?"":posed.error());
@@ -232,6 +229,24 @@ void Visuals(fps::ObjectFpsApplication& application,const std::filesystem::path&
                 output/(std::string(names[state])+"_"+std::to_string(sample)+(debug?"_collision.bmp":"_model.bmp"));
             Render(application,ui,snapshot,debug,file);++captures;
         }
+    }
+    // A profile view exposes the barrel/grip alignment hidden by a front view.
+    snapshot.enemies.clear();
+    for(const auto& definition:definitions) if(definition.rig->weapon) {
+        const auto& rig=*definition.rig;
+        fps::EnemySnapshot enemy;
+        enemy.id=1;enemy.definitionId=definition.id;enemy.kind=definition.kind;
+        enemy.state=fps::EnemyState::Attacking;enemy.position={3.5F,5.7F};
+        enemy.yawRadians=-std::numbers::pi_v<float>*0.5F;
+        const auto posed=Engine::Model::SamplePose(*rig.model,rig.clips[2],rig.releaseSeconds,
+            Engine::Model::PlaybackMode::Clamp,enemy.pose);
+        Require(bool(posed),posed?"":posed.error());
+        snapshot.enemies.push_back(std::move(enemy));
+    }
+    if(!snapshot.enemies.empty()) {
+        snapshot.screen=fps::GameScreen::Playing;
+        Render(application,ui,snapshot,false,output.empty()?std::filesystem::path{}:output/"pistol_profile.bmp");
+        ++captures;
     }
     std::cout<<"visual_frames="<<captures<<" cpu_skin_ms="<<skinMs<<" estimated_vertex_upload_bytes="<<vertexBytes<<"\n";
     Wave(application,&ui,output);

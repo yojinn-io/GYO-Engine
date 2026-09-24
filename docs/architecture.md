@@ -2,6 +2,8 @@
 
 This document describes the current repository boundaries. The engine supplies reusable C++ mechanisms; games own gameplay and content; design tools consume the same public engine APIs. Engine libraries are linked statically into game and tool executables. Native third-party runtime libraries are deployed beside those products where required.
 
+This document owns engine-wide architecture, dependency directions and shared rules. Detailed game architecture, gameplay policies and product data contracts belong in `docs/<game>/`. Engine subsystem documents describe reusable mechanisms; dated development logs record implementation history and validation evidence.
+
 ## Repository ownership
 
 ```text
@@ -65,40 +67,27 @@ Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters r
 
 The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No new umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization.
 
-### Animated actors and collision (Object_FPS v2)
-
-Object_FPS v2 uses simulation-owned `Model::AnimationInstance` values. Gameplay
-selects clips and advances time; Model provides sampling, interruptible pose
-blending and playback intervals. The resulting CPU pose drives bone-bound hurt
-capsules and attack sockets. The game publishes an owning pose snapshot, and
-ModelRenderer skins that same pose without advancing another clock. The stable
-movement capsule is separate from the animated hurt shapes. Gameplay owns bone
-bindings, damage, attack windows, navigation and kinematic slide policy.
-
-`Collision` provides arbitrary-axis capsule ray/sphere queries and upright
-capsule overlap/sweep contacts against boxes and other upright capsules. It
-knows geometry only. The v2 world adapter converts grid walls and actors to those
-shapes. `Model` has no Render dependency, and `Render` has no Model dependency;
-the separate `ModelRenderer` target inside `engine/render/model` joins the two.
-The v2 weapon and enemies both consume this bridge. Asset/JSON interpretation
-remains product-owned; no Engine enemy schema or general physics world is added.
-
-The observed pressures were duplicated weapon/enemy skinning and resource
-lifetime code, sprite pixels driving combat, and animation now participating in
-hit detection. The architecture delta adds v2 domain → Model, the
-ModelRenderer → Model/Render bridge target, and a v2-only enemy data contract.
-The original Object_FPS product retains its source, content format and existing
-Engine APIs. A v1 migration is not required by the new capabilities.
-
-Render's additive `WorldOverlay` mesh layer uses the world camera in a separate
-pass without a depth attachment, after scene content and before viewmodel/UI.
-It is omitted when empty. Neutral wire-box/capsule triangle meshes support
-collision inspection without coupling Render to Collision. F3 and the display
-toggle, semantic colors and choice of visible shapes belong to v2, not Engine.
-See [v2 enemies and collision inspection](object_fps_v2/enemies.zh-Hant.md) for
-the content contract, controls and validation procedure.
-
 `RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. `IRuntimePort<Snapshot, Command, Event>` is a typed observation/intent boundary; each game retains ownership of its payloads and legality rules. Borrowed observations remain valid only until the runtime advances.
+
+### Model, collision and rendering boundaries
+
+`Model` owns animation sampling, caller-driven playback and pose blending.
+Compatible-skeleton clip transfer takes explicit node bindings and a displacement
+scale, corrects reference frames and preserves target geometry and skin bindings.
+It validates mapped hierarchy and supported scale constraints; applications own
+node-name selection and the decision to enable cross-source binding.
+`ModelRenderer`, inside `engine/render/model`, depends on Model and Render to
+manage shared model/material resources and independent skinned mesh instances.
+It consumes an evaluated pose without advancing an animation clock. Model and
+Render do not depend on each other; product state and content semantics remain
+outside this bridge.
+
+`Collision` operates on numeric geometry and returns geometric query results.
+Render's wire generators also accept numeric geometry, without a Collision
+dependency. `WorldOverlay` provides world-camera drawing without depth testing
+or writing; an empty layer adds no pass. Application-specific collision policies,
+controls and diagnostic meanings belong to their product owners. See the
+[rendering architecture](rendering_architecture.zh-Hant.md) for pass and resource contracts.
 
 ## Build and project management
 

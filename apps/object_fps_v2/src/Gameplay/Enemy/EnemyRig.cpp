@@ -24,4 +24,20 @@ std::vector<EnemyHurtbox> BuildEnemyHurtboxes(const EnemyRig& rig, const Engine:
     }
     return result;
 }
+Engine::Model::Pose BuildEnemyWeaponPose(const EnemyRig& rig, const Engine::Model::Pose& pose) {
+    if (!rig.weapon || !rig.weapon->model)
+        throw std::invalid_argument("Enemy has no resolved weapon attachment");
+    const auto& weapon = *rig.weapon;
+    if (weapon.node >= pose.globalTransforms.size())
+        throw std::invalid_argument("Enemy weapon bone is outside its authoritative pose");
+    Engine::Model::Pose result;
+    const auto made = Engine::Model::MakeDefaultPose(*weapon.model, result);
+    if (!made)
+        throw std::invalid_argument("Enemy weapon pose: " + made.error());
+    const auto mount = Engine::Model::Multiply(pose.globalTransforms[weapon.node],
+                                               Engine::Model::ToMatrix(weapon.localTransform));
+    for (auto& transform : result.globalTransforms)
+        transform = Engine::Model::Multiply(mount, transform);
+    return result;
+}
 } // namespace fps

@@ -28,8 +28,9 @@ struct AnimationSetDefinition final {
     const Engine::Asset::AssetId& animationSetId,
     std::string& error);
 
-// Until cross-file skeleton binding exists, an executable assembly requires
-// both the canonical source ID and the same model ownership snapshot.
+// An executable assembly requires both the target ID and the same immutable
+// model snapshot. Explicit cross-source transfer assembles a new target model
+// and rebinds its clip references before this validation; raw selectors fail.
 [[nodiscard]] bool ValidateAnimationSetBinding(
     const AnimationSetDefinition& animationSet,
     const Engine::Asset::AssetId& modelAssetId,

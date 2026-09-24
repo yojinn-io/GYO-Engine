@@ -32,6 +32,26 @@ struct SkinnedVertex final {
 [[nodiscard]] Base::Result<void, std::string> MakeDefaultPose(
     const ModelAsset& model, Pose& output);
 
+struct AnimationNodeBinding final {
+    std::size_t sourceNodeIndex{};
+    std::size_t targetNodeIndex{};
+};
+
+// Transfer rest-relative motion between explicitly matched hierarchies. The
+// one-to-one binding must include each mapped node's ancestors. Rest frames may
+// differ in orientation, proportions and positive uniform scale; non-uniform
+// or mirrored rest/animated scale is unsupported. translationScale is an
+// explicit positive multiplier of model-space displacement, with parent rest
+// scales accounted for when converting back to target local coordinates.
+// Every source track must be mapped, except explicitly excluded non-skeletal
+// mesh nodes. Unmapped target nodes retain their defaults during sampling.
+// The returned clip owns its keys; neither input asset is modified. No names,
+// bone roles, axis inference or automatic humanoid matching are involved.
+[[nodiscard]] Base::Result<AnimationClip, std::string> TransferCompatibleAnimation(
+    const ModelAsset& source, const ModelAsset& target, std::size_t sourceClipIndex,
+    std::span<const AnimationNodeBinding> bindings, float translationScale,
+    std::span<const std::size_t> excludedSourceTrackNodes = {});
+
 // Interpolate local TRS, then resolve the hierarchy. Matrix interpolation is
 // deliberately avoided so rotations remain rigid during transitions.
 [[nodiscard]] Base::Result<void, std::string> BlendPoses(
