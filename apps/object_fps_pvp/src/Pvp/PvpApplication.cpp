@@ -1,6 +1,10 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
+#include "RetroFPS/Pvp/SnapshotTimeline.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -14,7 +18,6 @@
 #include "engine/asset/loading/LoaderRegistry.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
-#include "engine/runtime/FixedTickRuntime.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
@@ -39,6 +42,9 @@ namespace fps::pvp {
 namespace {
 using Control = Engine::Runtime::RuntimeControl;
 using Clock = std::chrono::steady_clock;
+double Milliseconds(Clock::time_point end, Clock::time_point begin) {
+    return std::chrono::duration<double, std::milli>(end - begin).count();
+}
 template<class Error> std::string Explain(const Error& error) {
     return error.message + (error.detail.empty() ? "" : ": " + error.detail);
 }
@@ -63,7 +69,6 @@ void AddText(Engine::Ui::UiDrawList& list, std::string text,
 } // namespace
 
 struct PvpApplication::Impl final {
-    struct ReceivedSnapshot { WorldSnapshot snapshot; Clock::time_point received; };
     Engine::Asset::AssetCatalog catalog;
     Engine::Asset::Loading::LoaderRegistry loaders;
     Engine::Asset::Loading::NativeFileAssetSource source;
@@ -87,15 +92,19 @@ struct PvpApplication::Impl final {
     Engine::Render::RenderQueue queue;
     ClientConnection connection;
     ClientConnectionState state;
-    Engine::Runtime::FixedTickRuntime clientTicks{60.0, 5};
-    std::deque<ReceivedSnapshot> history;
+    std::unique_ptr<LocalPlayerPrediction> prediction;
+    PredictionElapsedTime predictionElapsed;
+    SnapshotTimeline timeline;
+    std::uint64_t connectionGeneration{}, lastSnapshotTick{}, ingressHistoryDrops{};
+    std::optional<RemoteMovementObservation> remoteMovement;
+    std::optional<PresentedMovementObservation> presentedMovement;
+    std::uint64_t skippedPresentationFrames{};
     std::string address{"127.0.0.1:8080"};
     std::string lastError;
     std::string localStatus;
     float width{1280}, height{720}, yaw{}, pitch{};
-    std::uint64_t sequence{};
-    PlayerId viewPlayer{};
-    bool editing{}, suppressUiEnter{}, previousFocused{}, initialized{}, quit{};
+    PlayerId viewPlayer{}, renderedPlayer{};
+    bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
     int exitCode{};
 
     ~Impl() {
@@ -129,8 +138,42 @@ struct PvpApplication::Impl final {
         }
     }
 
+    void ReleasePointer() {
+        if (inputCaptured) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
+            static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(SDL_GetTicks()));
+        inputCaptured = false;
+        const auto released = input->SetRelativeMouseMode(false);
+        if (!released) {
+            lastError = Explain(released.error());
+            exitCode = 1;
+            quit = true;
+        }
+    }
+
     void HandleNativeEvent(const SDL_Event& event) {
-        if (!editing || InWorld()) return;
+        if (InWorld()) {
+            const auto windowId = SDL_GetWindowID(platform->NativeWindow());
+            if (((event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) && event.window.windowID != windowId) ||
+                (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID != windowId) ||
+                (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.windowID != windowId)) return;
+            if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_MOVED ||
+                event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_MINIMIZED) {
+                // Release during the native event, before the next simulation
+                // update. Moving a window must not retain gameplay mouse lock.
+                windowInteraction = true;
+                ReleasePointer();
+            } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_TAB && !event.key.repeat &&
+                       input->Snapshot().windowFocused && !windowInteraction) {
+                if (inputCaptured) ReleasePointer();
+                else inputCaptured = true;
+            } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
+                       input->Snapshot().windowFocused && !windowInteraction &&
+                       event.button.x >= 0 && event.button.x < width && event.button.y >= 0 && event.button.y < height) {
+                inputCaptured = true;
+            }
+            return;
+        }
+        if (!editing) return;
         if (event.type == SDL_EVENT_TEXT_INPUT) AppendAddress(event.text.text);
         if (event.type != SDL_EVENT_KEY_DOWN) return;
         if (event.key.key == SDLK_BACKSPACE && !address.empty()) address.pop_back();
@@ -156,7 +199,7 @@ struct PvpApplication::Impl final {
         if (!state.rooms.empty()) {
             const auto& first = state.rooms.front();
             room = "ROOM " + first.id + "  /  " + std::to_string(first.players) +
-                " of " + std::to_string(first.capacity) + " players";
+                " of " + std::to_string(first.capacity) + " slots occupied";
         }
         result.emplace("room", std::move(room));
         std::string status = "Ready. Start a match or join the listed room.";
@@ -185,48 +228,47 @@ struct PvpApplication::Impl final {
     }
 
     void RefreshState() {
-        state = connection.State();
-        if (state.phase == ConnectionPhase::Lobby) {
-            history.clear();
+        auto received = connection.Drain();
+        state = std::move(received.state);
+        if (connectionGeneration != received.generation) {
+            connectionGeneration = received.generation;
+            timeline.Reset();
+            lastSnapshotTick = 0;
             viewPlayer = 0;
+            if (prediction) prediction->Reset();
+            predictionElapsed.Reset();
+        }
+        ingressHistoryDrops = received.snapshotHistoryOverflowCount;
+        const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
+        if (state.phase != ConnectionPhase::Playing || !self) {
+            timeline.Reset();
+            lastSnapshotTick = 0;
+            remoteMovement.reset();
+            viewPlayer = 0;
+            renderedPlayer = 0;
+            inputCaptured = false;
+            if (prediction) prediction->Reset();
+            predictionElapsed.Reset();
             return;
         }
-        if (!state.snapshot) return;
-        if (history.empty() || state.snapshot->tick > history.back().snapshot.tick) {
-            history.push_back({*state.snapshot, Clock::now()});
-            while (history.size() > 32) history.pop_front();
-        }
         if (viewPlayer != state.playerId) {
-            if (const auto* self = FindPlayer(*state.snapshot, state.playerId)) {
-                yaw = self->yaw;
-                pitch = self->pitch;
-                viewPlayer = state.playerId;
-                sequence = 0;
-                // A client sampling clock has no relationship to authority tick.
-                clientTicks.Reset();
-            }
+            timeline.Reset();
+            lastSnapshotTick = 0;
+            prediction->Reset();
+            predictionElapsed.Reset();
+            yaw = self->yaw;
+            pitch = self->pitch;
+            viewPlayer = state.playerId;
+            inputCaptured = false;
         }
-    }
-
-    Float3 RemotePosition(const PlayerState& latest) const {
-        if (history.empty()) return latest.position;
-        const auto target = Clock::now() - std::chrono::milliseconds(100);
-        const ReceivedSnapshot* before = nullptr;
-        const ReceivedSnapshot* after = nullptr;
-        for (const auto& received : history) {
-            if (!FindPlayer(received.snapshot, latest.playerId)) continue;
-            if (received.received <= target) before = &received;
-            else { after = &received; break; }
+        // Consume the complete receipt-stamped batch before selecting this
+        // frame's timeline bracket. Never play a stalled backlog one frame at a time.
+        for (const auto& sample : received.snapshots)
+            static_cast<void>(timeline.Push(sample.snapshot, sample.receivedAt));
+        if (state.snapshot->tick > lastSnapshotTick) {
+            prediction->Reconcile(*self, state.snapshot->tick);
+            lastSnapshotTick = state.snapshot->tick;
         }
-        if (!before && after) return FindPlayer(after->snapshot, latest.playerId)->position;
-        if (!before) return latest.position;
-        const auto& a = FindPlayer(before->snapshot, latest.playerId)->position;
-        if (!after) return a; // Never extrapolate through a missing snapshot.
-        const auto& b = FindPlayer(after->snapshot, latest.playerId)->position;
-        const auto span = std::chrono::duration<double>(after->received - before->received).count();
-        const float t = span > 0.0 ? static_cast<float>(std::clamp(
-            std::chrono::duration<double>(target - before->received).count() / span, 0.0, 1.0)) : 1.0F;
-        return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
     }
 
     bool SubmitBox(Engine::Render::Float3 center, Engine::Render::Float3 scale,
@@ -241,8 +283,9 @@ struct PvpApplication::Impl final {
     }
 
     bool PrepareWorld() {
-        const auto* self = FindPlayer(*state.snapshot, state.playerId);
-        queue.SetCamera({{self->position.x, self->position.y + arena->eyeHeight, self->position.z},
+        remoteMovement.reset();
+        const auto& position = prediction->Observation().renderPosition;
+        queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
             {pitch, yaw, 0}, 1.0471975512F, 0.05F, 150.0F});
         // Simple checker floor gives movement depth cues without campaign assets.
         const float tile = arena->cellSize;
@@ -268,15 +311,42 @@ struct PvpApplication::Impl final {
             if (!SubmitBox({(a.x+b.x)*.5F,b.y-.06F,(a.z+b.z)*.5F},
                 {b.x-a.x+.01F,.12F,b.z-a.z+.01F}, {.15F,.65F,.70F,1})) return false;
         }
+        const auto presentationTime = Clock::now();
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
-            const auto position = RemotePosition(player);
-            const auto color = player.playerId % 2 ? Engine::Render::Color{.12F,.65F,.93F,1} : Engine::Render::Color{.96F,.35F,.10F,1};
+            const auto sampled = timeline.Sample(player.playerId, presentationTime);
+            const auto& presented = sampled ? sampled->player : player;
+            const auto position = presented.position;
+            remoteMovement = RemoteMovementObservation{player.playerId, position};
+            auto& observation = *remoteMovement;
+            observation.movementEpoch = presented.movementEpoch;
+            observation.yaw = presented.yaw;
+            observation.pitch = presented.pitch;
+            observation.ingressHistoryDrops = ingressHistoryDrops;
+            if (sampled) {
+                observation.lowerTick = sampled->lowerTick;
+                observation.upperTick = sampled->upperTick;
+                observation.presentationTick = sampled->presentationTick;
+                observation.interpolationAlpha = sampled->alpha;
+                observation.latestReceiveAgeSeconds = sampled->latestReceiveAgeSeconds;
+                observation.missingFutureSnapshot = sampled->missingFutureSnapshot;
+                observation.holdSeconds = sampled->holdSeconds;
+                observation.totalHoldSeconds = sampled->totalHoldSeconds;
+                observation.historySize = sampled->historySize;
+                observation.holdCount = sampled->holdCount;
+                observation.gapCount = sampled->gapCount;
+                observation.historyEvictions = sampled->historyEvictions;
+                observation.phaseReanchors = sampled->phaseReanchors;
+                observation.holding = sampled->holding;
+                observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
+                observation.upperResolvedCommand = sampled->upperResolvedCommand;
+            }
+            const Engine::Render::Color color{.96F,.35F,.10F,1};
             if (!SubmitBox({position.x,position.y+arena->bodyHeight*.5F,position.z},
-                {arena->radius*2,arena->bodyHeight,arena->radius*2},color,player.yaw)) return false;
-            if (!SubmitBox({position.x+std::sin(player.yaw)*arena->radius,
-                position.y+arena->eyeHeight, position.z+std::cos(player.yaw)*arena->radius},
-                {.24F,.12F,.12F},{.95F,.95F,.95F,1},player.yaw)) return false;
+                {arena->radius*2,arena->bodyHeight,arena->radius*2},color,presented.yaw)) return false;
+            if (!SubmitBox({position.x+std::sin(presented.yaw)*arena->radius,
+                position.y+arena->eyeHeight, position.z+std::cos(presented.yaw)*arena->radius},
+                {.24F,.12F,.12F},{.95F,.95F,.95F,1},presented.yaw)) return false;
         }
         return true;
     }
@@ -315,6 +385,8 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!textLoader) { error = Explain(textLoader.error()); return false; }
     impl_->arena = Arena::Load(assetRoot / "pvp_arena.json", error);
     if (!impl_->arena) return false;
+    impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
+    impl_->predictionElapsed.Reset();
     impl_->connection.SetArenaIdentity(impl_->arena->id, impl_->arena->version);
     const auto loaded = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.pvp_lobby"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
@@ -336,6 +408,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
 }
 
 bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, std::string& error) {
+    const auto started = Clock::now();
     error.clear();
     if (!impl_->arena) { error = "PvP content must be initialized before graphics"; return false; }
     Engine::Platform::Sdl::SdlPlatformOptions platformOptions;
@@ -349,6 +422,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     Engine::Render::Backend::SdlGpu::SdlGpuOptions gpu;
     gpu.availableShaderFormats = impl_->shaders.CompleteFormats();
     gpu.driver = options.gpuDriver;
+    gpu.vsync = options.vsync;
     auto device = Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice::Create(*impl_->platform, gpu);
     if (!device) { error = Explain(device.error()); return false; }
     impl_->device = std::move(device).value();
@@ -369,25 +443,38 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->width = static_cast<float>(options.width);
     impl_->height = static_cast<float>(options.height);
     impl_->address = options.gateway;
-    impl_->previousFocused = impl_->input->Snapshot().windowFocused;
     impl_->initialized = true;
+    SDL_Log("PvP graphics ready driver=%s initialization_ms=%.1f",
+        impl_->device->GetInfo().driver.c_str(), Milliseconds(Clock::now(), started));
     return true;
 }
 
 Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     if (!impl_->initialized) return impl_->Fail("PvP application is not initialized");
+    const auto started = Clock::now();
     impl_->suppressUiEnter = false;
+    impl_->windowInteraction = false;
     impl_->input->BeginFrame();
     const auto control = impl_->platform->PumpEvents([this](const SDL_Event& event) {
         impl_->input->HandleEvent(event);
         impl_->HandleNativeEvent(event);
     });
     impl_->input->EndFrame();
+    const auto elapsed = Milliseconds(Clock::now(), started);
+    if (elapsed >= 250) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow event processing elapsed_ms=%.1f", elapsed);
     return control;
 }
 
 Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
     if (!impl_->initialized) return impl_->Fail("PvP application is not initialized");
+    const auto started = Clock::now();
+    if (frame.deltaSeconds >= .1) {
+        MovementTraceEvent event;
+        event.kind = MovementTraceKind::RuntimeGap;
+        event.playerId = impl_->state.playerId;
+        event.frameSeconds = frame.deltaSeconds;
+        TraceMovement(event);
+    }
     using Engine::Input::Key;
     const auto& physical = impl_->input->Snapshot();
     impl_->assets.BeginFrame(frame.frameIndex);
@@ -400,25 +487,21 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             impl_->RefreshState();
         } else {
             // Consume a presentation frame's raw mouse delta exactly once.
-            if (physical.windowFocused && physical.pointer.relativeMode) {
+            if (impl_->inputCaptured && physical.windowFocused && physical.pointer.relativeMode) {
                 impl_->yaw = std::remainder(impl_->yaw + physical.pointer.deltaX * .0025F,
                     2.0F * std::numbers::pi_v<float>);
-                impl_->pitch = std::clamp(impl_->pitch + physical.pointer.deltaY * .0025F, -1.45F, 1.45F);
+                impl_->pitch = std::clamp(impl_->pitch + physical.pointer.deltaY * .0025F, -MovementMaximumPitch, MovementMaximumPitch);
             }
-            const float forward = physical.windowFocused ?
+            const float forward = impl_->inputCaptured && physical.windowFocused ?
                 static_cast<float>(physical.Get(Key::W).held) - static_cast<float>(physical.Get(Key::S).held) : 0;
-            const float right = physical.windowFocused ?
+            const float right = impl_->inputCaptured && physical.windowFocused ?
                 static_cast<float>(physical.Get(Key::D).held) - static_cast<float>(physical.Get(Key::A).held) : 0;
-            std::optional<PlayerInput> latest;
-            impl_->clientTicks.Advance(frame.deltaSeconds, [&](const Engine::Runtime::TickContext& tick) {
-                if (tick.tickId % 2 == 0) latest = PlayerInput{impl_->state.playerId,
-                    ++impl_->sequence, tick.tickId, forward, right, impl_->yaw, impl_->pitch};
-            });
-            if (latest) impl_->connection.SendInput(*latest);
-            if (impl_->previousFocused && !physical.windowFocused) {
-                impl_->connection.SendInput({impl_->state.playerId, ++impl_->sequence,
-                    impl_->clientTicks.TickId(), 0, 0, impl_->yaw, impl_->pitch});
-            }
+            // Refresh/reconciliation may cover a stall since the runtime took
+            // its frame timestamp. Sample here, after that work, so the next
+            // frame cannot charge the same elapsed interval a second time.
+            const double movementElapsed = impl_->predictionElapsed.Sample(Clock::now());
+            if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->yaw, impl_->pitch))
+                impl_->connection.SendInput(impl_->prediction->PendingInput());
         }
     } else {
         Engine::Ui::UiInputFrame uiInput;
@@ -435,13 +518,22 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         if (!updated) return impl_->Fail(ExplainUi(updated.error()));
         for (const auto& event : updated.value()) impl_->Execute(event.action);
     }
-    const auto relative = impl_->input->SetRelativeMouseMode(impl_->InWorld() && physical.windowFocused);
+    const auto mouseStarted = Clock::now();
+    const auto relative = impl_->input->SetRelativeMouseMode(impl_->InWorld() && impl_->inputCaptured && physical.windowFocused);
     if (!relative) return impl_->Fail(Explain(relative.error()));
-    impl_->previousFocused = physical.windowFocused;
+    const auto finished = Clock::now();
+    if (Milliseconds(finished, started) >= 250)
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow update player=%llu elapsed_ms=%.1f mouse_mode_ms=%.1f frame_gap_ms=%.1f",
+            static_cast<unsigned long long>(impl_->state.playerId), Milliseconds(finished, started),
+            Milliseconds(finished, mouseStarted), frame.deltaSeconds * 1000);
     return impl_->quit ? Control::Stop : Control::Continue;
 }
 
-Control PvpApplication::Render(const Engine::Runtime::FrameContext&) {
+Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
+    impl_->presentedMovement.reset();
+    const auto started = Clock::now();
+    const bool world = impl_->InWorld();
+    const bool firstWorldFrame = world && impl_->renderedPlayer != impl_->state.playerId;
     Engine::Render::FrameDescription frame;
     frame.clearColor = {.04F,.065F,.10F,1};
     impl_->queue.Reset(frame);
@@ -450,23 +542,63 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext&) {
         if (!impl_->PrepareWorld()) return impl_->Fail(impl_->lastError);
         const float scale = (std::min)(impl_->width/1280.0F, impl_->height/720.0F);
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,510*scale,62*scale},{.015F,.025F,.04F,.88F}});
-        AddText(draws, "PLAYER " + std::to_string(impl_->state.playerId) + "  /  " +
-            std::to_string(impl_->state.snapshot->players.size()) + " players",
+        AddText(draws, "PLAYERS ONLINE: " + std::to_string(impl_->state.snapshot->players.size()),
             {30,24,490*scale,25*scale},18*scale);
-        AddText(draws, "WASD move  |  Mouse look  |  ESC leave", {30,50,490*scale,22*scale},15*scale);
+        AddText(draws, "WASD move  |  Mouse look  |  Tab cursor  |  ESC leave", {30,50,490*scale,22*scale},14*scale);
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-5,impl_->height*.5F-1,10,2},{.9F,.96F,1,1}});
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-1,impl_->height*.5F-5,2,10},{.9F,.96F,1,1}});
-        if (!impl_->input->Snapshot().windowFocused)
-            AddText(draws, "Click the window to resume input", {impl_->width*.5F-190,110,480,30});
+        if (!impl_->inputCaptured || !impl_->input->Snapshot().windowFocused)
+            AddText(draws, "Click inside the window to resume input", {impl_->width*.5F-190,110,480,30});
     } else {
         const auto composed = impl_->ui.Compose(impl_->Bindings(), impl_->Viewport());
         if (!composed) return impl_->Fail(ExplainUi(composed.error()));
         draws = composed.value();
     }
+    const auto prepared = Clock::now();
     const auto ui = impl_->uiRenderer.Submit(draws, impl_->queue);
     if (!ui) return impl_->Fail(ExplainUi(ui.error()));
+    const auto uiFinished = Clock::now();
     const auto rendered = impl_->renderer.Render(impl_->queue);
     if (!rendered) return impl_->Fail(Explain(rendered.error()));
+    const auto finished = Clock::now();
+    if (firstWorldFrame || Milliseconds(finished, started) >= 250 || context.deltaSeconds >= .25)
+        SDL_Log("PvP render player=%llu first_world_frame=%d frame_gap_ms=%.1f prepare_ms=%.1f ui_ms=%.1f render_ms=%.1f presented=%d",
+            static_cast<unsigned long long>(impl_->state.playerId), firstWorldFrame, context.deltaSeconds * 1000,
+            Milliseconds(prepared, started), Milliseconds(uiFinished, prepared), Milliseconds(finished, uiFinished),
+            rendered.value() == Engine::Render::PresentStatus::Presented);
+    if (rendered.value() == Engine::Render::PresentStatus::Presented) {
+        impl_->renderedPlayer = world ? impl_->state.playerId : 0;
+        if (world) {
+            if (impl_->remoteMovement) {
+                const auto& remote = *impl_->remoteMovement;
+                PlayerState pose{remote.playerId, remote.renderPosition, remote.yaw, remote.pitch};
+                pose.movementEpoch = remote.movementEpoch;
+                impl_->remoteMovement->holding = impl_->timeline.CommitPresented(finished, &pose, remote.holding);
+                impl_->remoteMovement->holdCount = impl_->timeline.HoldCount();
+                impl_->remoteMovement->holdSeconds = impl_->timeline.HoldSeconds();
+                impl_->remoteMovement->totalHoldSeconds = impl_->timeline.TotalHoldSeconds();
+            } else (void)impl_->timeline.CommitPresented(finished, nullptr, false);
+        }
+        if (world) impl_->presentedMovement = PresentedMovementObservation{
+            context.frameIndex, std::chrono::duration<double>(finished.time_since_epoch()).count(),
+            impl_->state.playerId, impl_->prediction->Observation(), impl_->remoteMovement,
+            impl_->skippedPresentationFrames, impl_->connectionGeneration};
+        if (world) {
+            MovementTraceEvent event;
+            event.kind = MovementTraceKind::Presentation;
+            event.timeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(finished.time_since_epoch()).count();
+            event.playerId = impl_->state.playerId;
+            event.epoch = impl_->prediction->Observation().movementEpoch;
+            event.sequence = impl_->prediction->Observation().latestCommand;
+            event.authorityTick = impl_->prediction->Observation().authorityTick;
+            event.frameSeconds = context.deltaSeconds;
+            TraceMovement(event);
+        }
+    } else {
+        ++impl_->skippedPresentationFrames;
+        // A minimized window has no swapchain wait to pace the runtime loop.
+        SDL_Delay(10);
+    }
     return Control::Continue;
 }
 
@@ -474,6 +606,7 @@ int PvpApplication::Run() {
     Engine::Runtime::RuntimeLoop loop(*this);
     loop.Run();
     impl_->connection.Leave();
+    impl_->RefreshState();
     if (!impl_->lastError.empty()) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", impl_->lastError.c_str());
     return impl_->exitCode;
 }
@@ -482,6 +615,19 @@ ClientConnection& PvpApplication::Connection() { return impl_->connection; }
 Engine::Render::Renderer& PvpApplication::Renderer() { return impl_->renderer; }
 Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevice() { return *impl_->device; }
 Engine::Platform::Sdl::SdlPlatform& PvpApplication::Platform() { return *impl_->platform; }
+const LocalMovementObservation& PvpApplication::LocalMovement() const noexcept {
+    static const LocalMovementObservation inactive;
+    return impl_->prediction ? impl_->prediction->Observation() : inactive;
+}
+const std::optional<RemoteMovementObservation>& PvpApplication::RemoteMovement() const noexcept {
+    return impl_->remoteMovement;
+}
+const std::optional<PresentedMovementObservation>& PvpApplication::PresentedMovement() const noexcept {
+    return impl_->presentedMovement;
+}
+std::uint64_t PvpApplication::SkippedPresentationFrames() const noexcept {
+    return impl_->skippedPresentationFrames;
+}
 const std::string& PvpApplication::LastError() const noexcept { return impl_->lastError; }
 int PvpApplication::ExitCode() const noexcept { return impl_->exitCode; }
 } // namespace fps::pvp

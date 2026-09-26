@@ -1,9 +1,12 @@
 #pragma once
 
 #include "engine/runtime/IRuntimeClient.hpp"
+#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace Engine::Platform::Sdl { class SdlPlatform; }
@@ -14,6 +17,32 @@ namespace Backend::SdlGpu { class SdlGpuRenderDevice; }
 
 namespace fps::pvp {
 class ClientConnection;
+struct LocalMovementObservation;
+struct RemoteMovementObservation final {
+    PlayerId playerId{};
+    Float3 renderPosition{};
+    std::uint64_t movementEpoch{1}, lowerTick{}, upperTick{};
+    double presentationTick{}, interpolationAlpha{};
+    float yaw{}, pitch{};
+    double latestReceiveAgeSeconds{}, holdSeconds{}, totalHoldSeconds{};
+    std::size_t historySize{};
+    std::uint64_t holdCount{}, gapCount{}, historyEvictions{}, ingressHistoryDrops{}, phaseReanchors{};
+    bool holding{};
+    std::uint64_t lowerResolvedCommand{}, upperResolvedCommand{};
+    bool missingFutureSnapshot{};
+};
+
+// A successful renderer submission, not a monitor scanout timestamp. Cleared
+// before each Render call so skipped frames cannot repeat an old observation.
+struct PresentedMovementObservation final {
+    std::uint64_t frameId{};
+    double hostSteadySeconds{};
+    PlayerId localPlayerId{};
+    LocalMovementObservation local;
+    std::optional<RemoteMovementObservation> remote;
+    std::uint64_t skippedFrames{};
+    std::uint64_t connectionGeneration{};
+};
 
 struct PvpApplicationOptions final {
     std::string title{"Object_FPS PVP"};
@@ -21,10 +50,11 @@ struct PvpApplicationOptions final {
     std::string gateway{"127.0.0.1:8080"};
     int width{1280};
     int height{720};
+    bool vsync{true};
 };
 
-// Product composition for the network client. It owns presentation and local
-// input sampling, never an authoritative or predicted gameplay world.
+// Product composition owns input sampling, local movement prediction and
+// presentation. The remote Match retains authority over the world.
 class PvpApplication final : public Engine::Runtime::IRuntimeClient {
 public:
     PvpApplication();
@@ -44,6 +74,10 @@ public:
     [[nodiscard]] Engine::Render::Renderer& Renderer();
     [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& RenderDevice();
     [[nodiscard]] Engine::Platform::Sdl::SdlPlatform& Platform();
+    [[nodiscard]] const LocalMovementObservation& LocalMovement() const noexcept;
+    [[nodiscard]] const std::optional<RemoteMovementObservation>& RemoteMovement() const noexcept;
+    [[nodiscard]] const std::optional<PresentedMovementObservation>& PresentedMovement() const noexcept;
+    [[nodiscard]] std::uint64_t SkippedPresentationFrames() const noexcept;
     [[nodiscard]] const std::string& LastError() const noexcept;
     [[nodiscard]] int ExitCode() const noexcept;
 

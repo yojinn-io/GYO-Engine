@@ -1,19 +1,15 @@
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
-#include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <utility>
 
 namespace fps::pvp {
-namespace {
-constexpr float kMaximumPitch = 89.0F * std::numbers::pi_v<float> / 180.0F;
-constexpr std::uint32_t kInputTimeoutTicks = 15;
-}
-
 PvpMatch::PvpMatch(Arena arena) : arena_(std::move(arena)) {
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
@@ -35,7 +31,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
         if (!CanPlaceCharacterBody({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius},
                                    arena_.walls, blockers)) continue;
         Participant player;
-        player.state = {playerId, p, spawn.yaw, 0, 0};
+        player.state = {playerId, p, std::remainder(spawn.yaw, 2 * std::numbers::pi_v<float>), 0, 0};
         players_.emplace(playerId, player);
         return true;
     }
@@ -46,43 +42,147 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
 bool PvpMatch::Leave(PlayerId playerId) { return players_.erase(playerId) != 0; }
 
 bool PvpMatch::ValidInput(const PlayerInput& input) noexcept {
-    return input.playerId != 0 && input.sequence != 0 &&
-        std::isfinite(input.moveForward) && std::abs(input.moveForward) <= 1 &&
-        std::isfinite(input.moveRight) && std::abs(input.moveRight) <= 1 &&
-        std::isfinite(input.yaw) && std::isfinite(input.pitch);
+    if (input.playerId == 0 || input.movementEpoch == 0 || input.commands.empty() ||
+        input.commands.size() > MaxPendingCommands)
+        return false;
+    std::uint64_t previous{};
+    for (const auto& command : input.commands) {
+        if (!ValidMovementCommand(command) || command.sequence <= previous) return false;
+        previous = command.sequence;
+    }
+    return true;
+}
+
+bool PvpMatch::CanSubmitInput(const PlayerInput& input) const noexcept {
+    const auto found = players_.find(input.playerId);
+    if (found == players_.end() || !ValidInput(input)) return false;
+    const auto& participant = found->second;
+    if (input.movementEpoch != participant.state.movementEpoch) return false;
+    const auto cursor = participant.state.lastResolvedCommand;
+    for (const auto& command : input.commands) {
+        if (command.sequence <= cursor) continue; // An irrevocably resolved step.
+        if (command.sequence - cursor > MaxFutureCommands) return false;
+        const auto queued = participant.commands.find(command.sequence);
+        if (queued != participant.commands.end() && queued->second != command) return false;
+    }
+    return true;
 }
 
 bool PvpMatch::SubmitInput(const PlayerInput& input) {
-    const auto found = players_.find(input.playerId);
-    if (found == players_.end() || !ValidInput(input)) return false;
-    auto& participant = found->second;
-    if (participant.hasInput && input.sequence <= participant.input.sequence) return false;
-    participant.input = input;
-    participant.inputAgeTicks = 0;
-    participant.hasInput = true;
+    if (!CanSubmitInput(input)) return false;
+    auto& participant = players_.at(input.playerId);
+    for (const auto& command : input.commands) {
+        if (command.sequence > participant.state.lastResolvedCommand)
+            participant.commands.try_emplace(command.sequence, command);
+    }
     return true;
+}
+
+std::uint32_t PvpMatch::ContiguousPending(const Participant& player) noexcept {
+    auto sequence = player.state.lastResolvedCommand;
+    std::uint32_t count{};
+    while (sequence < (std::numeric_limits<std::uint64_t>::max)() &&
+           player.commands.contains(sequence + 1)) {
+        ++sequence;
+        ++count;
+    }
+    return count;
+}
+
+void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reason) {
+    if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())
+        throw std::overflow_error("Movement epoch exhausted");
+    ++player.state.movementEpoch;
+    player.state.lastResolvedCommand = 0;
+    player.state.contiguousPendingCommands = 0;
+    player.commands.clear();
+    player.lastActualCommand = {};
+    player.missingInputTicks = 0;
+    player.started = false;
+    player.backlogSamples.clear();
+    player.backlogSum = 0;
+    player.fallbackSamples.clear();
+    player.fallbackCount = 0;
+    player.lastMovementResetTick = tick_;
+    player.movementResetScheduled = false;
+    player.movementResetReason = MovementResetReason::None;
+    TraceMovement({.kind = MovementTraceKind::Reset, .playerId = player.state.playerId,
+        .epoch = player.state.movementEpoch, .authorityTick = tick_, .resetReason = reason});
 }
 
 void PvpMatch::Tick(const Engine::Runtime::TickContext& tick) {
     if (tick.tickId == 0 || tick.tickId != tick_ + 1 || !std::isfinite(tick.deltaSeconds) || tick.deltaSeconds <= 0 ||
-        tick.deltaSeconds > 0.1) throw std::invalid_argument("Invalid match tick");
+        std::abs(tick.deltaSeconds - MovementTickSeconds) > 1.0e-12)
+        throw std::invalid_argument("Invalid match tick");
     tick_ = tick.tickId;
     for (auto& [id, player] : players_) {
         static_cast<void>(id);
-        const bool active = player.hasInput && player.inputAgeTicks < kInputTimeoutTicks;
-        if (active) {
-            player.state.yaw = std::remainder(player.input.yaw, 2 * std::numbers::pi_v<float>);
-            player.state.pitch = std::clamp(player.input.pitch, -kMaximumPitch, kMaximumPitch);
-            player.state.lastInputSequence = player.input.sequence;
+        if (player.movementResetScheduled) {
+            // The decision belongs to the previous completed tick. Rotation
+            // preserves the world clock and pose, but performs no movement.
+            ResetMovementEpoch(player, player.movementResetReason);
+            continue;
         }
-        const auto displacement = ComputePlanarDisplacement(
-            active ? player.input.moveForward : 0, active ? player.input.moveRight : 0,
-            player.state.yaw, arena_.movementSpeed, static_cast<float>(tick.deltaSeconds));
-        const auto p = player.state.position;
-        player.state.position = MoveCharacterBody(
-            {{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius},
-            {displacement.x, 0, displacement.z}, arena_.walls, {}, true);
-        if (player.inputAgeTicks < kInputTimeoutTicks) ++player.inputAgeTicks;
+        if (!player.started) {
+            if (!player.commands.contains(1)) continue;
+            player.started = true;
+        }
+        if (player.state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {
+            ResetMovementEpoch(player, MovementResetReason::SequenceExhausted);
+            continue;
+        }
+        const auto sequence = player.state.lastResolvedCommand + 1;
+        auto command = player.lastActualCommand;
+        auto source = MovementInputSource::Actual;
+        const auto actual = player.commands.find(sequence);
+        if (actual != player.commands.end()) {
+            command = actual->second;
+            player.lastActualCommand = command;
+            player.missingInputTicks = 0;
+            player.commands.erase(actual);
+        } else {
+            if (player.missingInputTicks >= InputHoldTicks) {
+                command.moveForward = command.moveRight = 0;
+                source = MovementInputSource::Neutral;
+            } else {
+                source = MovementInputSource::Held;
+            }
+            if (player.missingInputTicks < (std::numeric_limits<std::uint32_t>::max)())
+                ++player.missingInputTicks;
+        }
+        command.sequence = sequence;
+        player.state = StepMovement(arena_, player.state, command);
+        const auto pending = ContiguousPending(player);
+        player.state.contiguousPendingCommands = pending;
+        TraceMovement({.kind = MovementTraceKind::Resolved, .playerId = id,
+            .epoch = player.state.movementEpoch, .sequence = sequence, .authorityTick = tick_,
+            .source = source, .queued = pending, .count = player.missingInputTicks});
+        player.backlogSamples.push_back(pending);
+        player.backlogSum += pending;
+        player.fallbackSamples.push_back(source != MovementInputSource::Actual);
+        player.fallbackCount += source != MovementInputSource::Actual;
+        if (player.backlogSamples.size() > MovementBacklogSampleTicks) {
+            player.backlogSum -= player.backlogSamples.front();
+            player.backlogSamples.pop_front();
+            player.fallbackCount -= player.fallbackSamples.front();
+            player.fallbackSamples.pop_front();
+        }
+        if (player.lastMovementResetTick == 0 ||
+            tick_ - player.lastMovementResetTick >= MovementResetCooldownTicks) {
+            // A running cursor can permanently outrun a recovered client even
+            // when occasional commands arrive in time. Require a whole window
+            // without usable lead, plus actual substitution, before rebasing.
+            // All-Actual just-in-time traffic must never trigger this fuse.
+            const bool starved = player.backlogSamples.size() == MovementBacklogSampleTicks &&
+                player.backlogSum == 0 && player.fallbackCount > 0 && player.commands.empty();
+            const bool backlog = player.backlogSamples.size() == MovementBacklogSampleTicks &&
+                player.backlogSum >= MovementBacklogCommandSum;
+            if (starved || backlog) {
+                player.movementResetScheduled = true;
+                player.movementResetReason = starved ? MovementResetReason::Starvation :
+                    MovementResetReason::Backlog;
+            }
+        }
     }
 }
 
@@ -92,7 +192,9 @@ WorldSnapshot PvpMatch::Snapshot() const {
     WorldSnapshot result{tick_, {}};
     for (const auto& [id, participant] : players_) {
         static_cast<void>(id);
-        result.players.push_back(participant.state);
+        auto state = participant.state;
+        state.contiguousPendingCommands = ContiguousPending(participant);
+        result.players.push_back(state);
     }
     return result;
 }

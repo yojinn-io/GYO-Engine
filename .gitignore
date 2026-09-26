@@ -2,6 +2,7 @@
 /.idea/
 /.vs/
 /.vscode/
+/.cache/clangd/
 *.iml
 *.suo
 *.user

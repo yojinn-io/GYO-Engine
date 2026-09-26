@@ -13,7 +13,7 @@ if(NOT TARGET httplib::httplib)
 endif()
 set(protocol_output "${CMAKE_CURRENT_BINARY_DIR}/protocol")
 file(MAKE_DIRECTORY "${protocol_output}")
-foreach(contract client_v1 runtime_v1)
+foreach(contract client_v3 runtime_v3)
     add_custom_command(OUTPUT "${protocol_output}/${contract}.pb.cc" "${protocol_output}/${contract}.pb.h"
         COMMAND $<TARGET_FILE:protobuf::protoc> "--cpp_out=${protocol_output}"
             "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protocol" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/${contract}.proto"
@@ -31,10 +31,10 @@ gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHos
     PUBLIC_LIBRARIES ${domain})
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
     PUBLIC_LIBRARIES ${host}
-    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v1")
+    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v3")
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain}
-    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v1")
+    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v3")
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp
     PUBLIC_LIBRARIES ${domain} ${network} GYO::Render
     PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer

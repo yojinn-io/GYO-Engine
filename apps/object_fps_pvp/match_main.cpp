@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
+#include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "gyo/AppConfig.hpp"
 #include <chrono>
 #include <csignal>
@@ -59,14 +60,16 @@ int main(int argc,char** argv) {
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena;
+        std::filesystem::path movementTrace;
         for(int index=1;index<argc;++index) {
             const std::string argument=argv[index];
             if(argument=="--help") {
-                std::cout<<"Match runtime: --arena path --listen 127.0.0.1:27016\n";return 0;
+                std::cout<<"Match runtime: --arena path --listen 127.0.0.1:27016 --movement-trace path\n";return 0;
             }
             if(index+1>=argc){std::cerr<<"Missing argument\n";return 2;}
             if(argument=="--arena") explicitArena=argv[++index];
             else if(argument=="--listen") listen=argv[++index];
+            else if(argument=="--movement-trace") movementTrace=argv[++index];
             else {std::cerr<<"Unknown argument: "<<argument<<'\n';return 2;}
         }
         const auto arenaPath=explicitArena ? *explicitArena
@@ -74,6 +77,7 @@ int main(int argc,char** argv) {
         std::string error;
         auto arena=fps::pvp::Arena::Load(arenaPath,error);
         if(!arena){std::cerr<<error<<'\n';return 1;}
+        fps::pvp::MovementTraceWriter trace(movementTrace);
         fps::pvp::MatchRuntimeHost runtime(*arena);
         std::jthread simulation([&](std::stop_token stop){runtime.Run(stop);});
         fps::pvp::IpcHost ipc(runtime,*arena);
@@ -81,7 +85,9 @@ int main(int argc,char** argv) {
         std::signal(SIGINT,Stop);std::signal(SIGTERM,Stop);
         std::cout<<"Object_FPS_PVP Match ready: "<<listen<<" arena="<<arena->id<<" authority=60Hz\n"<<std::flush;
         while(!stopping) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        ipc.Stop(); simulation.request_stop();
+        ipc.Stop(); simulation.request_stop(); simulation.join();
+        trace.Finish();
+        if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
     return 0;
 }

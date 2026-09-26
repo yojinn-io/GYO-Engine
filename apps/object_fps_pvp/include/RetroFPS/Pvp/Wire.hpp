@@ -23,7 +23,7 @@ inline std::vector<std::uint8_t> Encode(const Packet& packet) {
     if (packet.payload.size()+HeaderSize>MaxDatagram) throw std::length_error("UDP payload exceeds 1200 bytes");
     std::vector<std::uint8_t> bytes(HeaderSize+packet.payload.size());
     bytes[0]='G'; bytes[1]='Y'; bytes[2]='O'; bytes[3]='P';
-    Write(std::span(bytes).subspan(4,2),1);
+    Write(std::span(bytes).subspan(4,2),3);
     Write(std::span(bytes).subspan(6,2),static_cast<std::uint16_t>(packet.type));
     Write(std::span(bytes).subspan(8,8),packet.session);
     Write(std::span(bytes).subspan(16,4),packet.sequence);
@@ -33,7 +33,7 @@ inline std::vector<std::uint8_t> Encode(const Packet& packet) {
 }
 inline std::optional<Packet> Decode(std::span<const std::uint8_t> bytes) {
     if(bytes.size()<HeaderSize || bytes.size()>MaxDatagram || bytes[0]!='G' || bytes[1]!='Y' || bytes[2]!='O' || bytes[3]!='P' ||
-       Read(bytes.subspan(4,2))!=1 || Read(bytes.subspan(22,2))!=0 || Read(bytes.subspan(20,2))!=bytes.size()-HeaderSize) return {};
+       Read(bytes.subspan(4,2))!=3 || Read(bytes.subspan(22,2))!=0 || Read(bytes.subspan(20,2))!=bytes.size()-HeaderSize) return {};
     const auto type=Read(bytes.subspan(6,2));
     if(type<1 || type>5) return {};
     return Packet{static_cast<Type>(type),Read(bytes.subspan(8,8)),static_cast<std::uint32_t>(Read(bytes.subspan(16,4))),

@@ -50,16 +50,20 @@ private:
         PlayerId playerId{};
         ControlKind kind{ControlKind::Join};
     };
+    struct PendingInput final {
+        std::uint64_t movementEpoch{};
+        std::map<std::uint64_t, MovementCommand> commands;
+        bool dirty{};
+    };
     bool QueueControl(Control control);
     void ClearState();
 
     mutable std::mutex mutex_;
     std::condition_variable_any wake_;
     PvpMatch match_;
-    Engine::Runtime::FixedTickRuntime ticker_;
+    Engine::Runtime::FixedTickRuntime ticker_{AuthorityTickRate};
     std::deque<Control> controls_;
-    std::map<PlayerId, PlayerInput> latestInputs_;
-    std::map<PlayerId, std::uint64_t> inputSequences_;
+    std::map<PlayerId, PendingInput> pendingInputs_;
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;
     std::optional<std::promise<void>> pendingReset_;

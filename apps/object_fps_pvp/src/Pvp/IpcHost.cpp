@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v1.pb.h"
+#include "runtime_v3.pb.h"
 #include <asio.hpp>
 #include <array>
 #include <charconv>
@@ -12,19 +13,20 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v1;
+namespace pb = object_fps_pvp::runtime::v3;
 using asio::ip::tcp;
 namespace {
 bool WouldBlock(const asio::error_code& error) {
     return error==asio::error::would_block || error==asio::error::try_again;
 }
 pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
-    pb::RuntimeEnvelope message; message.set_protocol_version(1);
+    pb::RuntimeEnvelope message; message.set_protocol_version(3);
     auto* out=message.mutable_snapshot(); out->set_tick(snapshot.tick);
     for(const auto& p:snapshot.players) {
         auto* state=out->add_players(); state->set_player_id(p.playerId);
         state->set_x(p.position.x); state->set_y(p.position.y); state->set_z(p.position.z);
-        state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_input_sequence(p.lastInputSequence);
+        state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_resolved_command(p.lastResolvedCommand);
+        state->set_movement_epoch(p.movementEpoch);state->set_contiguous_pending_commands(p.contiguousPendingCommands);
     }
     return message;
 }
@@ -43,13 +45,18 @@ struct IpcHost::Impl {
         socket.set_option(tcp::no_delay(true));
         std::vector<std::uint8_t> input;
         std::deque<std::vector<std::uint8_t>> controls;
-        std::optional<std::vector<std::uint8_t>> latestSnapshot;
+        using Clock=std::chrono::steady_clock;
+        struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;};
+        std::optional<SnapshotFrame> latestSnapshot;
         std::vector<std::uint8_t> writing;
         std::size_t writeOffset{};
+        bool writingSnapshot{};
+        std::uint64_t writingTick{},coalescedSnapshots{};
+        Clock::time_point writingQueuedAt{};
         std::map<std::uint64_t,PlayerId> joins;
-        pb::RuntimeEnvelope ready; ready.set_protocol_version(1);
+        pb::RuntimeEnvelope ready; ready.set_protocol_version(3);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version);
-        r->set_tick_rate(60); r->set_snapshot_interval_ticks(3); r->set_max_players(2);
+        r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
         controls.push_back(wire::Frame(ready.SerializeAsString()));
         std::array<std::uint8_t,8192> buffer{};
         while(!stop.stop_requested()) {
@@ -63,7 +70,7 @@ struct IpcHost::Impl {
                 if(!length || length>wire::MaxFrame) return;
                 if(input.size()<length+4) break;
                 pb::RuntimeEnvelope message;
-                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=1) return;
+                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=3) return;
                 input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
                 if(message.has_join()) {
                     if(joins.size()>=64) return;
@@ -74,23 +81,45 @@ struct IpcHost::Impl {
                     if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return;
                 } else if(message.has_input()) {
                     const auto& p=message.input();
-                    static_cast<void>(host.SubmitInput({p.player_id(),p.input_sequence(),p.client_tick(),
-                        p.move_forward(),p.move_right(),p.yaw(),p.pitch()}));
+                    if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
+                    PlayerInput window{p.player_id(),{},p.movement_epoch()};
+                    for(const auto& command:p.commands())
+                        window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch()});
+                    static_cast<void>(host.SubmitInput(window));
                 } else return;
             }
             for(const auto& result:host.TakeControlResults()) {
                 const auto found=joins.find(result.requestId);
                 if(found==joins.end()) continue;
-                pb::RuntimeEnvelope message; message.set_protocol_version(1);
+                pb::RuntimeEnvelope message; message.set_protocol_version(3);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 controls.push_back(wire::Frame(message.SerializeAsString())); joins.erase(found);
                 if(controls.size()>64) return;
             }
-            if(auto snapshot=host.TakeSnapshot()) latestSnapshot=wire::Frame(SnapshotMessage(*snapshot).SerializeAsString());
+            if(auto snapshot=host.TakeSnapshot()) {
+                if(latestSnapshot) {
+                    ++coalescedSnapshots;
+                    TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=snapshot->tick,
+                        .count=coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-latestSnapshot->queuedAt).count()});
+                }
+                latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now()};
+            }
+            // An unstarted snapshot is still replaceable. Once TCP accepted
+            // even one byte, finish that frame before selecting anything else.
+            if(writingSnapshot && !writing.empty() && writeOffset==0 && latestSnapshot) {
+                ++coalescedSnapshots;
+                writing=std::move(latestSnapshot->bytes);writingTick=latestSnapshot->tick;
+                writingQueuedAt=latestSnapshot->queuedAt;latestSnapshot.reset();
+                TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=writingTick,.count=coalescedSnapshots});
+            }
             if(writing.empty()) {
-                if(!controls.empty()) { writing=std::move(controls.front()); controls.pop_front(); }
-                else if(latestSnapshot) { writing=std::move(*latestSnapshot); latestSnapshot.reset(); }
+                if(!controls.empty()) {
+                    writing=std::move(controls.front());controls.pop_front();writingSnapshot=false;writingTick=0;writingQueuedAt=Clock::now();
+                } else if(latestSnapshot) {
+                    writing=std::move(latestSnapshot->bytes);writingTick=latestSnapshot->tick;
+                    writingQueuedAt=latestSnapshot->queuedAt;writingSnapshot=true;latestSnapshot.reset();
+                }
                 writeOffset=0;
             }
             if(!writing.empty()) {
@@ -98,6 +127,8 @@ struct IpcHost::Impl {
                 writeOffset+=socket.write_some(asio::buffer(writing.data()+writeOffset,writing.size()-writeOffset),error);
                 if(error && !WouldBlock(error)) return;
                 if(writeOffset==writing.size()) writing.clear();
+                else TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=writingTick,
+                    .count=coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-writingQueuedAt).count()});
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

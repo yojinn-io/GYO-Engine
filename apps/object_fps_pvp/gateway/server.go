@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -20,8 +21,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv1"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev1"
+	client "gyo.local/object_fps_pvp/protocol/clientv3"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
 )
 
 const sessionTimeout = 5 * time.Second
@@ -37,13 +38,15 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
-	session     *session.Session
-	playerID    uint64
-	requestID   string
-	phase       phase
-	joinStarted time.Time
-	lastInput   uint64
-	outSequence uint32
+	session       *session.Session
+	playerID      uint64
+	requestID     string
+	phase         phase
+	joinStarted   time.Time
+	lastResolved  uint64
+	movementEpoch uint64
+	commands      map[uint64]*runtime.MovementCommand
+	outSequence   uint32
 }
 type outbound struct {
 	peer   netip.AddrPort
@@ -51,24 +54,25 @@ type outbound struct {
 }
 
 type Server struct {
-	config       Config
-	mu           sync.Mutex
-	available    bool
-	created      bool
-	ready        *runtime.Ready
-	link         *runtimeLink
-	players      map[uint64]*reservation
-	sessions     map[uint64]*reservation
-	requests     map[string]*reservation
-	nextPlayer   uint64
-	lastSnapshot uint64
-	hasSnapshot  bool
-	http         *http.Server
-	listener     net.Listener
-	udp          *net.UDPConn
-	controlOut   chan outbound
-	snapshotOut  chan []byte
-	closeOnce    sync.Once
+	config               Config
+	mu                   sync.Mutex
+	available            bool
+	created              bool
+	ready                *runtime.Ready
+	link                 *runtimeLink
+	players              map[uint64]*reservation
+	sessions             map[uint64]*reservation
+	requests             map[string]*reservation
+	nextPlayer           uint64
+	lastSnapshot         uint64
+	hasSnapshot          bool
+	http                 *http.Server
+	listener             net.Listener
+	udp                  *net.UDPConn
+	controlOut           chan outbound
+	snapshotOut          chan []byte
+	closeOnce            sync.Once
+	snapshotReplacements atomic.Uint64
 }
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
@@ -111,7 +115,7 @@ func (s *Server) HTTPAddress() string { return s.listener.Addr().String() }
 func (s *Server) UDPAddress() string  { return s.udp.LocalAddr().String() }
 
 // Serve keeps HTTP available after a runtime failure so room state reports the
-// failure. Recovery in v1 means restarting Runtime/Gateway and joining again.
+// failure. Recovery means restarting Runtime/Gateway and joining again.
 func (s *Server) Serve(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -139,6 +143,7 @@ func (s *Server) Close() {
 		_ = s.udp.Close()
 		_ = s.http.Close()
 		_ = s.listener.Close()
+		log.Printf("gateway transport coalesced_snapshots=%d", s.snapshotReplacements.Load())
 	})
 }
 
@@ -249,7 +254,8 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{session: peer, playerID: s.nextPlayer, requestID: request.RequestID}
+	player := &reservation{session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1,
+		commands: make(map[uint64]*runtime.MovementCommand)}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
 	s.requests[request.RequestID] = player
@@ -334,7 +340,7 @@ func (s *Server) receiveUDP(ctx context.Context) {
 func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.available {
+	if !s.available || h.Version != adapter.ClientVersion {
 		return nil
 	}
 	p := s.sessions[h.SessionID]
@@ -365,14 +371,45 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 			return nil
 		}
 		in, err := adapter.DecodeInput(payload, p.playerID)
-		if err != nil || in.InputSequence <= p.lastInput {
+		if err != nil {
 			return nil
+		}
+		// Epochs are authority-owned. Old packets are inert; future packets
+		// cannot initiate a movement reset or replace an existing window.
+		if in.MovementEpoch != p.movementEpoch {
+			return nil
+		}
+		// Validate the whole batch before committing any new command. Resolved
+		// steps are obsolete; unacknowledged steps are immutable across packets.
+		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch}
+		for _, command := range in.Commands {
+			if command.Sequence <= p.lastResolved {
+				continue
+			}
+			if command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
+				return nil
+			}
+			if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
+				return nil
+			}
+			pending.Commands = append(pending.Commands, command)
 		}
 		if p.session.CommitSequence(h.Sequence, now) != nil {
 			return nil
 		}
-		p.lastInput = in.InputSequence
-		return s.link.input(in)
+		if len(pending.Commands) == 0 {
+			return nil
+		}
+		if err := s.link.input(pending); err != nil {
+			if errors.Is(err, adapter.ErrInput) {
+				return nil
+			}
+			return err
+		}
+		for _, command := range pending.Commands {
+			p.commands[command.Sequence] = command
+		}
+		return nil
 	}
 	return nil
 }
@@ -424,8 +461,31 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			s.mu.Unlock()
 			return
 		}
+		for _, state := range out.Players {
+			if p := s.players[state.PlayerId]; p != nil &&
+				(state.MovementEpoch < p.movementEpoch || (state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
+				s.mu.Unlock()
+				return
+			}
+		}
 		s.lastSnapshot = out.Tick
 		s.hasSnapshot = true
+		for _, state := range out.Players {
+			if p := s.players[state.PlayerId]; p != nil &&
+				(state.MovementEpoch > p.movementEpoch || state.LastResolvedCommand > p.lastResolved) {
+				if state.MovementEpoch > p.movementEpoch {
+					clear(p.commands)
+				}
+				p.movementEpoch = state.MovementEpoch
+				p.lastResolved = state.LastResolvedCommand
+				for sequence := range p.commands {
+					if sequence <= p.lastResolved {
+						delete(p.commands, sequence)
+					}
+				}
+				s.link.acknowledge(p.playerID, p.movementEpoch, p.lastResolved)
+			}
+		}
 		s.mu.Unlock()
 		payload, err := proto.Marshal(out)
 		if err != nil {
@@ -441,6 +501,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		default:
 			select {
 			case <-s.snapshotOut:
+				s.snapshotReplacements.Add(1)
 			default:
 			}
 			select {
@@ -464,25 +525,46 @@ func (s *Server) sendUDP(ctx context.Context) {
 			s.writeUDP(packet)
 		case payload := <-s.snapshotOut:
 			s.mu.Lock()
-			packets := make([]outbound, 0, len(s.players))
+			players := make([]uint64, 0, len(s.players))
 			if s.available {
 				for _, p := range s.players {
 					if p.phase == active {
-						p.outSequence++
-						packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
-						if err == nil {
-							packets = append(packets, outbound{p.session.Endpoint(), packet})
-						}
+						players = append(players, p.playerID)
 					}
 				}
 			}
 			s.mu.Unlock()
-			for _, packet := range packets {
+			for _, playerID := range players {
+				var packet outbound
+				payload, packet = s.snapshotForPeer(playerID, payload)
 				s.writeUDP(packet)
 			}
 		}
 	}
 }
+
+func (s *Server) snapshotForPeer(playerID uint64, payload []byte) ([]byte, outbound) {
+	// A previous peer's write may have blocked while a newer publication arrived.
+	// Replace this still-unwritten datagram before assigning its transport sequence.
+	select {
+	case payload = <-s.snapshotOut:
+		s.snapshotReplacements.Add(1)
+	default:
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.players[playerID]
+	if !s.available || p == nil || p.phase != active {
+		return payload, outbound{}
+	}
+	p.outSequence++
+	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
+	if err != nil {
+		return payload, outbound{}
+	}
+	return payload, outbound{p.session.Endpoint(), packet}
+}
+
 func (s *Server) writeUDP(packet outbound) {
 	if packet.peer.IsValid() {
 		_ = s.udp.SetWriteDeadline(time.Now().Add(time.Second))
@@ -506,7 +588,14 @@ func (s *Server) expireAt(now time.Time) {
 	s.mu.Lock()
 	var failure error
 	for _, p := range s.players {
-		if p.session.Expired(now, sessionTimeout) || (p.phase == joining && now.Sub(p.joinStarted) >= joinTimeout) {
+		sessionExpired := p.session.Expired(now, sessionTimeout)
+		joinExpired := p.phase == joining && now.Sub(p.joinStarted) >= joinTimeout
+		if sessionExpired || joinExpired {
+			reason := "session_timeout"
+			if joinExpired {
+				reason = "join_timeout"
+			}
+			log.Printf("player expired player=%d reason=%s", p.playerID, reason)
 			if p.phase != reserved {
 				e := envelope()
 				e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}

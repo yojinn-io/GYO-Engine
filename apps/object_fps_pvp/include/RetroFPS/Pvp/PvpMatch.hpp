@@ -1,34 +1,17 @@
 #pragma once
 
-#include "RetroFPS/Pvp/Arena.hpp"
+#include "RetroFPS/Pvp/Movement.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <string>
 #include <vector>
 
 namespace fps::pvp {
 
-using PlayerId = std::uint64_t;
-
-struct PlayerInput final {
-    PlayerId playerId{};
-    std::uint64_t sequence{};
-    std::uint64_t clientTick{};
-    float moveForward{};
-    float moveRight{};
-    float yaw{};
-    float pitch{};
-};
-
-struct PlayerState final {
-    PlayerId playerId{};
-    Float3 position{}; // feet, in arena world units
-    float yaw{};
-    float pitch{};
-    std::uint64_t lastInputSequence{};
-};
+enum class MovementResetReason;
 
 struct WorldSnapshot final {
     std::uint64_t tick{};
@@ -42,6 +25,8 @@ public:
     [[nodiscard]] bool Join(PlayerId playerId, std::string& error);
     [[nodiscard]] bool Leave(PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
+    // Read-only ingress validation; the host does not mutate authority on I/O.
+    [[nodiscard]] bool CanSubmitInput(const PlayerInput& input) const noexcept;
     void Tick(const Engine::Runtime::TickContext& tick);
     void Reset() noexcept;
     [[nodiscard]] WorldSnapshot Snapshot() const;
@@ -53,10 +38,20 @@ public:
 private:
     struct Participant final {
         PlayerState state;
-        PlayerInput input;
-        std::uint32_t inputAgeTicks{15};
-        bool hasInput{};
+        std::map<std::uint64_t, MovementCommand> commands;
+        MovementCommand lastActualCommand;
+        std::uint32_t missingInputTicks{};
+        bool started{};
+        std::deque<std::uint32_t> backlogSamples;
+        std::uint32_t backlogSum{};
+        std::deque<bool> fallbackSamples;
+        std::uint32_t fallbackCount{};
+        std::uint64_t lastMovementResetTick{};
+        bool movementResetScheduled{};
+        MovementResetReason movementResetReason{};
     };
+    [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
+    void ResetMovementEpoch(Participant& player, MovementResetReason reason);
     Arena arena_;
     std::map<PlayerId, Participant> players_;
     std::uint64_t tick_{};
