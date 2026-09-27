@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "client_v4.pb.h"
 #include <httplib.h>
 #include <algorithm>
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -114,12 +116,41 @@ int main(int argc,char** argv) {
             Require(!wire::Decode(oldVersion),"protocol v1 accepted");
             oldVersion[5]=2;
             Require(!wire::Decode(oldVersion),"protocol v2 accepted");
+            oldVersion[5]=3;
+            Require(!wire::Decode(oldVersion),"protocol v3 accepted");
+            namespace pb=object_fps_pvp::client::v4;
+            const auto maximum=std::numeric_limits<std::uint64_t>::max();
+            pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
+            pb::ActionResults results;results.set_retired_through(maximum-MaxActionBatch);
+            for(std::size_t i=0;i<MaxActionBatch;++i){
+                auto* shot=actions.add_shots();shot->set_action_id(maximum-MaxActionBatch+1+i);
+                shot->set_observed_authority_tick(maximum);shot->set_yaw(3.14F);shot->set_pitch(MovementMaximumPitch);
+                auto* decision=results.add_decisions();decision->set_action_id(shot->action_id());
+                decision->set_resolved_tick(maximum);decision->set_accepted(true);
+                decision->set_hit_kind(pb::HIT_PLAYER);decision->set_target_id(maximum);
+                decision->set_damage(PvpCombatRules.shotDamage);
+            }
+            pb::WorldSnapshot snapshot;snapshot.set_tick(maximum);
+            for(std::size_t i=0;i<2;++i){
+                auto* player=snapshot.add_players();player->set_player_id(maximum-i);
+                player->set_x(1);player->set_y(1);player->set_z(1);player->set_yaw(1);player->set_pitch(1);
+                player->set_last_resolved_command(maximum);player->set_movement_epoch(maximum);
+                player->set_contiguous_pending_commands(MaxFutureCommands);
+                auto* combat=snapshot.add_combat();combat->set_player_id(maximum-i);
+                combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);
+            }
+            const auto actionBytes=wire::Encode({wire::Type::Actions,maximum,0xffffffffu,actions.SerializeAsString()});
+            const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});
+            const auto snapshotBytes=wire::Encode({wire::Type::Snapshot,maximum,0xffffffffu,snapshot.SerializeAsString()});
+            Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
+                "maximum legal v4 protobuf plus24-byte UDP header exceeds1200 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }
             Require(oversizedRejected,"oversized UDP accepted");
             bytes[20]=1;Require(!wire::Decode(bytes),"invalid UDP length accepted");
-            std::cout<<"wire self-test passed\n";return 0;
+            std::cout<<"wire v4 self-test passed; maximum legal action/result/snapshot datagrams="
+                <<actionBytes.size()<<'/'<<resultBytes.size()<<'/'<<snapshotBytes.size()<<" bytes; versions1-3 rejected\n";return 0;
         }
         ClientConnection a,b;
         a.CreateAndJoin(gateway);
@@ -127,8 +158,12 @@ int main(int argc,char** argv) {
         b.Refresh(gateway);
         Wait([&]{const auto s=b.State();if(!s.error.empty())throw std::runtime_error(s.error);return s.phase==ConnectionPhase::Lobby && !s.rooms.empty();},"room list failed");
         b.Join(gateway,b.State().rooms.front().id);
-        Wait([&]{const auto s=b.State();if(!s.error.empty())throw std::runtime_error(s.error);return s.phase==ConnectionPhase::Playing && a.State().snapshot->players.size()==2;},"second client failed to join");
+        Wait([&]{const auto s=b.State(),first=a.State();if(!s.error.empty())throw std::runtime_error(s.error);
+            return s.phase==ConnectionPhase::Playing && first.snapshot && first.snapshot->players.size()==2 &&
+                s.snapshot && s.snapshot->players.size()==2;},"second client failed to join");
         const auto idA=a.State().playerId,idB=b.State().playerId;
+        Require(a.State().combatRules.has_value() && b.State().combatRules.has_value(),"Welcome lacks authoritative combat rules");
+        Require(a.State().snapshot->combat.size()==2 && b.State().snapshot->combat.size()==2,"Snapshot lacks independent combat state");
         if(!disconnectReady.empty()) {
             {std::ofstream signal(disconnectReady);signal<<"ready\n";Require(bool(signal),"cannot signal disconnect readiness");}
             Wait([&]{return a.State().phase==ConnectionPhase::Lobby && b.State().phase==ConnectionPhase::Lobby;},

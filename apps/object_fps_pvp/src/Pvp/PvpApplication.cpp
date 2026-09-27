@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/App/WeaponViewModel.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -14,12 +15,14 @@
 #include "engine/asset/core/AssetStorage.hpp"
 #include "engine/asset/loaders/FontLoader.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
+#include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/AssetPipeline.hpp"
 #include "engine/asset/loading/LoaderRegistry.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
+#include "model/backend/ufbx/UfbxModelLoader.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
 #include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "render/PrimitiveMesh.hpp"
@@ -90,6 +93,10 @@ struct PvpApplication::Impl final {
     Engine::Render::MeshHandle cube;
     Engine::Render::MeshHandle floor;
     Engine::Render::RenderQueue queue;
+    std::unique_ptr<fps::WeaponViewModel> weapon;
+    WeaponFeedbackObservation weaponFeedback;
+    fps::WeaponViewModelAction weaponAction{fps::WeaponViewModelAction::Idle};
+    Clock::time_point weaponStartedAt{}, localCooldownUntil{}, hitMarkerUntil{}, rejectionUntil{};
     ClientConnection connection;
     ClientConnectionState state;
     std::unique_ptr<LocalPlayerPrediction> prediction;
@@ -105,10 +112,12 @@ struct PvpApplication::Impl final {
     float width{1280}, height{720}, yaw{}, pitch{};
     PlayerId viewPlayer{}, renderedPlayer{};
     bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
+    bool leftButtonDown{}, pointerAcquiredThisFrame{}, pendingShotEdge{};
     int exitCode{};
 
     ~Impl() {
         connection.Leave();
+        weapon.reset();
         uiRenderer.Reset();
         if (device) {
             if (cube.IsValid()) static_cast<void>(device->ReleaseMesh(cube));
@@ -142,6 +151,8 @@ struct PvpApplication::Impl final {
         if (inputCaptured) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
             static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(SDL_GetTicks()));
         inputCaptured = false;
+        pendingShotEdge = false;
+        leftButtonDown = false;
         const auto released = input->SetRelativeMouseMode(false);
         if (!released) {
             lastError = Explain(released.error());
@@ -151,11 +162,16 @@ struct PvpApplication::Impl final {
     }
 
     void HandleNativeEvent(const SDL_Event& event) {
+        if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(platform->NativeWindow())) {
+            width = static_cast<float>((std::max)(1, event.window.data1));
+            height = static_cast<float>((std::max)(1, event.window.data2));
+        }
         if (InWorld()) {
             const auto windowId = SDL_GetWindowID(platform->NativeWindow());
             if (((event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) && event.window.windowID != windowId) ||
                 (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID != windowId) ||
-                (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.windowID != windowId)) return;
+                ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+                    event.button.windowID != windowId)) return;
             if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_MOVED ||
                 event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_MINIMIZED) {
                 // Release during the native event, before the next simulation
@@ -164,12 +180,19 @@ struct PvpApplication::Impl final {
                 ReleasePointer();
             } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_TAB && !event.key.repeat &&
                        input->Snapshot().windowFocused && !windowInteraction) {
-                if (inputCaptured) ReleasePointer();
-                else inputCaptured = true;
+                if (inputCaptured) { windowInteraction = true; ReleasePointer(); }
+                else { inputCaptured = true; pointerAcquiredThisFrame = true; }
             } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
                        input->Snapshot().windowFocused && !windowInteraction &&
                        event.button.x >= 0 && event.button.x < width && event.button.y >= 0 && event.button.y < height) {
-                inputCaptured = true;
+                const bool rising = !leftButtonDown;
+                leftButtonDown = true;
+                if (!inputCaptured) {
+                    inputCaptured = true;
+                    pointerAcquiredThisFrame = true;
+                } else if (rising && !pointerAcquiredThisFrame) pendingShotEdge = true;
+            } else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+                leftButtonDown = false;
             }
             return;
         }
@@ -237,6 +260,7 @@ struct PvpApplication::Impl final {
             viewPlayer = 0;
             if (prediction) prediction->Reset();
             predictionElapsed.Reset();
+            ResetWeaponFeedback();
         }
         ingressHistoryDrops = received.snapshotHistoryOverflowCount;
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
@@ -249,6 +273,7 @@ struct PvpApplication::Impl final {
             inputCaptured = false;
             if (prediction) prediction->Reset();
             predictionElapsed.Reset();
+            ResetWeaponFeedback();
             return;
         }
         if (viewPlayer != state.playerId) {
@@ -260,6 +285,37 @@ struct PvpApplication::Impl final {
             pitch = self->pitch;
             viewPlayer = state.playerId;
             inputCaptured = false;
+            ResetWeaponFeedback();
+            weaponFeedback.active = true;
+            weaponAction = fps::WeaponViewModelAction::Draw;
+            weaponStartedAt = Clock::now();
+            ++weaponFeedback.animationRevision;
+        }
+        weaponFeedback.maximumHp = state.combatRules ? state.combatRules->maximumHp : 0;
+        for (const auto& combat : state.snapshot->combat)
+            if (combat.playerId == state.playerId) weaponFeedback.hp = combat.hp;
+        // Drain owns delivery exactly once, independently of the movement ACK.
+        // A decision can display a hit/rejection, but never restart a local shot.
+        for (const auto& decision : received.decisions) {
+            ++weaponFeedback.decisionCount;
+            weaponFeedback.lastDecisionActionId = decision.actionId;
+            weaponFeedback.lastDecisionTick = decision.resolvedTick;
+            weaponFeedback.lastRejection = decision.rejection;
+            weaponFeedback.lastHitKind = decision.hitKind;
+            weaponFeedback.lastTargetId = decision.targetId;
+            weaponFeedback.lastDamage = decision.damage;
+            const auto now = Clock::now();
+            weaponFeedback.lastDecisionSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
+            if (decision.accepted) {
+                ++weaponFeedback.acceptedDecisions;
+                if (decision.hitKind == ShotHitKind::Player) {
+                    ++weaponFeedback.hitDecisions;
+                    hitMarkerUntil = now + std::chrono::milliseconds{180};
+                }
+            } else {
+                ++weaponFeedback.rejectedDecisions;
+                rejectionUntil = now + std::chrono::seconds{1};
+            }
         }
         // Consume the complete receipt-stamped batch before selecting this
         // frame's timeline bracket. Never play a stalled backlog one frame at a time.
@@ -271,6 +327,54 @@ struct PvpApplication::Impl final {
         }
     }
 
+    void ResetWeaponFeedback() {
+        weaponFeedback = {};
+        weaponFeedback.ready = weapon != nullptr;
+        weaponAction = fps::WeaponViewModelAction::Idle;
+        weaponStartedAt = localCooldownUntil = hitMarkerUntil = rejectionUntil = {};
+        pendingShotEdge = leftButtonDown = false;
+    }
+
+    void UpdateWeaponFeedback(Clock::time_point now) {
+        weaponFeedback.inputCaptured = InWorld() && inputCaptured && input->Snapshot().windowFocused;
+        weaponFeedback.yaw = yaw;
+        weaponFeedback.pitch = pitch;
+        if (!weaponFeedback.active) return;
+        if (pendingShotEdge && !pointerAcquiredThisFrame && !windowInteraction &&
+            weaponFeedback.inputCaptured && state.combatRules && now >= localCooldownUntil) {
+            const auto combat = std::find_if(state.snapshot->combat.begin(), state.snapshot->combat.end(),
+                [this](const CombatState& value) { return value.playerId == state.playerId; });
+            if (combat != state.snapshot->combat.end() && state.snapshot->tick >= combat->nextAllowedShotTick) {
+                if (const auto id = connection.SubmitShot(state.snapshot->tick, yaw, pitch)) {
+                    weaponFeedback.lastActionId = *id;
+                    ++weaponFeedback.submittedActions;
+                    ++weaponFeedback.animationStarts;
+                    ++weaponFeedback.animationRevision;
+                    weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
+                    weaponAction = fps::WeaponViewModelAction::Shoot;
+                    weaponStartedAt = now;
+                    localCooldownUntil = now + std::chrono::duration_cast<Clock::duration>(
+                        std::chrono::duration<double>{static_cast<double>(state.combatRules->cooldownTicks) / AuthorityTickRate});
+                }
+            }
+        }
+        pendingShotEdge = false;
+        double elapsed = std::chrono::duration<double>(now - weaponStartedAt).count();
+        double duration = weapon->GetActionDurationSeconds(weaponAction);
+        if (weaponAction != fps::WeaponViewModelAction::Idle && elapsed >= duration) {
+            weaponAction = fps::WeaponViewModelAction::Idle;
+            ++weaponFeedback.animationRevision;
+            elapsed = 0;
+            duration = 0;
+        }
+        weaponFeedback.actionElapsedSeconds = weaponAction == fps::WeaponViewModelAction::Idle ? 0 : elapsed;
+        weaponFeedback.actionDurationSeconds = duration;
+        weaponFeedback.shooting = weaponAction == fps::WeaponViewModelAction::Shoot;
+        weaponFeedback.drawing = weaponAction == fps::WeaponViewModelAction::Draw;
+        weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
+        weaponFeedback.cooldownRemainingSeconds = (std::max)(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
+    }
+
     bool SubmitBox(Engine::Render::Float3 center, Engine::Render::Float3 scale,
         Engine::Render::Color color, float rotation = 0.0F) {
         Engine::Render::MeshSubmission draw;
@@ -279,6 +383,25 @@ struct PvpApplication::Impl final {
         draw.material.tint = color;
         const auto result = queue.Submit(draw);
         if (!result) { lastError = Explain(result.error()); return false; }
+        return true;
+    }
+
+    bool SubmitWeapon() {
+        fps::WeaponViewModelFrame weaponFrame;
+        weaponFrame.action = weaponAction;
+        weaponFrame.elapsedSeconds = static_cast<float>(weaponFeedback.actionElapsedSeconds);
+        weaponFrame.durationSeconds = static_cast<float>(weaponFeedback.actionDurationSeconds);
+        // Cosmetic kick belongs solely to the dedicated viewmodel camera/layer.
+        weaponFrame.recoilRadians = weaponFeedback.shooting ?
+            .04F * std::exp(-14.0F * weaponFrame.elapsedSeconds) : 0;
+        if (!weapon->Submit(weaponFrame, queue, lastError)) return false;
+        const auto observation = weapon->GetObservation();
+        weaponFeedback.meshCount = observation.meshCount;
+        weaponFeedback.materialCount = observation.materialCount;
+        weaponFeedback.submittedMeshes = observation.submittedMeshCount;
+        weaponFeedback.poseRevision = observation.poseRevision;
+        weaponFeedback.sampledAnimationSeconds = observation.sampledTimeSeconds;
+        weaponFeedback.recoilRadians = observation.recoilRadians;
         return true;
     }
 
@@ -348,7 +471,7 @@ struct PvpApplication::Impl final {
                 position.y+arena->eyeHeight, position.z+std::cos(presented.yaw)*arena->radius},
                 {.24F,.12F,.12F},{.95F,.95F,.95F,1},presented.yaw)) return false;
         }
-        return true;
+        return SubmitWeapon();
     }
 
     Control Fail(std::string message) {
@@ -383,6 +506,10 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!fontLoader) { error = Explain(fontLoader.error()); return false; }
     const auto textLoader = impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
     if (!textLoader) { error = Explain(textLoader.error()); return false; }
+    const auto modelLoader = impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
+    if (!modelLoader) { error = Explain(modelLoader.error()); return false; }
+    const auto imageLoader = impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
+    if (!imageLoader) { error = Explain(imageLoader.error()); return false; }
     impl_->arena = Arena::Load(assetRoot / "pvp_arena.json", error);
     if (!impl_->arena) return false;
     impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
@@ -415,7 +542,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     platformOptions.title = options.title;
     platformOptions.width = options.width;
     platformOptions.height = options.height;
-    platformOptions.resizable = false;
+    platformOptions.resizable = true;
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create(platformOptions);
     if (!platform) { error = Explain(platform.error()); return false; }
     impl_->platform = std::move(platform).value();
@@ -439,6 +566,23 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     auto floor = impl_->device->CreateMesh(Engine::Render::MakeUnitQuadXZ().View());
     if (!floor) { error = Explain(floor.error()); return false; }
     impl_->floor = floor.value();
+    impl_->weapon = std::make_unique<fps::WeaponViewModel>();
+    if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
+        Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.mark23"), error)) return false;
+    // Prepare the actual viewmodel pass before joining. Model, images and GPU
+    // resources are loaded above; rendering Idle also warms the lazy pipelines
+    // shared by Draw and Shoot, so the first click performs no asset loading.
+    bool weaponPresented = false;
+    for (unsigned attempt = 0; attempt < 8 && !weaponPresented; ++attempt) {
+        impl_->queue.Reset({});
+        if (!impl_->weapon->Submit(fps::WeaponViewModelFrame{}, impl_->queue, error)) return false;
+        const auto warmup = impl_->renderer.Render(impl_->queue);
+        if (!warmup) { error = Explain(warmup.error()); return false; }
+        weaponPresented = warmup.value() == Engine::Render::PresentStatus::Presented;
+        if (!weaponPresented) SDL_Delay(10);
+    }
+    if (!weaponPresented) { error = "Cannot prepare the weapon presentation surface"; return false; }
+    impl_->ResetWeaponFeedback();
     impl_->input = std::make_unique<Engine::Input::Backend::Sdl::SdlInput>(*impl_->platform);
     impl_->width = static_cast<float>(options.width);
     impl_->height = static_cast<float>(options.height);
@@ -454,6 +598,8 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     const auto started = Clock::now();
     impl_->suppressUiEnter = false;
     impl_->windowInteraction = false;
+    impl_->pointerAcquiredThisFrame = false;
+    impl_->pendingShotEdge = false;
     impl_->input->BeginFrame();
     const auto control = impl_->platform->PumpEvents([this](const SDL_Event& event) {
         impl_->input->HandleEvent(event);
@@ -488,6 +634,8 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         } else {
             // Consume a presentation frame's raw mouse delta exactly once.
             if (impl_->inputCaptured && physical.windowFocused && physical.pointer.relativeMode) {
+                if (physical.pointer.deltaX != 0 || physical.pointer.deltaY != 0)
+                    ++impl_->weaponFeedback.mouseDeltaConsumeCount;
                 impl_->yaw = std::remainder(impl_->yaw + physical.pointer.deltaX * .0025F,
                     2.0F * std::numbers::pi_v<float>);
                 impl_->pitch = std::clamp(impl_->pitch + physical.pointer.deltaY * .0025F, -MovementMaximumPitch, MovementMaximumPitch);
@@ -502,6 +650,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             const double movementElapsed = impl_->predictionElapsed.Sample(Clock::now());
             if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->yaw, impl_->pitch))
                 impl_->connection.SendInput(impl_->prediction->PendingInput());
+            impl_->UpdateWeaponFeedback(Clock::now());
         }
     } else {
         Engine::Ui::UiInputFrame uiInput;
@@ -541,12 +690,32 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
     if (impl_->InWorld()) {
         if (!impl_->PrepareWorld()) return impl_->Fail(impl_->lastError);
         const float scale = (std::min)(impl_->width/1280.0F, impl_->height/720.0F);
-        draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,510*scale,62*scale},{.015F,.025F,.04F,.88F}});
+        draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,610*scale,86*scale},{.015F,.025F,.04F,.88F}});
         AddText(draws, "PLAYERS ONLINE: " + std::to_string(impl_->state.snapshot->players.size()),
             {30,24,490*scale,25*scale},18*scale);
-        AddText(draws, "WASD move  |  Mouse look  |  Tab cursor  |  ESC leave", {30,50,490*scale,22*scale},14*scale);
+        AddText(draws, "WASD move  |  Mouse look  |  Click shoot  |  Tab cursor  |  ESC leave",
+            {30,50,590*scale,22*scale},14*scale);
+        AddText(draws, "HP " + std::to_string(impl_->weaponFeedback.hp) + " / " +
+            std::to_string(impl_->weaponFeedback.maximumHp) + "    MARK23  /  unlimited ammo",
+            {30,74,590*scale,22*scale},14*scale);
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-5,impl_->height*.5F-1,10,2},{.9F,.96F,1,1}});
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-1,impl_->height*.5F-5,2,10},{.9F,.96F,1,1}});
+        if (impl_->weaponFeedback.hitMarkerVisible) {
+            for (const float x : {-9.0F, 6.0F}) for (const float y : {-9.0F, 6.0F})
+                draws.commands.emplace_back(Engine::Ui::UiQuadDraw{
+                    {impl_->width*.5F+x,impl_->height*.5F+y,3,3},{1,.35F,.12F,1}});
+        }
+        if (Clock::now() < impl_->rejectionUntil) {
+            std::string reason;
+            switch (impl_->weaponFeedback.lastRejection) {
+            case ShotRejection::Cooldown: reason = "Shot rejected: cooling down"; break;
+            case ShotRejection::Expired: reason = "Shot rejected: request expired"; break;
+            case ShotRejection::InvalidReference: reason = "Shot rejected: world state unavailable"; break;
+            default: break;
+            }
+            if (!reason.empty()) AddText(draws, reason, {30,106,560*scale,22*scale},14*scale);
+        } else if (impl_->state.actionTransport.pending > 0)
+            AddText(draws, "Shot pending confirmation", {30,106,560*scale,22*scale},14*scale);
         if (!impl_->inputCaptured || !impl_->input->Snapshot().windowFocused)
             AddText(draws, "Click inside the window to resume input", {impl_->width*.5F-190,110,480,30});
     } else {
@@ -582,7 +751,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         if (world) impl_->presentedMovement = PresentedMovementObservation{
             context.frameIndex, std::chrono::duration<double>(finished.time_since_epoch()).count(),
             impl_->state.playerId, impl_->prediction->Observation(), impl_->remoteMovement,
-            impl_->skippedPresentationFrames, impl_->connectionGeneration};
+            impl_->skippedPresentationFrames, impl_->connectionGeneration, impl_->weaponFeedback};
         if (world) {
             MovementTraceEvent event;
             event.kind = MovementTraceKind::Presentation;
@@ -624,6 +793,9 @@ const std::optional<RemoteMovementObservation>& PvpApplication::RemoteMovement()
 }
 const std::optional<PresentedMovementObservation>& PvpApplication::PresentedMovement() const noexcept {
     return impl_->presentedMovement;
+}
+const WeaponFeedbackObservation& PvpApplication::WeaponFeedback() const noexcept {
+    return impl_->weaponFeedback;
 }
 std::uint64_t PvpApplication::SkippedPresentationFrames() const noexcept {
     return impl_->skippedPresentationFrames;

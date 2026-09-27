@@ -13,7 +13,7 @@ if(NOT TARGET httplib::httplib)
 endif()
 set(protocol_output "${CMAKE_CURRENT_BINARY_DIR}/protocol")
 file(MAKE_DIRECTORY "${protocol_output}")
-foreach(contract client_v3 runtime_v3)
+foreach(contract client_v4 runtime_v4)
     add_custom_command(OUTPUT "${protocol_output}/${contract}.pb.cc" "${protocol_output}/${contract}.pb.h"
         COMMAND $<TARGET_FILE:protobuf::protoc> "--cpp_out=${protocol_output}"
             "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protocol" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/${contract}.proto"
@@ -31,16 +31,17 @@ gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHos
     PUBLIC_LIBRARIES ${domain})
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
     PUBLIC_LIBRARIES ${host}
-    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v3")
+    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v4")
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain}
-    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v3")
+    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v4")
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp
-    PUBLIC_LIBRARIES ${domain} ${network} GYO::Render
-    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer
-    PRIVATE_COMPONENTS SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
+        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
+    PUBLIC_LIBRARIES ${domain} ${network} GYO::Render GYO::Model GYO::ModelRenderer
+    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer nlohmann_json::nlohmann_json
+    PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
-    COMPONENTS SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
+    COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
 gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc})
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)

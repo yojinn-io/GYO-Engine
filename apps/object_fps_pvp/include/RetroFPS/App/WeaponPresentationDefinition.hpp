@@ -41,5 +41,9 @@ LoadWeaponPresentationDefinition(
 [[nodiscard]] Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose);
+[[nodiscard]] Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+    const WeaponPresentationDefinition& definition,
+    const Engine::Model::Pose& pose,
+    const Engine::Render::Transform3D& placement);
 
 } // namespace fps

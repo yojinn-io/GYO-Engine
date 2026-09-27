@@ -11,32 +11,34 @@ import presentation_evidence as evidence
 
 class LatencyEvidenceTests(unittest.TestCase):
     def scenario(self, delay, missing=(), ambiguous=False, malformed=False,
-                 presented_gaps=(), wrong_observer=False, observer_id=2, changed_generation=False):
+                 presented_gaps=(), wrong_observer=False, observer_id=2, changed_generation=False,
+                 short=False, analyze_as_long=False):
         temporary = tempfile.TemporaryDirectory(prefix="pvp-latency-evidence-")
         self.addCleanup(temporary.cleanup)
         directory = Path(temporary.name)
+        count, duration, period = (20, 16, .8) if short else (200, 120, .6)
         with (directory / "latency-plan.csv").open("w", newline="") as target:
             writer = csv.writer(target)
             writer.writerow(["event_id", "scheduled_host_seconds", "end_host_seconds", "sign",
                              "threshold_units", "duration_seconds", "event_count"])
-            for event in range(200):
-                writer.writerow([event, 102 + event * .6, 102 + (event + 1) * .6,
-                                 1 if event % 2 == 0 else -1, .25, 120, 200])
+            for event in range(count):
+                writer.writerow([event, 102 + event * period, 102 + (event + 1) * period,
+                                 1 if event % 2 == 0 else -1, .25, duration, count])
         with (directory / "latency-events.csv").open("w", newline="") as target:
             writer = csv.writer(target)
             writer.writerow(["event_id", "actual_start_host_seconds", "local_id", "movement_epoch",
                              "after_sequence", "origin_x", "origin_z", "direction_x", "direction_z"])
-            for event in range(200):
+            for event in range(count):
                 if event not in missing:
-                    writer.writerow([event, 102 + event * .6, 1, 1, 120 + event * 36,
+                    writer.writerow([event, 102 + event * period, 1, 1, int(120 + event * period * 60),
                                      0, 0 if event % 2 == 0 else .9, 0, 1 if event % 2 == 0 else -1])
 
         def position(time):
             elapsed = time - 102
-            if elapsed <= 0 or elapsed >= 120:
+            if elapsed <= 0 or elapsed >= duration:
                 return 0
-            leg = int(elapsed / .6)
-            phase = elapsed - leg * .6
+            leg = int(elapsed / period)
+            phase = elapsed - leg * period
             return (0 if leg % 2 == 0 else .9) + (1 if leg % 2 == 0 else -1) * min(phase, .3) * 3
 
         fields = ["host_steady_seconds", "local_id", "local_x", "local_z", "remote_id", "remote_x", "remote_z",
@@ -45,15 +47,15 @@ class LatencyEvidenceTests(unittest.TestCase):
                   "connection_generation"]
         for role in ("create", "join"):
             (directory / f"{role}-report.txt").write_text(
-                f"player_id={1 if role == 'create' else observer_id}\nmode=latency\ncapture=none\nnominal_fps=60\nskipped_frames=0\n",
+                f"player_id={1 if role == 'create' else observer_id}\nmode={'latency-short' if short else 'latency'}\ncapture=none\nnominal_fps=60\nskipped_frames=0\n",
                 encoding="utf-8")
             with (directory / f"{role}-presentation.csv").open("w", newline="") as target:
                 writer = csv.DictWriter(target, fieldnames=fields)
                 writer.writeheader()
                 for frame in range(7500):
                     time = 100 + frame / 60
-                    event = math.floor((time - 102) / .6)
-                    if role == "join" and event in presented_gaps and .06 < (time - 102) % .6 < .25:
+                    event = math.floor((time - 102) / period)
+                    if role == "join" and event in presented_gaps and .06 < (time - 102) % period < .25:
                         continue
                     command = (time - 100) * 60
                     remote_command = max(0, (time - delay - 100) * 60)
@@ -76,7 +78,29 @@ class LatencyEvidenceTests(unittest.TestCase):
                     if changed_generation and role == "join" and frame >= 600:
                         row["connection_generation"] = 2
                     writer.writerow(row)
-        return evidence.analyze_latency(directory)
+        return (evidence.analyze_short_latency(directory) if short and not analyze_as_long
+                else evidence.analyze_latency(directory))
+
+    def test_explicit_short_keeps_same_latency_thresholds(self):
+        result = self.scenario(.04, short=True)
+        self.assertTrue(result["passed"], result["errors"])
+        self.assertEqual(result["matched_event_count"], 20)
+        self.assertFalse(result["long_run_certification"])
+        self.assertEqual(result["criteria"]["maximum_p50_seconds"], .05)
+        self.assertEqual(result["criteria"]["maximum_p95_seconds"], .08)
+        self.assertFalse(self.scenario(.1, short=True)["passed"])
+
+    def test_short_evidence_never_passes_long_run_gate(self):
+        result = self.scenario(.04, short=True, analyze_as_long=True)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["criteria"]["minimum_seconds"], 120)
+        self.assertEqual(result["criteria"]["minimum_events"], 200)
+
+    def test_short_unmatched_event_stays_in_denominator(self):
+        result = self.scenario(.04, short=True, missing=(5,))
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["planned_event_count"], 20)
+        self.assertEqual(result["infinite_event_count"], 1)
 
     def test_clean_40_ms_passes(self):
         result = self.scenario(.04)

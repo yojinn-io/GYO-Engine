@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv3"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
+	client "gyo.local/object_fps_pvp/protocol/clientv4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
 )
 
 func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
@@ -71,8 +71,8 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 }
 
 func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
-	in := &runtime.WorldSnapshot{Tick: 3, Players: []*runtime.PlayerState{{MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88}}}
-	out, err := SnapshotForClient(in)
+	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88}}}
+	out, err := SnapshotForClient(in, testRules())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,18 +102,22 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 		t.Fatal("epoch zero accepted")
 	}
 	state := &runtime.PlayerState{PlayerId: 1, MovementEpoch: 9, LastResolvedCommand: 2, ContiguousPendingCommands: MaxFutureCommands}
-	snapshot := &runtime.WorldSnapshot{Tick: 8, Players: []*runtime.PlayerState{state}}
-	out, err := SnapshotForClient(snapshot)
+	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{PlayerId: 1, Hp: 100}}, Tick: 8, Players: []*runtime.PlayerState{state}}
+	out, err := SnapshotForClient(snapshot, testRules())
 	if err != nil || out.Players[0].MovementEpoch != 9 || out.Players[0].ContiguousPendingCommands != MaxFutureCommands {
 		t.Fatalf("authority metadata lost: %v %v", out, err)
 	}
 	state.ContiguousPendingCommands++
-	if _, err := SnapshotForClient(snapshot); err == nil {
+	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("unbounded authority queue accepted")
 	}
 	state.ContiguousPendingCommands = 0
 	state.MovementEpoch = 0
-	if _, err := SnapshotForClient(snapshot); err == nil {
+	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("epoch-zero authority accepted")
 	}
+}
+
+func testRules() *runtime.CombatRules {
+	return &runtime.CombatRules{MaximumHp: 100, ShotDamage: 25, CooldownTicks: 20, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

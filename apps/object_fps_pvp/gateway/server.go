@@ -21,8 +21,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv3"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
+	client "gyo.local/object_fps_pvp/protocol/clientv4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
 )
 
 const sessionTimeout = 5 * time.Second
@@ -38,6 +38,9 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
+	actions       *actionWindow
+	packetWindow  time.Time
+	packetCount   uint64
 	session       *session.Session
 	playerID      uint64
 	requestID     string
@@ -49,30 +52,34 @@ type reservation struct {
 	outSequence   uint32
 }
 type outbound struct {
-	peer   netip.AddrPort
-	packet []byte
+	actionPlayer uint64
+	peer         netip.AddrPort
+	packet       []byte
 }
 
 type Server struct {
-	config               Config
-	mu                   sync.Mutex
-	available            bool
-	created              bool
-	ready                *runtime.Ready
-	link                 *runtimeLink
-	players              map[uint64]*reservation
-	sessions             map[uint64]*reservation
-	requests             map[string]*reservation
-	nextPlayer           uint64
-	lastSnapshot         uint64
-	hasSnapshot          bool
-	http                 *http.Server
-	listener             net.Listener
-	udp                  *net.UDPConn
-	controlOut           chan outbound
-	snapshotOut          chan []byte
-	closeOnce            sync.Once
-	snapshotReplacements atomic.Uint64
+	config                  Config
+	mu                      sync.Mutex
+	available               bool
+	created                 bool
+	ready                   *runtime.Ready
+	link                    *runtimeLink
+	players                 map[uint64]*reservation
+	sessions                map[uint64]*reservation
+	requests                map[string]*reservation
+	nextPlayer              uint64
+	lastSnapshot            uint64
+	hasSnapshot             bool
+	http                    *http.Server
+	listener                net.Listener
+	udp                     *net.UDPConn
+	controlOut              chan outbound
+	snapshotOut             chan []byte
+	closeOnce               sync.Once
+	snapshotReplacements    atomic.Uint64
+	rateAcceptedPackets     atomic.Uint64
+	rateRejectedPackets     atomic.Uint64
+	maxSessionWindowPackets atomic.Uint64
 }
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
@@ -143,7 +150,7 @@ func (s *Server) Close() {
 		_ = s.udp.Close()
 		_ = s.http.Close()
 		_ = s.listener.Close()
-		log.Printf("gateway transport coalesced_snapshots=%d", s.snapshotReplacements.Load())
+		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
 	})
 }
 
@@ -240,12 +247,13 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 	if len(s.players) >= int(s.ready.MaxPlayers) {
 		return nil, http.StatusConflict, "room_full"
 	}
-	peer, err := session.New(time.Now())
+	createdAt := time.Now()
+	peer, err := session.New(createdAt)
 	if err != nil {
 		return nil, http.StatusInternalServerError, "session_creation_failed"
 	}
 	for s.sessions[peer.ID] != nil {
-		peer, err = session.New(time.Now())
+		peer, err = session.New(createdAt)
 		if err != nil {
 			return nil, http.StatusInternalServerError, "session_creation_failed"
 		}
@@ -254,7 +262,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1,
+	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1,
 		commands: make(map[uint64]*runtime.MovementCommand)}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
@@ -350,7 +358,12 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 	switch h.Type {
 	case adapter.Hello:
 		var hello client.Hello
-		if proto.Unmarshal(payload, &hello) != nil || p.session.Hello(hello.SessionToken, peer, h.Sequence, now) != nil {
+		if proto.Unmarshal(payload, &hello) != nil {
+			return nil
+		}
+		admission := p.session.Hello(hello.SessionToken, peer, h.Sequence, now)
+		s.trackAdmission(p, now, admission)
+		if admission != nil {
 			return nil
 		}
 		switch p.phase {
@@ -363,11 +376,16 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		case active:
 			s.welcome(p)
 		}
+	case adapter.Actions:
+		if p.phase != active || s.admit(p, peer, h.Sequence, now) != nil {
+			return nil
+		}
+		return s.receiveActions(p, h, payload, now)
 	case adapter.Input:
 		if p.phase != active {
 			return nil
 		}
-		if p.session.Admit(peer, h.Sequence, now) != nil {
+		if s.admit(p, peer, h.Sequence, now) != nil {
 			return nil
 		}
 		in, err := adapter.DecodeInput(payload, p.playerID)
@@ -410,12 +428,14 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 			p.commands[command.Sequence] = command
 		}
 		return nil
+	default:
+		_ = s.admit(p, peer, h.Sequence, now)
 	}
 	return nil
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion})
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, CombatRules: adapter.RulesForClient(s.ready.CombatRules)})
 }
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
@@ -428,12 +448,18 @@ func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message)
 		return
 	}
 	select {
-	case s.controlOut <- outbound{p.session.Endpoint(), packet}:
+	case s.controlOut <- outbound{peer: p.session.Endpoint(), packet: packet}:
 	default:
 	}
 }
 
 func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
+	if results := e.GetActionResults(); results != nil {
+		if err := s.receiveActionResults(results); err != nil {
+			s.runtimeFailed(err)
+		}
+		return
+	}
 	if result := e.GetJoinResult(); result != nil {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -451,7 +477,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		return
 	}
 	if snapshot := e.GetSnapshot(); snapshot != nil {
-		out, err := adapter.SnapshotForClient(snapshot)
+		out, err := adapter.SnapshotForClient(snapshot, s.ready.CombatRules)
 		if err != nil {
 			s.runtimeFailed(err)
 			return
@@ -517,10 +543,17 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 }
 
 func (s *Server) sendUDP(ctx context.Context) {
+	ticker := time.NewTicker(actionSendInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			for _, packet := range s.actionPackets(time.Now()) {
+				s.writeUDP(packet)
+				s.actionWritten(packet.actionPlayer, time.Now())
+			}
 		case packet := <-s.controlOut:
 			s.writeUDP(packet)
 		case payload := <-s.snapshotOut:
@@ -562,7 +595,7 @@ func (s *Server) snapshotForPeer(playerID uint64, payload []byte) ([]byte, outbo
 	if err != nil {
 		return payload, outbound{}
 	}
-	return payload, outbound{p.session.Endpoint(), packet}
+	return payload, outbound{peer: p.session.Endpoint(), packet: packet}
 }
 
 func (s *Server) writeUDP(packet outbound) {

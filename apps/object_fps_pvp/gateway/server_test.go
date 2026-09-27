@@ -16,8 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv3"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
+	client "gyo.local/object_fps_pvp/protocol/clientv4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
 )
 
 func TestCreateRoomWaitsForFragmentedJSON(t *testing.T) {
@@ -78,7 +78,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -119,6 +119,11 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 	return s, f
 }
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
+	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {
+		for _, p := range snapshot.Players {
+			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{PlayerId: p.PlayerId, Hp: 100})
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, _ := proto.Marshal(e)
@@ -478,7 +483,7 @@ func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 
-	for _, version := range []uint32{1, 2} {
+	for _, version := range []uint32{1, 2, 3} {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -493,7 +498,7 @@ func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
 			}
 			defer conn.Close()
 			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{
-				ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2}}}
+				ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()
@@ -701,7 +706,7 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	// A delayed old epoch can carry a numerically larger ACK and even an
 	// otherwise newer tick. It must not prune the replacement epoch's window.
 	stale := envelope()
-	stale.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 8,
+	stale.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 8, Combat: []*runtime.CombatState{{PlayerId: c.PlayerID, Hp: 100}},
 		Players: []*runtime.PlayerState{{PlayerId: c.PlayerID, MovementEpoch: 1, LastResolvedCommand: 999}}}}
 	s.runtimeMessage(stale)
 	s.mu.Lock()
@@ -713,18 +718,24 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	}
 }
 
-func TestV2ClientIsRejectedAfterV3Upgrade(t *testing.T) {
+func TestOldClientsAreRejectedAfterV4Upgrade(t *testing.T) {
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
-	status, _ := post(t, s, "/rooms/1/join", map[string]any{"request_id": "v2", "protocol_version": 2})
-	if status != http.StatusConflict {
-		t.Fatal("v2 HTTP join accepted")
-	}
-	c, p := reserve(t, s, "v3"), peer(t)
+	c, p := reserve(t, s, "v4"), peer(t)
 	payload, _ := proto.Marshal(&client.Hello{SessionToken: c.Token})
-	old, _ := framing.EncodeDatagram(framing.Header{Version: 2, Type: adapter.Hello, SessionID: c.SessionID, Sequence: 1}, payload)
-	if _, err := p.WriteToUDPAddrPort(old, netip.AddrPortFrom(netip.MustParseAddr(c.UDPIP), c.UDPPort)); err != nil {
-		t.Fatal(err)
+	for _, version := range []uint16{1, 2, 3} {
+		status, _ := post(t, s, "/rooms/1/join", map[string]any{"request_id": "old", "protocol_version": version})
+		if status != http.StatusConflict {
+			t.Fatalf("HTTP v%d accepted", version)
+		}
+		old, _ := framing.EncodeDatagram(framing.Header{Version: version, Type: adapter.Hello, SessionID: c.SessionID, Sequence: 1}, payload)
+		if _, err := p.WriteToUDPAddrPort(old, netip.AddrPortFrom(netip.MustParseAddr(c.UDPIP), c.UDPPort)); err != nil {
+			t.Fatal(err)
+		}
+		f.quiet(t)
 	}
-	f.quiet(t)
+}
+
+func testRules() *runtime.CombatRules {
+	return &runtime.CombatRules{MaximumHp: 100, ShotDamage: 25, CooldownTicks: 20, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

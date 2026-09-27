@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v3.pb.h"
+#include "runtime_v4.pb.h"
 #include <asio.hpp>
 #include <array>
 #include <charconv>
@@ -13,20 +13,43 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v3;
+namespace pb = object_fps_pvp::runtime::v4;
 using asio::ip::tcp;
 namespace {
 bool WouldBlock(const asio::error_code& error) {
     return error==asio::error::would_block || error==asio::error::try_again;
 }
 pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
-    pb::RuntimeEnvelope message; message.set_protocol_version(3);
+    pb::RuntimeEnvelope message; message.set_protocol_version(4);
     auto* out=message.mutable_snapshot(); out->set_tick(snapshot.tick);
     for(const auto& p:snapshot.players) {
         auto* state=out->add_players(); state->set_player_id(p.playerId);
         state->set_x(p.position.x); state->set_y(p.position.y); state->set_z(p.position.z);
         state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_resolved_command(p.lastResolvedCommand);
         state->set_movement_epoch(p.movementEpoch);state->set_contiguous_pending_commands(p.contiguousPendingCommands);
+    }
+    for(const auto& p:snapshot.combat) {
+        auto* state=out->add_combat();state->set_player_id(p.playerId);
+        state->set_hp(p.hp);state->set_next_allowed_shot_tick(p.nextAllowedShotTick);
+    }
+    return message;
+}
+pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor) {
+    pb::RuntimeEnvelope message;message.set_protocol_version(4);
+    auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
+    out->set_retired_through(results.retiredThrough);
+    if(results.decisions.empty()) {cursor=results.retiredThrough;return message;}
+    const auto first=std::find_if(results.decisions.begin(),results.decisions.end(),
+        [&](const auto& decision){return decision.actionId>cursor;});
+    const auto offset=first==results.decisions.end()?0:static_cast<std::size_t>(first-results.decisions.begin());
+    for(std::size_t i=0;i<(std::min)(MaxActionBatch,results.decisions.size());++i) {
+        const auto& decision=results.decisions[(offset+i)%results.decisions.size()];
+        auto* value=out->add_decisions();value->set_action_id(decision.actionId);
+        value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
+        value->set_rejection(static_cast<pb::ShotRejection>(decision.rejection));
+        value->set_hit_kind(static_cast<pb::ShotHitKind>(decision.hitKind));
+        value->set_target_id(decision.targetId);value->set_damage(decision.damage);
+        cursor=decision.actionId;
     }
     return message;
 }
@@ -54,9 +77,16 @@ struct IpcHost::Impl {
         std::uint64_t writingTick{},coalescedSnapshots{};
         Clock::time_point writingQueuedAt{};
         std::map<std::uint64_t,PlayerId> joins;
-        pb::RuntimeEnvelope ready; ready.set_protocol_version(3);
+        struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
+        std::map<PlayerId,ActionLane> actionLanes;
+        pb::RuntimeEnvelope ready; ready.set_protocol_version(4);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
+        auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);
+        rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(PvpCombatRules.cooldownTicks);
+        rules->set_shot_range(PvpCombatRules.shotRange);
+        rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
         controls.push_back(wire::Frame(ready.SerializeAsString()));
         std::array<std::uint8_t,8192> buffer{};
         while(!stop.stop_requested()) {
@@ -70,7 +100,7 @@ struct IpcHost::Impl {
                 if(!length || length>wire::MaxFrame) return;
                 if(input.size()<length+4) break;
                 pb::RuntimeEnvelope message;
-                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=3) return;
+                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=4) return;
                 input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
                 if(message.has_join()) {
                     if(joins.size()>=64) return;
@@ -79,6 +109,7 @@ struct IpcHost::Impl {
                     joins.emplace(request,message.join().player_id());
                 } else if(message.has_leave()) {
                     if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return;
+                    actionLanes.erase(message.leave().player_id());
                 } else if(message.has_input()) {
                     const auto& p=message.input();
                     if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
@@ -86,14 +117,24 @@ struct IpcHost::Impl {
                     for(const auto& command:p.commands())
                         window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch()});
                     static_cast<void>(host.SubmitInput(window));
+                } else if(message.has_actions()) {
+                    const auto& value=message.actions();
+                    if(value.shots_size()>static_cast<int>(MaxActionBatch)) continue;
+                    ActionBatch batch{value.player_id(),{}};
+                    for(const auto& shot:value.shots())
+                        batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch()});
+                    // Admission is distinct from a terminal shot decision. The
+                    // immutable request remains with the sender for retry.
+                    static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
                 } else return;
             }
             for(const auto& result:host.TakeControlResults()) {
                 const auto found=joins.find(result.requestId);
                 if(found==joins.end()) continue;
-                pb::RuntimeEnvelope message; message.set_protocol_version(3);
+                pb::RuntimeEnvelope message; message.set_protocol_version(4);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
+                if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);
                 controls.push_back(wire::Frame(message.SerializeAsString())); joins.erase(found);
                 if(controls.size()>64) return;
             }
@@ -116,7 +157,25 @@ struct IpcHost::Impl {
             if(writing.empty()) {
                 if(!controls.empty()) {
                     writing=std::move(controls.front());controls.pop_front();writingSnapshot=false;writingTick=0;writingQueuedAt=Clock::now();
-                } else if(latestSnapshot) {
+                } else {
+                    // Results stay in Match until Client ACK. Only choose a
+                    // batch when a write slot is free; a blocked socket cannot
+                    // accumulate or overwrite a separate decision queue.
+                    const auto now=Clock::now();
+                    for(auto it=actionLanes.begin();it!=actionLanes.end();) {
+                        auto& [playerId,lane]=*it;
+                        if(now<lane.nextSend) {++it;continue;}
+                        lane.nextSend=now+std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+                        const auto results=host.GetActionResults(playerId);
+                        if(!results) {it=actionLanes.erase(it);continue;}
+                        ++it;
+                        if(results->decisions.empty() && results->retiredThrough==0) continue;
+                        writing=wire::Frame(ActionMessage(*results,lane.cursor).SerializeAsString());
+                        writingSnapshot=false;writingTick=0;writingQueuedAt=now;
+                        break;
+                    }
+                }
+                if(writing.empty() && latestSnapshot) {
                     writing=std::move(latestSnapshot->bytes);writingTick=latestSnapshot->tick;
                     writingQueuedAt=latestSnapshot->queuedAt;writingSnapshot=true;latestSnapshot.reset();
                 }

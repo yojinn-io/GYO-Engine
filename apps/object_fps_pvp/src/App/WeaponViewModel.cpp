@@ -1,6 +1,7 @@
 #include "RetroFPS/App/WeaponViewModel.hpp"
 #include "render/RenderQueue.hpp"
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/Gameplay/Weapon/WeaponState.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -27,6 +28,15 @@ std::size_t ClipSlot(WeaponAction action) {
     }
 }
 
+std::size_t ClipSlot(WeaponViewModelAction action) {
+    switch (action) {
+    case WeaponViewModelAction::Idle: return 0;
+    case WeaponViewModelAction::Shoot: return 1;
+    case WeaponViewModelAction::Draw: return 3;
+    }
+    return static_cast<std::size_t>(-1);
+}
+
 } // namespace
 
 struct WeaponViewModel::Impl final {
@@ -40,6 +50,9 @@ struct WeaponViewModel::Impl final {
     Engine::Render::Float3 muzzleViewCameraPosition{};
     std::size_t lastClip{static_cast<std::size_t>(-1)};
     double lastTime{-1.0};
+    std::uint64_t poseRevision{}, submissionCount{};
+    std::size_t submittedMeshCount{};
+    float recoilRadians{};
 
     ~Impl() {
         modelInstance.reset();
@@ -99,20 +112,26 @@ struct WeaponViewModel::Impl final {
         modelInstance = std::move(instance.value());
         lastClip = definition->clips[0];
         lastTime = 0.0;
+        poseRevision = 1;
     }
 
-    bool Submit(const WeaponPresentationSnapshot& snapshot,
+    bool Submit(std::size_t slot, float elapsedSeconds, float durationSeconds,
+                float recoil,
                 Engine::Render::RenderQueue& queue, std::string& error) {
-        if (snapshot.action == WeaponAction::Holstered) return true;
-        if (!std::isfinite(snapshot.elapsedSeconds) || snapshot.elapsedSeconds < 0 ||
-            !std::isfinite(snapshot.durationSeconds) || snapshot.durationSeconds < 0) {
+        submittedMeshCount = 0;
+        if (slot >= definition->clips.size()) {
+            throw std::runtime_error("weapon frame has an invalid action");
+        }
+        if (!std::isfinite(elapsedSeconds) || elapsedSeconds < 0 ||
+            !std::isfinite(durationSeconds) || durationSeconds < 0 ||
+            !std::isfinite(recoil)) {
             throw std::runtime_error("weapon snapshot has an invalid action time");
         }
-        const std::size_t clip = definition->clips[ClipSlot(snapshot.action)];
-        const double progress = snapshot.durationSeconds > 0
-            ? std::clamp(static_cast<double>(snapshot.elapsedSeconds) /
-                         snapshot.durationSeconds, 0.0, 1.0) : 0.0;
-        const double time = snapshot.action == WeaponAction::Idle
+        const std::size_t clip = definition->clips[slot];
+        const double progress = durationSeconds > 0
+            ? std::clamp(static_cast<double>(elapsedSeconds) /
+                         durationSeconds, 0.0, 1.0) : 0.0;
+        const double time = slot == 0
             ? 0.0 : definition->model->clips[clip].durationSeconds * progress;
         if (clip != lastClip || time != lastTime) {
             Evaluate(clip, time);
@@ -120,14 +139,22 @@ struct WeaponViewModel::Impl final {
             if (!updated) throw std::runtime_error(updated.error());
             lastClip = clip;
             lastTime = time;
+            ++poseRevision;
         }
+        auto placement = definition->placement;
+        placement.rotationRadians.x += recoil;
         queue.SetViewModelCamera(definition->camera);
-        const auto submitted = modelInstance->Submit(queue, definition->placement,
+        const auto before = queue.Meshes().size();
+        const auto submitted = modelInstance->Submit(queue, placement,
             Engine::Render::MeshLayer::ViewModel);
         if (!submitted) {
             error = submitted.error();
             return false;
         }
+        muzzleViewCameraPosition = EvaluateWeaponMuzzleViewCameraPosition(*definition, pose, placement);
+        submittedMeshCount = queue.Meshes().size() - before;
+        ++submissionCount;
+        recoilRadians = recoil;
         return true;
     }
 };
@@ -137,6 +164,21 @@ WeaponViewModel::~WeaponViewModel() = default;
 
 Engine::Render::Float3 WeaponViewModel::GetMuzzleViewCameraPosition() const noexcept {
     return impl_ ? impl_->muzzleViewCameraPosition : Engine::Render::Float3{};
+}
+
+float WeaponViewModel::GetActionDurationSeconds(WeaponViewModelAction action) const noexcept {
+    const auto slot = ClipSlot(action);
+    if (!impl_ || slot >= impl_->definition->clips.size()) return 0.0F;
+    return static_cast<float>(impl_->definition->model->clips[impl_->definition->clips[slot]].durationSeconds);
+}
+
+WeaponViewModelObservation WeaponViewModel::GetObservation() const {
+    if (!impl_) return {};
+    return {true, impl_->definition->model->meshes.size(),
+        impl_->definition->materialTextureAssetIds.size(), impl_->submittedMeshCount,
+        impl_->submissionCount, impl_->poseRevision,
+        impl_->definition->model->clips[impl_->lastClip].name,
+        impl_->lastTime, impl_->recoilRadians};
 }
 
 bool WeaponViewModel::Initialize(Engine::Render::IRenderDevice& device,
@@ -160,9 +202,28 @@ bool WeaponViewModel::Initialize(Engine::Render::IRenderDevice& device,
 
 bool WeaponViewModel::Submit(const WeaponPresentationSnapshot& snapshot,
                             Engine::Render::RenderQueue& queue, std::string& error) {
+    error.clear();
     if (!impl_) { error = "weapon viewmodel is not initialized"; return false; }
     try {
-        return impl_->Submit(snapshot, queue, error);
+        if (snapshot.action == WeaponAction::Holstered) {
+            impl_->submittedMeshCount = 0;
+            return true;
+        }
+        return impl_->Submit(ClipSlot(snapshot.action), snapshot.elapsedSeconds,
+            snapshot.durationSeconds, 0.0F, queue, error);
+    } catch (const std::exception& exception) {
+        error = "failed to present weapon viewmodel: " + std::string(exception.what());
+        return false;
+    }
+}
+
+bool WeaponViewModel::Submit(const WeaponViewModelFrame& frame,
+                            Engine::Render::RenderQueue& queue, std::string& error) {
+    error.clear();
+    if (!impl_) { error = "weapon viewmodel is not initialized"; return false; }
+    try {
+        return impl_->Submit(ClipSlot(frame.action), frame.elapsedSeconds,
+            frame.durationSeconds, frame.recoilRadians, queue, error);
     } catch (const std::exception& exception) {
         error = "failed to present weapon viewmodel: " + std::string(exception.what());
         return false;

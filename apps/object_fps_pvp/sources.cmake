@@ -31,6 +31,7 @@ set(APP_DOMAIN_SOURCES
 set(PVP_DOMAIN_SOURCES
     src/Pvp/Arena.cpp
     src/Pvp/PvpMatch.cpp
+    src/Pvp/ShotQuery.cpp
     src/Pvp/Movement.cpp
     src/Pvp/LocalPlayerPrediction.cpp
     src/Gameplay/Player/PlanarMovement.cpp

@@ -1,8 +1,8 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
-// The mock is external to production: HTTP joins and wire-v3 UDP snapshots only.
+// The mock is external to production: HTTP joins and wire-v4 UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v3.pb.h"
+#include "client_v4.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -11,6 +11,10 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <limits>
+#include <map>
+#include <mutex>
+#include <set>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -19,18 +23,24 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v3;
+namespace pb=object_fps_pvp::client::v4;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
+struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
+struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
 class MockGateway {
 public:
     MockGateway():socket(io,udp::endpoint(asio::ip::address_v4::loopback(),0)) {
         socket.non_blocking(true);
         http.Get("/rooms",[](const auto&,auto& response){response.set_content(R"({"rooms":[]})","application/json");});
-        http.Post("/rooms/1/join",[&](const auto&,auto& response){
-            const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",3},
+        http.Post("/rooms/1/join",[&](const auto& request,auto& response){
+            const auto body=Json::parse(request.body);
+            if(body.value("protocol_version",0)!=4) {
+                response.status=400;response.set_content(R"({"error":"expected v4"})","application/json");return;
+            }
+            const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
                 {"arena_id","worker-test"},{"arena_version",1},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
             response.set_content(reply.dump(),"application/json");
         });
@@ -51,17 +61,26 @@ public:
             if(error)throw std::runtime_error(error.message());
             const auto packet=wire::Decode(std::span(buffer).first(size));
             Require(packet.has_value() && packet->session==1,"invalid worker UDP envelope");
-            peer=source;
+            peer=source;packets.push_back({Clock::now(),packet->type,size});
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);
+                if(includeRules) {
+                    auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
+                    rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
+                }
                 Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
-                pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()==1 &&
+                pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
                     input.commands_size()>0 && input.commands_size()<=12,"invalid worker input window");
                 attempts.push_back({Clock::now(),input});
                 if(autoAck)Snapshot(input.commands(input.commands_size()-1).sequence());
+            } else if(packet->type==wire::Type::Actions) {
+                pb::ActionBatch message;
+                Require(message.ParseFromString(packet->payload) && message.shots_size()<=MaxActionBatch &&
+                    (message.shots_size() || message.acknowledged_through()),"invalid worker action batch");
+                actionAttempts.push_back({Clock::now(),message});
             }
         }
     }
@@ -76,15 +95,30 @@ public:
     void UntilTime(Clock::time_point deadline){Until([&]{return Clock::now()>=deadline;});}
     void Snapshot(std::uint64_t resolved) {
         ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
-        auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(1);player->set_last_resolved_command(ack);
+        auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);
+        auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
+    void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
+        pb::ActionResults results;results.set_retired_through(retired);
+        for(const auto id:ids) {
+            auto* d=results.add_decisions();d->set_action_id(id);d->set_resolved_tick(123);
+            d->set_rejection(pb::REJECTION_COOLDOWN);
+        }
+        SendResults(results);
+    }
+    void SendResults(const pb::ActionResults& results){Send(wire::Type::ActionResults,results.SerializeAsString());}
     void FailConnection() {
         pb::Error error;error.set_code("worker_test_failure");error.set_message("Intentional worker lifecycle failure");
         Send(wire::Type::Error,error.SerializeAsString());
     }
     std::string address;
     std::vector<Attempt> attempts;
+    std::vector<ActionAttempt> actionAttempts;
+    std::vector<PacketAttempt> packets;
+    std::atomic<unsigned> protocolVersion{4};
+    bool includeRules{true};
+    std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
 private:
@@ -107,9 +141,152 @@ bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     Require(state.error.empty(),"worker connection failed");
     return state.snapshot && state.snapshot->players.at(0).lastResolvedCommand==sequence;
 }
+std::size_t CheckMaximumDatagrams() {
+    const auto max64=std::numeric_limits<std::uint64_t>::max();
+    const auto max32=std::numeric_limits<std::uint32_t>::max();
+    std::size_t largest{};
+    const auto check=[&](wire::Type type,const auto& message) {
+        const auto bytes=wire::Encode({type,max64,max32,message.SerializeAsString()});
+        Require(bytes.size()<=wire::MaxDatagram && wire::Decode(bytes).has_value(),"maximum-field v4 datagram exceeded envelope");
+        largest=std::max(largest,bytes.size());
+    };
+    pb::ActionBatch batch;batch.set_acknowledged_through(max64-MaxActionWindow);
+    pb::ActionResults results;results.set_retired_through(max64-MaxActionWindow);
+    for(std::size_t n=0;n<MaxActionBatch;++n) {
+        auto* shot=batch.add_shots();shot->set_action_id(max64-n);shot->set_observed_authority_tick(max64);
+        shot->set_yaw(3.0f);shot->set_pitch(1.5f);
+        auto* d=results.add_decisions();d->set_action_id(max64-n);d->set_resolved_tick(max64);
+        d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);
+    }
+    check(wire::Type::Actions,batch);check(wire::Type::ActionResults,results);
+    pb::PlayerInput movement;movement.set_movement_epoch(max64);
+    for(std::size_t n=0;n<MaxPendingCommands;++n) {
+        auto* c=movement.add_commands();c->set_sequence(max64-(MaxPendingCommands-1)+n);c->set_move_forward(1);c->set_move_right(1);
+        c->set_yaw(3.0f);c->set_pitch(1.5f);
+    }
+    check(wire::Type::Input,movement);
+    pb::WorldSnapshot snapshot;snapshot.set_tick(max64);
+    for(unsigned n=0;n<2;++n) {
+        auto* p=snapshot.add_players();p->set_player_id(max64-n);
+        p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
+        p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);
+        auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);
+    }
+    check(wire::Type::Snapshot,snapshot);
+    auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
+    for(std::uint64_t version=1;version<=3;++version) {
+        wire::Write(std::span(legacy).subspan(4,2),version);
+        Require(!wire::Decode(legacy),"v4 accepted legacy UDP version");
+    }
+    return largest;
+}
+
+Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
+    const auto rules=connection.State().combatRules;
+    Require(rules && rules->maximumHp==200 && rules->shotDamage==37 && rules->cooldownTicks==9 &&
+        rules->shotRange==140 && rules->maximumReferenceAge==333ms,"client duplicated authoritative combat defaults");
+    Require(connection.State().snapshot->combat.at(0).hp==74 &&
+        connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
+    Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
+    std::mutex allocatedMutex;std::vector<ActionId> allocated;
+    std::vector<std::jthread> producers;
+    for(unsigned n=0;n<8;++n)producers.emplace_back([&]{
+        for(unsigned shot=0;shot<4;++shot) {
+            const auto id=connection.SubmitShot(connection.State().snapshot->tick,0,0);
+            if(id){std::scoped_lock lock(allocatedMutex);allocated.push_back(*id);}
+        }
+    });
+    producers.clear();std::sort(allocated.begin(),allocated.end());
+    Require(allocated.size()==MaxActionWindow,"concurrent submission lost capacity");
+    for(std::size_t n=0;n<allocated.size();++n)Require(allocated[n]==n+1,"action allocation duplicated or skipped an ID");
+    Require(!connection.SubmitShot(1,0,0),"full action window accepted another request");
+    const auto firstActions=gateway.actionAttempts.size();
+    gateway.autoAck=false;connection.SendInput(Input(67,67));
+    const auto coexistenceStart=Clock::now();
+    // No Drain: the main-thread consumer is stalled for a full second while
+    // movement, Hello and the independent circular action worker continue.
+    gateway.UntilTime(coexistenceStart+1100ms);
+    std::map<ActionId,std::size_t> deliveries;
+    std::map<ActionId,std::string> immutableRequests;
+    for(std::size_t n=firstActions;n<gateway.actionAttempts.size();++n) {
+        const auto& attempt=gateway.actionAttempts[n];
+        Require(attempt.actions.shots_size()==MaxActionBatch && !attempt.actions.acknowledged_through(),"unexpected stalled action batch");
+        if(n>firstActions)Require(attempt.at-gateway.actionAttempts[n-1].at>=30ms,"action worker emitted overdue catch-up packets");
+        for(const auto& shot:attempt.actions.shots()) {
+            ++deliveries[shot.action_id()];
+            const auto [entry,inserted]=immutableRequests.emplace(shot.action_id(),shot.SerializeAsString());
+            Require(inserted || entry->second==shot.SerializeAsString(),"worker mutated an allocated shot on retry");
+        }
+    }
+    for(const auto id:allocated)Require(deliveries[id]>=2,"circular resend starved part of the 32-entry window");
+    std::size_t maxPacketsInSecond{};
+    // Every actual receive counts, including Hello and duplicate movement/action
+    // retransmissions. Check all sliding windows, stronger than one fixed phase.
+    for(std::size_t first=0,last=0;first<gateway.packets.size();++first) {
+        while(last<gateway.packets.size() && gateway.packets[last].at-gateway.packets[first].at<1s)++last;
+        maxPacketsInSecond=std::max(maxPacketsInSecond,last-first);
+    }
+    Require(maxPacketsInSecond<=120,"60+30+Hello exceeded the actual 120-packet session budget");
+    // Reordered results leave an ID-1 hole. Invalid/conflicting batches cannot
+    // partially publish ID 1 or retire data which the game has never consumed.
+    for(ActionId first=2;first<=32;first+=8) {
+        std::vector<ActionId> ids;
+        for(ActionId id=first;id<=32 && id<first+8;++id)ids.push_back(id);
+        gateway.Results(ids);
+    }
+    gateway.Until([&]{return connection.State().actionTransport.unconsumed==31;});
+    pb::ActionResults conflict;
+    auto* fresh=conflict.add_decisions();fresh->set_action_id(1);fresh->set_resolved_tick(123);fresh->set_rejection(pb::REJECTION_COOLDOWN);
+    auto* changed=conflict.add_decisions();changed->set_action_id(2);changed->set_resolved_tick(124);changed->set_rejection(pb::REJECTION_COOLDOWN);
+    gateway.SendResults(conflict);gateway.Results({},32);
+    gateway.Until([&]{return connection.State().actionTransport.rejectedResultBatches>=2;});
+    Require(connection.State().actionTransport.pending==1 && connection.State().actionTransport.retiredThrough==0,
+        "malformed result batch partially changed transport state");
+    const auto beforeEpoch=connection.State().actionTransport;
+    ++gateway.epoch;gateway.Snapshot(0);
+    gateway.Until([&]{return connection.State().snapshot->players.at(0).movementEpoch==gateway.epoch;});
+    Require(connection.State().actionTransport.retained==beforeEpoch.retained &&
+        connection.State().actionTransport.unconsumed==31,"movement epoch erased action results");
+    for(unsigned n=0;n<MaxReceivedSnapshots+16;++n)gateway.Snapshot(0);
+    gateway.UntilTime(Clock::now()+50ms);
+    const auto drained=connection.Drain();
+    Require(drained.overflow && drained.snapshots.size()==MaxReceivedSnapshots && drained.decisions.size()==31 &&
+        drained.state.actionTransport.acknowledgedThrough==0,"snapshot overflow lost decisions or ACK crossed an ID hole");
+    for(const auto& d:drained.decisions)Require(!d.accepted && d.rejection==ShotRejection::Cooldown,"client fabricated a successful result");
+    gateway.Results({2,3,4,5,6,7,8,9});gateway.UntilTime(Clock::now()+10ms);
+    Require(connection.Drain().decisions.empty(),"duplicate results were delivered twice");
+    Require(!connection.SubmitShot(1,0,0),"consumed but unretired results freed the distance window");
+    gateway.Results({1});gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
+    const auto last=connection.Drain();
+    Require(last.decisions.size()==1 && last.decisions[0].actionId==1 &&
+        last.state.actionTransport.acknowledgedThrough==32,"contiguous consumed results failed to ACK through 32");
+    const auto ackStart=gateway.actionAttempts.size();
+    // Drop two ACK-only transmissions: no authority retirement is returned.
+    gateway.Until([&]{return gateway.actionAttempts.size()>=ackStart+3;});
+    for(std::size_t n=ackStart;n<gateway.actionAttempts.size();++n)
+        Require(gateway.actionAttempts[n].actions.shots().empty() && gateway.actionAttempts[n].actions.acknowledged_through()==32,
+            "ACK loss stopped acknowledgements or replayed decided shots");
+    Require(connection.State().actionTransport.retained==32,"unconfirmed ACK discarded bounded results");
+    gateway.Results({},16);gateway.Until([&]{return connection.State().actionTransport.retiredThrough==16;});
+    gateway.Results({},0);gateway.Results({},32);
+    gateway.Until([&]{return connection.State().actionTransport.retained==0;});
+    const auto resumed=connection.SubmitShot(connection.State().snapshot->tick,0,0);
+    Require(resumed && *resumed==33,"retirement or failed submission skipped an allocated ID");
+    gateway.Until([&]{return !gateway.actionAttempts.back().actions.shots().empty() && gateway.actionAttempts.back().actions.shots(0).action_id()==33;});
+    gateway.Results({33},32);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
+    Require(connection.Drain().decisions.size()==1,"new action failed after clearing loss");
+    gateway.Results({},33);gateway.Until([&]{return connection.State().actionTransport.retained==0;});
+    const auto state=connection.State().actionTransport;
+    Require(state.maxDatagramBytes<=wire::MaxDatagram && state.maxBatchShots==8,"worker diagnostics exceeded packet limits");
+    return Json{{"concurrent_actions",allocated.size()},{"max_packets_in_any_1s",maxPacketsInSecond},
+        {"action_batches",state.sentBatches},{"ack_only_batches",state.sentAckOnlyBatches},
+        {"invalid_result_batches",state.rejectedResultBatches},{"max_action_datagram_bytes",state.maxDatagramBytes},
+        {"main_stall_ms",1100},{"restored_action_id",*resumed}};
+}
 }
 int main() {
     try {
+        const auto maximumDatagram=CheckMaximumDatagrams();
         MockGateway gateway;ClientConnection connection;
         connection.SetArenaIdentity("worker-test",1);connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
@@ -153,7 +330,19 @@ int main() {
         gateway.Until([&]{return Acknowledged(connection,66);});
         const auto sixtyAttempts=gateway.attempts.size()-sixtyBegin;
         Require(sixtyAttempts>=60 && sixtyAttempts<=70,"fully acknowledged 60 FPS publication caused excessive sends");
+        const auto actionEvidence=CheckActions(gateway,connection);
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+        Require(!connection.State().combatRules && connection.State().actionTransport.retained==0 &&
+            connection.State().actionTransport.allocatedThrough==0 && connection.Drain().decisions.empty(),"Leave retained action lifecycle state");
+        gateway.epoch=1;
+
+        gateway.protocolVersion=3;connection.Join(gateway.address,"1");
+        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
+        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v3 join");
+        gateway.protocolVersion=4;gateway.includeRules=false;connection.Join(gateway.address,"1");
+        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
+        Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
+        gateway.includeRules=true;
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.
@@ -164,6 +353,8 @@ int main() {
             connection.Join(gateway.address,"1");
             gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
             if(cycle)Require(gateway.leaves.load()>leavesBefore,"failed session cleanup was skipped before rejoin");
+            const auto freshAction=connection.SubmitShot(connection.State().snapshot->tick,0,0);
+            Require(freshAction && *freshAction==1,"new player lifecycle failed to restart action IDs");
             const auto initial=connection.Drain();
             const auto expectedTick=initial.state.snapshot->tick+MaxReceivedSnapshots+16;
             for(std::size_t index=0;index<MaxReceivedSnapshots+16;++index)gateway.Snapshot(66);
@@ -188,6 +379,9 @@ int main() {
                         !drained.state.snapshot && drained.state.playerId==0 && !drained.state.error.empty() &&
                         drained.snapshots.empty() && !drained.overflow && drained.snapshotHistoryOverflowCount==0,
                         "failure generation did not atomically publish empty Lobby state and history");
+                    Require(drained.decisions.empty() && !drained.state.combatRules &&
+                        drained.state.actionTransport.retained==0 && drained.state.actionTransport.allocatedThrough==0,
+                        "failure generation retained stale action state");
                     break;
                 }
                 Require(Clock::now()<deadline,"worker failure publication timed out");
@@ -197,7 +391,8 @@ int main() {
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
         std::cout<<Json{{"passed",true},{"restart_ms",restartMs},{"completed_window_gap_ms",completedWindowGapMs},
             {"partial_ack_gap_ms",partialGapMs},{"unacknowledged_resends_1s",resends},{"fully_acknowledged_60fps_attempts",sixtyAttempts},
-            {"atomic_failure_cycles",failureCycles},{"snapshot_history_overflows_exercised",overflowObserved}}.dump()<<'\n';
+            {"atomic_failure_cycles",failureCycles},{"snapshot_history_overflows_exercised",overflowObserved},
+            {"largest_maximum_field_datagram_bytes",maximumDatagram},{"actions",actionEvidence}}.dump()<<'\n';
         return 0;
     } catch(const std::exception& error){std::cerr<<"worker acceptance: "<<error.what()<<'\n';return 1;}
 }

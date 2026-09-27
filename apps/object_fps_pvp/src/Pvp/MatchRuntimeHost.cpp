@@ -11,7 +11,10 @@ namespace {
 constexpr std::size_t kMaximumControls = 64;
 }
 
-MatchRuntimeHost::MatchRuntimeHost(Arena arena) : match_(std::move(arena)) {}
+MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now)
+    : match_(std::move(arena)), now_(std::move(now)) {
+    if (!now_) throw std::invalid_argument("MatchRuntimeHost needs a monotonic clock");
+}
 
 bool MatchRuntimeHost::QueueControl(Control control) {
     std::lock_guard lock(mutex_);
@@ -59,6 +62,60 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     return true;
 }
 
+ActionAdmission MatchRuntimeHost::SubmitActions(const ActionBatch& batch) {
+    if (batch.shots.empty()) return ActionAdmission::InvalidBatch;
+    return SubmitActionBatch(batch, 0);
+}
+
+ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough) {
+    std::lock_guard lock(mutex_);
+    if (pendingReset_) return ActionAdmission::InvalidPlayer;
+    if (!match_.ContainsPlayer(batch.playerId)) return ActionAdmission::InvalidPlayer;
+    if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
+    const auto queuedAck = pendingActionAcknowledgements_.find(batch.playerId);
+    const auto through = queuedAck == pendingActionAcknowledgements_.end() ? acknowledgedThrough :
+        (std::max)(acknowledgedThrough, queuedAck->second);
+    const auto pending = pendingActions_.find(batch.playerId);
+    const std::span<const ShotRequest> staged = pending == pendingActions_.end()
+        ? std::span<const ShotRequest>{} : pending->second;
+    const auto admission = batch.shots.empty() ? ActionAdmission::Accepted :
+        match_.CanSubmitActions(batch, staged, through);
+    if (admission != ActionAdmission::Accepted) return admission;
+
+    const auto retained = match_.GetActionResults(batch.playerId);
+    auto merged = pending == pendingActions_.end() ? std::vector<ShotRequest>{} : pending->second;
+    const auto floor = (std::max)(retained->retiredThrough, through);
+    std::erase_if(merged, [=](const auto& shot) { return shot.actionId <= floor; });
+    for (const auto& shot : batch.shots) {
+        if (shot.actionId <= floor) continue;
+        // Resolved duplicates already have their immutable answer. They need no
+        // further simulation handoff; reads continue returning the same result.
+        if (std::any_of(retained->decisions.begin(), retained->decisions.end(),
+            [&](const auto& decision) { return decision.actionId == shot.actionId; })) continue;
+        if (std::none_of(merged.begin(), merged.end(),
+            [&](const auto& request) { return request.actionId == shot.actionId; }))
+            merged.push_back(shot);
+    }
+    if (!merged.empty()) pendingActions_[batch.playerId] = std::move(merged);
+    else pendingActions_.erase(batch.playerId);
+    if (through > retained->retiredThrough) pendingActionAcknowledgements_[batch.playerId] = through;
+    return ActionAdmission::Accepted;
+}
+
+bool MatchRuntimeHost::QueueActionAcknowledgement(PlayerId playerId, ActionId through) {
+    std::lock_guard lock(mutex_);
+    if (pendingReset_ || !match_.CanAcknowledgeActions(playerId, through)) return false;
+    auto& pending = pendingActionAcknowledgements_[playerId];
+    pending = std::max(pending, through);
+    return true;
+}
+
+std::optional<ActionResults> MatchRuntimeHost::GetActionResults(PlayerId playerId) const {
+    std::lock_guard lock(mutex_);
+    if (pendingReset_) return std::nullopt;
+    return match_.GetActionResults(playerId);
+}
+
 Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSeconds) {
     std::lock_guard lock(mutex_);
     if (pendingReset_) {
@@ -67,7 +124,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         pendingReset_->set_value();
         pendingReset_.reset();
     }
-    const auto advance = ticker_.Advance(elapsedSeconds, [this](const Engine::Runtime::TickContext& tick) {
+    std::optional<WorldSnapshot> publication;
+    const auto advance = ticker_.Advance(elapsedSeconds, [this, &publication](const Engine::Runtime::TickContext& tick) {
         while (!controls_.empty()) {
             const auto control = controls_.front();
             controls_.pop_front();
@@ -77,9 +135,24 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
             } else {
                 static_cast<void>(match_.Leave(control.playerId));
                 pendingInputs_.erase(control.playerId);
+                pendingActions_.erase(control.playerId);
+                pendingActionAcknowledgements_.erase(control.playerId);
             }
             results_.push_back(std::move(result));
         }
+        for (const auto& [playerId, through] : pendingActionAcknowledgements_)
+            static_cast<void>(match_.AcknowledgeActions(playerId, through));
+        pendingActionAcknowledgements_.clear();
+        for (const auto& [playerId, shots] : pendingActions_) {
+            for (std::size_t first = 0; first < shots.size(); first += MaxActionBatch) {
+                const auto last = std::min(first + MaxActionBatch, shots.size());
+                ActionBatch batch{playerId, {shots.begin() + first, shots.begin() + last}};
+                const auto admission = match_.SubmitActions(batch);
+                if (admission != ActionAdmission::Accepted)
+                    throw std::logic_error("Validated action handoff lost its reservation");
+            }
+        }
+        pendingActions_.clear();
         for (auto& [playerId, pending] : pendingInputs_) {
             if (!pending.dirty) continue;
             PlayerInput input{playerId, {}, pending.movementEpoch};
@@ -94,7 +167,12 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
             if (!input.commands.empty()) static_cast<void>(match_.SubmitInput(input));
             pending.dirty = false;
         }
-        match_.Tick(tick);
+        match_.Tick(tick, [this](std::uint64_t observedTick) -> std::optional<std::chrono::nanoseconds> {
+            const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
+                [&](const auto& entry) { return entry.tick == observedTick; });
+            if (reference == publishedReferences_.end()) return std::nullopt;
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
+        });
         auto state = match_.Snapshot();
         // Retaining only unresolved tuples supplies bounded duplicate identity
         // across ingress handoffs. Epoch rotation and Leave discard it here.
@@ -112,10 +190,17 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
             else ++input;
         }
         if (tick.tickId % SnapshotIntervalTicks == 0) {
-            snapshot_ = std::move(state);
+            publication = std::move(state);
             TraceMovement({.kind = MovementTraceKind::SnapshotProduced, .authorityTick = tick.tickId});
         }
     });
+    if (publication) {
+        // Only the final owning state enters the IPC handoff. Catch-up states
+        // replaced inside this Advance were never published references.
+        publishedReferences_.push_back({publication->tick, now_()});
+        if (publishedReferences_.size() > MaxPublishedShotReferences) publishedReferences_.pop_front();
+        snapshot_ = std::move(publication);
+    }
     if (elapsedSeconds >= 0.1 || advance.droppedSeconds > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .authorityTick = match_.TickCount(),
             .droppedSeconds = advance.droppedSeconds, .frameSeconds = elapsedSeconds});
@@ -167,6 +252,9 @@ void MatchRuntimeHost::ClearState() {
     ticker_.Reset();
     controls_.clear();
     pendingInputs_.clear();
+    pendingActions_.clear();
+    pendingActionAcknowledgements_.clear();
+    publishedReferences_.clear();
     results_.clear();
     snapshot_.reset();
 }

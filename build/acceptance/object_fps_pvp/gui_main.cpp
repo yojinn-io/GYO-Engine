@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -37,7 +38,12 @@ struct Options {
     double duration{5};
     bool move{};
     bool latency{};
+    bool latencyShort{};
+    bool combat{};
     bool phaseStalls{};
+    bool weaponShort{};
+    bool weaponCapture{};
+    bool nativeWindow{};
     unsigned events{200};
     double fps{60};
 };
@@ -51,18 +57,24 @@ double Seconds(Clock::time_point a, Clock::time_point b) {
 Options Parse(int argc, char* argv[]) {
     Options options;
     bool explicitDuration{};
+    bool explicitEvents{};
     for (int i = 1; i < argc; ++i) {
         const std::string_view argument = argv[i];
         if (argument == "--move") { options.move = true; continue; }
         if (argument == "--latency") { options.latency = true; continue; }
+        if (argument == "--latency-short") { options.latencyShort = true; continue; }
+        if (argument == "--combat") { options.combat = true; continue; }
         if (argument == "--phase-stalls") { options.phaseStalls = true; continue; }
+        if (argument == "--weapon-short") { options.weaponShort = true; continue; }
+        if (argument == "--weapon-capture") { options.weaponCapture = true; continue; }
+        if (argument == "--native-window") { options.nativeWindow = true; continue; }
         Require(i + 1 < argc, "Missing value for " + std::string(argument));
         const std::string value = argv[++i];
         if (argument == "--arena-root") options.assetRoot = value;
         else if (argument == "--gateway") options.gateway = value;
         else if (argument == "--role") options.role = value;
         else if (argument == "--duration") { options.duration = std::stod(value); explicitDuration = true; }
-        else if (argument == "--events") options.events = static_cast<unsigned>(std::stoul(value));
+        else if (argument == "--events") { options.events = static_cast<unsigned>(std::stoul(value)); explicitEvents = true; }
         else if (argument == "--fps") options.fps = std::stod(value);
         else if (argument == "--output") options.output = value;
         else if (argument == "--gpu-driver") options.gpu = value;
@@ -71,12 +83,25 @@ Options Parse(int argc, char* argv[]) {
     Require(!options.assetRoot.empty(), "--arena-root must name the deployed PvP assets directory");
     Require(!options.output.empty(), "--output must name the capture directory");
     Require(options.role == "create" || options.role == "join", "--role must be create or join");
-    Require(!options.latency || !options.phaseStalls, "Choose either --latency or --phase-stalls");
+    Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
+        unsigned(options.weaponShort) + unsigned(options.weaponCapture) + unsigned(options.nativeWindow) <= 1,
+        "Choose one explicit probe mode");
+    Require(!options.combat || options.latency || options.latencyShort, "--combat requires an explicit latency mode");
     if (options.latency && !explicitDuration) options.duration = 120;
+    if (options.latencyShort && !explicitDuration) options.duration = 16;
+    if (options.latencyShort && !explicitEvents) options.events = 20;
+    if ((options.weaponShort || options.weaponCapture) && !explicitDuration) options.duration = 8;
+    if (options.nativeWindow && !explicitDuration) options.duration = 180;
     Require(std::isfinite(options.duration) && options.duration >= (options.latency ? 120 : 2) && options.duration <= 3600,
         "--duration must be 120..3600 seconds for latency, 2..3600 otherwise");
-    Require(options.events >= 200 && options.events <= 6000, "--events must be 200..6000");
-    Require(!options.latency || options.duration / options.events >= .6, "Each latency event needs at least 600 ms");
+    Require(options.events >= (options.latencyShort ? 20U : 200U) && options.events <= 6000,
+        "--events must be 200..6000 (20..6000 for explicit short latency)");
+    Require(!(options.latency || options.latencyShort) || options.duration / options.events >= .6,
+        "Each latency event needs at least 600 ms");
+    Require(!options.latencyShort || (options.duration >= 16 && options.duration <= 25),
+        "Short latency duration must be 16..25 seconds");
+    Require(!(options.weaponShort || options.weaponCapture) || (options.duration >= 8 && options.duration <= 25),
+        "Weapon short duration must be 8..25 seconds");
     Require(std::isfinite(options.fps) && options.fps >= 30 && options.fps <= 144, "--fps must be 30..144");
     return options;
 }
@@ -103,15 +128,17 @@ void PushMovement(SDL_Window* window, bool held, SDL_Scancode direction = SDL_SC
         focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
         focus.window.windowID = id;
         Require(SDL_PushEvent(&focus), "Could not enqueue probe focus event");
-        SDL_Event click{};
-        click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        click.button.windowID = id;
-        click.button.button = SDL_BUTTON_LEFT;
-        click.button.down = true;
-        Require(SDL_PushEvent(&click), "Could not enqueue probe capture click");
-        click.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        click.button.down = false;
-        Require(SDL_PushEvent(&click), "Could not enqueue probe capture release");
+        if (!SDL_GetWindowRelativeMouseMode(window)) {
+            SDL_Event click{};
+            click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            click.button.windowID = id;
+            click.button.button = SDL_BUTTON_LEFT;
+            click.button.down = true;
+            Require(SDL_PushEvent(&click), "Could not enqueue probe capture click");
+            click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            click.button.down = false;
+            Require(SDL_PushEvent(&click), "Could not enqueue probe capture release");
+        }
     }
     SDL_Event keyboard{};
     keyboard.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
@@ -184,6 +211,10 @@ void WriteLatencyPresentation(std::ostream& stream,
     stream << ',' << local.predictedPosition.x << ',' << local.predictedPosition.z << '\n';
 }
 
+#include "weapon_short.hpp"
+#include "native_window.hpp"
+#include "combat_latency.hpp"
+
 // Long latency runs use ordinary input/connection APIs and successful renderer
 // submissions. No readback, capture, production test switch or clock sync exists.
 void RunLatency(const Options& options) {
@@ -200,6 +231,7 @@ void RunLatency(const Options& options) {
     fps::pvp::MovementTraceWriter traceWriter(options.output / (options.role + "-commands.jsonl"));
 #endif
     fps::pvp::PvpApplication application;
+    CombatLatencyEvidence combat(options);
     std::string error;
     Require(application.InitializeContent(options.assetRoot, error), error);
     fps::pvp::PvpApplicationOptions graphics;
@@ -292,11 +324,15 @@ void RunLatency(const Options& options) {
             }
         }
         const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
+        const auto beforeWeapon = application.WeaponFeedback();
+        if (options.combat) combat.BeforeUpdate(elapsed, application);
         previous = now;
         if (elapsed >= 0 && elapsed <= options.duration) maximumFrameGap = std::max(maximumFrameGap, frame.deltaSeconds);
         Require(application.ProcessEvents(frame) == Control::Continue, "Latency window was closed");
         Require(application.Update(frame) == Control::Continue, application.LastError());
+        if (options.combat) combat.AfterUpdate(frame.frameIndex, beforeWeapon, application);
         Require(application.Render(frame) == Control::Continue, application.LastError());
+        if (options.combat) combat.AfterRender(frame.frameIndex, application);
         if (const auto& submitted = application.PresentedMovement()) {
             Require(submitted->frameId == frame.frameIndex, "Stale Presented observation");
             if (presentationSamples.size() == maximumPresentations)
@@ -309,6 +345,7 @@ void RunLatency(const Options& options) {
         if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
     }
     if (held) PushMovement(application.Platform().NativeWindow(), false, *held);
+    if (options.combat) combat.Save(application);
     std::ofstream presentation(options.output / (options.role + "-presentation.csv"));
     Require(bool(presentation), "Cannot create latency presentation trace");
     presentation << "host_steady_seconds,local_id,local_x,local_z,remote_id,remote_x,remote_z,frame_id,local_epoch,remote_epoch,authority_tick,resolved,latest,pending,correction_x,correction_z,skipped_frames,local_previous,local_current,local_alpha,remote_lower_tick,remote_upper_tick,remote_tick,remote_lower_command,remote_upper_command,remote_alpha,remote_receive_age,remote_hold_seconds,remote_total_hold_seconds,remote_hold_count,remote_gap_count,remote_history_size,remote_ingress_drops,remote_phase_reanchors,remote_holding,connection_generation,remote_missing_future_snapshot,local_predicted_x,local_predicted_z\n"
@@ -329,7 +366,8 @@ void RunLatency(const Options& options) {
     std::ofstream report(options.output / (options.role + "-report.txt"));
     Require(bool(report), "Cannot create latency report");
     report << "role=" << options.role << "\nplayer_id=" << playerId
-           << "\nmode=latency\nplanned_events=" << options.events << "\nmeasurement_seconds=" << options.duration
+           << "\nmode=" << (options.latencyShort ? "latency-short" : "latency")
+           << "\nplanned_events=" << options.events << "\nmeasurement_seconds=" << options.duration
            << "\nnominal_fps=" << options.fps << "\npresentation_frames=" << presentedCount
            << "\npresentation_buffer_capacity=" << maximumPresentations << "\nbuffered_event_count=" << eventSamples.size()
            << "\nobservation_csv_write_phase=after_measurement_and_trailing_drain\nbuffer_overflow=false"
@@ -846,11 +884,18 @@ int main(int argc, char* argv[]) {
                   << "--arena-root <deployed assets> --gateway host:port --role create|join\n"
                   << "--duration 5 --output <directory> [--gpu-driver auto|d3d12|vulkan] [--move]\n"
                   << "--latency --duration 120 --events 200 --fps 60 (no GPU readback)\n"
-                  << "--phase-stalls --fps 60 (six 64/83/250 ms event/update phase stalls)\n";
+                  << "--combat (latency modes only: concurrent SDL shooting, decisions and authority HP)\n"
+                  << "--phase-stalls --fps 60 (six 64/83/250 ms event/update phase stalls)\n"
+                  << "--latency-short --duration 16 --events 20 --fps 60 (explicit short regression)\n"
+                  << "--weapon-short --fps 30|60|144 (8 seconds, no GPU readback)\n"
+                  << "--native-window --duration 180 (passive native X11 input/lifecycle observer)\n"
+                  << "--weapon-capture --fps 60 (separate actual GPU idle/shoot/resize/depth captures)\n";
         return 0;
     }
     try { const auto options = Parse(argc, argv);
-        if (options.latency) RunLatency(options);
+        if (options.latency || options.latencyShort) RunLatency(options);
+        else if (options.weaponShort || options.weaponCapture) RunWeaponShort(options);
+        else if (options.nativeWindow) RunNativeWindow(options);
         else if (options.phaseStalls) RunPhaseStalls(options);
         else Run(options);
         return 0; }

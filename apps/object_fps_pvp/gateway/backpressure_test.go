@@ -10,15 +10,15 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv3"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
+	client "gyo.local/object_fps_pvp/protocol/clientv4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
 )
 
 // Interleave publication between the two actual per-peer selection calls. This
 // exercises the case where the first UDP write was slow, without a production
 // blocking switch or pretending an ordinary loopback UDP socket is saturated.
 func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing.T) {
-	s := &Server{available: true, players: make(map[uint64]*reservation),
+	s := &Server{available: true, ready: &runtime.Ready{CombatRules: testRules()}, players: make(map[uint64]*reservation),
 		controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
 	for id := uint64(1); id <= 2; id++ {
 		peer, err := session.New(time.Now())
@@ -86,7 +86,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
 		t.Run(pause.String(), func(t *testing.T) {
-			s := &Server{available: true, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
+			s := &Server{available: true, ready: &runtime.Ready{CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
 			var produced atomic.Uint64
 			stop, done := make(chan struct{}), make(chan struct{})
 			go func() {

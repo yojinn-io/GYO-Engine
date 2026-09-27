@@ -11,12 +11,15 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev3"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
 )
 
 // This queue is product-owned: ordered lifecycle requests and bounded command
 // windows intentionally have different semantics. Neither lane blocks the World.
+var errRuntimeDisconnected = errors.New("runtime disconnected")
+
 type runtimeLink struct {
+	actionWindows   map[uint64]*actionWindow
 	conn            *framing.TCPConnection
 	mu              sync.Mutex
 	controls        []*runtime.RuntimeEnvelope
@@ -43,7 +46,7 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 	ready := envelope.GetReady()
 	if err == nil && (envelope.ProtocolVersion != adapter.RuntimeVersion || ready == nil ||
 		ready.ArenaId == "" || ready.ArenaVersion == 0 || ready.TickRate != adapter.AuthorityTickRate ||
-		ready.SnapshotIntervalTicks != adapter.SnapshotIntervalTicks || ready.MaxPlayers != adapter.MaxPlayers) {
+		ready.SnapshotIntervalTicks != adapter.SnapshotIntervalTicks || ready.MaxPlayers != adapter.MaxPlayers || !adapter.ValidRules(ready.CombatRules) || !adapter.ReadyFitsWelcome(ready)) {
 		err = errors.New("runtime readiness contract mismatch")
 	}
 	if err != nil {
@@ -61,7 +64,7 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
-		return errors.New("runtime disconnected")
+		return errRuntimeDisconnected
 	}
 	if len(l.controls) >= 64 {
 		return errors.New("runtime lifecycle queue full")
@@ -69,6 +72,7 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 	if leave := message.GetLeave(); leave != nil {
 		delete(l.inputs, leave.PlayerId)
 		delete(l.epochs, leave.PlayerId)
+		delete(l.actionWindows, leave.PlayerId)
 	}
 	l.controls = append(l.controls, message)
 	l.notify()
@@ -79,7 +83,7 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
-		return errors.New("runtime disconnected")
+		return errRuntimeDisconnected
 	}
 	if in == nil || in.PlayerId == 0 || in.MovementEpoch == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
 		return adapter.ErrInput
@@ -189,12 +193,14 @@ func (l *runtimeLink) batch() []*runtime.RuntimeEnvelope {
 		}
 		delete(l.inputs, id)
 	}
-	return batch
+	return append(batch, l.actionBatch(time.Now())...)
 }
 
 func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnvelope), failed func(error)) {
 	fail := func(err error) { l.once.Do(func() { l.close(); failed(err) }) }
 	go func() {
+		ticker := time.NewTicker(actionSendInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -202,18 +208,22 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			case <-l.done:
 				return
 			case <-l.wake:
+			case <-ticker.C:
 			}
 			for _, message := range l.batch() {
 				payload, err := proto.Marshal(message)
 				if err == nil {
 					started := time.Now()
-					err = l.conn.Write(payload, time.Second)
+					err = l.conn.Write(payload, 3*time.Second)
 					elapsed := time.Since(started)
 					l.mu.Lock()
 					if elapsed > l.maxWriteAge {
 						l.maxWriteAge = elapsed
 					}
 					l.mu.Unlock()
+				}
+				if actions := message.GetActions(); err == nil && actions != nil {
+					l.actionWritten(actions.PlayerId, time.Now())
 				}
 				if err != nil {
 					fail(err)
@@ -239,7 +249,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				return
 			}
 			switch message.Message.(type) {
-			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error:
+			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error, *runtime.RuntimeEnvelope_ActionResults:
 				receive(&message)
 			default:
 				fail(errors.New("unexpected runtime message"))
@@ -260,6 +270,7 @@ func (l *runtimeLink) close() {
 	l.controls = nil
 	clear(l.inputs)
 	clear(l.epochs)
+	clear(l.actionWindows)
 	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
 	l.mu.Unlock()
 	_ = l.conn.Close()

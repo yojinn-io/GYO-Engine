@@ -58,12 +58,18 @@ std::shared_ptr<const T> LoadShared(
 Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose) {
+    return EvaluateWeaponMuzzleViewCameraPosition(definition, pose, definition.placement);
+}
+
+Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+    const WeaponPresentationDefinition& definition,
+    const Engine::Model::Pose& pose,
+    const Engine::Render::Transform3D& transform) {
     if (definition.muzzleNodeIndex >= pose.globalTransforms.size()) {
         throw std::runtime_error("viewmodel muzzle requires a complete model pose");
     }
     const auto point = Engine::Model::TransformPoint(
         pose.globalTransforms[definition.muzzleNodeIndex], definition.muzzleLocalPosition);
-    const auto& transform = definition.placement;
     Engine::Render::Float3 result{
         (point.x - definition.idleAnchor.x) * transform.scale.x,
         (point.y - definition.idleAnchor.y) * transform.scale.y,

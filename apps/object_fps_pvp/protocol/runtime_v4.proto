@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package object_fps_pvp.runtime.v3;
-option go_package = "gyo.local/object_fps_pvp/protocol/runtimev3";
+package object_fps_pvp.runtime.v4;
+option go_package = "gyo.local/object_fps_pvp/protocol/runtimev4";
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
 // sessions, endpoints, or wire envelopes.
@@ -11,6 +11,7 @@ message Ready {
   uint32 tick_rate = 3;
   uint32 snapshot_interval_ticks = 4;
   uint32 max_players = 5;
+  CombatRules combat_rules = 6;
 }
 message PlayerJoin { uint64 player_id = 1; }
 message PlayerLeave { uint64 player_id = 1; }
@@ -47,6 +48,7 @@ message PlayerState {
 message WorldSnapshot {
   uint64 tick = 1;
   repeated PlayerState players = 2;
+  repeated CombatState combat = 3;
 }
 message RuntimeError {
   uint64 player_id = 1;
@@ -63,5 +65,57 @@ message RuntimeEnvelope {
     JoinResult join_result = 14;
     RuntimeError error = 15;
     WorldSnapshot snapshot = 16;
+    ActionBatch actions = 17;
+    ActionResults action_results = 18;
   }
+}
+
+message ActionBatch {
+  uint64 player_id = 1;
+  repeated ShotRequest shots = 2;
+  uint64 acknowledged_through = 3;
+}
+message ActionResults {
+  uint64 player_id = 1;
+  uint64 retired_through = 2;
+  repeated ShotDecision decisions = 3;
+}
+
+message CombatRules {
+  uint32 maximum_hp = 1;
+  uint32 shot_damage = 2;
+  uint64 cooldown_ticks = 3;
+  float shot_range = 4;
+  uint32 maximum_reference_age_ms = 5;
+}
+message CombatState {
+  uint64 player_id = 1;
+  uint32 hp = 2;
+  uint64 next_allowed_shot_tick = 3;
+}
+message ShotRequest {
+  uint64 action_id = 1;
+  uint64 observed_authority_tick = 2;
+  float yaw = 3;
+  float pitch = 4;
+}
+enum ShotRejection {
+  REJECTION_NONE = 0;
+  REJECTION_INVALID_REFERENCE = 1;
+  REJECTION_EXPIRED = 2;
+  REJECTION_COOLDOWN = 3;
+}
+enum ShotHitKind {
+  HIT_MISS = 0;
+  HIT_WORLD = 1;
+  HIT_PLAYER = 2;
+}
+message ShotDecision {
+  uint64 action_id = 1;
+  uint64 resolved_tick = 2;
+  bool accepted = 3;
+  ShotRejection rejection = 4;
+  ShotHitKind hit_kind = 5;
+  uint64 target_id = 6;
+  uint32 damage = 7;
 }

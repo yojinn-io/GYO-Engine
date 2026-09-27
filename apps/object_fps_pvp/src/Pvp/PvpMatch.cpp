@@ -7,6 +7,7 @@
 #include <limits>
 #include <numbers>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace fps::pvp {
@@ -32,6 +33,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
                                    arena_.walls, blockers)) continue;
         Participant player;
         player.state = {playerId, p, std::remainder(spawn.yaw, 2 * std::numbers::pi_v<float>), 0, 0};
+        player.combat.playerId = playerId;
         players_.emplace(playerId, player);
         return true;
     }
@@ -78,6 +80,144 @@ bool PvpMatch::SubmitInput(const PlayerInput& input) {
     return true;
 }
 
+ActionAdmission PvpMatch::CanSubmitActions(const ActionBatch& batch,
+    std::span<const ShotRequest> staged, ActionId acknowledgedThrough) const {
+    const auto found = players_.find(batch.playerId);
+    if (found == players_.end()) return ActionAdmission::InvalidPlayer;
+    if (batch.shots.empty() || batch.shots.size() > MaxActionBatch)
+        return ActionAdmission::InvalidBatch;
+    if (staged.size() > MaxActionWindow) return ActionAdmission::Full;
+    const auto& player = found->second;
+    if (!CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
+    const auto floor = (std::max)(player.retiredActionThrough, acknowledgedThrough);
+    // This bounded candidate also reserves room for every eventual decision.
+    // Validation must finish before the live ledger (or host staging) changes.
+    std::map<ActionId, ShotRequest> candidate;
+    for (const auto& [id, entry] : player.actions)
+        if (id > floor) candidate.emplace(id, entry.request);
+    std::map<ActionId, ShotRequest> incoming;
+    const auto merge = [&](std::span<const ShotRequest> shots) {
+        for (const auto& shot : shots) {
+            if (!ValidMovementCommand({shot.actionId, 0, 0, shot.yaw, shot.pitch}))
+                return ActionAdmission::InvalidBatch;
+            // Even retired IDs cannot make a self-conflicting batch well formed.
+            // We compare supplied content only; retired historical content is gone.
+            const auto [supplied, first] = incoming.try_emplace(shot.actionId, shot);
+            if (!first && supplied->second != shot) return ActionAdmission::Conflict;
+            if (shot.actionId <= player.retiredActionThrough) continue;
+            const auto retained = player.actions.find(shot.actionId);
+            if (retained != player.actions.end() && retained->second.request != shot)
+                return ActionAdmission::Conflict;
+            if (shot.actionId <= floor) continue;
+            // Subtraction only after the floor check avoids R+32 overflow.
+            if (shot.actionId - floor > MaxActionWindow)
+                return ActionAdmission::OutsideWindow;
+            const auto [entry, inserted] = candidate.try_emplace(shot.actionId, shot);
+            if (!inserted && entry->second != shot) return ActionAdmission::Conflict;
+            if (candidate.size() > MaxActionWindow) return ActionAdmission::Full;
+        }
+        return ActionAdmission::Accepted;
+    };
+    const auto stagingResult = merge(staged);
+    return stagingResult == ActionAdmission::Accepted ? merge(batch.shots) : stagingResult;
+}
+
+ActionAdmission PvpMatch::SubmitActions(const ActionBatch& batch) {
+    const auto admission = CanSubmitActions(batch);
+    if (admission != ActionAdmission::Accepted) return admission;
+    if (tick_ == (std::numeric_limits<std::uint64_t>::max)())
+        throw std::overflow_error("Authority tick exhausted");
+    auto& player = players_.at(batch.playerId);
+    for (const auto& shot : batch.shots) {
+        if (shot.actionId > player.retiredActionThrough)
+            player.actions.try_emplace(shot.actionId, ActionEntry{shot, tick_ + 1, {}});
+    }
+    return ActionAdmission::Accepted;
+}
+
+bool PvpMatch::CanAcknowledgeActions(PlayerId playerId, ActionId through) const noexcept {
+    const auto found = players_.find(playerId);
+    if (found == players_.end()) return false;
+    const auto& player = found->second;
+    if (through <= player.retiredActionThrough) return true;
+    if (through - player.retiredActionThrough > MaxActionWindow) return false;
+    auto cursor = player.retiredActionThrough;
+    while (cursor < through) {
+        const auto entry = player.actions.find(++cursor);
+        if (entry == player.actions.end() || !entry->second.decision) return false;
+    }
+    return true;
+}
+
+bool PvpMatch::AcknowledgeActions(PlayerId playerId, ActionId through) {
+    if (!CanAcknowledgeActions(playerId, through)) return false;
+    auto& player = players_.at(playerId);
+    if (through > player.retiredActionThrough) {
+        player.actions.erase(player.actions.begin(), player.actions.upper_bound(through));
+        player.retiredActionThrough = through;
+    }
+    return true;
+}
+
+std::optional<ActionResults> PvpMatch::GetActionResults(PlayerId playerId) const {
+    const auto found = players_.find(playerId);
+    if (found == players_.end()) return std::nullopt;
+    ActionResults result{playerId, found->second.retiredActionThrough, {}};
+    for (const auto& [id, entry] : found->second.actions) {
+        static_cast<void>(id);
+        if (entry.decision) result.decisions.push_back(*entry.decision);
+    }
+    return result;
+}
+
+void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
+    std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> pending;
+    for (const auto& [playerId, player] : players_) {
+        for (const auto& [actionId, entry] : player.actions) {
+            if (!entry.decision) pending.emplace_back(entry.acceptedTick, playerId, actionId);
+        }
+    }
+    if (pending.empty()) return;
+    std::sort(pending.begin(), pending.end());
+    std::vector<PlayerState> targets;
+    for (const auto& [id, player] : players_) {
+        static_cast<void>(id);
+        targets.push_back(player.state);
+    }
+    for (const auto& [acceptedTick, playerId, actionId] : pending) {
+        static_cast<void>(acceptedTick);
+        auto& player = players_.at(playerId);
+        auto& entry = player.actions.at(actionId);
+        const auto& shot = entry.request;
+        ShotDecision decision{actionId, tick_};
+        const auto age = referenceAge && shot.observedAuthorityTick != 0 &&
+            shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
+        if (!age || *age < std::chrono::nanoseconds::zero()) {
+            decision.rejection = ShotRejection::InvalidReference;
+        } else if (*age > PvpCombatRules.maximumReferenceAge) {
+            decision.rejection = ShotRejection::Expired;
+        } else if (player.lastShotTick && tick_ - *player.lastShotTick < PvpCombatRules.cooldownTicks) {
+            decision.rejection = ShotRejection::Cooldown;
+        } else {
+            const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch,
+                targets, PvpCombatRules.shotRange);
+            decision.accepted = true;
+            decision.hitKind = hit.kind;
+            decision.targetId = hit.targetId;
+            if (hit.kind == ShotHitKind::Player) {
+                auto& target = players_.at(hit.targetId).combat;
+                decision.damage = (std::min)(PvpCombatRules.shotDamage, target.hp);
+                target.hp -= decision.damage;
+            }
+            player.lastShotTick = tick_;
+            const auto maximumTick = (std::numeric_limits<std::uint64_t>::max)();
+            player.combat.nextAllowedShotTick = tick_ > maximumTick - PvpCombatRules.cooldownTicks ?
+                maximumTick : tick_ + PvpCombatRules.cooldownTicks;
+        }
+        entry.decision = decision;
+    }
+}
+
 std::uint32_t PvpMatch::ContiguousPending(const Participant& player) noexcept {
     auto sequence = player.state.lastResolvedCommand;
     std::uint32_t count{};
@@ -110,8 +250,9 @@ void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reaso
         .epoch = player.state.movementEpoch, .authorityTick = tick_, .resetReason = reason});
 }
 
-void PvpMatch::Tick(const Engine::Runtime::TickContext& tick) {
-    if (tick.tickId == 0 || tick.tickId != tick_ + 1 || !std::isfinite(tick.deltaSeconds) || tick.deltaSeconds <= 0 ||
+void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenceAge& referenceAge) {
+    if (tick_ == (std::numeric_limits<std::uint64_t>::max)() ||
+        tick.tickId == 0 || tick.tickId != tick_ + 1 || !std::isfinite(tick.deltaSeconds) || tick.deltaSeconds <= 0 ||
         std::abs(tick.deltaSeconds - MovementTickSeconds) > 1.0e-12)
         throw std::invalid_argument("Invalid match tick");
     tick_ = tick.tickId;
@@ -184,17 +325,19 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick) {
             }
         }
     }
+    ResolveActions(referenceAge);
 }
 
 void PvpMatch::Reset() noexcept { players_.clear(); tick_ = 0; }
 
 WorldSnapshot PvpMatch::Snapshot() const {
-    WorldSnapshot result{tick_, {}};
+    WorldSnapshot result{tick_, {}, {}};
     for (const auto& [id, participant] : players_) {
         static_cast<void>(id);
         auto state = participant.state;
         state.contiguousPendingCommands = ContiguousPending(participant);
         result.players.push_back(state);
+        result.combat.push_back(participant.combat);
     }
     return result;
 }

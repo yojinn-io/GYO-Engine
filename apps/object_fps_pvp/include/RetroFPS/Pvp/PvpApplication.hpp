@@ -3,6 +3,7 @@
 #include "engine/runtime/IRuntimeClient.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/Combat.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -18,6 +19,24 @@ namespace Backend::SdlGpu { class SdlGpuRenderDevice; }
 namespace fps::pvp {
 class ClientConnection;
 struct LocalMovementObservation;
+// Product presentation diagnostics. Read-only values never control simulation;
+// counters belong to one joined player and survive movement-epoch recovery.
+struct WeaponFeedbackObservation final {
+    bool ready{}, active{}, inputCaptured{}, shooting{}, drawing{}, hitMarkerVisible{};
+    std::uint64_t submittedActions{}, animationStarts{}, decisionCount{}, acceptedDecisions{},
+        rejectedDecisions{}, hitDecisions{}, lastActionId{}, lastDecisionActionId{},
+        mouseDeltaConsumeCount{}, animationRevision{}, lastDecisionTick{}, lastTargetId{};
+    std::uint32_t hp{}, maximumHp{}, lastDamage{};
+    ShotRejection lastRejection{ShotRejection::None};
+    ShotHitKind lastHitKind{ShotHitKind::Miss};
+    float yaw{}, pitch{};
+    double actionElapsedSeconds{}, actionDurationSeconds{}, cooldownRemainingSeconds{},
+        lastSubmittedSeconds{}, lastDecisionSeconds{};
+    std::size_t meshCount{}, materialCount{}, submittedMeshes{};
+    std::uint64_t poseRevision{};
+    double sampledAnimationSeconds{};
+    float recoilRadians{};
+};
 struct RemoteMovementObservation final {
     PlayerId playerId{};
     Float3 renderPosition{};
@@ -42,6 +61,7 @@ struct PresentedMovementObservation final {
     std::optional<RemoteMovementObservation> remote;
     std::uint64_t skippedFrames{};
     std::uint64_t connectionGeneration{};
+    WeaponFeedbackObservation weapon;
 };
 
 struct PvpApplicationOptions final {
@@ -77,6 +97,7 @@ public:
     [[nodiscard]] const LocalMovementObservation& LocalMovement() const noexcept;
     [[nodiscard]] const std::optional<RemoteMovementObservation>& RemoteMovement() const noexcept;
     [[nodiscard]] const std::optional<PresentedMovementObservation>& PresentedMovement() const noexcept;
+    [[nodiscard]] const WeaponFeedbackObservation& WeaponFeedback() const noexcept;
     [[nodiscard]] std::uint64_t SkippedPresentationFrames() const noexcept;
     [[nodiscard]] const std::string& LastError() const noexcept;
     [[nodiscard]] int ExitCode() const noexcept;

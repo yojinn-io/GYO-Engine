@@ -247,12 +247,25 @@ def _event_crossings(samples, event, next_event, fallback_end):
 
 def analyze_latency(directory):
     """One long run; every predeclared event remains in the denominator."""
+    return _analyze_latency(directory, short=False)
+
+
+def analyze_short_latency(directory):
+    """Explicit bounded regression; never certifies the 120-second baseline."""
+    return _analyze_latency(directory, short=True)
+
+
+def _analyze_latency(directory, *, short):
     directory = Path(directory)
+    minimum_seconds, minimum_events = (16, 20) if short else (120, 200)
+    mode = "latency-short" if short else "latency"
     evidence = {
         "passed": False,
+        "mode": mode,
+        "long_run_certification": not short,
         "method": "One directed 0.25-unit displacement crossing per predeclared event; remote successful-submission crossing minus local crossing. Current traces identify events by epoch and interpolated command range. Unmatched, ambiguous or unobserved crossings spanning a 100 ms Presented gap count as +infinity for nearest-rank quantiles; this is not a timeout on well-observed slow events.",
         "scope": "Same-host monotonic timestamps after successful renderer submission; not monitor scanout, input-to-photon or cross-host clock synchronization.",
-        "criteria": {"minimum_seconds": 120, "minimum_events": 200, "minimum_matched_rate": .99,
+        "criteria": {"minimum_seconds": minimum_seconds, "minimum_events": minimum_events, "minimum_matched_rate": .99,
                      "maximum_p50_seconds": .05, "maximum_p95_seconds": .08, "minimum_nominal_fps": 60,
                      "unknown_crossing_bracket_seconds": MAXIMUM_CROSSING_BRACKET_SECONDS},
         "errors": [],
@@ -264,8 +277,8 @@ def analyze_latency(directory):
             raise ValueError("Observer player_id must be distinct from the mover")
         reports = {role: _read_report(directory / f"{role}-report.txt") for role in ("create", "join")}
         for role, report in reports.items():
-            if report.get("mode") != "latency" or report.get("capture") != "none":
-                raise ValueError(f"{role}: long-run evidence requires latency mode without capture")
+            if report.get("mode") != mode or report.get("capture") != "none":
+                raise ValueError(f"{role}: {mode} evidence requires the matching explicit mode without capture")
             if float(report["nominal_fps"]) < 60:
                 evidence["errors"].append(f"{role}: nominal FPS below 60")
         local = _latency_samples(directory / "create-presentation.csv", mover, False)
@@ -273,8 +286,8 @@ def analyze_latency(directory):
         with (directory / "latency-plan.csv").open(newline="", encoding="utf-8") as source:
             plan = list(csv.DictReader(source))
         count = len(plan)
-        if count < 200:
-            raise ValueError("Fewer than 200 predeclared movement events")
+        if count < minimum_events:
+            raise ValueError(f"Fewer than {minimum_events} predeclared movement events")
         previous_end = None
         for index, row in enumerate(plan):
             start, end = float(row["scheduled_host_seconds"]), float(row["end_host_seconds"])
@@ -282,12 +295,12 @@ def analyze_latency(directory):
                     not all(math.isfinite(value) for value in (start, end)) or end - start < .599999 or
                     (previous_end is not None and abs(start - previous_end) > .00001) or
                     int(row["sign"]) != (-1 if index % 2 else 1) or float(row["threshold_units"]) != .25 or
-                    float(row["duration_seconds"]) < 120):
+                    float(row["duration_seconds"]) < minimum_seconds):
                 raise ValueError("Invalid predeclared movement event schedule")
             previous_end = end
         begin, finish = float(plan[0]["scheduled_host_seconds"]), float(plan[-1]["end_host_seconds"])
-        if finish - begin < 119.999:
-            raise ValueError("Measurement duration below 120 seconds")
+        if finish - begin < minimum_seconds - .001:
+            raise ValueError(f"Measurement duration below {minimum_seconds} seconds")
         events = {}
         with (directory / "latency-events.csv").open(newline="", encoding="utf-8") as source:
             for row in csv.DictReader(source):
@@ -358,13 +371,17 @@ def analyze_latency(directory):
     except (OSError, ValueError, TypeError, KeyError, IndexError, ZeroDivisionError) as error:
         evidence["errors"].append(str(error))
     evidence["passed"] = not evidence["errors"]
-    (directory / "presentation-latency.json").write_text(json.dumps(evidence, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    filename = "presentation-short-latency.json" if short else "presentation-latency.json"
+    (directory / filename).write_text(json.dumps(evidence, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return evidence
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path, help="Directory containing both GUI presentation traces")
-    directory = parser.parse_args().directory
-    result = analyze_latency(directory) if (directory / "latency-plan.csv").exists() else analyze_presentation(directory)
+    parser.add_argument("--short", action="store_true", help="Explicit 16-second/20-event regression; not long-run certification")
+    args = parser.parse_args()
+    directory = args.directory
+    result = (analyze_short_latency(directory) if args.short else
+              analyze_latency(directory) if (directory / "latency-plan.csv").exists() else analyze_presentation(directory))
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result["passed"] else 1)
