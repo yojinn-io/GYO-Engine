@@ -2,6 +2,9 @@
 
 更新：2026-09-28。Owner：`object_fps_pvp`。
 
+後續人物／基本對戰循環見 [v5 五批計畫](v5/README.md) 及 [v5 交接](v5/HANDOFF.md)。
+v5 第01–02批完成；第03批功能及網路已成v5候選，可見延遲守門未結案；以下保留v4歷史證據。
+
 **第 05 批完整驗收已完成；依使用者追加授權，v4 已升格為穩定基線。**
 **適用範圍：Linux／X11／Vulkan、同機雙玩家。** 證據與邊界見 [穩定基線](STABLE_BASELINE.md)。
 Client／Gateway／Match 已一起切換 v4，真 socket 動作交付、移動共存及故障恢復已通過短測。

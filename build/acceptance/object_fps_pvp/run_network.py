@@ -124,6 +124,12 @@ def main():
             (args.output / "network.log").write_text(result.stdout + result.stderr, encoding="utf-8")
             if result.returncode:
                 raise RuntimeError(result.stdout + result.stderr)
+            life_cleanup = subprocess.run([str(args.probe.resolve()), "--gateway", f"127.0.0.1:{http}",
+                                           "--life-cleanup-only"], cwd=isolated, capture_output=True, text=True,
+                                           timeout=15, creationflags=flags)
+            (args.output / "life-cleanup.log").write_text(life_cleanup.stdout + life_cleanup.stderr, encoding="utf-8")
+            if life_cleanup.returncode:
+                raise RuntimeError(life_cleanup.stdout + life_cleanup.stderr)
             impairment_results = []
             if args.network_impairments:
                 for rtt in (0, 20, 40):
@@ -219,6 +225,7 @@ def main():
                 "network_impairments": impairment_results,
                 "ipc_failure_returns_both_clients_to_lobby": True,
                 "replacement_gateway_joins_cleared_match": True,
+                "death_wait_leave_rejoin_cleanup": True, "death_wait_match_failure_clears_life_ledger": True,
                 "probe_output": result.stdout.strip()}, indent=2), encoding="utf-8")
             print(result.stdout.strip())
     finally:

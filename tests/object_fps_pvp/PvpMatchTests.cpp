@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -721,4 +722,151 @@ TEST_CASE("PvP exhausted lead respects the complete future map and the existing 
         CHECK(match.Snapshot().players.front().movementEpoch == 3);
         CHECK(match.TickCount() == resetTick + MovementResetCooldownTicks + 1);
     }
+}
+
+TEST_CASE("PvP fixed jump follows analytic height and consumes midair edges without a landing queue") {
+    using namespace fps::pvp;
+    const auto arena = TestArena();
+    PlayerState state{1, {2, 0, 2}};
+    float maximumHeight{};
+    unsigned landingTick{};
+    for (std::uint64_t sequence = 1; sequence <= 70; ++sequence) {
+        state = StepMovement(arena, state, {sequence, 0, 0, 0, 0, sequence == 1 || sequence == 8});
+        maximumHeight = (std::max)(maximumHeight, state.position.y);
+        CHECK(state.position.y >= 0);
+        if (sequence == 1) {
+            const float launch = std::sqrt(2 * arena.gravity * arena.jumpHeight);
+            CHECK(state.position.y == doctest::Approx(launch / 60 - arena.gravity / 7200));
+            CHECK(state.verticalVelocity == doctest::Approx(launch - arena.gravity / 60));
+            CHECK_FALSE(state.grounded);
+        }
+        if (state.grounded && landingTick == 0) landingTick = static_cast<unsigned>(sequence);
+        if (landingTick != 0) {
+            CHECK(state.position.y == 0);
+            CHECK(state.verticalVelocity == 0);
+        }
+    }
+    CHECK(maximumHeight == doctest::Approx(0.6).epsilon(0.002));
+    CHECK(landingTick == 31);
+    state = StepMovement(arena, state, {71, 0, 0, 0, 0, true});
+    CHECK(state.position.y > 0);
+    CHECK_FALSE(state.grounded);
+}
+
+TEST_CASE("PvP actual jump is never repeated by held or neutral command substitution") {
+    using namespace fps::pvp;
+    auto arena = TestArena();
+    arena.walls.push_back({{0, 2, 0}, {12, 2.2F, 12}});
+    PvpMatch match(arena);
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    REQUIRE(match.SubmitInput({1, {{1, 0, 0, 0, 0, true}}}));
+    Step(match);
+    REQUIRE(match.Snapshot().players.front().position.y > 0);
+    bool landed{};
+    for (unsigned tick = 2; tick <= 25; ++tick) {
+        Step(match);
+        const auto state = match.Snapshot().players.front();
+        CHECK(state.position.y <= 0.2001F);
+        if (state.grounded) landed = true;
+        if (landed) CHECK(state.position.y == 0);
+        CHECK(state.lastResolvedCommand == tick);
+        CHECK(state.movementEpoch == 1);
+    }
+    REQUIRE(landed); // Ceiling shortens the arc into the held-input interval.
+}
+
+TEST_CASE("PvP jump sweeps the full capsule against ceiling walls and corners") {
+    using namespace fps::pvp;
+    auto arena = TestArena();
+    arena.walls.push_back({{0, 2, 0}, {12, 2.2F, 12}});
+    PlayerState state{1, {4.6F, 0, 5}};
+    bool touchedCeiling{};
+    for (std::uint64_t sequence = 1; sequence <= 90; ++sequence) {
+        state = StepMovement(arena, state, {sequence, sequence < 40 ? 0.0F : -1.0F,
+            1, 0, 0, sequence == 1});
+        CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
+            arena.bodyHeight, arena.radius}, arena.walls, {}));
+        CHECK(state.position.y >= 0);
+        CHECK(state.position.y <= 0.2001F);
+        if (state.position.y > 0.19F && state.verticalVelocity == 0) {
+            touchedCeiling = true;
+            CHECK_FALSE(state.grounded);
+        }
+        if (sequence < 35) CHECK(state.position.x <= 4.7501F);
+    }
+    CHECK(touchedCeiling);
+    CHECK(state.grounded);
+    CHECK(state.position.y == 0);
+    CHECK(state.position.x > 5); // Sliding clears the wall corner after landing.
+}
+
+TEST_CASE("PvP capsule lands on a raised wall top and falls when walking off its support") {
+    using namespace fps::pvp;
+    auto arena = TestArena();
+    arena.walls.push_back({{1, 0, 3}, {4, 0.3F, 4}});
+    PlayerState state{1, {2, 0, 2.5F}};
+    bool landedOnTop{};
+    for (std::uint64_t sequence = 1; sequence <= 75; ++sequence) {
+        state = StepMovement(arena, state, {sequence, 1, 0, 0, 0, sequence == 1});
+        CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
+            arena.bodyHeight, arena.radius}, arena.walls, {}));
+        if (state.grounded && state.position.y > 0.29F) {
+            landedOnTop = true;
+            CHECK(state.verticalVelocity == 0);
+        }
+    }
+    CHECK(landedOnTop);
+    CHECK(state.position.z > 5.9F);
+    CHECK(state.position.y == 0);
+    CHECK(state.grounded);
+    CHECK(state.verticalVelocity == 0);
+}
+
+TEST_CASE("PvP authority replays the same vertical state and binds commands to life generation") {
+    using namespace fps::pvp;
+    const auto arena = TestArena();
+    PvpMatch match(arena);
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    auto predicted = match.Snapshot().players.front();
+    for (std::uint64_t sequence = 1; sequence <= 70; ++sequence) {
+        const MovementCommand command{sequence, 1, 0, 0, 0.6F, sequence == 1 || sequence == 8};
+        REQUIRE(match.SubmitInput({1, {command}, 1, 1}));
+        predicted = StepMovement(arena, predicted, command);
+        Step(match);
+        const auto state = match.Snapshot().players.front();
+        CHECK(state.position.x == predicted.position.x);
+        CHECK(state.position.y == predicted.position.y);
+        CHECK(state.position.z == predicted.position.z);
+        CHECK(state.verticalVelocity == predicted.verticalVelocity);
+        CHECK(state.grounded == predicted.grounded);
+        CHECK(state.lifeGeneration == 1);
+        CHECK(state.lifeState == LifeState::Alive);
+    }
+    CHECK_FALSE(match.SubmitInput({1, {{71, 0, 0, 0, 0}}, 1, 0}));
+    CHECK_FALSE(match.SubmitInput({1, {{71, 0, 0, 0, 0}}, 1, 2}));
+    CHECK(match.SubmitInput({1, {{71, 0, 0, 0, 0, true}}, 1, 1}));
+    CHECK_FALSE(match.SubmitInput({1, {{71, 0, 0, 0, 0, false}}, 1, 1}));
+}
+
+TEST_CASE("PvP arena rejects invalid jump settings and loads their authoritative defaults") {
+    using namespace fps::pvp;
+    std::string error;
+    for (const float bad : {0.0F, -1.0F, std::numeric_limits<float>::infinity(),
+        std::numeric_limits<float>::quiet_NaN()}) {
+        auto arena = TestArena();
+        arena.jumpHeight = bad;
+        CHECK_FALSE(arena.Validate(error));
+        arena = TestArena();
+        arena.gravity = bad;
+        CHECK_FALSE(arena.Validate(error));
+    }
+    auto arena = TestArena();
+    arena.jumpHeight = arena.gravity = std::numeric_limits<float>::max();
+    CHECK_FALSE(arena.Validate(error));
+    const auto loaded = Arena::Load(PVP_DOMAIN_TEST_ARENA_PATH, error);
+    REQUIRE(loaded);
+    CHECK(loaded->jumpHeight == 0.6F);
+    CHECK(loaded->gravity == 18);
 }

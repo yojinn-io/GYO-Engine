@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v4.pb.h"
+#include "runtime_v5.pb.h"
 #include <asio.hpp>
 #include <array>
 #include <charconv>
@@ -13,29 +13,65 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v4;
+namespace pb = object_fps_pvp::runtime::v5;
 using asio::ip::tcp;
 namespace {
+pb::ShotRejection RejectionForWire(ShotRejection rejection) {
+    switch(rejection) {
+    case ShotRejection::None: return pb::REJECTION_NONE;
+    case ShotRejection::InvalidReference: return pb::REJECTION_INVALID_REFERENCE;
+    case ShotRejection::Expired: return pb::REJECTION_EXPIRED;
+    case ShotRejection::Cooldown: return pb::REJECTION_COOLDOWN;
+    case ShotRejection::Dead: return pb::REJECTION_DEAD;
+    case ShotRejection::StaleLife: return pb::REJECTION_STALE_LIFE;
+    case ShotRejection::InvalidLife: return pb::REJECTION_INVALID_LIFE;
+    case ShotRejection::Reloading: return pb::REJECTION_RELOADING;
+    case ShotRejection::EmptyMagazine: return pb::REJECTION_EMPTY_MAGAZINE;
+    case ShotRejection::MagazineFull: return pb::REJECTION_MAGAZINE_FULL;
+    }
+    throw std::logic_error("Unmapped Match action rejection");
+}
+pb::ActionKind KindForWire(ActionKind kind) {
+    switch(kind) {
+    case ActionKind::Shot: return pb::ACTION_SHOT;
+    case ActionKind::Reload: return pb::ACTION_RELOAD;
+    }
+    throw std::logic_error("Unmapped Match action kind");
+}
+pb::LifeState LifeForWire(LifeState state) {
+    switch(state) {
+    case LifeState::Alive: return pb::LIFE_ALIVE;
+    case LifeState::Dead: return pb::LIFE_DEAD;
+    }
+    throw std::logic_error("Unmapped Match life state");
+}
 bool WouldBlock(const asio::error_code& error) {
     return error==asio::error::would_block || error==asio::error::try_again;
 }
 pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
-    pb::RuntimeEnvelope message; message.set_protocol_version(4);
+    pb::RuntimeEnvelope message; message.set_protocol_version(5);
     auto* out=message.mutable_snapshot(); out->set_tick(snapshot.tick);
     for(const auto& p:snapshot.players) {
         auto* state=out->add_players(); state->set_player_id(p.playerId);
         state->set_x(p.position.x); state->set_y(p.position.y); state->set_z(p.position.z);
         state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_resolved_command(p.lastResolvedCommand);
         state->set_movement_epoch(p.movementEpoch);state->set_contiguous_pending_commands(p.contiguousPendingCommands);
+        state->set_vertical_velocity(p.verticalVelocity);state->set_grounded(p.grounded);
+        state->set_life_generation(p.lifeGeneration);state->set_life_state(LifeForWire(p.lifeState));
+        state->set_life_state_tick(p.lifeStateTick);state->set_respawn_tick(p.respawnTick);
     }
     for(const auto& p:snapshot.combat) {
         auto* state=out->add_combat();state->set_player_id(p.playerId);
         state->set_hp(p.hp);state->set_next_allowed_shot_tick(p.nextAllowedShotTick);
+        state->set_life_generation(p.lifeGeneration);state->set_magazine_ammo(p.magazineAmmo);
+        state->set_reload_action_id(p.reloadActionId);state->set_reload_start_tick(p.reloadStartTick);
+        state->set_reload_end_tick(p.reloadEndTick);state->set_last_shot_action_id(p.lastShotActionId);
+        state->set_last_shot_tick(p.lastShotTick);
     }
     return message;
 }
 pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor) {
-    pb::RuntimeEnvelope message;message.set_protocol_version(4);
+    pb::RuntimeEnvelope message;message.set_protocol_version(5);
     auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
     out->set_retired_through(results.retiredThrough);
     if(results.decisions.empty()) {cursor=results.retiredThrough;return message;}
@@ -46,9 +82,11 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor
         const auto& decision=results.decisions[(offset+i)%results.decisions.size()];
         auto* value=out->add_decisions();value->set_action_id(decision.actionId);
         value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
-        value->set_rejection(static_cast<pb::ShotRejection>(decision.rejection));
+        value->set_rejection(RejectionForWire(decision.rejection));
         value->set_hit_kind(static_cast<pb::ShotHitKind>(decision.hitKind));
         value->set_target_id(decision.targetId);value->set_damage(decision.damage);
+        value->set_kind(KindForWire(decision.kind));value->set_life_generation(decision.lifeGeneration);
+        value->set_target_life_generation(decision.targetLifeGeneration);
         cursor=decision.actionId;
     }
     return message;
@@ -79,12 +117,15 @@ struct IpcHost::Impl {
         std::map<std::uint64_t,PlayerId> joins;
         struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
         std::map<PlayerId,ActionLane> actionLanes;
-        pb::RuntimeEnvelope ready; ready.set_protocol_version(4);
+        pb::RuntimeEnvelope ready; ready.set_protocol_version(5);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version);
+        r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
         auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);
         rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(PvpCombatRules.cooldownTicks);
         rules->set_shot_range(PvpCombatRules.shotRange);
+        rules->set_magazine_capacity(PvpCombatRules.magazineCapacity);rules->set_reload_ticks(PvpCombatRules.reloadTicks);
+        rules->set_respawn_ticks(PvpCombatRules.respawnTicks);
         rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
         controls.push_back(wire::Frame(ready.SerializeAsString()));
@@ -100,7 +141,7 @@ struct IpcHost::Impl {
                 if(!length || length>wire::MaxFrame) return;
                 if(input.size()<length+4) break;
                 pb::RuntimeEnvelope message;
-                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=4) return;
+                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=5) return;
                 input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
                 if(message.has_join()) {
                     if(joins.size()>=64) return;
@@ -113,16 +154,25 @@ struct IpcHost::Impl {
                 } else if(message.has_input()) {
                     const auto& p=message.input();
                     if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
-                    PlayerInput window{p.player_id(),{},p.movement_epoch()};
+                    PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation()};
                     for(const auto& command:p.commands())
-                        window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch()});
+                        window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
                     static_cast<void>(host.SubmitInput(window));
                 } else if(message.has_actions()) {
                     const auto& value=message.actions();
                     if(value.shots_size()>static_cast<int>(MaxActionBatch)) continue;
                     ActionBatch batch{value.player_id(),{}};
-                    for(const auto& shot:value.shots())
-                        batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch()});
+                    bool valid=true;
+                    for(const auto& shot:value.shots()) {
+                        const bool shooting=shot.kind()==pb::ACTION_SHOT;
+                        const bool reloading=shot.kind()==pb::ACTION_RELOAD;
+                        if(!shot.life_generation() || (!shooting && !reloading) ||
+                           (shooting && (!shot.has_yaw() || !shot.has_pitch())) ||
+                           (reloading && (shot.has_yaw() || shot.has_pitch()))) {valid=false;break;}
+                        batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
+                            shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
+                    }
+                    if(!valid) continue;
                     // Admission is distinct from a terminal shot decision. The
                     // immutable request remains with the sender for retry.
                     static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
@@ -131,7 +181,7 @@ struct IpcHost::Impl {
             for(const auto& result:host.TakeControlResults()) {
                 const auto found=joins.find(result.requestId);
                 if(found==joins.end()) continue;
-                pb::RuntimeEnvelope message; message.set_protocol_version(4);
+                pb::RuntimeEnvelope message; message.set_protocol_version(5);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);

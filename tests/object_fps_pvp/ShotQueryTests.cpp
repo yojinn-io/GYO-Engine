@@ -146,3 +146,17 @@ TEST_CASE("PvP shot rejects invalid angles range and origin even in an empty are
     shooter.position.x = nan;
     CHECK_THROWS_AS(static_cast<void>(QueryShot(arena, shooter, 0, 0, {}, 100)), std::invalid_argument);
 }
+
+TEST_CASE("PvP dead capsules do not occlude a living target behind them") {
+    using namespace fps::pvp;
+    const auto arena = ShotArena();
+    const PlayerState shooter{1, {0, 0, 0}};
+    PlayerState dead{2, {0, 0, 3}};
+    dead.lifeState = LifeState::Dead;
+    const std::array players{dead, PlayerState{3, {0, 0, 5}}};
+    const auto hit = QueryShot(arena, shooter, 0, 0, players, 100);
+    CHECK(hit.kind == ShotHitKind::Player);
+    CHECK(hit.targetId == 3);
+    CHECK(hit.distance == 4.75F);
+    CHECK(QueryShot(arena, shooter, 0, 0, std::span{players}.first(1), 100).kind == ShotHitKind::Miss);
+}

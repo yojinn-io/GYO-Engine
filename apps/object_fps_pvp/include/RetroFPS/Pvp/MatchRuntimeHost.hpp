@@ -11,6 +11,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <stop_token>
 #include <vector>
 
@@ -37,7 +38,7 @@ public:
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
     // I/O validates and stages immutable requests; only Advance mutates Match.
     [[nodiscard]] ActionAdmission SubmitActions(const ActionBatch& batch);
-    // v4 validates shots and ACK together; a rejected batch queues neither.
+    // Requests (Shot/Reload) and ACK validate together; rejection queues neither.
     [[nodiscard]] ActionAdmission SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough);
     [[nodiscard]] bool QueueActionAcknowledgement(PlayerId playerId, ActionId through);
     // Owning, non-destructive results survive reads until a validated ACK retires them.
@@ -62,7 +63,11 @@ private:
     };
     struct PendingInput final {
         std::uint64_t movementEpoch{};
+        std::uint64_t lifeGeneration{};
         std::map<std::uint64_t, MovementCommand> commands;
+        // Only these commands have not crossed into Match; retained duplicates
+        // are excluded from Host lifecycle-cancellation counts.
+        std::set<std::uint64_t> stagedSequences;
         bool dirty{};
     };
     struct PublishedReference final {

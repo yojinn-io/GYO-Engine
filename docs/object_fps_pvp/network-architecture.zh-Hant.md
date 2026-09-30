@@ -939,3 +939,116 @@ Architecture Delta 限於產品 Client 的呈現責任、既有能力依賴與�
 核心、Host 和 Gateway 不識別槍模／動畫。沒有新 subsystem 或跨 owner 依賴。
 詳細輸入／GPU 證據、初次 sandbox 失敗及限制見
 [第 04 批 dev_log](../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
+
+## v5 規劃入口：人物、跳躍與生命循環
+
+2026-09-28：已保存 [五批計畫與進度](plans/v5/README.md)、
+[v5 契約](protocol-v5.zh-Hant.md) 及 [交接](plans/v5/HANDOFF.md)。
+第 01 批文件／基線及第 02 批人物呈現／短測已完成；第03批已建成三角色v5候選，
+功能與網路短測完成，但可見延遲守門尚有啟動相位問題，整批驗收未結案。
+第02批下述v4圖示是當時切片的歷史說明。
+原 [v4 穩定基線](plans/STABLE_BASELINE.md) 與驗收證據保持原範圍。
+
+新增責任是產品內生命世代、跳躍／彈匣／換彈／重生狀態及 Client 人物呈現。
+lifeGeneration、movementEpoch 與 Session ActionId 分離；重生不清未 ACK 的動作帳本。
+Match 保持膠囊權威，Client 使用 PvP 自有模型／骨骼資料；不依賴 v2、Enemy／Campaign
+生命周期，也不向 Engine 或公共 Gateway 下沉 FPS 政策。完整 v5 Architecture Delta
+見 v5 契約第 7 節；第 02 批實際變化限於下述 Client 呈現切片，owner 不變。
+
+第 02 批先在 v4 玩法下驗證人物 Idle／Jog；第 03 批才同時升三角色 v5；第 04 批
+完成动作呈現，第 05 批短整合與交付驗收指南。每批完成後停止，完整驗收另行授權。
+第 01 批實際結果見 [dev_log](../dev_logs/2026_09_28_pvp_v5_batch01.zh-Hant.md)。
+
+### 第 02 批已實作：玩家呈現與位移相位
+
+```text
+Match v4 (capsule / HP / movement / shot decisions)
+    -> Gateway v4 -> Client worker -> SnapshotTimeline
+                                        |
+                         sampled position / yaw / tick / epoch
+                                        |
+             +---------------- PlayerPresentation ----------------+
+             | per-player displacement -> signed Jog phase        |
+             | Idle/Jog legs + spine_01 pistol upper-body mask    |
+             | blended local TRS -> global pose -> body / hair / gun
+             +-----------------------+----------------------------+
+                                     |
+                   existing Engine ModelRenderer / Render
+                                     |
+                 successful Presented + read-only observations
+
+PvP player JSON / existing female + UAL + pistol assets
+    -> product character loader -> pre-Join load / GPU warmup
+```
+
+人物不影響權威移動／命中。每位遠端人物依相鄰有效呈現樣本的水平距離推進相位，
+而非按鍵或render dt；轉向、貼牆、hold不原地跑。長幀、Skipped、身分／epoch與
+時間線重定位建立新步程段，避免恢復時補走未呈現距離。角色／髮髻／槍共用組合姿勢。
+固定reference腳底與1.8身高校準後，Jog以3單位／秒參考、stride scale 2播放；
+後退反向、側移近似，沒有IK或骨骼命中宣稱。
+
+Client在Join前預備當前兩人產品所需的一個遠端GPU instance；退出重用資源但清身分。
+Build只啟用產品既有CharacterPresentationDefinition與新Presenter，沒有把玩家接到
+Enemy／Campaign；Match domain未增加Model／SDL，Engine與公共Gateway未改。
+專用CPU與GUI驗收仍由產品owner選擇。這是產品Client新增呈現責任及既有介面延伸，
+沒有新跨owner依賴、公共subsystem或FPS通用框架。
+
+30／60／144 FPS雙GUI、獨立GPU圖像、原生操作與16秒移動＋射擊短測通過。
+同路程相位一致，人物Submit CPU P95約2.68–3.10ms；20／20跨視窗位移事件
+P50／P95為44.58／45.50ms，1920／1920 Actual，原門檻不變。
+只是本次候選短驗證，沒有覆蓋v4完整性能認證或升格v5。完整校準、架構Delta、
+失敗與修正、圖像及成本見 [第02批dev_log](../dev_logs/2026_09_28_pvp_v5_batch02.zh-Hant.md)。
+
+### 第03批：v5命令、生命與動作的交接
+
+```text
+Client (Frame)
+  Space edge -> fixed 60 Hz command -> shared 3D movement -> prediction
+  R / click  -> Session ActionId + lifeGeneration -> local HUD / feedback
+        |                         |
+        +---- Client worker ------+  input 60 Hz / action+ACK 30 Hz
+                  |
+        v5 Client protobuf / UDP (whole datagram <= 1200 bytes)
+                  |
+       Go product Gateway / Adapter
+       session validation / bounded delivery / explicit enum conversion
+                  |
+        v5 Runtime protobuf / framed TCP
+                  |
+       Runtime Host: bounded handoff / scheduling / backpressure
+                  |
+       Match (Authority 60 Hz)
+       +---------------------------------------------------------+
+       | 1. due respawn / reload completion                       |
+       | 2. all players: shared 3D fixed movement                 |
+       | 3. stable action order: life -> age -> weapon -> hit      |
+       |    lethal damage immediately changes target to Dead     |
+       +---------------------------------------------------------+
+          |                          |
+          | latest-wins Snapshot     | retained terminal decisions
+          | life / pose / HP / ammo  | Session ActionId / request life
+          +-------------+------------+
+                        v
+                  Client Drain
+          +-------------+---------------------+
+          |                                   |
+ latest own state                       remote same-time segment
+ prediction restore/replay              position + life + combat
+ latest authority HUD                   timeline -> PlayerPresentation
+          |                                   |
+  rendered 3D camera                    Idle/Jog now; full actions in 04
+```
+
+世界Tick、移動epoch內sequence、Session ActionId與lifeGeneration不是同一識別。
+死亡保留連線與中立命令；重生保留PlayerId／Session／動作帳本，只提升生命及移動世代。
+因此舊生命射擊／換彈仍可可靠完成裁決與ACK，而新生命的移動、HP、彈匣和HUD不被污染。
+動作結果不可套用Snapshot的latest-wins；純移動歷史在重生時失效，另列取消證據。
+
+跳躍位置、垂直速度、接地狀態由同一產品純步驟模擬與重播。Held輸入移除跳躍邊沿；
+Client窗口滿仍更新允許的視角／網路，丟棄未分配跳躍沿。生命切換清預測與呈現段，
+不清其他玩家時間線或未ACK動作。遠端combat取位置所在區間，本機HUD取最新權威。
+
+新增依賴限於產品既有Collision／Client呈現能力及v5生成型別；Match無模型／SDL／
+Renderer，公共Gateway及Engine無FPS分支。第04批才處理完整骨骼動作與素材重定時。
+三角色版本、短驗證結果與原始證據入口見
+[第03批dev_log](../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)及[v5交接](plans/v5/HANDOFF.md)。

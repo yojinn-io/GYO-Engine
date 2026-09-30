@@ -24,7 +24,9 @@ bool Arena::Validate(std::string& error) const {
     if (version != 1 || id.empty() || id.size() > 64 ||
         !positive(width) || !positive(depth) || !positive(cellSize) ||
         !positive(movementSpeed) || !positive(bodyHeight) || !positive(radius) ||
-        !positive(eyeHeight) || bodyHeight < radius * 2 || eyeHeight > bodyHeight ||
+        !positive(eyeHeight) || !positive(jumpHeight) || !positive(gravity) ||
+        !std::isfinite(2 * gravity * jumpHeight) ||
+        bodyHeight < radius * 2 || eyeHeight > bodyHeight ||
         spawns.size() != 2 || walls.size() > 1024) {
         error = "Arena v1 requires an id, valid dimensions/movement settings and exactly two spawns";
         return false;
@@ -75,6 +77,8 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         arena.bodyHeight = json.value("body_height", 1.8F);
         arena.radius = json.value("radius", 0.25F);
         arena.eyeHeight = json.value("eye_height", 1.6F);
+        arena.jumpHeight = json.value("jump_height", 0.6F);
+        arena.gravity = json.value("gravity", 18.0F);
         for (const auto& wall : json.at("walls")) {
             const auto minimum = ReadPosition(wall.at("min"));
             const auto maximum = ReadPosition(wall.at("max"));

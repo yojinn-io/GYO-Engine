@@ -81,8 +81,8 @@ class IpcPause:
                 if not 1 <= length <= 65536:
                     raise ValueError('IPC frame length corrupted')
                 payload = self._read(upstream, length)
-                if payload[:2] != b'\x08\x04':
-                    raise ValueError('IPC envelope lost protocol v4')
+                if payload[:2] != b'\x08\x05':
+                    raise ValueError('IPC envelope lost protocol v5')
                 frame = header + payload
                 with self.lock:
                     self.stats['frames'] += 1

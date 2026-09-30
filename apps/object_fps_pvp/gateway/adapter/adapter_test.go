@@ -6,12 +6,12 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv4"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	client "gyo.local/object_fps_pvp/protocol/clientv5"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
-	in := &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{
+	in := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{
 		{Sequence: 10, MoveForward: 1, MoveRight: -1, Yaw: 1.2, Pitch: -0.3}, {Sequence: 11},
 	}}
 	bytes, err := proto.Marshal(in)
@@ -27,7 +27,7 @@ func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
 		{{Sequence: 1, Pitch: 2}}, {{Sequence: 1, MoveRight: float32(math.Inf(1))}},
 		{{Sequence: 1}, {Sequence: 1}}, {{Sequence: 2}, {Sequence: 1}},
 	} {
-		bad := &client.PlayerInput{MovementEpoch: 1, Commands: commands}
+		bad := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: commands}
 		b, _ := proto.Marshal(bad)
 		if _, err := DecodeInput(b, 7); err == nil {
 			t.Fatalf("bad input %+v accepted", bad)
@@ -41,22 +41,23 @@ func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
 	if _, err := DecodeInput(bytes, 0); err == nil {
 		t.Fatal("zero player identity accepted")
 	}
-	boundary, _ := proto.Marshal(&client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, Pitch: float32(math.Pi / 2)}}})
+	boundary, _ := proto.Marshal(&client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, Pitch: float32(math.Pi / 2)}}})
 	if _, err := DecodeInput(boundary, 7); err != nil {
 		t.Fatal("float32 pitch boundary differs from Match:", err)
 	}
 }
 
 func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
-	in := &client.PlayerInput{MovementEpoch: math.MaxUint64}
+	in := &client.PlayerInput{LifeGeneration: math.MaxUint64, MovementEpoch: math.MaxUint64}
 	for i := 0; i < MaxPendingCommands; i++ {
 		in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint64 - MaxPendingCommands + 1 + uint64(i),
-			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2)})
+			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2), JumpRequested: true})
 	}
 	bytes, err := proto.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("maximum movement datagram=%d bytes incl header", len(bytes)+framing.HeaderSize)
 	if len(bytes)+framing.HeaderSize > framing.MaxDatagram {
 		t.Fatal("full window exceeds UDP bound")
 	}
@@ -71,7 +72,7 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 }
 
 func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
-	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88}}}
+	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88}}}
 	out, err := SnapshotForClient(in, testRules())
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +91,7 @@ func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
 }
 
 func TestEpochAndContiguousQueueContract(t *testing.T) {
-	input := &client.PlayerInput{MovementEpoch: 9, Commands: []*client.MovementCommand{{Sequence: 1}}}
+	input := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 9, Commands: []*client.MovementCommand{{Sequence: 1}}}
 	payload, _ := proto.Marshal(input)
 	mapped, err := DecodeInput(payload, 1)
 	if err != nil || mapped.MovementEpoch != 9 {
@@ -101,8 +102,8 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 	if _, err := DecodeInput(payload, 1); err == nil {
 		t.Fatal("epoch zero accepted")
 	}
-	state := &runtime.PlayerState{PlayerId: 1, MovementEpoch: 9, LastResolvedCommand: 2, ContiguousPendingCommands: MaxFutureCommands}
-	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{PlayerId: 1, Hp: 100}}, Tick: 8, Players: []*runtime.PlayerState{state}}
+	state := &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 1, MovementEpoch: 9, LastResolvedCommand: 2, ContiguousPendingCommands: MaxFutureCommands}
+	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 1, Hp: 100}}, Tick: 8, Players: []*runtime.PlayerState{state}}
 	out, err := SnapshotForClient(snapshot, testRules())
 	if err != nil || out.Players[0].MovementEpoch != 9 || out.Players[0].ContiguousPendingCommands != MaxFutureCommands {
 		t.Fatalf("authority metadata lost: %v %v", out, err)
@@ -119,5 +120,5 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MaximumHp: 100, ShotDamage: 25, CooldownTicks: 20, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

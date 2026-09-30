@@ -41,7 +41,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
             closest = {ShotHitKind::World, 0, *distance};
     }
     for (const auto& player : players) {
-        if (player.playerId == shooter.playerId) continue;
+        if (player.playerId == shooter.playerId || player.lifeState == LifeState::Dead) continue;
         const Engine::Collision::VerticalCapsule capsule{
             {player.position.x, player.position.y, player.position.z},
             arena.bodyHeight, arena.radius};

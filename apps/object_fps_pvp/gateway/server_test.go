@@ -16,8 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv4"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	client "gyo.local/object_fps_pvp/protocol/clientv5"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 func TestCreateRoomWaitsForFragmentedJSON(t *testing.T) {
@@ -78,7 +78,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -121,7 +121,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {
 		for _, p := range snapshot.Players {
-			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{PlayerId: p.PlayerId, Hp: 100})
+			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100})
 		}
 	}
 	f.mu.Lock()
@@ -290,21 +290,21 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	sendPacket(t, p, c, 4, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	receivePacket(t, p, adapter.Welcome)
 	f.quiet(t)
-	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
 	in := f.next(t).GetInput()
 	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 {
 		t.Fatalf("bad input %v", in)
 	}
 	// Redundant batches keep every command and remain valid after the mailbox drains.
-	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
 	if repeated := f.next(t).GetInput(); repeated == nil || len(repeated.Commands) != 2 || repeated.Commands[0].Sequence != 2 {
 		t.Fatalf("redundant window lost: %v", repeated)
 	}
 	// One conflict rejects the entire batch, including its new command.
-	sendPacket(t, p, c, 7, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: -1}, {Sequence: 4}}})
+	sendPacket(t, p, c, 7, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: -1}, {Sequence: 4}}})
 	f.quiet(t)
 	e = envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: []*runtime.PlayerState{{MovementEpoch: 1, PlayerId: c.PlayerID, X: 5, Z: 7, LastResolvedCommand: 3}}}}
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, X: 5, Z: 7, LastResolvedCommand: 3}}}}
 	f.send(e)
 	var snapshot client.WorldSnapshot
 	if err := proto.Unmarshal(receivePacket(t, p, adapter.Snapshot), &snapshot); err != nil || snapshot.Tick != 3 || len(snapshot.Players) != 1 || snapshot.Players[0].X != 5 || snapshot.Players[0].LastResolvedCommand != 3 {
@@ -317,7 +317,7 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID {
 		t.Fatal("leave missing")
 	}
-	sendPacket(t, p, c, 8, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 4, MoveForward: 1}}})
+	sendPacket(t, p, c, 8, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 4, MoveForward: 1}}})
 	f.quiet(t)
 }
 
@@ -371,7 +371,7 @@ func TestRuntimeMailboxPreservesControlAndCoalescesInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, seq := range []uint64{10, 12, 11} {
-		if err := l.input(&runtime.PlayerInput{MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: seq}}}); err != nil {
+		if err := l.input(&runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: seq}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -379,7 +379,7 @@ func TestRuntimeMailboxPreservesControlAndCoalescesInput(t *testing.T) {
 	if len(batch) != 2 || batch[0].GetJoin() == nil || len(batch[1].GetInput().Commands) != 3 || batch[1].GetInput().Commands[0].Sequence != 10 || batch[1].GetInput().Commands[1].Sequence != 11 || batch[1].GetInput().Commands[2].Sequence != 12 {
 		t.Fatalf("batch %v", batch)
 	}
-	_ = l.input(&runtime.PlayerInput{MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: 13}}})
+	_ = l.input(&runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: 13}}})
 	leave := envelope()
 	leave.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: 1}}
 	_ = l.control(leave)
@@ -407,7 +407,7 @@ func TestSnapshotsFollowRuntimePublicationsForBothPeers(t *testing.T) {
 	}
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: []*runtime.PlayerState{
-		{MovementEpoch: 1, PlayerId: a.PlayerID, X: 1, Z: 2}, {MovementEpoch: 1, PlayerId: b.PlayerID, X: 3, Z: 4},
+		{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: a.PlayerID, X: 1, Z: 2}, {LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: b.PlayerID, X: 3, Z: 4},
 	}}}
 	f.send(e)
 	first, second := receivePacket(t, pa, adapter.Snapshot), receivePacket(t, pb, adapter.Snapshot)
@@ -463,7 +463,7 @@ func TestPendingJoinTimeoutCannotResurrectSession(t *testing.T) {
 	}
 }
 
-func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
+func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 	s, f := newTestServer(t)
 	if status, _ := post(t, s, "/rooms", map[string]any{}); status != 200 {
 		t.Fatal(status)
@@ -483,7 +483,7 @@ func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 
-	for _, version := range []uint32{1, 2, 3} {
+	for _, version := range []uint32{1, 2, 3, 4} {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -497,7 +497,7 @@ func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
 				return
 			}
 			defer conn.Close()
-			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{
+			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
 				ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
@@ -513,7 +513,7 @@ func TestV1ClientAndRuntimeAreRejected(t *testing.T) {
 func TestRuntimeMailboxMergesWindowsAtomicallyAndBoundsStorage(t *testing.T) {
 	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
 	window := func(first, last uint64) *runtime.PlayerInput {
-		in := &runtime.PlayerInput{MovementEpoch: 1, PlayerId: 1}
+		in := &runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1}
 		for sequence := first; sequence <= last; sequence++ {
 			in.Commands = append(in.Commands, &runtime.MovementCommand{Sequence: sequence, MoveForward: 1})
 		}
@@ -561,7 +561,7 @@ func TestRuntimeMailboxMergesWindowsAtomicallyAndBoundsStorage(t *testing.T) {
 	if err := l.input(window(30, 32)); err != nil {
 		t.Fatal(err)
 	}
-	l.acknowledge(1, 1, 31)
+	l.acknowledge(1, 1, 1, 31)
 	batch = l.batch()
 	if len(batch) != 1 || len(batch[0].GetInput().Commands) != 1 || batch[0].GetInput().Commands[0].Sequence != 32 {
 		t.Fatalf("stale commands retained: %v", batch)
@@ -575,7 +575,7 @@ func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
 	sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
-	first := &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1}, {Sequence: 2}}}
+	first := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1}, {Sequence: 2}}}
 	sendPacket(t, p, c, 2, adapter.Input, first)
 	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 2 || in.Commands[1].MoveForward != 0 {
 		t.Fatalf("stop command lost: %v", in)
@@ -585,13 +585,13 @@ func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
 	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 2 {
 		t.Fatalf("redundancy dropped: %v", in)
 	}
-	sendPacket(t, p, c, 4, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	sendPacket(t, p, c, 4, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
 	f.quiet(t)
 	// Reordered transport packet must not resurrect movement either.
 	sendPacket(t, p, c, 2, adapter.Input, first)
 	f.quiet(t)
 	e := envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 9, Players: []*runtime.PlayerState{{MovementEpoch: 1, PlayerId: c.PlayerID, LastResolvedCommand: 2}}}}
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 9, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, LastResolvedCommand: 2}}}}
 	f.send(e)
 	receivePacket(t, p, adapter.Snapshot)
 	sendPacket(t, p, c, 5, adapter.Input, first)
@@ -602,7 +602,7 @@ func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
 		t.Error("acknowledged commands retained")
 	}
 	s.mu.Unlock()
-	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 3}}})
+	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 3}}})
 	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 1 || in.Commands[0].Sequence != 3 {
 		t.Fatalf("new command missing: %v", in)
 	}
@@ -641,7 +641,7 @@ func TestActiveHelloKeepsSessionAliveWithoutRefreshingGameplay(t *testing.T) {
 func TestRuntimeMailboxEpochOnlyAdvancesFromAuthority(t *testing.T) {
 	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
 	input := func(epoch uint64, forward float32) *runtime.PlayerInput {
-		return &runtime.PlayerInput{PlayerId: 1, MovementEpoch: epoch, Commands: []*runtime.MovementCommand{{Sequence: 1, MoveForward: forward}}}
+		return &runtime.PlayerInput{LifeGeneration: 1, PlayerId: 1, MovementEpoch: epoch, Commands: []*runtime.MovementCommand{{Sequence: 1, MoveForward: forward}}}
 	}
 	if err := l.input(input(1, 1)); err != nil {
 		t.Fatal(err)
@@ -649,7 +649,7 @@ func TestRuntimeMailboxEpochOnlyAdvancesFromAuthority(t *testing.T) {
 	if err := l.input(input(2, -1)); err == nil {
 		t.Fatal("input advanced epoch")
 	}
-	l.acknowledge(1, 2, 0)
+	l.acknowledge(1, 2, 1, 0)
 	if len(l.batch()) != 0 {
 		t.Fatal("epoch reset retained old commands")
 	}
@@ -665,7 +665,7 @@ func TestRuntimeMailboxEpochOnlyAdvancesFromAuthority(t *testing.T) {
 	if err := l.input(input(2, -1)); err != nil {
 		t.Fatal(err)
 	}
-	l.acknowledge(1, 1, 99)
+	l.acknowledge(1, 1, 1, 99)
 	batch := l.batch()
 	if len(batch) != 1 || batch[0].GetInput().MovementEpoch != 2 || batch[0].GetInput().Commands[0].MoveForward != -1 {
 		t.Fatalf("authority epoch changed incorrectly: %v", batch)
@@ -680,14 +680,14 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 	input := func(epoch uint64, forward float32) *client.PlayerInput {
-		return &client.PlayerInput{MovementEpoch: epoch, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: forward}}}
+		return &client.PlayerInput{LifeGeneration: 1, MovementEpoch: epoch, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: forward}}}
 	}
 	sendPacket(t, p, c, 2, adapter.Input, input(1, 1))
 	if in := f.next(t).GetInput(); in == nil || in.MovementEpoch != 1 {
 		t.Fatalf("initial epoch: %v", in)
 	}
 	e := envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 7, Players: []*runtime.PlayerState{{PlayerId: c.PlayerID, MovementEpoch: 2, ContiguousPendingCommands: 0}}}}
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 7, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: c.PlayerID, MovementEpoch: 2, ContiguousPendingCommands: 0}}}}
 	f.send(e)
 	var snapshot client.WorldSnapshot
 	if err := proto.Unmarshal(receivePacket(t, p, adapter.Snapshot), &snapshot); err != nil || snapshot.Players[0].MovementEpoch != 2 || snapshot.Players[0].LastResolvedCommand != 0 {
@@ -706,8 +706,8 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	// A delayed old epoch can carry a numerically larger ACK and even an
 	// otherwise newer tick. It must not prune the replacement epoch's window.
 	stale := envelope()
-	stale.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 8, Combat: []*runtime.CombatState{{PlayerId: c.PlayerID, Hp: 100}},
-		Players: []*runtime.PlayerState{{PlayerId: c.PlayerID, MovementEpoch: 1, LastResolvedCommand: 999}}}}
+	stale.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 8, Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: c.PlayerID, Hp: 100}},
+		Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: c.PlayerID, MovementEpoch: 1, LastResolvedCommand: 999}}}}
 	s.runtimeMessage(stale)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -718,12 +718,12 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	}
 }
 
-func TestOldClientsAreRejectedAfterV4Upgrade(t *testing.T) {
+func TestOldClientsAreRejectedAfterV5Upgrade(t *testing.T) {
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
-	c, p := reserve(t, s, "v4"), peer(t)
+	c, p := reserve(t, s, "v5"), peer(t)
 	payload, _ := proto.Marshal(&client.Hello{SessionToken: c.Token})
-	for _, version := range []uint16{1, 2, 3} {
+	for _, version := range []uint16{1, 2, 3, 4} {
 		status, _ := post(t, s, "/rooms/1/join", map[string]any{"request_id": "old", "protocol_version": version})
 		if status != http.StatusConflict {
 			t.Fatalf("HTTP v%d accepted", version)
@@ -737,5 +737,5 @@ func TestOldClientsAreRejectedAfterV4Upgrade(t *testing.T) {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MaximumHp: 100, ShotDamage: 25, CooldownTicks: 20, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

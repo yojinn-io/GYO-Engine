@@ -24,6 +24,7 @@ struct ClientConnectionState {
     PlayerId playerId{};
     std::optional<WorldSnapshot> snapshot;
     std::optional<CombatRules> combatRules;
+    std::optional<MovementRules> movementRules;
     ActionTransportState actionTransport;
 };
 inline constexpr std::size_t MaxReceivedSnapshots = 64;
@@ -59,6 +60,8 @@ public:
     // window has room. Retries, decisions and ACKs stay alive across movement
     // epochs and stalled game frames. Nullopt never allocates/skips an ID.
     [[nodiscard]] std::optional<ActionId> SubmitShot(std::uint64_t observedAuthorityTick, float yaw, float pitch);
+    [[nodiscard]] std::optional<ActionId> SubmitAction(ActionKind kind, std::uint64_t lifeGeneration,
+        std::uint64_t observedAuthorityTick, float yaw = 0, float pitch = 0);
     [[nodiscard]] ClientConnectionState State() const;
     // Atomically consumes receipt-stamped history with its matching state and
     // lifecycle generation. Overflow count is cumulative within this generation.

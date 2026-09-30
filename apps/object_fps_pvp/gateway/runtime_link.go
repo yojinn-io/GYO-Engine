@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 // This queue is product-owned: ordered lifecycle requests and bounded command
@@ -25,6 +25,7 @@ type runtimeLink struct {
 	controls        []*runtime.RuntimeEnvelope
 	inputs          map[uint64]*runtime.PlayerInput
 	epochs          map[uint64]uint64 // Advanced only by authoritative snapshots.
+	lives           map[uint64]uint64
 	wake            chan struct{}
 	done            chan struct{}
 	closed          bool
@@ -53,7 +54,7 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{})}, ready, nil
+	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{})}, ready, nil
 }
 
 func envelope() *runtime.RuntimeEnvelope {
@@ -72,6 +73,7 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 	if leave := message.GetLeave(); leave != nil {
 		delete(l.inputs, leave.PlayerId)
 		delete(l.epochs, leave.PlayerId)
+		delete(l.lives, leave.PlayerId)
 		delete(l.actionWindows, leave.PlayerId)
 	}
 	l.controls = append(l.controls, message)
@@ -85,17 +87,21 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 	if l.closed {
 		return errRuntimeDisconnected
 	}
-	if in == nil || in.PlayerId == 0 || in.MovementEpoch == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
+	if in == nil || in.PlayerId == 0 || in.MovementEpoch == 0 || in.LifeGeneration == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
 		return adapter.ErrInput
 	}
 	epoch := l.epochs[in.PlayerId]
 	if epoch == 0 {
 		epoch = 1
 	}
-	if in.MovementEpoch < epoch {
+	life := l.lives[in.PlayerId]
+	if life == 0 {
+		life = 1
+	}
+	if in.MovementEpoch < epoch || in.LifeGeneration < life {
 		return nil
 	}
-	if in.MovementEpoch != epoch {
+	if in.MovementEpoch != epoch || in.LifeGeneration != life {
 		return adapter.ErrInput
 	}
 	var previous uint64
@@ -124,7 +130,7 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 	if len(merged) > adapter.MaxFutureCommands {
 		return adapter.ErrInput
 	}
-	window := &runtime.PlayerInput{PlayerId: in.PlayerId, MovementEpoch: epoch}
+	window := &runtime.PlayerInput{PlayerId: in.PlayerId, MovementEpoch: epoch, LifeGeneration: life}
 	for _, command := range merged {
 		window.Commands = append(window.Commands, proto.Clone(command).(*runtime.MovementCommand))
 	}
@@ -137,21 +143,29 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 	return nil
 }
 
-func (l *runtimeLink) acknowledge(playerID, epoch, sequence uint64) {
+func (l *runtimeLink) acknowledge(playerID, epoch, life, sequence uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	previous := l.epochs[playerID]
 	if previous == 0 {
 		previous = 1
 	}
-	if epoch < previous {
+	previousLife := l.lives[playerID]
+	if previousLife == 0 {
+		previousLife = 1
+	}
+	if life == 0 || epoch < previous || life < previousLife || (life > previousLife && epoch <= previous) {
 		return
 	}
 	if l.epochs == nil {
 		l.epochs = make(map[uint64]uint64)
 	}
 	l.epochs[playerID] = epoch
-	if epoch > previous {
+	if l.lives == nil {
+		l.lives = make(map[uint64]uint64)
+	}
+	l.lives[playerID] = life
+	if epoch > previous || life > previousLife {
 		delete(l.inputs, playerID)
 	}
 	if in := l.inputs[playerID]; in != nil {
@@ -187,7 +201,7 @@ func (l *runtimeLink) batch() []*runtime.RuntimeEnvelope {
 		for len(commands) > 0 {
 			count := min(len(commands), adapter.MaxPendingCommands)
 			e := envelope()
-			e.Message = &runtime.RuntimeEnvelope_Input{Input: &runtime.PlayerInput{PlayerId: id, Commands: commands[:count], MovementEpoch: l.inputs[id].MovementEpoch}}
+			e.Message = &runtime.RuntimeEnvelope_Input{Input: &runtime.PlayerInput{PlayerId: id, Commands: commands[:count], MovementEpoch: l.inputs[id].MovementEpoch, LifeGeneration: l.inputs[id].LifeGeneration}}
 			batch = append(batch, e)
 			commands = commands[count:]
 		}
@@ -270,6 +284,7 @@ func (l *runtimeLink) close() {
 	l.controls = nil
 	clear(l.inputs)
 	clear(l.epochs)
+	clear(l.lives)
 	clear(l.actionWindows)
 	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
 	l.mu.Unlock()

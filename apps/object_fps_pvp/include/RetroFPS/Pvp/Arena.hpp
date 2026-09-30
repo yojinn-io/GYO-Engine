@@ -29,6 +29,8 @@ struct Arena final {
     float eyeHeight{1.6F};
     std::vector<Engine::Collision::Aabb> walls;
     std::vector<SpawnPoint> spawns;
+    float jumpHeight{0.6F};
+    float gravity{18.0F};
 
     [[nodiscard]] bool Validate(std::string& error) const;
     [[nodiscard]] static std::optional<Arena> Load(

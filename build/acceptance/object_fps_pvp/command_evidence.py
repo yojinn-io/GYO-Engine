@@ -32,7 +32,7 @@ def read_trace_events(path):
     count, ended = 0, False
     file_schema = None
     allowed = {'generated', 'sent', 'host_accepted', 'resolved', 'reset', 'snapshot_produced',
-               'snapshot_received', 'presentation', 'runtime_gap', 'transport'}
+               'snapshot_received', 'presentation', 'runtime_gap', 'transport', 'lifecycle_cancelled'}
     with path.open() as stream:
         for line_number, line in enumerate(stream, 1):
             try:

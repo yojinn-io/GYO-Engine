@@ -19,17 +19,25 @@ inline constexpr unsigned ActionSendRate = 30;
 struct CombatRules final {
     std::uint32_t maximumHp{100};
     std::uint32_t shotDamage{25};
-    std::uint64_t cooldownTicks{20};
+    std::uint64_t cooldownTicks{10};
     float shotRange{100};
     std::chrono::nanoseconds maximumReferenceAge{std::chrono::milliseconds{250}};
+    std::uint32_t magazineCapacity{12};
+    std::uint64_t reloadTicks{90};
+    std::uint64_t respawnTicks{180};
 };
 inline constexpr CombatRules PvpCombatRules{};
 
+enum class ActionKind { Shot = 0, Reload = 1 };
+
+// Historical Shot names also carry reload actions in protocol v5.
 struct ShotRequest final {
     ActionId actionId{};
     std::uint64_t observedAuthorityTick{};
     float yaw{};
     float pitch{};
+    ActionKind kind{ActionKind::Shot};
+    std::uint64_t lifeGeneration{1};
     bool operator==(const ShotRequest&) const = default;
 };
 
@@ -40,7 +48,10 @@ struct ActionBatch final {
 
 // Admission failure is retryable with the original IDs, never a shot decision.
 enum class ActionAdmission { Accepted, InvalidPlayer, InvalidBatch, Conflict, OutsideWindow, Full };
-enum class ShotRejection { None, InvalidReference, Expired, Cooldown };
+enum class ShotRejection {
+    None, InvalidReference, Expired, Cooldown,
+    Dead, StaleLife, InvalidLife, Reloading, EmptyMagazine, MagazineFull
+};
 
 struct ShotDecision final {
     ActionId actionId{};
@@ -50,6 +61,9 @@ struct ShotDecision final {
     ShotHitKind hitKind{ShotHitKind::Miss};
     PlayerId targetId{};
     std::uint32_t damage{};
+    ActionKind kind{ActionKind::Shot};
+    std::uint64_t lifeGeneration{1};
+    std::uint64_t targetLifeGeneration{};
     bool operator==(const ShotDecision&) const = default;
 };
 
@@ -57,6 +71,13 @@ struct CombatState final {
     PlayerId playerId{};
     std::uint32_t hp{PvpCombatRules.maximumHp};
     std::uint64_t nextAllowedShotTick{};
+    std::uint64_t lifeGeneration{1};
+    std::uint32_t magazineAmmo{PvpCombatRules.magazineCapacity};
+    ActionId reloadActionId{};
+    std::uint64_t reloadStartTick{};
+    std::uint64_t reloadEndTick{};
+    ActionId lastShotActionId{};
+    std::uint64_t lastShotTick{};
     bool operator==(const CombatState&) const = default;
 };
 

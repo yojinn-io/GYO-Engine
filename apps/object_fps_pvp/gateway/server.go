@@ -21,8 +21,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv4"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	client "gyo.local/object_fps_pvp/protocol/clientv5"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 const sessionTimeout = 5 * time.Second
@@ -38,18 +38,19 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
-	actions       *actionWindow
-	packetWindow  time.Time
-	packetCount   uint64
-	session       *session.Session
-	playerID      uint64
-	requestID     string
-	phase         phase
-	joinStarted   time.Time
-	lastResolved  uint64
-	movementEpoch uint64
-	commands      map[uint64]*runtime.MovementCommand
-	outSequence   uint32
+	actions        *actionWindow
+	packetWindow   time.Time
+	packetCount    uint64
+	session        *session.Session
+	playerID       uint64
+	requestID      string
+	phase          phase
+	joinStarted    time.Time
+	lastResolved   uint64
+	movementEpoch  uint64
+	lifeGeneration uint64
+	commands       map[uint64]*runtime.MovementCommand
+	outSequence    uint32
 }
 type outbound struct {
 	actionPlayer uint64
@@ -262,7 +263,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1,
+	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1, lifeGeneration: 1,
 		commands: make(map[uint64]*runtime.MovementCommand)}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
@@ -394,12 +395,12 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		}
 		// Epochs are authority-owned. Old packets are inert; future packets
 		// cannot initiate a movement reset or replace an existing window.
-		if in.MovementEpoch != p.movementEpoch {
+		if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
 			return nil
 		}
 		// Validate the whole batch before committing any new command. Resolved
 		// steps are obsolete; unacknowledged steps are immutable across packets.
-		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch}
+		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch, LifeGeneration: p.lifeGeneration}
 		for _, command := range in.Commands {
 			if command.Sequence <= p.lastResolved {
 				continue
@@ -435,7 +436,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, CombatRules: adapter.RulesForClient(s.ready.CombatRules)})
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity})
 }
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
@@ -489,7 +490,9 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		}
 		for _, state := range out.Players {
 			if p := s.players[state.PlayerId]; p != nil &&
-				(state.MovementEpoch < p.movementEpoch || (state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
+				(state.LifeGeneration < p.lifeGeneration || state.MovementEpoch < p.movementEpoch ||
+					(state.LifeGeneration > p.lifeGeneration && state.MovementEpoch <= p.movementEpoch) ||
+					(state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
 				s.mu.Unlock()
 				return
 			}
@@ -498,18 +501,19 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		s.hasSnapshot = true
 		for _, state := range out.Players {
 			if p := s.players[state.PlayerId]; p != nil &&
-				(state.MovementEpoch > p.movementEpoch || state.LastResolvedCommand > p.lastResolved) {
-				if state.MovementEpoch > p.movementEpoch {
+				(state.LifeGeneration > p.lifeGeneration || state.MovementEpoch > p.movementEpoch || state.LastResolvedCommand > p.lastResolved) {
+				if state.MovementEpoch > p.movementEpoch || state.LifeGeneration > p.lifeGeneration {
 					clear(p.commands)
 				}
 				p.movementEpoch = state.MovementEpoch
+				p.lifeGeneration = state.LifeGeneration
 				p.lastResolved = state.LastResolvedCommand
 				for sequence := range p.commands {
 					if sequence <= p.lastResolved {
 						delete(p.commands, sequence)
 					}
 				}
-				s.link.acknowledge(p.playerID, p.movementEpoch, p.lastResolved)
+				s.link.acknowledge(p.playerID, p.movementEpoch, p.lifeGeneration, p.lastResolved)
 			}
 		}
 		s.mu.Unlock()

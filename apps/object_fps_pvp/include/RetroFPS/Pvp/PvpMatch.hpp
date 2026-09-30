@@ -54,7 +54,6 @@ private:
     struct Participant final {
         PlayerState state;
         CombatState combat;
-        std::optional<std::uint64_t> lastShotTick;
         ActionId retiredActionThrough{};
         std::map<ActionId, ActionEntry> actions;
         std::map<std::uint64_t, MovementCommand> commands;
@@ -71,6 +70,9 @@ private:
     };
     [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
     void ResetMovementEpoch(Participant& player, MovementResetReason reason);
+    void ResolveLifeBoundaries();
+    [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
+    void Kill(Participant& player);
     void ResolveActions(const ShotReferenceAge& referenceAge);
     Arena arena_;
     std::map<PlayerId, Participant> players_;

@@ -11,6 +11,13 @@
 #include <utility>
 
 namespace fps::pvp {
+namespace {
+std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
+    if (tick > (std::numeric_limits<std::uint64_t>::max)() - duration)
+        throw std::overflow_error("Authority deadline exhausted");
+    return tick + duration;
+}
+}
 PvpMatch::PvpMatch(Arena arena) : arena_(std::move(arena)) {
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
@@ -21,18 +28,10 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
     if (playerId == 0) { error = "invalid_player"; return false; }
     if (players_.contains(playerId)) return true;
     if (players_.size() >= 2) { error = "match_full"; return false; }
-    std::vector<Engine::Collision::VerticalCapsule> blockers;
-    for (const auto& [id, player] : players_) {
-        static_cast<void>(id);
-        const auto p = player.state.position;
-        blockers.push_back({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius});
-    }
-    for (const auto& spawn : arena_.spawns) {
-        const auto p = spawn.position;
-        if (!CanPlaceCharacterBody({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius},
-                                   arena_.walls, blockers)) continue;
+    if (const auto* spawn = FindSpawn(playerId)) {
         Participant player;
-        player.state = {playerId, p, std::remainder(spawn.yaw, 2 * std::numbers::pi_v<float>), 0, 0};
+        player.state = {playerId, spawn->position,
+            std::remainder(spawn->yaw, 2 * std::numbers::pi_v<float>), 0, 0};
         player.combat.playerId = playerId;
         players_.emplace(playerId, player);
         return true;
@@ -44,7 +43,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
 bool PvpMatch::Leave(PlayerId playerId) { return players_.erase(playerId) != 0; }
 
 bool PvpMatch::ValidInput(const PlayerInput& input) noexcept {
-    if (input.playerId == 0 || input.movementEpoch == 0 || input.commands.empty() ||
+    if (input.playerId == 0 || input.movementEpoch == 0 || input.lifeGeneration == 0 || input.commands.empty() ||
         input.commands.size() > MaxPendingCommands)
         return false;
     std::uint64_t previous{};
@@ -59,7 +58,8 @@ bool PvpMatch::CanSubmitInput(const PlayerInput& input) const noexcept {
     const auto found = players_.find(input.playerId);
     if (found == players_.end() || !ValidInput(input)) return false;
     const auto& participant = found->second;
-    if (input.movementEpoch != participant.state.movementEpoch) return false;
+    if (input.movementEpoch != participant.state.movementEpoch ||
+        input.lifeGeneration != participant.state.lifeGeneration) return false;
     const auto cursor = participant.state.lastResolvedCommand;
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue; // An irrevocably resolved step.
@@ -98,7 +98,10 @@ ActionAdmission PvpMatch::CanSubmitActions(const ActionBatch& batch,
     std::map<ActionId, ShotRequest> incoming;
     const auto merge = [&](std::span<const ShotRequest> shots) {
         for (const auto& shot : shots) {
-            if (!ValidMovementCommand({shot.actionId, 0, 0, shot.yaw, shot.pitch}))
+            if (shot.lifeGeneration == 0 ||
+                (shot.kind != ActionKind::Shot && shot.kind != ActionKind::Reload) ||
+                (shot.kind == ActionKind::Reload && (shot.yaw != 0 || shot.pitch != 0)) ||
+                !ValidMovementCommand({shot.actionId, 0, 0, shot.yaw, shot.pitch}))
                 return ActionAdmission::InvalidBatch;
             // Even retired IDs cannot make a self-conflicting batch well formed.
             // We compare supplied content only; retired historical content is gone.
@@ -170,6 +173,78 @@ std::optional<ActionResults> PvpMatch::GetActionResults(PlayerId playerId) const
     return result;
 }
 
+const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
+    std::vector<Engine::Collision::VerticalCapsule> blockers;
+    for (const auto& [id, player] : players_) {
+        if (id == playerId || player.state.lifeState == LifeState::Dead) continue;
+        const auto p = player.state.position;
+        blockers.push_back({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius});
+    }
+    const SpawnPoint* selected = nullptr;
+    double bestDistance = -1;
+    for (const auto& spawn : arena_.spawns) {
+        const auto p = spawn.position;
+        if (!CanPlaceCharacterBody({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius},
+            arena_.walls, blockers)) continue;
+        double nearest = (std::numeric_limits<double>::max)();
+        for (const auto& blocker : blockers) {
+            const double dx = p.x - blocker.feet.x;
+            const double dy = p.y - blocker.feet.y;
+            const double dz = p.z - blocker.feet.z;
+            nearest = (std::min)(nearest, dx * dx + dy * dy + dz * dz);
+        }
+        // Strict comparison leaves equal-distance choices in content order.
+        if (!selected || nearest > bestDistance) {
+            selected = &spawn;
+            bestDistance = nearest;
+        }
+    }
+    return selected;
+}
+
+void PvpMatch::Kill(Participant& player) {
+    player.state.respawnTick = FutureTick(tick_, PvpCombatRules.respawnTicks);
+    player.state.lifeState = LifeState::Dead;
+    player.state.lifeStateTick = tick_;
+    player.combat.reloadActionId = 0;
+    player.combat.reloadStartTick = 0;
+    player.combat.reloadEndTick = 0;
+}
+
+void PvpMatch::ResolveLifeBoundaries() {
+    // std::map order makes concurrent respawns deterministic: later players
+    // see the live capsule placed by every earlier successful respawn.
+    for (auto& [id, player] : players_) {
+        if (player.state.lifeState == LifeState::Dead) {
+            if (tick_ < player.state.respawnTick) continue;
+            const auto* spawn = FindSpawn(id);
+            if (!spawn) continue; // Keep the due deadline and retry next tick.
+            if (player.state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())
+                throw std::overflow_error("Life generation exhausted");
+            if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())
+                throw std::overflow_error("Movement epoch exhausted");
+            ++player.state.lifeGeneration;
+            player.state.lifeState = LifeState::Alive;
+            player.state.lifeStateTick = tick_;
+            player.state.respawnTick = 0;
+            player.state.position = spawn->position;
+            player.state.yaw = std::remainder(spawn->yaw, 2 * std::numbers::pi_v<float>);
+            player.state.pitch = 0;
+            player.state.verticalVelocity = 0;
+            player.state.grounded = true;
+            player.combat = CombatState{id};
+            player.combat.lifeGeneration = player.state.lifeGeneration;
+            // Movement resets never clear the session's action ledger or ACK floor.
+            ResetMovementEpoch(player, MovementResetReason::LifeRespawn);
+        } else if (player.combat.reloadActionId != 0 && tick_ >= player.combat.reloadEndTick) {
+            player.combat.magazineAmmo = PvpCombatRules.magazineCapacity;
+            player.combat.reloadActionId = 0;
+            player.combat.reloadStartTick = 0;
+            player.combat.reloadEndTick = 0;
+        }
+    }
+}
+
 void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
     std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> pending;
     for (const auto& [playerId, player] : players_) {
@@ -177,42 +252,69 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
             if (!entry.decision) pending.emplace_back(entry.acceptedTick, playerId, actionId);
         }
     }
-    if (pending.empty()) return;
     std::sort(pending.begin(), pending.end());
-    std::vector<PlayerState> targets;
-    for (const auto& [id, player] : players_) {
-        static_cast<void>(id);
-        targets.push_back(player.state);
-    }
     for (const auto& [acceptedTick, playerId, actionId] : pending) {
         static_cast<void>(acceptedTick);
         auto& player = players_.at(playerId);
         auto& entry = player.actions.at(actionId);
         const auto& shot = entry.request;
         ShotDecision decision{actionId, tick_};
-        const auto age = referenceAge && shot.observedAuthorityTick != 0 &&
-            shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
-        if (!age || *age < std::chrono::nanoseconds::zero()) {
-            decision.rejection = ShotRejection::InvalidReference;
-        } else if (*age > PvpCombatRules.maximumReferenceAge) {
-            decision.rejection = ShotRejection::Expired;
-        } else if (player.lastShotTick && tick_ - *player.lastShotTick < PvpCombatRules.cooldownTicks) {
-            decision.rejection = ShotRejection::Cooldown;
+        decision.kind = shot.kind;
+        decision.lifeGeneration = shot.lifeGeneration;
+        if (shot.lifeGeneration != player.state.lifeGeneration) {
+            decision.rejection = shot.lifeGeneration < player.state.lifeGeneration ?
+                ShotRejection::StaleLife : ShotRejection::InvalidLife;
+        } else if (player.state.lifeState == LifeState::Dead) {
+            decision.rejection = ShotRejection::Dead;
         } else {
-            const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch,
-                targets, PvpCombatRules.shotRange);
-            decision.accepted = true;
-            decision.hitKind = hit.kind;
-            decision.targetId = hit.targetId;
-            if (hit.kind == ShotHitKind::Player) {
-                auto& target = players_.at(hit.targetId).combat;
-                decision.damage = (std::min)(PvpCombatRules.shotDamage, target.hp);
-                target.hp -= decision.damage;
+            const auto age = referenceAge && shot.observedAuthorityTick != 0 &&
+                shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
+            if (!age || *age < std::chrono::nanoseconds::zero()) {
+                decision.rejection = ShotRejection::InvalidReference;
+            } else if (*age > PvpCombatRules.maximumReferenceAge) {
+                decision.rejection = ShotRejection::Expired;
+            } else if (player.combat.reloadActionId != 0) {
+                decision.rejection = ShotRejection::Reloading;
+            } else if (shot.kind == ActionKind::Reload) {
+                if (player.combat.magazineAmmo == PvpCombatRules.magazineCapacity) {
+                    decision.rejection = ShotRejection::MagazineFull;
+                } else {
+                    const auto endTick = FutureTick(tick_, PvpCombatRules.reloadTicks);
+                    player.combat.reloadActionId = actionId;
+                    player.combat.reloadStartTick = tick_;
+                    player.combat.reloadEndTick = endTick;
+                    decision.accepted = true;
+                }
+            } else if (player.combat.magazineAmmo == 0) {
+                decision.rejection = ShotRejection::EmptyMagazine;
+            } else if (tick_ < player.combat.nextAllowedShotTick) {
+                decision.rejection = ShotRejection::Cooldown;
+            } else {
+                const auto nextAllowedShotTick = FutureTick(tick_, PvpCombatRules.cooldownTicks);
+                // Build this view for each action: a preceding lethal hit has
+                // already removed its target from the live hit population.
+                std::vector<PlayerState> targets;
+                for (const auto& [id, target] : players_) {
+                    static_cast<void>(id);
+                    if (target.state.lifeState == LifeState::Alive) targets.push_back(target.state);
+                }
+                const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch,
+                    targets, PvpCombatRules.shotRange);
+                --player.combat.magazineAmmo;
+                player.combat.lastShotActionId = actionId;
+                player.combat.lastShotTick = tick_;
+                player.combat.nextAllowedShotTick = nextAllowedShotTick;
+                decision.accepted = true;
+                decision.hitKind = hit.kind;
+                decision.targetId = hit.targetId;
+                if (hit.kind == ShotHitKind::Player) {
+                    auto& target = players_.at(hit.targetId);
+                    decision.targetLifeGeneration = target.state.lifeGeneration;
+                    decision.damage = (std::min)(PvpCombatRules.shotDamage, target.combat.hp);
+                    target.combat.hp -= decision.damage;
+                    if (target.combat.hp == 0) Kill(target);
+                }
             }
-            player.lastShotTick = tick_;
-            const auto maximumTick = (std::numeric_limits<std::uint64_t>::max)();
-            player.combat.nextAllowedShotTick = tick_ > maximumTick - PvpCombatRules.cooldownTicks ?
-                maximumTick : tick_ + PvpCombatRules.cooldownTicks;
         }
         entry.decision = decision;
     }
@@ -232,6 +334,7 @@ std::uint32_t PvpMatch::ContiguousPending(const Participant& player) noexcept {
 void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reason) {
     if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())
         throw std::overflow_error("Movement epoch exhausted");
+    const auto cancelled = player.commands.size();
     ++player.state.movementEpoch;
     player.state.lastResolvedCommand = 0;
     player.state.contiguousPendingCommands = 0;
@@ -247,7 +350,9 @@ void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reaso
     player.movementResetScheduled = false;
     player.movementResetReason = MovementResetReason::None;
     TraceMovement({.kind = MovementTraceKind::Reset, .playerId = player.state.playerId,
-        .epoch = player.state.movementEpoch, .authorityTick = tick_, .resetReason = reason});
+        .epoch = player.state.movementEpoch, .authorityTick = tick_,
+        .count = reason == MovementResetReason::LifeRespawn ? cancelled : 0,
+        .resetReason = reason, .lifeGeneration = player.state.lifeGeneration});
 }
 
 void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenceAge& referenceAge) {
@@ -256,8 +361,10 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         std::abs(tick.deltaSeconds - MovementTickSeconds) > 1.0e-12)
         throw std::invalid_argument("Invalid match tick");
     tick_ = tick.tickId;
+    ResolveLifeBoundaries();
     for (auto& [id, player] : players_) {
         static_cast<void>(id);
+        if (player.lastMovementResetTick == tick_) continue; // Successful respawn reset boundary.
         if (player.movementResetScheduled) {
             // The decision belongs to the previous completed tick. Rotation
             // preserves the world clock and pose, but performs no movement.
@@ -282,6 +389,7 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
             player.missingInputTicks = 0;
             player.commands.erase(actual);
         } else {
+            command.jumpRequested = false; // An edge never repeats in held/neutral substitution.
             if (player.missingInputTicks >= InputHoldTicks) {
                 command.moveForward = command.moveRight = 0;
                 source = MovementInputSource::Neutral;
@@ -297,7 +405,8 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         player.state.contiguousPendingCommands = pending;
         TraceMovement({.kind = MovementTraceKind::Resolved, .playerId = id,
             .epoch = player.state.movementEpoch, .sequence = sequence, .authorityTick = tick_,
-            .source = source, .queued = pending, .count = player.missingInputTicks});
+            .source = source, .queued = pending, .count = player.missingInputTicks,
+            .lifeGeneration = player.state.lifeGeneration});
         player.backlogSamples.push_back(pending);
         player.backlogSum += pending;
         player.fallbackSamples.push_back(source != MovementInputSource::Actual);

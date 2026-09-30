@@ -1,4 +1,4 @@
-"""Short product-owned v4 matrix: real Match, Go Gateway and ClientConnection.
+"""Short product-owned action transport matrix: real Match, Go Gateway and ClientConnection.
 
 Only this acceptance relay injects faults. UDP blockage means a bounded relay
 holds/drops datagrams; TCP blockage preserves a partially delivered frame. These
@@ -99,6 +99,11 @@ def decision(payload):
     names = ('action_id', 'resolved_tick', 'accepted', 'rejection', 'hit_kind', 'target_id', 'damage')
     result = {name: scalar(payload, field) for field, name in enumerate(names, 1)}
     result['accepted'] = bool(result['accepted'])
+    if scalar(payload, 8):
+        result['action_kind'] = scalar(payload, 8)-1
+        result['life_generation'] = scalar(payload, 9)
+        result['target_life_generation'] = scalar(payload, 10)
+        result['rejection'] = {4: 5, 5: 6, 6: 4}.get(result['rejection'], result['rejection'])
     return result
 
 
@@ -117,6 +122,8 @@ class ActionRelay(_ImpairedGateway):
         self.network_random = {}
         self.network_counts = Counter()
         self.network_until = None
+        self.cross_session = None
+        self.cross_until = None
         self.network_order = 0
         self.network_maximum_scheduled_delay_ms = 0
         self.fault = {'start_ns': 0, 'release_ns': 0, 'maximum_held_datagrams': 0,
@@ -146,6 +153,12 @@ class ActionRelay(_ImpairedGateway):
 
     def _release(self):
         now = time.monotonic()
+        if self.cross_until is not None and now >= self.cross_until:
+            self.cross_until = None
+            self.fault['release_ns'] = time.monotonic_ns()
+            held = self.held.pop(('cross-life-result', self.cross_session), None)
+            if held:
+                self._send(*held, 'cross_life_result_released')
         while self.network_queue and self.network_queue[0][0] <= now:
             _, _, payload, destination, upstream = heapq.heappop(self.network_queue)
             self._send(payload, destination, upstream, 'network_forwarded')
@@ -190,6 +203,24 @@ class ActionRelay(_ImpairedGateway):
                 event['decisions'] = [decision(item) for item in messages(body, 2)]
                 event['retired'] = scalar(body, 1)
             self.events.append(event)
+            if self.mode == 'cross-life':
+                if self.cross_session is None and kind == 7 and any(d.get('action_kind') == 1 and d['action_id'] == 2 and d['accepted'] for d in event.get('decisions', [])):
+                    self.cross_session = session
+                    self.cross_until = time.monotonic()+4.5
+                    self.fault['start_ns'] = now
+                if session == self.cross_session and self.cross_until is not None:
+                    if kind == 7:
+                        self.held.setdefault(('cross-life-result', session), (payload, destination, upstream))
+                        self.events.append(dict(event, event='cross_life_result_held'))
+                        return
+                    if upstream and kind == 6 and 3 in event.get('shots', []):
+                        # Keep every retry's immutable ID3/life1 withheld until
+                        # life2. Later IDs still exercise a real receipt hole.
+                        filtered = [(n,w,v) for n,w,v in fields(body) if not (n == 1 and w == 2 and scalar(v,1) == 3)]
+                        self.events.append(dict(event, event='cross_life_request_held'))
+                        if not any(n == 1 for n,_,_ in filtered) and not scalar(encoded(filtered),2):
+                            return
+                        payload = packet_payload(payload, encoded(filtered))
             if self.mode.startswith('network') and kind in (3, 4, 6, 7):
                 if self.network_until is None:
                     self.network_until = time.monotonic()+4
@@ -245,7 +276,11 @@ class ActionRelay(_ImpairedGateway):
                 later = [(n, w, scalar(original, 1)+31 if n == 1 else v) for n, w, v in fields(original)]
                 malformed = encoded([(1, 2, encoded(conflict)), (1, 2, encoded(later))])
                 self._send(packet_payload(payload, malformed), destination, upstream, 'conflicting_atomic_batch')
-                # A well-framed v4 datagram with malformed protobuf cannot become
+                for number, value, label in ((6, scalar(original, 6)+1, 'conflicting_life'), (5, 2, 'conflicting_kind')):
+                    altered = [(n, w, v) for n, w, v in fields(original) if n != number and not (number == 5 and n in (3, 4))]
+                    altered.append((number, 0, value))
+                    self._send(packet_payload(payload, encoded([(1, 2, encoded(altered))])), destination, upstream, label)
+                # A well-framed v5 datagram with malformed protobuf cannot become
                 # a shot or damage event and must not disconnect a valid Session.
                 self._send(packet_payload(payload, b'\x0a\x7f\x08'), destination, upstream, 'malformed_action')
                 self.held[('reorder', session)] = (payload, destination, upstream)
@@ -298,6 +333,9 @@ def analyze(output, relay, fault, mode):
         if not condition:
             errors.append(message)
     client = json.loads((output/'action-client.json').read_text())
+    if client.get('gameplay_v5'):
+        from gameplay_evidence import analyze as analyze_gameplay
+        return analyze_gameplay(output, relay, fault, mode)
     events = list(records(output/'actions.jsonl', legacy=not (output/'action-frames.jsonl').exists()))
     frames = list(action_frames(output))
     if mode == 'burst2':
@@ -473,9 +511,9 @@ def analyze(output, relay, fault, mode):
 
 
 def run_case(args, mode, milliseconds=0):
-    name = mode+(f'-{milliseconds}ms' if milliseconds else '')
+    name = getattr(args, 'case_name', None) or mode+(f'-{milliseconds}ms' if milliseconds else '')
     output = args.output/name
-    output.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=False)
     (output/'ready.json').unlink(missing_ok=True)
     artifacts = {name: {'path': str(getattr(args, name)),
                         'sha256': hashlib.sha256(getattr(args, name).read_bytes()).hexdigest()}
@@ -509,7 +547,9 @@ def run_case(args, mode, milliseconds=0):
                 time.sleep(.01)
         relay = ActionRelay(http, udp, mode)
         command = [args.probe, '--gateway', relay.gateway, '--arena', args.arena, '--output', output, '--duration', 6]
-        if mode.startswith('network') or mode == 'burst2':
+        if getattr(args, 'gameplay_v5', False):
+            command += ['--gameplay-v5', 'true', '--fps', getattr(args, 'fps', 60)]
+        elif mode.startswith('network') or mode == 'burst2':
             command += ['--legal-shots', 'true']
         if mode == 'drain-stall':
             command += ['--drain-stall-ms', 1300]
@@ -522,7 +562,7 @@ def run_case(args, mode, milliseconds=0):
         ready = json.loads((output/'ready.json').read_text())
         fault = {'start_ns': 0, 'release_ns': 0}
         if milliseconds:
-            while time.monotonic_ns() < ready['start_ns']+1_500_000_000:
+            while time.monotonic_ns() < ready['start_ns']+int(getattr(args, 'fault_at', 1.5)*1e9):
                 time.sleep(.005)
             if mode == 'gateway':
                 fault['start_ns'] = time.monotonic_ns()
@@ -539,12 +579,13 @@ def run_case(args, mode, milliseconds=0):
                 fault = ipc_relay.evidence()
             else:
                 relay.arm(mode, milliseconds/1000)
-        if probe.wait(timeout=20):
+        if probe.wait(timeout=25):
             raise RuntimeError('Client action probe failed; see probe.log and client JSON')
         if mode == 'drain-stall':
-            fault = {'start_ns': ready['start_ns']+1_500_000_000, 'release_ns': ready['start_ns']+2_800_000_000}
+            drain_at = 4 if getattr(args, 'gameplay_v5', False) else 1.5
+            fault = {'start_ns': ready['start_ns']+int(drain_at*1e9), 'release_ns': ready['start_ns']+int((drain_at+1.3)*1e9)}
         evidence = relay.evidence()
-        if mode in ('upstream', 'downstream', 'socket-path') or mode.startswith('network'):
+        if mode in ('upstream', 'downstream', 'socket-path', 'cross-life') or mode.startswith('network'):
             fault = evidence['fault']
         (output/'relay.json').write_text(json.dumps(evidence, indent=2)+'\n')
         gateway.terminate();gateway.wait(timeout=5)

@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v4.pb.h"
+#include "client_v5.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -20,7 +20,7 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v4;
+namespace pb=object_fps_pvp::client::v5;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
@@ -50,13 +50,31 @@ std::optional<CombatRules> ReadRules(const pb::Welcome& welcome) {
     const auto& rules=welcome.combat_rules();
     if(!rules.maximum_hp() || !rules.shot_damage() || rules.shot_damage()>rules.maximum_hp() ||
        !rules.cooldown_ticks() || !std::isfinite(rules.shot_range()) || rules.shot_range()<=0 ||
-       !rules.maximum_reference_age_ms())return {};
+       !rules.maximum_reference_age_ms() || !rules.magazine_capacity() ||
+       !rules.reload_ticks() || !rules.respawn_ticks())return {};
     return CombatRules{rules.maximum_hp(),rules.shot_damage(),rules.cooldown_ticks(),rules.shot_range(),
-        std::chrono::milliseconds{rules.maximum_reference_age_ms()}};
+        std::chrono::milliseconds{rules.maximum_reference_age_ms()},
+        rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks()};
+}
+ShotRejection ReadRejection(pb::ShotRejection value) {
+    switch(value) {
+    case pb::REJECTION_NONE:return ShotRejection::None;
+    case pb::REJECTION_INVALID_REFERENCE:return ShotRejection::InvalidReference;
+    case pb::REJECTION_EXPIRED:return ShotRejection::Expired;
+    case pb::REJECTION_COOLDOWN:return ShotRejection::Cooldown;
+    case pb::REJECTION_STALE_LIFE:return ShotRejection::StaleLife;
+    case pb::REJECTION_INVALID_LIFE:return ShotRejection::InvalidLife;
+    case pb::REJECTION_DEAD:return ShotRejection::Dead;
+    case pb::REJECTION_RELOADING:return ShotRejection::Reloading;
+    case pb::REJECTION_EMPTY_MAGAZINE:return ShotRejection::EmptyMagazine;
+    case pb::REJECTION_MAGAZINE_FULL:return ShotRejection::MagazineFull;
+    default:throw std::invalid_argument("Invalid rejection");
+    }
 }
 bool SameRules(const CombatRules& a,const CombatRules& b) {
     return a.maximumHp==b.maximumHp && a.shotDamage==b.shotDamage && a.cooldownTicks==b.cooldownTicks &&
-        a.shotRange==b.shotRange && a.maximumReferenceAge==b.maximumReferenceAge;
+        a.shotRange==b.shotRange && a.maximumReferenceAge==b.maximumReferenceAge &&
+        a.magazineCapacity==b.magazineCapacity && a.reloadTicks==b.reloadTicks && a.respawnTicks==b.respawnTicks;
 }
 }
 struct ClientConnection::Impl {
@@ -101,7 +119,7 @@ struct ClientConnection::Impl {
     // Called only while holding mutex at a connection-generation boundary.
     void ResetActions() {
         actions.clear();actionTransport={};actionSendCursor=0;
-        state.combatRules.reset();state.actionTransport={};
+        state.combatRules.reset();state.movementRules.reset();state.actionTransport={};
     }
     ActionTransportState ActionState() const {
         auto result=actionTransport;result.retained=actions.size();
@@ -243,12 +261,12 @@ struct ClientConnection::Impl {
         if(request.generation!=generation.load())return;
         static std::atomic<std::uint64_t> nextRequest{};
         const auto requestId=std::to_string(Clock::now().time_since_epoch().count())+"-"+std::to_string(++nextRequest);
-        const Json join={{"request_id",requestId},{"protocol_version",4}};
+        const Json join={{"request_id",requestId},{"protocol_version",5}};
         const auto joined=Response(http->Post("/rooms/"+room+"/join",join.dump(),"application/json"));
         // Keep credentials even if cancelled so the next action releases its reservation.
         session=joined.at("session_id").get<std::uint64_t>();token=joined.at("session_token").get<std::string>();
         if(request.generation!=generation.load())return;
-        if(joined.at("protocol_version").get<unsigned>()!=4)throw std::runtime_error("Client protocol mismatch");
+        if(joined.at("protocol_version").get<unsigned>()!=5)throw std::runtime_error("Client protocol mismatch");
         CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>());
         udp::resolver resolver(io);
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
@@ -273,19 +291,25 @@ struct ClientConnection::Impl {
         std::vector<ShotDecision> decoded;decoded.reserve(message.decisions_size());
         for(const auto& value:message.decisions()) {
             if(!value.action_id() || value.action_id()>actionTransport.allocatedThrough || !value.resolved_tick() ||
+               !value.life_generation() || (value.kind()!=pb::ACTION_SHOT && value.kind()!=pb::ACTION_RELOAD) ||
                !pb::ShotRejection_IsValid(value.rejection()) || !pb::ShotHitKind_IsValid(value.hit_kind()) ||
                (value.accepted()!=(value.rejection()==pb::REJECTION_NONE)) ||
                (!value.accepted() && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())) ||
                (value.hit_kind()==pb::HIT_PLAYER && (!value.target_id() || value.target_id()==state.playerId)) ||
                (value.hit_kind()!=pb::HIT_PLAYER && (value.target_id() || value.damage())) ||
-               value.damage()>state.combatRules->shotDamage)return false;
+               value.damage()>state.combatRules->shotDamage ||
+               (value.hit_kind()==pb::HIT_PLAYER && !value.target_life_generation()) ||
+               (value.hit_kind()!=pb::HIT_PLAYER && value.target_life_generation()) ||
+               (value.kind()==pb::ACTION_RELOAD && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())))return false;
             ShotDecision decision{value.action_id(),value.resolved_tick(),value.accepted(),
-                static_cast<ShotRejection>(value.rejection()),static_cast<ShotHitKind>(value.hit_kind()),
-                value.target_id(),value.damage()};
+                ReadRejection(value.rejection()),static_cast<ShotHitKind>(value.hit_kind()),
+                value.target_id(),value.damage(),value.kind()==pb::ACTION_SHOT?ActionKind::Shot:ActionKind::Reload,
+                value.life_generation(),value.target_life_generation()};
             if(std::any_of(decoded.begin(),decoded.end(),[&](const auto& d){return d.actionId==decision.actionId;}))return false;
             const auto found=actions.find(decision.actionId);
             if(decision.actionId>actionTransport.retiredThrough &&
-               (found==actions.end() || (found->second.decision && *found->second.decision!=decision)))return false;
+               (found==actions.end() || found->second.request.kind!=decision.kind ||
+                found->second.request.lifeGeneration!=decision.lifeGeneration || (found->second.decision && *found->second.decision!=decision)))return false;
             decoded.push_back(decision);
         }
         for(const auto& decision:decoded) {
@@ -310,7 +334,9 @@ struct ClientConnection::Impl {
                 if(entry.decision)continue;
                 auto* shot=message.add_shots();shot->set_action_id(id);
                 shot->set_observed_authority_tick(entry.request.observedAuthorityTick);
-                shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);
+                shot->set_kind(entry.request.kind==ActionKind::Shot?pb::ACTION_SHOT:pb::ACTION_RELOAD);
+                shot->set_life_generation(entry.request.lifeGeneration);
+                if(entry.request.kind==ActionKind::Shot){shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);}
                 actionSendCursor=id;
             }
             if(message.shots().empty() && actionTransport.acknowledgedThrough<=actionTransport.retiredThrough)return;
@@ -358,11 +384,17 @@ struct ClientConnection::Impl {
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
                 if(!rules)throw std::runtime_error("Invalid Match combat rules");
+                if(!std::isfinite(message.jump_height()) || message.jump_height()<=0 || message.jump_height()>10 ||
+                   !std::isfinite(message.gravity()) || message.gravity()<=0 || message.gravity()>1000)
+                    throw std::runtime_error("Invalid Match movement rules");
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
                 if(message.player_id()!=state.playerId)throw std::runtime_error("Unexpected player identity");
                 if(state.combatRules && !SameRules(*state.combatRules,*rules))
                     throw std::runtime_error("Match combat rules changed within a session");
+                if(state.movementRules && (state.movementRules->jumpHeight!=message.jump_height() ||
+                    state.movementRules->gravity!=message.gravity()))throw std::runtime_error("Match movement rules changed within a session");
+                state.movementRules=MovementRules{message.jump_height(),message.gravity()};
                 state.combatRules=rules;
                 welcomed=true;
             } else if(packet->type==wire::Type::Snapshot) {
@@ -370,30 +402,44 @@ struct ClientConnection::Impl {
                 pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
                     message.tick()==0 || message.players_size()>2 || message.combat_size()!=message.players_size())continue;
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
-                PlayerId own;std::uint32_t maximumHp{};{
+                PlayerId own;std::uint32_t maximumHp{},magazineCapacity{};{
                     std::scoped_lock lock(mutex);
                     if(activeGeneration!=generation.load())return;
                     own=state.playerId;
                     if(!state.combatRules)continue;
-                    maximumHp=state.combatRules->maximumHp;
+                    maximumHp=state.combatRules->maximumHp;magazineCapacity=state.combatRules->magazineCapacity;
                 }
                 for(const auto& p:message.players()) {
                     if(p.player_id()==0 || std::any_of(snapshot.players.begin(),snapshot.players.end(),
                         [&](const PlayerState& existing){return existing.playerId==p.player_id();}) ||
                         !std::isfinite(p.x()) || !std::isfinite(p.y()) || !std::isfinite(p.z()) ||
                         !ValidMovementCommand({1,0,0,p.yaw(),p.pitch()}) || p.movement_epoch()==0 ||
-                        p.contiguous_pending_commands()>MaxFutureCommands){valid=false;break;}
+                        p.contiguous_pending_commands()>MaxFutureCommands || !p.life_generation() ||
+                        !std::isfinite(p.vertical_velocity()) ||
+                        (p.life_state()!=pb::LIFE_ALIVE && p.life_state()!=pb::LIFE_DEAD) ||
+                        p.life_state_tick()>message.tick() ||
+                        (p.life_state()==pb::LIFE_ALIVE && p.respawn_tick()!=0) ||
+                        (p.life_state()==pb::LIFE_DEAD && (!p.life_state_tick() || p.respawn_tick()<=p.life_state_tick()))) {valid=false;break;}
                     snapshot.players.push_back({p.player_id(),{p.x(),p.y(),p.z()},p.yaw(),p.pitch(),p.last_resolved_command(),
-                        p.movement_epoch(),p.contiguous_pending_commands()});
+                        p.movement_epoch(),p.contiguous_pending_commands(),p.vertical_velocity(),p.grounded(),p.life_generation(),
+                        p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick()});
                     self|=p.player_id()==own;
                 }
                 for(const auto& combat:message.combat()) {
-                    if(!combat.player_id() || combat.hp()>maximumHp ||
+                    if(!combat.player_id() || combat.hp()>maximumHp || !combat.life_generation() || combat.magazine_ammo()>magazineCapacity ||
+                       (combat.reload_action_id()==0 && (combat.reload_start_tick()!=0 || combat.reload_end_tick()!=0)) ||
+                       (combat.reload_action_id()!=0 && (!combat.reload_start_tick() || combat.reload_start_tick()>message.tick() || combat.reload_end_tick()<=message.tick())) ||
+                       (combat.last_shot_action_id()==0)!=(combat.last_shot_tick()==0) || combat.last_shot_tick()>message.tick() ||
                        std::none_of(snapshot.players.begin(),snapshot.players.end(),[&](const auto& p){return p.playerId==combat.player_id();}) ||
                        std::any_of(snapshot.combat.begin(),snapshot.combat.end(),[&](const auto& p){return p.playerId==combat.player_id();})) {
                         valid=false;break;
                     }
-                    snapshot.combat.push_back({combat.player_id(),combat.hp(),combat.next_allowed_shot_tick()});
+                    const auto& player=*std::find_if(snapshot.players.begin(),snapshot.players.end(),[&](const auto& p){return p.playerId==combat.player_id();});
+                    if(combat.life_generation()!=player.lifeGeneration || (combat.hp()==0)!=(player.lifeState==LifeState::Dead) ||
+                       (player.lifeState==LifeState::Dead && combat.reload_action_id()!=0)){valid=false;break;}
+                    snapshot.combat.push_back({combat.player_id(),combat.hp(),combat.next_allowed_shot_tick(),combat.life_generation(),
+                        combat.magazine_ammo(),combat.reload_action_id(),combat.reload_start_tick(),combat.reload_end_tick(),
+                        combat.last_shot_action_id(),combat.last_shot_tick()});
                 }
                 if(!valid)continue;
                 std::scoped_lock lock(mutex);
@@ -406,7 +452,8 @@ struct ClientConnection::Impl {
                         for(const auto& player:snapshot.players)
                             for(const auto& previous:state.snapshot->players)
                                 if(player.playerId==previous.playerId &&
-                                    (player.movementEpoch<previous.movementEpoch ||
+                                    (player.lifeGeneration<previous.lifeGeneration || player.movementEpoch<previous.movementEpoch ||
+                                     (player.lifeGeneration>previous.lifeGeneration && player.movementEpoch<=previous.movementEpoch) ||
                                      (player.movementEpoch==previous.movementEpoch && player.lastResolvedCommand<previous.lastResolvedCommand)))valid=false;
                     }
                     if(!valid)continue;
@@ -434,7 +481,7 @@ struct ClientConnection::Impl {
                         TraceMovement({.kind=MovementTraceKind::SnapshotReceived,
                             .timeNs=std::chrono::duration_cast<std::chrono::nanoseconds>(arrivedAt.time_since_epoch()).count(),.playerId=player.playerId,
                             .epoch=player.movementEpoch,.sequence=player.lastResolvedCommand,.authorityTick=snapshot.tick,
-                            .queued=player.contiguousPendingCommands,.count=snapshotOverflowCount});
+                            .queued=player.contiguousPendingCommands,.count=snapshotOverflowCount,.lifeGeneration=player.lifeGeneration});
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
                 }
@@ -457,11 +504,11 @@ struct ClientConnection::Impl {
             if(activeGeneration!=generation.load())return;
             if(welcomed && (!haveSentInput || Clock::now()>=nextInputSendAt))input=latestInput;}
         if(input) {
-            pb::PlayerInput message;message.set_movement_epoch(input->movementEpoch);
+            pb::PlayerInput message;message.set_movement_epoch(input->movementEpoch);message.set_life_generation(input->lifeGeneration);
             for(const auto& command:input->commands) {
                 auto* out=message.add_commands();out->set_sequence(command.sequence);
                 out->set_move_forward(command.moveForward);out->set_move_right(command.moveRight);
-                out->set_yaw(command.yaw);out->set_pitch(command.pitch);
+                out->set_yaw(command.yaw);out->set_pitch(command.pitch);out->set_jump_requested(command.jumpRequested);
             }
             const auto payload=message.SerializeAsString();
             const auto sendStarted=MovementTraceNowNs();
@@ -471,7 +518,7 @@ struct ClientConnection::Impl {
                 for(const auto& command:input->commands)
                     TraceMovement({.kind=MovementTraceKind::Sent,.timeNs=sendFinished,
                         .playerId=input->playerId,.epoch=input->movementEpoch,
-                        .sequence=command.sequence,.startedNs=sendStarted});
+                        .sequence=command.sequence,.startedNs=sendStarted,.lifeGeneration=input->lifeGeneration});
             const auto sentAt=Clock::now();
             const auto period=std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0/InputSendRate));
             // A missed send is skipped, never repaid by a packet burst.
@@ -507,14 +554,14 @@ void ClientConnection::SendInput(PlayerInput input){
     std::scoped_lock lock(impl_->mutex);
     if((impl_->state.phase!=ConnectionPhase::Playing && impl_->state.phase!=ConnectionPhase::Connecting) ||
        input.playerId!=impl_->state.playerId || !PvpMatch::ValidInput(input))return;
-    std::uint64_t resolved{},epoch{1};
+    std::uint64_t resolved{},epoch{1},life{1};
     if(impl_->state.snapshot) {
         for(const auto& player:impl_->state.snapshot->players)
-            if(player.playerId==input.playerId){resolved=player.lastResolvedCommand;epoch=player.movementEpoch;}
+            if(player.playerId==input.playerId){resolved=player.lastResolvedCommand;epoch=player.movementEpoch;life=player.lifeGeneration;}
     }
     // Only authority can advance an epoch. Neither a stale application frame
     // nor a caller-provided future epoch can repopulate the worker's window.
-    if(input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch)return;
+    if(input.lifeGeneration!=life || input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch)return;
     std::erase_if(input.commands,[&](const auto& command){return command.sequence<=resolved;});
     std::erase_if(impl_->submittedCommands,[&](const auto& command){return command.sequence<=resolved;});
     if(input.commands.empty())return;
@@ -530,15 +577,26 @@ void ClientConnection::SendInput(PlayerInput input){
     impl_->latestInput=std::move(input);
 }
 std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch){
+    const auto state=State();
+    if(!state.snapshot)return {};
+    const auto player=std::find_if(state.snapshot->players.begin(),state.snapshot->players.end(),
+        [&](const auto& p){return p.playerId==state.playerId;});
+    if(player==state.snapshot->players.end())return {};
+    return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch);
+}
+std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint64_t lifeGeneration,
+    std::uint64_t observedAuthorityTick,float yaw,float pitch){
     std::scoped_lock lock(impl_->mutex);
-    if(impl_->state.phase!=ConnectionPhase::Playing || !impl_->state.combatRules ||
-       !ValidMovementCommand({1,0,0,yaw,pitch}) || impl_->actions.size()>=MaxActionWindow)return {};
+    if(impl_->state.phase!=ConnectionPhase::Playing || !impl_->state.combatRules || !lifeGeneration ||
+       (kind!=ActionKind::Shot && kind!=ActionKind::Reload) ||
+       !ValidMovementCommand({1,0,0,yaw,pitch}) || (kind==ActionKind::Reload && (yaw!=0 || pitch!=0)) ||
+       impl_->actions.size()>=MaxActionWindow)return {};
     if(impl_->actionTransport.allocatedThrough==std::numeric_limits<ActionId>::max()) {
         impl_->state.error="Action IDs exhausted; leave and rejoin the Match";return {};
     }
     const auto id=impl_->actionTransport.allocatedThrough+1;
     if(id<=impl_->actionTransport.retiredThrough || id-impl_->actionTransport.retiredThrough>MaxActionWindow)return {};
-    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch},{},false});
+    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration},{},false});
     impl_->actionTransport.allocatedThrough=id;
     return id;
 }

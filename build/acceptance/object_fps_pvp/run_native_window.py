@@ -252,6 +252,13 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def circle_clear_of_aabb(position, minimum, maximum, radius):
+    # PvP collision uses a horizontal circle. An axis-expanded rectangle would
+    # incorrectly reject legal rounded-corner positions outside that circle.
+    closest = [min(high, max(low, value)) for value, low, high in zip(position, minimum, maximum)]
+    return math.dist(position, closest) >= radius
+
+
 def state(directory, role):
     return json.loads((directory / f"{role}-native-state.json").read_text())
 
@@ -465,7 +472,7 @@ def run(args):
         desktop.key(a, "w", False)
         wall = fresh()
         position = wall["local"]["predicted"]
-        require(not (8.75 < position[0] < 11.25 and 8.75 < position[1] < 11.25), "Native approach penetrated wall")
+        require(circle_clear_of_aabb(position, (9, 9), (11, 11), .25), "Native approach penetrated wall")
         # Continue diagonal into center corner: collision must keep both
         # predicted and displayed cylinder outside the solid wall footprint.
         aim(math.atan2(10 - position[0], 10 - position[1]))
@@ -474,7 +481,7 @@ def run(args):
         desktop.key(a, "w", False)
         wall = fresh()
         for p in (wall["local"]["predicted"], wall["local"]["render"]):
-            require(not (8.75 + .001 < p[0] < 11.25 - .001 and 8.75 + .001 < p[1] < 11.25 - .001), "Native corner/camera penetrated wall")
+            require(circle_clear_of_aabb(p, (9, 9), (11, 11), .25), "Native corner/camera penetrated wall")
         result["checks"]["V1_native_motion_stop_look_wall_corner"] = True
         result["checks"]["V2_native_move_aim_shoot"] = True
         # Near the center wall, aim directly into it; player HP must stay full.

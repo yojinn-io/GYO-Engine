@@ -50,6 +50,7 @@ private:
             output_ << "{\"schema_version\":2,\"kind\":\"" << TraceKindName(e.kind)
                     << "\",\"time_ns\":" << e.timeNs
                     << ",\"player_id\":" << e.playerId
+                    << ",\"life_generation\":" << e.lifeGeneration
                     << ",\"epoch\":" << e.epoch
                     << ",\"sequence\":" << e.sequence
                     << ",\"authority_tick\":" << e.authorityTick

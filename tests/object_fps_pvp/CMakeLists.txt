@@ -2,7 +2,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" match_domain match_domain)
 gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
-    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp)
+    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} doctest::doctest)
@@ -15,7 +15,42 @@ endif()
 add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 30)
 
+# Client presentation has its own CPU asset/pose tests. Keep Model/SDL and
+# staged character content out of the authority-domain test target.
+gyo_get_app_target("${GYO_CURRENT_APP}" app_support support)
+set(presentation_tests "gyo_${GYO_CURRENT_APP}_presentation_tests")
+set(presentation_stage "${PROJECT_BINARY_DIR}/test-products/${GYO_CURRENT_APP}")
+set(presentation_content "gyo_${GYO_CURRENT_APP}_presentation_test_runtime")
+add_custom_target(${presentation_content})
+gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
+add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp)
+target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
+target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
+    SDL3::SDL3 nlohmann_json::nlohmann_json doctest::doctest)
+gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
+set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(${presentation_tests} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${presentation_tests} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${presentation_tests})
+add_dependencies(${presentation_tests} ${presentation_content})
+add_test(NAME "${GYO_CURRENT_APP}.presentation_cpu" COMMAND ${presentation_tests})
+set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.gameplay_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+add_test(NAME "${GYO_CURRENT_APP}.player_presentation_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_player_presentation_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.player_presentation_evidence" PROPERTIES LABELS "cpu;pvp;presentation;acceptance" TIMEOUT 10)
 add_test(NAME "${GYO_CURRENT_APP}.action_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_action_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.action_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
@@ -34,3 +69,7 @@ set_tests_properties("${GYO_CURRENT_APP}.recovery_relay" PROPERTIES LABELS "cpu;
 add_test(NAME "${GYO_CURRENT_APP}.backpressure_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_backpressure_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.backpressure_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+
+add_test(NAME "${GYO_CURRENT_APP}.native_window_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_native_window.py")
+set_tests_properties("${GYO_CURRENT_APP}.native_window_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

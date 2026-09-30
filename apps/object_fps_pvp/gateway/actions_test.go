@@ -11,15 +11,15 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv4"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	client "gyo.local/object_fps_pvp/protocol/clientv5"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 func shot(id uint64) *runtime.ShotRequest {
-	return &runtime.ShotRequest{ActionId: id, ObservedAuthorityTick: 1, Yaw: .25}
+	return &runtime.ShotRequest{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: id, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}
 }
 func decision(id uint64) *runtime.ShotDecision {
-	return &runtime.ShotDecision{ActionId: id, ResolvedTick: 10, Accepted: true}
+	return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: id, ResolvedTick: 10, Accepted: true}
 }
 func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Time) {
 	t.Helper()
@@ -32,15 +32,15 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 	if peer.Hello(peer.Token, endpoint, 1, now) != nil {
 		t.Fatal("hello")
 	}
-	p := &reservation{playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
+	p := &reservation{lifeGeneration: 1, playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
 	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1)}
-	s := &Server{available: true, ready: &runtime.Ready{TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
 	return s, p, endpoint, now
 }
 func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.AddrPort, seq uint32, b *client.ActionBatch, now time.Time) {
 	t.Helper()
 	payload, _ := proto.Marshal(b)
-	if err := s.receivePacket(framing.Header{Version: 4, Type: adapter.Actions, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now); err != nil {
+	if err := s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: adapter.Actions, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -48,7 +48,7 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 	s, p, endpoint, now := actionFixture(t)
 	// Client has no trusted player field. Even a protobuf unknown field cannot
 	// replace the identity selected from its authenticated session.
-	batch := &client.ActionBatch{Shots: []*client.ShotRequest{{ActionId: 2, ObservedAuthorityTick: 1, Yaw: .25}}}
+	batch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
 	batch.ProtoReflect().SetUnknown([]byte{0x18, 99})
 	deliverActions(t, s, p, netip.MustParseAddrPort("127.0.0.1:29002"), 2, batch, now)
 	if len(p.actions.requests) != 0 {
@@ -65,11 +65,11 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 	if p.actions.acknowledged != 0 {
 		t.Fatal("ACK crossed missing decision1")
 	}
-	deliverActions(t, s, p, endpoint, 4, &client.ActionBatch{Shots: []*client.ShotRequest{{ActionId: 1, ObservedAuthorityTick: 1, Yaw: .25}, {ActionId: 2, ObservedAuthorityTick: 1, Yaw: 1}}}, now)
+	deliverActions(t, s, p, endpoint, 4, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}, {LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(1)}}}, now)
 	if len(p.actions.requests) != 1 || p.actions.requests[1] != nil {
 		t.Fatal("conflict partially admitted")
 	}
-	deliverActions(t, s, p, endpoint, 5, &client.ActionBatch{Shots: []*client.ShotRequest{{ActionId: 1, ObservedAuthorityTick: 1, Yaw: .25}, {ActionId: 1, ObservedAuthorityTick: 1, Yaw: .25}}}, now)
+	deliverActions(t, s, p, endpoint, 5, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}, {LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}, now)
 	if len(p.actions.requests) != 2 {
 		t.Fatal("identical duplicate rejected")
 	}
@@ -77,7 +77,7 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A valid ACK paired with malformed/conflicting content must remain atomic.
-	deliverActions(t, s, p, endpoint, 6, &client.ActionBatch{AcknowledgedThrough: 2, Shots: []*client.ShotRequest{{ActionId: 2, ObservedAuthorityTick: 1, Yaw: 1}}}, now)
+	deliverActions(t, s, p, endpoint, 6, &client.ActionBatch{AcknowledgedThrough: 2, Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(1)}}}, now)
 	if p.actions.acknowledged != 0 {
 		t.Fatal("bad batch committed ACK")
 	}
@@ -94,7 +94,7 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 	}
 	// Movement resets do not clear decisions, requests, ACKs or the retirement floor.
 	e := envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 2, Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 2}}, Combat: []*runtime.CombatState{{PlayerId: 7, Hp: 100}}}}
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 2, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 7, MovementEpoch: 2}}, Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}}}
 	s.runtimeMessage(e)
 	if p.actions.retired != 2 || p.movementEpoch != 2 {
 		t.Fatal("movement reset cleared action lifecycle")
@@ -211,7 +211,7 @@ func TestActionOverflowAndRetiredDuplicateConflict(t *testing.T) {
 		t.Fatal("last action id rejected")
 	}
 	w.merge(b)
-	if w.validate(&runtime.ActionBatch{PlayerId: 1, Shots: []*runtime.ShotRequest{{ActionId: 1, Yaw: 1}, {ActionId: 1, Yaw: 2}}}) == nil {
+	if w.validate(&runtime.ActionBatch{PlayerId: 1, Shots: []*runtime.ShotRequest{{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(1)}, {LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(2)}}}) == nil {
 		t.Fatal("conflicting duplicate retired contents")
 	}
 	if w.validate(&runtime.ActionBatch{PlayerId: 1, AcknowledgedThrough: math.MaxUint64}) == nil {
@@ -228,19 +228,19 @@ func TestMovementActionsHelloShareUnchanged120PacketBudget(t *testing.T) {
 		for tick := 0; tick < 60; tick++ {
 			now := base.Add(time.Duration(tick) * time.Second / 60)
 			seq++
-			in := &client.PlayerInput{MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1}}}
+			in := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1}}}
 			payload, _ := proto.Marshal(in)
-			if err := s.receivePacket(framing.Header{Version: 4, Type: adapter.Input, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now); err != nil {
+			if err := s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: adapter.Input, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now); err != nil {
 				t.Fatal(err)
 			}
 			if tick%2 == 0 {
 				seq++
-				deliverActions(t, s, p, endpoint, seq, &client.ActionBatch{Shots: []*client.ShotRequest{{ActionId: 1, ObservedAuthorityTick: 1, Yaw: .25}}}, now)
+				deliverActions(t, s, p, endpoint, seq, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}, now)
 			}
 			if tick == 0 {
 				seq++
 				payload, _ = proto.Marshal(&client.Hello{SessionToken: p.session.Token})
-				if s.receivePacket(framing.Header{Version: 4, Type: adapter.Hello, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now) != nil {
+				if s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: adapter.Hello, SessionID: p.session.ID, Sequence: seq}, payload, endpoint, now) != nil {
 					t.Fatal("hello")
 				}
 			}
@@ -256,10 +256,10 @@ func TestMovementActionsHelloShareUnchanged120PacketBudget(t *testing.T) {
 	now := start.Add(5 * time.Second)
 	seq++
 	hello, _ := proto.Marshal(&client.Hello{SessionToken: p.session.Token})
-	_ = s.receivePacket(framing.Header{Version: 4, Type: adapter.Hello, SessionID: p.session.ID, Sequence: seq}, hello, endpoint, now)
+	_ = s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: adapter.Hello, SessionID: p.session.ID, Sequence: seq}, hello, endpoint, now)
 	for i := 0; i < 119; i++ {
 		seq++
-		_ = s.receivePacket(framing.Header{Version: 4, Type: 99, SessionID: p.session.ID, Sequence: seq}, nil, endpoint, now)
+		_ = s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: 99, SessionID: p.session.ID, Sequence: seq}, nil, endpoint, now)
 	}
 	if err := s.admit(p, endpoint, seq+1, now); err != session.ErrRateLimit {
 		t.Fatalf("all authenticated traffic not counted: %v", err)
@@ -279,7 +279,7 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 	if proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome) != nil || welcome.CombatRules == nil || welcome.CombatRules.ShotDamage != 25 {
 		t.Fatal("Match rules not in Welcome")
 	}
-	sendPacket(t, p, c, 2, adapter.Actions, &client.ActionBatch{Shots: []*client.ShotRequest{{ActionId: 1, ObservedAuthorityTick: 1, Yaw: .25}}})
+	sendPacket(t, p, c, 2, adapter.Actions, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}})
 	in := f.next(t).GetActions()
 	if in == nil || in.PlayerId != c.PlayerID || len(in.Shots) != 1 || in.Shots[0].ActionId != 1 {
 		t.Fatalf("wire action mapping %v", in)
@@ -322,7 +322,7 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 			break
 		}
 	}
-	sendPacket(t, p, c, 4, adapter.Actions, &client.ActionBatch{AcknowledgedThrough: 1, Shots: []*client.ShotRequest{{ActionId: 2, ObservedAuthorityTick: 1, Yaw: .25}}})
+	sendPacket(t, p, c, 4, adapter.Actions, &client.ActionBatch{AcknowledgedThrough: 1, Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}})
 	for {
 		in = f.next(t).GetActions()
 		if in != nil && len(in.Shots) > 0 && in.Shots[0].ActionId == 2 {

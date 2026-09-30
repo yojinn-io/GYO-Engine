@@ -1,8 +1,8 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
-// The mock is external to production: HTTP joins and wire-v4 UDP movement and action transport.
+// The mock is external to production: HTTP joins and wire-v5 UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v4.pb.h"
+#include "client_v5.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -23,7 +23,7 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v4;
+namespace pb=object_fps_pvp::client::v5;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
@@ -37,8 +37,8 @@ public:
         http.Get("/rooms",[](const auto&,auto& response){response.set_content(R"({"rooms":[]})","application/json");});
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
-            if(body.value("protocol_version",0)!=4) {
-                response.status=400;response.set_content(R"({"error":"expected v4"})","application/json");return;
+            if(body.value("protocol_version",0)!=5) {
+                response.status=400;response.set_content(R"({"error":"expected v5"})","application/json");return;
             }
             const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
                 {"arena_id","worker-test"},{"arena_version",1},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
@@ -65,10 +65,11 @@ public:
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
-                welcome.set_snapshot_rate(60);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);
+                welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);
                 if(includeRules) {
                     auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
+                    rules->set_magazine_capacity(7);rules->set_reload_ticks(88);rules->set_respawn_ticks(177);
                 }
                 Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
@@ -95,15 +96,15 @@ public:
     void UntilTime(Clock::time_point deadline){Until([&]{return Clock::now()>=deadline;});}
     void Snapshot(std::uint64_t resolved) {
         ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
-        auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);
-        auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);
+        auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
+        auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
         pb::ActionResults results;results.set_retired_through(retired);
         for(const auto id:ids) {
             auto* d=results.add_decisions();d->set_action_id(id);d->set_resolved_tick(123);
-            d->set_rejection(pb::REJECTION_COOLDOWN);
+            d->set_rejection(pb::REJECTION_COOLDOWN);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(1);
         }
         SendResults(results);
     }
@@ -116,7 +117,7 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
-    std::atomic<unsigned> protocolVersion{4};
+    std::atomic<unsigned> protocolVersion{5};
     bool includeRules{true};
     std::uint64_t epoch{1};
     bool autoAck{};
@@ -147,36 +148,38 @@ std::size_t CheckMaximumDatagrams() {
     std::size_t largest{};
     const auto check=[&](wire::Type type,const auto& message) {
         const auto bytes=wire::Encode({type,max64,max32,message.SerializeAsString()});
-        Require(bytes.size()<=wire::MaxDatagram && wire::Decode(bytes).has_value(),"maximum-field v4 datagram exceeded envelope");
+        Require(bytes.size()<=wire::MaxDatagram && wire::Decode(bytes).has_value(),"maximum-field v5 datagram exceeded envelope");
         largest=std::max(largest,bytes.size());
     };
     pb::ActionBatch batch;batch.set_acknowledged_through(max64-MaxActionWindow);
     pb::ActionResults results;results.set_retired_through(max64-MaxActionWindow);
     for(std::size_t n=0;n<MaxActionBatch;++n) {
         auto* shot=batch.add_shots();shot->set_action_id(max64-n);shot->set_observed_authority_tick(max64);
-        shot->set_yaw(3.0f);shot->set_pitch(1.5f);
+        shot->set_yaw(3.0f);shot->set_pitch(1.5f);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(max64);
         auto* d=results.add_decisions();d->set_action_id(max64-n);d->set_resolved_tick(max64);
-        d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);
+        d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(max64);d->set_target_life_generation(max64);
     }
     check(wire::Type::Actions,batch);check(wire::Type::ActionResults,results);
-    pb::PlayerInput movement;movement.set_movement_epoch(max64);
+    pb::PlayerInput movement;movement.set_movement_epoch(max64);movement.set_life_generation(max64);
     for(std::size_t n=0;n<MaxPendingCommands;++n) {
         auto* c=movement.add_commands();c->set_sequence(max64-(MaxPendingCommands-1)+n);c->set_move_forward(1);c->set_move_right(1);
-        c->set_yaw(3.0f);c->set_pitch(1.5f);
+        c->set_yaw(3.0f);c->set_pitch(1.5f);c->set_jump_requested(true);
     }
     check(wire::Type::Input,movement);
     pb::WorldSnapshot snapshot;snapshot.set_tick(max64);
     for(unsigned n=0;n<2;++n) {
         auto* p=snapshot.add_players();p->set_player_id(max64-n);
         p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
-        p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);
-        auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);
+        p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);p->set_vertical_velocity(4);p->set_grounded(true);
+        p->set_life_generation(max64);p->set_life_state(pb::LIFE_ALIVE);p->set_life_state_tick(max64);p->set_respawn_tick(max64);
+        auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
+        c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
     }
     check(wire::Type::Snapshot,snapshot);
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
-    for(std::uint64_t version=1;version<=3;++version) {
+    for(std::uint64_t version=1;version<=4;++version) {
         wire::Write(std::span(legacy).subspan(4,2),version);
-        Require(!wire::Decode(legacy),"v4 accepted legacy UDP version");
+        Require(!wire::Decode(legacy),"v5 accepted legacy UDP version");
     }
     return largest;
 }
@@ -184,7 +187,7 @@ std::size_t CheckMaximumDatagrams() {
 Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto rules=connection.State().combatRules;
     Require(rules && rules->maximumHp==200 && rules->shotDamage==37 && rules->cooldownTicks==9 &&
-        rules->shotRange==140 && rules->maximumReferenceAge==333ms,"client duplicated authoritative combat defaults");
+        rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177,"client duplicated authoritative combat defaults");
     Require(connection.State().snapshot->combat.at(0).hp==74 &&
         connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
@@ -236,8 +239,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     }
     gateway.Until([&]{return connection.State().actionTransport.unconsumed==31;});
     pb::ActionResults conflict;
-    auto* fresh=conflict.add_decisions();fresh->set_action_id(1);fresh->set_resolved_tick(123);fresh->set_rejection(pb::REJECTION_COOLDOWN);
-    auto* changed=conflict.add_decisions();changed->set_action_id(2);changed->set_resolved_tick(124);changed->set_rejection(pb::REJECTION_COOLDOWN);
+    auto* fresh=conflict.add_decisions();fresh->set_action_id(1);fresh->set_resolved_tick(123);fresh->set_rejection(pb::REJECTION_COOLDOWN);fresh->set_kind(pb::ACTION_SHOT);fresh->set_life_generation(1);
+    auto* changed=conflict.add_decisions();changed->set_action_id(2);changed->set_resolved_tick(124);changed->set_rejection(pb::REJECTION_COOLDOWN);changed->set_kind(pb::ACTION_SHOT);changed->set_life_generation(1);
     gateway.SendResults(conflict);gateway.Results({},32);
     gateway.Until([&]{return connection.State().actionTransport.rejectedResultBatches>=2;});
     Require(connection.State().actionTransport.pending==1 && connection.State().actionTransport.retiredThrough==0,
@@ -336,10 +339,10 @@ int main() {
             connection.State().actionTransport.allocatedThrough==0 && connection.Drain().decisions.empty(),"Leave retained action lifecycle state");
         gateway.epoch=1;
 
-        gateway.protocolVersion=3;connection.Join(gateway.address,"1");
+        gateway.protocolVersion=4;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v3 join");
-        gateway.protocolVersion=4;gateway.includeRules=false;connection.Join(gateway.address,"1");
+        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v4 join");
+        gateway.protocolVersion=5;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
         gateway.includeRules=true;

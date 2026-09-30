@@ -20,13 +20,47 @@ bool ValidMovementCommand(const MovementCommand& command) noexcept {
 PlayerState StepMovement(const Arena& arena, const PlayerState& state, const MovementCommand& command) {
     if (!ValidMovementCommand(command)) throw std::invalid_argument("Invalid movement command");
     auto result = state;
-    result.yaw = std::remainder(command.yaw, 2 * std::numbers::pi_v<float>);
-    result.pitch = std::clamp(command.pitch, -MovementMaximumPitch, MovementMaximumPitch);
-    const auto displacement = ComputePlanarDisplacement(command.moveForward, command.moveRight,
+    const bool alive = state.lifeState == LifeState::Alive;
+    if (alive) {
+        result.yaw = std::remainder(command.yaw, 2 * std::numbers::pi_v<float>);
+        result.pitch = std::clamp(command.pitch, -MovementMaximumPitch, MovementMaximumPitch);
+    }
+    const auto displacement = ComputePlanarDisplacement(alive ? command.moveForward : 0,
+        alive ? command.moveRight : 0,
         result.yaw, arena.movementSpeed, static_cast<float>(MovementTickSeconds));
     const auto p = state.position;
+    const auto supported = [&](const Float3& feet) {
+        if (feet.y <= 0.0001F) return true;
+        const Engine::Collision::VerticalCapsule body{
+            {feet.x, feet.y, feet.z}, arena.bodyHeight, arena.radius};
+        for (const auto& wall : arena.walls) {
+            const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(
+                body, {0, -0.002F, 0}, wall);
+            if (contact && contact->normal.y > 0.5F) return true;
+        }
+        return false;
+    };
+    if (result.grounded) result.grounded = supported(p);
+    if (alive && command.jumpRequested && result.grounded) {
+        result.verticalVelocity = std::sqrt(2 * arena.gravity * arena.jumpHeight);
+        result.grounded = false;
+    }
+    float desiredY = p.y;
+    if (!result.grounded) {
+        // Analytic constant acceleration preserves the configured jump height.
+        desiredY = static_cast<float>(p.y + result.verticalVelocity * MovementTickSeconds -
+            0.5 * arena.gravity * MovementTickSeconds * MovementTickSeconds);
+        result.verticalVelocity -= static_cast<float>(arena.gravity * MovementTickSeconds);
+        if (desiredY <= 0) {
+            desiredY = 0;
+            result.verticalVelocity = 0;
+        }
+    }
     result.position = MoveCharacterBody({{p.x, p.y, p.z}, arena.bodyHeight, arena.radius},
-        {displacement.x, 0, displacement.z}, arena.walls, {}, true);
+        {displacement.x, desiredY - p.y, displacement.z}, arena.walls, {}, false);
+    if (std::abs(result.position.y - desiredY) > 0.0001F) result.verticalVelocity = 0;
+    result.grounded = result.verticalVelocity <= 0 && supported(result.position);
+    if (result.grounded) result.verticalVelocity = 0;
     result.lastResolvedCommand = command.sequence;
     return result;
 }

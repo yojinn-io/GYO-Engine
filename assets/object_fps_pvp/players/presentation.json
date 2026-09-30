@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "character_asset_id": "object_fps_pvp.player.character",
+  "reference_speed": 3.0,
+  "jog_stride_scale": 2.0,
+  "transition_seconds": 0.1,
+  "max_frame_delta_seconds": 0.1,
+  "upper_body_root": "spine_01",
+  "weapon": {
+    "character_asset_id": "object_fps_pvp.weapon.ultimate_pistol_1.world",
+    "node": "hand_r",
+    "translation": [0, 0.081245, -0.035426],
+    "rotation_xyzw": [-0.45120211, -0.5444416, 0.45120211, 0.5444416],
+    "scale": 0.14
+  }
+}

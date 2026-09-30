@@ -21,6 +21,7 @@ struct SnapshotPresentation final {
     bool holding{};
     std::uint64_t lowerResolvedCommand{}, upperResolvedCommand{};
     bool missingFutureSnapshot{};
+    std::optional<CombatState> combat;
 };
 
 // Product-local, receive-stamped state history. Input/network frequency never
@@ -39,14 +40,14 @@ public:
         if (!history_.empty() && receivedAt < history_.back().receivedAt) return false;
         for (std::size_t i = 0; i < snapshot.players.size(); ++i) {
             const auto& player = snapshot.players[i];
-            if (!player.playerId || !player.movementEpoch || !std::isfinite(player.position.x) ||
+            if (!player.playerId || !player.movementEpoch || !player.lifeGeneration || !std::isfinite(player.position.x) ||
                 !std::isfinite(player.position.y) || !std::isfinite(player.position.z) ||
                 !std::isfinite(player.yaw) || !std::isfinite(player.pitch)) return false;
             for (std::size_t j = 0; j < i; ++j)
                 if (snapshot.players[j].playerId == player.playerId) return false;
             if (!history_.empty()) {
                 if (const auto* old = Find(history_.back().snapshot, player.playerId);
-                    old && player.movementEpoch < old->movementEpoch) return false;
+                    old && (player.movementEpoch < old->movementEpoch || player.lifeGeneration < old->lifeGeneration)) return false;
             }
         }
         if (history_.empty()) { baseTick_ = snapshot.tick; firstReceive_ = receivedAt; }
@@ -83,7 +84,8 @@ public:
         std::size_t first = history_.size() - 1;
         while (first > 0) {
             const auto* previous = Find(history_[first - 1].snapshot, id);
-            if (!previous || previous->movementEpoch != latest->movementEpoch) break;
+            if (!previous || previous->movementEpoch != latest->movementEpoch ||
+                previous->lifeGeneration != latest->lifeGeneration || previous->lifeState != latest->lifeState) break;
             --first;
         }
         // A stationary pose does not visibly stall when future data is absent.
@@ -113,10 +115,13 @@ public:
         player.yaw = std::remainder(a.yaw + std::remainder(b.yaw - a.yaw,
             2 * std::numbers::pi_v<float>) * fraction, 2 * std::numbers::pi_v<float>);
         player.pitch = a.pitch + (b.pitch - a.pitch) * fraction;
+        std::optional<CombatState> combat;
+        for (const auto& value : history_[before].snapshot.combat)
+            if (value.playerId == id && value.lifeGeneration == player.lifeGeneration) combat = value;
         return SnapshotPresentation{player, aTick, bTick, static_cast<double>(baseTick_) + playerCursor,
             alpha, std::max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
             history_.size(), holdCount_, gaps_, evictions_, phaseReanchors_, holding,
-            a.lastResolvedCommand, b.lastResolvedCommand, missingFuture};
+            a.lastResolvedCommand, b.lastResolvedCommand, missingFuture, combat};
     }
     // Commit only after the renderer successfully submits the selected pose.
     // A skipped selection must not create or end a visible hold episode.
@@ -127,6 +132,7 @@ public:
         const bool holding = movingAtTail && lastMovingAtTail_ && player && lastPresented_ &&
             player->playerId == lastPresented_->playerId &&
             player->movementEpoch == lastPresented_->movementEpoch &&
+            player->lifeGeneration == lastPresented_->lifeGeneration && player->lifeState == lastPresented_->lifeState &&
             !PoseChanged(*player, *lastPresented_) && lastSample_ && now >= *lastSample_;
         if (holding) {
             if (!holding_) { ++holdCount_; holdSeconds_ = 0; }

@@ -20,6 +20,7 @@
 #include <iostream>
 #include <iomanip>
 #include <nlohmann/json.hpp>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -44,6 +45,8 @@ struct Options {
     bool weaponShort{};
     bool weaponCapture{};
     bool nativeWindow{};
+    bool playerShort{};
+    bool playerCapture{};
     unsigned events{200};
     double fps{60};
 };
@@ -68,6 +71,8 @@ Options Parse(int argc, char* argv[]) {
         if (argument == "--weapon-short") { options.weaponShort = true; continue; }
         if (argument == "--weapon-capture") { options.weaponCapture = true; continue; }
         if (argument == "--native-window") { options.nativeWindow = true; continue; }
+        if (argument == "--player-short") { options.playerShort = true; continue; }
+        if (argument == "--player-capture") { options.playerCapture = true; continue; }
         Require(i + 1 < argc, "Missing value for " + std::string(argument));
         const std::string value = argv[++i];
         if (argument == "--arena-root") options.assetRoot = value;
@@ -84,7 +89,8 @@ Options Parse(int argc, char* argv[]) {
     Require(!options.output.empty(), "--output must name the capture directory");
     Require(options.role == "create" || options.role == "join", "--role must be create or join");
     Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
-        unsigned(options.weaponShort) + unsigned(options.weaponCapture) + unsigned(options.nativeWindow) <= 1,
+        unsigned(options.weaponShort) + unsigned(options.weaponCapture) + unsigned(options.nativeWindow) +
+        unsigned(options.playerShort) + unsigned(options.playerCapture) <= 1,
         "Choose one explicit probe mode");
     Require(!options.combat || options.latency || options.latencyShort, "--combat requires an explicit latency mode");
     if (options.latency && !explicitDuration) options.duration = 120;
@@ -92,6 +98,7 @@ Options Parse(int argc, char* argv[]) {
     if (options.latencyShort && !explicitEvents) options.events = 20;
     if ((options.weaponShort || options.weaponCapture) && !explicitDuration) options.duration = 8;
     if (options.nativeWindow && !explicitDuration) options.duration = 180;
+    if ((options.playerShort || options.playerCapture) && !explicitDuration) options.duration = 12;
     Require(std::isfinite(options.duration) && options.duration >= (options.latency ? 120 : 2) && options.duration <= 3600,
         "--duration must be 120..3600 seconds for latency, 2..3600 otherwise");
     Require(options.events >= (options.latencyShort ? 20U : 200U) && options.events <= 6000,
@@ -102,6 +109,8 @@ Options Parse(int argc, char* argv[]) {
         "Short latency duration must be 16..25 seconds");
     Require(!(options.weaponShort || options.weaponCapture) || (options.duration >= 8 && options.duration <= 25),
         "Weapon short duration must be 8..25 seconds");
+    Require(!(options.playerShort || options.playerCapture) || options.duration == 12,
+        "Player presentation probes use an explicit bounded 12-second schedule");
     Require(std::isfinite(options.fps) && options.fps >= 30 && options.fps <= 144, "--fps must be 30..144");
     return options;
 }
@@ -212,6 +221,7 @@ void WriteLatencyPresentation(std::ostream& stream,
 }
 
 #include "weapon_short.hpp"
+#include "player_short.hpp"
 #include "native_window.hpp"
 #include "combat_latency.hpp"
 
@@ -888,6 +898,8 @@ int main(int argc, char* argv[]) {
                   << "--phase-stalls --fps 60 (six 64/83/250 ms event/update phase stalls)\n"
                   << "--latency-short --duration 16 --events 20 --fps 60 (explicit short regression)\n"
                   << "--weapon-short --fps 30|60|144 (8 seconds, no GPU readback)\n"
+                  << "--player-short --fps 30|60|144 (12 seconds, remote character and displacement phase)\n"
+                  << "--player-capture --fps 60 (separate real GPU character captures)\n"
                   << "--native-window --duration 180 (passive native X11 input/lifecycle observer)\n"
                   << "--weapon-capture --fps 60 (separate actual GPU idle/shoot/resize/depth captures)\n";
         return 0;
@@ -895,6 +907,7 @@ int main(int argc, char* argv[]) {
     try { const auto options = Parse(argc, argv);
         if (options.latency || options.latencyShort) RunLatency(options);
         else if (options.weaponShort || options.weaponCapture) RunWeaponShort(options);
+        else if (options.playerShort || options.playerCapture) RunPlayerShort(options);
         else if (options.nativeWindow) RunNativeWindow(options);
         else if (options.phaseStalls) RunPhaseStalls(options);
         else Run(options);

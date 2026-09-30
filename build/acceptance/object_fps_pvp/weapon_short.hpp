@@ -41,7 +41,12 @@ WeaponJson WeaponSample(const fps::pvp::WeaponFeedbackObservation& w) {
         {"last_decision_tick", w.lastDecisionTick}, {"last_target", w.lastTargetId}, {"last_damage", w.lastDamage},
         {"mesh_count", w.meshCount}, {"material_count", w.materialCount}, {"submitted_meshes", w.submittedMeshes},
         {"pose_revision", w.poseRevision}, {"sampled_animation_seconds", w.sampledAnimationSeconds},
-        {"recoil_radians", w.recoilRadians}};
+        {"recoil_radians", w.recoilRadians}, {"life_generation", w.lifeGeneration}, {"life_state_tick", w.lifeStateTick},
+        {"respawn_tick", w.respawnTick}, {"reload_start_tick", w.reloadStartTick}, {"reload_end_tick", w.reloadEndTick},
+        {"ammo", w.magazineAmmo}, {"capacity", w.magazineCapacity}, {"dead", w.dead}, {"reloading", w.reloading},
+        {"reload_pending", w.reloadPending}, {"grounded", w.grounded}, {"vertical_velocity", w.verticalVelocity},
+        {"reload_progress", w.reloadProgress}, {"respawn_remaining_seconds", w.respawnRemainingSeconds},
+        {"last_action_kind", static_cast<int>(w.lastActionKind)}, {"last_decision_kind", static_cast<int>(w.lastDecisionKind)}};
 }
 
 void RunWeaponShort(const Options& options) {

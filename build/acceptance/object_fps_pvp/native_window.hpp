@@ -64,7 +64,8 @@ void RunNativeWindow(const Options& options) {
             {"local", {{"active", local.active}, {"predicted", {local.predictedPosition.x, local.predictedPosition.z}},
                 {"render", {local.renderPosition.x, local.renderPosition.z}},
                 {"correction", {local.correctionOffset.x, local.correctionOffset.z}},
-                {"pending", local.pendingCommands}}}, {"players", WeaponJson::array()}, {"rooms", WeaponJson::array()},
+                {"pending", local.pendingCommands}, {"y", local.predictedPosition.y}, {"grounded", local.grounded},
+                {"life_generation", local.lifeGeneration}, {"vertical_velocity", local.verticalVelocity}}}, {"players", WeaponJson::array()}, {"rooms", WeaponJson::array()},
             {"presented", false}};
         for (const auto& room : state.rooms)
             sample["rooms"].push_back({{"id", room.id}, {"players", room.players}, {"capacity", room.capacity}});
@@ -72,7 +73,9 @@ void RunNativeWindow(const Options& options) {
             sample["authority_tick"] = state.snapshot->tick;
             for (const auto& player : state.snapshot->players) {
                 WeaponJson value{{"id", player.playerId}, {"x", player.position.x}, {"z", player.position.z},
-                    {"yaw", player.yaw}, {"pitch", player.pitch}, {"epoch", player.movementEpoch}};
+                    {"yaw", player.yaw}, {"pitch", player.pitch}, {"epoch", player.movementEpoch}, {"y", player.position.y},
+                    {"life_generation", player.lifeGeneration}, {"life_state", static_cast<int>(player.lifeState)},
+                    {"grounded", player.grounded}, {"vertical_velocity", player.verticalVelocity}};
                 for (const auto& combat : state.snapshot->combat) if (combat.playerId == player.playerId) value["hp"] = combat.hp;
                 sample["players"].push_back(std::move(value));
             }
@@ -83,6 +86,11 @@ void RunNativeWindow(const Options& options) {
             sample["presented_seconds"] = shown->hostSteadySeconds;
             sample["presented_weapon"] = WeaponSample(shown->weapon);
             sample["skipped_frames"] = shown->skippedFrames;
+            sample["presented_remote"] = nullptr;
+            if (const auto& remote = shown->remote)
+                sample["presented_remote"] = {{"player_id", remote->playerId},
+                    {"position", {remote->renderPosition.x, remote->renderPosition.y, remote->renderPosition.z}},
+                    {"character", CharacterSample(remote->character)}};
         }
         Require(frames.size() < frames.capacity(), "Native acceptance bounded frame buffer exhausted");
         frames.push_back(sample);

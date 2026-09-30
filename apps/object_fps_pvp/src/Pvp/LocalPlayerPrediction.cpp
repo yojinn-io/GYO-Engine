@@ -30,6 +30,14 @@ LocalPlayerPrediction::LocalPlayerPrediction(const Arena& arena) : arena_(arena)
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
 }
 
+void LocalPlayerPrediction::SetMovementRules(MovementRules rules) {
+    if (!std::isfinite(rules.jumpHeight) || rules.jumpHeight <= 0 ||
+        !std::isfinite(rules.gravity) || rules.gravity <= 0)
+        throw std::invalid_argument("Invalid authoritative movement rules");
+    arena_.jumpHeight = rules.jumpHeight;
+    arena_.gravity = rules.gravity;
+}
+
 void LocalPlayerPrediction::Reset() noexcept {
     ticks_.Reset();
     pending_.clear();
@@ -39,11 +47,13 @@ void LocalPlayerPrediction::Reset() noexcept {
     alpha_ = 0;
     sendPending_ = false;
     freshSeed_ = false;
+    pendingJump_ = false;
     observation_ = {};
 }
 
 void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     ticks_.Reset();
+    pendingJump_ = false;
     alpha_ = 0;
     pending_.clear();
     current_ = previous_ = authority;
@@ -54,22 +64,30 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
         previous_ = current_;
         current_ = StepMovement(arena_, current_, command);
         TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
-            .epoch = current_.movementEpoch, .sequence = command.sequence, .seededNeutral = true});
+            .epoch = current_.movementEpoch, .sequence = command.sequence, .seededNeutral = true, .lifeGeneration = current_.lifeGeneration});
     }
     sendPending_ = true;
     freshSeed_ = true;
 }
 
 void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
-    if (authority.playerId == 0 || authority.movementEpoch == 0 ||
+    if (authority.playerId == 0 || authority.movementEpoch == 0 || !authority.lifeGeneration ||
+        !std::isfinite(authority.verticalVelocity) ||
+        (authority.lifeState != LifeState::Alive && authority.lifeState != LifeState::Dead) ||
         authority.contiguousPendingCommands > MaxFutureCommands || !Finite(authority.position) ||
         !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return;
     const bool newPlayer = !observation_.active || current_.playerId != authority.playerId;
     if (!newPlayer && (authorityTick <= observation_.authorityTick ||
-        authority.movementEpoch < current_.movementEpoch ||
+        authority.lifeGeneration < current_.lifeGeneration || authority.movementEpoch < current_.movementEpoch ||
         (authority.movementEpoch == current_.movementEpoch &&
          authority.lastResolvedCommand < observation_.lastResolvedCommand))) return;
-    if (newPlayer || authority.movementEpoch > current_.movementEpoch) {
+    if (newPlayer || authority.lifeGeneration != current_.lifeGeneration || authority.movementEpoch > current_.movementEpoch) {
+        if (!newPlayer && authority.lifeGeneration != current_.lifeGeneration) {
+            for (const auto& command : pending_)
+                TraceMovement({.kind = MovementTraceKind::LifecycleCancelled, .playerId = current_.playerId,
+                    .epoch = current_.movementEpoch, .sequence = command.sequence, .authorityTick = authorityTick,
+                    .lifeGeneration = current_.lifeGeneration});
+        }
         // New epochs have an independent sequence namespace. No old input,
         // fractional simulation time or correction may leak into this seed.
         Reset();
@@ -121,6 +139,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
             correctionSeconds_ = MovementCorrectionSeconds;
         }
     }
+    if (authority.lifeState == LifeState::Dead) pendingJump_ = false;
     observation_.authorityTick = authorityTick;
     observation_.lastResolvedCommand = authority.lastResolvedCommand;
     observation_.movementEpoch = authority.movementEpoch;
@@ -129,11 +148,14 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
 }
 
 bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float right,
-                                    float yaw, float pitch) {
+                                    float yaw, float pitch, bool jumpRequested) {
     if (!observation_.active) return false;
     if (!ValidMovementCommand({1, forward, right, yaw, pitch}) ||
         !std::isfinite(frameSeconds) || frameSeconds < 0)
         throw std::invalid_argument("Invalid local movement input");
+    if (current_.lifeState != LifeState::Alive || pending_.size() >= MaxPendingCommands) pendingJump_ = false;
+    else pendingJump_ = pendingJump_ || jumpRequested;
+    if (current_.lifeState == LifeState::Dead) { forward = right = 0; yaw = current_.yaw; pitch = current_.pitch; }
     // A new seed is based on authority received this frame. The preceding
     // frame's elapsed interval is already represented by that state; replaying
     // its catch-up time would permanently add steps to the command lead. Allow
@@ -165,13 +187,14 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
         previous_ = current_;
         if (pending_.size() < MaxPendingCommands &&
             current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {
-            MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch};
+            MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch, pendingJump_};
+            pendingJump_ = false;
             current_ = StepMovement(arena_, current_, command);
             pending_.push_back(command);
             TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
-                .epoch = current_.movementEpoch, .sequence = command.sequence});
+                .epoch = current_.movementEpoch, .sequence = command.sequence, .lifeGeneration = current_.lifeGeneration});
             send = true;
-        } else ++blockedSteps;
+        } else { ++blockedSteps; pendingJump_ = false; }
     });
     alpha_ = std::clamp(static_cast<float>(1.0 - advance.secondsUntilNextTick / MovementTickSeconds),
                         0.0F, 1.0F);
@@ -182,7 +205,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
             .pending = static_cast<std::uint32_t>(pending_.size()),
             .droppedSeconds = advance.droppedSeconds + (frameSeconds - elapsed) +
                 blockedSteps * MovementTickSeconds,
-            .frameSeconds = frameSeconds, .count = blockedSteps});
+            .frameSeconds = frameSeconds, .count = blockedSteps, .lifeGeneration = current_.lifeGeneration});
     if (correctionSeconds_ > 0) {
         const auto remaining = (std::max)(0.0, correctionSeconds_ - elapsed);
         const auto scale = static_cast<float>(remaining / correctionSeconds_);
@@ -203,9 +226,14 @@ void LocalPlayerPrediction::UpdatePresentation() {
     const auto position = current_.position;
     // Sweep from the valid predicted body to the proposed display body. An
     // offset cannot carry the camera through a wall, including around corners.
-    const auto render = MoveCharacterBody(
+    auto render = MoveCharacterBody(
         {{position.x, position.y, position.z}, arena_.bodyHeight, arena_.radius},
-        Difference(target, position), arena_.walls, {}, true);
+        Difference(target, position), arena_.walls, {}, false);
+    render.y = (std::max)(0.0F, render.y);
+    observation_.verticalVelocity = current_.verticalVelocity;
+    observation_.grounded = current_.grounded;
+    observation_.lifeGeneration = current_.lifeGeneration;
+    observation_.lifeState = current_.lifeState;
     observation_.predictedPosition = position;
     observation_.renderPosition = render;
     observation_.correctionOffset = Difference(render, base);
@@ -219,7 +247,7 @@ void LocalPlayerPrediction::UpdatePresentation() {
 }
 
 PlayerInput LocalPlayerPrediction::PendingInput() const {
-    return {current_.playerId, {pending_.begin(), pending_.end()}, current_.movementEpoch};
+    return {current_.playerId, {pending_.begin(), pending_.end()}, current_.movementEpoch, current_.lifeGeneration};
 }
 
 const LocalMovementObservation& LocalPlayerPrediction::Observation() const noexcept {

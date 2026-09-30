@@ -25,6 +25,10 @@ struct LocalMovementObservation final {
     std::uint64_t previousCommand{};
     std::uint64_t currentCommand{};
     float interpolationAlpha{};
+    float verticalVelocity{};
+    bool grounded{};
+    std::uint64_t lifeGeneration{};
+    LifeState lifeState{LifeState::Alive};
 };
 
 // Product-local movement prediction. The application samples mouse input once
@@ -34,11 +38,13 @@ public:
     explicit LocalPlayerPrediction(const Arena& arena);
 
     void Reset() noexcept;
+    void SetMovementRules(MovementRules rules);
+    void ClearJumpRequest() noexcept { pendingJump_ = false; }
     void Reconcile(const PlayerState& authority, std::uint64_t authorityTick);
     // True publishes a changed complete window. The network worker owns its
     // independent 60 Hz retransmission deadlines and never creates commands.
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,
-                               float yaw, float pitch);
+                               float yaw, float pitch, bool jumpRequested = false);
     [[nodiscard]] PlayerInput PendingInput() const;
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
 
@@ -56,6 +62,7 @@ private:
     float alpha_{};
     bool sendPending_{};
     bool freshSeed_{};
+    bool pendingJump_{};
     LocalMovementObservation observation_{};
 };
 

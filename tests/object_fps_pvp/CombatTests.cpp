@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -47,6 +48,32 @@ CombatState CombatPlayer(const PvpMatch& match, PlayerId playerId) {
     REQUIRE(player != snapshot.combat.end());
     return *player;
 }
+
+PlayerState LifePlayer(const PvpMatch& match, PlayerId playerId) {
+    const auto snapshot = match.Snapshot();
+    const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
+        [=](const auto& state) { return state.playerId == playerId; });
+    REQUIRE(player != snapshot.players.end());
+    return *player;
+}
+
+void MoveCombatPlayer(PvpMatch& match, PlayerId id, float forward = 0, float right = 0,
+    float yaw = 0, float pitch = 0, bool jump = false) {
+    const auto player = LifePlayer(match, id);
+    REQUIRE(match.SubmitInput({id,
+        {{player.lastResolvedCommand + 1, forward, right, yaw, pitch, jump}},
+        player.movementEpoch, player.lifeGeneration}));
+}
+
+void DamageThreeTimes(PvpMatch& match) {
+    CombatStep(match);
+    for (ActionId id = 1; id <= 3; ++id) {
+        REQUIRE(match.SubmitActions({1, {{id, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        CHECK(Decisions(match).back().damage == 25);
+        CombatStep(match, 9);
+    }
+}
 }
 
 TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown boundary") {
@@ -63,14 +90,18 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CHECK(original.hitKind == ShotHitKind::Player);
     CHECK(original.targetId == 2);
     CHECK(original.damage == 25);
-    CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 22);
+    CHECK(original.kind == ActionKind::Shot);
+    CHECK(original.lifeGeneration == 1);
+    CHECK(original.targetLifeGeneration == 1);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 11);
+    CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 12);
     CHECK(CombatPlayer(match, 2).hp == 75);
 
     for (unsigned repeat = 0; repeat < 40; ++repeat)
         REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
-    CombatStep(match, 18);
+    CombatStep(match, 8);
     REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match); // Tick 21 remains inside cooldown.
+    CombatStep(match); // Tick 11 remains inside cooldown.
     auto decisions = Decisions(match);
     REQUIRE(decisions.size() == 2);
     CHECK(decisions.front() == original);
@@ -78,7 +109,7 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CHECK(decisions.back().rejection == ShotRejection::Cooldown);
     CHECK(CombatPlayer(match, 2).hp == 75);
     REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match); // Tick 22 is permitted, including after a rejection.
+    CombatStep(match); // Tick 12 is permitted, including after a rejection.
     CHECK(Decisions(match).back().accepted);
     CHECK(CombatPlayer(match, 2).hp == 50);
 }
@@ -168,9 +199,14 @@ TEST_CASE("PvP action conflicts and malformed batches are rejected atomically") 
         ShotRequest{2, 1, std::numeric_limits<float>::quiet_NaN(), 0},
         ShotRequest{2, 1, 0, std::numeric_limits<float>::infinity()},
         ShotRequest{2, 1, 1.0e6F + 1, 0},
-        ShotRequest{2, 1, 0, std::numbers::pi_v<float>}}) {
+        ShotRequest{2, 1, 0, std::numbers::pi_v<float>},
+        ShotRequest{2, 1, 0, 0, ActionKind::Shot, 0},
+        ShotRequest{2, 1, 0, 0, static_cast<ActionKind>(99), 1},
+        ShotRequest{2, 1, 1, 0, ActionKind::Reload, 1}}) {
         CHECK(match.SubmitActions({1, {{3, 1, 0, 0}, invalid}}) == ActionAdmission::InvalidBatch);
     }
+    CHECK(match.SubmitActions({1, {{1, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Conflict);
+    CHECK(match.SubmitActions({1, {{1, 1, 0, 0, ActionKind::Shot, 2}}}) == ActionAdmission::Conflict);
     CHECK(match.SubmitActions({1, {}}) == ActionAdmission::InvalidBatch);
     CHECK(match.SubmitActions({0, {original}}) == ActionAdmission::InvalidPlayer);
     CHECK(match.SubmitActions({99, {original}}) == ActionAdmission::InvalidPlayer);
@@ -287,47 +323,6 @@ TEST_CASE("PvP shots use post-movement authority poses for every participant and
     CHECK(CombatPlayer(match, 2).hp == 75);
 }
 
-TEST_CASE("PvP zero HP remains targetable mobile and able to shoot until session teardown") {
-    PvpMatch match(CombatArena());
-    JoinCombatPlayers(match);
-    CombatStep(match);
-    for (ActionId id = 1; id <= 5; ++id) {
-        REQUIRE(match.SubmitActions({1, {{id, 1, 0, 0}}}) == ActionAdmission::Accepted);
-        CombatStep(match);
-        const auto decision = Decisions(match).back();
-        CHECK(decision.accepted);
-        CHECK(decision.hitKind == ShotHitKind::Player);
-        CHECK(decision.damage == (id <= 4 ? 25 : 0));
-        if (id < 5) CombatStep(match, 19);
-    }
-    CHECK(CombatPlayer(match, 2).hp == 0);
-    REQUIRE(match.SubmitInput({2, {{1, -1, 0, 0, 0}}}));
-    REQUIRE(match.SubmitActions({2, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match);
-    CHECK(match.Snapshot().players[1].position.z == doctest::Approx(7.95));
-    CHECK(Decisions(match, 2).front().accepted);
-    CHECK(CombatPlayer(match, 1).hp == 75);
-    std::string error;
-    REQUIRE(match.Join(2, error)); // Duplicate active join preserves combat state.
-    CHECK(CombatPlayer(match, 2).hp == 0);
-    CHECK(Decisions(match, 2).size() == 1);
-    REQUIRE(match.Leave(2));
-    CHECK_FALSE(match.GetActionResults(2));
-    REQUIRE(match.Join(3, error));
-    CHECK(CombatPlayer(match, 3).hp == 100);
-    CHECK(match.GetActionResults(3)->retiredThrough == 0);
-    CHECK(Decisions(match, 3).empty());
-    REQUIRE(match.SubmitActions({3, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match);
-    CHECK(Decisions(match, 3).front().accepted);
-    match.Reset();
-    CHECK(match.Snapshot().combat.empty());
-    CHECK_FALSE(match.GetActionResults(1));
-    REQUIRE(match.Join(1, error));
-    CHECK(CombatPlayer(match, 1).hp == 100);
-    CHECK(match.GetActionResults(1)->retiredThrough == 0);
-}
-
 TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions and HP") {
     PvpMatch match(CombatArena());
     JoinCombatPlayers(match);
@@ -350,6 +345,9 @@ TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions
     CHECK(decisions[1].accepted);
     CHECK(decisions.back().rejection == ShotRejection::Cooldown);
     CHECK(CombatPlayer(match, 1).nextAllowedShotTick == cooldown);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 10);
+    CHECK(CombatPlayer(match, 1).lifeGeneration == 1);
+    CHECK(match.Snapshot().players.front().lifeGeneration == 1);
     CHECK(CombatPlayer(match, 2).hp == 50);
     REQUIRE(match.AcknowledgeActions(1, 3));
     CHECK(match.GetActionResults(1)->retiredThrough == 3);
@@ -357,4 +355,351 @@ TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions
     CombatStep(match, 20);
     CHECK(Decisions(match).empty());
     CHECK(CombatPlayer(match, 2).hp == 50);
+}
+
+TEST_CASE("PvP twelve world or miss shots exhaust ammo before cooldown and reload completes on tick ninety") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    CombatStep(match);
+    for (ActionId id = 1; id <= 12; ++id) {
+        const float pitch = id % 2 ? -0.5F : 0.5F;
+        REQUIRE(match.SubmitActions({1, {{id, 1, 0, pitch}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        const auto decision = Decisions(match).back();
+        REQUIRE(decision.accepted);
+        CHECK(decision.hitKind == (id % 2 ? ShotHitKind::Miss : ShotHitKind::World));
+        CHECK(decision.targetLifeGeneration == 0);
+        CHECK(CombatPlayer(match, 1).magazineAmmo == 12 - id);
+        if (id < 12) CombatStep(match, 9);
+    }
+    const auto emptied = CombatPlayer(match, 1);
+    CHECK(emptied.lastShotActionId == 12);
+    CHECK(emptied.lastShotTick == 112);
+    REQUIRE(match.SubmitActions({1, {{13, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    CHECK(Decisions(match).back().rejection == ShotRejection::EmptyMagazine);
+    CHECK(CombatPlayer(match, 1) == emptied);
+
+    const ShotRequest reload{14, 1, 0, 0, ActionKind::Reload, 1};
+    REQUIRE(match.SubmitActions({1, {reload}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto started = CombatPlayer(match, 1);
+    CHECK(started.magazineAmmo == 0);
+    CHECK(started.reloadActionId == 14);
+    CHECK(started.reloadStartTick == 114);
+    CHECK(started.reloadEndTick == 204);
+    const auto acceptedReload = Decisions(match).back();
+    CHECK(acceptedReload.accepted);
+    CHECK(acceptedReload.kind == ActionKind::Reload);
+    CHECK(acceptedReload.hitKind == ShotHitKind::Miss);
+    CHECK(acceptedReload.targetId == 0);
+    CHECK(acceptedReload.damage == 0);
+
+    REQUIRE(match.SubmitActions({1, {reload, {15, 1, 0, 0},
+        {16, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    MoveCombatPlayer(match, 1, 1, 0, 0, 0, true);
+    CombatStep(match);
+    CHECK(LifePlayer(match, 1).position.y > 0);
+    CHECK(LifePlayer(match, 1).position.z > 2);
+    CHECK(Decisions(match)[14].rejection == ShotRejection::Reloading);
+    CHECK(Decisions(match)[15].rejection == ShotRejection::Reloading);
+    CHECK(CombatPlayer(match, 1) == started);
+    while (match.TickCount() < started.reloadEndTick - 1) CombatStep(match);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 0);
+    REQUIRE(match.SubmitActions({1, {{17, 1, 0, -0.5F}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    CHECK(Decisions(match).back().accepted);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 11);
+    CHECK(CombatPlayer(match, 1).reloadActionId == 0);
+    CHECK(CombatPlayer(match, 1).reloadStartTick == 0);
+    CHECK(CombatPlayer(match, 1).reloadEndTick == 0);
+    REQUIRE(match.SubmitActions({1, {reload}}) == ActionAdmission::Accepted);
+    CombatStep(match, 90);
+    CHECK(Decisions(match)[13] == acceptedReload);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 11); // A late duplicate cannot refill again.
+    CHECK(CombatPlayer(match, 2).hp == 100);
+}
+
+TEST_CASE("PvP reload format and gameplay rejections remain terminal and side effect free") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    CombatStep(match);
+    REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    CHECK(Decisions(match).back().rejection == ShotRejection::MagazineFull);
+    CHECK(CombatPlayer(match, 1).reloadActionId == 0);
+    REQUIRE(match.SubmitActions({1, {{2, 1, 0, -0.5F}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto spent = CombatPlayer(match, 1);
+    REQUIRE(match.SubmitActions({1, {{3, 0, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    CHECK(Decisions(match).back().rejection == ShotRejection::InvalidReference);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match, 1, [](std::uint64_t) { return std::optional{251ms}; });
+    CHECK(Decisions(match).back().rejection == ShotRejection::Expired);
+    CHECK(CombatPlayer(match, 1) == spent);
+    REQUIRE(match.SubmitActions({1, {{5, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto end = CombatPlayer(match, 1).reloadEndTick;
+    CHECK(end == match.TickCount() + 90); // Missing only one round still takes ninety ticks.
+    REQUIRE(match.AcknowledgeActions(1, 5));
+    while (match.TickCount() < end) CombatStep(match);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 12);
+}
+
+TEST_CASE("PvP lethal action immediately prevents same tick retaliation and corpse hits") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match); // Tick 31, victim has 25 HP and both weapons are ready.
+    REQUIRE(match.SubmitActions({2, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto dead = LifePlayer(match, 2);
+    CHECK(dead.lifeState == LifeState::Dead);
+    CHECK(dead.lifeStateTick == 32);
+    CHECK(dead.respawnTick == 212);
+    CHECK(dead.lifeGeneration == 1);
+    CHECK(CombatPlayer(match, 2).hp == 0);
+    CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
+    CHECK(CombatPlayer(match, 1).hp == 100);
+    CHECK(Decisions(match, 2).front().rejection == ShotRejection::Dead);
+    const auto lethal = Decisions(match).back();
+    CHECK(lethal.damage == 25);
+    CHECK(lethal.targetLifeGeneration == 1);
+    MoveCombatPlayer(match, 2, 1, 1, 1, 0.5F, true);
+    REQUIRE(match.SubmitActions({2, {{2, 0, 0, 0, ActionKind::Reload, 1},
+        {3, 0, 0, 0, ActionKind::Shot, 2}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto neutral = LifePlayer(match, 2);
+    CHECK(neutral.position.x == dead.position.x);
+    CHECK(neutral.position.y == dead.position.y);
+    CHECK(neutral.position.z == dead.position.z);
+    CHECK(neutral.yaw == dead.yaw);
+    CHECK(neutral.pitch == dead.pitch);
+    CHECK(neutral.lastResolvedCommand == 1);
+    CHECK(Decisions(match, 2)[1].rejection == ShotRejection::Dead); // Before invalid reference.
+    CHECK(Decisions(match, 2)[2].rejection == ShotRejection::InvalidLife); // Before death.
+    CombatStep(match, 8);
+    REQUIRE(match.SubmitActions({1, {{5, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    CHECK(Decisions(match).back().accepted);
+    CHECK(Decisions(match).back().hitKind == ShotHitKind::Miss);
+    CHECK(Decisions(match).back().damage == 0);
+    CHECK(CombatPlayer(match, 1).magazineAmmo == 7);
+    std::string error;
+    REQUIRE(match.Join(2, error));
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    CHECK(Decisions(match, 2).size() == 3);
+}
+
+TEST_CASE("PvP respawn resets movement and combat while retaining cross life action ledger and ids") {
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } trace;
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({2, {{1, 1, 0, -0.5F}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // A miss spends one victim round before the lethal shot.
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({2, {{2, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // Player 1 kills first: victim reload never starts.
+    const auto due = LifePlayer(match, 2).respawnTick;
+    const auto retained = Decisions(match, 2);
+    REQUIRE(retained.size() == 2);
+    CHECK(retained[0].accepted);
+    CHECK(retained[1].rejection == ShotRejection::Dead);
+    while (match.TickCount() < due - 1) {
+        MoveCombatPlayer(match, 2); // Normal dead neutral stream avoids starvation recovery.
+        CombatStep(match);
+    }
+    const auto before = LifePlayer(match, 2);
+    REQUIRE(before.lifeState == LifeState::Dead);
+    CHECK(before.lifeGeneration == 1);
+    REQUIRE(match.SubmitInput({2,
+        {{before.lastResolvedCommand + 1, 1, 0, 0, 0, true},
+         {before.lastResolvedCommand + 2, 1, 0, 0, 0, false}}, before.movementEpoch, 1}));
+    REQUIRE(match.SubmitActions({2, {
+        {1, 1, 0, -0.5F}, // Retained old decision stays immutable.
+        {3, 0, 0, 0, ActionKind::Reload, 1}, // Unresolved old life receives a terminal rejection.
+        {4, 0, 0, 0, ActionKind::Shot, 3},
+        {5, 1, std::numbers::pi_v<float>, 0, ActionKind::Shot, 2}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto respawned = LifePlayer(match, 2);
+    CHECK(match.TickCount() == due);
+    CHECK(respawned.lifeState == LifeState::Alive);
+    CHECK(respawned.lifeGeneration == 2);
+    CHECK(respawned.lifeStateTick == due);
+    CHECK(respawned.respawnTick == 0);
+    CHECK(respawned.movementEpoch == before.movementEpoch + 1);
+    CHECK(respawned.lastResolvedCommand == 0);
+    CHECK(respawned.contiguousPendingCommands == 0);
+    CHECK(respawned.position.x == 2);
+    CHECK(respawned.position.y == 0);
+    CHECK(respawned.position.z == 8);
+    CHECK(respawned.grounded);
+    CHECK(respawned.verticalVelocity == 0);
+    const auto combat = CombatPlayer(match, 2);
+    CHECK(combat.lifeGeneration == 2);
+    CHECK(combat.hp == 100);
+    CHECK(combat.magazineAmmo == 11); // Same-boundary action 5 consumes the new magazine.
+    CHECK(combat.lastShotActionId == 5);
+    CHECK(combat.lastShotTick == due);
+    CHECK(combat.reloadActionId == 0);
+    const auto decisions = Decisions(match, 2);
+    REQUIRE(decisions.size() == 5);
+    CHECK(decisions[0] == retained[0]);
+    CHECK(decisions[1] == retained[1]);
+    CHECK(decisions[2].rejection == ShotRejection::StaleLife);
+    CHECK(decisions[2].kind == ActionKind::Reload);
+    CHECK(decisions[2].lifeGeneration == 1);
+    CHECK(decisions[3].rejection == ShotRejection::InvalidLife);
+    CHECK(decisions[4].accepted);
+    CHECK(decisions[4].lifeGeneration == 2);
+    CHECK(decisions[4].targetLifeGeneration == 1);
+    CHECK(CombatPlayer(match, 1).hp == 75);
+    CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 1}));
+    CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, before.movementEpoch, 2}));
+    CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 3}));
+    CHECK(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 2}));
+    const auto events = trace.trace->Drain();
+    unsigned lifeResets{};
+    for (const auto& event : events) {
+        if (event.kind == MovementTraceKind::Reset && event.resetReason == MovementResetReason::LifeRespawn) {
+            ++lifeResets;
+            CHECK(event.playerId == 2);
+            CHECK(event.authorityTick == due);
+            CHECK(event.epoch == respawned.movementEpoch);
+            CHECK(event.lifeGeneration == 2);
+            CHECK(event.count == 2);
+        }
+        CHECK_FALSE((event.kind == MovementTraceKind::Resolved && event.playerId == 2 && event.authorityTick == due));
+    }
+    CHECK(lifeResets == 1);
+    REQUIRE(match.AcknowledgeActions(2, 5));
+    CHECK(match.GetActionResults(2)->retiredThrough == 5);
+    CHECK(Decisions(match, 2).empty());
+    REQUIRE(match.Leave(2));
+    std::string error;
+    REQUIRE(match.Join(2, error));
+    CHECK(LifePlayer(match, 2).lifeGeneration == 1);
+    CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
+    CHECK(match.GetActionResults(2)->retiredThrough == 0);
+}
+
+TEST_CASE("PvP death cancels an active reload and keeps airborne neutral gravity") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({2, {{1, 1, 0, -0.5F}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(match.SubmitActions({2, {{2, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(CombatPlayer(match, 2).reloadActionId == 2);
+    const auto originalEnd = CombatPlayer(match, 2).reloadEndTick;
+    MoveCombatPlayer(match, 2, 0, 0, 0, 0, true);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto dead = LifePlayer(match, 2);
+    REQUIRE(dead.lifeState == LifeState::Dead);
+    REQUIRE(dead.position.y > 0);
+    REQUIRE(dead.verticalVelocity > 0);
+    CHECK_FALSE(dead.grounded);
+    CHECK(CombatPlayer(match, 2).magazineAmmo == 11);
+    CHECK(CombatPlayer(match, 2).reloadActionId == 0);
+    CHECK(CombatPlayer(match, 2).reloadStartTick == 0);
+    CHECK(CombatPlayer(match, 2).reloadEndTick == 0);
+    float maximumHeight = dead.position.y;
+    while (match.TickCount() <= originalEnd) {
+        MoveCombatPlayer(match, 2, 1, 1, 1.5F, 1, true);
+        CombatStep(match);
+        const auto current = LifePlayer(match, 2);
+        maximumHeight = (std::max)(maximumHeight, current.position.y);
+        CHECK(current.position.x == dead.position.x);
+        CHECK(current.position.z == dead.position.z);
+        CHECK(current.yaw == dead.yaw);
+        CHECK(current.pitch == dead.pitch);
+        CHECK(current.lifeState == LifeState::Dead);
+        CHECK(CombatPlayer(match, 2).magazineAmmo == 11);
+    }
+    CHECK(maximumHeight == doctest::Approx(0.6).epsilon(0.002));
+    CHECK(LifePlayer(match, 2).grounded);
+    CHECK(LifePlayer(match, 2).position.y == 0);
+    CHECK(LifePlayer(match, 2).verticalVelocity == 0);
+    const auto due = dead.respawnTick;
+    while (match.TickCount() < due) CombatStep(match);
+    CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
+    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).nextAllowedShotTick == 0);
+    CHECK(CombatPlayer(match, 2).lastShotActionId == 0);
+    CHECK(CombatPlayer(match, 2).lastShotTick == 0);
+}
+
+TEST_CASE("PvP a fully blocked respawn retains its due deadline and retries until one capsule fits") {
+    auto arena = CombatArena();
+    arena.movementSpeed = 18; // One command is exactly the half-spawn separation.
+    arena.spawns[1].position.z = 2.6F;
+    PvpMatch match(arena);
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto dead = LifePlayer(match, 2);
+    MoveCombatPlayer(match, 1, 1);
+    CombatStep(match); // Live capsule at the midpoint overlaps both spawn capsules.
+    MoveCombatPlayer(match, 1);
+    CombatStep(match);
+    while (match.TickCount() < dead.respawnTick + 2) CombatStep(match);
+    const auto blocked = LifePlayer(match, 2);
+    CHECK(blocked.lifeState == LifeState::Dead);
+    CHECK(blocked.lifeGeneration == 1);
+    CHECK(blocked.respawnTick == dead.respawnTick);
+    CHECK(blocked.movementEpoch == dead.movementEpoch);
+    MoveCombatPlayer(match, 1, 0, 1);
+    CombatStep(match);
+    MoveCombatPlayer(match, 1, 0, 1);
+    CombatStep(match);
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Dead); // Spawn is checked before movement.
+    MoveCombatPlayer(match, 1);
+    CombatStep(match);
+    const auto alive = LifePlayer(match, 2);
+    CHECK(alive.lifeState == LifeState::Alive);
+    CHECK(alive.lifeGeneration == 2);
+    CHECK(alive.movementEpoch == blocked.movementEpoch + 1);
+    CHECK(alive.position.z == 2); // Exact distance tie uses configured first spawn.
+    CHECK(alive.lastResolvedCommand == 0);
+}
+
+TEST_CASE("PvP respawn selects the farthest free spawn and dead opponents do not block joins") {
+    SUBCASE("Farthest is selected even when the first spawn is free") {
+        auto arena = CombatArena();
+        arena.movementSpeed = 60;
+        PvpMatch match(arena);
+        JoinCombatPlayers(match);
+        DamageThreeTimes(match);
+        REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        const auto due = LifePlayer(match, 2).respawnTick;
+        MoveCombatPlayer(match, 1, 1);
+        CombatStep(match); // Opponent now z=3: both free; second spawn is farther away.
+        MoveCombatPlayer(match, 1);
+        CombatStep(match);
+        while (match.TickCount() < due) CombatStep(match);
+        CHECK(LifePlayer(match, 2).lifeState == LifeState::Alive);
+        CHECK(LifePlayer(match, 2).position.z == 8);
+    }
+    SUBCASE("With no living opponent the first free spawn wins") {
+        PvpMatch match(CombatArena());
+        JoinCombatPlayers(match);
+        DamageThreeTimes(match);
+        REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        const auto due = LifePlayer(match, 2).respawnTick;
+        REQUIRE(match.Leave(1));
+        while (match.TickCount() < due) CombatStep(match);
+        CHECK(LifePlayer(match, 2).position.z == 2);
+        CHECK(LifePlayer(match, 2).lifeGeneration == 2);
+    }
 }

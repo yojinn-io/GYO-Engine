@@ -13,9 +13,9 @@
 namespace fps::pvp {
 
 enum class MovementTraceKind { Generated, Sent, HostAccepted, Resolved, Reset,
-    SnapshotProduced, SnapshotReceived, Presentation, RuntimeGap, Transport };
+    SnapshotProduced, SnapshotReceived, Presentation, RuntimeGap, Transport, LifecycleCancelled };
 enum class MovementInputSource { None, Actual, Held, Neutral };
-enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation };
+enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation, LifeRespawn };
 
 struct MovementTraceEvent final {
     MovementTraceKind kind{};
@@ -30,12 +30,13 @@ struct MovementTraceEvent final {
     bool seededNeutral{};
     double droppedSeconds{};
     double frameSeconds{};
-    // Counters/ages for transport diagnostics; their meaning is set by kind.
+    // Counters/ages for diagnostics; Reset/LifeRespawn count is cancelled queued input.
     std::uint64_t count{};
     double ageSeconds{};
     MovementResetReason resetReason{MovementResetReason::None};
     // Successful Sent events span the nonblocking send call: start to timeNs.
     std::int64_t startedNs{};
+    std::uint64_t lifeGeneration{1};
 };
 
 inline std::int64_t MovementTraceNowNs() noexcept {
@@ -89,6 +90,7 @@ inline constexpr std::string_view TraceKindName(MovementTraceKind kind) noexcept
     case MovementTraceKind::Presentation: return "presentation";
     case MovementTraceKind::RuntimeGap: return "runtime_gap";
     case MovementTraceKind::Transport: return "transport";
+    case MovementTraceKind::LifecycleCancelled: return "lifecycle_cancelled";
     }
     return "invalid";
 }
@@ -107,6 +109,7 @@ inline constexpr std::string_view TraceResetReasonName(MovementResetReason reaso
     case MovementResetReason::Backlog: return "backlog";
     case MovementResetReason::Starvation: return "starvation";
     case MovementResetReason::SequenceExhausted: return "sequence_exhausted";
+    case MovementResetReason::LifeRespawn: return "life_respawn";
     }
     return "invalid";
 }

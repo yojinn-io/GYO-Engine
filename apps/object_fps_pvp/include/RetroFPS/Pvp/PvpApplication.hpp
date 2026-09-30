@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Pvp/PlayerPresentation.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -36,6 +37,12 @@ struct WeaponFeedbackObservation final {
     std::uint64_t poseRevision{};
     double sampledAnimationSeconds{};
     float recoilRadians{};
+    std::uint64_t lifeGeneration{}, lifeStateTick{}, respawnTick{}, reloadStartTick{}, reloadEndTick{};
+    std::uint32_t magazineAmmo{}, magazineCapacity{};
+    bool dead{}, reloading{}, reloadPending{}, grounded{};
+    float verticalVelocity{};
+    double reloadProgress{}, respawnRemainingSeconds{};
+    ActionKind lastActionKind{ActionKind::Shot}, lastDecisionKind{ActionKind::Shot};
 };
 struct RemoteMovementObservation final {
     PlayerId playerId{};
@@ -49,6 +56,9 @@ struct RemoteMovementObservation final {
     bool holding{};
     std::uint64_t lowerResolvedCommand{}, upperResolvedCommand{};
     bool missingFutureSnapshot{};
+    PlayerPresentationObservation character;
+    std::uint64_t lifeGeneration{1};
+    LifeState lifeState{LifeState::Alive};
 };
 
 // A successful renderer submission, not a monitor scanout timestamp. Cleared
@@ -62,6 +72,7 @@ struct PresentedMovementObservation final {
     std::uint64_t skippedFrames{};
     std::uint64_t connectionGeneration{};
     WeaponFeedbackObservation weapon;
+    double prepareWorldMilliseconds{}, remoteSubmitMilliseconds{};
 };
 
 struct PvpApplicationOptions final {

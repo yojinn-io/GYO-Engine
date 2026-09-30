@@ -27,6 +27,13 @@ inline constexpr std::size_t MovementBacklogSampleTicks = 30;
 inline constexpr std::uint32_t MovementBacklogCommandSum = 105;
 inline constexpr std::uint64_t MovementResetCooldownTicks = 60;
 
+enum class LifeState { Alive = 0, Dead = 1 };
+
+struct MovementRules final {
+    float jumpHeight{};
+    float gravity{};
+};
+
 // One immutable fixed-duration movement step; angles are absolute radians.
 struct MovementCommand final {
     std::uint64_t sequence{};
@@ -34,6 +41,7 @@ struct MovementCommand final {
     float moveRight{};
     float yaw{};
     float pitch{};
+    bool jumpRequested{};
     bool operator==(const MovementCommand&) const = default;
 };
 
@@ -41,6 +49,7 @@ struct PlayerInput final {
     PlayerId playerId{};
     std::vector<MovementCommand> commands;
     std::uint64_t movementEpoch{1};
+    std::uint64_t lifeGeneration{1};
 };
 
 struct PlayerState final {
@@ -51,6 +60,12 @@ struct PlayerState final {
     std::uint64_t lastResolvedCommand{};
     std::uint64_t movementEpoch{1};
     std::uint32_t contiguousPendingCommands{};
+    float verticalVelocity{};
+    bool grounded{true};
+    std::uint64_t lifeGeneration{1};
+    LifeState lifeState{LifeState::Alive};
+    std::uint64_t lifeStateTick{};
+    std::uint64_t respawnTick{};
 };
 
 [[nodiscard]] bool ValidMovementCommand(const MovementCommand& command) noexcept;

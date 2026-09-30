@@ -1,10 +1,11 @@
-// Product-owned, short real-socket v4 action/movement acceptance. No GUI.
+// Product-owned real-socket action/movement acceptance. No GUI.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -78,12 +79,14 @@ template<class F> void Wait(F condition){
 }
 Json Decision(const ShotDecision& d){return {{"action_id",d.actionId},{"resolved_tick",d.resolvedTick},
     {"accepted",d.accepted},{"rejection",static_cast<int>(d.rejection)},
-    {"hit_kind",static_cast<int>(d.hitKind)},{"target_id",d.targetId},{"damage",d.damage}};}
+    {"hit_kind",static_cast<int>(d.hitKind)},{"target_id",d.targetId},{"damage",d.damage},
+    {"action_kind",static_cast<int>(d.kind)},{"life_generation",d.lifeGeneration},{"target_life_generation",d.targetLifeGeneration}};}
 }
+#include "gameplay_action.hpp"
 int main(int argc,char** argv){
     std::filesystem::path output;
     try{
-        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool legalShots=false;
+        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool legalShots=false,gameplay=false;
         for(int i=1;i<argc;++i){const std::string key=argv[i];Require(i+1<argc,"Missing option value");
             const std::string value=argv[++i];
             if(key=="--gateway")gateway=value;else if(key=="--arena")arenaPath=value;
@@ -91,8 +94,10 @@ int main(int argc,char** argv){
             else if(key=="--drain-stall-ms")drainStallMs=std::stod(value);
             else if(key=="--fps")fps=std::stoi(value);
             else if(key=="--legal-shots")legalShots=value=="true";
+            else if(key=="--gameplay-v5")gameplay=value=="true";
             else throw std::runtime_error("Unknown option: "+key);
         }
+        if(gameplay)return RunGameplay(gateway,arenaPath,output,fps,drainStallMs);
         Require(!output.empty() && std::isfinite(duration) && duration>=5 && duration<=(legalShots?1800:15) &&
             (fps==30||fps==60||fps==144) && drainStallMs>=0 && drainStallMs<=1500,"Invalid action-probe options");
         std::filesystem::create_directories(output);

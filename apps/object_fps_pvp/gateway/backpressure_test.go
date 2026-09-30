@@ -10,15 +10,15 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv4"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	client "gyo.local/object_fps_pvp/protocol/clientv5"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 // Interleave publication between the two actual per-peer selection calls. This
 // exercises the case where the first UDP write was slow, without a production
 // blocking switch or pretending an ordinary loopback UDP socket is saturated.
 func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing.T) {
-	s := &Server{available: true, ready: &runtime.Ready{CombatRules: testRules()}, players: make(map[uint64]*reservation),
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation),
 		controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
 	for id := uint64(1); id <= 2; id++ {
 		peer, err := session.New(time.Now())
@@ -29,7 +29,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		if err := peer.Hello(peer.Token, endpoint, 1, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
+		s.players[id] = &reservation{lifeGeneration: 1, playerID: id, session: peer, phase: active}
 	}
 	decode := func(packet outbound) (framing.Header, uint64) {
 		t.Helper()
@@ -50,8 +50,8 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		t.Fatal("first peer did not receive the initial publication")
 	}
 	secondPeer := s.players[2]
-	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{PlayerId: 2})
-	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{PlayerId: 2})
+	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: 2})
+	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: 2})
 	for tick := uint64(2); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
@@ -86,7 +86,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
 		t.Run(pause.String(), func(t *testing.T) {
-			s := &Server{available: true, ready: &runtime.Ready{CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
+			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
 			var produced atomic.Uint64
 			stop, done := make(chan struct{}), make(chan struct{})
 			go func() {
@@ -167,7 +167,7 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 				generated++
 				for player := uint64(1); player <= 2; player++ {
 					sequence := (generated-1)%adapter.MaxFutureCommands + 1
-					in := &runtime.PlayerInput{PlayerId: player, MovementEpoch: 1, Commands: []*runtime.MovementCommand{{Sequence: sequence, MoveForward: 1}}}
+					in := &runtime.PlayerInput{LifeGeneration: 1, PlayerId: player, MovementEpoch: 1, Commands: []*runtime.MovementCommand{{Sequence: sequence, MoveForward: 1}}}
 					if err := link.input(in); err != nil {
 						t.Fatal(err)
 					}

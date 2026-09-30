@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v4.pb.h"
+#include "client_v5.pb.h"
 #include <httplib.h>
 #include <algorithm>
 #include <chrono>
@@ -97,11 +97,12 @@ private:
 };
 int main(int argc,char** argv) {
     try {
-        std::string gateway="127.0.0.1:8080";bool selfTest=false;
+        std::string gateway="127.0.0.1:8080";bool selfTest=false,lifeCleanupOnly=false;
         std::filesystem::path disconnectReady, arenaPath;
         for(int index=1;index<argc;++index){
             const std::string arg=argv[index];
             if(arg=="--self-test")selfTest=true;
+            else if(arg=="--life-cleanup-only")lifeCleanupOnly=true;
             else if(arg=="--gateway" && index+1<argc)gateway=argv[++index];
             else if(arg=="--arena" && index+1<argc)arenaPath=argv[++index];
             else if(arg=="--disconnect-ready" && index+1<argc)disconnectReady=argv[++index];
@@ -118,39 +119,42 @@ int main(int argc,char** argv) {
             Require(!wire::Decode(oldVersion),"protocol v2 accepted");
             oldVersion[5]=3;
             Require(!wire::Decode(oldVersion),"protocol v3 accepted");
-            namespace pb=object_fps_pvp::client::v4;
+            oldVersion[5]=4;Require(!wire::Decode(oldVersion),"protocol v4 accepted");
+            namespace pb=object_fps_pvp::client::v5;
             const auto maximum=std::numeric_limits<std::uint64_t>::max();
             pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
             pb::ActionResults results;results.set_retired_through(maximum-MaxActionBatch);
             for(std::size_t i=0;i<MaxActionBatch;++i){
                 auto* shot=actions.add_shots();shot->set_action_id(maximum-MaxActionBatch+1+i);
-                shot->set_observed_authority_tick(maximum);shot->set_yaw(3.14F);shot->set_pitch(MovementMaximumPitch);
+                shot->set_observed_authority_tick(maximum);shot->set_yaw(3.14F);shot->set_pitch(MovementMaximumPitch);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(maximum);
                 auto* decision=results.add_decisions();decision->set_action_id(shot->action_id());
                 decision->set_resolved_tick(maximum);decision->set_accepted(true);
                 decision->set_hit_kind(pb::HIT_PLAYER);decision->set_target_id(maximum);
-                decision->set_damage(PvpCombatRules.shotDamage);
+                decision->set_damage(PvpCombatRules.shotDamage);decision->set_kind(pb::ACTION_SHOT);decision->set_life_generation(maximum);decision->set_target_life_generation(maximum);
             }
             pb::WorldSnapshot snapshot;snapshot.set_tick(maximum);
             for(std::size_t i=0;i<2;++i){
                 auto* player=snapshot.add_players();player->set_player_id(maximum-i);
                 player->set_x(1);player->set_y(1);player->set_z(1);player->set_yaw(1);player->set_pitch(1);
                 player->set_last_resolved_command(maximum);player->set_movement_epoch(maximum);
-                player->set_contiguous_pending_commands(MaxFutureCommands);
+                player->set_contiguous_pending_commands(MaxFutureCommands);player->set_vertical_velocity(4);player->set_grounded(true);
+                player->set_life_generation(maximum);player->set_life_state(pb::LIFE_ALIVE);player->set_life_state_tick(maximum);player->set_respawn_tick(maximum);
                 auto* combat=snapshot.add_combat();combat->set_player_id(maximum-i);
-                combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);
+                combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);combat->set_life_generation(maximum);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
+                combat->set_reload_action_id(maximum);combat->set_reload_start_tick(maximum);combat->set_reload_end_tick(maximum);combat->set_last_shot_action_id(maximum);combat->set_last_shot_tick(maximum);
             }
             const auto actionBytes=wire::Encode({wire::Type::Actions,maximum,0xffffffffu,actions.SerializeAsString()});
             const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});
             const auto snapshotBytes=wire::Encode({wire::Type::Snapshot,maximum,0xffffffffu,snapshot.SerializeAsString()});
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
-                "maximum legal v4 protobuf plus24-byte UDP header exceeds1200 bytes");
+                "maximum legal v5 protobuf plus24-byte UDP header exceeds1200 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }
             Require(oversizedRejected,"oversized UDP accepted");
             bytes[20]=1;Require(!wire::Decode(bytes),"invalid UDP length accepted");
-            std::cout<<"wire v4 self-test passed; maximum legal action/result/snapshot datagrams="
-                <<actionBytes.size()<<'/'<<resultBytes.size()<<'/'<<snapshotBytes.size()<<" bytes; versions1-3 rejected\n";return 0;
+            std::cout<<"wire v5 self-test passed; maximum legal action/result/snapshot datagrams="
+                <<actionBytes.size()<<'/'<<resultBytes.size()<<'/'<<snapshotBytes.size()<<" bytes; versions1-4 rejected\n";return 0;
         }
         ClientConnection a,b;
         a.CreateAndJoin(gateway);
@@ -164,13 +168,54 @@ int main(int argc,char** argv) {
         const auto idA=a.State().playerId,idB=b.State().playerId;
         Require(a.State().combatRules.has_value() && b.State().combatRules.has_value(),"Welcome lacks authoritative combat rules");
         Require(a.State().snapshot->combat.size()==2 && b.State().snapshot->combat.size()==2,"Snapshot lacks independent combat state");
+        if(lifeCleanupOnly || !disconnectReady.empty()) {
+            // This branch starts at untouched spawns, so the four-shot line is
+            // deterministic. It does not fabricate HP or skip authority time.
+            for(unsigned shot=0;shot<4;++shot) {
+                const auto sa=a.State();const auto& self=Player(*sa.snapshot,idA);const auto& target=Player(*sa.snapshot,idB);
+                const auto id=a.SubmitShot(sa.snapshot->tick,std::atan2(target.position.x-self.position.x,target.position.z-self.position.z),0);
+                Require(id.has_value(),"Cannot allocate life-cleanup shot");
+                std::uint64_t resolved{};
+                Wait([&]{for(const auto& d:a.Drain().decisions)if(d.actionId==*id){
+                    Require(d.accepted && d.damage==25 && d.targetId==idB && d.targetLifeGeneration==1,"Life-cleanup lethal shot not accepted");resolved=d.resolvedTick;}
+                    return resolved!=0;},"Life-cleanup shot decision missing");
+                if(shot<3)Wait([&]{return a.State().snapshot->tick>=resolved+10;},"Authority cooldown did not advance");
+            }
+            Wait([&]{return Player(*b.State().snapshot,idB).lifeState==LifeState::Dead;},"Life-cleanup peer not dead");
+            const auto dead=b.State();
+            Require(Player(*dead.snapshot,idB).respawnTick>dead.snapshot->tick,"Cleanup began after death wait");
+            Require(b.SubmitAction(ActionKind::Reload,1,dead.snapshot->tick).has_value(),"Dead cleanup action was not allocated");
+            if(lifeCleanupOnly) {
+                b.Leave();
+                Require(!b.State().snapshot && !b.State().combatRules && !b.State().movementRules &&
+                    !b.State().playerId && !b.State().actionTransport.allocatedThrough && b.Drain().decisions.empty(),
+                    "Death-wait Leave retained life/rules/ledger/world");
+                Wait([&]{return b.State().phase==ConnectionPhase::Lobby && ExactPlayers(a.State(),{idA});},"Death-wait Leave retained remote player");
+                b.Join(gateway,"1");
+                Wait([&]{const auto s=b.State();Require(s.error.empty(),"Death-wait rejoin failed");
+                    return s.phase==ConnectionPhase::Playing && s.snapshot && s.snapshot->players.size()==2;},"Death-wait rejoin incomplete");
+                const auto joined=b.State();const auto& fresh=Player(*joined.snapshot,joined.playerId);
+                Require(joined.playerId!=idB && fresh.lifeGeneration==1 && fresh.lifeState==LifeState::Alive &&
+                    joined.actionTransport.allocatedThrough==0 && joined.actionTransport.retained==0 && b.Drain().decisions.empty(),
+                    "Rejoin reused old life/identity/action ledger");
+                for(const auto& combat:joined.snapshot->combat)if(combat.playerId==joined.playerId)
+                    Require(combat.hp==joined.combatRules->maximumHp && combat.magazineAmmo==joined.combatRules->magazineCapacity &&
+                        combat.lifeGeneration==1 && !combat.reloadActionId,"New session inherited dead combat state");
+                a.Leave();b.Leave();Wait([&]{return a.State().phase==ConnectionPhase::Lobby && b.State().phase==ConnectionPhase::Lobby;},"Life-cleanup final Leave failed");
+                std::cout<<"v5 life cleanup passed: dead-wait Leave cleared life/combat/ledger; new PlayerId life1 HP100 ammo12; pending old action absent\n";
+                return 0;
+            }
+        }
         if(!disconnectReady.empty()) {
             {std::ofstream signal(disconnectReady);signal<<"ready\n";Require(bool(signal),"cannot signal disconnect readiness");}
             Wait([&]{return a.State().phase==ConnectionPhase::Lobby && b.State().phase==ConnectionPhase::Lobby;},
                  "clients did not return to Lobby after Match failure");
             Require(!a.State().error.empty() && !b.State().error.empty(),"Match failure lacked client errors");
-            Require(!a.State().snapshot && !b.State().snapshot,"failed Match retained stale world state");
-            std::cout<<"failure acceptance passed: both clients returned to Lobby and cleared their world\n";
+            Require(!a.State().snapshot && !b.State().snapshot && !a.State().combatRules && !b.State().combatRules &&
+                !a.State().movementRules && !b.State().movementRules && !a.State().actionTransport.retained && !b.State().actionTransport.retained &&
+                !a.State().actionTransport.allocatedThrough && !b.State().actionTransport.allocatedThrough &&
+                a.Drain().decisions.empty() && b.Drain().decisions.empty(),"failed Match retained stale world/life/ledger state");
+            std::cout<<"v5 death-wait failure acceptance passed: both clients returned to Lobby and cleared world/life/rules/action ledger\n";
             return 0;
         }
         const auto startA=Player(*a.State().snapshot,idA).position;

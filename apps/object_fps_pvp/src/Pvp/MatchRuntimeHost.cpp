@@ -42,23 +42,26 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     // Validate the complete merge before committing any command. Separate batches
     // must not erase one another or change an immutable pending command.
     auto merged = pendingInputs_[input.playerId];
-    if (merged.movementEpoch != input.movementEpoch) {
+    if (merged.movementEpoch != input.movementEpoch || merged.lifeGeneration != input.lifeGeneration) {
         merged.commands.clear();
+        merged.stagedSequences.clear();
         merged.movementEpoch = input.movementEpoch;
+        merged.lifeGeneration = input.lifeGeneration;
     }
     std::vector<std::uint64_t> newlyAccepted;
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue;
         const auto [found, inserted] = merged.commands.try_emplace(command.sequence, command);
         if (!inserted && found->second != command) return false;
-        if (inserted) newlyAccepted.push_back(command.sequence);
+        if (inserted) { newlyAccepted.push_back(command.sequence); merged.stagedSequences.insert(command.sequence); }
     }
     if (merged.commands.size() > MaxFutureCommands) return false;
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
     for (const auto sequence : newlyAccepted)
         TraceMovement({.kind = MovementTraceKind::HostAccepted, .playerId = input.playerId,
-            .epoch = input.movementEpoch, .sequence = sequence, .authorityTick = match_.TickCount()});
+            .epoch = input.movementEpoch, .sequence = sequence, .authorityTick = match_.TickCount(),
+            .lifeGeneration = input.lifeGeneration});
     return true;
 }
 
@@ -155,16 +158,33 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         pendingActions_.clear();
         for (auto& [playerId, pending] : pendingInputs_) {
             if (!pending.dirty) continue;
-            PlayerInput input{playerId, {}, pending.movementEpoch};
+            PlayerInput input{playerId, {}, pending.movementEpoch, pending.lifeGeneration};
+            const auto handoff = [&] {
+                // A snapshot may have advanced life after ingress validation.
+                // Recheck the complete identity at the simulation boundary.
+                if (!match_.CanSubmitInput(input)) {
+                    const auto current = match_.Snapshot();
+                    const auto player = std::find_if(current.players.begin(), current.players.end(),
+                        [&](const auto& p) { return p.playerId == playerId; });
+                    if (player != current.players.end() && player->lifeGeneration != pending.lifeGeneration) {
+                        for (const auto& command : input.commands)
+                            if (pending.stagedSequences.contains(command.sequence))
+                                TraceMovement({.kind = MovementTraceKind::LifecycleCancelled, .playerId = playerId,
+                                    .epoch = pending.movementEpoch, .sequence = command.sequence,
+                                    .authorityTick = match_.TickCount(), .lifeGeneration = pending.lifeGeneration});
+                    }
+                } else static_cast<void>(match_.SubmitInput(input));
+            };
             for (const auto& [sequence, command] : pending.commands) {
                 static_cast<void>(sequence);
                 input.commands.push_back(command);
                 if (input.commands.size() == MaxPendingCommands) {
-                    static_cast<void>(match_.SubmitInput(input));
+                    handoff();
                     input.commands.clear();
                 }
             }
-            if (!input.commands.empty()) static_cast<void>(match_.SubmitInput(input));
+            if (!input.commands.empty()) handoff();
+            pending.stagedSequences.clear();
             pending.dirty = false;
         }
         match_.Tick(tick, [this](std::uint64_t observedTick) -> std::optional<std::chrono::nanoseconds> {
@@ -179,7 +199,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         for (auto input = pendingInputs_.begin(); input != pendingInputs_.end();) {
             const auto player = std::find_if(state.players.begin(), state.players.end(),
                 [&](const auto& candidate) { return candidate.playerId == input->first; });
-            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch) {
+            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||
+                player->lifeGeneration != input->second.lifeGeneration) {
                 input = pendingInputs_.erase(input);
                 continue;
             }
@@ -191,7 +212,10 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         }
         if (tick.tickId % SnapshotIntervalTicks == 0) {
             publication = std::move(state);
-            TraceMovement({.kind = MovementTraceKind::SnapshotProduced, .authorityTick = tick.tickId});
+            for (const auto& player : publication->players)
+                TraceMovement({.kind = MovementTraceKind::SnapshotProduced, .playerId = player.playerId,
+                    .epoch = player.movementEpoch, .authorityTick = tick.tickId,
+                    .lifeGeneration = player.lifeGeneration});
         }
     });
     if (publication) {

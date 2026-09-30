@@ -10,7 +10,7 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev4"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
 )
 
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate
@@ -90,7 +90,9 @@ func (w *actionWindow) validateResults(in *runtime.ActionResults) error {
 		if d.ActionId <= w.retired {
 			continue
 		}
-		if w.requests[d.ActionId] == nil || d.ActionId-w.retired > adapter.MaxActions {
+		request := w.requests[d.ActionId]
+		if request == nil || d.ActionId-w.retired > adapter.MaxActions ||
+			d.Kind != request.Kind || d.LifeGeneration != request.LifeGeneration {
 			return adapter.ErrActions
 		}
 		if old := w.decisions[d.ActionId]; old != nil && !adapter.EqualDecision(old, d) {
