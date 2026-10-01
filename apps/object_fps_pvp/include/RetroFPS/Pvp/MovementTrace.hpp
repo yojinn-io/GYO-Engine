@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fps::pvp {
@@ -70,13 +71,24 @@ private:
 };
 
 // One optional sink per product process. Installation happens before workers
-// start; atomic publication also makes shutdown/diagnostic probes safe.
-inline std::atomic<std::shared_ptr<MovementTrace>> movementTraceSink;
+// start; guarded publication also makes shutdown/diagnostic probes safe.
+// A mutex is used instead of std::atomic<std::shared_ptr>, which Apple libc++ lacks.
+inline std::mutex movementTraceSinkMutex;
+inline std::shared_ptr<MovementTrace> movementTraceSink;
 inline void SetMovementTrace(std::shared_ptr<MovementTrace> trace) noexcept {
-    movementTraceSink.store(std::move(trace), std::memory_order_release);
+    std::shared_ptr<MovementTrace> previous;
+    {
+        std::lock_guard lock(movementTraceSinkMutex);
+        previous = std::exchange(movementTraceSink, std::move(trace));
+    }
 }
 inline void TraceMovement(MovementTraceEvent event) {
-    if (auto trace = movementTraceSink.load(std::memory_order_acquire)) trace->Record(event);
+    std::shared_ptr<MovementTrace> trace;
+    {
+        std::lock_guard lock(movementTraceSinkMutex);
+        trace = movementTraceSink;
+    }
+    if (trace) trace->Record(event);
 }
 inline constexpr std::string_view TraceKindName(MovementTraceKind kind) noexcept {
     switch (kind) {
