@@ -27,6 +27,9 @@ endforeach()
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
     PUBLIC_LIBRARIES GYO::Engine GYO::Collision
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
+# Apple libc++ hides std::jthread/std::stop_token behind its experimental gate.
+# Every product target reaches the domain library, so the flag stays product-local.
+target_compile_options(${domain} PUBLIC $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
     PUBLIC_LIBRARIES ${domain})
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
