@@ -17,6 +17,9 @@ Float3 Interpolate(Float3 from, Float3 to, float alpha) {
 Float3 Difference(Float3 lhs, Float3 rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
+// A start-phase shift is slewed: each frame moves the fixed-step clock by at
+// most this share of its elapsed time, so the display never steps backwards.
+constexpr double StartPhaseSlewFraction = 0.25;
 float Length(Float3 value) {
     return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
 }
@@ -48,6 +51,9 @@ void LocalPlayerPrediction::Reset() noexcept {
     sendPending_ = false;
     freshSeed_ = false;
     pendingJump_ = false;
+    startPhasePending_ = false;
+    startWindowLagSeconds_.reset();
+    phaseShiftSeconds_ = 0;
     observation_ = {};
 }
 
@@ -68,6 +74,11 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     }
     sendPending_ = true;
     freshSeed_ = true;
+    // Only an epoch-start seed publishes the first window the Host times. A
+    // stall reseed rebases the phase within a running epoch; nothing measures it.
+    startPhasePending_ = authority.lastResolvedCommand == 0;
+    startWindowLagSeconds_.reset();
+    phaseShiftSeconds_ = 0;
 }
 
 void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
@@ -139,6 +150,20 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
             correctionSeconds_ = MovementCorrectionSeconds;
         }
     }
+    if (startPhasePending_ && startWindowLagSeconds_ && authority.epochStartWaitMicros &&
+        authority.movementEpoch == current_.movementEpoch && authority.lifeGeneration == current_.lifeGeneration) {
+        // Wait plus the first step's age at publication is the slack beyond
+        // the sequence lead for a command sent at its fixed-step boundary.
+        // Shifting the phase sets that slack to the target for every later
+        // command; the sequence-to-tick mapping and lead are unchanged.
+        startPhasePending_ = false;
+        const double wait = *authority.epochStartWaitMicros * 1.0e-6;
+        observation_.epochStartWaitSeconds = wait;
+        if (wait <= MovementStartPhaseMaximumWaitSeconds) {
+            phaseShiftSeconds_ = wait + *startWindowLagSeconds_ - MovementStartPhaseTargetSeconds;
+            observation_.startPhaseShiftSeconds = phaseShiftSeconds_;
+        }
+    }
     if (authority.lifeState == LifeState::Dead) pendingJump_ = false;
     observation_.authorityTick = authorityTick;
     observation_.lastResolvedCommand = authority.lastResolvedCommand;
@@ -182,8 +207,17 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     freshSeed_ = false;
     bool send = sendPending_;
     sendPending_ = false;
+    // Time discarded after the first window rebases the phase the Host timed.
+    if (startWindowLagSeconds_ && frameSeconds > elapsed) startPhasePending_ = false;
+    double advanceSeconds = elapsed;
+    if (phaseShiftSeconds_ != 0) {
+        const double limit = elapsed * StartPhaseSlewFraction;
+        const double shift = std::clamp(phaseShiftSeconds_, -limit, limit);
+        advanceSeconds -= shift;
+        phaseShiftSeconds_ -= shift;
+    }
     std::uint64_t blockedSteps{};
-    const auto advance = ticks_.Advance(elapsed, [&](const Engine::Runtime::TickContext&) {
+    const auto advance = ticks_.Advance(advanceSeconds, [&](const Engine::Runtime::TickContext&) {
         previous_ = current_;
         if (pending_.size() < MaxPendingCommands &&
             current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {
@@ -217,7 +251,15 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     // step. A neutral-only window would start authority before that step exists.
     const bool neutralOnlyBootstrap = observation_.lastResolvedCommand == 0 &&
         current_.lastResolvedCommand <= InitialCommandLead;
-    return send && !pending_.empty() && !neutralOnlyBootstrap;
+    const bool publish = send && !pending_.empty() && !neutralOnlyBootstrap;
+    if (publish && startPhasePending_ && !startWindowLagSeconds_) {
+        // The first legitimate step is the oldest generated this frame.
+        if (advance.steps > 0)
+            startWindowLagSeconds_ = (advance.steps - 1) * MovementTickSeconds +
+                (MovementTickSeconds - advance.secondsUntilNextTick);
+        else startPhasePending_ = false;
+    }
+    return publish;
 }
 
 void LocalPlayerPrediction::UpdatePresentation() {

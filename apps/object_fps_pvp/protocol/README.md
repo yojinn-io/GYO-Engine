@@ -20,6 +20,10 @@ combat records carry matching life generations. Movement windows are discarded
 at an authoritative life/epoch transition, while the immutable action ledger and
 ACK/retirement cursors survive until Leave/disconnect. Nonzero stale/future-life
 actions reach Match for a terminal decision.
+`PlayerState.epoch_start_wait_us` is an optional Host timing observation: the wait
+from receiving an epoch's first window to the tick that executed sequence 1. Adapters
+keep its presence and reject values above 1,000,000; only the Client's start-phase
+alignment reads it.
 
 The historical `ShotRequest`, `ShotDecision`, `ShotRejection` and `ActionBatch.shots`
 names now cover both Shot and Reload. `ActionKind` and `LifeState` have an invalid

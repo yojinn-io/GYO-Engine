@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 
 namespace fps::pvp {
 
@@ -29,6 +30,10 @@ struct LocalMovementObservation final {
     bool grounded{};
     std::uint64_t lifeGeneration{};
     LifeState lifeState{LifeState::Alive};
+    // Start-phase alignment for this epoch: the Host-reported wait and the
+    // shift it produced (positive delays the fixed-step phase). Unset until applied.
+    std::optional<double> epochStartWaitSeconds;
+    std::optional<double> startPhaseShiftSeconds;
 };
 
 // Product-local movement prediction. The application samples mouse input once
@@ -63,6 +68,12 @@ private:
     bool sendPending_{};
     bool freshSeed_{};
     bool pendingJump_{};
+    // The current fixed-step phase began at an epoch-start seed and has not
+    // since been rebased, so the Host's start wait still describes it.
+    bool startPhasePending_{};
+    // Age of the first real step when its window was published (frame quantization).
+    std::optional<double> startWindowLagSeconds_;
+    double phaseShiftSeconds_{};
     LocalMovementObservation observation_{};
 };
 

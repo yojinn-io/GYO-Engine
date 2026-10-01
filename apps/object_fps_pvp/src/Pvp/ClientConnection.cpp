@@ -419,10 +419,12 @@ struct ClientConnection::Impl {
                         (p.life_state()!=pb::LIFE_ALIVE && p.life_state()!=pb::LIFE_DEAD) ||
                         p.life_state_tick()>message.tick() ||
                         (p.life_state()==pb::LIFE_ALIVE && p.respawn_tick()!=0) ||
-                        (p.life_state()==pb::LIFE_DEAD && (!p.life_state_tick() || p.respawn_tick()<=p.life_state_tick()))) {valid=false;break;}
+                        (p.life_state()==pb::LIFE_DEAD && (!p.life_state_tick() || p.respawn_tick()<=p.life_state_tick())) ||
+                        (p.has_epoch_start_wait_us() && p.epoch_start_wait_us()>MaxEpochStartWaitMicros)) {valid=false;break;}
                     snapshot.players.push_back({p.player_id(),{p.x(),p.y(),p.z()},p.yaw(),p.pitch(),p.last_resolved_command(),
                         p.movement_epoch(),p.contiguous_pending_commands(),p.vertical_velocity(),p.grounded(),p.life_generation(),
-                        p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick()});
+                        p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick(),
+                        p.has_epoch_start_wait_us()?std::optional<std::uint32_t>{p.epoch_start_wait_us()}:std::nullopt});
                     self|=p.player_id()==own;
                 }
                 for(const auto& combat:message.combat()) {

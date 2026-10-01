@@ -1039,3 +1039,59 @@ TEST_CASE("PvP reseed does not catch up elapsed time already covered by authorit
     // Worker/render/authority recovery and the complete bounded lead window
     // are exercised with independent clocks in MovementRecoveryTests.cpp.
 }
+
+TEST_CASE("PvP epoch start wait shifts the fixed-step phase once without moving the display backwards") {
+    const auto arena = PredictionArena();
+    const auto started = [&](LocalPlayerPrediction& client) {
+        client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+        REQUIRE(client.Advance(MovementTickSeconds, 1, 0, 0, 0)); // First window: sequences 1-3.
+        CHECK(client.PendingInput().commands.size() == InitialCommandLead + 1);
+    };
+    LocalPlayerPrediction aligned(arena), unaligned(arena);
+    started(aligned);
+    started(unaligned);
+    PlayerState authority{1, {2, 0, 2}, 0, 0, 1};
+    unaligned.Reconcile(authority, 2);
+    authority.epochStartWaitMicros = 14781;
+    aligned.Reconcile(authority, 2);
+    CHECK_FALSE(unaligned.Observation().startPhaseShiftSeconds);
+    REQUIRE(aligned.Observation().epochStartWaitSeconds);
+    CHECK(*aligned.Observation().epochStartWaitSeconds == doctest::Approx(0.014781));
+    REQUIRE(aligned.Observation().startPhaseShiftSeconds);
+    const double shift = 0.014781 - MovementStartPhaseTargetSeconds;
+    CHECK(*aligned.Observation().startPhaseShiftSeconds == doctest::Approx(shift));
+
+    float travelled{};
+    for (int frame = 0; frame < 8; ++frame) { // Stays within the pending window.
+        static_cast<void>(aligned.Advance(MovementTickSeconds, 1, 0, 0, 0));
+        static_cast<void>(unaligned.Advance(MovementTickSeconds, 1, 0, 0, 0));
+        const auto distance = Distance(aligned.Observation().renderPosition, {2, 0, 2});
+        CHECK(distance + 0.00001F >= travelled);
+        travelled = distance;
+        // A repeated report of the same epoch never shifts again.
+        aligned.Reconcile(authority, 3 + frame);
+    }
+    CHECK(unaligned.Observation().interpolationAlpha < 0.0001F);
+    CHECK(aligned.Observation().interpolationAlpha ==
+        doctest::Approx(1.0 - shift / MovementTickSeconds).epsilon(0.0001));
+    CHECK(aligned.Observation().latestCommand + 1 == unaligned.Observation().latestCommand);
+
+    // A Host that was late for the start tick reports an unrepresentative wait.
+    LocalPlayerPrediction late(arena);
+    started(late);
+    authority.epochStartWaitMicros = 30000;
+    late.Reconcile(authority, 2);
+    REQUIRE(late.Observation().epochStartWaitSeconds);
+    CHECK_FALSE(late.Observation().startPhaseShiftSeconds);
+
+    // A wait for an epoch the client reseeded from a later state is not applied.
+    LocalPlayerPrediction reseeded(arena);
+    started(reseeded);
+    PlayerState later{1, {2, 0, 2}, 0, 0, 5};
+    later.epochStartWaitMicros = 9000;
+    reseeded.Reconcile(later, 6);
+    static_cast<void>(reseeded.Advance(MovementTickSeconds, 1, 0, 0, 0));
+    later.lastResolvedCommand = 6;
+    reseeded.Reconcile(later, 7);
+    CHECK_FALSE(reseeded.Observation().epochStartWaitSeconds);
+}

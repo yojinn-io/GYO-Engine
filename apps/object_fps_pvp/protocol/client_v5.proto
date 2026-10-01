@@ -47,6 +47,11 @@ message PlayerState {
   LifeState life_state = 13;
   uint64 life_state_tick = 14;
   uint64 respawn_tick = 15;
+  // Host-observed microseconds from receiving this epoch's first command
+  // window to the authority tick that executed sequence 1; absent until then.
+  // Timing observation only (<= 1,000,000); the Client uses it to align its
+  // fixed-step phase once per epoch and Match never reads it.
+  optional uint32 epoch_start_wait_us = 16;
 }
 enum LifeState {
   LIFE_UNSPECIFIED = 0;

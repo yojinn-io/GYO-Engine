@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 namespace fps::pvp {
@@ -26,6 +27,13 @@ inline constexpr std::uint32_t InputHoldTicks = 15;
 inline constexpr std::size_t MovementBacklogSampleTicks = 30;
 inline constexpr std::uint32_t MovementBacklogCommandSum = 105;
 inline constexpr std::uint64_t MovementResetCooldownTicks = 60;
+// Start phase: the Host reports how long an epoch's first window waited for
+// the tick that executed sequence 1. The Client shifts its fixed-step phase
+// once so that wait equals this target; lead, interpolation and thresholds stay.
+// Waits beyond one tick plus the bound below come from a late Host and are ignored.
+inline constexpr double MovementStartPhaseTargetSeconds = 0.004;
+inline constexpr double MovementStartPhaseMaximumWaitSeconds = MovementTickSeconds + 0.002;
+inline constexpr std::uint32_t MaxEpochStartWaitMicros = 1'000'000;
 
 enum class LifeState { Alive = 0, Dead = 1 };
 
@@ -66,6 +74,8 @@ struct PlayerState final {
     LifeState lifeState{LifeState::Alive};
     std::uint64_t lifeStateTick{};
     std::uint64_t respawnTick{};
+    // Host timing observation for this epoch, never simulation input.
+    std::optional<std::uint32_t> epochStartWaitMicros{};
 };
 
 [[nodiscard]] bool ValidMovementCommand(const MovementCommand& command) noexcept;
