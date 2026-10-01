@@ -157,3 +157,25 @@ func TestV5ResultEnumsLifeAndAuthoritativeRules(t *testing.T) {
 		t.Fatal("valid authority rules rejected")
 	}
 }
+
+func TestV5EpochStartWaitKeepsPresenceAndBound(t *testing.T) {
+	in := &runtime.WorldSnapshot{Tick: 8,
+		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 2, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: 1}},
+		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 1, Hp: 100, MagazineAmmo: 12}},
+	}
+	out, err := SnapshotForClient(in, testRules())
+	if err != nil || out.Players[0].EpochStartWaitUs != nil {
+		t.Fatalf("unmeasured start wait must stay absent: %v %v", out, err)
+	}
+	for _, wait := range []uint32{0, 14781, MaxEpochStartWaitUs} {
+		in.Players[0].EpochStartWaitUs = proto.Uint32(wait)
+		out, err = SnapshotForClient(in, testRules())
+		if err != nil || out.Players[0].EpochStartWaitUs == nil || *out.Players[0].EpochStartWaitUs != wait {
+			t.Fatalf("start wait %d lost: %v %v", wait, out, err)
+		}
+	}
+	in.Players[0].EpochStartWaitUs = proto.Uint32(MaxEpochStartWaitUs + 1)
+	if _, err := SnapshotForClient(in, testRules()); err == nil {
+		t.Fatal("unbounded start wait accepted")
+	}
+}

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -35,15 +36,22 @@ struct RecoveryResult {
     unsigned resetsAfterBound{};
     unsigned excessiveQueueAfterBound{};
     Time stableStart{-1};
+    // Generation-to-execution time of Actual commands during the clean second
+    // before any stall, and the start wait the virtual Host reported.
+    std::vector<Time> actualLatencies;
+    unsigned cleanFallbacks{};
+    std::optional<std::uint32_t> firstStartWaitMicros;
 };
 
 // Only public product command windows and snapshots cross this virtual wire.
 // Worker receipt/ACK pruning remains live during render stalls. Prediction is
 // reconciled once per render with the latest received snapshot, just as in the
 // application. A client cannot bootstrap from a synthetic pre-tick snapshot.
+// Like the product Host, receipt of an epoch's sequence 1 is timed to the tick
+// that executes it and that wait rides on the epoch's later snapshots.
 RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                            Time workerPhase, Time authorityPhase, double firstElapsed,
-                           Time bootstrapGap = 0) {
+                           Time bootstrapGap = 0, bool hostStartWait = true) {
     const auto arena = RecoveryArena();
     PvpMatch match(arena);
     std::string error;
@@ -79,6 +87,9 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     std::uint32_t queueSum{};
     unsigned actualRun{};
     Time actualRunStart{}, previousResolution{-Tick};
+    struct EpochStart { std::uint64_t epoch{}; Time receivedAt{}; std::optional<std::uint32_t> waitMicros; };
+    std::optional<EpochStart> epochStart;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, Time> generatedAt;
     for (;;) {
         Time now = (std::min)({nextFrame, nextWorker, nextTick});
         for (const auto& packet : inputs) now = (std::min)(now, packet.due);
@@ -88,7 +99,12 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             auto input = std::move(packet->input);
             packet = inputs.erase(packet);
             const auto state = match.Snapshot().players.front();
+            const bool startsEpoch = state.lastResolvedCommand == 0 && input.movementEpoch == state.movementEpoch &&
+                std::any_of(input.commands.begin(), input.commands.end(),
+                    [](const auto& command) { return command.sequence == 1; });
             if (match.SubmitInput(input)) {
+                if (startsEpoch && (!epochStart || epochStart->epoch != input.movementEpoch))
+                    epochStart = EpochStart{input.movementEpoch, now, std::nullopt};
                 for (const auto& command : input.commands)
                     if (command.sequence > state.lastResolvedCommand)
                         accepted.try_emplace(std::pair{input.movementEpoch, command.sequence}, command);
@@ -147,6 +163,8 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 if (firstAdvance && !received.players.empty() && bootstrapGap)
                     nextFrame = now + bootstrapGap;
                 if (client.Advance(elapsed, 1, 0, 0, 0)) published = client.PendingInput();
+                for (const auto& command : client.PendingInput().commands)
+                    generatedAt.try_emplace({client.PendingInput().movementEpoch, command.sequence}, now);
                 if (!received.players.empty()) firstAdvance = false;
                 previousFrame = now;
                 result.maximumPending = (std::max)(result.maximumPending, client.PendingInput().commands.size());
@@ -162,8 +180,15 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             nextTick += Tick;
             const auto before = match.Snapshot().players.front();
             match.Tick({match.TickCount() + 1, MovementTickSeconds});
-            const auto snapshot = match.Snapshot();
-            const auto& state = snapshot.players.front();
+            auto snapshot = match.Snapshot();
+            auto& state = snapshot.players.front();
+            if (epochStart && epochStart->epoch == state.movementEpoch) {
+                if (!epochStart->waitMicros && state.lastResolvedCommand >= 1) {
+                    epochStart->waitMicros = static_cast<std::uint32_t>((now - epochStart->receivedAt) * 1000000 / Units);
+                    if (!result.firstStartWaitMicros) result.firstStartWaitMicros = epochStart->waitMicros;
+                }
+                if (hostStartWait) state.epochStartWaitMicros = epochStart->waitMicros;
+            }
             result.maximumFuture = (std::max)(result.maximumFuture, state.contiguousPendingCommands);
             if (state.movementEpoch != previousEpoch) {
                 ++result.resets;
@@ -180,6 +205,11 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             if (state.movementEpoch == before.movementEpoch &&
                 state.lastResolvedCommand > before.lastResolvedCommand) {
                 const bool actual = accepted.contains({state.movementEpoch, state.lastResolvedCommand});
+                const auto generated = generatedAt.find({state.movementEpoch, state.lastResolvedCommand});
+                if (now >= Units && now < 2 * Units) {
+                    if (!actual) ++result.cleanFallbacks;
+                    else if (generated != generatedAt.end()) result.actualLatencies.push_back(now - generated->second);
+                }
                 queueSamples.push_back(state.contiguousPendingCommands);
                 queueSum += state.contiguousPendingCommands;
                 if (queueSamples.size() > MovementBacklogSampleTicks) {
@@ -200,10 +230,12 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     }
                 }
             }
-            std::erase_if(accepted, [&](const auto& entry) {
+            const auto resolved = [&](const auto& entry) {
                 return entry.first.first < state.movementEpoch ||
                     (entry.first.first == state.movementEpoch && entry.first.second <= state.lastResolvedCommand);
-            });
+            };
+            std::erase_if(accepted, resolved);
+            std::erase_if(generatedAt, resolved);
         }
     }
     return result;
@@ -253,4 +285,37 @@ TEST_CASE("PvP a delayed first rendered frame does not establish a persistent bo
                         CHECK(result.fallbacksAfterBound == 0);
                         CHECK(result.excessiveQueueAfterBound == 0);
                     }
+}
+
+TEST_CASE("PvP start phase alignment removes the start lottery without losing Actual commands") {
+    const auto median = [](RecoveryResult result) {
+        REQUIRE(!result.actualLatencies.empty());
+        std::sort(result.actualLatencies.begin(), result.actualLatencies.end());
+        return result.actualLatencies[result.actualLatencies.size() / 2];
+    };
+    for (const int fps : {30, 60, 144})
+        for (const int rtt : {0, 20, 40})
+            for (const Time worker : {Time(0), Time(4000), Time(8000)}) {
+                Time alignedLow = Units, alignedHigh{}, unalignedHigh{};
+                for (Time authority = 0; authority < Tick; authority += Tick / 12) {
+                    INFO("fps ", fps, " rtt ", rtt, " worker ", worker, " authority ", authority);
+                    const auto aligned = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0);
+                    const auto unaligned = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, false);
+                    REQUIRE(aligned.firstStartWaitMicros);
+                    CHECK(aligned.cleanFallbacks == 0);
+                    CHECK(aligned.fallbacksAfterBound == 0);
+                    CHECK(aligned.resets == 0);
+                    const auto alignedMedian = median(aligned), unalignedMedian = median(unaligned);
+                    // Never later than the unaligned start; frames only quantize the gain.
+                    CHECK(alignedMedian <= unalignedMedian);
+                    alignedLow = (std::min)(alignedLow, alignedMedian);
+                    alignedHigh = (std::max)(alignedHigh, alignedMedian);
+                    unalignedHigh = (std::max)(unalignedHigh, unalignedMedian);
+                }
+                INFO("fps ", fps, " rtt ", rtt, " worker ", worker);
+                // The worst start phase gains at least a third of a tick at every frame rate.
+                CHECK(alignedHigh + Tick / 3 <= unalignedHigh);
+                // Frames finer than a tick leave only their own quantization.
+                if (fps > static_cast<int>(AuthorityTickRate)) CHECK(alignedHigh - alignedLow <= Units / fps);
+            }
 }

@@ -70,6 +70,14 @@ private:
         std::set<std::uint64_t> stagedSequences;
         bool dirty{};
     };
+    // Receipt of an epoch's first window (sequence 1) and, once Match executes
+    // it, the wait until that tick. Published with the epoch; never fed to Match.
+    struct EpochStart final {
+        std::uint64_t movementEpoch{};
+        std::uint64_t lifeGeneration{};
+        std::chrono::steady_clock::time_point receivedAt;
+        std::optional<std::uint32_t> waitMicros;
+    };
     struct PublishedReference final {
         std::uint64_t tick{};
         std::chrono::steady_clock::time_point publishedAt;
@@ -86,6 +94,7 @@ private:
     std::map<PlayerId, PendingInput> pendingInputs_;
     std::map<PlayerId, std::vector<ShotRequest>> pendingActions_;
     std::map<PlayerId, ActionId> pendingActionAcknowledgements_;
+    std::map<PlayerId, EpochStart> epochStarts_;
     std::deque<PublishedReference> publishedReferences_;
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;

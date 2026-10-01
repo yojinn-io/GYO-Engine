@@ -466,6 +466,45 @@ TEST_CASE("PvP host orders controls and preserves complete immutable input windo
     CHECK(host.QueueLeave(67, 8));
 }
 
+TEST_CASE("PvP host times an epoch's first window to the tick that executes sequence one") {
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    fps::pvp::MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    CHECK_FALSE(snapshot->players[0].epochStartWaitMicros);
+    now += 3ms;
+    REQUIRE(host.SubmitInput(Window(5, 2, 3))); // Without sequence 1 nothing starts.
+    now += 2ms;
+    REQUIRE(host.SubmitInput(Window(5, 1, 3)));
+    now += 4ms;
+    REQUIRE(host.SubmitInput(Window(5, 1, 4))); // A retransmission keeps the first receipt.
+    now += 7ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].lastResolvedCommand == 1);
+    REQUIRE(snapshot->players[0].epochStartWaitMicros);
+    CHECK(*snapshot->players[0].epochStartWaitMicros == 11000);
+    now += 17ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    CHECK(snapshot->players[0].lastResolvedCommand == 2);
+    CHECK(snapshot->players[0].epochStartWaitMicros == std::optional<std::uint32_t>{11000});
+
+    REQUIRE(host.QueueLeave(2, 5));
+    REQUIRE(host.QueueJoin(3, 6));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players.size() == 1);
+    CHECK(snapshot->players[0].playerId == 6);
+    CHECK_FALSE(snapshot->players[0].epochStartWaitMicros);
+}
+
 TEST_CASE("PvP host bounds merged ingress and checks commands already queued in authority") {
     fps::pvp::MatchRuntimeHost host(TestArena());
     REQUIRE(host.QueueJoin(1, 1));

@@ -58,6 +58,11 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     if (merged.commands.size() > MaxFutureCommands) return false;
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
+    if (cursor == 0 && std::find(newlyAccepted.begin(), newlyAccepted.end(), 1) != newlyAccepted.end()) {
+        auto& start = epochStarts_[input.playerId];
+        if (start.movementEpoch != input.movementEpoch || start.lifeGeneration != input.lifeGeneration)
+            start = {input.movementEpoch, input.lifeGeneration, now_(), std::nullopt};
+    }
     for (const auto sequence : newlyAccepted)
         TraceMovement({.kind = MovementTraceKind::HostAccepted, .playerId = input.playerId,
             .epoch = input.movementEpoch, .sequence = sequence, .authorityTick = match_.TickCount(),
@@ -140,6 +145,7 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
                 pendingInputs_.erase(control.playerId);
                 pendingActions_.erase(control.playerId);
                 pendingActionAcknowledgements_.erase(control.playerId);
+                epochStarts_.erase(control.playerId);
             }
             results_.push_back(std::move(result));
         }
@@ -194,6 +200,26 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
             return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
         });
         auto state = match_.Snapshot();
+        for (auto start = epochStarts_.begin(); start != epochStarts_.end();) {
+            const auto player = std::find_if(state.players.begin(), state.players.end(),
+                [&](const auto& candidate) { return candidate.playerId == start->first; });
+            if (player == state.players.end() || player->movementEpoch != start->second.movementEpoch ||
+                player->lifeGeneration != start->second.lifeGeneration) {
+                start = epochStarts_.erase(start);
+                continue;
+            }
+            if (!start->second.waitMicros && player->lastResolvedCommand >= 1) {
+                // Sequence 1 executes on the first tick after its handoff, so
+                // this is the start tick. A late Host inflates it; the Client
+                // ignores waits beyond its bound rather than trusting them.
+                const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(
+                    now_() - start->second.receivedAt).count();
+                start->second.waitMicros = static_cast<std::uint32_t>(std::clamp<std::int64_t>(
+                    wait, 0, MaxEpochStartWaitMicros));
+            }
+            if (start->second.waitMicros) player->epochStartWaitMicros = start->second.waitMicros;
+            ++start;
+        }
         // Retaining only unresolved tuples supplies bounded duplicate identity
         // across ingress handoffs. Epoch rotation and Leave discard it here.
         for (auto input = pendingInputs_.begin(); input != pendingInputs_.end();) {
@@ -278,6 +304,7 @@ void MatchRuntimeHost::ClearState() {
     pendingInputs_.clear();
     pendingActions_.clear();
     pendingActionAcknowledgements_.clear();
+    epochStarts_.clear();
     publishedReferences_.clear();
     results_.clear();
     snapshot_.reset();

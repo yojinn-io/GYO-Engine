@@ -16,6 +16,7 @@ const RuntimeVersion uint32 = 5
 const MaxPlayers = 2
 const MaxPendingCommands = 12
 const MaxFutureCommands = 32
+const MaxEpochStartWaitUs = 1_000_000
 const AuthorityTickRate = 60
 const SnapshotIntervalTicks = 1
 const InputSendRate = 60
@@ -77,7 +78,8 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			p.ContiguousPendingCommands > MaxFutureCommands || !finite(p.VerticalVelocity) || p.LifeGeneration == 0 ||
 			(p.LifeState != runtime.LifeState_LIFE_ALIVE && p.LifeState != runtime.LifeState_LIFE_DEAD) ||
 			p.LifeStateTick > in.Tick || (p.LifeState == runtime.LifeState_LIFE_ALIVE && p.RespawnTick != 0) ||
-			(p.LifeState == runtime.LifeState_LIFE_DEAD && p.RespawnTick <= p.LifeStateTick) {
+			(p.LifeState == runtime.LifeState_LIFE_DEAD && p.RespawnTick <= p.LifeStateTick) ||
+			(p.EpochStartWaitUs != nil && *p.EpochStartWaitUs > MaxEpochStartWaitUs) {
 			return nil, errors.New("invalid runtime player state")
 		}
 		seen[p.PlayerId] = p
@@ -89,7 +91,8 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			Y: p.Y, Z: p.Z, Yaw: p.Yaw, Pitch: p.Pitch, LastResolvedCommand: p.LastResolvedCommand,
 			MovementEpoch: p.MovementEpoch, ContiguousPendingCommands: p.ContiguousPendingCommands,
 			VerticalVelocity: p.VerticalVelocity, Grounded: p.Grounded, LifeGeneration: p.LifeGeneration,
-			LifeState: lifeState, LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick})
+			LifeState: lifeState, LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick,
+			EpochStartWaitUs: p.EpochStartWaitUs})
 	}
 	combatSeen := make(map[uint64]bool, len(in.Combat))
 	for _, state := range in.Combat {

@@ -2,7 +2,8 @@
 
 更新：2026-09-28。Owner：`object_fps_pvp`。
 **Client／Gateway／Match 已一起實作 v5 候選；第03批功能及網路恢復通過，整批驗收未結案。**
-可見延遲50ms守門尚有啟動相位問題，詳見交接；本契約參數及門檻沒有因此放寬。
+2026-10-01經使用者批准加入啟動相位對齊（方案A1，見§1、§2），修正後的GUI可見延遲尚待重測；
+本契約其餘參數及門檻沒有因此放寬。
 第01批建立契約，第02批完成女性人物Idle／Jog／掛槍；第03批接入v5 wire、
 跳躍、彈匣、換彈、死亡／重生及操作／HUD。完整動作動畫仍留第04批。
 實作／停止點見 [v5進度](plans/v5/README.md)。本候選尚未完成v5完整驗收，
@@ -19,6 +20,7 @@
 | Authority／本機固定模擬 | 60Hz；固定1/60秒，不受FPS或封包數驅動 |
 | 移動worker／Snapshot | 各60Hz；保持既有獨立傳輸排程 |
 | 初始／重同步lead | 2個中立命令，第一個合法固定步形成後才首次發布完整窗口 |
+| 啟動相位對齊 | Host量測每個epoch首窗口（含seq1）收到→執行seq1的Tick之等待w並隨Snapshot下發；Client每epoch一次把固定步相位調整「w＋首步發布時已過時間−4ms」，每幀最多移動該幀經過時間的25%。w超過1Tick＋2ms視為Host延遲而不採用；lead、插值、命令數與門檻不變 |
 | 移動窗口／Match未來命令 | Client≤12；Match數量與距游標皆≤32 |
 | 動作交付 | 每批≤8，未退休窗口與ID距離≤32，動作／ACK合計排程30Hz |
 | 遠端插值／本機校正 | 落後1Tick；小校正100ms消除，誤差≥1世界單位直接定位 |
@@ -46,7 +48,7 @@ Client／Match共用產品純移動步驟；Client使用已驗證的權威規則
 |---|---|
 | MovementCommand | 新增單次jumpRequested；仍只代表固定一步，沒有任意dt或Client位置 |
 | PlayerInput | 完整未確認窗口帶player身分、movementEpoch及單一lifeGeneration |
-| PlayerState | 既有位置／角度／ACK，加verticalVelocity、grounded、lifeGeneration、Alive／Dead及生命轉換Tick |
+| PlayerState | 既有位置／角度／ACK，加verticalVelocity、grounded、lifeGeneration、Alive／Dead及生命轉換Tick；可選epochStartWaitMicros（Host時序觀測，≤1,000,000，量到前不存在，Match不讀取） |
 | CombatState | 既有HP／冷卻，加magazineAmmo、reloadActionId／起訖Tick、最近接受射擊ActionId／Tick；同份Snapshot按PlayerId關聯生命 |
 | ActionRequest | ActionId、lifeGeneration、observedAuthorityTick與Shot／Reload種類；只有Shot包含絕對yaw／pitch |
 | ActionDecision | 動作種類、原請求生命世代、ActionId、裁決Tick、接受／拒絕；Shot結果另含命中kind／targetId／targetLifeGeneration／damage |

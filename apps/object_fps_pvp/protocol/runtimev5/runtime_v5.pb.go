@@ -660,8 +660,13 @@ type PlayerState struct {
 	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.runtime.v5.LifeState" json:"life_state,omitempty"`
 	LifeStateTick             uint64                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
 	RespawnTick               uint64                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// Host-observed microseconds from receiving this epoch's first command
+	// window to the authority tick that executed sequence 1; absent until then.
+	// Timing observation only (<= 1,000,000); the Client uses it to align its
+	// fixed-step phase once per epoch and Match never reads it.
+	EpochStartWaitUs *uint32 `protobuf:"varint,16,opt,name=epoch_start_wait_us,json=epochStartWaitUs,proto3,oneof" json:"epoch_start_wait_us,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerState) Reset() {
@@ -795,6 +800,13 @@ func (x *PlayerState) GetLifeStateTick() uint64 {
 func (x *PlayerState) GetRespawnTick() uint64 {
 	if x != nil {
 		return x.RespawnTick
+	}
+	return 0
+}
+
+func (x *PlayerState) GetEpochStartWaitUs() uint32 {
+	if x != nil && x.EpochStartWaitUs != nil {
+		return *x.EpochStartWaitUs
 	}
 	return 0
 }
@@ -1695,7 +1707,7 @@ const file_runtime_v5_proto_rawDesc = "" +
 	"JoinResult\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x99\x04\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xe5\x04\n" +
 	"\vPlayerState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1713,7 +1725,9 @@ const file_runtime_v5_proto_rawDesc = "" +
 	"\n" +
 	"life_state\x18\r \x01(\x0e2$.object_fps_pvp.runtime.v5.LifeStateR\tlifeState\x12&\n" +
 	"\x0flife_state_tick\x18\x0e \x01(\x04R\rlifeStateTick\x12!\n" +
-	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\"\xa5\x01\n" +
+	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x122\n" +
+	"\x13epoch_start_wait_us\x18\x10 \x01(\rH\x00R\x10epochStartWaitUs\x88\x01\x01B\x16\n" +
+	"\x14_epoch_start_wait_us\"\xa5\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12@\n" +
 	"\aplayers\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v5.PlayerStateR\aplayers\x12>\n" +
@@ -1885,6 +1899,7 @@ func file_runtime_v5_proto_init() {
 	if File_runtime_v5_proto != nil {
 		return
 	}
+	file_runtime_v5_proto_msgTypes[6].OneofWrappers = []any{}
 	file_runtime_v5_proto_msgTypes[9].OneofWrappers = []any{
 		(*RuntimeEnvelope_Ready)(nil),
 		(*RuntimeEnvelope_Join)(nil),

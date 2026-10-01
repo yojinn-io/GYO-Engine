@@ -59,6 +59,7 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_vertical_velocity(p.verticalVelocity);state->set_grounded(p.grounded);
         state->set_life_generation(p.lifeGeneration);state->set_life_state(LifeForWire(p.lifeState));
         state->set_life_state_tick(p.lifeStateTick);state->set_respawn_tick(p.respawnTick);
+        if(p.epochStartWaitMicros)state->set_epoch_start_wait_us(*p.epochStartWaitMicros);
     }
     for(const auto& p:snapshot.combat) {
         auto* state=out->add_combat();state->set_player_id(p.playerId);
