@@ -23,18 +23,32 @@ struct PlayerPresentationFrame final {
     bool continuous{true}, holding{};
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    // Authority-time action inputs from the same snapshot interval and life as
+    // the position, in the presentationSeconds base (tick / authority rate).
+    // The action pose is a pure function of these and presentationSeconds, so
+    // resends, ACKs, duplicate snapshots and timeline holds cannot restart it.
+    bool grounded{true};
+    float verticalVelocity{};
+    double lifeStateSeconds{};
+    // Zero IDs mean none: the latest accepted shot and the active reload.
+    std::uint64_t shotActionId{}, reloadActionId{};
+    double shotSeconds{}, reloadStartSeconds{}, reloadEndSeconds{};
 };
 
 // Product-owned CPU binding. Loading needs neither a renderer nor Campaign/Enemy.
 struct PlayerPresentationDefinition final {
     std::shared_ptr<const CharacterPresentationDefinition> character, weapon;
     std::size_t idleClip{}, jogClip{}, upperBodyRoot{}, weaponNode{};
+    std::size_t shootClip{}, reloadClip{}, jumpStartClip{}, jumpLoopClip{}, jumpLandClip{}, deathClip{};
     std::vector<bool> upperBodyMask;
     Engine::Model::Vec3 anchor{};
     float scale{}, bodyHeight{}, referenceSpeed{};
     // Calibrated full-clip travel / (referenceSpeed * authored clip seconds).
     double strideScale{};
     double transitionSeconds{}, maxFrameDeltaSeconds{};
+    // Contract presentation spans; the authored clips are time-scaled into
+    // them. Reload follows the authoritative interval, death its own clip.
+    double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{};
     Engine::Model::Transform weaponMount{};
     Engine::Model::Pose weaponReferencePose;
 };
@@ -42,6 +56,10 @@ struct PlayerPresentationDefinition final {
 [[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
 LoadPlayerPresentationDefinition(Engine::Asset::AssetManager& assets, float bodyHeight,
                                  std::string& error);
+
+// Jump presentation follows the sampled grounded state. Only a rising liftoff
+// plays Start; leaving the ground while falling goes straight to the Loop.
+enum class PlayerJumpPhase : std::uint8_t { Grounded, Start, Airborne, Land };
 
 struct PlayerLocomotionState final {
     bool initialized{}, jogging{}, backward{}, holding{}, phaseReset{};
@@ -54,11 +72,30 @@ struct PlayerLocomotionState final {
     std::string resetReason;
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    bool grounded{true};
+    PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
+    double jumpPhaseSeconds{}; // presentationSeconds at which jumpPhase began
 };
 
 [[nodiscard]] bool AdvancePlayerLocomotion(PlayerLocomotionState& state,
     const PlayerPresentationFrame& frame, const PlayerPresentationDefinition& definition,
     std::string& error);
+
+enum class PlayerUpperAction : std::uint8_t { Hold, Shoot, Reload };
+enum class PlayerLowerAction : std::uint8_t { Locomotion, JumpStart, JumpLoop, JumpLand, Death };
+
+// Clip times already mapped from the contract spans; Death is full body.
+struct PlayerActionPose final {
+    PlayerUpperAction upper{PlayerUpperAction::Hold};
+    PlayerLowerAction lower{PlayerLowerAction::Locomotion};
+    double upperClipSeconds{}, lowerClipSeconds{};
+    std::uint64_t shotActionId{}, reloadActionId{};
+};
+
+// Pure: identical inputs always select the identical action pose.
+[[nodiscard]] bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
+    PlayerActionPose& output, std::string& error);
 
 struct PlayerPresentationPose final {
     Engine::Model::Pose body, weapon;
@@ -67,6 +104,9 @@ struct PlayerPresentationPose final {
 
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
     const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error);
+[[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerActionPose& actions,
+    PlayerPresentationPose& output, std::string& error);
 
 struct PlayerPresentationObservation final {
     bool ready{}, jogging{}, holding{}, backward{}, phaseReset{};
@@ -81,6 +121,8 @@ struct PlayerPresentationObservation final {
     std::string resetReason;
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
+    PlayerActionPose actions;
 };
 
 // All GPU instances are allocated before Join. Submit reuses these slots and

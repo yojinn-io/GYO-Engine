@@ -8,7 +8,7 @@
 | 子批次 | 內容 | 建議檔位 | 狀態 |
 |---|---|---|---|
 | 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
-| 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 未開始 |
+| 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 程式完成（呈現測試19 cases／12616 assertions、突變9／9被抓、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 未開始 |
 | 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | 未開始 |
 
@@ -23,6 +23,22 @@
   - 操作提示「WASD move | Space jump | Click shoot | R reload」第03批已存在，切片7不需再加。
   - 修正第03批留下的HUD重疊：「CONNECTION POOR」警告原畫在y=70–100、水平置中，與左上HUD面板的HP／彈匣行重疊
     （800×600與1280×720皆然），改到畫面下方中央。
+- 04-2紀錄（xhigh）：
+  - 設計：遠端動作是呈現時間的純函數。輸入只有`presentationSeconds`與時間線同一區間、同一生命的`CombatState`／`PlayerState`
+    （`ResolvePlayerActions`）。時間線游標只前進、停住時凍結，因此重送、裁決ACK、重複Snapshot與時間線停住都不會重播，
+    恢復後也不補播已過的動作；不需要以ActionId記錄「已播過」的狀態。唯一有狀態的是跳躍（`grounded`轉換），
+    重設（spawn／生命／epoch／不連續／長幀／瞬移）時依當下狀態直接進Loop或落地，不捏造起跳。
+  - 合約時長：射擊0.1667秒（Pistol_Shoot原長0.633秒，約3.8倍速）；Jump Start／Land各0.1秒（原長1.333／1.267秒，約13倍速），
+    只有上升中離地才播Start，掉落直接Loop；換彈依權威區間（Pistol_Reload 1.667秒對應1.5秒）；Death01原速2.4秒後保持末姿態到新生命。
+    上半身（`spine_01`以下）取持槍／射擊／換彈，下半身取移動或跳躍；死亡為全身，武器與髮飾跟隨最終合成姿勢。
+  - 根運動量測（ufbx）：Jump系列骨盆不高於站姿（Start由蹲回站、Land下蹲緩衝），不會與權威垂直位移疊加，不需剝除；
+    Death01骨盆落地並水平位移約0.55m。
+  - 防禦：動作Tick早於`lifeStateTick`不顯示。Match重生時已重建`CombatState`、死亡時清除換彈，這是雙重保險。
+  - 突變檢查9項（拿掉生命防護×2、掉落也播Start、重設捏造起跳、死亡不夾、射擊區間閉合、射擊不縮放、死亡時套上半身、
+    射擊優先於換彈）全部被測試抓到。
+  - 資產：玩家animset加入shoot／reload／jump_start／jump_loop／jump_land／death；檔名`locomotion.animset.json`改為
+    `animations.animset.json`（內容已不只移動；只有`asset_catalog.json`引用）。`presentation.json`加`actions`時長。
+  - 待04-4截圖確認：射擊3.8倍速與起跳13倍速的觀感、Start開頭的瞬間蹲低。
 
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者

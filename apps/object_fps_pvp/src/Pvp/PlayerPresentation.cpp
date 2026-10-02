@@ -91,6 +91,12 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         };
         definition->idleClip = clip("idle");
         definition->jogClip = clip("jog");
+        definition->shootClip = clip("shoot");
+        definition->reloadClip = clip("reload");
+        definition->jumpStartClip = clip("jump_start");
+        definition->jumpLoopClip = clip("jump_loop");
+        definition->jumpLandClip = clip("jump_land");
+        definition->deathClip = clip("death");
         definition->bodyHeight = bodyHeight;
         definition->referenceSpeed = config.at("reference_speed").get<float>();
         definition->strideScale = config.at("jog_stride_scale").get<double>();
@@ -101,6 +107,13 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
             !std::isfinite(definition->transitionSeconds) || definition->transitionSeconds <= 0 ||
             !std::isfinite(definition->maxFrameDeltaSeconds) || definition->maxFrameDeltaSeconds <= 0)
             throw std::runtime_error("player locomotion calibration must be finite and positive");
+        const auto& actions = config.at("actions");
+        definition->shotSeconds = actions.at("shot_seconds").get<double>();
+        definition->jumpStartSeconds = actions.at("jump_start_seconds").get<double>();
+        definition->jumpLandSeconds = actions.at("jump_land_seconds").get<double>();
+        for (const double span : {definition->shotSeconds, definition->jumpStartSeconds, definition->jumpLandSeconds})
+            if (!std::isfinite(span) || span <= 0)
+                throw std::runtime_error("player action spans must be finite and positive");
 
         Pose reference;
         Require(Engine::Model::MakeDefaultPose(model, reference));
@@ -177,7 +190,12 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         !std::isfinite(definition.referenceSpeed) || definition.referenceSpeed <= 0 ||
         !std::isfinite(definition.strideScale) || definition.strideScale <= 0 ||
         !std::isfinite(definition.transitionSeconds) || definition.transitionSeconds <= 0 ||
-        !std::isfinite(definition.maxFrameDeltaSeconds) || definition.maxFrameDeltaSeconds <= 0) {
+        !std::isfinite(definition.maxFrameDeltaSeconds) || definition.maxFrameDeltaSeconds <= 0 ||
+        !std::isfinite(frame.verticalVelocity) || !std::isfinite(frame.lifeStateSeconds) ||
+        !std::isfinite(frame.shotSeconds) || !std::isfinite(frame.reloadStartSeconds) ||
+        !std::isfinite(frame.reloadEndSeconds) ||
+        !std::isfinite(definition.jumpStartSeconds) || definition.jumpStartSeconds <= 0 ||
+        !std::isfinite(definition.jumpLandSeconds) || definition.jumpLandSeconds <= 0) {
         error = "player locomotion requires valid sampled values and calibration";
         return false;
     }
@@ -212,6 +230,10 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         state.movementEpoch = frame.movementEpoch;
         state.lifeGeneration = frame.lifeGeneration;
         state.dead = frame.dead;
+        // A reanchor never invents a liftoff or landing it did not observe.
+        state.grounded = frame.grounded;
+        state.jumpPhase = frame.grounded ? PlayerJumpPhase::Grounded : PlayerJumpPhase::Airborne;
+        state.jumpPhaseSeconds = frame.presentationSeconds;
     } else {
         state.phaseReset = false;
         state.resetReason.clear();
@@ -238,14 +260,113 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
             state.moveWeight = state.jogging ? std::min(1.0F, state.moveWeight + weightStep) :
                 std::max(0.0F, state.moveWeight - weightStep);
         }
+        const double now = frame.presentationSeconds;
+        if (state.grounded && !frame.grounded) {
+            state.jumpPhase = frame.verticalVelocity > 0 ? PlayerJumpPhase::Start : PlayerJumpPhase::Airborne;
+            state.jumpPhaseSeconds = now;
+        } else if (!state.grounded && frame.grounded) {
+            state.jumpPhase = PlayerJumpPhase::Land;
+            state.jumpPhaseSeconds = now;
+        }
+        // The contract spans end in sampled time; control never waits for them.
+        if (state.jumpPhase == PlayerJumpPhase::Start && now - state.jumpPhaseSeconds >= definition.jumpStartSeconds) {
+            state.jumpPhase = PlayerJumpPhase::Airborne;
+            state.jumpPhaseSeconds += definition.jumpStartSeconds;
+        } else if (state.jumpPhase == PlayerJumpPhase::Land &&
+                   now - state.jumpPhaseSeconds >= definition.jumpLandSeconds) {
+            state.jumpPhase = PlayerJumpPhase::Grounded;
+            state.jumpPhaseSeconds += definition.jumpLandSeconds;
+        }
+        state.grounded = frame.grounded;
     }
     state.previousPosition = frame.position;
     state.previousPresentationSeconds = frame.presentationSeconds;
     return true;
 }
 
+bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
+    PlayerActionPose& output, std::string& error) {
+    error.clear();
+    output = {};
+    try {
+        if (!definition.character || !definition.character->model)
+            throw std::runtime_error("player actions require a resolved character");
+        const auto& clips = definition.character->model->clips;
+        const auto duration = [&](const std::size_t clip) {
+            if (clip >= clips.size() || !std::isfinite(clips[clip].durationSeconds) || clips[clip].durationSeconds <= 0)
+                throw std::runtime_error("player action clip requires a positive duration");
+            return clips[clip].durationSeconds;
+        };
+        // Contract spans are shorter than the authored clips: progress through
+        // the span maps onto the whole clip, which is time-scaled to fit.
+        const auto scaled = [](const double elapsed, const double span, const double clip) {
+            return std::clamp(elapsed / span, 0.0, 1.0) * clip;
+        };
+        const double now = frame.presentationSeconds;
+        if (!std::isfinite(now) || !std::isfinite(frame.lifeStateSeconds) || !std::isfinite(frame.shotSeconds) ||
+            !std::isfinite(frame.reloadStartSeconds) || !std::isfinite(frame.reloadEndSeconds) ||
+            !std::isfinite(state.jumpPhaseSeconds) || !std::isfinite(definition.shotSeconds) ||
+            definition.shotSeconds <= 0 || !std::isfinite(definition.jumpStartSeconds) ||
+            definition.jumpStartSeconds <= 0 || !std::isfinite(definition.jumpLandSeconds) ||
+            definition.jumpLandSeconds <= 0)
+            throw std::runtime_error("player actions require finite times and positive spans");
+        if (frame.dead) {
+            // Full body; after the clip the last pose holds until the new life.
+            output.lower = PlayerLowerAction::Death;
+            output.lowerClipSeconds = std::clamp(now - frame.lifeStateSeconds, 0.0, duration(definition.deathClip));
+            return true;
+        }
+        const double inPhase = std::max(0.0, now - state.jumpPhaseSeconds);
+        switch (state.jumpPhase) {
+        case PlayerJumpPhase::Start:
+            output.lower = PlayerLowerAction::JumpStart;
+            output.lowerClipSeconds = scaled(inPhase, definition.jumpStartSeconds, duration(definition.jumpStartClip));
+            break;
+        case PlayerJumpPhase::Airborne:
+            output.lower = PlayerLowerAction::JumpLoop;
+            static_cast<void>(duration(definition.jumpLoopClip));
+            output.lowerClipSeconds = inPhase;
+            break;
+        case PlayerJumpPhase::Land:
+            output.lower = PlayerLowerAction::JumpLand;
+            output.lowerClipSeconds = scaled(inPhase, definition.jumpLandSeconds, duration(definition.jumpLandClip));
+            break;
+        case PlayerJumpPhase::Grounded:
+            break;
+        }
+        // Only actions of this alive period. The Match restarts combat state
+        // on respawn; a tick before the life began cannot belong to it.
+        if (frame.reloadActionId && frame.reloadEndSeconds > frame.reloadStartSeconds &&
+            frame.reloadStartSeconds >= frame.lifeStateSeconds &&
+            now >= frame.reloadStartSeconds && now < frame.reloadEndSeconds) {
+            output.upper = PlayerUpperAction::Reload;
+            output.upperClipSeconds = scaled(now - frame.reloadStartSeconds,
+                frame.reloadEndSeconds - frame.reloadStartSeconds, duration(definition.reloadClip));
+            output.reloadActionId = frame.reloadActionId;
+        } else if (frame.shotActionId && frame.shotSeconds >= frame.lifeStateSeconds &&
+                   now >= frame.shotSeconds && now < frame.shotSeconds + definition.shotSeconds) {
+            output.upper = PlayerUpperAction::Shoot;
+            output.upperClipSeconds = scaled(now - frame.shotSeconds, definition.shotSeconds,
+                duration(definition.shootClip));
+            output.shotActionId = frame.shotActionId;
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        output = {};
+        error = "player actions: " + std::string(exception.what());
+        return false;
+    }
+}
+
 bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
     const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error) {
+    return SamplePlayerPresentationPose(definition, state, PlayerActionPose{}, output, error);
+}
+
+bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerActionPose& actions,
+    PlayerPresentationPose& output, std::string& error) {
     error.clear();
     try {
         if (!definition.character || !definition.character->model || !definition.weapon ||
@@ -255,19 +376,58 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
         if (definition.upperBodyMask.size() != model.nodes.size() ||
             definition.weaponNode >= model.nodes.size())
             throw std::runtime_error("player pose requires a resolved mask and weapon bone");
-        Pose idle, jog;
+        if (!std::isfinite(actions.upperClipSeconds) || !std::isfinite(actions.lowerClipSeconds))
+            throw std::runtime_error("player pose requires finite action clip times");
+        using Engine::Model::PlaybackMode;
+        Pose idle;
         Require(Engine::Model::SamplePose(model, definition.idleClip, state.idleSeconds,
-            Engine::Model::PlaybackMode::Loop, idle));
-        Require(Engine::Model::SamplePose(model, definition.jogClip, state.phaseSeconds,
-            Engine::Model::PlaybackMode::Loop, jog));
-        Require(Engine::Model::BlendPoses(model, idle, jog, state.moveWeight, output.body));
+            PlaybackMode::Loop, idle));
+        Pose upperAction;
+        const Pose* upper = &idle;
+        switch (actions.lower) {
+        case PlayerLowerAction::Death:
+            Require(Engine::Model::SamplePose(model, definition.deathClip, actions.lowerClipSeconds,
+                PlaybackMode::Clamp, output.body));
+            upper = nullptr; // Death owns the whole body, weapon hand included.
+            break;
+        case PlayerLowerAction::Locomotion: {
+            Pose jog;
+            Require(Engine::Model::SamplePose(model, definition.jogClip, state.phaseSeconds,
+                PlaybackMode::Loop, jog));
+            Require(Engine::Model::BlendPoses(model, idle, jog, state.moveWeight, output.body));
+            break;
+        }
+        case PlayerLowerAction::JumpStart:
+            Require(Engine::Model::SamplePose(model, definition.jumpStartClip, actions.lowerClipSeconds,
+                PlaybackMode::Clamp, output.body));
+            break;
+        case PlayerLowerAction::JumpLoop:
+            Require(Engine::Model::SamplePose(model, definition.jumpLoopClip, actions.lowerClipSeconds,
+                PlaybackMode::Loop, output.body));
+            break;
+        case PlayerLowerAction::JumpLand:
+            Require(Engine::Model::SamplePose(model, definition.jumpLandClip, actions.lowerClipSeconds,
+                PlaybackMode::Clamp, output.body));
+            break;
+        default:
+            throw std::runtime_error("player pose has an invalid lower-body action");
+        }
+        if (upper && actions.upper != PlayerUpperAction::Hold) {
+            if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload)
+                throw std::runtime_error("player pose has an invalid upper-body action");
+            Require(Engine::Model::SamplePose(model,
+                actions.upper == PlayerUpperAction::Shoot ? definition.shootClip : definition.reloadClip,
+                actions.upperClipSeconds, PlaybackMode::Clamp, upperAction));
+            upper = &upperAction;
+        }
         for (std::size_t i = 0; i < model.nodes.size(); ++i) {
-            if (definition.upperBodyMask[i]) output.body.localTransforms[i] = idle.localTransforms[i];
+            if (upper && definition.upperBodyMask[i]) output.body.localTransforms[i] = upper->localTransforms[i];
             const auto local = Engine::Model::ToMatrix(output.body.localTransforms[i]);
             const auto parent = model.nodes[i].parentIndex;
             output.body.globalTransforms[i] = parent ?
                 Engine::Model::Multiply(output.body.globalTransforms[*parent], local) : local;
         }
+        // The weapon and hair follow the final composed pose.
         output.weapon = definition.weaponReferencePose;
         const auto mount = Engine::Model::Multiply(output.body.globalTransforms[definition.weaponNode],
             Engine::Model::ToMatrix(definition.weaponMount));
@@ -423,12 +583,18 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             auto& slot = *found;
             if (!AdvancePlayerLocomotion(slot.locomotion, player, definition, error))
                 throw std::runtime_error(error);
-            if (slot.locomotion.phaseReset) {
+            PlayerActionPose actions;
+            if (!ResolvePlayerActions(definition, slot.locomotion, player, actions, error))
+                throw std::runtime_error(error);
+            const bool plain = actions.upper == PlayerUpperAction::Hold &&
+                actions.lower == PlayerLowerAction::Locomotion;
+            if (slot.locomotion.phaseReset && plain) {
                 if (!slot.idlePrepared) impl.Upload(slot, impl.initialPose);
                 slot.pose = impl.initialPose;
                 slot.idlePrepared = true;
             } else {
-                if (!SamplePlayerPresentationPose(definition, slot.locomotion, slot.pose, error))
+                // A reset into death or the air still shows that action at once.
+                if (!SamplePlayerPresentationPose(definition, slot.locomotion, actions, slot.pose, error))
                     throw std::runtime_error(error);
                 impl.Upload(slot, slot.pose);
                 slot.idlePrepared = false;
@@ -441,6 +607,8 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.movementEpoch = player.movementEpoch;
             observation.lifeGeneration = player.lifeGeneration;
             observation.dead = player.dead;
+            observation.jumpPhase = state.jumpPhase;
+            observation.actions = actions;
             observation.jogging = state.jogging;
             observation.holding = state.holding;
             observation.backward = state.backward;

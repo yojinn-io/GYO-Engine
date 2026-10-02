@@ -607,6 +607,23 @@ struct PvpApplication::Impl final {
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
                 sampled->phaseReanchors == characterPhaseReanchors;
             characterFrame.holding = sampled && sampled->holding;
+            characterFrame.grounded = presented.grounded;
+            characterFrame.verticalVelocity = presented.verticalVelocity;
+            characterFrame.lifeStateSeconds = static_cast<double>(presented.lifeStateTick) / AuthorityTickRate;
+            // Actions come only from the sampled interval's own combat state, so
+            // newer combat is never paired with an older position or life.
+            if (sampled && sampled->combat) {
+                const auto& combat = *sampled->combat;
+                if (combat.lastShotActionId) {
+                    characterFrame.shotActionId = combat.lastShotActionId;
+                    characterFrame.shotSeconds = static_cast<double>(combat.lastShotTick) / AuthorityTickRate;
+                }
+                if (combat.reloadActionId && combat.reloadEndTick > combat.reloadStartTick) {
+                    characterFrame.reloadActionId = combat.reloadActionId;
+                    characterFrame.reloadStartSeconds = static_cast<double>(combat.reloadStartTick) / AuthorityTickRate;
+                    characterFrame.reloadEndSeconds = static_cast<double>(combat.reloadEndTick) / AuthorityTickRate;
+                }
+            }
             characterFrames.push_back(characterFrame);
             if (sampled) characterPhaseReanchors = sampled->phaseReanchors;
         }

@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 
 namespace {
@@ -505,12 +506,21 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
 }
 
 TEST_CASE("PvP player definitions reject missing clips bones and invalid stride calibration") {
-    for (const std::string_view fault : {"mask", "leg_mask", "weapon", "clip", "speed", "stride"}) {
+    for (const std::string_view fault : {"mask", "leg_mask", "weapon", "clip", "action_clip", "speed", "stride",
+                                         "action_span"}) {
         CAPTURE(fault);
         PresentationAssets fixture;
         if (fault == "clip") {
             fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
                 json["clips"]["jog"]["clip"] = "Armature|MissingJog";
+            });
+        } else if (fault == "action_clip") {
+            fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
+                json["clips"].erase("death");
+            });
+        } else if (fault == "action_span") {
+            fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
+                json["actions"]["shot_seconds"] = 0;
             });
         } else {
             fixture.Override("object_fps_pvp.player.presentation", [&](auto& json) {
@@ -525,4 +535,291 @@ TEST_CASE("PvP player definitions reject missing clips bones and invalid stride 
         CHECK_FALSE(LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error));
         CHECK_FALSE(error.empty());
     }
+}
+
+namespace {
+PlayerActionPose Resolve(const PlayerLocomotionState& state, const PlayerPresentationFrame& frame) {
+    PlayerActionPose actions;
+    std::string error;
+    REQUIRE_MESSAGE(ResolvePlayerActions(ProductionDefinition(), state, frame, actions, error), error);
+    return actions;
+}
+
+double ClipSeconds(const std::size_t clip) {
+    return ProductionDefinition().character->model->clips.at(clip).durationSeconds;
+}
+
+PlayerPresentationFrame Air(const double seconds, const bool grounded, const float verticalVelocity) {
+    auto frame = Frame(seconds, 1.0 / 60);
+    frame.grounded = grounded;
+    frame.verticalVelocity = verticalVelocity;
+    return frame;
+}
+
+// Steps at 60 FPS so no sampled gap reaches the long-frame reanchor.
+double AdvanceTo(PlayerLocomotionState& state, double from, const double to, PlayerPresentationFrame frame) {
+    while (from < to - 1e-9) {
+        from = (std::min)(to, from + 1.0 / 60);
+        frame.presentationSeconds = from;
+        Advance(state, frame);
+    }
+    return from;
+}
+} // namespace
+
+TEST_CASE("PvP player action clips and contract spans resolve from owner-local content") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    const std::array<std::tuple<std::size_t, std::string_view, double>, 6> clips{{
+        {definition.shootClip, "Armature|Pistol_Shoot", 0.633},
+        {definition.reloadClip, "Armature|Pistol_Reload", 1.667},
+        {definition.jumpStartClip, "Armature|Jump_Start", 1.333},
+        {definition.jumpLoopClip, "Armature|Jump_Loop", 2.5},
+        {definition.jumpLandClip, "Armature|Jump_Land", 1.267},
+        {definition.deathClip, "Armature|Death01", 2.4}}};
+    for (const auto& [clip, name, seconds] : clips) {
+        CAPTURE(name);
+        REQUIRE(clip < model.clips.size());
+        CHECK(model.clips[clip].name == name);
+        CHECK(model.clips[clip].durationSeconds == doctest::Approx(seconds).epsilon(0.01));
+    }
+    // The contract spans, not the authored lengths, time the presentation.
+    CHECK(definition.shotSeconds == doctest::Approx(10.0 / 60).epsilon(1e-4));
+    CHECK(definition.jumpStartSeconds == doctest::Approx(0.1));
+    CHECK(definition.jumpLandSeconds == doctest::Approx(0.1));
+}
+
+TEST_CASE("PvP remote shot plays over its contract span as a pure function of presentation time") {
+    const auto& definition = ProductionDefinition();
+    PlayerLocomotionState state;
+    auto frame = Frame(10, 1.0 / 60);
+    Advance(state, frame);
+    frame.shotActionId = 7;
+    frame.shotSeconds = 10;
+    const auto first = Resolve(state, frame);
+    CHECK(first.upper == PlayerUpperAction::Shoot);
+    CHECK(first.shotActionId == 7);
+    CHECK(first.upperClipSeconds == doctest::Approx(0));
+    CHECK(first.lower == PlayerLowerAction::Locomotion);
+    frame.presentationSeconds = 10 + definition.shotSeconds / 2;
+    const auto middle = Resolve(state, frame);
+    CHECK(middle.upper == PlayerUpperAction::Shoot);
+    CHECK(middle.upperClipSeconds == doctest::Approx(ClipSeconds(definition.shootClip) / 2));
+    // A held timeline, a duplicate snapshot, a resend or an ACK presents the
+    // same input again and must select the same point, never a restart.
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        const auto again = Resolve(state, frame);
+        CHECK(again.upper == middle.upper);
+        CHECK(again.upperClipSeconds == middle.upperClipSeconds);
+        CHECK(again.shotActionId == 7);
+    }
+    // The span is half-open, and resuming past it shows no catch-up replay.
+    frame.presentationSeconds = 10 + definition.shotSeconds;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+    frame.presentationSeconds = 10.8;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+    // A later accepted shot restarts from its own authority tick.
+    frame.shotActionId = 8;
+    frame.shotSeconds = 10.5;
+    frame.presentationSeconds = 10.5;
+    const auto next = Resolve(state, frame);
+    CHECK(next.upper == PlayerUpperAction::Shoot);
+    CHECK(next.shotActionId == 8);
+    CHECK(next.upperClipSeconds == doctest::Approx(0));
+}
+
+TEST_CASE("PvP remote reload follows the authoritative interval and outranks a shot") {
+    const auto& definition = ProductionDefinition();
+    PlayerLocomotionState state;
+    auto frame = Frame(20, 1.0 / 60);
+    Advance(state, frame);
+    frame.reloadActionId = 9;
+    frame.reloadStartSeconds = 20;
+    frame.reloadEndSeconds = 21.5;
+    frame.presentationSeconds = 20.75;
+    const auto reload = Resolve(state, frame);
+    CHECK(reload.upper == PlayerUpperAction::Reload);
+    CHECK(reload.reloadActionId == 9);
+    CHECK(reload.upperClipSeconds == doctest::Approx(ClipSeconds(definition.reloadClip) / 2));
+    frame.shotActionId = 8;
+    frame.shotSeconds = 20.7;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Reload);
+    frame.presentationSeconds = 21.5;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+    frame.presentationSeconds = 20.75;
+    frame.shotActionId = 0;
+    frame.reloadEndSeconds = frame.reloadStartSeconds;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+}
+
+TEST_CASE("PvP actions from before the current life began cannot appear in it") {
+    PlayerLocomotionState state;
+    auto frame = Frame(33, 1.0 / 60);
+    frame.lifeGeneration = 2;
+    frame.lifeStateSeconds = 33;
+    Advance(state, frame);
+    frame.presentationSeconds = 33.05;
+    frame.shotActionId = 3;
+    frame.shotSeconds = 32.99;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+    frame.shotActionId = 0;
+    frame.reloadActionId = 4;
+    frame.reloadStartSeconds = 32;
+    frame.reloadEndSeconds = 33.5;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Hold);
+    frame.reloadStartSeconds = 33;
+    frame.reloadEndSeconds = 34.5;
+    CHECK(Resolve(state, frame).upper == PlayerUpperAction::Reload);
+}
+
+TEST_CASE("PvP jump phases follow the sampled grounded state within their contract spans") {
+    const auto& definition = ProductionDefinition();
+    SUBCASE("rising liftoff plays Start Loop and Land") {
+        PlayerLocomotionState state;
+        Advance(state, Air(1, true, 0));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
+        const double liftoff = 1 + 1.0 / 60;
+        Advance(state, Air(liftoff, false, 4));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Start);
+        auto actions = Resolve(state, Air(liftoff, false, 4));
+        CHECK(actions.lower == PlayerLowerAction::JumpStart);
+        CHECK(actions.lowerClipSeconds == doctest::Approx(0));
+        double now = AdvanceTo(state, liftoff, liftoff + definition.jumpStartSeconds / 2, Air(0, false, 3));
+        actions = Resolve(state, Air(now, false, 3));
+        CHECK(actions.lower == PlayerLowerAction::JumpStart);
+        CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpStartClip) / 2));
+        now = AdvanceTo(state, now, liftoff + definition.jumpStartSeconds + 0.05, Air(0, false, 1));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
+        actions = Resolve(state, Air(now, false, 1));
+        CHECK(actions.lower == PlayerLowerAction::JumpLoop);
+        CHECK(actions.lowerClipSeconds == doctest::Approx(0.05));
+        now = AdvanceTo(state, now, 1.6, Air(0, false, -2));
+        Advance(state, Air(now + 1.0 / 60, true, 0));
+        now += 1.0 / 60;
+        CHECK(state.jumpPhase == PlayerJumpPhase::Land);
+        const double landed = now;
+        now = AdvanceTo(state, now, landed + definition.jumpLandSeconds / 2, Air(0, true, 0));
+        actions = Resolve(state, Air(now, true, 0));
+        CHECK(actions.lower == PlayerLowerAction::JumpLand);
+        CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpLandClip) / 2));
+        now = AdvanceTo(state, now, landed + definition.jumpLandSeconds + 1.0 / 60, Air(0, true, 0));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
+        CHECK(Resolve(state, Air(now, true, 0)).lower == PlayerLowerAction::Locomotion);
+    }
+    SUBCASE("leaving the ground while falling skips Start") {
+        PlayerLocomotionState state;
+        Advance(state, Air(1, true, 0));
+        Advance(state, Air(1 + 1.0 / 60, false, -1));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
+    }
+    SUBCASE("a short hop lands during Start") {
+        PlayerLocomotionState state;
+        Advance(state, Air(1, true, 0));
+        Advance(state, Air(1 + 1.0 / 60, false, 2));
+        Advance(state, Air(1 + 2.0 / 60, true, 0));
+        CHECK(state.jumpPhase == PlayerJumpPhase::Land);
+    }
+    SUBCASE("a reanchor in the air never invents a liftoff") {
+        PlayerLocomotionState state;
+        Advance(state, Air(1, true, 0));
+        auto discontinuous = Air(1 + 1.0 / 60, false, 4);
+        discontinuous.continuous = false;
+        Advance(state, discontinuous);
+        CHECK(state.phaseReset);
+        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
+        auto spawned = Air(2, false, 4);
+        PlayerLocomotionState fresh;
+        Advance(fresh, spawned);
+        CHECK(fresh.jumpPhase == PlayerJumpPhase::Airborne);
+    }
+}
+
+TEST_CASE("PvP death plays Death01 once over the whole body and holds its last pose until the new life") {
+    const auto& definition = ProductionDefinition();
+    PlayerLocomotionState state;
+    Advance(state, Frame(29.9, 1.0 / 60));
+    auto dead = Frame(30, 1.0 / 60);
+    dead.dead = true;
+    dead.lifeStateSeconds = 30;
+    dead.shotActionId = 5;
+    dead.shotSeconds = 29.95;
+    Advance(state, dead);
+    CHECK(state.phaseReset);
+    CHECK(state.resetReason == "life");
+    auto actions = Resolve(state, dead);
+    CHECK(actions.lower == PlayerLowerAction::Death);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(0));
+    CHECK(actions.upper == PlayerUpperAction::Hold); // Death owns the weapon hand.
+    double now = AdvanceTo(state, 30, 30.5, dead);
+    dead.presentationSeconds = now;
+    CHECK(Resolve(state, dead).lowerClipSeconds == doctest::Approx(0.5));
+    std::string error;
+    PlayerPresentationPose held, later;
+    now = AdvanceTo(state, now, 33, dead);
+    dead.presentationSeconds = now;
+    actions = Resolve(state, dead);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.deathClip)));
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, actions, held, error), error);
+    now = AdvanceTo(state, now, 35, dead);
+    dead.presentationSeconds = now;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, Resolve(state, dead), later, error), error);
+    for (std::size_t node = 0; node < held.body.globalTransforms.size(); ++node)
+        CheckMatrix(later.body.globalTransforms[node], held.body.globalTransforms[node]);
+    // The new life starts clean: no death pose and no previous-life shot.
+    auto alive = Frame(now + 1.0 / 60, 1.0 / 60);
+    alive.lifeGeneration = 2;
+    alive.lifeStateSeconds = alive.presentationSeconds;
+    alive.shotActionId = 5;
+    alive.shotSeconds = 29.95;
+    Advance(state, alive);
+    CHECK(state.phaseReset);
+    CHECK(state.resetReason == "life");
+    actions = Resolve(state, alive);
+    CHECK(actions.lower == PlayerLowerAction::Locomotion);
+    CHECK(actions.upper == PlayerUpperAction::Hold);
+}
+
+TEST_CASE("PvP composed action pose takes action upper body over locomotion or jump legs with attached weapon") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    PlayerLocomotionState state;
+    state.initialized = true;
+    state.phaseSeconds = 0.31;
+    state.idleSeconds = 0.23;
+    state.moveWeight = 1;
+    Pose idle, jog, legs, shoot, loop, death;
+    REQUIRE(SamplePose(model, definition.idleClip, state.idleSeconds, PlaybackMode::Loop, idle));
+    REQUIRE(SamplePose(model, definition.jogClip, state.phaseSeconds, PlaybackMode::Loop, jog));
+    REQUIRE(BlendPoses(model, idle, jog, state.moveWeight, legs));
+    REQUIRE(SamplePose(model, definition.shootClip, 0.2, PlaybackMode::Clamp, shoot));
+    REQUIRE(SamplePose(model, definition.jumpLoopClip, 0.4, PlaybackMode::Loop, loop));
+    REQUIRE(SamplePose(model, definition.deathClip, 1.0, PlaybackMode::Clamp, death));
+    const auto check = [&](const PlayerActionPose& actions, const Pose& upper, const Pose& lower) {
+        PlayerPresentationPose combined;
+        std::string error;
+        REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, actions, combined, error), error);
+        for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+            CAPTURE(model.nodes[node].name);
+            const auto local = ToMatrix(combined.body.localTransforms[node]);
+            CheckMatrix(local, ToMatrix((definition.upperBodyMask[node] ? upper : lower).localTransforms[node]));
+            const auto parent = model.nodes[node].parentIndex;
+            CheckMatrix(combined.body.globalTransforms[node], parent ?
+                Multiply(combined.body.globalTransforms[*parent], local) : local);
+        }
+        const auto mount = Multiply(combined.body.globalTransforms.at(definition.weaponNode),
+            ToMatrix(definition.weaponMount));
+        for (std::size_t node = 0; node < combined.weapon.globalTransforms.size(); ++node)
+            CheckMatrix(combined.weapon.globalTransforms[node],
+                Multiply(mount, definition.weaponReferencePose.globalTransforms[node]));
+    };
+    PlayerActionPose actions;
+    actions.upper = PlayerUpperAction::Shoot;
+    actions.upperClipSeconds = 0.2;
+    check(actions, shoot, legs);
+    actions.lower = PlayerLowerAction::JumpLoop;
+    actions.lowerClipSeconds = 0.4;
+    check(actions, shoot, loop);
+    actions.lower = PlayerLowerAction::Death;
+    actions.lowerClipSeconds = 1.0;
+    check(actions, death, death); // The upper action is ignored while dead.
 }
