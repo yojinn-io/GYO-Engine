@@ -173,6 +173,12 @@ std::optional<ActionResults> PvpMatch::GetActionResults(PlayerId playerId) const
     return result;
 }
 
+std::optional<MovementQuality> PvpMatch::GetMovementQuality(PlayerId playerId) const {
+    const auto found = players_.find(playerId);
+    if (found == players_.end()) return std::nullopt;
+    return found->second.quality;
+}
+
 const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
     std::vector<Engine::Collision::VerticalCapsule> blockers;
     for (const auto& [id, player] : players_) {
@@ -347,6 +353,7 @@ void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reaso
     player.fallbackSamples.clear();
     player.fallbackCount = 0;
     player.lastMovementResetTick = tick_;
+    if (reason == MovementResetReason::Starvation || reason == MovementResetReason::Backlog) ++player.quality.resets;
     player.movementResetScheduled = false;
     player.movementResetReason = MovementResetReason::None;
     TraceMovement({.kind = MovementTraceKind::Reset, .playerId = player.state.playerId,
@@ -400,6 +407,8 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
                 ++player.missingInputTicks;
         }
         command.sequence = sequence;
+        ++player.quality.resolved;
+        if (source != MovementInputSource::Actual) ++player.quality.substituted;
         player.state = StepMovement(arena_, player.state, command);
         const auto pending = ContiguousPending(player);
         player.state.contiguousPendingCommands = pending;

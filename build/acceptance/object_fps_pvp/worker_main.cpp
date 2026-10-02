@@ -160,7 +160,7 @@ std::size_t CheckMaximumDatagrams() {
         d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(max64);d->set_target_life_generation(max64);
     }
     check(wire::Type::Actions,batch);check(wire::Type::ActionResults,results);
-    pb::PlayerInput movement;movement.set_movement_epoch(max64);movement.set_life_generation(max64);
+    pb::PlayerInput movement;movement.set_movement_epoch(max64);movement.set_life_generation(max64);movement.set_observed_authority_tick(max64);
     for(std::size_t n=0;n<MaxPendingCommands;++n) {
         auto* c=movement.add_commands();c->set_sequence(max64-(MaxPendingCommands-1)+n);c->set_move_forward(1);c->set_move_right(1);
         c->set_yaw(3.0f);c->set_pitch(1.5f);c->set_jump_requested(true);
@@ -172,6 +172,8 @@ std::size_t CheckMaximumDatagrams() {
         p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
         p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);p->set_vertical_velocity(4);p->set_grounded(true);
         p->set_life_generation(max64);p->set_life_state(pb::LIFE_ALIVE);p->set_life_state_tick(max64);p->set_respawn_tick(max64);
+        p->set_movement_slack_sequence(max64);p->set_movement_slack_us(-MaxMovementSlackMicros);
+        p->set_connection_quality_failures(ConnectionQualityFailedWindows-1);
         auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
         c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
     }
@@ -306,14 +308,29 @@ int main() {
         const auto completedWindowGapMs=std::chrono::duration<double,std::milli>(firstNewSend-lastOldSend).count();
         Require(restartMs<10 && completedWindowGapMs<14,"new window waited behind a fully acknowledged window's deadline");
 
-        // A partial acknowledgement leaves the existing 60 Hz deadline intact,
-        // even when the render thread appends more commands during that period.
+        // A partial acknowledgement leaves the unchanged window on its 60 Hz
+        // resend deadline. A command never sent goes at the next poll while the
+        // input token bucket (60/s, two tokens) has one; a resend always leaves one.
         connection.SendInput(Input(3,4));gateway.Snapshot(3);
         gateway.Until([&]{return Acknowledged(connection,3);});
-        connection.SendInput(Input(4,5));
-        gateway.Until([&]{return gateway.attempts.size()>=4;});
-        const auto partialGapMs=std::chrono::duration<double,std::milli>(gateway.attempts.back().at-firstNewSend).count();
+        const auto onlyFour=[&](std::size_t index){
+            const auto& input=gateway.attempts[index].input;
+            return input.commands_size()==1 && input.commands(0).sequence()==4;
+        };
+        gateway.Until([&]{
+            const auto size=gateway.attempts.size();
+            return size>=2 && onlyFour(size-1) && onlyFour(size-2);
+        });
+        const auto resentAt=gateway.attempts.back().at;
+        const auto partialGapMs=std::chrono::duration<double,std::milli>(resentAt-gateway.attempts[gateway.attempts.size()-2].at).count();
         Require(partialGapMs>=14,"partial acknowledgement bypassed the resend deadline");
+        const auto beforeFresh=gateway.attempts.size();
+        connection.SendInput(Input(4,5));
+        gateway.Until([&]{return gateway.attempts.size()>beforeFresh;});
+        const auto& fresh=gateway.attempts.back().input;
+        Require(fresh.commands(fresh.commands_size()-1).sequence()==5,"the new command was not sent next");
+        const auto freshMs=std::chrono::duration<double,std::milli>(gateway.attempts.back().at-resentAt).count();
+        Require(freshMs<10,"a new command waited behind the resend deadline");
         connection.SendInput(Input(4,6));
         const auto resendBegin=gateway.attempts.size();
         gateway.UntilTime(Clock::now()+1s);
@@ -333,6 +350,21 @@ int main() {
         gateway.Until([&]{return Acknowledged(connection,66);});
         const auto sixtyAttempts=gateway.attempts.size()-sixtyBegin;
         Require(sixtyAttempts>=60 && sixtyAttempts<=70,"fully acknowledged 60 FPS publication caused excessive sends");
+        // Publishing a new command every 4 ms without acknowledgement still sends
+        // at most the bucket: two at once, then 60 per second, never a burst.
+        gateway.autoAck=false;
+        const auto fastBegin=gateway.attempts.size();
+        const auto fastStart=Clock::now();
+        for(std::uint64_t sequence=67;sequence<78;++sequence) {
+            connection.SendInput(Input(67,sequence));
+            gateway.UntilTime(fastStart+std::chrono::milliseconds((sequence-66)*4));
+        }
+        gateway.UntilTime(fastStart+100ms);
+        const auto fastAttempts=gateway.attempts.size()-fastBegin;
+        Require(fastAttempts<=2+7,"fresh publications exceeded the input token bucket");
+        for(auto index=fastBegin+2;index<gateway.attempts.size();++index)
+            Require(gateway.attempts[index].at-gateway.attempts[index-2].at>=14ms,"worker emitted an input burst beyond two packets");
+        gateway.Snapshot(77);gateway.Until([&]{return Acknowledged(connection,77);});
         const auto actionEvidence=CheckActions(gateway,connection);
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
         Require(!connection.State().combatRules && connection.State().actionTransport.retained==0 &&

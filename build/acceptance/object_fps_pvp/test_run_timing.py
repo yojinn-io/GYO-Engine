@@ -86,10 +86,20 @@ class TimingRunnerTests(unittest.TestCase):
 
     @staticmethod
     def phase_epoch(**values):
-        epoch = {'player_id': 1, 'movement_epoch': 1, 'life_generation': 1, 'status': 'shift_armed', 'host_wait_micros': 3214,
-                 'client_wait_seconds': .003214, 'client_shift_seconds': .0012, 'client_skip_reason': None}
+        epoch = {'player_id': 1, 'movement_epoch': 1, 'life_generation': 1, 'status': 'tracking', 'first_decision_frame': 3,
+                 'decided_seconds_before_measurement': .984, 'first_error_seconds': .0012, 'corrections': 2,
+                 'late_corrections': 0, 'last_state': 'tracking', 'host_samples': 900, 'host_late_samples': 0,
+                 'host_slack_min_micros': 1200, 'host_slack_max_micros': 3214, 'connection_quality_failures_max': 0,
+                 'stall_reseeds': 0}
         epoch.update(values)
         return epoch
+
+    @staticmethod
+    def acquiring_epoch(**values):
+        """Host samples arrived but the Client never decided."""
+        return TimingRunnerTests.phase_epoch(**{'status': 'acquiring', 'first_decision_frame': None,
+                                                'decided_seconds_before_measurement': None, 'first_error_seconds': None,
+                                                'corrections': 0, 'last_state': 'acquiring', **values})
 
     @staticmethod
     def windows(**extra):
@@ -98,27 +108,29 @@ class TimingRunnerTests(unittest.TestCase):
                            'join': {'status': 'recorded', 'placement': 'usable_bounds_bottom_right', 'final_position': [256, 180],
                                     'sync': 'timed_out'}}, **extra}
 
-    def test_summary_names_start_phase_and_window_state_per_round(self):
-        armed = self.phase_epoch()
-        late = self.phase_epoch(player_id=2, status='skipped_host_late', host_wait_micros=25000, client_wait_seconds=.025,
-                                client_shift_seconds=None, client_skip_reason='host_late')
-        measured = self.phase_epoch(movement_epoch=3, status='not_armed_or_invalidated', host_wait_micros=4000,
-                                    client_wait_seconds=None, client_shift_seconds=None)
+    def test_summary_names_phase_tracking_and_window_state_per_round(self):
+        tracking = self.phase_epoch()
+        late = self.acquiring_epoch(player_id=2, host_samples=25, host_late_samples=25, host_slack_min_micros=-25000,
+                                    host_slack_max_micros=-1500)
+        measured = self.acquiring_epoch(movement_epoch=3, status='host_samples_absent', host_samples=0,
+                                        host_slack_min_micros=None, host_slack_max_micros=None,
+                                        connection_quality_failures_max=4)
         rounds = iter([
-            {'start_phase': {'create': {'status': 'recorded', 'first_epoch': armed, 'measured_epoch': 1,
-                                        'measured_epoch_record': armed, 'epoch_count': 1,
-                                        'conflicting_frames': {'host': 0, 'client': 0}, 'dropped_observations': 0},
+            {'start_phase': {'create': {'status': 'recorded', 'first_epoch': tracking, 'measured_epoch': 1,
+                                        'measured_epoch_record': tracking, 'epoch_count': 1, 'dropped_observations': 0},
                              'join': {'status': 'recorded', 'first_epoch': late, 'measured_epoch': 1, 'measured_epoch_record': late,
-                                      'epoch_count': 2, 'status_counts': {'skipped_host_late': 1, 'host_wait_absent': 1}}},
+                                      'epoch_count': 2, 'status_counts': {'acquiring': 1, 'host_samples_absent': 1}}},
              **self.windows(window_disturbed=False, window_disturbances=[])},
             {'start_phase': {'create': {'status': 'absent', 'reason': 'create-start-phase.json missing', 'measured_epoch': 1},
-                             'join': {'status': 'recorded', 'first_epoch': armed, 'measured_epoch': 3, 'measured_epoch_record': measured,
-                                      'epoch_count': 2, 'status_counts': {'shift_armed': 1, 'not_armed_or_invalidated': 1},
-                                      'conflicting_frames': {'host': 2, 'client': 0}, 'dropped_observations': 3}},
+                             'join': {'status': 'recorded', 'first_epoch': tracking, 'measured_epoch': 3,
+                                      'measured_epoch_record': measured, 'epoch_count': 2,
+                                      'status_counts': {'tracking': 1, 'host_samples_absent': 1}, 'dropped_observations': 3}},
              **self.windows(window_disturbed=False, window_disturbances=[])},
-            {'start_phase': {'create': {'status': 'recorded', 'first_epoch': armed, 'measured_epoch': 7, 'measured_epoch_record': None,
+            {'start_phase': {'create': {'status': 'recorded', 'first_epoch': tracking, 'measured_epoch': 7,
+                                        'measured_epoch_record': None,
                                         'measured_epoch_reason': 'no record for measured epoch 7', 'epoch_count': 1},
-                             'join': {'status': 'invalid', 'reason': 'join-start-phase.json: client_first_steady_ns must be an integer'}},
+                             'join': {'status': 'invalid',
+                                      'reason': 'join-start-phase.json: first_decision_steady_ns must be an integer'}},
              'window': {'create': {'status': 'recorded', 'placement': 'p', 'final_position': None}, 'join': 'garbage'},
              'window_disturbed': None, 'window_disturbances': ['join: window evidence invalid: truncated']}])
         def measurement(args, output, fps):
@@ -126,27 +138,30 @@ class TimingRunnerTests(unittest.TestCase):
         self.args.report_only = True
         self.assertEqual(self.run_rounds(measurement), 0)
         summary = (self.args.output/'summary.md').read_text()
-        self.assertIn('Round 1 start phase: create measured epoch 1/life 1 shift_armed: Host wait 3.214 ms, Client wait 3.214 ms, '
-                      'shift 1.200 ms; join measured epoch 1/life 1 skipped_host_late: Host wait 25.000 ms, Client wait 25.000 ms, '
-                      "shift unset, skip reason host_late; 2 epochs {'skipped_host_late': 1, 'host_wait_absent': 1}", summary)
-        self.assertIn('a stall reseed that cancelled the start phase reads cancelled_by_reseed', summary)
-        self.assertIn('slew completion is not observable', summary)
+        self.assertIn('Round 1 phase tracking: create measured epoch 1/life 1 tracking: decided 0.984 s before measurement '
+                      'began, first error 1.200 ms, 2 correction(s) (0 late), last state tracking, Host samples 900 (late 0, '
+                      'slack 1.200 ms to 3.214 ms); join measured epoch 1/life 1 acquiring: never decided, first error unset, '
+                      '0 correction(s) (0 late), last state acquiring, Host samples 25 (late 25, slack -25.000 ms to -1.500 ms); '
+                      "2 epochs {'acquiring': 1, 'host_samples_absent': 1}", summary)
+        self.assertIn('a stall reseed returns it to acquiring', summary)
+        self.assertIn('its state during measurement splits into tracking and acquiring seconds', summary)
         self.assertIn('Window interference note: ', summary)
         self.assertIn('Round 1 window: no window-state interference detected (create usable_bounds_top_left at (0, 53); '
                       'join usable_bounds_bottom_right at (256, 180), sync timed_out)', summary)
         self.assertNotIn('window: clean', summary)
         self.assertNotIn('platform-default placement', summary)
-        self.assertIn('Round 2 start phase: create absent (create-start-phase.json missing); measured epoch 1; '
-                      'join measured epoch 3/life 1 not_armed_or_invalidated: Host wait 4.000 ms, Client wait unset, shift unset; '
-                      'first epoch 1/life 1 shift_armed', summary)
-        self.assertIn('conflicting frames host 2/client 0; dropped observations 3', summary)
-        self.assertIn('Round 3 start phase: create measured epoch 7 not recorded (no record for measured epoch 7); first epoch 1/life 1 '
-                      'shift_armed', summary)
-        self.assertIn('join invalid (join-start-phase.json: client_first_steady_ns must be an integer)', summary)
+        self.assertIn('Round 2 phase tracking: create absent (create-start-phase.json missing); measured epoch 1; '
+                      'join measured epoch 3/life 1 host_samples_absent: never decided, first error unset, 0 correction(s) '
+                      '(0 late), last state acquiring, Host samples 0, connection-quality failures up to 4; '
+                      'first epoch 1/life 1 tracking: decided 0.984 s before measurement began', summary)
+        self.assertIn("; 2 epochs {'tracking': 1, 'host_samples_absent': 1}; dropped observations 3", summary)
+        self.assertIn('Round 3 phase tracking: create measured epoch 7 not recorded (no record for measured epoch 7); '
+                      'first epoch 1/life 1 tracking', summary)
+        self.assertIn('join invalid (join-start-phase.json: first_decision_steady_ns must be an integer)', summary)
         self.assertIn('Round 3 window: unknown (create p at ()): join: window evidence invalid: truncated', summary)
         self.assertNotIn('DISTURBED', summary)
         saved = self.results()['rounds'][0]['evidence']['presentation']
-        self.assertEqual(saved['start_phase']['join']['first_epoch']['host_wait_micros'], 25000)
+        self.assertEqual(saved['start_phase']['join']['first_epoch']['host_slack_min_micros'], -25000)
 
     def test_window_gate_invalidates_only_counted_rounds(self):
         for disturbed, report_only, status, passed in (
@@ -209,63 +224,56 @@ class TimingRunnerTests(unittest.TestCase):
         self.assertIn('| 1 | invalid_window_evidence_invalid (thresholds passed) |', summary)
         self.assertIn('-> counted round invalid_window_evidence_invalid (underlying threshold result: passed)', summary)
 
-    def test_summary_names_reseed_cancellation_and_shift_applied_seconds(self):
-        traced = self.phase_epoch(status='cancelled_by_reseed', recorded_status='shift_armed', host_wait_micros=2606,
-                                  client_wait_seconds=.002606, client_shift_seconds=-.000912,
-                                  cancelled_by_reseed={'source': 'client_trace_fallback', 'trace': 'create-commands.jsonl',
-                                                       'steady_ns': 5, 'frame': None, 'reseed_sequence': 42,
-                                                       'after_decision': True, 'seconds_after_decision': .532779,
-                                                       'stall_reseeds_in_epoch': 1, 'seconds_before_measurement': 1.25},
-                                  measurement_window={'status': 'cancelled_by_reseed', 'states': ['cancelled_by_reseed'],
-                                                      'state_seconds': {'cancelled_by_reseed': 15.5},
-                                                      'withdrawn_during_measurement': False,
-                                                      'cancelled_during_measurement': True, 'shift_applied_seconds': 0.,
-                                                      'unaligned_seconds': 15.5, 'observed_seconds': 15.5,
-                                                      'window_seconds': 16.})
-        product = self.phase_epoch(player_id=2, status='cancelled_by_reseed', host_wait_micros=5522, client_wait_seconds=.005522,
-                                   client_shift_seconds=.0021, client_skip_reason=None,
-                                   cancelled_by_reseed={'source': 'product', 'steady_ns': 9, 'frame': 400,
-                                                        'seconds_before_measurement': -3.5},
-                                   measurement_window={'status': 'cancelled_by_reseed',
-                                                       'states': ['shift_armed', 'cancelled_by_reseed'],
-                                                       'state_seconds': {'shift_armed': 3.5, 'cancelled_by_reseed': 12.5},
-                                                       'withdrawn_during_measurement': False,
-                                                       'cancelled_during_measurement': True, 'shift_applied_seconds': 3.5,
-                                                       'unaligned_seconds': 12.5, 'observed_seconds': 16.,
-                                                       'window_seconds': 16.})
+    def test_summary_names_reacquisition_stall_reseeds_and_tracking_seconds(self):
+        # create: a stall reseed (counted in its Client trace) returned it to
+        # acquiring inside the window; join decided only after measurement began.
+        reseeded = self.phase_epoch(corrections=3, stall_reseeds=1,
+                                    measurement_window={'status': 'acquiring_during_measurement',
+                                                        'states': ['tracking', 'settling', 'acquiring'],
+                                                        'state_seconds': {'tracking': 11.5, 'settling': .5, 'acquiring': 3.5},
+                                                        'tracking_seconds': 12., 'acquiring_seconds': 3.5,
+                                                        'observed_seconds': 15.5, 'window_seconds': 16.,
+                                                        'corrections_in_window': 1, 'reacquisitions_in_window': 1})
+        late = self.phase_epoch(player_id=2, decided_seconds_before_measurement=-3.5, first_error_seconds=-.0021,
+                                corrections=1, late_corrections=1, host_late_samples=3, host_slack_min_micros=-800,
+                                connection_quality_failures_max=2,
+                                measurement_window={'status': 'acquiring_during_measurement', 'states': ['acquiring', 'tracking'],
+                                                    'state_seconds': {'acquiring': 3.5, 'tracking': 12.5},
+                                                    'tracking_seconds': 12.5, 'acquiring_seconds': 3.5,
+                                                    'observed_seconds': 16., 'window_seconds': 16.,
+                                                    'corrections_in_window': 1, 'reacquisitions_in_window': 0})
         evidence = {'overall_passed': True, 'presentation': {'start_phase': {
-            'create': {'status': 'recorded', 'first_epoch': traced, 'measured_epoch': 1, 'measured_epoch_record': traced,
+            'create': {'status': 'recorded', 'first_epoch': reseeded, 'measured_epoch': 1, 'measured_epoch_record': reseeded,
                        'epoch_count': 1},
-            'join': {'status': 'recorded', 'first_epoch': product, 'measured_epoch': 1, 'measured_epoch_record': product,
+            'join': {'status': 'recorded', 'first_epoch': late, 'measured_epoch': 1, 'measured_epoch_record': late,
                      'epoch_count': 1}}}}
         self.args.rounds, self.args.report_only = 1, True
         self.assertEqual(self.run_rounds(lambda *args: evidence), 0)
         summary = (self.args.output/'summary.md').read_text()
-        self.assertIn('create measured epoch 1/life 1 cancelled_by_reseed (recorded shift_armed): Host wait 2.606 ms, '
-                      'Client wait 2.606 ms, shift -0.912 ms, cancelled by a stall reseed 0.533 s after the decision '
-                      '(Client trace create-commands.jsonl: neutral reseed from sequence 42), 1.250 s before measurement began; '
-                      'during measurement: cancelled_by_reseed (measured epoch CANCELLED by a stall reseed '
-                      'for 15.500 s of the 16.000 s window); shift applied 0.000 s, unaligned 15.500 s '
+        self.assertIn('create measured epoch 1/life 1 tracking: decided 0.984 s before measurement began, first error 1.200 ms, '
+                      '3 correction(s) (0 late), last state tracking, Host samples 900 (late 0, slack 1.200 ms to 3.214 ms), '
+                      '1 stall reseed(s) in the Client trace; during measurement: acquiring_during_measurement; '
+                      'tracking 12.000 s, acquiring 3.500 s, 1 correction(s), 1 reacquisition(s) '
                       '(observed 15.500 s of the 16.000 s window)', summary)
-        self.assertIn('join measured epoch 1/life 1 cancelled_by_reseed: Host wait 5.522 ms, Client wait 5.522 ms, '
-                      'shift 2.100 ms, cancelled by a stall reseed (reported by the product from frame 400), 3.500 s after '
-                      'measurement began; during measurement: cancelled_by_reseed (measured epoch CANCELLED by a stall reseed '
-                      'for 12.500 s of the 16.000 s window); shift applied 3.500 s, unaligned 12.500 s', summary)
-        self.assertNotIn('unaligned 12.500 s (observed', summary)
-        phase = {'status': 'recorded', 'first_epoch': traced, 'measured_epoch': 1, 'measured_epoch_record': traced,
+        join = run_timing._phase_role('join', evidence['presentation']['start_phase']['join'])
+        self.assertEqual(join, 'join measured epoch 1/life 1 tracking: decided 3.500 s after measurement began, first error '
+                               '-2.100 ms, 1 correction(s) (1 late), last state tracking, Host samples 900 (late 3, slack '
+                               '-0.800 ms to 3.214 ms), connection-quality failures up to 2; during measurement: '
+                               'acquiring_during_measurement; tracking 12.500 s, acquiring 3.500 s, 1 correction(s)')
+        self.assertIn(join, summary)
+        phase = {'status': 'recorded', 'first_epoch': reseeded, 'measured_epoch': 1, 'measured_epoch_record': reseeded,
                  'epoch_count': 1, 'unattributed_epochs': [{'player_id': 0}], 'unattributed_client_frames': 2,
                  'reseed_detection': {'status': 'invalid', 'source': 'create-commands.jsonl', 'reason': 'missing trace_end'}}
-        self.assertIn('; 1 record(s) and 2 active Client frame(s) without a player id excluded; reseed cancellation not '
-                      'checked (invalid: missing trace_end)', run_timing._phase_role('create', phase))
-        phase['reseed_detection'] = {'status': 'recorded'}
-        self.assertNotIn('not checked', run_timing._phase_role('create', phase))
-        older = run_timing._measurement_state({'status': 'not_recorded', 'reason': 'record carries no client state history '
-                                               '(older recorder)', 'cancelled_before_window': True})
-        self.assertEqual(older, '; during measurement: not_recorded (record carries no client state history (older recorder)) '
-                                '(cancelled before the window began, so no shift was applied in this epoch and life while measured)')
-        self.assertIn('cancelled by a stall reseed before any decision',
-                      run_timing._phase_epoch(self.phase_epoch(status='cancelled_by_reseed', cancelled_by_reseed={
-                          'source': 'client_trace_fallback', 'trace': 't', 'after_decision': False, 'reseed_sequence': 7})))
+        self.assertIn('; 1 record(s) and 2 active Client frame(s) without a player id excluded; stall reseeds not '
+                      'counted (invalid: missing trace_end)', run_timing._phase_role('create', phase))
+        for status in ('recorded', 'not_checked'):
+            phase['reseed_detection'] = {'status': status, 'reason': 'no Client trace was given'}
+            self.assertNotIn('not counted', run_timing._phase_role('create', phase))
+        older = run_timing._measurement_state({'status': 'not_recorded', 'reason': 'record carries no state history'})
+        self.assertEqual(older, '; during measurement: not_recorded (record carries no state history)')
+        never = run_timing._phase_epoch(self.acquiring_epoch(host_samples=0, stall_reseeds=2))
+        self.assertIn('acquiring: never decided, first error unset', never)
+        self.assertIn('Host samples 0, 2 stall reseed(s) in the Client trace', never)
 
     def test_wayland_warning_is_printed_only_for_counted_gui_rounds_in_wayland_sessions(self):
         wayland = {'WAYLAND_DISPLAY': 'wayland-0'}
@@ -308,31 +316,30 @@ class TimingRunnerTests(unittest.TestCase):
                       '-> counted round invalid_window_disturbed (underlying threshold result: passed)', summary)
         self.assertEqual((rounds[0]['thresholds_passed'], rounds[0]['underlying_status']), (True, 'passed'))
 
-    def test_summary_names_withdrawal_pending_resets_and_frame_intervals(self):
-        withdrawn = self.phase_epoch(status='shift_withdrawn_below_cut', host_wait_micros=9000, client_wait_seconds=.009,
-                                     client_shift_seconds=.005, client_armed_shift_seconds=.005, withdrawn_frames=96,
-                                     withdrawn_first_frame=400, withdrawals=1, restorations=1, last_client_state='shift_armed',
-                                     measurement_window={'status': 'withdrawn_below_cut', 'states': ['shift_armed', 'withdrawn_below_cut'],
-                                                         'state_seconds': {'shift_armed': 14., 'withdrawn_below_cut': 2.},
-                                                         'withdrawn_during_measurement': True, 'window_seconds': 16.})
-        pending = self.phase_epoch(player_id=2, status='pending_frame_window', host_wait_micros=9000, client_wait_seconds=None,
-                                   client_shift_seconds=None, client_active_frames_at_last_undecided=6,
-                                   measurement_window={'status': 'undecided', 'states': ['undecided'],
-                                                       'state_seconds': {'undecided': 16.}, 'withdrawn_during_measurement': False,
-                                                       'window_seconds': 16.})
-        restored = self.phase_epoch(status='shift_armed_after_below_cut_decision', client_shift_seconds=None,
-                                    client_skip_reason='frame_rate_below_tick', client_armed_shift_seconds=.0012,
-                                    client_first_armed_frame=40)
+    def test_summary_names_settling_acquiring_resets_and_frame_intervals(self):
+        settling = self.phase_epoch(corrections=3, late_corrections=1, last_state='settling',
+                                    measurement_window={'status': 'tracking', 'states': ['tracking', 'settling'],
+                                                        'state_seconds': {'tracking': 14., 'settling': 2.},
+                                                        'tracking_seconds': 16., 'acquiring_seconds': 0.,
+                                                        'observed_seconds': 16., 'window_seconds': 16.,
+                                                        'corrections_in_window': 2, 'reacquisitions_in_window': 0})
+        acquiring = self.acquiring_epoch(player_id=2, host_samples=40, host_late_samples=40, host_slack_min_micros=-9000,
+                                         host_slack_max_micros=-4000,
+                                         measurement_window={'status': 'acquiring_during_measurement', 'states': ['acquiring'],
+                                                             'state_seconds': {'acquiring': 16.}, 'tracking_seconds': 0.,
+                                                             'acquiring_seconds': 16., 'observed_seconds': 16.,
+                                                             'window_seconds': 16., 'corrections_in_window': 0,
+                                                             'reacquisitions_in_window': 0})
         frames = {'roles': {'create': {'count': 959, 'median_seconds': .016667, 'p95_seconds': .0171, 'maximum_seconds': .0334,
                                        'over_1_1_tick': 3, 'at_least_2_ticks': 1}}}
         evidence = {'overall_passed': True, 'resets': 2, 'reset_reasons': {'starvation': 1, 'backlog': 1},
                     'presentation_frame_intervals': frames,
                     'presentation': {'start_phase': {
-                        'create': {'status': 'recorded', 'first_epoch': withdrawn, 'measured_epoch': 1,
-                                   'measured_epoch_record': withdrawn, 'epoch_count': 1},
-                        'join': {'status': 'recorded', 'first_epoch': pending, 'measured_epoch': 1,
-                                 'measured_epoch_record': pending, 'epoch_count': 2,
-                                 'status_counts': {'pending_frame_window': 1, 'shift_armed_after_below_cut_decision': 1}}},
+                        'create': {'status': 'recorded', 'first_epoch': settling, 'measured_epoch': 1,
+                                   'measured_epoch_record': settling, 'epoch_count': 1},
+                        'join': {'status': 'recorded', 'first_epoch': acquiring, 'measured_epoch': 1,
+                                 'measured_epoch_record': acquiring, 'epoch_count': 2,
+                                 'status_counts': {'acquiring': 1, 'tracking': 1}}},
                         'window': {'create': {'status': 'recorded', 'placement': 'platform_default', 'final_position': [320, 180]},
                                    'join': {'status': 'recorded', 'placement': 'platform_default', 'final_position': [320, 180],
                                             'sync': 'not_requested'}},
@@ -340,20 +347,24 @@ class TimingRunnerTests(unittest.TestCase):
         self.args.rounds, self.args.report_only = 1, True
         self.assertEqual(self.run_rounds(lambda *args: evidence), 0)
         summary = (self.args.output/'summary.md').read_text()
-        self.assertIn('create measured epoch 1/life 1 shift_withdrawn_below_cut: Host wait 9.000 ms, Client wait 9.000 ms, '
-                      'shift 5.000 ms, withdrawn below the cut for 96 frame(s) from frame 400 (1 withdrawal(s)/1 restoration(s)), '
-                      'last state shift_armed; during measurement: withdrawn_below_cut (measured epoch WITHDRAWN below the cut '
-                      'during measurement for 2.000 s of 16.000 s)', summary)
-        self.assertIn('join measured epoch 1/life 1 pending_frame_window: Host wait 9.000 ms, Client wait unset, shift unset, '
-                      'Client still undecided after 6 active frame(s); during measurement: undecided', summary)
-        self.assertIn('withdrawal below 60 FPS reads shift_withdrawn_below_cut', summary)
+        # Settling is tracked time; a full observed window names no observed seconds.
+        self.assertIn('create measured epoch 1/life 1 tracking: decided 0.984 s before measurement began, first error 1.200 ms, '
+                      '3 correction(s) (1 late), last state settling, Host samples 900 (late 0, slack 1.200 ms to 3.214 ms); '
+                      'during measurement: tracking; tracking 16.000 s, acquiring 0.000 s, 2 correction(s); join', summary)
+        self.assertIn('join measured epoch 1/life 1 acquiring: never decided, first error unset, 0 correction(s) (0 late), '
+                      'last state acquiring, Host samples 40 (late 40, slack -9.000 ms to -4.000 ms); during measurement: '
+                      "acquiring_during_measurement; tracking 0.000 s, acquiring 16.000 s, 0 correction(s); "
+                      "2 epochs {'acquiring': 1, 'tracking': 1}", summary)
+        self.assertIn('settling while a correction slews', summary)
         self.assertIn('Round 1 movement: Host movement resets during measurement: 2 (backlog 1, starvation 1); '
                       'frame intervals during measurement: create 959 intervals: median 16.667 ms, p95 17.100 ms, '
                       'max 33.400 ms, >1.1 tick 3, >=2 ticks 1; join not recorded', summary)
         self.assertIn('Round 1 window: no window-state interference detected (create platform_default at (320, 180); '
                       'join platform_default at (320, 180), sync not_requested) [platform-default placement (non-macOS): '
                       'the two windows may overlap, and a Wayland compositor may report OCCLUDED for the covered one]', summary)
-        self.assertIn('armed later at frame 40 with shift 1.200 ms', run_timing._phase_epoch(restored))
+        # Without a plan the decision is named by its frame.
+        unplanned = self.phase_epoch(decided_seconds_before_measurement=None, first_decision_frame=40)
+        self.assertIn('tracking: decided at frame 40, first error 1.200 ms', run_timing._phase_epoch(unplanned))
 
     def test_counted_round_without_window_evidence_is_invalid_not_failed(self):
         def measurement(args, output, fps):
@@ -366,11 +377,11 @@ class TimingRunnerTests(unittest.TestCase):
         self.assertEqual((record['status'], record['passed']), ('invalid_window_evidence_missing', False))
         self.assertIn('-> counted round invalid_window_evidence_missing', (self.args.output/'summary.md').read_text())
 
-    def test_not_run_rounds_have_no_start_phase_claim(self):
+    def test_not_run_rounds_have_no_phase_tracking_claim(self):
         self.assertEqual(self.run_rounds(lambda *args: {'overall_passed': False}), 1)
         summary = (self.args.output/'summary.md').read_text()
-        self.assertIn('Round 1 start phase: not analysed', summary)
-        self.assertNotIn('Round 2 start phase', summary)
+        self.assertIn('Round 1 phase tracking: not analysed', summary)
+        self.assertNotIn('Round 2 phase tracking', summary)
 
     def test_run_round_records_counted_disturbed_round_with_threshold_result(self):
         # run_round itself, with services, probes and analysers replaced: no sockets, GUI or clock.

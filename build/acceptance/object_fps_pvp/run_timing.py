@@ -103,66 +103,38 @@ def _milliseconds(value, scale):
     return f'{value*scale:.3f} ms'
 
 
-SHIFT_ARMED_NOTE = ('shift_armed = shift armed and never withdrawn while observed; a withdrawal below 60 FPS reads '
-                    'shift_withdrawn_below_cut, and a stall reseed that cancelled the start phase reads cancelled_by_reseed '
-                    '(reported by the product, or derived from the Client trace for an older product); for the measured epoch '
-                    'its state during measurement splits into shift-applied and unaligned seconds; slew completion is not '
-                    'observable')
+PHASE_NOTE = ('tracking = the Client decided its phase at least once in this epoch and life and keeps correcting it '
+              '(settling while a correction slews; a stall reseed returns it to acquiring); acquiring = Host samples '
+              'but no decision; host_samples_absent = no Host slack sample reached the probe; for the measured epoch '
+              'its state during measurement splits into tracking and acquiring seconds')
 
 
 def _seconds_or_unknown(value):
     return 'unknown' if not isinstance(value, (int, float)) or isinstance(value, bool) else f'{value:.3f} s'
 
 
-def _cancellation(entry):
-    cancelled = entry.get('cancelled_by_reseed')
-    if not isinstance(cancelled, dict):
-        return ', cancelled by a stall reseed (no detail recorded)'
-    if cancelled.get('source') == 'product':
-        text = f", cancelled by a stall reseed (reported by the product from frame {cancelled.get('frame')})"
-    else:
-        when = (f"{_seconds_or_unknown(cancelled.get('seconds_after_decision'))} after the decision"
-                if cancelled.get('after_decision') else 'before any decision')
-        text = (f", cancelled by a stall reseed {when} (Client trace {cancelled.get('trace')}: neutral reseed from "
-                f"sequence {cancelled.get('reseed_sequence')})")
-    before = cancelled.get('seconds_before_measurement')
-    if isinstance(before, (int, float)) and not isinstance(before, bool):
-        text += (f", {before:.3f} s before measurement began" if before >= 0 else
-                 f", {-before:.3f} s after measurement began")
-    return text
+def _decided(entry):
+    before = entry.get('decided_seconds_before_measurement')
+    if entry.get('first_decision_frame') is None:
+        return 'never decided'
+    if not isinstance(before, (int, float)) or isinstance(before, bool):
+        return f"decided at frame {entry.get('first_decision_frame')}"
+    return f'decided {before:.3f} s before measurement began' if before >= 0 else \
+        f'decided {-before:.3f} s after measurement began'
 
 
 def _phase_epoch(entry):
-    recorded = f" (recorded {entry['recorded_status']})" if entry.get('recorded_status') else ''
-    text = (f"epoch {entry.get('movement_epoch')}/life {entry.get('life_generation')} {entry.get('status')}{recorded}: "
-            f"Host wait {_milliseconds(entry.get('host_wait_micros'), 1e-3)}, "
-            f"Client wait {_milliseconds(entry.get('client_wait_seconds'), 1e3)}, "
-            f"shift {_milliseconds(entry.get('client_shift_seconds'), 1e3)}")
-    text += f", skip reason {entry['client_skip_reason']}" if entry.get('client_skip_reason') else ''
-    if entry.get('status') == 'shift_armed_after_below_cut_decision':
-        text += f", armed later at frame {entry.get('client_first_armed_frame')} with shift " \
-                f"{_milliseconds(entry.get('client_armed_shift_seconds'), 1e3)}"
-    if entry.get('withdrawn_frames'):
-        text += (f", withdrawn below the cut for {entry['withdrawn_frames']} frame(s) from frame "
-                 f"{entry.get('withdrawn_first_frame')} ({entry.get('withdrawals')} withdrawal(s)/"
-                 f"{entry.get('restorations')} restoration(s)), last state {entry.get('last_client_state')}")
-    if entry.get('status') == 'pending_frame_window':
-        text += f", Client still undecided after {entry.get('client_active_frames_at_last_undecided')} active frame(s)"
-    if entry.get('status') == 'cancelled_by_reseed':
-        text += _cancellation(entry)
-    return text
-
-
-def _window_seconds(window):
-    """Shift-applied and unaligned seconds, and the observed part of the window when it is not all of it."""
-    applied, unaligned = window.get('shift_applied_seconds'), window.get('unaligned_seconds')
-    if applied is None and unaligned is None:
-        return ''
-    text = f"; shift applied {_seconds_or_unknown(applied)}, unaligned {_seconds_or_unknown(unaligned)}"
-    observed, total = window.get('observed_seconds'), window.get('window_seconds')
-    numbers = all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in (observed, total))
-    if not numbers or abs(observed - total) > 5e-4:
-        text += f" (observed {_seconds_or_unknown(observed)} of the {_seconds_or_unknown(total)} window)"
+    text = (f"epoch {entry.get('movement_epoch')}/life {entry.get('life_generation')} {entry.get('status')}: "
+            f"{_decided(entry)}, first error {_milliseconds(entry.get('first_error_seconds'), 1e3)}, "
+            f"{entry.get('corrections')} correction(s) ({entry.get('late_corrections')} late), "
+            f"last state {entry.get('last_state')}, Host samples {entry.get('host_samples')}")
+    if entry.get('host_samples'):
+        text += (f" (late {entry.get('host_late_samples')}, slack {_milliseconds(entry.get('host_slack_min_micros'), 1e-3)} to "
+                 f"{_milliseconds(entry.get('host_slack_max_micros'), 1e-3)})")
+    if entry.get('connection_quality_failures_max'):
+        text += f", connection-quality failures up to {entry['connection_quality_failures_max']}"
+    if entry.get('stall_reseeds'):
+        text += f", {entry['stall_reseeds']} stall reseed(s) in the Client trace"
     return text
 
 
@@ -170,22 +142,19 @@ def _measurement_state(window):
     if not isinstance(window, dict):
         return ''
     text = f"; during measurement: {window.get('status')}"
-    if window.get('status') == 'mixed':
-        text += f" {window.get('states')}"
-    seconds = window.get('state_seconds') or {}
-    if window.get('withdrawn_during_measurement'):
-        text += (f" (measured epoch WITHDRAWN below the cut during measurement for "
-                 f"{_seconds_or_unknown(seconds.get('withdrawn_below_cut', 0))} of "
-                 f"{_seconds_or_unknown(window.get('window_seconds'))})")
-    elif window.get('cancelled_during_measurement'):
-        text += (f" (measured epoch CANCELLED by a stall reseed for "
-                 f"{_seconds_or_unknown(seconds.get('cancelled_by_reseed', 0))} of the "
-                 f"{_seconds_or_unknown(window.get('window_seconds'))} window)")
-    elif window.get('reason'):
-        text += f" ({window['reason']})"
-    if window.get('cancelled_before_window'):
-        text += ' (cancelled before the window began, so no shift was applied in this epoch and life while measured)'
-    return text + _window_seconds(window)
+    if window.get('reason'):
+        return text + f" ({window['reason']})"
+    if window.get('tracking_seconds') is None:
+        return text
+    text += (f"; tracking {_seconds_or_unknown(window.get('tracking_seconds'))}, acquiring "
+             f"{_seconds_or_unknown(window.get('acquiring_seconds'))}, {window.get('corrections_in_window')} correction(s)")
+    if window.get('reacquisitions_in_window'):
+        text += f", {window['reacquisitions_in_window']} reacquisition(s)"
+    observed, total = window.get('observed_seconds'), window.get('window_seconds')
+    numbers = all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in (observed, total))
+    if not numbers or abs(observed - total) > 5e-4:
+        text += f" (observed {_seconds_or_unknown(observed)} of the {_seconds_or_unknown(total)} window)"
+    return text
 
 
 def _phase_role(role, phase):
@@ -205,9 +174,6 @@ def _phase_role(role, phase):
     count = phase.get('epoch_count') or 0
     if count > 1:
         text += f"; {count} epochs {phase.get('status_counts')}"
-    conflicts = phase.get('conflicting_frames') or {}
-    if any(conflicts.values()):
-        text += f"; conflicting frames host {conflicts.get('host')}/client {conflicts.get('client')}"
     if phase.get('dropped_observations'):
         text += f"; dropped observations {phase['dropped_observations']}"
     unattributed = [f"{len(phase['unattributed_epochs'])} record(s)"] if phase.get('unattributed_epochs') else []
@@ -216,8 +182,8 @@ def _phase_role(role, phase):
     if unattributed:
         text += f"; {' and '.join(unattributed)} without a player id excluded"
     detection = phase.get('reseed_detection') or {}
-    if detection.get('status') not in (None, 'product', 'recorded'):
-        text += f"; reseed cancellation not checked ({detection.get('status')}: {detection.get('reason')})"
+    if detection.get('status') not in (None, 'recorded', 'not_checked'):
+        text += f"; stall reseeds not counted ({detection.get('status')}: {detection.get('reason')})"
     return text
 
 
@@ -225,14 +191,16 @@ def start_phase_note(round_number, presentation):
     """One explicit line per GUI round; absent or unanalysed values are named."""
     phases = presentation.get('start_phase')
     if not isinstance(phases, dict):
-        return f'Round {round_number} start phase: not analysed (no presentation start_phase evidence)'
+        return f'Round {round_number} phase tracking: not analysed (no presentation start_phase evidence)'
     try:
         parts = [_phase_role(role, phases.get(role) or {'status': 'absent', 'reason': 'not analysed'})
                  for role in ('create', 'join')]
     except (AttributeError, TypeError, ValueError) as error:
-        return f'Round {round_number} start phase: unreadable evidence ({error})'
-    line = f'Round {round_number} start phase: ' + '; '.join(parts)
-    return line + (f' ({SHIFT_ARMED_NOTE})' if 'shift_' in line else '')
+        return f'Round {round_number} phase tracking: unreadable evidence ({error})'
+    line = f'Round {round_number} phase tracking: ' + '; '.join(parts)
+    recorded = any(isinstance(phases.get(role), dict) and phases[role].get('status') == 'recorded'
+                   for role in ('create', 'join'))
+    return line + (f' ({PHASE_NOTE})' if recorded else '')
 
 
 def _milliseconds_or_unknown(value):

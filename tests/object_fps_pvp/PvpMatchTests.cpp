@@ -4,13 +4,17 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <numbers>
+#include <optional>
 #include <thread>
+#include <vector>
 
 namespace {
 fps::pvp::Arena TestArena() {
@@ -466,7 +470,7 @@ TEST_CASE("PvP host orders controls and preserves complete immutable input windo
     CHECK(host.QueueLeave(67, 8));
 }
 
-TEST_CASE("PvP host times an epoch's first window to the tick that executes sequence one") {
+TEST_CASE("PvP host reports movement slack from first receipt and late arrivals as negative") {
     using namespace std::chrono_literals;
     std::chrono::steady_clock::time_point now{};
     fps::pvp::MatchRuntimeHost host(TestArena(), [&] { return now; });
@@ -474,10 +478,9 @@ TEST_CASE("PvP host times an epoch's first window to the tick that executes sequ
     REQUIRE(host.Advance(1.0 / 60).steps == 1);
     auto snapshot = host.TakeSnapshot();
     REQUIRE(snapshot);
-    CHECK_FALSE(snapshot->players[0].epochStartWaitMicros);
+    CHECK_FALSE(snapshot->players[0].movementSlackSequence);
+    CHECK_FALSE(snapshot->players[0].movementSlackMicros);
     now += 3ms;
-    REQUIRE(host.SubmitInput(Window(5, 2, 3))); // Without sequence 1 nothing starts.
-    now += 2ms;
     REQUIRE(host.SubmitInput(Window(5, 1, 3)));
     now += 4ms;
     REQUIRE(host.SubmitInput(Window(5, 1, 4))); // A retransmission keeps the first receipt.
@@ -486,14 +489,46 @@ TEST_CASE("PvP host times an epoch's first window to the tick that executes sequ
     snapshot = host.TakeSnapshot();
     REQUIRE(snapshot);
     REQUIRE(snapshot->players[0].lastResolvedCommand == 1);
-    REQUIRE(snapshot->players[0].epochStartWaitMicros);
-    CHECK(*snapshot->players[0].epochStartWaitMicros == 11000);
+    CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{1});
+    CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{11000});
+    // Each published snapshot carries the smallest sample since the previous one.
     now += 17ms;
     REQUIRE(host.Advance(1.0 / 60).steps == 1);
     snapshot = host.TakeSnapshot();
     REQUIRE(snapshot);
-    CHECK(snapshot->players[0].lastResolvedCommand == 2);
-    CHECK(snapshot->players[0].epochStartWaitMicros == std::optional<std::uint32_t>{11000});
+    CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{2});
+    CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{28000});
+    // Catch-up ticks inside one Advance publish once, with the smaller sample.
+    now += 34ms;
+    REQUIRE(host.Advance(2.0 / 60).steps == 2);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].lastResolvedCommand == 4);
+    CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{4});
+    CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{58000});
+    // Sequence 5 never arrived in time: substituted, no sample.
+    now += 17ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].lastResolvedCommand == 5);
+    CHECK_FALSE(snapshot->players[0].movementSlackSequence);
+    // Its late arrival reports how late it was, once.
+    now += 8ms;
+    REQUIRE(host.SubmitInput(Window(5, 5, 6)));
+    REQUIRE(host.SubmitInput(Window(5, 5, 6)));
+    now += 9ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].lastResolvedCommand == 6);
+    CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{5});
+    CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{-8000});
+    now += 17ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    CHECK_FALSE(snapshot->players[0].movementSlackSequence); // sequence 7 substituted
 
     REQUIRE(host.QueueLeave(2, 5));
     REQUIRE(host.QueueJoin(3, 6));
@@ -502,7 +537,85 @@ TEST_CASE("PvP host times an epoch's first window to the tick that executes sequ
     REQUIRE(snapshot);
     REQUIRE(snapshot->players.size() == 1);
     CHECK(snapshot->players[0].playerId == 6);
-    CHECK_FALSE(snapshot->players[0].epochStartWaitMicros);
+    CHECK_FALSE(snapshot->players[0].movementSlackSequence);
+}
+
+TEST_CASE("PvP match counts resolved, substituted and reset movement for connection quality") {
+    fps::pvp::PvpMatch match(TestArena());
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    CHECK_FALSE(match.GetMovementQuality(2));
+    REQUIRE(match.GetMovementQuality(1));
+    CHECK(match.GetMovementQuality(1)->resolved == 0);
+    REQUIRE(match.SubmitInput(Window(1, 1, 2)));
+    Step(match, 2);
+    auto quality = *match.GetMovementQuality(1);
+    CHECK(quality.resolved == 2);
+    CHECK(quality.substituted == 0);
+    // Without input the cursor runs on Held and then Neutral steps until the
+    // Starvation fuse resets the epoch; the reset counts, the respawn would not.
+    Step(match, 40);
+    quality = *match.GetMovementQuality(1);
+    CHECK(quality.resets == 1);
+    CHECK(quality.substituted + 2 == quality.resolved);
+    CHECK(quality.substituted >= 28);
+}
+
+TEST_CASE("PvP host evicts a player after three failed connection-quality windows") {
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    fps::pvp::MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.QueueJoin(2, 6));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // The joins happen at this tick.
+    REQUIRE(host.TakeSnapshot());
+    std::map<fps::pvp::PlayerId, std::uint64_t> next{{5, 1}, {6, 1}};
+    std::uint64_t latestTick{1};
+    std::map<std::uint64_t, std::uint32_t> failuresAt;
+    std::optional<std::uint64_t> evictedAt;
+    std::vector<fps::pvp::Eviction> evictions;
+    // Both players deliver every command in time. Player 6 reports the latest
+    // snapshot; player 5 one twelve ticks (200 ms) old, as with a high ping.
+    const auto windowTicks = fps::pvp::ConnectionQualityWindowTicks;
+    for (std::uint64_t step = 1; step < 4 * windowTicks + 30; ++step) {
+        for (auto& [player, sequence] : next) {
+            if (evictedAt && player == 5) continue;
+            auto window = Window(player, sequence, sequence, 0);
+            window.observedAuthorityTick = player == 5 ? (latestTick > 12 ? latestTick - 12 : 0) : latestTick;
+            if (window.observedAuthorityTick == 0) window.observedAuthorityTick = latestTick;
+            REQUIRE(host.SubmitInput(window));
+            ++sequence;
+        }
+        now += std::chrono::nanoseconds(16'666'667);
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        for (const auto& eviction : host.TakeEvictions()) {
+            evictions.push_back(eviction);
+            evictedAt = latestTick + 1;
+        }
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        latestTick = snapshot->tick;
+        for (const auto& player : snapshot->players) {
+            if (player.playerId == 6) CHECK(player.connectionQualityFailures == 0);
+            if (player.playerId == 5) failuresAt[snapshot->tick] = player.connectionQualityFailures;
+        }
+        if (evictedAt) CHECK(std::none_of(snapshot->players.begin(), snapshot->players.end(),
+            [](const auto& player) { return player.playerId == 5; }));
+    }
+    // The first window after the join is not judged; each later one fails.
+    CHECK(failuresAt[windowTicks + 10] == 0);
+    CHECK(failuresAt[2 * windowTicks + 10] == 1);
+    CHECK(failuresAt[3 * windowTicks + 10] == 2);
+    REQUIRE(evictions.size() == 1);
+    CHECK(evictions[0].playerId == 5);
+    CHECK(evictions[0].reason == fps::pvp::EvictionReason::HighLatency);
+    CHECK(evictions[0].referenceAgeMillis >= 199);
+    CHECK(evictions[0].referenceAgeMillis <= 201);
+    CHECK(evictions[0].substitutedPermille == 0);
+    CHECK(evictions[0].movementResets == 0);
+    REQUIRE(evictedAt);
+    CHECK(*evictedAt == 4 * windowTicks);
+    CHECK_FALSE(host.SubmitInput(Window(5, next[5], next[5])));
 }
 
 TEST_CASE("PvP host bounds merged ingress and checks commands already queued in authority") {

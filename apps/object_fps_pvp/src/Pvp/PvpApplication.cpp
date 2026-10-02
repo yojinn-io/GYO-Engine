@@ -862,6 +862,17 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             AddText(draws, "Action pending confirmation", {30,136,620*scale,22*scale},14*scale);
         if (!impl_->weaponFeedback.dead && (!impl_->inputCaptured || !impl_->input->Snapshot().windowFocused))
             AddText(draws, "Click inside the window to resume input", {impl_->width*.5F-190,110,480,30});
+        // The Match evicts after ConnectionQualityFailedWindows failed windows in a row.
+        const auto& players = impl_->state.snapshot->players;
+        if (const auto self = std::find_if(players.begin(), players.end(),
+                [&](const auto& player) { return player.playerId == impl_->state.playerId; });
+            self != players.end() && self->connectionQualityFailures > 0 &&
+            self->connectionQualityFailures < ConnectionQualityFailedWindows) {
+            const auto seconds = (ConnectionQualityFailedWindows - self->connectionQualityFailures) *
+                ConnectionQualityWindowTicks / AuthorityTickRate;
+            AddText(draws, "CONNECTION POOR - improve within " + std::to_string(seconds) + "s or you will be removed",
+                {impl_->width*.5F-300,70,620,30});
+        }
     } else {
         const auto composed = impl_->ui.Compose(impl_->Bindings(), impl_->Viewport());
         if (!composed) return impl_->Fail(ExplainUi(composed.error()));

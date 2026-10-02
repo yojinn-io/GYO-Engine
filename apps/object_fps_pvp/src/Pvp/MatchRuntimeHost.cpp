@@ -9,6 +9,14 @@
 namespace fps::pvp {
 namespace {
 constexpr std::size_t kMaximumControls = 64;
+// Bounds the host's own bookkeeping, not gameplay: substituted sequences kept
+// for late arrivals, and input reference ages per connection-quality window.
+constexpr std::size_t kMaximumSubstitutedSequences = 64;
+constexpr std::size_t kMaximumReferenceAgeSamples = 2048;
+constexpr std::int64_t kMaximumReferenceAgeMicros = 1'000'000;
+std::int64_t Micros(std::chrono::steady_clock::duration value) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(value).count();
+}
 }
 
 MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now)
@@ -58,10 +66,37 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     if (merged.commands.size() > MaxFutureCommands) return false;
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
-    if (cursor == 0 && std::find(newlyAccepted.begin(), newlyAccepted.end(), 1) != newlyAccepted.end()) {
-        auto& start = epochStarts_[input.playerId];
-        if (start.movementEpoch != input.movementEpoch || start.lifeGeneration != input.lifeGeneration)
-            start = {input.movementEpoch, input.lifeGeneration, now_(), std::nullopt};
+    // The clock is read only when something new needs a timestamp, so reads
+    // and pure retransmissions leave it untouched.
+    std::optional<std::chrono::steady_clock::time_point> received;
+    const auto at = [&] { if (!received) received = now_(); return *received; };
+    auto& track = slack_[input.playerId];
+    if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration)
+        track = {input.movementEpoch, input.lifeGeneration, cursor, {}, {}, std::nullopt};
+    for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
+    for (const auto& command : input.commands) {
+        // A command whose sequence was already substituted reports how late it came.
+        if (command.sequence > cursor) continue;
+        const auto late = track.substituted.find(command.sequence);
+        if (late == track.substituted.end()) continue;
+        const auto micros = -Micros(at() - late->second);
+        if (!track.pending || micros < track.pending->second) track.pending = std::pair{command.sequence, micros};
+        track.substituted.erase(late);
+    }
+    // Connection quality: the age of the snapshot this window says the Client
+    // applied. A tick older than every retained reference is at least as old
+    // as the oldest one; an unknown newer tick is ignored.
+    if (const auto quality = quality_.find(input.playerId); quality != quality_.end() &&
+        !newlyAccepted.empty() && input.observedAuthorityTick != 0 && !publishedReferences_.empty() &&
+        quality->second.referenceAgesMicros.size() < kMaximumReferenceAgeSamples) {
+        const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
+            [&](const auto& entry) { return entry.tick == input.observedAuthorityTick; });
+        std::optional<std::int64_t> age;
+        if (reference != publishedReferences_.end()) age = Micros(at() - reference->publishedAt);
+        else if (input.observedAuthorityTick < publishedReferences_.front().tick)
+            age = Micros(at() - publishedReferences_.front().publishedAt);
+        if (age) quality->second.referenceAgesMicros.push_back(
+            static_cast<std::uint32_t>(std::clamp<std::int64_t>(*age, 0, kMaximumReferenceAgeMicros)));
     }
     for (const auto sequence : newlyAccepted)
         TraceMovement({.kind = MovementTraceKind::HostAccepted, .playerId = input.playerId,
@@ -133,19 +168,19 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         pendingReset_.reset();
     }
     std::optional<WorldSnapshot> publication;
-    const auto advance = ticker_.Advance(elapsedSeconds, [this, &publication](const Engine::Runtime::TickContext& tick) {
+    // One clock reading per Advance serves slack timing and the publication reference.
+    std::optional<std::chrono::steady_clock::time_point> advancedAt;
+    const auto advance = ticker_.Advance(elapsedSeconds, [this, &publication, &advancedAt](const Engine::Runtime::TickContext& tick) {
         while (!controls_.empty()) {
             const auto control = controls_.front();
             controls_.pop_front();
             ControlResult result{control.requestId, control.playerId, control.kind, true, {}};
             if (control.kind == ControlKind::Join) {
                 result.accepted = match_.Join(control.playerId, result.error);
+                if (result.accepted) quality_[control.playerId] = {match_.TickCount(), {}, {}, false, 0};
             } else {
                 static_cast<void>(match_.Leave(control.playerId));
-                pendingInputs_.erase(control.playerId);
-                pendingActions_.erase(control.playerId);
-                pendingActionAcknowledgements_.erase(control.playerId);
-                epochStarts_.erase(control.playerId);
+                RemovePlayerState(control.playerId);
             }
             results_.push_back(std::move(result));
         }
@@ -200,26 +235,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
             return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
         });
         auto state = match_.Snapshot();
-        for (auto start = epochStarts_.begin(); start != epochStarts_.end();) {
-            const auto player = std::find_if(state.players.begin(), state.players.end(),
-                [&](const auto& candidate) { return candidate.playerId == start->first; });
-            if (player == state.players.end() || player->movementEpoch != start->second.movementEpoch ||
-                player->lifeGeneration != start->second.lifeGeneration) {
-                start = epochStarts_.erase(start);
-                continue;
-            }
-            if (!start->second.waitMicros && player->lastResolvedCommand >= 1) {
-                // Sequence 1 executes on the first tick after its handoff, so
-                // this is the start tick. A late Host inflates it; the Client
-                // ignores waits beyond its bound rather than trusting them.
-                const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(
-                    now_() - start->second.receivedAt).count();
-                start->second.waitMicros = static_cast<std::uint32_t>(std::clamp<std::int64_t>(
-                    wait, 0, MaxEpochStartWaitMicros));
-            }
-            if (start->second.waitMicros) player->epochStartWaitMicros = start->second.waitMicros;
-            ++start;
-        }
+        TrackSlack(state, advancedAt);
+        JudgeConnectionQuality(state);
         // Retaining only unresolved tuples supplies bounded duplicate identity
         // across ingress handoffs. Epoch rotation and Leave discard it here.
         for (auto input = pendingInputs_.begin(); input != pendingInputs_.end();) {
@@ -247,9 +264,13 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
     if (publication) {
         // Only the final owning state enters the IPC handoff. Catch-up states
         // replaced inside this Advance were never published references.
-        publishedReferences_.push_back({publication->tick, now_()});
+        if (!advancedAt) advancedAt = now_();
+        publishedReferences_.push_back({publication->tick, *advancedAt});
         if (publishedReferences_.size() > MaxPublishedShotReferences) publishedReferences_.pop_front();
         snapshot_ = std::move(publication);
+        // Samples reach the Client through published snapshots only; catch-up
+        // states replaced inside this Advance kept accumulating the minimum.
+        for (auto& [playerId, track] : slack_) track.pending.reset();
     }
     if (elapsedSeconds >= 0.1 || advance.droppedSeconds > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .authorityTick = match_.TickCount(),
@@ -288,6 +309,106 @@ std::vector<ControlResult> MatchRuntimeHost::TakeControlResults() {
     return result;
 }
 
+std::vector<Eviction> MatchRuntimeHost::TakeEvictions() {
+    std::lock_guard lock(mutex_);
+    std::vector<Eviction> result;
+    result.swap(evictions_);
+    return result;
+}
+
+void MatchRuntimeHost::RemovePlayerState(PlayerId playerId) {
+    pendingInputs_.erase(playerId);
+    pendingActions_.erase(playerId);
+    pendingActionAcknowledgements_.erase(playerId);
+    slack_.erase(playerId);
+    quality_.erase(playerId);
+}
+
+void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chrono::steady_clock::time_point>& at) {
+    // Sequences resolved by this tick: received earlier means executed
+    // (slack = now - first receipt); otherwise substituted, remembered so a
+    // late arrival can report how late it was. The smallest sample since the
+    // last publication rides on the snapshot.
+    for (auto& player : state.players) {
+        auto found = slack_.find(player.playerId);
+        if (found == slack_.end() || found->second.movementEpoch != player.movementEpoch ||
+            found->second.lifeGeneration != player.lifeGeneration)
+            found = slack_.insert_or_assign(player.playerId, SlackTrack{player.movementEpoch, player.lifeGeneration,
+                player.lastResolvedCommand, {}, {}, std::nullopt}).first;
+        auto& track = found->second;
+        if (player.lastResolvedCommand > track.lastResolved + kMaximumSubstitutedSequences)
+            track.lastResolved = player.lastResolvedCommand - kMaximumSubstitutedSequences;
+        for (auto sequence = track.lastResolved + 1; sequence <= player.lastResolvedCommand; ++sequence) {
+            if (!at) at = now_();
+            const auto receipt = track.receipts.find(sequence);
+            if (receipt != track.receipts.end()) {
+                const auto micros = Micros(*at - receipt->second);
+                if (!track.pending || micros < track.pending->second) track.pending = std::pair{sequence, micros};
+            } else track.substituted[sequence] = *at;
+        }
+        track.lastResolved = (std::max)(track.lastResolved, player.lastResolvedCommand);
+        while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
+            track.receipts.erase(track.receipts.begin());
+        while (track.substituted.size() > kMaximumSubstitutedSequences) track.substituted.erase(track.substituted.begin());
+        if (track.pending) {
+            player.movementSlackSequence = track.pending->first;
+            player.movementSlackMicros = static_cast<std::int32_t>(std::clamp<std::int64_t>(
+                track.pending->second, -MaxMovementSlackMicros, MaxMovementSlackMicros));
+        }
+    }
+    std::erase_if(slack_, [&](const auto& entry) {
+        return std::none_of(state.players.begin(), state.players.end(),
+            [&](const auto& player) { return player.playerId == entry.first; });
+    });
+}
+
+void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
+    const auto tick = match_.TickCount();
+    std::vector<PlayerId> evicted;
+    for (auto& [playerId, track] : quality_) {
+        const auto quality = match_.GetMovementQuality(playerId);
+        if (!quality) continue;
+        if (tick - track.windowStartTick >= ConnectionQualityWindowTicks) {
+            if (track.judged) {
+                auto& ages = track.referenceAgesMicros;
+                std::uint32_t referenceAgeMillis{};
+                if (!ages.empty()) {
+                    const auto middle = ages.begin() + static_cast<std::ptrdiff_t>(ages.size() / 2);
+                    std::nth_element(ages.begin(), middle, ages.end());
+                    referenceAgeMillis = *middle / 1000;
+                }
+                const auto resolved = quality->resolved - track.windowStart.resolved;
+                const auto substituted = quality->substituted - track.windowStart.substituted;
+                const auto resets = quality->resets - track.windowStart.resets;
+                const auto permille = resolved ? static_cast<std::uint32_t>(substituted * 1000 / resolved) : 0U;
+                const bool late = referenceAgeMillis > ConnectionQualityMaximumReferenceAgeMillis;
+                const bool failed = late || permille > ConnectionQualityMaximumSubstitutedPermille || resets > 0;
+                track.failures = failed ? track.failures + 1 : 0;
+                if (track.failures >= ConnectionQualityFailedWindows) {
+                    evictions_.push_back({playerId, late ? EvictionReason::HighLatency : EvictionReason::UnstableInput,
+                        referenceAgeMillis, permille,
+                        static_cast<std::uint32_t>((std::min)(resets, std::uint64_t{1'000'000}))});
+                    evicted.push_back(playerId);
+                }
+            }
+            // The first window after a join covers startup hitches and is not judged.
+            track.judged = true;
+            track.windowStartTick = tick;
+            track.windowStart = *quality;
+            track.referenceAgesMicros.clear();
+        }
+        const auto player = std::find_if(state.players.begin(), state.players.end(),
+            [&](const auto& candidate) { return candidate.playerId == playerId; });
+        if (player != state.players.end()) player->connectionQualityFailures = track.failures;
+    }
+    for (const auto playerId : evicted) {
+        static_cast<void>(match_.Leave(playerId));
+        RemovePlayerState(playerId);
+        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });
+        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });
+    }
+}
+
 std::future<void> MatchRuntimeHost::RequestReset() {
     std::lock_guard lock(mutex_);
     if (pendingReset_) throw std::logic_error("A match reset is already pending");
@@ -304,7 +425,9 @@ void MatchRuntimeHost::ClearState() {
     pendingInputs_.clear();
     pendingActions_.clear();
     pendingActionAcknowledgements_.clear();
-    epochStarts_.clear();
+    slack_.clear();
+    quality_.clear();
+    evictions_.clear();
     publishedReferences_.clear();
     results_.clear();
     snapshot_.reset();

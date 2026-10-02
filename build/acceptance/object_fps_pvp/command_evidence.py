@@ -8,7 +8,7 @@ from pathlib import Path
 import statistics
 
 TICK_SECONDS = 1 / 60
-# MovementStartPhaseMaximumFrameSeconds: the start-phase guard's frame-period cut.
+# 1.1 tick: a frame-pacing statistic (the cut of the former A1 start-phase guard; phase tracking has no cut).
 START_PHASE_FRAME_CUT_SECONDS = TICK_SECONDS * 1.1
 FRAME_INTERVAL_SOURCE = ("Presentation trace events' frame_seconds (the runtime frame-start interval of each presented "
                          "frame) inside the measurement window, per Client trace file; unpresented frames are absent, "
@@ -25,7 +25,7 @@ def finite(value):
 
 
 def frame_interval_statistics(intervals):
-    """Median/P95 (nearest rank)/maximum and the counts beyond the guard's cut and two ticks."""
+    """Median/P95 (nearest rank)/maximum and the counts beyond 1.1 tick and two ticks."""
     ordered = sorted(intervals)
     return {'count': len(ordered), 'median_seconds': statistics.median(ordered) if ordered else None,
             'p95_seconds': nearest_rank(ordered, .95) if ordered else None,

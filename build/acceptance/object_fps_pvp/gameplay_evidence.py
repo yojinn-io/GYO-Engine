@@ -44,7 +44,7 @@ def combat_expected(player, life, tick, decisions, maximum_hp=100, capacity=12, 
 
 
 def start_phase_by_player(client, reseeds=None):
-    """Each Session's per-epoch A1 start-phase record from action-client.json; absence is explicit.
+    """Each Session's per-epoch phase-tracking record from action-client.json; absence is explicit.
     The gameplay run has no latency plan, so measured-epoch fields are explicit nulls. ``reseeds``
     is the shared Client trace's stall reseeds (reseed_evidence), keyed by player, epoch and life."""
     return {str(entry.get('player_id', index)): summarize_start_phase(entry.get('start_phase'), f'action-client.json clients[{index}].start_phase',

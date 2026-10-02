@@ -45,6 +45,13 @@ pb::LifeState LifeForWire(LifeState state) {
     }
     throw std::logic_error("Unmapped Match life state");
 }
+pb::EvictionReason EvictionForWire(EvictionReason reason) {
+    switch(reason) {
+    case EvictionReason::HighLatency: return pb::EVICTION_HIGH_LATENCY;
+    case EvictionReason::UnstableInput: return pb::EVICTION_UNSTABLE_INPUT;
+    }
+    throw std::logic_error("Unmapped eviction reason");
+}
 bool WouldBlock(const asio::error_code& error) {
     return error==asio::error::would_block || error==asio::error::try_again;
 }
@@ -59,7 +66,10 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_vertical_velocity(p.verticalVelocity);state->set_grounded(p.grounded);
         state->set_life_generation(p.lifeGeneration);state->set_life_state(LifeForWire(p.lifeState));
         state->set_life_state_tick(p.lifeStateTick);state->set_respawn_tick(p.respawnTick);
-        if(p.epochStartWaitMicros)state->set_epoch_start_wait_us(*p.epochStartWaitMicros);
+        if(p.movementSlackSequence && p.movementSlackMicros) {
+            state->set_movement_slack_sequence(*p.movementSlackSequence);state->set_movement_slack_us(*p.movementSlackMicros);
+        }
+        state->set_connection_quality_failures(p.connectionQualityFailures);
     }
     for(const auto& p:snapshot.combat) {
         auto* state=out->add_combat();state->set_player_id(p.playerId);
@@ -155,7 +165,7 @@ struct IpcHost::Impl {
                 } else if(message.has_input()) {
                     const auto& p=message.input();
                     if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
-                    PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation()};
+                    PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
                     for(const auto& command:p.commands())
                         window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
                     static_cast<void>(host.SubmitInput(window));
@@ -187,6 +197,19 @@ struct IpcHost::Impl {
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);
                 controls.push_back(wire::Frame(message.SerializeAsString())); joins.erase(found);
+                if(controls.size()>64) return;
+            }
+            for(const auto& eviction:host.TakeEvictions()) {
+                // The Match already removed the player; the Gateway clears its
+                // reservation like a Leave and tells the Client why.
+                pb::RuntimeEnvelope message; message.set_protocol_version(5);
+                auto* evicted=message.mutable_evicted();evicted->set_player_id(eviction.playerId);
+                evicted->set_reason(EvictionForWire(eviction.reason));
+                evicted->set_reference_age_ms(eviction.referenceAgeMillis);
+                evicted->set_substituted_permille(eviction.substitutedPermille);
+                evicted->set_movement_resets(eviction.movementResets);
+                controls.push_back(wire::Frame(message.SerializeAsString()));
+                actionLanes.erase(eviction.playerId);
                 if(controls.size()>64) return;
             }
             if(auto snapshot=host.TakeSnapshot()) {

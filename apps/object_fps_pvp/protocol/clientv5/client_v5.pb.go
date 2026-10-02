@@ -483,8 +483,11 @@ type PlayerInput struct {
 	Commands       []*MovementCommand     `protobuf:"bytes,1,rep,name=commands,proto3" json:"commands,omitempty"`
 	MovementEpoch  uint64                 `protobuf:"varint,2,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
 	LifeGeneration uint64                 `protobuf:"varint,3,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Tick of the latest snapshot the Client applied when it published this
+	// window (0 before any). The Match times connection quality with it.
+	ObservedAuthorityTick uint64 `protobuf:"varint,4,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlayerInput) Reset() {
@@ -538,6 +541,13 @@ func (x *PlayerInput) GetLifeGeneration() uint64 {
 	return 0
 }
 
+func (x *PlayerInput) GetObservedAuthorityTick() uint64 {
+	if x != nil {
+		return x.ObservedAuthorityTick
+	}
+	return 0
+}
+
 type PlayerState struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId                  uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -555,13 +565,20 @@ type PlayerState struct {
 	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.client.v5.LifeState" json:"life_state,omitempty"`
 	LifeStateTick             uint64                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
 	RespawnTick               uint64                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
-	// Host-observed microseconds from receiving this epoch's first command
-	// window to the authority tick that executed sequence 1; absent until then.
-	// Timing observation only (<= 1,000,000); the Client uses it to align its
-	// fixed-step phase once per epoch and Match never reads it.
-	EpochStartWaitUs *uint32 `protobuf:"varint,16,opt,name=epoch_start_wait_us,json=epochStartWaitUs,proto3,oneof" json:"epoch_start_wait_us,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Host timing observation, never simulation input: the smallest movement
+	// slack since the previous published snapshot and its command sequence.
+	// Slack is the executing tick minus the command's first receipt, or minus
+	// the receipt of a command that arrived after its sequence was substituted
+	// (negative). Both or neither; |slack| <= 1,000,000 and
+	// 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
+	// reads it.
+	MovementSlackSequence *uint64 `protobuf:"varint,17,opt,name=movement_slack_sequence,json=movementSlackSequence,proto3,oneof" json:"movement_slack_sequence,omitempty"`
+	MovementSlackUs       *int32  `protobuf:"zigzag32,18,opt,name=movement_slack_us,json=movementSlackUs,proto3,oneof" json:"movement_slack_us,omitempty"`
+	// Consecutive failed 10-second connection-quality windows (0-2). At 3 the
+	// Match evicts the player; the HUD warns while this is non-zero.
+	ConnectionQualityFailures uint32 `protobuf:"varint,19,opt,name=connection_quality_failures,json=connectionQualityFailures,proto3" json:"connection_quality_failures,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *PlayerState) Reset() {
@@ -699,9 +716,23 @@ func (x *PlayerState) GetRespawnTick() uint64 {
 	return 0
 }
 
-func (x *PlayerState) GetEpochStartWaitUs() uint32 {
-	if x != nil && x.EpochStartWaitUs != nil {
-		return *x.EpochStartWaitUs
+func (x *PlayerState) GetMovementSlackSequence() uint64 {
+	if x != nil && x.MovementSlackSequence != nil {
+		return *x.MovementSlackSequence
+	}
+	return 0
+}
+
+func (x *PlayerState) GetMovementSlackUs() int32 {
+	if x != nil && x.MovementSlackUs != nil {
+		return *x.MovementSlackUs
+	}
+	return 0
+}
+
+func (x *PlayerState) GetConnectionQualityFailures() uint32 {
+	if x != nil {
+		return x.ConnectionQualityFailures
 	}
 	return 0
 }
@@ -1363,11 +1394,12 @@ const file_client_v5_proto_rawDesc = "" +
 	"move_right\x18\x03 \x01(\x02R\tmoveRight\x12\x10\n" +
 	"\x03yaw\x18\x04 \x01(\x02R\x03yaw\x12\x14\n" +
 	"\x05pitch\x18\x05 \x01(\x02R\x05pitch\x12%\n" +
-	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\xa4\x01\n" +
+	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\xdc\x01\n" +
 	"\vPlayerInput\x12E\n" +
 	"\bcommands\x18\x01 \x03(\v2).object_fps_pvp.client.v5.MovementCommandR\bcommands\x12%\n" +
 	"\x0emovement_epoch\x18\x02 \x01(\x04R\rmovementEpoch\x12'\n" +
-	"\x0flife_generation\x18\x03 \x01(\x04R\x0elifeGeneration\"\xe4\x04\n" +
+	"\x0flife_generation\x18\x03 \x01(\x04R\x0elifeGeneration\x126\n" +
+	"\x17observed_authority_tick\x18\x04 \x01(\x04R\x15observedAuthorityTick\"\x93\x06\n" +
 	"\vPlayerState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1385,9 +1417,12 @@ const file_client_v5_proto_rawDesc = "" +
 	"\n" +
 	"life_state\x18\r \x01(\x0e2#.object_fps_pvp.client.v5.LifeStateR\tlifeState\x12&\n" +
 	"\x0flife_state_tick\x18\x0e \x01(\x04R\rlifeStateTick\x12!\n" +
-	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x122\n" +
-	"\x13epoch_start_wait_us\x18\x10 \x01(\rH\x00R\x10epochStartWaitUs\x88\x01\x01B\x16\n" +
-	"\x14_epoch_start_wait_us\"\xa3\x01\n" +
+	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x12;\n" +
+	"\x17movement_slack_sequence\x18\x11 \x01(\x04H\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
+	"\x11movement_slack_us\x18\x12 \x01(\x11H\x01R\x0fmovementSlackUs\x88\x01\x01\x12>\n" +
+	"\x1bconnection_quality_failures\x18\x13 \x01(\rR\x19connectionQualityFailuresB\x1a\n" +
+	"\x18_movement_slack_sequenceB\x14\n" +
+	"\x12_movement_slack_usJ\x04\b\x10\x10\x11R\x13epoch_start_wait_us\"\xa3\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12?\n" +
 	"\aplayers\x18\x02 \x03(\v2%.object_fps_pvp.client.v5.PlayerStateR\aplayers\x12=\n" +

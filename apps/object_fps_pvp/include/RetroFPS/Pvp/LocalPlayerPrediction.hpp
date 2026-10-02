@@ -11,17 +11,9 @@
 
 namespace fps::pvp {
 
-// Why an epoch's start phase has no shift applied.
-enum class StartPhaseSkip {
-    // The Host was late for the start tick; its wait does not describe the phase.
-    HostLate,
-    // The frame-rate measure is above the cut (below about 54.5 FPS); the
-    // armed shift is withdrawn and returns once frames recover.
-    FrameRateBelowTick,
-    // A stall reseed rebased the phase the Host timed, while the decision was
-    // pending or after it; nothing returns in this epoch.
-    CancelledByReseed,
-};
+// Phase tracking: Acquiring until the first decision after a seed (epoch
+// start or stall reseed), Settling while a correction slews, Tracking otherwise.
+enum class PhaseTrackingState { Acquiring, Settling, Tracking };
 
 // Read-only presentation diagnostics. These never drive simulation or input.
 struct LocalMovementObservation final {
@@ -43,23 +35,15 @@ struct LocalMovementObservation final {
     bool grounded{};
     std::uint64_t lifeGeneration{};
     LifeState lifeState{LifeState::Alive};
-    // Start-phase alignment for this epoch: the Host-reported wait and the
-    // shift it produced (positive delays the fixed-step phase). The wait is
-    // taken once eight frame intervals describe the frame rate (a late Host's
-    // at once); both stay unset until then.
-    std::optional<double> epochStartWaitSeconds;
-    std::optional<double> startPhaseShiftSeconds;
-    // Why the epoch's start phase has no shift applied; unset while shifted,
-    // while the decision is pending and when nothing was timed. While the
-    // frame-rate measure is above MovementStartPhaseMaximumFrameSeconds (below
-    // about 54.5 FPS, 1.1 tick) the shift is withdrawn (FrameRateBelowTick),
-    // also when the epoch is armed there; it is applied again once the measure
-    // has stayed at or below MovementStartPhaseRestoreFrameSeconds (about
-    // 56.6 FPS, 1.06 tick) for a 32-frame dwell. A stall reseed cancels a
-    // pending or decided start phase (CancelledByReseed): the shift is cleared,
-    // a wait already taken stays, and nothing is taken or restored afterwards.
-    // A late Host's epoch armed nothing and keeps HostLate.
-    std::optional<StartPhaseSkip> startPhaseSkip;
+    PhaseTrackingState phaseTracking{PhaseTrackingState::Acquiring};
+    // Latest decided error: the window percentile of slack beyond the lead and
+    // target for a command sent at its boundary (positive: the phase may move later).
+    std::optional<double> phaseErrorSeconds;
+    // Latest correction started (positive delays the fixed-step phase).
+    std::optional<double> phaseCorrectionSeconds;
+    // Corrections in this epoch and life, and how many late samples forced.
+    std::uint32_t phaseCorrections{};
+    std::uint32_t phaseLateCorrections{};
 };
 
 // Product-local movement prediction. The application samples mouse input once
@@ -81,8 +65,9 @@ public:
 
 private:
     void SeedLead(const PlayerState& authority);
+    void TrackPhase(const PlayerState& authority);
+    void Correct(double error, bool late);
     void UpdatePresentation();
-    [[nodiscard]] std::optional<double> FramePeriodSeconds() const;
 
     // Steps one Advance may run; whole steps beyond them are dropped.
     static constexpr std::uint32_t CatchUpSteps = 5;
@@ -98,26 +83,26 @@ private:
     bool sendPending_{};
     bool freshSeed_{};
     bool pendingJump_{};
-    // The current fixed-step phase began at an epoch-start seed and has not
-    // since been rebased, so the Host's start wait still describes it.
-    bool startPhasePending_{};
-    // Age of the first real step when its window was published (frame quantization).
-    std::optional<double> startWindowLagSeconds_;
+    // Remaining phase correction, slewed into the fixed-step clock.
     double phaseShiftSeconds_{};
-    // The shift armed for this epoch's phase; it is withdrawn while frames run
-    // below about 54.5 FPS (1.1 tick). A stall reseed disarms it.
-    std::optional<double> armedPhaseShiftSeconds_;
-    bool startPhaseWithdrawn_{};
-    // Frames in a row a withdrawn shift has seen frame rates fit to restore it.
-    std::size_t startPhaseRecoveredFrames_{};
-    // Latest positive frame intervals, each limited to two ticks: the start
-    // phase's frame-rate evidence. They describe the display loop, so a reseed
-    // keeps them; Reset() clears them. The window is also the restore dwell.
-    struct FrameIntervals final {
-        std::array<double, 32> seconds{};
-        std::size_t count{};
-        std::size_t next{};
-    } frameIntervals_{};
+    // Positive frame intervals seen, up to the first decision's evidence. They
+    // describe the display loop, so a seed keeps them; Reset() clears them.
+    std::size_t frameEvidence_{};
+    // Each real command's age when its window was published, by sequence.
+    struct CommandAge final {
+        std::uint64_t sequence{};
+        double seconds{};
+    };
+    std::array<CommandAge, 64> commandAges_{};
+    // Error samples of the current phase (slack beyond the lead and target).
+    std::deque<double> phaseSamples_;
+    // Samples count only for commands generated after this sequence: the seed
+    // lead, or the tip when the latest correction finished slewing.
+    std::uint64_t settledAfter_{};
+    std::uint64_t lastSlackSequence_{};
+    std::size_t lateSamples_{};
+    bool settling_{};
+    bool phaseDecided_{};
     LocalMovementObservation observation_{};
 };
 

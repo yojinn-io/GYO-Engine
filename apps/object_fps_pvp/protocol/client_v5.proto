@@ -30,6 +30,9 @@ message PlayerInput {
   repeated MovementCommand commands = 1;
   uint64 movement_epoch = 2;
   uint64 life_generation = 3;
+  // Tick of the latest snapshot the Client applied when it published this
+  // window (0 before any). The Match times connection quality with it.
+  uint64 observed_authority_tick = 4;
 }
 message PlayerState {
   uint64 player_id = 1;
@@ -47,11 +50,20 @@ message PlayerState {
   LifeState life_state = 13;
   uint64 life_state_tick = 14;
   uint64 respawn_tick = 15;
-  // Host-observed microseconds from receiving this epoch's first command
-  // window to the authority tick that executed sequence 1; absent until then.
-  // Timing observation only (<= 1,000,000); the Client uses it to align its
-  // fixed-step phase once per epoch and Match never reads it.
-  optional uint32 epoch_start_wait_us = 16;
+  reserved 16;
+  reserved "epoch_start_wait_us";
+  // Host timing observation, never simulation input: the smallest movement
+  // slack since the previous published snapshot and its command sequence.
+  // Slack is the executing tick minus the command's first receipt, or minus
+  // the receipt of a command that arrived after its sequence was substituted
+  // (negative). Both or neither; |slack| <= 1,000,000 and
+  // 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
+  // reads it.
+  optional uint64 movement_slack_sequence = 17;
+  optional sint32 movement_slack_us = 18;
+  // Consecutive failed 10-second connection-quality windows (0-2). At 3 the
+  // Match evicts the player; the HUD warns while this is non-zero.
+  uint32 connection_quality_failures = 19;
 }
 enum LifeState {
   LIFE_UNSPECIFIED = 0;

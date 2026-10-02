@@ -11,7 +11,7 @@ import (
 )
 
 func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
-	in := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{
+	in := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, ObservedAuthorityTick: 4321, Commands: []*client.MovementCommand{
 		{Sequence: 10, MoveForward: 1, MoveRight: -1, Yaw: 1.2, Pitch: -0.3}, {Sequence: 11},
 	}}
 	bytes, err := proto.Marshal(in)
@@ -19,7 +19,7 @@ func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := DecodeInput(bytes, 7)
-	if err != nil || got.PlayerId != 7 || len(got.Commands) != 2 || got.Commands[0].Sequence != 10 || got.Commands[0].MoveForward != 1 || got.Commands[0].Yaw != in.Commands[0].Yaw || got.Commands[1].Sequence != 11 {
+	if err != nil || got.PlayerId != 7 || got.ObservedAuthorityTick != 4321 || len(got.Commands) != 2 || got.Commands[0].Sequence != 10 || got.Commands[0].MoveForward != 1 || got.Commands[0].Yaw != in.Commands[0].Yaw || got.Commands[1].Sequence != 11 {
 		t.Fatalf("mapping %+v %v", got, err)
 	}
 	for _, commands := range [][]*client.MovementCommand{
@@ -48,7 +48,7 @@ func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
 }
 
 func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
-	in := &client.PlayerInput{LifeGeneration: math.MaxUint64, MovementEpoch: math.MaxUint64}
+	in := &client.PlayerInput{LifeGeneration: math.MaxUint64, MovementEpoch: math.MaxUint64, ObservedAuthorityTick: math.MaxUint64}
 	for i := 0; i < MaxPendingCommands; i++ {
 		in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint64 - MaxPendingCommands + 1 + uint64(i),
 			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2), JumpRequested: true})

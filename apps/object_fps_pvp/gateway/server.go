@@ -400,7 +400,8 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		}
 		// Validate the whole batch before committing any new command. Resolved
 		// steps are obsolete; unacknowledged steps are immutable across packets.
-		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch, LifeGeneration: p.lifeGeneration}
+		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch, LifeGeneration: p.lifeGeneration,
+			ObservedAuthorityTick: in.ObservedAuthorityTick}
 		for _, command := range in.Commands {
 			if command.Sequence <= p.lastResolved {
 				continue
@@ -539,6 +540,22 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			default:
 			}
 		}
+		return
+	}
+	if evicted := e.GetEvicted(); evicted != nil {
+		// The Match already removed the player for sustained poor connection
+		// quality. Clear the reservation like a Leave and tell the Client why.
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		p := s.players[evicted.PlayerId]
+		if p == nil {
+			return
+		}
+		code, message := adapter.EvictionNotice(evicted)
+		log.Printf("player evicted player=%d reason=%s reference_age_ms=%d substituted_permille=%d movement_resets=%d",
+			evicted.PlayerId, code, evicted.ReferenceAgeMs, evicted.SubstitutedPermille, evicted.MovementResets)
+		s.sendControl(p, adapter.Failure, &client.Error{Code: code, Message: message})
+		s.remove(p)
 		return
 	}
 	if problem := e.GetError(); problem != nil {
