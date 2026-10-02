@@ -1,7 +1,7 @@
 # PvP v5 交接
 
 更新：2026-10-02。**第01–03批已完成（第03批2026-10-02結案驗收通過）。**
-**第04批進行中**（2026-10-02使用者啟動；計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`），第05批未開始；未執行長測、未升格v5穩定基線。
+**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），第05批未開始；未執行長測、未升格v5穩定基線。
 
 ## 第04批進度（記錄器，隨工作更新）
 
@@ -10,8 +10,8 @@
 | 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 程式完成（呈現測試19 cases／12616 assertions、突變9／9被抓、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 完成（CTest `-L pvp` 17／17；開發實跑action 30／60／144與capture皆PASS，不計入04-4） |
-| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | L1／L2／L3通過（macOS Intel／Metal）；文件與PR待步幅修正後一併完成 |
-| 04-5 | 步幅：依速度混合Walk_Loop／Jog_Fwd_Loop（使用者2026-10-02決定），各自校準防滑步 | xhigh | 程式完成（呈現測試21 cases、突變5／5、CTest 41／41）；人物短測跨FPS相位一致；待使用者目視步態 |
+| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | L1／L2／L3通過（macOS Intel／Metal）；dev_log與README已更新 |
+| 04-5 | 步幅：依速度混合Walk_Loop／Jog_Fwd_Loop（使用者2026-10-02決定），各自校準防滑步 | xhigh | 完成（呈現測試21 cases、突變5／5、CTest 41／41）；人物短測跨FPS相位一致；使用者目視步態接受（`pvp-v5-batch04-5-gait-manual/`） |
 
 - 開工時發現：GUI probe的`--gpu-driver`只列`auto|d3d12|vulkan`，macOS依賴`auto`選到Metal；第03批的玩法GUI（Space／快射／R／重生）
   是X11/XTest的`run_gameplay_gui.py`，SDL注入的probe沒有對應模式，因此04-3須補一個動作短測模式。
