@@ -86,7 +86,7 @@ Json Decision(const ShotDecision& d){return {{"action_id",d.actionId},{"resolved
 int main(int argc,char** argv){
     std::filesystem::path output;
     try{
-        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool legalShots=false,gameplay=false;
+        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool legalShots=false,gameplay=false;unsigned cycles=1;
         for(int i=1;i<argc;++i){const std::string key=argv[i];Require(i+1<argc,"Missing option value");
             const std::string value=argv[++i];
             if(key=="--gateway")gateway=value;else if(key=="--arena")arenaPath=value;
@@ -95,9 +95,11 @@ int main(int argc,char** argv){
             else if(key=="--fps")fps=std::stoi(value);
             else if(key=="--legal-shots")legalShots=value=="true";
             else if(key=="--gameplay-v5")gameplay=value=="true";
+            else if(key=="--cycles")cycles=static_cast<unsigned>(std::stoul(value));
             else throw std::runtime_error("Unknown option: "+key);
         }
-        if(gameplay)return RunGameplay(gateway,arenaPath,output,fps,drainStallMs);
+        if(gameplay)return RunGameplay(gateway,arenaPath,output,fps,drainStallMs,cycles);
+        Require(cycles==1,"--cycles requires --gameplay-v5 true");
         Require(!output.empty() && std::isfinite(duration) && duration>=5 && duration<=(legalShots?1800:15) &&
             (fps==30||fps==60||fps==144) && drainStallMs>=0 && drainStallMs<=1500,"Invalid action-probe options");
         std::filesystem::create_directories(output);

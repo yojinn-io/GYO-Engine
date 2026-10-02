@@ -2,9 +2,15 @@
 #include "start_phase_record.hpp"
 struct GameplayStep {
     double at{}; unsigned player{}; const char* name{}; ActionKind kind{ActionKind::Shot};
-    std::uint64_t life{1}; ShotRejection expected{ShotRejection::None}; bool target{};
+    std::uint64_t life{1}; ShotRejection expected{ShotRejection::None}; bool target{}; unsigned cycle{};
 };
-std::vector<GameplayStep> GameplayPlan() {
+// One 16-second plan. Player B (index 1) dies once per plan and player A never
+// does, so a repeated plan advances only B's life generation by one per cycle.
+constexpr double GameplayCycleSeconds=16;
+constexpr unsigned GameplayMaximumCycles=113; // 1808 s: the smallest whole-cycle soak covering 1800 s.
+constexpr std::array<std::uint64_t,2> GameplayLivesPerCycle{0,1};
+constexpr std::array GameplayJumpSeconds{.75,1.6,7.2,10.4};
+std::vector<GameplayStep> GameplayCyclePlan() {
     std::vector<GameplayStep> plan;
     for(unsigned n=0;n<12;++n)plan.push_back({.5+n*.25,0,"magazine-shot"});
     plan.push_back({.5,1,"peer-prime"});
@@ -31,6 +37,19 @@ std::vector<GameplayStep> GameplayPlan() {
     std::stable_sort(plan.begin(),plan.end(),[](const auto& a,const auto& b){return a.at<b.at;});
     return plan;
 }
+// A ends a plan with 11 rounds; only when another cycle follows does it reload,
+// so the next cycle's twelfth magazine shot is again legal. One cycle is the
+// unchanged 16-second plan.
+std::vector<GameplayStep> GameplayPlan(unsigned cycles) {
+    std::vector<GameplayStep> plan;
+    for(unsigned cycle=0;cycle<cycles;++cycle){
+        auto steps=GameplayCyclePlan();
+        if(cycle+1<cycles)steps.push_back({14.6,0,"cycle-reload",ActionKind::Reload});
+        for(auto step:steps){step.cycle=cycle;step.at+=cycle*GameplayCycleSeconds;
+            step.life+=cycle*GameplayLivesPerCycle[step.player];plan.push_back(step);}
+    }
+    return plan;
+}
 Json GameplayCombat(const WorldSnapshot& snapshot) {
     Json value=Json::array();
     for(const auto& c:snapshot.combat)value.push_back({{"player_id",c.playerId},{"life_generation",c.lifeGeneration},
@@ -48,15 +67,20 @@ Json GameplayPlayers(const WorldSnapshot& snapshot) {
     return value;
 }
 int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPath,
-                const std::filesystem::path& output,int fps,double drainStallMs) {
-    Require(!output.empty()&&(fps==30||fps==60||fps==144)&&drainStallMs>=0&&drainStallMs<=1500,"Invalid gameplay probe options");
+                const std::filesystem::path& output,int fps,double drainStallMs,unsigned cycles) {
+    Require(!output.empty()&&(fps==30||fps==60||fps==144)&&drainStallMs>=0&&drainStallMs<=1500&&
+        cycles>=1&&cycles<=GameplayMaximumCycles&&(cycles==1||drainStallMs==0),"Invalid gameplay probe options");
     std::filesystem::create_directories(output);
-    const auto plan=GameplayPlan(); Json declared=Json::array();
+    const auto plan=GameplayPlan(cycles); Json declared=Json::array();
+    const double duration=cycles*GameplayCycleSeconds;
     for(std::size_t n=0;n<plan.size();++n){const auto& s=plan[n];declared.push_back({{"ordinal",n},{"at_seconds",s.at},
         {"player_index",s.player},{"name",s.name},{"action_kind",static_cast<int>(s.kind)},
-        {"life_generation",s.life},{"expected_rejection",static_cast<int>(s.expected)},{"target",s.target}});}
-    {std::ofstream file(output/"gameplay-plan.json");file<<Json{{"protocol",5},{"duration_seconds",16},
-        {"actions",declared},{"jump_edges_seconds",{.75,1.6,7.2,10.4}},
+        {"life_generation",s.life},{"expected_rejection",static_cast<int>(s.expected)},{"target",s.target},{"cycle",s.cycle}});}
+    std::vector<double> jumpEdges;
+    for(unsigned cycle=0;cycle<cycles;++cycle)for(const double at:GameplayJumpSeconds)jumpEdges.push_back(cycle*GameplayCycleSeconds+at);
+    {std::ofstream file(output/"gameplay-plan.json");file<<Json{{"protocol",5},{"duration_seconds",duration},
+        {"cycles",cycles},{"cycle_seconds",GameplayCycleSeconds},{"lives_per_cycle",GameplayLivesPerCycle},
+        {"actions",declared},{"jump_edges_seconds",jumpEdges},
         {"fault_policy","Original actions remain denominator; only <=5.6s events may gain InvalidReference/Expired or ammo-dependent terminal outcome under injected faults; later life events retain exact verdict except operations generated inside a declared fault with original reference age >250ms may terminal Expired."}}.dump(2)<<'\n';}
     MovementTraceWriter trace(output/"clients-commands.jsonl");ActionEvidenceWriter evidence(output);
     std::string error;const auto arena=Arena::Load(arenaPath,error);Require(arena.has_value(),error);
@@ -80,9 +104,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     const auto started=Clock::now();auto previous=started,deadline=started;const auto startNs=MovementTraceNowNs();
     const auto period=std::chrono::nanoseconds(1'000'000'000/fps);
     {std::ofstream ready(output/"ready.json");ready<<Json{{"start_ns",startNs},{"player_ids",ids},{"protocol",5}}.dump();}
-    std::size_t nextStep{};std::array<unsigned,2> nextJump{};
-    constexpr std::array jumpAt{.75,1.6,7.2,10.4};
-    while(std::chrono::duration<double>(Clock::now()-started).count()<16){
+    std::size_t nextStep{};std::array<std::size_t,2> nextJump{};
+    while(std::chrono::duration<double>(Clock::now()-started).count()<duration){
         const auto now=Clock::now();const auto ns=MovementTraceNowNs();
         const double age=std::chrono::duration<double>(now-started).count();
         const double elapsed=std::chrono::duration<double>(now-previous).count();previous=now;
@@ -101,7 +124,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             }
             Require(state.error.empty(),state.error);Require(state.phase==ConnectionPhase::Playing&&state.snapshot,"Gameplay Session lost");
             const auto& authority=Player(*state.snapshot,ids[i]);prediction[i].Reconcile(authority,state.snapshot->tick);
-            const bool jump=nextJump[i]<jumpAt.size()&&age>=jumpAt[nextJump[i]];
+            const bool jump=nextJump[i]<jumpEdges.size()&&age>=jumpEdges[nextJump[i]];
             if(jump){evidence.Push({{"kind","jump"},{"time_ns",ns},{"player_id",ids[i]},{"ordinal",nextJump[i]},
                 {"life_generation",authority.lifeGeneration},{"life_state",static_cast<int>(authority.lifeState)}});++nextJump[i];}
             const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
@@ -116,6 +139,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             frame["pending_actions"+suffix]=state.actionTransport.pending;frame["ack"+suffix]=state.actionTransport.acknowledgedThrough;
             frame["retired"+suffix]=state.actionTransport.retiredThrough;frame["snapshot_tick"+suffix]=state.snapshot->tick;
             frame["combat"+suffix]=GameplayCombat(*state.snapshot);frame["players"+suffix]=GameplayPlayers(*state.snapshot);
+            frame["phase_state"+suffix]=static_cast<int>(p.phaseTracking);frame["phase_corrections"+suffix]=p.phaseCorrections;
+            frame["phase_late_corrections"+suffix]=p.phaseLateCorrections;
             maximumRetained[i]=std::max(maximumRetained[i],state.actionTransport.retained);
             maximumUnconsumed[i]=std::max(maximumUnconsumed[i],state.actionTransport.unconsumed);
             Require(p.pendingCommands<=12&&authority.contiguousPendingCommands<=32&&state.actionTransport.retained<=32&&state.actionTransport.unconsumed<=32,"Gameplay window overflow");
@@ -134,7 +159,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         evidence.Push(std::move(frame),true);++frameIndex;deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
     }
     Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",5},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
-        {"player_ids",ids},{"fps",fps},{"duration",16},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
+        {"player_ids",ids},{"fps",fps},{"duration",duration},{"cycles",cycles},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
         {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()}};
     for(unsigned i=0;i<2;++i){const auto state=clients[i].State();const auto& rules=*state.combatRules;
         result["clients"].push_back({{"player_id",ids[i]},{"submitted",submitted[i].size()},{"decisions",decisions[i].size()},

@@ -46,11 +46,13 @@
   幀抖動下會在本機被擋（第03批「冷卻點擊不排隊」設計）。權威的10 Tick冷卻本身正確。
 - 需決定：本機閘門是否以估計的權威Tick補償落差，或維持保守；屬操作手感，與防止送出必被拒絕的請求之間取捨。
 
-### 5. 驗收工具清理：`weapon_short`
+### 5. 驗收工具清理：`weapon_short`與v4合法射擊長測
 
 - 現況：`build/acceptance/object_fps_pvp/weapon_short.hpp`的觀察方仍檢查v4「HP=0仍可移動與射擊」，在v5必然失敗；
   其v5涵蓋已由第04批的動作短測（`run_action_short.py`）取代。
-- 需決定：刪除該模式或改寫為v5語意。
+- 同類（v5第05批05-1發現）：`run_action_legal.py`與probe的`--legal-shots`模式、`action_evidence.analyze_legal`假設
+  「全部接受、無限彈藥」，v5第13發起即為空彈拒絕；v5長測已改用`run_gameplay_soak.py`。
+- 需決定：刪除這些模式或改寫為v5語意。
 
 ### 6. 自己死亡時的持槍手臂（待使用者釐清）
 
