@@ -286,12 +286,41 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn('--product "$TRAIN_PRODUCT"', registry)
         self.assertIn("TRAIN_PRODUCT: ${{ inputs.product }}", registry)
 
+    def test_release_form_carries_the_real_device_evidence_reference_to_the_draft(self):
+        # Optional in the form: the helper decides from the train's declared
+        # items whether a reference is required, so tools never need one.
+        dispatch = top_level_block(self.release, "on")
+        self.assertRegex(dispatch, r"(?m)^      l4_evidence:\n        description: .+\n        required: false\n"
+                                   r"        default: ''\n        type: string$")
+        prepare = job_block(self.release, "prepare")
+        draft = job_block(self.release, "draft")
+        # prepare reads the input from the event file and fails before any build.
+        self.assertIn('--event-path "$GITHUB_EVENT_PATH"', run_script(step_with(prepare, "id: source")))
+        self.assertIn("l4_evidence: ${{ steps.source.outputs.l4_evidence }}", prepare)
+        record = step_with(prepare, "name: Record the release candidate")
+        self.assertEqual({key: value for key, value in env_block(record, 8).items() if key.startswith("L4_")},
+                         {"L4_ITEMS": "${{ steps.source.outputs.l4_items }}",
+                          "L4_EVIDENCE": "${{ steps.source.outputs.l4_evidence }}"})
+        step = step_with(draft, "id: draft")
+        self.assertEqual(env_block(step, 8)["L4_EVIDENCE"], "${{ needs.prepare.outputs.l4_evidence }}")
+        # The = form keeps a value starting with '-' from being read as an option.
+        self.assertIn('--l4-evidence="$L4_EVIDENCE"', run_script(step))
+        self.assertIn("real-device (L4)", run_script(step_with(draft, "name: Show the draft")))
+        # Free text reaches scripts only through the environment, never as an expression.
+        self.assertNotIn("${{ inputs.l4_evidence }}", self.release)
+        for job in (prepare, draft):
+            for item in steps_of(job):
+                if re.search(r"(?m)^        run: \|", item):
+                    self.assertNotIn("l4_evidence }}", run_script(item))
+        # Snapshots never carry real-device evidence.
+        self.assertNotIn("l4", job_block(self.quick, "snapshot").lower())
+
     def test_workflow_commands_match_the_release_helper_cli(self):
         # Ask the real CLI parser, without entering any network/mutation path.
         for command, required_options in (
             ("prepare", ("--event-path", "--event-name", "--commit", "--ref", "--output")),
             ("draft", ("--train", "--tag", "--commit", "--prerelease", "--package-directory",
-                       "--service-directory", "--output")),
+                       "--service-directory", "--l4-evidence", "--output")),
             ("snapshot", ("--train", "--commit", "--package-directory", "--service-directory", "--output")),
         ):
             with self.subTest(command=command):

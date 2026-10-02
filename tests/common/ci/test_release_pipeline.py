@@ -6,6 +6,7 @@ import hashlib
 import http.client
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -254,13 +255,14 @@ class PrepareTests(unittest.TestCase):
         return {"inputs": {"train": train, "version": version, "prerelease": prerelease}}
 
     def prepare(self, event=None, git=None, ref="refs/heads/feature/rendering", name="workflow_dispatch"):
-        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit(), trains=self.TRAINS)
+        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit(), trains=self.TRAINS,
+                             evidence=lambda train: ())
 
     def test_manual_branch_request_is_bound_to_event_commit(self):
         git = FakeGit()
         self.assertEqual(self.prepare(git=git),
                          {"tag": f"{APP}-v1.2.3", "commit": COMMIT, "prerelease": "false",
-                          "train": APP, "product": APP})
+                          "train": APP, "product": APP, "l4_items": "", "l4_evidence": ""})
         self.assertIn(("check-ref-format", "refs/heads/feature/rendering"), git.calls)
         self.assertFalse(any(args[0] == "merge-base" for args in git.calls))
 
@@ -384,7 +386,60 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
                          f"tag=sample_app-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
-                         "train=sample_app\nproduct=sample_app\n")
+                         "train=sample_app\nproduct=sample_app\nl4_items=\nl4_evidence=\n")
+
+    def test_prepare_cli_requires_the_declared_release_evidence(self):
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        registry, contracts = self.work / "projects.csv", self.work / "contracts"
+        registry.write_text("name,description,version,enabled,windows,linux,macos\n"
+                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
+        contract = contracts / "build/acceptance/sample_app/checks.json"
+        contract.parent.mkdir(parents=True)
+        contract.write_text(json.dumps({"version": 1, "checks": [], "release_evidence": [
+            {"name": "visible_latency", "description": "Timed GUI latency run", "platforms": ["windows-x64"]}]}),
+            encoding="utf-8")
+
+        def prepare(inputs):
+            event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
+            output_path.unlink(missing_ok=True)
+            event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+                                                         "prerelease": "false", **inputs}}), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
+                "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch",
+                "--ref", "refs/heads/main", "--commit", commit, "--output", str(output_path),
+                "--registry", str(registry), "--acceptance-root", str(contracts),
+            ], text=True, capture_output=True, check=False)
+            return result, output_path
+
+        for inputs in ({}, {"l4_evidence": ""}):
+            with self.subTest(inputs=inputs):
+                result, output_path = prepare(inputs)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("requires real-device (L4) release evidence for: visible_latency", result.stderr)
+                self.assertFalse(output_path.exists())
+        result, output_path = prepare({"l4_evidence": "https://github.com/example/repo/discussions/5"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(output_path.read_text(encoding="utf-8").endswith(
+            "l4_items=visible_latency\nl4_evidence=https://github.com/example/repo/discussions/5\n"))
+        # A leading dash fails at prepare, before the release build runs.
+        result, output_path = prepare({"l4_evidence": "-issue#12"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("l4_evidence must not start with '-'", result.stderr)
+        self.assertFalse(output_path.exists())
+
+    def test_draft_cli_reads_a_dash_value_in_the_workflow_form(self):
+        # The workflow passes --l4-evidence=VALUE, which argparse never reads
+        # as another option; the mismatched commit stops before any API call.
+        result = subprocess.run([
+            sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
+            "draft", "--train", "sample_app", "--tag", "sample_app-v1.0.0", "--commit", "0" * 40,
+            "--prerelease", "false", "--package-directory", str(self.work), "--service-directory", str(self.work),
+            "--l4-evidence=-issue#12", "--output", str(self.work / "outputs.txt"),
+        ], text=True, capture_output=True, check=False, env={**os.environ, "GH_TOKEN": "", "GH_REPO": ""})
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("expected one argument", result.stderr)
+        self.assertIn("does not match the selected source commit", result.stderr)
 
     def test_missing_platform_and_unexpected_file_fail(self):
         self.write_packages(packages()[:2])

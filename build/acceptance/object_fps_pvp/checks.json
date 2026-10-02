@@ -10,5 +10,17 @@
       "platforms": ["windows-x64", "linux-x64", "macos-arm64", "macos-x64"],
       "gpu": false
     }
+  ],
+  "release_evidence": [
+    {
+      "name": "gui_visible_latency",
+      "description": "Timed GUI visible-latency short run (run_timing.py --gui --short) on a real display, observer window unobstructed: visible crossing P50 <= 50 ms and P95 <= 80 ms; rerun rule in docs/object_fps_pvp/plans/v5/fix/06",
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64", "macos-x64"]
+    },
+    {
+      "name": "physical_gpu_visual",
+      "description": "Client on a physical GPU: start, join a match, move and fire; scene, players and effects render without missing geometry, shader or presentation errors",
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64", "macos-x64"]
+    }
   ]
 }

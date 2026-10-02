@@ -25,7 +25,8 @@ from release_support import (PLATFORMS, Package, ReleaseError, archive_name, che
                              validate_commit, validate_item, validate_tag_name, validate_expected_pairs)
 from release_channels import (SNAPSHOT_KEEP, Train, derive_trains, latest_other_snapshot, parse_release_tag,
                               parse_snapshot_tag, prepare_event, render_notes, resolve_train,
-                              select_expired_snapshots, select_orphan_snapshot_tags, snapshot_tag)
+                              select_expired_snapshots, select_orphan_snapshot_tags, snapshot_tag,
+                              train_release_evidence, validate_evidence_reference)
 from app_registry import export_registry, export_tools
 
 
@@ -515,6 +516,8 @@ def main() -> None:
     registry.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
     registry.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
     registry.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
+    registry.add_argument("--acceptance-root", type=Path,
+                          help="Root holding build/acceptance/<owner>/checks.json, for isolated validation")
     prepare = commands.add_parser("prepare", parents=[registry])
     prepare.add_argument("--event-path", type=Path, required=True)
     prepare.add_argument("--event-name", required=True)
@@ -528,6 +531,8 @@ def main() -> None:
     draft.add_argument("--prerelease", choices=("true", "false"), required=True)
     draft.add_argument("--package-directory", type=Path, required=True)
     draft.add_argument("--service-directory", type=Path, required=True)
+    draft.add_argument("--l4-evidence", default="",
+                       help="Real-device (L4) evidence reference; required when the train declares items")
     draft.add_argument("--output", type=Path, required=True)
     snapshot = commands.add_parser("snapshot", parents=[registry])
     snapshot.add_argument("--train", required=True)
@@ -543,7 +548,8 @@ def main() -> None:
         trains = derive_trains(export_registry(args.registry))
         if args.command == "prepare":
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
-            result = prepare_event(args.event_name, event, args.commit, args.ref, trains=trains)
+            result = prepare_event(args.event_name, event, args.commit, args.ref, trains=trains,
+                                   evidence=lambda train: train_release_evidence(train, args.acceptance_root))
         else:
             from release_support import git
             if git("rev-parse", "HEAD") != args.commit:
@@ -552,9 +558,15 @@ def main() -> None:
             profile = "release" if args.command == "draft" else "quick"
             items, expected_services = load_train_archives(train, args.commit, args.package_directory,
                                                            args.service_directory, selected_tools, profile)
+            # A formal draft re-derives the required L4 items from the fixed
+            # checkout; snapshots never carry real-device evidence.
+            evidence = train_release_evidence(train, args.acceptance_root) if args.command == "draft" else ()
+            reference = (validate_evidence_reference(train, evidence, args.l4_evidence)
+                         if args.command == "draft" else "")
             notes = render_notes(train=train, commit=args.commit, profile=profile,
                                  descriptions=[describe_item(item, profile) for item in items],
-                                 snapshot=args.command == "snapshot")
+                                 snapshot=args.command == "snapshot", evidence=evidence,
+                                 evidence_reference=reference)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
             if args.command == "draft":
                 parse_release_tag(train, args.tag)

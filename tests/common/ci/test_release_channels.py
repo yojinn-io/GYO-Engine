@@ -19,12 +19,14 @@ from workspace import TemporaryDirectory
 
 import go_checks
 from go_checks import SERVICE_RECORD_NAME, Service
-from release_channels import (SNAPSHOT_KEEP, TOOLS_TRAIN, TRIAL_LABEL, Train, derive_trains, parse_release_tag,
-                              parse_snapshot_tag, prepare_event, published_snapshots, release_tag, render_notes, resolve_train,
+from release_channels import (EVIDENCE_REFERENCE_LIMIT, SNAPSHOT_KEEP, TOOLS_TRAIN, TRIAL_LABEL, Train, derive_trains,
+                              parse_release_tag, train_release_evidence, validate_evidence_reference,
+                              parse_snapshot_tag, prepare_event, published_snapshots, release_tag, render_evidence, render_notes, resolve_train,
                               latest_other_snapshot, select_expired_snapshots, select_orphan_snapshot_tags, select_trial, snapshot_tag,
                               train_matrix, verification_level)
 from release_pipeline import ApiError, prepare_draft, publish_snapshot
-from release_support import (PLATFORMS, ReleaseError, checksum_document, describe_item, load_packages, load_services,
+from release_support import (PLATFORMS, EvidenceItem, ReleaseError, checksum_document, describe_item,
+                             load_packages, load_release_evidence, load_services, validate_release_evidence,
                              validate_service_archive)
 from test_release_pipeline import (APP, COMMIT, OTHER_COMMIT, FakeApi, FakeGit, evidence, manifest, package)
 
@@ -173,9 +175,10 @@ class VersionAndTagTests(unittest.TestCase):
     def test_prepare_event_derives_the_tag_and_product_per_train(self):
         def prepare(train, version):
             event = {"inputs": {"train": train, "version": version, "prerelease": False}}
-            return prepare_event("workflow_dispatch", event, COMMIT, "refs/heads/master", FakeGit(), trains=self.trains)
+            return prepare_event("workflow_dispatch", event, COMMIT, "refs/heads/master", FakeGit(), trains=self.trains,
+                                 evidence=lambda train: ())
         self.assertEqual(prepare("tools", "v2026.10.1"), {"tag": "tools-v2026.10.1", "commit": COMMIT,
-            "prerelease": "false", "train": "tools", "product": "toolchain"})
+            "prerelease": "false", "train": "tools", "product": "toolchain", "l4_items": "", "l4_evidence": ""})
         self.assertEqual(prepare(SECOND, "v1.0.0")["tag"], f"{SECOND}-v1.0.0")
         for train, version in (("tools", "v1.0.0"), (APP, "v2026.10"), ("toolchain", "v2026.10.1"), (None, "v1.0.0")):
             with self.subTest(train=train, version=version), self.assertRaises(ReleaseError):
@@ -183,7 +186,8 @@ class VersionAndTagTests(unittest.TestCase):
         # An existing tag must already point at the selected commit; tags never move.
         with self.assertRaises(ReleaseError):
             prepare_event("workflow_dispatch", {"inputs": {"train": APP, "version": "v1.0.0"}}, COMMIT,
-                          "refs/heads/master", FakeGit(tag=OTHER_COMMIT), trains=self.trains)
+                          "refs/heads/master", FakeGit(tag=OTHER_COMMIT), trains=self.trains,
+                          evidence=lambda train: ())
 
     def test_snapshot_tags_are_dated_by_the_commit_and_never_shared(self):
         tag = snapshot_tag(self.game, COMMIT, COMMITTED_AT)
@@ -525,6 +529,176 @@ class NotesTests(unittest.TestCase):
         self.assertIn("not code-signed", notes)
         formal = render_notes(train=train, commit=COMMIT, profile="release", descriptions=descriptions, snapshot=False)
         self.assertNotIn("snapshot", formal)
+
+
+def write_contract(root: Path, owner: str, release_evidence=None, *, raw=None) -> Path:
+    """A synthetic owner acceptance contract; CMake reads only its checks."""
+    path = root / "build/acceptance" / owner / "checks.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document = {"version": 1, "checks": []}
+    if release_evidence is not None:
+        document["release_evidence"] = release_evidence
+    path.write_text(json.dumps(document) if raw is None else raw, encoding="utf-8")
+    return path
+
+
+def evidence_entry(name="visible_latency", platforms=None, description="Timed GUI latency run on a real display"):
+    return {"name": name, "description": description, "platforms": list(PLATFORMS) if platforms is None else platforms}
+
+
+class ReleaseEvidenceTests(unittest.TestCase):
+    """Manual real-device (L4) evidence that formal game releases reference."""
+
+    def setUp(self):
+        self.trains = derive_trains(REGISTRY_PAIRS)
+        self.directory = TemporaryDirectory()
+        self.root = Path(self.directory.__enter__())
+        self.addCleanup(self.directory.__exit__, None, None, None)
+
+    def prepare(self, train, reference=None, *, evidence=None):
+        inputs = {"train": train, "version": "v2026.10.1" if train == TOOLS_TRAIN else "v1.0.0", "prerelease": False}
+        if reference is not None:
+            inputs["l4_evidence"] = reference
+        return prepare_event("workflow_dispatch", {"inputs": inputs}, COMMIT, "refs/heads/master", FakeGit(),
+                             trains=self.trains,
+                             evidence=evidence or (lambda selected: train_release_evidence(selected, self.root)))
+
+    def test_schema_accepts_declared_items_in_platform_order_and_no_section(self):
+        document = {"version": 1, "checks": [], "release_evidence": [
+            evidence_entry(), evidence_entry("gpu_visual", ["macos-x64", "linux-x64"], "Physical GPU visual check")]}
+        self.assertEqual(validate_release_evidence(document), (
+            EvidenceItem("visible_latency", "Timed GUI latency run on a real display", tuple(PLATFORMS)),
+            EvidenceItem("gpu_visual", "Physical GPU visual check", ("linux-x64", "macos-x64"))))
+        self.assertEqual(validate_release_evidence({"version": 1, "checks": []}), ())
+        self.assertEqual(validate_release_evidence({"release_evidence": []}), ())
+
+    def test_schema_rejects_malformed_items(self):
+        invalid = [
+            [],
+            {"release_evidence": {}},
+            {"release_evidence": ["visible_latency"]},
+            {"release_evidence": [{**evidence_entry(), "required": True}]},
+            {"release_evidence": [{key: value for key, value in evidence_entry().items() if key != "platforms"}]},
+            {"release_evidence": [evidence_entry(), evidence_entry()]},
+            {"release_evidence": [evidence_entry("Visible-Latency")]},
+            {"release_evidence": [evidence_entry(description="")]},
+            {"release_evidence": [evidence_entry(description=" padded")]},
+            {"release_evidence": [evidence_entry(description="two\nlines")]},
+            {"release_evidence": [evidence_entry(description="x" * 301)]},
+            {"release_evidence": [evidence_entry(platforms=[])]},
+            {"release_evidence": [evidence_entry(platforms=["linux-arm64"])]},
+            {"release_evidence": [evidence_entry(platforms=["linux-x64", "linux-x64"])]},
+        ]
+        for document in invalid:
+            with self.subTest(document=document), self.assertRaises(ReleaseError):
+                validate_release_evidence(document)
+
+    def test_owner_contract_is_read_from_its_own_acceptance_directory(self):
+        self.assertEqual(load_release_evidence(APP, self.root), ())
+        write_contract(self.root, APP, [evidence_entry()])
+        self.assertEqual([item.name for item in load_release_evidence(APP, self.root)], ["visible_latency"])
+        self.assertEqual(load_release_evidence(SECOND, self.root), ())
+        write_contract(self.root, SECOND, raw="{not json")
+        with self.assertRaises(ReleaseError):
+            load_release_evidence(SECOND, self.root)
+
+    def test_game_train_requires_its_declared_items_on_its_platforms_only(self):
+        write_contract(self.root, SECOND, [evidence_entry(), evidence_entry("linux_gpu", ["linux-x64"])])
+        # SECOND has no Linux row, so the Linux-only item does not apply to it.
+        required = train_release_evidence(self.trains[SECOND], self.root)
+        self.assertEqual(required, (EvidenceItem("visible_latency", "Timed GUI latency run on a real display",
+                                                 ("windows-x64", "macos-arm64")),))
+        self.assertEqual(train_release_evidence(self.trains[APP], self.root), ())
+
+    def test_tools_train_never_requires_evidence(self):
+        for owner in ("toolchain", "tools"):
+            write_contract(self.root, owner, [evidence_entry()])
+        self.assertEqual(train_release_evidence(self.trains[TOOLS_TRAIN], self.root), ())
+        self.assertEqual(self.prepare(TOOLS_TRAIN)["l4_items"], "")
+        self.assertEqual(self.prepare(TOOLS_TRAIN, "  ")["l4_evidence"], "")
+        with self.assertRaisesRegex(ReleaseError, f"l4_evidence is not used by train {TOOLS_TRAIN}"):
+            self.prepare(TOOLS_TRAIN, "discussion #9")
+
+    def test_prepare_fails_clearly_without_a_reference_for_a_declaring_game(self):
+        write_contract(self.root, APP, [evidence_entry(), evidence_entry("gpu_visual")])
+        for reference in (None, "", "   "):
+            with self.subTest(reference=reference), self.assertRaisesRegex(
+                    ReleaseError, rf"Train {APP} requires real-device \(L4\) release evidence for: "
+                                  r"visible_latency, gpu_visual.*l4_evidence"):
+                self.prepare(APP, reference)
+        result = self.prepare(APP, "  https://github.com/example/repo/issues/42  ")
+        self.assertEqual((result["l4_items"], result["l4_evidence"]),
+                         ("visible_latency,gpu_visual", "https://github.com/example/repo/issues/42"))
+        # A game without declared items needs no reference and accepts none.
+        self.assertEqual(self.prepare(SECOND)["l4_evidence"], "")
+        with self.assertRaisesRegex(ReleaseError, f"l4_evidence is not used by train {SECOND}"):
+            self.prepare(SECOND, "https://github.com/example/repo/issues/42")
+
+    def test_evidence_reference_is_one_bounded_line(self):
+        train = self.trains[APP]
+        items = (EvidenceItem("visible_latency", "d", ("linux-x64",)),)
+        self.assertEqual(validate_evidence_reference(train, items, "discussion #7"), "discussion #7")
+        self.assertEqual(validate_evidence_reference(train, (), None), "")
+        self.assertEqual(validate_evidence_reference(train, items, "issue-#1"), "issue-#1")
+        with self.assertRaisesRegex(ReleaseError, "not used by train"):
+            validate_evidence_reference(train, (), "artifact link")
+        for reference in ("issue\n#1", "issue\r#1", "a\tb", "x" * (EVIDENCE_REFERENCE_LIMIT + 1), 42,
+                          "-issue#12", "--see-#12", "  -x"):
+            with self.subTest(reference=reference), self.assertRaises(ReleaseError):
+                validate_evidence_reference(train, items, reference)
+        with self.assertRaises(ReleaseError):
+            self.prepare(APP, "line\ninjected=true", evidence=lambda selected: items)
+
+    def test_formal_notes_carry_a_checklist_and_snapshots_never_do(self):
+        train = self.trains[APP]
+        descriptions = [describe_item(quick_package(platform), "quick") for platform in PLATFORMS]
+        items = (EvidenceItem("visible_latency", "Timed GUI latency run", ("linux-x64", "macos-x64")),
+                 EvidenceItem("gpu_visual", "Physical GPU visual check", ("windows-x64",)))
+        notes = render_notes(train=train, commit=COMMIT, profile="release", descriptions=descriptions,
+                             snapshot=False, evidence=items, evidence_reference="https://example.test/issues/42")
+        self.assertIn("### Real-device evidence (L4)", notes)
+        self.assertIn("Evidence: <https://example.test/issues/42>\n", notes)
+        self.assertIn("the publisher confirms every item", notes)
+        self.assertIn("- [ ] `visible_latency` (linux-x64, macos-x64): Timed GUI latency run\n", notes)
+        self.assertIn("- [ ] `gpu_visual` (windows-x64): Physical GPU visual check\n", notes)
+        self.assertLess(notes.index("### CI verification"), notes.index("### Real-device evidence (L4)"))
+        plain = render_notes(train=train, commit=COMMIT, profile="release", descriptions=descriptions, snapshot=False)
+        self.assertNotIn("Real-device", plain)
+        with self.assertRaises(ReleaseError):
+            render_notes(train=self.trains[TOOLS_TRAIN], commit=COMMIT, profile="release",
+                         descriptions=descriptions, snapshot=False, evidence_reference="discussion #9")
+        snapshot = render_notes(train=train, commit=COMMIT, profile="quick", descriptions=descriptions, snapshot=True)
+        self.assertNotIn("Real-device", snapshot)
+        for options in ({"evidence": items}, {"evidence_reference": "x"}):
+            with self.subTest(options=options), self.assertRaises(ReleaseError):
+                render_notes(train=train, commit=COMMIT, profile="quick", descriptions=descriptions, snapshot=True,
+                             **options)
+
+    def test_evidence_reference_renders_as_inert_markdown(self):
+        # Only the person running the workflow writes this field; it must not
+        # add links, images, HTML, mentions or cross-references to the notes.
+        item = (EvidenceItem("visible_latency", "d", ("linux-x64",)),)
+        cases = {
+            "https://github.com/example/repo/issues/42": "<https://github.com/example/repo/issues/42>",
+            "see #12 by @someone": "`see #12 by @someone`",
+            "[proof](https://evil.test) ![x](https://evil.test/x.png)":
+                "`[proof](https://evil.test) ![x](https://evil.test/x.png)`",
+            "<img src=x onerror=alert(1)>": "`<img src=x onerror=alert(1)>`",
+            "https://example.test/<b>": "`https://example.test/<b>`",
+            "https://example.test/a b": "`https://example.test/a b`",
+            "run `check` then ``more``": "``` run `check` then ``more`` ```",
+            "`quoted`": "`` `quoted` ``",
+        }
+        for reference, rendered in cases.items():
+            with self.subTest(reference=reference):
+                lines = render_evidence(item, reference)
+                self.assertIn(f"Evidence: {rendered}", lines)
+
+    def test_every_owner_contract_declares_valid_release_evidence(self):
+        # Iterates whatever owners exist; holds with none, assumes no product.
+        for path in sorted((ROOT / "build/acceptance").glob("*/checks.json")):
+            with self.subTest(owner=path.parent.name):
+                load_release_evidence(path.parent.name)
 
 
 class SnapshotApi(FakeApi):
