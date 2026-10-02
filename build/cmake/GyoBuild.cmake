@@ -23,6 +23,9 @@ elseif(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update populated dependency sources")
+# The engine-layer Go gateway framework is recorded in every configuration, so
+# its Go checks run even when no game is registered.
+gyo_register_go_module(OWNER engine DIRECTORY "${GYO_REPOSITORY_ROOT}/services/gyo_gateway")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/third_party" third_party)
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
@@ -73,7 +76,8 @@ if(TARGET gyo_shader_host_tools)
     set(_gyo_shader_host_tools true)
 endif()
 _gyo_registry_json_quote("${CMAKE_BUILD_TYPE}" _gyo_build_configuration)
-file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools}}\n")
+gyo_go_build_record(_gyo_go_modules _gyo_go_services)
+file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools},\"go_modules\":${_gyo_go_modules},\"go_services\":${_gyo_go_services}}\n")
 function(gyo_label_tests directory)
     # A standalone tool wrapper adds the repository, which reuses the tool's
     # source directory. Source-based SUBDIRECTORIES lookup can revisit that

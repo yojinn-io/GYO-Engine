@@ -51,11 +51,7 @@ gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES $
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)
 add_dependencies(${match} "gyo_${GYO_APP_ID}--content")
 
-# Go remains optional for normal C++ builds, and is staged outside native archives.
-set(GYO_GO_EXECUTABLE go CACHE STRING "Go executable used by explicit gateway build targets")
-set(gateway_stage "${GYO_OUTPUT_ROOT}/_services/${GYO_APP_ID}/bin")
-add_custom_target("gyo_${GYO_APP_ID}-gateway"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${gateway_stage}"
-    COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "${GYO_GO_EXECUTABLE}" build
-        -o "${gateway_stage}/gyo_${GYO_APP_ID}-gateway${CMAKE_EXECUTABLE_SUFFIX}" ./gateway/cmd
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+# The Go gateway is this game's service: Go stays optional for native builds,
+# the host build is staged outside native archives and CI cross-builds the
+# declared platforms (no macOS gateway).
+gyo_app_add_go_service(gateway PACKAGE ./gateway/cmd PLATFORMS linux-x64 windows-x64)

@@ -233,6 +233,56 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+      # Go work follows the native package, so a Go failure never skips product
+      # acceptance. The toolchain row verifies the engine-layer modules; a
+      # product row verifies its own module (release only, like its C++ tests,
+      # since L1 checks every module) and archives its declared services. Only
+      # Linux provisions Go: services are cross-built there for every platform.
+      - name: Plan this row's recorded Go modules and services
+        id: go_plan
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}
+        run: |
+          python build/ci/common/go_checks.py plan --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Provision the Go version the recorded modules declare
+        id: go_setup
+        if: ${{ !cancelled() && steps.go_plan.outputs.has_go_modules == 'true' && (inputs.profile == 'release' || matrix.kind == 'toolchain' || steps.go_plan.outputs.has_go_services == 'true') }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ steps.go_plan.outputs.go_version_file }}
+          cache: true
+          cache-dependency-path: ${{ steps.go_plan.outputs.go_dependency_files }}
+
+      - name: Vet, test and race-test this row's Go modules
+        id: go
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' && (inputs.profile == 'release' || matrix.kind == 'toolchain') }}
+        run: |
+          python build/ci/common/go_checks.py check --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --race 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-checks.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Cross-build and archive this product's Go services
+        id: go_services
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' && steps.go_plan.outputs.has_go_services == 'true' }}
+        run: |
+          python build/ci/common/go_checks.py build --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output-dir "build/target/_build/$env:PRESET/go-services" --revision $env:SOURCE_COMMIT 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-services.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Service archives are CI artifacts only. Their artifact name stays
+      # outside the gyo-package-* pattern that release draft preparation reads.
+      - name: Upload this product's Go service archives
+        if: ${{ !cancelled() && steps.go_services.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gyo-service-${{ matrix.product }}
+          overwrite: true
+          path: |
+            build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz
+            build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
       # Statistics are diagnostics only and never decide the job result.
       # Packaging jobs restore the compiler cache but never save it.
       - name: Record compiler cache statistics
@@ -270,6 +320,8 @@ jobs:
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
           GPU_RESULT: ${{ steps.gpu_smoke.outcome }}
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
+          GO_RESULT: ${{ steps.go.outcome }}
+          GO_SERVICES_RESULT: ${{ steps.go_services.outcome }}
         run: |
           $entry = $env:GYO_PRODUCT
           @"
@@ -283,6 +335,8 @@ jobs:
           | Installed product acceptance | $env:SMOKE_RESULT |
           | Linux software GPU / engine baseline | $env:GPU_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
+          | Go vet / test / race (Linux) | $env:GO_RESULT |
+          | Go service archives (Linux cross-builds) | $env:GO_SERVICES_RESULT |
 
           Package checks are declared by the central product acceptance contract. Physical GPU acceptance remains manual.
           Quick artifacts cannot substitute for release acceptance.
