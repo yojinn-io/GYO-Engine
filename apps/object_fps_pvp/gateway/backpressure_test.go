@@ -88,6 +88,14 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 		t.Run(pause.String(), func(t *testing.T) {
 			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
 			var produced atomic.Uint64
+			// The lane is inspected from the producer between publications: a
+			// replacement drains and refills the channel in two steps, so reading
+			// len() concurrently can observe the transient empty state.
+			type laneState struct {
+				pending      int
+				replacements uint64
+			}
+			inspect := make(chan chan laneState)
 			stop, done := make(chan struct{}), make(chan struct{})
 			go func() {
 				defer close(done)
@@ -98,6 +106,8 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 					select {
 					case <-stop:
 						return
+					case reply := <-inspect:
+						reply <- laneState{len(s.snapshotOut), s.snapshotReplacements.Load()}
 					case <-ticker.C:
 						tick++
 						e := envelope()
@@ -112,7 +122,10 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 			if produced.Load() < uint64(pause/(time.Second/adapter.AuthorityTickRate))-3 {
 				t.Fatal("blocked consumer stalled snapshot publication")
 			}
-			if len(s.snapshotOut) != 1 || cap(s.snapshotOut) != 1 || s.snapshotReplacements.Load() == 0 {
+			reply := make(chan laneState)
+			inspect <- reply
+			lane := <-reply
+			if lane.pending != 1 || cap(s.snapshotOut) != 1 || lane.replacements == 0 {
 				t.Fatal("snapshot lane was not bounded/latest-only")
 			}
 			released := time.Now()
