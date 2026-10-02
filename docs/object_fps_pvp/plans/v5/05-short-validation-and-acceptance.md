@@ -22,7 +22,8 @@ v4 的歷史追加授權只涵蓋當時已完成的驗收，不能套用到 v5�
   PvP 不引用 v2 專用內容，Engine／公共流程不新增產品特例。
 - 第 03 批結案驗收（來源 `2cecd3a`）的 GUI 與 25 案矩陣，只在 Match、Gateway、action probe 與分析器指紋未變時重用；
   第 04 批只改 Client 呈現時，矩陣可重用，計次 GUI 延遲須以新 Client 重跑。（2026-10-02）
-- GUI 證據的平台依第 04 批 D1 決定；原生 X11/XTest runner 只支援 Linux，macOS 上的原生操作若為人工紀錄須明示。（2026-10-02）
+- GUI 證據沿用第 04 批的跨平台分層（L1 SDL 注入 probe、L2 GPU capture、L3 人工原生操作清單）；原生 X11/XTest runner
+  只是 Linux 上的可選自動化。每份證據帶平台指紋，結果按平台分列。（2026-10-02）
 - 明列「短測通過、完整 GUI／長測未執行、v5 未升格」；未測、受干擾、缺檔均
   不是通過。既有 v4 穩定基線與 manifest 保留，不被本批候選覆寫。
 
@@ -97,7 +98,9 @@ v4 的歷史追加授權只涵蓋當時已完成的驗收，不能套用到 v5�
 
 ## 手動指南與狀態交付
 
-本批建立 v5 目錄內的 `MANUAL_ACCEPTANCE.md` 與 `ACCEPTANCE_STATUS.md`，
+本批建立 v5 目錄內的 `MANUAL_ACCEPTANCE.md` 與 `ACCEPTANCE_STATUS.md`（2026-10-02：兩者須跨平台中立，
+沿用第 04 批的 L1／L2／L3 分層與原生操作清單；命令只用 Python runner 與明確路徑，平台差異以註記列出；
+狀態表按 macOS／Windows／Linux 分欄，某平台未執行即標「未執行」），
 由 [總覽](README.md)／[交接](HANDOFF.md) 連結；v4 原指南、狀態及基線原樣保留。
 計畫目前不假造尚未實作的 runner 參數；到交付時核對實際 `--help`、binary／asset
 路徑及短模式，再寫可直接複製的命令。
