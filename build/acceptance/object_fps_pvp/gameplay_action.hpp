@@ -1,4 +1,5 @@
 // Included only by the product acceptance executable, never by the application.
+#include "start_phase_record.hpp"
 struct GameplayStep {
     double at{}; unsigned player{}; const char* name{}; ActionKind kind{ActionKind::Shot};
     std::uint64_t life{1}; ShotRejection expected{ShotRejection::None}; bool target{};
@@ -75,6 +76,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     std::array<SnapshotTimeline,2> timelines;
     std::array<std::map<ActionId,Json>,2> submitted,decisions;
     std::array<std::size_t,2> maximumRetained{},maximumUnconsumed{};
+    std::array<StartPhaseRecorder,2> startPhase;std::uint64_t frameIndex{};
     const auto started=Clock::now();auto previous=started,deadline=started;const auto startNs=MovementTraceNowNs();
     const auto period=std::chrono::nanoseconds(1'000'000'000/fps);
     {std::ofstream ready(output/"ready.json");ready<<Json{{"start_ns",startNs},{"player_ids",ids},{"protocol",5}}.dump();}
@@ -104,7 +106,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
                 {"life_generation",authority.lifeGeneration},{"life_state",static_cast<int>(authority.lifeState)}});++nextJump[i];}
             const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
             if(prediction[i].Advance(elapsed,0,right,0,0,jump))clients[i].SendInput(prediction[i].PendingInput());
-            const auto& p=prediction[i].Observation();const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
+            const auto& p=prediction[i].Observation();startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
+            const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
             frame["pending"+suffix]=p.pendingCommands;frame["queued"+suffix]=authority.contiguousPendingCommands;
             frame["epoch"+suffix]=authority.movementEpoch;frame["remote_age"+suffix]=remote?remote->latestReceiveAgeSeconds:1e9;
             frame["resolved"+suffix]=authority.lastResolvedCommand;frame["frozen"+suffix]=p.frozen;
@@ -128,7 +131,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             submitted[s.player][*id]=request;evidence.Push({{"kind","submitted"},{"time_ns",ns},{"player_id",ids[s.player]},
                 {"request",request},{"plan_ordinal",nextStep}});++nextStep;
         }
-        evidence.Push(std::move(frame),true);deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
+        evidence.Push(std::move(frame),true);++frameIndex;deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
     }
     Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",5},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
         {"player_ids",ids},{"fps",fps},{"duration",16},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
@@ -139,7 +142,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             {"maximum_datagram_bytes",state.actionTransport.maxDatagramBytes},{"maximum_batch_shots",state.actionTransport.maxBatchShots},
             {"maximum_hp",rules.maximumHp},{"shot_damage",rules.shotDamage},{"magazine_capacity",rules.magazineCapacity},
             {"cooldown_ticks",rules.cooldownTicks},{"reload_ticks",rules.reloadTicks},{"respawn_ticks",rules.respawnTicks},
-            {"combat",GameplayCombat(*state.snapshot)},{"players",GameplayPlayers(*state.snapshot)}});
+            {"combat",GameplayCombat(*state.snapshot)},{"players",GameplayPlayers(*state.snapshot)},{"start_phase",startPhase[i].Json()}});
         if(submitted[i].size()!=decisions[i].size()||state.actionTransport.retained)result["passed"]=false;
     }
     for(auto& c:clients)c.Leave();Wait([&]{return clients[0].State().phase==ConnectionPhase::Lobby&&clients[1].State().phase==ConnectionPhase::Lobby;});

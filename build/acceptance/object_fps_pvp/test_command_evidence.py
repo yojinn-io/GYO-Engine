@@ -290,6 +290,16 @@ class CommandEvidenceTests(unittest.TestCase):
         result = evidence.analyze_commands(directory)
         self.assertTrue(result['disturbed'])
         self.assert_error(result, "no preceding substantive interference")
+        # Schema 1 reset: the error names that no reason was recorded instead of guessing one.
+        self.assert_error(result, "Unexplained epoch reset for player 1 (reason unrecorded): ")
+
+    def test_unexplained_reset_error_names_the_reset_reason(self):
+        directory, client, match, timing = self.make_run()
+        match.append(event('reset', START+SECOND, player=2, epoch=2, sequence=0, reset_reason='backlog'))
+        self.write(directory, client, match, timing)
+        result = evidence.analyze_commands(directory)
+        self.assert_error(result, "Unexplained epoch reset for player 2 (reason backlog): no preceding substantive interference")
+        self.assertEqual(result['reset_causality'][0]['reason'], 'backlog')
 
     def test_unrelated_later_stall_cannot_explain_an_earlier_reset(self):
         directory, client, match, timing = self.make_run()
@@ -306,6 +316,39 @@ class CommandEvidenceTests(unittest.TestCase):
         result = evidence.analyze_commands(directory)
         self.assertTrue(result['passed'], result['errors'])
         self.assertEqual(result['reset_causality'][0]['preceding_interference'][0]['kind'], 'runtime_gap')
+
+    def test_resets_keep_their_reason_and_gui_frame_intervals_are_per_role(self):
+        directory, client, match, timing = self.make_run()
+        match.append(event('reset', START+SECOND, player=2, epoch=2, sequence=0, reset_reason='starvation'))
+        match.append(event('reset', START+3*SECOND, epoch=2, sequence=0))  # Schema 1: no reason recorded.
+        client.append(event('runtime_gap', START+2*SECOND, player=2, frame_seconds=1.5, dropped_seconds=1.4))
+        client.append(event('runtime_gap', START+3*SECOND+100_000_000, player=1, frame_seconds=1.5, dropped_seconds=1.4))
+        self.write(directory, client, match, timing)
+        tick = 1 / 60
+        intervals = [tick] * 56 + [.019, .02, .03, .04]
+        presented, stamp = [], START + 5_000_000
+        for seconds in intervals:
+            stamp += int(seconds * SECOND)
+            presented.append(event('presentation', stamp, frame_seconds=seconds))
+        presented.append(event('presentation', START + DURATION * SECOND + 1, frame_seconds=.5))  # After the window.
+        with (directory / 'create-commands.jsonl').open('w', encoding='utf-8') as output:
+            for record in presented:
+                output.write(json.dumps(record) + '\n')
+            output.write(json.dumps({'kind': 'trace_end', 'events': len(presented), 'dropped': 0}) + '\n')
+        result = evidence.analyze_commands(directory)
+        self.assertTrue(result['passed'], result['errors'])
+        self.assertEqual(result['resets'], 2)
+        self.assertEqual(result['reset_reasons'], {'starvation': 1, 'unrecorded': 1})
+        self.assertEqual([item['reason'] for item in result['reset_causality']], ['starvation', 'unrecorded'])
+        roles = result['presentation_frame_intervals']['roles']
+        self.assertEqual(sorted(roles), ['create'])
+        create = roles['create']
+        self.assertEqual(create['count'], 60)
+        self.assertAlmostEqual(create['median_seconds'], tick)
+        self.assertEqual(create['maximum_seconds'], .04)
+        self.assertEqual(create['p95_seconds'], .019)  # Nearest rank 57 of 60.
+        self.assertEqual((create['over_1_1_tick'], create['at_least_2_ticks']), (4, 1))  # 30 ms is under two ticks.
+        self.assertAlmostEqual(result['presentation_frame_intervals']['cut_seconds'], tick * 1.1)
 
     def test_client_recovery_failure_cannot_be_overridden_by_actual_trace(self):
         directory, *_ = self.make_run(release=START + SECOND, recovery_client_passed=False)

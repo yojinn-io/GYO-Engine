@@ -9,7 +9,7 @@ import socket
 import subprocess
 import time
 import urllib.request
-from run_network import free_port
+from run_network import free_port, wait_for_match_ready
 from run_native_window import Desktop, require, state, wait_state, screenshot
 
 
@@ -31,6 +31,7 @@ def run(args):
     try:
         ipc,http,udp=free_port(),free_port(),free_port(socket.SOCK_DGRAM)
         match=start('match',[str(args.match),'--arena',str(args.arena),'--listen',f'127.0.0.1:{ipc}'])
+        wait_for_match_ready(match,out/'match.log',f'127.0.0.1:{ipc}')
         gateway=start('gateway',[str(args.gateway),'--runtime',f'127.0.0.1:{ipc}','--http',f'127.0.0.1:{http}','--udp',f'127.0.0.1:{udp}','--advertise-ip','127.0.0.1'])
         deadline=time.monotonic()+10
         while True:

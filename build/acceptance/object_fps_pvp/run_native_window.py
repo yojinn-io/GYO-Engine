@@ -17,7 +17,7 @@ import subprocess
 import time
 import urllib.request
 
-from run_network import free_port
+from run_network import free_port, wait_for_match_ready
 
 
 class ClientData(C.Union):
@@ -324,6 +324,7 @@ def run(args):
                                   "create": state(directory, "create"), "join": state(directory, "join"), **extra})
     try:
         match = start("match", [str(args.match), "--arena", str(args.arena), "--listen", f"127.0.0.1:{ipc}"])
+        wait_for_match_ready(match, directory / "match.log", f"127.0.0.1:{ipc}")
         gateway = start("gateway", [str(args.gateway), "--runtime", f"127.0.0.1:{ipc}", "--http", f"127.0.0.1:{http}",
                                     "--udp", f"127.0.0.1:{udp}", "--advertise-ip", "127.0.0.1"])
         deadline = time.monotonic() + 10

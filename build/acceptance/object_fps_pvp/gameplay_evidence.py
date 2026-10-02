@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 from action_evidence import records, frames
 from command_evidence import read_trace_events, recovery_actual_intervals
+from start_phase_evidence import reseed_evidence, summarize_start_phase
 
 
 def percentile(values, percent):
@@ -40,6 +41,15 @@ def combat_expected(player, life, tick, decisions, maximum_hp=100, capacity=12, 
         end = reload_id = reload_start = 0
     return dict(hp=hp, ammo=ammo, reload_action_id=reload_id, reload_start_tick=reload_start,
                 reload_end_tick=end, last_shot_id=last_id, last_shot_tick=last_tick)
+
+
+def start_phase_by_player(client, reseeds=None):
+    """Each Session's per-epoch A1 start-phase record from action-client.json; absence is explicit.
+    The gameplay run has no latency plan, so measured-epoch fields are explicit nulls. ``reseeds``
+    is the shared Client trace's stall reseeds (reseed_evidence), keyed by player, epoch and life."""
+    return {str(entry.get('player_id', index)): summarize_start_phase(entry.get('start_phase'), f'action-client.json clients[{index}].start_phase',
+                                                                      reseeds=reseeds)
+            for index, entry in enumerate(client.get('clients', []))}
 
 
 def is_wire_send_event(event):
@@ -335,4 +345,4 @@ def analyze(output, relay, fault, mode):
             'unique_wire_decisions':len(originals),'identical_repeats':repeats,'combat_observations':hp_count,'jump_maximum_foot_y':jumps,
             'legal_match_p95_ms':percentile(legal_latency,95) if clean else None,'legal_client_p95_ms':percentile(delivery_latency,95) if clean else None,
             'movement':movement,'recovery':recovery,'fault':fault,'maximum_packet_rate':rates,'full_frame_count':len(all_frames),'maximum_frame_seconds':max_frame,
-            'all_frame_intervals_seconds':all_intervals,'client':client}
+            'all_frame_intervals_seconds':all_intervals,'start_phase':start_phase_by_player(client,reseed_evidence(client_events,'clients-commands.jsonl')),'client':client}

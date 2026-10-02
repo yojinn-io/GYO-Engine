@@ -12,6 +12,7 @@
 #include <SDL3/SDL_main.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <deque>
@@ -224,6 +225,115 @@ void WriteLatencyPresentation(std::ostream& stream,
 #include "player_short.hpp"
 #include "native_window.hpp"
 #include "combat_latency.hpp"
+#include "start_phase_record.hpp"
+
+// Latency-mode window evidence. SDL calls event watchers synchronously while it
+// queues an event, so OS window events are counted without a second drain of
+// the product's queue; the callback only increments counters. Probe-pushed
+// focus (PushMovement) is counted separately via the synthetic flag. Moved and
+// resized are counted because the product releases its pointer on them. The
+// watcher is added after placement: the placement's own MOVED (queued while
+// SDL_SyncWindow pumps events) and the window's creation events are never
+// counted; a MOVED that arrives later still lands in window_os_events, but only
+// counts as interference inside the measurement window.
+struct LatencyWindow {
+    static constexpr std::array<std::pair<Uint32, const char*>, 8> Kinds{{
+        {SDL_EVENT_WINDOW_OCCLUDED, "occluded"}, {SDL_EVENT_WINDOW_EXPOSED, "exposed"},
+        {SDL_EVENT_WINDOW_HIDDEN, "hidden"}, {SDL_EVENT_WINDOW_MINIMIZED, "minimized"},
+        {SDL_EVENT_WINDOW_FOCUS_GAINED, "focus_gained"}, {SDL_EVENT_WINDOW_FOCUS_LOST, "focus_lost"},
+        {SDL_EVENT_WINDOW_MOVED, "moved"}, {SDL_EVENT_WINDOW_RESIZED, "resized"}}};
+    SDL_Window* window{};
+    SDL_WindowID id{};
+    std::string placement{"platform_default"};
+    std::optional<SDL_Rect> usable;
+    std::optional<std::array<int, 2>> requested, afterSync;
+    std::optional<bool> synced;
+    std::optional<SDL_WindowFlags> startFlags;
+    std::atomic<bool> measuring{}, synthetic{};
+    std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
+    std::atomic<unsigned> syntheticEvents{};
+    LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)) {
+#if defined(__APPLE__)
+        // macOS throttles fully occluded windows. Both probes otherwise open
+        // centred at one spot and the mover raises itself over the observer.
+        // Opposite corners of the usable bounds keep part of each visible;
+        // the 1280x720 render size is unchanged. SDL positions name the
+        // client area and Cocoa reports zero borders, so the title bar above
+        // each window is outside these coordinates.
+        SDL_Rect bounds{};
+        const auto display = SDL_GetDisplayForWindow(window);
+        int width{}, height{}, top{}, left{}, bottom{}, right{};
+        if (display && SDL_GetDisplayUsableBounds(display, &bounds) && SDL_GetWindowSize(window, &width, &height)) {
+            SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right); // Zeros if unsupported.
+            const int x = mover ? bounds.x + left : std::max(bounds.x + left, bounds.x + bounds.w - right - width);
+            const int y = mover ? bounds.y + top : std::max(bounds.y + top, bounds.y + bounds.h - bottom - height);
+            Require(SDL_SetWindowPosition(window, x, y), SDL_GetError());
+            synced = SDL_SyncWindow(window); // False: timed out before the requested state.
+            int syncedX{}, syncedY{};
+            if (SDL_GetWindowPosition(window, &syncedX, &syncedY)) afterSync = std::array{syncedX, syncedY};
+            usable = bounds; requested = std::array{x, y};
+            placement = mover ? "usable_bounds_top_left" : "usable_bounds_bottom_right";
+        }
+#else
+        // Linux and Windows keep the platform-default placement, so the two
+        // probe windows may overlap. SDL's X11 backend reports OCCLUDED only
+        // with minimizing, while a Wayland compositor may suspend a covered
+        // window and report OCCLUDED, which the evidence names as window
+        // interference.
+        static_cast<void>(mover);
+#endif
+        Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
+    }
+    ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
+    LatencyWindow(const LatencyWindow&) = delete;
+    LatencyWindow& operator=(const LatencyWindow&) = delete;
+    static bool SDLCALL Watch(void* self, SDL_Event* event) {
+        auto& evidence = *static_cast<LatencyWindow*>(self);
+        if (event->type < SDL_EVENT_WINDOW_FIRST || event->type > SDL_EVENT_WINDOW_LAST || event->window.windowID != evidence.id) return true;
+        for (std::size_t kind = 0; kind < Kinds.size(); ++kind) {
+            if (event->type != Kinds[kind].first) continue;
+            if (evidence.synthetic.load(std::memory_order_relaxed)) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
+            else {
+                evidence.total[kind].fetch_add(1, std::memory_order_relaxed);
+                if (evidence.measuring.load(std::memory_order_relaxed)) evidence.during[kind].fetch_add(1, std::memory_order_relaxed);
+            }
+            break;
+        }
+        return true;
+    }
+    void Report(std::ostream& report) const {
+        int x{}, y{}, width{}, height{}, top{}, left{}, bottom{}, right{};
+        SDL_GetWindowPosition(window, &x, &y);
+        SDL_GetWindowSize(window, &width, &height);
+        SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right);
+        const auto flags = [](std::optional<SDL_WindowFlags> value) -> std::string {
+            if (!value) return "unobserved";
+            return "occluded:" + std::to_string(int(bool(*value & SDL_WINDOW_OCCLUDED))) + ",hidden:" +
+                std::to_string(int(bool(*value & SDL_WINDOW_HIDDEN))) + ",minimized:" +
+                std::to_string(int(bool(*value & SDL_WINDOW_MINIMIZED))) + ",input_focus:" +
+                std::to_string(int(bool(*value & SDL_WINDOW_INPUT_FOCUS)));
+        };
+        const auto counts = [](const auto& values) {
+            std::string text;
+            for (std::size_t kind = 0; kind < Kinds.size(); ++kind)
+                text += (kind ? "," : "") + std::string(Kinds[kind].second) + ':' + std::to_string(values[kind].load());
+            return text;
+        };
+        report << "window_placement=" << placement << "\nwindow_usable_bounds=";
+        if (usable) report << usable->x << ',' << usable->y << ',' << usable->w << ',' << usable->h; else report << "unavailable";
+        report << "\nwindow_requested_position=";
+        if (requested) report << (*requested)[0] << ',' << (*requested)[1]; else report << "none";
+        report << "\nwindow_sync=" << (!synced ? "not_requested" : *synced ? "succeeded" : "timed_out")
+               << "\nwindow_position_after_sync=";
+        if (afterSync) report << (*afterSync)[0] << ',' << (*afterSync)[1]; else report << "none";
+        report << "\nwindow_final_position=" << x << ',' << y << "\nwindow_size=" << width << ',' << height
+               << "\nwindow_borders=" << top << ',' << left << ',' << bottom << ',' << right
+               << "\nwindow_flags_at_measurement_start=" << flags(startFlags)
+               << "\nwindow_flags_at_end=" << flags(SDL_GetWindowFlags(window))
+               << "\nwindow_os_events=" << counts(total) << "\nwindow_os_events_during_measurement=" << counts(during)
+               << "\nwindow_synthetic_events=" << syntheticEvents.load() << '\n';
+    }
+};
 
 // Long latency runs use ordinary input/connection APIs and successful renderer
 // submissions. No readback, capture, production test switch or clock sync exists.
@@ -251,6 +361,9 @@ void RunLatency(const Options& options) {
     Require(application.InitializeGraphics(graphics, error), error);
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
+    // Placed before connecting: its MOVED event is drained while still in Lobby.
+    LatencyWindow windowEvidence(application.Platform().NativeWindow(), mover);
+    StartPhaseRecorder startPhase;
     if (mover) connection.CreateAndJoin(options.gateway);
     else connection.Refresh(options.gateway);
     bool joined = mover;
@@ -308,6 +421,8 @@ void RunLatency(const Options& options) {
         if (togetherSince) Require(both, "A GUI client left during latency measurement");
         if (both) finalTick = state.snapshot->tick;
         const double elapsed = measurementStart ? Seconds(now, *measurementStart) : -1;
+        windowEvidence.measuring.store(elapsed >= 0 && elapsed <= options.duration + 2, std::memory_order_relaxed);
+        if (elapsed >= 0 && !windowEvidence.startFlags) windowEvidence.startFlags = SDL_GetWindowFlags(application.Platform().NativeWindow());
         if (mover && elapsed >= 0) {
             if (elapsed >= options.duration + 2) break;
             const auto event = static_cast<unsigned>(elapsed / period);
@@ -329,7 +444,9 @@ void RunLatency(const Options& options) {
                         state.playerId, EpochOf(local), local.latestCommand, local.renderPosition.x, local.renderPosition.z,
                         std::sin(self->yaw) * sign, std::cos(self->yaw) * sign});
                     held = event % 2 ? SDL_SCANCODE_S : SDL_SCANCODE_W;
+                    windowEvidence.synthetic.store(true, std::memory_order_relaxed);
                     PushMovement(application.Platform().NativeWindow(), true, *held);
+                    windowEvidence.synthetic.store(false, std::memory_order_relaxed);
                 }
             }
         }
@@ -340,6 +457,14 @@ void RunLatency(const Options& options) {
         if (elapsed >= 0 && elapsed <= options.duration) maximumFrameGap = std::max(maximumFrameGap, frame.deltaSeconds);
         Require(application.ProcessEvents(frame) == Control::Continue, "Latency window was closed");
         Require(application.Update(frame) == Control::Continue, application.LastError());
+        {
+            // `state` predates this Update, which may have joined and activated
+            // the prediction while `state` still had no player id. Pair the
+            // Client observation with the connection state after Update.
+            const auto updated = connection.State();
+            startPhase.Observe(frame.frameIndex, std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(),
+                updated.playerId, FindSelf(updated), application.LocalMovement());
+        }
         if (options.combat) combat.AfterUpdate(frame.frameIndex, beforeWeapon, application);
         Require(application.Render(frame) == Control::Continue, application.LastError());
         if (options.combat) combat.AfterRender(frame.frameIndex, application);
@@ -363,6 +488,11 @@ void RunLatency(const Options& options) {
     for (const auto& sample : presentationSamples) WriteLatencyPresentation(presentation, sample);
     presentation.flush();
     Require(bool(presentation), "Cannot write latency presentation trace");
+    std::ofstream phase(options.output / (options.role + "-start-phase.json"));
+    auto phaseRecord = startPhase.Json();
+    phaseRecord["role"] = options.role; phaseRecord["player_id"] = playerId;
+    phase << phaseRecord.dump(2) << '\n';
+    phase.flush(); Require(bool(phase), "Cannot write start-phase record");
     if (mover) {
         std::ofstream events(options.output / "latency-events.csv");
         Require(bool(events), "Cannot create latency event trace");
@@ -384,7 +514,9 @@ void RunLatency(const Options& options) {
            << "\nmaximum_frame_gap_seconds=" << maximumFrameGap
            << "\nskipped_frames=" << application.SkippedPresentationFrames()
            << "\nfirst_authority_tick=" << firstTick << "\nfinal_authority_tick=" << finalTick
-           << "\ncapture=none\nclock_scope=same-host monotonic submission timestamps; not physical scanout\n";
+           << "\ncapture=none\nclock_scope=same-host monotonic submission timestamps; not physical scanout\n"
+           << "start_phase_record=" << options.role << "-start-phase.json\n";
+    windowEvidence.Report(report);
     report.flush();
     Require(bool(report), "Cannot write latency report");
     if (mover) {

@@ -5,6 +5,14 @@ import csv
 import json
 import math
 from pathlib import Path
+import statistics
+
+TICK_SECONDS = 1 / 60
+# MovementStartPhaseMaximumFrameSeconds: the start-phase guard's frame-period cut.
+START_PHASE_FRAME_CUT_SECONDS = TICK_SECONDS * 1.1
+FRAME_INTERVAL_SOURCE = ("Presentation trace events' frame_seconds (the runtime frame-start interval of each presented "
+                         "frame) inside the measurement window, per Client trace file; unpresented frames are absent, "
+                         "and the prediction samples its own elapsed time later in the same frame")
 
 
 def nearest_rank(values, fraction):
@@ -14,6 +22,22 @@ def nearest_rank(values, fraction):
 
 def finite(value):
     return value if math.isfinite(value) else None
+
+
+def frame_interval_statistics(intervals):
+    """Median/P95 (nearest rank)/maximum and the counts beyond the guard's cut and two ticks."""
+    ordered = sorted(intervals)
+    return {'count': len(ordered), 'median_seconds': statistics.median(ordered) if ordered else None,
+            'p95_seconds': nearest_rank(ordered, .95) if ordered else None,
+            'maximum_seconds': ordered[-1] if ordered else None,
+            'over_1_1_tick': sum(value > START_PHASE_FRAME_CUT_SECONDS for value in ordered),
+            'at_least_2_ticks': sum(value >= 2 * TICK_SECONDS for value in ordered)}
+
+
+def trace_role(path):
+    """create-commands.jsonl -> create; the file stem otherwise."""
+    name = Path(path).name
+    return name[:-len('-commands.jsonl')] if name.endswith('-commands.jsonl') else Path(path).stem
 
 
 def measurement_window(directory):
@@ -142,6 +166,7 @@ def analyze_commands(directory, *, enforce=True):
     seeded = Counter()
     transport_max_age, transport_count = 0, 0
     receipt_gaps = []
+    presented = {}
     for path in sorted(directory.glob('*commands.jsonl')):
         ended = False
         count = 0
@@ -202,6 +227,8 @@ def analyze_commands(directory, *, enforce=True):
                             'start_ns':timestamp-round(event['frame_seconds']*1e9), 'end_ns':timestamp})
                 elif kind == 'reset' and measured:
                     resets.append(event)
+                elif kind == 'presentation' and measured:
+                    presented.setdefault(trace_role(path), []).append(event['frame_seconds'])
                 elif kind == 'transport':
                     transport_max_age = max(transport_max_age, event['age_seconds'])
                     transport_count += event['count']
@@ -293,13 +320,19 @@ def analyze_commands(directory, *, enforce=True):
     disturbed = bool(remote_stale_frames or gaps or receipt_gaps or timing.get('gaps_100ms') or timing.get('injected') or
         timing.get('history_overflows') or transport_max_age >= .1)
     reset_causes = []
+    def reset_reason(reset):
+        # Schema 1 traces carry no reason; never guess one.
+        reason = reset.get('reset_reason')
+        return reason if isinstance(reason, str) and reason else 'unrecorded'
     for reset in resets:
         causes = [item for item in interference if item['player_id'] in (0, reset['player_id']) and
                   item['start_ns'] < reset['time_ns'] <= item['end_ns']+1_500_000_000]
-        reset_causes.append({'player_id':reset['player_id'], 'epoch':reset['epoch'],
+        reason = reset_reason(reset)
+        reset_causes.append({'player_id':reset['player_id'], 'epoch':reset['epoch'], 'reason':reason,
                              'time_ns':reset['time_ns'], 'preceding_interference':causes})
         if not causes:
-            errors.append(f'Unexplained epoch reset for player {reset["player_id"]}: no preceding substantive interference')
+            errors.append(f'Unexplained epoch reset for player {reset["player_id"]} (reason {reason}): '
+                          'no preceding substantive interference')
     if not disturbed and queue_max >= 105:
         errors.append('Clean-run 30-tick queued-command sum reaches the backlog reset threshold')
     result = {'passed': not errors, 'latency_thresholds_enforced':enforce, 'errors': errors, 'window_ns': [start, end],
@@ -313,9 +346,13 @@ def analyze_commands(directory, *, enforce=True):
         'host_to_execution_p50_ms': finite(nearest_rank(accepted_execution_ms,.5)),
         'execution_sources': dict(sources), 'queue_30_tick_sum_max': queue_max,
         'queue_30_tick_sum_tail': {str(k):v for k,v in queue_tail.items()},
-        'resets': len(resets), 'reset_causality':reset_causes, 'disturbed': disturbed, 'runtime_gap_events': gaps, 'snapshot_receipt_gaps':receipt_gaps, 'remote_stale_frames':remote_stale_frames,
+        'resets': len(resets), 'reset_reasons': dict(Counter(reset_reason(reset) for reset in resets)),
+        'reset_causality':reset_causes, 'disturbed': disturbed, 'runtime_gap_events': gaps, 'snapshot_receipt_gaps':receipt_gaps, 'remote_stale_frames':remote_stale_frames,
         'transport_event_counts':transport_count, 'transport_max_age_seconds':transport_max_age,
         'trace_files': trace_files, 'trace_events': dict(event_counts),
+        'presentation_frame_intervals': {'source': FRAME_INTERVAL_SOURCE, 'tick_seconds': TICK_SECONDS,
+            'cut_seconds': START_PHASE_FRAME_CUT_SECONDS,
+            'roles': {role: frame_interval_statistics(values) for role, values in sorted(presented.items())}},
         'quantile': 'nearest-rank; missing/substituted actual executions are positive infinity (JSON null)',
         'clock_scope':'same-host steady clock; not input-to-photon'}
     (directory/'command-evidence.json').write_text(json.dumps(result,indent=2)+'\n')

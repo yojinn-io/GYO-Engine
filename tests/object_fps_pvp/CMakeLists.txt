@@ -15,6 +15,22 @@ endif()
 add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 30)
 
+# The acceptance probes' header-only start-phase recorder, driven by the real
+# prediction. Kept apart so the domain test target gains no JSON dependency.
+set(record_tests "gyo_${GYO_CURRENT_APP}_start_phase_record_tests")
+add_executable(${record_tests} TestMain.cpp StartPhaseRecordTests.cpp)
+target_compile_features(${record_tests} PRIVATE cxx_std_20)
+target_include_directories(${record_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
+target_link_libraries(${record_tests} PRIVATE ${match_domain} nlohmann_json::nlohmann_json doctest::doctest)
+if(WIN32)
+    target_compile_definitions(${record_tests} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${record_tests} PRIVATE /utf-8)
+endif()
+add_test(NAME "${GYO_CURRENT_APP}.start_phase_record" COMMAND ${record_tests})
+set_tests_properties("${GYO_CURRENT_APP}.start_phase_record" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+
 # Client presentation has its own CPU asset/pose tests. Keep Model/SDL and
 # staged character content out of the authority-domain test target.
 gyo_get_app_target("${GYO_CURRENT_APP}" app_support support)
@@ -56,7 +72,7 @@ add_test(NAME "${GYO_CURRENT_APP}.action_evidence"
 set_tests_properties("${GYO_CURRENT_APP}.action_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
 add_test(NAME "${GYO_CURRENT_APP}.presentation_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_presentation_evidence.py")
-set_tests_properties("${GYO_CURRENT_APP}.presentation_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+set_tests_properties("${GYO_CURRENT_APP}.presentation_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
 
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence.py")
@@ -73,3 +89,15 @@ set_tests_properties("${GYO_CURRENT_APP}.backpressure_evidence" PROPERTIES LABEL
 add_test(NAME "${GYO_CURRENT_APP}.native_window_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_native_window.py")
 set_tests_properties("${GYO_CURRENT_APP}.native_window_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+
+add_test(NAME "${GYO_CURRENT_APP}.timing_runner"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_timing.py")
+set_tests_properties("${GYO_CURRENT_APP}.timing_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+
+add_test(NAME "${GYO_CURRENT_APP}.steady_clock"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_steady_clock.py")
+set_tests_properties("${GYO_CURRENT_APP}.steady_clock" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+
+add_test(NAME "${GYO_CURRENT_APP}.service_startup"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_service_startup.py")
+set_tests_properties("${GYO_CURRENT_APP}.service_startup" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

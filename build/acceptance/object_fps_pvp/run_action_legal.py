@@ -16,7 +16,7 @@ import time
 import urllib.request
 
 from action_evidence import analyze_legal
-from run_network import free_port
+from run_network import free_port, wait_for_match_ready
 
 
 def run(args):
@@ -39,6 +39,7 @@ def run(args):
         ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
         match = start('match', [args.match, '--arena', args.arena, '--listen', f'127.0.0.1:{ipc}',
                                '--movement-trace', output/'match-commands.jsonl'])
+        wait_for_match_ready(match, output/'match.log', f'127.0.0.1:{ipc}')
         gateway = start('gateway', [args.gateway, '--runtime', f'127.0.0.1:{ipc}', '--http', f'127.0.0.1:{http}',
                                     '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])
         deadline = time.monotonic()+15

@@ -18,7 +18,7 @@ import urllib.request
 from backpressure_probe import analyze as analyze_recovery
 from command_evidence import analyze_commands
 from impaired_network import _ImpairedGateway
-from run_network import free_port
+from run_network import free_port, wait_for_match_ready
 
 
 class FixedRTTGateway(_ImpairedGateway):
@@ -93,6 +93,7 @@ def run_case(args, rtt, stall):
         ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
         match = start('match', [args.match, '--arena', args.arena, '--listen', f'127.0.0.1:{ipc}',
                                 '--movement-trace', output/'match-commands.jsonl'])
+        wait_for_match_ready(match, output/'match.log', f'127.0.0.1:{ipc}')
         gateway = start('gateway', [args.gateway, '--runtime', f'127.0.0.1:{ipc}', '--http', f'127.0.0.1:{http}',
                                     '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])
         deadline = time.monotonic()+15

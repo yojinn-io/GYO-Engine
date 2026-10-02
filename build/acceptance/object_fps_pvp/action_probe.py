@@ -23,7 +23,7 @@ import urllib.request
 from backpressure_probe import IpcPause, analyze as analyze_recovery
 from command_evidence import analyze_commands
 from impaired_network import _ImpairedGateway
-from run_network import free_port
+from run_network import free_port, steady_clock_ns, wait_for_match_ready
 from action_evidence import frames as action_frames, records, analyze_legal
 
 
@@ -139,7 +139,7 @@ class ActionRelay(_ImpairedGateway):
                 self.armed_duration = duration
             else:
                 self.block_until = time.monotonic()+duration
-                self.fault['start_ns'] = time.monotonic_ns()
+                self.fault['start_ns'] = steady_clock_ns()
 
     def _send(self, payload, destination, upstream, label='forwarded'):
         if upstream and self.mode == 'duplicate-reorder-conflict':
@@ -147,7 +147,7 @@ class ActionRelay(_ImpairedGateway):
             self.sequences[session] += 1
             payload = payload[:16]+self.sequences[session].to_bytes(4, 'big')+payload[20:]
         self.udp.sendto(payload, destination)
-        self.events.append({'time_ns': time.monotonic_ns(), 'event': label,
+        self.events.append({'time_ns': steady_clock_ns(), 'event': label,
                             'upstream': upstream, 'kind': int.from_bytes(payload[6:8], 'big'),
                             'session': int.from_bytes(payload[8:16], 'big'), 'bytes': len(payload)})
 
@@ -155,7 +155,7 @@ class ActionRelay(_ImpairedGateway):
         now = time.monotonic()
         if self.cross_until is not None and now >= self.cross_until:
             self.cross_until = None
-            self.fault['release_ns'] = time.monotonic_ns()
+            self.fault['release_ns'] = steady_clock_ns()
             held = self.held.pop(('cross-life-result', self.cross_session), None)
             if held:
                 self._send(*held, 'cross_life_result_released')
@@ -163,9 +163,9 @@ class ActionRelay(_ImpairedGateway):
             _, _, payload, destination, upstream = heapq.heappop(self.network_queue)
             self._send(payload, destination, upstream, 'network_forwarded')
         if self.network_until is not None and now >= self.network_until and not self.network_queue and not self.fault['release_ns']:
-            self.fault['release_ns'] = time.monotonic_ns()
+            self.fault['release_ns'] = steady_clock_ns()
         if self.block_until is not None and time.monotonic() >= self.block_until:
-            self.fault['release_ns'] = time.monotonic_ns()
+            self.fault['release_ns'] = steady_clock_ns()
             self.block_until = None
             for payload, destination, upstream in self.held.values():
                 self._send(payload, destination, upstream, 'released')
@@ -174,7 +174,7 @@ class ActionRelay(_ImpairedGateway):
     def _receive(self, payload, source):
         if len(payload) < 24:
             raise ValueError('Truncated product packet')
-        now = time.monotonic_ns()
+        now = steady_clock_ns()
         upstream = source != self.upstream_udp
         kind = int.from_bytes(payload[6:8], 'big')
         session = int.from_bytes(payload[8:16], 'big')
@@ -531,6 +531,8 @@ def run_case(args, mode, milliseconds=0):
     try:
         ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
         match = start('match', [args.match, '--arena', args.arena, '--listen', f'127.0.0.1:{ipc}', '--movement-trace', output/'match-commands.jsonl'])
+        # The Gateway (or the IPC relay it dials) connects to the Match once at startup.
+        wait_for_match_ready(match, output/'match.log', f'127.0.0.1:{ipc}')
         if mode == 'host-ipc':
             ipc_relay = IpcPause(ipc)
         gateway = start('gateway', [args.gateway, '--runtime', f'127.0.0.1:{ipc_relay.port if ipc_relay else ipc}', '--http', f'127.0.0.1:{http}', '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])
@@ -562,16 +564,17 @@ def run_case(args, mode, milliseconds=0):
         ready = json.loads((output/'ready.json').read_text())
         fault = {'start_ns': 0, 'release_ns': 0}
         if milliseconds:
-            while time.monotonic_ns() < ready['start_ns']+int(getattr(args, 'fault_at', 1.5)*1e9):
+            # ready['start_ns'] and the fault stamps share the probe's C++ steady clock.
+            while steady_clock_ns() < ready['start_ns']+int(getattr(args, 'fault_at', 1.5)*1e9):
                 time.sleep(.005)
             if mode == 'gateway':
-                fault['start_ns'] = time.monotonic_ns()
+                fault['start_ns'] = steady_clock_ns()
                 gateway.send_signal(signal.SIGSTOP)
                 stopped = True
                 time.sleep(milliseconds/1000)
                 gateway.send_signal(signal.SIGCONT)
                 stopped = False
-                fault['release_ns'] = time.monotonic_ns()
+                fault['release_ns'] = steady_clock_ns()
             elif mode == 'host-ipc':
                 ipc_relay.arm(milliseconds/1000)
                 if not ipc_relay.released.wait(milliseconds/1000+2):

@@ -20,7 +20,7 @@ import urllib.request
 
 from impaired_network import _ImpairedGateway
 from command_evidence import analyze_commands, read_trace_events, recovery_actual_intervals
-from run_network import free_port
+from run_network import free_port, steady_clock_ns, wait_for_match_ready
 
 
 class IpcPause:
@@ -92,13 +92,13 @@ class IpcPause:
                     downstream.sendall(frame[:3])
                     with self.lock:
                         self.stats['partial_header_bytes'] = 3
-                        self.stats['start_ns'] = time.monotonic_ns()
+                        self.stats['start_ns'] = steady_clock_ns()
                     self.stop.wait(duration)
                     # Fragment the rest too: both decoders must preserve framing.
                     for offset in range(3, len(frame), 7):
                         downstream.sendall(frame[offset:offset+7])
                     with self.lock:
-                        self.stats['release_ns'] = time.monotonic_ns()
+                        self.stats['release_ns'] = steady_clock_ns()
                     self.released.set()
                 else:
                     downstream.sendall(frame)
@@ -186,13 +186,13 @@ class DownstreamPause(_ImpairedGateway):
                     self.udp.sendto(pending, peer)
                 self.held.clear()
                 self.hold_until = None
-                self.fault['release_ns'] = time.monotonic_ns()
+                self.fault['release_ns'] = steady_clock_ns()
                 self.released.set()
             if source == self.upstream_udp and kind == 4:
                 if self.hold_duration is not None:
                     self.hold_until = now + self.hold_duration
                     self.hold_duration = None
-                    self.fault['start_ns'] = time.monotonic_ns()
+                    self.fault['start_ns'] = steady_clock_ns()
                 if self.hold_until is not None:
                     if session in self.held:
                         self.fault['coalesced_snapshots'] += 1
@@ -334,6 +334,8 @@ def run_case(args, layer, milliseconds):
         ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
         match = start('match', [args.match, '--arena', args.arena, '--listen', f'127.0.0.1:{ipc}',
                                 '--movement-trace', output/'match-commands.jsonl'])
+        # The Gateway (or the IPC relay it dials) connects to the Match once at startup.
+        wait_for_match_ready(match, output/'match.log', f'127.0.0.1:{ipc}')
         runtime_port = ipc
         if layer == 'host-ipc':
             proxy = IpcPause(ipc)
@@ -361,13 +363,13 @@ def run_case(args, layer, milliseconds):
         if client.poll() is not None:
             raise RuntimeError('Timing probe exited before fault injection')
         if layer == 'gateway':
-            fault = {'start_ns': time.monotonic_ns(), 'relay_error': None}
+            fault = {'start_ns': steady_clock_ns(), 'relay_error': None}
             gateway.send_signal(signal.SIGSTOP)
             stopped = True
             time.sleep(milliseconds/1000)
             gateway.send_signal(signal.SIGCONT)
             stopped = False
-            fault['release_ns'] = time.monotonic_ns()
+            fault['release_ns'] = steady_clock_ns()
         else:
             proxy.arm(milliseconds/1000)
             if not proxy.released.wait(milliseconds/1000+3):
