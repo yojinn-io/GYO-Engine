@@ -332,3 +332,76 @@ jobs:
             esac
           done
           exit "$status"
+
+  # Snapshot channel: a successful default-branch push publishes one snapshot
+  # prerelease per release train from the Quick packages of this run. Pull
+  # requests, forks and manual runs never publish.
+  snapshot_plan:
+    name: Plan snapshot trains
+    needs: gate
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && !github.event.repository.fork
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      trains: ${{ steps.trains.outputs.trains }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Derive the release trains from the registry
+        id: trains
+        run: python build/ci/common/release_channels.py trains --output "$GITHUB_OUTPUT"
+
+  # The only job of this workflow that writes repository contents. One group
+  # per train serializes publication and retention cleanup across runs.
+  snapshot:
+    name: Snapshot / ${{ matrix.train }}
+    needs: [quick, snapshot_plan]
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && !github.event.repository.fork
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.snapshot_plan.outputs.trains) }}
+    concurrency:
+      group: gyo-snapshot-${{ matrix.train }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      # Only this train's product: its packages, then its service record and archives.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gyo-package-${{ matrix.product }}-*
+          path: snapshot-packages
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gyo-service-${{ matrix.product }}
+          path: snapshot-services
+          merge-multiple: true
+      - name: Verify, publish the snapshot and apply retention
+        id: snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SNAPSHOT_TRAIN: ${{ matrix.train }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          python build/ci/common/release_pipeline.py snapshot --train "$SNAPSHOT_TRAIN" --commit "$SOURCE_COMMIT" \
+            --package-directory snapshot-packages --service-directory snapshot-services --output "$GITHUB_OUTPUT"
+      - name: Summarize the snapshot
+        env:
+          SNAPSHOT_TRAIN: ${{ matrix.train }}
+          SNAPSHOT_TAG: ${{ steps.snapshot.outputs.tag }}
+          SNAPSHOT_PUBLISHED: ${{ steps.snapshot.outputs.published }}
+          SNAPSHOT_URL: ${{ steps.snapshot.outputs.release_url }}
+          SNAPSHOT_DELETED: ${{ steps.snapshot.outputs.deleted }}
+        run: |
+          printf '## Snapshot / %s\n\n- Tag: `%s`\n- Published: `%s` %s\n- Expired snapshots deleted: `%s`\n' \
+            "$SNAPSHOT_TRAIN" "$SNAPSHOT_TAG" "$SNAPSHOT_PUBLISHED" "$SNAPSHOT_URL" "${SNAPSHOT_DELETED:-none}" >> "$GITHUB_STEP_SUMMARY"

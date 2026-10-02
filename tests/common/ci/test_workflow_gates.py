@@ -16,6 +16,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
+sys.path.insert(0, str(ROOT / "build/ci/common"))
+from go_checks import SERVICE_RECORD_NAME  # noqa: E402
+from release_channels import TRIAL_LABEL  # noqa: E402
+
+SNAPSHOT_CONDITION = ("github.event_name == 'push' && github.ref == format('refs/heads/{0}', "
+                      "github.event.repository.default_branch) && !github.event.repository.fork")
 NATIVE_SETUP = ROOT / ".github" / "actions" / "native-setup" / "action.yml"
 HOST_TOOLS_DEFINE = r'''"-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS"'''
 
@@ -38,6 +44,48 @@ def top_level_block(document: str, key: str) -> str:
     tail = document[match.end():]
     following = re.search(r"(?m)^[A-Za-z_][A-Za-z0-9_-]*:", tail)
     return tail[:following.start()] if following else tail
+
+
+def permission_blocks(workflow: str) -> dict[str, dict[str, str] | str]:
+    """Every permissions key of a workflow, keyed "workflow" or by job name.
+
+    A scalar value (write-all, read-all, {}) is returned as a string; a
+    mapping as {scope: access}. Any permissions key that is neither top-level
+    nor job-level fails, so no block escapes the policy check.
+    """
+    lines = workflow.splitlines()
+    blocks = {}
+    job = None
+    for index, line in enumerate(lines):
+        if heading := re.fullmatch(r"  ([A-Za-z_][A-Za-z0-9_-]*):\s*", line):
+            job = heading.group(1)
+        entry = re.fullmatch(r"( *)permissions:\s*(.*?)\s*", line)
+        if entry is None:
+            continue
+        indent, value = len(entry.group(1)), entry.group(2)
+        if indent == 0:
+            location = "workflow"
+        elif indent == 4 and job is not None:
+            location = job
+        else:
+            raise AssertionError(f"Unexpected permissions key at line {index + 1}: {line!r}")
+        if location in blocks:
+            raise AssertionError(f"Duplicate permissions for {location}")
+        if value and not value.startswith("#"):
+            blocks[location] = value
+            continue
+        scopes = {}
+        for scope_line in lines[index + 1:]:
+            if not scope_line.strip() or scope_line.strip().startswith("#"):
+                continue
+            scope = re.fullmatch(rf"{' ' * (indent + 2)}([a-z-]+):\s*([a-z]+)\s*(?:#.*)?", scope_line)
+            if scope is None:
+                if len(scope_line) - len(scope_line.lstrip()) > indent:
+                    raise AssertionError(f"Unparsed permissions entry: {scope_line!r}")
+                break
+            scopes[scope.group(1)] = scope.group(2)
+        blocks[location] = scopes
+    return blocks
 
 
 def steps_of(job: str, indent: int = 6) -> list[str]:
@@ -131,6 +179,7 @@ class WorkflowGateTests(unittest.TestCase):
         cls.quick = (WORKFLOWS / "cross-platform.yml").read_text(encoding="utf-8")
         cls.release = (WORKFLOWS / "prepare-release.yml").read_text(encoding="utf-8")
         cls.shared = (WORKFLOWS / "build-and-validate.yml").read_text(encoding="utf-8")
+        cls.trial = (WORKFLOWS / "package-trial.yml").read_text(encoding="utf-8")
         cls.setup = NATIVE_SETUP.read_text(encoding="utf-8")
 
     def test_actual_final_gate_rejects_failed_skipped_and_cancelled_jobs(self):
@@ -155,8 +204,29 @@ class WorkflowGateTests(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, prepare == native == "success",
                                  result.stdout + result.stderr)
 
-    def test_only_final_draft_job_can_write_repository_contents(self):
-        self.assertNotRegex(self.quick + self.shared, r"contents:\s*write")
+    def test_only_release_draft_and_snapshot_jobs_can_write_repository_contents(self):
+        # Every permissions key of every workflow, exactly: contents is the only
+        # scope ever written, and pull-requests: read is the only extra scope.
+        read, pull_requests = {"contents": "read"}, {"contents": "read", "pull-requests": "read"}
+        expected = {
+            "cross-platform.yml": {"workflow": read, "scope": pull_requests, "snapshot": {"contents": "write"}},
+            "prepare-release.yml": {"workflow": read, "draft": {"contents": "write"}},
+            "build-and-validate.yml": {"workflow": read},
+            "package-trial.yml": {"workflow": read, "select": pull_requests},
+        }
+        self.assertEqual(sorted(path.name for path in WORKFLOWS.glob("*.yml")), sorted(expected))
+        for name, blocks in expected.items():
+            workflow = (WORKFLOWS / name).read_text(encoding="utf-8")
+            with self.subTest(workflow=name):
+                self.assertEqual(permission_blocks(workflow), blocks)
+                self.assertNotRegex(workflow, r"write-all|read-all")
+        for workflow in (self.quick, self.trial):
+            self.assertNotRegex(workflow, r"pull-requests:\s*write|actions:\s*write")
+        self.assertNotRegex(self.shared + self.trial, r"contents:\s*write")
+        snapshot = job_block(self.quick, "snapshot")
+        self.assertRegex(snapshot, r"(?m)^    permissions:\n      contents: write\n    strategy:$")
+        self.assertNotRegex(self.quick.replace(snapshot, ""), r"contents:\s*write")
+        self.assertNotRegex(snapshot, r"continue-on-error:\s*true|always\(\)|failure\(\)|cancelled\(\)")
         draft = job_block(self.release, "draft")
         self.assertRegex(draft, r"(?m)^    needs: \[prepare, build\]$")
         # No always()/failure()/cancelled() override may bypass GitHub's
@@ -178,22 +248,51 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn("ref: ${{ github.sha }}", step_using(prepare, "actions/checkout"))
         self.assertIn("source_commit: ${{ needs.prepare.outputs.commit }}", build)
         self.assertIn("profile: release", build)
+        # A train builds the toolchain baseline plus only its own product.
+        self.assertIn("product: ${{ needs.prepare.outputs.product }}", build)
+        for output in ("tag", "commit", "prerelease", "train", "product"):
+            self.assertIn(f"{output}: ${{{{ steps.source.outputs.{output} }}}}", prepare)
         self.assertIn("ref: ${{ needs.prepare.outputs.commit }}", step_using(draft, "actions/checkout"))
         self.assertIn("SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}", draft)
         native = job_block(self.shared, "native")
         self.assertIn("ref: ${{ inputs.source_commit }}", step_using(native, "actions/checkout"))
         self.assertIn("SOURCE_COMMIT: ${{ inputs.source_commit }}", native)
         upload = step_using(native, "actions/upload-artifact")
-        download = step_using(draft, "actions/download-artifact")
         self.assertIn("name: gyo-package-${{ matrix.product }}-${{ matrix.platform }}", upload)
-        self.assertIn("pattern: gyo-package-*", download)
-        self.assertNotRegex(download, r"(?m)^\s*(run-id|repository|github-token):")
+        downloads = [step for step in steps_of(draft) if "uses: actions/download-artifact@" in step]
+        self.assertEqual([re.search(r"(?m)^          pattern: (.+)$", step).group(1) for step in downloads],
+                         ["gyo-package-${{ needs.prepare.outputs.product }}-*",
+                          "gyo-service-${{ needs.prepare.outputs.product }}"])
+        for download in downloads:
+            self.assertNotRegex(download, r"(?m)^\s*(run-id|repository|github-token):")
+            self.assertIn("merge-multiple: true", download)
+        command = run_script(step_with(draft, "id: draft"))
+        self.assertIn('--train "$RELEASE_TRAIN"', command)
+        self.assertIn("--service-directory release-services", command)
+        self.assertIn("RELEASE_TRAIN: ${{ needs.prepare.outputs.train }}", draft)
+
+    def test_release_form_selects_one_train_and_serializes_each_train_version(self):
+        dispatch = top_level_block(self.release, "on")
+        for name in ("train", "version", "prerelease"):
+            self.assertRegex(dispatch, rf"(?m)^      {name}:$")
+        self.assertRegex(dispatch, r"(?m)^      train:\n        description: .+\n        required: true\n        type: string$")
+        group = re.search(r"(?m)^  group:\s*(.+)$", top_level_block(self.release, "concurrency")).group(1)
+        self.assertEqual(group, "gyo-prepare-release-${{ inputs.train }}-${{ inputs.version }}")
+        self.assertRegex(top_level_block(self.release, "concurrency"), r"(?m)^  cancel-in-progress: false$")
+        # The shared workflow keeps building every product unless a train narrows it.
+        shared_inputs = top_level_block(self.shared, "on")
+        self.assertRegex(shared_inputs, r"(?m)^      product:\n        description: .+\n        required: false\n        default: ''\n        type: string$")
+        registry = step_with(job_block(self.shared, "prepare"), "id: registry")
+        self.assertIn('--product "$TRAIN_PRODUCT"', registry)
+        self.assertIn("TRAIN_PRODUCT: ${{ inputs.product }}", registry)
 
     def test_workflow_commands_match_the_release_helper_cli(self):
         # Ask the real CLI parser, without entering any network/mutation path.
         for command, required_options in (
             ("prepare", ("--event-path", "--event-name", "--commit", "--ref", "--output")),
-            ("draft", ("--tag", "--commit", "--prerelease", "--package-directory", "--output")),
+            ("draft", ("--train", "--tag", "--commit", "--prerelease", "--package-directory",
+                       "--service-directory", "--output")),
+            ("snapshot", ("--train", "--commit", "--package-directory", "--service-directory", "--output")),
         ):
             with self.subTest(command=command):
                 result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
@@ -708,23 +807,141 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         # Hosted toolchain facts stay in native-setup; Go is provisioned only where recorded.
         self.assertNotIn("setup-go", self.setup + self.release)
 
-    def test_go_service_archives_are_ci_artifacts_outside_the_release_download(self):
+    def test_service_records_and_archives_enter_only_their_product_train(self):
         native = job_block(self.shared, "native")
         services = step_with(native, "id: go_services")
         self.assertIn("--revision $env:SOURCE_COMMIT", run_script(services))
+        # Every Linux packaging row records its services, even none, bound to the commit.
+        plan = run_script(step_with(native, "id: go_plan")).splitlines()[0]
+        self.assertIn(f'--record "build/target/_build/$env:PRESET/go-services/{SERVICE_RECORD_NAME}"', plan)
+        self.assertIn("--revision $env:SOURCE_COMMIT", plan)
         uploads = [step for step in steps_of(native) if "uses: actions/upload-artifact@" in step]
         upload = next(step for step in uploads if "go-services" in step)
-        self.assertIn("if: ${{ !cancelled() && steps.go_services.outcome == 'success' }}", upload)
+        self.assertIn("if: ${{ !cancelled() && steps.go_plan.outcome == 'success' && "
+                      "(steps.go_plan.outputs.has_go_services != 'true' || steps.go_services.outcome == 'success') }}",
+                      upload)
         name = re.search(r"(?m)^          name: (.+)$", upload).group(1)
         self.assertEqual(name, "gyo-service-${{ matrix.product }}")
-        pattern = re.search(r"(?m)^          pattern: (.+)$", step_using(job_block(self.release, "draft"),
-                                                                       "actions/download-artifact")).group(1)
-        self.assertFalse(fnmatch.fnmatchcase(name.replace("${{ matrix.product }}", "sample"), pattern))
         self.assertIn("if-no-files-found: error", upload)
+        self.assertIn(f"go-services/{SERVICE_RECORD_NAME}\n", upload)
         self.assertIn("go-services/gyo-*.tar.gz.sha256", upload)
+        package_name = re.search(r"(?m)^          name: (.+)$", step_using(native, "actions/upload-artifact")).group(1)
+        for job, product in ((job_block(self.release, "draft"), "${{ needs.prepare.outputs.product }}"),
+                             (job_block(self.quick, "snapshot"), "${{ matrix.product }}")):
+            patterns = [re.search(r"(?m)^          pattern: (.+)$", step).group(1)
+                        for step in steps_of(job) if "uses: actions/download-artifact@" in step]
+            self.assertEqual(len(patterns), 2)
+            with self.subTest(job=product):
+                package_pattern, service_pattern = (pattern.replace(product, "sample") for pattern in patterns)
+                artifacts = {artifact.replace("${{ matrix.product }}", owner).replace("${{ matrix.platform }}", platform)
+                             for owner in ("sample", "sample_two", "toolchain")
+                             for platform in ("linux-x64", "macos-x64")
+                             for artifact in (name, package_name)}
+                # A train downloads exactly its product's artifacts, never a
+                # prefix-sharing product's or the other artifact family.
+                self.assertEqual({artifact for artifact in artifacts if fnmatch.fnmatchcase(artifact, package_pattern)},
+                                 {"gyo-package-sample-linux-x64", "gyo-package-sample-macos-x64"})
+                self.assertEqual({artifact for artifact in artifacts if fnmatch.fnmatchcase(artifact, service_pattern)},
+                                 {"gyo-service-sample"})
         # L1 cross-builds services for the merge gate but never publishes them.
         self.assertNotIn("gyo-service-", job_block(self.quick, "l1"))
         self.assertNotIn("--revision", run_script(step_with(job_block(self.quick, "l1"), "id: go_services")))
+        self.assertNotIn("--record", job_block(self.quick, "l1"))
+
+    def test_snapshot_channel_publishes_only_after_a_passed_default_branch_push(self):
+        plan = job_block(self.quick, "snapshot_plan")
+        snapshot = job_block(self.quick, "snapshot")
+        # The gate covers L1 and Quick; GitHub's implicit success() applies
+        # because no status function overrides it.
+        self.assertRegex(plan, r"(?m)^    needs: gate$")
+        self.assertRegex(snapshot, r"(?m)^    needs: \[quick, snapshot_plan\]$")
+        for job in (plan, snapshot):
+            self.assertEqual(re.search(r"(?m)^    if: (.+)$", job).group(1), SNAPSHOT_CONDITION)
+            self.assertIn("ref: ${{ github.sha }}", step_using(job, "actions/checkout"))
+            self.assertIn("persist-credentials: false", step_using(job, "actions/checkout"))
+        self.assertNotRegex(self.quick, r"(?m)^  push:\n    branches: \[(?!master\])")
+        self.assertIn('        run: python build/ci/common/release_channels.py trains --output "$GITHUB_OUTPUT"\n',
+                      step_with(plan, "id: trains"))
+        self.assertIn("trains: ${{ steps.trains.outputs.trains }}", plan)
+        self.assertIn("matrix: ${{ fromJSON(needs.snapshot_plan.outputs.trains) }}", snapshot)
+        self.assertRegex(snapshot, r"fail-fast:\s*false")
+        # One group per train: publication and retention never race.
+        self.assertRegex(snapshot, r"(?m)^    concurrency:\n      group: gyo-snapshot-\$\{\{ matrix\.train \}\}\n"
+                                   r"      cancel-in-progress: false$")
+        command = run_script(step_with(snapshot, "id: snapshot"))
+        self.assertTrue(command.startswith('python build/ci/common/release_pipeline.py snapshot --train "$SNAPSHOT_TRAIN" '
+                                           '--commit "$SOURCE_COMMIT"'), command)
+        self.assertEqual(env_block(step_with(snapshot, "id: snapshot"), 8), {
+            "GH_TOKEN": "${{ github.token }}", "GH_REPO": "${{ github.repository }}",
+            "SNAPSHOT_TRAIN": "${{ matrix.train }}", "SOURCE_COMMIT": "${{ github.sha }}"})
+        help_text = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_channels.py"), "trains", "--help"],
+                                   text=True, capture_output=True, timeout=30, check=False)
+        self.assertEqual(help_text.returncode, 0, help_text.stderr)
+        self.assertIn("--output", help_text.stdout)
+        # The gate stays the only required check and never waits for publication.
+        self.assertRegex(job_block(self.quick, "gate"), r"(?m)^    needs: \[scope, l1, quick\]$")
+
+    def test_trial_channel_packages_labelled_pull_requests_and_manual_runs_only(self):
+        trigger = [line.strip() for line in top_level_block(self.trial, "on").splitlines()
+                   if line.strip() and not line.strip().startswith("#")]
+        self.assertEqual(trigger, ["pull_request:", "types: [opened, synchronize, reopened, labeled]",
+                                   "workflow_dispatch:"])
+        self.assertNotRegex(self.trial, r"paths(-ignore)?:|branches(-ignore)?:|tags(-ignore)?:|push:")
+        group = re.search(r"(?m)^  group:\s*(.+)$", top_level_block(self.trial, "concurrency")).group(1)
+        # Only an event that can select packaging may supersede a running trial.
+        self.assertIn(f"(github.event.action != 'labeled' || github.event.label.name == '{TRIAL_LABEL}')", group)
+        self.assertIn("|| github.run_id }}", group)
+        select = job_block(self.trial, "select")
+        self.assertRegex(select, r"(?m)^    permissions:\n      contents: read\n      pull-requests: read\n    outputs:$")
+        package = job_block(self.trial, "package")
+        self.assertRegex(package, r"(?m)^    needs: select$")
+        self.assertRegex(package, r"(?m)^    if: needs\.select\.outputs\.run_package == 'true'$")
+        self.assertIn("uses: ./.github/workflows/build-and-validate.yml", package)
+        self.assertIn("source_commit: ${{ github.sha }}", package)
+        self.assertIn("profile: quick", package)
+        self.assertNotIn("product:", package)
+        self.assertNotRegex(self.trial, r"release_pipeline|gh release|/releases")
+
+    def test_actual_trial_selector_reads_the_live_pull_request_only_for_pull_requests(self):
+        bash = find_bash()
+        if bash is None:
+            if os.name == "nt":
+                self.skipTest("Native Git Bash cannot execute in this Windows environment")
+            self.fail("Bash is required by the Ubuntu trial selector")
+        script = run_script(step_with(job_block(self.trial, "select"), "release_channels.py trial"))
+        prefix = '''gh() { printf '%s\\n' "$*" >> gh-calls; [ "$GH_STATUS" = 0 ] || return "$GH_STATUS"; printf '%s\\n' "$LIVE_PULL_REQUEST"; }
+python() { printf '%s\\n' "$@" > python-arguments; }
+'''
+        lookup = ["api repos/owner/repository/pulls/7 --jq {state: .state, labels: [.labels[].name]}"]
+        live = json.dumps({"state": "open", "labels": [TRIAL_LABEL]})
+        for event_name, gh_status, expected_gh in (("pull_request", 0, lookup), ("workflow_dispatch", 0, []),
+                                                   ("pull_request", 1, lookup)):
+            with self.subTest(event=event_name, gh_status=gh_status), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                environment = dict(os.environ, EVENT_NAME=event_name, PR_NUMBER="7" if event_name == "pull_request" else "",
+                                   GITHUB_REPOSITORY="owner/repository", GITHUB_EVENT_PATH="event.json",
+                                   GITHUB_OUTPUT="outputs", GITHUB_STEP_SUMMARY="summary",
+                                   GH_STATUS=str(gh_status), LIVE_PULL_REQUEST=live)
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
+                                        cwd=root, env=environment, capture_output=True, text=True, timeout=10)
+                calls = (root / "gh-calls").read_text().splitlines() if (root / "gh-calls").exists() else []
+                self.assertEqual(calls, expected_gh)
+                if gh_status:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse((root / "python-arguments").exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                arguments = (root / "python-arguments").read_text().splitlines()
+                self.assertEqual(arguments[:6], ["build/ci/common/release_channels.py", "trial", "--event-name",
+                                                 event_name, "--event-path", "event.json"])
+                if event_name == "pull_request":
+                    self.assertEqual(arguments[arguments.index("--live-pull-request") + 1], live)
+                else:
+                    self.assertNotIn("--live-pull-request", arguments)
+        help_text = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_channels.py"), "trial", "--help"],
+                                   text=True, capture_output=True, timeout=30, check=False)
+        for option in ("--event-name", "--event-path", "--live-pull-request", "--output", "--summary"):
+            self.assertIn(option, help_text.stdout)
 
     def test_engine_layer_go_module_is_recorded_in_every_configuration(self):
         build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")

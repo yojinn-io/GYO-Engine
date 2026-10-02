@@ -57,7 +57,7 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 
 `projects.csv` selects games and `tools.csv` selects design tools; directory discovery does not. Every supported release platform has a toolchain archive containing its release-selected tools (currently UI Editor GUI); enabled games have separate archives. A failed selected game, tool or required check fails engine integration. Zero selected games is a valid release. These products are runnable binaries and dependencies, not an engine SDK or source-code package.
 
-`Prepare Release` fixes a commit, builds and validates the complete product set, and prepares the tag and Draft Release. Publishing the Draft is a separate user action. Game packages contain only their game, assets and runtime dependencies; tests and acceptance tools run outside them.
+`Prepare Release` selects one release train (`tools` or a game), fixes a commit, builds and validates that train's products, and prepares the tag and Draft Release. Publishing the Draft is a separate user action. Game packages contain only their game, assets and runtime dependencies; tests and acceptance tools run outside them.
 
 ## Design reference
 

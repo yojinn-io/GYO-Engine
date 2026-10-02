@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
@@ -15,7 +15,7 @@ from workspace import TemporaryDirectory
 
 from release_pipeline import ApiError, TransientApiError, main, prepare_draft_with_retries
 from release_support import ReleaseError
-from test_release_pipeline import ASSET_COUNT, COMMIT, OTHER_COMMIT, FakeApi, packages, EXPECTED_PAIRS
+from test_release_pipeline import ASSET_COUNT, COMMIT, OTHER_COMMIT, PLATFORMS, FakeApi, packages, EXPECTED_PAIRS
 
 
 class ReleaseRetryTests(unittest.TestCase):
@@ -251,6 +251,8 @@ class ReleaseRetryTests(unittest.TestCase):
 
     def test_draft_cli_recovers_a_timeout_and_writes_github_outputs(self):
         api = FakeApi()
+        tag = "sample_app-v1.2.3"
+        api.release["tag_name"] = tag
         request = api.request
         failed = False
 
@@ -267,13 +269,15 @@ class ReleaseRetryTests(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             output = Path(temporary) / "github-output.txt"
             package_directory = Path(temporary) / "packages"
-            argv = ["release_pipeline.py", "draft", "--tag", "v1.2.3", "--commit", COMMIT,
+            service_directory = Path(temporary) / "services"
+            argv = ["release_pipeline.py", "draft", "--train", "sample_app", "--tag", tag, "--commit", COMMIT,
                     "--prerelease", "false", "--package-directory", str(package_directory),
-                    "--output", str(output)]
+                    "--service-directory", str(service_directory), "--output", str(output)]
             with patch.object(sys, "argv", argv), \
                     patch.dict(os.environ, {"GH_REPO": "test/repo", "GH_TOKEN": "unit-test-token"}), \
                     patch("release_pipeline.load_packages", return_value=self.items) as load, \
-                    patch("release_pipeline.release_products", return_value=EXPECTED_PAIRS), \
+                    patch("release_pipeline.load_services", return_value=([], set())) as services, \
+                    patch("release_pipeline.export_registry", return_value=EXPECTED_PAIRS), \
                     patch("release_pipeline.export_tools", return_value={"windows-x64": ["alpha:native"]}), \
                     patch("release_support.git", return_value=COMMIT), \
                     patch("release_pipeline.GitHubApi", return_value=api), \
@@ -281,11 +285,13 @@ class ReleaseRetryTests(unittest.TestCase):
                     patch("release_pipeline.prepare_draft_with_retries", side_effect=retry_without_sleep) as recovery:
                 main()
             load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS,
-                                         expected_tool_owners={"windows-x64": {"alpha"}})
-            recovery.assert_called_once_with(api, "v1.2.3", COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS)
+                                         expected_tool_owners={"windows-x64": {"alpha"}}, profile="release")
+            services.assert_called_once_with(service_directory, COMMIT, "sample_app", tuple(PLATFORMS))
+            recovery.assert_called_once_with(api, tag, COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS,
+                                             expected_services=set(), notes=ANY)
             self.assertEqual(output.read_text(encoding="utf-8").splitlines(), [
                 "release_id=42", "release_url=" + api.release["html_url"],
-                "tag=v1.2.3", "commit=" + COMMIT])
+                "tag=" + tag, "commit=" + COMMIT])
         self.assertEqual(self.delays, [2])
         self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertNotIn("unit-test-token", self.stderr.getvalue())
