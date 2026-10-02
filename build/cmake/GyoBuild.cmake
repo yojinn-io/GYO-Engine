@@ -4,6 +4,9 @@ set(GYO_OUTPUT_ROOT "${GYO_REPOSITORY_ROOT}/build/target" CACHE PATH "Assembled 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No sources use C++ modules. CMake would otherwise scan every C++20 source
+# and add GCC module flags that make compiler-cache lookups uncacheable.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 option(BUILD_TESTING "Build centralized engine and project tests" OFF)
 option(GYO_ENABLE_PACKAGING "Generate product manifests and acceptance contracts" OFF)
 include(CTest)

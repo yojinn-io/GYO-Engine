@@ -21,14 +21,24 @@
 
 | 操作 | 結果 |
 |---|---|
-| 分支 push／pull request／一般 workflow 手動執行 | Quick 整合與 Actions artifacts |
+| Draft pull request，或只變更 `docs/**` 的 pull request | 只執行 CI 政策測試與範圍判定；`CI gate` 以預期略過通過 |
+| Ready pull request | L1 合併閘門：每平台一個 job，建置登錄啟用的遊戲、預設工具、Engine 與測試，並跑 `cpu`／`shader` 標籤測試；Linux 另跑 host shader、Lavapipe GPU 與 core；不封裝 |
+| 推送 master／一般 workflow 手動執行 | L1 加 Quick 整合與 Actions artifacts |
+| 推送其他分支 | 不執行 CI |
 | **Prepare Release** | 固定 SHA，完整驗收全部必要產品，準備 tag、Draft 與附件 |
 | 推送 tag | 不以此作為自動發佈入口 |
 | **Publish release** | 公開已準備的 Draft，不重新編譯 |
 
+必要檢查只設定 `CI gate`。它在每個 pull request 事件都會回報；所選層級全部成功，或依規則略過時才通過。同一 PR 的新推送會取消舊執行，master 的執行彼此不取消。編譯快取（sccache）只由預設分支的 L1 寫入，PR 與封裝 jobs 只讀取。
+
+- Draft 判定讀取 PR 目前狀態；重新執行舊的 Draft 執行也會跑 L1。
+- Draft 改為 Ready 而 head commit 未變時，新執行的 `CI gate` 要等前面 jobs 結束才出現，期間該 commit 仍顯示 Draft 執行的通過結果。新的 `CI gate` 回報前不要合併或啟用 auto-merge。
+- L1 不執行封裝與安裝後驗收。變更 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake 的 PR，合併前在該分支手動執行 **Cross-platform CI**。
+- 只改 PR 目標分支（`edited`）不會重新執行。目前未支援 merge queue（`merge_group`）；啟用前須先加入該觸發與範圍判定。
+
 第一次使用前，先把 workflow 與所需程式放入預設分支，GitHub 才能顯示 **Run workflow**。來源分支也必須包含相同支援。需要 Actions 執行與 Release 編輯權限；建置 jobs 保持讀取權限，最後 Draft job 才使用寫入權限。
 
-1. 推送預定來源並確認 Quick 結果。
+1. 確認預定來源 commit 的 Quick 結果；master 以外的分支 push 不執行 CI，需在該分支手動執行 **Cross-platform CI**。
 2. 在 **Actions → Prepare Release → Run workflow** 選擇來源分支。
 3. 填入 version，例如 `v1.0.1`，必要時勾選 prerelease。
 4. 等待三平台固定 toolchain 與全部 CSV 遊戲的必要驗收。

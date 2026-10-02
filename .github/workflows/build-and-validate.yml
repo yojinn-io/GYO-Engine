@@ -77,55 +77,13 @@ jobs:
           persist-credentials: false
           lfs: true
 
-      - name: Initialize MSVC x64
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: Provision the pinned toolchain and compiler cache
+        id: setup
+        uses: ./.github/actions/native-setup
         with:
-          arch: amd64
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14 ninja-build pkg-config \
-            libasound2-dev libpulse-dev libudev-dev libx11-dev libxext-dev \
-            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
-            libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
-            libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libdbus-1-dev \
-            mesa-vulkan-drivers vulkan-tools xvfb xauth
-          # SDL 3.4 enables XTest by default and requires its development files.
-          pkg-config --modversion xtst
-
-      - name: Select the macOS compiler toolchain
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          if [ "$(uname -m)" != "arm64" ]; then
-            echo "::error::ci-macos requires the macos-15 ARM64 runner; review the matrix label."
-            exit 1
-          fi
-          xcode_developer=/Applications/Xcode_16.4.app/Contents/Developer
-          if [ ! -d "$xcode_developer" ]; then
-            echo "::error::Pinned Xcode 16.4 is absent. Review actions/runner-images macos-15-arm64, then update the selected Xcode, toolchain cache key and docs together."
-            exit 1
-          fi
-          sudo xcode-select -s "$xcode_developer"
-          xcodebuild -version
-
-      - name: Record toolchain
-        id: tools
-        run: |
-          New-Item -ItemType Directory -Force "build/target/_build/$env:PRESET/logs" | Out-Null
-          cmake --version
-          ninja --version
-          python --version
-          if ($IsWindows) {
-            "compiler=$env:VCToolsVersion" >> $env:GITHUB_OUTPUT
-          } else {
-            $compiler = (& $env:CXX --version | Select-Object -First 1) -replace '[^a-zA-Z0-9.-]', '_'
-            "compiler=$compiler" >> $env:GITHUB_OUTPUT
-          }
+          platform: ${{ matrix.platform }}
+          toolchain: ${{ matrix.toolchain }}
+          preset: ${{ matrix.preset }}
 
       - name: Configure the selected product and engine verification
         id: configure
@@ -148,12 +106,14 @@ jobs:
           xcrun -sdk macosx metal -c "$RUNNER_TEMP/gyo-metal-probe.metal" -o "$RUNNER_TEMP/gyo-metal-probe.air"
           xcrun -sdk macosx metallib "$RUNNER_TEMP/gyo-metal-probe.air" -o "$RUNNER_TEMP/gyo-metal-probe.metallib"
 
+      # The restored host-tools CMakeCache records the sccache launcher, so the
+      # key family is tied to it and only jobs using native-setup restore it.
       - name: Cache pinned native shader tools
         if: steps.configure.outputs.has_shader_tools == 'true'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/target/_build/${{ matrix.preset }}/host-tools
-          key: shader-tools-v1-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.tools.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
+          key: shader-tools-v2-sccache-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
 
       - name: Build the selected graph and its tests
         id: build
@@ -175,11 +135,13 @@ jobs:
           ctest --test-dir "build/target/_build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # The core preset leaves MSVC on /Zi, whose shared per-target PDB is unsafe
+      # behind sccache; embedded (/Z7) debug info is MSVC-only and ignored elsewhere.
       - name: Build and test core with optional modules disabled
         id: core
-        if: always() && matrix.kind == 'toolchain' && steps.tools.outcome == 'success'
+        if: always() && matrix.kind == 'toolchain' && steps.setup.outcome == 'success'
         run: |
-          cmake --preset core -B "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
+          cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -270,6 +232,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      # Statistics are diagnostics only and never decide the job result.
+      # Packaging jobs restore the compiler cache but never save it.
+      - name: Record compiler cache statistics
+        if: always() && steps.setup.outcome == 'success'
+        run: |
+          sccache --show-stats 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/sccache-stats.log"
+          sccache --stop-server 2>&1 | Out-Null
+          exit 0
 
       - name: Upload diagnostics
         if: always()

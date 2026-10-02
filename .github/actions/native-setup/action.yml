@@ -1,0 +1,145 @@
+name: Native CI toolchain
+description: >-
+  Provision the pinned hosted toolchain for one row of the CI toolchain table
+  and route every CMake compile, including FetchContent dependencies and the
+  shader host-tools ExternalProject, through a restored sccache directory.
+  Both the L1 merge gate and packaging jobs use this one definition so their
+  toolchains, and therefore their compiler cache entries, stay identical.
+
+inputs:
+  platform:
+    description: Package platform of the toolchain table row
+    required: true
+  toolchain:
+    description: Pinned toolchain identity of the toolchain table row
+    required: true
+  preset:
+    description: CMake configure preset whose log directory the job writes
+    required: true
+
+outputs:
+  compiler:
+    description: Exact compiler identity for cache keys
+    value: ${{ steps.toolchain.outputs.compiler }}
+  cache-path:
+    description: Local sccache directory restored by this action
+    value: ${{ steps.toolchain.outputs.cache-path }}
+  cache-key:
+    description: Unique key under which the caller may save the compiler cache
+    value: ${{ steps.toolchain.outputs.cache-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Initialize MSVC x64
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      with:
+        arch: amd64
+
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-14 g++-14 ninja-build pkg-config \
+          libasound2-dev libpulse-dev libudev-dev libx11-dev libxext-dev \
+          libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+          libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+          libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libdbus-1-dev \
+          mesa-vulkan-drivers vulkan-tools xvfb xauth
+        # SDL 3.4 enables XTest by default and requires its development files.
+        pkg-config --modversion xtst
+
+    - name: Select the macOS compiler toolchain
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        if [ "$(uname -m)" != "arm64" ]; then
+          echo "::error::ci-macos requires the macos-15 ARM64 runner; review the matrix label."
+          exit 1
+        fi
+        xcode_developer=/Applications/Xcode_16.4.app/Contents/Developer
+        if [ ! -d "$xcode_developer" ]; then
+          echo "::error::Pinned Xcode 16.4 is absent. Review actions/runner-images macos-15-arm64, then update the selected Xcode, toolchain cache key and docs together."
+          exit 1
+        fi
+        sudo xcode-select -s "$xcode_developer"
+        xcodebuild -version
+
+    # Install the release archive directly against a pinned SHA-256. The
+    # setup action exported the Actions runtime token to every later build
+    # and test step; only the local-disk cache backend is used here.
+    - name: Install the pinned compiler cache
+      shell: pwsh
+      env:
+        SCCACHE_VERSION: v0.18.0
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        $pinned = @{
+          'Linux-X64' = 'x86_64-unknown-linux-musl', '45f1447fbe231e3037bde351ef70677dd212216c8d62ae7ca409fecc4d6acc89'
+          'Windows-X64' = 'x86_64-pc-windows-msvc', '1a63c1be2beab3f04d27e4cc145443e092e02d3dd83a51030989829d7023091b'
+          'macOS-ARM64' = 'aarch64-apple-darwin', '308184519b646f5125289e8515b36f6ca65a13a041923994aebe702348674e8e'
+        }
+        $runner = "$env:RUNNER_OS-$env:RUNNER_ARCH"
+        if (-not $pinned.ContainsKey($runner)) {
+          throw "No pinned sccache $env:SCCACHE_VERSION archive for the $runner runner; add its release SHA-256 here."
+        }
+        $triple, $sha256 = $pinned[$runner]
+        $name = "sccache-$env:SCCACHE_VERSION-$triple"
+        Invoke-WebRequest "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz" -OutFile (Join-Path $env:RUNNER_TEMP "$name.tar.gz") -MaximumRetryCount 3 -RetryIntervalSec 5
+        $actual = (Get-FileHash (Join-Path $env:RUNNER_TEMP "$name.tar.gz") -Algorithm SHA256).Hash
+        if ($actual -ne $sha256) { throw "Checksum mismatch for ${name}.tar.gz: expected $sha256, got $actual." }
+        # A relative archive path keeps GNU tar from reading a drive letter as a host.
+        Push-Location $env:RUNNER_TEMP
+        tar -xzf "$name.tar.gz"
+        $status = $LASTEXITCODE
+        Pop-Location
+        if ($status -ne 0) { exit $status }
+        Join-Path $env:RUNNER_TEMP $name >> $env:GITHUB_PATH
+
+    - name: Record toolchain and route compilers through sccache
+      id: toolchain
+      shell: pwsh
+      env:
+        PRESET: ${{ inputs.preset }}
+        CACHE_FAMILY: sccache-v1-${{ inputs.platform }}-${{ inputs.toolchain }}
+      run: |
+        New-Item -ItemType Directory -Force "build/target/_build/$env:PRESET/logs" | Out-Null
+        cmake --version
+        ninja --version
+        python --version
+        sccache --version
+        if ($IsWindows) {
+          $compiler = $env:VCToolsVersion
+        } else {
+          $compiler = (& $env:CXX --version | Select-Object -First 1) -replace '[^a-zA-Z0-9.-]', '_'
+        }
+        if (-not $compiler) { throw 'Unable to identify the compiler for the cache keys.' }
+        $cachePath = Join-Path $env:RUNNER_TEMP 'gyo-sccache'
+        $prefix = "$env:CACHE_FAMILY-$compiler-$env:PRESET-"
+        "compiler=$compiler" >> $env:GITHUB_OUTPUT
+        "cache-path=$cachePath" >> $env:GITHUB_OUTPUT
+        "restore-prefix=$prefix" >> $env:GITHUB_OUTPUT
+        "cache-key=$prefix$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT
+        # CMake reads these launcher variables on every first configure, so
+        # they also reach FetchContent subprojects and the host-tools
+        # ExternalProject. The bare name keeps restored CMakeCaches portable.
+        # MSVC objects are cacheable only with embedded /Z7 debug info, which
+        # ci-windows and the CI core configure commands select.
+        "SCCACHE_DIR=$cachePath" >> $env:GITHUB_ENV
+        "SCCACHE_CACHE_SIZE=2G" >> $env:GITHUB_ENV
+        "SCCACHE_IDLE_TIMEOUT=0" >> $env:GITHUB_ENV
+        "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+        "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+        "CMAKE_OBJC_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+        "CMAKE_OBJCXX_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+
+    # Only the default-branch L1 job saves; every other job reads the newest
+    # seed for the same platform, toolchain, compiler and preset.
+    - name: Restore the compiler cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.toolchain.outputs.cache-path }}
+        key: ${{ steps.toolchain.outputs.cache-key }}
+        restore-keys: ${{ steps.toolchain.outputs.restore-prefix }}
