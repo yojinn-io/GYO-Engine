@@ -1,6 +1,6 @@
 # PvP v5 分批計畫與進度
 
-更新：2026-10-02。Owner：`object_fps_pvp`。
+更新：2026-10-03。Owner：`object_fps_pvp`。
 **第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
 （PR #11，合併為`bec86b7`），2026-10-02結案驗收通過，**第03批已結案**；**第04批2026-10-02完成**（PR #14，合併為`cef1b39`），**第05批進行中**（2026-10-02啟動，子批次見[交接](HANDOFF.md)）。**
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
@@ -25,7 +25,7 @@
 | 02 | [人物與移動動畫](02-player-model-and-locomotion.md) | 已完成，2026-09-28 | Client女性人物、掛槍、Idle／Jog與步頻；真雙GUI短測通過，仍為v4玩法 |
 | 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 已結案，2026-10-02 | 完整三角色v5、25案網路與生命恢復通過；持續相位追蹤＋token bucket worker與連線品質移出（PR #11）；計次可見50ms守門3輪與25案矩陣通過，修正與已知問題見[fix](fix/README.md) |
 | 04 | [完整動作呈現](04-complete-action-presentation.md) | 已完成，2026-10-02 | 第一人稱換彈、遠端射擊／換彈／跳躍／死亡與生命隔離、Walk／Jog依速度混合；L1／L2／L3於macOS通過，見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md) |
-| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 進行中，2026-10-02啟動；含完整驗收與升格（使用者決定） | 短整合、手動命令／日誌／門檻與回報表；仍是候選 |
+| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 短測與驗收工具完成（05-1～05-4，2026-10-03）；完整驗收（05-5）待執行，含升格（使用者決定） | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
 
 ```text
 01 契約／基線 -> 02 人物Idle/Jog（v4）
@@ -63,10 +63,10 @@
 
 ## 接續處理文字
 
-> 請先讀 docs/object_fps_pvp/plans/v5/HANDOFF.md、v5契約、第03批計畫與 fix/README.md。
-> 第03批、第04批已於2026-10-02完成。第05批須由使用者明確啟動，啟動前先複審第05批計畫
-> （2026-10-02已補入持續相位追蹤、連線品質移出與跨平台分層）；延到v6的項目見 ../v6/HANDOFF.md。
-> 不執行長測。GUI量測仍須閒置機器、一次一輪，事前宣告總輪數與補跑規則（fix/06）。
+> 請先讀 docs/object_fps_pvp/plans/v5/HANDOFF.md、v5契約、MANUAL_ACCEPTANCE.md、ACCEPTANCE_STATUS.md 與 fix/README.md。
+> 第03批、第04批已於2026-10-02完成；第05批05-1～05-4已於2026-10-03完成，剩05-5完整驗收（使用者已授權，
+> 只在本機macOS）：事前宣告後依序跑GUI三輪與60／144 Hz長測，全部通過即寫STABLE_BASELINE並升格。
+> 機器須閒置約1.5小時；延到v6的項目見 ../v6/HANDOFF.md。
 
 ## 第02批結果
 

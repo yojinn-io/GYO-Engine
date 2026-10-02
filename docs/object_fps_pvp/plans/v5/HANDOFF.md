@@ -1,7 +1,7 @@
 # PvP v5 交接
 
-更新：2026-10-02。**第01–04批已完成（第03批2026-10-02結案驗收通過；第04批PR #14合併為`cef1b39`）。**
-**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），**第05批進行中**（2026-10-02使用者啟動；工作分支`claude/pvp-v5-batch05`，自`cef1b39`）；未執行長測、未升格v5穩定基線。
+更新：2026-10-03。**第01–04批已完成（第03批2026-10-02結案驗收通過；第04批PR #14合併為`cef1b39`）。**
+**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），**第05批進行中**（2026-10-02使用者啟動；工作分支`claude/pvp-v5-batch05`，自`cef1b39`）：05-1～05-4完成（2026-10-03），剩05-5完整驗收；未執行長測、未升格v5穩定基線。
 
 ## 第05批進度（記錄器，隨工作更新）
 
@@ -18,7 +18,7 @@
 | 05-1 | headless長測v5化：玩法probe可重複16秒計畫為多個循環（生命世代相對遞增），分析器逐循環／逐生命核對；`--soak`長模式與短模式 | high | 完成（CTest 42／42；突變14／14；開發實跑2循環60 Hz、3循環144 Hz與單循環矩陣clean-60皆PASS，不計入驗收） |
 | 05-2 | GUI combat v5化：射擊遇空彈匣換彈、死亡／重生期間依v5規則、逐生命HP與唯一傷害核對 | high | 完成（CTest 43／43；突變9／9；開發實跑16秒與兩輪120秒，第二輪120秒整輪PASS，不計入驗收） |
 | 05-3 | 整合短測與架構檢查：依指紋重用第03／04批短測（05-1改了action probe，25案矩陣須重跑）、一輪雙GUI整合短模式、產品移除／owner選擇／Match不連結Renderer與SDL | medium | 完成（矩陣25／25、GUI短測、長測短模式、產品移除皆通過；2026-10-03） |
-| 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 未開始 |
+| 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 完成（2026-10-03；PR待CI） |
 | 05-5 | 完整驗收：事前宣告；GUI三輪×120秒combat（計次、fix/06補跑規則）；60 Hz與144 Hz各1808秒長測（113循環，串行）；全部通過寫v5穩定基線並結案 | medium（執行約1.5小時，機器須閒置） | 未開始 |
 
 使用者2026-10-02確認拆分與檔位，05-1以high執行。
@@ -86,6 +86,14 @@
     release pipeline測試都是`git rev-parse`在非repo副本失敗；在副本內建立git repo重跑`build.ci`即通過。
     剩餘非文件引用1處：`services/gyo_gateway/README.md`說明產品Gateway模組依賴公共模組（方向正確；移除產品時該說明會過時，屬文件）。
   - 量測後檢查無孤兒程序（Match／Gateway／probe／runner皆已結束）。
+- 05-4紀錄（使用者2026-10-03確認，medium）：
+  - 新增[手動指南](MANUAL_ACCEPTANCE.md)：共同前提（`test` preset建置、一次一項、全新輸出、指紋）、正式Client四終端、
+    L3原生操作清單（v5預期）、L1／L2短測命令、量化門檻（含05-1／05-2確立的逐生命、LifeRespawn、產量容許與漂移窗口規則）、
+    完整驗收命令（GUI三輪＋兩組長測）與fix/06補跑規則、平台註記。命令以本機`--help`與05-3實跑核對；
+    雜湊用Python，避免`sha256sum`／`shasum`的平台差異。
+  - 新增[驗收狀態](ACCEPTANCE_STATUS.md)：短測與完整驗收兩表，按macOS／Windows／Linux分欄；Windows／Linux與完整驗收全標「未執行」；
+    回報欄位與升格條件。
+  - 第05批計畫狀態、README進度與接續文字、本批dev_log（`docs/dev_logs/2026_10_03_pvp_v5_batch05.zh-Hant.md`）已更新。
 
 ## 第04批進度（記錄器，隨工作更新）
 
