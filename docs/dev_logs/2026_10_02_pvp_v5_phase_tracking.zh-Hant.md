@@ -1,7 +1,7 @@
 # PvP v5 第03批：持續相位追蹤、token bucket worker與連線品質移出
 
 日期：2026-10-02。Owner：object_fps_pvp。
-狀態：實作與CPU驗證完成，第03批結案驗收通過；經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`）提交PR #11送審（三平台CI通過），**尚未合併**；
+狀態：實作與CPU驗證完成，第03批結案驗收通過；經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`），由PR #11合併為`bec86b7`；
 實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收通過（計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms）；25案真網路矩陣25／25通過（1075／1075動作）），**第03批已結案**，第04批暫停。
 每個問題的成因／影響／復現／解決方案見[修正與已知問題](../object_fps_pvp/plans/v5/fix/README.md)，本文只記經過。
 數字未標「實機」者皆為CPU模擬。
