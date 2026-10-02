@@ -177,6 +177,40 @@ jobs:
           ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # Go work comes only from the configured build record, which always holds
+      # the engine-layer module, so it also runs with no registered game. It
+      # follows the native steps: a Go failure never skips C++ tests or the
+      # compiler cache seed, and the minute it adds stays off the slower rows.
+      - name: Plan the recorded Go modules and services
+        id: go_plan
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}
+        run: |
+          python build/ci/common/go_checks.py plan --build-info "build/target/_build/$env:PRESET/gyo-build.json" --output $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Provision the Go version the recorded modules declare
+        id: go_setup
+        if: ${{ !cancelled() && steps.go_plan.outputs.has_go_modules == 'true' }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ steps.go_plan.outputs.go_version_file }}
+          cache: true
+          cache-dependency-path: ${{ steps.go_plan.outputs.go_dependency_files }}
+
+      - name: Vet, test and race-test the recorded Go modules
+        id: go
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' }}
+        run: |
+          python build/ci/common/go_checks.py check --build-info "build/target/_build/$env:PRESET/gyo-build.json" --race 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-checks.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Cross-build the declared Go services
+        id: go_services
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' && steps.go_plan.outputs.has_go_services == 'true' }}
+        run: |
+          python build/ci/common/go_checks.py build --build-info "build/target/_build/$env:PRESET/gyo-build.json" --output-dir "build/target/_build/$env:PRESET/go-services" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-services.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # Stopping the server flushes pending cache writes before any save.
       # Statistics are diagnostics only and never decide the job result.
       - name: Record compiler cache statistics
@@ -222,6 +256,8 @@ jobs:
           SHADER_RESULT: ${{ steps.shaders.outcome }}
           GPU_RESULT: ${{ steps.gpu.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
+          GO_RESULT: ${{ steps.go.outcome }}
+          GO_SERVICES_RESULT: ${{ steps.go_services.outcome }}
         run: |
           @"
           ## L1 / $env:L1_PLATFORM
@@ -232,6 +268,8 @@ jobs:
           | Host shader tests (Linux) | $env:SHADER_RESULT |
           | Linux software GPU engine tests | $env:GPU_RESULT |
           | Core baseline (Linux) | $env:CORE_RESULT |
+          | Go vet / test / race (Linux) | $env:GO_RESULT |
+          | Go service cross-builds (Linux) | $env:GO_SERVICES_RESULT |
 
           L1 builds and tests only. Packaging and installed acceptance run on master integration.
           "@ >> $env:GITHUB_STEP_SUMMARY

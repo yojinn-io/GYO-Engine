@@ -1,5 +1,6 @@
 """Exercise the CI and release workflows' actual gates without GitHub API calls."""
 
+import fnmatch
 import itertools
 import json
 import os
@@ -609,6 +610,84 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("if ($status -ne 0) { exit $status }", install)
         self.assertIn(">> $env:GITHUB_PATH", install)
         self.assertNotIn(">> $env:GITHUB_ENV", install)
+
+    def test_go_work_runs_on_linux_only_from_the_configured_build_record(self):
+        native = job_block(self.shared, "native")
+        l1 = job_block(self.quick, "l1")
+        record = '--build-info "build/target/_build/$env:PRESET/gyo-build.json"'
+        go_help = {command: subprocess.run([sys.executable, str(ROOT / "build/ci/common/go_checks.py"), command, "--help"],
+                                           text=True, capture_output=True, timeout=30, check=False)
+                   for command in ("plan", "check", "build")}
+        for name, job, last_native_step in (("l1", l1, "id: core"), ("native", native, "name: Upload this product and platform package")):
+            with self.subTest(job=name):
+                steps = steps_of(job)
+                plan = step_with(job, "id: go_plan")
+                setup = step_using(job, "actions/setup-go")
+                check = step_with(job, "id: go\n")
+                services = step_with(job, "id: go_services")
+                self.assertEqual(job.count("uses: actions/setup-go@"), 1)
+                # Go follows every native step so a Go failure cannot skip
+                # C++ tests, product acceptance or the compiler cache seed.
+                self.assertLess(steps.index(step_with(job, last_native_step)), steps.index(plan))
+                self.assertLess(steps.index(plan), steps.index(setup))
+                self.assertLess(steps.index(setup), steps.index(check))
+                self.assertLess(steps.index(check), steps.index(services))
+                self.assertIn("if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}", plan)
+                self.assertIn("steps.go_plan.outputs.has_go_modules == 'true'", setup)
+                self.assertIn("go-version-file: ${{ steps.go_plan.outputs.go_version_file }}", setup)
+                self.assertIn("cache-dependency-path: ${{ steps.go_plan.outputs.go_dependency_files }}", setup)
+                self.assertRegex(setup, r"(?m)^          cache: true$")
+                self.assertIn("steps.go_setup.outcome == 'success'", check)
+                self.assertIn("steps.go_setup.outcome == 'success'", services)
+                self.assertIn("steps.go_plan.outputs.has_go_services == 'true'", services)
+                self.assertNotIn("continue-on-error", plan + setup + check + services)
+                for command, step in (("plan", plan), ("check", check), ("build", services)):
+                    script = run_script(step).splitlines()
+                    self.assertEqual(len(script), 2, script)
+                    self.assertTrue(script[0].startswith(f"python build/ci/common/go_checks.py {command} {record} "), script[0])
+                    self.assertEqual(script[1], PROPAGATE)
+                    self.assertEqual(go_help[command].returncode, 0, go_help[command].stderr)
+                    for option in re.findall(r"(?<!\S)(--[a-z][a-z-]*)", script[0]):
+                        self.assertIn(option, go_help[command].stdout)
+                    # A packaging row selects its own records; L1 checks them all.
+                    self.assertEqual("--product $env:GYO_PRODUCT" in script[0], name == "native", script[0])
+                # The race detector runs on Linux, the only row that has Go.
+                self.assertIn(" --race ", run_script(check))
+        # A product row checks its module where its C++ tests run (release);
+        # L1 already checks every module for the same commit.
+        self.assertIn("(inputs.profile == 'release' || matrix.kind == 'toolchain')", step_with(native, "id: go\n"))
+        self.assertNotRegex(step_with(l1, "id: go\n"), r"inputs\.profile|matrix\.kind")
+        # Hosted toolchain facts stay in native-setup; Go is provisioned only where recorded.
+        self.assertNotIn("setup-go", self.setup + self.release)
+
+    def test_go_service_archives_are_ci_artifacts_outside_the_release_download(self):
+        native = job_block(self.shared, "native")
+        services = step_with(native, "id: go_services")
+        self.assertIn("--revision $env:SOURCE_COMMIT", run_script(services))
+        uploads = [step for step in steps_of(native) if "uses: actions/upload-artifact@" in step]
+        upload = next(step for step in uploads if "go-services" in step)
+        self.assertIn("if: ${{ !cancelled() && steps.go_services.outcome == 'success' }}", upload)
+        name = re.search(r"(?m)^          name: (.+)$", upload).group(1)
+        self.assertEqual(name, "gyo-service-${{ matrix.product }}")
+        pattern = re.search(r"(?m)^          pattern: (.+)$", step_using(job_block(self.release, "draft"),
+                                                                       "actions/download-artifact")).group(1)
+        self.assertFalse(fnmatch.fnmatchcase(name.replace("${{ matrix.product }}", "sample"), pattern))
+        self.assertIn("if-no-files-found: error", upload)
+        self.assertIn("go-services/gyo-*.tar.gz.sha256", upload)
+        # L1 cross-builds services for the merge gate but never publishes them.
+        self.assertNotIn("gyo-service-", job_block(self.quick, "l1"))
+        self.assertNotIn("--revision", run_script(step_with(job_block(self.quick, "l1"), "id: go_services")))
+
+    def test_engine_layer_go_module_is_recorded_in_every_configuration(self):
+        build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
+        # Unconditional (top-level) registration, before any game is added.
+        registration = re.search(r"(?m)^gyo_register_go_module\(OWNER engine DIRECTORY \"\$\{GYO_REPOSITORY_ROOT\}/[^\"]+\"\)$", build)
+        self.assertIsNotNone(registration)
+        self.assertLess(registration.start(), build.index("foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)"))
+        self.assertNotIn(" TESTS", registration.group(0))
+        write = next(line for line in build.splitlines() if "gyo-build.json" in line and line.startswith("file(WRITE"))
+        for field in ("shader_bundles", "shader_host_tools", "go_modules", "go_services"):
+            self.assertIn(f'\\"{field}\\":', write)
 
     def test_every_external_action_is_pinned_to_a_full_commit(self):
         documents = sorted(WORKFLOWS.glob("*.yml")) + sorted((ROOT / ".github" / "actions").glob("*/action.yml"))
