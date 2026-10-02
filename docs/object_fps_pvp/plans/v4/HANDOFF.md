@@ -1,6 +1,6 @@
 # PvP v4 交接
 
-後續開發入口：[v5 交接](v5/HANDOFF.md)、[五批進度](v5/README.md)。
+後續開發入口：[v5 交接](../v5/HANDOFF.md)、[五批進度](../v5/README.md)。
 v5 第01–02批完成；第03批已建成三角色v5候選，但可見延遲守門未結案；第04批未開始。
 下文保留 v4 完整驗收的歷史交接，長測授權不自動延伸至 v5。
 
@@ -10,13 +10,13 @@ v5 第01–02批完成；第03批已建成三角色v5候選，但可見延遲守
 ## 現況與閱讀順序
 
 1. [進度與執行規則](README.md)：只執行使用者這次指定的批次。
-2. [v4 契約](../protocol-v4.zh-Hant.md)：政策、時間與資料語意的單一入口。
+2. [v4 契約](../../protocol-v4.zh-Hant.md)：政策、時間與資料語意的單一入口。
 3. 本次 [05 整合短測與手動指南](05-short-validation-and-manual-test-guide.md)：
    [手動命令與門檻](MANUAL_ACCEPTANCE.md)、[驗收狀態／回報表](ACCEPTANCE_STATUS.md)。
 4. [穩定基線](STABLE_BASELINE.md)：最終驗收、版本指紋及適用範圍。
-5. 第 05 批最初交付見 [第 05 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch05.zh-Hant.md)。
-   正式遊戲實作與呈現證據見 [第 04 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
-   網路共存／恢復證據保留於 [第 03 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md)。
+5. 第 05 批最初交付見 [第 05 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch05.zh-Hant.md)。
+   正式遊戲實作與呈現證據見 [第 04 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
+   網路共存／恢復證據保留於 [第 03 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md)。
 
 Client／Gateway／Match 的 wire、HTTP join、Ready／Welcome 已一起升為 **v4**，
 拒絕 v1–v3。試跑必須使用一起重建的三個角色；舊程序須重啟。

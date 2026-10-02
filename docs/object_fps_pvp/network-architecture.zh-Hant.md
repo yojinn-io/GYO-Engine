@@ -778,16 +778,16 @@ HTTP join、Ready／Welcome 同步升級並拒絕 v1–v3。前述 v3 移動修�
 回顧保留歷史證據；不能當成新增射擊或 v4 長測的驗收紀錄。
 v4 的時間、ActionId、裁決、有效期、戰鬥狀態及 ownership 統一見
 [v4 契約](protocol-v4.zh-Hant.md)；執行順序與各批進度見
-[五份計畫](plans/README.md)，新對話交接見 [HANDOFF](plans/HANDOFF.md)。
+[五份計畫](plans/v4/README.md)，新對話交接見 [HANDOFF](plans/v4/HANDOFF.md)。
 
 第 02 批加入產品權威射擊及 Host 有界發布時間 metadata，第 03 批完成 v4 傳輸
 及 headless 真網路交付／共存／恢復。第 04 批已接既有槍模與即時武器回饋，
 真實雙 GUI 呈現短回歸通過；第 05 批交付整合測試與手動驗收指南。
 **三輪GUI共存、60／144Hz各30分鐘及原生X11操作已通過。**
 穩定範圍限Linux／X11／Vulkan、同機雙玩家與已驗證的受控網路；
-指紋、完整數據、原始失敗及限制見 [穩定基線](plans/STABLE_BASELINE.md)。
-啟動、日誌與固定門檻見 [手動指南](plans/MANUAL_ACCEPTANCE.md)，
-實際通過／失敗及缺項見 [驗收狀態](plans/ACCEPTANCE_STATUS.md)。
+指紋、完整數據、原始失敗及限制見 [穩定基線](plans/v4/STABLE_BASELINE.md)。
+啟動、日誌與固定門檻見 [手動指南](plans/v4/MANUAL_ACCEPTANCE.md)，
+實際通過／失敗及缺項見 [驗收狀態](plans/v4/ACCEPTANCE_STATUS.md)。
 移動基線不調參，命中回溯與可重用同步機制留後續。
 原分批交付後，使用者明確追加授權Agent接手完整驗收及通過後升格；現已完成。
 手動指南與回報表保留作未來測例參考，不自動開始歷史命中或其他下一階段。
@@ -947,7 +947,7 @@ Architecture Delta 限於產品 Client 的呈現責任、既有能力依賴與�
 第 01 批文件／基線及第 02 批人物呈現／短測已完成；第03批已建成三角色v5候選，
 功能與網路短測完成，但可見延遲守門尚有啟動相位問題，整批驗收未結案。
 第02批下述v4圖示是當時切片的歷史說明。
-原 [v4 穩定基線](plans/STABLE_BASELINE.md) 與驗收證據保持原範圍。
+原 [v4 穩定基線](plans/v4/STABLE_BASELINE.md) 與驗收證據保持原範圍。
 
 新增責任是產品內生命世代、跳躍／彈匣／換彈／重生狀態及 Client 人物呈現。
 lifeGeneration、movementEpoch 與 Session ActionId 分離；重生不清未 ACK 的動作帳本。

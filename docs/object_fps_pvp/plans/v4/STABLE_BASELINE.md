@@ -12,7 +12,7 @@ Client／Gateway／Match共同使用v4，明確拒絕v1–v3。保持60Hz模擬�
 兩步移動lead、既定epoch恢復、1Tick遠端插值。Mark23單發、無限彈藥、100HP、
 25傷害、20Tick冷卻；Match查詢當前權威幾何，獨立ActionId去重與確認。
 HP=0仍可操作，離開再加入取得新身分與滿血，沒有新增死亡／重生或歷史命中。
-詳細政策以 [v4契約](../protocol-v4.zh-Hant.md) 為準。
+詳細政策以 [v4契約](../../protocol-v4.zh-Hant.md) 為準。
 
 起始HEAD：`bfeb047669d465ce2a9a43af43c85fb3e577e4bc`。工作樹尚未提交；
 不能只用HEAD識別本基線。來源、內容、分析器、產物、證據及git status記於：
@@ -92,7 +92,7 @@ Engine／公共Gateway責任移動或新通用框架。工具仍由object_fps_pv
 
 保留第05批P50 52.02ms失敗與兩次pointer-release診斷，不能用新通過跑次抹除；
 原生1／2／3／5的測例失敗亦保留。歷史整機拖窗停頓根因仍未證實。
-詳見 [完整驗收dev_log](../../dev_logs/2026_09_28_pvp_v4_full_acceptance.zh-Hant.md)。
+詳見 [完整驗收dev_log](../../../dev_logs/2026_09_28_pvp_v4_full_acceptance.zh-Hant.md)。
 
 [手動命令、日誌與門檻](MANUAL_ACCEPTANCE.md) 及
 [驗收狀態／回報模板](ACCEPTANCE_STATUS.md) 永久保留供後續重驗。

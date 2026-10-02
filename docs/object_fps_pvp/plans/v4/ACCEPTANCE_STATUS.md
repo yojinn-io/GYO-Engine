@@ -5,7 +5,7 @@
 第 05 批工具交付後已追加完整驗收。以下以實際新跑次判斷；既有故障矩陣與
 CPU／GPU 證據僅在正式產品來源及產物未變的範圍重用，不以歷史 v3 長測抵銷缺項。
 
-操作入口：[手動驗收指南](MANUAL_ACCEPTANCE.md)。契約：[Protocol v4](../protocol-v4.zh-Hant.md)。
+操作入口：[手動驗收指南](MANUAL_ACCEPTANCE.md)。契約：[Protocol v4](../../protocol-v4.zh-Hant.md)。
 
 ## 本次完整驗收
 

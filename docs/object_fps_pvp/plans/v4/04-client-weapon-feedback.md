@@ -1,8 +1,8 @@
 # 第 04 批：Client 武器回饋與遊戲操作
 
-依賴：第 03 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../protocol-v4.zh-Hant.md)。
+依賴：第 03 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../../protocol-v4.zh-Hant.md)。
 **2026-09-28 已完成並停止。** 真實 GUI 呈現短回歸已通過；未啟動第 05 批或長測。
-實作與原始證據見 [本批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
+實作與原始證據見 [本批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
 以下保留本批要求。
 
 ## 目標

@@ -30,8 +30,8 @@
 `build/target/_services/object_fps_pvp/bin/`，probes 位於
 `build/target/_build/test/acceptance/object_fps_pvp/`。
 
-[v4 穩定基線](../STABLE_BASELINE.md)、[手動指南](../MANUAL_ACCEPTANCE.md) 與
-[驗收狀態](../ACCEPTANCE_STATUS.md) 保持原文。歷史基線中的舊 HEAD／當時工作樹
+[v4 穩定基線](../v4/STABLE_BASELINE.md)、[手動指南](../v4/MANUAL_ACCEPTANCE.md) 與
+[驗收狀態](../v4/ACCEPTANCE_STATUS.md) 保持原文。歷史基線中的舊 HEAD／當時工作樹
 描述屬於原跑次來源，不改寫成本批 HEAD。適用範圍仍是 Linux／X11／Vulkan、
 同機雙玩家；新增人物後須取得新呈現證據，不能自動承接舊 GPU／效能認證。
 

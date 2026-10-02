@@ -24,7 +24,7 @@ macOS會對完全被遮蔽的視窗節流（`gui_main.cpp` `LatencyWindow`註解
 
 ### 2. 視窗狀態干擾沒有紀錄
 
-- v4只在[手動指南](../../MANUAL_ACCEPTANCE.md)要求「量測時讓兩個視窗持續呈現」，不要拖曳、切換、最小化或遮蔽；
+- v4只在[手動指南](../../v4/MANUAL_ACCEPTANCE.md)要求「量測時讓兩個視窗持續呈現」，不要拖曳、切換、最小化或遮蔽；
   harness不記錄是否真的做到。
 - 產品在`FOCUS_LOST`／`MOVED`／`RESIZED`／`MINIMIZED`時釋放滑鼠指標
   （`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:191`，`HandleNativeEvent`），這些事件會改變受測Client的輸入狀態。
@@ -34,7 +34,7 @@ macOS會對完全被遮蔽的視窗節流（`gui_main.cpp` `LatencyWindow`註解
 
 沒有事前規則時，「這輪受干擾所以重跑」可以在看過延遲分數後才決定，等同挑分數；也違反既有
 「失敗保留、不以另一次通過覆蓋」的原則（例：v4第05批GUI首輪P50 52.02 ms與外部建置重疊，仍記為未通過，
-見[v4驗收狀態](../../ACCEPTANCE_STATUS.md)）。
+見[v4驗收狀態](../../v4/ACCEPTANCE_STATUS.md)）。
 
 ## 影響
 

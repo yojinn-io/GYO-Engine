@@ -2,7 +2,7 @@
 
 更新：2026-09-28。Owner：`object_fps_pvp`。
 
-後續人物／基本對戰循環見 [v5 五批計畫](v5/README.md) 及 [v5 交接](v5/HANDOFF.md)。
+後續人物／基本對戰循環見 [v5 五批計畫](../v5/README.md) 及 [v5 交接](../v5/HANDOFF.md)。
 v5 第01–02批完成；第03批功能及網路已成v5候選，可見延遲守門未結案；以下保留v4歷史證據。
 
 **第 05 批完整驗收已完成；依使用者追加授權，v4 已升格為穩定基線。**
@@ -27,7 +27,7 @@ Client／Gateway／Match 已一起切換 v4，真 socket 動作交付、移動�
                                                          本次已追加授權 Agent 執行
 ```
 
-各批共用的規則以 [v4 契約](../protocol-v4.zh-Hant.md) 為準；計畫引用契約，不另外維護
+各批共用的規則以 [v4 契約](../../protocol-v4.zh-Hant.md) 為準；計畫引用契約，不另外維護
 一套預設值。下一位實作者先讀 [交接文件](HANDOFF.md)，再讀指定批次。
 
 ## 執行規則
@@ -58,7 +58,7 @@ Mark23 模型動畫。本機回饋可預判，命中與血量只由權威決定�
 - release manifest 的 120 份來源指紋未變，Match／Gateway／timing probe／Arena
   的四份建置產物指紋相符；既有架構文件的未提交修改完整保留。
 - 產品 CPU 與證據分析短回歸 5／5 通過，總計 8.61 秒；詳見
-  [本批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch01.zh-Hant.md)。
+  [本批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch01.zh-Hant.md)。
 - 本批沒有修改 `.proto`、bindings、產品程式、建置圖或遊戲資產；沒有執行長測。
 
 ## 第 02 批證據
@@ -66,7 +66,7 @@ Mark23 模型動畫。本機回饋可預判，命中與血量只由權威決定�
 - 測試程式、Match、Client 建置成功；Match 沒有引入 SDL／Renderer／Campaign。
 - 五項 CTest 短回歸 5／5 通過，8.25 秒；C++ 96 cases（新增 29）。最後補強
   冷卻跨 movementEpoch 的案例後另重跑 domain；詳見
-  [本批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch02.zh-Hant.md)。
+  [本批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch02.zh-Hant.md)。
 - 普通 C++ API 已完成，wire／bindings／Go／GUI 未切換；沒有長測或新延遲驗收。
 
 ## 第 03 批證據
@@ -82,7 +82,7 @@ Mark23 模型動畫。本機回饋可預判，命中與血量只由權威決定�
   恢復；正常共存零限流拒絕。原始失敗報告與重新核對結果並存，未提高限流或恢復門檻。
 - 既有 RTT 0／20／40 ms、抖動／丟包、六秒主執行緒停頓與離開重入／斷線短回歸通過。
   此為 headless 同機證據，不能代替 GUI 呈現、實體 LAN 或長測。
-- 詳見 [第 03 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md) 及
+- 詳見 [第 03 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md) 及
   [交接](HANDOFF.md)。
 
 ## 第 04 批證據
@@ -96,7 +96,7 @@ Mark23 模型動畫。本機回饋可預判，命中與血量只由權威決定�
   未執行 120 秒／200 事件驗收，短跑不能取得完整跑次資格。
 - 6 項 CPU／模型／元件測試、實際 Vulkan GPU smoke 及 16 個呈現分析器測試通過。
   已核對 Draw／Idle／Shoot、縮放及靠牆五張 GPU 圖像；全部原始幀資料保留。
-- 詳見 [第 04 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md) 與
+- 詳見 [第 04 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md) 與
   [交接](HANDOFF.md)。上述是第 04 批結束時的證據；後續驗收見下節。
 
 ## 第 05 批使用入口
@@ -113,7 +113,7 @@ Mark23 模型動畫。本機回饋可預判，命中與血量只由權威決定�
 42.29/43.48 ms；150 個唯一裁決、四次25HP與兩端權威HP／HUD核對通過。
 30／60／144 Hz headless 共存與四個新增故障短案亦通過。最初純移動跑次 P50
 52.02 ms 超標及外部負載重疊完整保留，後續跑次不抹除它。完整數據與限制見
-[第 05 批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch05.zh-Hant.md)。
+[第 05 批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch05.zh-Hant.md)。
 
 本次追加驗收已完成三輪各 120 秒 GUI：各 200／200 移動事件、150／150 唯一射擊
 裁決與四次 25 HP 扣減。三輪可見延遲 P50／P95 分別為 37.82／38.76、39.81／40.76、

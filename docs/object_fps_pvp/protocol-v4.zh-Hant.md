@@ -4,8 +4,8 @@
 驗證範圍為Linux／X11／Vulkan、同機雙玩家及受控網路。Client／Gateway／Match
 一起使用v4並拒絕v1–v3；Mark23單發、權威HP、動作確認與既有移動政策維持不變。
 三輪GUI移動／射擊／HP、60／144Hz各30分鐘與原生桌面操作已通過。
-基線指紋、證據、限制見 [穩定基線](plans/STABLE_BASELINE.md)；
-執行歷史見 [分批計畫](plans/README.md)。實體LAN、Windows及射擊回溯不在本輪認證內。
+基線指紋、證據、限制見 [穩定基線](plans/v4/STABLE_BASELINE.md)；
+執行歷史見 [分批計畫](plans/v4/README.md)。實體LAN、Windows及射擊回溯不在本輪認證內。
 
 ## 1. 範圍與責任
 
@@ -244,7 +244,7 @@ Renderer。依賴方向不變，無新產品間依賴或 Top-level subsystem。
 傳送戰鬥狀態與獨立裁決；Host 的 `SubmitActionBatch` 原子處理 shots＋ACK／純 ACK，
 有效 ACK 可為同批新請求預留容量，真正退休及交付仍在 Tick 邊界生效。
 Client Drain 只交付一次裁決，只有已交付的連續 ID 才可確認；snapshot history
-溢位或 movementEpoch 不清帳本。來源與接續注意點見 [交接](plans/HANDOFF.md)。
+溢位或 movementEpoch 不清帳本。來源與接續注意點見 [交接](plans/v4/HANDOFF.md)。
 
 第 03 批 C++、Go race、worker／wire、16 案真 socket 共存與恢復，以及既有移動
 網路短回歸已通過。射擊壓力下移動 Actual 100%，執行延遲 P95 45.86 ms；
@@ -254,11 +254,11 @@ Client Drain 只交付一次裁決，只有已交付的連續 ID 才可確認；
 [第 03 批 dev_log](../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md)。
 
 驗收門檻、目視清單與手動長測規則集中在
-[第 05 批](plans/05-short-validation-and-manual-test-guide.md)。不降低原移動門檻；
+[第 05 批](plans/v4/05-short-validation-and-manual-test-guide.md)。不降低原移動門檻；
 第 04 批的 30／60／144 FPS、GPU 圖像與 16 秒／20 事件雙 GUI 短測已通過，
 跨視窗 P50／P95 為 48.43／48.84 ms。詳見
 [第 04 批 dev_log](../dev_logs/2026_09_28_pvp_v4_batch04.zh-Hant.md)。
 第05批追加完整驗收已通過：三輪120秒GUI共600個移動事件／450槍，
 60／144Hz各30分鐘共17740個唯一接受裁決，原生X11 V1–V8及HUD圖像核對通過。
-依此升格v4；詳見 [穩定基線](plans/STABLE_BASELINE.md) 與
-[驗收狀態](plans/ACCEPTANCE_STATUS.md)，不以歷史v3結果抵銷本次長測。
+依此升格v4；詳見 [穩定基線](plans/v4/STABLE_BASELINE.md) 與
+[驗收狀態](plans/v4/ACCEPTANCE_STATUS.md)，不以歷史v3結果抵銷本次長測。

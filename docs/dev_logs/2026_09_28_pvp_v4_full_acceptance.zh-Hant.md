@@ -105,7 +105,7 @@ C++／Go race／wire／shader／GPU／故障／fitness重用範圍由未變正�
 驗收器新增負面回歸19／19通過。所有本次自有測試服務均已退出。
 
 本次滿足完整驗收後正式升格v4，詳見
-[穩定基線](../object_fps_pvp/plans/STABLE_BASELINE.md)。完整來源／產物／證據指紋
+[穩定基線](../object_fps_pvp/plans/v4/STABLE_BASELINE.md)。完整來源／產物／證據指紋
 新增於`build/target/_build/test/logs/pvp-v4-release-manifest.json`；v3 manifest保留。
 手動指南及回報表保留；沒有自動提交或開始歷史命中下一階段。
 
