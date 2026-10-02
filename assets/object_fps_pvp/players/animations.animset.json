@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "clips": {
+    "idle": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Idle_Loop" },
+    "walk": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Walk_Loop" },
+    "jog": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Jog_Fwd_Loop" },
+    "shoot": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Shoot" },
+    "reload": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Reload" },
+    "jump_start": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Jump_Start" },
+    "jump_loop": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Jump_Loop" },
+    "jump_land": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Jump_Land" },
+    "death": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Death01" }
+  }
+}

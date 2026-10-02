@@ -94,6 +94,10 @@ add_test(NAME "${GYO_CURRENT_APP}.timing_runner"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_timing.py")
 set_tests_properties("${GYO_CURRENT_APP}.timing_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
 
+add_test(NAME "${GYO_CURRENT_APP}.action_runner"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_action_short.py")
+set_tests_properties("${GYO_CURRENT_APP}.action_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+
 add_test(NAME "${GYO_CURRENT_APP}.steady_clock"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_steady_clock.py")
 set_tests_properties("${GYO_CURRENT_APP}.steady_clock" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

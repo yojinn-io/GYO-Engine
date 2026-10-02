@@ -74,10 +74,10 @@ WeaponJson CharacterSample(const fps::pvp::PlayerPresentationObservation& c) {
     return {{"ready", c.ready}, {"player_id", c.playerId}, {"epoch", c.movementEpoch},
         {"jogging", c.jogging}, {"holding", c.holding}, {"backward", c.backward},
         {"phase_reset", c.phaseReset}, {"reset_count", c.resetCount}, {"reset_reason", c.resetReason},
-        {"phase_seconds", c.phaseSeconds}, {"unwrapped_phase_seconds", c.unwrappedPhaseSeconds},
+        {"phase_cycles", c.phaseCycles}, {"unwrapped_phase_cycles", c.unwrappedPhaseCycles},
         {"signed_distance", c.signedDistance}, {"total_distance", c.totalDistance},
-        {"distance_delta", c.distanceDelta}, {"stride_distance", c.strideDistance},
-        {"jog_duration_seconds", c.jogDurationSeconds},
+        {"distance_delta", c.distanceDelta}, {"cycle_distance", c.cycleDistance},
+        {"jog_weight", c.jogWeight},
         {"speed", c.speed}, {"playback_rate", c.playbackRate}, {"move_weight", c.moveWeight},
         {"scale", c.scale}, {"foot_anchor", {c.footAnchor.x, c.footAnchor.y, c.footAnchor.z}},
         {"weapon_world_position", {c.weaponWorldPosition.x, c.weaponWorldPosition.y, c.weaponWorldPosition.z}},
@@ -124,6 +124,7 @@ void RunPlayerShort(const Options& options) {
         report["initialize_graphics_ms"] = Seconds(Clock::now(), preparing) * 1000;
         auto& connection = application.Connection();
         auto* window = application.Platform().NativeWindow();
+        report["platform"] = PlatformFingerprint::Capture(application, window).Json();
         inputWatch.Install(window);
         if (mover) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);

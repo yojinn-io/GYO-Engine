@@ -23,10 +23,12 @@ struct LocalMovementObservation;
 // Product presentation diagnostics. Read-only values never control simulation;
 // counters belong to one joined player and survive movement-epoch recovery.
 struct WeaponFeedbackObservation final {
-    bool ready{}, active{}, inputCaptured{}, shooting{}, drawing{}, hitMarkerVisible{};
+    bool ready{}, active{}, inputCaptured{}, shooting{}, drawing{}, reloadAnimating{}, hitMarkerVisible{};
     std::uint64_t submittedActions{}, animationStarts{}, decisionCount{}, acceptedDecisions{},
         rejectedDecisions{}, hitDecisions{}, lastActionId{}, lastDecisionActionId{},
         mouseDeltaConsumeCount{}, animationRevision{}, lastDecisionTick{}, lastTargetId{};
+    // Authority-observed reloads; animationStarts stays the immediate local shot count.
+    std::uint64_t reloadAnimationStarts{};
     std::uint32_t hp{}, maximumHp{}, lastDamage{};
     ShotRejection lastRejection{ShotRejection::None};
     ShotHitKind lastHitKind{ShotHitKind::Miss};

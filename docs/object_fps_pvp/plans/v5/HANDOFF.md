@@ -1,7 +1,98 @@
 # PvP v5 交接
 
 更新：2026-10-02。**第01–03批已完成（第03批2026-10-02結案驗收通過）。**
-第04批計畫複審完成（2026-10-02），驗證平台已定（本機Mac、跨平台手法），待明確啟動，第05批未開始；未執行長測、未升格v5穩定基線。
+**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），第05批未開始；未執行長測、未升格v5穩定基線。
+
+## 第04批進度（記錄器，隨工作更新）
+
+| 子批次 | 內容 | 建議檔位 | 狀態 |
+|---|---|---|---|
+| 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
+| 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 程式完成（呈現測試19 cases／12616 assertions、突變9／9被抓、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
+| 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 完成（CTest `-L pvp` 17／17；開發實跑action 30／60／144與capture皆PASS，不計入04-4） |
+| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | L1／L2／L3通過（macOS Intel／Metal）；dev_log與README已更新 |
+| 04-5 | 步幅：依速度混合Walk_Loop／Jog_Fwd_Loop（使用者2026-10-02決定），各自校準防滑步 | xhigh | 完成（呈現測試21 cases、突變5／5、CTest 41／41）；人物短測跨FPS相位一致；使用者目視步態接受（`pvp-v5-batch04-5-gait-manual/`） |
+
+- 開工時發現：GUI probe的`--gpu-driver`只列`auto|d3d12|vulkan`，macOS依賴`auto`選到Metal；第03批的玩法GUI（Space／快射／R／重生）
+  是X11/XTest的`run_gameplay_gui.py`，SDL注入的probe沒有對應模式，因此04-3須補一個動作短測模式。
+- 04-1紀錄：
+  - 換彈動畫等Snapshot顯示權威換彈才開始（契約「Reload 1.5秒權威進度」），按R當下只有既有的「Reload requested」文字；
+    進度以首次看到時的權威已過時間定錨，之後以本機時間平滑推進並夾在1.5秒內，死亡／新生命／權威結束即回Idle。
+    Mark23 Reload原長3.733秒由武器模型依進度對應（約2.49倍速）。
+  - 新增獨立計數`reloadAnimationStarts`：`animationStarts`維持「本機立即射擊回饋次數」，因`combat_latency.hpp`與
+    `weapon_short.hpp`檢查它等於送出的動作數，換彈要等權威確認，沿用會在送出與確認之間短暫不等。
+  - 操作提示「WASD move | Space jump | Click shoot | R reload」第03批已存在，切片7不需再加。
+  - 修正第03批留下的HUD重疊：「CONNECTION POOR」警告原畫在y=70–100、水平置中，與左上HUD面板的HP／彈匣行重疊
+    （800×600與1280×720皆然），改到畫面下方中央。
+- 04-2紀錄（xhigh）：
+  - 設計：遠端動作是呈現時間的純函數。輸入只有`presentationSeconds`與時間線同一區間、同一生命的`CombatState`／`PlayerState`
+    （`ResolvePlayerActions`）。時間線游標只前進、停住時凍結，因此重送、裁決ACK、重複Snapshot與時間線停住都不會重播，
+    恢復後也不補播已過的動作；不需要以ActionId記錄「已播過」的狀態。唯一有狀態的是跳躍（`grounded`轉換），
+    重設（spawn／生命／epoch／不連續／長幀／瞬移）時依當下狀態直接進Loop或落地，不捏造起跳。
+  - 合約時長：射擊0.1667秒（Pistol_Shoot原長0.633秒，約3.8倍速）；Jump Start／Land各0.1秒（原長1.333／1.267秒，約13倍速），
+    只有上升中離地才播Start，掉落直接Loop；換彈依權威區間（Pistol_Reload 1.667秒對應1.5秒）；Death01原速2.4秒後保持末姿態到新生命。
+    上半身（`spine_01`以下）取持槍／射擊／換彈，下半身取移動或跳躍；死亡為全身，武器與髮飾跟隨最終合成姿勢。
+  - 根運動量測（ufbx）：Jump系列骨盆不高於站姿（Start由蹲回站、Land下蹲緩衝），不會與權威垂直位移疊加，不需剝除；
+    Death01骨盆落地並水平位移約0.55m。
+  - 防禦：動作Tick早於`lifeStateTick`不顯示。Match重生時已重建`CombatState`、死亡時清除換彈，這是雙重保險。
+  - 突變檢查9項（拿掉生命防護×2、掉落也播Start、重設捏造起跳、死亡不夾、射擊區間閉合、射擊不縮放、死亡時套上半身、
+    射擊優先於換彈）全部被測試抓到。
+  - 資產：玩家animset加入shoot／reload／jump_start／jump_loop／jump_land／death；檔名`locomotion.animset.json`改為
+    `animations.animset.json`（內容已不只移動；只有`asset_catalog.json`引用）。`presentation.json`加`actions`時長。
+  - 待04-4截圖確認：射擊3.8倍速與起跳13倍速的觀感、Start開頭的瞬間蹲低。
+- 04-3紀錄：
+  - 平台指紋（`platform_fingerprint.hpp`）：延遲報告寫`platform_*`（OS、架構、SDL視訊驅動、GPU驅動、更新率、可用區域、輸入方式），
+    JSON模式（weapon／player／action）附`platform`；`presentation_evidence.platform_evidence`讀取（舊probe無指紋記為absent），
+    `run_timing`摘要新增「Round N platform」行。GPU驅動取自`RenderDevice().GetInfo().driver`，不改Engine。
+  - 視窗擺放：對角配置由macOS擴大到所有能由程式擺放視窗的平台；`SDL_SetWindowPosition`失敗（如Wayland）時保留預設位置，
+    並記錄`window_placement_error`。摘要與干擾說明文字隨之更新。
+  - SDL注入的動作短測：`--action-short --fps 30|60|144`與`--action-capture --fps 60`（`action_short.hpp`），runner
+    `run_action_short.py`（GPU驅動預設auto、可選metal），`summarize`測試5項並登記CTest `object_fps_pvp.action_runner`；
+    `test_service_startup.py`的RUNNERS加入新runner。情境：按住只射一發、R換彈、換彈中射擊／再按R被擋、換彈中後退、
+    跳躍中射擊、打空彈匣與空彈匣點擊被擋、空彈匣換彈、擊殺；目標死亡時移動／跳躍／開火／換彈全被擋、重生滿HP與彈匣並可射擊；
+    雙方互看遠端射擊、換彈、跳躍三段、死亡保持與新生命，同一ActionId不得重播。
+  - 開發實跑（不計入04-4，macOS Intel／Metal）：action 30／60／144與capture皆PASS；capture 8張圖已目視
+    （第一人稱換彈、遠端換彈／跳躍／射擊／死亡／死亡保持）。report-only延遲短測一輪：可見P50／P95 37.0／40.8ms，摘要含平台行。
+    證據：`build/target/_build/test/logs/pvp-v5-batch04-dev-{action-1..4,timing-1}/`（git忽略）。
+  - 實跑中發現：本機射擊冷卻閘以最新Snapshot的Tick比對`nextAllowedShotTick`，該Tick約比權威晚2 Tick；
+    12 Tick間隔的點擊在幀抖動下會在本機被擋（第03批既有的「冷卻點擊不排隊」設計，未改）。probe改用15 Tick間隔，
+    精確10 Tick邊界由domain測試涵蓋。是否讓本機閘門補償這個落差，屬日後的產品手感議題。
+  - 既有工具狀況（未改，超出範圍）：`weapon_short.hpp`觀察方仍檢查v4「HP=0仍可移動與射擊」，在v5必然失敗；
+    其v5涵蓋已由動作短測取代。`run_player_short.py`／`run_weapon_short.py`的GPU驅動選項補上metal、預設auto。
+- 04-4紀錄（來源`a3962cf`，macOS Intel／Metal；Windows／Linux未執行）：
+  - CTest全標籤41／41（開跑前，`99db266`）；`-L pvp` 17／17（`a3962cf`）。
+  - L1／L2：`run_action_short.py`四案。第一次（`pvp-v5-batch04-20261002/`）action30失敗並保留：量測中實體滑鼠移動，
+    actor yaw在無排程轉向時漂移約2.5°，之後射擊未命中、目標未死。當時probe無法區分外部輸入，故新增「未排程yaw變化」
+    偵測（標`disturbed`、runner註明非產品判定），提交`a3962cf`後在`pvp-v5-batch04-20261002-run2/`重跑：action 30／60／144
+    與capture皆PASS，皆無干擾；目標死亡約9.5秒、3.0秒後重生，死亡中位移0；遠端看到16發、2次換彈、跳躍三段，重播0。
+    L2的8張截圖已目視；限制：遠端人物距離遠（約120像素高），射擊中與待機的上半身差異在截圖中難以分辨，由L3確認。
+  - L3（使用者人工，`pvp-v5-batch04-20261002-manual-2/`）：清單1–8通過。第一組（`-manual/`）只短暫進入世界，不計。
+  - 使用者回報與決定（2026-10-02）：
+    - 上下視角：遠端人物上半身沒有依pitch瞄準（契約「持槍／瞄準」的缺口；素材有Pistol_Aim_Up／Neutral／Down）。決定：延到v6（[v6交接](../v6/HANDOFF.md)第1項）。
+    - 步幅：Jog_Fwd_Loop原速足部約5.94 m/s，移動3 m/s時以約0.5倍速播放（第02批防滑步校準），看起來是慢動作大步跑；
+      素材為使用者提供的UAL，不是Agent自製。決定：依速度混合Walk_Loop／Jog（04-5）。
+    - 受擊反應：不在契約與本批範圍（素材有Hit_Chest／Hit_Head；Snapshot無受擊時點）。決定：延到v6（[v6交接](../v6/HANDOFF.md)第2項）。
+    - CONNECTION POOR：使用者在操作中看到警告。Client紀錄有三次約1.2秒與兩次0.7–0.8秒的render停頓，緊接視窗互動
+      （釋放指標）；Engine SDL GPU後端用阻塞的`SDL_WaitAndAcquireGPUSwapchainTexture`，Metal在視窗拖動／縮放時取得
+      drawable最多等約1秒，主迴圈停住、不產生移動命令，1.2秒約72 Tick Held（10秒窗口12%>5%）使該窗口不合格。
+      警告判定本身正確。決定：先記錄為已知問題（Engine層，修正屬Architecture Delta），延到v6（[v6交接](../v6/HANDOFF.md)第3項）。
+    - 04-5紀錄（xhigh）：
+      - 量測（測試`PvP walk and jog native speeds are measured stance evidence...`）：Walk_Loop 1.333秒、著地足速約0.93 m/s；
+        Jog 0.933秒、約5.96 m/s（沿用第02批校準6.0）；兩者左／右腳著地相位皆約0／0.5，同一步態相位驅動、無需偏移。
+      - 設計：Jog權重＝clamp((速度−0.93)/(6.0−0.93))；速度取時間線前後兩個權威狀態的水平位移（`SnapshotPresentation.planarSpeed`），
+        與Client幀率無關；無速度樣本（hold／停住）時保留上一權重。週期距離＝lerp(0.93×1.333, 6.0×0.933, 權重)，
+        相位（cycles）每幀增加帶號位移÷週期距離。3 m/s時權重0.408、週期3.02 m、每秒約2步（原純Jog約1.07步）；
+        混合後著地足速實測2.85／2.99 m/s（目標3）。設定`presentation.json`的`locomotion.walk_native_speed／jog_native_speed`
+        取代`jog_stride_scale`；觀測與第02批分析器由Jog秒改為步態週期（`phase_cycles`、`cycle_distance`、`jog_weight`）。
+      - 突變5項（權重改用本幀位移速度、hold重設權重、Jog用Walk時鐘、週期忽略Walk、權重斜率錯）皆被抓到。
+      - GUI（開發驗證，`pvp-v5-batch04-5-player-1/`）：人物短測同路程0.5／1.0／1.5單位的相位在30／60／144 FPS間差<1e-15週期。
+        144 FPS案在幀率門檻失敗（join實測120 FPS＜85%×144）：兩視窗CPU準備世界皆約2.1ms，join的render中位8.14ms（create 2.75ms），
+        判斷為本機同時跑兩個144 FPS視窗的GPU／呈現容量，非04-5的CPU成本；照實保留，不重跑挑分數。
+      - 截圖模式（`-player-2/`）原失敗於區段檢查：Metal讀回使每張截圖造成>100ms長幀而重設步態相位（第02批Linux／Vulkan約68ms
+        未觸發）。分析器的區段檢查比照既有幀率門檻與同路程比較，限非截圖模式；同一跑次重新分析通過。8張截圖已產生。
+    - 自己死亡時「持槍手臂還在」：待使用者釐清是第一人稱（程式在死亡時隱藏）或對方畫面的屍體手持槍（Death01全身含掛槍，現行設計）；
+      延到v6（[v6交接](../v6/HANDOFF.md)第6項）。本機冷卻閘落差與`weapon_short`清理亦列於v6交接第4、5項。
+
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
 批准實作方案A1啟動相位對齊（PR #2，合併為`ff11ee3`）；2026-10-02補上低幀率守門與驗收器修正（PR #3，合併為`9cd7f26`）。

@@ -234,6 +234,24 @@ def movement_note(round_number, evidence):
     return f'Round {round_number} movement: {resets}; frame intervals during measurement: {frames}'
 
 
+def platform_note(round_number, presentation):
+    """One line naming where each role ran; a pass on one platform never stands for another."""
+    platforms = presentation.get('platform')
+    if not isinstance(platforms, dict):
+        return f'Round {round_number} platform: not analysed (no presentation platform evidence)'
+    parts = []
+    for role in ('create', 'join'):
+        record = platforms.get(role)
+        if not isinstance(record, dict) or record.get('status') != 'recorded':
+            parts.append(f"{role} {record.get('status') if isinstance(record, dict) else 'absent'}")
+            continue
+        refresh = record.get('refresh_hz')
+        parts.append(f"{role} {record.get('os')}/{record.get('architecture')} video {record.get('video_driver')}, "
+                     f"GPU {record.get('gpu_driver')}, "
+                     f"{'unknown' if not refresh else format(refresh, 'g') + ' Hz'} display, input {record.get('input')}")
+    return f"Round {round_number} platform: {'; '.join(parts)}"
+
+
 def window_note(round_number, presentation, gate=None):
     if 'window' not in presentation:
         state = 'not analysed (no presentation window evidence)'
@@ -257,8 +275,8 @@ def window_note(round_number, presentation, gate=None):
     line = (f'Round {round_number} window: {state}' + (f" ({'; '.join(placed)})" if placed else '') +
             (': ' + '; '.join(details) if details else ''))
     if placed and platform_default:
-        line += (' [platform-default placement (non-macOS): the two windows may overlap, and a Wayland compositor '
-                 'may report OCCLUDED for the covered one]')
+        line += (' [platform-default placement (the platform did not let the probe position its window): the two '
+                 'windows may overlap, and a Wayland compositor may report OCCLUDED for the covered one]')
     if isinstance(gate, dict) and gate.get('status') != 'clean':
         if gate.get('enforced'):
             line += f" -> counted round {gate.get('status')}"
@@ -273,9 +291,10 @@ WINDOW_INTERFERENCE_NOTE = (
     'Window interference note: a counted GUI round qualifies only with window evidence from both probes and no detected '
     'window interference; otherwise it is invalid_window_disturbed, invalid_window_evidence_missing, '
     'invalid_window_evidence_invalid or invalid_window_evidence_unknown, with its threshold result kept beside the status. '
-    'On macOS the two probe windows open in opposite corners of the usable display bounds. On Linux and Windows they keep '
-    "the platform's default window positions and may overlap; on Linux/Wayland a compositor may then report OCCLUDED for "
-    'the covered window, which invalidates a counted round (invalid_window_disturbed) even when its thresholds pass.')
+    'The two probe windows open in opposite corners of the usable display bounds wherever the platform lets a program '
+    'position its windows (macOS, Windows, Linux X11). Where it does not (Linux/Wayland) they keep the default positions '
+    'and may overlap; a compositor may then report OCCLUDED for the covered window, which invalidates a counted round '
+    '(invalid_window_disturbed) even when its thresholds pass.')
 
 
 def wayland_warning(gui, report_only, environ=None, platform=None):
@@ -460,6 +479,7 @@ def execute_rounds(args, round_runner=run_round):
         if args.gui and record['status'] != 'not_run':
             notes.append(start_phase_note(record['round'], presentation))
             notes.append(movement_note(record['round'], evidence))
+            notes.append(platform_note(record['round'], presentation))
             notes.append(window_note(record['round'], presentation, evidence.get('window_gate')))
         if record.get('error') or record.get('reason'):
             notes.append(f"Round {record['round']}: {record.get('error', record.get('reason'))}")

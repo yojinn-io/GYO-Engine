@@ -453,8 +453,9 @@ class LatencyEvidenceTests(unittest.TestCase):
 
     @staticmethod
     def linux_window_report(occluded_during=0):
-        # The non-macOS probe keeps the platform-default placement: no usable
-        # bounds, no requested position and no sync; X11 may report borders.
+        # Where the platform does not let the probe position its window
+        # (Wayland) it keeps the default placement: no requested position and
+        # no sync; the platform may still report borders.
         return ("window_placement=platform_default\nwindow_usable_bounds=unavailable\nwindow_requested_position=none\n"
                 "window_sync=not_requested\nwindow_position_after_sync=none\nwindow_final_position=320,180\n"
                 "window_size=1280,720\nwindow_borders=37,1,1,1\n"
@@ -497,6 +498,36 @@ class LatencyEvidenceTests(unittest.TestCase):
         self.assertIn("duplicate window_* key(s): window_final_position", result["window"]["create"]["reason"])
         self.assertEqual(result["window"]["join"]["status"], "recorded")
         self.assertIsNone(result["window_disturbed"])
+
+    PLATFORM_REPORT = ("platform_os=macOS\nplatform_architecture=x64\nplatform_video_driver=cocoa\n"
+                       "platform_gpu_driver=metal\nplatform_refresh_hz=60\nplatform_usable_bounds=0,30,1792,1090\n"
+                       "platform_input=sdl_injected\n")
+
+    def test_platform_fingerprint_is_recorded_absent_or_invalid(self):
+        directory = self.window_directory({"create": self.PLATFORM_REPORT, "join": "role=join\n"})
+        create = evidence.platform_evidence(directory / "create-report.txt")
+        self.assertEqual(create["status"], "recorded")
+        self.assertEqual((create["os"], create["architecture"], create["video_driver"], create["gpu_driver"],
+                          create["refresh_hz"], create["usable_bounds"], create["input"]),
+                         ("macOS", "x64", "cocoa", "metal", 60.0, [0, 30, 1792, 1090], "sdl_injected"))
+        # An older probe has no fingerprint; that is absent, not a failure.
+        self.assertEqual(evidence.platform_evidence(directory / "join-report.txt")["status"], "absent")
+        self.assertEqual(evidence.platform_evidence(directory / "missing-report.txt")["status"], "absent")
+        unavailable = self.window_directory({"create": self.PLATFORM_REPORT.replace(
+            "platform_usable_bounds=0,30,1792,1090", "platform_usable_bounds=unavailable")})
+        self.assertIsNone(evidence.platform_evidence(unavailable / "create-report.txt")["usable_bounds"])
+        for broken in (self.PLATFORM_REPORT + "platform_os=Linux\n",
+                       self.PLATFORM_REPORT.replace("platform_refresh_hz=60", "platform_refresh_hz=fast"),
+                       self.PLATFORM_REPORT.replace("platform_input=sdl_injected\n", "")):
+            with self.subTest(broken=broken[-40:]):
+                bad = self.window_directory({"create": broken})
+                self.assertEqual(evidence.platform_evidence(bad / "create-report.txt")["status"], "invalid")
+
+    def test_window_placement_error_is_kept_beside_the_default_placement(self):
+        report = self.linux_window_report() + "window_placement_error=wayland: cannot position a toplevel\n"
+        result = evidence._windows(self.window_directory({"create": report, "join": self.linux_window_report()}))
+        self.assertEqual(result["window"]["create"]["placement_error"], "wayland: cannot position a toplevel")
+        self.assertNotIn("placement_error", result["window"]["join"])
 
     def test_window_overlap_never_raises_on_malformed_geometry(self):
         overlap = evidence._window_overlap({"final_position": [0], "size": [1, 1], "borders_top_left_bottom_right": None},

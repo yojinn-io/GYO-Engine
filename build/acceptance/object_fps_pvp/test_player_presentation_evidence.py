@@ -7,8 +7,8 @@ def sample(index, distance, phase, *, holding=False, backward=False):
     return {'frame_id':index,'remote':{'player_id':1,'position':[0,0,distance],
         'character':{'player_id':1,'ready':True,'prepared_instances':1,'body_meshes':4,'hair_meshes':1,
         'weapon_meshes':1,'upper_body_mask_count':20,'foot_anchor':[0,-1,0],
-        'weapon_world_position':[0,1,distance],'scale':.9,'stride_distance':2.8,'jog_duration_seconds':2.8/3,'phase_seconds':phase%(.933333),
-        'unwrapped_phase_seconds':phase,'signed_distance':distance,'total_distance':abs(distance),
+        'weapon_world_position':[0,1,distance],'scale':.9,'cycle_distance':3.0,'jog_weight':.4,'phase_cycles':phase%1,
+        'unwrapped_phase_cycles':phase,'signed_distance':distance,'total_distance':abs(distance),
         'distance_delta':abs(distance),'speed':3,'playback_rate':1,'phase_reset':index==0,
         'reset_count':1,'reset_reason':'new-player' if index==0 else '',
         'holding':holding,'backward':backward}}}
@@ -63,16 +63,16 @@ class PlayerEvidenceTests(unittest.TestCase):
         result=validate_samples([sample(0,0,0),value])
         self.assertTrue(any('submitted position' in error for error in result['errors']))
 
-    def test_nonfinite_or_zero_jog_duration_cannot_bypass_phase_check(self):
-        for duration in (float('nan'),float('inf'),0):
-            with self.subTest(duration=duration):
+    def test_nonfinite_or_zero_cycle_distance_cannot_bypass_phase_check(self):
+        for distance in (float('nan'),float('inf'),0):
+            with self.subTest(distance=distance):
                 value=sample(1,.1,.1)
-                value['remote']['character']['jog_duration_seconds']=duration
+                value['remote']['character']['cycle_distance']=distance
                 self.assertTrue(validate_samples([sample(0,0,0),value])['errors'])
 
-    def test_calibrated_stride_is_used_instead_of_fixed_time_rate(self):
-        values=[sample(0,0,0),sample(1,.1,.2/3)]
-        for value in values:value['remote']['character']['stride_distance']=1.4
+    def test_blended_cycle_distance_is_used_instead_of_fixed_time_rate(self):
+        values=[sample(0,0,0),sample(1,.1,.1/1.5)]
+        for value in values:value['remote']['character']['cycle_distance']=1.5
         self.assertEqual(validate_samples(values)['errors'],[])
 
     def test_reset_must_clear_old_phase_not_only_last_delta(self):
@@ -85,6 +85,13 @@ class PlayerEvidenceTests(unittest.TestCase):
         value['remote']['position'][2]=.1
         result=validate_samples([sample(0,0,0,holding=True),value])
         self.assertTrue(any('submitted position' in error for error in result['errors']))
+
+    def test_jog_weight_outside_the_blend_is_rejected(self):
+        for weight in (-.1,1.1,float('nan')):
+            with self.subTest(weight=weight):
+                value=sample(1,.1,.1/3)
+                value['remote']['character']['jog_weight']=weight
+                self.assertTrue(validate_samples([sample(0,0,0),value])['errors'])
 
     def test_skipped_frames_do_not_infer_path_from_equal_endpoints(self):
         value=sample(3,.2,.2/3,backward=True)

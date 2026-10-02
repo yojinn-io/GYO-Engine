@@ -20,21 +20,39 @@ struct PlayerPresentationFrame final {
     Engine::Render::Float3 position{};
     float yaw{};
     double presentationSeconds{}, deltaSeconds{};
+    // Planar speed between the two authority snapshots bracketing this sample:
+    // independent of the render rate. Zero means unknown or not moving.
+    double planarSpeed{};
     bool continuous{true}, holding{};
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    // Authority-time action inputs from the same snapshot interval and life as
+    // the position, in the presentationSeconds base (tick / authority rate).
+    // The action pose is a pure function of these and presentationSeconds, so
+    // resends, ACKs, duplicate snapshots and timeline holds cannot restart it.
+    bool grounded{true};
+    float verticalVelocity{};
+    double lifeStateSeconds{};
+    // Zero IDs mean none: the latest accepted shot and the active reload.
+    std::uint64_t shotActionId{}, reloadActionId{};
+    double shotSeconds{}, reloadStartSeconds{}, reloadEndSeconds{};
 };
 
 // Product-owned CPU binding. Loading needs neither a renderer nor Campaign/Enemy.
 struct PlayerPresentationDefinition final {
     std::shared_ptr<const CharacterPresentationDefinition> character, weapon;
-    std::size_t idleClip{}, jogClip{}, upperBodyRoot{}, weaponNode{};
+    std::size_t idleClip{}, walkClip{}, jogClip{}, upperBodyRoot{}, weaponNode{};
+    std::size_t shootClip{}, reloadClip{}, jumpStartClip{}, jumpLoopClip{}, jumpLandClip{}, deathClip{};
     std::vector<bool> upperBodyMask;
     Engine::Model::Vec3 anchor{};
     float scale{}, bodyHeight{}, referenceSpeed{};
-    // Calibrated full-clip travel / (referenceSpeed * authored clip seconds).
-    double strideScale{};
+    // Measured stance foot speed of each clip at authored playback. They are
+    // the two points of the speed blend; walk and jog share one gait phase.
+    double walkNativeSpeed{}, jogNativeSpeed{};
     double transitionSeconds{}, maxFrameDeltaSeconds{};
+    // Contract presentation spans; the authored clips are time-scaled into
+    // them. Reload follows the authoritative interval, death its own clip.
+    double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{};
     Engine::Model::Transform weaponMount{};
     Engine::Model::Pose weaponReferencePose;
 };
@@ -43,22 +61,52 @@ struct PlayerPresentationDefinition final {
 LoadPlayerPresentationDefinition(Engine::Asset::AssetManager& assets, float bodyHeight,
                                  std::string& error);
 
+// Jump presentation follows the sampled grounded state. Only a rising liftoff
+// plays Start; leaving the ground while falling goes straight to the Loop.
+enum class PlayerJumpPhase : std::uint8_t { Grounded, Start, Airborne, Land };
+
 struct PlayerLocomotionState final {
     bool initialized{}, jogging{}, backward{}, holding{}, phaseReset{};
     std::uint64_t playerId{}, movementEpoch{}, resetCount{};
     Engine::Render::Float3 previousPosition{};
     double previousPresentationSeconds{};
-    double phaseSeconds{}, unwrappedPhaseSeconds{}, idleSeconds{};
+    // Gait phase in cycles, shared by walk and jog; playbackRate is cycles/s.
+    double phaseCycles{}, unwrappedPhaseCycles{}, idleSeconds{};
     double signedDistance{}, totalDistance{}, distanceDelta{}, speed{}, playbackRate{};
+    double jogWeight{}, cycleDistance{};
     float moveWeight{};
     std::string resetReason;
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    bool grounded{true};
+    PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
+    double jumpPhaseSeconds{}; // presentationSeconds at which jumpPhase began
 };
+
+// The speed blend: jog weight from a sampled planar speed, and the distance one
+// gait cycle covers at that weight so the blended feet move at that speed.
+[[nodiscard]] double PlayerJogWeight(const PlayerPresentationDefinition& definition, double planarSpeed);
+[[nodiscard]] double PlayerCycleDistance(const PlayerPresentationDefinition& definition, double jogWeight);
 
 [[nodiscard]] bool AdvancePlayerLocomotion(PlayerLocomotionState& state,
     const PlayerPresentationFrame& frame, const PlayerPresentationDefinition& definition,
     std::string& error);
+
+enum class PlayerUpperAction : std::uint8_t { Hold, Shoot, Reload };
+enum class PlayerLowerAction : std::uint8_t { Locomotion, JumpStart, JumpLoop, JumpLand, Death };
+
+// Clip times already mapped from the contract spans; Death is full body.
+struct PlayerActionPose final {
+    PlayerUpperAction upper{PlayerUpperAction::Hold};
+    PlayerLowerAction lower{PlayerLowerAction::Locomotion};
+    double upperClipSeconds{}, lowerClipSeconds{};
+    std::uint64_t shotActionId{}, reloadActionId{};
+};
+
+// Pure: identical inputs always select the identical action pose.
+[[nodiscard]] bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
+    PlayerActionPose& output, std::string& error);
 
 struct PlayerPresentationPose final {
     Engine::Model::Pose body, weapon;
@@ -67,12 +115,15 @@ struct PlayerPresentationPose final {
 
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
     const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error);
+[[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerActionPose& actions,
+    PlayerPresentationPose& output, std::string& error);
 
 struct PlayerPresentationObservation final {
     bool ready{}, jogging{}, holding{}, backward{}, phaseReset{};
     std::uint64_t playerId{}, movementEpoch{}, poseRevision{}, resetCount{};
-    double phaseSeconds{}, unwrappedPhaseSeconds{}, signedDistance{}, totalDistance{};
-    double distanceDelta{}, strideDistance{}, jogDurationSeconds{}, speed{}, playbackRate{};
+    double phaseCycles{}, unwrappedPhaseCycles{}, signedDistance{}, totalDistance{};
+    double distanceDelta{}, cycleDistance{}, jogWeight{}, speed{}, playbackRate{};
     float moveWeight{}, scale{};
     Engine::Model::Vec3 footAnchor{};
     Engine::Render::Float3 weaponWorldPosition{};
@@ -81,6 +132,8 @@ struct PlayerPresentationObservation final {
     std::string resetReason;
     std::uint64_t lifeGeneration{1};
     bool dead{};
+    PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
+    PlayerActionPose actions;
 };
 
 // All GPU instances are allocated before Join. Submit reuses these slots and

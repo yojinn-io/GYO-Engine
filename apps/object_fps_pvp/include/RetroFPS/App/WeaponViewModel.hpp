@@ -16,7 +16,7 @@ namespace fps {
 struct WeaponPresentationSnapshot;
 
 // Client presentation does not require Campaign weapon/ammunition state.
-enum class WeaponViewModelAction : std::uint8_t { Idle, Draw, Shoot };
+enum class WeaponViewModelAction : std::uint8_t { Idle, Draw, Shoot, Reload };
 
 struct WeaponViewModelFrame final {
     WeaponViewModelAction action{WeaponViewModelAction::Idle};
