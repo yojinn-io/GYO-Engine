@@ -216,7 +216,9 @@ object_fps_v2 的 variable-frame gameplay 不受影響；本次只改 PvP。
 
 Client 60 Hz 產生命令，每個序號固定代表 1/60 秒，欄位只有移動軸與絕對 yaw／pitch。
 滑鼠 delta 每個 presentation frame 只消費一次，不在 catch-up 重複消費。
-Network worker 以獨立 60 Hz deadline 重送完整未確認窗口，首次窗口立即送出；
+Network worker 以每秒 60 個、容量 2 的 token bucket 送出完整未確認窗口：含從未送出命令的窗口在下一次輪詢
+（≤2 ms）有 token 即送，沒有新命令的窗口在 60 Hz 期限（上次送出＋1/60 秒）重送並保留一個 token 給下一個新命令
+（2026-10-02，見 [v5 fix/03](plans/v5/fix/03-a1-missed-frame-starvation.md)）；
 新 epoch 的 ACK=0 階段，首次窗口等第一個合法固定步形成後才發布，包含原來的
 兩個中立命令及已產生的當前命令，避免僅有 neutral 的窗口提前耗掉 headroom。
 這項 bootstrap 補充已由使用者批准；沒有額外產生步數或增加中立命令。

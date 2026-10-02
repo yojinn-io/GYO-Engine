@@ -190,15 +190,19 @@ class LatencyEvidenceTests(unittest.TestCase):
         self.assertIn("distinct", result["errors"][0])
 
     @staticmethod
-    def phase_epoch(status, wait_micros=None, wait=None, shift=None, epoch=1, set_at=101, player=1, skip=None):
+    def phase_epoch(status, error=None, epoch=1, set_at=101, player=1, samples=None):
+        """A recorder epoch without its state history (history() adds it); error is the first decision's phase error."""
         stamp = int(set_at * 1e9)
+        samples = (0 if status == "host_samples_absent" else 900) if samples is None else samples
+        decided = error is not None
         return {"player_id": player, "movement_epoch": epoch, "life_generation": 1, "status": status,
-                "first_observed_frame": 1, "first_observed_steady_ns": stamp,
-                "host_wait_micros": wait_micros, "host_wait_first_frame": None if wait_micros is None else 2,
-                "host_wait_first_steady_ns": None if wait_micros is None else stamp,
-                "host_wait_conflicting_frames": 0, "client_wait_seconds": wait, "client_shift_seconds": shift,
-                "client_skip_reason": skip, "client_first_frame": None if wait is None else 3,
-                "client_first_steady_ns": None if wait is None else stamp + 16_000_000, "client_conflicting_frames": 0}
+                "first_observed_frame": 1, "first_observed_steady_ns": stamp, "host_samples": samples,
+                "host_late_samples": 0, "host_slack_min_micros": 1200 if samples else None,
+                "host_slack_max_micros": 3214 if samples else None, "connection_quality_failures_max": 0,
+                "first_decision_frame": 3 if decided else None,
+                "first_decision_steady_ns": stamp + 16_000_000 if decided else None, "first_error_seconds": error,
+                "corrections": int(decided), "late_corrections": 0, "last_error_seconds": error,
+                "last_correction_seconds": error}
 
     @staticmethod
     def window_report(placement, position, occluded_during=0, focus_lost_during=0, moved_during=0, resized_during=0,
@@ -214,42 +218,43 @@ class LatencyEvidenceTests(unittest.TestCase):
                 f"window_synthetic_events=20\n")
 
     def test_start_phase_values_reach_short_evidence_per_role(self):
-        records = {"create": {"supported": True, "skip_reason_supported": True, "player_id": 1, "dropped_observations": 0, "epochs": [
-                       self.phase_epoch("shift_armed", 3214, .003214, .0012),
-                       self.phase_epoch("host_wait_absent", epoch=2, set_at=110)]},
-                   "join": {"supported": True, "skip_reason_supported": True, "player_id": 2, "dropped_observations": 0, "epochs": [
-                       self.phase_epoch("skipped_host_late", 25000, .025, player=2, skip="host_late")]}}
+        records = {"create": {"supported": True, "player_id": 1, "dropped_observations": 0, "epochs": [
+                       self.phase_epoch("tracking", .0012),
+                       self.phase_epoch("host_samples_absent", epoch=2, set_at=110)]},
+                   "join": {"supported": True, "player_id": 2, "dropped_observations": 0, "epochs": [
+                       self.phase_epoch("acquiring", player=2, samples=25)]}}
         result = self.scenario(.04, short=True, start_phase=records)
         self.assertTrue(result["passed"], result["errors"])
         create, join = result["start_phase"]["create"], result["start_phase"]["join"]
-        self.assertEqual((create["status"], create["first_epoch_status"], create["epoch_count"]), ("recorded", "shift_armed", 2))
-        self.assertEqual(create["first_epoch"]["host_wait_micros"], 3214)
-        self.assertEqual(create["first_epoch"]["client_shift_seconds"], .0012)
-        self.assertAlmostEqual(create["first_epoch"]["client_set_seconds_before_measurement"], .984)
-        self.assertEqual(create["status_counts"], {"shift_armed": 1, "host_wait_absent": 1})
-        self.assertIsNone(create["epochs"][1]["client_set_seconds_before_measurement"])
-        self.assertIn("not observable", create["status_scope"])
+        self.assertEqual((create["status"], create["first_epoch_status"], create["epoch_count"]), ("recorded", "tracking", 2))
+        self.assertEqual(create["first_epoch"]["host_slack_max_micros"], 3214)
+        self.assertEqual(create["first_epoch"]["first_error_seconds"], .0012)
+        self.assertAlmostEqual(create["first_epoch"]["decided_seconds_before_measurement"], .984)
+        self.assertEqual(create["status_counts"], {"tracking": 1, "host_samples_absent": 1})
+        self.assertIsNone(create["epochs"][1]["decided_seconds_before_measurement"])
+        self.assertIn("a stall reseed returns it to acquiring", create["status_scope"])
         # create measures the epoch its emitted events moved in; join the epoch it was in at begin.
-        self.assertEqual((create["measured_epoch"], create["measured_epoch_status"]), (1, "shift_armed"))
+        self.assertEqual((create["measured_epoch"], create["measured_epoch_status"]), (1, "tracking"))
         self.assertIn("latency-events.csv", create["measured_epoch_source"])
-        self.assertEqual(join["first_epoch_status"], "skipped_host_late")
-        self.assertEqual(join["first_epoch"]["client_skip_reason"], "host_late")
-        self.assertIsNone(join["first_epoch"]["client_shift_seconds"])
+        self.assertEqual(join["first_epoch_status"], "acquiring")
+        self.assertEqual(join["first_epoch"]["host_samples"], 25)
+        self.assertIsNone(join["first_epoch"]["first_decision_frame"])
+        self.assertIsNone(join["first_epoch"]["decided_seconds_before_measurement"])
         self.assertEqual((join["measured_epoch"], join["measured_epoch_record"]["player_id"]), (1, 2))
-        self.assertEqual(join["conflicting_frames"], {"host": 0, "client": 0})
+        self.assertEqual((join["dropped_observations"], join["measured_epoch_record_count"]), (0, 1))
         saved = json.loads((self.last_directory / "presentation-short-latency.json").read_text())
-        self.assertEqual(saved["start_phase"]["join"]["first_epoch"]["host_wait_micros"], 25000)
+        self.assertEqual(saved["start_phase"]["join"]["first_epoch"]["host_samples"], 25)
 
     def test_join_measured_epoch_is_the_one_active_at_measurement_begin(self):
-        records = {role: {"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001),
-                                                        self.phase_epoch("not_armed_or_invalidated", 4000, epoch=3, set_at=101.5)]}
+        records = {role: {"supported": True, "epochs": [self.phase_epoch("tracking", .003),
+                                                        self.phase_epoch("acquiring", epoch=3, set_at=101.5)]}
                    for role in ("create", "join")}
         result = self.scenario(.04, short=True, start_phase=records, join_epoch=lambda time: 1 if time < 101.4 else 3)
         self.assertTrue(result["passed"], result["errors"])
         join = result["start_phase"]["join"]
-        self.assertEqual((join["measured_epoch"], join["measured_epoch_status"]), (3, "not_armed_or_invalidated"))
+        self.assertEqual((join["measured_epoch"], join["measured_epoch_status"]), (3, "acquiring"))
         self.assertEqual(join["first_epoch"]["movement_epoch"], 1)
-        missing = self.scenario(.04, short=True, start_phase={"join": {"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001)]}},
+        missing = self.scenario(.04, short=True, start_phase={"join": {"supported": True, "epochs": [self.phase_epoch("tracking", .003)]}},
                                 join_epoch=lambda time: 5)
         self.assertIsNone(missing["start_phase"]["join"]["measured_epoch_record"])
         self.assertIn("no record for measured epoch 5", missing["start_phase"]["join"]["measured_epoch_reason"])
@@ -265,18 +270,19 @@ class LatencyEvidenceTests(unittest.TestCase):
             "create": {"supported": False, "epochs": []}, "join": {"supported": True, "epochs": []}})
         self.assertEqual(unsupported["start_phase"]["create"]["status"], "unsupported")
         self.assertEqual(unsupported["start_phase"]["join"]["status"], "no_epoch_observed")
-        legacy = self.scenario(.04, short=True, start_phase={"create": {"supported": True, "epochs": [self.phase_epoch("applied", 1, .001, .001)]}})
+        # A former A1 start-phase status is not a phase-tracking status.
+        legacy = self.scenario(.04, short=True, start_phase={"create": {"supported": True, "epochs": [self.phase_epoch("shift_armed", .001)]}})
         self.assertEqual(legacy["start_phase"]["create"]["status"], "invalid")
 
     def test_non_numeric_steady_ns_marks_only_that_role_invalid(self):
-        broken = self.phase_epoch("shift_armed", 3000, .003, .001)
-        broken["client_first_steady_ns"] = "101.0s"
+        broken = self.phase_epoch("tracking", .003)
+        broken["first_decision_steady_ns"] = "101.0s"
         result = self.scenario(.04, short=True, start_phase={
             "create": {"supported": True, "epochs": [broken]},
-            "join": {"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001, player=2)]}})
+            "join": {"supported": True, "epochs": [self.phase_epoch("tracking", .003, player=2)]}})
         self.assertTrue(result["passed"], result["errors"])
         self.assertEqual(result["start_phase"]["create"]["status"], "invalid")
-        self.assertIn("client_first_steady_ns must be an integer", result["start_phase"]["create"]["reason"])
+        self.assertIn("first_decision_steady_ns must be an integer", result["start_phase"]["create"]["reason"])
         self.assertEqual(result["start_phase"]["create"]["measured_epoch"], 1)
         self.assertEqual(result["start_phase"]["join"]["status"], "recorded")
         # Malformed even without a plan (the gameplay reader): never silently accepted.
@@ -284,12 +290,16 @@ class LatencyEvidenceTests(unittest.TestCase):
 
     def test_start_phase_without_a_plan_keeps_every_key_explicit(self):
         summary = evidence.summarize_start_phase({"supported": True, "dropped_observations": 2, "epochs": [
-            self.phase_epoch("shift_armed", 3000, .003, .001)]}, "action-client.json")
+            self.phase_epoch("tracking", .003)]}, "action-client.json")
         epoch = summary["first_epoch"]
-        self.assertIsNone(epoch["host_wait_set_seconds_before_measurement"])
-        self.assertIsNone(epoch["client_set_seconds_before_measurement"])
+        self.assertIsNone(epoch["decided_seconds_before_measurement"])
+        self.assertIsNone(epoch["measurement_window"])
+        self.assertIsNone(epoch["stall_reseeds"])
         self.assertIsNone(summary["measured_epoch"])
         self.assertEqual(summary["measured_epoch_reason"], "no latency measurement plan")
+        window_keys = ("measured_epoch_window_status", "measured_epoch_tracking_seconds", "measured_epoch_acquiring_seconds",
+                       "measured_epoch_corrections_in_window")
+        self.assertEqual({key: summary[key] for key in window_keys}, dict.fromkeys(window_keys))
         self.assertEqual(summary["dropped_observations"], 2)
         absent = evidence.summarize_start_phase(None, "missing.json")
         self.assertIsNone(absent["measured_epoch"])
@@ -355,68 +365,73 @@ class LatencyEvidenceTests(unittest.TestCase):
         return [{"state": state, "frame": frame, "steady_ns": int(seconds * 1e9)} for state, frame, seconds in entries]
 
     def history(self, epoch, changes, last_seconds, **values):
-        epoch.update(client_state_changes=changes, client_state_changes_dropped=0, last_client_state=changes[-1]["state"],
-                     last_client_frame=changes[-1]["frame"] + 1, last_client_steady_ns=int(last_seconds * 1e9), **values)
+        epoch.update(state_changes=changes, state_changes_dropped=0, last_state=changes[-1]["state"],
+                     last_frame=changes[-1]["frame"] + 1, last_steady_ns=int(last_seconds * 1e9), **values)
         return epoch
 
-    def test_measured_epoch_withdrawn_during_measurement_is_a_window_state(self):
-        # Plan: 102..118 s. create is withdrawn 105..107 s inside the window;
-        # join was withdrawn only before measurement began.
-        create = self.history(self.phase_epoch("shift_withdrawn_below_cut", 9000, .009, .005), self.changes(
-            ("undecided", 1, 101), ("shift_armed", 3, 101.016), ("withdrawn_below_cut", 400, 105), ("shift_armed", 496, 107)),
-            119, client_armed_shift_seconds=.005, withdrawn_frames=96, withdrawn_first_frame=400,
-            withdrawn_first_steady_ns=105_000_000_000, withdrawals=1, restorations=1)
-        join = self.history(self.phase_epoch("shift_withdrawn_below_cut", 9000, .009, .005, player=2), self.changes(
-            ("undecided", 1, 101), ("shift_armed", 3, 101.016), ("withdrawn_below_cut", 30, 101.5), ("shift_armed", 48, 101.8)),
-            119, withdrawn_frames=18, withdrawals=1, restorations=1)
+    def test_measured_epoch_corrections_during_measurement_are_a_window_state(self):
+        # Plan: 102..118 s. create settles twice inside the window (105..107 s
+        # and 110..110.5 s); join settled only before measurement began.
+        create = self.history(self.phase_epoch("tracking", .009), self.changes(
+            ("acquiring", 1, 101), ("tracking", 3, 101.016), ("settling", 240, 105), ("tracking", 360, 107),
+            ("settling", 540, 110), ("tracking", 570, 110.5)), 119, corrections=3)
+        join = self.history(self.phase_epoch("tracking", .009, player=2), self.changes(
+            ("acquiring", 1, 101), ("tracking", 3, 101.016), ("settling", 30, 101.5), ("tracking", 48, 101.8)), 119)
         result = self.scenario(.04, short=True, start_phase={"create": {"supported": True, "epochs": [create]},
                                                              "join": {"supported": True, "epochs": [join]}})
         self.assertTrue(result["passed"], result["errors"])
         measured = result["start_phase"]["create"]
         window = measured["measured_epoch_record"]["measurement_window"]
-        self.assertEqual((window["status"], measured["measured_epoch_window_status"]), ("withdrawn_below_cut", "withdrawn_below_cut"))
-        self.assertIs(measured["measured_epoch_withdrawn_during_measurement"], True)
-        self.assertEqual(window["states"], ["shift_armed", "withdrawn_below_cut"])
-        self.assertAlmostEqual(window["state_seconds"]["withdrawn_below_cut"], 2)
-        self.assertAlmostEqual(window["state_seconds"]["shift_armed"], 14)
+        self.assertEqual((window["status"], measured["measured_epoch_window_status"]), ("tracking", "tracking"))
+        self.assertEqual(window["states"], ["tracking", "settling"])
+        self.assertAlmostEqual(window["state_seconds"]["settling"], 2.5)
+        self.assertAlmostEqual(window["state_seconds"]["tracking"], 13.5)
+        self.assertEqual((window["corrections_in_window"], window["reacquisitions_in_window"]), (2, 0))
+        # Settling is tracked time: the whole window counts as tracking.
+        self.assertAlmostEqual(measured["measured_epoch_tracking_seconds"], 16)
+        self.assertEqual(measured["measured_epoch_acquiring_seconds"], 0)
         self.assertAlmostEqual(window["window_seconds"], 16)
         self.assertAlmostEqual(window["observed_seconds"], 16)
         before = result["start_phase"]["join"]
-        self.assertEqual(before["measured_epoch_status"], "shift_withdrawn_below_cut")
-        self.assertEqual(before["measured_epoch_window_status"], "shift_armed")
-        self.assertIs(before["measured_epoch_withdrawn_during_measurement"], False)
+        self.assertEqual(before["measured_epoch_status"], "tracking")
+        self.assertEqual(before["measured_epoch_record"]["measurement_window"]["states"], ["tracking"])
+        self.assertEqual(before["measured_epoch_corrections_in_window"], 0)
         saved = json.loads((self.last_directory / "presentation-short-latency.json").read_text())
-        self.assertTrue(saved["start_phase"]["create"]["measured_epoch_withdrawn_during_measurement"])
+        self.assertEqual(saved["start_phase"]["create"]["measured_epoch_corrections_in_window"], 2)
 
     def test_window_state_without_plan_history_or_full_history_is_explicit(self):
-        pending = self.history(self.phase_epoch("pending_frame_window", 9000), self.changes(("undecided", 1, 101)), 101.1,
-                               host_wait_undecided_frames=6, client_active_frames_at_last_undecided=6)
-        summary = evidence.summarize_start_phase({"supported": True, "epochs": [pending]}, "x.json", 102,
+        acquiring = self.history(self.phase_epoch("acquiring"), self.changes(("acquiring", 1, 101)), 101.1)
+        summary = evidence.summarize_start_phase({"supported": True, "epochs": [acquiring]}, "x.json", 102,
                                                  {"epoch": 1, "source": "test", "reason": None}, 118)
-        self.assertEqual(summary["measured_epoch_status"], "pending_frame_window")
+        self.assertEqual(summary["measured_epoch_status"], "acquiring")
         self.assertEqual(summary["measured_epoch_window_status"], "client_not_observed_in_window")
-        no_plan = evidence.summarize_start_phase({"supported": True, "epochs": [pending]}, "x.json")
+        no_plan = evidence.summarize_start_phase({"supported": True, "epochs": [acquiring]}, "x.json")
         self.assertIsNone(no_plan["first_epoch"]["measurement_window"])
-        older = evidence.summarize_start_phase({"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001)]},
+        older = evidence.summarize_start_phase({"supported": True, "epochs": [self.phase_epoch("tracking", .003)]},
                                                "x.json", 102, {"epoch": 1, "source": "test", "reason": None}, 118)
         self.assertEqual(older["measured_epoch_window_status"], "not_recorded")
-        truncated = dict(pending, client_state_changes_dropped=3)
+        self.assertIsNone(older["measured_epoch_tracking_seconds"])
+        truncated = dict(acquiring, state_changes_dropped=3)
         self.assertEqual(start_phase_evidence.measurement_window(truncated, 102, 118)["status"], "state_history_truncated")
-        mixed = self.history(self.phase_epoch("shift_armed_after_below_cut_decision", 9000, .009, None, skip="frame_rate_below_tick"),
-                             self.changes(("skipped_below_cut", 1, 101), ("shift_armed", 60, 110)), 119)
-        window = start_phase_evidence.measurement_window(mixed, 102, 118)
-        self.assertEqual((window["status"], window["states"]), ("mixed", ["skipped_below_cut", "shift_armed"]))
-        self.assertFalse(window["withdrawn_during_measurement"])
-        unordered = self.history(self.phase_epoch("shift_armed", 3000, .003, .001),
-                                 self.changes(("undecided", 1, 103), ("shift_armed", 3, 102)), 119)
+        unobserved = dict(self.phase_epoch("host_samples_absent"), state_changes=[], state_changes_dropped=0,
+                          last_state=None, last_frame=None, last_steady_ns=None)
+        self.assertEqual(start_phase_evidence.measurement_window(unobserved, 102, 118)["status"], "client_not_observed")
+        late = self.history(self.phase_epoch("tracking", .009), self.changes(("acquiring", 1, 101), ("tracking", 60, 110)), 119)
+        window = start_phase_evidence.measurement_window(late, 102, 118)
+        self.assertEqual((window["status"], window["states"]), ("acquiring_during_measurement", ["acquiring", "tracking"]))
+        self.assertAlmostEqual(window["acquiring_seconds"], 8)
+        self.assertAlmostEqual(window["tracking_seconds"], 8)
+        self.assertEqual(window["reacquisitions_in_window"], 0)  # The first state is not a reacquisition.
+        unordered = self.history(self.phase_epoch("tracking", .003),
+                                 self.changes(("acquiring", 1, 103), ("tracking", 3, 102)), 119)
         self.assertEqual(evidence.summarize_start_phase({"epochs": [unordered]}, "x.json")["status"], "invalid")
 
     def test_non_finite_start_phase_numbers_mark_only_that_role_invalid(self):
-        valid = {"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001, player=2)]}
+        valid = {"supported": True, "epochs": [self.phase_epoch("tracking", .003, player=2)]}
         for literal in ("NaN", "1e999"):
             with self.subTest(literal=literal):
-                text = json.dumps({"supported": True, "epochs": [self.phase_epoch("shift_armed", 3000, .003, .001)]})
-                text = text.replace('"client_shift_seconds": 0.001', f'"client_shift_seconds": {literal}')
+                text = json.dumps({"supported": True, "epochs": [self.phase_epoch("tracking", .003)]})
+                text = text.replace('"first_error_seconds": 0.003', f'"first_error_seconds": {literal}')
                 self.assertIn(literal, text)
                 result = self.scenario(.04, short=True, start_phase={"create": text, "join": valid})
                 self.assertTrue(result["passed"], result["errors"])
@@ -431,8 +446,8 @@ class LatencyEvidenceTests(unittest.TestCase):
             path.write_text('{"supported": true, "dropped_observations": -Infinity, "epochs": []}', encoding="utf-8")
             self.assertEqual(evidence._start_phase_file(Path(temporary), "create")["status"], "invalid")
         # Already-parsed values (the gameplay reader) are checked as well.
-        inf = self.phase_epoch("shift_armed", 3000, .003, float("inf"))
-        self.assertIn("client_shift_seconds", evidence.summarize_start_phase({"epochs": [inf]}, "x.json")["reason"])
+        inf = self.phase_epoch("tracking", float("inf"))
+        self.assertIn("first_error_seconds", evidence.summarize_start_phase({"epochs": [inf]}, "x.json")["reason"])
         extra = evidence.summarize_start_phase({"epochs": [], "future": [float("nan")]}, "x.json")
         self.assertEqual(extra["status"], "invalid")
 
@@ -501,129 +516,126 @@ class LatencyEvidenceTests(unittest.TestCase):
         lines.append(json.dumps({"schema_version": 2, "kind": "trace_end", "events": len(generated), "dropped": 0}))
         return "\n".join(lines) + "\n"
 
-    def test_older_product_reseed_after_the_decision_is_cancelled_from_the_client_trace(self):
-        # Plan: 102..118 s. create armed at 101.016 s; a stall reseed at 105 s
-        # (neutral sequences 42-43) cancels it for the rest of the epoch, while
-        # the older product's observation keeps reading armed.
-        create = self.history(self.phase_epoch("shift_armed", 9000, .009, .005), self.changes(
-            ("undecided", 1, 101), ("shift_armed", 3, 101.016)), 119, client_armed_shift_seconds=.005)
-        # join: a pending phase (Host wait seen, never decided) cancelled by a reseed at 101.5 s.
-        join = self.history(self.phase_epoch("not_armed_or_invalidated", 4000, player=2), self.changes(("undecided", 1, 101)),
-                            119, host_wait_undecided_frames=900, client_active_frames_at_last_undecided=900)
+    def test_stall_reseed_is_a_reacquisition_and_the_client_trace_counts_it_per_record(self):
+        # Plan: 102..118 s. create tracks from 101.016 s; a stall reseed at 105 s
+        # (neutral sequences 42-43) returns it to acquiring until 105.5 s.
+        create = self.history(self.phase_epoch("tracking", .009), self.changes(
+            ("acquiring", 1, 101), ("tracking", 3, 101.016), ("acquiring", 240, 105), ("tracking", 270, 105.5)), 119)
+        # join never decided: reseeds while acquiring add no state change and are only in its trace.
+        join = self.history(self.phase_epoch("acquiring", player=2), self.changes(("acquiring", 1, 101)), 119)
         trace = self.client_trace((101.0, 1, True, 1, 1), (101.0, 2, True, 1, 1), (101.016, 3, False, 1, 1),
                                   (105.0, 42, True, 1, 1), (105.0, 43, True, 1, 1), (105.016, 44, False, 1, 1),
                                   (106.0, 102, True, 1, 2))  # Another epoch: never this record's.
         join_trace = self.client_trace((101.0, 1, True, 2, 1), (101.0, 2, True, 2, 1), (101.5, 7, True, 2, 1),
                                        (101.5, 8, True, 2, 1), (103.0, 60, True, 2, 1), (103.0, 61, True, 2, 1))
-        records = {"create": {"supported": True, "skip_reason_supported": True, "cancel_reason_supported": False,
-                              "player_id": 1, "epochs": [create]},
-                   "join": {"supported": True, "skip_reason_supported": True, "player_id": 2, "epochs": [join]}}
+        records = {"create": {"supported": True, "player_id": 1, "epochs": [create]},
+                   "join": {"supported": True, "player_id": 2, "epochs": [join]}}
         result = self.scenario(.04, short=True, start_phase=records,
                                files={"create-commands.jsonl": trace, "join-commands.jsonl": join_trace})
         self.assertTrue(result["passed"], result["errors"])
         phase = result["start_phase"]["create"]
         entry = phase["measured_epoch_record"]
-        self.assertEqual((entry["status"], entry["recorded_status"]), ("cancelled_by_reseed", "shift_armed"))
-        cancelled = entry["cancelled_by_reseed"]
-        self.assertEqual((cancelled["source"], cancelled["trace"], cancelled["reseed_sequence"]),
-                         ("client_trace_fallback", "create-commands.jsonl", 42))
-        self.assertTrue(cancelled["after_decision"])
-        self.assertAlmostEqual(cancelled["seconds_after_decision"], 3.984)
-        self.assertAlmostEqual(cancelled["seconds_before_measurement"], -3)
+        # A reseed never rewrites the recorded status; it is counted beside it.
+        self.assertEqual((entry["status"], entry["stall_reseeds"]), ("tracking", 1))
         window = entry["measurement_window"]
-        self.assertEqual((window["status"], window["states"]), ("cancelled_by_reseed", ["shift_armed", "cancelled_by_reseed"]))
-        self.assertTrue(window["cancelled_during_measurement"])
-        self.assertAlmostEqual(window["shift_applied_seconds"], 3)
-        self.assertAlmostEqual(window["unaligned_seconds"], 13)
+        self.assertEqual((window["status"], window["states"]), ("acquiring_during_measurement", ["tracking", "acquiring"]))
+        self.assertEqual((window["reacquisitions_in_window"], window["corrections_in_window"]), (1, 0))
+        self.assertAlmostEqual(window["tracking_seconds"], 15.5)
+        self.assertAlmostEqual(window["acquiring_seconds"], .5)
         self.assertAlmostEqual(window["observed_seconds"], 16)
-        self.assertAlmostEqual(phase["measured_epoch_shift_applied_seconds"], 3)
-        self.assertTrue(phase["measured_epoch_cancelled_by_reseed"])
-        self.assertEqual(phase["status_counts"], {"cancelled_by_reseed": 1})
-        self.assertEqual(phase["reseed_detection"]["status"], "recorded")
-        self.assertEqual(phase["reseed_detection"]["stall_reseeds"], {"1/1/1": 1, "1/2/1": 1})
-        # The recorded record is untouched; only the summary's view carries the derived status.
+        self.assertAlmostEqual(phase["measured_epoch_acquiring_seconds"], .5)
+        self.assertEqual(phase["status_counts"], {"tracking": 1})
+        self.assertEqual(phase["reseed_detection"], {"status": "recorded", "source": "create-commands.jsonl", "reason": None})
+        # The recorded record is untouched; only the summary's view carries the trace count.
         saved = json.loads((self.last_directory / "create-start-phase.json").read_text())
-        self.assertEqual(saved["epochs"][0]["status"], "shift_armed")
+        self.assertNotIn("stall_reseeds", saved["epochs"][0])
         join_entry = result["start_phase"]["join"]["measured_epoch_record"]
-        self.assertEqual((join_entry["status"], join_entry["recorded_status"]), ("cancelled_by_reseed", "not_armed_or_invalidated"))
-        self.assertFalse(join_entry["cancelled_by_reseed"]["after_decision"])
-        self.assertEqual(join_entry["cancelled_by_reseed"]["reseed_sequence"], 7)  # The first of two reseeds.
-        self.assertEqual(join_entry["cancelled_by_reseed"]["stall_reseeds_in_epoch"], 2)
+        self.assertEqual((join_entry["status"], join_entry["stall_reseeds"]), ("acquiring", 2))
         join_window = join_entry["measurement_window"]
-        self.assertEqual((join_window["status"], join_window["shift_applied_seconds"]), ("cancelled_by_reseed", 0))
-        self.assertAlmostEqual(join_window["unaligned_seconds"], 16)
+        self.assertEqual((join_window["status"], join_window["reacquisitions_in_window"]), ("acquiring_during_measurement", 0))
+        self.assertAlmostEqual(join_window["acquiring_seconds"], 16)
+        self.assertEqual(join_window["tracking_seconds"], 0)
 
-    def test_reseed_detection_is_explicit_when_not_derivable_and_skipped_when_reported(self):
-        armed = self.history(self.phase_epoch("shift_armed", 9000, .009, .005), self.changes(
-            ("undecided", 1, 101), ("shift_armed", 3, 101.016)), 119)
-        product = self.history(self.phase_epoch("cancelled_by_reseed", 9000, .009, .005, player=2), self.changes(
-            ("undecided", 1, 101), ("shift_armed", 3, 101.016), ("cancelled_by_reseed", 300, 106)), 119.5,
-            client_cancelled_frames=800, client_cancelled_first_frame=300, client_cancelled_first_steady_ns=106_000_000_000,
-            client_skip_reason=None, last_client_skip_reason="cancelled_by_reseed")
-        # A reseed in join's trace must not be applied: the product reports cancellations itself.
-        reseeded = self.client_trace((101.0, 1, True, 2, 1), (101.0, 2, True, 2, 1), (104.0, 9, True, 2, 1))
+    def test_reseed_detection_is_explicit_when_the_client_trace_cannot_count_reseeds(self):
+        tracking = self.history(self.phase_epoch("tracking", .009), self.changes(
+            ("acquiring", 1, 101), ("tracking", 3, 101.016)), 119)
+        reacquired = self.history(self.phase_epoch("tracking", .009, player=2), self.changes(
+            ("acquiring", 1, 101), ("tracking", 3, 101.016), ("acquiring", 300, 106), ("tracking", 330, 106.5)), 119.5)
+        # join's trace is read even though its record already shows the reacquisition.
+        reseeded = self.client_trace((101.0, 1, True, 2, 1), (101.0, 2, True, 2, 1), (106.0, 9, True, 2, 1))
         result = self.scenario(.04, short=True, files={"join-commands.jsonl": reseeded}, start_phase={
-            "create": {"supported": True, "epochs": [armed]},
-            "join": {"supported": True, "cancel_reason_supported": True, "player_id": 2, "epochs": [product]}})
+            "create": {"supported": True, "epochs": [tracking]},
+            "join": {"supported": True, "player_id": 2, "epochs": [reacquired]}})
         create, join = result["start_phase"]["create"], result["start_phase"]["join"]
-        self.assertEqual(create["measured_epoch_status"], "shift_armed")
+        self.assertEqual(create["measured_epoch_status"], "tracking")
         self.assertEqual(create["reseed_detection"]["status"], "absent")
         self.assertIn("create-commands.jsonl missing", create["reseed_detection"]["reason"])
-        self.assertAlmostEqual(create["measured_epoch_shift_applied_seconds"], 16)
-        self.assertEqual(create["measured_epoch_unaligned_seconds"], 0)
-        self.assertEqual(join["reseed_detection"]["status"], "product")
+        # Not counted is null, never zero; the window state does not depend on the trace.
+        self.assertIsNone(create["measured_epoch_record"]["stall_reseeds"])
+        self.assertAlmostEqual(create["measured_epoch_tracking_seconds"], 16)
+        self.assertEqual(create["measured_epoch_acquiring_seconds"], 0)
+        self.assertEqual(join["reseed_detection"]["status"], "recorded")
         entry = join["measured_epoch_record"]
-        self.assertNotIn("recorded_status", entry)
-        self.assertEqual(entry["cancelled_by_reseed"], {"source": "product", "steady_ns": 106_000_000_000, "frame": 300,
-                                                        "seconds_before_measurement": -4.0})
-        self.assertAlmostEqual(entry["measurement_window"]["shift_applied_seconds"], 4)
-        self.assertAlmostEqual(entry["measurement_window"]["unaligned_seconds"], 12)
+        self.assertEqual((entry["status"], entry["stall_reseeds"]), ("tracking", 1))
+        self.assertEqual(entry["measurement_window"]["reacquisitions_in_window"], 1)
+        self.assertAlmostEqual(entry["measurement_window"]["tracking_seconds"], 15.5)
+        self.assertAlmostEqual(entry["measurement_window"]["acquiring_seconds"], .5)
         with tempfile.TemporaryDirectory(prefix="pvp-start-phase-") as temporary:
-            (Path(temporary) / "create-start-phase.json").write_text(json.dumps({"supported": True, "epochs": [armed]}))
+            (Path(temporary) / "create-start-phase.json").write_text(json.dumps({"supported": True, "epochs": [tracking]}))
             (Path(temporary) / "create-commands.jsonl").write_text('{"kind": "generated"}\n')
             corrupt = evidence._start_phase_file(Path(temporary), "create", 102, {"epoch": 1, "source": "t", "reason": None}, 118)
         self.assertEqual(corrupt["reseed_detection"]["status"], "invalid")
         self.assertIn("corrupt diagnostic record", corrupt["reseed_detection"]["reason"])
-        self.assertEqual(corrupt["measured_epoch_status"], "shift_armed")
+        self.assertEqual(corrupt["measured_epoch_status"], "tracking")
+        self.assertIsNone(corrupt["measured_epoch_record"]["stall_reseeds"])
         lifeless = start_phase_evidence.reseed_evidence([{"kind": "generated", "player_id": 1, "epoch": 1, "sequence": 9,
                                                           "seeded_neutral": True, "time_ns": 1}], "old.jsonl")
         self.assertEqual(lifeless["status"], "unsupported")
-        not_given = evidence.summarize_start_phase({"supported": True, "epochs": [armed]}, "x.json")
+        unattributable = evidence.summarize_start_phase({"supported": True, "epochs": [tracking]}, "x.json", reseeds=lifeless)
+        self.assertEqual(unattributable["reseed_detection"]["status"], "unsupported")
+        self.assertIsNone(unattributable["first_epoch"]["stall_reseeds"])
+        not_given = evidence.summarize_start_phase({"supported": True, "epochs": [tracking]}, "x.json")
         self.assertEqual(not_given["reseed_detection"]["status"], "not_checked")
 
-    def test_older_record_cancelled_before_the_window_is_named_without_history(self):
-        older = self.phase_epoch("shift_armed", 2606, .002606, -.000912)
-        reseeds = start_phase_evidence.reseed_evidence(
-            [{"kind": "generated", "player_id": 1, "epoch": 1, "life_generation": 1, "sequence": 42,
-              "seeded_neutral": True, "time_ns": 101_500_000_000}], "create-commands.jsonl")
+    def test_record_without_state_history_counts_reseeds_but_names_no_window_state(self):
+        older = self.phase_epoch("tracking", .002606)
+
+        def generated(sequence, seeded, seconds, life=1):
+            return {"kind": "generated", "player_id": 1, "epoch": 1, "life_generation": life, "sequence": sequence,
+                    "seeded_neutral": seeded, "time_ns": int(seconds * 1e9)}
+        reseeds = start_phase_evidence.reseed_evidence([generated(42, True, 101.5)], "create-commands.jsonl")
         summary = evidence.summarize_start_phase({"supported": True, "epochs": [older]}, "x.json", 102,
                                                  {"epoch": 1, "source": "test", "reason": None}, 118, reseeds)
         entry = summary["measured_epoch_record"]
-        self.assertEqual(entry["status"], "cancelled_by_reseed")
+        self.assertEqual((entry["status"], entry["stall_reseeds"]), ("tracking", 1))
         self.assertEqual(entry["measurement_window"]["status"], "not_recorded")
-        self.assertTrue(entry["measurement_window"]["cancelled_before_window"])
-        self.assertAlmostEqual(entry["cancelled_by_reseed"]["seconds_before_measurement"], .5)
-        # A reseed before the decision frame cannot have cancelled the decided shift.
-        early = start_phase_evidence.reseed_evidence(
-            [{"kind": "generated", "player_id": 1, "epoch": 1, "life_generation": 1, "sequence": 9,
-              "seeded_neutral": True, "time_ns": 101_000_000_000}], "create-commands.jsonl")
-        kept = evidence.summarize_start_phase({"supported": True, "epochs": [older]}, "x.json", reseeds=early)
-        self.assertEqual(kept["first_epoch_status"], "shift_armed")
-        self.assertIsNone(kept["first_epoch"]["cancelled_by_reseed"])
+        self.assertIn("no state history", entry["measurement_window"]["reason"])
+        self.assertIsNone(summary["measured_epoch_tracking_seconds"])
+        # The epoch-start seed (sequences 1..2) is not a reseed, one reseed's consecutive
+        # neutral sequences count once, and another life's reseed is never this record's.
+        events = [generated(1, True, 101), generated(2, True, 101), generated(3, False, 101.016),
+                  generated(9, True, 103), generated(10, True, 103), generated(11, False, 103.016),
+                  generated(12, True, 104), generated(30, True, 105, life=2)]
+        for trace, count in ((events, 2), (events[:3], 0)):
+            with self.subTest(count=count):
+                counted = evidence.summarize_start_phase({"supported": True, "epochs": [older]}, "x.json", reseeds=
+                                                         start_phase_evidence.reseed_evidence(trace, "create-commands.jsonl"))
+                self.assertEqual(counted["first_epoch"]["stall_reseeds"], count)
 
     def test_unattributed_player_zero_records_are_reported_apart(self):
         # An older gui probe keyed its first active frame by player 0.
-        phantom = self.history(self.phase_epoch("host_wait_absent", player=0), self.changes(("undecided", 0, 100.9)), 100.9)
-        create = self.phase_epoch("shift_armed", 3000, .003, .001)
+        phantom = self.history(self.phase_epoch("host_samples_absent", player=0), self.changes(("acquiring", 0, 100.9)), 100.9)
+        create = self.phase_epoch("tracking", .003)
         result = self.scenario(.04, short=True, start_phase={
             "create": {"supported": True, "player_id": 1, "unattributed_client_frames": 0, "epochs": [phantom, create]},
             "join": {"supported": True, "player_id": 2, "epochs": [phantom]}})
         self.assertTrue(result["passed"], result["errors"])
         phase = result["start_phase"]["create"]
-        self.assertEqual((phase["epoch_count"], phase["first_epoch_status"]), (1, "shift_armed"))
+        self.assertEqual((phase["epoch_count"], phase["first_epoch_status"]), (1, "tracking"))
         self.assertEqual(phase["first_epoch"]["player_id"], 1)
         self.assertEqual([item["player_id"] for item in phase["unattributed_epochs"]], [0])
-        self.assertEqual(phase["status_counts"], {"shift_armed": 1})
+        self.assertEqual(phase["status_counts"], {"tracking": 1})
+        self.assertEqual(phase["unattributed_client_frames"], 0)
         only = result["start_phase"]["join"]
         self.assertEqual(only["status"], "no_epoch_observed")
         self.assertIn("1 record(s) without a player id", only["reason"])

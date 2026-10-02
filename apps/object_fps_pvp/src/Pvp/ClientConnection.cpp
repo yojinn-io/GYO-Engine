@@ -110,6 +110,10 @@ struct ClientConnection::Impl {
     std::uint32_t sentSequence{},receivedSequence{};
     bool haveSequence{},welcomed{};
     bool haveSentInput{};
+    // Input token bucket (InputSendBurst) and what the last input send carried.
+    double inputTokens{InputSendBurst};
+    Clock::time_point inputTokensAt{};
+    std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
     std::jthread worker;
@@ -138,6 +142,7 @@ struct ClientConnection::Impl {
         // them on a failed request can leave an old pawn occupying a room slot.
         welcomed=false;haveSequence=false;sentSequence=0;activeGeneration=0;
         haveSentInput=false;nextInputSendAt={};nextActionSendAt={};
+        inputTokens=InputSendBurst;inputTokensAt={};
     }
     void Close() {
         CloseTransport();
@@ -420,11 +425,16 @@ struct ClientConnection::Impl {
                         p.life_state_tick()>message.tick() ||
                         (p.life_state()==pb::LIFE_ALIVE && p.respawn_tick()!=0) ||
                         (p.life_state()==pb::LIFE_DEAD && (!p.life_state_tick() || p.respawn_tick()<=p.life_state_tick())) ||
-                        (p.has_epoch_start_wait_us() && p.epoch_start_wait_us()>MaxEpochStartWaitMicros)) {valid=false;break;}
+                        p.has_movement_slack_sequence()!=p.has_movement_slack_us() ||
+                        (p.has_movement_slack_us() && (p.movement_slack_us()>MaxMovementSlackMicros || p.movement_slack_us()<-MaxMovementSlackMicros)) ||
+                        (p.has_movement_slack_sequence() && (p.movement_slack_sequence()==0 || p.movement_slack_sequence()>p.last_resolved_command())) ||
+                        p.connection_quality_failures()>=ConnectionQualityFailedWindows) {valid=false;break;}
                     snapshot.players.push_back({p.player_id(),{p.x(),p.y(),p.z()},p.yaw(),p.pitch(),p.last_resolved_command(),
                         p.movement_epoch(),p.contiguous_pending_commands(),p.vertical_velocity(),p.grounded(),p.life_generation(),
                         p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick(),
-                        p.has_epoch_start_wait_us()?std::optional<std::uint32_t>{p.epoch_start_wait_us()}:std::nullopt});
+                        p.has_movement_slack_sequence()?std::optional<std::uint64_t>{p.movement_slack_sequence()}:std::nullopt,
+                        p.has_movement_slack_us()?std::optional<std::int32_t>{p.movement_slack_us()}:std::nullopt,
+                        p.connection_quality_failures()});
                     self|=p.player_id()==own;
                 }
                 for(const auto& combat:message.combat()) {
@@ -504,9 +514,24 @@ struct ClientConnection::Impl {
         std::optional<PlayerInput> input;
         {std::scoped_lock lock(mutex);
             if(activeGeneration!=generation.load())return;
-            if(welcomed && (!haveSentInput || Clock::now()>=nextInputSendAt))input=latestInput;}
+            if(welcomed && latestInput) {
+                const auto now=Clock::now();
+                const auto period=std::chrono::duration<double>(1.0/InputSendRate);
+                if(inputTokensAt==Clock::time_point{})inputTokensAt=now;
+                inputTokens=(std::min)(InputSendBurst,inputTokens+std::chrono::duration<double>(now-inputTokensAt)/period);
+                inputTokensAt=now;
+                // A window with a command never sent goes now; an unchanged one
+                // waits for its deadline and leaves a token for the next command.
+                const bool fresh=!haveSentInput || latestInput->movementEpoch!=sentInputEpoch ||
+                    latestInput->lifeGeneration!=sentInputLife ||
+                    (!latestInput->commands.empty() && latestInput->commands.back().sequence>sentInputThrough);
+                if((fresh && inputTokens>=1) || (now>=nextInputSendAt && inputTokens>=InputSendBurst)) {
+                    input=latestInput;inputTokens-=1;
+                }
+            }}
         if(input) {
             pb::PlayerInput message;message.set_movement_epoch(input->movementEpoch);message.set_life_generation(input->lifeGeneration);
+            message.set_observed_authority_tick(input->observedAuthorityTick);
             for(const auto& command:input->commands) {
                 auto* out=message.add_commands();out->set_sequence(command.sequence);
                 out->set_move_forward(command.moveForward);out->set_move_right(command.moveRight);
@@ -526,6 +551,8 @@ struct ClientConnection::Impl {
             // A missed send is skipped, never repaid by a packet burst.
             nextInputSendAt=sentAt+period;
             haveSentInput=true;
+            sentInputEpoch=input->movementEpoch;sentInputLife=input->lifeGeneration;
+            sentInputThrough=input->commands.empty()?0:input->commands.back().sequence;
         }
         SendActions();
     }

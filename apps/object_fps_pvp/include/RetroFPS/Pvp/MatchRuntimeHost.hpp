@@ -27,6 +27,18 @@ struct ControlResult final {
     std::string error;
 };
 
+enum class EvictionReason { HighLatency, UnstableInput };
+
+// A player the host removed for ConnectionQualityFailedWindows failed
+// connection-quality windows in a row, with the last window's measurements.
+struct Eviction final {
+    PlayerId playerId{};
+    EvictionReason reason{EvictionReason::UnstableInput};
+    std::uint32_t referenceAgeMillis{};
+    std::uint32_t substitutedPermille{};
+    std::uint32_t movementResets{};
+};
+
 // Product scheduler/host. Network I/O only exchanges values through bounded
 // ingress/results and one replaceable snapshot; it never drives world ticks.
 class MatchRuntimeHost final {
@@ -48,6 +60,8 @@ public:
     void Run(std::stop_token stop);
     [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot();
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
+    // Players already removed from the match; the I/O layer tells the Gateway.
+    [[nodiscard]] std::vector<Eviction> TakeEvictions();
 
     // IPC must wait for completion before accepting a replacement connection.
     // The future is completed by the simulation thread, which never waits I/O.
@@ -70,13 +84,27 @@ private:
         std::set<std::uint64_t> stagedSequences;
         bool dirty{};
     };
-    // Receipt of an epoch's first window (sequence 1) and, once Match executes
-    // it, the wait until that tick. Published with the epoch; never fed to Match.
-    struct EpochStart final {
+    // Movement slack of one player's current epoch/life: first receipt of
+    // each unresolved sequence, resolution time of recently substituted ones
+    // (a late arrival reports how late it was) and the smallest sample since
+    // the last publication. Published with snapshots; never fed to Match.
+    struct SlackTrack final {
         std::uint64_t movementEpoch{};
         std::uint64_t lifeGeneration{};
-        std::chrono::steady_clock::time_point receivedAt;
-        std::optional<std::uint32_t> waitMicros;
+        std::uint64_t lastResolved{};
+        std::map<std::uint64_t, std::chrono::steady_clock::time_point> receipts;
+        std::map<std::uint64_t, std::chrono::steady_clock::time_point> substituted;
+        std::optional<std::pair<std::uint64_t, std::int64_t>> pending;
+    };
+    // Connection-quality window of one player: its start tick and movement
+    // counters, the input reference ages seen in it and the failed windows in
+    // a row. The first window after a join is not judged.
+    struct QualityTrack final {
+        std::uint64_t windowStartTick{};
+        MovementQuality windowStart{};
+        std::vector<std::uint32_t> referenceAgesMicros;
+        bool judged{};
+        std::uint32_t failures{};
     };
     struct PublishedReference final {
         std::uint64_t tick{};
@@ -84,6 +112,10 @@ private:
     };
     bool QueueControl(Control control);
     void ClearState();
+    void RemovePlayerState(PlayerId playerId);
+    // `at` is this Advance's single clock reading, taken on first use.
+    void TrackSlack(WorldSnapshot& state, std::optional<std::chrono::steady_clock::time_point>& at);
+    void JudgeConnectionQuality(WorldSnapshot& state);
 
     mutable std::mutex mutex_;
     std::condition_variable_any wake_;
@@ -94,7 +126,9 @@ private:
     std::map<PlayerId, PendingInput> pendingInputs_;
     std::map<PlayerId, std::vector<ShotRequest>> pendingActions_;
     std::map<PlayerId, ActionId> pendingActionAcknowledgements_;
-    std::map<PlayerId, EpochStart> epochStarts_;
+    std::map<PlayerId, SlackTrack> slack_;
+    std::map<PlayerId, QualityTrack> quality_;
+    std::vector<Eviction> evictions_;
     std::deque<PublishedReference> publishedReferences_;
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;

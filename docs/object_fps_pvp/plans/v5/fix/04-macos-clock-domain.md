@@ -2,7 +2,7 @@
 
 狀態：**已解決**。2026-10-01發現並修正，2026-10-02以不計次單案確認。Owner：`object_fps_pvp`（驗收器`build/acceptance/object_fps_pvp`）。
 相關：為PR #2（`ff11ee3`，A1啟動相位對齊，已合併）準備本機macOS結案驗證時發現；本修正不在PR #2內，
-尚未commit／PR，提交前的工作分支為`claude/pvp-v5-start-phase-guard`（自`origin/master` `ff11ee3`）。
+經PR #3（`claude/pvp-v5-start-phase-guard`，自`ff11ee3`分出）合併為`9cd7f26`。
 只改驗收器；產品runtime、wire、v5契約、Engine與公共層都不變。索引見 [README](README.md)，
 時間順序見 [守門dev_log](../../../../dev_logs/2026_10_02_pvp_v5_start_phase_guard.zh-Hant.md)。
 

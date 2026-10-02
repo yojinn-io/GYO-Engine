@@ -1,8 +1,9 @@
 # 01 A1 在低幀率（30／40 FPS）造成 Held 與重設
 
-狀態：已解決（工作樹修正，尚未提交）。2026-10-02。Owner：`object_fps_pvp`。
+狀態：已解決。2026-10-02。Owner：`object_fps_pvp`。
+**2026-10-02更新**：本守門已隨A1一起由持續相位追蹤取代並刪除（見[08](./08-a1-clock-drift.md)）；token bucket worker使30／40 FPS對齊後不再Held，本文保留作為歷史紀錄。
 相關：A1 由 PR #2（`claude/project-thread-lv6bg5`，`d74830c`，合併為 `ff11ee3`）引入；
-本修正（防護 v3）在提交前的工作分支 `claude/pvp-v5-start-phase-guard`，尚未 commit／開 PR。
+本修正（防護 v3）經 PR #3（`claude/pvp-v5-start-phase-guard`）合併為 `9cd7f26`。
 第03批仍未結案：計次GUI可見延遲輪次與25案矩陣依使用者決定未執行（MVP技術驗證）；
 本修正不代表結案，第04批維持暫停。
 另見 [第03批計畫](../03-v5-gameplay-and-delivery.md)、[交接](../HANDOFF.md)、
@@ -99,7 +100,7 @@ Held／延遲／重設與未對齊相同。其餘相關測例見「驗證」。
   Held／重設等同未對齊的斷言失敗；`PredictionTests.cpp` 的
   "PvP start phase waits for a full frame window and is not applied below about 54.5 FPS" 也會失敗。
   模擬的 cut 判定在測試端依文件定義獨立計算，不受此變異影響。
-- 結束後手動刪除該行。提交前此檔的防護本身未提交，不可用 `git checkout`／`git restore` 還原。
+- 結束後手動刪除該行，或以 `git restore` 還原該檔（防護已隨 PR #3 提交）。
 - 同一手法的舊版紀錄：證據目錄 `below60/scratch_src/LocalPlayerPrediction.cpp`
   （`GYO_A1_EXPERIMENT_NO_GUARD`）與 `below60/noguard_*.txt`（v1 時期）。
 

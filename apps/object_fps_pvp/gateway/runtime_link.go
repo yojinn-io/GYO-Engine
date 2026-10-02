@@ -130,7 +130,12 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 	if len(merged) > adapter.MaxFutureCommands {
 		return adapter.ErrInput
 	}
-	window := &runtime.PlayerInput{PlayerId: in.PlayerId, MovementEpoch: epoch, LifeGeneration: life}
+	// A merged window reports the newest snapshot any of its parts observed.
+	observed := in.ObservedAuthorityTick
+	if old != nil && old.ObservedAuthorityTick > observed {
+		observed = old.ObservedAuthorityTick
+	}
+	window := &runtime.PlayerInput{PlayerId: in.PlayerId, MovementEpoch: epoch, LifeGeneration: life, ObservedAuthorityTick: observed}
 	for _, command := range merged {
 		window.Commands = append(window.Commands, proto.Clone(command).(*runtime.MovementCommand))
 	}
@@ -201,7 +206,8 @@ func (l *runtimeLink) batch() []*runtime.RuntimeEnvelope {
 		for len(commands) > 0 {
 			count := min(len(commands), adapter.MaxPendingCommands)
 			e := envelope()
-			e.Message = &runtime.RuntimeEnvelope_Input{Input: &runtime.PlayerInput{PlayerId: id, Commands: commands[:count], MovementEpoch: l.inputs[id].MovementEpoch, LifeGeneration: l.inputs[id].LifeGeneration}}
+			e.Message = &runtime.RuntimeEnvelope_Input{Input: &runtime.PlayerInput{PlayerId: id, Commands: commands[:count], MovementEpoch: l.inputs[id].MovementEpoch,
+				LifeGeneration: l.inputs[id].LifeGeneration, ObservedAuthorityTick: l.inputs[id].ObservedAuthorityTick}}
 			batch = append(batch, e)
 			commands = commands[count:]
 		}
@@ -263,7 +269,8 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				return
 			}
 			switch message.Message.(type) {
-			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error, *runtime.RuntimeEnvelope_ActionResults:
+			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error, *runtime.RuntimeEnvelope_ActionResults,
+				*runtime.RuntimeEnvelope_Evicted:
 				receive(&message)
 			default:
 				fail(errors.New("unexpected runtime message"))

@@ -1,10 +1,11 @@
 # 02 stall reseed 使 A1 在整個 epoch 失效（開局卡頓）
 
-狀態：**未解決（暫緩）**。2026-10-02。Owner：`object_fps_pvp`。
-相關：A1本體PR #2（合併為`ff11ee3`）；守門v3與`CancelledByReseed`診斷在提交前的工作分支
-`claude/pvp-v5-start-phase-guard`（尚未commit／PR）。第03批未結案，計次輪未執行，第04批暫停。
+狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**。Owner：`object_fps_pvp`。
+相關：A1本體PR #2（合併為`ff11ee3`）；守門v3與`CancelledByReseed`診斷經PR #3
+（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。第03批未結案，計次輪未執行，第04批暫停。
 已解決的只有「看得見」：產品回報取消原因，驗收器記錄取消與量測窗口內的對齊秒數。
-取消後整個epoch不再對齊這件事本身未修；下列方案只做評估與原型，沒有進產品，也不代表已排程。
+取消後整個epoch不再對齊這件事本身未修；下列方案只做評估與原型，沒有進產品。
+2026-10-02起與[08](./08-a1-clock-drift.md)（時鐘漂移）一起改以閉環的持續相位追蹤處理，見文末「方向變更」。
 索引見[README](./README.md)；低幀率守門見[01](./01-a1-low-fps-regression.md)，
 偶發掉幀重設見[03](./03-a1-missed-frame-starvation.md)，補跑規則見[06](./06-gui-window-interference-and-rerun-rule.md)，
 啟動相位紀錄見[07](./07-start-phase-diagnostics.md)。
@@ -204,6 +205,14 @@ cd build/acceptance/object_fps_pvp && python3 -m unittest -k reseed \
 MVP／PvP技術驗證：不做3c、不跑計次輪，本問題列為未解決（暫緩），先處理其他問題。
 第03批結案驗收（計次GUI可見延遲短測＋25案矩陣）因此未執行，第03批未結案；第04批暫停。
 
+### 方向變更（2026-10-02）
+
+使用者要求先處理本問題並選擇O2W＋O2P；草案送審時改為先討論根因。漂移模擬（[08](./08-a1-clock-drift.md)）
+顯示「每epoch量一次」的開環設計在長局本身就會失準：無卡頓時Client快20ppm、RTT 20，延遲P50約第10分鐘
+超過50ms且沒有任何重設修正；這種情境reseed為0次，O2W不會啟動。因此不再推薦O2W／3c，
+改為評估閉環的持續相位追蹤，以同一個回饋處理epoch開始、reseed與漂移。上表的評估保留作為歷史紀錄。
+使用者決定不做兩台實機的漂移實測（邏輯缺陷不因實測數值而消失），直接修正。
+
 ### 後續候選：CS式開局準備期（未排程、無承諾）
 
 開局／回合開始時全員凍結且無敵並倒數；啟動相位量測與首幀卡頓都落在其中，因所有人同時凍結而公平
@@ -219,6 +228,9 @@ MVP／PvP技術驗證：不做3c、不跑計次輪，本問題列為未解決（
 - 實機（report-only，不計次、不作為驗收證據）：smoke-3（守門v3）兩角色皆由產品回報`CancelledByReseed`；
   smoke-1／2（舊產品）以Client trace重分析，create皆為`cancelled_by_reseed`（seq42／seq7）。
 - 方案只有原型與模擬：沒有任何恢復方案在實機GUI或真網路驗證過；卡頓來源與真實大廳流程是否觸發也未驗證。
+- 持續相位追蹤（2026-10-02，PR #11）實機report-only GUI冒煙1輪（不計次、不作為驗收證據）：create方啟動時3次、
+  join方1次stall reseed，兩方都在量測開始前1.8–2.1秒重新決定相位，量測期間全程tracking、0次修正、0次移動重設；
+  可見P50／P95 36.754／38.811ms。只是一輪，不是統計證明。證據：`build/target/_build/test/logs/pvp-v5-ct-gui-smoke-20261002-192738/`。
 - 證據（git忽略，只在本機；`build/`日後可能移出工作區，須保留）：
   `build/target/_build/test/logs/pvp-v5-start-phase-evidence-20261002/`
   - `integration-smoke-{1,2,3}/`：summary與`round-1/{create,join}-{commands.jsonl,start-phase.json,presentation.csv}`

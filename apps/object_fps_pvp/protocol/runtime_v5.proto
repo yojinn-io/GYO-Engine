@@ -32,6 +32,8 @@ message PlayerInput {
   repeated MovementCommand commands = 2;
   uint64 movement_epoch = 3;
   uint64 life_generation = 4;
+  // Latest snapshot tick the Client applied; merged windows carry the largest.
+  uint64 observed_authority_tick = 5;
 }
 message JoinResult {
   uint64 player_id = 1;
@@ -54,11 +56,20 @@ message PlayerState {
   LifeState life_state = 13;
   uint64 life_state_tick = 14;
   uint64 respawn_tick = 15;
-  // Host-observed microseconds from receiving this epoch's first command
-  // window to the authority tick that executed sequence 1; absent until then.
-  // Timing observation only (<= 1,000,000); the Client uses it to align its
-  // fixed-step phase once per epoch and Match never reads it.
-  optional uint32 epoch_start_wait_us = 16;
+  reserved 16;
+  reserved "epoch_start_wait_us";
+  // Host timing observation, never simulation input: the smallest movement
+  // slack since the previous published snapshot and its command sequence.
+  // Slack is the executing tick minus the command's first receipt, or minus
+  // the receipt of a command that arrived after its sequence was substituted
+  // (negative). Both or neither; |slack| <= 1,000,000 and
+  // 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
+  // reads it.
+  optional uint64 movement_slack_sequence = 17;
+  optional sint32 movement_slack_us = 18;
+  // Consecutive failed 10-second connection-quality windows (0-2). At 3 the
+  // Match evicts the player; the HUD warns while this is non-zero.
+  uint32 connection_quality_failures = 19;
 }
 enum LifeState {
   LIFE_UNSPECIFIED = 0;
@@ -69,6 +80,20 @@ message WorldSnapshot {
   uint64 tick = 1;
   repeated PlayerState players = 2;
   repeated CombatState combat = 3;
+}
+// Match-initiated removal for sustained poor connection quality. The Gateway
+// clears the player like a Leave and tells the Client why.
+enum EvictionReason {
+  EVICTION_UNSPECIFIED = 0;
+  EVICTION_HIGH_LATENCY = 1;
+  EVICTION_UNSTABLE_INPUT = 2;
+}
+message PlayerEvicted {
+  uint64 player_id = 1;
+  EvictionReason reason = 2;
+  uint32 reference_age_ms = 3;
+  uint32 substituted_permille = 4;
+  uint32 movement_resets = 5;
 }
 message RuntimeError {
   uint64 player_id = 1;
@@ -87,6 +112,7 @@ message RuntimeEnvelope {
     WorldSnapshot snapshot = 16;
     ActionBatch actions = 17;
     ActionResults action_results = 18;
+    PlayerEvicted evicted = 19;
   }
 }
 

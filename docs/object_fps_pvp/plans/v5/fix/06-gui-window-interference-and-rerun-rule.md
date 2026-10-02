@@ -1,7 +1,7 @@
 # 06 GUI 延遲測試的視窗干擾、視窗配置與補跑規則
 
-狀態：已解決（驗收器修正與補跑規則已實作；計次輪未執行）。2026-10-02。Owner：`object_fps_pvp`。
-相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；提交前的工作分支`claude/pvp-v5-start-phase-guard`（尚未commit／PR）。
+狀態：已解決（驗收器修正與補跑規則已實作；2026-10-02第03批結案驗收首次在計次輪運用）。2026-10-02。Owner：`object_fps_pvp`。
+相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；本修正經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
 範圍：只改產品自有驗收器`build/acceptance/object_fps_pvp/`（GUI probe、分析器、runner）；Engine `SdlPlatform`、
 產品Client／Gateway／Match、wire契約與延遲門檻都不變。本修正不代表第03批結案：計次GUI短測依使用者決定
 （MVP技術驗證）未執行，補跑規則也還沒在真實計次輪用過。索引與其他問題見[本目錄總覽](README.md)。
@@ -238,7 +238,9 @@ report-only輪的`status`仍由門檻決定，只多一個標記。本次未實�
   證據（git-ignored，只在本機）：`build/target/_build/test/logs/pvp-v5-start-phase-evidence-20261002/integration-smoke-{1,2,3}/`
   （`summary.md`、`round-1/{create,join}-report.txt`、`round-1/round.json`）。
 - 未驗證：
-  - 真實計次輪從未觸發`invalid_window_*`；第03批計次輪依使用者決定未執行，補跑規則也未實際運用。
+  - 2026-10-02第03批結案驗收（事前宣告3輪）：第3輪量測中create視窗出現OS `focus_lost`／`focus_gained`各1次，
+    兩個probe同時約122ms卡頓，判`invalid_window_disturbed`（底層門檻因配對19／20而失敗，可見P50 36.9ms）；
+    依規則只看視窗證據補跑一次，補跑PASS。焦點來源未確認。證據：`build/target/_build/test/logs/pvp-v5-batch03-closure-20261002/gui-round-3{,-rerun}/`。
   - `LatencyWindow`（C++）沒有單元測試，只由實機冒煙涵蓋。
   - 方法C、D未實跑；Linux／Windows未實跑。
 

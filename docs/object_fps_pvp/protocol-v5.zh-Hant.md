@@ -2,7 +2,9 @@
 
 更新：2026-10-02。Owner：`object_fps_pvp`。
 **Client／Gateway／Match 已一起實作 v5 候選；第03批功能及網路恢復通過，整批驗收未結案。**
-2026-10-01經使用者批准加入啟動相位對齊（方案A1，見§1、§2），2026-10-02加入低幀率守門（§1）；
+2026-10-01經使用者批准加入啟動相位對齊（方案A1），2026-10-02加入低幀率守門；同日經使用者核准，
+以「持續相位追蹤＋輸入worker token bucket」取代兩者，並加入連線品質移出（§1、§2、§7；
+依據見[fix/08](plans/v5/fix/08-a1-clock-drift.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)）。
 計次GUI可見延遲重測依使用者決定暫緩。本契約其餘參數及門檻沒有因此放寬。
 第01批建立契約，第02批完成女性人物Idle／Jog／掛槍；第03批接入v5 wire、
 跳躍、彈匣、換彈、死亡／重生及操作／HUD。完整動作動畫仍留第04批。
@@ -18,9 +20,9 @@
 | 政策 | v5預設／來源 |
 |---|---|
 | Authority／本機固定模擬 | 60Hz；固定1/60秒，不受FPS或封包數驅動 |
-| 移動worker／Snapshot | 各60Hz；保持既有獨立傳輸排程 |
+| 移動worker／Snapshot | Snapshot 60Hz。輸入worker以每秒60個、容量2的token bucket送出：窗口含從未送出的命令時，下一次輪詢（≤2ms）有token即送；沒有新命令的窗口在既有期限（上次送出＋1/60秒）重送，但須保留一個token給下一個新命令。平均≤60包／秒、最多連送2包、不補送過期批次，worker不產生命令 |
 | 初始／重同步lead | 2個中立命令，第一個合法固定步形成後才首次發布完整窗口 |
-| 啟動相位對齊 | Host量測每個epoch首窗口（含seq1）收到→執行seq1的Tick之等待w並隨Snapshot下發；Client每epoch一次把固定步相位調整「w＋首步發布時已過時間−4ms」，每幀最多移動該幀經過時間的25%。w超過1Tick＋2ms視為Host延遲而不採用。幀率守門：累積≥8個幀間隔才決定；最新32個幀間隔（各最多計2Tick）的平均>1.1Tick（約54.5 FPS）時不對齊，已對齊者同樣以每幀25%撤回；平均≤1.06Tick（約56.6 FPS）持續32幀才恢復，低幀率造成的不對齊可逆。lead、插值、命令數與門檻不變 |
+| 持續相位追蹤 | Host逐序號記錄首次收到時刻；每Tick對已執行者取樣「執行Tick−首次收到」，對被替代後才到的命令取負值「−（收到−替代）」，每份Snapshot帶上次發布以來最小的樣本及其序號。Client對目前相位穩定後才產生的真實命令計算誤差e＝樣本＋該命令發布時年齡−2Tick−4ms（在固定步邊界送出的命令，lead之外餘裕4ms；與A1目標相同）。每次播種（epoch開始或stall reseed）後，滿8個幀間隔且有8個樣本即以P90首次決定，\|e\|>0.5ms才修正；之後以最近240個樣本（約4秒）的P90追蹤，\|e\|>2ms才修正；連續2個負值樣本立即以其中最小者修正。每次修正≤±2Tick，每幀最多移動該幀經過時間的25%；slew期間仍收樣本，slew結束後才再決定，只計slew結束前已存在序號之後的命令。沒有低幀率守門。lead、插值、命令數與門檻不變 |
 | 移動窗口／Match未來命令 | Client≤12；Match數量與距游標皆≤32 |
 | 動作交付 | 每批≤8，未退休窗口與ID距離≤32，動作／ACK合計排程30Hz |
 | 遠端插值／本機校正 | 落後1Tick；小校正100ms消除，誤差≥1世界單位直接定位 |
@@ -31,12 +33,14 @@
 | 手槍 | 半自動，10Tick／約167ms間隔，射程100 |
 | 彈藥／換彈 | 彈匣12、無限備彈，R換彈90Tick／1.5秒；不自動換彈 |
 | 動作有效期 | 保留250ms權威發布參考年齡上限，不接受Client時間／位置／傷害 |
+| 連線品質移出 | Match每10秒（600Tick）評估每位玩家，加入後第一個10秒不評估；輸入參考年齡（輸入窗口所載Snapshot Tick的發布至今時間）中位數>160ms、被替代（Held／Neutral）的移動>5%、或發生Starvation／Backlog移動重設，該窗口不合格。連續3個不合格窗口即移出：Match執行等同Leave的清理並通知Gateway，Gateway清除保留並以Error告知Client原因（`evicted_high_latency`／`evicted_unstable_input`）。Snapshot帶連續不合格窗口數供HUD警告；可重新加入 |
 
-不採用啟動相位的原因`StartPhaseSkip`｛`HostLate`、`FrameRateBelowTick`、`CancelledByReseed`｝
-只是Client本機診斷（`LocalMovementObservation::startPhaseSkip`），不進wire，Match不知道它。
-已知限制：每epoch只量一次，stall reseed會取消該epoch其餘時間的對齊，切點以上偶發掉幀仍可能造成
-starvation重設，見[fix/02](plans/v5/fix/02-a1-cancelled-by-stall-reseed.md)與
-[fix/03](plans/v5/fix/03-a1-missed-frame-starvation.md)。
+相位追蹤狀態（取得中／穩定中／追蹤中）、最近決定的誤差、修正與遲到修正次數只是Client本機診斷
+（`LocalMovementObservation`），不進wire，Match不知道它們。已知取捨：目標餘裕是在固定步邊界送出的命令
+lead之外4ms，30 FPS等一幀含兩步時較舊的命令最壞只剩約4ms，幀抖動可能偶發Held（CPU模擬≤0.5%）；
+連續大卡頓與掉包下的Held與不對齊相近。RTT約150ms以上（12命令窗口）或低於30 FPS（幀長於2Tick lead）
+是本設計無法處理的範圍，由連線品質移出處理。依據見[fix/08](plans/v5/fix/08-a1-clock-drift.md)、
+[fix/09](plans/v5/fix/09-covered-gap-stuck-late.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)。
 
 由Match擁有並經Ready／Welcome發布規則：移動規則包含jumpHeight／gravity，
 戰鬥規則包含HP、傷害、射速、彈匣、reloadTicks、respawnTicks與既有射擊限制。
@@ -53,8 +57,8 @@ Client／Match共用產品純移動步驟；Client使用已驗證的權威規則
 | 資料 | v5增補與規則 |
 |---|---|
 | MovementCommand | 新增單次jumpRequested；仍只代表固定一步，沒有任意dt或Client位置 |
-| PlayerInput | 完整未確認窗口帶player身分、movementEpoch及單一lifeGeneration |
-| PlayerState | 既有位置／角度／ACK，加verticalVelocity、grounded、lifeGeneration、Alive／Dead及生命轉換Tick；可選epochStartWaitMicros（Host時序觀測，≤1,000,000，量到前不存在，Match不讀取） |
+| PlayerInput | 完整未確認窗口帶player身分、movementEpoch及單一lifeGeneration；observedAuthorityTick為Client發布時最後套用的Snapshot Tick（0為無），只供連線品質計時，產品Gateway合併窗口時取最大值 |
+| PlayerState | 既有位置／角度／ACK，加verticalVelocity、grounded、lifeGeneration、Alive／Dead及生命轉換Tick；可選movementSlackSequence＋movementSlackMicros（Host時序觀測，同時存在或同時不存在；\|slack\|≤1,000,000µs、1≤序號≤lastResolvedCommand；Match不讀取；原epochStartWaitMicros已刪除、編號保留）；connectionQualityFailures（連續不合格窗口數0–2） |
 | CombatState | 既有HP／冷卻，加magazineAmmo、reloadActionId／起訖Tick、最近接受射擊ActionId／Tick；同份Snapshot按PlayerId關聯生命 |
 | ActionRequest | ActionId、lifeGeneration、observedAuthorityTick與Shot／Reload種類；只有Shot包含絕對yaw／pitch |
 | ActionDecision | 動作種類、原請求生命世代、ActionId、裁決Tick、接受／拒絕；Shot結果另含命中kind／targetId／targetLifeGeneration／damage |
@@ -66,6 +70,8 @@ Client／Match共用產品純移動步驟；Client使用已驗證的權威規則
 採明確轉換；Shot的yaw／pitch必須存在，Reload不得攜帶這兩欄。
 兩份Client／Runtime協定獨立，經產品Adapter轉譯。HTTP join、Ready／Welcome、
 wire版本與建置引用同批切換，明確拒絕v1–v4，不交付混用三角色的可部署組合。
+Runtime協定另有Match→Gateway的`PlayerEvicted`（玩家、原因、參考年齡ms、被替代‰、移動重設數）：
+Match已移出該玩家，Gateway照Leave清理並以Client `Error`告知；Gateway不自行判斷連線品質。
 
 lifeGeneration從1開始，只由Match在成功重生時遞增；PlayerId／Session不變。
 重生同時提升movementEpoch並歸零其命令序號，兩種世代各自有意義且不回繞。
@@ -221,3 +227,18 @@ Architecture Delta（第01批記錄；第02–03批實作對應部分，第04批
    controllers會帶入不必要生命周期，且v2沒有網路重生契約或步頻校準。
 7. Fitness：專用code／assets／tests由owner選取；只讓Client增加角色支援，
    Match無SDL／Model／Renderer；刪除／複製產品不要求公共層新增名稱分支。
+
+Architecture Delta（2026-10-02，持續相位追蹤＋token bucket＋連線品質移出，使用者核准）：
+
+1. 需求：[fix/02](plans/v5/fix/02-a1-cancelled-by-stall-reseed.md)、[03](plans/v5/fix/03-a1-missed-frame-starvation.md)、
+   [08](plans/v5/fix/08-a1-clock-drift.md)、[09](plans/v5/fix/09-covered-gap-stuck-late.md)觀測到的開環量測與送出相位鋸齒，
+   以及使用者要求的伺服器保護（[10](plans/v5/fix/10-connection-quality-eviction.md)）。
+2. 改變邊界：產品Client／Runtime契約中一個Host時序觀測換成slack樣本，PlayerInput加observedAuthorityTick，
+   Runtime加PlayerEvicted；ClientConnection的送出規則；沒有新Top-level domain或公共層概念。
+3. 影響owner：只有object_fps_pvp的Client、Match、產品Go Gateway與專用驗收；Engine與`services/gyo_gateway`不改。
+4. 依賴方向不變：Match仍不依賴Gateway；移出由Match決定、經既有IPC通知，Gateway只執行與轉告。
+5. Ownership：Match新增「依移動品質移出玩家」與逐序號收到時刻帳本（取代epoch首窗口帳本）；
+   相位追蹤留在Client預測；閾值是Match的固定常數，不經Ready／Welcome下發。
+6. 較小替代不足：O2W、只改worker或只做追蹤都無法同時處理漂移、卡頓與掉包（fix/08「已評估、未採用」）；
+   移出必須與追蹤同時上線，否則以現行缺陷誤踢約12%正常局。
+7. 簡化：刪除A1首窗口量測、HostLate規則、低幀率守門與撤回／恢復狀態機及`StartPhaseSkip`。

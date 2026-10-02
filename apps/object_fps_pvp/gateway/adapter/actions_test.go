@@ -30,7 +30,9 @@ func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
 	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: "test_arena", ArenaVersion: math.MaxUint32, CombatRules: RulesForClient(rules)}
 	snapshot := &client.WorldSnapshot{Tick: math.MaxUint64 - 1}
 	for i := uint64(0); i < MaxPlayers; i++ {
-		snapshot.Players = append(snapshot.Players, &client.PlayerState{LifeGeneration: math.MaxUint64, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint64 - 100, VerticalVelocity: math.MaxFloat32, Grounded: true, PlayerId: math.MaxUint64 - i, X: -math.MaxFloat32, Y: -math.MaxFloat32, Z: -math.MaxFloat32, Yaw: 1e6, Pitch: -float32(math.Pi / 2), LastResolvedCommand: math.MaxUint64, MovementEpoch: math.MaxUint64, ContiguousPendingCommands: 32})
+		snapshot.Players = append(snapshot.Players, &client.PlayerState{LifeGeneration: math.MaxUint64, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint64 - 100, VerticalVelocity: math.MaxFloat32, Grounded: true, PlayerId: math.MaxUint64 - i, X: -math.MaxFloat32, Y: -math.MaxFloat32, Z: -math.MaxFloat32, Yaw: 1e6, Pitch: -float32(math.Pi / 2), LastResolvedCommand: math.MaxUint64, MovementEpoch: math.MaxUint64, ContiguousPendingCommands: 32,
+			MovementSlackSequence: proto.Uint64(math.MaxUint64), MovementSlackUs: proto.Int32(-MaxMovementSlackUs),
+			ConnectionQualityFailures: ConnectionQualityFailedWindows - 1})
 		snapshot.Combat = append(snapshot.Combat, &client.CombatState{LifeGeneration: math.MaxUint64, MagazineAmmo: math.MaxUint32, PlayerId: math.MaxUint64 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint64, ReloadActionId: math.MaxUint64, ReloadStartTick: math.MaxUint64 - 90, ReloadEndTick: math.MaxUint64, LastShotActionId: math.MaxUint64, LastShotTick: math.MaxUint64 - 91})
 	}
 	for _, message := range []proto.Message{batch, converted, welcome, snapshot} {

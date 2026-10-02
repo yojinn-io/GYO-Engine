@@ -3,6 +3,7 @@ package adapter
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"google.golang.org/protobuf/proto"
@@ -16,7 +17,10 @@ const RuntimeVersion uint32 = 5
 const MaxPlayers = 2
 const MaxPendingCommands = 12
 const MaxFutureCommands = 32
-const MaxEpochStartWaitUs = 1_000_000
+const MaxMovementSlackUs = 1_000_000
+
+// Consecutive failed connection-quality windows before the Match evicts.
+const ConnectionQualityFailedWindows = 3
 const AuthorityTickRate = 60
 const SnapshotIntervalTicks = 1
 const InputSendRate = 60
@@ -43,7 +47,8 @@ func DecodeInput(payload []byte, playerID uint64) (*runtime.PlayerInput, error) 
 	if err := proto.Unmarshal(payload, &in); err != nil || in.MovementEpoch == 0 || in.LifeGeneration == 0 || len(in.Commands) == 0 || len(in.Commands) > MaxPendingCommands {
 		return nil, ErrInput
 	}
-	out := &runtime.PlayerInput{PlayerId: playerID, MovementEpoch: in.MovementEpoch, LifeGeneration: in.LifeGeneration}
+	out := &runtime.PlayerInput{PlayerId: playerID, MovementEpoch: in.MovementEpoch, LifeGeneration: in.LifeGeneration,
+		ObservedAuthorityTick: in.ObservedAuthorityTick}
 	var previous uint64
 	for _, command := range in.Commands {
 		if command == nil || command.Sequence <= previous || !finite(command.MoveForward) || !finite(command.MoveRight) ||
@@ -79,7 +84,10 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			(p.LifeState != runtime.LifeState_LIFE_ALIVE && p.LifeState != runtime.LifeState_LIFE_DEAD) ||
 			p.LifeStateTick > in.Tick || (p.LifeState == runtime.LifeState_LIFE_ALIVE && p.RespawnTick != 0) ||
 			(p.LifeState == runtime.LifeState_LIFE_DEAD && p.RespawnTick <= p.LifeStateTick) ||
-			(p.EpochStartWaitUs != nil && *p.EpochStartWaitUs > MaxEpochStartWaitUs) {
+			(p.MovementSlackSequence == nil) != (p.MovementSlackUs == nil) ||
+			(p.MovementSlackUs != nil && (*p.MovementSlackUs > MaxMovementSlackUs || *p.MovementSlackUs < -MaxMovementSlackUs)) ||
+			(p.MovementSlackSequence != nil && (*p.MovementSlackSequence == 0 || *p.MovementSlackSequence > p.LastResolvedCommand)) ||
+			p.ConnectionQualityFailures >= ConnectionQualityFailedWindows {
 			return nil, errors.New("invalid runtime player state")
 		}
 		seen[p.PlayerId] = p
@@ -92,7 +100,8 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			MovementEpoch: p.MovementEpoch, ContiguousPendingCommands: p.ContiguousPendingCommands,
 			VerticalVelocity: p.VerticalVelocity, Grounded: p.Grounded, LifeGeneration: p.LifeGeneration,
 			LifeState: lifeState, LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick,
-			EpochStartWaitUs: p.EpochStartWaitUs})
+			MovementSlackSequence: p.MovementSlackSequence, MovementSlackUs: p.MovementSlackUs,
+			ConnectionQualityFailures: p.ConnectionQualityFailures})
 	}
 	combatSeen := make(map[uint64]bool, len(in.Combat))
 	for _, state := range in.Combat {
@@ -112,6 +121,16 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick})
 	}
 	return out, nil
+}
+
+// EvictionNotice is the Client error for a Match eviction: a stable code and
+// a readable message with the last failed window's measurements.
+func EvictionNotice(e *runtime.PlayerEvicted) (string, string) {
+	if e.Reason == runtime.EvictionReason_EVICTION_HIGH_LATENCY {
+		return "evicted_high_latency", fmt.Sprintf("Removed from the match: latency too high (about %d ms)", e.ReferenceAgeMs)
+	}
+	return "evicted_unstable_input", fmt.Sprintf("Removed from the match: unstable input (%.1f%% of movement lost, %d resets)",
+		float64(e.SubstitutedPermille)/10, e.MovementResets)
 }
 
 func finite(v float32) bool { return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) }

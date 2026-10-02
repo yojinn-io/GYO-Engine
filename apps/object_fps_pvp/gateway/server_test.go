@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -319,6 +320,54 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	}
 	sendPacket(t, p, c, 8, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 4, MoveForward: 1}}})
 	f.quiet(t)
+}
+
+func TestMatchEvictionRemovesPlayerAndTellsClient(t *testing.T) {
+	s, f := newTestServer(t)
+	if status, _ := post(t, s, "/rooms", map[string]any{}); status != 200 {
+		t.Fatal(status)
+	}
+	c := reserve(t, s, "evicted")
+	p := peer(t)
+	sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
+	accept(t, f, c)
+	receivePacket(t, p, adapter.Welcome)
+	sendPacket(t, p, c, 2, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, ObservedAuthorityTick: 9,
+		Commands: []*client.MovementCommand{{Sequence: 1}, {Sequence: 2}, {Sequence: 3}}})
+	if in := f.next(t).GetInput(); in == nil || in.ObservedAuthorityTick != 9 {
+		t.Fatalf("observed tick not forwarded: %v", in)
+	}
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: c.PlayerID,
+		Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 190}}
+	f.send(e)
+	var failure client.Error
+	if err := proto.Unmarshal(receivePacket(t, p, adapter.Failure), &failure); err != nil ||
+		failure.Code != "evicted_high_latency" || !strings.Contains(failure.Message, "190 ms") {
+		t.Fatalf("eviction notice %v %v", &failure, err)
+	}
+	// The Match already removed the player: no input or Leave follows.
+	sendPacket(t, p, c, 3, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 4}}})
+	if status, _ := post(t, s, "/rooms/1/leave", map[string]any{"session_id": c.SessionID, "session_token": c.Token}); status != 200 {
+		t.Fatal(status)
+	}
+	f.quiet(t)
+}
+
+func TestRuntimeMailboxCarriesNewestObservedTick(t *testing.T) {
+	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
+	for _, window := range []*runtime.PlayerInput{
+		{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 1, ObservedAuthorityTick: 40, Commands: []*runtime.MovementCommand{{Sequence: 1}}},
+		{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 1, ObservedAuthorityTick: 38, Commands: []*runtime.MovementCommand{{Sequence: 2}}},
+	} {
+		if err := l.input(window); err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch := l.batch()
+	if len(batch) != 1 || batch[0].GetInput().ObservedAuthorityTick != 40 || len(batch[0].GetInput().Commands) != 2 {
+		t.Fatalf("merged window lost the newest observed tick: %v", batch)
+	}
 }
 
 func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {

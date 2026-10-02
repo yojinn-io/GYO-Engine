@@ -115,39 +115,40 @@ class GameplayEvidenceTests(unittest.TestCase):
             self.assertEqual({c['milliseconds'] for c in cases if c['mode']==mode},{250,1000})
 
     def test_start_phase_record_per_session_is_carried_or_explicitly_absent(self):
-        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'shift_armed','host_wait_micros':2900,
-               'client_wait_seconds':.0029,'client_shift_seconds':.0007,'client_first_steady_ns':5_000_000_000}
-        respawn=dict(epoch,life_generation=2,status='not_armed_or_invalidated',client_wait_seconds=None,client_shift_seconds=None,
-                     client_first_steady_ns=None)
+        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'tracking','host_samples':900,
+               'first_decision_frame':3,'first_decision_steady_ns':5_000_000_000,'first_error_seconds':.0029,'corrections':1}
+        respawn=dict(epoch,life_generation=2,status='acquiring',first_decision_frame=None,first_decision_steady_ns=None,
+                     first_error_seconds=None,corrections=0)
         result=start_phase_by_player({'clients':[{'player_id':7,'start_phase':{'supported':True,'epochs':[epoch,respawn]}},
                                                  {'player_id':8}]})
-        self.assertEqual(result['7']['first_epoch_status'],'shift_armed')
-        self.assertEqual(result['7']['status_counts'],{'shift_armed':1,'not_armed_or_invalidated':1})
-        self.assertIsNone(result['7']['first_epoch']['client_set_seconds_before_measurement'])
+        self.assertEqual(result['7']['first_epoch_status'],'tracking')
+        self.assertEqual(result['7']['status_counts'],{'tracking':1,'acquiring':1})
+        self.assertIsNone(result['7']['first_epoch']['decided_seconds_before_measurement'])
+        self.assertIsNone(result['7']['first_epoch']['measurement_window'])
         self.assertIsNone(result['7']['measured_epoch'])
         self.assertEqual(result['8']['status'],'absent')
         self.assertIn('clients[1].start_phase missing',result['8']['reason'])
         self.assertEqual(result['7']['reseed_detection']['status'],'not_checked')
+        self.assertIsNone(result['7']['first_epoch']['stall_reseeds'])
 
-    def test_start_phase_stall_reseed_in_the_shared_client_trace_cancels_only_its_own_record(self):
+    def test_start_phase_stall_reseeds_in_the_shared_client_trace_count_only_for_their_own_record(self):
         from start_phase_evidence import reseed_evidence
-        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'shift_armed','host_wait_micros':2900,
-               'client_wait_seconds':.0029,'client_shift_seconds':.0007,'client_first_steady_ns':5_000_000_000}
-        other=dict(epoch,player_id=8)
+        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'tracking','host_samples':900,
+               'first_decision_frame':3,'first_decision_steady_ns':5_000_000_000,'first_error_seconds':.0029,'corrections':1}
+        other,respawn=dict(epoch,player_id=8),dict(epoch,life_generation=2)
         def generated(player,sequence,seeded,time_ns):
             return {'kind':'generated','player_id':player,'epoch':1,'life_generation':1,'sequence':sequence,
                     'seeded_neutral':seeded,'time_ns':time_ns}
-        # Both players share clients-commands.jsonl; only player 7 reseeds after its decision.
+        # Both players share clients-commands.jsonl; only player 7 reseeds, in its first life.
         events=[generated(7,1,True,4_000_000_000),generated(7,2,True,4_000_000_000),generated(8,1,True,4_000_000_000),
                 generated(8,2,True,4_000_000_000),generated(7,30,True,6_000_000_000),generated(7,31,True,6_000_000_000)]
-        result=start_phase_by_player({'clients':[{'player_id':7,'start_phase':{'supported':True,'epochs':[epoch]}},
+        result=start_phase_by_player({'clients':[{'player_id':7,'start_phase':{'supported':True,'epochs':[epoch,respawn]}},
                                                  {'player_id':8,'start_phase':{'supported':True,'epochs':[other]}}]},
                                      reseed_evidence(events,'clients-commands.jsonl'))
-        self.assertEqual(result['7']['first_epoch_status'],'cancelled_by_reseed')
-        self.assertEqual(result['7']['first_epoch']['recorded_status'],'shift_armed')
-        self.assertAlmostEqual(result['7']['first_epoch']['cancelled_by_reseed']['seconds_after_decision'],1)
-        self.assertEqual(result['8']['first_epoch_status'],'shift_armed')
-        self.assertEqual(result['8']['reseed_detection']['stall_reseeds'],{'7/1/1':1})
+        self.assertEqual([item['stall_reseeds'] for item in result['7']['epochs']],[1,0])
+        self.assertEqual(result['7']['first_epoch_status'],'tracking')  # Counted beside the status, never rewriting it.
+        self.assertEqual((result['8']['first_epoch_status'],result['8']['first_epoch']['stall_reseeds']),('tracking',0))
+        self.assertEqual(result['8']['reseed_detection'],{'status':'recorded','source':'clients-commands.jsonl','reason':None})
 
     def test_gameplay_reader_does_not_depend_on_the_gui_latency_reader(self):
         code='import sys,gameplay_evidence;sys.exit(int("presentation_evidence" in sys.modules))'

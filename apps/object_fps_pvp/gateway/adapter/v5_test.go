@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -158,24 +159,55 @@ func TestV5ResultEnumsLifeAndAuthoritativeRules(t *testing.T) {
 	}
 }
 
-func TestV5EpochStartWaitKeepsPresenceAndBound(t *testing.T) {
+func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 8,
-		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 2, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: 1}},
+		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 2, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: 5}},
 		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 1, Hp: 100, MagazineAmmo: 12}},
 	}
 	out, err := SnapshotForClient(in, testRules())
-	if err != nil || out.Players[0].EpochStartWaitUs != nil {
-		t.Fatalf("unmeasured start wait must stay absent: %v %v", out, err)
+	if err != nil || out.Players[0].MovementSlackSequence != nil || out.Players[0].MovementSlackUs != nil || out.Players[0].ConnectionQualityFailures != 0 {
+		t.Fatalf("an absent slack sample must stay absent: %v %v", out, err)
 	}
-	for _, wait := range []uint32{0, 14781, MaxEpochStartWaitUs} {
-		in.Players[0].EpochStartWaitUs = proto.Uint32(wait)
+	for _, sample := range []struct {
+		sequence uint64
+		micros   int32
+	}{{1, 0}, {5, 14781}, {3, -2500}, {5, MaxMovementSlackUs}, {5, -MaxMovementSlackUs}} {
+		in.Players[0].MovementSlackSequence = proto.Uint64(sample.sequence)
+		in.Players[0].MovementSlackUs = proto.Int32(sample.micros)
+		in.Players[0].ConnectionQualityFailures = ConnectionQualityFailedWindows - 1
 		out, err = SnapshotForClient(in, testRules())
-		if err != nil || out.Players[0].EpochStartWaitUs == nil || *out.Players[0].EpochStartWaitUs != wait {
-			t.Fatalf("start wait %d lost: %v %v", wait, out, err)
+		if err != nil || out.Players[0].MovementSlackSequence == nil || *out.Players[0].MovementSlackSequence != sample.sequence ||
+			out.Players[0].MovementSlackUs == nil || *out.Players[0].MovementSlackUs != sample.micros ||
+			out.Players[0].ConnectionQualityFailures != ConnectionQualityFailedWindows-1 {
+			t.Fatalf("slack sample %+v lost: %v %v", sample, out, err)
 		}
 	}
-	in.Players[0].EpochStartWaitUs = proto.Uint32(MaxEpochStartWaitUs + 1)
-	if _, err := SnapshotForClient(in, testRules()); err == nil {
-		t.Fatal("unbounded start wait accepted")
+	for _, edit := range []func(*runtime.PlayerState){
+		func(p *runtime.PlayerState) { p.MovementSlackUs = nil },
+		func(p *runtime.PlayerState) { p.MovementSlackSequence = nil },
+		func(p *runtime.PlayerState) { p.MovementSlackUs = proto.Int32(MaxMovementSlackUs + 1) },
+		func(p *runtime.PlayerState) { p.MovementSlackUs = proto.Int32(-MaxMovementSlackUs - 1) },
+		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint64(0) },
+		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint64(6) },
+		func(p *runtime.PlayerState) { p.ConnectionQualityFailures = ConnectionQualityFailedWindows },
+	} {
+		bad := proto.Clone(in).(*runtime.WorldSnapshot)
+		bad.Players[0].MovementSlackSequence = proto.Uint64(5)
+		bad.Players[0].MovementSlackUs = proto.Int32(100)
+		edit(bad.Players[0])
+		if _, err := SnapshotForClient(bad, testRules()); err == nil {
+			t.Fatalf("invalid slack or quality accepted: %v", bad.Players[0])
+		}
+	}
+}
+
+func TestEvictionNoticeNamesReasonAndMeasurements(t *testing.T) {
+	code, message := EvictionNotice(&runtime.PlayerEvicted{PlayerId: 3, Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 182})
+	if code != "evicted_high_latency" || !strings.Contains(message, "182 ms") {
+		t.Fatalf("latency notice: %s %q", code, message)
+	}
+	code, message = EvictionNotice(&runtime.PlayerEvicted{PlayerId: 3, Reason: runtime.EvictionReason_EVICTION_UNSTABLE_INPUT, SubstitutedPermille: 123, MovementResets: 2})
+	if code != "evicted_unstable_input" || !strings.Contains(message, "12.3%") || !strings.Contains(message, "2 resets") {
+		t.Fatalf("input notice: %s %q", code, message)
 	}
 }

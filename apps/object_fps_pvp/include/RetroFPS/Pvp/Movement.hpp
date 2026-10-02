@@ -15,6 +15,12 @@ using PlayerId = std::uint64_t;
 inline constexpr std::uint32_t AuthorityTickRate = 60;
 inline constexpr std::uint32_t SnapshotIntervalTicks = 1;
 inline constexpr std::uint32_t InputSendRate = 60;
+// Input sends draw from an InputSendRate token bucket of this many tokens. A
+// window carrying a command never sent goes at the worker's next poll once a
+// token exists; an unchanged window is resent at the 1/InputSendRate deadline
+// only while one token stays in reserve for the next new command. The average
+// stays at InputSendRate, bursts are two packets, nothing is repaid.
+inline constexpr double InputSendBurst = 2;
 inline constexpr double MovementTickSeconds = 1.0 / AuthorityTickRate;
 inline constexpr float MovementMaximumPitch = 89.0F * std::numbers::pi_v<float> / 180.0F;
 inline constexpr double MovementCorrectionSeconds = 0.1;
@@ -27,31 +33,38 @@ inline constexpr std::uint32_t InputHoldTicks = 15;
 inline constexpr std::size_t MovementBacklogSampleTicks = 30;
 inline constexpr std::uint32_t MovementBacklogCommandSum = 105;
 inline constexpr std::uint64_t MovementResetCooldownTicks = 60;
-// Start phase: the Host reports how long an epoch's first window waited for
-// the tick that executed sequence 1. The Client shifts its fixed-step phase
-// once so that wait equals this target; lead, interpolation and thresholds stay.
-// Waits beyond one tick plus the bound below come from a late Host and are ignored.
-inline constexpr double MovementStartPhaseTargetSeconds = 0.004;
-inline constexpr double MovementStartPhaseMaximumWaitSeconds = MovementTickSeconds + 0.002;
-// Below about 54.5 FPS (a mean frame period above 1.1 tick) the shift is not
-// applied: a frame longer than a tick generates several commands, so the shift
-// lands on whole frames and the older command of each frame depends on the
-// send phase, which drifts against the frame clock. The frame rate is the mean
-// of the latest 32 frame intervals (eight at least), each counted as at most
-// two ticks (one missed 60 Hz refresh); above this cut the shift is withdrawn,
-// within four frames of a drop from 60 to 30 FPS and 16-20 frames of a drop to
-// a vsync-paced 50 FPS. The 10 % allowance keeps 59.94 Hz, ordinary jitter and
-// ~58 FPS desktop frames aligned. A 60 Hz display that drops one refresh in
-// 12-30 frames (55-58 FPS) stays within it once the window holds more than ten
-// intervals.
-inline constexpr double MovementStartPhaseMaximumFrameSeconds = MovementTickSeconds * 1.1;
-// A withdrawn shift returns only after the mean has stayed at or below this
-// (about 56.6 FPS, 1.06 tick) for a 32-frame dwell, so a frame rate near the
-// cut keeps its state instead of toggling. It must stay above the ~1.03-1.04
-// tick mean of ~58 FPS desktop frames.
-inline constexpr double MovementStartPhaseRestoreFrameSeconds =
-    MovementStartPhaseMaximumFrameSeconds - MovementTickSeconds * 0.04;
-inline constexpr std::uint32_t MaxEpochStartWaitMicros = 1'000'000;
+// Phase tracking: the Host reports, with each snapshot, how long before its
+// executing tick a recent command arrived (movement slack). For a command sent
+// at its fixed-step boundary the Client keeps the slack beyond the sequence
+// lead at this target; lead, interpolation and thresholds stay.
+inline constexpr double MovementPhaseTargetSeconds = 0.004;
+// The error of the latest commands is the 90th percentile of a window of
+// slack samples: commands the worker sent at once, not the ones that also
+// waited for a frame. The first decision after a seed uses the first samples
+// and a narrow deadband; tracking then uses about four seconds of samples and
+// corrects only beyond the wider deadband. Two late (negative) samples in a
+// row correct at once. Each correction is at most two ticks and is slewed.
+inline constexpr std::size_t MovementPhaseFirstSamples = 8;
+inline constexpr std::size_t MovementPhaseWindowSamples = 240;
+inline constexpr double MovementPhasePercentile = 0.9;
+inline constexpr double MovementPhaseFirstDeadbandSeconds = 0.0005;
+inline constexpr double MovementPhaseDeadbandSeconds = 0.002;
+inline constexpr std::size_t MovementPhaseLateSamples = 2;
+inline constexpr double MovementPhaseMaximumCorrectionSeconds = 2 * MovementTickSeconds;
+inline constexpr std::int32_t MaxMovementSlackMicros = 1'000'000;
+// Connection quality: the Match judges each 10-second window after the first
+// one following a join. A window fails when the median input reference age
+// (the age of the snapshot a window says the Client applied, about RTT plus
+// the Client's publication delay) is above 160 ms, more than 5 % of resolved
+// movement steps were substituted (Held or Neutral), or a Starvation/Backlog
+// movement reset happened. Three failed windows in a row evict the player.
+// 160 ms is where the 12-command Client window starts to fill at 60 FPS; below
+// 30 FPS a frame is longer than the two-command lead, and 25 FPS already loses
+// 7 % of its steps; ordinary play stays below 1 %.
+inline constexpr std::uint64_t ConnectionQualityWindowTicks = 10 * AuthorityTickRate;
+inline constexpr std::uint32_t ConnectionQualityFailedWindows = 3;
+inline constexpr std::uint32_t ConnectionQualityMaximumReferenceAgeMillis = 160;
+inline constexpr std::uint32_t ConnectionQualityMaximumSubstitutedPermille = 50;
 
 enum class LifeState { Alive = 0, Dead = 1 };
 
@@ -76,6 +89,9 @@ struct PlayerInput final {
     std::vector<MovementCommand> commands;
     std::uint64_t movementEpoch{1};
     std::uint64_t lifeGeneration{1};
+    // Latest snapshot tick the Client applied when publishing (0: none).
+    // Connection-quality timing only, never simulation input.
+    std::uint64_t observedAuthorityTick{};
 };
 
 struct PlayerState final {
@@ -92,8 +108,12 @@ struct PlayerState final {
     LifeState lifeState{LifeState::Alive};
     std::uint64_t lifeStateTick{};
     std::uint64_t respawnTick{};
-    // Host timing observation for this epoch, never simulation input.
-    std::optional<std::uint32_t> epochStartWaitMicros{};
+    // Host timing observation, never simulation input: the smallest movement
+    // slack since the previous published snapshot and its sequence. Both or neither.
+    std::optional<std::uint64_t> movementSlackSequence{};
+    std::optional<std::int32_t> movementSlackMicros{};
+    // Consecutive failed connection-quality windows; eviction at ConnectionQualityFailedWindows.
+    std::uint32_t connectionQualityFailures{};
 };
 
 [[nodiscard]] bool ValidMovementCommand(const MovementCommand& command) noexcept;

@@ -139,6 +139,7 @@ int main(int argc,char** argv) {
                 player->set_last_resolved_command(maximum);player->set_movement_epoch(maximum);
                 player->set_contiguous_pending_commands(MaxFutureCommands);player->set_vertical_velocity(4);player->set_grounded(true);
                 player->set_life_generation(maximum);player->set_life_state(pb::LIFE_ALIVE);player->set_life_state_tick(maximum);player->set_respawn_tick(maximum);
+                player->set_movement_slack_sequence(maximum);player->set_movement_slack_us(-1'000'000);player->set_connection_quality_failures(2);
                 auto* combat=snapshot.add_combat();combat->set_player_id(maximum-i);
                 combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);combat->set_life_generation(maximum);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
                 combat->set_reload_action_id(maximum);combat->set_reload_start_tick(maximum);combat->set_reload_end_tick(maximum);combat->set_last_shot_action_id(maximum);combat->set_last_shot_tick(maximum);

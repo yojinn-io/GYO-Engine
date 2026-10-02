@@ -169,10 +169,8 @@ def _start_phase_file(directory, role, measurement_start_seconds=None, measured=
         summary = summarize_start_phase({}, path.name, measurement_start_seconds, measured)  # Keeps the explicit keys.
         summary.update(status="invalid", reason=f"{path.name}: {error}")
         return summary
-    # The role's own Client trace, read only when the record cannot report a
-    # reseed cancellation itself (older products).
-    reseeds = None if not isinstance(record, dict) or record.get("cancel_reason_supported") is True else \
-        read_reseed_evidence(directory / f"{role}-commands.jsonl")
+    # The role's own Client trace counts stall reseeds per record (informational).
+    reseeds = None if not isinstance(record, dict) else read_reseed_evidence(directory / f"{role}-commands.jsonl")
     return summarize_start_phase(record, path.name, measurement_start_seconds, measured, measurement_end_seconds, reseeds)
 
 

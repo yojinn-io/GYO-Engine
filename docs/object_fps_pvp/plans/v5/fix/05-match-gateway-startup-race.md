@@ -1,7 +1,7 @@
 # 05 驗收 runner 同時啟動 Match 與 Gateway 的競態
 
-狀態：已解決（驗收器修正；尚未commit／PR）。發現與修正：2026-10-02。Owner：`object_fps_pvp`。
-相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；提交前的工作分支`claude/pvp-v5-start-phase-guard`。
+狀態：已解決（驗收器修正）。發現與修正：2026-10-02。Owner：`object_fps_pvp`。
+相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；本修正經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
 範圍：只改產品自有驗收器`build/acceptance/object_fps_pvp/`；Match／Gateway／Client程式、wire契約、
 啟動規則與門檻都不變。本修正不代表第03批結案；計次GUI短測與25案矩陣仍未執行。
 索引與其他問題見[本目錄總覽](README.md)，時間順序見

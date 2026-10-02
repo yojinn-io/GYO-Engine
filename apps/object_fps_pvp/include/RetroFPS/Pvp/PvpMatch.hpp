@@ -21,6 +21,16 @@ struct WorldSnapshot final {
     std::vector<CombatState> combat;
 };
 
+// Cumulative movement resolution counts of one participant, for the host's
+// connection-quality judgement; never gameplay input.
+struct MovementQuality final {
+    std::uint64_t resolved{};
+    // Steps resolved with a Held or Neutral substitute instead of the command.
+    std::uint64_t substituted{};
+    // Starvation and Backlog epoch resets (not respawns or exhaustion).
+    std::uint64_t resets{};
+};
+
 // Sole gameplay authority. No player controller, camera, connection or clock.
 class PvpMatch final {
 public:
@@ -37,6 +47,7 @@ public:
     [[nodiscard]] bool CanAcknowledgeActions(PlayerId playerId, ActionId through) const noexcept;
     [[nodiscard]] bool AcknowledgeActions(PlayerId playerId, ActionId through);
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
+    [[nodiscard]] std::optional<MovementQuality> GetMovementQuality(PlayerId playerId) const;
     void Tick(const Engine::Runtime::TickContext& tick, const ShotReferenceAge& referenceAge = {});
     void Reset() noexcept;
     [[nodiscard]] WorldSnapshot Snapshot() const;
@@ -67,6 +78,7 @@ private:
         std::uint64_t lastMovementResetTick{};
         bool movementResetScheduled{};
         MovementResetReason movementResetReason{};
+        MovementQuality quality;
     };
     [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
     void ResetMovementEpoch(Participant& player, MovementResetReason reason);
