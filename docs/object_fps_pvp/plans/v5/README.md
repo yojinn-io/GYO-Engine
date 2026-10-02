@@ -12,7 +12,7 @@
 
 先讀 [交接](HANDOFF.md)、[v5契約](../../protocol-v5.zh-Hant.md) 和指定批次。
 修正與已知問題：第03批啟動相位相關問題各一份文件（成因／影響／復現／解決方案），見 [fix/README.md](fix/README.md)。
-延遲整改從門檻失守到推翻重構的整體思考鏈，見 [延遲整改回顧](LATENCY_CASE_STUDY.md)。
+延遲整改從門檻失守到推翻重構的整體思考鏈，見 [延遲整改回顧](LATENCY_CASE_STUDY.md)（時間序）與 [v2](LATENCY_CASE_STUDY_v2.md)（系統模型、抽象層級與判準）。
 原 [v4穩定基線](../v4/STABLE_BASELINE.md)、[手動指南](../v4/MANUAL_ACCEPTANCE.md)、
 [驗收狀態](../v4/ACCEPTANCE_STATUS.md) 保留，不覆寫舊版證據。
 
