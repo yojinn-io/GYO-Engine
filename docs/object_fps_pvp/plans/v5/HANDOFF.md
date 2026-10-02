@@ -8,10 +8,10 @@
 其後一度依使用者決定以MVP技術驗證收尾、暫緩結案驗收。門檻、lead、插值與60Hz始終不變。各問題見[修正與已知問題](fix/README.md)。
 2026-10-02：A1「每epoch量一次」在長局會因時鐘漂移失準（[fix/08](fix/08-a1-clock-drift.md)），與reseed取消（fix/02）
 及fix/03、fix/09一起處理。使用者核准後已實作「輸入worker 60/s token bucket＋閉環的持續相位追蹤」與連線品質移出
-（[fix/10](fix/10-connection-quality-eviction.md)），CPU驗證通過，經分支`claude/pvp-v5-phase-tracking`提交PR #11送審（三平台CI通過）、**尚未合併**；
+（[fix/10](fix/10-connection-quality-eviction.md)），CPU驗證通過，經分支`claude/pvp-v5-phase-tracking`（PR #11，合併為`bec86b7`）；
 A1、HostLate、低幀率守門與`StartPhaseSkip`已刪除。實機report-only GUI冒煙1輪PASS（可見P50／P95 36.8／38.8ms；不計次、不作為驗收證據），兩方量測全程tracking。
 **結案驗收（2026-10-02，來源`2cecd3a`）：計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms）；25案真網路矩陣25／25通過（1075／1075動作）；第03批結案。**經過與驗證見
-[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)。
+[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)；整體思考鏈見[延遲整改回顧](LATENCY_CASE_STUDY.md)。
 
 ## 閱讀入口
 

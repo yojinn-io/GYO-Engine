@@ -2,7 +2,7 @@
 
 更新：2026-10-02。Owner：`object_fps_pvp`。
 **第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
-（PR #11），2026-10-02結案驗收通過，**第03批已結案**；第04批暫停（需計畫複審及明確啟動），第05批未開始。**
+（PR #11，合併為`bec86b7`），2026-10-02結案驗收通過，**第03批已結案**；第04批暫停（需計畫複審及明確啟動），第05批未開始。**
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
 已定位既有首次命令／Authority Tick相位差。2026-10-01實作獲批准的啟動相位對齊（PR #2，合併為`ff11ee3`）；
 2026-10-02以產品式worker的CPU模擬發現它使30／40 FPS退化（實機未重現），
@@ -12,6 +12,7 @@
 
 先讀 [交接](HANDOFF.md)、[v5契約](../../protocol-v5.zh-Hant.md) 和指定批次。
 修正與已知問題：第03批啟動相位相關問題各一份文件（成因／影響／復現／解決方案），見 [fix/README.md](fix/README.md)。
+延遲整改從門檻失守到推翻重構的整體思考鏈，見 [延遲整改回顧](LATENCY_CASE_STUDY.md)。
 原 [v4穩定基線](../v4/STABLE_BASELINE.md)、[手動指南](../v4/MANUAL_ACCEPTANCE.md)、
 [驗收狀態](../v4/ACCEPTANCE_STATUS.md) 保留，不覆寫舊版證據。
 
@@ -100,7 +101,7 @@
   （[fix/08](fix/08-a1-clock-drift.md)，模擬中Client快20ppm、RTT 20約第10分鐘超過50ms）同根於「每epoch量一次」，
   2026-10-02經使用者核准實作輸入worker 60/s token bucket＋閉環的持續相位追蹤，一併處理fix/03與新發現的
   [fix/09](fix/09-covered-gap-stuck-late.md)，並加入[連線品質移出](fix/10-connection-quality-eviction.md)；
-  CPU驗證通過、經分支`claude/pvp-v5-phase-tracking`提交PR #11送審，實機report-only GUI冒煙1輪PASS（可見P50／P95 36.8／38.8ms；不計次、不作為驗收證據），見[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)；
+  CPU驗證通過、經分支`claude/pvp-v5-phase-tracking`（PR #11，合併為`bec86b7`），實機report-only GUI冒煙1輪PASS（可見P50／P95 36.8／38.8ms；不計次、不作為驗收證據），見[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)；
   偶發掉幀重設的根因（worker鋸齒）一併解決（[fix/03](fix/03-a1-missed-frame-starvation.md)）。
 - 2026-10-02結案驗收（使用者恢復；來源`2cecd3a`，事前宣告3輪GUI＋1次矩陣）：計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms），
   兩方量測全程tracking、0次移動重設；第3輪因量測中OS焦點變化判`invalid_window_disturbed`而依fix/06補跑一次，原輪保留。
@@ -110,4 +111,4 @@
   首幀卡頓落在其中；需Match回合狀態、無敵規則、HUD倒數與契約變更，須另立計畫，見[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)。
 - [第03批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)與[交接](HANDOFF.md)
   保存修復、失敗與最後指紋。第01–03批內容在`de87bb9`（wip），A1在`ff11ee3`；
-  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出在分支`claude/pvp-v5-phase-tracking`（PR #11）。第03批已結案；第04批暫停，無長測。
+  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出經PR #11，合併為`bec86b7`。第03批已結案；第04批暫停，無長測。
