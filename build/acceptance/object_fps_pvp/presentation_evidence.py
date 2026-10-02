@@ -242,6 +242,8 @@ def _window_record(report):
               "os_events": _named_counts(report["window_os_events"], WINDOW_EVENT_KINDS),
               "os_events_during_measurement": _named_counts(report["window_os_events_during_measurement"], WINDOW_EVENT_KINDS),
               "synthetic_events": int(report["window_synthetic_events"])}
+    if "window_placement_error" in report:
+        result["placement_error"] = report["window_placement_error"]
     if result["sync"] not in WINDOW_SYNC_STATES:
         raise ValueError(f"window_sync must be one of {', '.join(WINDOW_SYNC_STATES)}, got {result['sync']!r}")
     if min(result["size"]) <= 0:
@@ -296,6 +298,30 @@ def _window_overlap(create, join):
                 "join_visible_fraction_with_create_on_top": visible(second)}
     except DIAGNOSTIC_ERRORS as error:
         return {"status": "invalid", "reason": f"window overlap: {_diagnostic_error(error)}"}
+
+
+PLATFORM_FIELDS = ("os", "architecture", "video_driver", "gpu_driver", "refresh_hz", "usable_bounds", "input")
+
+
+def platform_evidence(path):
+    """Platform fingerprint of one probe report; absent for a probe that predates it."""
+    try:
+        report = _read_report(path, unique_prefix="platform_")
+    except OSError as error:
+        return {"status": "absent", "reason": f"{path.name}: {error}"}
+    except ValueError as error:
+        return {"status": "invalid", "reason": f"{path.name}: {error}"}
+    if "platform_os" not in report:
+        return {"status": "absent", "reason": f"{path.name} has no platform fingerprint (probe predates it)"}
+    try:
+        result = {"status": "recorded"}
+        for field in PLATFORM_FIELDS:
+            result[field] = report[f"platform_{field}"]
+        result["refresh_hz"] = float(result["refresh_hz"])
+        result["usable_bounds"] = _integers(report, "platform_usable_bounds", 4, "unavailable")
+    except DIAGNOSTIC_ERRORS as error:
+        return {"status": "invalid", "reason": f"{path.name}: {_diagnostic_error(error)}"}
+    return result
 
 
 def _windows(directory):
@@ -563,6 +589,7 @@ def _analyze_latency(directory, *, short):
     measured = {role: _measured_epoch(directory, role, begin) for role in ("create", "join")}
     evidence["start_phase"] = {role: _start_phase_file(directory, role, begin, measured[role], finish) for role in ("create", "join")}
     evidence.update(_windows(directory))
+    evidence["platform"] = {role: platform_evidence(directory / f"{role}-report.txt") for role in ("create", "join")}
     evidence["passed"] = not evidence["errors"]
     filename = "presentation-short-latency.json" if short else "presentation-latency.json"
     (directory / filename).write_text(json.dumps(evidence, indent=2, allow_nan=False) + "\n", encoding="utf-8")

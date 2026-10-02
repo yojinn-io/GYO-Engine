@@ -7,6 +7,7 @@
 #endif
 #include "platform/sdl/SdlPlatform.hpp"
 #include "render/Renderer.hpp"
+#include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -23,6 +24,7 @@
 #include <nlohmann/json.hpp>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -48,6 +50,8 @@ struct Options {
     bool nativeWindow{};
     bool playerShort{};
     bool playerCapture{};
+    bool actionShort{};
+    bool actionCapture{};
     unsigned events{200};
     double fps{60};
 };
@@ -74,6 +78,8 @@ Options Parse(int argc, char* argv[]) {
         if (argument == "--native-window") { options.nativeWindow = true; continue; }
         if (argument == "--player-short") { options.playerShort = true; continue; }
         if (argument == "--player-capture") { options.playerCapture = true; continue; }
+        if (argument == "--action-short") { options.actionShort = true; continue; }
+        if (argument == "--action-capture") { options.actionCapture = true; continue; }
         Require(i + 1 < argc, "Missing value for " + std::string(argument));
         const std::string value = argv[++i];
         if (argument == "--arena-root") options.assetRoot = value;
@@ -91,7 +97,8 @@ Options Parse(int argc, char* argv[]) {
     Require(options.role == "create" || options.role == "join", "--role must be create or join");
     Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
         unsigned(options.weaponShort) + unsigned(options.weaponCapture) + unsigned(options.nativeWindow) +
-        unsigned(options.playerShort) + unsigned(options.playerCapture) <= 1,
+        unsigned(options.playerShort) + unsigned(options.playerCapture) +
+        unsigned(options.actionShort) + unsigned(options.actionCapture) <= 1,
         "Choose one explicit probe mode");
     Require(!options.combat || options.latency || options.latencyShort, "--combat requires an explicit latency mode");
     if (options.latency && !explicitDuration) options.duration = 120;
@@ -100,6 +107,7 @@ Options Parse(int argc, char* argv[]) {
     if ((options.weaponShort || options.weaponCapture) && !explicitDuration) options.duration = 8;
     if (options.nativeWindow && !explicitDuration) options.duration = 180;
     if ((options.playerShort || options.playerCapture) && !explicitDuration) options.duration = 12;
+    if ((options.actionShort || options.actionCapture) && !explicitDuration) options.duration = 15;
     Require(std::isfinite(options.duration) && options.duration >= (options.latency ? 120 : 2) && options.duration <= 3600,
         "--duration must be 120..3600 seconds for latency, 2..3600 otherwise");
     Require(options.events >= (options.latencyShort ? 20U : 200U) && options.events <= 6000,
@@ -112,6 +120,8 @@ Options Parse(int argc, char* argv[]) {
         "Weapon short duration must be 8..25 seconds");
     Require(!(options.playerShort || options.playerCapture) || options.duration == 12,
         "Player presentation probes use an explicit bounded 12-second schedule");
+    Require(!(options.actionShort || options.actionCapture) || (options.duration >= 15 && options.duration <= 25),
+        "Action probes need 15..25 seconds for their fixed schedule and the target respawn");
     Require(std::isfinite(options.fps) && options.fps >= 30 && options.fps <= 144, "--fps must be 30..144");
     return options;
 }
@@ -221,8 +231,10 @@ void WriteLatencyPresentation(std::ostream& stream,
     stream << ',' << local.predictedPosition.x << ',' << local.predictedPosition.z << '\n';
 }
 
+#include "platform_fingerprint.hpp"
 #include "weapon_short.hpp"
 #include "player_short.hpp"
+#include "action_short.hpp"
 #include "native_window.hpp"
 #include "combat_latency.hpp"
 #include "start_phase_record.hpp"
@@ -245,6 +257,7 @@ struct LatencyWindow {
     SDL_Window* window{};
     SDL_WindowID id{};
     std::string placement{"platform_default"};
+    std::string placementError;
     std::optional<SDL_Rect> usable;
     std::optional<std::array<int, 2>> requested, afterSync;
     std::optional<bool> synced;
@@ -253,13 +266,13 @@ struct LatencyWindow {
     std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
     std::atomic<unsigned> syntheticEvents{};
     LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)) {
-#if defined(__APPLE__)
-        // macOS throttles fully occluded windows. Both probes otherwise open
-        // centred at one spot and the mover raises itself over the observer.
-        // Opposite corners of the usable bounds keep part of each visible;
-        // the 1280x720 render size is unchanged. SDL positions name the
-        // client area and Cocoa reports zero borders, so the title bar above
-        // each window is outside these coordinates.
+        // Both probes otherwise open at one platform-default spot and the mover
+        // raises itself over the observer: macOS throttles a fully occluded
+        // window and a Wayland compositor may report it OCCLUDED. Opposite
+        // corners of the usable bounds keep part of each visible on every
+        // platform that lets a program position its windows; the 1280x720
+        // render size is unchanged. SDL positions name the client area, and the
+        // reported borders (zero on macOS) keep the title bar on screen.
         SDL_Rect bounds{};
         const auto display = SDL_GetDisplayForWindow(window);
         int width{}, height{}, top{}, left{}, bottom{}, right{};
@@ -267,21 +280,20 @@ struct LatencyWindow {
             SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right); // Zeros if unsupported.
             const int x = mover ? bounds.x + left : std::max(bounds.x + left, bounds.x + bounds.w - right - width);
             const int y = mover ? bounds.y + top : std::max(bounds.y + top, bounds.y + bounds.h - bottom - height);
-            Require(SDL_SetWindowPosition(window, x, y), SDL_GetError());
-            synced = SDL_SyncWindow(window); // False: timed out before the requested state.
-            int syncedX{}, syncedY{};
-            if (SDL_GetWindowPosition(window, &syncedX, &syncedY)) afterSync = std::array{syncedX, syncedY};
-            usable = bounds; requested = std::array{x, y};
-            placement = mover ? "usable_bounds_top_left" : "usable_bounds_bottom_right";
+            usable = bounds;
+            if (SDL_SetWindowPosition(window, x, y)) {
+                synced = SDL_SyncWindow(window); // False: timed out before the requested state.
+                int syncedX{}, syncedY{};
+                if (SDL_GetWindowPosition(window, &syncedX, &syncedY)) afterSync = std::array{syncedX, syncedY};
+                requested = std::array{x, y};
+                placement = mover ? "usable_bounds_top_left" : "usable_bounds_bottom_right";
+            } else {
+                // Wayland does not let a client place its window: keep the default
+                // position and name why, so an overlap is attributable.
+                const char* reason = SDL_GetError();
+                placementError = reason && *reason ? reason : "SDL_SetWindowPosition failed";
+            }
         }
-#else
-        // Linux and Windows keep the platform-default placement, so the two
-        // probe windows may overlap. SDL's X11 backend reports OCCLUDED only
-        // with minimizing, while a Wayland compositor may suspend a covered
-        // window and report OCCLUDED, which the evidence names as window
-        // interference.
-        static_cast<void>(mover);
-#endif
         Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
     }
     ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
@@ -319,7 +331,9 @@ struct LatencyWindow {
                 text += (kind ? "," : "") + std::string(Kinds[kind].second) + ':' + std::to_string(values[kind].load());
             return text;
         };
-        report << "window_placement=" << placement << "\nwindow_usable_bounds=";
+        report << "window_placement=" << placement;
+        if (!placementError.empty()) report << "\nwindow_placement_error=" << placementError;
+        report << "\nwindow_usable_bounds=";
         if (usable) report << usable->x << ',' << usable->y << ',' << usable->w << ',' << usable->h; else report << "unavailable";
         report << "\nwindow_requested_position=";
         if (requested) report << (*requested)[0] << ',' << (*requested)[1]; else report << "none";
@@ -363,6 +377,7 @@ void RunLatency(const Options& options) {
     const bool mover = options.role == "create";
     // Placed before connecting: its MOVED event is drained while still in Lobby.
     LatencyWindow windowEvidence(application.Platform().NativeWindow(), mover);
+    const auto platform = PlatformFingerprint::Capture(application, application.Platform().NativeWindow());
     StartPhaseRecorder startPhase;
     if (mover) connection.CreateAndJoin(options.gateway);
     else connection.Refresh(options.gateway);
@@ -516,6 +531,7 @@ void RunLatency(const Options& options) {
            << "\nfirst_authority_tick=" << firstTick << "\nfinal_authority_tick=" << finalTick
            << "\ncapture=none\nclock_scope=same-host monotonic submission timestamps; not physical scanout\n"
            << "start_phase_record=" << options.role << "-start-phase.json\n";
+    platform.Report(report);
     windowEvidence.Report(report);
     report.flush();
     Require(bool(report), "Cannot write latency report");
@@ -1024,7 +1040,7 @@ int main(int argc, char* argv[]) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "PvP GUI acceptance (run create and join in separate processes)\n"
                   << "--arena-root <deployed assets> --gateway host:port --role create|join\n"
-                  << "--duration 5 --output <directory> [--gpu-driver auto|d3d12|vulkan] [--move]\n"
+                  << "--duration 5 --output <directory> [--gpu-driver auto|d3d12|vulkan|metal] [--move]\n"
                   << "--latency --duration 120 --events 200 --fps 60 (no GPU readback)\n"
                   << "--combat (latency modes only: concurrent SDL shooting, decisions and authority HP)\n"
                   << "--phase-stalls --fps 60 (six 64/83/250 ms event/update phase stalls)\n"
@@ -1033,13 +1049,16 @@ int main(int argc, char* argv[]) {
                   << "--player-short --fps 30|60|144 (12 seconds, remote character and displacement phase)\n"
                   << "--player-capture --fps 60 (separate real GPU character captures)\n"
                   << "--native-window --duration 180 (passive native X11 input/lifecycle observer)\n"
-                  << "--weapon-capture --fps 60 (separate actual GPU idle/shoot/resize/depth captures)\n";
+                  << "--weapon-capture --fps 60 (separate actual GPU idle/shoot/resize/depth captures)\n"
+                  << "--action-short --fps 30|60|144 (15 seconds, SDL-injected v5 actions on any platform)\n"
+                  << "--action-capture --fps 60 (the same schedule with GPU captures of v5 actions)\n";
         return 0;
     }
     try { const auto options = Parse(argc, argv);
         if (options.latency || options.latencyShort) RunLatency(options);
         else if (options.weaponShort || options.weaponCapture) RunWeaponShort(options);
         else if (options.playerShort || options.playerCapture) RunPlayerShort(options);
+        else if (options.actionShort || options.actionCapture) RunActionShort(options);
         else if (options.nativeWindow) RunNativeWindow(options);
         else if (options.phaseStalls) RunPhaseStalls(options);
         else Run(options);

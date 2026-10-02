@@ -163,6 +163,19 @@ class TimingRunnerTests(unittest.TestCase):
         saved = self.results()['rounds'][0]['evidence']['presentation']
         self.assertEqual(saved['start_phase']['join']['first_epoch']['host_slack_min_micros'], -25000)
 
+    def test_platform_note_names_each_role_and_missing_evidence(self):
+        presentation = {'platform': {
+            'create': {'status': 'recorded', 'os': 'macOS', 'architecture': 'x64', 'video_driver': 'cocoa',
+                       'gpu_driver': 'metal', 'refresh_hz': 60.0, 'input': 'sdl_injected'},
+            'join': {'status': 'absent', 'reason': 'join-report.txt has no platform fingerprint (probe predates it)'}}}
+        self.assertEqual(run_timing.platform_note(1, presentation),
+                         'Round 1 platform: create macOS/x64 video cocoa, GPU metal, 60 Hz display, '
+                         'input sdl_injected; join absent')
+        presentation['platform']['create']['refresh_hz'] = 0.0
+        self.assertIn('GPU metal, unknown display', run_timing.platform_note(1, presentation))
+        self.assertEqual(run_timing.platform_note(2, {}),
+                         'Round 2 platform: not analysed (no presentation platform evidence)')
+
     def test_window_gate_invalidates_only_counted_rounds(self):
         for disturbed, report_only, status, passed in (
                 (False, False, 'clean', True), (True, False, 'invalid_window_disturbed', False),
@@ -360,8 +373,9 @@ class TimingRunnerTests(unittest.TestCase):
                       'frame intervals during measurement: create 959 intervals: median 16.667 ms, p95 17.100 ms, '
                       'max 33.400 ms, >1.1 tick 3, >=2 ticks 1; join not recorded', summary)
         self.assertIn('Round 1 window: no window-state interference detected (create platform_default at (320, 180); '
-                      'join platform_default at (320, 180), sync not_requested) [platform-default placement (non-macOS): '
-                      'the two windows may overlap, and a Wayland compositor may report OCCLUDED for the covered one]', summary)
+                      'join platform_default at (320, 180), sync not_requested) [platform-default placement (the platform did not '
+                      'let the probe position its window): the two windows may overlap, and a Wayland compositor may '
+                      'report OCCLUDED for the covered one]', summary)
         # Without a plan the decision is named by its frame.
         unplanned = self.phase_epoch(decided_seconds_before_measurement=None, first_decision_frame=40)
         self.assertIn('tracking: decided at frame 40, first error 1.200 ms', run_timing._phase_epoch(unplanned))

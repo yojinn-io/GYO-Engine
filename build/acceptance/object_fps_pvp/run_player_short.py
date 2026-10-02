@@ -137,7 +137,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('match','gateway','gui-probe','arena','arena-root','output'):
         parser.add_argument('--'+name,type=Path,required=True)
-    parser.add_argument('--gpu-driver',default='vulkan',choices=('auto','vulkan','d3d12'))
+    parser.add_argument('--gpu-driver',default='auto',choices=('auto','vulkan','d3d12','metal'))
     parser.add_argument('--case',action='append',choices=('player30','player60','player144','capture'))
     args=parser.parse_args()
     for name in ('match','gateway','gui_probe','arena','arena_root','output'):

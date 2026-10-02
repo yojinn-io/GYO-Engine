@@ -85,6 +85,7 @@ void RunWeaponShort(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
         auto* window = application.Platform().NativeWindow();
+        evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
         bool joined = actor, rejoining{}, rejoined{}, cooldownInjected{}, hpZeroShot{}, hpZeroMovement{};

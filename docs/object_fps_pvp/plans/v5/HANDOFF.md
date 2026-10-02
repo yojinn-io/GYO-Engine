@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 程式完成（呈現測試19 cases／12616 assertions、突變9／9被抓、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
-| 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 未開始 |
+| 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 完成（CTest `-L pvp` 17／17；開發實跑action 30／60／144與capture皆PASS，不計入04-4） |
 | 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | 未開始 |
 
 - 開工時發現：GUI probe的`--gpu-driver`只列`auto|d3d12|vulkan`，macOS依賴`auto`選到Metal；第03批的玩法GUI（Space／快射／R／重生）
@@ -39,6 +39,25 @@
   - 資產：玩家animset加入shoot／reload／jump_start／jump_loop／jump_land／death；檔名`locomotion.animset.json`改為
     `animations.animset.json`（內容已不只移動；只有`asset_catalog.json`引用）。`presentation.json`加`actions`時長。
   - 待04-4截圖確認：射擊3.8倍速與起跳13倍速的觀感、Start開頭的瞬間蹲低。
+- 04-3紀錄：
+  - 平台指紋（`platform_fingerprint.hpp`）：延遲報告寫`platform_*`（OS、架構、SDL視訊驅動、GPU驅動、更新率、可用區域、輸入方式），
+    JSON模式（weapon／player／action）附`platform`；`presentation_evidence.platform_evidence`讀取（舊probe無指紋記為absent），
+    `run_timing`摘要新增「Round N platform」行。GPU驅動取自`RenderDevice().GetInfo().driver`，不改Engine。
+  - 視窗擺放：對角配置由macOS擴大到所有能由程式擺放視窗的平台；`SDL_SetWindowPosition`失敗（如Wayland）時保留預設位置，
+    並記錄`window_placement_error`。摘要與干擾說明文字隨之更新。
+  - SDL注入的動作短測：`--action-short --fps 30|60|144`與`--action-capture --fps 60`（`action_short.hpp`），runner
+    `run_action_short.py`（GPU驅動預設auto、可選metal），`summarize`測試5項並登記CTest `object_fps_pvp.action_runner`；
+    `test_service_startup.py`的RUNNERS加入新runner。情境：按住只射一發、R換彈、換彈中射擊／再按R被擋、換彈中後退、
+    跳躍中射擊、打空彈匣與空彈匣點擊被擋、空彈匣換彈、擊殺；目標死亡時移動／跳躍／開火／換彈全被擋、重生滿HP與彈匣並可射擊；
+    雙方互看遠端射擊、換彈、跳躍三段、死亡保持與新生命，同一ActionId不得重播。
+  - 開發實跑（不計入04-4，macOS Intel／Metal）：action 30／60／144與capture皆PASS；capture 8張圖已目視
+    （第一人稱換彈、遠端換彈／跳躍／射擊／死亡／死亡保持）。report-only延遲短測一輪：可見P50／P95 37.0／40.8ms，摘要含平台行。
+    證據：`build/target/_build/test/logs/pvp-v5-batch04-dev-{action-1..4,timing-1}/`（git忽略）。
+  - 實跑中發現：本機射擊冷卻閘以最新Snapshot的Tick比對`nextAllowedShotTick`，該Tick約比權威晚2 Tick；
+    12 Tick間隔的點擊在幀抖動下會在本機被擋（第03批既有的「冷卻點擊不排隊」設計，未改）。probe改用15 Tick間隔，
+    精確10 Tick邊界由domain測試涵蓋。是否讓本機閘門補償這個落差，屬日後的產品手感議題。
+  - 既有工具狀況（未改，超出範圍）：`weapon_short.hpp`觀察方仍檢查v4「HP=0仍可移動與射擊」，在v5必然失敗；
+    其v5涵蓋已由動作短測取代。`run_player_short.py`／`run_weapon_short.py`的GPU驅動選項補上metal、預設auto。
 
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
