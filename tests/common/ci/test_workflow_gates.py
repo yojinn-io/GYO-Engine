@@ -319,6 +319,9 @@ xvfb-run() {
                          "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
         for name in ("dev", "test", "core", "ci-linux", "ci-macos"):
             self.assertNotIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", cache(name))
+        # MSVC precompiled headers (/Yc, /Fp) are never cacheable; dependencies
+        # that enable them must compile without them in CI.
+        self.assertEqual(cache("ci-windows")["CMAKE_DISABLE_PRECOMPILE_HEADERS"], "ON")
 
     def test_only_master_pushes_integrate_and_pull_requests_are_classified_in_a_job(self):
         trigger = [line.strip() for line in top_level_block(self.quick, "on").splitlines()
@@ -511,6 +514,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         # The core preset keeps MSVC /Zi, whose shared per-target PDB is unsafe
         # behind sccache; only embedded debug information may be cached.
         self.assertIn("'-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>'", configure)
+        self.assertIn(" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON ", configure)
 
     def test_cxx_compiles_are_not_module_scanned(self):
         # CMP0155 scanning adds GCC -fmodules-ts flags that sccache refuses to

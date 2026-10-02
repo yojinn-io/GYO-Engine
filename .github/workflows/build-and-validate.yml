@@ -141,7 +141,7 @@ jobs:
         id: core
         if: always() && matrix.kind == 'toolchain' && steps.setup.outcome == 'success'
         run: |
-          cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
+          cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
