@@ -4,9 +4,14 @@
 第04批暫停，第05批未開始；未執行長測、未升格v5穩定基線。
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
-批准實作方案A1啟動相位對齊（PR #2，合併為`ff11ee3`）；2026-10-02補上低幀率守門與驗收器修正（尚未commit）。
+批准實作方案A1啟動相位對齊（PR #2，合併為`ff11ee3`）；2026-10-02補上低幀率守門與驗收器修正（PR #3，合併為`9cd7f26`）。
 使用者決定以MVP技術驗證收尾，**計次的原生GUI可見延遲短測與25案矩陣未執行**，第03批維持未結案。
 門檻、lead、插值與60Hz不變，停止在第03批。各問題見[修正與已知問題](fix/README.md)。
+2026-10-02：A1「每epoch量一次」在長局會因時鐘漂移失準（[fix/08](fix/08-a1-clock-drift.md)），與reseed取消（fix/02）
+及fix/03、fix/09一起處理。使用者核准後已實作「輸入worker 60/s token bucket＋閉環的持續相位追蹤」與連線品質移出
+（[fix/10](fix/10-connection-quality-eviction.md)），CPU驗證通過，經分支`claude/pvp-v5-phase-tracking`提交PR送審、**尚未合併**；
+A1、HostLate、低幀率守門與`StartPhaseSkip`已刪除。實機GUI冒煙與結案驗收未執行。經過與驗證見
+[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)。
 
 ## 閱讀入口
 
@@ -53,7 +58,7 @@
 - 當前兩人產品Join前預備一個遠端GPU instance，Leave清識別但重用GPU；身高1.8、
   固定腳底anchor、Jog相位按路程。後退反向、側移近似，不宣稱全週期零滑步／IK。
 - 第01–03批內容已存於`de87bb9`（wip）；啟動相位對齊經PR #2（分支`claude/project-thread-lv6bg5`）
-  合併為`ff11ee3`；低幀率守門與驗收器修改在工作分支`claude/pvp-v5-start-phase-guard`，尚未commit／PR。
+  合併為`ff11ee3`；低幀率守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
   不可把前批修改當無關內容刪掉。
 
 ## 驗證與證據

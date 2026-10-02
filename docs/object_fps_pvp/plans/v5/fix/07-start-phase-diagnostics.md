@@ -1,8 +1,9 @@
 # 07 啟動相位的觀測與記錄（w、調整量、撤回、取消）
 
-狀態：已解決（工作樹修正，尚未提交）。2026-10-02。Owner：`object_fps_pvp`。
-相關：A1 由 PR #2（合併為 `ff11ee3`）引入；本修正在提交前的工作分支
-`claude/pvp-v5-start-phase-guard`，尚未 commit／開 PR。
+狀態：已解決。2026-10-02。Owner：`object_fps_pvp`。
+**2026-10-02更新**：A1紀錄（w、調整量、撤回、取消）已改為持續相位追蹤紀錄（狀態歷程、首次決定、修正與遲到修正次數、Host slack樣本），沿用`start_phase_record.hpp`／`start_phase_evidence.py`檔名，見[08](./08-a1-clock-drift.md)；本文保留作為歷史紀錄。
+相關：A1 由 PR #2（合併為 `ff11ee3`）引入；本修正經 PR #3
+（`claude/pvp-v5-start-phase-guard`）合併為 `9cd7f26`。
 第03批仍未結案：本文件只解決「能記錄、能判讀」，計次 GUI 輪次與 25 案矩陣依使用者決定未執行。
 索引見 [本目錄總覽](README.md)；相關問題見
 [01 低幀率守門](./01-a1-low-fps-regression.md)、[02 停頓重新播種取消A1](./02-a1-cancelled-by-stall-reseed.md)。

@@ -20,10 +20,19 @@ combat records carry matching life generations. Movement windows are discarded
 at an authoritative life/epoch transition, while the immutable action ledger and
 ACK/retirement cursors survive until Leave/disconnect. Nonzero stale/future-life
 actions reach Match for a terminal decision.
-`PlayerState.epoch_start_wait_us` is an optional Host timing observation: the wait
-from receiving an epoch's first window to the tick that executed sequence 1. Adapters
-keep its presence and reject values above 1,000,000; only the Client's start-phase
-alignment reads it.
+`PlayerState.movement_slack_sequence` and `movement_slack_us` are an optional Host
+timing observation, present together or not at all: the smallest movement slack since
+the previous published snapshot (executing tick minus a command's first receipt, or
+negative for a command that arrived after its sequence was substituted) and its
+sequence. Adapters keep their presence, reject |slack| above 1,000,000 us and a
+sequence outside 1..last_resolved_command; only the Client's phase tracking reads
+them (field 16, the former `epoch_start_wait_us`, is reserved).
+`PlayerState.connection_quality_failures` counts the failed 10-second connection-quality
+windows in a row (0-2); `PlayerInput.observed_authority_tick` is the latest snapshot
+tick the Client applied, and a merged window carries the largest. The Match evicts
+after three failed windows and sends the runtime-only `PlayerEvicted`; the Gateway
+clears the player like a Leave and sends the Client an `Error` with code
+`evicted_high_latency` or `evicted_unstable_input`.
 
 The historical `ShotRequest`, `ShotDecision`, `ShotRejection` and `ActionBatch.shots`
 names now cover both Shot and Reload. `ActionKind` and `LifeState` have an invalid
