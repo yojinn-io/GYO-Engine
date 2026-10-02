@@ -8,6 +8,9 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No sources use C++ modules. CMake would otherwise scan every C++20 source
+# and add GCC module flags that make compiler-cache lookups uncacheable.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config} "${CMAKE_BINARY_DIR}/bin")

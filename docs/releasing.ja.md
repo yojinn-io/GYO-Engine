@@ -21,14 +21,24 @@ Platform は `windows-x64`、`linux-x64`、`macos-arm64` です。Archive ごと
 
 | 操作 | 結果 |
 |---|---|
-| Branch push／pull request／通常 workflow の手動実行 | Quick 統合と Actions artifacts |
+| Draft pull request、または `docs/**` だけを変更する pull request | CI policy tests と範囲判定のみ実行し、`CI gate` は意図した skip として成功 |
+| Ready の pull request | L1 merge gate：platform ごとに 1 job で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行。Linux は host shader、Lavapipe GPU、core も実行。封装なし |
+| master への push／通常 workflow の手動実行 | L1 と Quick 統合、Actions artifacts |
+| その他の branch push | CI を実行しない |
 | **Prepare Release** | SHA を固定し、全必須製品の完全検証後に tag、Draft、添付を準備 |
 | Tag push | 自動公開の入口にはしない |
 | **Publish release** | 既存 Draft を公開し、再コンパイルしない |
 
+Required check には `CI gate` だけを設定します。すべての pull request event で報告し、選択した段階がすべて成功するか、規則どおり skip された場合だけ成功します。同じ PR の新しい push は古い実行を取り消し、master の実行は互いに取り消しません。Compiler cache（sccache）は既定 branch の L1 だけが書き込み、PR と封装 jobs は読み取りのみです。
+
+- Draft の判定は PR の現在の状態を読みます。古い Draft 実行を re-run しても L1 を実行します。
+- head commit を変えずに Draft から Ready にした場合、新しい実行の `CI gate` は前段の jobs が終わるまで現れず、その間は同じ commit に Draft 実行の成功が残ります。新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。
+- L1 は封装と install 後の検証を実行しません。`.github/`、`build/ci/`、`build/acceptance/`、封装 CMake を変更する PR は、merge 前にその branch で **Cross-platform CI** を手動実行します。
+- PR の base branch 変更（`edited`）では再実行しません。Merge queue（`merge_group`）は未対応で、有効化する前にその trigger と範囲判定を追加します。
+
 初回は workflow と必要なコードを既定 branch に入れ、GitHub に **Run workflow** を表示させます。選択する source branch にも同じ支援が必要です。Actions 実行／Release 編集権限を用い、build jobs は read-only、最後の Draft job だけ write 権限を持ちます。
 
-1. 公開予定の source を push し、Quick の結果を確認します。
+1. 公開予定 source commit の Quick 結果を確認します。master 以外の branch push では CI が動かないため、その branch で **Cross-platform CI** を手動実行します。
 2. **Actions → Prepare Release → Run workflow** で source branch を選びます。
 3. `v1.0.1` などの version を入力し、必要なら prerelease を選びます。
 4. 3 platform の固定 toolchain と全 CSV ゲームの必要検証を待ちます。

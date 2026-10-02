@@ -1,23 +1,286 @@
 name: Cross-platform CI
 run-name: ${{ github.event_name }} / ${{ github.ref_name }}
 
+# Mainline development: only master pushes integrate. Pull requests carry no
+# path or draft filters here; the scope job decides what runs, so the single
+# required "CI gate" check reports for every pull request event.
 on:
   push:
-    branches: ['**']
+    branches: [master]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes its older run. Integration
+# runs never share a group: GitHub replaces even a pending run in a shared
+# group, which would leave a master commit without a gate result, packages
+# or a compiler cache seed.
 concurrency:
-  group: gyo-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: gyo-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  scope:
+    name: Select CI scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Reading the live draft state needs only read access to pull requests.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_l1: ${{ steps.scope.outputs.run_l1 }}
+      run_quick: ${{ steps.scope.outputs.run_quick }}
+      reason: ${{ steps.scope.outputs.reason }}
+      platforms: ${{ steps.scope.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          # Both parents of GitHub's pull request test merge commit.
+          fetch-depth: 2
+          persist-credentials: false
+      # The classifier decides which tiers run, so its own policy tests run
+      # before it; a broken classifier must not silently skip the merge gate.
+      - name: Test the CI scope and gate policies
+        run: python -m unittest discover -s tests/common/ci -v
+      - name: Classify draft, documentation-only and integration events
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          arguments=(--event-name "$EVENT_NAME" --event-path "$GITHUB_EVENT_PATH")
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # A re-run replays the original payload, so its draft flag can be
+            # stale; the current state decides whether L1 may be skipped.
+            draft=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .draft)
+            arguments+=(--live-draft "$draft")
+          fi
+          python build/ci/common/ci_scope.py "${arguments[@]}" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+  l1:
+    name: L1 / ${{ matrix.platform }}
+    needs: scope
+    if: needs.scope.outputs.run_l1 == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # One job per platform builds every registered product once.
+      matrix: ${{ fromJSON(needs.scope.outputs.platforms) }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PRESET: ${{ matrix.preset }}
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          lfs: true
+
+      - name: Provision the pinned toolchain and compiler cache
+        id: setup
+        uses: ./.github/actions/native-setup
+        with:
+          platform: ${{ matrix.platform }}
+          toolchain: ${{ matrix.toolchain }}
+          preset: ${{ matrix.preset }}
+
+      # The ci-<os> preset already selects every registry-enabled game, the
+      # default tools, the engine and its tests; no product is named here.
+      - name: Configure registered products, default tools and engine tests
+        id: configure
+        run: |
+          cmake --preset $env:PRESET 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
+          "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Cache pinned native shader tools
+        if: steps.configure.outputs.has_shader_tools == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/target/_build/${{ matrix.preset }}/host-tools
+          key: shader-tools-v2-sccache-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
+
+      - name: Build the registered graph and its tests
+        id: build
+        run: |
+          cmake --build --preset $env:PRESET 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run CPU, headless and shader tests
+        id: tests
+        run: |
+          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run host shader reflection and rejection tests
+        id: shaders
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.build.outcome == 'success' && steps.configure.outputs.has_shader_tools == 'true' }}
+        run: |
+          ctest --test-dir "build/target/_build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Same Lavapipe setup and common engine GPU command as the packaging
+      # toolchain job; product GPU checks stay with installed acceptance.
+      - name: Run common engine Linux GPU tests
+        id: gpu
+        timeout-minutes: 20
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          SDL_VIDEODRIVER: x11
+          SDL_AUDIODRIVER: dummy
+          SDL_LOGGING: '*=info'
+        run: |
+          set -euo pipefail
+          mapfile -t icds < <(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)
+          if [ "${#icds[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one Mesa Lavapipe ICD, found ${#icds[@]}"
+            exit 1
+          fi
+          export VK_DRIVER_FILES="${icds[0]}"
+          export VK_ICD_FILENAMES="$VK_DRIVER_FILES"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/gyo-xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary > "build/target/_build/$PRESET/logs/vulkan-info.log" 2>&1
+          xvfb-run -a -s '-screen 0 1920x1080x24' ctest \
+            --test-dir "build/target/_build/$PRESET" -L gpu -R '^render\.' \
+            --no-tests=error --output-on-failure \
+            --output-junit "$GITHUB_WORKSPACE/build/target/_build/$PRESET/logs/common-gpu-tests.xml" \
+            2>&1 | tee "build/target/_build/$PRESET/logs/common-gpu-tests.log"
+
+      # Same command as the toolchain packaging row, which also runs it on
+      # Windows: the core preset leaves MSVC on /Zi, whose shared per-target
+      # PDB is unsafe behind sccache; embedded (/Z7) debug info is MSVC-only.
+      - name: Build and test core with optional modules disabled
+        id: core
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.setup.outcome == 'success' }}
+        run: |
+          cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Stopping the server flushes pending cache writes before any save.
+      # Statistics are diagnostics only and never decide the job result.
+      - name: Record compiler cache statistics
+        if: always() && steps.setup.outcome == 'success'
+        run: |
+          sccache --show-stats 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/sccache-stats.log"
+          sccache --stop-server 2>&1 | Out-Null
+          exit 0
+
+      # Only default-branch integration runs write the compiler cache. Pull
+      # requests restore these seeds and never write one that master reads.
+      - name: Seed the default-branch compiler cache
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup.outputs.cache-path }}
+          key: ${{ steps.setup.outputs.cache-key }}
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: l1-diagnostics-${{ matrix.platform }}
+          overwrite: true
+          path: |
+            build/target/_build/${{ matrix.preset }}/logs
+            build/target/_build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/Testing/Temporary
+            build/target/_build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}/host-tools/Testing/Temporary
+            build/target/_build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}-core/Testing/Temporary
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Summarize the merge gate boundary
+        if: always()
+        env:
+          L1_PLATFORM: ${{ matrix.platform }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          TEST_RESULT: ${{ steps.tests.outcome }}
+          SHADER_RESULT: ${{ steps.shaders.outcome }}
+          GPU_RESULT: ${{ steps.gpu.outcome }}
+          CORE_RESULT: ${{ steps.core.outcome }}
+        run: |
+          @"
+          ## L1 / $env:L1_PLATFORM
+          | Check | Result |
+          | --- | --- |
+          | Build (registered games, default tools, engine, tests) | $env:BUILD_RESULT |
+          | CPU / headless tests | $env:TEST_RESULT |
+          | Host shader tests (Linux) | $env:SHADER_RESULT |
+          | Linux software GPU engine tests | $env:GPU_RESULT |
+          | Core baseline (Linux) | $env:CORE_RESULT |
+
+          L1 builds and tests only. Packaging and installed acceptance run on master integration.
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+  quick:
     name: Quick acceptance
+    needs: scope
+    if: needs.scope.outputs.run_quick == 'true'
     uses: ./.github/workflows/build-and-validate.yml
     with:
       source_commit: ${{ github.sha }}
       profile: quick
+
+  # The only required check. It always runs (a skipped job would count as
+  # passing) and accepts exactly a selected success or an unselected skip.
+  gate:
+    name: CI gate
+    needs: [scope, l1, quick]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected tier and accept only intended skips
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SCOPE_REASON: ${{ needs.scope.outputs.reason }}
+          RUN_L1: ${{ needs.scope.outputs.run_l1 }}
+          RUN_QUICK: ${{ needs.scope.outputs.run_quick }}
+          L1_RESULT: ${{ needs.l1.result }}
+          QUICK_RESULT: ${{ needs.quick.result }}
+        run: |
+          if [ "$SCOPE_RESULT" != success ]; then
+            echo "::error::The CI scope job finished as '$SCOPE_RESULT'; no tier can be judged."
+            exit 1
+          fi
+          status=0
+          for tier in L1 Quick; do
+            if [ "$tier" = L1 ]; then
+              selected=$RUN_L1 result=$L1_RESULT
+            else
+              selected=$RUN_QUICK result=$QUICK_RESULT
+            fi
+            case "$selected:$result" in
+              true:success) echo "- $tier: selected and passed." >> "$GITHUB_STEP_SUMMARY" ;;
+              false:skipped) echo "- $tier: not selected ($SCOPE_REASON)." >> "$GITHUB_STEP_SUMMARY" ;;
+              *)
+                echo "::error::$tier selection '$selected' finished as '$result'; only a selected success or an unselected skip passes."
+                status=1
+                ;;
+            esac
+          done
+          exit "$status"

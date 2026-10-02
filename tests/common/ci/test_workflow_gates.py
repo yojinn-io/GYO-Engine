@@ -1,4 +1,4 @@
-"""Exercise the release workflow's actual final gate without GitHub API calls."""
+"""Exercise the CI and release workflows' actual gates without GitHub API calls."""
 
 import itertools
 import json
@@ -15,6 +15,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
+NATIVE_SETUP = ROOT / ".github" / "actions" / "native-setup" / "action.yml"
 
 
 def job_block(workflow: str, name: str) -> str:
@@ -25,6 +26,70 @@ def job_block(workflow: str, name: str) -> str:
     tail = workflow[match.end():]
     next_job = re.search(r"(?m)^  [A-Za-z_][A-Za-z0-9_-]*:\s*$", tail)
     return tail[:next_job.start()] if next_job else tail
+
+
+def top_level_block(document: str, key: str) -> str:
+    """Read one top-level mapping, not a general-purpose YAML parser."""
+    match = re.search(rf"(?m)^{re.escape(key)}:\s*$", document)
+    if match is None:
+        raise AssertionError(f"Required top-level key is missing: {key}")
+    tail = document[match.end():]
+    following = re.search(r"(?m)^[A-Za-z_][A-Za-z0-9_-]*:", tail)
+    return tail[:following.start()] if following else tail
+
+
+def steps_of(job: str, indent: int = 6) -> list[str]:
+    """Split workflow job steps (6 spaces) or composite action steps (4)."""
+    return re.split(rf"(?m)^{' ' * indent}- ", job)
+
+
+def step_with(job: str, marker: str, indent: int = 6) -> str:
+    matches = [step for step in steps_of(job, indent) if marker in step]
+    if len(matches) != 1:
+        raise AssertionError(f"Expected exactly one workflow step containing {marker!r}, found {len(matches)}")
+    return matches[0]
+
+
+def run_script(step: str) -> str:
+    match = re.search(r"(?m)^        run: \|\s*$", step)
+    if match is None:
+        raise AssertionError("Workflow step has no executable block")
+    # The block ends at the first non-blank line indented like a step key or
+    # less, such as a comment introducing the next step.
+    lines = []
+    for line in step[match.end():].splitlines()[1:]:
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        lines.append(line)
+    return textwrap.dedent("\n".join(lines)).strip()
+
+
+def env_block(block: str, indent: int) -> dict[str, str]:
+    """Read one env mapping at the given indent, not a general-purpose YAML parser."""
+    match = re.search(rf"(?m)^{' ' * indent}env:\s*$", block)
+    if match is None:
+        raise AssertionError("Required env block is missing")
+    values = {}
+    for line in block[match.end():].splitlines()[1:]:
+        entry = re.fullmatch(rf"{' ' * (indent + 2)}([A-Z_][A-Z0-9_]*): (.+)", line)
+        if entry is None:
+            break
+        values[entry.group(1)] = entry.group(2)
+    return values
+
+
+PROPAGATE = "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
+
+
+def assert_native_commands_propagate(case: unittest.TestCase, script: str):
+    """Every cmake/ctest line in a pwsh step must be followed by exit propagation."""
+    lines = script.splitlines()
+    commands = [index for index, line in enumerate(lines) if re.match(r"(cmake|ctest) ", line)]
+    case.assertTrue(commands, script)
+    for index in commands:
+        case.assertLess(index + 1, len(lines), script)
+        case.assertEqual(lines[index + 1], PROPAGATE, script)
+    case.assertNotRegex(script, r"exit 0|\|\| true|continue-on-error")
 
 
 def step_using(job: str, action: str) -> str:
@@ -64,6 +129,7 @@ class WorkflowGateTests(unittest.TestCase):
         cls.quick = (WORKFLOWS / "cross-platform.yml").read_text(encoding="utf-8")
         cls.release = (WORKFLOWS / "prepare-release.yml").read_text(encoding="utf-8")
         cls.shared = (WORKFLOWS / "build-and-validate.yml").read_text(encoding="utf-8")
+        cls.setup = NATIVE_SETUP.read_text(encoding="utf-8")
 
     def test_actual_final_gate_rejects_failed_skipped_and_cancelled_jobs(self):
         bash = find_bash()
@@ -248,6 +314,337 @@ xvfb-run() {
         self.assertEqual(tests["test"]["configurePreset"], "test")
         for platform in ("windows", "linux", "macos"):
             self.assertEqual(tests["ci-" + platform]["inherits"], "test")
+        # MSVC objects must embed /Z7 debug information to be compiler-cacheable.
+        self.assertEqual(cache("ci-windows")["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"],
+                         "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+        for name in ("dev", "test", "core", "ci-linux", "ci-macos"):
+            self.assertNotIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", cache(name))
+        # MSVC precompiled headers (/Yc, /Fp) are never cacheable; dependencies
+        # that enable them must compile without them in CI.
+        self.assertEqual(cache("ci-windows")["CMAKE_DISABLE_PRECOMPILE_HEADERS"], "ON")
+
+    def test_only_master_pushes_integrate_and_pull_requests_are_classified_in_a_job(self):
+        trigger = [line.strip() for line in top_level_block(self.quick, "on").splitlines()
+                   if line.strip() and not line.strip().startswith("#")]
+        # No paths/draft/branch filters: a filtered pull request event would
+        # leave the required gate check unreported.
+        self.assertEqual(trigger, ["push:", "branches: [master]", "pull_request:",
+                                   "types: [opened, synchronize, reopened, ready_for_review]",
+                                   "workflow_dispatch:"])
+        self.assertNotRegex(self.quick, r"paths(-ignore)?:|branches-ignore:|tags(-ignore)?:")
+        self.assertNotIn("pull_request.draft", self.quick)
+
+    def test_pull_request_runs_supersede_each_other_but_integration_runs_never_do(self):
+        concurrency = top_level_block(self.quick, "concurrency")
+        group = re.search(r"(?m)^  group:\s*(.+)$", concurrency).group(1)
+        self.assertIn("github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)", group)
+        self.assertIn("|| github.run_id }}", group)
+        self.assertNotIn("github.ref", group)
+        self.assertRegex(concurrency, r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$")
+
+    def test_scope_job_alone_selects_tiers_through_the_tested_helper(self):
+        scope = job_block(self.quick, "scope")
+        self.assertIn("ref: ${{ github.sha }}", step_using(scope, "actions/checkout"))
+        self.assertIn("fetch-depth: 2", step_using(scope, "actions/checkout"))
+        classifier = step_with(scope, "ci_scope.py")
+        self.assertRegex(classifier, r"(?m)^        id: scope$")
+        command = run_script(classifier)
+        invocations = [line for line in command.splitlines() if "ci_scope.py" in line]
+        self.assertEqual(len(invocations), 1, command)
+        self.assertTrue(invocations[0].startswith('python build/ci/common/ci_scope.py "${arguments[@]}" '), command)
+        help_text = subprocess.run([sys.executable, str(ROOT / "build/ci/common/ci_scope.py"), "--help"],
+                                   text=True, capture_output=True, timeout=30, check=False)
+        self.assertEqual(help_text.returncode, 0, help_text.stderr)
+        python_options = re.findall(r"(--[a-z][a-z-]*)", invocations[0] + re.search(
+            r"(?m)^arguments=\((.+)\)$", command).group(1) + re.search(r"arguments\+=\((.+)\)", command).group(1))
+        self.assertIn("--live-draft", python_options)
+        for option in python_options:
+            self.assertIn(option, help_text.stdout)
+        self.assertEqual(env_block(classifier, 8), {
+            "EVENT_NAME": "${{ github.event_name }}",
+            "PR_NUMBER": "${{ github.event.pull_request.number }}",
+            "GH_TOKEN": "${{ github.token }}",
+        })
+        # Reading the live draft state is the only extra permission.
+        self.assertRegex(scope, r"(?m)^    permissions:\n      contents: read\n      pull-requests: read\n    outputs:$")
+        # The classifier's own policy tests run first, exactly as in Quick.
+        steps = steps_of(scope)
+        tests = step_with(scope, "unittest discover")
+        self.assertLess(steps.index(tests), steps.index(classifier))
+        self.assertIn("run: python -m unittest discover -s tests/common/ci -v", tests)
+        self.assertIn("run: python -m unittest discover -s tests/common/ci -v", job_block(self.shared, "prepare"))
+        for output in ("run_l1", "run_quick", "reason", "platforms"):
+            self.assertIn(f"{output}: ${{{{ steps.scope.outputs.{output} }}}}", scope)
+        l1 = job_block(self.quick, "l1")
+        self.assertRegex(l1, r"(?m)^    needs: scope$")
+        self.assertRegex(l1, r"(?m)^    if: needs\.scope\.outputs\.run_l1 == 'true'$")
+        quick = job_block(self.quick, "quick")
+        self.assertRegex(quick, r"(?m)^    needs: scope$")
+        self.assertRegex(quick, r"(?m)^    if: needs\.scope\.outputs\.run_quick == 'true'$")
+        self.assertIn("uses: ./.github/workflows/build-and-validate.yml", quick)
+        self.assertIn("source_commit: ${{ github.sha }}", quick)
+        self.assertIn("profile: quick", quick)
+
+    def test_actual_classifier_reads_the_live_draft_state_only_for_pull_requests(self):
+        bash = find_bash()
+        if bash is None:
+            if os.name == "nt":
+                self.skipTest("Native Git Bash cannot execute in this Windows environment")
+            self.fail("Bash is required by the Ubuntu CI scope job")
+        script = run_script(step_with(job_block(self.quick, "scope"), "ci_scope.py"))
+        prefix = '''gh() { printf '%s\\n' "$*" >> gh-calls; [ "$GH_STATUS" = 0 ] || return "$GH_STATUS"; printf '%s\\n' "$LIVE_DRAFT"; }
+python() { printf '%s\\n' "$@" > python-arguments; }
+'''
+        lookup = ["api repos/owner/repository/pulls/7 --jq .draft"]
+        for event_name, gh_status, live_draft, expected_gh, expected_draft in (
+            ("pull_request", 0, "true", lookup, "true"),
+            ("pull_request", 0, "false", lookup, "false"),
+            ("push", 0, "true", [], None),
+            ("workflow_dispatch", 0, "true", [], None),
+            ("pull_request", 1, "false", lookup, None),
+        ):
+            with self.subTest(event=event_name, gh_status=gh_status, live_draft=live_draft), \
+                    tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                environment = dict(os.environ, EVENT_NAME=event_name, PR_NUMBER="7" if event_name == "pull_request" else "",
+                                   GITHUB_REPOSITORY="owner/repository", GITHUB_EVENT_PATH="event.json",
+                                   GITHUB_OUTPUT="outputs", GITHUB_STEP_SUMMARY="summary",
+                                   GH_STATUS=str(gh_status), LIVE_DRAFT=live_draft)
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
+                                        cwd=root, env=environment, capture_output=True, text=True, timeout=10)
+                calls = (root / "gh-calls").read_text().splitlines() if (root / "gh-calls").exists() else []
+                self.assertEqual(calls, expected_gh)
+                if gh_status:
+                    # A failed lookup must fail the scope job, never classify.
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse((root / "python-arguments").exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                arguments = (root / "python-arguments").read_text().splitlines()
+                self.assertEqual(arguments[:5], ["build/ci/common/ci_scope.py", "--event-name", event_name,
+                                                 "--event-path", "event.json"])
+                if expected_draft is None:
+                    self.assertNotIn("--live-draft", arguments)
+                else:
+                    self.assertEqual(arguments[arguments.index("--live-draft") + 1], expected_draft)
+
+    def test_actual_ci_gate_accepts_only_selected_successes_and_unselected_skips(self):
+        bash = find_bash()
+        if bash is None:
+            if os.name == "nt":
+                self.skipTest("Native Git Bash cannot execute in this Windows environment")
+            self.fail("Bash is required by the Ubuntu CI gate")
+        gate = job_block(self.quick, "gate")
+        self.assertRegex(gate, r"(?m)^    name: CI gate$")
+        self.assertRegex(gate, r"(?m)^    needs: \[scope, l1, quick\]$")
+        # The policy below is only as good as its wiring to the real jobs.
+        self.assertEqual(env_block(gate, 8), {
+            "SCOPE_RESULT": "${{ needs.scope.result }}",
+            "SCOPE_REASON": "${{ needs.scope.outputs.reason }}",
+            "RUN_L1": "${{ needs.scope.outputs.run_l1 }}",
+            "RUN_QUICK": "${{ needs.scope.outputs.run_quick }}",
+            "L1_RESULT": "${{ needs.l1.result }}",
+            "QUICK_RESULT": "${{ needs.quick.result }}",
+        })
+        # A skipped job counts as passing a required check, so the gate must
+        # never be skippable by a failed or cancelled dependency.
+        self.assertRegex(gate, r"(?m)^    if: always\(\)$")
+        self.assertNotRegex(gate, r"continue-on-error:\s*true")
+        runs = list(re.finditer(r"(?m)^        run: \|\s*$", gate))
+        self.assertEqual(len(runs), 1, "The gate job must have one executable policy block")
+        script = textwrap.dedent(gate[runs[0].end():]).strip()
+        outcomes = ("success", "failure", "cancelled", "skipped")
+        selections = ("true", "false", "")
+        accepted = {("true", "success"), ("false", "skipped")}
+        cases = [(scope, ("true", "success"), ("true", "success")) for scope in outcomes]
+        cases.append(("failure", ("false", "skipped"), ("false", "skipped")))
+        tiers = list(itertools.product(selections, outcomes))
+        cases += [("success", tier, ("false", "skipped")) for tier in tiers]
+        cases += [("success", ("true", "success"), tier) for tier in tiers]
+        for scope, (run_l1, l1), (run_quick, quick) in cases:
+            with self.subTest(scope=scope, l1=(run_l1, l1), quick=(run_quick, quick)):
+                environment = dict(os.environ, SCOPE_RESULT=scope, SCOPE_REASON="fixture",
+                                   RUN_L1=run_l1, L1_RESULT=l1, RUN_QUICK=run_quick, QUICK_RESULT=quick,
+                                   GITHUB_STEP_SUMMARY="/dev/null")
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+                                        env=environment, text=True, capture_output=True, timeout=10, check=False)
+                expected = scope == "success" and (run_l1, l1) in accepted and (run_quick, quick) in accepted
+                self.assertEqual(result.returncode == 0, expected, result.stdout + result.stderr)
+
+    def test_l1_builds_every_registered_product_once_per_platform_without_packaging(self):
+        l1 = job_block(self.quick, "l1")
+        self.assertRegex(l1, r"(?m)^    name: L1 / \$\{\{ matrix\.platform \}\}$")
+        self.assertIn("matrix: ${{ fromJSON(needs.scope.outputs.platforms) }}", l1)
+        self.assertRegex(l1, r"fail-fast:\s*false")
+        self.assertNotRegex(l1, r"continue-on-error:\s*true")
+        self.assertIn("ref: ${{ github.sha }}", step_using(l1, "actions/checkout"))
+        configure = run_script(step_with(l1, "id: configure"))
+        # The ci-<os> preset owns registry AUTO selection; no product or tool
+        # list may be injected by the merge gate.
+        self.assertTrue(configure.startswith("cmake --preset $env:PRESET 2>&1 | Tee-Object"), configure)
+        self.assertNotRegex(configure, r"-D")
+        for forbidden in ("cmake --install", "run_package_checks", "validate_package", "archive_package",
+                          "app_copy_integration", "gyo-package-", "matrix.product", "matrix.kind"):
+            self.assertNotIn(forbidden, l1)
+        tests = step_with(l1, "id: tests")
+        self.assertNotRegex(tests, r"(?m)^        if:")
+        ctest = run_script(tests).splitlines()[0]
+        # The ci-<os> test preset owns label selection; L1 adds no filter.
+        self.assertTrue(ctest.startswith("ctest --preset $env:PRESET --output-junit "), ctest)
+        self.assertEqual(re.findall(r"(?<!\S)(-{1,2}[A-Za-z][A-Za-z-]*)", ctest.split(" 2>&1 ")[0]),
+                         ["--preset", "--output-junit"])
+        for marker in ("id: configure", "id: build", "id: tests", "id: shaders", "id: core"):
+            with self.subTest(step=marker):
+                assert_native_commands_propagate(self, run_script(step_with(l1, marker)))
+        gpu = run_script(step_with(l1, "id: gpu"))
+        self.assertTrue(gpu.startswith("set -euo pipefail\n"), gpu)
+        self.assertNotRegex(gpu, r"exit 0|\|\| true")
+        for marker in ("id: shaders", "id: gpu", "id: core"):
+            with self.subTest(step=marker):
+                self.assertIn("runner.os == 'Linux'", step_with(l1, marker))
+        self.assertIn("steps.configure.outputs.has_shader_tools == 'true'", step_with(l1, "id: shaders"))
+        self.assertIn("steps.configure.outputs.has_shader_tools == 'true'", step_using(l1, "actions/cache"))
+
+    def test_l1_and_toolchain_core_baselines_share_one_cacheable_command(self):
+        native = run_script(step_with(job_block(self.shared, "native"), "id: core"))
+        l1 = run_script(step_with(job_block(self.quick, "l1"), "id: core"))
+        self.assertEqual(native, l1)
+        configure = native.splitlines()[0]
+        self.assertTrue(configure.startswith("cmake --preset core "), configure)
+        # The core preset keeps MSVC /Zi, whose shared per-target PDB is unsafe
+        # behind sccache; only embedded debug information may be cached.
+        self.assertIn("'-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>'", configure)
+        self.assertIn(" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON ", configure)
+
+    def test_cxx_compiles_are_not_module_scanned(self):
+        # CMP0155 scanning adds GCC -fmodules-ts flags that sccache refuses to
+        # cache; both CMake projects that set C++20 must disable it.
+        for path in ("build/cmake/GyoBuild.cmake", "engine/render/shaders/pipeline/CMakeLists.txt"):
+            with self.subTest(project=path):
+                text = (ROOT / path).read_text(encoding="utf-8")
+                self.assertRegex(text, r"(?m)^set\(CMAKE_CXX_SCAN_FOR_MODULES OFF\)$")
+                self.assertLess(text.index("set(CMAKE_CXX_STANDARD 20)"), text.index("set(CMAKE_CXX_SCAN_FOR_MODULES OFF)"))
+        build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
+        self.assertLess(build.index("set(CMAKE_CXX_SCAN_FOR_MODULES OFF)"), build.index("add_subdirectory("))
+
+    def test_l1_and_toolchain_gpu_baselines_share_one_command(self):
+        native = job_block(self.shared, "native")
+        l1 = job_block(self.quick, "l1")
+        native_gpu = run_script(step_with(native, "id: gpu_smoke"))
+        l1_gpu = run_script(step_with(l1, "id: gpu"))
+        setup_end = "vulkaninfo --summary"
+        native_setup = native_gpu[:native_gpu.index("\n", native_gpu.index(setup_end))]
+        self.assertTrue(l1_gpu.startswith(native_setup + "\n"), "L1 must reuse the Lavapipe/Xvfb setup verbatim")
+        native_ctest = native_gpu[native_gpu.index("xvfb-run -a -s '-screen 0 1920x1080x24' ctest"):]
+        native_ctest = native_ctest[:native_ctest.index("\nfi")]
+        self.assertEqual(textwrap.dedent(native_ctest.replace("\n  ", "\n")).strip(),
+                         l1_gpu[len(native_setup):].strip())
+        self.assertIn("-L gpu -R '^render\\.'", l1_gpu)
+
+    def test_shared_toolchain_setup_and_compiler_cache_ownership(self):
+        native = job_block(self.shared, "native")
+        l1 = job_block(self.quick, "l1")
+        for name, job in (("native", native), ("l1", l1)):
+            with self.subTest(job=name):
+                setup = step_with(job, "uses: ./.github/actions/native-setup")
+                self.assertIn("id: setup", setup)
+                for field in ("platform", "toolchain", "preset"):
+                    self.assertIn(f"{field}: ${{{{ matrix.{field} }}}}", setup)
+                stats = step_with(job, "sccache --stop-server")
+                self.assertIn("if: always() && steps.setup.outcome == 'success'", stats)
+        # One owner for hosted toolchain facts: none remain inline in jobs.
+        for inline in ("ilammy/msvc-dev-cmd", "apt-get install", "xcode-select", "CMAKE_CXX_COMPILER_LAUNCHER"):
+            self.assertNotIn(inline, self.quick + self.shared)
+        self.assertIn("steps.setup.outcome == 'success'", step_with(native, "id: core"))
+        self.assertNotIn("steps.tools.", native)
+        # Only default-branch L1 integration runs may write the compiler cache.
+        self.assertNotIn("actions/cache/save@", self.shared + self.release + self.setup)
+        save = step_using(l1, "actions/cache/save")
+        self.assertEqual(self.quick.count("actions/cache/save@"), 1)
+        self.assertIn("github.event_name != 'pull_request'", save)
+        self.assertIn("github.ref == format('refs/heads/{0}', github.event.repository.default_branch)", save)
+        self.assertIn("path: ${{ steps.setup.outputs.cache-path }}", save)
+        self.assertIn("key: ${{ steps.setup.outputs.cache-key }}", save)
+        self.assertLess(l1.index("sccache --stop-server"), l1.index("actions/cache/save@"))
+        shader_keys = {re.search(r"(?m)^          key: (shader-tools-.+)$", step_using(job, "actions/cache")).group(1)
+                       for job in (native, l1)}
+        self.assertEqual(len(shader_keys), 1, "L1 and packaging must share one host-tools cache identity")
+        self.assertIn("-sccache-", shader_keys.pop())
+
+    def test_native_setup_routes_every_compile_through_a_restored_cache(self):
+        steps = steps_of(self.setup, 4)
+        toolchain = step_with(self.setup, "id: toolchain", 4)
+        for language in ("C", "CXX", "OBJC", "OBJCXX"):
+            self.assertIn(f'"CMAKE_{language}_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV', toolchain)
+        self.assertIn('"SCCACHE_DIR=$cachePath" >> $env:GITHUB_ENV', toolchain)
+        self.assertIn("CACHE_FAMILY: sccache-v1-${{ inputs.platform }}-${{ inputs.toolchain }}", toolchain)
+        self.assertIn('$prefix = "$env:CACHE_FAMILY-$compiler-$env:PRESET-"', toolchain)
+        self.assertIn("PRESET: ${{ inputs.preset }}", toolchain)
+        restore = step_with(self.setup, "uses: actions/cache/restore@", 4)
+        self.assertIn("path: ${{ steps.toolchain.outputs.cache-path }}", restore)
+        self.assertIn("restore-keys: ${{ steps.toolchain.outputs.restore-prefix }}", restore)
+        self.assertGreater(steps.index(restore), steps.index(toolchain))
+        self.assertNotRegex(self.setup, r"SCCACHE_GHA_ENABLED|actions/cache@")
+        outputs = top_level_block(self.setup, "outputs")
+        for name in ("compiler", "cache-path", "cache-key"):
+            with self.subTest(output=name):
+                self.assertRegex(outputs, rf"(?m)^  {name}:\n    description: .+\n"
+                                          rf"    value: \$\{{\{{ steps\.toolchain\.outputs\.{name} \}}\}}$")
+        self.assertEqual(len(re.findall(r"(?m)^    value: ", outputs)), 3)
+
+    def test_native_setup_installs_a_checksum_pinned_compiler_cache_without_runtime_tokens(self):
+        steps = steps_of(self.setup, 4)
+        install = step_with(self.setup, "name: Install the pinned compiler cache", 4)
+        self.assertLess(steps.index(install), steps.index(step_with(self.setup, "id: toolchain", 4)))
+        # A setup action exported ACTIONS_RUNTIME_TOKEN to every later build step.
+        self.assertNotIn("uses:", install)
+        self.assertNotRegex(self.setup, r"mozilla-actions/|ACTIONS_RUNTIME_TOKEN|ACTIONS_RESULTS_URL")
+        self.assertIn("shell: pwsh", install)
+        self.assertRegex(install, r"SCCACHE_VERSION: v\d+\.\d+\.\d+\n")
+        pinned = dict(re.findall(r"'((?:Linux|Windows|macOS)-(?:X64|ARM64))' = '[a-z0-9_-]+', '([0-9a-f]{64})'", install))
+        self.assertEqual(set(pinned), {"Linux-X64", "Windows-X64", "macOS-ARM64"})
+        self.assertIn("(Get-FileHash ", install)
+        self.assertIn("if ($actual -ne $sha256) { throw ", install)
+        self.assertIn('tar -xzf "$name.tar.gz"', install)
+        self.assertIn("if ($status -ne 0) { exit $status }", install)
+        self.assertIn(">> $env:GITHUB_PATH", install)
+        self.assertNotIn(">> $env:GITHUB_ENV", install)
+
+    def test_every_external_action_is_pinned_to_a_full_commit(self):
+        documents = sorted(WORKFLOWS.glob("*.yml")) + sorted((ROOT / ".github" / "actions").glob("*/action.yml"))
+        self.assertIn(NATIVE_SETUP, documents)
+        for document in documents:
+            for reference in re.findall(r"(?m)^\s*(?:- )?uses:\s*([^\s#]+)", document.read_text(encoding="utf-8")):
+                with self.subTest(document=document.name, uses=reference):
+                    if reference.startswith("./"):
+                        self.assertTrue((ROOT / reference).exists(), reference)
+                    else:
+                        self.assertRegex(reference, r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
+
+    def test_common_ci_definitions_name_no_product_owner(self):
+        # Product selection belongs to registry data; naming an owner in common
+        # CI definitions or helpers would make removing that owner edit CI.
+        # Registered games and tools require their directories, so directories
+        # also cover disabled owners that the registry export leaves out.
+        owners = {entry.name for folder in ("apps", "tools", "services") if (ROOT / folder).is_dir()
+                  for entry in (ROOT / folder).iterdir() if entry.is_dir() and not entry.name.startswith((".", "_"))}
+        self.assertTrue(owners)
+        sources = [*sorted(WORKFLOWS.glob("*.yml")), NATIVE_SETUP, *sorted((ROOT / "build/ci/common").glob("*.py"))]
+        common = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in sources}
+        for owner in sorted(owners):
+            name = re.escape(owner)
+            # Only identifier-like uses count, so an owner named like ordinary
+            # CI prose (quick, core, engine) does not collide: an owner path, a
+            # quoted literal, an assignment or comparison value, or a product,
+            # app, tool or game key.
+            usage = re.compile(rf"(?:apps|tools|services)/{name}(?![A-Za-z0-9_])"
+                               rf"|(['\"]){name}\1"
+                               rf"|(?<![=!<>])=\s?{name}(?![A-Za-z0-9_./-])"
+                               rf"|\b(?:products?|apps?|tools?|games?)\s*:\s*\[?\s*{name}(?![A-Za-z0-9_])")
+            for path, text in common.items():
+                with self.subTest(owner=owner, path=path):
+                    match = usage.search(text)
+                    self.assertIsNone(match, match and match.group(0))
 
 
 if __name__ == "__main__":
