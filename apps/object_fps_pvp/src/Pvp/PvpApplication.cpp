@@ -120,6 +120,11 @@ struct PvpApplication::Impl final {
     LifeState viewLifeState{LifeState::Alive};
     std::optional<ActionId> pendingReload;
     std::uint64_t acceptedReloadEndTick{};
+    // The authoritative reload start this animation is anchored to, and the
+    // local instant at which its authority progress was first observed.
+    std::uint64_t reloadAnchorStartTick{};
+    Clock::time_point reloadAnchorAt{};
+    double reloadAnchorSeconds{};
     bool pendingReloadEdge{}, lifeBoundaryThisFrame{};
     bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
     bool leftButtonDown{}, pointerAcquiredThisFrame{}, pendingShotEdge{};
@@ -322,6 +327,7 @@ struct PvpApplication::Impl final {
             pendingShotEdge = pendingReloadEdge = leftButtonDown = false;
             pendingReload.reset();
             acceptedReloadEndTick = 0;
+            reloadAnchorStartTick = 0;
             prediction->ClearJumpRequest();
             weaponAction = fps::WeaponViewModelAction::Idle;
             weaponStartedAt = localCooldownUntil = hitMarkerUntil = rejectionUntil = {};
@@ -405,6 +411,7 @@ struct PvpApplication::Impl final {
         pendingShotEdge = pendingReloadEdge = leftButtonDown = false;
         viewLife = 0;
         pendingReload.reset(); acceptedReloadEndTick = 0;
+        reloadAnchorStartTick = 0;
     }
 
     void UpdateWeaponFeedback(Clock::time_point now) {
@@ -413,7 +420,8 @@ struct PvpApplication::Impl final {
         weaponFeedback.pitch = pitch;
         if (!weaponFeedback.active) {
             pendingShotEdge = pendingReloadEdge = false;
-            weaponFeedback.shooting = weaponFeedback.drawing = weaponFeedback.hitMarkerVisible = false;
+            weaponFeedback.shooting = weaponFeedback.drawing = weaponFeedback.reloadAnimating =
+                weaponFeedback.hitMarkerVisible = false;
             return;
         }
         const bool canAct = !pointerAcquiredThisFrame && !windowInteraction && weaponFeedback.inputCaptured;
@@ -448,18 +456,44 @@ struct PvpApplication::Impl final {
         }
         pendingShotEdge = pendingReloadEdge = false;
         weaponFeedback.reloadPending = pendingReload.has_value();
-        double elapsed = std::chrono::duration<double>(now - weaponStartedAt).count();
-        double duration = weapon->GetActionDurationSeconds(weaponAction);
-        if (weaponAction != fps::WeaponViewModelAction::Idle && elapsed >= duration) {
-            weaponAction = fps::WeaponViewModelAction::Idle;
-            ++weaponFeedback.animationRevision;
-            elapsed = 0;
-            duration = 0;
+        double elapsed{}, duration{};
+        if (weaponFeedback.reloading && weaponFeedback.reloadEndTick > weaponFeedback.reloadStartTick) {
+            // Authority owns the reload clock: the clip starts only once a snapshot
+            // shows the reload, and local time merely smooths between snapshots.
+            if (weaponAction != fps::WeaponViewModelAction::Reload ||
+                reloadAnchorStartTick != weaponFeedback.reloadStartTick) {
+                reloadAnchorStartTick = weaponFeedback.reloadStartTick;
+                reloadAnchorAt = now;
+                reloadAnchorSeconds = state.snapshot->tick > weaponFeedback.reloadStartTick ?
+                    static_cast<double>(state.snapshot->tick - weaponFeedback.reloadStartTick) / AuthorityTickRate : 0;
+                weaponAction = fps::WeaponViewModelAction::Reload;
+                ++weaponFeedback.reloadAnimationStarts;
+                ++weaponFeedback.animationRevision;
+            }
+            duration = static_cast<double>(weaponFeedback.reloadEndTick - weaponFeedback.reloadStartTick) / AuthorityTickRate;
+            elapsed = (std::min)(duration,
+                reloadAnchorSeconds + std::chrono::duration<double>(now - reloadAnchorAt).count());
+        } else {
+            if (weaponAction == fps::WeaponViewModelAction::Reload) {
+                // Completed, cancelled by death or replaced by a new life.
+                weaponAction = fps::WeaponViewModelAction::Idle;
+                reloadAnchorStartTick = 0;
+                ++weaponFeedback.animationRevision;
+            }
+            elapsed = std::chrono::duration<double>(now - weaponStartedAt).count();
+            duration = weapon->GetActionDurationSeconds(weaponAction);
+            if (weaponAction != fps::WeaponViewModelAction::Idle && elapsed >= duration) {
+                weaponAction = fps::WeaponViewModelAction::Idle;
+                ++weaponFeedback.animationRevision;
+                elapsed = 0;
+                duration = 0;
+            }
         }
         weaponFeedback.actionElapsedSeconds = weaponAction == fps::WeaponViewModelAction::Idle ? 0 : elapsed;
         weaponFeedback.actionDurationSeconds = duration;
         weaponFeedback.shooting = weaponAction == fps::WeaponViewModelAction::Shoot;
         weaponFeedback.drawing = weaponAction == fps::WeaponViewModelAction::Draw;
+        weaponFeedback.reloadAnimating = weaponAction == fps::WeaponViewModelAction::Reload;
         weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
         weaponFeedback.cooldownRemainingSeconds = (std::max)(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
     }
@@ -871,7 +905,8 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             const auto seconds = (ConnectionQualityFailedWindows - self->connectionQualityFailures) *
                 ConnectionQualityWindowTicks / AuthorityTickRate;
             AddText(draws, "CONNECTION POOR - improve within " + std::to_string(seconds) + "s or you will be removed",
-                {impl_->width*.5F-300,70,620,30});
+                // Bottom centre: the top-left HUD panel and the centred focus hint own the top.
+                {impl_->width*.5F-310,impl_->height-70,620,30});
         }
     } else {
         const auto composed = impl_->ui.Compose(impl_->Bindings(), impl_->Viewport());

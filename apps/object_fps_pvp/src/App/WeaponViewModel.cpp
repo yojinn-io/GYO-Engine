@@ -32,6 +32,7 @@ std::size_t ClipSlot(WeaponViewModelAction action) {
     switch (action) {
     case WeaponViewModelAction::Idle: return 0;
     case WeaponViewModelAction::Shoot: return 1;
+    case WeaponViewModelAction::Reload: return 2;
     case WeaponViewModelAction::Draw: return 3;
     }
     return static_cast<std::size_t>(-1);

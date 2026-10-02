@@ -1,7 +1,29 @@
 # PvP v5 交接
 
 更新：2026-10-02。**第01–03批已完成（第03批2026-10-02結案驗收通過）。**
-第04批計畫複審完成（2026-10-02），驗證平台已定（本機Mac、跨平台手法），待明確啟動，第05批未開始；未執行長測、未升格v5穩定基線。
+**第04批進行中**（2026-10-02使用者啟動；計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`），第05批未開始；未執行長測、未升格v5穩定基線。
+
+## 第04批進度（記錄器，隨工作更新）
+
+| 子批次 | 內容 | 建議檔位 | 狀態 |
+|---|---|---|---|
+| 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
+| 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 未開始 |
+| 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 未開始 |
+| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | 未開始 |
+
+- 開工時發現：GUI probe的`--gpu-driver`只列`auto|d3d12|vulkan`，macOS依賴`auto`選到Metal；第03批的玩法GUI（Space／快射／R／重生）
+  是X11/XTest的`run_gameplay_gui.py`，SDL注入的probe沒有對應模式，因此04-3須補一個動作短測模式。
+- 04-1紀錄：
+  - 換彈動畫等Snapshot顯示權威換彈才開始（契約「Reload 1.5秒權威進度」），按R當下只有既有的「Reload requested」文字；
+    進度以首次看到時的權威已過時間定錨，之後以本機時間平滑推進並夾在1.5秒內，死亡／新生命／權威結束即回Idle。
+    Mark23 Reload原長3.733秒由武器模型依進度對應（約2.49倍速）。
+  - 新增獨立計數`reloadAnimationStarts`：`animationStarts`維持「本機立即射擊回饋次數」，因`combat_latency.hpp`與
+    `weapon_short.hpp`檢查它等於送出的動作數，換彈要等權威確認，沿用會在送出與確認之間短暫不等。
+  - 操作提示「WASD move | Space jump | Click shoot | R reload」第03批已存在，切片7不需再加。
+  - 修正第03批留下的HUD重疊：「CONNECTION POOR」警告原畫在y=70–100、水平置中，與左上HUD面板的HP／彈匣行重疊
+    （800×600與1280×720皆然），改到畫面下方中央。
+
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
 批准實作方案A1啟動相位對齊（PR #2，合併為`ff11ee3`）；2026-10-02補上低幀率守門與驗收器修正（PR #3，合併為`9cd7f26`）。
