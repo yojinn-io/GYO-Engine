@@ -1,11 +1,15 @@
 name: Prepare Release
-run-name: Prepare Release / ${{ inputs.version }} / ${{ github.ref_name }}
+run-name: Prepare Release / ${{ inputs.train }} / ${{ inputs.version }} / ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
     inputs:
+      train:
+        description: Release train, tools or an enabled game id from engine/config/projects.csv
+        required: true
+        type: string
       version:
-        description: Version tag, for example v1.0.1 or v1.1.0-rc.1
+        description: Train version; tools use vYYYY.M.N (v2026.10.1), games use SemVer (v5.0.0, v5.1.0-rc.1)
         required: true
         type: string
       prerelease:
@@ -13,32 +17,40 @@ on:
         required: false
         default: false
         type: boolean
+      l4_evidence:
+        description: Real-device (L4) evidence link or reference (issue, PR, discussion or artifact); required when the game declares release_evidence; must stay empty for a train without items, such as tools
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
-# The same version must retain its source commit and complete one draft upload
-# at a time. Ordinary branch CI cannot cancel a release preparation.
+# The same train version must retain its source commit and complete one draft
+# upload at a time. Ordinary branch CI cannot cancel a release preparation.
 concurrency:
-  group: gyo-prepare-release-${{ inputs.version }}
+  group: gyo-prepare-release-${{ inputs.train }}-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
   prepare:
-    name: Validate version and capture source commit
+    name: Validate train, version and capture source commit
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       tag: ${{ steps.source.outputs.tag }}
       commit: ${{ steps.source.outputs.commit }}
       prerelease: ${{ steps.source.outputs.prerelease }}
+      train: ${{ steps.source.outputs.train }}
+      product: ${{ steps.source.outputs.product }}
+      l4_evidence: ${{ steps.source.outputs.l4_evidence }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate the requested version and fixed source revision
+      - name: Validate the requested train, version and fixed source revision
         id: source
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -50,13 +62,18 @@ jobs:
             --commit "$SOURCE_COMMIT" --ref "$SOURCE_REF" --output "$GITHUB_OUTPUT"
       - name: Record the release candidate
         env:
+          RELEASE_TRAIN: ${{ steps.source.outputs.train }}
           RELEASE_TAG: ${{ steps.source.outputs.tag }}
           SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
           SOURCE_REF: ${{ github.ref }}
+          L4_ITEMS: ${{ steps.source.outputs.l4_items }}
+          L4_EVIDENCE: ${{ steps.source.outputs.l4_evidence }}
         run: |
-          printf '## Release candidate\n\n- Version: `%s`\n- Source: `%s`\n- Commit: `%s`\n\nAll baseline jobs and configured app/platform packages must pass before a tag or draft is created.\n' \
-            "$RELEASE_TAG" "$SOURCE_REF" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Release candidate\n\n- Train: `%s`\n- Tag: `%s`\n- Source: `%s`\n- Commit: `%s`\n- Real-device (L4) items: %s\n- L4 evidence: %s\n\nThe toolchain baseline and every package of this train must pass before a tag or draft is created.\n' \
+            "$RELEASE_TRAIN" "$RELEASE_TAG" "$SOURCE_REF" "$SOURCE_COMMIT" "${L4_ITEMS:-none}" "${L4_EVIDENCE:-none}" >> "$GITHUB_STEP_SUMMARY"
 
+  # The toolchain rows always run as the engine baseline; a game train adds
+  # only its own rows, so another game's failure cannot block this train.
   build:
     name: Full release acceptance
     needs: prepare
@@ -64,6 +81,7 @@ jobs:
     with:
       source_commit: ${{ needs.prepare.outputs.commit }}
       profile: release
+      product: ${{ needs.prepare.outputs.product }}
 
   draft:
     name: Prepare verified draft and downloads
@@ -80,28 +98,37 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
+      # Only this train's product: its packages, then its service record and archives.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: gyo-package-*
+          pattern: gyo-package-${{ needs.prepare.outputs.product }}-*
           path: release-packages
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gyo-service-${{ needs.prepare.outputs.product }}
+          path: release-services
           merge-multiple: true
       - name: Verify packages, create the tag and prepare the draft
         id: draft
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TRAIN: ${{ needs.prepare.outputs.train }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}
           RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          L4_EVIDENCE: ${{ needs.prepare.outputs.l4_evidence }}
         run: |
-          python build/ci/common/release_pipeline.py draft \
+          python build/ci/common/release_pipeline.py draft --train "$RELEASE_TRAIN" \
             --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --prerelease "$RELEASE_PRERELEASE" \
-            --package-directory release-packages --output "$GITHUB_OUTPUT"
+            --package-directory release-packages --service-directory release-services \
+            --l4-evidence="$L4_EVIDENCE" --output "$GITHUB_OUTPUT"
       - name: Show the draft for manual publication
         env:
           RELEASE_TAG: ${{ steps.draft.outputs.tag }}
           SOURCE_COMMIT: ${{ steps.draft.outputs.commit }}
           RELEASE_URL: ${{ steps.draft.outputs.release_url }}
         run: |
-          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every fixed toolchain and configured game/platform archive and SHA-256 file is verified.\n- Review the notes and downloads, then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
+          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every archive of this train and its SHA-256 file is verified.\n- Review the notes and downloads; confirm every real-device (L4) item listed in the notes against its evidence.\n- Then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
             "$RELEASE_TAG" "$RELEASE_URL" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"

@@ -57,7 +57,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 
 ゲーム選択は `projects.csv`、ツール選択は `tools.csv` に従い、ディレクトリ数から推測しません。各対応プラットフォームは release 選択されたツール（現在は UI Editor GUI）の toolchain archive を生成し、有効なゲームは別 archive を生成します。選択されたゲーム、ツール、必須検証の失敗は Engine 統合全体を失敗させます。ゲーム 0 件でも公開できます。配布物は実行ファイルと必要な依存物であり、Engine SDK やソースコードのパッケージではありません。
 
-`Prepare Release` は commit を固定し、全製品をビルド・検証して tag と Draft Release を準備します。Draft の公開は利用者の別操作です。ゲーム包に入るのはゲーム、資産、runtime 依存物だけで、検証ツールは外側から実行します。
+`Prepare Release` は公開ライン（`tools` または各ゲーム）を一つ選んで commit を固定し、その製品をビルド・検証して tag と Draft Release を準備します。Draft の公開は利用者の別操作です。ゲーム包に入るのはゲーム、資産、runtime 依存物だけで、検証ツールは外側から実行します。
 
 ## 設計資料
 

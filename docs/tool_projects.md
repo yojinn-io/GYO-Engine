@@ -12,7 +12,7 @@ ui_editor,UI design editor,,1,1,1,1,1,1
 object_fps_preview,Object FPS local preview,,1,0,0,1,1,1
 ```
 
-The description/version fields are notes. `enabled` and platform flags permit selection; `default` selects a tool in `AUTO`; `release` selects its default variant for that platform's toolchain. Release selection must be nonempty on all three supported platforms. The CMake parser is authoritative for both local builds and CI; directory discovery and a second Python CSV parser are not selection mechanisms.
+The description/version fields are notes. `enabled` and platform flags permit selection; `default` selects a tool in `AUTO`; `release` selects its default variant for that platform's toolchain. Release selection must be nonempty on every supported package platform (windows-x64, linux-x64, macos-arm64, macos-x64; the `macos` flag covers both macOS architectures). The CMake parser is authoritative for both local builds and CI; directory discovery and a second Python CSV parser are not selection mechanisms.
 
 ```sh
 # Games only; no tool sources are required.

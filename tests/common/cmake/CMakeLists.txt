@@ -1,4 +1,4 @@
-foreach(suite AppRegistry ToolRegistry AcceptanceToken Component RenderOptions MsvcRuntime ProjectComposition ProductPackaging)
+foreach(suite AppRegistry ToolRegistry AcceptanceToken Component RenderOptions MsvcRuntime ProjectComposition ProductPackaging GoService)
     add_test(NAME "cmake.${suite}"
         COMMAND "${CMAKE_COMMAND}"
             "-DGENERATOR=${CMAKE_GENERATOR}"

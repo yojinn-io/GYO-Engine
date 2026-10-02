@@ -1,6 +1,8 @@
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/GyoComponents.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GyoRuntimeDeployment.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/GyoGo.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/GyoAppRegistry.cmake")
 
 # This context belongs to one app directory, never to the engine or its cache.
 function(gyo_app_project)
@@ -181,6 +183,44 @@ function(gyo_app_add_executable role)
         gyo_attach_content(${target} "${GYO_APP_ID}")
     endif()
     set(${EXE_OUT_TARGET} "${target}" PARENT_SCOPE)
+endfunction()
+
+# Declares a Go service built from the app's own Go module (go.mod in the app
+# directory). The explicit host target stages it outside native archives;
+# CI cross-builds the recorded PLATFORMS. Normal native builds never need Go.
+function(gyo_app_add_go_service role)
+    cmake_parse_arguments(PARSE_ARGV 1 SERVICE "" "PACKAGE;OUT_TARGET" "PLATFORMS")
+    if(SERVICE_UNPARSED_ARGUMENTS OR SERVICE_KEYWORDS_MISSING_VALUES OR NOT SERVICE_PACKAGE OR NOT SERVICE_PLATFORMS)
+        message(FATAL_ERROR "gyo_app_add_go_service requires a role, PACKAGE and PLATFORMS")
+    endif()
+    _gyo_app_target_name("${role}" FALSE target)
+    gyo_register_go_module(OWNER "${GYO_APP_ID}" DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TESTS OUT_PATH module)
+    gyo_record_go_service(OWNER "${GYO_APP_ID}" ROLE "${role}" MODULE "${module}"
+        PACKAGE "${SERVICE_PACKAGE}" PLATFORMS ${SERVICE_PLATFORMS})
+    # CI verifies Go modules and cross-builds services only in Linux rows, so a
+    # service owner must be Linux-enabled or its Go would silently go unchecked;
+    # it may also only target platforms its registry entry supports.
+    if(NOT DEFINED GYO_APP_REGISTRY_DATA)
+        message(FATAL_ERROR "gyo_app_add_go_service requires the app registry data (gyo_configure_apps)")
+    endif()
+    gyo_app_registry_package_platforms("${GYO_APP_REGISTRY_DATA}" "${GYO_APP_ID}" registered)
+    if(NOT "linux-x64" IN_LIST registered)
+        message(FATAL_ERROR "Go service ${GYO_APP_ID}/${role} requires its app to be Linux-enabled in the registry: CI verifies Go only on Linux")
+    endif()
+    foreach(platform IN LISTS SERVICE_PLATFORMS)
+        if(NOT platform IN_LIST registered)
+            message(FATAL_ERROR "Go service ${GYO_APP_ID}/${role} platform '${platform}' is not enabled for the app in the registry")
+        endif()
+    endforeach()
+    set(stage "${GYO_OUTPUT_ROOT}/_services/${GYO_APP_ID}/bin")
+    add_custom_target("${target}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${stage}"
+        COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "${GYO_GO_EXECUTABLE}" build
+            -o "${stage}/${target}${CMAKE_EXECUTABLE_SUFFIX}" "${SERVICE_PACKAGE}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+    if(SERVICE_OUT_TARGET)
+        set(${SERVICE_OUT_TARGET} "${target}" PARENT_SCOPE)
+    endif()
 endfunction()
 
 

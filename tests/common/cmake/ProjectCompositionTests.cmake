@@ -168,7 +168,7 @@ if(TEST_OUTPUT_COLLISION)
 endif()
 ]=])
     file(WRITE "${source}/build/acceptance/${tool}/checks.json" [=[
-{"version":1,"checks":[{"name":"startup","command":["@EXECUTABLE:main@"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64"],"gpu":false,"timeout":10}]}
+{"version":1,"checks":[{"name":"startup","command":["@EXECUTABLE:main@"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64","macos-x64"],"gpu":false,"timeout":10}]}
 ]=])
 endforeach()
 # An app config is private and cannot be mixed with another app on one target.

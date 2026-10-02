@@ -1,5 +1,6 @@
 """Exercise the CI and release workflows' actual gates without GitHub API calls."""
 
+import fnmatch
 import itertools
 import json
 import os
@@ -15,7 +16,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
+sys.path.insert(0, str(ROOT / "build/ci/common"))
+from go_checks import SERVICE_RECORD_NAME  # noqa: E402
+from release_channels import TRIAL_LABEL  # noqa: E402
+
+SNAPSHOT_CONDITION = ("github.event_name == 'push' && github.ref == format('refs/heads/{0}', "
+                      "github.event.repository.default_branch) && !github.event.repository.fork")
 NATIVE_SETUP = ROOT / ".github" / "actions" / "native-setup" / "action.yml"
+HOST_TOOLS_DEFINE = r'''"-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS"'''
 
 
 def job_block(workflow: str, name: str) -> str:
@@ -36,6 +44,48 @@ def top_level_block(document: str, key: str) -> str:
     tail = document[match.end():]
     following = re.search(r"(?m)^[A-Za-z_][A-Za-z0-9_-]*:", tail)
     return tail[:following.start()] if following else tail
+
+
+def permission_blocks(workflow: str) -> dict[str, dict[str, str] | str]:
+    """Every permissions key of a workflow, keyed "workflow" or by job name.
+
+    A scalar value (write-all, read-all, {}) is returned as a string; a
+    mapping as {scope: access}. Any permissions key that is neither top-level
+    nor job-level fails, so no block escapes the policy check.
+    """
+    lines = workflow.splitlines()
+    blocks = {}
+    job = None
+    for index, line in enumerate(lines):
+        if heading := re.fullmatch(r"  ([A-Za-z_][A-Za-z0-9_-]*):\s*", line):
+            job = heading.group(1)
+        entry = re.fullmatch(r"( *)permissions:\s*(.*?)\s*", line)
+        if entry is None:
+            continue
+        indent, value = len(entry.group(1)), entry.group(2)
+        if indent == 0:
+            location = "workflow"
+        elif indent == 4 and job is not None:
+            location = job
+        else:
+            raise AssertionError(f"Unexpected permissions key at line {index + 1}: {line!r}")
+        if location in blocks:
+            raise AssertionError(f"Duplicate permissions for {location}")
+        if value and not value.startswith("#"):
+            blocks[location] = value
+            continue
+        scopes = {}
+        for scope_line in lines[index + 1:]:
+            if not scope_line.strip() or scope_line.strip().startswith("#"):
+                continue
+            scope = re.fullmatch(rf"{' ' * (indent + 2)}([a-z-]+):\s*([a-z]+)\s*(?:#.*)?", scope_line)
+            if scope is None:
+                if len(scope_line) - len(scope_line.lstrip()) > indent:
+                    raise AssertionError(f"Unparsed permissions entry: {scope_line!r}")
+                break
+            scopes[scope.group(1)] = scope.group(2)
+        blocks[location] = scopes
+    return blocks
 
 
 def steps_of(job: str, indent: int = 6) -> list[str]:
@@ -129,6 +179,7 @@ class WorkflowGateTests(unittest.TestCase):
         cls.quick = (WORKFLOWS / "cross-platform.yml").read_text(encoding="utf-8")
         cls.release = (WORKFLOWS / "prepare-release.yml").read_text(encoding="utf-8")
         cls.shared = (WORKFLOWS / "build-and-validate.yml").read_text(encoding="utf-8")
+        cls.trial = (WORKFLOWS / "package-trial.yml").read_text(encoding="utf-8")
         cls.setup = NATIVE_SETUP.read_text(encoding="utf-8")
 
     def test_actual_final_gate_rejects_failed_skipped_and_cancelled_jobs(self):
@@ -153,8 +204,29 @@ class WorkflowGateTests(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, prepare == native == "success",
                                  result.stdout + result.stderr)
 
-    def test_only_final_draft_job_can_write_repository_contents(self):
-        self.assertNotRegex(self.quick + self.shared, r"contents:\s*write")
+    def test_only_release_draft_and_snapshot_jobs_can_write_repository_contents(self):
+        # Every permissions key of every workflow, exactly: contents is the only
+        # scope ever written, and pull-requests: read is the only extra scope.
+        read, pull_requests = {"contents": "read"}, {"contents": "read", "pull-requests": "read"}
+        expected = {
+            "cross-platform.yml": {"workflow": read, "scope": pull_requests, "snapshot": {"contents": "write"}},
+            "prepare-release.yml": {"workflow": read, "draft": {"contents": "write"}},
+            "build-and-validate.yml": {"workflow": read},
+            "package-trial.yml": {"workflow": read, "select": pull_requests},
+        }
+        self.assertEqual(sorted(path.name for path in WORKFLOWS.glob("*.yml")), sorted(expected))
+        for name, blocks in expected.items():
+            workflow = (WORKFLOWS / name).read_text(encoding="utf-8")
+            with self.subTest(workflow=name):
+                self.assertEqual(permission_blocks(workflow), blocks)
+                self.assertNotRegex(workflow, r"write-all|read-all")
+        for workflow in (self.quick, self.trial):
+            self.assertNotRegex(workflow, r"pull-requests:\s*write|actions:\s*write")
+        self.assertNotRegex(self.shared + self.trial, r"contents:\s*write")
+        snapshot = job_block(self.quick, "snapshot")
+        self.assertRegex(snapshot, r"(?m)^    permissions:\n      contents: write\n    strategy:$")
+        self.assertNotRegex(self.quick.replace(snapshot, ""), r"contents:\s*write")
+        self.assertNotRegex(snapshot, r"continue-on-error:\s*true|always\(\)|failure\(\)|cancelled\(\)")
         draft = job_block(self.release, "draft")
         self.assertRegex(draft, r"(?m)^    needs: \[prepare, build\]$")
         # No always()/failure()/cancelled() override may bypass GitHub's
@@ -176,22 +248,80 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn("ref: ${{ github.sha }}", step_using(prepare, "actions/checkout"))
         self.assertIn("source_commit: ${{ needs.prepare.outputs.commit }}", build)
         self.assertIn("profile: release", build)
+        # A train builds the toolchain baseline plus only its own product.
+        self.assertIn("product: ${{ needs.prepare.outputs.product }}", build)
+        for output in ("tag", "commit", "prerelease", "train", "product"):
+            self.assertIn(f"{output}: ${{{{ steps.source.outputs.{output} }}}}", prepare)
         self.assertIn("ref: ${{ needs.prepare.outputs.commit }}", step_using(draft, "actions/checkout"))
         self.assertIn("SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}", draft)
         native = job_block(self.shared, "native")
         self.assertIn("ref: ${{ inputs.source_commit }}", step_using(native, "actions/checkout"))
         self.assertIn("SOURCE_COMMIT: ${{ inputs.source_commit }}", native)
         upload = step_using(native, "actions/upload-artifact")
-        download = step_using(draft, "actions/download-artifact")
         self.assertIn("name: gyo-package-${{ matrix.product }}-${{ matrix.platform }}", upload)
-        self.assertIn("pattern: gyo-package-*", download)
-        self.assertNotRegex(download, r"(?m)^\s*(run-id|repository|github-token):")
+        downloads = [step for step in steps_of(draft) if "uses: actions/download-artifact@" in step]
+        self.assertEqual([re.search(r"(?m)^          pattern: (.+)$", step).group(1) for step in downloads],
+                         ["gyo-package-${{ needs.prepare.outputs.product }}-*",
+                          "gyo-service-${{ needs.prepare.outputs.product }}"])
+        for download in downloads:
+            self.assertNotRegex(download, r"(?m)^\s*(run-id|repository|github-token):")
+            self.assertIn("merge-multiple: true", download)
+        command = run_script(step_with(draft, "id: draft"))
+        self.assertIn('--train "$RELEASE_TRAIN"', command)
+        self.assertIn("--service-directory release-services", command)
+        self.assertIn("RELEASE_TRAIN: ${{ needs.prepare.outputs.train }}", draft)
+
+    def test_release_form_selects_one_train_and_serializes_each_train_version(self):
+        dispatch = top_level_block(self.release, "on")
+        for name in ("train", "version", "prerelease"):
+            self.assertRegex(dispatch, rf"(?m)^      {name}:$")
+        self.assertRegex(dispatch, r"(?m)^      train:\n        description: .+\n        required: true\n        type: string$")
+        group = re.search(r"(?m)^  group:\s*(.+)$", top_level_block(self.release, "concurrency")).group(1)
+        self.assertEqual(group, "gyo-prepare-release-${{ inputs.train }}-${{ inputs.version }}")
+        self.assertRegex(top_level_block(self.release, "concurrency"), r"(?m)^  cancel-in-progress: false$")
+        # The shared workflow keeps building every product unless a train narrows it.
+        shared_inputs = top_level_block(self.shared, "on")
+        self.assertRegex(shared_inputs, r"(?m)^      product:\n        description: .+\n        required: false\n        default: ''\n        type: string$")
+        registry = step_with(job_block(self.shared, "prepare"), "id: registry")
+        self.assertIn('--product "$TRAIN_PRODUCT"', registry)
+        self.assertIn("TRAIN_PRODUCT: ${{ inputs.product }}", registry)
+
+    def test_release_form_carries_the_real_device_evidence_reference_to_the_draft(self):
+        # Optional in the form: the helper decides from the train's declared
+        # items whether a reference is required, so tools never need one.
+        dispatch = top_level_block(self.release, "on")
+        self.assertRegex(dispatch, r"(?m)^      l4_evidence:\n        description: .+\n        required: false\n"
+                                   r"        default: ''\n        type: string$")
+        prepare = job_block(self.release, "prepare")
+        draft = job_block(self.release, "draft")
+        # prepare reads the input from the event file and fails before any build.
+        self.assertIn('--event-path "$GITHUB_EVENT_PATH"', run_script(step_with(prepare, "id: source")))
+        self.assertIn("l4_evidence: ${{ steps.source.outputs.l4_evidence }}", prepare)
+        record = step_with(prepare, "name: Record the release candidate")
+        self.assertEqual({key: value for key, value in env_block(record, 8).items() if key.startswith("L4_")},
+                         {"L4_ITEMS": "${{ steps.source.outputs.l4_items }}",
+                          "L4_EVIDENCE": "${{ steps.source.outputs.l4_evidence }}"})
+        step = step_with(draft, "id: draft")
+        self.assertEqual(env_block(step, 8)["L4_EVIDENCE"], "${{ needs.prepare.outputs.l4_evidence }}")
+        # The = form keeps a value starting with '-' from being read as an option.
+        self.assertIn('--l4-evidence="$L4_EVIDENCE"', run_script(step))
+        self.assertIn("real-device (L4)", run_script(step_with(draft, "name: Show the draft")))
+        # Free text reaches scripts only through the environment, never as an expression.
+        self.assertNotIn("${{ inputs.l4_evidence }}", self.release)
+        for job in (prepare, draft):
+            for item in steps_of(job):
+                if re.search(r"(?m)^        run: \|", item):
+                    self.assertNotIn("l4_evidence }}", run_script(item))
+        # Snapshots never carry real-device evidence.
+        self.assertNotIn("l4", job_block(self.quick, "snapshot").lower())
 
     def test_workflow_commands_match_the_release_helper_cli(self):
         # Ask the real CLI parser, without entering any network/mutation path.
         for command, required_options in (
             ("prepare", ("--event-path", "--event-name", "--commit", "--ref", "--output")),
-            ("draft", ("--tag", "--commit", "--prerelease", "--package-directory", "--output")),
+            ("draft", ("--train", "--tag", "--commit", "--prerelease", "--package-directory",
+                       "--service-directory", "--l4-evidence", "--output")),
+            ("snapshot", ("--train", "--commit", "--package-directory", "--service-directory", "--output")),
         ):
             with self.subTest(command=command):
                 result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
@@ -207,7 +337,7 @@ class WorkflowGateTests(unittest.TestCase):
         steps = re.split(r"(?m)^      - ", native)
         for marker, field in (("xcrun -sdk macosx metal -v", "has_shader_bundles"),
                               ("uses: actions/cache@", "has_shader_tools"),
-                              ('ctest --test-dir "build/target/_build/$env:PRESET/host-tools"', "has_shader_tools")):
+                              ('ctest --test-dir "$env:GYO_HOST_TOOLS"', "has_shader_tools")):
             step = next(step for step in steps if marker in step)
             self.assertIn(f"steps.configure.outputs.{field} == 'true'", step)
             self.assertNotIn("exit 0", step)
@@ -305,19 +435,28 @@ xvfb-run() {
             return values
         for name, expected in (("dev", ("OFF", "OFF")), ("test", ("ON", "OFF")),
                                ("core", ("ON", "OFF")), ("ci-windows", ("ON", "ON")),
-                               ("ci-linux", ("ON", "ON")), ("ci-macos", ("ON", "ON"))):
+                               ("ci-linux", ("ON", "ON")), ("ci-macos", ("ON", "ON")),
+                               ("ci-macos-x64", ("ON", "ON"))):
             with self.subTest(preset=name):
                 values = cache(name)
                 self.assertEqual((values["BUILD_TESTING"], values["GYO_ENABLE_PACKAGING"]), expected)
         tests = {preset["name"]: preset for preset in document["testPresets"]}
         self.assertNotIn("dev", tests)
         self.assertEqual(tests["test"]["configurePreset"], "test")
-        for platform in ("windows", "linux", "macos"):
+        for platform in ("windows", "linux", "macos", "macos-x64"):
             self.assertEqual(tests["ci-" + platform]["inherits"], "test")
+        # Both macOS rows share one deployment target and differ only in the
+        # target architecture; the host architecture never comes from a preset.
+        self.assertEqual({name: (cache(name)["CMAKE_OSX_ARCHITECTURES"], cache(name)["CMAKE_OSX_DEPLOYMENT_TARGET"])
+                          for name in ("ci-macos", "ci-macos-x64")},
+                         {"ci-macos": ("arm64", "13.3"), "ci-macos-x64": ("x86_64", "13.3")})
+        build_presets = {preset["name"]: preset["configurePreset"] for preset in document["buildPresets"]}
+        self.assertEqual(build_presets["ci-macos-x64"], "ci-macos-x64")
+        self.assertEqual(tests["ci-macos-x64"]["configurePreset"], "ci-macos-x64")
         # MSVC objects must embed /Z7 debug information to be compiler-cacheable.
         self.assertEqual(cache("ci-windows")["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"],
                          "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
-        for name in ("dev", "test", "core", "ci-linux", "ci-macos"):
+        for name in ("dev", "test", "core", "ci-linux", "ci-macos", "ci-macos-x64"):
             self.assertNotIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", cache(name))
         # MSVC precompiled headers (/Yc, /Fp) are never cacheable; dependencies
         # that enable them must compile without them in CI.
@@ -480,7 +619,9 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("ref: ${{ github.sha }}", step_using(l1, "actions/checkout"))
         configure = run_script(step_with(l1, "id: configure"))
         # The ci-<os> preset owns registry AUTO selection; no product or tool
-        # list may be injected by the merge gate.
+        # list may be injected by the merge gate. Only the host-keyed shader
+        # tool directory, shared with packaging, is placed by the workflow.
+        configure = configure.replace(HOST_TOOLS_DEFINE + " ", "", 1)
         self.assertTrue(configure.startswith("cmake --preset $env:PRESET 2>&1 | Tee-Object"), configure)
         self.assertNotRegex(configure, r"-D")
         for forbidden in ("cmake --install", "run_package_checks", "validate_package", "archive_package",
@@ -548,14 +689,17 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             with self.subTest(job=name):
                 setup = step_with(job, "uses: ./.github/actions/native-setup")
                 self.assertIn("id: setup", setup)
-                for field in ("platform", "toolchain", "preset"):
+                for field in ("platform", "toolchain", "preset", "host"):
                     self.assertIn(f"{field}: ${{{{ matrix.{field} }}}}", setup)
+                self.assertIn("cpu-execution: ${{ matrix.cpu_execution }}", setup)
                 stats = step_with(job, "sccache --stop-server")
                 self.assertIn("if: always() && steps.setup.outcome == 'success'", stats)
         # One owner for hosted toolchain facts: none remain inline in jobs.
         for inline in ("ilammy/msvc-dev-cmd", "apt-get install", "xcode-select", "CMAKE_CXX_COMPILER_LAUNCHER"):
             self.assertNotIn(inline, self.quick + self.shared)
         self.assertIn("steps.setup.outcome == 'success'", step_with(native, "id: core"))
+        # The host-targeted core preset runs once per host, never on a cross-built row.
+        self.assertIn("matrix.host == matrix.platform", step_with(native, "id: core"))
         self.assertNotIn("steps.tools.", native)
         # Only default-branch L1 integration runs may write the compiler cache.
         self.assertNotIn("actions/cache/save@", self.shared + self.release + self.setup)
@@ -569,7 +713,40 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         shader_keys = {re.search(r"(?m)^          key: (shader-tools-.+)$", step_using(job, "actions/cache")).group(1)
                        for job in (native, l1)}
         self.assertEqual(len(shader_keys), 1, "L1 and packaging must share one host-tools cache identity")
-        self.assertIn("-sccache-", shader_keys.pop())
+        shader_key = shader_keys.pop()
+        self.assertIn("-sccache-", shader_key)
+        # Host tools run on the runner: rows sharing a host share the cache,
+        # and the target platform must not split (or leak into) it.
+        self.assertIn("-${{ matrix.host }}-", shader_key)
+        self.assertNotIn("matrix.platform", shader_key)
+        for name, job in (("native", native), ("l1", l1)):
+            with self.subTest(job=name):
+                self.assertIn("GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}", job)
+                self.assertIn("path: ${{ env.GYO_HOST_TOOLS }}", step_using(job, "actions/cache"))
+                self.assertIn(HOST_TOOLS_DEFINE, run_script(step_with(job, "id: configure")))
+                self.assertNotIn("/host-tools", job.replace("_build/host-tools-${{ matrix.host }}", ""))
+
+    def test_cross_built_rows_verify_their_host_and_translated_execution(self):
+        xcode = step_with(self.setup, "name: Select the macOS compiler toolchain", 4)
+        self.assertIn("HOST_PLATFORM: ${{ inputs.host }}", xcode)
+        self.assertIn('if [ "$(uname -m)" != "$host_architecture" ]; then', xcode)
+        self.assertNotIn("ci-macos requires", xcode)
+        rosetta = step_with(self.setup, "name: Provide Rosetta 2 for translated CPU execution", 4)
+        self.assertIn("if: inputs.cpu-execution == 'rosetta2'", rosetta)
+        self.assertIn("arch -x86_64 /usr/bin/true", rosetta)
+        self.assertIn("sudo softwareupdate --install-rosetta --agree-to-license", rosetta)
+        self.assertNotRegex(rosetta, r"exit 0|\|\| true|continue-on-error")
+        # A failed install falls through (bash -e) to the explicit translation check and its error.
+        install = rosetta.index("sudo softwareupdate --install-rosetta --agree-to-license || echo")
+        self.assertLess(install, rosetta.index("::error::Rosetta 2 cannot run x86_64 code"))
+        steps = steps_of(self.setup, 4)
+        # Translation is proven before any compile, so a missing Rosetta fails the row early.
+        self.assertLess(steps.index(rosetta), steps.index(step_with(self.setup, "id: toolchain", 4)))
+        native = job_block(self.shared, "native")
+        self.assertIn("GYO_CPU_EXECUTION: ${{ matrix.cpu_execution }}", native)
+        self.assertIn("--cpu-execution $env:GYO_CPU_EXECUTION", run_script(step_with(native, "id: archive")))
+        for job in (native, job_block(self.quick, "l1")):
+            self.assertIn("Target CPU execution", step_with(job, "GITHUB_STEP_SUMMARY"))
 
     def test_native_setup_routes_every_compile_through_a_restored_cache(self):
         steps = steps_of(self.setup, 4)
@@ -609,6 +786,202 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("if ($status -ne 0) { exit $status }", install)
         self.assertIn(">> $env:GITHUB_PATH", install)
         self.assertNotIn(">> $env:GITHUB_ENV", install)
+
+    def test_go_work_runs_on_linux_only_from_the_configured_build_record(self):
+        native = job_block(self.shared, "native")
+        l1 = job_block(self.quick, "l1")
+        record = '--build-info "build/target/_build/$env:PRESET/gyo-build.json"'
+        go_help = {command: subprocess.run([sys.executable, str(ROOT / "build/ci/common/go_checks.py"), command, "--help"],
+                                           text=True, capture_output=True, timeout=30, check=False)
+                   for command in ("plan", "check", "build")}
+        for name, job, last_native_step in (("l1", l1, "id: core"), ("native", native, "name: Upload this product and platform package")):
+            with self.subTest(job=name):
+                steps = steps_of(job)
+                plan = step_with(job, "id: go_plan")
+                setup = step_using(job, "actions/setup-go")
+                check = step_with(job, "id: go\n")
+                services = step_with(job, "id: go_services")
+                self.assertEqual(job.count("uses: actions/setup-go@"), 1)
+                # Go follows every native step so a Go failure cannot skip
+                # C++ tests, product acceptance or the compiler cache seed.
+                self.assertLess(steps.index(step_with(job, last_native_step)), steps.index(plan))
+                self.assertLess(steps.index(plan), steps.index(setup))
+                self.assertLess(steps.index(setup), steps.index(check))
+                self.assertLess(steps.index(check), steps.index(services))
+                self.assertIn("if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}", plan)
+                self.assertIn("steps.go_plan.outputs.has_go_modules == 'true'", setup)
+                self.assertIn("go-version-file: ${{ steps.go_plan.outputs.go_version_file }}", setup)
+                self.assertIn("cache-dependency-path: ${{ steps.go_plan.outputs.go_dependency_files }}", setup)
+                self.assertRegex(setup, r"(?m)^          cache: true$")
+                self.assertIn("steps.go_setup.outcome == 'success'", check)
+                self.assertIn("steps.go_setup.outcome == 'success'", services)
+                self.assertIn("steps.go_plan.outputs.has_go_services == 'true'", services)
+                self.assertNotIn("continue-on-error", plan + setup + check + services)
+                for command, step in (("plan", plan), ("check", check), ("build", services)):
+                    script = run_script(step).splitlines()
+                    self.assertEqual(len(script), 2, script)
+                    self.assertTrue(script[0].startswith(f"python build/ci/common/go_checks.py {command} {record} "), script[0])
+                    self.assertEqual(script[1], PROPAGATE)
+                    self.assertEqual(go_help[command].returncode, 0, go_help[command].stderr)
+                    for option in re.findall(r"(?<!\S)(--[a-z][a-z-]*)", script[0]):
+                        self.assertIn(option, go_help[command].stdout)
+                    # A packaging row selects its own records; L1 checks them all.
+                    self.assertEqual("--product $env:GYO_PRODUCT" in script[0], name == "native", script[0])
+                # The race detector runs on Linux, the only row that has Go.
+                self.assertIn(" --race ", run_script(check))
+        # A product row checks its module where its C++ tests run (release);
+        # L1 already checks every module for the same commit.
+        self.assertIn("(inputs.profile == 'release' || matrix.kind == 'toolchain')", step_with(native, "id: go\n"))
+        self.assertNotRegex(step_with(l1, "id: go\n"), r"inputs\.profile|matrix\.kind")
+        # Hosted toolchain facts stay in native-setup; Go is provisioned only where recorded.
+        self.assertNotIn("setup-go", self.setup + self.release)
+
+    def test_service_records_and_archives_enter_only_their_product_train(self):
+        native = job_block(self.shared, "native")
+        services = step_with(native, "id: go_services")
+        self.assertIn("--revision $env:SOURCE_COMMIT", run_script(services))
+        # Every Linux packaging row records its services, even none, bound to the commit.
+        plan = run_script(step_with(native, "id: go_plan")).splitlines()[0]
+        self.assertIn(f'--record "build/target/_build/$env:PRESET/go-services/{SERVICE_RECORD_NAME}"', plan)
+        self.assertIn("--revision $env:SOURCE_COMMIT", plan)
+        uploads = [step for step in steps_of(native) if "uses: actions/upload-artifact@" in step]
+        upload = next(step for step in uploads if "go-services" in step)
+        self.assertIn("if: ${{ !cancelled() && steps.go_plan.outcome == 'success' && "
+                      "(steps.go_plan.outputs.has_go_services != 'true' || steps.go_services.outcome == 'success') }}",
+                      upload)
+        name = re.search(r"(?m)^          name: (.+)$", upload).group(1)
+        self.assertEqual(name, "gyo-service-${{ matrix.product }}")
+        self.assertIn("if-no-files-found: error", upload)
+        self.assertIn(f"go-services/{SERVICE_RECORD_NAME}\n", upload)
+        self.assertIn("go-services/gyo-*.tar.gz.sha256", upload)
+        package_name = re.search(r"(?m)^          name: (.+)$", step_using(native, "actions/upload-artifact")).group(1)
+        for job, product in ((job_block(self.release, "draft"), "${{ needs.prepare.outputs.product }}"),
+                             (job_block(self.quick, "snapshot"), "${{ matrix.product }}")):
+            patterns = [re.search(r"(?m)^          pattern: (.+)$", step).group(1)
+                        for step in steps_of(job) if "uses: actions/download-artifact@" in step]
+            self.assertEqual(len(patterns), 2)
+            with self.subTest(job=product):
+                package_pattern, service_pattern = (pattern.replace(product, "sample") for pattern in patterns)
+                artifacts = {artifact.replace("${{ matrix.product }}", owner).replace("${{ matrix.platform }}", platform)
+                             for owner in ("sample", "sample_two", "toolchain")
+                             for platform in ("linux-x64", "macos-x64")
+                             for artifact in (name, package_name)}
+                # A train downloads exactly its product's artifacts, never a
+                # prefix-sharing product's or the other artifact family.
+                self.assertEqual({artifact for artifact in artifacts if fnmatch.fnmatchcase(artifact, package_pattern)},
+                                 {"gyo-package-sample-linux-x64", "gyo-package-sample-macos-x64"})
+                self.assertEqual({artifact for artifact in artifacts if fnmatch.fnmatchcase(artifact, service_pattern)},
+                                 {"gyo-service-sample"})
+        # L1 cross-builds services for the merge gate but never publishes them.
+        self.assertNotIn("gyo-service-", job_block(self.quick, "l1"))
+        self.assertNotIn("--revision", run_script(step_with(job_block(self.quick, "l1"), "id: go_services")))
+        self.assertNotIn("--record", job_block(self.quick, "l1"))
+
+    def test_snapshot_channel_publishes_only_after_a_passed_default_branch_push(self):
+        plan = job_block(self.quick, "snapshot_plan")
+        snapshot = job_block(self.quick, "snapshot")
+        # The gate covers L1 and Quick; GitHub's implicit success() applies
+        # because no status function overrides it.
+        self.assertRegex(plan, r"(?m)^    needs: gate$")
+        self.assertRegex(snapshot, r"(?m)^    needs: \[quick, snapshot_plan\]$")
+        for job in (plan, snapshot):
+            self.assertEqual(re.search(r"(?m)^    if: (.+)$", job).group(1), SNAPSHOT_CONDITION)
+            self.assertIn("ref: ${{ github.sha }}", step_using(job, "actions/checkout"))
+            self.assertIn("persist-credentials: false", step_using(job, "actions/checkout"))
+        self.assertNotRegex(self.quick, r"(?m)^  push:\n    branches: \[(?!master\])")
+        self.assertIn('        run: python build/ci/common/release_channels.py trains --output "$GITHUB_OUTPUT"\n',
+                      step_with(plan, "id: trains"))
+        self.assertIn("trains: ${{ steps.trains.outputs.trains }}", plan)
+        self.assertIn("matrix: ${{ fromJSON(needs.snapshot_plan.outputs.trains) }}", snapshot)
+        self.assertRegex(snapshot, r"fail-fast:\s*false")
+        # One group per train: publication and retention never race.
+        self.assertRegex(snapshot, r"(?m)^    concurrency:\n      group: gyo-snapshot-\$\{\{ matrix\.train \}\}\n"
+                                   r"      cancel-in-progress: false$")
+        command = run_script(step_with(snapshot, "id: snapshot"))
+        self.assertTrue(command.startswith('python build/ci/common/release_pipeline.py snapshot --train "$SNAPSHOT_TRAIN" '
+                                           '--commit "$SOURCE_COMMIT"'), command)
+        self.assertEqual(env_block(step_with(snapshot, "id: snapshot"), 8), {
+            "GH_TOKEN": "${{ github.token }}", "GH_REPO": "${{ github.repository }}",
+            "SNAPSHOT_TRAIN": "${{ matrix.train }}", "SOURCE_COMMIT": "${{ github.sha }}"})
+        help_text = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_channels.py"), "trains", "--help"],
+                                   text=True, capture_output=True, timeout=30, check=False)
+        self.assertEqual(help_text.returncode, 0, help_text.stderr)
+        self.assertIn("--output", help_text.stdout)
+        # The gate stays the only required check and never waits for publication.
+        self.assertRegex(job_block(self.quick, "gate"), r"(?m)^    needs: \[scope, l1, quick\]$")
+
+    def test_trial_channel_packages_labelled_pull_requests_and_manual_runs_only(self):
+        trigger = [line.strip() for line in top_level_block(self.trial, "on").splitlines()
+                   if line.strip() and not line.strip().startswith("#")]
+        self.assertEqual(trigger, ["pull_request:", "types: [opened, synchronize, reopened, labeled]",
+                                   "workflow_dispatch:"])
+        self.assertNotRegex(self.trial, r"paths(-ignore)?:|branches(-ignore)?:|tags(-ignore)?:|push:")
+        group = re.search(r"(?m)^  group:\s*(.+)$", top_level_block(self.trial, "concurrency")).group(1)
+        # Only an event that can select packaging may supersede a running trial.
+        self.assertIn(f"(github.event.action != 'labeled' || github.event.label.name == '{TRIAL_LABEL}')", group)
+        self.assertIn("|| github.run_id }}", group)
+        select = job_block(self.trial, "select")
+        self.assertRegex(select, r"(?m)^    permissions:\n      contents: read\n      pull-requests: read\n    outputs:$")
+        package = job_block(self.trial, "package")
+        self.assertRegex(package, r"(?m)^    needs: select$")
+        self.assertRegex(package, r"(?m)^    if: needs\.select\.outputs\.run_package == 'true'$")
+        self.assertIn("uses: ./.github/workflows/build-and-validate.yml", package)
+        self.assertIn("source_commit: ${{ github.sha }}", package)
+        self.assertIn("profile: quick", package)
+        self.assertNotIn("product:", package)
+        self.assertNotRegex(self.trial, r"release_pipeline|gh release|/releases")
+
+    def test_actual_trial_selector_reads_the_live_pull_request_only_for_pull_requests(self):
+        bash = find_bash()
+        if bash is None:
+            if os.name == "nt":
+                self.skipTest("Native Git Bash cannot execute in this Windows environment")
+            self.fail("Bash is required by the Ubuntu trial selector")
+        script = run_script(step_with(job_block(self.trial, "select"), "release_channels.py trial"))
+        prefix = '''gh() { printf '%s\\n' "$*" >> gh-calls; [ "$GH_STATUS" = 0 ] || return "$GH_STATUS"; printf '%s\\n' "$LIVE_PULL_REQUEST"; }
+python() { printf '%s\\n' "$@" > python-arguments; }
+'''
+        lookup = ["api repos/owner/repository/pulls/7 --jq {state: .state, labels: [.labels[].name]}"]
+        live = json.dumps({"state": "open", "labels": [TRIAL_LABEL]})
+        for event_name, gh_status, expected_gh in (("pull_request", 0, lookup), ("workflow_dispatch", 0, []),
+                                                   ("pull_request", 1, lookup)):
+            with self.subTest(event=event_name, gh_status=gh_status), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                environment = dict(os.environ, EVENT_NAME=event_name, PR_NUMBER="7" if event_name == "pull_request" else "",
+                                   GITHUB_REPOSITORY="owner/repository", GITHUB_EVENT_PATH="event.json",
+                                   GITHUB_OUTPUT="outputs", GITHUB_STEP_SUMMARY="summary",
+                                   GH_STATUS=str(gh_status), LIVE_PULL_REQUEST=live)
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
+                                        cwd=root, env=environment, capture_output=True, text=True, timeout=10)
+                calls = (root / "gh-calls").read_text().splitlines() if (root / "gh-calls").exists() else []
+                self.assertEqual(calls, expected_gh)
+                if gh_status:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse((root / "python-arguments").exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                arguments = (root / "python-arguments").read_text().splitlines()
+                self.assertEqual(arguments[:6], ["build/ci/common/release_channels.py", "trial", "--event-name",
+                                                 event_name, "--event-path", "event.json"])
+                if event_name == "pull_request":
+                    self.assertEqual(arguments[arguments.index("--live-pull-request") + 1], live)
+                else:
+                    self.assertNotIn("--live-pull-request", arguments)
+        help_text = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_channels.py"), "trial", "--help"],
+                                   text=True, capture_output=True, timeout=30, check=False)
+        for option in ("--event-name", "--event-path", "--live-pull-request", "--output", "--summary"):
+            self.assertIn(option, help_text.stdout)
+
+    def test_engine_layer_go_module_is_recorded_in_every_configuration(self):
+        build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
+        # Unconditional (top-level) registration, before any game is added.
+        registration = re.search(r"(?m)^gyo_register_go_module\(OWNER engine DIRECTORY \"\$\{GYO_REPOSITORY_ROOT\}/[^\"]+\"\)$", build)
+        self.assertIsNotNone(registration)
+        self.assertLess(registration.start(), build.index("foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)"))
+        self.assertNotIn(" TESTS", registration.group(0))
+        write = next(line for line in build.splitlines() if "gyo-build.json" in line and line.startswith("file(WRITE"))
+        for field in ("shader_bundles", "shader_host_tools", "go_modules", "go_services"):
+            self.assertIn(f'\\"{field}\\":', write)
 
     def test_every_external_action_is_pinned_to_a_full_commit(self):
         documents = sorted(WORKFLOWS.glob("*.yml")) + sorted((ROOT / ".github" / "actions").glob("*/action.yml"))

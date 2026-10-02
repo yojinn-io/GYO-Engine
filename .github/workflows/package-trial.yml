@@ -1,0 +1,62 @@
+name: Package trial
+run-name: Package trial / ${{ github.event_name }} / ${{ github.ref_name }}
+
+# Trial channel: Quick packages as Actions artifacts for a pull request that
+# carries the "package" label, or for a manual run on any branch. It never
+# creates a tag or release and is not a required check.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a labelled pull request supersedes its older trial. Adding
+# any other label gets its own group, so it can never cancel a running trial.
+concurrency:
+  group: gyo-package-trial-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'package') && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  select:
+    name: Select trial packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Reading the live state and labels needs only read access to pull requests.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_package: ${{ steps.select.outputs.run_package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Decide from the event and the live pull request
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          arguments=(--event-name "$EVENT_NAME" --event-path "$GITHUB_EVENT_PATH")
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # A re-run replays the original payload, and GitHub also sends
+            # labeled for closed pull requests; the current state and labels decide.
+            live=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '{state: .state, labels: [.labels[].name]}')
+            arguments+=(--live-pull-request "$live")
+          fi
+          python build/ci/common/release_channels.py trial "${arguments[@]}" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+  # The same Quick packaging path as default-branch integration; artifacts
+  # keep the shared 14-day retention and are never published.
+  package:
+    name: Trial packages
+    needs: select
+    if: needs.select.outputs.run_package == 'true'
+    uses: ./.github/workflows/build-and-validate.yml
+    with:
+      source_commit: ${{ github.sha }}
+      profile: quick

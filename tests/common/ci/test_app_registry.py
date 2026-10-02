@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from app_registry import ROOT, export_registry
+from app_registry import PLATFORMS, ROOT, export_registry
 import app_registry
 
 
@@ -38,7 +38,8 @@ class RegistryMatrixTests(unittest.TestCase):
                             'disabled,,anything,false,true,true,true\r\n'
                             'linux_only,,,true,false,true,false\r\n')
         self.assertEqual(set(export_registry(self.registry)), {
-            ("sample_app", "windows-x64"), ("sample_app", "macos-arm64"), ("linux_only", "linux-x64")})
+            ("sample_app", "windows-x64"), ("sample_app", "macos-arm64"), ("sample_app", "macos-x64"),
+            ("linux_only", "linux-x64")})
 
     def test_empty_registry_still_builds_every_core_tool_baseline(self):
         self.write_registry("")
@@ -50,7 +51,7 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         outputs = dict(line.split("=", 1) for line in output.read_text().splitlines())
         matrix = json.loads(outputs["build_matrix"])["include"]
-        self.assertEqual(len(matrix), 3)
+        self.assertEqual([row["platform"] for row in matrix], list(PLATFORMS))
         self.assertTrue(all(row["product"] == "toolchain" for row in matrix))
         self.assertTrue(all(row["tools"] for row in matrix))
         self.assertEqual(outputs["has_apps"], "false")
@@ -69,7 +70,8 @@ class RegistryMatrixTests(unittest.TestCase):
                 "variants": {"native": {"components": [], "packageable": owner != "local"}}}))
         tools = app_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {"windows-x64": ["alpha:native"],
-            "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"]})
+            "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"],
+            "macos-x64": ["alpha:native"]})
 
     def test_empty_release_tool_selection_is_rejected(self):
         registry = self.root / "tools.csv"
@@ -82,7 +84,7 @@ class RegistryMatrixTests(unittest.TestCase):
         self.write_registry("")
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         event = self.root / "event.json"
-        event.write_text(json.dumps({"inputs": {"version": "v9876.5432.100", "prerelease": False}}))
+        event.write_text(json.dumps({"inputs": {"train": "tools", "version": "v2026.10.1", "prerelease": False}}))
         output = self.root / "outputs.txt"
         result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"), "prepare",
             "--registry", str(self.registry), "--event-path", str(event), "--event-name", "workflow_dispatch",
@@ -90,7 +92,9 @@ class RegistryMatrixTests(unittest.TestCase):
             "--ref", "refs/heads/main", "--commit", commit, "--output", str(output)],
             capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(output.exists())
+        outputs = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual((outputs["tag"], outputs["train"], outputs["product"]),
+                         ("tools-v2026.10.1", "tools", "toolchain"))
 
 
 if __name__ == "__main__":

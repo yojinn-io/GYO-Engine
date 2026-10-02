@@ -21,6 +21,9 @@ function(_gyo_package_array variable output)
     set(${output} "${array}" PARENT_SCOPE)
 endfunction()
 
+# The package platform names the TARGET architecture. On Apple it follows
+# CMAKE_OSX_ARCHITECTURES, so an x86_64 build on an arm64 host is macos-x64;
+# a multi-architecture (universal) build has no single package platform.
 function(_gyo_package_platform output)
     set(architecture "${CMAKE_SYSTEM_PROCESSOR}")
     if(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID)
@@ -35,8 +38,10 @@ function(_gyo_package_platform output)
         set(platform linux-x64)
     elseif(CMAKE_SYSTEM_NAME STREQUAL Darwin AND architecture MATCHES "^(arm64|aarch64)$")
         set(platform macos-arm64)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL Darwin AND architecture STREQUAL "x86_64")
+        set(platform macos-x64)
     else()
-        message(FATAL_ERROR "No package platform for ${CMAKE_SYSTEM_NAME}/${architecture}; supported targets are Windows x64, Linux x64 and macOS ARM64")
+        message(FATAL_ERROR "No package platform for ${CMAKE_SYSTEM_NAME}/${architecture}; supported targets are Windows x64, Linux x64, macOS ARM64 and macOS x64")
     endif()
     set(${output} "${platform}" PARENT_SCOPE)
 endfunction()

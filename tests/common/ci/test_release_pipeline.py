@@ -6,6 +6,7 @@ import hashlib
 import http.client
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -25,7 +26,8 @@ from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, Transien
                               prepare_draft as _prepare_draft, retry_after_seconds, verify_remote_tag)
 from release_support import (PLATFORMS, Package,
                              ReleaseError, archive_name as _archive_name, checksum_document,
-                             load_packages as _load_packages, prepare_event, validate_archive as _validate_archive)
+                             load_packages as _load_packages, validate_archive as _validate_archive)
+from release_channels import derive_trains, prepare_event
 from package_contract import check_identity, manifest_digest, manifest_path, required_checks, inventory_digest
 
 
@@ -37,6 +39,8 @@ APP = "sample_app"
 ARCHIVE_ROOT = "gyo-" + APP
 METADATA_PATH = ARCHIVE_ROOT + "/build_metadata.json"
 EXPECTED_PAIRS = [(APP, platform) for platform in PLATFORMS]
+# One archive and one checksum per expected product/platform pair.
+ASSET_COUNT = 2 * len(EXPECTED_PAIRS)
 
 
 def archive_name(platform, product=APP):
@@ -245,16 +249,20 @@ class FakeApi:
 
 
 class PrepareTests(unittest.TestCase):
-    def event(self, version="v1.2.3", prerelease=False):
-        return {"inputs": {"version": version, "prerelease": prerelease}}
+    TRAINS = derive_trains(EXPECTED_PAIRS)
+
+    def event(self, version="v1.2.3", prerelease=False, train=APP):
+        return {"inputs": {"train": train, "version": version, "prerelease": prerelease}}
 
     def prepare(self, event=None, git=None, ref="refs/heads/feature/rendering", name="workflow_dispatch"):
-        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit())
+        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit(), trains=self.TRAINS,
+                             evidence=lambda train: ())
 
     def test_manual_branch_request_is_bound_to_event_commit(self):
         git = FakeGit()
         self.assertEqual(self.prepare(git=git),
-                         {"tag": "v1.2.3", "commit": COMMIT, "prerelease": "false"})
+                         {"tag": f"{APP}-v1.2.3", "commit": COMMIT, "prerelease": "false",
+                          "train": APP, "product": APP, "l4_items": "", "l4_evidence": ""})
         self.assertIn(("check-ref-format", "refs/heads/feature/rendering"), git.calls)
         self.assertFalse(any(args[0] == "merge-base" for args in git.calls))
 
@@ -285,7 +293,7 @@ class PrepareTests(unittest.TestCase):
             for value in (True, False, "true", "false"):
                 with self.subTest(version=version, value=value):
                     result = self.prepare(self.event(version, value))
-                    self.assertEqual(result["tag"], version)
+                    self.assertEqual(result["tag"], f"{APP}-{version}")
                     self.assertEqual(result["prerelease"], str(value).lower())
         for version in ("", "1.2.3", "v01.2.3", "v1.2", "v1.2.3-01", "v1.2.3-rc..1",
                         "v1.2.3\ninjected=true", "v1.2.3 ", "v1.2.3/extra", 123):
@@ -324,7 +332,7 @@ class PackageTests(unittest.TestCase):
 
     def test_complete_matrix_loads(self):
         self.write_packages()
-        self.assertEqual(len(load_packages(self.work, COMMIT)), 3)
+        self.assertEqual(len(load_packages(self.work, COMMIT)), len(PLATFORMS))
 
     def test_metadata_only_archives_fail_for_every_platform(self):
         for platform in PLATFORMS:
@@ -352,7 +360,7 @@ class PackageTests(unittest.TestCase):
                         validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_unix_executable_requires_owner_execute_mode(self):
-        for platform in ("linux-x64", "macos-arm64"):
+        for platform in ("linux-x64", "macos-arm64", "macos-x64"):
             for mode in (0o644, 0o001, 0o010):
                 item = package(platform, executable_mode=mode)
                 with self.subTest(platform=platform, mode=mode), self.assertRaisesRegex(ReleaseError, "execute permission"):
@@ -367,7 +375,8 @@ class PackageTests(unittest.TestCase):
         registry = self.work / "projects.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
-        event_path.write_text(json.dumps({"inputs": {"version": "v9876.5432.10101", "prerelease": "false"}}), encoding="utf-8")
+        event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+                                                     "prerelease": "false"}}), encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
             "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch", "--ref", "refs/heads/main",
@@ -376,7 +385,61 @@ class PackageTests(unittest.TestCase):
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
-                         f"tag=v9876.5432.10101\ncommit={commit}\nprerelease=false\n")
+                         f"tag=sample_app-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
+                         "train=sample_app\nproduct=sample_app\nl4_items=\nl4_evidence=\n")
+
+    def test_prepare_cli_requires_the_declared_release_evidence(self):
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        registry, contracts = self.work / "projects.csv", self.work / "contracts"
+        registry.write_text("name,description,version,enabled,windows,linux,macos\n"
+                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
+        contract = contracts / "build/acceptance/sample_app/checks.json"
+        contract.parent.mkdir(parents=True)
+        contract.write_text(json.dumps({"version": 1, "checks": [], "release_evidence": [
+            {"name": "visible_latency", "description": "Timed GUI latency run", "platforms": ["windows-x64"]}]}),
+            encoding="utf-8")
+
+        def prepare(inputs):
+            event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
+            output_path.unlink(missing_ok=True)
+            event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+                                                         "prerelease": "false", **inputs}}), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
+                "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch",
+                "--ref", "refs/heads/main", "--commit", commit, "--output", str(output_path),
+                "--registry", str(registry), "--acceptance-root", str(contracts),
+            ], text=True, capture_output=True, check=False)
+            return result, output_path
+
+        for inputs in ({}, {"l4_evidence": ""}):
+            with self.subTest(inputs=inputs):
+                result, output_path = prepare(inputs)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("requires real-device (L4) release evidence for: visible_latency", result.stderr)
+                self.assertFalse(output_path.exists())
+        result, output_path = prepare({"l4_evidence": "https://github.com/example/repo/discussions/5"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(output_path.read_text(encoding="utf-8").endswith(
+            "l4_items=visible_latency\nl4_evidence=https://github.com/example/repo/discussions/5\n"))
+        # A leading dash fails at prepare, before the release build runs.
+        result, output_path = prepare({"l4_evidence": "-issue#12"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("l4_evidence must not start with '-'", result.stderr)
+        self.assertFalse(output_path.exists())
+
+    def test_draft_cli_reads_a_dash_value_in_the_workflow_form(self):
+        # The workflow passes --l4-evidence=VALUE, which argparse never reads
+        # as another option; the mismatched commit stops before any API call.
+        result = subprocess.run([
+            sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
+            "draft", "--train", "sample_app", "--tag", "sample_app-v1.0.0", "--commit", "0" * 40,
+            "--prerelease", "false", "--package-directory", str(self.work), "--service-directory", str(self.work),
+            "--l4-evidence=-issue#12", "--output", str(self.work / "outputs.txt"),
+        ], text=True, capture_output=True, check=False, env={**os.environ, "GH_TOKEN": "", "GH_REPO": ""})
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("expected one argument", result.stderr)
+        self.assertIn("does not match the selected source commit", result.stderr)
 
     def test_missing_platform_and_unexpected_file_fail(self):
         self.write_packages(packages()[:2])
@@ -498,12 +561,12 @@ class DraftTests(unittest.TestCase):
         redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)
 
-    def test_new_version_creates_tag_then_draft_then_six_assets(self):
+    def test_new_version_creates_tag_then_draft_then_every_asset(self):
         api = FakeApi(release=False, commit=None)
         result = prepare_draft(api, "v1.2.3", COMMIT, True, packages())
         self.assertEqual(result, {
             "release_id": "42", "release_url": api.release["html_url"], "tag": "v1.2.3", "commit": COMMIT})
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertEqual(api.mutations[0], ("POST", "/git/refs", {"ref": "refs/tags/v1.2.3", "sha": COMMIT}))
         self.assertEqual(api.mutations[1][1], "/releases")
         self.assertTrue(api.release["draft"])
@@ -536,7 +599,7 @@ class DraftTests(unittest.TestCase):
         for name, data in attachments.items():
             api.add_asset(name, data)
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6 + len(attachments))
+        self.assertEqual(len(api.assets), ASSET_COUNT + len(attachments))
         for name, data in attachments.items():
             self.assertEqual(api.download(api.assets[name]["id"]), data)
         self.assertFalse(any(method in ("PATCH", "DELETE") for method, _, _ in api.calls))
@@ -548,7 +611,7 @@ class DraftTests(unittest.TestCase):
 
         def upload_with_unexpected_asset(release_id, name, data):
             result = upload(release_id, name, data)
-            if api.upload_attempts == 6:
+            if api.upload_attempts == ASSET_COUNT:
                 api.add_asset(extra.name, extra.data)
             return result
 
@@ -571,7 +634,7 @@ class DraftTests(unittest.TestCase):
         api = FakeApi()
         api.release["target_commitish"] = "master"
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertEqual(api.release["target_commitish"], "master")
 
     def test_missing_platform_or_invalid_archive_never_creates_a_tag(self):
@@ -628,8 +691,8 @@ class DraftTests(unittest.TestCase):
         self.assertEqual(len(api.assets), 1)
         api.fail_upload_at = None
         prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
-        self.assertEqual(len(api.assets), 6)
-        self.assertEqual(len(api.mutations), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
+        self.assertEqual(len(api.mutations), ASSET_COUNT)
 
     def test_orphan_checksum_requires_matching_archive(self):
         api = FakeApi()
@@ -639,7 +702,7 @@ class DraftTests(unittest.TestCase):
             prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
         self.assertEqual(api.mutations, [])
         prepare_draft(api, "v1.2.3", COMMIT, False, [item, *packages()[1:]])
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
 
     def test_tag_is_rechecked_between_uploads(self):
         api = FakeApi()
@@ -661,7 +724,7 @@ class DraftTests(unittest.TestCase):
         api = FakeApi(release=False, commit=None)
         api.race_tag = api.race_create = api.race_upload = True
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertTrue(api.release["draft"])
 
     def test_annotated_tag_is_peeled(self):

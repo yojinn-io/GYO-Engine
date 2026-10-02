@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Validate a manual release request and prepare a verified, unpublished draft."""
+"""Deliver one release train: a verified, unpublished draft (Prepare Release)
+or a published snapshot prerelease with retention (default-branch pushes)."""
 
 import argparse
 from email.utils import parsedate_to_datetime
@@ -19,10 +20,14 @@ import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, load_packages,
-                             parse_boolean, prepare_event, validate_archive, validate_checksum,
-                             validate_commit, validate_version, validate_expected_pairs)
-from app_registry import release_products, export_tools
+from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, describe_item,
+                             load_packages, load_services, parse_boolean, service_archive_name, validate_checksum,
+                             validate_commit, validate_item, validate_tag_name, validate_expected_pairs)
+from release_channels import (SNAPSHOT_KEEP, Train, derive_trains, latest_other_snapshot, parse_release_tag,
+                              parse_snapshot_tag, prepare_event, render_notes, resolve_train,
+                              select_expired_snapshots, select_orphan_snapshot_tags, snapshot_tag,
+                              train_release_evidence, validate_evidence_reference)
+from app_registry import export_registry, export_tools
 
 
 class ApiError(ReleaseError):
@@ -38,9 +43,13 @@ class TransientApiError(ReleaseError):
 
 RETRY_DELAYS = (2, 4, 8)
 TRANSIENT_HTTP_STATUS = frozenset((500, 502, 503, 504))
+_PLATFORM_ALTERNATIVES = "(?:" + "|".join(re.escape(platform) for platform in PLATFORMS) + ")"
 MANAGED_PACKAGE_ASSET = re.compile(
-    r"gyo-[a-z][a-z0-9_]*-(?:" + "|".join(re.escape(platform) for platform in PLATFORMS)
-    + r")\.tar\.gz(?:\.sha256)?\Z")
+    r"gyo-[a-z][a-z0-9_]*-" + _PLATFORM_ALTERNATIVES + r"\.tar\.gz(?:\.sha256)?\Z")
+# gyo-<owner>-<role>-<platform>: disjoint from packages because an owner or a
+# role never contains '-' and every platform is exactly <os>-<arch>.
+MANAGED_SERVICE_ASSET = re.compile(
+    r"gyo-[a-z][a-z0-9_]*-[a-z][a-z0-9_]*-" + _PLATFORM_ALTERNATIVES + r"\.tar\.gz(?:\.sha256)?\Z")
 
 
 def retry_after_seconds(value: str | None) -> float | None:
@@ -101,7 +110,10 @@ class GitHubApi:
             raise ReleaseError(f"{operation}: connection failed ({type(error.reason).__name__})") from None
         except (TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
             raise TransientApiError(f"{operation}: {type(error).__name__}") from None
-        return result if binary else json.loads(result)
+        if binary:
+            return result
+        # DELETE answers 204 No Content.
+        return json.loads(result) if result else None
 
     def request(self, method: str, path: str, data=None):
         encoded = None if data is None else json.dumps(data).encode("utf-8")
@@ -139,18 +151,23 @@ def verify_remote_tag(api, tag: str, commit: str) -> None:
         raise ReleaseError("Remote version tag is missing or moved away from the verified commit")
 
 
-def find_release(api, tag: str):
+def list_releases(api) -> list[dict]:
     # The tag endpoint is not sufficient for drafts. Authenticated release lists
-    # include drafts for a token with push access; examine every page for conflicts.
-    matches = []
+    # include drafts for a token with push access; examine every page.
+    releases = []
     for page in range(1, 101):
         batch = api.request("GET", f"/releases?per_page=100&page={page}")
-        matches.extend(release for release in batch if release.get("tag_name") == tag)
+        releases.extend(batch)
         if len(batch) < 100:
-            if len(matches) > 1:
-                raise ReleaseError("Multiple releases use this version tag; resolve the conflict manually")
-            return matches[0] if matches else None
+            return releases
     raise ReleaseError("Too many releases to safely identify the requested draft")
+
+
+def find_release(api, tag: str):
+    matches = [release for release in list_releases(api) if release.get("tag_name") == tag]
+    if len(matches) > 1:
+        raise ReleaseError("Multiple releases use this version tag; resolve the conflict manually")
+    return matches[0] if matches else None
 
 
 def verify_draft(release: dict, tag: str, expected_id: int | None = None) -> int:
@@ -186,10 +203,12 @@ def release_assets(api, release_id: int) -> dict:
     raise ReleaseError("Too many release assets")
 
 
-def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> list[tuple[str, bytes]]:
+def plan_uploads(api, assets: dict, packages: list[Package], commit: str,
+                 *, profile: str = "release") -> list[tuple[str, bytes]]:
     """Verify existing assets before any mutation, tolerating nondeterministic rebuild bytes."""
     expected = {name for package in packages for name in (package.name, package.name + ".sha256")}
-    unexpected = sorted(name for name in assets if MANAGED_PACKAGE_ASSET.fullmatch(name) and name not in expected)
+    unexpected = sorted(name for name in assets if name not in expected and (
+        MANAGED_PACKAGE_ASSET.fullmatch(name) or MANAGED_SERVICE_ASSET.fullmatch(name)))
     if unexpected:
         raise ReleaseError(f"Draft contains unexpected managed application package assets: {unexpected}. "
                            "No assets were deleted or replaced.")
@@ -206,7 +225,7 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
                     "placeholder before rerunning the failed job; no asset was deleted automatically")
         if archive_asset:
             existing = api.download(archive_asset["id"])
-            validate_archive(package.name, existing, package.product, package.platform, commit)
+            validate_item(package, existing, commit, profile=profile)
             if checksum_asset:
                 validate_checksum(package.name, existing, api.download(checksum_asset["id"]))
             else:
@@ -222,24 +241,33 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str) -> lis
 
 
 def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[Package], *,
-                  expected_pairs: list[tuple[str, str]]) -> dict:
+                  expected_pairs: list[tuple[str, str]], expected_services=frozenset(),
+                  profile: str = "release", notes: str | None = None, generate_notes: bool = True) -> dict:
+    """Tag the commit and fill an unpublished draft with exactly the expected
+    archives: native packages (expected_pairs) and service archives
+    (expected_services as owner/role/platform). Notes only seed a new draft."""
     validate_commit(commit)
-    validate_version(tag)
+    validate_tag_name(tag)
     prerelease = parse_boolean(prerelease)
     expected = validate_expected_pairs(expected_pairs)
-    actual = [(package.product, package.platform) for package in packages]
+    actual = [package.identity for package in packages if package.role is None]
+    services = [package.identity for package in packages if package.role is not None]
     if len(actual) != len(set(actual)) or set(actual) != expected:
         raise ReleaseError("Draft preparation requires exactly the configured product/platform packages")
+    if len(services) != len(set(services)) or set(services) != set(expected_services):
+        raise ReleaseError("Draft preparation requires exactly the recorded service archives")
     for package in packages:
-        if package.name != archive_name(package.product, package.platform):
+        name = (archive_name(package.product, package.platform) if package.role is None
+                else service_archive_name(package.product, package.role, package.platform))
+        if package.name != name:
             raise ReleaseError("Package filename does not match its platform")
         validate_checksum(package.name, package.data, package.checksum_data)
-        validate_archive(package.name, package.data, package.product, package.platform, commit)
+        validate_item(package, package.data, commit, profile=profile)
     release = find_release(api, tag)
     if release is not None:
         release_id = verify_draft(release, tag)
         # Inspect every existing package before uploading anything.
-        uploads = plan_uploads(api, release_assets(api, release_id), packages, commit)
+        uploads = plan_uploads(api, release_assets(api, release_id), packages, commit, profile=profile)
     resolved = remote_tag_commit(api, tag)
     if resolved is not None and resolved != commit:
         raise ReleaseError("Existing version tag points to a different commit; tags are never moved")
@@ -264,9 +292,11 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
         release = find_release(api, tag)
         if release is None:
             try:
+                # GitHub prepends a given body to generated notes.
                 release = api.request("POST", "/releases", {
                     "tag_name": tag, "target_commitish": commit, "name": tag,
-                    "draft": True, "prerelease": prerelease, "generate_release_notes": True,
+                    "draft": True, "prerelease": prerelease, "generate_release_notes": generate_notes,
+                    **({"body": notes} if notes else {}),
                 })
             except ApiError as error:
                 if error.status in (403, 404):
@@ -279,7 +309,7 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
                 if release is None:
                     raise
         release_id = verify_draft(release, tag)
-        uploads = plan_uploads(api, release_assets(api, release_id), packages, commit)
+        uploads = plan_uploads(api, release_assets(api, release_id), packages, commit, profile=profile)
     for name, data in uploads:
         # The human Publish button can be clicked while this job is active.
         # Stop immediately if the draft became public; never PATCH it back to draft.
@@ -297,7 +327,7 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
                 raise ReleaseError(f"Draft asset already exists with different bytes: {name}") from error
         print(f"Verified draft asset: {name}")
     refresh_draft(api, release_id, tag, commit)
-    remaining = plan_uploads(api, release_assets(api, release_id), packages, commit)
+    remaining = plan_uploads(api, release_assets(api, release_id), packages, commit, profile=profile)
     if remaining:
         raise ReleaseError("Draft is still missing required platform assets after upload")
     release = refresh_draft(api, release_id, tag, commit)
@@ -311,14 +341,13 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
     return {"release_id": str(release_id), "release_url": release_url, "tag": tag, "commit": commit}
 
 
-def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
-                               packages: list[Package], *, expected_pairs: list[tuple[str, str]], sleep=time.sleep) -> dict:
+def with_retries(operation, *, sleep=time.sleep):
     # A failed POST may already have succeeded remotely. Restart reconciliation,
     # never the individual POST: verify the tag, draft and existing packages again.
     attempts = len(RETRY_DELAYS) + 1
     for attempt in range(attempts):
         try:
-            return prepare_draft(api, tag, commit, prerelease, packages, expected_pairs=expected_pairs)
+            return operation()
         except (ApiError, TransientApiError) as error:
             if isinstance(error, ApiError) and error.status not in TRANSIENT_HTTP_STATUS:
                 raise
@@ -338,54 +367,218 @@ def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
     raise AssertionError("Unreachable retry state")
 
 
+def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
+                               packages: list[Package], *, sleep=time.sleep, **options) -> dict:
+    return with_retries(lambda: prepare_draft(api, tag, commit, prerelease, packages, **options), sleep=sleep)
+
+
+def snapshot_tag_refs(api, train_id: str) -> list[str]:
+    prefix = f"{train_id}-snapshot-"
+    refs = api.request("GET", "/git/matching-refs/tags/" + urllib.parse.quote(prefix, safe=""))
+    if not isinstance(refs, list):
+        raise ReleaseError("GitHub returned an invalid tag listing")
+    return [ref["ref"].removeprefix("refs/tags/") for ref in refs
+            if isinstance(ref, dict) and isinstance(ref.get("ref"), str) and ref["ref"].startswith("refs/tags/")]
+
+
+def delete_snapshot_tag(api, train_id: str, tag: str) -> None:
+    if parse_snapshot_tag(train_id, tag) is None:
+        raise ReleaseError(f"Refusing to delete a tag that is not a snapshot tag of {train_id}: {tag!r}")
+    try:
+        api.request("DELETE", "/git/refs/tags/" + urllib.parse.quote(tag, safe=""))
+    except ApiError as error:
+        # GitHub answers 422 for a missing ref; anything still present is an error.
+        if error.status not in (404, 422) or remote_tag_commit(api, tag) is not None:
+            raise
+
+
+def delete_snapshot(api, train_id: str, release: dict) -> None:
+    """Delete one expired snapshot prerelease, then its snapshot tag."""
+    tag = release.get("tag_name")
+    release_id = release.get("id")
+    # Re-checked here so no other tag or release can ever reach a DELETE.
+    if (parse_snapshot_tag(train_id, tag) is None or release.get("draft") is not False
+            or release.get("prerelease") is not True or not isinstance(release_id, int) or isinstance(release_id, bool)):
+        raise ReleaseError(f"Refusing to delete a release that is not a published snapshot: {tag!r}")
+    print(f"Deleting expired snapshot {tag}", flush=True)
+    try:
+        api.request("DELETE", f"/releases/{release_id}")
+    except ApiError as error:
+        if error.status != 404:  # A concurrent cleanup already removed it.
+            raise
+    delete_snapshot_tag(api, train_id, tag)
+
+
+def is_strict_ancestor(api, ancestor: str, descendant: str) -> bool:
+    """True when `ancestor` is reachable from `descendant` and differs from it,
+    from the repository history (GitHub's compare), not from any date."""
+    validate_commit(ancestor)
+    validate_commit(descendant)
+    comparison = api.request("GET", f"/compare/{descendant}...{ancestor}?per_page=1")
+    status = comparison.get("status") if isinstance(comparison, dict) else None
+    if status not in ("ahead", "behind", "identical", "diverged"):
+        raise ReleaseError("GitHub returned an invalid commit comparison")
+    return status == "behind"
+
+
+def superseding_snapshot(api, releases, train: Train, tag: str, commit: str) -> str | None:
+    """The tag of a published snapshot whose commit descends from `commit`.
+
+    A rerun of an older default-branch run then must not publish: publication
+    order decides retention, so it would rank above the newer state."""
+    latest = latest_other_snapshot(releases, train.id, tag)
+    if latest is None:
+        return None
+    latest_commit = remote_tag_commit(api, latest["tag_name"])
+    if latest_commit is None or not is_strict_ancestor(api, commit, latest_commit):
+        return None
+    return latest["tag_name"]
+
+
+def publish_snapshot(api, train: Train, tag: str, commit: str, packages: list[Package], *,
+                     expected_pairs, expected_services, notes: str, keep: int = SNAPSHOT_KEEP) -> dict:
+    """Publish one train's snapshot prerelease, then apply its retention.
+
+    The archives go through the verified draft path first and the release is
+    published only when complete, so an interrupted run leaves a draft that a
+    rerun reconciles. Reruns of a published snapshot only verify it.
+    """
+    if parse_snapshot_tag(train.id, tag) is None:
+        raise ReleaseError(f"Not a snapshot tag of train {train.id}: {tag!r}")
+    releases = list_releases(api)
+    existing = [release for release in releases if release.get("tag_name") == tag]
+    if len(existing) > 1:
+        raise ReleaseError("Multiple releases use this snapshot tag; resolve the conflict manually")
+    result = {"tag": tag, "commit": commit, "published": "false", "release_url": ""}
+    published = bool(existing) and existing[0].get("draft") is False
+    superseded = None if published else superseding_snapshot(api, releases, train, tag, commit)
+    if superseded:
+        # An interrupted draft of this commit, if any, is left unpublished.
+        print(f"Skipping snapshot {tag}: snapshot {superseded} of {train.id} already covers a newer "
+              "commit of the default branch", flush=True)
+    elif published:
+        release = existing[0]
+        if release.get("prerelease") is not True:
+            raise ReleaseError(f"Snapshot {tag} was promoted to a full release; it is never modified")
+        verify_remote_tag(api, tag, commit)
+        if plan_uploads(api, release_assets(api, release["id"]), packages, commit, profile="quick"):
+            raise ReleaseError(f"Published snapshot {tag} lacks verified archives; it is never modified. "
+                               "Delete it manually to republish this commit")
+        print(f"Snapshot {tag} is already published and verified", flush=True)
+        result.update(published="true", release_url=release.get("html_url", ""))
+    else:
+        draft = prepare_draft(api, tag, commit, True, packages, expected_pairs=expected_pairs,
+                              expected_services=expected_services, profile="quick", notes=notes,
+                              generate_notes=False)
+        release_id = int(draft["release_id"])
+        refresh_draft(api, release_id, tag, commit)
+        release = api.request("PATCH", f"/releases/{release_id}",
+                              {"draft": False, "prerelease": True, "make_latest": "false"})
+        if (not isinstance(release, dict) or release.get("id") != release_id or release.get("tag_name") != tag
+                or release.get("draft") is not False or release.get("prerelease") is not True):
+            raise ReleaseError("GitHub did not publish the snapshot as a prerelease")
+        verify_remote_tag(api, tag, commit)
+        print(f"Published snapshot {tag} with {len(packages)} verified archives", flush=True)
+        result.update(published="true", release_url=draft["release_url"])
+    releases = list_releases(api)
+    expired = select_expired_snapshots(releases, train.id, keep, protect={tag})
+    for release in expired:
+        delete_snapshot(api, train.id, release)
+    # The same train's runs are serialized, so a snapshot tag without any
+    # release is debris of an interrupted run, never another run's work.
+    orphans = select_orphan_snapshot_tags(snapshot_tag_refs(api, train.id), releases, train.id, protect={tag})
+    for orphan in orphans:
+        print(f"Deleting orphaned snapshot tag {orphan}", flush=True)
+        delete_snapshot_tag(api, train.id, orphan)
+    result["deleted"] = ",".join([*(release["tag_name"] for release in expired), *orphans])
+    return result
+
+
 def write_outputs(path: Path, result: dict) -> None:
     with path.open("a", encoding="utf-8") as stream:
         for key, value in result.items():
             stream.write(f"{key}={value}\n")
 
 
+def load_train_archives(train: Train, commit: str, package_directory: Path, service_directory: Path | None,
+                        selected_tools: dict[str, list[str]], profile: str):
+    """Exactly one train's archives: its packages and its recorded services."""
+    tool_owners = {platform: {tool.split(":", 1)[0] for tool in tools} for platform, tools in selected_tools.items()}
+    packages = load_packages(package_directory, commit, train.pairs, expected_tool_owners=tool_owners, profile=profile)
+    services, expected_services = load_services(service_directory, commit, train.product, train.platforms)
+    return packages + services, expected_services
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    prepare = commands.add_parser("prepare")
+    registry = argparse.ArgumentParser(add_help=False)
+    registry.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
+    registry.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
+    registry.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
+    registry.add_argument("--acceptance-root", type=Path,
+                          help="Root holding build/acceptance/<owner>/checks.json, for isolated validation")
+    prepare = commands.add_parser("prepare", parents=[registry])
     prepare.add_argument("--event-path", type=Path, required=True)
     prepare.add_argument("--event-name", required=True)
     prepare.add_argument("--commit", required=True)
     prepare.add_argument("--ref", required=True)
     prepare.add_argument("--output", type=Path, required=True)
-    prepare.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
-    prepare.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
-    prepare.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
-    draft = commands.add_parser("draft")
+    draft = commands.add_parser("draft", parents=[registry])
+    draft.add_argument("--train", required=True)
     draft.add_argument("--tag", required=True)
     draft.add_argument("--commit", required=True)
     draft.add_argument("--prerelease", choices=("true", "false"), required=True)
     draft.add_argument("--package-directory", type=Path, required=True)
+    draft.add_argument("--service-directory", type=Path, required=True)
+    draft.add_argument("--l4-evidence", default="",
+                       help="Real-device (L4) evidence reference; required when the train declares items")
     draft.add_argument("--output", type=Path, required=True)
-    draft.add_argument("--registry", type=Path, help="Project registry override for isolated validation")
-    draft.add_argument("--tool-registry", type=Path, help="Tool registry override for isolated validation")
-    draft.add_argument("--repository-root", type=Path, help="Tool descriptor source root for isolated validation")
+    snapshot = commands.add_parser("snapshot", parents=[registry])
+    snapshot.add_argument("--train", required=True)
+    snapshot.add_argument("--commit", required=True)
+    snapshot.add_argument("--package-directory", type=Path, required=True)
+    snapshot.add_argument("--service-directory", type=Path, required=True)
+    snapshot.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         selected_tools = export_tools(args.tool_registry, repository_root=args.repository_root)
+        # Trains come from the fixed checkout's CMake registry, never from
+        # downloaded artifacts or their manifests.
+        trains = derive_trains(export_registry(args.registry))
         if args.command == "prepare":
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
-            result = prepare_event(args.event_name, event, args.commit, args.ref)
-            validate_expected_pairs(release_products(args.registry))
+            result = prepare_event(args.event_name, event, args.commit, args.ref, trains=trains,
+                                   evidence=lambda train: train_release_evidence(train, args.acceptance_root))
         else:
-            # The checkout is fixed by the workflow. Rebuild expectations from its
-            # CMake registry, never from downloaded artifacts or their manifests.
             from release_support import git
             if git("rev-parse", "HEAD") != args.commit:
-                raise ReleaseError("Draft checkout does not match the selected source commit")
-            expected = release_products(args.registry)
-            tool_owners = {platform: {tool.split(":", 1)[0] for tool in tools}
-                           for platform, tools in selected_tools.items()}
-            packages = load_packages(args.package_directory, args.commit, expected,
-                                     expected_tool_owners=tool_owners)
+                raise ReleaseError("Release checkout does not match the selected source commit")
+            train = resolve_train(trains, args.train)
+            profile = "release" if args.command == "draft" else "quick"
+            items, expected_services = load_train_archives(train, args.commit, args.package_directory,
+                                                           args.service_directory, selected_tools, profile)
+            # A formal draft re-derives the required L4 items from the fixed
+            # checkout; snapshots never carry real-device evidence.
+            evidence = train_release_evidence(train, args.acceptance_root) if args.command == "draft" else ()
+            reference = (validate_evidence_reference(train, evidence, args.l4_evidence)
+                         if args.command == "draft" else "")
+            notes = render_notes(train=train, commit=args.commit, profile=profile,
+                                 descriptions=[describe_item(item, profile) for item in items],
+                                 snapshot=args.command == "snapshot", evidence=evidence,
+                                 evidence_reference=reference)
             api = GitHubApi(os.environ.get("GH_REPO", ""), os.environ.get("GH_TOKEN", ""))
-            result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease),
-                                                packages, expected_pairs=expected)
+            if args.command == "draft":
+                parse_release_tag(train, args.tag)
+                result = prepare_draft_with_retries(api, args.tag, args.commit, parse_boolean(args.prerelease),
+                                                    items, expected_pairs=train.pairs,
+                                                    expected_services=expected_services, notes=notes)
+            else:
+                committed_at = int(git("log", "-1", "--format=%ct", args.commit))
+                tag = snapshot_tag(train, args.commit, committed_at)
+                result = with_retries(lambda: publish_snapshot(
+                    api, train, tag, args.commit, items, expected_pairs=train.pairs,
+                    expected_services=expected_services, notes=notes))
         write_outputs(args.output, result)
         print(json.dumps(result))
     except (ReleaseError, OSError, ValueError) as error:

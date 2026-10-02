@@ -57,31 +57,59 @@ class NativeLinkageTests(unittest.TestCase):
             with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, "Unregistered"):
                 validate_product_namespace([relative], "toolchain", contract)
 
+    def macos_stage(self, root: Path, platform: str) -> Path:
+        stage = root / "stage"
+        contract = tools_manifest()
+        contract["platform"] = platform
+        contract["native_files"] = ["lib/libSDL3.0.dylib"]
+        for relative in ("bin/canvas", "bin/packer", "lib/libSDL3.0.dylib"):
+            path = stage / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture")
+        path = stage / manifest_path("toolchain")
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(contract))
+        return stage
+
+    @staticmethod
+    def macos_tools(architectures):
+        """Fake otool and lipo; architectures maps a file name to lipo -archs."""
+        def run(command, **kwargs):
+            if command[0] == "lipo":
+                return architectures.get(Path(command[-1]).name, architectures["*"])
+            if Path(command[-1]).name == "packer":
+                return "/usr/lib/libSystem.B.dylib"
+            if command[1] == "-L":
+                return "@rpath/libSDL3.0.dylib"
+            return "path @executable_path/../lib (offset 12)"
+        return run
+
     def test_macos_cli_does_not_require_gui_rpath(self):
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            stage = root / "stage"
-            contract = tools_manifest()
-            contract["platform"] = "macos-arm64"
-            contract["native_files"] = ["lib/libSDL3.0.dylib"]
-            for relative in ("bin/canvas", "bin/packer", "lib/libSDL3.0.dylib"):
-                path = stage / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("fixture")
-            path = stage / manifest_path("toolchain")
-            path.parent.mkdir(parents=True)
-            path.write_text(json.dumps(contract))
+        for platform, architecture in (("macos-arm64", "arm64"), ("macos-x64", "x86_64")):
+            with self.subTest(platform=platform), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                stage = self.macos_stage(root, platform)
+                with patch("validate_package.platform.system", return_value="Darwin"), \
+                        patch("validate_package.subprocess.check_output",
+                              side_effect=self.macos_tools({"*": architecture + "\n"})) as tools:
+                    validate_linkage(stage, "toolchain", root / "logs")
+                checked = {Path(call.args[0][-1]).name for call in tools.call_args_list if call.args[0][0] == "lipo"}
+                self.assertEqual(checked, {"canvas", "packer", "libSDL3.0.dylib"})
 
-            def otool(command, **kwargs):
-                if Path(command[-1]).name == "packer":
-                    return "/usr/lib/libSystem.B.dylib"
-                if command[1] == "-L":
-                    return "@rpath/libSDL3.0.dylib"
-                return "path @executable_path/../lib (offset 12)"
-
-            with patch("validate_package.platform.system", return_value="Darwin"), \
-                    patch("validate_package.subprocess.check_output", side_effect=otool):
-                validate_linkage(stage, "toolchain", root / "logs")
+    def test_macos_binaries_must_carry_exactly_the_target_architecture(self):
+        # A cross-built x86_64 package must not ship host (arm64) or universal code.
+        for platform, architectures in (
+                ("macos-x64", {"*": "x86_64", "packer": "arm64"}),
+                ("macos-x64", {"*": "x86_64", "libSDL3.0.dylib": "x86_64 arm64"}),
+                ("macos-arm64", {"*": "arm64", "canvas": "x86_64"}),
+                ("macos-arm64", {"*": ""})):
+            with self.subTest(platform=platform, architectures=architectures), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                stage = self.macos_stage(root, platform)
+                with patch("validate_package.platform.system", return_value="Darwin"), \
+                        patch("validate_package.subprocess.check_output", side_effect=self.macos_tools(architectures)), \
+                        self.assertRaisesRegex(RuntimeError, f"{platform} requires exactly"):
+                    validate_linkage(stage, "toolchain", root / "logs")
 
     def test_duplicate_paths_and_noncanonical_roles_are_rejected(self):
         for mutation in ("path", "role"):

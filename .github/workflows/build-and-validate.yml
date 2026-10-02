@@ -11,6 +11,11 @@ on:
         description: quick or release acceptance
         required: true
         type: string
+      product:
+        description: One release train product beside the toolchain baseline; empty builds every product
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -42,7 +47,9 @@ jobs:
           esac
       - name: Export the authoritative project selection
         id: registry
-        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT"
+        env:
+          TRAIN_PRODUCT: ${{ inputs.product }}
+        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
       - name: Test package, draft preparation and smoke failure policies
         run: python -m unittest discover -s tests/common/ci -v
 
@@ -53,13 +60,17 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      # Three toolchain products always exist, including an entirely empty app registry.
+      # One toolchain product per release platform always exists, including an entirely empty app registry.
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     defaults:
       run:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
+      # Host tools are keyed by the runner, not the target: rows that share a
+      # host (macOS arm64 and its x86_64 cross build) share one shader tool.
+      GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}
+      GYO_CPU_EXECUTION: ${{ matrix.cpu_execution }}
       GYO_PRODUCT: ${{ matrix.product }}
       GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}
       # VsDevCmd owns Platform (= x64); Windows env names are case-insensitive.
@@ -84,12 +95,14 @@ jobs:
           platform: ${{ matrix.platform }}
           toolchain: ${{ matrix.toolchain }}
           preset: ${{ matrix.preset }}
+          host: ${{ matrix.host }}
+          cpu-execution: ${{ matrix.cpu_execution }}
 
       - name: Configure the selected product and engine verification
         id: configure
         run: |
           $apps = if ($env:GYO_PRODUCT -eq 'toolchain') { '' } else { $env:GYO_PRODUCT }
-          cmake --preset $env:PRESET "-DGYO_APPS=$apps" "-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
+          cmake --preset $env:PRESET "-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS" "-DGYO_APPS=$apps" "-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
           "GYO_BUILD_CONFIG=$($build.configuration)" >> $env:GITHUB_ENV
@@ -112,8 +125,8 @@ jobs:
         if: steps.configure.outputs.has_shader_tools == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: build/target/_build/${{ matrix.preset }}/host-tools
-          key: shader-tools-v2-sccache-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
+          path: ${{ env.GYO_HOST_TOOLS }}
+          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
 
       - name: Build the selected graph and its tests
         id: build
@@ -132,14 +145,16 @@ jobs:
         id: shaders
         if: always() && inputs.profile == 'release' && steps.build.outcome == 'success' && steps.configure.outputs.has_shader_tools == 'true'
         run: |
-          ctest --test-dir "build/target/_build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
+          ctest --test-dir "$env:GYO_HOST_TOOLS" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # The core preset leaves MSVC on /Zi, whose shared per-target PDB is unsafe
       # behind sccache; embedded (/Z7) debug info is MSVC-only and ignored elsewhere.
+      # The core preset targets its host, so a cross-built row would only repeat
+      # its host row's core baseline; the row's own tests cover its target.
       - name: Build and test core with optional modules disabled
         id: core
-        if: always() && matrix.kind == 'toolchain' && steps.setup.outcome == 'success'
+        if: always() && matrix.kind == 'toolchain' && matrix.host == matrix.platform && steps.setup.outcome == 'success'
         run: |
           cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -217,7 +232,7 @@ jobs:
       - name: Archive the verified product package
         id: archive
         run: |
-          python build/ci/common/archive_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --output "build/target/_build/$env:PRESET/gyo-$env:GYO_PRODUCT-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --smoke-report "build/target/_build/$env:PRESET/logs/acceptance.json" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/archive.log"
+          python build/ci/common/archive_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --output "build/target/_build/$env:PRESET/gyo-$env:GYO_PRODUCT-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --cpu-execution $env:GYO_CPU_EXECUTION --smoke-report "build/target/_build/$env:PRESET/logs/acceptance.json" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/archive.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload this product and platform package
@@ -229,6 +244,59 @@ jobs:
           path: |
             build/target/_build/${{ matrix.preset }}/gyo-${{ matrix.product }}-${{ matrix.platform }}.tar.gz
             build/target/_build/${{ matrix.preset }}/gyo-${{ matrix.product }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      # Go work follows the native package, so a Go failure never skips product
+      # acceptance. The toolchain row verifies the engine-layer modules; a
+      # product row verifies its own module (release only, like its C++ tests,
+      # since L1 checks every module) and archives its declared services. Only
+      # Linux provisions Go: services are cross-built there for every platform.
+      # The plan also writes the row's service record, possibly empty, which
+      # tells the release trains exactly which service archives belong to it.
+      - name: Plan this row's recorded Go modules and services
+        id: go_plan
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}
+        run: |
+          python build/ci/common/go_checks.py plan --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output $env:GITHUB_OUTPUT --record "build/target/_build/$env:PRESET/go-services/go-services.json" --revision $env:SOURCE_COMMIT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Provision the Go version the recorded modules declare
+        id: go_setup
+        if: ${{ !cancelled() && steps.go_plan.outputs.has_go_modules == 'true' && (inputs.profile == 'release' || matrix.kind == 'toolchain' || steps.go_plan.outputs.has_go_services == 'true') }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ steps.go_plan.outputs.go_version_file }}
+          cache: true
+          cache-dependency-path: ${{ steps.go_plan.outputs.go_dependency_files }}
+
+      - name: Vet, test and race-test this row's Go modules
+        id: go
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' && (inputs.profile == 'release' || matrix.kind == 'toolchain') }}
+        run: |
+          python build/ci/common/go_checks.py check --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --race 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-checks.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Cross-build and archive this product's Go services
+        id: go_services
+        if: ${{ !cancelled() && steps.go_setup.outcome == 'success' && steps.go_plan.outputs.has_go_services == 'true' }}
+        run: |
+          python build/ci/common/go_checks.py build --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output-dir "build/target/_build/$env:PRESET/go-services" --revision $env:SOURCE_COMMIT 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-services.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The record and the service archives enter the product's release train
+      # through their own artifact, outside the gyo-package-* packages.
+      - name: Upload this product's Go service record and archives
+        if: ${{ !cancelled() && steps.go_plan.outcome == 'success' && (steps.go_plan.outputs.has_go_services != 'true' || steps.go_services.outcome == 'success') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gyo-service-${{ matrix.product }}
+          overwrite: true
+          path: |
+            build/target/_build/${{ matrix.preset }}/go-services/go-services.json
+            build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz
+            build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz.sha256
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -252,9 +320,9 @@ jobs:
             build/target/_build/${{ matrix.preset }}/logs
             build/target/_build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
             build/target/_build/${{ matrix.preset }}/Testing/Temporary
-            build/target/_build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
-            build/target/_build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
-            build/target/_build/${{ matrix.preset }}/host-tools/Testing/Temporary
+            ${{ env.GYO_HOST_TOOLS }}/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.GYO_HOST_TOOLS }}/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.GYO_HOST_TOOLS }}/Testing/Temporary
             build/target/_build/${{ matrix.preset }}/shaders/**/manifest.json
             build/target/_build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: warn
@@ -270,12 +338,17 @@ jobs:
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
           GPU_RESULT: ${{ steps.gpu_smoke.outcome }}
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
+          GO_RESULT: ${{ steps.go.outcome }}
+          GO_SERVICES_RESULT: ${{ steps.go_services.outcome }}
+          BUILD_HOST: ${{ matrix.host }}
         run: |
           $entry = $env:GYO_PRODUCT
           @"
           ## $entry / $env:GYO_PACKAGE_PLATFORM / $env:ACCEPTANCE_PROFILE
           | Check | Result |
           | --- | --- |
+          | Build host / target | $env:BUILD_HOST / $env:GYO_PACKAGE_PLATFORM |
+          | Target CPU execution (tests and installed checks) | $env:GYO_CPU_EXECUTION |
           | Build | $env:BUILD_RESULT |
           | CPU / shader tests | $env:TEST_RESULT |
           | Core baseline | $env:CORE_RESULT |
@@ -283,8 +356,11 @@ jobs:
           | Installed product acceptance | $env:SMOKE_RESULT |
           | Linux software GPU / engine baseline | $env:GPU_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
+          | Go vet / test / race (Linux) | $env:GO_RESULT |
+          | Go service archives (Linux cross-builds) | $env:GO_SERVICES_RESULT |
 
           Package checks are declared by the central product acceptance contract. Physical GPU acceptance remains manual.
+          Only Linux runs GPU checks (software Vulkan); macOS rows have no GPU checks, and a rosetta2 row verifies its x86_64 package translated on an arm64 host. The archive records the same execution mode.
           Quick artifacts cannot substitute for release acceptance.
           "@ >> $env:GITHUB_STEP_SUMMARY
 

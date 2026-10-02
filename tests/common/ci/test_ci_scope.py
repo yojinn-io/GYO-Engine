@@ -89,6 +89,21 @@ class ScopePolicyTests(unittest.TestCase):
                 self.assertEqual(row, dict(platform=row["platform"], **TOOLCHAINS[row["platform"]]))
                 self.assertFalse({"product", "kind", "tools"} & set(row))
 
+    def test_cross_built_rows_share_their_host_but_not_their_target_caches(self):
+        # Each row owns its preset, so its build tree and compiler cache family
+        # (keyed by platform and preset) never mix target architectures.
+        self.assertEqual(len({row["preset"] for row in TOOLCHAINS.values()}), len(TOOLCHAINS))
+        for platform, row in TOOLCHAINS.items():
+            with self.subTest(platform=platform):
+                host = TOOLCHAINS[row["host"]]
+                # Host tools are cached per host, so a host must be a native
+                # row on the same runner image with the same toolchain.
+                self.assertEqual(host["host"], row["host"])
+                self.assertEqual((host["runner"], host["toolchain"]), (row["runner"], row["toolchain"]))
+                self.assertEqual(row["cpu_execution"] == "native", row["host"] == platform)
+        self.assertEqual((TOOLCHAINS["macos-x64"]["host"], TOOLCHAINS["macos-x64"]["cpu_execution"]),
+                         ("macos-arm64", "rosetta2"))
+
 
 class MergeChangeTests(unittest.TestCase):
     """Exercise the real git commands against GitHub-shaped merge commits."""

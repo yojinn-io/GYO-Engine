@@ -18,14 +18,29 @@ from package_contract import PLATFORMS, validate_product
 
 
 ROOT = Path(__file__).resolve().parents[3]
+# One row per release platform. host is the package platform of the runner
+# itself: host tools such as the shader compiler run there and share its
+# caches. cpu_execution states how the row runs its target binaries: natively,
+# or translated by Rosetta 2 when an x86_64 macOS target is cross-built on an
+# arm64 runner.
 TOOLCHAINS = {
-    "windows-x64": dict(runner="windows-2025", preset="ci-windows", toolchain="msvc-vs2026",
-                        cc="cl", cxx="cl", parallel=4),
-    "linux-x64": dict(runner="ubuntu-24.04", preset="ci-linux", toolchain="gcc-14",
-                      cc="gcc-14", cxx="g++-14", parallel=4),
-    "macos-arm64": dict(runner="macos-15", preset="ci-macos", toolchain="appleclang-xcode16.4",
-                        cc="/usr/bin/clang", cxx="/usr/bin/clang++", parallel=2),
+    "windows-x64": dict(runner="windows-2025", host="windows-x64", preset="ci-windows",
+                        toolchain="msvc-vs2026", cc="cl", cxx="cl", parallel=4, cpu_execution="native"),
+    "linux-x64": dict(runner="ubuntu-24.04", host="linux-x64", preset="ci-linux",
+                      toolchain="gcc-14", cc="gcc-14", cxx="g++-14", parallel=4, cpu_execution="native"),
+    "macos-arm64": dict(runner="macos-15", host="macos-arm64", preset="ci-macos",
+                        toolchain="appleclang-xcode16.4", cc="/usr/bin/clang", cxx="/usr/bin/clang++",
+                        parallel=2, cpu_execution="native"),
+    "macos-x64": dict(runner="macos-15", host="macos-arm64", preset="ci-macos-x64",
+                      toolchain="appleclang-xcode16.4", cc="/usr/bin/clang", cxx="/usr/bin/clang++",
+                      parallel=2, cpu_execution="rosetta2"),
 }
+CPU_EXECUTION = ("native", "rosetta2")
+# A row executes its target natively exactly when it is built on that platform.
+assert set(TOOLCHAINS) == set(PLATFORMS)
+assert all(row["host"] in PLATFORMS and row["cpu_execution"] in CPU_EXECUTION
+           and (row["cpu_execution"] == "native") == (row["host"] == platform)
+           for platform, row in TOOLCHAINS.items())
 
 
 def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tuple[str, str]]:
@@ -95,8 +110,16 @@ def main():
     parser.add_argument("--tool-registry", type=Path)
     parser.add_argument("--repository-root", type=Path, help="Tool source root override for isolated validation")
     parser.add_argument("--output", type=Path, help="Append GitHub Actions outputs")
+    parser.add_argument("--product", default="",
+                        help="Build only this release train product beside the toolchain baseline "
+                             "(toolchain alone selects no game); empty builds every product")
     args = parser.parse_args()
     pairs = export_registry(args.registry)
+    if args.product:
+        validate_product(args.product)
+        if args.product != "toolchain" and all(product != args.product for product, _ in pairs):
+            raise SystemExit(f"Product {args.product!r} is neither the toolchain nor a registry-enabled game")
+        pairs = [pair for pair in pairs if pair[0] == args.product]
     tools = export_tools(args.tool_registry, repository_root=args.repository_root)
     matrix = {"include": [dict(product=product, kind="app", platform=platform, tools=[], **TOOLCHAINS[platform]) for product, platform in pairs]}
     baseline = {"include": [dict(product="toolchain", kind="toolchain", platform=platform, tools=tools[platform], **TOOLCHAINS[platform]) for platform in PLATFORMS]}
