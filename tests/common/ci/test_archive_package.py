@@ -83,6 +83,40 @@ class ArchiveMetadataTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertFalse((stage / "build_metadata.json").exists())
 
+    def test_execution_mode_is_recorded_and_restricted(self):
+        self.assertEqual(self.metadata()["cpu_execution"], "native")
+        self.report.write_text(json.dumps(evidence(self.contract)), encoding="utf-8")
+        translated = package_metadata(COMMIT, self.contract, self.report, cpu_execution="rosetta2")
+        self.assertEqual(translated["cpu_execution"], "rosetta2")
+        for mode in ("", "qemu", None):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                package_metadata(COMMIT, self.contract, cpu_execution=mode)
+
+    def test_archive_identity_is_the_recorded_target_not_the_archiving_host(self):
+        # A cross-built package keeps its target identity on any host; the
+        # build host is provenance only.
+        root = Path(self.workspace.name)
+        for platform in PLATFORMS:
+            with self.subTest(platform=platform):
+                stage = root / f"stage-{platform}"
+                for name, data in package_contents(platform).items():
+                    path = stage / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                output = root / f"gyo-{APP}-{platform}.tar.gz"
+                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/archive_package.py"),
+                    "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--cpu-execution", "rosetta2",
+                    "--output", str(output)], capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                metadata = json.loads((stage / "build_metadata.json").read_text(encoding="utf-8"))
+                self.assertEqual((metadata["platform"], metadata["cpu_execution"]), (platform, "rosetta2"))
+                mismatch = next(other for other in PLATFORMS if other != platform)
+                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/archive_package.py"),
+                    "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--platform", mismatch,
+                    "--output", str(root / "mismatch.tar.gz")], capture_output=True, text=True, timeout=30)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("product/platform identity does not match", result.stderr)
+
     def test_toolchain_archives_are_valid_without_any_game(self):
         registry = Path(self.workspace.name) / "empty.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n")

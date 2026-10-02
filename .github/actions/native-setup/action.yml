@@ -16,6 +16,12 @@ inputs:
   preset:
     description: CMake configure preset whose log directory the job writes
     required: true
+  host:
+    description: Package platform of the runner that builds the row and runs its host tools
+    required: true
+  cpu-execution:
+    description: How the row runs its target binaries, native or rosetta2
+    required: true
 
 outputs:
   compiler:
@@ -51,14 +57,27 @@ runs:
         # SDL 3.4 enables XTest by default and requires its development files.
         pkg-config --modversion xtst
 
+    # The row's host decides the runner architecture; its preset alone selects
+    # the target architecture (CMAKE_OSX_ARCHITECTURES), so an x86_64 target
+    # is cross-built here while host tools stay native to the runner.
     - name: Select the macOS compiler toolchain
       if: runner.os == 'macOS'
       shell: bash
+      env:
+        HOST_PLATFORM: ${{ inputs.host }}
+        TARGET_PLATFORM: ${{ inputs.platform }}
+        PRESET: ${{ inputs.preset }}
       run: |
-        if [ "$(uname -m)" != "arm64" ]; then
-          echo "::error::ci-macos requires the macos-15 ARM64 runner; review the matrix label."
+        case "$HOST_PLATFORM" in
+          macos-arm64) host_architecture=arm64 ;;
+          macos-x64) host_architecture=x86_64 ;;
+          *) echo "::error::Row $TARGET_PLATFORM declares the non-macOS host $HOST_PLATFORM on a macOS runner."; exit 1 ;;
+        esac
+        if [ "$(uname -m)" != "$host_architecture" ]; then
+          echo "::error::Row $TARGET_PLATFORM ($PRESET) requires a $HOST_PLATFORM runner, but this runner is $(uname -m); review the matrix label."
           exit 1
         fi
+        echo "Host $HOST_PLATFORM builds target $TARGET_PLATFORM with preset $PRESET."
         xcode_developer=/Applications/Xcode_16.4.app/Contents/Developer
         if [ ! -d "$xcode_developer" ]; then
           echo "::error::Pinned Xcode 16.4 is absent. Review actions/runner-images macos-15-arm64, then update the selected Xcode, toolchain cache key and docs together."
@@ -66,6 +85,27 @@ runs:
         fi
         sudo xcode-select -s "$xcode_developer"
         xcodebuild -version
+
+    # x86_64 tests and installed checks of a cross-built row run translated.
+    # Hosted images may omit Rosetta 2; a row that needs it fails here, before
+    # any build, instead of reporting untranslatable test binaries later.
+    - name: Provide Rosetta 2 for translated CPU execution
+      if: inputs.cpu-execution == 'rosetta2'
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" != macOS ] || [ "$(uname -m)" != arm64 ]; then
+          echo "::error::Rosetta 2 execution requires an arm64 macOS runner, not $RUNNER_OS/$(uname -m)."
+          exit 1
+        fi
+        if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+          # Keep going on failure so the check below reports the explicit error.
+          sudo softwareupdate --install-rosetta --agree-to-license || echo "::warning::Rosetta 2 installation failed."
+        fi
+        if ! arch -x86_64 /usr/bin/true; then
+          echo "::error::Rosetta 2 cannot run x86_64 code on this runner; the row's CPU tests and installed checks cannot be verified."
+          exit 1
+        fi
+        echo "Rosetta 2 runs x86_64 code: $(arch -x86_64 /usr/bin/uname -m)"
 
     # Install the release archive directly against a pinned SHA-256. The
     # setup action exported the Actions runtime token to every later build

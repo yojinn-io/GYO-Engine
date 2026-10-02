@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from content_contract import decode_json, relative_path, validate_content, catalog_files, shader_files
 
-PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64")
+PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64", "macos-x64")
 PROFILES = ("quick", "release")
 
 

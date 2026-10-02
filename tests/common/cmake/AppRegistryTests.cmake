@@ -88,10 +88,11 @@ expect_equal("${explicit_apps}" "empty_text;game_a" "Explicit subset order")
 
 gyo_export_app_matrix("${registry}" matrix)
 string(JSON count LENGTH "${matrix}" include)
-expect_equal("${count}" "4" "Matrix count")
-set(expected_names game_a game_a linux_only empty_text)
-set(expected_platforms windows-x64 macos-arm64 linux-x64 macos-arm64)
-foreach(index RANGE 0 3)
+# The macos column expands to every macOS package architecture.
+expect_equal("${count}" "6" "Matrix count")
+set(expected_names game_a game_a game_a linux_only empty_text empty_text)
+set(expected_platforms windows-x64 macos-arm64 macos-x64 linux-x64 macos-arm64 macos-x64)
+foreach(index RANGE 0 5)
     string(JSON app GET "${matrix}" include ${index} app)
     string(JSON platform GET "${matrix}" include ${index} platform)
     list(GET expected_names ${index} expected_app)
@@ -173,7 +174,7 @@ if(NOT result EQUAL 0 OR NOT "${stderr}" STREQUAL "")
     message(FATAL_ERROR "Registry stdout export failed: ${stdout}\n${stderr}")
 endif()
 string(JSON exported_count LENGTH "${stdout}" include)
-expect_equal("${exported_count}" "4" "Exporter stdout JSON")
+expect_equal("${exported_count}" "6" "Exporter stdout JSON")
 execute_process(COMMAND "${CMAKE_COMMAND}" "-DGYO_REGISTRY_FILE=${csv}"
     "-DGYO_OUTPUT=${work}/export/matrix.json"
     -P "${repository}/build/cmake/ExportAppRegistry.cmake"
@@ -183,7 +184,7 @@ if(NOT result EQUAL 0 OR NOT "${stdout}${stderr}" STREQUAL "")
 endif()
 file(READ "${work}/export/matrix.json" exported)
 string(JSON exported_count LENGTH "${exported}" include)
-expect_equal("${exported_count}" "4" "Exporter output file JSON")
+expect_equal("${exported_count}" "6" "Exporter output file JSON")
 
 # Configure a compiler-free fixture to exercise the public API in project mode.
 # It declares the registry as a configure dependency, just like the real root.

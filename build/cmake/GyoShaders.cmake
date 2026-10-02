@@ -32,6 +32,13 @@ function(_gyo_require_shader_tool out_command out_dependency)
                 list(APPEND host_args "-D${host_tool}:FILEPATH=${${host_tool}}")
             endif()
         endforeach()
+        # Apple targets select their architecture with CMAKE_OSX_ARCHITECTURES
+        # without counting as cross compiling, and CMake also reads it from the
+        # environment. Pin the host architecture so an x86_64 target built on
+        # an arm64 host still builds, runs and caches one native shader tool.
+        if(CMAKE_HOST_APPLE)
+            list(APPEND host_args "-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_HOST_SYSTEM_PROCESSOR}")
+        endif()
         # Reuse explicitly provided, immutable source caches without sharing
         # target binaries or leaking the target toolchain into the host build.
         foreach(dependency SDL3 NLOHMANN_JSON GYO_SPIRVCROSS GYO_SHADERCROSS GYO_DXC GYO_DXC_SOURCE)

@@ -38,6 +38,7 @@ GO_TARGETS = {
     "windows-x64": ("windows", "amd64", ".exe"),
     "linux-x64": ("linux", "amd64", ""),
     "macos-arm64": ("darwin", "arm64", ""),
+    "macos-x64": ("darwin", "amd64", ""),
 }
 STEPS = {
     "vet": ("vet", "./..."),
