@@ -1,6 +1,6 @@
 # PvP v5 驗收狀態與回報表
 
-更新：2026-10-03。Owner：`object_fps_pvp`。**v5仍是候選：短測與驗收工具完成，完整驗收尚未執行，未升格穩定基線。**
+更新：2026-10-03。Owner：`object_fps_pvp`。**v5仍是候選：完整驗收進行中（GUI三輪通過、60 Hz長測失敗待使用者決定、144 Hz未執行），未升格穩定基線。**
 操作入口：[手動驗收指南](MANUAL_ACCEPTANCE.md)。契約：[Protocol v5](../../protocol-v5.zh-Hant.md)。
 v4的[驗收狀態](../v4/ACCEPTANCE_STATUS.md)與[穩定基線](../v4/STABLE_BASELINE.md)原樣保留，不繼承其完成勾選。
 
@@ -30,11 +30,11 @@ v4的[驗收狀態](../v4/ACCEPTANCE_STATUS.md)與[穩定基線](../v4/STABLE_BA
 
 | 項目 | macOS | Windows | Linux | 指標與證據 |
 |---|---|---|---|---|
-| GUI round 1（120秒＋戰鬥） | 未執行 | 未執行 | 未執行 | |
-| GUI round 2 | 未執行 | 未執行 | 未執行 | |
-| GUI round 3 | 未執行 | 未執行 | 未執行 | |
-| Headless長測60 Hz（113循環／1808秒） | 未執行 | 未執行 | 未執行 | |
-| Headless長測144 Hz（113循環／1808秒） | 未執行 | 未執行 | 未執行 | |
+| GUI round 1（120秒＋戰鬥） | 通過 | 未執行 | 未執行 | 可見P50／P95 36.6／38.7ms（200／200）、Actual P95 37.3ms、116動作／18次死亡、裁決P95 104ms、回饋P95 6.2ms、視窗乾淨；`pvp-v5-acceptance-20261003/gui-round-1/` |
+| GUI round 2 | 通過 | 未執行 | 未執行 | 35.8／38.8ms（200／200）、Actual P95 36.9ms、116／18、104ms、6.2ms、乾淨；`pvp-v5-acceptance-20261003/gui-round-2/` |
+| GUI round 3 | 通過 | 未執行 | 未執行 | 34.9／37.7ms（200／200）、Actual P95 37.2ms、116／18、106ms、6.3ms、乾淨；`pvp-v5-acceptance-20261003/gui-round-3/` |
+| Headless長測60 Hz（113循環／1808秒） | **失敗** | 未執行 | 未執行 | 唯一錯誤：3次重生首幀時間重設未配對（幀長21.8／21.8／23.1ms，超過規則上限1/60秒＋5ms＝21.7ms）；其餘全過：4971／4971動作、每循環判定簽名1、113次死亡／重生、Actual P50／P95 33.6／38.4ms、漂移窗口全過、最長幀87ms；`pvp-v5-acceptance-20261003/soak60/` |
+| Headless長測144 Hz（113循環／1808秒） | 未執行（60 Hz失敗後依宣告停止） | 未執行 | 未執行 | |
 | Client／Host時鐘漂移（兩台實體機器） | 未執行 | 未執行 | 未執行 | 同機測不到；須另行授權 |
 
 ## 回報欄位

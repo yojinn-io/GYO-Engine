@@ -25,7 +25,7 @@
 | 02 | [人物與移動動畫](02-player-model-and-locomotion.md) | 已完成，2026-09-28 | Client女性人物、掛槍、Idle／Jog與步頻；真雙GUI短測通過，仍為v4玩法 |
 | 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 已結案，2026-10-02 | 完整三角色v5、25案網路與生命恢復通過；持續相位追蹤＋token bucket worker與連線品質移出（PR #11）；計次可見50ms守門3輪與25案矩陣通過，修正與已知問題見[fix](fix/README.md) |
 | 04 | [完整動作呈現](04-complete-action-presentation.md) | 已完成，2026-10-02 | 第一人稱換彈、遠端射擊／換彈／跳躍／死亡與生命隔離、Walk／Jog依速度混合；L1／L2／L3於macOS通過，見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md) |
-| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 短測與驗收工具完成（05-1～05-4，2026-10-03）；完整驗收（05-5）待執行，含升格（使用者決定） | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
+| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 短測與驗收工具完成（05-1～05-4，2026-10-03）；完整驗收05-5：GUI三輪通過、60 Hz長測失敗待決定（見交接），未升格 | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
 
 ```text
 01 契約／基線 -> 02 人物Idle/Jog（v4）
