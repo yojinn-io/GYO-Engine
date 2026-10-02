@@ -65,7 +65,7 @@
 | `apps/object_fps_pvp/CMakeLists.txt` | 只選 PvP domain／必要 App 支援；勿整包啟用複製的 Campaign 程式 |
 | `apps/object_fps_pvp/protocol/`、`gateway/adapter/` | 目前兩份 v4 schema；第 03 批連同三角色版本／建置引用一次切換 |
 
-Tick／Frame 的既有分離是固定步進累積器及独立網路 worker；本機模擬與畫面仍共用
+Tick／Frame 的既有分離是固定步進累積器及獨立網路 worker；本機模擬與畫面仍共用
 主執行緒。沒有把「固定 60 Hz」誤稱為獨立 Client 模擬執行緒。
 
 ## 素材清單與限制
@@ -119,7 +119,7 @@ UAL 沒有專用側移／後退持槍循環；後退反向 Jog、側移近似已
 並測 20 Tick 冷卻；v4 的無限彈藥長測也持續射擊。第 03 批須用新生命／彈藥／
 冷卻狀態機案例明確取代這些斷言；不能刪測例後假稱 v5 已通過。既有移動、
 背壓、ACK／epoch 故障與 latency 門檻保留。第 05 批另建 v5 手動指南／回報表，
-不改舊 v4 指南来迎合新結果。
+不改舊 v4 指南來迎合新結果。
 
 本批未跑 Go race、shader、GPU、真 socket 矩陣、GUI 或長測；它們依對應批次
 執行，最終完整驗收另行授權。沒有重建或啟動試玩服務。

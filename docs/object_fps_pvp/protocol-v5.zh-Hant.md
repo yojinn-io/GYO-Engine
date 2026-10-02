@@ -1,9 +1,9 @@
 # PvP Protocol v5：人物、跳躍與生命循環契約
 
-更新：2026-09-28。Owner：`object_fps_pvp`。
+更新：2026-10-02。Owner：`object_fps_pvp`。
 **Client／Gateway／Match 已一起實作 v5 候選；第03批功能及網路恢復通過，整批驗收未結案。**
-2026-10-01經使用者批准加入啟動相位對齊（方案A1，見§1、§2），修正後的GUI可見延遲尚待重測；
-本契約其餘參數及門檻沒有因此放寬。
+2026-10-01經使用者批准加入啟動相位對齊（方案A1，見§1、§2），2026-10-02加入低幀率守門（§1）；
+計次GUI可見延遲重測依使用者決定暫緩。本契約其餘參數及門檻沒有因此放寬。
 第01批建立契約，第02批完成女性人物Idle／Jog／掛槍；第03批接入v5 wire、
 跳躍、彈匣、換彈、死亡／重生及操作／HUD。完整動作動畫仍留第04批。
 實作／停止點見 [v5進度](plans/v5/README.md)。本候選尚未完成v5完整驗收，
@@ -20,7 +20,7 @@
 | Authority／本機固定模擬 | 60Hz；固定1/60秒，不受FPS或封包數驅動 |
 | 移動worker／Snapshot | 各60Hz；保持既有獨立傳輸排程 |
 | 初始／重同步lead | 2個中立命令，第一個合法固定步形成後才首次發布完整窗口 |
-| 啟動相位對齊 | Host量測每個epoch首窗口（含seq1）收到→執行seq1的Tick之等待w並隨Snapshot下發；Client每epoch一次把固定步相位調整「w＋首步發布時已過時間−4ms」，每幀最多移動該幀經過時間的25%。w超過1Tick＋2ms視為Host延遲而不採用；lead、插值、命令數與門檻不變 |
+| 啟動相位對齊 | Host量測每個epoch首窗口（含seq1）收到→執行seq1的Tick之等待w並隨Snapshot下發；Client每epoch一次把固定步相位調整「w＋首步發布時已過時間−4ms」，每幀最多移動該幀經過時間的25%。w超過1Tick＋2ms視為Host延遲而不採用。幀率守門：累積≥8個幀間隔才決定；最新32個幀間隔（各最多計2Tick）的平均>1.1Tick（約54.5 FPS）時不對齊，已對齊者同樣以每幀25%撤回；平均≤1.06Tick（約56.6 FPS）持續32幀才恢復，低幀率造成的不對齊可逆。lead、插值、命令數與門檻不變 |
 | 移動窗口／Match未來命令 | Client≤12；Match數量與距游標皆≤32 |
 | 動作交付 | 每批≤8，未退休窗口與ID距離≤32，動作／ACK合計排程30Hz |
 | 遠端插值／本機校正 | 落後1Tick；小校正100ms消除，誤差≥1世界單位直接定位 |
@@ -31,6 +31,12 @@
 | 手槍 | 半自動，10Tick／約167ms間隔，射程100 |
 | 彈藥／換彈 | 彈匣12、無限備彈，R換彈90Tick／1.5秒；不自動換彈 |
 | 動作有效期 | 保留250ms權威發布參考年齡上限，不接受Client時間／位置／傷害 |
+
+不採用啟動相位的原因`StartPhaseSkip`｛`HostLate`、`FrameRateBelowTick`、`CancelledByReseed`｝
+只是Client本機診斷（`LocalMovementObservation::startPhaseSkip`），不進wire，Match不知道它。
+已知限制：每epoch只量一次，stall reseed會取消該epoch其餘時間的對齊，切點以上偶發掉幀仍可能造成
+starvation重設，見[fix/02](plans/v5/fix/02-a1-cancelled-by-stall-reseed.md)與
+[fix/03](plans/v5/fix/03-a1-missed-frame-starvation.md)。
 
 由Match擁有並經Ready／Welcome發布規則：移動規則包含jumpHeight／gravity，
 戰鬥規則包含HP、傷害、射速、彈匣、reloadTicks、respawnTicks與既有射擊限制。
@@ -71,7 +77,7 @@ lifeGeneration從1開始，只由Match在成功重生時遞增；PlayerId／Sess
 重生不歸零；只有Leave／斷線／新Session按既有生命週期清理整條動作流。
 
 可替換的Snapshot繼續latest-wins；動作裁決不可因此丟失。已開始的TCP frame
-必須寫完或失敗，未知動作结果不得因超時或重生靜默取消。動畫提示是Snapshot
+必須寫完或失敗，未知動作結果不得因超時或重生靜默取消。動畫提示是Snapshot
 中可替換的短暫呈現狀態，不是對每個遠端動作逐一播放的可靠事件通道。
 
 ## 3. 跳躍、命令與重播
@@ -83,7 +89,7 @@ lifeGeneration從1開始，只由Match在成功重生時遞增；PlayerId／Sess
 - Client／Match以固定1/60秒解析積分重力，掃掠完整膠囊、處理頂頭與向下支撐。
   保留現有pitch不影響水平速度的行為、靜態牆碰撞及不做玩家互撞的範圍。
 - Actual按收到的命令執行；Held沿用最近實際執行命令的持續軸／角度，但清除
-  jumpRequested；Neutral亦無跳躍。重送不刷新Held期限或增加世界步数。
+  jumpRequested；Neutral亦無跳躍。重送不刷新Held期限或增加世界步數。
 - 延續既有Running／AwaitingFirstCommand／ResetBoundary命令游標政策；
   Running每Tick恰好一步。缺命令或死亡不把重力當作可重複的輸入事件；死亡的
   正常Running步仍執行垂直中立物理。重設邊界保持原先不執行移動的規則。
@@ -145,7 +151,7 @@ Authority Tick
 - 成功重生設出生位置／朝向、grounded=true、垂直速度0、滿血滿彈、清冷卻與
   Reload，清舊移動／替代輸入／積欠統計。Client以新權威狀態重建兩步lead。
 - **不清動作帳本、待ACK結果或ActionId。** 已完成結果保持不可變；未完成舊生命
-  動作在裁決時明確拒絕。Client照常Drain／ACK旧結果，但只允許當前自身生命的
+  動作在裁決時明確拒絕。Client照常Drain／ACK舊結果，但只允許當前自身生命的
   結果影響當前武器提示；傷害歸屬以targetId＋targetLifeGeneration核對。
 - 死亡本身不重新Join、不改Lobby占用人數；同一玩家重生不增加玩家數。
 
@@ -176,7 +182,7 @@ EnemyCatalog／GameSession等campaign接口。Match只依賴膠囊與數值規�
 
 遠端位置、生命與動作取同一Snapshot呈現區間，不把最新CombatState與較舊位置
 任意拼接；不跨生命世代或Alive／Dead邊界插值，也不因此清除其他玩家的時間線。
-本機HUD則始終讀最新权威Snapshot。短暫遠端Shot可被新狀態取代，恢復後不補播
+本機HUD則始終讀最新權威Snapshot。短暫遠端Shot可被新狀態取代，恢復後不補播
 過時動畫；這不影響原請求者取得每個動作的可靠裁決。
 
 ## 7. 驗收、分母與Architecture Delta

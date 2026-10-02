@@ -1,14 +1,17 @@
 # PvP v5 分批計畫與進度
 
-更新：2026-10-01。Owner：`object_fps_pvp`。
-**第01–02批已完成；第03批功能、真網路恢復與啟動相位修正已完成，待本機GUI短測結案；第04–05批未開始。**
+更新：2026-10-02。Owner：`object_fps_pvp`。
+**第01–02批已完成；第03批功能與A1低幀率守門完成，結案驗收暫緩（MVP技術驗證），第03批未結案；
+第04批暫停，第05批未開始。**
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
-已定位既有首次命令／Authority Tick相位差。2026-10-01已實作獲批准的啟動相位對齊（PR #2），
-CPU／Go／CTest與三平台CI通過；修正後的原生GUI可見延遲短測與25案真網路矩陣尚未重跑，
-須在有顯示與GPU的本機執行，不能用另一次通過覆蓋原失敗。
-v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
+已定位既有首次命令／Authority Tick相位差。2026-10-01實作獲批准的啟動相位對齊（PR #2，合併為`ff11ee3`）；
+2026-10-02以產品式worker的CPU模擬發現它使30／40 FPS退化（實機未重現），
+補上低於約54.5 FPS不對齊的守門及驗收器修正（尚未commit）。
+使用者決定先以MVP技術驗證收尾：計次的原生GUI可見延遲短測與25案真網路矩陣未執行，
+不能用另一次通過覆蓋原失敗。v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
 
 先讀 [交接](HANDOFF.md)、[v5契約](../../protocol-v5.zh-Hant.md) 和指定批次。
+修正與已知問題：第03批啟動相位相關問題各一份文件（成因／影響／復現／解決方案），見 [fix/README.md](fix/README.md)。
 原 [v4穩定基線](../STABLE_BASELINE.md)、[手動指南](../MANUAL_ACCEPTANCE.md)、
 [驗收狀態](../ACCEPTANCE_STATUS.md) 保留，不覆寫舊版證據。
 
@@ -18,9 +21,9 @@ v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，
 |---|---|---|---|
 | 01 | [契約與基線](01-contract-and-baseline.md) | 已完成，2026-09-28 | v5契約、素材／測例清單、v4指紋、現有CPU短回歸 |
 | 02 | [人物與移動動畫](02-player-model-and-locomotion.md) | 已完成，2026-09-28 | Client女性人物、掛槍、Idle／Jog與步頻；真雙GUI短測通過，仍為v4玩法 |
-| 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 修正完成；待本機GUI短測結案 | 完整三角色v5、25案網路與生命恢復通過；啟動相位對齊已實作並通過自動測試（PR #2），可見50ms守門與網路矩陣待本機重測 |
-| 04 | [完整動作呈現](04-complete-action-presentation.md) | 待啟動 | 第一人稱與遠端快射、換彈、跳躍、死亡及生命隔離 |
-| 05 | [整合短测與完整驗收交付](05-short-validation-and-acceptance.md) | 待啟動 | 短整合、手動命令／日誌／門檻與回報表；仍是候選 |
+| 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 功能與A1低幀率守門完成；結案驗收暫緩（MVP） | 完整三角色v5、25案網路與生命恢復通過；啟動相位對齊（PR #2）與低幀率守門通過自動測試；計次可見50ms守門與25案矩陣未重跑，已知問題見[fix](fix/README.md) |
+| 04 | [完整動作呈現](04-complete-action-presentation.md) | 暫停（需第03批結案、計畫複審及明確啟動） | 第一人稱與遠端快射、換彈、跳躍、死亡及生命隔離 |
+| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 待啟動 | 短整合、手動命令／日誌／門檻與回報表；仍是候選 |
 
 ```text
 01 契約／基線 -> 02 人物Idle/Jog（v4）
@@ -34,7 +37,7 @@ v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，
 ## 執行規則
 
 - 每次只執行使用者指定批次；依賴未完成不得以部分升版頂替。每批短測後更新本表、
-  HANDOFF與dev_log，然後停止，不自動开始下一批或提交commit。
+  HANDOFF與dev_log，然後停止，不自動開始下一批或提交commit。
 - 最初先落盤五份計畫與完成第01批；第02–03批依後續明確指示執行。第04批須另外啟動。
 - 第03批把Client、Gateway、Match一起切為v5；試跑必須使用同批三角色，舊程序需重啟。
 - 固定政策與資料語意只在v5契約維護。一般實作修正直接處理；若須改批准玩法、
@@ -58,10 +61,11 @@ v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，
 
 ## 接續處理文字
 
-> 請先讀 docs/object_fps_pvp/plans/v5/HANDOFF.md、v5契約與第03批計畫。啟動相位修正（方案A1）
-> 已實作；只在有顯示與GPU的環境以同批三角色重跑原生雙GUI可見延遲短測與25案真網路矩陣，
-> 並記錄每輪的w與相位調整量。不改門檻、lead、插值或60Hz，不以重跑挑好成績；
-> 結果寫回本表、HANDOFF與dev_log後停止，不開始第04批、不執行長測。
+> 請先讀 docs/object_fps_pvp/plans/v5/HANDOFF.md、v5契約、第03批計畫與 fix/README.md。
+> 第03批結案驗收目前暫緩（MVP技術驗證）。若恢復結案，先讀 fix/02 與 fix/06；在閒置機器上
+> 以同批三角色一次只跑一輪，事前宣告總輪數與補跑規則，記錄每輪w、調整量、撤回與取消。
+> 不改門檻、lead、插值或60Hz，不以重跑挑好成績；結果寫回本表、HANDOFF與dev_log後停止，
+> 不開始第04批、不執行長測。
 
 ## 第02批結果
 
@@ -85,9 +89,19 @@ v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，
 - 可見短測一輪51.125ms超50ms，另一輪42.914ms通過。首次命令的Authority相位
   差會持續成延遲差；不以第二輪取代第一輪或宣稱穩定基線。
 - 2026-10-01：使用者批准方案A1，Host回報epoch首窗口等待w，Client每epoch一次對齊固定步相位。
-  CPU／Go／CTest與三平台CI通過（PR #2）；原生GUI可見延遲短測與25案真網路矩陣
-  待在有顯示／GPU的本機重跑（見[交接](HANDOFF.md)、
-  [修正dev_log](../../../dev_logs/2026_10_01_pvp_v5_start_phase.zh-Hant.md)）。
+  CPU／Go／CTest與三平台CI通過（PR #2，合併為`ff11ee3`）；見
+  [A1 dev_log](../../../dev_logs/2026_10_01_pvp_v5_start_phase.zh-Hant.md)（含2026-10-02更正）。
+- 2026-10-02：以產品式worker模型的CPU模擬（worker晚醒量取自本機Intel Mac）發現A1使30／40 FPS
+  產生Held與重設（實機未重現），經使用者批准加守門：
+  低於約54.5 FPS（1.1 Tick）不做啟動相位對齊；並修正驗收器的時鐘域、啟動競態、視窗配置／補跑規則
+  與啟動相位紀錄。C++ 133 cases、CTest `-L pvp` 16／16、Python 165項通過；
+  三次GUI冒煙與一次矩陣單案冒煙均為report-only，不計次、不作為驗收證據。見
+  [修正與已知問題](fix/README.md)、[守門dev_log](../../../dev_logs/2026_10_02_pvp_v5_start_phase_guard.zh-Hant.md)。
+- 結案驗收（計次GUI可見延遲短測＋25案矩陣）依使用者決定暫緩，第03批未結案；
+  stall reseed取消對齊仍未解決（暫緩，[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)）；
+  偶發掉幀重設列為已知問題（[fix/03](fix/03-a1-missed-frame-starvation.md)）。
+- 後續候選（未排程、無承諾）：CS式開局／回合準備期，全員凍結且無敵並倒數，讓啟動相位量測與
+  首幀卡頓落在其中；需Match回合狀態、無敵規則、HUD倒數與契約變更，須另立計畫，見[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)。
 - [第03批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)與[交接](HANDOFF.md)
-  保存修復、失敗、最後指紋及唯一待結案項。第01–03批內容在`de87bb9`（wip），
-  啟動相位修正在PR #2。第04批未開始，無長測。
+  保存修復、失敗與最後指紋。第01–03批內容在`de87bb9`（wip），A1在`ff11ee3`；
+  守門與驗收器修改尚未commit（工作分支`claude/pvp-v5-start-phase-guard`）。第04批暫停，無長測。

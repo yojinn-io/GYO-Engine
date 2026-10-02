@@ -57,7 +57,7 @@ Client／Gateway／Match 的 wire、HTTP join、Ready／Welcome 已一起升為 
   及唯一裁決，四次25HP；全部150槍下一成功呈現幀回饋，Client裁決 P95 100.55 ms。
   Actual100%，零重設／診斷遺失，實際59.70FPS。當時只是一輪整合，沒有取代後來的三輪驗收。
 - 純移動診斷首輪 P50 52.02 ms 超標，與 fitness build 重疊；第二輪指標通過，兩輪
-  各有一次 pointer-release 記錄。原始失敗、外部負載及未證实根因均保留，不挑好的
+  各有一次 pointer-release 記錄。原始失敗、外部負載及未證實根因均保留，不挑好的
   報告冒充完整驗收。GUI共存短／完整輪沒有該release記錄。
 - Headless30／60／144 Hz每案10秒，148/148裁決均接受，各案兩玩家各實際扣100HP，
   Actual100%。RTT0／20／40＋jitter/loss及burst2四個新短案通過；20ms案有一次

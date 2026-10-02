@@ -22,12 +22,12 @@ Match 的責任邊界；把可獨立於產品成立的固定 Tick 機制下沉 G
 - **Build graph**：PvP native `main`／`match` roles、產品按需 Protobuf／Asio／
   cpp-httplib wrappers。Go 使用獨立 module 與 service staging；普通 C++ build
   不要求 Go，Gateway 不冒充 native release archive 中的 CMake executable。
-- **Data contracts**：產品持有独立 Client v1／Runtime v1 `.proto` 和版本化
+- **Data contracts**：產品持有獨立 Client v1／Runtime v1 `.proto` 和版本化
   Arena。Engine 沒有 Universal Runtime Protocol。Client 與 Authority Tick
   明確不同，Input sequence 負責排序，Snapshot cadence 只來自 Authority Tick。
 - **Client**：入口改成 Lobby、60 Hz 本地輸入採樣、30 Hz latest input、權威位置
   與 100 ms 遠端插值。保留即時本地視角，不做位置預測。UI 地址編輯由 SDL
-  adapter 處理，没有擴充公共 UI schema。
+  adapter 處理，沒有擴充公共 UI schema。
 
 新增邊界是實際 Headless 與外部驅動需求所需；使用完整 Client Controller、讓
 IPC 驅動時間或把 Room 塞進公共 Gateway 都會洩漏責任。v1／v2 的程式與既有

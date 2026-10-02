@@ -50,7 +50,7 @@ HP=0後後續命中傷害0；不以飽和HP單獨證明去重，仍結合ID、�
 
 新增 acceptance-only `--native-window` 被動觀測模式及 `run_native_window.py`：
 使用正式 PvpApplication、真實 X11／XTest 鍵鼠與 GNOME 視窗管理員，初次加入後
-不注入 SDL 事件、不呼叫 SubmitShot 或直接修改世界。20Hz 唯讀状态與有界逐幀
+不注入 SDL 事件、不呼叫 SubmitShot 或直接修改世界。20Hz 唯讀狀態與有界逐幀
 Presented 資料供核對；圖像經 XGetImage 取得，包含實際 HUD。
 此功能驗證不作效能量測，也不宣稱有人親手試玩或量到顯示器 scanout。
 
