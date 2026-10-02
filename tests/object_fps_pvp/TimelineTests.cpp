@@ -338,3 +338,22 @@ TEST_CASE("PvP presented identity changes break repeated pose hold evidence") {
     CHECK(history.HoldCount() == 2);
     CHECK(history.TotalHoldSeconds() == doctest::Approx(.04));
 }
+
+TEST_CASE("PvP remote samples report the planar speed of their bracketing authority states") {
+    SnapshotTimeline timeline;
+    for (std::uint64_t tick = 1; tick <= 10; ++tick)
+        REQUIRE(timeline.Push(State(tick), At(tick * MovementTickSeconds)));
+    // Between two authority states the speed is their own displacement rate,
+    // whatever the render rate that asked for the sample.
+    for (const double seconds : {6.3 * MovementTickSeconds, 7.9 * MovementTickSeconds}) {
+        const auto sample = timeline.Sample(1, At(seconds));
+        REQUIRE(sample);
+        REQUIRE(sample->upperTick > sample->lowerTick);
+        CHECK(sample->planarSpeed == doctest::Approx(3).epsilon(1e-4));
+    }
+    // At the newest state with no future data there is no bracket: no speed.
+    const auto held = timeline.Sample(1, At(20 * MovementTickSeconds));
+    REQUIRE(held);
+    CHECK(held->lowerTick == held->upperTick);
+    CHECK(held->planarSpeed == 0);
+}

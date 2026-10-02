@@ -604,6 +604,7 @@ struct PvpApplication::Impl final {
             characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
                 static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
             characterFrame.deltaSeconds = deltaSeconds;
+            characterFrame.planarSpeed = sampled ? sampled->planarSpeed : 0;
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
                 sampled->phaseReanchors == characterPhaseReanchors;
             characterFrame.holding = sampled && sampled->holding;

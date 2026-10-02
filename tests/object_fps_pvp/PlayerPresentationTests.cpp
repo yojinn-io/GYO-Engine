@@ -17,6 +17,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <numbers>
@@ -101,9 +102,15 @@ const PlayerPresentationDefinition& ProductionDefinition() {
     return *definition;
 }
 
+// Samples come from an authority moving at the 3 m/s reference speed.
 PlayerPresentationFrame Frame(double seconds, double delta, float x = 0, float z = 0) {
     return {.playerId = 1, .movementEpoch = 1, .position = {x, 0, z}, .yaw = 0,
-        .presentationSeconds = seconds, .deltaSeconds = delta};
+        .presentationSeconds = seconds, .deltaSeconds = delta, .planarSpeed = 3};
+}
+
+double ReferenceCycle() {
+    const auto& definition = ProductionDefinition();
+    return PlayerCycleDistance(definition, PlayerJogWeight(definition, 3));
 }
 
 void Advance(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
@@ -148,6 +155,8 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
     REQUIRE(definition.jogClip < model.clips.size());
     CHECK(model.clips[definition.idleClip].name == "Armature|Pistol_Idle_Loop");
     CHECK(model.clips[definition.jogClip].name == "Armature|Jog_Fwd_Loop");
+    REQUIRE(definition.walkClip < model.clips.size());
+    CHECK(model.clips[definition.walkClip].name == "Armature|Walk_Loop");
     for (const auto& [name, clip] : character.animationSet->clips) {
         CAPTURE(name);
         CHECK(clip.model == character.model);
@@ -207,7 +216,8 @@ TEST_CASE("PvP player anchor and body scale come from the immutable reference ge
     for (const double phase : {0.0, 0.23, 0.71}) {
         PlayerLocomotionState state;
         state.initialized = true;
-        state.phaseSeconds = phase;
+        state.phaseCycles = phase;
+        state.jogWeight = 0.4;
         state.idleSeconds = phase;
         state.moveWeight = 1;
         PlayerPresentationPose pose;
@@ -220,87 +230,144 @@ TEST_CASE("PvP player anchor and body scale come from the immutable reference ge
     }
 }
 
-TEST_CASE("PvP scaled Jog foot travel provides measured stride calibration evidence") {
+namespace {
+struct StanceMeasure final {
+    double contactSpeed{}, contactSeconds{}, foreAftSwing{}, verticalSwing{};
+    std::size_t contactRuns{};
+    std::string contactStarts;
+};
+
+// Stance is approximated by a bone within 2.5cm of its lowest point while it
+// moves backwards: an explicit bone-height model, not a claim of exact sole
+// contact or zero sliding. Phase is the gait cycle fraction.
+StanceMeasure MeasureStance(const PlayerPresentationDefinition& definition, std::string_view bone,
+                            const std::function<void(double, Pose&)>& sample, double cycleSeconds) {
+    constexpr std::size_t samples = 240;
+    constexpr double contactBandMeters = 0.025;
+    const auto& model = *definition.character->model;
+    const auto node = model.FindNode(bone);
+    REQUIRE(node);
+    std::array<Vec3, samples> points;
+    double minimumY = std::numeric_limits<double>::max();
+    double maximumY = -minimumY, minimumZ = minimumY, maximumZ = -minimumY;
+    for (std::size_t frame = 0; frame < samples; ++frame) {
+        Pose pose;
+        sample(static_cast<double>(frame) / samples, pose);
+        const auto point = TransformPoint(pose.globalTransforms[*node], {});
+        points[frame] = {(point.x - definition.anchor.x) * definition.scale,
+            (point.y - definition.anchor.y) * definition.scale, (point.z - definition.anchor.z) * definition.scale};
+        minimumY = std::min(minimumY, static_cast<double>(points[frame].y));
+        maximumY = std::max(maximumY, static_cast<double>(points[frame].y));
+        minimumZ = std::min(minimumZ, static_cast<double>(points[frame].z));
+        maximumZ = std::max(maximumZ, static_cast<double>(points[frame].z));
+    }
+    StanceMeasure measure;
+    double distance{};
+    std::array<bool, samples> contact{};
+    for (std::size_t frame = 0; frame < samples; ++frame) {
+        const auto& from = points[frame];
+        const auto& to = points[(frame + 1) % samples];
+        contact[frame] = std::max(from.y, to.y) <= minimumY + contactBandMeters && to.z < from.z;
+        if (contact[frame]) { distance += from.z - to.z; measure.contactSeconds += cycleSeconds / samples; }
+    }
+    // The cycle loops: a stance running through phase 1 continues at phase 0.
+    for (std::size_t frame = 0; frame < samples; ++frame) {
+        if (contact[frame] && !contact[(frame + samples - 1) % samples]) {
+            ++measure.contactRuns;
+            measure.contactStarts += std::to_string(static_cast<double>(frame) / samples) + ",";
+        }
+    }
+    measure.contactSpeed = measure.contactSeconds > 0 ? distance / measure.contactSeconds : 0;
+    measure.foreAftSwing = maximumZ - minimumZ;
+    measure.verticalSwing = maximumY - minimumY;
+    return measure;
+}
+} // namespace
+
+TEST_CASE("PvP walk and jog native speeds are measured stance evidence and share one gait phase") {
     const auto& definition = ProductionDefinition();
     const auto& model = *definition.character->model;
-    const double duration = model.clips.at(definition.jogClip).durationSeconds;
-    constexpr std::size_t samples = 120;
-    // This is an explicit bone-height approximation of stance, not a claim
-    // that a rendered shoe sole has exact contact or zero foot sliding.
-    constexpr double contactBandMeters = 0.025;
-    for (const std::string_view name : {"foot_l", "foot_r", "ball_l", "ball_r"}) {
-        const auto node = model.FindNode(name);
-        if (!node && name.starts_with("ball_")) continue;
-        REQUIRE(node);
-        std::array<Vec3, samples> points;
-        double minimumY = std::numeric_limits<double>::max();
-        double maximumY = -minimumY, minimumZ = minimumY, maximumZ = -minimumY;
-        for (std::size_t frame = 0; frame < samples; ++frame) {
-            Pose pose;
-            REQUIRE(SamplePose(model, definition.jogClip,
-                duration * frame / samples, PlaybackMode::Loop, pose));
-            const auto point = TransformPoint(pose.globalTransforms[*node], {});
-            points[frame] = {(point.x - definition.anchor.x) * definition.scale,
-                (point.y - definition.anchor.y) * definition.scale,
-                (point.z - definition.anchor.z) * definition.scale};
-            minimumY = std::min(minimumY, static_cast<double>(points[frame].y));
-            maximumY = std::max(maximumY, static_cast<double>(points[frame].y));
-            minimumZ = std::min(minimumZ, static_cast<double>(points[frame].z));
-            maximumZ = std::max(maximumZ, static_cast<double>(points[frame].z));
+    for (const auto& [label, clip, native] : {std::tuple{"walk", definition.walkClip, definition.walkNativeSpeed},
+                                              std::tuple{"jog", definition.jogClip, definition.jogNativeSpeed}}) {
+        const double duration = model.clips.at(clip).durationSeconds;
+        for (const std::string_view bone : {"ball_l", "ball_r"}) {
+            const auto measure = MeasureStance(definition, bone, [&](double phase, Pose& pose) {
+                REQUIRE(SamplePose(model, clip, phase * duration, PlaybackMode::Loop, pose));
+            }, duration);
+            INFO("clip=", label, " bone=", bone, " duration=", duration, " contact_speed_mps=", measure.contactSpeed,
+                " contact_seconds=", measure.contactSeconds, " contact_starts=", measure.contactStarts,
+                " fore_aft_swing_m=", measure.foreAftSwing, " configured_native_speed_mps=", native);
+            CHECK(measure.foreAftSwing > 0.1);
+            CHECK(measure.contactRuns >= 1);
+            // A 2.5cm band is approximate: 10% tolerance for stance speed.
+            CHECK(measure.contactSpeed == doctest::Approx(native).epsilon(0.1));
+            // Left stance starts near phase 0 and right near 0.5 in both clips,
+            // so one gait phase drives both without an offset.
+            const double start = std::stod(measure.contactStarts);
+            const double expected = bone == "ball_l" ? 0.0 : 0.5;
+            CHECK(std::abs(std::remainder(start - expected, 1.0)) < 0.1);
         }
-        double backwardContactDistance{}, backwardContactSeconds{};
-        std::array<bool, samples> contact;
-        std::array<int, samples> forwardDirection, verticalDirection;
-        const auto direction = [](double delta) { return delta > 1e-5 ? 1 : delta < -1e-5 ? -1 : 0; };
-        for (std::size_t frame = 0; frame < samples; ++frame) {
-            const auto& from = points[frame];
-            const auto& to = points[(frame + 1) % samples];
-            forwardDirection[frame] = direction(to.z - from.z);
-            verticalDirection[frame] = direction(to.y - from.y);
-            contact[frame] = std::max(from.y, to.y) <= minimumY + contactBandMeters && to.z < from.z;
-            if (contact[frame]) {
-                backwardContactDistance += from.z - to.z;
-                backwardContactSeconds += duration / samples;
-            }
+    }
+}
+
+TEST_CASE("PvP speed blend weights walk and jog from the authority speed and keeps blended stance at that speed") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    CHECK(PlayerJogWeight(definition, 0) == 0);
+    CHECK(PlayerJogWeight(definition, definition.walkNativeSpeed) == doctest::Approx(0));
+    CHECK(PlayerJogWeight(definition, definition.jogNativeSpeed) == doctest::Approx(1));
+    CHECK(PlayerJogWeight(definition, 20) == 1);
+    const double weight = PlayerJogWeight(definition, 3);
+    CHECK(weight == doctest::Approx((3 - definition.walkNativeSpeed) /
+        (definition.jogNativeSpeed - definition.walkNativeSpeed)));
+    const double walkCycle = definition.walkNativeSpeed * model.clips[definition.walkClip].durationSeconds;
+    const double jogCycle = definition.jogNativeSpeed * model.clips[definition.jogClip].durationSeconds;
+    CHECK(PlayerCycleDistance(definition, 0) == doctest::Approx(walkCycle));
+    CHECK(PlayerCycleDistance(definition, 1) == doctest::Approx(jogCycle));
+    const double cycle = PlayerCycleDistance(definition, weight);
+    // At 3 m/s the gait runs about one cycle (two steps) per second instead of
+    // the half-speed jog that read as slow long strides.
+    CHECK(3 / cycle > 0.9);
+    CHECK(3 / cycle < 1.1);
+    for (const std::string_view bone : {"ball_l", "ball_r"}) {
+        const auto measure = MeasureStance(definition, bone, [&](double phase, Pose& pose) {
+            Pose walk, jog;
+            REQUIRE(SamplePose(model, definition.walkClip, phase * model.clips[definition.walkClip].durationSeconds,
+                PlaybackMode::Loop, walk));
+            REQUIRE(SamplePose(model, definition.jogClip, phase * model.clips[definition.jogClip].durationSeconds,
+                PlaybackMode::Loop, jog));
+            REQUIRE(BlendPoses(model, walk, jog, static_cast<float>(weight), pose));
+        }, cycle / 3);
+        INFO("blended bone=", bone, " jog_weight=", weight, " cycle_m=", cycle, " contact_speed_mps=", measure.contactSpeed,
+            " contact_seconds=", measure.contactSeconds, " contact_starts=", measure.contactStarts);
+        // Linear blending of two gaits is not exact: allow 15% stance error.
+        CHECK(measure.contactSpeed == doctest::Approx(3).epsilon(0.15));
+    }
+}
+
+TEST_CASE("PvP gait phase uses the authority speed sample so render rate and partial frames cannot change it") {
+    const auto& definition = ProductionDefinition();
+    // The same route, with a first frame that moved only part of a tick and a
+    // held sample without speed: the phase depends only on distance and the
+    // authority speed, never on this frame's own displacement rate.
+    for (const int fps : {30, 60, 144}) {
+        CAPTURE(fps);
+        PlayerLocomotionState state;
+        Advance(state, Frame(0, 0));
+        Advance(state, Frame(0.25 / fps, 0.25 / fps, 0, 0.01F));
+        double now = 0.25 / fps, z = 0.01;
+        while (z < 1.5) {
+            now += 1.0 / fps;
+            z = std::min(1.5, z + 3.0 / fps);
+            Advance(state, Frame(now, 1.0 / fps, 0, static_cast<float>(z)));
         }
-        std::size_t contactRuns{}, forwardPeaks{}, backwardPeaks{}, lowPoints{};
-        std::string contactStarts, forwardPeakPhases;
-        for (std::size_t frame = 0; frame < samples; ++frame) {
-            const auto previous = (frame + samples - 1) % samples;
-            if (contact[frame] && !contact[previous]) {
-                ++contactRuns;
-                contactStarts += std::to_string(static_cast<double>(frame) / samples) + ",";
-            }
-            if (forwardDirection[previous] > 0 && forwardDirection[frame] < 0) {
-                ++forwardPeaks;
-                forwardPeakPhases += std::to_string(static_cast<double>(frame) / samples) + ",";
-            }
-            backwardPeaks += forwardDirection[previous] < 0 && forwardDirection[frame] > 0;
-            lowPoints += verticalDirection[previous] < 0 && verticalDirection[frame] > 0;
-        }
-        const double contactSpeed = backwardContactSeconds > 0 ?
-            backwardContactDistance / backwardContactSeconds : 0;
-        INFO("node=", name, " reference_height=", definition.bodyHeight,
-            " model_scale=", definition.scale, " jog_duration=", duration,
-            " fore_aft_swing_m=", maximumZ - minimumZ,
-            " vertical_swing_m=", maximumY - minimumY,
-            " backward_contact_distance_m=", backwardContactDistance,
-            " backward_contact_seconds=", backwardContactSeconds,
-            " backward_contact_speed_mps=", contactSpeed,
-            " contact_band_m=", contactBandMeters,
-            " contact_runs=", contactRuns, " contact_start_phases=", contactStarts,
-            " forward_peaks=", forwardPeaks, " forward_peak_phases=", forwardPeakPhases,
-            " backward_peaks=", backwardPeaks, " low_points=", lowPoints,
-            " stride_scale=", definition.strideScale,
-            " configured_reference_speed_mps=", definition.referenceSpeed,
-            " calibrated_contact_speed_mps=", contactSpeed / definition.strideScale);
-        CHECK(maximumZ - minimumZ > 0.1);
-        CHECK(backwardContactSeconds > 0);
-        CHECK(std::isfinite(contactSpeed));
-        // A 2.5cm band is approximate; keep a 10% tolerance for stance speed,
-        // while catching an uncalibrated full-speed clip at this body height.
-        if (name.starts_with("ball_"))
-            CHECK(contactSpeed / definition.strideScale == doctest::Approx(definition.referenceSpeed).epsilon(0.1));
+        CHECK(state.unwrappedPhaseCycles == doctest::Approx(1.5 / ReferenceCycle()).epsilon(1e-5));
+        const double weight = state.jogWeight;
+        auto held = Frame(now + 1.0 / fps, 1.0 / fps, 0, static_cast<float>(z));
+        held.planarSpeed = 0;
+        held.holding = true;
+        Advance(state, held);
+        CHECK(state.jogWeight == weight); // A held or stopped sample keeps the blend.
     }
 }
 
@@ -309,12 +376,17 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
     const auto& model = *definition.character->model;
     PlayerLocomotionState state;
     state.initialized = true;
-    state.phaseSeconds = 0.31;
+    state.phaseCycles = 0.33;
+    state.jogWeight = 0.4;
     state.idleSeconds = 0.23;
     state.moveWeight = 1;
-    Pose idle, jog;
+    Pose idle, walk, gaitJog, jog;
     REQUIRE(SamplePose(model, definition.idleClip, state.idleSeconds, PlaybackMode::Loop, idle));
-    REQUIRE(SamplePose(model, definition.jogClip, state.phaseSeconds, PlaybackMode::Loop, jog));
+    REQUIRE(SamplePose(model, definition.walkClip, state.phaseCycles * model.clips[definition.walkClip].durationSeconds,
+        PlaybackMode::Loop, walk));
+    REQUIRE(SamplePose(model, definition.jogClip, state.phaseCycles * model.clips[definition.jogClip].durationSeconds,
+        PlaybackMode::Loop, gaitJog));
+    REQUIRE(BlendPoses(model, walk, gaitJog, static_cast<float>(state.jogWeight), jog));
     PlayerPresentationPose combined;
     std::string error;
     REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, combined, error), error);
@@ -347,8 +419,7 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
 
 TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in every planar direction") {
     const auto& definition = ProductionDefinition();
-    const auto duration = definition.character->model->clips[definition.jogClip].durationSeconds;
-    const double expectedPhase = 3.0 / (definition.referenceSpeed * definition.strideScale);
+    const double expectedPhase = 3.0 / ReferenceCycle();
     const float diagonal = 1.0F / std::sqrt(2.0F);
     for (const int fps : {30, 60, 144}) {
         CAPTURE(fps);
@@ -359,9 +430,10 @@ TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in eve
             const auto state = Travel(fps, direction[0], direction[1]);
             CHECK(state.totalDistance == doctest::Approx(3).epsilon(1e-5));
             CHECK(state.signedDistance == doctest::Approx(3).epsilon(1e-5));
-            CHECK(state.unwrappedPhaseSeconds == doctest::Approx(expectedPhase).epsilon(1e-5));
-            CHECK(state.phaseSeconds == doctest::Approx(std::fmod(expectedPhase, duration)).epsilon(1e-5));
-            CHECK(state.playbackRate == doctest::Approx(1.0 / definition.strideScale).epsilon(1e-4));
+            CHECK(state.unwrappedPhaseCycles == doctest::Approx(expectedPhase).epsilon(1e-5));
+            CHECK(state.phaseCycles == doctest::Approx(expectedPhase - std::floor(expectedPhase)).epsilon(1e-5));
+            CHECK(state.playbackRate == doctest::Approx(3.0 / ReferenceCycle()).epsilon(1e-4));
+            CHECK(state.jogWeight == doctest::Approx(PlayerJogWeight(definition, 3)));
             CHECK(state.moveWeight > 0.99F);
             CHECK_FALSE(state.backward);
         }
@@ -370,14 +442,14 @@ TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in eve
 
 TEST_CASE("PvP stop wall contact turning and timeline hold cannot accumulate phantom footsteps") {
     auto state = Travel(60, 0, 1, 0.5);
-    const double phase = state.unwrappedPhaseSeconds;
+    const double phase = state.unwrappedPhaseCycles;
     const double distance = state.totalDistance;
     for (int step = 1; step <= 30; ++step) {
         auto frame = Frame(0.5 + step / 60.0, 1.0 / 60, 0, 1.5F);
         frame.yaw = static_cast<float>(step) / 10;
         Advance(state, frame);
     }
-    CHECK(state.unwrappedPhaseSeconds == phase);
+    CHECK(state.unwrappedPhaseCycles == phase);
     CHECK(state.totalDistance == distance);
     CHECK(state.distanceDelta == 0);
     CHECK(state.speed == 0);
@@ -387,10 +459,10 @@ TEST_CASE("PvP stop wall contact turning and timeline hold cannot accumulate pha
     finalStep.holding = true;
     Advance(state, finalStep);
     CHECK(state.totalDistance == doctest::Approx(distance + 0.05).epsilon(1e-5));
-    const auto heldPhase = state.unwrappedPhaseSeconds;
+    const auto heldPhase = state.unwrappedPhaseCycles;
     const auto resets = state.resetCount;
     for (int step = 0; step < 30; ++step) Advance(state, finalStep);
-    CHECK(state.unwrappedPhaseSeconds == heldPhase);
+    CHECK(state.unwrappedPhaseCycles == heldPhase);
     CHECK(state.resetCount == resets);
     CHECK(state.holding);
     auto resume = Frame(finalStep.presentationSeconds + 1.0 / 60, 1.0 / 60, 0, 1.6F);
@@ -404,15 +476,15 @@ TEST_CASE("PvP backward motion reverses jog phase and returning along the same r
     const auto backward = Travel(60, 0, -1);
     CHECK(backward.totalDistance == doctest::Approx(3));
     CHECK(backward.signedDistance == doctest::Approx(-3));
-    CHECK(backward.unwrappedPhaseSeconds == doctest::Approx(-1.0 / definition.strideScale));
-    CHECK(backward.playbackRate == doctest::Approx(-1.0 / definition.strideScale).epsilon(1e-4));
+    CHECK(backward.unwrappedPhaseCycles == doctest::Approx(-3.0 / ReferenceCycle()));
+    CHECK(backward.playbackRate == doctest::Approx(-3.0 / ReferenceCycle()).epsilon(1e-4));
     CHECK(backward.backward);
     auto state = Travel(60, 0, 1, 0.5);
     for (int step = 1; step <= 30; ++step)
         Advance(state, Frame(0.5 + step / 60.0, 1.0 / 60, 0, 1.5F - step * 0.05F));
     CHECK(state.totalDistance == doctest::Approx(3));
     CHECK(state.signedDistance == doctest::Approx(0).epsilon(1e-5).scale(1));
-    CHECK(state.unwrappedPhaseSeconds == doctest::Approx(0).epsilon(1e-5).scale(1));
+    CHECK(state.unwrappedPhaseCycles == doctest::Approx(0).epsilon(1e-5).scale(1));
 }
 
 TEST_CASE("PvP epoch discontinuity teleport and long frame reanchor instead of replaying unseen travel") {
@@ -434,7 +506,7 @@ TEST_CASE("PvP epoch discontinuity teleport and long frame reanchor instead of r
         CHECK(state.phaseReset);
         CHECK(state.resetCount == resets + 1);
         CHECK(state.resetReason == reason);
-        CHECK(state.unwrappedPhaseSeconds == 0);
+        CHECK(state.unwrappedPhaseCycles == 0);
         CHECK(state.distanceDelta == 0);
         frame.continuous = true;
         frame.deltaSeconds = 1.0 / 60;
@@ -443,7 +515,7 @@ TEST_CASE("PvP epoch discontinuity teleport and long frame reanchor instead of r
         Advance(state, frame);
         CHECK_FALSE(state.phaseReset);
         CHECK(state.distanceDelta == doctest::Approx(0.05).epsilon(1e-4));
-        CHECK(state.unwrappedPhaseSeconds == doctest::Approx(1.0 / (60 * definition.strideScale)).epsilon(1e-4));
+        CHECK(state.unwrappedPhaseCycles == doctest::Approx(0.05 / ReferenceCycle()).epsilon(1e-4));
     }
 }
 
@@ -460,7 +532,7 @@ TEST_CASE("PvP life and death boundaries clear old locomotion even at the same m
         CHECK(state.phaseReset);
         CHECK(state.resetReason == "life");
         CHECK(state.totalDistance == 0);
-        CHECK(state.unwrappedPhaseSeconds == 0);
+        CHECK(state.unwrappedPhaseCycles == 0);
         CHECK(state.lifeGeneration == frame.lifeGeneration);
         CHECK(state.dead == frame.dead);
     }
@@ -476,7 +548,7 @@ TEST_CASE("PvP 100ms and 108ms rendering gaps reset locomotion at the existing r
         CHECK(state.resetReason == "long_frame");
         CHECK(state.resetCount == resets + 1);
         CHECK(state.distanceDelta == 0);
-        CHECK(state.unwrappedPhaseSeconds == 0);
+        CHECK(state.unwrappedPhaseCycles == 0);
     }
 }
 
@@ -486,22 +558,22 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
     auto other = Frame(0, 0, 4, 5);
     other.playerId = 2;
     Advance(second, other);
-    const auto firstPhase = first.unwrappedPhaseSeconds;
+    const auto firstPhase = first.unwrappedPhaseCycles;
     other.presentationSeconds = 0.05;
     other.deltaSeconds = 0.05;
     other.position.x += 0.15F;
     Advance(second, other);
-    CHECK(second.unwrappedPhaseSeconds == doctest::Approx(0.05 / ProductionDefinition().strideScale).epsilon(1e-5));
-    CHECK(first.unwrappedPhaseSeconds == firstPhase);
-    const auto secondPhase = second.unwrappedPhaseSeconds;
+    CHECK(second.unwrappedPhaseCycles == doctest::Approx(0.15 / ReferenceCycle()).epsilon(1e-5));
+    CHECK(first.unwrappedPhaseCycles == firstPhase);
+    const auto secondPhase = second.unwrappedPhaseCycles;
     auto rejoin = Frame(0.5 + 1.0 / 60, 1.0 / 60, 9, 9);
     rejoin.playerId = 3;
     Advance(first, rejoin);
     CHECK(first.playerId == 3);
     CHECK(first.phaseReset);
     CHECK(first.resetReason == "player");
-    CHECK(first.unwrappedPhaseSeconds == 0);
-    CHECK(second.unwrappedPhaseSeconds == secondPhase);
+    CHECK(first.unwrappedPhaseCycles == 0);
+    CHECK(second.unwrappedPhaseCycles == secondPhase);
     CHECK(second.playerId == 2);
 }
 
@@ -528,7 +600,7 @@ TEST_CASE("PvP player definitions reject missing clips bones and invalid stride 
                 if (fault == "leg_mask") json["upper_body_root"] = "pelvis";
                 if (fault == "weapon") json["weapon"]["node"] = "MissingHand";
                 if (fault == "speed") json["reference_speed"] = 0;
-                if (fault == "stride") json["jog_stride_scale"] = 0;
+                if (fault == "stride") json["locomotion"]["jog_native_speed"] = 0.5; // Not faster than walk.
             });
         }
         std::string error;
@@ -784,13 +856,18 @@ TEST_CASE("PvP composed action pose takes action upper body over locomotion or j
     const auto& model = *definition.character->model;
     PlayerLocomotionState state;
     state.initialized = true;
-    state.phaseSeconds = 0.31;
+    state.phaseCycles = 0.33;
+    state.jogWeight = 0.4;
     state.idleSeconds = 0.23;
     state.moveWeight = 1;
-    Pose idle, jog, legs, shoot, loop, death;
+    Pose idle, walk, jog, gait, legs, shoot, loop, death;
     REQUIRE(SamplePose(model, definition.idleClip, state.idleSeconds, PlaybackMode::Loop, idle));
-    REQUIRE(SamplePose(model, definition.jogClip, state.phaseSeconds, PlaybackMode::Loop, jog));
-    REQUIRE(BlendPoses(model, idle, jog, state.moveWeight, legs));
+    REQUIRE(SamplePose(model, definition.walkClip, state.phaseCycles * model.clips[definition.walkClip].durationSeconds,
+        PlaybackMode::Loop, walk));
+    REQUIRE(SamplePose(model, definition.jogClip, state.phaseCycles * model.clips[definition.jogClip].durationSeconds,
+        PlaybackMode::Loop, jog));
+    REQUIRE(BlendPoses(model, walk, jog, static_cast<float>(state.jogWeight), gait));
+    REQUIRE(BlendPoses(model, idle, gait, state.moveWeight, legs));
     REQUIRE(SamplePose(model, definition.shootClip, 0.2, PlaybackMode::Clamp, shoot));
     REQUIRE(SamplePose(model, definition.jumpLoopClip, 0.4, PlaybackMode::Loop, loop));
     REQUIRE(SamplePose(model, definition.deathClip, 1.0, PlaybackMode::Clamp, death));

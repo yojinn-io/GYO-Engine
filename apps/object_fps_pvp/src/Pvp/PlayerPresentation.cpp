@@ -90,6 +90,7 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
             return index;
         };
         definition->idleClip = clip("idle");
+        definition->walkClip = clip("walk");
         definition->jogClip = clip("jog");
         definition->shootClip = clip("shoot");
         definition->reloadClip = clip("reload");
@@ -99,14 +100,17 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         definition->deathClip = clip("death");
         definition->bodyHeight = bodyHeight;
         definition->referenceSpeed = config.at("reference_speed").get<float>();
-        definition->strideScale = config.at("jog_stride_scale").get<double>();
+        const auto& locomotion = config.at("locomotion");
+        definition->walkNativeSpeed = locomotion.at("walk_native_speed").get<double>();
+        definition->jogNativeSpeed = locomotion.at("jog_native_speed").get<double>();
         definition->transitionSeconds = config.at("transition_seconds").get<double>();
         definition->maxFrameDeltaSeconds = config.at("max_frame_delta_seconds").get<double>();
         if (!std::isfinite(definition->referenceSpeed) || definition->referenceSpeed <= 0 ||
-            !std::isfinite(definition->strideScale) || definition->strideScale <= 0 ||
+            !std::isfinite(definition->walkNativeSpeed) || definition->walkNativeSpeed <= 0 ||
+            !std::isfinite(definition->jogNativeSpeed) || definition->jogNativeSpeed <= definition->walkNativeSpeed ||
             !std::isfinite(definition->transitionSeconds) || definition->transitionSeconds <= 0 ||
             !std::isfinite(definition->maxFrameDeltaSeconds) || definition->maxFrameDeltaSeconds <= 0)
-            throw std::runtime_error("player locomotion calibration must be finite and positive");
+            throw std::runtime_error("player locomotion calibration must be finite and positive, with jog faster than walk");
         const auto& actions = config.at("actions");
         definition->shotSeconds = actions.at("shot_seconds").get<double>();
         definition->jumpStartSeconds = actions.at("jump_start_seconds").get<double>();
@@ -179,6 +183,21 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
     }
 }
 
+double PlayerJogWeight(const PlayerPresentationDefinition& definition, const double planarSpeed) {
+    return std::clamp((planarSpeed - definition.walkNativeSpeed) /
+        (definition.jogNativeSpeed - definition.walkNativeSpeed), 0.0, 1.0);
+}
+
+double PlayerCycleDistance(const PlayerPresentationDefinition& definition, const double jogWeight) {
+    // Each clip covers its native speed times its authored length per cycle.
+    // Both are sampled at one gait phase, so their stance feet blend into a
+    // foot that moves, on average, at the presented speed.
+    const auto& clips = definition.character->model->clips;
+    const double walk = definition.walkNativeSpeed * clips[definition.walkClip].durationSeconds;
+    const double jog = definition.jogNativeSpeed * clips[definition.jogClip].durationSeconds;
+    return walk + (jog - walk) * jogWeight;
+}
+
 bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
     const PlayerPresentationDefinition& definition, std::string& error) {
     error.clear();
@@ -187,8 +206,11 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         !std::isfinite(frame.deltaSeconds) || frame.deltaSeconds < 0 ||
         !definition.character || !definition.character->model ||
         definition.jogClip >= definition.character->model->clips.size() ||
+        definition.walkClip >= definition.character->model->clips.size() ||
         !std::isfinite(definition.referenceSpeed) || definition.referenceSpeed <= 0 ||
-        !std::isfinite(definition.strideScale) || definition.strideScale <= 0 ||
+        !std::isfinite(definition.walkNativeSpeed) || definition.walkNativeSpeed <= 0 ||
+        !std::isfinite(definition.jogNativeSpeed) || definition.jogNativeSpeed <= definition.walkNativeSpeed ||
+        !std::isfinite(frame.planarSpeed) || frame.planarSpeed < 0 ||
         !std::isfinite(definition.transitionSeconds) || definition.transitionSeconds <= 0 ||
         !std::isfinite(definition.maxFrameDeltaSeconds) || definition.maxFrameDeltaSeconds <= 0 ||
         !std::isfinite(frame.verticalVelocity) || !std::isfinite(frame.lifeStateSeconds) ||
@@ -199,10 +221,12 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         error = "player locomotion requires valid sampled values and calibration";
         return false;
     }
-    const double duration = definition.character->model->clips[definition.jogClip].durationSeconds;
-    if (!std::isfinite(duration) || duration <= 0) {
-        error = "player jog duration must be finite and positive";
-        return false;
+    for (const auto clip : {definition.walkClip, definition.jogClip}) {
+        const double duration = definition.character->model->clips[clip].durationSeconds;
+        if (!std::isfinite(duration) || duration <= 0) {
+            error = "player walk and jog durations must be finite and positive";
+            return false;
+        }
     }
     const double elapsed = frame.presentationSeconds - state.previousPresentationSeconds;
     const double dx = static_cast<double>(frame.position.x) - state.previousPosition.x;
@@ -234,6 +258,8 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         state.grounded = frame.grounded;
         state.jumpPhase = frame.grounded ? PlayerJumpPhase::Grounded : PlayerJumpPhase::Airborne;
         state.jumpPhaseSeconds = frame.presentationSeconds;
+        state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
+        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
     } else {
         state.phaseReset = false;
         state.resetReason.clear();
@@ -246,12 +272,15 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         const double signedDelta = state.backward ? -state.distanceDelta : state.distanceDelta;
         state.signedDistance += signedDelta;
         state.totalDistance += state.distanceDelta;
-        state.unwrappedPhaseSeconds += signedDelta / (definition.referenceSpeed * definition.strideScale);
-        state.phaseSeconds = std::fmod(state.unwrappedPhaseSeconds, duration);
-        if (state.phaseSeconds < 0) state.phaseSeconds += duration;
+        // The weight follows the authority-sampled speed, never this frame's own
+        // displacement, so equal routes reach equal phases at any render rate.
+        // Without a speed (held or stopped samples) the last blend is kept.
+        if (frame.planarSpeed > 0) state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
+        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
+        state.unwrappedPhaseCycles += signedDelta / state.cycleDistance;
+        state.phaseCycles = state.unwrappedPhaseCycles - std::floor(state.unwrappedPhaseCycles);
         state.speed = elapsed > 0 ? state.distanceDelta / elapsed : 0;
-        state.playbackRate = (state.backward ? -state.speed : state.speed) /
-            (definition.referenceSpeed * definition.strideScale);
+        state.playbackRate = (state.backward ? -state.speed : state.speed) / state.cycleDistance;
         state.idleSeconds += elapsed;
         // All pose clocks follow the sampled timeline. A visible hold freezes
         // its last walking pose instead of blending legs while position stalls.
@@ -391,10 +420,13 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
             upper = nullptr; // Death owns the whole body, weapon hand included.
             break;
         case PlayerLowerAction::Locomotion: {
-            Pose jog;
-            Require(Engine::Model::SamplePose(model, definition.jogClip, state.phaseSeconds,
-                PlaybackMode::Loop, jog));
-            Require(Engine::Model::BlendPoses(model, idle, jog, state.moveWeight, output.body));
+            Pose walk, jog, gait;
+            Require(Engine::Model::SamplePose(model, definition.walkClip,
+                state.phaseCycles * model.clips[definition.walkClip].durationSeconds, PlaybackMode::Loop, walk));
+            Require(Engine::Model::SamplePose(model, definition.jogClip,
+                state.phaseCycles * model.clips[definition.jogClip].durationSeconds, PlaybackMode::Loop, jog));
+            Require(Engine::Model::BlendPoses(model, walk, jog, static_cast<float>(state.jogWeight), gait));
+            Require(Engine::Model::BlendPoses(model, idle, gait, state.moveWeight, output.body));
             break;
         }
         case PlayerLowerAction::JumpStart:
@@ -613,14 +645,13 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.holding = state.holding;
             observation.backward = state.backward;
             observation.phaseReset = state.phaseReset;
-            observation.phaseSeconds = state.phaseSeconds;
-            observation.unwrappedPhaseSeconds = state.unwrappedPhaseSeconds;
+            observation.phaseCycles = state.phaseCycles;
+            observation.unwrappedPhaseCycles = state.unwrappedPhaseCycles;
             observation.signedDistance = state.signedDistance;
             observation.totalDistance = state.totalDistance;
             observation.distanceDelta = state.distanceDelta;
-            observation.strideDistance = definition.referenceSpeed * definition.strideScale *
-                definition.character->model->clips[definition.jogClip].durationSeconds;
-            observation.jogDurationSeconds = definition.character->model->clips[definition.jogClip].durationSeconds;
+            observation.cycleDistance = state.cycleDistance;
+            observation.jogWeight = state.jogWeight;
             observation.speed = state.speed;
             observation.playbackRate = state.playbackRate;
             observation.moveWeight = state.moveWeight;

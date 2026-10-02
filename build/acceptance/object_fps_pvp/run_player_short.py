@@ -158,9 +158,9 @@ def main():
         if not result['passed']:break
     comparisons={}
     for distance in ('0.5','1.0','1.5'):
-        values={case:crossings[distance]['phase_seconds'] for case,crossings in measured.items() if distance in crossings}
-        comparisons[distance]={'phase_seconds_by_case':values,'maximum_difference_seconds':max(values.values())-min(values.values()) if values else None}
-    phase_consistent=all(value['maximum_difference_seconds'] is None or value['maximum_difference_seconds']<.0002 for value in comparisons.values())
+        values={case:crossings[distance]['cycles'] for case,crossings in measured.items() if distance in crossings}
+        comparisons[distance]={'cycles_by_case':values,'maximum_difference_cycles':max(values.values())-min(values.values()) if values else None}
+    phase_consistent=all(value['maximum_difference_cycles'] is None or value['maximum_difference_cycles']<.0002 for value in comparisons.values())
     summary={'passed':len(results)==len(names) and all(value['passed'] for value in results) and phase_consistent,
         'requested_cases':names,'cases':results,'long_run_executed':False,'wire_gameplay':'v4 unchanged',
         'same_distance_across_fps':comparisons,'same_distance_phase_consistent':phase_consistent}

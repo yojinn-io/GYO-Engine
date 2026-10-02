@@ -25,10 +25,10 @@ def validate_samples(samples):
         if min(c["body_meshes"], c["hair_meshes"], c["weapon_meshes"], c["upper_body_mask_count"]) <= 0:
             errors.append("Successful remote pose lacks body, buns, hand weapon or upper-body mask")
         numbers = position + c["foot_anchor"] + c["weapon_world_position"] + [
-            c[name] for name in ("scale", "stride_distance", "jog_duration_seconds", "phase_seconds", "unwrapped_phase_seconds",
+            c[name] for name in ("scale", "cycle_distance", "jog_weight", "phase_cycles", "unwrapped_phase_cycles",
                                 "signed_distance", "total_distance", "distance_delta", "speed", "playback_rate")]
         if (not all(math.isfinite(value) for value in numbers) or c["scale"] <= 0 or
-                c["stride_distance"] <= 0 or c["jog_duration_seconds"] <= 0):
+                c["cycle_distance"] <= 0 or not 0 <= c["jog_weight"] <= 1):
             errors.append("Nonfinite or invalid character geometry/phase")
             previous = None
             continue
@@ -40,22 +40,23 @@ def validate_samples(samples):
             resets += 1
             if abs(c["distance_delta"]) > 1e-6 or not c["reset_reason"]:
                 errors.append("Phase reset consumed a discontinuous displacement or omitted its reason")
-            if any(abs(c[name]) > 1e-6 for name in ("phase_seconds", "unwrapped_phase_seconds", "signed_distance", "total_distance")):
+            if any(abs(c[name]) > 1e-6 for name in ("phase_cycles", "unwrapped_phase_cycles", "signed_distance", "total_distance")):
                 errors.append("Phase reset retained old phase or accumulated path distance")
         if previous and previous["remote"]["player_id"] == identity:
             old = previous["remote"]["character"]
             if c["reset_count"] == old["reset_count"] and not c["phase_reset"]:
-                phase_delta = c["unwrapped_phase_seconds"] - old["unwrapped_phase_seconds"]
+                phase_delta = c["unwrapped_phase_cycles"] - old["unwrapped_phase_cycles"]
                 signed_delta = c["signed_distance"] - old["signed_distance"]
                 distance_delta = c["total_distance"] - old["total_distance"]
-                if abs(phase_delta - signed_delta / c["stride_distance"] * c["jog_duration_seconds"]) > 2e-5:
-                    errors.append("Jog phase is not proportional to actual signed displacement")
+                # The gait phase advances by the frame's own blended cycle distance.
+                if abs(phase_delta - signed_delta / c["cycle_distance"]) > 2e-5:
+                    errors.append("Gait phase is not proportional to actual signed displacement")
                 if distance_delta < -1e-6 or abs(signed_delta) > distance_delta + 2e-5:
                     errors.append("Accumulated locomotion distance is inconsistent")
                 geometric_delta = math.dist(position, previous["remote"]["position"])
                 consecutive = sample["frame_id"] == previous["frame_id"] + 1
                 if consecutive and geometric_delta < 1e-7 and abs(phase_delta) > 2e-5:
-                    errors.append("Stationary or pure-turn pose continued advancing Jog phase")
+                    errors.append("Stationary or pure-turn pose continued advancing gait phase")
                 if c["holding"] and old["holding"]:
                     holds += 1
                     if abs(phase_delta) > 2e-5 or geometric_delta > 2e-5:
@@ -63,7 +64,7 @@ def validate_samples(samples):
                 if consecutive and c["backward"] and c["distance_delta"] > 1e-5:
                     backward += 1
                     if phase_delta >= 0:
-                        errors.append("Backward displacement did not reverse the existing Jog phase")
+                        errors.append("Backward displacement did not reverse the existing gait phase")
                 # Consecutive successful renders must agree with the transform
                 # actually submitted. Across a skipped render, use accumulated
                 # distance instead of treating the last per-attempt delta as all.
@@ -78,8 +79,8 @@ def validate_samples(samples):
 def analyze(directory):
     directory = Path(directory)
     result = {"passed": False, "scope": "12-second same-host two-GUI character regression; v4 gameplay, not v5 certification.",
-              "method": "Successful Presented positions and owning character pose/phase. Phase seconds = actual signed distance / calibrated stride * loaded Jog duration; cycles = distance / calibrated stride.",
-              "direction_limit": "Sideways uses forward Jog approximation; backwards samples Jog in reverse. No dedicated direction clips or IK.",
+              "method": "Successful Presented positions and owning character pose/phase. Gait cycles = actual signed distance / the blended walk/jog cycle distance of each frame.",
+              "direction_limit": "Sideways uses the forward walk/jog approximation; backwards samples it in reverse. No dedicated direction clips or IK.",
               "clients": {}, "errors": []}
     try:
         reports = {role: json.loads((directory / f"{role}-player.json").read_text()) for role in ("create", "join")}
@@ -127,13 +128,15 @@ def analyze(directory):
                 result["errors"].append(f"{name}: too few successful poses")
                 continue
             a,b = samples[0]["remote"]["character"],samples[-1]["remote"]["character"]
-            delta = b["unwrapped_phase_seconds"]-a["unwrapped_phase_seconds"]
+            delta = b["unwrapped_phase_cycles"]-a["unwrapped_phase_cycles"]
             distance = b["total_distance"]-a["total_distance"]
-            result["segments"][name] = {"samples":len(samples),"distance":distance,"phase_delta_seconds":delta,
-                "phase_seconds_per_meter": abs(delta)/distance if distance>1e-6 else None,
-                "stride_distance": b["stride_distance"], "jog_duration_seconds": b["jog_duration_seconds"],
-                "cycles": delta / b["jog_duration_seconds"]}
-            if (sign == 0 and (abs(delta)>2e-4 or distance>2e-4)) or (sign and sign*delta <= .015):
+            result["segments"][name] = {"samples":len(samples),"distance":distance,"phase_delta_cycles":delta,
+                "cycles_per_meter": abs(delta)/distance if distance>1e-6 else None,
+                "cycle_distance": b["cycle_distance"], "jog_weight": b["jog_weight"]}
+            # Like the cadence gate and path crossings, segment phase is timing
+            # evidence: GPU readback frames reanchor the gait in capture runs.
+            if reports["join"]["capture"] == "none" and (
+                    (sign == 0 and (abs(delta)>2e-4 or distance>2e-4)) or (sign and sign*delta <= .015)):
                 result["errors"].append(f"{name}: displacement-driven stop/direction evidence failed")
         # Compare identical observed path lengths at different presentation FPS,
         # rather than equating the duration of a scripted key hold with distance.
@@ -148,8 +151,8 @@ def analyze(directory):
                     before,after=a["total_distance"]-origin["total_distance"],b["total_distance"]-origin["total_distance"]
                     if before < distance <= after:
                         fraction=(distance-before)/(after-before)
-                        phase=a["unwrapped_phase_seconds"]+fraction*(b["unwrapped_phase_seconds"]-a["unwrapped_phase_seconds"])-origin["unwrapped_phase_seconds"]
-                        crossings[str(distance)]={"phase_seconds":phase,"cycles":phase/b["jog_duration_seconds"],"stride_distance":b["stride_distance"]}
+                        phase=a["unwrapped_phase_cycles"]+fraction*(b["unwrapped_phase_cycles"]-a["unwrapped_phase_cycles"])-origin["unwrapped_phase_cycles"]
+                        crossings[str(distance)]={"cycles":phase,"cycle_distance":b["cycle_distance"],"jog_weight":b["jog_weight"]}
                         break
         result["equal_distance_forward_phase"] = crossings
         if reports["join"]["capture"] == "none" and len(crossings)!=3:

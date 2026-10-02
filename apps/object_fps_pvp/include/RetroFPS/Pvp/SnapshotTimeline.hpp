@@ -15,6 +15,9 @@ struct SnapshotPresentation final {
     PlayerState player;
     std::uint64_t lowerTick{}, upperTick{};
     double presentationTick{}, alpha{};
+    // Planar speed between the bracketing authority states (zero when both
+    // are the same state): a property of the timeline, not the render rate.
+    double planarSpeed{};
     double latestReceiveAgeSeconds{}, holdSeconds{}, totalHoldSeconds{};
     std::size_t historySize{};
     std::uint64_t holdCount{}, gapCount{}, historyEvictions{}, phaseReanchors{};
@@ -115,11 +118,13 @@ public:
         player.yaw = std::remainder(a.yaw + std::remainder(b.yaw - a.yaw,
             2 * std::numbers::pi_v<float>) * fraction, 2 * std::numbers::pi_v<float>);
         player.pitch = a.pitch + (b.pitch - a.pitch) * fraction;
+        const double planarSpeed = bTick > aTick ? std::hypot(static_cast<double>(b.position.x) - a.position.x,
+            static_cast<double>(b.position.z) - a.position.z) / (static_cast<double>(bTick - aTick) * MovementTickSeconds) : 0;
         std::optional<CombatState> combat;
         for (const auto& value : history_[before].snapshot.combat)
             if (value.playerId == id && value.lifeGeneration == player.lifeGeneration) combat = value;
         return SnapshotPresentation{player, aTick, bTick, static_cast<double>(baseTick_) + playerCursor,
-            alpha, std::max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
+            alpha, planarSpeed, std::max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
             history_.size(), holdCount_, gaps_, evictions_, phaseReanchors_, holding,
             a.lastResolvedCommand, b.lastResolvedCommand, missingFuture, combat};
     }
