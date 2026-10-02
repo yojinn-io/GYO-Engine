@@ -25,7 +25,8 @@ from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, Transien
                               prepare_draft as _prepare_draft, retry_after_seconds, verify_remote_tag)
 from release_support import (PLATFORMS, Package,
                              ReleaseError, archive_name as _archive_name, checksum_document,
-                             load_packages as _load_packages, prepare_event, validate_archive as _validate_archive)
+                             load_packages as _load_packages, validate_archive as _validate_archive)
+from release_channels import derive_trains, prepare_event
 from package_contract import check_identity, manifest_digest, manifest_path, required_checks, inventory_digest
 
 
@@ -247,16 +248,19 @@ class FakeApi:
 
 
 class PrepareTests(unittest.TestCase):
-    def event(self, version="v1.2.3", prerelease=False):
-        return {"inputs": {"version": version, "prerelease": prerelease}}
+    TRAINS = derive_trains(EXPECTED_PAIRS)
+
+    def event(self, version="v1.2.3", prerelease=False, train=APP):
+        return {"inputs": {"train": train, "version": version, "prerelease": prerelease}}
 
     def prepare(self, event=None, git=None, ref="refs/heads/feature/rendering", name="workflow_dispatch"):
-        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit())
+        return prepare_event(name, event or self.event(), COMMIT, ref, git or FakeGit(), trains=self.TRAINS)
 
     def test_manual_branch_request_is_bound_to_event_commit(self):
         git = FakeGit()
         self.assertEqual(self.prepare(git=git),
-                         {"tag": "v1.2.3", "commit": COMMIT, "prerelease": "false"})
+                         {"tag": f"{APP}-v1.2.3", "commit": COMMIT, "prerelease": "false",
+                          "train": APP, "product": APP})
         self.assertIn(("check-ref-format", "refs/heads/feature/rendering"), git.calls)
         self.assertFalse(any(args[0] == "merge-base" for args in git.calls))
 
@@ -287,7 +291,7 @@ class PrepareTests(unittest.TestCase):
             for value in (True, False, "true", "false"):
                 with self.subTest(version=version, value=value):
                     result = self.prepare(self.event(version, value))
-                    self.assertEqual(result["tag"], version)
+                    self.assertEqual(result["tag"], f"{APP}-{version}")
                     self.assertEqual(result["prerelease"], str(value).lower())
         for version in ("", "1.2.3", "v01.2.3", "v1.2", "v1.2.3-01", "v1.2.3-rc..1",
                         "v1.2.3\ninjected=true", "v1.2.3 ", "v1.2.3/extra", 123):
@@ -369,7 +373,8 @@ class PackageTests(unittest.TestCase):
         registry = self.work / "projects.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
-        event_path.write_text(json.dumps({"inputs": {"version": "v9876.5432.10101", "prerelease": "false"}}), encoding="utf-8")
+        event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+                                                     "prerelease": "false"}}), encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
             "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch", "--ref", "refs/heads/main",
@@ -378,7 +383,8 @@ class PackageTests(unittest.TestCase):
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
-                         f"tag=v9876.5432.10101\ncommit={commit}\nprerelease=false\n")
+                         f"tag=sample_app-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
+                         "train=sample_app\nproduct=sample_app\n")
 
     def test_missing_platform_and_unexpected_file_fail(self):
         self.write_packages(packages()[:2])

@@ -57,7 +57,7 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 
 `projects.csv` 決定遊戲集合，`tools.csv` 決定設計工具集合，不從目錄數量推測。每個支援平台產生由 release 選取工具組成的 toolchain archive（目前為 UI Editor GUI），再為啟用遊戲產生獨立 archive。任何選中遊戲、工具或必要驗收失敗都會讓 Engine 整合失敗。零遊戲仍可成功發佈。配布物是可執行產品與必要依賴，沒有 Engine SDK 或原始碼套件。
 
-`Prepare Release` 固定 commit，建置並驗證完整產品集合，再準備 tag 與 Draft Release。公開 Draft 是使用者的獨立操作。遊戲包只包含遊戲、資產與 runtime 依賴；驗收工具從產品外部執行。
+`Prepare Release` 選擇一條發佈線（`tools` 或某個遊戲）並固定 commit，建置並驗證該發佈線的產品，再準備 tag 與 Draft Release。公開 Draft 是使用者的獨立操作。遊戲包只包含遊戲、資產與 runtime 依賴；驗收工具從產品外部執行。
 
 ## 設計資料
 

@@ -11,6 +11,11 @@ on:
         description: quick or release acceptance
         required: true
         type: string
+      product:
+        description: One release train product beside the toolchain baseline; empty builds every product
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -42,7 +47,9 @@ jobs:
           esac
       - name: Export the authoritative project selection
         id: registry
-        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT"
+        env:
+          TRAIN_PRODUCT: ${{ inputs.product }}
+        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
       - name: Test package, draft preparation and smoke failure policies
         run: python -m unittest discover -s tests/common/ci -v
 
@@ -246,11 +253,13 @@ jobs:
       # product row verifies its own module (release only, like its C++ tests,
       # since L1 checks every module) and archives its declared services. Only
       # Linux provisions Go: services are cross-built there for every platform.
+      # The plan also writes the row's service record, possibly empty, which
+      # tells the release trains exactly which service archives belong to it.
       - name: Plan this row's recorded Go modules and services
         id: go_plan
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}
         run: |
-          python build/ci/common/go_checks.py plan --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output $env:GITHUB_OUTPUT
+          python build/ci/common/go_checks.py plan --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output $env:GITHUB_OUTPUT --record "build/target/_build/$env:PRESET/go-services/go-services.json" --revision $env:SOURCE_COMMIT
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Provision the Go version the recorded modules declare
@@ -276,15 +285,16 @@ jobs:
           python build/ci/common/go_checks.py build --build-info "build/target/_build/$env:PRESET/gyo-build.json" --product $env:GYO_PRODUCT --output-dir "build/target/_build/$env:PRESET/go-services" --revision $env:SOURCE_COMMIT 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/go-services.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # Service archives are CI artifacts only. Their artifact name stays
-      # outside the gyo-package-* pattern that release draft preparation reads.
-      - name: Upload this product's Go service archives
-        if: ${{ !cancelled() && steps.go_services.outcome == 'success' }}
+      # The record and the service archives enter the product's release train
+      # through their own artifact, outside the gyo-package-* packages.
+      - name: Upload this product's Go service record and archives
+        if: ${{ !cancelled() && steps.go_plan.outcome == 'success' && (steps.go_plan.outputs.has_go_services != 'true' || steps.go_services.outcome == 'success') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gyo-service-${{ matrix.product }}
           overwrite: true
           path: |
+            build/target/_build/${{ matrix.preset }}/go-services/go-services.json
             build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz
             build/target/_build/${{ matrix.preset }}/go-services/gyo-*.tar.gz.sha256
           if-no-files-found: error

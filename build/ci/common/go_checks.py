@@ -10,6 +10,9 @@ knows no product: a workflow row selects owners by its configured product.
   check   go vet / go test / go test -race for each selected module
   build   CGO-free cross-builds of each selected service for its declared
           release platforms, optionally archived with a SHA-256 file
+
+A packaging row's plan can also write its service record (--record): the
+release trains read it to know which service archives belong to a product.
 """
 
 import argparse
@@ -19,6 +22,7 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import platform as host_platform
 import re
 import subprocess
 import sys
@@ -49,6 +53,11 @@ STEPS = {
 DEPENDENCY_DELIMITER = "GYO_GO_DEPENDENCY_FILES_EOF"
 # Per go command; the CTest TIMEOUT in GyoGo.cmake must stay above it.
 COMMAND_TIMEOUT = 900
+# Only Linux rows provision Go (GyoAppProject.cmake requires a service owner to
+# be Linux-enabled), so a product's service record comes from its Linux row.
+SERVICE_BUILD_PLATFORM = "linux-x64"
+SERVICE_RECORD_NAME = "go-services.json"
+SERVICE_RECORD_VERSION = 1
 
 assert set(GO_TARGETS) == set(PLATFORMS)
 
@@ -177,6 +186,21 @@ def plan(modules, services, repository: Path = ROOT) -> dict[str, str]:
     return outputs
 
 
+def service_record(product: str, services: list[Service], revision: str) -> dict:
+    """The services one packaging row declares, bound to its product and commit."""
+    validate_product(product)
+    if not re.fullmatch(r"[0-9a-f]{40}", revision or ""):
+        raise GoCheckError("Service record revision must be a full lowercase Git commit SHA")
+    owners = selected_owners(product)
+    if any(service.owner not in owners for service in services):
+        raise GoCheckError(f"Service record for {product} may only contain its own services")
+    return {
+        "version": SERVICE_RECORD_VERSION, "product": product, "source_revision": revision,
+        "services": [{"owner": service.owner, "role": service.role, "platforms": list(service.platforms)}
+                     for service in services],
+    }
+
+
 def write_outputs(outputs: dict[str, str], stream) -> None:
     for name, value in outputs.items():
         if "\n" in value:
@@ -272,10 +296,13 @@ def build(services: list[Service], output: Path, *, repository: Path = ROOT, go:
             if revision is None:
                 produced.append(stage / "bin" / executable)
                 continue
+            # build_* describe the host that compiled the service, as in
+            # native package metadata; release notes derive cross-builds from it.
             metadata = {
                 "source_revision": revision, "owner": service.owner, "role": service.role,
                 "platform": platform, "goos": goos, "goarch": goarch, "cgo": False,
                 "go_version": go_version, "module": service.module, "package": service.package,
+                "build_os": host_platform.platform(), "build_architecture": host_platform.machine(),
             }
             archive = output / archive_name(service, platform)
             digest = _archive(stage, executable, metadata, archive, f"gyo-{service.owner}-{service.role}")
@@ -295,6 +322,8 @@ def main(arguments=None) -> int:
     selection.add_argument("--repository", type=Path, default=ROOT)
     plan_parser = commands.add_parser("plan", parents=[selection])
     plan_parser.add_argument("--output", type=Path, help="Append GitHub Actions outputs")
+    plan_parser.add_argument("--record", type=Path, help="Write this packaging row's service record")
+    plan_parser.add_argument("--revision", help="Source commit the service record is bound to")
     check_parser = commands.add_parser("check", parents=[selection])
     check_parser.add_argument("--module", type=Path, help="Check one module directory instead of a record")
     check_parser.add_argument("--step", action="append", choices=tuple(STEPS))
@@ -318,6 +347,14 @@ def main(arguments=None) -> int:
             directories = [repository / module.path for module in modules]
         if args.command == "plan":
             outputs = plan(modules, services, repository)
+            if args.record is not None:
+                if args.product is None:
+                    raise GoCheckError("--record requires the packaging row's --product")
+                record = service_record(args.product, services, args.revision)
+                args.record.parent.mkdir(parents=True, exist_ok=True)
+                args.record.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            elif args.revision is not None:
+                raise GoCheckError("--revision is only used with --record")
             if args.output:
                 with args.output.open("a", encoding="utf-8") as stream:
                     write_outputs(outputs, stream)

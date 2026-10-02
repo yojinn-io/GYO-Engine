@@ -84,7 +84,7 @@ class RegistryMatrixTests(unittest.TestCase):
         self.write_registry("")
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         event = self.root / "event.json"
-        event.write_text(json.dumps({"inputs": {"version": "v9876.5432.100", "prerelease": False}}))
+        event.write_text(json.dumps({"inputs": {"train": "tools", "version": "v2026.10.1", "prerelease": False}}))
         output = self.root / "outputs.txt"
         result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"), "prepare",
             "--registry", str(self.registry), "--event-path", str(event), "--event-name", "workflow_dispatch",
@@ -92,7 +92,9 @@ class RegistryMatrixTests(unittest.TestCase):
             "--ref", "refs/heads/main", "--commit", commit, "--output", str(output)],
             capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(output.exists())
+        outputs = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual((outputs["tag"], outputs["train"], outputs["product"]),
+                         ("tools-v2026.10.1", "tools", "toolchain"))
 
 
 if __name__ == "__main__":

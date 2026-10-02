@@ -110,8 +110,16 @@ def main():
     parser.add_argument("--tool-registry", type=Path)
     parser.add_argument("--repository-root", type=Path, help="Tool source root override for isolated validation")
     parser.add_argument("--output", type=Path, help="Append GitHub Actions outputs")
+    parser.add_argument("--product", default="",
+                        help="Build only this release train product beside the toolchain baseline "
+                             "(toolchain alone selects no game); empty builds every product")
     args = parser.parse_args()
     pairs = export_registry(args.registry)
+    if args.product:
+        validate_product(args.product)
+        if args.product != "toolchain" and all(product != args.product for product, _ in pairs):
+            raise SystemExit(f"Product {args.product!r} is neither the toolchain nor a registry-enabled game")
+        pairs = [pair for pair in pairs if pair[0] == args.product]
     tools = export_tools(args.tool_registry, repository_root=args.repository_root)
     matrix = {"include": [dict(product=product, kind="app", platform=platform, tools=[], **TOOLCHAINS[platform]) for product, platform in pairs]}
     baseline = {"include": [dict(product="toolchain", kind="toolchain", platform=platform, tools=tools[platform], **TOOLCHAINS[platform]) for platform in PLATFORMS]}

@@ -2,7 +2,7 @@
 
 [繁體中文](releasing.zh-Hant.md) · [全体構造](architecture.md) · [描画の検証](rendering_architecture.ja.md#r09)
 
-GitHub Actions の **Prepare Release** で必要な製品を検証し、Draft の添付と説明を確認してから **Publish release** を押します。公開単位は Engine 統合であり、ゲームの有無で公開可否を決めません。
+GitHub Actions の **Prepare Release** で公開ライン（train）を一つ選んで必要な製品を検証し、Draft の添付と説明を確認してから **Publish release** を押します。Train ごとに version と公開を独立させます。ツール群の公開可否はゲームの有無で決まらず、あるゲームの失敗が他の train を止めることもありません。
 
 ## 1. 製品集合
 
@@ -15,6 +15,17 @@ GitHub Actions の **Prepare Release** で必要な製品を検証し、Draft �
 
 Platform は `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64` です。CSV の `macos` 列は両方の macOS architecture（arm64 と x64）を有効にし、architecture ごとの列は設けません。展開規則は CMake の registry parser だけが持ちます。Archive ごとに同名の `.sha256` を付けます。Apps がない場合、CSV が header だけの場合、全ゲーム無効の場合も、4 platform の toolchain と checksum を公開できます。Go service は自身が宣言した platform だけを archive します。たとえば gateway は引き続き Linux と Windows のみです。未登録ディレクトリは選びません。選択したゲームの欠落、compile failure、必要な検証の失敗は統合全体を失敗させます。
 
+### 公開ライン（train）
+
+Train は registry データから導出し、workflow と共通コードに製品名を書きません。
+
+| Train | 内容 | 正式 tag | Snapshot tag |
+|---|---|---|---|
+| `tools` | 4 platform の `gyo-toolchain-<platform>`（全公開ツール。`requires_apps` が空のものだけ） | `tools-vYYYY.M.N`。例：`tools-v2026.10.1` | `tools-snapshot-<yyyymmdd>-<sha7>` |
+| 有効な各ゲーム | 有効 platform ごとの `gyo-<game>-<platform>`（client と match）と、その封装行が記録した service archive。例：`gyo-<game>-gateway-<platform>`（linux-x64、windows-x64） | `<game>-vX.Y.Z`（SemVer）。例：`object_fps_pvp-v5.0.0` | `<game>-snapshot-<yyyymmdd>-<sha7>` |
+
+同じ release の client、match、gateway は同じ commit と version から作ります。Service archive は Linux 封装行の service record `go-services.json`（製品、commit、宣言された service／platform）を通じてゲームの train に入り、checksum、内容、`build_metadata.json` の source commit を同様に検証します。製品 version は通信 protocol の version と独立しており、protocol の互換性は tag で表しません。Tools とゲーム train の間の Data Contract version 検査は宣言の仕組みがまだないため後回しです。Archive のコード署名は未対応です（TODO）。
+
 配布物は実行可能な製品と必要な依存物です。Engine SDK や source archive は生成しません。Toolchain にゲーム source/assets を含めず、ゲーム包に CI、tests、acceptance executable、editor、元の美術ソースを含めません。エンジンは静的リンクし、必要な third-party dynamic runtime を配置します。
 
 ## 2. 入口と操作
@@ -24,8 +35,10 @@ Platform は `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64` です。
 | Draft pull request、または `docs/**` だけを変更する pull request | CI policy tests と範囲判定のみ実行し、`CI gate` は意図した skip として成功 |
 | Ready の pull request | L1 merge gate：platform ごとに 1 job で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行。Linux は host shader、Lavapipe GPU、core も実行。`macos-x64` は arm64 runner で cross build し、tests を Rosetta 2 で実行。封装なし |
 | master への push／通常 workflow の手動実行 | L1 と Quick 統合、Actions artifacts |
+| master への push で `CI gate` が成功 | 今回の Quick 製品から train ごとに snapshot prerelease を 1 つ公開。Tag は再利用せず、train ごとに公開順で直近 5 個だけ残し（tag の日付は命名専用）、それより前に公開した snapshot release とその snapshot tag を削除（他の tag には触れない）。古い run の再実行で、その commit がより新しい snapshot の commit の祖先なら公開しない |
+| `package` label 付きの open な pull request（close／merge 済みは build しない）、または **Package trial** の手動実行 | Quick の封装経路で Actions artifacts だけを upload（14 日保持）。Tag や release は作らず、required check でもない |
 | その他の branch push | CI を実行しない |
-| **Prepare Release** | SHA を固定し、全必須製品の完全検証後に tag、Draft、添付を準備 |
+| **Prepare Release** | Train を一つ選び、SHA を固定し、toolchain baseline とその train の製品を完全検証してから tag、Draft、添付を準備 |
 | Tag push | 自動公開の入口にはしない |
 | **Publish release** | 既存 Draft を公開し、再コンパイルしない |
 
@@ -36,12 +49,12 @@ Required check には `CI gate` だけを設定します。すべての pull req
 - L1 は封装と install 後の検証を実行しません。`.github/`、`build/ci/`、`build/acceptance/`、封装 CMake を変更する PR は、merge 前にその branch で **Cross-platform CI** を手動実行します。
 - PR の base branch 変更（`edited`）では再実行しません。Merge queue（`merge_group`）は未対応で、有効化する前にその trigger と範囲判定を追加します。
 
-初回は workflow と必要なコードを既定 branch に入れ、GitHub に **Run workflow** を表示させます。選択する source branch にも同じ支援が必要です。Actions 実行／Release 編集権限を用い、build jobs は read-only、最後の Draft job だけ write 権限を持ちます。
+初回は workflow と必要なコードを既定 branch に入れ、GitHub に **Run workflow** を表示させます。選択する source branch にも同じ支援が必要です。Actions 実行／Release 編集権限を用い、build jobs は read-only で、Draft job と snapshot 公開 job だけが write 権限を持ちます。Snapshot は既定 branch への push だけで実行し、pull request、fork、手動実行では公開しません。同じ train の公開と削除は順に実行され、競合しません。Snapshot の説明には platform ごとの検証水準を載せます。例：`macos-x64` は cross build、CPU tests は Rosetta 2、実機 GPU なし。gateway は Linux 上の cross build。
 
 1. 公開予定 source commit の Quick 結果を確認します。master 以外の branch push では CI が動かないため、その branch で **Cross-platform CI** を手動実行します。
 2. **Actions → Prepare Release → Run workflow** で source branch を選びます。
-3. `v1.0.1` などの version を入力し、必要なら prerelease を選びます。
-4. 4 platform の固定 toolchain と全 CSV ゲームの必要検証を待ちます。
+3. Train（`tools` または有効なゲーム id）と version を入力します。Tools は `v2026.10.1` 形式、ゲームは `v5.0.0` などの SemVer です。必要なら prerelease を選びます。
+4. 4 platform の toolchain baseline とその train の必要検証を待ちます。
 5. Summary から Draft を開き、commit、version、全添付、説明を確認します。
 6. 公開する時に **Publish release** を押します。
 
@@ -61,7 +74,7 @@ Quick と Release の範囲や GPU suite は owner の checks が決めます。
 
 `macos-x64` の検証水準は他の platform と異なります。製品は macOS arm64 の hosted runner 上で `ci-macos-x64` preset（`CMAKE_OSX_ARCHITECTURES=x86_64`、deployment target は同じ 13.3）により cross build し、CPU tests と install 後の検証は同じ runner で Rosetta 2 により変換実行します。GPU checks は実行せず、実機の Intel Mac による検証もありません。Runner が x86_64 code を実行できない場合、その行は build 前に失敗します。Linkage 検査は macOS package 内の実行ファイルと native library が target architecture だけを含むことを要求します。各行の Summary は build host／target と CPU 実行方式を示し、archive の `build_metadata.json` も `cpu_execution`（`native` または `rosetta2`）として同じ情報を記録します。
 
-封装と Draft 準備は同じ source SHA から完全な期待集合を再計算します。Product/platform、tool owner 集合、checksum、archive path の安全性、manifest、必要内容、Release profile の証拠を確認します。欠落、余分な製品、一部のツールだけを含む toolchain、重複 identity、Quick-only 証拠を拒否します。
+封装と Draft 準備は同じ source SHA の registry から train の期待集合を再計算します。Product/platform、tool owner 集合、checksum、archive path の安全性、manifest、必要内容、Release profile の証拠を確認し、service archive は service record と完全に一致させます。欠落、余分な製品、一部のツールだけを含む toolchain、重複 identity、Quick-only 証拠を拒否します。Snapshot も同じ検証を行いますが、Quick の証拠を受け付けます。
 
 `acceptance.json` の `package_sha256` は製品内の全ファイル内容とシンボリックリンク先を結び付け、封装時に生成する root の `build_metadata.json` だけを除外します。CPU／GPU 検証と封装の間の内容変更を拒否し、archive 検査でも同じ digest を独立に再計算します。製品隔離は登録済み実行ファイル、native files、コンテンツの一覧に従い、接頭辞や拡張子によらず未登録ファイルを拒否します。シンボリックリンクは宣言済み native files に限り、参照先を package 内に制限します。
 

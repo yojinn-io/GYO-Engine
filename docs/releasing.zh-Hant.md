@@ -2,7 +2,7 @@
 
 [日本語](releasing.ja.md) · [整體架構](architecture.md) · [渲染驗收](rendering_architecture.zh-Hant.md#r09)
 
-在 GitHub Actions 執行 **Prepare Release**，等所有必要產品通過驗收並準備好 Draft，再檢查附件與說明、按 **Publish release**。本流程以 Engine 整合為單位，不以某個遊戲是否存在決定能否發佈。
+在 GitHub Actions 執行 **Prepare Release** 並選擇一條發佈線（train），等該 train 的必要產品通過驗收並準備好 Draft，再檢查附件與說明、按 **Publish release**。每條 train 獨立訂版本與發佈；工具鏈不以某個遊戲是否存在決定能否發佈，一個遊戲失敗也不阻擋其他 train。
 
 ## 1. 產品集合
 
@@ -15,6 +15,17 @@
 
 平台是 `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64`。CSV 的 `macos` 欄同時啟用兩種 macOS 架構（arm64 與 x64），不另設架構欄位；展開規則只由 CMake 登錄解析器維護。每個壓縮檔另有同名 `.sha256`。因此沒有 app、CSV 只有標頭或全部停用時，仍有四平台 toolchain 與 checksum，可完成 Release。Go 服務只封裝自己宣告的平台，例如 gateway 仍只有 Linux 與 Windows。未登錄的目錄不會自動加入；已選中的遊戲缺檔、編譯或驗收失敗，則整次整合失敗。
 
+### 發佈線（train）
+
+Train 由登錄資料推導，workflow 與共通程式不寫產品名稱：
+
+| Train | 內容 | 正式 tag | Snapshot tag |
+|---|---|---|---|
+| `tools` | 四平台 `gyo-toolchain-<platform>`（全部發佈工具，僅限 `requires_apps` 為空者） | `tools-vYYYY.M.N`，例如 `tools-v2026.10.1` | `tools-snapshot-<yyyymmdd>-<sha7>` |
+| 每個啟用的遊戲 | 該遊戲各啟用平台的 `gyo-<game>-<platform>`（client 與 match），加上其封裝列記錄的服務壓縮檔，例如 `gyo-<game>-gateway-<platform>`（linux-x64、windows-x64） | `<game>-vX.Y.Z`（SemVer），例如 `object_fps_pvp-v5.0.0` | `<game>-snapshot-<yyyymmdd>-<sha7>` |
+
+同一個 release 的 client、match 與 gateway 來自同一 commit 與同一版本。服務壓縮檔經 Linux 封裝列的服務記錄 `go-services.json`（產品、commit 與宣告的服務／平台）進入該遊戲 train，同樣驗證 checksum、內容與 `build_metadata.json` 的來源 commit。產品版本與通訊協定版本彼此獨立，協定相容性不由 tag 表示。Tools 與遊戲 train 之間的 Data Contract 版本檢查尚無宣告機制，留待之後處理；壓縮檔目前未做程式碼簽章（TODO）。
+
 產品是可執行程式與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source/assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
 
 ## 2. 入口與操作
@@ -24,8 +35,10 @@
 | Draft pull request，或只變更 `docs/**` 的 pull request | 只執行 CI 政策測試與範圍判定；`CI gate` 以預期略過通過 |
 | Ready pull request | L1 合併閘門：每平台一個 job，建置登錄啟用的遊戲、預設工具、Engine 與測試，並跑 `cpu`／`shader` 標籤測試；Linux 另跑 host shader、Lavapipe GPU 與 core；`macos-x64` 在 arm64 runner 交叉編譯，測試經 Rosetta 2 執行；不封裝 |
 | 推送 master／一般 workflow 手動執行 | L1 加 Quick 整合與 Actions artifacts |
+| 推送 master 且 `CI gate` 通過 | 依本次 Quick 套件為每條 train 發佈一個 snapshot prerelease；tag 不重複使用，每條 train 依發佈順序只保留最近發佈的 5 個（tag 中的日期只用於命名），較早發佈的 snapshot release 與其 snapshot tag 會刪除（不碰其他 tag）；重跑舊的 run 時，若其 commit 已是較新 snapshot commit 的祖先，便略過不發佈 |
+| 開啟中的 pull request 帶有 `package` 標籤（已關閉或已合併者不建置），或手動執行 **Package trial** | 走 Quick 封裝路徑，只上傳 Actions artifacts（保留 14 天），不建立 tag 或 release；不是必要檢查 |
 | 推送其他分支 | 不執行 CI |
-| **Prepare Release** | 固定 SHA，完整驗收全部必要產品，準備 tag、Draft 與附件 |
+| **Prepare Release** | 選擇一條 train，固定 SHA，以 toolchain 基準加該 train 的產品完整驗收，準備 tag、Draft 與附件 |
 | 推送 tag | 不以此作為自動發佈入口 |
 | **Publish release** | 公開已準備的 Draft，不重新編譯 |
 
@@ -36,12 +49,12 @@
 - L1 不執行封裝與安裝後驗收。變更 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake 的 PR，合併前在該分支手動執行 **Cross-platform CI**。
 - 只改 PR 目標分支（`edited`）不會重新執行。目前未支援 merge queue（`merge_group`）；啟用前須先加入該觸發與範圍判定。
 
-第一次使用前，先把 workflow 與所需程式放入預設分支，GitHub 才能顯示 **Run workflow**。來源分支也必須包含相同支援。需要 Actions 執行與 Release 編輯權限；建置 jobs 保持讀取權限，最後 Draft job 才使用寫入權限。
+第一次使用前，先把 workflow 與所需程式放入預設分支，GitHub 才能顯示 **Run workflow**。來源分支也必須包含相同支援。需要 Actions 執行與 Release 編輯權限；建置 jobs 保持讀取權限，只有 Draft job 與 snapshot 發佈 job 使用寫入權限。Snapshot 只在預設分支的 push 執行，不在 pull request、fork 或手動執行時發佈；同一條 train 的發佈與清理依序執行，不會互相競爭。Snapshot 說明列出各平台的驗證等級，例如 `macos-x64` 為交叉編譯、CPU 測試經 Rosetta 2、無實體 GPU，gateway 為在 Linux 交叉編譯。
 
 1. 確認預定來源 commit 的 Quick 結果；master 以外的分支 push 不執行 CI，需在該分支手動執行 **Cross-platform CI**。
 2. 在 **Actions → Prepare Release → Run workflow** 選擇來源分支。
-3. 填入 version，例如 `v1.0.1`，必要時勾選 prerelease。
-4. 等待四平台固定 toolchain 與全部 CSV 遊戲的必要驗收。
+3. 填入 train（`tools` 或啟用的遊戲 id）與 version：tools 用 `v2026.10.1` 形式，遊戲用 SemVer，例如 `v5.0.0`；必要時勾選 prerelease。
+4. 等待四平台 toolchain 基準與該 train 的必要驗收。
 5. 從 Summary 開啟 Draft，核對 commit、版本、全部附件及說明。
 6. 準備公開時按 **Publish release**。
 
@@ -61,7 +74,7 @@ Quick 與 Release 由 checks 的 profile 控制產品驗收深度，GPU suite �
 
 `macos-x64` 的驗證等級與其他平台不同：產品在 macOS arm64 hosted runner 上以 `ci-macos-x64` preset（`CMAKE_OSX_ARCHITECTURES=x86_64`，部署目標同為 13.3）交叉編譯，CPU 測試與安裝後驗收在同一台 runner 經 Rosetta 2 轉譯執行，不跑任何 GPU 檢查，也沒有實體 Intel Mac 驗收。Runner 無法執行 x86_64 程式時，該列在建置前即失敗。Linkage 檢查要求 macOS 套件內的程式與原生庫只含目標架構。每列 Summary 列出建置 host／目標與 CPU 執行方式，壓縮檔的 `build_metadata.json` 也以 `cpu_execution`（`native` 或 `rosetta2`）記錄同一資訊。
 
-封裝與 Draft 階段重新推導同一來源 SHA 的完整預期集合，驗證每項 product/platform、工具 owner 集合、checksum、archive 路徑安全、manifest、必要內容及 Release profile 證據。缺包、多包、工具子集冒充完整工具鏈、重複身份或 Quick-only 證據都不接受。
+封裝與 Draft 階段從同一來源 SHA 的登錄重新推導該 train 的預期集合，驗證每項 product/platform、工具 owner 集合、checksum、archive 路徑安全、manifest、必要內容及 Release profile 證據；服務壓縮檔須與服務記錄完全一致。缺包、多包、工具子集冒充完整工具鏈、重複身份或 Quick-only 證據都不接受。Snapshot 使用同樣的驗證，但接受 Quick 證據。
 
 `acceptance.json` 的 `package_sha256` 綁定產品內所有檔案的內容與符號連結目標，僅排除封裝時生成的根目錄 `build_metadata.json`。CPU、GPU 驗收與封裝之間若內容變更便拒絕，archive 驗證會再獨立計算相同摘要。產品隔離依據登錄程式、原生庫與內容清單，拒絕任何未登錄檔案，不再依賴 `gyo_` 或副檔名猜測。只有宣告的 native files 可使用限定在套件內的符號連結。
 

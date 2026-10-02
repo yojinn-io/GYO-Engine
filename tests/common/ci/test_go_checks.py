@@ -212,6 +212,9 @@ class GoServiceBuildTests(unittest.TestCase):
                     self.assertEqual(members[f"gyo-alpha-relay/bin/{executable}"].mode & 0o777, 0o755)
                     metadata = json.loads(contents.extractfile("gyo-alpha-relay/build_metadata.json").read())
                 goos, goarch, _ = go_checks.GO_TARGETS[platform]
+                # The compiling host is recorded like native package metadata.
+                self.assertTrue(metadata.pop("build_os"))
+                self.assertTrue(metadata.pop("build_architecture"))
                 self.assertEqual(metadata, {
                     "source_revision": COMMIT, "owner": "alpha", "role": "relay", "platform": platform,
                     "goos": goos, "goarch": goarch, "cgo": False, "go_version": "go1.23.4",
