@@ -447,7 +447,7 @@ class TimingRunnerTests(unittest.TestCase):
                         mock.patch.object(run_timing, 'wait_for_match_ready', side_effect=ready), \
                         mock.patch.object(run_timing, 'free_port', return_value=5000), \
                         mock.patch.object(run_timing.urllib.request, 'urlopen', return_value=nullcontext()), \
-                        mock.patch.object(run_timing, 'analyze_commands', side_effect=lambda output, enforce=True: dict(movement)), \
+                        mock.patch.object(run_timing, 'analyze_commands', side_effect=lambda output, enforce=True, fps=None: dict(movement)), \
                         mock.patch('presentation_evidence.analyze_short_latency', return_value=presentation), \
                         redirect_stdout(io.StringIO()):
                     self.assertEqual(run_timing.execute_rounds(args), 1)
@@ -487,6 +487,22 @@ class TimingRunnerTests(unittest.TestCase):
         failed = {'passed': False, 'errors': ['P50 exceeds 50 ms'], 'window_disturbed': True, 'window_disturbances': ['x']}
         self.assertIs(run_weapon_short.gate_latency_case(failed)['thresholds_passed'], False)
         self.assertEqual(failed['errors'][0], 'P50 exceeds 50 ms')
+
+    def test_verified_life_respawns_are_gameplay_not_interference(self):
+        resets = [{'player_id': 2, 'life_generation': 2, 'epoch': 2, 'authority_tick': 559, 'time_ns': 1}]
+        evidence = {'overall_passed': True, 'passed': True, 'errors': [], 'disturbed': False, 'resets': 1,
+                    'unexpected_resets': 0, 'life_respawn_resets': resets, 'combat': {'life_respawns_verified': True}}
+        self.assertTrue(run_timing.require_verified_life_resets(evidence))
+        self.assertTrue(run_timing.require_clean_gui_round(evidence))
+        for combat in ({}, {'life_respawns_verified': False}):
+            with self.subTest(combat=combat):
+                evidence = {'passed': True, 'errors': [], 'life_respawn_resets': resets, 'combat': combat}
+                self.assertFalse(run_timing.require_verified_life_resets(evidence))
+                self.assertFalse(evidence['passed'])
+                self.assertIn('lack verified deaths', evidence['errors'][0])
+        self.assertTrue(run_timing.require_verified_life_resets({'passed': True, 'life_respawn_resets': []}))
+        unexpected = {'overall_passed': True, 'errors': [], 'disturbed': False, 'resets': 2, 'unexpected_resets': 1}
+        self.assertFalse(run_timing.require_clean_gui_round(unexpected))
 
     def test_full_gui_requires_clean_round_even_when_latency_passes(self):
         for disturbed, resets, expected in ((False, 0, True), (True, 0, False),

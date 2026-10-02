@@ -16,7 +16,7 @@
 | 子批次 | 內容 | 建議檔位 | 狀態 |
 |---|---|---|---|
 | 05-1 | headless長測v5化：玩法probe可重複16秒計畫為多個循環（生命世代相對遞增），分析器逐循環／逐生命核對；`--soak`長模式與短模式 | high | 完成（CTest 42／42；突變14／14；開發實跑2循環60 Hz、3循環144 Hz與單循環矩陣clean-60皆PASS，不計入驗收） |
-| 05-2 | GUI combat v5化：射擊遇空彈匣換彈、死亡／重生期間依v5規則、逐生命HP與唯一傷害核對 | high | 未開始 |
+| 05-2 | GUI combat v5化：射擊遇空彈匣換彈、死亡／重生期間依v5規則、逐生命HP與唯一傷害核對 | high | 完成（CTest 43／43；突變9／9；開發實跑16秒與兩輪120秒，第二輪120秒整輪PASS，不計入驗收） |
 | 05-3 | 整合短測與架構檢查：依指紋重用第03／04批短測（05-1改了action probe，25案矩陣須重跑）、一輪雙GUI整合短模式、產品移除／owner選擇／Match不連結Renderer與SDL | medium | 未開始 |
 | 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 未開始 |
 | 05-5 | 完整驗收：事前宣告；GUI三輪×120秒combat（計次、fix/06補跑規則）；60 Hz與144 Hz各1808秒長測（113循環，串行）；全部通過寫v5穩定基線並結案 | medium（執行約1.5小時，機器須閒置） | 未開始 |
@@ -49,6 +49,30 @@
     `gameplay_evidence.py`未改。
   - v4的`run_action_legal.py`（`--legal-shots`）與`analyze_legal`在v5無法通過，不再作為v5驗收入口；
     沒有刪除（範圍外），已列入[v6交接](../v6/HANDOFF.md)第5項的驗收工具清理。
+- 05-2紀錄（使用者2026-10-02確認，high）：
+  - 預先宣告的SDL排程（`combat_latency.hpp`）：沿用v4每0.8秒一格、自0.2秒起，改為17格一循環（13.6秒）：
+    4發擊殺join→3發打屍體（死亡等待中）→空格→4發擊殺重生的新生命→第12發打屍體→空彈匣點擊→R換彈→換彈中點擊→空格。
+    每格與其依賴的死亡／重生／換彈邊界至少隔0.6秒，所以每個動作的判定都可事前確定。120秒＝150格、116個送出動作、18次死亡。
+  - 實跑確認的v5行為：空彈匣與換彈中的點擊由Client在本機擋下（不送出、不播射擊動畫），probe逐次檢查；
+    對死亡目標的射擊被受理、扣彈、命中World、0傷害（Match不把屍體放進命中候選）。
+  - HP紀錄每幀加上完整CombatState（生命、彈藥、換彈、最後射擊）與PlayerState生命欄位，HUD另記彈藥、生命、死亡。
+    分析器（`combat_gui_evidence.py`，schema 2）以第03批的`combat_expected`逐生命重算每幀快照與HUD；
+    命中的目標生命以排程預測，再以快照的生命時間線核對；死亡等待180 Tick、重生建立新epoch、射擊者從不死亡；
+    Match的LifeRespawn重設必須與觀測到的死亡／新生命逐一相同。
+  - 共用移動分析器`command_evidence.analyze_commands`原本把重生的epoch重設判為「不明重設」，重生首幀的時間重設判為干擾，
+    舊生命被取消的命令算成未執行。改為：LifeRespawn重設另列（`unexpected_resets`只計其他原因）；
+    重生首幀只有與LifeRespawn精確配對時才不算干擾（規則從第03批`gameplay_evidence.client_disturbance`移到共用函式，兩邊共用）；
+    生命週期取消的命令必須有對應的LifeRespawn，才移出分母。`run_timing.py`在有重生時要求combat證據已核對，否則失敗。
+  - 60 Hz產量檢查原為整段±2步（頭尾兩個邊界）。實跑中join每次重生約少1個命令：契約規定每次播種重新起算固定步相位（≤1步），
+    新epoch首次相位修正≤±2 Tick（`MovementPhaseMaximumCorrectionSeconds`）。因此每次LifeRespawn另加3步容許，
+    依契約上限換算，不是新數字。120秒輪join 17次重生、容許53步，實測少14／20步。
+  - `test_combat_gui_evidence.py`原本未登錄CTest（既有缺口），本次改寫並登錄（`combat_gui_evidence`，逾時30秒）。
+  - 開發實跑（不計入驗收，`pvp-v5-batch05-2-dev-{1..4}/`）：dev-1為改分析器前的16秒原始資料；dev-2 16秒短測PASS；
+    dev-3 120秒的combat與可見延遲皆過，但產量檢查失敗（促成上一項）；dev-4 120秒整輪PASS：可見P50／P95 36.0／39.4ms（200／200）、
+    移動Actual P95 37.8ms、裁決抵達P95 107ms、射擊回饋P95 6.2ms、18次死亡／重生、視窗乾淨。
+  - 突變（以dev-4資料改壞後重分析）9／9被抓：屍體射擊造成傷害、換彈被拒、空彈點擊被送出、join快照HP、create快照彈藥、
+    HUD彈藥、HUD生命、LifeRespawn重設缺一、死亡等待不是180 Tick。
+  - 指紋影響：`gameplay_evidence.py`改為呼叫共用配對函式，05-3的25案矩陣本來就要以新probe重跑。
 
 ## 第04批進度（記錄器，隨工作更新）
 

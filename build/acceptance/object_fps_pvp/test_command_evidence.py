@@ -293,6 +293,67 @@ class CommandEvidenceTests(unittest.TestCase):
         # Schema 1 reset: the error names that no reason was recorded instead of guessing one.
         self.assert_error(result, "Unexplained epoch reset for player 1 (reason unrecorded): ")
 
+    @staticmethod
+    def life_respawn(match, client, *, clamp_epoch=2, reset_life=2, cancel=True):
+        """Player 2 respawns at tick 70 one second in: its LifeRespawn, fresh-seed clamp and one cancelled command."""
+        at = START + SECOND
+        match.append(event('reset', at, player=2, epoch=2, sequence=0, authority_tick=70,
+                           reset_reason='life_respawn', life_generation=reset_life))
+        frame = .0168
+        client.append(event('runtime_gap', at + 10_000_000, player=2, epoch=clamp_epoch, sequence=3, authority_tick=71,
+                            frame_seconds=frame, dropped_seconds=frame - evidence.TICK_SECONDS))
+        if cancel:
+            resolved = next(r for r in match if r['kind'] == 'resolved' and r['player_id'] == 2 and r['sequence'] == 100)
+            match.remove(resolved)
+            client.append(event('lifecycle_cancelled', at + 20_000_000, player=2, epoch=1, sequence=100,
+                                life_generation=1))
+
+    def test_life_respawn_is_a_contract_epoch_with_its_clamp_and_cancellations(self):
+        directory, client, match, timing = self.make_run()
+        self.life_respawn(match, client)
+        self.write(directory, client, match, timing)
+        result = evidence.analyze_commands(directory)
+        self.assertTrue(result['passed'], result['errors'])
+        self.assertFalse(result['disturbed'])
+        self.assertEqual((result['resets'], result['unexpected_resets'], len(result['life_seed_clamps'])), (1, 0, 1))
+        self.assertEqual((result['lifecycle_cancelled'], result['actual_fraction']), (1, 1.0))
+        self.assertEqual(result['commands_per_player'][2], DURATION * 60)
+        self.assertEqual(result['life_respawn_resets'][0]['life_generation'], 2)
+
+    def test_each_life_respawn_may_move_production_by_its_fresh_phase_and_first_correction(self):
+        for missing, passed in ((5, True), (6, False)):
+            with self.subTest(missing=missing):
+                directory, client, match, timing = self.make_run()
+                self.life_respawn(match, client, cancel=False)
+                late = [r for r in client if r['kind'] == 'generated' and r['player_id'] == 2][-missing:]
+                for record in late:
+                    client.remove(record)
+                self.write(directory, client, match, timing)
+                result = evidence.analyze_commands(directory, enforce=False)
+                self.assertEqual(result['production_allowance_steps']['2'], 5)
+                self.assertEqual(result['production_60hz_passed'], passed)
+
+    def test_clamp_in_another_epoch_remains_interference(self):
+        directory, client, match, timing = self.make_run()
+        self.life_respawn(match, client, clamp_epoch=1)
+        self.write(directory, client, match, timing)
+        result = evidence.analyze_commands(directory)
+        self.assertTrue(result['disturbed'])
+        self.assertEqual(result['life_seed_clamps'], [])
+
+    def test_cancellation_without_its_life_respawn_is_an_error(self):
+        directory, client, match, timing = self.make_run()
+        self.life_respawn(match, client)
+        match[:] = [r for r in match if r['kind'] != 'reset']
+        self.write(directory, client, match, timing)
+        self.assert_error(evidence.analyze_commands(directory), 'lacks a matching LifeRespawn reset')
+
+    def test_life_respawn_without_new_life_is_an_error(self):
+        directory, client, match, timing = self.make_run()
+        self.life_respawn(match, client, reset_life=1, cancel=False)
+        self.write(directory, client, match, timing)
+        self.assert_error(evidence.analyze_commands(directory), 'lacks a new life generation')
+
     def test_unexplained_reset_error_names_the_reset_reason(self):
         directory, client, match, timing = self.make_run()
         match.append(event('reset', START+SECOND, player=2, epoch=2, sequence=0, reset_reason='backlog'))

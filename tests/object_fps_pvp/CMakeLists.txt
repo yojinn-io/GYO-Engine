@@ -102,6 +102,10 @@ add_test(NAME "${GYO_CURRENT_APP}.gameplay_soak"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_soak_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_soak" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
 
+add_test(NAME "${GYO_CURRENT_APP}.combat_gui_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_combat_gui_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.combat_gui_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+
 add_test(NAME "${GYO_CURRENT_APP}.steady_clock"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_steady_clock.py")
 set_tests_properties("${GYO_CURRENT_APP}.steady_clock" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
