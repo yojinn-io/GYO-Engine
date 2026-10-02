@@ -10,7 +10,8 @@
 | 04-1 | 第一人稱Reload（`WeaponViewModelAction::Reload`，以權威reload Tick定錨、本機時間平滑推進）；HUD | high | 程式完成（建置、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-2 | 遠端動作：玩家animset加Shoot／Reload／Jump三段／Death01；`PlayerPresentationFrame`帶同區間CombatState與grounded；上半身組合、跳躍狀態、死亡保持；ActionId去重與生命隔離 | high（生命／時間線隔離xhigh） | 程式完成（呈現測試19 cases／12616 assertions、突變9／9被抓、CTest `-L pvp` 16／16）；畫面待04-4截圖確認 |
 | 04-3 | 驗證工具跨平台（切片8）：平台指紋、視窗擺放；probe新增SDL注入的v5動作短測模式 | high | 完成（CTest `-L pvp` 17／17；開發實跑action 30／60／144與capture皆PASS，不計入04-4） |
-| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | 未開始 |
+| 04-4 | 驗證與記錄：CPU／CTest、L1 30／60／144短片段、L2 Metal capture冒煙與圖像、L3使用者人工清單；README／HANDOFF／dev_log | medium | L1／L2／L3通過（macOS Intel／Metal）；文件與PR待步幅修正後一併完成 |
+| 04-5 | 步幅：依速度混合Walk_Loop／Jog_Fwd_Loop（使用者2026-10-02決定），各自校準防滑步 | high | 未開始 |
 
 - 開工時發現：GUI probe的`--gpu-driver`只列`auto|d3d12|vulkan`，macOS依賴`auto`選到Metal；第03批的玩法GUI（Space／快射／R／重生）
   是X11/XTest的`run_gameplay_gui.py`，SDL注入的probe沒有對應模式，因此04-3須補一個動作短測模式。
@@ -58,6 +59,24 @@
     精確10 Tick邊界由domain測試涵蓋。是否讓本機閘門補償這個落差，屬日後的產品手感議題。
   - 既有工具狀況（未改，超出範圍）：`weapon_short.hpp`觀察方仍檢查v4「HP=0仍可移動與射擊」，在v5必然失敗；
     其v5涵蓋已由動作短測取代。`run_player_short.py`／`run_weapon_short.py`的GPU驅動選項補上metal、預設auto。
+- 04-4紀錄（來源`a3962cf`，macOS Intel／Metal；Windows／Linux未執行）：
+  - CTest全標籤41／41（開跑前，`99db266`）；`-L pvp` 17／17（`a3962cf`）。
+  - L1／L2：`run_action_short.py`四案。第一次（`pvp-v5-batch04-20261002/`）action30失敗並保留：量測中實體滑鼠移動，
+    actor yaw在無排程轉向時漂移約2.5°，之後射擊未命中、目標未死。當時probe無法區分外部輸入，故新增「未排程yaw變化」
+    偵測（標`disturbed`、runner註明非產品判定），提交`a3962cf`後在`pvp-v5-batch04-20261002-run2/`重跑：action 30／60／144
+    與capture皆PASS，皆無干擾；目標死亡約9.5秒、3.0秒後重生，死亡中位移0；遠端看到16發、2次換彈、跳躍三段，重播0。
+    L2的8張截圖已目視；限制：遠端人物距離遠（約120像素高），射擊中與待機的上半身差異在截圖中難以分辨，由L3確認。
+  - L3（使用者人工，`pvp-v5-batch04-20261002-manual-2/`）：清單1–8通過。第一組（`-manual/`）只短暫進入世界，不計。
+  - 使用者回報與決定（2026-10-02）：
+    - 上下視角：遠端人物上半身沒有依pitch瞄準（契約「持槍／瞄準」的缺口；素材有Pistol_Aim_Up／Neutral／Down）。決定：留到之後的批次。
+    - 步幅：Jog_Fwd_Loop原速足部約5.94 m/s，移動3 m/s時以約0.5倍速播放（第02批防滑步校準），看起來是慢動作大步跑；
+      素材為使用者提供的UAL，不是Agent自製。決定：依速度混合Walk_Loop／Jog（04-5）。
+    - 受擊反應：不在契約與本批範圍（素材有Hit_Chest／Hit_Head；Snapshot無受擊時點）。決定：另立計畫，之後再做。
+    - CONNECTION POOR：使用者在操作中看到警告。Client紀錄有三次約1.2秒與兩次0.7–0.8秒的render停頓，緊接視窗互動
+      （釋放指標）；Engine SDL GPU後端用阻塞的`SDL_WaitAndAcquireGPUSwapchainTexture`，Metal在視窗拖動／縮放時取得
+      drawable最多等約1秒，主迴圈停住、不產生移動命令，1.2秒約72 Tick Held（10秒窗口12%>5%）使該窗口不合格。
+      警告判定本身正確。決定：先記錄為已知問題（Engine層，修正屬Architecture Delta）。
+    - 自己死亡時「持槍手臂還在」：待使用者釐清是第一人稱（程式在死亡時隱藏）或對方畫面的屍體手持槍（Death01全身含掛槍，現行設計）。
 
 
 第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
