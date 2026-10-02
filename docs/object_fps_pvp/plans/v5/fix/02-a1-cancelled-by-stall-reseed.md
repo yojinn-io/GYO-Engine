@@ -1,6 +1,6 @@
 # 02 stall reseed 使 A1 在整個 epoch 失效（開局卡頓）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成，PR #11送審中；實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收未執行）**。Owner：`object_fps_pvp`。
+狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**。Owner：`object_fps_pvp`。
 相關：A1本體PR #2（合併為`ff11ee3`）；守門v3與`CancelledByReseed`診斷經PR #3
 （`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。第03批未結案，計次輪未執行，第04批暫停。
 已解決的只有「看得見」：產品回報取消原因，驗收器記錄取消與量測窗口內的對齊秒數。

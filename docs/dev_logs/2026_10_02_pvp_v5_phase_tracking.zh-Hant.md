@@ -1,8 +1,8 @@
 # PvP v5 第03批：持續相位追蹤、token bucket worker與連線品質移出
 
 日期：2026-10-02。Owner：object_fps_pvp。
-狀態：實作與CPU驗證完成，經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`）提交PR #11送審（三平台CI通過），**尚未合併**；
-實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收（計次GUI可見延遲短測＋25案矩陣）未執行，**第03批未結案**，第04批暫停。
+狀態：實作與CPU驗證完成，第03批結案驗收通過；經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`）提交PR #11送審（三平台CI通過），**尚未合併**；
+實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收通過（計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms）；25案真網路矩陣25／25通過（1075／1075動作）），**第03批已結案**，第04批暫停。
 每個問題的成因／影響／復現／解決方案見[修正與已知問題](../object_fps_pvp/plans/v5/fix/README.md)，本文只記經過。
 數字未標「實機」者皆為CPU模擬。
 
@@ -31,6 +31,9 @@
    寫測例時一度改成「slew期間不收樣本」，以產品碼重跑模擬發現卡頓重設退步，改回原型語意（見fix/08「實作」）。
 10. 依建議順序commit並開PR #11（合併master `0bd5363`，無衝突），三平台CI通過。準備冒煙時發現另一會話殘留12個
     CPU壓力用忙迴圈佔滿CPU約78分鐘；本會話無權結束，由使用者結束後，在閒置機器上跑一輪report-only GUI冒煙。
+11. 使用者恢復第03批結案驗收，通過後才合併PR。凍結來源`2cecd3a`與產物／分析器指紋，事前宣告3輪計次GUI＋1次矩陣與補跑規則。
+    第3輪因量測中OS焦點變化無效，依fix/06補跑一次。第一次矩陣在第12案因工具會話結束而中斷：
+    先在宣告追加補充條款，再核對指紋、於新目錄重跑完整25案，原目錄保留不計。
 
 ## 使用者決定
 
@@ -38,6 +41,7 @@
 - 核准fix/08提案：持續相位追蹤取代A1與低幀率守門、輸入worker token bucket、PlayerState欄位替換、刪除StartPhaseSkip。
 - 要求並核准連線品質移出：10秒窗口、參考年齡>160ms／被替代>5%／移動重設任一即不合格、連續3窗口移出；加HUD警告。
 - 依建議順序：先commit／PR讓CI跑三平台，CI期間跑report-only GUI冒煙，再決定是否恢復第03批結案驗收。
+- 恢復第03批結案驗收；驗收通過後合併PR #11。
 
 ## 驗證
 
@@ -54,7 +58,16 @@
   可見P50／P95 36.754／38.811ms（Actual 28.831／36.448ms），20／20配對，視窗無干擾。兩方在量測開始前1.8–2.1秒決定相位，
   量測期間全程tracking、0次修正、0次移動重設；create方啟動時3次stall reseed都在量測前重新決定（fix/02的情境）。
   對照A1＋守門的三次冒煙：P50 47.4／38.3／46.5ms，移動方全程未對齊。只是一輪，不是統計證明。
-- 未執行：計次GUI可見延遲短測、25案矩陣、長測。
+- 第03批結案驗收（來源`2cecd3a`，指紋見證據目錄`fingerprints.json`，宣告見`declaration.md`）：
+  | 輪 | 狀態 | 可見P50／P95 ms | Actual P50／P95 ms | 配對 | 量測中相位 |
+  |---|---|---|---|---|---|
+  | 1 | passed | 37.263／38.212 | 29.870／37.557 | 20／20 | 兩方tracking，0修正 |
+  | 2 | passed | 36.561／40.826 | 29.266／36.658 | 20／20 | 兩方tracking，0修正 |
+  | 3 | invalid_window_disturbed（門檻failed：配對率0.95） | 36.853／39.214 | 29.261／37.299 | 19／20 | 約122ms卡頓後重新取得 |
+  | 3補跑 | passed | 35.893／37.279 | 29.273／36.660 | 20／20 | 兩方tracking，0修正 |
+  有效輪量測期間Host移動重設皆為0、幀間隔中位約17.3ms。矩陣`matrix-run-2`：25／25、1075／1075動作，
+  新操作恢復最慢1.110秒、穩定移動起點最慢0.293秒（門檻1.5／0.25秒維持）；`matrix`（中斷，前11案通過）不計。
+- 未執行：長測、第04批。
 
 ## Architecture Delta
 
@@ -75,3 +88,4 @@ PlayerInput的`observed_authority_tick`，PlayerState以slack樣本取代`epoch_
 - `build/target/_build/test/logs/pvp-v5-ct-prototype-20261002/`：`ct/`原型覆蓋層；`drift/`模擬器（`Sim.cpp`、`SimProduct.cpp`）、
   `build.py`、`sweep.py`、比較腳本與全部輸出（`out_final_bucket.txt`原型、`out_product_final.txt`產品、`out_kick_*.txt`移出閾值）。
 - `build/target/_build/test/logs/pvp-v5-ct-gui-smoke-20261002-192738/`：report-only GUI冒煙（summary與`round-1`原始紀錄）。
+- `build/target/_build/test/logs/pvp-v5-batch03-closure-20261002/`：結案驗收（`declaration.md`、`fingerprints.json`、`gui-round-1`～`3`、`gui-round-3-rerun`、`matrix`（中斷）、`matrix-run-2`）。

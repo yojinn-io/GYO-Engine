@@ -1,6 +1,6 @@
 # 08 Client／Host 時鐘漂移使 A1 對齊隨時間失準（長局）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成，PR #11送審中；實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收未執行）**。2026-10-02發現。Owner：`object_fps_pvp`。
+狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**。2026-10-02發現。Owner：`object_fps_pvp`。
 相關：A1本體PR #2（`ff11ee3`）、低幀率守門PR #3（`9cd7f26`）；與[02](./02-a1-cancelled-by-stall-reseed.md)同根：
 A1是開環量測，每個epoch只量一次。第03批未結案，第04批暫停。
 索引見[README](./README.md)；偶發掉幀重設見[03](./03-a1-missed-frame-starvation.md)。

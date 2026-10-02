@@ -1,6 +1,6 @@
 # 03 A1 對偶發掉幀敏感（Starvation 重設；55–58 FPS vsync）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成，PR #11送審中；實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收未執行）**（原為已知問題；根因與處理見下節「根因更新」及[08](./08-a1-clock-drift.md)）。Owner：`object_fps_pvp`。
+狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**（原為已知問題；根因與處理見下節「根因更新」及[08](./08-a1-clock-drift.md)）。Owner：`object_fps_pvp`。
 相關：A1 由 PR #2（`claude/project-thread-lv6bg5`，`d74830c`，合併為 `ff11ee3`）引入；
 低幀率守門 v3 與下文引用的測例經 PR #3（`claude/pvp-v5-start-phase-guard`）合併為 `9cd7f26`。
 第03批仍未結案（計次 GUI 可見延遲輪與 25 案矩陣依使用者決定未執行），第04批暫停。
