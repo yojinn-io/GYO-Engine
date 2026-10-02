@@ -9,8 +9,8 @@
 門檻、lead、插值與60Hz不變，停止在第03批。各問題見[修正與已知問題](fix/README.md)。
 2026-10-02：A1「每epoch量一次」在長局會因時鐘漂移失準（[fix/08](fix/08-a1-clock-drift.md)），與reseed取消（fix/02）
 及fix/03、fix/09一起處理。使用者核准後已實作「輸入worker 60/s token bucket＋閉環的持續相位追蹤」與連線品質移出
-（[fix/10](fix/10-connection-quality-eviction.md)），CPU驗證通過，經分支`claude/pvp-v5-phase-tracking`提交PR送審、**尚未合併**；
-A1、HostLate、低幀率守門與`StartPhaseSkip`已刪除。實機GUI冒煙與結案驗收未執行。經過與驗證見
+（[fix/10](fix/10-connection-quality-eviction.md)），CPU驗證通過，經分支`claude/pvp-v5-phase-tracking`提交PR #11送審（三平台CI通過）、**尚未合併**；
+A1、HostLate、低幀率守門與`StartPhaseSkip`已刪除。實機report-only GUI冒煙1輪PASS（可見P50／P95 36.8／38.8ms；不計次、不作為驗收證據），兩方量測全程tracking；結案驗收未執行。經過與驗證見
 [追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)。
 
 ## 閱讀入口

@@ -1,6 +1,6 @@
 # 09 涵蓋空檔後 Client 卡在「剛好遲到」（連續 Held 直到 Starvation 重設）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成，PR送審中；實機GUI冒煙與第03批結案驗收未執行）**。2026-10-02於[08](./08-a1-clock-drift.md)的模擬評估中發現。Owner：`object_fps_pvp`。
+狀態：**已解決（2026-10-02實作與CPU驗證完成，PR #11送審中；實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收未執行）**。2026-10-02於[08](./08-a1-clock-drift.md)的模擬評估中發現。Owner：`object_fps_pvp`。
 相關：A1（`ff11ee3`）與守門（`9cd7f26`）之前就存在的恢復路徑；A1的緊湊餘裕使它更常發生。
 索引見[README](./README.md)；stall reseed見[02](./02-a1-cancelled-by-stall-reseed.md)，掉幀見[03](./03-a1-missed-frame-starvation.md)。
 

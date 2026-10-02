@@ -2,7 +2,7 @@
 
 更新：2026-10-02。Owner：`object_fps_pvp`。
 **第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
-（CPU驗證通過、PR送審中），結案驗收暫緩（MVP技術驗證），第03批未結案；第04批暫停，第05批未開始。**
+（CPU驗證通過、PR #11送審中），結案驗收暫緩（MVP技術驗證），第03批未結案；第04批暫停，第05批未開始。**
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
 已定位既有首次命令／Authority Tick相位差。2026-10-01實作獲批准的啟動相位對齊（PR #2，合併為`ff11ee3`）；
 2026-10-02以產品式worker的CPU模擬發現它使30／40 FPS退化（實機未重現），
@@ -102,10 +102,10 @@
   （[fix/08](fix/08-a1-clock-drift.md)，模擬中Client快20ppm、RTT 20約第10分鐘超過50ms）同根於「每epoch量一次」，
   2026-10-02經使用者核准實作輸入worker 60/s token bucket＋閉環的持續相位追蹤，一併處理fix/03與新發現的
   [fix/09](fix/09-covered-gap-stuck-late.md)，並加入[連線品質移出](fix/10-connection-quality-eviction.md)；
-  CPU驗證通過、經分支`claude/pvp-v5-phase-tracking`提交PR送審，見[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)；
+  CPU驗證通過、經分支`claude/pvp-v5-phase-tracking`提交PR #11送審，實機report-only GUI冒煙1輪PASS（可見P50／P95 36.8／38.8ms；不計次、不作為驗收證據），見[追蹤dev_log](../../../dev_logs/2026_10_02_pvp_v5_phase_tracking.zh-Hant.md)；
   偶發掉幀重設列為已知問題（[fix/03](fix/03-a1-missed-frame-starvation.md)）。
 - 後續候選（未排程、無承諾）：CS式開局／回合準備期，全員凍結且無敵並倒數，讓啟動相位量測與
   首幀卡頓落在其中；需Match回合狀態、無敵規則、HUD倒數與契約變更，須另立計畫，見[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)。
 - [第03批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)與[交接](HANDOFF.md)
   保存修復、失敗與最後指紋。第01–03批內容在`de87bb9`（wip），A1在`ff11ee3`；
-  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出在分支`claude/pvp-v5-phase-tracking`（PR送審中）。第04批暫停，無長測。
+  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出在分支`claude/pvp-v5-phase-tracking`（PR #11送審中）。第04批暫停，無長測。

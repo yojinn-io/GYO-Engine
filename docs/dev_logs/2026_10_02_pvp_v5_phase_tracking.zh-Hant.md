@@ -1,8 +1,8 @@
 # PvP v5 第03批：持續相位追蹤、token bucket worker與連線品質移出
 
 日期：2026-10-02。Owner：object_fps_pvp。
-狀態：實作與CPU驗證完成，經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`）提交PR送審，**尚未合併**；
-實機GUI冒煙與第03批結案驗收（計次GUI可見延遲短測＋25案矩陣）未執行，**第03批未結案**，第04批暫停。
+狀態：實作與CPU驗證完成，經分支`claude/pvp-v5-phase-tracking`（worktree `GYO-Engine-v5`，自`df195fa`，合併master `0bd5363`）提交PR #11送審（三平台CI通過），**尚未合併**；
+實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收（計次GUI可見延遲短測＋25案矩陣）未執行，**第03批未結案**，第04批暫停。
 每個問題的成因／影響／復現／解決方案見[修正與已知問題](../object_fps_pvp/plans/v5/fix/README.md)，本文只記經過。
 數字未標「實機」者皆為CPU模擬。
 
@@ -29,12 +29,15 @@
    Python分析器測試的機械性改寫交由子代理完成。
 9. 驗證中兩處修正：CombatHost測例要求每次發布只讀一次時鐘，改為每次Advance至多讀一次並與發布參考共用；
    寫測例時一度改成「slew期間不收樣本」，以產品碼重跑模擬發現卡頓重設退步，改回原型語意（見fix/08「實作」）。
+10. 依建議順序commit並開PR #11（合併master `0bd5363`，無衝突），三平台CI通過。準備冒煙時發現另一會話殘留12個
+    CPU壓力用忙迴圈佔滿CPU約78分鐘；本會話無權結束，由使用者結束後，在閒置機器上跑一輪report-only GUI冒煙。
 
 ## 使用者決定
 
 - 不採O2W草案，先討論根因；不做兩台實機漂移實測，直接修正。
 - 核准fix/08提案：持續相位追蹤取代A1與低幀率守門、輸入worker token bucket、PlayerState欄位替換、刪除StartPhaseSkip。
 - 要求並核准連線品質移出：10秒窗口、參考年齡>160ms／被替代>5%／移動重設任一即不合格、連續3窗口移出；加HUD警告。
+- 依建議順序：先commit／PR讓CI跑三平台，CI期間跑report-only GUI冒煙，再決定是否恢復第03批結案驗收。
 
 ## 驗證
 
@@ -47,7 +50,11 @@
 - Python：`test_run_timing.py` 18、`test_presentation_evidence.py` 36、`test_gameplay_evidence.py` 20。
 - 模擬：以產品碼重跑171組設定，除卡頓風暴（產品約90秒依fix/10移出）外與核准原型逐位元相同；重設總數173（原型181）。
   與現行A1相比沒有任何一格Held多於0.05個百分點或重設多於2次。
-- 未執行：實機GUI冒煙、計次GUI可見延遲短測、25案矩陣、長測。
+- 實機report-only GUI冒煙（機器閒置，一輪16秒、20事件、60 FPS；不計次、不作為驗收證據）：PASS，
+  可見P50／P95 36.754／38.811ms（Actual 28.831／36.448ms），20／20配對，視窗無干擾。兩方在量測開始前1.8–2.1秒決定相位，
+  量測期間全程tracking、0次修正、0次移動重設；create方啟動時3次stall reseed都在量測前重新決定（fix/02的情境）。
+  對照A1＋守門的三次冒煙：P50 47.4／38.3／46.5ms，移動方全程未對齊。只是一輪，不是統計證明。
+- 未執行：計次GUI可見延遲短測、25案矩陣、長測。
 
 ## Architecture Delta
 
@@ -67,3 +74,4 @@ PlayerInput的`observed_authority_tick`，PlayerState以slack樣本取代`epoch_
 - `build/target/_build/test/logs/pvp-v5-drift-sim-20261002/`：漂移現象（舊A1）。
 - `build/target/_build/test/logs/pvp-v5-ct-prototype-20261002/`：`ct/`原型覆蓋層；`drift/`模擬器（`Sim.cpp`、`SimProduct.cpp`）、
   `build.py`、`sweep.py`、比較腳本與全部輸出（`out_final_bucket.txt`原型、`out_product_final.txt`產品、`out_kick_*.txt`移出閾值）。
+- `build/target/_build/test/logs/pvp-v5-ct-gui-smoke-20261002-192738/`：report-only GUI冒煙（summary與`round-1`原始紀錄）。

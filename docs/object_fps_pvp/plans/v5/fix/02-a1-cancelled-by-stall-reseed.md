@@ -1,6 +1,6 @@
 # 02 stall reseed 使 A1 在整個 epoch 失效（開局卡頓）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成，PR送審中；實機GUI冒煙與第03批結案驗收未執行）**。Owner：`object_fps_pvp`。
+狀態：**已解決（2026-10-02實作與CPU驗證完成，PR #11送審中；實機report-only GUI冒煙1輪PASS（不計次）；第03批結案驗收未執行）**。Owner：`object_fps_pvp`。
 相關：A1本體PR #2（合併為`ff11ee3`）；守門v3與`CancelledByReseed`診斷經PR #3
 （`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。第03批未結案，計次輪未執行，第04批暫停。
 已解決的只有「看得見」：產品回報取消原因，驗收器記錄取消與量測窗口內的對齊秒數。
@@ -228,6 +228,9 @@ MVP／PvP技術驗證：不做3c、不跑計次輪，本問題列為未解決（
 - 實機（report-only，不計次、不作為驗收證據）：smoke-3（守門v3）兩角色皆由產品回報`CancelledByReseed`；
   smoke-1／2（舊產品）以Client trace重分析，create皆為`cancelled_by_reseed`（seq42／seq7）。
 - 方案只有原型與模擬：沒有任何恢復方案在實機GUI或真網路驗證過；卡頓來源與真實大廳流程是否觸發也未驗證。
+- 持續相位追蹤（2026-10-02，PR #11）實機report-only GUI冒煙1輪（不計次、不作為驗收證據）：create方啟動時3次、
+  join方1次stall reseed，兩方都在量測開始前1.8–2.1秒重新決定相位，量測期間全程tracking、0次修正、0次移動重設；
+  可見P50／P95 36.754／38.811ms。只是一輪，不是統計證明。證據：`build/target/_build/test/logs/pvp-v5-ct-gui-smoke-20261002-192738/`。
 - 證據（git忽略，只在本機；`build/`日後可能移出工作區，須保留）：
   `build/target/_build/test/logs/pvp-v5-start-phase-evidence-20261002/`
   - `integration-smoke-{1,2,3}/`：summary與`round-1/{create,join}-{commands.jsonl,start-phase.json,presentation.csv}`
