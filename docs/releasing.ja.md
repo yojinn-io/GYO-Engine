@@ -13,7 +13,7 @@ GitHub Actions の **Prepare Release** で必要な製品を検証し、Draft �
 | 固定の設計ツール群 | `gyo-toolchain-<platform>.tar.gz` | `gyo-toolchain` |
 | CSV が選んだゲーム | `gyo-<game>-<platform>.tar.gz` | `gyo-<game>` |
 
-Platform は `windows-x64`、`linux-x64`、`macos-arm64` です。Archive ごとに同名の `.sha256` を付けます。Apps がない場合、CSV が header だけの場合、全ゲーム無効の場合も、3 platform の toolchain と checksum を公開できます。未登録ディレクトリは選びません。選択したゲームの欠落、compile failure、必要な検証の失敗は統合全体を失敗させます。
+Platform は `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64` です。CSV の `macos` 列は両方の macOS architecture（arm64 と x64）を有効にし、architecture ごとの列は設けません。展開規則は CMake の registry parser だけが持ちます。Archive ごとに同名の `.sha256` を付けます。Apps がない場合、CSV が header だけの場合、全ゲーム無効の場合も、4 platform の toolchain と checksum を公開できます。Go service は自身が宣言した platform だけを archive します。たとえば gateway は引き続き Linux と Windows のみです。未登録ディレクトリは選びません。選択したゲームの欠落、compile failure、必要な検証の失敗は統合全体を失敗させます。
 
 配布物は実行可能な製品と必要な依存物です。Engine SDK や source archive は生成しません。Toolchain にゲーム source/assets を含めず、ゲーム包に CI、tests、acceptance executable、editor、元の美術ソースを含めません。エンジンは静的リンクし、必要な third-party dynamic runtime を配置します。
 
@@ -22,14 +22,14 @@ Platform は `windows-x64`、`linux-x64`、`macos-arm64` です。Archive ごと
 | 操作 | 結果 |
 |---|---|
 | Draft pull request、または `docs/**` だけを変更する pull request | CI policy tests と範囲判定のみ実行し、`CI gate` は意図した skip として成功 |
-| Ready の pull request | L1 merge gate：platform ごとに 1 job で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行。Linux は host shader、Lavapipe GPU、core も実行。封装なし |
+| Ready の pull request | L1 merge gate：platform ごとに 1 job で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行。Linux は host shader、Lavapipe GPU、core も実行。`macos-x64` は arm64 runner で cross build し、tests を Rosetta 2 で実行。封装なし |
 | master への push／通常 workflow の手動実行 | L1 と Quick 統合、Actions artifacts |
 | その他の branch push | CI を実行しない |
 | **Prepare Release** | SHA を固定し、全必須製品の完全検証後に tag、Draft、添付を準備 |
 | Tag push | 自動公開の入口にはしない |
 | **Publish release** | 既存 Draft を公開し、再コンパイルしない |
 
-Required check には `CI gate` だけを設定します。すべての pull request event で報告し、選択した段階がすべて成功するか、規則どおり skip された場合だけ成功します。同じ PR の新しい push は古い実行を取り消し、master の実行は互いに取り消しません。Compiler cache（sccache）は既定 branch の L1 だけが書き込み、PR と封装 jobs は読み取りのみです。
+Required check には `CI gate` だけを設定します。すべての pull request event で報告し、選択した段階がすべて成功するか、規則どおり skip された場合だけ成功します。同じ PR の新しい push は古い実行を取り消し、master の実行は互いに取り消しません。Compiler cache（sccache）は既定 branch の L1 だけが書き込み、PR と封装 jobs は読み取りのみです。Platform 行ごとに cache family を分けるため、`macos-x64` の target object が arm64 と混ざることはありません。Shader compiler などの host tools は runner の platform で cache し、`macos-arm64` と `macos-x64` は同じ arm64 native tools を共有します。Target architecture は host tools の build に持ち込みません。
 
 - Draft の判定は PR の現在の状態を読みます。古い Draft 実行を re-run しても L1 を実行します。
 - head commit を変えずに Draft から Ready にした場合、新しい実行の `CI gate` は前段の jobs が終わるまで現れず、その間は同じ commit に Draft 実行の成功が残ります。新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。
@@ -41,7 +41,7 @@ Required check には `CI gate` だけを設定します。すべての pull req
 1. 公開予定 source commit の Quick 結果を確認します。master 以外の branch push では CI が動かないため、その branch で **Cross-platform CI** を手動実行します。
 2. **Actions → Prepare Release → Run workflow** で source branch を選びます。
 3. `v1.0.1` などの version を入力し、必要なら prerelease を選びます。
-4. 3 platform の固定 toolchain と全 CSV ゲームの必要検証を待ちます。
+4. 4 platform の固定 toolchain と全 CSV ゲームの必要検証を待ちます。
 5. Summary から Draft を開き、commit、version、全添付、説明を確認します。
 6. 公開する時に **Publish release** を押します。
 
@@ -58,6 +58,8 @@ Required check には `CI gate` だけを設定します。すべての pull req
 診断 executable は owner が role を明示登録します。CMake が生成する `<build>/packages/<product>/<configuration>/acceptance-context.json` を `--context` で runner に渡します。Context は manifest と build configuration に結び付き、`@CHECK_ROOT@`、`@PROBE:<role>@` の外部位置だけを解決し、検証コマンドや集合を変えません。`@EXECUTABLE:<role>@` は owner ごとの製品を参照し、検証・ログ名は `owner.name` です。Runner は製品の一時コピーへ probe を置けますが正式実行ファイルを上書きしません。製品には context、probe、Python 検証コードを含めません。Runtime は `bin/assets/<game>` だけを読みます。
 
 Quick と Release の範囲や GPU suite は owner の checks が決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画テストを実行します。Toolchain を含む全製品は、自身の契約に宣言された GPU checks も独立に実行し、共通 baseline との排他的な分岐にしません。必要能力の欠落、timeout、異常は失敗です。Software Vulkan と Windows/macOS hosted の結果は実物 GPU の検証ではありません。[Object_FPS の外部検証](object_fps/acceptance.ja.md)も参照してください。
+
+`macos-x64` の検証水準は他の platform と異なります。製品は macOS arm64 の hosted runner 上で `ci-macos-x64` preset（`CMAKE_OSX_ARCHITECTURES=x86_64`、deployment target は同じ 13.3）により cross build し、CPU tests と install 後の検証は同じ runner で Rosetta 2 により変換実行します。GPU checks は実行せず、実機の Intel Mac による検証もありません。Runner が x86_64 code を実行できない場合、その行は build 前に失敗します。Linkage 検査は macOS package 内の実行ファイルと native library が target architecture だけを含むことを要求します。各行の Summary は build host／target と CPU 実行方式を示し、archive の `build_metadata.json` も `cpu_execution`（`native` または `rosetta2`）として同じ情報を記録します。
 
 封装と Draft 準備は同じ source SHA から完全な期待集合を再計算します。Product/platform、tool owner 集合、checksum、archive path の安全性、manifest、必要内容、Release profile の証拠を確認します。欠落、余分な製品、一部のツールだけを含む toolchain、重複 identity、Quick-only 証拠を拒否します。
 
@@ -78,4 +80,4 @@ Quick と Release の範囲や GPU suite は owner の checks が決めます。
 
 ## 5. 証拠の扱い
 
-本機 tests や workflow 静的検査は、遠隔3 platform／Draft 成功の証拠ではありません。公開 revision の Actions Summary、必須 jobs、検証報告、添付を確認してください。Historical dev logs は当時のパスと結果の記録であり、今回の構造変更の成功を意味しません。
+本機 tests や workflow 静的検査は、遠隔の各 platform／Draft 成功の証拠ではありません。公開 revision の Actions Summary、必須 jobs、検証報告、添付を確認してください。Historical dev logs は当時のパスと結果の記録であり、今回の構造変更の成功を意味しません。

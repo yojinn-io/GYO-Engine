@@ -17,6 +17,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
 NATIVE_SETUP = ROOT / ".github" / "actions" / "native-setup" / "action.yml"
+HOST_TOOLS_DEFINE = r'''"-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS"'''
 
 
 def job_block(workflow: str, name: str) -> str:
@@ -208,7 +209,7 @@ class WorkflowGateTests(unittest.TestCase):
         steps = re.split(r"(?m)^      - ", native)
         for marker, field in (("xcrun -sdk macosx metal -v", "has_shader_bundles"),
                               ("uses: actions/cache@", "has_shader_tools"),
-                              ('ctest --test-dir "build/target/_build/$env:PRESET/host-tools"', "has_shader_tools")):
+                              ('ctest --test-dir "$env:GYO_HOST_TOOLS"', "has_shader_tools")):
             step = next(step for step in steps if marker in step)
             self.assertIn(f"steps.configure.outputs.{field} == 'true'", step)
             self.assertNotIn("exit 0", step)
@@ -306,19 +307,28 @@ xvfb-run() {
             return values
         for name, expected in (("dev", ("OFF", "OFF")), ("test", ("ON", "OFF")),
                                ("core", ("ON", "OFF")), ("ci-windows", ("ON", "ON")),
-                               ("ci-linux", ("ON", "ON")), ("ci-macos", ("ON", "ON"))):
+                               ("ci-linux", ("ON", "ON")), ("ci-macos", ("ON", "ON")),
+                               ("ci-macos-x64", ("ON", "ON"))):
             with self.subTest(preset=name):
                 values = cache(name)
                 self.assertEqual((values["BUILD_TESTING"], values["GYO_ENABLE_PACKAGING"]), expected)
         tests = {preset["name"]: preset for preset in document["testPresets"]}
         self.assertNotIn("dev", tests)
         self.assertEqual(tests["test"]["configurePreset"], "test")
-        for platform in ("windows", "linux", "macos"):
+        for platform in ("windows", "linux", "macos", "macos-x64"):
             self.assertEqual(tests["ci-" + platform]["inherits"], "test")
+        # Both macOS rows share one deployment target and differ only in the
+        # target architecture; the host architecture never comes from a preset.
+        self.assertEqual({name: (cache(name)["CMAKE_OSX_ARCHITECTURES"], cache(name)["CMAKE_OSX_DEPLOYMENT_TARGET"])
+                          for name in ("ci-macos", "ci-macos-x64")},
+                         {"ci-macos": ("arm64", "13.3"), "ci-macos-x64": ("x86_64", "13.3")})
+        build_presets = {preset["name"]: preset["configurePreset"] for preset in document["buildPresets"]}
+        self.assertEqual(build_presets["ci-macos-x64"], "ci-macos-x64")
+        self.assertEqual(tests["ci-macos-x64"]["configurePreset"], "ci-macos-x64")
         # MSVC objects must embed /Z7 debug information to be compiler-cacheable.
         self.assertEqual(cache("ci-windows")["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"],
                          "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
-        for name in ("dev", "test", "core", "ci-linux", "ci-macos"):
+        for name in ("dev", "test", "core", "ci-linux", "ci-macos", "ci-macos-x64"):
             self.assertNotIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", cache(name))
         # MSVC precompiled headers (/Yc, /Fp) are never cacheable; dependencies
         # that enable them must compile without them in CI.
@@ -481,7 +491,9 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("ref: ${{ github.sha }}", step_using(l1, "actions/checkout"))
         configure = run_script(step_with(l1, "id: configure"))
         # The ci-<os> preset owns registry AUTO selection; no product or tool
-        # list may be injected by the merge gate.
+        # list may be injected by the merge gate. Only the host-keyed shader
+        # tool directory, shared with packaging, is placed by the workflow.
+        configure = configure.replace(HOST_TOOLS_DEFINE + " ", "", 1)
         self.assertTrue(configure.startswith("cmake --preset $env:PRESET 2>&1 | Tee-Object"), configure)
         self.assertNotRegex(configure, r"-D")
         for forbidden in ("cmake --install", "run_package_checks", "validate_package", "archive_package",
@@ -549,14 +561,17 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             with self.subTest(job=name):
                 setup = step_with(job, "uses: ./.github/actions/native-setup")
                 self.assertIn("id: setup", setup)
-                for field in ("platform", "toolchain", "preset"):
+                for field in ("platform", "toolchain", "preset", "host"):
                     self.assertIn(f"{field}: ${{{{ matrix.{field} }}}}", setup)
+                self.assertIn("cpu-execution: ${{ matrix.cpu_execution }}", setup)
                 stats = step_with(job, "sccache --stop-server")
                 self.assertIn("if: always() && steps.setup.outcome == 'success'", stats)
         # One owner for hosted toolchain facts: none remain inline in jobs.
         for inline in ("ilammy/msvc-dev-cmd", "apt-get install", "xcode-select", "CMAKE_CXX_COMPILER_LAUNCHER"):
             self.assertNotIn(inline, self.quick + self.shared)
         self.assertIn("steps.setup.outcome == 'success'", step_with(native, "id: core"))
+        # The host-targeted core preset runs once per host, never on a cross-built row.
+        self.assertIn("matrix.host == matrix.platform", step_with(native, "id: core"))
         self.assertNotIn("steps.tools.", native)
         # Only default-branch L1 integration runs may write the compiler cache.
         self.assertNotIn("actions/cache/save@", self.shared + self.release + self.setup)
@@ -570,7 +585,40 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         shader_keys = {re.search(r"(?m)^          key: (shader-tools-.+)$", step_using(job, "actions/cache")).group(1)
                        for job in (native, l1)}
         self.assertEqual(len(shader_keys), 1, "L1 and packaging must share one host-tools cache identity")
-        self.assertIn("-sccache-", shader_keys.pop())
+        shader_key = shader_keys.pop()
+        self.assertIn("-sccache-", shader_key)
+        # Host tools run on the runner: rows sharing a host share the cache,
+        # and the target platform must not split (or leak into) it.
+        self.assertIn("-${{ matrix.host }}-", shader_key)
+        self.assertNotIn("matrix.platform", shader_key)
+        for name, job in (("native", native), ("l1", l1)):
+            with self.subTest(job=name):
+                self.assertIn("GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}", job)
+                self.assertIn("path: ${{ env.GYO_HOST_TOOLS }}", step_using(job, "actions/cache"))
+                self.assertIn(HOST_TOOLS_DEFINE, run_script(step_with(job, "id: configure")))
+                self.assertNotIn("/host-tools", job.replace("_build/host-tools-${{ matrix.host }}", ""))
+
+    def test_cross_built_rows_verify_their_host_and_translated_execution(self):
+        xcode = step_with(self.setup, "name: Select the macOS compiler toolchain", 4)
+        self.assertIn("HOST_PLATFORM: ${{ inputs.host }}", xcode)
+        self.assertIn('if [ "$(uname -m)" != "$host_architecture" ]; then', xcode)
+        self.assertNotIn("ci-macos requires", xcode)
+        rosetta = step_with(self.setup, "name: Provide Rosetta 2 for translated CPU execution", 4)
+        self.assertIn("if: inputs.cpu-execution == 'rosetta2'", rosetta)
+        self.assertIn("arch -x86_64 /usr/bin/true", rosetta)
+        self.assertIn("sudo softwareupdate --install-rosetta --agree-to-license", rosetta)
+        self.assertNotRegex(rosetta, r"exit 0|\|\| true|continue-on-error")
+        # A failed install falls through (bash -e) to the explicit translation check and its error.
+        install = rosetta.index("sudo softwareupdate --install-rosetta --agree-to-license || echo")
+        self.assertLess(install, rosetta.index("::error::Rosetta 2 cannot run x86_64 code"))
+        steps = steps_of(self.setup, 4)
+        # Translation is proven before any compile, so a missing Rosetta fails the row early.
+        self.assertLess(steps.index(rosetta), steps.index(step_with(self.setup, "id: toolchain", 4)))
+        native = job_block(self.shared, "native")
+        self.assertIn("GYO_CPU_EXECUTION: ${{ matrix.cpu_execution }}", native)
+        self.assertIn("--cpu-execution $env:GYO_CPU_EXECUTION", run_script(step_with(native, "id: archive")))
+        for job in (native, job_block(self.quick, "l1")):
+            self.assertIn("Target CPU execution", step_with(job, "GITHUB_STEP_SUMMARY"))
 
     def test_native_setup_routes_every_compile_through_a_restored_cache(self):
         steps = steps_of(self.setup, 4)

@@ -6,7 +6,7 @@ set(GYO_GO_EXECUTABLE go CACHE STRING "Go executable used by explicit Go service
 
 # Release package platforms a Go service may declare; build/ci/common/go_checks.py
 # maps each one to its GOOS/GOARCH when cross-building service archives.
-set(GYO_GO_SERVICE_PLATFORMS windows-x64 linux-x64 macos-arm64)
+set(GYO_GO_SERVICE_PLATFORMS windows-x64 linux-x64 macos-arm64 macos-x64)
 
 function(_gyo_go_json_quote value output)
     string(REPLACE "\\" "\\\\" value "${value}")

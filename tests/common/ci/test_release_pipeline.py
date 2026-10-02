@@ -37,6 +37,8 @@ APP = "sample_app"
 ARCHIVE_ROOT = "gyo-" + APP
 METADATA_PATH = ARCHIVE_ROOT + "/build_metadata.json"
 EXPECTED_PAIRS = [(APP, platform) for platform in PLATFORMS]
+# One archive and one checksum per expected product/platform pair.
+ASSET_COUNT = 2 * len(EXPECTED_PAIRS)
 
 
 def archive_name(platform, product=APP):
@@ -324,7 +326,7 @@ class PackageTests(unittest.TestCase):
 
     def test_complete_matrix_loads(self):
         self.write_packages()
-        self.assertEqual(len(load_packages(self.work, COMMIT)), 3)
+        self.assertEqual(len(load_packages(self.work, COMMIT)), len(PLATFORMS))
 
     def test_metadata_only_archives_fail_for_every_platform(self):
         for platform in PLATFORMS:
@@ -352,7 +354,7 @@ class PackageTests(unittest.TestCase):
                         validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_unix_executable_requires_owner_execute_mode(self):
-        for platform in ("linux-x64", "macos-arm64"):
+        for platform in ("linux-x64", "macos-arm64", "macos-x64"):
             for mode in (0o644, 0o001, 0o010):
                 item = package(platform, executable_mode=mode)
                 with self.subTest(platform=platform, mode=mode), self.assertRaisesRegex(ReleaseError, "execute permission"):
@@ -498,12 +500,12 @@ class DraftTests(unittest.TestCase):
         redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)
 
-    def test_new_version_creates_tag_then_draft_then_six_assets(self):
+    def test_new_version_creates_tag_then_draft_then_every_asset(self):
         api = FakeApi(release=False, commit=None)
         result = prepare_draft(api, "v1.2.3", COMMIT, True, packages())
         self.assertEqual(result, {
             "release_id": "42", "release_url": api.release["html_url"], "tag": "v1.2.3", "commit": COMMIT})
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertEqual(api.mutations[0], ("POST", "/git/refs", {"ref": "refs/tags/v1.2.3", "sha": COMMIT}))
         self.assertEqual(api.mutations[1][1], "/releases")
         self.assertTrue(api.release["draft"])
@@ -536,7 +538,7 @@ class DraftTests(unittest.TestCase):
         for name, data in attachments.items():
             api.add_asset(name, data)
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6 + len(attachments))
+        self.assertEqual(len(api.assets), ASSET_COUNT + len(attachments))
         for name, data in attachments.items():
             self.assertEqual(api.download(api.assets[name]["id"]), data)
         self.assertFalse(any(method in ("PATCH", "DELETE") for method, _, _ in api.calls))
@@ -548,7 +550,7 @@ class DraftTests(unittest.TestCase):
 
         def upload_with_unexpected_asset(release_id, name, data):
             result = upload(release_id, name, data)
-            if api.upload_attempts == 6:
+            if api.upload_attempts == ASSET_COUNT:
                 api.add_asset(extra.name, extra.data)
             return result
 
@@ -571,7 +573,7 @@ class DraftTests(unittest.TestCase):
         api = FakeApi()
         api.release["target_commitish"] = "master"
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertEqual(api.release["target_commitish"], "master")
 
     def test_missing_platform_or_invalid_archive_never_creates_a_tag(self):
@@ -628,8 +630,8 @@ class DraftTests(unittest.TestCase):
         self.assertEqual(len(api.assets), 1)
         api.fail_upload_at = None
         prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
-        self.assertEqual(len(api.assets), 6)
-        self.assertEqual(len(api.mutations), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
+        self.assertEqual(len(api.mutations), ASSET_COUNT)
 
     def test_orphan_checksum_requires_matching_archive(self):
         api = FakeApi()
@@ -639,7 +641,7 @@ class DraftTests(unittest.TestCase):
             prepare_draft(api, "v1.2.3", COMMIT, False, packages(timestamp=2))
         self.assertEqual(api.mutations, [])
         prepare_draft(api, "v1.2.3", COMMIT, False, [item, *packages()[1:]])
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
 
     def test_tag_is_rechecked_between_uploads(self):
         api = FakeApi()
@@ -661,7 +663,7 @@ class DraftTests(unittest.TestCase):
         api = FakeApi(release=False, commit=None)
         api.race_tag = api.race_create = api.race_upload = True
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertTrue(api.release["draft"])
 
     def test_annotated_tag_is_peeled(self):

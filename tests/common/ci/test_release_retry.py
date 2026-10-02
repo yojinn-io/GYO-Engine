@@ -15,7 +15,7 @@ from workspace import TemporaryDirectory
 
 from release_pipeline import ApiError, TransientApiError, main, prepare_draft_with_retries
 from release_support import ReleaseError
-from test_release_pipeline import COMMIT, OTHER_COMMIT, FakeApi, packages, EXPECTED_PAIRS
+from test_release_pipeline import ASSET_COUNT, COMMIT, OTHER_COMMIT, FakeApi, packages, EXPECTED_PAIRS
 
 
 class ReleaseRetryTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class ReleaseRetryTests(unittest.TestCase):
                     result = self.run_draft(api)
                 self.assertEqual(result["commit"], COMMIT)
                 self.assertEqual(self.delays, [2])
-                self.assertEqual(len(api.assets), 6)
+                self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertIn("attempt 1/4", self.stderr.getvalue())
         self.assertIn("rechecking tag, draft and uploaded checksums", self.stderr.getvalue())
 
@@ -81,9 +81,10 @@ class ReleaseRetryTests(unittest.TestCase):
         self.assertTrue(failed)
         self.assertEqual(result["release_id"], "42")
         self.assertEqual(self.delays, [2])
-        self.assertEqual(len(api.assets), 6)
-        self.assertEqual(api.upload_attempts, 6)
-        self.assertEqual(len(api.mutations), 8)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
+        self.assertEqual(api.upload_attempts, ASSET_COUNT)
+        # Tag and draft creation plus one upload per asset.
+        self.assertEqual(len(api.mutations), 2 + ASSET_COUNT)
         self.assertEqual(sum(method == "POST" and path == "/git/refs"
                              for method, path, _ in api.calls), 1)
         self.assertEqual(sum(method == "POST" and path == "/releases"
@@ -121,8 +122,9 @@ class ReleaseRetryTests(unittest.TestCase):
         with patch.object(api, "download", side_effect=fail_once):
             self.run_draft(api)
         self.assertEqual(self.delays, [2])
-        self.assertEqual(api.upload_attempts, 4)
-        self.assertEqual(len(api.assets), 6)
+        # Only the assets that were not already attached are uploaded.
+        self.assertEqual(api.upload_attempts, ASSET_COUNT - 2)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         for name, asset_id in existing_ids.items():
             self.assertEqual(api.assets[name]["id"], asset_id)
 
@@ -213,8 +215,9 @@ class ReleaseRetryTests(unittest.TestCase):
         self.run_draft(api, sleep=finish_upload)
         self.assertEqual(self.delays, [2])
         self.assertEqual(api.assets[item.name]["id"], asset_id)
-        self.assertEqual(api.upload_attempts, 5)
-        self.assertEqual(len(api.assets), 6)
+        # The completed starter archive is kept, never uploaded again.
+        self.assertEqual(api.upload_attempts, ASSET_COUNT - 1)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertFalse(any(method == "DELETE" for method, _, _ in api.calls))
 
     def test_retry_after_is_respected_up_to_sixty_seconds(self):
@@ -235,7 +238,7 @@ class ReleaseRetryTests(unittest.TestCase):
                 with patch.object(api, "request", side_effect=fail_once):
                     self.run_draft(api)
                 self.assertEqual(self.delays, [expected])
-                self.assertEqual(len(api.assets), 6)
+                self.assertEqual(len(api.assets), ASSET_COUNT)
 
     def test_retry_after_over_sixty_seconds_stops_without_an_early_retry(self):
         api = FakeApi()
@@ -284,7 +287,7 @@ class ReleaseRetryTests(unittest.TestCase):
                 "release_id=42", "release_url=" + api.release["html_url"],
                 "tag=v1.2.3", "commit=" + COMMIT])
         self.assertEqual(self.delays, [2])
-        self.assertEqual(len(api.assets), 6)
+        self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertNotIn("unit-test-token", self.stderr.getvalue())
 
 

@@ -101,6 +101,19 @@
         "CMAKE_OSX_ARCHITECTURES": "arm64",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3"
       }
+    },
+    {
+      "name": "ci-macos-x64",
+      "displayName": "macOS x86_64 target, native on Intel or cross-built on Apple silicon",
+      "inherits": "ci-macos",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "x86_64"
+      }
     }
   ],
   "buildPresets": [
@@ -127,6 +140,10 @@
     {
       "name": "ci-macos",
       "configurePreset": "ci-macos"
+    },
+    {
+      "name": "ci-macos-x64",
+      "configurePreset": "ci-macos-x64"
     }
   ],
   "testPresets": [
@@ -168,6 +185,11 @@
     {
       "name": "ci-macos",
       "configurePreset": "ci-macos",
+      "inherits": "test"
+    },
+    {
+      "name": "ci-macos-x64",
+      "configurePreset": "ci-macos-x64",
       "inherits": "test"
     }
   ]

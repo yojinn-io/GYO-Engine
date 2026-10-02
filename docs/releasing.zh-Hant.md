@@ -13,7 +13,7 @@
 | 固定設計工具鏈 | `gyo-toolchain-<platform>.tar.gz` | `gyo-toolchain` |
 | CSV 選中的遊戲 | `gyo-<game>-<platform>.tar.gz` | `gyo-<game>` |
 
-平台是 `windows-x64`、`linux-x64`、`macos-arm64`。每個壓縮檔另有同名 `.sha256`。因此沒有 app、CSV 只有標頭或全部停用時，仍有三平台 toolchain 與 checksum，可完成 Release。未登錄的目錄不會自動加入；已選中的遊戲缺檔、編譯或驗收失敗，則整次整合失敗。
+平台是 `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64`。CSV 的 `macos` 欄同時啟用兩種 macOS 架構（arm64 與 x64），不另設架構欄位；展開規則只由 CMake 登錄解析器維護。每個壓縮檔另有同名 `.sha256`。因此沒有 app、CSV 只有標頭或全部停用時，仍有四平台 toolchain 與 checksum，可完成 Release。Go 服務只封裝自己宣告的平台，例如 gateway 仍只有 Linux 與 Windows。未登錄的目錄不會自動加入；已選中的遊戲缺檔、編譯或驗收失敗，則整次整合失敗。
 
 產品是可執行程式與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source/assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
 
@@ -22,14 +22,14 @@
 | 操作 | 結果 |
 |---|---|
 | Draft pull request，或只變更 `docs/**` 的 pull request | 只執行 CI 政策測試與範圍判定；`CI gate` 以預期略過通過 |
-| Ready pull request | L1 合併閘門：每平台一個 job，建置登錄啟用的遊戲、預設工具、Engine 與測試，並跑 `cpu`／`shader` 標籤測試；Linux 另跑 host shader、Lavapipe GPU 與 core；不封裝 |
+| Ready pull request | L1 合併閘門：每平台一個 job，建置登錄啟用的遊戲、預設工具、Engine 與測試，並跑 `cpu`／`shader` 標籤測試；Linux 另跑 host shader、Lavapipe GPU 與 core；`macos-x64` 在 arm64 runner 交叉編譯，測試經 Rosetta 2 執行；不封裝 |
 | 推送 master／一般 workflow 手動執行 | L1 加 Quick 整合與 Actions artifacts |
 | 推送其他分支 | 不執行 CI |
 | **Prepare Release** | 固定 SHA，完整驗收全部必要產品，準備 tag、Draft 與附件 |
 | 推送 tag | 不以此作為自動發佈入口 |
 | **Publish release** | 公開已準備的 Draft，不重新編譯 |
 
-必要檢查只設定 `CI gate`。它在每個 pull request 事件都會回報；所選層級全部成功，或依規則略過時才通過。同一 PR 的新推送會取消舊執行，master 的執行彼此不取消。編譯快取（sccache）只由預設分支的 L1 寫入，PR 與封裝 jobs 只讀取。
+必要檢查只設定 `CI gate`。它在每個 pull request 事件都會回報；所選層級全部成功，或依規則略過時才通過。同一 PR 的新推送會取消舊執行，master 的執行彼此不取消。編譯快取（sccache）只由預設分支的 L1 寫入，PR 與封裝 jobs 只讀取；每個平台列有自己的快取族群，因此 `macos-x64` 的目標物件不會與 arm64 混用。Shader 編譯器等 host 工具依 runner 平台快取，`macos-arm64` 與 `macos-x64` 共用同一份 arm64 原生工具，目標架構不會帶進 host 工具建置。
 
 - Draft 判定讀取 PR 目前狀態；重新執行舊的 Draft 執行也會跑 L1。
 - Draft 改為 Ready 而 head commit 未變時，新執行的 `CI gate` 要等前面 jobs 結束才出現，期間該 commit 仍顯示 Draft 執行的通過結果。新的 `CI gate` 回報前不要合併或啟用 auto-merge。
@@ -41,7 +41,7 @@
 1. 確認預定來源 commit 的 Quick 結果；master 以外的分支 push 不執行 CI，需在該分支手動執行 **Cross-platform CI**。
 2. 在 **Actions → Prepare Release → Run workflow** 選擇來源分支。
 3. 填入 version，例如 `v1.0.1`，必要時勾選 prerelease。
-4. 等待三平台固定 toolchain 與全部 CSV 遊戲的必要驗收。
+4. 等待四平台固定 toolchain 與全部 CSV 遊戲的必要驗收。
 5. 從 Summary 開啟 Draft，核對 commit、版本、全部附件及說明。
 6. 準備公開時按 **Publish release**。
 
@@ -58,6 +58,8 @@
 診斷 executable 由 owner 明確註冊角色。CMake 生成 `<build>/packages/<product>/<configuration>/acceptance-context.json`，使用 `--context` 傳給 runner；context 綁定 manifest 與建置配置，只解析 `@CHECK_ROOT@`、`@PROBE:<role>@` 所需的外部位置，不改變檢查命令或集合。`@EXECUTABLE:<role>@` 依 owner 查找產品，檢查與日誌以 `owner.name` 識別。Runner 可以在產品臨時副本中放入 probe，但不能覆寫正式程式；正式產品不包含 context、probe 或 Python 驗收程式。遊戲 runtime 僅讀 `bin/assets/<game>`。
 
 Quick 與 Release 由 checks 的 profile 控制產品驗收深度，GPU suite 參數也由 owner 自己的配置指定。Linux toolchain job 固定以 Xvfb／Lavapipe 執行共通引擎 GPU 渲染測試，即使沒有遊戲亦然；所有產品（包含 toolchain）另執行其 contract 宣告的 GPU checks，兩者不是互斥分支。缺少所需能力、逾時或錯誤皆為失敗。軟體 Vulkan 結果與 Windows/macOS hosted 建置不代表實體 GPU 已驗證。Object_FPS 的外部驗收見[專案指南](object_fps/acceptance.zh-Hant.md)。
+
+`macos-x64` 的驗證等級與其他平台不同：產品在 macOS arm64 hosted runner 上以 `ci-macos-x64` preset（`CMAKE_OSX_ARCHITECTURES=x86_64`，部署目標同為 13.3）交叉編譯，CPU 測試與安裝後驗收在同一台 runner 經 Rosetta 2 轉譯執行，不跑任何 GPU 檢查，也沒有實體 Intel Mac 驗收。Runner 無法執行 x86_64 程式時，該列在建置前即失敗。Linkage 檢查要求 macOS 套件內的程式與原生庫只含目標架構。每列 Summary 列出建置 host／目標與 CPU 執行方式，壓縮檔的 `build_metadata.json` 也以 `cpu_execution`（`native` 或 `rosetta2`）記錄同一資訊。
 
 封裝與 Draft 階段重新推導同一來源 SHA 的完整預期集合，驗證每項 product/platform、工具 owner 集合、checksum、archive 路徑安全、manifest、必要內容及 Release profile 證據。缺包、多包、工具子集冒充完整工具鏈、重複身份或 Quick-only 證據都不接受。
 
@@ -78,4 +80,4 @@ Quick 與 Release 由 checks 的 profile 控制產品驗收深度，GPU suite �
 
 ## 5. 驗證證據
 
-本機測試與靜態 workflow 檢查不等於遠端三平台或 Draft 已成功。本次版本應以實際 Actions Summary、必要 jobs、驗收報告與附件為準。歷史 dev logs 僅記錄當時的路徑與結果，不作為此次重構已通過的證明。
+本機測試與靜態 workflow 檢查不等於遠端各平台或 Draft 已成功。本次版本應以實際 Actions Summary、必要 jobs、驗收報告與附件為準。歷史 dev logs 僅記錄當時的路徑與結果，不作為此次重構已通過的證明。

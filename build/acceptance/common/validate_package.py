@@ -19,6 +19,20 @@ from workspace import TemporaryDirectory
 from package_contract import (decode_json, load_manifest, installed_required_files, valid_installed_file,
                               validate_product_namespace)
 
+# macOS package platform -> the single Mach-O architecture its binaries carry.
+# A cross-built package must not silently contain host-architecture code.
+MACOS_ARCHITECTURES = {"macos-arm64": "arm64", "macos-x64": "x86_64"}
+
+
+def verify_macos_architecture(binary: Path, package_platform: str) -> None:
+    expected = MACOS_ARCHITECTURES.get(package_platform)
+    if expected is None:
+        raise RuntimeError(f"No Mach-O architecture is defined for package platform {package_platform}")
+    architectures = subprocess.check_output(["lipo", "-archs", str(binary)], text=True, timeout=30).split()
+    if architectures != [expected]:
+        raise RuntimeError(f"{binary.name} contains {' '.join(architectures) or 'no'} code; "
+                           f"{package_platform} requires exactly {expected}")
+
 
 def validate_linkage(stage: Path, product: str, logs: Path, dumpbin: str | None = None) -> None:
     stage, logs = stage.resolve(strict=True), logs.resolve()
@@ -55,6 +69,10 @@ def validate_linkage(stage: Path, product: str, logs: Path, dumpbin: str | None 
             if missing:
                 raise RuntimeError("Package is missing product-local MSVC runtime DLLs:\n" + "\n".join(sorted(missing)))
 
+        if platform.system() == "Darwin":
+            for relative in manifest["native_files"]:
+                verify_macos_architecture(package / relative, manifest["platform"])
+
         for role, entry in manifest["executables"].items():
             executable_path = entry["path"]
             executable = str(package / executable_path)
@@ -74,6 +92,7 @@ def validate_linkage(stage: Path, product: str, logs: Path, dumpbin: str | None 
                     if not sdl or not Path(sdl.group(1)).resolve().is_relative_to(package / "lib"):
                         raise RuntimeError(f"SDL3 did not resolve inside the package:\n{result.stdout}")
             elif platform.system() == "Darwin":
+                verify_macos_architecture(Path(executable), manifest["platform"])
                 dependencies = subprocess.check_output(["otool", "-L", executable], text=True, timeout=30)
                 commands = subprocess.check_output(["otool", "-l", executable], text=True, timeout=30)
                 log.write_text(dependencies + "\n" + commands, encoding="utf-8")

@@ -14,7 +14,7 @@ if(PLATFORM)
 endif()
 file(MAKE_DIRECTORY "${source}/build/acceptance/sample")
 file(WRITE "${source}/build/acceptance/sample/checks.json" [=[
-{"version":1,"checks":[{"name":"content","command":["@PROBE:main@","--validate-package"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64"],"gpu":false,"timeout":90}]}
+{"version":1,"checks":[{"name":"content","command":["@PROBE:main@","--validate-package"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64","macos-x64"],"gpu":false,"timeout":90}]}
 ]=])
 file(WRITE "${source}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.30)
@@ -24,6 +24,7 @@ set(GYO_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(GYO_ENABLE_PACKAGING ON)
 set(CMAKE_SYSTEM_NAME "${TEST_SYSTEM}")
 set(CMAKE_SYSTEM_PROCESSOR "${TEST_ARCH}")
+set(CMAKE_OSX_ARCHITECTURES "${TEST_OSX_ARCHITECTURES}")
 set(APPLE FALSE)
 set(MSVC FALSE)
 if(TEST_SYSTEM STREQUAL Darwin)
@@ -50,16 +51,24 @@ endif()
 gyo_finalize_product_packages()
 ]=])
 
-foreach(case "Windows|AMD64|windows-x64" "Linux|x86_64|linux-x64" "Darwin|arm64|macos-arm64" "Linux|aarch64|unsupported")
+# system|host processor|CMAKE_OSX_ARCHITECTURES|expected. On Apple the target
+# architecture decides the package platform, so an x86_64 build on an arm64
+# host is macos-x64 (and the reverse macos-arm64); universal builds have none.
+foreach(case "Windows|AMD64||windows-x64" "Linux|x86_64||linux-x64" "Darwin|arm64||macos-arm64"
+        "Darwin|x86_64||macos-x64" "Darwin|arm64|x86_64|macos-x64" "Darwin|x86_64|arm64|macos-arm64"
+        "Darwin|arm64|arm64,x86_64|unsupported" "Linux|aarch64||unsupported")
     string(REPLACE "|" ";" fields "${case}")
     list(GET fields 0 system)
     list(GET fields 1 architecture)
-    list(GET fields 2 expected)
-    set(binary "${work}/${system}-${architecture}")
+    list(GET fields 2 osx_architectures)
+    list(GET fields 3 expected)
+    string(REPLACE "," ";" osx_architectures "${osx_architectures}")
+    string(MAKE_C_IDENTIFIER "${system}-${architecture}-${osx_architectures}" name)
+    set(binary "${work}/${name}")
     execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}"
         ${generator_args}
         "-DGYO_TEST_REPOSITORY=${repository}" "-DTEST_SYSTEM=${system}" "-DTEST_ARCH=${architecture}"
-        -DCMAKE_BUILD_TYPE=Debug RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 30)
+        "-DTEST_OSX_ARCHITECTURES=${osx_architectures}" -DCMAKE_BUILD_TYPE=Debug RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 30)
     if(expected STREQUAL unsupported)
         if(result EQUAL 0 OR NOT "${stdout}${stderr}" MATCHES "No package platform")
             message(FATAL_ERROR "Unsupported package target was not rejected: ${stdout}${stderr}")

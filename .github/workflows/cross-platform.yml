@@ -78,6 +78,9 @@ jobs:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
+      # Host tools are keyed by the runner, not the target: rows that share a
+      # host (macOS arm64 and its x86_64 cross build) share one shader tool.
+      GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
       CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.parallel }}
@@ -96,13 +99,15 @@ jobs:
           platform: ${{ matrix.platform }}
           toolchain: ${{ matrix.toolchain }}
           preset: ${{ matrix.preset }}
+          host: ${{ matrix.host }}
+          cpu-execution: ${{ matrix.cpu_execution }}
 
       # The ci-<os> preset already selects every registry-enabled game, the
       # default tools, the engine and its tests; no product is named here.
       - name: Configure registered products, default tools and engine tests
         id: configure
         run: |
-          cmake --preset $env:PRESET 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
+          cmake --preset $env:PRESET "-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
           "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
@@ -111,8 +116,8 @@ jobs:
         if: steps.configure.outputs.has_shader_tools == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: build/target/_build/${{ matrix.preset }}/host-tools
-          key: shader-tools-v2-sccache-${{ matrix.platform }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
+          path: ${{ env.GYO_HOST_TOOLS }}
+          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp', 'engine/base/src/Sha256.cpp') }}
 
       - name: Build the registered graph and its tests
         id: build
@@ -130,7 +135,7 @@ jobs:
         id: shaders
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.build.outcome == 'success' && steps.configure.outputs.has_shader_tools == 'true' }}
         run: |
-          ctest --test-dir "build/target/_build/$env:PRESET/host-tools" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
+          ctest --test-dir "$env:GYO_HOST_TOOLS" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Same Lavapipe setup and common engine GPU command as the packaging
@@ -239,9 +244,9 @@ jobs:
             build/target/_build/${{ matrix.preset }}/logs
             build/target/_build/${{ matrix.preset }}/CMakeFiles/CMakeConfigureLog.yaml
             build/target/_build/${{ matrix.preset }}/Testing/Temporary
-            build/target/_build/${{ matrix.preset }}/host-tools/CMakeFiles/CMakeConfigureLog.yaml
-            build/target/_build/${{ matrix.preset }}/host-tools/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
-            build/target/_build/${{ matrix.preset }}/host-tools/Testing/Temporary
+            ${{ env.GYO_HOST_TOOLS }}/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.GYO_HOST_TOOLS }}/_deps/**/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.GYO_HOST_TOOLS }}/Testing/Temporary
             build/target/_build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
             build/target/_build/${{ matrix.preset }}-core/Testing/Temporary
           if-no-files-found: warn
@@ -251,6 +256,8 @@ jobs:
         if: always()
         env:
           L1_PLATFORM: ${{ matrix.platform }}
+          L1_HOST: ${{ matrix.host }}
+          CPU_EXECUTION: ${{ matrix.cpu_execution }}
           BUILD_RESULT: ${{ steps.build.outcome }}
           TEST_RESULT: ${{ steps.tests.outcome }}
           SHADER_RESULT: ${{ steps.shaders.outcome }}
@@ -263,6 +270,8 @@ jobs:
           ## L1 / $env:L1_PLATFORM
           | Check | Result |
           | --- | --- |
+          | Build host / target | $env:L1_HOST / $env:L1_PLATFORM |
+          | Target CPU execution | $env:CPU_EXECUTION |
           | Build (registered games, default tools, engine, tests) | $env:BUILD_RESULT |
           | CPU / headless tests | $env:TEST_RESULT |
           | Host shader tests (Linux) | $env:SHADER_RESULT |
@@ -272,6 +281,7 @@ jobs:
           | Go service cross-builds (Linux) | $env:GO_SERVICES_RESULT |
 
           L1 builds and tests only. Packaging and installed acceptance run on master integration.
+          Only Linux runs GPU tests (software Vulkan); macOS rows have no GPU checks, and a rosetta2 row runs its x86_64 tests translated on an arm64 host.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
   quick:
