@@ -286,7 +286,7 @@ Snapshot 到達時還原自己的權威狀態，移除已完成命令並依序�
 首次啟動、ACK 超過本機 tip、或較新 epoch 時，清除失效歷史與累積時間，建立
 **兩個中立命令**提前量。固定 lead 會形成穩態序號差，是約 33.3 ms 的持續延遲成本，
 並非只影響啟動。ACK 小於 tip 時還原並重播；**ACK 等於 tip 是正常確認**，保留
-計時餘數，不補中立命令。新播種的首次 Advance 最多计入一步；pending 為空且
+計時餘數，不補中立命令。新播種的首次 Advance 最多計入一步；pending 為空且
 frame gap 超過 50 ms 時亦最多計入一步，保留既有餘數，避免重播權威已涵蓋的停頓。
 新epoch先保留seed窗口，首個合法固定步形成後才一起發布。若尚未發布前的累積
 時間會在一次Advance產生三個以上操作命令，同樣限制本次計入一步並記錄省略時間，
@@ -625,11 +625,11 @@ Arena JSON Data Contract 維持不變。v2 測試證據見
 執行、epoch 重設、快照接收及成功 Presented。`PresentedMovement()` 只在
 `PresentStatus::Presented` 後產生一份觀測，Skipped 不冒充呈現。
 
-產品專屬 `run_timing.py` 支援雙 GUI 三輪 120 秒／200 個预先安排事件，以及
+產品專屬 `run_timing.py` 支援雙 GUI 三輪 120 秒／200 個預先安排事件，以及
 `timing_probe` 的 60／144 Hz 真實網路／預測 30 分鐘長測。命令延遲以相同識別
 配對；呈現以位移交越配對。未配對／不明事件以無限延遲計入 nearest-rank 分位數，
 不排除慢幀，所有呈現間隔均保留。GUI 計時期間不 readback 或存圖；GPU 正確性另測。
-僅比较同機單調時鐘，不稱為 input-to-photon。固定門檻、執行命令、實測結果與限制見
+僅比較同機單調時鐘，不稱為 input-to-photon。固定門檻、執行命令、實測結果與限制見
 [命令時序 v3 開發日誌](../dev_logs/2026_09_25_pvp_command_timing_v3.zh-Hant.md)。
 
 ## 7. 後續開發應保留的核心設計
@@ -778,16 +778,16 @@ HTTP join、Ready／Welcome 同步升級並拒絕 v1–v3。前述 v3 移動修�
 回顧保留歷史證據；不能當成新增射擊或 v4 長測的驗收紀錄。
 v4 的時間、ActionId、裁決、有效期、戰鬥狀態及 ownership 統一見
 [v4 契約](protocol-v4.zh-Hant.md)；執行順序與各批進度見
-[五份計畫](plans/README.md)，新對話交接見 [HANDOFF](plans/HANDOFF.md)。
+[五份計畫](plans/v4/README.md)，新對話交接見 [HANDOFF](plans/v4/HANDOFF.md)。
 
 第 02 批加入產品權威射擊及 Host 有界發布時間 metadata，第 03 批完成 v4 傳輸
 及 headless 真網路交付／共存／恢復。第 04 批已接既有槍模與即時武器回饋，
 真實雙 GUI 呈現短回歸通過；第 05 批交付整合測試與手動驗收指南。
 **三輪GUI共存、60／144Hz各30分鐘及原生X11操作已通過。**
 穩定範圍限Linux／X11／Vulkan、同機雙玩家與已驗證的受控網路；
-指紋、完整數據、原始失敗及限制見 [穩定基線](plans/STABLE_BASELINE.md)。
-啟動、日誌與固定門檻見 [手動指南](plans/MANUAL_ACCEPTANCE.md)，
-實際通過／失敗及缺項見 [驗收狀態](plans/ACCEPTANCE_STATUS.md)。
+指紋、完整數據、原始失敗及限制見 [穩定基線](plans/v4/STABLE_BASELINE.md)。
+啟動、日誌與固定門檻見 [手動指南](plans/v4/MANUAL_ACCEPTANCE.md)，
+實際通過／失敗及缺項見 [驗收狀態](plans/v4/ACCEPTANCE_STATUS.md)。
 移動基線不調參，命中回溯與可重用同步機制留後續。
 原分批交付後，使用者明確追加授權Agent接手完整驗收及通過後升格；現已完成。
 手動指南與回報表保留作未來測例參考，不自動開始歷史命中或其他下一階段。
@@ -947,7 +947,7 @@ Architecture Delta 限於產品 Client 的呈現責任、既有能力依賴與�
 第 01 批文件／基線及第 02 批人物呈現／短測已完成；第03批已建成三角色v5候選，
 功能與網路短測完成，但可見延遲守門尚有啟動相位問題，整批驗收未結案。
 第02批下述v4圖示是當時切片的歷史說明。
-原 [v4 穩定基線](plans/STABLE_BASELINE.md) 與驗收證據保持原範圍。
+原 [v4 穩定基線](plans/v4/STABLE_BASELINE.md) 與驗收證據保持原範圍。
 
 新增責任是產品內生命世代、跳躍／彈匣／換彈／重生狀態及 Client 人物呈現。
 lifeGeneration、movementEpoch 與 Session ActionId 分離；重生不清未 ACK 的動作帳本。
@@ -956,7 +956,7 @@ Match 保持膠囊權威，Client 使用 PvP 自有模型／骨骼資料；不�
 見 v5 契約第 7 節；第 02 批實際變化限於下述 Client 呈現切片，owner 不變。
 
 第 02 批先在 v4 玩法下驗證人物 Idle／Jog；第 03 批才同時升三角色 v5；第 04 批
-完成动作呈現，第 05 批短整合與交付驗收指南。每批完成後停止，完整驗收另行授權。
+完成動作呈現，第 05 批短整合與交付驗收指南。每批完成後停止，完整驗收另行授權。
 第 01 批實際結果見 [dev_log](../dev_logs/2026_09_28_pvp_v5_batch01.zh-Hant.md)。
 
 ### 第 02 批已實作：玩家呈現與位移相位

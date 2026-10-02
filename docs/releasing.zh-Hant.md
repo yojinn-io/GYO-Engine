@@ -15,7 +15,7 @@
 
 平台是 `windows-x64`、`linux-x64`、`macos-arm64`。每個壓縮檔另有同名 `.sha256`。因此沒有 app、CSV 只有標頭或全部停用時，仍有三平台 toolchain 與 checksum，可完成 Release。未登錄的目錄不會自動加入；已選中的遊戲缺檔、編譯或驗收失敗，則整次整合失敗。
 
-產品是可執行程式與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source/assets；遊戲包不带 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
+產品是可執行程式與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source/assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
 
 ## 2. 入口與操作
 

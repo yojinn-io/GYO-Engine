@@ -20,6 +20,16 @@ Float3 Difference(Float3 lhs, Float3 rhs) {
 // A start-phase shift is slewed: each frame moves the fixed-step clock by at
 // most this share of its elapsed time, so the display never steps backwards.
 constexpr double StartPhaseSlewFraction = 0.25;
+// Share of a step a slew keeps clear of the runtime's catch-up capacity, well
+// above FixedTickRuntime's own step tolerance (1e-9).
+constexpr double StartPhaseCatchUpMargin = 1.0e-6;
+// The start phase is armed once this many frame intervals describe the frame
+// rate; the mean then grows to the whole interval window.
+constexpr std::size_t StartPhaseFrameEvidence = 8;
+// One missed 60 Hz refresh. A longer hitch counts as this, so a single stall
+// weighs like one dropped frame while every refresh a vsync-paced display drops
+// still counts in full.
+constexpr double StartPhaseFrameIntervalLimit = 2 * MovementTickSeconds;
 float Length(Float3 value) {
     return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
 }
@@ -54,10 +64,23 @@ void LocalPlayerPrediction::Reset() noexcept {
     startPhasePending_ = false;
     startWindowLagSeconds_.reset();
     phaseShiftSeconds_ = 0;
+    armedPhaseShiftSeconds_.reset();
+    startPhaseWithdrawn_ = false;
+    startPhaseRecoveredFrames_ = 0;
+    frameIntervals_ = {};
     observation_ = {};
 }
 
 void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
+    // An epoch-start seed follows Reset(), so a start phase still pending or
+    // armed here belongs to a stall reseed, which rebases the phase the Host
+    // timed. The state below disarms it either way; the diagnostics say so
+    // instead of keeping the last shift or withdrawal. A wait already taken
+    // stays reported.
+    if (startPhasePending_ || armedPhaseShiftSeconds_) {
+        observation_.startPhaseShiftSeconds.reset();
+        observation_.startPhaseSkip = StartPhaseSkip::CancelledByReseed;
+    }
     ticks_.Reset();
     pendingJump_ = false;
     alpha_ = 0;
@@ -79,6 +102,19 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     startPhasePending_ = authority.lastResolvedCommand == 0;
     startWindowLagSeconds_.reset();
     phaseShiftSeconds_ = 0;
+    armedPhaseShiftSeconds_.reset();
+    startPhaseWithdrawn_ = false;
+    startPhaseRecoveredFrames_ = 0;
+}
+
+std::optional<double> LocalPlayerPrediction::FramePeriodSeconds() const {
+    // A plain mean: a vsync-paced display drops whole refreshes, and discarding
+    // the longest intervals as outliers would hide exactly those drops. The
+    // two-tick limit already bounds what one long hitch contributes.
+    if (frameIntervals_.count < StartPhaseFrameEvidence) return std::nullopt;
+    double sum{};
+    for (std::size_t index = 0; index < frameIntervals_.count; ++index) sum += frameIntervals_.seconds[index];
+    return sum / static_cast<double>(frameIntervals_.count);
 }
 
 void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
@@ -101,7 +137,10 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
         }
         // New epochs have an independent sequence namespace. No old input,
         // fractional simulation time or correction may leak into this seed.
+        // Frame pacing belongs to the display loop and carries over.
+        const auto frameIntervals = frameIntervals_;
         Reset();
+        frameIntervals_ = frameIntervals;
         observation_.active = true;
         SeedLead(authority);
     } else {
@@ -156,12 +195,28 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
         // the sequence lead for a command sent at its fixed-step boundary.
         // Shifting the phase sets that slack to the target for every later
         // command; the sequence-to-tick mapping and lead are unchanged.
-        startPhasePending_ = false;
+        // The shift is armed once frame evidence exists; until then the timed
+        // phase stays pending and every snapshot of this epoch repeats the wait.
+        // Armed while the frame-rate measure is above the cut (below about
+        // 54.5 FPS, MovementStartPhaseMaximumFrameSeconds), it starts withdrawn
+        // and Advance applies it once frames recover.
         const double wait = *authority.epochStartWaitMicros * 1.0e-6;
-        observation_.epochStartWaitSeconds = wait;
-        if (wait <= MovementStartPhaseMaximumWaitSeconds) {
-            phaseShiftSeconds_ = wait + *startWindowLagSeconds_ - MovementStartPhaseTargetSeconds;
-            observation_.startPhaseShiftSeconds = phaseShiftSeconds_;
+        const auto framePeriod = FramePeriodSeconds();
+        if (wait > MovementStartPhaseMaximumWaitSeconds || framePeriod) {
+            startPhasePending_ = false;
+            observation_.epochStartWaitSeconds = wait;
+            if (wait > MovementStartPhaseMaximumWaitSeconds) {
+                observation_.startPhaseSkip = StartPhaseSkip::HostLate;
+            } else {
+                armedPhaseShiftSeconds_ = wait + *startWindowLagSeconds_ - MovementStartPhaseTargetSeconds;
+                startPhaseWithdrawn_ = *framePeriod > MovementStartPhaseMaximumFrameSeconds;
+                if (startPhaseWithdrawn_) {
+                    observation_.startPhaseSkip = StartPhaseSkip::FrameRateBelowTick;
+                } else {
+                    phaseShiftSeconds_ = *armedPhaseShiftSeconds_;
+                    observation_.startPhaseShiftSeconds = phaseShiftSeconds_;
+                }
+            }
         }
     }
     if (authority.lifeState == LifeState::Dead) pendingJump_ = false;
@@ -178,6 +233,44 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     if (!ValidMovementCommand({1, forward, right, yaw, pitch}) ||
         !std::isfinite(frameSeconds) || frameSeconds < 0)
         throw std::invalid_argument("Invalid local movement input");
+    if (frameSeconds > 0) {
+        frameIntervals_.seconds[frameIntervals_.next] = (std::min)(frameSeconds, StartPhaseFrameIntervalLimit);
+        frameIntervals_.next = (frameIntervals_.next + 1) % frameIntervals_.seconds.size();
+        frameIntervals_.count = (std::min)(frameIntervals_.count + 1, frameIntervals_.seconds.size());
+    }
+    if (armedPhaseShiftSeconds_) {
+        // The shift is withdrawn on the first frame whose mean is above the cut
+        // (below about 54.5 FPS, 1.1 tick): the same slew takes the clock back
+        // to the unshifted phase (cancelling any remainder). Each interval
+        // counts as at most two ticks, so a drop from 60 FPS needs up to four
+        // frames at 30 FPS and 16-20 frames at a vsync-paced 50 FPS to get
+        // there. The shift returns only once the mean has stayed at or below
+        // the restore bound (about 56.6 FPS, 1.06 tick) for a 32-frame dwell,
+        // so a frame rate between the two bounds keeps whichever state it
+        // reached and a short run of whole frames inside a low frame rate
+        // (random missed refreshes) does not bring it back.
+        const auto framePeriod = FramePeriodSeconds();
+        bool withdrawn = startPhaseWithdrawn_;
+        if (!withdrawn) {
+            withdrawn = framePeriod && *framePeriod > MovementStartPhaseMaximumFrameSeconds;
+        } else if (framePeriod && *framePeriod <= MovementStartPhaseRestoreFrameSeconds) {
+            if (frameSeconds > 0) withdrawn = ++startPhaseRecoveredFrames_ < frameIntervals_.seconds.size();
+        } else {
+            startPhaseRecoveredFrames_ = 0;
+        }
+        if (withdrawn != startPhaseWithdrawn_) {
+            startPhaseRecoveredFrames_ = 0;
+            phaseShiftSeconds_ += withdrawn ? -*armedPhaseShiftSeconds_ : *armedPhaseShiftSeconds_;
+            startPhaseWithdrawn_ = withdrawn;
+            if (withdrawn) {
+                observation_.startPhaseShiftSeconds.reset();
+                observation_.startPhaseSkip = StartPhaseSkip::FrameRateBelowTick;
+            } else {
+                observation_.startPhaseShiftSeconds = armedPhaseShiftSeconds_;
+                observation_.startPhaseSkip.reset();
+            }
+        }
+    }
     if (current_.lifeState != LifeState::Alive || pending_.size() >= MaxPendingCommands) pendingJump_ = false;
     else pendingJump_ = pendingJump_ || jumpRequested;
     if (current_.lifeState == LifeState::Dead) { forward = right = 0; yaw = current_.yaw; pitch = current_.pitch; }
@@ -212,7 +305,23 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     double advanceSeconds = elapsed;
     if (phaseShiftSeconds_ != 0) {
         const double limit = elapsed * StartPhaseSlewFraction;
-        const double shift = std::clamp(phaseShiftSeconds_, -limit, limit);
+        // A negative shift runs the clock ahead of the frame. The runtime steps
+        // at most CatchUpSteps times per call and drops whole steps beyond
+        // that, so on a frame of four ticks or more the slew could lose a step
+        // instead of moving the phase. It takes only the time the runtime can
+        // still step this frame (none when the frame alone drops steps); the
+        // rest waits for later frames.
+        double ahead = limit;
+        if (phaseShiftSeconds_ < 0) {
+            auto preview = ticks_;
+            const double step = preview.StepSeconds();
+            const double accumulated = step -
+                preview.Advance(0.0, [](const Engine::Runtime::TickContext&) {}).secondsUntilNextTick;
+            const double capacity = (CatchUpSteps + 1) * step - accumulated - elapsed -
+                step * StartPhaseCatchUpMargin;
+            ahead = std::clamp(capacity, 0.0, limit);
+        }
+        const double shift = std::clamp(phaseShiftSeconds_, -ahead, limit);
         advanceSeconds -= shift;
         phaseShiftSeconds_ -= shift;
     }

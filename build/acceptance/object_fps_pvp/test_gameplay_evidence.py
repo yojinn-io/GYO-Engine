@@ -1,6 +1,9 @@
 """Counterexamples for v5 per-life evidence and wire mapping; no live services."""
+from pathlib import Path
+import subprocess
+import sys
 import unittest
-from gameplay_evidence import combat_expected, life_reset_matches, validate_accepted_actions, client_disturbance, fault_expiry_exception, is_wire_send_event
+from gameplay_evidence import combat_expected, life_reset_matches, validate_accepted_actions, client_disturbance, fault_expiry_exception, is_wire_send_event, start_phase_by_player
 from command_evidence import recovery_actual_intervals
 from action_probe import decision, encoded
 from run_gameplay import matrix
@@ -111,5 +114,43 @@ class GameplayEvidenceTests(unittest.TestCase):
         for mode in ('upstream','downstream','socket-path','gateway','host-ipc'):
             self.assertEqual({c['milliseconds'] for c in cases if c['mode']==mode},{250,1000})
 
+    def test_start_phase_record_per_session_is_carried_or_explicitly_absent(self):
+        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'shift_armed','host_wait_micros':2900,
+               'client_wait_seconds':.0029,'client_shift_seconds':.0007,'client_first_steady_ns':5_000_000_000}
+        respawn=dict(epoch,life_generation=2,status='not_armed_or_invalidated',client_wait_seconds=None,client_shift_seconds=None,
+                     client_first_steady_ns=None)
+        result=start_phase_by_player({'clients':[{'player_id':7,'start_phase':{'supported':True,'epochs':[epoch,respawn]}},
+                                                 {'player_id':8}]})
+        self.assertEqual(result['7']['first_epoch_status'],'shift_armed')
+        self.assertEqual(result['7']['status_counts'],{'shift_armed':1,'not_armed_or_invalidated':1})
+        self.assertIsNone(result['7']['first_epoch']['client_set_seconds_before_measurement'])
+        self.assertIsNone(result['7']['measured_epoch'])
+        self.assertEqual(result['8']['status'],'absent')
+        self.assertIn('clients[1].start_phase missing',result['8']['reason'])
+        self.assertEqual(result['7']['reseed_detection']['status'],'not_checked')
+
+    def test_start_phase_stall_reseed_in_the_shared_client_trace_cancels_only_its_own_record(self):
+        from start_phase_evidence import reseed_evidence
+        epoch={'player_id':7,'movement_epoch':1,'life_generation':1,'status':'shift_armed','host_wait_micros':2900,
+               'client_wait_seconds':.0029,'client_shift_seconds':.0007,'client_first_steady_ns':5_000_000_000}
+        other=dict(epoch,player_id=8)
+        def generated(player,sequence,seeded,time_ns):
+            return {'kind':'generated','player_id':player,'epoch':1,'life_generation':1,'sequence':sequence,
+                    'seeded_neutral':seeded,'time_ns':time_ns}
+        # Both players share clients-commands.jsonl; only player 7 reseeds after its decision.
+        events=[generated(7,1,True,4_000_000_000),generated(7,2,True,4_000_000_000),generated(8,1,True,4_000_000_000),
+                generated(8,2,True,4_000_000_000),generated(7,30,True,6_000_000_000),generated(7,31,True,6_000_000_000)]
+        result=start_phase_by_player({'clients':[{'player_id':7,'start_phase':{'supported':True,'epochs':[epoch]}},
+                                                 {'player_id':8,'start_phase':{'supported':True,'epochs':[other]}}]},
+                                     reseed_evidence(events,'clients-commands.jsonl'))
+        self.assertEqual(result['7']['first_epoch_status'],'cancelled_by_reseed')
+        self.assertEqual(result['7']['first_epoch']['recorded_status'],'shift_armed')
+        self.assertAlmostEqual(result['7']['first_epoch']['cancelled_by_reseed']['seconds_after_decision'],1)
+        self.assertEqual(result['8']['first_epoch_status'],'shift_armed')
+        self.assertEqual(result['8']['reseed_detection']['stall_reseeds'],{'7/1/1':1})
+
+    def test_gameplay_reader_does_not_depend_on_the_gui_latency_reader(self):
+        code='import sys,gameplay_evidence;sys.exit(int("presentation_evidence" in sys.modules))'
+        self.assertEqual(subprocess.run([sys.executable,'-c',code],cwd=Path(__file__).resolve().parent).returncode,0)
 
 if __name__=='__main__':unittest.main()

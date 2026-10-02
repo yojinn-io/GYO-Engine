@@ -4,7 +4,7 @@ Production Client, Gateway and Runtime use protocol v5 and reject v1–v4.
 The product-owned [v5 contract](../../../docs/object_fps_pvp/protocol-v5.zh-Hant.md)
 is the single source for gameplay, field validation, identity, timing and delivery
 rules. The [batch plan](../../../docs/object_fps_pvp/plans/v5/README.md) tracks
-implementation and acceptance; the prior [v4 baseline](../../../docs/object_fps_pvp/plans/STABLE_BASELINE.md)
+implementation and acceptance; the prior [v4 baseline](../../../docs/object_fps_pvp/plans/v4/STABLE_BASELINE.md)
 does not certify v5.
 
 `client_v5.proto` defines remote Client ↔ Gateway payloads.

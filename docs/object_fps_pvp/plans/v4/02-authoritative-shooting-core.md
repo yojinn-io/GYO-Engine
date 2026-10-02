@@ -1,8 +1,8 @@
 # 第 02 批：權威射擊核心
 
-依賴：第 01 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../protocol-v4.zh-Hant.md)。
+依賴：第 01 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../../protocol-v4.zh-Hant.md)。
 本批已依使用者指示完成，2026-09-28。沒有開始第 03 批，沒有執行長測。
-交付、短測及限制見 [dev_log](../../dev_logs/2026_09_28_pvp_v4_batch02.zh-Hant.md)；
+交付、短測及限制見 [dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch02.zh-Hant.md)；
 接續使用 [交接](HANDOFF.md)。以下保留本批原定範圍與完成條件。
 
 ## 目標與邊界

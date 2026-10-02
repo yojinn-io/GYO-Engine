@@ -8,11 +8,13 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import time
 import urllib.request
 
 from presentation_evidence import analyze_short_latency
-from run_network import free_port
+from run_network import free_port, wait_for_match_ready
+from run_timing import WINDOW_INTERFERENCE_NOTE, gate_window_evidence, wayland_warning
 
 
 def digest(path):
@@ -78,6 +80,22 @@ def weapon_result(directory, fps, capture):
     return result
 
 
+def gate_latency_case(result):
+    """The latency case decides pass/fail, so it takes the counted GUI round's window gate.
+
+    Detected window interference or missing window evidence fails the case
+    with an explicit window_gate status; the latency result before the gate is
+    kept as window_gate.thresholds_passed.
+    """
+    counted = {"overall_passed": bool(result.get("passed")), "presentation": result,
+               "errors": result.setdefault("errors", [])}
+    gate = gate_window_evidence(counted, report_only=False)
+    result["window_gate"] = gate
+    result["window_interference_note"] = WINDOW_INTERFERENCE_NOTE
+    result["passed"] = counted["overall_passed"]
+    return gate
+
+
 def run_case(args, name):
     directory = args.output / name
     directory.mkdir(parents=True, exist_ok=False)
@@ -100,6 +118,7 @@ def run_case(args, name):
     result = {"passed": False, "case": name, "commands": commands}
     try:
         match = start("match", [str(args.match), "--arena", str(args.arena), "--listen", f"127.0.0.1:{ipc}"])
+        wait_for_match_ready(match, directory / "match.log", f"127.0.0.1:{ipc}")
         gateway = start("gateway", [str(args.gateway), "--runtime", f"127.0.0.1:{ipc}",
             "--http", f"127.0.0.1:{http}", "--udp", f"127.0.0.1:{udp}", "--advertise-ip", "127.0.0.1"])
         deadline = time.monotonic() + 10
@@ -132,6 +151,8 @@ def run_case(args, name):
             raise RuntimeError("GUI probe failed")
         measured = analyze_short_latency(directory) if name == "latency" else weapon_result(directory, fps, name == "capture")
         result.update(measured)
+        if name == "latency":
+            gate_latency_case(result)
         if not result["passed"]:
             raise RuntimeError("Short evidence failed: " + "; ".join(result["errors"]))
     except Exception as error:
@@ -172,6 +193,10 @@ def main():
         parser.error("--arena-root must contain the deployed asset_catalog.json")
     args.output.mkdir(parents=True, exist_ok=True)
     cases = args.case or ["weapon30", "weapon60", "weapon144", "capture", "latency"]
+    # The latency case takes the counted GUI window gate.
+    warning = wayland_warning("latency" in cases, report_only=False)
+    if warning:
+        print(warning, file=sys.stderr, flush=True)
     results = []
     for name in cases:
         result = run_case(args, name)

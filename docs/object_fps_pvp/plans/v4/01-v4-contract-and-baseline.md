@@ -9,7 +9,7 @@
 
 ## 工作內容
 
-- 在 [v4 契約](../protocol-v4.zh-Hant.md) 定義 SimulationTick、InputSequence、
+- 在 [v4 契約](../../protocol-v4.zh-Hant.md) 定義 SimulationTick、InputSequence、
   PacketSequence、ActionId、Session／PlayerId 與 movementEpoch 各自的用途。
 - 區分 Network Snapshot、Hit-test History、Rollback State；後兩者不在 v4 實作。
 - 記錄已批准的 CombatRules、本機回饋／權威裁決、動作窗口與確認、有效期限、

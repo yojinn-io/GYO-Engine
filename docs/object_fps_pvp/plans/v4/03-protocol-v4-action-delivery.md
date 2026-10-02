@@ -1,9 +1,9 @@
 # 第 03 批：Protocol v4 與動作交付
 
-依賴：第 02 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../protocol-v4.zh-Hant.md)。
+依賴：第 02 批完成。先讀 [交接](HANDOFF.md) 及 [v4 契約](../../protocol-v4.zh-Hant.md)。
 **2026-09-28 已完成並停止。** 本批額外要求先證明網路共存與恢復，已完成；
 第 04 批未開始，未執行長測。實作、原始證據及限制見
-[本批 dev_log](../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md)。以下保留本批要求。
+[本批 dev_log](../../../dev_logs/2026_09_28_pvp_v4_batch03.zh-Hant.md)。以下保留本批要求。
 
 ## 目標
 

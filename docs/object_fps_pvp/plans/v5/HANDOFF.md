@@ -1,17 +1,19 @@
 # PvP v5 交接
 
-更新：2026-10-01。**第01–02批已完成；第03批完整功能與網路恢復已交付，整批驗收未結案。**
-第04–05批未開始；未執行長測、未升格v5穩定基線。
+更新：2026-10-02。**第01–02批已完成；第03批完整功能與網路恢復已交付，整批驗收未結案（結案驗收暫緩）。**
+第04批暫停，第05批未開始；未執行長測、未升格v5穩定基線。
 
-唯一待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
-批准實作方案A1啟動相位對齊（下述），CPU／Go驗證通過；**修正後的原生GUI可見延遲短測尚未執行**，
-需在有顯示與GPU的環境重測後才能結案。門檻、lead、插值與60Hz不變，停止在第03批。
+第03批待結案守門：乾淨可見延遲短測曾有P50 **51.125ms >50ms**（啟動相位）。2026-10-01經使用者
+批准實作方案A1啟動相位對齊（PR #2，合併為`ff11ee3`）；2026-10-02補上低幀率守門與驗收器修正（尚未commit）。
+使用者決定以MVP技術驗證收尾，**計次的原生GUI可見延遲短測與25案矩陣未執行**，第03批維持未結案。
+門檻、lead、插值與60Hz不變，停止在第03批。各問題見[修正與已知問題](fix/README.md)。
 
 ## 閱讀入口
 
 1. [進度與停止規則](README.md)、[v5唯一契約](../../protocol-v5.zh-Hant.md)。
 2. [03完整v5玩法與交付](03-v5-gameplay-and-delivery.md)、[第03批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)。
-3. 先處理下述時序守門；[04完整動作呈現](04-complete-action-presentation.md)尚不可視為依賴已驗收，須另外明確啟動。
+3. 先處理下述時序守門及[修正與已知問題](fix/README.md)（每個問題一份：成因／影響／復現／解決方案）；
+   [04完整動作呈現](04-complete-action-presentation.md)尚不可視為依賴已驗收，須另外明確啟動。
 4. 第02批人物校準、GUI證據與限制見[第02批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch02.zh-Hant.md)。
 5. [原始v4基線與素材／測例清單](BASELINE.md)。v4完整認證只涵蓋原指紋，不自動涵蓋本候選。
 
@@ -24,7 +26,7 @@
 - 共用3D固定步、膠囊掃掠／支撐／頂頭、垂直預測／replay／鏡頭校正。
   Space沿只在第一個合法command消費；Held無jump，窗口滿／死亡／失焦／重同步清沿。
 - LifeGeneration與movementEpoch獨立；重生保留PlayerId／Session及持續ActionId／帳本。
-  舊生命請求仍得terminal裁決與ACK，晚到結果不改新生命HUD。旧移動取消另列觀測。
+  舊生命請求仍得terminal裁決與ACK，晚到結果不改新生命HUD。舊移動取消另列觀測。
 - Dead抑制操作／瞄準，保留中立命令與垂直落地；死亡取消換彈。
   到期先重生／補彈，然後全體移動，最後按穩定順序裁決動作，無新增同Tick互殺。
 - 正式Space／R／左鍵及HUD已接入；R同幀優先，按住不連發，換彈／冷卻點擊不排隊。
@@ -40,7 +42,7 @@
   通用入口`SubmitAction(kind, life, observedTick, yaw, pitch)`；`SubmitShot`保留便利包裝。
 - C++／proto保留歷史名稱`ShotRequest`／`ShotDecision`／`ShotRejection`與`shots`容器，
   實際支援Shot／Reload。wire enum的0是無效值；C++與wire拒絕值部分不同，必須明確映射。
-  Shot角度要求presence，Reload不得带角度；不要用static_cast替換映射。
+  Shot角度要求presence，Reload不得帶角度；不要用static_cast替換映射。
 - `LocalPlayerPrediction`含verticalVelocity／grounded／life；`SnapshotTimeline`回傳同段combat。
   `PvpApplication`以最新生命限制操作；切換所在幀丟棄轉換前收集的控制沿。
 - `WeaponFeedbackObservation`提供life、HP／ammo、reload起訖／進度、death倒數與裁決kind；
@@ -48,9 +50,10 @@
 - 第04批沿用第02批女性／UAL／世界槍及Mark23，明確產品骨骼遮罩，不導入Enemy／Campaign。
   Reload原素材約3.733秒，Shoot約0.333秒；玩法時程分別1.5／約0.167秒，需做呈現映射。
   Jump Start／Land不可延遲物理；死亡動畫不能決定重生。人物命中仍是膠囊。
-- 當前兩人產品Join前預备一個遠端GPU instance，Leave清識別但重用GPU；身高1.8、
+- 當前兩人產品Join前預備一個遠端GPU instance，Leave清識別但重用GPU；身高1.8、
   固定腳底anchor、Jog相位按路程。後退反向、側移近似，不宣稱全週期零滑步／IK。
-- 第01–03批內容已存於`de87bb9`（wip）；啟動相位修正在分支`claude/project-thread-lv6bg5`。
+- 第01–03批內容已存於`de87bb9`（wip）；啟動相位對齊經PR #2（分支`claude/project-thread-lv6bg5`）
+  合併為`ff11ee3`；低幀率守門與驗收器修改在工作分支`claude/pvp-v5-start-phase-guard`，尚未commit／PR。
   不可把前批修改當無關內容刪掉。
 
 ## 驗證與證據
@@ -99,14 +102,45 @@ gui2有未排程mouse delta，來源未證實；不把受干擾結果或原GUI�
   模擬的「命令產生→執行」中位數：144FPS各相位差≤1幀，最差相位改善≥1/3Tick
   （RTT0最差相位：60FPS 50→37.5ms、144FPS 45.8→36.1ms）。這是CPU模擬，不是可見延遲。Go unit／race及CTest `-L pvp` 11項通過
   （`presentation_cpu`因本環境無法下載shader工具未執行）。
-- 未完成：原生雙GUI可見延遲短測（需X11／GPU）、真網路25案矩陣未重跑。結案前須重跑GUI短測，
+  2026-10-02更正：該相位矩陣的模擬worker與幀時鐘相位鎖定；改用產品式worker／漂移／抖動後，
+  30 FPS對齊時Held 10–14%，「全部Actual」不成立，見[fix/01](fix/01-a1-low-fps-regression.md)。
+  PR head `d74830c`的本機CPU執行為119 cases／1,398,491 assertions（`ff11ee3`測試來源亦為119個TEST_CASE），
+  與上列118不同。
+- 未完成：原生雙GUI可見延遲短測、真網路25案矩陣未重跑。結案前須重跑GUI短測，
   並在結果記錄每輪的w與相位調整量；不可改門檻或重跑挑分數。
+  更正（2026-10-02）：可見延遲短測`run_timing.py --gui --short`以`SDL_PushEvent`注入輸入，
+  可在macOS／Metal執行，不需X11；只有`run_native_window.py`、`run_gameplay_gui.py`等原生視窗runner需X11／XTest。
+
+### 2026-10-02：低幀率守門與暫緩結案
+
+- 已做（細節各見fix文件）：
+  - 低於約54.5 FPS不對齊：最新32個幀間隔（各最多計2Tick）平均>1.1Tick時不採用或撤回，
+    ≤1.06Tick持續32幀才恢復。[fix/01](fix/01-a1-low-fps-regression.md)
+  - Client本機診斷`StartPhaseSkip`（HostLate／FrameRateBelowTick／CancelledByReseed），非wire；
+    驗收器逐epoch記錄w、調整量、撤回與取消。[fix/07](fix/07-start-phase-diagnostics.md)
+  - 驗收器：跨行程時鐘域[fix/04](fix/04-macos-clock-domain.md)、
+    等Match ready再啟Gateway[fix/05](fix/05-match-gateway-startup-race.md)、
+    macOS視窗對角配置、視窗干擾判定與補跑規則[fix/06](fix/06-gui-window-interference-and-rerun-rule.md)。
+  - 驗證：C++ 133 cases／1,418,939 assertions、CTest `-L pvp` 16／16、Python 165項通過。
+    GUI冒煙3次與矩陣單案冒煙1次皆report-only，不計次、不作為驗收證據。
+- 未做：計次GUI可見延遲短測、25案矩陣、第03批結案、第04批。
+- 未解決（暫緩，無承諾）：stall reseed使該epoch其餘時間失去對齊；本機三次GUI冒煙的移動方
+  都被視窗啟動卡頓取消，冒煙未量到對齊後的可見延遲。[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)
+- 已知問題：切點以上偶發掉幀造成starvation重設；55–58 FPS規律掉refresh時對齊與否取決於啟動時機。
+  [fix/03](fix/03-a1-missed-frame-starvation.md)
+- 若恢復結案：先讀fix/02與fix/06；閒置機器、一次一輪，事前宣告總輪數與補跑規則。
+
+### 本機驗證環境（Intel Mac）
+
+- MacBook Pro 2019（x86_64）、macOS 26.7.1、Xcode 26.6＋Metal toolchain；GUI量測須機器閒置、一次一輪。
+  完整平台、工具鏈與閒置條件以[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)的「如何復現 A」為準。
 
 ## 架構與停止邊界
 
 Architecture Delta限於PvP的wire／runtime狀態、Client操作／呈現及專用驗收。
 Match仍不載Model／FBX／Renderer／SDL；Engine和公共Gateway不識別FPS政策。
 不新增Top-level subsystem、跨v2／Editor依賴或通用可靠傳輸框架。
+2026-10-02守門只新增產品內常數與Client本機診斷，未改Engine或wire；見[守門dev_log](../../../dev_logs/2026_10_02_pvp_v5_start_phase_guard.zh-Hant.md)。
 
 v4的`MANUAL_ACCEPTANCE.md`、`ACCEPTANCE_STATUS.md`、`STABLE_BASELINE.md`維持原文及指紋。
 證據位於git忽略的build目錄，提交文件不會保存原始trace／圖像，需另行備份。

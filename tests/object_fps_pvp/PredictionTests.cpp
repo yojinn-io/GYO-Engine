@@ -10,9 +10,11 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <initializer_list>
 #include <map>
 #include <limits>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -1040,24 +1042,93 @@ TEST_CASE("PvP reseed does not catch up elapsed time already covered by authorit
     // are exercised with independent clocks in MovementRecoveryTests.cpp.
 }
 
+namespace {
+// The start-phase decision needs eight frame intervals. They belong to the
+// display loop and survive an epoch reseed, so an earlier epoch at this frame
+// rate lets the wait of the epoch started afterwards arm at once.
+void WarmFrames(LocalPlayerPrediction& client, std::initializer_list<double> frames) {
+    client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+    for (const double seconds : frames) static_cast<void>(client.Advance(seconds, 0, 0, 0, 0));
+}
+void WarmFrames(LocalPlayerPrediction& client, double seconds = MovementTickSeconds) {
+    WarmFrames(client, {seconds, seconds, seconds, seconds, seconds, seconds, seconds, seconds});
+}
+// Starts epoch 2 at authority tick 10 and publishes its first window (sequences 1-3).
+void StartEpoch(LocalPlayerPrediction& client, double seconds = MovementTickSeconds) {
+    client.Reconcile({1, {2, 0, 2}, 0, 0, 0, 2}, 10);
+    REQUIRE(client.Advance(seconds, 1, 0, 0, 0));
+    CHECK(client.PendingInput().commands.size() == InitialCommandLead + 1);
+}
+PlayerState EpochAuthority(std::uint64_t acknowledged, std::optional<std::uint32_t> waitMicros) {
+    PlayerState authority{1, {2, 0, 2}, 0, 0, acknowledged, 2};
+    authority.epochStartWaitMicros = waitMicros;
+    return authority;
+}
+// Twins from one epoch start; only `aligned` hears the Host's 18 ms start wait.
+// Neutral input and acknowledgements two commands behind the tip keep the
+// window short and positions exact, so the twins differ only in their
+// fixed-step clocks. Frame() returns how far the aligned clock trails, in seconds.
+struct StartPhaseTwins {
+    explicit StartPhaseTwins(const Arena& arena) : aligned(arena), unaligned(arena) {
+        for (auto* client : {&aligned, &unaligned}) {
+            client->Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+            // Half a tick of startup time: the first real step is half a tick old when published.
+            CHECK_FALSE(client->Advance(MovementTickSeconds / 2, 0, 0, 0, 0));
+        }
+    }
+    double Frame(double seconds, bool wait = true) {
+        ++tick;
+        for (auto* client : {&aligned, &unaligned}) {
+            static_cast<void>(client->Advance(seconds, 0, 0, 0, 0));
+            const auto latest = client->Observation().latestCommand;
+            PlayerState authority{1, {2, 0, 2}, 0, 0, latest - InitialCommandLead};
+            if (client == &aligned && wait) authority.epochStartWaitMicros = 18000;
+            client->Reconcile(authority, tick);
+            REQUIRE(client->Observation().pendingCommands == InitialCommandLead);
+        }
+        return Clock(unaligned) - Clock(aligned);
+    }
+    // A stall reseed: authority resolved past both tips. The twins seed from
+    // the same state, so their fixed-step clocks match from here on.
+    void Reseed(double seconds) {
+        ++tick;
+        for (auto* client : {&aligned, &unaligned}) static_cast<void>(client->Advance(seconds, 0, 0, 0, 0));
+        const auto tip = (std::max)(aligned.Observation().latestCommand, unaligned.Observation().latestCommand);
+        for (auto* client : {&aligned, &unaligned}) {
+            PlayerState authority{1, {2, 0, 2}, 0, 0, tip + 1};
+            if (client == &aligned) authority.epochStartWaitMicros = 18000;
+            client->Reconcile(authority, tick);
+        }
+    }
+    [[nodiscard]] bool Shifted() const { return aligned.Observation().startPhaseShiftSeconds.has_value(); }
+    static double Clock(const LocalPlayerPrediction& client) {
+        return (client.Observation().latestCommand + client.Observation().interpolationAlpha) * MovementTickSeconds;
+    }
+    // Shift = wait + first-step age - target.
+    static constexpr double Shift = 0.018 + MovementTickSeconds / 2 - MovementStartPhaseTargetSeconds;
+    LocalPlayerPrediction aligned, unaligned;
+    std::uint64_t tick{1};
+};
+} // namespace
+
 TEST_CASE("PvP epoch start wait shifts the fixed-step phase once without moving the display backwards") {
     const auto arena = PredictionArena();
     const auto started = [&](LocalPlayerPrediction& client) {
-        client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
-        REQUIRE(client.Advance(MovementTickSeconds, 1, 0, 0, 0)); // First window: sequences 1-3.
-        CHECK(client.PendingInput().commands.size() == InitialCommandLead + 1);
+        WarmFrames(client);
+        StartEpoch(client);
     };
     LocalPlayerPrediction aligned(arena), unaligned(arena);
     started(aligned);
     started(unaligned);
-    PlayerState authority{1, {2, 0, 2}, 0, 0, 1};
-    unaligned.Reconcile(authority, 2);
+    auto authority = EpochAuthority(1, std::nullopt);
+    unaligned.Reconcile(authority, 11);
     authority.epochStartWaitMicros = 14781;
-    aligned.Reconcile(authority, 2);
+    aligned.Reconcile(authority, 11);
     CHECK_FALSE(unaligned.Observation().startPhaseShiftSeconds);
     REQUIRE(aligned.Observation().epochStartWaitSeconds);
     CHECK(*aligned.Observation().epochStartWaitSeconds == doctest::Approx(0.014781));
     REQUIRE(aligned.Observation().startPhaseShiftSeconds);
+    CHECK_FALSE(aligned.Observation().startPhaseSkip);
     const double shift = 0.014781 - MovementStartPhaseTargetSeconds;
     CHECK(*aligned.Observation().startPhaseShiftSeconds == doctest::Approx(shift));
 
@@ -1069,7 +1140,7 @@ TEST_CASE("PvP epoch start wait shifts the fixed-step phase once without moving 
         CHECK(distance + 0.00001F >= travelled);
         travelled = distance;
         // A repeated report of the same epoch never shifts again.
-        aligned.Reconcile(authority, 3 + frame);
+        aligned.Reconcile(authority, 12 + frame);
     }
     CHECK(unaligned.Observation().interpolationAlpha < 0.0001F);
     CHECK(aligned.Observation().interpolationAlpha ==
@@ -1077,21 +1148,402 @@ TEST_CASE("PvP epoch start wait shifts the fixed-step phase once without moving 
     CHECK(aligned.Observation().latestCommand + 1 == unaligned.Observation().latestCommand);
 
     // A Host that was late for the start tick reports an unrepresentative wait.
+    // That needs no frame evidence: it is rejected as soon as it arrives.
     LocalPlayerPrediction late(arena);
-    started(late);
-    authority.epochStartWaitMicros = 30000;
-    late.Reconcile(authority, 2);
+    late.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+    REQUIRE(late.Advance(MovementTickSeconds, 1, 0, 0, 0));
+    PlayerState lateAuthority{1, {2, 0, 2}, 0, 0, 1};
+    lateAuthority.epochStartWaitMicros = 30000;
+    late.Reconcile(lateAuthority, 2);
     REQUIRE(late.Observation().epochStartWaitSeconds);
     CHECK_FALSE(late.Observation().startPhaseShiftSeconds);
+    CHECK(late.Observation().startPhaseSkip == StartPhaseSkip::HostLate);
 
-    // A wait for an epoch the client reseeded from a later state is not applied.
+    // A wait for an epoch the client reseeded from a later state is not applied;
+    // the reseed cancelled the pending start phase.
     LocalPlayerPrediction reseeded(arena);
     started(reseeded);
-    PlayerState later{1, {2, 0, 2}, 0, 0, 5};
-    later.epochStartWaitMicros = 9000;
-    reseeded.Reconcile(later, 6);
+    auto later = EpochAuthority(5, 9000);
+    reseeded.Reconcile(later, 11);
     static_cast<void>(reseeded.Advance(MovementTickSeconds, 1, 0, 0, 0));
     later.lastResolvedCommand = 6;
-    reseeded.Reconcile(later, 7);
+    reseeded.Reconcile(later, 12);
     CHECK_FALSE(reseeded.Observation().epochStartWaitSeconds);
+    CHECK_FALSE(reseeded.Observation().startPhaseShiftSeconds);
+    CHECK(reseeded.Observation().startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+}
+
+TEST_CASE("PvP start phase waits for a full frame window and is not applied below about 54.5 FPS") {
+    const auto arena = PredictionArena();
+    // A first epoch has no frame history: the wait stays pending (the phase
+    // the Host timed is unchanged) until eight frames describe the frame rate.
+    LocalPlayerPrediction fresh(arena);
+    fresh.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+    REQUIRE(fresh.Advance(MovementTickSeconds, 0, 0, 0, 0));
+    PlayerState authority{1, {2, 0, 2}, 0, 0, 1};
+    authority.epochStartWaitMicros = 14781;
+    fresh.Reconcile(authority, 2);
+    CHECK_FALSE(fresh.Observation().epochStartWaitSeconds);
+    CHECK_FALSE(fresh.Observation().startPhaseShiftSeconds);
+    CHECK_FALSE(fresh.Observation().startPhaseSkip);
+    for (int frame = 0; frame < 7; ++frame) static_cast<void>(fresh.Advance(MovementTickSeconds, 0, 0, 0, 0));
+    fresh.Reconcile(authority, 3);
+    REQUIRE(fresh.Observation().startPhaseShiftSeconds);
+    CHECK(*fresh.Observation().startPhaseShiftSeconds ==
+        doctest::Approx(0.014781 - MovementStartPhaseTargetSeconds));
+    CHECK_FALSE(fresh.Observation().startPhaseSkip);
+
+    // 59.94 Hz frames are 60 FPS frames.
+    LocalPlayerPrediction ntsc(arena);
+    WarmFrames(ntsc, 1001.0 / 60000.0);
+    StartEpoch(ntsc, 1001.0 / 60000.0);
+    ntsc.Reconcile(EpochAuthority(1, 14781), 11);
+    CHECK(ntsc.Observation().startPhaseShiftSeconds);
+    CHECK_FALSE(ntsc.Observation().startPhaseSkip);
+
+    // Below about 54.5 FPS (a mean above 1.1 tick) the wait is recorded and the
+    // shift armed withdrawn: the epoch keeps its unaligned phase while frames
+    // stay there.
+    for (const double frameSeconds : {1.0 / 30, 1.0 / 40, 1.0 / 50}) {
+        INFO("frame seconds ", frameSeconds);
+        LocalPlayerPrediction aligned(arena), unaligned(arena);
+        for (auto* client : {&aligned, &unaligned}) {
+            WarmFrames(*client, frameSeconds);
+            StartEpoch(*client, frameSeconds);
+        }
+        aligned.Reconcile(EpochAuthority(1, 14781), 11);
+        unaligned.Reconcile(EpochAuthority(1, std::nullopt), 11);
+        REQUIRE(aligned.Observation().epochStartWaitSeconds);
+        CHECK(*aligned.Observation().epochStartWaitSeconds == doctest::Approx(0.014781));
+        CHECK_FALSE(aligned.Observation().startPhaseShiftSeconds);
+        CHECK(aligned.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+        for (int frame = 0; frame < 3; ++frame) {
+            static_cast<void>(aligned.Advance(frameSeconds, 1, 0, 0, 0));
+            static_cast<void>(unaligned.Advance(frameSeconds, 1, 0, 0, 0));
+            CHECK(aligned.Observation().latestCommand == unaligned.Observation().latestCommand);
+            CHECK(aligned.Observation().interpolationAlpha == unaligned.Observation().interpolationAlpha);
+        }
+    }
+}
+
+TEST_CASE("PvP start phase frame rate counts every dropped refresh and a long hitch as one") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    // The epoch's first window adds one more 60 FPS interval.
+    const auto shifted = [&](std::initializer_list<double> frames) {
+        LocalPlayerPrediction client(arena);
+        WarmFrames(client, frames);
+        StartEpoch(client);
+        client.Reconcile(EpochAuthority(1, 14781), 11);
+        REQUIRE(client.Observation().epochStartWaitSeconds);
+        CHECK((client.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick) !=
+              client.Observation().startPhaseShiftSeconds.has_value());
+        return client.Observation().startPhaseShiftSeconds.has_value();
+    };
+    // A 250 ms stall weighs like one missed refresh: 17 ticks over 16 frames.
+    CHECK(shifted({T, T, T, T, T, T, T, 0.25, T, T, T, T, T, T, T}));
+    // One missed refresh in sixteen frames (56 FPS) stays within the cut...
+    CHECK(shifted({T, T, T, T, T, T, T, T, T, T, T, T, T, T, 2 * T}));
+    // ...two (53 FPS) do not, nor does a vsync-paced 50 FPS that shows every
+    // fifth frame for two refreshes: dropped refreshes are never discarded.
+    CHECK_FALSE(shifted({T, T, T, T, T, T, T, T, T, T, T, T, T, 2 * T, 2 * T}));
+    CHECK_FALSE(shifted({T, T, T, T, 2 * T, T, T, T, T, 2 * T, T, T, T, T, 2 * T}));
+    // Eight frames suffice for a decision.
+    CHECK_FALSE(shifted({T, T, T, T, T, 1.0 / 30, 1.0 / 30, 1.0 / 30}));
+}
+
+TEST_CASE("PvP a drop below about 54.5 FPS withdraws the start phase shift mid-slew and restores it on recovery") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    StartPhaseTwins twins(arena);
+    for (int index = 0; index < 7; ++index) CHECK(twins.Frame(T, false) == doctest::Approx(0));
+    CHECK(twins.Frame(T) == doctest::Approx(0));
+    REQUIRE(twins.aligned.Observation().startPhaseShiftSeconds);
+    CHECK(*twins.aligned.Observation().startPhaseShiftSeconds == doctest::Approx(StartPhaseTwins::Shift));
+    double offset = twins.Frame(T);
+    CHECK(offset == doctest::Approx(T / 4));
+    // 30 FPS: withdrawn within four frames (133 ms), here before the slew has
+    // applied the whole shift.
+    int slowFrames{};
+    double applied = offset;
+    while (twins.Shifted()) {
+        REQUIRE(++slowFrames <= 4);
+        offset = twins.Frame(2 * T);
+        applied = (std::max)(applied, offset);
+    }
+    CHECK(applied < StartPhaseTwins::Shift);
+    CHECK(twins.aligned.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+    // The applied part is slewed back at the same rate and the shift stays
+    // withdrawn while frames stay at 30 FPS; the twins then match.
+    for (int index = 0; index < 60; ++index) {
+        const double next = twins.Frame(2 * T);
+        CHECK(next <= offset + 1.0e-9);
+        CHECK_FALSE(twins.Shifted());
+        offset = next;
+    }
+    CHECK(offset == doctest::Approx(0).epsilon(0.000001));
+    CHECK(twins.aligned.Observation().latestCommand == twins.unaligned.Observation().latestCommand);
+    // Back at 60 FPS the slow frames leave the 32-frame window and the restore
+    // bound then holds for 32 frames: the same shift returns within 64 frames
+    // and is slewed in again; the repeated wait never re-arms it.
+    int recoveryFrames{};
+    while (!twins.Shifted()) {
+        REQUIRE(++recoveryFrames <= 64);
+        offset = twins.Frame(T);
+        if (!twins.Shifted()) CHECK(offset == doctest::Approx(0).epsilon(0.000001));
+    }
+    CHECK(recoveryFrames > 32);
+    CHECK(*twins.aligned.Observation().startPhaseShiftSeconds == doctest::Approx(StartPhaseTwins::Shift));
+    CHECK_FALSE(twins.aligned.Observation().startPhaseSkip);
+    for (int index = 0; index < 8; ++index) offset = twins.Frame(T);
+    CHECK(offset == doctest::Approx(StartPhaseTwins::Shift).epsilon(0.000001));
+
+    // Reset clears the decision and the frame evidence: a new session's wait
+    // waits for eight new frames again.
+    auto& aligned = twins.aligned;
+    aligned.Reset();
+    CHECK_FALSE(aligned.Observation().epochStartWaitSeconds);
+    CHECK_FALSE(aligned.Observation().startPhaseShiftSeconds);
+    CHECK_FALSE(aligned.Observation().startPhaseSkip);
+    aligned.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+    REQUIRE(aligned.Advance(T, 0, 0, 0, 0));
+    PlayerState rejoined{1, {2, 0, 2}, 0, 0, 1};
+    rejoined.epochStartWaitMicros = 18000;
+    aligned.Reconcile(rejoined, 2);
+    CHECK_FALSE(aligned.Observation().epochStartWaitSeconds);
+}
+
+TEST_CASE("PvP a start phase armed during startup hitches is applied once frames recover") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    StartPhaseTwins twins(arena);
+    // Three 50 ms startup frames still dominate the frame evidence when the wait arrives.
+    static_cast<void>(twins.Frame(T, false));
+    for (int index = 0; index < 3; ++index) static_cast<void>(twins.Frame(0.05, false));
+    for (int index = 0; index < 3; ++index) static_cast<void>(twins.Frame(T, false));
+    CHECK(twins.Frame(T) == doctest::Approx(0));
+    const auto& observation = twins.aligned.Observation();
+    REQUIRE(observation.epochStartWaitSeconds);
+    CHECK(*observation.epochStartWaitSeconds == doctest::Approx(0.018));
+    CHECK_FALSE(observation.startPhaseShiftSeconds);
+    CHECK(observation.startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+    // Armed withdrawn, nothing is applied until frames recover; then the shift
+    // measured at the epoch start is applied in full.
+    int frames{};
+    while (!twins.Shifted()) {
+        REQUIRE(++frames <= 64);
+        const double offset = twins.Frame(T);
+        if (!twins.Shifted()) CHECK(offset == doctest::Approx(0).epsilon(0.000001));
+    }
+    CHECK(*observation.startPhaseShiftSeconds == doctest::Approx(StartPhaseTwins::Shift));
+    CHECK_FALSE(observation.startPhaseSkip);
+    double offset{};
+    for (int index = 0; index < 8; ++index) offset = twins.Frame(T);
+    CHECK(offset == doctest::Approx(StartPhaseTwins::Shift).epsilon(0.000001));
+}
+
+TEST_CASE("PvP start phase near the cut keeps its state and a short recovery does not restore it") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    StartPhaseTwins twins(arena);
+    unsigned toggles{};
+    bool shifted{};
+    const auto frame = [&](double seconds) {
+        static_cast<void>(twins.Frame(seconds));
+        if (twins.Shifted() != shifted) {
+            ++toggles;
+            shifted = !shifted;
+        }
+    };
+    // A vsync-paced 50 FPS display shows every fifth frame for two refreshes.
+    int vsyncFrame{};
+    const auto vsync50 = [&] { frame(++vsyncFrame % 5 == 0 ? 2 * T : T); };
+    for (int index = 0; index < 7; ++index) static_cast<void>(twins.Frame(T, false));
+    static_cast<void>(twins.Frame(T));
+    REQUIRE(twins.Shifted());
+    shifted = true;
+    // 55 FPS lies between the restore bound and the cut: an applied shift stays.
+    for (int index = 0; index < 120; ++index) frame(1.0 / 55);
+    CHECK(toggles == 0);
+    for (int index = 0; index < 32; ++index) frame(T);
+    // A drop to vsync 50 FPS withdraws it once four doubled frames are in the
+    // window: within 20 frames (0.4 s). It stays withdrawn while the drop lasts.
+    int dropFrames{};
+    while (shifted) {
+        REQUIRE(++dropFrames <= 20);
+        vsync50();
+    }
+    for (int index = 0; index < 120; ++index) vsync50();
+    CHECK(toggles == 1);
+    // Half a second of whole 60 Hz frames inside that drop does not restore it.
+    for (int index = 0; index < 30; ++index) frame(T);
+    for (int index = 0; index < 60; ++index) vsync50();
+    // Nor does 55 FPS: a withdrawn shift stays withdrawn there too.
+    for (int index = 0; index < 120; ++index) frame(1.0 / 55);
+    CHECK(toggles == 1);
+    CHECK(twins.aligned.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+    // Sustained 60 FPS restores it within 64 frames.
+    int recoveryFrames{};
+    while (!shifted) {
+        REQUIRE(++recoveryFrames <= 64);
+        frame(T);
+    }
+    CHECK(toggles == 2);
+    CHECK_FALSE(twins.aligned.Observation().startPhaseSkip);
+}
+
+TEST_CASE("PvP a withdrawal slew in 4.0-4.4 tick frames never makes the runtime drop a step") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    // About 14 FPS, alternating two frame lengths. Neither clock drops a step
+    // at these lengths by itself, but a frame plus a withdrawal slew of a
+    // quarter of it can exceed the runtime's five catch-up steps. The slew
+    // takes only what the runtime can still step, so the phase moves
+    // continuously back to the unshifted one instead of losing a step.
+    for (const double first : {4.0, 4.2, 4.4})
+        for (const double second : {4.0, 4.2, 4.4}) {
+            INFO("frame ticks ", first, " and ", second);
+            StartPhaseTwins twins(arena);
+            for (int index = 0; index < 7; ++index) static_cast<void>(twins.Frame(T, false));
+            static_cast<void>(twins.Frame(T));
+            REQUIRE(twins.Shifted());
+            double offset{};
+            for (int index = 0; index < 8; ++index) offset = twins.Frame(T);
+            REQUIRE(offset == doctest::Approx(StartPhaseTwins::Shift).epsilon(0.000001));
+            for (int index = 0; index < 40; ++index) {
+                const double seconds = (index % 2 == 0 ? first : second) * T;
+                const double next = twins.Frame(seconds);
+                // Within a microsecond (float interpolation alpha); a lost step is a tick.
+                CHECK(next <= offset + 1.0e-6);
+                CHECK(offset - next <= seconds * 0.25 + 1.0e-6);
+                CHECK(next >= -1.0e-6);
+                offset = next;
+            }
+            CHECK_FALSE(twins.Shifted());
+            CHECK(twins.aligned.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+            CHECK(offset == doctest::Approx(0).epsilon(0.000001));
+            CHECK(twins.aligned.Observation().latestCommand == twins.unaligned.Observation().latestCommand);
+        }
+}
+
+TEST_CASE("PvP a stall reseed cancels an armed or withdrawn start phase without moving the phase") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    for (const bool withdrawn : {false, true}) {
+        INFO("withdrawn ", withdrawn);
+        StartPhaseTwins twins(arena);
+        for (int index = 0; index < 7; ++index) static_cast<void>(twins.Frame(T, false));
+        static_cast<void>(twins.Frame(T));
+        REQUIRE(twins.Shifted());
+        for (int index = 0; index < 8; ++index) static_cast<void>(twins.Frame(T));
+        if (withdrawn) {
+            int slowFrames{};
+            while (twins.Shifted()) {
+                REQUIRE(++slowFrames <= 4);
+                static_cast<void>(twins.Frame(2 * T));
+            }
+            REQUIRE(twins.aligned.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+        }
+        // The reseed rebases the phase the Host timed: the shift is cleared
+        // and the wait already taken stays reported.
+        twins.Reseed(withdrawn ? 2 * T : T);
+        const auto& observation = twins.aligned.Observation();
+        REQUIRE(observation.epochStartWaitSeconds);
+        CHECK(*observation.epochStartWaitSeconds == doctest::Approx(0.018));
+        CHECK_FALSE(observation.startPhaseShiftSeconds);
+        CHECK(observation.startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+        // Nothing is armed any more: neither 30 FPS nor a long run of 60 FPS
+        // frames changes the reason or brings a shift back, and the twins'
+        // clocks, seeded alike, stay equal.
+        for (int index = 0; index < 60; ++index) {
+            CHECK(twins.Frame(2 * T) == doctest::Approx(0).epsilon(0.000001));
+            CHECK(observation.startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+        }
+        for (int index = 0; index < 120; ++index) {
+            CHECK(twins.Frame(T) == doctest::Approx(0).epsilon(0.000001));
+            CHECK_FALSE(twins.Shifted());
+            CHECK(observation.startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+        }
+        CHECK(twins.aligned.Observation().latestCommand == twins.unaligned.Observation().latestCommand);
+        REQUIRE(observation.epochStartWaitSeconds);
+        CHECK(*observation.epochStartWaitSeconds == doctest::Approx(0.018));
+        twins.aligned.Reset();
+        CHECK_FALSE(observation.epochStartWaitSeconds);
+        CHECK_FALSE(observation.startPhaseSkip);
+    }
+}
+
+TEST_CASE("PvP a stall reseed inside the frame window cancels the pending start phase and the next epoch starts afresh") {
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    LocalPlayerPrediction client(arena);
+    const auto& observation = client.Observation();
+    client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
+    REQUIRE(client.Advance(T, 0, 0, 0, 0));
+    PlayerState authority{1, {2, 0, 2}, 0, 0, 1};
+    authority.epochStartWaitMicros = 14781;
+    client.Reconcile(authority, 2);
+    static_cast<void>(client.Advance(T, 0, 0, 0, 0));
+    // Two frame intervals: the wait is still deferred.
+    authority.lastResolvedCommand = 2;
+    client.Reconcile(authority, 3);
+    CHECK_FALSE(observation.epochStartWaitSeconds);
+    CHECK_FALSE(observation.startPhaseSkip);
+    static_cast<void>(client.Advance(T, 0, 0, 0, 0));
+    authority.lastResolvedCommand = observation.latestCommand + 1;
+    client.Reconcile(authority, 4);
+    CHECK_FALSE(observation.epochStartWaitSeconds);
+    CHECK_FALSE(observation.startPhaseShiftSeconds);
+    CHECK(observation.startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+    // The frame window fills later; the repeated wait is never taken.
+    std::uint64_t tick = 4;
+    for (int frame = 0; frame < 16; ++frame) {
+        static_cast<void>(client.Advance(T, 0, 0, 0, 0));
+        authority.lastResolvedCommand = observation.latestCommand - InitialCommandLead;
+        client.Reconcile(authority, ++tick);
+        CHECK_FALSE(observation.epochStartWaitSeconds);
+        CHECK_FALSE(observation.startPhaseShiftSeconds);
+        CHECK(observation.startPhaseSkip == StartPhaseSkip::CancelledByReseed);
+    }
+    // A new epoch clears the cancellation and decides its own wait at once
+    // from the carried frame intervals.
+    client.Reconcile({1, {2, 0, 2}, 0, 0, 0, 2}, ++tick);
+    CHECK_FALSE(observation.epochStartWaitSeconds);
+    CHECK_FALSE(observation.startPhaseSkip);
+    REQUIRE(client.Advance(T, 1, 0, 0, 0));
+    client.Reconcile(EpochAuthority(1, 14781), ++tick);
+    REQUIRE(observation.startPhaseShiftSeconds);
+    CHECK(*observation.startPhaseShiftSeconds == doctest::Approx(0.014781 - MovementStartPhaseTargetSeconds));
+    CHECK_FALSE(observation.startPhaseSkip);
+
+    // A late Host's epoch armed nothing: a reseed keeps its reason.
+    LocalPlayerPrediction late(arena);
+    WarmFrames(late);
+    StartEpoch(late);
+    late.Reconcile(EpochAuthority(1, 30000), 11);
+    REQUIRE(late.Observation().startPhaseSkip == StartPhaseSkip::HostLate);
+    static_cast<void>(late.Advance(T, 0, 0, 0, 0));
+    late.Reconcile(EpochAuthority(late.Observation().latestCommand + 1, 30000), 12);
+    CHECK(late.Observation().epochStartWaitSeconds);
+    CHECK(late.Observation().startPhaseSkip == StartPhaseSkip::HostLate);
+}
+
+TEST_CASE("PvP start phase skip reasons are cleared by Reset") {
+    const auto arena = PredictionArena();
+    LocalPlayerPrediction slow(arena), late(arena);
+    WarmFrames(slow, 1.0 / 30);
+    StartEpoch(slow, 1.0 / 30);
+    slow.Reconcile(EpochAuthority(1, 14781), 11);
+    REQUIRE(slow.Observation().startPhaseSkip == StartPhaseSkip::FrameRateBelowTick);
+    WarmFrames(late);
+    StartEpoch(late);
+    late.Reconcile(EpochAuthority(1, 30000), 11);
+    REQUIRE(late.Observation().startPhaseSkip == StartPhaseSkip::HostLate);
+    for (auto* client : {&slow, &late}) {
+        REQUIRE(client->Observation().epochStartWaitSeconds);
+        client->Reset();
+        CHECK_FALSE(client->Observation().epochStartWaitSeconds);
+        CHECK_FALSE(client->Observation().startPhaseShiftSeconds);
+        CHECK_FALSE(client->Observation().startPhaseSkip);
+    }
 }

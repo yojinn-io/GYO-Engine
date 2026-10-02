@@ -39,7 +39,7 @@ Runner 在外部工作目錄驗證產品，必要時建立隔離副本並把 pro
 | GPU quick | 宣告的平台執行 viewmodel 渲染／讀回 |
 | GPU release／manual | 世界、選單、武器、換彈和多比例槍口診斷 |
 
-舊的 `--startup-smoke-test`、`--headless-smoke-test`、`--validate-package` 與 GPU probe switches 現在屬於 acceptance executable，不能傳给遊戲產品。正常遊戲只保留一般操作、`--help` 與 `--gpu-driver`。
+舊的 `--startup-smoke-test`、`--headless-smoke-test`、`--validate-package` 與 GPU probe switches 現在屬於 acceptance executable，不能傳給遊戲產品。正常遊戲只保留一般操作、`--help` 與 `--gpu-driver`。
 
 ## 3. GPU 與實機
 

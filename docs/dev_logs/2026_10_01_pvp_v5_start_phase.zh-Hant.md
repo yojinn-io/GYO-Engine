@@ -69,3 +69,17 @@ Match在收到seq1後的下一個Tick開始，之後每Tick一個序號。兩端
   第03批結案前須重跑GUI短測並記錄每輪w與調整量；不可改門檻或重跑挑分數。
 - 只在epoch起點對齊一次。跨機器時鐘漂移或epoch中途重新播種後相位會再次漂移，
   連續微調另議。
+
+## 2026-10-02 更正
+
+以上原文保留，以下只更正錯誤：
+- 「鎖頻幀率下…模擬中全部Actual」不成立。原相位矩陣的模擬worker與幀時鐘相位鎖定；改用產品式worker
+  （以送出時刻重設期限，本機實測每次約+0.33–0.37ms）、幀時鐘漂移與節拍抖動後，30 FPS RTT 20／40對齊時
+  Held 10–14%（最差一輪30–36%）並有starvation重設，未對齊為0%；40 FPS為1.7%。
+- 30 FPS的改善被高估：上表約29ms的差距以退化的乾淨模擬為基準，實際約21ms。
+  之後加入守門，低於約54.5 FPS（1.1 Tick）不做對齊，30 FPS不採用A1。
+- 測例數：`gyo_object_fps_pvp_tests`在`ff11ee3`的來源共119個TEST_CASE；PR head `d74830c`在本機執行為
+  119 cases／1,398,491 assertions，不是118 cases／1,398,468 assertions。
+- 狀態補充：計次GUI可見延遲短測與25案矩陣依使用者決定暫緩，第03批未結案。
+- 詳見[fix/01](../object_fps_pvp/plans/v5/fix/01-a1-low-fps-regression.md)與
+  [守門dev_log](2026_10_02_pvp_v5_start_phase_guard.zh-Hant.md)。

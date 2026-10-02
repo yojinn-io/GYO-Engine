@@ -8,6 +8,8 @@ from pathlib import Path
 import platform
 import statistics
 
+from start_phase_evidence import finite_json_float, read_reseed_evidence, reject_json_constant, summarize_start_phase
+
 
 THRESHOLDS = (0.25, 0.5, 0.75, 1.0, 1.25)
 MINIMUM_MATCHES = 3
@@ -16,6 +18,16 @@ MAXIMUM_MEDIAN_SECONDS = 0.15
 MAXIMUM_CROSSING_BRACKET_SECONDS = .1  # Existing runtime/presentation disturbance boundary.
 FIELDS = {"host_steady_seconds", "local_id", "local_x", "local_z",
           "remote_id", "remote_x", "remote_z"}
+WINDOW_EVENT_KINDS = ("occluded", "exposed", "hidden", "minimized", "focus_gained", "focus_lost", "moved", "resized")
+WINDOW_FLAGS = ("occluded", "hidden", "minimized", "input_focus")
+WINDOW_SYNC_STATES = ("succeeded", "timed_out", "not_requested")
+# Exposed is informational. OS focus changes during measurement mean outside
+# interaction; the probe's own synthetic focus is counted separately. The
+# product releases its pointer on moved/resized (PvpApplication), so those
+# during measurement are interference too.
+DISTURBING_WINDOW_EVENTS = ("occluded", "hidden", "minimized", "focus_gained", "focus_lost", "moved", "resized")
+DISTURBING_WINDOW_FLAGS = ("occluded", "hidden", "minimized")
+DIAGNOSTIC_ERRORS = (KeyError, ValueError, TypeError, IndexError, AttributeError, OverflowError, ZeroDivisionError)
 
 
 def _mover_id(report):
@@ -140,6 +152,174 @@ def analyze_presentation(directory):
 
 
 
+def _diagnostic_error(error):
+    return f"missing {error}" if isinstance(error, KeyError) else str(error)
+
+
+def _start_phase_file(directory, role, measurement_start_seconds=None, measured=None, measurement_end_seconds=None):
+    path = directory / f"{role}-start-phase.json"
+    try:
+        # NaN, Infinity and overflowing literals make only this role invalid;
+        # they never reach the evidence file, which is written without NaN.
+        record = json.loads(path.read_text(encoding="utf-8"),
+                            parse_constant=reject_json_constant, parse_float=finite_json_float)
+    except FileNotFoundError:
+        record = None
+    except (OSError, ValueError) as error:
+        summary = summarize_start_phase({}, path.name, measurement_start_seconds, measured)  # Keeps the explicit keys.
+        summary.update(status="invalid", reason=f"{path.name}: {error}")
+        return summary
+    # The role's own Client trace, read only when the record cannot report a
+    # reseed cancellation itself (older products).
+    reseeds = None if not isinstance(record, dict) or record.get("cancel_reason_supported") is True else \
+        read_reseed_evidence(directory / f"{role}-commands.jsonl")
+    return summarize_start_phase(record, path.name, measurement_start_seconds, measured, measurement_end_seconds, reseeds)
+
+
+def _measured_epoch(directory, role, begin):
+    """create: the epoch its emitted events moved in; join: its own epoch when measurement began."""
+    if role == "create":
+        source = "latency-events.csv movement_epoch of the first emitted event"
+        try:
+            with (directory / "latency-events.csv").open(newline="", encoding="utf-8") as stream:
+                rows = sorted(csv.DictReader(stream), key=lambda row: int(row["event_id"]))
+            if not rows:
+                return {"epoch": None, "source": source, "reason": "no movement event was emitted"}
+            epochs = sorted({int(row["movement_epoch"]) for row in rows})
+            return {"epoch": int(rows[0]["movement_epoch"]), "source": source, "reason": None, "event_epochs": epochs}
+        except (OSError, *DIAGNOSTIC_ERRORS) as error:
+            return {"epoch": None, "source": source, "reason": f"latency-events.csv: {_diagnostic_error(error)}"}
+    source = "join-presentation.csv local_epoch of the last frame at or before measurement begin"
+    if begin is None:
+        return {"epoch": None, "source": source, "reason": "no latency measurement plan"}
+    try:
+        epoch = None
+        with (directory / "join-presentation.csv").open(newline="", encoding="utf-8") as stream:
+            for row in csv.DictReader(stream):
+                if float(row["host_steady_seconds"]) > begin:
+                    break
+                epoch = int(row["local_epoch"])
+        if not epoch:
+            return {"epoch": None, "source": source, "reason": "join had no movement epoch at measurement begin"}
+        return {"epoch": epoch, "source": source, "reason": None}
+    except (OSError, *DIAGNOSTIC_ERRORS) as error:
+        return {"epoch": None, "source": source, "reason": f"join-presentation.csv: {_diagnostic_error(error)}"}
+
+
+def _named_counts(value, names):
+    if value == "unobserved":
+        return None
+    counts = {}
+    for item in value.split(","):
+        name, separator, number = item.partition(":")
+        if not separator or name in counts:
+            raise ValueError(f"malformed count list {value!r}")
+        counts[name] = int(number)
+    if tuple(counts) != names:
+        raise ValueError(f"expected {', '.join(names)} in {value!r}")
+    return counts
+
+
+def _integers(report, key, count, absent=None):
+    value = report[key]
+    if absent is not None and value == absent:
+        return None
+    parts = value.split(",")
+    if len(parts) != count:
+        raise ValueError(f"{key} must hold {count} integers, got {value!r}")
+    return [int(part) for part in parts]
+
+
+def _window_record(report):
+    result = {"status": "recorded", "placement": report["window_placement"],
+              "usable_bounds": _integers(report, "window_usable_bounds", 4, "unavailable"),
+              "requested_position": _integers(report, "window_requested_position", 2, "none"),
+              "sync": report["window_sync"],
+              "position_after_sync": _integers(report, "window_position_after_sync", 2, "none"),
+              "final_position": _integers(report, "window_final_position", 2),
+              "size": _integers(report, "window_size", 2),
+              "borders_top_left_bottom_right": _integers(report, "window_borders", 4),
+              "flags_at_measurement_start": _named_counts(report["window_flags_at_measurement_start"], WINDOW_FLAGS),
+              "flags_at_end": _named_counts(report["window_flags_at_end"], WINDOW_FLAGS),
+              "os_events": _named_counts(report["window_os_events"], WINDOW_EVENT_KINDS),
+              "os_events_during_measurement": _named_counts(report["window_os_events_during_measurement"], WINDOW_EVENT_KINDS),
+              "synthetic_events": int(report["window_synthetic_events"])}
+    if result["sync"] not in WINDOW_SYNC_STATES:
+        raise ValueError(f"window_sync must be one of {', '.join(WINDOW_SYNC_STATES)}, got {result['sync']!r}")
+    if min(result["size"]) <= 0:
+        raise ValueError(f"window_size must be positive, got {result['size']}")
+    if result["os_events"] is None or result["os_events_during_measurement"] is None:
+        raise ValueError("window event counts are unobserved")
+    return result
+
+
+def window_evidence(path, role):
+    """Window placement and OS window events of one latency probe report."""
+    try:
+        report = _read_report(path, unique_prefix="window_")
+    except OSError as error:
+        return {"status": "absent", "reason": f"{path.name}: {error}"}
+    except ValueError as error:
+        return {"status": "invalid", "reason": f"{path.name}: {error}"}
+    if "window_os_events" not in report:
+        return {"status": "absent", "reason": f"{path.name} has no window evidence (probe predates it)"}
+    try:
+        result = _window_record(report)
+        start, during = result["flags_at_measurement_start"], result["os_events_during_measurement"]
+        disturbances = [f"{role}: window state at measurement start was not observed"] if start is None else [
+            f"{role}: window {flag} at measurement start" for flag in DISTURBING_WINDOW_FLAGS if start[flag]]
+        disturbances += [f"{role}: {during[kind]} OS {kind} event(s) during measurement"
+                         for kind in DISTURBING_WINDOW_EVENTS if during[kind]]
+    except DIAGNOSTIC_ERRORS as error:
+        return {"status": "invalid", "reason": f"{path.name}: {_diagnostic_error(error)}"}
+    result["disturbances"] = disturbances
+    return result
+
+
+def _window_overlap(create, join):
+    """Share of each window's client area left visible with the other on top.
+
+    SDL positions and sizes name the client area. The top border is added only
+    when the platform reports one: macOS reports zero borders, so there the
+    title bar above each window is not part of this geometry.
+    """
+    try:
+        def rectangle(window):
+            (x, y), (width, height) = window["final_position"], window["size"]
+            top = (window["borders_top_left_bottom_right"] or [0])[0]
+            return x, y - top, x + width, y + height
+        first, second = rectangle(create), rectangle(join)
+        shared = max(0, min(first[2], second[2]) - max(first[0], second[0])) * \
+            max(0, min(first[3], second[3]) - max(first[1], second[1]))
+        def visible(box):
+            area = (box[2] - box[0]) * (box[3] - box[1])
+            return None if area <= 0 else 1 - shared / area
+        return {"status": "recorded", "create_visible_fraction_with_join_on_top": visible(first),
+                "join_visible_fraction_with_create_on_top": visible(second)}
+    except DIAGNOSTIC_ERRORS as error:
+        return {"status": "invalid", "reason": f"window overlap: {_diagnostic_error(error)}"}
+
+
+def _windows(directory):
+    windows = {}
+    for role in ("create", "join"):
+        try:
+            windows[role] = window_evidence(directory / f"{role}-report.txt", role)
+        except DIAGNOSTIC_ERRORS as error:  # Defensive: one role never aborts the other or the verdict.
+            windows[role] = {"status": "invalid", "reason": f"{role}-report.txt: {_diagnostic_error(error)}"}
+    result = {"window": windows}
+    if all(window["status"] == "recorded" for window in windows.values()):
+        result["window_disturbances"] = [item for window in windows.values() for item in window["disturbances"]]
+        result["window_disturbed"] = bool(result["window_disturbances"])
+        result["window_overlap"] = _window_overlap(windows["create"], windows["join"])
+    else:
+        # Unknown is reported as such; it is never promoted to clean.
+        result["window_disturbed"] = None
+        result["window_disturbances"] = [f"{role}: window evidence {window['status']}: {window['reason']}"
+                                         for role, window in windows.items() if window["status"] != "recorded"]
+    return result
+
+
 def _rank(values, quantile):
     if not values:
         return None
@@ -147,8 +327,18 @@ def _rank(values, quantile):
     return value if math.isfinite(value) else None
 
 
-def _read_report(path):
-    return dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line)
+def _read_report(path, unique_prefix=None):
+    """key=value lines; a repeated key with ``unique_prefix`` is invalid rather than last-wins."""
+    pairs = [line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line]
+    if unique_prefix is not None:
+        seen, repeated = set(), []
+        for key, _ in pairs:
+            if key.startswith(unique_prefix) and key in seen and key not in repeated:
+                repeated.append(key)
+            seen.add(key)
+        if repeated:
+            raise ValueError(f"duplicate {unique_prefix}* key(s): {', '.join(repeated)}")
+    return dict(pairs)
 
 
 def _latency_samples(path, mover, remote, observer=None):
@@ -270,6 +460,7 @@ def _analyze_latency(directory, *, short):
                      "unknown_crossing_bracket_seconds": MAXIMUM_CROSSING_BRACKET_SECONDS},
         "errors": [],
     }
+    begin = finish = None
     try:
         mover = _mover_id(directory / "create-report.txt")
         observer = _mover_id(directory / "join-report.txt")
@@ -370,6 +561,10 @@ def _analyze_latency(directory, *, short):
                          "fallback": None if command_attribution else "Saved baseline: conservative predeclared geometric event windows; unmatched remain infinity."})
     except (OSError, ValueError, TypeError, KeyError, IndexError, ZeroDivisionError) as error:
         evidence["errors"].append(str(error))
+    # Diagnostic records only: they never change the latency verdict above.
+    measured = {role: _measured_epoch(directory, role, begin) for role in ("create", "join")}
+    evidence["start_phase"] = {role: _start_phase_file(directory, role, begin, measured[role], finish) for role in ("create", "join")}
+    evidence.update(_windows(directory))
     evidence["passed"] = not evidence["errors"]
     filename = "presentation-short-latency.json" if short else "presentation-latency.json"
     (directory / filename).write_text(json.dumps(evidence, indent=2, allow_nan=False) + "\n", encoding="utf-8")

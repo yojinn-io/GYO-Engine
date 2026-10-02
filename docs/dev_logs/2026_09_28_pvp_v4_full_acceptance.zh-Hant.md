@@ -50,7 +50,7 @@ HP=0後後續命中傷害0；不以飽和HP單獨證明去重，仍結合ID、�
 
 新增 acceptance-only `--native-window` 被動觀測模式及 `run_native_window.py`：
 使用正式 PvpApplication、真實 X11／XTest 鍵鼠與 GNOME 視窗管理員，初次加入後
-不注入 SDL 事件、不呼叫 SubmitShot 或直接修改世界。20Hz 唯讀状态與有界逐幀
+不注入 SDL 事件、不呼叫 SubmitShot 或直接修改世界。20Hz 唯讀狀態與有界逐幀
 Presented 資料供核對；圖像經 XGetImage 取得，包含實際 HUD。
 此功能驗證不作效能量測，也不宣稱有人親手試玩或量到顯示器 scanout。
 
@@ -105,7 +105,7 @@ C++／Go race／wire／shader／GPU／故障／fitness重用範圍由未變正�
 驗收器新增負面回歸19／19通過。所有本次自有測試服務均已退出。
 
 本次滿足完整驗收後正式升格v4，詳見
-[穩定基線](../object_fps_pvp/plans/STABLE_BASELINE.md)。完整來源／產物／證據指紋
+[穩定基線](../object_fps_pvp/plans/v4/STABLE_BASELINE.md)。完整來源／產物／證據指紋
 新增於`build/target/_build/test/logs/pvp-v4-release-manifest.json`；v3 manifest保留。
 手動指南及回報表保留；沒有自動提交或開始歷史命中下一階段。
 

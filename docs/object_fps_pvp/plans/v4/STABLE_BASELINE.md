@@ -12,7 +12,7 @@ Client／Gateway／Match共同使用v4，明確拒絕v1–v3。保持60Hz模擬�
 兩步移動lead、既定epoch恢復、1Tick遠端插值。Mark23單發、無限彈藥、100HP、
 25傷害、20Tick冷卻；Match查詢當前權威幾何，獨立ActionId去重與確認。
 HP=0仍可操作，離開再加入取得新身分與滿血，沒有新增死亡／重生或歷史命中。
-詳細政策以 [v4契約](../protocol-v4.zh-Hant.md) 為準。
+詳細政策以 [v4契約](../../protocol-v4.zh-Hant.md) 為準。
 
 起始HEAD：`bfeb047669d465ce2a9a43af43c85fb3e577e4bc`。工作樹尚未提交；
 不能只用HEAD識別本基線。來源、內容、分析器、產物、證據及git status記於：
@@ -57,7 +57,7 @@ Gateway零限流拒絕，每Session每秒最高78包。兩玩家持續依≥400m
 不能只靠HP飽和證明去重，仍結合ActionId／不可變裁決與domain／網路帳本回歸。
 全部延遲只比較同機單調時鐘，不稱input-to-photon。
 
-原生X11／XTest V1–V8全部通過：移动／瞄準／同時射擊、捕捉單擊／按住、
+原生X11／XTest V1–V8全部通過：移動／瞄準／同時射擊、捕捉單擊／按住、
 100→75→50→25→0、隔牆／射偏、零血操作、新身分滿血、Tab／失焦、實際標題列
 拖曳與原生WM縮放、雙Esc後Lobby0人、Alt+F4。9槍均於首次成功Presented回饋；
 實際HUD與槍模圖像已核對。這是Agent執行的原生功能驗收，非使用者手感回報；
@@ -74,7 +74,7 @@ Gateway零限流拒絕，每Session每秒最高78包。兩玩家持續依≥400m
 | `pvp-v4-release-evidence-audit-1/qualification.json` | 新增零干擾／零重設gate後補核對，原始報告不改 |
 | `pvp-v4-release-soak60-1/result.json` | 60Hz完整30分鐘、原始資料與產物指紋 |
 | `pvp-v4-release-soak144-1/result.json` | 144Hz完整30分鐘、原始資料與產物指紋 |
-| `pvp-v4-release-soak-suite-1/results.json` | 串行執行、兩輪退出碼0與完整资格 |
+| `pvp-v4-release-soak-suite-1/results.json` | 串行執行、兩輪退出碼0與完整資格 |
 | `pvp-v4-native-window-6/native-window-result.json`、`native-frame-audit.json` | 原生V1–V8、9槍逐幀與HUD；四張PNG |
 | `pvp-v4-release-provenance-check.json` | 正式產品與第05批產物一致；GUI probe新增native模式 |
 | `pvp-v4-release-environment.json` | OS／CPU／GPU及工具版本 |
@@ -92,7 +92,7 @@ Engine／公共Gateway責任移動或新通用框架。工具仍由object_fps_pv
 
 保留第05批P50 52.02ms失敗與兩次pointer-release診斷，不能用新通過跑次抹除；
 原生1／2／3／5的測例失敗亦保留。歷史整機拖窗停頓根因仍未證實。
-詳見 [完整驗收dev_log](../../dev_logs/2026_09_28_pvp_v4_full_acceptance.zh-Hant.md)。
+詳見 [完整驗收dev_log](../../../dev_logs/2026_09_28_pvp_v4_full_acceptance.zh-Hant.md)。
 
 [手動命令、日誌與門檻](MANUAL_ACCEPTANCE.md) 及
 [驗收狀態／回報模板](ACCEPTANCE_STATUS.md) 永久保留供後續重驗。

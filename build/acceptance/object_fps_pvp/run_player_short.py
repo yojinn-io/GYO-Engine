@@ -9,7 +9,7 @@ import urllib.request
 
 from impaired_network import _ImpairedGateway
 from player_presentation_evidence import analyze
-from run_network import free_port
+from run_network import free_port, steady_clock_ns, wait_for_match_ready
 from run_weapon_short import digest
 
 
@@ -33,7 +33,7 @@ class SnapshotHold(_ImpairedGateway):
         kind=int.from_bytes(payload[6:8],'big')
         session=int.from_bytes(payload[8:16],'big')
         downstream=source==self.upstream_udp
-        now=time.monotonic()
+        now=steady_clock_ns()/1e9  # Compared with the GUI probe's C++ host_steady_seconds.
         with self.lock:
             if downstream:
                 destination=self.clients.get(session)
@@ -78,6 +78,7 @@ def run_case(args,name):
         return process
     try:
         match=start('match',[str(args.match),'--arena',str(args.arena),'--listen',f'127.0.0.1:{ipc}'])
+        wait_for_match_ready(match,directory/'match.log',f'127.0.0.1:{ipc}')
         gateway=start('gateway',[str(args.gateway),'--runtime',f'127.0.0.1:{ipc}',
             '--http',f'127.0.0.1:{http}','--udp',f'127.0.0.1:{udp}','--advertise-ip','127.0.0.1'])
         deadline=time.monotonic()+10

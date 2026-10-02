@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -19,6 +20,66 @@ def free_port(kind=socket.SOCK_STREAM):
     with socket.socket(socket.AF_INET, kind) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+# match_main.cpp prints this once its IPC listener is bound and listening,
+# followed by the listen address and " arena=...".
+MATCH_READY_PREFIX = "Object_FPS_PVP Match ready: "
+MATCH_READY_TIMEOUT_SECONDS = 15.0
+
+
+def match_ready(log_text, listen):
+    """True when the Match log carries the ready line for exactly ``listen``."""
+    expected = MATCH_READY_PREFIX + listen
+    return any(line == expected or line.startswith(expected + " ") for line in log_text.splitlines())
+
+
+def wait_for_match_ready(process, log_path, listen, timeout=MATCH_READY_TIMEOUT_SECONDS, *,
+                         clock=time.monotonic, sleep=time.sleep, poll_seconds=0.02):
+    """Return once the Match has logged that it listens on ``listen``; raise RuntimeError otherwise.
+
+    The Gateway dials the Match's IPC port once at startup and exits when that
+    connection is refused, so a runner starts it only after this returns.
+    Readiness is read from the Match's own log, never by connecting: IpcHost
+    serves one Gateway session at a time and treats any accepted connection as
+    that session (it resets the runtime, sends Ready and resets again when the
+    connection closes), so a probe connection would itself be a Match session
+    and could hold the single accept slot while the Gateway dials.
+    Bounded: fails when the Match exits first or ``timeout`` seconds pass.
+    """
+    log_path = Path(log_path)
+    deadline = clock() + timeout
+    while True:
+        try:
+            text = log_path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            text = ""
+        if match_ready(text, listen):
+            return
+        if process.poll() is not None:
+            raise RuntimeError(f"Match exited with code {process.returncode} before it listened on {listen}; "
+                               f"inspect {log_path.name}")
+        if clock() >= deadline:
+            raise RuntimeError(f"Match did not report listening on {listen} within {timeout:g} s; "
+                               f"inspect {log_path.name}")
+        sleep(poll_seconds)
+
+
+def steady_clock_source(system=sys.platform):
+    """Return a nanosecond clock in the probes' C++ std::chrono::steady_clock domain.
+
+    Apple libc++ reads CLOCK_MONOTONIC_RAW, which keeps counting through sleep;
+    Python's monotonic clock on macOS (mach_absolute_time) does not, so the two
+    differ by all sleep since boot. Linux libstdc++ and Python both read
+    CLOCK_MONOTONIC. Use this only where Python times meet C++ trace times;
+    pure-Python intervals keep time.monotonic().
+    """
+    if system == "darwin":
+        return lambda: time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
+    return time.monotonic_ns
+
+
+steady_clock_ns = steady_clock_source()
 
 
 @contextmanager
@@ -99,6 +160,7 @@ def main():
             default_match.wait(timeout=10)
             match = start("match", [str(staged), "--arena", str(args.arena.resolve()),
                                     "--listen", f"127.0.0.1:{ipc}"])
+            wait_for_match_ready(match, args.output / "match.log", f"127.0.0.1:{ipc}")
             gateway_command = [str(args.gateway.resolve()), "--runtime", f"127.0.0.1:{ipc}",
                                "--http", f"127.0.0.1:{http}", "--udp", f"127.0.0.1:{udp}",
                                "--advertise-ip", "127.0.0.1"]
