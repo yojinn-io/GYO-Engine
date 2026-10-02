@@ -26,6 +26,8 @@ Train は registry データから導出し、workflow と共通コードに製�
 
 同じ release の client、match、gateway は同じ commit と version から作ります。Service archive は Linux 封装行の service record `go-services.json`（製品、commit、宣言された service／platform）を通じてゲームの train に入り、checksum、内容、`build_metadata.json` の source commit を同様に検証します。製品 version は通信 protocol の version と独立しており、protocol の互換性は tag で表しません。Tools とゲーム train の間の Data Contract version 検査は宣言の仕組みがまだないため後回しです。Archive のコード署名は未対応です（TODO）。
 
+ゲーム train の正式公開には実機（L4）証拠が必要です。項目はゲーム自身が `build/acceptance/<game>/checks.json` の任意フィールド `release_evidence`（`name`、1 行の `description`、`platforms`）で宣言し、その train で有効な platform だけに適用します。`object_fps_pvp` は GUI 可視遅延の短時間テストと実機 GPU の画面確認を宣言しています。Self-hosted runner は置かず、CI はこれらを実行しません。人が実機で実行し、結果を issue、PR、discussion、artifact のいずれかに記録して、そのリンクを Prepare Release の `l4_evidence` に入力します。ゲームが項目を宣言しているのに `l4_evidence` が空の場合、Prepare Release は build の前に失敗します。Draft の説明には各項目のチェックリストと証拠リンクが入り、公開者は各項目を確認してから **Publish release** を押します。CI は参照の有無だけを検査し、証拠の内容は判断しません。Tools train と snapshot には L4 証拠は不要です。項目を宣言していない train で `l4_evidence` を入力すると Prepare Release は失敗します。証拠参照は説明にコードまたは URL リンクとして表示され、Markdown として解釈されません。
+
 配布物は実行可能な製品と必要な依存物です。Engine SDK や source archive は生成しません。Toolchain にゲーム source/assets を含めず、ゲーム包に CI、tests、acceptance executable、editor、元の美術ソースを含めません。エンジンは静的リンクし、必要な third-party dynamic runtime を配置します。
 
 ## 2. 入口と操作
@@ -53,9 +55,9 @@ Required check には `CI gate` だけを設定します。すべての pull req
 
 1. 公開予定 source commit の Quick 結果を確認します。master 以外の branch push では CI が動かないため、その branch で **Cross-platform CI** を手動実行します。
 2. **Actions → Prepare Release → Run workflow** で source branch を選びます。
-3. Train（`tools` または有効なゲーム id）と version を入力します。Tools は `v2026.10.1` 形式、ゲームは `v5.0.0` などの SemVer です。必要なら prerelease を選びます。
+3. Train（`tools` または有効なゲーム id）と version を入力します。Tools は `v2026.10.1` 形式、ゲームは `v5.0.0` などの SemVer です。必要なら prerelease を選びます。ゲームが実機証拠を宣言している場合は `l4_evidence` も入力します。
 4. 4 platform の toolchain baseline とその train の必要検証を待ちます。
-5. Summary から Draft を開き、commit、version、全添付、説明を確認します。
+5. Summary から Draft を開き、commit、version、全添付、説明を確認します。説明に実機（L4）項目があれば、証拠と照合して各項目を確認します。
 6. 公開する時に **Publish release** を押します。
 
 最初に完全な source SHA を固定するため、後続の branch 更新は混入しません。必須 job の失敗、取消、意図しない skip は Draft 準備を止めます。一部 platform の成功を統合成功としません。

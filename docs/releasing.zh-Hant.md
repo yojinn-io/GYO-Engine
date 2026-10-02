@@ -26,6 +26,8 @@ Train 由登錄資料推導，workflow 與共通程式不寫產品名稱：
 
 同一個 release 的 client、match 與 gateway 來自同一 commit 與同一版本。服務壓縮檔經 Linux 封裝列的服務記錄 `go-services.json`（產品、commit 與宣告的服務／平台）進入該遊戲 train，同樣驗證 checksum、內容與 `build_metadata.json` 的來源 commit。產品版本與通訊協定版本彼此獨立，協定相容性不由 tag 表示。Tools 與遊戲 train 之間的 Data Contract 版本檢查尚無宣告機制，留待之後處理；壓縮檔目前未做程式碼簽章（TODO）。
 
+遊戲 train 的正式發佈需要實機（L4）證據。項目由遊戲自己在 `build/acceptance/<game>/checks.json` 的選用欄位 `release_evidence` 宣告（`name`、單行 `description`、`platforms`），只套用到該 train 啟用的平台；`object_fps_pvp` 宣告 GUI 可見延遲短測與實體 GPU 畫面檢查。不設 self-hosted runner，CI 也不執行這些項目：由人在實機上執行，把結果記錄在 issue、PR、discussion 或 artifact，再把連結填入 Prepare Release 的 `l4_evidence`。遊戲宣告了項目而 `l4_evidence` 為空時，Prepare Release 在建置前即失敗。Draft 說明會列出各項目的核對清單與證據連結，發佈者須逐項確認後才按 **Publish release**；CI 只檢查有無參照，不判斷證據內容。Tools train 與 snapshot 不需要 L4 證據；未宣告項目的 train 若填入 `l4_evidence`，Prepare Release 會失敗。證據參照在說明中以程式碼或網址連結顯示，不解讀為 Markdown。
+
 產品是可執行程式與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source/assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
 
 ## 2. 入口與操作
@@ -53,9 +55,9 @@ Train 由登錄資料推導，workflow 與共通程式不寫產品名稱：
 
 1. 確認預定來源 commit 的 Quick 結果；master 以外的分支 push 不執行 CI，需在該分支手動執行 **Cross-platform CI**。
 2. 在 **Actions → Prepare Release → Run workflow** 選擇來源分支。
-3. 填入 train（`tools` 或啟用的遊戲 id）與 version：tools 用 `v2026.10.1` 形式，遊戲用 SemVer，例如 `v5.0.0`；必要時勾選 prerelease。
+3. 填入 train（`tools` 或啟用的遊戲 id）與 version：tools 用 `v2026.10.1` 形式，遊戲用 SemVer，例如 `v5.0.0`；必要時勾選 prerelease。遊戲宣告了實機證據時，另填 `l4_evidence`。
 4. 等待四平台 toolchain 基準與該 train 的必要驗收。
-5. 從 Summary 開啟 Draft，核對 commit、版本、全部附件及說明。
+5. 從 Summary 開啟 Draft，核對 commit、版本、全部附件及說明；說明列有實機（L4）項目時，逐項對照證據確認。
 6. 準備公開時按 **Publish release**。
 
 工作流程先固定完整 commit SHA，後續分支變更不會混入同一次產品。必要 job 失敗、取消或意外跳過都阻止 Draft；不能用部分平台成功作為全體成功。

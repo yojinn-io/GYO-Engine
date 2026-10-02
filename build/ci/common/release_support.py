@@ -362,3 +362,64 @@ def describe_item(item: Package, profile: str) -> dict:
     gpu = {check_identity(check) for check in required_checks(manifest, profile) if check["gpu"]}
     return {**description, "kind": "package", "profile": profile, "cpu_execution": metadata.get("cpu_execution"),
             "checks": len(passed), "gpu_checks": len(gpu & passed), "gpu_acceptance": metadata.get("gpu_acceptance")}
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+RELEASE_EVIDENCE_FIELDS = frozenset(("name", "description", "platforms"))
+RELEASE_EVIDENCE_TEXT_LIMIT = 300
+
+
+@dataclass(frozen=True)
+class EvidenceItem:
+    """One manual real-device (L4) check that CI cannot run, e.g. on a
+    physical GPU or a real display."""
+    name: str
+    description: str
+    platforms: tuple[str, ...]
+
+
+def single_line_text(value, limit: int) -> bool:
+    return (isinstance(value, str) and 0 < len(value) <= limit and value == value.strip()
+            and not any(ord(char) < 32 or ord(char) == 127 for char in value))
+
+
+def validate_release_evidence(document, source: str = "acceptance contract") -> tuple[EvidenceItem, ...]:
+    """The optional `release_evidence` array of one owner's acceptance
+    contract (build/acceptance/<owner>/checks.json). CMake reads only its
+    `checks`; release tooling reads this array and nothing else of it."""
+    if not isinstance(document, dict):
+        raise ReleaseError(f"{source} must be a JSON object")
+    declared = document.get("release_evidence", [])
+    if not isinstance(declared, list):
+        raise ReleaseError(f"{source}: release_evidence must be an array")
+    items, names = [], set()
+    for item in declared:
+        if not isinstance(item, dict) or set(item) != RELEASE_EVIDENCE_FIELDS:
+            raise ReleaseError(f"{source}: each release_evidence item has exactly name, description and platforms")
+        name, description, platforms = item["name"], item["description"], item["platforms"]
+        if not isinstance(name, str) or not IDENTIFIER_PATTERN.fullmatch(name) or name in names:
+            raise ReleaseError(f"{source}: release_evidence names must be unique identifiers: {name!r}")
+        names.add(name)
+        if not single_line_text(description, RELEASE_EVIDENCE_TEXT_LIMIT):
+            raise ReleaseError(f"{source}: release_evidence {name} needs a one-line description of at most "
+                               f"{RELEASE_EVIDENCE_TEXT_LIMIT} characters")
+        if (not isinstance(platforms, list) or not platforms or any(value not in PLATFORMS for value in platforms)
+                or len(platforms) != len(set(platforms))):
+            raise ReleaseError(f"{source}: release_evidence {name} needs unique platforms from {list(PLATFORMS)}")
+        items.append(EvidenceItem(name, description, tuple(value for value in PLATFORMS if value in platforms)))
+    return tuple(items)
+
+
+def load_release_evidence(owner: str, repository_root: Path | None = None) -> tuple[EvidenceItem, ...]:
+    """An owner's declared release evidence; an owner without an acceptance
+    contract declares none."""
+    validate_product(owner)
+    relative = f"build/acceptance/{owner}/checks.json"
+    path = (repository_root or REPOSITORY_ROOT) / relative
+    if not path.is_file():
+        return ()
+    try:
+        document = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as error:
+        raise ReleaseError(f"Cannot read {relative}: {error}") from error
+    return validate_release_evidence(document, relative)

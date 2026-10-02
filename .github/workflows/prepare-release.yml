@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      l4_evidence:
+        description: Real-device (L4) evidence link or reference (issue, PR, discussion or artifact); required when the game declares release_evidence; must stay empty for a train without items, such as tools
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -38,6 +43,7 @@ jobs:
       prerelease: ${{ steps.source.outputs.prerelease }}
       train: ${{ steps.source.outputs.train }}
       product: ${{ steps.source.outputs.product }}
+      l4_evidence: ${{ steps.source.outputs.l4_evidence }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,9 +66,11 @@ jobs:
           RELEASE_TAG: ${{ steps.source.outputs.tag }}
           SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
           SOURCE_REF: ${{ github.ref }}
+          L4_ITEMS: ${{ steps.source.outputs.l4_items }}
+          L4_EVIDENCE: ${{ steps.source.outputs.l4_evidence }}
         run: |
-          printf '## Release candidate\n\n- Train: `%s`\n- Tag: `%s`\n- Source: `%s`\n- Commit: `%s`\n\nThe toolchain baseline and every package of this train must pass before a tag or draft is created.\n' \
-            "$RELEASE_TRAIN" "$RELEASE_TAG" "$SOURCE_REF" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Release candidate\n\n- Train: `%s`\n- Tag: `%s`\n- Source: `%s`\n- Commit: `%s`\n- Real-device (L4) items: %s\n- L4 evidence: %s\n\nThe toolchain baseline and every package of this train must pass before a tag or draft is created.\n' \
+            "$RELEASE_TRAIN" "$RELEASE_TAG" "$SOURCE_REF" "$SOURCE_COMMIT" "${L4_ITEMS:-none}" "${L4_EVIDENCE:-none}" >> "$GITHUB_STEP_SUMMARY"
 
   # The toolchain rows always run as the engine baseline; a game train adds
   # only its own rows, so another game's failure cannot block this train.
@@ -110,15 +118,17 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.commit }}
           RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          L4_EVIDENCE: ${{ needs.prepare.outputs.l4_evidence }}
         run: |
           python build/ci/common/release_pipeline.py draft --train "$RELEASE_TRAIN" \
             --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --prerelease "$RELEASE_PRERELEASE" \
-            --package-directory release-packages --service-directory release-services --output "$GITHUB_OUTPUT"
+            --package-directory release-packages --service-directory release-services \
+            --l4-evidence="$L4_EVIDENCE" --output "$GITHUB_OUTPUT"
       - name: Show the draft for manual publication
         env:
           RELEASE_TAG: ${{ steps.draft.outputs.tag }}
           SOURCE_COMMIT: ${{ steps.draft.outputs.commit }}
           RELEASE_URL: ${{ steps.draft.outputs.release_url }}
         run: |
-          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every archive of this train and its SHA-256 file is verified.\n- Review the notes and downloads, then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
+          printf '## Draft ready for review\n\n[Open draft %s](%s)\n\n- Commit: `%s`\n- Every archive of this train and its SHA-256 file is verified.\n- Review the notes and downloads; confirm every real-device (L4) item listed in the notes against its evidence.\n- Then click **Publish release** in GitHub.\n- Publishing does not rebuild the packages.\n' \
             "$RELEASE_TAG" "$RELEASE_URL" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"

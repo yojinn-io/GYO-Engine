@@ -15,11 +15,14 @@ Channels deliver a train's archives:
   snapshot   every successful default-branch push: one published prerelease
              per train under a never-reused tag; the SNAPSHOT_KEEP most
              recently published stay
-  formal     Prepare Release for one train: a verified, unpublished draft
+  formal     Prepare Release for one train: a verified, unpublished draft.
+             A game train whose game declares release evidence (manual
+             real-device L4 checks) also needs a reference to that evidence;
+             the tools train and snapshots never do
 """
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -28,7 +31,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from release_support import PLATFORMS, ReleaseError, git, validate_commit, validate_product, parse_boolean
+from release_support import (PLATFORMS, EvidenceItem, ReleaseError, git, load_release_evidence, single_line_text,
+                             validate_commit, validate_product, parse_boolean)
 from app_registry import export_registry
 from go_checks import TOOLCHAIN_PRODUCT
 
@@ -41,6 +45,9 @@ TRIAL_LABEL = "package"
 # their snapshot tags are deleted.
 SNAPSHOT_KEEP = 5
 RESERVED_TRAINS = frozenset((TOOLS_TRAIN, TOOLCHAIN_PRODUCT))
+# One line: an issue, pull request, discussion or artifact link, or a short
+# text reference to where people recorded the real-device evidence.
+EVIDENCE_REFERENCE_LIMIT = 500
 
 _NUMBER = r"(?:0|[1-9][0-9]*)"
 _SUFFIX = r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\Z"
@@ -205,9 +212,47 @@ def select_trial(event_name: str, event, live_pull_request) -> tuple[bool, str]:
     return (True, "label") if TRIAL_LABEL in live_labels else (False, "no-label")
 
 
+def train_release_evidence(train: Train, repository_root: Path | None = None) -> tuple[EvidenceItem, ...]:
+    """The real-device (L4) items a formal release of this train must reference:
+    the game's declared items narrowed to the train's platforms. The tools
+    train never needs L4 evidence (user decision)."""
+    if train.id == TOOLS_TRAIN:
+        return ()
+    platforms = set(train.platforms)
+    return tuple(replace(item, platforms=tuple(value for value in item.platforms if value in platforms))
+                 for item in load_release_evidence(train.product, repository_root)
+                 if platforms.intersection(item.platforms))
+
+
+def validate_evidence_reference(train: Train, items: tuple[EvidenceItem, ...], reference) -> str:
+    """The normalized evidence reference; required when the train declares items.
+    CI only checks that a reference exists; people judge the evidence."""
+    if reference is None:
+        reference = ""
+    if not isinstance(reference, str):
+        raise ReleaseError("l4_evidence must be text")
+    reference = reference.strip()
+    if reference and not items:
+        raise ReleaseError(f"l4_evidence is not used by train {train.id}: it declares no real-device (L4) "
+                           "evidence items; leave the field empty")
+    if reference and not single_line_text(reference, EVIDENCE_REFERENCE_LIMIT):
+        raise ReleaseError(f"l4_evidence must be one line of at most {EVIDENCE_REFERENCE_LIMIT} characters")
+    # A leading dash would be read as an option by the draft command line;
+    # reject it here so Prepare Release fails before the release build.
+    if reference.startswith("-"):
+        raise ReleaseError("l4_evidence must not start with '-'")
+    if items and not reference:
+        names = ", ".join(item.name for item in items)
+        raise ReleaseError(f"Train {train.id} requires real-device (L4) release evidence for: {names}. "
+                           "Record it in an issue, pull request, discussion or artifact and enter that "
+                           "link in the l4_evidence field of Prepare Release")
+    return reference
+
+
 def prepare_event(event_name: str, event: dict, commit: str, ref: str, git_command=git, *,
-                  trains: dict[str, Train]) -> dict:
-    """Validate a GUI Prepare Release dispatch without creating a tag or release."""
+                  trains: dict[str, Train], evidence) -> dict:
+    """Validate a GUI Prepare Release dispatch without creating a tag or release.
+    `evidence(train)` returns the train's required real-device items."""
     if event_name != "workflow_dispatch":
         raise ReleaseError("Prepare Release only accepts an explicit workflow_dispatch event")
     validate_commit(commit)
@@ -223,13 +268,16 @@ def prepare_event(event_name: str, event: dict, commit: str, ref: str, git_comma
     train = resolve_train(trains, inputs.get("train"))
     tag = release_tag(train, inputs.get("version", ""))
     prerelease = parse_boolean(inputs.get("prerelease", False))
+    items = evidence(train)
+    reference = validate_evidence_reference(train, items, inputs.get("l4_evidence"))
     git_command("check-ref-format", f"refs/tags/{tag}")
     existing = git_command("tag", "--list", tag)
     if existing:
         if existing != tag or git_command("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") != commit:
             raise ReleaseError("Existing version tag does not point to the exact selected commit")
     return {"tag": tag, "commit": commit, "prerelease": str(prerelease).lower(),
-            "train": train.id, "product": train.product}
+            "train": train.id, "product": train.product,
+            "l4_items": ",".join(item.name for item in items), "l4_evidence": reference}
 
 
 def _host(description: dict) -> str:
@@ -259,7 +307,34 @@ def verification_level(description: dict) -> str:
             f"{description['profile']} checks passed {execution}; {gpu}; no physical GPU")
 
 
-def render_notes(*, train: Train, commit: str, profile: str, descriptions: list[dict], snapshot: bool) -> str:
+def render_reference(reference: str) -> str:
+    """The free-text evidence reference as inert Markdown: a plain web URL
+    becomes an autolink, anything else an inline code span, so the field
+    cannot add links, images, HTML, mentions or cross-references."""
+    if re.fullmatch(r"https?://[^\s<>`]+", reference):
+        return f"<{reference}>"
+    fence = "`" * (max((len(run) for run in re.findall(r"`+", reference)), default=0) + 1)
+    padding = " " if reference.startswith("`") or reference.endswith("`") else ""
+    return f"{fence}{padding}{reference}{padding}{fence}"
+
+
+def render_evidence(items: tuple[EvidenceItem, ...], reference: str) -> list[str]:
+    """A checklist of the declared real-device items for the publisher."""
+    if not items:
+        if reference:
+            raise ReleaseError("An evidence reference needs declared real-device (L4) items")
+        return []
+    lines = ["", "### Real-device evidence (L4)", "",
+             f"Evidence: {render_reference(reference)}" if reference else "Evidence: none recorded.", ""]
+    return lines + ["CI cannot run these checks; people run them on real devices. Before clicking "
+                    "**Publish release**, the publisher confirms every item against the evidence:",
+                    "", *(f"- [ ] `{item.name}` ({', '.join(item.platforms)}): {item.description}" for item in items)]
+
+
+def render_notes(*, train: Train, commit: str, profile: str, descriptions: list[dict], snapshot: bool,
+                 evidence: tuple[EvidenceItem, ...] = (), evidence_reference: str = "") -> str:
+    if snapshot and (evidence or evidence_reference):
+        raise ReleaseError("Snapshots never carry real-device evidence; their notes state CI verification only")
     lines = []
     if snapshot:
         lines += [f"Automated snapshot of `{commit}` from the default branch for testing. "
@@ -273,6 +348,7 @@ def render_notes(*, train: Train, commit: str, profile: str, descriptions: list[
     manual = sorted({item["gpu_acceptance"] for item in descriptions if item.get("gpu_acceptance")})
     lines += ["", *(f"{text}." if not text.endswith(".") else text for text in manual),
               "Archives are not code-signed."]
+    lines += render_evidence(evidence, evidence_reference)
     return "\n".join(lines) + "\n"
 
 
