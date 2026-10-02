@@ -42,6 +42,7 @@
 - CTest `-L pvp` 16／16（含worker、wire、presentation、Python分析器）。全標籤只有`cmake.ProjectComposition`失敗：
   本機Darwin/x86_64不是封裝平台（`GyoPackaging.cmake`只支援Windows x64、Linux x64、macOS ARM64），與本次修改無關。
   `build.ci`以使用者shell的PATH（`~/.zshrc`加入cmake）執行通過。
+  合併master `0bd5363`（新增macos-x64封裝平台與Go service測試）後重建，CTest全標籤40／40通過，Go `./...`的test、race、vet通過。
 - Go：產品Gateway unit、race、vet通過；`services/gyo_gateway`未修改。
 - Python：`test_run_timing.py` 18、`test_presentation_evidence.py` 36、`test_gameplay_evidence.py` 20。
 - 模擬：以產品碼重跑171組設定，除卡頓風暴（產品約90秒依fix/10移出）外與核准原型逐位元相同；重設總數173（原型181）。
