@@ -104,6 +104,7 @@ void RunActionShort(const Options& options) {
     std::vector<ActionJson> frames;
     frames.reserve(static_cast<std::size_t>(options.fps * (options.duration + 25)));
     RemoteActionTrack remote;
+    std::uint64_t unscheduledYawFramesSeen{};
     auto save = [&] {
         evidence["remote"] = remote.Json();
         std::ofstream report(options.output / (options.role + "-action.json"));
@@ -165,7 +166,8 @@ void RunActionShort(const Options& options) {
         PlayerId playerId{};
         std::string room;
         std::uint64_t frameIndex{}, presentedCount{}, heldBase{}, deathLife{}, allocatedAtDeath{};
-        double maximumFrameGap{}, savedYaw{}, backDisplacement{};
+        double maximumFrameGap{}, savedYaw{}, backDisplacement{}, unscheduledYaw{};
+        std::uint64_t unscheduledYawFrames{};
         bool reloadAnimatingSeen{}, died{}, deadChecked{}, respawned{}, respawnShot{};
         bool remoteDeathScheduled{}, remoteReloadCaptured{}, remoteJumpCaptured{}, remoteShotCaptured{};
         std::optional<double> measurementStart;
@@ -340,6 +342,15 @@ void RunActionShort(const Options& options) {
                 evidence["checks"][event + "_suppressed"] = true;
             }
             reloadAnimatingSeen = reloadAnimatingSeen || after.reloadAnimating;
+            // Only scripted turns may change the aim. Any other change is real
+            // mouse motion reaching the captured window: external input, not
+            // product behaviour, and it invalidates the aimed shots.
+            if (measurementStart && event != "turn-wall" && event != "turn-back" &&
+                std::abs(after.yaw - before.yaw) > 1e-6F) {
+                ++unscheduledYawFrames;
+                unscheduledYawFramesSeen = unscheduledYawFrames;
+                unscheduledYaw += std::abs(after.yaw - before.yaw);
+            }
             if (!actor && !died && after.dead) {
                 died = true;
                 deathLife = after.lifeGeneration;
@@ -414,6 +425,9 @@ void RunActionShort(const Options& options) {
             if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
         }
         evidence["presentation_frames"] = presentedCount;
+        evidence["unscheduled_yaw_frames"] = unscheduledYawFrames;
+        evidence["unscheduled_yaw_radians"] = unscheduledYaw;
+        evidence["disturbed"] = unscheduledYawFrames > 0;
         evidence["maximum_frame_seconds"] = maximumFrameGap;
         evidence["back_displacement"] = backDisplacement;
         evidence["final_local"] = LocalActionSample(application.WeaponFeedback());
@@ -440,6 +454,8 @@ void RunActionShort(const Options& options) {
         std::cout << options.role << ": action short evidence passed; " << presentedCount << " successful presentations\n";
     } catch (const std::exception& exception) {
         evidence["error"] = exception.what();
+        evidence["unscheduled_yaw_frames"] = unscheduledYawFramesSeen;
+        evidence["disturbed"] = unscheduledYawFramesSeen > 0;
         save();
         // Let the target finish its own bounded run and save its report too.
         if (actor) { std::ofstream finished(finishedPath); finished << "Actor action probe failed\n"; }

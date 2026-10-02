@@ -41,6 +41,9 @@ def summarize(directory, capture):
             continue
         recorded = report.get('checks') if isinstance(report.get('checks'), dict) else {}
         missing = [name for name in checks if recorded.get(name) is not True]
+        if report.get('disturbed') is True:
+            errors.append(f"{role}: disturbed by external input ({report.get('unscheduled_yaw_frames')} frame(s) of "
+                          'unscheduled mouse motion); not a product verdict')
         if report.get('passed') is not True:
             errors.append(f"{role}: {report.get('error') or 'probe did not pass'}")
         if missing:
@@ -49,9 +52,11 @@ def summarize(directory, capture):
         if capture and len(captures) != CAPTURES_PER_ROLE:
             errors.append(f'{role}: expected {CAPTURES_PER_ROLE} GPU captures, found {len(captures)}')
         platforms[role] = report.get('platform')
-        roles[role] = {'passed': report.get('passed') is True and not missing, 'remote': report.get('remote')}
+        roles[role] = {'passed': report.get('passed') is True and not missing, 'remote': report.get('remote'),
+                       'disturbed': report.get('disturbed') is True}
+    disturbed = [role for role in REQUIRED_CHECKS if role in roles and roles[role].get('disturbed')]
     return {'passed': not errors and len(roles) == len(REQUIRED_CHECKS), 'errors': errors, 'roles': roles,
-            'platform': platforms}
+            'platform': platforms, 'disturbed': disturbed}
 
 
 def run_case(args, name):

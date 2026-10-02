@@ -57,6 +57,15 @@ class ActionSummaryTests(unittest.TestCase):
         summary = runner.summarize(self.directory(short), True)
         self.assertIn("create: expected 4 GPU captures, found 3", summary["errors"])
 
+    def test_external_input_is_named_as_disturbance_not_a_product_verdict(self):
+        create = self.report("create", passed=False, disturbed=True, unscheduled_yaw_frames=12,
+                             error="Remote target death, held death pose and new life were not all presented")
+        summary = runner.summarize(self.directory({"create": create, "join": self.report("join")}), False)
+        self.assertFalse(summary["passed"])
+        self.assertEqual(summary["disturbed"], ["create"])
+        self.assertIn("create: disturbed by external input (12 frame(s) of unscheduled mouse motion); "
+                      "not a product verdict", summary["errors"])
+
     def test_malformed_report_is_an_error_not_a_crash(self):
         summary = runner.summarize(self.directory({"create": "{not json", "join": "[]"}), False)
         self.assertFalse(summary["passed"])
