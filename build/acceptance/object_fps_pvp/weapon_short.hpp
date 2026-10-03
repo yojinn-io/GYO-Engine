@@ -96,7 +96,7 @@ void RunWeaponShort(const Options& options) {
         std::uint64_t frameIndex{}, presentedCount{}, expectedSubmissions{}, expectedAnimations{};
         std::uint64_t originalAllocated{}, beforeCombinedMouse{};
         float beforeCombinedPitch{}, combinedYaw{}, combinedPitch{};
-        fps::Float3 zeroMovementStart{};
+        Engine::Math::Vec3 zeroMovementStart{};
         double zeroMovementMaximum{}, maximumFrameGap{}, firstFeedbackDelay{};
         std::optional<double> measurementStart;
         std::optional<Clock::time_point> firstRejoined;

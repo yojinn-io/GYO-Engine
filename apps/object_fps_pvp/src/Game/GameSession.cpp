@@ -31,9 +31,9 @@ constexpr float kMaximumShotDistance = 50.0F;
 constexpr float kLengthEpsilon = 0.000001F;
 
 struct ViewBasis final {
-    Float3 forward{};
-    Float3 right{};
-    Float3 up{};
+    Engine::Math::Vec3 forward{};
+    Engine::Math::Vec3 right{};
+    Engine::Math::Vec3 up{};
 };
 
 [[nodiscard]] ViewBasis MakeViewBasis(
@@ -50,9 +50,9 @@ struct ViewBasis final {
     };
 }
 
-[[nodiscard]] Float3 AddScaled(
-    const Float3 value,
-    const Float3 direction,
+[[nodiscard]] Engine::Math::Vec3 AddScaled(
+    const Engine::Math::Vec3 value,
+    const Engine::Math::Vec3 direction,
     const float distance) noexcept {
     return {
         value.x + direction.x * distance,
@@ -61,12 +61,8 @@ struct ViewBasis final {
     };
 }
 
-[[nodiscard]] Float3 Subtract(const Float3 left, const Float3 right) noexcept {
+[[nodiscard]] Engine::Math::Vec3 Subtract(const Engine::Math::Vec3 left, const Engine::Math::Vec3 right) noexcept {
     return {left.x - right.x, left.y - right.y, left.z - right.z};
-}
-
-[[nodiscard]] float Length(const Float3 value) noexcept {
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
 }
 
 [[nodiscard]] std::vector<CombatTarget> MakeCombatTargets(
@@ -83,8 +79,8 @@ struct ViewBasis final {
 }
 
 [[nodiscard]] bool SegmentIntersectsCell(
-    const Float2 start,
-    const Float2 end,
+    const GroundPoint start,
+    const GroundPoint end,
     const GridCoordinate cell,
     const float cellSize) noexcept {
     const double minimumX = static_cast<double>(cell.column) * cellSize;
@@ -647,7 +643,7 @@ struct GameSession::Impl final {
         const GameFrameInput& input,
         const float deltaSeconds,
         std::string& error) {
-        const Float2 previousPlayerPosition = stage->player.GetPositionXZ();
+        const GroundPoint previousPlayerPosition = stage->player.GetPositionXZ();
         const auto blockers = stage->enemies.CollectAliveBodies();
         playerController.Update(
             stage->player,
@@ -687,7 +683,7 @@ struct GameSession::Impl final {
         for (const WeaponActionEvent& action : weaponController.GetActionEvents()) {
             Emit(action);
         }
-        std::vector<Float3> resolvedShotPoints;
+        std::vector<Engine::Math::Vec3> resolvedShotPoints;
         resolvedShotPoints.reserve(weaponController.GetShotEvents().size());
         for (const ShotEvent& shot : weaponController.GetShotEvents()) {
             Emit(shot);
@@ -707,7 +703,7 @@ struct GameSession::Impl final {
         // Existing projectiles advance before these new cosmetics are born.
         // Use the final camera (including this shot's recoil), but retain the
         // authoritative pre-recoil impact and never apply damage a second time.
-        for (const Float3 point : resolvedShotPoints) SpawnPlayerShotTracer(point);
+        for (const Engine::Math::Vec3 point : resolvedShotPoints) SpawnPlayerShotTracer(point);
         for (const PlayerProjectileHit& hit : projectileHits) {
             ApplyPlayerDamage(hit.damage);
             if (playerCombat.IsDead()) {
@@ -724,8 +720,8 @@ struct GameSession::Impl final {
                     return;
                 }
             } else {
-                const Float3 direction = Subtract(attack.target, attack.origin);
-                if (Length(direction) > kLengthEpsilon) {
+                const Engine::Math::Vec3 direction = Subtract(attack.target, attack.origin);
+                if (Engine::Math::Length(direction) > kLengthEpsilon) {
                     static_cast<void>(stage->projectiles.SpawnEnemyProjectile(
                         attack.origin, attack.target, attack.damage));
                 }
@@ -763,14 +759,14 @@ struct GameSession::Impl final {
         }
     }
 
-    [[nodiscard]] Float3 ResolvePlayerMuzzle() const {
-        const Float3 cameraOrigin = stage->player.GetEyePosition(
+    [[nodiscard]] Engine::Math::Vec3 ResolvePlayerMuzzle() const {
+        const Engine::Math::Vec3 cameraOrigin = stage->player.GetEyePosition(
             playerController.GetSettings().eyeHeight);
         const ViewBasis basis = MakeViewBasis(
             stage->player.GetYawRadians(), stage->player.GetPitchRadians());
-        const Float3 cameraMuzzle = ResolveWeaponMuzzleCameraPosition(
+        const Engine::Math::Vec3 cameraMuzzle = ResolveWeaponMuzzleCameraPosition(
             weaponShotGeometry, config.worldVerticalFovRadians);
-        Float3 muzzle = AddScaled(cameraOrigin, basis.forward, cameraMuzzle.z);
+        Engine::Math::Vec3 muzzle = AddScaled(cameraOrigin, basis.forward, cameraMuzzle.z);
         muzzle = AddScaled(muzzle, basis.right, cameraMuzzle.x);
         muzzle = AddScaled(muzzle, basis.up, cameraMuzzle.y);
         // Authored offsets may extend past the body's collision radius. Keep
@@ -779,10 +775,10 @@ struct GameSession::Impl final {
             stage->world.GetMap(), stage->world.GetSettings(), cameraOrigin, muzzle);
     }
 
-    void SpawnPlayerShotTracer(const Float3 resolvedPoint) {
-        const Float3 muzzle = ResolvePlayerMuzzle();
-        const Float3 direction = Subtract(resolvedPoint, muzzle);
-        const float distance = Length(direction);
+    void SpawnPlayerShotTracer(const Engine::Math::Vec3 resolvedPoint) {
+        const Engine::Math::Vec3 muzzle = ResolvePlayerMuzzle();
+        const Engine::Math::Vec3 direction = Subtract(resolvedPoint, muzzle);
+        const float distance = Engine::Math::Length(direction);
         if (distance <= kLengthEpsilon) return;
         // Camera recoil can move the cosmetic path behind a corner even though
         // the shot was valid. Clip only against the world, not enemy capsules.
@@ -792,8 +788,8 @@ struct GameSession::Impl final {
             muzzle, worldHit.has_value() ? worldHit->position : resolvedPoint));
     }
 
-    [[nodiscard]] Float3 ResolvePlayerShot(const ShotEvent& shot) {
-        const Float3 cameraOrigin = stage->player.GetEyePosition(
+    [[nodiscard]] Engine::Math::Vec3 ResolvePlayerShot(const ShotEvent& shot) {
+        const Engine::Math::Vec3 cameraOrigin = stage->player.GetEyePosition(
             playerController.GetSettings().eyeHeight);
         const ViewBasis basis = MakeViewBasis(
             stage->player.GetYawRadians(), stage->player.GetPitchRadians());
@@ -806,18 +802,18 @@ struct GameSession::Impl final {
             basis.forward,
             kMaximumShotDistance,
             targets);
-        const Float3 aimPoint = aimHit.has_value()
+        const Engine::Math::Vec3 aimPoint = aimHit.has_value()
                                     ? aimHit->position
                                     : AddScaled(
                                           cameraOrigin,
                                           basis.forward,
                                           kMaximumShotDistance);
-        const Float3 muzzle = ResolvePlayerMuzzle();
+        const Engine::Math::Vec3 muzzle = ResolvePlayerMuzzle();
 
         std::optional<CombatHit> resolvedHit;
-        Float3 resolvedPoint = aimPoint;
-        const Float3 muzzleToAim = Subtract(aimPoint, muzzle);
-        const float muzzleDistance = Length(muzzleToAim);
+        Engine::Math::Vec3 resolvedPoint = aimPoint;
+        const Engine::Math::Vec3 muzzleToAim = Subtract(aimPoint, muzzle);
+        const float muzzleDistance = Engine::Math::Length(muzzleToAim);
         if (muzzleDistance > kLengthEpsilon) {
             resolvedHit = CombatCollision::Raycast(
                 stage->world.GetMap(),
@@ -895,7 +891,7 @@ struct GameSession::Impl final {
     }
 
     void HandleStageExit(
-        const Float2 previousPlayerPosition,
+        const GroundPoint previousPlayerPosition,
         std::string& error) {
         if (!stage || !stage->doorVisible) {
             return;

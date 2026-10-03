@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0–B4b 已合併（B4b 為 #22，合併為 `43bccad`）。B5 本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a 本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。**
 
 ## 閱讀入口
 
@@ -36,6 +36,8 @@
 | 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
 | 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
 | 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
+| 2026-10-04 | B6a：`Math::DegreesToRadians`／`RadiansToDegrees` 改為 constexpr，讓 pvp 的 `MovementMaximumPitch` 能以 `inline constexpr` 改用它（單次乘法，編譯期與執行期捨入相同） | 使用者 |
+| 2026-10-04 | B6a 的跨平台驗證：本機（mac x64）比對 master 與 branch 的全模擬 digest；依賴 libm 的替換（`hypot`）與會漂移的替換（倒數相乘正規化）以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測；其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關 | 使用者 |
 
 ## B0 基線
 
@@ -303,7 +305,7 @@
 
 ## B5 Ui 與 ui_editor
 
-狀態：**本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台**（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
+狀態：**完成**。PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 於 2026-10-04 合併為 `efe4a30`；最終 head `8d0487b` 的 CI 四平台全部通過。
 
 ### 進行方式（ultracode）
 
@@ -343,7 +345,7 @@
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 依賴圖 | 與 B4a 相比多出 `gyo_ui → gyo_math`、`gyo_ui_editor_preview → gyo_math`、`gyo_ui_editor_preview_srgb_tests → gyo_math` |
 | 對抗式審查 | 1 個 major（舊行為描述不完整，已更正並由使用者再次確認）、5 個 minor（全部處理） |
-| CI 四平台 | 第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
+| CI 四平台 | 最終 head `8d0487b` 全部通過。第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
 
 ### 範圍外，只回報
 
@@ -351,8 +353,88 @@
 - ui_editor 的 letterbox、半開區間點擊判定、文字對齊，與 Ui 本體各有一份；`UiRuntime` 的 Evaluate 與 Compose 也重複了 layout 走訪。屬於 layout 邏輯，不是數學庫範圍。
 - `Render::Color` 與 `UiColor` 同構（PLAN 已列）。
 
+## B6a pvp 模擬層 `match_domain`
+
+狀態：**本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台**（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
+
+### 進行方式（ultracode）
+
+1. 重新盤點：B0 之後 pvp 有大量變動（見 B2「master 的變動」），PLAN 的 pvp 行號作廢。3 個 agent 分別盤點 `match_domain` 的 helper、`fps::Float3`／`fps::Float2` 的全部使用者、決定性量測方法與 protocol 風險，再由 1 個 agent 做完整性檢查。
+   - 行號更正：protocol 版本檢查在 `IpcHost.cpp:155`、`ClientConnection.cpp:274`；`PredictionTests.cpp` 的水平距離在 :39-41；PLAN 所說的 563、584 現在是 565、586。
+2. 使用者決定兩項（見決策紀錄 2026-10-04）：Math 的角度換算改為 constexpr；跨平台驗證採「本機全模擬 digest＋CI characterization 測試」。
+3. 實作後以 2 個 agent 驗證：全模擬 digest 與靈敏度檢查、對抗式審查。
+
+### 變更
+
+- **型別**：
+  - `fps::Float3` 刪除，全部改為 `Engine::Math::Vec3`（133 處、29 個檔案：`match_domain` 22、app_support 的 header 3、測試 6、acceptance 7、未編譯檔與其 header 95）。
+  - `fps::Float2` 改名為產品語義型別 `fps::GroundPoint`（XZ 地面上的點或偏移量；95 處、19 個檔案），header 移到 `RetroFPS/World/GroundPoint.hpp`。
+  - `RetroFPS/Math/Vector.hpp` 刪除；原本 include 它的 13 個 header 改為各自 include 實際用到的 `GroundPoint.hpp` 或 `engine/math/linear/Vec3.hpp`。
+- **`match_domain` 的 helper 改用 Math**：
+  - `Movement.cpp`：pitch 上限 `pi/2` 改為 `HalfPi`（與 Go gateway 的 `float32(math.Pi/2)` 同一個 float），yaw 改用 `WrapRadians`，pitch clamp 改用 `Clamp`。
+  - `Movement.hpp`：`MovementMaximumPitch` 改為 `DegreesToRadians(89.0F)`。
+  - `ShotQuery.cpp`：`IsFinite`、`WrapRadians`、`Clamp`、`Normalize`；地板命中改為 `Intersect(Ray, Plane{})`（`Plane{}` 即 y = 0），半空間政策（起點在地板上或以下時距離為 0）留在產品。
+  - `PvpMatch.cpp`：spawn 的 yaw 改用 `WrapRadians`；spawn 距離改為 `LengthSquared(ToVec3d(p - feet))`（先以 float 相減、再以 double 平方，與原式相同）。
+  - `LocalPlayerPrediction.cpp`：`Interpolate`、`Difference`、`Length`、`Finite` 刪除，改用 `Lerp`、運算子、`Length`、`IsFinite`；float 的 clamp 與 max 改用 Math。
+  - `CharacterCollision.cpp`：向量運算改用 Math 運算子、`Length`、`Dot`、`Min`／`Max`（參數順序不變）；水平長度的 `std::hypot` 改為 `Length(Vec3{x, 0, z})`。
+  - `PlanarMovement.cpp`：clamp 改用 `Clamp`；倒數相乘的正規化改為對 `Vec3{x, 0, z}` 使用 `LengthSquared`、`Normalize`。
+  - `Arena.cpp`：`Finite` 刪除，改用 `IsFinite(Vec3)`、`IsFinite(Aabb)`。
+  - 各處的 identity 拷貝（`{p.x, p.y, p.z}`）改為直接傳值。
+- **保留為產品政策**：各種容差與迭代次數；`ShotQuery` 的眼睛位置與 `CharacterCollision` 試探位移的逐分量寫法（改成向量加法會改變 -0 或把 0·inf 帶進 y）；二分法的中點；double 與整數的 clamp／min／max（Math 的 `Min`／`Max`／`Clamp` 只有 float 版本，改用會悄悄縮窄）；`Percentile`。
+- **Math**：`DegreesToRadians`、`RadiansToDegrees` 改為 constexpr；`MathTests.cpp` 新增「編譯期求值與執行期逐位元相同」的測試；`math.md` 數值政策加註。
+- **未編譯檔的提前處理**：型別換成 `Vec3` 後，以下 helper 會與 Math 經 ADL 歧義，使 syntax-only 檢查失敗，因此在 B6a 先處理：
+  - `CombatCollision.cpp` 的 `IsFinite`、`Length`、`Normalize`，以及 `GameSession.cpp` 的 `Length`：與 Math 逐位元相同，刪除後改為明確呼叫 `Engine::Math::`。
+  - `ProjectileSystem.cpp` 的 `IsFinite`、`Length` 刪除；`Normalize` 遇到零或非有限值會 throw，語意與 Math 不同，改名為 `NormalizeOrThrow`。
+  - 其餘 helper（`AddScaled`、`Subtract`、`ToCollision` 等）照計劃留給 B6c。
+- **測試**：
+  - `PredictionTests.cpp` 的水平距離 `Distance` 改名為 `HorizontalDistance`（13 個呼叫點），語意不變。
+  - `TimelineTests.cpp` 補上 `<numbers>`：它原本經由 `Movement.hpp` 間接取得，而 `Movement.hpp` 已不再需要它。
+  - 新增 `tests/object_fps_pvp/MathCharacterizationTests.cpp`（`object_fps_pvp.cpu` 的一部分，8 個 test case）：凍結 master `efe4a30` 的各 helper，在執行期輸入下與 Math 比對。
+
+### 數值
+
+- **逐位元相同**：除了下面兩項，所有替換都逐位元相同，characterization 測試以精確比對鎖定。
+- **漂移 1：`ComputePlanarInput` 的正規化**（authority 與 prediction 都會經過）：
+  - 由 `x·(1/√s)` 改為 `x/√s`，`s` 不變。推導上限 2 ulp（同一個 binade 內最多 1 ulp）；本機實測最多 1 ulp，需要正規化的輸入中 37214／95023（39%）不同；不需要正規化的輸入完全相同。
+- **漂移 2：`CharacterCollision` 的水平長度**（`hypot` 改為 `sqrt`）：
+  - 只在 `constrainToFloor = true` 時執行，唯一的呼叫者是未編譯的 `EnemySystem.cpp`；PvP 都傳 false，所以 PvP 模擬不會經過這條路徑。
+  - 推導上限：長度 4 ulp、正規化分量 5 ulp（假設各平台 `hypotf` 誤差在 1 ulp 內）；本機實測長度最多 1 ulp、分量最多 2 ulp，`1e-6` 門檻沒有翻轉。
+- **全模擬 digest**（本機 mac x64、Apple clang、`-ffp-contract=off`，harness 在 scratch，不進 repo）：
+  - 情境：平面輸入、`StepMovement` 連鎖、`MoveCharacterBody`（含 `constrainToFloor` 兩種）、`QueryShot`、PvpMatch 兩人對戰（斷線、射擊、擊殺、復活）、prediction 加虛擬線路（6 種延遲、丟包、stall、斷線設定）、`MatchRuntimeHost`、spawn 近似平局。共 5 個 arena、62 個情境 digest；規模 1 與 10。
+  - **isolation 版**（branch 只把上述兩項改回舊寫法）：在 -O2、-O0 以及規模 1、10 下，62 個情境都與 master 相同，trace 逐 byte 相同（規模 10 為 3.86 GB）。其餘替換的逐位元相同因此得到確認。
+  - **master 對 branch**：差異全部歸因於這兩項。`hypot` 只影響 `constrainToFloor = true` 的碰撞情境；平面正規化影響移動、authority、prediction、host 情境，不影響射擊情境。
+    - authority 位置最大差 2.67e-5 m，prediction 2.15e-5 m，host 1.34e-5 m；沒有任何離散狀態分歧（grounded、生命狀態、命中、擊殺、復活、spawn 選擇都相同）。
+    - prediction 的 snap 次數、平滑修正次數、最大修正量、最大 snap 位移都與 master 相同（規模 10：snap 106、平滑修正 28583）。
+    - 合成的退化狀態（站在 3 m 高的角落牆頂上，PvP 內容中無法到達）中，1 ulp 的差異會讓接觸判定翻轉，差異最大 0.186 m。這表示邊緣幾何會放大 ulp 級差異，但仍在 1 m 的 snap 門檻以下。
+  - -O2 與 -O0 的 digest 相同；連結 CMake 建出的 archive 時，digest 與手動建置相同。
+- **Protocol**：不升級，`apps/object_fps_pvp/protocol/` 沒有變動。wire 上的 float 都原樣傳送，沒有狀態 hash；client 每個 snapshot 都以 authority 重建，再 replay 至多 12 步。新舊版本混連時的漂移會被平滑修正吸收。`ValidMovementCommand` 的上限（`HalfPi`、1e6）與 Go gateway 一致，接受條件不變。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過（pvp 不在 core preset 中） |
+| test preset | 46／46 通過；`object_fps_pvp.cpu` 含新的 characterization 測試 |
+| gateway Go 測試 | `object_fps_pvp.go.vet`、`object_fps_pvp.go.test` 通過（`ctest -L go`） |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B5 相同，沒有新的邊 |
+| 全模擬 digest | 見上節 |
+| 靈敏度檢查 | 7 種刻意改動中 5 種被抓到。其餘 2 種是等價改動：`Min(Dot, 0)` 參數對調只改變零的正負號，之後被吸收；`NormalizeOrZero` 在 `s > 1` 時與 `Normalize` 同式 |
+| 對抗式審查 | 沒有推翻正確性；審查者另寫的 driver 也得到同樣結論。指出 1 個 minor（HANDOFF 與 dev_log 尚未記錄、README 與 PLAN 的 digest 說法未更新）與 2 個 nit（漂移應寫成推導上限、`MathTests` 新 helper 應放進匿名 namespace），都已處理 |
+| CI 四平台 | 待 CI |
+
+### Architecture Delta
+
+- **產品內部的檔案移動**：`RetroFPS/Math/Vector.hpp` 刪除，`GroundPoint` 放在 `RetroFPS/World/GroundPoint.hpp`。理由：刪除 `Float3` 後該檔只剩產品語義型別，留在 `Math/` 會讓人誤以為是數學重複定義。不涉及頂層目錄、CMake 或 Product Boundary，依賴方向不變。
+- **Math 公開介面**：`DegreesToRadians`、`RadiansToDegrees` 加上 constexpr，相容擴充。
+- 沒有新的依賴邊（`match_domain → gyo_math` 在 B2 已加入）。
+
+### 範圍外，只回報
+
+- client 與 server 只比對 arena 的 id 與 version，不比對內容；client 以自己的 arena 檔做 prediction。
+- client 與 server 可以跑在不同平台，`sinf`／`cosf` 本來就可能相差 1 ulp；B6a 的漂移屬於同一類。
+- 瞄準方向公式在 `ShotQuery.cpp` 與未編譯的 `GameSession.cpp` 各有一份；`AddScaled` 在三個未編譯檔各有一份（B6c）。
+
 ## 未結事項
 
-
-- B2 開始時確認 Collision 的 raycast 介面是否改成接收 `Math::Ray`（公開介面變更）。
-- B1、B4b、B6a 是否使用 ultracode 對抗式檢查，屆時逐次徵求同意。
+- B6b（pvp 表現層與 acceptance）、B6c（29 個未編譯檔）、B7（收尾）。

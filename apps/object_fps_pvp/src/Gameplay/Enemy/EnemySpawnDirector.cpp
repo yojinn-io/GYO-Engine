@@ -144,7 +144,7 @@ void EnemySpawnDirector::Reset() noexcept {
 EnemySpawnBatchResult EnemySpawnDirector::SpawnAvailable(
     EnemySystem& system,
     const GridMap& map,
-    const Float2 playerPosition,
+    const GroundPoint playerPosition,
     const float playerCollisionRadius,
     std::string& error) {
     EnemySpawnBatchResult batch{};
@@ -208,7 +208,7 @@ EnemySpawnDirector::SpawnAttemptResult EnemySpawnDirector::TrySpawnKind(
     const EnemyKind kind,
     EnemySystem& system,
     const GridMap& map,
-    const Float2 playerPosition,
+    const GroundPoint playerPosition,
     const float playerCollisionRadius,
     std::string& error) {
     std::uint32_t& remaining = kind == EnemyKind::Melee
@@ -229,7 +229,7 @@ EnemySpawnDirector::SpawnAttemptResult EnemySpawnDirector::TrySpawnKind(
 
     for (std::size_t offset = 0; offset < markers.size(); ++offset) {
         const std::size_t markerIndex = (start + offset) % markers.size();
-        const Float2 position =
+        const GroundPoint position =
             map.GetCellCenter(markers[markerIndex], system.GetCellSize());
         const EnemySpawnResult result = system.Spawn(
             map,

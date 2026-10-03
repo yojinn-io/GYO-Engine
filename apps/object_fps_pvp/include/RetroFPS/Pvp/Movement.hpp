@@ -1,10 +1,10 @@
 #pragma once
 
 #include "RetroFPS/Pvp/Arena.hpp"
+#include "engine/math/scalar/Angle.hpp"
 
 #include <cstddef>
 #include <cstdint>
-#include <numbers>
 #include <optional>
 #include <vector>
 
@@ -22,7 +22,7 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // stays at InputSendRate, bursts are two packets, nothing is repaid.
 inline constexpr double InputSendBurst = 2;
 inline constexpr double MovementTickSeconds = 1.0 / AuthorityTickRate;
-inline constexpr float MovementMaximumPitch = 89.0F * std::numbers::pi_v<float> / 180.0F;
+inline constexpr float MovementMaximumPitch = Engine::Math::DegreesToRadians(89.0F);
 inline constexpr double MovementCorrectionSeconds = 0.1;
 inline constexpr float MovementHardCorrectionDistance = 1.0F;
 inline constexpr double MovementMaximumRegularFrameSeconds = 3 * MovementTickSeconds;
@@ -96,7 +96,7 @@ struct PlayerInput final {
 
 struct PlayerState final {
     PlayerId playerId{};
-    Float3 position{}; // feet, in arena world units
+    Engine::Math::Vec3 position{}; // feet, in arena world units
     float yaw{};
     float pitch{};
     std::uint64_t lastResolvedCommand{};

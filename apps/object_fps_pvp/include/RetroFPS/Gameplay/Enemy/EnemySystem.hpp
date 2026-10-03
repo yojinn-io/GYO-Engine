@@ -3,8 +3,9 @@
 #include "RetroFPS/Collision/GridCollision.hpp"
 #include "RetroFPS/Data/GameData.hpp"
 #include "RetroFPS/Gameplay/Enemy/EnemyRig.hpp"
-#include "RetroFPS/Math/Vector.hpp"
 #include "RetroFPS/World/GridMap.hpp"
+#include "RetroFPS/World/GroundPoint.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,7 +49,7 @@ struct EnemySnapshot final {
     EnemyDefinitionId definitionId{};
     EnemyKind kind = EnemyKind::Melee;
     EnemyState state = EnemyState::Idle;
-    Float2 position{};
+    GroundPoint position{};
     float collisionRadius = 0.0f;
     float hitboxHeight = 0.0f;
     float health = 0.0f;
@@ -67,13 +68,13 @@ struct EnemyAttackEvent final {
     EnemyId enemyId = 0;
     EnemyDefinitionId definitionId{};
     EnemyKind kind = EnemyKind::Melee;
-    Float3 origin{};
-    Float3 target{};
+    Engine::Math::Vec3 origin{};
+    Engine::Math::Vec3 target{};
     float damage = 0.0f;
 };
 
 struct EnemyTarget final {
-    Float2 position{};
+    GroundPoint position{};
     float collisionRadius = 0.0f;
     float hitboxHeight = 0.0f;
     float feetY = 0.0f;
@@ -112,7 +113,7 @@ public:
     // Definitions and spawn policy are supplied explicitly through Spawn.
     [[nodiscard]] bool Initialize(
         const GridMap& map,
-        Float2 playerPosition,
+        GroundPoint playerPosition,
         float playerCollisionRadius,
         float cellSize,
         EnemySettings settings,
@@ -123,9 +124,9 @@ public:
 
     [[nodiscard]] EnemySpawnResult Spawn(
         const GridMap& map,
-        Float2 playerPosition,
+        GroundPoint playerPosition,
         float playerCollisionRadius,
-        Float2 spawnPosition,
+        GroundPoint spawnPosition,
         const EnemyDefinition& definition,
         std::string& error);
     [[nodiscard]] bool Retire(EnemyId id) noexcept;
@@ -174,7 +175,7 @@ private:
         EnemyId id = 0;
         EnemyKind kind = EnemyKind::Melee;
         EnemyState state = EnemyState::Idle;
-        Float2 position{};
+        GroundPoint position{};
         float yawRadians{};
         Engine::Model::AnimationInstance animation;
         std::optional<Engine::Math::Capsule> attackShape;

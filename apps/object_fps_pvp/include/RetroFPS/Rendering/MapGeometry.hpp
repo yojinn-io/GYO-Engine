@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RetroFPS/Math/Vector.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cstddef>
 #include <vector>
@@ -14,15 +14,15 @@ enum class SurfaceType {
 };
 
 struct SurfaceTransform {
-    Float3 translation{};
-    Float3 rotationRadians{};
-    Float3 scale{1.0f, 1.0f, 1.0f};
+    Engine::Math::Vec3 translation{};
+    Engine::Math::Vec3 rotationRadians{};
+    Engine::Math::Vec3 scale{1.0f, 1.0f, 1.0f};
 };
 
 struct SurfaceInstance {
     SurfaceType type = SurfaceType::Floor;
     SurfaceTransform transform{};
-    Float3 normal{0.0f, 1.0f, 0.0f};
+    Engine::Math::Vec3 normal{0.0f, 1.0f, 0.0f};
     std::size_t row = 0;
     std::size_t column = 0;
 };

@@ -20,11 +20,11 @@ GridMap::GridMap(
       enemySpawnPoints_(std::move(enemySpawnPoints)),
       nextMapExitCell_(nextMapExitCell) {}
 
-Float2 GridMap::GetSpawnPosition(const float cellSize) const {
+GroundPoint GridMap::GetSpawnPosition(const float cellSize) const {
     return GetCellCenter(playerSpawnCell_, cellSize);
 }
 
-Float2 GridMap::GetCellCenter(
+GroundPoint GridMap::GetCellCenter(
     const GridCoordinate coordinate, const float cellSize) const {
     if (!std::isfinite(cellSize) || cellSize <= 0.0f) {
         throw std::invalid_argument("cell size must be finite and greater than zero");
@@ -40,7 +40,7 @@ Float2 GridMap::GetCellCenter(
 }
 
 std::optional<GridCoordinate> GridMap::TryGetCoordinateAtPosition(
-    const Float2 position, const float cellSize) const {
+    const GroundPoint position, const float cellSize) const {
     if (!std::isfinite(cellSize) || cellSize <= 0.0f) {
         throw std::invalid_argument("cell size must be finite and greater than zero");
     }

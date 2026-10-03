@@ -4,7 +4,7 @@
 
 namespace fps {
 
-Float2 Player::GetPositionXZ() const noexcept { return positionXZ_; }
+GroundPoint Player::GetPositionXZ() const noexcept { return positionXZ_; }
 
 float Player::GetYawRadians() const noexcept { return yawRadians_; }
 
@@ -18,7 +18,7 @@ float Player::GetRecoilDegrees() const noexcept {
 }
 
 void Player::Reset(
-    const Float2 spawnPosition,
+    const GroundPoint spawnPosition,
     const float yawRadians,
     const float pitchRadians) noexcept {
     positionXZ_ = spawnPosition;
@@ -30,7 +30,7 @@ void Player::Reset(
     recoilPitchRadians_ = 0.0f;
 }
 
-void Player::SetPositionXZ(const Float2 position) noexcept { positionXZ_ = position; }
+void Player::SetPositionXZ(const GroundPoint position) noexcept { positionXZ_ = position; }
 
 void Player::SetLookAngles(
     const float yawRadians, const float pitchRadians) noexcept {

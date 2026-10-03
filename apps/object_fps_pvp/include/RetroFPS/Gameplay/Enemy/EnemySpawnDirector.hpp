@@ -38,7 +38,7 @@ public:
     [[nodiscard]] EnemySpawnBatchResult SpawnAvailable(
         EnemySystem& system,
         const GridMap& map,
-        Float2 playerPosition,
+        GroundPoint playerPosition,
         float playerCollisionRadius,
         std::string& error);
 
@@ -78,7 +78,7 @@ private:
         EnemyKind kind,
         EnemySystem& system,
         const GridMap& map,
-        Float2 playerPosition,
+        GroundPoint playerPosition,
         float playerCollisionRadius,
         std::string& error);
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "RetroFPS/Math/Vector.hpp"
 #include "engine/collision/Collision.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -12,7 +12,7 @@
 namespace fps::pvp {
 
 struct SpawnPoint final {
-    Float3 position{};
+    Engine::Math::Vec3 position{};
     float yaw{};
 };
 

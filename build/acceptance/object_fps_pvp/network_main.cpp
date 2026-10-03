@@ -228,7 +228,7 @@ int main(int argc,char** argv) {
         LocalPlayerPrediction predictionA(*arena),predictionB(*arena);
         auto previous=Clock::now();const auto started=previous;
         const auto end=previous+std::chrono::seconds(4);
-        std::optional<fps::Float3> stoppedA,stoppedB;
+        std::optional<Engine::Math::Vec3> stoppedA,stoppedB;
         while(Clock::now()<end){
             const auto now=Clock::now();
             const auto beforeA=a.State(),beforeB=b.State();

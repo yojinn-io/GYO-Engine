@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RetroFPS/Data/GameData.hpp"
-#include "RetroFPS/Math/Vector.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cmath>
 #include <numbers>
@@ -13,7 +13,7 @@ namespace fps {
 // +Y up, +Z forward. Campaign loading supplies this numeric calibration so the
 // simulation does not need models, animation, or renderer resources.
 struct WeaponShotGeometry final {
-    Float3 muzzleViewCameraPosition{};
+    Engine::Math::Vec3 muzzleViewCameraPosition{};
     float viewModelVerticalFovRadians{};
 };
 
@@ -27,7 +27,7 @@ using WeaponShotGeometryMap =
 
 // Match the viewmodel muzzle's screen position in the world camera while
 // retaining its authored depth. Both FOVs must have passed content validation.
-[[nodiscard]] inline Float3 ResolveWeaponMuzzleCameraPosition(
+[[nodiscard]] inline Engine::Math::Vec3 ResolveWeaponMuzzleCameraPosition(
     const WeaponShotGeometry& geometry,
     const float worldVerticalFovRadians) noexcept {
     const float scale = std::tan(worldVerticalFovRadians * 0.5F) /

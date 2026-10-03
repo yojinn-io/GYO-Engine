@@ -1,8 +1,12 @@
 #include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "engine/math/geometry/Intersection.hpp"
+#include "engine/math/geometry/Plane.hpp"
+#include "engine/math/geometry/Ray.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Angle.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
-#include <numbers>
 #include <stdexcept>
 
 namespace fps::pvp {
@@ -15,25 +19,23 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     }
     const Engine::Math::Vec3 origin{
         shooter.position.x, shooter.position.y + arena.eyeHeight, shooter.position.z};
-    if (!std::isfinite(origin.x) || !std::isfinite(origin.y) || !std::isfinite(origin.z))
-        throw std::invalid_argument("Invalid shot origin");
+    if (!Engine::Math::IsFinite(origin)) throw std::invalid_argument("Invalid shot origin");
 
-    yaw = std::remainder(yaw, 2 * std::numbers::pi_v<float>);
-    pitch = std::clamp(pitch, -MovementMaximumPitch, MovementMaximumPitch);
+    yaw = Engine::Math::WrapRadians(yaw);
+    pitch = Engine::Math::Clamp(pitch, -MovementMaximumPitch, MovementMaximumPitch);
     const float cosinePitch = std::cos(pitch);
-    Engine::Math::Vec3 direction{
-        std::sin(yaw) * cosinePitch, -std::sin(pitch), std::cos(yaw) * cosinePitch};
-    const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y +
-        direction.z * direction.z);
-    direction = {direction.x / length, direction.y / length, direction.z / length};
+    const Engine::Math::Vec3 direction = Engine::Math::Normalize(Engine::Math::Vec3{
+        std::sin(yaw) * cosinePitch, -std::sin(pitch), std::cos(yaw) * cosinePitch});
 
     ShotHit closest{ShotHitKind::Miss, 0, range};
     // The arena floor bounds a solid half-space; starting on/under it is overlap.
+    // Plane{} is the floor y = 0; only a downward ray from above it can hit.
     if (origin.y <= 0) {
         closest = {ShotHitKind::World, 0, 0};
-    } else if (direction.y < 0) {
-        const float distance = -origin.y / direction.y;
-        if (distance <= range) closest = {ShotHitKind::World, 0, distance};
+    } else if (const auto floor =
+                   Engine::Math::Intersect(Engine::Math::Ray{origin, direction}, Engine::Math::Plane{});
+               floor && *floor <= range) {
+        closest = {ShotHitKind::World, 0, *floor};
     }
     for (const auto& wall : arena.walls) {
         const auto distance = Engine::Collision::RaycastAabb({origin, direction}, range, wall);
@@ -42,9 +44,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     }
     for (const auto& player : players) {
         if (player.playerId == shooter.playerId || player.lifeState == LifeState::Dead) continue;
-        const Engine::Collision::VerticalCapsule capsule{
-            {player.position.x, player.position.y, player.position.z},
-            arena.bodyHeight, arena.radius};
+        const Engine::Collision::VerticalCapsule capsule{player.position, arena.bodyHeight, arena.radius};
         const auto distance = Engine::Collision::RaycastCapsule({origin, direction}, range, capsule);
         if (!distance) continue;
         if (*distance < closest.distance || (*distance == closest.distance &&

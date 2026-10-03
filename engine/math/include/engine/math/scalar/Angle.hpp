@@ -6,11 +6,13 @@
 
 namespace Engine::Math {
 
-[[nodiscard]] inline float DegreesToRadians(const float degrees) noexcept {
+// A single correctly rounded multiplication, so constant evaluation and run
+// time give the same bits; constexpr lets products declare angle constants.
+[[nodiscard]] constexpr float DegreesToRadians(const float degrees) noexcept {
     return degrees * (Pi / 180.0F);
 }
 
-[[nodiscard]] inline float RadiansToDegrees(const float radians) noexcept {
+[[nodiscard]] constexpr float RadiansToDegrees(const float radians) noexcept {
     return radians * (180.0F / Pi);
 }
 
