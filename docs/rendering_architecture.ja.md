@@ -80,7 +80,7 @@ flowchart TD
 
 | 項目 | 契約 |
 |---|---|
-| 座標 | 左手系、+Y が上、+Z が前。行列は row-major、ベクトルは row vector |
+| 座標 | 左手系、+Y が上、+Z が前（`GYO::Math` の規約）。CPU 側の行列は Math の契約に従い column-major・column vector（[math.md](architecture/math.md) 参照）。shader は同じ 16 個の float を `row_major float4x4` と `mul(float4(p, 1), M)` で読む。両者はバイト単位で同一で、アップロード時に転置しない |
 | 頂点 | `Vertex3D`：位置 float3、UV float2。順序と offset は固定 vertex layout で定義 |
 | 通常の vertex uniform | `worldViewProjection`：64 bytes、vertex ステージの論理 uniform スロット 0 |
 | 通常の fragment リソース | テクスチャと sampler が各 1 個、fragment ステージの論理スロット 0 |

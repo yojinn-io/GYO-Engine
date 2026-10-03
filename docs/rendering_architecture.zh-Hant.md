@@ -80,7 +80,7 @@ flowchart TD
 
 | 項目 | 契約 |
 |---|---|
-| 座標 | 左手系，+Y 向上，+Z 向前；矩陣以 row-major 儲存，使用 row vector |
+| 座標 | 左手系，+Y 向上，+Z 向前（`GYO::Math` 慣例）。CPU 端矩陣依 Math 契約：column-major 儲存、column vector（見 [math.md](architecture/math.md)）；shader 以 `row_major float4x4` 與 `mul(float4(p, 1), M)` 讀取同一組 16 個 float，兩種解讀的位元組完全相同，上傳時不轉置 |
 | 頂點 | `Vertex3D`：位置 float3、UV float2；順序及 offset 由固定 vertex layout 定義 |
 | 一般頂點 uniform | `worldViewProjection`：64 bytes，vertex 階段邏輯 uniform 槽 0 |
 | 一般 fragment 資源 | 一張貼圖與一個 sampler，fragment 階段邏輯槽 0 |

@@ -299,7 +299,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 ### B4b　Render 矩陣切換到 Math 慣例（xhigh；建議 ultracode 檢查）
 
 - **範圍**：`Renderer.cpp` 依上面的對照表改寫並加上 `ToShaderMatrix`；同步修改 `docs/rendering_architecture.{zh-Hant,ja}.md:83`。
-- **前置**：先在 B4b 開頭新增測試：把舊 `Renderer.cpp` 的矩陣碼凍結成 Legacy 版本，經 capture device 取得 VertexUniforms 後做 memcmp。輸入要涵蓋 sprite 的旋轉與非中心 pivot。
+- **前置**：先在 B4b 開頭新增測試：把舊 `Renderer.cpp` 的矩陣碼凍結成 Legacy 版本，經 capture device 取得 VertexUniforms 後做 memcmp。輸入要涵蓋 sprite 的旋轉與非中心 pivot。（實作：`tests/common/render/RendererTests.cpp` 的 5 個 byte-identical test case，見 HANDOFF B4b。）
   - 兩邊的輸入都必須是執行期資料（例如經 opaque 函式或檔案供給）。clang 最佳化時可能用 fused 捨入做常數摺疊，即使在 x86_64 上也一樣。
   - WVP 的結合方式必須維持 `Multiply(Multiply(Proj, View), World)`（對應舊的 `World·(View·Proj)`）。B1 量到改成 `Multiply(Proj, Multiply(View, World))` 會改變位元。
 - **驗收**：

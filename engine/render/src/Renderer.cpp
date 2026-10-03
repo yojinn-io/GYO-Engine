@@ -2,6 +2,7 @@
 #include "render/ShaderAbi.hpp"
 #include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/scalar/ColorSpace.hpp"
 #include <algorithm>
 #include <array>
@@ -11,118 +12,48 @@
 #include <map>
 #include <numbers>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 namespace Engine::Render {
 namespace {
 using namespace ShaderAbi;
-[[nodiscard]] Matrix4 Identity() noexcept {
-    Matrix4 result{};
-    result.values[0][0] = 1.0F;
-    result.values[1][1] = 1.0F;
-    result.values[2][2] = 1.0F;
-    result.values[3][3] = 1.0F;
+// Matrices follow the Engine::Math convention: column-major storage, column
+// vectors, Multiply(a, b) applies b first. Shaders read the same 16 floats as
+// row_major float4x4 with mul(float4(p, 1), M), so uploads copy them in order
+// (ToShaderMatrix) without a transpose. Each chain below is the mirror of the
+// former row-vector product and is byte-identical to it (RendererMatrixTests).
+
+[[nodiscard]] Matrix4 ToShaderMatrix(const Math::Matrix4& matrix) noexcept {
+    static_assert(sizeof(Matrix4) == sizeof(matrix.values));
+    static_assert(std::is_trivially_copyable_v<Matrix4> && std::is_trivially_copyable_v<Math::Matrix4>);
+    Matrix4 result;
+    std::memcpy(&result.values, matrix.values.data(), sizeof(result.values));
     return result;
 }
 
-[[nodiscard]] Matrix4 Multiply(const Matrix4& left, const Matrix4& right) noexcept {
-    Matrix4 result{};
-    for (std::size_t row = 0; row < 4; ++row) {
-        for (std::size_t column = 0; column < 4; ++column) {
-            for (std::size_t inner = 0; inner < 4; ++inner) {
-                result.values[row][column] +=
-                    left.values[row][inner] * right.values[inner][column];
-            }
-        }
-    }
-    return result;
+[[nodiscard]] Math::Matrix4 WorldMatrix(const Transform3D& transform) noexcept {
+    return Math::ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale);
 }
 
-[[nodiscard]] Matrix4 Translation(Math::Vec3 value) noexcept {
-    Matrix4 result = Identity();
-    result.values[3][0] = value.x;
-    result.values[3][1] = value.y;
-    result.values[3][2] = value.z;
-    return result;
-}
-
-[[nodiscard]] Matrix4 Scale(Math::Vec3 value) noexcept {
-    Matrix4 result = Identity();
-    result.values[0][0] = value.x;
-    result.values[1][1] = value.y;
-    result.values[2][2] = value.z;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationX(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[1][1] = cosine;
-    result.values[1][2] = sine;
-    result.values[2][1] = -sine;
-    result.values[2][2] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationY(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[0][0] = cosine;
-    result.values[0][2] = -sine;
-    result.values[2][0] = sine;
-    result.values[2][2] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 RotationZ(float radians) noexcept {
-    Matrix4 result = Identity();
-    const float cosine = std::cos(radians);
-    const float sine = std::sin(radians);
-    result.values[0][0] = cosine;
-    result.values[0][1] = sine;
-    result.values[1][0] = -sine;
-    result.values[1][1] = cosine;
-    return result;
-}
-
-[[nodiscard]] Matrix4 WorldMatrix(const Transform3D& transform) noexcept {
-    Matrix4 result = Scale(transform.scale);
-    result = Multiply(result, RotationX(transform.rotationRadians.x));
-    result = Multiply(result, RotationY(transform.rotationRadians.y));
-    result = Multiply(result, RotationZ(transform.rotationRadians.z));
-    return Multiply(result, Translation(transform.translation));
-}
-
-[[nodiscard]] Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
-    Matrix4 result = Translation({
+[[nodiscard]] Math::Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
+    Math::Matrix4 result = Math::MakeTranslation({
         -camera.position.x,
         -camera.position.y,
         -camera.position.z,
     });
-    result = Multiply(result, RotationZ(-camera.rotationRadians.z));
-    result = Multiply(result, RotationY(-camera.rotationRadians.y));
-    return Multiply(result, RotationX(-camera.rotationRadians.x));
+    result = Math::Multiply(Math::MakeRotationZ(-camera.rotationRadians.z), result);
+    result = Math::Multiply(Math::MakeRotationY(-camera.rotationRadians.y), result);
+    return Math::Multiply(Math::MakeRotationX(-camera.rotationRadians.x), result);
 }
 
-[[nodiscard]] Matrix4 ProjectionMatrix(
+[[nodiscard]] Math::Matrix4 ProjectionMatrix(
     const PerspectiveCamera3D& camera,
     float aspectRatio) noexcept {
-    Matrix4 result{};
-    const float yScale = 1.0F /
-                         std::tan(camera.verticalFieldOfViewRadians * 0.5F);
-    const float xScale = yScale / aspectRatio;
-    const float depthRange = camera.farClip - camera.nearClip;
-    result.values[0][0] = xScale;
-    result.values[1][1] = yScale;
-    result.values[2][2] = camera.farClip / depthRange;
-    result.values[2][3] = 1.0F;
-    result.values[3][2] =
-        -(camera.nearClip * camera.farClip) / depthRange;
-    return result;
+    return Math::MakePerspective(camera.verticalFieldOfViewRadians, aspectRatio,
+                                 camera.nearClip, camera.farClip);
 }
 
-[[nodiscard]] Matrix4 SpriteWorldMatrix(
+[[nodiscard]] Math::Matrix4 SpriteWorldMatrix(
     const SpriteSubmission& sprite) noexcept {
     const Math::Vec3 localPivotTranslation{
         0.5F - sprite.pivotNormalized.x,
@@ -137,25 +68,14 @@ using namespace ShaderAbi;
         0.0F,
     };
 
-    Matrix4 result = Translation(localPivotTranslation);
-    result = Multiply(result, Scale({
+    Math::Matrix4 result = Math::MakeTranslation(localPivotTranslation);
+    result = Math::Multiply(Math::MakeScale({
         sprite.destinationPixels.width,
         sprite.destinationPixels.height,
         1.0F,
-    }));
-    result = Multiply(result, RotationZ(sprite.rotationRadians));
-    return Multiply(result, Translation(anchor));
-}
-
-[[nodiscard]] Matrix4 PixelProjection(float width, float height) noexcept {
-    Matrix4 result{};
-    result.values[0][0] = 2.0F / width;
-    result.values[1][1] = -2.0F / height;
-    result.values[2][2] = 1.0F;
-    result.values[3][0] = -1.0F;
-    result.values[3][1] = 1.0F;
-    result.values[3][3] = 1.0F;
-    return result;
+    }), result);
+    result = Math::Multiply(Math::MakeRotationZ(sprite.rotationRadians), result);
+    return Math::Multiply(Math::MakeTranslation(anchor), result);
 }
 
 [[nodiscard]] bool IsFinite(float value) noexcept {
@@ -291,19 +211,20 @@ struct Renderer::Impl final {
         return Result::Ok();
     }
     PreparedDraw Draw(const MaterialDesc& material, MeshHandle mesh, PipelineHandle pipeline,
-                      const Matrix4& matrix, UvTransform uv, float cutoff) const {
+                      const Math::Matrix4& matrix, UvTransform uv, float cutoff) const {
         PreparedDraw draw;
         draw.pipeline = pipeline; draw.mesh = mesh;
         draw.fragmentTextures.push_back({material.texture ? material.texture : white, material.sampler});
-        draw.vertexUniforms.push_back(Bytes(VertexUniforms{matrix}));
+        draw.vertexUniforms.push_back(Bytes(VertexUniforms{ToShaderMatrix(matrix)}));
         draw.fragmentUniforms.push_back(Bytes(MakeFragmentUniforms(material.tint, uv, cutoff)));
         return draw;
     }
     Base::Result<void, RenderError> Meshes(PreparedPass& pass, const RenderQueue& queue,
         MeshLayer layer, const PerspectiveCamera3D& camera) {
         using Result = Base::Result<void, RenderError>;
-        const Matrix4 viewProjection = Multiply(ViewMatrix(camera),
-            ProjectionMatrix(camera, static_cast<float>(width) / static_cast<float>(height)));
+        // (Projection * View) * World, mirroring the former World * (View * Projection).
+        const Math::Matrix4 viewProjection = Math::Multiply(
+            ProjectionMatrix(camera, static_cast<float>(width) / static_cast<float>(height)), ViewMatrix(camera));
         for (const auto& mesh : queue.Meshes()) {
             if (mesh.layer != layer) continue;
             const bool sky = mesh.surface == SurfaceMode::Sky;
@@ -314,21 +235,22 @@ struct Renderer::Impl final {
                 cull, masked, !overlay, !overlay && !sky);
             if (!pipeline) return Result::Err(pipeline.error());
             pass.draws.push_back(Draw(mesh.material, mesh.mesh, pipeline.value(),
-                Multiply(WorldMatrix(mesh.transform), viewProjection), mesh.uv, masked ? 0.01F : -1.0F));
+                Math::Multiply(viewProjection, WorldMatrix(mesh.transform)), mesh.uv, masked ? 0.01F : -1.0F));
         }
         return Result::Ok();
     }
     Base::Result<void, RenderError> Sprites(PreparedPass& pass, const RenderQueue& queue,
         CompositeLayer layer, TextureFormat target) {
         using Result = Base::Result<void, RenderError>;
-        const Matrix4 projection = PixelProjection(static_cast<float>(width), static_cast<float>(height));
+        const Math::Matrix4 projection =
+            Math::MakeOrthographicPixels(static_cast<float>(width), static_cast<float>(height));
         for (const auto& sprite : queue.Sprites()) {
             if (sprite.layer != layer || sprite.destinationPixels.width == 0 ||
                 sprite.destinationPixels.height == 0 || sprite.sourceUv.width == 0 || sprite.sourceUv.height == 0) continue;
             auto pipeline = Pipeline(sprite.material.shader, target, CullMode::None, true, false, false);
             if (!pipeline) return Result::Err(pipeline.error());
             pass.draws.push_back(Draw(sprite.material, quad, pipeline.value(),
-                Multiply(SpriteWorldMatrix(sprite), projection), MakeSpriteUvTransform(sprite.sourceUv), -1.0F));
+                Math::Multiply(projection, SpriteWorldMatrix(sprite)), MakeSpriteUvTransform(sprite.sourceUv), -1.0F));
         }
         return Result::Ok();
     }

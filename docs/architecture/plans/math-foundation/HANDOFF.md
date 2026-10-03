@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19）、B3（#20，合併為 `14a32ac`）已合併。B4a 本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI 四平台。**
+更新：2026-10-03。**B0–B4a 已合併（B4a 為 #21，合併為 `ed7a08a`）。B4b 本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -30,6 +30,7 @@
 | 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
 | 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
 | 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
+| 2026-10-03 | 本計劃全程使用 ultracode（盤點、實作、驗證、審查都以多 agent workflow 進行）：這是底層概念模型的變更，且已有大量實作依賴它 | 使用者（B4b 進行中） |
 | 2026-10-03 | Collision 的 raycast 改為接收 `Math::Ray`（Ray 是幾何 primitive，`RaycastAabb`／`RaycastCapsule` 是 Collision 演算法） | 使用者 |
 | 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
 | 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
@@ -226,7 +227,7 @@
 
 ## B4a Render 型別與 helper
 
-狀態：**本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI 四平台**（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。
+狀態：**完成**。PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 於 2026-10-03 合併為 `ed7a08a`；最終 head `d78b17c` 的 CI 四平台全部通過。
 
 ### 變更
 
@@ -269,6 +270,35 @@
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 依賴圖 | 與 B3 相比只多 `gyo_render → gyo_math` |
 | 對抗式審查 | 2 個 minor：溢位造成 Ok 加 NaN（已修正），文件未更新（本節） |
+
+## B4b Render 矩陣切換到 Math 慣例
+
+狀態：**本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台**（分支 `claude/math-foundation-b4b`，自 master `ed7a08a`）。
+
+### 變更
+
+- `Renderer.cpp`：
+  - 刪除私有的 row-major／row-vector 矩陣 helper（`Identity`、`Multiply`、`Translation`、`Scale`、`RotationX/Y/Z`、`PixelProjection`）。
+  - `WorldMatrix` 改用 `Math::ComposeEulerXYZ`；`ViewMatrix`、`SpriteWorldMatrix` 依 PLAN 對照表改為 column-vector 的鏡像鏈；`ProjectionMatrix` 改用 `Math::MakePerspective`；sprite 投影改用 `Math::MakeOrthographicPixels`。
+  - mesh 的 WVP 為 `Multiply(Multiply(Proj, View), World)`，對應舊的 `World·(View·Proj)`，結合方式不變；sprite 為 `Multiply(PixelProj, SpriteWorld)`。
+  - 新增 `ToShaderMatrix`：把 Math 的 16 個 float 依序 memcpy 到 `ShaderAbi::Matrix4`，不轉置；以 static_assert 鎖住大小與 trivially copyable。
+  - `ShaderAbi`、HLSL、shader pipeline 都沒有修改。
+- `tests/common/render/RendererTests.cpp`：新增 5 個 memcmp test case（World、WorldOverlay、ViewModel 三種 mesh 圖層，Scene、Overlay 兩種 sprite 圖層，各 40 幀 × 50 筆，執行期隨機輸入、隨機視窗尺寸）。
+  - 凍結 master `ed7a08a` 的舊矩陣碼為 `Legacy`，逐筆比對每個 draw 上傳的 64 位元組 uniform。
+  - 測試先在未修改的 Renderer 上通過，再於改寫後通過。
+  - 依 PLAN D14 永久保留，作為 Renderer 矩陣的回歸測試；重用檔案內既有的 `Library()` 與 `Device` 測試替身。
+- 文件：`rendering_architecture.zh-Hant.md`、`.ja.md` 的座標列改寫為 Math 慣例與 GPU 讀法（位元組相同、不轉置）。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| memcmp | 改寫前後都通過；20410 個斷言逐位元相同，數值漂移為 0 |
+| 靈敏度檢查 | 8 種刻意改動全部被偵測，包括數學上等價的 WVP 重新結合，以及只差 1 ulp 的 `xScale` 算法；每種改動只讓它碰到的路徑失敗 |
+| core preset | 19／19 通過 |
+| test preset | 45／45 通過（含 pvp 的 `presentation_evidence` 與本機 metal 的 sdl_gpu smoke） |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 對抗式審查 | 3 個 minor：Legacy 來源標註錯誤（已更正）、測試替身重複（併入 `RendererTests.cpp` 重用）、文件未更新（本節）。審查者也以 flat index 對應逐項證明了各鏡像鏈逐位元相同 |
 
 ## 未結事項
 

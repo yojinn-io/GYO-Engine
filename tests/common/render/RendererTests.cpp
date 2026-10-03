@@ -1,6 +1,11 @@
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>
 #include <array>
+#include <vector>
+#include <string>
+#include <numbers>
+#include <cstdint>
+#include <cmath>
 #include <cstring>
 #include <map>
 #include <unordered_set>
@@ -203,5 +208,362 @@ TEST_CASE("Renderer resize replaces targets without replacing cached shader and 
 TEST_CASE("Renderer requires complete builtins before allocating resources") {
     auto library=Library(false); Device device; Renderer renderer;
     CHECK_FALSE(renderer.Initialize(device,library)); CHECK(device.textures.empty()); CHECK(device.meshes.empty());
+}
+
+// Characterization of the uploaded world-view-projection uniforms. The renderer
+// moved from its own row-major, row-vector matrix code to Engine::Math's
+// column-major, column-vector convention; the 16 floats sent to the GPU must
+// stay byte-identical. Namespace Legacy freezes the former code verbatim
+// (engine/render/src/Renderer.cpp:18-158 and the WVP composition at :305-331
+// at ed7a08a, the master before B4b; Matrix4 mirrors ShaderAbi.hpp:5) as the
+// reference. Inputs come from a runtime seed so no expression is constant-folded.
+namespace Legacy {
+
+struct Matrix4 final {
+    float values[4][4]{};
+};
+
+[[nodiscard]] Matrix4 Identity() noexcept {
+    Matrix4 result{};
+    result.values[0][0] = 1.0F;
+    result.values[1][1] = 1.0F;
+    result.values[2][2] = 1.0F;
+    result.values[3][3] = 1.0F;
+    return result;
+}
+
+[[nodiscard]] Matrix4 Multiply(const Matrix4& left, const Matrix4& right) noexcept {
+    Matrix4 result{};
+    for (std::size_t row = 0; row < 4; ++row) {
+        for (std::size_t column = 0; column < 4; ++column) {
+            for (std::size_t inner = 0; inner < 4; ++inner) {
+                result.values[row][column] +=
+                    left.values[row][inner] * right.values[inner][column];
+            }
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] Matrix4 Translation(Math::Vec3 value) noexcept {
+    Matrix4 result = Identity();
+    result.values[3][0] = value.x;
+    result.values[3][1] = value.y;
+    result.values[3][2] = value.z;
+    return result;
+}
+
+[[nodiscard]] Matrix4 Scale(Math::Vec3 value) noexcept {
+    Matrix4 result = Identity();
+    result.values[0][0] = value.x;
+    result.values[1][1] = value.y;
+    result.values[2][2] = value.z;
+    return result;
+}
+
+[[nodiscard]] Matrix4 RotationX(float radians) noexcept {
+    Matrix4 result = Identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    result.values[1][1] = cosine;
+    result.values[1][2] = sine;
+    result.values[2][1] = -sine;
+    result.values[2][2] = cosine;
+    return result;
+}
+
+[[nodiscard]] Matrix4 RotationY(float radians) noexcept {
+    Matrix4 result = Identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    result.values[0][0] = cosine;
+    result.values[0][2] = -sine;
+    result.values[2][0] = sine;
+    result.values[2][2] = cosine;
+    return result;
+}
+
+[[nodiscard]] Matrix4 RotationZ(float radians) noexcept {
+    Matrix4 result = Identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    result.values[0][0] = cosine;
+    result.values[0][1] = sine;
+    result.values[1][0] = -sine;
+    result.values[1][1] = cosine;
+    return result;
+}
+
+[[nodiscard]] Matrix4 WorldMatrix(const Transform3D& transform) noexcept {
+    Matrix4 result = Scale(transform.scale);
+    result = Multiply(result, RotationX(transform.rotationRadians.x));
+    result = Multiply(result, RotationY(transform.rotationRadians.y));
+    result = Multiply(result, RotationZ(transform.rotationRadians.z));
+    return Multiply(result, Translation(transform.translation));
+}
+
+[[nodiscard]] Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
+    Matrix4 result = Translation({
+        -camera.position.x,
+        -camera.position.y,
+        -camera.position.z,
+    });
+    result = Multiply(result, RotationZ(-camera.rotationRadians.z));
+    result = Multiply(result, RotationY(-camera.rotationRadians.y));
+    return Multiply(result, RotationX(-camera.rotationRadians.x));
+}
+
+[[nodiscard]] Matrix4 ProjectionMatrix(
+    const PerspectiveCamera3D& camera,
+    float aspectRatio) noexcept {
+    Matrix4 result{};
+    const float yScale = 1.0F /
+                         std::tan(camera.verticalFieldOfViewRadians * 0.5F);
+    const float xScale = yScale / aspectRatio;
+    const float depthRange = camera.farClip - camera.nearClip;
+    result.values[0][0] = xScale;
+    result.values[1][1] = yScale;
+    result.values[2][2] = camera.farClip / depthRange;
+    result.values[2][3] = 1.0F;
+    result.values[3][2] =
+        -(camera.nearClip * camera.farClip) / depthRange;
+    return result;
+}
+
+[[nodiscard]] Matrix4 SpriteWorldMatrix(
+    const SpriteSubmission& sprite) noexcept {
+    const Math::Vec3 localPivotTranslation{
+        0.5F - sprite.pivotNormalized.x,
+        0.5F - sprite.pivotNormalized.y,
+        0.0F,
+    };
+    const Math::Vec3 anchor{
+        sprite.destinationPixels.x +
+            sprite.pivotNormalized.x * sprite.destinationPixels.width,
+        sprite.destinationPixels.y +
+            sprite.pivotNormalized.y * sprite.destinationPixels.height,
+        0.0F,
+    };
+
+    Matrix4 result = Translation(localPivotTranslation);
+    result = Multiply(result, Scale({
+        sprite.destinationPixels.width,
+        sprite.destinationPixels.height,
+        1.0F,
+    }));
+    result = Multiply(result, RotationZ(sprite.rotationRadians));
+    return Multiply(result, Translation(anchor));
+}
+
+[[nodiscard]] Matrix4 PixelProjection(float width, float height) noexcept {
+    Matrix4 result{};
+    result.values[0][0] = 2.0F / width;
+    result.values[1][1] = -2.0F / height;
+    result.values[2][2] = 1.0F;
+    result.values[3][0] = -1.0F;
+    result.values[3][1] = 1.0F;
+    result.values[3][3] = 1.0F;
+    return result;
+}
+
+// Renderer.cpp:305-306 and :317 at master: World * (View * Projection).
+[[nodiscard]] Matrix4 MeshUniform(const Transform3D& transform, const PerspectiveCamera3D& camera,
+                                  float width, float height) noexcept {
+    const Matrix4 viewProjection = Multiply(ViewMatrix(camera), ProjectionMatrix(camera, width / height));
+    return Multiply(WorldMatrix(transform), viewProjection);
+}
+
+// Renderer.cpp:324 and :331 at master: SpriteWorld * PixelProjection.
+[[nodiscard]] Matrix4 SpriteUniform(const SpriteSubmission& sprite, float width, float height) noexcept {
+    return Multiply(SpriteWorldMatrix(sprite), PixelProjection(width, height));
+}
+
+} // namespace Legacy
+
+static_assert(sizeof(Legacy::Matrix4) == sizeof(ShaderAbi::VertexUniforms));
+
+// Runtime seed: a volatile read keeps every generated input opaque to the optimizer.
+volatile std::uint32_t gSeed = 0xB4B5EEDU;
+
+class Lcg final {
+public:
+    explicit Lcg(std::uint32_t seed) : state_(seed) {}
+    float Range(float lo, float hi) {
+        state_ = state_ * 1664525U + 1013904223U;
+        const float unit = static_cast<float>(state_ >> 8U) / 16777216.0F;
+        return lo + (hi - lo) * unit;
+    }
+    std::uint32_t Next() {
+        state_ = state_ * 1664525U + 1013904223U;
+        return state_;
+    }
+
+private:
+    std::uint32_t state_;
+};
+
+float Angle(Lcg& random) {
+    // Mix ordinary angles with exact multiples of pi/2, pi and large values.
+    switch (random.Next() % 6U) {
+    case 0: return 0.0F;
+    case 1: return std::numbers::pi_v<float> * static_cast<float>(static_cast<int>(random.Next() % 5U) - 2) * 0.5F;
+    case 2: return random.Range(-100.0F, 100.0F);
+    default: return random.Range(-7.0F, 7.0F);
+    }
+}
+
+Math::Vec3 Vector(Lcg& random, float lo, float hi) {
+    const float x = random.Range(lo, hi);
+    const float y = random.Range(lo, hi);
+    const float z = random.Range(lo, hi);
+    return {x, y, z};
+}
+
+Transform3D RandomTransform(Lcg& random) {
+    Transform3D transform;
+    transform.translation = Vector(random, -50.0F, 50.0F);
+    const float rx = Angle(random);
+    const float ry = Angle(random);
+    const float rz = Angle(random);
+    transform.rotationRadians = {rx, ry, rz};
+    transform.scale = Vector(random, 0.01F, 5.0F);
+    if (random.Next() % 4U == 0) transform.scale.x = -transform.scale.x;
+    return transform;
+}
+
+PerspectiveCamera3D RandomCamera(Lcg& random) {
+    PerspectiveCamera3D camera;
+    camera.position = Vector(random, -20.0F, 20.0F);
+    const float rx = Angle(random);
+    const float ry = Angle(random);
+    const float rz = Angle(random);
+    camera.rotationRadians = {rx, ry, rz};
+    camera.verticalFieldOfViewRadians = random.Range(0.2F, 2.8F);
+    camera.nearClip = random.Next() % 3U == 0 ? 1.0e-4F : random.Range(0.01F, 1.0F);
+    camera.farClip = camera.nearClip + random.Range(1.0F, 5000.0F);
+    return camera;
+}
+
+SpriteSubmission RandomSprite(Lcg& random, CompositeLayer layer) {
+    SpriteSubmission sprite;
+    const float x = random.Range(-500.0F, 2000.0F);
+    const float y = random.Range(-500.0F, 2000.0F);
+    const float width = random.Range(0.5F, 900.0F);
+    const float height = random.Range(0.5F, 900.0F);
+    sprite.destinationPixels = {x, y, width, height};
+    const float pivotX = random.Next() % 3U == 0 ? 0.5F : random.Range(-0.5F, 1.5F);
+    const float pivotY = random.Next() % 3U == 0 ? 0.5F : random.Range(-0.5F, 1.5F);
+    sprite.pivotNormalized = {pivotX, pivotY};
+    sprite.rotationRadians = Angle(random);
+    sprite.layer = layer;
+    return sprite;
+}
+
+// Vertex uniform blocks of every draw, in pass and draw order.
+std::vector<std::vector<std::byte>> UploadedMatrices(const PreparedFrame& frame) {
+    std::vector<std::vector<std::byte>> result;
+    for (const auto& pass : frame.passes) {
+        for (const auto& draw : pass.draws) {
+            if (!draw.vertexUniforms.empty()) result.push_back(draw.vertexUniforms[0]);
+        }
+    }
+    return result;
+}
+
+void CheckSameBytes(const std::vector<std::byte>& uploaded, const Legacy::Matrix4& expected, std::size_t index) {
+    REQUIRE(uploaded.size() == sizeof(expected));
+    if (std::memcmp(uploaded.data(), &expected, sizeof(expected)) != 0) {
+        std::array<float, 16> actual{};
+        std::memcpy(actual.data(), uploaded.data(), sizeof(actual));
+        for (std::size_t element = 0; element < 16; ++element) {
+            CAPTURE(index);
+            CAPTURE(element);
+            CHECK(std::memcmp(&actual[element], &expected.values[element / 4][element % 4], sizeof(float)) == 0);
+        }
+    }
+}
+
+void CheckMeshLayer(MeshLayer layer, std::uint32_t seedOffset) {
+    auto library = Library();
+    Device device;
+    Renderer renderer;
+    REQUIRE(renderer.Initialize(device, library));
+    Lcg random{gSeed + seedOffset};
+    for (int frame = 0; frame < 40; ++frame) {
+        device.width = 16U + random.Next() % 2400U;
+        device.height = 16U + random.Next() % 1600U;
+        const PerspectiveCamera3D camera = RandomCamera(random);
+        const PerspectiveCamera3D viewModelCamera = RandomCamera(random);
+        RenderQueue queue;
+        queue.SetCamera(camera);
+        queue.SetViewModelCamera(viewModelCamera);
+        std::vector<Transform3D> transforms;
+        for (int index = 0; index < 50; ++index) {
+            MeshSubmission mesh;
+            mesh.mesh = MeshHandle::FromParts(99, 1);
+            mesh.transform = RandomTransform(random);
+            mesh.layer = layer;
+            REQUIRE(queue.Submit(mesh));
+            transforms.push_back(mesh.transform);
+        }
+        REQUIRE(renderer.Render(queue));
+        const auto uploaded = UploadedMatrices(device.captured);
+        REQUIRE(uploaded.size() == transforms.size());
+        const PerspectiveCamera3D& used = layer == MeshLayer::ViewModel ? viewModelCamera : camera;
+        for (std::size_t index = 0; index < transforms.size(); ++index) {
+            CheckSameBytes(uploaded[index],
+                Legacy::MeshUniform(transforms[index], used, static_cast<float>(device.width),
+                                    static_cast<float>(device.height)),
+                index);
+        }
+    }
+}
+
+void CheckSpriteLayer(CompositeLayer layer, std::uint32_t seedOffset) {
+    auto library = Library();
+    Device device;
+    Renderer renderer;
+    REQUIRE(renderer.Initialize(device, library));
+    Lcg random{gSeed + seedOffset};
+    for (int frame = 0; frame < 40; ++frame) {
+        device.width = 16U + random.Next() % 2400U;
+        device.height = 16U + random.Next() % 1600U;
+        RenderQueue queue;
+        std::vector<SpriteSubmission> sprites;
+        for (int index = 0; index < 50; ++index) {
+            const SpriteSubmission sprite = RandomSprite(random, layer);
+            REQUIRE(queue.Submit(sprite));
+            sprites.push_back(sprite);
+        }
+        REQUIRE(renderer.Render(queue));
+        const auto uploaded = UploadedMatrices(device.captured);
+        REQUIRE(uploaded.size() == sprites.size());
+        for (std::size_t index = 0; index < sprites.size(); ++index) {
+            CheckSameBytes(uploaded[index],
+                Legacy::SpriteUniform(sprites[index], static_cast<float>(device.width),
+                                      static_cast<float>(device.height)),
+                index);
+        }
+    }
+}
+
+TEST_CASE("World mesh uniforms are byte-identical to the frozen row-vector renderer") {
+    CheckMeshLayer(MeshLayer::World, 1U);
+}
+
+TEST_CASE("WorldOverlay mesh uniforms are byte-identical to the frozen row-vector renderer") {
+    CheckMeshLayer(MeshLayer::WorldOverlay, 2U);
+}
+
+TEST_CASE("ViewModel mesh uniforms are byte-identical to the frozen row-vector renderer") {
+    CheckMeshLayer(MeshLayer::ViewModel, 3U);
+}
+
+TEST_CASE("Scene sprite uniforms are byte-identical to the frozen row-vector renderer") {
+    CheckSpriteLayer(CompositeLayer::Scene, 4U);
+}
+
+TEST_CASE("Overlay sprite uniforms are byte-identical to the frozen row-vector renderer") {
+    CheckSpriteLayer(CompositeLayer::Overlay, 5U);
 }
 } // namespace
