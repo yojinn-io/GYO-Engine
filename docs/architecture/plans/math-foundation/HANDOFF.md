@@ -504,12 +504,68 @@
 
 ## B6c pvp 未編譯的 29 個檔案
 
-狀態：**進行中**（2026-10-04 開始，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
+狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
 
 ### 進行方式（ultracode）
 
 1. 盤點（B6b 驗證期間進行）：2 個 agent 依目錄分擔 29 個檔案與只有它們使用的 header，再由 1 個 agent 檢查遺漏。
+2. 這些檔案不在任何 target 中，無法執行。驗證方式：
+   - 逐檔 syntax-only；
+   - 1 個 agent 把每個改動的新舊寫法抽到 scratch，以執行期輸入比對；
+   - 1 個 agent 做對抗式審查。
+
+### 變更
+
+- **GameSession**：
+  - `AddScaled`、`Subtract` 刪除，改用 Vec3 運算子；muzzle 的偏移鏈維持 z、x、y 的加法順序。
+  - 相機基底 `MakeViewBasis` 改為由 renderer 的方向契約求得：`ComposeEulerXYZ({}, {pitch, yaw, 0}, 1)` 的三個軸。
+  - FOV 預設值 `pi/3` 改為 `DegreesToRadians(60.0F)`（同一個 float）；float 的 min／max 改用 Math；距離判斷改用 `Distance`。
+- **ProjectileSystem**：`AddScaled` 刪除；向量運算與 min／max 改用 Math；`NormalizeOrThrow` 保留（會 throw 的驗證，Math 沒有對應）。
+- **CombatCollision**：
+  - `AddScaled` 與 identity 的 `ToCollision(Vec3)` 刪除（產品 `VerticalCapsule` 的轉換保留）。
+  - 地板命中改為在產品的條件內呼叫 `Intersect(Ray, Plane{{0,1,0}, sweepRadius})`。
+- **EnemyRig**：骨骼的世界座標改為 `TransformPoint(ComposeEulerXYZ({x, 0, z}, {0, yaw, 0}, scale), p - anchor)`，即 `EnemyPresentation` 提交給 renderer 的契約（與 B6b 的第三人稱武器相同）。
+- **EnemySystem**：
+  - 兩處水平長度的 `std::hypot` 改為 `Length(Vec3{dx, 0, dz})`（B6a 的 CharacterCollision 先例），近戰命中點改用 `Lerp`；float 的 min／max 與 `IsFinite` 改用 Math；identity 拷貝刪除。
+  - `GroundPoint` 的 helper（`IsFinite`、`Distance`、`SurfaceDistance`、格子的線段檢查）留在產品：Math 沒有 XZ 型別。
+- **EnemyPresentationDefinition**：武器四元數比照 B6b 的 mount（`Math::Normalize` 與 float 的 `LengthSquared` 驗證）；min／max 與 `IsFinite` 改用 Math。
+- **其餘**：
+  - `Player`（`RadiansToDegrees`）、`PlayerController`（`WrapRadians`、`DegreesToRadians`、`Clamp`）、`PlayerCombatState`、`WeaponController`、`ObjectFpsUi` 的 float clamp／min／max。
+  - `CampaignContent`（`IsFinite`）、`MapGeometryGenerator`（`Pi`／`HalfPi`）、`ObjectFpsPresentation`（identity 拷貝與淡出的 `Clamp`）、`EnemyPresentation`（`-anchor` 與 identity 拷貝）。
+- **保留**：
+  - double 與整數的 min／max／clamp；遊戲規則與容差；淡入淡出的 smoothstep；`GroundPoint` 的 XZ 運算。
+  - **B7 稽核例外**：`EnemySystem.cpp` 的 `IsFinite(GroundPoint)`、`Distance(GroundPoint)`（產品語義型別 `GroundPoint` 的 helper），以及 `ProjectileSystem.cpp` 的 `NormalizeOrThrow`（會 throw 的驗證，Math 沒有對應）。
+  - `MapGeometryGenerator` 的牆面法線常數：用旋轉求得會帶入 `cos(π/2)` 的捨入雜訊，所以維持字面值。
+
+### 數值（這些檔案不會執行，以 scratch 抽出的新舊寫法實測）
+
+- **逐位元相同**：56 個比對項目中有 51 個逐位元相同，包括 NaN payload、例外判定與回傳值。每項以 100 萬到 43 億筆執行期輸入比對；`WrapRadians`、`DegreesToRadians`、`RadiansToDegrees` 窮舉了全部 2³² 個 float。
+- **漂移與邊緣差異**（5 項，都在預期內）：
+  - **相機基底**：非零分量完全相同；只在 yaw 或 pitch 恰為 ±0 時，零的正負號可能不同（例如出生時的 `forward.y`）。yaw 或 pitch 非有限時，新寫法九個分量都是 NaN。遊戲中角度一律有限。端到端（射擊、muzzle、tracer）只有零號差異，命中結果相同。
+  - **EnemyRig**：y 相同；x、z 在位置量級主導時最多差 2 ulp（結果跨 2 的冪次時），99.9% 在 1 ulp 內；原點附近最多約 4 ulp（相對於位置與縮放後偏移中較大者）；±60 m 內絕對差最多 7.6e-6 m。yaw 非有限時 y 也變成 NaN（原本有限），遊戲中 yaw 來自有限值的 `atan2`。
+  - **水平長度**（`hypot` 改為 `Length`）：實際範圍內最多 1 ulp，判定不變；極端值（約 1.8e19 以上或 1e-19 以下）會上溢或下溢；牆面恰好落在 muzzle 距離上時，1 ulp 可能翻轉遮擋判定（極端輸入 100 萬筆中 7 筆，實際範圍 0 筆）。
+  - **地板命中**：只有 `sweepRadius` 與 `origin.y` 都是 -0 時，距離與命中點 y 的零號不同；沒有呼叫者傳入 -0。
+  - **敵人武器四元數**：最多 3 ulp；正式內容（object_fps_pvp 與 object_fps_v2 的 `ranged.enemy.json`）逐位元相同；平方和超出 float 範圍的內容改為拒絕；門檻上的翻轉只有「原本拒絕、現在接受」一個方向。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| test preset | 46／46 通過（已編譯的程式沒有變動） |
+| 新舊寫法比對 | 見上節（scratch，Apple clang x86_64，-O2 與 -O0 相同） |
+| 對抗式審查 | 沒有推翻正確性。1 個 minor：保留的 `IsFinite(GroundPoint)` 未登記為 B7 稽核例外，已在本節與 PLAN 登記；2 個 nit：變更清單的 `CampaignContent` 寫錯、EnemyRig 漂移的描述太樂觀，都已更正 |
+| CI 四平台 | 待 PR |
+
+### Architecture Delta
+
+- 沒有。只改 `object_fps_pvp` 未編譯檔案內部的計算；不改 CMake、依賴或 target。
+
+### 範圍外，只回報
+
+- `GroundPoint` 的有限性檢查在 `EnemySystem`、`GridCollision`、`GridMap` 各寫一份；格子線段檢查在 `GameSession` 與 `EnemySystem` 各一份。屬於產品內部的重複，不是 Math 的範圍。
+- `EnemyPresentationDefinition.cpp:160` 接受的攻擊 clip 長度上限是 `attackInterval + 1e-5`，`EnemySystem.cpp` 的驗證是 `+ 1e-6`；落在兩者之間的內容能載入，但會在 `EnemySystem` 驗證時失敗。
 
 ## 未結事項
 
-- B6c 進行中；B7（收尾）。B6a（#24）、B6b（#25）待使用者合併。
+- B6c 本機驗收完成；B7（收尾）。B6a（#24）、B6b（#25）待使用者合併。
