@@ -367,7 +367,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - 公共層沒有出現產品名稱。
 - **未啟用產品的破損盤點**：
   - 在 scratch registry 中啟用 object_fps 和 object_fps_v2，並設定 `GYO_OUTPUT_ROOT=<scratchpad>`。
-  - 用 `ninja -k 0` 建置，逐 TU 收集錯誤，記錄到 HANDOFF，作為將來重新啟用時的遷移清單。repo 不變。
+  - 用 `ninja -k 0` 建置，逐 TU 收集錯誤，記錄到 HANDOFF，作為將來重新啟用時的遷移清單。repo 不變。（B7：篇幅關係改記於 [inactive_products.md](inactive_products.md)，HANDOFF 連結之。）
 - 依賴圖與 B0 比對；撰寫 Architecture Report；HANDOFF 標為完成。
 
 ### 順序理由

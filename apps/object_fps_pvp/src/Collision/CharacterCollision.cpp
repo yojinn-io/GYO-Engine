@@ -17,7 +17,7 @@ Engine::Collision::Contact PlanarPenetration(Engine::Collision::Contact contact,
         Engine::Math::Length(Engine::Math::Vec3{contact.normal.x, 0, contact.normal.z});
     std::size_t count = directions.size();
     if (horizontal > 0.000001F) {
-        directions[0] = Engine::Math::Vec3{contact.normal.x, 0, contact.normal.z} / horizontal;
+        directions[0] = {contact.normal.x / horizontal, 0, contact.normal.z / horizontal};
         count = 1;
     }
     std::optional<Engine::Collision::Contact> best;
@@ -110,7 +110,7 @@ Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, En
                     Engine::Math::Length(Engine::Math::Vec3{c->normal.x, 0, c->normal.z});
                 if (horizontal <= 0.000001F)
                     return;
-                c->normal = Engine::Math::Vec3{c->normal.x, 0, c->normal.z} / horizontal;
+                c->normal = {c->normal.x / horizontal, 0, c->normal.z / horizontal};
             }
             if (!nearest || c->fraction < nearest->fraction)
                 nearest = c;

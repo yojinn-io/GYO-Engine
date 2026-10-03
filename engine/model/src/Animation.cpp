@@ -12,13 +12,12 @@ using Math::Vec3;
 namespace {
 using Result = Base::Result<void, std::string>;
 
-// Model validity predicates. Finite vectors and matrices use the Math checks;
-// a valid rotation also needs a non-degenerate quaternion.
+// Model validity predicates over the Math checks; a valid rotation also needs
+// a non-degenerate quaternion.
 bool Finite(const Vec3 v) { return Math::IsFinite(v); }
 bool Finite(const Quaternion q) {
-    const float lengthSquared=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
-    return std::isfinite(q.x)&&std::isfinite(q.y)&&std::isfinite(q.z)&&std::isfinite(q.w)
-        && std::isfinite(lengthSquared)&&lengthSquared > 1.0e-12F;
+    const float lengthSquared=Math::LengthSquared(q);
+    return Math::IsFinite(q)&&std::isfinite(lengthSquared)&&lengthSquared > 1.0e-12F;
 }
 bool Finite(const Matrix4& m) { return Math::IsFinite(m); }
 bool Finite(const Transform& t) { return Finite(t.translation)&&Finite(t.rotation)&&Finite(t.scale); }

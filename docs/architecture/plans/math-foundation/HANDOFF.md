@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）CI 通過，B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）待 CI，三者疊在一起待使用者合併；B7 進行中。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）、B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）CI 四平台通過；B7 本機驗收完成。四個 PR 疊在一起，待使用者合併。**
 
 ## 閱讀入口
 
@@ -270,7 +270,7 @@
 | 項目 | 結果 |
 |---|---|
 | core preset | 19／19 通過 |
-| test preset | 45／45 通過（含 sdl_gpu mesh smoke） |
+| test preset | 45／45 通過（`render.sdl_gpu_mesh_smoke` 屬 gpu 標籤，不在 test preset 內，由 CI Linux lavapipe 執行；B7 更正） |
 | digest | 見上方漂移紀錄 |
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 依賴圖 | 與 B3 相比只多 `gyo_render → gyo_math` |
@@ -301,7 +301,7 @@
 | memcmp | 改寫前後都通過；20410 個斷言逐位元相同，數值漂移為 0 |
 | 靈敏度檢查 | 8 種刻意改動全部被偵測，包括數學上等價的 WVP 重新結合，以及只差 1 ulp 的 `xScale` 算法；每種改動只讓它碰到的路徑失敗 |
 | core preset | 19／19 通過 |
-| test preset | 45／45 通過（含 pvp 的 `presentation_evidence` 與本機 metal 的 sdl_gpu smoke） |
+| test preset | 45／45 通過（含 pvp 的 `presentation_evidence`；sdl_gpu smoke 屬 gpu 標籤，不在 test preset 內，由 CI Linux lavapipe 執行；B7 更正） |
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 對抗式審查 | 3 個 minor：Legacy 來源標註錯誤（已更正）、測試替身重複（併入 `RendererTests.cpp` 重用）、文件未更新（本節）。審查者也以 flat index 對應逐項證明了各鏡像鏈逐位元相同 |
 
@@ -455,10 +455,10 @@
 - `SnapshotTimeline.hpp`（`match_domain` 的 header，只有表現層使用）：位置與 pitch 插值改用 `Lerp`，yaw 改用 `LerpRadiansShortest`，yaw 差改用 `WrapRadians`，有限性改用 `IsFinite`；水平速度的 `std::hypot` 改為 `Length(Vec3d{dx, 0, dz})`。
 - `PvpApplication.cpp`：滑鼠的 yaw／pitch 改用 `WrapRadians`、`Clamp`；世界相機的 FOV 字面值 `1.0471975512F` 改為 `DegreesToRadians(60.0F)` 常數（同一個 float）；牆的中心與尺寸改用 `Center(Aabb)` 與 `max - min`；float 的 min 改用 `Math::Min`；identity 拷貝刪除。
 - `PlayerPresentation.cpp`：
-  - 第三人稱武器位置 `weaponWorldPosition` 原本手寫 yaw 旋轉，改為 `TransformPoint(ComposeEulerXYZ(t.translation, t.rotationRadians, t.scale), mount - anchor)`，`transform` 就是提交給 renderer 的那一個，與 GPU 使用同一個 World 矩陣。
+  - 第三人稱武器位置 `weaponWorldPosition` 原本手寫 yaw 旋轉，改為 `TransformPoint(ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale), mount - anchor)`，`transform` 就是提交給 renderer 的那一個，與 GPU 使用同一個 World 矩陣。
   - 武器 mount 四元數：原本以 double 求倒數再相乘，改為 `Math::Normalize`；驗證改為 float 的 `LengthSquared`（非有限或 `< 1e-12F` 時拒絕）。
   - 移動距離改用 `Length(Vec3d)`，後退判定改用 `Dot(Vec3d)`；float 的 min／max 改用 Math；`Finite` 刪除，改用 `IsFinite`；offset 改為 `-anchor`。
-- `WeaponPresentationDefinition.cpp`：muzzle 原本逐步縮放與旋轉，改為 `TransformPoint(ComposeEulerXYZ(t.translation, t.rotationRadians, t.scale), point - idleAnchor)`，即 renderer 的提交契約；角度換算改用 `DegreesToRadians`；`Finite` 刪除；identity 拷貝刪除。
+- `WeaponPresentationDefinition.cpp`：muzzle 原本逐步縮放與旋轉，改為 `TransformPoint(ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale), point - idleAnchor)`，即 renderer 的提交契約；角度換算改用 `DegreesToRadians`；`Finite` 刪除；identity 拷貝刪除。
 - `WeaponViewModel.cpp`（offset 改為 `-idleAnchor`）、`CharacterPresentationDefinition.cpp`（`IsFinite`）、`WeaponShotGeometry.hpp`（上限改用 `Math::Pi`）。
 - **保留**：
   - 相機眼睛位置的逐分量寫法（向量加法會改變 -0）、牆頂裝飾條與地板格的配置、射擊的 recoil 衰減、double 與整數的 clamp／min／max。
@@ -492,6 +492,7 @@
 
 | 項目 | 結果 |
 |---|---|
+| core preset | 未受影響（只改 pvp；pvp 不在 core preset） |
 | test preset | 46／46 通過；`object_fps_pvp.presentation_cpu` 含新的 characterization 與正式內容比對 |
 | gateway Go 測試 | 通過 |
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過（`WeaponShotGeometry.hpp` 也被它們使用） |
@@ -506,7 +507,7 @@
 
 ## B6c pvp 未編譯的 29 個檔案
 
-狀態：**本機驗收完成，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 待 CI**（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
+狀態：**CI 四平台通過，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 待使用者合併**（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
 
 ### 進行方式（ultracode）
 
@@ -557,7 +558,8 @@
 | test preset | 46／46 通過（已編譯的程式沒有變動） |
 | 新舊寫法比對 | 見上節（scratch，Apple clang x86_64，-O2 與 -O0 相同） |
 | 對抗式審查 | 沒有推翻正確性。1 個 minor：保留的 `IsFinite(GroundPoint)` 未登記為 B7 稽核例外，已在本節與 PLAN 登記；2 個 nit：變更清單的 `CampaignContent` 寫錯、EnemyRig 漂移的描述太樂觀，都已更正 |
-| CI 四平台 | 待 PR |
+| core preset | 未受影響（只改 pvp 的未編譯檔；pvp 不在 core preset） |
+| CI 四平台 | PR #26 的 head `6a67755` 全部通過（windows-x64、linux-x64、macos-arm64、macos-x64、CI gate） |
 
 ### Architecture Delta
 
@@ -570,13 +572,15 @@
 
 ## B7 收尾
 
-狀態：**進行中**（2026-10-04 開始，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
 
 ### 進行方式（ultracode）
 
 1. 未啟用產品的破損盤點：在 B6c 驗證期間以 1 個 agent 完成（scratch 建置，repo 不變）。
 2. 稽核：2 個 agent 並行，分別做 grep 稽核（active 範圍）與文件一致性檢查。
 3. 依稽核結果修正後，以 2 個 agent 驗證：engine 清理的新舊比對，以及最終審查。
+   - 新舊比對發現：pvp `CharacterCollision` 的水平正規化改用 Vec3 除法後，normal 為 NaN 時 y 會由 +0 變成 NaN（實際路徑碰不到，但不是嚴格的逐位元相同），因此改回原寫法。
+   - 同時把 Model `Finite(Quaternion)` 的分量檢查改用 `Math::IsFinite`、`Math::LengthSquared`（逐位元相同）。
 
 ### 未啟用產品的遷移清單
 
@@ -587,12 +591,11 @@
 ### 稽核結果與處置
 
 - **型別定義**：engine/math 以外沒有違規。命中的只有 GPU ABI 的 `ShaderAbi::Matrix4`，以及測試中凍結的 Legacy 複本；engine 公開 header 沒有 `using namespace Engine::Math`。
-- **公共層的產品名稱**：engine、build/cmake、tests/common 的程式碼沒有產品名稱，只出現在註冊資料（`projects.csv`、`tools.csv`）。
+- **公共層的產品名稱**：engine、build/cmake、tests/common 的程式碼中，除了註冊資料（`projects.csv`、`tools.csv`）與 `tests/common/ci/test_workflow_gates.py:349` 的反向守衛（見範圍外表），沒有產品名稱。
 - **早期批次遺漏、可逐位元相同地改用 Math 的寫法**（本批修正）：
   - Collision：`RaySphere` 的 offset 改用 `Dot`、`LengthSquared`；sweep 的 delta 改用運算子；`ValidateCapsule` 改用 `IsFinite`。
-  - Model：`AnimationTransfer` 的 delta 改用運算子；`TransformNormal` 的三列改用 `Dot`，尾段改用 `Length` 與除法；頂點 uv 改用 `IsFinite(Vec2)`。
+  - Model：`AnimationTransfer` 的 delta 改用運算子；`TransformNormal` 的三列改用 `Dot`，尾段改用 `Length` 與除法；頂點 uv 改用 `IsFinite(Vec2)`；`Finite(Quaternion)` 改用 `Math::IsFinite`、`Math::LengthSquared`。
   - Render：view 矩陣改用 `-camera.position`；`PrimitiveMesh` 與 `RenderQueue` 的 π 改用 `Math::Pi`、`Math::TwoPi`；`ModelRenderer` 的 offset 與 `SdlGpuRenderDevice` 的頂點 uv 改用 `IsFinite`。
-  - pvp：`CharacterCollision` 的水平正規化改用 Vec3 除法。
 - **登記為 B7 稽核例外**（已寫入 PLAN B7）：
   - ModelRenderer 的 `Finite(Render::Color)`（Render 語義型別，同 B4a）。
   - Model `TransformNormal` 的餘因子法線矩陣：Math 的 `Inverse` 以倒數相乘、展開順序也不同，而且退化容忍屬於 Model 政策；整個改寫會改變蒙皮法線的位元。
@@ -608,7 +611,15 @@
 
 ### 驗收
 
-（待驗證 workflow 完成後填入）
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過 |
+| test preset | 46／46 通過（含 `RendererTests.cpp` 對凍結 renderer 的 memcmp） |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B6a 相同；與 B0 相比多出 9 條指向 `gyo_math` 的邊（見 Architecture Report 第 5 點），沒有減少 |
+| engine 清理的新舊比對 | 兩棵樹各自建置真實 TU，以相同的執行期種子比對（兩個種子，含 ±0、subnormal、極大值、inf、NaN）：Collision 的公開查詢與 `ValidateCapsule`、`RaySphere`、sweep（約 2800 萬次）；`TransformNormal`、`SkinMesh`、`ValidateModel`、`AnimationTransfer`；`ViewMatrix`（2000 萬台相機）；`PrimitiveMesh`（機器碼相同，2.1 萬個 mesh 的 buffer hash 相同）；`RenderQueue`、`ModelRenderer`（機器碼相同）；`SdlGpuRenderDevice`（抽出比對）。可觀測結果全部相同。差異只有：NaN 相機位置下 view 矩陣的 NaN payload（結果不會被使用），以及 `SkinMesh` 回傳錯誤時暫存輸出的 NaN payload（呼叫者不使用）。 |
+| 最終審查 | 正確性沒有被推翻。指出的紀錄缺口（B6c 的 CI、B7 驗收）、收錄理由表與數值清單的不準確、`math.md` 的措辭等，都已更正 |
+| CI 四平台 | 待 PR |
 
 ### Architecture Report（AGENTS §3、§14）
 
@@ -645,24 +656,24 @@
 
 **數值的改變**（全部量測並記錄）：
 - `PrimitiveMesh` 的長度與正規化（B4a）。
-- pvp：平面輸入正規化（B6a）；碰撞 `hypot`、muzzle 與第三人稱武器位置、mount 四元數、double 水平長度（B6b）；未編譯檔的相機基底、EnemyRig、水平長度、敵人武器四元數（B6c）。
-- `ClipSprite` 的非有限值改為一律報錯（B5，使用者決定）。
+- pvp：平面輸入正規化與碰撞 `hypot`（B6a）；muzzle 與第三人稱武器位置、mount 四元數、double 水平長度（B6b）；未編譯檔的相機基底、EnemyRig、水平長度、地板命中的 -0、敵人武器四元數（B6c）。
+- 行為改變：`ClipSprite` 的非有限值一律報錯（B5，使用者決定）；`PrimitiveMesh` 的 wire mesh 溢位改為回報錯誤（B4a）；mount 與敵人武器四元數的驗證改為 float，平方和溢位的內容改為拒絕、門檻上可能翻轉（B6b、B6c）。
 - 其餘替換逐位元相同。
 
 #### Math 收錄理由（決策 3：完整基礎庫）
 
 | 型別／函式群 | 收錄理由 |
 |---|---|
-| `Vec2`、`Vec3`、運算子、`Dot`、`Length`、`LengthSquared`、`Distance`、`Normalize`、`Lerp`、`IsFinite`、`Min`／`Max`／`Clamp` | 取代 Render、Model、Collision、Ui 與 pvp 的同構型別和 helper（B2–B6c） |
-| `Vec3d`、`Segmentd`、`Aabbd`、`ToVec3d`、`ToVec3` | 取代 CapsuleQueries 匿名的 double `Vec3`、`Closest`、`Clamp`（B2）；pvp 的 spawn 距離（B6a） |
-| `Matrix4`、`Multiply`、`TransformPoint`、`TransformVector`、`MakeTranslation／Scale／RotationX／Y／Z`、`ComposeTRS`、`ComposeEulerXYZ`、`MakePerspective`、`MakeOrthographicPixels`、`Zero` | 取代 Model 的矩陣與 Renderer 的私有矩陣碼（B3、B4b）；muzzle、第三人稱武器位置、EnemyRig、相機基底（B6b、B6c） |
-| `Quaternion`、`Normalize`、`NormalizeOrIdentity`、`Conjugate`、`Slerp`、`MakeRotation` | 取代 Model 的四元數運算（B3）；mount 與敵人武器四元數（B6b、B6c） |
-| `Rect`、`Intersection`、`Contains` | 取代 `Render::Rect`、`UiRect`、`IntersectRect`（B4a、B5） |
+| `Vec2`、`Vec3`、運算子、`Dot`、`Cross`、`Length`、`LengthSquared`、`Distance`、`Normalize`、`Lerp`、`IsFinite`、`Min`／`Max`／`Clamp` | 取代 Render、Model、Collision、Ui 與 pvp 的同構型別和 helper（B2–B7；`Cross` 用於 PrimitiveMesh，B4a） |
+| `Vec3d`、`Segmentd`、`Aabbd`、`ToVec3d`、`ToVec3`、`ToAabbd` | 取代 CapsuleQueries 匿名的 double `Vec3`、`Closest`、`Clamp`（B2）；pvp 的 spawn 距離（B6a） |
+| `Matrix4`、`Multiply`、`TransformPoint`、`TransformVector`、`MakeTranslation／Scale／RotationX／Y／Z`、`ComposeTRS`、`ComposeEulerXYZ`、`MakePerspective`、`MakeOrthographicPixels` | 取代 Model 的矩陣與 Renderer 的私有矩陣碼（B3、B4b）；muzzle、第三人稱武器位置、EnemyRig、相機基底（B6b、B6c）。`Zero` 由 `MakePerspective`／`MakeOrthographicPixels` 間接使用 |
+| `Quaternion`、`Normalize`、`Conjugate`、`Slerp` | 取代 Model 的四元數運算（B3）；mount 與敵人武器四元數（B6b、B6c）。`NormalizeOrIdentity` 由 `Slerp` 間接使用 |
+| `Rect`、`Intersection` | 取代 `Render::Rect`、`UiRect`、`IntersectRect`（B4a、B5） |
 | `Aabb`、`Capsule`、`Segment`、`Ray`、`ClosestPoint`、`Center` | 取代 Collision 的形狀與最近點（B2）；Collision 介面的 `Ray`、`Segment`（使用者決定）；pvp 的牆（B6b） |
 | `Plane`、`Intersect(Ray, Plane)` | pvp 的地板命中（B6a、B6c） |
-| `Pi`、`TwoPi`、`HalfPi`、`DegreesToRadians`、`RadiansToDegrees`、`WrapRadians`、`LerpRadiansShortest` | 取代各處的 π、角度換算與 yaw wrap（B4a–B6c） |
+| `Pi`、`TwoPi`、`HalfPi`、`DegreesToRadians`、`RadiansToDegrees`、`WrapRadians`、`LerpRadiansShortest` | 取代各處的 π、角度換算與 yaw wrap（B6a–B7） |
 | `DecodeSrgb`、`EncodeSrgb` | 取代 Render、Ui、ui_editor 的三份 sRGB（B4a、B5） |
-| `Vec4`、`Vec2i`、`Vec3i`、`Matrix3`、`Determinant`、`Inverse`、`Transpose`、`Sphere`、`Triangle`、`MakePlane`、`SignedDistance`、`Overlaps`、`Merge`、`Expand`、`Extents`、`Area`、`Centroid`、`Normal`、`UnitNormal`、`PointAt`、`Rotate`、`MakeQuaternionFromAxisAngle`、`NormalizeOrZero`、`ToMatrix3`、`ToMatrix4`、`MakePoint4`、`MakeDirection4`、`XYZ`、Ray 對 Sphere／Aabb／Triangle 的 `Intersect` | 目前沒有使用者；依使用者要求（補齊常用結構、樹狀圖的 Geometry 與 Linear Algebra、2026-10-03 決策）在 B1 預先收錄，以 `MathTests.cpp` 的規格測試鎖定 |
+| `Vec4`、`Vec2i`、`Vec3i`、`Matrix3`、`Transform(Matrix3, Vec3)`、`Determinant`、`Inverse`、`Transpose`、`Sphere`、`Triangle`、`MakePlane`、`SignedDistance`、`Contains`、`Overlaps`、`Merge`、`Expand`、`Extents`、`Area`、`Centroid`、`Normal`、`UnitNormal`、`Axis(Capsule)`、`PointAt`、`Rotate`、`MakeRotation`、`MakeQuaternionFromAxisAngle`、`NormalizeOrZero`、`ToMatrix3`、`ToMatrix4`、`MakePoint4`、`MakeDirection4`、`XYZ`、Ray 對 Sphere／Aabb／Triangle 的 `Intersect` | 目前沒有使用者；依使用者要求（補齊常用結構、樹狀圖的 Geometry 與 Linear Algebra、2026-10-03 決策）在 B1 預先收錄，以 `MathTests.cpp` 的規格測試鎖定 |
 
 ### 範圍外，只回報（全計劃彙整）
 
@@ -680,7 +691,9 @@
 | float 純量的 clamp／min／max：engine 與工具仍用 `std::`，pvp 已改用 `Math::`；是否統一寫法待決定 | B7 |
 | characterization 的共用 helper（`SameBits`、`UlpDistance`、`Opaque`）在 tests/common、tests/object_fps_pvp、tests/ui_editor 各一份；共通測試不能依賴產品測試 | B7 |
 | `services/gyo_gateway/README.md` 與 `tests/common/ci/test_workflow_gates.py` 的說明或守衛中出現產品名稱 | B7 |
+| 根目錄三份 README 的範例 `cmake --preset dev -DGYO_APPS=object_fps` 指向停用中的產品；依本計劃，它重新啟用前需要先遷移 | B7 |
 
 ## 未結事項
 
-- B7 進行中。B6a（#24）、B6b（#25）、B6c（#26）待使用者合併。
+- 本計劃的批次全部完成。B6a（#24）、B6b（#25）、B6c（#26）CI 四平台通過；B7 的 PR 待 CI。四個 PR 疊在一起，依序合併（#24 → #25 → #26 → B7），由使用者決定。
+- 待使用者決定：float 純量的 clamp／min／max 寫法是否統一（engine 與工具用 `std::`，pvp 用 `Math::`）；範圍外表中各項是否另開工作。

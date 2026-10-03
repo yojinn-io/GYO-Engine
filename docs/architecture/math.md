@@ -2,7 +2,7 @@
 
 `GYO::Math` (`engine/math`, namespace `Engine::Math`) is the engine-wide math foundation: value types, pure geometry and the coordinate conventions every module shares. It is header-only, depends only on the C++ standard library and is the lowest engine layer; it links nothing and knows no module, product or tool.
 
-Every active engine module, product and tool uses Math; inactive products still use the removed names and must migrate before re-enabling ([migration list](plans/math-foundation/inactive_products.md)). History and evidence: [math-foundation plan](plans/math-foundation/README.md).
+All active code that used the removed vector, matrix and geometry types (Collision, Model, Render, Ui, object_fps_pvp, the UI editor) now uses Math; inactive products still use the removed names and must migrate before re-enabling ([migration list](plans/math-foundation/inactive_products.md)). History and evidence: [math-foundation plan](plans/math-foundation/README.md).
 
 ## Boundary
 
@@ -53,7 +53,7 @@ All types are `final` aggregates without constructors, trivially copyable and st
 
 ## Numeric policy
 
-- Each operation has exactly one implementation in GYO. Changing an expression's shape (operand order, association, splitting or merging expressions) can change float results. Treat such edits as behaviour changes and re-run the characterization tests.
+- Each operation has exactly one implementation in GYO. Recorded exceptions (semantic types, domain tolerances, -0-preserving authority code) are listed in the [math-foundation plan](plans/math-foundation/PLAN.md) (B7 audit). Changing an expression's shape (operand order, association, splitting or merging expressions) can change float results. Treat such edits as behaviour changes and re-run the characterization tests.
 - GYO compiles its own code with floating-point contraction off: `-ffp-contract=off` for Clang, AppleClang and GCC (set in `build/cmake/GyoBuild.cmake`), and MSVC's default `/fp:precise`, which does not contract. No multiply and add is fused into FMA, so the supported x64 platforms (Linux, Windows, macOS) round identically apart from libm; arm64 matches as a by-product. Code compiled outside that setting (contraction on) may fuse at run time or when an optimizer constant-folds, and can then differ from GYO builds.
 - Comparisons that must be bit-exact (characterization, digests) still feed both sides run-time data, so an accidental contraction setting shows up as a difference rather than being hidden by constant folding.
 - `DegreesToRadians` and `RadiansToDegrees` are `constexpr` (one multiplication each, so constant evaluation gives the run-time bits) and may initialise constants. Operations with several roundings stay plain `inline`.

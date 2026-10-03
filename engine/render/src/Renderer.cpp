@@ -20,7 +20,7 @@ using namespace ShaderAbi;
 // vectors, Multiply(a, b) applies b first. Shaders read the same 16 floats as
 // row_major float4x4 with mul(float4(p, 1), M), so uploads copy them in order
 // (ToShaderMatrix) without a transpose. Each chain below is the mirror of the
-// former row-vector product and is byte-identical to it (RendererMatrixTests).
+// former row-vector product and is byte-identical to it (RendererTests.cpp).
 
 [[nodiscard]] Matrix4 ToShaderMatrix(const Math::Matrix4& matrix) noexcept {
     static_assert(sizeof(Matrix4) == sizeof(matrix.values));

@@ -1,6 +1,6 @@
 # Math 基礎統一：未啟用產品的遷移清單
 
-量測日期：2026-10-04（B7）。對象：`2117570`（Math 遷移做到 B6c；之後只改文件）。對照：B0 基準 `0bd5363`。
+量測日期：2026-10-04（B7）。對象：`2117570`（Math 遷移做到 B6c；之後只做不改公開名稱的內部清理與文件）。對照：B0 基準 `0bd5363`。
 
 本計劃依「未啟用產品除外」的範圍，不修改 object_fps、object_fps_v2 與 object_fps_preview。舊名稱移除後，它們重新啟用時需要先遷移；本文件是遷移清單。量測在 scratch 建置中進行，repo 沒有修改。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md#b7-收尾)。
 
@@ -27,7 +27,7 @@
 
 | 代碼 | 舊名 | 遷移方式 | 未啟用產品中的出現次數 |
 |---|---|---|---|
-| R-F3 | `Engine::Render::Float3`（MuzzleProbe 中寫成別名 `Render::Float3`） | `Engine::Math::Vec3` | 23 ＋ 別名 8 |
+| R-F3 | `Engine::Render::Float3`（MuzzleProbe 中寫成別名 `Render::Float3`） | `Engine::Math::Vec3` | 23 ＋ 別名 7 |
 | R-F2 | `Render::Float2`（只在 MuzzleProbe 的別名中出現） | `Engine::Math::Vec2` | 5 |
 | M-V3 | `Engine::Model::Vec3`，以及 `using namespace Engine::Model` 下的非限定 `Vec3` | `Engine::Math::Vec3` | 11 ＋ 非限定（RigInspection、Mark23ModelTests） |
 | M-M4 | `using namespace Engine::Model` 下的非限定 `Matrix4` | `Engine::Math::Matrix4` | 1（EnemyAttachmentTests:85） |
