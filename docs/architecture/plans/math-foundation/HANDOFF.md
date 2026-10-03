@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24)，CI 通過）與 B6b（PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）疊在一起待使用者合併；B6c 進行中。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）CI 通過，B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）待 CI，三者疊在一起待使用者合併；B7 進行中。**
 
 ## 閱讀入口
 
@@ -437,7 +437,7 @@
 
 ## B6b pvp 表現層
 
-狀態：**本機驗收完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 待 CI**（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
+狀態：**CI 四平台通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 待使用者合併**（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
 
 使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
 
@@ -496,7 +496,7 @@
 | 依賴圖 | 沒有變化（只新增測試來源） |
 | 表現層 digest | 見上節 |
 | 對抗式審查 | 沒有推翻正確性。1 個 minor：mount 驗證的接受案例沒有確認載入成功，且離門檻太遠，改為 1.01e-6 並確認載入與正規化結果；1 個 nit：四元數判定翻轉的計數在取樣範圍內不可能失敗，刪除（翻轉由 `PlayerPresentationTests` 的確定性案例涵蓋）。另依 digest agent 的提醒，測試輸入的 `std::pow(10, x)` 改用執行期的底數，避免 clang -O2 換成 `exp10` 使輸入隨最佳化等級改變 |
-| CI 四平台 | 待 CI |
+| CI 四平台 | PR #25 的 head `42e32aa` 全部通過（windows-x64、linux-x64、macos-arm64、macos-x64、CI gate），characterization 測試的推導上限在四平台都成立 |
 
 ### Architecture Delta
 
@@ -504,7 +504,7 @@
 
 ## B6c pvp 未編譯的 29 個檔案
 
-狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
+狀態：**本機驗收完成，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 待 CI**（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
 
 ### 進行方式（ultracode）
 
@@ -566,6 +566,14 @@
 - `GroundPoint` 的有限性檢查在 `EnemySystem`、`GridCollision`、`GridMap` 各寫一份；格子線段檢查在 `GameSession` 與 `EnemySystem` 各一份。屬於產品內部的重複，不是 Math 的範圍。
 - `EnemyPresentationDefinition.cpp:160` 接受的攻擊 clip 長度上限是 `attackInterval + 1e-5`，`EnemySystem.cpp` 的驗證是 `+ 1e-6`；落在兩者之間的內容能載入，但會在 `EnemySystem` 驗證時失敗。
 
+## B7 收尾
+
+狀態：**進行中**（2026-10-04 開始，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+
+### 進行方式（ultracode）
+
+1. 未啟用產品的破損盤點，在 B6c 驗證期間先以 1 個 agent 完成（scratch 建置，repo 不變）。
+
 ## 未結事項
 
-- B6c 本機驗收完成；B7（收尾）。B6a（#24）、B6b（#25）待使用者合併。
+- B7 進行中。B6a（#24）、B6b（#25）、B6c（#26）待使用者合併。
