@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a 本機驗收完成，PR 待開（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a 本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。**
 
 ## 閱讀入口
 
@@ -355,7 +355,7 @@
 
 ## B6a pvp 模擬層 `match_domain`
 
-狀態：**本機驗收完成**，PR 待開（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
+狀態：**本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台**（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
 
 ### 進行方式（ultracode）
 
@@ -421,7 +421,7 @@
 | 全模擬 digest | 見上節 |
 | 靈敏度檢查 | 7 種刻意改動中 5 種被抓到。其餘 2 種是等價改動：`Min(Dot, 0)` 參數對調只改變零的正負號，之後被吸收；`NormalizeOrZero` 在 `s > 1` 時與 `Normalize` 同式 |
 | 對抗式審查 | 沒有推翻正確性；審查者另寫的 driver 也得到同樣結論。指出 1 個 minor（HANDOFF 與 dev_log 尚未記錄、README 與 PLAN 的 digest 說法未更新）與 2 個 nit（漂移應寫成推導上限、`MathTests` 新 helper 應放進匿名 namespace），都已處理 |
-| CI 四平台 | 待 PR |
+| CI 四平台 | 待 CI |
 
 ### Architecture Delta
 

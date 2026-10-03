@@ -35,7 +35,7 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B4a Render 型別 | high | 完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 已合併 | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
 | B4b Render 矩陣 | xhigh | 完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 已合併 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
 | B5 Ui／ui_editor | high | 完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 已合併 | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
-| B6a pvp 模擬層 | xhigh | 本機驗收完成 | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
+| B6a pvp 模擬層 | xhigh | 本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
 | B6b pvp 表現層 | high | 未開始 | `app_support` 與 acceptance |
 | B6c pvp 未編譯檔 | high | 未開始 | 29 檔遷移與 syntax-only 驗證 |
 | B7 收尾 | medium | 未開始 | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
