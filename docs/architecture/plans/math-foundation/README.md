@@ -27,7 +27,7 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
-| B0 基線 | medium | 完成，2026-10-03 | core／test 基線、依賴圖、29 檔 syntax-only 基線、本文件與 HANDOFF |
+| B0 基線 | medium | 完成，2026-10-03，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) | core／test 基線、依賴圖、29 檔 syntax-only 基線、本文件與 HANDOFF |
 | B1 `GYO::Math` | high（慣例與數值 xhigh） | 未開始 | 新模組（依樹狀圖的完整型別）、`gyo_math_tests`、characterization、`docs/architecture/math.md` 初稿 |
 | B2 Collision | high（double 路徑 xhigh） | 未開始 | `Collision::Float3/Aabb/Capsule` 移除，最近點查詢與 helper 改用 Math；`VerticalCapsule` 保留 |
 | B3 Model | high（矩陣與四元數 xhigh） | 未開始 | `Model::Vec2/Vec3/Quaternion/Matrix4` 移除 |

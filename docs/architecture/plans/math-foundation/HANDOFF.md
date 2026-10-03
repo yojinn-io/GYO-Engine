@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0 基線完成（分支 `claude/math-foundation-b0`，待提交 PR）。B1 未開始，需使用者指示啟動。**
+更新：2026-10-03。**B0 基線完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17)（分支 `claude/math-foundation-b0`）。B1 未開始，需使用者指示啟動。**
 
 ## 閱讀入口
 

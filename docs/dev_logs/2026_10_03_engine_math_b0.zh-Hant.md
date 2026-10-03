@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B0：規劃與基線
 
 日期：2026-10-03。Owner：Engine（新增模組 `GYO::Math`）。
-狀態：B0 完成（分支 `claude/math-foundation-b0`，基準 `0bd5363`），不改程式；B1 未開始。
+狀態：B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17)（分支 `claude/math-foundation-b0`，基準 `0bd5363`），不改程式；B1 未開始。
 計畫與進度見 [Math 基礎統一](../architecture/plans/math-foundation/README.md)，本文只記經過。
 
 ## 經過
