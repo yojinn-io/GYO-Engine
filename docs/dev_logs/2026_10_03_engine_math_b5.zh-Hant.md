@@ -30,6 +30,7 @@
 5. 對抗式審查的 major：我向使用者描述的舊版 `ClipSprite` 行為不完整。舊版除了報錯和靜默丟棄，還會在寬或高為 +inf 時送出 UV 範圍為 0 的 sprite；文字對齊溢位也會觸發。
    補齊說明後，使用者再次確認維持一律報錯，並更正了註解、測試與 HANDOFF 的描述。其餘 5 個 minor 也都已處理。
 6. 本機驗收：core 19／19、test 46／46，pvp 未編譯 29 檔 syntax-only 全部通過，依賴圖只多三條預期中的邊。
+7. CI 第一次執行時 windows-x64 建置失敗：兩個新測試把 `std::string_view` 串進 doctest 訊息卻沒有 include `<ostream>`，MSVC 需要完整的 `std::ostream`。補上 include 後重跑。
 
 ## 留給下一步
 

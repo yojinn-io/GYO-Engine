@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <ostream>
 #include <span>
 #include <string>
 #include <string_view>

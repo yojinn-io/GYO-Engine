@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <ostream>
 #include <string>
 #include <string_view>
 

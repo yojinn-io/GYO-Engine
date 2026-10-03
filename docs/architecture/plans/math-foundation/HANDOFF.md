@@ -343,6 +343,7 @@
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 依賴圖 | 與 B4a 相比多出 `gyo_ui → gyo_math`、`gyo_ui_editor_preview → gyo_math`、`gyo_ui_editor_preview_srgb_tests → gyo_math` |
 | 對抗式審查 | 1 個 major（舊行為描述不完整，已更正並由使用者再次確認）、5 個 minor（全部處理） |
+| CI 四平台 | 第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
 
 ### 範圍外，只回報
 
