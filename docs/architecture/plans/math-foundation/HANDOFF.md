@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0–B4a 已合併（B4a 為 #21，合併為 `ed7a08a`）。B4b 本機驗收完成（分支 `claude/math-foundation-b4b`），待 commit、PR 與 CI。**
+更新：2026-10-03。**B0–B4a 已合併（B4a 為 #21，合併為 `ed7a08a`）。B4b 本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -273,7 +273,7 @@
 
 ## B4b Render 矩陣切換到 Math 慣例
 
-狀態：**本機驗收完成**（分支 `claude/math-foundation-b4b`，自 master `ed7a08a`）。待 commit、PR 與 CI 四平台。
+狀態：**本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台**（分支 `claude/math-foundation-b4b`，自 master `ed7a08a`）。
 
 ### 變更
 
