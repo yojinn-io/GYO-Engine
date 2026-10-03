@@ -70,6 +70,7 @@ if(TARGET SDL3_image::SDL3_image)
     )
 endif()
 
+add_subdirectory(math)
 add_subdirectory(model)
 add_subdirectory(collision)
 add_subdirectory(text)
