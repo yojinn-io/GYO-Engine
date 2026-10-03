@@ -1,7 +1,7 @@
 #include "render/RenderQueue.hpp"
+#include "engine/math/scalar/Constants.hpp"
 
 #include <cmath>
-#include <numbers>
 #include <string>
 #include <string_view>
 
@@ -30,7 +30,7 @@ namespace {
     return IsFinite(camera.position) && IsFinite(camera.rotationRadians) &&
            IsFinite(camera.verticalFieldOfViewRadians) &&
            camera.verticalFieldOfViewRadians > 0.0F &&
-           camera.verticalFieldOfViewRadians < std::numbers::pi_v<float> &&
+           camera.verticalFieldOfViewRadians < Math::Pi &&
            IsFinite(camera.nearClip) && camera.nearClip > 0.0F &&
            IsFinite(camera.farClip) && camera.farClip > camera.nearClip;
 }

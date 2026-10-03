@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO は C++20 のゲームエンジンです。Runtime、Asset、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
+GYO は C++20 のゲームエンジンです。Runtime、Asset、Math、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
 
 ## ディレクトリと責務
 
@@ -64,6 +64,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [全体構造と責務](docs/architecture.md)
 - [UI 標準と編集手順](docs/ui_toolchain.md)
 - [ツール登録・選択と旧 CMake 設定の移行](docs/tool_projects.md)
+- [数学基盤の契約](docs/architecture/math.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [3D 資産とアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)

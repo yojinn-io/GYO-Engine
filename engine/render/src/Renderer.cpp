@@ -10,7 +10,6 @@
 #include <cstring>
 #include <limits>
 #include <map>
-#include <numbers>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -36,11 +35,7 @@ using namespace ShaderAbi;
 }
 
 [[nodiscard]] Math::Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
-    Math::Matrix4 result = Math::MakeTranslation({
-        -camera.position.x,
-        -camera.position.y,
-        -camera.position.z,
-    });
+    Math::Matrix4 result = Math::MakeTranslation(-camera.position);
     result = Math::Multiply(Math::MakeRotationZ(-camera.rotationRadians.z), result);
     result = Math::Multiply(Math::MakeRotationY(-camera.rotationRadians.y), result);
     return Math::Multiply(Math::MakeRotationX(-camera.rotationRadians.x), result);

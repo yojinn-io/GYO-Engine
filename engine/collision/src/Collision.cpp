@@ -32,8 +32,7 @@ void ValidateQuery(
 }
 
 void ValidateCapsule(const VerticalCapsule& capsule) {
-    if (!std::isfinite(capsule.feet.x) || !std::isfinite(capsule.feet.z) ||
-        !std::isfinite(capsule.feet.y) || !std::isfinite(capsule.height) || !std::isfinite(capsule.radius) ||
+    if (!IsFinite(capsule.feet) || !std::isfinite(capsule.height) || !std::isfinite(capsule.radius) ||
         capsule.radius <= 0.0f || capsule.height < capsule.radius * 2.0f) {
         throw std::invalid_argument(
             "collision capsule must be finite, positive, and at least two radii high");
@@ -46,11 +45,9 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
     const float maximumDistance,
     const Math::Vec3 center,
     const float radius) noexcept {
-    const Math::Vec3 offset{origin.x - center.x, origin.y - center.y, origin.z - center.z};
-    const float halfB = offset.x * direction.x + offset.y * direction.y +
-                        offset.z * direction.z;
-    const float c = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z -
-                    radius * radius;
+    const Math::Vec3 offset = origin - center;
+    const float halfB = Dot(offset, direction);
+    const float c = LengthSquared(offset) - radius * radius;
     const float discriminant = halfB * halfB - c;
     if (discriminant < 0.0f) {
         return std::nullopt;
@@ -201,7 +198,7 @@ std::optional<float> SweepSphereAgainstCapsule(
         throw std::invalid_argument("collision sweep endpoints/radius must be finite with non-negative radius");
     }
     ValidateCapsule(capsule);
-    const Math::Vec3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
+    const Math::Vec3 delta = end - start;
     const float length = Length(delta);
     if (!std::isfinite(length)) {
         throw std::invalid_argument("collision sweep length must be finite");

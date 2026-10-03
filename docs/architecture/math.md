@@ -2,7 +2,7 @@
 
 `GYO::Math` (`engine/math`, namespace `Engine::Math`) is the engine-wide math foundation: value types, pure geometry and the coordinate conventions every module shares. It is header-only, depends only on the C++ standard library and is the lowest engine layer; it links nothing and knows no module, product or tool.
 
-Migration status and history: [math-foundation plan](plans/math-foundation/README.md).
+Every active engine module, product and tool uses Math; inactive products still use the removed names and must migrate before re-enabling ([migration list](plans/math-foundation/inactive_products.md)). History and evidence: [math-foundation plan](plans/math-foundation/README.md).
 
 ## Boundary
 
@@ -10,7 +10,7 @@ Migration status and history: [math-foundation plan](plans/math-foundation/READM
 |---|---|
 | Vectors, matrices, quaternions and their operations | GPU ABI structs (`ShaderAbi::*`, `Vertex3D`): Render |
 | Geometric primitives that describe "what a shape is" (`Ray`, `Plane`, `Sphere`, `Aabb`, `Capsule`, `Segment`, `Triangle`, `Rect`) | Domain shapes specialised for a purpose, e.g. `VerticalCapsule`: Collision |
-| Pure geometric queries: closest points, containment, overlap, ray intersection without tolerance | Collision detection, contact, penetration, sweeps, skin widths and tolerances: Collision. Its queries take Math primitives (`RaycastAabb(Ray, ...)`, `SweepSphereAgainstCapsule(Segment, ...)`) |
+| Pure geometric queries: closest points, containment, overlap, ray intersection without tolerance | Collision detection, contact, penetration, sweeps, skin widths and tolerances: Collision. Its queries take Math primitives (`RaycastAabb(Ray, ...)`, `SweepSphereAgainstCapsule(Segment, ...)`); Collision raycasts return world-space distances (direction normalized internally), unlike the `|direction|`-scaled `t` of `Math::Intersect` |
 | Coordinate, matrix, Euler and clip-space conventions | Semantic transforms (`Transform3D`, `Model::Transform`), cameras, colours as data, wire and file formats |
 | Scalar utilities, constants, angle and sRGB transfer functions | Gameplay rules and product-specific coordinates (for example ground-plane points) |
 
@@ -48,6 +48,7 @@ All types are `final` aggregates without constructors, trivially copyable and st
 - **Ray**: `direction` need not be normalized; ray parameters `t` are in units of `|direction|`.
 - **Plane**: `normal` is unit length and points are those with `dot(normal, p) == distance`; `SignedDistance` is positive on the normal side. `MakePlane` normalizes.
 - **Triangle**: vertex order defines `Normal = Cross(b - a, c - a)`. Math defines no front face; facing and culling are render pipeline state.
+- **Rect**: queries assume a non-negative size; callers that can produce negative sizes (for example UI layout) handle them first. The axis direction (for example y-down pixels) belongs to the caller's space.
 - **Containment and overlap** are closed: touching counts.
 
 ## Numeric policy
@@ -59,7 +60,7 @@ All types are `final` aggregates without constructors, trivially copyable and st
 - Matrix product association matters: `World * (View * Proj)` in the old row-vector code equals `Multiply(Multiply(Proj, View), World)`, not `Multiply(Proj, Multiply(View, World))`.
 - Math has no global epsilon. Functions that need a tolerance take none and document exact behaviour (`== 0` checks, closed intervals); tolerances belong to the caller's domain.
 - `Normalize` requires a non-zero input (zero yields NaN). Use `NormalizeOrZero` (vectors) or `NormalizeOrIdentity` (quaternions, length <= 1e-12) when degenerate input is expected.
-- `Inverse` returns `std::nullopt` when the determinant is exactly zero or the result is not finite.
+- Matrix `Inverse` returns `std::nullopt` when the determinant is exactly zero or the result is not finite. Quaternion `Inverse` divides by the squared length and requires a non-zero quaternion; use `Conjugate` for unit quaternions.
 - Ray `Intersect` returns `std::nullopt` for a non-finite ray or when the computation overflows to NaN. Ray-sphere uses Lagrange's identity for the discriminant, so distant origins do not cancel catastrophically.
 - `ClosestPoint(point, Triangle)` treats a triangle with `|ab x ac|^2 <= FLT_EPSILON * |ab|^2 * |ac|^2` as a segment (closest of the three edge points). This is a conditioning guard inside the function, not a caller tolerance; its error is about `sqrt(FLT_EPSILON)` times the edge length. Coordinates must stay below about 1e9.
 - Documented edge behaviour: sRGB functions pass NaN through; `NormalizeOrIdentity` returns a zero quaternion when the length overflows; `WrapRadians` of an infinity is NaN.

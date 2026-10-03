@@ -1,9 +1,9 @@
 #include "render/PrimitiveMesh.hpp"
+#include "engine/math/scalar/Constants.hpp"
 
 #include <cmath>
 #include <array>
 #include <limits>
-#include <numbers>
 #include <utility>
 
 namespace Engine::Render {
@@ -147,11 +147,10 @@ Base::Result<MeshData, RenderError> MakeUvSphere(
     mesh.indices.reserve(
         static_cast<std::size_t>(verticalSegments) * horizontalSegments * 6U);
 
-    constexpr float pi = std::numbers::pi_v<float>;
     for (std::uint32_t vertical = 0; vertical <= verticalSegments; ++vertical) {
         const float v = static_cast<float>(vertical) /
                         static_cast<float>(verticalSegments);
-        const float latitude = v * pi;
+        const float latitude = v * Math::Pi;
         const float sinLatitude = std::sin(latitude);
         const float cosLatitude = std::cos(latitude);
 
@@ -159,7 +158,7 @@ Base::Result<MeshData, RenderError> MakeUvSphere(
              ++horizontal) {
             const float u = static_cast<float>(horizontal) /
                             static_cast<float>(horizontalSegments);
-            const float longitude = u * 2.0F * pi;
+            const float longitude = u * 2.0F * Math::Pi;
             mesh.vertices.push_back({
                 {
                     sinLatitude * std::sin(longitude),
@@ -239,22 +238,21 @@ Base::Result<MeshData, RenderError> MakeWireCapsule(
         ? delta / length : Math::Vec3{0.0F, 1.0F, 0.0F};
     const Math::Vec3 u = Perpendicular(axis);
     const Math::Vec3 v = Math::Cross(axis, u);
-    constexpr float pi = std::numbers::pi_v<float>;
     MeshData mesh;
-    AppendWireArc(mesh, segmentStart, u, v, radius, 0.0F, 2.0F * pi,
+    AppendWireArc(mesh, segmentStart, u, v, radius, 0.0F, Math::TwoPi,
                   segments, lineThickness);
     if (length <= 0.000001F) {
-        AppendWireArc(mesh, segmentStart, u, axis, radius, 0.0F, 2.0F * pi,
+        AppendWireArc(mesh, segmentStart, u, axis, radius, 0.0F, Math::TwoPi,
                       segments, lineThickness);
-        AppendWireArc(mesh, segmentStart, v, axis, radius, 0.0F, 2.0F * pi,
+        AppendWireArc(mesh, segmentStart, v, axis, radius, 0.0F, Math::TwoPi,
                       segments, lineThickness);
     } else {
-        AppendWireArc(mesh, segmentEnd, u, v, radius, 0.0F, 2.0F * pi,
+        AppendWireArc(mesh, segmentEnd, u, v, radius, 0.0F, Math::TwoPi,
                       segments, lineThickness);
         for (const Math::Vec3 radial : {u, v}) {
-            AppendWireArc(mesh, segmentStart, radial, axis, radius, pi, 2.0F * pi,
+            AppendWireArc(mesh, segmentStart, radial, axis, radius, Math::Pi, Math::TwoPi,
                           segments / 2, lineThickness);
-            AppendWireArc(mesh, segmentEnd, radial, axis, radius, 0.0F, pi,
+            AppendWireArc(mesh, segmentEnd, radial, axis, radius, 0.0F, Math::Pi,
                           segments / 2, lineThickness);
             for (const float side : {-1.0F, 1.0F}) {
                 const Math::Vec3 offset = radial * (radius * side);

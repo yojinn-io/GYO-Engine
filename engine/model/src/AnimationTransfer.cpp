@@ -124,8 +124,7 @@ TransferResult TransferCompatibleAnimation(
         track.rotations.reserve(sourceTrack.rotations.size());
         track.scales.reserve(sourceTrack.scales.size());
         for(const auto& key:sourceTrack.translations) {
-            const Vec3 delta{key.value.x-sourceRest.translation.x,key.value.y-sourceRest.translation.y,
-                             key.value.z-sourceRest.translation.z};
+            const Vec3 delta=key.value-sourceRest.translation;
             const auto rotated=TransformPoint(correctionMatrix,delta);
             const Vec3 value{
                 static_cast<float>(targetRest.translation.x+rotated.x*localTranslationScale),

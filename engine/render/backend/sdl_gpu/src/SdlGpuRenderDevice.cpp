@@ -467,8 +467,7 @@ struct SdlGpuRenderDevice::Impl final {
             }
         }
         for (const Vertex3D& vertex : mesh.vertices) {
-            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv.x) ||
-                !IsFinite(vertex.uv.y)) {
+            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv)) {
                 return Result::Err(MakeError(
                     RenderErrorCode::InvalidArgument,
                     "SDL_GPU: mesh vertices must be finite"));
@@ -726,8 +725,7 @@ struct SdlGpuRenderDevice::Impl final {
                 "SDL_GPU: vertex updates must preserve the mesh vertex count"));
         }
         for (const Vertex3D& vertex : vertices) {
-            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv.x) ||
-                !IsFinite(vertex.uv.y)) {
+            if (!IsFinite(vertex.position) || !IsFinite(vertex.uv)) {
                 return Result::Err(MakeError(
                     RenderErrorCode::InvalidArgument,
                     "SDL_GPU: updated mesh vertices must be finite"));
