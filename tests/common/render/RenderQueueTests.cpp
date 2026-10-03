@@ -8,9 +8,9 @@ namespace {
 
 using namespace Engine::Render;
 
-[[nodiscard]] constexpr Float2 TransformUv(
+[[nodiscard]] constexpr Engine::Math::Vec2 TransformUv(
     UvTransform transform,
-    Float2 uv) noexcept {
+    Engine::Math::Vec2 uv) noexcept {
     return {
         uv.x * transform.scale.x + transform.offset.x,
         uv.y * transform.scale.y + transform.offset.y,
@@ -65,9 +65,9 @@ TEST_CASE("Sprite source UV maps visual top-left for full textures") {
         MakeSpriteUvTransform({0.0F, 0.0F, 1.0F, 1.0F});
 
     // The shared XY quad's v=1 vertices appear at the top in screen space.
-    const Float2 topLeft = TransformUv(transform, {0.0F, 1.0F});
-    const Float2 topRight = TransformUv(transform, {1.0F, 1.0F});
-    const Float2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
+    const Engine::Math::Vec2 topLeft = TransformUv(transform, {0.0F, 1.0F});
+    const Engine::Math::Vec2 topRight = TransformUv(transform, {1.0F, 1.0F});
+    const Engine::Math::Vec2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
 
     CHECK(topLeft.x == doctest::Approx(0.0F));
     CHECK(topLeft.y == doctest::Approx(0.0F));
@@ -81,10 +81,10 @@ TEST_CASE("Sprite source UV preserves atlas sub-rectangle boundaries") {
     const UvTransform transform =
         MakeSpriteUvTransform({0.25F, 0.125F, 0.5F, 0.25F});
 
-    const Float2 topLeft = TransformUv(transform, {0.0F, 1.0F});
-    const Float2 topRight = TransformUv(transform, {1.0F, 1.0F});
-    const Float2 bottomLeft = TransformUv(transform, {0.0F, 0.0F});
-    const Float2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
+    const Engine::Math::Vec2 topLeft = TransformUv(transform, {0.0F, 1.0F});
+    const Engine::Math::Vec2 topRight = TransformUv(transform, {1.0F, 1.0F});
+    const Engine::Math::Vec2 bottomLeft = TransformUv(transform, {0.0F, 0.0F});
+    const Engine::Math::Vec2 bottomRight = TransformUv(transform, {1.0F, 0.0F});
 
     CHECK(topLeft.x == doctest::Approx(0.25F));
     CHECK(topLeft.y == doctest::Approx(0.125F));

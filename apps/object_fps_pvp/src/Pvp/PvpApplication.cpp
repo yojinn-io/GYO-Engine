@@ -498,7 +498,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.cooldownRemainingSeconds = (std::max)(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
     }
 
-    bool SubmitBox(Engine::Render::Float3 center, Engine::Render::Float3 scale,
+    bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,
         Engine::Render::Color color, float rotation = 0.0F) {
         Engine::Render::MeshSubmission draw;
         draw.mesh = cube;

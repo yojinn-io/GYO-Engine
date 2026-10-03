@@ -38,10 +38,10 @@ LoadWeaponPresentationDefinition(
 
 // Applies the same scale -> X/Y/Z rotation -> translation contract used by
 // the render submission, after removing the fixed Idle anchor.
-[[nodiscard]] Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+[[nodiscard]] Engine::Math::Vec3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose);
-[[nodiscard]] Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+[[nodiscard]] Engine::Math::Vec3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose,
     const Engine::Render::Transform3D& placement);

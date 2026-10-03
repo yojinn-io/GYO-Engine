@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19，合併為 `5c8fd10`）已合併。B3 本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI 四平台。**
+更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19）、B3（#20，合併為 `14a32ac`）已合併。B4a 本機驗收完成（分支 `claude/math-foundation-b4a`），待 commit、PR 與 CI。**
 
 ## 閱讀入口
 
@@ -185,7 +185,7 @@
 
 ## B3 Model
 
-狀態：**本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI 四平台**（分支 `claude/math-foundation-b3`，自 master `5c8fd10`）。
+狀態：**完成**。PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 於 2026-10-03 合併為 `14a32ac`；最終 head `f116db0` 的 CI 四平台全部通過。
 
 ### 變更
 
@@ -223,6 +223,52 @@
 - 用不到的 using-declaration：`UfbxModelTests.cpp` 還原為 master 版，其餘刪除用不到的宣告。
 - `Animation.cpp` 的 `Finite` 系列：保留理由記錄於上方，PLAN 的 B7 稽核加上例外。
 - 計劃文件尚未更新：本節與 dev_log、README 一併補上。
+
+## B4a Render 型別與 helper
+
+狀態：**本機驗收完成**（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。待 commit、PR 與 CI 四平台。
+
+### 變更
+
+- `RenderTypes.hpp`：`Render::Float2/Float3/Rect` 移除，`Transform3D`、`PerspectiveCamera3D`、`Vertex3D`、`UvTransform`、各 Submission 的欄位改用 `Math::Vec2/Vec3/Rect`；`Transform3D` 註解改指向 `Math::ComposeEulerXYZ` 慣例。
+- 重複的 helper：
+  - `RenderQueue`、`SdlGpuRenderDevice` 的向量與 `Rect` 版 `IsFinite` 刪除，經 ADL 使用 `Math::IsFinite`；`Renderer.cpp` 中沒人呼叫的 `IsFinite(Float3)` 刪除。
+  - `IsFinite(float)`、`IsFinite(Color)` 保留（純量與 Render 語義型別），列為 B7 稽核例外。
+  - `PrimitiveMesh`：`Add/Subtract/Scale/Cross` 改用 Math 的運算子與 `Cross`；`hypot` 長度改用 `Math::Length`；倒數相乘的正規化改用 `Math::Normalize`／除法。
+- `ColorTransform`：公開的 `Decode/EncodeSrgbComponent` 刪除（與 Math 重複），`DecodeSrgbColor` 等與 `Renderer.cpp` 的 `CaptureComponent` 改用 `Math::DecodeSrgb/EncodeSrgb`；`ClampUnit` 改用 `Math::Clamp`。
+- `render/model` 的 ModelRenderer：頂點複製改為 `{vertex.position + offset, vertex.uv}`。
+- `Renderer.cpp` 的矩陣碼不動（B4b），只換型別名稱。
+- `engine/render/CMakeLists.txt`：PUBLIC 連結 `GYO::Math`。
+- UiRenderer：`ConvertRect` 改為回傳 `Math::Rect`（B5 移除 `UiRect` 時一併刪除）。
+- pvp（`WeaponPresentationDefinition`、`WeaponViewModel`、`PlayerPresentation`、`PvpApplication`）與測試：型別名稱替換。
+- `tests/common/render/sdl_gpu/RenderFeatureSmoke.cpp`：只把 `Float2/Float3` 拼寫換成 Math 型別（不留別名，決策 1），`RotateX/Y/Z`、`Project` 這個獨立 oracle 的計算式沒變；期望值中的 sRGB 改用 `Math::EncodeSrgb`（與被刪除的 Render 函式逐字相同，實際值來自 GPU readback，不經過受測的 `CaptureComponent`）。
+- 文件：`architecture.md` 的 Render 列。
+
+### 數值漂移紀錄（PrimitiveMesh，Apple clang 21／libc++，x86_64，`-ffp-contract=off`）
+
+- **長度**：在所有分量的絕對值都在 [2⁻⁶⁴, 2⁶⁴] 的正常範圍，libc++ 的三參數 `hypot` 就是 `sqrt(x*x+y*y+z*z)`，與 `Math::Length` 逐位元相同（200 萬筆隨機向量，0 ulp）。libstdc++、MSVC 的 `hypot` 不同，預期在 Linux、Windows 上另有最多數 ulp 的差異（B1 characterization 實測倒數正規化最多 4 ulp）。
+- **正規化**：倒數相乘改成除法，正規化後的分量有 27.5% 差 1 ulp（600 萬樣本，最大 1 ulp）。
+- **線框網格**（`MakeWireBox`、`MakeWireCapsule`）：一般輸入（座標 ±100）頂點最大絕對差 3.97e-4（發生在條件很差的極短弧弦），軸對齊輸入最大 3.05e-5，測試用輸入最大 3 ulp。長度接近 1e-6 門檻或 `|axis.y|` 在 0.9 的 1 ulp 內時，少數輸入的頂點數或 `Perpendicular` 參考軸會改變。
+- **逐位元相同**：quad、cube、UV 球體；ColorTransform 全部（sRGB 對全部 2³² 個 float 窮舉）；RenderQueue 驗證（20 萬筆）；ModelRenderer 頂點複製；`MakeSpriteUvTransform`。
+- 現有測試沒有對 PrimitiveMesh 輸出做精確比較，因此沒有修改任何測試的容差。
+
+### 溢位行為（審查發現，已修正）
+
+- `Math::Length` 不做縮放，邊長或弧弦超過約 1.8e19 時會溢位。master 的 `hypot` 會先縮放。
+- 修正前：`MakeWireBox` 在邊長超過約 1.8e19 時回傳 Ok，頂點卻是 NaN；`MakeWireCapsule` 在半徑約 1e20 時也一樣。
+- 修正：兩個函式在回傳前檢查所有頂點都是有限值，否則回傳 `InvalidArgument`；header 註明這個上限，並新增測試。
+- 與 master 的差異：這種尺度的輸入現在一律回傳錯誤（master 會回傳有限的幾何）。世界座標不會用到這種尺度，視為可接受的行為變更。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過 |
+| test preset | 45／45 通過（含 sdl_gpu mesh smoke） |
+| digest | 見上方漂移紀錄 |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B3 相比只多 `gyo_render → gyo_math` |
+| 對抗式審查 | 2 個 minor：溢位造成 Ok 加 NaN（已修正），文件未更新（本節） |
 
 ## 未結事項
 

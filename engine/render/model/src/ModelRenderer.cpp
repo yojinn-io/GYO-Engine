@@ -77,8 +77,7 @@ struct ModelInstance::Impl final {
         vertices.resize(skinned.size());
         for (std::size_t index = 0; index < skinned.size(); ++index) {
             const auto& vertex = skinned[index];
-            vertices[index] = {{vertex.position.x + offset.x, vertex.position.y + offset.y,
-                                vertex.position.z + offset.z}, {vertex.uv.x, vertex.uv.y}};
+            vertices[index] = {vertex.position + offset, vertex.uv};
         }
         return Result::Ok();
     }

@@ -12,22 +12,9 @@ namespace {
     return std::isfinite(value);
 }
 
-[[nodiscard]] bool IsFinite(Float2 value) noexcept {
-    return IsFinite(value.x) && IsFinite(value.y);
-}
-
-[[nodiscard]] bool IsFinite(Float3 value) noexcept {
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-}
-
 [[nodiscard]] bool IsFinite(Color value) noexcept {
     return IsFinite(value.red) && IsFinite(value.green) &&
            IsFinite(value.blue) && IsFinite(value.alpha);
-}
-
-[[nodiscard]] bool IsFinite(Rect value) noexcept {
-    return IsFinite(value.x) && IsFinite(value.y) &&
-           IsFinite(value.width) && IsFinite(value.height);
 }
 
 [[nodiscard]] RenderError Invalid(std::string_view message) {

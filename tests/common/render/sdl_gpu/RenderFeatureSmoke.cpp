@@ -2,6 +2,7 @@
 #include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
 #include "render/ShaderAbi.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -67,7 +68,7 @@ bool CheckUvBlendAndTextureColor(IRenderDevice& device, Renderer& renderer) {
     auto linear=resources.Image(1,1,gray);
     if (!atlas || !srgb || !linear) return false;
     RenderQueue queue({{0,0,1,1}});
-    auto sprite=[&](TextureHandle texture, Rect rect, Rect uv=Rect{0,0,1,1}, Color tint=Color{}) {
+    auto sprite=[&](TextureHandle texture, Engine::Math::Rect rect, Engine::Math::Rect uv=Engine::Math::Rect{0,0,1,1}, Color tint=Color{}) {
         SpriteSubmission value; value.material.texture=texture; value.material.tint=tint;
         value.destinationPixels=rect; value.sourceUv=uv; value.layer=CompositeLayer::Scene;
         return static_cast<bool>(queue.Submit(value));
@@ -89,11 +90,11 @@ bool CheckUvBlendAndTextureColor(IRenderDevice& device, Renderer& renderer) {
         Pixel(*captured,95,90,{128,128,128,255},"sRGB decode and capture roundtrip") &&
         Pixel(*captured,135,90,{188,188,188,255},"linear texture to sRGB capture");
 }
-Float3 RotateX(Float3 v,float a) { return {v.x,v.y*std::cos(a)-v.z*std::sin(a),v.y*std::sin(a)+v.z*std::cos(a)}; }
-Float3 RotateY(Float3 v,float a) { return {v.x*std::cos(a)+v.z*std::sin(a),v.y,-v.x*std::sin(a)+v.z*std::cos(a)}; }
-Float3 RotateZ(Float3 v,float a) { return {v.x*std::cos(a)-v.y*std::sin(a),v.x*std::sin(a)+v.y*std::cos(a),v.z}; }
+Engine::Math::Vec3 RotateX(Engine::Math::Vec3 v,float a) { return {v.x,v.y*std::cos(a)-v.z*std::sin(a),v.y*std::sin(a)+v.z*std::cos(a)}; }
+Engine::Math::Vec3 RotateY(Engine::Math::Vec3 v,float a) { return {v.x*std::cos(a)+v.z*std::sin(a),v.y,-v.x*std::sin(a)+v.z*std::cos(a)}; }
+Engine::Math::Vec3 RotateZ(Engine::Math::Vec3 v,float a) { return {v.x*std::cos(a)-v.y*std::sin(a),v.x*std::sin(a)+v.y*std::cos(a),v.z}; }
 // Independent scalar reference: do not reuse Renderer matrix helpers.
-Float2 Project(Float3 vertex,const Transform3D& object,const PerspectiveCamera3D& camera,unsigned width,unsigned height) {
+Engine::Math::Vec2 Project(Engine::Math::Vec3 vertex,const Transform3D& object,const PerspectiveCamera3D& camera,unsigned width,unsigned height) {
     vertex={vertex.x*object.scale.x,vertex.y*object.scale.y,vertex.z*object.scale.z};
     vertex=RotateZ(RotateY(RotateX(vertex,object.rotationRadians.x),object.rotationRadians.y),object.rotationRadians.z);
     vertex={vertex.x+object.translation.x-camera.position.x,vertex.y+object.translation.y-camera.position.y,vertex.z+object.translation.z-camera.position.z};
@@ -151,7 +152,7 @@ bool CheckPostColor(IRenderDevice& device,const ShaderLibrary& library) {
     const auto& image=output.value();
     if(image.format!=TextureFormat::Rgba8SRgb||image.rowPitch<13*4||image.bytes.size()<image.rowPitch*7)return false;
     for(unsigned y=0;y<7;++y)for(unsigned x=0;x<13;++x)for(unsigned channel=0;channel<4;++channel){
-        const int expected=channel==3?255:int(std::lround(EncodeSrgbComponent(std::sqrt(std::min(float(sourcePixel[channel])/255.0F*2,1.0F)))*255));
+        const int expected=channel==3?255:int(std::lround(Engine::Math::EncodeSrgb(std::sqrt(std::min(float(sourcePixel[channel])/255.0F*2,1.0F)))*255));
         const int actual=std::to_integer<int>(image.bytes[std::size_t(y)*image.rowPitch+x*4+channel]);
         if(std::abs(expected-actual)>2){std::cerr<<"scene post/sRGB pixel channel "<<channel<<": "<<actual<<" expected "<<expected<<'\n';return false;}
     }

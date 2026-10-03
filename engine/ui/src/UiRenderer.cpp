@@ -59,14 +59,14 @@ namespace {
     return {color.red, color.green, color.blue, color.alpha};
 }
 
-[[nodiscard]] Render::Rect ConvertRect(UiRect rect) noexcept {
+[[nodiscard]] Math::Rect ConvertRect(UiRect rect) noexcept {
     return {rect.x, rect.y, rect.width, rect.height};
 }
 
 [[nodiscard]] bool ClipSprite(
     Render::SpriteSubmission& sprite,
     UiRect clip) noexcept {
-    const Render::Rect original = sprite.destinationPixels;
+    const Math::Rect original = sprite.destinationPixels;
     if (!std::isfinite(clip.x) || !std::isfinite(clip.y) ||
         !std::isfinite(clip.width) || !std::isfinite(clip.height) ||
         original.width <= 0.0F || original.height <= 0.0F ||

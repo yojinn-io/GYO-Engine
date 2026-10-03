@@ -60,7 +60,7 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |
-| `GYO::Render` | opaque resources, queue, shader library, frame/pass preparation | Engine |
+| `GYO::Render` | opaque resources, queue, shader library, frame/pass preparation; GPU ABI and render submission contracts over Math values | Engine, Math |
 | `GYO::Ui` | JSON codec, validation, layout, focus, binding and typed actions | Engine |
 | `GYO::UiRenderer` | UI draw list to renderer and text/texture resources | Ui, Render, Text |
 | Game | campaign, movement/combat rules, screen policy and presentation composition | selected public engine APIs |
