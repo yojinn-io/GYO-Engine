@@ -1,6 +1,6 @@
 #include "RetroFPS/Gameplay/Player/PlayerCombatState.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace fps {
@@ -17,8 +17,8 @@ PlayerDamageResult PlayerCombatState::ApplyDamage(const float damage) noexcept {
     }
 
     result.applied = true;
-    result.appliedDamage = (std::min)(damage, health_);
-    health_ = (std::max)(0.0f, health_ - result.appliedDamage);
+    result.appliedDamage = Engine::Math::Min(damage, health_);
+    health_ = Engine::Math::Max(0.0f, health_ - result.appliedDamage);
     result.killed = health_ <= 0.0f;
     result.remainingHealth = health_;
     return result;

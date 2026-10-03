@@ -6,19 +6,15 @@
 #include "RetroFPS/Gameplay/Player/Player.hpp"
 #include "RetroFPS/World/GridMap.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
+#include "engine/math/scalar/Angle.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <exception>
-#include <numbers>
 #include <utility>
 
 namespace fps {
-namespace {
-
-constexpr float kDegreesToRadians = std::numbers::pi_v<float> / 180.0f;
-
-} // namespace
 
 bool PlayerController::Configure(
     PlayerSettings settings, std::string& error) {
@@ -80,13 +76,11 @@ void PlayerController::Update(
     if (input.lookEnabled) {
         if (std::isfinite(input.lookDeltaX)) {
             yawRadians += input.lookDeltaX * settings_.mouseSensitivity;
-            yawRadians = std::remainder(
-                yawRadians, 2.0f * std::numbers::pi_v<float>);
+            yawRadians = Engine::Math::WrapRadians(yawRadians);
         }
         if (std::isfinite(input.lookDeltaY)) {
-            const float maxPitchRadians =
-                settings_.maxPitchDegrees * kDegreesToRadians;
-            pitchRadians = std::clamp(
+            const float maxPitchRadians = Engine::Math::DegreesToRadians(settings_.maxPitchDegrees);
+            pitchRadians = Engine::Math::Clamp(
                 pitchRadians + input.lookDeltaY * settings_.mouseSensitivity,
                 -maxPitchRadians,
                 maxPitchRadians);
@@ -162,7 +156,7 @@ void PlayerController::Update(
     // A body can lose its support by walking off another actor. A ceiling
     // contact also stops vertical motion, but cannot establish ground contact.
     player.grounded_ = player.verticalVelocity_ <= 0.0F &&
-        isSupported({{moved.x, moved.y, moved.z}, settings_.bodyHeight, settings_.collisionRadius});
+        isSupported({moved, settings_.bodyHeight, settings_.collisionRadius});
     if (player.grounded_) {
         player.verticalVelocity_ = 0.0F;
     }
@@ -175,10 +169,10 @@ bool PlayerController::SetVerticalRecoilDegrees(
         return false;
     }
 
-    const float maximumPitchRadians = settings_.maxPitchDegrees * kDegreesToRadians;
-    const float requestedRecoilRadians = -recoilDegrees * kDegreesToRadians;
+    const float maximumPitchRadians = Engine::Math::DegreesToRadians(settings_.maxPitchDegrees);
+    const float requestedRecoilRadians = Engine::Math::DegreesToRadians(-recoilDegrees);
     const float aimPitchRadians = player.GetAimPitchRadians();
-    const float effectivePitchRadians = std::clamp(
+    const float effectivePitchRadians = Engine::Math::Clamp(
         aimPitchRadians + requestedRecoilRadians,
         -maximumPitchRadians,
         maximumPitchRadians);
