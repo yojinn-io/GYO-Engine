@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "engine/base/Result.hpp"
+#include "engine/math/geometry/Rect.hpp"
+#include "engine/math/linear/Vec2.hpp"
 
 namespace Engine::Ui {
 
@@ -36,18 +38,6 @@ struct UiError final {
 
 template <class T>
 using UiResult = Base::Result<T, UiError>;
-
-struct UiFloat2 final {
-    float x{};
-    float y{};
-};
-
-struct UiRect final {
-    float x{};
-    float y{};
-    float width{};
-    float height{};
-};
 
 // RGB channels are linear-light. Alpha is linear coverage.
 struct UiColor final {
@@ -109,16 +99,16 @@ struct UiInputFrame final {
     bool activatePressed{};
     bool cancelPressed{};
     bool pointerAvailable{};
-    UiFloat2 pointerPixels{};
+    Math::Vec2 pointerPixels{};
     bool pointerPrimaryPressed{};
     bool pointerPrimaryHeld{};
     bool pointerPrimaryReleased{};
 };
 
 struct UiQuadDraw final {
-    UiRect destinationPixels{};
+    Math::Rect destinationPixels{};
     UiColor color{};
-    UiRect clipPixels{
+    Math::Rect clipPixels{
         0.0F,
         0.0F,
         (std::numeric_limits<float>::max)(),
@@ -127,14 +117,14 @@ struct UiQuadDraw final {
 };
 
 struct UiTextDraw final {
-    UiRect boundsPixels{};
+    Math::Rect boundsPixels{};
     std::string utf8;
     std::string fontAssetId;
     float pointSizePixels{};
     UiColor color{};
     UiHorizontalAlign horizontalAlign{UiHorizontalAlign::Left};
     UiVerticalAlign verticalAlign{UiVerticalAlign::Top};
-    UiRect clipPixels{
+    Math::Rect clipPixels{
         0.0F,
         0.0F,
         (std::numeric_limits<float>::max)(),
@@ -143,11 +133,11 @@ struct UiTextDraw final {
 };
 
 struct UiImageDraw final {
-    UiRect destinationPixels{};
-    UiRect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
+    Math::Rect destinationPixels{};
+    Math::Rect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
     std::string textureAssetId;
     UiColor tint{};
-    UiRect clipPixels{
+    Math::Rect clipPixels{
         0.0F,
         0.0F,
         (std::numeric_limits<float>::max)(),

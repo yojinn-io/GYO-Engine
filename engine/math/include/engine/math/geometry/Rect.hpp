@@ -8,8 +8,10 @@
 
 namespace Engine::Math {
 
-// Axis-aligned 2D rectangle: origin (x, y) and non-negative size. The axis
-// direction (for example y-down pixels) belongs to the caller's space.
+// Axis-aligned 2D rectangle: origin (x, y) and size. The queries below assume a
+// non-negative size; callers that can produce negative sizes (for example UI
+// layout) handle them before querying. The axis direction (for example y-down
+// pixels) belongs to the caller's space.
 struct Rect final {
     float x{};
     float y{};

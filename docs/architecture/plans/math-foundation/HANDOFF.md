@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0–B4a 已合併（B4a 為 #21，合併為 `ed7a08a`）。B4b 本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台。**
+更新：2026-10-03。**B0–B4b 已合併（B4b 為 #22，合併為 `43bccad`）。B5 本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -30,6 +30,7 @@
 | 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
 | 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
 | 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
+| 2026-10-03 | B5：UiRenderer 的 `ClipSprite` 改用 `Math::Intersection`；目標矩形非有限時一律轉交 RenderQueue 回報錯誤。舊版的處理不一致：有時報錯、有時靜默丟棄，寬或高為 +inf 時還會送出 UV 範圍為 0 的 sprite；文字 bounds 接近 `FLT_MAX` 而對齊計算溢位時也會觸發。審查補齊這些情況後，使用者再次確認維持一律報錯 | 使用者 |
 | 2026-10-03 | 本計劃全程使用 ultracode（盤點、實作、驗證、審查都以多 agent workflow 進行）：這是底層概念模型的變更，且已有大量實作依賴它 | 使用者（B4b 進行中） |
 | 2026-10-03 | Collision 的 raycast 改為接收 `Math::Ray`（Ray 是幾何 primitive，`RaycastAabb`／`RaycastCapsule` 是 Collision 演算法） | 使用者 |
 | 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
@@ -273,7 +274,7 @@
 
 ## B4b Render 矩陣切換到 Math 慣例
 
-狀態：**本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI 四平台**（分支 `claude/math-foundation-b4b`，自 master `ed7a08a`）。
+狀態：**完成**。PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 於 2026-10-03 合併為 `43bccad`；最終 head `2cbf2c6` 的 CI 四平台全部通過（含 Linux lavapipe GPU smoke）。
 
 ### 變更
 
@@ -299,6 +300,56 @@
 | test preset | 45／45 通過（含 pvp 的 `presentation_evidence` 與本機 metal 的 sdl_gpu smoke） |
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 對抗式審查 | 3 個 minor：Legacy 來源標註錯誤（已更正）、測試替身重複（併入 `RendererTests.cpp` 重用）、文件未更新（本節）。審查者也以 flat index 對應逐項證明了各鏡像鏈逐位元相同 |
+
+## B5 Ui 與 ui_editor
+
+狀態：**本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台**（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
+
+### 進行方式（ultracode）
+
+1. 盤點：3 個 agent 分別盤點 Ui 本體、UiRenderer 與 ui_editor、gyo.ui 資料契約與外部使用者。
+2. 前置測試：在 master `43bccad` 的程式碼上新增並通過，再進行遷移。
+   - gyo.ui v1 `Serialize` 的 golden：`kDocument`，以及新的全 ASCII 合成文件 `UiGoldenDocument.hpp`（涵蓋 image `source_uv`、panel、顏色 select、value 文字、字型覆寫、float32 數字格式）。
+   - sRGB hex 往返（全部 256 個 byte）；decode 結果以凍結的舊版 `SrgbToLinear` 在執行期比對（不寫死依賴 libm 的常數）。
+   - JSON 陣列位置對應到欄位的順序。
+   - 半開區間點擊判定的右、下邊界。
+   - 精確 layout 與 draw list 回歸（`UiLayoutGolden.hpp`，兩份文件 × 3 種 viewport，以 bit pattern 比對）。
+   - `ClipSprite` 有限值的精確結果。
+   - `tests/ui_editor`：凍結 `PreviewAdapter` 的 `LinearToSrgb` 與 `Math::EncodeSrgb` 比對（新 ctest `gyo_ui_editor.preview_srgb`）。
+3. 遷移後全部前置測試照樣通過，再做差異比對與對抗式審查。
+
+### 變更
+
+- `UiTypes.hpp`：`UiFloat2`、`UiRect` 移除；`UiInputFrame`、各 draw command、`UiDesignCanvas`、`UiRectTransform` 欄位、`UiElement::sourceUv/itemStep`、`UiEvaluatedElement`、`HitTestUiLayout` 改用 `Math::Vec2`／`Math::Rect`。`UiColor`、`UiViewport`、`UiRectTransform` 保留。
+- `UiRuntime.cpp`：`IntersectRect` 刪除，改用 `Math::Intersection`（參數順序不變）；`ContainsHalfOpen` 保留為 Ui 的半開區間點擊政策（加註說明不用閉區間的 `Math::Contains`）；`MakeFit`、`ResolveDesignRect`、`ToPixels` 只換型別。
+- `UiValidation.cpp`：`IsFinite(UiFloat2)` 刪除，經 ADL 使用 `Math::IsFinite`；`source_uv` 的有限性檢查改用 `Math::IsFinite(Rect)`；`IsFinite(UiColor)` 保留（Ui 語義型別，列為 B7 稽核例外）。
+- `UiColor.cpp`：`SrgbToLinear`、`LinearToSrgb` 刪除，改用 `Math::DecodeSrgb/EncodeSrgb`；byte 量化的 clamp 改用 `Math::Clamp`。
+- codec（`UiDocumentCodec.cpp`、`UiSerialization.cpp`）只換型別，gyo.ui v1 格式與 schema 版本不變。
+- `UiRenderer.cpp`：`ConvertRect` 刪除（直接指派）；`ClipSprite` 改用 `Math::Intersection`，目標矩形非有限時一律交給 RenderQueue 報錯（使用者決定，見決策紀錄）。
+- `engine/ui/CMakeLists.txt`：`gyo_ui` PUBLIC 連結 `GYO::Math`。
+- ui_editor：`PreviewAdapter` 的 `LinearToSrgb` 刪除，改用 `Math::EncodeSrgb`；alpha clamp 改用 `Math::Clamp`；`gyo_ui_editor_preview` PRIVATE 連結 `GYO::Math`。
+- pvp：已編譯的 `PvpApplication.cpp` 與未編譯的 `ObjectFpsUi.cpp` 中的 `Engine::Ui::UiRect` 改為 `Engine::Math::Rect`（PLAN 原本沒列，盤點時發現）。
+- `Math::Rect` 的註解：改為「查詢預設尺寸非負」，因為 Ui layout 會產生負尺寸的 bounds；`UiEvaluatedElement` 加註。
+- 文件：`architecture.md` 的 Ui 與 UI editor 列。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| 前置測試 | 在 master 上通過，遷移後照樣通過（`gyo_ui_tests` 30 個 case） |
+| 差異比對（master 對 B5，`-O2`／`-O0`） | 有限輸入全部逐位元相同：codec（含 38400 份突變文件）、layout／compose（4.7 萬個 viewport）、Update 序列（6.6 萬幀）、hit test（104 萬個點）、Renderer（368 萬次 submit）、sRGB 窮舉。唯一差異是決定中的非有限目標矩形一律報錯 |
+| core preset | 19／19 通過 |
+| test preset | 46／46 通過（多出 `gyo_ui_editor.preview_srgb`） |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B4a 相比多出 `gyo_ui → gyo_math`、`gyo_ui_editor_preview → gyo_math`、`gyo_ui_editor_preview_srgb_tests → gyo_math` |
+| 對抗式審查 | 1 個 major（舊行為描述不完整，已更正並由使用者再次確認）、5 個 minor（全部處理） |
+| CI 四平台 | 第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
+
+### 範圍外，只回報
+
+- `item_step` 沒有有限性驗證：`{NaN, 1}` 能通過 Validate，序列化後變成 `null` 而無法再讀回。修正會改變資料契約的驗證規則，需另行決定。
+- ui_editor 的 letterbox、半開區間點擊判定、文字對齊，與 Ui 本體各有一份；`UiRuntime` 的 Evaluate 與 Compose 也重複了 layout 走訪。屬於 layout 邏輯，不是數學庫範圍。
+- `Render::Color` 與 `UiColor` 同構（PLAN 已列）。
 
 ## 未結事項
 

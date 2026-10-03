@@ -20,7 +20,7 @@ enum class UiScaleMode : std::uint8_t {
 };
 
 struct UiDesignCanvas final {
-    UiFloat2 size{1280.0F, 720.0F};
+    Math::Vec2 size{1280.0F, 720.0F};
     UiScaleMode scaleMode{UiScaleMode::Fit};
 };
 
@@ -60,11 +60,11 @@ struct UiBindingDeclaration final {
 };
 
 struct UiRectTransform final {
-    UiFloat2 anchorMin{};
-    UiFloat2 anchorMax{};
-    UiFloat2 pivot{};
-    UiFloat2 position{};
-    UiFloat2 sizeDelta{};
+    Math::Vec2 anchorMin{};
+    Math::Vec2 anchorMax{};
+    Math::Vec2 pivot{};
+    Math::Vec2 position{};
+    Math::Vec2 sizeDelta{};
 };
 
 enum class UiValueReferenceKind : std::uint8_t {
@@ -149,7 +149,7 @@ struct UiElement final {
 
     // image
     std::string textureAsset;
-    UiRect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
+    Math::Rect sourceUv{0.0F, 0.0F, 1.0F, 1.0F};
 
     // text / button
     UiTextSource text;
@@ -171,7 +171,7 @@ struct UiElement final {
 
     // fixed_step_list
     std::size_t maxItems{};
-    UiFloat2 itemStep{};
+    Math::Vec2 itemStep{};
     std::vector<UiElement> itemTemplate;
 };
 

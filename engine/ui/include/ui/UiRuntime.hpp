@@ -14,8 +14,10 @@ namespace Engine::Ui {
 struct UiEvaluatedElement final {
     std::string id;
     UiElementType type{UiElementType::Container};
-    UiRect boundsPixels{};
-    UiRect clipPixels{};
+    // Pixel bounds may have a negative size when a negative size_delta exceeds
+    // the anchored span; hit testing treats such bounds as empty.
+    Math::Rect boundsPixels{};
+    Math::Rect clipPixels{};
     std::size_t drawOrder{};
     bool interactive{};
     std::optional<std::size_t> listItemIndex;
@@ -25,7 +27,7 @@ struct UiEvaluatedElement final {
 // span and therefore the returned pointer's lifetime.
 [[nodiscard]] const UiEvaluatedElement* HitTestUiLayout(
     std::span<const UiEvaluatedElement> layout,
-    UiFloat2 pointPixels,
+    Math::Vec2 pointPixels,
     bool interactiveOnly = false) noexcept;
 
 class UiRuntime final {

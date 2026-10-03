@@ -7,6 +7,7 @@
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/loaders/FontAsset.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
+#include "engine/math/geometry/Rect.hpp"
 #include "render/IRenderDevice.hpp"
 #include "render/RenderQueue.hpp"
 #include "render/RenderTypes.hpp"
@@ -59,41 +60,35 @@ namespace {
     return {color.red, color.green, color.blue, color.alpha};
 }
 
-[[nodiscard]] Math::Rect ConvertRect(UiRect rect) noexcept {
-    return {rect.x, rect.y, rect.width, rect.height};
-}
-
+// Clips a sprite to clip and remaps its source UV. A sprite whose destination is
+// not finite (including text placement that overflowed) is passed through
+// unchanged so RenderQueue reports it as an error. The former inline clip
+// handled such sprites inconsistently: some errored, some were dropped, and an
+// infinite width or height was clipped into a sprite with a zero-size source UV.
 [[nodiscard]] bool ClipSprite(
     Render::SpriteSubmission& sprite,
-    UiRect clip) noexcept {
+    Math::Rect clip) noexcept {
     const Math::Rect original = sprite.destinationPixels;
-    if (!std::isfinite(clip.x) || !std::isfinite(clip.y) ||
-        !std::isfinite(clip.width) || !std::isfinite(clip.height) ||
+    if (!Math::IsFinite(original)) return true;
+    if (!Math::IsFinite(clip) ||
         original.width <= 0.0F || original.height <= 0.0F ||
         clip.width <= 0.0F || clip.height <= 0.0F) {
         return false;
     }
-    const float x = std::max(original.x, clip.x);
-    const float y = std::max(original.y, clip.y);
-    const float right = std::min(
-        original.x + original.width,
-        clip.x + clip.width);
-    const float bottom = std::min(
-        original.y + original.height,
-        clip.y + clip.height);
-    if (right <= x || bottom <= y) return false;
+    const Math::Rect visible = Math::Intersection(original, clip);
+    if (visible.width <= 0.0F || visible.height <= 0.0F) return false;
 
-    const float leftFraction = (x - original.x) / original.width;
-    const float topFraction = (y - original.y) / original.height;
-    const float widthFraction = (right - x) / original.width;
-    const float heightFraction = (bottom - y) / original.height;
+    const float leftFraction = (visible.x - original.x) / original.width;
+    const float topFraction = (visible.y - original.y) / original.height;
+    const float widthFraction = visible.width / original.width;
+    const float heightFraction = visible.height / original.height;
     sprite.sourceUv = {
         sprite.sourceUv.x + sprite.sourceUv.width * leftFraction,
         sprite.sourceUv.y + sprite.sourceUv.height * topFraction,
         sprite.sourceUv.width * widthFraction,
         sprite.sourceUv.height * heightFraction,
     };
-    sprite.destinationPixels = {x, y, right - x, bottom - y};
+    sprite.destinationPixels = visible;
     return true;
 }
 
@@ -395,14 +390,14 @@ UiResult<void> UiRenderer::Submit(
                 Render::SpriteSubmission sprite{};
                 sprite.layer = Render::CompositeLayer::Overlay;
                 if constexpr (std::is_same_v<T, UiQuadDraw>) {
-                    sprite.destinationPixels = ConvertRect(draw.destinationPixels);
+                    sprite.destinationPixels = draw.destinationPixels;
                     sprite.material.tint = ConvertColor(draw.color);
                 } else if constexpr (std::is_same_v<T, UiImageDraw>) {
                     auto image = impl_->ResolveImage(draw.textureAssetId);
                     if (!image) return UiResult<void>::Err(std::move(image).error());
                     sprite.material.texture = image.value()->gpu;
-                    sprite.destinationPixels = ConvertRect(draw.destinationPixels);
-                    sprite.sourceUv = ConvertRect(draw.sourceUv);
+                    sprite.destinationPixels = draw.destinationPixels;
+                    sprite.sourceUv = draw.sourceUv;
                     sprite.material.tint = ConvertColor(draw.tint);
                 } else {
                     if (draw.utf8.empty()) return UiResult<void>::Ok();

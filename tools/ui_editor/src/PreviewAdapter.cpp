@@ -1,5 +1,9 @@
 #include "gyo/ui_editor/PreviewAdapter.hpp"
 
+#include "engine/math/geometry/Rect.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
+#include "engine/math/scalar/Scalar.hpp"
+
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 
 #include <imgui.h>
@@ -24,30 +28,23 @@ namespace {
 
 using Json = nlohmann::json;
 
-[[nodiscard]] float LinearToSrgb(const float linear) noexcept {
-    const float clamped = std::clamp(linear, 0.0F, 1.0F);
-    return clamped <= 0.0031308F
-        ? clamped * 12.92F
-        : 1.055F * std::pow(clamped, 1.0F / 2.4F) - 0.055F;
-}
-
 [[nodiscard]] ImU32 ToImColor(const Engine::Ui::UiColor& color) noexcept {
     return ImGui::ColorConvertFloat4ToU32({
-        LinearToSrgb(color.red),
-        LinearToSrgb(color.green),
-        LinearToSrgb(color.blue),
-        std::clamp(color.alpha, 0.0F, 1.0F),
+        Engine::Math::EncodeSrgb(color.red),
+        Engine::Math::EncodeSrgb(color.green),
+        Engine::Math::EncodeSrgb(color.blue),
+        Engine::Math::Clamp(color.alpha, 0.0F, 1.0F),
     });
 }
 
 [[nodiscard]] ImVec2 Minimum(
-    const Engine::Ui::UiRect& rect,
+    const Engine::Math::Rect& rect,
     const PreviewAdapter::Viewport& viewport) noexcept {
     return {viewport.x + rect.x, viewport.y + rect.y};
 }
 
 [[nodiscard]] ImVec2 Maximum(
-    const Engine::Ui::UiRect& rect,
+    const Engine::Math::Rect& rect,
     const PreviewAdapter::Viewport& viewport) noexcept {
     return {
         viewport.x + rect.x + rect.width,
@@ -101,7 +98,7 @@ class ClipScope final {
 public:
     ClipScope(
         ImDrawList& drawList,
-        const Engine::Ui::UiRect& clip,
+        const Engine::Math::Rect& clip,
         const PreviewAdapter::Viewport& viewport)
         : drawList_(&drawList) {
         drawList_->PushClipRect(Minimum(clip, viewport), Maximum(clip, viewport), true);
@@ -398,7 +395,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
         drawList.AddRect(
             minimum, maximum, IM_COL32(255, 192, 64, 255), 0.0F, 0, 2.0F);
 
-        Engine::Ui::UiRect parentBounds;
+        Engine::Math::Rect parentBounds;
         if (source.parent != nullptr) {
             const std::string parentId = source.parent->value(
                 "id", std::string{});

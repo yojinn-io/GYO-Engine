@@ -11,7 +11,7 @@ target_include_directories(gyo_ui PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(gyo_ui
-    PUBLIC GYO::Engine
+    PUBLIC GYO::Engine GYO::Math
     PRIVATE nlohmann_json::nlohmann_json
 )
 target_compile_features(gyo_ui PUBLIC cxx_std_20)
