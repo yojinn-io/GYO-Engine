@@ -1042,7 +1042,7 @@ int main(int argc, char* argv[]) {
                   << "--arena-root <deployed assets> --gateway host:port --role create|join\n"
                   << "--duration 5 --output <directory> [--gpu-driver auto|d3d12|vulkan|metal] [--move]\n"
                   << "--latency --duration 120 --events 200 --fps 60 (no GPU readback)\n"
-                  << "--combat (latency modes only: concurrent SDL shooting, decisions and authority HP)\n"
+                  << "--combat (latency modes only: concurrent predeclared v5 SDL combat schedule, decisions and per-life state)\n"
                   << "--phase-stalls --fps 60 (six 64/83/250 ms event/update phase stalls)\n"
                   << "--latency-short --duration 16 --events 20 --fps 60 (explicit short regression)\n"
                   << "--weapon-short --fps 30|60|144 (8 seconds, no GPU readback)\n"

@@ -46,11 +46,13 @@
   幀抖動下會在本機被擋（第03批「冷卻點擊不排隊」設計）。權威的10 Tick冷卻本身正確。
 - 需決定：本機閘門是否以估計的權威Tick補償落差，或維持保守；屬操作手感，與防止送出必被拒絕的請求之間取捨。
 
-### 5. 驗收工具清理：`weapon_short`
+### 5. 驗收工具清理：`weapon_short`與v4合法射擊長測
 
 - 現況：`build/acceptance/object_fps_pvp/weapon_short.hpp`的觀察方仍檢查v4「HP=0仍可移動與射擊」，在v5必然失敗；
   其v5涵蓋已由第04批的動作短測（`run_action_short.py`）取代。
-- 需決定：刪除該模式或改寫為v5語意。
+- 同類（v5第05批05-1發現）：`run_action_legal.py`與probe的`--legal-shots`模式、`action_evidence.analyze_legal`假設
+  「全部接受、無限彈藥」，v5第13發起即為空彈拒絕；v5長測已改用`run_gameplay_soak.py`。
+- 需決定：刪除這些模式或改寫為v5語意。
 
 ### 6. 自己死亡時的持槍手臂（待使用者釐清）
 
@@ -59,7 +61,40 @@
   遠端畫面中屍體依Death01全身動畫倒地，世界手槍仍掛在手上（v5第04批的設計）。
 - 待釐清：使用者看到的是第一人稱手臂（若是則為缺陷，須重現）或對方畫面中屍體手上的槍（若希望掉落或隱藏則為新需求）。
 
-### 7. 未排程的既有候選（v5文件已記載）
+### 7. 驗收紀錄計時器基線（使用者2026-10-03決定延到v6）
+
+- 來源：v5第05批05-5的60 Hz長測失敗。headless probe以`sleep_until`跑60 Hz迴圈，macOS常晚醒3～8 ms
+  （空迴圈實測：P99 20.5 ms、超過18 ms約22–25%；probe加上工作後4.6%的幀超過21.7 ms）。
+  重生首幀時間重設的配對規則原本假設「幀長≤1/60秒＋5 ms」，113次重生撞到3次而誤判。
+- v5的處理：配對改為結構條件（同epoch、緊跟LifeRespawn、掉時恰為幀長−1 Tick、幀長<100 ms），不再依賴計時精度。
+- v6待做：probe開始時量一次計時器抖動（例如數秒的空60 Hz迴圈分布），寫進平台指紋與報告，**只用來解讀結果，不當門檻**；
+  讓不同平台的時間抖動可以直接和產品問題區分。原則：不依OS名稱分支，以實測能力解讀。
+
+### 8. 測試與驗收器的跨平台相容性稽核（2026-10-03，使用者要求的全面檢查）
+
+- 原則（使用者2026-10-03討論定案）：對玩家的門檻跨平台相同、不因平台放寬；測量工具對主機計時精度或視窗／GPU行為的假設，
+  優先改成結構條件，非得用時間常數時以實測基線解讀（第7項），不依OS名稱分支；平台對玩家的影響（如第3項）屬產品問題。
+- v5已處理：重生首幀時間重設的配對規則（改為結構條件）。其餘項目在macOS的v5驗收中都通過，未有失敗證據，
+  依「實際壓力才改」不在v5變更（改了也會使已取得的驗收指紋失效）。下表依風險排序，數字為子代理稽核所列位置（`build/acceptance/object_fps_pvp/`為BA）。
+- 已有失敗紀錄：
+  - BA/`player_presentation_evidence.py:101-103`：人物短測達成FPS須≥名義×0.85；144 FPS需≥122.4。v5第04批join只到120 FPS而失敗（當時判為GPU容量並保留）。
+    同檔`:122-139`的腳本時窗也依賴事件準時。
+- 高風險（依主機喚醒精度或以接收端時間量間隔）：
+  - BA/`worker_main.cpp:336-352`：1秒內重送55–65次、60–70次嘗試；`:219,340,366`以接收端`Pump()`時間要求間隔≥30／≥14 ms（只剩2.7 ms餘裕）。
+  - BA/`worker_main.cpp:230-234`、`action_probe.py:402-412`、`gameplay_evidence.py:202-206`：以relay接收時間做1秒滑動窗口（≤120包、≤31動作／結果），relay執行緒停頓會把封包擠在一起。
+  - BA/`action_short.hpp:150-158`：射擊間隔0.25秒對10 Tick冷卻、換彈只留200 ms；某幀晚83 ms以上即失敗。
+  - BA/`gui_main.cpp:657-662`（產生命令數只容1 ms搶占）、`:932,1004`（穩定幀≤40 ms）、`:571-686`（`SDL_Delay(83)`注入停頓逼近補步上限）。
+  - BA/`presentation_evidence.py:16,130`：遠端交越不得早於本機20 ms以上；60 Hz加晚醒的幀可達約25 ms。
+  - BA/`run_timing.py:69-105`：計次GUI輪任一OS視窗事件即無效；macOS對`SDL_RaiseWindow`的非同步啟用事件若晚到，會被計入。
+  - `tests/common/render/sdl_gpu/MeshUpdateSmoke.cpp:237-249`：16幀都須Presented；視窗被遮蔽或headless GPU會回Skipped。
+  - `tests/common/ci/test_package_checks.py:75-80`（0.2秒內Python子程序須啟動）、`tests/object_fps/package_tools/test_gpu_smoke.py:55-60`（0.5秒）。
+  - `apps/object_fps_pvp/gateway/backpressure_test.go:102-158`：60 Hz `time.Ticker`在250 ms內須≥12次，並依100 ms間隔判定恢復。
+  - `tests/common/core/asset/AssetWatcherTests.cpp:39-66`：20 ms後改寫同大小檔案，依賴檔案系統mtime精度（FAT 2秒）。
+- 說明（非缺陷，但解讀時要知道）：各分析器的「≥100 ms停頓」實際約83 ms即可觸發，因為Client每幀最多補5步（`LocalPlayerPrediction.hpp:73`），
+  剩餘時間加上該幀達100 ms就開始捨棄，`dropped_seconds>0`也算停頓。v5長測最長幀87 ms而未掉時，屬接近邊界。
+- 產品門檻（50／66.7／80／100／150 ms、≥99%、恢復1.5秒、窗口與包率上限）不在此列，維持跨平台相同。
+
+### 9. 未排程的既有候選（v5文件已記載）
 
 - CS式開局／回合準備期：全員凍結、無敵、倒數；需Match回合狀態、無敵規則、HUD倒數與契約變更。見
   [v5 fix/02](../v5/fix/02-a1-cancelled-by-stall-reseed.md)。

@@ -1,7 +1,128 @@
 # PvP v5 交接
 
-更新：2026-10-02。**第01–03批已完成（第03批2026-10-02結案驗收通過）。**
-**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），第05批未開始；未執行長測、未升格v5穩定基線。
+更新：2026-10-03。**第01–04批已完成（第03批2026-10-02結案驗收通過；第04批PR #14合併為`cef1b39`）。**
+**第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），**第05批進行中**（2026-10-02使用者啟動；工作分支`claude/pvp-v5-batch05`，自`cef1b39`）：05-1～05-4完成（2026-10-03），剩05-5完整驗收；未執行長測、未升格v5穩定基線。
+
+## 第05批進度（記錄器，隨工作更新）
+
+使用者決定（2026-10-02）：
+- 「v5結案」＝第05批＋完整驗收＋全部通過即升格v5穩定基線（同v4的結案方式）。此決定即視為完整GUI三輪與兩組30分鐘長測的授權。
+- 平台：只在本機macOS（Intel／Metal）；Windows／Linux依跨平台手法標「未執行」，狀態表按平台分列。
+
+開工時發現：完整驗收的兩個runner仍是v4語意。`run_action_legal.py`（headless長測）沒有生命、換彈或死亡；
+`run_timing.py --combat`（GUI三輪）的`combat_latency.hpp`只追蹤HP，不分生命、不換彈。第05批計畫「先修正驗收語意，再量測」
+正是這個缺口。v5的逐生命核對已存在於第03批的玩法probe（`--gameplay-v5`，固定16秒計畫）與`gameplay_evidence.py`。
+
+| 子批次 | 內容 | 建議檔位 | 狀態 |
+|---|---|---|---|
+| 05-1 | headless長測v5化：玩法probe可重複16秒計畫為多個循環（生命世代相對遞增），分析器逐循環／逐生命核對；`--soak`長模式與短模式 | high | 完成（CTest 42／42；突變14／14；開發實跑2循環60 Hz、3循環144 Hz與單循環矩陣clean-60皆PASS，不計入驗收） |
+| 05-2 | GUI combat v5化：射擊遇空彈匣換彈、死亡／重生期間依v5規則、逐生命HP與唯一傷害核對 | high | 完成（CTest 43／43；突變9／9；開發實跑16秒與兩輪120秒，第二輪120秒整輪PASS，不計入驗收） |
+| 05-3 | 整合短測與架構檢查：依指紋重用第03／04批短測（05-1改了action probe，25案矩陣須重跑）、一輪雙GUI整合短模式、產品移除／owner選擇／Match不連結Renderer與SDL | medium | 完成（矩陣25／25、GUI短測、長測短模式、產品移除皆通過；2026-10-03） |
+| 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 完成（2026-10-03；PR待CI） |
+| 05-5 | 完整驗收：事前宣告；GUI三輪×120秒combat（計次、fix/06補跑規則）；60 Hz與144 Hz各1808秒長測（113循環，串行）；全部通過寫v5穩定基線並結案 | medium（執行約1.5小時，機器須閒置） | **停止待決定**：GUI三輪通過；60 Hz長測經規則B重新分析通過；144 Hz受干擾（整機瞬間停頓使Match掉1 Tick） |
+
+使用者2026-10-02確認拆分與檔位，05-1以high執行。
+
+- 05-1紀錄：
+  - probe（`gameplay_action.hpp`）新增`--cycles N`（1–113）：把第03批的16秒計畫重複N次。B每循環死亡一次、A從不死亡，
+    所以B的動作生命世代每循環+1、A固定為1；計畫JSON帶`cycle`、`cycles`、`lives_per_cycle`與絕對生命世代。
+    A每循環結束剩11發，下一循環第12發會變成空彈拒絕，因此**只在後面還有循環時**於14.6秒加一次`cycle-reload`；
+    單循環仍是原16秒計畫（矩陣用）。每幀另記雙方Client的相位追蹤狀態與修正計數。
+  - 為何另寫runner與分析器：v4的`run_action_legal.py`／`analyze_legal`假設「全部接受、HP打到0後仍可射擊」，
+    v5會在第13發起變成空彈拒絕；第03批`gameplay_evidence.py`把全部幀載入記憶體並逐幀重算戰鬥狀態，
+    144 Hz跑30分鐘約1.2 GB證據，無法沿用。新增`run_gameplay_soak.py`（不經relay，與v4長測相同，
+    以Gateway限流計數與Client傳輸上限核對容量）與串流分析器`gameplay_soak_evidence.py`（重用第03批的
+    `combat_expected`、`validate_accepted_actions`、`client_disturbance`等判定，按生命分組並依Tick快取）。
+  - 檢查：每個宣告動作恰一次且判定與計畫完全一致、每循環判定簽名相同；逐幀HP／彈藥／換彈／最後射擊與該生命的唯一裁決一致；
+    B的生命1…N+1連續、每生命恰一次死亡且在該循環內、180 Tick等待、屍體不水平移動、重生建立新epoch且有對應的LifeRespawn重設；
+    A從不死亡；每位玩家每循環都有跳起並落地；乾淨跑次的移動門檻（送出P95≤22、Actual P50≤50／P95≤66.7、≥99%）、
+    零非重生重設、零Match掉時、零≥100ms幀。
+  - 「延遲不隨時間漂移」：以**既有**門檻（50／66.7ms）套用到每10個循環（160秒）的窗口，任一窗口不合格即失敗；
+    不是新數字。相位追蹤（狀態秒數、修正與遲到修正次數、每循環修正數）只報告，不新增門檻。
+  - 長模式：`--soak`固定113循環（1808秒，涵蓋1800秒的最小整循環數），只允許60／144 Hz；短模式2–4循環。
+  - 開發實跑（不計入驗收，`pvp-v5-batch05-1-dev-{1,2,matrix}/`）：2循環60 Hz與3循環144 Hz皆PASS，
+    每循環判定簽名一致、位置每循環回到同一點；144 Hz 48秒產生33 MB證據、分析1.2秒／39 MB記憶體（推估30分鐘約1.2 GB、45秒）。
+    單循環矩陣`clean-60`仍PASS。
+  - 突變（以dev-1實跑資料改壞後重分析）14／14被抓：判定被改、重複裁決、致命傷害消失、早於排程送出、錯生命、
+    幀HP／彈藥被改、屍體移動、慢幀、跳躍消失、LifeRespawn重設遺失、重設原因非重生、Actual改為Held、後段延遲漂移。
+  - 指紋影響：action probe已改，第03批結案的25案矩陣不再符合「指紋未變才重用」，05-3須以新probe重跑；
+    `gameplay_evidence.py`未改。
+  - v4的`run_action_legal.py`（`--legal-shots`）與`analyze_legal`在v5無法通過，不再作為v5驗收入口；
+    沒有刪除（範圍外），已列入[v6交接](../v6/HANDOFF.md)第5項的驗收工具清理。
+- 05-2紀錄（使用者2026-10-02確認，high）：
+  - 預先宣告的SDL排程（`combat_latency.hpp`）：沿用v4每0.8秒一格、自0.2秒起，改為17格一循環（13.6秒）：
+    4發擊殺join→3發打屍體（死亡等待中）→空格→4發擊殺重生的新生命→第12發打屍體→空彈匣點擊→R換彈→換彈中點擊→空格。
+    每格與其依賴的死亡／重生／換彈邊界至少隔0.6秒，所以每個動作的判定都可事前確定。120秒＝150格、116個送出動作、18次死亡。
+  - 實跑確認的v5行為：空彈匣與換彈中的點擊由Client在本機擋下（不送出、不播射擊動畫），probe逐次檢查；
+    對死亡目標的射擊被受理、扣彈、命中World、0傷害（Match不把屍體放進命中候選）。
+  - HP紀錄每幀加上完整CombatState（生命、彈藥、換彈、最後射擊）與PlayerState生命欄位，HUD另記彈藥、生命、死亡。
+    分析器（`combat_gui_evidence.py`，schema 2）以第03批的`combat_expected`逐生命重算每幀快照與HUD；
+    命中的目標生命以排程預測，再以快照的生命時間線核對；死亡等待180 Tick、重生建立新epoch、射擊者從不死亡；
+    Match的LifeRespawn重設必須與觀測到的死亡／新生命逐一相同。
+  - 共用移動分析器`command_evidence.analyze_commands`原本把重生的epoch重設判為「不明重設」，重生首幀的時間重設判為干擾，
+    舊生命被取消的命令算成未執行。改為：LifeRespawn重設另列（`unexpected_resets`只計其他原因）；
+    重生首幀只有與LifeRespawn精確配對時才不算干擾（規則從第03批`gameplay_evidence.client_disturbance`移到共用函式，兩邊共用）；
+    生命週期取消的命令必須有對應的LifeRespawn，才移出分母。`run_timing.py`在有重生時要求combat證據已核對，否則失敗。
+  - 60 Hz產量檢查原為整段±2步（頭尾兩個邊界）。實跑中join每次重生約少1個命令：契約規定每次播種重新起算固定步相位（≤1步），
+    新epoch首次相位修正≤±2 Tick（`MovementPhaseMaximumCorrectionSeconds`）。因此每次LifeRespawn另加3步容許，
+    依契約上限換算，不是新數字。120秒輪join 17次重生、容許53步，實測少14／20步。
+  - `test_combat_gui_evidence.py`原本未登錄CTest（既有缺口），本次改寫並登錄（`combat_gui_evidence`，逾時30秒）。
+  - 開發實跑（不計入驗收，`pvp-v5-batch05-2-dev-{1..4}/`）：dev-1為改分析器前的16秒原始資料；dev-2 16秒短測PASS；
+    dev-3 120秒的combat與可見延遲皆過，但產量檢查失敗（促成上一項）；dev-4 120秒整輪PASS：可見P50／P95 36.0／39.4ms（200／200）、
+    移動Actual P95 37.8ms、裁決抵達P95 107ms、射擊回饋P95 6.2ms、18次死亡／重生、視窗乾淨。
+  - 突變（以dev-4資料改壞後重分析）9／9被抓：屍體射擊造成傷害、換彈被拒、空彈點擊被送出、join快照HP、create快照彈藥、
+    HUD彈藥、HUD生命、LifeRespawn重設缺一、死亡等待不是180 Tick。
+  - 指紋影響：`gameplay_evidence.py`改為呼叫共用配對函式，05-3的25案矩陣本來就要以新probe重跑。
+- 05-3紀錄（使用者2026-10-03確認，medium；來源`4f91a0a`，事前宣告與指紋在
+  `build/target/_build/test/logs/pvp-v5-batch05-3-20261003/`的`declaration.md`、`fingerprints.txt`）：
+  - 產物確認：測試建置`ninja -n`無待建項目，正式Match／Gateway／Client與probe即為`4f91a0a`的產物。
+  - 25案真網路玩法矩陣（新probe與分析器，一次）：25／25通過，1075／1075動作，干擾解除後新裁決最慢1.081秒（門檻1.5秒）。`matrix/`
+  - 雙GUI整合短測（計次一輪，`--gui --combat --short`，16秒60 FPS）：PASS，可見P50／P95 36.3／38.1ms（20／20）、
+    2次死亡／重生、11命中／4屍體射擊／1換彈、視窗乾淨，未補跑。`gui-short-1/`
+  - 長測短模式（2循環60 Hz）：PASS。`soak-short/`
+  - Match依賴：`otool -L`只連結CoreFoundation、libc++、libSystem，符號無SDL／Renderer。
+  - 產品移除（`removal/`，含腳本`removal_check.sh`）：`git archive HEAD`的隔離副本刪除281個owner檔案與
+    `engine/config/projects.csv`的登錄列後，`test` preset組態與完整建置成功；CTest 26／27，唯一失敗`build.ci`的4項
+    release pipeline測試都是`git rev-parse`在非repo副本失敗；在副本內建立git repo重跑`build.ci`即通過。
+    剩餘非文件引用1處：`services/gyo_gateway/README.md`說明產品Gateway模組依賴公共模組（方向正確；移除產品時該說明會過時，屬文件）。
+  - 量測後檢查無孤兒程序（Match／Gateway／probe／runner皆已結束）。
+- 05-4紀錄（使用者2026-10-03確認，medium）：
+  - 新增[手動指南](MANUAL_ACCEPTANCE.md)：共同前提（`test` preset建置、一次一項、全新輸出、指紋）、正式Client四終端、
+    L3原生操作清單（v5預期）、L1／L2短測命令、量化門檻（含05-1／05-2確立的逐生命、LifeRespawn、產量容許與漂移窗口規則）、
+    完整驗收命令（GUI三輪＋兩組長測）與fix/06補跑規則、平台註記。命令以本機`--help`與05-3實跑核對；
+    雜湊用Python，避免`sha256sum`／`shasum`的平台差異。
+  - 新增[驗收狀態](ACCEPTANCE_STATUS.md)：短測與完整驗收兩表，按macOS／Windows／Linux分欄；Windows／Linux與完整驗收全標「未執行」；
+    回報欄位與升格條件。
+  - 第05批計畫狀態、README進度與接續文字、本批dev_log（`docs/dev_logs/2026_10_03_pvp_v5_batch05.zh-Hant.md`）已更新。
+- 05-5紀錄（2026-10-03；來源`1c9028f`＝PR #15內容；宣告、指紋、驅動腳本在`build/target/_build/test/logs/pvp-v5-acceptance-20261003/`）：
+  - PR #15：repo不允許auto-merge，且不輪詢CI，因此先開跑（樹與PR相同），結束後查一次CI：全綠。
+    但驗收有失敗，依事前安排**未合併**、未升格，等使用者決定。
+  - GUI三輪全部通過（見[驗收狀態](ACCEPTANCE_STATUS.md)），無補跑。
+  - 60 Hz長測失敗，依宣告停止，144 Hz未執行，不重跑。唯一錯誤是「Client runtime gap is not a matched normal LifeRespawn clamp」：
+    64次重生首幀時間重設中61次配對、3次未配對（第37、45、97條生命，t＝569.8／697.8／1529.8秒）。
+    這3次都是同epoch、緊跟LifeRespawn 2～19ms、掉時恰為「幀長−1 Tick」的正常重設，只是該幀長21.8～23.1ms，
+    超過第03批分析器規則`frame_seconds <= 1/fps + 0.005`（60 Hz時21.7ms）。其他檢查全部通過
+    （4971／4971動作、判定簽名1、113次死亡／重生、Actual P95 38.4ms、漂移窗口全過、最長幀87ms＜100ms）。
+  - 待使用者決定（不自行放寬已核准規則）：
+    a. 維持規則：視為長測失敗，先查probe在重生幀為何偶發多5～6ms（headless probe每幀做兩個Client的Drain與JSON），再重跑；
+    b. 調整規則：重生首幀的上限改為與其他檢查一致的「<100ms且掉時精確等於幀長−1 Tick」，或放寬幾毫秒，屬驗收規則變更，
+       須同時改第03批分析器（共用函式）並重跑受影響項目（矩陣與兩組長測）。
+  - 量測後無殘留程序。
+  - 使用者2026-10-03決定選**b**，計時器基線紀錄列入v6（[v6交接](../v6/HANDOFF.md)第7項）：
+    `command_evidence.is_life_seed_clamp`改為結構條件（同epoch、LifeRespawn後100 ms且2 Tick內、掉時恰為幀長−1 Tick、幀長<100 ms），
+    移除`1/fps+5ms`；`fps`參數隨之從配對函式、`analyze_commands`、`client_disturbance`移除。測試補上「23.1 ms等超過舊上限的正常重設放行、
+    100 ms幀／掉時不精確／他epoch／他玩家／超過2 Tick／100 ms後仍擋」。
+  - 以新規則**重新分析原始資料**（產品與probe未變，新規則只比舊規則寬，對同一份資料等同以新分析器量測）：
+    60 Hz長測改為通過，只有那3筆配對改變，其餘欄位完全相同（`soak60-reanalysis-rule-B.json`）；
+    05-3的25案矩陣25／25、GUI三輪仍全部通過（`reanalysis-rule-B-matrix-gui.json`）。原始結果檔保留不動。
+  - 使用者要求全面檢查測試的跨平台相容性：子代理稽核列出依主機計時精度或視窗／GPU行為的判定，分類與風險排序記入v6交接第8項；
+    v5不變更（皆無失敗證據，且會使已取得的指紋失效）。
+  - 144 Hz長測：第一次（12:08）在約1800秒被執行工具的背景時間上限（30分鐘）中止，保留為`soak144-interrupted/`（無效）；
+    以獨立背景程序重跑（12:39～13:12）。結果只有一項錯誤「Clean Match runtime gap/dropped time」：Match固定步迴圈在t＝1727秒
+    （約13:08:27）一幀99.4 ms，捨棄1 Tick；`snapshot_produced`間隔同為99.4 ms。同一時刻Client probe也有49.8 ms與31.5 ms的幀，
+    兩個獨立程序同時變慢，判為整機瞬間停頓，不是Match程式。系統紀錄未找到確切成因（附近只有cloudd 13:08:41的網路工作、
+    13:07:05的觸控板使用者活動摘要）。其餘檢查全部通過。依v4／v5的乾淨長測定義（零模擬掉時），本輪屬「受干擾」，不算通過；
+    未合併PR #15、未升格，等使用者決定（建議：以受干擾處理並重跑一次144 Hz；若再發生，先查macOS對背景程序的節流，再決定）。
 
 ## 第04批進度（記錄器，隨工作更新）
 

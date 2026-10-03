@@ -14,9 +14,23 @@ from command_evidence import analyze_commands
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
 
 
+def require_verified_life_resets(evidence):
+    """A LifeRespawn reset is a contract epoch only when the combat evidence saw that death and new life."""
+    resets = evidence.get('life_respawn_resets') or []
+    verified = not resets or evidence.get('combat', {}).get('life_respawns_verified') is True
+    if not verified:
+        message = 'Host LifeRespawn resets lack verified deaths and new lives'
+        if message not in evidence.setdefault('errors', []):
+            evidence['errors'].append(message)
+        evidence['passed'] = False
+    return verified
+
+
 def require_clean_gui_round(evidence):
-    """Full GUI qualification includes the declared clean-run requirement."""
-    clean = evidence.get('disturbed') is False and evidence.get('resets') == 0
+    """Full GUI qualification includes the declared clean-run requirement.
+
+    Verified LifeRespawn resets are v5 gameplay, not interference; every other reset is."""
+    clean = evidence.get('disturbed') is False and evidence.get('unexpected_resets', evidence.get('resets')) == 0
     evidence['gui_clean_passed'] = clean
     if not clean:
         message = 'Full GUI round was disturbed or reset epoch; cannot qualify as clean'
@@ -370,7 +384,8 @@ def run_round(args, output, fps):
             evidence['presentation']=(analyze_short_latency if args.short else analyze_latency)(output)
         if args.combat:
             from combat_gui_evidence import analyze_combat_gui
-            evidence['combat']=analyze_combat_gui(output)
+            evidence['combat']=analyze_combat_gui(output,evidence['life_respawn_resets'])
+        require_verified_life_resets(evidence)
         if args.soak:
             evidence['soak_clean_passed']=evidence['passed'] and not evidence['disturbed'] and evidence['resets']==0
         evidence['overall_passed']=evidence['passed'] and (not args.gui or evidence['presentation']['passed']) and (not args.soak or evidence['soak_clean_passed']) and (not args.combat or evidence['combat']['passed'])
@@ -501,7 +516,7 @@ def main():
     p=argparse.ArgumentParser()
     for key in ('match','gateway','probe','arena','output'):p.add_argument('--'+key,required=True,type=Path)
     p.add_argument('--gui',action='store_true');p.add_argument('--soak',action='store_true')
-    p.add_argument('--combat',action='store_true',help='Concurrent SDL shots and authority HP; requires --gui')
+    p.add_argument('--combat',action='store_true',help='Concurrent predeclared v5 SDL combat (kills, respawns, reload) checked per life; requires --gui')
     p.add_argument('--short',action='store_true',help='Explicit 16..25 second GUI regression; never full certification')
     p.add_argument('--report-only',action='store_true');p.add_argument('--rounds',type=int,default=1)
     p.add_argument('--duration',type=float,default=120);p.add_argument('--fps',type=int,default=60)

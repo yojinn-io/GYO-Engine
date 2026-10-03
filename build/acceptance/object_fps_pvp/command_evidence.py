@@ -8,6 +8,8 @@ from pathlib import Path
 import statistics
 
 TICK_SECONDS = 1 / 60
+# Production steps one contract LifeRespawn may move: a fresh phase (1) plus its first correction (<= 2 ticks).
+LIFE_RESPAWN_PRODUCTION_STEPS = 3
 # 1.1 tick: a frame-pacing statistic (the cut of the former A1 start-phase guard; phase tracking has no cut).
 START_PHASE_FRAME_CUT_SECONDS = TICK_SECONDS * 1.1
 FRAME_INTERVAL_SOURCE = ("Presentation trace events' frame_seconds (the runtime frame-start interval of each presented "
@@ -32,6 +34,41 @@ def frame_interval_statistics(intervals):
             'maximum_seconds': ordered[-1] if ordered else None,
             'over_1_1_tick': sum(value > START_PHASE_FRAME_CUT_SECONDS for value in ordered),
             'at_least_2_ticks': sum(value >= 2 * TICK_SECONDS for value in ordered)}
+
+
+def is_life_seed_clamp(gap, reset):
+    """A respawn's fresh-seed clamp: the first new-epoch frame drops only its time beyond one tick.
+
+    ``reset`` is a LifeRespawn reset. The gap follows it within 100 ms and two authority ticks, in
+    the reset's epoch, drops exactly its frame time beyond one tick, and that frame is shorter than
+    the 100 ms interference threshold. The rule is structural: it does not assume how precisely the
+    host wakes a sleeping thread (macOS often oversleeps a 60 Hz deadline by 3-8 ms), so it needs no
+    per-platform tolerance. Anything else remains interference."""
+    frame, dropped = gap['frame_seconds'], gap['dropped_seconds']
+    return (gap['player_id'] == reset['player_id'] and
+            gap['epoch'] == reset['epoch'] and 0 <= gap['time_ns']-reset['time_ns'] < 100_000_000 and
+            0 <= gap['authority_tick']-reset['authority_tick'] <= 2 and
+            frame < .1 and dropped > 0 and abs(dropped-(frame-TICK_SECONDS)) < 1e-8)
+
+
+def match_life_seed_clamps(gaps, life_resets):
+    """Pair each gap with at most one unused reset of ``life_resets`` (LifeRespawn only); returns (clamps, unmatched gaps)."""
+    used, clamps, unmatched = set(), [], []
+    for gap in gaps:
+        found = next((index for index, reset in enumerate(life_resets)
+                      if index not in used and is_life_seed_clamp(gap, reset)), None)
+        if found is None:
+            unmatched.append(gap)
+        else:
+            used.add(found)
+            clamps.append({'event': gap, 'life_reset': life_resets[found]})
+    return clamps, unmatched
+
+
+def lifecycle_cancellation_matches(event, life_resets):
+    """An old-life command cancelled only after its player's next life reset a newer epoch."""
+    return any(reset['player_id'] == event['player_id'] and reset['life_generation'] == event['life_generation']+1 and
+               reset['epoch'] > event['epoch'] and reset['time_ns'] <= event['time_ns'] for reset in life_resets)
 
 
 def trace_role(path):
@@ -167,6 +204,7 @@ def analyze_commands(directory, *, enforce=True):
     transport_max_age, transport_count = 0, 0
     receipt_gaps = []
     presented = {}
+    cancelled, all_life_resets = {}, []
     for path in sorted(directory.glob('*commands.jsonl')):
         ended = False
         count = 0
@@ -225,8 +263,14 @@ def analyze_commands(directory, *, enforce=True):
                     if event['frame_seconds'] > .05:
                         interference.append({'kind':'runtime_gap', 'player_id':event['player_id'],
                             'start_ns':timestamp-round(event['frame_seconds']*1e9), 'end_ns':timestamp})
-                elif kind == 'reset' and measured:
-                    resets.append(event)
+                elif kind == 'reset':
+                    if measured:
+                        resets.append(event)
+                    # A death near the window's end respawns after it; its cancellations still need the reset.
+                    if event.get('reset_reason') == 'life_respawn':
+                        all_life_resets.append(event)
+                elif kind == 'lifecycle_cancelled':
+                    cancelled[key] = event
                 elif kind == 'presentation' and measured:
                     presented.setdefault(trace_role(path), []).append(event['frame_seconds'])
                 elif kind == 'transport':
@@ -242,6 +286,27 @@ def analyze_commands(directory, *, enforce=True):
     if not trace_files or not any(p['name'].startswith('match') for p in trace_files) or not any(
             p['name'] in ('clients-commands.jsonl','create-commands.jsonl','join-commands.jsonl') for p in trace_files):
         errors.append('Missing Match or Client trace')
+    def reset_reason(reset):
+        # Schema 1 traces carry no reason; never guess one.
+        reason = reset.get('reset_reason')
+        return reason if isinstance(reason, str) and reason else 'unrecorded'
+    # A respawn resets the player's epoch by contract. Its fresh-seed clamp and
+    # the old life's cancelled commands are its consequences, matched exactly;
+    # any other reset, gap or missing command still counts as interference.
+    life_resets = [reset for reset in resets if reset_reason(reset) == 'life_respawn']
+    for reset in life_resets:
+        if not isinstance(reset.get('life_generation'), int) or reset['life_generation'] < 2:
+            errors.append(f'LifeRespawn reset for player {reset["player_id"]} lacks a new life generation')
+    life_seed_clamps, gaps = match_life_seed_clamps(gaps, all_life_resets)
+    # Production counts every generated original; a cancelled one was still produced at 60 Hz.
+    per_player = Counter(key[0] for key in generated)
+    lifecycle_cancelled = 0
+    for key, event in cancelled.items():
+        if not lifecycle_cancellation_matches(event, all_life_resets):
+            errors.append(f'Lifecycle cancellation {key} lacks a matching LifeRespawn reset')
+        elif key in generated and key not in resolved:
+            del generated[key]
+            lifecycle_cancelled += 1
     send_ms, actual_ms, host_ms, accepted_execution_ms = [], [], [], []
     actual, substitute, missing = 0, 0, 0
     for key, (timestamp, source) in resolved.items():
@@ -270,12 +335,15 @@ def analyze_commands(directory, *, enforce=True):
             else:
                 missing += 1
     n = len(generated)
-    per_player = Counter(key[0] for key in generated)
     expected_players = timing.get('player_ids', sorted(per_player))
     if len(expected_players) != 2 or set(expected_players) != set(per_player):
         errors.append('Expected both players to generate commands across the measurement window')
     expected_count = (end-start) * 60 / 1e9
-    production_ok = all(abs(per_player[p] - expected_count) <= 2 for p in expected_players)
+    # Two boundary steps per run. A LifeRespawn starts a new fixed-step phase (up to one step) and the
+    # new epoch's first phase correction moves it up to MovementPhaseMaximumCorrectionSeconds (two ticks).
+    respawns = Counter(reset['player_id'] for reset in life_resets)
+    production_allowance = {p: 2 + LIFE_RESPAWN_PRODUCTION_STEPS * respawns[p] for p in expected_players}
+    production_ok = all(abs(per_player[p] - expected_count) <= production_allowance[p] for p in expected_players)
     if not timing.get('injected') and not gaps and not timing.get('gaps_100ms') and not production_ok:
         errors.append('Clean-run command production differs from 60 Hz by more than two boundary steps per player')
     recovery = None
@@ -320,24 +388,20 @@ def analyze_commands(directory, *, enforce=True):
     disturbed = bool(remote_stale_frames or gaps or receipt_gaps or timing.get('gaps_100ms') or timing.get('injected') or
         timing.get('history_overflows') or transport_max_age >= .1)
     reset_causes = []
-    def reset_reason(reset):
-        # Schema 1 traces carry no reason; never guess one.
-        reason = reset.get('reset_reason')
-        return reason if isinstance(reason, str) and reason else 'unrecorded'
     for reset in resets:
         causes = [item for item in interference if item['player_id'] in (0, reset['player_id']) and
                   item['start_ns'] < reset['time_ns'] <= item['end_ns']+1_500_000_000]
         reason = reset_reason(reset)
         reset_causes.append({'player_id':reset['player_id'], 'epoch':reset['epoch'], 'reason':reason,
                              'time_ns':reset['time_ns'], 'preceding_interference':causes})
-        if not causes:
+        if not causes and reason != 'life_respawn':
             errors.append(f'Unexplained epoch reset for player {reset["player_id"]} (reason {reason}): '
                           'no preceding substantive interference')
     if not disturbed and queue_max >= 105:
         errors.append('Clean-run 30-tick queued-command sum reaches the backlog reset threshold')
     result = {'passed': not errors, 'latency_thresholds_enforced':enforce, 'errors': errors, 'window_ns': [start, end],
         'commands': n, 'commands_per_player':dict(per_player), 'expected_per_player':expected_count,
-        'production_60hz_passed':production_ok, 'seeded_per_player':dict(seeded), 'recovery':recovery, 'actual': actual, 'substituted': substitute, 'unresolved': missing,
+        'production_60hz_passed':production_ok, 'production_allowance_steps': {str(k): v for k, v in production_allowance.items()}, 'seeded_per_player':dict(seeded), 'recovery':recovery, 'actual': actual, 'substituted': substitute, 'unresolved': missing,
         'actual_fraction': ratio, 'first_send_p95_ms': finite(send95),
         'first_send_timestamp':'successful send-call end; conservative latency upper bound (schema 1: legacy point timestamp)',
         'actual_p50_ms': finite(actual50), 'actual_p95_ms': finite(actual95),
@@ -346,7 +410,13 @@ def analyze_commands(directory, *, enforce=True):
         'host_to_execution_p50_ms': finite(nearest_rank(accepted_execution_ms,.5)),
         'execution_sources': dict(sources), 'queue_30_tick_sum_max': queue_max,
         'queue_30_tick_sum_tail': {str(k):v for k,v in queue_tail.items()},
-        'resets': len(resets), 'reset_reasons': dict(Counter(reset_reason(reset) for reset in resets)),
+        'resets': len(resets), 'unexpected_resets': len(resets)-len(life_resets),
+        # Every LifeRespawn of the run, including one just after the window, for callers' death/new-life check.
+        'life_respawn_resets': [{key: reset[key] for key in ('player_id', 'life_generation', 'epoch', 'authority_tick', 'time_ns')}
+                                for reset in all_life_resets],
+        'life_seed_clamps': life_seed_clamps, 'lifecycle_cancelled': lifecycle_cancelled,
+        'life_scope': 'LifeRespawn resets are contract epochs, not interference; their callers must verify each against an observed death and new life',
+        'reset_reasons': dict(Counter(reset_reason(reset) for reset in resets)),
         'reset_causality':reset_causes, 'disturbed': disturbed, 'runtime_gap_events': gaps, 'snapshot_receipt_gaps':receipt_gaps, 'remote_stale_frames':remote_stale_frames,
         'transport_event_counts':transport_count, 'transport_max_age_seconds':transport_max_age,
         'trace_files': trace_files, 'trace_events': dict(event_counts),

@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 from action_evidence import records, frames
-from command_evidence import read_trace_events, recovery_actual_intervals
+from command_evidence import match_life_seed_clamps, read_trace_events, recovery_actual_intervals
 from start_phase_evidence import reseed_evidence, summarize_start_phase
 
 
@@ -109,22 +109,15 @@ def validate_accepted_actions(decisions, life_starts, *, capacity=12, reload_tic
     return errors
 
 
-def client_disturbance(events, frame_samples, life_resets, fps):
-    errors=[];clamps=[];used=set();previous=None
+def client_disturbance(events, frame_samples, life_resets):
+    errors=[];previous=None
     for f in frame_samples:
         if f['frame_seconds']>=.1 or previous is not None and f['time_ns']-previous>=100_000_000:
             errors.append('Client full-run frame reached100ms')
         previous=f['time_ns']
-    for e in events:
-        if e['kind']!='runtime_gap' or e['frame_seconds']<.1 and e['dropped_seconds']<=0:continue
-        matching=[(i,r) for i,r in enumerate(life_resets) if i not in used and
-                  r['player_id']==e['player_id'] and r['epoch']==e['epoch'] and
-                  0<=e['time_ns']-r['time_ns']<100_000_000 and 0<=e['authority_tick']-r['authority_tick']<=2]
-        exact_clamp=(e['frame_seconds']<.1 and e['frame_seconds']<=1/fps+.005 and e['dropped_seconds']>0 and
-                     abs(e['dropped_seconds']-max(0,e['frame_seconds']-1/60))<1e-8)
-        if matching and exact_clamp:
-            i,r=matching[0];used.add(i);clamps.append({'event':e,'life_reset':r})
-        else:errors.append('Client runtime gap/dropped time is not a matched normal LifeRespawn clamp')
+    gaps=[e for e in events if e['kind']=='runtime_gap' and (e['frame_seconds']>=.1 or e['dropped_seconds']>0)]
+    clamps,unmatched=match_life_seed_clamps(gaps,life_resets)
+    errors+=['Client runtime gap/dropped time is not a matched normal LifeRespawn clamp']*len(unmatched)
     return errors,clamps
 
 
@@ -260,7 +253,7 @@ def analyze(output, relay, fault, mode):
     life_starts={(player,1):0 for player in client['player_ids']}
     life_starts.update({(r['player_id'],r['life']):r['tick'] for r in respawns})
     for error in validate_accepted_actions(decisions,life_starts):check(False,error)
-    client_gaps,life_clamps=client_disturbance(client_events,all_frames,life_resets,client['fps'])
+    client_gaps,life_clamps=client_disturbance(client_events,all_frames,life_resets)
     if clean:
         for error in client_gaps:check(False,error)
     generated={(e['player_id'],e['epoch'],e['sequence']):e for e in client_events if e['kind']=='generated'}
