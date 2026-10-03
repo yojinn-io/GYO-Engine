@@ -1,12 +1,22 @@
 #include <doctest/doctest.h>
 
+#include "UiGoldenDocument.hpp"
+#include "UiLayoutGolden.hpp"
 #include "UiTestDocument.hpp"
 #include "ui/UiDocumentCodec.hpp"
 #include "ui/UiRuntime.hpp"
 
+#include <array>
+#include <bit>
+#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <variant>
+#include <vector>
 
 namespace Engine::Ui::Tests {
 namespace {
@@ -33,6 +43,130 @@ namespace {
     REQUIRE(runtime.Initialize(Document()));
     REQUIRE(runtime.ActivateCanvas("screen"));
     return runtime;
+}
+
+[[nodiscard]] UiEvaluatedElement Evaluated(
+    std::string id,
+    std::size_t drawOrder,
+    std::array<float, 4> bounds,
+    std::array<float, 4> clip) {
+    UiEvaluatedElement element;
+    element.id = std::move(id);
+    element.type = UiElementType::Button;
+    element.boundsPixels = {bounds[0], bounds[1], bounds[2], bounds[3]};
+    element.clipPixels = {clip[0], clip[1], clip[2], clip[3]};
+    element.drawOrder = drawOrder;
+    element.interactive = true;
+    return element;
+}
+
+[[nodiscard]] float Below(float value) noexcept {
+    return std::nextafter(value, -std::numeric_limits<float>::infinity());
+}
+
+[[nodiscard]] std::string_view HitId(
+    std::span<const UiEvaluatedElement> layout,
+    float x,
+    float y) {
+    const UiEvaluatedElement* hit = HitTestUiLayout(layout, {x, y}, true);
+    return hit == nullptr ? std::string_view{} : std::string_view{hit->id};
+}
+
+template <class Rect>
+[[nodiscard]] LayoutGolden::Bits4 RectBits(const Rect& rect) noexcept {
+    return {
+        std::bit_cast<std::uint32_t>(rect.x),
+        std::bit_cast<std::uint32_t>(rect.y),
+        std::bit_cast<std::uint32_t>(rect.width),
+        std::bit_cast<std::uint32_t>(rect.height),
+    };
+}
+
+[[nodiscard]] std::array<std::uint32_t, 4> ColorBits(const UiColor& color) noexcept {
+    return {
+        std::bit_cast<std::uint32_t>(color.red),
+        std::bit_cast<std::uint32_t>(color.green),
+        std::bit_cast<std::uint32_t>(color.blue),
+        std::bit_cast<std::uint32_t>(color.alpha),
+    };
+}
+
+void CheckColor(const UiColor& actual, std::string_view expectedHex) {
+    auto expected = DecodeSrgbHexColor(expectedHex);
+    REQUIRE(expected);
+    CHECK(ColorBits(actual) == ColorBits(expected.value()));
+}
+
+struct LayoutCase final {
+    std::string_view name;
+    std::string_view document;
+    std::string_view canvas;
+    UiViewport viewport;
+    std::span<const LayoutGolden::LayoutRow> layout;
+    std::span<const LayoutGolden::DrawRow> draws;
+};
+
+void CheckLayoutCase(const LayoutCase& testCase) {
+    CAPTURE(testCase.name);
+    auto parsed = UiDocumentCodec::Parse(testCase.document);
+    REQUIRE(parsed);
+    UiRuntime runtime;
+    REQUIRE(runtime.Initialize(std::make_shared<const UiDocument>(std::move(parsed).value())));
+    REQUIRE(runtime.ActivateCanvas(testCase.canvas));
+
+    auto layout = runtime.EvaluatePreviewLayout(testCase.viewport);
+    REQUIRE(layout);
+    REQUIRE(layout.value().size() == testCase.layout.size());
+    for (std::size_t index = 0; index < testCase.layout.size(); ++index) {
+        CAPTURE(index);
+        const UiEvaluatedElement& actual = layout.value()[index];
+        const LayoutGolden::LayoutRow& expected = testCase.layout[index];
+        CHECK(actual.id == expected.id);
+        CHECK(actual.drawOrder == expected.drawOrder);
+        CHECK(actual.listItemIndex.value_or(LayoutGolden::kNoItem) == expected.listItemIndex);
+        CHECK(RectBits(actual.boundsPixels) == expected.boundsPixels);
+        CHECK(RectBits(actual.clipPixels) == expected.clipPixels);
+    }
+
+    auto composed = runtime.ComposePreview(testCase.viewport);
+    REQUIRE(composed);
+    const std::vector<UiDrawCommand>& commands = composed.value().commands;
+    REQUIRE(commands.size() == testCase.draws.size());
+    for (std::size_t index = 0; index < testCase.draws.size(); ++index) {
+        CAPTURE(index);
+        const LayoutGolden::DrawRow& expected = testCase.draws[index];
+        const UiDrawCommand& command = commands[index];
+        switch (expected.kind) {
+        case LayoutGolden::DrawKind::Quad: {
+            const auto* quad = std::get_if<UiQuadDraw>(&command);
+            REQUIRE(quad != nullptr);
+            CHECK(RectBits(quad->destinationPixels) == expected.rect);
+            CHECK(RectBits(quad->clipPixels) == expected.clipPixels);
+            CheckColor(quad->color, expected.colorHex);
+            break;
+        }
+        case LayoutGolden::DrawKind::Image: {
+            const auto* image = std::get_if<UiImageDraw>(&command);
+            REQUIRE(image != nullptr);
+            CHECK(RectBits(image->destinationPixels) == expected.rect);
+            CHECK(RectBits(image->clipPixels) == expected.clipPixels);
+            CHECK(RectBits(image->sourceUv) == expected.sourceUv);
+            CHECK(image->textureAssetId == expected.text);
+            CheckColor(image->tint, expected.colorHex);
+            break;
+        }
+        case LayoutGolden::DrawKind::Text: {
+            const auto* text = std::get_if<UiTextDraw>(&command);
+            REQUIRE(text != nullptr);
+            CHECK(RectBits(text->boundsPixels) == expected.rect);
+            CHECK(RectBits(text->clipPixels) == expected.clipPixels);
+            CHECK(std::bit_cast<std::uint32_t>(text->pointSizePixels) == expected.pointSizePixels);
+            CHECK(text->utf8 == expected.text);
+            CheckColor(text->color, expected.colorHex);
+            break;
+        }
+        }
+    }
 }
 
 } // namespace
@@ -177,6 +311,78 @@ TEST_CASE("UiRuntime gives cancel priority and never falls back to previews") {
     auto missing = runtime.Compose({}, {100.0F, 100.0F});
     REQUIRE_FALSE(missing);
     CHECK(missing.error().code == UiErrorCode::MissingBinding);
+}
+
+TEST_CASE("HitTestUiLayout uses half-open bounds and clip rectangles") {
+    SUBCASE("bounds: left and top edges hit, right and bottom edges miss") {
+        const std::vector<UiEvaluatedElement> layout{
+            Evaluated("box", 0, {10.0F, 20.0F, 30.0F, 40.0F}, {0.0F, 0.0F, 1000.0F, 1000.0F}),
+        };
+        CHECK(HitId(layout, 10.0F, 20.0F) == "box");
+        CHECK(HitId(layout, 10.0F, 59.5F) == "box");
+        CHECK(HitId(layout, 39.5F, 20.0F) == "box");
+        CHECK(HitId(layout, Below(40.0F), Below(60.0F)) == "box");
+        CHECK(HitId(layout, 40.0F, 30.0F).empty());
+        CHECK(HitId(layout, 20.0F, 60.0F).empty());
+        CHECK(HitId(layout, 40.0F, 60.0F).empty());
+        CHECK(HitId(layout, Below(10.0F), 30.0F).empty());
+        CHECK(HitId(layout, 20.0F, Below(20.0F)).empty());
+    }
+    SUBCASE("clip: right and bottom clip edges miss inside the bounds") {
+        const std::vector<UiEvaluatedElement> layout{
+            Evaluated("clipped", 0, {0.0F, 0.0F, 100.0F, 100.0F}, {5.0F, 5.0F, 45.0F, 45.0F}),
+        };
+        CHECK(HitId(layout, 5.0F, 5.0F) == "clipped");
+        CHECK(HitId(layout, Below(50.0F), Below(50.0F)) == "clipped");
+        CHECK(HitId(layout, 50.0F, 10.0F).empty());
+        CHECK(HitId(layout, 10.0F, 50.0F).empty());
+        CHECK(HitId(layout, Below(5.0F), 10.0F).empty());
+        CHECK(HitId(layout, 75.0F, 75.0F).empty());
+    }
+    SUBCASE("a fully clipped element is never hit") {
+        const std::vector<UiEvaluatedElement> layout{
+            Evaluated("zero_clip", 0, {0.0F, 0.0F, 100.0F, 100.0F}, {25.0F, 25.0F, 0.0F, 0.0F}),
+            Evaluated("zero_width", 1, {0.0F, 0.0F, 100.0F, 100.0F}, {25.0F, 25.0F, 0.0F, 50.0F}),
+            Evaluated("zero_height", 2, {0.0F, 0.0F, 100.0F, 100.0F}, {25.0F, 25.0F, 50.0F, 0.0F}),
+        };
+        for (const float x : {0.0F, 24.0F, 25.0F, 26.0F, 50.0F, 99.0F}) {
+            for (const float y : {0.0F, 24.0F, 25.0F, 26.0F, 50.0F, 99.0F}) {
+                CAPTURE(x);
+                CAPTURE(y);
+                CHECK(HitId(layout, x, y).empty());
+            }
+        }
+    }
+    SUBCASE("shared edges resolve to the element that owns the left or top edge") {
+        const std::vector<UiEvaluatedElement> layout{
+            Evaluated("left", 0, {0.0F, 0.0F, 50.0F, 50.0F}, {0.0F, 0.0F, 50.0F, 50.0F}),
+            Evaluated("right", 1, {50.0F, 0.0F, 50.0F, 50.0F}, {50.0F, 0.0F, 50.0F, 50.0F}),
+        };
+        CHECK(HitId(layout, 50.0F, 10.0F) == "right");
+        CHECK(HitId(layout, Below(50.0F), 10.0F) == "left");
+        CHECK(HitId(layout, 100.0F, 10.0F).empty());
+    }
+}
+
+TEST_CASE("UiRuntime layout and draw list match exact master geometry") {
+    using namespace LayoutGolden;
+    const LayoutCase cases[]{
+        {"kDocument 200x100", kDocument, "screen", {200.0F, 100.0F},
+         kTestDocument200x100Layout, kTestDocument200x100Draws},
+        {"kDocument 1920x1080", kDocument, "screen", {1920.0F, 1080.0F},
+         kTestDocument1920x1080Layout, kTestDocument1920x1080Draws},
+        {"kDocument 1000x333", kDocument, "screen", {1000.0F, 333.0F},
+         kTestDocument1000x333Layout, kTestDocument1000x333Draws},
+        {"golden 200x100", kGoldenSourceDocument, "main", {200.0F, 100.0F},
+         kGolden200x100Layout, kGolden200x100Draws},
+        {"golden 1920x1080", kGoldenSourceDocument, "main", {1920.0F, 1080.0F},
+         kGolden1920x1080Layout, kGolden1920x1080Draws},
+        {"golden 1000x333", kGoldenSourceDocument, "main", {1000.0F, 333.0F},
+         kGolden1000x333Layout, kGolden1000x333Draws},
+    };
+    for (const LayoutCase& testCase : cases) {
+        CheckLayoutCase(testCase);
+    }
 }
 
 } // namespace Engine::Ui::Tests

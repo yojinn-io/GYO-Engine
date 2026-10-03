@@ -173,7 +173,7 @@ void RejectUnknownKeys(
     return value.get<bool>();
 }
 
-[[nodiscard]] UiFloat2 ParseFloat2(
+[[nodiscard]] Math::Vec2 ParseFloat2(
     const Json& value,
     std::string_view source,
     const std::string& path) {
@@ -208,7 +208,7 @@ void RejectUnknownKeys(
     };
 }
 
-[[nodiscard]] UiRect ParseRect4(
+[[nodiscard]] Math::Rect ParseRect4(
     const Json& value,
     std::string_view source,
     const std::string& path) {

@@ -128,7 +128,7 @@ struct HudLayout final {
     };
 }
 
-[[nodiscard]] Engine::Ui::UiRect Place(
+[[nodiscard]] Engine::Math::Rect Place(
     const HudLayout& layout,
     const float x,
     const float y,
@@ -144,7 +144,7 @@ struct HudLayout final {
 
 void AddQuad(
     Engine::Ui::UiDrawList& drawList,
-    const Engine::Ui::UiRect bounds,
+    const Engine::Math::Rect bounds,
     const Engine::Ui::UiColor color) {
     drawList.commands.emplace_back(Engine::Ui::UiQuadDraw{bounds, color});
 }
@@ -152,7 +152,7 @@ void AddQuad(
 void AddText(
     Engine::Ui::UiDrawList& drawList,
     std::string text,
-    const Engine::Ui::UiRect bounds,
+    const Engine::Math::Rect bounds,
     const float sizePixels,
     const Engine::Ui::UiColor color = kText,
     const Engine::Ui::UiHorizontalAlign horizontal =

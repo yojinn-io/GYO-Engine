@@ -293,7 +293,7 @@ namespace {
 
 struct FitTransform final {
     float scale{1.0F};
-    UiFloat2 offset{};
+    Math::Vec2 offset{};
 };
 
 [[nodiscard]] FitTransform MakeFit(const UiDocument& document, UiViewport viewport) noexcept {
@@ -306,9 +306,9 @@ struct FitTransform final {
     }};
 }
 
-[[nodiscard]] UiRect ResolveDesignRect(
+[[nodiscard]] Math::Rect ResolveDesignRect(
     const UiRectTransform& transform,
-    UiRect parent) noexcept {
+    Math::Rect parent) noexcept {
     const float anchorWidth = transform.anchorMax.x - transform.anchorMin.x;
     const float anchorHeight = transform.anchorMax.y - transform.anchorMin.y;
     const float width = parent.width * anchorWidth + transform.sizeDelta.x;
@@ -325,7 +325,7 @@ struct FitTransform final {
     };
 }
 
-[[nodiscard]] UiRect ToPixels(UiRect design, FitTransform fit) noexcept {
+[[nodiscard]] Math::Rect ToPixels(Math::Rect design, FitTransform fit) noexcept {
     return {
         fit.offset.x + design.x * fit.scale,
         fit.offset.y + design.y * fit.scale,
@@ -334,20 +334,9 @@ struct FitTransform final {
     };
 }
 
-[[nodiscard]] UiRect IntersectRect(UiRect left, UiRect right) noexcept {
-    const float x = std::max(left.x, right.x);
-    const float y = std::max(left.y, right.y);
-    const float rightEdge = std::min(left.x + left.width, right.x + right.width);
-    const float bottomEdge = std::min(left.y + left.height, right.y + right.height);
-    return {
-        x,
-        y,
-        std::max(0.0F, rightEdge - x),
-        std::max(0.0F, bottomEdge - y),
-    };
-}
-
-[[nodiscard]] bool ContainsHalfOpen(UiRect rect, UiFloat2 point) noexcept {
+// UI hit testing is half-open (right and bottom edges excluded, empty rects never
+// hit), unlike the closed Math::Contains.
+[[nodiscard]] bool ContainsHalfOpen(Math::Rect rect, Math::Vec2 point) noexcept {
     return point.x >= rect.x && point.y >= rect.y &&
            point.x < rect.x + rect.width && point.y < rect.y + rect.height;
 }
@@ -364,8 +353,8 @@ struct FitTransform final {
 
 [[nodiscard]] UiResult<void> EvaluateElements(
     const std::vector<UiElement>& elements,
-    UiRect parent,
-    UiRect parentClip,
+    Math::Rect parent,
+    Math::Rect parentClip,
     FitTransform fit,
     const UiDocument& document,
     const UiBindingTable& bindings,
@@ -373,8 +362,8 @@ struct FitTransform final {
     std::vector<UiEvaluatedElement>& result,
     std::size_t& drawOrder) {
     for (const UiElement& element : elements) {
-        const UiRect design = ResolveDesignRect(element.rect, parent);
-        const UiRect clip = IntersectRect(parentClip, design);
+        const Math::Rect design = ResolveDesignRect(element.rect, parent);
+        const Math::Rect clip = Math::Intersection(parentClip, design);
         result.push_back({
             element.id,
             element.type,
@@ -391,13 +380,13 @@ struct FitTransform final {
             const UiList& list = std::get<UiList>(*listValue.value());
             const std::size_t count = std::min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
-                UiRect itemRect = design;
+                Math::Rect itemRect = design;
                 itemRect.x += element.itemStep.x * static_cast<float>(index);
                 itemRect.y += element.itemStep.y * static_cast<float>(index);
                 auto itemLayout = EvaluateElements(
                     element.itemTemplate,
                     itemRect,
-                    IntersectRect(clip, itemRect),
+                    Math::Intersection(clip, itemRect),
                     fit,
                     document,
                     bindings,
@@ -456,7 +445,7 @@ struct FitTransform final {
     const UiDocument& document,
     const UiBindingTable& bindings,
     const UiElement& slider,
-    UiRect sliderPixels,
+    Math::Rect sliderPixels,
     float pointerX) {
     if (sliderPixels.width <= 0.0F) {
         return UiResult<std::optional<UiActionEvent>>::Err(RuntimeError(
@@ -482,13 +471,13 @@ struct ComposeContext final {
 
 [[nodiscard]] UiResult<void> AppendText(
     const UiElement& element,
-    UiRect designRect,
+    Math::Rect designRect,
     const UiListItem* item,
-    UiRect clipPixels,
+    Math::Rect clipPixels,
     ComposeContext& context,
     std::optional<UiHorizontalAlign> alignmentOverride = std::nullopt,
     std::optional<std::string> textOverride = std::nullopt,
-    std::optional<UiRect> pixelBoundsOverride = std::nullopt) {
+    std::optional<Math::Rect> pixelBoundsOverride = std::nullopt) {
     auto text = textOverride
         ? UiResult<std::string>::Ok(std::move(*textOverride))
         : EvaluateText(element.text, context.document, context.bindings, item);
@@ -517,15 +506,15 @@ struct ComposeContext final {
 
 [[nodiscard]] UiResult<void> ComposeElements(
     const std::vector<UiElement>& elements,
-    UiRect parent,
-    UiRect parentClip,
+    Math::Rect parent,
+    Math::Rect parentClip,
     const UiListItem* item,
     ComposeContext& context) {
     for (const UiElement& element : elements) {
-        const UiRect design = ResolveDesignRect(element.rect, parent);
-        const UiRect pixels = ToPixels(design, context.fit);
-        const UiRect designClip = IntersectRect(parentClip, design);
-        const UiRect clipPixels = ToPixels(designClip, context.fit);
+        const Math::Rect design = ResolveDesignRect(element.rect, parent);
+        const Math::Rect pixels = ToPixels(design, context.fit);
+        const Math::Rect designClip = Math::Intersection(parentClip, design);
+        const Math::Rect clipPixels = ToPixels(designClip, context.fit);
         if (pixels.width < 0.0F || pixels.height < 0.0F) {
             return UiResult<void>::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
@@ -582,7 +571,7 @@ struct ComposeContext final {
             if (!value) return UiResult<void>::Err(std::move(value).error());
             const double clamped = std::clamp(value.value(), element.minimum, element.maximum);
             const float ratio = static_cast<float>((clamped - element.minimum) / (element.maximum - element.minimum));
-            const UiRect textBounds{
+            const Math::Rect textBounds{
                 pixels.x + pixels.width * 0.04F,
                 pixels.y + pixels.height * 0.08F,
                 pixels.width * 0.92F,
@@ -607,7 +596,7 @@ struct ComposeContext final {
             if (!fillColor) return UiResult<void>::Err(std::move(fillColor).error());
             auto thumbColor = NamedColor(context.document, element.thumbColor);
             if (!thumbColor) return UiResult<void>::Err(std::move(thumbColor).error());
-            const UiRect track{
+            const Math::Rect track{
                 pixels.x + pixels.width * 0.04F,
                 pixels.y + pixels.height * 0.72F,
                 pixels.width * 0.92F,
@@ -632,13 +621,13 @@ struct ComposeContext final {
             const UiList& list = std::get<UiList>(*listValue.value());
             const std::size_t count = std::min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
-                UiRect itemRect = design;
+                Math::Rect itemRect = design;
                 itemRect.x += element.itemStep.x * static_cast<float>(index);
                 itemRect.y += element.itemStep.y * static_cast<float>(index);
                 auto composed = ComposeElements(
                     element.itemTemplate,
                     itemRect,
-                    IntersectRect(designClip, itemRect),
+                    Math::Intersection(designClip, itemRect),
                     &list.items[index],
                     context);
                 if (!composed) return composed;
@@ -657,7 +646,7 @@ struct ComposeContext final {
 
 const UiEvaluatedElement* HitTestUiLayout(
     std::span<const UiEvaluatedElement> layout,
-    UiFloat2 pointPixels,
+    Math::Vec2 pointPixels,
     bool interactiveOnly) noexcept {
     const UiEvaluatedElement* selected = nullptr;
     for (const UiEvaluatedElement& element : layout) {
@@ -679,7 +668,7 @@ struct UiRuntime::Impl final {
     UiInteractionState interaction;
     std::string pressedElement;
     bool pointerWasAvailable{};
-    UiFloat2 lastPointerPixels{};
+    Math::Vec2 lastPointerPixels{};
 
     void TrackPointer(const UiInputFrame& input) noexcept {
         pointerWasAvailable = input.pointerAvailable;
@@ -699,7 +688,7 @@ struct UiRuntime::Impl final {
                 UiErrorCode::RuntimeState,
                 "UI viewport must be finite and positive"));
         }
-        const UiRect root{
+        const Math::Rect root{
             0.0F,
             0.0F,
             document->designCanvas.size.x,
@@ -738,11 +727,11 @@ struct UiRuntime::Impl final {
             return UiResult<UiDrawList>::Err(RuntimeError(UiErrorCode::MissingReference, "active canvas backdrop color is missing"));
         }
         UiDrawList result;
-        const UiRect viewportRect{0.0F, 0.0F, viewport.width, viewport.height};
+        const Math::Rect viewportRect{0.0F, 0.0F, viewport.width, viewport.height};
         result.commands.emplace_back(UiQuadDraw{viewportRect, backdrop->second, viewportRect});
         ComposeContext context{
             *document, bindings, interaction, pressedElement, MakeFit(*document, viewport), result};
-        const UiRect root{0.0F, 0.0F, document->designCanvas.size.x, document->designCanvas.size.y};
+        const Math::Rect root{0.0F, 0.0F, document->designCanvas.size.x, document->designCanvas.size.y};
         auto composed = ComposeElements(canvas->children, root, root, nullptr, context);
         if (!composed) return UiResult<UiDrawList>::Err(std::move(composed).error());
         return UiResult<UiDrawList>::Ok(std::move(result));

@@ -61,7 +61,7 @@ const PlayerState* FindPlayer(const WorldSnapshot& snapshot, PlayerId id) {
     return found == snapshot.players.end() ? nullptr : &*found;
 }
 void AddText(Engine::Ui::UiDrawList& list, std::string text,
-    Engine::Ui::UiRect bounds, float size = 18.0F) {
+    Engine::Math::Rect bounds, float size = 18.0F) {
     Engine::Ui::UiTextDraw draw;
     draw.utf8 = std::move(text);
     draw.boundsPixels = bounds;

@@ -12,7 +12,7 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 
-[[nodiscard]] Json Float2Json(UiFloat2 value) {
+[[nodiscard]] Json Float2Json(Math::Vec2 value) {
     return Json::array({value.x, value.y});
 }
 

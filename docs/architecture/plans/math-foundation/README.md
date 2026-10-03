@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-03。Owner：Engine（新增模組 `GYO::Math`）。
-**B0–B4a 完成並合併；B4b 本機驗收完成。**
+**B0–B4b 完成並合併；B5 本機驗收完成。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -33,8 +33,8 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B2 Collision | high（double 路徑 xhigh） | 完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 已合併 | `Collision::Float3/Aabb/Capsule` 移除；raycast 接收 `Math::Ray`、sweep 接收 `Math::Segment`；`VerticalCapsule` 保留 |
 | B3 Model | high（矩陣與四元數 xhigh） | 完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 已合併 | `Model::Vec2/Vec3/Quaternion/Matrix4`、`Multiply`、`TransformPoint` 移除；`Transform`、`ToMatrix` 保留 |
 | B4a Render 型別 | high | 完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 已合併 | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
-| B4b Render 矩陣 | xhigh | 本機驗收完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 待 CI | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
-| B5 Ui／ui_editor | high | 未開始 | `UiFloat2/UiRect` 移除，sRGB 統一，gyo.ui golden |
+| B4b Render 矩陣 | xhigh | 完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 已合併 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
+| B5 Ui／ui_editor | high | 本機驗收完成 | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
 | B6a pvp 模擬層 | xhigh | 未開始 | `fps::Float3` 移除，`match_domain` helper 改用 Math，digest 含 arm64 |
 | B6b pvp 表現層 | high | 未開始 | `app_support` 與 acceptance |
 | B6c pvp 未編譯檔 | high | 未開始 | 29 檔遷移與 syntax-only 驗證 |

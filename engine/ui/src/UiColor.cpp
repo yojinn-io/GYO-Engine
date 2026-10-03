@@ -1,6 +1,8 @@
 #include "ui/UiTypes.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/ColorSpace.hpp"
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -19,19 +21,6 @@ namespace {
         return value - 'A' + 10;
     }
     return -1;
-}
-
-[[nodiscard]] float SrgbToLinear(float value) noexcept {
-    return value <= 0.04045F
-        ? value / 12.92F
-        : std::pow((value + 0.055F) / 1.055F, 2.4F);
-}
-
-[[nodiscard]] float LinearToSrgb(float value) noexcept {
-    value = std::clamp(value, 0.0F, 1.0F);
-    return value <= 0.0031308F
-        ? value * 12.92F
-        : 1.055F * std::pow(value, 1.0F / 2.4F) - 0.055F;
 }
 
 [[nodiscard]] UiError ColorError(
@@ -75,9 +64,9 @@ UiResult<UiColor> DecodeSrgbHexColor(
 
     constexpr float kByteScale = 1.0F / 255.0F;
     return UiResult<UiColor>::Ok({
-        SrgbToLinear(static_cast<float>(channels[0]) * kByteScale),
-        SrgbToLinear(static_cast<float>(channels[1]) * kByteScale),
-        SrgbToLinear(static_cast<float>(channels[2]) * kByteScale),
+        Math::DecodeSrgb(static_cast<float>(channels[0]) * kByteScale),
+        Math::DecodeSrgb(static_cast<float>(channels[1]) * kByteScale),
+        Math::DecodeSrgb(static_cast<float>(channels[2]) * kByteScale),
         static_cast<float>(channels[3]) * kByteScale,
     });
 }
@@ -85,11 +74,11 @@ UiResult<UiColor> DecodeSrgbHexColor(
 std::string EncodeSrgbHexColor(const UiColor& color) {
     const auto byte = [](float value) {
         return static_cast<unsigned>(
-            std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
+            std::lround(Math::Clamp(value, 0.0F, 1.0F) * 255.0F));
     };
-    const unsigned red = byte(LinearToSrgb(color.red));
-    const unsigned green = byte(LinearToSrgb(color.green));
-    const unsigned blue = byte(LinearToSrgb(color.blue));
+    const unsigned red = byte(Math::EncodeSrgb(color.red));
+    const unsigned green = byte(Math::EncodeSrgb(color.green));
+    const unsigned blue = byte(Math::EncodeSrgb(color.blue));
     const unsigned alpha = byte(color.alpha);
 
     std::array<char, 10> encoded{};

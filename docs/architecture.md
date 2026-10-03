@@ -61,10 +61,10 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |
 | `GYO::Render` | opaque resources, queue, shader library, frame/pass preparation; GPU ABI and render submission contracts over Math values | Engine, Math |
-| `GYO::Ui` | JSON codec, validation, layout, focus, binding and typed actions | Engine |
+| `GYO::Ui` | JSON codec, validation, layout, focus, binding and typed actions; UI geometry uses Math values | Engine, Math |
 | `GYO::UiRenderer` | UI draw list to renderer and text/texture resources | Ui, Render, Text |
 | Game | campaign, movement/combat rules, screen policy and presentation composition | selected public engine APIs |
-| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui APIs and selected adapters |
+| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui/Math APIs and selected adapters |
 
 Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters remain explicit choices. Backend-neutral core builds do not fetch SDL merely because another application uses it. Public neutral contracts do not expose native SDL/GPU pointers; concrete adapter APIs may expose their own native interoperability surface.
 

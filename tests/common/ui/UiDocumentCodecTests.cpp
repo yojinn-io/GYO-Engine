@@ -1,11 +1,458 @@
 #include <doctest/doctest.h>
 
+#include "UiGoldenDocument.hpp"
 #include "UiTestDocument.hpp"
 #include "ui/UiDocumentCodec.hpp"
 
+#include <array>
+#include <bit>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <string>
+#include <string_view>
 
 namespace Engine::Ui::Tests {
+namespace {
+// engine/ui/src/UiColor.cpp:24-28 (SrgbToLinear) frozen from master 43bccad;
+// the input is formed as at :76-79. The volatile offset keeps the comparison at
+// run time so both sides use the platform's std::pow.
+volatile unsigned gByteOffset = 0U;
+
+[[nodiscard]] float LegacySrgbToLinear(float value) noexcept {
+    return value <= 0.04045F
+        ? value / 12.92F
+        : std::pow((value + 0.055F) / 1.055F, 2.4F);
+}
+
+
+// Frozen gyo.ui v1 Serialize output for kDocument, captured on master 43bccad
+// (math-foundation B5 prerequisite). The literal is kept ASCII because
+// gyo_ui_tests is compiled without /utf-8 on MSVC: the one non-ASCII run
+// (the button_one literal, UTF-8 for katakana "game start") is spelled with
+// \x escapes, which yield the same bytes under every source and execution
+// character set. kDocument itself (UiTestDocument.hpp) still embeds that run
+// as raw UTF-8, as the pre-existing tests in this file already assume.
+inline constexpr std::string_view kDocumentCanonicalGolden =
+    R"json({
+  "schema": "gyo.ui",
+  "version": 1,
+  "design_canvas": {
+    "size": [
+      100.0,
+      100.0
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "test.font"
+  },
+  "default_font": "ui",
+  "colors": {
+    "background": "#000000FF",
+    "fill": "#E08020FF",
+    "focused": "#804000FF",
+    "gray": "#808080FF",
+    "normal": "#202020FF",
+    "pressed": "#C06000FF",
+    "thumb": "#FFFFFFFF",
+    "track": "#303030FF",
+    "white": "#FFFFFFFF"
+  },
+  "actions": [
+    {
+      "id": "back",
+      "payload": "none"
+    },
+    {
+      "id": "one",
+      "payload": "none"
+    },
+    {
+      "id": "two",
+      "payload": "none"
+    },
+    {
+      "id": "set_gamma",
+      "payload": "number"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "gamma",
+      "type": "number",
+      "preview": 1.0
+    },
+    {
+      "id": "outcome",
+      "type": "enum",
+      "values": [
+        "win",
+        "lose"
+      ],
+      "preview": "win"
+    },
+    {
+      "id": "rooms",
+      "type": "list<object>",
+      "item_fields": {
+        "kills": "integer",
+        "name": "string"
+      },
+      "preview": [
+        {
+          "kills": 2,
+          "name": "A"
+        },
+        {
+          "kills": 5,
+          "name": "B"
+        }
+      ]
+    }
+  ],
+  "canvases": [
+    {
+      "id": "screen",
+      "backdrop_color": "background",
+      "default_focus": "button_one",
+      "cancel_action": "back",
+      "focus_order": [
+        "button_one",
+        "button_two",
+        "gamma_slider"
+      ],
+      "children": [
+        {
+          "type": "container",
+          "id": "stretch_parent",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              1.0,
+              1.0
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              -20.0,
+              -20.0
+            ]
+          },
+          "children": [
+            {
+              "type": "button",
+              "id": "button_one",
+              "rect": {
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  1.0
+                ],
+                "pivot": [
+                  0.5,
+                  0.5
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  40.0,
+                  -40.0
+                ]
+              },
+              "text": {
+                "literal": ")json"
+    "\xE3\x82\xB2\xE3\x83\xBC\xE3\x83\xA0\xE3\x82\xB9\xE3\x82\xBF\xE3\x83\xBC\xE3\x83\x88"
+    R"json("
+              },
+              "point_size": 10.0,
+              "text_color": {
+                "color": "white"
+              },
+              "horizontal_align": "center",
+              "vertical_align": "center",
+              "action": "one",
+              "background": {
+                "normal": "normal",
+                "focused": "focused",
+                "pressed": "pressed"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "button_two",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              65.0,
+              5.0
+            ],
+            "size_delta": [
+              30.0,
+              20.0
+            ]
+          },
+          "text": {
+            "literal": "TWO"
+          },
+          "point_size": 10.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "two",
+          "background": {
+            "normal": "normal",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "horizontal_slider",
+          "id": "gamma_slider",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              10.0,
+              75.0
+            ],
+            "size_delta": [
+              80.0,
+              20.0
+            ]
+          },
+          "text": {
+            "literal": "GAMMA"
+          },
+          "point_size": 8.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "top",
+          "action": "set_gamma",
+          "background": {
+            "normal": "normal",
+            "focused": "focused",
+            "pressed": "pressed"
+          },
+          "binding": "gamma",
+          "minimum": 0.75,
+          "maximum": 1.5,
+          "step": 0.05,
+          "value_format": {
+            "decimals": 2,
+            "show_plus": false
+          },
+          "track_color": "track",
+          "fill_color": "fill",
+          "thumb_color": "thumb"
+        },
+        {
+          "type": "fixed_step_list",
+          "id": "room_list",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              5.0,
+              2.0
+            ],
+            "size_delta": [
+              40.0,
+              20.0
+            ]
+          },
+          "binding": "rooms",
+          "max_items": 4,
+          "item_step": [
+            0.0,
+            9.0
+          ],
+          "template": [
+            {
+              "type": "text",
+              "id": "room_row",
+              "rect": {
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  0.0
+                ],
+                "pivot": [
+                  0.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  0.0,
+                  8.0
+                ]
+              },
+              "text": {
+                "compose": {
+                  "format": "{name} {kills}",
+                  "placeholders": {
+                    "kills": {
+                      "item_field": "kills",
+                      "format": {
+                        "decimals": 0,
+                        "show_plus": false
+                      }
+                    },
+                    "name": {
+                      "item_field": "name",
+                      "format": {
+                        "decimals": 0,
+                        "show_plus": false
+                      }
+                    }
+                  }
+                }
+              },
+              "point_size": 7.0,
+              "text_color": {
+                "color": "gray"
+              },
+              "horizontal_align": "left",
+              "vertical_align": "top"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "outcome",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.5
+            ],
+            "anchor_max": [
+              0.5,
+              0.5
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              30.0,
+              10.0
+            ]
+          },
+          "text": {
+            "select": {
+              "binding": "outcome",
+              "cases": {
+                "lose": "LOSE",
+                "win": "WIN"
+              }
+            }
+          },
+          "point_size": 8.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        }
+      ]
+    }
+  ]
+}
+)json";
+
+[[nodiscard]] bool IsAscii(std::string_view text) noexcept {
+    for (const char value : text) {
+        if (static_cast<unsigned char>(value) >= 0x80U) return false;
+    }
+    return true;
+}
+
+[[nodiscard]] std::string SerializeParsed(std::string_view json) {
+    auto parsed = UiDocumentCodec::Parse(json, "golden");
+    if (!parsed) {
+        FAIL_CHECK(parsed.error().message << " at " << parsed.error().jsonPointer);
+        return {};
+    }
+    auto serialized = UiDocumentCodec::Serialize(parsed.value());
+    if (!serialized) {
+        FAIL_CHECK(serialized.error().message);
+        return {};
+    }
+    return std::move(serialized).value();
+}
+
+[[nodiscard]] const UiElement& FindChild(
+    const std::vector<UiElement>& elements,
+    std::string_view id) {
+    for (const UiElement& element : elements) {
+        if (element.id == id) return element;
+    }
+    FAIL("missing element " << id);
+    return elements.front();
+}
+
+} // namespace
 
 TEST_CASE("UiDocumentCodec parses UTF-8 and converts sRGB colors to linear") {
     auto parsed = UiDocumentCodec::Parse(kDocument, "memory://test-ui");
@@ -194,6 +641,160 @@ TEST_CASE("named placeholder compose rejects unknown, unused, and malformed form
         source.composeFormat = "{name}} {kills}";
         CHECK_FALSE(UiDocumentCodec::Validate(parsed.value()));
     }
+}
+
+TEST_CASE("Serialize matches the frozen gyo.ui v1 golden for kDocument") {
+    const std::string serialized = SerializeParsed(kDocument);
+    CHECK(serialized == kDocumentCanonicalGolden);
+    // The golden is a fixed point of Parse -> Serialize.
+    CHECK(SerializeParsed(kDocumentCanonicalGolden) == kDocumentCanonicalGolden);
+}
+
+TEST_CASE("Serialize matches the frozen gyo.ui v1 golden for the synthetic document") {
+    REQUIRE(IsAscii(kGoldenSourceDocument));
+    REQUIRE(IsAscii(kGoldenCanonicalDocument));
+    const std::string serialized = SerializeParsed(kGoldenSourceDocument);
+    CHECK(serialized == kGoldenCanonicalDocument);
+    CHECK(SerializeParsed(kGoldenCanonicalDocument) == kGoldenCanonicalDocument);
+
+    // Spot checks that document what the golden pins (the full comparison
+    // above is authoritative).
+    CHECK(serialized.find("\"schema\": \"gyo.ui\"") != std::string::npos);
+    CHECK(serialized.find("\"version\": 1,") != std::string::npos);
+    CHECK(serialized.find("0.10000000149011612") != std::string::npos);
+    CHECK(serialized.find("1.0000000150474662e+30") != std::string::npos);
+    CHECK(serialized.find("1.0000000031710769e-30") != std::string::npos);
+    CHECK(serialized.find("\"#A1B2C3D4\"") != std::string::npos);
+    CHECK(serialized.find("\"#102030FF\"") != std::string::npos);
+}
+
+TEST_CASE("sRGB hex colours round-trip every byte") {
+    for (unsigned byte = 0; byte < 256U; ++byte) {
+        CAPTURE(byte);
+        std::array<char, 10> lower{};
+        std::array<char, 10> upper{};
+        std::snprintf(lower.data(), lower.size(), "#%02x%02x%02x%02x", byte, byte, byte, byte);
+        std::snprintf(upper.data(), upper.size(), "#%02X%02X%02X%02X", byte, byte, byte, byte);
+        auto decoded = DecodeSrgbHexColor(lower.data());
+        REQUIRE(decoded);
+        CHECK(EncodeSrgbHexColor(decoded.value()) == upper.data());
+        // #RRGGBB defaults alpha to FF.
+        auto opaque = DecodeSrgbHexColor(std::string_view(upper.data(), 7));
+        REQUIRE(opaque);
+        CHECK(EncodeSrgbHexColor(opaque.value()) ==
+              std::string(upper.data(), 7) + "FF");
+    }
+
+    // Decoded binary32 patterns. The linear segment and alpha are exact
+    // constants captured on master 43bccad; everything that goes through
+    // std::pow is compared at run time with the decode frozen from master,
+    // because libm pow may round differently across platforms.
+    struct DecodedBits final {
+        unsigned byte;
+        std::uint32_t rgb;
+        std::uint32_t alpha;
+    };
+    constexpr std::array<DecodedBits, 4> kDecoded{{
+        {0U, 0x00000000U, 0x00000000U},
+        {1U, 0x399F22B4U, 0x3B808081U},
+        {10U, 0x3B46EB61U, 0x3D20A0A1U},
+        {255U, 0x3F800000U, 0x3F800000U},
+    }};
+    for (const DecodedBits& expected : kDecoded) {
+        CAPTURE(expected.byte);
+        std::array<char, 10> hex{};
+        std::snprintf(hex.data(), hex.size(), "#%02X%02X%02X%02X",
+            expected.byte, expected.byte, expected.byte, expected.byte);
+        auto decoded = DecodeSrgbHexColor(hex.data());
+        REQUIRE(decoded);
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().red) == expected.rgb);
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().green) == expected.rgb);
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().blue) == expected.rgb);
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().alpha) == expected.alpha);
+    }
+
+    for (unsigned byte = 0; byte < 256U; ++byte) {
+        CAPTURE(byte);
+        const float scaled = static_cast<float>(byte + gByteOffset) * (1.0F / 255.0F);
+        const float expected = LegacySrgbToLinear(scaled);
+        std::array<char, 10> hex{};
+        std::snprintf(hex.data(), hex.size(), "#%02X%02X%02X%02X", byte, byte, byte, byte);
+        auto decoded = DecodeSrgbHexColor(hex.data());
+        REQUIRE(decoded);
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().red) == std::bit_cast<std::uint32_t>(expected));
+        CHECK(std::bit_cast<std::uint32_t>(decoded.value().alpha) == std::bit_cast<std::uint32_t>(scaled));
+    }
+}
+
+TEST_CASE("Parse maps array positions to fields") {
+    auto parsed = UiDocumentCodec::Parse(kGoldenSourceDocument);
+    REQUIRE(parsed);
+    const UiDocument& document = parsed.value();
+
+    // design_canvas.size [x, y]
+    CHECK(document.designCanvas.size.x == 333.3F);
+    CHECK(document.designCanvas.size.y == 187.5F);
+
+    const UiCanvas& canvas = document.canvases.at(0);
+    const UiElement& frame = FindChild(canvas.children, "frame");
+
+    // source_uv [x, y, width, height]
+    const UiElement& iconUv = FindChild(frame.children, "icon_uv");
+    CHECK(iconUv.sourceUv.x == 0.125F);
+    CHECK(iconUv.sourceUv.y == 0.25F);
+    CHECK(iconUv.sourceUv.width == 0.5F);
+    CHECK(iconUv.sourceUv.height == 0.75F);
+
+    // Omitted source_uv keeps the full texture.
+    const UiElement& iconFull = FindChild(frame.children, "icon_full");
+    CHECK(iconFull.sourceUv.x == 0.0F);
+    CHECK(iconFull.sourceUv.y == 0.0F);
+    CHECK(iconFull.sourceUv.width == 1.0F);
+    CHECK(iconFull.sourceUv.height == 1.0F);
+
+    // rect.* [x, y]
+    CHECK(iconUv.rect.anchorMin.x == 0.25F);
+    CHECK(iconUv.rect.anchorMin.y == 0.125F);
+    CHECK(iconUv.rect.anchorMax.x == 0.25F);
+    CHECK(iconUv.rect.anchorMax.y == 0.125F);
+    CHECK(iconUv.rect.pivot.x == 0.3F);
+    CHECK(iconUv.rect.pivot.y == 0.7F);
+    CHECK(iconUv.rect.position.x == 0.1F);
+    CHECK(iconUv.rect.position.y == -0.2F);
+    CHECK(iconUv.rect.sizeDelta.x == 48.0F);
+    CHECK(iconUv.rect.sizeDelta.y == 32.0F);
+
+    CHECK(iconFull.rect.anchorMin.x == 0.75F);
+    CHECK(iconFull.rect.anchorMin.y == 0.5F);
+    CHECK(iconFull.rect.anchorMax.x == 1.0F);
+    CHECK(iconFull.rect.anchorMax.y == 0.75F);
+    CHECK(iconFull.rect.pivot.x == 1.0F);
+    CHECK(iconFull.rect.pivot.y == 0.0F);
+    CHECK(iconFull.rect.position.x == -3.3F);
+    CHECK(iconFull.rect.position.y == 4.4F);
+
+    const UiElement& slider = FindChild(canvas.children, "volume_slider");
+    CHECK(slider.rect.anchorMin.x == 0.1F);
+    CHECK(slider.rect.anchorMin.y == 0.6F);
+    CHECK(slider.rect.anchorMax.x == 0.9F);
+    CHECK(slider.rect.anchorMax.y == 0.6F);
+    CHECK(slider.rect.position.y == 0.3F);
+    CHECK(slider.rect.sizeDelta.y == 22.2F);
+
+    const UiElement& farAway = FindChild(canvas.children, "far_away");
+    CHECK(farAway.rect.position.x == 1.0e30F);
+    CHECK(farAway.rect.position.y == -2.5e-30F);
+    CHECK(farAway.rect.sizeDelta.x == 1.0e-30F);
+    CHECK(farAway.rect.sizeDelta.y == 3.0e20F);
+
+    // item_step [x, y]
+    const UiElement& list = FindChild(canvas.children, "entries_list");
+    CHECK(list.itemStep.x == 0.5F);
+    CHECK(list.itemStep.y == 10.1F);
+    CHECK(list.rect.position.x == 20.2F);
+    CHECK(list.rect.position.y == 30.3F);
+    CHECK(list.rect.sizeDelta.x == 90.9F);
+    CHECK(list.rect.sizeDelta.y == 8.8F);
 }
 
 } // namespace Engine::Ui::Tests

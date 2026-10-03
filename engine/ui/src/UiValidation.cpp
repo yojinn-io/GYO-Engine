@@ -21,10 +21,6 @@ namespace {
     return UiResult<void>::Err({code, std::move(message), {}, std::move(path)});
 }
 
-[[nodiscard]] bool IsFinite(UiFloat2 value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y);
-}
-
 [[nodiscard]] bool IsFinite(UiColor value) noexcept {
     return std::isfinite(value.red) && std::isfinite(value.green) &&
            std::isfinite(value.blue) && std::isfinite(value.alpha);
@@ -303,9 +299,8 @@ struct CanvasElementState final {
             if (element.textureAsset.empty()) {
                 return Invalid("texture_asset cannot be empty", elementPath + "/texture_asset");
             }
-            const UiRect uv = element.sourceUv;
-            if (!std::isfinite(uv.x) || !std::isfinite(uv.y) ||
-                !std::isfinite(uv.width) || !std::isfinite(uv.height) ||
+            const Math::Rect uv = element.sourceUv;
+            if (!Math::IsFinite(uv) ||
                 uv.x < 0.0F || uv.y < 0.0F || uv.width <= 0.0F || uv.height <= 0.0F ||
                 uv.x + uv.width > 1.0F || uv.y + uv.height > 1.0F) {
                 return Invalid("source_uv must be a positive normalized rectangle", elementPath + "/source_uv");

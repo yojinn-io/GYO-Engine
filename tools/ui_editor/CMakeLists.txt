@@ -65,6 +65,8 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         GYO::TextBackendSDLTTF
         imgui::core
     )
+    # PreviewAdapter calls Math functions directly (sRGB, Rect).
+    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math)
     target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp)
     target_link_libraries(gyo_ui_editor PRIVATE
         gyo_ui_editor_preview
