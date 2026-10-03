@@ -16,7 +16,7 @@
 namespace fps::pvp {
 namespace {
 using Engine::Model::Pose;
-using Engine::Model::Vec3;
+using Engine::Math::Vec3;
 using Resource = Engine::ModelRenderer::ModelResource;
 using Instance = Engine::ModelRenderer::ModelInstance;
 
@@ -457,14 +457,14 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
             const auto local = Engine::Model::ToMatrix(output.body.localTransforms[i]);
             const auto parent = model.nodes[i].parentIndex;
             output.body.globalTransforms[i] = parent ?
-                Engine::Model::Multiply(output.body.globalTransforms[*parent], local) : local;
+                Engine::Math::Multiply(output.body.globalTransforms[*parent], local) : local;
         }
         // The weapon and hair follow the final composed pose.
         output.weapon = definition.weaponReferencePose;
-        const auto mount = Engine::Model::Multiply(output.body.globalTransforms[definition.weaponNode],
+        const auto mount = Engine::Math::Multiply(output.body.globalTransforms[definition.weaponNode],
             Engine::Model::ToMatrix(definition.weaponMount));
         for (auto& transform : output.weapon.globalTransforms)
-            transform = Engine::Model::Multiply(mount, transform);
+            transform = Engine::Math::Multiply(mount, transform);
         output.accessories.clear();
         for (const auto& accessory : definition.character->accessories)
             output.accessories.push_back(BuildCharacterAccessoryPose(accessory, output.body));
@@ -667,7 +667,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.upperBodyMaskCount = static_cast<std::size_t>(std::count(
                 definition.upperBodyMask.begin(), definition.upperBodyMask.end(), true));
             observation.preparedInstances = impl.slots.size();
-            auto point = Engine::Model::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
+            auto point = Engine::Math::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
                 definition.weaponMount.translation);
             point = {(point.x - definition.anchor.x) * scale, (point.y - definition.anchor.y) * scale,
                      (point.z - definition.anchor.z) * scale};

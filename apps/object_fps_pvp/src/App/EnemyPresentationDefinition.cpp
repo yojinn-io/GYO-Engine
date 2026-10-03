@@ -116,7 +116,7 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
                 const auto& value = entry.at(name);
                 if (!value.is_array() || value.size() != 3)
                     throw std::runtime_error(std::string("weapon ") + name + " requires three coordinates");
-                Engine::Model::Vec3 result{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+                Engine::Math::Vec3 result{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
                 if (!std::isfinite(result.x) || !std::isfinite(result.y) || !std::isfinite(result.z))
                     throw std::runtime_error(std::string("weapon ") + name + " must be finite");
                 return result;
@@ -142,7 +142,7 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
             q = {q.x * inverseLength, q.y * inverseLength, q.z * inverseLength, q.w * inverseLength};
             if (attack.contains("point"))
                 throw std::runtime_error("weapon muzzle determines attack point; remove duplicate attack.point");
-            rig->attackPoint = {weapon.node, Engine::Model::TransformPoint(
+            rig->attackPoint = {weapon.node, Engine::Math::TransformPoint(
                 Engine::Model::ToMatrix(weapon.localTransform), weapon.muzzlePosition)};
             const auto muzzle = rig->attackPoint.offset;
             if (!std::isfinite(muzzle.x) || !std::isfinite(muzzle.y) || !std::isfinite(muzzle.z))

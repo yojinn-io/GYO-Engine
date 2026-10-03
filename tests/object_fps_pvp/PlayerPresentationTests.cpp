@@ -30,6 +30,8 @@
 namespace {
 using namespace fps::pvp;
 using namespace Engine::Model;
+using Engine::Math::Matrix4;
+using Engine::Math::Vec3;
 
 Engine::Asset::AssetCatalog LoadCatalog() {
     const char* base = SDL_GetBasePath();

@@ -20,13 +20,13 @@ struct WeaponPresentationDefinition final {
     std::shared_ptr<const Engine::Model::ModelAsset> model;
     // Idle, Shoot, Reload, Draw, Hide.
     std::array<std::size_t, 5> clips{};
-    Engine::Model::Vec3 idleAnchor{};
+    Engine::Math::Vec3 idleAnchor{};
     Engine::Render::Transform3D placement{};
     Engine::Render::PerspectiveCamera3D camera{};
     Engine::Render::SamplerMode sampler{Engine::Render::SamplerMode::LinearClamp};
     std::vector<Engine::Asset::AssetId> materialTextureAssetIds;
     std::size_t muzzleNodeIndex{};
-    Engine::Model::Vec3 muzzleLocalPosition{};
+    Engine::Math::Vec3 muzzleLocalPosition{};
     WeaponShotGeometry shotGeometry{};
 };
 

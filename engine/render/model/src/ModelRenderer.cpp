@@ -61,7 +61,7 @@ Base::Result<std::shared_ptr<ModelResource>, std::string> ModelResource::Create(
 
 struct ModelInstance::Impl final {
     std::shared_ptr<ModelResource> resource;
-    Model::Vec3 offset{};
+    Math::Vec3 offset{};
     std::vector<Render::MeshHandle> meshes;
     std::vector<Model::SkinnedVertex> skinned;
     std::vector<Render::Vertex3D> vertices;
@@ -89,7 +89,7 @@ ModelInstance::~ModelInstance() = default;
 
 Base::Result<std::unique_ptr<ModelInstance>, std::string> ModelInstance::Create(
     std::shared_ptr<ModelResource> resource, const Model::Pose& pose,
-    const Model::Vec3 modelSpaceOffset) {
+    const Math::Vec3 modelSpaceOffset) {
     using CreateResult = Base::Result<std::unique_ptr<ModelInstance>, std::string>;
     if (!resource) return CreateResult::Err("Model instance requires a resource.");
     if (!std::isfinite(modelSpaceOffset.x) || !std::isfinite(modelSpaceOffset.y) ||

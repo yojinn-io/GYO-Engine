@@ -12,13 +12,13 @@ enum class PlaybackMode { Clamp, Loop };
 
 struct Pose final {
     std::vector<Transform> localTransforms;
-    std::vector<Matrix4> globalTransforms;
+    std::vector<Math::Matrix4> globalTransforms;
 };
 
 struct SkinnedVertex final {
-    Vec3 position{};
-    Vec3 normal{};
-    Vec2 uv{};
+    Math::Vec3 position{};
+    Math::Vec3 normal{};
+    Math::Vec2 uv{};
 };
 
 // Call once when constructing a model outside a provided asset loader.

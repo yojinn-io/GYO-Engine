@@ -7,6 +7,7 @@
 #include <limits>
 
 using namespace Engine::Model;
+using Engine::Math::Vec3;
 
 namespace {
 ModelAsset MakeModel() {

@@ -68,7 +68,7 @@ Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
     if (definition.muzzleNodeIndex >= pose.globalTransforms.size()) {
         throw std::runtime_error("viewmodel muzzle requires a complete model pose");
     }
-    const auto point = Engine::Model::TransformPoint(
+    const auto point = Engine::Math::TransformPoint(
         pose.globalTransforms[definition.muzzleNodeIndex], definition.muzzleLocalPosition);
     Engine::Render::Float3 result{
         (point.x - definition.idleAnchor.x) * transform.scale.x,
@@ -172,7 +172,7 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
         const auto idle = Engine::Model::SamplePose(
             *definition->model, definition->clips[0], 0, Engine::Model::PlaybackMode::Clamp, pose);
         if (!idle) throw std::runtime_error(idle.error());
-        definition->idleAnchor = Engine::Model::TransformPoint(pose.globalTransforms[*anchor], {});
+        definition->idleAnchor = Engine::Math::TransformPoint(pose.globalTransforms[*anchor], {});
         const auto shoot = Engine::Model::SamplePose(
             *definition->model, definition->clips[1], 0, Engine::Model::PlaybackMode::Clamp, pose);
         if (!shoot) throw std::runtime_error(shoot.error());

@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-03。Owner：Engine（新增模組 `GYO::Math`）。
-**B0、B1、B1b 完成並合併；B2 本機驗收完成。**
+**B0、B1、B1b、B2 完成並合併；B3 本機驗收完成。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -30,8 +30,8 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B0 基線 | medium | 完成，2026-10-03，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併 | core／test 基線、依賴圖、29 檔 syntax-only 基線、本文件與 HANDOFF |
 | B1 `GYO::Math` | high（慣例與數值 xhigh） | 完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 已合併 | 新模組（依樹狀圖的完整型別）、`gyo_math_tests`、characterization、`docs/architecture/math.md` 初稿 |
 | B1b 浮點收縮統一 | medium | 完成，併入 #18 合併 | 全專案 `-ffp-contract=off`，文件與量測方式更新 |
-| B2 Collision | high（double 路徑 xhigh） | 本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI | `Collision::Float3/Aabb/Capsule` 移除；raycast 接收 `Math::Ray`、sweep 接收 `Math::Segment`；`VerticalCapsule` 保留 |
-| B3 Model | high（矩陣與四元數 xhigh） | 未開始 | `Model::Vec2/Vec3/Quaternion/Matrix4` 移除 |
+| B2 Collision | high（double 路徑 xhigh） | 完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 已合併 | `Collision::Float3/Aabb/Capsule` 移除；raycast 接收 `Math::Ray`、sweep 接收 `Math::Segment`；`VerticalCapsule` 保留 |
+| B3 Model | high（矩陣與四元數 xhigh） | 本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI | `Model::Vec2/Vec3/Quaternion/Matrix4`、`Multiply`、`TransformPoint` 移除；`Transform`、`ToMatrix` 保留 |
 | B4a Render 型別 | high | 未開始 | `Render::Float2/Float3/Rect` 移除，Render helper 改用 Math |
 | B4b Render 矩陣 | xhigh | 未開始 | `Renderer.cpp` 改用 Math 慣例，memcmp 逐位元驗證 |
 | B5 Ui／ui_editor | high | 未開始 | `UiFloat2/UiRect` 移除，sRGB 統一，gyo.ui golden |

@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0（#17）、B1＋B1b（#18，合併為 `6cc2829`）已合併。B2 本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台。**
+更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19，合併為 `5c8fd10`）已合併。B3 本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -144,7 +144,7 @@
 
 ## B2 Collision
 
-狀態：**本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台**（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。
+狀態：**完成**。PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 於 2026-10-03 合併為 `5c8fd10`；最終 head `33bf64c` 的 CI 四平台全部通過。
 
 ### 變更
 
@@ -182,6 +182,47 @@
 - 影響：test preset 多出 `object_fps_pvp.action_runner`、`gameplay_soak`、`combat_gui_evidence` 三項；pvp 有 28 個檔案變動（+1381／−444）。
 - 29 個未編譯檔案的清單經重新計算後不變。
 - PLAN 中 pvp helper 的行號是規劃時量的，**B6 開始時必須重新盤點**。
+
+## B3 Model
+
+狀態：**本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI 四平台**（分支 `claude/math-foundation-b3`，自 master `5c8fd10`）。
+
+### 變更
+
+- `ModelAsset.hpp`：`Model::Vec2/Vec3/Quaternion/Matrix4` 與 `Multiply`、`TransformPoint` 移除，改用 Math 的型別與函式。
+  - `Transform`（資產節點的 TRS 契約）與 `ToMatrix` 保留在 Model；`ToMatrix` 改為呼叫 `Math::ComposeTRS`。
+  - `Animation.hpp`、`ModelAsset.hpp` 的欄位型別改為 `Math::` 限定名稱；公開 header 不寫 using。
+- `ModelAsset.cpp`：刪除 `Multiply`、`TransformPoint` 的本體。
+- `Animation.cpp`：
+  - 刪除本地 `Lerp`、guarded `Normalize`、`Slerp`；`BlendPoses` 等未限定的呼叫經 ADL 使用 Math 版本。
+  - `Sample()` 以 callable 接收插值函式，改傳包裝 `Math::Lerp`、`Math::Slerp` 的 lambda。
+  - **`Finite` 系列保留**：它是 Model 的驗證政策。`Finite(Quaternion)` 另有「長度平方大於 1e-12」的非退化規則；`Finite(Vec3)`、`Finite(Matrix4)` 只是轉呼叫 `Math::IsFinite`，讓 `ValidKeys` 模板能用同一組多載。B7 的 grep 稽核把它們列為已知例外。
+- `AnimationTransfer.cpp`：
+  - 刪除本地 `Normalize`；舊的 `Inverse`（其實是共軛）三處呼叫全部明確改為 `Math::Conjugate`。
+  - `Product` 保留為組合函式，本體為 `Math::Normalize(Math::Multiply(a, b))`。
+- ufbx loader、`render/model` 的 ModelRenderer：型別名稱改為 Math 的型別。
+- `engine/model/CMakeLists.txt`：PUBLIC 連結 `GYO::Math`。
+- 測試：`tests/common/model/ModelTests.cpp`、`tests/object_fps_pvp/PlayerPresentationTests.cpp` 補上需要的 using-declaration。
+- pvp：有編譯的 `PlayerPresentation`、`WeaponPresentationDefinition`、`CharacterPresentationDefinition`，以及未編譯的 `EnemyRig`、`EnemyPresentationDefinition`：`Engine::Model::Vec3/Matrix4/Multiply/TransformPoint` 換成 `Engine::Math::`。
+- 文件：`architecture.md` 的 Model 列。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過 |
+| test preset | 45／45 通過 |
+| Model digest | master 與 B3 共 1207 萬筆輸出逐位元相同（`-O2`、`-O0`），涵蓋 Model 全部公開函式與各錯誤分支；9 種刻意改動（例如 `Conjugate` 換回 `Inverse`、Slerp 閾值、乘法順序）都會被偵測到 |
+| 漂移 | 0（逐位元相同，沒有需要記錄的漂移） |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B2 相比只多 `gyo_model → gyo_math` |
+
+### 對抗式審查
+
+3 個 minor，沒有正確性問題：
+- 用不到的 using-declaration：`UfbxModelTests.cpp` 還原為 master 版，其餘刪除用不到的宣告。
+- `Animation.cpp` 的 `Finite` 系列：保留理由記錄於上方，PLAN 的 B7 稽核加上例外。
+- 計劃文件尚未更新：本節與 dev_log、README 一併補上。
 
 ## 未結事項
 
