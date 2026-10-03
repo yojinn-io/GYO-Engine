@@ -2,13 +2,13 @@
 
 更新：2026-10-03。Owner：`object_fps_pvp`。
 **第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
-（PR #11，合併為`bec86b7`），2026-10-02結案驗收通過，**第03批已結案**；**第04批2026-10-02完成**（PR #14，合併為`cef1b39`），**第05批進行中**（2026-10-02啟動，子批次見[交接](HANDOFF.md)）。**
+（PR #11，合併為`bec86b7`），2026-10-02結案驗收通過，**第03批已結案**；**第04批2026-10-02完成**（PR #14，合併為`cef1b39`），**第05批2026-10-03完成，完整驗收通過，v5升格為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)）。**
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
 已定位既有首次命令／Authority Tick相位差。2026-10-01實作獲批准的啟動相位對齊（PR #2，合併為`ff11ee3`）；
 2026-10-02以產品式worker的CPU模擬發現它使30／40 FPS退化（實機未重現），
 補上低於約54.5 FPS不對齊的守門及驗收器修正（PR #3，合併為`9cd7f26`）。
 原51.13ms失敗輪保留，不以後續通過覆蓋；結案驗收以持續相位追蹤版本在事前宣告下重跑：
-計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms），25案真網路矩陣25／25通過（1075／1075動作）。v5未升格穩定基線；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
+計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms），25案真網路矩陣25／25通過（1075／1075動作）。2026-10-03完整驗收通過後升格（見下方第05批與[STABLE_BASELINE](STABLE_BASELINE.md)）；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
 
 先讀 [交接](HANDOFF.md)、[v5契約](../../protocol-v5.zh-Hant.md) 和指定批次。
 修正與已知問題：第03批啟動相位相關問題各一份文件（成因／影響／復現／解決方案），見 [fix/README.md](fix/README.md)。
@@ -25,7 +25,7 @@
 | 02 | [人物與移動動畫](02-player-model-and-locomotion.md) | 已完成，2026-09-28 | Client女性人物、掛槍、Idle／Jog與步頻；真雙GUI短測通過，仍為v4玩法 |
 | 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 已結案，2026-10-02 | 完整三角色v5、25案網路與生命恢復通過；持續相位追蹤＋token bucket worker與連線品質移出（PR #11）；計次可見50ms守門3輪與25案矩陣通過，修正與已知問題見[fix](fix/README.md) |
 | 04 | [完整動作呈現](04-complete-action-presentation.md) | 已完成，2026-10-02 | 第一人稱換彈、遠端射擊／換彈／跳躍／死亡與生命隔離、Walk／Jog依速度混合；L1／L2／L3於macOS通過，見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md) |
-| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 短測與驗收工具完成（05-1～05-4，2026-10-03）；完整驗收05-5：GUI三輪通過、60 Hz長測失敗待決定（見交接），未升格 | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
+| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 已完成，2026-10-03；完整驗收通過，**v5升格穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)） | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
 
 ```text
 01 契約／基線 -> 02 人物Idle/Jog（v4）
@@ -63,10 +63,9 @@
 
 ## 接續處理文字
 
-> 請先讀 docs/object_fps_pvp/plans/v5/HANDOFF.md、v5契約、MANUAL_ACCEPTANCE.md、ACCEPTANCE_STATUS.md 與 fix/README.md。
-> 第03批、第04批已於2026-10-02完成；第05批05-1～05-4已於2026-10-03完成，剩05-5完整驗收（使用者已授權，
-> 只在本機macOS）：事前宣告後依序跑GUI三輪與60／144 Hz長測，全部通過即寫STABLE_BASELINE並升格。
-> 機器須閒置約1.5小時；延到v6的項目見 ../v6/HANDOFF.md。
+> v5已於2026-10-03升格穩定基線（macOS Intel／Metal、同機），先讀 STABLE_BASELINE.md 與 HANDOFF.md。
+> 下一步是v6：從 ../v6/HANDOFF.md 開始（延後的玩法／呈現項目、Engine呈現阻塞、驗收工具的計時基線與跨平台相容性稽核）。
+> Windows／Linux驗收與兩台機器的時鐘漂移實測須另行授權。
 
 ## 第02批結果
 
