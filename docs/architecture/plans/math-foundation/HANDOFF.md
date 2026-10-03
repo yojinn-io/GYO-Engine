@@ -132,6 +132,14 @@
 - `compile_commands.json` 確認套用範圍：engine 54／54、apps 18／18、tests 54／54、tools 11／11、build（acceptance）7／7 都帶有 `-ffp-contract=off`；
   SDL、SDL_image、SDL_ttf、imgui、ufbx、doctest 都沒有；pvp 自己目錄加入的 protobuf、absl 也帶有這個選項，與預期相符。
 
+## #18 附帶修正：CI 快取鍵的無效路徑
+
+依使用者指示併入 PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18)（2026-10-03），不另開 PR。
+
+- B0 盤點時發現 `build-and-validate.yml:129` 與 `cross-platform.yml:120` 的 shader 工具快取鍵引用了已不存在的 `engine/base/src/Sha256.cpp`（`Sha256` 現在是 header-only，`.hpp` 已在鍵中），當時列為範圍外。
+- 兩處都刪除該路徑。`hashFiles()` 會略過不存在的路徑，所以刪除前後鍵值相同，不會讓快取失效。
+- `tests/common/ci/test_ci_scope.py:59` 只是用該路徑當作「engine 原始碼變更」的範例輸入，不是引用實際檔案，因此保留。本機 `build.ci` 通過。
+
 ## 未結事項
 
 

@@ -197,7 +197,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 **範圍外，只回報**
 - Collision 內部 float 和 double 兩套演算法並存：這是演算法層的重複，不是數學庫問題，而且會改變 authority 的判定。
 - `Render::Color` 和 `UiColor` 同構重複，但不屬於幾何數學。
-- 兩份 FNV-1a；CI cache key 引用了不存在的檔案；include 路徑風格不一致。
+- 兩份 FNV-1a；include 路徑風格不一致。（CI 快取鍵的無效路徑已依使用者指示在 #18 修正，見 HANDOFF。）
 - `object_fps_preview` 的 registration 不一致：工具是 enabled，但依賴的 app 已停用。
 
 **Render 乘法鏈對照表**（B4b 使用）
