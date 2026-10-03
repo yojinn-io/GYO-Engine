@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO is a C++20 game engine with explicit runtime, asset, input, collision, model, text, rendering and UI boundaries. Engine libraries are linked statically into games and design tools. Games own their rules and content; the engine does not depend on a concrete game.
+GYO is a C++20 game engine with explicit runtime, asset, math, input, collision, model, text, rendering and UI boundaries. Engine libraries are linked statically into games and design tools. Games own their rules and content; the engine does not depend on a concrete game.
 
 ## Repository
 
@@ -64,6 +64,7 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [Architecture and responsibility boundaries](docs/architecture.md)
 - [UI standard and authoring workflow](docs/ui_toolchain.md)
 - [Tool registration, selection and CMake migration](docs/tool_projects.md)
+- [Math foundation contract](docs/architecture/math.md)
 - [Rendering and shader contract](docs/rendering_architecture.zh-Hant.md)
 - [3D asset ownership and animation limits](docs/architecture/3d-assets.md)
 - [Release procedure](docs/releasing.zh-Hant.md)

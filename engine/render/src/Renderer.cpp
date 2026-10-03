@@ -10,7 +10,6 @@
 #include <cstring>
 #include <limits>
 #include <map>
-#include <numbers>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -21,7 +20,7 @@ using namespace ShaderAbi;
 // vectors, Multiply(a, b) applies b first. Shaders read the same 16 floats as
 // row_major float4x4 with mul(float4(p, 1), M), so uploads copy them in order
 // (ToShaderMatrix) without a transpose. Each chain below is the mirror of the
-// former row-vector product and is byte-identical to it (RendererMatrixTests).
+// former row-vector product and is byte-identical to it (RendererTests.cpp).
 
 [[nodiscard]] Matrix4 ToShaderMatrix(const Math::Matrix4& matrix) noexcept {
     static_assert(sizeof(Matrix4) == sizeof(matrix.values));
@@ -36,11 +35,7 @@ using namespace ShaderAbi;
 }
 
 [[nodiscard]] Math::Matrix4 ViewMatrix(const PerspectiveCamera3D& camera) noexcept {
-    Math::Matrix4 result = Math::MakeTranslation({
-        -camera.position.x,
-        -camera.position.y,
-        -camera.position.z,
-    });
+    Math::Matrix4 result = Math::MakeTranslation(-camera.position);
     result = Math::Multiply(Math::MakeRotationZ(-camera.rotationRadians.z), result);
     result = Math::Multiply(Math::MakeRotationY(-camera.rotationRadians.y), result);
     return Math::Multiply(Math::MakeRotationX(-camera.rotationRadians.x), result);

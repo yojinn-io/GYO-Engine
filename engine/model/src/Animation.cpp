@@ -12,13 +12,12 @@ using Math::Vec3;
 namespace {
 using Result = Base::Result<void, std::string>;
 
-// Model validity predicates. Finite vectors and matrices use the Math checks;
-// a valid rotation also needs a non-degenerate quaternion.
+// Model validity predicates over the Math checks; a valid rotation also needs
+// a non-degenerate quaternion.
 bool Finite(const Vec3 v) { return Math::IsFinite(v); }
 bool Finite(const Quaternion q) {
-    const float lengthSquared=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
-    return std::isfinite(q.x)&&std::isfinite(q.y)&&std::isfinite(q.z)&&std::isfinite(q.w)
-        && std::isfinite(lengthSquared)&&lengthSquared > 1.0e-12F;
+    const float lengthSquared=Math::LengthSquared(q);
+    return Math::IsFinite(q)&&std::isfinite(lengthSquared)&&lengthSquared > 1.0e-12F;
 }
 bool Finite(const Matrix4& m) { return Math::IsFinite(m); }
 bool Finite(const Transform& t) { return Finite(t.translation)&&Finite(t.rotation)&&Finite(t.scale); }
@@ -63,17 +62,17 @@ Result ResolveGlobals(const ModelAsset& model,Pose& output) {
 
 Vec3 TransformNormal(const Matrix4& matrix,const Vec3 normal) {
     const auto& m=matrix.values;
-    // Cofactor matrix / determinant is the inverse transpose of the 3x3.
+    // Cofactor matrix / determinant is the inverse transpose of the 3x3. The
+    // determinant tolerance is Model's normal-matrix policy (Math has none).
     const float c00=m[5]*m[10]-m[9]*m[6],c01=m[9]*m[2]-m[1]*m[10],c02=m[1]*m[6]-m[5]*m[2];
     const float c10=m[8]*m[6]-m[4]*m[10],c11=m[0]*m[10]-m[8]*m[2],c12=m[4]*m[2]-m[0]*m[6];
     const float c20=m[4]*m[9]-m[8]*m[5],c21=m[8]*m[1]-m[0]*m[9],c22=m[0]*m[5]-m[4]*m[1];
     const float determinant=m[0]*c00+m[4]*c01+m[8]*c02;
     if(std::abs(determinant)<1.0e-12F) return normal;
-    Vec3 n{(c00*normal.x+c01*normal.y+c02*normal.z)/determinant,
-           (c10*normal.x+c11*normal.y+c12*normal.z)/determinant,
-           (c20*normal.x+c21*normal.y+c22*normal.z)/determinant};
-    const float length=std::sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
-    return length>1.0e-12F?Vec3{n.x/length,n.y/length,n.z/length}:normal;
+    const Vec3 n=Vec3{Math::Dot(Vec3{c00,c01,c02},normal),Math::Dot(Vec3{c10,c11,c12},normal),
+                      Math::Dot(Vec3{c20,c21,c22},normal)}/determinant;
+    const float length=Math::Length(n);
+    return length>1.0e-12F?n/length:normal;
 }
 } // namespace
 
@@ -98,7 +97,7 @@ Result ValidateModel(const ModelAsset& model) {
         for(const auto& joint:mesh.joints) if(joint.nodeIndex>=model.nodes.size()||!Finite(joint.geometryToJoint))
             return Result::Err("Model skin joint is invalid.");
         for(const auto& v:mesh.vertices) {
-            if(!Finite(v.position)||!Finite(v.normal)||!std::isfinite(v.uv.x)||!std::isfinite(v.uv.y))
+            if(!Finite(v.position)||!Finite(v.normal)||!Math::IsFinite(v.uv))
                 return Result::Err("Model vertex contains non-finite attributes.");
             float total=0;
             for(std::size_t k=0;k<4;++k) {

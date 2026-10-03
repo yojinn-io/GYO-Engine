@@ -91,8 +91,7 @@ Base::Result<std::unique_ptr<ModelInstance>, std::string> ModelInstance::Create(
     const Math::Vec3 modelSpaceOffset) {
     using CreateResult = Base::Result<std::unique_ptr<ModelInstance>, std::string>;
     if (!resource) return CreateResult::Err("Model instance requires a resource.");
-    if (!std::isfinite(modelSpaceOffset.x) || !std::isfinite(modelSpaceOffset.y) ||
-        !std::isfinite(modelSpaceOffset.z)) return CreateResult::Err("Model offset must be finite.");
+    if (!Math::IsFinite(modelSpaceOffset)) return CreateResult::Err("Model offset must be finite.");
     auto impl = std::make_unique<Impl>();
     impl->resource = std::move(resource);
     impl->offset = modelSpaceOffset;

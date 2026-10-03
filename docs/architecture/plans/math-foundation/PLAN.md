@@ -73,7 +73,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 | `Ray` | `{origin, direction}`，direction 不要求正規化（與現有 Collision raycast 的約定一致；需要單位長度的運算自行正規化） | 新增（1.5、1.6）；現有 raycast 以分開的參數傳遞 |
 | `Plane` | `{normal, distance}`，normal 要求正規化，平面方程為 `dot(n, p) = d` | 新增（1.5、1.6） |
 | `Sphere` | `{center, radius}` | 新增（1.5、1.6） |
-| `Segment` | `{start, end}` | 新增（1.5）；`Capsule` 的軸、`ClosestPointOnSegment` 的參數 |
+| `Segment` | `{start, end}` | 新增（1.5）；`Capsule` 的軸、`ClosestPoint(point, Segment)` 的參數 |
 | `Triangle` | `{a, b, c}`，只定義頂點順序與 normal 的計算方式：`normal = Cross(b − a, c − a)`（需要單位長度時再正規化）。不定義哪一面是正面；正面與剔除屬於 Render 的管線狀態（`RenderDeviceTypes.hpp` 的 `clockwiseFrontFace`） | 新增（1.5） |
 
 **不放進 Math**，以下仍歸原 owner：
@@ -107,7 +107,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 
 **實作規則**
 - Epsilon 不放全域常數，容差留給呼叫端。
-- 容易被 FMA 收縮的運算（`Dot`、`Lerp`、`Cross`、`Multiply`、`TransformPoint`）寫成 inline，不寫 constexpr，避免編譯期求值和執行期結果不一致。
+- 容易被 FMA 收縮的運算（`Dot`、`Lerp`、`Cross`、`Multiply`、`TransformPoint`）寫成 inline，不寫 constexpr，避免編譯期求值和執行期結果不一致。（B1 審查更正：不寫 constexpr 不足以避免差異，clang 最佳化仍可能以 fused 捨入做常數摺疊；B1b 起全專案 `-ffp-contract=off`，比對兩邊都用執行期資料。單次乘法的角度換算於 B6a 改為 constexpr。見 math.md 數值政策與 HANDOFF B1、B1b、B6a。）
 - engine 公開 header 禁止寫 `using namespace Engine::Math`。
 - 往後只在出現第二個使用者時才擴充；這次收錄的每個函式都要對應到一處現有用途，寫在 Architecture Delta 裡。
   例外見 1.5。
@@ -153,7 +153,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **最近點查詢歸 Math**：不需要「碰撞」語義也成立的純幾何查詢。
   - `CapsuleQueries.cpp:27` 的 `Closest`（點到線段的最近點）。線段退化成一點時回傳端點 a，這個行為要保留。
   - `CapsuleQueries.cpp:32` 的 `Clamp`（點到 AABB 的最近點）。依同一原則一併移入。
-  - Math 提供 `Vec3` 與 `Vec3d` 兩個多載，名稱於 B1 確認（例如 `ClosestPointOnSegment`、`ClosestPointOnAabb`）。
+  - Math 提供 `Vec3` 與 `Vec3d` 兩個多載，名稱於 B1 確認（例如 `ClosestPointOnSegment`、`ClosestPointOnAabb`）。→ B1 定案為重載 `ClosestPoint(point, Segment／Segmentd／Aabb／Aabbd)`（1.5）。
   - Collision 的 double 路徑改呼叫 Math 的 `Vec3d` 版本。
 
 ---
@@ -173,7 +173,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 **Model**
 - `ModelAsset` 中的 `Multiply`、`TransformPoint` 刪除，改由 Math 提供。`ToMatrix(Transform)` 留在 Model，改寫成 `ComposeTRS`。
 - `Animation.cpp:170,172` 把 `Lerp` 當成 callable 傳進 template，改傳 lambda。
-- `Animation`、`AnimationTransfer` 中的 `Normalize`、`Product`、`Slerp`、`Finite` 改用 Math。
+- `Animation`、`AnimationTransfer` 中的 `Normalize`、`Product`、`Slerp`、`Finite` 改用 Math。（B3：`Finite` 系列保留為 Model 的驗證政策，內部改呼叫 Math；`Product` 保留為 `Normalize(Multiply)` 的組合函式。見 HANDOFF B3。）
 - **ADL 陷阱**：`AnimationTransfer.cpp:16` 的舊 `Inverse(q)` 其實是共軛，必須改寫成 `Math::Conjugate`（呼叫處 :125、:148、:149）。若只刪掉 local helper，未限定的 `Inverse(q)` 會經 ADL 靜默選到真正的 `Math::Inverse`（除以 |q|²），造成位元漂移。
 
 **Collision**
@@ -188,11 +188,11 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 
 **pvp**
 - `fps::Float3` 移除，`Vector.hpp` 中的 Float3 刪除。
-- `ToCollision`、`Render::Float3` 與 `Model::Vec3` 之間的互轉全部刪除。
+- `ToCollision`、`Render::Float3` 與 `Model::Vec3` 之間的互轉全部刪除。（B6c：只刪除數學型別之間的轉換；產品 `VerticalCapsule` 轉成 `Collision::VerticalCapsule` 的 `ToCollision` 保留。見 HANDOFF B6c。）
 - `Length`、`Lerp`、`Finite`、yaw wrap（7 處）、角度換算、muzzle 的手寫 Euler（`WeaponPresentationDefinition.cpp:64-84`）、yaw 旋轉（`PlayerPresentation.cpp:476`）改用 Math。
 - **`fps::Float2{x,z}` 的處理**：它代表地平面座標，語義和 `Math::Vec2{x,y}` 不同，機械式取代會把 z 靜默對應成 y。建議保留為產品自有的語義型別，改名為 `GroundPoint`，並註明它不是數學重複定義。這是本計劃唯一保留的產品型別；核准時未另行指示，採用此方案。
 
-**不得遷移**：`tests/common/render/sdl_gpu/RenderFeatureSmoke.cpp:92-96` 是刻意獨立的 scalar oracle，保持不動。
+**不得遷移**：`tests/common/render/sdl_gpu/RenderFeatureSmoke.cpp:92-96` 是刻意獨立的 scalar oracle，保持不動。（B4a：計算式 `RotateX/Y/Z`、`Project` 維持獨立；因為不留別名，只替換型別拼寫，sRGB 期望值改用 `Math::EncodeSrgb`。見 HANDOFF B4a。）
 
 **範圍外，只回報**
 - Collision 內部 float 和 double 兩套演算法並存：這是演算法層的重複，不是數學庫問題，而且會改變 authority 的判定。
@@ -231,7 +231,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - 量測工具是 B1 建立的 characterization 測試：舊實作凍結成測試內的複本，和 Math 對照。
   - 原本精確比較的測試，因結果改變而需要修改時，要逐一註明理由，不能直接放寬容差。
 - **停止條件**：出現非預期的回歸、範圍擴大，或 PvP authority 的漂移超出 reconciliation 能吸收的程度時，停下來回報並重新規劃，不自行升降檔。
-- **ultracode 對抗式檢查**：建議在 B1、B4b、B6a 使用，到時逐次徵求使用者同意。
+- **ultracode 對抗式檢查**：建議在 B1、B4b、B6a 使用，到時逐次徵求使用者同意。（已被取代：2026-10-03 使用者決定本計劃全程使用 ultracode，見 HANDOFF 決策紀錄。）
 
 ### B0　基線（medium，不改程式）
 
@@ -362,12 +362,12 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - `docs/creating_apps.md:41`：加入 `GYO::Math`。
   - `docs/architecture/math.md`。
 - **grep 稽核 active 範圍**：
-  - 除了第 2 節列為保留的型別，已沒有 `struct (Float[23]|Vec[23]|Matrix4|Quaternion)`。
-  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。已知例外：Model `Animation.cpp` 的 `Finite` 驗證政策系列（B3，見 HANDOFF）、ufbx loader 的 `Rotation(ufbx_quat)` 轉換函式，Render 的 `IsFinite(float)`／`IsFinite(Color)`（純量與 Render 語義型別，B4a），以及 Ui 的 `IsFinite(UiColor)`（Ui 語義型別，B5），pvp 的 `IsFinite(GroundPoint)`／`Distance(GroundPoint)` 與 `NormalizeOrThrow`（產品語義型別與會 throw 的驗證，B6c）。
+  - 除了 1.2 與第 2 節列為保留的型別（含 GPU ABI `ShaderAbi::Matrix4`、產品 `GroundPoint`），已沒有 `struct (Float[23]|Vec[23]|Matrix4|Quaternion)`。
+  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。已知例外：Model `Animation.cpp` 的 `Finite` 驗證政策系列（B3，見 HANDOFF）、ufbx loader 的 `Rotation(ufbx_quat)` 轉換函式，Render 的 `IsFinite(float)`／`IsFinite(Color)`（純量與 Render 語義型別，B4a），以及 Ui 的 `IsFinite(UiColor)`（Ui 語義型別，B5），pvp 的 `IsFinite(GroundPoint)`／`Distance(GroundPoint)` 與 `NormalizeOrThrow`（產品語義型別與會 throw 的驗證，B6c）。B7 補登：ModelRenderer 的 `Finite(Render::Color)`（Render 語義型別）、Model `TransformNormal` 的餘因子法線矩陣（Model 的退化容忍政策）、ufbx loader 的轉換函式（`Vector`、`Matrix`、`TransformOf`）、pvp authority 的瞄準方向與平面輸入旋轉（改用 Math 只會改變 -0，依 B6a 的 -0 保留政策維持）。測試中刻意凍結的舊實作與獨立 oracle（各 characterization 測試、`RendererTests.cpp` 的 Legacy、`RenderFeatureSmoke`、pvp 的 `PresentationLegacyMath.hpp` 與 acceptance 量測、`UiDocumentCodecTests` 的凍結 `SrgbToLinear`）不在稽核對象內。
   - 公共層沒有出現產品名稱。
 - **未啟用產品的破損盤點**：
   - 在 scratch registry 中啟用 object_fps 和 object_fps_v2，並設定 `GYO_OUTPUT_ROOT=<scratchpad>`。
-  - 用 `ninja -k 0` 建置，逐 TU 收集錯誤，記錄到 HANDOFF，作為將來重新啟用時的遷移清單。repo 不變。
+  - 用 `ninja -k 0` 建置，逐 TU 收集錯誤，記錄到 HANDOFF，作為將來重新啟用時的遷移清單。repo 不變。（B7：篇幅關係改記於 [inactive_products.md](inactive_products.md)，HANDOFF 連結之。）
 - 依賴圖與 B0 比對；撰寫 Architecture Report；HANDOFF 標為完成。
 
 ### 順序理由
@@ -385,7 +385,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 1. **需求來源**：使用者明確要求的 Refactoring：Math 作為 Engine 的基礎。
 2. **觀測到的問題**：第 1 節列出的重複定義、語義相反的 Matrix4、多套 helper 寫法、反覆出現的轉換函式（`ToCollision`、`ConvertRect`、型別之間的 brace-copy）。
 3. **變化的 boundary**：新增最底層模組 `GYO::Math`。座標系、矩陣、Euler 順序和 clip space 的慣例 ownership，從 Render 和 Model 的註解移到 Math 契約。
-4. **影響範圍**：engine 的 collision、model、render、ui；`apps/object_fps_pvp`；`tools/ui_editor`；`tests/common`；docs。
+4. **影響範圍**：engine 的 collision、model、render、ui；`apps/object_fps_pvp`；`tools/ui_editor`；`tests/common`；docs。（實施後追加：`build/cmake/GyoBuild.cmake` 的浮點收縮設定（B1b）、`.github/workflows` 的快取鍵（#18）、`tests/object_fps_pvp`、`tests/ui_editor`、`build/acceptance/object_fps_pvp`、根目錄 README；見 HANDOFF 各批。）
 5. **依賴方向**：只新增「模組 → Math」的單向邊，沒有循環。Collision 仍不依賴 `GYO::Engine`，Model 與 Render 仍互不依賴，`match_domain` 不會多出 Render 或 Model 依賴。
 6. **Ownership**：值型別、通用運算、純幾何運算和慣例歸 Math；語義型別、ABI、資料契約與領域政策留在原 owner。Math 與 Collision 的分界見 1.6。
 7. **為什麼沒有更小的做法**：
@@ -417,6 +417,6 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 
 ## 6. 尚未確認之處
 
-- 那 29 個 .cpp 和未啟用產品目前在 master 上能否編譯：由 B0 和 B7 實測。
-- MSVC 與 GCC 在內聯後的 FP 收縮行為：以 B1 在 CI 四個平台的結果為準。
-- PvP 漂移的實際大小，以及是否需要升 protocol：由 B6a 量測後決定。
+- 那 29 個 .cpp 和未啟用產品目前在 master 上能否編譯：由 B0 和 B7 實測。→ 已確認：B0 時 29／29 通過；未啟用產品在基準上全部可編譯，遷移後 39／104 個 TU 失敗，見 [遷移清單](inactive_products.md)。
+- MSVC 與 GCC 在內聯後的 FP 收縮行為：以 B1 在 CI 四個平台的結果為準。→ B1 CI 四平台通過；B1b 起全專案不收縮。
+- PvP 漂移的實際大小，以及是否需要升 protocol：由 B6a 量測後決定。→ B6a：authority 位置最大差 2.67e-5 m、無離散狀態分歧，不升 protocol。

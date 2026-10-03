@@ -14,7 +14,7 @@ GYO-Engine/
     base/, io/                foundational values and filesystem/stream IO
     runtime/, asset/          frame lifecycle and CPU asset management
     math/                     value types, pure geometry and coordinate conventions
-    collision/                geometric queries
+    collision/                collision raycasts, sweeps, overlaps and contacts
     config/projects.csv       integrated game selection
     config/tools.csv          design-tool default/release/platform selection
     input/                    neutral input and adapters
@@ -150,12 +150,20 @@ It consumes an evaluated pose without advancing an animation clock. Model and
 Render do not depend on each other; product state and content semantics remain
 outside this bridge.
 
-`Collision` operates on numeric geometry and returns geometric query results.
-Render's wire generators also accept numeric geometry, without a Collision
-dependency. `WorldOverlay` provides world-camera drawing without depth testing
+`Collision` takes Math primitives and returns collision results (world-space
+ray distances, sweep fractions and contacts); tolerance-free geometric queries
+belong to Math. Render's wire generators also accept Math values, without a
+Collision dependency. `WorldOverlay` provides world-camera drawing without depth testing
 or writing; an empty layer adds no pass. Application-specific collision policies,
 controls and diagnostic meanings belong to their product owners. See the
 [rendering architecture](rendering_architecture.zh-Hant.md) for pass and resource contracts.
+
+Coordinate, matrix, Euler and clip-space conventions are owned by the
+[Math contract](architecture/math.md). Model's asset `Transform` composes
+through `Math::ComposeTRS`; Render's `Transform3D` uses `Math::ComposeEulerXYZ`
+and uploads Math matrices to `ShaderAbi` without a transpose; Collision queries
+take Math primitives under Collision's own tolerances. Modules and products
+link this contract instead of restating it.
 
 ## Build and project management
 
@@ -241,6 +249,8 @@ The reorganization resolves observed ownership conflicts: duplicated root/editor
 The contract repair addresses three additional observed pressures: divergent Python content validators, Editor re-reading catalogs independently of validation, and a test shader required by normal gameplay. Validation rules now have one Python owner with shared C++ fixtures, Editor consumes one parsed snapshot, and shader validation belongs to common tests. No top-level subsystem or reverse engine-to-game dependency is added; runtime does not depend on Python.
 
 The build-boundary repair addresses repeated concrete-tool branches in composition, packaging and CI, inferred acceptance target names, and generated-header path leakage. Selection and requirements move to owner data; reusable build code composes those declarations. Packaging/acceptance remain development support and games still own their rules. Fixing only the preview conditional would leave the same special cases in component resolution, package checks and common tests. This changes the build graph and support interfaces, adds no top-level subsystem, and introduces no engine-to-game dependency or plugin framework.
+
+At the user's request, Math was made the engine foundation (a requested refactoring). It resolves observed duplication: four isomorphic float3 types and three float2 types across Render, Model, Collision, Ui and a product; two `Matrix4` types with opposite storage order, default value and `Multiply` argument order; repeated converters (`ToCollision`, `ConvertRect`, brace copies); and divergent helpers (hypot or sqrt lengths, guarded or unguarded normalization, three sRGB copies). `GYO::Math` is a new header-only leaf below every engine module. It owns value types, pure geometry and the coordinate conventions previously stated in Render and Model comments. Collision, Model, Render and Ui link it publicly; products and tools link it where they use Math values. Math links nothing, Collision still does not depend on `GYO::Engine`, and Model and Render stay independent. Semantic types, the GPU ABI, wire and file formats and product types (for example a ground-plane point) stay with their owners. All GYO code builds without floating-point contraction so x64 platforms round alike. Old names were removed without aliases, so inactive products need the recorded migration before they are re-enabled. Placing the types in `engine/base` would make Collision depend on `GYO::Engine`, adopting Render's types would make every module depend on Render, and adding converters would keep the duplication; see the [math-foundation plan](architecture/plans/math-foundation/README.md).
 
 Structural verification checks one-way dependencies, absence of test/CI code in products, CSV-only game selection, single-app and zero-app builds, manual-copy isolation, and self-contained executable-relative content. Functional verification includes engine tests, editor validation, asset/shader failure cases, game diagnostics and installed-product execution. A successful build does not prove physical GPU support on an untested machine.
 
