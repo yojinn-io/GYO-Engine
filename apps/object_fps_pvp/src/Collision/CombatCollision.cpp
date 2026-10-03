@@ -17,16 +17,8 @@ namespace {
 
 constexpr float kEpsilon = 0.000001f;
 
-[[nodiscard]] bool IsFinite(const Float3 value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-
-[[nodiscard]] float Length(const Float3 value) noexcept {
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-
-[[nodiscard]] Float3 AddScaled(
-    const Float3 origin, const Float3 direction, const float distance) noexcept {
+[[nodiscard]] Engine::Math::Vec3 AddScaled(
+    const Engine::Math::Vec3 origin, const Engine::Math::Vec3 direction, const float distance) noexcept {
     return {
         origin.x + direction.x * distance,
         origin.y + direction.y * distance,
@@ -35,11 +27,11 @@ constexpr float kEpsilon = 0.000001f;
 }
 
 void ValidateQuery(
-    const Float3 origin,
-    const Float3 direction,
+    const Engine::Math::Vec3 origin,
+    const Engine::Math::Vec3 direction,
     const float maximumDistance,
     const float sweepRadius) {
-    if (!IsFinite(origin) || !IsFinite(direction)) {
+    if (!Engine::Math::IsFinite(origin) || !Engine::Math::IsFinite(direction)) {
         throw std::invalid_argument("combat query vectors must be finite");
     }
     if (!std::isfinite(maximumDistance) || maximumDistance < 0.0f) {
@@ -48,18 +40,13 @@ void ValidateQuery(
     if (!std::isfinite(sweepRadius) || sweepRadius < 0.0f) {
         throw std::invalid_argument("combat query sweep radius must be finite and non-negative");
     }
-    const float directionLength = Length(direction);
+    const float directionLength = Engine::Math::Length(direction);
     if (!std::isfinite(directionLength) || directionLength <= kEpsilon) {
         throw std::invalid_argument("combat query direction must be non-zero");
     }
 }
 
-[[nodiscard]] Float3 Normalize(const Float3 value) noexcept {
-    const float length = Length(value);
-    return {value.x / length, value.y / length, value.z / length};
-}
-
-[[nodiscard]] Engine::Math::Vec3 ToCollision(const Float3 value) noexcept {
+[[nodiscard]] Engine::Math::Vec3 ToCollision(const Engine::Math::Vec3 value) noexcept {
     return {value.x, value.y, value.z};
 }
 [[nodiscard]] Engine::Collision::VerticalCapsule ToCollision(const VerticalCapsule& capsule) noexcept {
@@ -71,8 +58,8 @@ void ValidateQuery(
 std::optional<CombatHit> CombatCollision::Raycast(
     const GridMap& map,
     const WorldSettings& worldSettings,
-    const Float3 origin,
-    const Float3 direction,
+    const Engine::Math::Vec3 origin,
+    const Engine::Math::Vec3 direction,
     const float maximumDistance,
     const std::span<const CombatTarget> targets,
     const float sweepRadius) {
@@ -81,7 +68,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
         !std::isfinite(worldSettings.wallHeight) || worldSettings.wallHeight <= 0.0f) {
         throw std::invalid_argument("combat query world settings must be finite and positive");
     }
-    const Float3 normalized = Normalize(direction);
+    const Engine::Math::Vec3 normalized = Engine::Math::Normalize(direction);
 
     std::optional<CombatHit> closest;
     const auto consider = [&closest, origin, normalized](
@@ -123,23 +110,23 @@ std::optional<CombatHit> CombatCollision::Raycast(
     return closest;
 }
 
-Float3 CombatCollision::ClampSegmentToWorld(
+Engine::Math::Vec3 CombatCollision::ClampSegmentToWorld(
     const GridMap& map,
     const WorldSettings& worldSettings,
-    const Float3 origin,
-    const Float3 desiredEnd,
+    const Engine::Math::Vec3 origin,
+    const Engine::Math::Vec3 desiredEnd,
     const float clearance) {
-    if (!IsFinite(origin) || !IsFinite(desiredEnd) ||
+    if (!Engine::Math::IsFinite(origin) || !Engine::Math::IsFinite(desiredEnd) ||
         !std::isfinite(clearance) || clearance <= 0.0f) {
         throw std::invalid_argument(
             "world segment endpoints must be finite and clearance positive");
     }
-    const Float3 delta{
+    const Engine::Math::Vec3 delta{
         desiredEnd.x - origin.x,
         desiredEnd.y - origin.y,
         desiredEnd.z - origin.z,
     };
-    const float distance = Length(delta);
+    const float distance = Engine::Math::Length(delta);
     if (!std::isfinite(distance)) {
         throw std::invalid_argument("world segment length must be finite");
     }
@@ -147,19 +134,19 @@ Float3 CombatCollision::ClampSegmentToWorld(
         return origin;
     }
     const auto hit = Raycast(map, worldSettings, origin, delta, distance);
-    return hit ? AddScaled(origin, Normalize(delta),
+    return hit ? AddScaled(origin, Engine::Math::Normalize(delta),
                            (std::max)(0.0f, hit->distance - clearance))
                : desiredEnd;
 }
 
 std::optional<float> CombatCollision::RaycastCapsule(
-    const Float3 origin, const Float3 direction, const float maximumDistance,
+    const Engine::Math::Vec3 origin, const Engine::Math::Vec3 direction, const float maximumDistance,
     const VerticalCapsule& capsule, const float sweepRadius) {
     return Engine::Collision::RaycastCapsule({ToCollision(origin), ToCollision(direction)}, maximumDistance, ToCollision(capsule), sweepRadius);
 }
 
 std::optional<float> CombatCollision::SweepSegmentAgainstCapsule(
-    const Float3 start, const Float3 end, const float sweepRadius,
+    const Engine::Math::Vec3 start, const Engine::Math::Vec3 end, const float sweepRadius,
     const VerticalCapsule& capsule) {
     return Engine::Collision::SweepSphereAgainstCapsule({ToCollision(start), ToCollision(end)}, sweepRadius, ToCollision(capsule));
 }

@@ -1,6 +1,8 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,14 +12,6 @@
 
 namespace fps::pvp {
 namespace {
-Float3 Interpolate(Float3 from, Float3 to, float alpha) {
-    return {from.x + (to.x - from.x) * alpha,
-            from.y + (to.y - from.y) * alpha,
-            from.z + (to.z - from.z) * alpha};
-}
-Float3 Difference(Float3 lhs, Float3 rhs) {
-    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
-}
 // A phase correction is slewed: each frame moves the fixed-step clock by at
 // most this share of its elapsed time, so the display never steps backwards.
 constexpr double PhaseSlewFraction = 0.25;
@@ -27,12 +21,6 @@ constexpr double PhaseCatchUpMargin = 1.0e-6;
 // The first decision after a reset waits for this many positive frame
 // intervals, so command ages no longer come from the first frames.
 constexpr std::size_t PhaseFrameEvidence = 8;
-float Length(Float3 value) {
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-bool Finite(Float3 value) {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
 double Percentile(const std::deque<double>& samples) {
     std::vector<double> sorted(samples.begin(), samples.end());
     const auto index = (std::min)(sorted.size() - 1,
@@ -159,7 +147,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
     if (authority.playerId == 0 || authority.movementEpoch == 0 || !authority.lifeGeneration ||
         !std::isfinite(authority.verticalVelocity) ||
         (authority.lifeState != LifeState::Alive && authority.lifeState != LifeState::Dead) ||
-        authority.contiguousPendingCommands > MaxFutureCommands || !Finite(authority.position) ||
+        authority.contiguousPendingCommands > MaxFutureCommands || !Engine::Math::IsFinite(authority.position) ||
         !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return;
     const bool newPlayer = !observation_.active || current_.playerId != authority.playerId;
     if (!newPlayer && (authorityTick <= observation_.authorityTick ||
@@ -182,7 +170,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
         observation_.active = true;
         SeedLead(authority);
     } else {
-        const auto oldBase = Interpolate(previous_.position, current_.position, alpha_);
+        const auto oldBase = Engine::Math::Lerp(previous_.position, current_.position, alpha_);
         const auto oldPredictedPosition = current_.position;
         const auto oldPreviousState = previous_;
         const auto oldTip = current_.lastResolvedCommand;
@@ -206,23 +194,19 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
                 // Collapsing it into authority would turn normal interpolation
                 // lag into a correction even for a perfectly predicted ACK.
                 previous_ = oldPreviousState;
-                const auto delta = Difference(current_.position, oldPredictedPosition);
-                previous_.position = {previous_.position.x + delta.x,
-                                      previous_.position.y + delta.y,
-                                      previous_.position.z + delta.z};
+                const auto delta = current_.position - oldPredictedPosition;
+                previous_.position = previous_.position + delta;
             }
         }
-        const auto newBase = Interpolate(previous_.position, current_.position, alpha_);
-        const auto displacement = Difference(oldBase, newBase);
-        const Float3 corrected{correction_.x + displacement.x,
-                               correction_.y + displacement.y,
-                               correction_.z + displacement.z};
-        if (Length(displacement) >= MovementHardCorrectionDistance ||
-            Length(corrected) >= MovementHardCorrectionDistance) {
+        const auto newBase = Engine::Math::Lerp(previous_.position, current_.position, alpha_);
+        const auto displacement = oldBase - newBase;
+        const auto corrected = correction_ + displacement;
+        if (Engine::Math::Length(displacement) >= MovementHardCorrectionDistance ||
+            Engine::Math::Length(corrected) >= MovementHardCorrectionDistance) {
             correction_ = {};
             correctionSeconds_ = 0;
             previous_ = current_;
-        } else if (Length(displacement) > 0.000001F) {
+        } else if (Engine::Math::Length(displacement) > 0.000001F) {
             correction_ = corrected;
             correctionSeconds_ = MovementCorrectionSeconds;
         }
@@ -325,8 +309,8 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
         settledAfter_ = current_.lastResolvedCommand;
         observation_.phaseTracking = PhaseTrackingState::Tracking;
     }
-    alpha_ = std::clamp(static_cast<float>(1.0 - advance.secondsUntilNextTick / MovementTickSeconds),
-                        0.0F, 1.0F);
+    alpha_ = Engine::Math::Clamp(static_cast<float>(1.0 - advance.secondsUntilNextTick / MovementTickSeconds),
+                                 0.0F, 1.0F);
     if (frameSeconds >= 0.1 || frameSeconds > elapsed || advance.droppedSeconds > 0 || blockedSteps > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .playerId = current_.playerId,
             .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand,
@@ -338,7 +322,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     if (correctionSeconds_ > 0) {
         const auto remaining = (std::max)(0.0, correctionSeconds_ - elapsed);
         const auto scale = static_cast<float>(remaining / correctionSeconds_);
-        correction_ = {correction_.x * scale, correction_.y * scale, correction_.z * scale};
+        correction_ = correction_ * scale;
         correctionSeconds_ = remaining;
     }
     UpdatePresentation();
@@ -350,22 +334,21 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
 }
 
 void LocalPlayerPrediction::UpdatePresentation() {
-    const auto base = Interpolate(previous_.position, current_.position, alpha_);
-    const Float3 target{base.x + correction_.x, base.y + correction_.y, base.z + correction_.z};
+    const auto base = Engine::Math::Lerp(previous_.position, current_.position, alpha_);
+    const auto target = base + correction_;
     const auto position = current_.position;
     // Sweep from the valid predicted body to the proposed display body. An
     // offset cannot carry the camera through a wall, including around corners.
     auto render = MoveCharacterBody(
-        {{position.x, position.y, position.z}, arena_.bodyHeight, arena_.radius},
-        Difference(target, position), arena_.walls, {}, false);
-    render.y = (std::max)(0.0F, render.y);
+        {position, arena_.bodyHeight, arena_.radius}, target - position, arena_.walls, {}, false);
+    render.y = Engine::Math::Max(0.0F, render.y);
     observation_.verticalVelocity = current_.verticalVelocity;
     observation_.grounded = current_.grounded;
     observation_.lifeGeneration = current_.lifeGeneration;
     observation_.lifeState = current_.lifeState;
     observation_.predictedPosition = position;
     observation_.renderPosition = render;
-    observation_.correctionOffset = Difference(render, base);
+    observation_.correctionOffset = render - base;
     observation_.latestCommand = current_.lastResolvedCommand;
     observation_.previousCommand = previous_.lastResolvedCommand;
     observation_.currentCommand = current_.lastResolvedCommand;

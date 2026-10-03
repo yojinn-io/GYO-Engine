@@ -1,5 +1,7 @@
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "engine/math/geometry/Aabb.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <nlohmann/json.hpp>
 #include <cmath>
@@ -8,10 +10,7 @@
 
 namespace fps::pvp {
 namespace {
-bool Finite(const Engine::Math::Vec3& value) {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-Float3 ReadPosition(const nlohmann::json& value) {
+Engine::Math::Vec3 ReadPosition(const nlohmann::json& value) {
     if (!value.is_array() || value.size() != 3)
         throw std::invalid_argument("Arena vectors require three numbers");
     return {value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>()};
@@ -32,7 +31,7 @@ bool Arena::Validate(std::string& error) const {
         return false;
     }
     for (const auto& wall : walls) {
-        if (!Finite(wall.minimum) || !Finite(wall.maximum) ||
+        if (!Engine::Math::IsFinite(wall) ||
             wall.minimum.x >= wall.maximum.x || wall.minimum.y >= wall.maximum.y ||
             wall.minimum.z >= wall.maximum.z) {
             error = "Arena wall must be a finite non-empty AABB";
@@ -41,9 +40,8 @@ bool Arena::Validate(std::string& error) const {
     }
     std::vector<Engine::Collision::VerticalCapsule> bodies;
     for (const auto& spawn : spawns) {
-        const Engine::Collision::VerticalCapsule body{
-            {spawn.position.x, spawn.position.y, spawn.position.z}, bodyHeight, radius};
-        if (!Finite(body.feet) || spawn.position.y != 0 || !std::isfinite(spawn.yaw) ||
+        const Engine::Collision::VerticalCapsule body{spawn.position, bodyHeight, radius};
+        if (!Engine::Math::IsFinite(body.feet) || spawn.position.y != 0 || !std::isfinite(spawn.yaw) ||
             spawn.position.x < radius || spawn.position.x > width - radius ||
             spawn.position.z < radius || spawn.position.z > depth - radius ||
             !CanPlaceCharacterBody(body, walls, bodies)) {
@@ -82,7 +80,7 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         for (const auto& wall : json.at("walls")) {
             const auto minimum = ReadPosition(wall.at("min"));
             const auto maximum = ReadPosition(wall.at("max"));
-            arena.walls.push_back({{minimum.x, minimum.y, minimum.z}, {maximum.x, maximum.y, maximum.z}});
+            arena.walls.push_back({minimum, maximum});
         }
         for (const auto& spawn : json.at("spawns"))
             arena.spawns.push_back({ReadPosition(spawn.at("position")), spawn.at("yaw").get<float>()});

@@ -14,24 +14,17 @@ namespace {
 
 constexpr float kEpsilon = 0.000001f;
 
-[[nodiscard]] bool IsFinite(const Float3 value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-
-[[nodiscard]] float Length(const Float3 value) noexcept {
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-
-[[nodiscard]] Float3 Normalize(const Float3 value) {
-    const float length = Length(value);
+// Unlike Engine::Math::Normalize, rejects zero and non-finite directions.
+[[nodiscard]] Engine::Math::Vec3 NormalizeOrThrow(const Engine::Math::Vec3 value) {
+    const float length = Engine::Math::Length(value);
     if (!std::isfinite(length) || length <= kEpsilon) {
         throw std::invalid_argument("projectile direction must be finite and non-zero");
     }
     return {value.x / length, value.y / length, value.z / length};
 }
 
-[[nodiscard]] Float3 AddScaled(
-    const Float3 value, const Float3 direction, const float distance) noexcept {
+[[nodiscard]] Engine::Math::Vec3 AddScaled(
+    const Engine::Math::Vec3 value, const Engine::Math::Vec3 direction, const float distance) noexcept {
     return {
         value.x + direction.x * distance,
         value.y + direction.y * distance,
@@ -68,16 +61,16 @@ void ProjectileSystem::Clear() noexcept {
     nextId_ = 1;
 }
 
-ProjectileId ProjectileSystem::SpawnPlayerTracer(const Float3 start, const Float3 end) {
-    if (!IsFinite(start) || !IsFinite(end)) {
+ProjectileId ProjectileSystem::SpawnPlayerTracer(const Engine::Math::Vec3 start, const Engine::Math::Vec3 end) {
+    if (!Engine::Math::IsFinite(start) || !Engine::Math::IsFinite(end)) {
         throw std::invalid_argument("player tracer endpoints must be finite");
     }
-    const Float3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
-    const float distance = Length(delta);
+    const Engine::Math::Vec3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
+    const float distance = Engine::Math::Length(delta);
     if (!std::isfinite(distance) || distance <= kEpsilon) {
         return 0;
     }
-    const Float3 direction = Normalize(delta);
+    const Engine::Math::Vec3 direction = NormalizeOrThrow(delta);
     const ProjectileId id = nextId_++;
     projectiles_.push_back({
         id,
@@ -98,12 +91,12 @@ ProjectileId ProjectileSystem::SpawnPlayerTracer(const Float3 start, const Float
 }
 
 ProjectileId ProjectileSystem::SpawnEnemyProjectile(
-    const Float3 start, const Float3 target, const float damage) {
-    if (!IsFinite(start) || !IsFinite(target) || !std::isfinite(damage) || damage <= 0.0f) {
+    const Engine::Math::Vec3 start, const Engine::Math::Vec3 target, const float damage) {
+    if (!Engine::Math::IsFinite(start) || !Engine::Math::IsFinite(target) || !std::isfinite(damage) || damage <= 0.0f) {
         throw std::invalid_argument(
             "enemy projectile requires finite endpoints and positive damage");
     }
-    const Float3 direction = Normalize(
+    const Engine::Math::Vec3 direction = NormalizeOrThrow(
         {target.x - start.x, target.y - start.y, target.z - start.z});
     const ProjectileId id = nextId_++;
     projectiles_.push_back({
@@ -141,13 +134,13 @@ std::span<const PlayerProjectileHit> ProjectileSystem::Update(
 
         const float stepSeconds =
             (std::min)(deltaSeconds, projectile.remainingLifetimeSeconds);
-        const float velocityLength = Length(projectile.velocity);
+        const float velocityLength = Engine::Math::Length(projectile.velocity);
         float travelDistance = velocityLength * stepSeconds;
         if (projectile.kind == ProjectileKind::PlayerTracer) {
             travelDistance = (std::min)(travelDistance, projectile.remainingDistance);
         }
-        const Float3 direction = Normalize(projectile.velocity);
-        const Float3 end = AddScaled(projectile.position, direction, travelDistance);
+        const Engine::Math::Vec3 direction = NormalizeOrThrow(projectile.velocity);
+        const Engine::Math::Vec3 end = AddScaled(projectile.position, direction, travelDistance);
 
         if (projectile.kind == ProjectileKind::EnemyBullet) {
             const std::optional<CombatHit> worldHit = CombatCollision::Raycast(

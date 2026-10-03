@@ -755,8 +755,8 @@ void Run(const Options& options) {
     std::optional<Clock::time_point> togetherSince;
     std::optional<Clock::time_point> captureFinished;
     std::optional<Clock::time_point> movementStarted;
-    std::optional<fps::Float3> startingPosition;
-    std::optional<fps::Float3> pointerReleasePosition;
+    std::optional<Engine::Math::Vec3> startingPosition;
+    std::optional<Engine::Math::Vec3> pointerReleasePosition;
     std::optional<Clock::time_point> pointerReleasedAt;
     bool submittedJoin = options.role == "create";
     bool beforeCaptured = false;

@@ -1,8 +1,9 @@
 #pragma once
 
-#include "RetroFPS/Math/Vector.hpp"
+#include "RetroFPS/World/GroundPoint.hpp"
 #include "engine/asset/AssetId.hpp"
 #include "engine/collision/Collision.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include "model/Animation.hpp"
 #include <array>
 #include <memory>
@@ -47,11 +48,11 @@ struct EnemyHurtbox final {
     std::string region;
     Engine::Math::Capsule shape;
 };
-[[nodiscard]] Float3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
-                                         const EnemyBonePoint& point, Float2 position, float yaw);
+[[nodiscard]] Engine::Math::Vec3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
+                                         const EnemyBonePoint& point, GroundPoint position, float yaw);
 [[nodiscard]] std::vector<EnemyHurtbox> BuildEnemyHurtboxes(const EnemyRig& rig,
                                                             const Engine::Model::Pose& pose,
-                                                            Float2 position, float yaw);
+                                                            GroundPoint position, float yaw);
 // Produces character-model-space globals from the same authoritative pose used
 // by attackPoint. Rendering applies the actor's anchor, scale and world transform.
 [[nodiscard]] Engine::Model::Pose BuildEnemyWeaponPose(const EnemyRig& rig,

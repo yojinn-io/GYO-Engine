@@ -2,6 +2,7 @@
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 
 #include <array>
+#include <numbers>
 #include <vector>
 
 namespace {

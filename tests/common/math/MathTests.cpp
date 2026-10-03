@@ -24,6 +24,7 @@
 #include "engine/math/scalar/Scalar.hpp"
 
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -269,6 +270,42 @@ TEST_CASE("degree and radian conversion") {
     for (int i = 0; i < 1000; ++i) {
         const float degrees = random.Range(-720.0F, 720.0F);
         CHECK(RadiansToDegrees(DegreesToRadians(degrees)) == doctest::Approx(degrees).epsilon(1e-5));
+    }
+}
+
+// The conversions are constexpr so products can declare angle constants. Each
+// is one multiplication, so constant evaluation must give the run-time bits.
+// The run-time inputs go through volatile so the compiler cannot fold them.
+constexpr std::size_t kAngleSamples = 2881;
+
+[[nodiscard]] constexpr float AngleSample(const std::size_t index) noexcept {
+    return static_cast<float>(index) * 0.5F - 720.0F;
+}
+
+constexpr auto kConstantRadians = [] {
+    std::array<float, kAngleSamples> values{};
+    for (std::size_t i = 0; i < values.size(); ++i) values[i] = DegreesToRadians(AngleSample(i));
+    return values;
+}();
+
+constexpr auto kConstantDegrees = [] {
+    std::array<float, kAngleSamples> values{};
+    for (std::size_t i = 0; i < values.size(); ++i) values[i] = RadiansToDegrees(AngleSample(i) * 0.01F);
+    return values;
+}();
+
+static_assert(DegreesToRadians(0.0F) == 0.0F);
+static_assert(RadiansToDegrees(0.0F) == 0.0F);
+
+TEST_CASE("degree and radian conversion is constant-evaluable with run-time bits") {
+    for (std::size_t i = 0; i < kAngleSamples; ++i) {
+        volatile float degrees = AngleSample(i);
+        volatile float radians = AngleSample(i) * 0.01F;
+        CAPTURE(i);
+        CHECK(std::bit_cast<std::uint32_t>(DegreesToRadians(degrees)) ==
+              std::bit_cast<std::uint32_t>(kConstantRadians[i]));
+        CHECK(std::bit_cast<std::uint32_t>(RadiansToDegrees(radians)) ==
+              std::bit_cast<std::uint32_t>(kConstantDegrees[i]));
     }
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RetroFPS/Collision/CombatCollision.hpp"
-#include "RetroFPS/Math/Vector.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cstdint>
 #include <span>
@@ -22,7 +22,7 @@ enum class ProjectileKind {
 struct ProjectileSnapshot final {
     ProjectileId id = 0;
     ProjectileKind kind = ProjectileKind::PlayerTracer;
-    Float3 position{};
+    Engine::Math::Vec3 position{};
     float radius = 0.0f;
 };
 
@@ -44,9 +44,9 @@ public:
     [[nodiscard]] bool Configure(ProjectileSettings settings) noexcept;
     void Clear() noexcept;
 
-    [[nodiscard]] ProjectileId SpawnPlayerTracer(Float3 start, Float3 end);
+    [[nodiscard]] ProjectileId SpawnPlayerTracer(Engine::Math::Vec3 start, Engine::Math::Vec3 end);
     [[nodiscard]] ProjectileId SpawnEnemyProjectile(
-        Float3 start, Float3 target, float damage);
+        Engine::Math::Vec3 start, Engine::Math::Vec3 target, float damage);
 
     [[nodiscard]] std::span<const PlayerProjectileHit> Update(
         const GridMap& map,
@@ -63,8 +63,8 @@ private:
     struct RuntimeProjectile final {
         ProjectileId id = 0;
         ProjectileKind kind = ProjectileKind::PlayerTracer;
-        Float3 position{};
-        Float3 velocity{};
+        Engine::Math::Vec3 position{};
+        Engine::Math::Vec3 velocity{};
         float radius = 0.0f;
         float remainingDistance = 0.0f;
         float remainingLifetimeSeconds = 0.0f;

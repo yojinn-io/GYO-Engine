@@ -45,7 +45,7 @@ bool PlayerController::Initialize(
     }
 
     try {
-        const Float2 spawnPosition = map.GetSpawnPosition(worldSettings.cellSize);
+        const GroundPoint spawnPosition = map.GetSpawnPosition(worldSettings.cellSize);
         const auto walls = BuildWorldCollisionBoxes(map, worldSettings);
         if (!CanPlaceCharacterBody(
                 {{spawnPosition.x, 0, spawnPosition.z}, settings_.bodyHeight, settings_.collisionRadius},
@@ -147,7 +147,7 @@ void PlayerController::Update(
         }
     }
 
-    const Float2 displacement = ComputePlanarDisplacement(
+    const GroundPoint displacement = ComputePlanarDisplacement(
         input.moveForward, input.moveRight, yawRadians,
         settings_.movementSpeed, deltaSeconds);
 

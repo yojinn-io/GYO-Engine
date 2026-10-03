@@ -7,7 +7,7 @@
 #include "RetroFPS/Gameplay/Enemy/EnemySystem.hpp"
 #include "RetroFPS/Gameplay/Player/PlayerSettings.hpp"
 #include "RetroFPS/Gameplay/Weapon/WeaponState.hpp"
-#include "RetroFPS/Math/Vector.hpp"
+#include "RetroFPS/World/GroundPoint.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
 
 #include <cstddef>
@@ -150,7 +150,7 @@ struct ActiveStageSnapshot final {
 };
 
 struct PlayerSnapshot final {
-    Float2 position{};
+    GroundPoint position{};
     float eyeHeight{};
     float yawRadians{};
     float pitchRadians{};

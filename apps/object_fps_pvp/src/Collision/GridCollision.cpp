@@ -10,7 +10,7 @@ namespace fps {
 namespace {
 
 void ValidateArguments(
-    const Float2 center, const float radius, const float cellSize) {
+    const GroundPoint center, const float radius, const float cellSize) {
     if (!std::isfinite(center.x) || !std::isfinite(center.z)) {
         throw std::invalid_argument("circle center must be finite");
     }
@@ -34,7 +34,7 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
 }
 
 [[nodiscard]] bool OverlapsCircleUnchecked(
-    const Float2 center,
+    const GroundPoint center,
     const float radius,
     const CircleObstacle& obstacle) noexcept {
     const double differenceX =
@@ -50,7 +50,7 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
 }
 
 [[nodiscard]] bool OverlapsAnyCircleUnchecked(
-    const Float2 center,
+    const GroundPoint center,
     const float radius,
     const std::span<const CircleObstacle> obstacles) noexcept {
     return std::ranges::any_of(
@@ -61,8 +61,8 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
 }
 
 [[nodiscard]] double FindCircleSweepFraction(
-    const Float2 start,
-    const Float2 displacement,
+    const GroundPoint start,
+    const GroundPoint displacement,
     const float radius,
     const std::span<const CircleObstacle> obstacles) noexcept {
     const double velocityX = static_cast<double>(displacement.x);
@@ -112,21 +112,21 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
     return std::clamp(allowedFraction, 0.0, 1.0);
 }
 
-[[nodiscard]] Float2 MoveAxisAgainstCircles(
-    const Float2 start,
-    const Float2 displacement,
+[[nodiscard]] GroundPoint MoveAxisAgainstCircles(
+    const GroundPoint start,
+    const GroundPoint displacement,
     const float radius,
     const std::span<const CircleObstacle> obstacles) noexcept {
     const double fraction =
         FindCircleSweepFraction(start, displacement, radius, obstacles);
     const auto positionAt = [start, displacement](const double value) {
-        return Float2{
+        return GroundPoint{
             start.x + displacement.x * static_cast<float>(value),
             start.z + displacement.z * static_cast<float>(value),
         };
     };
 
-    Float2 candidate = positionAt(fraction);
+    GroundPoint candidate = positionAt(fraction);
     if (!OverlapsAnyCircleUnchecked(candidate, radius, obstacles)) {
         return candidate;
     }
@@ -149,7 +149,7 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
 } // namespace
 
 bool GridCollision::OverlapsCircle(
-    const Float2 center,
+    const GroundPoint center,
     const float radius,
     const CircleObstacle& obstacle) {
     if (!std::isfinite(center.x) || !std::isfinite(center.z)) {
@@ -164,7 +164,7 @@ bool GridCollision::OverlapsCircle(
 
 bool GridCollision::OverlapsSolid(
     const GridMap& map,
-    const Float2 center,
+    const GroundPoint center,
     const float radius,
     const float cellSize) {
     ValidateArguments(center, radius, cellSize);
@@ -230,10 +230,10 @@ bool GridCollision::OverlapsSolid(
     return false;
 }
 
-Float2 GridCollision::MoveCircle(
+GroundPoint GridCollision::MoveCircle(
     const GridMap& map,
-    const Float2 start,
-    const Float2 displacement,
+    const GroundPoint start,
+    const GroundPoint displacement,
     const float radius,
     const float cellSize) {
     return MoveCircle(
@@ -245,10 +245,10 @@ Float2 GridCollision::MoveCircle(
         cellSize);
 }
 
-Float2 GridCollision::MoveCircle(
+GroundPoint GridCollision::MoveCircle(
     const GridMap& map,
-    const Float2 start,
-    const Float2 displacement,
+    const GroundPoint start,
+    const GroundPoint displacement,
     const float radius,
     const std::span<const CircleObstacle> obstacles,
     const float cellSize) {
@@ -282,20 +282,20 @@ Float2 GridCollision::MoveCircle(
     const std::size_t stepCount =
         (std::max)(std::size_t{1}, static_cast<std::size_t>(requestedSteps));
     const float inverseStepCount = 1.0f / static_cast<float>(stepCount);
-    const Float2 step{
+    const GroundPoint step{
         displacement.x * inverseStepCount,
         displacement.z * inverseStepCount,
     };
 
-    Float2 result = start;
+    GroundPoint result = start;
     for (std::size_t index = 0; index < stepCount; ++index) {
-        const Float2 xCandidate = MoveAxisAgainstCircles(
+        const GroundPoint xCandidate = MoveAxisAgainstCircles(
             result, {step.x, 0.0f}, radius, obstacles);
         if (!OverlapsSolid(map, xCandidate, radius, cellSize)) {
             result = xCandidate;
         }
 
-        const Float2 zCandidate = MoveAxisAgainstCircles(
+        const GroundPoint zCandidate = MoveAxisAgainstCircles(
             result, {0.0f, step.z}, radius, obstacles);
         if (!OverlapsSolid(map, zCandidate, radius, cellSize)) {
             result = zCandidate;

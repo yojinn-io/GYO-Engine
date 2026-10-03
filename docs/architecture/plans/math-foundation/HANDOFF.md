@@ -36,6 +36,8 @@
 | 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
 | 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
 | 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
+| 2026-10-04 | B6a：`Math::DegreesToRadians`／`RadiansToDegrees` 改為 constexpr，讓 pvp 的 `MovementMaximumPitch` 能以 `inline constexpr` 改用它（單次乘法，編譯期與執行期捨入相同） | 使用者 |
+| 2026-10-04 | B6a 的跨平台驗證：本機（mac x64）比對 master 與 branch 的全模擬 digest；依賴 libm 的替換（`hypot`）與會漂移的替換（倒數相乘正規化）以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測；其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關 | 使用者 |
 
 ## B0 基線
 

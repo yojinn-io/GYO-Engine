@@ -28,7 +28,7 @@ CampaignContentBuildResult CampaignContent::Build(
             return {std::nullopt, "campaign weapon requires shot geometry: " + weapon.id};
         }
         const WeaponShotGeometry& geometry = found->second;
-        const Float3 muzzle = geometry.muzzleViewCameraPosition;
+        const Engine::Math::Vec3 muzzle = geometry.muzzleViewCameraPosition;
         if (!std::isfinite(muzzle.x) || !std::isfinite(muzzle.y) ||
             !std::isfinite(muzzle.z) || muzzle.z <= 0.0F ||
             !IsValidWeaponVerticalFov(geometry.viewModelVerticalFovRadians)) {

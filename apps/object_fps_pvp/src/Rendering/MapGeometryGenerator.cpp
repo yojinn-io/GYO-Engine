@@ -13,9 +13,9 @@ namespace {
 struct WallDirection {
     std::ptrdiff_t rowOffset;
     std::ptrdiff_t columnOffset;
-    Float3 normal;
+    Engine::Math::Vec3 normal;
     float yawRadians;
-    Float2 boundaryOffset;
+    GroundPoint boundaryOffset;
 };
 
 constexpr float kPi = std::numbers::pi_v<float>;
