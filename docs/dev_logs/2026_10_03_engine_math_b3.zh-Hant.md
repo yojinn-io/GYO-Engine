@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B3：Model 改用 GYO::Math
 
 日期：2026-10-03。Owner：Engine（`GYO::Model`），連帶 ufbx loader、`render/model` 與 `object_fps_pvp`。
-狀態：本機驗收完成，待 commit、PR 與 CI 四平台（分支 `claude/math-foundation-b3`，自 master `5c8fd10`）。
+狀態：本機驗收完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 待 CI 四平台（分支 `claude/math-foundation-b3`，自 master `5c8fd10`）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b3-model)，本文只記經過。
 
 ## 經過
