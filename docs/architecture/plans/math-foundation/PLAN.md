@@ -102,7 +102,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 | 四元數 | `Multiply`、`Conjugate`、`Dot`、`Normalize`（不做防護）、`NormalizeOrIdentity`（長度 ≤ 1e-12F 時回傳單位四元數；兩種語義用不同名稱並存）、`Slerp`（從 `Animation.cpp` 移入）、`MakeRotation(Quaternion)`（含零四元數時 s=0 的容忍） |
 | 矩陣 | `Matrix3`：`Multiply`、`Transform`、`Transpose`、由 `Matrix4` 取左上 3×3。`Matrix4`：`Multiply`、`TransformPoint(const Matrix4&, Vec3)`（必須是非 template，呼叫端有 `TransformPoint(m, {})`）、`TransformVector`、`MakeTranslation/Scale/RotationX/Y/Z`、`ComposeTRS`、`ComposeEulerXYZ`、`MakePerspective`、`MakeOrthographicPixels`、`Zero()` |
 | 純量與常數 | `Clamp`、`Lerp`、`Min`、`Max`（純量版）、`Pi`、`TwoPi`、`DegreesToRadians`（統一一種寫法）、`RadiansToDegrees`、`WrapRadians`（`std::remainder`）、`LerpRadiansShortest`（yaw 最短弧插值） |
-| 幾何 | `Rect` 的 `Intersect`；最近點查詢（1.6）；其餘 primitive 的基本查詢（例如點到平面的距離、AABB 合併與包含）在 B1 依 1.5 確認 |
+| 幾何 | `Rect` 的 `Intersection`（回傳重疊區域；為避免與回傳 `optional<float>` 的射線 `Intersect` 混淆而改名，B1 定案）；最近點查詢（1.6）；其餘 primitive 的基本查詢（例如點到平面的距離、AABB 合併與包含）在 B1 依 1.5 確認 |
 | 色彩空間 | `DecodeSrgb`、`EncodeSrgb`，取代 Render、Ui、ui_editor 三份 |
 
 **實作規則**
@@ -127,7 +127,11 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   另外保留計劃原有、樹狀圖未列出的項目：`Vec3d`、`Vec2i/Vec3i`、`Rect`、角度工具、色彩空間轉換。
 - 已定案（使用者，2026-10-03）：`Ray` 的 direction 不要求正規化；`Plane` 的 normal 要求正規化，方程為 `dot(n, p) = d`。
 - 已定案（使用者，2026-10-03）：AABB 的型別名稱為 `Aabb`；`Triangle` 只定義頂點順序與 normal 的計算方式，不定義正面。
-- B1 開始時仍要確認的細節：各 primitive 的基本查詢清單。
+- B1 開始時定案（使用者，2026-10-03）：
+  - 最近點查詢統一用重載 `ClosestPoint(point, 型別)`。double 路徑用 `Segmentd`、`Aabbd`。
+  - 幾何交集測試收進 Math：`Intersect(ray, Plane／Sphere／Aabb／Triangle)` 回傳最小的 t ≥ 0，起點在實心內部時回傳 0，不帶容差；`Overlaps` 用於 `Aabb`、`Sphere`、`Rect`。Collision 是否改用，於 B2 決定。
+  - `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse`。
+  - 各型別的基本查詢依 B1 提出的清單實作（例如 `Plane` 的 `SignedDistance`、`Aabb` 的 `Merge`／`Expand`、`Triangle` 的 `Area`／`Centroid`）。
 - 和既有 owner 重疊的型別，依 1.6 的分界原則決定歸屬。
 - 新增結構同樣遵守 1.2 的版面規則、1.3 的慣例和 1.4 的實作規則，並在 `gyo_math_tests` 補上慣例與版面測試。
 
@@ -162,13 +166,15 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - View、Projection、Sprite 的乘法鏈依下表鏡像改寫。
 - `ToShaderMatrix` 只做 16 個 float 的 memcpy。
 - 沒人用的 `IsFinite(Float3)`（:164）刪除。
-- `PrimitiveMesh` 的 `Length` 從 hypot 改成 sqrt。這會改變結果和溢位行為，需要量測。
+- `PrimitiveMesh` 的 `Length` 從 hypot 改成 sqrt。B1 在 Apple libc++ 上量到正常範圍 0 ulp（libc++ 的三參數 hypot 在該範圍就是同一個 sqrt 式），libstdc++／MSVC 估計最多 3 ulp；溢位與下溢行為不同。
+- `PrimitiveMesh.cpp:59,66` 的倒數相乘正規化（`Scale(v, 1.0F / Length(v))`）改用 `Math::Normalize` 時，B1 量到最多 1 ulp、約 53% 的輸入不同。B4a 替換時記錄這段漂移。
 - `ModelRenderer.cpp:80-81` 改成 `{vertex.position + offset, vertex.uv}`。
 
 **Model**
 - `ModelAsset` 中的 `Multiply`、`TransformPoint` 刪除，改由 Math 提供。`ToMatrix(Transform)` 留在 Model，改寫成 `ComposeTRS`。
 - `Animation.cpp:170,172` 把 `Lerp` 當成 callable 傳進 template，改傳 lambda。
 - `Animation`、`AnimationTransfer` 中的 `Normalize`、`Product`、`Slerp`、`Finite` 改用 Math。
+- **ADL 陷阱**：`AnimationTransfer.cpp:16` 的舊 `Inverse(q)` 其實是共軛，必須改寫成 `Math::Conjugate`（呼叫處 :125、:148、:149）。若只刪掉 local helper，未限定的 `Inverse(q)` 會經 ADL 靜默選到真正的 `Math::Inverse`（除以 |q|²），造成位元漂移。
 
 **Collision**
 - `Collision.hpp` 改用 `Math::Vec3`；`Collision::Aabb`、`Collision::Capsule` 移除，改用 Math 的 AABB 與 `Capsule`（1.6）。`VerticalCapsule` 保留。
@@ -178,7 +184,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 **Ui 與 ui_editor**
 - `UiFloat2`、`UiRect` 改成 Math 型別，`ConvertRect` 刪除。
 - `UiColor`、`PreviewAdapter.cpp:27` 的 sRGB 改用 Math。
-- `IntersectRect` 改用 `Math::Intersect`。
+- `IntersectRect` 改用 `Math::Intersection`（B1 characterization 確認逐位元相同）。
 
 **pvp**
 - `fps::Float3` 移除，`Vector.hpp` 中的 Float3 刪除。
@@ -290,6 +296,8 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 
 - **範圍**：`Renderer.cpp` 依上面的對照表改寫並加上 `ToShaderMatrix`；同步修改 `docs/rendering_architecture.{zh-Hant,ja}.md:83`。
 - **前置**：先在 B4b 開頭新增測試：把舊 `Renderer.cpp` 的矩陣碼凍結成 Legacy 版本，經 capture device 取得 VertexUniforms 後做 memcmp。輸入要涵蓋 sprite 的旋轉與非中心 pivot。
+  - 兩邊的輸入都必須是執行期資料（例如經 opaque 函式或檔案供給）。clang 最佳化時可能用 fused 捨入做常數摺疊，即使在 x86_64 上也一樣。
+  - WVP 的結合方式必須維持 `Multiply(Multiply(Proj, View), World)`（對應舊的 `World·(View·Proj)`）。B1 量到改成 `Multiply(Proj, Multiply(View, World))` 會改變位元。
 - **驗收**：
   - memcmp 在四個平台逐位元相同。矩陣乘法已證明可以逐位元保持；若某平台不同，就停下來回報。
   - `gyo_render_tests`、`render.sdl_gpu_mesh_smoke`、pvp 的 `presentation_evidence` 通過。
@@ -317,8 +325,10 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - **預設不升 protocol**。如果量測到的漂移會讓新舊版本混連時出現 reconciliation 無法吸收的偏差，就停下來，請使用者決定是否升到 v6。
 - **決定性量測**：
   - 固定指令序列的 digest，在 master 和 branch 上分別產生並比較。
-  - 必須包含 arm64（macos-arm64 的 CI 列，或在該列 commit 一份 master 的 digest）。本機 Intel Mac 沒有 FMA，量不到收縮差異。
+  - 必須包含 arm64（macos-arm64 的 CI 列，或在該列 commit 一份 master 的 digest）。本機 Intel Mac 沒有 FMA 指令，執行期量不到收縮差異；但 clang 的最佳化常數摺疊仍可能採用 fused 結果，所以 digest 的輸入必須是執行期資料。
   - 差異如實記錄。注意 `PredictionTests.cpp:563,584` 和 `PvpMatchTests.cpp:258-318` 都是 Approx 或同一次執行內的自我一致比較，不是 golden。
+- **名稱衝突**：`tests/object_fps_pvp/PredictionTests.cpp:37` 的 `Distance(fps::Float3, fps::Float3)` 算的是水平（XZ）距離。型別換成 `Math::Vec3` 後會和 `Math::Distance` 歧義；改名為 `HorizontalDistance` 並保留語意，不可當成重複定義刪除。
+- **產品 helper 的 characterization**：pvp 舊 helper 的凍結比對放在 `tests/object_fps_pvp`，不放共通測試（AGENTS §7）。ui_editor 的 `PreviewAdapter` 舊 helper 同理，在 B5 放進 `tests/ui_editor`。
 - **驗收**：
   - `object_fps_pvp.cpu`、`object_fps_pvp.start_phase_record`、gateway 的 Go 測試通過。
   - `apps/object_fps_pvp/protocol/` 沒有任何變動，除非使用者決定升 protocol。

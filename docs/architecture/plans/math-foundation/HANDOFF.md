@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0 基線完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17)（分支 `claude/math-foundation-b0`）。B1 未開始，需使用者指示啟動。**
+更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 本機驗收完成，待 commit、PR 與 CI 四平台。**
 
 ## 閱讀入口
 
@@ -28,10 +28,13 @@
 | 2026-10-03 | header 依樹狀圖分子目錄 `linear/`、`geometry/`、`scalar/`；namespace 仍為單一 `Engine::Math` | 使用者 |
 | 2026-10-03 | `Ray`：direction 不要求正規化。`Plane`：normal 要求正規化，方程 `dot(n, p) = d` | 使用者 |
 | 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
+| 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
+| 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
+| 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
 
 ## B0 基線
 
-狀態：**完成**（2026-10-03，分支 `claude/math-foundation-b0`，基準 commit `0bd5363`）。
+狀態：**完成**（2026-10-03，分支 `claude/math-foundation-b0`，基準 commit `0bd5363`；PR #17 合併為 `0dd3077`）。
 環境：Intel Mac（x86_64），Apple clang 21.0.0（clang-2100.1.1.101）。cmake／ninja 以絕對路徑呼叫。
 
 | 項目 | 結果 | 保存位置 |
@@ -58,9 +61,66 @@
 - 29 個未編譯檔案在 master 上都能通過語意檢查，所以 B6c 的驗收是「29 檔全部仍然通過」，沒有「基線就失敗、只能標為未驗證」的檔案。
 - 本機是 x86_64，沒有 FMA 收縮；決定性相關的比較必須包含 CI 的 macos-arm64 列（PLAN B6a）。
 
+## B1 `GYO::Math`
+
+狀態：**本機驗收完成，待 CI 四平台**（分支 `claude/math-foundation-b1`，自 B0 分支分出）。尚未 commit。
+
+### 交付
+
+- `engine/math`：header-only 的 `GYO::Math`，分為 `linear/`、`geometry/`、`scalar/` 三組，共 19 個 header，只依賴標準函式庫。
+  每個 header 單獨編譯（且重複 include 兩次）時，`-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror` 都沒有警告。
+- `engine/CMakeLists.txt` 註冊 `math`，排在所有模組之前。
+- `tests/common/math`：`gyo_math_tests`，包含規格測試 `MathTests.cpp` 與 characterization `MathCharacterizationTests.cpp`，共 89 個 test case。
+- 文件：新增 `docs/architecture/math.md`（契約）；`docs/architecture.md`、`docs/creating_apps.md` 加入 `GYO::Math`。
+- 既有消費者一行都沒改。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過（B0 為 18，新增 `gyo_math_tests`） |
+| test preset | 42／42 通過（B0 為 41） |
+| 依賴圖 | 與 B0 相比只多 `gyo_math_tests → gyo_math`、`gyo_math_tests → doctest`；`gyo_math` 沒有對外的邊 |
+| 收縮模式 | `gyo_math_tests` 在 `-O0`、`-O2`、`-O2 -mfma -ffp-contract=on`、`-O2 -mfma -ffp-contract=fast` 下都通過（本機 clang x86_64） |
+| CI 四平台 | 待 PR |
+
+### Characterization 結果（engine helper → Math）
+
+- **逐位元相同**：
+  - Model：`Multiply`、`ToMatrix`（對 `ComposeTRS`）、`TransformPoint`、`Lerp`、兩種四元數 `Normalize`、`Slerp`、`Inverse`（對 `Conjugate`）、`Product`（對 `Normalize(Multiply)`）。
+  - Collision：`IsFinite`、`Length`、`Normalize`、double 路徑全部、`Closest`（對 `ClosestPoint(Segmentd)`）、`Clamp`（對 `ClosestPoint(Aabbd)`）。
+  - Render：基本矩陣、`Multiply(A,B)`（對 `Multiply(B,A)`）、`WorldMatrix`（對 `ComposeEulerXYZ`）、View／Projection／Sprite／PixelProjection、整條 WVP 鏈、sRGB。
+  - Ui：`IntersectRect`（對 `Intersection`）、sRGB（UiColor 的 256 個輸入）、各處 `IsFinite`。
+- **漂移**：
+  - `PrimitiveMesh` 的 hypot `Length` 對 sqrt：Apple libc++ 正常範圍 0 ulp；溢位與下溢行為不同。
+  - 倒數相乘正規化對 `Math::Normalize`：最多 1 ulp，約 53% 的輸入不同。
+- **刻意的語意差異**：UiColor 的 decode 不 clamp，但在 hex 輸入下結果相同；兩種四元數 `Normalize` 只在長度 ≤ 1e-12 時不同，各自保留為不同名稱。
+
+### 對抗式審查（ultracode）與處理
+
+- 修正 2 個 blocker：
+  - `Triangle` 最近點遇到退化或近退化三角形時會出現 NaN；在 FMA 下，近退化甚至出現約 200 的誤差。
+    改成以數值條件判定（`|ab×ac|² ≤ FLT_EPSILON·|ab|²|ac|²` 時改取三邊最近點），內部分支改為沿法線投影，並以 double 參考實作驗證。
+  - Cross 測試的容差在 FMA 下會誤報，改為隨運算元大小縮放。
+- 修正 2 個 major：
+  - 「不寫 constexpr 就能避免編譯期與執行期結果不同」的說法錯誤：clang 最佳化時可能用 fused 捨入做常數摺疊，x86_64 也一樣。已更正註解、math.md，以及 PLAN B4b、B6a 的量測方法（兩邊都用執行期資料）。
+  - 近退化三角形的測試不足，已補上。
+- minor：
+  - 射線交集遇到非有限輸入與溢位時改回傳 nullopt；射線對球的判別式改用 Lagrange 恆等式，避免遠距離時嚴重相消。
+  - 補齊版面的 static_assert。
+  - 修正 `ComposeTRS` 等函式的註解。
+  - characterization 補上 `Finite(Matrix4)` 與倒數相乘正規化。
+- 寫進 PLAN 的後續注意事項：
+  - B3：`AnimationTransfer` 的 `Inverse` 必須改寫成 `Conjugate`，避免 ADL 靜默選到 `Math::Inverse`。
+  - B4a：記錄倒數相乘正規化的漂移。
+  - B4b：WVP 的結合方式必須照舊。
+  - B6a：`PredictionTests` 的 `Distance` 是水平距離，改名為 `HorizontalDistance`。
+  - B5、B6a：產品和工具的 helper 比對放在各自的產品測試。
+
 ## 未結事項
 
-- B1 開始時確認最近點查詢函式的命名（結構清單已依樹狀圖定案，見 PLAN 1.5）。
-- B1 確認各 primitive 的基本查詢清單。
+- **浮點收縮模式**：目前沿用各編譯器預設（Apple clang `-ffp-contract=on`，arm64 會產生 fmadd；MSVC 與 gcc-14 x86_64 沒有 FMA）。
+  是否全專案統一成 `-ffp-contract=off` 以求跨平台位元一致，需要使用者決定；這會改變 arm64 目前的結果，並影響 PvP 的決定性。
+
 - B2 開始時確認 Collision 的 raycast 介面是否改成接收 `Math::Ray`（公開介面變更）。
 - B1、B4b、B6a 是否使用 ultracode 對抗式檢查，屆時逐次徵求同意。

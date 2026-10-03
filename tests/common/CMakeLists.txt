@@ -1,6 +1,7 @@
 add_subdirectory(collision)
 add_subdirectory(core)
 add_subdirectory(input)
+add_subdirectory(math)
 add_subdirectory(model)
 add_subdirectory(render)
 add_subdirectory(render/sdl_gpu)

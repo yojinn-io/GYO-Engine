@@ -38,7 +38,7 @@ gyo_app_add_executable(main MAIN OUT_TARGET app
     COMPONENTS SDL_RENDERER SDL_PLATFORM)
 ```
 
-Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
+Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Math`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
 
 Do not add asset copy commands, install recipes, CI callbacks, tests, diagnostic compilation or requirement-discovery guards to the game CMake file. Shared build helpers provide the ordinary runtime assembly and native dependency deployment.
 

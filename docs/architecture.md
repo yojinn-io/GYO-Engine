@@ -13,6 +13,7 @@ GYO-Engine/
   engine/
     base/, io/                foundational values and filesystem/stream IO
     runtime/, asset/          frame lifecycle and CPU asset management
+    math/                     value types, pure geometry and coordinate conventions
     collision/                geometric queries
     config/projects.csv       integrated game selection
     config/tools.csv          design-tool default/release/platform selection
@@ -51,6 +52,7 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 
 | Owner | Responsibility | Dependencies |
 |---|---|---|
+| `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | C++ standard library only |
 | `GYO::Engine` | base values, IO, runtime lifecycle, CPU asset identity/cache/loading | C++ library; JSON parser privately |
 | `GYO::Collision` | capsule, ray/AABB, swept-sphere queries | neutral geometry values |
 | `GYO::Input` | physical input and action/axis evaluation | neutral input types |
