@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a 本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24)，CI 通過）與 B6b（PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）疊在一起待使用者合併；B6c 進行中。**
 
 ## 閱讀入口
 
@@ -355,7 +355,7 @@
 
 ## B6a pvp 模擬層 `match_domain`
 
-狀態：**本機驗收完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待 CI 四平台**（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
+狀態：**CI 四平台通過，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待使用者合併**（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
 
 ### 進行方式（ultracode）
 
@@ -421,7 +421,7 @@
 | 全模擬 digest | 見上節 |
 | 靈敏度檢查 | 7 種刻意改動中 5 種被抓到。其餘 2 種是等價改動：`Min(Dot, 0)` 參數對調只改變零的正負號，之後被吸收；`NormalizeOrZero` 在 `s > 1` 時與 `Normalize` 同式 |
 | 對抗式審查 | 沒有推翻正確性；審查者另寫的 driver 也得到同樣結論。指出 1 個 minor（HANDOFF 與 dev_log 尚未記錄、README 與 PLAN 的 digest 說法未更新）與 2 個 nit（漂移應寫成推導上限、`MathTests` 新 helper 應放進匿名 namespace），都已處理 |
-| CI 四平台 | 待 CI |
+| CI 四平台 | PR #24 的 head `a9a5e85` 全部通過（windows-x64、linux-x64、macos-arm64、macos-x64、CI gate），characterization 測試的推導上限在四平台都成立 |
 
 ### Architecture Delta
 
@@ -437,7 +437,7 @@
 
 ## B6b pvp 表現層
 
-狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
+狀態：**本機驗收完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 待 CI**（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
 
 使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
 
@@ -496,12 +496,20 @@
 | 依賴圖 | 沒有變化（只新增測試來源） |
 | 表現層 digest | 見上節 |
 | 對抗式審查 | 沒有推翻正確性。1 個 minor：mount 驗證的接受案例沒有確認載入成功，且離門檻太遠，改為 1.01e-6 並確認載入與正規化結果；1 個 nit：四元數判定翻轉的計數在取樣範圍內不可能失敗，刪除（翻轉由 `PlayerPresentationTests` 的確定性案例涵蓋）。另依 digest agent 的提醒，測試輸入的 `std::pow(10, x)` 改用執行期的底數，避免 clang -O2 換成 `exp10` 使輸入隨最佳化等級改變 |
-| CI 四平台 | 待 PR |
+| CI 四平台 | 待 CI |
 
 ### Architecture Delta
 
 - 沒有。只改 `object_fps_pvp` 內部的計算與測試；renderer 的提交契約（`ComposeEulerXYZ` 與 `-anchor` offset）改由產品直接呼叫 Math 表達，不新增依賴邊。
 
+## B6c pvp 未編譯的 29 個檔案
+
+狀態：**進行中**（2026-10-04 開始，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
+
+### 進行方式（ultracode）
+
+1. 盤點（B6b 驗證期間進行）：2 個 agent 依目錄分擔 29 個檔案與只有它們使用的 header，再由 1 個 agent 檢查遺漏。
+
 ## 未結事項
 
-- B6b 本機驗收完成；B6c（29 個未編譯檔）、B7（收尾）。
+- B6c 進行中；B7（收尾）。B6a（#24）、B6b（#25）待使用者合併。
