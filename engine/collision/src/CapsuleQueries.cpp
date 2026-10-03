@@ -10,50 +10,30 @@ namespace Engine::Collision {
 namespace {
 
 // Calculations use doubles to retain accuracy for short sweeps and long rays.
-struct Vec3 {
-    double x{}, y{}, z{};
-};
+using Math::Vec3d;
 constexpr double kTolerance = 1.0e-7;
-Vec3 V(Float3 v) { return {v.x, v.y, v.z}; }
-Float3 F(Vec3 v) {
-    return {static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z)};
-}
-Vec3 operator+(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 operator-(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 operator*(Vec3 a, double b) { return {a.x * b, a.y * b, a.z * b}; }
-double Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-double Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
-bool Finite(Float3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
-Vec3 Closest(Vec3 p, Vec3 a, Vec3 b) {
-    const Vec3 edge = b - a;
-    const double squared = Dot(edge, edge);
-    return a + edge * (squared > 0.0 ? std::clamp(Dot(p - a, edge) / squared, 0.0, 1.0) : 0.0);
-}
-Vec3 Clamp(Vec3 p, Vec3 lo, Vec3 hi) {
-    return {std::clamp(p.x, lo.x, hi.x), std::clamp(p.y, lo.y, hi.y), std::clamp(p.z, lo.z, hi.z)};
-}
 void Validate(const VerticalCapsule &c) {
-    if (!Finite(c.feet) || !std::isfinite(c.height) || !std::isfinite(c.radius) ||
+    if (!Math::IsFinite(c.feet) || !std::isfinite(c.height) || !std::isfinite(c.radius) ||
         c.radius <= 0.0f || c.height < 2.0 * c.radius) {
         throw std::invalid_argument(
             "collision capsule must be finite, positive, and at least two radii high");
     }
 }
-void Validate(const Capsule &c) {
-    if (!Finite(c.segmentStart) || !Finite(c.segmentEnd) || !std::isfinite(c.radius) ||
+void Validate(const Math::Capsule &c) {
+    if (!Math::IsFinite(c.segmentStart) || !Math::IsFinite(c.segmentEnd) || !std::isfinite(c.radius) ||
         c.radius <= 0.0f) {
         throw std::invalid_argument(
             "collision capsule endpoints must be finite and radius positive");
     }
 }
-void Validate(const Aabb &b) {
-    if (!Finite(b.minimum) || !Finite(b.maximum) || b.minimum.x > b.maximum.x ||
+void Validate(const Math::Aabb &b) {
+    if (!Math::IsFinite(b.minimum) || !Math::IsFinite(b.maximum) || b.minimum.x > b.maximum.x ||
         b.minimum.y > b.maximum.y || b.minimum.z > b.maximum.z) {
         throw std::invalid_argument("collision AABB must be finite with ordered bounds");
     }
 }
-void ValidateSweep(Float3 start, Float3 end, float radius) {
-    if (!Finite(start) || !Finite(end) || !std::isfinite(radius) || radius < 0.0f) {
+void ValidateSweep(Math::Vec3 start, Math::Vec3 end, float radius) {
+    if (!Math::IsFinite(start) || !Math::IsFinite(end) || !std::isfinite(radius) || radius < 0.0f) {
         throw std::invalid_argument(
             "collision sweep endpoints/radius must be finite with non-negative radius");
     }
@@ -61,7 +41,7 @@ void ValidateSweep(Float3 start, Float3 end, float radius) {
 
 // Solve |offset + velocity*t|^2 == radius^2. Used for both cylinder
 // cross-sections and spheres; the caller checks the appropriate surface range.
-template <class Accept> void Roots(Vec3 offset, Vec3 velocity, double radius, Accept accept) {
+template <class Accept> void Roots(Vec3d offset, Vec3d velocity, double radius, Accept accept) {
     const double a = Dot(velocity, velocity);
     if (a <= 0.0)
         return;
@@ -87,9 +67,9 @@ template <class Accept> void Roots(Vec3 offset, Vec3 velocity, double radius, Ac
     accept(second);
 }
 
-std::optional<double> RayCapsule(Vec3 origin, Vec3 direction, double maximumDistance, Vec3 start,
-                                 Vec3 end, double radius) {
-    const Vec3 separation = origin - Closest(origin, start, end);
+std::optional<double> RayCapsule(Vec3d origin, Vec3d direction, double maximumDistance, Vec3d start,
+                                 Vec3d end, double radius) {
+    const Vec3d separation = origin - Math::ClosestPoint(origin, Math::Segmentd{start, end});
     if (Dot(separation, separation) <= radius * radius)
         return 0.0;
     double nearest = std::numeric_limits<double>::infinity();
@@ -97,11 +77,11 @@ std::optional<double> RayCapsule(Vec3 origin, Vec3 direction, double maximumDist
         if (distance >= 0.0 && distance <= maximumDistance)
             nearest = (std::min)(nearest, distance);
     };
-    const Vec3 edge = end - start;
+    const Vec3d edge = end - start;
     const double edgeLength = Length(edge);
     if (edgeLength > 0.0) {
-        const Vec3 axis = edge * (1.0 / edgeLength);
-        const Vec3 offset = origin - start;
+        const Vec3d axis = edge * (1.0 / edgeLength);
+        const Vec3d offset = origin - start;
         const double along = Dot(offset, axis);
         const double directionAlong = Dot(direction, axis);
         Roots(offset - axis * along, direction - axis * directionAlong, radius,
@@ -119,9 +99,9 @@ std::optional<double> RayCapsule(Vec3 origin, Vec3 direction, double maximumDist
 // The Minkowski difference of an upright segment and AABB is another AABB.
 // Its rounded boundary is queried exactly by solving the squared point-to-box
 // distance in each interval between the ray's six slab crossings.
-std::optional<double> RayRoundedBox(Vec3 origin, Vec3 displacement, Vec3 lo, Vec3 hi,
+std::optional<double> RayRoundedBox(Vec3d origin, Vec3d displacement, Vec3d lo, Vec3d hi,
                                     double radius) {
-    const Vec3 separation = origin - Clamp(origin, lo, hi);
+    const Vec3d separation = origin - Math::ClosestPoint(origin, Math::Aabbd{lo, hi});
     if (Dot(separation, separation) <= radius * radius)
         return 0.0;
     const std::array<double, 3> p{origin.x, origin.y, origin.z};
@@ -164,7 +144,7 @@ std::optional<double> RayRoundedBox(Vec3 origin, Vec3 displacement, Vec3 lo, Vec
 }
 
 struct Upright {
-    Vec3 bottom;
+    Vec3d bottom;
     double length;
     double radius;
 };
@@ -173,10 +153,10 @@ Upright Shape(const VerticalCapsule &c) {
             static_cast<double>(c.height) - 2.0 * c.radius,
             c.radius};
 }
-Vec3 BoxContactPoint(Upright c, const Aabb &b, Vec3 normal) {
+Vec3d BoxContactPoint(Upright c, const Math::Aabb &b, Vec3d normal) {
     const double low = (std::max)(c.bottom.y, static_cast<double>(b.minimum.y));
     const double high = (std::min)(c.bottom.y + c.length, static_cast<double>(b.maximum.y));
-    Vec3 point = Clamp({c.bottom.x, (low + high) * 0.5, c.bottom.z}, V(b.minimum), V(b.maximum));
+    Vec3d point = Math::ClosestPoint(Vec3d{c.bottom.x, (low + high) * 0.5, c.bottom.z}, Math::ToAabbd(b));
     if (normal.x != 0.0)
         point.x = normal.x > 0.0 ? b.maximum.x : b.minimum.x;
     if (normal.y != 0.0)
@@ -185,12 +165,12 @@ Vec3 BoxContactPoint(Upright c, const Aabb &b, Vec3 normal) {
         point.z = normal.z > 0.0 ? b.maximum.z : b.minimum.z;
     return point;
 }
-Contact BoxContact(Upright c, const Aabb &b, double fraction) {
-    Vec3 lo = V(b.minimum), hi = V(b.maximum);
+Contact BoxContact(Upright c, const Math::Aabb &b, double fraction) {
+    Vec3d lo = Math::ToVec3d(b.minimum), hi = Math::ToVec3d(b.maximum);
     lo.y -= c.length;
-    const Vec3 separation = c.bottom - Clamp(c.bottom, lo, hi);
+    const Vec3d separation = c.bottom - Math::ClosestPoint(c.bottom, Math::Aabbd{lo, hi});
     const double distance = Length(separation);
-    Vec3 normal{};
+    Vec3d normal{};
     double depth{};
     if (distance > 0.0) {
         normal = separation * (1.0 / distance);
@@ -199,75 +179,79 @@ Contact BoxContact(Upright c, const Aabb &b, double fraction) {
         const std::array<double, 6> distances{c.bottom.x - lo.x, hi.x - c.bottom.x,
                                               c.bottom.y - lo.y, hi.y - c.bottom.y,
                                               c.bottom.z - lo.z, hi.z - c.bottom.z};
-        constexpr std::array<Vec3, 6> normals{
+        constexpr std::array<Vec3d, 6> normals{
             {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}}};
         const auto nearest = std::min_element(distances.begin(), distances.end());
         normal = normals[static_cast<std::size_t>(nearest - distances.begin())];
         depth = *nearest + c.radius;
     }
-    return {static_cast<float>(fraction), F(BoxContactPoint(c, b, normal)), F(normal),
+    return {static_cast<float>(fraction), Math::ToVec3(BoxContactPoint(c, b, normal)), Math::ToVec3(normal),
             static_cast<float>(depth)};
 }
 Contact CapsuleContact(Upright c, Upright target, double fraction) {
-    Vec3 a = c.bottom, b = target.bottom;
+    Vec3d a = c.bottom, b = target.bottom;
     if (a.y > b.y + target.length)
         b.y += target.length;
     else if (a.y + c.length < b.y)
         a.y += c.length;
     else
         a.y = b.y = ((std::max)(a.y, b.y) + (std::min)(a.y + c.length, b.y + target.length)) * 0.5;
-    const Vec3 separation = a - b;
+    const Vec3d separation = a - b;
     const double distance = Length(separation);
-    const Vec3 normal = distance > 0.0 ? separation * (1.0 / distance) : Vec3{1, 0, 0};
-    return {static_cast<float>(fraction), F(b + normal * target.radius), F(normal),
+    const Vec3d normal = distance > 0.0 ? separation * (1.0 / distance) : Vec3d{1, 0, 0};
+    return {static_cast<float>(fraction), Math::ToVec3(b + normal * target.radius), Math::ToVec3(normal),
             static_cast<float>((std::max)(0.0, c.radius + target.radius - distance))};
 }
-bool SeparatingContact(const Contact &c, Vec3 displacement) {
-    return c.penetrationDepth <= kTolerance && Dot(V(c.normal), displacement) >= 0.0;
+bool SeparatingContact(const Contact &c, Vec3d displacement) {
+    return c.penetrationDepth <= kTolerance && Dot(Math::ToVec3d(c.normal), displacement) >= 0.0;
 }
 } // namespace
 
-Capsule ToCapsule(const VerticalCapsule &capsule) {
+Math::Capsule ToCapsule(const VerticalCapsule &capsule) {
     Validate(capsule);
     const auto c = Shape(capsule);
-    return {F(c.bottom), F(c.bottom + Vec3{0, c.length, 0}), capsule.radius};
+    return {Math::ToVec3(c.bottom), Math::ToVec3(c.bottom + Vec3d{0, c.length, 0}), capsule.radius};
 }
 
-std::optional<float> RaycastCapsule(Float3 origin, Float3 direction, float maximumDistance,
-                                    const Capsule &capsule, float sweepRadius) {
+std::optional<float> RaycastCapsule(const Math::Ray &ray, float maximumDistance,
+                                    const Math::Capsule &capsule, float sweepRadius) {
+    const Math::Vec3 origin = ray.origin;
+    const Math::Vec3 direction = ray.direction;
     Validate(capsule);
     ValidateSweep(origin, direction, sweepRadius);
-    const double length = Length(V(direction));
+    const double length = Length(Math::ToVec3d(direction));
     if (!std::isfinite(maximumDistance) || maximumDistance < 0.0f || length <= 1.0e-6) {
         throw std::invalid_argument(
             "collision ray needs a non-zero direction and finite non-negative distance");
     }
-    const auto hit = RayCapsule(V(origin), V(direction) * (1.0 / length), maximumDistance,
-                                V(capsule.segmentStart), V(capsule.segmentEnd),
+    const auto hit = RayCapsule(Math::ToVec3d(origin), Math::ToVec3d(direction) * (1.0 / length), maximumDistance,
+                                Math::ToVec3d(capsule.segmentStart), Math::ToVec3d(capsule.segmentEnd),
                                 static_cast<double>(capsule.radius) + sweepRadius);
     return hit ? std::optional<float>{static_cast<float>(*hit)} : std::nullopt;
 }
 
-std::optional<float> SweepSphereAgainstCapsule(Float3 start, Float3 end, float sweepRadius,
-                                               const Capsule &capsule) {
+std::optional<float> SweepSphereAgainstCapsule(const Math::Segment &path, float sweepRadius,
+                                               const Math::Capsule &capsule) {
+    const Math::Vec3 start = path.start;
+    const Math::Vec3 end = path.end;
     Validate(capsule);
     ValidateSweep(start, end, sweepRadius);
-    const Vec3 delta = V(end) - V(start);
+    const Vec3d delta = Math::ToVec3d(end) - Math::ToVec3d(start);
     // Parametric t is directly the sweep fraction, including a stationary query.
     const auto hit =
-        RayCapsule(V(start), delta, 1.0, V(capsule.segmentStart), V(capsule.segmentEnd),
+        RayCapsule(Math::ToVec3d(start), delta, 1.0, Math::ToVec3d(capsule.segmentStart), Math::ToVec3d(capsule.segmentEnd),
                    static_cast<double>(capsule.radius) + sweepRadius);
     return hit ? std::optional<float>{static_cast<float>(*hit)} : std::nullopt;
 }
 
 std::optional<Contact> OverlapVerticalCapsuleAabb(const VerticalCapsule &capsule,
-                                                  const Aabb &bounds) {
+                                                  const Math::Aabb &bounds) {
     Validate(capsule);
     Validate(bounds);
     const auto c = Shape(capsule);
-    Vec3 lo = V(bounds.minimum);
+    Vec3d lo = Math::ToVec3d(bounds.minimum);
     lo.y -= c.length;
-    if (Length(c.bottom - Clamp(c.bottom, lo, V(bounds.maximum))) > c.radius)
+    if (Length(c.bottom - Math::ClosestPoint(c.bottom, Math::Aabbd{lo, Math::ToVec3d(bounds.maximum)})) > c.radius)
         return std::nullopt;
     return BoxContact(c, bounds, 0.0);
 }
@@ -277,28 +261,29 @@ std::optional<Contact> OverlapVerticalCapsules(const VerticalCapsule &capsule,
     Validate(capsule);
     Validate(target);
     const auto c = Shape(capsule), t = Shape(target);
-    if (Length(c.bottom - Closest(c.bottom, t.bottom - Vec3{0, c.length, 0},
-                                  t.bottom + Vec3{0, t.length, 0})) > c.radius + t.radius)
+    if (Length(c.bottom - Math::ClosestPoint(c.bottom, Math::Segmentd{t.bottom - Vec3d{0, c.length, 0},
+                                                                t.bottom + Vec3d{0, t.length, 0}})) >
+        c.radius + t.radius)
         return std::nullopt;
     return CapsuleContact(c, t, 0.0);
 }
 
 std::optional<Contact> SweepVerticalCapsuleAgainstAabb(const VerticalCapsule &capsule,
-                                                       Float3 displacement, const Aabb &bounds) {
+                                                       Math::Vec3 displacement, const Math::Aabb &bounds) {
     Validate(capsule);
     Validate(bounds);
-    if (!Finite(displacement))
+    if (!Math::IsFinite(displacement))
         throw std::invalid_argument("collision displacement must be finite");
     auto c = Shape(capsule);
-    const Vec3 delta = V(displacement);
+    const Vec3d delta = Math::ToVec3d(displacement);
     if (Dot(delta, delta) == 0.0)
         return OverlapVerticalCapsuleAabb(capsule, bounds);
     if (const auto overlap = OverlapVerticalCapsuleAabb(capsule, bounds)) {
         return SeparatingContact(*overlap, delta) ? std::nullopt : overlap;
     }
-    Vec3 lo = V(bounds.minimum);
+    Vec3d lo = Math::ToVec3d(bounds.minimum);
     lo.y -= c.length;
-    const auto hit = RayRoundedBox(c.bottom, delta, lo, V(bounds.maximum), c.radius);
+    const auto hit = RayRoundedBox(c.bottom, delta, lo, Math::ToVec3d(bounds.maximum), c.radius);
     if (!hit)
         return std::nullopt;
     c.bottom = c.bottom + delta * *hit;
@@ -308,22 +293,22 @@ std::optional<Contact> SweepVerticalCapsuleAgainstAabb(const VerticalCapsule &ca
 }
 
 std::optional<Contact> SweepVerticalCapsuleAgainstCapsule(const VerticalCapsule &capsule,
-                                                          Float3 displacement,
+                                                          Math::Vec3 displacement,
                                                           const VerticalCapsule &target) {
     Validate(capsule);
     Validate(target);
-    if (!Finite(displacement))
+    if (!Math::IsFinite(displacement))
         throw std::invalid_argument("collision displacement must be finite");
     auto c = Shape(capsule);
     const auto t = Shape(target);
-    const Vec3 delta = V(displacement);
+    const Vec3d delta = Math::ToVec3d(displacement);
     if (Dot(delta, delta) == 0.0)
         return OverlapVerticalCapsules(capsule, target);
     if (const auto overlap = OverlapVerticalCapsules(capsule, target)) {
         return SeparatingContact(*overlap, delta) ? std::nullopt : overlap;
     }
-    const auto hit = RayCapsule(c.bottom, delta, 1.0, t.bottom - Vec3{0, c.length, 0},
-                                t.bottom + Vec3{0, t.length, 0}, c.radius + t.radius);
+    const auto hit = RayCapsule(c.bottom, delta, 1.0, t.bottom - Vec3d{0, c.length, 0},
+                                t.bottom + Vec3d{0, t.length, 0}, c.radius + t.radius);
     if (!hit)
         return std::nullopt;
     c.bottom = c.bottom + delta * *hit;

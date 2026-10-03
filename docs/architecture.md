@@ -54,7 +54,7 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 |---|---|---|
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | C++ standard library only |
 | `GYO::Engine` | base values, IO, runtime lifecycle, CPU asset identity/cache/loading | C++ library; JSON parser privately |
-| `GYO::Collision` | capsule, ray/AABB, swept-sphere queries | neutral geometry values |
+| `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math |
 | `GYO::Input` | physical input and action/axis evaluation | neutral input types |
 | `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning | Engine |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |

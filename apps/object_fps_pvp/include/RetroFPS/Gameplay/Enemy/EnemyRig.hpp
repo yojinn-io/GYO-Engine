@@ -45,7 +45,7 @@ struct EnemyRig final {
 };
 struct EnemyHurtbox final {
     std::string region;
-    Engine::Collision::Capsule shape;
+    Engine::Math::Capsule shape;
 };
 [[nodiscard]] Float3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
                                          const EnemyBonePoint& point, Float2 position, float yaw);

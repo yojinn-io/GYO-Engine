@@ -7,13 +7,13 @@
 
 namespace fps {
 
-std::vector<Engine::Collision::Aabb> BuildWorldCollisionBoxes(
+std::vector<Engine::Math::Aabb> BuildWorldCollisionBoxes(
     const GridMap& map, const WorldSettings& settings) {
     if (!std::isfinite(settings.cellSize) || settings.cellSize <= 0 ||
         !std::isfinite(settings.wallHeight) || settings.wallHeight <= 0)
         throw std::invalid_argument(
             "Character world cell size and wall height must be finite and positive");
-    std::vector<Engine::Collision::Aabb> result;
+    std::vector<Engine::Math::Aabb> result;
     for (std::size_t row = 0; row < map.GetHeight(); ++row)
         for (std::size_t col = 0; col < map.GetWidth(); ++col)
             if (map.IsSolid(static_cast<std::ptrdiff_t>(row), static_cast<std::ptrdiff_t>(col)))

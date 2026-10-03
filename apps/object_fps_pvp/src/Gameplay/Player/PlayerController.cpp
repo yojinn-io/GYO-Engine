@@ -105,7 +105,7 @@ void PlayerController::Update(
         if (body.feet.y <= 0.0001F) {
             return true;
         }
-        constexpr Engine::Collision::Float3 probe{0.0F, -0.002F, 0.0F};
+        constexpr Engine::Math::Vec3 probe{0.0F, -0.002F, 0.0F};
         for (const auto& wall : walls) {
             const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, probe, wall);
             if (contact && contact->normal.y > 0.5F) {

@@ -221,6 +221,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **每批**：一個 PR，commit 與 PR 用日語。HANDOFF 在每批開始、里程碑、停止時與該批的工作一起更新。
 - **計劃與紀錄文件**：`docs/architecture/plans/math-foundation/{README,HANDOFF}.md`；dev_log 放 `docs/dev_logs/`。
 - **舊名稱一次移除**：因為不留別名，每一批都要把該模組的舊名稱和所有 active 使用者（engine、pvp、ui_editor、tests）一起改完，不能留下編譯不過的中間狀態。
+- **pvp 未編譯 29 檔**（B2 起）：每一批也一併更新它們對該模組的引用，批次結束時以 syntax-only 檢查 29 檔全部通過；B6c 只處理它們自己重複的 helper。
 - **本機驗收**（cmake、ninja 用絕對路徑）：
   - `cmake --preset core`、`cmake --build --preset core`、`ctest --preset core`
   - `cmake --preset test`、`cmake --build --preset test`、`ctest --preset test`
@@ -265,6 +266,8 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **範圍**：
   - `Collision.hpp`、`Collision.cpp`、`CapsuleQueries.cpp`、`engine/collision/CMakeLists.txt`、collision 測試。
   - pvp 中引用 `Collision::Float3`、`Collision::Aabb`、`Collision::Capsule` 的地方：`ToCollision` 改成轉換到 Math 型別。
+  - 介面（使用者決定，2026-10-03）：raycast 改為接收 `Math::Ray`，`SweepSphereAgainstCapsule` 改為接收 `Math::Segment`；Collision 的演算法本體不改用 `Math::Intersect`。
+  - `match_domain` 明確連結 `GYO::Math`（自 B6a 提前）。
   - 依 1.6 在 B1 確認後移入 Math 的形狀與純幾何 helper，在這一批切換。
 - **驗收**：
   - `gyo_collision_tests` 通過。
@@ -327,6 +330,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - 固定指令序列的 digest，在 master 和 branch 上分別產生並比較。
   - B1b 起全專案以 `-ffp-contract=off` 建置（MSVC 預設即不收縮），優先平台為 Linux、Windows、mac x64，arm64 為附帶產物。digest 以優先平台為準，各平台結果應只因 libm 不同而有差異。digest 的輸入仍必須是執行期資料。
   - 差異如實記錄。注意 `PredictionTests.cpp:563,584` 和 `PvpMatchTests.cpp:258-318` 都是 Approx 或同一次執行內的自我一致比較，不是 golden。
+- **重新盤點**：B0 之後 master 合併了 PvP v5 的多個 PR（#11–#16），pvp 有 28 個檔案變動。本節與第 2 節的 pvp 行號以 B0 時為準，B6a 開始時必須重新盤點。
 - **名稱衝突**：`tests/object_fps_pvp/PredictionTests.cpp:37` 的 `Distance(fps::Float3, fps::Float3)` 算的是水平（XZ）距離。型別換成 `Math::Vec3` 後會和 `Math::Distance` 歧義；改名為 `HorizontalDistance` 並保留語意，不可當成重複定義刪除。
 - **產品 helper 的 characterization**：pvp 舊 helper 的凍結比對放在 `tests/object_fps_pvp`，不放共通測試（AGENTS §7）。ui_editor 的 `PreviewAdapter` 舊 helper 同理，在 B5 放進 `tests/ui_editor`。
 - **驗收**：

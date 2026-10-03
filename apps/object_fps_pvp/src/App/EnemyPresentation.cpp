@@ -239,7 +239,7 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
         if (!debug)
             return true;
         std::size_t count = 0;
-        const auto capsule = [&](const Engine::Collision::Capsule& c, Engine::Render::Color color,
+        const auto capsule = [&](const Engine::Math::Capsule& c, Engine::Render::Color color,
                                  float thickness = 0.012F) {
             auto mesh = Engine::Render::MakeWireCapsule(
                 {c.segmentStart.x, c.segmentStart.y, c.segmentStart.z},

@@ -27,7 +27,7 @@ struct Arena final {
     float bodyHeight{1.8F};
     float radius{0.25F};
     float eyeHeight{1.6F};
-    std::vector<Engine::Collision::Aabb> walls;
+    std::vector<Engine::Math::Aabb> walls;
     std::vector<SpawnPoint> spawns;
     float jumpHeight{0.6F};
     float gravity{18.0F};

@@ -24,7 +24,7 @@ struct VerticalCapsule final {
 
 struct CombatTarget final {
     CombatTargetId id = 0;
-    Engine::Collision::Capsule capsule{};
+    Engine::Math::Capsule capsule{};
     std::string region;
 };
 

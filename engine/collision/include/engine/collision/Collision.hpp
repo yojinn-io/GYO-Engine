@@ -2,23 +2,24 @@
 
 #include <optional>
 
+#include "engine/math/geometry/Aabb.hpp"
+#include "engine/math/geometry/Capsule.hpp"
+#include "engine/math/geometry/Ray.hpp"
+#include "engine/math/geometry/Segment.hpp"
+#include "engine/math/linear/Vec3.hpp"
+
 namespace Engine::Collision {
 
-struct Float3 final { float x{}, y{}, z{}; };
-struct Aabb final { Float3 minimum{}, maximum{}; };
+// Geometric primitives (Ray, Segment, Aabb, Capsule) come from Engine::Math;
+// this module owns the collision algorithms and their tolerances, validation
+// and contact policy.
 
-// feet is the world-space bottom of the upright capsule, not its center.
-// height includes both hemispheres and must be at least two radii.
+// The character body shape specialised for collision: feet is the world-space
+// bottom of the upright capsule, not its center. height includes both
+// hemispheres and must be at least two radii.
 struct VerticalCapsule final {
-    Float3 feet{};
+    Math::Vec3 feet{};
     float height{};
-    float radius{};
-};
-
-// The endpoints are centers of the hemispheres. Coincident endpoints form a sphere.
-struct Capsule final {
-    Float3 segmentStart{};
-    Float3 segmentEnd{};
     float radius{};
 };
 
@@ -27,35 +28,37 @@ struct Capsule final {
 // initial overlap. A sweep fraction is measured along the supplied displacement.
 struct Contact final {
     float fraction{};
-    Float3 position{};
-    Float3 normal{};
+    Math::Vec3 position{};
+    Math::Vec3 normal{};
     float penetrationDepth{};
 };
 
-[[nodiscard]] Capsule ToCapsule(const VerticalCapsule& capsule);
+[[nodiscard]] Math::Capsule ToCapsule(const VerticalCapsule& capsule);
 
-// Ray directions need not be normalized. Distances are world-space units.
-// Initial overlap returns zero. Invalid/non-finite inputs throw invalid_argument.
+// The ray direction need not be normalized. Unlike Math::Intersect, results are
+// world-space distances along the ray (the direction is normalized internally)
+// and are limited to maximumDistance. Initial overlap returns zero.
+// Invalid/non-finite inputs throw invalid_argument.
 [[nodiscard]] std::optional<float> RaycastAabb(
-    Float3 origin, Float3 direction, float maximumDistance, const Aabb& bounds);
+    const Math::Ray& ray, float maximumDistance, const Math::Aabb& bounds);
 [[nodiscard]] std::optional<float> RaycastCapsule(
-    Float3 origin, Float3 direction, float maximumDistance,
+    const Math::Ray& ray, float maximumDistance,
     const VerticalCapsule& capsule, float sweepRadius = 0.0f);
 [[nodiscard]] std::optional<float> RaycastCapsule(
-    Float3 origin, Float3 direction, float maximumDistance,
-    const Capsule& capsule, float sweepRadius = 0.0f);
+    const Math::Ray& ray, float maximumDistance,
+    const Math::Capsule& capsule, float sweepRadius = 0.0f);
 
-// Sweeps a sphere center along a segment; returns first contact fraction [0, 1].
-// A zero-length segment is an overlap query.
+// Sweeps a sphere center along path; returns first contact fraction [0, 1]
+// along the segment. A zero-length path is an overlap query.
 [[nodiscard]] std::optional<float> SweepSphereAgainstCapsule(
-    Float3 start, Float3 end, float sweepRadius, const VerticalCapsule& capsule);
+    const Math::Segment& path, float sweepRadius, const VerticalCapsule& capsule);
 [[nodiscard]] std::optional<float> SweepSphereAgainstCapsule(
-    Float3 start, Float3 end, float sweepRadius, const Capsule& capsule);
+    const Math::Segment& path, float sweepRadius, const Math::Capsule& capsule);
 
 // Overlap queries include touching. The AABB query uses the actual rounded
 // capsule shape, including at box edges and corners, not an expanded box proxy.
 [[nodiscard]] std::optional<Contact> OverlapVerticalCapsuleAabb(
-    const VerticalCapsule& capsule, const Aabb& bounds);
+    const VerticalCapsule& capsule, const Math::Aabb& bounds);
 [[nodiscard]] std::optional<Contact> OverlapVerticalCapsules(
     const VerticalCapsule& capsule, const VerticalCapsule& target);
 
@@ -63,8 +66,8 @@ struct Contact final {
 // moving into the contact; separating and tangential motion are permitted.
 // A zero displacement is an overlap query. All inputs must be finite.
 [[nodiscard]] std::optional<Contact> SweepVerticalCapsuleAgainstAabb(
-    const VerticalCapsule& capsule, Float3 displacement, const Aabb& bounds);
+    const VerticalCapsule& capsule, Math::Vec3 displacement, const Math::Aabb& bounds);
 [[nodiscard]] std::optional<Contact> SweepVerticalCapsuleAgainstCapsule(
-    const VerticalCapsule& capsule, Float3 displacement, const VerticalCapsule& target);
+    const VerticalCapsule& capsule, Math::Vec3 displacement, const VerticalCapsule& target);
 
 } // namespace Engine::Collision

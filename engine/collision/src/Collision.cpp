@@ -11,17 +11,9 @@ namespace {
 
 constexpr float kEpsilon = 0.000001f;
 
-[[nodiscard]] bool IsFinite(const Float3 value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-
-[[nodiscard]] float Length(const Float3 value) noexcept {
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-
 void ValidateQuery(
-    const Float3 origin,
-    const Float3 direction,
+    const Math::Vec3 origin,
+    const Math::Vec3 direction,
     const float maximumDistance,
     const float sweepRadius) {
     if (!IsFinite(origin) || !IsFinite(direction)) {
@@ -48,18 +40,13 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
     }
 }
 
-[[nodiscard]] Float3 Normalize(const Float3 value) noexcept {
-    const float length = Length(value);
-    return {value.x / length, value.y / length, value.z / length};
-}
-
 [[nodiscard]] std::optional<float> RaySphere(
-    const Float3 origin,
-    const Float3 direction,
+    const Math::Vec3 origin,
+    const Math::Vec3 direction,
     const float maximumDistance,
-    const Float3 center,
+    const Math::Vec3 center,
     const float radius) noexcept {
-    const Float3 offset{origin.x - center.x, origin.y - center.y, origin.z - center.z};
+    const Math::Vec3 offset{origin.x - center.x, origin.y - center.y, origin.z - center.z};
     const float halfB = offset.x * direction.x + offset.y * direction.y +
                         offset.z * direction.z;
     const float c = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z -
@@ -81,11 +68,11 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
 }
 
 [[nodiscard]] std::optional<float> RayAabb(
-    const Float3 origin,
-    const Float3 direction,
+    const Math::Vec3 origin,
+    const Math::Vec3 direction,
     const float maximumDistance,
-    const Float3 minimum,
-    const Float3 maximum) noexcept {
+    const Math::Vec3 minimum,
+    const Math::Vec3 maximum) noexcept {
     float entry = 0.0f;
     float exit = maximumDistance;
     const std::array<float, 3> origins{origin.x, origin.y, origin.z};
@@ -120,8 +107,8 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
 }
 
 [[nodiscard]] std::optional<float> RayCapsuleUnchecked(
-    const Float3 origin,
-    const Float3 direction,
+    const Math::Vec3 origin,
+    const Math::Vec3 direction,
     const float maximumDistance,
     const VerticalCapsule& capsule,
     const float sweepRadius) noexcept {
@@ -163,11 +150,11 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
         }
     }
 
-    const std::array<Float3, 2> ends{{
+    const std::array<Math::Vec3, 2> ends{{
         {capsule.feet.x, segmentBottom, capsule.feet.z},
         {capsule.feet.x, segmentTop, capsule.feet.z},
     }};
-    for (const Float3 end : ends) {
+    for (const Math::Vec3 end : ends) {
         const std::optional<float> hit =
             RaySphere(origin, direction, maximumDistance, end, radius);
         if (hit.has_value()) {
@@ -184,8 +171,9 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
 } // namespace
 
 std::optional<float> RaycastAabb(
-    const Float3 origin, const Float3 direction, const float maximumDistance,
-    const Aabb& bounds) {
+    const Math::Ray& ray, const float maximumDistance, const Math::Aabb& bounds) {
+    const Math::Vec3 origin = ray.origin;
+    const Math::Vec3 direction = ray.direction;
     ValidateQuery(origin, direction, maximumDistance, 0.0f);
     if (!IsFinite(bounds.minimum) || !IsFinite(bounds.maximum) ||
         bounds.minimum.x > bounds.maximum.x || bounds.minimum.y > bounds.maximum.y ||
@@ -196,21 +184,24 @@ std::optional<float> RaycastAabb(
 }
 
 std::optional<float> RaycastCapsule(
-    const Float3 origin, const Float3 direction, const float maximumDistance,
+    const Math::Ray& ray, const float maximumDistance,
     const VerticalCapsule& capsule, const float sweepRadius) {
+    const Math::Vec3 origin = ray.origin;
+    const Math::Vec3 direction = ray.direction;
     ValidateQuery(origin, direction, maximumDistance, sweepRadius);
     ValidateCapsule(capsule);
     return RayCapsuleUnchecked(origin, Normalize(direction), maximumDistance, capsule, sweepRadius);
 }
 
 std::optional<float> SweepSphereAgainstCapsule(
-    const Float3 start, const Float3 end, const float sweepRadius,
-    const VerticalCapsule& capsule) {
+    const Math::Segment& path, const float sweepRadius, const VerticalCapsule& capsule) {
+    const Math::Vec3 start = path.start;
+    const Math::Vec3 end = path.end;
     if (!IsFinite(start) || !IsFinite(end) || !std::isfinite(sweepRadius) || sweepRadius < 0.0f) {
         throw std::invalid_argument("collision sweep endpoints/radius must be finite with non-negative radius");
     }
     ValidateCapsule(capsule);
-    const Float3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
+    const Math::Vec3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
     const float length = Length(delta);
     if (!std::isfinite(length)) {
         throw std::invalid_argument("collision sweep length must be finite");
@@ -218,7 +209,7 @@ std::optional<float> SweepSphereAgainstCapsule(
     if (length <= kEpsilon) {
         return RayCapsuleUnchecked(start, {0.0f, 1.0f, 0.0f}, 0.0f, capsule, sweepRadius);
     }
-    const auto distance = RaycastCapsule(start, delta, length, capsule, sweepRadius);
+    const auto distance = RaycastCapsule(Math::Ray{start, delta}, length, capsule, sweepRadius);
     return distance ? std::optional<float>{*distance / length} : std::nullopt;
 }
 

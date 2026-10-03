@@ -172,7 +172,7 @@ struct GameSessionSnapshot final {
     WeaponHudSnapshot weapon;
     WeaponPresentationSnapshot weaponPresentation;
     std::vector<EnemySnapshot> enemies;
-    std::vector<Engine::Collision::Aabb> worldCollisionBoxes;
+    std::vector<Engine::Math::Aabb> worldCollisionBoxes;
     std::vector<ProjectileSnapshot> projectiles;
     CampaignOutcome campaignOutcome{CampaignOutcome::InProgress};
     std::vector<CampaignRoomStats> campaignRooms;

@@ -8,7 +8,7 @@
 
 namespace fps::pvp {
 namespace {
-bool Finite(const Engine::Collision::Float3& value) {
+bool Finite(const Engine::Math::Vec3& value) {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 Float3 ReadPosition(const nlohmann::json& value) {
