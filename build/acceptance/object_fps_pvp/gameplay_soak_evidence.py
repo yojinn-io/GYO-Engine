@@ -344,7 +344,7 @@ def analyze_soak(output, gateway_counters, *, soak=False):
                 cancelled[key] = event
         elif kind == 'runtime_gap':
             runtime_gaps.append(event)
-    gap_errors, life_clamps = client_disturbance(runtime_gaps, [], life_resets, client['fps'])
+    gap_errors, life_clamps = client_disturbance(runtime_gaps, [], life_resets)
     for error in gap_errors:
         check(False, error)
     per_cycle_actual = [[] for _ in range(cycles)]

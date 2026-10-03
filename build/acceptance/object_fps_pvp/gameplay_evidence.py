@@ -109,14 +109,14 @@ def validate_accepted_actions(decisions, life_starts, *, capacity=12, reload_tic
     return errors
 
 
-def client_disturbance(events, frame_samples, life_resets, fps):
+def client_disturbance(events, frame_samples, life_resets):
     errors=[];previous=None
     for f in frame_samples:
         if f['frame_seconds']>=.1 or previous is not None and f['time_ns']-previous>=100_000_000:
             errors.append('Client full-run frame reached100ms')
         previous=f['time_ns']
     gaps=[e for e in events if e['kind']=='runtime_gap' and (e['frame_seconds']>=.1 or e['dropped_seconds']>0)]
-    clamps,unmatched=match_life_seed_clamps(gaps,life_resets,fps)
+    clamps,unmatched=match_life_seed_clamps(gaps,life_resets)
     errors+=['Client runtime gap/dropped time is not a matched normal LifeRespawn clamp']*len(unmatched)
     return errors,clamps
 
@@ -253,7 +253,7 @@ def analyze(output, relay, fault, mode):
     life_starts={(player,1):0 for player in client['player_ids']}
     life_starts.update({(r['player_id'],r['life']):r['tick'] for r in respawns})
     for error in validate_accepted_actions(decisions,life_starts):check(False,error)
-    client_gaps,life_clamps=client_disturbance(client_events,all_frames,life_resets,client['fps'])
+    client_gaps,life_clamps=client_disturbance(client_events,all_frames,life_resets)
     if clean:
         for error in client_gaps:check(False,error)
     generated={(e['player_id'],e['epoch'],e['sequence']):e for e in client_events if e['kind']=='generated'}

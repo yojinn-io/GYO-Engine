@@ -378,7 +378,7 @@ def run_round(args, output, fps):
         gateway.terminate();gateway.wait(timeout=10)
         match.terminate();match.wait(timeout=10)
         if match.returncode:raise RuntimeError('Match failed while flushing diagnostics')
-        evidence=analyze_commands(output,enforce=not args.report_only and not args.stall_ms,fps=fps)
+        evidence=analyze_commands(output,enforce=not args.report_only and not args.stall_ms)
         if args.gui:
             from presentation_evidence import analyze_latency, analyze_short_latency
             evidence['presentation']=(analyze_short_latency if args.short else analyze_latency)(output)

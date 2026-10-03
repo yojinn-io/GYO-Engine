@@ -333,6 +333,28 @@ class CommandEvidenceTests(unittest.TestCase):
                 self.assertEqual(result['production_allowance_steps']['2'], 5)
                 self.assertEqual(result['production_60hz_passed'], passed)
 
+    def test_life_seed_clamp_is_structural_not_a_host_timer_tolerance(self):
+        reset = event('reset', START, player=2, epoch=2, sequence=0, authority_tick=70,
+                      reset_reason='life_respawn', life_generation=2)
+        def gap(frame, dropped=None, **values):
+            fields = dict(player=2, epoch=2, sequence=3, authority_tick=71, frame_seconds=frame,
+                          dropped_seconds=frame - evidence.TICK_SECONDS if dropped is None else dropped)
+            fields.update(values)
+            return event('runtime_gap', START + 10_000_000, **fields)
+        # The 2026-10-03 soak: a macOS 60 Hz loop overslept the respawn frame to 23.1 ms.
+        for frame in (.0168, .0231, 1 / 30, .099):
+            with self.subTest(frame=frame):
+                self.assertTrue(evidence.is_life_seed_clamp(gap(frame), reset))
+        for name, candidate in (('100 ms frame', gap(.1)), ('inexact drop', gap(.0231, dropped=.005)),
+                                ('nothing dropped', gap(.0160, dropped=0)), ('other epoch', gap(.0231, epoch=1)),
+                                ('other player', gap(.0231, player=1)), ('three ticks later', gap(.0231, authority_tick=73))):
+            with self.subTest(case=name):
+                self.assertFalse(evidence.is_life_seed_clamp(candidate, reset))
+        late = dict(gap(.0231), time_ns=START + 100_000_000)
+        self.assertFalse(evidence.is_life_seed_clamp(late, reset))
+        clamps, unmatched = evidence.match_life_seed_clamps([gap(.0231), gap(.0231)], [reset])
+        self.assertEqual((len(clamps), len(unmatched)), (1, 1))
+
     def test_clamp_in_another_epoch_remains_interference(self):
         directory, client, match, timing = self.make_run()
         self.life_respawn(match, client, clamp_epoch=1)

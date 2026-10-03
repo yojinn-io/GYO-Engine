@@ -447,7 +447,7 @@ class TimingRunnerTests(unittest.TestCase):
                         mock.patch.object(run_timing, 'wait_for_match_ready', side_effect=ready), \
                         mock.patch.object(run_timing, 'free_port', return_value=5000), \
                         mock.patch.object(run_timing.urllib.request, 'urlopen', return_value=nullcontext()), \
-                        mock.patch.object(run_timing, 'analyze_commands', side_effect=lambda output, enforce=True, fps=None: dict(movement)), \
+                        mock.patch.object(run_timing, 'analyze_commands', side_effect=lambda output, enforce=True: dict(movement)), \
                         mock.patch('presentation_evidence.analyze_short_latency', return_value=presentation), \
                         redirect_stdout(io.StringIO()):
                     self.assertEqual(run_timing.execute_rounds(args), 1)

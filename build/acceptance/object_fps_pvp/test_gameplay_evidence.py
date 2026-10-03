@@ -81,15 +81,15 @@ class GameplayEvidenceTests(unittest.TestCase):
 
     def test_client_stall_cannot_be_clean_or_life_clamp(self):
         event=dict(kind='runtime_gap',frame_seconds=.108,dropped_seconds=.09,player_id=2,epoch=2,time_ns=1000,authority_tick=200)
-        errors,clamps=client_disturbance([event],[dict(time_ns=1000,frame_seconds=.108)],[],30)
+        errors,clamps=client_disturbance([event],[dict(time_ns=1000,frame_seconds=.108)],[])
         self.assertTrue(errors);self.assertFalse(clamps)
 
     def test_normal_thirty_fps_life_seed_clamp_is_explicit(self):
         reset=dict(player_id=2,epoch=2,time_ns=1_000_000_000,authority_tick=200)
         event=dict(kind='runtime_gap',frame_seconds=1/30,dropped_seconds=1/60,player_id=2,epoch=2,time_ns=1_020_000_000,authority_tick=201)
-        errors,clamps=client_disturbance([event],[dict(time_ns=1_020_000_000,frame_seconds=1/30)],[reset],30)
+        errors,clamps=client_disturbance([event],[dict(time_ns=1_020_000_000,frame_seconds=1/30)],[reset])
         self.assertFalse(errors);self.assertEqual(len(clamps),1)
-        errors,_=client_disturbance([event],[],[],30)
+        errors,_=client_disturbance([event],[],[])
         self.assertTrue(errors)
 
     def test_fault_expiry_requires_original_reference_and_generation_inside_fault(self):

@@ -36,25 +36,27 @@ def frame_interval_statistics(intervals):
             'at_least_2_ticks': sum(value >= 2 * TICK_SECONDS for value in ordered)}
 
 
-def is_life_seed_clamp(gap, reset, fps=None):
+def is_life_seed_clamp(gap, reset):
     """A respawn's fresh-seed clamp: the first new-epoch frame drops only its time beyond one tick.
 
     ``reset`` is a LifeRespawn reset. The gap follows it within 100 ms and two authority ticks, in
-    the reset's epoch, inside one nominal frame; anything else remains interference."""
+    the reset's epoch, drops exactly its frame time beyond one tick, and that frame is shorter than
+    the 100 ms interference threshold. The rule is structural: it does not assume how precisely the
+    host wakes a sleeping thread (macOS often oversleeps a 60 Hz deadline by 3-8 ms), so it needs no
+    per-platform tolerance. Anything else remains interference."""
     frame, dropped = gap['frame_seconds'], gap['dropped_seconds']
     return (gap['player_id'] == reset['player_id'] and
             gap['epoch'] == reset['epoch'] and 0 <= gap['time_ns']-reset['time_ns'] < 100_000_000 and
             0 <= gap['authority_tick']-reset['authority_tick'] <= 2 and
-            frame < .1 and frame <= 1/(fps or 60)+.005 and dropped > 0 and
-            abs(dropped-max(0, frame-TICK_SECONDS)) < 1e-8)
+            frame < .1 and dropped > 0 and abs(dropped-(frame-TICK_SECONDS)) < 1e-8)
 
 
-def match_life_seed_clamps(gaps, life_resets, fps=None):
+def match_life_seed_clamps(gaps, life_resets):
     """Pair each gap with at most one unused reset of ``life_resets`` (LifeRespawn only); returns (clamps, unmatched gaps)."""
     used, clamps, unmatched = set(), [], []
     for gap in gaps:
         found = next((index for index, reset in enumerate(life_resets)
-                      if index not in used and is_life_seed_clamp(gap, reset, fps)), None)
+                      if index not in used and is_life_seed_clamp(gap, reset)), None)
         if found is None:
             unmatched.append(gap)
         else:
@@ -189,8 +191,7 @@ def recovery_actual_intervals(resolutions, generated, player_ids, release_ns):
     return result
 
 
-def analyze_commands(directory, *, enforce=True, fps=None):
-    """``fps`` is the Clients' nominal rate, bounding a respawn's fresh-seed clamp (default 60)."""
+def analyze_commands(directory, *, enforce=True):
     directory = Path(directory)
     start, end, timing = measurement_window(directory)
     generated, all_generated, sent, sent_started, accepted, resolved = {}, {}, {}, {}, {}, {}
@@ -296,7 +297,7 @@ def analyze_commands(directory, *, enforce=True, fps=None):
     for reset in life_resets:
         if not isinstance(reset.get('life_generation'), int) or reset['life_generation'] < 2:
             errors.append(f'LifeRespawn reset for player {reset["player_id"]} lacks a new life generation')
-    life_seed_clamps, gaps = match_life_seed_clamps(gaps, all_life_resets, fps)
+    life_seed_clamps, gaps = match_life_seed_clamps(gaps, all_life_resets)
     # Production counts every generated original; a cancelled one was still produced at 60 Hz.
     per_player = Counter(key[0] for key in generated)
     lifecycle_cancelled = 0
