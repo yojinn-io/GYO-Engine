@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-03。Owner：Engine（新增模組 `GYO::Math`）。
-**B0–B3 完成並合併；B4a 本機驗收完成。**
+**B0–B4a 完成並合併；B4b 本機驗收完成。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -32,8 +32,8 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B1b 浮點收縮統一 | medium | 完成，併入 #18 合併 | 全專案 `-ffp-contract=off`，文件與量測方式更新 |
 | B2 Collision | high（double 路徑 xhigh） | 完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 已合併 | `Collision::Float3/Aabb/Capsule` 移除；raycast 接收 `Math::Ray`、sweep 接收 `Math::Segment`；`VerticalCapsule` 保留 |
 | B3 Model | high（矩陣與四元數 xhigh） | 完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 已合併 | `Model::Vec2/Vec3/Quaternion/Matrix4`、`Multiply`、`TransformPoint` 移除；`Transform`、`ToMatrix` 保留 |
-| B4a Render 型別 | high | 本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
-| B4b Render 矩陣 | xhigh | 未開始 | `Renderer.cpp` 改用 Math 慣例，memcmp 逐位元驗證 |
+| B4a Render 型別 | high | 完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 已合併 | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
+| B4b Render 矩陣 | xhigh | 本機驗收完成 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
 | B5 Ui／ui_editor | high | 未開始 | `UiFloat2/UiRect` 移除，sRGB 統一，gyo.ui golden |
 | B6a pvp 模擬層 | xhigh | 未開始 | `fps::Float3` 移除，`match_domain` helper 改用 Math，digest 含 arm64 |
 | B6b pvp 表現層 | high | 未開始 | `app_support` 與 acceptance |
@@ -48,5 +48,6 @@ B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7
 
 - 每次只執行使用者指定的批次；一批一個 PR，commit 與 PR 用日語。
 - 每批開始、里程碑、停止時更新本表、HANDOFF 與 dev_log，然後停止，不自動開始下一批。
-- 主對話檔位由使用者決定；表中檔位是建議值。ultracode 對抗式檢查（建議 B1、B4b、B6a）每次先徵求同意。
+- 主對話檔位由使用者決定；表中檔位是建議值。
+- 使用者決定本計劃全程使用 ultracode（2026-10-03，B4b 起明定）：每批的盤點、實作、驗證與審查都以多 agent workflow 進行。
 - 出現非預期回歸、範圍擴大，或 PvP authority 漂移超出 reconciliation 能吸收的程度時，停下回報並重新規劃。
