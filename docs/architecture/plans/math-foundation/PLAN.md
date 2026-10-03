@@ -325,7 +325,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - **預設不升 protocol**。如果量測到的漂移會讓新舊版本混連時出現 reconciliation 無法吸收的偏差，就停下來，請使用者決定是否升到 v6。
 - **決定性量測**：
   - 固定指令序列的 digest，在 master 和 branch 上分別產生並比較。
-  - 必須包含 arm64（macos-arm64 的 CI 列，或在該列 commit 一份 master 的 digest）。本機 Intel Mac 沒有 FMA 指令，執行期量不到收縮差異；但 clang 的最佳化常數摺疊仍可能採用 fused 結果，所以 digest 的輸入必須是執行期資料。
+  - B1b 起全專案以 `-ffp-contract=off` 建置（MSVC 預設即不收縮），優先平台為 Linux、Windows、mac x64，arm64 為附帶產物。digest 以優先平台為準，各平台結果應只因 libm 不同而有差異。digest 的輸入仍必須是執行期資料。
   - 差異如實記錄。注意 `PredictionTests.cpp:563,584` 和 `PvpMatchTests.cpp:258-318` 都是 Approx 或同一次執行內的自我一致比較，不是 golden。
 - **名稱衝突**：`tests/object_fps_pvp/PredictionTests.cpp:37` 的 `Distance(fps::Float3, fps::Float3)` 算的是水平（XZ）距離。型別換成 `Math::Vec3` 後會和 `Math::Distance` 歧義；改名為 `HorizontalDistance` 並保留語意，不可當成重複定義刪除。
 - **產品 helper 的 characterization**：pvp 舊 helper 的凍結比對放在 `tests/object_fps_pvp`，不放共通測試（AGENTS §7）。ui_editor 的 `PreviewAdapter` 舊 helper 同理，在 B5 放進 `tests/ui_editor`。

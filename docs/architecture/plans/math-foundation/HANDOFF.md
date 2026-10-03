@@ -30,6 +30,7 @@
 | 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
 | 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
 | 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
+| 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
 | 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
 
 ## B0 基線
@@ -117,10 +118,22 @@
   - B6a：`PredictionTests` 的 `Distance` 是水平距離，改名為 `HorizontalDistance`。
   - B5、B6a：產品和工具的 helper 比對放在各自的產品測試。
 
+## B1b 浮點收縮模式統一
+
+狀態：**本機驗收完成**（分支 `claude/math-foundation-b1b`，自 B1 分支分出；PR 待 #18 合併後開，base 為 master）。
+
+- `build/cmake/GyoBuild.cmake`：在 `third_party` 之後、`engine` 之前加上 `add_compile_options`，對 C／C++ 的 Clang、AppleClang、GCC 加 `-ffp-contract=off`。
+  - 作用範圍：engine、apps、tools、tests，以及產品從自己目錄加入的相依套件（pvp 的 protobuf、asio、httplib）。
+  - 不受影響：`third_party/` 與以 `ExternalProject` 另外建置的 shader 工具（DXC 等）。
+- 預期影響：Linux（gcc-14、ISO 模式）與 Windows（MSVC）原本就不收縮，結果不變；mac x64 只有 Apple clang 對常數輸入做的 fused 常數摺疊會消失；arm64 不再產生 fmadd。
+- 文件：`math.md` 數值政策、`Scalar.hpp` 註解、PLAN B6a 的量測方式。
+- Architecture Delta：共通建置設定變更（Build Graph／編譯選項）。不新增 target 或依賴邊；產品與工具不需要任何修改。
+- 本機驗收（Intel Mac）：core 19／19、test 42／42 通過，包括 pvp 全部 15 項；依賴圖與 B1 相同。
+- `compile_commands.json` 確認套用範圍：engine 54／54、apps 18／18、tests 54／54、tools 11／11、build（acceptance）7／7 都帶有 `-ffp-contract=off`；
+  SDL、SDL_image、SDL_ttf、imgui、ufbx、doctest 都沒有；pvp 自己目錄加入的 protobuf、absl 也帶有這個選項，與預期相符。
+
 ## 未結事項
 
-- **浮點收縮模式**：目前沿用各編譯器預設（Apple clang `-ffp-contract=on`，arm64 會產生 fmadd；MSVC 與 gcc-14 x86_64 沒有 FMA）。
-  是否全專案統一成 `-ffp-contract=off` 以求跨平台位元一致，需要使用者決定；這會改變 arm64 目前的結果，並影響 PvP 的決定性。
 
 - B2 開始時確認 Collision 的 raycast 介面是否改成接收 `Math::Ray`（公開介面變更）。
 - B1、B4b、B6a 是否使用 ultracode 對抗式檢查，屆時逐次徵求同意。

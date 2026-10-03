@@ -27,6 +27,13 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update populated dep
 # its Go checks run even when no game is registered.
 gyo_register_go_module(OWNER engine DIRECTORY "${GYO_REPOSITORY_ROOT}/services/gyo_gateway")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/third_party" third_party)
+# One floating-point contraction mode for GYO code on every platform: never fuse
+# a multiply and add into FMA, so x64 Linux, Windows and macOS (and arm64 as a
+# by-product) round identically apart from libm. MSVC's default /fp:precise
+# already does not contract. Applies to the directories added below, including
+# any dependency a product adds from its own directory.
+add_compile_options("$<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang,GNU>:-ffp-contract=off>"
+                    "$<$<COMPILE_LANG_AND_ID:CXX,AppleClang,Clang,GNU>:-ffp-contract=off>")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     set(GYO_APP_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/apps/${GYO_CURRENT_APP}")
