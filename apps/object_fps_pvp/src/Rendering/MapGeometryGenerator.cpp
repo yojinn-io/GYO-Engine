@@ -1,10 +1,10 @@
 #include "RetroFPS/Rendering/MapGeometryGenerator.hpp"
 
 #include "RetroFPS/World/GridMap.hpp"
+#include "engine/math/scalar/Constants.hpp"
 
 #include <array>
 #include <cmath>
-#include <numbers>
 #include <stdexcept>
 
 namespace fps {
@@ -18,15 +18,14 @@ struct WallDirection {
     GroundPoint boundaryOffset;
 };
 
-constexpr float kPi = std::numbers::pi_v<float>;
 constexpr float kDoorWidthInCells = 0.70f;
 constexpr float kDoorHeightInWalls = 0.80f;
 constexpr float kDoorDepthInCells = 0.12f;
 constexpr std::array<WallDirection, 4> kWallDirections = {{
     {-1, 0, {0.0f, 0.0f, 1.0f}, 0.0f, {0.0f, -0.5f}},
-    {0, 1, {-1.0f, 0.0f, 0.0f}, -kPi * 0.5f, {0.5f, 0.0f}},
-    {1, 0, {0.0f, 0.0f, -1.0f}, kPi, {0.0f, 0.5f}},
-    {0, -1, {1.0f, 0.0f, 0.0f}, kPi * 0.5f, {-0.5f, 0.0f}},
+    {0, 1, {-1.0f, 0.0f, 0.0f}, -Engine::Math::HalfPi, {0.5f, 0.0f}},
+    {1, 0, {0.0f, 0.0f, -1.0f}, Engine::Math::Pi, {0.0f, 0.5f}},
+    {0, -1, {1.0f, 0.0f, 0.0f}, Engine::Math::HalfPi, {-0.5f, 0.0f}},
 }};
 
 void ValidateSettings(const WorldSettings& settings) {

@@ -2,6 +2,11 @@
 #include "RetroFPS/Collision/GridWorldCollision.hpp"
 
 #include "engine/collision/Collision.hpp"
+#include "engine/math/geometry/Intersection.hpp"
+#include "engine/math/geometry/Plane.hpp"
+#include "engine/math/geometry/Ray.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include "RetroFPS/World/GridMap.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
@@ -16,15 +21,6 @@ namespace fps {
 namespace {
 
 constexpr float kEpsilon = 0.000001f;
-
-[[nodiscard]] Engine::Math::Vec3 AddScaled(
-    const Engine::Math::Vec3 origin, const Engine::Math::Vec3 direction, const float distance) noexcept {
-    return {
-        origin.x + direction.x * distance,
-        origin.y + direction.y * distance,
-        origin.z + direction.z * distance,
-    };
-}
 
 void ValidateQuery(
     const Engine::Math::Vec3 origin,
@@ -46,9 +42,6 @@ void ValidateQuery(
     }
 }
 
-[[nodiscard]] Engine::Math::Vec3 ToCollision(const Engine::Math::Vec3 value) noexcept {
-    return {value.x, value.y, value.z};
-}
 [[nodiscard]] Engine::Collision::VerticalCapsule ToCollision(const VerticalCapsule& capsule) noexcept {
     return {{capsule.centerXZ.x, capsule.feetY, capsule.centerXZ.z}, capsule.height, capsule.radius};
 }
@@ -76,7 +69,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
                               const float distance,
                               const CombatTargetId targetId = 0, const std::string& region = {}) {
         if (!closest.has_value() || distance < closest->distance) {
-            closest = CombatHit{kind, AddScaled(origin, normalized, distance), distance, targetId, region};
+            closest = CombatHit{kind, origin + normalized * distance, distance, targetId, region};
         }
     };
 
@@ -86,23 +79,25 @@ std::optional<CombatHit> CombatCollision::Raycast(
             const Engine::Collision::VerticalCapsule sphere{
                 {origin.x,origin.y-sweepRadius,origin.z},2*sweepRadius,sweepRadius};
             const auto contact=Engine::Collision::SweepVerticalCapsuleAgainstAabb(sphere,
-                {normalized.x*maximumDistance,normalized.y*maximumDistance,normalized.z*maximumDistance},box);
+                normalized*maximumDistance,box);
             if(contact) distance=contact->fraction*maximumDistance;
         } else {
-            distance=Engine::Collision::RaycastAabb({ToCollision(origin), ToCollision(normalized)},maximumDistance,box);
+            distance=Engine::Collision::RaycastAabb({origin, normalized},maximumDistance,box);
         }
         if(distance) consider(CombatHitKind::Wall,*distance);
     }
 
+    // The swept sphere's center meets the floor on the plane y = sweepRadius.
     if (normalized.y < -kEpsilon && origin.y >= sweepRadius) {
-        const float floorDistance = (sweepRadius - origin.y) / normalized.y;
-        if (floorDistance >= 0.0f && floorDistance <= maximumDistance) {
-            consider(CombatHitKind::Floor, floorDistance);
+        const auto floorDistance = Engine::Math::Intersect(
+            Engine::Math::Ray{origin, normalized}, Engine::Math::Plane{{0.0f, 1.0f, 0.0f}, sweepRadius});
+        if (floorDistance && *floorDistance <= maximumDistance) {
+            consider(CombatHitKind::Floor, *floorDistance);
         }
     }
 
     for (const CombatTarget& target : targets) {
-        const std::optional<float> distance = Engine::Collision::RaycastCapsule({ToCollision(origin), ToCollision(normalized)}, maximumDistance, target.capsule, sweepRadius);
+        const std::optional<float> distance = Engine::Collision::RaycastCapsule({origin, normalized}, maximumDistance, target.capsule, sweepRadius);
         if (distance.has_value()) {
             consider(CombatHitKind::Target, *distance, target.id, target.region);
         }
@@ -121,11 +116,7 @@ Engine::Math::Vec3 CombatCollision::ClampSegmentToWorld(
         throw std::invalid_argument(
             "world segment endpoints must be finite and clearance positive");
     }
-    const Engine::Math::Vec3 delta{
-        desiredEnd.x - origin.x,
-        desiredEnd.y - origin.y,
-        desiredEnd.z - origin.z,
-    };
+    const Engine::Math::Vec3 delta = desiredEnd - origin;
     const float distance = Engine::Math::Length(delta);
     if (!std::isfinite(distance)) {
         throw std::invalid_argument("world segment length must be finite");
@@ -134,21 +125,20 @@ Engine::Math::Vec3 CombatCollision::ClampSegmentToWorld(
         return origin;
     }
     const auto hit = Raycast(map, worldSettings, origin, delta, distance);
-    return hit ? AddScaled(origin, Engine::Math::Normalize(delta),
-                           (std::max)(0.0f, hit->distance - clearance))
+    return hit ? origin + Engine::Math::Normalize(delta) * Engine::Math::Max(0.0f, hit->distance - clearance)
                : desiredEnd;
 }
 
 std::optional<float> CombatCollision::RaycastCapsule(
     const Engine::Math::Vec3 origin, const Engine::Math::Vec3 direction, const float maximumDistance,
     const VerticalCapsule& capsule, const float sweepRadius) {
-    return Engine::Collision::RaycastCapsule({ToCollision(origin), ToCollision(direction)}, maximumDistance, ToCollision(capsule), sweepRadius);
+    return Engine::Collision::RaycastCapsule({origin, direction}, maximumDistance, ToCollision(capsule), sweepRadius);
 }
 
 std::optional<float> CombatCollision::SweepSegmentAgainstCapsule(
     const Engine::Math::Vec3 start, const Engine::Math::Vec3 end, const float sweepRadius,
     const VerticalCapsule& capsule) {
-    return Engine::Collision::SweepSphereAgainstCapsule({ToCollision(start), ToCollision(end)}, sweepRadius, ToCollision(capsule));
+    return Engine::Collision::SweepSphereAgainstCapsule({start, end}, sweepRadius, ToCollision(capsule));
 }
 
 } // namespace fps

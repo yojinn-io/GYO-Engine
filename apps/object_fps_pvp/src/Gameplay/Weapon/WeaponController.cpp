@@ -1,4 +1,5 @@
 #include "RetroFPS/Gameplay/Weapon/WeaponController.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -136,12 +137,12 @@ void WeaponController::Update(
         return;
     }
 
-    state.fireCooldownSeconds_ = (std::max)(0.0f, state.fireCooldownSeconds_ - deltaSeconds);
-    state.recoilDegrees_ = (std::max)(0.0f, state.recoilDegrees_ -
+    state.fireCooldownSeconds_ = Engine::Math::Max(0.0f, state.fireCooldownSeconds_ - deltaSeconds);
+    state.recoilDegrees_ = Engine::Math::Max(0.0f, state.recoilDegrees_ -
         settings_.recoilRecoveryDegreesPerSecond * deltaSeconds);
     const float duration = ActionDuration(state.action_);
     if (duration > 0.0f) {
-        state.actionElapsedSeconds_ = (std::min)(duration, state.actionElapsedSeconds_ + deltaSeconds);
+        state.actionElapsedSeconds_ = Engine::Math::Min(duration, state.actionElapsedSeconds_ + deltaSeconds);
     }
 
     // Reload/equip transitions are intentionally non-interruptible. Commands
@@ -180,8 +181,8 @@ void WeaponController::Update(
     }
     --state.magazineAmmo_;
     state.fireCooldownSeconds_ = definition_.fireIntervalSeconds;
-    state.recoilDegrees_ = (std::min)(settings_.maximumAccumulatedRecoilDegrees,
-                                    state.recoilDegrees_ + definition_.recoilDegrees);
+    state.recoilDegrees_ = Engine::Math::Min(settings_.maximumAccumulatedRecoilDegrees,
+                                           state.recoilDegrees_ + definition_.recoilDegrees);
     BeginAction(state, WeaponAction::Shoot);
     shotEvents_.push_back({definition_.id, definition_.damage, definition_.recoilDegrees, state.magazineAmmo_});
 }
@@ -199,10 +200,10 @@ WeaponHudSnapshot WeaponController::MakeHudSnapshot(const WeaponState& state) co
         return {};
     }
     const float reloadProgress = state.IsReloading()
-        ? std::clamp(state.actionElapsedSeconds_ / definition_.reloadSeconds, 0.0f, 1.0f) : 0.0f;
+        ? Engine::Math::Clamp(state.actionElapsedSeconds_ / definition_.reloadSeconds, 0.0f, 1.0f) : 0.0f;
     return {state.weaponId_, state.magazineAmmo_, state.reserveAmmo_, state.IsReloading(),
             reloadProgress, state.recoilDegrees_,
-            std::clamp(state.recoilDegrees_ / settings_.maximumAccumulatedRecoilDegrees, 0.0f, 1.0f)};
+            Engine::Math::Clamp(state.recoilDegrees_ / settings_.maximumAccumulatedRecoilDegrees, 0.0f, 1.0f)};
 }
 
 } // namespace fps

@@ -6,6 +6,7 @@
 #include "render/PrimitiveMesh.hpp"
 #include "render/IRenderDevice.hpp"
 #include "render/RenderQueue.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -175,13 +176,13 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
             if (actor == state.actors.end()) {
                 auto created =
                     Impl::Instance::Create(definition->second.resource, enemy.pose,
-                                           {-rig.anchor.x, -rig.anchor.y, -rig.anchor.z});
+                                           -rig.anchor);
                 if (!created)
                     throw std::runtime_error(created.error());
                 std::unique_ptr<Impl::Instance> weaponInstance;
                 if (weaponPose) {
                     auto weapon = Impl::Instance::Create(definition->second.weaponResource,
-                        *weaponPose, {-rig.anchor.x, -rig.anchor.y, -rig.anchor.z});
+                        *weaponPose, -rig.anchor);
                     if (!weapon)
                         throw std::runtime_error(weapon.error());
                     weaponInstance = std::move(weapon.value());
@@ -189,7 +190,7 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
                 std::vector<std::unique_ptr<Impl::Instance>> accessoryInstances;
                 for (std::size_t i = 0; i < accessoryPoses.size(); ++i) {
                     auto accessory = Impl::Instance::Create(definition->second.accessories[i].resource,
-                        accessoryPoses[i], {-rig.anchor.x, -rig.anchor.y, -rig.anchor.z});
+                        accessoryPoses[i], -rig.anchor);
                     if (!accessory) throw std::runtime_error(accessory.error());
                     accessoryInstances.push_back(std::move(accessory.value()));
                 }
@@ -241,9 +242,7 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
         std::size_t count = 0;
         const auto capsule = [&](const Engine::Math::Capsule& c, Engine::Render::Color color,
                                  float thickness = 0.012F) {
-            auto mesh = Engine::Render::MakeWireCapsule(
-                {c.segmentStart.x, c.segmentStart.y, c.segmentStart.z},
-                {c.segmentEnd.x, c.segmentEnd.y, c.segmentEnd.z}, c.radius, thickness);
+            auto mesh = Engine::Render::MakeWireCapsule(c.segmentStart, c.segmentEnd, c.radius, thickness);
             if (!mesh)
                 throw std::runtime_error(mesh.error().message);
             state.WireMesh(mesh.value(), color, count++, queue);
@@ -263,8 +262,7 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
                     capsule(*enemy.attackShape, {1, 0.05F, 0.05F, 1});
             }
         for (const auto& box : snapshot.worldCollisionBoxes) {
-            auto mesh = Engine::Render::MakeWireBox({box.minimum.x, box.minimum.y, box.minimum.z},
-                                                    {box.maximum.x, box.maximum.y, box.maximum.z});
+            auto mesh = Engine::Render::MakeWireBox(box.minimum, box.maximum);
             if (!mesh)
                 throw std::runtime_error(mesh.error().message);
             state.WireMesh(mesh.value(), {0.1F, 0.8F, 1, 1}, count++, queue);

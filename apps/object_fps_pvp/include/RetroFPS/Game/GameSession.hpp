@@ -9,11 +9,11 @@
 #include "RetroFPS/Gameplay/Weapon/WeaponState.hpp"
 #include "RetroFPS/World/GroundPoint.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
+#include "engine/math/scalar/Angle.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <numbers>
 #include <optional>
 #include <span>
 #include <string>
@@ -33,7 +33,7 @@ struct GameSessionConfig final {
     ProjectileSettings projectiles{};
     float fadeOutSeconds{0.4F};
     float fadeInSeconds{0.4F};
-    float worldVerticalFovRadians{std::numbers::pi_v<float> / 3.0F};
+    float worldVerticalFovRadians{Engine::Math::DegreesToRadians(60.0F)};
 };
 
 // Semantic game input. Physical bindings belong to the app's GYO
@@ -177,7 +177,7 @@ struct GameSessionSnapshot final {
     CampaignOutcome campaignOutcome{CampaignOutcome::InProgress};
     std::vector<CampaignRoomStats> campaignRooms;
     bool quitRequested{};
-    float worldVerticalFovRadians{std::numbers::pi_v<float> / 3.0F};
+    float worldVerticalFovRadians{Engine::Math::DegreesToRadians(60.0F)};
 };
 
 class GameSession final {

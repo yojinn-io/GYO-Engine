@@ -2,6 +2,9 @@
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
 #include "AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
+#include "engine/math/linear/Quaternion.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -45,8 +48,8 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
             if (!skinned)
                 throw std::runtime_error(skinned.error());
             for (const auto& v : vertices) {
-                minimum = (std::min)(minimum, v.position.y);
-                maximum = (std::max)(maximum, v.position.y);
+                minimum = Engine::Math::Min(minimum, v.position.y);
+                maximum = Engine::Math::Max(maximum, v.position.y);
             }
         }
         if (!std::isfinite(maximum - minimum) || maximum - minimum < 0.001F)
@@ -68,8 +71,7 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
                     throw std::runtime_error("bone offset requires three coordinates");
                 result.offset = {o[0].get<float>(), o[1].get<float>(), o[2].get<float>()};
             }
-            if (!std::isfinite(result.offset.x) || !std::isfinite(result.offset.y) ||
-                !std::isfinite(result.offset.z))
+            if (!Engine::Math::IsFinite(result.offset))
                 throw std::runtime_error("bone offset must be finite");
             return result;
         };
@@ -117,7 +119,7 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
                 if (!value.is_array() || value.size() != 3)
                     throw std::runtime_error(std::string("weapon ") + name + " requires three coordinates");
                 Engine::Math::Vec3 result{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
-                if (!std::isfinite(result.x) || !std::isfinite(result.y) || !std::isfinite(result.z))
+                if (!Engine::Math::IsFinite(result))
                     throw std::runtime_error(std::string("weapon ") + name + " must be finite");
                 return result;
             };
@@ -133,19 +135,16 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
             auto& q = weapon.localTransform.rotation;
             q = {rotation[0].get<float>(), rotation[1].get<float>(),
                  rotation[2].get<float>(), rotation[3].get<float>()};
-            const double lengthSquared = static_cast<double>(q.x) * q.x +
-                static_cast<double>(q.y) * q.y + static_cast<double>(q.z) * q.z +
-                static_cast<double>(q.w) * q.w;
-            if (!std::isfinite(lengthSquared) || lengthSquared < 1e-12)
+            const float lengthSquared = Engine::Math::LengthSquared(q);
+            if (!std::isfinite(lengthSquared) || lengthSquared < 1e-12F)
                 throw std::runtime_error("weapon rotation must be finite and nonzero");
-            const float inverseLength = static_cast<float>(1.0 / std::sqrt(lengthSquared));
-            q = {q.x * inverseLength, q.y * inverseLength, q.z * inverseLength, q.w * inverseLength};
+            q = Engine::Math::Normalize(q);
             if (attack.contains("point"))
                 throw std::runtime_error("weapon muzzle determines attack point; remove duplicate attack.point");
             rig->attackPoint = {weapon.node, Engine::Math::TransformPoint(
                 Engine::Model::ToMatrix(weapon.localTransform), weapon.muzzlePosition)};
             const auto muzzle = rig->attackPoint.offset;
-            if (!std::isfinite(muzzle.x) || !std::isfinite(muzzle.y) || !std::isfinite(muzzle.z))
+            if (!Engine::Math::IsFinite(muzzle))
                 throw std::runtime_error("weapon mount produces a non-finite muzzle position");
             rig->weapon = std::move(weapon);
         } else {
