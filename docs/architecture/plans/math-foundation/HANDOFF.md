@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0–B4b 已合併（B4b 為 #22，合併為 `43bccad`）。B5 本機驗收完成（分支 `claude/math-foundation-b5`），待 commit、PR 與 CI。**
+更新：2026-10-03。**B0–B4b 已合併（B4b 為 #22，合併為 `43bccad`）。B5 本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -303,7 +303,7 @@
 
 ## B5 Ui 與 ui_editor
 
-狀態：**本機驗收完成**（分支 `claude/math-foundation-b5`，自 master `43bccad`）。待 commit、PR 與 CI 四平台。
+狀態：**本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台**（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
 
 ### 進行方式（ultracode）
 

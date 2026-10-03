@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B5：Ui 與 ui_editor 改用 GYO::Math
 
 日期：2026-10-03。Owner：Engine（`GYO::Ui`、UiRenderer），連帶 `tools/ui_editor` 與 `object_fps_pvp`。
-狀態：本機驗收完成，待 commit、PR 與 CI 四平台（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
+狀態：本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b5-ui-與-ui_editor)，本文只記經過。
 
 ## 經過

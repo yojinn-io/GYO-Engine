@@ -34,7 +34,7 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B3 Model | high（矩陣與四元數 xhigh） | 完成，PR [#20](https://github.com/yojinn-io/GYO-Engine/pull/20) 已合併 | `Model::Vec2/Vec3/Quaternion/Matrix4`、`Multiply`、`TransformPoint` 移除；`Transform`、`ToMatrix` 保留 |
 | B4a Render 型別 | high | 完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 已合併 | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
 | B4b Render 矩陣 | xhigh | 完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 已合併 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
-| B5 Ui／ui_editor | high | 本機驗收完成 | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
+| B5 Ui／ui_editor | high | 本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
 | B6a pvp 模擬層 | xhigh | 未開始 | `fps::Float3` 移除，`match_domain` helper 改用 Math，digest 含 arm64 |
 | B6b pvp 表現層 | high | 未開始 | `app_support` 與 acceptance |
 | B6c pvp 未編譯檔 | high | 未開始 | 29 檔遷移與 syntax-only 驗證 |
