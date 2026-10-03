@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）、B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）CI 四平台通過；B7 本機驗收完成。四個 PR 疊在一起，待使用者合併。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）、B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）CI 四平台通過；B7 本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI。四個 PR 疊在一起，待使用者合併。**
 
 ## 閱讀入口
 
@@ -572,7 +572,7 @@
 
 ## B7 收尾
 
-狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+狀態：**本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI**（2026-10-04，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
 
 ### 進行方式（ultracode）
 
@@ -695,5 +695,5 @@
 
 ## 未結事項
 
-- 本計劃的批次全部完成。B6a（#24）、B6b（#25）、B6c（#26）CI 四平台通過；B7 的 PR 待 CI。四個 PR 疊在一起，依序合併（#24 → #25 → #26 → B7），由使用者決定。
+- 本計劃的批次全部完成。B6a（#24）、B6b（#25）、B6c（#26）CI 四平台通過；B7 的 PR #27 待 CI。四個 PR 疊在一起，依序合併（#24 → #25 → #26 → #27），由使用者決定。
 - 待使用者決定：float 純量的 clamp／min／max 寫法是否統一（engine 與工具用 `std::`，pvp 用 `Math::`）；範圍外表中各項是否另開工作。

@@ -38,7 +38,7 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B6a pvp 模擬層 | xhigh | CI 通過，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待合併 | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
 | B6b pvp 表現層 | high | CI 通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)（疊在 #24 上）待合併 | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 `Math::ComposeEulerXYZ`（renderer 的提交契約）；acceptance 的量測維持獨立 |
 | B6c pvp 未編譯檔 | high | CI 通過，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26)（疊在 #25 上）待合併 | 29 檔遷移與 syntax-only 驗證 |
-| B7 收尾 | medium | 本機驗收完成 | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
+| B7 收尾 | medium | 本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27)（疊在 #26 上）待 CI | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
 
 ```text
 B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7

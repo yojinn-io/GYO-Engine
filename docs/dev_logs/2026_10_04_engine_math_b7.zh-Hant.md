@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B7：收尾
 
 日期：2026-10-04。Owner：Engine（`GYO::Math`），連帶文件與計畫紀錄。
-狀態：本機驗收完成，PR 待開（分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+狀態：本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI（分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b7-收尾)，本文只記經過。
 
 ## 經過
@@ -23,5 +23,5 @@
 ## 留給下一步
 
 - B7 的 PR 與 CI 四平台驗收。
-- 使用者依序合併 #24 → #25 → #26 → B7 的 PR。
+- 使用者依序合併 #24 → #25 → #26 → #27。
 - 待使用者決定：float 純量的 clamp／min／max 寫法是否統一；範圍外各項是否另開工作。
