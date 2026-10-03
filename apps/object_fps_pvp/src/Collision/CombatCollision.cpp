@@ -59,7 +59,7 @@ void ValidateQuery(
     return {value.x / length, value.y / length, value.z / length};
 }
 
-[[nodiscard]] Engine::Collision::Float3 ToCollision(const Float3 value) noexcept {
+[[nodiscard]] Engine::Math::Vec3 ToCollision(const Float3 value) noexcept {
     return {value.x, value.y, value.z};
 }
 [[nodiscard]] Engine::Collision::VerticalCapsule ToCollision(const VerticalCapsule& capsule) noexcept {
@@ -102,7 +102,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
                 {normalized.x*maximumDistance,normalized.y*maximumDistance,normalized.z*maximumDistance},box);
             if(contact) distance=contact->fraction*maximumDistance;
         } else {
-            distance=Engine::Collision::RaycastAabb(ToCollision(origin),ToCollision(normalized),maximumDistance,box);
+            distance=Engine::Collision::RaycastAabb({ToCollision(origin), ToCollision(normalized)},maximumDistance,box);
         }
         if(distance) consider(CombatHitKind::Wall,*distance);
     }
@@ -115,8 +115,7 @@ std::optional<CombatHit> CombatCollision::Raycast(
     }
 
     for (const CombatTarget& target : targets) {
-        const std::optional<float> distance = Engine::Collision::RaycastCapsule(
-            ToCollision(origin), ToCollision(normalized), maximumDistance, target.capsule, sweepRadius);
+        const std::optional<float> distance = Engine::Collision::RaycastCapsule({ToCollision(origin), ToCollision(normalized)}, maximumDistance, target.capsule, sweepRadius);
         if (distance.has_value()) {
             consider(CombatHitKind::Target, *distance, target.id, target.region);
         }
@@ -156,15 +155,13 @@ Float3 CombatCollision::ClampSegmentToWorld(
 std::optional<float> CombatCollision::RaycastCapsule(
     const Float3 origin, const Float3 direction, const float maximumDistance,
     const VerticalCapsule& capsule, const float sweepRadius) {
-    return Engine::Collision::RaycastCapsule(
-        ToCollision(origin), ToCollision(direction), maximumDistance, ToCollision(capsule), sweepRadius);
+    return Engine::Collision::RaycastCapsule({ToCollision(origin), ToCollision(direction)}, maximumDistance, ToCollision(capsule), sweepRadius);
 }
 
 std::optional<float> CombatCollision::SweepSegmentAgainstCapsule(
     const Float3 start, const Float3 end, const float sweepRadius,
     const VerticalCapsule& capsule) {
-    return Engine::Collision::SweepSphereAgainstCapsule(
-        ToCollision(start), ToCollision(end), sweepRadius, ToCollision(capsule));
+    return Engine::Collision::SweepSphereAgainstCapsule({ToCollision(start), ToCollision(end)}, sweepRadius, ToCollision(capsule));
 }
 
 } // namespace fps

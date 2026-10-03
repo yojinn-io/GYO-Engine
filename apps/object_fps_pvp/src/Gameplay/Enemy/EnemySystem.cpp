@@ -315,7 +315,7 @@ struct OpenNodeCompare final {
     const float maximumDistance,
     const float radius,
     const float height,
-    std::span<const Engine::Collision::Aabb> walls,
+    std::span<const Engine::Math::Aabb> walls,
     std::span<const Engine::Collision::VerticalCapsule> actors) {
     const float targetDistance = Distance(position, target);
     if (targetDistance <= kPositionEpsilon || maximumDistance <= 0.0f) {
@@ -1096,7 +1096,7 @@ void EnemySystem::SetState(RuntimeEnemy& enemy, const EnemyState state) {
 }
 
 void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& player,
-    const std::span<const Engine::Collision::Aabb> walls, const float deltaSeconds) {
+    const std::span<const Engine::Math::Aabb> walls, const float deltaSeconds) {
     // Preserve the complete blend state, so an event inside a long simulation
     // tick samples precisely the same pose as advancing normally to that time.
     auto eventAnimation = enemy.animation;
@@ -1123,13 +1123,13 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
         if (!enemy.attackEventEmitted && previous <= rig.releaseSeconds && current >= rig.releaseSeconds) {
             const auto origin = pointAt(rig.releaseSeconds);
             // A muzzle on the far side of a wall must not spawn a projectile through it.
-            const Engine::Collision::Float3 from{enemy.position.x, origin.y, enemy.position.z};
-            const Engine::Collision::Float3 direction{origin.x-from.x, 0, origin.z-from.z};
+            const Engine::Math::Vec3 from{enemy.position.x, origin.y, enemy.position.z};
+            const Engine::Math::Vec3 direction{origin.x-from.x, 0, origin.z-from.z};
             const float length = std::hypot(direction.x, direction.z);
             bool blocked = false;
             if (length > kPositionEpsilon)
                 for (const auto& wall : walls)
-                    if (Engine::Collision::RaycastAabb(from, direction, length, wall)) { blocked = true; break; }
+                    if (Engine::Collision::RaycastAabb({from, direction}, length, wall)) { blocked = true; break; }
             enemy.attackEventEmitted = true;
             if (!blocked) emit(origin);
         }
@@ -1146,24 +1146,24 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     const std::size_t steps = (std::max)(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
     for (std::size_t step = 1; step <= steps; ++step) {
         const auto to = pointAt(begin + (end - begin) * static_cast<double>(step) / static_cast<double>(steps));
-        const Engine::Collision::Float3 start{from.x,from.y,from.z}, finish{to.x,to.y,to.z};
-        const Engine::Collision::Capsule swept{start,finish,radius};
+        const Engine::Math::Vec3 start{from.x,from.y,from.z}, finish{to.x,to.y,to.z};
+        const Engine::Math::Capsule swept{start,finish,radius};
         // The debug shape is the same latest active hand segment used here.
         if (current <= rig.attackEndSeconds) enemy.attackShape = swept;
         if (!enemy.attackEventEmitted) {
-            const auto hit = Engine::Collision::SweepSphereAgainstCapsule(start, finish, radius, playerBody);
+            const auto hit = Engine::Collision::SweepSphereAgainstCapsule({start, finish}, radius, playerBody);
             if (hit) {
-                const Engine::Collision::Float3 displacement{finish.x-start.x,finish.y-start.y,finish.z-start.z};
+                const Engine::Math::Vec3 displacement{finish.x-start.x,finish.y-start.y,finish.z-start.z};
                 const Engine::Collision::VerticalCapsule sphere{{start.x,start.y-radius,start.z},2*radius,radius};
                 const Float3 impact{from.x+(to.x-from.x)* *hit,from.y+(to.y-from.y)* *hit,from.z+(to.z-from.z)* *hit};
-                const Engine::Collision::Float3 shoulder{enemy.position.x,impact.y,enemy.position.z};
-                const Engine::Collision::Float3 reach{impact.x-shoulder.x,0,impact.z-shoulder.z};
+                const Engine::Math::Vec3 shoulder{enemy.position.x,impact.y,enemy.position.z};
+                const Engine::Math::Vec3 reach{impact.x-shoulder.x,0,impact.z-shoulder.z};
                 const float reachLength = std::hypot(reach.x, reach.z);
                 bool blocked = false;
                 for (const auto& wall : walls) {
                     const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(sphere, displacement, wall);
                     if ((contact && contact->fraction <= *hit) ||
-                        (reachLength > kPositionEpsilon && Engine::Collision::RaycastAabb(shoulder, reach, reachLength, wall))) {
+                        (reachLength > kPositionEpsilon && Engine::Collision::RaycastAabb({shoulder, reach}, reachLength, wall))) {
                         blocked = true;
                         break;
                     }

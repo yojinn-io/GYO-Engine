@@ -12,7 +12,7 @@ template <class Overlap>
 Engine::Collision::Contact PlanarPenetration(Engine::Collision::Contact contact,
                                              Engine::Collision::VerticalCapsule body,
                                              Overlap overlap) {
-    using Vector = Engine::Collision::Float3;
+    using Vector = Engine::Math::Vec3;
     std::array<Vector, 4> directions{{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}};
     const float horizontal = std::hypot(contact.normal.x, contact.normal.z);
     std::size_t count = directions.size();
@@ -54,7 +54,7 @@ Engine::Collision::Contact PlanarPenetration(Engine::Collision::Contact contact,
 }
 } // namespace
 bool CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
-                           std::span<const Engine::Collision::Aabb> walls,
+                           std::span<const Engine::Math::Aabb> walls,
                            std::span<const Engine::Collision::VerticalCapsule> actors) {
     for (const auto &wall : walls)
         if (auto c = Engine::Collision::OverlapVerticalCapsuleAabb(body, wall);
@@ -67,7 +67,7 @@ bool CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
     return true;
 }
 Float3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Float3 displacement,
-                         std::span<const Engine::Collision::Aabb> walls,
+                         std::span<const Engine::Math::Aabb> walls,
                          std::span<const Engine::Collision::VerticalCapsule> actors,
                          const bool constrainToFloor) {
     if (constrainToFloor)
@@ -116,7 +116,7 @@ Float3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Float3 displac
             if (!nearest || c->fraction < nearest->fraction)
                 nearest = c;
         };
-        const Engine::Collision::Float3 d{displacement.x, displacement.y, displacement.z};
+        const Engine::Math::Vec3 d{displacement.x, displacement.y, displacement.z};
         for (const auto &wall : walls)
             consider(Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, d, wall));
         for (const auto &actor : actors)

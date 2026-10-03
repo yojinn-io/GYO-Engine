@@ -60,7 +60,7 @@ struct EnemySnapshot final {
     Engine::Model::Pose pose;
     Engine::Collision::VerticalCapsule body;
     std::vector<EnemyHurtbox> hurtboxes;
-    std::optional<Engine::Collision::Capsule> attackShape;
+    std::optional<Engine::Math::Capsule> attackShape;
 };
 
 struct EnemyAttackEvent final {
@@ -177,7 +177,7 @@ private:
         Float2 position{};
         float yawRadians{};
         Engine::Model::AnimationInstance animation;
-        std::optional<Engine::Collision::Capsule> attackShape;
+        std::optional<Engine::Math::Capsule> attackShape;
         EnemyDefinition definition{};
         float health = 0.0f;
         float hitFlashRemainingSeconds = 0.0f;
@@ -198,7 +198,7 @@ private:
     void SetState(RuntimeEnemy& enemy, EnemyState state);
     void MarkDead(RuntimeEnemy& enemy);
     void AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& player,
-        std::span<const Engine::Collision::Aabb> walls, float deltaSeconds);
+        std::span<const Engine::Math::Aabb> walls, float deltaSeconds);
     void UpdateSnapshot(const RuntimeEnemy& enemy, EnemySnapshot& snapshot) const;
     void RefreshSnapshots();
 

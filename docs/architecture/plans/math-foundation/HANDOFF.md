@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 與 B1b 本機驗收完成，合併在 PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18)，待 CI 四平台。**
+更新：2026-10-03。**B0（#17）、B1＋B1b（#18，合併為 `6cc2829`）已合併。B2 本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -30,6 +30,8 @@
 | 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
 | 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
 | 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
+| 2026-10-03 | Collision 的 raycast 改為接收 `Math::Ray`（Ray 是幾何 primitive，`RaycastAabb`／`RaycastCapsule` 是 Collision 演算法） | 使用者 |
+| 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
 | 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
 | 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
 
@@ -64,7 +66,7 @@
 
 ## B1 `GYO::Math`
 
-狀態：**本機驗收完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 待 CI 四平台**（分支 `claude/math-foundation-b1`）。
+狀態：**完成**。PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 於 2026-10-03 合併為 `6cc2829`；最終 head `9e65b41` 的 CI 四平台全部通過。
 
 ### 交付
 
@@ -83,7 +85,7 @@
 | test preset | 42／42 通過（B0 為 41） |
 | 依賴圖 | 與 B0 相比只多 `gyo_math_tests → gyo_math`、`gyo_math_tests → doctest`；`gyo_math` 沒有對外的邊 |
 | 收縮模式 | `gyo_math_tests` 在 `-O0`、`-O2`、`-O2 -mfma -ffp-contract=on`、`-O2 -mfma -ffp-contract=fast` 下都通過（本機 clang x86_64） |
-| CI 四平台 | 第一次執行時，linux-x64 與 windows-x64 的 `gyo_math_tests` 失敗：倒數相乘正規化的漂移上限只依 Apple 實測設為 2 ulp，而兩平台 hypot 實作不同，實測 4 ulp。上限改為由誤差組成推導的 `kHypotDriftUlpBound + 2`（5 ulp）後重跑。其餘 88 個 test case 在兩平台都通過，Math 與測試程式碼在 gcc-14、MSVC 下都沒有警告 |
+| CI 四平台 | 最終 head `9e65b41` 全部通過。第一次執行時，linux-x64 與 windows-x64 的 `gyo_math_tests` 失敗：倒數相乘正規化的漂移上限只依 Apple 實測設為 2 ulp，而兩平台 hypot 實作不同，實測 4 ulp。上限改為由誤差組成推導的 `kHypotDriftUlpBound + 2`（5 ulp）後重跑。其餘 88 個 test case 在兩平台都通過，Math 與測試程式碼在 gcc-14、MSVC 下都沒有警告 |
 
 ### Characterization 結果（engine helper → Math）
 
@@ -139,6 +141,47 @@
 - B0 盤點時發現 `build-and-validate.yml:129` 與 `cross-platform.yml:120` 的 shader 工具快取鍵引用了已不存在的 `engine/base/src/Sha256.cpp`（`Sha256` 現在是 header-only，`.hpp` 已在鍵中），當時列為範圍外。
 - 兩處都刪除該路徑。`hashFiles()` 會略過不存在的路徑，所以刪除前後鍵值相同，不會讓快取失效。
 - `tests/common/ci/test_ci_scope.py:59` 只是用該路徑當作「engine 原始碼變更」的範例輸入，不是引用實際檔案，因此保留。本機 `build.ci` 通過。
+
+## B2 Collision
+
+狀態：**本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台**（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。
+
+### 變更
+
+- `Collision.hpp`：`Collision::Float3`、`Aabb`、`Capsule` 移除，改用 `Math::Vec3`、`Math::Aabb`、`Math::Capsule`；`VerticalCapsule`、`Contact` 保留，欄位型別改為 `Math::Vec3`。
+  - `RaycastAabb`、`RaycastCapsule`（兩個多載）改為接收 `const Math::Ray&`。
+  - `SweepSphereAgainstCapsule`（兩個多載）改為接收 `const Math::Segment&`。
+  - header 註明：Collision 的 raycast 回傳世界空間距離（內部正規化方向），與 `Math::Intersect` 以 |direction| 為單位的 t 不同。
+- `Collision.cpp`：刪除本地 `IsFinite`、`Length`、`Normalize`，改由 ADL 使用 Math 的版本。
+- `CapsuleQueries.cpp`：
+  - 內部 double `Vec3` 改用 `Math::Vec3d`；`V()`、`F()` 改用 `ToVec3d`、`ToVec3`。
+  - `Closest`、`Clamp` 改用 `ClosestPoint(·, Segmentd)` 與 `ClosestPoint(·, Aabbd)`；`Finite` 改用 `IsFinite`。
+  - `Roots`、`RayCapsule`、`RayRoundedBox` 與 contact 計算本體不動。
+- `engine/collision/CMakeLists.txt`：PUBLIC 連結 `GYO::Math`。
+- `tests/common/collision`：呼叫改為傳入 `Ray`／`Segment`，型別改用 Math 的型別。
+- pvp：
+  - 有編譯的 `Arena`、`Movement`、`PvpMatch`、`ShotQuery`、`CharacterCollision`：只做型別替換與 `Ray` 呼叫。
+  - 未編譯 29 檔中引用 Collision 的 8 檔及其 header：同樣處理。
+  - `match_domain` 明確 PUBLIC 連結 `GYO::Math`（原計劃在 B6a，因 pvp 程式碼已直接使用 Math 型別而提前）。
+  - pvp 自己的 helper（例如 `Arena.cpp` 的 `Finite`）只改參數型別，去重複留到 B6a。
+- 文件：`architecture.md` 的 Collision 一列、`math.md` 的邊界表。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過 |
+| test preset | 45／45 通過（其中 3 項是 B0 之後由其他 PR 加入的 pvp 驗收測試，見下） |
+| Collision digest | master 與 B2 在 25 萬筆查詢（涵蓋全部公開函式、例外行為）上逐位元相同，`-O2` 與 `-O0` 都相同；靈敏度檢查：把 `kEpsilon` 改成 1.1e-6 時出現 737 行差異 |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B1b 相比只多 `gyo_collision → gyo_math`、`match_domain → gyo_math` |
+
+### master 的變動（B0 之後）
+
+- B0 基線（`0bd5363`）之後，master 先合併了其他 session 的 PR #11–#16（PvP v5 的 batch04、batch05、stable baseline 等），然後才合併 #17、#18。
+- 影響：test preset 多出 `object_fps_pvp.action_runner`、`gameplay_soak`、`combat_gui_evidence` 三項；pvp 有 28 個檔案變動（+1381／−444）。
+- 29 個未編譯檔案的清單經重新計算後不變。
+- PLAN 中 pvp helper 的行號是規劃時量的，**B6 開始時必須重新盤點**。
 
 ## 未結事項
 

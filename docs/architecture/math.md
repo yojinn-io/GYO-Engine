@@ -10,7 +10,7 @@ Migration status and history: [math-foundation plan](plans/math-foundation/READM
 |---|---|
 | Vectors, matrices, quaternions and their operations | GPU ABI structs (`ShaderAbi::*`, `Vertex3D`): Render |
 | Geometric primitives that describe "what a shape is" (`Ray`, `Plane`, `Sphere`, `Aabb`, `Capsule`, `Segment`, `Triangle`, `Rect`) | Domain shapes specialised for a purpose, e.g. `VerticalCapsule`: Collision |
-| Pure geometric queries: closest points, containment, overlap, ray intersection without tolerance | Collision detection, contact, penetration, sweeps, skin widths and tolerances: Collision |
+| Pure geometric queries: closest points, containment, overlap, ray intersection without tolerance | Collision detection, contact, penetration, sweeps, skin widths and tolerances: Collision. Its queries take Math primitives (`RaycastAabb(Ray, ...)`, `SweepSphereAgainstCapsule(Segment, ...)`) |
 | Coordinate, matrix, Euler and clip-space conventions | Semantic transforms (`Transform3D`, `Model::Transform`), cameras, colours as data, wire and file formats |
 | Scalar utilities, constants, angle and sRGB transfer functions | Gameplay rules and product-specific coordinates (for example ground-plane points) |
 

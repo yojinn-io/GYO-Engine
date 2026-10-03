@@ -6,89 +6,92 @@
 #include <stdexcept>
 
 using namespace Engine::Collision;
+using Engine::Math::Aabb;
+using Engine::Math::Capsule;
+using Engine::Math::Vec3;
 
 TEST_CASE("capsule queries use world feet and normalize ray direction") {
     const VerticalCapsule capsule{{0.0f, 0.6f, 0.0f}, 1.8f, 0.25f};
-    const auto hit = RaycastCapsule({-1.0f, 1.2f, 0.0f}, {2.0f, 0.0f, 0.0f}, 3.0f, capsule);
+    const auto hit = RaycastCapsule({{-1.0f, 1.2f, 0.0f}, {2.0f, 0.0f, 0.0f}}, 3.0f, capsule);
     REQUIRE(hit);
     CHECK(*hit == doctest::Approx(0.75f));
-    CHECK_FALSE(RaycastCapsule({-1.0f, 0.3f, 0.0f}, {1.0f, 0.0f, 0.0f}, 3.0f, capsule));
-    const auto top = RaycastCapsule({0.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 5.0f, capsule);
+    CHECK_FALSE(RaycastCapsule({{-1.0f, 0.3f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 3.0f, capsule));
+    const auto top = RaycastCapsule({{0.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}}, 5.0f, capsule);
     REQUIRE(top);
     CHECK(*top == doctest::Approx(1.6f));
-    const auto overlap = RaycastCapsule({0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.0f, capsule);
+    const auto overlap = RaycastCapsule({{0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 2.0f, capsule);
     REQUIRE(overlap);
     CHECK(*overlap == 0.0f);
 }
 
 TEST_CASE("sphere sweeps report first fraction including stationary overlap") {
     const VerticalCapsule capsule{{0.0f, 0.6f, 0.0f}, 1.8f, 0.25f};
-    const auto hit = SweepSphereAgainstCapsule({-1.0f, 1.2f, 0.0f}, {1.0f, 1.2f, 0.0f}, 0.05f, capsule);
+    const auto hit = SweepSphereAgainstCapsule({{-1.0f, 1.2f, 0.0f}, {1.0f, 1.2f, 0.0f}}, 0.05f, capsule);
     REQUIRE(hit);
     CHECK(*hit == doctest::Approx(0.35f));
-    const auto stationary = SweepSphereAgainstCapsule({0.0f, 0.6f, 0.0f}, {0.0f, 0.6f, 0.0f}, 0.0f, capsule);
+    const auto stationary = SweepSphereAgainstCapsule({{0.0f, 0.6f, 0.0f}, {0.0f, 0.6f, 0.0f}}, 0.0f, capsule);
     REQUIRE(stationary);
     CHECK(*stationary == 0.0f);
-    CHECK_FALSE(SweepSphereAgainstCapsule({0.0f, 0.1f, 0.0f}, {0.0f, 0.1f, 0.0f}, 0.0f, capsule));
-    CHECK_FALSE(SweepSphereAgainstCapsule({-1.0f, 0.3f, 0.0f}, {1.0f, 0.3f, 0.0f}, 0.05f, capsule));
+    CHECK_FALSE(SweepSphereAgainstCapsule({{0.0f, 0.1f, 0.0f}, {0.0f, 0.1f, 0.0f}}, 0.0f, capsule));
+    CHECK_FALSE(SweepSphereAgainstCapsule({{-1.0f, 0.3f, 0.0f}, {1.0f, 0.3f, 0.0f}}, 0.05f, capsule));
 }
 
 TEST_CASE("primitive queries reject malformed input") {
     const VerticalCapsule valid{{0.0f, 0.0f, 0.0f}, 1.8f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({}, {}, 1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({}, {}, -1.0f, valid)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {}}, 1.0f, valid)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, -1.0f, valid)), std::invalid_argument);
     const VerticalCapsule bad{{0.0f, (std::numeric_limits<float>::quiet_NaN)(), 0.0f}, 1.8f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({}, {}, 0.0f, bad)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, 0.0f, bad)), std::invalid_argument);
     const VerticalCapsule tooShort{{}, 0.1f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({}, {1.0f, 0.0f, 0.0f}, 1.0f, tooShort)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, tooShort)), std::invalid_argument);
 }
 
 TEST_CASE("AABB ray reports normalized distance and immediate overlap") {
     const Aabb box{{0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
-    const auto hit = RaycastAabb({-1.0f, 0.5f, 0.5f}, {2.0f, 0.0f, 0.0f}, 2.0f, box);
+    const auto hit = RaycastAabb({{-1.0f, 0.5f, 0.5f}, {2.0f, 0.0f, 0.0f}}, 2.0f, box);
     REQUIRE(hit);
     CHECK(*hit == doctest::Approx(1.0f));
-    const auto inside = RaycastAabb({0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, 2.0f, box);
+    const auto inside = RaycastAabb({{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}}, 2.0f, box);
     REQUIRE(inside);
     CHECK(*inside == 0.0f);
-    CHECK_FALSE(RaycastAabb({-1.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.0f, box));
-    CHECK_THROWS_AS(static_cast<void>(RaycastAabb({}, {1.0f, 0.0f, 0.0f}, 1.0f, {{1.0f,0.0f,0.0f}, {}})), std::invalid_argument);
+    CHECK_FALSE(RaycastAabb({{-1.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 2.0f, box));
+    CHECK_THROWS_AS(static_cast<void>(RaycastAabb({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, {{1.0f,0.0f,0.0f}, {}})), std::invalid_argument);
 }
 
 TEST_CASE("arbitrary capsules support rotated axes, end caps, and degenerate spheres") {
     const Capsule horizontal{{-1.0f, 2.0f, 0.0f}, {1.0f, 2.0f, 0.0f}, 0.25f};
-    const auto side = RaycastCapsule({0.0f, 2.0f, -2.0f}, {0.0f, 0.0f, 4.0f}, 4.0f, horizontal);
+    const auto side = RaycastCapsule({{0.0f, 2.0f, -2.0f}, {0.0f, 0.0f, 4.0f}}, 4.0f, horizontal);
     REQUIRE(side);
     CHECK(*side == doctest::Approx(1.75f));
-    const auto end = RaycastCapsule({3.0f, 2.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 4.0f, horizontal);
+    const auto end = RaycastCapsule({{3.0f, 2.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}}, 4.0f, horizontal);
     REQUIRE(end);
     CHECK(*end == doctest::Approx(1.75f));
 
     const Capsule tilted{{-1.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, 0.5f};
-    const auto perpendicular = RaycastCapsule({0.0f, 0.0f, -2.0f}, {0.0f, 0.0f, 1.0f}, 4.0f, tilted);
+    const auto perpendicular = RaycastCapsule({{0.0f, 0.0f, -2.0f}, {0.0f, 0.0f, 1.0f}}, 4.0f, tilted);
     REQUIRE(perpendicular);
     CHECK(*perpendicular == doctest::Approx(1.5f));
-    CHECK_FALSE(RaycastCapsule({1.0f, -1.0f, -2.0f}, {0.0f, 0.0f, 1.0f}, 4.0f, tilted));
+    CHECK_FALSE(RaycastCapsule({{1.0f, -1.0f, -2.0f}, {0.0f, 0.0f, 1.0f}}, 4.0f, tilted));
 
     const Capsule sphere{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.5f};
-    const auto sphereHit = RaycastCapsule({-2.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 4.0f, sphere);
+    const auto sphereHit = RaycastCapsule({{-2.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 4.0f, sphere);
     REQUIRE(sphereHit);
     CHECK(*sphereHit == doctest::Approx(1.5f));
-    CHECK_FALSE(RaycastCapsule({-2.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1.49f, sphere));
+    CHECK_FALSE(RaycastCapsule({{-2.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 1.49f, sphere));
 }
 
 TEST_CASE("arbitrary sphere sweeps handle nonunit segments, tangency and stationary overlap") {
     const Capsule c{{-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.25f};
-    const auto sweep = SweepSphereAgainstCapsule({0.0f, 0.0f, -2.0f}, {0.0f, 0.0f, 2.0f}, 0.25f, c);
+    const auto sweep = SweepSphereAgainstCapsule({{0.0f, 0.0f, -2.0f}, {0.0f, 0.0f, 2.0f}}, 0.25f, c);
     REQUIRE(sweep);
     CHECK(*sweep == doctest::Approx(0.375f));
-    const auto tangent = SweepSphereAgainstCapsule({0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f}, 0.25f, c);
+    const auto tangent = SweepSphereAgainstCapsule({{0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f}}, 0.25f, c);
     REQUIRE(tangent);
     CHECK(*tangent == doctest::Approx(0.5f));
-    const auto stationary = SweepSphereAgainstCapsule({}, {}, 0.0f, c);
+    const auto stationary = SweepSphereAgainstCapsule({{}, {}}, 0.0f, c);
     REQUIRE(stationary);
     CHECK(*stationary == 0.0f);
-    CHECK_FALSE(SweepSphereAgainstCapsule({0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.0f, c));
+    CHECK_FALSE(SweepSphereAgainstCapsule({{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}}, 0.0f, c));
 }
 
 TEST_CASE("new arbitrary capsule queries agree with legacy upright queries") {
@@ -97,10 +100,10 @@ TEST_CASE("new arbitrary capsule queries agree with legacy upright queries") {
     CHECK(general.segmentStart.y == doctest::Approx(0.65f));
     CHECK(general.segmentEnd.y == doctest::Approx(1.95f));
     for (int height = -3; height <= 15; ++height) {
-        const Float3 start{-3.0f, height * 0.2f, -2.0f};
-        const Float3 end{3.0f, start.y, start.z};
-        const auto legacy = SweepSphereAgainstCapsule(start, end, 0.1f, upright);
-        const auto current = SweepSphereAgainstCapsule(start, end, 0.1f, general);
+        const Vec3 start{-3.0f, height * 0.2f, -2.0f};
+        const Vec3 end{3.0f, start.y, start.z};
+        const auto legacy = SweepSphereAgainstCapsule({start, end}, 0.1f, upright);
+        const auto current = SweepSphereAgainstCapsule({start, end}, 0.1f, general);
         REQUIRE(legacy.has_value() == current.has_value());
         if (legacy) CHECK(*current == doctest::Approx(*legacy));
     }
@@ -236,10 +239,10 @@ TEST_CASE("capsule pair overlap has finite normal even when center axes coincide
 TEST_CASE("extended queries reject invalid geometry and nonfinite movement") {
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const Capsule valid{{0,0,0},{1,1,0},0.2f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({}, {}, 1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({}, {1,0,0}, -1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({}, {nan,0,0}, 0.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({}, {}, 0.0f, Capsule{{},{},0})), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {}}, 1.0f, valid)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {1,0,0}}, -1.0f, valid)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {nan,0,0}}, 0.0f, valid)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, 0.0f, Capsule{{},{},0})), std::invalid_argument);
     const VerticalCapsule upright{{},1.8f,0.25f};
     const Aabb box{{0,0,0},{1,1,1}};
     CHECK_THROWS_AS(static_cast<void>(SweepVerticalCapsuleAgainstAabb(upright, {nan,0,0}, box)), std::invalid_argument);

@@ -13,7 +13,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
         !std::isfinite(range) || range < 0) {
         throw std::invalid_argument("Invalid shot angles or range");
     }
-    const Engine::Collision::Float3 origin{
+    const Engine::Math::Vec3 origin{
         shooter.position.x, shooter.position.y + arena.eyeHeight, shooter.position.z};
     if (!std::isfinite(origin.x) || !std::isfinite(origin.y) || !std::isfinite(origin.z))
         throw std::invalid_argument("Invalid shot origin");
@@ -21,7 +21,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     yaw = std::remainder(yaw, 2 * std::numbers::pi_v<float>);
     pitch = std::clamp(pitch, -MovementMaximumPitch, MovementMaximumPitch);
     const float cosinePitch = std::cos(pitch);
-    Engine::Collision::Float3 direction{
+    Engine::Math::Vec3 direction{
         std::sin(yaw) * cosinePitch, -std::sin(pitch), std::cos(yaw) * cosinePitch};
     const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y +
         direction.z * direction.z);
@@ -36,7 +36,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
         if (distance <= range) closest = {ShotHitKind::World, 0, distance};
     }
     for (const auto& wall : arena.walls) {
-        const auto distance = Engine::Collision::RaycastAabb(origin, direction, range, wall);
+        const auto distance = Engine::Collision::RaycastAabb({origin, direction}, range, wall);
         if (distance && *distance <= closest.distance)
             closest = {ShotHitKind::World, 0, *distance};
     }
@@ -45,7 +45,7 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
         const Engine::Collision::VerticalCapsule capsule{
             {player.position.x, player.position.y, player.position.z},
             arena.bodyHeight, arena.radius};
-        const auto distance = Engine::Collision::RaycastCapsule(origin, direction, range, capsule);
+        const auto distance = Engine::Collision::RaycastCapsule({origin, direction}, range, capsule);
         if (!distance) continue;
         if (*distance < closest.distance || (*distance == closest.distance &&
             (closest.kind == ShotHitKind::Miss ||

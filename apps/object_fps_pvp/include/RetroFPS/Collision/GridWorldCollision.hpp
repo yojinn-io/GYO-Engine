@@ -10,7 +10,7 @@ class GridMap;
 struct WorldSettings;
 
 // Campaign grid composition is separate from the pure character geometry API.
-[[nodiscard]] std::vector<Engine::Collision::Aabb> BuildWorldCollisionBoxes(
+[[nodiscard]] std::vector<Engine::Math::Aabb> BuildWorldCollisionBoxes(
     const GridMap& map, const WorldSettings& settings);
 
 } // namespace fps
