@@ -1,6 +1,6 @@
 # PvP v5 驗收狀態與回報表
 
-更新：2026-10-03。Owner：`object_fps_pvp`。**v5仍是候選：完整驗收進行中（GUI三輪通過、60 Hz長測經規則B重新分析通過、144 Hz受干擾待使用者決定），未升格穩定基線。**
+更新：2026-10-03。Owner：`object_fps_pvp`。**完整驗收已通過（macOS）；v5升格為穩定基線，見[STABLE_BASELINE](STABLE_BASELINE.md)。**
 操作入口：[手動驗收指南](MANUAL_ACCEPTANCE.md)。契約：[Protocol v5](../../protocol-v5.zh-Hant.md)。
 v4的[驗收狀態](../v4/ACCEPTANCE_STATUS.md)與[穩定基線](../v4/STABLE_BASELINE.md)原樣保留，不繼承其完成勾選。
 
@@ -34,7 +34,7 @@ v4的[驗收狀態](../v4/ACCEPTANCE_STATUS.md)與[穩定基線](../v4/STABLE_BA
 | GUI round 2 | 通過 | 未執行 | 未執行 | 35.8／38.8ms（200／200）、Actual P95 36.9ms、116／18、104ms、6.2ms、乾淨；`pvp-v5-acceptance-20261003/gui-round-2/` |
 | GUI round 3 | 通過 | 未執行 | 未執行 | 34.9／37.7ms（200／200）、Actual P95 37.2ms、116／18、106ms、6.3ms、乾淨；`pvp-v5-acceptance-20261003/gui-round-3/` |
 | Headless長測60 Hz（113循環／1808秒） | 通過（規則B重新分析） | 未執行 | 未執行 | 原判定失敗、保留；使用者選規則B後以同一份原始資料重新分析為通過（`soak60-reanalysis-rule-B.json`）。原唯一錯誤：3次重生首幀時間重設未配對（幀長21.8／21.8／23.1ms，超過規則上限1/60秒＋5ms＝21.7ms）；其餘全過：4971／4971動作、每循環判定簽名1、113次死亡／重生、Actual P50／P95 33.6／38.4ms、漂移窗口全過、最長幀87ms；`pvp-v5-acceptance-20261003/soak60/` |
-| Headless長測144 Hz（113循環／1808秒） | **受干擾（失敗）** | 未執行 | 未執行 | 第一次被執行工具30分鐘上限中止（`soak144-interrupted/`，無效）；重跑唯一錯誤：Match在t＝1727秒一幀99.4 ms、捨棄1 Tick（「零模擬掉時」不成立）；同時刻Client probe也有49.8／31.5 ms幀，屬整機瞬間停頓。其餘全過：4971／4971動作、簽名1、113次死亡／重生、Actual P50／P95 34.6／39.0ms、漂移窗口全過、Gateway零限流；`pvp-v5-acceptance-20261003/soak144/` |
+| Headless長測144 Hz（113循環／1808秒） | 通過 | 未執行 | 未執行 | 第三次通過：4971／4971、簽名1、113次死亡／重生、Actual P50／P95 34.1／38.7ms、最長幀32ms、漂移窗口全過；`pvp-v5-acceptance-20261003/soak144/`。第一次工具中斷（`soak144-interrupted/`）、第二次整機瞬間停頓受干擾（`soak144-disturbed/`），皆保留不計 |
 | Client／Host時鐘漂移（兩台實體機器） | 未執行 | 未執行 | 未執行 | 同機測不到；須另行授權 |
 
 ## 回報欄位
@@ -60,7 +60,7 @@ L3清單：每項 通過／失敗／無法判定＋備註
 
 ## 升格條件
 
-以下全部滿足才把v5升格為穩定基線（寫`STABLE_BASELINE.md`）：
+以下全部滿足才把v5升格為穩定基線（寫`STABLE_BASELINE.md`）——**2026-10-03全部滿足，已升格**：
 
 1. 完整驗收的GUI三輪與兩組長測在macOS全部`通過`，依事前宣告執行；受干擾輪依fix/06補跑規則處理，原輪保留。
 2. 短測項目指紋與完整驗收同一來源與產物；若期間有程式變更，受影響項目重跑。
