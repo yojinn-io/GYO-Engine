@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include "PresentationLegacyMath.hpp"
+#include "RetroFPS/App/WeaponPresentationDefinition.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
@@ -7,7 +9,10 @@
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "engine/math/linear/Matrix4.hpp"
+#include "engine/math/linear/Quaternion.hpp"
 #include "gyo/AppConfig.hpp"
+#include "model/Animation.hpp"
 #include "model/backend/ufbx/UfbxModelLoader.hpp"
 
 #include <SDL3/SDL_filesystem.h>
@@ -901,4 +906,99 @@ TEST_CASE("PvP composed action pose takes action upper body over locomotion or j
     actions.lower = PlayerLowerAction::Death;
     actions.lowerClipSeconds = 1.0;
     check(actions, death, death); // The upper action is ignored while dead.
+}
+
+// Math B6b characterization with production content; random inputs are in
+// PresentationMathCharacterizationTests.cpp.
+TEST_CASE("characterization: production weapon mount rotation normalizes as the legacy double reciprocal did") {
+    PresentationAssets fixture;
+    const auto* entry = fixture.catalog.Find(Engine::Asset::AssetId::FromString("object_fps_pvp.player.presentation"));
+    REQUIRE(entry);
+    const auto bytes = fixture.source.ReadAll(entry->resolvedPath);
+    REQUIRE(bytes);
+    const auto json = nlohmann::json::parse(std::string_view(
+        reinterpret_cast<const char*>(bytes.value().data()), bytes.value().size()));
+    const auto& r = json.at("weapon").at("rotation_xyzw");
+    const Engine::Math::Quaternion authored{r[0].get<float>(), r[1].get<float>(), r[2].get<float>(), r[3].get<float>()};
+    const auto legacy = PresentationLegacy::NormalizeMountRotation(authored);
+    const auto& loaded = ProductionDefinition().weaponMount.rotation;
+    CHECK(loaded.x == legacy.x);
+    CHECK(loaded.y == legacy.y);
+    CHECK(loaded.z == legacy.z);
+    CHECK(loaded.w == legacy.w);
+}
+
+TEST_CASE("characterization: production weapon muzzle keeps its load-time value and drifts only under recoil") {
+    PresentationAssets fixture;
+    std::string error;
+    const auto definition = fps::LoadWeaponPresentationDefinition(
+        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.mark23"), error);
+    REQUIRE_MESSAGE(definition, error);
+    const auto muzzlePoint = [&](const Pose& pose) {
+        return Engine::Math::TransformPoint(
+            pose.globalTransforms[definition->muzzleNodeIndex], definition->muzzleLocalPosition);
+    };
+    Pose pose;
+    REQUIRE(static_cast<bool>(SamplePose(*definition->model, definition->clips[1], 0, PlaybackMode::Clamp, pose)));
+    const auto legacyShot = PresentationLegacy::MuzzleViewCameraPosition(
+        muzzlePoint(pose), definition->idleAnchor, definition->placement);
+    const auto& shot = definition->shotGeometry.muzzleViewCameraPosition;
+    CHECK(shot.x == legacyShot.x);
+    CHECK(shot.y == legacyShot.y);
+    CHECK(shot.z == legacyShot.z);
+
+    // The viewmodel adds the shot recoil to the placement's X rotation.
+    float maximumError = 0;
+    std::size_t samples = 0;
+    std::size_t recoilFreeDiffering = 0;
+    for (const auto clip : definition->clips) {
+        const double duration = definition->model->clips[clip].durationSeconds;
+        for (double time = 0; time <= duration; time += 1.0 / 30.0) {
+            REQUIRE(static_cast<bool>(SamplePose(*definition->model, clip, time, PlaybackMode::Clamp, pose)));
+            const auto point = muzzlePoint(pose);
+            for (const float recoil : {0.0F, 0.005F, 0.02F, 0.04F}) {
+                auto placement = definition->placement;
+                placement.rotationRadians.x += recoil;
+                const auto legacy = PresentationLegacy::MuzzleViewCameraPosition(point, definition->idleAnchor, placement);
+                const auto current = fps::EvaluateWeaponMuzzleViewCameraPosition(*definition, pose, placement);
+                const float difference = (std::max)({std::abs(legacy.x - current.x), std::abs(legacy.y - current.y),
+                                                     std::abs(legacy.z - current.z)});
+                if (recoil == 0.0F && difference != 0.0F) ++recoilFreeDiffering;
+                maximumError = (std::max)(maximumError, difference);
+                CHECK(current.z > definition->camera.nearClip);
+                ++samples;
+            }
+        }
+    }
+    MESSAGE("production muzzle: max |delta| " << maximumError << " m over " << samples << " samples");
+    CHECK(recoilFreeDiffering == 0);
+    // 32 u M (PresentationMathCharacterizationTests.cpp) with M < 2 m here.
+    CHECK(maximumError <= 32.0F * 0x1p-24F * 2.0F);
+}
+
+TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations") {
+    const auto rejects = [](const nlohmann::json& rotation) {
+        PresentationAssets fixture;
+        fixture.Override("object_fps_pvp.player.presentation", [&](auto& json) {
+            json["weapon"]["rotation_xyzw"] = rotation;
+        });
+        std::string error;
+        return !LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error) &&
+            error.find("weapon mount") != std::string::npos;
+    };
+    CHECK(rejects(nlohmann::json::array({0, 0, 0, 0})));
+    CHECK(rejects(nlohmann::json::array({1e-7, 0, 0, 0})));
+    // The squared length must stay finite in float: content this large was
+    // accepted before B6b (the length was summed in double) and is now rejected.
+    CHECK(rejects(nlohmann::json::array({1e20, 0, 0, 1e20})));
+    // Just above the 1e-12 threshold the rotation loads and normalizes. Within
+    // a few ulp of the threshold the float and double rules may disagree.
+    PresentationAssets fixture;
+    fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
+        json["weapon"]["rotation_xyzw"] = nlohmann::json::array({0, 0, 0, 1.01e-6});
+    });
+    std::string error;
+    const auto loaded = LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error);
+    REQUIRE_MESSAGE(loaded, error);
+    CHECK(loaded->weaponMount.rotation.w == doctest::Approx(1.0F));
 }

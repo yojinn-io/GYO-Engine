@@ -39,7 +39,7 @@ set(presentation_stage "${PROJECT_BINARY_DIR}/test-products/${GYO_CURRENT_APP}")
 set(presentation_content "gyo_${GYO_CURRENT_APP}_presentation_test_runtime")
 add_custom_target(${presentation_content})
 gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
-add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp)
+add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     SDL3::SDL3 nlohmann_json::nlohmann_json doctest::doctest)

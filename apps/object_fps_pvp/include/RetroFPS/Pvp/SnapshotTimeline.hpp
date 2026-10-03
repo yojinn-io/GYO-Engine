@@ -1,12 +1,15 @@
 #pragma once
 
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/linear/Vec3d.hpp"
+#include "engine/math/scalar/Angle.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <deque>
-#include <numbers>
 #include <optional>
 
 namespace fps::pvp {
@@ -43,8 +46,8 @@ public:
         if (!history_.empty() && receivedAt < history_.back().receivedAt) return false;
         for (std::size_t i = 0; i < snapshot.players.size(); ++i) {
             const auto& player = snapshot.players[i];
-            if (!player.playerId || !player.movementEpoch || !player.lifeGeneration || !std::isfinite(player.position.x) ||
-                !std::isfinite(player.position.y) || !std::isfinite(player.position.z) ||
+            if (!player.playerId || !player.movementEpoch || !player.lifeGeneration ||
+                !Engine::Math::IsFinite(player.position) ||
                 !std::isfinite(player.yaw) || !std::isfinite(player.pitch)) return false;
             for (std::size_t j = 0; j < i; ++j)
                 if (snapshot.players[j].playerId == player.playerId) return false;
@@ -112,14 +115,13 @@ public:
             (playerCursor - Relative(aTick)) / static_cast<double>(bTick - aTick), 0.0, 1.0);
         const float fraction = static_cast<float>(alpha);
         auto player = a;
-        player.position = {a.position.x + (b.position.x - a.position.x) * fraction,
-                           a.position.y + (b.position.y - a.position.y) * fraction,
-                           a.position.z + (b.position.z - a.position.z) * fraction};
-        player.yaw = std::remainder(a.yaw + std::remainder(b.yaw - a.yaw,
-            2 * std::numbers::pi_v<float>) * fraction, 2 * std::numbers::pi_v<float>);
-        player.pitch = a.pitch + (b.pitch - a.pitch) * fraction;
-        const double planarSpeed = bTick > aTick ? std::hypot(static_cast<double>(b.position.x) - a.position.x,
-            static_cast<double>(b.position.z) - a.position.z) / (static_cast<double>(bTick - aTick) * MovementTickSeconds) : 0;
+        player.position = Engine::Math::Lerp(a.position, b.position, fraction);
+        player.yaw = Engine::Math::LerpRadiansShortest(a.yaw, b.yaw, fraction);
+        player.pitch = Engine::Math::Lerp(a.pitch, b.pitch, fraction);
+        const Engine::Math::Vec3d planar{static_cast<double>(b.position.x) - a.position.x, 0.0,
+                                         static_cast<double>(b.position.z) - a.position.z};
+        const double planarSpeed = bTick > aTick ?
+            Engine::Math::Length(planar) / (static_cast<double>(bTick - aTick) * MovementTickSeconds) : 0;
         std::optional<CombatState> combat;
         for (const auto& value : history_[before].snapshot.combat)
             if (value.playerId == id && value.lifeGeneration == player.lifeGeneration) combat = value;
@@ -172,7 +174,7 @@ private:
         return std::abs(a.position.x - b.position.x) > epsilon ||
             std::abs(a.position.y - b.position.y) > epsilon ||
             std::abs(a.position.z - b.position.z) > epsilon ||
-            std::abs(std::remainder(a.yaw - b.yaw, 2 * std::numbers::pi_v<float>)) > epsilon ||
+            std::abs(Engine::Math::WrapRadians(a.yaw - b.yaw)) > epsilon ||
             std::abs(a.pitch - b.pitch) > epsilon;
     }
     double Relative(std::uint64_t tick) const { return static_cast<double>(tick - baseTick_); }

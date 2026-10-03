@@ -31,13 +31,15 @@
 #include "ui/UiDocumentCodec.hpp"
 #include "ui/UiRenderer.hpp"
 #include "ui/UiRuntime.hpp"
+#include "engine/math/geometry/Aabb.hpp"
+#include "engine/math/scalar/Angle.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <deque>
-#include <numbers>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -46,6 +48,7 @@ namespace fps::pvp {
 namespace {
 using Control = Engine::Runtime::RuntimeControl;
 using Clock = std::chrono::steady_clock;
+constexpr float WorldVerticalFovRadians = Engine::Math::DegreesToRadians(60.0F);
 double Milliseconds(Clock::time_point end, Clock::time_point begin) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
 }
@@ -534,13 +537,13 @@ struct PvpApplication::Impl final {
         remoteSubmitMilliseconds = 0;
         const auto& position = prediction->Observation().renderPosition;
         queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
-            {pitch, yaw, 0}, 1.0471975512F, 0.05F, 150.0F});
+            {pitch, yaw, 0}, WorldVerticalFovRadians, 0.05F, 150.0F});
         // Simple checker floor gives movement depth cues without campaign assets.
         const float tile = arena->cellSize;
         for (float z = 0; z < arena->depth; z += tile) {
             for (float x = 0; x < arena->width; x += tile) {
-                const float w = (std::min)(tile, arena->width - x);
-                const float d = (std::min)(tile, arena->depth - z);
+                const float w = Engine::Math::Min(tile, arena->width - x);
+                const float d = Engine::Math::Min(tile, arena->depth - z);
                 Engine::Render::MeshSubmission draw;
                 draw.mesh = floor;
                 draw.transform = {{x + w * .5F, 0, z + d * .5F}, {}, {w, 1, d}};
@@ -554,8 +557,7 @@ struct PvpApplication::Impl final {
         for (const auto& wall : arena->walls) {
             const auto& a = wall.minimum;
             const auto& b = wall.maximum;
-            if (!SubmitBox({(a.x+b.x)*.5F,(a.y+b.y)*.5F,(a.z+b.z)*.5F},
-                {b.x-a.x,b.y-a.y,b.z-a.z}, {.20F,.31F,.39F,1})) return false;
+            if (!SubmitBox(Engine::Math::Center(wall), b - a, {.20F,.31F,.39F,1})) return false;
             if (!SubmitBox({(a.x+b.x)*.5F,b.y-.06F,(a.z+b.z)*.5F},
                 {b.x-a.x+.01F,.12F,b.z-a.z+.01F}, {.15F,.65F,.70F,1})) return false;
         }
@@ -599,7 +601,7 @@ struct PvpApplication::Impl final {
             characterFrame.movementEpoch = presented.movementEpoch;
             characterFrame.lifeGeneration = presented.lifeGeneration;
             characterFrame.dead = presented.lifeState == LifeState::Dead;
-            characterFrame.position = {position.x, position.y, position.z};
+            characterFrame.position = position;
             characterFrame.yaw = presented.yaw;
             characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
                 static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
@@ -743,7 +745,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     bool weaponPresented = false;
     for (unsigned attempt = 0; attempt < 8 && !weaponPresented; ++attempt) {
         impl_->queue.Reset({});
-        impl_->queue.SetCamera({{0, impl_->arena->eyeHeight, 0}, {}, 1.0471975512F, 0.05F, 150.0F});
+        impl_->queue.SetCamera({{0, impl_->arena->eyeHeight, 0}, {}, WorldVerticalFovRadians, 0.05F, 150.0F});
         if (!impl_->players->SubmitWarmup(impl_->queue, error)) return false;
         if (!impl_->weapon->Submit(fps::WeaponViewModelFrame{}, impl_->queue, error)) return false;
         const auto warmup = impl_->renderer.Render(impl_->queue);
@@ -807,9 +809,9 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             if (impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused && physical.pointer.relativeMode) {
                 if (physical.pointer.deltaX != 0 || physical.pointer.deltaY != 0)
                     ++impl_->weaponFeedback.mouseDeltaConsumeCount;
-                impl_->yaw = std::remainder(impl_->yaw + physical.pointer.deltaX * .0025F,
-                    2.0F * std::numbers::pi_v<float>);
-                impl_->pitch = std::clamp(impl_->pitch + physical.pointer.deltaY * .0025F, -MovementMaximumPitch, MovementMaximumPitch);
+                impl_->yaw = Engine::Math::WrapRadians(impl_->yaw + physical.pointer.deltaX * .0025F);
+                impl_->pitch = Engine::Math::Clamp(impl_->pitch + physical.pointer.deltaY * .0025F,
+                    -MovementMaximumPitch, MovementMaximumPitch);
             }
             const float forward = impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused ?
                 static_cast<float>(physical.Get(Key::W).held) - static_cast<float>(physical.Get(Key::S).held) : 0;
@@ -868,7 +870,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         const auto worldStarted = Clock::now();
         if (!impl_->PrepareWorld(context.deltaSeconds)) return impl_->Fail(impl_->lastError);
         prepareWorldMilliseconds = Milliseconds(Clock::now(), worldStarted);
-        const float scale = (std::min)(impl_->width/1280.0F, impl_->height/720.0F);
+        const float scale = Engine::Math::Min(impl_->width/1280.0F, impl_->height/720.0F);
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,680*scale,114*scale},{.015F,.025F,.04F,.88F}});
         AddText(draws, "PLAYERS ONLINE: " + std::to_string(impl_->state.snapshot->players.size()),
             {16+14*scale,16+8*scale,490*scale,25*scale},18*scale);

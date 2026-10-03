@@ -36,8 +36,8 @@ LoadWeaponPresentationDefinition(
     const Engine::Asset::AssetId& presentationId,
     std::string& error);
 
-// Applies the same scale -> X/Y/Z rotation -> translation contract used by
-// the render submission, after removing the fixed Idle anchor.
+// Applies the render submission's world matrix (Math::ComposeEulerXYZ: scale,
+// X/Y/Z rotation, translation) after removing the fixed Idle anchor.
 [[nodiscard]] Engine::Math::Vec3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose);

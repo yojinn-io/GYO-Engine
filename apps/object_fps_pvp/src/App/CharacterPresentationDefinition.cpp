@@ -3,6 +3,7 @@
 #include "AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include "model/Animation.hpp"
 
 #include <algorithm>
@@ -199,8 +200,7 @@ static std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterDefin
                     accessory.placement.translation = {p[0].get<float>(), p[1].get<float>(), p[2].get<float>()};
                 }
                 const float scale = entry.value("scale", 1.0F);
-                const auto p = accessory.placement.translation;
-                if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
+                if (!Engine::Math::IsFinite(accessory.placement.translation) ||
                     !std::isfinite(scale) || scale <= 0)
                     throw std::runtime_error("accessory placement must be finite with positive scale");
                 accessory.placement.scale = {scale, scale, scale};
