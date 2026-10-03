@@ -383,7 +383,7 @@ TEST_CASE("characterization: pvp horizontal contact normal drifts from Math Leng
     for (int i = 0; i < 200000; ++i) {
         // Contact normals are unit vectors. Their horizontal part spans
         // [1e-8, 1] log-uniformly, so the 1e-6 gate is crossed.
-        const float horizontal = std::pow(10.0F, random.Range(-8.0F, 0.0F));
+        const float horizontal = std::pow(Opaque(10.0F), random.Range(-8.0F, 0.0F));
         const float angle = random.Range(-4.0F, 4.0F);
         const Legacy::Float3 normal = Opaque(Legacy::Float3{std::sin(angle) * horizontal,
                                                             std::sqrt(1.0F - horizontal * horizontal),

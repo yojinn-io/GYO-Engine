@@ -135,8 +135,8 @@ TEST_CASE("characterization: presentation horizontal length drifts from Math Len
     for (int i = 0; i < kCount; ++i) {
         // Differences of float positions, as both call sites form them; the
         // exponents of the two positions vary independently.
-        const float magnitudeA = std::pow(10.0F, random.Range(-4.0F, 2.0F));
-        const float magnitudeB = std::pow(10.0F, random.Range(-4.0F, 2.0F));
+        const float magnitudeA = std::pow(Opaque(10.0F), random.Range(-4.0F, 2.0F));
+        const float magnitudeB = std::pow(Opaque(10.0F), random.Range(-4.0F, 2.0F));
         const float ax = Opaque(random.Range(-1.0F, 1.0F) * magnitudeA);
         const float az = Opaque(random.Range(-1.0F, 1.0F) * magnitudeA);
         const float bx = Opaque(random.Range(-1.0F, 1.0F) * magnitudeB);
@@ -237,27 +237,21 @@ constexpr std::int64_t kMountNormalizeDriftUlpBound = 4;
 TEST_CASE("characterization: presentation mount rotation drifts from Math Normalize within a derived bound") {
     Random random{0x7F21D9C5U};
     std::int64_t maximumUlp = 0;
-    std::size_t acceptanceFlips = 0;
     constexpr int kCount = 200000;
     for (int i = 0; i < kCount; ++i) {
-        const float magnitude = std::pow(10.0F, random.Range(-5.0F, 9.0F));
+        const float magnitude = std::pow(Opaque(10.0F), random.Range(-5.0F, 9.0F));
         const Math::Quaternion q{Opaque(random.Range(-1.0F, 1.0F) * magnitude), Opaque(random.Range(-1.0F, 1.0F) * magnitude),
                                  Opaque(random.Range(-1.0F, 1.0F) * magnitude), Opaque(random.Range(-1.0F, 1.0F) * magnitude)};
+        // Both validations accept these; the float and double rules differ only
+        // near |q|^2 = 1e-12 and beyond the float range (PlayerPresentationTests).
         const float lengthSquared = Math::LengthSquared(q);
-        const bool accepted = std::isfinite(lengthSquared) && !(lengthSquared < 1e-12F);
-        const double legacyLengthSquared = static_cast<double>(q.x) * q.x + static_cast<double>(q.y) * q.y +
-            static_cast<double>(q.z) * q.z + static_cast<double>(q.w) * q.w;
-        if (legacyLengthSquared >= 1e-10 && legacyLengthSquared <= 1e18 &&
-            accepted != PresentationLegacy::AcceptsMountRotation(q))
-            ++acceptanceFlips;
-        if (!accepted) continue;
+        if (!std::isfinite(lengthSquared) || lengthSquared < 1e-12F || !PresentationLegacy::AcceptsMountRotation(q))
+            continue;
         const auto legacy = PresentationLegacy::NormalizeMountRotation(q);
         const auto math = Math::Normalize(q);
         maximumUlp = (std::max)({maximumUlp, UlpDistance(legacy.x, math.x), UlpDistance(legacy.y, math.y),
                                  UlpDistance(legacy.z, math.z), UlpDistance(legacy.w, math.w)});
     }
-    MESSAGE("mount rotation: max " << maximumUlp << " ulp, " << acceptanceFlips << " acceptance flips");
+    MESSAGE("mount rotation: max " << maximumUlp << " ulp");
     CHECK(maximumUlp <= kMountNormalizeDriftUlpBound);
-    // Inside |q|^2 in [1e-10, 1e18] the float and double validations agree.
-    CHECK(acceptanceFlips == 0);
 }

@@ -991,6 +991,14 @@ TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations"
     // The squared length must stay finite in float: content this large was
     // accepted before B6b (the length was summed in double) and is now rejected.
     CHECK(rejects(nlohmann::json::array({1e20, 0, 0, 1e20})));
-    // A rotation just above the threshold still loads.
-    CHECK_FALSE(rejects(nlohmann::json::array({0, 0, 0, 1e-5})));
+    // Just above the 1e-12 threshold the rotation loads and normalizes. Within
+    // a few ulp of the threshold the float and double rules may disagree.
+    PresentationAssets fixture;
+    fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
+        json["weapon"]["rotation_xyzw"] = nlohmann::json::array({0, 0, 0, 1.01e-6});
+    });
+    std::string error;
+    const auto loaded = LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error);
+    REQUIRE_MESSAGE(loaded, error);
+    CHECK(loaded->weaponMount.rotation.w == doctest::Approx(1.0F));
 }
