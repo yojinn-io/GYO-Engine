@@ -16,15 +16,15 @@ namespace {
 
 constexpr std::array<const char*, 5> kActions{"Idle", "Shoot", "Reload", "Draw", "Hide"};
 
-bool Finite(Engine::Render::Float3 value) {
+bool Finite(Engine::Math::Vec3 value) {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
-Engine::Render::Float3 ReadVector(const nlohmann::json& json) {
+Engine::Math::Vec3 ReadVector(const nlohmann::json& json) {
     if (!json.is_array() || json.size() != 3) {
         throw std::runtime_error("viewmodel vector must contain exactly three numbers");
     }
-    const Engine::Render::Float3 result{
+    const Engine::Math::Vec3 result{
         json.at(0).get<float>(), json.at(1).get<float>(), json.at(2).get<float>()};
     if (!Finite(result)) throw std::runtime_error("viewmodel vector must be finite");
     return result;
@@ -55,13 +55,13 @@ std::shared_ptr<const T> LoadShared(
 
 } // namespace
 
-Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+Engine::Math::Vec3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose) {
     return EvaluateWeaponMuzzleViewCameraPosition(definition, pose, definition.placement);
 }
 
-Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
+Engine::Math::Vec3 EvaluateWeaponMuzzleViewCameraPosition(
     const WeaponPresentationDefinition& definition,
     const Engine::Model::Pose& pose,
     const Engine::Render::Transform3D& transform) {
@@ -70,7 +70,7 @@ Engine::Render::Float3 EvaluateWeaponMuzzleViewCameraPosition(
     }
     const auto point = Engine::Math::TransformPoint(
         pose.globalTransforms[definition.muzzleNodeIndex], definition.muzzleLocalPosition);
-    Engine::Render::Float3 result{
+    Engine::Math::Vec3 result{
         (point.x - definition.idleAnchor.x) * transform.scale.x,
         (point.y - definition.idleAnchor.y) * transform.scale.y,
         (point.z - definition.idleAnchor.z) * transform.scale.z};

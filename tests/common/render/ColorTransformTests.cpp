@@ -2,6 +2,7 @@
 
 #include "render/ColorTransform.hpp"
 #include "render/RenderQueue.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
 
 #include <limits>
 
@@ -10,9 +11,9 @@ namespace {
 using namespace Engine::Render;
 
 TEST_CASE("sRGB 0.5 survives the exact linear round trip") {
-    const float linear = DecodeSrgbComponent(0.5F);
+    const float linear = Engine::Math::DecodeSrgb(0.5F);
     CHECK(linear == doctest::Approx(0.21404114F).epsilon(0.000001F));
-    CHECK(EncodeSrgbComponent(linear) == doctest::Approx(0.5F).epsilon(0.000001F));
+    CHECK(Engine::Math::EncodeSrgb(linear) == doctest::Approx(0.5F).epsilon(0.000001F));
 
     const Color decoded = DecodeSrgbColor({0.5F, 0.5F, 0.5F, 0.375F});
     const Color encoded = EncodeSrgbColor(decoded);

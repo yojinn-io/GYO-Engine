@@ -2,6 +2,7 @@
 #include "render/ShaderAbi.hpp"
 #include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -36,7 +37,7 @@ using namespace ShaderAbi;
     return result;
 }
 
-[[nodiscard]] Matrix4 Translation(Float3 value) noexcept {
+[[nodiscard]] Matrix4 Translation(Math::Vec3 value) noexcept {
     Matrix4 result = Identity();
     result.values[3][0] = value.x;
     result.values[3][1] = value.y;
@@ -44,7 +45,7 @@ using namespace ShaderAbi;
     return result;
 }
 
-[[nodiscard]] Matrix4 Scale(Float3 value) noexcept {
+[[nodiscard]] Matrix4 Scale(Math::Vec3 value) noexcept {
     Matrix4 result = Identity();
     result.values[0][0] = value.x;
     result.values[1][1] = value.y;
@@ -123,12 +124,12 @@ using namespace ShaderAbi;
 
 [[nodiscard]] Matrix4 SpriteWorldMatrix(
     const SpriteSubmission& sprite) noexcept {
-    const Float3 localPivotTranslation{
+    const Math::Vec3 localPivotTranslation{
         0.5F - sprite.pivotNormalized.x,
         0.5F - sprite.pivotNormalized.y,
         0.0F,
     };
-    const Float3 anchor{
+    const Math::Vec3 anchor{
         sprite.destinationPixels.x +
             sprite.pivotNormalized.x * sprite.destinationPixels.width,
         sprite.destinationPixels.y +
@@ -159,10 +160,6 @@ using namespace ShaderAbi;
 
 [[nodiscard]] bool IsFinite(float value) noexcept {
     return std::isfinite(value);
-}
-
-[[nodiscard]] bool IsFinite(Float3 value) noexcept {
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
 [[nodiscard]] bool IsFinite(Color value) noexcept {
@@ -206,7 +203,7 @@ using namespace ShaderAbi;
 [[nodiscard]] std::uint8_t CaptureComponent(float value, bool srgb) noexcept {
     if (std::isnan(value)) value = 0.0F;
     value = std::clamp(value, 0.0F, 1.0F);
-    if (srgb) value = EncodeSrgbComponent(value);
+    if (srgb) value = Math::EncodeSrgb(value);
     return static_cast<std::uint8_t>(std::lround(value * 255.0F));
 }
 

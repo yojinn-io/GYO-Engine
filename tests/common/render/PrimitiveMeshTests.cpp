@@ -59,9 +59,26 @@ TEST_CASE("Wire box outlines its twelve edges with valid triangles") {
     CHECK_FALSE(MakeWireBox({0, 0, 0}, {1, 1, 1}, 0.0F));
 }
 
+TEST_CASE("Wire meshes reject geometry too large for finite floats") {
+    // Lengths above about 1.8e19 overflow Math::Length; the result must be an
+    // error, never Ok with non-finite vertices.
+    CHECK_FALSE(MakeWireBox({0, 0, 0}, {2e19F, 1, 1}));
+    CHECK_FALSE(MakeWireBox({-3e38F, 0, 0}, {3e38F, 1, 1}));
+    CHECK_FALSE(MakeWireCapsule({0, 0, 0}, {0, 1, 0}, 1e20F));
+    CHECK_FALSE(MakeWireCapsule({0, 0, 0}, {2e19F, 0, 0}, 1.0F));
+    // The largest accepted scales still produce finite geometry.
+    const auto box = MakeWireBox({0, 0, 0}, {1e18F, 1e18F, 1e18F}, 1.0F);
+    REQUIRE(box);
+    for (const auto& vertex : box.value().vertices) {
+        CHECK(std::isfinite(vertex.position.x));
+        CHECK(std::isfinite(vertex.position.y));
+        CHECK(std::isfinite(vertex.position.z));
+    }
+}
+
 TEST_CASE("Wire capsules support arbitrary axes and coincident sphere endpoints") {
-    for (const auto end : {Float3{0, 2, 0}, Float3{2, 0, 0},
-                           Float3{1, 1, 1}, Float3{0, 0, 0}}) {
+    for (const auto end : {Engine::Math::Vec3{0, 2, 0}, Engine::Math::Vec3{2, 0, 0},
+                           Engine::Math::Vec3{1, 1, 1}, Engine::Math::Vec3{0, 0, 0}}) {
         auto wire = MakeWireCapsule({}, end, 0.4F, 0.01F);
         REQUIRE(wire);
         REQUIRE_FALSE(wire.value().vertices.empty());

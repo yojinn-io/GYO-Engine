@@ -48,7 +48,7 @@ struct WeaponViewModel::Impl final {
     std::unique_ptr<Engine::ModelRenderer::ModelInstance> modelInstance;
     std::shared_ptr<const WeaponPresentationDefinition> definition;
     Engine::Model::Pose pose;
-    Engine::Render::Float3 muzzleViewCameraPosition{};
+    Engine::Math::Vec3 muzzleViewCameraPosition{};
     std::size_t lastClip{static_cast<std::size_t>(-1)};
     double lastTime{-1.0};
     std::uint64_t poseRevision{}, submissionCount{};
@@ -163,8 +163,8 @@ struct WeaponViewModel::Impl final {
 WeaponViewModel::WeaponViewModel() = default;
 WeaponViewModel::~WeaponViewModel() = default;
 
-Engine::Render::Float3 WeaponViewModel::GetMuzzleViewCameraPosition() const noexcept {
-    return impl_ ? impl_->muzzleViewCameraPosition : Engine::Render::Float3{};
+Engine::Math::Vec3 WeaponViewModel::GetMuzzleViewCameraPosition() const noexcept {
+    return impl_ ? impl_->muzzleViewCameraPosition : Engine::Math::Vec3{};
 }
 
 float WeaponViewModel::GetActionDurationSeconds(WeaponViewModelAction action) const noexcept {

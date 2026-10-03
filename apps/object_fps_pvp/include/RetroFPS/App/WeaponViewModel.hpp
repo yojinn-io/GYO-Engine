@@ -58,7 +58,7 @@ public:
         Engine::Render::RenderQueue& queue,
         std::string& error);
     // Current sampled pose, in the dedicated viewmodel camera's coordinates.
-    [[nodiscard]] Engine::Render::Float3 GetMuzzleViewCameraPosition() const noexcept;
+    [[nodiscard]] Engine::Math::Vec3 GetMuzzleViewCameraPosition() const noexcept;
     [[nodiscard]] float GetActionDurationSeconds(WeaponViewModelAction action) const noexcept;
     // Observes successful pose/GPU preparation and queue submission; reading
     // this cannot advance or restart an animation.

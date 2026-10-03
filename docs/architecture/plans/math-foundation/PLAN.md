@@ -289,6 +289,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **範圍**：
   - `RenderTypes.hpp` 中的 `Float2`、`Float3`、`Rect` 改成 Math 型別。
   - `RenderQueue`、`SdlGpuRenderDevice`、`PrimitiveMesh`、`ColorTransform`、`render/model`。
+  - `ColorTransform` 的公開 `Decode/EncodeSrgbComponent` 依「舊名稱完全移除」直接刪除（原計劃 D6 的薄包裝不採用），呼叫者改用 `Math::DecodeSrgb/EncodeSrgb`。
   - pvp 和 ui_editor 中所有引用 `Render::Float2/Float3/Rect` 的地方。
   - `Renderer.cpp` 的矩陣碼這一批不動。
 - **驗收**：
@@ -361,7 +362,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - `docs/architecture/math.md`。
 - **grep 稽核 active 範圍**：
   - 除了第 2 節列為保留的型別，已沒有 `struct (Float[23]|Vec[23]|Matrix4|Quaternion)`。
-  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。已知例外：Model `Animation.cpp` 的 `Finite` 驗證政策系列（B3，見 HANDOFF），以及 ufbx loader 的 `Rotation(ufbx_quat)` 轉換函式。
+  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。已知例外：Model `Animation.cpp` 的 `Finite` 驗證政策系列（B3，見 HANDOFF）、ufbx loader 的 `Rotation(ufbx_quat)` 轉換函式，以及 Render 的 `IsFinite(float)`／`IsFinite(Color)`（純量與 Render 語義型別，B4a）。
   - 公共層沒有出現產品名稱。
 - **未啟用產品的破損盤點**：
   - 在 scratch registry 中啟用 object_fps 和 object_fps_v2，並設定 `GYO_OUTPUT_ROOT=<scratchpad>`。

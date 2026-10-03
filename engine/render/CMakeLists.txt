@@ -14,6 +14,7 @@ target_include_directories(gyo_render PUBLIC
 
 target_link_libraries(gyo_render PUBLIC
     GYO::Engine
+    GYO::Math
 )
 target_link_libraries(gyo_render PRIVATE nlohmann_json::nlohmann_json)
 

@@ -11,10 +11,10 @@ namespace {
 
 void AppendFace(
     MeshData& mesh,
-    Float3 bottomLeft,
-    Float3 bottomRight,
-    Float3 topRight,
-    Float3 topLeft) {
+    Math::Vec3 bottomLeft,
+    Math::Vec3 bottomRight,
+    Math::Vec3 topRight,
+    Math::Vec3 topLeft) {
     const auto first = static_cast<std::uint32_t>(mesh.vertices.size());
     mesh.vertices.push_back({bottomLeft, {0.0F, 1.0F}});
     mesh.vertices.push_back({bottomRight, {1.0F, 1.0F}});
@@ -26,71 +26,51 @@ void AppendFace(
     });
 }
 
-[[nodiscard]] Float3 Add(Float3 a, Float3 b) noexcept {
-    return {a.x + b.x, a.y + b.y, a.z + b.z};
+[[nodiscard]] Math::Vec3 Perpendicular(Math::Vec3 axis) noexcept {
+    const Math::Vec3 reference = std::abs(axis.y) < 0.9F
+        ? Math::Vec3{0.0F, 1.0F, 0.0F} : Math::Vec3{1.0F, 0.0F, 0.0F};
+    return Math::Normalize(Math::Cross(axis, reference));
 }
 
-[[nodiscard]] Float3 Subtract(Float3 a, Float3 b) noexcept {
-    return {a.x - b.x, a.y - b.y, a.z - b.z};
+// Math::Length does not rescale, so an edge or chord longer than about 1.8e19
+// overflows and yields non-finite vertices; such meshes are rejected.
+[[nodiscard]] bool HasFiniteVertices(const MeshData& mesh) noexcept {
+    for (const auto& vertex : mesh.vertices) {
+        if (!IsFinite(vertex.position)) return false;
+    }
+    return true;
 }
 
-[[nodiscard]] Float3 Scale(Float3 a, float scale) noexcept {
-    return {a.x * scale, a.y * scale, a.z * scale};
-}
-
-[[nodiscard]] Float3 Cross(Float3 a, Float3 b) noexcept {
-    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
-            a.x * b.y - a.y * b.x};
-}
-
-[[nodiscard]] float Length(Float3 value) noexcept {
-    return std::hypot(value.x, value.y, value.z);
-}
-
-[[nodiscard]] bool IsFinite(Float3 value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y) &&
-           std::isfinite(value.z);
-}
-
-[[nodiscard]] Float3 Perpendicular(Float3 axis) noexcept {
-    const Float3 reference = std::abs(axis.y) < 0.9F
-        ? Float3{0.0F, 1.0F, 0.0F} : Float3{1.0F, 0.0F, 0.0F};
-    const Float3 cross = Cross(axis, reference);
-    return Scale(cross, 1.0F / Length(cross));
-}
-
-void AppendWireSegment(MeshData& mesh, Float3 start, Float3 end, float thickness) {
-    const Float3 delta = Subtract(end, start);
-    const float length = Length(delta);
+void AppendWireSegment(MeshData& mesh, Math::Vec3 start, Math::Vec3 end, float thickness) {
+    const Math::Vec3 delta = end - start;
+    const float length = Math::Length(delta);
     if (length <= 0.000001F) return;
-    const Float3 axis = Scale(delta, 1.0F / length);
-    const Float3 u = Scale(Perpendicular(axis), thickness * 0.5F);
-    const Float3 v = Scale(Cross(axis, Perpendicular(axis)), thickness * 0.5F);
-    const std::array<Float3, 4> offsets{
-        Add(u, v), Subtract(v, u), Scale(Add(u, v), -1.0F), Subtract(u, v)};
+    const Math::Vec3 axis = delta / length;
+    const Math::Vec3 u = Perpendicular(axis) * (thickness * 0.5F);
+    const Math::Vec3 v = Math::Cross(axis, Perpendicular(axis)) * (thickness * 0.5F);
+    const std::array<Math::Vec3, 4> offsets{u + v, v - u, (u + v) * -1.0F, u - v};
     for (std::size_t side = 0; side < offsets.size(); ++side) {
         const auto next = (side + 1) % offsets.size();
-        AppendFace(mesh, Add(start, offsets[side]), Add(start, offsets[next]),
-                   Add(end, offsets[next]), Add(end, offsets[side]));
+        AppendFace(mesh, start + offsets[side], start + offsets[next],
+                   end + offsets[next], end + offsets[side]);
     }
-    AppendFace(mesh, Add(start, offsets[3]), Add(start, offsets[2]),
-               Add(start, offsets[1]), Add(start, offsets[0]));
-    AppendFace(mesh, Add(end, offsets[0]), Add(end, offsets[1]),
-               Add(end, offsets[2]), Add(end, offsets[3]));
+    AppendFace(mesh, start + offsets[3], start + offsets[2],
+               start + offsets[1], start + offsets[0]);
+    AppendFace(mesh, end + offsets[0], end + offsets[1],
+               end + offsets[2], end + offsets[3]);
 }
 
-void AppendWireArc(MeshData& mesh, Float3 center, Float3 u, Float3 v,
+void AppendWireArc(MeshData& mesh, Math::Vec3 center, Math::Vec3 u, Math::Vec3 v,
                    float radius, float startAngle, float endAngle,
                    std::uint32_t segments, float thickness) {
     const auto point = [&](float angle) {
-        return Add(center, Scale(Add(Scale(u, std::cos(angle)),
-                                     Scale(v, std::sin(angle))), radius));
+        return center + (u * std::cos(angle) + v * std::sin(angle)) * radius;
     };
-    Float3 previous = point(startAngle);
+    Math::Vec3 previous = point(startAngle);
     for (std::uint32_t index = 1; index <= segments; ++index) {
         const float angle = startAngle + (endAngle - startAngle) *
             static_cast<float>(index) / static_cast<float>(segments);
-        const Float3 current = point(angle);
+        const Math::Vec3 current = point(angle);
         AppendWireSegment(mesh, previous, current, thickness);
         previous = current;
     }
@@ -210,16 +190,16 @@ Base::Result<MeshData, RenderError> MakeUvSphere(
 }
 
 Base::Result<MeshData, RenderError> MakeWireBox(
-    Float3 minimum, Float3 maximum, float lineThickness) {
+    Math::Vec3 minimum, Math::Vec3 maximum, float lineThickness) {
     using Result = Base::Result<MeshData, RenderError>;
     if (!IsFinite(minimum) || !IsFinite(maximum) ||
-        !IsFinite(Subtract(maximum, minimum)) ||
+        !IsFinite(maximum - minimum) ||
         minimum.x >= maximum.x || minimum.y >= maximum.y || minimum.z >= maximum.z ||
         !std::isfinite(lineThickness) || lineThickness <= 0.0F) {
         return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireBox: finite ordered bounds and positive line thickness required"));
     }
-    std::array<Float3, 8> corners{};
+    std::array<Math::Vec3, 8> corners{};
     for (std::size_t index = 0; index < corners.size(); ++index) {
         corners[index] = {(index & 1U) ? maximum.x : minimum.x,
                           (index & 2U) ? maximum.y : minimum.y,
@@ -235,15 +215,19 @@ Base::Result<MeshData, RenderError> MakeWireBox(
             }
         }
     }
+    if (!HasFiniteVertices(mesh)) {
+        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+            "MakeWireBox: bounds too large for finite wire geometry"));
+    }
     return Result::Ok(std::move(mesh));
 }
 
 Base::Result<MeshData, RenderError> MakeWireCapsule(
-    Float3 segmentStart, Float3 segmentEnd, float radius,
+    Math::Vec3 segmentStart, Math::Vec3 segmentEnd, float radius,
     float lineThickness, std::uint32_t segments) {
     using Result = Base::Result<MeshData, RenderError>;
-    const Float3 delta = Subtract(segmentEnd, segmentStart);
-    const float length = Length(delta);
+    const Math::Vec3 delta = segmentEnd - segmentStart;
+    const float length = Math::Length(delta);
     if (!IsFinite(segmentStart) || !IsFinite(segmentEnd) || !std::isfinite(length) ||
         !std::isfinite(radius) || radius <= 0.0F ||
         !std::isfinite(lineThickness) || lineThickness <= 0.0F ||
@@ -251,10 +235,10 @@ Base::Result<MeshData, RenderError> MakeWireCapsule(
         return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireCapsule: finite endpoints, positive radius/thickness and 8..128 segments required"));
     }
-    const Float3 axis = length > 0.000001F
-        ? Scale(delta, 1.0F / length) : Float3{0.0F, 1.0F, 0.0F};
-    const Float3 u = Perpendicular(axis);
-    const Float3 v = Cross(axis, u);
+    const Math::Vec3 axis = length > 0.000001F
+        ? delta / length : Math::Vec3{0.0F, 1.0F, 0.0F};
+    const Math::Vec3 u = Perpendicular(axis);
+    const Math::Vec3 v = Math::Cross(axis, u);
     constexpr float pi = std::numbers::pi_v<float>;
     MeshData mesh;
     AppendWireArc(mesh, segmentStart, u, v, radius, 0.0F, 2.0F * pi,
@@ -267,17 +251,21 @@ Base::Result<MeshData, RenderError> MakeWireCapsule(
     } else {
         AppendWireArc(mesh, segmentEnd, u, v, radius, 0.0F, 2.0F * pi,
                       segments, lineThickness);
-        for (const Float3 radial : {u, v}) {
+        for (const Math::Vec3 radial : {u, v}) {
             AppendWireArc(mesh, segmentStart, radial, axis, radius, pi, 2.0F * pi,
                           segments / 2, lineThickness);
             AppendWireArc(mesh, segmentEnd, radial, axis, radius, 0.0F, pi,
                           segments / 2, lineThickness);
             for (const float side : {-1.0F, 1.0F}) {
-                const Float3 offset = Scale(radial, radius * side);
-                AppendWireSegment(mesh, Add(segmentStart, offset),
-                                  Add(segmentEnd, offset), lineThickness);
+                const Math::Vec3 offset = radial * (radius * side);
+                AppendWireSegment(mesh, segmentStart + offset,
+                                  segmentEnd + offset, lineThickness);
             }
         }
+    }
+    if (!HasFiniteVertices(mesh)) {
+        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+            "MakeWireCapsule: capsule too large for finite wire geometry"));
     }
     return Result::Ok(std::move(mesh));
 }

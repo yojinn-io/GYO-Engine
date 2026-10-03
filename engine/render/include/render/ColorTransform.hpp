@@ -9,12 +9,8 @@ inline constexpr float kMaximumSceneExposureEv = 8.0F;
 inline constexpr float kMinimumSceneGammaAdjustment = 0.25F;
 inline constexpr float kMaximumSceneGammaAdjustment = 4.0F;
 
-// Standard sRGB transfer functions for normalized components. Inputs are
-// clamped to the representable [0, 1] display range.
-[[nodiscard]] float DecodeSrgbComponent(float encoded) noexcept;
-[[nodiscard]] float EncodeSrgbComponent(float linear) noexcept;
-
-// RGB follows the standard sRGB transfer while straight alpha is preserved.
+// RGB follows the standard sRGB transfer (Math::DecodeSrgb/EncodeSrgb, inputs
+// clamped to [0, 1]) while straight alpha is preserved.
 [[nodiscard]] Color DecodeSrgbColor(Color encoded) noexcept;
 [[nodiscard]] Color EncodeSrgbColor(Color linear) noexcept;
 

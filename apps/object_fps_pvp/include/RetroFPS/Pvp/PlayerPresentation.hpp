@@ -17,7 +17,7 @@ namespace fps::pvp {
 // Already sampled presentation values, never movement commands or authority state.
 struct PlayerPresentationFrame final {
     std::uint64_t playerId{}, movementEpoch{};
-    Engine::Render::Float3 position{};
+    Engine::Math::Vec3 position{};
     float yaw{};
     double presentationSeconds{}, deltaSeconds{};
     // Planar speed between the two authority snapshots bracketing this sample:
@@ -68,7 +68,7 @@ enum class PlayerJumpPhase : std::uint8_t { Grounded, Start, Airborne, Land };
 struct PlayerLocomotionState final {
     bool initialized{}, jogging{}, backward{}, holding{}, phaseReset{};
     std::uint64_t playerId{}, movementEpoch{}, resetCount{};
-    Engine::Render::Float3 previousPosition{};
+    Engine::Math::Vec3 previousPosition{};
     double previousPresentationSeconds{};
     // Gait phase in cycles, shared by walk and jog; playbackRate is cycles/s.
     double phaseCycles{}, unwrappedPhaseCycles{}, idleSeconds{};
@@ -126,7 +126,7 @@ struct PlayerPresentationObservation final {
     double distanceDelta{}, cycleDistance{}, jogWeight{}, speed{}, playbackRate{};
     float moveWeight{}, scale{};
     Engine::Math::Vec3 footAnchor{};
-    Engine::Render::Float3 weaponWorldPosition{};
+    Engine::Math::Vec3 weaponWorldPosition{};
     std::size_t bodySubmittedMeshes{}, hairSubmittedMeshes{}, weaponSubmittedMeshes{};
     std::size_t upperBodyMaskCount{}, preparedInstances{};
     std::string resetReason;

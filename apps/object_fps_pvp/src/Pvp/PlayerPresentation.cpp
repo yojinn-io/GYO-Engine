@@ -20,7 +20,7 @@ using Engine::Math::Vec3;
 using Resource = Engine::ModelRenderer::ModelResource;
 using Instance = Engine::ModelRenderer::ModelInstance;
 
-bool Finite(const Engine::Render::Float3 value) {
+bool Finite(const Engine::Math::Vec3 value) {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
