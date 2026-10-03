@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B2：Collision 改用 GYO::Math
 
 日期：2026-10-03。Owner：Engine（`GYO::Collision`），連帶 `object_fps_pvp`。
-狀態：本機驗收完成，待 commit、PR 與 CI 四平台（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。
+狀態：本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b2-collision)，本文只記經過。
 
 ## 經過

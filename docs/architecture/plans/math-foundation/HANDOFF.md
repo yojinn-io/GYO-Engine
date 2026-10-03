@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0（#17）、B1＋B1b（#18，合併為 `6cc2829`）已合併。B2 本機驗收完成（分支 `claude/math-foundation-b2`），待 commit、PR 與 CI。**
+更新：2026-10-03。**B0（#17）、B1＋B1b（#18，合併為 `6cc2829`）已合併。B2 本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -144,7 +144,7 @@
 
 ## B2 Collision
 
-狀態：**本機驗收完成**（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。待 commit、PR 與 CI 四平台。
+狀態：**本機驗收完成，PR [#19](https://github.com/yojinn-io/GYO-Engine/pull/19) 待 CI 四平台**（分支 `claude/math-foundation-b2`，自 master `6cc2829`）。
 
 ### 變更
 
