@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B4a：Render 型別與 helper 改用 GYO::Math
 
 日期：2026-10-03。Owner：Engine（`GYO::Render`），連帶 `render/model`、UiRenderer、`object_fps_pvp`。
-狀態：本機驗收完成，待 commit、PR 與 CI 四平台（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。
+狀態：本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI 四平台（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b4a-render-型別與-helper)，本文只記經過。
 
 ## 經過

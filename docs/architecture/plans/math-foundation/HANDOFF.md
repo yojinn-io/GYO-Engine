@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19）、B3（#20，合併為 `14a32ac`）已合併。B4a 本機驗收完成（分支 `claude/math-foundation-b4a`），待 commit、PR 與 CI。**
+更新：2026-10-03。**B0（#17）、B1＋B1b（#18）、B2（#19）、B3（#20，合併為 `14a32ac`）已合併。B4a 本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -226,7 +226,7 @@
 
 ## B4a Render 型別與 helper
 
-狀態：**本機驗收完成**（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。待 commit、PR 與 CI 四平台。
+狀態：**本機驗收完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 待 CI 四平台**（分支 `claude/math-foundation-b4a`，自 master `14a32ac`）。
 
 ### 變更
 
