@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B1：GYO::Math 模組
 
 日期：2026-10-03。Owner：Engine（`GYO::Math`）。
-狀態：本機驗收完成，待 commit、PR 與 CI 四平台（分支 `claude/math-foundation-b1`）。既有消費者未修改。
+狀態：本機驗收完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 待 CI 四平台（分支 `claude/math-foundation-b1`）。既有消費者未修改。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b1-gyomath)，本文只記經過。
 
 ## 經過

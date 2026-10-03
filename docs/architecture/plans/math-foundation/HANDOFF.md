@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 本機驗收完成，待 commit、PR 與 CI 四平台。**
+更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 本機驗收完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -63,7 +63,7 @@
 
 ## B1 `GYO::Math`
 
-狀態：**本機驗收完成，待 CI 四平台**（分支 `claude/math-foundation-b1`，自 B0 分支分出）。尚未 commit。
+狀態：**本機驗收完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 待 CI 四平台**（分支 `claude/math-foundation-b1`）。
 
 ### 交付
 
@@ -82,7 +82,7 @@
 | test preset | 42／42 通過（B0 為 41） |
 | 依賴圖 | 與 B0 相比只多 `gyo_math_tests → gyo_math`、`gyo_math_tests → doctest`；`gyo_math` 沒有對外的邊 |
 | 收縮模式 | `gyo_math_tests` 在 `-O0`、`-O2`、`-O2 -mfma -ffp-contract=on`、`-O2 -mfma -ffp-contract=fast` 下都通過（本機 clang x86_64） |
-| CI 四平台 | 待 PR |
+| CI 四平台 | PR #18 進行中 |
 
 ### Characterization 結果（engine helper → Math）
 
