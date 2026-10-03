@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0–B4b 已合併（B4b 為 #22，合併為 `43bccad`）。B5 本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台。**
+更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a 進行中（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。**
 
 ## 閱讀入口
 
@@ -303,7 +303,7 @@
 
 ## B5 Ui 與 ui_editor
 
-狀態：**本機驗收完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 待 CI 四平台**（分支 `claude/math-foundation-b5`，自 master `43bccad`）。
+狀態：**完成**。PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 於 2026-10-04 合併為 `efe4a30`；最終 head `8d0487b` 的 CI 四平台全部通過。
 
 ### 進行方式（ultracode）
 
@@ -343,13 +343,21 @@
 | pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
 | 依賴圖 | 與 B4a 相比多出 `gyo_ui → gyo_math`、`gyo_ui_editor_preview → gyo_math`、`gyo_ui_editor_preview_srgb_tests → gyo_math` |
 | 對抗式審查 | 1 個 major（舊行為描述不完整，已更正並由使用者再次確認）、5 個 minor（全部處理） |
-| CI 四平台 | 第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
+| CI 四平台 | 最終 head `8d0487b` 全部通過。第一次執行時 windows-x64 建置失敗：`UiDocumentCodecTests.cpp`、`UiRuntimeTests.cpp` 把 `std::string_view` 串進 doctest 訊息（`FAIL`、`CAPTURE`），但沒有 include `<ostream>`。doctest 只前置宣告 `std::ostream`，MSVC 實例化 `operator<<` 時需要完整型別；本機 libc++ 可以編譯，沒有重現。兩檔補上 `<ostream>` 後重跑 |
 
 ### 範圍外，只回報
 
 - `item_step` 沒有有限性驗證：`{NaN, 1}` 能通過 Validate，序列化後變成 `null` 而無法再讀回。修正會改變資料契約的驗證規則，需另行決定。
 - ui_editor 的 letterbox、半開區間點擊判定、文字對齊，與 Ui 本體各有一份；`UiRuntime` 的 Evaluate 與 Compose 也重複了 layout 走訪。屬於 layout 邏輯，不是數學庫範圍。
 - `Render::Color` 與 `UiColor` 同構（PLAN 已列）。
+
+## B6a pvp 模擬層 `match_domain`
+
+狀態：**進行中**（2026-10-04 開始，分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
+
+### 進行方式（ultracode）
+
+1. 重新盤點：B0 之後 pvp 有大量變動（見 B2「master 的變動」），PLAN 的 pvp 行號作廢，以多 agent 重新盤點 `match_domain` 的 helper、`fps::Float3`／`fps::Float2` 的全部使用者，以及決定性量測的方法。
 
 ## 未結事項
 
