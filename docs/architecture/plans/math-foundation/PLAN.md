@@ -167,7 +167,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - `ToShaderMatrix` 只做 16 個 float 的 memcpy。
 - 沒人用的 `IsFinite(Float3)`（:164）刪除。
 - `PrimitiveMesh` 的 `Length` 從 hypot 改成 sqrt。B1 在 Apple libc++ 上量到正常範圍 0 ulp（libc++ 的三參數 hypot 在該範圍就是同一個 sqrt 式），libstdc++／MSVC 估計最多 3 ulp；溢位與下溢行為不同。
-- `PrimitiveMesh.cpp:59,66` 的倒數相乘正規化（`Scale(v, 1.0F / Length(v))`）改用 `Math::Normalize` 時，B1 量到最多 1 ulp、約 53% 的輸入不同。B4a 替換時記錄這段漂移。
+- `PrimitiveMesh.cpp:59,66` 的倒數相乘正規化（`Scale(v, 1.0F / Length(v))`）改用 `Math::Normalize` 時，B1 量到 Apple libc++ 最多 1 ulp（約 53% 的輸入不同），Linux libstdc++ 與 Windows MSVC 最多 4 ulp（約 63%），差異來自各平台的 hypot。B4a 替換時記錄這段漂移。
 - `ModelRenderer.cpp:80-81` 改成 `{vertex.position + offset, vertex.uv}`。
 
 **Model**

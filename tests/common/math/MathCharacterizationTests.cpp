@@ -1346,9 +1346,12 @@ TEST_CASE("characterization: PrimitiveMesh hypot Length drifts from Math sqrt Le
 }
 
 // Replacing PrimitiveMesh's reciprocal normalization with Math::Normalize
-// (divide each component by the sqrt length) is a drift, not an identity.
-// Measured on Apple clang 21 / libc++ x86_64.
-constexpr std::int64_t kReciprocalNormalizeDriftUlpBound = 2;
+// (divide each component by the sqrt length) is a drift, not an identity. The
+// bound is derived, not fitted to one platform: the hypot length may differ from
+// sqrt by kHypotDriftUlpBound, and the legacy form adds one rounding for the
+// reciprocal and one for the multiply. Observed: Apple libc++ 1 ulp, Linux
+// libstdc++ 4 ulp, Windows MSVC 4 ulp.
+constexpr std::int64_t kReciprocalNormalizeDriftUlpBound = kHypotDriftUlpBound + 2;
 
 TEST_CASE("characterization: PrimitiveMesh reciprocal normalization drifts from Math Normalize within a measured bound") {
     Lcg random{0x0A2D1E5FU};

@@ -82,7 +82,7 @@
 | test preset | 42／42 通過（B0 為 41） |
 | 依賴圖 | 與 B0 相比只多 `gyo_math_tests → gyo_math`、`gyo_math_tests → doctest`；`gyo_math` 沒有對外的邊 |
 | 收縮模式 | `gyo_math_tests` 在 `-O0`、`-O2`、`-O2 -mfma -ffp-contract=on`、`-O2 -mfma -ffp-contract=fast` 下都通過（本機 clang x86_64） |
-| CI 四平台 | PR #18 進行中 |
+| CI 四平台 | 第一次執行時，linux-x64 與 windows-x64 的 `gyo_math_tests` 失敗：倒數相乘正規化的漂移上限只依 Apple 實測設為 2 ulp，而兩平台 hypot 實作不同，實測 4 ulp。上限改為由誤差組成推導的 `kHypotDriftUlpBound + 2`（5 ulp）後重跑。其餘 88 個 test case 在兩平台都通過，Math 與測試程式碼在 gcc-14、MSVC 下都沒有警告 |
 
 ### Characterization 結果（engine helper → Math）
 
@@ -93,7 +93,7 @@
   - Ui：`IntersectRect`（對 `Intersection`）、sRGB（UiColor 的 256 個輸入）、各處 `IsFinite`。
 - **漂移**：
   - `PrimitiveMesh` 的 hypot `Length` 對 sqrt：Apple libc++ 正常範圍 0 ulp；溢位與下溢行為不同。
-  - 倒數相乘正規化對 `Math::Normalize`：最多 1 ulp，約 53% 的輸入不同。
+  - 倒數相乘正規化對 `Math::Normalize`：Apple libc++ 最多 1 ulp；Linux libstdc++、Windows MSVC 最多 4 ulp（CI 實測）。
 - **刻意的語意差異**：UiColor 的 decode 不 clamp，但在 hex 輸入下結果相同；兩種四元數 `Normalize` 只在長度 ≤ 1e-12 時不同，各自保留為不同名稱。
 
 ### 對抗式審查（ultracode）與處理
