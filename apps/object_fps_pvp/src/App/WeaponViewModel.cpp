@@ -6,6 +6,7 @@
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include "model/Animation.hpp"
 #include "model_renderer/ModelRenderer.hpp"
 #include "render/IRenderDevice.hpp"
@@ -107,8 +108,7 @@ struct WeaponViewModel::Impl final {
         auto resource = Engine::ModelRenderer::ModelResource::Create(*device, definition->model, materials);
         if (!resource) throw std::runtime_error(resource.error());
         modelResource = std::move(resource.value());
-        auto instance = Engine::ModelRenderer::ModelInstance::Create(modelResource, pose,
-            {-definition->idleAnchor.x, -definition->idleAnchor.y, -definition->idleAnchor.z});
+        auto instance = Engine::ModelRenderer::ModelInstance::Create(modelResource, pose, -definition->idleAnchor);
         if (!instance) throw std::runtime_error(instance.error());
         modelInstance = std::move(instance.value());
         lastClip = definition->clips[0];

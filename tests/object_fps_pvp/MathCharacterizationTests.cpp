@@ -14,6 +14,7 @@
 
 #include <doctest/doctest.h>
 
+#include "CharacterizationSupport.hpp"
 #include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "engine/math/geometry/Intersection.hpp"
@@ -27,11 +28,9 @@
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -41,6 +40,10 @@
 namespace {
 
 namespace Math = Engine::Math;
+using CharacterizationSupport::Opaque;
+using CharacterizationSupport::Random;
+using CharacterizationSupport::SameBits;
+using CharacterizationSupport::UlpDistance;
 
 namespace Legacy {
 
@@ -174,75 +177,17 @@ struct SweepStep {
 
 [[nodiscard]] Math::Vec3 ToMath(const Legacy::Float3 v) { return {v.x, v.y, v.z}; }
 
-[[nodiscard]] float Opaque(const float value) {
-    volatile float stored = value;
-    return stored;
-}
-
 [[nodiscard]] Legacy::Float3 Opaque(const Legacy::Float3 value) {
     return {Opaque(value.x), Opaque(value.y), Opaque(value.z)};
-}
-
-[[nodiscard]] bool SameBits(const float a, const float b) {
-    if (std::isnan(a) && std::isnan(b)) return true;
-    return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
-}
-
-[[nodiscard]] bool SameBits(const double a, const double b) {
-    if (std::isnan(a) && std::isnan(b)) return true;
-    return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b);
 }
 
 [[nodiscard]] bool SameBits(const Legacy::Float3 a, const Math::Vec3 b) {
     return SameBits(a.x, b.x) && SameBits(a.y, b.y) && SameBits(a.z, b.z);
 }
 
-// Distance in representable floats; -0 and +0 are 0 apart.
-[[nodiscard]] std::int64_t UlpDistance(const float a, const float b) {
-    if (std::isnan(a) || std::isnan(b)) {
-        return std::isnan(a) && std::isnan(b) ? 0 : (std::numeric_limits<std::int64_t>::max)();
-    }
-    const auto ordered = [](const float value) {
-        const auto bits = static_cast<std::int64_t>(std::bit_cast<std::int32_t>(value));
-        return bits < 0 ? std::int64_t{(std::numeric_limits<std::int32_t>::min)()} - bits : bits;
-    };
-    return std::llabs(ordered(a) - ordered(b));
+[[nodiscard]] Legacy::Float3 AnyVector(Random& random, const float scale) {
+    return {random.Any(scale), random.Any(scale), random.Any(scale)};
 }
-
-// SplitMix64 seeded through a volatile, so every sample is run-time data.
-class Random final {
-public:
-    explicit Random(const std::uint64_t seed) {
-        volatile std::uint64_t stored = seed;
-        state_ = stored;
-    }
-
-    [[nodiscard]] std::uint64_t Next() {
-        std::uint64_t z = (state_ += 0x9E3779B97F4A7C15ULL);
-        z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
-        z = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
-        return z ^ (z >> 31U);
-    }
-
-    // Exact: a 24-bit integer scaled by a power of two.
-    [[nodiscard]] float Unit() { return static_cast<float>(Next() >> 40U) * 0x1p-24F; }
-    [[nodiscard]] float Range(const float lo, const float hi) { return lo + (hi - lo) * Unit(); }
-
-    // Mostly ordinary values, sometimes a special one.
-    [[nodiscard]] float Any(const float scale) {
-        static constexpr std::array<float, 10> special{0.0F, -0.0F, 1.0F, -1.0F, 1.0e-40F, -1.0e-40F,
-                                                      std::numeric_limits<float>::infinity(),
-                                                      -std::numeric_limits<float>::infinity(),
-                                                      std::numeric_limits<float>::quiet_NaN(), 3.0e38F};
-        if (Next() % 16U == 0U) return special[Next() % special.size()];
-        return Range(-scale, scale);
-    }
-
-    [[nodiscard]] Legacy::Float3 AnyVector(const float scale) { return {Any(scale), Any(scale), Any(scale)}; }
-
-private:
-    std::uint64_t state_{};
-};
 
 [[nodiscard]] std::vector<float> YawSamples() {
     constexpr float pi = std::numbers::pi_v<float>;
@@ -281,8 +226,8 @@ TEST_CASE("characterization: pvp prediction vector helpers equal Math") {
     Random random{0x51F0A6E3U};
     std::size_t differing = 0;
     for (int i = 0; i < 100000; ++i) {
-        const auto a = Opaque(random.AnyVector(64.0F));
-        const auto b = Opaque(random.AnyVector(64.0F));
+        const auto a = Opaque(AnyVector(random, 64.0F));
+        const auto b = Opaque(AnyVector(random, 64.0F));
         const float alpha = Opaque(i % 8 == 0 ? random.Any(2.0F) : random.Unit());
         const float scale = Opaque(random.Unit());
         if (!SameBits(Legacy::Interpolate(a, b, alpha), Math::Lerp(ToMath(a), ToMath(b), alpha))) ++differing;
@@ -327,7 +272,7 @@ TEST_CASE("characterization: pvp shot direction and floor distance equal Math No
     }
     // A general vector (not only unit-length directions) normalizes identically.
     for (int i = 0; i < 100000; ++i) {
-        const auto value = Opaque(random.AnyVector(1.0e3F));
+        const auto value = Opaque(AnyVector(random, 1.0e3F));
         if (!SameBits(Legacy::NormalizeDirection(value), Math::Normalize(ToMath(value)))) ++differing;
     }
     CHECK(floorHits > 10000);
@@ -338,8 +283,8 @@ TEST_CASE("characterization: pvp spawn distance equals Math LengthSquared of the
     Random random{0x6D2E90B5U};
     std::size_t differing = 0;
     for (int i = 0; i < 100000; ++i) {
-        const auto p = Opaque(random.AnyVector(64.0F));
-        const auto feet = Opaque(random.AnyVector(64.0F));
+        const auto p = Opaque(AnyVector(random, 64.0F));
+        const auto feet = Opaque(AnyVector(random, 64.0F));
         const double math = Math::LengthSquared(Math::ToVec3d(ToMath(p) - ToMath(feet)));
         if (!SameBits(Legacy::SpawnDistanceSquared(p, feet), math)) ++differing;
     }
@@ -350,13 +295,13 @@ TEST_CASE("characterization: pvp character sweep and slide expressions equal Mat
     Random random{0x0F4B83A9U};
     std::size_t differing = 0;
     for (int i = 0; i < 100000; ++i) {
-        const auto feet = Opaque(random.AnyVector(32.0F));
-        const auto normal = Opaque(random.AnyVector(1.0F));
+        const auto feet = Opaque(AnyVector(random, 32.0F));
+        const auto normal = Opaque(AnyVector(random, 1.0F));
         const float depth = Opaque(random.Any(0.5F));
         const Math::Vec3 pushed = ToMath(feet) + ToMath(normal) * (depth + 0.0001F);
         if (!SameBits(Legacy::Depenetrate(feet, normal, depth), pushed)) ++differing;
 
-        const auto d = Opaque(random.AnyVector(0.2F));
+        const auto d = Opaque(AnyVector(random, 0.2F));
         const float nearestFraction = Opaque(random.Unit());
         const auto legacy = Legacy::Slide(feet, d, nearestFraction, normal);
         const Math::Vec3 md = ToMath(d);
