@@ -56,7 +56,7 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 | `GYO::Engine` | base values, IO, runtime lifecycle, CPU asset identity/cache/loading | C++ library; JSON parser privately |
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math |
 | `GYO::Input` | physical input and action/axis evaluation | neutral input types |
-| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning | Engine |
+| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS) | Engine, Math |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |

@@ -7,7 +7,7 @@ Float3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
                            const EnemyBonePoint& point, Float2 position, float yaw) {
     if (point.node >= pose.globalTransforms.size())
         throw std::invalid_argument("Enemy bone is outside its authoritative pose");
-    const auto p = Engine::Model::TransformPoint(pose.globalTransforms[point.node], point.offset);
+    const auto p = Engine::Math::TransformPoint(pose.globalTransforms[point.node], point.offset);
     const float x = (p.x - rig.anchor.x) * rig.scale, z = (p.z - rig.anchor.z) * rig.scale;
     return {position.x + std::cos(yaw) * x + std::sin(yaw) * z, (p.y - rig.anchor.y) * rig.scale,
             position.z - std::sin(yaw) * x + std::cos(yaw) * z};
@@ -34,10 +34,10 @@ Engine::Model::Pose BuildEnemyWeaponPose(const EnemyRig& rig, const Engine::Mode
     const auto made = Engine::Model::MakeDefaultPose(*weapon.model, result);
     if (!made)
         throw std::invalid_argument("Enemy weapon pose: " + made.error());
-    const auto mount = Engine::Model::Multiply(pose.globalTransforms[weapon.node],
+    const auto mount = Engine::Math::Multiply(pose.globalTransforms[weapon.node],
                                                Engine::Model::ToMatrix(weapon.localTransform));
     for (auto& transform : result.globalTransforms)
-        transform = Engine::Model::Multiply(mount, transform);
+        transform = Engine::Math::Multiply(mount, transform);
     return result;
 }
 } // namespace fps

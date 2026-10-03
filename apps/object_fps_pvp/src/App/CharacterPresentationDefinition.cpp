@@ -228,7 +228,7 @@ Engine::Model::Pose BuildCharacterAccessoryPose(
         accessory.targetNode >= characterPose.globalTransforms.size())
         throw std::invalid_argument("accessory requires its resolved bind pose and the character pose");
     auto pose = accessory.referencePose;
-    pose.globalTransforms[accessory.sourceNode] = Engine::Model::Multiply(
+    pose.globalTransforms[accessory.sourceNode] = Engine::Math::Multiply(
         characterPose.globalTransforms[accessory.targetNode], Engine::Model::ToMatrix(accessory.placement));
     return pose;
 }

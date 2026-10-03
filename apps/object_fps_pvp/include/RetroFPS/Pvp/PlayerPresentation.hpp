@@ -44,7 +44,7 @@ struct PlayerPresentationDefinition final {
     std::size_t idleClip{}, walkClip{}, jogClip{}, upperBodyRoot{}, weaponNode{};
     std::size_t shootClip{}, reloadClip{}, jumpStartClip{}, jumpLoopClip{}, jumpLandClip{}, deathClip{};
     std::vector<bool> upperBodyMask;
-    Engine::Model::Vec3 anchor{};
+    Engine::Math::Vec3 anchor{};
     float scale{}, bodyHeight{}, referenceSpeed{};
     // Measured stance foot speed of each clip at authored playback. They are
     // the two points of the speed blend; walk and jog share one gait phase.
@@ -125,7 +125,7 @@ struct PlayerPresentationObservation final {
     double phaseCycles{}, unwrappedPhaseCycles{}, signedDistance{}, totalDistance{};
     double distanceDelta{}, cycleDistance{}, jogWeight{}, speed{}, playbackRate{};
     float moveWeight{}, scale{};
-    Engine::Model::Vec3 footAnchor{};
+    Engine::Math::Vec3 footAnchor{};
     Engine::Render::Float3 weaponWorldPosition{};
     std::size_t bodySubmittedMeshes{}, hairSubmittedMeshes{}, weaponSubmittedMeshes{};
     std::size_t upperBodyMaskCount{}, preparedInstances{};

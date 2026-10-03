@@ -6,27 +6,17 @@
 #include <unordered_set>
 
 namespace Engine::Model {
+using Math::Quaternion;
+using Math::Vec3;
 namespace {
 using TransferResult = Base::Result<AnimationClip, std::string>;
 
-Quaternion Normalize(const Quaternion q) {
-    const float length=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);
-    return {q.x/length,q.y/length,q.z/length,q.w/length};
-}
-Quaternion Inverse(const Quaternion q) { return {-q.x,-q.y,-q.z,q.w}; }
-Quaternion Product(const Quaternion a,const Quaternion b) {
-    return Normalize({a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,
-                      a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,
-                      a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,
-                      a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z});
-}
-bool Finite(const Vec3 v) {
-    return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);
-}
+// Normalized rotation composition: Product(a, b) applies b first, then a.
+Quaternion Product(const Quaternion a,const Quaternion b) { return Math::Normalize(Math::Multiply(a,b)); }
 bool UniformPositive(const Vec3 scale) {
     const float largest=std::max({scale.x,scale.y,scale.z});
     const float smallest=std::min({scale.x,scale.y,scale.z});
-    return Finite(scale)&&smallest>0&&largest-smallest<=largest*0.0001F;
+    return Math::IsFinite(scale)&&smallest>0&&largest-smallest<=largest*0.0001F;
 }
 struct ReferenceFrame final {
     Quaternion rotation{};
@@ -42,7 +32,7 @@ bool ResolveReferenceFrames(const ModelAsset& model,
         if(!UniformPositive(node.localTransform.scale)) return false;
         const auto parent=node.parentIndex?frames[*node.parentIndex]:ReferenceFrame{};
         auto& frame=frames[index];
-        frame.rotation=Product(parent.rotation,Normalize(node.localTransform.rotation));
+        frame.rotation=Product(parent.rotation,Math::Normalize(node.localTransform.rotation));
         frame.scale=parent.scale*static_cast<double>(node.localTransform.scale.x);
         if(!std::isfinite(frame.scale)||frame.scale<=0) return false;
     }
@@ -122,7 +112,7 @@ TransferResult TransferCompatibleAnimation(
         const auto& targetRest=targetNode.localTransform;
         const auto sourceParent=sourceNode.parentIndex?sourceFrames[*sourceNode.parentIndex]:ReferenceFrame{};
         const auto targetParent=targetNode.parentIndex?targetFrames[*targetNode.parentIndex]:ReferenceFrame{};
-        const auto correction=Product(Inverse(targetParent.rotation),sourceParent.rotation);
+        const auto correction=Product(Math::Conjugate(targetParent.rotation),sourceParent.rotation);
         const auto correctionMatrix=ToMatrix({{},correction,{1,1,1}});
         const double localTranslationScale=static_cast<double>(translationScale)*sourceParent.scale/targetParent.scale;
         if(!std::isfinite(localTranslationScale)||localTranslationScale<=0)
@@ -141,13 +131,13 @@ TransferResult TransferCompatibleAnimation(
                 static_cast<float>(targetRest.translation.x+rotated.x*localTranslationScale),
                 static_cast<float>(targetRest.translation.y+rotated.y*localTranslationScale),
                 static_cast<float>(targetRest.translation.z+rotated.z*localTranslationScale)};
-            if(!Finite(value)) return TransferResult::Err("Animation transfer produced non-finite translation keys.");
+            if(!Math::IsFinite(value)) return TransferResult::Err("Animation transfer produced non-finite translation keys.");
             track.translations.push_back({key.timeSeconds,value});
         }
         for(const auto& key:sourceTrack.rotations) {
-            const auto delta=Product(Normalize(key.value),Inverse(Normalize(sourceRest.rotation)));
-            const auto converted=Product(Product(correction,delta),Inverse(correction));
-            track.rotations.push_back({key.timeSeconds,Product(converted,Normalize(targetRest.rotation))});
+            const auto delta=Product(Math::Normalize(key.value),Math::Conjugate(Math::Normalize(sourceRest.rotation)));
+            const auto converted=Product(Product(correction,delta),Math::Conjugate(correction));
+            track.rotations.push_back({key.timeSeconds,Product(converted,Math::Normalize(targetRest.rotation))});
         }
         for(const auto& key:sourceTrack.scales) {
             if(!UniformPositive(key.value))

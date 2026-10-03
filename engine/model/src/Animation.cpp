@@ -6,44 +6,27 @@
 #include <unordered_set>
 
 namespace Engine::Model {
+using Math::Matrix4;
+using Math::Quaternion;
+using Math::Vec3;
 namespace {
 using Result = Base::Result<void, std::string>;
 
-bool Finite(const Vec3 v) { return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z); }
+// Model validity predicates. Finite vectors and matrices use the Math checks;
+// a valid rotation also needs a non-degenerate quaternion.
+bool Finite(const Vec3 v) { return Math::IsFinite(v); }
 bool Finite(const Quaternion q) {
     const float lengthSquared=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
     return std::isfinite(q.x)&&std::isfinite(q.y)&&std::isfinite(q.z)&&std::isfinite(q.w)
         && std::isfinite(lengthSquared)&&lengthSquared > 1.0e-12F;
 }
-bool Finite(const Matrix4& m) {
-    return std::all_of(m.values.begin(),m.values.end(),[](float f){return std::isfinite(f);});
-}
+bool Finite(const Matrix4& m) { return Math::IsFinite(m); }
 bool Finite(const Transform& t) { return Finite(t.translation)&&Finite(t.rotation)&&Finite(t.scale); }
 
-Vec3 Lerp(const Vec3 a,const Vec3 b,const float t) {
-    return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t};
-}
-
-Quaternion Normalize(Quaternion q) {
-    const float length=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);
-    if (length<=1.0e-12F) return {};
-    return {q.x/length,q.y/length,q.z/length,q.w/length};
-}
-
-Quaternion Slerp(Quaternion a,Quaternion b,const float t) {
-    a=Normalize(a); b=Normalize(b);
-    float dot=a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w;
-    if (dot<0) { b={-b.x,-b.y,-b.z,-b.w}; dot=-dot; }
-    dot=std::clamp(dot,-1.0F,1.0F);
-    float left=1-t,right=t;
-    if (dot<0.9995F) {
-        const float angle=std::acos(dot),divisor=std::sin(angle);
-        left=std::sin((1-t)*angle)/divisor;
-        right=std::sin(t*angle)/divisor;
-    }
-    return Normalize({a.x*left+b.x*right,a.y*left+b.y*right,
-                      a.z*left+b.z*right,a.w*left+b.w*right});
-}
+// Sample takes the interpolation as a callable; overloaded Math functions are
+// wrapped so the template can deduce them.
+constexpr auto LerpVec3=[](const Vec3 a,const Vec3 b,const float t){return Math::Lerp(a,b,t);};
+constexpr auto SlerpRotation=[](const Quaternion a,const Quaternion b,const float t){return Math::Slerp(a,b,t);};
 
 template<class T,class Interpolator>
 T Sample(const std::vector<Keyframe<T>>& keys,const double time,T fallback,Interpolator interpolate) {
@@ -167,9 +150,9 @@ Result SamplePose(const ModelAsset& model,const std::size_t clipIndex,double sec
     for(const auto& track:clip.tracks) {
         if(track.nodeIndex>=model.nodes.size()) return Result::Err("Animation track node is out of range.");
         auto& t=output.localTransforms[track.nodeIndex];
-        t.translation=Sample(track.translations,seconds,t.translation,Lerp);
-        t.rotation=Sample(track.rotations,seconds,t.rotation,Slerp);
-        t.scale=Sample(track.scales,seconds,t.scale,Lerp);
+        t.translation=Sample(track.translations,seconds,t.translation,LerpVec3);
+        t.rotation=Sample(track.rotations,seconds,t.rotation,SlerpRotation);
+        t.scale=Sample(track.scales,seconds,t.scale,LerpVec3);
     }
     return ResolveGlobals(model,output);
 }

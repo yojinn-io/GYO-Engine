@@ -13,7 +13,7 @@
 namespace fps {
 struct EnemyBonePoint final {
     std::size_t node{};
-    Engine::Model::Vec3 offset{};
+    Engine::Math::Vec3 offset{};
 };
 struct EnemyHurtRegion final {
     std::string id;
@@ -26,14 +26,14 @@ struct EnemyWeaponAttachment final {
     std::shared_ptr<const Engine::Model::ModelAsset> model;
     std::size_t node{};
     Engine::Model::Transform localTransform{};
-    Engine::Model::Vec3 muzzlePosition{}; // weapon model-space metres
+    Engine::Math::Vec3 muzzlePosition{}; // weapon model-space metres
 };
 // Resolved, immutable CPU contract. Asset decoding and material assembly remain in App.
 struct EnemyRig final {
     Engine::Asset::AssetId characterAssetId;
     std::shared_ptr<const Engine::Model::ModelAsset> model;
     std::array<std::size_t, 4> clips{}; // idle, move, attack, dead
-    Engine::Model::Vec3 anchor{};
+    Engine::Math::Vec3 anchor{};
     float scale{1};
     std::vector<EnemyHurtRegion> hurtRegions;
     std::optional<EnemyWeaponAttachment> weapon;

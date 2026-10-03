@@ -11,6 +11,9 @@
 #include <unordered_map>
 
 namespace Engine::Model::Ufbx {
+using Math::Matrix4;
+using Math::Quaternion;
+using Math::Vec3;
 namespace {
 using Result = Base::Result<Asset::Core::AnyAsset, Asset::Loading::AssetError>;
 using ScenePtr = std::unique_ptr<ufbx_scene, decltype(&ufbx_free_scene)>;

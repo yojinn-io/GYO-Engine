@@ -49,7 +49,7 @@ class ModelInstance final {
 public:
     [[nodiscard]] static Base::Result<std::unique_ptr<ModelInstance>, std::string> Create(
         std::shared_ptr<ModelResource> resource, const Model::Pose& pose,
-        Model::Vec3 modelSpaceOffset = {});
+        Math::Vec3 modelSpaceOffset = {});
     ~ModelInstance();
     ModelInstance(const ModelInstance&) = delete;
     ModelInstance& operator=(const ModelInstance&) = delete;

@@ -361,7 +361,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - `docs/architecture/math.md`。
 - **grep 稽核 active 範圍**：
   - 除了第 2 節列為保留的型別，已沒有 `struct (Float[23]|Vec[23]|Matrix4|Quaternion)`。
-  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。
+  - 沒有匿名的 `Length/IsFinite/Finite(/Normalize/Multiply/Rotation`。已知例外：Model `Animation.cpp` 的 `Finite` 驗證政策系列（B3，見 HANDOFF），以及 ufbx loader 的 `Rotation(ufbx_quat)` 轉換函式。
   - 公共層沒有出現產品名稱。
 - **未啟用產品的破損盤點**：
   - 在 scratch registry 中啟用 object_fps 和 object_fps_v2，並設定 `GYO_OUTPUT_ROOT=<scratchpad>`。
