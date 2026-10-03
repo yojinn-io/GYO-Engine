@@ -276,6 +276,8 @@ TEST_CASE("degree and radian conversion") {
 // The conversions are constexpr so products can declare angle constants. Each
 // is one multiplication, so constant evaluation must give the run-time bits.
 // The run-time inputs go through volatile so the compiler cannot fold them.
+namespace {
+
 constexpr std::size_t kAngleSamples = 2881;
 
 [[nodiscard]] constexpr float AngleSample(const std::size_t index) noexcept {
@@ -293,6 +295,8 @@ constexpr auto kConstantDegrees = [] {
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = RadiansToDegrees(AngleSample(i) * 0.01F);
     return values;
 }();
+
+} // namespace
 
 static_assert(DegreesToRadians(0.0F) == 0.0F);
 static_assert(RadiansToDegrees(0.0F) == 0.0F);

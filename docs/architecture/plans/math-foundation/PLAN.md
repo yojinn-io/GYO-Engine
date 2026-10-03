@@ -330,6 +330,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **決定性量測**：
   - 固定指令序列的 digest，在 master 和 branch 上分別產生並比較。
   - B1b 起全專案以 `-ffp-contract=off` 建置（MSVC 預設即不收縮），優先平台為 Linux、Windows、mac x64，arm64 為附帶產物。digest 以優先平台為準，各平台結果應只因 libm 不同而有差異。digest 的輸入仍必須是執行期資料。
+  - 使用者決定（2026-10-04）：全模擬 digest 在本機（mac x64）比對；依賴 libm 或會漂移的替換，以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測。其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關。
   - 差異如實記錄。注意 `PredictionTests.cpp:563,584` 和 `PvpMatchTests.cpp:258-318` 都是 Approx 或同一次執行內的自我一致比較，不是 golden。
 - **重新盤點**：B0 之後 master 合併了 PvP v5 的多個 PR（#11–#16），pvp 有 28 個檔案變動。本節與第 2 節的 pvp 行號以 B0 時為準，B6a 開始時必須重新盤點。
 - **名稱衝突**：`tests/object_fps_pvp/PredictionTests.cpp:37` 的 `Distance(fps::Float3, fps::Float3)` 算的是水平（XZ）距離。型別換成 `Math::Vec3` 後會和 `Math::Distance` 歧義；改名為 `HorizontalDistance` 並保留語意，不可當成重複定義刪除。
@@ -410,7 +411,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - B1 的 characterization 測試。
   - B4b 的 Renderer memcmp（四平台）。
   - B5 的 gyo.ui golden 字串。
-  - B6a 的 PvP digest（含 arm64）。
+  - B6a 的 PvP digest（本機 mac x64）與 pvp characterization 測試（CI 四平台）。
   - B6c 的逐檔 syntax-only 檢查。
 - **最終**：B7 的 grep 稽核、依賴圖比對、未啟用產品破損清單、Architecture Report。
 
