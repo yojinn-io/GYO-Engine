@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 本機驗收完成，PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18) 待 CI 四平台。**
+更新：2026-10-03。**B0 完成，PR [#17](https://github.com/yojinn-io/GYO-Engine/pull/17) 已合併（`0dd3077`，2026-10-03）。B1 與 B1b 本機驗收完成，合併在 PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18)，待 CI 四平台。**
 
 ## 閱讀入口
 
@@ -120,7 +120,7 @@
 
 ## B1b 浮點收縮模式統一
 
-狀態：**本機驗收完成**（分支 `claude/math-foundation-b1b`，自 B1 分支分出；PR 待 #18 合併後開，base 為 master）。
+狀態：**本機驗收完成，依使用者指示併入 PR [#18](https://github.com/yojinn-io/GYO-Engine/pull/18)**（2026-10-03；原分支 `claude/math-foundation-b1b` 的 commit 已 cherry-pick 到 B1 分支，不另開 PR）。
 
 - `build/cmake/GyoBuild.cmake`：在 `third_party` 之後、`engine` 之前加上 `add_compile_options`，對 C／C++ 的 Clang、AppleClang、GCC 加 `-ffp-contract=off`。
   - 作用範圍：engine、apps、tools、tests，以及產品從自己目錄加入的相依套件（pvp 的 protobuf、asio、httplib）。
