@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 驗收完成（含 `/Zc:preprocessor`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 完成（PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 合併為 `9c51b32`）。R2 本機驗收完成，PR 待開。**
 
 ## 閱讀入口
 
@@ -101,7 +101,7 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ## R1 概念文件與 Assert
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。
+狀態：**完成**。PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 於 2026-10-04 合併為 `9c51b32`，L1 四列與 CI gate 通過（分支 `claude/result-unification-r1`，基準 `3b9765e`）。
 
 ### 變更
 
@@ -177,6 +177,8 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 6. **Ownership**：前處理器模式歸建置層（`GyoBuild.cmake`）；`Assert.hpp` 只宣告並強制它所依賴的前提。
 7. **為什麼沒有更小的做法**：維持現狀就是保留特例；改用 (B) 只涵蓋連 Base 的目標，會留下兩種前處理器模式；逐 target 設定會在每個新 target 重複同一個事實。
 
+**連帶影響：Windows 的 compiler cache**。編譯旗標改變後，sccache 的 key 也改變，windows-x64 的「Build the registered graph」步驟從 8 分 52 秒（命中率 85.7%）變成 24 分 23 秒（35.8%）。CI 只在 master 上更新 cache，所以合併前的每次 PR run 都是冷 cache（第三次 run 為 28 分 24 秒）。合併後 master 會以新旗標重建 cache。之後若再改全域編譯旗標，預期會有同樣的一次性成本。
+
 ### 依賴 collision 例外做內容驗證的未編譯檔（R1 之後這些路徑會 abort）
 
 - `apps/object_fps_pvp/src/Gameplay/Player/PlayerController.cpp:43-62`：try 包住 `CanPlaceCharacterBody`（`:46`），catch 在 `:55`、`:59`（後者是 `catch (...)`）。
@@ -187,11 +189,11 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- 無（L1 四列已通過，等待使用者合併）。
+- 無。
 
 ## R2 Result 的寫法
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立；#31 合併後併入 master），PR 待開。
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立，#31 合併後併入 master `9c51b32`），PR 待開。
 
 ### 變更
 
@@ -240,4 +242,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- #31 合併後把 master 併入本分支，開 PR 並取得 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。
+- 開 PR 並取得 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。`Result.hpp` 被大多數 TU include，Windows 列預計要重編大部分檔案（約 20 多分鐘）。
