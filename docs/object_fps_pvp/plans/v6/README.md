@@ -1,7 +1,7 @@
 # PvP v6 分批計畫與進度
 
 更新：2026-10-05。Owner：`object_fps_pvp`。
-**第 01～03 批完成並合併**（PR #39、#40、#41；master `6381e9d`）。**第 04 批進行中**；其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)）。
+**第 01～03 批完成並合併**（PR #39、#40、#41；master `6381e9d`）。**第 04 批完成**（PR 待開）；其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)）。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
@@ -27,8 +27,8 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 01 | [計畫、分批與基線](01-plan-and-baseline.md) | ultracode → medium → low | 完成，PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39) 已合併（`a687663`） | 分批計畫、HANDOFF 更正與決策紀錄、基線 CTest、v5 證據保存、契約骨架、兩個 Engine 計畫夾 |
 | 02 | [驗收工具可信化](02-acceptance-tools.md) | high（02c 計時判定局部 xhigh） | 完成，PR [#40](https://github.com/yojinn-io/GYO-Engine/pull/40) 已合併（`a36b319`；②③' 兩處待產品配合） | 02a 刪除 v4 語意模式與版本常數、02b 計時器基線、02c 計時假設改為結構條件並重新分析 v5 資料 |
 | 03 | [權威 digest 閘門](03-authority-digest.md) | high（golden 策略局部 xhigh） | 完成，PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41) 已合併（`6381e9d`） | 逐 Tick 權威狀態 digest、同機兩樹比對、CI 自洽檢查 |
-| 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 進行中 | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
-| 05 | [死亡後第一人稱手臂](05-first-person-arms-after-death.md) | high | 未開始 | 第 6 項的缺陷修正；無法重現就停下 |
+| 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 完成（第 3 項重現；第 6 項未重現） | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
+| 05 | [死亡後第一人稱手臂](05-first-person-arms-after-death.md) | high | 不執行（第 04 批未重現；依停止條件） | 第 6 項的缺陷修正；無法重現就停下 |
 | 06 | [改經 Engine 取得輸入](06-input-migration.md) | high | 未開始 | 產品與 GUI probe 改用 IP-1；文字輸入例外 |
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 未開始 | IP-2 之後重取基線 |
 | 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 未開始 | 29 檔與孤兒資產 |

@@ -1,6 +1,6 @@
 # 第 04 批：量測基線 B0 與缺陷重現
 
-狀態：進行中（2026-10-05 開始）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md)、[第02批](02-acceptance-tools.md) 與 [第03批](03-authority-digest.md)。
+狀態：完成（2026-10-05）。第 3 項重現；第 6 項未重現。結果見 [基線 B0](BASELINE.md) 與 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch04.zh-Hant.md)。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md)、[第02批](02-acceptance-tools.md) 與 [第03批](03-authority-digest.md)。
 依賴：第02批、第03批都已合併。
 
 本批在固定的來源上，用第02批凍結的工具量出基線 B0，並重現 HANDOFF 第3、6項。

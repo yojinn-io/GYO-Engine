@@ -1,7 +1,8 @@
 # 輸入與呈現：分批計畫與進度
 
-更新：2026-10-04。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；`engine/runtime` 只讀）。
+更新：2026-10-05。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；`engine/runtime` 只讀）。
 **狀態：未開始。** 本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立，沒有任何批次開始。
+2026-10-05：IP-2 的消費端條件（拖動重現與量測基線 B0）已由消費端完成；縮放時的停頓落在事件處理而非 render，IP-2 開始時須先處理，見 [HANDOFF](HANDOFF.md) 未結事項。
 
 Engine 的輸入層與呈現路徑各有一個缺口：
 
