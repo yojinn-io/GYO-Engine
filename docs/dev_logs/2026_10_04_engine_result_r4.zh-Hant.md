@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R4：Model、ui／render 的轉換與 API 誤用
 
 日期：2026-10-04。Owner：Engine（model、render、ui、`GYO::Base`），連帶 pvp 的被迫修改。
-狀態：本機驗收完成，PR 待開（分支 `claude/result-unification-r4`，基準 `12abe2e`）。
+狀態：本機驗收完成，PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 待 CI（分支 `claude/result-unification-r4`，基準 `12abe2e`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r4-modeluirender-的轉換與-api-誤用)，本文只記經過。
 
 ## 經過
