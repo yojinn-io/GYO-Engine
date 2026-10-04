@@ -154,4 +154,12 @@ class GameplayEvidenceTests(unittest.TestCase):
         code='import sys,gameplay_evidence;sys.exit(int("presentation_evidence" in sys.modules))'
         self.assertEqual(subprocess.run([sys.executable,'-c',code],cwd=Path(__file__).resolve().parent).returncode,0)
 
+class TimerBaselineIsNeverAVerdict(unittest.TestCase):
+    """The empty-loop timer baseline is interpretation only: the analyzer may pass it through, never read it."""
+    def test_source_only_passes_the_timer_baseline_through(self):
+        source = (Path(__file__).resolve().parent / 'gameplay_evidence.py').read_text(encoding="utf-8")
+        lines = [line.strip() for line in source.splitlines() if "timer" in line.lower()]
+        self.assertEqual(lines, ["'timer_baseline':client.get('timer'),  # Interpretation only; no check reads it."], "a check may have started reading the timer baseline")
+
+
 if __name__=='__main__':unittest.main()

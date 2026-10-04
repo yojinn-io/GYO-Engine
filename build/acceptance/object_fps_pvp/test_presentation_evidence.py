@@ -523,6 +523,34 @@ class LatencyEvidenceTests(unittest.TestCase):
                 bad = self.window_directory({"create": broken})
                 self.assertEqual(evidence.platform_evidence(bad / "create-report.txt")["status"], "invalid")
 
+    TIMER_REPORT = ("platform_timer_sleeper=SDL_DelayNS remainder\nplatform_timer_schedule=frame_relative\n"
+                    "platform_timer_samples=180\n"
+                    "platform_timer_late_p50_ms=0.9\nplatform_timer_late_p99_ms=6.5\nplatform_timer_late_max_ms=8.1\n"
+                    "platform_timer_interval_p50_ms=16.8\nplatform_timer_interval_p99_ms=20.5\n"
+                    "platform_timer_interval_max_ms=24.9\nplatform_timer_interval_over_slow_fraction=0.22\n")
+
+    def test_timer_baseline_is_reported_for_interpretation_only(self):
+        directory = self.window_directory({"create": self.PLATFORM_REPORT + self.TIMER_REPORT, "join": self.PLATFORM_REPORT})
+        create = evidence.platform_evidence(directory / "create-report.txt")
+        self.assertEqual(create["status"], "recorded")
+        self.assertEqual((create["timer"]["samples"], create["timer"]["interval_p99_ms"]), (180, 20.5))
+        self.assertIn("interpretation only", create["timer"]["use"])
+        self.assertIsNone(evidence.platform_evidence(directory / "join-report.txt")["timer"])
+        broken = self.window_directory({"create": self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=180", "=many")})
+        result = evidence.platform_evidence(broken / "create-report.txt")
+        self.assertEqual((result["status"], result["timer"]["status"]), ("recorded", "invalid"))
+
+    def test_timer_baseline_never_changes_a_latency_verdict(self):
+        # Mutation: an extreme or broken timer baseline must leave pass and fail exactly as they were.
+        extreme = self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=20.5", "=900").replace("=0.22", "=1")
+        broken = self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=180", "=many")
+        for delay in (.04, .1):
+            with self.subTest(delay=delay):
+                plain = self.scenario(delay, short=True)
+                for extra in (extreme, broken):
+                    timed = self.scenario(delay, short=True, report_extra={"create": extra, "join": extra})
+                    self.assertEqual((timed["passed"], timed["errors"]), (plain["passed"], plain["errors"]))
+
     def test_window_placement_error_is_kept_beside_the_default_placement(self):
         report = self.linux_window_report() + "window_placement_error=wayland: cannot position a toplevel\n"
         result = evidence._windows(self.window_directory({"create": report, "join": self.linux_window_report()}))

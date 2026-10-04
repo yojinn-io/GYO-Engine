@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "acceptance_protocol.hpp"
+#include "timer_baseline.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <algorithm>

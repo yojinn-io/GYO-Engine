@@ -66,6 +66,7 @@
 - 2026-10-04：02a 開工盤點觸發停止條件（`weapon_short` 的涵蓋對照表有斷言找不到替代），使用者決定 D14。
 - 2026-10-04：02a 完成：獨有斷言移進 `action_short`，刪除 `weapon_short`、legal 模式；`run_native_window.py` 改為 v5 死亡語意；
   驗收端版本號收成單一常數。本機雙 GUI 開發實跑 `action30`／`60`／`144`／`capture` 通過（不計次）。對照表見 [dev_log](../../../dev_logs/2026_10_04_pvp_v6_batch02.zh-Hant.md)。
+- 2026-10-04：02b 完成：GUI 與 headless probe 都記錄 3 秒空 60 Hz 迴圈的晚醒分布（睡法與各 probe 相同），只供解讀；判定不讀它（突變與原始碼守衛測試）。
 - 待決：`action_probe.py` 自己的 `main` 仍是 v4 動作矩陣語意，v5 驗收不用它。
 
 ## 延後項目：現況與對應批次

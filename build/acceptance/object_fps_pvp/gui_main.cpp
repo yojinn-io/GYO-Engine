@@ -9,6 +9,7 @@
 #include "render/Renderer.hpp"
 #include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "acceptance_protocol.hpp"
+#include "timer_baseline.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>

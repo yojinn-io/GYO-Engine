@@ -301,6 +301,23 @@ def _window_overlap(create, join):
 
 
 PLATFORM_FIELDS = ("os", "architecture", "video_driver", "gpu_driver", "refresh_hz", "usable_bounds", "input")
+TIMER_FIELDS = ("late_p50_ms", "late_p99_ms", "late_max_ms", "interval_p50_ms", "interval_p99_ms", "interval_max_ms",
+                "interval_over_slow_fraction")
+
+
+def timer_evidence(report):
+    """The probe's empty-loop late-wake distribution: interpretation only, never part of a verdict."""
+    if "platform_timer_samples" not in report:
+        return None
+    try:
+        timer = {"use": "interpretation only; never a verdict, threshold or denominator",
+                 "sleeper": report["platform_timer_sleeper"], "schedule": report.get("platform_timer_schedule"),
+                 "samples": int(report["platform_timer_samples"])}
+        for field in TIMER_FIELDS:
+            timer[field] = float(report[f"platform_timer_{field}"])
+        return timer
+    except (KeyError, ValueError) as error:
+        return {"status": "invalid", "reason": f"timer baseline: {error}"}
 
 
 def platform_evidence(path):
@@ -321,6 +338,7 @@ def platform_evidence(path):
         result["usable_bounds"] = _integers(report, "platform_usable_bounds", 4, "unavailable")
     except DIAGNOSTIC_ERRORS as error:
         return {"status": "invalid", "reason": f"{path.name}: {_diagnostic_error(error)}"}
+    result["timer"] = timer_evidence(report)
     return result
 
 

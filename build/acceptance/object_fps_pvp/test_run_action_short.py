@@ -109,5 +109,13 @@ class ActionSummaryTests(unittest.TestCase):
         self.assertEqual(len(summary["errors"]), 2)
 
 
+class TimerBaselineIsNeverAVerdict(unittest.TestCase):
+    """The empty-loop timer baseline is interpretation only: the analyzer may pass it through, never read it."""
+    def test_source_only_passes_the_timer_baseline_through(self):
+        source = (Path(__file__).resolve().parent / 'run_action_short.py').read_text(encoding="utf-8")
+        lines = [line.strip() for line in source.splitlines() if "timer" in line.lower()]
+        self.assertEqual(lines, [], "a check may have started reading the timer baseline")
+
+
 if __name__ == "__main__":
     unittest.main()

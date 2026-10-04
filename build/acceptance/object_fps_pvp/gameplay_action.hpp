@@ -71,6 +71,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     Require(!output.empty()&&(fps==30||fps==60||fps==144)&&drainStallMs>=0&&drainStallMs<=1500&&
         cycles>=1&&cycles<=GameplayMaximumCycles&&(cycles==1||drainStallMs==0),"Invalid gameplay probe options");
     std::filesystem::create_directories(output);
+    // Interpretation only: the frame loop below sleeps with sleep_until.
+    const auto timer=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
     const auto plan=GameplayPlan(cycles); Json declared=Json::array();
     const double duration=cycles*GameplayCycleSeconds;
     for(std::size_t n=0;n<plan.size();++n){const auto& s=plan[n];declared.push_back({{"ordinal",n},{"at_seconds",s.at},
@@ -160,7 +162,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     }
     Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",AcceptanceProtocolVersion},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
         {"player_ids",ids},{"fps",fps},{"duration",duration},{"cycles",cycles},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
-        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()}};
+        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()},{"timer",timer.Json()}};
     for(unsigned i=0;i<2;++i){const auto state=clients[i].State();const auto& rules=*state.combatRules;
         result["clients"].push_back({{"player_id",ids[i]},{"submitted",submitted[i].size()},{"decisions",decisions[i].size()},
             {"retired_through",state.actionTransport.retiredThrough},{"retained",state.actionTransport.retained},
