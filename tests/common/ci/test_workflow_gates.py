@@ -1,5 +1,6 @@
 """Exercise the CI and release workflows' actual gates without GitHub API calls."""
 
+import csv
 import fnmatch
 import itertools
 import json
@@ -346,10 +347,14 @@ class WorkflowGateTests(unittest.TestCase):
         native = job_block(self.shared, "native")
         self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
         self.assertIn('"-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS"', native)
-        # Tools are selected only through GYO_TOOLS: no per-tool GYO_BUILD_<TOOL>
-        # switch (GYO_BUILD_CONFIG is the build configuration, not a tool) and no
-        # tool-specific GUI switch may come back.
-        self.assertNotRegex(native, r"GYO_BUILD_(?!CONFIG\b)[A-Z0-9_]+|GYO_[A-Z0-9_]+_BUILD_GUI")
+        # Tools are selected only through GYO_TOOLS: no registered tool may come
+        # back as its own GYO_BUILD_<TOOL> or GYO_<TOOL>_BUILD_GUI switch. The
+        # names come from the registration data, so no tool is named here.
+        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8", newline="") as rows:
+            tools = [row["name"].upper() for row in csv.DictReader(rows)]
+        self.assertTrue(tools)
+        for tool in tools:
+            self.assertNotRegex(native, rf"GYO_BUILD_{tool}\b|GYO_{tool}_BUILD_GUI\b")
         self.assertIn('"-DGYO_APPS=$apps"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.kind == 'toolchain'", native)
         for step in re.split(r"(?m)^      - ", native):
