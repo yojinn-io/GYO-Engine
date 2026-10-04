@@ -6,6 +6,7 @@ from pathlib import Path
 from action_evidence import records, frames
 from command_evidence import match_life_seed_clamps, read_trace_events, recovery_actual_intervals
 from start_phase_evidence import reseed_evidence, summarize_start_phase
+from acceptance_util import PROTOCOL_VERSION, STALL_RULE
 
 
 def percentile(values, percent):
@@ -136,8 +137,8 @@ def analyze(output, relay, fault, mode):
     client=json.loads((output/'action-client.json').read_text())
     plan=json.loads((output/'gameplay-plan.json').read_text())
     events=list(records(output/'actions.jsonl')); all_frames=list(frames(output))
-    check(client.get('gameplay_v5') and client['protocol']==5 and client['passed'],'v5 client did not finish/retire all actions')
-    check(plan['protocol']==5 and len(plan['actions'])==client['planned_actions'],'Predeclared v5 denominator missing')
+    check(client.get('gameplay_v5') and client['protocol']==PROTOCOL_VERSION and client['passed'],'v5 client did not finish/retire all actions')
+    check(plan['protocol']==PROTOCOL_VERSION and len(plan['actions'])==client['planned_actions'],'Predeclared v5 denominator missing')
     submitted={}; delivered={}; by_plan={}; decisions=[]
     for e in events:
         if e['kind']=='submitted':
@@ -333,7 +334,10 @@ def analyze(output, relay, fault, mode):
     if mode=='duplicate-reorder-conflict':
         for label in ('duplicate_action','conflicting_atomic_batch','conflicting_life','conflicting_kind','reordered_old_action'):
             check(sum(e['event']==label for e in relay['events'])==2,'Missing '+label)
-    return {'passed':not errors,'errors':errors,'protocol':5,'mode':mode,'fps':client['fps'],'scope':'16-second real-socket v5 gameplay and delivery, no long certification',
+    return {'passed':not errors,'errors':errors,'protocol':PROTOCOL_VERSION,'mode':mode,'fps':client['fps'],
+            'timer_baseline':client.get('timer'),  # Interpretation only; no check reads it.
+            'stall_rule':STALL_RULE,
+           'scope':'16-second real-socket v5 gameplay and delivery, no long certification',
             'fault_expiry_reasons':fault_expiry_reasons,'planned_actions':len(plan['actions']),'delivered_actions':len(delivered),'verdicts':dict(verdicts),'deaths':deaths,'respawns':respawns,
             'unique_wire_decisions':len(originals),'identical_repeats':repeats,'combat_observations':hp_count,'jump_maximum_foot_y':jumps,
             'legal_match_p95_ms':percentile(legal_latency,95) if clean else None,'legal_client_p95_ms':percentile(delivery_latency,95) if clean else None,

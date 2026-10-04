@@ -1,5 +1,6 @@
 """Counterexamples for the character acceptance evidence, without GUI fixtures."""
 import unittest
+import player_presentation_evidence as evidence
 from player_presentation_evidence import validate_samples
 
 
@@ -99,5 +100,35 @@ class PlayerEvidenceTests(unittest.TestCase):
         value['remote']['character']['distance_delta']=.01
         self.assertEqual(validate_samples([sample(0,0,0),value])['errors'],[])
 
+
+
+class ScriptTimingTests(unittest.TestCase):
+    SCHEDULE = [{"ordinal": 1, "seconds": .75, "name": "forward"}, {"ordinal": 2, "seconds": 1.55, "name": "stop"}]
+
+    def test_windows_follow_when_the_actor_input_really_fired(self):
+        # Old misjudgement: a 120 ms late wake delays the actor's key, but a fixed script window
+        # still starts at 0.95 s, only 80 ms after the key really entered.
+        frames = [{"event": "", "seconds": .7}, {"event": "forward", "seconds": .87}, {"event": "stop", "seconds": 1.67}]
+        times = evidence.event_times(self.SCHEDULE, frames)
+        begin, end = evidence.anchored(times, .95, 1, 1.5, 2)
+        self.assertAlmostEqual(begin, 1.07)
+        self.assertAlmostEqual(end, 1.62)
+        self.assertAlmostEqual(begin - times[1]["actual"], .2)
+        # A punctual run keeps exactly the declared window.
+        punctual = evidence.event_times(self.SCHEDULE, [{"event": "forward", "seconds": .75}, {"event": "stop", "seconds": 1.55}])
+        self.assertEqual(evidence.anchored(punctual, .95, 1, 1.5, 2), (.95, 1.5))
+
+    def test_missing_or_reordered_actor_input_is_still_an_error(self):
+        # Real defect: an input that never fired, or fired out of order, cannot be re-anchored away.
+        for frames in ([{"event": "forward", "seconds": .75}],
+                       [{"event": "stop", "seconds": .75}, {"event": "forward", "seconds": 1.55}]):
+            with self.subTest(frames=frames):
+                with self.assertRaises(ValueError):
+                    evidence.event_times(self.SCHEDULE, frames)
+
+    def test_cadence_below_85_percent_is_invalid_not_failed(self):
+        self.assertEqual(evidence.cadence_status(120, 144, "none"), "invalid_capacity")
+        self.assertEqual(evidence.cadence_status(122.4, 144, "none"), "valid")
+        self.assertEqual(evidence.cadence_status(30, 144, "actual scene GPU readback"), "not_applicable")
 
 if __name__=='__main__':unittest.main()

@@ -125,3 +125,10 @@ v5 是單一 commit 同時升級三角色（`de87bb9`）。v6 也是這樣做（
 
 目前 repo 沒有任何權威狀態 digest 或 golden 回放。Math B6a 的 62 情境全模擬 digest harness 只放在 scratch，沒有進 repo。
 第 03 批會補上這道閘門，並記錄本基準（`05042fa`）的 digest。在那之前，「權威結果不變」只能靠既有 CPU 測試。
+
+## 第 02 批凍結的驗收工具（供第 04 批使用）
+
+- 2026-10-04 凍結：`build/acceptance/object_fps_pvp` 的 52 個檔案。
+- 雜湊清單：`build/target/_build/test/logs/pvp-v6-batch02-reanalysis-20261004/frozen-tools.sha256`。
+- 清單本身的 SHA-256：`b5f4bf79d1a312e860a69b8c8038aa535ad5f5ac16a91dbea0dad2267ff59b77`。
+- 第 04 批量測前要先核對工具與這份清單相同；不同就先查明差異，不得直接量測。

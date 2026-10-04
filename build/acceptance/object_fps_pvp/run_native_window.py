@@ -425,16 +425,18 @@ def run(args):
         result["checks"]["V4_native_four_hits_hp"] = hp
         desktop.focus(b)
         result["captures"].append(screenshot(directory, "peer-hp-zero-hud", b))
-        # HP zero remains playable; release later, then rejoin via real Lobby UI.
+        # v5: the dead peer can neither move nor fire until its respawn; then rejoin via real Lobby UI.
         capture("join")
-        initial = sample("join")["local"]["predicted"]
+        dead = sample("join")
+        require(dead["weapon"]["dead"], "Peer at HP zero is not dead")
         desktop.key(b, "w", True)
-        shoot("join")
+        desktop.click(b, .08)
         time.sleep(.25)
         desktop.key(b, "w", False)
         target = fresh("join")
-        require(math.dist(initial, target["local"]["predicted"]) > .3, "HP zero blocked movement")
-        record("hp-zero-native-move-shot")
+        require(math.dist(dead["local"]["predicted"], target["local"]["predicted"]) < .05, "Dead peer moved")
+        require(target["weapon"]["submitted"] == dead["weapon"]["submitted"], "Dead peer submitted a shot")
+        record("dead-native-move-shot-suppressed")
         old_id = target["player_id"]
         desktop.tap(b, "Escape")
         wait_state(directory, "join", lambda s: s["phase"] == 0 and not s["weapon"]["active"], "Native Escape did not leave")

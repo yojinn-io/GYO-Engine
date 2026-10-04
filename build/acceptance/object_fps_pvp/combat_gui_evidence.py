@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 
 from gameplay_evidence import combat_expected
+from acceptance_util import PROTOCOL_VERSION
 
 CYCLE = (["hit"] * 4 + ["dead_target_shot"] * 3 + ["idle"] + ["hit"] * 4 +
          ["dead_target_shot", "empty_click", "reload", "reloading_click", "idle"])
@@ -117,7 +118,7 @@ def analyze_combat_gui(directory, life_respawn_resets=None):
     resets; when given, it must equal the respawns seen in the HP history."""
     directory = Path(directory)
     result = {
-        "schema_version": 2, "protocol": 5, "passed": False, "full_acceptance": False,
+        "schema_version": 2, "protocol": PROTOCOL_VERSION, "passed": False, "full_acceptance": False,
         "scope": "Same-host real SDL input and successful Presented frames; timestamps end at Render return, not monitor scanout or input-to-photon. This evidence alone is not complete v5 acceptance.",
         "criteria": {"maximum_decision_arrival_p95_seconds": .150,
                      "verdicts": "every predeclared action has its exact v5 verdict; empty and reloading clicks are never submitted",
@@ -151,7 +152,7 @@ def analyze_combat_gui(directory, life_respawn_resets=None):
                       sources=[f"{role}-combat{suffix}" for role in reports for suffix in (".json", "-hp.jsonl")])
         for role, report in reports.items():
             mover, label = role == "create", f"{role} combat"
-            if report["schema_version"] != 2 or report.get("protocol") != 5 or report["enabled"] is not True:
+            if report["schema_version"] != 2 or report.get("protocol") != PROTOCOL_VERSION or report["enabled"] is not True:
                 raise ValueError(f"{label}: unsupported schema or disabled combat")
             if report["duration_seconds"] != duration:
                 raise ValueError(f"{label}: inconsistent duration")

@@ -71,6 +71,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     Require(!output.empty()&&(fps==30||fps==60||fps==144)&&drainStallMs>=0&&drainStallMs<=1500&&
         cycles>=1&&cycles<=GameplayMaximumCycles&&(cycles==1||drainStallMs==0),"Invalid gameplay probe options");
     std::filesystem::create_directories(output);
+    // Interpretation only: the frame loop below sleeps with sleep_until.
+    const auto timer=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
     const auto plan=GameplayPlan(cycles); Json declared=Json::array();
     const double duration=cycles*GameplayCycleSeconds;
     for(std::size_t n=0;n<plan.size();++n){const auto& s=plan[n];declared.push_back({{"ordinal",n},{"at_seconds",s.at},
@@ -78,7 +80,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         {"life_generation",s.life},{"expected_rejection",static_cast<int>(s.expected)},{"target",s.target},{"cycle",s.cycle}});}
     std::vector<double> jumpEdges;
     for(unsigned cycle=0;cycle<cycles;++cycle)for(const double at:GameplayJumpSeconds)jumpEdges.push_back(cycle*GameplayCycleSeconds+at);
-    {std::ofstream file(output/"gameplay-plan.json");file<<Json{{"protocol",5},{"duration_seconds",duration},
+    {std::ofstream file(output/"gameplay-plan.json");file<<Json{{"protocol",AcceptanceProtocolVersion},{"duration_seconds",duration},
         {"cycles",cycles},{"cycle_seconds",GameplayCycleSeconds},{"lives_per_cycle",GameplayLivesPerCycle},
         {"actions",declared},{"jump_edges_seconds",jumpEdges},
         {"fault_policy","Original actions remain denominator; only <=5.6s events may gain InvalidReference/Expired or ammo-dependent terminal outcome under injected faults; later life events retain exact verdict except operations generated inside a declared fault with original reference age >250ms may terminal Expired."}}.dump(2)<<'\n';}
@@ -103,7 +105,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     std::array<StartPhaseRecorder,2> startPhase;std::uint64_t frameIndex{};
     const auto started=Clock::now();auto previous=started,deadline=started;const auto startNs=MovementTraceNowNs();
     const auto period=std::chrono::nanoseconds(1'000'000'000/fps);
-    {std::ofstream ready(output/"ready.json");ready<<Json{{"start_ns",startNs},{"player_ids",ids},{"protocol",5}}.dump();}
+    {std::ofstream ready(output/"ready.json");ready<<Json{{"start_ns",startNs},{"player_ids",ids},{"protocol",AcceptanceProtocolVersion}}.dump();}
     std::size_t nextStep{};std::array<std::size_t,2> nextJump{};
     while(std::chrono::duration<double>(Clock::now()-started).count()<duration){
         const auto now=Clock::now();const auto ns=MovementTraceNowNs();
@@ -158,9 +160,9 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         }
         evidence.Push(std::move(frame),true);++frameIndex;deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
     }
-    Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",5},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
+    Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",AcceptanceProtocolVersion},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
         {"player_ids",ids},{"fps",fps},{"duration",duration},{"cycles",cycles},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
-        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()}};
+        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()},{"timer",timer.Json()}};
     for(unsigned i=0;i<2;++i){const auto state=clients[i].State();const auto& rules=*state.combatRules;
         result["clients"].push_back({{"player_id",ids[i]},{"submitted",submitted[i].size()},{"decisions",decisions[i].size()},
             {"retired_through",state.actionTransport.retiredThrough},{"retained",state.actionTransport.retained},

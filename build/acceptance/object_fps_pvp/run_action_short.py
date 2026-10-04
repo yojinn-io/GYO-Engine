@@ -1,9 +1,13 @@
 """Bounded v5 action GUI regression with SDL-injected input: the same command on every platform.
 
-Native OS input is not part of this runner; it stays the manual checklist of batch 04.
+Besides the v5 actions it owns the first-person weapon checks of the retired weapon short probe:
+local feedback on the first successful presentation, an authority cooldown rejection, wall and hit
+decisions, one mouse delta per combined frame, window interactions without ghost shots, ESC and
+rejoin. Native OS input is not part of this runner; it stays the manual checklist of batch 04.
 """
 import argparse
 import json
+import math
 from pathlib import Path
 import socket
 import subprocess
@@ -11,19 +15,48 @@ import time
 import urllib.request
 
 from run_network import free_port, wait_for_match_ready
-from run_weapon_short import digest
+from acceptance_util import digest
 
 CASES = {'action30': ('--action-short', 30), 'action60': ('--action-short', 60),
          'action144': ('--action-short', 144), 'capture': ('--action-capture', 60)}
-CAPTURES_PER_ROLE = 4
+CAPTURES_PER_ROLE = {'create': 8, 'join': 4}
 REQUIRED_CHECKS = {
     'create': ('held_fire_one_shot', 'reload-shot_suppressed', 'reload-again_suppressed', 'move_while_reloading',
                'reload_completes_and_refills', 'empty-shot_suppressed', 'empty_magazine_reload',
-               'remote_death_held_then_new_life', 'remote_actions_never_replay'),
+               'remote_death_held_then_new_life', 'remote_actions_never_replay',
+               'movement_turn_shoot_mouse_once', 'mouse_delta_not_replayed', 'focus-loss_suppressed',
+               'focus-gain-held_suppressed', 'tab-release_suppressed', 'drag_suppressed',
+               'authority_cooldown_wall_and_hit', 'local_feedback_before_decision', 'escape_clears_weapon',
+               'rejoin_full_hp_no_stale_effects'),
     'join': ('dead-click_suppressed', 'dead-move_suppressed', 'dead_suppresses_move_jump_fire_reload',
              'respawn_full_hp_and_magazine', 'respawned_player_can_shoot', 'remote_shot_reload_and_jump_presented',
              'remote_actions_never_replay'),
 }
+
+
+def frame_errors(role, report, frames):
+    """Per-frame first-person evidence: a dead local player never presents a weapon mesh, and every
+    SDL shot has one finite submission-to-first-successful-Presented duration."""
+    errors = []
+    for frame in frames:
+        weapon = frame.get('presented_weapon') if frame.get('presented') else None
+        if isinstance(weapon, dict) and weapon.get('dead') is True and (weapon.get('submitted_meshes') or 0) > 0:
+            errors.append(f"{role}: frame {frame.get('frame_id')} presented first-person weapon meshes while dead")
+            break
+    delays = [frame['submission_to_presented_seconds'] for frame in frames if 'submission_to_presented_seconds' in frame]
+    if report.get('passed') is True and len(delays) != report.get('injected_sdl_shots'):
+        errors.append(f"{role}: {len(delays)} shot(s) reached a successful presentation, "
+                      f"{report.get('injected_sdl_shots')} were injected")
+    if any(not isinstance(delay, (int, float)) or not math.isfinite(delay) or delay < 0 for delay in delays):
+        errors.append(f'{role}: invalid submitted-shot-to-Presented duration')
+    return errors
+
+
+def read_frames(path):
+    try:
+        return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()]
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def summarize(directory, capture):
@@ -49,8 +82,13 @@ def summarize(directory, capture):
         if missing:
             errors.append(f"{role}: missing checks {', '.join(missing)}")
         captures = report.get('captures') if isinstance(report.get('captures'), list) else []
-        if capture and len(captures) != CAPTURES_PER_ROLE:
-            errors.append(f'{role}: expected {CAPTURES_PER_ROLE} GPU captures, found {len(captures)}')
+        if capture and len(captures) != CAPTURES_PER_ROLE[role]:
+            errors.append(f'{role}: expected {CAPTURES_PER_ROLE[role]} GPU captures, found {len(captures)}')
+        frames = read_frames(directory / f'{role}-action-frames.jsonl')
+        if frames is None:
+            errors.append(f'{role}-action-frames.jsonl: missing or malformed')
+        else:
+            errors.extend(frame_errors(role, report, frames))
         platforms[role] = report.get('platform')
         roles[role] = {'passed': report.get('passed') is True and not missing, 'remote': report.get('remote'),
                        'disturbed': report.get('disturbed') is True}

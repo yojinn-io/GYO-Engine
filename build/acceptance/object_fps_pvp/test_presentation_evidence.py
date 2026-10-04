@@ -523,6 +523,54 @@ class LatencyEvidenceTests(unittest.TestCase):
                 bad = self.window_directory({"create": broken})
                 self.assertEqual(evidence.platform_evidence(bad / "create-report.txt")["status"], "invalid")
 
+    TIMER_REPORT = ("platform_timer_sleeper=SDL_DelayNS remainder\nplatform_timer_schedule=frame_relative\n"
+                    "platform_timer_samples=180\n"
+                    "platform_timer_late_p50_ms=0.9\nplatform_timer_late_p99_ms=6.5\nplatform_timer_late_max_ms=8.1\n"
+                    "platform_timer_interval_p50_ms=16.8\nplatform_timer_interval_p99_ms=20.5\n"
+                    "platform_timer_interval_max_ms=24.9\nplatform_timer_interval_over_slow_fraction=0.22\n")
+
+    def test_remote_order_is_judged_by_frames_not_a_time_tolerance(self):
+        local = [(1.000, 0.0), (1.025, .3)]  # A late wake stretches this local frame gap to 25 ms.
+        # Old misjudgement: interpolation puts the remote 20.8 ms "before" the local, past the old
+        # -20 ms tolerance, although the remote was first seen past the threshold after the local's last frame short of it.
+        remote = [(.990, .2), (1.010, .3)]
+        local_bracket = evidence._crossing_bracket(local, .25)
+        remote_bracket = evidence._crossing_bracket(remote, .25)
+        self.assertLess(remote_bracket[2] - local_bracket[2], -.02)
+        self.assertFalse(evidence.remote_precedes_local(local_bracket, remote_bracket))
+        # Real defect: the remote was already past the threshold before the local's last frame short of it.
+        early = evidence._crossing_bracket([(.970, .2), (.995, .3)], .25)
+        self.assertTrue(evidence.remote_precedes_local(local_bracket, early))
+
+    def test_timer_baseline_is_reported_for_interpretation_only(self):
+        directory = self.window_directory({"create": self.PLATFORM_REPORT + self.TIMER_REPORT, "join": self.PLATFORM_REPORT})
+        create = evidence.platform_evidence(directory / "create-report.txt")
+        self.assertEqual(create["status"], "recorded")
+        self.assertEqual((create["timer"]["samples"], create["timer"]["interval_p99_ms"]), (180, 20.5))
+        self.assertIn("interpretation only", create["timer"]["use"])
+        self.assertIsNone(evidence.platform_evidence(directory / "join-report.txt")["timer"])
+        broken = self.window_directory({"create": self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=180", "=many")})
+        result = evidence.platform_evidence(broken / "create-report.txt")
+        self.assertEqual((result["status"], result["timer"]["status"]), ("recorded", "invalid"))
+
+    def test_timer_baseline_never_changes_a_latency_verdict(self):
+        # Mutation: an extreme or broken timer baseline must leave pass and fail exactly as they were.
+        extreme = self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=20.5", "=900").replace("=0.22", "=1")
+        broken = self.PLATFORM_REPORT + self.TIMER_REPORT.replace("=180", "=many")
+        for delay in (.04, .1):
+            with self.subTest(delay=delay):
+                plain = self.scenario(delay, short=True)
+                for extra in (extreme, broken):
+                    timed = self.scenario(delay, short=True, report_extra={"create": extra, "join": extra})
+                    self.assertEqual((timed["passed"], timed["errors"]), (plain["passed"], plain["errors"]))
+
+    def test_raise_completion_is_recorded_apart_from_interference(self):
+        report = self.linux_window_report() + "window_raise_completion_events=1\n"
+        result = evidence._windows(self.window_directory({"create": report, "join": self.linux_window_report()}))
+        self.assertEqual(result["window"]["create"]["raise_completion_events"], 1)
+        self.assertIsNone(result["window"]["join"]["raise_completion_events"])
+        self.assertEqual(result["window_disturbances"], [])
+
     def test_window_placement_error_is_kept_beside_the_default_placement(self):
         report = self.linux_window_report() + "window_placement_error=wayland: cannot position a toplevel\n"
         result = evidence._windows(self.window_directory({"create": report, "join": self.linux_window_report()}))

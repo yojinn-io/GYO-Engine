@@ -1,5 +1,5 @@
 // Product acceptance only: concurrent SDL firing and bounded read-only evidence.
-// Included after weapon_short.hpp; no production controls or additional Drain.
+// Included after gui_input.hpp; no production controls or additional Drain.
 //
 // v5 schedule: one SDL input slot every 0.8 s from 0.2 s, repeating a 17-slot
 // cycle (13.6 s). The creator kills the joiner with four hits, shoots its corpse
@@ -191,7 +191,7 @@ public:
         Check(suppressed_ == local, "Not every predeclared local-only click was observed");
         Check(w.decisionCount == submitting && decisions_.size() == submitting, "Some action outcomes were not fully observed");
         Check(feedback_.size() == submittedShots_ && !awaiting_, "Some shots lack next-Presented feedback");
-        WeaponJson report{{"schema_version", 2}, {"protocol", 5}, {"enabled", true}, {"role", options_.role},
+        WeaponJson report{{"schema_version", 2}, {"protocol", AcceptanceProtocolVersion}, {"enabled", true}, {"role", options_.role},
             {"duration_seconds", options_.duration}, {"local_id", local_}, {"expected_target_id", target_},
             {"maximum_hp", maximumHp_}, {"damage_per_hit", damage_}, {"magazine_capacity", capacity_},
             {"cooldown_ticks", cooldownTicks_}, {"reload_ticks", reloadTicks_}, {"respawn_ticks", respawnTicks_},

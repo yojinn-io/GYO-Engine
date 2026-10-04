@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from action_probe import run_case
+from acceptance_util import PROTOCOL_VERSION
 
 
 def matrix():
@@ -37,7 +38,7 @@ def main():
         setattr(args,name,getattr(args,name).resolve())
         if not getattr(args,name).is_file():parser.error('Missing '+name)
     args.output=args.output.resolve();args.output.mkdir(parents=True,exist_ok=False)
-    (args.output/'planned-matrix.json').write_text(json.dumps({'protocol':5,'cases':cases,'seconds_per_probe':16,
+    (args.output/'planned-matrix.json').write_text(json.dumps({'protocol':PROTOCOL_VERSION,'cases':cases,'seconds_per_probe':16,
         'clean_denominator':'all predeclared legal action edges, separate intentional rejections',
         'recovery_seconds':1.5,'stable_movement_seconds':.25,'long_run':False},indent=2)+'\n')
     results=[]
@@ -46,7 +47,7 @@ def main():
         result=run_case(opts,case['mode'],case['milliseconds']);result['case']=case;results.append(result)
         print(json.dumps({'case':case['name'],'passed':result['passed'],'errors':result['errors']}),flush=True)
         summary={'passed':len(results)==len(cases) and all(r['passed'] for r in results),'requested_cases':len(cases),
-                 'completed_cases':len(results),'cases':results,'protocol':5,'long_run':False}
+                 'completed_cases':len(results),'cases':results,'protocol':PROTOCOL_VERSION,'long_run':False}
         (args.output/'gameplay-matrix.json').write_text(json.dumps(summary,indent=2)+'\n')
         if not result['passed']:break
     return 0 if summary['passed'] else 1

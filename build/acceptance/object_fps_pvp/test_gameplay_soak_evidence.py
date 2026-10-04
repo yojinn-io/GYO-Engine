@@ -1,6 +1,7 @@
 """Counterexamples for the repeated-plan soak evidence and runner options; no services are started."""
 import contextlib
 import io
+from pathlib import Path
 import unittest
 
 from gameplay_soak_evidence import (JumpTally, LifeTally, PhaseTally, cycle_of, drift_windows,
@@ -166,6 +167,14 @@ class RunnerOptionTests(unittest.TestCase):
             with self.subTest(extra=extra), self.assertRaises(SystemExit), \
                     contextlib.redirect_stderr(io.StringIO()):
                 self.parse(*extra)
+
+
+class TimerBaselineIsNeverAVerdict(unittest.TestCase):
+    """The empty-loop timer baseline is interpretation only: the analyzer may pass it through, never read it."""
+    def test_source_only_passes_the_timer_baseline_through(self):
+        source = (Path(__file__).resolve().parent / 'gameplay_soak_evidence.py').read_text(encoding="utf-8")
+        lines = [line.strip() for line in source.splitlines() if "timer" in line.lower()]
+        self.assertEqual(lines, ["'timer_baseline': client.get('timer'),  # Interpretation only; no check reads it."], "a check may have started reading the timer baseline")
 
 
 if __name__ == '__main__':

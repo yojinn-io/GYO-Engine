@@ -13,7 +13,6 @@ from start_phase_evidence import finite_json_float, read_reseed_evidence, reject
 
 THRESHOLDS = (0.25, 0.5, 0.75, 1.0, 1.25)
 MINIMUM_MATCHES = 3
-MINIMUM_DELAY_SECONDS = -0.02  # Sampling/interpolation tolerance, not clock adjustment.
 MAXIMUM_MEDIAN_SECONDS = 0.15
 MAXIMUM_CROSSING_BRACKET_SECONDS = .1  # Existing runtime/presentation disturbance boundary.
 FIELDS = {"host_steady_seconds", "local_id", "local_x", "local_z",
@@ -73,13 +72,33 @@ def _progress(samples, origin):
 
 
 def _crossing(samples, threshold):
-    # Require an observed bracket, rather than inventing a crossing before the
-    # first frame. Straight probe movement can still contain small corrections.
+    bracket = _crossing_bracket(samples, threshold)
+    return bracket[2] if bracket else None
+
+
+def _crossing_bracket(samples, threshold):
+    """(last frame short of the threshold, first frame past it, interpolated crossing), or None.
+
+    Require an observed bracket, rather than inventing a crossing before the
+    first frame. Straight probe movement can still contain small corrections.
+    """
     for (before_time, before), (after_time, after) in zip(samples, samples[1:]):
         if before < threshold <= after:
             fraction = (threshold - before) / (after - before)
-            return before_time + fraction * (after_time - before_time)
+            return before_time, after_time, before_time + fraction * (after_time - before_time)
     return None
+
+
+def remote_precedes_local(local_bracket, remote_bracket):
+    """Causal order by frames, not by a time tolerance.
+
+    The remote cannot cross before the local mover did, but both crossings are
+    interpolated between frames whose spacing follows the host's wake-up timing,
+    so the interpolated remote time may land a few milliseconds early. It is a
+    real error only when the remote was already observed past the threshold
+    before the local was last observed short of it.
+    """
+    return remote_bracket[1] < local_bracket[0]
 
 
 def _maximum_backstep(samples):
@@ -98,7 +117,7 @@ def analyze_presentation(directory):
         "origin": "First create-process local render position; planar distance in arena world units.",
         "sources": ["create-report.txt", "create-presentation.csv", "join-presentation.csv"],
         "criteria": {"minimum_matched_thresholds": MINIMUM_MATCHES,
-                     "minimum_delay_seconds": MINIMUM_DELAY_SECONDS,
+                     "causal_order": "the remote's first frame past a threshold may not precede the local's last frame short of it",
                      "maximum_median_delay_seconds": MAXIMUM_MEDIAN_SECONDS},
         "errors": [],
     }
@@ -117,8 +136,10 @@ def analyze_presentation(directory):
         thresholds, delays = [], []
         previous_local = previous_remote = None
         for threshold in THRESHOLDS:
-            local_time = _crossing(local_progress, threshold)
-            remote_time = _crossing(remote_progress, threshold)
+            local_bracket = _crossing_bracket(local_progress, threshold)
+            remote_bracket = _crossing_bracket(remote_progress, threshold)
+            local_time = local_bracket[2] if local_bracket else None
+            remote_time = remote_bracket[2] if remote_bracket else None
             delay = None
             if local_time is not None and remote_time is not None:
                 if ((previous_local is not None and local_time <= previous_local) or
@@ -127,8 +148,8 @@ def analyze_presentation(directory):
                 previous_local, previous_remote = local_time, remote_time
                 delay = remote_time - local_time
                 delays.append(delay)
-                if delay < MINIMUM_DELAY_SECONDS:
-                    evidence["errors"].append(f"Remote crossed {threshold} units more than 20 ms before local")
+                if remote_precedes_local(local_bracket, remote_bracket):
+                    evidence["errors"].append(f"Remote was observed past {threshold} units before local was last observed short of it")
             thresholds.append({"displacement_units": threshold,
                                "local_crossing_host_seconds": local_time,
                                "remote_crossing_host_seconds": remote_time,
@@ -241,7 +262,10 @@ def _window_record(report):
               "flags_at_end": _named_counts(report["window_flags_at_end"], WINDOW_FLAGS),
               "os_events": _named_counts(report["window_os_events"], WINDOW_EVENT_KINDS),
               "os_events_during_measurement": _named_counts(report["window_os_events_during_measurement"], WINDOW_EVENT_KINDS),
-              "synthetic_events": int(report["window_synthetic_events"])}
+              "synthetic_events": int(report["window_synthetic_events"]),
+              # The first focus event completing the mover's own raise; recorded, never interference.
+              "raise_completion_events": int(report["window_raise_completion_events"])
+              if "window_raise_completion_events" in report else None}
     if "window_placement_error" in report:
         result["placement_error"] = report["window_placement_error"]
     if result["sync"] not in WINDOW_SYNC_STATES:
@@ -301,6 +325,23 @@ def _window_overlap(create, join):
 
 
 PLATFORM_FIELDS = ("os", "architecture", "video_driver", "gpu_driver", "refresh_hz", "usable_bounds", "input")
+TIMER_FIELDS = ("late_p50_ms", "late_p99_ms", "late_max_ms", "interval_p50_ms", "interval_p99_ms", "interval_max_ms",
+                "interval_over_slow_fraction")
+
+
+def timer_evidence(report):
+    """The probe's empty-loop late-wake distribution: interpretation only, never part of a verdict."""
+    if "platform_timer_samples" not in report:
+        return None
+    try:
+        timer = {"use": "interpretation only; never a verdict, threshold or denominator",
+                 "sleeper": report["platform_timer_sleeper"], "schedule": report.get("platform_timer_schedule"),
+                 "samples": int(report["platform_timer_samples"])}
+        for field in TIMER_FIELDS:
+            timer[field] = float(report[f"platform_timer_{field}"])
+        return timer
+    except (KeyError, ValueError) as error:
+        return {"status": "invalid", "reason": f"timer baseline: {error}"}
 
 
 def platform_evidence(path):
@@ -321,6 +362,7 @@ def platform_evidence(path):
         result["usable_bounds"] = _integers(report, "platform_usable_bounds", 4, "unavailable")
     except DIAGNOSTIC_ERRORS as error:
         return {"status": "invalid", "reason": f"{path.name}: {_diagnostic_error(error)}"}
+    result["timer"] = timer_evidence(report)
     return result
 
 

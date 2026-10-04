@@ -10,7 +10,7 @@ import urllib.request
 from impaired_network import _ImpairedGateway
 from player_presentation_evidence import analyze
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
-from run_weapon_short import digest
+from acceptance_util import digest
 
 
 class SnapshotHold(_ImpairedGateway):
@@ -114,7 +114,11 @@ def run_case(args,name):
         result['presentation']=analyze(directory)
         result['relay']=relay.evidence()
         result['passed']=result['presentation']['passed'] and bool(result['relay']['dropped_observer_snapshots']) and result['relay']['relay_error'] is None
-        if not result['passed']:result['error']='Player phase/GPU/hold evidence failed; inspect individual checks'
+        # D11-3: a host that cannot hold the nominal FPS makes the run invalid, not a product failure.
+        result['invalid']=(result['presentation']['verdict']=='invalid_capacity' and
+                           bool(result['relay']['dropped_observer_snapshots']) and result['relay']['relay_error'] is None)
+        if result['invalid']:result['error']='Invalid run: '+'; '.join(result['presentation']['invalid'])
+        elif not result['passed']:result['error']='Player phase/GPU/hold evidence failed; inspect individual checks'
     except Exception as error:
         result['error']=str(error)
     finally:
@@ -151,18 +155,21 @@ def main():
     measured={}
     for name in names:
         result=run_case(args,name)
-        results.append({'case':name,'passed':result['passed'],'error':result.get('error')})
+        results.append({'case':name,'passed':result['passed'],'invalid':result.get('invalid',False),'error':result.get('error')})
         if name!='capture' and result.get('presentation'):
             measured[name]=result['presentation'].get('equal_distance_forward_phase',{})
         print(json.dumps(results[-1]),flush=True)
-        if not result['passed']:break
+        # An invalid run is not counted and does not stop the remaining cases; a failure does.
+        if not result['passed'] and not result.get('invalid'):break
     comparisons={}
     for distance in ('0.5','1.0','1.5'):
         values={case:crossings[distance]['cycles'] for case,crossings in measured.items() if distance in crossings}
         comparisons[distance]={'cycles_by_case':values,'maximum_difference_cycles':max(values.values())-min(values.values()) if values else None}
     phase_consistent=all(value['maximum_difference_cycles'] is None or value['maximum_difference_cycles']<.0002 for value in comparisons.values())
+    invalid=[value['case'] for value in results if value['invalid']]
     summary={'passed':len(results)==len(names) and all(value['passed'] for value in results) and phase_consistent,
-        'requested_cases':names,'cases':results,'long_run_executed':False,'wire_gameplay':'v4 unchanged',
+        'requested_cases':names,'cases':results,'invalid_cases':invalid,
+        'unverified':invalid,  # Too few valid runs: these cases are unverified, never passed.'long_run_executed':False,'wire_gameplay':'v4 unchanged',
         'same_distance_across_fps':comparisons,'same_distance_phase_consistent':phase_consistent}
     (args.output/'player-short-matrix.json').write_text(json.dumps(summary,indent=2)+'\n')
     return 0 if summary['passed'] else 1
