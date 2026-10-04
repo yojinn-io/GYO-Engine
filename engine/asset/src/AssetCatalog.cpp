@@ -89,9 +89,10 @@ namespace Engine::Asset {
             // ★ここで resolvedPath を確定させる（root脱出などもここで弾く）
             auto rp = resolver.Resolve(r.path);
             if (!rp) {
-                // Keep the resolver's code (InvalidPath or PathEscapesRoot); the
-                // detail names the catalog entry.
-                return Base::Err(AssetError::Make(rp.error().code, rp.error().message, r.id));
+                // Keep the resolver's code (InvalidPath or PathEscapesRoot) and
+                // its detail; the catalog entry id comes first.
+                return Base::Err(AssetError::Make(rp.error().code, rp.error().message,
+                    rp.error().detail.empty() ? r.id : r.id + "; " + rp.error().detail));
             }
 
             Catalog::CatalogEntry e;

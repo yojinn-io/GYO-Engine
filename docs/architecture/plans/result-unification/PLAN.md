@@ -1,7 +1,21 @@
 # GYO Assert／Result 統一計劃（核准版）
 
 核准：2026-10-04。Owner：Engine（`engine/base`，R1 起為 `GYO::Base`）。進度見 [README](README.md)，紀錄見 [HANDOFF](HANDOFF.md)。
-本文件是核准版計劃經 R0 校正（以 `eeebc1e` 重新盤點與對抗檢查）後的版本。
+本文件是核准版計劃經 R0 校正（以 `eeebc1e` 重新盤點與對抗檢查）後的版本，之後不再改寫內文；實作中的決策以 HANDOFF 的決策紀錄為準。
+
+> **實作與本文件的差異（R6 彙整）**
+> - 規則 5 的 detail 以 `Base::CauseDetail` 產生，格式為 `[<outer detail>; ]<InnerCode>[: <inner detail>]`；規則 4 允許在同模組內為 message 或 detail 加上脈絡，但不得丟掉 code 或 detail。
+> - `ClipSprite` 不是資料驗證點；非有限的 sprite 由 `RenderQueue::Submit` 擋下，UiRenderer 轉成 `RenderSubmissionFailed`。
+> - `GYO_UNREACHABLE` 在 R4 加入（位於 `UiRuntime.cpp` 的 text source switch 之後）。預設 handler 輸出兩行（條件式；檔案、行號與函式），abort 由 `ReportAssertionFailure` 執行。
+> - 沒有加入 doctest 的 exception translator（R1，理由見 HANDOFF）。
+> - `CodedError` 要求 `message`、`detail` 可轉成 `const std::string&`，`ToString` 經由 ADL 取得；8 個既有 enum 都在 R3 補上 `ToString`。
+> - 新增的 E 還包括 ui_editor 的 `CatalogError`、`PreviewError`、`EditorError`（集中在 `EditorError.hpp`）。
+> - `LoaderRegistry::Register` 改回傳 `void`；`AssetErrorCode::UnsupportedRequest` 刪除。
+> - ShaderLibrary 保留帶型別的內部例外 `ArtifactReadFailure`，在 `AppendBundle` 邊界轉換。
+> - `PreviewAdapter::Result` 改名為 `FrameOutput`；`AssetPreviewContext` 的 `Mount`、`Unmount`、第二個 `Initialize` 改成 `void` 加 Assert。
+> - `std::filesystem::absolute` 以 `FileService` 的 `AbsolutePath` 取代。
+> - pvp 中 Model 字串 E 的直接使用為 13 處，`Require` 改成接受任何 E 的 template。
+> - 依賴邊另有 `gyo_collision -> gyo_base`（R1）與 `gyo_render_tests -> gyo_test_support`（R4）。
 
 ## Context
 

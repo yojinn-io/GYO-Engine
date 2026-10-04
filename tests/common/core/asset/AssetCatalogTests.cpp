@@ -99,7 +99,7 @@ TEST_CASE("AssetCatalog: a path resolution failure keeps the resolver's code") {
     const auto r = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
     REQUIRE_FALSE(r);
     CHECK(r.error().code == Engine::Asset::AssetErrorCode::PathEscapesRoot);
-    CHECK(r.error().detail == "escape");
+    CHECK(r.error().detail.rfind("escape", 0) == 0); // the entry id, then the resolver detail
     fs::remove_all(tmp);
 }
 

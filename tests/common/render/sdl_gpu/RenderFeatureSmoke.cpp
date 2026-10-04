@@ -1,4 +1,5 @@
 #include "RenderFeatureSmoke.hpp"
+#include "engine/base/Error.hpp"
 #include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
 #include "render/ShaderAbi.hpp"
@@ -54,7 +55,7 @@ bool CheckCustomShader(Renderer& renderer) {
     if (!queue.Submit(builtin) || !queue.Submit(custom)) return false;
     renderer.RequestSceneCapture();
     const auto rendered = renderer.Render(queue);
-    if (!rendered) { std::cerr << rendered.error().message << '\n'; return false; }
+    if (!rendered) { std::cerr << Engine::Base::Describe(rendered.error()) << '\n'; return false; }
     const auto image = renderer.TakeSceneCapture();
     return image && Pixel(*image, 24, 24, {255, 0, 0, 255}, "builtin shader") &&
         Pixel(*image, 96, 24, {0, 0, 255, 255}, "custom channel-swap shader");
@@ -78,7 +79,7 @@ bool CheckUvBlendAndTextureColor(IRenderDevice& device, Renderer& renderer) {
         !sprite({}, {80,45,40,20}, {0,0,1,1}, {1,0,0,0.5F}) ||
         !sprite(srgb,{80,75,30,30}) || !sprite(linear,{120,75,30,30})) return false;
     renderer.RequestSceneCapture(); auto rendered=renderer.Render(queue);
-    if (!rendered) { std::cerr<<rendered.error().message<<'\n'; return false; }
+    if (!rendered) { std::cerr<<Engine::Base::Describe(rendered.error())<<'\n'; return false; }
     auto captured=renderer.TakeSceneCapture();
     return captured && Pixel(*captured,1,1,{255,0,0,255},"texture top-left") &&
         Pixel(*captured,62,1,{0,255,0,255},"texture top-right") &&

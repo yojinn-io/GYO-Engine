@@ -1,7 +1,7 @@
 # Assert／Result 統一：分批計畫與進度
 
 更新：2026-10-04。Owner：Engine（`engine/base`，R1 起為獨立 target `GYO::Base`）。
-**R0–R4 完成；R5 本機驗收完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 待 CI。**
+**R0–R5 完成；R6 本機驗收完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 待 CI。**
 
 GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這套慣例從未寫成文件，
 後來的模組各自用例外、`std::string`、手寫結果型別或 out-param 表達失敗。
@@ -15,7 +15,7 @@ GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這�
 1. 核心概念：Assert 表示 Programmer Error，Result 表示 Runtime Error。optional（單純沒有）、diagnostics、遊戲結果都不是錯誤；例外不是第三種錯誤機制。
 2. 範圍：`engine/`、`tools/ui_editor`、`tests/common`、`tests/ui_editor` 完整統一。Apps 只做被迫的修改；未啟用產品不修改。
 3. 保留兩個參數的 `Result<T, E>`；E 符合 `CodedError`（enum `code` 加 `message`）。不做全域 error enum、error chain，不升 C++23。
-4. 資料驗證型 API（RenderQueue、ClipSprite 等）的輸入錯誤屬於 Runtime Error，維持回傳 Result。API 誤用屬於 Programmer Error，改用 Assert；只有 SdlGpu device 的狀態錯誤例外。
+4. 資料驗證型 API（RenderQueue 等）的輸入錯誤屬於 Runtime Error，維持回傳 Result。API 誤用屬於 Programmer Error，改用 Assert；只有 SdlGpu device 的狀態錯誤例外。
 5. Assert 適用於整個 engine，包括 Math；`GYO::Base` 是比 Math 更低的 leaf。只在 debug 生效的 `GYO_DEBUG_ASSERT` 等第一個昂貴檢查出現時再加。
 6. 舊名稱完全移除，不留別名。
 
@@ -28,8 +28,8 @@ GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這�
 | R2 Result 的寫法 | high（`Result.hpp` xhigh；codemod medium） | 完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 已合併 | `Base::Err`、隱式成功、移除 `Ok`／`Err`／`ok()` |
 | R3 Error 語意與 asset | high | 完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 已合併 | `CodedError`、`Describe`、移除 `None`、別名收斂、AssetRecord；asset 的 API 誤用改 Assert |
 | R4 Model、ui／render | high | 完成，PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 已合併 | Model／ModelRenderer 的 E、保留 code 的轉換；ui／render 的 API 誤用改 Assert |
-| R5 ui_editor | high | 本機驗收完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 待 CI | 結果型別、out-param、assert、`Describe` |
-| R6 收尾 | medium（最終審查 high） | 未開始 | 文件定稿、稽核、破損清單、Architecture Report |
+| R5 ui_editor | high | 完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 已合併 | 結果型別、out-param、assert、`Describe` |
+| R6 收尾 | medium（最終審查 high） | 本機驗收完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 待 CI | 文件定稿、稽核、破損清單、Architecture Report |
 
 ```text
 R0 -> R1 -> R2 -> R3 -> R4 -> R5 -> R6
