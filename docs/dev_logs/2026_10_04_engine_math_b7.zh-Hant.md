@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B7：收尾
 
 日期：2026-10-04。Owner：Engine（`GYO::Math`），連帶文件與計畫紀錄。
-狀態：本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI（分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+狀態：完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 已合併（`fdc72e9`），CI 四平台通過（分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b7-收尾)，本文只記經過。
 
 ## 經過

@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**B0–B5 已合併（B5 為 #23，合併為 `efe4a30`）。B6a（[#24](https://github.com/yojinn-io/GYO-Engine/pull/24)）、B6b（[#25](https://github.com/yojinn-io/GYO-Engine/pull/25)）、B6c（[#26](https://github.com/yojinn-io/GYO-Engine/pull/26)）CI 四平台通過；B7 本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI。四個 PR 疊在一起，待使用者合併。**
+更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：float 純量 clamp／min／max 的統一進行中。**
 
 ## 閱讀入口
 
@@ -357,7 +357,7 @@
 
 ## B6a pvp 模擬層 `match_domain`
 
-狀態：**CI 四平台通過，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待使用者合併**（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
+狀態：**完成**。PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 於 2026-10-04 合併為 `507daa7`；CI 四平台通過（分支 `claude/math-foundation-b6a`，自 master `efe4a30`）。
 
 ### 進行方式（ultracode）
 
@@ -439,7 +439,7 @@
 
 ## B6b pvp 表現層
 
-狀態：**CI 四平台通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 待使用者合併**（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
+狀態：**完成**。PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 於 2026-10-04 合併為 `bd7e1c3`；CI 四平台通過（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
 
 使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
 
@@ -507,7 +507,7 @@
 
 ## B6c pvp 未編譯的 29 個檔案
 
-狀態：**CI 四平台通過，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 待使用者合併**（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
+狀態：**完成**。PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 於 2026-10-04 合併為 `fb9b012`；CI 四平台通過（2026-10-04，分支 `claude/math-foundation-b6c`，疊在 B6b 分支上）。
 
 ### 進行方式（ultracode）
 
@@ -572,7 +572,7 @@
 
 ## B7 收尾
 
-狀態：**本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 待 CI**（2026-10-04，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
+狀態：**完成**。PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 於 2026-10-04 合併為 `fdc72e9`；最終 head `9d6559c` 的 CI 四平台全部通過（2026-10-04，分支 `claude/math-foundation-b7`，疊在 B6c 分支上）。
 
 ### 進行方式（ultracode）
 
@@ -619,7 +619,7 @@
 | 依賴圖 | 與 B6a 相同；與 B0 相比多出 9 條指向 `gyo_math` 的邊（見 Architecture Report 第 5 點），沒有減少 |
 | engine 清理的新舊比對 | 兩棵樹各自建置真實 TU，以相同的執行期種子比對（兩個種子，含 ±0、subnormal、極大值、inf、NaN）：Collision 的公開查詢與 `ValidateCapsule`、`RaySphere`、sweep（約 2800 萬次）；`TransformNormal`、`SkinMesh`、`ValidateModel`、`AnimationTransfer`；`ViewMatrix`（2000 萬台相機）；`PrimitiveMesh`（機器碼相同，2.1 萬個 mesh 的 buffer hash 相同）；`RenderQueue`、`ModelRenderer`（機器碼相同）；`SdlGpuRenderDevice`（抽出比對）。可觀測結果全部相同。差異只有：NaN 相機位置下 view 矩陣的 NaN payload（結果不會被使用），以及 `SkinMesh` 回傳錯誤時暫存輸出的 NaN payload（呼叫者不使用）。 |
 | 最終審查 | 正確性沒有被推翻。指出的紀錄缺口（B6c 的 CI、B7 驗收）、收錄理由表與數值清單的不準確、`math.md` 的措辭等，都已更正 |
-| CI 四平台 | 待 PR |
+| CI 四平台 | PR #27 的 head `9d6559c` 全部通過（windows-x64、linux-x64、macos-arm64、macos-x64、CI gate） |
 
 ### Architecture Report（AGENTS §3、§14）
 
@@ -677,23 +677,20 @@
 
 ### 範圍外，只回報（全計劃彙整）
 
-| 項目 | 來源 |
-|---|---|
-| Collision 內部 float 與 double 兩套演算法並存 | PLAN 第 2 節 |
-| `Render::Color` 與 `UiColor` 同構；`Color` 的有限性檢查在 RenderQueue、Renderer、SdlGpuRenderDevice、ModelRenderer 共 4 份 | PLAN 第 2 節、B7 |
-| 兩份 FNV-1a；include 路徑風格不一致 | PLAN 第 2 節 |
-| `object_fps_preview` 的 registration：工具啟用，但依賴的 app 停用 | PLAN 第 2 節 |
-| gyo.ui 的 `item_step` 沒有有限性驗證 | B5 |
-| ui_editor 與 Ui 的 letterbox、點擊判定、文字對齊各有一份；`UiRuntime` 的 Evaluate 與 Compose 重複 layout 走訪 | B5 |
-| client 與 server 只比對 arena 的 id 與 version | B6a |
-| `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（pvp 產品內） | B6c |
-| `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（1e-5 與 1e-6） | B6c |
-| float 純量的 clamp／min／max：engine 與工具仍用 `std::`，pvp 已改用 `Math::`；是否統一寫法待決定 | B7 |
-| characterization 的共用 helper（`SameBits`、`UlpDistance`、`Opaque`）在 tests/common、tests/object_fps_pvp、tests/ui_editor 各一份；共通測試不能依賴產品測試 | B7 |
-| `services/gyo_gateway/README.md` 與 `tests/common/ci/test_workflow_gates.py` 的說明或守衛中出現產品名稱 | B7 |
-| 根目錄三份 README 的範例 `cmake --preset dev -DGYO_APPS=object_fps` 指向停用中的產品；依本計劃，它重新啟用前需要先遷移 | B7 |
+- 使用者決定（2026-10-04）轉入 PvP v6 計畫：清單與後續處理見 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。本文件不再維護這份清單，避免同一件事寫在兩處。
+- 例外：float 純量的 clamp／min／max 寫法，使用者決定直接在本計劃的後續中統一（見「後續：float 純量 clamp／min／max 的統一」）。
+
+## 後續：float 純量 clamp／min／max 的統一
+
+狀態：**進行中**（2026-10-04 開始，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
+
+- 使用者決定（2026-10-04）：B7 留下的寫法不一致（engine 與工具用 `std::`，pvp 用 `Math::`）直接在本計劃後續中統一。
+- 方向：使用者的樹狀圖把 `Clamp`、`Min／Max` 放在 Math 的 Scalar 底下，所以 float 純量統一使用 `Engine::Math::Min／Max／Clamp`。
+  - `Math::Min／Max／Clamp` 只有 float 版本，double 與整數維持 `std::`，避免悄悄縮窄。
+  - 依 PLAN 1.1，不連結 Math 的模組（`GYO::Engine` 的 base、io、runtime、asset，以及 Input、Text）維持 `std::`。
+  - 測試與 acceptance 的量測計算是獨立 oracle，維持原寫法（與 B6b 相同）。
 
 ## 未結事項
 
-- 本計劃的批次全部完成。B6a（#24）、B6b（#25）、B6c（#26）CI 四平台通過；B7 的 PR #27 待 CI。四個 PR 疊在一起，依序合併（#24 → #25 → #26 → #27），由使用者決定。
-- 待使用者決定：float 純量的 clamp／min／max 寫法是否統一（engine 與工具用 `std::`，pvp 用 `Math::`）；範圍外表中各項是否另開工作。
+- 本計劃的批次全部完成並合併：#24 → #25 → #26 → #27 依序合併（2026-10-04；疊在一起的 PR 在合併前一個之後改指 master）。
+- 後續（使用者 2026-10-04 決定）：float 純量 clamp／min／max 統一，進行中；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。

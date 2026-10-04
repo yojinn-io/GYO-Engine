@@ -26,11 +26,11 @@ Use CMake 3.30+, a C++20 compiler and Ninja. Windows builds need an initialized 
 Enable the intended game and OS columns in `engine/config/projects.csv`, then run from the repository root:
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
-cmake --build --preset dev --target gyo_object_fps
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --build --preset dev --target gyo_object_fps_pvp
 ```
 
-Build state is under `build/target/_build/dev`; the runnable game is assembled under `build/target/object_fps/bin`. The game reads only executable-relative `assets/object_fps`, including builtin and game shader bundles. No source checkout is needed to run the assembled product.
+Build state is under `build/target/_build/dev`; the runnable game is assembled under `build/target/object_fps_pvp/bin`. The game reads only executable-relative `assets/object_fps_pvp`, including builtin and game shader bundles. No source checkout is needed to run the assembled product.
 
 The normal product build has testing and CI/package acceptance disabled. It does not depend on tests, CI code or the editor. To check the backend-neutral engine:
 
