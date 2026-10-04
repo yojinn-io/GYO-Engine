@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-04。Owner：Engine（新增模組 `GYO::Math`）。
-**B0–B5 完成並合併；B6a、B6b、B6c 的 PR 疊在一起待使用者合併。**
+**B0–B5 完成並合併；B6a–B7 完成，PR 疊在一起待使用者合併。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -21,7 +21,7 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 7. 分界：Math 為基礎數學型別加純幾何運算；Collision 為碰撞判定、接觸、穿透、掃掠的領域演算法（見 PLAN 1.6）。
 
 範圍不含未啟用產品（`object_fps`、`object_fps_v2`、`tools/object_fps_preview`），這些不做任何修改；
-舊名稱移除後它們重新啟用時需要先遷移，B7 會產出破損清單。
+舊名稱移除後它們重新啟用時需要先遷移，見 [未啟用產品的遷移清單](inactive_products.md)（B7）。
 
 ## 進度
 
@@ -36,9 +36,9 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B4b Render 矩陣 | xhigh | 完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 已合併 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
 | B5 Ui／ui_editor | high | 完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 已合併 | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
 | B6a pvp 模擬層 | xhigh | CI 通過，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待合併 | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
-| B6b pvp 表現層 | high | 本機驗收完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)（疊在 #24 上）待 CI | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 renderer 的 `ComposeEulerXYZ`；acceptance 的量測維持獨立 |
-| B6c pvp 未編譯檔 | high | 本機驗收完成 | 29 檔遷移與 syntax-only 驗證 |
-| B7 收尾 | medium | 未開始 | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
+| B6b pvp 表現層 | high | CI 通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)（疊在 #24 上）待合併 | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 `Math::ComposeEulerXYZ`（renderer 的提交契約）；acceptance 的量測維持獨立 |
+| B6c pvp 未編譯檔 | high | CI 通過，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26)（疊在 #25 上）待合併 | 29 檔遷移與 syntax-only 驗證 |
+| B7 收尾 | medium | 本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27)（疊在 #26 上）待 CI | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
 
 ```text
 B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7
@@ -46,7 +46,7 @@ B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7
 
 ## 執行規則
 
-- 每次只執行使用者指定的批次；一批一個 PR，commit 與 PR 用日語。
+- 每次只執行使用者指定的批次；一批一個 PR，commit 與 PR 用日語。例外：2026-10-04 使用者暫離時指示連續完成 B6b–B7，PR 疊在前一批上，合併由使用者決定（見 HANDOFF 決策紀錄）。
 - 每批開始、里程碑、停止時更新本表、HANDOFF 與 dev_log，然後停止，不自動開始下一批。
 - 主對話檔位由使用者決定；表中檔位是建議值。
 - 使用者決定本計劃全程使用 ultracode（2026-10-03，B4b 起明定）：每批的盤點、實作、驗證與審查都以多 agent workflow 進行。

@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Input、Collision、Model、Text、Render 與 UI。引擎程式庫靜態連結進遊戲與設計工具；遊戲擁有自己的規則與內容，引擎不依賴特定遊戲。
+GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Math、Input、Collision、Model、Text、Render 與 UI。引擎程式庫靜態連結進遊戲與設計工具；遊戲擁有自己的規則與內容，引擎不依賴特定遊戲。
 
 ## 目錄與責任
 
@@ -64,6 +64,7 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 - [整體架構與責任邊界](docs/architecture.md)
 - [UI 標準與設計流程](docs/ui_toolchain.md)
 - [工具登錄、選取與舊 CMake 設定遷移](docs/tool_projects.md)
+- [數學基礎契約](docs/architecture/math.md)
 - [渲染與 shader 契約](docs/rendering_architecture.zh-Hant.md)
 - [3D 資產與動畫限制](docs/architecture/3d-assets.md)
 - [發佈程序](docs/releasing.zh-Hant.md)
