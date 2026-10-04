@@ -1,6 +1,6 @@
 # PvP v6 交接
 
-更新：2026-10-04。Owner：`object_fps_pvp`。**第 01 批完成**（計畫、分批與基線；PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)，CI 通過，等使用者合併；工作分支 `claude/pvp-v6-batch01`，自 master `05042fa`）。
+更新：2026-10-05。Owner：`object_fps_pvp`。**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批進行中**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`）。
 其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 
 本文件原本收集 v5 期間使用者決定「延到 v6」的項目。2026-10-04 第 01 批開始後，它也是 v6 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
@@ -84,6 +84,14 @@
 - 2026-10-05：開 PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（base 為 #40 的分支）。CI 四平台會驗證 golden 子集。
 - 2026-10-05：CI 的 macos-arm64 出現 -O0 不一致（只有非零角度的 `move-turning/contract`，原因是 sincos 合併），依停止條件回報；使用者決定 D15，已實作並加保險測試。
 - 2026-10-05：修正後 CI 四平台全部通過；golden 子集在四平台逐位元相同。
+
+## 第 04 批進度（記錄器）
+
+- 2026-10-05：第 01～03 批的 PR 由使用者合併（#39→#40→#41，各自改指 master 後合併）。
+- 2026-10-05：使用者決定先執行第 04 批（Engine 的 IP-2 需要本批的重現）。檔位照計畫：medium。
+  量測來源固定為 master `6381e9d`，在獨立 worktree `GYO-Engine-v6b04`（detached）以 test preset 從零建置。
+- 2026-10-05：L1：第 02 批凍結的 52 個工具檔與清單（`b5f4bf79…`）逐一相同。`05042fa..6381e9d` 沒有合併任何 Engine 批次；`engine`、`apps`、`services`、`tools` 之下只改了 `apps/object_fps_pvp/gateway/backpressure_test.go`（測試），產品執行期來源與 `05042fa` 相同。
+- 2026-10-05：跑次、分母與第 3、6 項的重現步驟已在量測前寫入 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch04.zh-Hant.md) 並 commit。
 
 ## 延後項目：現況與對應批次
 
