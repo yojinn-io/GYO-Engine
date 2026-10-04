@@ -83,6 +83,7 @@
   經過見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch03.zh-Hant.md)。
 - 2026-10-05：開 PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（base 為 #40 的分支）。CI 四平台會驗證 golden 子集。
 - 2026-10-05：CI 的 macos-arm64 出現 -O0 不一致（只有非零角度的 `move-turning/contract`，原因是 sincos 合併），依停止條件回報；使用者決定 D15，已實作並加保險測試。
+- 2026-10-05：修正後 CI 四平台全部通過；golden 子集在四平台逐位元相同。
 
 ## 延後項目：現況與對應批次
 
