@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R1：概念文件與 Assert
 
 日期：2026-10-04。Owner：Engine（`GYO::Base`），連帶 Math、Collision、Runtime、測試與文件。
-狀態：本機驗收完成，PR 待開（分支 `claude/result-unification-r1`，基準 `3b9765e`）。
+狀態：本機驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI（分支 `claude/result-unification-r1`，基準 `3b9765e`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r1-概念文件與-assert)，本文只記經過。
 
 ## 經過

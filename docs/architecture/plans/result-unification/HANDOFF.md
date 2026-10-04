@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 本機驗收完成，PR 待開。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 本機驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI。**
 
 ## 閱讀入口
 
@@ -99,7 +99,7 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ## R1 概念文件與 Assert
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR 待開。
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI。
 
 ### 變更
 
@@ -145,4 +145,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- 開 PR 並取得 L1 四列結果（MSVC 的前處理器與 abort 行為）。
+- PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 的 L1 四列結果（MSVC 的前處理器與 abort 行為）。
