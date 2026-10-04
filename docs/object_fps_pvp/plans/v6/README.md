@@ -24,7 +24,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 
 | 批次 | 文件 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|---|
-| 01 | [計畫、分批與基線](01-plan-and-baseline.md) | ultracode → medium → low | 進行中 | 分批計畫、HANDOFF 更正與決策紀錄、基線 CTest、v5 證據保存、契約骨架、兩個 Engine 計畫夾 |
+| 01 | [計畫、分批與基線](01-plan-and-baseline.md) | ultracode → medium → low | 文件完成，PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39) 等 CI | 分批計畫、HANDOFF 更正與決策紀錄、基線 CTest、v5 證據保存、契約骨架、兩個 Engine 計畫夾 |
 | 02 | [驗收工具可信化](02-acceptance-tools.md) | high（02c 計時判定局部 xhigh） | 未開始 | 02a 刪除 v4 語意模式與版本常數、02b 計時器基線、02c 計時假設改為結構條件並重新分析 v5 資料 |
 | 03 | [權威 digest 閘門](03-authority-digest.md) | high（golden 策略局部 xhigh） | 未開始 | 逐 Tick 權威狀態 digest、同機兩樹比對、CI 自洽檢查 |
 | 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 未開始 | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
