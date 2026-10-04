@@ -100,7 +100,7 @@
 | FF-5 | 未開始 | — |
 | FF-6 | 未開始 | — |
 | FF-7 | 未開始 | — |
-| FF-8 | 未開始 | — |
+| FF-8 | 進行中 | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
 
 每批開始時在此新增一節：分支、base commit、檔位（含使用者同意的紀錄）、事前宣告（若有）、里程碑、證據位置、結果與停止理由。
@@ -121,6 +121,12 @@
 - 2026-10-05：先加 characterization 測試鎖住舊雜湊值（`AssetId`、`AssetType` 標準型別、`InputActionId`／`InputAxisId` 含空字串為 0、ui_editor 的檔案內容雜湊），在舊實作上通過。
 - 2026-10-05：新增 `engine/base/include/engine/base/Fnv1a.hpp`（`Engine::Base::Fnv1a64(std::string_view)`，constexpr）與參考向量測試；三處改用；刪除 `engine/asset/include/engine/asset/detail/Hash.hpp`（含沒有使用者的 `HashCombine`）。
 - 2026-10-05：CTest 55／55；依賴邊比對（`cmake --graphviz`，base 與 branch）只新增 `gyo_input→gyo_base`，沒有刪除的邊。完成，開 PR。
+
+### FF-8（記錄器）
+
+- 2026-10-05：接續使用者「把 Engine 側的功能完成」的指示。分支 `claude/engine-ff8`，疊在 FF-3 上。
+  檔位 high。計畫建議「解碼拒絕條件局部 xhigh」，但 xhigh 高於主對話檔位，使用者不在、無法徵求同意（D8），所以不升檔；改以先鎖舊行為的拒絕表測試補足，並在 PR 標明。
+- 2026-10-05：先加消費端的 characterization（7 種訊息的位元組、完整拒絕表、超長編碼丟例外），在舊的 `Wire.hpp` 上通過。
 
 ## 未結事項
 

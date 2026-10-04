@@ -53,7 +53,7 @@
 | FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證 | high（契約部分 medium） | 未開始 | ui_editor 改用 Engine Ui 的 letterbox、viewport 判定、文字對齊；`UiRuntime` 走訪合併；`item_step` 驗證與契約文件 |
 | FF-6 共通層衛生與產品登錄 | medium | 未開始 | characterization helper 收進 tests/common；共通層去除產品名；preview 停用並寫進遷移清單 |
 | FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 未開始 | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
-| FF-8 GYOP 標頭 C++ 編解碼 | high（解碼拒絕條件局部 xhigh） | 未開始 | 新增最小 Engine 子系統（單一 target）；1200 bytes 為 Engine 傳輸契約；@22 命名 `Channel`；與 Go framing 共用合成 golden 向量；位元組不變 |
+| FF-8 GYOP 標頭 C++ 編解碼 | high（解碼拒絕條件局部 xhigh） | 進行中 | 新增最小 Engine 子系統（單一 target）；1200 bytes 為 Engine 傳輸契約；@22 命名 `Channel`；與 Go framing 共用合成 golden 向量；位元組不變 |
 | FF-9 Collision 統一與公開合法性檢查 | high（ultracode 開始時徵求同意；容差選擇、`IsValid`、差異歸因局部 xhigh） | 未開始 | D3 ①–④；事前宣告與事後兩樹比對；與消費端權威批同一 PR |
 
 ## 依賴圖
