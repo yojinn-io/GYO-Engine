@@ -122,6 +122,7 @@
 | `EnemyPresentationDefinition`與`EnemySystem`的攻擊時間容差不一致（1e-5與1e-6；屬未編譯的29檔） | object_fps_pvp | B6c |
 | characterization的共用helper（`SameBits`、`UlpDistance`、`Opaque`）在tests/common、tests/object_fps_pvp、tests/ui_editor各一份；共通測試不能依賴產品測試 | 測試 | B7 |
 | `services/gyo_gateway/README.md`與`tests/common/ci/test_workflow_gates.py`的說明或守衛中出現產品名稱 | 共通層 | B7 |
+| Collision的`ValidateCapsule`允許半徑極小（約`2^-23`倍）、`height == 2r`的退化膠囊；此時`segmentTop < segmentBottom`，`Collision.cpp`的`Clamp(origin.y, segmentBottom, segmentTop)`違反前置條件（debug建置會assert；std::clamp原本也屬未定義行為） | Engine（Collision） | 純量統一後續 |
 | 根目錄三份README的範例`cmake --preset dev -DGYO_APPS=object_fps`指向停用中的產品；它重新啟用前需要先依[遷移清單](../../../architecture/plans/math-foundation/inactive_products.md)遷移 | 文件 | B7 |
 
 - 不轉入：float純量的clamp／min／max寫法，使用者決定直接在Math計畫的後續中統一（2026-10-04）。

@@ -2,11 +2,11 @@
 
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace Engine::Collision {
 namespace {

@@ -3,7 +3,6 @@
 #include "engine/math/scalar/ColorSpace.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace Engine::Render {

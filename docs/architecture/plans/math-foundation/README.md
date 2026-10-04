@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-04。Owner：Engine（新增模組 `GYO::Math`）。
-**全部批次完成並合併（2026-10-04，最後為 #27 `fdc72e9`）。後續：float 純量 clamp／min／max 的統一。**
+**全部批次完成並合併（2026-10-04，最後為 #27 `fdc72e9`）。後續：純量 Min／Max／Clamp 的統一。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -39,10 +39,10 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B6b pvp 表現層 | high | 完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 已合併 | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 `Math::ComposeEulerXYZ`（renderer 的提交契約）；acceptance 的量測維持獨立 |
 | B6c pvp 未編譯檔 | high | 完成，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 已合併 | 29 檔遷移與 syntax-only 驗證 |
 | B7 收尾 | medium | 完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 已合併 | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
-| 後續：float 純量 clamp／min／max 統一 | high | 進行中 | float 的 min／max／clamp 統一使用 `Math::Min／Max／Clamp`；double 與整數維持 `std::` |
+| 後續：純量 Min／Max／Clamp 統一 | high | 本機驗收完成 | min／max／clamp 統一使用 GYO 自己的 `Math::Min／Max／Clamp`（所有算術型別，bool 除外）；`GYO::Engine` 連結 Math；測試與 acceptance 維持 std 作為 oracle |
 
 ```text
-B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7 -> 後續（float 純量統一）
+B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7 -> 後續（純量 Min／Max／Clamp）
 ```
 
 ## 執行規則

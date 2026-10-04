@@ -296,7 +296,7 @@ namespace Engine::IO::Stream {
             auto tr = inner_->Tell();
             if (tr) {
                 const std::uint64_t logicalEnd = tr.value() + static_cast<std::uint64_t>(wlen_);
-                if (logicalEnd > sz) sz = logicalEnd;
+                sz = Math::Max(sz, logicalEnd);
             }
         }
         return IoResult<std::uint64_t>::Ok(sz);

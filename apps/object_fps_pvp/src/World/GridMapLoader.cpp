@@ -1,4 +1,5 @@
 #include "RetroFPS/World/GridMapLoader.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <exception>
 #include <optional>
@@ -73,7 +74,7 @@ MapLoadResult GridMapLoader::Parse(const std::string_view text) {
                 expectedWidth = line.size();
             } else if (line.size() != expectedWidth) {
                 const std::size_t mismatchColumn =
-                    line.size() < expectedWidth ? line.size() + 1 : expectedWidth + 1;
+                    Engine::Math::Min(line.size(), expectedWidth) + 1;
                 throw GridMapParseError(
                     lineNumber, mismatchColumn, "map rows must form a rectangle");
             }

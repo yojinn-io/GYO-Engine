@@ -271,7 +271,7 @@ void CheckMatchesStd(const std::vector<T>& values) {
             CHECK(SameRepresentation(Min(T{va}, T{vb}), (std::min)(T{va}, T{vb})));
             CHECK(SameRepresentation(Max(T{va}, T{vb}), (std::max)(T{va}, T{vb})));
             for (const T c : values) {
-                if (!(b <= c)) continue; // std::clamp requires lo <= hi
+                if (c < b) continue; // std::clamp requires !(hi < lo)
                 volatile T vc = c;
                 CHECK(SameRepresentation(Clamp(T{va}, T{vb}, T{vc}), std::clamp(T{va}, T{vb}, T{vc})));
             }
@@ -281,7 +281,7 @@ void CheckMatchesStd(const std::vector<T>& values) {
 
 } // namespace
 
-TEST_CASE("scalar Min, Max and Clamp match std for every arithmetic type") {
+TEST_CASE("scalar Min, Max and Clamp match std for float, double and integer types") {
     const float nanF = std::numeric_limits<float>::quiet_NaN();
     const float payloadF = std::bit_cast<float>(0x7FC12345U);
     CheckMatchesStd<float>({0.0F, -0.0F, 1.0F, -1.0F, 2.5F, 1.0e-40F, -1.0e-40F, kInf, -kInf, nanF, payloadF,

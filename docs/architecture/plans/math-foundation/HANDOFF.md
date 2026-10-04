@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：float 純量 clamp／min／max 的統一進行中。**
+更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：純量 Min／Max／Clamp 的統一本機驗收完成。**
 
 ## 閱讀入口
 
@@ -42,7 +42,7 @@
 | 2026-10-04 | B6a 的跨平台驗證：本機（mac x64）比對 master 與 branch 的全模擬 digest；依賴 libm 的替換（`hypot`）與會漂移的替換（倒數相乘正規化）以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測；其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關 | 使用者 |
 | 2026-10-04 | float 純量的 clamp／min／max 統一使用 Math（B7 留下的寫法不一致） | 使用者 |
 | 2026-10-04 | double 與整數也統一：`Math::Min／Max／Clamp` 改為 GYO 自己的實作，支援所有算術型別（bool 除外），結果與 std 相同；引數型別不一致時不能編譯。理由：std 的這些函式受 C／C++ 版本與平台巨集影響 | 使用者 |
-| 2026-10-04 | `GYO::Engine` PUBLIC 連結 `GYO::Math`（新增依賴邊 `engine → gyo_math`），讓 io、runtime、asset 也能使用；更正 PLAN 1.1「Engine 不連結」。Input、Text、Platform 目前沒有這類呼叫，維持不連結 | 使用者 |
+| 2026-10-04 | `GYO::Engine` PUBLIC 連結 `GYO::Math`（新增依賴邊 `engine → gyo_math`），讓 io、runtime、asset 也能使用；更正 PLAN 1.1「Engine 不連結」。Input、Text、Platform 不直接連結（Text 與 PlatformSDL 經 `GYO::Engine` 間接可見 Math；core Input 與 host 的 `gyo_shader_tool` 沒有 Math，目前也沒有這類呼叫） | 使用者 |
 
 ## B0 基線
 
@@ -385,7 +385,7 @@
   - `PlanarMovement.cpp`：clamp 改用 `Clamp`；倒數相乘的正規化改為對 `Vec3{x, 0, z}` 使用 `LengthSquared`、`Normalize`。
   - `Arena.cpp`：`Finite` 刪除，改用 `IsFinite(Vec3)`、`IsFinite(Aabb)`。
   - 各處的 identity 拷貝（`{p.x, p.y, p.z}`）改為直接傳值。
-- **保留為產品政策**：各種容差與迭代次數；`ShotQuery` 的眼睛位置與 `CharacterCollision` 試探位移的逐分量寫法（改成向量加法會改變 -0 或把 0·inf 帶進 y）；二分法的中點；double 與整數的 clamp／min／max（Math 的 `Min`／`Max`／`Clamp` 只有 float 版本，改用會悄悄縮窄）；`Percentile`。
+- **保留為產品政策**：各種容差與迭代次數；`ShotQuery` 的眼睛位置與 `CharacterCollision` 試探位移的逐分量寫法（改成向量加法會改變 -0 或把 0·inf 帶進 y）；二分法的中點；double 與整數的 clamp／min／max（當時 Math 的 `Min`／`Max`／`Clamp` 只有 float 版本，改用會悄悄縮窄；2026-10-04 的後續已改為全算術型別，見「後續」一節）；`Percentile`。
 - **Math**：`DegreesToRadians`、`RadiansToDegrees` 改為 constexpr；`MathTests.cpp` 新增「編譯期求值與執行期逐位元相同」的測試；`math.md` 數值政策加註。
 - **未編譯檔的提前處理**：型別換成 `Vec3` 後，以下 helper 會與 Math 經 ADL 歧義，使 syntax-only 檢查失敗，因此在 B6a 先處理：
   - `CombatCollision.cpp` 的 `IsFinite`、`Length`、`Normalize`，以及 `GameSession.cpp` 的 `Length`：與 Math 逐位元相同，刪除後改為明確呼叫 `Engine::Math::`。
@@ -681,19 +681,65 @@
 ### 範圍外，只回報（全計劃彙整）
 
 - 使用者決定（2026-10-04）轉入 PvP v6 計畫：清單與後續處理見 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。本文件不再維護這份清單，避免同一件事寫在兩處。
-- 例外：float 純量的 clamp／min／max 寫法，使用者決定直接在本計劃的後續中統一（見「後續：float 純量 clamp／min／max 的統一」）。
+- 例外：純量 min／max／clamp 的寫法，使用者決定直接在本計劃的後續中統一（見「後續：純量 Min／Max／Clamp 的統一」）。
 
-## 後續：float 純量 clamp／min／max 的統一
+## 後續：純量 Min／Max／Clamp 的統一
 
-狀態：**進行中**（2026-10-04 開始，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
+狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
 
-- 使用者決定（2026-10-04）：B7 留下的寫法不一致（engine 與工具用 `std::`，pvp 用 `Math::`）直接在本計劃後續中統一。
-- 方向：使用者的樹狀圖把 `Clamp`、`Min／Max` 放在 Math 的 Scalar 底下，所以 float 純量統一使用 `Engine::Math::Min／Max／Clamp`。
-  - `Math::Min／Max／Clamp` 只有 float 版本，double 與整數維持 `std::`，避免悄悄縮窄。
-  - 依 PLAN 1.1，不連結 Math 的模組（`GYO::Engine` 的 base、io、runtime、asset，以及 Input、Text）維持 `std::`。
-  - 測試與 acceptance 的量測計算是獨立 oracle，維持原寫法（與 B6b 相同）。
+### 決策與方向
+
+- 使用者決定（2026-10-04，見決策紀錄）：
+  - B7 留下的寫法不一致（engine 與工具用 `std::`，pvp 用 `Math::`）在本計劃後續中統一。
+  - double 與整數也一起統一，理由是 std 的這些函式受 C／C++ 版本與平台巨集影響。
+  - `GYO::Engine` 連結 Math。
+- 做法：`Math::Min／Max／Clamp` 改為 GYO 自己的 constexpr template。
+  - 支援所有算術型別（`Arithmetic` concept，bool 除外）。
+  - 實作就是標準的定義（`b < a ? b : a`、`a < b ? b : a`、`v < lo ? lo : hi < v ? hi : v`），所以結果、相等時取哪一個、NaN 的行為都與 std 相同。
+  - 引數必須同型別；混合型別無法編譯，不會隱式轉換。
+  - `Clamp` 與 std 一樣要求 `!(hi < lo)`，debug 建置以 assert 檢查。
+  - 不再依賴 `<algorithm>`，也不受 Windows 的 `min`／`max` 巨集影響。
+- 保留 std 的地方：
+  - `min_element` 這類演算法；
+  - 非算術型別（`std::chrono` duration，`ClientConnection.cpp:569`）；
+  - 測試與 acceptance 的獨立 oracle；
+  - 沒有 Math 的 core `GYO::Input`、host 的 `gyo_shader_tool`（`engine/base` 的 `Span.hpp` 也被它直接 include），以及未啟用產品。
+
+### 變更
+
+- `engine/math/scalar/Scalar.hpp`：`Min`、`Max`、`Clamp` 改為 template；Math 內部的 `std::clamp`（`Quaternion` 的 `Slerp`、`Segment`、`Vec3d`）也改用它，並移除 `<algorithm>`。
+- 呼叫處約 120 個，以 2 個 agent 分兩輪替換，引數順序與轉換都不變：
+  - 第一輪是 float；第二輪是 double、整數與 initializer-list 形式（改為依序巢狀呼叫，與 `min_element` 取第一個的規則相同）。
+  - 範圍：engine（含 `GYO::Engine` 的 io、runtime、asset）、`tools/ui_editor`、`apps/object_fps_pvp`（含未編譯的 29 檔）。
+  - 顯式 template 引數保留為 `Math::X<T>(...)`，只有在兩邊本來就同型別時才省略。
+- 手寫的 min 與 max 各一處改用 Math：`BufferedStream.cpp` 的 `if` 改為 `Max`，`GridMapLoader.cpp` 的三元式改為 `Min`。兩處都逐位元相同。
+- 不再使用的 `<algorithm>` 已移除（`FixedTickRuntime.hpp`、`ColorTransform.cpp` 等）；`Collision.cpp` 改為 include `<utility>`。
+- CMake：`GYO::Engine` PUBLIC 連結 `GYO::Math`，`add_subdirectory(math)` 移到 engine/CMakeLists.txt 最前面；`gyo_ui_editor_core` 明確 PRIVATE 連結 Math（`UndoStack` 直接使用）。
+- `MathTests.cpp`：
+  - 以 concept 鎖定型別規則：同型別可以，混合型別、bool 不行。
+  - 新增 constexpr 檢查。
+  - 在 float、double、int32、uint64、size_t 上，與 `std::min`、`max`、`clamp` 逐位元比對，涵蓋 NaN payload、±0、無限大與極值。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 19／19 通過 |
+| test preset | 46／46 通過 |
+| gateway Go 測試 | 通過 |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過 |
+| 依賴圖 | 與 B7 相比只多出 `engine → gyo_math` |
+| 對抗式審查 | 正確性沒有被推翻。審查者以探針取得 189 個呼叫處實際推導的型別，三個平台都與原本的 std 呼叫相同（size_t、uint64、protobuf `::uint64_t`、Sint32 等都同型別）。在 strict libc++ 下移除 transitive include 後，全部 TU 仍可編譯。指出的 minor 與 nit 都已處理：`Clamp` 的 debug 前置條件、ui_editor core 的明確連結、死掉的 `<algorithm>`、測試的過濾條件 |
+| 殘留稽核 | 範圍內已沒有算術型別的 `std::min／max／clamp`，也沒有 `std::fmin／fmax`。手寫的重複有兩處已改；`CapsuleQueries.cpp` 的「越過的那一面」與 `Span.hpp` 保留 |
+| CI 四平台 | 待 PR |
+
+### Architecture Delta
+
+- 新增依賴邊 `engine → gyo_math`（`GYO::Engine` PUBLIC 連結 Math）。Math 是零依賴的 header-only 最底層，不會形成循環。Text 與 PlatformSDL 因此經 Engine 間接可見 Math。
+- Math 公開介面：`Min`／`Max`／`Clamp` 由 float 函式改為 template，並新增公開 concept `Engine::Math::Arithmetic`。既有的 float 呼叫推導為 `T = float`，結果不變。
+- 執行期結果：在前置條件成立的輸入上全部不變。違反 `Clamp` 前置條件（`hi < lo`，標準上屬未定義行為）時，現在三個平台都依同一個寫法回傳。
 
 ## 未結事項
 
 - 本計劃的批次全部完成並合併：#24 → #25 → #26 → #27 依序合併（2026-10-04；疊在一起的 PR 在合併前一個之後改指 master）。
-- 後續（使用者 2026-10-04 決定）：float 純量 clamp／min／max 統一，進行中；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。
+- 後續（使用者 2026-10-04 決定）：純量 Min／Max／Clamp 的統一，本機驗收完成；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。
