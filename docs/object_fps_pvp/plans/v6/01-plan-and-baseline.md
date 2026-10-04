@@ -1,6 +1,6 @@
 # 第 01 批：計畫、分批與基線
 
-狀態：文件完成，2026-10-04；等 PR 的 CI。先讀 [進度](README.md)、[交接](HANDOFF.md)。
+狀態：完成，2026-10-04（PR #39，CI 通過）。先讀 [進度](README.md)、[交接](HANDOFF.md)。
 
 ## 目標與範圍
 
@@ -42,7 +42,7 @@
 | L1 | HANDOFF 第 1～8、10、11 項的每個子項都有批次，或標「候選／不做／已解決」 | 審查者逐列核對 25 列，全部有落點 |
 | L1 | `docs/architecture`、`docs/checkup` 沒有指向 `docs/object_fps_pvp` 的連結（D12） | 0 個 |
 | L1 | `git diff --stat` 只有 docs | 是 |
-| L1 | CI | PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39) 執行中 |
+| L1 | CI | PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39) 通過（只改 docs：CI scope 判定略過 L1 四平台與 Quick acceptance，CI gate 通過） |
 | L3 | 使用者確認分批與決定 | 2026-10-04 確認 |
 
 ## 平台
@@ -50,7 +50,7 @@
 | 平台 | 本批 |
 |---|---|
 | macOS Intel／Metal 實機 | 建置與 CTest 已執行（只有 CPU 與 `render.sdl_gpu_mesh_smoke`） |
-| CI 四平台 L1 | PR 時執行 |
+| CI 四平台 L1 | 略過（CI scope 判定只改 docs） |
 | Linux lavapipe GPU | 未執行（本批只改文件；CI toolchain 列的共通 `render.*` 照常執行，不作為本批驗收依據） |
 | Windows D3D12 實機 | 未執行（本批不需要） |
 | Linux 實機 | 未執行（本批不需要） |

@@ -1,6 +1,6 @@
 # PvP v6 交接
 
-更新：2026-10-04。Owner：`object_fps_pvp`。**第 01 批進行中**（計畫、分批與基線；工作分支 `claude/pvp-v6-batch01`，自 master `05042fa`）。
+更新：2026-10-04。Owner：`object_fps_pvp`。**第 01 批完成**（計畫、分批與基線；PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)，CI 通過，等使用者合併；工作分支 `claude/pvp-v6-batch01`，自 master `05042fa`）。
 其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 
 本文件原本收集 v5 期間使用者決定「延到 v6」的項目。2026-10-04 第 01 批開始後，它也是 v6 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
@@ -57,7 +57,7 @@
 - 2026-10-04：使用者決定 D1～D11。批次重新編號為本產品 01～14，Engine 為 IP-1～2、FF-1～9。
 - 2026-10-04：基線：test preset 建置成功，CTest 54／54 通過（97.64 秒）。v5 證據 10 個目錄、1,325 個檔案 clone 到本 worktree，雜湊與原檔相同。
 - 2026-10-04：批次文件與 Engine 計畫並行撰寫，經兩位審查者檢查；使用者另決定 D12、D13；修正後再驗證一次，剩下的小問題由主對話修正。
-- 2026-10-04：最終檢查：315 個相對連結全部存在；Engine 文件沒有連到本產品文件；沒有簡體字；變更只有 docs。commit 後開 PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)，等 CI。
+- 2026-10-04：最終檢查：315 個相對連結全部存在；Engine 文件沒有連到本產品文件；沒有簡體字；變更只有 docs。commit 後開 PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)。CI 通過：只改 docs，CI scope 判定略過 L1 四平台與 Quick acceptance，CI gate 通過。
 
 ## 延後項目：現況與對應批次
 
@@ -174,7 +174,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 01 批：修正完成後跑連結與涵蓋檢查，然後 commit、開 PR、確認 CI，把 PR 編號記到這裡。
+- 第 01 批：PR #39 等使用者合併。
 - 第 02 批之後都未開始，由使用者逐批指定。
 - 已知要在批次開始時決定的事：
   - FF-7 的 include 統一方向。
