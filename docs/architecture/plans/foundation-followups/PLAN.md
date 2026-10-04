@@ -28,7 +28,7 @@
 
 ## FF-1 Collision 判定語料
 
-狀態：未開始。
+狀態：完成（2026-10-05）。見 [dev_log](../../../dev_logs/2026_10_05_engine_ff1.zh-Hant.md)。
 
 ### 目標與範圍
 
