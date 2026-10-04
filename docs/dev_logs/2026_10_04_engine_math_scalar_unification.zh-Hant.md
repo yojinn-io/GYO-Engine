@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 後續：純量 Min／Max／Clamp 的統一
 
 日期：2026-10-04。Owner：Engine（`GYO::Math`），連帶使用 Math 的模組、工具與 `object_fps_pvp`。
-狀態：本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI（分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
+狀態：完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 已合併（`574ae32`），CI 四平台通過（分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#後續純量-minmaxclamp-的統一)，本文只記經過。
 
 ## 經過
@@ -19,3 +19,4 @@
 ## 留給下一步
 
 - PR 與 CI 四平台驗收。
+- 使用者合併 #28。
