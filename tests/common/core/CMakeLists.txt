@@ -15,6 +15,7 @@ add_executable(engine_tests
     runtime/RuntimePortTests.cpp
     io/BufferedStreamTests.cpp
     io/StreamReaderTests.cpp
+    io/VfsTests.cpp
 )
 
 target_link_libraries(engine_tests PRIVATE

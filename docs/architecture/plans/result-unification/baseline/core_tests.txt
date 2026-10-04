@@ -1,0 +1,22 @@
+Test project <repo>/build/target/_build/core
+  Test  #1: gyo_collision_tests
+  Test  #2: engine_tests
+  Test  #3: input_tests
+  Test  #4: gyo_math_tests
+  Test  #5: gyo_model_tests
+  Test  #6: gyo_model_renderer_tests
+  Test  #7: gyo_render_tests
+  Test  #8: gyo_ui_tests
+  Test  #9: cmake.AppRegistry
+  Test #10: cmake.ToolRegistry
+  Test #11: cmake.AcceptanceToken
+  Test #12: cmake.Component
+  Test #13: cmake.RenderOptions
+  Test #14: cmake.MsvcRuntime
+  Test #15: cmake.ProjectComposition
+  Test #16: cmake.ProductPackaging
+  Test #17: cmake.GoService
+  Test #18: build.ci
+  Test #19: build.assembly
+
+Total Tests: 19
