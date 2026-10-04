@@ -616,6 +616,58 @@ TEST_CASE("AssetManager: only the most recent failure is retained beside a publi
     CHECK(f.storage.Find(f.id)->refCount == 0);
 }
 
+// Characterization for the Assert/Result plan (R0): KeepOldIfAny stores the
+// failure beside the still-published generation. R3 changes how AssetRecord
+// holds errors; these cases must pass unchanged across that batch.
+TEST_CASE("AssetManager: async KeepOldIfAny failure reports its error on the published handle") {
+    ManagerFixture f;
+    const auto original = f.Initial();
+    CHECK_FALSE(f.manager.GetError(original));
+    auto request = f.ReloadAsync();
+    request.overridePath = "missing";
+    const auto failed = f.manager.Load(f.id, request);
+    REQUIRE(failed);
+    f.manager.Update();
+
+    CHECK(f.manager.GetState(original) == AssetState::Ready);
+    CHECK(f.manager.GetState(failed.value()) == AssetState::Failed);
+    const auto published = f.manager.GetError(original);
+    REQUIRE(published);
+    const auto candidate = f.manager.GetError(failed.value());
+    REQUIRE(candidate);
+    CHECK(candidate->code == AssetErrorCode::SourceReadFailed);
+    CHECK(published->code == candidate->code);
+    CHECK(published->message == candidate->message);
+
+    const auto next = f.manager.Load(f.id, f.ReloadAsync());
+    REQUIRE(next);
+    f.manager.Update();
+    CHECK(f.manager.GetState(next.value()) == AssetState::Ready);
+    CHECK_FALSE(f.manager.GetError(next.value()));
+    f.manager.Release(original);
+    f.manager.Release(failed.value());
+    f.manager.Release(next.value());
+}
+
+TEST_CASE("AssetManager: sync KeepOldIfAny failure returns the published handle with the error") {
+    ManagerFixture f;
+    const auto original = f.Initial();
+    auto request = AssetRequest::Reload();
+    request.overridePath = "missing";
+    REQUIRE(request.fallback == AssetRequest::Fallback::KeepOldIfAny);
+    const auto kept = f.manager.Load(f.id, request);
+    REQUIRE(kept);
+    CHECK(kept.value().generation() == original.generation());
+    CHECK(f.manager.GetState(kept.value()) == AssetState::Ready);
+    const auto error = f.manager.GetError(kept.value());
+    REQUIRE(error);
+    CHECK(error->code == AssetErrorCode::SourceReadFailed);
+    REQUIRE(f.manager.GetShared<Loaders::TextAsset>(kept.value()));
+    CHECK(f.manager.GetShared<Loaders::TextAsset>(kept.value())->text == "old");
+    f.manager.Release(original);
+    f.manager.Release(kept.value());
+}
+
 TEST_CASE("AssetManager: generation exhaustion rejects new loads without wrapping or side effects") {
     ManagerFixture f;
     const auto original = f.Initial();
