@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1、R2 完成（#31 合併為 `9c51b32`，#32 合併為 `dedeebd`）。R3 本機驗收完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1–R3 完成（#31 合併為 `9c51b32`，#32 為 `dedeebd`，#33 為 `12abe2e`）。R4 本機驗收完成，PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 待 CI。**
 
 ## 閱讀入口
 
@@ -32,6 +32,9 @@
 | 2026-10-04 | `LoaderRegistry::Register` 的失敗分支全是 API 誤用，改成 Assert 後回傳型別改為 `void`；呼叫端（ui_editor、pvp、tests）的錯誤處理隨之刪除 | R3 實作（依「API 誤用改 Assert」的決定） |
 | 2026-10-04 | `AssetErrorCode::UnsupportedRequest` 不再有產生者，刪除；`AssetRecord::ResetToUnloaded`（沒有呼叫者）刪除 | R3 實作 |
 | 2026-10-04 | `UiError` 的建構子參數順序為 code、message、source、jsonPointer、detail，維持既有大括號初始化的順序，detail 放最後 | R3 實作 |
+| 2026-10-04 | 規則 5 的 detail 以 `Base::CauseDetail(inner, outerDetail)` 產生：外層若有自己的 detail（例如路徑），格式為 `<outer>; <InnerCode>: <inner detail>`。外層 message 保留內層原文，可以在前後加上自己的說明 | R4 實作 |
+| 2026-10-04 | ShaderLibrary 的 artifact 讀取失敗改用帶型別的內部例外（`ArtifactReadFailure`，攜帶 `AssetError`），在 `AppendBundle` 邊界依規則 5 轉換。PLAN 原寫「不再經由例外」；但整個 bundle 解析都以例外運作（含 nlohmann `.at()`），只把 `Read` 改成 Result 仍無法去掉例外。重點在保留 code，而內部 throw、邊界轉換符合規則 6 | R4 實作 |
+| 2026-10-04 | `Result` 的 E 以 `CodedError` 約束（PLAN 2.4）。`ResultTests` 中為 R2–R3 過渡期寫的 `Result<int, std::string>` 測試改成檢查 string 會被拒絕 | R4 實作 |
 
 ## R0 任務校正
 
@@ -249,7 +252,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R3 Error 語意與 asset
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r3`，基準 `dedeebd`），PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。
+狀態：**完成**。PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 於 2026-10-04 合併為 `12abe2e`，L1 四列與 CI gate 通過；windows-x64 的警告只多 1 個 doctest C5285（新增的 `ErrorTests.cpp` 這個 TU），其餘與 R2 相同（分支 `claude/result-unification-r3`）。
 
 ### 變更
 
@@ -283,4 +286,50 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 的 L1 四列結果。
+- 無。
+
+## R4 Model、ui／render 的轉換與 API 誤用
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r4`，基準 `12abe2e`），PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 待 CI。
+
+### 變更
+
+- **`ModelError`**（新 header `model/ModelError.hpp`）：`InvalidModel`、`InvalidArgument`、`IncompatibleAnimation`，以及 `ModelResult<T>`。Model API 的 8 個宣告與 `Animation.cpp`（27 處）、`AnimationTransfer.cpp`（11 處）改用它，訊息逐字保留。轉移中巢狀的 `ValidateModel` 錯誤在同模組內保留 code。
+- **`ModelRendererError`**：`InvalidModel`、`InvalidArgument`、`ResourceCreationFailed`、`SubmissionFailed`。Model 與 Render 的錯誤依規則 5 轉換（包括 R0 補列的 `:113` 原樣傳遞），null model 與 null resource 改用 `GYO_ASSERT`。
+- **`Result` 以 `CodedError` 約束 E**；`Base::CauseDetail` 新增於 `Error.hpp`；`GYO_UNREACHABLE` 新增於 `Assert.hpp`。
+- **跨模組轉換**：
+  - UiRenderer 的 6 處（Asset、Render、Text → `UiError`）改成在 detail 保留內層 code。
+  - ShaderLibrary 的 artifact 讀取失敗保留 `AssetError` 的 code（見決策紀錄）。
+  - `UfbxModelLoader` 的 `ValidateModel` 不再經由例外，直接轉成 `AssetError::DecodeFailed`，detail 為 `<path>; <ModelCode>`。
+- **API 誤用改用 Assert**：
+  - UiRuntime 10 處（no active canvas 3、not initialized 3、null document 1、evaluated 或 captured element 不在 document 中 2、不可到達的 text source kind 1，最後這處改用 `GYO_UNREACHABLE`）。
+  - `UiRuntime.cpp` 的 `placeholders.at(name)` 改成先 `GYO_ASSERT` 再存取。
+  - UiRenderer 3 處（`maximumCachedTextRuns == 0`、not initialized、point size）。
+  - `Renderer::Render` 的 not initialized。
+  - 保留為 Result 的 `RuntimeState`：viewport 3 處、slider 寬度、負尺寸、item_field（呼叫端資料或 document 內容）。
+- **被迫的修改**：
+  - `ModelTests` 4 處、`ModelRendererTests` 1 處改成 `.error().message`，並補上 code 斷言。
+  - pvp 已編譯檔 13 處與 `Require` helper（改成接受任何 E 的 template）。
+  - 29 個未編譯檔中的 17 處（相容修改，與 R0 盤點的數量相同）。
+- **測試**：`UiRendererTests` 的「before initialization」改成 `GYO_CHECK_ASSERTS`。新增：
+  - ModelRenderer 保留 Model／Render code、null 輸入的 Assert。
+  - Renderer、UiRuntime 的 API 誤用。
+  - `CauseDetail` 的格式。
+  - `GYO_UNREACHABLE`。
+  - `ResultTests` 中 string E 被拒絕。
+- **文件**：`error-handling.md` 寫入 `GYO_UNREACHABLE`、`CauseDetail`、`CodedError` 約束。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過 |
+| test preset | 50／50 通過（含 `UfbxModelTests.cpp:172-173` 沒有修改就通過，外層 message 保留內層原文） |
+| 稽核 | `string_error_type` 為 0（Apps 也是 0）；engine 的 `gyo_assert` 從 29 增為 50 |
+| 第一方警告 | 與 R3 相同 |
+| 依賴圖 | 只多出測試專用的 `gyo_render_tests -> gyo_test_support` |
+| 29 檔 syntax-only | 29／29 PASS（17 處相容修改後） |
+
+### 未結事項
+
+- PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 的 L1 四列結果。

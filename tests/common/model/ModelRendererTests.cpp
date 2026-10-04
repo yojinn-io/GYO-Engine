@@ -1,5 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
+#include "AssertTestSupport.hpp"
 
 #include "model_renderer/ModelRenderer.hpp"
 #include "render/RenderQueue.hpp"
@@ -115,7 +116,10 @@ TEST_CASE("model renderer cleans up partial uploads and reports device failures"
     model->materials.push_back({"second"});
     const std::array materials{material,material};
     device.failTextureCall=2;
-    CHECK_FALSE(ModelRenderer::ModelResource::Create(device,model,materials));
+    const auto failedUpload=ModelRenderer::ModelResource::Create(device,model,materials);
+    REQUIRE_FALSE(failedUpload);
+    CHECK(failedUpload.error().code==ModelRenderer::ModelRendererErrorCode::ResourceCreationFailed);
+    CHECK(failedUpload.error().detail=="ResourceCreationFailed"); // the Render code (rule 5)
     CHECK(device.textures.empty());
     device.failTextureCall=0;
     auto resource=ModelRenderer::ModelResource::Create(device,model,materials);
@@ -136,7 +140,9 @@ TEST_CASE("model renderer cleans up partial uploads and reports device failures"
     device.failUpdate=true;
     const auto update=instance.value()->UpdatePose(pose);
     REQUIRE_FALSE(update);
-    CHECK(update.error().find("injected update failure")!=std::string::npos);
+    CHECK(update.error().code==ModelRenderer::ModelRendererErrorCode::ResourceCreationFailed);
+    CHECK(update.error().message.find("injected update failure")!=std::string::npos);
+    CHECK(update.error().detail.rfind("ResourceCreationFailed",0)==0); // the Render code
 }
 
 TEST_CASE("untextured model materials and malformed poses have explicit behavior") {
@@ -156,4 +162,21 @@ TEST_CASE("untextured model materials and malformed poses have explicit behavior
     queue.SetCamera({});
     REQUIRE(instance.value()->Submit(queue,{}));
     CHECK_FALSE(queue.Meshes()[0].material.texture.IsValid());
+}
+
+TEST_CASE("model renderer keeps the Model code and asserts on null inputs") {
+    Device device;
+    auto model=MakeModel();
+    const std::array materials{material};
+    auto invalid=std::make_shared<Model::ModelAsset>(*model);
+    invalid->nodes.clear();
+    const auto rejected=ModelRenderer::ModelResource::Create(device,invalid,materials);
+    REQUIRE_FALSE(rejected);
+    CHECK(rejected.error().code==ModelRenderer::ModelRendererErrorCode::InvalidModel);
+    CHECK(rejected.error().detail=="InvalidModel"); // the Model code (rule 5)
+    CHECK(rejected.error().message=="Model requires at least one node.");
+
+    GYO_CHECK_ASSERTS(ModelRenderer::ModelResource::Create(device,nullptr,materials));
+    Model::Pose pose;REQUIRE(Model::MakeDefaultPose(*model,pose));
+    GYO_CHECK_ASSERTS(ModelRenderer::ModelInstance::Create(nullptr,pose));
 }

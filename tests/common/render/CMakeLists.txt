@@ -9,6 +9,7 @@ add_executable(gyo_render_tests
 
 target_link_libraries(gyo_render_tests PRIVATE
     GYO::Render
+    gyo_test_support
     doctest::doctest
     nlohmann_json::nlohmann_json
 )

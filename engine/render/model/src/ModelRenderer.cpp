@@ -3,13 +3,19 @@
 #include "render/IRenderDevice.hpp"
 #include "render/RenderQueue.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include <cmath>
 #include <utility>
 #include <vector>
 
 namespace Engine::ModelRenderer {
 namespace {
-using Result = Base::Result<void, std::string>;
+using Result = Base::Result<void, ModelRendererError>;
+
+ModelRendererError Failure(const ModelRendererErrorCode code, std::string message, std::string detail = {}) {
+    return ModelRendererError::Make(code, std::move(message), std::move(detail));
+}
 bool Finite(const Render::Color color) {
     return std::isfinite(color.red) && std::isfinite(color.green) &&
            std::isfinite(color.blue) && std::isfinite(color.alpha);
@@ -31,26 +37,35 @@ struct ModelResource::Impl final {
 ModelResource::ModelResource(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 ModelResource::~ModelResource() = default;
 
-Base::Result<std::shared_ptr<ModelResource>, std::string> ModelResource::Create(
+Base::Result<std::shared_ptr<ModelResource>, ModelRendererError> ModelResource::Create(
     Render::IRenderDevice& device, std::shared_ptr<const Model::ModelAsset> model,
     const std::span<const ModelMaterial> materials) {
-    if (!model) return Base::Err("Model resource requires a model.");
+    GYO_ASSERT(model != nullptr);
     const auto valid = Model::ValidateModel(*model);
-    if (!valid) return Base::Err(valid.error());
+    if (!valid) {
+        return Base::Err(Failure(ModelRendererErrorCode::InvalidModel, valid.error().message,
+                                 Base::CauseDetail(valid.error())));
+    }
     if (materials.size() != model->materials.size())
-        return Base::Err("Model resource requires one material per source material.");
+        return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument,
+                                 "Model resource requires one material per source material."));
     auto impl = std::make_unique<Impl>();
     impl->device = &device;
     impl->model = std::move(model);
     impl->materials.reserve(materials.size());
     for (const auto& source : materials) {
-        if (!Finite(source.tint)) return Base::Err("Model material tint must be finite.");
+        if (!Finite(source.tint))
+            return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument, "Model material tint must be finite."));
         Render::MaterialDesc material;
         material.tint = source.tint;
         material.sampler = source.sampler;
         if (source.texture) {
             const auto created = device.CreateTexture(*source.texture);
-            if (!created) return Base::Err("Model texture upload failed: " + created.error().message);
+            if (!created) {
+                return Base::Err(Failure(ModelRendererErrorCode::ResourceCreationFailed,
+                                         "Model texture upload failed: " + created.error().message,
+                                         Base::CauseDetail(created.error())));
+            }
             material.texture = created.value();
         }
         impl->materials.push_back(material);
@@ -72,7 +87,10 @@ struct ModelInstance::Impl final {
 
     Result Skin(const std::size_t mesh, const Model::Pose& pose) {
         const auto result = Model::SkinMesh(*resource->impl_->model, mesh, pose, skinned);
-        if (!result) return result;
+        if (!result) {
+            return Base::Err(Failure(ModelRendererErrorCode::InvalidModel, result.error().message,
+                                     Base::CauseDetail(result.error())));
+        }
         vertices.resize(skinned.size());
         for (std::size_t index = 0; index < skinned.size(); ++index) {
             const auto& vertex = skinned[index];
@@ -85,11 +103,12 @@ struct ModelInstance::Impl final {
 ModelInstance::ModelInstance(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 ModelInstance::~ModelInstance() = default;
 
-Base::Result<std::unique_ptr<ModelInstance>, std::string> ModelInstance::Create(
+Base::Result<std::unique_ptr<ModelInstance>, ModelRendererError> ModelInstance::Create(
     std::shared_ptr<ModelResource> resource, const Model::Pose& pose,
     const Math::Vec3 modelSpaceOffset) {
-    if (!resource) return Base::Err("Model instance requires a resource.");
-    if (!Math::IsFinite(modelSpaceOffset)) return Base::Err("Model offset must be finite.");
+    GYO_ASSERT(resource != nullptr);
+    if (!Math::IsFinite(modelSpaceOffset))
+        return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument, "Model offset must be finite."));
     auto impl = std::make_unique<Impl>();
     impl->resource = std::move(resource);
     impl->offset = modelSpaceOffset;
@@ -99,7 +118,11 @@ Base::Result<std::unique_ptr<ModelInstance>, std::string> ModelInstance::Create(
         const auto skinned = impl->Skin(mesh, pose);
         if (!skinned) return Base::Err(skinned.error());
         const auto created = impl->resource->impl_->device->CreateMesh({impl->vertices, model.meshes[mesh].indices});
-        if (!created) return Base::Err("Model mesh creation failed: " + created.error().message);
+        if (!created) {
+            return Base::Err(Failure(ModelRendererErrorCode::ResourceCreationFailed,
+                                     "Model mesh creation failed: " + created.error().message,
+                                     Base::CauseDetail(created.error())));
+        }
         impl->meshes.push_back(created.value());
     }
     return std::unique_ptr<ModelInstance>(new ModelInstance(std::move(impl)));
@@ -110,14 +133,19 @@ Result ModelInstance::UpdatePose(const Model::Pose& pose) {
         const auto skinned = impl_->Skin(mesh, pose);
         if (!skinned) return skinned;
         const auto updated = impl_->resource->impl_->device->UpdateMeshVertices(impl_->meshes[mesh], impl_->vertices);
-        if (!updated) return Base::Err("Model mesh update failed: " + updated.error().message);
+        if (!updated) {
+            return Base::Err(Failure(ModelRendererErrorCode::ResourceCreationFailed,
+                                     "Model mesh update failed: " + updated.error().message,
+                                     Base::CauseDetail(updated.error())));
+        }
     }
     return {};
 }
 
 Result ModelInstance::Submit(Render::RenderQueue& queue, const Render::Transform3D& transform,
                               const Render::MeshLayer layer, const Render::Color tint) const {
-    if (!Finite(tint)) return Base::Err("Model instance tint must be finite.");
+    if (!Finite(tint))
+        return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument, "Model instance tint must be finite."));
     const auto& resource = *impl_->resource->impl_;
     for (std::size_t mesh = 0; mesh < impl_->meshes.size(); ++mesh) {
         Render::MeshSubmission submission;
@@ -130,7 +158,11 @@ Result ModelInstance::Submit(Render::RenderQueue& queue, const Render::Transform
         submission.transform = transform;
         submission.layer = layer;
         const auto submitted = queue.Submit(submission);
-        if (!submitted) return Base::Err("Model submission failed: " + submitted.error().message);
+        if (!submitted) {
+            return Base::Err(Failure(ModelRendererErrorCode::SubmissionFailed,
+                                     "Model submission failed: " + submitted.error().message,
+                                     Base::CauseDetail(submitted.error())));
+        }
     }
     return {};
 }

@@ -10,7 +10,7 @@ Result = Runtime Error
 | | Programmer Error | Runtime Error |
 |---|---|---|
 | Meaning | The program is wrong: a broken precondition or internal invariant, API misuse, an unreachable branch | The program is right, but external data or the environment failed it |
-| Mechanism | `GYO_ASSERT` (`engine/base/Assert.hpp`) | `Engine::Base::Result<T, E>` (`engine/base/Result.hpp`) with the module's error type |
+| Mechanism | `GYO_ASSERT`, `GYO_UNREACHABLE` (`engine/base/Assert.hpp`) | `Engine::Base::Result<T, E>` (`engine/base/Result.hpp`) with the module's error type |
 | Caller | Does not handle it; the fix is in the code | Must handle it (`[[nodiscard]]`) |
 | When it happens | The assertion handler runs, by default printing the condition and aborting, in every build configuration | The function returns the error, carrying the module's own code |
 | Shown to people | The handler prints the condition and its location | The error's code, message and detail |
@@ -24,7 +24,7 @@ These are not errors and use neither mechanism:
 
 Exceptions are not a third mechanism. See rule 6.
 
-Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). `GYO_ASSERT`, `GYO::Base`, Result's construction syntax, the `CodedError` convention and `Base::Describe` are in place; the model, cross-module and tool migrations land in later batches. Until then some code may still use the older forms listed in the plan.
+Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). The engine follows it; the UI editor's migration lands in a later batch. Until then the editor may still use the older forms listed in the plan.
 
 ## Rules
 
@@ -37,7 +37,7 @@ Status: this contract is being introduced by the [Assert/Result plan](plans/resu
 2. **Data-validation APIs (wide contracts) return Result.** Some engine APIs are themselves the first validation point for data that comes from content or callers' input, for example `RenderQueue::Submit`, UI sprite clipping and the model animation API. Bad input there is a Runtime Error and they return a `Result` with an `InvalidArgument`-style code. The plan keeps a list of them.
 3. **API misuse is a Programmer Error.** Calling a function in the wrong state (before initialization, without an active canvas), registering a null or duplicate loader, or passing reserved request fields are assertions, not results. The one documented exception is the SDL GPU device: `WrongThread`, `InvalidHandle` and frame-state errors stay `Result`, because they are the GPU backend's external contract and `WrongThread` is detected on another thread.
 4. **Propagate within a module unchanged**: return the callee's error as it is.
-5. **Translate at module boundaries without losing the code.** The outer module chooses its own code. Its message keeps the inner message verbatim; the inner code name, and the inner detail if any, go into the outer detail as `<InnerCode>: <inner detail>`.
+5. **Translate at module boundaries without losing the code.** The outer module chooses its own code. Its message keeps the inner message verbatim (it may add its own context around it); the outer detail records the cause with `Base::CauseDetail(inner, outerDetail)`, which yields `<InnerCode>` or `<InnerCode>: <inner detail>`, after the outer module's own detail (such as a path) when there is one.
 6. **Do not use exceptions to report failures from engine or tool APIs.** A module may throw internally (for example through a JSON library) only if it catches at its public boundary and returns a `Result`. Boundary catches name `std::exception`; never `catch (...)`, which would also swallow a test's `AssertionFailure`. A thread entry point that can meet a Runtime Error catches it itself.
 7. **Present Runtime Errors through one formatter**, `Base::Describe`, instead of per-module formatting helpers.
 
@@ -50,6 +50,7 @@ Status: this contract is being introduced by the [Assert/Result plan](plans/resu
 - A function that contains `GYO_ASSERT` is not `noexcept`, and destructors and thread entry points contain none (the Lakos rule). Tests replace the handler with one that throws, and a throw out of a `noexcept` function terminates instead of reaching the test. Math functions that assert, such as `Clamp` and the functions that forward caller-provided bounds to it, are therefore not `noexcept`.
 - In a `constexpr` function a failing `GYO_ASSERT` during constant evaluation is a compile error.
 - Conditions may contain commas (`GYO_ASSERT(std::is_same_v<A, B>)`). GYO macros, this one included, assume a standard-conforming preprocessor on every compiler: `build/cmake/GyoBuild.cmake` passes `/Zc:preprocessor` to MSVC for all GYO code (engine, products, tools and tests; not `third_party`), and `Assert.hpp` stops with `#error` if MSVC's traditional preprocessor is active. Macros may therefore forward `__VA_ARGS__` and use `__VA_OPT__`.
+- `GYO_UNREACHABLE()` marks a branch a correct program never reaches, such as the end of a switch that handles every enumerator; reaching it is reported like a failed assertion.
 - There is no debug-only level yet. `GYO_DEBUG_ASSERT`, for checks too expensive to run in release, will be added together with the first such check.
 
 Tests include `tests/common/support/AssertTestSupport.hpp` (target `gyo_test_support`). `GYO_CHECK_ASSERTS(expr)` installs a throwing handler for the duration of the expression and checks that it failed an assertion; outside it the default handler stays installed, so an unexpected Programmer Error aborts the test executable. `AssertionFailure` deliberately does not derive from `std::exception`. The header also disables the Windows abort dialog. That the default handler really aborts is checked by `gyo_assert_abort_probe` under `cmake -P` (`tests/common/base`).
@@ -66,7 +67,7 @@ C++26 has no run-time function to swap the handler and chooses semantics per bui
 
 ## Result and errors
 
-`Engine::Base::Result<T, E>` holds either a value or an error. Its interface is a subset of C++23 `std::expected`, with `Base::Err` in the role of `std::unexpected`:
+`Engine::Base::Result<T, E>` holds either a value or an error; `E` must satisfy `CodedError` (below), so a string or another uncoded type does not compile. Its interface is a subset of C++23 `std::expected`, with `Base::Err` in the role of `std::unexpected`:
 
 ```cpp
 Base::Result<Path, IoError> Parse(std::string_view raw) {

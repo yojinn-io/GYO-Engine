@@ -64,7 +64,7 @@ void BindCompatibleAnimations(const nlohmann::json& config,
                 throw std::runtime_error("ignored animation node is absent from its source");
             auto clip = Engine::Model::TransferCompatibleAnimation(
                 *reference.model, *model, reference.clipIndex, nodes, translationScale, excluded);
-            if (!clip) throw std::runtime_error("animation '" + semantic + "': " + clip.error());
+            if (!clip) throw std::runtime_error("animation '" + semantic + "': " + clip.error().message);
             if (model->FindClip(clip.value().name))
                 throw std::runtime_error("assembled animation clip name is ambiguous: " + clip.value().name);
             clipIndex = model->clips.size();
@@ -75,7 +75,7 @@ void BindCompatibleAnimations(const nlohmann::json& config,
             AnimationClipReference{definition.modelAssetId, model, clipIndex});
     }
     const auto valid = Engine::Model::ValidateModel(*model);
-    if (!valid) throw std::runtime_error(valid.error());
+    if (!valid) throw std::runtime_error(valid.error().message);
     definition.model = std::move(model);
     definition.animationSet = std::move(boundSet);
 }
@@ -205,7 +205,7 @@ static std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterDefin
                     throw std::runtime_error("accessory placement must be finite with positive scale");
                 accessory.placement.scale = {scale, scale, scale};
                 const auto made = Engine::Model::MakeDefaultPose(source, accessory.referencePose);
-                if (!made) throw std::runtime_error(made.error());
+                if (!made) throw std::runtime_error(made.error().message);
                 definition->accessories.push_back(std::move(accessory));
             }
         }

@@ -16,6 +16,14 @@ RenderError Invalid(std::string message, std::string detail = {}) {
     return RenderError::Make(RenderErrorCode::InvalidArgument,
         "ShaderLibrary: " + std::move(message), std::move(detail));
 }
+// Bundle parsing reports failures by internal exceptions (as nlohmann .at()
+// does), converted to a Result at AppendBundle. An artifact that cannot be
+// resolved or read carries its AssetError there, so the asset code survives.
+struct ArtifactReadFailure final : std::runtime_error {
+    ArtifactReadFailure(std::string message, Asset::AssetError cause)
+        : std::runtime_error(std::move(message)), error(std::move(cause)) {}
+    Asset::AssetError error;
+};
 std::string RequiredString(const Json& object, const char* key) {
     const auto value = object.at(key).get<std::string>();
     if (value.empty()) throw std::runtime_error(std::string("empty ") + key);
@@ -47,9 +55,9 @@ ShaderFormat ParseFormat(const std::string& value) {
 Asset::Loading::ByteBuffer Read(Asset::Loading::IAssetSource& source,
     const Asset::Resolver::AssetPathResolver& resolver, const std::string& path) {
     const auto resolved = resolver.Resolve(RelativePath(path));
-    if (!resolved) throw std::runtime_error(resolved.error().message + ": " + path);
+    if (!resolved) throw ArtifactReadFailure(resolved.error().message + ": " + path, resolved.error());
     auto bytes = source.ReadAll(resolved.value().Str());
-    if (!bytes) throw std::runtime_error(bytes.error().message + ": " + resolved.value().Str());
+    if (!bytes) throw ArtifactReadFailure(bytes.error().message + ": " + resolved.value().Str(), bytes.error());
     if (bytes.value().empty()) throw std::runtime_error("empty artifact: " + path);
     return std::move(bytes).value();
 }
@@ -132,6 +140,8 @@ Base::Result<void, RenderError> ShaderLibrary::AppendBundle(
         programs_.merge(pending);
         version_ = std::move(newVersion);
         return {};
+    } catch (const ArtifactReadFailure& failure) {
+        return Base::Err(Invalid(failure.what(), Base::CauseDetail(failure.error, manifestPath)));
     } catch (const std::exception& error) {
         return Base::Err(Invalid(error.what(), std::string(manifestPath)));
     }

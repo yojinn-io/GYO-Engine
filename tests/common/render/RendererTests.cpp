@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "AssertTestSupport.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <vector>
@@ -567,3 +568,8 @@ TEST_CASE("Overlay sprite uniforms are byte-identical to the frozen row-vector r
     CheckSpriteLayer(CompositeLayer::Overlay, 5U);
 }
 } // namespace
+
+TEST_CASE("Renderer use before Initialize is a Programmer Error") {
+    Renderer renderer;
+    GYO_CHECK_ASSERTS(renderer.Render(RenderQueue{}));
+}

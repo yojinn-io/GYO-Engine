@@ -12,7 +12,7 @@ using Math::Matrix4;
 using Math::Quaternion;
 using Math::Vec3;
 namespace {
-using Result = Base::Result<void, std::string>;
+using Result = ModelResult<void>;
 
 // Model validity predicates over the Math checks; a valid rotation also needs
 // a non-degenerate quaternion.
@@ -54,10 +54,10 @@ Result ResolveGlobals(const ModelAsset& model,Pose& output) {
     output.globalTransforms.resize(model.nodes.size());
     for(std::size_t i=0;i<model.nodes.size();++i) {
         const auto parent=model.nodes[i].parentIndex;
-        if(parent&&*parent>=i) return Base::Err("Model nodes must be ordered parent before child.");
+        if(parent&&*parent>=i) return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model nodes must be ordered parent before child."));
         Matrix4 local=ToMatrix(output.localTransforms[i]);
         output.globalTransforms[i]=parent?Multiply(output.globalTransforms[*parent],local):local;
-        if(!Finite(output.globalTransforms[i])) return Base::Err("Model pose contains a non-finite transform.");
+        if(!Finite(output.globalTransforms[i])) return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model pose contains a non-finite transform."));
     }
     return {};
 }
@@ -79,49 +79,49 @@ Vec3 TransformNormal(const Matrix4& matrix,const Vec3 normal) {
 } // namespace
 
 Result ValidateModel(const ModelAsset& model) {
-    if(model.nodes.empty()) return Base::Err("Model requires at least one node.");
+    if(model.nodes.empty()) return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model requires at least one node."));
     for(const auto& material:model.materials) {
         if(!std::all_of(material.baseColorLinear.begin(),material.baseColorLinear.end(),
             [](float component){return std::isfinite(component);}))
-            return Base::Err("Model material '"+material.name+"' has a non-finite base color.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model material '"+material.name+"' has a non-finite base color."));
     }
     for(std::size_t i=0;i<model.nodes.size();++i) {
         const auto& node=model.nodes[i];
         if((node.parentIndex&&*node.parentIndex>=i)||!Finite(node.localTransform))
-            return Base::Err("Model node has an invalid hierarchy or transform.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model node has an invalid hierarchy or transform."));
     }
     for(const auto& mesh:model.meshes) {
         if(mesh.nodeIndex>=model.nodes.size()||mesh.materialIndex>=model.materials.size()||
            mesh.vertices.empty()||mesh.indices.empty()||mesh.indices.size()%3!=0||!Finite(mesh.geometryToNode))
-            return Base::Err("Model mesh has an invalid node, material, transform or topology.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model mesh has an invalid node, material, transform or topology."));
         for(const auto index:mesh.indices) if(index>=mesh.vertices.size())
-            return Base::Err("Model mesh index exceeds its vertex count.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model mesh index exceeds its vertex count."));
         for(const auto& joint:mesh.joints) if(joint.nodeIndex>=model.nodes.size()||!Finite(joint.geometryToJoint))
-            return Base::Err("Model skin joint is invalid.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model skin joint is invalid."));
         for(const auto& v:mesh.vertices) {
             if(!Finite(v.position)||!Finite(v.normal)||!Math::IsFinite(v.uv))
-                return Base::Err("Model vertex contains non-finite attributes.");
+                return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model vertex contains non-finite attributes."));
             float total=0;
             for(std::size_t k=0;k<4;++k) {
                 if(!std::isfinite(v.weights[k])||v.weights[k]<0||
                    (v.weights[k]>0&&v.joints[k]>=mesh.joints.size()))
-                    return Base::Err("Model vertex has invalid skin weights or joint indices.");
+                    return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model vertex has invalid skin weights or joint indices."));
                 total+=v.weights[k];
             }
             if(total>0&&std::abs(total-1.0F)>0.0001F)
-                return Base::Err("Model skin weights must sum to one.");
+                return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model skin weights must sum to one."));
         }
     }
     std::unordered_set<std::string> names;
     for(const auto& clip:model.clips) {
         if(clip.name.empty()||!names.insert(clip.name).second||
            !std::isfinite(clip.durationSeconds)||clip.durationSeconds<0)
-            return Base::Err("Model animation has an invalid name or duration.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model animation has an invalid name or duration."));
         std::unordered_set<std::size_t> trackedNodes;
         for(const auto& track:clip.tracks) {
             if(track.nodeIndex>=model.nodes.size()||!trackedNodes.insert(track.nodeIndex).second||
                !ValidKeys(track.translations)||!ValidKeys(track.rotations)||!ValidKeys(track.scales))
-                return Base::Err("Model animation has invalid node tracks or keyframes.");
+                return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Model animation has invalid node tracks or keyframes."));
         }
     }
     return {};
@@ -136,12 +136,12 @@ Result MakeDefaultPose(const ModelAsset& model,Pose& output) {
 Result SamplePose(const ModelAsset& model,const std::size_t clipIndex,double seconds,
                   const PlaybackMode mode,Pose& output) {
     if(clipIndex>=model.clips.size()||!std::isfinite(seconds))
-        return Base::Err("Animation sampling requires a valid clip and finite time.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation sampling requires a valid clip and finite time."));
     const auto& clip=model.clips[clipIndex];
     if(!std::isfinite(clip.durationSeconds)||clip.durationSeconds<0)
-        return Base::Err("Animation duration must be finite and non-negative.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Animation duration must be finite and non-negative."));
     if(mode!=PlaybackMode::Clamp&&mode!=PlaybackMode::Loop)
-        return Base::Err("Animation playback mode is invalid.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation playback mode is invalid."));
     if(mode==PlaybackMode::Loop&&clip.durationSeconds>0) {
         seconds=std::fmod(seconds,clip.durationSeconds);
         if(seconds<0) seconds+=clip.durationSeconds;
@@ -149,7 +149,7 @@ Result SamplePose(const ModelAsset& model,const std::size_t clipIndex,double sec
     output.localTransforms.resize(model.nodes.size());
     for(std::size_t i=0;i<model.nodes.size();++i) output.localTransforms[i]=model.nodes[i].localTransform;
     for(const auto& track:clip.tracks) {
-        if(track.nodeIndex>=model.nodes.size()) return Base::Err("Animation track node is out of range.");
+        if(track.nodeIndex>=model.nodes.size()) return Base::Err(ModelError::Make(ModelErrorCode::InvalidModel, "Animation track node is out of range."));
         auto& t=output.localTransforms[track.nodeIndex];
         t.translation=Sample(track.translations,seconds,t.translation,LerpVec3);
         t.rotation=Sample(track.rotations,seconds,t.rotation,SlerpRotation);
@@ -162,12 +162,12 @@ Result BlendPoses(const ModelAsset& model,const Pose& from,const Pose& to,
                   const float alpha,Pose& output) {
     if(from.localTransforms.size()!=model.nodes.size()||
        to.localTransforms.size()!=model.nodes.size()||!std::isfinite(alpha)||alpha<0||alpha>1)
-        return Base::Err("Pose blending requires complete poses and a finite weight in [0,1].");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Pose blending requires complete poses and a finite weight in [0,1]."));
     output.localTransforms.resize(model.nodes.size());
     for(std::size_t i=0;i<model.nodes.size();++i) {
         // Copy before assigning so the output may alias either input.
         const auto a=from.localTransforms[i],b=to.localTransforms[i];
-        if(!Finite(a)||!Finite(b)) return Base::Err("Pose blending received an invalid transform.");
+        if(!Finite(a)||!Finite(b)) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Pose blending received an invalid transform."));
         output.localTransforms[i]={Lerp(a.translation,b.translation,alpha),
                                   Slerp(a.rotation,b.rotation,alpha),
                                   Lerp(a.scale,b.scale,alpha)};
@@ -195,7 +195,7 @@ AnimationInstance::AnimationInstance(std::shared_ptr<const ModelAsset> model)
 Result AnimationInstance::Play(const std::size_t clipIndex,const PlaybackMode mode,
                                const double transitionSeconds) {
     if(!model_||!std::isfinite(transitionSeconds)||transitionSeconds<0)
-        return Base::Err("Animation playback requires a model and a finite non-negative transition.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation playback requires a model and a finite non-negative transition."));
     auto sampled=SamplePose(*model_,clipIndex,0.0,mode,sampled_);
     if(!sampled) return sampled;
     // Capture the displayed pose when a transition interrupts another one.
@@ -210,12 +210,12 @@ Result AnimationInstance::Play(const std::size_t clipIndex,const PlaybackMode mo
     return {};
 }
 
-Base::Result<PlaybackInterval,std::string> AnimationInstance::Advance(const double deltaSeconds) {
+ModelResult<PlaybackInterval> AnimationInstance::Advance(const double deltaSeconds) {
     if(!model_||!clipIndex_||!std::isfinite(deltaSeconds)||deltaSeconds<0)
-        return Base::Err("Animation advance requires an active clip and a finite non-negative delta.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation advance requires an active clip and a finite non-negative delta."));
     const double duration=model_->clips[*clipIndex_].durationSeconds;
     const double next=timeSeconds_+deltaSeconds;
-    if(!std::isfinite(next)) return Base::Err("Animation playback time overflowed.");
+    if(!std::isfinite(next)) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation playback time overflowed."));
     const double current=mode_==PlaybackMode::Clamp?Math::Min(next,duration):next;
     auto sampled=SamplePose(*model_,*clipIndex_,current,mode_,sampled_);
     if(!sampled) return Base::Err(sampled.error());
@@ -243,14 +243,14 @@ bool AnimationInstance::IsFinished() const noexcept {
 Result SkinMesh(const ModelAsset& model,const std::size_t meshIndex,const Pose& pose,
                 std::vector<SkinnedVertex>& output) {
     if(meshIndex>=model.meshes.size()||pose.globalTransforms.size()!=model.nodes.size())
-        return Base::Err("Skinning requires a valid mesh and a complete pose.");
+        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Skinning requires a valid mesh and a complete pose."));
     const auto& mesh=model.meshes[meshIndex];
-    if(mesh.nodeIndex>=pose.globalTransforms.size()) return Base::Err("Mesh node is out of range.");
+    if(mesh.nodeIndex>=pose.globalTransforms.size()) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Mesh node is out of range."));
     const Matrix4 rigid=Multiply(pose.globalTransforms[mesh.nodeIndex],mesh.geometryToNode);
     std::vector<Matrix4> palette;
     palette.reserve(mesh.joints.size());
     for(const auto& joint:mesh.joints) {
-        if(joint.nodeIndex>=pose.globalTransforms.size()) return Base::Err("Skin joint node is out of range.");
+        if(joint.nodeIndex>=pose.globalTransforms.size()) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Skin joint node is out of range."));
         palette.push_back(Multiply(pose.globalTransforms[joint.nodeIndex],joint.geometryToJoint));
     }
     output.resize(mesh.vertices.size());
@@ -260,7 +260,7 @@ Result SkinMesh(const ModelAsset& model,const std::size_t meshIndex,const Pose& 
         float total=0;
         for(std::size_t k=0;k<4;++k) {
             if(source.weights[k]<=0) continue;
-            if(source.joints[k]>=palette.size()) return Base::Err("Skin vertex joint is out of range.");
+            if(source.joints[k]>=palette.size()) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Skin vertex joint is out of range."));
             const auto& matrix=palette[source.joints[k]];
             for(std::size_t j=0;j<16;++j) blended.values[j]+=matrix.values[j]*source.weights[k];
             total+=source.weights[k];
@@ -268,7 +268,7 @@ Result SkinMesh(const ModelAsset& model,const std::size_t meshIndex,const Pose& 
         if(total==0) blended=rigid;
         output[i]={TransformPoint(blended,source.position),TransformNormal(blended,source.normal),source.uv};
         if(!Finite(output[i].position)||!Finite(output[i].normal))
-            return Base::Err("Skinned vertex is non-finite.");
+            return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Skinned vertex is non-finite."));
     }
     return {};
 }

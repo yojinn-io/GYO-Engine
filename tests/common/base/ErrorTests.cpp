@@ -53,3 +53,10 @@ TEST_CASE("Describe: code name and message, then the detail when present") {
     CHECK(Engine::Base::Describe(Sample::SampleError::Make(Sample::SampleCode::Second, "unreadable", "a/b.txt"))
           == "Second: unreadable (a/b.txt)");
 }
+
+TEST_CASE("CauseDetail: inner code name and detail, after the outer detail") {
+    const auto inner = Sample::SampleError::Make(Sample::SampleCode::Second, "unreadable", "a/b.txt");
+    CHECK(Engine::Base::CauseDetail(inner) == "Second: a/b.txt");
+    CHECK(Engine::Base::CauseDetail(inner, "manifest.json") == "manifest.json; Second: a/b.txt");
+    CHECK(Engine::Base::CauseDetail(Sample::SampleError::Make(Sample::SampleCode::First, "missing")) == "First");
+}

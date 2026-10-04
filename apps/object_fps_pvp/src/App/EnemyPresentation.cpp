@@ -112,7 +112,7 @@ bool EnemyPresentation::Initialize(Engine::Render::IRenderDevice& device,
             }
             auto made = Impl::Resource::Create(device, model, materials);
             if (!made)
-                throw std::runtime_error(made.error());
+                throw std::runtime_error(made.error().message);
             return std::move(made.value());
         };
         for (const auto& enemy : catalog.GetDefinitions()) {
@@ -178,20 +178,20 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
                     Impl::Instance::Create(definition->second.resource, enemy.pose,
                                            -rig.anchor);
                 if (!created)
-                    throw std::runtime_error(created.error());
+                    throw std::runtime_error(created.error().message);
                 std::unique_ptr<Impl::Instance> weaponInstance;
                 if (weaponPose) {
                     auto weapon = Impl::Instance::Create(definition->second.weaponResource,
                         *weaponPose, -rig.anchor);
                     if (!weapon)
-                        throw std::runtime_error(weapon.error());
+                        throw std::runtime_error(weapon.error().message);
                     weaponInstance = std::move(weapon.value());
                 }
                 std::vector<std::unique_ptr<Impl::Instance>> accessoryInstances;
                 for (std::size_t i = 0; i < accessoryPoses.size(); ++i) {
                     auto accessory = Impl::Instance::Create(definition->second.accessories[i].resource,
                         accessoryPoses[i], -rig.anchor);
-                    if (!accessory) throw std::runtime_error(accessory.error());
+                    if (!accessory) throw std::runtime_error(accessory.error().message);
                     accessoryInstances.push_back(std::move(accessory.value()));
                 }
                 actor = state.actors
@@ -202,15 +202,15 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
             } else {
                 auto changed = actor->second.instance->UpdatePose(enemy.pose);
                 if (!changed)
-                    throw std::runtime_error(changed.error());
+                    throw std::runtime_error(changed.error().message);
                 if (weaponPose) {
                     auto weaponChanged = actor->second.weaponInstance->UpdatePose(*weaponPose);
                     if (!weaponChanged)
-                        throw std::runtime_error(weaponChanged.error());
+                        throw std::runtime_error(weaponChanged.error().message);
                 }
                 for (std::size_t i = 0; i < accessoryPoses.size(); ++i) {
                     const auto accessoryChanged = actor->second.accessories[i]->UpdatePose(accessoryPoses[i]);
-                    if (!accessoryChanged) throw std::runtime_error(accessoryChanged.error());
+                    if (!accessoryChanged) throw std::runtime_error(accessoryChanged.error().message);
                 }
             }
             const float flash = enemy.hitFlashRemainingSeconds > 0 ? 1.5F : 1;
@@ -222,17 +222,17 @@ bool EnemyPresentation::Submit(const GameSessionSnapshot& snapshot,
                 queue, transform,
                 Engine::Render::MeshLayer::World, {flash, flash, flash, 1});
             if (!submitted)
-                throw std::runtime_error(submitted.error());
+                throw std::runtime_error(submitted.error().message);
             if (actor->second.weaponInstance) {
                 auto weaponSubmitted = actor->second.weaponInstance->Submit(
                     queue, transform, Engine::Render::MeshLayer::World, {flash, flash, flash, 1});
                 if (!weaponSubmitted)
-                    throw std::runtime_error(weaponSubmitted.error());
+                    throw std::runtime_error(weaponSubmitted.error().message);
             }
             for (const auto& accessory : actor->second.accessories) {
                 const auto accessorySubmitted = accessory->Submit(queue, transform,
                     Engine::Render::MeshLayer::World, {flash, flash, flash, 1});
-                if (!accessorySubmitted) throw std::runtime_error(accessorySubmitted.error());
+                if (!accessorySubmitted) throw std::runtime_error(accessorySubmitted.error().message);
             }
         }
         std::erase_if(state.actors,

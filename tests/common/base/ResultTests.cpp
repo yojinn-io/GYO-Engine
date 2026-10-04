@@ -14,7 +14,12 @@ using Engine::Base::Result;
 
 namespace {
 
-enum class SampleErrorCode { None = 0, Failed };
+enum class SampleErrorCode { Failed = 1 };
+
+[[nodiscard]] constexpr const char* ToString(const SampleErrorCode code) noexcept {
+    return code == SampleErrorCode::Failed ? "Failed" : "Unknown";
+}
+
 using SampleError = Engine::Base::Error<SampleErrorCode>;
 using IntResult = Result<int, SampleError>;
 using VoidResult = Result<void, SampleError>;
@@ -54,9 +59,14 @@ static_assert(!std::is_default_constructible_v<IntResult>, "no default success f
 static_assert(std::is_default_constructible_v<VoidResult>, "`return {};` is the void success");
 static_assert(std::is_constructible_v<Result<Explicit, SampleError>, int>, "explicit T constructors stay available");
 static_assert(!std::is_convertible_v<int, Result<Explicit, SampleError>>, "...but only explicitly");
-static_assert(std::is_convertible_v<Err<const char*>, Result<int, std::string>>,
-              "Err<G> converts when E is constructible from G (string literals for string errors)");
-static_assert(!std::is_constructible_v<Result<int, std::string>, Err<int>>);
+
+// E must satisfy CodedError: a string or a default-constructible type cannot
+// describe a failure by code.
+template <class T, class E>
+concept ResultAccepts = requires { typename Result<T, E>; };
+static_assert(ResultAccepts<int, SampleError>);
+static_assert(!ResultAccepts<int, std::string>);
+static_assert(!ResultAccepts<int, int>);
 
 TEST_CASE("Result: success and failure through return statements") {
     const auto success = Parse(true);
@@ -75,15 +85,6 @@ TEST_CASE("Result: success and failure through return statements") {
 
     CHECK(Check(true));
     CHECK(Check(false).error().code == SampleErrorCode::Failed);
-}
-
-TEST_CASE("Result: string literal errors convert through Err<const char*>") {
-    const auto make = [](const bool succeed) -> Result<int, std::string> {
-        if (!succeed) return Err("no value");
-        return 1;
-    };
-    CHECK(make(false).error() == "no value");
-    CHECK(make(true).value() == 1);
 }
 
 TEST_CASE("Result: move-only values, arrow access and Result<bool>") {

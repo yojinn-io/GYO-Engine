@@ -1,5 +1,7 @@
 #include "ui/UiRuntime.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include "engine/math/scalar/Scalar.hpp"
 #include "ui/UiDocumentCodec.hpp"
 
@@ -234,7 +236,10 @@ namespace {
             }
             const std::size_t end = source.composeFormat.find('}', index + 1U);
             const std::string name = source.composeFormat.substr(index + 1U, end - index - 1U);
-            const UiTextPlaceholder& placeholder = source.placeholders.at(name);
+            // Validate guarantees every referenced placeholder exists.
+            const auto placeholderEntry = source.placeholders.find(name);
+            GYO_ASSERT(placeholderEntry != source.placeholders.end());
+            const UiTextPlaceholder& placeholder = placeholderEntry->second;
             auto value = ResolveScalar(document, bindings, placeholder.value, item);
             if (!value) return Base::Err(std::move(value).error());
             result += FormatScalar(value.value(), placeholder.format);
@@ -254,7 +259,7 @@ namespace {
         return selected->second;
     }
     }
-    return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "unknown text source kind"));
+    GYO_UNREACHABLE();
 }
 
 [[nodiscard]] UiResult<UiColor> EvaluateColor(
@@ -679,11 +684,8 @@ struct UiRuntime::Impl final {
     [[nodiscard]] UiResult<std::vector<UiEvaluatedElement>> EvaluateInternal(
         const UiBindingTable& bindings,
         UiViewport viewport) const {
-        if (!document || canvas == nullptr) {
-            return Base::Err(RuntimeError(
-                UiErrorCode::RuntimeState,
-                "UiRuntime has no active canvas"));
-        }
+        // Evaluating before ActivateCanvas is API misuse.
+        GYO_ASSERT(document && canvas != nullptr);
         if (!IsValidViewport(viewport)) {
             return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
@@ -716,9 +718,8 @@ struct UiRuntime::Impl final {
     [[nodiscard]] UiResult<UiDrawList> ComposeInternal(
         const UiBindingTable& bindings,
         UiViewport viewport) const {
-        if (!document || canvas == nullptr) {
-            return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
-        }
+        // Composing before ActivateCanvas is API misuse.
+        GYO_ASSERT(document && canvas != nullptr);
         if (!IsValidViewport(viewport)) {
             return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
         }
@@ -744,9 +745,7 @@ UiRuntime::UiRuntime(UiRuntime&&) noexcept = default;
 UiRuntime& UiRuntime::operator=(UiRuntime&&) noexcept = default;
 
 UiResult<void> UiRuntime::Initialize(std::shared_ptr<const UiDocument> document) {
-    if (!document) {
-        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime requires a non-null document"));
-    }
+    GYO_ASSERT(document != nullptr);
     auto validation = UiDocumentCodec::Validate(*document);
     if (!validation) return validation;
     impl_->document = std::move(document);
@@ -768,9 +767,8 @@ void UiRuntime::Reset() noexcept {
 }
 
 UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
-    if (!impl_->document) {
-        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
-    }
+    // Activating a canvas before Initialize is API misuse.
+    GYO_ASSERT(impl_->document != nullptr);
     const auto found = std::find_if(
         impl_->document->canvases.begin(),
         impl_->document->canvases.end(),
@@ -798,9 +796,8 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     const UiInputFrame& input,
     const UiBindingTable& bindings,
     UiViewport viewport) {
-    if (!impl_->document || impl_->canvas == nullptr) {
-        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
-    }
+    // Updating before ActivateCanvas is API misuse.
+    GYO_ASSERT(impl_->document && impl_->canvas != nullptr);
     if (!IsValidViewport(viewport)) {
         return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
     }
@@ -835,11 +832,8 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     bool pointerSliderProcessed = false;
     if (input.pointerPrimaryPressed && hit != nullptr) {
         const UiElement* hitElement = FindElement(impl_->canvas->children, hit->id);
-        if (hitElement == nullptr) {
-            return Base::Err(RuntimeError(
-                UiErrorCode::RuntimeState,
-                "evaluated interactive element is missing from the document"));
-        }
+        // Hits come from this document's own evaluation.
+        GYO_ASSERT(hitElement != nullptr);
         impl_->pressedElement = hitElement->id;
         if (hitElement->type == UiElementType::Button) {
             events.push_back({hitElement->action, hitElement->id, std::monostate{}});
@@ -869,11 +863,8 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
             const UiElement* capturedElement = FindElement(
                 impl_->canvas->children,
                 captured->id);
-            if (capturedElement == nullptr) {
-                return Base::Err(RuntimeError(
-                    UiErrorCode::RuntimeState,
-                    "captured slider is missing from the document"));
-            }
+            // Captures come from this document's own evaluation.
+            GYO_ASSERT(capturedElement != nullptr);
             auto event = SliderPointerEvent(
                 *impl_->document,
                 bindings,
@@ -930,9 +921,8 @@ UiResult<UiDrawList> UiRuntime::Compose(
 }
 
 UiResult<UiDrawList> UiRuntime::ComposePreview(UiViewport viewport) const {
-    if (!impl_->document) {
-        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
-    }
+    // Previewing before Initialize is API misuse.
+    GYO_ASSERT(impl_->document != nullptr);
     UiBindingTable bindings;
     for (const UiBindingDeclaration& declaration : impl_->document->bindings) {
         bindings.emplace(declaration.id, declaration.preview);
@@ -948,11 +938,8 @@ UiResult<std::vector<UiEvaluatedElement>> UiRuntime::EvaluateLayout(
 
 UiResult<std::vector<UiEvaluatedElement>> UiRuntime::EvaluatePreviewLayout(
     UiViewport viewport) const {
-    if (!impl_->document) {
-        return Base::Err(RuntimeError(
-            UiErrorCode::RuntimeState,
-            "UiRuntime is not initialized"));
-    }
+    // Previewing before Initialize is API misuse.
+    GYO_ASSERT(impl_->document != nullptr);
     UiBindingTable bindings;
     for (const UiBindingDeclaration& declaration : impl_->document->bindings) {
         bindings.emplace(declaration.id, declaration.preview);

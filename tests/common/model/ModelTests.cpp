@@ -106,8 +106,9 @@ TEST_CASE("model materials retain renderer-neutral linear colors and reject non-
             invalidModel.materials[0].baseColorLinear[component]=invalid;
             const auto validation=ValidateModel(invalidModel);
             REQUIRE_FALSE(validation);
-            CHECK(validation.error().find("diffuse")!=std::string::npos);
-            CHECK(validation.error().find("non-finite base color")!=std::string::npos);
+            CHECK(validation.error().code==ModelErrorCode::InvalidModel);
+            CHECK(validation.error().message.find("diffuse")!=std::string::npos);
+            CHECK(validation.error().message.find("non-finite base color")!=std::string::npos);
         }
     }
 }
@@ -240,7 +241,7 @@ TEST_CASE("compatible animation transfer preserves proportions and converts rest
     // Different names and reordered siblings require only the caller's indices.
     const std::array<AnimationNodeBinding,3> bindings{{{1,3},{0,1},{2,4}}};
     auto result=TransferCompatibleAnimation(source,target,0,bindings,1.5F);
-    REQUIRE_MESSAGE(result,(result?"":result.error()));
+    REQUIRE_MESSAGE(result,(result?std::string{}:Engine::Base::Describe(result.error())));
     CHECK(result.value().name=="motion");
     CHECK(result.value().durationSeconds==2);
     REQUIRE(result.value().tracks.size()==1);
@@ -319,7 +320,8 @@ TEST_CASE("compatible transfer validates complete one-to-one parent bindings") {
     CHECK_FALSE(TransferCompatibleAnimation(source,target,0,missingParent,1));
     const auto missing=TransferCompatibleAnimation(source,target,0,missingTrack,1);
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().find("no binding")!=std::string::npos);
+    CHECK(missing.error().code==ModelErrorCode::IncompatibleAnimation);
+    CHECK(missing.error().message.find("no binding")!=std::string::npos);
     auto invalidHierarchy=target;
     invalidHierarchy.nodes[0].parentIndex=1;
     CHECK_FALSE(TransferCompatibleAnimation(source,invalidHierarchy,0,valid,1));

@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "AssertTestSupport.hpp"
 
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
@@ -251,12 +252,10 @@ TEST_CASE("UiRenderer CPU-clips sprites and always submits Overlay") {
     CHECK(sprite.material.tint.green == doctest::Approx(0.25F));
 }
 
-TEST_CASE("UiRenderer rejects use before initialization") {
+TEST_CASE("UiRenderer use before initialization is a Programmer Error") {
     UiRenderer renderer;
     Render::RenderQueue queue;
-    auto result = renderer.Submit({}, queue);
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code == UiErrorCode::RuntimeState);
+    GYO_CHECK_ASSERTS(renderer.Submit({}, queue));
 }
 
 TEST_CASE("UiRenderer caches whole UTF-8 runs and evicts retained LRU textures") {

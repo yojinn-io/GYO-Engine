@@ -32,9 +32,10 @@ Matrix4 Matrix(const ufbx_matrix& source) {
     return result;
 }
 
-Result Error(const Asset::Loading::LoadContext& context,std::string message) {
+Result Error(const Asset::Loading::LoadContext& context,std::string message,std::string detail={}) {
     return Base::Err(Asset::AssetError::Make(
-        Asset::AssetErrorCode::DecodeFailed,"FBX model: "+std::move(message),context.resolvedPath));
+        Asset::AssetErrorCode::DecodeFailed,"FBX model: "+std::move(message),
+        detail.empty()?context.resolvedPath:std::move(detail)));
 }
 
 std::string ErrorMessage(const ufbx_error& error) {
@@ -202,8 +203,6 @@ std::shared_ptr<ModelAsset> Import(const ufbx_scene& scene) {
         model->clips.push_back(std::move(clip));
     }
     if(model->meshes.empty()) throw std::runtime_error("file contains no triangle meshes");
-    const auto valid=ValidateModel(*model);
-    if(!valid) throw std::runtime_error(valid.error());
     return model;
 }
 } // namespace
@@ -232,11 +231,19 @@ Result UfbxModelLoader::Load(const Base::ConstSpan<std::byte> bytes,
     ufbx_error error{};
     ScenePtr scene(ufbx_load_memory(bytes.data(),bytes.size(),&options,&error),ufbx_free_scene);
     if(!scene) return Error(context,ErrorMessage(error));
+    std::shared_ptr<ModelAsset> model;
     try {
-        return Asset::Core::AnyAsset::FromShared<ModelAsset>(Import(*scene));
+        model=Import(*scene);
     } catch(const std::exception& exception) {
+        // Import's internal parse failures; never catch (...) here.
         return Error(context,exception.what());
     }
+    const auto valid=ValidateModel(*model);
+    if(!valid) {
+        return Error(context,valid.error().message,
+                     Base::CauseDetail(valid.error(),context.resolvedPath));
+    }
+    return Asset::Core::AnyAsset::FromShared<ModelAsset>(std::move(model));
 }
 
 } // namespace Engine::Model::Ufbx

@@ -605,7 +605,7 @@ EnemySpawnResult EnemySystem::Spawn(
         enemy.definition = definition;
         enemy.animation = Engine::Model::AnimationInstance(definition.rig->model);
         const auto animation = enemy.animation.Play(definition.rig->clips[0], Engine::Model::PlaybackMode::Loop);
-        if (!animation) throw std::runtime_error("Enemy idle animation: " + animation.error());
+        if (!animation) throw std::runtime_error("Enemy idle animation: " + animation.error().message);
         enemy.health = definition.maxHealth;
         enemy.repathElapsedSeconds = settings_.repathIntervalSeconds;
         const EnemyId spawnedId = enemy.id;
@@ -1090,7 +1090,7 @@ void EnemySystem::SetState(RuntimeEnemy& enemy, const EnemyState state) {
         ? Engine::Model::PlaybackMode::Loop : Engine::Model::PlaybackMode::Clamp;
     const auto transition = state == EnemyState::Attacking ? rig.attackTransitionSeconds : rig.transitionSeconds;
     const auto result = enemy.animation.Play(rig.clips[static_cast<std::size_t>(state)], mode, transition);
-    if (!result) throw std::runtime_error("Enemy animation transition: " + result.error());
+    if (!result) throw std::runtime_error("Enemy animation transition: " + result.error().message);
     enemy.state = state;
     enemy.stateElapsedSeconds = 0;
     enemy.attackShape.reset();
@@ -1102,7 +1102,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     // tick samples precisely the same pose as advancing normally to that time.
     auto eventAnimation = enemy.animation;
     const auto advance = enemy.animation.Advance(deltaSeconds);
-    if (!advance) throw std::runtime_error("Enemy animation advance: " + advance.error());
+    if (!advance) throw std::runtime_error("Enemy animation advance: " + advance.error().message);
     AddElapsed(enemy.stateElapsedSeconds, deltaSeconds);
     enemy.attackShape.reset();
     if (enemy.state != EnemyState::Attacking) return;
@@ -1112,7 +1112,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     const double current = advance.value().currentSeconds;
     const auto pointAt = [&](const double seconds) {
         const auto result = eventAnimation.Advance(Engine::Math::Max(0.0, seconds - eventAnimation.TimeSeconds()));
-        if (!result) throw std::runtime_error("Enemy attack pose: " + result.error());
+        if (!result) throw std::runtime_error("Enemy attack pose: " + result.error().message);
         return EnemyBoneWorldPoint(rig, eventAnimation.CurrentPose(), rig.attackPoint, enemy.position, enemy.yawRadians);
     };
     const auto emit = [&](const Engine::Math::Vec3 origin) {

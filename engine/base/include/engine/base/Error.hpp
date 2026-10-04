@@ -54,6 +54,21 @@ private:
         : code(errorCode), message(std::move(errorMessage)), detail(std::move(errorDetail)) {}
 };
 
+// The detail an outer module records when it converts an inner module's error
+// (rule 5 of docs/architecture/error-handling.md): "<InnerCode>" or
+// "<InnerCode>: <inner detail>", after the outer module's own detail if any.
+template <CodedError E>
+[[nodiscard]] std::string CauseDetail(const E& inner, const std::string_view outerDetail = {}) {
+    std::string text{outerDetail};
+    if (!text.empty()) text += "; ";
+    text += std::string_view(ToString(inner.code));
+    if (!inner.detail.empty()) {
+        text += ": ";
+        text += inner.detail;
+    }
+    return text;
+}
+
 // One line for people: "<CodeName>: <message>", followed by " (<detail>)"
 // when there is a detail.
 template <CodedError E>

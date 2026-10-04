@@ -37,7 +37,7 @@ Engine::Model::Pose BuildEnemyWeaponPose(const EnemyRig& rig, const Engine::Mode
     Engine::Model::Pose result;
     const auto made = Engine::Model::MakeDefaultPose(*weapon.model, result);
     if (!made)
-        throw std::invalid_argument("Enemy weapon pose: " + made.error());
+        throw std::invalid_argument("Enemy weapon pose: " + made.error().message);
     const auto mount = Engine::Math::Multiply(pose.globalTransforms[weapon.node],
                                                Engine::Model::ToMatrix(weapon.localTransform));
     for (auto& transform : result.globalTransforms)
