@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <ostream>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -617,6 +618,55 @@ TEST_CASE("UiDocument validation enforces typed references and list item fields"
         auto validation = UiDocumentCodec::Validate(parsed.value());
         REQUIRE_FALSE(validation);
         CHECK(validation.error().message.find("fields") != std::string::npos);
+    }
+}
+
+namespace {
+UiElement* FindElementById(std::vector<UiElement>& elements, std::string_view id) {
+    for (UiElement& element : elements) {
+        if (element.id == id) return &element;
+        if (UiElement* found = FindElementById(element.children, id)) return found;
+        if (UiElement* found = FindElementById(element.itemTemplate, id)) return found;
+    }
+    return nullptr;
+}
+} // namespace
+
+TEST_CASE("fixed_step_list item_step must be finite in float") {
+    SUBCASE("non-finite values set in memory are rejected with their location") {
+        for (const float bad : {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity()}) {
+            for (int axis = 0; axis < 2; ++axis) {
+                auto parsed = UiDocumentCodec::Parse(kDocument);
+                REQUIRE(parsed);
+                UiElement* list = FindElementById(parsed.value().canvases[0].children, "room_list");
+                REQUIRE(list != nullptr);
+                (axis == 0 ? list->itemStep.x : list->itemStep.y) = bad;
+                const auto validation = UiDocumentCodec::Validate(parsed.value());
+                REQUIRE_FALSE(validation);
+                CHECK(validation.error().code == UiErrorCode::ValidationFailed);
+                CHECK(validation.error().jsonPointer.starts_with("/canvases/0/"));
+                CHECK(validation.error().jsonPointer.ends_with("/item_step"));
+            }
+        }
+    }
+    SUBCASE("a finite JSON number beyond the float range is rejected") {
+        std::string json(kDocument);
+        const std::string original = "\"item_step\": [0, 9]";
+        const auto at = json.find(original);
+        REQUIRE(at != std::string::npos);
+        json.replace(at, original.size(), "\"item_step\": [0, 1e39]");
+        const auto parsed = UiDocumentCodec::Parse(json);
+        REQUIRE_FALSE(parsed);
+        CHECK(parsed.error().jsonPointer.ends_with("/item_step"));
+    }
+    SUBCASE("the largest finite float is still accepted") {
+        std::string json(kDocument);
+        const std::string original = "\"item_step\": [0, 9]";
+        const auto at = json.find(original);
+        REQUIRE(at != std::string::npos);
+        json.replace(at, original.size(), "\"item_step\": [0, 3.4028234663852886e38]");
+        CHECK(UiDocumentCodec::Parse(json));
     }
 }
 
