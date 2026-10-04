@@ -2,9 +2,9 @@
 
 #include "RetroFPS/Data/GameData.hpp"
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Constants.hpp"
 
 #include <cmath>
-#include <numbers>
 #include <unordered_map>
 
 namespace fps {
@@ -22,7 +22,7 @@ using WeaponShotGeometryMap =
 
 [[nodiscard]] inline bool IsValidWeaponVerticalFov(const float radians) noexcept {
     return std::isfinite(radians) && radians > 0.0F &&
-           radians < std::numbers::pi_v<float>;
+           radians < Engine::Math::Pi;
 }
 
 // Match the viewmodel muzzle's screen position in the world camera while

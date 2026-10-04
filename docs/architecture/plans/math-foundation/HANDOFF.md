@@ -435,6 +435,73 @@
 - client 與 server 可以跑在不同平台，`sinf`／`cosf` 本來就可能相差 1 ulp；B6a 的漂移屬於同一類。
 - 瞄準方向公式在 `ShotQuery.cpp` 與未編譯的 `GameSession.cpp` 各有一份；`AddScaled` 在三個未編譯檔各有一份（B6c）。
 
+## B6b pvp 表現層
+
+狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
+
+使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
+
+### 進行方式（ultracode）
+
+1. 盤點（B6a 驗證期間進行）：2 個 agent 分別盤點 app_support 等已編譯的非 `match_domain` 程式，以及 acceptance 與測試；再由 1 個 agent 檢查遺漏。
+   - runtime_host、ipc、client_network、`main.cpp`、`match_main.cpp` 沒有向量或角度運算，只有 wire 編解碼與 double／整數的 min／max。
+   - PLAN 的行號更正：`PvpApplication.cpp:758` 現在是 810-812；`PlayerPresentation.cpp:476` 現在是 670-677；`WeaponPresentationDefinition.cpp:64-84` 現在是 64-85。
+2. 實作後以 2 個 agent 驗證：表現層 digest（含 isolation 版）與對抗式審查。
+
+### 變更
+
+- `SnapshotTimeline.hpp`（`match_domain` 的 header，只有表現層使用）：位置與 pitch 插值改用 `Lerp`，yaw 改用 `LerpRadiansShortest`，yaw 差改用 `WrapRadians`，有限性改用 `IsFinite`；水平速度的 `std::hypot` 改為 `Length(Vec3d{dx, 0, dz})`。
+- `PvpApplication.cpp`：滑鼠的 yaw／pitch 改用 `WrapRadians`、`Clamp`；世界相機的 FOV 字面值 `1.0471975512F` 改為 `DegreesToRadians(60.0F)` 常數（同一個 float）；牆的中心與尺寸改用 `Center(Aabb)` 與 `max - min`；float 的 min 改用 `Math::Min`；identity 拷貝刪除。
+- `PlayerPresentation.cpp`：
+  - 第三人稱武器位置 `weaponWorldPosition` 原本手寫 yaw 旋轉，改為 `TransformPoint(ComposeEulerXYZ(transform), mount - anchor)`，`transform` 就是提交給 renderer 的那一個，與 GPU 使用同一個 World 矩陣。
+  - 武器 mount 四元數：原本以 double 求倒數再相乘，改為 `Math::Normalize`；驗證改為 float 的 `LengthSquared`（非有限或 `< 1e-12F` 時拒絕）。
+  - 移動距離改用 `Length(Vec3d)`，後退判定改用 `Dot(Vec3d)`；float 的 min／max 改用 Math；`Finite` 刪除，改用 `IsFinite`；offset 改為 `-anchor`。
+- `WeaponPresentationDefinition.cpp`：muzzle 原本逐步縮放與旋轉，改為 `TransformPoint(ComposeEulerXYZ(transform), point - idleAnchor)`，即 renderer 的提交契約；角度換算改用 `DegreesToRadians`；`Finite` 刪除；identity 拷貝刪除。
+- `WeaponViewModel.cpp`（offset 改為 `-idleAnchor`）、`CharacterPresentationDefinition.cpp`（`IsFinite`）、`WeaponShotGeometry.hpp`（上限改用 `Math::Pi`）。
+- **保留**：
+  - 相機眼睛位置的逐分量寫法（向量加法會改變 -0）、牆頂裝飾條與地板格的配置、射擊的 recoil 衰減、double 與整數的 clamp／min／max。
+  - acceptance 與測試中的量測計算（水平距離、yaw 目標、π 常數等）：它們是獨立 oracle，維持原寫法，與 B6a 保留 `HorizontalDistance` 相同。
+- **測試**：
+  - 新增 `PresentationMathCharacterizationTests.cpp`（presentation 測試 target）與凍結舊式的 `PresentationLegacyMath.hpp`。
+  - `PlayerPresentationTests.cpp` 新增正式內容的比對（mount 四元數、mark23 的 muzzle），以及 mount 驗證的拒絕案例（零、過小、float 溢位）。
+  - characterization 共用的 helper 移到 `CharacterizationSupport.hpp`，B6a 的測試也改用它。
+
+### 數值
+
+- **逐位元相同**：除了下列四項，所有替換都逐位元相同，由 characterization 測試以精確比對鎖定。
+- **muzzle**：
+  - 只繞 Y 軸旋轉且 scale 為 1 時，矩陣元素都是精確值，結果與舊式相同。這是正式內容載入時的情況（mark23：旋轉 (0, 180°, 0)、scale 1），`shotGeometry` 不變。
+  - 只有 recoil 讓 X 旋轉不為 0 時才漂移：正式內容最多 6.0e-8 m。推導上限是 32 u M（M 為平移量加上 scale 乘以點到 anchor 的 L1 距離，u = 2⁻²⁴）；隨機輸入實測 2.96 u M。
+- **`weaponWorldPosition`**：同一上限；只在客戶端顯示與手動 GUI 證據中使用，證據只檢查有限性。
+- **mount 四元數**：推導上限 4 ulp，隨機輸入實測 3 ulp；正式內容逐位元相同。
+  - 驗證的行為改變（正式內容都碰不到）：
+    - 分量大到平方和超出 float 範圍（約 1.85e19 以上）時，原本可以載入，現在拒絕（digest 實例：`[1e20,0,0,1e20]`、`[1.85e19,0,0,0]`、`[1e19]×4`）。
+    - `|q|²` 恰在 1e-12 門檻上時，float 與 double 的捨入可能讓判定翻轉（實例：`[0,0,0,1e-6]`、`[5e-7]×4` 原本拒絕，現在接受）。
+- **double 水平長度**（`hypot` 改為 `sqrt`）：推導上限 4 ulp。本機（Apple libm）只在兩個位置的指數差很多時不同：距離最多 1 ulp、速度最多 2 ulp；phase 的累加差在 1e-15 以內，沒有改變任何離散狀態或 pose。一般的移動排程幾乎碰不到這類輸入。
+
+- **表現層 digest**（本機 mac x64，harness 在 scratch）：
+  - 兩邊各自編譯 `PlayerPresentation`、`WeaponPresentationDefinition`、`CharacterPresentationDefinition`、`AnimationSetDefinition`，連結 repo 建出的 engine 靜態庫，載入正式內容。
+  - 涵蓋：player／weapon definition 載入（含 52 組改寫的四元數與 24 組改寫的 viewmodel）、5 個 clip 的 muzzle 加 recoil、`SnapshotTimeline` 的 Push／Sample（8 萬次 Sample，含亂序、hold、死亡、epoch 變更）、locomotion 與 pose 取樣（共約 3400 萬筆 pose 資料）、以 CPU 假裝置跑真正的 `Initialize`／`Submit`（4830 筆 observation），以及 `PvpApplication` 公式的逐字複本。共 13 個部分。
+  - **isolation 版**（branch 只把四項漂移改回舊寫法）：-O2 與 -O0 下 13 個部分都與 base 逐位元相同（約 4190 萬筆）。
+  - **base 對 branch**：差異只在四項漂移。muzzle 在 recoil 為 0 時完全相同；`weaponWorldPosition` 最多 1 ulp（±60 m 下 3.8e-6 m），y 分量相同；其餘 observation、頂點上傳、queue 的 transform 都相同；locomotion 的離散狀態（reset 原因、後退、jogging、phase、動作）都相同。
+  - 靈敏度檢查：2 種非等價的 ulp 級改動被抓到；2 種等價改動沒有誤報。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| test preset | 46／46 通過；`object_fps_pvp.presentation_cpu` 含新的 characterization 與正式內容比對 |
+| gateway Go 測試 | 通過 |
+| pvp 未編譯 29 檔 | syntax-only 29／29 通過（`WeaponShotGeometry.hpp` 也被它們使用） |
+| 依賴圖 | 沒有變化（只新增測試來源） |
+| 表現層 digest | 見上節 |
+| 對抗式審查 | 沒有推翻正確性。1 個 minor：mount 驗證的接受案例沒有確認載入成功，且離門檻太遠，改為 1.01e-6 並確認載入與正規化結果；1 個 nit：四元數判定翻轉的計數在取樣範圍內不可能失敗，刪除（翻轉由 `PlayerPresentationTests` 的確定性案例涵蓋）。另依 digest agent 的提醒，測試輸入的 `std::pow(10, x)` 改用執行期的底數，避免 clang -O2 換成 `exp10` 使輸入隨最佳化等級改變 |
+| CI 四平台 | 待 PR |
+
+### Architecture Delta
+
+- 沒有。只改 `object_fps_pvp` 內部的計算與測試；renderer 的提交契約（`ComposeEulerXYZ` 與 `-anchor` offset）改由產品直接呼叫 Math 表達，不新增依賴邊。
+
 ## 未結事項
 
-- B6b（pvp 表現層與 acceptance）、B6c（29 個未編譯檔）、B7（收尾）。
+- B6b 本機驗收完成；B6c（29 個未編譯檔）、B7（收尾）。

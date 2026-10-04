@@ -6,6 +6,11 @@
 #include "model_renderer/ModelRenderer.hpp"
 #include "render/IRenderDevice.hpp"
 #include "render/RenderQueue.hpp"
+#include "engine/math/linear/Matrix4.hpp"
+#include "engine/math/linear/Quaternion.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/linear/Vec3d.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,10 +24,6 @@ using Engine::Model::Pose;
 using Engine::Math::Vec3;
 using Resource = Engine::ModelRenderer::ModelResource;
 using Instance = Engine::ModelRenderer::ModelInstance;
-
-bool Finite(const Engine::Math::Vec3 value) {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
 
 std::size_t Node(const Engine::Model::ModelAsset& model, const std::string& name) {
     const auto found = model.FindNode(name);
@@ -126,8 +127,8 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         for (std::size_t mesh = 0; mesh < model.meshes.size(); ++mesh) {
             Require(Engine::Model::SkinMesh(model, mesh, reference, vertices));
             for (const auto& vertex : vertices) {
-                minimum = std::min(minimum, vertex.position.y);
-                maximum = std::max(maximum, vertex.position.y);
+                minimum = Engine::Math::Min(minimum, vertex.position.y);
+                maximum = Engine::Math::Max(maximum, vertex.position.y);
             }
         }
         if (!std::isfinite(maximum - minimum) || maximum - minimum < 0.001F)
@@ -165,14 +166,12 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         mount.translation = {p[0].get<float>(), p[1].get<float>(), p[2].get<float>()};
         auto& q = mount.rotation;
         q = {r[0].get<float>(), r[1].get<float>(), r[2].get<float>(), r[3].get<float>()};
-        const double norm = static_cast<double>(q.x) * q.x + static_cast<double>(q.y) * q.y +
-            static_cast<double>(q.z) * q.z + static_cast<double>(q.w) * q.w;
+        const float lengthSquared = Engine::Math::LengthSquared(q);
         const float scale = weapon.at("scale").get<float>();
-        if (!Finite({mount.translation.x, mount.translation.y, mount.translation.z}) ||
-            !std::isfinite(norm) || norm < 1e-12 || !std::isfinite(scale) || scale <= 0)
+        if (!Engine::Math::IsFinite(mount.translation) ||
+            !std::isfinite(lengthSquared) || lengthSquared < 1e-12F || !std::isfinite(scale) || scale <= 0)
             throw std::runtime_error("player weapon mount must be finite with positive scale");
-        const auto inverse = static_cast<float>(1 / std::sqrt(norm));
-        q = {q.x * inverse, q.y * inverse, q.z * inverse, q.w * inverse};
+        q = Engine::Math::Normalize(q);
         mount.scale = {scale, scale, scale};
         Require(Engine::Model::MakeDefaultPose(*definition->weapon->model,
             definition->weaponReferencePose));
@@ -201,7 +200,7 @@ double PlayerCycleDistance(const PlayerPresentationDefinition& definition, const
 bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
     const PlayerPresentationDefinition& definition, std::string& error) {
     error.clear();
-    if (!frame.playerId || !frame.movementEpoch || !Finite(frame.position) ||
+    if (!frame.playerId || !frame.movementEpoch || !Engine::Math::IsFinite(frame.position) ||
         !std::isfinite(frame.yaw) || !std::isfinite(frame.presentationSeconds) ||
         !std::isfinite(frame.deltaSeconds) || frame.deltaSeconds < 0 ||
         !definition.character || !definition.character->model ||
@@ -229,9 +228,9 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         }
     }
     const double elapsed = frame.presentationSeconds - state.previousPresentationSeconds;
-    const double dx = static_cast<double>(frame.position.x) - state.previousPosition.x;
-    const double dz = static_cast<double>(frame.position.z) - state.previousPosition.z;
-    const double distance = std::hypot(dx, dz);
+    const Engine::Math::Vec3d planar{static_cast<double>(frame.position.x) - state.previousPosition.x, 0.0,
+                                     static_cast<double>(frame.position.z) - state.previousPosition.z};
+    const double distance = Engine::Math::Length(planar);
     std::string reset;
     if (!state.initialized) reset = "spawn";
     else if (frame.playerId != state.playerId) reset = "player";
@@ -265,7 +264,8 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         state.resetReason.clear();
         state.distanceDelta = distance > 0.000001 ? distance : 0;
         state.jogging = state.distanceDelta > 0;
-        state.backward = state.jogging && dx * std::sin(frame.yaw) + dz * std::cos(frame.yaw) < -0.000001;
+        state.backward = state.jogging && Engine::Math::Dot(planar,
+            Engine::Math::Vec3d{std::sin(frame.yaw), 0.0, std::cos(frame.yaw)}) < -0.000001;
         // A timeline can label its final moving sample as holding. Consume its
         // real displacement, then stop on the subsequent unchanged sample.
         state.holding = frame.holding && !state.jogging;
@@ -286,8 +286,8 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         // its last walking pose instead of blending legs while position stalls.
         if (!state.holding) {
             const float weightStep = static_cast<float>(elapsed / definition.transitionSeconds);
-            state.moveWeight = state.jogging ? std::min(1.0F, state.moveWeight + weightStep) :
-                std::max(0.0F, state.moveWeight - weightStep);
+            state.moveWeight = state.jogging ? Engine::Math::Min(1.0F, state.moveWeight + weightStep) :
+                Engine::Math::Max(0.0F, state.moveWeight - weightStep);
         }
         const double now = frame.presentationSeconds;
         if (state.grounded && !frame.grounded) {
@@ -545,7 +545,7 @@ bool PlayerPresentation::Initialize(Engine::Render::IRenderDevice& device,
             next->accessoryResources.push_back(CreateResource(device, assets, *accessory.presentation));
         if (!SamplePlayerPresentationPose(definition, {}, next->initialPose, error))
             throw std::runtime_error(error);
-        const Vec3 offset{-definition.anchor.x, -definition.anchor.y, -definition.anchor.z};
+        const Vec3 offset = -definition.anchor;
         const auto instance = [&](const auto& resource, const Pose& pose) {
             auto created = Instance::Create(resource, pose, offset);
             if (!created) throw std::runtime_error(created.error());
@@ -631,7 +631,8 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
                 impl.Upload(slot, slot.pose);
                 slot.idlePrepared = false;
             }
-            impl.SubmitSlot(slot, {player.position, {0, player.yaw, 0}, {scale, scale, scale}}, queue);
+            const Engine::Render::Transform3D transform{player.position, {0, player.yaw, 0}, {scale, scale, scale}};
+            impl.SubmitSlot(slot, transform, queue);
             const auto& state = slot.locomotion;
             PlayerPresentationObservation observation;
             observation.ready = true;
@@ -667,14 +668,13 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.upperBodyMaskCount = static_cast<std::size_t>(std::count(
                 definition.upperBodyMask.begin(), definition.upperBodyMask.end(), true));
             observation.preparedInstances = impl.slots.size();
-            auto point = Engine::Math::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
+            // Where the renderer draws the mount: the instance offsets vertices by
+            // -anchor, then the renderer applies ComposeEulerXYZ(transform).
+            const auto mount = Engine::Math::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
                 definition.weaponMount.translation);
-            point = {(point.x - definition.anchor.x) * scale, (point.y - definition.anchor.y) * scale,
-                     (point.z - definition.anchor.z) * scale};
-            observation.weaponWorldPosition = {
-                player.position.x + std::cos(player.yaw) * point.x + std::sin(player.yaw) * point.z,
-                player.position.y + point.y,
-                player.position.z - std::sin(player.yaw) * point.x + std::cos(player.yaw) * point.z};
+            observation.weaponWorldPosition = Engine::Math::TransformPoint(
+                Engine::Math::ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale),
+                mount - definition.anchor);
             impl.observations.push_back(std::move(observation));
         }
         return true;
