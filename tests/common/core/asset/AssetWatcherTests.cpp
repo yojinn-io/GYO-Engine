@@ -73,3 +73,21 @@ TEST_CASE("AssetWatcher: removed and keepWatchingMissing=false") {
     CHECK(ch[0].kind == AssetChangeKind::Removed);
     CHECK(w.IsWatching(id) == false);
 }
+
+TEST_CASE("AssetWatcher: an unchanged file is never reported") {
+    fs::path tmp = fs::temp_directory_path() / "asset_watcher_test3";
+    fs::remove_all(tmp);
+    fs::create_directories(tmp);
+
+    fs::path f = tmp / "c.txt";
+    WriteFile(f, "same");
+
+    AssetWatcher::Options opt;
+    opt.debounceMs = 0;
+    AssetWatcher w(opt);
+    w.Watch(AssetId::FromString("c"), f.string());
+
+    // The modification time never changes, so every poll must agree with the
+    // snapshot taken by Watch; one spurious Modified fails the test.
+    for (int poll = 0; poll < 1000; ++poll) REQUIRE(w.Poll().empty());
+}

@@ -27,9 +27,11 @@
 
 ### FF-2 共通測試的計時假設
 
-狀態：未開始，批次完成時更新。
+狀態：FF-2 完成（2026-10-05）。
 
-- `tests/object_fps/package_tools/test_gpu_smoke.py:55-60`：子程序須在 0.5 秒的 timeout 內輸出。重新啟用時比照 FF-2 對 `tests/common/ci/test_package_checks.py` 的修法，改為就緒訊號（D6）。
+- `tests/object_fps/package_tools/test_gpu_smoke.py:55-60`：子程序須在 0.5 秒的 timeout 內輸出。重新啟用時比照 FF-2 對 `tests/common/ci/test_package_checks.py` 的修法（D6）：
+  子程序輸出後寫就緒檔，測試以 `run_after_ready` 型的包裝讓 timeout 從就緒後才開始計時；runner 不改。
+- 未啟用產品若使用 `AssetWatcher`：FF-2 修正了換算抖動造成的誤報 `Modified`，不需要遷移；`WatchedInfo::lastWriteTimeNs` 的值會差一個固定的時鐘差，不影響比較。
 
 ### FF-3 FNV-1a 收為一份
 

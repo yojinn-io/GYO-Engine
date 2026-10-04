@@ -94,7 +94,7 @@
 | 批次 | 狀態 | 紀錄 |
 |---|---|---|
 | FF-1 | 未開始 | — |
-| FF-2 | 進行中 | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
+| FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
 | FF-3 | 未開始 | — |
 | FF-4 | 未開始 | — |
 | FF-5 | 未開始 | — |
@@ -111,10 +111,12 @@
   檔位照計畫：MeshUpdateSmoke 用 high，package checks、AssetWatcher 用 medium；不用 ultracode，沒有高於主對話的檔位，不需另外同意（D8）。
 - 2026-10-05：B1 MeshUpdateSmoke、B2 package checks 照宣告完成，突變都被抓到；B3 AssetWatcher 的測試改完並通過。
 - 2026-10-05：**停止**：B3 的突變 20 次只有 18 次失敗。原因是 `AssetWatcher.cpp` 的 `FileTimeToSystemNs` 每次以當下時鐘換算，同一檔案時間約 2.2% 的換算結果不同，watcher 會偶發誤報 `Modified`。修正屬範圍擴大，等使用者決定。
+- 2026-10-05：使用者決定在 FF-2 一起修。`FileTimeToSystemNs` 改為 process 內只取樣一次時鐘差；新增「沒變的檔案 Poll 1,000 次不得回報」測試（舊實作 10／10 失敗、新實作 20／20 通過）；原宣告的突變改為 20／20 失敗。
+- 2026-10-05：全部 CTest 55／55；完成，開 PR。
 
 ## 未結事項
 
-- FF-2 發現：AssetWatcher 在檔案沒變時偶發回報 `Modified`（`engine/asset/src/AssetWatcher.cpp` 的 `FileTimeToSystemNs` 換算抖動，約 2.2%／次）。處理方式待使用者決定。
+- FF-2 發現：AssetWatcher 在檔案沒變時偶發回報 `Modified`（換算抖動，約 2.2%／次）；使用者決定在 FF-2 修正，已完成。
 
 - FF-7：統一方向（`engine/<m>/` 或 `<m>/`）未定，開始時提給使用者。FF-8 的新子系統若先合併，要選一種暫用風格，並由 FF-7 統一。
 - FF-9：容差（`1e-6f` 或 `1e-7`）與 AABB 規則（拒絕 `min>=max` 或只拒絕 `min>max`）未定，開始時事前宣告。選 `1e-7` 時預期移動與 Client 預測不變；選其他容差時，移動的變化要列入事前宣告。若選只拒絕 `min>max`，消費端的 arena 規則是否保留「牆必須有厚度」作為遊戲規則，由消費端決定。
