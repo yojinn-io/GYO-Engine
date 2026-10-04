@@ -1,8 +1,8 @@
 #include "doctest/doctest.h"
 
 #include <filesystem>
+#include <chrono>
 #include <fstream>
-#include <thread>
 
 #include "engine/asset/hot_reload/AssetWatcher.hpp"
 #include "engine/asset/AssetId.hpp"
@@ -36,8 +36,12 @@ TEST_CASE("AssetWatcher: modified") {
 
     (void)w.Poll(); // 初回は変化なし想定
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    // The watcher compares modification times, whose resolution is the file
+    // system's (FAT: 2 s), so a rewrite moments later can keep the same time.
+    // Moving the time forward explicitly makes the change structural.
+    const auto before = fs::last_write_time(f);
     WriteFile(f, "2");
+    fs::last_write_time(f, before + std::chrono::hours(1));
 
     auto ch = w.Poll();
     REQUIRE(!ch.empty());
@@ -62,7 +66,6 @@ TEST_CASE("AssetWatcher: removed and keepWatchingMissing=false") {
     w.Watch(id, f.string());
     (void)w.Poll();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     fs::remove(f);
 
     auto ch = w.Poll();

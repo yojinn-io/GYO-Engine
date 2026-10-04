@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 import sys
 import subprocess
+import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
@@ -17,6 +19,30 @@ from package_contract import PLATFORMS, manifest_path, validate_evidence, valida
 from run_package_checks import run_checks
 from test_release_pipeline import APP, COMMIT, manifest
 from release_support import archive_name, validate_archive
+
+
+def run_after_ready(ready, safety_seconds=30):
+    """A subprocess.run whose timeout starts only once the child has signalled readiness.
+
+    Interpreter start-up takes no fixed time on a busy host, so a check timeout that also
+    covered start-up would decide the outcome by host speed. The ready file, written by the
+    child after its output, is the structural signal; the safety bound only stops a hung
+    test and is never a verdict threshold. After the signal it behaves like subprocess.run:
+    a timeout kills the child and raises TimeoutExpired with the output gathered so far.
+    """
+    def run(command, *, timeout, check=False, **options):
+        process = subprocess.Popen(command, **options)
+        deadline = time.monotonic() + safety_seconds
+        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        try:
+            output, _ = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            output, _ = process.communicate()
+            raise subprocess.TimeoutExpired(command, timeout, output=output)
+        return subprocess.CompletedProcess(command, process.returncode, output)
+    return run
 
 
 class InstalledCheckTests(unittest.TestCase):
@@ -73,9 +99,12 @@ class InstalledCheckTests(unittest.TestCase):
         self.assertEqual([item["exit_code"] for item in report["checks"]], [0, 17, -2])
 
     def test_timeout_preserves_partial_output(self):
+        ready = self.root / "ready"
         self.contract["checks"][0].update(timeout=0.2, command=["@PYTHON@", "-c",
-            "import time; print('started', flush=True); time.sleep(20)"])
-        self.assertFalse(self.run_checks())
+            "import pathlib, sys, time; print('started', flush=True); "
+            "pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(20)", str(ready)])
+        with mock.patch.object(subprocess, "run", run_after_ready(ready)):
+            self.assertFalse(self.run_checks())
         self.assertIn("started", (self.logs / f"{APP}.startup.log").read_text())
         self.assertIn("timed out", (self.logs / f"{APP}.startup.log").read_text())
 

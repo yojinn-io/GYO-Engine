@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <numbers>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -235,20 +236,81 @@ bool Exercise(Device& device, Renderer& renderer, Engine::Platform::Sdl::SdlPlat
     if (!ExpectError(renderer.Render(queue), RenderErrorCode::InvalidArgument,
             "cleared viewmodel camera")) return false;
     queue.SetViewModelCamera({{0, 0, -4}, {}, 0.85F});
-    for (unsigned frame = 0; frame < 16; ++frame) {
+    // Skipped is a valid outcome (an occluded window or a nonblocking
+    // swapchain), so the bounds are attempt counts, never wall-clock time:
+    // every attempt updates and renders, and the attempts must still yield
+    // the declared number of Presented frames.
+    constexpr unsigned AttemptLimit = 240;
+    constexpr unsigned RequiredPresented = 16;
+    unsigned attempts = 0, presented = 0;
+    for (; attempts < AttemptLimit && presented < RequiredPresented; ++attempts) {
         static_cast<void>(platform.PumpEvents());
         data.vertices.front().position.x = original.position.x +
-            0.1F * std::sin(static_cast<float>(frame));
+            0.1F * std::sin(static_cast<float>(attempts));
         const auto updated = device.UpdateMeshVertices(handle, data.vertices);
         if (!updated) {
             std::cerr << Engine::Base::Describe(updated.error()) << '\n';
             return false;
         }
         const auto rendered = renderer.Render(queue);
-        if (!rendered || rendered.value() != PresentStatus::Presented) {
-            std::cerr << "updated world/viewmodel frame was not presented\n";
+        if (!rendered) {
+            std::cerr << Engine::Base::Describe(rendered.error()) << '\n';
             return false;
         }
+        if (rendered.value() == PresentStatus::Presented) ++presented;
+    }
+    std::cout << "updated world/viewmodel frames presented=" << presented
+              << " attempts=" << attempts << '\n';
+    if (presented < RequiredPresented) {
+        std::cerr << "updated world/viewmodel frames were not presented\n";
+        return false;
+    }
+
+    // The presented content must be the latest update. A capture request
+    // survives Skipped frames and is fulfilled by the next Presented one.
+    const auto presentedCentre = [&](const RenderQueue& frameQueue) -> std::optional<std::array<int, 4>> {
+        renderer.RequestSceneCapture();
+        for (unsigned attempt = 0; attempt < AttemptLimit; ++attempt) {
+            static_cast<void>(platform.PumpEvents());
+            const auto rendered = renderer.Render(frameQueue);
+            if (!rendered) {
+                std::cerr << Engine::Base::Describe(rendered.error()) << '\n';
+                return std::nullopt;
+            }
+            if (rendered.value() != PresentStatus::Presented) continue;
+            const auto captured = renderer.TakeSceneCapture();
+            if (!captured) return std::nullopt;
+            const std::size_t offset = (static_cast<std::size_t>(captured->height / 2U) * captured->width +
+                captured->width / 2U) * 4U;
+            return std::array<int, 4>{captured->rgba8[offset], captured->rgba8[offset + 1],
+                captured->rgba8[offset + 2], captured->rgba8[offset + 3]};
+        }
+        std::cerr << "content check frame was never presented\n";
+        return std::nullopt;
+    };
+    const auto closeTo = [](std::array<int, 4> actual, std::array<int, 4> expected) {
+        for (std::size_t channel = 0; channel < actual.size(); ++channel)
+            if (std::abs(actual[channel] - expected[channel]) > 2) return false;
+        return true;
+    };
+    RenderQueue contentQueue;
+    contentQueue.SetCamera({{0, 0, -2}});
+    MeshSubmission content = world;
+    content.material.tint = {0, 1, 0, 1};
+    if (!contentQueue.Submit(content)) return false;
+    data = MakeUnitCube();
+    if (!device.UpdateMeshVertices(handle, data.vertices)) return false;
+    const auto inView = presentedCentre(contentQueue);
+    if (!inView || !closeTo(*inView, {0, 255, 0, 255})) {
+        std::cerr << "presented frame did not show the updated cube\n";
+        return false;
+    }
+    for (auto& vertex : data.vertices) vertex.position.x += 100.0F;
+    if (!device.UpdateMeshVertices(handle, data.vertices)) return false;
+    const auto moved = presentedCentre(contentQueue);
+    if (!moved || !closeTo(*moved, {0, 0, 0, 255})) {
+        std::cerr << "presented frame did not show the latest vertex update\n";
+        return false;
     }
 
     // A viewmodel-only frame must not require the world camera.
