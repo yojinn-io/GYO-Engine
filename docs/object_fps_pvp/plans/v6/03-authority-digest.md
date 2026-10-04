@@ -1,6 +1,6 @@
 # 第 03 批：權威 digest 閘門
 
-狀態：完成（2026-10-05；見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch03.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
+狀態：完成（2026-10-05；見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch03.zh-Hant.md)）。依 D15，CI 的 -O0 比對只對角度為 0 的情境強制。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
 依賴：第01批（與第02批平行）。
 
 本批建立「權威不變」的量測工具：逐 Tick 權威狀態 digest，以及同機兩樹比對。

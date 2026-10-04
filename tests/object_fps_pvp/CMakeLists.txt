@@ -118,7 +118,9 @@ set_tests_properties("${GYO_CURRENT_APP}.service_startup" PROPERTIES LABELS "cpu
 # prediction through predeclared scenarios and chains each Tick's state with
 # SHA-256. A second runner recompiles the product's domain sources at -O0
 # (Engine Collision and Math stay as built); the test requires both runners to
-# agree on every scenario and the zero-angle subset to match its golden file.
+# agree on the zero-angle scenarios and those to match their golden file. Other
+# scenarios may legitimately differ with optimisation (libm call form), so their
+# differences are listed for information only (authority_digest_check.cmake).
 # Formal "authority unchanged" proof is the same-host two-tree comparison
 # (compare_authority_trees.py), not this test.
 set(digest_arena_definitions

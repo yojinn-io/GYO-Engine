@@ -1386,3 +1386,48 @@ TEST_CASE("PvP without Host samples the seeded phase stays, input reports the ap
     CHECK(observation.phaseLateCorrections == 0);
     CHECK(twins.tracked.PendingInput().observedAuthorityTick == 0);
 }
+
+// Platforms may disagree on the last bits of sin/cos (for example a merged
+// sincos call on one build): a Client then reconciles against an authority a
+// few ULPs away from what it would have computed itself. Pin that such
+// differences stay at their own scale and never accumulate through
+// reconciliation. Every snapshot position is pushed a few ULPs before the
+// Client sees it, over three minutes of turning, strafing, wall and jump
+// movement; the correction stays tiny and does not grow from minute to minute.
+TEST_CASE("PvP ULP-level authority differences never accumulate in Client corrections") {
+    const auto arena = PredictionArena();
+    PvpMatch match(arena);
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    LocalPlayerPrediction client(arena);
+    client.Reconcile(match.Snapshot().players.front(), 0);
+    const auto nudge = [](float value, int ulps) {
+        for (int step = 0; step < std::abs(ulps); ++step)
+            value = std::nextafter(value, ulps > 0 ? std::numeric_limits<float>::infinity()
+                                                   : -std::numeric_limits<float>::infinity());
+        return value;
+    };
+    constexpr int Minutes = 3;
+    constexpr int TicksPerMinute = 60 * 60;
+    std::array<float, Minutes> worst{};
+    for (int tick = 0; tick < Minutes * TicksPerMinute; ++tick) {
+        const float yaw = static_cast<float>(tick % 720) * 0.0087F;
+        const float forward = (tick / 90) % 3 == 2 ? -1.0F : 1.0F;
+        const float right = (tick / 150) % 2 ? 0.5F : -0.5F;
+        if (client.Advance(MovementTickSeconds, forward, right, yaw, 0, tick % 240 == 7))
+            REQUIRE(match.SubmitInput(client.PendingInput()));
+        Step(match);
+        auto snapshot = match.Snapshot();
+        auto& player = snapshot.players.front();
+        const int ulps = 1 + tick % 4;
+        player.position.x = nudge(player.position.x, tick % 2 ? ulps : -ulps);
+        player.position.z = nudge(player.position.z, tick % 3 ? -ulps : ulps);
+        client.Reconcile(player, snapshot.tick);
+        const auto correction = HorizontalDistance(client.Observation().correctionOffset, {});
+        auto& minute = worst[static_cast<std::size_t>(tick / TicksPerMinute)];
+        minute = (std::max)(minute, correction);
+    }
+    for (const float correction : worst) CHECK(correction < 1e-4F);
+    CHECK(worst.back() <= worst.front() + 1e-6F);
+    CHECK(client.Observation().active);
+}
