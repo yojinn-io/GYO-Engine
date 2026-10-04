@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 本機驗收完成，PR 待開。**
+更新：2026-10-04。**R0 本機驗收完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 待 CI。**
 
 ## 閱讀入口
 
@@ -95,5 +95,5 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ### 未結事項
 
-- 開 PR 並取得 L1 四列結果。
+- PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 的 L1 四列結果。
 - `AssetError.hpp:42-67` 被註解掉的舊 struct 會讓 `error_code_none` 多算 3 處；R3 刪除它。
