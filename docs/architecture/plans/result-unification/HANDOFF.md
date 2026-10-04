@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1、R2 完成（#31 合併為 `9c51b32`，#32 合併為 `dedeebd`）。R3 本機驗收完成，PR 待開。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1、R2 完成（#31 合併為 `9c51b32`，#32 合併為 `dedeebd`）。R3 本機驗收完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。**
 
 ## 閱讀入口
 
@@ -249,7 +249,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R3 Error 語意與 asset
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r3`，基準 `dedeebd`），PR 待開。
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r3`，基準 `dedeebd`），PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。
 
 ### 變更
 
@@ -283,4 +283,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- 開 PR 並取得 L1 四列結果。
+- PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 的 L1 四列結果。
