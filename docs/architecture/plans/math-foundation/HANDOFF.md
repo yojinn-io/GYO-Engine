@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：純量 Min／Max／Clamp 的統一本機驗收完成。**
+更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：純量 Min／Max／Clamp 的統一本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI。**
 
 ## 閱讀入口
 
@@ -685,7 +685,7 @@
 
 ## 後續：純量 Min／Max／Clamp 的統一
 
-狀態：**本機驗收完成**，PR 待開（2026-10-04，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
+狀態：**本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI**（2026-10-04，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
 
 ### 決策與方向
 
