@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R5：ui_editor
 
 日期：2026-10-04。Owner：Tool（`tools/ui_editor`），連帶 `tests/ui_editor` 與 `tests/common/runtime_sdl`。
-狀態：本機驗收完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 待 CI（分支 `claude/result-unification-r5`，基準 `88e9641`）。
+狀態：完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 已合併（`f72bfbd`），L1 四列通過（分支 `claude/result-unification-r5`，基準 `88e9641`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r5-ui_editor)，本文只記經過。
 
 ## 經過
@@ -17,5 +17,4 @@
 
 ## 留給下一步
 
-- R5 的 PR 與 L1 四列結果。
-- 使用者指示後開始 R6（收尾）。
+- R6（收尾）接著在同日進行，見 [R6 dev log](2026_10_04_engine_result_r6.zh-Hant.md)。

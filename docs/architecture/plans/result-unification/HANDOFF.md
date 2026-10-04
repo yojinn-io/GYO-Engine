@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1–R4 完成（#31 合併為 `9c51b32`，#32 為 `dedeebd`，#33 為 `12abe2e`，#34 為 `88e9641`）。R5 本機驗收完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 待 CI。**
+更新：2026-10-04。**R0–R5 完成（#30 `3b9765e`、#31 `9c51b32`、#32 `dedeebd`、#33 `12abe2e`、#34 `88e9641`、#35 `f72bfbd`）。R6 本機驗收完成，PR 待開。**
 
 ## 閱讀入口
 
@@ -28,7 +28,7 @@
 | 2026-10-04 | 跨模組轉換時外層 message 保留內層原文，內層 code 名稱放進 detail。理由：`UfbxModelTests.cpp:172-173` 鎖住了外層 message 含內層訊息 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
 | 2026-10-04 | MSVC 全專案改用符合標準的前處理器（`/Zc:preprocessor`），消除巨集寫法上的 MSVC 特例；設定位置為 `GyoBuild.cmake` 的全域 `add_compile_options`（比照 `-ffp-contract=off`），並在 `Assert.hpp` 加防呆 `#error`；放在 R1 | 使用者 |
-| 2026-10-04 | `Result` 的成功建構子沒有預設模板參數，所以非 void 的 `return {};` 編譯不過，大括號值寫成 `return T{...};`（與 PLAN 2.3「非 void 版沒有預設建構子」一致，並封住 `{}` 經由 `Result(T&&)` 成功的路徑） | R2 實作 |
+| 2026-10-04 | `Result` 的成功建構子沒有預設模板參數，所以非 void 的 `return {};` 編譯不過，大括號值寫成 `return T{...};`（見 `error-handling.md` 的 Result 一節：封住 `{}` 經由 `Result(T&&)` 以預設 T 成功的路徑） | R2 實作 |
 | 2026-10-04 | `LoaderRegistry::Register` 的失敗分支全是 API 誤用，改成 Assert 後回傳型別改為 `void`；呼叫端（ui_editor、pvp、tests）的錯誤處理隨之刪除 | R3 實作（依「API 誤用改 Assert」的決定） |
 | 2026-10-04 | `AssetErrorCode::UnsupportedRequest` 不再有產生者，刪除；`AssetRecord::ResetToUnloaded`（沒有呼叫者）刪除 | R3 實作 |
 | 2026-10-04 | `UiError` 的建構子參數順序為 code、message、source、jsonPointer、detail，維持既有大括號初始化的順序，detail 放最後 | R3 實作 |
@@ -339,7 +339,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R5 ui_editor
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r5`，基準 `88e9641`），PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 待 CI。
+狀態：**完成**。PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 於 2026-10-04 合併為 `f72bfbd`，L1 四列與 CI gate 通過；windows-x64 的警告與 R4 逐項相同（分支 `claude/result-unification-r5`）。
 
 ### 變更
 
@@ -379,4 +379,110 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 的 L1 四列結果。
+- 無。
+
+## R6 收尾
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r6`，基準 `f72bfbd`），PR 待開。
+
+### 變更
+
+- `docs/architecture/error-handling.md` 定稿：
+  - Result 與 Error types 分成兩節。
+  - 規則 2 的例子改成 `RenderQueue::Submit`，並連到 wide contract 清單，註明其中的狀態檢查後來已依規則 3 改成 Assert。
+  - 規則 4 改成「同模組內保留 code 與 detail，可以加上脈絡」。
+  - 規則 5 寫出完整格式 `[<outer detail>; ]<InnerCode>[: <inner detail>]`。
+  - 補上 shader host 自行設定 `/Zc:preprocessor`。
+  - Status 的那一句是在 R5 修改的。
+- PLAN 開頭加入「實作與本文件的差異」彙整，內文維持核准時的版本。
+- `docs/architecture.md` 的 Assert／Result 段落補上 `/Zc:preprocessor`。
+- 新增 [inactive_products.md](inactive_products.md)：未啟用產品的遷移清單。
+- 本節：全範圍稽核、Apps 剩餘項目、Architecture Report。
+- 最終審查（1 個唯讀 agent）指出的程式碼修正：
+  - `tests/common/render/sdl_gpu` 的 smoke 測試有 12 處自行輸出 `.error().message`，改用 `Base::Describe`（規則 7）。
+  - `AssetCatalog` 轉換 resolver 錯誤時把 detail（路徑）換成了 entry id，改成 `<id>; <resolver detail>`（規則 4），並放寬 R3 測試的 detail 斷言。
+  - ui_editor 參數錯誤的輸出也改用 `Describe`。
+
+### 全範圍稽核（Apps 以外，`f72bfbd`）
+
+| pattern | engine | tools_ui_editor | tests_common | tests_ui_editor |
+|---|---|---|---|---|
+| 靜態 `Ok`（R0 → R6） | 199 → 0 | 0 → 0 | 28 → 0 | 1 → 0 |
+| 靜態 `Err` | 489 → 0 | 0 → 0 | 9 → 0 | 0 → 0 |
+| `Result::ok()` 與 `Error::ok()` | 1 → 0 | — | — | — |
+| `IoResultVoid` | 120 → 0 | — | — | — |
+| `ErrorCode::None` | 6 → 0 | — | — | — |
+| `AssetError`／`IoError`／`IoResult` 別名 | 17／15／11 → 1／1／1 | — | — | — |
+| `Result<…, std::string>` | 21 → 0 | — | — | — |
+| `throw std::invalid_argument` 等 | 17 → 0 | 0 | 0 | 0 |
+| `CHECK_THROWS*` | — | — | 17 → 0 | 0 |
+| `assert(`／`<cassert>` | 2 → 0 | 2 → 0 | 0 | 0 |
+| `std::string& error` out-param | 0 | 23 → 0 | 0 | 0 |
+| `GYO_ASSERT` | 0 → 50 | 0 → 9 | 0 → 8 | 0 |
+
+- engine 剩下的 `throw` 只在 UiDocumentCodec、ShaderLibrary、UfbxModelLoader 內部使用，都在公開邊界 catch 並轉成 Result（規則 6）。範圍內沒有 `catch (...)`。
+- `RuntimeState` 還剩 6 處，都是資料錯誤（viewport 3、slider 寬度、負尺寸、item_field），保留 Result。
+- 資料驗證型 API 與 SdlGpu 的例外依處理規則 2、3 保留 Result。
+- 依賴圖：與 R0 相比只多出 `gyo_base` 相關的邊（R1）與測試專用的 `gyo_test_support` 邊（R1、R4）。
+
+### Apps 剩餘項目（之後順手修改時的參考，不排批次）
+
+`object_fps_pvp`（含 tests 與 acceptance）中，下列寫法仍然存在。新程式碼依 `error-handling.md` 撰寫；舊程式碼在因其他理由修改時再改。
+
+| pattern | 數量 | 集中的檔案 |
+|---|---|---|
+| `throw std::invalid_argument` 等 | 66 | `Collision/GridCollision.cpp` 11、`Pvp/IpcHost.cpp` 7、`Collision/CombatCollision.cpp` 7、`Pvp/MatchRuntimeHost.cpp` 5、`Gameplay/Enemy/EnemySystem.cpp` 5 |
+| `std::string& error` out-param | 126 | `Game/GameSession.cpp` 12、`Pvp/PlayerPresentation.cpp` 與其 header 各 8、`App/ObjectFpsPresentation.cpp` 8 |
+| `CHECK_THROWS_AS` | 9 | `PvpMatchTests.cpp` 5、`ShotQueryTests.cpp` 4 |
+
+依 R0 分類表，pvp 的 throw 多數是 Q0（例如 `ShotQuery.cpp` 在 admission 驗證之後的重新檢查），應改成 `GYO_ASSERT`；`Arena::Load` 這類從檔案讀取的應改成 Result。改動 authority 相關程式碼時，需要先用 digest 鎖住行為。
+
+### Architecture Report
+
+- **Architecture Delta**：
+  - 新增概念「Assert = Programmer Error、Result = Runtime Error」與 7 條處理規則，由 `docs/architecture/error-handling.md` 擁有。
+  - `engine/base` 從 `GYO::Engine` 的 include 目錄升格為 leaf target `GYO::Base`，位在 Math 之下。
+  - MSVC 全專案改用 `/Zc:preprocessor`（建置層的全域選項）。
+- **新的依賴邊**：`engine → gyo_base`、`gyo_math → gyo_base`、`gyo_collision → gyo_base`；測試專用的 `gyo_test_support → gyo_base`、`doctest`、5 個測試執行檔到 `gyo_test_support`，以及 abort probe 與 `gyo_base_tests` 到 `gyo_base`。沒有循環，產品的依賴邊沒有變。
+- **Ownership**：
+  - Base 擁有 Assert、Result、Error、`CodedError`、`Describe`、`CauseDetail`。
+  - 各模組擁有自己的 code enum 與邊界轉換（新增 `ModelError`、`ModelRendererError`）。
+  - ui_editor 擁有 `EditorError.hpp`。
+  - 前處理器模式歸建置層。
+- **Product Boundary**：沒有變化。Apps 只做被迫的修改（R2–R4）。公共層沒有加入產品名稱。未啟用產品的破損另列清單。
+- **Data Contract**：沒有變化。error code 的數值不是資料契約（R0 確認沒有持久化、序列化或上 wire），wire 字串與檔案格式都沒有改動。
+- **行為變更**：
+  - engine 與 ui_editor 的 Programmer Error 從丟例外或回傳 Result 改成 Assert 後 abort，release 也生效。
+  - `Math::Clamp` 的前提檢查原本在 RelWithDebInfo 中從未生效，現在永遠生效。
+  - CLI 的錯誤訊息改成 `<Code>: <message> (<detail>)`（參數錯誤也是），結束碼不變。
+- **發現的 Code Smell 與之後可以考慮的事**：
+  - `return std::move(x);` 41 處（來自原本的 `Ok(std::move(x))`）。區域變數可以改成 `return x;`。
+  - `PreviewAdapter` 在資產載入失敗時只畫 placeholder，沒有回報錯誤。這是既有行為。
+  - Apps 的剩餘項目（見上表）。pvp 的 Q0 檢查改成 Assert 時，需要先用 digest 鎖住 authority 行為。
+  - 只在 debug 生效的 `GYO_DEBUG_ASSERT` 尚未加入，等第一個昂貴檢查出現時再加。
+  - 測試的 assertion handler 是全域狀態，目前所有測試都是單執行緒；如果日後出現平行執行的測試，需要重新檢查。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過（R0 的 19 個加上 `gyo_base_tests` 與 3 個 abort probe） |
+| test preset | 50／50 通過 |
+| 依賴圖（與 R0 比對） | 只多出 13 條邊：`engine`、`gyo_math`、`gyo_collision`、`gyo_assert_abort_probe` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests` 到 doctest、`gyo_base` 與 `gyo_test_support`；`engine_tests`、`gyo_collision_tests`、`gyo_math_tests`、`gyo_render_tests` 到 `gyo_test_support` |
+| 29 檔 syntax-only | 29／29 PASS |
+| 第一方警告 | 0 |
+| 未啟用產品 | 本計劃新增 82 筆錯誤、1 個新的失敗 TU，全部歸類於 [inactive_products.md](inactive_products.md) |
+
+### 最終審查
+
+1 個唯讀 agent 交叉比對文件與程式碼，指出 6 項應修正、7 項次要，以及 PLAN 中需要加註的過時內容，已全部處理：
+- **程式碼**：見「變更」的最後一項。
+- **事實錯誤**：規則 2 的 `ClipSprite` 例子；`inactive_products.md` 的 TU 數（應為 20 個，其中 19 個原本就失敗）。
+- **說法不精確**：規則 4、5、前處理器的說明。
+- **紀錄問題**：HANDOFF 開頭的殘句、引用了 PLAN 沒有的句子、把 Status 的修改算在 R6。
+- **缺漏**：R6 的 dev log，以及 R5 dev log 中過時的一行。
+
+### 未結事項
+
+- 開 PR 並取得 L1 四列結果。
+- 範圍外、留待日後：Apps 剩餘項目（上表）、未啟用產品的遷移（[inactive_products.md](inactive_products.md)），以及 R1 記錄的 pvp 未編譯檔依賴 collision 例外做內容驗證（見「R1 概念文件與 Assert」）。

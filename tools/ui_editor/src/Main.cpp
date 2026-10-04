@@ -78,7 +78,7 @@ int main(const int argc, char* argv[]) {
 
     const auto parsed = ParseCommandLine(arguments);
     if (!parsed) {
-        std::cerr << "error: " << parsed.error().message << "\n\n" << CommandLineHelp();
+        std::cerr << "error: " << Engine::Base::Describe(parsed.error()) << "\n\n" << CommandLineHelp();
         return 2;
     }
     if (parsed->mode == EditorMode::Help) {

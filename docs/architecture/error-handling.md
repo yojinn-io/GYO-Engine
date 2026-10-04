@@ -34,10 +34,10 @@ Status: introduced by the [Assert/Result plan](plans/result-unification/README.m
    3. Is it only "not there", with one obvious reason? Use `std::optional`.
    4. Are there several problems or warnings to report? Return diagnostics.
    5. Is it a normal outcome of game rules? Use a domain type.
-2. **Data-validation APIs (wide contracts) return Result.** Some engine APIs are themselves the first validation point for data that comes from content or callers' input, for example `RenderQueue::Submit`, UI sprite clipping and the model animation API. Bad input there is a Runtime Error and they return a `Result` with an `InvalidArgument`-style code. The plan keeps a list of them.
+2. **Data-validation APIs (wide contracts) return Result.** Some engine APIs are themselves the first validation point for data that comes from content or callers' input, for example `RenderQueue::Submit` (which `UiRenderer::Submit` relies on for sprite rectangles) and the model animation API. Bad input there is a Runtime Error and they return a `Result` with an `InvalidArgument`-style code. The list taken at the start of the plan is in [wide_contract_sites.tsv](plans/result-unification/baseline/wide_contract_sites.tsv); its state checks (not initialized, null pointers) later became assertions under rule 3.
 3. **API misuse is a Programmer Error.** Calling a function in the wrong state (before initialization, without an active canvas), registering a null or duplicate loader, or passing reserved request fields are assertions, not results. The one documented exception is the SDL GPU device: `WrongThread`, `InvalidHandle` and frame-state errors stay `Result`, because they are the GPU backend's external contract and `WrongThread` is detected on another thread.
-4. **Propagate within a module unchanged**: return the callee's error as it is.
-5. **Translate at module boundaries without losing the code.** The outer module chooses its own code. Its message keeps the inner message verbatim (it may add its own context around it); the outer detail records the cause with `Base::CauseDetail(inner, outerDetail)`, which yields `<InnerCode>` or `<InnerCode>: <inner detail>`, after the outer module's own detail (such as a path) when there is one.
+4. **Within a module, keep the code and the detail.** Usually the callee's error is returned as it is; a caller may add context to the message (for example "Invalid animation source: …") or to the detail, but does not drop either.
+5. **Translate at module boundaries without losing the code.** The outer module chooses its own code. Its message keeps the inner message verbatim (it may add its own context around it); the outer detail records the cause with `Base::CauseDetail(inner, outerDetail)`, formatted as `[<outer detail>; ]<InnerCode>[: <inner detail>]`.
 6. **Do not use exceptions to report failures from engine or tool APIs.** A module may throw internally (for example through a JSON library) only if it catches at its public boundary and returns a `Result`. Boundary catches name `std::exception`; never `catch (...)`, which would also swallow a test's `AssertionFailure`. A thread entry point that can meet a Runtime Error catches it itself.
 7. **Present Runtime Errors through one formatter**, `Base::Describe`, instead of per-module formatting helpers.
 
@@ -49,7 +49,7 @@ Status: introduced by the [Assert/Result plan](plans/result-unification/README.m
 - On failure it calls the installed `AssertionHandler`. `SetAssertionHandler` installs one for the whole program and returns the previous one; `nullptr` selects the default, which prints `GYO_ASSERT failed: <condition>` with the file, line and function to stderr. If a handler returns, the process aborts; a failure inside a handler aborts immediately. Install a handler before starting threads. Product handlers may log; they must not throw.
 - A function that contains `GYO_ASSERT` is not `noexcept`, and destructors and thread entry points contain none (the Lakos rule). Tests replace the handler with one that throws, and a throw out of a `noexcept` function terminates instead of reaching the test. Math functions that assert, such as `Clamp` and the functions that forward caller-provided bounds to it, are therefore not `noexcept`.
 - In a `constexpr` function a failing `GYO_ASSERT` during constant evaluation is a compile error.
-- Conditions may contain commas (`GYO_ASSERT(std::is_same_v<A, B>)`). GYO macros, this one included, assume a standard-conforming preprocessor on every compiler: `build/cmake/GyoBuild.cmake` passes `/Zc:preprocessor` to MSVC for all GYO code (engine, products, tools and tests; not `third_party`), and `Assert.hpp` stops with `#error` if MSVC's traditional preprocessor is active. Macros may therefore forward `__VA_ARGS__` and use `__VA_OPT__`.
+- Conditions may contain commas (`GYO_ASSERT(std::is_same_v<A, B>)`). GYO macros, this one included, assume a standard-conforming preprocessor on every compiler: `build/cmake/GyoBuild.cmake` passes `/Zc:preprocessor` to MSVC for all GYO code (engine, products, tools and tests; not `third_party`), the separately configured host shader tool sets it on its own target, and `Assert.hpp` stops with `#error` if MSVC's traditional preprocessor is active. Macros may therefore forward `__VA_ARGS__` and use `__VA_OPT__`.
 - `GYO_UNREACHABLE()` marks a branch a correct program never reaches, such as the end of a switch that handles every enumerator; reaching it is reported like a failed assertion.
 - There is no debug-only level yet. `GYO_DEBUG_ASSERT`, for checks too expensive to run in release, will be added together with the first such check.
 
@@ -65,7 +65,7 @@ Tests include `tests/common/support/AssertTestSupport.hpp` (target `gyo_test_sup
 
 C++26 has no run-time function to swap the handler and chooses semantics per build rather than per check, so a migration is mechanical for the checks but not for the test helpers.
 
-## Result and errors
+## Result
 
 `Engine::Base::Result<T, E>` holds either a value or an error; `E` must satisfy `CodedError` (below), so a string or another uncoded type does not compile. Its interface is a subset of C++23 `std::expected`, with `Base::Err` in the role of `std::unexpected`:
 
@@ -82,7 +82,12 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 - **Failure**: `return Base::Err(error);`. `Err<G>` converts to `Result<T, E>` whenever `E` is constructible from `G`. A bare `E` does not convert, so a forgotten `Err` is a compile error. A braced error names its type (`Base::Err(UiError{...})`).
 - **Queries**: `has_value()` or `explicit operator bool` (success, also for `Result<bool, E>`), `value()`, `operator*`, `operator->`, `error()`. Reading the side that is not held is a Programmer Error and asserts. Unlike `std::expected`, nothing throws.
 - `T` and `E` must differ and must not be references. The class is `[[nodiscard]]`.
-- No monadic operations (`and_then`, `transform`) and no `value_or` until code needs them. Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
+- No monadic operations (`and_then`, `transform`) and no `value_or` until code needs them.
+- Types that cannot be moved are returned as `Result<std::unique_ptr<T>, E>`.
+
+## Error types
+
+Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
 
 - `code` is an enum owned by the module. Zero is not a valid code: each enum starts at 1, and `Error::Make` asserts against zero. The numeric values are not a data contract. A `ToString(code)` in the enum's namespace names each code.
 - `message` is for people (logs, diagnostics) and is never parsed by code; tests compare `code`.
@@ -90,5 +95,3 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 - There is no default constructor, so an error value always describes a failure. A state that may or may not hold an error uses `std::optional<E>` (for example `AssetManager::GetError`).
 
 `Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type, and IO also `IoResult<T>`, exactly once next to its code enum. `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
-
-Types that cannot be moved are returned as `Result<std::unique_ptr<T>, E>`.

@@ -1,4 +1,5 @@
 #include "platform/sdl/SdlPlatform.hpp"
+#include "engine/base/Error.hpp"
 #include "render/PrimitiveMesh.hpp"
 #include "render/RenderQueue.hpp"
 #include "render/Renderer.hpp"
@@ -84,7 +85,7 @@ bool CheckCapturedLayers(Device& device, Renderer& renderer) {
     renderer.RequestSceneCapture();
     const auto rendered = renderer.Render(queue);
     if (!rendered) {
-        std::cerr << rendered.error().message << ' ' << rendered.error().detail << '\n';
+        std::cerr << Engine::Base::Describe(rendered.error()) << '\n';
         return false;
     }
     auto captured = renderer.TakeSceneCapture();
@@ -133,7 +134,7 @@ bool CheckExteriorAndSkyCulling(Device& device, Renderer& renderer) {
         renderer.RequestSceneCapture();
         const auto result = renderer.Render(queue);
         if (!result) {
-            std::cerr << result.error().message << '\n';
+            std::cerr << Engine::Base::Describe(result.error()) << '\n';
             return false;
         }
         const auto captured = renderer.TakeSceneCapture();
@@ -175,7 +176,7 @@ bool Exercise(Device& device, Renderer& renderer, Engine::Platform::Sdl::SdlPlat
     MeshData data = MakeUnitCube();
     const auto created = device.CreateMesh(data.View());
     if (!created) {
-        std::cerr << created.error().message << '\n';
+        std::cerr << Engine::Base::Describe(created.error()) << '\n';
         return false;
     }
     const MeshHandle handle = created.value();
@@ -240,7 +241,7 @@ bool Exercise(Device& device, Renderer& renderer, Engine::Platform::Sdl::SdlPlat
             0.1F * std::sin(static_cast<float>(frame));
         const auto updated = device.UpdateMeshVertices(handle, data.vertices);
         if (!updated) {
-            std::cerr << updated.error().message << '\n';
+            std::cerr << Engine::Base::Describe(updated.error()) << '\n';
             return false;
         }
         const auto rendered = renderer.Render(queue);
@@ -284,7 +285,7 @@ bool CheckFrameContracts(Device& device, const ShaderLibrary& library) {
     PipelineDesc pipelineDesc{vertex.value(), fragment.value(), frame.colorFormat,
         true, CullMode::None, false, false, false};
     auto pipeline = device.CreatePipeline(pipelineDesc);
-    if (!pipeline) { std::cerr << pipeline.error().message << ' ' << pipeline.error().detail << '\n'; return false; }
+    if (!pipeline) { std::cerr << Engine::Base::Describe(pipeline.error()) << '\n'; return false; }
     pipelineDesc.vertexShader = fragment.value();
     if (!ExpectError(device.CreatePipeline(pipelineDesc), RenderErrorCode::InvalidArgument, "reversed shader stages")) return false;
     // Native pipelines own their compiled shader relationship; their copied
@@ -335,7 +336,7 @@ int main(int argc, char** argv) {
     options.resizable = false;
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create(options);
     if (!platform) {
-        std::cerr << platform.error().message << '\n';
+        std::cerr << Engine::Base::Describe(platform.error()) << '\n';
         return 1;
     }
     Engine::Asset::Loading::NativeFileAssetSource source;
@@ -343,10 +344,10 @@ int main(int argc, char** argv) {
     resolverOptions.assetsRoot = GYO_TEST_SHADER_BUNDLE;
     ShaderLibrary library;
     auto bundle = library.AppendBundle(source, Engine::Asset::Resolver::AssetPathResolver(resolverOptions));
-    if (!bundle) { std::cerr << bundle.error().message << ' ' << bundle.error().detail << '\n'; return 1; }
+    if (!bundle) { std::cerr << Engine::Base::Describe(bundle.error()) << '\n'; return 1; }
     resolverOptions.assetsRoot = GYO_TEST_CUSTOM_SHADER_BUNDLE;
     bundle = library.AppendBundle(source, Engine::Asset::Resolver::AssetPathResolver(resolverOptions));
-    if (!bundle) { std::cerr << bundle.error().message << ' ' << bundle.error().detail << '\n'; return 1; }
+    if (!bundle) { std::cerr << Engine::Base::Describe(bundle.error()) << '\n'; return 1; }
     Backend::SdlGpu::SdlGpuOptions gpuOptions;
     gpuOptions.driver=requestedDriver;
     gpuOptions.availableShaderFormats = library.CompleteFormats();
@@ -354,12 +355,12 @@ int main(int argc, char** argv) {
     gpuOptions.debugMode = true;
     auto device = Device::Create(*platform.value(), gpuOptions);
     if (!device) {
-        std::cerr << device.error().message << '\n';
+        std::cerr << Engine::Base::Describe(device.error()) << '\n';
         return 1;
     }
     Renderer renderer;
     auto initialized = renderer.Initialize(*device.value(), library);
-    if (!initialized) { std::cerr << initialized.error().message << '\n'; return 1; }
+    if (!initialized) { std::cerr << Engine::Base::Describe(initialized.error()) << '\n'; return 1; }
     std::cout << "SDL_GPU smoke requested=" << requestedDriver
               << " actual=" << device.value()->GetInfo().driver
               << " shader=" << ShaderFormatName(*renderer.ActiveShaderFormat()) << '\n';
