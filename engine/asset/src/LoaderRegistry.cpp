@@ -1,5 +1,7 @@
 #include "engine/asset/loading/LoaderRegistry.hpp"
 
+#include "engine/base/Assert.hpp"
+
 namespace Engine::Asset::Loading {
 
     std::uint64_t LoaderRegistry::Key(AssetType type) noexcept {
@@ -7,26 +9,12 @@ namespace Engine::Asset::Loading {
         return static_cast<std::uint64_t>(type.value);
     }
 
-    Base::Result<void, AssetError>
-    LoaderRegistry::Register(std::unique_ptr<IAssetLoader> loader) {
-        if (!loader) {
-            return Base::Err(AssetError::Make(AssetErrorCode::InternalError, "Register: loader is null"));
-        }
-
-        const auto type = loader->GetType();
-        const auto k = Key(type);
-
-        if (k == 0) {
-            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedType, "Register: invalid AssetType (0)"));
-        }
-
-        auto it = map_.find(k);
-        if (it != map_.end()) {
-            return Base::Err(AssetError::Make(AssetErrorCode::InternalError, "Register: loader already exists for type"));
-        }
-
+    void LoaderRegistry::Register(std::unique_ptr<IAssetLoader> loader) {
+        GYO_ASSERT(loader != nullptr);
+        const auto k = Key(loader->GetType());
+        GYO_ASSERT(k != 0);
+        GYO_ASSERT(!map_.contains(k));
         map_.emplace(k, std::move(loader));
-        return {};
     }
 
     IAssetLoader* LoaderRegistry::Find(AssetType type) noexcept {

@@ -9,7 +9,6 @@
 #include "engine/asset/loading/LoadContext.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     class TextureLoader final : public Loading::IAssetLoader {
     public:

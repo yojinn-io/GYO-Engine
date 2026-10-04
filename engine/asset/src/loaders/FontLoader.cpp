@@ -1,7 +1,6 @@
 #include "engine/asset/loaders/FontLoader.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     AssetType FontLoader::GetType() const noexcept {
         static const AssetType kType = AssetType::FromString("font");

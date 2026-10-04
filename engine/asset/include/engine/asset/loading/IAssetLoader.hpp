@@ -12,7 +12,6 @@
 
 
 namespace Engine::Asset::Loading {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     // IAssetLoader（アイ・アセット・ローダ）
     // - bytes -> runtime resource（Core::AnyAsset）へ変換する

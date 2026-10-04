@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -12,10 +13,8 @@
 #include "engine/asset/AssetError.hpp"
 
 #include "engine/asset/core/AnyAsset.hpp"
-#include "engine/base/Error.hpp"
 
 namespace Engine::Asset::Core {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     // AssetRecord:
     // - 「1つの AssetId」に対する状態・キャッシュ実体・エラー等の集合
@@ -41,13 +40,15 @@ namespace Engine::Asset::Core {
         // One bounded failure outcome survives new candidates and successful
         // publication; the next failed operation replaces it.
         std::uint32_t failedGeneration = 0;
-        AssetError failedError{};
+        std::optional<AssetError> failedError;
 
         // 実体（型消去）
         AnyAsset asset{};
 
-        // 失敗時の情報（成功時は空にしておく）
-        AssetError error{};
+        // The failure of the published generation: set while it is Failed, and
+        // also beside a still-Ready generation after a KeepOldIfAny failure.
+        // Empty after a successful load.
+        std::optional<AssetError> error;
 
         // Total number of references across every still-live handle generation.
         // A reload makes old handles stale for reads, but it does not revoke the
@@ -71,11 +72,11 @@ namespace Engine::Asset::Core {
             return AssetState::Unloaded;
         }
 
-        const AssetError* ErrorFor(std::uint32_t handleGeneration) const noexcept {
-            if (handleGeneration == 0) return nullptr;
-            if (handleGeneration == generation) return error.ok() ? nullptr : &error;
-            if (handleGeneration == failedGeneration) return &failedError;
-            return nullptr;
+        std::optional<AssetError> ErrorFor(std::uint32_t handleGeneration) const {
+            if (handleGeneration == 0) return std::nullopt;
+            if (handleGeneration == generation) return error;
+            if (handleGeneration == failedGeneration) return failedError;
+            return std::nullopt;
         }
 
         void AddReference(std::uint32_t handleGeneration) {
@@ -114,7 +115,7 @@ namespace Engine::Asset::Core {
 
         void SetReady(AnyAsset a) {
             asset = std::move(a);
-            error = AssetError{}; // clear
+            error.reset();
             state = AssetState::Ready;
         }
 
@@ -122,13 +123,6 @@ namespace Engine::Asset::Core {
             asset.Reset();
             error = std::move(e);
             state = AssetState::Failed;
-        }
-
-        void ResetToUnloaded() {
-            asset.Reset();
-            error = AssetError{};
-            state = AssetState::Unloaded;
-            // generation は「同一IDで中身が変わる」時に増やすことが多い
         }
     };
 

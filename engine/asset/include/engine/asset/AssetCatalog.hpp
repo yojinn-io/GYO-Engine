@@ -22,7 +22,6 @@ namespace Engine::Asset::Resolver {
 
 namespace Engine::Asset {
 
-    using AssetError = Base::Error<AssetErrorCode>;
 
     class AssetCatalog final {
     public:

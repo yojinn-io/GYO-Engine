@@ -21,9 +21,6 @@
 
 namespace Engine::IO::Helpers {
 
-    using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
-    template<class T>
-    using IoResult = Engine::Base::Result<T, IoError>;
 
     struct ReadAllOptions final {
         std::size_t maxBytes = 64u * 1024u * 1024u; // 安全上限（64MB）
@@ -134,4 +131,4 @@ namespace Engine::IO::Helpers {
         }
     }
 
-} // namespace Engine::IO::Helpers::detail
+} // namespace Engine::IO::Helpers

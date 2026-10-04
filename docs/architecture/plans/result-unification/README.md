@@ -1,7 +1,7 @@
 # Assert／Result 統一：分批計畫與進度
 
 更新：2026-10-04。Owner：Engine（`engine/base`，R1 起為獨立 target `GYO::Base`）。
-**R0、R1 完成；R2 本機驗收完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI。**
+**R0–R2 完成；R3 本機驗收完成，PR 待開。**
 
 GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這套慣例從未寫成文件，
 後來的模組各自用例外、`std::string`、手寫結果型別或 out-param 表達失敗。
@@ -25,8 +25,8 @@ GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這�
 |---|---|---|---|
 | R0 任務校正 | medium（盤點用 ultracode；characterization 測試 high） | 完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 已合併 | 計畫文件、基線、分類表、稽核腳本、Vfs 與 KeepOldIfAny 的 characterization |
 | R1 概念文件與 Assert | high（`Assert.hpp` xhigh） | 完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 已合併 | `GYO::Base`、`Assert.hpp`、`error-handling.md`、Collision／FixedTickRuntime／`Math::Clamp` 改用 Assert |
-| R2 Result 的寫法 | high（`Result.hpp` xhigh；codemod medium） | 本機驗收完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI | `Base::Err`、隱式成功、移除 `Ok`／`Err`／`ok()` |
-| R3 Error 語意與 asset | high | 未開始 | `CodedError`、`Describe`、移除 `None`、別名收斂、AssetRecord；asset 的 API 誤用改 Assert |
+| R2 Result 的寫法 | high（`Result.hpp` xhigh；codemod medium） | 完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 已合併 | `Base::Err`、隱式成功、移除 `Ok`／`Err`／`ok()` |
+| R3 Error 語意與 asset | high | 本機驗收完成，PR 待開 | `CodedError`、`Describe`、移除 `None`、別名收斂、AssetRecord；asset 的 API 誤用改 Assert |
 | R4 Model、ui／render | high | 未開始 | Model／ModelRenderer 的 E、保留 code 的轉換；ui／render 的 API 誤用改 Assert |
 | R5 ui_editor | high | 未開始 | 結果型別、out-param、assert、`Describe` |
 | R6 收尾 | medium（最終審查 high） | 未開始 | 文件定稿、稽核、破損清單、Architecture Report |

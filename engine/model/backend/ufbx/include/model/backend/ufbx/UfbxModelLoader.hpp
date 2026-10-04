@@ -9,7 +9,7 @@ namespace Engine::Model::Ufbx {
 class UfbxModelLoader final : public Asset::Loading::IAssetLoader {
 public:
     [[nodiscard]] Asset::AssetType GetType() const noexcept override;
-    [[nodiscard]] Base::Result<Asset::Core::AnyAsset, Asset::Loading::AssetError>
+    [[nodiscard]] Base::Result<Asset::Core::AnyAsset, Asset::AssetError>
     Load(Base::ConstSpan<std::byte> bytes,
          const Asset::Loading::LoadContext& context) override;
 };

@@ -7,7 +7,6 @@
 #include "engine/io/path/PathUtils.hpp"
 
 namespace Engine::IO::Path {
-    using IoError = Base::Error<IoErrorCode>;
 
     class Path final {
     public:

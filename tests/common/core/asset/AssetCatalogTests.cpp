@@ -76,6 +76,33 @@ TEST_CASE("AssetCatalog: duplicate id should fail") {
     CHECK(r.error().code == Engine::Asset::AssetErrorCode::InvalidCatalogEntry);
 }
 
+TEST_CASE("AssetCatalog: a path resolution failure keeps the resolver's code") {
+    fs::path tmp = fs::temp_directory_path() / "asset_catalog_test_escape";
+    fs::remove_all(tmp);
+
+    fs::path assetsRoot = tmp / "assets";
+    fs::path catalogPath = assetsRoot / "asset_catalog.json";
+
+    WriteText(catalogPath, R"({
+      "version":1,
+      "assets":[
+        {"id":"escape","type":"text","path":"../outside.txt"}
+      ]
+    })");
+
+    AssetPathResolver::Options options;
+    options.assetsRoot = assetsRoot.string();
+    AssetPathResolver resolver(options);
+    CatalogParser parser;
+    AssetCatalog catalog;
+
+    const auto r = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+    REQUIRE_FALSE(r);
+    CHECK(r.error().code == Engine::Asset::AssetErrorCode::PathEscapesRoot);
+    CHECK(r.error().detail == "escape");
+    fs::remove_all(tmp);
+}
+
 TEST_CASE("AssetCatalog: independently rooted append is atomic and preserves entries") {
     const fs::path tmp = fs::temp_directory_path() / "gyo_catalog_composition_tests";
     const fs::path gameFile = tmp / "game.json";

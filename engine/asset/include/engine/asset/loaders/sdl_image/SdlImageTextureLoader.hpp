@@ -15,7 +15,7 @@ class SdlImageTextureLoader final : public Loading::IAssetLoader {
 public:
     AssetType GetType() const noexcept override;
 
-    Base::Result<Core::AnyAsset, Loading::AssetError>
+    Base::Result<Core::AnyAsset, AssetError>
     Load(Base::ConstSpan<std::byte> bytes,
          const Loading::LoadContext& context) override;
 };

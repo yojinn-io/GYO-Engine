@@ -7,7 +7,6 @@
 #include "engine/io/path/Path.hpp"
 
 namespace Engine::IO::Path {
-    using IoError = Base::Error<IoErrorCode>;
 
     enum class UriScheme {
         None,

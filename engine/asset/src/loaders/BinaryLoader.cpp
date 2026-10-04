@@ -1,7 +1,6 @@
 #include "engine/asset/loaders/BinaryLoader.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     AssetType BinaryLoader::GetType() const noexcept {
         static const AssetType kType = AssetType::FromString("binary");

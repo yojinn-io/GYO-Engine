@@ -7,7 +7,6 @@
 #include "engine/io/IoError.hpp"
 
 namespace Engine::IO::Path {
-    using IoError = Base::Error<IoErrorCode>;
 
     struct NormalizeOptions {
         bool convertBackslash     = true;  // "\" -> "/"

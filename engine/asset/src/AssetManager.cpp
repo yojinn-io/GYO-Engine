@@ -1,5 +1,7 @@
 #include "engine/asset/AssetManager.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include "engine/asset/AssetCatalog.hpp"
 
 #include <algorithm>
@@ -28,11 +30,9 @@ void AssetManager::Update() {
 Base::Result<AssetHandle, AssetError>
 AssetManager::Load(const AssetId& id, const AssetRequest& request) {
     // Reserved hints must never silently change the request's meaning, including
-    // on cache hits. Reject before catalog access, records, pinning or references.
-    if (request.priority != 0 || request.keepAliveFramesOverride != 0) {
-        return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedRequest,
-            "AssetManager: nonzero priority and per-request TTL are not supported"));
-    }
+    // on cache hits. Passing them is API misuse, checked before catalog access,
+    // records, pinning or references.
+    GYO_ASSERT(request.priority == 0 && request.keepAliveFramesOverride == 0);
     if (stats_) stats_->OnLoadRequest();
     auto entry = ResolveEntry_(id, request);
     if (!entry) return Base::Err(std::move(entry.error()));
@@ -122,9 +122,9 @@ AssetState AssetManager::GetState(const AssetHandle& handle) const {
     return record ? record->StateFor(handle.generation()) : AssetState::Unloaded;
 }
 
-const AssetError* AssetManager::GetError(const AssetHandle& handle) const {
+std::optional<AssetError> AssetManager::GetError(const AssetHandle& handle) const {
     const auto* record = FindRecordConst_(handle);
-    return record ? record->ErrorFor(handle.generation()) : nullptr;
+    return record ? record->ErrorFor(handle.generation()) : std::nullopt;
 }
 
 bool AssetManager::EvictIfPossible(const AssetId& id) {

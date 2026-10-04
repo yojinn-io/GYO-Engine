@@ -9,7 +9,6 @@
 #include "engine/base/Result.hpp"
 
 namespace Engine::Asset::Catalog {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     struct RawCatalogEntry final {
         std::string id;    // stringのまま（ここではAssetIdに変換しない）

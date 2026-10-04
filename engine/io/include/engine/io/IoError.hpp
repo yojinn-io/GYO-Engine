@@ -1,19 +1,17 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
-#include <utility>
 
-#include "engine/base/Error.hpp" // Engine::Error（共通Error）
+#include "engine/base/Error.hpp"
+#include "engine/base/Result.hpp"
 
 namespace Engine::IO {
 
-    // IO エラーコード（機械判定用）
+    // Failure classes of IO. Zero is not a valid code; the numeric values are
+    // not a data contract.
     enum class IoErrorCode : std::uint16_t {
-        None = 0,
-
         // path / resolve
-        InvalidPath,
+        InvalidPath = 1,
         PathEscapesRoot,
 
         // fs
@@ -33,9 +31,8 @@ namespace Engine::IO {
         InternalError
     };
 
-    inline constexpr const char* ToString(IoErrorCode c) noexcept {
+    [[nodiscard]] constexpr const char* ToString(const IoErrorCode c) noexcept {
         switch (c) {
-        case IoErrorCode::None:             return "None";
         case IoErrorCode::InvalidPath:      return "InvalidPath";
         case IoErrorCode::PathEscapesRoot:  return "PathEscapesRoot";
         case IoErrorCode::NotFound:         return "NotFound";
@@ -48,8 +45,15 @@ namespace Engine::IO {
         case IoErrorCode::SeekFailed:       return "SeekFailed";
         case IoErrorCode::EndOfStream:      return "EndOfStream";
         case IoErrorCode::InternalError:    return "InternalError";
-        default:                            return "Unknown";
         }
+        return "Unknown";
     }
+
+    // IO's error type and its Result, declared once for every IO namespace.
+    using IoError = Base::Error<IoErrorCode>;
+    static_assert(Base::CodedError<IoError>);
+
+    template <class T>
+    using IoResult = Base::Result<T, IoError>;
 
 } // namespace Engine::IO

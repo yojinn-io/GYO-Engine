@@ -21,6 +21,8 @@
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/asset/catalog/CatalogParser.hpp"
 
+#include "AssertTestSupport.hpp"
+
 
 using namespace Engine::Asset;
 namespace fs = std::filesystem;
@@ -86,7 +88,7 @@ TEST_CASE("AssetManager: sync load -> cache hit") {
 
     // --- pipeline 組み立て（実装に合わせて調整） ---
     Loading::LoaderRegistry registry;
-    REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
+    registry.Register(std::make_unique<Loaders::TextLoader>());
 
     auto memSource = std::make_unique<MemoryAssetSource>();
     memSource->Put("mem://ui/title.txt", BytesOf("hello"));
@@ -153,7 +155,7 @@ TEST_CASE("AssetManager: stale handle release balances its pre-reload reference"
     REQUIRE(catalog.LoadFromFile(catalogPath.string(), parser, resolver));
 
     Loading::LoaderRegistry registry;
-    REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
+    registry.Register(std::make_unique<Loaders::TextLoader>());
 
     auto memSource = std::make_unique<MemoryAssetSource>();
     constexpr auto kMemoryPath = "mem://reloadable.txt";
@@ -287,7 +289,7 @@ struct ManagerFixture {
         options.assetsRoot = root.generic_string();
         Resolver::AssetPathResolver resolver(options);
         REQUIRE(catalog.LoadFromFile((root / "catalog.json").string(), parser, resolver));
-        REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
+        registry.Register(std::make_unique<Loaders::TextLoader>());
         source.Put(Path(), BytesOf("old"));
     }
     ~ManagerFixture() { std::error_code error; fs::remove_all(root, error); }
@@ -436,14 +438,12 @@ TEST_CASE("AssetManager: conflicting requests leave the queued operation and pol
     CHECK(f.manager.EvictIfPossible(f.id));
 }
 
-TEST_CASE("AssetManager: unsupported hints fail before IO references or pinning") {
+TEST_CASE("AssetManager: reserved hints are a Programmer Error caught before IO, references or pinning") {
     ManagerFixture f;
     SUBCASE("fresh priority") {
         auto request = AssetRequest::AsyncLoad(5);
         request.pin = true;
-        const auto rejected = f.manager.Load(f.id, request);
-        REQUIRE_FALSE(rejected);
-        CHECK(rejected.error().code == AssetErrorCode::UnsupportedRequest);
+        GYO_CHECK_ASSERTS(f.manager.Load(f.id, request));
         CHECK(f.storage.Size() == 0);
     }
     SUBCASE("cached TTL") {
@@ -451,9 +451,7 @@ TEST_CASE("AssetManager: unsupported hints fail before IO references or pinning"
         auto request = AssetRequest::Default();
         request.keepAliveFramesOverride = 30;
         request.pin = true;
-        const auto rejected = f.manager.Load(f.id, request);
-        REQUIRE_FALSE(rejected);
-        CHECK(rejected.error().code == AssetErrorCode::UnsupportedRequest);
+        GYO_CHECK_ASSERTS(f.manager.Load(f.id, request));
         CHECK(f.storage.Find(f.id)->refCount == 1);
         CHECK(f.source.reads == 1);
     }
@@ -462,9 +460,7 @@ TEST_CASE("AssetManager: unsupported hints fail before IO references or pinning"
         REQUIRE(pending);
         auto request = AssetRequest::AsyncLoad(1);
         request.pin = true;
-        const auto rejected = f.manager.Load(f.id, request);
-        REQUIRE_FALSE(rejected);
-        CHECK(rejected.error().code == AssetErrorCode::UnsupportedRequest);
+        GYO_CHECK_ASSERTS(f.manager.Load(f.id, request));
         CHECK(f.storage.Find(f.id)->refCount == 1);
         CHECK(f.manager.GetState(pending.value()) == AssetState::Loading);
         CHECK(f.source.reads == 0);
@@ -605,7 +601,7 @@ TEST_CASE("AssetManager: only the most recent failure is retained beside a publi
     CHECK(f.manager.GetState(first.value()) == AssetState::Failed);
     f.manager.Update();
     CHECK(f.manager.GetState(first.value()) == AssetState::Unloaded);
-    CHECK(f.manager.GetError(first.value()) == nullptr);
+    CHECK_FALSE(f.manager.GetError(first.value()));
     CHECK(f.manager.GetState(second.value()) == AssetState::Failed);
     REQUIRE(f.manager.GetError(second.value()));
     CHECK(f.manager.GetState(original) == AssetState::Ready);

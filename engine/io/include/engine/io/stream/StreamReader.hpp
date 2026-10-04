@@ -12,10 +12,7 @@
 
 namespace Engine::IO::Stream {
 
-    using IoError  = Engine::Base::Error<Engine::IO::IoErrorCode>;
 
-    template<class T>
-    using IoResult = Engine::Base::Result<T, IoError>;
 
 
     struct TextReadOptions final {

@@ -35,4 +35,4 @@ namespace Engine::IO::FS {
         MountPoint() = default;
     };
 
-} // namespace Engine::IO::VFS
+} // namespace Engine::IO::FS

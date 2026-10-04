@@ -668,14 +668,10 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
         if (!loaded) { error = Explain(loaded.error()); return false; }
     }
     if (!impl_->shaders.CompleteFormats()) { error = "Shader bundles have no complete common format"; return false; }
-    const auto fontLoader = impl_->loaders.Register(std::make_unique<Asset::Loaders::FontLoader>());
-    if (!fontLoader) { error = Explain(fontLoader.error()); return false; }
-    const auto textLoader = impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
-    if (!textLoader) { error = Explain(textLoader.error()); return false; }
-    const auto modelLoader = impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
-    if (!modelLoader) { error = Explain(modelLoader.error()); return false; }
-    const auto imageLoader = impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    if (!imageLoader) { error = Explain(imageLoader.error()); return false; }
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::FontLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
+    impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
     impl_->arena = Arena::Load(assetRoot / "pvp_arena.json", error);
     if (!impl_->arena) return false;
     impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);

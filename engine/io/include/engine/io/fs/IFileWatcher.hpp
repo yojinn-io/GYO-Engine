@@ -13,9 +13,6 @@
 
 namespace Engine::IO::FS {
 
-    using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
-    template<class T>
-    using IoResult = Engine::Base::Result<T, IoError>;
 
     using WatchId = std::uint64_t;
 

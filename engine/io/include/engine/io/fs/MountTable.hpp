@@ -19,9 +19,6 @@
 
 namespace Engine::IO::FS {
 
-using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
-template<class T>
-using IoResult = Engine::Base::Result<T, IoError>;
 
 namespace detail {
 
@@ -161,4 +158,4 @@ namespace detail {
         std::vector<MountPoint> mounts_;
     };
 
-} // namespace Engine::IO::VFS
+} // namespace Engine::IO::FS

@@ -11,14 +11,24 @@
 
 namespace Engine::Render::Backend::Sdl {
 
+// Zero is not a valid code; the numeric values are not a data contract.
 enum class SdlRendererErrorCode {
-    None = 0,
-    CreationFailed,
+    CreationFailed = 1,
     ClearFailed,
     PresentFailed,
 };
 
+[[nodiscard]] constexpr const char* ToString(const SdlRendererErrorCode code) noexcept {
+    switch (code) {
+    case SdlRendererErrorCode::CreationFailed: return "CreationFailed";
+    case SdlRendererErrorCode::ClearFailed: return "ClearFailed";
+    case SdlRendererErrorCode::PresentFailed: return "PresentFailed";
+    }
+    return "Unknown";
+}
+
 using SdlRendererError = Base::Error<SdlRendererErrorCode>;
+static_assert(Base::CodedError<SdlRendererError>);
 
 struct SdlRendererOptions {
     bool vsync{true};

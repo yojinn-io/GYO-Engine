@@ -10,7 +10,6 @@
 #include "engine/base/Result.hpp"
 
 namespace Engine::Asset::Loading {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     // バイト列の所有バッファ（I/O結果）
     using ByteBuffer = std::vector<std::byte>;

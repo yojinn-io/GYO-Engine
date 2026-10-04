@@ -8,7 +8,6 @@
 #include "engine/asset/loading/LoadContext.hpp"
 
 namespace Engine::Asset::Loading {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     // AssetPipeline：
     // - 読む（IAssetSource）

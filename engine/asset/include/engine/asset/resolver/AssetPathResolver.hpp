@@ -11,7 +11,6 @@
 
 namespace Engine::Asset::Resolver {
 
-    using AssetError = Base::Error<AssetErrorCode>;
 
     class AssetPathResolver final {
     public:

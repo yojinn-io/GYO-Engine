@@ -23,13 +23,13 @@ public:
 
     void Found() { error_.reset(); }
     void Fails(IoErrorCode code, std::string message) {
-        error_ = FS::IoError::Make(code, std::move(message));
+        error_ = IoError::Make(code, std::move(message));
     }
     int Calls() const noexcept { return calls_; }
 
     const char* Name() const noexcept override { return name_.c_str(); }
 
-    FS::IoResult<FS::FileInfo> Stat(const Path::Uri&) override {
+    IoResult<FS::FileInfo> Stat(const Path::Uri&) override {
         ++calls_;
         if (error_) return Engine::Base::Err(*error_);
         FS::FileInfo info;
@@ -38,51 +38,51 @@ public:
         return info;
     }
 
-    FS::IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri&, Stream::FileOpenMode) override {
+    IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri&, Stream::FileOpenMode) override {
         ++calls_;
         if (error_) return Engine::Base::Err(*error_);
         std::vector<std::byte> bytes(name_.size());
         for (std::size_t i = 0; i < name_.size(); ++i) bytes[i] = static_cast<std::byte>(name_[i]);
         return std::make_unique<Stream::MemoryStream>(std::move(bytes), Stream::MemoryStream::Options{});
     }
-    FS::IoResult<bool> Exists(const Path::Uri&) override {
+    IoResult<bool> Exists(const Path::Uri&) override {
         ++calls_;
         if (error_) return Engine::Base::Err(*error_);
         return true;
     }
-    FS::IoResult<void> CreateDirectories(const Path::Uri&) override {
+    IoResult<void> CreateDirectories(const Path::Uri&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<void> Remove(const Path::Uri&, const FS::RemoveOptions&) override {
+    IoResult<void> Remove(const Path::Uri&, const FS::RemoveOptions&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<void> Move(const Path::Uri&, const Path::Uri&) override {
+    IoResult<void> Move(const Path::Uri&, const Path::Uri&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<void> Copy(const Path::Uri&, const Path::Uri&) override {
+    IoResult<void> Copy(const Path::Uri&, const Path::Uri&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri&, const FS::ListOptions&) override {
+    IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri&, const FS::ListOptions&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<std::string> ToNativePathString(const Path::Uri&) override {
+    IoResult<std::string> ToNativePathString(const Path::Uri&) override {
         return Engine::Base::Err(Unsupported());
     }
     FS::FileSystemCapabilities Capabilities() const noexcept override { return {}; }
-    FS::IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri&, const FS::ListOptions&) override {
+    IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri&, const FS::ListOptions&) override {
         return Engine::Base::Err(Unsupported());
     }
-    FS::IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override {
+    IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override {
         return Engine::Base::Err(Unsupported());
     }
 
 private:
-    static FS::IoError Unsupported() {
-        return FS::IoError::Make(IoErrorCode::NotSupported, "ScriptedFileSystem: not scripted");
+    static IoError Unsupported() {
+        return IoError::Make(IoErrorCode::NotSupported, "ScriptedFileSystem: not scripted");
     }
 
     std::string name_;
-    std::optional<FS::IoError> error_;
+    std::optional<IoError> error_;
     int calls_ = 0;
 };
 
