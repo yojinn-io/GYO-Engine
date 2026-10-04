@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R6：收尾
 
 日期：2026-10-04。Owner：Engine（`GYO::Base`），連帶文件、共通測試與計畫紀錄。
-狀態：本機驗收完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 待 CI（分支 `claude/result-unification-r6`，基準 `f72bfbd`）。
+狀態：完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 合併為 `a15c836`（分支 `claude/result-unification-r6`，基準 `f72bfbd`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r6-收尾)，本文只記經過。
 
 ## 經過
@@ -13,8 +13,8 @@
 5. `error-handling.md` 定稿；寫入 Architecture Report。
 6. 最終審查（1 個唯讀 agent）：修正 smoke 測試的錯誤輸出、AssetCatalog 丟掉 resolver detail 的問題、規則 2／4／5 的措辭、`inactive_products.md` 的計數，以及紀錄上的缺漏；PLAN 開頭加入「實作與本文件的差異」彙整。
 7. 本機驗收：core 23／23、test 50／50；依賴圖與 R0 相比只多出計劃列出的邊；29 檔 syntax-only 全部通過；沒有第一方警告。
+8. PR #36 的 L1 四列與 CI gate 通過，windows-x64 的警告與 R5 逐項相同；合併為 `a15c836`，本計劃完成。
 
 ## 留給下一步
 
-- R6 的 PR 與 L1 四列結果；合併後本計劃完成。
 - 範圍外、留待日後：Apps 剩餘項目、未啟用產品的遷移。
