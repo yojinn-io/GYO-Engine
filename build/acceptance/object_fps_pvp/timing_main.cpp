@@ -29,7 +29,7 @@ template<class Test> void Wait(Test test) {
 struct Frame { std::int64_t timeNs; double seconds; std::array<std::size_t,2> pending;
     std::array<std::uint32_t,2> queued; std::array<std::uint64_t,2> epoch;
     std::array<double,2> remoteAge; std::array<std::uint64_t,2> resolved;
-    std::array<fps::Float3,2> authority; };
+    std::array<Engine::Math::Vec3,2> authority; };
 }
 int main(int argc, char** argv) {
     try {
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
         std::vector<Frame> frames; frames.reserve(static_cast<std::size_t>((duration+5)*fps)+1000);
         std::size_t resets{}, gaps{}, frozen{}; bool injected{}; std::int64_t releaseNs{};
         std::optional<Clock::time_point> stableSince,recoveredAt;
-        std::array<std::optional<fps::Float3>,2> releasePositions;
+        std::array<std::optional<Engine::Math::Vec3>,2> releasePositions;
         while(Clock::now()<end+std::chrono::seconds(2)) {
             auto now=Clock::now();
             if(!injected && stallAt>=0 && std::chrono::duration<double>(now-measurement).count()>=stallAt) {

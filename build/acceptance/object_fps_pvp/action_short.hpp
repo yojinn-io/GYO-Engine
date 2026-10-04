@@ -171,7 +171,7 @@ void RunActionShort(const Options& options) {
         bool reloadAnimatingSeen{}, died{}, deadChecked{}, respawned{}, respawnShot{};
         bool remoteDeathScheduled{}, remoteReloadCaptured{}, remoteJumpCaptured{}, remoteShotCaptured{};
         std::optional<double> measurementStart;
-        fps::Float3 backStart{}, deathPosition{};
+        Engine::Math::Vec3 backStart{}, deathPosition{};
         std::optional<std::string> pendingCapture;
         const auto started = Clock::now();
         auto previous = started, refreshed = started;

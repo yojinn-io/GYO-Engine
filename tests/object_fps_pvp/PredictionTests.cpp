@@ -31,17 +31,17 @@ Arena PredictionArena() {
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
     return arena;
 }
-void SamePosition(fps::Float3 actual, fps::Float3 expected) {
+void SamePosition(Engine::Math::Vec3 actual, Engine::Math::Vec3 expected) {
     CHECK(actual.x == doctest::Approx(expected.x).epsilon(0.00001));
     CHECK(actual.y == doctest::Approx(expected.y).epsilon(0.00001));
     CHECK(actual.z == doctest::Approx(expected.z).epsilon(0.00001));
 }
-float Distance(fps::Float3 lhs, fps::Float3 rhs) {
+// Horizontal (XZ) distance; not Engine::Math::Distance, which is 3D.
+float HorizontalDistance(Engine::Math::Vec3 lhs, Engine::Math::Vec3 rhs) {
     return std::hypot(lhs.x - rhs.x, lhs.z - rhs.z);
 }
-void ClearBody(const Arena& arena, fps::Float3 position) {
-    CHECK(fps::CanPlaceCharacterBody(
-        {{position.x, position.y, position.z}, arena.bodyHeight, arena.radius}, arena.walls, {}));
+void ClearBody(const Arena& arena, Engine::Math::Vec3 position) {
+    CHECK(fps::CanPlaceCharacterBody({position, arena.bodyHeight, arena.radius}, arena.walls, {}));
 }
 void Step(PvpMatch& match) { match.Tick({match.TickCount() + 1, MovementTickSeconds}); }
 
@@ -99,7 +99,7 @@ LinkEvidence RunLink(LinkOptions options) {
     unsigned inputNumber{}, snapshotNumber{}, lastInputNumber{};
     double nextFrame{}, nextSend{}, nextTick = 1000.0 / 60.0, previousFrame{};
     PlayerInput publishedWindow;
-    fps::Float3 previousDisplay = client.Observation().renderPosition;
+    Engine::Math::Vec3 previousDisplay = client.Observation().renderPosition;
     auto previousAuthorityPosition = match.Snapshot().players.front().position;
     float restingPosition{};
     LinkEvidence result;
@@ -155,11 +155,11 @@ LinkEvidence RunLink(LinkOptions options) {
                     result.firstDisplayedMotionMs = millisecond;
                 result.maximumPending = (std::max)(result.maximumPending, observation.pendingCommands);
                 result.maximumCorrection = (std::max)(result.maximumCorrection,
-                    Distance(observation.correctionOffset, {}));
+                    HorizontalDistance(observation.correctionOffset, {}));
                 ClearBody(arena, observation.renderPosition);
                 if (options.continuous && now > 500 && now < 1800) {
                     ++result.frameCount;
-                    const auto step = Distance(observation.renderPosition, previousDisplay);
+                    const auto step = HorizontalDistance(observation.renderPosition, previousDisplay);
                     if (step > 0.0001F) ++result.movingFrames;
                     result.maximumDisplayStep = (std::max)(result.maximumDisplayStep, step);
                 }
@@ -198,7 +198,7 @@ LinkEvidence RunLink(LinkOptions options) {
             nextTick += 1000.0 / 60.0;
             Step(match);
             const auto authority = match.Snapshot().players.front();
-            if (Distance(authority.position, previousAuthorityPosition) > 0.00001F) {
+            if (HorizontalDistance(authority.position, previousAuthorityPosition) > 0.00001F) {
                 if (result.firstAuthorityMotionMs < 0) result.firstAuthorityMotionMs = millisecond;
                 if (millisecond < 2700) result.lastAuthorityMotionBeforeStopMs = millisecond;
             }
@@ -324,7 +324,7 @@ TEST_CASE("PvP repeated perfect full ACKs retain adjacent interpolation without 
         CHECK(acknowledged.currentCommand == before.currentCommand);
         CHECK(acknowledged.interpolationAlpha == before.interpolationAlpha);
         SamePosition(acknowledged.renderPosition, before.renderPosition);
-        CHECK(Distance(acknowledged.correctionOffset, {}) < 0.00001F);
+        CHECK(HorizontalDistance(acknowledged.correctionOffset, {}) < 0.00001F);
         REQUIRE(client.Advance(0.5 * MovementTickSeconds, 1, 0, 0, 0));
         CHECK(client.Observation().latestCommand == before.latestCommand + 1);
         SamePosition(client.Observation().renderPosition, before.predictedPosition);
@@ -355,7 +355,7 @@ TEST_CASE("PvP partial previous-endpoint and frozen ACKs preserve the meaning of
             CHECK(client.Observation().previousCommand == before.previousCommand);
             SamePosition(client.Observation().predictedPosition, before.predictedPosition);
             SamePosition(client.Observation().renderPosition, before.renderPosition);
-            CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+            CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
         }
     }
     SUBCASE("Full window frozen at its tip remains collapsed after a perfect full ACK") {
@@ -371,7 +371,7 @@ TEST_CASE("PvP partial previous-endpoint and frozen ACKs preserve the meaning of
         CHECK_FALSE(client.Observation().frozen);
         CHECK(client.Observation().previousCommand == before.previousCommand);
         SamePosition(client.Observation().renderPosition, before.renderPosition);
-        CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+        CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
         REQUIRE(client.Advance(MovementTickSeconds, 1, 0, 0, 0));
         CHECK(client.Observation().latestCommand == before.latestCommand + 1);
     }
@@ -395,7 +395,7 @@ TEST_CASE("PvP full ACK smooths only real endpoint error and retains collision-s
         CHECK(client.Observation().correctionOffset.x == doctest::Approx(-0.1));
         client.Reconcile({1, corrected, 0, 0, before.latestCommand}, 2);
         static_cast<void>(client.Advance(0.05, 0, 0, 0, 0));
-        CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+        CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
     }
     SUBCASE("A translated previous endpoint cannot pull the camera through a wall corner") {
         LocalPlayerPrediction client(arena);
@@ -878,7 +878,7 @@ TEST_CASE("PvP prediction and authority execute identical straight diagonal turn
             REQUIRE(expected.contains(authority.lastResolvedCommand));
             SamePosition(authority.position, expected.at(authority.lastResolvedCommand).position);
             if (match.TickCount() % SnapshotIntervalTicks == 0) client.Reconcile(authority, match.TickCount());
-            CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+            CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
             ClearBody(arena, client.Observation().renderPosition);
         }
         if (scenario == 0) CHECK(reference.position.z == doctest::Approx(14).epsilon(0.0001));
@@ -954,10 +954,10 @@ TEST_CASE("PvP small corrections converge within 100 ms and large corrections re
     client.Reconcile({1, {2.4F, 0, 2}, 0, 0, 2}, 3);
     static_cast<void>(client.Advance(0.05, 0, 0, 0, 0));
     CHECK(client.Observation().renderPosition.x == doctest::Approx(2.4));
-    CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+    CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
     client.Reconcile({1, {4, 0, 2}, 0, 0, 3}, 4);
     CHECK(client.Observation().renderPosition.x == doctest::Approx(4));
-    CHECK(Distance(client.Observation().correctionOffset, {}) < 0.00001F);
+    CHECK(HorizontalDistance(client.Observation().correctionOffset, {}) < 0.00001F);
 }
 
 TEST_CASE("PvP display correction cannot sweep the local camera across a static corner") {
@@ -966,7 +966,7 @@ TEST_CASE("PvP display correction cannot sweep the local camera across a static 
     client.Reconcile({1, {7.72F, 0, 4.1F}, 0, 0, 0}, 1);
     // Both endpoints are valid, but the direct correction line cuts the corner.
     client.Reconcile({1, {8.1F, 0, 3.72F}, 0, 0, 1}, 2);
-    CHECK(Distance(client.Observation().renderPosition, {7.72F, 0, 4.1F}) > 0.01F);
+    CHECK(HorizontalDistance(client.Observation().renderPosition, {7.72F, 0, 4.1F}) > 0.01F);
     for (int frame = 0; frame < 20; ++frame) {
         static_cast<void>(client.Advance(1.0 / 144, 1, 1, 0, 0));
         ClearBody(arena, client.Observation().renderPosition);
@@ -1022,7 +1022,7 @@ TEST_CASE("PvP reseed does not catch up elapsed time already covered by authorit
         CHECK(client.Advance(previousFrameSeconds, 1, 0, 0.4F, 0.2F));
         CHECK(client.Observation().latestCommand == 27 + InitialCommandLead + 1);
         CHECK(client.Observation().pendingCommands == InitialCommandLead + 1);
-        CHECK(Distance(client.Observation().predictedPosition, {5, 0, 5}) ==
+        CHECK(HorizontalDistance(client.Observation().predictedPosition, {5, 0, 5}) ==
             doctest::Approx(arena.movementSpeed * MovementTickSeconds));
         CHECK(client.PendingInput().commands.back().yaw == 0.4F);
         CHECK(client.PendingInput().commands.back().pitch == 0.2F);
@@ -1156,7 +1156,7 @@ TEST_CASE("PvP phase tracking decides from eight samples and frames and slews th
         PlayerState authority{1, {2, 0, 2}, 0, 0, 1, 2};
         SetSlack(authority, moving.Observation().latestCommand, SlackFor(error, NewestAge(moving)));
         moving.Reconcile(authority, 11 + frame);
-        const auto distance = Distance(moving.Observation().renderPosition, {2, 0, 2});
+        const auto distance = HorizontalDistance(moving.Observation().renderPosition, {2, 0, 2});
         CHECK(distance + 0.00001F >= travelled);
         travelled = distance;
     }

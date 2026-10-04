@@ -1,40 +1,41 @@
 #include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace fps {
 
-Float2 ComputePlanarInput(
+GroundPoint ComputePlanarInput(
     const float forwardAxis,
     const float rightAxis,
     const float yawRadians,
     const float pitchRadians) noexcept {
     static_cast<void>(pitchRadians);
-    const float clampedForward = std::clamp(forwardAxis, -1.0f, 1.0f);
-    const float clampedRight = std::clamp(rightAxis, -1.0f, 1.0f);
+    const float clampedForward = Engine::Math::Clamp(forwardAxis, -1.0f, 1.0f);
+    const float clampedRight = Engine::Math::Clamp(rightAxis, -1.0f, 1.0f);
     const float sinYaw = std::sin(yawRadians);
     const float cosYaw = std::cos(yawRadians);
 
-    Float2 movement{
+    // The ground vector lifted to y = 0, so Math's vector operations apply
+    // without remapping z.
+    Engine::Math::Vec3 movement{
         sinYaw * clampedForward + cosYaw * clampedRight,
+        0.0f,
         cosYaw * clampedForward - sinYaw * clampedRight,
     };
 
-    const float lengthSquared = movement.x * movement.x + movement.z * movement.z;
-    if (lengthSquared > 1.0f) {
-        const float inverseLength = 1.0f / std::sqrt(lengthSquared);
-        movement.x *= inverseLength;
-        movement.z *= inverseLength;
+    if (Engine::Math::LengthSquared(movement) > 1.0f) {
+        movement = Engine::Math::Normalize(movement);
     }
 
-    return movement;
+    return {movement.x, movement.z};
 }
 
-Float2 ComputePlanarDisplacement(
+GroundPoint ComputePlanarDisplacement(
     const float forwardAxis, const float rightAxis, const float yawRadians,
     const float movementSpeed, const float deltaSeconds) noexcept {
-    const Float2 direction = ComputePlanarInput(forwardAxis, rightAxis, yawRadians);
+    const GroundPoint direction = ComputePlanarInput(forwardAxis, rightAxis, yawRadians);
     return {direction.x * movementSpeed * deltaSeconds,
             direction.z * movementSpeed * deltaSeconds};
 }

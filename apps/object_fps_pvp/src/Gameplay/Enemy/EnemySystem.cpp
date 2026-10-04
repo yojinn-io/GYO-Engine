@@ -22,7 +22,7 @@ namespace {
 constexpr float kPositionEpsilon = 0.0001f;
 constexpr float kWaypointTolerance = 0.025f;
 
-[[nodiscard]] bool IsFinite(const Float2 value) noexcept {
+[[nodiscard]] bool IsFinite(const GroundPoint value) noexcept {
     return std::isfinite(value.x) && std::isfinite(value.z);
 }
 
@@ -41,7 +41,7 @@ constexpr float kWaypointTolerance = 0.025f;
         ClipDurationSeconds(definition, EnemyState::Dead));
 }
 
-[[nodiscard]] float Distance(const Float2 left, const Float2 right) noexcept {
+[[nodiscard]] float Distance(const GroundPoint left, const GroundPoint right) noexcept {
     const double deltaX = static_cast<double>(right.x) - left.x;
     const double deltaZ = static_cast<double>(right.z) - left.z;
     const double distance = std::hypot(deltaX, deltaZ);
@@ -50,9 +50,9 @@ constexpr float kWaypointTolerance = 0.025f;
 }
 
 [[nodiscard]] float SurfaceDistance(
-    const Float2 left,
+    const GroundPoint left,
     const float leftRadius,
-    const Float2 right,
+    const GroundPoint right,
     const float rightRadius) noexcept {
     return Distance(left, right) - leftRadius - rightRadius;
 }
@@ -68,8 +68,8 @@ void SubtractElapsed(float& remainingSeconds, const float deltaSeconds) noexcept
 }
 
 [[nodiscard]] bool SegmentIntersectsClosedCell(
-    const Float2 start,
-    const Float2 end,
+    const GroundPoint start,
+    const GroundPoint end,
     const GridCoordinate cell,
     const float cellSize) noexcept {
     const double minimumX = static_cast<double>(cell.column) * cellSize;
@@ -109,8 +109,8 @@ void SubtractElapsed(float& remainingSeconds, const float deltaSeconds) noexcept
 // blocked, matching a supercover traversal rather than a thin visual ray.
 [[nodiscard]] bool HasWallLineOfSight(
     const GridMap& map,
-    const Float2 start,
-    const Float2 end,
+    const GroundPoint start,
+    const GroundPoint end,
     const float cellSize) {
     if (!map.TryGetCoordinateAtPosition(start, cellSize).has_value() ||
         !map.TryGetCoordinateAtPosition(end, cellSize).has_value()) {
@@ -309,9 +309,9 @@ struct OpenNodeCompare final {
     return true;
 }
 
-[[nodiscard]] Float2 MoveToward(
-    const Float2 position,
-    const Float2 target,
+[[nodiscard]] GroundPoint MoveToward(
+    const GroundPoint position,
+    const GroundPoint target,
     const float maximumDistance,
     const float radius,
     const float height,
@@ -323,7 +323,7 @@ struct OpenNodeCompare final {
     }
     const float distanceToMove = (std::min)(maximumDistance, targetDistance);
     const float scale = distanceToMove / targetDistance;
-    const Float3 displacement{
+    const Engine::Math::Vec3 displacement{
         (target.x - position.x) * scale,
         0.0f,
         (target.z - position.z) * scale,
@@ -404,7 +404,7 @@ bool ValidateEnemySettings(
 
 bool EnemySystem::Initialize(
     const GridMap& map,
-    const Float2 playerPosition,
+    const GroundPoint playerPosition,
     const float playerCollisionRadius,
     const float cellSize,
     EnemySettings settings,
@@ -552,9 +552,9 @@ void EnemySystem::Reset() noexcept {
 
 EnemySpawnResult EnemySystem::Spawn(
     const GridMap& map,
-    const Float2 playerPosition,
+    const GroundPoint playerPosition,
     const float playerCollisionRadius,
-    const Float2 spawnPosition,
+    const GroundPoint spawnPosition,
     const EnemyDefinition& definition,
     std::string& error) {
     error.clear();
@@ -669,7 +669,7 @@ void EnemySystem::Update(
     if (!initialized_ || !std::isfinite(deltaSeconds) || deltaSeconds <= 0.0f) {
         return;
     }
-    const Float2 playerPosition = player.position;
+    const GroundPoint playerPosition = player.position;
     const float playerCollisionRadius = player.collisionRadius;
     if (!IsFinite(playerPosition)) {
         throw std::invalid_argument("enemy update player position must be finite");
@@ -754,7 +754,7 @@ void EnemySystem::Update(
             map.TryGetCoordinateAtPosition(enemy.position, cellSize_);
 
         bool movementRequested = false;
-        const Float2 previousPosition = enemy.position;
+        const GroundPoint previousPosition = enemy.position;
 
         if (enemy.kind == EnemyKind::Melee) {
             if (surfaceDistance <= settings_.meleeAttackSurfaceDistance &&
@@ -851,7 +851,7 @@ void EnemySystem::Update(
                                     playerCell)) {
                                 continue;
                             }
-                            const Float2 candidatePosition =
+                            const GroundPoint candidatePosition =
                                 map.GetCellCenter(candidate, cellSize_);
                             const float candidateSurfaceDistance = SurfaceDistance(
                                 candidatePosition,
@@ -956,7 +956,7 @@ void EnemySystem::Update(
                                 playerCell)) {
                             continue;
                         }
-                        const Float2 candidatePosition =
+                        const GroundPoint candidatePosition =
                             map.GetCellCenter(candidate, cellSize_);
                         const float candidateSurfaceDistance = SurfaceDistance(
                             candidatePosition,
@@ -1030,7 +1030,7 @@ void EnemySystem::Update(
                    enemy.nextWaypointIndex < enemy.path.size() &&
                    remainingIterations > 0) {
                 --remainingIterations;
-                const Float2 waypoint = map.GetCellCenter(
+                const GroundPoint waypoint = map.GetCellCenter(
                     enemy.path[enemy.nextWaypointIndex], cellSize_);
                 const float waypointDistance = Distance(enemy.position, waypoint);
                 if (waypointDistance <= kWaypointTolerance) {
@@ -1039,7 +1039,7 @@ void EnemySystem::Update(
                 }
 
                 movementRequested = true;
-                const Float2 beforeStep = enemy.position;
+                const GroundPoint beforeStep = enemy.position;
                 enemy.position = MoveToward(
                     enemy.position,
                     waypoint,
@@ -1114,7 +1114,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
         if (!result) throw std::runtime_error("Enemy attack pose: " + result.error());
         return EnemyBoneWorldPoint(rig, eventAnimation.CurrentPose(), rig.attackPoint, enemy.position, enemy.yawRadians);
     };
-    const auto emit = [&](const Float3 origin) {
+    const auto emit = [&](const Engine::Math::Vec3 origin) {
         enemy.attackEventEmitted = true;
         attackEvents_.push_back({enemy.id, enemy.definition.id, enemy.kind, origin,
             {player.position.x, player.feetY + player.hitboxHeight * 0.5f, player.position.z}, enemy.definition.damage});
@@ -1142,7 +1142,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     const Engine::Collision::VerticalCapsule playerBody{{player.position.x, player.feetY, player.position.z},
         player.hitboxHeight, player.collisionRadius};
     const float radius = rig.attackRadius * rig.scale;
-    Float3 from = pointAt(begin);
+    Engine::Math::Vec3 from = pointAt(begin);
     const std::size_t steps = (std::max)(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
     for (std::size_t step = 1; step <= steps; ++step) {
         const auto to = pointAt(begin + (end - begin) * static_cast<double>(step) / static_cast<double>(steps));
@@ -1155,7 +1155,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
             if (hit) {
                 const Engine::Math::Vec3 displacement{finish.x-start.x,finish.y-start.y,finish.z-start.z};
                 const Engine::Collision::VerticalCapsule sphere{{start.x,start.y-radius,start.z},2*radius,radius};
-                const Float3 impact{from.x+(to.x-from.x)* *hit,from.y+(to.y-from.y)* *hit,from.z+(to.z-from.z)* *hit};
+                const Engine::Math::Vec3 impact{from.x+(to.x-from.x)* *hit,from.y+(to.y-from.y)* *hit,from.z+(to.z-from.z)* *hit};
                 const Engine::Math::Vec3 shoulder{enemy.position.x,impact.y,enemy.position.z};
                 const Engine::Math::Vec3 reach{impact.x-shoulder.x,0,impact.z-shoulder.z};
                 const float reachLength = std::hypot(reach.x, reach.z);

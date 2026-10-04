@@ -48,7 +48,7 @@ struct WeaponFeedbackObservation final {
 };
 struct RemoteMovementObservation final {
     PlayerId playerId{};
-    Float3 renderPosition{};
+    Engine::Math::Vec3 renderPosition{};
     std::uint64_t movementEpoch{1}, lowerTick{}, upperTick{};
     double presentationTick{}, interpolationAlpha{};
     float yaw{}, pitch{};

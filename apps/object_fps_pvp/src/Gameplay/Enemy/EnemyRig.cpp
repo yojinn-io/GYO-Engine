@@ -3,8 +3,8 @@
 #include <stdexcept>
 
 namespace fps {
-Float3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
-                           const EnemyBonePoint& point, Float2 position, float yaw) {
+Engine::Math::Vec3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
+                           const EnemyBonePoint& point, GroundPoint position, float yaw) {
     if (point.node >= pose.globalTransforms.size())
         throw std::invalid_argument("Enemy bone is outside its authoritative pose");
     const auto p = Engine::Math::TransformPoint(pose.globalTransforms[point.node], point.offset);
@@ -13,7 +13,7 @@ Float3 EnemyBoneWorldPoint(const EnemyRig& rig, const Engine::Model::Pose& pose,
             position.z - std::sin(yaw) * x + std::cos(yaw) * z};
 }
 std::vector<EnemyHurtbox> BuildEnemyHurtboxes(const EnemyRig& rig, const Engine::Model::Pose& pose,
-                                              Float2 position, float yaw) {
+                                              GroundPoint position, float yaw) {
     std::vector<EnemyHurtbox> result;
     result.reserve(rig.hurtRegions.size());
     for (const auto& region : rig.hurtRegions) {

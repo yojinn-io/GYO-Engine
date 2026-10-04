@@ -1,11 +1,13 @@
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/linear/Vec3d.hpp"
+#include "engine/math/scalar/Angle.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numbers>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -30,8 +32,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
     if (players_.size() >= 2) { error = "match_full"; return false; }
     if (const auto* spawn = FindSpawn(playerId)) {
         Participant player;
-        player.state = {playerId, spawn->position,
-            std::remainder(spawn->yaw, 2 * std::numbers::pi_v<float>), 0, 0};
+        player.state = {playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};
         player.combat.playerId = playerId;
         players_.emplace(playerId, player);
         return true;
@@ -184,20 +185,18 @@ const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
     for (const auto& [id, player] : players_) {
         if (id == playerId || player.state.lifeState == LifeState::Dead) continue;
         const auto p = player.state.position;
-        blockers.push_back({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius});
+        blockers.push_back({p, arena_.bodyHeight, arena_.radius});
     }
     const SpawnPoint* selected = nullptr;
     double bestDistance = -1;
     for (const auto& spawn : arena_.spawns) {
         const auto p = spawn.position;
-        if (!CanPlaceCharacterBody({{p.x, p.y, p.z}, arena_.bodyHeight, arena_.radius},
-            arena_.walls, blockers)) continue;
+        if (!CanPlaceCharacterBody({p, arena_.bodyHeight, arena_.radius}, arena_.walls, blockers)) continue;
         double nearest = (std::numeric_limits<double>::max)();
         for (const auto& blocker : blockers) {
-            const double dx = p.x - blocker.feet.x;
-            const double dy = p.y - blocker.feet.y;
-            const double dz = p.z - blocker.feet.z;
-            nearest = (std::min)(nearest, dx * dx + dy * dy + dz * dz);
+            // Float difference, then double squares: the established spawn distance.
+            nearest = (std::min)(nearest,
+                Engine::Math::LengthSquared(Engine::Math::ToVec3d(p - blocker.feet)));
         }
         // Strict comparison leaves equal-distance choices in content order.
         if (!selected || nearest > bestDistance) {
@@ -234,7 +233,7 @@ void PvpMatch::ResolveLifeBoundaries() {
             player.state.lifeStateTick = tick_;
             player.state.respawnTick = 0;
             player.state.position = spawn->position;
-            player.state.yaw = std::remainder(spawn->yaw, 2 * std::numbers::pi_v<float>);
+            player.state.yaw = Engine::Math::WrapRadians(spawn->yaw);
             player.state.pitch = 0;
             player.state.verticalVelocity = 0;
             player.state.grounded = true;

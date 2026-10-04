@@ -17,9 +17,9 @@ enum class PhaseTrackingState { Acquiring, Settling, Tracking };
 
 // Read-only presentation diagnostics. These never drive simulation or input.
 struct LocalMovementObservation final {
-    Float3 predictedPosition{};
-    Float3 renderPosition{};
-    Float3 correctionOffset{};
+    Engine::Math::Vec3 predictedPosition{};
+    Engine::Math::Vec3 renderPosition{};
+    Engine::Math::Vec3 correctionOffset{};
     std::uint64_t lastResolvedCommand{};
     std::uint64_t latestCommand{};
     std::uint64_t authorityTick{};
@@ -77,7 +77,7 @@ private:
     std::deque<MovementCommand> pending_;
     PlayerState current_{};
     PlayerState previous_{};
-    Float3 correction_{};
+    Engine::Math::Vec3 correction_{};
     double correctionSeconds_{};
     float alpha_{};
     bool sendPending_{};
