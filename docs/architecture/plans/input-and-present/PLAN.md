@@ -1,6 +1,6 @@
 # 輸入與呈現：批次計畫
 
-更新：2026-10-04。狀態：**未開始**（IP-1、IP-2 都未開始）。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
+更新：2026-10-05。狀態：IP-1 完成（PR 待合併）；IP-2 未開始。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
 
 本文件寫兩批的範圍、驗收、平台表與 Architecture Delta。現況與證據的完整敘述在 [HANDOFF](HANDOFF.md)「正式項目清單」。
 file:line 以 master `05042fa` 為準，批次開始時重新核對。
@@ -22,7 +22,7 @@ file:line 以 master `05042fa` 為準，批次開始時重新核對。
 
 ## IP-1：輸入層：完整 scancode 與視窗互動事件
 
-狀態：未開始。
+狀態：完成（2026-10-05）。見 [dev_log](../../../dev_logs/2026_10_05_engine_ip1.zh-Hant.md)。
 
 ### 目標與範圍
 

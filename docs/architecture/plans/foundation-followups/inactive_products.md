@@ -90,10 +90,10 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
 
 ### IP-1 輸入層：完整 scancode 與視窗互動事件
 
-狀態：未開始，批次完成時更新。
+狀態：IP-1 完成（2026-10-05）。
 
-- `tools/object_fps_preview/ViewmodelPreview.cpp:74-82` 直接讀 `SDL_SCANCODE_1..6` 與 `SDL_SCANCODE_ESCAPE`。重新啟用時改經 Engine 輸入層取得。preview 目前無法 link（見 FF-6），所以只能在 object_fps 重新啟用後驗證。
-- `Key` 以加法擴充、保留 `NativeEventObserver`，預計不造成其他未啟用產品的編譯破損；批次完成時確認。
+- `tools/object_fps_preview/ViewmodelPreview.cpp:74-82` 直接讀 `SDL_SCANCODE_1..6` 與 `SDL_SCANCODE_ESCAPE`。重新啟用時改用 Engine 的 `Key::Digit1`～`Key::Digit6` 與 `Key::Escape`（`PhysicalInputFrame::Get(Key)` 或 `InputActionMap`）。preview 目前無法 link（見 FF-6），只能在 object_fps 重新啟用後驗證。
+- 破損：無。`Key`、`MouseButton` 只在原有值之後追加；`PhysicalInputFrame` 新增 `events`（`std::vector`），既有的 `pressed`／`released`／`held` 語意不變；`NativeEventObserver` 保留。2026-10-05 grep：未啟用產品沒有依賴 `Key::Count`、`MouseButton::Count` 或 `PhysicalInputFrame` 的大小。
 
 ### IP-2 呈現不阻塞主迴圈
 
