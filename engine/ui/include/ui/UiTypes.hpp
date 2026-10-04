@@ -6,18 +6,20 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
+#include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/math/geometry/Rect.hpp"
 #include "engine/math/linear/Vec2.hpp"
 
 namespace Engine::Ui {
 
+// Zero is not a valid code; the numeric values are not a data contract.
 enum class UiErrorCode : std::uint8_t {
-    None = 0,
-    InvalidJson,
+    InvalidJson = 1,
     UnsupportedSchema,
     UnsupportedVersion,
     ValidationFailed,
@@ -29,12 +31,41 @@ enum class UiErrorCode : std::uint8_t {
     RenderSubmissionFailed,
 };
 
+[[nodiscard]] constexpr const char* ToString(const UiErrorCode code) noexcept {
+    switch (code) {
+    case UiErrorCode::InvalidJson: return "InvalidJson";
+    case UiErrorCode::UnsupportedSchema: return "UnsupportedSchema";
+    case UiErrorCode::UnsupportedVersion: return "UnsupportedVersion";
+    case UiErrorCode::ValidationFailed: return "ValidationFailed";
+    case UiErrorCode::MissingReference: return "MissingReference";
+    case UiErrorCode::BindingTypeMismatch: return "BindingTypeMismatch";
+    case UiErrorCode::MissingBinding: return "MissingBinding";
+    case UiErrorCode::RuntimeState: return "RuntimeState";
+    case UiErrorCode::ResourceFailure: return "ResourceFailure";
+    case UiErrorCode::RenderSubmissionFailed: return "RenderSubmissionFailed";
+    }
+    return "Unknown";
+}
+
+// UI's error type. Besides the common code, message and detail it locates
+// document errors by source and JSON pointer. There is no default
+// constructor: a UiError always describes a failure.
 struct UiError final {
-    UiErrorCode code{UiErrorCode::None};
+    UiError(const UiErrorCode errorCode, std::string errorMessage, std::string errorSource = {},
+            std::string errorJsonPointer = {}, std::string errorDetail = {})
+        : code(errorCode),
+          message(std::move(errorMessage)),
+          source(std::move(errorSource)),
+          jsonPointer(std::move(errorJsonPointer)),
+          detail(std::move(errorDetail)) {}
+
+    UiErrorCode code;
     std::string message;
     std::string source;
     std::string jsonPointer;
+    std::string detail;
 };
+static_assert(Base::CodedError<UiError>);
 
 template <class T>
 using UiResult = Base::Result<T, UiError>;

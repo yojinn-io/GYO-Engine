@@ -86,15 +86,10 @@ bool ObjectFpsApplication::InitializeContent(const std::filesystem::path& assetR
             if (!program) { error = Explain(program.error()); return false; }
         }
     }
-    const auto addLoader = [&](auto loader) {
-        const auto registered = impl_->loaders.Register(std::move(loader));
-        if (!registered) { error = Explain(registered.error()); return false; }
-        return true;
-    };
-    if (!addLoader(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>()) ||
-        !addLoader(std::make_unique<Asset::Loaders::FontLoader>()) ||
-        !addLoader(std::make_unique<Asset::Loaders::TextLoader>()) ||
-        !addLoader(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>())) return false;
+    impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::FontLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
     auto content = CampaignContentLoader::Load(impl_->assets);
     if (!content) { error = content.error; return false; }
     impl_->content = std::make_shared<const CampaignContent>(std::move(*content.content));

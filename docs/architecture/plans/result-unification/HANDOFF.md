@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 完成（PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 合併為 `9c51b32`）。R2 本機驗收完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1、R2 完成（#31 合併為 `9c51b32`，#32 合併為 `dedeebd`）。R3 本機驗收完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。**
 
 ## 閱讀入口
 
@@ -29,6 +29,9 @@
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
 | 2026-10-04 | MSVC 全專案改用符合標準的前處理器（`/Zc:preprocessor`），消除巨集寫法上的 MSVC 特例；設定位置為 `GyoBuild.cmake` 的全域 `add_compile_options`（比照 `-ffp-contract=off`），並在 `Assert.hpp` 加防呆 `#error`；放在 R1 | 使用者 |
 | 2026-10-04 | `Result` 的成功建構子沒有預設模板參數，所以非 void 的 `return {};` 編譯不過，大括號值寫成 `return T{...};`（與 PLAN 2.3「非 void 版沒有預設建構子」一致，並封住 `{}` 經由 `Result(T&&)` 成功的路徑） | R2 實作 |
+| 2026-10-04 | `LoaderRegistry::Register` 的失敗分支全是 API 誤用，改成 Assert 後回傳型別改為 `void`；呼叫端（ui_editor、pvp、tests）的錯誤處理隨之刪除 | R3 實作（依「API 誤用改 Assert」的決定） |
+| 2026-10-04 | `AssetErrorCode::UnsupportedRequest` 不再有產生者，刪除；`AssetRecord::ResetToUnloaded`（沒有呼叫者）刪除 | R3 實作 |
+| 2026-10-04 | `UiError` 的建構子參數順序為 code、message、source、jsonPointer、detail，維持既有大括號初始化的順序，detail 放最後 | R3 實作 |
 
 ## R0 任務校正
 
@@ -193,7 +196,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R2 Result 的寫法
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立，#31 合併後併入 master `9c51b32`），PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI。
+狀態：**完成**。PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 於 2026-10-04 合併為 `dedeebd`，L1 四列與 CI gate 通過；windows-x64 的警告與 R1 逐項相同（138 個，全為既有），50／50（分支 `claude/result-unification-r2`）。
 
 ### 變更
 
@@ -242,4 +245,42 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 的 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。`Result.hpp` 被大多數 TU include，Windows 列預計要重編大部分檔案（約 20 多分鐘）。
+- 無。
+
+## R3 Error 語意與 asset
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r3`，基準 `dedeebd`），PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI。
+
+### 變更
+
+- **`Error.hpp`**：
+  - `Base::Error<Code>`：`code`、`message`、`detail` 維持 public；建構子改為 private，`Make` 是唯一入口，收到 0 code 時 `GYO_ASSERT`；不可預設建構。移除 `ok`、`operator bool`、`None`、`Clear`、`CodeValue`、`Message`、`Detail`。
+  - 新增 concept `Base::CodedError`：enum 的 `code`、`message`、`detail`、經由 ADL 的 `ToString(code)`，且不可預設建構。
+  - 新增 `Base::Describe(error)`：`<CodeName>: <message>`，有 detail 時接 ` (<detail>)`。
+- **code enum**（Asset、Io、Render、Text、Ui、SdlPlatform、SdlRenderer、SdlInput 共 8 個）：移除 `None = 0`，第一個 enumerator 明寫 `= 1`，每個都有 `ToString` 與 `static_assert(Base::CodedError<...>)`。刪除 `AssetError.hpp` 被註解掉的舊 struct。
+- **別名收斂**：`AssetError` 只在 `AssetError.hpp`（`Engine::Asset`），`IoError` 與 `IoResult` 只在 `IoError.hpp`（`Engine::IO`）。刪除 43 個重複宣告；內層 namespace 經由名稱查找取得外層的別名。被迫的修改：`Loading::AssetError`、`FS::IoResult` 等限定寫法。
+- **`UiError`**：新增 `detail` 與建構子，移除預設建構；既有的大括號初始化照樣可用。
+- **`AssetRecord`**：`error`、`failedError` 改成 `std::optional<AssetError>`；`ErrorFor` 與 `AssetManager::GetError` 改成以值回傳 `std::optional<AssetError>`，不再回傳指向 record 內部的指標；`KeepOldIfAny` 的語意不變。
+- **API 誤用改用 Assert**：
+  - `LoaderRegistry::Register`：null loader、type 0、重複註冊改成 `GYO_ASSERT`，回傳型別改為 `void`。被迫的修改：ui_editor 的 `AssetPreviewContext`、pvp 的 `PvpApplication`、未編譯的 `ObjectFpsApplication`（相容修改）、`PlayerPresentationTests` 與 tests/common 的 5 處。
+  - `AssetManager::Load`：保留欄位 `priority`／`keepAliveFramesOverride` 非預設時改成 `GYO_ASSERT`；`AssetManagerTests` 的 3 個 subcase 改用 `GYO_CHECK_ASSERTS`，仍檢查沒有任何副作用；`docs/architecture.md` 同步更新。
+- **`AssetCatalog.cpp:92-98`**：保留 resolver 傳回的 code（`PathEscapesRoot` 不再被改成 `InvalidPath`），新增測試鎖住。
+- **其他**：`ShaderLibraryTests.cpp:27` 的 `static_cast<AssetErrorCode>(1)` 改成具名的 `CatalogNotFound`（保留原本的數值意義）；`AssetManagerTests.cpp:609` 的 `== nullptr` 改成 `CHECK_FALSE`；修正錯誤的 namespace 結尾註解（`MountTable.hpp`、`MountPoint.hpp`、`Vfs.hpp`、`FileAllCommon.hpp`、`Span.hpp`）。其中 `MountTable.hpp` 原本列在 R2，當時漏掉，在本批補上。
+- **測試**：新增 `ErrorTests.cpp`（`CodedError` 的成立與不成立條件、`Make`、0 code 觸發 Assert、`Describe` 的格式）。
+- **文件**：`error-handling.md` 寫入 `CodedError`、`Describe`、0 code 與 optional 的規則；`docs/architecture.md` 的保留欄位敘述。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過 |
+| test preset | 50／50 通過 |
+| characterization（R0） | Vfs 與 KeepOldIfAny 的測試沒有修改就通過（`GetError` 改成 optional 也照樣編譯） |
+| 稽核 | `error_code_none`、`error_code_value_init`、`error_getters`、`result_ok_call` 為 0；`alias_asset_error`、`alias_io_error`、`alias_io_result` 各 1 |
+| 第一方警告 | 與 R2 相同 |
+| 依賴圖 | 與 R2 相同 |
+| 29 檔 syntax-only | 29／29 PASS |
+
+### 未結事項
+
+- PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 的 L1 四列結果。

@@ -11,7 +11,6 @@
 #include "engine/asset/loading/LoadContext.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     struct BinaryAsset final {
         std::vector<std::byte> bytes;

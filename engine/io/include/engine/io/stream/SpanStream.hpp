@@ -15,10 +15,7 @@
 
 namespace Engine::IO::Stream {
 
-    using IoError  = Base::Error<Engine::IO::IoErrorCode>;
 
-    template<class T>
-    using IoResult = Base::Result<T, IoError>;
 
 
     class SpanStream final : public IStream {

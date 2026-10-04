@@ -20,10 +20,10 @@ Bytes ToBytes(std::string_view value) {
 }
 struct MemorySource final : Asset::Loading::IAssetSource {
     std::map<std::string, Bytes, std::less<>> files;
-    Base::Result<Bytes, Asset::Loading::AssetError> ReadAll(std::string_view path) override {
+    Base::Result<Bytes, Asset::AssetError> ReadAll(std::string_view path) override {
         const auto found = files.find(path);
-        if (found == files.end()) return Engine::Base::Err(Asset::Loading::AssetError::Make(
-            static_cast<Asset::AssetErrorCode>(1), "missing file", std::string(path)));
+        if (found == files.end()) return Engine::Base::Err(Asset::AssetError::Make(
+            Asset::AssetErrorCode::CatalogNotFound, "missing file", std::string(path)));
         return found->second;
     }
 };

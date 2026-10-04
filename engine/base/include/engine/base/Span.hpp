@@ -56,4 +56,4 @@ namespace Engine::Base {
     template <class T>
     using ConstSpan = Span<const T>;
 
-} // namespace Engine::Asset::Detail
+} // namespace Engine::Base

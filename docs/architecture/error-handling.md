@@ -24,7 +24,7 @@ These are not errors and use neither mechanism:
 
 Exceptions are not a third mechanism. See rule 6.
 
-Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). `GYO_ASSERT`, `GYO::Base` and Result's construction syntax are in place; the `CodedError` convention, `Base::Describe` and the remaining migrations land in later batches. Until then existing code may still use the older forms listed in the plan.
+Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). `GYO_ASSERT`, `GYO::Base`, Result's construction syntax, the `CodedError` convention and `Base::Describe` are in place; the model, cross-module and tool migrations land in later batches. Until then some code may still use the older forms listed in the plan.
 
 ## Rules
 
@@ -39,7 +39,7 @@ Status: this contract is being introduced by the [Assert/Result plan](plans/resu
 4. **Propagate within a module unchanged**: return the callee's error as it is.
 5. **Translate at module boundaries without losing the code.** The outer module chooses its own code. Its message keeps the inner message verbatim; the inner code name, and the inner detail if any, go into the outer detail as `<InnerCode>: <inner detail>`.
 6. **Do not use exceptions to report failures from engine or tool APIs.** A module may throw internally (for example through a JSON library) only if it catches at its public boundary and returns a `Result`. Boundary catches name `std::exception`; never `catch (...)`, which would also swallow a test's `AssertionFailure`. A thread entry point that can meet a Runtime Error catches it itself.
-7. **Present Runtime Errors through one formatter** (`Base::Describe`, once it lands) instead of per-module formatting helpers.
+7. **Present Runtime Errors through one formatter**, `Base::Describe`, instead of per-module formatting helpers.
 
 ## Assert
 
@@ -81,6 +81,13 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 - **Failure**: `return Base::Err(error);`. `Err<G>` converts to `Result<T, E>` whenever `E` is constructible from `G`. A bare `E` does not convert, so a forgotten `Err` is a compile error. A braced error names its type (`Base::Err(UiError{...})`).
 - **Queries**: `has_value()` or `explicit operator bool` (success, also for `Result<bool, E>`), `value()`, `operator*`, `operator->`, `error()`. Reading the side that is not held is a Programmer Error and asserts. Unlike `std::expected`, nothing throws.
 - `T` and `E` must differ and must not be references. The class is `[[nodiscard]]`.
-- No monadic operations (`and_then`, `transform`) and no `value_or` until code needs them. `Engine::Base::Error<Code>` carries an enum `code`, a human-readable `message` and an optional `detail`; each module owns its code enum. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
+- No monadic operations (`and_then`, `transform`) and no `value_or` until code needs them. Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
+
+- `code` is an enum owned by the module. Zero is not a valid code: each enum starts at 1, and `Error::Make` asserts against zero. The numeric values are not a data contract. A `ToString(code)` in the enum's namespace names each code.
+- `message` is for people (logs, diagnostics) and is never parsed by code; tests compare `code`.
+- `detail` is optional context, such as a path or, at a module boundary, the inner error's code name and detail.
+- There is no default constructor, so an error value always describes a failure. A state that may or may not hold an error uses `std::optional<E>` (for example `AssetManager::GetError`).
+
+`Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type, and IO also `IoResult<T>`, exactly once next to its code enum. `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
 
 Types that cannot be moved are returned as `Result<std::unique_ptr<T>, E>`.

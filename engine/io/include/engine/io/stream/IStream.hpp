@@ -11,7 +11,6 @@
 
 
 namespace Engine::IO::Stream {
-    using IoError = Base::Error<IoErrorCode>;
 
     struct StreamCaps final {
         bool readable = false;

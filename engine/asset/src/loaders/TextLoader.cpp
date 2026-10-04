@@ -1,7 +1,6 @@
 #include "engine/asset/loaders/TextLoader.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     AssetType TextLoader::GetType() const noexcept {
         static const AssetType kType = AssetType::FromString("text");

@@ -24,14 +24,14 @@ struct SurfaceDeleter final {
 
 using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
-Base::Result<Core::AnyAsset, Loading::AssetError>
+Base::Result<Core::AnyAsset, AssetError>
 DecodeFailed(const Loading::LoadContext& context, std::string message) {
     const char* sdlError = SDL_GetError();
     if (sdlError != nullptr && *sdlError != '\0') {
         message += ": ";
         message += sdlError;
     }
-    return Base::Err(Loading::AssetError::Make(
+    return Base::Err(AssetError::Make(
             AssetErrorCode::DecodeFailed,
             std::move(message),
             context.resolvedPath));
@@ -43,7 +43,7 @@ AssetType SdlImageTextureLoader::GetType() const noexcept {
     return AssetType::Texture();
 }
 
-Base::Result<Core::AnyAsset, Loading::AssetError>
+Base::Result<Core::AnyAsset, AssetError>
 SdlImageTextureLoader::Load(const Base::ConstSpan<std::byte> bytes,
                             const Loading::LoadContext& context) {
     if (bytes.empty()) {

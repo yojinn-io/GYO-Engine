@@ -9,7 +9,6 @@
 #include "engine/base/Span.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     class FontLoader final : public Loading::IAssetLoader {
     public:

@@ -10,7 +10,6 @@
 #include "engine/asset/loading/IAssetLoader.hpp"
 
 namespace Engine::Asset::Loading {
-    using AssetError = Base::Error<AssetErrorCode>;
 
 
     // LoaderRegistry：AssetType -> IAssetLoader の登録/検索
@@ -19,7 +18,10 @@ namespace Engine::Asset::Loading {
         LoaderRegistry() = default;
 
         // 既に登録済みtypeへの上書きはエラー（事故防止）
-        Base::Result<void, AssetError> Register(std::unique_ptr<IAssetLoader> loader);
+        // One loader per AssetType. A null loader, a loader for the invalid
+        // type 0 or a second loader for a registered type is API misuse
+        // (GYO_ASSERT).
+        void Register(std::unique_ptr<IAssetLoader> loader);
 
         // 見つからなければ nullptr
         IAssetLoader* Find(AssetType type) noexcept;

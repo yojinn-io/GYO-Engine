@@ -23,9 +23,6 @@
 
 namespace Engine::IO::FS {
 
-using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
-template<class T>
-using IoResult = Engine::Base::Result<T, IoError>;
 
     /// VFS 本体
     /// - scheme（assets:// 等）で MountTable を検索
@@ -347,4 +344,4 @@ using IoResult = Engine::Base::Result<T, IoError>;
         MountTable mounts_;
     };
 
-} // namespace Engine::IO::VFS
+} // namespace Engine::IO::FS

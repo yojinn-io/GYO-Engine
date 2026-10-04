@@ -15,7 +15,7 @@ using Math::Matrix4;
 using Math::Quaternion;
 using Math::Vec3;
 namespace {
-using Result = Base::Result<Asset::Core::AnyAsset, Asset::Loading::AssetError>;
+using Result = Base::Result<Asset::Core::AnyAsset, Asset::AssetError>;
 using ScenePtr = std::unique_ptr<ufbx_scene, decltype(&ufbx_free_scene)>;
 using BakePtr = std::unique_ptr<ufbx_baked_anim, decltype(&ufbx_free_baked_anim)>;
 
@@ -33,7 +33,7 @@ Matrix4 Matrix(const ufbx_matrix& source) {
 }
 
 Result Error(const Asset::Loading::LoadContext& context,std::string message) {
-    return Base::Err(Asset::Loading::AssetError::Make(
+    return Base::Err(Asset::AssetError::Make(
         Asset::AssetErrorCode::DecodeFailed,"FBX model: "+std::move(message),context.resolvedPath));
 }
 

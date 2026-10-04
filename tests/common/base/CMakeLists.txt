@@ -1,5 +1,6 @@
 add_executable(gyo_base_tests
     AssertTests.cpp
+    ErrorTests.cpp
     PreprocessorTests.cpp
     ResultTests.cpp
 )

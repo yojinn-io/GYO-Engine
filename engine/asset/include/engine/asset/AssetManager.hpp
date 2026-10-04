@@ -29,7 +29,6 @@ class AssetCatalog;
 }
 
 namespace Engine::Asset {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     class AssetManager final {
     public:
@@ -86,7 +85,9 @@ namespace Engine::Asset {
 
         // 状態・エラー参照
         AssetState GetState(const AssetHandle& h) const;
-        const AssetError* GetError(const AssetHandle& h) const;
+        // The failure recorded for this handle's generation, if any. A copy:
+        // it stays valid after reloads, eviction or Clear.
+        [[nodiscard]] std::optional<AssetError> GetError(const AssetHandle& h) const;
 
         // 型安全取得（shared_ptr を返すのが安全）
         template <class T>

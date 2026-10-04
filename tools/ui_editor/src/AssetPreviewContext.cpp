@@ -166,18 +166,9 @@ bool AssetPreviewContext::Initialize(SDL_Renderer& renderer,
         error = "asset preview requires a rasterizer and may be initialized only once";
         return false;
     }
-    auto font = impl_->loaders.Register(
-        std::make_unique<Engine::Asset::Loaders::FontLoader>());
-    if (!font) {
-        error = Describe(font.error());
-        return false;
-    }
-    auto image = impl_->loaders.Register(std::make_unique<
+    impl_->loaders.Register(std::make_unique<Engine::Asset::Loaders::FontLoader>());
+    impl_->loaders.Register(std::make_unique<
         Engine::Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    if (!image) {
-        error = Describe(image.error());
-        return false;
-    }
     impl_->rasterizer = std::move(rasterizer);
     impl_->renderer = &renderer;
     impl_->initialized = true;

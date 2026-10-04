@@ -20,10 +20,7 @@
 
 namespace Engine::IO::FS {
 
-    using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
 
-    template<class T>
-    using IoResult = Engine::Base::Result<T, IoError>;
 
 
     /// IFileSystem：OS/バックエンド差異を隠す最小抽象

@@ -9,12 +9,20 @@
 
 namespace Engine::Input::Backend::Sdl {
 
+// Zero is not a valid code; the numeric values are not a data contract.
 enum class SdlInputErrorCode {
-    None = 0,
-    RelativeMouseModeFailed,
+    RelativeMouseModeFailed = 1,
 };
 
+[[nodiscard]] constexpr const char* ToString(const SdlInputErrorCode code) noexcept {
+    switch (code) {
+    case SdlInputErrorCode::RelativeMouseModeFailed: return "RelativeMouseModeFailed";
+    }
+    return "Unknown";
+}
+
 using SdlInputError = Base::Error<SdlInputErrorCode>;
+static_assert(Base::CodedError<SdlInputError>);
 
 class SdlInput final {
 public:

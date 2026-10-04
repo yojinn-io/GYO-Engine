@@ -12,14 +12,24 @@
 
 namespace Engine::Platform::Sdl {
 
+// Zero is not a valid code; the numeric values are not a data contract.
 enum class SdlPlatformErrorCode {
-    None = 0,
-    InvalidWindowSize,
+    InvalidWindowSize = 1,
     InitializationFailed,
     WindowCreationFailed,
 };
 
+[[nodiscard]] constexpr const char* ToString(const SdlPlatformErrorCode code) noexcept {
+    switch (code) {
+    case SdlPlatformErrorCode::InvalidWindowSize: return "InvalidWindowSize";
+    case SdlPlatformErrorCode::InitializationFailed: return "InitializationFailed";
+    case SdlPlatformErrorCode::WindowCreationFailed: return "WindowCreationFailed";
+    }
+    return "Unknown";
+}
+
 using SdlPlatformError = Base::Error<SdlPlatformErrorCode>;
+static_assert(Base::CodedError<SdlPlatformError>);
 
 struct SdlPlatformOptions {
     std::string title{"GYO Runtime"};

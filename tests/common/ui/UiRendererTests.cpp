@@ -127,7 +127,7 @@ struct FontRendererFixture final {
         output << R"({"version":1,"assets":[{"id":"test.font","type":"font","path":"font.ttf"}]})";
         output.close();
 
-        REQUIRE(registry.Register(std::make_unique<Asset::Loaders::FontLoader>()));
+        registry.Register(std::make_unique<Asset::Loaders::FontLoader>());
         Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = (directory / "assets").string();
         Asset::Resolver::AssetPathResolver resolver(options);
@@ -177,7 +177,7 @@ struct TextureRendererFixture final {
         output << R"({"version":1,"assets":[{"id":"test.texture","type":"texture","path":"atlas.ppm"}]})";
         output.close();
 
-        REQUIRE(registry.Register(std::make_unique<Asset::Loaders::TextureLoader>()));
+        registry.Register(std::make_unique<Asset::Loaders::TextureLoader>());
         Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = (directory / "assets").string();
         Asset::Resolver::AssetPathResolver resolver(options);

@@ -25,7 +25,7 @@ Bytes ByteString(std::string_view text) {
 }
 struct Source final : Asset::Loading::IAssetSource {
     std::map<std::string, Bytes, std::less<>> files;
-    Base::Result<Bytes, Asset::Loading::AssetError> ReadAll(std::string_view path) override {
+    Base::Result<Bytes, Asset::AssetError> ReadAll(std::string_view path) override {
         return files.at(std::string(path));
     }
 };

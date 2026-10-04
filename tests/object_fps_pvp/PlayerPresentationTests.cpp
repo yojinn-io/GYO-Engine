@@ -78,10 +78,9 @@ struct PresentationAssets final {
     Engine::Asset::AssetManager assets{catalog, pipeline, storage, lifetime, policy};
 
     PresentationAssets() {
-        if (!loaders.Register(std::make_unique<Engine::Asset::Loaders::TextLoader>()) ||
-            !loaders.Register(std::make_unique<Engine::Asset::Loaders::SdlImage::SdlImageTextureLoader>()) ||
-            !loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>()))
-            throw std::runtime_error("PvP presentation CPU loaders failed to register");
+        loaders.Register(std::make_unique<Engine::Asset::Loaders::TextLoader>());
+        loaders.Register(std::make_unique<Engine::Asset::Loaders::SdlImage::SdlImageTextureLoader>());
+        loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     }
 
     template<class Edit>

@@ -12,7 +12,6 @@
 #include "engine/asset/loading/LoadContext.hpp"
 
 namespace Engine::Asset::Loaders {
-    using AssetError = Base::Error<AssetErrorCode>;
 
     // 最小のサウンド表現（PCM16）
     struct SoundAsset final {
