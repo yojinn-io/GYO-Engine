@@ -56,11 +56,11 @@
 
 ### FF-6 共通層衛生與產品登錄
 
-狀態：未開始，批次完成時更新。
+狀態：FF-6 完成（2026-10-05）。`object_fps_preview` 已在 `tools.csv` 停用。
 
 - `object_fps_preview` 在 `engine/config/tools.csv` 改為停用（D11⑧）。重新啟用順序：先依各清單遷移並重新啟用 object_fps（preview link 依賴它的 `app_support`），再把 preview 的登錄改回啟用。
 - preview 的輸入遷移見本文件「IP」節；Math、Result 的遷移見各自的清單。
-- 未啟用產品的測試若自帶 characterization helper，不受影響；若重新啟用後要使用，改依賴 tests/common 的共通版本。
+- 未啟用產品的測試若自帶 characterization helper，不受影響；若重新啟用後要使用，改依賴 tests/common 的共通版本 `tests/common/support/CharacterizationBits.hpp`（`Engine::Test::Opaque`、`SameBits`、`UlpDistance`，連結 `gyo_test_support`）。
 
 ### FF-7 include 路徑風格徹底統一
 
