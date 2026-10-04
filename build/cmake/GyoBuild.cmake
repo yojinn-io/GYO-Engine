@@ -34,6 +34,14 @@ add_subdirectory("${GYO_REPOSITORY_ROOT}/third_party" third_party)
 # any dependency a product adds from its own directory.
 add_compile_options("$<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang,GNU>:-ffp-contract=off>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,AppleClang,Clang,GNU>:-ffp-contract=off>")
+# One preprocessor for GYO code on every platform: MSVC uses its
+# standard-conforming preprocessor, as Clang and GCC already do (clang-cl reports
+# the Clang ID and needs nothing). GYO's variadic macros rely on it, and
+# engine/base/Assert.hpp refuses to compile under the traditional one. Like the
+# contraction mode, it applies to the directories added below, including any
+# dependency a product adds from its own directory, but not to third_party.
+add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
+                    "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     set(GYO_APP_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/apps/${GYO_CURRENT_APP}")

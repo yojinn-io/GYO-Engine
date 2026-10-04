@@ -20,6 +20,7 @@ add_executable(engine_tests
 
 target_link_libraries(engine_tests PRIVATE
     GYO::Engine
+    gyo_test_support
     doctest::doctest
     nlohmann_json::nlohmann_json
 )

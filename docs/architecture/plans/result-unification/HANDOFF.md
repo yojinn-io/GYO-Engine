@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 本機驗收完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 驗收完成（含 `/Zc:preprocessor`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。**
 
 ## 閱讀入口
 
@@ -27,10 +27,11 @@
 | 2026-10-04 | `UiError` 新增 `detail`；`CodedError` 要求 `code`、`message`、`detail`。理由：處理規則 5（跨模組轉換）與 `Describe` 需要統一的欄位 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | 跨模組轉換時外層 message 保留內層原文，內層 code 名稱放進 detail。理由：`UfbxModelTests.cpp:172-173` 鎖住了外層 message 含內層訊息 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
+| 2026-10-04 | MSVC 全專案改用符合標準的前處理器（`/Zc:preprocessor`），消除巨集寫法上的 MSVC 特例；設定位置為 `GyoBuild.cmake` 的全域 `add_compile_options`（比照 `-ffp-contract=off`），並在 `Assert.hpp` 加防呆 `#error`；放在 R1 | 使用者 |
 
 ## R0 任務校正
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
+狀態：**完成**。PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 於 2026-10-04 合併為 `3b9765e`，L1 四列與 CI gate 通過（分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
 環境：Intel Mac（x86_64），Apple clang 21；cmake／ninja 以絕對路徑呼叫。
 
 ### 盤點方式
@@ -95,5 +96,94 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ### 未結事項
 
-- PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 的 L1 四列結果。
 - `AssetError.hpp:42-67` 被註解掉的舊 struct 會讓 `error_code_none` 多算 3 處；R3 刪除它。
+
+## R1 概念文件與 Assert
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。
+
+### 變更
+
+- **`GYO::Base`**：新增 `engine/base/CMakeLists.txt`（INTERFACE、header-only、只依賴標準函式庫）。`engine/CMakeLists.txt` 先 `add_subdirectory(base)` 再 math；`engine` 的 `base/include` include 目錄改成 `PUBLIC GYO::Base`。`GYO::Math` 以 INTERFACE、`GYO::Collision` 以 PRIVATE 連它。shader host 仍以路徑 include `Sha256.hpp`，沒有變更。
+- **`Assert.hpp`**：`GYO_ASSERT`、`AssertionFailure`（不繼承 `std::exception`）、`SetAssertionHandler`、`DefaultAssertionHandler`、`ReportAssertionFailure`。handler 存放在 `inline constinit std::atomic`；重入 guard 是 `thread_local` 旗標加 RAII scope，handler 丟例外時也會復原。巨集是 variadic，只對 `__VA_ARGS__` 做字串化與原地展開，不轉送給其他巨集。
+- **改用 Assert 的地方**：
+  - Collision 15 處（`Collision.cpp` 8、`CapsuleQueries.cpp` 7）。條件寫成原本 throw 條件的否定，NaN 的判定與原本完全相同。只放在非 noexcept 的 `Validate*` 與公開查詢。
+  - `FixedTickRuntime` 2 處，檢查仍在任何狀態變更之前（`FixedTickRuntimeTests` 的 `TickId()==0` 照樣通過）。
+  - `Math::Clamp`：`<cassert>` 改成 `GYO_ASSERT` 並拿掉 `noexcept`。
+  - Result 的 `value()`／`error()`（共 11 個存取子）：讀取未持有的一方改成 `GYO_ASSERT`，內部改用 `get_if`；`Result<void,E>::value()` 拿掉 `noexcept`。
+- **Lakos rule 的延伸**（計劃原本只寫 `Clamp`）：Vec2／Vec3／Vec3d／Vec4 的 `Clamp` 與 `ClosestPoint(point, Aabb)`／`(point, Aabbd)` 會把呼叫端給的上下界傳給 `Clamp`，所以一併拿掉 `noexcept`。Quaternion、Segment、ColorSpace 傳入的是常數上下界，不可能違反，維持 noexcept。
+- **`CatalogParser.cpp:14`**：`catch (...)` 收窄為 `catch (const std::exception&)`。
+- **測試支援**：`tests/common/support/AssertTestSupport.hpp` 與 INTERFACE target `gyo_test_support`（`ScopedAssertionHandler`、`GYO_CHECK_ASSERTS`、MSVC 上停用 abort 對話框）。計劃提到的 doctest exception translator 沒有加：預設 handler 在 `GYO_CHECK_ASSERTS` 之外仍是 abort，`AssertionFailure` 不會逃到 doctest；header 中的 translator 也會在每個 TU 重複註冊。
+- **測試**：
+  - 新增 `gyo_base_tests`（`AssertTests.cpp`、`ResultTests.cpp`），涵蓋條件只求值一次、含逗號的條件式、失敗位置、同一個 case 連續失敗、handler 的替換與還原，以及 Result 讀取未持有一方會觸發 Assert。另有一個反向對照：`GYO_CHECK_ASSERTS` 在沒有觸發 Assert 時判定失敗（doctest `should_fail`）。
+  - 新增 abort probe：`gyo_assert_abort_probe` 加 `AssertAbortProbe.cmake`，三種模式（預設 handler、handler 返回、handler 內再失敗），由 `gyo_base.assert_abort.{default,returning,nested}` 執行。
+  - 改寫：`CollisionTests` 12 處與 `FixedTickRuntimeTests` 5 處 `CHECK_THROWS_AS(..., std::invalid_argument)` 改成 `GYO_CHECK_ASSERTS`。
+  - `gyo_math_tests` 新增 `Clamp`、vector `Clamp`、`ClosestPoint(Aabb)` 違反前提的測試，以及相等上下界和 NaN 上下界不觸發的確認。
+- **文件**：新增 `docs/architecture/error-handling.md`；`docs/architecture.md` 的依賴表加入 `GYO::Base`，並加入 Architecture Delta 段落；`math.md` 改為依賴 Base，並寫入 `Clamp` 的新行為；`creating_apps.md` 的 public target 清單加入 `GYO::Base`。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過（R0 的 19 個加上 `gyo_base_tests` 與 3 個 abort probe） |
+| test preset | 50／50 通過（46 加上同樣的 4 個） |
+| abort probe | 三種模式都以 abort 結束（本機為 `Subprocess aborted`），stderr 含條件式原文 |
+| 依賴圖 | 與 R0 相比只多出計劃列出的邊：`engine`、`gyo_math`、`gyo_collision` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests`、`engine_tests`、`gyo_collision_tests`、`gyo_math_tests` 到 `gyo_test_support`；probe 到 `gyo_base`。`gyo_base` 沒有對外的邊 |
+| 29 檔 syntax-only | 29／29 PASS |
+| 稽核（與 R0 比對） | engine 的 `throw_logic` 17→0、`cassert` 2→0、`gyo_assert` 0→29；tests_common 的 `throws_test` 17→0。tests_common 的 Ok／Err 增加（35／23）來自 R0 的 VfsTests 與本批的 ResultTests，R2 一起改寫 |
+| 警告 | nodiscard 0；第一方警告與 R0 相同（只有既有的 `ModelTests.cpp:29` braced-scalar-init） |
+| pvp | `.cpu`、`.start_phase_record`、`.presentation_cpu` 不改就通過 |
+
+MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證。
+
+### MSVC 符合標準的前處理器（R1 追加）
+
+使用者要求在 R1 合併前，讓 MSVC 全專案改用 `/Zc:preprocessor`，消除巨集寫法的 MSVC 特例（方針：統一實作優先於特例）。
+
+- **設定**：`build/cmake/GyoBuild.cmake` 在 `add_subdirectory(third_party)` 之後、`engine` 之前，以 `add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>" "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")` 全域加入。用 compiler ID 判斷，所以 clang-cl、Clang、GCC、AppleClang 都不受影響。shader host（`engine/render/shaders/pipeline`）是獨立的 CMake 專案，不繼承這個選項，所以在 `gyo_shader_tool` 的 MSVC 選項中另外加入。repo 內只有這兩個 CMake 專案。
+- **防呆**：`Assert.hpp` 開頭在 MSVC（排除 clang-cl）且 `_MSVC_TRADITIONAL` 未定義或非 0 時 `#error`。`Result.hpp` include 它，所以 MSVC 上幾乎所有 GYO 的 TU 都會檢查。`Sha256.hpp` 不受影響。
+- **證明選項生效**：`tests/common/base/PreprocessorTests.cpp` 用 `static_assert` 檢查兩件只有符合標準的前處理器才成立的事：把 `__VA_ARGS__` 轉交給另一個巨集後的參數個數，以及 `__VA_OPT__`。MSVC 上另外檢查 `_MSVC_TRADITIONAL == 0`。
+- **說明更新**：`Assert.hpp`、`AssertTestSupport.hpp` 的註解與 `error-handling.md` 改為說明所依賴的建置設定；PLAN 2.2 拿掉巨集寫法的限制；`docs/architecture.md` 補上這條全專案規則。
+
+#### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| 本機 core／test preset | 23／23、50／50 通過 |
+| 本機編譯指令（macOS、AppleClang） | `compile_commands.json` 與改動前相比，core 84→85、test 944→945 筆，只多出 `PreprocessorTests.cpp`，其餘 0 筆變動 |
+| windows-x64 基準（改動前，#31 第一次 CI） | 警告 138 個、22 組（檔案、代碼），全部在第三方（protobuf、absl、doctest、spirv-cross），加上 pvp 的 2 個 C4456 |
+| windows-x64（改動後，`9f46627`，run 37181489276） | 編譯器為 MSVC 19.51.36260.0（cl，不是 clang-cl）。警告 138 個、22 組，與基準逐項完全相同，沒有 C5105 等新警告，沒有錯誤 |
+| 選項確實生效 | `PreprocessorTests.cpp`（含 `_MSVC_TRADITIONAL == 0`、`__VA_ARGS__` 轉送、`__VA_OPT__` 的 `static_assert`）在 MSVC 上編譯通過，`gyo_base_tests` 通過；`Assert.hpp` 的防呆在 engine 的每個 TU 都沒有觸發 |
+| abort probe（Windows） | 三種模式都通過，各約 0.03 秒，沒有被 WER 對話框卡住 |
+| shader host | `gyo_shader_tool` 加上 `/Zc:preprocessor` 後建置成功 |
+| L1 四列 | linux-x64、macos-arm64、macos-x64、windows-x64 全部通過（Windows 上 test preset 50／50） |
+
+#### 選項比較（決定時的依據）
+
+| 面向 | (A) GyoBuild 全域（採用） | (B) `gyo_base` 的 INTERFACE |
+|---|---|---|
+| 涵蓋範圍 | GyoBuild 底下所有目標，不論是否連 Base | 只有連 Base 的目標；`gyo_input` 等不連 Base 的目標會留在傳統模式 |
+| Ownership | 工具鏈一致性屬於建置層，與 `-ffp-contract=off` 同類 | 函式庫的使用需求變成決定使用端整個 TU 的編譯模式 |
+| Product Removability | 不含產品資訊，刪除產品不需改公共層 | 同上 |
+
+#### Architecture Delta（AGENTS.md §3）
+
+1. **需求來源**：使用者要求（R1 合併前），統一實作優先於特例。
+2. **現在的問題**：MSVC 使用傳統前處理器，GYO 的可變參數巨集因此限縮寫法（不轉送 `__VA_ARGS__`、不用 `__VA_OPT__`），註解與文件記載了這個特例；同一份巨集在不同編譯器上展開規則不同。
+3. **變化的 boundary**：Build Graph 的全域編譯選項（只在 MSVC 生效）。CMake target 與依賴邊沒有變化。
+4. **影響範圍**：MSVC 上所有 GYO 程式碼：engine、`object_fps_pvp`、`ui_editor`、tests、shader host，以及產品從自己目錄加入的相依套件。`third_party` 不受影響。Linux 與 macOS 的編譯指令不變。
+5. **依賴方向**：不變。
+6. **Ownership**：前處理器模式歸建置層（`GyoBuild.cmake`）；`Assert.hpp` 只宣告並強制它所依賴的前提。
+7. **為什麼沒有更小的做法**：維持現狀就是保留特例；改用 (B) 只涵蓋連 Base 的目標，會留下兩種前處理器模式；逐 target 設定會在每個新 target 重複同一個事實。
+
+### 依賴 collision 例外做內容驗證的未編譯檔（R1 之後這些路徑會 abort）
+
+- `apps/object_fps_pvp/src/Gameplay/Player/PlayerController.cpp:43-62`：try 包住 `CanPlaceCharacterBody`（`:46`），catch 在 `:55`、`:59`（後者是 `catch (...)`）。
+- `apps/object_fps_pvp/src/Gameplay/Enemy/EnemySystem.cpp:584-620`：try 包住 `CanPlaceCharacterBody`（`:595`）與字串 E 的 `Play`（`:608`），catch 在 `:615`、`:618`。
+- 會順帶吞掉例外的 catch-all：`src/Game/GameSession.cpp:366-372`、`570-574`。
+
+這些檔案從未編譯；重新啟用時，內容驗證應移到載入時進行。
+
+### 未結事項
+
+- 無（L1 四列已通過，等待使用者合併）。

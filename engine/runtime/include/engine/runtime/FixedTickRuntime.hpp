@@ -2,9 +2,9 @@
 
 #include <cmath>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
 namespace Engine::Runtime {
@@ -35,18 +35,16 @@ public:
 
     explicit FixedTickRuntime(double tickRate, std::uint32_t maximumCatchUpSteps = 5)
         : stepSeconds_(1.0 / tickRate), maximumCatchUpSteps_(maximumCatchUpSteps) {
-        if (!std::isfinite(tickRate) || tickRate <= 0.0 ||
-            !std::isfinite(stepSeconds_) || stepSeconds_ <= 0.0 || maximumCatchUpSteps == 0) {
-            throw std::invalid_argument("FixedTickRuntime requires a finite positive tick rate and catch-up limit");
-        }
+        // A finite positive tick rate and a non-zero catch-up limit.
+        GYO_ASSERT(!(!std::isfinite(tickRate) || tickRate <= 0.0 ||
+                     !std::isfinite(stepSeconds_) || stepSeconds_ <= 0.0 || maximumCatchUpSteps == 0));
     }
 
     template<class Callback>
     FixedTickAdvance Advance(double elapsedSeconds, Callback&& callback) {
-        if (!std::isfinite(elapsedSeconds) || elapsedSeconds < 0.0 ||
-            !std::isfinite(accumulatedSeconds_ + elapsedSeconds)) {
-            throw std::invalid_argument("FixedTickRuntime elapsed time must be finite and non-negative");
-        }
+        // Finite, non-negative elapsed time; checked before any state changes.
+        GYO_ASSERT(!(!std::isfinite(elapsedSeconds) || elapsedSeconds < 0.0 ||
+                     !std::isfinite(accumulatedSeconds_ + elapsedSeconds)));
         accumulatedSeconds_ += elapsedSeconds;
         FixedTickAdvance result;
         const double tolerance = stepSeconds_ * 1.0e-9;

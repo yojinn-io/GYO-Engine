@@ -1,7 +1,7 @@
 add_library(gyo_collision STATIC src/Collision.cpp src/CapsuleQueries.cpp)
 add_library(GYO::Collision ALIAS gyo_collision)
 target_include_directories(gyo_collision PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(gyo_collision PUBLIC GYO::Math)
+target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base)
 target_compile_features(gyo_collision PUBLIC cxx_std_20)
 if(MSVC)
     target_compile_options(gyo_collision PRIVATE /W4 /permissive-)

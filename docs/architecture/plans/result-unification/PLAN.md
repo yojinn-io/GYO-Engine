@@ -80,7 +80,7 @@ Result = Runtime Error
 - `AssertionFailure { expression, std::source_location }` 不繼承 `std::exception`。
 - `SetAssertionHandler(handler)` 回傳前一個 handler。預設 handler 輸出一行到 stderr 並 flush，然後 abort。重入用 RAII 的 thread_local guard 判斷，堆疊展開時也會復原。
 - handler 存放在 header 的 `inline constinit std::atomic`；所有 GYO 函式庫都是 STATIC，整個程式只有一份。
-- 巨集不使用 `__VA_OPT__`，也不把 `__VA_ARGS__` 轉送給有具名參數的內層巨集；在 MSVC 上驗證含逗號的條件式。條件式不得有副作用，只求值一次。
+- 全專案的 MSVC 使用符合標準的前處理器（`/Zc:preprocessor`，由 `build/cmake/GyoBuild.cmake` 全域設定；shader host 在自己的 target 設定），`Assert.hpp` 在傳統前處理器下以 `#error` 停止，所以巨集可以轉送 `__VA_ARGS__`、使用 `__VA_OPT__`（2026-10-04，R1 追加）。條件式不得有副作用，只求值一次。
 - noexcept（Lakos rule）：含 Assert 的函式不標 `noexcept`；解構子與執行緒入口裡不放 Assert。`constexpr` 函式可以使用：常數求值時條件成立就照常運作，條件不成立會變成編譯錯誤。
 - 適用範圍是整個 engine，包括 Math（2026-10-04 更正）。Math 中其他「由呼叫端保證」的前提不會一律加上 Assert，等有實際需要時再加。
 - 只在 debug 生效的 `GYO_DEBUG_ASSERT` 等第一個昂貴檢查出現時再加。

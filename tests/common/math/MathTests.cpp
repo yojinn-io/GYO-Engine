@@ -23,6 +23,8 @@
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
+#include "AssertTestSupport.hpp"
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -2245,4 +2247,15 @@ TEST_CASE("Triangle ClosestPoint matches a double-precision reference, including
         INFO("worst thin-triangle error " << worst);
         CHECK(worst <= 2e-3);
     }
+}
+
+TEST_CASE("Clamp with hi < lo is a Programmer Error") {
+    GYO_CHECK_ASSERTS(Clamp(1, 5, 0));
+    GYO_CHECK_ASSERTS(Clamp(0.5f, 1.0f, 0.0f));
+    GYO_CHECK_ASSERTS(Clamp(Vec3{}, Vec3{1.0f, 0.0f, 0.0f}, Vec3{0.0f, 1.0f, 1.0f}));
+    GYO_CHECK_ASSERTS(ClosestPoint(Vec3{}, Aabb{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f}}));
+    // Equal bounds and NaN bounds are not ordered-by-less-than violations.
+    CHECK(Clamp(3, 2, 2) == 2);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    CHECK(Clamp(0.5f, nan, 1.0f) == 0.5f);
 }

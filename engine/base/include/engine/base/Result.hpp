@@ -3,6 +3,8 @@
 #include <utility>
 #include <variant>
 
+#include "engine/base/Assert.hpp"
+
 namespace Engine::Base {
 
     // C++17 で使える軽量 Result（std::expected の代替）
@@ -19,13 +21,14 @@ namespace Engine::Base {
         bool ok() const noexcept { return data_.index() == 0; }
         explicit operator bool() const noexcept { return ok(); }
 
-        T& value() & { return std::get<0>(data_); }
-        const T& value() const& { return std::get<0>(data_); }
-        T&& value() && { return std::move(std::get<0>(data_)); }
+        // Reading the side that is not held is a Programmer Error.
+        T& value() & { GYO_ASSERT(ok()); return *std::get_if<0>(&data_); }
+        const T& value() const& { GYO_ASSERT(ok()); return *std::get_if<0>(&data_); }
+        T&& value() && { GYO_ASSERT(ok()); return std::move(*std::get_if<0>(&data_)); }
 
-        E& error() & { return std::get<1>(data_); }
-        const E& error() const& { return std::get<1>(data_); }
-        E&& error() && { return std::move(std::get<1>(data_)); }
+        E& error() & { GYO_ASSERT(!ok()); return *std::get_if<1>(&data_); }
+        const E& error() const& { GYO_ASSERT(!ok()); return *std::get_if<1>(&data_); }
+        E&& error() && { GYO_ASSERT(!ok()); return std::move(*std::get_if<1>(&data_)); }
 
     private:
         template <class... Args>
@@ -52,12 +55,12 @@ namespace Engine::Base {
         bool ok() const noexcept { return data_.index() == 0; }
         explicit operator bool() const noexcept { return ok(); }
 
-        // value() は何もしない（API互換のため）
-        void value() const noexcept {}
+        // Reading the side that is not held is a Programmer Error.
+        void value() const { GYO_ASSERT(ok()); }
 
-        E& error() & { return std::get<1>(data_); }
-        const E& error() const& { return std::get<1>(data_); }
-        E&& error() && { return std::move(std::get<1>(data_)); }
+        E& error() & { GYO_ASSERT(!ok()); return *std::get_if<1>(&data_); }
+        const E& error() const& { GYO_ASSERT(!ok()); return *std::get_if<1>(&data_); }
+        E&& error() && { GYO_ASSERT(!ok()); return std::move(*std::get_if<1>(&data_)); }
 
     private:
         explicit Result(std::in_place_index_t<0>) : data_(std::in_place_index<0>, std::monostate{}) {}

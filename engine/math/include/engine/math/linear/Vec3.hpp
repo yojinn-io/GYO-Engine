@@ -58,7 +58,8 @@ static_assert(std::is_aggregate_v<Vec3>);
 [[nodiscard]] inline Vec3 Max(const Vec3 a, const Vec3 b) noexcept {
     return {Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z)};
 }
-[[nodiscard]] inline Vec3 Clamp(const Vec3 v, const Vec3 lo, const Vec3 hi) noexcept {
+// Per component; each lo/hi pair must satisfy Clamp's precondition (asserts).
+[[nodiscard]] inline Vec3 Clamp(const Vec3 v, const Vec3 lo, const Vec3 hi) {
     return {Clamp(v.x, lo.x, hi.x), Clamp(v.y, lo.y, hi.y), Clamp(v.z, lo.z, hi.z)};
 }
 

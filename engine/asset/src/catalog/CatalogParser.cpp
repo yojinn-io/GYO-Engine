@@ -11,7 +11,8 @@ namespace Engine::Asset::Catalog {
         json j;
         try {
             j = json::parse(catalogText.begin(), catalogText.end());
-        } catch (...) {
+        } catch (const std::exception&) {
+            // Never catch (...): it would swallow a test's AssertionFailure.
             return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
                 AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: JSON parse failed", std::string(sourceName)));
         }

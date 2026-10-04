@@ -38,7 +38,7 @@ struct Contact final {
 // The ray direction need not be normalized. Unlike Math::Intersect, results are
 // world-space distances along the ray (the direction is normalized internally)
 // and are limited to maximumDistance. Initial overlap returns zero.
-// Invalid/non-finite inputs throw invalid_argument.
+// Invalid or non-finite inputs are a Programmer Error (GYO_ASSERT).
 [[nodiscard]] std::optional<float> RaycastAabb(
     const Math::Ray& ray, float maximumDistance, const Math::Aabb& bounds);
 [[nodiscard]] std::optional<float> RaycastCapsule(

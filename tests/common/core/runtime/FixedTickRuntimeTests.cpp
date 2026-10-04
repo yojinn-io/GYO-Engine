@@ -2,6 +2,8 @@
 
 #include "engine/runtime/FixedTickRuntime.hpp"
 
+#include "AssertTestSupport.hpp"
+
 #include <limits>
 #include <vector>
 
@@ -38,12 +40,12 @@ TEST_CASE("FixedTickRuntime bounds catch-up and preserves only fractional backlo
 }
 
 TEST_CASE("FixedTickRuntime rejects invalid configuration and elapsed time") {
-    CHECK_THROWS_AS(FixedTickRuntime(0), std::invalid_argument);
-    CHECK_THROWS_AS(FixedTickRuntime(60, 0), std::invalid_argument);
+    GYO_CHECK_ASSERTS(FixedTickRuntime(0));
+    GYO_CHECK_ASSERTS(FixedTickRuntime(60, 0));
     FixedTickRuntime runtime;
-    CHECK_THROWS_AS(runtime.Advance(-1, [](const TickContext&) {}), std::invalid_argument);
-    CHECK_THROWS_AS(runtime.Advance(std::numeric_limits<double>::infinity(), [](const TickContext&) {}), std::invalid_argument);
-    CHECK_THROWS_AS(runtime.Advance(std::numeric_limits<double>::quiet_NaN(), [](const TickContext&) {}), std::invalid_argument);
+    GYO_CHECK_ASSERTS(runtime.Advance(-1, [](const TickContext&) {}));
+    GYO_CHECK_ASSERTS(runtime.Advance(std::numeric_limits<double>::infinity(), [](const TickContext&) {}));
+    GYO_CHECK_ASSERTS(runtime.Advance(std::numeric_limits<double>::quiet_NaN(), [](const TickContext&) {}));
     CHECK(runtime.TickId() == 0);
 }
 
