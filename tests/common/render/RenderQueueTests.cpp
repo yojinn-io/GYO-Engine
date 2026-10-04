@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <array>
 #include <limits>
 
 #include "render/RenderQueue.hpp"
@@ -257,3 +258,35 @@ TEST_CASE("Material shader IDs and raster states reject empty or unsupported val
 }
 
 } // namespace
+
+// Pinned before the Color finiteness check was shared across render targets:
+// every channel, NaN and both infinities, with the same code and message.
+TEST_CASE("RenderQueue rejects a non-finite tint in any channel with its existing error") {
+    constexpr std::array<float, 3> bad{std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()};
+    for (std::size_t channel = 0; channel < 4; ++channel) {
+        for (const float value : bad) {
+            CAPTURE(channel);
+            RenderQueue queue;
+            queue.SetCamera(PerspectiveCamera3D{});
+            MeshSubmission mesh{};
+            mesh.mesh = MeshHandle::FromParts(0, 1);
+            SpriteSubmission sprite{};
+            sprite.destinationPixels = {0.0F, 0.0F, 10.0F, 10.0F};
+            float* meshChannels[]{&mesh.material.tint.red, &mesh.material.tint.green, &mesh.material.tint.blue,
+                &mesh.material.tint.alpha};
+            float* spriteChannels[]{&sprite.material.tint.red, &sprite.material.tint.green,
+                &sprite.material.tint.blue, &sprite.material.tint.alpha};
+            *meshChannels[channel] = value;
+            *spriteChannels[channel] = value;
+            const auto meshResult = queue.Submit(mesh);
+            REQUIRE_FALSE(meshResult);
+            CHECK(meshResult.error().code == RenderErrorCode::InvalidArgument);
+            CHECK(meshResult.error().message == "RenderQueue: mesh submission contains non-finite values");
+            const auto spriteResult = queue.Submit(sprite);
+            REQUIRE_FALSE(spriteResult);
+            CHECK(spriteResult.error().code == RenderErrorCode::InvalidArgument);
+            CHECK(spriteResult.error().message == "RenderQueue: sprite submission contains non-finite values");
+        }
+    }
+}

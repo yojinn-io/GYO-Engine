@@ -367,9 +367,25 @@ bool CheckFrameContracts(Device& device, const ShaderLibrary& library) {
     auto invalidFrame = *acquired.value(); ++invalidFrame.token;
     if (!ExpectError(device.SubmitFrame(invalidFrame, {}), RenderErrorCode::InvalidArgument, "foreign frame token")) return false;
     device.AbandonFrame(*acquired.value());
+    commands.passes[0].draws[0].fragmentUniforms[0].resize(48);
+    // A non-finite clear color in any channel is rejected with the existing
+    // error (pinned before the Color finiteness check was shared).
+    for (std::size_t channel = 0; channel < 4; ++channel) {
+        acquired = device.AcquireFrame();
+        if (!acquired || !acquired.value()) return false;
+        auto invalidClear = commands;
+        float* channels[]{&invalidClear.passes[0].clearColor.red, &invalidClear.passes[0].clearColor.green,
+            &invalidClear.passes[0].clearColor.blue, &invalidClear.passes[0].clearColor.alpha};
+        *channels[channel] = std::numeric_limits<float>::quiet_NaN();
+        const auto rejected = device.SubmitFrame(*acquired.value(), invalidClear);
+        if (rejected || rejected.error().code != RenderErrorCode::InvalidArgument ||
+            rejected.error().message != "SDL_GPU: invalid attachment clear value") {
+            std::cerr << "non-finite clear color was not rejected with the existing error\n";
+            return false;
+        }
+    }
     acquired = device.AcquireFrame();
     if (!acquired || !acquired.value()) return false;
-    commands.passes[0].draws[0].fragmentUniforms[0].resize(48);
     if (!device.SubmitFrame(*acquired.value(), commands)) return false;
     if (!device.ReleasePipeline(pipeline.value()) ||
         !ExpectError(device.ReleasePipeline(pipeline.value()), RenderErrorCode::InvalidHandle, "stale pipeline release")) return false;

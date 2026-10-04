@@ -2,6 +2,7 @@
 #include "AssertTestSupport.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
+#include <limits>
 #include <vector>
 #include <string>
 #include <numbers>
@@ -148,6 +149,23 @@ TEST_CASE("Renderer owns fixed passes, uniform ABI and independent viewmodel dep
     CHECK(device.textures.size()==3); CHECK(device.reads==0);
     renderer.Reset(); CHECK(device.textures.empty()); CHECK(device.meshes.empty()); CHECK(device.pipelines.empty()); CHECK(device.shaders.empty());
     CHECK_FALSE(renderer.ActiveShaderFormat());
+}
+// Pinned before the Color finiteness check was shared across render targets.
+TEST_CASE("Renderer rejects a non-finite clear color with its existing error") {
+    auto library=Library(); Device device; Renderer renderer; REQUIRE(renderer.Initialize(device,library));
+    for (const float value : {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+        for (std::size_t channel=0; channel<4; ++channel) {
+            CAPTURE(channel);
+            Color clear{0.1F,0.2F,0.3F,1.0F};
+            float* channels[]{&clear.red,&clear.green,&clear.blue,&clear.alpha};
+            *channels[channel]=value;
+            const auto result=renderer.Render(RenderQueue({clear,{}}));
+            REQUIRE_FALSE(result);
+            CHECK(result.error().code==RenderErrorCode::InvalidArgument);
+            CHECK(result.error().message=="Renderer: invalid frame description");
+        }
+    }
+    CHECK(device.submissions==0);
 }
 TEST_CASE("Renderer skips minimized frames and captures only requested successful scene frames") {
     auto library=Library(); Device device; Renderer renderer; REQUIRE(renderer.Initialize(device,library));

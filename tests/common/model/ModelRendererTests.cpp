@@ -7,6 +7,7 @@
 #include "RenderDeviceStub.hpp"
 
 #include <array>
+#include <limits>
 #include <unordered_map>
 
 using namespace Engine;
@@ -179,4 +180,39 @@ TEST_CASE("model renderer keeps the Model code and asserts on null inputs") {
     GYO_CHECK_ASSERTS(ModelRenderer::ModelResource::Create(device,nullptr,materials));
     Model::Pose pose;REQUIRE(Model::MakeDefaultPose(*model,pose));
     GYO_CHECK_ASSERTS(ModelRenderer::ModelInstance::Create(nullptr,pose));
+}
+
+// Pinned before the Color finiteness check was shared across render targets.
+TEST_CASE("model renderer rejects non-finite material and instance tints with its existing errors") {
+    Device device;
+    const auto model=MakeModel();
+    for (std::size_t channel=0; channel<4; ++channel) {
+        CAPTURE(channel);
+        auto badMaterial=material;
+        float* channels[]{&badMaterial.tint.red,&badMaterial.tint.green,&badMaterial.tint.blue,&badMaterial.tint.alpha};
+        *channels[channel]=std::numeric_limits<float>::quiet_NaN();
+        const auto rejected=ModelRenderer::ModelResource::Create(device,model,{&badMaterial,1});
+        REQUIRE_FALSE(rejected);
+        CHECK(rejected.error().code==ModelRenderer::ModelRendererErrorCode::InvalidArgument);
+        CHECK(rejected.error().message=="Model material tint must be finite.");
+    }
+    auto resource=ModelRenderer::ModelResource::Create(device,model,{&material,1});
+    REQUIRE(resource);
+    Model::Pose pose;
+    REQUIRE(Model::MakeDefaultPose(*model,pose));
+    auto instance=ModelRenderer::ModelInstance::Create(resource.value(),pose);
+    REQUIRE(instance);
+    Render::RenderQueue queue;
+    queue.SetCamera({});
+    for (std::size_t channel=0; channel<4; ++channel) {
+        CAPTURE(channel);
+        Render::Color tint{1,1,1,1};
+        float* channels[]{&tint.red,&tint.green,&tint.blue,&tint.alpha};
+        *channels[channel]=std::numeric_limits<float>::infinity();
+        const auto rejected=instance.value()->Submit(queue,{},Render::MeshLayer::World,tint);
+        REQUIRE_FALSE(rejected);
+        CHECK(rejected.error().code==ModelRenderer::ModelRendererErrorCode::InvalidArgument);
+        CHECK(rejected.error().message=="Model instance tint must be finite.");
+    }
+    CHECK(queue.Meshes().empty());
 }
