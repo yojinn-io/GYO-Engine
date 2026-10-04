@@ -1,10 +1,11 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
+
+#include "engine/math/scalar/Scalar.hpp"
 
 namespace Engine::Runtime {
 
@@ -51,7 +52,7 @@ public:
         const double tolerance = stepSeconds_ * 1.0e-9;
         while (accumulatedSeconds_ + tolerance >= stepSeconds_ &&
                result.steps < maximumCatchUpSteps_) {
-            accumulatedSeconds_ = (std::max)(0.0, accumulatedSeconds_ - stepSeconds_);
+            accumulatedSeconds_ = Math::Max(0.0, accumulatedSeconds_ - stepSeconds_);
             ++tickId_;
             ++result.steps;
             callback(TickContext{tickId_, stepSeconds_});

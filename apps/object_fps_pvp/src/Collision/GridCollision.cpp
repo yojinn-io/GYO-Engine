@@ -1,4 +1,5 @@
 #include "RetroFPS/Collision/GridCollision.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -109,7 +110,7 @@ void ValidateObstacle(const CircleObstacle& obstacle) {
         }
     }
 
-    return std::clamp(allowedFraction, 0.0, 1.0);
+    return Engine::Math::Clamp(allowedFraction, 0.0, 1.0);
 }
 
 [[nodiscard]] GroundPoint MoveAxisAgainstCircles(
@@ -196,10 +197,10 @@ bool GridCollision::OverlapsSolid(
     const auto toCell = [cellSizeValue](const double value) {
         return static_cast<std::size_t>(std::floor(value / cellSizeValue));
     };
-    const std::size_t minimumColumn = (std::min)(toCell(minimumX), width - 1);
-    const std::size_t maximumColumn = (std::min)(toCell(maximumX), width - 1);
-    const std::size_t minimumRow = (std::min)(toCell(minimumZ), height - 1);
-    const std::size_t maximumRow = (std::min)(toCell(maximumZ), height - 1);
+    const std::size_t minimumColumn = Engine::Math::Min(toCell(minimumX), width - 1);
+    const std::size_t maximumColumn = Engine::Math::Min(toCell(maximumX), width - 1);
+    const std::size_t minimumRow = Engine::Math::Min(toCell(minimumZ), height - 1);
+    const std::size_t maximumRow = Engine::Math::Min(toCell(maximumZ), height - 1);
     const double radiusSquared = radiusValue * radiusValue;
 
     for (std::size_t row = minimumRow; row <= maximumRow; ++row) {
@@ -214,8 +215,8 @@ bool GridCollision::OverlapsSolid(
             const double cellMaximumX = cellMinimumX + cellSizeValue;
             const double cellMinimumZ = static_cast<double>(row) * cellSizeValue;
             const double cellMaximumZ = cellMinimumZ + cellSizeValue;
-            const double nearestX = std::clamp(centerX, cellMinimumX, cellMaximumX);
-            const double nearestZ = std::clamp(centerZ, cellMinimumZ, cellMaximumZ);
+            const double nearestX = Engine::Math::Clamp(centerX, cellMinimumX, cellMaximumX);
+            const double nearestZ = Engine::Math::Clamp(centerZ, cellMinimumZ, cellMaximumZ);
             const double differenceX = centerX - nearestX;
             const double differenceZ = centerZ - nearestZ;
             const double distanceSquared =
@@ -280,7 +281,7 @@ GroundPoint GridCollision::MoveCircle(
     }
 
     const std::size_t stepCount =
-        (std::max)(std::size_t{1}, static_cast<std::size_t>(requestedSteps));
+        Engine::Math::Max(std::size_t{1}, static_cast<std::size_t>(requestedSteps));
     const float inverseStepCount = 1.0f / static_cast<float>(stepCount);
     const GroundPoint step{
         displacement.x * inverseStepCount,

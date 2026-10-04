@@ -1,6 +1,6 @@
 # PvP v6 交接
 
-更新：2026-10-02。Owner：`object_fps_pvp`。**v6尚未開始，沒有計畫、契約或分批。**
+更新：2026-10-04。Owner：`object_fps_pvp`。**v6尚未開始，沒有計畫、契約或分批。**
 本文件收集v5期間使用者決定「延到v6處理」的項目，作為v6規劃的起點；開始v6時先讀本文件，
 再依[v5穩定基線](../v5/STABLE_BASELINE.md)（2026-10-03升格）與[v5交接](../v5/HANDOFF.md)確認v5的最終狀態。這些項目都不是v5的未完成工作，v5不會等它們。
 
@@ -100,3 +100,30 @@
   [v5 fix/02](../v5/fix/02-a1-cancelled-by-stall-reseed.md)。
 - 相位估計器在WAN雜訊下的穩定性：非對稱抖動、相關突發、佇列、亂序、Wi-Fi競爭下P90估計是否穩定；
   先收集真實餘裕樣本分布再決定。見[延遲整改回顧v2](../v5/LATENCY_CASE_STUDY_v2.md)第6節。
+
+### 10. Math 基礎統一的範圍外事項（使用者2026-10-04決定轉入v6）
+
+- 來源：[Math 基礎統一](../../../architecture/plans/math-foundation/README.md)（2026-10-03～04，PR #17～#27）各批「範圍外，只回報」的項目。
+  使用者決定轉入v6：v6原本是網路協議的升級版本，這些項目放在同一次升級中處理。
+- 範圍不只object_fps_pvp：大部分屬於Engine、工具或共通測試。動到Engine公開介面或共通建置時，依AGENTS §3以Architecture Delta提出；
+  不改變權威結果的整理，可以獨立於協議變更進行。
+- 各項的證據與當時的判斷，見Math計畫的[HANDOFF](../../../architecture/plans/math-foundation/HANDOFF.md)對應批次。
+
+| 項目 | 範圍 | 來源批次 |
+|---|---|---|
+| Collision內部float與double兩套演算法並存（演算法層的重複；統一會改變authority判定） | Engine | PLAN第2節 |
+| `Render::Color`與`UiColor`同構；`Color`的有限性檢查在RenderQueue、Renderer、SdlGpuRenderDevice、ModelRenderer共4份 | Engine | PLAN第2節、B7 |
+| 兩份FNV-1a；include路徑風格不一致 | Engine、工具 | PLAN第2節 |
+| `object_fps_preview`的registration：工具啟用，但依賴的app停用 | 建置註冊 | PLAN第2節 |
+| gyo.ui的`item_step`沒有有限性驗證：`{NaN, 1}`能通過Validate，序列化後變成`null`而無法讀回（改驗證規則屬資料契約變更） | Engine（Ui）、資料契約 | B5 |
+| ui_editor與Ui的letterbox、點擊判定、文字對齊各有一份；`UiRuntime`的Evaluate與Compose重複layout走訪 | Engine（Ui）、工具 | B5 |
+| client與server只比對arena的id與version，不比對內容；client以自己的arena檔做prediction | object_fps_pvp、協議 | B6a |
+| `GroundPoint`的有限性檢查三份、格子線段檢查兩份（屬未編譯的29檔） | object_fps_pvp | B6c |
+| `EnemyPresentationDefinition`與`EnemySystem`的攻擊時間容差不一致（1e-5與1e-6；屬未編譯的29檔） | object_fps_pvp | B6c |
+| characterization的共用helper（`SameBits`、`UlpDistance`、`Opaque`）在tests/common、tests/object_fps_pvp、tests/ui_editor各一份；共通測試不能依賴產品測試 | 測試 | B7 |
+| `services/gyo_gateway/README.md`與`tests/common/ci/test_workflow_gates.py`的說明或守衛中出現產品名稱 | 共通層 | B7 |
+| Collision的`ValidateCapsule`允許半徑極小（約`2^-23`倍）、`height == 2r`的退化膠囊；此時`segmentTop < segmentBottom`，`Collision.cpp`的`Clamp(origin.y, segmentBottom, segmentTop)`違反前置條件（debug建置會assert；std::clamp原本也屬未定義行為） | Engine（Collision） | 純量統一後續 |
+| 根目錄三份README的範例`cmake --preset dev -DGYO_APPS=object_fps`指向停用中的產品；它重新啟用前需要先依[遷移清單](../../../architecture/plans/math-foundation/inactive_products.md)遷移 | 文件 | B7 |
+
+- 不轉入：float純量的clamp／min／max寫法，使用者決定直接在Math計畫的後續中統一（2026-10-04）。
+

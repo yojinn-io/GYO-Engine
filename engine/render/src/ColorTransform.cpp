@@ -3,7 +3,6 @@
 #include "engine/math/scalar/ColorSpace.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace Engine::Render {
@@ -13,7 +12,7 @@ namespace {
     const float linear,
     const float exposureScale,
     const float inverseGamma) noexcept {
-    const float exposed = Math::Clamp((std::max)(linear, 0.0F) * exposureScale, 0.0F, 1.0F);
+    const float exposed = Math::Clamp(Math::Max(linear, 0.0F) * exposureScale, 0.0F, 1.0F);
     return std::pow(exposed, inverseGamma);
 }
 

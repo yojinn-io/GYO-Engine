@@ -1,7 +1,7 @@
 # Engine Math 基礎統一 B6b：pvp 表現層改用 GYO::Math
 
 日期：2026-10-04。Owner：`object_fps_pvp`（app_support 與 `SnapshotTimeline`）。
-狀態：CI 四平台通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 待使用者合併（分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
+狀態：完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 已合併（`bd7e1c3`），CI 四平台通過（分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
 計畫與證據見 [Math 基礎統一](../architecture/plans/math-foundation/README.md) 與 [HANDOFF](../architecture/plans/math-foundation/HANDOFF.md#b6b-pvp-表現層)，本文只記經過。
 
 ## 經過

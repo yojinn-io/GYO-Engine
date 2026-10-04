@@ -1,5 +1,7 @@
 #include "engine/io/stream/SpanStream.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
+
 namespace Engine::IO::Stream {
     IoResult<std::size_t> SpanStream::Read(void* dst, std::size_t bytes)  {
         if (!open_) {
@@ -16,7 +18,7 @@ namespace Engine::IO::Stream {
 
         const std::uint64_t remain = size_ - pos_;
         const std::size_t n = static_cast<std::size_t>(
-            (std::min<std::uint64_t>)(remain, static_cast<std::uint64_t>(bytes))
+            Math::Min(remain, static_cast<std::uint64_t>(bytes))
         );
 
         std::memcpy(dst, ro_ + pos_, n);

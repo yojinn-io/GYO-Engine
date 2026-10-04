@@ -1,7 +1,7 @@
 # Math 基礎統一：分批計畫與進度
 
 更新：2026-10-04。Owner：Engine（新增模組 `GYO::Math`）。
-**B0–B5 完成並合併；B6a–B7 完成，PR 疊在一起待使用者合併。**
+**全部批次完成並合併（2026-10-04，最後為 #27 `fdc72e9`）。後續：純量 Min／Max／Clamp 的統一。**
 
 GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision、Ui 與 `object_fps_pvp` 各自定義，
 兩份 `Matrix4` 的儲存順序與預設值也不同。本計畫新增最底層模組 `GYO::Math`，
@@ -35,13 +35,14 @@ GYO 的向量、矩陣、四元數和常用運算在 Render、Model、Collision�
 | B4a Render 型別 | high | 完成，PR [#21](https://github.com/yojinn-io/GYO-Engine/pull/21) 已合併 | `Render::Float2/Float3/Rect` 移除；PrimitiveMesh、ColorTransform、RenderQueue 改用 Math；漂移已記錄 |
 | B4b Render 矩陣 | xhigh | 完成，PR [#22](https://github.com/yojinn-io/GYO-Engine/pull/22) 已合併 | `Renderer.cpp` 改用 Math 慣例與 `ToShaderMatrix`；memcmp 逐位元相同，漂移 0 |
 | B5 Ui／ui_editor | high | 完成，PR [#23](https://github.com/yojinn-io/GYO-Engine/pull/23) 已合併 | `UiFloat2/UiRect` 移除；sRGB、`IntersectRect`、`ConvertRect` 統一；gyo.ui golden 與精確 layout 鎖定；`ClipSprite` 非有限值一律報錯 |
-| B6a pvp 模擬層 | xhigh | CI 通過，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 待合併 | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
-| B6b pvp 表現層 | high | CI 通過，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25)（疊在 #24 上）待合併 | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 `Math::ComposeEulerXYZ`（renderer 的提交契約）；acceptance 的量測維持獨立 |
-| B6c pvp 未編譯檔 | high | CI 通過，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26)（疊在 #25 上）待合併 | 29 檔遷移與 syntax-only 驗證 |
-| B7 收尾 | medium | 本機驗收完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27)（疊在 #26 上）待 CI | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
+| B6a pvp 模擬層 | xhigh | 完成，PR [#24](https://github.com/yojinn-io/GYO-Engine/pull/24) 已合併 | `fps::Float3` 移除，`fps::Float2` 改名 `GroundPoint`；`match_domain` helper 改用 Math；全模擬 digest 與 characterization 測試 |
+| B6b pvp 表現層 | high | 完成，PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 已合併 | `app_support` 與 `SnapshotTimeline` 改用 Math；muzzle 與第三人稱武器位置改用 `Math::ComposeEulerXYZ`（renderer 的提交契約）；acceptance 的量測維持獨立 |
+| B6c pvp 未編譯檔 | high | 完成，PR [#26](https://github.com/yojinn-io/GYO-Engine/pull/26) 已合併 | 29 檔遷移與 syntax-only 驗證 |
+| B7 收尾 | medium | 完成，PR [#27](https://github.com/yojinn-io/GYO-Engine/pull/27) 已合併 | 文件定稿、grep 稽核、未啟用產品破損清單、Architecture Report |
+| 後續：純量 Min／Max／Clamp 統一 | high | 本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI | min／max／clamp 統一使用 GYO 自己的 `Math::Min／Max／Clamp`（所有算術型別，bool 除外）；`GYO::Engine` 連結 Math；測試與 acceptance 維持 std 作為 oracle |
 
 ```text
-B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7
+B0 -> B1 -> B1b -> B2 -> B3 -> B4a -> B4b -> B5 -> B6a -> B6b -> B6c -> B7 -> 後續（純量 Min／Max／Clamp）
 ```
 
 ## 執行規則

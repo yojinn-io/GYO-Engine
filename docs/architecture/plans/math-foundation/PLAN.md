@@ -47,7 +47,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   | Collision、Model、Render、Ui | PUBLIC |
   | pvp `match_domain`（`apps/object_fps_pvp/CMakeLists.txt:27`） | 明確 PUBLIC |
   | ui_editor 的 `gyo_ui_editor_preview`（`tools/ui_editor/CMakeLists.txt:55-60`） | 明確 PRIVATE |
-  | `GYO::Engine`、Input、Text | 不連結 |
+  | `GYO::Engine`、Input、Text | 不連結（後續更正，2026-10-04 使用者決定：`GYO::Engine` PUBLIC 連結 Math，以便統一 min／max／clamp。Input、Text、Platform 不直接連結；Text 與 PlatformSDL 經 Engine 間接可見 Math。見 HANDOFF 決策紀錄） |
 
 ### 1.2 型別
 
@@ -95,6 +95,8 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **GPU**：HLSL 以 `row_major float4x4` 加 `mul(float4(p,1), M)` 讀取同一組 16 個 float，位元組完全相同，上傳時不轉置。這已經驗證：Render 的 `Multiply(A,B)` 逐位元等於 Model 的 `Multiply(B,A)`。
 
 ### 1.4 函式（自由函式、非 template、`[[nodiscard]] noexcept`）
+
+（後續更正，2026-10-04 使用者決定：純量 `Min`／`Max`／`Clamp` 改為 constexpr template，以 `Arithmetic` concept 支援 bool 以外的算術型別，引數須同型別。見 HANDOFF 決策紀錄與「後續」一節。）
 
 | 分類 | 函式 |
 |---|---|

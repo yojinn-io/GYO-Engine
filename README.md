@@ -26,11 +26,11 @@ CMake 3.30 以降、C++20 compiler、Ninja を使用します。Windows は x64 
 `engine/config/projects.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
-cmake --build --preset dev --target gyo_object_fps
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --build --preset dev --target gyo_object_fps_pvp
 ```
 
-ビルド状態は `build/target/_build/dev`、実行可能なゲームは `build/target/object_fps/bin` です。ゲームは実行ファイル相対の `assets/object_fps` だけを読み、内蔵／ゲーム shader もその下に置きます。配布製品の実行にソースツリーは不要です。
+ビルド状態は `build/target/_build/dev`、実行可能なゲームは `build/target/object_fps_pvp/bin` です。ゲームは実行ファイル相対の `assets/object_fps_pvp` だけを読み、内蔵／ゲーム shader もその下に置きます。配布製品の実行にソースツリーは不要です。
 
 通常ビルドでは tests と CI/package acceptance を無効にしています。ゲームは tests、CI コード、editor に依存しません。Backend-neutral engine の検証は次の通りです。
 

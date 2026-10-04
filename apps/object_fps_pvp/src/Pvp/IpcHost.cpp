@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include "runtime_v5.pb.h"
 #include <asio.hpp>
 #include <array>
@@ -89,7 +90,7 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor
     const auto first=std::find_if(results.decisions.begin(),results.decisions.end(),
         [&](const auto& decision){return decision.actionId>cursor;});
     const auto offset=first==results.decisions.end()?0:static_cast<std::size_t>(first-results.decisions.begin());
-    for(std::size_t i=0;i<(std::min)(MaxActionBatch,results.decisions.size());++i) {
+    for(std::size_t i=0;i<Engine::Math::Min(MaxActionBatch,results.decisions.size());++i) {
         const auto& decision=results.decisions[(offset+i)%results.decisions.size()];
         auto* value=out->add_decisions();value->set_action_id(decision.actionId);
         value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);

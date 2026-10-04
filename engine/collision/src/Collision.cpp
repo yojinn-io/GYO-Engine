@@ -1,10 +1,12 @@
 #include "engine/collision/Collision.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace Engine::Collision {
 namespace {
@@ -53,7 +55,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
         return std::nullopt;
     }
 
-    const float root = std::sqrt((std::max)(0.0f, discriminant));
+    const float root = std::sqrt(Math::Max(0.0f, discriminant));
     float distance = -halfB - root;
     if (distance < 0.0f) {
         distance = -halfB + root;
@@ -90,8 +92,8 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
         if (first > second) {
             std::swap(first, second);
         }
-        entry = (std::max)(entry, first);
-        exit = (std::min)(exit, second);
+        entry = Math::Max(entry, first);
+        exit = Math::Min(exit, second);
         if (entry > exit) {
             return std::nullopt;
         }
@@ -100,7 +102,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
     if (exit < 0.0f || entry > maximumDistance) {
         return std::nullopt;
     }
-    return (std::max)(0.0f, entry);
+    return Math::Max(0.0f, entry);
 }
 
 [[nodiscard]] std::optional<float> RayCapsuleUnchecked(
@@ -112,7 +114,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
     const float radius = capsule.radius + sweepRadius;
     const float segmentBottom = capsule.feet.y + capsule.radius;
     const float segmentTop = capsule.feet.y + capsule.height - capsule.radius;
-    const float closestHeight = std::clamp(origin.y, segmentBottom, segmentTop);
+    const float closestHeight = Math::Clamp(origin.y, segmentBottom, segmentTop);
     const float overlapX = origin.x - capsule.feet.x;
     const float overlapY = origin.y - closestHeight;
     const float overlapZ = origin.z - capsule.feet.z;
@@ -130,7 +132,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
         const float c = offsetX * offsetX + offsetZ * offsetZ - radius * radius;
         const float discriminant = halfB * halfB - a * c;
         if (discriminant >= 0.0f) {
-            const float root = std::sqrt((std::max)(0.0f, discriminant));
+            const float root = std::sqrt(Math::Max(0.0f, discriminant));
             const std::array<float, 2> roots{
                 (-halfB - root) / a,
                 (-halfB + root) / a,
@@ -141,7 +143,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
                 }
                 const float height = origin.y + direction.y * distance;
                 if (height >= segmentBottom && height <= segmentTop) {
-                    closest = (std::min)(closest, distance);
+                    closest = Math::Min(closest, distance);
                 }
             }
         }
@@ -155,7 +157,7 @@ void ValidateCapsule(const VerticalCapsule& capsule) {
         const std::optional<float> hit =
             RaySphere(origin, direction, maximumDistance, end, radius);
         if (hit.has_value()) {
-            closest = (std::min)(closest, *hit);
+            closest = Math::Min(closest, *hit);
         }
     }
 

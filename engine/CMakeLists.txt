@@ -1,3 +1,7 @@
+# Math is the lowest engine layer: every module, GYO::Engine included, may
+# link it.
+add_subdirectory(math)
+
 add_library(engine STATIC)
 add_library(GYO::Engine ALIAS engine)
 target_compile_features(engine PUBLIC cxx_std_20)
@@ -52,8 +56,9 @@ target_sources(engine
     asset/src/LoaderRegistry.cpp
     asset/src/NativeFileAssetSource.cpp
 )
-target_link_libraries(engine PRIVATE
-    nlohmann_json::nlohmann_json
+target_link_libraries(engine
+    PUBLIC GYO::Math
+    PRIVATE nlohmann_json::nlohmann_json
 )
 
 # SDL_image is an optional decoder implementation. GYO::Engine remains
@@ -70,7 +75,6 @@ if(TARGET SDL3_image::SDL3_image)
     )
 endif()
 
-add_subdirectory(math)
 add_subdirectory(model)
 add_subdirectory(collision)
 add_subdirectory(text)

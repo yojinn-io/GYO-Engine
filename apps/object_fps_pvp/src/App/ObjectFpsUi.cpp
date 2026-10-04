@@ -329,14 +329,14 @@ void AddHud(
     if (!std::isfinite(value)) {
         return minimum;
     }
-    const double clamped = std::clamp(
+    const double clamped = Engine::Math::Clamp(
         value,
         static_cast<double>(minimum),
         static_cast<double>(maximum));
     const double index = std::round(
         (clamped - static_cast<double>(minimum)) /
         static_cast<double>(step));
-    return static_cast<float>(std::clamp(
+    return static_cast<float>(Engine::Math::Clamp(
         static_cast<double>(minimum) + index * static_cast<double>(step),
         static_cast<double>(minimum),
         static_cast<double>(maximum)));

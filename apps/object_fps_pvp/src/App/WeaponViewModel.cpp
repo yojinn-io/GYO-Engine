@@ -7,11 +7,11 @@
 #include "engine/asset/AssetRequest.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include "model/Animation.hpp"
 #include "model_renderer/ModelRenderer.hpp"
 #include "render/IRenderDevice.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <vector>
@@ -130,8 +130,8 @@ struct WeaponViewModel::Impl final {
         }
         const std::size_t clip = definition->clips[slot];
         const double progress = durationSeconds > 0
-            ? std::clamp(static_cast<double>(elapsedSeconds) /
-                         durationSeconds, 0.0, 1.0) : 0.0;
+            ? Engine::Math::Clamp(static_cast<double>(elapsedSeconds) /
+                                  durationSeconds, 0.0, 1.0) : 0.0;
         const double time = slot == 0
             ? 0.0 : definition->model->clips[clip].durationSeconds * progress;
         if (clip != lastClip || time != lastTime) {

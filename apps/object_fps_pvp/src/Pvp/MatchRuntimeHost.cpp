@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -96,7 +97,7 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         else if (input.observedAuthorityTick < publishedReferences_.front().tick)
             age = Micros(at() - publishedReferences_.front().publishedAt);
         if (age) quality->second.referenceAgesMicros.push_back(
-            static_cast<std::uint32_t>(std::clamp<std::int64_t>(*age, 0, kMaximumReferenceAgeMicros)));
+            static_cast<std::uint32_t>(Engine::Math::Clamp<std::int64_t>(*age, 0, kMaximumReferenceAgeMicros)));
     }
     for (const auto sequence : newlyAccepted)
         TraceMovement({.kind = MovementTraceKind::HostAccepted, .playerId = input.playerId,
@@ -117,7 +118,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
     if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
     const auto queuedAck = pendingActionAcknowledgements_.find(batch.playerId);
     const auto through = queuedAck == pendingActionAcknowledgements_.end() ? acknowledgedThrough :
-        (std::max)(acknowledgedThrough, queuedAck->second);
+        Engine::Math::Max(acknowledgedThrough, queuedAck->second);
     const auto pending = pendingActions_.find(batch.playerId);
     const std::span<const ShotRequest> staged = pending == pendingActions_.end()
         ? std::span<const ShotRequest>{} : pending->second;
@@ -127,7 +128,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
 
     const auto retained = match_.GetActionResults(batch.playerId);
     auto merged = pending == pendingActions_.end() ? std::vector<ShotRequest>{} : pending->second;
-    const auto floor = (std::max)(retained->retiredThrough, through);
+    const auto floor = Engine::Math::Max(retained->retiredThrough, through);
     std::erase_if(merged, [=](const auto& shot) { return shot.actionId <= floor; });
     for (const auto& shot : batch.shots) {
         if (shot.actionId <= floor) continue;
@@ -149,7 +150,7 @@ bool MatchRuntimeHost::QueueActionAcknowledgement(PlayerId playerId, ActionId th
     std::lock_guard lock(mutex_);
     if (pendingReset_ || !match_.CanAcknowledgeActions(playerId, through)) return false;
     auto& pending = pendingActionAcknowledgements_[playerId];
-    pending = std::max(pending, through);
+    pending = Engine::Math::Max(pending, through);
     return true;
 }
 
@@ -189,7 +190,7 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         pendingActionAcknowledgements_.clear();
         for (const auto& [playerId, shots] : pendingActions_) {
             for (std::size_t first = 0; first < shots.size(); first += MaxActionBatch) {
-                const auto last = std::min(first + MaxActionBatch, shots.size());
+                const auto last = Engine::Math::Min(first + MaxActionBatch, shots.size());
                 ActionBatch batch{playerId, {shots.begin() + first, shots.begin() + last}};
                 const auto admission = match_.SubmitActions(batch);
                 if (admission != ActionAdmission::Accepted)
@@ -346,13 +347,13 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
                 if (!track.pending || micros < track.pending->second) track.pending = std::pair{sequence, micros};
             } else track.substituted[sequence] = *at;
         }
-        track.lastResolved = (std::max)(track.lastResolved, player.lastResolvedCommand);
+        track.lastResolved = Engine::Math::Max(track.lastResolved, player.lastResolvedCommand);
         while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
             track.receipts.erase(track.receipts.begin());
         while (track.substituted.size() > kMaximumSubstitutedSequences) track.substituted.erase(track.substituted.begin());
         if (track.pending) {
             player.movementSlackSequence = track.pending->first;
-            player.movementSlackMicros = static_cast<std::int32_t>(std::clamp<std::int64_t>(
+            player.movementSlackMicros = static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(
                 track.pending->second, -MaxMovementSlackMicros, MaxMovementSlackMicros));
         }
     }
@@ -387,7 +388,7 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
                 if (track.failures >= ConnectionQualityFailedWindows) {
                     evictions_.push_back({playerId, late ? EvictionReason::HighLatency : EvictionReason::UnstableInput,
                         referenceAgeMillis, permille,
-                        static_cast<std::uint32_t>((std::min)(resets, std::uint64_t{1'000'000}))});
+                        static_cast<std::uint32_t>(Engine::Math::Min(resets, std::uint64_t{1'000'000}))});
                     evicted.push_back(playerId);
                 }
             }

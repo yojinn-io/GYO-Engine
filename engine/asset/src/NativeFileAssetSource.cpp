@@ -1,6 +1,7 @@
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <fstream>
 #include <limits>
 #include <string>
@@ -27,10 +28,10 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
 
     const std::streamoff end = static_cast<std::streamoff>(stream.tellg());
     const auto maximumReadSize = static_cast<std::uintmax_t>(
-        (std::min)(static_cast<std::uintmax_t>(
-                       (std::numeric_limits<std::size_t>::max)()),
-                   static_cast<std::uintmax_t>(
-                       (std::numeric_limits<std::streamsize>::max)())));
+        Math::Min(static_cast<std::uintmax_t>(
+                      (std::numeric_limits<std::size_t>::max)()),
+                  static_cast<std::uintmax_t>(
+                      (std::numeric_limits<std::streamsize>::max)())));
     if (end < 0 || static_cast<std::uintmax_t>(end) > maximumReadSize) {
         return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
             AssetErrorCode::SourceReadFailed,

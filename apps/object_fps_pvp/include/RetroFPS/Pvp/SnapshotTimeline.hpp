@@ -83,7 +83,7 @@ public:
         const auto* latest = Find(history_.back().snapshot, id);
         if (!latest) return std::nullopt; // Membership comes from the newest state.
         const double desired = (Seconds(now, firstReceive_) - phase_ - DelaySeconds) / MovementTickSeconds;
-        cursor_ = std::max(cursor_, std::clamp(desired, Relative(history_.front().snapshot.tick),
+        cursor_ = Engine::Math::Max(cursor_, Engine::Math::Clamp(desired, Relative(history_.front().snapshot.tick),
             Relative(history_.back().snapshot.tick)));
         const bool missingFuture = desired > Relative(history_.back().snapshot.tick) + 1e-8;
         // A missing player or a new epoch ends that player's segment only.
@@ -100,7 +100,7 @@ public:
         const auto* prior = first + 1 < history_.size() ?
             Find(history_[history_.size() - 2].snapshot, id) : nullptr;
         const bool holding = missingFuture && prior && PoseChanged(*prior, *latest);
-        const double playerCursor = std::clamp(cursor_, Relative(history_[first].snapshot.tick),
+        const double playerCursor = Engine::Math::Clamp(cursor_, Relative(history_[first].snapshot.tick),
             Relative(history_.back().snapshot.tick));
         std::size_t before = first, after = first;
         for (std::size_t index = first; index < history_.size(); ++index) {
@@ -111,7 +111,7 @@ public:
         const auto& a = *Find(history_[before].snapshot, id);
         const auto& b = *Find(history_[after].snapshot, id);
         const auto aTick = history_[before].snapshot.tick, bTick = history_[after].snapshot.tick;
-        const double alpha = aTick == bTick ? 0 : std::clamp(
+        const double alpha = aTick == bTick ? 0 : Engine::Math::Clamp(
             (playerCursor - Relative(aTick)) / static_cast<double>(bTick - aTick), 0.0, 1.0);
         const float fraction = static_cast<float>(alpha);
         auto player = a;
@@ -126,7 +126,7 @@ public:
         for (const auto& value : history_[before].snapshot.combat)
             if (value.playerId == id && value.lifeGeneration == player.lifeGeneration) combat = value;
         return SnapshotPresentation{player, aTick, bTick, static_cast<double>(baseTick_) + playerCursor,
-            alpha, planarSpeed, std::max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
+            alpha, planarSpeed, Engine::Math::Max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
             history_.size(), holdCount_, gaps_, evictions_, phaseReanchors_, holding,
             a.lastResolvedCommand, b.lastResolvedCommand, missingFuture, combat};
     }

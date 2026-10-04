@@ -1,9 +1,9 @@
 #include "model/backend/ufbx/UfbxModelLoader.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include "model/Animation.hpp"
 
 #include <ufbx.h>
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -145,7 +145,7 @@ std::shared_ptr<ModelAsset> Import(const ufbx_scene& scene) {
                     if(skin) {
                         const auto sourceVertex=mesh->vertex_indices[corner];
                         const auto influence=skin->vertices[sourceVertex];
-                        const auto count=(std::min)(std::size_t{4},static_cast<std::size_t>(influence.num_weights));
+                        const auto count=Math::Min(std::size_t{4},static_cast<std::size_t>(influence.num_weights));
                         double total=0;
                         for(std::size_t k=0;k<count;++k) {
                             const auto weight=skin->weights[influence.weight_begin+k];

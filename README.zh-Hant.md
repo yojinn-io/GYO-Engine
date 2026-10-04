@@ -26,11 +26,11 @@ GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Math、Input、Colli
 在 `engine/config/projects.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
-cmake --build --preset dev --target gyo_object_fps
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --build --preset dev --target gyo_object_fps_pvp
 ```
 
-建置狀態位於 `build/target/_build/dev`，可執行遊戲組裝於 `build/target/object_fps/bin`。遊戲只讀取執行檔相對的 `assets/object_fps`；內建與遊戲 shader 也位於其中。組裝完成的產品不需要 source checkout 才能執行。
+建置狀態位於 `build/target/_build/dev`，可執行遊戲組裝於 `build/target/object_fps_pvp/bin`。遊戲只讀取執行檔相對的 `assets/object_fps_pvp`；內建與遊戲 shader 也位於其中。組裝完成的產品不需要 source checkout 才能執行。
 
 普通產品建置關閉測試與 CI/package acceptance，不依賴 tests、CI 程式或 editor。驗證 backend-neutral engine：
 
