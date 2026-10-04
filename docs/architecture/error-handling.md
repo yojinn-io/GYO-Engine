@@ -24,7 +24,7 @@ These are not errors and use neither mechanism:
 
 Exceptions are not a third mechanism. See rule 6.
 
-Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). `GYO_ASSERT` and `GYO::Base` exist; Result's final construction syntax, the `CodedError` convention, `Base::Describe` and the remaining migrations land in later batches. Until then existing code may still use the older forms listed in the plan.
+Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). `GYO_ASSERT`, `GYO::Base` and Result's construction syntax are in place; the `CodedError` convention, `Base::Describe` and the remaining migrations land in later batches. Until then existing code may still use the older forms listed in the plan.
 
 ## Rules
 
@@ -66,6 +66,21 @@ C++26 has no run-time function to swap the handler and chooses semantics per bui
 
 ## Result and errors
 
-`Engine::Base::Result<T, E>` holds either a value or an error. Reading the side that is not held (`value()` on an error, `error()` on a value) is a Programmer Error and asserts. `Engine::Base::Error<Code>` carries an enum `code`, a human-readable `message` and an optional `detail`; each module owns its code enum. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
+`Engine::Base::Result<T, E>` holds either a value or an error. Its interface is a subset of C++23 `std::expected`, with `Base::Err` in the role of `std::unexpected`:
+
+```cpp
+Base::Result<Path, IoError> Parse(std::string_view raw) {
+    auto normalized = Normalize(raw);
+    if (!normalized) return Base::Err(std::move(normalized).error());  // propagate
+    return Path::FromNormalized(std::move(*normalized));               // success
+}
+Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void success
+```
+
+- **Success**: return the value; it converts implicitly when `T` does. A braced value names its type (`return T{...};`); a non-void `Result` has no default constructor, so `return {};` cannot silently succeed with a default `T`.
+- **Failure**: `return Base::Err(error);`. `Err<G>` converts to `Result<T, E>` whenever `E` is constructible from `G`. A bare `E` does not convert, so a forgotten `Err` is a compile error. A braced error names its type (`Base::Err(UiError{...})`).
+- **Queries**: `has_value()` or `explicit operator bool` (success, also for `Result<bool, E>`), `value()`, `operator*`, `operator->`, `error()`. Reading the side that is not held is a Programmer Error and asserts. Unlike `std::expected`, nothing throws.
+- `T` and `E` must differ and must not be references. The class is `[[nodiscard]]`.
+- No monadic operations (`and_then`, `transform`) and no `value_or` until code needs them. `Engine::Base::Error<Code>` carries an enum `code`, a human-readable `message` and an optional `detail`; each module owns its code enum. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
 
 Types that cannot be moved are returned as `Result<std::unique_ptr<T>, E>`.

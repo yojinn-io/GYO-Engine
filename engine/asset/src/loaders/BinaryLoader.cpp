@@ -14,9 +14,7 @@ namespace Engine::Asset::Loaders {
         bin->bytes.assign(bytes.begin(), bytes.end());
 
         (void)ctx;
-        return Base::Result<Core::AnyAsset, AssetError>::Ok(
-            Core::AnyAsset::FromShared<BinaryAsset>(std::move(bin))
-        );
+        return Core::AnyAsset::FromShared<BinaryAsset>(std::move(bin));
     }
 
 } // namespace Engine::Asset::Loaders

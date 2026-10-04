@@ -33,7 +33,7 @@ Matrix4 Matrix(const ufbx_matrix& source) {
 }
 
 Result Error(const Asset::Loading::LoadContext& context,std::string message) {
-    return Result::Err(Asset::Loading::AssetError::Make(
+    return Base::Err(Asset::Loading::AssetError::Make(
         Asset::AssetErrorCode::DecodeFailed,"FBX model: "+std::move(message),context.resolvedPath));
 }
 
@@ -233,7 +233,7 @@ Result UfbxModelLoader::Load(const Base::ConstSpan<std::byte> bytes,
     ScenePtr scene(ufbx_load_memory(bytes.data(),bytes.size(),&options,&error),ufbx_free_scene);
     if(!scene) return Error(context,ErrorMessage(error));
     try {
-        return Result::Ok(Asset::Core::AnyAsset::FromShared<ModelAsset>(Import(*scene)));
+        return Asset::Core::AnyAsset::FromShared<ModelAsset>(Import(*scene));
     } catch(const std::exception& exception) {
         return Error(context,exception.what());
     }

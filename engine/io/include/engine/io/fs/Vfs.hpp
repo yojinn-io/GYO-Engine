@@ -26,7 +26,6 @@ namespace Engine::IO::FS {
 using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
 template<class T>
 using IoResult = Engine::Base::Result<T, IoError>;
-using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     /// VFS 本体
     /// - scheme（assets:// 等）で MountTable を検索
@@ -37,7 +36,7 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
         MountTable& Mounts() noexcept { return mounts_; }
         const MountTable& Mounts() const noexcept { return mounts_; }
 
-        IoResultVoid Mount(MountPoint mp) { return mounts_.Mount(std::move(mp)); }
+        IoResult<void> Mount(MountPoint mp) { return mounts_.Mount(std::move(mp)); }
         bool Unmount(std::string_view name) { return mounts_.Unmount(name); }
 
         // ---- IFileSystem 互換の操作群（VFS ルーティング付き） ----
@@ -45,16 +44,14 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
         IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>
         Open(const Engine::IO::Path::Uri& uri, Engine::IO::Stream::FileOpenMode mode) {
             if (!Engine::IO::Stream::IsValid(mode)) {
-                return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(
-                    IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
                                   "Vfs: invalid FileOpenMode"));
             }
 
             const bool writeReq = detail::WantsWrite(mode);
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(
-                    IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             if (writeReq) {
@@ -72,11 +69,10 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                     // NotFound でも “書き込み” は次候補へ（overlay write の想定）
                     // ただし PermissionDenied 等は即返す
                     if (!detail::IsNotFound(openr.error())) {
-                        return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(openr.error());
+                        return Base::Err(openr.error());
                     }
                 }
-                return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(
-                    IoError::Make(Engine::IO::IoErrorCode::PermissionDenied,
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::PermissionDenied,
                                   "Vfs: no writable mount found"));
             } else {
                 // 読みは overlay：上から open を試す
@@ -94,15 +90,15 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                         lastNotFound = openr.error();
                         continue;
                     }
-                    return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(openr.error());
+                    return Base::Err(openr.error());
                 }
-                return IoResult<std::unique_ptr<Engine::IO::Stream::IStream>>::Err(lastNotFound);
+                return Base::Err(lastNotFound);
             }
         }
 
         IoResult<bool> Exists(const Engine::IO::Path::Uri& uri) {
             const auto cands = mounts_.Candidates(uri);
-            if (cands.empty()) return IoResult<bool>::Ok(false);
+            if (cands.empty()) return false;
 
             for (const auto* mp : cands) {
                 if (!mp || !mp->fs) continue;
@@ -111,20 +107,19 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
 
                 auto er = mp->fs->Exists(rr.value().nativeUri);
                 if (er) {
-                    if (er.value()) return IoResult<bool>::Ok(true);
+                    if (er.value()) return true;
                     continue;
                 }
                 if (detail::IsNotFound(er.error())) continue;
-                return IoResult<bool>::Err(er.error());
+                return Base::Err(er.error());
             }
-            return IoResult<bool>::Ok(false);
+            return false;
         }
 
         IoResult<Engine::IO::FS::FileInfo> Stat(const Engine::IO::Path::Uri& uri) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResult<Engine::IO::FS::FileInfo>::Err(
-                    IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             IoError lastNotFound = IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: not found");
@@ -141,16 +136,16 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                     lastNotFound = sr.error();
                     continue;
                 }
-                return IoResult<Engine::IO::FS::FileInfo>::Err(sr.error());
+                return Base::Err(sr.error());
             }
-            return IoResult<Engine::IO::FS::FileInfo>::Err(lastNotFound);
+            return Base::Err(lastNotFound);
         }
 
-        IoResultVoid CreateDirectories(const Engine::IO::Path::Uri& uri) {
+        IoResult<void> CreateDirectories(const Engine::IO::Path::Uri& uri) {
             // 書き込み先 mount を選ぶ（preferWrite / priority 順）
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
@@ -165,17 +160,17 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                 if (cr) return cr;
 
                 if (detail::IsNotFound(cr.error())) continue;
-                return IoResultVoid::Err(cr.error());
+                return Base::Err(cr.error());
             }
 
-            return IoResultVoid::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::PermissionDenied, "Vfs: no writable mount found"));
         }
 
-        IoResultVoid Remove(const Engine::IO::Path::Uri& uri, const Engine::IO::FS::RemoveOptions& opt = {}) {
+        IoResult<void> Remove(const Engine::IO::Path::Uri& uri, const Engine::IO::FS::RemoveOptions& opt = {}) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
@@ -196,17 +191,17 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                     lastNotFound = sr.error();
                     continue;
                 }
-                return IoResultVoid::Err(sr.error());
+                return Base::Err(sr.error());
             }
-            return IoResultVoid::Err(lastNotFound);
+            return Base::Err(lastNotFound);
         }
 
-        IoResultVoid Move(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) {
+        IoResult<void> Move(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) {
             // 原則：同じ mount（同じ下位 FS）内での Move を想定
             // まず “from が存在する mount” を決め、to も同じ mount に解決して実行する
             const auto cands = mounts_.Candidates(from);
             if (cands.empty()) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
@@ -221,21 +216,21 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                 auto sr = mp->fs->Stat(rfrom.value().nativeUri);
                 if (!sr) {
                     if (detail::IsNotFound(sr.error())) continue;
-                    return IoResultVoid::Err(sr.error());
+                    return Base::Err(sr.error());
                 }
 
                 return mp->fs->Move(rfrom.value().nativeUri, rto.value().nativeUri);
             }
 
-            return IoResultVoid::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotFound, "Vfs: source not found or no writable mount"));
         }
 
-        IoResultVoid Copy(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) {
+        IoResult<void> Copy(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) {
             // Copy も Move と同様に “from の存在 mount” を決める
             const auto cands = mounts_.Candidates(from);
             if (cands.empty()) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
@@ -250,13 +245,13 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                 auto sr = mp->fs->Stat(rfrom.value().nativeUri);
                 if (!sr) {
                     if (detail::IsNotFound(sr.error())) continue;
-                    return IoResultVoid::Err(sr.error());
+                    return Base::Err(sr.error());
                 }
 
                 return mp->fs->Copy(rfrom.value().nativeUri, rto.value().nativeUri);
             }
 
-            return IoResultVoid::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotFound, "Vfs: source not found or no writable mount"));
         }
 
@@ -265,8 +260,7 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
         List(const Engine::IO::Path::Uri& uri, const Engine::IO::FS::ListOptions& opt = {}) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResult<std::vector<Engine::IO::FS::DirectoryEntry>>::Err(
-                    IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             std::vector<Engine::IO::FS::DirectoryEntry> out;
@@ -288,7 +282,7 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                     // NotFound は overlay 的に次を見る
                     if (detail::IsNotFound(lr.error())) continue;
                     // その他は即返す（壊れた mount を無視するとデバッグ地獄）
-                    return IoResult<std::vector<Engine::IO::FS::DirectoryEntry>>::Err(lr.error());
+                    return Base::Err(lr.error());
                 }
 
                 anyOk = true;
@@ -306,9 +300,9 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
             }
 
             if (!anyOk) {
-                return IoResult<std::vector<Engine::IO::FS::DirectoryEntry>>::Err(lastErr);
+                return Base::Err(lastErr);
             }
-            return IoResult<std::vector<Engine::IO::FS::DirectoryEntry>>::Ok(std::move(out));
+            return std::move(out);
         }
 
         /// Iterate：簡易に List を VectorDirectoryIterator に変換（巨大ディレクトリでは platform 実装が欲しい）
@@ -316,17 +310,17 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
         Iterate(const Engine::IO::Path::Uri& uri, const Engine::IO::FS::ListOptions& opt = {}) {
             auto lr = List(uri, opt);
             if (!lr) {
-                return IoResult<std::unique_ptr<Engine::IO::FS::DirectoryIterator>>::Err(lr.error());
+                return Base::Err(lr.error());
             }
             auto it = std::make_unique<Engine::IO::FS::VectorDirectoryIterator>(std::move(lr.value()), "VfsIterator");
-            return IoResult<std::unique_ptr<Engine::IO::FS::DirectoryIterator>>::Ok(std::move(it));
+            return std::move(it);
         }
 
         IoResult<std::string> ToNativePathString(const Engine::IO::Path::Uri& uri) {
             // “存在する mount” のものを返す（read overlay）
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return IoResult<std::string>::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
@@ -344,9 +338,9 @@ using IoResultVoid = Engine::Base::Result<void, IoError>;
                     lastNotFound = pr.error();
                     continue;
                 }
-                return IoResult<std::string>::Err(pr.error());
+                return Base::Err(pr.error());
             }
-            return IoResult<std::string>::Err(lastNotFound);
+            return Base::Err(lastNotFound);
         }
 
     private:

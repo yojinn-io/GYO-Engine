@@ -17,7 +17,6 @@ namespace Engine::IO::Stream {
     using IoError  = Engine::Base::Error<Engine::IO::IoErrorCode>;
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     struct TextWriteOptions final {
         bool writeUtf8Bom = false;
@@ -28,20 +27,20 @@ namespace Engine::IO::Stream {
     public:
         explicit StreamWriter(IStream& s);
 
-        IoResultVoid WriteAllBytes(Engine::Base::Span<const std::byte> bytes);
-        IoResultVoid WriteAllText(std::string_view text, const TextWriteOptions& opt = {});
+        IoResult<void> WriteAllBytes(Engine::Base::Span<const std::byte> bytes);
+        IoResult<void> WriteAllText(std::string_view text, const TextWriteOptions& opt = {});
 
-        IoResultVoid WriteU8(std::uint8_t v);
-        IoResultVoid WriteU16LE(std::uint16_t v);
-        IoResultVoid WriteU32LE(std::uint32_t v);
-        IoResultVoid WriteU64LE(std::uint64_t v);
+        IoResult<void> WriteU8(std::uint8_t v);
+        IoResult<void> WriteU16LE(std::uint16_t v);
+        IoResult<void> WriteU32LE(std::uint32_t v);
+        IoResult<void> WriteU64LE(std::uint64_t v);
 
-        IoResultVoid WriteLine(std::string_view line);
+        IoResult<void> WriteLine(std::string_view line);
 
-        IoResultVoid Flush();
+        IoResult<void> Flush();
 
     private:
-        IoResultVoid WriteExactly(const void* src, std::size_t bytes);
+        IoResult<void> WriteExactly(const void* src, std::size_t bytes);
 
     private:
         IStream& s_;

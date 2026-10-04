@@ -13,21 +13,18 @@ namespace Engine::Asset::Catalog {
             j = json::parse(catalogText.begin(), catalogText.end());
         } catch (const std::exception&) {
             // Never catch (...): it would swallow a test's AssertionFailure.
-            return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: JSON parse failed", std::string(sourceName)));
+            return Base::Err(AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: JSON parse failed", std::string(sourceName)));
         }
 
         if (!j.is_object() || !j.contains("version") || !j["version"].is_number_integer() ||
             j["version"] != 1 || !j.contains("assets") || !j["assets"].is_array()) {
-            return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: expected integer version 1 and assets array", std::string(sourceName)));
+            return Base::Err(AssetError::Make(AssetErrorCode::ParseFailed, "CatalogParser: expected integer version 1 and assets array", std::string(sourceName)));
         }
 
         std::vector<RawCatalogEntry> out;
         for (const auto& a : j["assets"]) {
             if (!a.is_object()) {
-                return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
+                return Base::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
                         "CatalogParser: asset entry must be an object", std::string(sourceName)));
             }
 
@@ -37,14 +34,13 @@ namespace Engine::Asset::Catalog {
             if (a.contains("path") && a["path"].is_string()) e.path = a["path"].get<std::string>();
 
             if (e.id.empty() || e.type.empty() || e.path.empty()) {
-                return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::InvalidCatalogEntry, "CatalogParser: missing id/type/path", std::string(sourceName)));
+                return Base::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry, "CatalogParser: missing id/type/path", std::string(sourceName)));
             }
 
             out.push_back(std::move(e));
         }
 
-        return Base::Result<std::vector<RawCatalogEntry>, AssetError>::Ok(std::move(out));
+        return std::move(out);
     }
 
 } // namespace Engine::Asset::Catalog

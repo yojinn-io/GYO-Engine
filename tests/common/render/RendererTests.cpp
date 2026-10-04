@@ -26,7 +26,7 @@ Bytes ByteString(std::string_view text) {
 struct Source final : Asset::Loading::IAssetSource {
     std::map<std::string, Bytes, std::less<>> files;
     Base::Result<Bytes, Asset::Loading::AssetError> ReadAll(std::string_view path) override {
-        return Base::Result<Bytes, Asset::Loading::AssetError>::Ok(files.at(std::string(path)));
+        return files.at(std::string(path));
     }
 };
 ShaderLibrary Library(bool post = true) {
@@ -62,35 +62,35 @@ struct Device final : IRenderDevice {
     PreparedFrame captured;
     RenderDeviceInfo GetInfo() const override { return {FormatBit(ShaderFormat::SPIRV), "mock"}; }
     R<MeshHandle> CreateMesh(const MeshView&) override {
-        auto handle = MeshHandle::FromParts(serial++,1); meshes.insert(handle); return R<MeshHandle>::Ok(handle);
+        auto handle = MeshHandle::FromParts(serial++,1); meshes.insert(handle); return handle;
     }
-    R<void> ReleaseMesh(MeshHandle handle) override { meshes.erase(handle); return R<void>::Ok(); }
+    R<void> ReleaseMesh(MeshHandle handle) override { meshes.erase(handle); return {}; }
     R<TextureHandle> CreateTexture(const ImageView& image) override {
         auto handle = TextureHandle::FromParts(serial++,1);
-        textures.emplace(handle, TextureDesc{image.width,image.height}); return R<TextureHandle>::Ok(handle);
+        textures.emplace(handle, TextureDesc{image.width,image.height}); return handle;
     }
     R<TextureHandle> CreateTexture(const TextureDesc& desc) override {
-        if (failTargets) return R<TextureHandle>::Err(RenderError::Make(RenderErrorCode::ResourceCreationFailed,"injected target failure"));
-        auto handle = TextureHandle::FromParts(serial++,1); textures.emplace(handle,desc); return R<TextureHandle>::Ok(handle);
+        if (failTargets) return Engine::Base::Err(RenderError::Make(RenderErrorCode::ResourceCreationFailed,"injected target failure"));
+        auto handle = TextureHandle::FromParts(serial++,1); textures.emplace(handle,desc); return handle;
     }
-    R<void> ReleaseTexture(TextureHandle handle) override { textures.erase(handle); return R<void>::Ok(); }
+    R<void> ReleaseTexture(TextureHandle handle) override { textures.erase(handle); return {}; }
     R<ShaderHandle> CreateShader(const ShaderArtifact& artifact) override {
-        auto handle = ShaderHandle::FromParts(serial++,1); shaders.emplace(handle,artifact); ++shaderCreates; return R<ShaderHandle>::Ok(handle);
+        auto handle = ShaderHandle::FromParts(serial++,1); shaders.emplace(handle,artifact); ++shaderCreates; return handle;
     }
-    R<void> ReleaseShader(ShaderHandle handle) override { shaders.erase(handle); return R<void>::Ok(); }
+    R<void> ReleaseShader(ShaderHandle handle) override { shaders.erase(handle); return {}; }
     R<PipelineHandle> CreatePipeline(const PipelineDesc& desc) override {
-        auto handle = PipelineHandle::FromParts(serial++,1); pipelines.emplace(handle,desc); ++pipelineCreates; return R<PipelineHandle>::Ok(handle);
+        auto handle = PipelineHandle::FromParts(serial++,1); pipelines.emplace(handle,desc); ++pipelineCreates; return handle;
     }
-    R<void> ReleasePipeline(PipelineHandle handle) override { pipelines.erase(handle); return R<void>::Ok(); }
+    R<void> ReleasePipeline(PipelineHandle handle) override { pipelines.erase(handle); return {}; }
     R<std::optional<AcquiredFrame>> AcquireFrame() override {
         ++acquisitions;
-        if (skip) return R<std::optional<AcquiredFrame>>::Ok(std::nullopt);
-        return R<std::optional<AcquiredFrame>>::Ok(AcquiredFrame{acquisitions,width,height,TextureFormat::Bgra8SRgb});
+        if (skip) return std::nullopt;
+        return AcquiredFrame{acquisitions,width,height,TextureFormat::Bgra8SRgb};
     }
     R<PresentStatus> SubmitFrame(const AcquiredFrame&, const PreparedFrame& frame) override {
         ++submissions; captured = frame;
-        if (failSubmit) return R<PresentStatus>::Err(RenderError::Make(RenderErrorCode::SubmissionFailed,"injected submit failure"));
-        return R<PresentStatus>::Ok(PresentStatus::Presented);
+        if (failSubmit) return Engine::Base::Err(RenderError::Make(RenderErrorCode::SubmissionFailed,"injected submit failure"));
+        return PresentStatus::Presented;
     }
     void AbandonFrame(const AcquiredFrame&) noexcept override { ++abandons; }
     R<TextureReadback> ReadTexture(TextureHandle handle) override {
@@ -100,7 +100,7 @@ struct Device final : IRenderDevice {
         const std::array<std::uint16_t,4> half{0x3800,0,0,0x3c00};
         for (unsigned y=0;y<desc.height;++y) for (unsigned x=0;x<desc.width;++x)
             std::memcpy(result.bytes.data()+y*result.rowPitch+x*8,half.data(),8);
-        return R<TextureReadback>::Ok(std::move(result));
+        return std::move(result);
     }
 };
 template<class T> T Uniform(const std::vector<std::byte>& bytes) {

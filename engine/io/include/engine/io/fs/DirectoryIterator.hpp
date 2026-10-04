@@ -16,7 +16,6 @@ namespace Engine::IO::FS {
     using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     /// ストリーミング列挙インターフェース（任意）
     class DirectoryIterator {
@@ -33,14 +32,14 @@ namespace Engine::IO::FS {
         virtual IoResult<bool> Next(DirectoryEntry& out) = 0;
 
         /// 先頭に戻す（対応しない backend は NotSupported を返してOK）
-        virtual IoResultVoid Reset() {
-            return IoResultVoid::Err(IoError::Make(
+        virtual IoResult<void> Reset() {
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported,
                 "DirectoryIterator: reset not supported"));
         }
 
         /// 明示クローズ（OSハンドル解放）
-        virtual IoResultVoid Close() = 0;
+        virtual IoResult<void> Close() = 0;
 
         DirectoryIterator(const DirectoryIterator&) = delete;
         DirectoryIterator& operator=(const DirectoryIterator&) = delete;
@@ -62,28 +61,28 @@ namespace Engine::IO::FS {
 
         IoResult<bool> Next(DirectoryEntry& out) override {
             if (!open_) {
-                return IoResult<bool>::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::ReadFailed,
                     "VectorDirectoryIterator: next on closed iterator"));
             }
-            if (index_ >= entries_.size()) return IoResult<bool>::Ok(false);
+            if (index_ >= entries_.size()) return false;
             out = entries_[index_++];
-            return IoResult<bool>::Ok(true);
+            return true;
         }
 
-        IoResultVoid Reset() override {
+        IoResult<void> Reset() override {
             if (!open_) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotSupported,
                     "VectorDirectoryIterator: reset on closed iterator"));
             }
             index_ = 0;
-            return IoResultVoid::Ok();
+            return {};
         }
 
-        IoResultVoid Close() override {
+        IoResult<void> Close() override {
             open_ = false;
-            return IoResultVoid::Ok();
+            return {};
         }
 
     private:

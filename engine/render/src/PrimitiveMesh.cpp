@@ -123,12 +123,11 @@ MeshData MakeUnitCube() {
 Base::Result<MeshData, RenderError> MakeUvSphere(
     std::uint32_t verticalSegments,
     std::uint32_t horizontalSegments) {
-    using Result = Base::Result<MeshData, RenderError>;
 
     constexpr std::uint32_t maximumSegments = 512;
     if (verticalSegments < 3 || horizontalSegments < 3 ||
         verticalSegments > maximumSegments || horizontalSegments > maximumSegments) {
-        return Result::Err(RenderError::Make(
+        return Base::Err(RenderError::Make(
             RenderErrorCode::InvalidArgument,
             "MakeUvSphere: segment counts must be in the range [3, 512]"));
     }
@@ -137,7 +136,7 @@ Base::Result<MeshData, RenderError> MakeUvSphere(
         static_cast<std::uint64_t>(verticalSegments + 1) *
         static_cast<std::uint64_t>(horizontalSegments + 1);
     if (vertexCount > std::numeric_limits<std::uint32_t>::max()) {
-        return Result::Err(RenderError::Make(
+        return Base::Err(RenderError::Make(
             RenderErrorCode::InvalidArgument,
             "MakeUvSphere: vertex count exceeds the 32-bit index range"));
     }
@@ -185,17 +184,16 @@ Base::Result<MeshData, RenderError> MakeUvSphere(
         }
     }
 
-    return Result::Ok(std::move(mesh));
+    return std::move(mesh);
 }
 
 Base::Result<MeshData, RenderError> MakeWireBox(
     Math::Vec3 minimum, Math::Vec3 maximum, float lineThickness) {
-    using Result = Base::Result<MeshData, RenderError>;
     if (!IsFinite(minimum) || !IsFinite(maximum) ||
         !IsFinite(maximum - minimum) ||
         minimum.x >= maximum.x || minimum.y >= maximum.y || minimum.z >= maximum.z ||
         !std::isfinite(lineThickness) || lineThickness <= 0.0F) {
-        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+        return Base::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireBox: finite ordered bounds and positive line thickness required"));
     }
     std::array<Math::Vec3, 8> corners{};
@@ -215,23 +213,22 @@ Base::Result<MeshData, RenderError> MakeWireBox(
         }
     }
     if (!HasFiniteVertices(mesh)) {
-        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+        return Base::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireBox: bounds too large for finite wire geometry"));
     }
-    return Result::Ok(std::move(mesh));
+    return std::move(mesh);
 }
 
 Base::Result<MeshData, RenderError> MakeWireCapsule(
     Math::Vec3 segmentStart, Math::Vec3 segmentEnd, float radius,
     float lineThickness, std::uint32_t segments) {
-    using Result = Base::Result<MeshData, RenderError>;
     const Math::Vec3 delta = segmentEnd - segmentStart;
     const float length = Math::Length(delta);
     if (!IsFinite(segmentStart) || !IsFinite(segmentEnd) || !std::isfinite(length) ||
         !std::isfinite(radius) || radius <= 0.0F ||
         !std::isfinite(lineThickness) || lineThickness <= 0.0F ||
         segments < 8 || segments > 128) {
-        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+        return Base::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireCapsule: finite endpoints, positive radius/thickness and 8..128 segments required"));
     }
     const Math::Vec3 axis = length > 0.000001F
@@ -262,10 +259,10 @@ Base::Result<MeshData, RenderError> MakeWireCapsule(
         }
     }
     if (!HasFiniteVertices(mesh)) {
-        return Result::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
+        return Base::Err(RenderError::Make(RenderErrorCode::InvalidArgument,
             "MakeWireCapsule: capsule too large for finite wire geometry"));
     }
-    return Result::Ok(std::move(mesh));
+    return std::move(mesh);
 }
 
 } // namespace Engine::Render

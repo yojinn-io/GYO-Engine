@@ -24,7 +24,6 @@ namespace Engine::IO::Helpers {
     using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     struct ReadAllOptions final {
         std::size_t maxBytes = 64u * 1024u * 1024u; // 安全上限（64MB）
@@ -78,8 +77,7 @@ namespace Engine::IO::Helpers {
             if (szr) {
                 const auto sz = static_cast<std::size_t>(szr.value());
                 if (sz > opt.maxBytes) {
-                    return IoResult<std::vector<std::byte>>::Err(
-                        MakeErr(Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
+                    return Base::Err(MakeErr(Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
                 }
                 out.reserve(sz);
             }
@@ -89,14 +87,13 @@ namespace Engine::IO::Helpers {
 
         while (true) {
             auto rr = s.Read(buf.data(), buf.size());
-            if (!rr) return IoResult<std::vector<std::byte>>::Err(rr.error());
+            if (!rr) return Base::Err(rr.error());
 
             const std::size_t n = rr.value();
             if (n == 0) break;
 
             if (out.size() + n > opt.maxBytes) {
-                return IoResult<std::vector<std::byte>>::Err(
-                    MakeErr(Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
+                return Base::Err(MakeErr(Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
             }
 
             const std::size_t old = out.size();
@@ -104,25 +101,25 @@ namespace Engine::IO::Helpers {
             std::memcpy(out.data() + old, buf.data(), n);
         }
 
-        return IoResult<std::vector<std::byte>>::Ok(std::move(out));
+        return std::move(out);
     }
 
-    inline IoResultVoid
+    inline IoResult<void>
     WriteAllToStream(Engine::IO::Stream::IStream& s, Engine::Base::ConstSpan<std::byte> data) {
         std::size_t offset = 0;
         while (offset < data.size()) {
             const std::size_t remain = data.size() - offset;
             auto wr = s.Write(data.data() + offset, remain);
-            if (!wr) return IoResultVoid::Err(wr.error());
+            if (!wr) return Base::Err(wr.error());
 
             const std::size_t n = wr.value();
             if (n == 0) {
-                return IoResultVoid::Err(MakeErr(
+                return Base::Err(MakeErr(
                     Engine::IO::IoErrorCode::WriteFailed, "WriteAllBytes: zero write"));
             }
             offset += n;
         }
-        return IoResultVoid::Ok();
+        return {};
     }
 
     // UTF-8 BOM (EF BB BF) を除去

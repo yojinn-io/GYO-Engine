@@ -18,7 +18,7 @@ namespace {
     std::string message,
     std::string path,
     UiErrorCode code = UiErrorCode::ValidationFailed) {
-    return UiResult<void>::Err({code, std::move(message), {}, std::move(path)});
+    return Base::Err(UiError{code, std::move(message), {}, std::move(path)});
 }
 
 [[nodiscard]] bool IsFinite(UiColor value) noexcept {
@@ -105,7 +105,7 @@ struct ValidationContext final {
             return Invalid("unknown color '" + selected->second + "'", path + "/cases/" + required, UiErrorCode::MissingReference);
         }
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 [[nodiscard]] UiResult<void> ValidateValueReference(
@@ -124,7 +124,7 @@ struct ValidationContext final {
         if (found->second->type == UiBindingType::List) {
             return Invalid("text cannot directly format a list binding", path, UiErrorCode::BindingTypeMismatch);
         }
-        return UiResult<void>::Ok();
+        return {};
     }
     if (listBinding == nullptr) {
         return Invalid("item_field is valid only inside a fixed_step_list template", path);
@@ -132,7 +132,7 @@ struct ValidationContext final {
     if (!listBinding->itemFields.contains(reference.id)) {
         return Invalid("unknown list item field '" + reference.id + "'", path, UiErrorCode::MissingReference);
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 [[nodiscard]] UiResult<void> ValidateTextSource(
@@ -142,7 +142,7 @@ struct ValidationContext final {
     const std::string& path) {
     switch (source.kind) {
     case UiTextSourceKind::Literal:
-        return UiResult<void>::Ok();
+        return {};
     case UiTextSourceKind::Value:
         return ValidateValueReference(source.value, context, listBinding, path);
     case UiTextSourceKind::Compose: {
@@ -196,7 +196,7 @@ struct ValidationContext final {
                 path + "/placeholders/" + name);
             if (!validation) return validation;
         }
-        return UiResult<void>::Ok();
+        return {};
     }
     case UiTextSourceKind::Select:
         return ValidateCases(
@@ -217,7 +217,7 @@ struct ValidationContext final {
         if (!context.colors.contains(source.color)) {
             return Invalid("unknown color '" + source.color + "'", path, UiErrorCode::MissingReference);
         }
-        return UiResult<void>::Ok();
+        return {};
     }
     return ValidateCases(
         source.selectionBinding,
@@ -247,7 +247,7 @@ struct ValidationContext final {
     if (!context.colors.contains(color)) {
         return Invalid("unknown color '" + std::string(color) + "'", path, UiErrorCode::MissingReference);
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 struct CanvasElementState final {
@@ -414,7 +414,7 @@ struct CanvasElementState final {
             elementPath + "/children");
         if (!childrenValidation) return childrenValidation;
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 } // namespace
@@ -548,7 +548,7 @@ UiResult<void> UiDocumentCodec::Validate(const UiDocument& document) {
     if (document.canvases.empty()) {
         return Invalid("at least one canvas is required", "/canvases");
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 } // namespace Engine::Ui

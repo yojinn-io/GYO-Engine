@@ -7,7 +7,7 @@
  */
 namespace Engine::IO::Helpers {
 
-    inline IoResultVoid
+    inline IoResult<void>
     WriteAllTextUtf8(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
                      std::string_view text,
                      const WriteAllOptions& opt = {}) {
@@ -16,7 +16,7 @@ namespace Engine::IO::Helpers {
         return WriteAllBytes(fs, uri, span, opt);
     }
 
-    inline IoResultVoid
+    inline IoResult<void>
     WriteAllTextUtf8(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
                      std::string_view text,
                      const WriteAllOptions& opt = {}) {

@@ -35,8 +35,7 @@ class EmptyAssetSource final : public Asset::Loading::IAssetSource {
 public:
     Base::Result<std::vector<std::byte>, Asset::AssetError> ReadAll(
         std::string_view) override {
-        return Base::Result<std::vector<std::byte>, Asset::AssetError>::Ok(
-            {std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03}});
+        return std::vector<std::byte>{std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
     }
 };
 
@@ -53,8 +52,7 @@ public:
         bitmap.height = 2;
         bitmap.rowPitch = 8;
         bitmap.rgba8.resize(16, std::byte{0xFF});
-        return Base::Result<Text::TextBitmap, Text::TextError>::Ok(
-            std::move(bitmap));
+        return std::move(bitmap);
     }
 };
 
@@ -66,8 +64,7 @@ public:
 
     Base::Result<Render::MeshHandle, Render::RenderError> CreateMesh(
         const Render::MeshView&) override {
-        return Base::Result<Render::MeshHandle, Render::RenderError>::Err(
-            Render::RenderError::Make(
+        return Engine::Base::Err(Render::RenderError::Make(
                 Render::RenderErrorCode::ResourceCreationFailed,
                 "unexpected call"));
     }
@@ -76,21 +73,20 @@ public:
         const Render::ImageView& image) override {
         ++createTextureCount;
         uploadedColorSpaces.push_back(image.colorSpace);
-        return Base::Result<Render::TextureHandle, Render::RenderError>::Ok(
-            Render::TextureHandle::FromParts(
+        return Render::TextureHandle::FromParts(
                 static_cast<std::uint32_t>(createTextureCount),
-                1));
+                1);
     }
 
     Base::Result<void, Render::RenderError> ReleaseMesh(
         Render::MeshHandle) override {
-        return Base::Result<void, Render::RenderError>::Ok();
+        return {};
     }
 
     Base::Result<void, Render::RenderError> ReleaseTexture(
         Render::TextureHandle handle) override {
         releasedTextures.push_back(handle);
-        return Base::Result<void, Render::RenderError>::Ok();
+        return {};
     }
 
 };
@@ -131,7 +127,7 @@ struct FontRendererFixture final {
         output << R"({"version":1,"assets":[{"id":"test.font","type":"font","path":"font.ttf"}]})";
         output.close();
 
-        registry.Register(std::make_unique<Asset::Loaders::FontLoader>());
+        REQUIRE(registry.Register(std::make_unique<Asset::Loaders::FontLoader>()));
         Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = (directory / "assets").string();
         Asset::Resolver::AssetPathResolver resolver(options);
@@ -154,8 +150,7 @@ public:
         for (const char value : kPpm) {
             bytes.push_back(static_cast<std::byte>(value));
         }
-        return Base::Result<std::vector<std::byte>, Asset::AssetError>::Ok(
-            std::move(bytes));
+        return std::move(bytes);
     }
 };
 
@@ -182,7 +177,7 @@ struct TextureRendererFixture final {
         output << R"({"version":1,"assets":[{"id":"test.texture","type":"texture","path":"atlas.ppm"}]})";
         output.close();
 
-        registry.Register(std::make_unique<Asset::Loaders::TextureLoader>());
+        REQUIRE(registry.Register(std::make_unique<Asset::Loaders::TextureLoader>()));
         Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = (directory / "assets").string();
         Asset::Resolver::AssetPathResolver resolver(options);

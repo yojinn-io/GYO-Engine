@@ -25,7 +25,6 @@ namespace Engine::IO::FS {
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
 
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     /// IFileSystem：OS/バックエンド差異を隠す最小抽象
     /// - file:// (ネイティブ) / pak:// / memory:// / http:// 等の実装差を platform 側で吸収
@@ -51,16 +50,16 @@ namespace Engine::IO::FS {
         virtual IoResult<FileInfo> Stat(const Engine::IO::Path::Uri& uri) = 0;
 
         /// CreateDirectories：親を含めて作る（mkdir -p）
-        virtual IoResultVoid CreateDirectories(const Engine::IO::Path::Uri& uri) = 0;
+        virtual IoResult<void> CreateDirectories(const Engine::IO::Path::Uri& uri) = 0;
 
         /// Remove：ファイル/ディレクトリ削除
-        virtual IoResultVoid Remove(const Engine::IO::Path::Uri& uri, const RemoveOptions& opt = {}) = 0;
+        virtual IoResult<void> Remove(const Engine::IO::Path::Uri& uri, const RemoveOptions& opt = {}) = 0;
 
         /// Move/Rename：同一 backend 内の移動
-        virtual IoResultVoid Move(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) = 0;
+        virtual IoResult<void> Move(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) = 0;
 
         /// Copy：必要なら（大きいのでデフォルトで入れない方針でもOK）
-        virtual IoResultVoid Copy(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) = 0;
+        virtual IoResult<void> Copy(const Engine::IO::Path::Uri& from, const Engine::IO::Path::Uri& to) = 0;
 
         /// List：ディレクトリ列挙
         virtual IoResult<std::vector<DirectoryEntry>>

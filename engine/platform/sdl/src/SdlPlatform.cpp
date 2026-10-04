@@ -16,16 +16,15 @@ SdlPlatformError MakeSdlError(
 
 Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>
 SdlPlatform::Create(const SdlPlatformOptions& options) {
-    using Result = Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>;
 
     if (options.width <= 0 || options.height <= 0) {
-        return Result::Err(SdlPlatformError::Make(
+        return Base::Err(SdlPlatformError::Make(
             SdlPlatformErrorCode::InvalidWindowSize,
             "SdlPlatform: window dimensions must be positive"));
     }
 
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-        return Result::Err(MakeSdlError(
+        return Base::Err(MakeSdlError(
             SdlPlatformErrorCode::InitializationFailed,
             "SdlPlatform: SDL video initialization failed"));
     }
@@ -42,10 +41,10 @@ SdlPlatform::Create(const SdlPlatformOptions& options) {
             SdlPlatformErrorCode::WindowCreationFailed,
             "SdlPlatform: SDL window creation failed");
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        return Result::Err(std::move(error));
+        return Base::Err(std::move(error));
     }
 
-    return Result::Ok(std::unique_ptr<SdlPlatform>(new SdlPlatform(window)));
+    return std::unique_ptr<SdlPlatform>(new SdlPlatform(window));
 }
 
 SdlPlatform::SdlPlatform(SDL_Window* window) noexcept

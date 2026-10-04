@@ -20,7 +20,6 @@ namespace Engine::IO::Stream {
     template<class T>
     using IoResult = Base::Result<T, IoError>;
 
-    using IoResultVoid = Base::Result<void, IoError>;
 
     class SpanStream final : public IStream {
     public:
@@ -52,8 +51,8 @@ namespace Engine::IO::Stream {
         IoResult<std::uint64_t> Seek(std::int64_t offset, SeekWhence whence) override;
         IoResult<std::uint64_t> Size() const override;
 
-        IoResultVoid Flush() override;
-        IoResultVoid Close() override;
+        IoResult<void> Flush() override;
+        IoResult<void> Close() override;
 
     private:
         const std::byte* ro_ = nullptr;

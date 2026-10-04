@@ -66,60 +66,58 @@ void RenderQueue::ClearViewModelCamera() noexcept {
 
 Base::Result<void, RenderError> RenderQueue::Submit(
     const MeshSubmission& submission) {
-    using Result = Base::Result<void, RenderError>;
 
     if (!submission.mesh) {
-        return Result::Err(Invalid("RenderQueue: mesh submission requires a valid mesh handle"));
+        return Base::Err(Invalid("RenderQueue: mesh submission requires a valid mesh handle"));
     }
     if (submission.layer != MeshLayer::World &&
         submission.layer != MeshLayer::ViewModel &&
         submission.layer != MeshLayer::WorldOverlay) {
-        return Result::Err(Invalid("RenderQueue: mesh layer is invalid"));
+        return Base::Err(Invalid("RenderQueue: mesh layer is invalid"));
     }
     const auto& camera = submission.layer == MeshLayer::ViewModel
         ? viewModelCamera_ : camera_;
     if (!camera || !IsValid(*camera)) {
-        return Result::Err(Invalid(
+        return Base::Err(Invalid(
             "RenderQueue: mesh submission requires a valid camera for its layer"));
     }
     if (!IsValid(submission.transform) || !IsFinite(submission.material.tint) ||
         !IsFinite(submission.uv.scale) || !IsFinite(submission.uv.offset)) {
-        return Result::Err(Invalid("RenderQueue: mesh submission contains non-finite values"));
+        return Base::Err(Invalid("RenderQueue: mesh submission contains non-finite values"));
     }
 
-    if (submission.material.shader.empty()) return Result::Err(Invalid("RenderQueue: shader ID is empty"));
+    if (submission.material.shader.empty()) return Base::Err(Invalid("RenderQueue: shader ID is empty"));
     if (submission.surface != SurfaceMode::Opaque && submission.surface != SurfaceMode::AlphaMasked && submission.surface != SurfaceMode::Sky)
-        return Result::Err(Invalid("RenderQueue: mesh surface mode is invalid"));
+        return Base::Err(Invalid("RenderQueue: mesh surface mode is invalid"));
     if (submission.material.sampler != SamplerMode::LinearClamp && submission.material.sampler != SamplerMode::LinearWrap)
-        return Result::Err(Invalid("RenderQueue: material sampler is invalid"));
+        return Base::Err(Invalid("RenderQueue: material sampler is invalid"));
     meshes_.push_back(submission);
-    return Result::Ok();
+    return {};
 }
 
 Base::Result<void, RenderError> RenderQueue::Submit(
     const SpriteSubmission& submission) {
-    using Result = Base::Result<void, RenderError>;
 
     if (!IsFinite(submission.destinationPixels) || !IsFinite(submission.sourceUv) ||
         !IsFinite(submission.pivotNormalized) ||
         !IsFinite(submission.rotationRadians) || !IsFinite(submission.material.tint)) {
-        return Result::Err(Invalid("RenderQueue: sprite submission contains non-finite values"));
+        return Base::Err(Invalid("RenderQueue: sprite submission contains non-finite values"));
     }
     if (submission.destinationPixels.width < 0.0F ||
         submission.destinationPixels.height < 0.0F ||
         submission.sourceUv.width < 0.0F || submission.sourceUv.height < 0.0F) {
-        return Result::Err(Invalid("RenderQueue: sprite rectangles cannot have negative dimensions"));
+        return Base::Err(Invalid("RenderQueue: sprite rectangles cannot have negative dimensions"));
     }
     if (submission.layer != CompositeLayer::Scene &&
         submission.layer != CompositeLayer::Overlay) {
-        return Result::Err(Invalid("RenderQueue: sprite composite layer is invalid"));
+        return Base::Err(Invalid("RenderQueue: sprite composite layer is invalid"));
     }
 
-    if (submission.material.shader.empty()) return Result::Err(Invalid("RenderQueue: shader ID is empty"));
+    if (submission.material.shader.empty()) return Base::Err(Invalid("RenderQueue: shader ID is empty"));
     if (submission.material.sampler != SamplerMode::LinearClamp && submission.material.sampler != SamplerMode::LinearWrap)
-        return Result::Err(Invalid("RenderQueue: material sampler is invalid"));
+        return Base::Err(Invalid("RenderQueue: material sampler is invalid"));
     sprites_.push_back(submission);
-    return Result::Ok();
+    return {};
 }
 
 const FrameDescription& RenderQueue::Frame() const noexcept {

@@ -60,8 +60,7 @@ public:
         const auto found = overrides.find(std::string(path));
         if (found != overrides.end()) {
             const auto bytes = std::as_bytes(std::span(found->second.data(), found->second.size()));
-            return Engine::Base::Result<Engine::Asset::Loading::ByteBuffer, Engine::Asset::AssetError>::Ok(
-                {bytes.begin(), bytes.end()});
+            return Engine::Asset::Loading::ByteBuffer(bytes.begin(), bytes.end());
         }
         Engine::Asset::Loading::NativeFileAssetSource native;
         return native.ReadAll(path);

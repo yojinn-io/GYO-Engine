@@ -30,9 +30,7 @@ namespace Engine::Asset::Loaders {
         }
 
         (void)ctx;
-        return Base::Result<Core::AnyAsset, AssetError>::Ok(
-            Core::AnyAsset::FromShared<TextAsset>(std::move(txt))
-        );
+        return Core::AnyAsset::FromShared<TextAsset>(std::move(txt));
     }
 
 } // namespace Engine::Asset::Loaders

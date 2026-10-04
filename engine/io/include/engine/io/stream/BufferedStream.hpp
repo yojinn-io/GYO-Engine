@@ -17,7 +17,6 @@ namespace Engine::IO::Stream {
     using IoError  = Engine::Base::Error<Engine::IO::IoErrorCode>;
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     struct BufferingOptions final {
         std::size_t readBufferSize  = 64 * 1024;
@@ -42,21 +41,21 @@ namespace Engine::IO::Stream {
         IoResult<std::uint64_t> Seek(std::int64_t offset, SeekWhence whence) override;
         IoResult<std::uint64_t> Size() const override;
 
-        IoResultVoid Flush() override;
-        IoResultVoid Close() override;
+        IoResult<void> Flush() override;
+        IoResult<void> Close() override;
 
         IStream& Inner() noexcept { return *inner_; }
         const IStream& Inner() const noexcept { return *inner_; }
 
     private:
-        IoResultVoid FlushWriteBuffer();
+        IoResult<void> FlushWriteBuffer();
         IoResult<std::size_t> FillReadBuffer();
 
         // read -> write の切替で「未消費 read buffer」を元に戻す
-        IoResultVoid SyncForWrite();
+        IoResult<void> SyncForWrite();
 
         // write -> read の切替で write を確定
-        IoResultVoid SyncForRead();
+        IoResult<void> SyncForRead();
 
     private:
         std::unique_ptr<IStream> inner_;

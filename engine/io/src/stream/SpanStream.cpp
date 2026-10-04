@@ -5,15 +5,15 @@
 namespace Engine::IO::Stream {
     IoResult<std::size_t> SpanStream::Read(void* dst, std::size_t bytes)  {
         if (!open_) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::ReadFailed,
                 "SpanStream: read on closed stream"));
         }
-        if (bytes == 0) return IoResult<std::size_t>::Ok(0);
+        if (bytes == 0) return 0;
 
         if (pos_ >= size_) {
             eof_ = true;
-            return IoResult<std::size_t>::Ok(0);
+            return 0;
         }
 
         const std::uint64_t remain = size_ - pos_;
@@ -24,25 +24,25 @@ namespace Engine::IO::Stream {
         std::memcpy(dst, ro_ + pos_, n);
         pos_ += static_cast<std::uint64_t>(n);
         eof_ = (pos_ >= size_);
-        return IoResult<std::size_t>::Ok(n);
+        return n;
     }
 
     IoResult<std::size_t> SpanStream::Write(const void* src, std::size_t bytes)  {
         if (!open_) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::WriteFailed,
                 "SpanStream: write on closed stream"));
         }
         if (!writable_) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported,
                 "SpanStream: write not supported (read-only)"));
         }
-        if (bytes == 0) return IoResult<std::size_t>::Ok(0);
+        if (bytes == 0) return 0;
 
         const std::uint64_t need = pos_ + static_cast<std::uint64_t>(bytes);
         if (need > size_) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::WriteFailed,
                 "SpanStream: write beyond end",
                 "need=" + std::to_string(need) + " size=" + std::to_string(size_)));
@@ -51,21 +51,21 @@ namespace Engine::IO::Stream {
         std::memcpy(rw_ + pos_, src, bytes);
         pos_ += static_cast<std::uint64_t>(bytes);
         eof_ = false;
-        return IoResult<std::size_t>::Ok(bytes);
+        return bytes;
     }
 
     IoResult<std::uint64_t> SpanStream::Tell() const  {
         if (!open_) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::SeekFailed,
                 "SpanStream: tell on closed stream"));
         }
-        return IoResult<std::uint64_t>::Ok(pos_);
+        return pos_;
     }
 
     IoResult<std::uint64_t> SpanStream::Seek(std::int64_t offset, SeekWhence whence)  {
         if (!open_) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::SeekFailed,
                 "SpanStream: seek on closed stream"));
         }
@@ -82,7 +82,7 @@ namespace Engine::IO::Stream {
         }
 
         if (target < 0 || target > end) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::SeekFailed,
                 "SpanStream: seek out of range",
                 "target=" + std::to_string(target) + " size=" + std::to_string(end)));
@@ -90,30 +90,30 @@ namespace Engine::IO::Stream {
 
         pos_ = static_cast<std::uint64_t>(target);
         eof_ = false;
-        return IoResult<std::uint64_t>::Ok(pos_);
+        return pos_;
     }
 
     IoResult<std::uint64_t> SpanStream::Size() const  {
         if (!open_) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported,
                 "SpanStream: size on closed stream"));
         }
-        return IoResult<std::uint64_t>::Ok(size_);
+        return size_;
     }
 
-    IoResultVoid SpanStream::Flush()  {
+    IoResult<void> SpanStream::Flush()  {
         if (!open_) {
-            return IoResultVoid::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported,
                 "SpanStream: flush on closed stream"));
         }
-        return IoResultVoid::Ok(); // no-op
+        return {}; // no-op
     }
 
-    IoResultVoid SpanStream::Close()  {
+    IoResult<void> SpanStream::Close()  {
         open_ = false;
         eof_ = false;
-        return IoResultVoid::Ok();
+        return {};
     }
 }

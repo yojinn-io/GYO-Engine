@@ -20,34 +20,31 @@ public:
     bool failUpdate{};
 
     Base::Result<Render::MeshHandle,Render::RenderError> CreateMesh(const Render::MeshView& mesh) override {
-        using R=Base::Result<Render::MeshHandle,Render::RenderError>;
-        if(++createMeshCalls==failMeshCall) return R::Err(Render::RenderError::Make(
+        if(++createMeshCalls==failMeshCall) return Engine::Base::Err(Render::RenderError::Make(
             Render::RenderErrorCode::ResourceCreationFailed,"injected mesh failure"));
         const auto handle=Render::MeshHandle::FromParts(++nextMesh,1);
         meshes[handle]={mesh.vertices.begin(),mesh.vertices.end()};
-        return R::Ok(handle);
+        return handle;
     }
     Base::Result<Render::TextureHandle,Render::RenderError> CreateTexture(const Render::ImageView& image) override {
-        using R=Base::Result<Render::TextureHandle,Render::RenderError>;
-        if(++createTextureCalls==failTextureCall) return R::Err(Render::RenderError::Make(
+        if(++createTextureCalls==failTextureCall) return Engine::Base::Err(Render::RenderError::Make(
             Render::RenderErrorCode::ResourceCreationFailed,"injected texture failure"));
         const auto handle=Render::TextureHandle::FromParts(++nextTexture,1);
         textures[handle]={image.rgba8.begin(),image.rgba8.end()};
-        return R::Ok(handle);
+        return handle;
     }
     Base::Result<void,Render::RenderError> UpdateMeshVertices(
         Render::MeshHandle handle,std::span<const Render::Vertex3D> vertices) override {
-        using R=Base::Result<void,Render::RenderError>;
-        if(failUpdate) return R::Err(Render::RenderError::Make(
+        if(failUpdate) return Engine::Base::Err(Render::RenderError::Make(
             Render::RenderErrorCode::ResourceCreationFailed,"injected update failure"));
         meshes.at(handle)={vertices.begin(),vertices.end()};
-        return R::Ok();
+        return {};
     }
     Base::Result<void,Render::RenderError> ReleaseMesh(Render::MeshHandle handle) override {
-        meshes.erase(handle);return Base::Result<void,Render::RenderError>::Ok();
+        meshes.erase(handle);return {};
     }
     Base::Result<void,Render::RenderError> ReleaseTexture(Render::TextureHandle handle) override {
-        textures.erase(handle);return Base::Result<void,Render::RenderError>::Ok();
+        textures.erase(handle);return {};
     }
 };
 

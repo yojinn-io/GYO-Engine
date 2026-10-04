@@ -76,18 +76,18 @@ namespace {
     std::string_view id) {
     const UiBindingDeclaration* declaration = FindBindingDeclaration(document, id);
     if (declaration == nullptr) {
-        return UiResult<const UiBindingValue*>::Err(RuntimeError(
+        return Base::Err(RuntimeError(
             UiErrorCode::MissingReference,
             "UI document refers to unknown binding '" + std::string(id) + "'"));
     }
     const auto found = bindings.find(std::string(id));
     if (found == bindings.end()) {
-        return UiResult<const UiBindingValue*>::Err(RuntimeError(
+        return Base::Err(RuntimeError(
             UiErrorCode::MissingBinding,
             "binding value '" + std::string(id) + "' was not supplied"));
     }
     if (!MatchesBinding(found->second, declaration->type)) {
-        return UiResult<const UiBindingValue*>::Err(RuntimeError(
+        return Base::Err(RuntimeError(
             UiErrorCode::BindingTypeMismatch,
             "binding value '" + std::string(id) + "' has the wrong type"));
     }
@@ -95,7 +95,7 @@ namespace {
         const std::string& selected = std::get<std::string>(found->second);
         if (std::find(declaration->enumValues.begin(), declaration->enumValues.end(), selected) ==
             declaration->enumValues.end()) {
-            return UiResult<const UiBindingValue*>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::BindingTypeMismatch,
                 "enum binding '" + std::string(id) + "' is outside its declared domain"));
         }
@@ -104,21 +104,21 @@ namespace {
         const UiList& list = std::get<UiList>(found->second);
         for (const UiListItem& item : list.items) {
             if (item.fields.size() != declaration->itemFields.size()) {
-                return UiResult<const UiBindingValue*>::Err(RuntimeError(
+                return Base::Err(RuntimeError(
                     UiErrorCode::BindingTypeMismatch,
                     "list binding '" + std::string(id) + "' has an invalid item shape"));
             }
             for (const auto& [name, type] : declaration->itemFields) {
                 const auto field = item.fields.find(name);
                 if (field == item.fields.end() || !MatchesScalar(field->second, type)) {
-                    return UiResult<const UiBindingValue*>::Err(RuntimeError(
+                    return Base::Err(RuntimeError(
                         UiErrorCode::BindingTypeMismatch,
                         "list binding '" + std::string(id) + "' field '" + name + "' has the wrong type"));
                 }
             }
         }
     }
-    return UiResult<const UiBindingValue*>::Ok(&found->second);
+    return &found->second;
 }
 
 [[nodiscard]] UiResult<UiScalarValue> ResolveScalar(
@@ -128,31 +128,31 @@ namespace {
     const UiListItem* item) {
     if (reference.kind == UiValueReferenceKind::ItemField) {
         if (item == nullptr) {
-            return UiResult<UiScalarValue>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
                 "item_field was evaluated outside a list item"));
         }
         const auto found = item->fields.find(reference.id);
         if (found == item->fields.end()) {
-            return UiResult<UiScalarValue>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::MissingBinding,
                 "list item field '" + reference.id + "' was not supplied"));
         }
-        return UiResult<UiScalarValue>::Ok(found->second);
+        return found->second;
     }
 
     auto resolved = ResolveBinding(document, bindings, reference.id);
-    if (!resolved) return UiResult<UiScalarValue>::Err(std::move(resolved).error());
+    if (!resolved) return Base::Err(std::move(resolved).error());
     const UiBindingValue& value = *resolved.value();
     return std::visit(
         [](const auto& typed) -> UiResult<UiScalarValue> {
             using T = std::decay_t<decltype(typed)>;
             if constexpr (std::is_same_v<T, UiList>) {
-                return UiResult<UiScalarValue>::Err(RuntimeError(
+                return Base::Err(RuntimeError(
                     UiErrorCode::BindingTypeMismatch,
                     "a list cannot be formatted as scalar text"));
             } else {
-                return UiResult<UiScalarValue>::Ok(UiScalarValue{typed});
+                return UiScalarValue{typed};
             }
         },
         value);
@@ -185,15 +185,15 @@ namespace {
     const UiBindingTable& bindings,
     std::string_view bindingId) {
     auto resolved = ResolveBinding(document, bindings, bindingId);
-    if (!resolved) return UiResult<std::string>::Err(std::move(resolved).error());
+    if (!resolved) return Base::Err(std::move(resolved).error());
     const UiBindingValue& value = *resolved.value();
     if (const auto* text = std::get_if<std::string>(&value)) {
-        return UiResult<std::string>::Ok(*text);
+        return *text;
     }
     if (const auto* boolean = std::get_if<bool>(&value)) {
-        return UiResult<std::string>::Ok(*boolean ? "true" : "false");
+        return *boolean ? "true" : "false";
     }
-    return UiResult<std::string>::Err(RuntimeError(
+    return Base::Err(RuntimeError(
         UiErrorCode::BindingTypeMismatch,
         "selection binding must be boolean or enum"));
 }
@@ -205,11 +205,11 @@ namespace {
     const UiListItem* item) {
     switch (source.kind) {
     case UiTextSourceKind::Literal:
-        return UiResult<std::string>::Ok(source.literal);
+        return source.literal;
     case UiTextSourceKind::Value: {
         auto value = ResolveScalar(document, bindings, source.value, item);
-        if (!value) return UiResult<std::string>::Err(std::move(value).error());
-        return UiResult<std::string>::Ok(FormatScalar(value.value(), source.format));
+        if (!value) return Base::Err(std::move(value).error());
+        return FormatScalar(value.value(), source.format);
     }
     case UiTextSourceKind::Compose: {
         std::string result;
@@ -236,25 +236,25 @@ namespace {
             const std::string name = source.composeFormat.substr(index + 1U, end - index - 1U);
             const UiTextPlaceholder& placeholder = source.placeholders.at(name);
             auto value = ResolveScalar(document, bindings, placeholder.value, item);
-            if (!value) return UiResult<std::string>::Err(std::move(value).error());
+            if (!value) return Base::Err(std::move(value).error());
             result += FormatScalar(value.value(), placeholder.format);
             index = end + 1U;
         }
-        return UiResult<std::string>::Ok(std::move(result));
+        return std::move(result);
     }
     case UiTextSourceKind::Select: {
         auto key = SelectionKey(document, bindings, source.selectionBinding);
-        if (!key) return UiResult<std::string>::Err(std::move(key).error());
+        if (!key) return Base::Err(std::move(key).error());
         const auto selected = source.cases.find(key.value());
         if (selected == source.cases.end()) {
-            return UiResult<std::string>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::BindingTypeMismatch,
                 "text selection has no case for '" + key.value() + "'"));
         }
-        return UiResult<std::string>::Ok(selected->second);
+        return selected->second;
     }
     }
-    return UiResult<std::string>::Err(RuntimeError(UiErrorCode::RuntimeState, "unknown text source kind"));
+    return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "unknown text source kind"));
 }
 
 [[nodiscard]] UiResult<UiColor> EvaluateColor(
@@ -266,10 +266,10 @@ namespace {
         colorId = source.color;
     } else {
         auto key = SelectionKey(document, bindings, source.selectionBinding);
-        if (!key) return UiResult<UiColor>::Err(std::move(key).error());
+        if (!key) return Base::Err(std::move(key).error());
         const auto selected = source.cases.find(key.value());
         if (selected == source.cases.end()) {
-            return UiResult<UiColor>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::BindingTypeMismatch,
                 "color selection has no case for '" + key.value() + "'"));
         }
@@ -277,9 +277,9 @@ namespace {
     }
     const auto color = document.colors.find(colorId);
     if (color == document.colors.end()) {
-        return UiResult<UiColor>::Err(RuntimeError(UiErrorCode::MissingReference, "unknown color '" + colorId + "'"));
+        return Base::Err(RuntimeError(UiErrorCode::MissingReference, "unknown color '" + colorId + "'"));
     }
-    return UiResult<UiColor>::Ok(color->second);
+    return color->second;
 }
 
 [[nodiscard]] UiResult<UiColor> NamedColor(
@@ -287,9 +287,9 @@ namespace {
     std::string_view id) {
     const auto color = document.colors.find(std::string(id));
     if (color == document.colors.end()) {
-        return UiResult<UiColor>::Err(RuntimeError(UiErrorCode::MissingReference, "unknown color '" + std::string(id) + "'"));
+        return Base::Err(RuntimeError(UiErrorCode::MissingReference, "unknown color '" + std::string(id) + "'"));
     }
-    return UiResult<UiColor>::Ok(color->second);
+    return color->second;
 }
 
 struct FitTransform final {
@@ -377,7 +377,7 @@ struct FitTransform final {
         });
         if (element.type == UiElementType::FixedStepList) {
             auto listValue = ResolveBinding(document, bindings, element.binding);
-            if (!listValue) return UiResult<void>::Err(std::move(listValue).error());
+            if (!listValue) return Base::Err(std::move(listValue).error());
             const UiList& list = std::get<UiList>(*listValue.value());
             const std::size_t count = Math::Min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
@@ -409,7 +409,7 @@ struct FitTransform final {
             drawOrder);
         if (!children) return children;
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 [[nodiscard]] double QuantizeSlider(const UiElement& slider, double value) noexcept {
@@ -423,8 +423,8 @@ struct FitTransform final {
     const UiBindingTable& bindings,
     const UiElement& slider) {
     auto value = ResolveBinding(document, bindings, slider.binding);
-    if (!value) return UiResult<double>::Err(std::move(value).error());
-    return UiResult<double>::Ok(std::get<double>(*value.value()));
+    if (!value) return Base::Err(std::move(value).error());
+    return std::get<double>(*value.value());
 }
 
 [[nodiscard]] UiResult<std::optional<UiActionEvent>> SliderEvent(
@@ -433,13 +433,13 @@ struct FitTransform final {
     const UiElement& slider,
     double candidate) {
     auto current = SliderValue(document, bindings, slider);
-    if (!current) return UiResult<std::optional<UiActionEvent>>::Err(std::move(current).error());
+    if (!current) return Base::Err(std::move(current).error());
     const double quantized = QuantizeSlider(slider, candidate);
     if (std::abs(quantized - current.value()) <= 1.0e-9) {
-        return UiResult<std::optional<UiActionEvent>>::Ok(std::nullopt);
+        return std::nullopt;
     }
-    return UiResult<std::optional<UiActionEvent>>::Ok(UiActionEvent{
-        slider.action, slider.id, quantized});
+    return UiActionEvent{
+        slider.action, slider.id, quantized};
 }
 
 [[nodiscard]] UiResult<std::optional<UiActionEvent>> SliderPointerEvent(
@@ -449,7 +449,7 @@ struct FitTransform final {
     Math::Rect sliderPixels,
     float pointerX) {
     if (sliderPixels.width <= 0.0F) {
-        return UiResult<std::optional<UiActionEvent>>::Err(RuntimeError(
+        return Base::Err(RuntimeError(
             UiErrorCode::RuntimeState, "slider resolved to a non-positive width"));
     }
     const double ratio = Math::Clamp(
@@ -480,17 +480,17 @@ struct ComposeContext final {
     std::optional<std::string> textOverride = std::nullopt,
     std::optional<Math::Rect> pixelBoundsOverride = std::nullopt) {
     auto text = textOverride
-        ? UiResult<std::string>::Ok(std::move(*textOverride))
+        ? UiResult<std::string>(std::move(*textOverride))
         : EvaluateText(element.text, context.document, context.bindings, item);
-    if (!text) return UiResult<void>::Err(std::move(text).error());
+    if (!text) return Base::Err(std::move(text).error());
     auto color = EvaluateColor(element.textStyle.color, context.document, context.bindings);
-    if (!color) return UiResult<void>::Err(std::move(color).error());
+    if (!color) return Base::Err(std::move(color).error());
     const std::string& alias = element.textStyle.font.empty()
         ? context.document.defaultFont
         : element.textStyle.font;
     const auto font = context.document.fonts.find(alias);
     if (font == context.document.fonts.end()) {
-        return UiResult<void>::Err(RuntimeError(UiErrorCode::MissingReference, "unknown font alias '" + alias + "'"));
+        return Base::Err(RuntimeError(UiErrorCode::MissingReference, "unknown font alias '" + alias + "'"));
     }
     context.drawList.commands.emplace_back(UiTextDraw{
         pixelBoundsOverride.value_or(ToPixels(designRect, context.fit)),
@@ -502,7 +502,7 @@ struct ComposeContext final {
         element.textStyle.verticalAlign,
         clipPixels,
     });
-    return UiResult<void>::Ok();
+    return {};
 }
 
 [[nodiscard]] UiResult<void> ComposeElements(
@@ -517,7 +517,7 @@ struct ComposeContext final {
         const Math::Rect designClip = Math::Intersection(parentClip, design);
         const Math::Rect clipPixels = ToPixels(designClip, context.fit);
         if (pixels.width < 0.0F || pixels.height < 0.0F) {
-            return UiResult<void>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
                 "element '" + element.id + "' resolved to a negative size"));
         }
@@ -527,13 +527,13 @@ struct ComposeContext final {
             break;
         case UiElementType::Panel: {
             auto color = EvaluateColor(element.color, context.document, context.bindings);
-            if (!color) return UiResult<void>::Err(std::move(color).error());
+            if (!color) return Base::Err(std::move(color).error());
             context.drawList.commands.emplace_back(UiQuadDraw{pixels, color.value(), clipPixels});
             break;
         }
         case UiElementType::Image: {
             auto tint = EvaluateColor(element.color, context.document, context.bindings);
-            if (!tint) return UiResult<void>::Err(std::move(tint).error());
+            if (!tint) return Base::Err(std::move(tint).error());
             context.drawList.commands.emplace_back(UiImageDraw{
                 pixels, element.sourceUv, element.textureAsset, tint.value(), clipPixels});
             break;
@@ -551,7 +551,7 @@ struct ComposeContext final {
                 colorId = element.background.focused;
             }
             auto background = NamedColor(context.document, colorId);
-            if (!background) return UiResult<void>::Err(std::move(background).error());
+            if (!background) return Base::Err(std::move(background).error());
             context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
             auto appended = AppendText(element, design, item, clipPixels, context);
             if (!appended) return appended;
@@ -565,11 +565,11 @@ struct ComposeContext final {
                 colorId = element.background.focused;
             }
             auto background = NamedColor(context.document, colorId);
-            if (!background) return UiResult<void>::Err(std::move(background).error());
+            if (!background) return Base::Err(std::move(background).error());
             context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
 
             auto value = SliderValue(context.document, context.bindings, element);
-            if (!value) return UiResult<void>::Err(std::move(value).error());
+            if (!value) return Base::Err(std::move(value).error());
             const double clamped = Math::Clamp(value.value(), element.minimum, element.maximum);
             const float ratio = static_cast<float>((clamped - element.minimum) / (element.maximum - element.minimum));
             const Math::Rect textBounds{
@@ -592,11 +592,11 @@ struct ComposeContext final {
             if (!valueText) return valueText;
 
             auto trackColor = NamedColor(context.document, element.trackColor);
-            if (!trackColor) return UiResult<void>::Err(std::move(trackColor).error());
+            if (!trackColor) return Base::Err(std::move(trackColor).error());
             auto fillColor = NamedColor(context.document, element.fillColor);
-            if (!fillColor) return UiResult<void>::Err(std::move(fillColor).error());
+            if (!fillColor) return Base::Err(std::move(fillColor).error());
             auto thumbColor = NamedColor(context.document, element.thumbColor);
-            if (!thumbColor) return UiResult<void>::Err(std::move(thumbColor).error());
+            if (!thumbColor) return Base::Err(std::move(thumbColor).error());
             const Math::Rect track{
                 pixels.x + pixels.width * 0.04F,
                 pixels.y + pixels.height * 0.72F,
@@ -618,7 +618,7 @@ struct ComposeContext final {
         }
         case UiElementType::FixedStepList: {
             auto listValue = ResolveBinding(context.document, context.bindings, element.binding);
-            if (!listValue) return UiResult<void>::Err(std::move(listValue).error());
+            if (!listValue) return Base::Err(std::move(listValue).error());
             const UiList& list = std::get<UiList>(*listValue.value());
             const std::size_t count = Math::Min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
@@ -640,7 +640,7 @@ struct ComposeContext final {
         auto children = ComposeElements(element.children, design, designClip, item, context);
         if (!children) return children;
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 } // namespace
@@ -680,12 +680,12 @@ struct UiRuntime::Impl final {
         const UiBindingTable& bindings,
         UiViewport viewport) const {
         if (!document || canvas == nullptr) {
-            return UiResult<std::vector<UiEvaluatedElement>>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
                 "UiRuntime has no active canvas"));
         }
         if (!IsValidViewport(viewport)) {
-            return UiResult<std::vector<UiEvaluatedElement>>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
                 "UI viewport must be finite and positive"));
         }
@@ -708,24 +708,23 @@ struct UiRuntime::Impl final {
             result,
             drawOrder);
         if (!evaluated) {
-            return UiResult<std::vector<UiEvaluatedElement>>::Err(
-                std::move(evaluated).error());
+            return Base::Err(std::move(evaluated).error());
         }
-        return UiResult<std::vector<UiEvaluatedElement>>::Ok(std::move(result));
+        return std::move(result);
     }
 
     [[nodiscard]] UiResult<UiDrawList> ComposeInternal(
         const UiBindingTable& bindings,
         UiViewport viewport) const {
         if (!document || canvas == nullptr) {
-            return UiResult<UiDrawList>::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
+            return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
         }
         if (!IsValidViewport(viewport)) {
-            return UiResult<UiDrawList>::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
+            return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
         }
         const auto backdrop = document->colors.find(canvas->backdropColor);
         if (backdrop == document->colors.end()) {
-            return UiResult<UiDrawList>::Err(RuntimeError(UiErrorCode::MissingReference, "active canvas backdrop color is missing"));
+            return Base::Err(RuntimeError(UiErrorCode::MissingReference, "active canvas backdrop color is missing"));
         }
         UiDrawList result;
         const Math::Rect viewportRect{0.0F, 0.0F, viewport.width, viewport.height};
@@ -734,8 +733,8 @@ struct UiRuntime::Impl final {
             *document, bindings, interaction, pressedElement, MakeFit(*document, viewport), result};
         const Math::Rect root{0.0F, 0.0F, document->designCanvas.size.x, document->designCanvas.size.y};
         auto composed = ComposeElements(canvas->children, root, root, nullptr, context);
-        if (!composed) return UiResult<UiDrawList>::Err(std::move(composed).error());
-        return UiResult<UiDrawList>::Ok(std::move(result));
+        if (!composed) return Base::Err(std::move(composed).error());
+        return std::move(result);
     }
 };
 
@@ -746,7 +745,7 @@ UiRuntime& UiRuntime::operator=(UiRuntime&&) noexcept = default;
 
 UiResult<void> UiRuntime::Initialize(std::shared_ptr<const UiDocument> document) {
     if (!document) {
-        return UiResult<void>::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime requires a non-null document"));
+        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime requires a non-null document"));
     }
     auto validation = UiDocumentCodec::Validate(*document);
     if (!validation) return validation;
@@ -756,7 +755,7 @@ UiResult<void> UiRuntime::Initialize(std::shared_ptr<const UiDocument> document)
     impl_->pressedElement.clear();
     impl_->pointerWasAvailable = false;
     impl_->lastPointerPixels = {};
-    return UiResult<void>::Ok();
+    return {};
 }
 
 void UiRuntime::Reset() noexcept {
@@ -770,14 +769,14 @@ void UiRuntime::Reset() noexcept {
 
 UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
     if (!impl_->document) {
-        return UiResult<void>::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
+        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
     }
     const auto found = std::find_if(
         impl_->document->canvases.begin(),
         impl_->document->canvases.end(),
         [canvasId](const UiCanvas& candidate) { return candidate.id == canvasId; });
     if (found == impl_->document->canvases.end()) {
-        return UiResult<void>::Err(RuntimeError(UiErrorCode::MissingReference, "unknown canvas '" + std::string(canvasId) + "'"));
+        return Base::Err(RuntimeError(UiErrorCode::MissingReference, "unknown canvas '" + std::string(canvasId) + "'"));
     }
     impl_->canvas = &*found;
     impl_->interaction.activeCanvas = found->id;
@@ -792,7 +791,7 @@ UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
     } else {
         impl_->interaction.focusedElement.clear();
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
@@ -800,10 +799,10 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     const UiBindingTable& bindings,
     UiViewport viewport) {
     if (!impl_->document || impl_->canvas == nullptr) {
-        return UiResult<std::vector<UiActionEvent>>::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
+        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime has no active canvas"));
     }
     if (!IsValidViewport(viewport)) {
-        return UiResult<std::vector<UiActionEvent>>::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
+        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UI viewport must be finite and positive"));
     }
     impl_->pressedElement.clear();
     std::vector<UiActionEvent> events;
@@ -818,12 +817,12 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
             events.push_back({*impl_->canvas->cancelAction, {}, std::monostate{}});
         }
         impl_->TrackPointer(input);
-        return UiResult<std::vector<UiActionEvent>>::Ok(std::move(events));
+        return std::move(events);
     }
 
     auto evaluated = impl_->EvaluateInternal(bindings, viewport);
     if (!evaluated) {
-        return UiResult<std::vector<UiActionEvent>>::Err(std::move(evaluated).error());
+        return Base::Err(std::move(evaluated).error());
     }
     const std::vector<UiEvaluatedElement>& layouts = evaluated.value();
     const UiEvaluatedElement* hit = input.pointerAvailable
@@ -837,7 +836,7 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     if (input.pointerPrimaryPressed && hit != nullptr) {
         const UiElement* hitElement = FindElement(impl_->canvas->children, hit->id);
         if (hitElement == nullptr) {
-            return UiResult<std::vector<UiActionEvent>>::Err(RuntimeError(
+            return Base::Err(RuntimeError(
                 UiErrorCode::RuntimeState,
                 "evaluated interactive element is missing from the document"));
         }
@@ -852,7 +851,7 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
                 *hitElement,
                 hit->boundsPixels,
                 input.pointerPixels.x);
-            if (!event) return UiResult<std::vector<UiActionEvent>>::Err(std::move(event).error());
+            if (!event) return Base::Err(std::move(event).error());
             if (event.value()) events.push_back(std::move(*event.value()));
             pointerSliderProcessed = true;
         }
@@ -871,7 +870,7 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
                 impl_->canvas->children,
                 captured->id);
             if (capturedElement == nullptr) {
-                return UiResult<std::vector<UiActionEvent>>::Err(RuntimeError(
+                return Base::Err(RuntimeError(
                     UiErrorCode::RuntimeState,
                     "captured slider is missing from the document"));
             }
@@ -881,7 +880,7 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
                 *capturedElement,
                 captured->boundsPixels,
                 input.pointerPixels.x);
-            if (!event) return UiResult<std::vector<UiActionEvent>>::Err(std::move(event).error());
+            if (!event) return Base::Err(std::move(event).error());
             if (event.value()) events.push_back(std::move(*event.value()));
         }
     }
@@ -907,13 +906,13 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     if (focused != nullptr && focused->type == UiElementType::HorizontalSlider &&
         input.adjustPreviousPressed != input.adjustNextPressed) {
         auto current = SliderValue(*impl_->document, bindings, *focused);
-        if (!current) return UiResult<std::vector<UiActionEvent>>::Err(std::move(current).error());
+        if (!current) return Base::Err(std::move(current).error());
         auto event = SliderEvent(
             *impl_->document,
             bindings,
             *focused,
             current.value() + (input.adjustNextPressed ? focused->step : -focused->step));
-        if (!event) return UiResult<std::vector<UiActionEvent>>::Err(std::move(event).error());
+        if (!event) return Base::Err(std::move(event).error());
         if (event.value()) events.push_back(std::move(*event.value()));
     }
     if (input.activatePressed && focused != nullptr && focused->type == UiElementType::Button) {
@@ -921,7 +920,7 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
         events.push_back({focused->action, focused->id, std::monostate{}});
     }
     impl_->TrackPointer(input);
-    return UiResult<std::vector<UiActionEvent>>::Ok(std::move(events));
+    return std::move(events);
 }
 
 UiResult<UiDrawList> UiRuntime::Compose(
@@ -932,7 +931,7 @@ UiResult<UiDrawList> UiRuntime::Compose(
 
 UiResult<UiDrawList> UiRuntime::ComposePreview(UiViewport viewport) const {
     if (!impl_->document) {
-        return UiResult<UiDrawList>::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
+        return Base::Err(RuntimeError(UiErrorCode::RuntimeState, "UiRuntime is not initialized"));
     }
     UiBindingTable bindings;
     for (const UiBindingDeclaration& declaration : impl_->document->bindings) {
@@ -950,7 +949,7 @@ UiResult<std::vector<UiEvaluatedElement>> UiRuntime::EvaluateLayout(
 UiResult<std::vector<UiEvaluatedElement>> UiRuntime::EvaluatePreviewLayout(
     UiViewport viewport) const {
     if (!impl_->document) {
-        return UiResult<std::vector<UiEvaluatedElement>>::Err(RuntimeError(
+        return Base::Err(RuntimeError(
             UiErrorCode::RuntimeState,
             "UiRuntime is not initialized"));
     }

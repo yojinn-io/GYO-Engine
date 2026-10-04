@@ -41,23 +41,23 @@ namespace Engine::IO::Stream {
         return inner_ ? inner_->IsEof() : true;
     }
 
-    IoResultVoid BufferedStream::SyncForRead() {
+    IoResult<void> BufferedStream::SyncForRead() {
         // 読む前に書き込みを確定
         if (wlen_ > 0) {
             auto fr = FlushWriteBuffer();
             if (!fr) return fr;
         }
         // 読み側はそのまま（seek時に破棄する）
-        return IoResultVoid::Ok();
+        return {};
     }
 
-    IoResultVoid BufferedStream::SyncForWrite() {
+    IoResult<void> BufferedStream::SyncForWrite() {
         // 未消費の read buffer がある場合、
         // inner の位置は「先読み済み」の末尾にあるため、論理位置まで戻す必要がある
         if (rlen_ > rpos_) {
             const auto caps = inner_->Caps();
             if (!caps.seekable) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::NotSupported,
                     "BufferedStream: switching read->write requires seekable inner stream"));
             }
@@ -65,7 +65,7 @@ namespace Engine::IO::Stream {
             const std::int64_t unread = static_cast<std::int64_t>(rlen_ - rpos_);
             auto sr = inner_->Seek(-unread, SeekWhence::Current);
             if (!sr) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::SeekFailed,
                     "BufferedStream: failed to rewind unread read-buffer bytes"));
             }
@@ -73,7 +73,7 @@ namespace Engine::IO::Stream {
         // read buffer を破棄
         rpos_ = 0;
         rlen_ = 0;
-        return IoResultVoid::Ok();
+        return {};
     }
 
     IoResult<std::size_t> BufferedStream::FillReadBuffer() {
@@ -81,29 +81,29 @@ namespace Engine::IO::Stream {
         rlen_ = 0;
 
         if (!opt_.enableRead || rbuf_.empty()) {
-            return IoResult<std::size_t>::Ok(0);
+            return 0;
         }
 
         auto rr = inner_->Read(rbuf_.data(), rbuf_.size());
         if (!rr) return rr; // inner 由来のエラーをそのまま返す
 
         rlen_ = rr.value();
-        return IoResult<std::size_t>::Ok(rlen_);
+        return rlen_;
     }
 
-    IoResultVoid BufferedStream::FlushWriteBuffer() {
+    IoResult<void> BufferedStream::FlushWriteBuffer() {
         if (!opt_.enableWrite || wbuf_.empty() || wlen_ == 0) {
-            return IoResultVoid::Ok();
+            return {};
         }
 
         std::size_t writtenTotal = 0;
         while (writtenTotal < wlen_) {
             auto wr = inner_->Write(wbuf_.data() + writtenTotal, wlen_ - writtenTotal);
-            if (!wr) return IoResultVoid::Err(wr.error());
+            if (!wr) return Base::Err(wr.error());
 
             const std::size_t n = wr.value();
             if (n == 0) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::WriteFailed,
                     "BufferedStream: inner write returned 0 (stalled)"));
             }
@@ -111,19 +111,19 @@ namespace Engine::IO::Stream {
         }
 
         wlen_ = 0;
-        return IoResultVoid::Ok();
+        return {};
     }
 
     IoResult<std::size_t> BufferedStream::Read(void* dst, std::size_t bytes) {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::ReadFailed, "BufferedStream: read on closed stream"));
         }
-        if (bytes == 0) return IoResult<std::size_t>::Ok(0);
+        if (bytes == 0) return 0;
 
         // write -> read の同期
         auto sr = SyncForRead();
-        if (!sr) return IoResult<std::size_t>::Err(sr.error());
+        if (!sr) return Base::Err(sr.error());
 
         // バッファ無効ならパススルー
         if (!opt_.enableRead || rbuf_.empty()) {
@@ -157,19 +157,19 @@ namespace Engine::IO::Stream {
             if (out == bytes) break;
         }
 
-        return IoResult<std::size_t>::Ok(out);
+        return out;
     }
 
     IoResult<std::size_t> BufferedStream::Write(const void* src, std::size_t bytes) {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResult<std::size_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::WriteFailed, "BufferedStream: write on closed stream"));
         }
-        if (bytes == 0) return IoResult<std::size_t>::Ok(0);
+        if (bytes == 0) return 0;
 
         // read -> write の同期（未消費 read buffer を巻き戻す）
         auto sw = SyncForWrite();
-        if (!sw) return IoResult<std::size_t>::Err(sw.error());
+        if (!sw) return Base::Err(sw.error());
 
         // バッファ無効ならパススルー
         if (!opt_.enableWrite || wbuf_.empty()) {
@@ -189,7 +189,7 @@ namespace Engine::IO::Stream {
                 if (!wr) return wr;
                 const std::size_t n = wr.value();
                 if (n == 0) {
-                    return IoResult<std::size_t>::Err(IoError::Make(
+                    return Base::Err(IoError::Make(
                         Engine::IO::IoErrorCode::WriteFailed,
                         "BufferedStream: inner write returned 0 (stalled)"));
                 }
@@ -206,22 +206,22 @@ namespace Engine::IO::Stream {
             // 満杯なら flush
             if (wlen_ == cap) {
                 auto fr = FlushWriteBuffer();
-                if (!fr) return IoResult<std::size_t>::Err(fr.error());
+                if (!fr) return Base::Err(fr.error());
             }
         }
 
-        return IoResult<std::size_t>::Ok(bytes);
+        return bytes;
     }
 
     IoResult<std::uint64_t> BufferedStream::Tell() const {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: tell on closed stream"));
         }
 
         const auto caps = inner_->Caps();
         if (!caps.seekable) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported, "BufferedStream: tell requires seekable inner stream"));
         }
 
@@ -240,24 +240,24 @@ namespace Engine::IO::Stream {
             pos += static_cast<std::uint64_t>(wlen_);
         }
 
-        return IoResult<std::uint64_t>::Ok(pos);
+        return pos;
     }
 
     IoResult<std::uint64_t> BufferedStream::Seek(std::int64_t offset, SeekWhence whence) {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: seek on closed stream"));
         }
 
         const auto caps = inner_->Caps();
         if (!caps.seekable) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported, "BufferedStream: seek requires seekable inner stream"));
         }
 
         // 書き込みは確定してから seek
         auto fr = FlushWriteBuffer();
-        if (!fr) return IoResult<std::uint64_t>::Err(fr.error());
+        if (!fr) return Base::Err(fr.error());
 
         // Current is relative to our logical cursor, not the end of read-ahead.
         if (whence == SeekWhence::Current) {
@@ -266,7 +266,7 @@ namespace Engine::IO::Stream {
             const auto minimum = (std::numeric_limits<std::int64_t>::min)();
             if (unread > static_cast<std::uint64_t>(maximum) ||
                 offset < minimum + static_cast<std::int64_t>(unread)) {
-                return IoResult<std::uint64_t>::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::SeekFailed,
                     "BufferedStream: relative seek offset overflow"));
             }
@@ -282,7 +282,7 @@ namespace Engine::IO::Stream {
 
     IoResult<std::uint64_t> BufferedStream::Size() const {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResult<std::uint64_t>::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported, "BufferedStream: size on closed stream"));
         }
 
@@ -299,12 +299,12 @@ namespace Engine::IO::Stream {
                 sz = Math::Max(sz, logicalEnd);
             }
         }
-        return IoResult<std::uint64_t>::Ok(sz);
+        return sz;
     }
 
-    IoResultVoid BufferedStream::Flush() {
+    IoResult<void> BufferedStream::Flush() {
         if (!inner_ || !inner_->IsOpen()) {
-            return IoResultVoid::Err(IoError::Make(
+            return Base::Err(IoError::Make(
                 Engine::IO::IoErrorCode::NotSupported, "BufferedStream: flush on closed stream"));
         }
 
@@ -315,8 +315,8 @@ namespace Engine::IO::Stream {
         return inner_->Flush();
     }
 
-    IoResultVoid BufferedStream::Close() {
-        if (!inner_) return IoResultVoid::Ok();
+    IoResult<void> BufferedStream::Close() {
+        if (!inner_) return {};
 
         // best-effort flush then close
         auto fr = FlushWriteBuffer();

@@ -87,7 +87,6 @@ std::shared_ptr<const ShaderArtifact> LoadStage(const Json& stage,
 Base::Result<void, RenderError> ShaderLibrary::AppendBundle(
     Asset::Loading::IAssetSource& source,
     const Asset::Resolver::AssetPathResolver& resolver, std::string_view manifestPath) {
-    using Result = Base::Result<void, RenderError>;
     try {
         const auto path = RelativePath(std::string(manifestPath));
         const auto bytes = Read(source, resolver, path);
@@ -95,9 +94,9 @@ Base::Result<void, RenderError> ShaderLibrary::AppendBundle(
             reinterpret_cast<const char*>(bytes.data()) + bytes.size());
         if (UnsignedInteger(document.at("version")) != 1 ||
             RequiredString(document, "abi") != ShaderAbiVersion)
-            return Result::Err(Invalid("unsupported bundle schema or shader ABI", path));
+            return Base::Err(Invalid("unsupported bundle schema or shader ABI", path));
         if (!document.at("programs").is_array() || document.at("programs").empty())
-            return Result::Err(Invalid("bundle requires programs", path));
+            return Base::Err(Invalid("bundle requires programs", path));
         decltype(programs_) pending;
         for (const auto& program : document.at("programs")) {
             const auto id = RequiredString(program, "id");
@@ -132,21 +131,20 @@ Base::Result<void, RenderError> ShaderLibrary::AppendBundle(
         newVersion += Base::Sha256(bytes).substr(0, 16);
         programs_.merge(pending);
         version_ = std::move(newVersion);
-        return Result::Ok();
+        return {};
     } catch (const std::exception& error) {
-        return Result::Err(Invalid(error.what(), std::string(manifestPath)));
+        return Base::Err(Invalid(error.what(), std::string(manifestPath)));
     }
 }
 
 Base::Result<ShaderProgram, RenderError> ShaderLibrary::FindProgram(
     std::string_view id, ShaderFormat format) const {
-    using Result = Base::Result<ShaderProgram, RenderError>;
     const auto found = programs_.find(id);
-    if (found == programs_.end()) return Result::Err(Invalid("unknown shader ID", std::string(id)));
+    if (found == programs_.end()) return Base::Err(Invalid("unknown shader ID", std::string(id)));
     const auto variant = found->second.find(format);
     if (variant == found->second.end())
-        return Result::Err(Invalid("shader format is unavailable", std::string(id) + ": " + std::string(ShaderFormatName(format))));
-    return Result::Ok(variant->second);
+        return Base::Err(Invalid("shader format is unavailable", std::string(id) + ": " + std::string(ShaderFormatName(format))));
+    return variant->second;
 }
 
 ShaderFormatMask ShaderLibrary::CompleteFormats() const noexcept {

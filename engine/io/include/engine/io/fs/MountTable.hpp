@@ -22,7 +22,6 @@ namespace Engine::IO::FS {
 using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
 template<class T>
 using IoResult = Engine::Base::Result<T, IoError>;
-using IoResultVoid = Engine::Base::Result<void, IoError>;
 
 namespace detail {
 
@@ -90,20 +89,20 @@ namespace detail {
     /// - scheme で候補を取り出し、priority 降順で並べる
     class MountTable final {
     public:
-        IoResultVoid Mount(MountPoint mp) {
+        IoResult<void> Mount(MountPoint mp) {
             if (!mp.fs) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::InvalidPath,
                     "MountTable: fs is null"));
             }
             if (mp.name.empty()) {
-                return IoResultVoid::Err(IoError::Make(
+                return Base::Err(IoError::Make(
                     Engine::IO::IoErrorCode::InvalidPath,
                     "MountTable: mount name is empty"));
             }
             mounts_.push_back(std::move(mp));
             SortByPriority();
-            return IoResultVoid::Ok();
+            return {};
         }
 
         bool Unmount(std::string_view name) {
@@ -144,7 +143,7 @@ namespace detail {
             ResolvedMount r;
             r.mp = &mp;
             r.nativeUri = detail::JoinRootAndRel(mp.rootUri, rel);
-            return IoResult<ResolvedMount>::Ok(std::move(r));
+            return std::move(r);
         }
 
     private:

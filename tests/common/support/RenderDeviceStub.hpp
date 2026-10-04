@@ -5,8 +5,7 @@ namespace Gyo::Tests {
 // Resource-only test fixtures reject accidental frame execution explicitly.
 class RenderDeviceStub : public Engine::Render::IRenderDevice {
     template<class T> static Engine::Base::Result<T, Engine::Render::RenderError> Unsupported() {
-        return Engine::Base::Result<T, Engine::Render::RenderError>::Err(
-            Engine::Render::RenderError::Make(Engine::Render::RenderErrorCode::UnsupportedOperation,
+        return Engine::Base::Err(Engine::Render::RenderError::Make(Engine::Render::RenderErrorCode::UnsupportedOperation,
                 "resource-only test device does not execute frames"));
     }
 public:
@@ -15,7 +14,7 @@ public:
     CreateShader(const Engine::Render::ShaderArtifact&) override { return Unsupported<Engine::Render::ShaderHandle>(); }
     Engine::Base::Result<void, Engine::Render::RenderError>
     ReleaseShader(Engine::Render::ShaderHandle) override {
-        return Engine::Base::Result<void, Engine::Render::RenderError>::Ok();
+        return {};
     }
     Engine::Base::Result<Engine::Render::TextureHandle, Engine::Render::RenderError>
     CreateTexture(const Engine::Render::TextureDesc&) override { return Unsupported<Engine::Render::TextureHandle>(); }

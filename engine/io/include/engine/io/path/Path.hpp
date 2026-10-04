@@ -25,9 +25,9 @@ namespace Engine::IO::Path {
                                          const NormalizeOptions& opt = {}) {
             auto n = Normalize(raw, opt);
             if (!n) {
-                return Base::Result<Path, IoError>::Err(std::move(n.error()));
+                return Base::Err(std::move(n.error()));
             }
-            return Base::Result<Path, IoError>::Ok(Path::FromNormalized(std::move(n.value())));
+            return Path::FromNormalized(std::move(n.value()));
         }
 
         const std::string& Str() const noexcept { return normalized_; }

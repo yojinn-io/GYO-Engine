@@ -157,11 +157,11 @@ void SdlInput::EndFrame() noexcept {
 Base::Result<void, SdlInputError>
 SdlInput::SetRelativeMouseMode(const bool enabled) {
     if (frame_.pointer.relativeMode == enabled) {
-        return Base::Result<void, SdlInputError>::Ok();
+        return {};
     }
 
     if (!SDL_SetWindowRelativeMouseMode(platform_->NativeWindow(), enabled)) {
-        return Base::Result<void, SdlInputError>::Err(SdlInputError::Make(
+        return Base::Err(SdlInputError::Make(
             SdlInputErrorCode::RelativeMouseModeFailed,
             "SdlInput: unable to change relative mouse mode",
             SDL_GetError()));
@@ -171,7 +171,7 @@ SdlInput::SetRelativeMouseMode(const bool enabled) {
     frame_.pointer.deltaX = 0.0f;
     frame_.pointer.deltaY = 0.0f;
     suppressRelativeMotion_ = true;
-    return Base::Result<void, SdlInputError>::Ok();
+    return {};
 }
 
 const PhysicalInputFrame& SdlInput::Snapshot() const noexcept {

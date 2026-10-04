@@ -31,8 +31,7 @@ DecodeFailed(const Loading::LoadContext& context, std::string message) {
         message += ": ";
         message += sdlError;
     }
-    return Base::Result<Core::AnyAsset, Loading::AssetError>::Err(
-        Loading::AssetError::Make(
+    return Base::Err(Loading::AssetError::Make(
             AssetErrorCode::DecodeFailed,
             std::move(message),
             context.resolvedPath));
@@ -95,8 +94,7 @@ SdlImageTextureLoader::Load(const Base::ConstSpan<std::byte> bytes,
                     texture->rgba.data() + row * rowBytes);
     }
 
-    return Base::Result<Core::AnyAsset, Loading::AssetError>::Ok(
-        Core::AnyAsset::FromShared<TextureAsset>(std::move(texture)));
+    return Core::AnyAsset::FromShared<TextureAsset>(std::move(texture));
 }
 
 } // namespace Engine::Asset::Loaders::SdlImage

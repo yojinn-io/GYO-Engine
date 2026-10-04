@@ -54,19 +54,15 @@ namespace Engine::IO::Path {
 
     Base::Result<std::string, IoError> Normalize(std::string_view raw, const NormalizeOptions& opt) {
         if (opt.rejectNullByte && ContainsNullByte(raw)) {
-            return Base::Result<std::string, IoError>::Err(
-                IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
                                         "path contains null byte",
-                                        std::string(raw))
-            );
+                                        std::string(raw)));
         }
 
         if (opt.rejectAbsoluteLike && IsAbsoluteLike(raw)) {
-            return Base::Result<std::string, IoError>::Err(
-                IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
                                         "absolute-like path is not allowed",
-                                        std::string(raw))
-            );
+                                        std::string(raw)));
         }
 
         // まずはスラッシュ統一（必要なら）
@@ -123,17 +119,13 @@ namespace Engine::IO::Path {
                         continue;
                     }
                     // root越え（相対パスで上に出る）
-                    return Base::Result<std::string, IoError>::Err(
-                                IoError::Make(Engine::IO::IoErrorCode::PathEscapesRoot,
+                    return Base::Err(IoError::Make(Engine::IO::IoErrorCode::PathEscapesRoot,
                                                 "path escapes root by '..'",
-                                                std::string(raw))
-                    );
+                                                std::string(raw)));
                 } else if (opt.rejectTraversal) {
-                    return Base::Result<std::string, IoError>::Err(
-                                IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+                    return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
                                                 "path traversal '..' is not allowed",
-                                                std::string(raw))
-                    );
+                                                std::string(raw)));
                 }
                 // resolveDotDot=false かつ rejectTraversal=false のときは ".." を残す
                 stack.push_back(seg);
@@ -160,14 +152,12 @@ namespace Engine::IO::Path {
 
         // 追加の traversal 判定（resolveDotDot=false時の保険）
         if (opt.rejectTraversal && ContainsTraversal(out)) {
-            return Base::Result<std::string, IoError>::Err(
-                                IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
                                         "path traversal '..' is not allowed",
-                                        out)
-            );
+                                        out));
         }
 
-        return Base::Result<std::string, IoError>::Ok(out);
+        return out;
     }
 
     std::string Join(std::string_view a, std::string_view b) {

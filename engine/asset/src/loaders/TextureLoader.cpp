@@ -53,37 +53,31 @@ namespace Engine::Asset::Loaders {
         const char* end = p + bytes.size();
 
         if (end - p < 2) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: file too small", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: file too small", ctx.resolvedPath));
         }
 
         const bool isP6 = (p[0] == 'P' && p[1] == '6');
         const bool isP3 = (p[0] == 'P' && p[1] == '3');
         if (!isP6 && !isP3) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "Texture: only PPM(P6/P3) supported (no external decoder)", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "Texture: only PPM(P6/P3) supported (no external decoder)", ctx.resolvedPath));
         }
         p += 2;
 
         int w = 0, h = 0, maxv = 0;
         if (!ReadInt(p, end, w) || !ReadInt(p, end, h) || !ReadInt(p, end, maxv)) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: header parse failed", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: header parse failed", ctx.resolvedPath));
         }
         if (w <= 0 || h <= 0) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: invalid width/height", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: invalid width/height", ctx.resolvedPath));
         }
         if (maxv != 255) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "PPM: only maxval=255 supported", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "PPM: only maxval=255 supported", ctx.resolvedPath));
         }
 
         // ヘッダ後の1文字分の空白をスキップ（P6はここからバイナリ）
         p = SkipCommentsAndSpaces(p, end);
         if (p >= end) {
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: missing body", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM: missing body", ctx.resolvedPath));
         }
 
         auto tex = std::make_shared<TextureAsset>();
@@ -95,8 +89,7 @@ namespace Engine::Asset::Loaders {
             const std::size_t need = static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 3;
             const std::size_t remain = static_cast<std::size_t>(end - p);
             if (remain < need) {
-                return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P6): body too small", ctx.resolvedPath));
+                return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P6): body too small", ctx.resolvedPath));
             }
 
             const unsigned char* src = reinterpret_cast<const unsigned char*>(p);
@@ -108,7 +101,7 @@ namespace Engine::Asset::Loaders {
                 tex->rgba[di + 3] = 255;
                 di += 4;
             }
-            return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Ok(std::move(tex));
+            return std::move(tex);
         }
 
         // P3 (ASCII)
@@ -117,12 +110,10 @@ namespace Engine::Asset::Loaders {
         for (int i = 0; i < w * h; ++i) {
             int r = 0, g = 0, b = 0;
             if (!ReadInt(p, end, r) || !ReadInt(p, end, g) || !ReadInt(p, end, b)) {
-                return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P3): body parse failed", ctx.resolvedPath));
+                return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P3): body parse failed", ctx.resolvedPath));
             }
             if ((unsigned)r > 255 || (unsigned)g > 255 || (unsigned)b > 255) {
-                return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P3): color out of range", ctx.resolvedPath));
+                return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "PPM(P3): color out of range", ctx.resolvedPath));
             }
             tex->rgba[di + 0] = static_cast<std::uint8_t>(r);
             tex->rgba[di + 1] = static_cast<std::uint8_t>(g);
@@ -130,7 +121,7 @@ namespace Engine::Asset::Loaders {
             tex->rgba[di + 3] = 255;
             di += 4;
         }
-        return Base::Result<std::shared_ptr<TextureAsset>, AssetError>::Ok(std::move(tex));
+        return std::move(tex);
     }
 
     AssetType TextureLoader::GetType() const noexcept {
@@ -143,12 +134,10 @@ namespace Engine::Asset::Loaders {
     TextureLoader::Load(Base::ConstSpan<std::byte> bytes, const Loading::LoadContext& ctx) {
         auto decoded = DecodePPM(bytes, ctx);
         if (!decoded) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(std::move(decoded.error()));
+            return Base::Err(std::move(decoded.error()));
         }
 
-        return Base::Result<Core::AnyAsset, AssetError>::Ok(
-            Core::AnyAsset::FromShared<TextureAsset>(std::move(decoded.value()))
-        );
+        return Core::AnyAsset::FromShared<TextureAsset>(std::move(decoded.value()));
     }
 
 } // namespace Engine::Asset::Loaders

@@ -205,14 +205,14 @@ struct UiRenderer::Impl final {
     [[nodiscard]] UiResult<FontResource*> ResolveFont(std::string_view assetId) {
         const auto cached = fonts.find(std::string(assetId));
         if (cached != fonts.end()) {
-            return UiResult<FontResource*>::Ok(&cached->second);
+            return &cached->second;
         }
         const Asset::AssetId id = Asset::AssetId::FromString(assetId);
         auto loaded = assets->Load(
             id,
             Asset::AssetRequest::WithTypeHint(Asset::AssetType::Font()));
         if (!loaded) {
-            return UiResult<FontResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to load UI font asset '" + AssetName(id) + "': " +
                     loaded.error().message));
@@ -221,27 +221,27 @@ struct UiRenderer::Impl final {
         auto font = assets->GetSharedConst<Asset::Loaders::FontAsset>(handle);
         if (!font || font->bytes.empty()) {
             assets->Release(handle);
-            return UiResult<FontResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "UI font asset '" + AssetName(id) + "' has no encoded payload"));
         }
         auto [inserted, wasInserted] = fonts.emplace(
             std::string(assetId), FontResource{handle, std::move(font)});
         if (!wasInserted) assets->Release(handle);
-        return UiResult<FontResource*>::Ok(&inserted->second);
+        return &inserted->second;
     }
 
     [[nodiscard]] UiResult<ImageResource*> ResolveImage(std::string_view assetId) {
         const auto cached = images.find(std::string(assetId));
         if (cached != images.end()) {
-            return UiResult<ImageResource*>::Ok(&cached->second);
+            return &cached->second;
         }
         const Asset::AssetId id = Asset::AssetId::FromString(assetId);
         auto loaded = assets->Load(
             id,
             Asset::AssetRequest::WithTypeHint(Asset::AssetType::Texture()));
         if (!loaded) {
-            return UiResult<ImageResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to load UI image asset '" + AssetName(id) + "': " +
                     loaded.error().message));
@@ -253,7 +253,7 @@ struct UiRenderer::Impl final {
         if (!texture || texture->width == 0 || texture->height == 0 ||
             expected != texture->rgba.size()) {
             assets->Release(handle);
-            return UiResult<ImageResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "UI image asset '" + AssetName(id) + "' has no valid RGBA8 payload"));
         }
@@ -267,7 +267,7 @@ struct UiRenderer::Impl final {
         auto uploaded = renderDevice->CreateTexture(image);
         if (!uploaded) {
             assets->Release(handle);
-            return UiResult<ImageResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to upload UI image asset '" + AssetName(id) + "': " +
                     uploaded.error().message));
@@ -278,12 +278,12 @@ struct UiRenderer::Impl final {
             static_cast<void>(renderDevice->ReleaseTexture(uploaded.value()));
             assets->Release(handle);
         }
-        return UiResult<ImageResource*>::Ok(&inserted->second);
+        return &inserted->second;
     }
 
     [[nodiscard]] UiResult<TextResource*> ResolveText(const UiTextDraw& draw) {
         auto font = ResolveFont(draw.fontAssetId);
-        if (!font) return UiResult<TextResource*>::Err(std::move(font).error());
+        if (!font) return Base::Err(std::move(font).error());
         TextKey key{
             draw.fontAssetId,
             font.value()->asset.generation(),
@@ -293,7 +293,7 @@ struct UiRenderer::Impl final {
         const auto cached = texts.find(key);
         if (cached != texts.end()) {
             cached->second.lastUse = ++useSerial;
-            return UiResult<TextResource*>::Ok(&cached->second);
+            return &cached->second;
         }
 
         const auto& bytes = font.value()->font->bytes;
@@ -301,13 +301,13 @@ struct UiRenderer::Impl final {
             std::span<const std::byte>{bytes.data(), bytes.size()},
             Text::TextRasterRequest{draw.utf8, draw.pointSizePixels});
         if (!rasterized) {
-            return UiResult<TextResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to rasterize UI text: " + rasterized.error().message));
         }
         Text::TextBitmap& bitmap = rasterized.value();
         if (!IsValidBitmap(bitmap)) {
-            return UiResult<TextResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "text rasterizer returned an invalid UI RGBA8 bitmap"));
         }
@@ -320,7 +320,7 @@ struct UiRenderer::Impl final {
         };
         auto uploaded = renderDevice->CreateTexture(image);
         if (!uploaded) {
-            return UiResult<TextResource*>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to upload UI text: " + uploaded.error().message));
         }
@@ -330,7 +330,7 @@ struct UiRenderer::Impl final {
         if (!wasInserted) {
             static_cast<void>(renderDevice->ReleaseTexture(uploaded.value()));
         }
-        return UiResult<TextResource*>::Ok(&inserted->second);
+        return &inserted->second;
     }
 
     [[nodiscard]] UiResult<void> SubmitSprite(
@@ -338,11 +338,11 @@ struct UiRenderer::Impl final {
         Render::RenderQueue& queue) {
         auto submitted = queue.Submit(submission);
         if (!submitted) {
-            return UiResult<void>::Err(RendererError(
+            return Base::Err(RendererError(
                 UiErrorCode::RenderSubmissionFailed,
                 "failed to submit UI sprite: " + submitted.error().message));
         }
-        return UiResult<void>::Ok();
+        return {};
     }
 };
 
@@ -357,7 +357,7 @@ UiResult<void> UiRenderer::Initialize(
     Asset::AssetManager& assets,
     UiRendererOptions options) {
     if (options.maximumCachedTextRuns == 0) {
-        return UiResult<void>::Err(RendererError(
+        return Base::Err(RendererError(
             UiErrorCode::RuntimeState,
             "UiRenderer maximumCachedTextRuns must be positive"));
     }
@@ -366,7 +366,7 @@ UiResult<void> UiRenderer::Initialize(
     impl_->textRasterizer = &textRasterizer;
     impl_->assets = &assets;
     impl_->options = options;
-    return UiResult<void>::Ok();
+    return {};
 }
 
 void UiRenderer::Reset() noexcept {
@@ -378,7 +378,7 @@ UiResult<void> UiRenderer::Submit(
     Render::RenderQueue& queue) {
     if (impl_->renderDevice == nullptr || impl_->textRasterizer == nullptr ||
         impl_->assets == nullptr) {
-        return UiResult<void>::Err(RendererError(
+        return Base::Err(RendererError(
             UiErrorCode::RuntimeState,
             "UiRenderer is not initialized"));
     }
@@ -394,20 +394,20 @@ UiResult<void> UiRenderer::Submit(
                     sprite.material.tint = ConvertColor(draw.color);
                 } else if constexpr (std::is_same_v<T, UiImageDraw>) {
                     auto image = impl_->ResolveImage(draw.textureAssetId);
-                    if (!image) return UiResult<void>::Err(std::move(image).error());
+                    if (!image) return Base::Err(std::move(image).error());
                     sprite.material.texture = image.value()->gpu;
                     sprite.destinationPixels = draw.destinationPixels;
                     sprite.sourceUv = draw.sourceUv;
                     sprite.material.tint = ConvertColor(draw.tint);
                 } else {
-                    if (draw.utf8.empty()) return UiResult<void>::Ok();
+                    if (draw.utf8.empty()) return {};
                     if (!std::isfinite(draw.pointSizePixels) || draw.pointSizePixels <= 0.0F) {
-                        return UiResult<void>::Err(RendererError(
+                        return Base::Err(RendererError(
                             UiErrorCode::RuntimeState,
                             "UI text point size must be finite and positive"));
                     }
                     auto text = impl_->ResolveText(draw);
-                    if (!text) return UiResult<void>::Err(std::move(text).error());
+                    if (!text) return Base::Err(std::move(text).error());
                     float x = draw.boundsPixels.x;
                     float y = draw.boundsPixels.y;
                     if (draw.horizontalAlign == UiHorizontalAlign::Center) {
@@ -430,14 +430,14 @@ UiResult<void> UiRenderer::Submit(
                     sprite.material.tint = ConvertColor(draw.color);
                 }
                 if (!ClipSprite(sprite, draw.clipPixels)) {
-                    return UiResult<void>::Ok();
+                    return {};
                 }
                 return impl_->SubmitSprite(sprite, queue);
             },
             command);
         if (!submitted) return submitted;
     }
-    return UiResult<void>::Ok();
+    return {};
 }
 
 } // namespace Engine::Ui

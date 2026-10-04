@@ -4,44 +4,44 @@
 
 namespace Engine::IO::Helpers {
 
-    inline IoResultVoid
+    inline IoResult<void>
     WriteAllBytes(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
                   Engine::Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(fs, uri);
-        if (!orw) return IoResultVoid::Err(orw.error());
+        if (!orw) return Base::Err(orw.error());
 
         auto& s = *orw.value();
         auto wr = WriteAllToStream(s, data);
-        if (!wr) return IoResultVoid::Err(wr.error());
+        if (!wr) return Base::Err(wr.error());
 
         if (opt.flush) {
             auto fr = s.Flush();
-            if (!fr) return IoResultVoid::Err(fr.error());
+            if (!fr) return Base::Err(fr.error());
         }
 
         (void)s.Close();
-        return IoResultVoid::Ok();
+        return {};
     }
 
-    inline IoResultVoid
+    inline IoResult<void>
     WriteAllBytes(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
                   Engine::Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(vfs, uri);
-        if (!orw) return IoResultVoid::Err(orw.error());
+        if (!orw) return Base::Err(orw.error());
 
         auto& s = *orw.value();
         auto wr = WriteAllToStream(s, data);
-        if (!wr) return IoResultVoid::Err(wr.error());
+        if (!wr) return Base::Err(wr.error());
 
         if (opt.flush) {
             auto fr = s.Flush();
-            if (!fr) return IoResultVoid::Err(fr.error());
+            if (!fr) return Base::Err(fr.error());
         }
 
         (void)s.Close();
-        return IoResultVoid::Ok();
+        return {};
     }
 
 } // namespace Engine::IO::Helpers

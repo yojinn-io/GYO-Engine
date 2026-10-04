@@ -41,10 +41,9 @@ namespace {
             ++reads;
             auto it = map_.find(std::string(resolvedPath));
             if (it == map_.end()) {
-                return Engine::Base::Result<std::vector<std::byte>, Engine::Base::Error<AssetErrorCode>>::Err(
-                    Engine::Base::Error<AssetErrorCode>::Make(AssetErrorCode::SourceReadFailed, "MemoryAssetSource: not found", std::string(resolvedPath)));
+                return Engine::Base::Err(Engine::Base::Error<AssetErrorCode>::Make(AssetErrorCode::SourceReadFailed, "MemoryAssetSource: not found", std::string(resolvedPath)));
             }
-            return Engine::Base::Result<std::vector<std::byte>, Engine::Base::Error<AssetErrorCode>>::Ok(it->second);
+            return it->second;
         }
 
     private:
@@ -87,7 +86,7 @@ TEST_CASE("AssetManager: sync load -> cache hit") {
 
     // --- pipeline 組み立て（実装に合わせて調整） ---
     Loading::LoaderRegistry registry;
-    registry.Register(std::make_unique<Loaders::TextLoader>());
+    REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
 
     auto memSource = std::make_unique<MemoryAssetSource>();
     memSource->Put("mem://ui/title.txt", BytesOf("hello"));
@@ -154,7 +153,7 @@ TEST_CASE("AssetManager: stale handle release balances its pre-reload reference"
     REQUIRE(catalog.LoadFromFile(catalogPath.string(), parser, resolver));
 
     Loading::LoaderRegistry registry;
-    registry.Register(std::make_unique<Loaders::TextLoader>());
+    REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
 
     auto memSource = std::make_unique<MemoryAssetSource>();
     constexpr auto kMemoryPath = "mem://reloadable.txt";
@@ -288,7 +287,7 @@ struct ManagerFixture {
         options.assetsRoot = root.generic_string();
         Resolver::AssetPathResolver resolver(options);
         REQUIRE(catalog.LoadFromFile((root / "catalog.json").string(), parser, resolver));
-        registry.Register(std::make_unique<Loaders::TextLoader>());
+        REQUIRE(registry.Register(std::make_unique<Loaders::TextLoader>()));
         source.Put(Path(), BytesOf("old"));
     }
     ~ManagerFixture() { std::error_code error; fs::remove_all(root, error); }

@@ -29,12 +29,11 @@ namespace Engine::Asset {
     ReadAllText(std::string_view path) {
         std::ifstream ifs(std::string(path), std::ios::in | std::ios::binary);
         if (!ifs) {
-            return Base::Result<std::string, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::SourceReadFailed, "AssetCatalog: cannot open catalog file", std::string(path)));
+            return Base::Err(AssetError::Make(AssetErrorCode::SourceReadFailed, "AssetCatalog: cannot open catalog file", std::string(path)));
         }
         std::ostringstream ss;
         ss << ifs.rdbuf();
-        return Base::Result<std::string, AssetError>::Ok(ss.str());
+        return ss.str();
     }
 
     Base::Result<void, AssetError>
@@ -44,10 +43,10 @@ namespace Engine::Asset {
         Clear();
 
         auto textR = ReadAllText(catalogJsonPath);
-        if (!textR) return Base::Result<void, AssetError>::Err(std::move(textR.error()));
+        if (!textR) return Base::Err(std::move(textR.error()));
 
         auto rawR = parser.Parse(textR.value(), catalogJsonPath);
-        if (!rawR) return Base::Result<void, AssetError>::Err(std::move(rawR.error()));
+        if (!rawR) return Base::Err(std::move(rawR.error()));
 
         return BuildFromRaw_(rawR.value(), resolver);
     }
@@ -61,7 +60,7 @@ namespace Engine::Asset {
         if (!loaded) return loaded;
         for (const auto& [id, entry] : pending.map_) {
             if (map_.contains(id)) {
-                return Base::Result<void, AssetError>::Err(AssetError::Make(
+                return Base::Err(AssetError::Make(
                     AssetErrorCode::InvalidCatalogEntry,
                     "AssetCatalog: duplicated id across catalogs", id.debugName));
             }
@@ -70,7 +69,7 @@ namespace Engine::Asset {
         // existing elements. Parse/path/duplicate errors never mutate map_.
         map_.reserve(map_.size() + pending.map_.size());
         map_.merge(pending.map_);
-        return Base::Result<void, AssetError>::Ok();
+        return {};
     }
 
     Base::Result<void, AssetError>
@@ -84,15 +83,14 @@ namespace Engine::Asset {
 
             // 重複IDはエラー（Catalogの一意性保証）
             if (map_.find(id) != map_.end()) {
-                return Base::Result<void, AssetError>::Err(
-                    AssetError::Make(AssetErrorCode::InvalidCatalogEntry, "AssetCatalog: duplicated id", r.id));
+                return Base::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry, "AssetCatalog: duplicated id", r.id));
             }
 
             // ★ここで resolvedPath を確定させる（root脱出などもここで弾く）
             auto rp = resolver.Resolve(r.path);
             if (!rp) {
                 // resolver が InvalidPath / PathEscapesRoot を返す
-                return Base::Result<void, AssetError>::Err(AssetError::Make(
+                return Base::Err(AssetError::Make(
                     AssetErrorCode::InvalidPath,
                     rp.error().message,
                     r.id));
@@ -107,7 +105,7 @@ namespace Engine::Asset {
             map_.emplace(e.id, std::move(e));
         }
 
-        return Base::Result<void, AssetError>::Ok();
+        return {};
     }
 
 } // namespace Engine::Asset
