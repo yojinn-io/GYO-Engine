@@ -1,6 +1,6 @@
 # Math 基礎統一：交接
 
-更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：純量 Min／Max／Clamp 的統一本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI。**
+更新：2026-10-04。**全部批次完成並合併：B6a 為 #24（`507daa7`）、B6b 為 #25（`bd7e1c3`）、B6c 為 #26（`fb9b012`）、B7 為 #27（`fdc72e9`）。後續：純量 Min／Max／Clamp 的統一為 #28（`574ae32`）。**
 
 ## 閱讀入口
 
@@ -685,7 +685,7 @@
 
 ## 後續：純量 Min／Max／Clamp 的統一
 
-狀態：**本機驗收完成，PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 待 CI**（2026-10-04，分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
+狀態：**完成**。PR [#28](https://github.com/yojinn-io/GYO-Engine/pull/28) 於 2026-10-04 合併為 `574ae32`；最終 head `d2446d5` 的 CI 四平台全部通過（分支 `claude/math-scalar-unification`，自 master `fdc72e9`）。
 
 ### 決策與方向
 
@@ -731,7 +731,7 @@
 | 依賴圖 | 與 B7 相比只多出 `engine → gyo_math` |
 | 對抗式審查 | 正確性沒有被推翻。審查者以探針取得 189 個呼叫處實際推導的型別，三個平台都與原本的 std 呼叫相同（size_t、uint64、protobuf `::uint64_t`、Sint32 等都同型別）。在 strict libc++ 下移除 transitive include 後，全部 TU 仍可編譯。指出的 minor 與 nit 都已處理：`Clamp` 的 debug 前置條件、ui_editor core 的明確連結、死掉的 `<algorithm>`、測試的過濾條件 |
 | 殘留稽核 | 範圍內已沒有算術型別的 `std::min／max／clamp`，也沒有 `std::fmin／fmax`。手寫的重複有兩處已改；`CapsuleQueries.cpp` 的「越過的那一面」與 `Span.hpp` 保留 |
-| CI 四平台 | 待 PR |
+| CI 四平台 | 通過（head `d2446d5`：linux-x64、macos-arm64、macos-x64、windows-x64） |
 
 ### Architecture Delta
 
@@ -742,4 +742,4 @@
 ## 未結事項
 
 - 本計劃的批次全部完成並合併：#24 → #25 → #26 → #27 依序合併（2026-10-04；疊在一起的 PR 在合併前一個之後改指 master）。
-- 後續（使用者 2026-10-04 決定）：純量 Min／Max／Clamp 的統一，本機驗收完成；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。
+- 後續（使用者 2026-10-04 決定）：純量 Min／Max／Clamp 的統一以 #28 合併（`574ae32`）；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。
