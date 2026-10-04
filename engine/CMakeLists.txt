@@ -77,6 +77,7 @@ endif()
 
 add_subdirectory(model)
 add_subdirectory(collision)
+add_subdirectory(net)
 add_subdirectory(text)
 if(GYO_ENABLE_SDL_PLATFORM)
     add_subdirectory(platform)

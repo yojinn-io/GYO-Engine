@@ -5,7 +5,7 @@ add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp Predi
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json")
-target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} doctest::doctest)
+target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} GYO::Net doctest::doctest)
 if(WIN32)
     target_compile_definitions(${tests} PRIVATE NOMINMAX)
 endif()

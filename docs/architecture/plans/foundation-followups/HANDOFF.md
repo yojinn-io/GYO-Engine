@@ -100,7 +100,7 @@
 | FF-5 | 未開始 | — |
 | FF-6 | 未開始 | — |
 | FF-7 | 未開始 | — |
-| FF-8 | 進行中 | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
+| FF-8 | 完成（PR 待合併） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
 
 每批開始時在此新增一節：分支、base commit、檔位（含使用者同意的紀錄）、事前宣告（若有）、里程碑、證據位置、結果與停止理由。
@@ -127,12 +127,16 @@
 - 2026-10-05：接續使用者「把 Engine 側的功能完成」的指示。分支 `claude/engine-ff8`，疊在 FF-3 上。
   檔位 high。計畫建議「解碼拒絕條件局部 xhigh」，但 xhigh 高於主對話檔位，使用者不在、無法徵求同意（D8），所以不升檔；改以先鎖舊行為的拒絕表測試補足，並在 PR 標明。
 - 2026-10-05：先加消費端的 characterization（7 種訊息的位元組、完整拒絕表、超長編碼丟例外），在舊的 `Wire.hpp` 上通過。
+- 2026-10-05：新增 Engine 子系統 `engine/net`（target `gyo_net`／`GYO::Net`，只依賴 `GYO::Base`）：`Engine::Net::EncodeGyopDatagram`／`DecodeGyopDatagram`，錯誤以 `Result<…, NetError>` 回傳。include 暫用 `engine/net/` 風格（與 base、input 相同），由 FF-7 統一。
+- 2026-10-05：合成向量 `tests/common/net/fixtures/gyop_datagram_vectors.json`（以 Python `struct` 獨立產生），C++（`gyo_net_tests`）與 Go（`services/gyo_gateway/framing/vectors_test.go`）讀同一份。
+  突變：拿掉 channel／length／1200 檢查、encode 接受 channel 1，C++ 測試都失敗；過程中發現自己寫的測試以暫存物件做 range-for，迴圈其實沒跑，已修正後才得到這個結果。
+- 2026-10-05：消費端 `Wire.hpp` 改用（版本收成 `ProtocolVersion` 一個常數，Type 範圍與 TCP frame 留在產品）。characterization 通過；CTest 56／56；權威 digest 同機兩樹（base＝FF-3 tip）35 個情境 0 不同；L2 clean-60 冒煙 base／branch 都通過（report-only）。完成，開 PR。
 
 ## 未結事項
 
 - FF-2 發現：AssetWatcher 在檔案沒變時偶發回報 `Modified`（換算抖動，約 2.2%／次）；使用者決定在 FF-2 修正，已完成。
 
-- FF-7：統一方向（`engine/<m>/` 或 `<m>/`）未定，開始時提給使用者。FF-8 的新子系統若先合併，要選一種暫用風格，並由 FF-7 統一。
+- FF-7：統一方向（`engine/<m>/` 或 `<m>/`）未定，開始時提給使用者。FF-8 的新子系統暫用 `engine/net/`（與 base、input 相同），由 FF-7 統一。
 - FF-9：容差（`1e-6f` 或 `1e-7`）與 AABB 規則（拒絕 `min>=max` 或只拒絕 `min>max`）未定，開始時事前宣告。選 `1e-7` 時預期移動與 Client 預測不變；選其他容差時，移動的變化要列入事前宣告。若選只拒絕 `min>max`，消費端的 arena 規則是否保留「牆必須有厚度」作為遊戲規則，由消費端決定。
 - FF-8：已定案（見決策紀錄）：@22 在 Engine C++ API 依 Go 命名為 `Channel`；1200 bytes 是 Engine 傳輸契約；Engine 解碼只做傳輸層檢查，版本與 Type 由呼叫端檢查。開始時只需確認實作與 Go 契約一致。
 - 合併順序：已定案為建議，不是依賴（見決策紀錄）。`InputActionMap.cpp` 由 IP-1 與 FF-3 先完成者先合併，後者 rebase；FF-4 建議排在 IP-2 之後合併，但不是依賴。

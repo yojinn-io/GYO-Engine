@@ -71,9 +71,10 @@
 
 ### FF-8 GYOP 標頭 C++ 編解碼
 
-狀態：未開始，批次完成時更新。
+狀態：FF-8 完成（2026-10-05）。
 
-- 預計無：未啟用產品沒有使用 GYOP 傳輸。批次完成時以 grep 確認。
+- 無：2026-10-05 grep `apps/object_fps`、`apps/object_fps_v2`、`tools/object_fps_preview` 沒有 GYOP、`wire::` 或 `Wire.hpp`。
+- 未啟用產品若之後使用 GYOP，直接連結 `GYO::Net`（`engine/net/GyopDatagram.hpp`），版本與訊息種類由產品自己決定。
 
 ### FF-9 Collision 統一與公開合法性檢查
 

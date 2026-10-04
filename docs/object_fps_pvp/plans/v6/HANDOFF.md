@@ -85,6 +85,12 @@
 - 2026-10-05：CI 的 macos-arm64 出現 -O0 不一致（只有非零角度的 `move-turning/contract`，原因是 sincos 合併），依停止條件回報；使用者決定 D15，已實作並加保險測試。
 - 2026-10-05：修正後 CI 四平台全部通過；golden 子集在四平台逐位元相同。
 
+## Engine 批次對本產品的影響（記錄器）
+
+- 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
+  [基線](BASELINE.md) 的 wire 版本號檢查表中 `Wire.hpp:26`、`:36` 兩處，因此變成這一個常數（第 09 批改值時以它為準）。
+  位元組與拒絕集合以 `tests/object_fps_pvp/WireTests.cpp` 鎖住；權威 digest 兩樹比對相同。見 [基礎後續整理交接](../../../architecture/plans/foundation-followups/HANDOFF.md)。
+
 ## 延後項目：現況與對應批次
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批
