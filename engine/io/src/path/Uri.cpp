@@ -60,10 +60,8 @@ namespace Engine::IO::Path {
 
     Base::Result<Uri, IoError> ParseUri(std::string_view s) {
         if (s.empty()) {
-            return Base::Result<Uri, IoError>::Err(
-                IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
-                                        "uri is empty")
-            );
+            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+                                        "uri is empty"));
         }
 
         // split fragment
@@ -95,12 +93,12 @@ namespace Engine::IO::Path {
 
             auto p = Path::Parse(base, opt);
             if (!p) {
-                return Base::Result<Uri, IoError>::Err(p.error());
+                return Base::Err(p.error());
             }
 
             uri.scheme = UriScheme::None;
             uri.path = std::move(p.value());
-            return Base::Result<Uri, IoError>::Ok(uri);
+            return uri;
         }
 
         // scheme part
@@ -146,7 +144,7 @@ namespace Engine::IO::Path {
         if (!pathPart.empty()) {
             auto p = Path::Parse(pathPart, opt);
             if (!p) {
-                return Base::Result<Uri, IoError>::Err(p.error());
+                return Base::Err(p.error());
             }
             uri.path = std::move(p.value());
         } else {
@@ -155,7 +153,7 @@ namespace Engine::IO::Path {
 
         // unknown scheme は「未対応」として弾きたいならここで返す
         //（今回は“パースは通す”方針。運用側で禁止してOK）
-        return Base::Result<Uri, IoError>::Ok(uri);;
+        return uri;;
     }
 
     Uri ParseUriLoose(std::string_view s) {

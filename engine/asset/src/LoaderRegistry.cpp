@@ -10,26 +10,23 @@ namespace Engine::Asset::Loading {
     Base::Result<void, AssetError>
     LoaderRegistry::Register(std::unique_ptr<IAssetLoader> loader) {
         if (!loader) {
-            return Base::Result<void, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::InternalError, "Register: loader is null"));
+            return Base::Err(AssetError::Make(AssetErrorCode::InternalError, "Register: loader is null"));
         }
 
         const auto type = loader->GetType();
         const auto k = Key(type);
 
         if (k == 0) {
-            return Base::Result<void, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedType, "Register: invalid AssetType (0)"));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedType, "Register: invalid AssetType (0)"));
         }
 
         auto it = map_.find(k);
         if (it != map_.end()) {
-            return Base::Result<void, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::InternalError, "Register: loader already exists for type"));
+            return Base::Err(AssetError::Make(AssetErrorCode::InternalError, "Register: loader already exists for type"));
         }
 
         map_.emplace(k, std::move(loader));
-        return Base::Result<void, AssetError>::Ok();
+        return {};
     }
 
     IAssetLoader* LoaderRegistry::Find(AssetType type) noexcept {

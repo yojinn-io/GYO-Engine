@@ -42,7 +42,7 @@ UiResult<UiColor> DecodeSrgbHexColor(
     std::string_view source,
     std::string_view jsonPointer) {
     if ((value.size() != 7 && value.size() != 9) || value.front() != '#') {
-        return UiResult<UiColor>::Err(ColorError(
+        return Base::Err(ColorError(
             "color must use #RRGGBB or #RRGGBBAA",
             source,
             jsonPointer));
@@ -54,7 +54,7 @@ UiResult<UiColor> DecodeSrgbHexColor(
         const int high = HexDigit(value[1U + index * 2U]);
         const int low = HexDigit(value[2U + index * 2U]);
         if (high < 0 || low < 0) {
-            return UiResult<UiColor>::Err(ColorError(
+            return Base::Err(ColorError(
                 "color contains a non-hexadecimal digit",
                 source,
                 jsonPointer));
@@ -63,12 +63,12 @@ UiResult<UiColor> DecodeSrgbHexColor(
     }
 
     constexpr float kByteScale = 1.0F / 255.0F;
-    return UiResult<UiColor>::Ok({
+    return UiColor{
         Math::DecodeSrgb(static_cast<float>(channels[0]) * kByteScale),
         Math::DecodeSrgb(static_cast<float>(channels[1]) * kByteScale),
         Math::DecodeSrgb(static_cast<float>(channels[2]) * kByteScale),
         static_cast<float>(channels[3]) * kByteScale,
-    });
+    };
 }
 
 std::string EncodeSrgbHexColor(const UiColor& color) {

@@ -23,13 +23,11 @@ namespace Engine::Asset::Loaders {
         const std::size_t n = bytes.size();
 
         if (n < 12) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: file too small", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: file too small", ctx.resolvedPath));
         }
 
         if (std::memcmp(p, "RIFF", 4) != 0 || std::memcmp(p + 8, "WAVE", 4) != 0) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "Sound: only WAV(RIFF/WAVE) supported (PCM16)", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "Sound: only WAV(RIFF/WAVE) supported (PCM16)", ctx.resolvedPath));
         }
 
         std::uint16_t audioFormat = 0;
@@ -50,8 +48,7 @@ namespace Engine::Asset::Loaders {
 
             if (std::memcmp(ck, "fmt ", 4) == 0) {
                 if (ckSize < 16) {
-                    return Base::Result<Core::AnyAsset, AssetError>::Err(
-                        AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: invalid fmt chunk", ctx.resolvedPath));
+                    return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: invalid fmt chunk", ctx.resolvedPath));
                 }
                 audioFormat   = ReadU16LE(p + off + 0);
                 channels      = ReadU16LE(p + off + 2);
@@ -67,24 +64,19 @@ namespace Engine::Asset::Loaders {
         }
 
         if (audioFormat != 1) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only PCM supported", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only PCM supported", ctx.resolvedPath));
         }
         if (channels == 0 || (channels != 1 && channels != 2)) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only mono/stereo supported", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only mono/stereo supported", ctx.resolvedPath));
         }
         if (bitsPerSample != 16) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only 16-bit supported", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedFormat, "WAV: only 16-bit supported", ctx.resolvedPath));
         }
         if (!dataPtr || dataSize == 0) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: missing data chunk", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: missing data chunk", ctx.resolvedPath));
         }
         if ((dataSize % 2) != 0) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: data size not aligned", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::DecodeFailed, "WAV: data size not aligned", ctx.resolvedPath));
         }
 
         const std::size_t sampleCount = dataSize / 2;
@@ -100,9 +92,7 @@ namespace Engine::Asset::Loaders {
             snd->pcm16[i] = static_cast<std::int16_t>(u);
         }
 
-        return Base::Result<Core::AnyAsset, AssetError>::Ok(
-            Core::AnyAsset::FromShared<SoundAsset>(std::move(snd))
-        );
+        return Core::AnyAsset::FromShared<SoundAsset>(std::move(snd));
     }
 
 } // namespace Engine::Asset::Loaders

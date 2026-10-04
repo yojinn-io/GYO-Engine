@@ -138,13 +138,12 @@ struct SdlGpuRenderDevice::Impl final {
     AcquiredFrame activeFrame{};
     ~Impl() { Shutdown(); }
     [[nodiscard]] Base::Result<void, RenderError> CheckThread() const {
-        using Result = Base::Result<void, RenderError>;
         if (std::this_thread::get_id() != ownerThread) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::WrongThread,
                 "SDL_GPU: render device must be used from its creation thread"));
         }
-        return Result::Ok();
+        return {};
     }
 
 
@@ -247,7 +246,6 @@ struct SdlGpuRenderDevice::Impl final {
     [[nodiscard]] Base::Result<void, RenderError> Initialize(
         Platform::Sdl::SdlPlatform& sourcePlatform,
         const SdlGpuOptions& options) {
-        using Result = Base::Result<void, RenderError>;
 
         platform = &sourcePlatform;
         window = sourcePlatform.NativeWindow();
@@ -259,19 +257,19 @@ struct SdlGpuRenderDevice::Impl final {
         if (options.driver == "d3d12") { driver = "direct3d12"; formats &= FormatBit(ShaderFormat::DXIL); }
         else if (options.driver == "vulkan") { driver = "vulkan"; formats &= FormatBit(ShaderFormat::SPIRV); }
         else if (options.driver == "metal") { driver = "metal"; formats &= FormatBit(ShaderFormat::Metallib); }
-        else if (options.driver != "auto") return Result::Err(MakeError(RenderErrorCode::InvalidArgument,
+        else if (options.driver != "auto") return Base::Err(MakeError(RenderErrorCode::InvalidArgument,
             "SDL_GPU: driver must be auto, d3d12, vulkan or metal"));
-        if (!formats) return Result::Err(MakeError(RenderErrorCode::BackendUnavailable,
+        if (!formats) return Base::Err(MakeError(RenderErrorCode::BackendUnavailable,
             "SDL_GPU: selected driver has no complete shader artifact format"));
         device = SDL_CreateGPUDevice(ToSdlFormats(formats), options.debugMode, driver);
-        if (!device) return Result::Err(MakeSdlError(RenderErrorCode::BackendUnavailable,
+        if (!device) return Base::Err(MakeSdlError(RenderErrorCode::BackendUnavailable,
             "SDL_GPU: device creation failed for driver " + options.driver));
         info.shaderFormats = FromSdlFormats(SDL_GetGPUShaderFormats(device)) & formats;
         info.driver = SDL_GetGPUDeviceDriver(device);
-        if (!info.shaderFormats) return Result::Err(MakeError(RenderErrorCode::BackendUnavailable,
+        if (!info.shaderFormats) return Base::Err(MakeError(RenderErrorCode::BackendUnavailable,
             "SDL_GPU: driver does not accept packaged shader formats"));
         if (!SDL_ClaimWindowForGPUDevice(device, window)) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: failed to claim the SDL window"));
         }
@@ -287,7 +285,7 @@ struct SdlGpuRenderDevice::Impl final {
                 device,
                 window,
                 SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR)) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: driver does not support a linear SDR swapchain"));
         }
@@ -296,12 +294,12 @@ struct SdlGpuRenderDevice::Impl final {
                 window,
                 SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR,
                 presentMode)) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: failed to configure a linear SDR swapchain"));
         }
         if (!SDL_SetGPUAllowedFramesInFlight(device, 2)) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: failed to configure frames in flight"));
         }
@@ -309,7 +307,7 @@ struct SdlGpuRenderDevice::Impl final {
         swapchainFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
         if (swapchainFormat != SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB &&
             swapchainFormat != SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: linear SDR swapchain did not provide an sRGB target"));
         }
@@ -317,44 +315,42 @@ struct SdlGpuRenderDevice::Impl final {
         linearClampSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE);
         linearWrapSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
         if (linearClampSampler == nullptr || linearWrapSampler == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create built-in samplers"));
         }
 
-        return Result::Ok();
+        return {};
     }
     [[nodiscard]] Base::Result<MeshSlot*, RenderError> FindMesh(MeshHandle handle) {
-        using Result = Base::Result<MeshSlot*, RenderError>;
         if (!handle || handle.Index() >= meshes.size()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: invalid mesh handle"));
         }
         MeshSlot& slot = meshes[handle.Index()];
         if (!slot.live || slot.generation != handle.Generation()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: stale mesh handle"));
         }
-        return Result::Ok(&slot);
+        return &slot;
     }
 
     [[nodiscard]] Base::Result<TextureSlot*, RenderError> FindTexture(
         TextureHandle handle) {
-        using Result = Base::Result<TextureSlot*, RenderError>;
         if (!handle || handle.Index() >= textures.size()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: invalid texture handle"));
         }
         TextureSlot& slot = textures[handle.Index()];
         if (!slot.live || slot.generation != handle.Generation()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: stale texture handle"));
         }
-        return Result::Ok(&slot);
+        return &slot;
     }
 
     [[nodiscard]] Base::Result<void, RenderError> UploadBuffers(
@@ -362,11 +358,10 @@ struct SdlGpuRenderDevice::Impl final {
         std::span<const std::byte> vertexBytes,
         SDL_GPUBuffer* indexBuffer,
         std::span<const std::byte> indexBytes) {
-        using Result = Base::Result<void, RenderError>;
 
         const std::uint64_t totalSize = vertexBytes.size() + indexBytes.size();
         if (totalSize > std::numeric_limits<Uint32>::max()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: mesh upload exceeds the 32-bit transfer limit"));
         }
@@ -377,7 +372,7 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUTransferBuffer* transfer =
             SDL_CreateGPUTransferBuffer(device, &transferInfo);
         if (transfer == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create a mesh transfer buffer"));
         }
@@ -385,7 +380,7 @@ struct SdlGpuRenderDevice::Impl final {
         void* mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
         if (mapped == nullptr) {
             SDL_ReleaseGPUTransferBuffer(device, transfer);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to map a mesh transfer buffer"));
         }
@@ -399,7 +394,7 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUCommandBuffer* command = SDL_AcquireGPUCommandBuffer(device);
         if (command == nullptr) {
             SDL_ReleaseGPUTransferBuffer(device, transfer);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to acquire a mesh upload command buffer"));
         }
@@ -407,7 +402,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (copyPass == nullptr) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
             SDL_ReleaseGPUTransferBuffer(device, transfer);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to begin a mesh copy pass"));
         }
@@ -436,39 +431,38 @@ struct SdlGpuRenderDevice::Impl final {
         const bool submitted = SDL_SubmitGPUCommandBuffer(command);
         SDL_ReleaseGPUTransferBuffer(device, transfer);
         if (!submitted) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: mesh upload submission failed"));
         }
-        return Result::Ok();
+        return {};
     }
 
     [[nodiscard]] Base::Result<MeshHandle, RenderError> CreateMeshInternal(
         const MeshView& mesh,
         bool reserved) {
-        using Result = Base::Result<MeshHandle, RenderError>;
 
         if (mesh.vertices.empty() || mesh.indices.empty()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: a mesh requires vertices and indices"));
         }
         if (mesh.vertices.size() > std::numeric_limits<std::uint32_t>::max() ||
             mesh.indices.size() > std::numeric_limits<std::uint32_t>::max()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: mesh element count exceeds the 32-bit limit"));
         }
         for (std::uint32_t index : mesh.indices) {
             if (index >= mesh.vertices.size()) {
-                return Result::Err(MakeError(
+                return Base::Err(MakeError(
                     RenderErrorCode::InvalidArgument,
                     "SDL_GPU: mesh index lies outside the vertex array"));
             }
         }
         for (const Vertex3D& vertex : mesh.vertices) {
             if (!IsFinite(vertex.position) || !IsFinite(vertex.uv)) {
-                return Result::Err(MakeError(
+                return Base::Err(MakeError(
                     RenderErrorCode::InvalidArgument,
                     "SDL_GPU: mesh vertices must be finite"));
             }
@@ -478,7 +472,7 @@ struct SdlGpuRenderDevice::Impl final {
         const auto indexBytes = std::as_bytes(mesh.indices);
         if (vertexBytes.size() > std::numeric_limits<Uint32>::max() ||
             indexBytes.size() > std::numeric_limits<Uint32>::max()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: mesh buffers exceed the 32-bit size limit"));
         }
@@ -488,7 +482,7 @@ struct SdlGpuRenderDevice::Impl final {
         vertexInfo.size = static_cast<Uint32>(vertexBytes.size());
         SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vertexInfo);
         if (vertexBuffer == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create a vertex buffer"));
         }
@@ -499,7 +493,7 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &indexInfo);
         if (indexBuffer == nullptr) {
             SDL_ReleaseGPUBuffer(device, vertexBuffer);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create an index buffer"));
         }
@@ -509,7 +503,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (!upload) {
             SDL_ReleaseGPUBuffer(device, indexBuffer);
             SDL_ReleaseGPUBuffer(device, vertexBuffer);
-            return Result::Err(std::move(upload).error());
+            return Base::Err(std::move(upload).error());
         }
 
         std::uint32_t slotIndex{};
@@ -527,16 +521,15 @@ struct SdlGpuRenderDevice::Impl final {
         slot.indexCount = static_cast<std::uint32_t>(mesh.indices.size());
         slot.live = true;
         slot.reserved = reserved;
-        return Result::Ok(MeshHandle::FromParts(slotIndex, slot.generation));
+        return MeshHandle::FromParts(slotIndex, slot.generation);
     }
 
     [[nodiscard]] Base::Result<TextureHandle, RenderError> CreateTextureInternal(
         const ImageView& image,
         bool reserved) {
-        using Result = Base::Result<TextureHandle, RenderError>;
 
         if (image.width == 0 || image.height == 0) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: texture dimensions must be positive"));
         }
@@ -545,7 +538,7 @@ struct SdlGpuRenderDevice::Impl final {
         const std::uint64_t sourceRowPitch =
             image.rowPitch == 0 ? tightRowPitch : image.rowPitch;
         if (sourceRowPitch < tightRowPitch) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: texture row pitch is smaller than width * 4"));
         }
@@ -554,7 +547,7 @@ struct SdlGpuRenderDevice::Impl final {
         const std::uint64_t tightSize = tightRowPitch * image.height;
         if (requiredSourceBytes > image.rgba8.size() ||
             tightSize > std::numeric_limits<Uint32>::max()) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: texture pixel span is too small or too large"));
         }
@@ -568,7 +561,7 @@ struct SdlGpuRenderDevice::Impl final {
                 format,
                 SDL_GPU_TEXTURETYPE_2D,
                 SDL_GPU_TEXTUREUSAGE_SAMPLER)) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: requested RGBA8 texture format is unsupported"));
         }
@@ -584,7 +577,7 @@ struct SdlGpuRenderDevice::Impl final {
         textureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
         SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &textureInfo);
         if (texture == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create a texture"));
         }
@@ -596,7 +589,7 @@ struct SdlGpuRenderDevice::Impl final {
             SDL_CreateGPUTransferBuffer(device, &transferInfo);
         if (transfer == nullptr) {
             SDL_ReleaseGPUTexture(device, texture);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to create a texture transfer buffer"));
         }
@@ -605,7 +598,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (mapped == nullptr) {
             SDL_ReleaseGPUTransferBuffer(device, transfer);
             SDL_ReleaseGPUTexture(device, texture);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to map a texture transfer buffer"));
         }
@@ -621,7 +614,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (command == nullptr) {
             SDL_ReleaseGPUTransferBuffer(device, transfer);
             SDL_ReleaseGPUTexture(device, texture);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to acquire a texture upload command buffer"));
         }
@@ -630,7 +623,7 @@ struct SdlGpuRenderDevice::Impl final {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
             SDL_ReleaseGPUTransferBuffer(device, transfer);
             SDL_ReleaseGPUTexture(device, texture);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to begin a texture copy pass"));
         }
@@ -659,7 +652,7 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_ReleaseGPUTransferBuffer(device, transfer);
         if (!submitted) {
             SDL_ReleaseGPUTexture(device, texture);
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: texture upload submission failed"));
         }
@@ -679,15 +672,14 @@ struct SdlGpuRenderDevice::Impl final {
             true, false, false};
         slot.live = true;
         slot.reserved = reserved;
-        return Result::Ok(TextureHandle::FromParts(slotIndex, slot.generation));
+        return TextureHandle::FromParts(slotIndex, slot.generation);
     }
 
     [[nodiscard]] Base::Result<MeshHandle, RenderError> CreateMesh(
         const MeshView& mesh) {
         auto thread = CheckThread();
         if (!thread) {
-            return Base::Result<MeshHandle, RenderError>::Err(
-                std::move(thread).error());
+            return Base::Err(std::move(thread).error());
         }
         return CreateMeshInternal(mesh, false);
     }
@@ -696,37 +688,35 @@ struct SdlGpuRenderDevice::Impl final {
         const ImageView& image) {
         auto thread = CheckThread();
         if (!thread) {
-            return Base::Result<TextureHandle, RenderError>::Err(
-                std::move(thread).error());
+            return Base::Err(std::move(thread).error());
         }
         return CreateTextureInternal(image, false);
     }
 
     [[nodiscard]] Base::Result<void, RenderError> UpdateMeshVertices(
         MeshHandle handle, std::span<const Vertex3D> vertices) {
-        using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread();
         if (!thread) {
             return thread;
         }
         auto found = FindMesh(handle);
         if (!found) {
-            return Result::Err(std::move(found).error());
+            return Base::Err(std::move(found).error());
         }
         MeshSlot& slot = *found.value();
         if (slot.reserved) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: backend-owned mesh cannot be updated"));
         }
         if (vertices.size() != slot.vertexCount) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidArgument,
                 "SDL_GPU: vertex updates must preserve the mesh vertex count"));
         }
         for (const Vertex3D& vertex : vertices) {
             if (!IsFinite(vertex.position) || !IsFinite(vertex.uv)) {
-                return Result::Err(MakeError(
+                return Base::Err(MakeError(
                     RenderErrorCode::InvalidArgument,
                     "SDL_GPU: updated mesh vertices must be finite"));
             }
@@ -740,14 +730,14 @@ struct SdlGpuRenderDevice::Impl final {
             info.size = static_cast<Uint32>(bytes.size());
             slot.vertexTransfer = SDL_CreateGPUTransferBuffer(device, &info);
             if (slot.vertexTransfer == nullptr) {
-                return Result::Err(MakeSdlError(
+                return Base::Err(MakeSdlError(
                     RenderErrorCode::ResourceCreationFailed,
                     "SDL_GPU: failed to create a vertex update transfer buffer"));
             }
         }
         void* mapped = SDL_MapGPUTransferBuffer(device, slot.vertexTransfer, true);
         if (mapped == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::ResourceCreationFailed,
                 "SDL_GPU: failed to map a vertex update transfer buffer"));
         }
@@ -756,14 +746,14 @@ struct SdlGpuRenderDevice::Impl final {
 
         SDL_GPUCommandBuffer* command = SDL_AcquireGPUCommandBuffer(device);
         if (command == nullptr) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to acquire a vertex update command buffer"));
         }
         SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(command);
         if (copy == nullptr) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: failed to begin a vertex update copy pass"));
         }
@@ -774,26 +764,25 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_UploadToGPUBuffer(copy, &source, &destination, true);
         SDL_EndGPUCopyPass(copy);
         if (!SDL_SubmitGPUCommandBuffer(command)) {
-            return Result::Err(MakeSdlError(
+            return Base::Err(MakeSdlError(
                 RenderErrorCode::SubmissionFailed,
                 "SDL_GPU: vertex update submission failed"));
         }
-        return Result::Ok();
+        return {};
     }
 
     [[nodiscard]] Base::Result<void, RenderError> ReleaseMesh(MeshHandle handle) {
-        using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread();
         if (!thread) {
             return thread;
         }
         auto found = FindMesh(handle);
         if (!found) {
-            return Result::Err(std::move(found).error());
+            return Base::Err(std::move(found).error());
         }
         MeshSlot& slot = *found.value();
         if (slot.reserved) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: backend-owned mesh cannot be released"));
         }
@@ -810,23 +799,22 @@ struct SdlGpuRenderDevice::Impl final {
         slot.live = false;
         slot.generation = NextGeneration(slot.generation);
         freeMeshes.push_back(handle.Index());
-        return Result::Ok();
+        return {};
     }
 
     [[nodiscard]] Base::Result<void, RenderError> ReleaseTexture(
         TextureHandle handle) {
-        using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread();
         if (!thread) {
             return thread;
         }
         auto found = FindTexture(handle);
         if (!found) {
-            return Result::Err(std::move(found).error());
+            return Base::Err(std::move(found).error());
         }
         TextureSlot& slot = *found.value();
         if (slot.reserved) {
-            return Result::Err(MakeError(
+            return Base::Err(MakeError(
                 RenderErrorCode::InvalidHandle,
                 "SDL_GPU: backend-owned texture cannot be released"));
         }
@@ -835,48 +823,46 @@ struct SdlGpuRenderDevice::Impl final {
         slot.live = false;
         slot.generation = NextGeneration(slot.generation);
         freeTextures.push_back(handle.Index());
-        return Result::Ok();
+        return {};
     }
 
     Base::Result<TextureHandle, RenderError> CreateTexture(const TextureDesc& description) {
-        using Result = Base::Result<TextureHandle, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
         const auto format = ToSdlFormat(description.format);
         if (!description.width || !description.height || format == SDL_GPU_TEXTUREFORMAT_INVALID ||
             (description.depthTarget && (description.colorTarget || description.format != TextureFormat::Depth32Float)) ||
             (!description.depthTarget && description.format == TextureFormat::Depth32Float))
-            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid texture descriptor"));
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid texture descriptor"));
         SDL_GPUTextureUsageFlags usage = 0;
         if (description.sampled) usage |= SDL_GPU_TEXTUREUSAGE_SAMPLER;
         if (description.colorTarget) usage |= SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
         if (description.depthTarget) usage |= SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
         if (!usage || !SDL_GPUTextureSupportsFormat(device, format, SDL_GPU_TEXTURETYPE_2D, usage))
-            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported texture format/usage"));
+            return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported texture format/usage"));
         SDL_GPUTextureCreateInfo create{};
         create.type = SDL_GPU_TEXTURETYPE_2D; create.format = format; create.usage = usage;
         create.width = description.width; create.height = description.height;
         create.layer_count_or_depth = 1; create.num_levels = 1; create.sample_count = SDL_GPU_SAMPLECOUNT_1;
         auto* texture = SDL_CreateGPUTexture(device, &create);
-        if (!texture) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: texture creation failed"));
+        if (!texture) return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: texture creation failed"));
         std::uint32_t index;
         if (freeTextures.empty()) { index = static_cast<std::uint32_t>(textures.size()); textures.emplace_back(); }
         else { index = freeTextures.back(); freeTextures.pop_back(); }
         auto& slot = textures[index]; slot.texture = texture; slot.description = description;
         slot.live = true; slot.reserved = false;
-        return Result::Ok(TextureHandle::FromParts(index, slot.generation));
+        return TextureHandle::FromParts(index, slot.generation);
     }
 
     Base::Result<ShaderHandle, RenderError> CreateShader(const ShaderArtifact& artifact) {
-        using Result = Base::Result<ShaderHandle, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
         if ((artifact.stage != ShaderStage::Vertex && artifact.stage != ShaderStage::Fragment) ||
             (artifact.format != ShaderFormat::DXIL && artifact.format != ShaderFormat::SPIRV && artifact.format != ShaderFormat::Metallib))
-            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid shader stage or format"));
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid shader stage or format"));
         if (artifact.code.empty() || artifact.entrypoint.empty() ||
             !(info.shaderFormats & FormatBit(artifact.format)) || artifact.resources.storageTextures ||
             artifact.resources.storageBuffers || artifact.resources.uniformBufferSizes.size() > 4 ||
             (artifact.stage == ShaderStage::Vertex && artifact.resources.samplers))
-            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported shader artifact or binding layout"));
+            return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: unsupported shader artifact or binding layout"));
         SDL_GPUShaderCreateInfo create{};
         create.code_size = artifact.code.size(); create.code = reinterpret_cast<const Uint8*>(artifact.code.data());
         create.entrypoint = artifact.entrypoint.c_str(); create.format = ToSdlFormats(FormatBit(artifact.format));
@@ -884,91 +870,85 @@ struct SdlGpuRenderDevice::Impl final {
         create.num_samplers = artifact.resources.samplers;
         create.num_uniform_buffers = static_cast<Uint32>(artifact.resources.uniformBufferSizes.size());
         auto* shader = SDL_CreateGPUShader(device, &create);
-        if (!shader) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: shader creation failed"));
+        if (!shader) return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: shader creation failed"));
         std::uint32_t index;
         if (freeShaders.empty()) { index = static_cast<std::uint32_t>(shaders.size()); shaders.emplace_back(); }
         else { index = freeShaders.back(); freeShaders.pop_back(); }
         auto& slot = shaders[index]; slot.shader = shader; slot.resources = artifact.resources;
         slot.stage = artifact.stage; slot.format = artifact.format; slot.live = true;
-        return Result::Ok(ShaderHandle::FromParts(index, slot.generation));
+        return ShaderHandle::FromParts(index, slot.generation);
     }
     Base::Result<ShaderSlot*, RenderError> FindShader(ShaderHandle handle) {
-        using Result = Base::Result<ShaderSlot*, RenderError>;
         if (!handle || handle.Index() >= shaders.size() || !shaders[handle.Index()].live ||
             shaders[handle.Index()].generation != handle.Generation())
-            return Result::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale shader handle"));
-        return Result::Ok(&shaders[handle.Index()]);
+            return Base::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale shader handle"));
+        return &shaders[handle.Index()];
     }
     Base::Result<void, RenderError> ReleaseShader(ShaderHandle handle) {
-        using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread(); if (!thread) return thread;
-        auto found = FindShader(handle); if (!found) return Result::Err(found.error());
+        auto found = FindShader(handle); if (!found) return Base::Err(found.error());
         auto& slot = *found.value(); SDL_ReleaseGPUShader(device, slot.shader);
         slot.shader = nullptr; slot.live = false; slot.resources = {}; slot.generation = NextGeneration(slot.generation);
-        freeShaders.push_back(handle.Index()); return Result::Ok();
+        freeShaders.push_back(handle.Index()); return {};
     }
     Base::Result<PipelineHandle, RenderError> CreatePipeline(const PipelineDesc& description) {
-        using Result = Base::Result<PipelineHandle, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
-        auto vertex = FindShader(description.vertexShader); if (!vertex) return Result::Err(vertex.error());
-        auto fragment = FindShader(description.fragmentShader); if (!fragment) return Result::Err(fragment.error());
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
+        auto vertex = FindShader(description.vertexShader); if (!vertex) return Base::Err(vertex.error());
+        auto fragment = FindShader(description.fragmentShader); if (!fragment) return Base::Err(fragment.error());
         if (vertex.value()->stage != ShaderStage::Vertex || fragment.value()->stage != ShaderStage::Fragment ||
             vertex.value()->format != fragment.value()->format ||
             ToSdlFormat(description.colorFormat) == SDL_GPU_TEXTUREFORMAT_INVALID ||
             description.colorFormat == TextureFormat::Depth32Float ||
             (description.cull != CullMode::None && description.cull != CullMode::Front && description.cull != CullMode::Back) ||
             (description.depthWrite && !description.depthTest))
-            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid pipeline descriptor"));
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid pipeline descriptor"));
         const auto cull = description.cull == CullMode::None ? SDL_GPU_CULLMODE_NONE :
             description.cull == CullMode::Front ? SDL_GPU_CULLMODE_FRONT : SDL_GPU_CULLMODE_BACK;
         auto* pipeline = CreateNativePipeline(vertex.value()->shader, fragment.value()->shader, cull, description.blend,
             description.depthTest, description.depthWrite, ToSdlFormat(description.colorFormat), description.vertexInput,
             description.clockwiseFrontFace);
-        if (!pipeline) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: pipeline creation failed"));
+        if (!pipeline) return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: pipeline creation failed"));
         std::uint32_t index;
         if (freePipelines.empty()) { index = static_cast<std::uint32_t>(pipelines.size()); pipelines.emplace_back(); }
         else { index = freePipelines.back(); freePipelines.pop_back(); }
         auto& slot = pipelines[index]; slot.pipeline = pipeline; slot.description = description; slot.live = true;
         slot.vertexResources = vertex.value()->resources; slot.fragmentResources = fragment.value()->resources;
-        return Result::Ok(PipelineHandle::FromParts(index, slot.generation));
+        return PipelineHandle::FromParts(index, slot.generation);
     }
     Base::Result<PipelineSlot*, RenderError> FindPipeline(PipelineHandle handle) {
-        using Result = Base::Result<PipelineSlot*, RenderError>;
         if (!handle || handle.Index() >= pipelines.size() || !pipelines[handle.Index()].live ||
             pipelines[handle.Index()].generation != handle.Generation())
-            return Result::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale pipeline handle"));
-        return Result::Ok(&pipelines[handle.Index()]);
+            return Base::Err(MakeError(RenderErrorCode::InvalidHandle, "SDL_GPU: invalid or stale pipeline handle"));
+        return &pipelines[handle.Index()];
     }
     Base::Result<void, RenderError> ReleasePipeline(PipelineHandle handle) {
-        using Result = Base::Result<void, RenderError>;
         auto thread = CheckThread(); if (!thread) return thread;
-        auto found = FindPipeline(handle); if (!found) return Result::Err(found.error());
+        auto found = FindPipeline(handle); if (!found) return Base::Err(found.error());
         auto& slot = *found.value(); SDL_ReleaseGPUGraphicsPipeline(device, slot.pipeline);
         slot.pipeline = nullptr; slot.live = false; slot.description = {}; slot.generation = NextGeneration(slot.generation);
-        freePipelines.push_back(handle.Index()); return Result::Ok();
+        freePipelines.push_back(handle.Index()); return {};
     }
     Base::Result<std::optional<AcquiredFrame>, RenderError> AcquireFrame() {
-        using Result = Base::Result<std::optional<AcquiredFrame>, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
-        if (frameCommand) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: a frame is already acquired"));
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
+        if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: a frame is already acquired"));
         auto* command = SDL_AcquireGPUCommandBuffer(device);
-        if (!command) return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
+        if (!command) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
         SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
         if (!SDL_WaitAndAcquireGPUSwapchainTexture(command, window, &swapchain, &width, &height)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
-            return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain acquisition failed"));
+            return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain acquisition failed"));
         }
         if (!swapchain || !width || !height) {
             if (swapchain) static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
             else static_cast<void>(SDL_CancelGPUCommandBuffer(command));
-            return Result::Ok(std::nullopt);
+            return std::nullopt;
         }
         auto token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
         if (!token) token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
         activeFrame = {token, width, height, swapchainFormat == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
             ? TextureFormat::Rgba8SRgb : TextureFormat::Bgra8SRgb};
         frameCommand = command; frameSwapchain = swapchain;
-        return Result::Ok(activeFrame);
+        return activeFrame;
     }
     void AbandonFrame(const AcquiredFrame& frame) noexcept {
         if (!frameCommand || frame.token != activeFrame.token || std::this_thread::get_id() != ownerThread) return;
@@ -976,36 +956,35 @@ struct SdlGpuRenderDevice::Impl final {
         frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
     }
     Base::Result<void, RenderError> Validate(const PreparedFrame& prepared) {
-        using Result = Base::Result<void, RenderError>;
         for (const auto& pass : prepared.passes) {
             TextureFormat colorFormat = activeFrame.colorFormat;
             std::uint32_t width = activeFrame.width, height = activeFrame.height;
             if (!IsFinite(pass.clearColor) || !IsFinite(pass.clearDepth) || pass.clearDepth < 0 || pass.clearDepth > 1)
-                return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment clear value"));
+                return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment clear value"));
             const auto validLoad = [](AttachmentLoad load) {
                 return load == AttachmentLoad::Clear || load == AttachmentLoad::Load || load == AttachmentLoad::DontCare;
             };
             if (!validLoad(pass.colorLoad) || !validLoad(pass.depthLoad))
-                return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment load operation"));
+                return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid attachment load operation"));
             if (pass.color) {
-                auto found = FindTexture(pass.color); if (!found) return Result::Err(found.error());
+                auto found = FindTexture(pass.color); if (!found) return Base::Err(found.error());
                 const auto& desc = found.value()->description;
-                if (!desc.colorTarget) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: color attachment is not a render target"));
+                if (!desc.colorTarget) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: color attachment is not a render target"));
                 colorFormat = desc.format; width = desc.width; height = desc.height;
             }
             if (pass.depth) {
-                auto found = FindTexture(pass.depth); if (!found) return Result::Err(found.error());
+                auto found = FindTexture(pass.depth); if (!found) return Base::Err(found.error());
                 const auto& desc = found.value()->description;
                 if (!desc.depthTarget || desc.width != width || desc.height != height)
-                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: incompatible depth attachment"));
+                    return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: incompatible depth attachment"));
             }
             for (const auto& draw : pass.draws) {
-                auto pipeline = FindPipeline(draw.pipeline); if (!pipeline) return Result::Err(pipeline.error());
+                auto pipeline = FindPipeline(draw.pipeline); if (!pipeline) return Base::Err(pipeline.error());
                 const auto& desc = pipeline.value()->description;
                 if (desc.colorFormat != colorFormat || desc.depthTest != static_cast<bool>(pass.depth) ||
                     desc.vertexInput != static_cast<bool>(draw.mesh) || (!draw.mesh && !draw.vertexCount))
-                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: draw pipeline/attachment/vertex mismatch"));
-                if (draw.mesh) { auto found = FindMesh(draw.mesh); if (!found) return Result::Err(found.error()); }
+                    return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: draw pipeline/attachment/vertex mismatch"));
+                if (draw.mesh) { auto found = FindMesh(draw.mesh); if (!found) return Base::Err(found.error()); }
                 const auto uniformsMatch = [](const auto& supplied, const auto& sizes) {
                     if (supplied.size() != sizes.size()) return false;
                     for (std::size_t i = 0; i < sizes.size(); ++i) if (supplied[i].size() != sizes[i]) return false;
@@ -1014,24 +993,23 @@ struct SdlGpuRenderDevice::Impl final {
                 if (!uniformsMatch(draw.vertexUniforms, pipeline.value()->vertexResources.uniformBufferSizes) ||
                     !uniformsMatch(draw.fragmentUniforms, pipeline.value()->fragmentResources.uniformBufferSizes) ||
                     draw.fragmentTextures.size() != pipeline.value()->fragmentResources.samplers)
-                    return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: shader resource bindings disagree with artifact metadata"));
+                    return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: shader resource bindings disagree with artifact metadata"));
                 for (const auto& binding : draw.fragmentTextures) {
-                    auto texture = FindTexture(binding.texture); if (!texture) return Result::Err(texture.error());
+                    auto texture = FindTexture(binding.texture); if (!texture) return Base::Err(texture.error());
                     if (!texture.value()->description.sampled || binding.texture == pass.color || binding.texture == pass.depth ||
                         (binding.sampler != SamplerMode::LinearClamp && binding.sampler != SamplerMode::LinearWrap))
-                        return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid sampled texture binding"));
+                        return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid sampled texture binding"));
                 }
             }
         }
-        return Result::Ok();
+        return {};
     }
     Base::Result<PresentStatus, RenderError> SubmitFrame(const AcquiredFrame& frame, const PreparedFrame& prepared) {
-        using Result = Base::Result<PresentStatus, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
         if (!frameCommand || !frame.token || frame.token != activeFrame.token)
-            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid or consumed frame token"));
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: invalid or consumed frame token"));
         auto valid = Validate(prepared);
-        if (!valid) { AbandonFrame(frame); return Result::Err(valid.error()); }
+        if (!valid) { AbandonFrame(frame); return Base::Err(valid.error()); }
         for (const auto& preparedPass : prepared.passes) {
             SDL_GPUColorTargetInfo color{};
             color.texture = preparedPass.color ? FindTexture(preparedPass.color).value()->texture : frameSwapchain;
@@ -1048,7 +1026,7 @@ struct SdlGpuRenderDevice::Impl final {
                 depth.cycle = preparedPass.depthLoad != AttachmentLoad::Load;
             }
             auto* pass = SDL_BeginGPURenderPass(frameCommand, &color, 1, preparedPass.depth ? &depth : nullptr);
-            if (!pass) { auto error = MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: render pass creation failed"); AbandonFrame(frame); return Result::Err(std::move(error)); }
+            if (!pass) { auto error = MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: render pass creation failed"); AbandonFrame(frame); return Base::Err(std::move(error)); }
             for (const auto& draw : preparedPass.draws) {
                 SDL_BindGPUGraphicsPipeline(pass, FindPipeline(draw.pipeline).value()->pipeline);
                 for (Uint32 i = 0; i < draw.vertexUniforms.size(); ++i)
@@ -1072,51 +1050,49 @@ struct SdlGpuRenderDevice::Impl final {
             SDL_EndGPURenderPass(pass);
         }
         auto* command = frameCommand; frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
-        if (!SDL_SubmitGPUCommandBuffer(command)) return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: frame submission failed"));
-        return Result::Ok(PresentStatus::Presented);
+        if (!SDL_SubmitGPUCommandBuffer(command)) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: frame submission failed"));
+        return PresentStatus::Presented;
     }
     Base::Result<TextureReadback, RenderError> ReadTexture(TextureHandle handle) {
-        using Result = Base::Result<TextureReadback, RenderError>;
-        auto thread = CheckThread(); if (!thread) return Result::Err(thread.error());
-        auto found = FindTexture(handle); if (!found) return Result::Err(found.error());
-        if (frameCommand) return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback requires a submitted frame"));
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
+        auto found = FindTexture(handle); if (!found) return Base::Err(found.error());
+        if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback requires a submitted frame"));
         const auto& desc = found.value()->description;
         if (desc.format == TextureFormat::Depth32Float)
-            return Result::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: depth readback is unsupported"));
+            return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: depth readback is unsupported"));
         const std::uint32_t bpp = desc.format == TextureFormat::Rgba16Float ? 8U : 4U;
         const std::uint64_t pitch = (static_cast<std::uint64_t>(desc.width) * bpp + 255U) & ~255ULL;
         const std::uint64_t total = pitch * desc.height;
         if (total > std::numeric_limits<Uint32>::max())
-            return Result::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback exceeds transfer limits"));
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback exceeds transfer limits"));
         TextureReadback output{desc.width, desc.height, static_cast<std::uint32_t>(pitch), desc.format, {}};
         output.bytes.resize(static_cast<std::size_t>(total));
         SDL_GPUTransferBufferCreateInfo create{}; create.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD; create.size = static_cast<Uint32>(total);
         auto* transfer = SDL_CreateGPUTransferBuffer(device, &create);
-        if (!transfer) return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback transfer allocation failed"));
+        if (!transfer) return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback transfer allocation failed"));
         auto* command = SDL_AcquireGPUCommandBuffer(device);
-        if (!command) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback command acquisition failed")); }
+        if (!command) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback command acquisition failed")); }
         auto* copy = SDL_BeginGPUCopyPass(command);
-        if (!copy) { static_cast<void>(SDL_CancelGPUCommandBuffer(command)); SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback copy pass failed")); }
+        if (!copy) { static_cast<void>(SDL_CancelGPUCommandBuffer(command)); SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback copy pass failed")); }
         SDL_GPUTextureRegion source{}; source.texture = found.value()->texture; source.w = desc.width; source.h = desc.height; source.d = 1;
         SDL_GPUTextureTransferInfo destination{}; destination.transfer_buffer = transfer; destination.pixels_per_row = static_cast<Uint32>(pitch / bpp); destination.rows_per_layer = desc.height;
         SDL_DownloadFromGPUTexture(copy, &source, &destination); SDL_EndGPUCopyPass(copy);
         auto* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(command);
-        if (!fence) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback submission failed")); }
+        if (!fence) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback submission failed")); }
         const bool waited = SDL_WaitForGPUFences(device, true, &fence, 1); SDL_ReleaseGPUFence(device, fence);
-        if (!waited) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback wait failed")); }
+        if (!waited) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback wait failed")); }
         const void* data = SDL_MapGPUTransferBuffer(device, transfer, false);
-        if (!data) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback mapping failed")); }
+        if (!data) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: readback mapping failed")); }
         std::memcpy(output.bytes.data(), data, output.bytes.size()); SDL_UnmapGPUTransferBuffer(device, transfer);
-        SDL_ReleaseGPUTransferBuffer(device, transfer); return Result::Ok(std::move(output));
+        SDL_ReleaseGPUTransferBuffer(device, transfer); return std::move(output);
     }
 };
 
 Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError> SdlGpuRenderDevice::Create(
     Platform::Sdl::SdlPlatform& platform, const SdlGpuOptions& options) {
-    using Result = Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError>;
     auto impl = std::make_unique<Impl>(); auto initialized = impl->Initialize(platform, options);
-    if (!initialized) return Result::Err(initialized.error());
-    return Result::Ok(std::unique_ptr<SdlGpuRenderDevice>(new SdlGpuRenderDevice(std::move(impl))));
+    if (!initialized) return Base::Err(initialized.error());
+    return std::unique_ptr<SdlGpuRenderDevice>(new SdlGpuRenderDevice(std::move(impl)));
 }
 SdlGpuRenderDevice::SdlGpuRenderDevice(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
 SdlGpuRenderDevice::~SdlGpuRenderDevice() = default;

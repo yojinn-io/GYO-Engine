@@ -22,7 +22,7 @@ public:
     // must preserve data used by frames already submitted to the GPU.
     [[nodiscard]] virtual Base::Result<void, RenderError> UpdateMeshVertices(
         MeshHandle, std::span<const Vertex3D>) {
-        return Base::Result<void, RenderError>::Err(RenderError::Make(
+        return Base::Err(RenderError::Make(
             RenderErrorCode::UnsupportedOperation,
             "render device does not support mesh vertex updates"));
     }

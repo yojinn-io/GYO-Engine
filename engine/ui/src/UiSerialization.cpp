@@ -272,7 +272,7 @@ Json ElementsJson(const std::vector<UiElement>& elements) {
 UiResult<std::string> UiDocumentCodec::Serialize(const UiDocument& document) {
     auto validation = Validate(document);
     if (!validation) {
-        return UiResult<std::string>::Err(std::move(validation).error());
+        return Base::Err(std::move(validation).error());
     }
 
     try {
@@ -348,9 +348,9 @@ UiResult<std::string> UiDocumentCodec::Serialize(const UiDocument& document) {
             false,
             nlohmann::json::error_handler_t::strict);
         serialized.push_back('\n');
-        return UiResult<std::string>::Ok(std::move(serialized));
+        return std::move(serialized);
     } catch (const std::exception& error) {
-        return UiResult<std::string>::Err({
+        return Base::Err(UiError{
             UiErrorCode::InvalidJson,
             error.what(),
             {},

@@ -28,6 +28,7 @@
 | 2026-10-04 | 跨模組轉換時外層 message 保留內層原文，內層 code 名稱放進 detail。理由：`UfbxModelTests.cpp:172-173` 鎖住了外層 message 含內層訊息 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
 | 2026-10-04 | MSVC 全專案改用符合標準的前處理器（`/Zc:preprocessor`），消除巨集寫法上的 MSVC 特例；設定位置為 `GyoBuild.cmake` 的全域 `add_compile_options`（比照 `-ffp-contract=off`），並在 `Assert.hpp` 加防呆 `#error`；放在 R1 | 使用者 |
+| 2026-10-04 | `Result` 的成功建構子沒有預設模板參數，所以非 void 的 `return {};` 編譯不過，大括號值寫成 `return T{...};`（與 PLAN 2.3「非 void 版沒有預設建構子」一致，並封住 `{}` 經由 `Result(T&&)` 成功的路徑） | R2 實作 |
 
 ## R0 任務校正
 
@@ -187,3 +188,56 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 ### 未結事項
 
 - 無（L1 四列已通過，等待使用者合併）。
+
+## R2 Result 的寫法
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立；#31 合併後併入 master），PR 待開。
+
+### 變更
+
+- **`Result.hpp` 重寫**：
+  - 新增 `Base::Err<E>`（對應 `std::unexpected`）與 CTAD。
+  - 成功值以 conditional explicit 隱式轉換；排除 `Result`、`Err`、`E` 本身，所以漏寫 `Err` 會編譯失敗。
+  - `Err<G>` 只要 `E` 可由 `G` 建構就能轉換（字串字面值 → `std::string` E）。
+  - `has_value()`、`explicit operator bool`、`value()`、`operator*`、`operator->`、`error()`；讀取未持有的一方走 `GYO_ASSERT`。
+  - class-level `[[nodiscard]]`；`static_assert(T != E && !is_reference)`。
+  - 移除 static `Ok`／`Err` 與 `ok()`；修正檔頭的「C++17」與 namespace 結尾註解。
+- **codemod**（`scripts/r2_result_codemod.py`，已 commit）：66 個檔案。
+
+  | 改寫 | 數量 |
+  |---|---|
+  | `return X::Ok(v);` → `return v;`（含空的 `Ok()` → `return {};`） | 228 |
+  | 運算式中的 `X::Ok(v)` → `X(v)` | 5 |
+  | `return X::Err(e);` → `return Base::Err(e);` | 504 |
+  | 運算式中的 `X::Err(e)` → `X(Base::Err(e))` | 3 |
+  | `IoResultVoid` → `IoResult<void>`（11 個別名宣告刪除） | 62 個 token |
+  | `.cpp` 中不再使用的區域 Result 別名刪除 | 52 |
+
+- **手動處理**（codemod 列出的 8 處）：
+  - `Err({...})` 5 處改成 `Base::Err(UiError{...})`：`UiDocumentCodec.cpp` 3、`UiSerialization.cpp`、`UiValidation.cpp`。
+  - `Ok({...})` 3 處改成具名型別：`UiColor.cpp`、`UiRendererTests.cpp`、`PlayerPresentationTests.cpp`。
+  - R0 預計的 lambda（`AssetManager.cpp:56`）不需修改：它只有一個 return，回傳 `AssetHandle` 後由呼叫端隱式轉成 Result。
+- **nodiscard**：class-level `[[nodiscard]]` 讓 tests 中 5 處丟棄 `Register` 回傳值的地方產生警告（與 R0 預測相同），改成 `REQUIRE(registry.Register(...))`。
+- **`ResultTests.cpp` 重寫**：以 `static_assert` 鎖住建構規則（隱式成功、`Err` 轉換、拒絕裸 `E`、非 void 沒有預設建構、explicit 的 `T`、`Err<const char*>` → `std::string`），並測試 return 寫法、錯誤傳遞、move-only `T`、`operator->`、`Result<bool>`、`Result<optional>`、讀取未持有一方會觸發 Assert。
+- **文件**：`error-handling.md` 的 Result 段落寫入建構與查詢規則。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過 |
+| test preset | 50／50 通過 |
+| 稽核 | `static_ok`、`static_err`、`io_result_void` 全部為 0。`result_ok_call` 剩 1 處，是 `AssetRecord.hpp:76` 的 `Error::ok()`（R3 移除），不是 Result |
+| Err 數量守恆 | 起點 512（R0、R1 的測試也算在內）。engine 的 `Base::Err(` 489 處，與改寫前 489 相同；tests_common 20 處；另外 3 處在重寫的 `ResultTests.cpp`，那裡以 using 宣告寫 `Err(`，不在稽核 pattern 內。合計 512 |
+| nodiscard 警告 | 0（修正上述 5 處後） |
+| 第一方警告 | 與 R1 相同（只有既有的 `ModelTests.cpp:29` braced-scalar-init） |
+| 依賴圖 | 與 R1 相同 |
+| 29 檔 syntax-only | 29／29 PASS |
+
+### 觀察（未處理）
+
+- `return std::move(x);` 有 41 處，來自原本的 `Ok(std::move(x))`。C++20 對區域變數與參數會隱式 move，所以多數可以寫成 `return x;`；但 x 若是成員，拿掉 `std::move` 會變成複製，無法安全地自動判斷，因此維持原樣。
+
+### 未結事項
+
+- #31 合併後把 master 併入本分支，開 PR 並取得 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。

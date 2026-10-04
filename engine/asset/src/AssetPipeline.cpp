@@ -11,8 +11,7 @@ namespace Engine::Asset::Loading {
     AssetPipeline::Load(const LoadContext& ctx) {
         // 0) 基本検証
         if (!ctx.HasPath()) {
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::InvalidPath, "AssetPipeline: resolvedPath is empty"));
+            return Base::Err(AssetError::Make(AssetErrorCode::InvalidPath, "AssetPipeline: resolvedPath is empty"));
         }
 
         if (ctx.statistics) {
@@ -25,8 +24,7 @@ namespace Engine::Asset::Loading {
             if (ctx.statistics) {
                 ctx.statistics->OnLoadFailure(ctx.id, ctx.type, ctx.nowFrame);
             }
-            return Base::Result<Core::AnyAsset, AssetError>::Err(
-                AssetError::Make(AssetErrorCode::UnsupportedType, "AssetPipeline: no loader for type", ctx.resolvedPath));
+            return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedType, "AssetPipeline: no loader for type", ctx.resolvedPath));
         }
 
         // 2) bytes を読む
@@ -35,7 +33,7 @@ namespace Engine::Asset::Loading {
             if (ctx.statistics) {
                 ctx.statistics->OnLoadFailure(ctx.id, ctx.type, ctx.nowFrame);
             }
-            return Base::Result<Core::AnyAsset, AssetError>::Err(std::move(bytesR.error()));
+            return Base::Err(std::move(bytesR.error()));
         }
 
         auto& buf = bytesR.value();
@@ -47,7 +45,7 @@ namespace Engine::Asset::Loading {
             if (ctx.statistics) {
                 ctx.statistics->OnLoadFailure(ctx.id, ctx.type, ctx.nowFrame);
             }
-            return Base::Result<Core::AnyAsset, AssetError>::Err(std::move(assetR.error()));
+            return Base::Err(std::move(assetR.error()));
         }
 
         if (ctx.statistics) {
@@ -56,7 +54,7 @@ namespace Engine::Asset::Loading {
                                           0 /*decodedBytes: 分かるなら loader で埋める*/);
         }
 
-        return Base::Result<Core::AnyAsset, AssetError>::Ok(std::move(assetR.value()));
+        return std::move(assetR.value());
     }
 
 } // namespace Engine::Asset::Loading

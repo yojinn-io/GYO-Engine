@@ -14,7 +14,7 @@ namespace Engine::IO::Helpers {
     ReadAllTextUtf8(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(fs, uri, opt);
-        if (!br) return IoResult<std::string>::Err(br.error());
+        if (!br) return Base::Err(br.error());
 
         const auto& bytes = br.value();
         std::string s;
@@ -23,14 +23,14 @@ namespace Engine::IO::Helpers {
             std::memcpy(s.data(), bytes.data(), bytes.size());
         }
         StripUtf8Bom(s);
-        return IoResult<std::string>::Ok(std::move(s));
+        return std::move(s);
     }
 
     inline IoResult<std::string>
     ReadAllTextUtf8(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(vfs, uri, opt);
-        if (!br) return IoResult<std::string>::Err(br.error());
+        if (!br) return Base::Err(br.error());
 
         const auto& bytes = br.value();
         std::string s;
@@ -39,7 +39,7 @@ namespace Engine::IO::Helpers {
             std::memcpy(s.data(), bytes.data(), bytes.size());
         }
         StripUtf8Bom(s);
-        return IoResult<std::string>::Ok(std::move(s));
+        return std::move(s);
     }
 
 } // namespace Engine::IO::Helpers

@@ -168,20 +168,20 @@ struct Renderer::Impl final {
         bool blend, bool depthTest, bool depthWrite, bool vertexInput = true) {
         using Result = Base::Result<PipelineHandle, RenderError>;
         PipelineKey key{shader, target, cull, blend, depthTest, depthWrite, vertexInput};
-        if (auto found = pipelines.find(key); found != pipelines.end()) return Result::Ok(found->second);
+        if (auto found = pipelines.find(key); found != pipelines.end()) return found->second;
         auto program = library->FindProgram(shader, format);
-        if (!program) return Result::Err(program.error());
+        if (!program) return Base::Err(program.error());
         if (program.value().interfaceName != (vertexInput ? "unlit" : "scene_post"))
-            return Result::Err(Error("Renderer: shader interface is incompatible with this draw: " + shader));
+            return Base::Err(Error("Renderer: shader interface is incompatible with this draw: " + shader));
         auto createShader = [&](const std::shared_ptr<const ShaderArtifact>& artifact) -> Base::Result<ShaderHandle, RenderError> {
             if (auto found = shaders.find(artifact.get()); found != shaders.end())
-                return Base::Result<ShaderHandle, RenderError>::Ok(found->second);
+                return found->second;
             auto created = device->CreateShader(*artifact);
             if (created) shaders.emplace(artifact.get(), created.value());
             return created;
         };
-        auto vertex = createShader(program.value().vertex); if (!vertex) return Result::Err(vertex.error());
-        auto fragment = createShader(program.value().fragment); if (!fragment) return Result::Err(fragment.error());
+        auto vertex = createShader(program.value().vertex); if (!vertex) return Base::Err(vertex.error());
+        auto fragment = createShader(program.value().fragment); if (!fragment) return Base::Err(fragment.error());
         auto pipeline = device->CreatePipeline({vertex.value(), fragment.value(), target, vertexInput,
             cull, blend, depthTest, depthWrite});
         if (!pipeline) return pipeline;
@@ -189,22 +189,21 @@ struct Renderer::Impl final {
         return pipeline;
     }
     Base::Result<void, RenderError> Targets(const AcquiredFrame& frame) {
-        using Result = Base::Result<void, RenderError>;
-        if (scene && width == frame.width && height == frame.height) return Result::Ok();
+        if (scene && width == frame.width && height == frame.height) return {};
         auto nextScene = device->CreateTexture({frame.width, frame.height,
             TextureFormat::Rgba16Float, true, true, false});
-        if (!nextScene) return Result::Err(nextScene.error());
+        if (!nextScene) return Base::Err(nextScene.error());
         auto nextDepth = device->CreateTexture({frame.width, frame.height,
             TextureFormat::Depth32Float, false, false, true});
         if (!nextDepth) {
             static_cast<void>(device->ReleaseTexture(nextScene.value()));
-            return Result::Err(nextDepth.error());
+            return Base::Err(nextDepth.error());
         }
         if (scene) static_cast<void>(device->ReleaseTexture(scene));
         if (depth) static_cast<void>(device->ReleaseTexture(depth));
         scene = nextScene.value(); depth = nextDepth.value();
         width = frame.width; height = frame.height;
-        return Result::Ok();
+        return {};
     }
     PreparedDraw Draw(const MaterialDesc& material, MeshHandle mesh, PipelineHandle pipeline,
                       const Math::Matrix4& matrix, UvTransform uv, float cutoff) const {
@@ -217,7 +216,6 @@ struct Renderer::Impl final {
     }
     Base::Result<void, RenderError> Meshes(PreparedPass& pass, const RenderQueue& queue,
         MeshLayer layer, const PerspectiveCamera3D& camera) {
-        using Result = Base::Result<void, RenderError>;
         // (Projection * View) * World, mirroring the former World * (View * Projection).
         const Math::Matrix4 viewProjection = Math::Multiply(
             ProjectionMatrix(camera, static_cast<float>(width) / static_cast<float>(height)), ViewMatrix(camera));
@@ -229,35 +227,33 @@ struct Renderer::Impl final {
             const CullMode cull = sky ? CullMode::Front : mesh.doubleSided ? CullMode::None : CullMode::Back;
             auto pipeline = Pipeline(mesh.material.shader, TextureFormat::Rgba16Float,
                 cull, masked, !overlay, !overlay && !sky);
-            if (!pipeline) return Result::Err(pipeline.error());
+            if (!pipeline) return Base::Err(pipeline.error());
             pass.draws.push_back(Draw(mesh.material, mesh.mesh, pipeline.value(),
                 Math::Multiply(viewProjection, WorldMatrix(mesh.transform)), mesh.uv, masked ? 0.01F : -1.0F));
         }
-        return Result::Ok();
+        return {};
     }
     Base::Result<void, RenderError> Sprites(PreparedPass& pass, const RenderQueue& queue,
         CompositeLayer layer, TextureFormat target) {
-        using Result = Base::Result<void, RenderError>;
         const Math::Matrix4 projection =
             Math::MakeOrthographicPixels(static_cast<float>(width), static_cast<float>(height));
         for (const auto& sprite : queue.Sprites()) {
             if (sprite.layer != layer || sprite.destinationPixels.width == 0 ||
                 sprite.destinationPixels.height == 0 || sprite.sourceUv.width == 0 || sprite.sourceUv.height == 0) continue;
             auto pipeline = Pipeline(sprite.material.shader, target, CullMode::None, true, false, false);
-            if (!pipeline) return Result::Err(pipeline.error());
+            if (!pipeline) return Base::Err(pipeline.error());
             pass.draws.push_back(Draw(sprite.material, quad, pipeline.value(),
                 Math::Multiply(projection, SpriteWorldMatrix(sprite)), MakeSpriteUvTransform(sprite.sourceUv), -1.0F));
         }
-        return Result::Ok();
+        return {};
     }
     Base::Result<void, RenderError> Capture() {
-        using Result = Base::Result<void, RenderError>;
         auto read = device->ReadTexture(scene);
-        if (!read) return Result::Err(read.error());
+        if (!read) return Base::Err(read.error());
         const auto& raw = read.value();
         if (raw.format != TextureFormat::Rgba16Float || raw.rowPitch < raw.width * 8U ||
             raw.bytes.size() < static_cast<std::size_t>(raw.rowPitch) * raw.height)
-            return Result::Err(Error("Renderer: invalid scene readback format or size"));
+            return Base::Err(Error("Renderer: invalid scene readback format or size"));
         SceneCapture result{raw.width, raw.height, {}};
         result.rgba8.resize(static_cast<std::size_t>(raw.width) * raw.height * 4U);
         for (std::uint32_t y = 0; y < raw.height; ++y) {
@@ -270,7 +266,7 @@ struct Renderer::Impl final {
             }
         }
         capture = std::move(result);
-        return Result::Ok();
+        return {};
     }
 };
 
@@ -282,76 +278,74 @@ std::optional<ShaderFormat> Renderer::ActiveShaderFormat() const noexcept {
 }
 
 Base::Result<void, RenderError> Renderer::Initialize(IRenderDevice& device, const ShaderLibrary& library) {
-    using Result = Base::Result<void, RenderError>;
     Reset();
     const auto formats = device.GetInfo().shaderFormats & library.CompleteFormats();
-    if (!formats) return Result::Err(Error("Renderer: device and complete shader bundle share no shader format"));
+    if (!formats) return Base::Err(Error("Renderer: device and complete shader bundle share no shader format"));
     ShaderFormat selected = ShaderFormat::Metallib;
     for (auto candidate : {ShaderFormat::DXIL, ShaderFormat::SPIRV, ShaderFormat::Metallib})
         if (formats & FormatBit(candidate)) { selected = candidate; break; }
     for (const auto& id : {"builtin/unlit", "builtin/scene_post"}) {
         auto program = library.FindProgram(id, selected);
-        if (!program) return Result::Err(program.error());
+        if (!program) return Base::Err(program.error());
     }
     impl_->device = &device; impl_->library = &library; impl_->format = selected;
     const std::array<std::uint8_t, 4> pixels{255,255,255,255};
     auto white = device.CreateTexture(ImageView{1,1,4,std::as_bytes(std::span{pixels}),TextureColorSpace::Linear});
-    if (!white) { Reset(); return Result::Err(white.error()); }
+    if (!white) { Reset(); return Base::Err(white.error()); }
     impl_->white = white.value();
     auto quad = device.CreateMesh(MakeUnitQuadXY().View());
-    if (!quad) { Reset(); return Result::Err(quad.error()); }
+    if (!quad) { Reset(); return Base::Err(quad.error()); }
     impl_->quad = quad.value();
-    return Result::Ok();
+    return {};
 }
 
 Base::Result<PresentStatus, RenderError> Renderer::Render(const RenderQueue& queue) {
-    using Result = Base::Result<PresentStatus, RenderError>;
     auto& state = *impl_;
-    if (!state.device) return Result::Err(Error("Renderer: not initialized"));
+    if (!state.device) return Base::Err(Error("Renderer: not initialized"));
     if (!IsFinite(queue.Frame().clearColor) || !IsValidSceneColorTransform(queue.Frame().sceneColorTransform))
-        return Result::Err(Error("Renderer: invalid frame description"));
+        return Base::Err(Error("Renderer: invalid frame description"));
     // Revalidate cameras in case a caller changed them after submissions.
     RenderQueue validation(queue.Frame());
     if (queue.Camera()) validation.SetCamera(*queue.Camera());
     if (queue.ViewModelCamera()) validation.SetViewModelCamera(*queue.ViewModelCamera());
-    for (const auto& mesh : queue.Meshes()) { auto r = validation.Submit(mesh); if (!r) return Result::Err(r.error()); }
-    for (const auto& sprite : queue.Sprites()) { auto r = validation.Submit(sprite); if (!r) return Result::Err(r.error()); }
+    for (const auto& mesh : queue.Meshes()) { auto r = validation.Submit(mesh); if (!r) return Base::Err(r.error()); }
+    for (const auto& sprite : queue.Sprites()) { auto r = validation.Submit(sprite); if (!r) return Base::Err(r.error()); }
     auto acquired = state.device->AcquireFrame();
-    if (!acquired) return Result::Err(acquired.error());
-    if (!acquired.value()) return Result::Ok(PresentStatus::Skipped);
+    if (!acquired) return Base::Err(acquired.error());
+    if (!acquired.value()) return PresentStatus::Skipped;
     const AcquiredFrame frame = *acquired.value();
     struct Guard { IRenderDevice& device; AcquiredFrame frame; bool active{true};
         ~Guard() { if (active) device.AbandonFrame(frame); } } guard{*state.device, frame};
     auto targets = state.Targets(frame);
-    if (!targets) return Result::Err(targets.error());
+    if (!targets) return Base::Err(targets.error());
     PreparedFrame prepared;
     PreparedPass world;
     world.color = state.scene; world.depth = state.depth;
     world.colorLoad = AttachmentLoad::Clear; world.clearColor = queue.Frame().clearColor;
     if (queue.Camera()) {
         auto r = state.Meshes(world, queue, MeshLayer::World, *queue.Camera());
-        if (!r) return Result::Err(r.error());
+        if (!r) return Base::Err(r.error());
     }
     prepared.passes.push_back(std::move(world));
     PreparedPass sceneSprites; sceneSprites.color = state.scene;
     auto r = state.Sprites(sceneSprites, queue, CompositeLayer::Scene, TextureFormat::Rgba16Float);
-    if (!r) return Result::Err(r.error());
+    if (!r) return Base::Err(r.error());
     if (!sceneSprites.draws.empty()) prepared.passes.push_back(std::move(sceneSprites));
     if (std::any_of(queue.Meshes().begin(), queue.Meshes().end(), [](const auto& m) { return m.layer == MeshLayer::WorldOverlay; })) {
         PreparedPass worldOverlay; worldOverlay.color = state.scene;
         r = state.Meshes(worldOverlay, queue, MeshLayer::WorldOverlay, *queue.Camera());
-        if (!r) return Result::Err(r.error());
+        if (!r) return Base::Err(r.error());
         prepared.passes.push_back(std::move(worldOverlay));
     }
     if (std::any_of(queue.Meshes().begin(), queue.Meshes().end(), [](const auto& m) { return m.layer == MeshLayer::ViewModel; })) {
         PreparedPass viewmodel; viewmodel.color = state.scene; viewmodel.depth = state.depth;
         r = state.Meshes(viewmodel, queue, MeshLayer::ViewModel, *queue.ViewModelCamera());
-        if (!r) return Result::Err(r.error());
+        if (!r) return Base::Err(r.error());
         prepared.passes.push_back(std::move(viewmodel));
     }
     PreparedPass post; post.colorLoad = AttachmentLoad::DontCare;
     auto postPipeline = state.Pipeline("builtin/scene_post", frame.colorFormat, CullMode::None, false, false, false, false);
-    if (!postPipeline) return Result::Err(postPipeline.error());
+    if (!postPipeline) return Base::Err(postPipeline.error());
     PreparedDraw postDraw; postDraw.pipeline = postPipeline.value();
     postDraw.fragmentTextures.push_back({state.scene, SamplerMode::LinearClamp});
     const auto color = queue.Frame().sceneColorTransform;
@@ -359,7 +353,7 @@ Base::Result<PresentStatus, RenderError> Renderer::Render(const RenderQueue& que
     post.draws.push_back(std::move(postDraw)); prepared.passes.push_back(std::move(post));
     PreparedPass overlay;
     r = state.Sprites(overlay, queue, CompositeLayer::Overlay, frame.colorFormat);
-    if (!r) return Result::Err(r.error());
+    if (!r) return Base::Err(r.error());
     if (!overlay.draws.empty()) prepared.passes.push_back(std::move(overlay));
     guard.active = false;
     auto submitted = state.device->SubmitFrame(frame, prepared);
@@ -367,7 +361,7 @@ Base::Result<PresentStatus, RenderError> Renderer::Render(const RenderQueue& que
     if (submitted.value() == PresentStatus::Presented && state.captureRequested) {
         state.captureRequested = false;
         auto capture = state.Capture();
-        if (!capture) return Result::Err(capture.error());
+        if (!capture) return Base::Err(capture.error());
     }
     return submitted;
 }

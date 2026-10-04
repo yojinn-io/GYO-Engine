@@ -16,7 +16,6 @@ namespace Engine::IO::FS {
     using IoError = Engine::Base::Error<Engine::IO::IoErrorCode>;
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     using WatchId = std::uint64_t;
 
@@ -65,7 +64,7 @@ namespace Engine::IO::FS {
                                           const WatchOptions& opt = {}) = 0;
 
         /// 監視を削除
-        virtual IoResultVoid RemoveWatch(WatchId id) = 0;
+        virtual IoResult<void> RemoveWatch(WatchId id) = 0;
 
         /// イベントを回収（非ブロッキング想定）
         /// - outEvents に追記する（呼び出し側で clear してもOK）
@@ -74,11 +73,11 @@ namespace Engine::IO::FS {
                                           std::size_t maxEvents = 256) = 0;
 
         /// OS バッファ等をフラッシュ（任意）
-        virtual IoResultVoid Flush() {
-            return IoResultVoid::Ok();
+        virtual IoResult<void> Flush() {
+            return {};
         }
 
-        virtual IoResultVoid Close() = 0;
+        virtual IoResult<void> Close() = 0;
 
         IFileWatcher(const IFileWatcher&) = delete;
         IFileWatcher& operator=(const IFileWatcher&) = delete;

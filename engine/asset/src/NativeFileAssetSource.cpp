@@ -12,7 +12,7 @@ namespace Engine::Asset::Loading {
 Base::Result<ByteBuffer, AssetError>
 NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
     if (resolvedPath.empty()) {
-        return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
+        return Base::Err(AssetError::Make(
             AssetErrorCode::InvalidPath,
             "NativeFileAssetSource: path is empty"));
     }
@@ -20,7 +20,7 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
     const std::string path(resolvedPath);
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) {
-        return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
+        return Base::Err(AssetError::Make(
             AssetErrorCode::SourceReadFailed,
             "NativeFileAssetSource: cannot open file",
             path));
@@ -33,7 +33,7 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
                   static_cast<std::uintmax_t>(
                       (std::numeric_limits<std::streamsize>::max)())));
     if (end < 0 || static_cast<std::uintmax_t>(end) > maximumReadSize) {
-        return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
+        return Base::Err(AssetError::Make(
             AssetErrorCode::SourceReadFailed,
             "NativeFileAssetSource: invalid file size",
             path));
@@ -43,7 +43,7 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
     ByteBuffer bytes(size);
     stream.seekg(0, std::ios::beg);
     if (!stream) {
-        return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
+        return Base::Err(AssetError::Make(
             AssetErrorCode::SourceReadFailed,
             "NativeFileAssetSource: cannot seek to start of file",
             path));
@@ -53,14 +53,14 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
         stream.read(reinterpret_cast<char*>(bytes.data()),
                     static_cast<std::streamsize>(size));
         if (!stream || static_cast<std::size_t>(stream.gcount()) != size) {
-            return Base::Result<ByteBuffer, AssetError>::Err(AssetError::Make(
+            return Base::Err(AssetError::Make(
                 AssetErrorCode::SourceReadFailed,
                 "NativeFileAssetSource: failed to read complete file",
                 path));
         }
     }
 
-    return Base::Result<ByteBuffer, AssetError>::Ok(std::move(bytes));
+    return std::move(bytes);
 }
 
 } // namespace Engine::Asset::Loading

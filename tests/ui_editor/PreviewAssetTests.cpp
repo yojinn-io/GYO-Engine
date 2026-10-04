@@ -30,7 +30,7 @@ public:
         ++calls;
         Expect(!font.empty(), "preview supplies the mounted font bytes");
         Engine::Text::TextBitmap bitmap{4, 4, 16, std::vector<std::byte>(64, std::byte{255})};
-        return Engine::Base::Result<Engine::Text::TextBitmap, Engine::Text::TextError>::Ok(std::move(bitmap));
+        return std::move(bitmap);
     }
 };
 

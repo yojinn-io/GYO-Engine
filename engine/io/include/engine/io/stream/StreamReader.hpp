@@ -17,7 +17,6 @@ namespace Engine::IO::Stream {
     template<class T>
     using IoResult = Engine::Base::Result<T, IoError>;
 
-    using IoResultVoid = Engine::Base::Result<void, IoError>;
 
     struct TextReadOptions final {
         bool stripUtf8Bom = true;

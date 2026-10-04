@@ -25,7 +25,7 @@ GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這�
 |---|---|---|---|
 | R0 任務校正 | medium（盤點用 ultracode；characterization 測試 high） | 完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 已合併 | 計畫文件、基線、分類表、稽核腳本、Vfs 與 KeepOldIfAny 的 characterization |
 | R1 概念文件與 Assert | high（`Assert.hpp` xhigh） | 驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待合併 | `GYO::Base`、`Assert.hpp`、`error-handling.md`、Collision／FixedTickRuntime／`Math::Clamp` 改用 Assert |
-| R2 Result 的寫法 | high（`Result.hpp` xhigh；codemod medium） | 未開始 | `Base::Err`、隱式成功、移除 `Ok`／`Err`／`ok()` |
+| R2 Result 的寫法 | high（`Result.hpp` xhigh；codemod medium） | 本機驗收完成，PR 待開 | `Base::Err`、隱式成功、移除 `Ok`／`Err`／`ok()` |
 | R3 Error 語意與 asset | high | 未開始 | `CodedError`、`Describe`、移除 `None`、別名收斂、AssetRecord；asset 的 API 誤用改 Assert |
 | R4 Model、ui／render | high | 未開始 | Model／ModelRenderer 的 E、保留 code 的轉換；ui／render 的 API 誤用改 Assert |
 | R5 ui_editor | high | 未開始 | 結果型別、out-param、assert、`Describe` |

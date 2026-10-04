@@ -928,7 +928,7 @@ UiResult<UiDocument> UiDocumentCodec::Parse(
     std::string_view utf8Json,
     std::string_view source) {
     if (!IsValidUtf8(utf8Json)) {
-        return UiResult<UiDocument>::Err({
+        return Base::Err(UiError{
             UiErrorCode::InvalidJson,
             "UI document is not valid UTF-8",
             std::string(source),
@@ -943,20 +943,20 @@ UiResult<UiDocument> UiDocumentCodec::Parse(
         if (!validation) {
             UiError error = std::move(validation).error();
             error.source = std::string(source);
-            return UiResult<UiDocument>::Err(std::move(error));
+            return Base::Err(std::move(error));
         }
-        return UiResult<UiDocument>::Ok(std::move(document));
+        return std::move(document);
     } catch (const ParseFailure& failure) {
-        return UiResult<UiDocument>::Err(failure.error);
+        return Base::Err(failure.error);
     } catch (const nlohmann::json::exception& error) {
-        return UiResult<UiDocument>::Err({
+        return Base::Err(UiError{
             UiErrorCode::InvalidJson,
             error.what(),
             std::string(source),
             {},
         });
     } catch (const std::exception& error) {
-        return UiResult<UiDocument>::Err({
+        return Base::Err(UiError{
             UiErrorCode::InvalidJson,
             error.what(),
             std::string(source),

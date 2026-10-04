@@ -53,19 +53,16 @@ using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceCloser>;
 
 Base::Result<std::unique_ptr<SdlTtfTextRasterizer>, TextError>
 SdlTtfTextRasterizer::Create() {
-    using Result = Base::Result<
-        std::unique_ptr<SdlTtfTextRasterizer>,
-        TextError>;
 
     SDL_ClearError();
     if (!TTF_Init()) {
-        return Result::Err(MakeError(
+        return Base::Err(MakeError(
             TextErrorCode::InitializationFailed,
             "SDL_ttf text rasterizer failed to initialize SDL_ttf"));
     }
 
-    return Result::Ok(std::unique_ptr<SdlTtfTextRasterizer>(
-        new SdlTtfTextRasterizer()));
+    return std::unique_ptr<SdlTtfTextRasterizer>(
+        new SdlTtfTextRasterizer());
 }
 
 SdlTtfTextRasterizer::~SdlTtfTextRasterizer() {
@@ -75,20 +72,19 @@ SdlTtfTextRasterizer::~SdlTtfTextRasterizer() {
 Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
     const std::span<const std::byte> encodedFont,
     const TextRasterRequest& request) {
-    using Result = Base::Result<TextBitmap, TextError>;
 
     if (encodedFont.empty()) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::InvalidArgument,
             "SDL_ttf text rasterizer requires encoded font bytes"));
     }
     if (request.utf8.empty()) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::InvalidArgument,
             "SDL_ttf text rasterizer requires non-empty UTF-8 text"));
     }
     if (!std::isfinite(request.pointSize) || request.pointSize <= 0.0F) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::InvalidArgument,
             "SDL_ttf text rasterizer requires a finite positive point size"));
     }
@@ -96,7 +92,7 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
     SDL_ClearError();
     IoPtr stream(SDL_IOFromConstMem(encodedFont.data(), encodedFont.size()));
     if (!stream) {
-        return Result::Err(MakeError(
+        return Base::Err(MakeError(
             TextErrorCode::FontOpenFailed,
             "SDL_ttf text rasterizer could not create a font memory stream"));
     }
@@ -105,7 +101,7 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
     // explicit instead of relying on closeio behavior on failed font creation.
     FontPtr font(TTF_OpenFontIO(stream.get(), false, request.pointSize));
     if (!font) {
-        return Result::Err(MakeError(
+        return Base::Err(MakeError(
             TextErrorCode::FontOpenFailed,
             "SDL_ttf text rasterizer could not open the encoded font"));
     }
@@ -117,19 +113,19 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
         request.utf8.size(),
         white));
     if (!rendered) {
-        return Result::Err(MakeError(
+        return Base::Err(MakeError(
             TextErrorCode::RasterizationFailed,
             "SDL_ttf text rasterizer could not rasterize the UTF-8 text"));
     }
 
     SurfacePtr rgba(SDL_ConvertSurface(rendered.get(), SDL_PIXELFORMAT_RGBA32));
     if (!rgba) {
-        return Result::Err(MakeError(
+        return Base::Err(MakeError(
             TextErrorCode::PixelConversionFailed,
             "SDL_ttf text rasterizer could not convert glyph pixels to RGBA8"));
     }
     if (rgba->w <= 0 || rgba->h <= 0 || rgba->pixels == nullptr || rgba->pitch < 0) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::RasterizationFailed,
             "SDL_ttf text rasterizer produced an empty or invalid surface"));
     }
@@ -140,7 +136,7 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
     if (width > (std::numeric_limits<std::uint32_t>::max)() ||
         height > (std::numeric_limits<std::uint32_t>::max)() ||
         width > (std::numeric_limits<std::size_t>::max)() / bytesPerPixel) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::SizeOverflow,
             "SDL_ttf text rasterizer output dimensions overflow RGBA8 storage"));
     }
@@ -149,7 +145,7 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
     if (rowBytes > (std::numeric_limits<std::uint32_t>::max)() ||
         static_cast<std::size_t>(rgba->pitch) < rowBytes ||
         height > (std::numeric_limits<std::size_t>::max)() / rowBytes) {
-        return Result::Err(TextError::Make(
+        return Base::Err(TextError::Make(
             TextErrorCode::SizeOverflow,
             "SDL_ttf text rasterizer output pitch or byte size is invalid"));
     }
@@ -168,7 +164,7 @@ Base::Result<TextBitmap, TextError> SdlTtfTextRasterizer::Rasterize(
             bitmap.rgba8.data() + row * rowBytes);
     }
 
-    return Result::Ok(std::move(bitmap));
+    return std::move(bitmap);
 }
 
 } // namespace Engine::Text::Backend::SdlTtf

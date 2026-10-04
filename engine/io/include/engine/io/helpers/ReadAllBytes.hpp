@@ -11,14 +11,14 @@ namespace Engine::IO::Helpers {
     ReadAllBytes(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(fs, uri);
-        if (!orr) return IoResult<std::vector<std::byte>>::Err(orr.error());
+        if (!orr) return Base::Err(orr.error());
 
         auto& s = *orr.value();
         auto br = ReadAllFromStream(s, opt);
-        if (!br) return IoResult<std::vector<std::byte>>::Err(br.error());
+        if (!br) return Base::Err(br.error());
 
         (void)s.Close();
-        return IoResult<std::vector<std::byte>>::Ok(std::move(br.value()));
+        return std::move(br.value());
     }
 
     // Vfs 版（必要なければ削除）
@@ -26,14 +26,14 @@ namespace Engine::IO::Helpers {
     ReadAllBytes(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(vfs, uri);
-        if (!orr) return IoResult<std::vector<std::byte>>::Err(orr.error());
+        if (!orr) return Base::Err(orr.error());
 
         auto& s = *orr.value();
         auto br = ReadAllFromStream(s, opt);
-        if (!br) return IoResult<std::vector<std::byte>>::Err(br.error());
+        if (!br) return Base::Err(br.error());
 
         (void)s.Close();
-        return IoResult<std::vector<std::byte>>::Ok(std::move(br.value()));
+        return std::move(br.value());
     }
 
 } // namespace Engine::IO::Helpers

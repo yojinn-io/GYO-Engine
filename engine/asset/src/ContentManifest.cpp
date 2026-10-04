@@ -49,14 +49,13 @@ AssetError Invalid(const std::string_view source, const std::string& field) {
 
 Base::Result<ContentManifest, AssetError> ContentManifest::Parse(
     const std::string_view text, const std::string_view sourceName) {
-    using Result = Base::Result<ContentManifest, AssetError>;
     try {
         const auto data = nlohmann::json::parse(text);
         if (!data.is_object() || !data.contains("version") ||
             !data["version"].is_number_integer() || data["version"] != 1 ||
             !data.contains("catalogs") || !data["catalogs"].is_array() ||
             !data.contains("shader_bundles") || !data["shader_bundles"].is_array()) {
-            return Result::Err(Invalid(sourceName, "version/catalogs/shader_bundles"));
+            return Base::Err(Invalid(sourceName, "version/catalogs/shader_bundles"));
         }
         ContentManifest manifest;
         std::set<std::string> paths;
@@ -64,27 +63,27 @@ Base::Result<ContentManifest, AssetError> ContentManifest::Parse(
         for (const auto& value : data["catalogs"]) {
             if (!value.is_string() || !IsRelativeContentPath(value.get<std::string>()) || value == "content.json" ||
                 !paths.insert(value.get<std::string>()).second) {
-                return Result::Err(Invalid(sourceName, "catalogs: expected unique root-relative paths"));
+                return Base::Err(Invalid(sourceName, "catalogs: expected unique root-relative paths"));
             }
             manifest.catalogs.push_back(value.get<std::string>());
         }
         for (const auto& value : data["shader_bundles"]) {
             if (!value.is_object() || !value.contains("name") || !value["name"].is_string() ||
                 !value.contains("path") || !value["path"].is_string()) {
-                return Result::Err(Invalid(sourceName, "shader_bundles: expected name and path"));
+                return Base::Err(Invalid(sourceName, "shader_bundles: expected name and path"));
             }
             ContentShaderBundle bundle{value["name"].get<std::string>(), value["path"].get<std::string>()};
             if (!IsBundleName(bundle.name) || !names.insert(bundle.name).second ||
                 !IsRelativeContentPath(bundle.path) || Overlaps(bundle.path, "content.json") ||
                 std::any_of(paths.begin(), paths.end(), [&](const auto& path) { return Overlaps(bundle.path, path); })) {
-                return Result::Err(Invalid(sourceName, "shader_bundles: duplicate identity or invalid path"));
+                return Base::Err(Invalid(sourceName, "shader_bundles: duplicate identity or invalid path"));
             }
             paths.insert(bundle.path);
             manifest.shaderBundles.push_back(std::move(bundle));
         }
-        return Result::Ok(std::move(manifest));
+        return std::move(manifest);
     } catch (const nlohmann::json::exception& error) {
-        return Result::Err(Invalid(sourceName, std::string{"JSON: "} + error.what()));
+        return Base::Err(Invalid(sourceName, std::string{"JSON: "} + error.what()));
     }
 }
 
@@ -92,8 +91,7 @@ Base::Result<ContentManifest, AssetError> ContentManifest::Load(
     const std::filesystem::path& assetRoot) {
     const auto path = assetRoot / "content.json";
     std::ifstream stream(path, std::ios::binary);
-    if (!stream) return Base::Result<ContentManifest, AssetError>::Err(
-        AssetError::Make(AssetErrorCode::SourceNotFound, "Cannot open content manifest", path.string()));
+    if (!stream) return Base::Err(AssetError::Make(AssetErrorCode::SourceNotFound, "Cannot open content manifest", path.string()));
     const std::string text{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
     return Parse(text, path.string());
 }
@@ -110,19 +108,19 @@ Base::Result<AssetCatalog, AssetError> ContentManifest::LoadCatalogs(
     Resolver::AssetPathResolver resolver(std::move(options));
     for (const auto& path : catalogs) {
         auto loaded = catalog.AppendFromFile((assetRoot / path).string(), parser, resolver);
-        if (!loaded) return Base::Result<AssetCatalog, AssetError>::Err(std::move(loaded.error()));
+        if (!loaded) return Base::Err(std::move(loaded.error()));
     }
     for (const auto* entry : catalog.Entries()) {
         if (!IsRelativeContentPath(entry->sourcePath) || entry->sourcePath == "content.json") {
-            return Base::Result<AssetCatalog, AssetError>::Err(Invalid("content.json", "catalog asset path: " + entry->sourcePath));
+            return Base::Err(Invalid("content.json", "catalog asset path: " + entry->sourcePath));
         }
         for (const auto& bundle : shaderBundles) {
             if (Overlaps(entry->sourcePath, bundle.path)) {
-                return Base::Result<AssetCatalog, AssetError>::Err(Invalid("content.json", "asset overlaps shader bundle: " + entry->sourcePath));
+                return Base::Err(Invalid("content.json", "asset overlaps shader bundle: " + entry->sourcePath));
             }
         }
     }
-    return Base::Result<AssetCatalog, AssetError>::Ok(std::move(catalog));
+    return std::move(catalog);
 }
 
 } // namespace Engine::Asset

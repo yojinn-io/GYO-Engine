@@ -27,16 +27,15 @@ void AssetManager::Update() {
 
 Base::Result<AssetHandle, AssetError>
 AssetManager::Load(const AssetId& id, const AssetRequest& request) {
-    using Result = Base::Result<AssetHandle, AssetError>;
     // Reserved hints must never silently change the request's meaning, including
     // on cache hits. Reject before catalog access, records, pinning or references.
     if (request.priority != 0 || request.keepAliveFramesOverride != 0) {
-        return Result::Err(AssetError::Make(AssetErrorCode::UnsupportedRequest,
+        return Base::Err(AssetError::Make(AssetErrorCode::UnsupportedRequest,
             "AssetManager: nonzero priority and per-request TTL are not supported"));
     }
     if (stats_) stats_->OnLoadRequest();
     auto entry = ResolveEntry_(id, request);
-    if (!entry) return Result::Err(std::move(entry.error()));
+    if (!entry) return Base::Err(std::move(entry.error()));
 
     auto pending = std::find_if(queue_.begin(), queue_.end(),
         [&](const PendingLoad& job) { return job.id == id; });
@@ -50,14 +49,14 @@ AssetManager::Load(const AssetId& id, const AssetRequest& request) {
     }
     const bool cached = existing && existing->IsReady() && !request.IsReload();
     if (pending == queue_.end() && !cached && !storage_.CanReserveGeneration(id)) {
-        return Result::Err(AssetError::Make(AssetErrorCode::GenerationExhausted,
+        return Base::Err(AssetError::Make(AssetErrorCode::GenerationExhausted,
             "AssetManager: all handle generations for this asset have been issued"));
     }
     auto& record = GetOrCreateRecord_(id, entry.value());
     const auto acquire = [&](std::uint32_t generation) {
         record.AddReference(generation);
         lifetime_.Touch(id, frame_);
-        return Result::Ok(AssetHandle::Make(id, generation));
+        return AssetHandle::Make(id, generation);
     };
 
     // A normal lookup can keep using the published asset during replacement.
@@ -72,7 +71,7 @@ AssetManager::Load(const AssetId& id, const AssetRequest& request) {
 
     if (pending != queue_.end()) {
         if (!Compatible_(*pending, entry.value(), request)) {
-            return Result::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
+            return Base::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
                 "AssetManager: another request for this asset is already queued"));
         }
         if (request.pin) lifetime_.Pin(id);
@@ -84,7 +83,7 @@ AssetManager::Load(const AssetId& id, const AssetRequest& request) {
         queue_.erase(pending);
         auto completed = CompleteLoad_(job);
         if (!completed && !(request.fallback == AssetRequest::Fallback::KeepOldIfAny && record.IsReady()))
-            return Result::Err(std::move(completed.error()));
+            return Base::Err(std::move(completed.error()));
         return acquire(record.generation);
     }
 
@@ -99,7 +98,7 @@ AssetManager::Load(const AssetId& id, const AssetRequest& request) {
 
     auto completed = CompleteLoad_(job);
     if (!completed && !(request.fallback == AssetRequest::Fallback::KeepOldIfAny && record.IsReady()))
-        return Result::Err(std::move(completed.error()));
+        return Base::Err(std::move(completed.error()));
     return acquire(record.generation);
 }
 
@@ -148,25 +147,24 @@ void AssetManager::Unwatch(const AssetId& id) {
 
 Base::Result<AssetManager::ResolvedEntry, AssetError>
 AssetManager::ResolveEntry_(const AssetId& id, const AssetRequest& request) {
-    using Result = Base::Result<ResolvedEntry, AssetError>;
     if (stats_) stats_->OnCatalogLookup();
     const auto* entry = catalog_.Find(id);
     if (!entry) {
         if (stats_) stats_->OnCatalogMiss();
-        return Result::Err(AssetError::Make(AssetErrorCode::CatalogNotFound,
+        return Base::Err(AssetError::Make(AssetErrorCode::CatalogNotFound,
             "AssetCatalog: id not found"));
     }
     if (request.useTypeHint && request.expectedType.value != 0 && request.expectedType != entry->type) {
-        return Result::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
+        return Base::Err(AssetError::Make(AssetErrorCode::InvalidCatalogEntry,
             "AssetRequest: expectedType mismatch"));
     }
     ResolvedEntry resolved{entry->type,
         request.overridePath.empty() ? entry->resolvedPath : request.overridePath};
     if (resolved.resolvedPath.empty()) {
-        return Result::Err(AssetError::Make(AssetErrorCode::InvalidPath,
+        return Base::Err(AssetError::Make(AssetErrorCode::InvalidPath,
             "AssetCatalog: resolvedPath is empty"));
     }
-    return Result::Ok(std::move(resolved));
+    return std::move(resolved);
 }
 
 Core::AssetRecord& AssetManager::GetOrCreateRecord_(const AssetId& id, const ResolvedEntry& entry) {
@@ -183,11 +181,10 @@ bool AssetManager::Compatible_(const PendingLoad& job, const ResolvedEntry& entr
 }
 
 Base::Result<void, AssetError> AssetManager::CompleteLoad_(const PendingLoad& job) {
-    using Result = Base::Result<void, AssetError>;
     auto* record = storage_.Find(job.id);
     // A forcibly removed record must not be recreated by a stale queued job.
     if (!record || !record->IsLoading() || record->candidateGeneration != job.generation) {
-        return Result::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
+        return Base::Err(AssetError::Make(AssetErrorCode::RequestInProgress,
             "AssetManager: queued generation is no longer pending"));
     }
     const bool hadReadyAsset = record->IsReady();
@@ -214,7 +211,7 @@ Base::Result<void, AssetError> AssetManager::CompleteLoad_(const PendingLoad& jo
             record->generation = job.generation;
             record->SetFailed(error);
         }
-        return Result::Err(error);
+        return Base::Err(error);
     }
 
     record->generation = job.generation;
@@ -223,7 +220,7 @@ Base::Result<void, AssetError> AssetManager::CompleteLoad_(const PendingLoad& jo
     record->ClearCandidate();
     record->SetReady(std::move(loaded.value()));
     lifetime_.OnLoaded(job.id, frame_);
-    return Result::Ok();
+    return {};
 }
 
 void AssetManager::ProcessQueue_() {

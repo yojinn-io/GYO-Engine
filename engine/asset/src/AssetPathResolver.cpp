@@ -19,12 +19,10 @@ namespace Engine::Asset::Resolver {
 
     Base::Result<IO::Path::Path, AssetError> AssetPathResolver::Resolve(std::string_view catalogPath) const {
         if (catalogPath.empty()) {
-            return Base::Result<IO::Path::Path, AssetError>::Err(
-                AssetError::Make(
+            return Base::Err(AssetError::Make(
                     AssetErrorCode::InvalidPath,
                     "AssetPathResolver: empty path",
-                    std::string(catalogPath))
-            );
+                    std::string(catalogPath)));
         }
 
         // 1) scheme 剥がし（res://, assets:// など）
@@ -42,18 +40,16 @@ namespace Engine::Asset::Resolver {
         // 3) 絶対パス判定
         if (Engine::IO::Path::IsAbsolutePathLike(p)) {
             if (!opt_.allowAbsolutePath) {
-                return Base::Result<IO::Path::Path, AssetError>::Err(
-                    AssetError::Make(
+                return Base::Err(AssetError::Make(
                         AssetErrorCode::InvalidPath,
                         "AssetPathResolver: absolute path is not allowed",
-                        std::string(catalogPath))
-                );
+                        std::string(catalogPath)));
             }
 
             // 絶対パス許可の場合：dot segments だけ解決（root制約なし）
             bool escaped = false;
             std::string cleaned = Engine::IO::Path::RemoveDotSegments(p, escaped);
-            return Base::Result<IO::Path::Path, AssetError>::Ok(IO::Path::Path::FromNormalized(std::move(cleaned)));
+            return IO::Path::Path::FromNormalized(std::move(cleaned));
         }
 
         // 4) assetsRoot と結合する前に、相対パス単体で root 越えを検出する。
@@ -62,12 +58,10 @@ namespace Engine::Asset::Resolver {
         bool escapedRelativeRoot = false;
         std::string cleanedRelative = Engine::IO::Path::RemoveDotSegments(p, escapedRelativeRoot);
         if (escapedRelativeRoot && !opt_.allowEscapeAssetsRoot) {
-            return Base::Result<IO::Path::Path, AssetError>::Err(
-                AssetError::Make(
+            return Base::Err(AssetError::Make(
                     AssetErrorCode::PathEscapesRoot,
                     "AssetPathResolver: path escapes assetsRoot via '..' which is not allowed",
-                    std::string(catalogPath))
-            );
+                    std::string(catalogPath)));
         }
 
         // allowEscapeAssetsRoot=true の場合は従来通り元の '..' を結合後に解決する。
@@ -81,15 +75,13 @@ namespace Engine::Asset::Resolver {
         std::string cleaned = Engine::IO::Path::RemoveDotSegments(joined, escapedAboveRoot);
 
         if (escapedAboveRoot && !opt_.allowEscapeAssetsRoot) {
-            return Base::Result<IO::Path::Path, AssetError>::Err(
-                AssetError::Make(
+            return Base::Err(AssetError::Make(
                     AssetErrorCode::PathEscapesRoot,
                     "AssetPathResolver: path escapes assetsRoot via '..' which is not allowed",
-                    std::string(catalogPath))
-            );
+                    std::string(catalogPath)));
         }
 
-        return Base::Result<IO::Path::Path, AssetError>::Ok(IO::Path::Path::FromNormalized(std::move(cleaned)));
+        return IO::Path::Path::FromNormalized(std::move(cleaned));
     }
 
 } // namespace Engine::Asset::Resolver
