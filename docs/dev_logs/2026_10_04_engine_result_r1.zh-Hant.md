@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R1：概念文件與 Assert
 
 日期：2026-10-04。Owner：Engine（`GYO::Base`），連帶 Math、Collision、Runtime、測試與文件。
-狀態：本機驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI（分支 `claude/result-unification-r1`，基準 `3b9765e`）。
+狀態：驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併（分支 `claude/result-unification-r1`，基準 `3b9765e`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r1-概念文件與-assert)，本文只記經過。
 
 ## 經過
@@ -13,8 +13,10 @@
 5. 新增測試支援 `gyo_test_support` 與 `GYO_CHECK_ASSERTS`，原本 17 處 `CHECK_THROWS_AS` 改用它；新增 `gyo_base_tests` 與三種模式的 abort probe。
 6. 新增 `docs/architecture/error-handling.md`，更新 architecture、math、creating_apps 文件。
 7. 本機驗收：core 23／23、test 50／50；依賴圖只多出計劃列出的邊；29 檔 syntax-only 全部通過；沒有新增警告。
+8. 使用者要求在合併前讓 MSVC 全專案改用 `/Zc:preprocessor`：在 `GyoBuild.cmake` 全域加入（shader host 個別加入），`Assert.hpp` 加防呆 `#error`，新增 `PreprocessorTests.cpp` 證明選項生效。
+9. CI：L1 四列通過。windows-x64 的警告與改動前逐項相同（138 個，全為既有項目）；MSVC 上的 `PreprocessorTests`、abort probe 都通過。
 
 ## 留給下一步
 
-- R1 的 PR 與 L1 四列驗收（特別是 MSVC）。
+- 使用者合併 #31。
 - 使用者指示後開始 R2（Result 的寫法）。

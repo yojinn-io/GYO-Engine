@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 本機驗收完成，PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 驗收完成（含 `/Zc:preprocessor`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。**
 
 ## 閱讀入口
 
@@ -100,7 +100,7 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ## R1 概念文件與 Assert
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 待 CI。
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) L1 四列通過，待合併。
 
 ### 變更
 
@@ -152,7 +152,11 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 | 本機 core／test preset | 23／23、50／50 通過 |
 | 本機編譯指令（macOS、AppleClang） | `compile_commands.json` 與改動前相比，core 84→85、test 944→945 筆，只多出 `PreprocessorTests.cpp`，其餘 0 筆變動 |
 | windows-x64 基準（改動前，#31 第一次 CI） | 警告 138 個、22 組（檔案、代碼），全部在第三方（protobuf、absl、doctest、spirv-cross），加上 pvp 的 2 個 C4456 |
-| windows-x64（改動後） | 待 CI |
+| windows-x64（改動後，`9f46627`，run 37181489276） | 編譯器為 MSVC 19.51.36260.0（cl，不是 clang-cl）。警告 138 個、22 組，與基準逐項完全相同，沒有 C5105 等新警告，沒有錯誤 |
+| 選項確實生效 | `PreprocessorTests.cpp`（含 `_MSVC_TRADITIONAL == 0`、`__VA_ARGS__` 轉送、`__VA_OPT__` 的 `static_assert`）在 MSVC 上編譯通過，`gyo_base_tests` 通過；`Assert.hpp` 的防呆在 engine 的每個 TU 都沒有觸發 |
+| abort probe（Windows） | 三種模式都通過，各約 0.03 秒，沒有被 WER 對話框卡住 |
+| shader host | `gyo_shader_tool` 加上 `/Zc:preprocessor` 後建置成功 |
+| L1 四列 | linux-x64、macos-arm64、macos-x64、windows-x64 全部通過（Windows 上 test preset 50／50） |
 
 #### 選項比較（決定時的依據）
 
@@ -182,4 +186,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 的 L1 四列結果（MSVC 的前處理器與 abort 行為）。
+- 無（L1 四列已通過，等待使用者合併）。
