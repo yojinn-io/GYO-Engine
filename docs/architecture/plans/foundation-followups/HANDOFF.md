@@ -196,6 +196,8 @@
 - 2026-10-05：`services/gyo_gateway/README.md` 改為不具名；`test_workflow_gates.py` 的舊開關守衛改為由 `engine/config/tools.csv` 的登錄名組出（守衛照舊，不寫產品名）。第一版曾用「任何 `GYO_BUILD_*`」的 regex，但 preset 有合法的 `GYO_BUILD_SDL_*` 開關，範圍過寬，改為登錄名。
 - 2026-10-05：`object_fps_preview` 在 `tools.csv` 停用（D11⑧），遷移需求已在遷移清單。
 - 2026-10-05：CTest 56／56；只選 ui_editor 的設定（`GYO_APPS=` 空、`GYO_TOOLS=ui_editor`）configure 通過，`gyo_ui_editor_preview_srgb_tests` 建置並通過。Removability 檢查進行中（scratch worktree）。
+- 2026-10-05：Removability 通過：scratch worktree（`d397b32`）刪除消費端的程式、資產、測試、驗收、文件與 `projects.csv` 登錄列後，test preset configure（選取的遊戲為空、工具 ui_editor）、建置成功，CTest 34／34 通過。完成，開 PR。
+  另記：`docs/architecture/plans/math-foundation/scripts/syntax_check.py`、`docs/architecture/plans/result-unification/scripts/` 兩個歷史計畫的腳本仍寫著消費端的路徑；它們不在建置與測試內，屬已結束計畫的紀錄，本批不改。
 
 ## 未結事項
 
