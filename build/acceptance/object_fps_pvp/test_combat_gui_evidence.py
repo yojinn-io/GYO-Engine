@@ -8,6 +8,7 @@ import unittest
 
 from combat_gui_evidence import RULES, SUBMITTING, analyze_combat_gui, schedule
 from gameplay_evidence import combat_expected
+from acceptance_util import PROTOCOL_VERSION
 
 SHOOTER, TARGET = 1, 2
 FIRST_TICK, SLOT_TICKS, LATENCY_TICKS = 100, 48, 2
@@ -99,7 +100,7 @@ class CombatGuiEvidenceTests(unittest.TestCase):
         for role, local in (("create", SHOOTER), ("join", TARGET)):
             mover = local == SHOOTER
             count = lambda value: value if mover else 0
-            report = {"schema_version": 2, "protocol": 5, "enabled": True, "role": role,
+            report = {"schema_version": 2, "protocol": PROTOCOL_VERSION, "enabled": True, "role": role,
                       "duration_seconds": duration, "local_id": local, "expected_target_id": 3 - local, **RULES,
                       "planned_slots": count(len(slots)), "dispatched_slots": count(len(slots)),
                       "planned_actions": count(len(submissions)), "submitted_actions": count(len(submissions)),

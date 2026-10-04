@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v5.pb.h"
+#include "acceptance_protocol.hpp"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -37,7 +38,7 @@ public:
         http.Get("/rooms",[](const auto&,auto& response){response.set_content(R"({"rooms":[]})","application/json");});
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
-            if(body.value("protocol_version",0)!=5) {
+            if(body.value("protocol_version",0u)!=AcceptanceProtocolVersion) {
                 response.status=400;response.set_content(R"({"error":"expected v5"})","application/json");return;
             }
             const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
@@ -117,7 +118,7 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
-    std::atomic<unsigned> protocolVersion{5};
+    std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
     bool includeRules{true};
     std::uint64_t epoch{1};
     bool autoAck{};
@@ -371,10 +372,11 @@ int main() {
             connection.State().actionTransport.allocatedThrough==0 && connection.Drain().decisions.empty(),"Leave retained action lifecycle state");
         gateway.epoch=1;
 
-        gateway.protocolVersion=4;connection.Join(gateway.address,"1");
+        // The previous version must be refused as a legacy join.
+        gateway.protocolVersion=AcceptanceProtocolVersion-1;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v4 join");
-        gateway.protocolVersion=5;gateway.includeRules=false;connection.Join(gateway.address,"1");
+        gateway.protocolVersion=AcceptanceProtocolVersion;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
         gateway.includeRules=true;

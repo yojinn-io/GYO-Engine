@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from run_weapon_short import rank
+from acceptance_util import rank
 
 
 def validate_samples(samples):

@@ -24,7 +24,7 @@ from backpressure_probe import IpcPause, analyze as analyze_recovery
 from command_evidence import analyze_commands
 from impaired_network import _ImpairedGateway
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
-from action_evidence import frames as action_frames, records, analyze_legal
+from action_evidence import frames as action_frames, records
 
 
 def varint(value):
@@ -404,7 +404,7 @@ def analyze(output, relay, fault, mode):
         # stricter sliding-window count; Hello and deliberate bad packets count.
         check(maximum <= 120, 'Authenticated traffic exceeds120 packets per second')
         counts = Counter(e['kind'] for e in received)
-        check(counts[1] >= 4 and counts[3] >= 180 and counts[6] >= (10 if client.get('legal_shots') else 90), 'Concurrent Hello/movement/action traffic not exercised')
+        check(counts[1] >= 4 and counts[3] >= 180 and counts[6] >= 90, 'Concurrent Hello/movement/action traffic not exercised')
         action_max = maximum_window([e['time_ns'] for e in received if e['kind'] == 6])
         check(action_max <= 31, 'Client action/ACK schedule exceeds30Hz (one boundary packet allowed)')
         result_max = maximum_window([e['time_ns'] for e in relay['events'] if not e['upstream'] and e['event'] == 'received'
@@ -480,7 +480,7 @@ def analyze(output, relay, fault, mode):
         check(client['maximum_retained'] == [32, 32] and min(client['blocked_submissions']) > 0, 'Drain stall did not reach/guard32 slots')
         check(min(client['maximum_unconsumed']) > 0, 'Drain stall retained no unconsumed decisions')
     movement_baseline = None
-    if mode == 'baseline' and not client.get('legal_shots'):
+    if mode == 'baseline':
         # A declared one-second warmup/tail leaves every frame inside the
         # four-second coexistence window, including any slow or failed frame.
         start, end = client['start_ns']+1_000_000_000, client['end_ns']-1_000_000_000
@@ -492,10 +492,6 @@ def analyze(output, relay, fault, mode):
         movement_baseline = analyze_commands(output, enforce=True)
         check(movement_baseline['passed'], 'Concurrent movement latency regression: '+str(movement_baseline['errors']))
         check(movement_baseline['production_60hz_passed'], 'Concurrent movement did not produce60Hz commands')
-    legal = None
-    if client.get('legal_shots'):
-        legal = analyze_legal(output, injected=mode != 'baseline')
-        check(legal['passed'], 'Legal-rate evidence failed: '+str(legal['errors']))
     return {'passed': not errors, 'errors': errors, 'mode': mode, 'fault': fault, 'rate': rate,
             'unique_wire_decisions': len(originals), 'identical_result_repeats': repeated,
             'accepted_unique_shots': accepted, 'unique_actual_damage': dict(total_damage),
@@ -506,7 +502,6 @@ def analyze(output, relay, fault, mode):
             'gateway_actual_session_rate_counters': gateway_counters,
             'rate_limit_acceptance_policy': rate_policy,
             'movement_baseline_with_actions': movement_baseline,
-            'legal_rate_evidence': legal,
             'kernel_socket_saturation_proven': False}
 
 
@@ -552,7 +547,8 @@ def run_case(args, mode, milliseconds=0):
         if getattr(args, 'gameplay_v5', False):
             command += ['--gameplay-v5', 'true', '--fps', getattr(args, 'fps', 60)]
         elif mode.startswith('network') or mode == 'burst2':
-            command += ['--legal-shots', 'true']
+            # The v4 legal-rate shots behind these cases are retired; v5 runs them in run_gameplay.py.
+            raise RuntimeError(mode+' requires the v5 gameplay probe; use run_gameplay.py')
         if mode == 'drain-stall':
             command += ['--drain-stall-ms', 1300]
         probe = start('probe', command)
@@ -632,7 +628,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('match', 'gateway', 'probe', 'arena', 'output'):
         parser.add_argument('--'+name, required=True, type=Path)
-    parser.add_argument('--case', choices=('baseline', 'loss-shot', 'loss-result', 'loss-ack', 'duplicate-reorder-conflict', 'drain-stall', 'upstream', 'downstream', 'socket-path', 'gateway', 'host-ipc', 'network0', 'network20', 'network40', 'burst2'))
+    parser.add_argument('--case', choices=('baseline', 'loss-shot', 'loss-result', 'loss-ack', 'duplicate-reorder-conflict', 'drain-stall', 'upstream', 'downstream', 'socket-path', 'gateway', 'host-ipc'))
     parser.add_argument('--milliseconds', type=int, choices=(250, 1000), default=250)
     args = parser.parse_args()
     for name in ('match', 'gateway', 'probe', 'arena'):

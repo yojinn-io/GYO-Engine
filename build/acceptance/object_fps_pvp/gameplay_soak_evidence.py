@@ -16,6 +16,7 @@ from command_evidence import read_trace_events
 from gameplay_evidence import (client_disturbance, combat_expected, life_reset_matches, percentile,
                                start_phase_by_player, validate_accepted_actions)
 from start_phase_evidence import reseed_evidence
+from acceptance_util import PROTOCOL_VERSION
 
 PHASE_STATES = ('acquiring', 'settling', 'tracking')
 DRIFT_BUCKET_CYCLES = 10
@@ -174,10 +175,10 @@ def analyze_soak(output, gateway_counters, *, soak=False):
     cycle_ns, lives_per_cycle = round(cycle_seconds*1e9), plan['lives_per_cycle']
     start_ns, player_ids = client['start_ns'], client['player_ids']
     end_ns = start_ns+cycles*cycle_ns
-    check(client.get('gameplay_v5') and client['protocol'] == 5 and client['passed'],
+    check(client.get('gameplay_v5') and client['protocol'] == PROTOCOL_VERSION and client['passed'],
           'v5 client did not finish/retire all actions')
     check(client.get('cycles') == cycles and client['duration'] == cycles*cycle_seconds and
-          plan['protocol'] == 5 and len(plan['actions']) == client['planned_actions'],
+          plan['protocol'] == PROTOCOL_VERSION and len(plan['actions']) == client['planned_actions'],
           'Predeclared cycle denominator missing or differs from the probe')
     check(client['end_ns'] >= end_ns, 'Probe ended before the declared cycles')
     rules = client['clients'][0]
@@ -377,7 +378,7 @@ def analyze_soak(output, gateway_counters, *, soak=False):
 
     measured_seconds = cycles*cycle_seconds
     result = {
-        'passed': not errors, 'errors': errors, 'protocol': 5, 'fps': client['fps'], 'cycles': cycles,
+        'passed': not errors, 'errors': errors, 'protocol': PROTOCOL_VERSION, 'fps': client['fps'], 'cycles': cycles,
         'measured_seconds': measured_seconds, 'soak_requested': soak,
         'full_30_minute_qualified': soak and measured_seconds >= 1800 and not errors,
         'scope': 'repeated 16-second v5 gameplay plan; same-host real sockets, headless, clean (no relay or fault); '

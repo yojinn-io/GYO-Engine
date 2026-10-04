@@ -10,7 +10,6 @@ import unittest
 from unittest import mock
 
 import run_timing
-import run_weapon_short
 
 
 class TimingRunnerTests(unittest.TestCase):
@@ -470,23 +469,6 @@ class TimingRunnerTests(unittest.TestCase):
                 self.assertIn(f'| 1 | invalid_window_disturbed (thresholds {expected}) |', summary)
                 self.assertIn('Round 1 movement: Host movement resets during measurement: 1 (starvation 1); '
                               'frame intervals during measurement: create not recorded; join not recorded', summary)
-
-    def test_weapon_short_latency_case_takes_the_counted_window_gate(self):
-        for disturbed, passed, status in ((False, True, 'clean'), (True, False, 'invalid_window_disturbed'),
-                                          (None, False, 'invalid_window_evidence_missing')):
-            with self.subTest(disturbed=disturbed):
-                result = {'passed': True, 'errors': [], 'window_disturbed': disturbed,
-                          'window_disturbances': ['join: 1 OS focus_lost event(s) during measurement'] if disturbed else []}
-                gate = run_weapon_short.gate_latency_case(result)
-                self.assertEqual((gate['status'], result['passed']), (status, passed))
-                self.assertIs(result['window_gate'], gate)
-                self.assertTrue(gate['enforced'])
-                self.assertIs(gate['thresholds_passed'], True)
-                self.assertEqual(bool(result['errors']), not passed)
-                self.assertIn('Linux/Wayland', result['window_interference_note'])
-        failed = {'passed': False, 'errors': ['P50 exceeds 50 ms'], 'window_disturbed': True, 'window_disturbances': ['x']}
-        self.assertIs(run_weapon_short.gate_latency_case(failed)['thresholds_passed'], False)
-        self.assertEqual(failed['errors'][0], 'P50 exceeds 50 ms')
 
     def test_verified_life_respawns_are_gameplay_not_interference(self):
         resets = [{'player_id': 2, 'life_generation': 2, 'epoch': 2, 'authority_tick': 559, 'time_ns': 1}]

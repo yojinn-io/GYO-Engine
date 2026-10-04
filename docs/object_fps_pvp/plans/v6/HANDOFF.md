@@ -48,6 +48,7 @@
 | D11⑪ | 第 14a 批的產品移除檢查把本產品的 dev_log 視為歷史紀錄保留 |
 | D12 | Engine 計畫文件完全匿名、不連結：只寫「提出需求的消費端」，不連到本產品的文件 |
 | D13 | IP-2 的 L2 必須在合併前完成；產品的分析器需要修改時，先做驗收工具的修正，再回到 IP-2 |
+| D14 | 第 02a 批：`weapon_short` 的多數斷言別處沒有涵蓋，所以先把獨有斷言移進 `action_short`，再刪除它（取代 D11④ 的「直接刪除」） |
 
 ## 第 01 批進度（記錄器）
 
@@ -58,6 +59,14 @@
 - 2026-10-04：基線：test preset 建置成功，CTest 54／54 通過（97.64 秒）。v5 證據 10 個目錄、1,325 個檔案 clone 到本 worktree，雜湊與原檔相同。
 - 2026-10-04：批次文件與 Engine 計畫並行撰寫，經兩位審查者檢查；使用者另決定 D12、D13；修正後再驗證一次，剩下的小問題由主對話修正。
 - 2026-10-04：最終檢查：315 個相對連結全部存在；Engine 文件沒有連到本產品文件；沒有簡體字；變更只有 docs。commit 後開 PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)。CI 通過：只改 docs，CI scope 判定略過 L1 四平台與 Quick acceptance，CI gate 通過。
+
+## 第 02 批進度（記錄器）
+
+- 2026-10-04：使用者開始第 02 批：一個 PR、三個 commit，high 為主、02c 局部 xhigh；分支 `claude/pvp-v6-batch02` 疊在 #39 上。
+- 2026-10-04：02a 開工盤點觸發停止條件（`weapon_short` 的涵蓋對照表有斷言找不到替代），使用者決定 D14。
+- 2026-10-04：02a 完成：獨有斷言移進 `action_short`，刪除 `weapon_short`、legal 模式；`run_native_window.py` 改為 v5 死亡語意；
+  驗收端版本號收成單一常數。本機雙 GUI 開發實跑 `action30`／`60`／`144`／`capture` 通過（不計次）。對照表見 [dev_log](../../../dev_logs/2026_10_04_pvp_v6_batch02.zh-Hant.md)。
+- 待決：`action_probe.py` 自己的 `main` 仍是 v4 動作矩陣語意，v5 驗收不用它。
 
 ## 延後項目：現況與對應批次
 

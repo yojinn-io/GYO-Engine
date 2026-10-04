@@ -10,7 +10,7 @@ import urllib.request
 from impaired_network import _ImpairedGateway
 from player_presentation_evidence import analyze
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
-from run_weapon_short import digest
+from acceptance_util import digest
 
 
 class SnapshotHold(_ImpairedGateway):

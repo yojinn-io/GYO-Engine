@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
+#include "acceptance_protocol.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <algorithm>
@@ -86,21 +87,20 @@ Json Decision(const ShotDecision& d){return {{"action_id",d.actionId},{"resolved
 int main(int argc,char** argv){
     std::filesystem::path output;
     try{
-        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool legalShots=false,gameplay=false;unsigned cycles=1;
+        std::string gateway;std::filesystem::path arenaPath;double duration=6,drainStallMs=0;int fps=60;bool gameplay=false;unsigned cycles=1;
         for(int i=1;i<argc;++i){const std::string key=argv[i];Require(i+1<argc,"Missing option value");
             const std::string value=argv[++i];
             if(key=="--gateway")gateway=value;else if(key=="--arena")arenaPath=value;
             else if(key=="--output")output=value;else if(key=="--duration")duration=std::stod(value);
             else if(key=="--drain-stall-ms")drainStallMs=std::stod(value);
             else if(key=="--fps")fps=std::stoi(value);
-            else if(key=="--legal-shots")legalShots=value=="true";
             else if(key=="--gameplay-v5")gameplay=value=="true";
             else if(key=="--cycles")cycles=static_cast<unsigned>(std::stoul(value));
             else throw std::runtime_error("Unknown option: "+key);
         }
         if(gameplay)return RunGameplay(gateway,arenaPath,output,fps,drainStallMs,cycles);
         Require(cycles==1,"--cycles requires --gameplay-v5 true");
-        Require(!output.empty() && std::isfinite(duration) && duration>=5 && duration<=(legalShots?1800:15) &&
+        Require(!output.empty() && std::isfinite(duration) && duration>=5 && duration<=15 &&
             (fps==30||fps==60||fps==144) && drainStallMs>=0 && drainStallMs<=1500,"Invalid action-probe options");
         std::filesystem::create_directories(output);
         MovementTraceWriter trace(output/"clients-commands.jsonl");
@@ -124,20 +124,18 @@ int main(int argc,char** argv){
         std::array<unsigned,2> blocked{};
         const auto started=Clock::now();auto previous=started,deadline=started,nextShot=started;
         const auto startNs=MovementTraceNowNs();
-        const double warmup=legalShots?2:0,tail=legalShots?2:1;
-        const double runDuration=duration+(legalShots?warmup+tail:0);
-        if(legalShots)nextShot+=std::chrono::seconds(2);
+        const double warmup=0,tail=1;
+        const double runDuration=duration;
         {std::ofstream ready(output/"ready.json");ready<<Json{{"start_ns",startNs},{"player_ids",ids}}.dump();}
         const auto framePeriod=std::chrono::nanoseconds(1'000'000'000/fps);
-        const auto shotPeriod=std::chrono::nanoseconds(legalShots?400'000'000:1'000'000'000/30);
+        const auto shotPeriod=std::chrono::nanoseconds(1'000'000'000/30);
         while(std::chrono::duration<double>(Clock::now()-started).count()<runDuration){
             const auto now=Clock::now();const auto ns=MovementTraceNowNs();
             const double age=std::chrono::duration<double>(now-started).count();
             const double elapsed=std::chrono::duration<double>(now-previous).count();previous=now;
             const bool stall=drainStallMs>0 && age>=1.5 && age<1.5+drainStallMs/1000;
             const bool shoot=now>=nextShot && age<runDuration-tail;
-            if(shoot){if(legalShots)nextShot=now+shotPeriod;
-                else{nextShot+=shotPeriod;if(nextShot<now)nextShot=now+shotPeriod;}}
+            if(shoot){nextShot+=shotPeriod;if(nextShot<now)nextShot=now+shotPeriod;}
             Json frame={{"time_ns",ns},{"frame_seconds",elapsed},{"drain_stalled",stall}};
             for(std::size_t i=0;i<2;++i){
                 ClientConnectionState state;
@@ -192,7 +190,7 @@ int main(int argc,char** argv){
         Json result={{"passed",true},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},{"player_ids",ids},
             {"maximum_retained",maximumRetained},{"maximum_unconsumed",maximumUnconsumed},{"blocked_submissions",blocked},
             {"drain_stall_ms",drainStallMs},{"duration",duration},{"clients",Json::array()}};
-        result["fps"]=fps;result["legal_shots"]=legalShots;result["shot_interval_ms"]=legalShots?400:1000.0/30;
+        result["fps"]=fps;result["shot_interval_ms"]=1000.0/30;
         result["measurement_start_ns"]=startNs+static_cast<std::uint64_t>(warmup*1e9);
         result["measurement_end_ns"]=startNs+static_cast<std::uint64_t>((runDuration-tail)*1e9);
         for(std::size_t i=0;i<2;++i){

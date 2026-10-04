@@ -2,9 +2,14 @@
 // action regression whose input is injected at the SDL layer, so the same
 // command runs on every platform: held fire, single shots, reload and what it
 // suppresses, a moving reload, an airborne shot, an empty magazine, death
-// suppression and respawn, and the remote presentation of each action. Native
-// OS input stays the manual checklist. Input, timing and assertions belong to
-// acceptance, never the application.
+// suppression and respawn, and the remote presentation of each action. The
+// actor also covers what the retired weapon short probe owned: local feedback
+// on its first successful presentation, an authority cooldown rejection, wall
+// and hit decisions, a combined move/turn/shoot frame that consumes the mouse
+// delta once, window interactions that release capture without a ghost shot,
+// and ESC/rejoin clearing every weapon effect. Native OS input stays the manual
+// checklist. Input, timing and assertions belong to acceptance, never the
+// application.
 using ActionJson = nlohmann::json;
 
 const char* UpperActionName(const fps::pvp::PlayerUpperAction action) {
@@ -42,7 +47,10 @@ ActionJson LocalActionSample(const fps::pvp::WeaponFeedbackObservation& w) {
         {"reloading", w.reloading}, {"reload_pending", w.reloadPending}, {"reload_animating", w.reloadAnimating},
         {"reload_animation_starts", w.reloadAnimationStarts}, {"submitted", w.submittedActions},
         {"animations", w.animationStarts}, {"last_action", w.lastActionId},
-        {"last_action_kind", static_cast<int>(w.lastActionKind)}, {"grounded", w.grounded}, {"yaw", w.yaw}};
+        {"last_action_kind", static_cast<int>(w.lastActionKind)}, {"grounded", w.grounded}, {"yaw", w.yaw},
+        {"pitch", w.pitch}, {"mouse_consumptions", w.mouseDeltaConsumeCount}, {"decisions", w.decisionCount},
+        {"hits", w.hitDecisions}, {"hit_marker", w.hitMarkerVisible},
+        {"last_rejection", static_cast<int>(w.lastRejection)}, {"last_hit_kind", static_cast<int>(w.lastHitKind)}};
 }
 
 // Every action of the other player must appear in one contiguous run of
@@ -94,7 +102,7 @@ void RunActionShort(const Options& options) {
     const auto startPath = options.output / "action-start.txt";
     const auto finishedPath = options.output / "action-finished.txt";
     if (actor) { std::filesystem::remove(startPath); std::filesystem::remove(finishedPath); }
-    ActionJson evidence{{"passed", false}, {"role", options.role}, {"protocol", 5},
+    ActionJson evidence{{"passed", false}, {"role", options.role}, {"protocol", AcceptanceProtocolVersion},
         {"mode", captureMode ? "action-capture" : "action-short"}, {"nominal_fps", options.fps},
         {"duration_seconds", options.duration},
         {"scope", "Two real GUI processes with SDL-injected input, real Match and Gateway on localhost. "
@@ -139,8 +147,8 @@ void RunActionShort(const Options& options) {
         std::deque<Event> schedule;
         if (actor) {
             for (const auto& [at, name] : std::vector<std::pair<double, const char*>>{
-                    {.10, "capture"}, {.20, "release"}, {.30, "capture-local-idle"},
-                    {.40, "held-shot"}, {.90, "held-release"},
+                    {.05, "capture-local-draw"}, {.10, "capture"}, {.20, "release"}, {.30, "capture-local-idle"},
+                    {.40, "held-shot"}, {.48, "capture-local-shoot"}, {.90, "held-release"},
                     {1.10, "reload"}, {1.15, "key-up"},
                     {1.40, "reload-shot"}, {1.45, "release"}, {1.50, "reload-again"}, {1.55, "key-up"},
                     {1.60, "back-start"}, {2.10, "capture-local-reload"}, {2.40, "back-stop"},
@@ -148,7 +156,10 @@ void RunActionShort(const Options& options) {
                     {3.80, "turn-wall"}})
                 schedule.push_back({at, name});
             // The airborne shot leaves eleven rounds: fire them all at a wall.
-            for (int shot = 0; shot < 11; ++shot) {
+            // The first one also moves and turns in the same frame.
+            schedule.push_back({4.0, "combined-wall-shot"});
+            schedule.push_back({4.05, "combined-release"});
+            for (int shot = 1; shot < 11; ++shot) {
                 schedule.push_back({4.0 + .25 * shot, "wall-shot"});
                 schedule.push_back({4.05 + .25 * shot, "release"});
             }
@@ -156,7 +167,16 @@ void RunActionShort(const Options& options) {
                     {6.80, "empty-shot"}, {6.85, "release"}, {7.00, "reload-empty"}, {7.05, "key-up"},
                     {8.70, "reload-empty-done"}, {8.80, "turn-back"},
                     {9.00, "kill-shot"}, {9.05, "release"}, {9.25, "kill-shot"}, {9.30, "release"},
-                    {9.50, "kill-shot"}, {9.55, "release"}, {9.75, "kill-shot"}, {9.80, "release"}})
+                    {9.50, "kill-shot"}, {9.55, "release"}, {9.75, "kill-shot"}, {9.80, "release"},
+                    // Window interactions release capture and never become a shot.
+                    {10.20, "focus-loss"}, {10.30, "focus-gain-held"}, {10.40, "release"},
+                    {10.55, "capture"}, {10.65, "release"}, {10.80, "tab-release"}, {10.90, "tab-key-up"},
+                    {11.05, "capture"}, {11.15, "release"}, {11.30, "drag"}, {11.40, "release"},
+                    {11.60, "resize"}, {12.20, "capture"}, {12.30, "release"}, {12.35, "capture-local-resize"},
+                    // Two seconds of walking reach the wall, as the retired weapon probe did.
+                    {12.40, "approach-wall"}, {14.40, "stop"}, {14.50, "capture-local-wall-depth"},
+                    // After the target's respawn has been presented: leave and rejoin.
+                    {14.80, "escape"}, {14.85, "escape-up"}})
                 schedule.push_back({at, name});
         } else {
             schedule = {{.10, "capture"}, {.20, "release"}, {.30, "capture-remote-idle"}};
@@ -166,6 +186,13 @@ void RunActionShort(const Options& options) {
         PlayerId playerId{};
         std::string room;
         std::uint64_t frameIndex{}, presentedCount{}, heldBase{}, deathLife{}, allocatedAtDeath{};
+        std::uint64_t injectedShots{}, injectedActions{}, beforeCombinedMouse{}, allocatedBeforeEscape{};
+        bool cooldownDecision{}, wallDecision{}, hitMarkerSeen{}, localFeedbackBeforeDecision{};
+        bool combinedChecked{}, combinedNextChecked{}, rejoining{}, rejoined{};
+        float beforeCombinedYaw{}, beforeCombinedPitch{}, combinedYaw{}, combinedPitch{};
+        std::optional<ActionId> awaitingPresentedAction;
+        std::optional<Clock::time_point> firstRejoined;
+        std::vector<double> feedbackDelays;
         double maximumFrameGap{}, savedYaw{}, backDisplacement{}, unscheduledYaw{};
         std::uint64_t unscheduledYawFrames{};
         bool reloadAnimatingSeen{}, died{}, deadChecked{}, respawned{}, respawnShot{};
@@ -220,7 +247,7 @@ void RunActionShort(const Options& options) {
             const auto beforeAllocated = state.actionTransport.allocatedThrough;
             const auto beforePosition = application.LocalMovement().predictedPosition;
             std::string event;
-            bool shotExpected{}, reloadExpected{}, silenceExpected{}, captureExpected{};
+            bool shotExpected{}, reloadExpected{}, silenceExpected{}, captureExpected{}, releaseExpected{};
             if (measurementStart && !schedule.empty() && elapsed >= schedule.front().at) {
                 event = schedule.front().name;
                 schedule.pop_front();
@@ -274,6 +301,54 @@ void RunActionShort(const Options& options) {
                     PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
                 } else if (event == "turn-back") {
                     PushMotion(window, static_cast<float>((savedYaw - before.yaw) / .0025), 0);
+                } else if (event == "combined-wall-shot") {
+                    // Move, turn and shoot in one frame: the mouse delta is consumed exactly once.
+                    beforeCombinedYaw = before.yaw;
+                    beforeCombinedPitch = before.pitch;
+                    beforeCombinedMouse = before.mouseDeltaConsumeCount;
+                    PushMotion(window, 4, 4);
+                    PushKey(window, SDL_SCANCODE_W, true);
+                    PushMouse(window, true);
+                    shotExpected = true;
+                } else if (event == "combined-release") {
+                    PushMouse(window, false);
+                    PushKey(window, SDL_SCANCODE_W, false);
+                } else if (event == "focus-loss") {
+                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST);
+                    PushMouse(window, true);
+                    silenceExpected = releaseExpected = true;
+                } else if (event == "focus-gain-held") {
+                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
+                    silenceExpected = releaseExpected = true;
+                } else if (event == "tab-release") {
+                    PushKey(window, SDL_SCANCODE_TAB, true);
+                    PushMouse(window, true);
+                    silenceExpected = releaseExpected = true;
+                } else if (event == "tab-key-up") {
+                    PushKey(window, SDL_SCANCODE_TAB, false);
+                    PushMouse(window, false);
+                } else if (event == "drag") {
+                    PushWindowEvent(window, SDL_EVENT_WINDOW_MOVED);
+                    PushMouse(window, true);
+                    silenceExpected = releaseExpected = true;
+                } else if (event == "resize") {
+                    Require(SDL_SetWindowSize(window, 1120, 630), SDL_GetError());
+                } else if (event == "approach-wall") {
+                    PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
+                    PushKey(window, SDL_SCANCODE_W, true);
+                } else if (event == "stop") {
+                    PushKey(window, SDL_SCANCODE_W, false);
+                } else if (event == "escape") {
+                    Require(before.hitDecisions >= 1 && hitMarkerSeen && wallDecision && cooldownDecision,
+                        "Hit, hit marker, wall or authority cooldown outcome was not observed before leaving");
+                    allocatedBeforeEscape = beforeAllocated;
+                    Require(allocatedBeforeEscape == before.submittedActions + injectedActions,
+                        "Action IDs do not equal SDL submissions plus the explicit authority injection");
+                    evidence["before_escape"] = WeaponSample(before);
+                    PushKey(window, SDL_SCANCODE_ESCAPE, true);
+                    rejoining = true;
+                } else if (event == "escape-up") {
+                    PushKey(window, SDL_SCANCODE_ESCAPE, false);
                 } else if (event == "wall-shot") {
                     PushMouse(window, true);
                     shotExpected = true;
@@ -330,6 +405,34 @@ void RunActionShort(const Options& options) {
                     "Shot edge '" + event + "' did not submit exactly one locally animated shot (local cooldown " +
                     std::to_string(before.cooldownRemainingSeconds) + " s, ammo " + std::to_string(before.magazineAmmo) + ")");
                 if (event == "respawn-shot") { respawnShot = true; evidence["checks"]["respawned_player_can_shoot"] = true; }
+                ++injectedShots;
+                awaitingPresentedAction = after.lastActionId;
+                if (event == "held-shot") {
+                    // A second request inside the authority cooldown is an explicit
+                    // transport injection, not another local click.
+                    const auto current = connection.State();
+                    Require(current.snapshot.has_value(), "No reference for the cooldown injection");
+                    const auto id = connection.SubmitShot(current.snapshot->tick, after.yaw, after.pitch);
+                    Require(id && *id == after.lastActionId + 1, "Cooldown injection was not allocated contiguously");
+                    evidence["cooldown_injection_action_id"] = *id;
+                    ++injectedActions;
+                }
+            }
+            if (event == "combined-wall-shot") {
+                Require(std::abs(after.yaw - (beforeCombinedYaw + .01F)) < .0001F &&
+                    std::abs(after.pitch - (beforeCombinedPitch + .01F)) < .0001F,
+                    "Movement/turn/shot frame applied the raw mouse delta other than once");
+                Require(after.mouseDeltaConsumeCount == beforeCombinedMouse + 1,
+                    "Combined frame did not consume exactly one nonzero mouse delta");
+                combinedYaw = after.yaw;
+                combinedPitch = after.pitch;
+                combinedChecked = true;
+                evidence["checks"]["movement_turn_shoot_mouse_once"] = true;
+            } else if (combinedChecked && !combinedNextChecked && event.empty()) {
+                Require(std::abs(after.yaw - combinedYaw) < .0001F && std::abs(after.pitch - combinedPitch) < .0001F,
+                    "Shot animation or recoil replayed the mouse delta on the next frame");
+                combinedNextChecked = true;
+                evidence["checks"]["mouse_delta_not_replayed"] = true;
             }
             if (reloadExpected) {
                 Require(after.submittedActions == before.submittedActions + 1 && after.lastActionKind == ActionKind::Reload &&
@@ -339,13 +442,38 @@ void RunActionShort(const Options& options) {
                 Require(after.submittedActions == before.submittedActions && afterAllocated == beforeAllocated,
                     "Suppressed input '" + event + "' allocated or submitted an action");
                 if (captureExpected) Require(after.inputCaptured, "Content click did not capture input");
+                if (releaseExpected) Require(!after.inputCaptured, "Window, Tab or focus interaction retained capture");
                 evidence["checks"][event + "_suppressed"] = true;
+            }
+            cooldownDecision = cooldownDecision || after.lastRejection == ShotRejection::Cooldown;
+            wallDecision = wallDecision || (after.lastHitKind == ShotHitKind::World && after.lastRejection == ShotRejection::None);
+            hitMarkerSeen = hitMarkerSeen || after.hitMarkerVisible;
+            if (rejoining && !rejoined && connection.State().phase == ConnectionPhase::Lobby) {
+                Require(!after.active && !after.shooting && after.submittedActions == 0 && after.animationStarts == 0 &&
+                    after.decisionCount == 0 && after.lastActionId == 0, "ESC retained weapon actions, animation or decisions");
+                const auto lobby = connection.State();
+                if (!lobby.rooms.empty()) {
+                    room = lobby.rooms.front().id;
+                    connection.Join(options.gateway, room);
+                    rejoined = true;
+                    evidence["checks"]["escape_clears_weapon"] = true;
+                }
+            }
+            if (rejoined && after.active && connection.State().playerId != playerId) {
+                if (!firstRejoined) firstRejoined = now;
+                Require(after.hp == after.maximumHp && after.magazineAmmo == after.magazineCapacity &&
+                    after.submittedActions == 0 && after.animationStarts == 0 && after.decisionCount == 0 &&
+                    !after.shooting && !after.hitMarkerVisible,
+                    "Rejoin retained old damage, ammo, shot animation or decision effects");
+                evidence["rejoined_player_id"] = connection.State().playerId;
+                evidence["checks"]["rejoin_full_hp_no_stale_effects"] = true;
             }
             reloadAnimatingSeen = reloadAnimatingSeen || after.reloadAnimating;
             // Only scripted turns may change the aim. Any other change is real
             // mouse motion reaching the captured window: external input, not
             // product behaviour, and it invalidates the aimed shots.
-            if (measurementStart && event != "turn-wall" && event != "turn-back" &&
+            if (measurementStart && event != "turn-wall" && event != "turn-back" && event != "combined-wall-shot" &&
+                event != "approach-wall" && !rejoining && before.active && after.active &&
                 std::abs(after.yaw - before.yaw) > 1e-6F) {
                 ++unscheduledYawFrames;
                 unscheduledYawFramesSeen = unscheduledYawFrames;
@@ -380,6 +508,23 @@ void RunActionShort(const Options& options) {
             if (const auto& presented = application.PresentedMovement()) {
                 Require(presented->frameId == frame.frameIndex, "Stale successful Presented observation");
                 sample["presented"] = true;
+                const auto& weapon = presented->weapon;
+                sample["presented_weapon"] = {{"active", weapon.active}, {"dead", weapon.dead},
+                    {"life", weapon.lifeGeneration}, {"submitted_meshes", weapon.submittedMeshes},
+                    {"shooting", weapon.shooting}, {"last_action", weapon.lastActionId}};
+                if (weapon.active && !weapon.dead)
+                    Require(weapon.meshCount > 0 && weapon.materialCount > 0 && weapon.submittedMeshes > 0,
+                        "Successful world presentation omitted the prepared first-person weapon");
+                if (awaitingPresentedAction) {
+                    Require(weapon.shooting && weapon.lastActionId == *awaitingPresentedAction,
+                        "Local shot feedback was absent from its first successful presentation");
+                    localFeedbackBeforeDecision = localFeedbackBeforeDecision ||
+                        weapon.lastDecisionActionId < *awaitingPresentedAction;
+                    const double delay = presented->hostSteadySeconds - weapon.lastSubmittedSeconds;
+                    sample["submission_to_presented_seconds"] = delay;
+                    feedbackDelays.push_back(delay);
+                    awaitingPresentedAction.reset();
+                }
                 if (presented->remote && presented->remote->character.ready) {
                     const auto& character = presented->remote->character;
                     Require(character.bodySubmittedMeshes > 0 && character.weaponSubmittedMeshes > 0,
@@ -430,12 +575,21 @@ void RunActionShort(const Options& options) {
         evidence["disturbed"] = unscheduledYawFrames > 0;
         evidence["maximum_frame_seconds"] = maximumFrameGap;
         evidence["back_displacement"] = backDisplacement;
+        evidence["injected_sdl_shots"] = injectedShots;
+        evidence["shot_to_first_presented_seconds"] = feedbackDelays;
+        evidence["skipped_frames"] = application.SkippedPresentationFrames();
         evidence["final_local"] = LocalActionSample(application.WeaponFeedback());
         Require(presentedCount >= 10, "Insufficient successful real GUI presentations");
         Require(remote.replays == 0, "A remote action replayed after its presentation run ended");
         evidence["checks"]["remote_actions_never_replay"] = true;
         if (actor) {
             Require(schedule.empty(), "Actor schedule did not complete; inspect raw events");
+            Require(cooldownDecision && wallDecision && hitMarkerSeen && localFeedbackBeforeDecision &&
+                combinedChecked && combinedNextChecked, "Weapon coverage incomplete; inspect raw events");
+            evidence["checks"]["authority_cooldown_wall_and_hit"] = true;
+            evidence["checks"]["local_feedback_before_decision"] = true;
+            Require(rejoined && firstRejoined && Seconds(Clock::now(), *firstRejoined) >= .3,
+                "ESC and rejoin were not observed for at least 0.3 seconds");
             Require(remote.death && remote.deathClipMaximum > 2.3 && remote.newLife,
                 "Remote target death, held death pose and new life were not all presented");
             evidence["checks"]["remote_death_held_then_new_life"] = true;
@@ -446,7 +600,7 @@ void RunActionShort(const Options& options) {
             Require(died && deadChecked && respawned && respawnShot, "Target death, suppression or respawn coverage incomplete");
             evidence["checks"]["remote_shot_reload_and_jump_presented"] = true;
         }
-        if (captureMode) Require(evidence["captures"].size() == 4, "Action GPU captures were not all produced");
+        if (captureMode) Require(evidence["captures"].size() == (actor ? 8U : 4U), "Action GPU captures were not all produced");
         evidence["passed"] = true;
         save();
         if (actor) { std::ofstream finished(finishedPath); finished << "Actor action probe complete\n"; }

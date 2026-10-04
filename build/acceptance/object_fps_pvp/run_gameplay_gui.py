@@ -11,14 +11,15 @@ import time
 import urllib.request
 from run_network import free_port, wait_for_match_ready
 from run_native_window import Desktop, require, state, wait_state, screenshot
+from acceptance_util import PROTOCOL_VERSION
 
 
 def run(args):
     out=args.output;out.mkdir(parents=True,exist_ok=False)
     processes=[];logs=[];desktop=None;gui={}
-    result={'passed':False,'protocol':5,'scope':'One bounded two-native-GUI batch03 input/HUD regression, no animation acceptance or timing certification',
+    result={'passed':False,'protocol':PROTOCOL_VERSION,'scope':'One bounded two-native-GUI batch03 input/HUD regression, no animation acceptance or timing certification',
             'checks':{},'events':[],'captures':[],'commands':[]}
-    (out/'gameplay-gui-plan.json').write_text(json.dumps({'protocol':5,'planned':[
+    (out/'gameplay-gui-plan.json').write_text(json.dumps({'protocol':PROTOCOL_VERSION,'planned':[
         'capture click no shot','Space held one jump/no buffered air jump','four native clicks at12 ticks each accepted',
         'R reload authoritative90ticks','death HP0 freezes controlled movement/jump/fire/reload',
         '180tick automatic respawn new life','respawn can shoot/reload','actual HUD captures','native Escape leave'],
