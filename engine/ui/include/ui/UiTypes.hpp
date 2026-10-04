@@ -71,6 +71,10 @@ template <class T>
 using UiResult = Base::Result<T, UiError>;
 
 // RGB channels are linear-light. Alpha is linear coverage.
+// Deliberately separate from Render::Color, though alike: gyo_ui does not
+// depend on render (gyo_ui_renderer bridges the two), and Math gains no color
+// type without a consumer of its own. For the same reason UiValidation keeps
+// its own finiteness check.
 struct UiColor final {
     float red{1.0F};
     float green{1.0F};

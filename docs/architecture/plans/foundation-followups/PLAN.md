@@ -249,7 +249,7 @@ high。跨 base、asset、input、ui_editor 的整理，要確認依賴邊與 Ow
 
 ## FF-4 有限性檢查收斂
 
-狀態：未開始。
+狀態：完成（2026-10-05）。見 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md)。
 
 ### 目標與範圍
 

@@ -76,15 +76,6 @@ using namespace ShaderAbi;
     return Math::Multiply(Math::MakeTranslation(anchor), result);
 }
 
-[[nodiscard]] bool IsFinite(float value) noexcept {
-    return std::isfinite(value);
-}
-
-[[nodiscard]] bool IsFinite(Color value) noexcept {
-    return IsFinite(value.red) && IsFinite(value.green) &&
-           IsFinite(value.blue) && IsFinite(value.alpha);
-}
-
 [[nodiscard]] FragmentUniforms MakeFragmentUniforms(
     Color tint,
     UvTransform uv,

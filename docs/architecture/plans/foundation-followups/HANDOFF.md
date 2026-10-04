@@ -96,7 +96,7 @@
 | FF-1 | 完成（PR 待合併） | 見下方「FF-1」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff1.zh-Hant.md) |
 | FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
 | FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
-| FF-4 | 未開始 | — |
+| FF-4 | 完成（PR 待合併） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
 | FF-5 | 未開始 | — |
 | FF-6 | 未開始 | — |
 | FF-7 | 未開始 | — |
@@ -177,6 +177,17 @@
 1. 在 base 與 branch 兩個 worktree 各自建置 `gyo_collision_corpus`（test preset）。
 2. `python3 docs/architecture/plans/foundation-followups/scripts/compare_collision_corpus.py --base <base runner> --branch <branch runner> --output <dir>`。
 3. 回報每個查詢不同的筆數與第一筆差異；`comparison.json` 保存全部結果。統計以 `--stats`、退化現況以 `--degenerate` 取得。
+
+### FF-4（記錄器）
+
+- 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff4`，疊在 FF-1 上。檔位 high，不用 ultracode。
+  計畫建議 FF-4 在 IP-2 之後合併（兩批都改 `SdlGpuRenderDevice.cpp`）；這只是建議，本批先完成，後合併的一方 rebase。
+- 2026-10-05：先加 characterization（RenderQueue 的 mesh／sprite tint、Renderer 的 clear color、ModelRenderer 的 material／instance tint、SDL_GPU 裝置的 clear value；每個 channel、NaN 與 ±inf，錯誤碼與訊息），在舊實作上通過。
+- 2026-10-05：`Engine::Render::IsFinite(const Color&)` 放在 `render/RenderTypes.hpp`（緊接 `Color` 之後，所有 render target 都已能看到這個 header）；四處改用。Renderer 的本地 `IsFinite(float)` 只被 Color 版使用，一起刪除。
+  `UiColor` 與 `UiValidation` 不動，理由寫在 `UiTypes.hpp` 與 `RenderTypes.hpp` 的註解。
+- 2026-10-05：CTest 56／56；沒有改 CMake，依賴邊不變。L2（report-only）：消費端 `action60` 通過；ui_editor 開啟 `minimal.ui.json` 4 秒，正常繪製並在 SIGTERM 後結束。完成，開 PR。
+
+**不合併兩個 Color 型別的理由（D11⑦）**：`gyo_ui` 只連結 `GYO::Engine` 與 `GYO::Math`，由 `gyo_ui_renderer` 橋接 Render；合併到 Render 會新增 ui→render 的邊。合併到 Math 違反健檢「沒有消費者前不要擴充 Math」。`UiValidation.cpp` 的 `UiColor` 有限性檢查因此也留在 Ui。
 
 ## 未結事項
 

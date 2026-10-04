@@ -42,10 +42,10 @@
 
 ### FF-4 有限性檢查收斂
 
-狀態：未開始，批次完成時更新。
+狀態：FF-4 完成（2026-10-05）。
 
-- 預計無破損：只新增 render 的公開函式，不移除公開名稱。
-- 可選：未啟用產品自己的 Color 有限性檢查可改用 render 的新函式（不影響編譯）。
+- 無破損：只新增 render 的公開函式 `Engine::Render::IsFinite(const Color&)`（`render/RenderTypes.hpp`），沒有移除公開名稱。
+- 可選：未啟用產品自己的 Color 有限性檢查可改用它（不影響編譯）。
 
 ### FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證
 

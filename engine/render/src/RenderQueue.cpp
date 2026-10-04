@@ -12,11 +12,6 @@ namespace {
     return std::isfinite(value);
 }
 
-[[nodiscard]] bool IsFinite(Color value) noexcept {
-    return IsFinite(value.red) && IsFinite(value.green) &&
-           IsFinite(value.blue) && IsFinite(value.alpha);
-}
-
 [[nodiscard]] RenderError Invalid(std::string_view message) {
     return RenderError::Make(RenderErrorCode::InvalidArgument, std::string(message));
 }
