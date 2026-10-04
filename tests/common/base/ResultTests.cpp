@@ -82,6 +82,7 @@ TEST_CASE("Result: success and failure through return statements") {
 
     CHECK(Forward(true).value() == 8);
     CHECK(Forward(false).error().detail == "sample");
+    CHECK(Engine::Base::Describe(Parse(false).error()) == "Failed: failed (sample)");
 
     CHECK(Check(true));
     CHECK(Check(false).error().code == SampleErrorCode::Failed);

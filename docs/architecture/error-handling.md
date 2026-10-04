@@ -24,7 +24,7 @@ These are not errors and use neither mechanism:
 
 Exceptions are not a third mechanism. See rule 6.
 
-Status: this contract is being introduced by the [Assert/Result plan](plans/result-unification/README.md). The engine follows it; the UI editor's migration lands in a later batch. Until then the editor may still use the older forms listed in the plan.
+Status: introduced by the [Assert/Result plan](plans/result-unification/README.md). The engine, the UI editor and the common tests follow it. Products follow it for new code; existing product code migrates when it is otherwise changed.
 
 ## Rules
 

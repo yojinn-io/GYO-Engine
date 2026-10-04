@@ -30,11 +30,7 @@ namespace {
 [[nodiscard]] std::filesystem::path AbsoluteNormalized(
     const std::filesystem::path& path) {
     std::error_code error;
-    std::filesystem::path absolute = std::filesystem::absolute(path, error);
-    if (error) {
-        absolute = path;
-    }
-
+    const std::filesystem::path absolute = AbsolutePath(path);
     const std::filesystem::path parent = absolute.parent_path();
     std::filesystem::path canonicalParent =
         std::filesystem::weakly_canonical(parent, error);
@@ -72,7 +68,12 @@ namespace {
             std::to_string(random()));
 }
 
-[[nodiscard]] FileOperationResult ReplaceFile(
+[[nodiscard]] FileError Failure(const FileErrorCode code, std::string message,
+                                const std::filesystem::path& path) {
+    return FileError::Make(code, std::move(message), path.string());
+}
+
+[[nodiscard]] Result<void, FileError> ReplaceFile(
     const std::filesystem::path& temporary,
     const std::filesystem::path& target) {
 #if defined(_WIN32)
@@ -80,87 +81,78 @@ namespace {
             temporary.c_str(),
             target.c_str(),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        return {
-            false,
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
             "failed to replace '" + target.string() +
                 "' (Win32 error " + std::to_string(GetLastError()) + ")",
-        };
+            target));
     }
-    return {true, {}};
+    return {};
 #else
     std::error_code error;
     std::filesystem::rename(temporary, target, error);
     if (error) {
-        return {
-            false,
-            "failed to replace '" + target.string() + "': " + error.message(),
-        };
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
+            "failed to replace '" + target.string() + "': " + error.message(), target));
     }
-    return {true, {}};
+    return {};
 #endif
 }
 
 } // namespace
 
-TextFileResult ReadTextFile(const std::filesystem::path& path) {
+Result<std::string, FileError> ReadTextFile(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
     if (!stream) {
-        return {std::nullopt, "cannot open file: " + path.string()};
+        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "cannot open file: " + path.string(), path));
     }
     std::ostringstream buffer;
     buffer << stream.rdbuf();
     if (stream.bad()) {
-        return {std::nullopt, "failed while reading file: " + path.string()};
+        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "failed while reading file: " + path.string(), path));
     }
-    return {buffer.str(), {}};
+    return buffer.str();
 }
 
-std::optional<FileStamp> ProbeFileStamp(
-    const std::filesystem::path& path,
-    std::string& error) {
-    error.clear();
+Result<FileStamp, FileError> ProbeFileStamp(const std::filesystem::path& path) {
     std::error_code fileError;
     const bool exists = std::filesystem::exists(path, fileError);
     if (fileError) {
-        error = "cannot inspect '" + path.string() + "': " + fileError.message();
-        return std::nullopt;
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
+            "cannot inspect '" + path.string() + "': " + fileError.message(), path));
     }
     if (!exists) {
         return FileStamp{};
     }
     if (!std::filesystem::is_regular_file(path, fileError) || fileError) {
-        error = "path is not a regular file: " + path.string();
-        return std::nullopt;
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
+            "path is not a regular file: " + path.string(), path));
     }
 
-    const TextFileResult text = ReadTextFile(path);
+    auto text = ReadTextFile(path);
     if (!text) {
-        error = text.error;
-        return std::nullopt;
+        return Engine::Base::Err(std::move(text).error());
     }
     FileStamp stamp;
     stamp.exists = true;
     stamp.size = std::filesystem::file_size(path, fileError);
     if (fileError) {
-        error = "cannot inspect size of '" + path.string() + "': " +
-                fileError.message();
-        return std::nullopt;
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
+            "cannot inspect size of '" + path.string() + "': " + fileError.message(), path));
     }
     stamp.writeTime = std::filesystem::last_write_time(path, fileError);
     if (fileError) {
-        error = "cannot inspect timestamp of '" + path.string() + "': " +
-                fileError.message();
-        return std::nullopt;
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
+            "cannot inspect timestamp of '" + path.string() + "': " + fileError.message(), path));
     }
-    stamp.contentHash = HashText(*text.text);
+    stamp.contentHash = HashText(*text);
     return stamp;
 }
 
-FileOperationResult WriteTextFileAtomically(
+Result<void, FileError> WriteTextFileAtomically(
     const std::filesystem::path& path,
     const std::string_view text) {
     if (path.empty()) {
-        return {false, "output path is empty"};
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed, "output path is empty", path));
     }
 
     std::error_code error;
@@ -168,11 +160,8 @@ FileOperationResult WriteTextFileAtomically(
     if (!parent.empty()) {
         std::filesystem::create_directories(parent, error);
         if (error) {
-            return {
-                false,
-                "cannot create output directory '" + parent.string() + "': " +
-                    error.message(),
-            };
+            return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
+                "cannot create output directory '" + parent.string() + "': " + error.message(), path));
         }
     }
 
@@ -182,28 +171,30 @@ FileOperationResult WriteTextFileAtomically(
             temporary,
             std::ios::binary | std::ios::trunc);
         if (!stream) {
-            return {
-                false,
-                "cannot create temporary output: " + temporary.string(),
-            };
+            return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
+                "cannot create temporary output: " + temporary.string(), path));
         }
         stream.write(text.data(), static_cast<std::streamsize>(text.size()));
         stream.flush();
         if (!stream) {
             stream.close();
             std::filesystem::remove(temporary, error);
-            return {
-                false,
-                "failed while writing temporary output: " + temporary.string(),
-            };
+            return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
+                "failed while writing temporary output: " + temporary.string(), path));
         }
     }
 
-    FileOperationResult result = ReplaceFile(temporary, path);
-    if (!result) {
+    auto replaced = ReplaceFile(temporary, path);
+    if (!replaced) {
         std::filesystem::remove(temporary, error);
     }
-    return result;
+    return replaced;
+}
+
+std::filesystem::path AbsolutePath(const std::filesystem::path& path) {
+    std::error_code error;
+    std::filesystem::path absolute = std::filesystem::absolute(path, error);
+    return (error ? path : absolute).lexically_normal();
 }
 
 bool IsPathWithin(

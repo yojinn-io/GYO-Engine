@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/ui_editor/EditorError.hpp"
+
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -22,16 +24,7 @@ struct CommandLineOptions final {
     std::optional<std::filesystem::path> assetRoot;
 };
 
-struct CommandLineResult final {
-    std::optional<CommandLineOptions> options;
-    std::string error;
-
-    [[nodiscard]] explicit operator bool() const noexcept {
-        return options.has_value();
-    }
-};
-
-[[nodiscard]] CommandLineResult ParseCommandLine(
+[[nodiscard]] Result<CommandLineOptions, CommandLineError> ParseCommandLine(
     std::span<const std::string_view> arguments);
 
 [[nodiscard]] std::string_view CommandLineHelp() noexcept;

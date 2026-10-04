@@ -3,10 +3,21 @@
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include <iterator>
+#include <system_error>
 #include <utility>
 
 namespace Gyo::Tools::UiEditor {
+namespace {
+
+[[nodiscard]] SessionError IoFailure(const FileError& cause, std::vector<Diagnostic> diagnostics = {}) {
+    return SessionError(SessionErrorCode::IoFailure, cause.message, std::move(diagnostics),
+                        Engine::Base::CauseDetail(cause));
+}
+
+} // namespace
 
 DocumentSession::DocumentSession() {
     NewDocument();
@@ -21,34 +32,31 @@ void DocumentSession::NewDocument() {
     ResetHistory(false);
 }
 
-SessionResult DocumentSession::Open(const std::filesystem::path& path) {
-    const TextFileResult file = ReadTextFile(path);
+Result<SessionReport, SessionError> DocumentSession::Open(const std::filesystem::path& path) {
+    const auto file = ReadTextFile(path);
     if (!file) {
-        return {false, file.error, {}, SaveFailure::IoFailure};
+        return Engine::Base::Err(IoFailure(file.error()));
     }
-    DocumentParseResult parsed = UiDocumentBridge::Parse(*file.text);
+    DocumentParseResult parsed = UiDocumentBridge::Parse(*file);
     if (!parsed) {
-        return {
-            false,
+        return Engine::Base::Err(SessionError(
+            SessionErrorCode::InvalidDocument,
             "UI document failed GYO::Ui codec validation",
-            std::move(parsed.diagnostics),
-            SaveFailure::InvalidDocument,
-        };
+            std::move(parsed.diagnostics)));
     }
 
-    std::string stampError;
-    std::optional<FileStamp> stamp = ProbeFileStamp(path, stampError);
-    if (!stamp.has_value()) {
-        return {false, std::move(stampError), {}, SaveFailure::IoFailure};
+    const auto stamp = ProbeFileStamp(path);
+    if (!stamp) {
+        return Engine::Base::Err(IoFailure(stamp.error()));
     }
 
     document_ = std::move(*parsed.document);
-    inputPath_ = std::filesystem::absolute(path).lexically_normal();
+    inputPath_ = AbsolutePath(path);
     outputPath_ = inputPath_;
     observedPath_ = inputPath_;
-    observedStamp_ = stamp;
+    observedStamp_ = *stamp;
     ResetHistory(true);
-    return {true, {}, UiDocumentBridge::Validate(document_), SaveFailure::None};
+    return SessionReport{UiDocumentBridge::Validate(document_)};
 }
 
 const nlohmann::json& DocumentSession::Document() const noexcept {
@@ -69,7 +77,7 @@ const std::optional<std::filesystem::path>& DocumentSession::OutputPath() const 
 
 void DocumentSession::SetOutputPath(std::optional<std::filesystem::path> path) {
     if (path.has_value()) {
-        *path = std::filesystem::absolute(*path).lexically_normal();
+        *path = AbsolutePath(*path);
     }
     outputPath_ = std::move(path);
 }
@@ -105,17 +113,21 @@ void DocumentSession::EndEdit() {
 
 void DocumentSession::CancelEdit() {
     history_.CancelTransaction();
-    static_cast<void>(Restore(history_.Current()));
+    Restore(history_.Current());
 }
 
 bool DocumentSession::Undo() {
     const std::string* state = history_.Undo();
-    return state != nullptr && Restore(*state);
+    if (state == nullptr) return false;
+    Restore(*state);
+    return true;
 }
 
 bool DocumentSession::Redo() {
     const std::string* state = history_.Redo();
-    return state != nullptr && Restore(*state);
+    if (state == nullptr) return false;
+    Restore(*state);
+    return true;
 }
 
 std::vector<Diagnostic> DocumentSession::Validate(
@@ -132,21 +144,18 @@ std::vector<Diagnostic> DocumentSession::Validate(
     return diagnostics;
 }
 
-SessionResult DocumentSession::Save(
+Result<SessionReport, SessionError> DocumentSession::Save(
     const ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
     if (!outputPath_.has_value()) {
-        return {
-            false,
-            "no output path is selected; use Export As",
-            {},
-            SaveFailure::MissingOutputPath,
-        };
+        return Engine::Base::Err(SessionError(
+            SessionErrorCode::MissingOutputPath,
+            "no output path is selected; use Export As"));
     }
     return SaveTo(*outputPath_, catalog, overwriteExternalModification);
 }
 
-SessionResult DocumentSession::Export(
+Result<SessionReport, SessionError> DocumentSession::Export(
     const std::filesystem::path& path,
     const ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
@@ -154,31 +163,24 @@ SessionResult DocumentSession::Export(
     return SaveTo(*outputPath_, catalog, overwriteExternalModification);
 }
 
-bool DocumentSession::HasExternalModification(std::string& error) const {
-    error.clear();
+Result<bool, FileError> DocumentSession::HasExternalModification() const {
     if (!outputPath_.has_value() || !observedStamp_.has_value()) {
         return false;
     }
-    if (!observedPath_.has_value() ||
-        std::filesystem::absolute(*outputPath_).lexically_normal() !=
-            *observedPath_) {
+    if (!observedPath_.has_value() || AbsolutePath(*outputPath_) != *observedPath_) {
         return false;
     }
-    std::optional<FileStamp> current = ProbeFileStamp(*outputPath_, error);
-    if (!current.has_value()) {
-        return false;
+    const auto current = ProbeFileStamp(*outputPath_);
+    if (!current) {
+        return Engine::Base::Err(current.error());
     }
     return *current != *observedStamp_;
 }
 
-bool DocumentSession::Restore(const std::string_view canonicalJson) {
-    try {
-        document_ = nlohmann::json::parse(
-            canonicalJson.begin(), canonicalJson.end());
-        return true;
-    } catch (const nlohmann::json::exception&) {
-        return false;
-    }
+void DocumentSession::Restore(const std::string_view canonicalJson) {
+    // Snapshots come from SerializeCanonical, so they always parse.
+    document_ = nlohmann::json::parse(canonicalJson.begin(), canonicalJson.end(), nullptr, false);
+    GYO_ASSERT(!document_.is_discarded());
 }
 
 void DocumentSession::ResetHistory(const bool saved) {
@@ -191,87 +193,73 @@ void DocumentSession::ResetHistory(const bool saved) {
     }
 }
 
-SessionResult DocumentSession::SaveTo(
+Result<SessionReport, SessionError> DocumentSession::SaveTo(
     const std::filesystem::path& path,
     const ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
     std::vector<Diagnostic> diagnostics = Validate(catalog);
     if (HasErrors(diagnostics)) {
-        return {
-            false,
+        return Engine::Base::Err(SessionError(
+            SessionErrorCode::InvalidDocument,
             "document validation failed",
-            std::move(diagnostics),
-            SaveFailure::InvalidDocument,
-        };
+            std::move(diagnostics)));
     }
 
     if (catalog != nullptr && catalog->IsMounted() &&
         IsPathWithin(path, catalog->AssetRoot())) {
-        return {
-            false,
+        return Engine::Base::Err(SessionError(
+            SessionErrorCode::OutputInsideMountedAssetRoot,
             "export target is inside the mounted app asset root; export to a "
             "working location, then copy and register it manually",
-            std::move(diagnostics),
-            SaveFailure::OutputInsideMountedAssetRoot,
-        };
+            std::move(diagnostics)));
     }
 
-    const std::filesystem::path absolutePath =
-        std::filesystem::absolute(path).lexically_normal();
-    std::string externalError;
+    const std::filesystem::path absolutePath = AbsolutePath(path);
+    std::optional<FileError> externalError;
     bool externalModification = false;
     if (observedPath_.has_value() && absolutePath == *observedPath_) {
-        externalModification = HasExternalModification(externalError);
+        auto modified = HasExternalModification();
+        if (modified) {
+            externalModification = *modified;
+        } else {
+            externalError = std::move(modified).error();
+        }
     } else {
         std::error_code existenceError;
         externalModification = std::filesystem::exists(absolutePath, existenceError);
         if (existenceError) {
-            externalError = "cannot inspect output path '" + absolutePath.string() +
-                            "': " + existenceError.message();
+            externalError = FileError::Make(
+                FileErrorCode::ProbeFailed,
+                "cannot inspect output path '" + absolutePath.string() + "': " + existenceError.message(),
+                absolutePath.string());
         }
     }
     if (!overwriteExternalModification && externalModification) {
-        return {
-            false,
+        return Engine::Base::Err(SessionError(
+            SessionErrorCode::ExternalModification,
             "output changed outside the editor",
-            std::move(diagnostics),
-            SaveFailure::ExternalModification,
-        };
+            std::move(diagnostics)));
     }
-    if (!externalError.empty()) {
-        return {
-            false,
-            std::move(externalError),
-            std::move(diagnostics),
-            SaveFailure::IoFailure,
-        };
+    if (externalError) {
+        return Engine::Base::Err(IoFailure(*externalError, std::move(diagnostics)));
     }
 
     const std::string serialized = UiDocumentBridge::SerializeCanonical(document_);
-    const FileOperationResult written = WriteTextFileAtomically(path, serialized);
+    const auto written = WriteTextFileAtomically(path, serialized);
     if (!written) {
-        return {
-            false,
-            written.error,
-            std::move(diagnostics),
-            SaveFailure::IoFailure,
-        };
+        return Engine::Base::Err(IoFailure(written.error(), std::move(diagnostics)));
     }
 
     outputPath_ = absolutePath;
     observedPath_ = absolutePath;
-    std::string stampError;
-    observedStamp_ = ProbeFileStamp(*outputPath_, stampError);
-    if (!observedStamp_.has_value()) {
-        return {
-            false,
-            std::move(stampError),
-            std::move(diagnostics),
-            SaveFailure::IoFailure,
-        };
+    auto stamp = ProbeFileStamp(*outputPath_);
+    if (!stamp) {
+        observedStamp_.reset();
+        return Engine::Base::Err(IoFailure(stamp.error(), std::move(diagnostics)));
     }
+    observedStamp_ = *stamp;
     history_.MarkSaved();
-    return {true, {}, std::move(diagnostics), SaveFailure::None};
+    return SessionReport{std::move(diagnostics)};
 }
 
 } // namespace Gyo::Tools::UiEditor

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/UiTypes.hpp"
+
 #include <nlohmann/json_fwd.hpp>
 
 #include <memory>
@@ -31,10 +33,13 @@ public:
         float height{};
     };
 
-    struct Result final {
+    // One frame's interaction outcome. A UI runtime failure (for example in
+    // the user's in-progress JSON) is reported in error; hover, click and
+    // actions collected before it remain valid.
+    struct FrameOutput final {
         std::string clickedNodeId;
         std::string hoveredNodeId;
-        std::string error;
+        std::optional<Engine::Ui::UiError> error;
 
         struct Action final {
             std::string id;
@@ -58,7 +63,7 @@ public:
         std::optional<GizmoEdit> gizmoEdit;
     };
 
-    [[nodiscard]] Result Draw(
+    [[nodiscard]] FrameOutput Draw(
         ImDrawList& drawList,
         const nlohmann::json& document,
         std::string_view canvasId,

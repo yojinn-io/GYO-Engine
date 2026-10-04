@@ -4,6 +4,7 @@
 #include "engine/asset/ContentManifest.hpp"
 #include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
+#include "gyo/ui_editor/FileService.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -11,42 +12,37 @@
 namespace Gyo::Tools::UiEditor {
 namespace {
 
-template <typename Error>
-[[nodiscard]] std::string DescribeError(const Error& error) {
-    std::string result = error.message;
-    if (!error.detail.empty()) {
-        result += ": " + error.detail;
-    }
-    return result;
+[[nodiscard]] CatalogError LoadFailed(std::string message, std::string detail = {}) {
+    return CatalogError::Make(CatalogErrorCode::LoadFailed, std::move(message), std::move(detail));
+}
+
+[[nodiscard]] CatalogError LoadFailed(const Engine::Asset::AssetError& cause) {
+    return LoadFailed(cause.message, Engine::Base::CauseDetail(cause));
 }
 
 } // namespace
 
-bool ReadOnlyAssetCatalog::MountRoot(
-    const std::filesystem::path& assetRoot, std::string& error) {
-    error.clear();
-    if (assetRoot.empty()) { error = "asset root is required"; return false; }
-    const auto root = std::filesystem::absolute(assetRoot).lexically_normal();
+Result<void, CatalogError> ReadOnlyAssetCatalog::MountRoot(
+    const std::filesystem::path& assetRoot) {
+    if (assetRoot.empty()) return Engine::Base::Err(LoadFailed("asset root is required"));
+    const auto root = AbsolutePath(assetRoot);
     const auto manifest = Engine::Asset::ContentManifest::Load(root);
-    if (!manifest) { error = DescribeError(manifest.error()); return false; }
+    if (!manifest) return Engine::Base::Err(LoadFailed(manifest.error()));
     auto catalog = manifest.value().LoadCatalogs(root);
-    if (!catalog) { error = DescribeError(catalog.error()); return false; }
+    if (!catalog) return Engine::Base::Err(LoadFailed(catalog.error()));
     Commit(std::move(catalog).value(), {}, root);
-    return true;
+    return {};
 }
 
-bool ReadOnlyAssetCatalog::Mount(
+Result<void, CatalogError> ReadOnlyAssetCatalog::Mount(
     const std::filesystem::path& catalogPath,
-    const std::filesystem::path& assetRoot,
-    std::string& error) {
-    error.clear();
+    const std::filesystem::path& assetRoot) {
     if (catalogPath.empty() || assetRoot.empty()) {
-        error = "catalog path and asset root are required";
-        return false;
+        return Engine::Base::Err(LoadFailed("catalog path and asset root are required"));
     }
 
     Engine::Asset::Resolver::AssetPathResolver::Options resolverOptions;
-    const auto root = std::filesystem::absolute(assetRoot).lexically_normal();
+    const auto root = AbsolutePath(assetRoot);
     resolverOptions.assetsRoot = root.string();
     resolverOptions.allowAbsolutePath = false;
     resolverOptions.allowEscapeAssetsRoot = false;
@@ -57,13 +53,10 @@ bool ReadOnlyAssetCatalog::Mount(
     Engine::Asset::AssetCatalog catalog;
     const auto loaded =
         catalog.LoadFromFile(catalogPath.string(), parser, resolver);
-    if (!loaded) {
-        error = DescribeError(loaded.error());
-        return false;
-    }
+    if (!loaded) return Engine::Base::Err(LoadFailed(loaded.error()));
 
-    Commit(std::move(catalog), std::filesystem::absolute(catalogPath).lexically_normal(), root);
-    return true;
+    Commit(std::move(catalog), AbsolutePath(catalogPath), root);
+    return {};
 }
 
 void ReadOnlyAssetCatalog::Commit(Engine::Asset::AssetCatalog catalog,

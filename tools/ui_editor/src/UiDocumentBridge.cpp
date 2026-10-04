@@ -1,5 +1,7 @@
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 
 #include "ui/UiDocumentCodec.hpp"
@@ -14,11 +16,13 @@ namespace {
 
 using Json = nlohmann::json;
 
+// Diagnostics are shown to people, so the message is the formatted error
+// (code, message and detail).
 [[nodiscard]] Diagnostic CodecDiagnostic(const Engine::Ui::UiError& error) {
     return {
         DiagnosticSeverity::Error,
         error.jsonPointer.empty() ? "/" : error.jsonPointer,
-        error.message,
+        Engine::Base::Describe(error),
     };
 }
 
@@ -98,14 +102,10 @@ DocumentParseResult UiDocumentBridge::Parse(const std::string_view text) {
     if (!canonical) {
         return {std::nullopt, {CodecDiagnostic(canonical.error())}};
     }
-    try {
-        return {Json::parse(canonical.value()), {}};
-    } catch (const Json::exception& error) {
-        return {
-            std::nullopt,
-            {{DiagnosticSeverity::Error, "/", error.what()}},
-        };
-    }
+    // The codec's own serialization always parses back.
+    Json document = Json::parse(canonical.value(), nullptr, false);
+    GYO_ASSERT(!document.is_discarded());
+    return {std::move(document), {}};
 }
 
 std::string UiDocumentBridge::SerializeCanonical(const Json& document) {

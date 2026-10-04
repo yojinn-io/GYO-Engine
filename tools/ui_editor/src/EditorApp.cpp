@@ -547,21 +547,24 @@ EditorApp::EditorApp(
     : options_(std::move(options)),
       previewAssets_(previewAssets) {}
 
-bool EditorApp::Initialize(std::string& error) {
-    error.clear();
+Result<void, EditorError> EditorApp::Initialize() {
     singleCatalogMode_ = options_.catalogPath.has_value();
     if (options_.assetRoot.has_value()) {
-        if (!MountCatalog(options_.catalogPath.value_or(std::filesystem::path{}),
-                *options_.assetRoot, error)) return false;
+        const auto mounted = MountCatalog(
+            options_.catalogPath.value_or(std::filesystem::path{}), *options_.assetRoot);
+        if (!mounted) {
+            return Engine::Base::Err(EditorError::Make(EditorErrorCode::CatalogUnavailable,
+                mounted.error().message, Engine::Base::CauseDetail(mounted.error())));
+        }
         CopyPath(catalogPath_, catalog_.CatalogPath());
         CopyPath(assetRoot_, catalog_.AssetRoot());
     }
     if (options_.inputPath.has_value()) {
-        SessionResult opened = session_.Open(*options_.inputPath);
+        auto opened = session_.Open(*options_.inputPath);
         if (!opened) {
-            error = opened.error;
-            diagnostics_ = std::move(opened.diagnostics);
-            return false;
+            diagnostics_ = std::move(opened.error().diagnostics);
+            return Engine::Base::Err(EditorError::Make(EditorErrorCode::DocumentUnavailable,
+                opened.error().message, Engine::Base::CauseDetail(opened.error())));
         }
         CopyPath(openPath_, *options_.inputPath);
     }
@@ -572,27 +575,26 @@ bool EditorApp::Initialize(std::string& error) {
         CopyPath(exportPath_, *session_.OutputPath());
     }
     RefreshDiagnostics();
-    return true;
+    return {};
 }
 
 void EditorApp::ApplyPendingAssetChanges() {
     if (pendingCatalogMount_) {
         pendingCatalogMount_ = false;
-        std::string error;
-        if (MountCatalog(pendingCatalogPath_, pendingAssetRoot_, error)) {
+        const auto mounted = MountCatalog(pendingCatalogPath_, pendingAssetRoot_);
+        if (mounted) {
             statusMessage_ = "Mounted read-only content: " + catalog_.AssetRoot().string();
         } else {
-            statusMessage_ = "Asset mount failed: " + error;
+            statusMessage_ = "Asset mount failed: " + Engine::Base::Describe(mounted.error());
         }
         RefreshDiagnostics();
     }
     if (pendingCatalogUnmount_) {
         pendingCatalogUnmount_ = false;
-        if (previewAssets_.Unmount()) {
-            catalog_.Unmount();
-            statusMessage_ = "Unmounted content";
-            RefreshDiagnostics();
-        }
+        previewAssets_.Unmount();
+        catalog_.Unmount();
+        statusMessage_ = "Unmounted content";
+        RefreshDiagnostics();
     }
 }
 
@@ -1051,7 +1053,7 @@ void EditorApp::DrawCanvas() {
         origin.x + canvasPanX_ + (available.x - scaledWidth) * 0.5F,
         origin.y + canvasPanY_ + (available.y - scaledHeight) * 0.5F,
     };
-    const PreviewAdapter::Result result = preview_.Draw(
+    const PreviewAdapter::FrameOutput result = preview_.Draw(
         *drawList,
         session_.Document(),
         selectedCanvas_,
@@ -1062,17 +1064,17 @@ void EditorApp::DrawCanvas() {
         canvasHovered || canvasFocused,
         snapToGrid_,
         gridSize_);
-    if (!result.error.empty()) {
-        statusMessage_ = "Preview: " + result.error;
+    if (result.error) {
+        statusMessage_ = "Preview: " + Engine::Base::Describe(*result.error);
     }
     if (!result.clickedNodeId.empty() && !result.gizmoEdit.has_value()) {
         selectedNode_ = result.clickedNodeId;
     }
     if (result.gizmoEdit.has_value()) {
-        const PreviewAdapter::Result::GizmoEdit& edit = *result.gizmoEdit;
-        const char* key = edit.field == PreviewAdapter::Result::GizmoField::AnchorMin
+        const PreviewAdapter::FrameOutput::GizmoEdit& edit = *result.gizmoEdit;
+        const char* key = edit.field == PreviewAdapter::FrameOutput::GizmoField::AnchorMin
             ? "anchor_min"
-            : edit.field == PreviewAdapter::Result::GizmoField::AnchorMax
+            : edit.field == PreviewAdapter::FrameOutput::GizmoField::AnchorMax
                 ? "anchor_max"
                 : "pivot";
         if (edit.began) {
@@ -1095,7 +1097,7 @@ void EditorApp::DrawCanvas() {
         session_.EndEdit();
         gizmoTransactionActive_ = false;
     }
-    for (const PreviewAdapter::Result::Action& action : result.actions) {
+    for (const PreviewAdapter::FrameOutput::Action& action : result.actions) {
         std::string entry = action.id + "  source:" + action.sourceElement;
         entry += action.numberPayload.has_value()
             ? "  payload:" + std::to_string(*action.numberPayload)
@@ -2149,9 +2151,9 @@ void EditorApp::NewDocument() {
 }
 
 void EditorApp::OpenDocument(const std::string& path) {
-    SessionResult result = session_.Open(path);
-    diagnostics_ = result.diagnostics;
-    statusMessage_ = result ? "Opened " + path : result.error;
+    const auto result = session_.Open(path);
+    diagnostics_ = result ? result->diagnostics : result.error().diagnostics;
+    statusMessage_ = result ? "Opened " + path : Engine::Base::Describe(result.error());
     if (result) {
         const Json& document = session_.Document();
         selectedCanvas_ = document.contains("canvases") &&
@@ -2166,57 +2168,58 @@ void EditorApp::OpenDocument(const std::string& path) {
 }
 
 void EditorApp::SaveDocument(const bool overwriteExternal) {
-    SessionResult result = session_.Save(
+    const auto result = session_.Save(
         catalog_.IsMounted() ? &catalog_ : nullptr,
         overwriteExternal);
-    diagnostics_ = result.diagnostics;
+    diagnostics_ = result ? result->diagnostics : result.error().diagnostics;
     if (result) {
         statusMessage_ = "Saved canonical UI JSON";
-    } else if (result.saveFailure == SaveFailure::MissingOutputPath) {
+    } else if (result.error().code == SessionErrorCode::MissingOutputPath) {
         showExportDialog_ = true;
-    } else if (result.saveFailure == SaveFailure::ExternalModification) {
+    } else if (result.error().code == SessionErrorCode::ExternalModification) {
         pendingOverwritePath_ = session_.OutputPath()->string();
         pendingOverwriteIsExport_ = false;
         showOverwriteDialog_ = true;
     } else {
-        statusMessage_ = result.error;
+        statusMessage_ = Engine::Base::Describe(result.error());
     }
 }
 
 void EditorApp::ExportDocument(
     const std::string& path,
     const bool overwriteExternal) {
-    SessionResult result = session_.Export(
+    const auto result = session_.Export(
         path,
         catalog_.IsMounted() ? &catalog_ : nullptr,
         overwriteExternal);
-    diagnostics_ = result.diagnostics;
+    diagnostics_ = result ? result->diagnostics : result.error().diagnostics;
     if (result) {
         statusMessage_ = "Exported canonical UI JSON to " + path;
         CopyPath(exportPath_, *session_.OutputPath());
-    } else if (result.saveFailure == SaveFailure::ExternalModification) {
+    } else if (result.error().code == SessionErrorCode::ExternalModification) {
         pendingOverwritePath_ = path;
         pendingOverwriteIsExport_ = true;
         showOverwriteDialog_ = true;
     } else {
-        statusMessage_ = result.error;
+        statusMessage_ = Engine::Base::Describe(result.error());
     }
 }
 
-bool EditorApp::MountCatalog(const std::filesystem::path& catalogPath,
-    const std::filesystem::path& assetRoot, std::string& error) {
+Result<void, CatalogError> EditorApp::MountCatalog(const std::filesystem::path& catalogPath,
+    const std::filesystem::path& assetRoot) {
     ReadOnlyAssetCatalog candidate;
     auto root = assetRoot;
     if (root.empty() && !catalogPath.empty()) {
         root = catalogPath.parent_path();
         if (root.empty()) root = ".";
     }
-    const bool loaded = catalogPath.empty()
-        ? candidate.MountRoot(root, error)
-        : candidate.Mount(catalogPath, root, error);
-    if (!loaded || !previewAssets_.Mount(candidate, error)) return false;
+    const auto loaded = catalogPath.empty()
+        ? candidate.MountRoot(root)
+        : candidate.Mount(catalogPath, root);
+    if (!loaded) return loaded;
+    previewAssets_.Mount(candidate);
     catalog_ = std::move(candidate);
-    return true;
+    return {};
 }
 
 } // namespace Gyo::Tools::UiEditor

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/ui_editor/EditorError.hpp"
+
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/Diagnostic.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
@@ -18,7 +20,7 @@ class EditorApp final {
 public:
     EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets);
 
-    [[nodiscard]] bool Initialize(std::string& error);
+    [[nodiscard]] Result<void, EditorError> Initialize();
     // Apply queued mount/unmount only before the host opens the next frame.
     void ApplyPendingAssetChanges();
     void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
@@ -50,8 +52,8 @@ private:
     void OpenDocument(const std::string& path);
     void SaveDocument(bool overwriteExternal = false);
     void ExportDocument(const std::string& path, bool overwriteExternal = false);
-    [[nodiscard]] bool MountCatalog(const std::filesystem::path& catalogPath,
-        const std::filesystem::path& assetRoot, std::string& error);
+    [[nodiscard]] Result<void, CatalogError> MountCatalog(const std::filesystem::path& catalogPath,
+        const std::filesystem::path& assetRoot);
 
     CommandLineOptions options_;
     AssetPreviewContext& previewAssets_;

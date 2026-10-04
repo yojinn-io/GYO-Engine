@@ -2,6 +2,7 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "engine/base/Assert.hpp"
 #include "text/ITextRasterizer.hpp"
 
 #include <SDL3/SDL.h>
@@ -19,6 +20,22 @@ using namespace Gyo::Tools::UiEditor;
 int failures{};
 void Expect(bool condition, const char* message) {
     if (!condition) { ++failures; std::cerr << "FAILED: " << message << '\n'; }
+}
+
+// True when call fails a GYO_ASSERT (API misuse). The throwing handler is
+// installed only for the call.
+template <class Call>
+bool Asserts(Call&& call) {
+    const auto previous = Engine::Base::SetAssertionHandler(
+        [](const Engine::Base::AssertionFailure& failure) { throw failure; });
+    bool asserted = false;
+    try {
+        call();
+    } catch (const Engine::Base::AssertionFailure&) {
+        asserted = true;
+    }
+    Engine::Base::SetAssertionHandler(previous);
+    return asserted;
 }
 
 class BitmapRasterizer final : public Engine::Text::ITextRasterizer {
@@ -81,27 +98,26 @@ struct Fixture final {
 void TestQueuedTexturesAndFrameEviction() {
     Fixture fixture;
     ReadOnlyAssetCatalog catalog;
-    std::string error;
-    Expect(catalog.Mount(fixture.root / "catalog.json", fixture.root, error), "mount fixture");
+    Expect(static_cast<bool>(catalog.Mount(fixture.root / "catalog.json", fixture.root)), "mount fixture");
     auto rasterizer = std::make_unique<BitmapRasterizer>();
     auto* observed = rasterizer.get();
     AssetPreviewContext assets;
-    Expect(assets.Initialize(*fixture.renderer, std::move(rasterizer), error), "inject deterministic rasterizer");
-    Expect(assets.Mount(catalog, error), "preview consumes parsed catalog");
+    assets.Initialize(*fixture.renderer, std::move(rasterizer));
+    assets.Mount(catalog);
     // A parsed snapshot must not be read from disk again by the preview.
     Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "catalog.json", "broken")), "replace source catalog");
     fixture.Begin(assets);
     for (int index = 0; index < 300; ++index) {
-        const auto text = assets.Text("font.default", std::to_string(index), 12, error);
-        Expect(text.texture != nullptr, "rasterized texture exists");
+        const auto text = assets.Text("font.default", std::to_string(index), 12);
+        Expect(text && text->texture != nullptr, "rasterized texture exists");
         ImGui::GetBackgroundDrawList()->AddImage(
-            ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(text.texture))},
+            ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(text ? text->texture : nullptr))},
             {static_cast<float>(index), 0}, {static_cast<float>(index + 1), 4});
     }
-    const auto first = assets.Text("font.default", "0", 12, error);
-    Expect(first.texture != nullptr && observed->calls == 300, "all 300 textures remain cached during one frame");
-    Expect(!assets.Mount(catalog, error), "mid-frame mount cannot destroy queued textures");
-    Expect(!assets.Unmount(), "mid-frame unmount cannot destroy queued textures");
+    const auto first = assets.Text("font.default", "0", 12);
+    Expect(first && first->texture != nullptr && observed->calls == 300, "all 300 textures remain cached during one frame");
+    Expect(Asserts([&] { assets.Mount(catalog); }), "mid-frame mount is a Programmer Error");
+    Expect(Asserts([&] { assets.Unmount(); }), "mid-frame unmount is a Programmer Error");
     fixture.Present(assets);
     for (int index = 0; index < 300; ++index) {
         Uint8 red{}, green{}, blue{}, alpha{};
@@ -109,24 +125,23 @@ void TestQueuedTexturesAndFrameEviction() {
             red == 255 && green == 255 && blue == 255, "every queued text actually renders");
     }
     fixture.Begin(assets);
-    static_cast<void>(assets.Text("font.default", "0", 12, error));
+    static_cast<void>(assets.Text("font.default", "0", 12));
     Expect(observed->calls == 300, "recent entry survives next-frame trim");
-    static_cast<void>(assets.Text("font.default", "1", 12, error));
+    static_cast<void>(assets.Text("font.default", "1", 12));
     Expect(observed->calls == 301, "old entry is evicted only at next frame boundary");
     ImGui::EndFrame(); // Cancel a frame without ever submitting its draw data.
     assets.EndFrame();
-    Expect(assets.Unmount(), "cancelled frame permits safe unmount");
+    assets.Unmount();
     Expect(!assets.IsMounted(), "unmount removes preview state");
-    Expect(assets.Mount(catalog, error), "remount reuses the validated snapshot after source file changed");
+    assets.Mount(catalog); // reuses the validated snapshot after the source file changed
     fixture.Begin(assets);
-    static_cast<void>(assets.Text("font.default", "0", 12, error));
+    static_cast<void>(assets.Text("font.default", "0", 12));
     Expect(observed->calls == 302, "remount does not reuse retired font/text cache");
     fixture.Present(assets);
 }
 
 void TestSharedContentAndQueuedMounts() {
     Fixture fixture;
-    std::string error;
     Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "content.json",
         R"({"version":1,"catalogs":["catalog.json","images.json"],"shader_bundles":[]})")), "write multi-catalog content");
     Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "images.json",
@@ -145,19 +160,19 @@ void TestSharedContentAndQueuedMounts() {
     AssetPreviewContext assets;
     auto rasterizer = std::make_unique<BitmapRasterizer>();
     auto* observed = rasterizer.get();
-    Expect(assets.Initialize(*fixture.renderer, std::move(rasterizer), error), "initialize multi-catalog preview");
+    assets.Initialize(*fixture.renderer, std::move(rasterizer));
     CommandLineOptions options;
     options.assetRoot = fixture.root;
     EditorApp editor(options, assets);
-    Expect(editor.Initialize(error), "GUI root mount consumes both catalogs");
+    Expect(static_cast<bool>(editor.Initialize()), "GUI root mount consumes both catalogs");
     fixture.Begin(assets);
-    auto* image = assets.Texture("texture.logo", error);
-    if (!image) std::cerr << error << '\n';
-    Expect(image != nullptr, "preview sees image from second catalog");
-    const auto text = assets.Text("font.default", "mounted", 12, error);
-    Expect(text.texture != nullptr, "preview sees font from first catalog");
+    auto image = assets.Texture("texture.logo");
+    if (!image) std::cerr << Engine::Base::Describe(image.error()) << '\n';
+    Expect(image && *image != nullptr, "preview sees image from second catalog");
+    const auto text = assets.Text("font.default", "mounted", 12);
+    Expect(text && text->texture != nullptr, "preview sees font from first catalog");
     ImGui::GetBackgroundDrawList()->AddImage(
-        ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(text.texture))}, {0, 0}, {4, 4});
+        ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(text ? text->texture : nullptr))}, {0, 0}, {4, 4});
     editor.RequestAssetUnmount();
     Expect(assets.IsMounted(), "GUI unmount waits while draw commands reference its textures");
     fixture.Present(assets);
@@ -171,10 +186,10 @@ void TestSharedContentAndQueuedMounts() {
     editor.ApplyPendingAssetChanges();
     Expect(assets.IsMounted(), "failed GUI remount preserves previous preview");
     fixture.Begin(assets);
-    image = assets.Texture("texture.logo", error);
-    if (!image) std::cerr << error << '\n';
-    Expect(image != nullptr, "failed remount keeps the previous image mapping");
-    static_cast<void>(assets.Text("font.default", "mounted", 12, error));
+    image = assets.Texture("texture.logo");
+    if (!image) std::cerr << Engine::Base::Describe(image.error()) << '\n';
+    Expect(image && *image != nullptr, "failed remount keeps the previous image mapping");
+    static_cast<void>(assets.Text("font.default", "mounted", 12));
     Expect(observed->calls == 2, "successful unmount/remount retires previous text cache");
     ImGui::EndFrame();
     assets.EndFrame();

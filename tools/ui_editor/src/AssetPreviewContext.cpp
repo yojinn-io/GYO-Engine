@@ -18,8 +18,9 @@
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include <cmath>
-#include <cassert>
 #include <cstddef>
 #include <algorithm>
 #include <limits>
@@ -33,22 +34,21 @@
 namespace Gyo::Tools::UiEditor {
 namespace {
 
-template <typename Error>
-[[nodiscard]] std::string Describe(const Error& error) {
-    std::string result = error.message;
-    if constexpr (requires { error.detail; }) {
-        if (!error.detail.empty()) result += ": " + error.detail;
-    }
-    return result;
+[[nodiscard]] PreviewError AssetFailed(std::string message, std::string detail = {}) {
+    return PreviewError::Make(PreviewErrorCode::AssetFailed, std::move(message), std::move(detail));
 }
 
-[[nodiscard]] SDL_Texture* Upload(
+template <class Cause>
+[[nodiscard]] PreviewError AssetFailedBy(const Cause& cause, const std::string_view assetId) {
+    return AssetFailed(cause.message, Engine::Base::CauseDetail(cause, assetId));
+}
+
+[[nodiscard]] Result<SDL_Texture*, PreviewError> Upload(
     SDL_Renderer& renderer,
     const std::uint32_t width,
     const std::uint32_t height,
     const void* pixels,
-    const std::uint32_t pitch,
-    std::string& error) {
+    const std::uint32_t pitch) {
     SDL_Texture* texture = SDL_CreateTexture(
         &renderer,
         SDL_PIXELFORMAT_RGBA32,
@@ -56,13 +56,12 @@ template <typename Error>
         static_cast<int>(width),
         static_cast<int>(height));
     if (texture == nullptr) {
-        error = std::string{"SDL texture creation failed: "} + SDL_GetError();
-        return nullptr;
+        return Engine::Base::Err(AssetFailed(std::string{"SDL texture creation failed: "} + SDL_GetError()));
     }
     if (!SDL_UpdateTexture(texture, nullptr, pixels, static_cast<int>(pitch))) {
-        error = std::string{"SDL texture upload failed: "} + SDL_GetError();
+        PreviewError error = AssetFailed(std::string{"SDL texture upload failed: "} + SDL_GetError());
         SDL_DestroyTexture(texture);
-        return nullptr;
+        return Engine::Base::Err(std::move(error));
     }
     static_cast<void>(SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND));
     static_cast<void>(SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR));
@@ -153,56 +152,47 @@ AssetPreviewContext::~AssetPreviewContext() {
 AssetPreviewContext::AssetPreviewContext(AssetPreviewContext&&) noexcept = default;
 AssetPreviewContext& AssetPreviewContext::operator=(AssetPreviewContext&&) noexcept = default;
 
-bool AssetPreviewContext::Initialize(SDL_Renderer& renderer, std::string& error) {
+Result<void, PreviewError> AssetPreviewContext::Initialize(SDL_Renderer& renderer) {
     auto rasterizer = Engine::Text::Backend::SdlTtf::SdlTtfTextRasterizer::Create();
-    if (!rasterizer) { error = Describe(rasterizer.error()); return false; }
-    return Initialize(renderer, std::move(rasterizer).value(), error);
+    if (!rasterizer) {
+        return Engine::Base::Err(PreviewError::Make(PreviewErrorCode::InitializationFailed,
+            rasterizer.error().message, Engine::Base::CauseDetail(rasterizer.error())));
+    }
+    Initialize(renderer, std::move(rasterizer).value());
+    return {};
 }
 
-bool AssetPreviewContext::Initialize(SDL_Renderer& renderer,
-    std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer, std::string& error) {
-    error.clear();
-    if (impl_->initialized || !rasterizer) {
-        error = "asset preview requires a rasterizer and may be initialized only once";
-        return false;
-    }
+void AssetPreviewContext::Initialize(SDL_Renderer& renderer,
+    std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer) {
+    // Initializing twice or without a rasterizer is API misuse.
+    GYO_ASSERT(!impl_->initialized && rasterizer != nullptr);
     impl_->loaders.Register(std::make_unique<Engine::Asset::Loaders::FontLoader>());
     impl_->loaders.Register(std::make_unique<
         Engine::Asset::Loaders::SdlImage::SdlImageTextureLoader>());
     impl_->rasterizer = std::move(rasterizer);
     impl_->renderer = &renderer;
     impl_->initialized = true;
-    return true;
 }
 
-bool AssetPreviewContext::Mount(
-    const ReadOnlyAssetCatalog& catalog, std::string& error) {
-    error.clear();
-    if (!impl_->initialized || impl_->renderer == nullptr) {
-        error = "asset preview context is not initialized";
-        return false;
-    }
-    if (impl_->frameActive || !catalog.IsMounted()) {
-        error = "preview mount requires a parsed catalog outside an active frame";
-        return false;
-    }
+void AssetPreviewContext::Mount(const ReadOnlyAssetCatalog& catalog) {
+    // Mount needs an initialized context, a mounted catalog and no active frame.
+    GYO_ASSERT(impl_->initialized && impl_->renderer != nullptr);
+    GYO_ASSERT(!impl_->frameActive && catalog.IsMounted());
     // Copy the validated snapshot before retiring the old state. No file is
     // parsed twice, and allocation failure cannot clear a working mount.
     auto candidate = catalog.ParsedCatalog();
     impl_->Clear();
     impl_->catalog = std::move(candidate);
     impl_->mounted = true;
-    return true;
 }
 
-bool AssetPreviewContext::Unmount() noexcept {
-    if (impl_->frameActive) return false;
+void AssetPreviewContext::Unmount() {
+    // Textures handed out in this frame must survive until EndFrame.
+    GYO_ASSERT(!impl_->frameActive);
     impl_->Clear();
-    return true;
 }
 void AssetPreviewContext::BeginFrame() {
-    assert(!impl_->frameActive);
-    if (impl_->frameActive) return;
+    GYO_ASSERT(!impl_->frameActive);
     constexpr std::size_t maximumTextEntries = 256U;
     while (impl_->text.size() > maximumTextEntries) {
         const auto oldest = std::min_element(impl_->text.begin(), impl_->text.end(),
@@ -215,11 +205,9 @@ void AssetPreviewContext::BeginFrame() {
 void AssetPreviewContext::EndFrame() noexcept { impl_->frameActive = false; }
 bool AssetPreviewContext::IsMounted() const noexcept { return impl_->mounted; }
 
-SDL_Texture* AssetPreviewContext::Texture(
-    const std::string_view assetId,
-    std::string& error) {
-    error.clear();
-    if (!impl_->frameActive || !impl_->mounted || impl_->renderer == nullptr) return nullptr;
+Result<SDL_Texture*, PreviewError> AssetPreviewContext::Texture(const std::string_view assetId) {
+    GYO_ASSERT(impl_->frameActive && impl_->renderer != nullptr);
+    if (!impl_->mounted) return nullptr;
     const std::string key{assetId};
     if (const auto found = impl_->textures.find(key);
         found != impl_->textures.end()) {
@@ -230,8 +218,7 @@ SDL_Texture* AssetPreviewContext::Texture(
         Engine::Asset::AssetRequest::WithTypeHint(
             Engine::Asset::AssetType::Texture()));
     if (!loaded) {
-        error = Describe(loaded.error());
-        return nullptr;
+        return Engine::Base::Err(AssetFailedBy(loaded.error(), assetId));
     }
     const Engine::Asset::AssetHandle handle = loaded.value();
     auto asset = impl_->assets.GetSharedConst<
@@ -239,34 +226,29 @@ SDL_Texture* AssetPreviewContext::Texture(
     if (!asset || asset->rgba.size() !=
             static_cast<std::size_t>(asset->width) * asset->height * 4U) {
         impl_->assets.Release(handle);
-        error = "texture asset has an invalid RGBA payload";
-        return nullptr;
+        return Engine::Base::Err(AssetFailed("texture asset has an invalid RGBA payload", std::string{assetId}));
     }
-    SDL_Texture* texture = Upload(
+    auto texture = Upload(
         *impl_->renderer,
         asset->width,
         asset->height,
         asset->rgba.data(),
-        asset->width * 4U,
-        error);
-    if (texture == nullptr) {
+        asset->width * 4U);
+    if (!texture) {
         impl_->assets.Release(handle);
-        return nullptr;
+        return Engine::Base::Err(std::move(texture).error());
     }
-    impl_->textures.emplace(key, Impl::TextureEntry{handle, texture});
-    return texture;
+    impl_->textures.emplace(key, Impl::TextureEntry{handle, *texture});
+    return *texture;
 }
 
-TextTextureView AssetPreviewContext::Text(
+Result<TextTextureView, PreviewError> AssetPreviewContext::Text(
     const std::string_view fontAssetId,
     const std::string_view utf8,
-    const float pointSize,
-    std::string& error) {
-    error.clear();
-    if (!impl_->frameActive || !impl_->mounted || impl_->renderer == nullptr ||
-        impl_->rasterizer == nullptr || utf8.empty() ||
-        !std::isfinite(pointSize) || pointSize <= 0.0F) {
-        return {};
+    const float pointSize) {
+    GYO_ASSERT(impl_->frameActive && impl_->renderer != nullptr && impl_->rasterizer != nullptr);
+    if (!impl_->mounted || utf8.empty() || !std::isfinite(pointSize) || pointSize <= 0.0F) {
+        return TextTextureView{};
     }
     const std::string fontKey{fontAssetId};
     auto font = impl_->fonts.find(fontKey);
@@ -276,16 +258,14 @@ TextTextureView AssetPreviewContext::Text(
             Engine::Asset::AssetRequest::WithTypeHint(
                 Engine::Asset::AssetType::Font()));
         if (!loaded) {
-            error = Describe(loaded.error());
-            return {};
+            return Engine::Base::Err(AssetFailedBy(loaded.error(), fontAssetId));
         }
         const Engine::Asset::AssetHandle handle = loaded.value();
         auto asset = impl_->assets.GetSharedConst<
             Engine::Asset::Loaders::FontAsset>(handle);
         if (!asset) {
             impl_->assets.Release(handle);
-            error = "font asset has no encoded data";
-            return {};
+            return Engine::Base::Err(AssetFailed("font asset has no encoded data", std::string{fontAssetId}));
         }
         font = impl_->fonts.emplace(
             fontKey, Impl::FontEntry{handle, std::move(asset)}).first;
@@ -296,35 +276,33 @@ TextTextureView AssetPreviewContext::Text(
     if (const auto found = impl_->text.find(textKey);
         found != impl_->text.end()) {
         found->second.lastUse = ++impl_->textClock;
-        return {found->second.texture, found->second.width, found->second.height};
+        return TextTextureView{found->second.texture, found->second.width, found->second.height};
     }
     auto bitmap = impl_->rasterizer->Rasterize(
         font->second.asset->bytes,
         {utf8, pointSize});
     if (!bitmap) {
-        error = Describe(bitmap.error());
-        return {};
+        return Engine::Base::Err(AssetFailedBy(bitmap.error(), fontAssetId));
     }
     const Engine::Text::TextBitmap& pixels = bitmap.value();
     if (pixels.width == 0U || pixels.height == 0U || pixels.rgba8.empty()) {
-        return {};
+        return TextTextureView{};
     }
-    SDL_Texture* texture = Upload(
+    auto texture = Upload(
         *impl_->renderer,
         pixels.width,
         pixels.height,
         pixels.rgba8.data(),
-        pixels.rowPitch,
-        error);
-    if (texture == nullptr) return {};
+        pixels.rowPitch);
+    if (!texture) return Engine::Base::Err(std::move(texture).error());
     const Impl::TextEntry entry{
-        texture,
+        *texture,
         static_cast<float>(pixels.width),
         static_cast<float>(pixels.height),
         ++impl_->textClock,
     };
     impl_->text.emplace(textKey, entry);
-    return {entry.texture, entry.width, entry.height};
+    return TextTextureView{entry.texture, entry.width, entry.height};
 }
 
 } // namespace Gyo::Tools::UiEditor
