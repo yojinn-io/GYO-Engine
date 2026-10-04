@@ -1,7 +1,7 @@
 # PvP v6 分批計畫與進度
 
 更新：2026-10-05。Owner：`object_fps_pvp`。
-**第 01～03 批完成並合併**（PR #39、#40、#41；master `6381e9d`）。**第 04 批完成**（PR 待開）；其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)）。
+**第 01～03 批完成並合併**（PR #39、#40、#41；master `6381e9d`）。**第 04 批完成**（PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)）；其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)）。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
