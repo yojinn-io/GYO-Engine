@@ -12,8 +12,10 @@ GYO は C++20 のゲームエンジンです。Runtime、Asset、Math、Input、
 | `assets/<game>/` | 準備済み runtime コンテンツ、catalog、`content.json` |
 | `engine/` | エンジン全モジュール、adapter、`config/projects.csv` と `config/tools.csv` |
 | `tools/` | 設計支援。UI editor と本機専用のゲーム preview |
+| `services/` | エンジンが所有する再利用可能な Go service 機構（`gyo_gateway`）。ゲーム固有の service は `apps/<game>/` に置く |
 | `tests/common`、`tests/<project>` | エンジン共通とプロジェクト固有の検証 |
 | `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受入検証の支援 |
+| `build/acceptance/` | 製品の外側から実行する共通およびプロジェクト固有の受入検証ツール |
 | `build/target/` | Git 管理外のビルドツリー、実行可能な製品、ログ |
 | `docs/`、`third_party/` | 設計文書と固定依存パッケージの wrapper |
 
@@ -65,8 +67,9 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [UI 標準と編集手順](docs/ui_toolchain.md)
 - [ツール登録・選択と旧 CMake 設定の移行](docs/tool_projects.md)
 - [数学基盤の契約](docs/architecture/math.md)
+- [エラー処理の契約（Result／Error／Assert）](docs/architecture/error-handling.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [3D 資産とアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)
 
-`Object_FPS` は campaign、UI、grid combat、CPU skinning の一人称武器、SDL_GPU を検証する取り外し可能な利用側です。汎用ゲーム framework を定義しません。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。
+`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。`object_fps` と `object_fps_v2` は無効化されており、Math／Result の統一後は移行してから再有効化する必要があります。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。

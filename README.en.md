@@ -11,9 +11,11 @@ GYO is a C++20 game engine with explicit runtime, asset, math, input, collision,
 | `apps/` | Game source and minimal project declarations |
 | `assets/<game>/` | Prepared runtime content, catalogs and `content.json` |
 | `engine/` | All reusable engine modules, adapters, `config/projects.csv` and `config/tools.csv` |
-| `tools/` | Design support; currently the UI editor |
+| `tools/` | Design support: the UI editor and local game previews |
+| `services/` | Engine-owned reusable Go service mechanisms (`gyo_gateway`); a game's own services live under `apps/<game>/` |
 | `tests/common`, `tests/<project>` | Common engine and project-specific validation |
 | `build/cmake`, `build/ci` | Build, integration, packaging and acceptance support |
+| `build/acceptance/` | Common and project-specific acceptance tools run from outside the products |
 | `build/target/` | Ignored build trees, runnable products and reports |
 | `docs/`, `third_party/` | Design documents and pinned dependency wrappers |
 
@@ -65,8 +67,9 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [UI standard and authoring workflow](docs/ui_toolchain.md)
 - [Tool registration, selection and CMake migration](docs/tool_projects.md)
 - [Math foundation contract](docs/architecture/math.md)
+- [Error handling contract (Result/Error/Assert)](docs/architecture/error-handling.md)
 - [Rendering and shader contract](docs/rendering_architecture.zh-Hant.md)
 - [3D asset ownership and animation limits](docs/architecture/3d-assets.md)
 - [Release procedure](docs/releasing.zh-Hant.md)
 
-`Object_FPS` is a removable consumer demonstrating campaign flow, UI, grid combat, CPU-skinned first-person animation and SDL_GPU rendering. It does not define a generic game framework. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.
+Each game under `apps/` is an independent project; the engine depends on none of them and does not define a generic game framework. The active game is `object_fps_pvp` (server-authoritative LAN PvP; see the [network architecture](docs/object_fps_pvp/network-architecture.zh-Hant.md), in Traditional Chinese). `object_fps` and `object_fps_v2` are disabled and must be migrated after the Math/Result unification before they can be re-enabled. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.

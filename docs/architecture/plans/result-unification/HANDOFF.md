@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0–R6 完成（#30 `3b9765e`、#31 `9c51b32`、#32 `dedeebd`、#33 `12abe2e`、#34 `88e9641`、#35 `f72bfbd`、#36 `a15c836`）。計劃完成。**
+更新：2026-10-04。**R0–R6 完成（#30 `3b9765e`、#31 `9c51b32`、#32 `dedeebd`、#33 `12abe2e`、#34 `88e9641`、#35 `f72bfbd`、#36 `a15c836`）。計畫完成。**
 
 ## 閱讀入口
 
@@ -18,12 +18,12 @@
 | 2026-10-04 | 目標：可讀性、Apps 以外的風格統一、統一的處理邏輯；Apps 只做被迫的修改 | 使用者 |
 | 2026-10-04 | 資料驗證型 API（wide contract）維持回傳 Result，寫入文件 | 使用者 |
 | 2026-10-04 | 只在 debug 生效的 Assert 等第一個昂貴檢查出現時再加 | 使用者 |
-| 2026-10-04 | 等 math-foundation 計劃完成（B7 合併）後才開工，第一批為任務校正 | 使用者 |
-| 2026-10-04 | 各批的建議檔位（PLAN 4.1） | 使用者核准計劃 |
+| 2026-10-04 | 等 math-foundation 計畫完成（B7 合併）後才開工，第一批為任務校正 | 使用者 |
+| 2026-10-04 | 各批的建議檔位（PLAN 4.1） | 使用者核准計畫 |
 | 2026-10-04 | 更正：Assert 適用於整個 engine，包括 Math；`GYO::Base` 比 Math 更低。原先「Math 不加 Assert、不連 Base」是規劃 agent 未經查證的推論，`math.md` 沒有這條規則 | 使用者 |
 | 2026-10-04 | `Math::Clamp` 的前提檢查改用永遠生效的 `GYO_ASSERT`，並拿掉 `noexcept` | 使用者 |
 | 2026-10-04 | 以 Result 回傳的 API 誤用改成 Assert；只有 SdlGpu device 的 `WrongThread`、`InvalidHandle`、frame 狀態錯誤維持 Result 並寫入文件 | 使用者 |
-| 2026-10-04 | 29 個未編譯檔：只做被迫的相容修改（範圍界定為 Apps 只做被迫修改後即確定） | 計劃（使用者原定「R0 再決定」） |
+| 2026-10-04 | 29 個未編譯檔：只做被迫的相容修改（範圍界定為 Apps 只做被迫修改後即確定） | 計畫（使用者原定「R0 再決定」） |
 | 2026-10-04 | `UiError` 新增 `detail`；`CodedError` 要求 `code`、`message`、`detail`。理由：處理規則 5（跨模組轉換）與 `Describe` 需要統一的欄位 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | 跨模組轉換時外層 message 保留內層原文，內層 code 名稱放進 detail。理由：`UfbxModelTests.cpp:172-173` 鎖住了外層 message 含內層訊息 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
@@ -84,9 +84,9 @@ python3 docs/architecture/plans/result-unification/scripts/result_audit.py [--de
 AssetManager 的兩個 case 用 `REQUIRE(error)`、`error->code`、`CHECK_FALSE(GetError(...))` 寫成，R3 把 `GetError` 改成回傳 optional 後不必修改。
 Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists 三種；其餘（寫入用 Open、CreateDirectories、Remove、Move、Copy、List、ToNativePathString）在產品中沒有呼叫端，留在 R3 收斂別名時一併檢查。
 
-### 計劃校正（對抗檢查與本批發現）
+### 計畫校正（對抗檢查與本批發現）
 
-- **PR 的 CI 涵蓋範圍**：PR 的 L1 四列本來就包含 MSVC 與 clang，會 build 並跑 test preset；只有 core preset 限定 Linux。原計劃「PR 只有 Linux 驗證、需另外觸發 workflow_dispatch」是錯的，已更正。
+- **PR 的 CI 涵蓋範圍**：PR 的 L1 四列本來就包含 MSVC 與 clang，會 build 並跑 test preset；只有 core preset 限定 Linux。原計畫「PR 只有 Linux 驗證、需另外觸發 workflow_dispatch」是錯的，已更正。
 - **`MountTableTests` 改為 `VfsTests`**：NotFound 改查下一個 mount 的邏輯在 `Vfs.hpp`，`MountTable` 只提供判斷函式。
 - **#28 的 `Math::Clamp`**：用了 `<cassert>`。依使用者決定在 R1 改成 `GYO_ASSERT`。
 - **API 誤用以 Result 回傳**：盤點漏列，對抗檢查補上（UiRuntime 10、UiRenderer 3、LoaderRegistry 3、AssetManager、Renderer、SdlGpu）。依使用者決定分配到 R3、R4，SdlGpu 例外。
@@ -121,9 +121,9 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
   - `FixedTickRuntime` 2 處，檢查仍在任何狀態變更之前（`FixedTickRuntimeTests` 的 `TickId()==0` 照樣通過）。
   - `Math::Clamp`：`<cassert>` 改成 `GYO_ASSERT` 並拿掉 `noexcept`。
   - Result 的 `value()`／`error()`（共 11 個存取子）：讀取未持有的一方改成 `GYO_ASSERT`，內部改用 `get_if`；`Result<void,E>::value()` 拿掉 `noexcept`。
-- **Lakos rule 的延伸**（計劃原本只寫 `Clamp`）：Vec2／Vec3／Vec3d／Vec4 的 `Clamp` 與 `ClosestPoint(point, Aabb)`／`(point, Aabbd)` 會把呼叫端給的上下界傳給 `Clamp`，所以一併拿掉 `noexcept`。Quaternion、Segment、ColorSpace 傳入的是常數上下界，不可能違反，維持 noexcept。
+- **Lakos rule 的延伸**（計畫原本只寫 `Clamp`）：Vec2／Vec3／Vec3d／Vec4 的 `Clamp` 與 `ClosestPoint(point, Aabb)`／`(point, Aabbd)` 會把呼叫端給的上下界傳給 `Clamp`，所以一併拿掉 `noexcept`。Quaternion、Segment、ColorSpace 傳入的是常數上下界，不可能違反，維持 noexcept。
 - **`CatalogParser.cpp:14`**：`catch (...)` 收窄為 `catch (const std::exception&)`。
-- **測試支援**：`tests/common/support/AssertTestSupport.hpp` 與 INTERFACE target `gyo_test_support`（`ScopedAssertionHandler`、`GYO_CHECK_ASSERTS`、MSVC 上停用 abort 對話框）。計劃提到的 doctest exception translator 沒有加：預設 handler 在 `GYO_CHECK_ASSERTS` 之外仍是 abort，`AssertionFailure` 不會逃到 doctest；header 中的 translator 也會在每個 TU 重複註冊。
+- **測試支援**：`tests/common/support/AssertTestSupport.hpp` 與 INTERFACE target `gyo_test_support`（`ScopedAssertionHandler`、`GYO_CHECK_ASSERTS`、MSVC 上停用 abort 對話框）。計畫提到的 doctest exception translator 沒有加：預設 handler 在 `GYO_CHECK_ASSERTS` 之外仍是 abort，`AssertionFailure` 不會逃到 doctest；header 中的 translator 也會在每個 TU 重複註冊。
 - **測試**：
   - 新增 `gyo_base_tests`（`AssertTests.cpp`、`ResultTests.cpp`），涵蓋條件只求值一次、含逗號的條件式、失敗位置、同一個 case 連續失敗、handler 的替換與還原，以及 Result 讀取未持有一方會觸發 Assert。另有一個反向對照：`GYO_CHECK_ASSERTS` 在沒有觸發 Assert 時判定失敗（doctest `should_fail`）。
   - 新增 abort probe：`gyo_assert_abort_probe` 加 `AssertAbortProbe.cmake`，三種模式（預設 handler、handler 返回、handler 內再失敗），由 `gyo_base.assert_abort.{default,returning,nested}` 執行。
@@ -138,7 +138,7 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 | core preset | 23／23 通過（R0 的 19 個加上 `gyo_base_tests` 與 3 個 abort probe） |
 | test preset | 50／50 通過（46 加上同樣的 4 個） |
 | abort probe | 三種模式都以 abort 結束（本機為 `Subprocess aborted`），stderr 含條件式原文 |
-| 依賴圖 | 與 R0 相比只多出計劃列出的邊：`engine`、`gyo_math`、`gyo_collision` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests`、`engine_tests`、`gyo_collision_tests`、`gyo_math_tests` 到 `gyo_test_support`；probe 到 `gyo_base`。`gyo_base` 沒有對外的邊 |
+| 依賴圖 | 與 R0 相比只多出計畫列出的邊：`engine`、`gyo_math`、`gyo_collision` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests`、`engine_tests`、`gyo_collision_tests`、`gyo_math_tests` 到 `gyo_test_support`；probe 到 `gyo_base`。`gyo_base` 沒有對外的邊 |
 | 29 檔 syntax-only | 29／29 PASS |
 | 稽核（與 R0 比對） | engine 的 `throw_logic` 17→0、`cassert` 2→0、`gyo_assert` 0→29；tests_common 的 `throws_test` 17→0。tests_common 的 Ok／Err 增加（35／23）來自 R0 的 VfsTests 與本批的 ResultTests，R2 一起改寫 |
 | 警告 | nodiscard 0；第一方警告與 R0 相同（只有既有的 `ModelTests.cpp:29` braced-scalar-init） |
@@ -471,7 +471,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 | 依賴圖（與 R0 比對） | 只多出 13 條邊：`engine`、`gyo_math`、`gyo_collision`、`gyo_assert_abort_probe` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests` 到 doctest、`gyo_base` 與 `gyo_test_support`；`engine_tests`、`gyo_collision_tests`、`gyo_math_tests`、`gyo_render_tests` 到 `gyo_test_support` |
 | 29 檔 syntax-only | 29／29 PASS |
 | 第一方警告 | 0 |
-| 未啟用產品 | 本計劃新增 82 筆錯誤、1 個新的失敗 TU，全部歸類於 [inactive_products.md](inactive_products.md) |
+| 未啟用產品 | 本計畫新增 82 筆錯誤、1 個新的失敗 TU，全部歸類於 [inactive_products.md](inactive_products.md) |
 
 ### 最終審查
 

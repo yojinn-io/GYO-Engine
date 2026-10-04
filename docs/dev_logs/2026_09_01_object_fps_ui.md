@@ -65,7 +65,7 @@ FontAsset
   -> SpriteSubmission
 ```
 
-代價是 Object_FPS presentation 暫時持有 `{UTF-8, pointSize}` whole-run texture cache。這是刻意接受的局部成本，因為 MVP 的字串集合有限，而且 cache policy 可以在未來有數據後被替換。
+代價是 Object_FPS presentation 暫時持有 `{UTF-8, pointSize}` whole-run texture cache。這是刻意接受的局部成本，因為 MVP 的字串集合有限，而且 cache policy 可以在未來有資料後被替換。
 
 ## 為何選單與 HUD 定義留在 Object_FPS
 

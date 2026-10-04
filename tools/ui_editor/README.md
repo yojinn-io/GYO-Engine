@@ -5,7 +5,7 @@
 From the repository root:
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_BUILD_UI_EDITOR=ON
+cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
@@ -18,7 +18,7 @@ cmake -S tools/ui_editor -B build/target/_build/ui-editor
 cmake --build build/target/_build/ui-editor --target gyo_ui_editor
 ```
 
-`-DGYO_UI_EDITOR_BUILD_GUI=OFF` provides a local CLI validation build. This is not the GUI toolchain artifact used for release. Enable `BUILD_TESTING` to register the central engine/editor tests; editor tests and fixtures live in `tests/ui_editor`, outside this product directory.
+`-DGYO_TOOLS=ui_editor:cli` selects the `cli` variant, a local CLI validation build (also accepted by the standalone entry). This is not the GUI toolchain artifact used for release. Enable `BUILD_TESTING` to register the central engine/editor tests; editor tests and fixtures live in `tests/ui_editor`, outside this product directory.
 
 ```text
 gyo_ui_editor --open working/menu.ui.json --output exports/menu.ui.json --asset-catalog assets/game/asset_catalog.json --asset-root assets/game

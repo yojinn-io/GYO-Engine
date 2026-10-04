@@ -14,7 +14,7 @@
 4. `Animation.cpp` 的 `Sample()` 把插值函式當成 callable 傳入，Math 的多載無法推導，改傳 lambda。
 5. 背景 agent 做了兩項驗證：
    - **digest**：master 與 B3 共 1207 萬筆輸出逐位元相同。9 種刻意改動都會被偵測到，包括把 `Conjugate` 換回 `Inverse`。
-   - **對抗式審查**：只有 3 個 minor。用不到的 using-declaration 已刪除；`Finite` 驗證系列保留並記錄理由；計劃文件已補上。
+   - **對抗式審查**：只有 3 個 minor。用不到的 using-declaration 已刪除；`Finite` 驗證系列保留並記錄理由；計畫文件已補上。
 6. 本機驗收：core 19／19、test 45／45，pvp 未編譯 29 檔 syntax-only 全部通過，依賴圖只多 `model → math`。
 
 ## 留給下一步

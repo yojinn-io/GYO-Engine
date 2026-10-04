@@ -4,8 +4,8 @@
 **2026-10-02更新**：本守門已隨A1一起由持續相位追蹤取代並刪除（見[08](./08-a1-clock-drift.md)）；token bucket worker使30／40 FPS對齊後不再Held，本文保留作為歷史紀錄。
 相關：A1 由 PR #2（`claude/project-thread-lv6bg5`，`d74830c`，合併為 `ff11ee3`）引入；
 本修正（防護 v3）經 PR #3（`claude/pvp-v5-start-phase-guard`）合併為 `9cd7f26`。
-第03批仍未結案：計次GUI可見延遲輪次與25案矩陣依使用者決定未執行（MVP技術驗證）；
-本修正不代表結案，第04批維持暫停。
+歷史（撰寫時）：第03批未結案，計次GUI可見延遲輪次與25案矩陣依使用者決定未執行；本修正不代表結案，第04批暫停。
+後續：第03批2026-10-02結案驗收通過；第04批（PR #14，`cef1b39`）、第05批（PR #15，`f97beb5`）完成，v5於2026-10-03升格穩定基線（[STABLE_BASELINE](../STABLE_BASELINE.md)，PR #16，`58346ca`）。
 另見 [第03批計畫](../03-v5-gameplay-and-delivery.md)、[交接](../HANDOFF.md)、
 [v5契約](../../../protocol-v5.zh-Hant.md)、[A1 dev_log](../../../../dev_logs/2026_10_01_pvp_v5_start_phase.zh-Hant.md)、
 [02 停頓重新播種取消A1](./02-a1-cancelled-by-stall-reseed.md)、[修正索引](./README.md)。
@@ -137,7 +137,7 @@ worker 模型：`locked`＝原相位鎖定；`prodX`＝產品式，平均 oversh
 只改 Client 預測（`LocalPlayerPrediction`）：量測幀率，低於 cut 不套用或撤回 A1 調整。
 Host、wire、`ClientConnection`、Engine 不變；不新增依賴，不是 Architecture Delta。
 
-### 設計（v3，現行）
+### 設計（v3；已於`a4ccaa5`（PR #11）隨A1刪除，見[08](./08-a1-clock-drift.md)）
 
 | 項目 | 值／行為 | 位置 |
 |---|---|---|

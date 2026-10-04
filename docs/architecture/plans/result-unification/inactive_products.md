@@ -1,20 +1,20 @@
 # Assert／Result 統一：未啟用產品的遷移清單
 
-量測日期：2026-10-04（R6）。對象：`f72bfbd`（R0–R5 合併後）。對照：Result 計劃開始前的 `eeebc1e`（math-foundation 完成時）。
+量測日期：2026-10-04（R6）。對象：`f72bfbd`（R0–R5 合併後）。對照：Result 計畫開始前的 `eeebc1e`（math-foundation 完成時）。
 
-本計劃依範圍不修改 object_fps、object_fps_v2 與 object_fps_preview。這些產品重新啟用時，除了 [Math 的遷移清單](../math-foundation/inactive_products.md)，還要處理本文件列出的項目。量測在 scratch 建置中進行，repo 沒有修改。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md#r6-收尾)。
+本計畫依範圍不修改 object_fps、object_fps_v2 與 object_fps_preview。這些產品重新啟用時，除了 [Math 的遷移清單](../math-foundation/inactive_products.md)，還要處理本文件列出的項目。量測在 scratch 建置中進行，repo 沒有修改。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md#r6-收尾)。
 
 ## 1. 結論
 
-| 項目 | `f72bfbd`（本計劃完成後） | `eeebc1e`（本計劃開始前） |
+| 項目 | `f72bfbd`（本計畫完成後） | `eeebc1e`（本計畫開始前） |
 |---|---|---|
 | 未啟用產品的 TU 數 | 104 | 104 |
-| 編譯失敗的 TU | 40（錯誤 507 筆） | 39（錯誤 425 筆，全部來自 Math 計劃） |
-| 本計劃新增 | 共 82 筆錯誤，分布在 20 個 TU：1 個新增失敗，19 個原本就因 Math 失敗 | — |
+| 編譯失敗的 TU | 40（錯誤 507 筆） | 39（錯誤 425 筆，全部來自 Math 計畫） |
+| 本計畫新增 | 共 82 筆錯誤，分布在 20 個 TU：1 個新增失敗，19 個原本就因 Math 失敗 | — |
 
 - 新增失敗的 TU 只有 `apps/object_fps/src/App/ObjectFpsApplication.cpp`（R3 的 `Register` 改回傳 `void`）。
-- 其餘 78 筆錯誤分布在 19 個原本就因 Math 計劃失敗的 TU。Math 的錯誤修好之後，這些錯誤才會成為唯一的阻礙。
-- 以 `-fsyntax-only -ferror-limit=0` 逐 TU 量測，所以 Math 的錯誤不會遮蔽本計劃造成的錯誤。不過 header 中的錯誤可能有連鎖效應，實際修改時以重新編譯為準。
+- 其餘 78 筆錯誤分布在 19 個原本就因 Math 計畫失敗的 TU。Math 的錯誤修好之後，這些錯誤才會成為唯一的阻礙。
+- 以 `-fsyntax-only -ferror-limit=0` 逐 TU 量測，所以 Math 的錯誤不會遮蔽本計畫造成的錯誤。不過 header 中的錯誤可能有連鎖效應，實際修改時以重新編譯為準。
 
 ## 2. 原因代碼與遷移方式
 
@@ -73,4 +73,4 @@
 - **建置**：`ninja -k 0`。失敗的建置步驟：`eeebc1e` 39 個、`f72bfbd` 40 個。
 - **分類**：依 `compile_commands.json`，對每個未啟用產品的 TU 以 `-fsyntax-only -ferror-limit=0` 重編，再比較兩棵樹相同 TU 的錯誤訊息（忽略行號）。新增的錯誤依訊息歸入上表的三類，沒有無法歸類的錯誤。
 - **編譯器**：AppleClang（`/usr/bin/c++`），Intel Mac x86_64。MSVC 或 GCC 上的訊息和連鎖錯誤數量可能不同，但原因相同。
-- **沒做到**：沒有實際做遷移並驗證 link 與測試（Math 的清單有做）。本計劃的修改都是逐行的機械替換，`object_fps_pvp` 已經做過同樣的遷移並通過測試。
+- **沒做到**：沒有實際做遷移並驗證 link 與測試（Math 的清單有做）。本計畫的修改都是逐行的機械替換，`object_fps_pvp` 已經做過同樣的遷移並通過測試。

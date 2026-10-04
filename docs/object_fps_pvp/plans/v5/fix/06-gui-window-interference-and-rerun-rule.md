@@ -3,8 +3,8 @@
 狀態：已解決（驗收器修正與補跑規則已實作；2026-10-02第03批結案驗收首次在計次輪運用）。2026-10-02。Owner：`object_fps_pvp`。
 相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；本修正經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
 範圍：只改產品自有驗收器`build/acceptance/object_fps_pvp/`（GUI probe、分析器、runner）；Engine `SdlPlatform`、
-產品Client／Gateway／Match、wire契約與延遲門檻都不變。本修正不代表第03批結案：計次GUI短測依使用者決定
-（MVP技術驗證）未執行，補跑規則也還沒在真實計次輪用過。索引與其他問題見[本目錄總覽](README.md)。
+產品Client／Gateway／Match、wire契約與延遲門檻都不變。撰寫時計次GUI短測未執行、補跑規則未在真實計次輪用過；
+2026-10-02第03批結案驗收首次在計次輪運用（第3輪依本規則補跑一次），見「驗證」。索引與其他問題見[本目錄總覽](README.md)。
 
 ## 問題成因
 

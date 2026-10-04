@@ -1,7 +1,7 @@
-# GYO Assert／Result 統一計劃（核准版）
+# GYO Assert／Result 統一計畫（核准版）
 
 核准：2026-10-04。Owner：Engine（`engine/base`，R1 起為 `GYO::Base`）。進度見 [README](README.md)，紀錄見 [HANDOFF](HANDOFF.md)。
-本文件是核准版計劃經 R0 校正（以 `eeebc1e` 重新盤點與對抗檢查）後的版本，之後不再改寫內文；實作中的決策以 HANDOFF 的決策紀錄為準。
+本文件是核准版計畫經 R0 校正（以 `eeebc1e` 重新盤點與對抗檢查）後的版本，之後不再改寫內文；實作中的決策以 HANDOFF 的決策紀錄為準。
 
 > **實作與本文件的差異（R6 彙整）**
 > - 規則 5 的 detail 以 `Base::CauseDetail` 產生，格式為 `[<outer detail>; ]<InnerCode>[: <inner detail>]`；規則 4 允許在同模組內為 message 或 detail 加上脈絡，但不得丟掉 code 或 detail。
@@ -166,11 +166,11 @@ Base::Result<void, IoError> Close() { ...; return {}; }  // void 版的成功
 | R5 | ui_editor | high | out-param 的機械替換 medium |
 | R6 | 收尾 | medium | 最終稽核與 Architecture Report 的審查 high |
 
-檔位理由見核准版計劃：有外部驗證（編譯器、測試、grep 稽核、characterization）的機械性工作降檔；沒有外部基準或容易悄悄出錯的部分（`Assert.hpp`、`Result.hpp` 的 overload resolution、characterization 測試本身）升檔。
+檔位理由見核准版計畫：有外部驗證（編譯器、測試、grep 稽核、characterization）的機械性工作降檔；沒有外部基準或容易悄悄出錯的部分（`Assert.hpp`、`Result.hpp` 的 overload resolution、characterization 測試本身）升檔。
 
 ### 4.2 R0 任務校正、基線、分類表（medium）
 
-- 以 `eeebc1e` 重新盤點（ultracode：3 個盤點加 1 次對抗檢查），校正本計劃。
+- 以 `eeebc1e` 重新盤點（ultracode：3 個盤點加 1 次對抗檢查），校正本計畫。
 - 建立本目錄與 `baseline/`：測試清單（core 19、test 46）、依賴邊（144 行，含 #28 的 `engine -> gyo_math`）、29 檔的 syntax 結果（29/29 PASS）、`audit.tsv`、`failure_sites.tsv`（173 列）、`wide_contract_sites.tsv`（16 個 API）。
 - 新增 `scripts/result_audit.py`。
 - characterization 測試：

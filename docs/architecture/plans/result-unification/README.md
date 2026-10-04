@@ -29,7 +29,7 @@ GYO 從 2026-01 起就有 `Base::Result<T, E>` 與 `Base::Error<Code>`，但這�
 | R3 Error 語意與 asset | high | 完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 已合併 | `CodedError`、`Describe`、移除 `None`、別名收斂、AssetRecord；asset 的 API 誤用改 Assert |
 | R4 Model、ui／render | high | 完成，PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 已合併 | Model／ModelRenderer 的 E、保留 code 的轉換；ui／render 的 API 誤用改 Assert |
 | R5 ui_editor | high | 完成，PR [#35](https://github.com/yojinn-io/GYO-Engine/pull/35) 已合併 | 結果型別、out-param、assert、`Describe` |
-| R6 收尾 | medium（最終審查 high） 完成（[#36](https://github.com/yojinn-io/GYO-Engine/pull/36)，`a15c836`） | 文件定稿、稽核、破損清單、Architecture Report |
+| R6 收尾 | medium（最終審查 high） | 完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 已合併（`a15c836`） | 文件定稿、稽核、破損清單、Architecture Report |
 
 ```text
 R0 -> R1 -> R2 -> R3 -> R4 -> R5 -> R6

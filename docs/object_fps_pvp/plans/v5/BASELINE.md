@@ -61,7 +61,7 @@
 | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp` | 權威順序、射擊與帳本；第 03 批統一生命與武器狀態機 |
 | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp` | 獨立 worker、移動／動作窗口與可靠裁決；不能因重生清未 ACK 動作 |
 | `apps/object_fps_pvp/src/App/CharacterPresentationDefinition.cpp` | PvP 自有人物 loader，目前尚未選入 Client 支援來源；第 02 批只接必要部分 |
-| `apps/object_fps_pvp/src/App/WeaponViewModel.cpp` | 既有第一人稱資產／GPU 管線及產品 presentation frame 接口 |
+| `apps/object_fps_pvp/src/App/WeaponViewModel.cpp` | 既有第一人稱資產／GPU 管線及產品 presentation frame 介面 |
 | `apps/object_fps_pvp/CMakeLists.txt` | 只選 PvP domain／必要 App 支援；勿整包啟用複製的 Campaign 程式 |
 | `apps/object_fps_pvp/protocol/`、`gateway/adapter/` | 目前兩份 v4 schema；第 03 批連同三角色版本／建置引用一次切換 |
 
@@ -77,7 +77,7 @@ runtime、test 或 packaging 依賴。第 01 批沒有新增或修改資產。
 |---|---|
 | `characters/superhero_female/Superhero_Female_FullBody.fbx` 及同目錄 textures | 已有女性人物、身高與腳底須對齊 1.8 膠囊 |
 | `characters/hairstyles/buns/character.json`、`Hair_Buns.fbx` | 既有人物附件 |
-| `characters/enemies/ranged.character.json`、`ranged.enemy.json` | 已校準 female／hand_r 掛槍的參考；玩家另建自有定義，不接 Enemy 生命周期 |
+| `characters/enemies/ranged.character.json`、`ranged.enemy.json` | 已校準 female／hand_r 掛槍的參考；玩家另建自有定義，不接 Enemy 生命週期 |
 | `animations/ual_mannequin/UAL1_Standard.fbx` | Idle／Jog／Aim／Shoot／Reload／Jump／Death01 的來源骨架 |
 | `weapons/ultimate_pistol_1/world/character.json`、`Pistol_1.fbx` | 第三人稱世界手槍 |
 | `weapons/mark23/viewmodel/Mark23.fbx`、`mark23_viewmodel.json`、`viewmodel.animset.json` | 第一人稱手臂／槍模及動畫映射 |

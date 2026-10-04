@@ -2,7 +2,8 @@
 
 狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**。2026-10-02發現。Owner：`object_fps_pvp`。
 相關：A1本體PR #2（`ff11ee3`）、低幀率守門PR #3（`9cd7f26`）；與[02](./02-a1-cancelled-by-stall-reseed.md)同根：
-A1是開環量測，每個epoch只量一次。第03批未結案，第04批暫停。
+A1是開環量測，每個epoch只量一次。本文的提案同時取代[01](./01-a1-low-fps-regression.md)的低幀率守門與[07](./07-start-phase-diagnostics.md)的A1紀錄，並解決02、03、09。
+後續：第03批2026-10-02結案驗收通過；第04批（PR #14，`cef1b39`）、第05批（PR #15，`f97beb5`）完成，v5於2026-10-03升格穩定基線（[STABLE_BASELINE](../STABLE_BASELINE.md)，PR #16，`58346ca`）。
 索引見[README](./README.md)；偶發掉幀重設見[03](./03-a1-missed-frame-starvation.md)。
 
 ## 問題成因

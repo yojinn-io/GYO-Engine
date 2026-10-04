@@ -148,7 +148,7 @@ existing Mark23 texture bindings retain white tint.
 The historical 2026-09-20 source inventory recorded **511 files / 1,076,255,418 bytes**, including 189 FBX,
 72 Blender files, 10 Blender backups, 61 OBJ/MTL pairs, 18 glTF/BIN pairs,
 5 GLB, 66 PNG and the supplied references, readmes and licenses. Each entry in
-The historical inventory at `apps/object_fps/art_source/source_inventory.json` recorded the original absolute
+The historical inventory (`apps/object_fps/art_source/source_inventory.json`, kept in local authoring storage and never tracked in this repository) recorded the original absolute
 path, repository-relative archive path, bytes, SHA-256, runtime copies and
 source-only reason. Runtime mappings also identify their catalog IDs and types.
 Binary FBX entries include mesh/bone/material/clip metadata and material templates,
@@ -225,7 +225,7 @@ cmake --build --preset test
 ctest --preset test
 ```
 
-First enable the game and intended platforms in `engine/config/projects.csv`. Test generated content from the assembled product, including missing-file failures; runtime loading must work without any source art or checkout path. GPU appearance checks are separate from model import and definition tests. See [Object_FPS acceptance](../object_fps/acceptance.zh-Hant.md).
+First enable the game and intended platforms in `engine/config/projects.csv`. Object_FPS is currently disabled and no longer compiles against the current engine API; re-enabling it requires the [Math](plans/math-foundation/inactive_products.md) and [Result](plans/result-unification/inactive_products.md) migrations. Test generated content from the assembled product, including missing-file failures; runtime loading must work without any source art or checkout path. GPU appearance checks are separate from model import and definition tests. See [Object_FPS acceptance](../object_fps/acceptance.zh-Hant.md).
 
 The following dated evidence is preserved exactly as historical context. Its paths, executable switches and ownership describe the old tree; they are not current commands or proof that this refactor passed.
 

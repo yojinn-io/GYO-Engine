@@ -1,15 +1,17 @@
 # PvP Protocol v5：人物、跳躍與生命循環契約
 
-更新：2026-10-02。Owner：`object_fps_pvp`。
-**Client／Gateway／Match 已一起實作 v5 候選；第03批功能及網路恢復通過，整批驗收未結案。**
-2026-10-01經使用者批准加入啟動相位對齊（方案A1），2026-10-02加入低幀率守門；同日經使用者核准，
+更新：2026-10-04。Owner：`object_fps_pvp`。
+**v5自2026-10-03起為穩定基線**（[STABLE_BASELINE](plans/v5/STABLE_BASELINE.md)）：Client／Gateway／Match
+共同使用v5並拒絕v1–v4；第01–05批全部完成，完整驗收於macOS通過。
+歷史：2026-10-01經使用者批准加入啟動相位對齊（方案A1），2026-10-02加入低幀率守門；同日經使用者核准，
 以「持續相位追蹤＋輸入worker token bucket」取代兩者，並加入連線品質移出（§1、§2、§7；
 依據見[fix/08](plans/v5/fix/08-a1-clock-drift.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)）。
-計次GUI可見延遲重測依使用者決定暫緩。本契約其餘參數及門檻沒有因此放寬。
+本契約其餘參數及門檻沒有因此放寬。
 第01批建立契約，第02批完成女性人物Idle／Jog／掛槍；第03批接入v5 wire、
-跳躍、彈匣、換彈、死亡／重生及操作／HUD。完整動作動畫仍留第04批。
-實作／停止點見 [v5進度](plans/v5/README.md)。本候選尚未完成v5完整驗收，
-不取代原 [v4穩定基線](plans/v4/STABLE_BASELINE.md) 的歷史指紋與認證範圍。
+跳躍、彈匣、換彈、死亡／重生及操作／HUD；第04批完成完整動作呈現（PR #14）；
+第05批完成整合短測與完整驗收並升格（PR #15、#16）。
+實作／停止點見 [v5進度](plans/v5/README.md)。v5基線範圍限已驗證的macOS環境；
+原 [v4穩定基線](plans/v4/STABLE_BASELINE.md) 的歷史指紋與認證範圍原樣保留，不由v5繼承或覆寫。
 
 ## 1. 範圍、時間與預設
 
@@ -137,7 +139,7 @@ Space與R／Shot為不同輸入語意，可以同幀跳躍加射擊或換彈。
 
 ```text
 Authority Tick
-  生命周期交接與ACK
+  生命週期交接與ACK
     -> 到期重生／換彈完成
     -> 全部玩家固定移動（Dead只保留中立垂直物理）
     -> 按既有 acceptedTick、PlayerId、ActionId 逐一裁決動作
@@ -169,7 +171,7 @@ Ultimate Pistol世界模型。第一人稱保持Mark23；兩種槍模差異沿�
 
 Client專用玩家Presenter使用已存在的模型載入、相容骨骼轉移、SamplePose／
 BlendPoses及蒙皮機制；建立玩家專用character／animset與骨骼遮罩內容，不透過
-EnemyCatalog／GameSession等campaign接口。Match只依賴膠囊與數值規則。
+EnemyCatalog／GameSession等campaign介面。Match只依賴膠囊與數值規則。
 
 | 呈現 | 時間／組合規則 |
 |---|---|
@@ -207,13 +209,13 @@ EnemyCatalog／GameSession等campaign接口。Match只依賴膠囊與數值規�
 - 乾淨跑次要求零積欠／耗盡恢復重設；重生的epoch切換需有唯一LifeRespawn原因、
   生命增量及位置重建證據。不得把未知reset重命名成重生。
 - 動作、傷害、彈藥、重生取消按生命世代核對。舊生命未執行移動的失效命令
-  單列生命周期取消，不算Actual，也不能靜默消失；純移動基準另保留≥99%Actual。
+  單列生命週期取消，不算Actual，也不能靜默消失；純移動基準另保留≥99%Actual。
 - 原生操作及GPU圖像與乾淨效能量測分離。新模型接受膠囊命中範圍，不宣稱
   骨骼級命中、input-to-photon、實體LAN、Windows或射擊回溯已驗證。
 - 每批只短測後停止；三輪GUI及60／144Hz各30分鐘需另外明確授權。v5完整驗收
-  未完成前仍候選，不能覆寫v4穩定基線或沿用v4的完整認證標記。
+  已於2026-10-03通過並升格；v5不覆寫v4穩定基線，也不沿用v4的完整認證標記。
 
-Architecture Delta（第01批記錄；第02–03批實作對應部分，第04批完整動畫仍待啟動）：
+Architecture Delta（第01批記錄；第02–04批實作對應部分，第05批驗收後隨v5升格）：
 
 1. Feature壓力：v4缺乏垂直移動、彈匣與生命世代，遠端只有方塊；不能靠Client
    單獨播動畫得到權威死亡／重生或去重換彈。
@@ -224,7 +226,7 @@ Architecture Delta（第01批記錄；第02–03批實作對應部分，第04批
    Engine及公共Gateway不依賴PvP，PvP不依賴v2或Editor。
 5. Ownership：生命、動作帳本、跳躍、動畫遮罩與參數留在產品；不移入Engine。
 6. 較小替代不足：只換模型無法完成玩法；直接啟用複製的Campaign／Enemy
-   controllers會帶入不必要生命周期，且v2沒有網路重生契約或步頻校準。
+   controllers會帶入不必要生命週期，且v2沒有網路重生契約或步頻校準。
 7. Fitness：專用code／assets／tests由owner選取；只讓Client增加角色支援，
    Match無SDL／Model／Renderer；刪除／複製產品不要求公共層新增名稱分支。
 

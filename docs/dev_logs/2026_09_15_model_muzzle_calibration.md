@@ -96,7 +96,7 @@ x／y 使用正切比例轉換，z 保持不變；這使兩組投影得到相同
 
 ## 調整與部署
 
-- 調整 `assets/object_fps/data/mark23_viewmodel.json` 的 offset、rotation、
+- 調整 `assets/object_fps/data/mark23_viewmodel.json`（現位於 `assets/object_fps/weapons/mark23/viewmodel/`）的 offset、rotation、
   scale 或武器 FOV，再建置以同步部署資產並重新啟動。共用載入流程
   會重新計算槍口，無須另改 gameplay 中一組手填偏移值。
 - 更換模型或槍管幾何時，重新測量槍口的節點局部點並核對節點名稱。
@@ -172,6 +172,6 @@ ctest --test-dir build/model-neutral-check -C Debug --output-on-failure
 JSON placement／FOV 變更、無效槍口設定拒絕，以及非預設世界 FOV
 由 snapshot 傳入 presentation 相機。
 
-本次輸出的 [16:9 模型與青色槍口標記](../../build/muzzle-calibration/16x9/muzzle_model_review.png)
+本次輸出的 16:9 模型與青色槍口標記（`build/muzzle-calibration/16x9/muzzle_model_review.png`，不在 repo 中）
 供離線複核；影格位於本機 build 目錄，重新建置／清除產物後可用以上
 指令重新產生 BMP。影像是 scene readback，尚未套用曝光／Gamma 或 HUD。

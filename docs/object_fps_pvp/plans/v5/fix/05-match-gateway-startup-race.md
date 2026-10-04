@@ -3,7 +3,7 @@
 狀態：已解決（驗收器修正）。發現與修正：2026-10-02。Owner：`object_fps_pvp`。
 相關：PR #2（A1，已合併為`ff11ee3`，不含本修正）；本修正經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
 範圍：只改產品自有驗收器`build/acceptance/object_fps_pvp/`；Match／Gateway／Client程式、wire契約、
-啟動規則與門檻都不變。本修正不代表第03批結案；計次GUI短測與25案矩陣仍未執行。
+啟動規則與門檻都不變。撰寫時本修正不代表第03批結案；第03批後於2026-10-02結案驗收通過（計次GUI短測3輪、25案矩陣25／25）。
 索引與其他問題見[本目錄總覽](README.md)，時間順序見
 [守門dev_log](../../../../dev_logs/2026_10_02_pvp_v5_start_phase_guard.zh-Hant.md)。
 同批另一個驗收器修正（跨行程時鐘域）見[04](04-macos-clock-domain.md)，兩者的helper都在`run_network.py`。

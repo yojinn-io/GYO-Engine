@@ -16,18 +16,19 @@ The description/version fields are notes. `enabled` and platform flags permit se
 
 ```sh
 # Games only; no tool sources are required.
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
 # GUI editor; no game is needed.
 cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 # Local CLI-only mode.
 cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor:cli
 # A game-specific preview requires that game to be selected separately.
+# (object_fps is currently disabled; see the note below.)
 cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=object_fps_preview
 ```
 
 An explicit list uses semicolons, for example `-DGYO_TOOLS=ui_editor;object_fps_preview` (quote the entire argument in the shell). `GYO_TOOLS=AUTO` selects enabled default tools on the current platform. `dev` and `core` default to no tools, while `test` selects `AUTO`. Use separate build trees and output roots for concurrent configurations.
 
-Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. Object_FPS preview depends on game libraries and content, so it remains local. It cannot simultaneously be a fixed game-independent release tool. UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
+Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. Object_FPS preview depends on game libraries and content, so it remains local. Object_FPS is currently disabled in `projects.csv` and no longer compiles against the current engine API, so the preview cannot build until the game is migrated ([Math](architecture/plans/math-foundation/inactive_products.md), [Result](architecture/plans/result-unification/inactive_products.md)). It cannot simultaneously be a fixed game-independent release tool. UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
 
 ## Add a tool by hand
 

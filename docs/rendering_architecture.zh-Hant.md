@@ -174,8 +174,8 @@ Overlay / HUD → Present
 Windows AUTO 產生 DXIL 與 SPIR-V；Linux 產生 SPIR-V；macOS 產生 Metallib。Metallib 需要原生 macOS 與 Apple Metal tools；部署最低版本與 app 一致。Host compiler 與 target compiler 保持分離。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
-cmake --build --preset dev --target gyo_object_fps
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --build --preset dev --target gyo_object_fps_pvp
 cmake --preset core
 cmake --build --preset core
 ctest --preset core
@@ -188,7 +188,7 @@ Build cache 位於 `build/target/_build/<preset>`；可執行遊戲在 `build/ta
 
 引擎靜態連結進遊戲與工具。各遊戲獨立擁有 `bin/assets/<game>`，包含所需 builtin shader，不依賴 `assets/common` 或包外 shader 目錄。Native runtime libraries 由共通產品部署處理。
 
-Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 product/kind、executables、必要檔案與檢查。Game archive 為 `gyo-<game>-<platform>.tar.gz`，toolchain archive 為 `gyo-toolchain-<platform>.tar.gz`；各自只有一個對應根目錄。遊戲包不含 UI editor、CI scripts、tests 或 diagnostic executable。
+Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 product/kind、executables、必要檔案與檢查。Game archive 為 `gyo-<game>-<platform>.tar.gz`，toolchain archive 為 `gyo-toolchain-<platform>.tar.gz`；各自只有一個對應根目錄。遊戲宣告的 Go 服務另有 `gyo-<game>-<role>-<platform>.tar.gz`，壓縮檔一覽見[版本發佈](releasing.zh-Hant.md)第 2 節。遊戲包不含 UI editor、CI scripts、tests 或 diagnostic executable。
 
 `build/acceptance/<game>` 產生獨立 acceptance executable；`build/acceptance/common` 與 project 專屬 adapter 從產品外部執行檢查。測試暫存副本可把 probe 放在 executable 旁，使其使用完全相同的相對資產路徑；probe 不會加入正式 archive。
 
@@ -197,12 +197,14 @@ Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 produ
 
 每個支援平台固定建置 engine 與 `tools.csv` 選中的 release 工具鏈（目前為 UI Editor GUI），再加入 `projects.csv` 選中的 games。公共 GPU baseline 與各產品自行宣告的 GPU checks 分別執行。沒有遊戲仍有 toolchain 產物，可以成功 Prepare Release；任何必要工具、遊戲、驗收或平台失敗、取消或跳過，都不能準備 Draft。沒有 Engine SDK 或 source archive。工具模式與登錄見[工具指南](tool_projects.md)。
 
-Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度由外部 contract 決定。Linux toolchain job 固定使用 Xvfb／Lavapipe 驗證共通引擎 GPU 渲染，沒有 app 時也執行；遊戲 job 另執行 contract 宣告的 GPU checks。這是軟體 Vulkan 證據，不是實體 GPU 驗證。Windows/macOS hosted 結果也不能取代實機測試。
+Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度由外部 contract 決定。Linux toolchain job 固定使用 Xvfb／Lavapipe 驗證共通引擎 GPU 渲染，沒有 app 時也執行；遊戲 job 另執行 contract 宣告的 GPU checks。這是軟體 Vulkan 證據，不是實體 GPU 驗證。Windows/macOS hosted 結果也不能取代實機測試。觸發條件、驗證等級 L1–L4、平台（含 macos-x64）、試用套件、master snapshot 與 release train 以[版本發佈](releasing.zh-Hant.md)第 3、5、7 節為準。
 
 Object_FPS 的 startup/headless/GPU probe 位於獨立 `gyo_<game>_acceptance`，不注入遊戲 `main`。遊戲執行檔保留正常遊戲操作與 `--gpu-driver`；診斷、截圖、互動 viewmodel preview 由外部 tests／design tool 擁有。詳見 [Object_FPS 驗收](object_fps/acceptance.zh-Hant.md)及[版本發佈](releasing.zh-Hant.md)。
 
 <a id="r10"></a>
 ## 10. 驗證狀態、限制與參考
+
+> **歷史紀錄（凍結於 2026-09-16）**：本節是 CI 改版前的本機與 hosted 證據，不再更新。表中「待新 CI」「尚未確認」等未結項目已由改版後的 CI 流程取代，目前狀態見[版本發佈](releasing.zh-Hant.md)。下列 `build/` 底下的日誌只存在於當時的開發機，不在 repo 中。
 
 以下保留 2026-09-16 舊建置配置的歷史證據，未用來宣稱本次 CSV／app 矩陣通過。舊 Object_FPS `NONE` 配置已由新的必要 GPU 宣告取代；目前選中此 app 並設定 `NONE` 會配置失敗。
 

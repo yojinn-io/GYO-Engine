@@ -6,10 +6,10 @@
 
 ## 經過
 
-1. 確認 math-foundation 計劃全部合併（#24–#27，後續 #28、#29），開工條件滿足；從 `eeebc1e` 建立分支。
+1. 確認 math-foundation 計畫全部合併（#24–#27，後續 #28、#29），開工條件滿足；從 `eeebc1e` 建立分支。
 2. 以 ultracode 重新盤點（3 個盤點 agent 加 1 次對抗檢查），prompt 帶 commit hash，不沿用規劃階段的快取。
 3. 在 `eeebc1e` 的原狀取得基線：core 19／19、test 46／46、依賴邊 144 條、29 檔 syntax-only 全部通過。建置期間把新測試暫存，確保基線未受影響。
-4. 盤點與對抗檢查發現的計劃校正：
+4. 盤點與對抗檢查發現的計畫校正：
    - PR 的 L1 本來就含 MSVC 與 clang；只有 core preset 限定 Linux。
    - NotFound 改查下一個 mount 的邏輯在 `Vfs.hpp`，characterization 改為 `VfsTests`。
    - #28 在 `Math::Clamp` 用了 `<cassert>`。
@@ -19,7 +19,7 @@
    - `Math::Clamp` 改用永遠生效的 `GYO_ASSERT`。
    - API 誤用改成 Assert，只保留 SdlGpu 的例外。
 6. 新增 characterization：Vfs 的 Stat、讀取用 Open、Exists 的 NotFound overlay 規則；AssetManager 非同步與同步的 `KeepOldIfAny` 失敗。
-7. 建立計劃目錄（README、PLAN、HANDOFF、`baseline/`、`scripts/result_audit.py`），分類表 173 列、資料驗證型 API 16 個。
+7. 建立計畫目錄（README、PLAN、HANDOFF、`baseline/`、`scripts/result_audit.py`），分類表 173 列、資料驗證型 API 16 個。
 8. 本機驗收：core 19／19、test 46／46；`engine_tests` 69 個 case 全部通過；nodiscard 警告 0。
 
 ## 留給下一步
