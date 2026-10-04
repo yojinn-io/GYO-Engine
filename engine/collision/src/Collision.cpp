@@ -1,11 +1,11 @@
 #include "engine/collision/Collision.hpp"
 
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
 #include <array>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 
 namespace Engine::Collision {
@@ -18,27 +18,19 @@ void ValidateQuery(
     const Math::Vec3 direction,
     const float maximumDistance,
     const float sweepRadius) {
-    if (!IsFinite(origin) || !IsFinite(direction)) {
-        throw std::invalid_argument("collision query vectors must be finite");
-    }
-    if (!std::isfinite(maximumDistance) || maximumDistance < 0.0f) {
-        throw std::invalid_argument("collision query distance must be finite and non-negative");
-    }
-    if (!std::isfinite(sweepRadius) || sweepRadius < 0.0f) {
-        throw std::invalid_argument("collision query sweep radius must be finite and non-negative");
-    }
+    GYO_ASSERT(IsFinite(origin) && IsFinite(direction));
+    GYO_ASSERT(std::isfinite(maximumDistance) && !(maximumDistance < 0.0f));
+    GYO_ASSERT(std::isfinite(sweepRadius) && !(sweepRadius < 0.0f));
+    // A zero direction has no ray.
     const float directionLength = Length(direction);
-    if (!std::isfinite(directionLength) || directionLength <= kEpsilon) {
-        throw std::invalid_argument("collision query direction must be non-zero");
-    }
+    GYO_ASSERT(std::isfinite(directionLength) && !(directionLength <= kEpsilon));
 }
 
 void ValidateCapsule(const VerticalCapsule& capsule) {
-    if (!IsFinite(capsule.feet) || !std::isfinite(capsule.height) || !std::isfinite(capsule.radius) ||
-        capsule.radius <= 0.0f || capsule.height < capsule.radius * 2.0f) {
-        throw std::invalid_argument(
-            "collision capsule must be finite, positive, and at least two radii high");
-    }
+    // Finite, positive and at least two radii high.
+    GYO_ASSERT(!(!IsFinite(capsule.feet) || !std::isfinite(capsule.height) ||
+                 !std::isfinite(capsule.radius) || capsule.radius <= 0.0f ||
+                 capsule.height < capsule.radius * 2.0f));
 }
 
 [[nodiscard]] std::optional<float> RaySphere(
@@ -174,11 +166,10 @@ std::optional<float> RaycastAabb(
     const Math::Vec3 origin = ray.origin;
     const Math::Vec3 direction = ray.direction;
     ValidateQuery(origin, direction, maximumDistance, 0.0f);
-    if (!IsFinite(bounds.minimum) || !IsFinite(bounds.maximum) ||
-        bounds.minimum.x > bounds.maximum.x || bounds.minimum.y > bounds.maximum.y ||
-        bounds.minimum.z > bounds.maximum.z) {
-        throw std::invalid_argument("collision AABB must be finite with ordered bounds");
-    }
+    // Finite with ordered bounds.
+    GYO_ASSERT(!(!IsFinite(bounds.minimum) || !IsFinite(bounds.maximum) ||
+                 bounds.minimum.x > bounds.maximum.x || bounds.minimum.y > bounds.maximum.y ||
+                 bounds.minimum.z > bounds.maximum.z));
     return RayAabb(origin, Normalize(direction), maximumDistance, bounds.minimum, bounds.maximum);
 }
 
@@ -196,15 +187,11 @@ std::optional<float> SweepSphereAgainstCapsule(
     const Math::Segment& path, const float sweepRadius, const VerticalCapsule& capsule) {
     const Math::Vec3 start = path.start;
     const Math::Vec3 end = path.end;
-    if (!IsFinite(start) || !IsFinite(end) || !std::isfinite(sweepRadius) || sweepRadius < 0.0f) {
-        throw std::invalid_argument("collision sweep endpoints/radius must be finite with non-negative radius");
-    }
+    GYO_ASSERT(IsFinite(start) && IsFinite(end) && std::isfinite(sweepRadius) && !(sweepRadius < 0.0f));
     ValidateCapsule(capsule);
     const Math::Vec3 delta = end - start;
     const float length = Length(delta);
-    if (!std::isfinite(length)) {
-        throw std::invalid_argument("collision sweep length must be finite");
-    }
+    GYO_ASSERT(std::isfinite(length));
     if (length <= kEpsilon) {
         return RayCapsuleUnchecked(start, {0.0f, 1.0f, 0.0f}, 0.0f, capsule, sweepRadius);
     }

@@ -47,12 +47,13 @@ static_assert(std::is_aggregate_v<Aabbd>);
     return {Min(box.minimum, point), Max(box.maximum, point)};
 }
 
-// Closest point in the box (the point itself when inside).
-[[nodiscard]] inline Vec3 ClosestPoint(const Vec3 point, const Aabb& box) noexcept {
+// Closest point in the box (the point itself when inside). The box must be
+// ordered (asserts through Clamp).
+[[nodiscard]] inline Vec3 ClosestPoint(const Vec3 point, const Aabb& box) {
     return Clamp(point, box.minimum, box.maximum);
 }
 
-[[nodiscard]] inline Vec3d ClosestPoint(const Vec3d point, const Aabbd& box) noexcept {
+[[nodiscard]] inline Vec3d ClosestPoint(const Vec3d point, const Aabbd& box) {
     return Clamp(point, box.minimum, box.maximum);
 }
 

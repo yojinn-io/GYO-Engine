@@ -47,7 +47,8 @@ static_assert(std::is_aggregate_v<Vec2>);
 
 [[nodiscard]] inline Vec2 Min(const Vec2 a, const Vec2 b) noexcept { return {Min(a.x, b.x), Min(a.y, b.y)}; }
 [[nodiscard]] inline Vec2 Max(const Vec2 a, const Vec2 b) noexcept { return {Max(a.x, b.x), Max(a.y, b.y)}; }
-[[nodiscard]] inline Vec2 Clamp(const Vec2 v, const Vec2 lo, const Vec2 hi) noexcept {
+// Per component; each lo/hi pair must satisfy Clamp's precondition (asserts).
+[[nodiscard]] inline Vec2 Clamp(const Vec2 v, const Vec2 lo, const Vec2 hi) {
     return {Clamp(v.x, lo.x, hi.x), Clamp(v.y, lo.y, hi.y)};
 }
 

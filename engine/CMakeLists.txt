@@ -1,5 +1,7 @@
-# Math is the lowest engine layer: every module, GYO::Engine included, may
-# link it.
+# Base is the lowest engine layer (failure handling: Assert, Result, Error);
+# Math sits directly above it. Every module, GYO::Engine included, may link
+# either.
+add_subdirectory(base)
 add_subdirectory(math)
 
 add_library(engine STATIC)
@@ -7,7 +9,6 @@ add_library(GYO::Engine ALIAS engine)
 target_compile_features(engine PUBLIC cxx_std_20)
 
 target_include_directories(engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/base/include
     ${CMAKE_CURRENT_SOURCE_DIR}/io/include
     ${CMAKE_CURRENT_SOURCE_DIR}/asset/include
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime/include
@@ -18,7 +19,6 @@ target_sources(engine
     # runtime
     runtime/src/RuntimeLoop.cpp
 
-    # base
     # io/fs
     io/src/fs/DirectoryIterator.cpp
     io/src/fs/MountTable.cpp
@@ -57,7 +57,7 @@ target_sources(engine
     asset/src/NativeFileAssetSource.cpp
 )
 target_link_libraries(engine
-    PUBLIC GYO::Math
+    PUBLIC GYO::Base GYO::Math
     PRIVATE nlohmann_json::nlohmann_json
 )
 

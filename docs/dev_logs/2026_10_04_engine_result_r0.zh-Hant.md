@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R0：任務校正
 
 日期：2026-10-04。Owner：Engine（`engine/base`），連帶測試與計畫紀錄。
-狀態：本機驗收完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 待 CI（分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
+狀態：完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 已合併（`3b9765e`），L1 四列通過（分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r0-任務校正)，本文只記經過。
 
 ## 經過

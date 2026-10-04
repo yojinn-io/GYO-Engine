@@ -1,3 +1,5 @@
+add_subdirectory(support)
+add_subdirectory(base)
 add_subdirectory(collision)
 add_subdirectory(core)
 add_subdirectory(input)

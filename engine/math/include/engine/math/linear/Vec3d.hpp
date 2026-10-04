@@ -39,7 +39,8 @@ static_assert(std::is_aggregate_v<Vec3d>);
 [[nodiscard]] inline double LengthSquared(const Vec3d a) noexcept { return a.x * a.x + a.y * a.y + a.z * a.z; }
 [[nodiscard]] inline double Length(const Vec3d a) noexcept { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
 
-[[nodiscard]] inline Vec3d Clamp(const Vec3d v, const Vec3d lo, const Vec3d hi) noexcept {
+// Per component; each lo/hi pair must satisfy Clamp's precondition (asserts).
+[[nodiscard]] inline Vec3d Clamp(const Vec3d v, const Vec3d lo, const Vec3d hi) {
     return {Clamp(v.x, lo.x, hi.x), Clamp(v.y, lo.y, hi.y), Clamp(v.z, lo.z, hi.z)};
 }
 

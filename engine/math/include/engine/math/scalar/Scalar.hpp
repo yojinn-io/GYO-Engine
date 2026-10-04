@@ -1,7 +1,8 @@
 #pragma once
 
-#include <cassert>
 #include <type_traits>
+
+#include "engine/base/Assert.hpp"
 
 namespace Engine::Math {
 
@@ -33,11 +34,12 @@ template <Arithmetic T>
     return a < b ? b : a;
 }
 
-// Requires !(hi < lo), as std::clamp does; debug builds assert it. A NaN
-// value is returned unchanged.
+// Requires !(hi < lo), as std::clamp does; a violation is a Programmer Error
+// (GYO_ASSERT, every build). Not noexcept because it asserts. A NaN value is
+// returned unchanged.
 template <Arithmetic T>
-[[nodiscard]] constexpr T Clamp(const T value, const T lo, const T hi) noexcept {
-    assert(!(hi < lo) && "Math::Clamp requires lo <= hi");
+[[nodiscard]] constexpr T Clamp(const T value, const T lo, const T hi) {
+    GYO_ASSERT(!(hi < lo));
     return value < lo ? lo : hi < value ? hi : value;
 }
 

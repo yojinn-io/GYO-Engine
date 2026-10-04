@@ -60,7 +60,8 @@ static_assert(std::is_aggregate_v<Vec4>);
 [[nodiscard]] inline Vec4 Max(const Vec4 a, const Vec4 b) noexcept {
     return {Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z), Max(a.w, b.w)};
 }
-[[nodiscard]] inline Vec4 Clamp(const Vec4 v, const Vec4 lo, const Vec4 hi) noexcept {
+// Per component; each lo/hi pair must satisfy Clamp's precondition (asserts).
+[[nodiscard]] inline Vec4 Clamp(const Vec4 v, const Vec4 lo, const Vec4 hi) {
     return {Clamp(v.x, lo.x, hi.x), Clamp(v.y, lo.y, hi.y), Clamp(v.z, lo.z, hi.z), Clamp(v.w, lo.w, hi.w)};
 }
 

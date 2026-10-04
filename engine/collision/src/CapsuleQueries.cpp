@@ -1,12 +1,12 @@
 #include "engine/collision/Collision.hpp"
 
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 
 namespace Engine::Collision {
 namespace {
@@ -15,30 +15,22 @@ namespace {
 using Math::Vec3d;
 constexpr double kTolerance = 1.0e-7;
 void Validate(const VerticalCapsule &c) {
-    if (!Math::IsFinite(c.feet) || !std::isfinite(c.height) || !std::isfinite(c.radius) ||
-        c.radius <= 0.0f || c.height < 2.0 * c.radius) {
-        throw std::invalid_argument(
-            "collision capsule must be finite, positive, and at least two radii high");
-    }
+    // Finite, positive and at least two radii high.
+    GYO_ASSERT(!(!Math::IsFinite(c.feet) || !std::isfinite(c.height) || !std::isfinite(c.radius) ||
+                 c.radius <= 0.0f || c.height < 2.0 * c.radius));
 }
 void Validate(const Math::Capsule &c) {
-    if (!Math::IsFinite(c.segmentStart) || !Math::IsFinite(c.segmentEnd) || !std::isfinite(c.radius) ||
-        c.radius <= 0.0f) {
-        throw std::invalid_argument(
-            "collision capsule endpoints must be finite and radius positive");
-    }
+    // Finite endpoints and a positive radius.
+    GYO_ASSERT(!(!Math::IsFinite(c.segmentStart) || !Math::IsFinite(c.segmentEnd) ||
+                 !std::isfinite(c.radius) || c.radius <= 0.0f));
 }
 void Validate(const Math::Aabb &b) {
-    if (!Math::IsFinite(b.minimum) || !Math::IsFinite(b.maximum) || b.minimum.x > b.maximum.x ||
-        b.minimum.y > b.maximum.y || b.minimum.z > b.maximum.z) {
-        throw std::invalid_argument("collision AABB must be finite with ordered bounds");
-    }
+    // Finite with ordered bounds.
+    GYO_ASSERT(!(!Math::IsFinite(b.minimum) || !Math::IsFinite(b.maximum) || b.minimum.x > b.maximum.x ||
+                 b.minimum.y > b.maximum.y || b.minimum.z > b.maximum.z));
 }
 void ValidateSweep(Math::Vec3 start, Math::Vec3 end, float radius) {
-    if (!Math::IsFinite(start) || !Math::IsFinite(end) || !std::isfinite(radius) || radius < 0.0f) {
-        throw std::invalid_argument(
-            "collision sweep endpoints/radius must be finite with non-negative radius");
-    }
+    GYO_ASSERT(Math::IsFinite(start) && Math::IsFinite(end) && std::isfinite(radius) && !(radius < 0.0f));
 }
 
 // Solve |offset + velocity*t|^2 == radius^2. Used for both cylinder
@@ -222,10 +214,8 @@ std::optional<float> RaycastCapsule(const Math::Ray &ray, float maximumDistance,
     Validate(capsule);
     ValidateSweep(origin, direction, sweepRadius);
     const double length = Length(Math::ToVec3d(direction));
-    if (!std::isfinite(maximumDistance) || maximumDistance < 0.0f || length <= 1.0e-6) {
-        throw std::invalid_argument(
-            "collision ray needs a non-zero direction and finite non-negative distance");
-    }
+    // A non-zero direction and a finite, non-negative distance.
+    GYO_ASSERT(!(!std::isfinite(maximumDistance) || maximumDistance < 0.0f || length <= 1.0e-6));
     const auto hit = RayCapsule(Math::ToVec3d(origin), Math::ToVec3d(direction) * (1.0 / length), maximumDistance,
                                 Math::ToVec3d(capsule.segmentStart), Math::ToVec3d(capsule.segmentEnd),
                                 static_cast<double>(capsule.radius) + sweepRadius);
@@ -274,8 +264,7 @@ std::optional<Contact> SweepVerticalCapsuleAgainstAabb(const VerticalCapsule &ca
                                                        Math::Vec3 displacement, const Math::Aabb &bounds) {
     Validate(capsule);
     Validate(bounds);
-    if (!Math::IsFinite(displacement))
-        throw std::invalid_argument("collision displacement must be finite");
+    GYO_ASSERT(Math::IsFinite(displacement));
     auto c = Shape(capsule);
     const Vec3d delta = Math::ToVec3d(displacement);
     if (Dot(delta, delta) == 0.0)
@@ -299,8 +288,7 @@ std::optional<Contact> SweepVerticalCapsuleAgainstCapsule(const VerticalCapsule 
                                                           const VerticalCapsule &target) {
     Validate(capsule);
     Validate(target);
-    if (!Math::IsFinite(displacement))
-        throw std::invalid_argument("collision displacement must be finite");
+    GYO_ASSERT(Math::IsFinite(displacement));
     auto c = Shape(capsule);
     const auto t = Shape(target);
     const Vec3d delta = Math::ToVec3d(displacement);

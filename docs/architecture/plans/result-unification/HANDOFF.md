@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 本機驗收完成，PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 本機驗收完成，PR 待開。**
 
 ## 閱讀入口
 
@@ -30,7 +30,7 @@
 
 ## R0 任務校正
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
+狀態：**完成**。PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 於 2026-10-04 合併為 `3b9765e`，L1 四列與 CI gate 通過（分支 `claude/result-unification-r0`，基準 `eeebc1e`）。
 環境：Intel Mac（x86_64），Apple clang 21；cmake／ninja 以絕對路徑呼叫。
 
 ### 盤點方式
@@ -95,5 +95,54 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 
 ### 未結事項
 
-- PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 的 L1 四列結果。
 - `AssetError.hpp:42-67` 被註解掉的舊 struct 會讓 `error_code_none` 多算 3 處；R3 刪除它。
+
+## R1 概念文件與 Assert
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r1`，基準 `3b9765e`），PR 待開。
+
+### 變更
+
+- **`GYO::Base`**：新增 `engine/base/CMakeLists.txt`（INTERFACE、header-only、只依賴標準函式庫）。`engine/CMakeLists.txt` 先 `add_subdirectory(base)` 再 math；`engine` 的 `base/include` include 目錄改成 `PUBLIC GYO::Base`。`GYO::Math` 以 INTERFACE、`GYO::Collision` 以 PRIVATE 連它。shader host 仍以路徑 include `Sha256.hpp`，沒有變更。
+- **`Assert.hpp`**：`GYO_ASSERT`、`AssertionFailure`（不繼承 `std::exception`）、`SetAssertionHandler`、`DefaultAssertionHandler`、`ReportAssertionFailure`。handler 存放在 `inline constinit std::atomic`；重入 guard 是 `thread_local` 旗標加 RAII scope，handler 丟例外時也會復原。巨集是 variadic，只對 `__VA_ARGS__` 做字串化與原地展開，不轉送給其他巨集。
+- **改用 Assert 的地方**：
+  - Collision 15 處（`Collision.cpp` 8、`CapsuleQueries.cpp` 7）。條件寫成原本 throw 條件的否定，NaN 的判定與原本完全相同。只放在非 noexcept 的 `Validate*` 與公開查詢。
+  - `FixedTickRuntime` 2 處，檢查仍在任何狀態變更之前（`FixedTickRuntimeTests` 的 `TickId()==0` 照樣通過）。
+  - `Math::Clamp`：`<cassert>` 改成 `GYO_ASSERT` 並拿掉 `noexcept`。
+  - Result 的 `value()`／`error()`（共 11 個存取子）：讀取未持有的一方改成 `GYO_ASSERT`，內部改用 `get_if`；`Result<void,E>::value()` 拿掉 `noexcept`。
+- **Lakos rule 的延伸**（計劃原本只寫 `Clamp`）：Vec2／Vec3／Vec3d／Vec4 的 `Clamp` 與 `ClosestPoint(point, Aabb)`／`(point, Aabbd)` 會把呼叫端給的上下界傳給 `Clamp`，所以一併拿掉 `noexcept`。Quaternion、Segment、ColorSpace 傳入的是常數上下界，不可能違反，維持 noexcept。
+- **`CatalogParser.cpp:14`**：`catch (...)` 收窄為 `catch (const std::exception&)`。
+- **測試支援**：`tests/common/support/AssertTestSupport.hpp` 與 INTERFACE target `gyo_test_support`（`ScopedAssertionHandler`、`GYO_CHECK_ASSERTS`、MSVC 上停用 abort 對話框）。計劃提到的 doctest exception translator 沒有加：預設 handler 在 `GYO_CHECK_ASSERTS` 之外仍是 abort，`AssertionFailure` 不會逃到 doctest；header 中的 translator 也會在每個 TU 重複註冊。
+- **測試**：
+  - 新增 `gyo_base_tests`（`AssertTests.cpp`、`ResultTests.cpp`），涵蓋條件只求值一次、含逗號的條件式、失敗位置、同一個 case 連續失敗、handler 的替換與還原，以及 Result 讀取未持有一方會觸發 Assert。另有一個反向對照：`GYO_CHECK_ASSERTS` 在沒有觸發 Assert 時判定失敗（doctest `should_fail`）。
+  - 新增 abort probe：`gyo_assert_abort_probe` 加 `AssertAbortProbe.cmake`，三種模式（預設 handler、handler 返回、handler 內再失敗），由 `gyo_base.assert_abort.{default,returning,nested}` 執行。
+  - 改寫：`CollisionTests` 12 處與 `FixedTickRuntimeTests` 5 處 `CHECK_THROWS_AS(..., std::invalid_argument)` 改成 `GYO_CHECK_ASSERTS`。
+  - `gyo_math_tests` 新增 `Clamp`、vector `Clamp`、`ClosestPoint(Aabb)` 違反前提的測試，以及相等上下界和 NaN 上下界不觸發的確認。
+- **文件**：新增 `docs/architecture/error-handling.md`；`docs/architecture.md` 的依賴表加入 `GYO::Base`，並加入 Architecture Delta 段落；`math.md` 改為依賴 Base，並寫入 `Clamp` 的新行為；`creating_apps.md` 的 public target 清單加入 `GYO::Base`。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過（R0 的 19 個加上 `gyo_base_tests` 與 3 個 abort probe） |
+| test preset | 50／50 通過（46 加上同樣的 4 個） |
+| abort probe | 三種模式都以 abort 結束（本機為 `Subprocess aborted`），stderr 含條件式原文 |
+| 依賴圖 | 與 R0 相比只多出計劃列出的邊：`engine`、`gyo_math`、`gyo_collision` 到 `gyo_base`；`gyo_test_support` 到 `gyo_base` 與 doctest；`gyo_base_tests`、`engine_tests`、`gyo_collision_tests`、`gyo_math_tests` 到 `gyo_test_support`；probe 到 `gyo_base`。`gyo_base` 沒有對外的邊 |
+| 29 檔 syntax-only | 29／29 PASS |
+| 稽核（與 R0 比對） | engine 的 `throw_logic` 17→0、`cassert` 2→0、`gyo_assert` 0→29；tests_common 的 `throws_test` 17→0。tests_common 的 Ok／Err 增加（35／23）來自 R0 的 VfsTests 與本批的 ResultTests，R2 一起改寫 |
+| 警告 | nodiscard 0；第一方警告與 R0 相同（只有既有的 `ModelTests.cpp:29` braced-scalar-init） |
+| pvp | `.cpu`、`.start_phase_record`、`.presentation_cpu` 不改就通過 |
+
+MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證。
+
+### 依賴 collision 例外做內容驗證的未編譯檔（R1 之後這些路徑會 abort）
+
+- `apps/object_fps_pvp/src/Gameplay/Player/PlayerController.cpp:43-62`：try 包住 `CanPlaceCharacterBody`（`:46`），catch 在 `:55`、`:59`（後者是 `catch (...)`）。
+- `apps/object_fps_pvp/src/Gameplay/Enemy/EnemySystem.cpp:584-620`：try 包住 `CanPlaceCharacterBody`（`:595`）與字串 E 的 `Play`（`:608`），catch 在 `:615`、`:618`。
+- 會順帶吞掉例外的 catch-all：`src/Game/GameSession.cpp:366-372`、`570-574`。
+
+這些檔案從未編譯；重新啟用時，內容驗證應移到載入時進行。
+
+### 未結事項
+
+- 開 PR 並取得 L1 四列結果（MSVC 的前處理器與 abort 行為）。

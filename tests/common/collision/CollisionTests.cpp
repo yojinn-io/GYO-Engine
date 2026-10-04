@@ -3,7 +3,8 @@
 #include "engine/collision/Collision.hpp"
 #include <cmath>
 #include <limits>
-#include <stdexcept>
+
+#include "AssertTestSupport.hpp"
 
 using namespace Engine::Collision;
 using Engine::Math::Aabb;
@@ -38,12 +39,12 @@ TEST_CASE("sphere sweeps report first fraction including stationary overlap") {
 
 TEST_CASE("primitive queries reject malformed input") {
     const VerticalCapsule valid{{0.0f, 0.0f, 0.0f}, 1.8f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {}}, 1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, -1.0f, valid)), std::invalid_argument);
+    GYO_CHECK_ASSERTS(RaycastCapsule({{}, {}}, 1.0f, valid));
+    GYO_CHECK_ASSERTS(SweepSphereAgainstCapsule({{}, {}}, -1.0f, valid));
     const VerticalCapsule bad{{0.0f, (std::numeric_limits<float>::quiet_NaN)(), 0.0f}, 1.8f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, 0.0f, bad)), std::invalid_argument);
+    GYO_CHECK_ASSERTS(SweepSphereAgainstCapsule({{}, {}}, 0.0f, bad));
     const VerticalCapsule tooShort{{}, 0.1f, 0.25f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, tooShort)), std::invalid_argument);
+    GYO_CHECK_ASSERTS(RaycastCapsule({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, tooShort));
 }
 
 TEST_CASE("AABB ray reports normalized distance and immediate overlap") {
@@ -55,7 +56,7 @@ TEST_CASE("AABB ray reports normalized distance and immediate overlap") {
     REQUIRE(inside);
     CHECK(*inside == 0.0f);
     CHECK_FALSE(RaycastAabb({{-1.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 2.0f, box));
-    CHECK_THROWS_AS(static_cast<void>(RaycastAabb({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, {{1.0f,0.0f,0.0f}, {}})), std::invalid_argument);
+    GYO_CHECK_ASSERTS(RaycastAabb({{}, {1.0f, 0.0f, 0.0f}}, 1.0f, {{1.0f,0.0f,0.0f}, {}}));
 }
 
 TEST_CASE("arbitrary capsules support rotated axes, end caps, and degenerate spheres") {
@@ -239,13 +240,13 @@ TEST_CASE("capsule pair overlap has finite normal even when center axes coincide
 TEST_CASE("extended queries reject invalid geometry and nonfinite movement") {
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const Capsule valid{{0,0,0},{1,1,0},0.2f};
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {}}, 1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(RaycastCapsule({{}, {1,0,0}}, -1.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {nan,0,0}}, 0.0f, valid)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepSphereAgainstCapsule({{}, {}}, 0.0f, Capsule{{},{},0})), std::invalid_argument);
+    GYO_CHECK_ASSERTS(RaycastCapsule({{}, {}}, 1.0f, valid));
+    GYO_CHECK_ASSERTS(RaycastCapsule({{}, {1,0,0}}, -1.0f, valid));
+    GYO_CHECK_ASSERTS(SweepSphereAgainstCapsule({{}, {nan,0,0}}, 0.0f, valid));
+    GYO_CHECK_ASSERTS(SweepSphereAgainstCapsule({{}, {}}, 0.0f, Capsule{{},{},0}));
     const VerticalCapsule upright{{},1.8f,0.25f};
     const Aabb box{{0,0,0},{1,1,1}};
-    CHECK_THROWS_AS(static_cast<void>(SweepVerticalCapsuleAgainstAabb(upright, {nan,0,0}, box)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(SweepVerticalCapsuleAgainstCapsule(upright, {}, {{},0.1f,0.25f})), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(OverlapVerticalCapsuleAabb(upright, {{1,0,0},{0,1,1}})), std::invalid_argument);
+    GYO_CHECK_ASSERTS(SweepVerticalCapsuleAgainstAabb(upright, {nan,0,0}, box));
+    GYO_CHECK_ASSERTS(SweepVerticalCapsuleAgainstCapsule(upright, {}, {{},0.1f,0.25f}));
+    GYO_CHECK_ASSERTS(OverlapVerticalCapsuleAabb(upright, {{1,0,0},{0,1,1}}));
 }
