@@ -160,6 +160,7 @@ trace的時間戳記比較。兩端在macOS讀的不是同一個時鐘：
 
 - macOS上16個受影響案例只跑過`upstream-250ms`一案且不計次；25案矩陣依使用者決定（MVP技術驗證）暫緩，
   未在macOS完整執行，第03批未結案。日後恢復結案時，矩陣會一併覆蓋本修正。
+  後續：2026-10-02第03批結案驗收的25案矩陣在macOS 25／25通過，已涵蓋本修正。
 - AST守門只涵蓋`SITES`表列的三個模組。其他模組（如`run_gameplay_gui.py`、`run_native_window.py`、
   `recovery_probe.py`、`impaired_network.py`、`run_timing.py`）仍用Python時鐘做純Python用途（截止時間、延遲排程、
   事件標籤）；若日後要與C++時間比較，須改用`steady_clock_ns`並加入`SITES`。

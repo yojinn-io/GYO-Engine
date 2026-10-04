@@ -1,10 +1,11 @@
 # 03 A1 對偶發掉幀敏感（Starvation 重設；55–58 FPS vsync）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**（原為已知問題；根因與處理見下節「根因更新」及[08](./08-a1-clock-drift.md)）。Owner：`object_fps_pvp`。
+狀態：**已解決（已被[08](./08-a1-clock-drift.md)取代：2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**（原為已知問題；根因與處理見下節「根因更新」及[08](./08-a1-clock-drift.md)）。Owner：`object_fps_pvp`。
 相關：A1 由 PR #2（`claude/project-thread-lv6bg5`，`d74830c`，合併為 `ff11ee3`）引入；
 低幀率守門 v3 與下文引用的測例經 PR #3（`claude/pvp-v5-start-phase-guard`）合併為 `9cd7f26`。
-第03批仍未結案（計次 GUI 可見延遲輪與 25 案矩陣依使用者決定未執行），第04批暫停。
-下列方案只是評估與 scratch 原型，沒有進產品，也不代表已排程。
+歷史（撰寫時）：第03批未結案（計次 GUI 可見延遲輪與 25 案矩陣依使用者決定未執行），第04批暫停；
+下列方案只是評估與 scratch 原型，沒有進產品。實際採用的修正見[08](./08-a1-clock-drift.md)。
+後續：第03批2026-10-02結案驗收通過；第04批（PR #14，`cef1b39`）、第05批（PR #15，`f97beb5`）完成，v5於2026-10-03升格穩定基線（[STABLE_BASELINE](../STABLE_BASELINE.md)，PR #16，`58346ca`）。
 另見 [01 低幀率守門](./01-a1-low-fps-regression.md)、[02 停頓重新播種取消A1](./02-a1-cancelled-by-stall-reseed.md)、
 [06 視窗干擾與補跑規則](./06-gui-window-interference-and-rerun-rule.md)、[07 啟動相位診斷](./07-start-phase-diagnostics.md)、
 [修正索引](./README.md)、[A1 dev_log](../../../../dev_logs/2026_10_01_pvp_v5_start_phase.zh-Hant.md)。
@@ -280,6 +281,8 @@ python3 build/acceptance/object_fps_pvp/run_timing.py --gui --short --report-onl
 
 ## 解決方案
 
+後續（2026-10-02）：已由[08](./08-a1-clock-drift.md)的token bucket worker＋持續相位追蹤解決（根因見上「根因更新」）；本節以下為撰寫時的評估，保留作為歷史。
+
 未實作。使用者決定列為已知問題。以下每一項都會改變已批准的參數或政策，須使用者批准，不代表已排程。
 
 ### 評估過的方案
@@ -322,7 +325,7 @@ constexpr double MissedRefreshSeconds = 1.5 * MovementTickSeconds;   // K = 1（
 
 ## 驗證
 
-- 本問題未修正，沒有修正驗證。
+- 本問題未修正，沒有修正驗證（撰寫時；修正後的驗證見[08](./08-a1-clock-drift.md)）。
 - 現行行為由「如何復現」A 的四個測例釘選，屬於 `gyo_object_fps_pvp_tests`
   （133 cases／1,418,939 assertions 全通過；CTest `object_fps_pvp.cpu`；`ctest -L pvp` 16／16）。
 - 數字來源：review 模擬（`rv2/out/`）；S2 的 17 次重設／108 個 Held 為實作者在釘選測例設定下的計數。
@@ -331,6 +334,8 @@ constexpr double MissedRefreshSeconds = 1.5 * MovementTickSeconds;   // K = 1（
   且移動方未對齊；這不能證明 S1／S2 不存在，只說明本機沒有觀察到。
 
 ## 殘留風險與後續
+
+以下為A1時的殘留風險，A1刪除後不再適用；現行設計見[08](./08-a1-clock-drift.md)。
 
 - 會掉 refresh 的 60Hz vsync 顯示（包括其他機器）上，對齊啟動可能偶發 starvation 重設；
   計次 GUI 輪若在這類環境執行，可能因此失去乾淨跑次資格。

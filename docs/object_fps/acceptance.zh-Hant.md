@@ -8,6 +8,8 @@
 
 共通驗收 runner 在 `build/acceptance/common`，Object_FPS 的 GPU／內容檢查在 `build/acceptance/object_fps`。正式 game archive 不含這些程式、Python scripts 或 probe。
 
+> **目前狀態（2026-10-04）**：`object_fps` 在 `engine/config/projects.csv` 為停用，且在 Math 與 Result 統一後已無法以目前的 engine API 編譯。重新啟用前須先依 [Math 遷移清單](../architecture/plans/math-foundation/inactive_products.md)與 [Result 遷移清單](../architecture/plans/result-unification/inactive_products.md)遷移；下列指令以完成遷移為前提。
+
 先在 `engine/config/projects.csv` 啟用遊戲與目標平台，再明確建立驗證配置：
 
 ```sh

@@ -14,7 +14,7 @@
    - 刪除 7 個私有矩陣 helper。World 改用 `ComposeEulerXYZ`；View 與 Sprite 改為 column-vector 的鏡像鏈；投影改用 `MakePerspective` 與 `MakeOrthographicPixels`。
    - WVP 維持 `(Proj·View)·World` 的結合方式；上傳時以 `ToShaderMatrix` 依序 memcpy 16 個 float，不轉置。
    - 改寫後 memcmp 的 20410 個斷言逐位元相同，數值漂移為 0。
-3. 使用者決定本計劃全程使用 ultracode：底層概念模型的變更，而且已有大量實作依賴它。
+3. 使用者決定本計畫全程使用 ultracode：底層概念模型的變更，而且已有大量實作依賴它。
 4. ultracode 驗證：
    - **靈敏度檢查**：在 scratch 複本中做 8 種刻意的錯誤改動，全部被 memcmp 抓到。其中包括數學上等價、只改變捨入順序的 WVP 重新結合，以及只差 1 ulp 的 `xScale` 算法。
    - **對抗式審查**：只有 3 個 minor。Legacy 的來源標註已更正；測試替身重複的問題，改為把 memcmp 併入 `RendererTests.cpp`、重用既有替身；文件已補上。

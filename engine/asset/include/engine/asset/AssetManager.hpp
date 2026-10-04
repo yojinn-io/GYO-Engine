@@ -69,7 +69,7 @@ namespace Engine::Asset {
         // KeepOldIfAny failure keeps previous handles Ready; the async candidate
         // is Failed. Sync fallback returns the previous Ready handle instead.
         // Compatible queued requests merge. Conflicting requests return
-        // RequestInProgress. Nonzero priority/TTL return UnsupportedRequest.
+        // RequestInProgress. Nonzero priority/TTL is API misuse (GYO_ASSERT).
         // Auto may return the published Ready asset while a reload is pending.
         // The most recent failed generation remains queryable until another
         // failure or record eviction. New generations never wrap/reuse tokens;

@@ -1,14 +1,15 @@
 # PvP v5 分批計畫與進度
 
-更新：2026-10-03。Owner：`object_fps_pvp`。
-**第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
-（PR #11，合併為`bec86b7`），2026-10-02結案驗收通過，**第03批已結案**；**第04批2026-10-02完成**（PR #14，合併為`cef1b39`），**第05批2026-10-03完成，完整驗收通過，v5升格為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)）。**
+更新：2026-10-04。Owner：`object_fps_pvp`。
+第01–02批已完成；第03批功能完成，2026-10-02以持續相位追蹤＋token bucket worker取代A1與低幀率守門並加入連線品質移出
+（PR #11，合併為`bec86b7`），**第03批2026-10-02結案驗收通過、已結案**；**第04批2026-10-02完成**（PR #14，合併為`cef1b39`）；
+**第05批2026-10-03完成，完整驗收通過，v5升格為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)；PR #15合併為`f97beb5`，基線文件PR #16合併為`58346ca`）。
 三角色已一起建成v5候選。乾淨GUI短測曾出現可見P50 51.13ms，高於50ms守門；
 已定位既有首次命令／Authority Tick相位差。2026-10-01實作獲批准的啟動相位對齊（PR #2，合併為`ff11ee3`）；
 2026-10-02以產品式worker的CPU模擬發現它使30／40 FPS退化（實機未重現），
 補上低於約54.5 FPS不對齊的守門及驗收器修正（PR #3，合併為`9cd7f26`）。
 原51.13ms失敗輪保留，不以後續通過覆蓋；結案驗收以持續相位追蹤版本在事前宣告下重跑：
-計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms），25案真網路矩陣25／25通過（1075／1075動作）。2026-10-03完整驗收通過後升格（見下方第05批與[STABLE_BASELINE](STABLE_BASELINE.md)）；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
+計次GUI可見延遲短測3輪有效輪皆通過（可見P50 37.3／36.6／35.9ms、P95 38.2／40.8／37.3ms），25案真網路矩陣25／25通過（1075／1075動作）。2026-10-03完整驗收通過後升格（見下方「第05批結果與升格」與[STABLE_BASELINE](STABLE_BASELINE.md)）；保留固定兩步lead、獨立60Hz及一Tick插值，沒有擅改政策。
 
 先讀 [交接](HANDOFF.md)、[v5契約](../../protocol-v5.zh-Hant.md) 和指定批次。
 修正與已知問題：第03批啟動相位相關問題各一份文件（成因／影響／復現／解決方案），見 [fix/README.md](fix/README.md)。
@@ -25,7 +26,7 @@
 | 02 | [人物與移動動畫](02-player-model-and-locomotion.md) | 已完成，2026-09-28 | Client女性人物、掛槍、Idle／Jog與步頻；真雙GUI短測通過，仍為v4玩法 |
 | 03 | [v5玩法與交付](03-v5-gameplay-and-delivery.md) | 已結案，2026-10-02 | 完整三角色v5、25案網路與生命恢復通過；持續相位追蹤＋token bucket worker與連線品質移出（PR #11）；計次可見50ms守門3輪與25案矩陣通過，修正與已知問題見[fix](fix/README.md) |
 | 04 | [完整動作呈現](04-complete-action-presentation.md) | 已完成，2026-10-02 | 第一人稱換彈、遠端射擊／換彈／跳躍／死亡與生命隔離、Walk／Jog依速度混合；L1／L2／L3於macOS通過，見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md) |
-| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 已完成，2026-10-03；完整驗收通過，**v5升格穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)） | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)；仍是候選 |
+| 05 | [整合短測與完整驗收交付](05-short-validation-and-acceptance.md) | 已完成，2026-10-03；完整驗收通過，**v5升格穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)） | 長測與GUI戰鬥驗收器v5化、25案矩陣與整合短測、產品移除；[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md) |
 
 ```text
 01 契約／基線 -> 02 人物Idle/Jog（v4）
@@ -112,4 +113,25 @@
   首幀卡頓落在其中；需Match回合狀態、無敵規則、HUD倒數與契約變更，須另立計畫，見[fix/02](fix/02-a1-cancelled-by-stall-reseed.md)。
 - [第03批dev_log](../../../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)與[交接](HANDOFF.md)
   保存修復、失敗與最後指紋。第01–03批內容在`de87bb9`（wip），A1在`ff11ee3`；
-  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出經PR #11，合併為`bec86b7`。第03批已結案；第04批暫停，無長測。
+  守門與驗收器修改經PR #3（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`；持續相位追蹤與連線品質移出經PR #11，合併為`bec86b7`。第03批已結案；本批未執行長測（長測屬第05批）。
+
+## 第04批結果
+
+- 2026-10-02完成（計畫複審PR #13合併為`dcb19d1`；實作PR #14合併為`cef1b39`）。只改`object_fps_pvp`的Client呈現、產品資產與產品自有驗收器；wire、Match、Gateway與Engine不變。
+- 第一人稱換彈；遠端射擊／換彈／跳躍三段／Death01，呈現為時間線同區間、同生命權威資料的純函數，不重播、不補播；
+  驗證工具跨平台（平台指紋、視窗配置、SDL注入動作短測）；步態改為Walk／Jog依速度混合（使用者決定，契約§6同步）。
+- 驗證：CTest全標籤41／41；突變檢查04-2 9／9、04-5 5／5；L1動作短測30／60／144 FPS與L2 Metal capture通過（第一次因實體滑鼠移動失敗，保留）；
+  L3原生操作清單1–8與步態由使用者人工確認。只在macOS Intel／Metal；未執行長測與完整GUI三輪。
+- 延到v6：遠端上半身俯仰瞄準、受擊反應、Engine呈現阻塞、本機冷卻閘約2 Tick落差等，見[v6交接](../v6/HANDOFF.md)。
+- 經過與證據見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)與[交接](HANDOFF.md)「第04批進度」。
+
+## 第05批結果與升格
+
+- 2026-10-02使用者啟動，並決定「v5結案」＝本批＋完整驗收＋全部通過即升格；平台只在本機macOS（Windows／Linux標「未執行」）。
+  PR #15合併為`f97beb5`；穩定基線文件經PR #16合併為`58346ca`。
+- 05-1／05-2：headless長測與GUI combat驗收器v5化（逐生命、換彈、死亡／重生）。05-3：25案矩陣25／25、雙GUI整合短測、長測短模式、產品移除通過。
+  05-4：[手動指南](MANUAL_ACCEPTANCE.md)、[驗收狀態](ACCEPTANCE_STATUS.md)。
+- 05-5完整驗收（2026-10-03）：GUI三輪×120秒皆通過（可見P50 36.6／35.8／34.9ms）；60 Hz與144 Hz各1808秒長測通過（4971／4971動作）。
+  60 Hz原判定失敗，使用者選規則B（重生首幀改為結構條件）後以同一份原始資料重新分析為通過；144 Hz第一次被工具時限中止、
+  第二次整機瞬間停頓判受干擾，第三次通過。失敗與中斷跑次全部保留。
+- 2026-10-03升格穩定基線，範圍為macOS Intel／Metal、同機三角色；見[STABLE_BASELINE](STABLE_BASELINE.md)與[第05批dev_log](../../../dev_logs/2026_10_03_pvp_v5_batch05.zh-Hant.md)。

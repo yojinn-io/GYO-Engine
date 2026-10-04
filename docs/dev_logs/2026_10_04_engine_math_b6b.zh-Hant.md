@@ -6,7 +6,7 @@
 
 ## 經過
 
-1. 使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正。指示中沒有合併，所以 B6b 疊在 B6a 的分支上開 PR，等使用者回來決定。
+1. 使用者在 B6a 進行中暫離，指示把剩下的批次照計畫做完：每批 commit、開 PR、跑 CI，有問題就修正。指示中沒有合併，所以 B6b 疊在 B6a 的分支上開 PR，等使用者回來決定。
 2. 盤點在 B6a 驗證期間進行：2 個 agent 分別盤點已編譯的非 `match_domain` 程式，以及 acceptance 與測試，再由 1 個 agent 檢查遺漏。
    - runtime_host、ipc、client_network 沒有向量或角度運算。
    - acceptance 與測試的量測計算是獨立 oracle，決定維持原寫法。

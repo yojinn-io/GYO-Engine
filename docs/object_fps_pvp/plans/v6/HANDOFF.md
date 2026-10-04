@@ -123,7 +123,21 @@
 | characterization的共用helper（`SameBits`、`UlpDistance`、`Opaque`）在tests/common、tests/object_fps_pvp、tests/ui_editor各一份；共通測試不能依賴產品測試 | 測試 | B7 |
 | `services/gyo_gateway/README.md`與`tests/common/ci/test_workflow_gates.py`的說明或守衛中出現產品名稱 | 共通層 | B7 |
 | Collision的`ValidateCapsule`允許半徑極小（約`2^-23`倍）、`height == 2r`的退化膠囊；此時`segmentTop < segmentBottom`，`Collision.cpp`的`Clamp(origin.y, segmentBottom, segmentTop)`違反前置條件（debug建置會assert；std::clamp原本也屬未定義行為） | Engine（Collision） | 純量統一後續 |
-| 根目錄三份README的範例`cmake --preset dev -DGYO_APPS=object_fps`指向停用中的產品；它重新啟用前需要先依[遷移清單](../../../architecture/plans/math-foundation/inactive_products.md)遷移 | 文件 | B7 |
+| 根目錄三份README的範例`cmake --preset dev -DGYO_APPS=object_fps`指向停用中的產品；它重新啟用前需要先依[遷移清單](../../../architecture/plans/math-foundation/inactive_products.md)遷移（2026-10-04文件整理已改為`object_fps_pvp`，本項已解決） | 文件 | B7 |
 
 - 不轉入：float純量的clamp／min／max寫法，使用者決定直接在Math計畫的後續中統一（2026-10-04）。
+
+### 11. Engine輸入層的缺口：完整按鍵集與視窗互動事件（使用者2026-10-04決定列入v6）
+
+- 來源：[架構漂移健檢（2026-10-04）](../../../checkup/2026_10_04_architecture.zh-Hant.md)「應收進Engine的功能」中優先度最高的一項。
+- 現況：
+  - `engine/input/include/engine/input/PhysicalInputFrame.hpp`的`Key`是只有14個鍵的封閉清單，沒有Tab與數字鍵。過去F3、H、R都是為了產品需求直接改Engine的enum加進去的。
+  - `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp`的`HandleNativeEvent`繞過Engine，直接處理`SDL_Event`：
+    Tab切換指標擷取、失焦／移動／縮小時釋放指標、windowID過濾、點擊擷取。
+  - `tools/object_fps_preview/ViewmodelPreview.cpp`直接讀`SDL_SCANCODE_1..6`。遊戲與工具兩種獨立消費端都在繞過Engine的輸入層。
+- 方向（未評估）：Engine提供完整的鍵盤scancode與視窗互動事件（失焦、移動、縮小等）；何時擷取或釋放指標，仍由各產品自己決定。
+  pvp改為經由Engine取得這些輸入後，再移除產品內的SDL直接處理。
+- 範圍：Engine（`engine/input`公開介面擴充）與object_fps_pvp。依AGENTS §3以Architecture Delta提出，先寫計畫再動手。
+  與第3項（視窗互動時的渲染阻塞）同樣牽涉視窗事件，規劃時一併考慮。
+- 同一份健檢中的相關缺口（文字輸入與剪貼簿）尚未列入v6；需要時另行決定。
 

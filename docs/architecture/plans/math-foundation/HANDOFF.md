@@ -25,20 +25,20 @@
 | 2026-10-03 | 點到線段的最近點 `Closest` 歸 Math（純幾何查詢）；依同一原則，點到 AABB 的最近點 `Clamp` 也移入 | 使用者；`Clamp` 為依原則延伸 |
 | 2026-10-03 | `Ray`、`Plane`、`Sphere` 歸 Math（空間幾何 primitive，沒有 Collision 語意；現有程式碼中沒有這些型別，屬於新增） | 使用者 |
 | 2026-10-03 | Math 組成依樹狀圖：Linear Algebra（Vec2/3/4、Matrix3/4、Quaternion）、Geometry（Ray、Plane、Sphere、AABB、Capsule、Segment、Triangle）、Scalar／Utility（Clamp、Lerp、Min／Max、Constants） | 使用者 |
-| 2026-10-03 | 向量命名：單一型別 `Vec2/Vec3/Vec4`，純量用後綴（`Vec3d`、`Vec2i/Vec3i`）；點與方向不分型別。原計劃的 `Float*`、`Double3` 名稱作廢 | 使用者 |
+| 2026-10-03 | 向量命名：單一型別 `Vec2/Vec3/Vec4`，純量用後綴（`Vec3d`、`Vec2i/Vec3i`）；點與方向不分型別。原計畫的 `Float*`、`Double3` 名稱作廢 | 使用者 |
 | 2026-10-03 | header 依樹狀圖分子目錄 `linear/`、`geometry/`、`scalar/`；namespace 仍為單一 `Engine::Math` | 使用者 |
 | 2026-10-03 | `Ray`：direction 不要求正規化。`Plane`：normal 要求正規化，方程 `dot(n, p) = d` | 使用者 |
-| 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計劃採用的標準式） |
+| 2026-10-03 | AABB 型別名稱為 `Aabb`。`Triangle` 只定義頂點順序與 normal 計算（`Cross(b − a, c − a)`），不定義正面；正面與剔除歸 Render 管線狀態 | 使用者（normal 公式為計畫採用的標準式） |
 | 2026-10-03 | 最近點查詢統一用重載 `ClosestPoint(point, 型別)`；double 路徑新增 `Segmentd`、`Aabbd`（比照 `Vec3d` 後綴規則） | 使用者（`Segmentd`、`Aabbd` 為依此延伸） |
 | 2026-10-03 | 幾何交集測試收進 Math：射線對 `Plane`／`Sphere`／`Aabb`／`Triangle` 的 `Intersect`，以及 `Overlaps`；Collision 是否改用，於 B2 決定 | 使用者 |
 | 2026-10-03 | B5：UiRenderer 的 `ClipSprite` 改用 `Math::Intersection`；目標矩形非有限時一律轉交 RenderQueue 回報錯誤。舊版的處理不一致：有時報錯、有時靜默丟棄，寬或高為 +inf 時還會送出 UV 範圍為 0 的 sprite；文字 bounds 接近 `FLT_MAX` 而對齊計算溢位時也會觸發。審查補齊這些情況後，使用者再次確認維持一律報錯 | 使用者 |
-| 2026-10-03 | 本計劃全程使用 ultracode（盤點、實作、驗證、審查都以多 agent workflow 進行）：這是底層概念模型的變更，且已有大量實作依賴它 | 使用者（B4b 進行中） |
+| 2026-10-03 | 本計畫全程使用 ultracode（盤點、實作、驗證、審查都以多 agent workflow 進行）：這是底層概念模型的變更，且已有大量實作依賴它 | 使用者（B4b 進行中） |
 | 2026-10-03 | Collision 的 raycast 改為接收 `Math::Ray`（Ray 是幾何 primitive，`RaycastAabb`／`RaycastCapsule` 是 Collision 演算法） | 使用者 |
 | 2026-10-03 | `SweepSphereAgainstCapsule` 的路徑改為接收 `Math::Segment` | 使用者 |
 | 2026-10-03 | 浮點收縮模式全專案統一為不收縮（`-ffp-contract=off`，MSVC 預設 `/fp:precise`）；優先平台為 Linux、Windows、mac x64，arm64 為附帶產物 | 使用者 |
 | 2026-10-03 | `Matrix3`／`Matrix4` 提供 `Determinant`、`Inverse`（不可逆時回傳 `std::optional` 空值）、`Transpose`；`Quaternion` 提供軸角建構、`Rotate`、`Inverse` | 使用者 |
 | 2026-10-04 | B6a：`Math::DegreesToRadians`／`RadiansToDegrees` 改為 constexpr，讓 pvp 的 `MovementMaximumPitch` 能以 `inline constexpr` 改用它（單次乘法，編譯期與執行期捨入相同） | 使用者 |
-| 2026-10-04 | 使用者暫離期間，剩餘批次照計劃連續執行：每批 commit、開 PR、跑 CI，有問題就修正後重跑；PR 疊在前一批分支上，合併由使用者決定 | 使用者（B6a 進行中） |
+| 2026-10-04 | 使用者暫離期間，剩餘批次照計畫連續執行：每批 commit、開 PR、跑 CI，有問題就修正後重跑；PR 疊在前一批分支上，合併由使用者決定 | 使用者（B6a 進行中） |
 | 2026-10-04 | B6a 的跨平台驗證：本機（mac x64）比對 master 與 branch 的全模擬 digest；依賴 libm 的替換（`hypot`）與會漂移的替換（倒數相乘正規化）以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測；其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關 | 使用者 |
 | 2026-10-04 | float 純量的 clamp／min／max 統一使用 Math（B7 留下的寫法不一致） | 使用者 |
 | 2026-10-04 | double 與整數也統一：`Math::Min／Max／Clamp` 改為 GYO 自己的實作，支援所有算術型別（bool 除外），結果與 std 相同；引數型別不一致時不能編譯。理由：std 的這些函式受 C／C++ 版本與平台巨集影響 | 使用者 |
@@ -171,7 +171,7 @@
 - pvp：
   - 有編譯的 `Arena`、`Movement`、`PvpMatch`、`ShotQuery`、`CharacterCollision`：只做型別替換與 `Ray` 呼叫。
   - 未編譯 29 檔中引用 Collision 的 8 檔及其 header：同樣處理。
-  - `match_domain` 明確 PUBLIC 連結 `GYO::Math`（原計劃在 B6a，因 pvp 程式碼已直接使用 Math 型別而提前）。
+  - `match_domain` 明確 PUBLIC 連結 `GYO::Math`（原計畫在 B6a，因 pvp 程式碼已直接使用 Math 型別而提前）。
   - pvp 自己的 helper（例如 `Arena.cpp` 的 `Finite`）只改參數型別，去重複留到 B6a。
 - 文件：`architecture.md` 的 Collision 一列、`math.md` 的邊界表。
 
@@ -231,7 +231,7 @@
 3 個 minor，沒有正確性問題：
 - 用不到的 using-declaration：`UfbxModelTests.cpp` 還原為 master 版，其餘刪除用不到的宣告。
 - `Animation.cpp` 的 `Finite` 系列：保留理由記錄於上方，PLAN 的 B7 稽核加上例外。
-- 計劃文件尚未更新：本節與 dev_log、README 一併補上。
+- 計畫文件尚未更新：本節與 dev_log、README 一併補上。
 
 ## B4a Render 型別與 helper
 
@@ -390,7 +390,7 @@
 - **未編譯檔的提前處理**：型別換成 `Vec3` 後，以下 helper 會與 Math 經 ADL 歧義，使 syntax-only 檢查失敗，因此在 B6a 先處理：
   - `CombatCollision.cpp` 的 `IsFinite`、`Length`、`Normalize`，以及 `GameSession.cpp` 的 `Length`：與 Math 逐位元相同，刪除後改為明確呼叫 `Engine::Math::`。
   - `ProjectileSystem.cpp` 的 `IsFinite`、`Length` 刪除；`Normalize` 遇到零或非有限值會 throw，語意與 Math 不同，改名為 `NormalizeOrThrow`。
-  - 其餘 helper（`AddScaled`、`Subtract`、`ToCollision` 等）照計劃留給 B6c。
+  - 其餘 helper（`AddScaled`、`Subtract`、`ToCollision` 等）照計畫留給 B6c。
 - **測試**：
   - `PredictionTests.cpp` 的水平距離 `Distance` 改名為 `HorizontalDistance`（13 個呼叫點），語意不變。
   - `TimelineTests.cpp` 補上 `<numbers>`：它原本經由 `Movement.hpp` 間接取得，而 `Movement.hpp` 已不再需要它。
@@ -444,7 +444,7 @@
 
 狀態：**完成**。PR [#25](https://github.com/yojinn-io/GYO-Engine/pull/25) 於 2026-10-04 合併為 `bd7e1c3`；CI 四平台通過（2026-10-04，分支 `claude/math-foundation-b6b`，疊在 B6a 分支 `a9a5e85` 上）。
 
-使用者在 B6a 進行中暫離，指示把剩下的批次照計劃做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
+使用者在 B6a 進行中暫離，指示把剩下的批次照計畫做完：每批 commit、開 PR、跑 CI，有問題就修正後重跑。合併沒有在指示中，所以 B6a 之後的 PR 疊在前一批的分支上，等使用者回來決定合併。
 
 ### 進行方式（ultracode）
 
@@ -678,10 +678,10 @@
 | `DecodeSrgb`、`EncodeSrgb` | 取代 Render、Ui、ui_editor 的三份 sRGB（B4a、B5） |
 | `Vec4`、`Vec2i`、`Vec3i`、`Matrix3`、`Transform(Matrix3, Vec3)`、`Determinant`、`Inverse`、`Transpose`、`Sphere`、`Triangle`、`MakePlane`、`SignedDistance`、`Contains`、`Overlaps`、`Merge`、`Expand`、`Extents`、`Area`、`Centroid`、`Normal`、`UnitNormal`、`Axis(Capsule)`、`PointAt`、`Rotate`、`MakeRotation`、`MakeQuaternionFromAxisAngle`、`NormalizeOrZero`、`ToMatrix3`、`ToMatrix4`、`MakePoint4`、`MakeDirection4`、`XYZ`、Ray 對 Sphere／Aabb／Triangle 的 `Intersect` | 目前沒有使用者；依使用者要求（補齊常用結構、樹狀圖的 Geometry 與 Linear Algebra、2026-10-03 決策）在 B1 預先收錄，以 `MathTests.cpp` 的規格測試鎖定 |
 
-### 範圍外，只回報（全計劃彙整）
+### 範圍外，只回報（全計畫彙整）
 
 - 使用者決定（2026-10-04）轉入 PvP v6 計畫：清單與後續處理見 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。本文件不再維護這份清單，避免同一件事寫在兩處。
-- 例外：純量 min／max／clamp 的寫法，使用者決定直接在本計劃的後續中統一（見「後續：純量 Min／Max／Clamp 的統一」）。
+- 例外：純量 min／max／clamp 的寫法，使用者決定直接在本計畫的後續中統一（見「後續：純量 Min／Max／Clamp 的統一」）。
 
 ## 後續：純量 Min／Max／Clamp 的統一
 
@@ -690,7 +690,7 @@
 ### 決策與方向
 
 - 使用者決定（2026-10-04，見決策紀錄）：
-  - B7 留下的寫法不一致（engine 與工具用 `std::`，pvp 用 `Math::`）在本計劃後續中統一。
+  - B7 留下的寫法不一致（engine 與工具用 `std::`，pvp 用 `Math::`）在本計畫後續中統一。
   - double 與整數也一起統一，理由是 std 的這些函式受 C／C++ 版本與平台巨集影響。
   - `GYO::Engine` 連結 Math。
 - 做法：`Math::Min／Max／Clamp` 改為 GYO 自己的 constexpr template。
@@ -703,7 +703,7 @@
   - `min_element` 這類演算法；
   - 非算術型別（`std::chrono` duration，`ClientConnection.cpp:569`）；
   - 測試與 acceptance 的獨立 oracle；
-  - 沒有 Math 的 core `GYO::Input`、host 的 `gyo_shader_tool`（`engine/base` 的 `Span.hpp` 也被它直接 include），以及未啟用產品。
+  - 沒有 Math 的 core `GYO::Input`、host 的 `gyo_shader_tool`（它直接 include `engine/base` 的 `Sha256.hpp`），以及未啟用產品。
 
 ### 變更
 
@@ -741,5 +741,5 @@
 
 ## 未結事項
 
-- 本計劃的批次全部完成並合併：#24 → #25 → #26 → #27 依序合併（2026-10-04；疊在一起的 PR 在合併前一個之後改指 master）。
+- 本計畫的批次全部完成並合併：#24 → #25 → #26 → #27 依序合併（2026-10-04；疊在一起的 PR 在合併前一個之後改指 master）。
 - 後續（使用者 2026-10-04 決定）：純量 Min／Max／Clamp 的統一以 #28 合併（`574ae32`）；範圍外事項轉入 [PvP v6 交接](../../../object_fps_pvp/plans/v6/HANDOFF.md)第 10 節。

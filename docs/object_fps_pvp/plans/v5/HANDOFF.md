@@ -18,8 +18,8 @@
 | 05-1 | headless長測v5化：玩法probe可重複16秒計畫為多個循環（生命世代相對遞增），分析器逐循環／逐生命核對；`--soak`長模式與短模式 | high | 完成（CTest 42／42；突變14／14；開發實跑2循環60 Hz、3循環144 Hz與單循環矩陣clean-60皆PASS，不計入驗收） |
 | 05-2 | GUI combat v5化：射擊遇空彈匣換彈、死亡／重生期間依v5規則、逐生命HP與唯一傷害核對 | high | 完成（CTest 43／43；突變9／9；開發實跑16秒與兩輪120秒，第二輪120秒整輪PASS，不計入驗收） |
 | 05-3 | 整合短測與架構檢查：依指紋重用第03／04批短測（05-1改了action probe，25案矩陣須重跑）、一輪雙GUI整合短模式、產品移除／owner選擇／Match不連結Renderer與SDL | medium | 完成（矩陣25／25、GUI短測、長測短模式、產品移除皆通過；2026-10-03） |
-| 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 完成（2026-10-03；PR待CI） |
-| 05-5 | 完整驗收：事前宣告；GUI三輪×120秒combat（計次、fix/06補跑規則）；60 Hz與144 Hz各1808秒長測（113循環，串行）；全部通過寫v5穩定基線並結案 | medium（執行約1.5小時，機器須閒置） | 完成（2026-10-03）：全部通過，PR #15合併為`f97beb5`，v5升格（[STABLE_BASELINE](STABLE_BASELINE.md)） |
+| 05-4 | `MANUAL_ACCEPTANCE.md`與`ACCEPTANCE_STATUS.md`（跨平台、按平台分欄）；README／HANDOFF／dev_log；PR | medium | 完成（2026-10-03；PR #15合併為`f97beb5`） |
+| 05-5 | 完整驗收：事前宣告；GUI三輪×120秒combat（計次、fix/06補跑規則）；60 Hz與144 Hz各1808秒長測（113循環，串行）；全部通過寫v5穩定基線並結案 | medium（執行約1.5小時，機器須閒置） | 完成（2026-10-03）：全部通過，PR #15合併為`f97beb5`，v5升格（[STABLE_BASELINE](STABLE_BASELINE.md)，PR #16合併為`58346ca`） |
 
 使用者2026-10-02確認拆分與檔位，05-1以high執行。
 
@@ -126,7 +126,7 @@
   - 使用者選A：保留為`soak144-disturbed/`，重跑一次（13:16～13:50）**通過**：4971／4971、簽名1、113次死亡／重生、
     Actual P50／P95 34.1／38.7ms、送出P95 3.2ms、最長幀32ms、漂移窗口全過、`full_30_minute_qualified: true`。
   - PR #15的CI在最新提交`32f6ab9`全綠，合併為`f97beb5`；master與`32f6ab9`的樹相同。和量測來源`1c9028f`相比只差規則B分析器，
-    已以重新分析涵蓋。依使用者指示寫[STABLE_BASELINE](STABLE_BASELINE.md)並升格（分支`claude/pvp-v5-stable-baseline`）。
+    已以重新分析涵蓋。依使用者指示寫[STABLE_BASELINE](STABLE_BASELINE.md)並升格（分支`claude/pvp-v5-stable-baseline`，PR #16合併為`58346ca`）。
 
 ## 第04批進度（記錄器，隨工作更新）
 
@@ -333,6 +333,8 @@ gui2有未排程mouse delta，來源未證實；不把受干擾結果或原GUI�
   可在macOS／Metal執行，不需X11；只有`run_native_window.py`、`run_gameplay_gui.py`等原生視窗runner需X11／XTest。
 
 ### 2026-10-02：低幀率守門與暫緩結案
+
+後續：本節的守門與`StartPhaseSkip`已於`a4ccaa5`（PR #11）由持續相位追蹤取代並刪除，見[fix/08](fix/08-a1-clock-drift.md)；第03批同日結案。
 
 - 已做（細節各見fix文件）：
   - 低於約54.5 FPS不對齊：最新32個幀間隔（各最多計2Tick）平均>1.1Tick時不採用或撤回，

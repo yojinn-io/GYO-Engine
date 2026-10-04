@@ -1,12 +1,14 @@
 # Object_FPS_PVP 聯網架構與操作
 
-本文件描述 Object_FPS_PVP 的 LAN 聯網與本機移動預測。Linux／Windows Client 經 LAN
+本文件描述 Object_FPS_PVP 的 LAN 聯網與本機移動預測。macOS／Linux／Windows Client 經 LAN
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
 
-2026-09-28：目前 wire 已升 v4，動作交付與批次狀態見第 9 節及
-[v4 契約](protocol-v4.zh-Hant.md)。下列 v3 量測／長測與成本回顧保留為歷史證據；
-正式 GUI 射擊與 Mark23 已於第 04 批接入，不將舊驗收視為 v4 的新驗收。
+2026-10-04：目前 wire 為 v5（2026-10-03 升格穩定基線），契約見
+[v5 契約](protocol-v5.zh-Hant.md)，批次狀態見文末 v5 一節。下列 v3 量測／長測、成本回顧
+及第 9 節 v4 記錄保留為歷史證據，不視為 v5 的驗收。Go Gateway 的建置平台宣告
+目前只有 linux-x64／windows-x64；v5 完整驗收在 macOS 同機三角色執行，範圍見
+[v5 穩定基線](plans/v5/STABLE_BASELINE.md)。
 
 ## 0. 本次修復總結：做了什麼、證明了什麼
 
@@ -67,6 +69,7 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 
 以下字符圖中的 Client A、B 各有自己的 worker；兩者共用同一 Gateway／Match。
 箭頭表示資料流，不表示底層程式碼依賴上層。
+v5 的輸入送出（60/s token bucket）、持續相位追蹤與連線品質移出見 [v5 契約](protocol-v5.zh-Hant.md) §1–§2。
 
 ```text
 Client A / Client B (each process)
@@ -75,7 +78,7 @@ Client A / Client B (each process)
                           |                           |
                           | immutable command window | predicted pose
                           v                           v
-    ClientConnection worker (independent 60 Hz)     local camera
+    ClientConnection worker (60/s token bucket)     local camera
       HTTP lifecycle + Hello keepalive                ^
       resend full unacked window <= 12                | reconcile latest ACK
       received snapshot history <= 64 ----------------+
@@ -83,7 +86,7 @@ Client A / Client B (each process)
                           |                           +-> SnapshotTimeline
                           |                               remote render pose
                           v
-  HTTP control / UDP Client Protocol v4
+  HTTP control / UDP Client Protocol v5
                           |
                           v
   Product Go Gateway
@@ -91,7 +94,7 @@ Client A / Client B (each process)
     input windows downstream; latest snapshot upstream to each peer
                           |
                           v
-  loopback TCP / Runtime Protocol v4
+  loopback TCP / Runtime Protocol v5
                           |
                           v
   C++ IPC Host I/O <---- bounded owning handoff ----> MatchRuntimeHost
@@ -110,13 +113,13 @@ Client A / Client B (each process)
 
 ```text
 Client（SDL 輸入 / Lobby / GYO Render）
-    │ HTTP JSON 控制 / UDP Client Protocol v4
+    │ HTTP JSON 控制 / UDP Client Protocol v5
     ▼
 Object_FPS_PVP Go 組合層
     ├─ Room、容量、加入資格、Session → PlayerId
     ├─ ObjectFPS Adapter：schema / version / 欄位轉換
     └─ 使用 services/gyo_gateway 的 HTTP / Session / framing
-    │ Runtime Protocol v4 / loopback TCP
+    │ Runtime Protocol v5 / loopback TCP
     ▼
 C++ IPC Host：讀寫、framing、Protobuf 轉換
     │ 有界控制佇列 / per-player command window / owning Snapshot
@@ -342,7 +345,7 @@ worker 保存最多 64 份實際接收時間戳快照，`Drain()` 原子取得�
 `PresentStatus::Presented` 後回報該幀真正提交的本機／遠端姿態、frame ID及時間；
 Skipped 不產生樣本。原始缺少未來 Snapshot 與移動中的 hold 分別觀測，靜止角色
 不增加動作停頓次數；只有同一玩家／epoch的相鄰成功呈現姿態確實重複，才累加
-hold。連續選用新的最新快照而位置前進時不算hold。正式遊戲沒有測試輸入或時間控制接口。
+hold。連續選用新的最新快照而位置前進時不算hold。正式遊戲沒有測試輸入或時間控制介面。
 產品日誌記錄首次世界繪製、超過 250 ms 的事件／更新／繪製、滑鼠釋放與網路斷線原因，
 不記錄 Session token。最小化時略過繪製的 frame 會短暫等待，避免忙迴圈。
 
@@ -363,8 +366,8 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol
 
-來源為產品的 `protocol/client_v4.proto` 與 `protocol/runtime_v4.proto`，彼此不 import。
-目前兩者版本都為 4，Client／Gateway／Match 必須一起升級，明確拒絕 v1–v3。Adapter 明確映射兩份生成型別，
+來源為產品的 `protocol/client_v5.proto` 與 `protocol/runtime_v5.proto`，彼此不 import。
+目前兩者版本都為 5，Client／Gateway／Match 必須一起升級，明確拒絕 v1–v4。Adapter 明確映射兩份生成型別，
 Match 核心只接收普通 C++ domain 值。
 
 Client Protocol 包含 Hello、Welcome、PlayerInput、WorldSnapshot、Error、ActionBatch、ActionResults。
@@ -375,33 +378,34 @@ arena identity 及 Match CombatRules。PlayerInput 包含 movement_epoch 及 com
 另有獨立 combat 集合。動作身分、裁決及消費確認見第 9 節。
 
 RuntimeEnvelope 包含獨立 `protocol_version` 和 oneof：Ready、PlayerJoin、
-PlayerLeave、PlayerInput、JoinResult、RuntimeError、WorldSnapshot、ActionBatch、ActionResults。
+PlayerLeave、PlayerInput、JoinResult、RuntimeError、WorldSnapshot、ActionBatch、ActionResults、
+PlayerEvicted（v5 連線品質移出，僅 Runtime）。
 Ready 宣告 arena identity、60 Hz、snapshot interval 1、容量 2 及 Match CombatRules。
 Runtime PlayerInput 的 PlayerId 來自已驗證的 Session 映射，不信任 Client 任選 ID。
 
 Adapter 驗證 Protobuf、版本、finite 數值、移動軸範圍與線上欄位範圍；Match 自行
 裁定出生位置、速度、合法視角與碰撞。Arena identity 不符時 Client 拒絕加入。
 
-### UDP v4
+### UDP v5
 
 最大 datagram 為 1,200 bytes，包括以下 24-byte big-endian header：
 
 | Offset | Bytes | 欄位 |
 |---|---:|---|
 | 0 | 4 | ASCII `GYOP` |
-| 4 | 2 | Client protocol version，現為 4 |
+| 4 | 2 | Client protocol version，現為 5 |
 | 6 | 2 | message type：Hello 1、Welcome 2、Input 3、Snapshot 4、Error 5、Actions 6、ActionResults 7 |
 | 8 | 8 | Session ID |
 | 16 | 4 | UDP sequence |
 | 20 | 2 | Protobuf payload length |
-| 22 | 2 | Channel，v4 只允許 0：unreliable sequenced |
+| 22 | 2 | Channel，v5 只允許 0：unreliable sequenced |
 
 Header 後面是對應 message 的 Protobuf payload。公共 framing 驗證長度與 Channel，
 不解釋產品 message type；PvP 邊界驗證版本與類型。本輪只有 Channel 0；尚無
 多 channel、傳輸層 ACK／ack_bits 或 Reliable Ordered；動作層另有消費 ACK。UDP sequence 用半範圍比較處理 32-bit wrap。
 Hello 可重送，Welcome 可重發；完整 Snapshot 修復漏掉的加入／離開資訊。
 
-### IPC v4
+### IPC v5
 
 Match 僅監聽 loopback TCP，預設 `127.0.0.1:27016`。每個 Protobuf
 RuntimeEnvelope 前有四個 bytes 的 big-endian 長度；payload 必須為 1–65,536
@@ -424,7 +428,7 @@ Runtime Ready 後 `POST /rooms` 建立房間，重試回傳同一個房間。
 Join request 範例：
 
 ```json
-{"request_id":"a-client-generated-unique-id","protocol_version":4}
+{"request_id":"a-client-generated-unique-id","protocol_version":5}
 ```
 
 成功回覆包含 `match_id`、`player_id`、`session_id`、`session_token`、`udp_ip`、
@@ -534,14 +538,15 @@ C++ compiler 與 runtime 都固定 Protobuf **v36.2**；C++ bindings 由 CMake �
 build tree。Go plugin/runtime 固定 **v1.36.11**，生成的 `.pb.go` 由產品持有。
 Asio 固定 **1.38.2**，cpp-httplib 固定 **0.56.0**；這些 wrapper 由所選產品引入。
 
-修改 `.proto` 後，用 CMake 建好的 v36.2 `protoc.exe` 執行：
+修改 `.proto` 後，用 CMake 建好的 v36.2 `protoc` 執行（PowerShell 範例；
+其他 shell 寫法見 [protocol README](../../apps/object_fps_pvp/protocol/README.md)）：
 
 ```powershell
 go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --version  # 必須為 libprotoc 36.2；PATH 指向本次 CMake 建置的 protoc
 protoc --proto_path=apps/object_fps_pvp/protocol `
   --go_out=apps/object_fps_pvp --go_opt=module=gyo.local/object_fps_pvp `
-  apps/object_fps_pvp/protocol/client_v4.proto apps/object_fps_pvp/protocol/runtime_v4.proto
+  apps/object_fps_pvp/protocol/client_v5.proto apps/object_fps_pvp/protocol/runtime_v5.proto
 git diff -- apps/object_fps_pvp/protocol
 ```
 
@@ -669,7 +674,7 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 | 遠端接收時間線 | `apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp` |
 | 幀內採樣、呈現與唯讀觀測整合 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp` |
 | Room／Session、轉接與背壓 | `apps/object_fps_pvp/gateway/server.go`、`runtime_link.go`、`adapter/adapter.go` |
-| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v4.proto`、`runtime_v4.proto`（第 9 節記錄 v4 擴充） |
+| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v5.proto`、`runtime_v5.proto`（規則見 [v5 契約](protocol-v5.zh-Hant.md)；第 9 節為 v4 歷史） |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 
 Architecture Delta 是 Client 增加預測／呈現責任、產品輸入從持續狀態變為可確認的
@@ -775,6 +780,8 @@ token 新文字。快取／非快取／輸出的計費不同，也不能據此�
 
 ## 9. v4 分批升級入口
 
+（歷史：本節記錄 v4 時期；目前 wire 為 v5，見文末 v5 一節。）
+
 2026-09-28 已完成第01–05批與追加完整驗收，**v4已升格穩定基線**，
 HTTP join、Ready／Welcome 同步升級並拒絕 v1–v3。前述 v3 移動修復量測與成本
 回顧保留歷史證據；不能當成新增射擊或 v4 長測的驗收紀錄。
@@ -787,7 +794,7 @@ v4 的時間、ActionId、裁決、有效期、戰鬥狀態及 ownership 統一�
 真實雙 GUI 呈現短回歸通過；第 05 批交付整合測試與手動驗收指南。
 **三輪GUI共存、60／144Hz各30分鐘及原生X11操作已通過。**
 穩定範圍限Linux／X11／Vulkan、同機雙玩家與已驗證的受控網路；
-指紋、完整數據、原始失敗及限制見 [穩定基線](plans/v4/STABLE_BASELINE.md)。
+指紋、完整資料、原始失敗及限制見 [穩定基線](plans/v4/STABLE_BASELINE.md)。
 啟動、日誌與固定門檻見 [手動指南](plans/v4/MANUAL_ACCEPTANCE.md)，
 實際通過／失敗及缺項見 [驗收狀態](plans/v4/ACCEPTANCE_STATUS.md)。
 移動基線不調參，命中回溯與可重用同步機制留後續。
@@ -946,19 +953,22 @@ Architecture Delta 限於產品 Client 的呈現責任、既有能力依賴與�
 
 2026-09-28：已保存 [五批計畫與進度](plans/v5/README.md)、
 [v5 契約](protocol-v5.zh-Hant.md) 及 [交接](plans/v5/HANDOFF.md)。
-第 01 批文件／基線及第 02 批人物呈現／短測已完成；第03批已建成三角色v5候選，
-功能與網路短測完成，但可見延遲守門尚有啟動相位問題，整批驗收未結案。
-第02批下述v4圖示是當時切片的歷史說明。
+第 01 批文件／基線及第 02 批人物呈現／短測已完成；第03批建成三角色v5，
+2026-10-02以持續相位追蹤＋輸入worker token bucket取代啟動相位對齊（A1）與低幀率守門、
+加入連線品質移出後結案（PR #11）。第04批2026-10-02完成完整動作呈現（PR #14）；
+第05批2026-10-03完成整合短測與完整驗收（macOS），**v5升格穩定基線**（PR #15、#16）。
+進度見 [v5 計畫](plans/v5/README.md)，指紋與範圍見 [v5 穩定基線](plans/v5/STABLE_BASELINE.md)。
+以下第02–03批段落與圖示是當時切片的歷史說明（第02批圖示仍為v4玩法）。
 原 [v4 穩定基線](plans/v4/STABLE_BASELINE.md) 與驗收證據保持原範圍。
 
 新增責任是產品內生命世代、跳躍／彈匣／換彈／重生狀態及 Client 人物呈現。
 lifeGeneration、movementEpoch 與 Session ActionId 分離；重生不清未 ACK 的動作帳本。
 Match 保持膠囊權威，Client 使用 PvP 自有模型／骨骼資料；不依賴 v2、Enemy／Campaign
-生命周期，也不向 Engine 或公共 Gateway 下沉 FPS 政策。完整 v5 Architecture Delta
+生命週期，也不向 Engine 或公共 Gateway 下沉 FPS 政策。完整 v5 Architecture Delta
 見 v5 契約第 7 節；第 02 批實際變化限於下述 Client 呈現切片，owner 不變。
 
 第 02 批先在 v4 玩法下驗證人物 Idle／Jog；第 03 批才同時升三角色 v5；第 04 批
-完成動作呈現，第 05 批短整合與交付驗收指南。每批完成後停止，完整驗收另行授權。
+完成動作呈現，第 05 批短整合、交付驗收指南及經授權的完整驗收。
 第 01 批實際結果見 [dev_log](../dev_logs/2026_09_28_pvp_v5_batch01.zh-Hant.md)。
 
 ### 第 02 批已實作：玩家呈現與位移相位

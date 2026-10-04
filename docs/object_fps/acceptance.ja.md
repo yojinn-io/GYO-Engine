@@ -8,6 +8,8 @@
 
 共通 runner は `build/acceptance/common`、Object_FPS の GPU／内容検証は `build/acceptance/object_fps` にあります。正式 game archive にこれらの Python scripts や probe を含めません。
 
+> **現在の状態（2026-10-04）**：`object_fps` は `engine/config/projects.csv` で無効化されており、Math と Result の統一後は現在の engine API でコンパイルできません。再有効化の前に [Math 移行一覧](../architecture/plans/math-foundation/inactive_products.md)と [Result 移行一覧](../architecture/plans/result-unification/inactive_products.md)に従って移行が必要です。以下のコマンドは移行済みを前提とします。
+
 `engine/config/projects.csv` でゲームと対象 OS を有効にして、検証を明示的に選びます。
 
 ```sh

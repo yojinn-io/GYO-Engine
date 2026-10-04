@@ -32,8 +32,8 @@ struct AssetRequest final {
         KeepOldIfAny       // Reload が失敗したら旧キャッシュを維持する
     };
 
-    // Reserved hint: the current FIFO manager rejects nonzero priority with
-    // UnsupportedRequest before changing state or performing IO.
+    // Reserved hint: the current FIFO manager treats nonzero priority as API
+    // misuse (GYO_ASSERT) before changing state or performing IO.
     std::int32_t priority = 0;
 
     // mode / sync / fallback

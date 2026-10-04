@@ -102,7 +102,7 @@ VSync 等待時主迴圈空轉。日誌足以讓下一次拖窗停頓有可追�
 - 系統原文：`build/target/_build/test/logs/pvp-entry-kernel.log`。
 - C++ 完整建置與 27 個 CTest 通過；其中 PvP 29 個案例、56,705 個 assertions 通過。產品 Go race 通過。
 - 網路 probe 新增主執行緒停 6 秒但 worker 正常：Session 存活、玩家按原規則停止、權威 Tick 繼續、恢復後重新同步並能再次移動。
-- GUI probe 驗證視窗移動釋放鼠標、仍按 W 時停止新預測、重新聚焦不捕捉、Tab 切換及 ESC 清理。
+- GUI probe 驗證視窗移動釋放滑鼠、仍按 W 時停止新預測、重新聚焦不捕捉、Tab 切換及 ESC 清理。
 - `*-presentation.csv` 記錄主機 monotonic 時間與實際提交繪製的位置；`presentation-latency.json` 比較相同位移門檻。
 - 此延遲是同主機 post-Render 的位置量測，不是螢幕 scanout／input-to-photon，也不是實體雙機 LAN 的時鐘同步量測。
 

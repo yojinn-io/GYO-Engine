@@ -40,6 +40,14 @@ gyo_app_add_executable(main MAIN OUT_TARGET app
 
 Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
 
+A game that ships its own Go service keeps a `go.mod` in `apps/<game>/` and declares each service in the game CMake file. The game must be enabled on Linux, and `PLATFORMS` must be a subset of the game's enabled platforms; configuration fails otherwise. Normal native builds never need Go; CI checks the module and cross-builds the declared platforms. Reusable Go mechanisms belong to the engine-owned `services/gyo_gateway` module, not to a game.
+
+```cmake
+gyo_app_add_go_service(gateway PACKAGE ./gateway/cmd PLATFORMS linux-x64 windows-x64)
+```
+
+Service archives and release handling are described in the release procedure, section 10.7 ([日本語](releasing.ja.md), [繁體中文](releasing.zh-Hant.md)).
+
 Do not add asset copy commands, install recipes, CI callbacks, tests, diagnostic compilation or requirement-discovery guards to the game CMake file. Shared build helpers provide the ordinary runtime assembly and native dependency deployment.
 
 ## Select and build

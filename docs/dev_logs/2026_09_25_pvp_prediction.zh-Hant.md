@@ -111,7 +111,7 @@ Data Contract 不變。公共 CMake／registry／packaging 沒有加入產品分
 
 最後重新建置後，已啟動正式 Match／Gateway 與兩個正式 Client 視窗。
 第一個選 Create + Join；第二個 Refresh 後 Join Room。
-請分別確認 WASD 平移、只轉滑鼠視角與兩者同時操作。使用者已確認本機平移與鼠標視角明顯順暢，但回報拖曳標題列時系統失去回應、
+請分別確認 WASD 平移、只轉滑鼠視角與兩者同時操作。使用者已確認本機平移與滑鼠視角明顯順暢，但回報拖曳標題列時系統失去回應、
 Player1 掉線，以及另一視窗人物有可見滯後。後續調整與證據記錄於
 [LAN 延遲與拖窗處理](2026_09_25_pvp_lan_latency.zh-Hant.md)；本篇六步／100 ms 為初版驗收配置。
 

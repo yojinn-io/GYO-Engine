@@ -1,10 +1,11 @@
 # 02 stall reseed 使 A1 在整個 epoch 失效（開局卡頓）
 
-狀態：**已解決（2026-10-02實作與CPU驗證完成（PR #11）；第03批結案驗收通過）**。Owner：`object_fps_pvp`。
+狀態：**已解決（已被[08](./08-a1-clock-drift.md)取代：2026-10-02以持續相位追蹤＋token bucket worker處理，PR #11合併為`bec86b7`；第03批結案驗收通過）**。Owner：`object_fps_pvp`。
 相關：A1本體PR #2（合併為`ff11ee3`）；守門v3與`CancelledByReseed`診斷經PR #3
-（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。第03批未結案，計次輪未執行，第04批暫停。
-已解決的只有「看得見」：產品回報取消原因，驗收器記錄取消與量測窗口內的對齊秒數。
-取消後整個epoch不再對齊這件事本身未修；下列方案只做評估與原型，沒有進產品。
+（`claude/pvp-v5-start-phase-guard`）合併為`9cd7f26`。
+後續：第03批2026-10-02結案驗收通過；第04批（PR #14，`cef1b39`）、第05批（PR #15，`f97beb5`）完成，v5於2026-10-03升格穩定基線（[STABLE_BASELINE](../STABLE_BASELINE.md)，PR #16，`58346ca`）。
+歷史（PR #3時）：第03批未結案、計次輪未執行、第04批暫停；當時解決的只有「看得見」（產品回報取消原因，驗收器記錄取消與量測窗口內的對齊秒數），
+取消後整個epoch不再對齊這件事本身未修；下列方案只做評估與原型，沒有進產品。A1、`StartPhaseSkip`與`CancelledByReseed`已於`a4ccaa5`刪除。
 2026-10-02起與[08](./08-a1-clock-drift.md)（時鐘漂移）一起改以閉環的持續相位追蹤處理，見文末「方向變更」。
 索引見[README](./README.md)；低幀率守門見[01](./01-a1-low-fps-regression.md)，
 偶發掉幀重設見[03](./03-a1-missed-frame-starvation.md)，補跑規則見[06](./06-gui-window-interference-and-rerun-rule.md)，
@@ -155,7 +156,7 @@ cd build/acceptance/object_fps_pvp && python3 -m unittest -k reseed \
 
 ## 解決方案
 
-### 已完成：取消可觀測（守門v3，工作分支）
+### 已完成：取消可觀測（守門v3；已於`a4ccaa5`隨A1刪除）
 
 - v1／v2時reseed會靜默清掉調整量，觀測值卻保留舊shift：smoke-1報`shift_armed`，實際已取消，
   證據與事實相反。
@@ -204,6 +205,7 @@ cd build/acceptance/object_fps_pvp && python3 -m unittest -k reseed \
 
 MVP／PvP技術驗證：不做3c、不跑計次輪，本問題列為未解決（暫緩），先處理其他問題。
 第03批結案驗收（計次GUI可見延遲短測＋25案矩陣）因此未執行，第03批未結案；第04批暫停。
+後續：同日改以持續相位追蹤處理（見下「方向變更」），使用者恢復結案驗收，第03批2026-10-02結案。
 
 ### 方向變更（2026-10-02）
 
@@ -241,6 +243,8 @@ MVP／PvP技術驗證：不做3c、不跑計次輪，本問題列為未解決（
     `-integration2-20261002-004224`（smoke-2，v2）、`-integration3-20261002-015053`（smoke-3，v3）
 
 ## 殘留風險與後續
+
+以下為A1時的殘留風險，A1刪除後不再適用；現行設計見[08](./08-a1-clock-drift.md)。
 
 - 若第03批恢復結案，計次輪的移動方很可能再被取消，可見P50會落在未對齊抽籤上（三輪中兩輪只剩約3ms餘裕）。
   只能如實記錄，不改門檻、不以重跑挑分數；`cancelled_by_reseed`的輪不能當A1生效的證據。

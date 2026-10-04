@@ -174,8 +174,8 @@ Overlay / HUD → Present
 Windows の AUTO は DXIL と SPIR-V、Linux は SPIR-V、macOS は Metallib を生成します。Metallib には native macOS と Apple Metal tools が必要で、最低 OS バージョンを app と揃えます。Host と target の compiler は分離します。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=
-cmake --build --preset dev --target gyo_object_fps
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --build --preset dev --target gyo_object_fps_pvp
 cmake --preset core
 cmake --build --preset core
 ctest --preset core
@@ -188,7 +188,7 @@ Cache は `build/target/_build/<preset>`、実行可能なゲームは `build/ta
 
 エンジンはゲームとツールに静的リンクします。各ゲームは `bin/assets/<game>` に内蔵 shader を含めて全資産を持ち、別の `assets/common` や包外 shader に依存しません。必要な native runtime libraries は共通製品配置で扱います。
 
-Product manifest は `share/gyo/products/<product>/manifest.json` で、product/kind、executables、必要ファイル、検査を記録します。ゲーム archive は `gyo-<game>-<platform>.tar.gz`、toolchain は `gyo-toolchain-<platform>.tar.gz` です。それぞれ対応する一つの root directory を持ちます。ゲーム包には UI editor、CI scripts、tests、diagnostic executable を含めません。
+Product manifest は `share/gyo/products/<product>/manifest.json` で、product/kind、executables、必要ファイル、検査を記録します。ゲーム archive は `gyo-<game>-<platform>.tar.gz`、toolchain は `gyo-toolchain-<platform>.tar.gz` です。それぞれ対応する一つの root directory を持ちます。ゲームが宣言した Go service は別に `gyo-<game>-<role>-<platform>.tar.gz` となります。archive の一覧は[公開手順](releasing.ja.md)の第 2 節を参照してください。ゲーム包には UI editor、CI scripts、tests、diagnostic executable を含めません。
 
 `build/acceptance/<game>` が独立 acceptance executable を作り、`build/acceptance/common` と project 固有 adapter が製品外部から検証します。検証用の一時コピーに probe を配置し、同じ実行ファイル相対の資産を読ませることはありますが、正式 archive には含めません。
 
@@ -197,12 +197,14 @@ Product manifest は `share/gyo/products/<product>/manifest.json` で、product/
 
 対応する各 platform は engine と `tools.csv` が選んだ release ツール（現在は UI Editor GUI）の toolchain を生成し、`projects.csv` が選んだゲームを追加します。共通 GPU baseline と各製品の宣言済み GPU checks は別々に実行します。ゲームがなくても toolchain があるため Prepare Release は成功できます。必須のツール、ゲーム、検証、platform の失敗、取消、skip は Draft 準備を阻止します。Engine SDK や source archive は生成しません。[ツール登録ガイド](tool_projects.md)も参照してください。
 
-Quick と Release は同じ製品／資産組立を使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。
+Quick と Release は同じ製品／資産組立を使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。Trigger、検証水準 L1–L4、platform（macos-x64 を含む）、試用パッケージ、master snapshot、release train は[公開手順](releasing.ja.md)の第 3、5、7 節に従います。
 
 Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance` が所有し、ゲーム `main` へ注入しません。ゲーム本体は通常操作と `--gpu-driver` を持ち、診断、capture、対話的 viewmodel preview は外側の tests／design tool が所有します。[Object_FPS 検証](object_fps/acceptance.ja.md)と[公開手順](releasing.ja.md)を参照してください。
 
 <a id="r10"></a>
 ## 10. 検証状況、制限、参考資料
+
+> **履歴（2026-09-16 時点で凍結）**：この節は CI 刷新前のローカル／hosted 証拠であり、更新しません。表中の「新 CI 待ち」「未確認」などの未完了項目は刷新後の CI フローに置き換わりました。現在の状態は[公開手順](releasing.ja.md)を参照してください。以下の `build/` 配下のログは当時の開発機にのみ存在し、repo には含まれません。
 
 以下は2026-09-16の旧ビルド構成の履歴であり、今回の CSV／app matrix の合格証拠ではありません。以前の Object_FPS `NONE` 構成は現在の必須 GPU 宣言で置き換わり、選択時の `NONE` は配置エラーです。
 

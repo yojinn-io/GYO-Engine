@@ -10,7 +10,7 @@ Result = Runtime Error
 | | Programmer Error | Runtime Error |
 |---|---|---|
 | Meaning | The program is wrong: a broken precondition or internal invariant, API misuse, an unreachable branch | The program is right, but external data or the environment failed it |
-| Mechanism | `GYO_ASSERT`, `GYO_UNREACHABLE` (`engine/base/Assert.hpp`) | `Engine::Base::Result<T, E>` (`engine/base/Result.hpp`) with the module's error type |
+| Mechanism | `GYO_ASSERT`, `GYO_UNREACHABLE` (`engine/base/include/engine/base/Assert.hpp`) | `Engine::Base::Result<T, E>` (`engine/base/include/engine/base/Result.hpp`) with the module's error type |
 | Caller | Does not handle it; the fix is in the code | Must handle it (`[[nodiscard]]`) |
 | When it happens | The assertion handler runs, by default printing the condition and aborting, in every build configuration | The function returns the error, carrying the module's own code |
 | Shown to people | The handler prints the condition and its location | The error's code, message and detail |
@@ -87,11 +87,11 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 
 ## Error types
 
-Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
+Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/include/engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
 
 - `code` is an enum owned by the module. Zero is not a valid code: each enum starts at 1, and `Error::Make` asserts against zero. The numeric values are not a data contract. A `ToString(code)` in the enum's namespace names each code.
 - `message` is for people (logs, diagnostics) and is never parsed by code; tests compare `code`.
 - `detail` is optional context, such as a path or, at a module boundary, the inner error's code name and detail.
 - There is no default constructor, so an error value always describes a failure. A state that may or may not hold an error uses `std::optional<E>` (for example `AssetManager::GetError`).
 
-`Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type, and IO also `IoResult<T>`, exactly once next to its code enum. `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
+`Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type exactly once next to its code enum, optionally with a `<Module>Result<T>` alias (`IoResult`, `UiResult`, `ModelResult`; the UI editor uses its own `Result<T, E>` alias). `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).

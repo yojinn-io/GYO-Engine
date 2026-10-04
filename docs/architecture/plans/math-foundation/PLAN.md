@@ -1,4 +1,4 @@
-# GYO Math 基礎統一整改計劃（核准版）
+# GYO Math 基礎統一整改計畫（核准版）
 
 核准：2026-10-03。Owner：Engine（新增模組 `GYO::Math`）。進度見 [README](README.md)，紀錄見 [HANDOFF](HANDOFF.md)。
 
@@ -21,7 +21,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 **範圍**
 - 包含：`engine/*`、`apps/object_fps_pvp`（含 `tests/object_fps_pvp`、`build/acceptance/object_fps_pvp`）、`tools/ui_editor`（含 `tests/ui_editor`）、`tests/common`、docs。
 - 排除，一行都不改：`apps/object_fps/**`、`apps/object_fps_v2/**`、`tests/object_fps/**`、`tests/object_fps_v2/**`、`build/acceptance/object_fps{,_v2}/**`、`docs/object_fps/**`、`docs/object_fps_v2/**`、`tools/object_fps_preview/**`、兩份 registry csv。
-- 規劃依據：ultracode 規劃 workflow 的結果（3 個盤點、3 個方案、1 個評審、1 次對抗式檢查）。對抗式檢查提出的 2 個 major 和 10 個 minor 都已納入本計劃。
+- 規劃依據：ultracode 規劃 workflow 的結果（3 個盤點、3 個方案、1 個評審、1 次對抗式檢查）。對抗式檢查提出的 2 個 major 和 10 個 minor 都已納入本計畫。
 
 ---
 
@@ -126,7 +126,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   ├─ Geometry：Ray、Plane、Sphere、AABB、Capsule、Segment、Triangle
   └─ Scalar / Utility：Clamp、Lerp、Min / Max、Constants
   ```
-  另外保留計劃原有、樹狀圖未列出的項目：`Vec3d`、`Vec2i/Vec3i`、`Rect`、角度工具、色彩空間轉換。
+  另外保留計畫原有、樹狀圖未列出的項目：`Vec3d`、`Vec2i/Vec3i`、`Rect`、角度工具、色彩空間轉換。
 - 已定案（使用者，2026-10-03）：`Ray` 的 direction 不要求正規化；`Plane` 的 normal 要求正規化，方程為 `dot(n, p) = d`。
 - 已定案（使用者，2026-10-03）：AABB 的型別名稱為 `Aabb`；`Triangle` 只定義頂點順序與 normal 的計算方式，不定義正面。
 - B1 開始時定案（使用者，2026-10-03）：
@@ -192,7 +192,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - `fps::Float3` 移除，`Vector.hpp` 中的 Float3 刪除。
 - `ToCollision`、`Render::Float3` 與 `Model::Vec3` 之間的互轉全部刪除。（B6c：只刪除數學型別之間的轉換；產品 `VerticalCapsule` 轉成 `Collision::VerticalCapsule` 的 `ToCollision` 保留。見 HANDOFF B6c。）
 - `Length`、`Lerp`、`Finite`、yaw wrap（7 處）、角度換算、muzzle 的手寫 Euler（`WeaponPresentationDefinition.cpp:64-84`）、yaw 旋轉（`PlayerPresentation.cpp:476`）改用 Math。
-- **`fps::Float2{x,z}` 的處理**：它代表地平面座標，語義和 `Math::Vec2{x,y}` 不同，機械式取代會把 z 靜默對應成 y。建議保留為產品自有的語義型別，改名為 `GroundPoint`，並註明它不是數學重複定義。這是本計劃唯一保留的產品型別；核准時未另行指示，採用此方案。
+- **`fps::Float2{x,z}` 的處理**：它代表地平面座標，語義和 `Math::Vec2{x,y}` 不同，機械式取代會把 z 靜默對應成 y。建議保留為產品自有的語義型別，改名為 `GroundPoint`，並註明它不是數學重複定義。這是本計畫唯一保留的產品型別；核准時未另行指示，採用此方案。
 
 **不得遷移**：`tests/common/render/sdl_gpu/RenderFeatureSmoke.cpp:92-96` 是刻意獨立的 scalar oracle，保持不動。（B4a：計算式 `RotateX/Y/Z`、`Project` 維持獨立；因為不留別名，只替換型別拼寫，sRGB 期望值改用 `Math::EncodeSrgb`。見 HANDOFF B4a。）
 
@@ -221,7 +221,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 ### 共同規則
 
 - **每批**：一個 PR，commit 與 PR 用日語。HANDOFF 在每批開始、里程碑、停止時與該批的工作一起更新。
-- **計劃與紀錄文件**：`docs/architecture/plans/math-foundation/{README,HANDOFF}.md`；dev_log 放 `docs/dev_logs/`。
+- **計畫與紀錄文件**：`docs/architecture/plans/math-foundation/{README,HANDOFF}.md`；dev_log 放 `docs/dev_logs/`。
 - **舊名稱一次移除**：因為不留別名，每一批都要把該模組的舊名稱和所有 active 使用者（engine、pvp、ui_editor、tests）一起改完，不能留下編譯不過的中間狀態。
 - **pvp 未編譯 29 檔**（B2 起）：每一批也一併更新它們對該模組的引用，批次結束時以 syntax-only 檢查 29 檔全部通過；B6c 只處理它們自己重複的 helper。
 - **本機驗收**（cmake、ninja 用絕對路徑）：
@@ -233,7 +233,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   - 量測工具是 B1 建立的 characterization 測試：舊實作凍結成測試內的複本，和 Math 對照。
   - 原本精確比較的測試，因結果改變而需要修改時，要逐一註明理由，不能直接放寬容差。
 - **停止條件**：出現非預期的回歸、範圍擴大，或 PvP authority 的漂移超出 reconciliation 能吸收的程度時，停下來回報並重新規劃，不自行升降檔。
-- **ultracode 對抗式檢查**：建議在 B1、B4b、B6a 使用，到時逐次徵求使用者同意。（已被取代：2026-10-03 使用者決定本計劃全程使用 ultracode，見 HANDOFF 決策紀錄。）
+- **ultracode 對抗式檢查**：建議在 B1、B4b、B6a 使用，到時逐次徵求使用者同意。（已被取代：2026-10-03 使用者決定本計畫全程使用 ultracode，見 HANDOFF 決策紀錄。）
 
 ### B0　基線（medium，不改程式）
 
@@ -291,7 +291,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 - **範圍**：
   - `RenderTypes.hpp` 中的 `Float2`、`Float3`、`Rect` 改成 Math 型別。
   - `RenderQueue`、`SdlGpuRenderDevice`、`PrimitiveMesh`、`ColorTransform`、`render/model`。
-  - `ColorTransform` 的公開 `Decode/EncodeSrgbComponent` 依「舊名稱完全移除」直接刪除（原計劃 D6 的薄包裝不採用），呼叫者改用 `Math::DecodeSrgb/EncodeSrgb`。
+  - `ColorTransform` 的公開 `Decode/EncodeSrgbComponent` 依「舊名稱完全移除」直接刪除（原計畫 D6 的薄包裝不採用），呼叫者改用 `Math::DecodeSrgb/EncodeSrgb`。
   - pvp 和 ui_editor 中所有引用 `Render::Float2/Float3/Rect` 的地方。
   - `Renderer.cpp` 的矩陣碼這一批不動。
 - **驗收**：
@@ -397,7 +397,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
 
 **對未啟用產品的影響**
 - 舊名稱移除後，object_fps、object_fps_v2 和 object_fps_preview 重新啟用時無法直接編譯，需要先遷移。
-- 這是使用者選擇「完全移除舊名」的直接後果。依「未啟用產品除外」的範圍，本計劃不修改它們，只在 B7 產出破損清單。
+- 這是使用者選擇「完全移除舊名」的直接後果。依「未啟用產品除外」的範圍，本計畫不修改它們，只在 B7 產出破損清單。
 - engine 的 header 和文件中不寫任何產品名稱。
 
 ---
