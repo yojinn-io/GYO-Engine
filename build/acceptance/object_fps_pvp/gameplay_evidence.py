@@ -6,7 +6,7 @@ from pathlib import Path
 from action_evidence import records, frames
 from command_evidence import match_life_seed_clamps, read_trace_events, recovery_actual_intervals
 from start_phase_evidence import reseed_evidence, summarize_start_phase
-from acceptance_util import PROTOCOL_VERSION
+from acceptance_util import PROTOCOL_VERSION, STALL_RULE
 
 
 def percentile(values, percent):
@@ -336,6 +336,7 @@ def analyze(output, relay, fault, mode):
             check(sum(e['event']==label for e in relay['events'])==2,'Missing '+label)
     return {'passed':not errors,'errors':errors,'protocol':PROTOCOL_VERSION,'mode':mode,'fps':client['fps'],
             'timer_baseline':client.get('timer'),  # Interpretation only; no check reads it.
+            'stall_rule':STALL_RULE,
            'scope':'16-second real-socket v5 gameplay and delivery, no long certification',
             'fault_expiry_reasons':fault_expiry_reasons,'planned_actions':len(plan['actions']),'delivered_actions':len(delivered),'verdicts':dict(verdicts),'deaths':deaths,'respawns':respawns,
             'unique_wire_decisions':len(originals),'identical_repeats':repeats,'combat_observations':hp_count,'jump_maximum_foot_y':jumps,

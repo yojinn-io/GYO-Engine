@@ -260,7 +260,19 @@ struct LatencyWindow {
     std::atomic<bool> measuring{}, synthetic{};
     std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
     std::atomic<unsigned> syntheticEvents{};
-    LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)) {
+    // The mover raises itself once both players are present. That raise's own
+    // asynchronous completion (focus gained by the mover, focus lost by the
+    // observer) may be delivered late on some platforms; the first such event
+    // after the raise is the probe's own action, so it is recorded apart and is
+    // never interference. A completion is expected only when the focus state at
+    // the raise says one is due (the mover lacked focus, or the observer had
+    // it); otherwise nothing is set aside. Any further focus event still counts.
+    const bool raisesItself;
+    const Uint32 raiseCompletionType;
+    std::atomic<bool> raiseCompletionPending{};
+    std::atomic<unsigned> raiseCompletionEvents{};
+    LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)), raisesItself(mover),
+        raiseCompletionType(mover ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST) {
         // Both probes otherwise open at one platform-default spot and the mover
         // raises itself over the observer: macOS throttles a fully occluded
         // window and a Wayland compositor may report it OCCLUDED. Opposite
@@ -292,11 +304,20 @@ struct LatencyWindow {
         Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
     }
     ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
+    void ExpectRaiseCompletion() {
+        const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+        raiseCompletionPending.store(raisesItself ? !focused : focused, std::memory_order_relaxed);
+    }
     LatencyWindow(const LatencyWindow&) = delete;
     LatencyWindow& operator=(const LatencyWindow&) = delete;
     static bool SDLCALL Watch(void* self, SDL_Event* event) {
         auto& evidence = *static_cast<LatencyWindow*>(self);
         if (event->type < SDL_EVENT_WINDOW_FIRST || event->type > SDL_EVENT_WINDOW_LAST || event->window.windowID != evidence.id) return true;
+        if (event->type == evidence.raiseCompletionType && !evidence.synthetic.load(std::memory_order_relaxed) &&
+            evidence.raiseCompletionPending.exchange(false, std::memory_order_relaxed)) {
+            evidence.raiseCompletionEvents.fetch_add(1, std::memory_order_relaxed);
+            return true;
+        }
         for (std::size_t kind = 0; kind < Kinds.size(); ++kind) {
             if (event->type != Kinds[kind].first) continue;
             if (evidence.synthetic.load(std::memory_order_relaxed)) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
@@ -340,7 +361,8 @@ struct LatencyWindow {
                << "\nwindow_flags_at_measurement_start=" << flags(startFlags)
                << "\nwindow_flags_at_end=" << flags(SDL_GetWindowFlags(window))
                << "\nwindow_os_events=" << counts(total) << "\nwindow_os_events_during_measurement=" << counts(during)
-               << "\nwindow_synthetic_events=" << syntheticEvents.load() << '\n';
+               << "\nwindow_synthetic_events=" << syntheticEvents.load()
+               << "\nwindow_raise_completion_events=" << raiseCompletionEvents.load() << '\n';
     }
 };
 
@@ -414,6 +436,7 @@ void RunLatency(const Options& options) {
             firstTick = state.snapshot->tick;
             playerId = state.playerId;
             measurementStart = now + std::chrono::seconds(2);
+            windowEvidence.ExpectRaiseCompletion();
             if (mover) {
                 // Write the complete denominator before dispatching any event.
                 std::ofstream plan(options.output / "latency-plan.csv");
@@ -561,6 +584,10 @@ void RunPhaseStalls(const Options& options) {
         std::size_t maxPending{};
         std::uint32_t maxServerPending{};
         double recoverySeconds{};
+        // Lower bound of the elapsed time the product itself sampled across the
+        // stalled frame: SDL_Delay can oversleep, so the nominal milliseconds
+        // do not say whether the product really saw a stall of 100 ms or more.
+        double productElapsedLowerBound{};
         bool recovered{};
     };
     std::array<Fault, 6> faults{{{true, 64}, {false, 64}, {true, 83},
@@ -584,7 +611,7 @@ void RunPhaseStalls(const Options& options) {
     bool joined = mover;
     const auto started = Clock::now();
     auto previous = started, refreshed = started;
-    std::optional<Clock::time_point> togetherSince, previousUpdate;
+    std::optional<Clock::time_point> togetherSince, previousUpdate, previousUpdateStart;
     std::optional<fps::pvp::LocalMovementObservation> previousMovement;
     std::optional<SDL_Scancode> held;
     unsigned nextFault{};
@@ -639,6 +666,9 @@ void RunPhaseStalls(const Options& options) {
             SDL_Delay(injecting->milliseconds);
             injecting->released = Clock::now();
         }
+        const auto updateStarted = Clock::now();
+        const std::optional<double> previousLowerBound = previousUpdate ?
+            std::optional<double>(Seconds(updateStarted, *previousUpdate)) : std::nullopt;
         Require(application.Update(frame) == Control::Continue, application.LastError());
         const auto updateFinished = Clock::now();
         const auto& local = application.LocalMovement();
@@ -649,16 +679,19 @@ void RunPhaseStalls(const Options& options) {
                 local.movementEpoch == previousMovement->movementEpoch &&
                 local.lastResolvedCommand <= previousMovement->latestCommand &&
                 local.latestCommand >= previousMovement->latestCommand) {
-                // A 1 ms tolerance covers the tiny amount of app work after
-                // sampling. A new authoritative seed is excluded above.
-                const auto possibleSteps = static_cast<std::uint64_t>(
-                    std::floor((updateInterval + .001) / fps::pvp::MovementTickSeconds)) + 1;
+                // The product samples its own clock inside Update, so its elapsed
+                // time since the previous sample is bracketed by this Update's end
+                // and the previous Update's start: an upper bound with no timing
+                // tolerance. A new authoritative seed is excluded above.
+                const auto possibleSteps = static_cast<std::uint64_t>(std::floor(
+                    Seconds(updateFinished, *previousUpdateStart) / fps::pvp::MovementTickSeconds)) + 1;
                 Require(local.latestCommand - previousMovement->latestCommand <= possibleSteps,
                     "Command generation charged a previous frame's already-covered stall again");
             }
             previousUpdate = updateFinished;
+            previousUpdateStart = updateStarted;
             previousMovement = local;
-        } else { previousUpdate.reset(); previousMovement.reset(); }
+        } else { previousUpdate.reset(); previousUpdateStart.reset(); previousMovement.reset(); }
         if (injecting && !injecting->beforeUpdate) {
             SDL_Delay(injecting->milliseconds);
             injecting->released = Clock::now();
@@ -674,9 +707,14 @@ void RunPhaseStalls(const Options& options) {
         if (mover && activeFault) {
             auto& fault = faults[*activeFault];
             const auto observedAt = Clock::now();
+            // The product's sample in this Update and the previous one lie at least
+            // as far apart as the previous Update's end and this Update's start.
+            if (previousLowerBound) fault.productElapsedLowerBound = std::max(fault.productElapsedLowerBound, *previousLowerBound);
             fault.maxPending = std::max(fault.maxPending, local.pendingCommands);
             fault.maxServerPending = std::max(fault.maxServerPending, local.serverPendingCommands);
-            if (fault.milliseconds < 100)
+            // A stall the product provably saw as 100 ms or more is a long stall,
+            // whatever was requested; every shorter one must keep its epoch.
+            if (fault.milliseconds < 100 && fault.productElapsedLowerBound < .1)
                 Require(local.movementEpoch == fault.epoch,
                     "A short GUI phase stall produced persistent backlog/epoch reset");
             const bool healthy = local.active && !local.frozen && local.pendingCommands < fps::pvp::MaxPendingCommands &&
@@ -706,7 +744,9 @@ void RunPhaseStalls(const Options& options) {
             const auto& fault = faults[index];
             Require(fault.recovered, "Final phase stall did not recover");
             report << "case=" << index << ",phase=" << (fault.beforeUpdate ? "after-events-before-update" : "after-update-before-render")
-                   << ",stall_ms=" << fault.milliseconds << ",recovery_seconds=" << fault.recoverySeconds
+                   << ",stall_ms=" << fault.milliseconds
+                   << ",product_elapsed_lower_bound_ms=" << fault.productElapsedLowerBound * 1000
+                   << ",recovery_seconds=" << fault.recoverySeconds
                    << ",max_pending=" << fault.maxPending << ",max_server_pending=" << fault.maxServerPending << '\n';
         }
     }
@@ -769,6 +809,7 @@ void Run(const Options& options) {
     bool sawWorldFrame{};
     std::optional<fps::pvp::LocalMovementObservation> previousObservation;
     std::optional<double> previousPresentedTime;
+    std::optional<std::uint64_t> previousPresentedFrame;
     std::ofstream trace(options.output / (options.role + "-movement.csv"));
     Require(bool(trace), "Cannot create local movement trace");
     trace << "seconds,frame_seconds,authority_tick,resolved,latest,pending,predicted_x,predicted_z,render_x,render_z,correction_x,correction_z,frozen\n";
@@ -924,13 +965,17 @@ void Run(const Options& options) {
                     ++movingPresentationFrames;
                     if (displayed.authorityTick == previousObservation->authorityTick) ++movingWithoutSnapshot;
                 }
-                if (submittedInterval > .0001 && submittedInterval <= .04 && !displayed.frozen) {
+                // Steady means consecutive successful presentations (no skipped or
+                // failed frame between them), not a frame-time limit.
+                if (submittedInterval > .0001 && previousPresentedFrame && presented->frameId == *previousPresentedFrame + 1 &&
+                    !displayed.frozen) {
                     ++stableFrames;
                     if (step > .00001) ++stableMovingFrames;
                 }
             }
             previousObservation = displayed;
             previousPresentedTime = presented->hostSteadySeconds;
+            previousPresentedFrame = presented->frameId;
             const auto& remote = presented->remote;
             presentation << presented->hostSteadySeconds << ',' << presented->localPlayerId << ','
                          << presented->local.renderPosition.x << ',' << presented->local.renderPosition.z << ','

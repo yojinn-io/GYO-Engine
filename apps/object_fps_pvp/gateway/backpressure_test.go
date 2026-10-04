@@ -1,8 +1,8 @@
 package gateway
 
 import (
+	"fmt"
 	"net/netip"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -83,80 +83,78 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 
 // Withholding the consumer models a blocked UDP writer without putting a test
 // switch into Server. This checks the actual publication lane, not a copy of it.
+// The verdicts follow publication order, not wall-clock cadence: a host that
+// wakes late changes how fast the steps run, never what they must show.
 func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
-	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
-		t.Run(pause.String(), func(t *testing.T) {
+	// 15 and 60 publications are the 250 ms and one-second stalls at 60 Hz.
+	for _, blocked := range []uint64{15, 60} {
+		t.Run(fmt.Sprintf("%d-publications", blocked), func(t *testing.T) {
 			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
-			var produced atomic.Uint64
-			// The lane is inspected from the producer between publications: a
-			// replacement drains and refills the channel in two steps, so reading
-			// len() concurrently can observe the transient empty state.
-			type laneState struct {
-				pending      int
-				replacements uint64
-			}
-			inspect := make(chan chan laneState)
-			stop, done := make(chan struct{}), make(chan struct{})
-			go func() {
-				defer close(done)
-				ticker := time.NewTicker(time.Second / adapter.AuthorityTickRate)
-				defer ticker.Stop()
-				var tick uint64
-				for {
-					select {
-					case <-stop:
-						return
-					case reply := <-inspect:
-						reply <- laneState{len(s.snapshotOut), s.snapshotReplacements.Load()}
-					case <-ticker.C:
-						tick++
+			publish := func(first, last uint64) {
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					for tick := first; tick <= last; tick++ {
 						e := envelope()
 						e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
 						s.runtimeMessage(e)
-						produced.Store(tick)
 					}
+				}()
+				// A generous guard against a publication that blocks, not a cadence bound.
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal("blocked consumer stalled snapshot publication")
 				}
-			}()
-			defer func() { close(stop); <-done }()
-			time.Sleep(pause)
-			if produced.Load() < uint64(pause/(time.Second/adapter.AuthorityTickRate))-3 {
-				t.Fatal("blocked consumer stalled snapshot publication")
 			}
-			reply := make(chan laneState)
-			inspect <- reply
-			lane := <-reply
-			if lane.pending != 1 || cap(s.snapshotOut) != 1 || lane.replacements == 0 {
-				t.Fatal("snapshot lane was not bounded/latest-only")
-			}
-			released := time.Now()
-			var previous uint64
-			stableSince := time.Time{}
-			for time.Since(released) < 1500*time.Millisecond {
+			receive := func() uint64 {
 				select {
 				case payload := <-s.snapshotOut:
 					var snapshot client.WorldSnapshot
 					if err := proto.Unmarshal(payload, &snapshot); err != nil {
 						t.Fatal(err)
 					}
-					if snapshot.Tick <= previous {
-						t.Fatal("snapshot went backwards after release")
-					}
-					previous = snapshot.Tick
-					if produced.Load() > snapshot.Tick+1 {
-						stableSince = time.Time{}
-						continue
-					}
-					if stableSince.IsZero() {
-						stableSince = time.Now()
-					}
-					if time.Since(stableSince) >= 250*time.Millisecond {
-						return
-					}
-				case <-time.After(100 * time.Millisecond):
-					stableSince = time.Time{}
+					return snapshot.Tick
+				case <-time.After(5 * time.Second):
+					t.Fatal("no snapshot was pending for the consumer")
+				}
+				return 0
+			}
+			// Consumer withheld: every publication returns and only the newest stays.
+			publish(1, blocked)
+			if len(s.snapshotOut) != 1 || cap(s.snapshotOut) != 1 || s.snapshotReplacements.Load() != blocked-1 {
+				t.Fatal("snapshot lane was not bounded/latest-only")
+			}
+			// Release: the first delivery is the newest, then each publication is current.
+			if tick := receive(); tick != blocked {
+				t.Fatalf("released consumer received stale tick %d instead of %d", tick, blocked)
+			}
+			for tick := blocked + 1; tick <= blocked+30; tick++ {
+				publish(tick, tick)
+				if received := receive(); received != tick {
+					t.Fatalf("snapshot lane did not stay current: received %d after publishing %d", received, tick)
 				}
 			}
-			t.Fatal("snapshot lane did not recover within1.5s and remain current for250ms")
+			// Concurrent producer and consumer: ticks only advance and the last one arrives.
+			last := blocked + 30 + 120
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for tick := blocked + 31; tick <= last; tick++ {
+					e := envelope()
+					e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+					s.runtimeMessage(e)
+				}
+			}()
+			previous := blocked + 30
+			for previous != last {
+				tick := receive()
+				if tick <= previous {
+					t.Fatal("snapshot went backwards after release")
+				}
+				previous = tick
+			}
+			<-done
 		})
 	}
 }

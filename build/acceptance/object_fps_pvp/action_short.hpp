@@ -108,7 +108,8 @@ void RunActionShort(const Options& options) {
         {"scope", "Two real GUI processes with SDL-injected input, real Match and Gateway on localhost. "
                   "Presented is successful renderer submission, not scanout; native OS input is the manual checklist."},
         {"capture", captureMode ? "actual scene GPU readback before UI; functional only, not timing" : "none"},
-        {"events", ActionJson::array()}, {"checks", ActionJson::object()}, {"captures", ActionJson::array()}};
+        {"events", ActionJson::array()}, {"checks", ActionJson::object()}, {"captures", ActionJson::array()},
+        {"event_waits", ActionJson::array()}};
     std::vector<ActionJson> frames;
     frames.reserve(static_cast<std::size_t>(options.fps * (options.duration + 25)));
     RemoteActionTrack remote;
@@ -140,10 +141,12 @@ void RunActionShort(const Options& options) {
         else connection.Refresh(options.gateway);
 
         struct Event { double at; std::string name; };
-        // Repeated clicks sit 0.25 s (15 ticks) apart. The local gate compares the
-        // cooldown with the newest snapshot tick, which trails authority by about
-        // two ticks, so 12-tick spacing is rejected locally under frame jitter;
-        // the exact 10-tick boundary is a domain test, not this GUI regression.
+        // Repeated clicks are scheduled 0.25 s (15 ticks) apart, but a shot is not
+        // pushed until the product's local gate is open (its wall-clock cooldown
+        // and the newest snapshot tick reaching nextAllowedShotTick), and a reload
+        // check waits until the reload has ended. A late-waking host therefore
+        // shifts an event instead of failing it; a gate that never opens still
+        // fails after one second. The exact 10-tick boundary is a domain test.
         std::deque<Event> schedule;
         if (actor) {
             for (const auto& [at, name] : std::vector<std::pair<double, const char*>>{
@@ -193,6 +196,8 @@ void RunActionShort(const Options& options) {
         std::optional<ActionId> awaitingPresentedAction;
         std::optional<Clock::time_point> firstRejoined;
         std::vector<double> feedbackDelays;
+        std::optional<double> waitingSince;
+        static constexpr double MaximumEventWaitSeconds = 1;
         double maximumFrameGap{}, savedYaw{}, backDisplacement{}, unscheduledYaw{};
         std::uint64_t unscheduledYawFrames{};
         bool reloadAnimatingSeen{}, died{}, deadChecked{}, respawned{}, respawnShot{};
@@ -248,8 +253,31 @@ void RunActionShort(const Options& options) {
             const auto beforePosition = application.LocalMovement().predictedPosition;
             std::string event;
             bool shotExpected{}, reloadExpected{}, silenceExpected{}, captureExpected{}, releaseExpected{};
+            std::string waitReason;
             if (measurementStart && !schedule.empty() && elapsed >= schedule.front().at) {
+                const auto& due = schedule.front().name;
+                const bool shot = due == "held-shot" || due == "air-shot" || due == "combined-wall-shot" ||
+                    due == "wall-shot" || due == "respawn-shot" || (due == "kill-shot" && !remote.death);
+                if (shot && !state.snapshot) waitReason = "no snapshot";
+                else if (shot) {
+                    const auto own = std::find_if(state.snapshot->combat.begin(), state.snapshot->combat.end(),
+                        [&](const CombatState& combat) { return combat.playerId == state.playerId; });
+                    if (before.cooldownRemainingSeconds > 0) waitReason = "local cooldown";
+                    else if (own == state.snapshot->combat.end() || state.snapshot->tick < own->nextAllowedShotTick)
+                        waitReason = "snapshot tick before nextAllowedShotTick";
+                } else if ((due == "reload-done" || due == "reload-empty-done") && (before.reloading || before.reloadPending))
+                    waitReason = "reload still running";
+            }
+            if (!waitReason.empty()) {
+                if (!waitingSince) waitingSince = elapsed;
+                Require(elapsed - *waitingSince <= MaximumEventWaitSeconds, "Event '" + schedule.front().name +
+                    "' waited more than one second for: " + waitReason);
+            } else if (measurementStart && !schedule.empty() && elapsed >= schedule.front().at) {
                 event = schedule.front().name;
+                if (waitingSince || elapsed - schedule.front().at > .05)
+                    evidence["event_waits"].push_back({{"name", event}, {"scheduled_seconds", schedule.front().at},
+                        {"fired_seconds", elapsed}, {"waited_for_gate", waitingSince.has_value()}});
+                waitingSince.reset();
                 schedule.pop_front();
                 if (event == "capture") {
                     PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);

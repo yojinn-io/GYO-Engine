@@ -76,12 +76,54 @@ def validate_samples(samples):
             "held_pairs": holds, "backward_pairs": backward, "phase_reset_frames": resets}
 
 
+CADENCE_FRACTION = .85
+
+
+def cadence_status(measured_fps, nominal_fps, capture):
+    """Below 85% of the nominal FPS this host could not run the declared cadence (decision D11-3).
+
+    Such a run is invalid: it is not counted and is never a pass, but it is not a product failure either.
+    Every other check of the same run still applies.
+    """
+    if capture != "none":
+        return "not_applicable"
+    return "valid" if measured_fps >= nominal_fps * CADENCE_FRACTION else "invalid_capacity"
+
+
+def event_times(schedule, frames):
+    """Actual firing time of each scripted actor event, matched by declared order and name.
+
+    Both probes stamp frames on the shared host steady clock from the same start, so the observer's
+    windows can follow when the actor's input really entered, not when the script asked for it.
+    """
+    fired = [(frame["event"], frame["seconds"]) for frame in frames if frame.get("event")]
+    if len(fired) < len(schedule) or any(name != event["name"] for (name, _), event in zip(fired, schedule)):
+        raise ValueError("Actor events do not match the declared script order")
+    return {event["ordinal"]: {"name": event["name"], "scheduled": event["seconds"], "actual": seconds}
+            for (_, seconds), event in zip(fired, schedule)}
+
+
+def anchored(times, begin, start, end, stop):
+    """Declared window [begin, end] around scheduled events `start` and `stop`, moved with their actual firing."""
+    # Shift the declared bound by the lateness, so a punctual event leaves it bit-identical.
+    return (begin + (times[start]["actual"] - times[start]["scheduled"]),
+            end + (times[stop]["actual"] - times[stop]["scheduled"]))
+
+
+# Declared observer windows (seconds on the script clock) and the actor events (ordinals of
+# player_short.hpp's schedule) each one follows: (begin, start event, end, stop event, sign).
+SEGMENTS = {"forward": (.95, 3, 1.5, 4, 1), "backward": (2.2, 5, 2.8, 6, -1), "strafe": (3.3, 7, 3.62, 8, 1),
+            "diagonal": (4.1, 9, 4.42, 10, 1), "pure_turn": (4.85, 11, 5.05, 12, 0), "wall_stop": (7.5, 14, 7.78, 14, 0)}
+FORWARD_CROSSING_WINDOW = (.65, 3, 1.85, 4)
+HOLD_MOTION, HOLD_STOP, ESCAPE, RECAPTURE = 15, 16, 17, 19
+
+
 def analyze(directory):
     directory = Path(directory)
     result = {"passed": False, "scope": "12-second same-host two-GUI character regression; v4 gameplay, not v5 certification.",
               "method": "Successful Presented positions and owning character pose/phase. Gait cycles = actual signed distance / the blended walk/jog cycle distance of each frame.",
               "direction_limit": "Sideways uses the forward walk/jog approximation; backwards samples it in reverse. No dedicated direction clips or IK.",
-              "clients": {}, "errors": []}
+              "clients": {}, "errors": [], "invalid": []}
     try:
         reports = {role: json.loads((directory / f"{role}-player.json").read_text()) for role in ("create", "join")}
         traces = {role: [json.loads(line) for line in (directory / f"{role}-player-frames.jsonl").read_text().splitlines()]
@@ -99,8 +141,10 @@ def analyze(directory):
             result["errors"].extend(f"{role}: {error}" for error in checks["errors"])
             stable = [frame for frame in shown if 0 <= frame["seconds"] <= 9]
             fps = ((len(stable)-1) / (stable[-1]["presented_seconds"]-stable[0]["presented_seconds"])) if len(stable)>1 else 0
-            if report["capture"] == "none" and fps < report["nominal_fps"] * .85:
-                result["errors"].append(f"{role}: measured FPS {fps:.2f} below existing short-probe 85% cadence gate")
+            cadence = cadence_status(fps, report["nominal_fps"], report["capture"])
+            if cadence == "invalid_capacity":
+                result["invalid"].append(f"{role}: measured FPS {fps:.2f} below 85% of nominal {report['nominal_fps']}; "
+                                         "this host could not run the declared cadence (invalid, not counted)")
             first_seen = {}
             for frame in shown:
                 if frame.get("remote"):
@@ -112,6 +156,7 @@ def analyze(directory):
             if report["capture"] == "none" and any(frame["update_ms"] + frame["render_ms"] >= 100 for frame in first_seen.values()):
                 result["errors"].append(f"{role}: first visible character crossed existing 100ms disturbance boundary")
             result["clients"][role] = {**checks, "nominal_fps": report["nominal_fps"], "measured_mean_fps_0_to_9s": fps,
+                "cadence": cadence,
                 "full_run_successful_frames": len(shown), "all_frame_intervals_seconds": intervals,
                 "frame_interval_p50_seconds": rank(intervals,.5), "frame_interval_p95_seconds": rank(intervals,.95),
                 "maximum_frame_interval_seconds": max(intervals, default=None), "costs_ms": costs,
@@ -119,10 +164,11 @@ def analyze(directory):
                     ("frame_id", "seconds", "update_ms", "render_ms", "prepare_world_ms", "remote_submit_ms", "remote")}
                     for key, frame in first_seen.items()}, "initialize_graphics_ms": report["initialize_graphics_ms"]}
         observer = [frame for frame in traces["join"] if frame["presented"]]
-        segments = {"forward": (.95,1.5,1), "backward": (2.2,2.8,-1), "strafe": (3.3,3.62,1),
-                    "diagonal": (4.1,4.42,1), "pure_turn": (4.85,5.05,0), "wall_stop": (7.5,7.78,0)}
+        times = event_times(reports["create"]["script_schedule"], traces["create"])
+        result["actor_event_times"] = times
         result["segments"] = {}
-        for name,(begin,end,sign) in segments.items():
+        for name,(begin,start,end,stop,sign) in SEGMENTS.items():
+            begin, end = anchored(times, begin, start, end, stop)
             samples = [frame for frame in observer if begin <= frame["seconds"] <= end and frame.get("remote")]
             if len(samples) < 2:
                 result["errors"].append(f"{name}: too few successful poses")
@@ -140,7 +186,8 @@ def analyze(directory):
                 result["errors"].append(f"{name}: displacement-driven stop/direction evidence failed")
         # Compare identical observed path lengths at different presentation FPS,
         # rather than equating the duration of a scripted key hold with distance.
-        forward = [frame["remote"]["character"] for frame in observer if .65 <= frame["seconds"] <= 1.85 and frame.get("remote")]
+        begin, end = anchored(times, *FORWARD_CROSSING_WINDOW)
+        forward = [frame["remote"]["character"] for frame in observer if begin <= frame["seconds"] <= end and frame.get("remote")]
         crossings = {}
         if forward:
             origin = forward[0]
@@ -157,17 +204,22 @@ def analyze(directory):
         result["equal_distance_forward_phase"] = crossings
         if reports["join"]["capture"] == "none" and len(crossings)!=3:
             result["errors"].append("Forward segment did not observe all predeclared 0.5/1.0/1.5-unit path crossings")
-        held = [frame for frame in observer if 8.2 <= frame["seconds"] <= 8.65 and
+        # The relay's controlled hold falls inside the actor's hold-motion run; the observer's own
+        # holding flag, not a clock window, says which poses were held and which resumed.
+        hold_begin, hold_end = times[HOLD_MOTION]["actual"], times[HOLD_STOP]["actual"]
+        held = [frame for frame in observer if hold_begin <= frame["seconds"] <= hold_end and
                 frame.get("remote") and frame["remote"]["character"]["holding"]]
         if len(held) < 2:
             result["errors"].append("Controlled snapshot hold did not produce at least two successful held poses")
-        resumed = [frame for frame in observer if 8.65 <= frame["seconds"] < 9.15 and frame.get("remote") and
-                   not frame["remote"]["character"]["holding"]]
+        last_held = held[-1]["seconds"] if held else hold_end
+        resumed = [frame for frame in observer if last_held < frame["seconds"] < times[ESCAPE]["actual"] and
+                   frame.get("remote") and not frame["remote"]["character"]["holding"]]
         if not resumed:
             result["errors"].append("No successful resumed pose after controlled snapshot hold")
         result["controlled_hold"] = {"held_frames":len(held),"resumed_frames":len(resumed)}
         old_id,new_id = reports["create"]["initial_player_id"],reports["create"].get("rejoined_player_id")
-        absence = [frame for frame in observer if 9.2 <= frame["seconds"] <= 10.2 and frame.get("remote") is None]
+        absence = [frame for frame in observer if times[ESCAPE]["actual"] <= frame["seconds"] <= times[RECAPTURE]["actual"] + .1
+                   and frame.get("remote") is None]
         new_samples = [frame for frame in observer if frame.get("remote") and frame["remote"]["player_id"] == new_id]
         if not new_id or new_id == old_id or not absence or not new_samples:
             result["errors"].append("Leave/rejoin did not remove the old model and introduce a distinct player")
@@ -178,7 +230,8 @@ def analyze(directory):
             result["captures"] = reports["join"]["captures"]
     except (OSError,ValueError,KeyError,TypeError,IndexError,ZeroDivisionError) as error:
         result["errors"].append(str(error))
-    result["passed"] = not result["errors"]
+    result["passed"] = not result["errors"] and not result["invalid"]
+    result["verdict"] = "failed" if result["errors"] else "invalid_capacity" if result["invalid"] else "passed"
     (directory/"player-presentation-evidence.json").write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
     return result
 
@@ -188,4 +241,4 @@ if __name__ == "__main__":
     parser.add_argument("directory",type=Path)
     result = analyze(parser.parse_args().directory)
     print(json.dumps(result,indent=2))
-    raise SystemExit(0 if result["passed"] else 1)
+    raise SystemExit(0 if result["passed"] else 2 if result["verdict"] == "invalid_capacity" else 1)

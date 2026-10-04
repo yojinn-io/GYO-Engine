@@ -1,6 +1,6 @@
 # 第 02 批：驗收工具可信化
 
-狀態：進行中（2026-10-04 開始；02a、02b 完成；02a 依 D14 改為先移入再刪除，見 [dev_log](../../../dev_logs/2026_10_04_pvp_v6_batch02.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
+狀態：完成（2026-10-04；02a 依 D14 改為先移入再刪除，見 [dev_log](../../../dev_logs/2026_10_04_pvp_v6_batch02.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
 依賴：第01批。對應 HANDOFF 第5、7項與第8項的 pvp 列；第8項的共通列在 Engine 計畫
 [foundation-followups](../../../architecture/plans/foundation-followups/README.md) 的 FF-2。
 

@@ -16,7 +16,7 @@ from command_evidence import read_trace_events
 from gameplay_evidence import (client_disturbance, combat_expected, life_reset_matches, percentile,
                                start_phase_by_player, validate_accepted_actions)
 from start_phase_evidence import reseed_evidence
-from acceptance_util import PROTOCOL_VERSION
+from acceptance_util import PROTOCOL_VERSION, STALL_RULE
 
 PHASE_STATES = ('acquiring', 'settling', 'tracking')
 DRIFT_BUCKET_CYCLES = 10
@@ -380,6 +380,7 @@ def analyze_soak(output, gateway_counters, *, soak=False):
     result = {
         'passed': not errors, 'errors': errors, 'protocol': PROTOCOL_VERSION, 'fps': client['fps'], 'cycles': cycles,
         'timer_baseline': client.get('timer'),  # Interpretation only; no check reads it.
+        'stall_rule': STALL_RULE,
         'measured_seconds': measured_seconds, 'soak_requested': soak,
         'full_30_minute_qualified': soak and measured_seconds >= 1800 and not errors,
         'scope': 'repeated 16-second v5 gameplay plan; same-host real sockets, headless, clean (no relay or fault); '
