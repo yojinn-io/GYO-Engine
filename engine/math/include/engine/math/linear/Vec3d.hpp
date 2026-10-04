@@ -1,10 +1,10 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <type_traits>
 
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 namespace Engine::Math {
 
@@ -40,7 +40,7 @@ static_assert(std::is_aggregate_v<Vec3d>);
 [[nodiscard]] inline double Length(const Vec3d a) noexcept { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
 
 [[nodiscard]] inline Vec3d Clamp(const Vec3d v, const Vec3d lo, const Vec3d hi) noexcept {
-    return {std::clamp(v.x, lo.x, hi.x), std::clamp(v.y, lo.y, hi.y), std::clamp(v.z, lo.z, hi.z)};
+    return {Clamp(v.x, lo.x, hi.x), Clamp(v.y, lo.y, hi.y), Clamp(v.z, lo.z, hi.z)};
 }
 
 [[nodiscard]] inline bool IsFinite(const Vec3d a) noexcept {

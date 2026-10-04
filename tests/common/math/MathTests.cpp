@@ -23,6 +23,7 @@
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -31,6 +32,7 @@
 #include <limits>
 #include <numbers>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 // Spec-derived tests for GYO::Math. Expected values come from the documented
@@ -213,6 +215,86 @@ bool SameValues(const Matrix4& a, const Matrix4& b) { return a.values == b.value
 // ---------------------------------------------------------------------------
 // scalar/Scalar.hpp, scalar/Constants.hpp
 // ---------------------------------------------------------------------------
+
+// Min, Max and Clamp accept every arithmetic type except bool, but all
+// arguments must share one type: a mixed call does not compile, so a call site
+// cannot convert silently.
+template <class A, class B>
+concept MinMaxAccepts = requires(A a, B b) {
+    Min(a, b);
+    Max(a, b);
+};
+template <class A, class B, class C>
+concept ClampAccepts = requires(A a, B b, C c) { Clamp(a, b, c); };
+
+static_assert(MinMaxAccepts<float, float>);
+static_assert(MinMaxAccepts<const float&, float>);
+static_assert(MinMaxAccepts<double, double>);
+static_assert(MinMaxAccepts<int, int>);
+static_assert(MinMaxAccepts<std::size_t, std::size_t>);
+static_assert(MinMaxAccepts<std::uint64_t, std::uint64_t>);
+static_assert(!MinMaxAccepts<float, double>);
+static_assert(!MinMaxAccepts<float, int>);
+static_assert(!MinMaxAccepts<int, unsigned>);
+static_assert(!MinMaxAccepts<bool, bool>);
+static_assert(MinMaxAccepts<Vec3, Vec3>);
+static_assert(ClampAccepts<float, float, float>);
+static_assert(ClampAccepts<double, double, double>);
+static_assert(ClampAccepts<std::int32_t, std::int32_t, std::int32_t>);
+static_assert(!ClampAccepts<float, float, double>);
+static_assert(!ClampAccepts<double, double, float>);
+static_assert(ClampAccepts<Vec3, Vec3, Vec3>);
+static_assert(ClampAccepts<Vec3d, Vec3d, Vec3d>);
+static_assert(Min(3, -2) == -2 && Max(3, -2) == 3 && Clamp(9, 0, 5) == 5);
+
+namespace {
+
+// Min, Max and Clamp must give exactly the std::min, std::max and std::clamp
+// results, including which argument a tie or NaN returns (visible as the sign
+// of a zero or the payload of a NaN).
+template <class T>
+[[nodiscard]] bool SameRepresentation(const T a, const T b) noexcept {
+    if constexpr (std::is_floating_point_v<T>) {
+        if constexpr (sizeof(T) == 4) return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
+        else return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b);
+    } else {
+        return a == b;
+    }
+}
+
+template <class T>
+void CheckMatchesStd(const std::vector<T>& values) {
+    for (const T a : values) {
+        for (const T b : values) {
+            volatile T va = a;
+            volatile T vb = b;
+            CHECK(SameRepresentation(Min(T{va}, T{vb}), (std::min)(T{va}, T{vb})));
+            CHECK(SameRepresentation(Max(T{va}, T{vb}), (std::max)(T{va}, T{vb})));
+            for (const T c : values) {
+                if (!(b <= c)) continue; // std::clamp requires lo <= hi
+                volatile T vc = c;
+                CHECK(SameRepresentation(Clamp(T{va}, T{vb}, T{vc}), std::clamp(T{va}, T{vb}, T{vc})));
+            }
+        }
+    }
+}
+
+} // namespace
+
+TEST_CASE("scalar Min, Max and Clamp match std for every arithmetic type") {
+    const float nanF = std::numeric_limits<float>::quiet_NaN();
+    const float payloadF = std::bit_cast<float>(0x7FC12345U);
+    CheckMatchesStd<float>({0.0F, -0.0F, 1.0F, -1.0F, 2.5F, 1.0e-40F, -1.0e-40F, kInf, -kInf, nanF, payloadF,
+                            std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest()});
+    const double nanD = std::numeric_limits<double>::quiet_NaN();
+    CheckMatchesStd<double>({0.0, -0.0, 1.0, -1.0, 2.5, 1.0e-310, std::numeric_limits<double>::infinity(),
+                             -std::numeric_limits<double>::infinity(), nanD,
+                             std::numeric_limits<double>::max(), std::numeric_limits<double>::lowest()});
+    CheckMatchesStd<std::int32_t>({0, 1, -1, 7, std::numeric_limits<std::int32_t>::max(),
+                                   std::numeric_limits<std::int32_t>::min()});
+    CheckMatchesStd<std::uint64_t>({0, 1, 2, 1000, std::numeric_limits<std::uint64_t>::max()});
+    CheckMatchesStd<std::size_t>({0, 1, 64, std::numeric_limits<std::size_t>::max()});
+}
 
 TEST_CASE("scalar Clamp, Lerp, Min and Max") {
     CHECK(Min(2.0F, -3.0F) == -3.0F);

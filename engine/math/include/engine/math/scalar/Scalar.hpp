@@ -1,6 +1,6 @@
 #pragma once
 
-#include <algorithm>
+#include <type_traits>
 
 namespace Engine::Math {
 
@@ -11,12 +11,31 @@ namespace Engine::Math {
 // with contraction on may fuse a multiply and add, at run time or when an
 // optimizer constant-folds, and then differs from GYO builds.
 
-[[nodiscard]] inline float Min(const float a, const float b) noexcept { return (std::min)(a, b); }
-[[nodiscard]] inline float Max(const float a, const float b) noexcept { return (std::max)(a, b); }
+// The scalar types Min, Max and Clamp accept: integers and floating point,
+// not bool.
+template <class T>
+concept Arithmetic = std::is_arithmetic_v<T> && !std::is_same_v<T, bool>;
 
-// Requires lo <= hi. NaN input is returned unchanged.
-[[nodiscard]] inline float Clamp(const float value, const float lo, const float hi) noexcept {
-    return std::clamp(value, lo, hi);
+// GYO's min, max and clamp for every arithmetic type, with exactly the
+// std::min, std::max and std::clamp results (the comparisons below are the
+// standard's definitions, so ties and NaN behave the same) but without
+// depending on <algorithm> or platform min/max macros. All arguments must
+// have the same type; a mixed call does not compile rather than converting
+// silently, so cast explicitly where the types differ.
+template <Arithmetic T>
+[[nodiscard]] constexpr T Min(const T a, const T b) noexcept {
+    return b < a ? b : a;
+}
+
+template <Arithmetic T>
+[[nodiscard]] constexpr T Max(const T a, const T b) noexcept {
+    return a < b ? b : a;
+}
+
+// Requires lo <= hi. A NaN value is returned unchanged.
+template <Arithmetic T>
+[[nodiscard]] constexpr T Clamp(const T value, const T lo, const T hi) noexcept {
+    return value < lo ? lo : hi < value ? hi : value;
 }
 
 // Unclamped: t outside [0, 1] extrapolates. Not std::lerp, whose rounding differs.

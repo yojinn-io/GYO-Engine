@@ -183,7 +183,7 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
 }
 
 double PlayerJogWeight(const PlayerPresentationDefinition& definition, const double planarSpeed) {
-    return std::clamp((planarSpeed - definition.walkNativeSpeed) /
+    return Engine::Math::Clamp((planarSpeed - definition.walkNativeSpeed) /
         (definition.jogNativeSpeed - definition.walkNativeSpeed), 0.0, 1.0);
 }
 
@@ -330,7 +330,7 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
         // Contract spans are shorter than the authored clips: progress through
         // the span maps onto the whole clip, which is time-scaled to fit.
         const auto scaled = [](const double elapsed, const double span, const double clip) {
-            return std::clamp(elapsed / span, 0.0, 1.0) * clip;
+            return Engine::Math::Clamp(elapsed / span, 0.0, 1.0) * clip;
         };
         const double now = frame.presentationSeconds;
         if (!std::isfinite(now) || !std::isfinite(frame.lifeStateSeconds) || !std::isfinite(frame.shotSeconds) ||
@@ -343,10 +343,10 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
         if (frame.dead) {
             // Full body; after the clip the last pose holds until the new life.
             output.lower = PlayerLowerAction::Death;
-            output.lowerClipSeconds = std::clamp(now - frame.lifeStateSeconds, 0.0, duration(definition.deathClip));
+            output.lowerClipSeconds = Engine::Math::Clamp(now - frame.lifeStateSeconds, 0.0, duration(definition.deathClip));
             return true;
         }
-        const double inPhase = std::max(0.0, now - state.jumpPhaseSeconds);
+        const double inPhase = Engine::Math::Max(0.0, now - state.jumpPhaseSeconds);
         switch (state.jumpPhase) {
         case PlayerJumpPhase::Start:
             output.lower = PlayerLowerAction::JumpStart;

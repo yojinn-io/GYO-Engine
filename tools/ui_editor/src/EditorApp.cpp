@@ -1,5 +1,7 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
+
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
@@ -963,7 +965,7 @@ void EditorApp::DrawHierarchy() {
                         continue;
                     }
                     const std::size_t target = moveDown
-                        ? std::min(index + 1U, siblings->size() - 1U)
+                        ? Engine::Math::Min(index + 1U, siblings->size() - 1U)
                         : (index > 0U ? index - 1U : 0U);
                     if (target != index) {
                         std::swap((*siblings)[index], (*siblings)[target]);
@@ -1011,7 +1013,7 @@ void EditorApp::DrawCanvas() {
     if (canvasHovered) {
         const ImGuiIO& io = ImGui::GetIO();
         if (io.MouseWheel != 0.0F) {
-            canvasZoom_ = std::clamp(
+            canvasZoom_ = Engine::Math::Clamp(
                 canvasZoom_ * (io.MouseWheel > 0.0F ? 1.1F : 1.0F / 1.1F),
                 0.25F,
                 4.0F);
@@ -1027,7 +1029,7 @@ void EditorApp::DrawCanvas() {
         {origin.x + available.x, origin.y + available.y},
         IM_COL32(13, 15, 19, 255));
     if (showGrid_) {
-        const float step = std::max(gridSize_ * canvasZoom_, 8.0F);
+        const float step = Engine::Math::Max(gridSize_ * canvasZoom_, 8.0F);
         const float xOffset = std::fmod(canvasPanX_, step);
         const float yOffset = std::fmod(canvasPanY_, step);
         for (float x = origin.x + xOffset; x < origin.x + available.x; x += step) {

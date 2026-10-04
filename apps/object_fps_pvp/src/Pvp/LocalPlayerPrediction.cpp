@@ -23,7 +23,7 @@ constexpr double PhaseCatchUpMargin = 1.0e-6;
 constexpr std::size_t PhaseFrameEvidence = 8;
 double Percentile(const std::deque<double>& samples) {
     std::vector<double> sorted(samples.begin(), samples.end());
-    const auto index = (std::min)(sorted.size() - 1,
+    const auto index = Engine::Math::Min(sorted.size() - 1,
         static_cast<std::size_t>(static_cast<double>(sorted.size()) * MovementPhasePercentile));
     std::nth_element(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(index), sorted.end());
     return sorted[index];
@@ -93,7 +93,7 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
 }
 
 void LocalPlayerPrediction::Correct(double error, bool late) {
-    phaseShiftSeconds_ = std::clamp(error, -MovementPhaseMaximumCorrectionSeconds, MovementPhaseMaximumCorrectionSeconds);
+    phaseShiftSeconds_ = Engine::Math::Clamp(error, -MovementPhaseMaximumCorrectionSeconds, MovementPhaseMaximumCorrectionSeconds);
     settling_ = true;
     phaseSamples_.clear();
     lateSamples_ = 0;
@@ -253,7 +253,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     const bool coveredGap = bootstrapCatchUp ||
         (pending_.empty() && frameSeconds > MovementMaximumRegularFrameSeconds);
     const double elapsed = freshSeed_ || coveredGap ?
-        (std::min)(frameSeconds, MovementTickSeconds) : frameSeconds;
+        Engine::Math::Min(frameSeconds, MovementTickSeconds) : frameSeconds;
     freshSeed_ = false;
     bool send = sendPending_;
     sendPending_ = false;
@@ -274,9 +274,9 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
                 preview.Advance(0.0, [](const Engine::Runtime::TickContext&) {}).secondsUntilNextTick;
             const double capacity = (CatchUpSteps + 1) * step - accumulated - elapsed -
                 step * PhaseCatchUpMargin;
-            ahead = std::clamp(capacity, 0.0, limit);
+            ahead = Engine::Math::Clamp(capacity, 0.0, limit);
         }
-        const double shift = std::clamp(phaseShiftSeconds_, -ahead, limit);
+        const double shift = Engine::Math::Clamp(phaseShiftSeconds_, -ahead, limit);
         advanceSeconds -= shift;
         phaseShiftSeconds_ -= shift;
     }
@@ -320,7 +320,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
                 blockedSteps * MovementTickSeconds,
             .frameSeconds = frameSeconds, .count = blockedSteps, .lifeGeneration = current_.lifeGeneration});
     if (correctionSeconds_ > 0) {
-        const auto remaining = (std::max)(0.0, correctionSeconds_ - elapsed);
+        const auto remaining = Engine::Math::Max(0.0, correctionSeconds_ - elapsed);
         const auto scale = static_cast<float>(remaining / correctionSeconds_);
         correction_ = correction_ * scale;
         correctionSeconds_ = remaining;

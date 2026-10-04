@@ -47,7 +47,7 @@ GYO 目前沒有共用的數學基礎。同一個概念在各處各自定義：
   | Collision、Model、Render、Ui | PUBLIC |
   | pvp `match_domain`（`apps/object_fps_pvp/CMakeLists.txt:27`） | 明確 PUBLIC |
   | ui_editor 的 `gyo_ui_editor_preview`（`tools/ui_editor/CMakeLists.txt:55-60`） | 明確 PRIVATE |
-  | `GYO::Engine`、Input、Text | 不連結 |
+  | `GYO::Engine`、Input、Text | 不連結（後續更正，2026-10-04 使用者決定：`GYO::Engine` PUBLIC 連結 Math，以便統一 min／max／clamp；Input、Text 仍不連結。見 HANDOFF 決策紀錄） |
 
 ### 1.2 型別
 

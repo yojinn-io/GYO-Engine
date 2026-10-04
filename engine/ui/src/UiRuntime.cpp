@@ -1,5 +1,6 @@
 #include "ui/UiRuntime.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
 #include "ui/UiDocumentCodec.hpp"
 
 #include <algorithm>
@@ -297,7 +298,7 @@ struct FitTransform final {
 };
 
 [[nodiscard]] FitTransform MakeFit(const UiDocument& document, UiViewport viewport) noexcept {
-    const float scale = std::min(
+    const float scale = Math::Min(
         viewport.width / document.designCanvas.size.x,
         viewport.height / document.designCanvas.size.y);
     return {scale, {
@@ -378,7 +379,7 @@ struct FitTransform final {
             auto listValue = ResolveBinding(document, bindings, element.binding);
             if (!listValue) return UiResult<void>::Err(std::move(listValue).error());
             const UiList& list = std::get<UiList>(*listValue.value());
-            const std::size_t count = std::min(element.maxItems, list.items.size());
+            const std::size_t count = Math::Min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
                 Math::Rect itemRect = design;
                 itemRect.x += element.itemStep.x * static_cast<float>(index);
@@ -412,9 +413,9 @@ struct FitTransform final {
 }
 
 [[nodiscard]] double QuantizeSlider(const UiElement& slider, double value) noexcept {
-    value = std::clamp(value, slider.minimum, slider.maximum);
+    value = Math::Clamp(value, slider.minimum, slider.maximum);
     const double steps = std::round((value - slider.minimum) / slider.step);
-    return std::clamp(slider.minimum + steps * slider.step, slider.minimum, slider.maximum);
+    return Math::Clamp(slider.minimum + steps * slider.step, slider.minimum, slider.maximum);
 }
 
 [[nodiscard]] UiResult<double> SliderValue(
@@ -451,7 +452,7 @@ struct FitTransform final {
         return UiResult<std::optional<UiActionEvent>>::Err(RuntimeError(
             UiErrorCode::RuntimeState, "slider resolved to a non-positive width"));
     }
-    const double ratio = std::clamp(
+    const double ratio = Math::Clamp(
         static_cast<double>((pointerX - sliderPixels.x) / sliderPixels.width), 0.0, 1.0);
     return SliderEvent(
         document,
@@ -569,7 +570,7 @@ struct ComposeContext final {
 
             auto value = SliderValue(context.document, context.bindings, element);
             if (!value) return UiResult<void>::Err(std::move(value).error());
-            const double clamped = std::clamp(value.value(), element.minimum, element.maximum);
+            const double clamped = Math::Clamp(value.value(), element.minimum, element.maximum);
             const float ratio = static_cast<float>((clamped - element.minimum) / (element.maximum - element.minimum));
             const Math::Rect textBounds{
                 pixels.x + pixels.width * 0.04F,
@@ -600,12 +601,12 @@ struct ComposeContext final {
                 pixels.x + pixels.width * 0.04F,
                 pixels.y + pixels.height * 0.72F,
                 pixels.width * 0.92F,
-                std::max(2.0F, pixels.height * 0.10F),
+                Math::Max(2.0F, pixels.height * 0.10F),
             };
             context.drawList.commands.emplace_back(UiQuadDraw{track, trackColor.value(), clipPixels});
             context.drawList.commands.emplace_back(UiQuadDraw{
                 {track.x, track.y, track.width * ratio, track.height}, fillColor.value(), clipPixels});
-            const float thumbWidth = std::max(6.0F, pixels.height * 0.14F);
+            const float thumbWidth = Math::Max(6.0F, pixels.height * 0.14F);
             context.drawList.commands.emplace_back(UiQuadDraw{
                 {track.x + track.width * ratio - thumbWidth * 0.5F,
                  track.y - track.height,
@@ -619,7 +620,7 @@ struct ComposeContext final {
             auto listValue = ResolveBinding(context.document, context.bindings, element.binding);
             if (!listValue) return UiResult<void>::Err(std::move(listValue).error());
             const UiList& list = std::get<UiList>(*listValue.value());
-            const std::size_t count = std::min(element.maxItems, list.items.size());
+            const std::size_t count = Math::Min(element.maxItems, list.items.size());
             for (std::size_t index = 0; index < count; ++index) {
                 Math::Rect itemRect = design;
                 itemRect.x += element.itemStep.x * static_cast<float>(index);

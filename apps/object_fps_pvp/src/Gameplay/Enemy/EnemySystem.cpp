@@ -32,7 +32,7 @@ constexpr float kWaypointTolerance = 0.025f;
     const EnemyDefinition& definition, const EnemyState state) noexcept {
     const double duration = definition.rig->model->clips[
         definition.rig->clips[static_cast<std::size_t>(state)]].durationSeconds;
-    return static_cast<float>((std::min)(
+    return static_cast<float>(Engine::Math::Min(
         duration, static_cast<double>((std::numeric_limits<float>::max)())));
 }
 
@@ -47,7 +47,7 @@ constexpr float kWaypointTolerance = 0.025f;
     const double deltaX = static_cast<double>(right.x) - left.x;
     const double deltaZ = static_cast<double>(right.z) - left.z;
     const double distance = std::hypot(deltaX, deltaZ);
-    return static_cast<float>((std::min)(
+    return static_cast<float>(Engine::Math::Min(
         distance, static_cast<double>((std::numeric_limits<float>::max)())));
 }
 
@@ -61,7 +61,7 @@ constexpr float kWaypointTolerance = 0.025f;
 
 void AddElapsed(float& elapsedSeconds, const float deltaSeconds) noexcept {
     const double sum = static_cast<double>(elapsedSeconds) + deltaSeconds;
-    elapsedSeconds = static_cast<float>((std::min)(
+    elapsedSeconds = static_cast<float>(Engine::Math::Min(
         sum, static_cast<double>((std::numeric_limits<float>::max)())));
 }
 
@@ -97,8 +97,8 @@ void SubtractElapsed(float& remainingSeconds, const float deltaSeconds) noexcept
         if (nearTime > farTime) {
             std::swap(nearTime, farTime);
         }
-        entryTime = (std::max)(entryTime, nearTime);
-        exitTime = (std::min)(exitTime, farTime);
+        entryTime = Engine::Math::Max(entryTime, nearTime);
+        exitTime = Engine::Math::Min(exitTime, farTime);
         return entryTime <= exitTime;
     };
 
@@ -1111,7 +1111,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     const double previous = advance.value().previousSeconds;
     const double current = advance.value().currentSeconds;
     const auto pointAt = [&](const double seconds) {
-        const auto result = eventAnimation.Advance((std::max)(0.0, seconds - eventAnimation.TimeSeconds()));
+        const auto result = eventAnimation.Advance(Engine::Math::Max(0.0, seconds - eventAnimation.TimeSeconds()));
         if (!result) throw std::runtime_error("Enemy attack pose: " + result.error());
         return EnemyBoneWorldPoint(rig, eventAnimation.CurrentPose(), rig.attackPoint, enemy.position, enemy.yawRadians);
     };
@@ -1137,14 +1137,14 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
         return;
     }
 
-    const double begin = (std::max)(previous, rig.attackBeginSeconds);
-    const double end = (std::min)(current, rig.attackEndSeconds);
+    const double begin = Engine::Math::Max(previous, rig.attackBeginSeconds);
+    const double end = Engine::Math::Min(current, rig.attackEndSeconds);
     if (end < begin || current < rig.attackBeginSeconds || previous > rig.attackEndSeconds) return;
     const Engine::Collision::VerticalCapsule playerBody{{player.position.x, player.feetY, player.position.z},
         player.hitboxHeight, player.collisionRadius};
     const float radius = rig.attackRadius * rig.scale;
     Engine::Math::Vec3 from = pointAt(begin);
-    const std::size_t steps = (std::max)(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
+    const std::size_t steps = Engine::Math::Max(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
     for (std::size_t step = 1; step <= steps; ++step) {
         const auto to = pointAt(begin + (end - begin) * static_cast<double>(step) / static_cast<double>(steps));
         const Engine::Math::Vec3 start = from, finish = to;
@@ -1253,10 +1253,10 @@ EnemyDamageResult EnemySystem::ApplyDamage(
 
         // Two finite floats can overflow when multiplied as floats. Resolve in
         // double and clamp to remaining health before converting back.
-        const double resolvedDamage = (std::max)(1.0,
+        const double resolvedDamage = Engine::Math::Max(1.0,
             static_cast<double>(rawDamage) * multiplier - enemy.definition.defense);
         const float healthBefore = enemy.health;
-        enemy.health = static_cast<float>((std::max)(0.0,
+        enemy.health = static_cast<float>(Engine::Math::Max(0.0,
             static_cast<double>(healthBefore) - resolvedDamage));
         enemy.hitFlashRemainingSeconds = kEnemyHitFlashSeconds;
         if (enemy.health <= 0.0f) {

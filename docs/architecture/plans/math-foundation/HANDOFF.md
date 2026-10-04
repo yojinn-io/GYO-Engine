@@ -40,6 +40,9 @@
 | 2026-10-04 | B6a：`Math::DegreesToRadians`／`RadiansToDegrees` 改為 constexpr，讓 pvp 的 `MovementMaximumPitch` 能以 `inline constexpr` 改用它（單次乘法，編譯期與執行期捨入相同） | 使用者 |
 | 2026-10-04 | 使用者暫離期間，剩餘批次照計劃連續執行：每批 commit、開 PR、跑 CI，有問題就修正後重跑；PR 疊在前一批分支上，合併由使用者決定 | 使用者（B6a 進行中） |
 | 2026-10-04 | B6a 的跨平台驗證：本機（mac x64）比對 master 與 branch 的全模擬 digest；依賴 libm 的替換（`hypot`）與會漂移的替換（倒數相乘正規化）以 `tests/object_fps_pvp` 的 characterization 測試在 CI 四平台實測；其餘替換只用 IEEE 四則運算與 `sqrt`，與平台無關 | 使用者 |
+| 2026-10-04 | float 純量的 clamp／min／max 統一使用 Math（B7 留下的寫法不一致） | 使用者 |
+| 2026-10-04 | double 與整數也統一：`Math::Min／Max／Clamp` 改為 GYO 自己的實作，支援所有算術型別（bool 除外），結果與 std 相同；引數型別不一致時不能編譯。理由：std 的這些函式受 C／C++ 版本與平台巨集影響 | 使用者 |
+| 2026-10-04 | `GYO::Engine` PUBLIC 連結 `GYO::Math`（新增依賴邊 `engine → gyo_math`），讓 io、runtime、asset 也能使用；更正 PLAN 1.1「Engine 不連結」。Input、Text、Platform 目前沒有這類呼叫，維持不連結 | 使用者 |
 
 ## B0 基線
 

@@ -187,8 +187,8 @@ struct PvpApplication::Impl final {
 
     void HandleNativeEvent(const SDL_Event& event) {
         if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(platform->NativeWindow())) {
-            width = static_cast<float>((std::max)(1, event.window.data1));
-            height = static_cast<float>((std::max)(1, event.window.data2));
+            width = static_cast<float>(Engine::Math::Max(1, event.window.data1));
+            height = static_cast<float>(Engine::Math::Max(1, event.window.data2));
         }
         if (InWorld()) {
             const auto windowId = SDL_GetWindowID(platform->NativeWindow());
@@ -356,7 +356,7 @@ struct PvpApplication::Impl final {
             weaponFeedback.reloadEndTick = combat.reloadEndTick;
             weaponFeedback.reloading = combat.reloadActionId != 0;
             weaponFeedback.reloadProgress = combat.reloadEndTick > combat.reloadStartTick ?
-                std::clamp(static_cast<double>(state.snapshot->tick - combat.reloadStartTick) /
+                Engine::Math::Clamp(static_cast<double>(state.snapshot->tick - combat.reloadStartTick) /
                     static_cast<double>(combat.reloadEndTick - combat.reloadStartTick), 0.0, 1.0) : 0;
         }
         // Drain owns delivery exactly once, independently of the movement ACK.
@@ -474,7 +474,7 @@ struct PvpApplication::Impl final {
                 ++weaponFeedback.animationRevision;
             }
             duration = static_cast<double>(weaponFeedback.reloadEndTick - weaponFeedback.reloadStartTick) / AuthorityTickRate;
-            elapsed = (std::min)(duration,
+            elapsed = Engine::Math::Min(duration,
                 reloadAnchorSeconds + std::chrono::duration<double>(now - reloadAnchorAt).count());
         } else {
             if (weaponAction == fps::WeaponViewModelAction::Reload) {
@@ -498,7 +498,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.drawing = weaponAction == fps::WeaponViewModelAction::Draw;
         weaponFeedback.reloadAnimating = weaponAction == fps::WeaponViewModelAction::Reload;
         weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
-        weaponFeedback.cooldownRemainingSeconds = (std::max)(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
+        weaponFeedback.cooldownRemainingSeconds = Engine::Math::Max(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
     }
 
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,

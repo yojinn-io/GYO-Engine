@@ -1,5 +1,7 @@
 #include "model/Animation.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -143,7 +145,7 @@ Result SamplePose(const ModelAsset& model,const std::size_t clipIndex,double sec
     if(mode==PlaybackMode::Loop&&clip.durationSeconds>0) {
         seconds=std::fmod(seconds,clip.durationSeconds);
         if(seconds<0) seconds+=clip.durationSeconds;
-    } else seconds=std::clamp(seconds,0.0,clip.durationSeconds);
+    } else seconds=Math::Clamp(seconds,0.0,clip.durationSeconds);
     output.localTransforms.resize(model.nodes.size());
     for(std::size_t i=0;i<model.nodes.size();++i) output.localTransforms[i]=model.nodes[i].localTransform;
     for(const auto& track:clip.tracks) {
@@ -215,10 +217,10 @@ Base::Result<PlaybackInterval,std::string> AnimationInstance::Advance(const doub
     const double duration=model_->clips[*clipIndex_].durationSeconds;
     const double next=timeSeconds_+deltaSeconds;
     if(!std::isfinite(next)) return AdvanceResult::Err("Animation playback time overflowed.");
-    const double current=mode_==PlaybackMode::Clamp?std::min(next,duration):next;
+    const double current=mode_==PlaybackMode::Clamp?Math::Min(next,duration):next;
     auto sampled=SamplePose(*model_,*clipIndex_,current,mode_,sampled_);
     if(!sampled) return AdvanceResult::Err(sampled.error());
-    transitionElapsedSeconds_=std::min(transitionSeconds_,transitionElapsedSeconds_+deltaSeconds);
+    transitionElapsedSeconds_=Math::Min(transitionSeconds_,transitionElapsedSeconds_+deltaSeconds);
     if(transitionSeconds_>0&&transitionElapsedSeconds_<transitionSeconds_) {
         auto blended=BlendPoses(*model_,transitionSource_,sampled_,
             static_cast<float>(transitionElapsedSeconds_/transitionSeconds_),pose_);

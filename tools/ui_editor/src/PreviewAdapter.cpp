@@ -141,7 +141,7 @@ void DrawImagePlaceholder(
                                static_cast<int>((y - minimum.y) / tile);
             drawList.AddRectFilled(
                 {x, y},
-                {std::min(x + tile, maximum.x), std::min(y + tile, maximum.y)},
+                {Engine::Math::Min(x + tile, maximum.x), Engine::Math::Min(y + tile, maximum.y)},
                 parity % 2 == 0
                     ? IM_COL32(68, 73, 84, 255)
                     : IM_COL32(42, 46, 55, 255));
@@ -161,7 +161,7 @@ void DrawText(
     AssetPreviewContext* assets) {
     ClipScope clip(drawList, text.clipPixels, viewport);
     const ImVec2 minimum = Minimum(text.boundsPixels, viewport);
-    const float fontSize = std::max(text.pointSizePixels, 1.0F);
+    const float fontSize = Engine::Math::Max(text.pointSizePixels, 1.0F);
     std::string assetError;
     const TextTextureView raster = assets != nullptr
         ? assets->Text(text.fontAssetId, text.utf8, fontSize, assetError)
@@ -411,7 +411,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
         const Json& design = sourceDocument["design_canvas"]["size"];
         const float designWidth = design[0].get<float>();
         const float designHeight = design[1].get<float>();
-        const float designScale = std::min(
+        const float designScale = Engine::Math::Min(
             viewport.width / designWidth,
             viewport.height / designHeight);
         if (source.parent == nullptr) {
@@ -525,10 +525,10 @@ PreviewAdapter::Result PreviewAdapter::Draw(
                         : pivotOffset;
                 const bool pivotField = field == Result::GizmoField::Pivot;
                 const ImVec2 basis = pivotField ? minimum : parentMinimum;
-                const float width = std::max(0.001F, pivotField
+                const float width = Engine::Math::Max(0.001F, pivotField
                     ? selected->boundsPixels.width
                     : parentBounds.width);
-                const float height = std::max(0.001F, pivotField
+                const float height = Engine::Math::Max(0.001F, pivotField
                     ? selected->boundsPixels.height
                     : parentBounds.height);
                 float x = (mouse.x - offset.x - basis.x) / width;
@@ -538,14 +538,14 @@ PreviewAdapter::Result PreviewAdapter::Draw(
                     x = std::round(x * width / snapPixels) * snapPixels / width;
                     y = std::round(y * height / snapPixels) * snapPixels / height;
                 }
-                x = std::clamp(x, 0.0F, 1.0F);
-                y = std::clamp(y, 0.0F, 1.0F);
+                x = Engine::Math::Clamp(x, 0.0F, 1.0F);
+                y = Engine::Math::Clamp(y, 0.0F, 1.0F);
                 if (field == Result::GizmoField::AnchorMin) {
-                    x = std::min(x, anchorMaxX);
-                    y = std::min(y, anchorMaxY);
+                    x = Engine::Math::Min(x, anchorMaxX);
+                    y = Engine::Math::Min(y, anchorMaxY);
                 } else if (field == Result::GizmoField::AnchorMax) {
-                    x = std::max(x, anchorMinX);
-                    y = std::max(y, anchorMinY);
+                    x = Engine::Math::Max(x, anchorMinX);
+                    y = Engine::Math::Max(y, anchorMinY);
                 }
                 const bool finished =
                     ImGui::IsMouseReleased(ImGuiMouseButton_Left);

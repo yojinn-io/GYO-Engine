@@ -4,6 +4,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
 #include "engine/math/scalar/Angle.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -90,7 +91,7 @@ ActionAdmission PvpMatch::CanSubmitActions(const ActionBatch& batch,
     if (staged.size() > MaxActionWindow) return ActionAdmission::Full;
     const auto& player = found->second;
     if (!CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
-    const auto floor = (std::max)(player.retiredActionThrough, acknowledgedThrough);
+    const auto floor = Engine::Math::Max(player.retiredActionThrough, acknowledgedThrough);
     // This bounded candidate also reserves room for every eventual decision.
     // Validation must finish before the live ledger (or host staging) changes.
     std::map<ActionId, ShotRequest> candidate;
@@ -195,7 +196,7 @@ const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
         double nearest = (std::numeric_limits<double>::max)();
         for (const auto& blocker : blockers) {
             // Float difference, then double squares: the established spawn distance.
-            nearest = (std::min)(nearest,
+            nearest = Engine::Math::Min(nearest,
                 Engine::Math::LengthSquared(Engine::Math::ToVec3d(p - blocker.feet)));
         }
         // Strict comparison leaves equal-distance choices in content order.
@@ -315,7 +316,7 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
                 if (hit.kind == ShotHitKind::Player) {
                     auto& target = players_.at(hit.targetId);
                     decision.targetLifeGeneration = target.state.lifeGeneration;
-                    decision.damage = (std::min)(PvpCombatRules.shotDamage, target.combat.hp);
+                    decision.damage = Engine::Math::Min(PvpCombatRules.shotDamage, target.combat.hp);
                     target.combat.hp -= decision.damage;
                     if (target.combat.hp == 0) Kill(target);
                 }

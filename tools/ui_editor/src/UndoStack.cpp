@@ -1,12 +1,13 @@
 #include "gyo/ui_editor/UndoStack.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <utility>
 
 namespace Gyo::Tools::UiEditor {
 
 UndoStack::UndoStack(const std::size_t capacity)
-    : capacity_(std::max<std::size_t>(capacity, 2U)) {}
+    : capacity_(Engine::Math::Max<std::size_t>(capacity, 2U)) {}
 
 void UndoStack::Reset(std::string initialState) {
     entries_.clear();
@@ -125,7 +126,7 @@ void UndoStack::TrimToCapacity() {
     entries_.erase(
         entries_.begin(),
         entries_.begin() + static_cast<std::ptrdiff_t>(removeCount));
-    cursor_ -= std::min(cursor_, removeCount);
+    cursor_ -= Engine::Math::Min(cursor_, removeCount);
 }
 
 } // namespace Gyo::Tools::UiEditor

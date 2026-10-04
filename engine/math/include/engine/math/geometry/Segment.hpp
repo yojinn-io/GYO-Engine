@@ -1,10 +1,10 @@
 #pragma once
 
-#include <algorithm>
 #include <type_traits>
 
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 namespace Engine::Math {
 
@@ -36,14 +36,14 @@ static_assert(std::is_aggregate_v<Segmentd>);
     const Vec3 edge = segment.end - segment.start;
     const float squared = Dot(edge, edge);
     return segment.start + edge * (squared > 0.0F
-        ? std::clamp(Dot(point - segment.start, edge) / squared, 0.0F, 1.0F) : 0.0F);
+        ? Clamp(Dot(point - segment.start, edge) / squared, 0.0F, 1.0F) : 0.0F);
 }
 
 [[nodiscard]] inline Vec3d ClosestPoint(const Vec3d point, const Segmentd& segment) noexcept {
     const Vec3d edge = segment.end - segment.start;
     const double squared = Dot(edge, edge);
     return segment.start + edge * (squared > 0.0
-        ? std::clamp(Dot(point - segment.start, edge) / squared, 0.0, 1.0) : 0.0);
+        ? Clamp(Dot(point - segment.start, edge) / squared, 0.0, 1.0) : 0.0);
 }
 
 } // namespace Engine::Math

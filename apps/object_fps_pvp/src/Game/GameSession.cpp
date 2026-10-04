@@ -12,7 +12,6 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <exception>
@@ -92,8 +91,8 @@ struct ViewBasis final {
         if (entryTime > exitTime) {
             std::swap(entryTime, exitTime);
         }
-        minimumTime = (std::max)(minimumTime, entryTime);
-        maximumTime = (std::min)(maximumTime, exitTime);
+        minimumTime = Engine::Math::Max(minimumTime, entryTime);
+        maximumTime = Engine::Math::Min(maximumTime, exitTime);
         return minimumTime <= maximumTime;
     };
 

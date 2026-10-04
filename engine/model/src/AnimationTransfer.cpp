@@ -1,6 +1,7 @@
 #include "model/Animation.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <cmath>
 #include <limits>
 #include <unordered_set>
@@ -14,8 +15,8 @@ using TransferResult = Base::Result<AnimationClip, std::string>;
 // Normalized rotation composition: Product(a, b) applies b first, then a.
 Quaternion Product(const Quaternion a,const Quaternion b) { return Math::Normalize(Math::Multiply(a,b)); }
 bool UniformPositive(const Vec3 scale) {
-    const float largest=std::max({scale.x,scale.y,scale.z});
-    const float smallest=std::min({scale.x,scale.y,scale.z});
+    const float largest=Math::Max(Math::Max(scale.x,scale.y),scale.z);
+    const float smallest=Math::Min(Math::Min(scale.x,scale.y),scale.z);
     return Math::IsFinite(scale)&&smallest>0&&largest-smallest<=largest*0.0001F;
 }
 struct ReferenceFrame final {

@@ -1,5 +1,7 @@
 #include "engine/collision/Collision.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -52,7 +54,7 @@ template <class Accept> void Roots(Vec3d offset, Vec3d velocity, double radius, 
         16.0 * std::numeric_limits<double>::epsilon() * (std::abs(b * b) + std::abs(a * c));
     if (discriminant < -roundoff)
         return;
-    const double root = std::sqrt((std::max)(0.0, discriminant));
+    const double root = std::sqrt(Math::Max(0.0, discriminant));
     // Stable quadratic roots avoid cancellation close to a surface.
     const double q = -b - std::copysign(root, b);
     if (q == 0.0) {
@@ -75,7 +77,7 @@ std::optional<double> RayCapsule(Vec3d origin, Vec3d direction, double maximumDi
     double nearest = std::numeric_limits<double>::infinity();
     auto accept = [&](double distance) {
         if (distance >= 0.0 && distance <= maximumDistance)
-            nearest = (std::min)(nearest, distance);
+            nearest = Math::Min(nearest, distance);
     };
     const Vec3d edge = end - start;
     const double edgeLength = Length(edge);
@@ -135,7 +137,7 @@ std::optional<double> RayRoundedBox(Vec3d origin, Vec3d displacement, Vec3d lo, 
         Roots({offset[0], offset[1], offset[2]}, {velocity[0], velocity[1], velocity[2]}, radius,
               [&](double t) {
                   if (t >= first - 1.0e-12 && t <= last + 1.0e-12)
-                      nearest = (std::min)(nearest, std::clamp(t, first, last));
+                      nearest = Math::Min(nearest, Math::Clamp(t, first, last));
               });
         if (std::isfinite(nearest))
             return nearest;
@@ -154,8 +156,8 @@ Upright Shape(const VerticalCapsule &c) {
             c.radius};
 }
 Vec3d BoxContactPoint(Upright c, const Math::Aabb &b, Vec3d normal) {
-    const double low = (std::max)(c.bottom.y, static_cast<double>(b.minimum.y));
-    const double high = (std::min)(c.bottom.y + c.length, static_cast<double>(b.maximum.y));
+    const double low = Math::Max(c.bottom.y, static_cast<double>(b.minimum.y));
+    const double high = Math::Min(c.bottom.y + c.length, static_cast<double>(b.maximum.y));
     Vec3d point = Math::ClosestPoint(Vec3d{c.bottom.x, (low + high) * 0.5, c.bottom.z}, Math::ToAabbd(b));
     if (normal.x != 0.0)
         point.x = normal.x > 0.0 ? b.maximum.x : b.minimum.x;
@@ -174,7 +176,7 @@ Contact BoxContact(Upright c, const Math::Aabb &b, double fraction) {
     double depth{};
     if (distance > 0.0) {
         normal = separation * (1.0 / distance);
-        depth = (std::max)(0.0, c.radius - distance);
+        depth = Math::Max(0.0, c.radius - distance);
     } else {
         const std::array<double, 6> distances{c.bottom.x - lo.x, hi.x - c.bottom.x,
                                               c.bottom.y - lo.y, hi.y - c.bottom.y,
@@ -195,12 +197,12 @@ Contact CapsuleContact(Upright c, Upright target, double fraction) {
     else if (a.y + c.length < b.y)
         a.y += c.length;
     else
-        a.y = b.y = ((std::max)(a.y, b.y) + (std::min)(a.y + c.length, b.y + target.length)) * 0.5;
+        a.y = b.y = (Math::Max(a.y, b.y) + Math::Min(a.y + c.length, b.y + target.length)) * 0.5;
     const Vec3d separation = a - b;
     const double distance = Length(separation);
     const Vec3d normal = distance > 0.0 ? separation * (1.0 / distance) : Vec3d{1, 0, 0};
     return {static_cast<float>(fraction), Math::ToVec3(b + normal * target.radius), Math::ToVec3(normal),
-            static_cast<float>((std::max)(0.0, c.radius + target.radius - distance))};
+            static_cast<float>(Math::Max(0.0, c.radius + target.radius - distance))};
 }
 bool SeparatingContact(const Contact &c, Vec3d displacement) {
     return c.penetrationDepth <= kTolerance && Dot(Math::ToVec3d(c.normal), displacement) >= 0.0;

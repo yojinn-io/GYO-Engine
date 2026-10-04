@@ -1,6 +1,7 @@
 #include "engine/io/stream/BufferedStream.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <cstring>
 #include <limits>
 
@@ -147,7 +148,7 @@ namespace Engine::IO::Stream {
             }
 
             const std::size_t need = bytes - out;
-            const std::size_t n = (std::min)(need, avail);
+            const std::size_t n = Math::Min(need, avail);
 
             std::memcpy(outPtr + out, rbuf_.data() + rpos_, n);
             rpos_ += n;
@@ -197,7 +198,7 @@ namespace Engine::IO::Stream {
             }
 
             // バッファへコピー
-            const std::size_t n = (std::min)(free, bytes - inOff);
+            const std::size_t n = Math::Min(free, bytes - inOff);
             std::memcpy(wbuf_.data() + wlen_, inPtr + inOff, n);
             wlen_ += n;
             inOff += n;

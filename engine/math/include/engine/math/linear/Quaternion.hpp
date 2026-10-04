@@ -1,11 +1,11 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <type_traits>
 
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 namespace Engine::Math {
 
@@ -86,7 +86,7 @@ static_assert(std::is_aggregate_v<Quaternion>);
         b = {-b.x, -b.y, -b.z, -b.w};
         dot = -dot;
     }
-    dot = std::clamp(dot, -1.0F, 1.0F);
+    dot = Clamp(dot, -1.0F, 1.0F);
     float left = 1 - t;
     float right = t;
     if (dot < 0.9995F) {

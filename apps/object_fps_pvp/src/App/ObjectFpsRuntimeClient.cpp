@@ -7,11 +7,11 @@
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/input/InputActionMap.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
 #include "ui/UiDocumentCodec.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <span>
@@ -266,7 +266,7 @@ Engine::Runtime::RuntimeControl ObjectFpsRuntimeClient::Update(
     }
 
     const float deltaSeconds = static_cast<float>(
-        std::clamp(frame.deltaSeconds, 0.0, 0.05));
+        Engine::Math::Clamp(frame.deltaSeconds, 0.0, 0.05));
     if (!impl_->session.Advance(
             deltaSeconds,
             gameInput,

@@ -4,6 +4,7 @@
 #include "render/PrimitiveMesh.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/scalar/ColorSpace.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -117,7 +118,7 @@ using namespace ShaderAbi;
 
 [[nodiscard]] std::uint8_t CaptureComponent(float value, bool srgb) noexcept {
     if (std::isnan(value)) value = 0.0F;
-    value = std::clamp(value, 0.0F, 1.0F);
+    value = Math::Clamp(value, 0.0F, 1.0F);
     if (srgb) value = Math::EncodeSrgb(value);
     return static_cast<std::uint8_t>(std::lround(value * 255.0F));
 }

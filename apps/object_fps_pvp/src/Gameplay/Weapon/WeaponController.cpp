@@ -1,7 +1,6 @@
 #include "RetroFPS/Gameplay/Weapon/WeaponController.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -153,7 +152,7 @@ void WeaponController::Update(
             const WeaponAction completed = state.action_;
             if (completed == WeaponAction::Reload) {
                 const std::uint32_t missing = definition_.magazineCapacity - state.magazineAmmo_;
-                const std::uint32_t transferred = (std::min)(missing, state.reserveAmmo_);
+                const std::uint32_t transferred = Engine::Math::Min(missing, state.reserveAmmo_);
                 state.magazineAmmo_ += transferred;
                 state.reserveAmmo_ -= transferred;
             }

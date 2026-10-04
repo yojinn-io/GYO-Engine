@@ -1,5 +1,7 @@
 #include "engine/io/stream/MemoryStream.hpp"
 
+#include "engine/math/scalar/Scalar.hpp"
+
 namespace Engine::IO::Stream {
     IoResult<std::size_t> MemoryStream::Read(void* dst, std::size_t bytes) {
         if (!open_) {
@@ -22,7 +24,7 @@ namespace Engine::IO::Stream {
 
         const std::uint64_t remain = size - pos_;
         const std::size_t n = static_cast<std::size_t>(
-            (std::min<std::uint64_t>)(remain, static_cast<std::uint64_t>(bytes))
+            Math::Min(remain, static_cast<std::uint64_t>(bytes))
         );
 
         std::memcpy(dst, buf_.data() + pos_, n);

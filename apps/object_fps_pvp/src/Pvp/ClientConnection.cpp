@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 #include "client_v5.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
@@ -321,7 +322,7 @@ struct ClientConnection::Impl {
             const auto found=actions.find(decision.actionId);
             if(found!=actions.end())found->second.decision=decision;
         }
-        actionTransport.retiredThrough=std::max(actionTransport.retiredThrough,message.retired_through());
+        actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,message.retired_through());
         while(!actions.empty() && actions.begin()->first<=actionTransport.retiredThrough)actions.erase(actions.begin());
         return true;
     }
@@ -357,9 +358,9 @@ struct ClientConnection::Impl {
             if(activeGeneration!=generation.load())return;
             ++actionTransport.sentBatches;actionTransport.sentShots+=message.shots_size();
             if(message.shots().empty())++actionTransport.sentAckOnlyBatches;
-            actionTransport.maxPayloadBytes=std::max(actionTransport.maxPayloadBytes,payload.size());
-            actionTransport.maxDatagramBytes=std::max(actionTransport.maxDatagramBytes,payload.size()+wire::HeaderSize);
-            actionTransport.maxBatchShots=std::max(actionTransport.maxBatchShots,static_cast<std::size_t>(message.shots_size()));
+            actionTransport.maxPayloadBytes=Engine::Math::Max(actionTransport.maxPayloadBytes,payload.size());
+            actionTransport.maxDatagramBytes=Engine::Math::Max(actionTransport.maxDatagramBytes,payload.size()+wire::HeaderSize);
+            actionTransport.maxBatchShots=Engine::Math::Max(actionTransport.maxBatchShots,static_cast<std::size_t>(message.shots_size()));
         }
     }
     void Network() {
@@ -518,7 +519,7 @@ struct ClientConnection::Impl {
                 const auto now=Clock::now();
                 const auto period=std::chrono::duration<double>(1.0/InputSendRate);
                 if(inputTokensAt==Clock::time_point{})inputTokensAt=now;
-                inputTokens=(std::min)(InputSendBurst,inputTokens+std::chrono::duration<double>(now-inputTokensAt)/period);
+                inputTokens=Engine::Math::Min(InputSendBurst,inputTokens+std::chrono::duration<double>(now-inputTokensAt)/period);
                 inputTokensAt=now;
                 // A window with a command never sent goes now; an unchanged one
                 // waits for its deadline and leaves a token for the next command.

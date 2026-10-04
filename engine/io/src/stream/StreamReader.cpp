@@ -1,6 +1,7 @@
 #include "engine/io/stream/StreamReader.hpp"
 
-#include <algorithm>
+#include "engine/math/scalar/Scalar.hpp"
+
 #include <cstring>
 
 namespace Engine::IO::Stream {
@@ -12,7 +13,7 @@ StreamReader::StreamReader(IStream& s) : s_(s) {
 
 IoResult<std::size_t> StreamReader::ReadSome(void* dst, std::size_t bytes) {
     if (lpos_ < llen_) {
-        const auto count = (std::min)(bytes, llen_ - lpos_);
+        const auto count = Math::Min(bytes, llen_ - lpos_);
         if (count != 0) std::memcpy(dst, lbuf_.data() + lpos_, count);
         lpos_ += count;
         return IoResult<std::size_t>::Ok(count);
