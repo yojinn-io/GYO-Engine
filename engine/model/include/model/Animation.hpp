@@ -1,7 +1,7 @@
 #pragma once
 
 #include "model/ModelAsset.hpp"
-#include "engine/base/Result.hpp"
+#include "model/ModelError.hpp"
 
 #include <span>
 #include <memory>
@@ -22,14 +22,14 @@ struct SkinnedVertex final {
 };
 
 // Call once when constructing a model outside a provided asset loader.
-[[nodiscard]] Base::Result<void, std::string> ValidateModel(const ModelAsset& model);
+[[nodiscard]] ModelResult<void> ValidateModel(const ModelAsset& model);
 
 // Validated model input. Sampling is deterministic and never advances a clock.
 // Output storage is reused; all animation policy remains with the caller.
-[[nodiscard]] Base::Result<void, std::string> SamplePose(
+[[nodiscard]] ModelResult<void> SamplePose(
     const ModelAsset& model, std::size_t clipIndex, double seconds,
     PlaybackMode mode, Pose& output);
-[[nodiscard]] Base::Result<void, std::string> MakeDefaultPose(
+[[nodiscard]] ModelResult<void> MakeDefaultPose(
     const ModelAsset& model, Pose& output);
 
 struct AnimationNodeBinding final {
@@ -47,14 +47,14 @@ struct AnimationNodeBinding final {
 // mesh nodes. Unmapped target nodes retain their defaults during sampling.
 // The returned clip owns its keys; neither input asset is modified. No names,
 // bone roles, axis inference or automatic humanoid matching are involved.
-[[nodiscard]] Base::Result<AnimationClip, std::string> TransferCompatibleAnimation(
+[[nodiscard]] ModelResult<AnimationClip> TransferCompatibleAnimation(
     const ModelAsset& source, const ModelAsset& target, std::size_t sourceClipIndex,
     std::span<const AnimationNodeBinding> bindings, float translationScale,
     std::span<const std::size_t> excludedSourceTrackNodes = {});
 
 // Interpolate local TRS, then resolve the hierarchy. Matrix interpolation is
 // deliberately avoided so rotations remain rigid during transitions.
-[[nodiscard]] Base::Result<void, std::string> BlendPoses(
+[[nodiscard]] ModelResult<void> BlendPoses(
     const ModelAsset& model, const Pose& from, const Pose& to, float alpha, Pose& output);
 
 struct PlaybackInterval final {
@@ -76,9 +76,9 @@ class AnimationInstance final {
 public:
     AnimationInstance() = default;
     explicit AnimationInstance(std::shared_ptr<const ModelAsset> model);
-    [[nodiscard]] Base::Result<void, std::string> Play(
+    [[nodiscard]] ModelResult<void> Play(
         std::size_t clipIndex, PlaybackMode mode, double transitionSeconds = 0.0);
-    [[nodiscard]] Base::Result<PlaybackInterval, std::string> Advance(double deltaSeconds);
+    [[nodiscard]] ModelResult<PlaybackInterval> Advance(double deltaSeconds);
     [[nodiscard]] const Pose& CurrentPose() const noexcept { return pose_; }
     [[nodiscard]] std::optional<std::size_t> ClipIndex() const noexcept { return clipIndex_; }
     [[nodiscard]] double TimeSeconds() const noexcept { return timeSeconds_; }
@@ -98,7 +98,7 @@ private:
 
 // Produces complete model-space vertices; apply the instance transform once
 // when rendering. Topology and UVs remain fixed while the pose changes.
-[[nodiscard]] Base::Result<void, std::string> SkinMesh(
+[[nodiscard]] ModelResult<void> SkinMesh(
     const ModelAsset& model, std::size_t meshIndex, const Pose& pose,
     std::vector<SkinnedVertex>& output);
 

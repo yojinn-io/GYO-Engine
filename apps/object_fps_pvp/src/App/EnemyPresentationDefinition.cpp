@@ -40,13 +40,13 @@ std::shared_ptr<const EnemyRig> LoadEnemyRig(Engine::Asset::AssetManager& assets
         Engine::Model::Pose reference;
         auto made = Engine::Model::MakeDefaultPose(*rig->model, reference);
         if (!made)
-            throw std::runtime_error(made.error());
+            throw std::runtime_error(made.error().message);
         float minimum = std::numeric_limits<float>::max(), maximum = -minimum;
         std::vector<Engine::Model::SkinnedVertex> vertices;
         for (std::size_t mesh = 0; mesh < rig->model->meshes.size(); ++mesh) {
             auto skinned = Engine::Model::SkinMesh(*rig->model, mesh, reference, vertices);
             if (!skinned)
-                throw std::runtime_error(skinned.error());
+                throw std::runtime_error(skinned.error().message);
             for (const auto& v : vertices) {
                 minimum = Engine::Math::Min(minimum, v.position.y);
                 maximum = Engine::Math::Max(maximum, v.position.y);

@@ -5,10 +5,11 @@
 #include <variant>
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/Error.hpp"
 
 // Result<T, E> reports a Runtime Error: it holds either the value T or the
-// error E. A Programmer Error is a GYO_ASSERT instead; see
-// docs/architecture/error-handling.md.
+// error E, which must satisfy CodedError (engine/base/Error.hpp). A Programmer
+// Error is a GYO_ASSERT instead; see docs/architecture/error-handling.md.
 //
 //     Base::Result<Path, IoError> Parse(std::string_view raw) {
 //         auto normalized = Normalize(raw);
@@ -55,7 +56,7 @@ inline constexpr bool isErr<Err<G>> = true;
 
 } // namespace Detail
 
-template <class T, class E>
+template <class T, CodedError E>
 class [[nodiscard]] Result final {
     static_assert(!std::is_reference_v<T> && !std::is_reference_v<E>,
                   "Result holds objects; use pointers or std::reference_wrapper for references");
@@ -114,7 +115,7 @@ private:
     std::variant<T, E> data_;
 };
 
-template <class E>
+template <CodedError E>
 class [[nodiscard]] Result<void, E> final {
     static_assert(!std::is_reference_v<E>, "Result holds objects");
 

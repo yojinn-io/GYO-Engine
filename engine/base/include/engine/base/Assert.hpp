@@ -114,3 +114,8 @@ namespace Detail {
 #define GYO_ASSERT(...)                                                        \
     ((__VA_ARGS__) ? static_cast<void>(0)                                      \
                    : ::Engine::Base::Detail::AssertionFailed(#__VA_ARGS__))
+
+// Marks a branch that a correct program never reaches (for example after a
+// switch that handles every enumerator). Reaching it is a Programmer Error
+// reported like a failed GYO_ASSERT; the call does not return.
+#define GYO_UNREACHABLE() ::Engine::Base::Detail::AssertionFailed("unreachable")

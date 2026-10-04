@@ -81,6 +81,15 @@ TEST_CASE("SetAssertionHandler: returns the previous handler and nullptr restore
     CHECK(SetAssertionHandler(original) == original);
 }
 
+TEST_CASE("GYO_UNREACHABLE reports like a failed assertion") {
+    Engine::Test::ScopedAssertionHandler scope;
+    try {
+        GYO_UNREACHABLE();
+    } catch (const AssertionFailure& failure) {
+        CHECK(std::strcmp(failure.expression, "unreachable") == 0);
+    }
+}
+
 TEST_CASE("AssertionFailure is not a std::exception") {
     static_assert(!std::is_base_of_v<std::exception, AssertionFailure>);
     CHECK(true);

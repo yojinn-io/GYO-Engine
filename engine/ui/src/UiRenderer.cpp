@@ -1,5 +1,7 @@
 #include "ui/UiRenderer.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include "engine/asset/AssetHandle.hpp"
 #include "engine/asset/AssetId.hpp"
 #include "engine/asset/AssetManager.hpp"
@@ -34,8 +36,9 @@ namespace {
 
 [[nodiscard]] UiError RendererError(
     UiErrorCode code,
-    std::string message) {
-    return {code, std::move(message), {}, {}};
+    std::string message,
+    std::string detail = {}) {
+    return UiError(code, std::move(message), {}, {}, std::move(detail));
 }
 
 [[nodiscard]] std::string AssetName(const Asset::AssetId& id) {
@@ -215,7 +218,8 @@ struct UiRenderer::Impl final {
             return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to load UI font asset '" + AssetName(id) + "': " +
-                    loaded.error().message));
+                    loaded.error().message,
+                Base::CauseDetail(loaded.error())));
         }
         const Asset::AssetHandle handle = loaded.value();
         auto font = assets->GetSharedConst<Asset::Loaders::FontAsset>(handle);
@@ -244,7 +248,8 @@ struct UiRenderer::Impl final {
             return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to load UI image asset '" + AssetName(id) + "': " +
-                    loaded.error().message));
+                    loaded.error().message,
+                Base::CauseDetail(loaded.error())));
         }
         const Asset::AssetHandle handle = loaded.value();
         const auto texture = assets->GetSharedConst<Asset::Loaders::TextureAsset>(handle);
@@ -270,7 +275,8 @@ struct UiRenderer::Impl final {
             return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
                 "failed to upload UI image asset '" + AssetName(id) + "': " +
-                    uploaded.error().message));
+                    uploaded.error().message,
+                Base::CauseDetail(uploaded.error())));
         }
         auto [inserted, wasInserted] = images.emplace(
             std::string(assetId), ImageResource{handle, uploaded.value()});
@@ -303,7 +309,8 @@ struct UiRenderer::Impl final {
         if (!rasterized) {
             return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
-                "failed to rasterize UI text: " + rasterized.error().message));
+                "failed to rasterize UI text: " + rasterized.error().message,
+                Base::CauseDetail(rasterized.error())));
         }
         Text::TextBitmap& bitmap = rasterized.value();
         if (!IsValidBitmap(bitmap)) {
@@ -322,7 +329,8 @@ struct UiRenderer::Impl final {
         if (!uploaded) {
             return Base::Err(RendererError(
                 UiErrorCode::ResourceFailure,
-                "failed to upload UI text: " + uploaded.error().message));
+                "failed to upload UI text: " + uploaded.error().message,
+                Base::CauseDetail(uploaded.error())));
         }
         auto [inserted, wasInserted] = texts.emplace(
             std::move(key),
@@ -340,7 +348,8 @@ struct UiRenderer::Impl final {
         if (!submitted) {
             return Base::Err(RendererError(
                 UiErrorCode::RenderSubmissionFailed,
-                "failed to submit UI sprite: " + submitted.error().message));
+                "failed to submit UI sprite: " + submitted.error().message,
+                Base::CauseDetail(submitted.error())));
         }
         return {};
     }
@@ -356,11 +365,7 @@ UiResult<void> UiRenderer::Initialize(
     Text::ITextRasterizer& textRasterizer,
     Asset::AssetManager& assets,
     UiRendererOptions options) {
-    if (options.maximumCachedTextRuns == 0) {
-        return Base::Err(RendererError(
-            UiErrorCode::RuntimeState,
-            "UiRenderer maximumCachedTextRuns must be positive"));
-    }
+    GYO_ASSERT(options.maximumCachedTextRuns > 0);
     impl_->Reset();
     impl_->renderDevice = &renderDevice;
     impl_->textRasterizer = &textRasterizer;
@@ -376,12 +381,9 @@ void UiRenderer::Reset() noexcept {
 UiResult<void> UiRenderer::Submit(
     const UiDrawList& drawList,
     Render::RenderQueue& queue) {
-    if (impl_->renderDevice == nullptr || impl_->textRasterizer == nullptr ||
-        impl_->assets == nullptr) {
-        return Base::Err(RendererError(
-            UiErrorCode::RuntimeState,
-            "UiRenderer is not initialized"));
-    }
+    // Submitting before Initialize is API misuse.
+    GYO_ASSERT(impl_->renderDevice != nullptr && impl_->textRasterizer != nullptr &&
+               impl_->assets != nullptr);
     impl_->TrimTextCache();
     for (const UiDrawCommand& command : drawList.commands) {
         auto submitted = std::visit(
@@ -401,11 +403,8 @@ UiResult<void> UiRenderer::Submit(
                     sprite.material.tint = ConvertColor(draw.tint);
                 } else {
                     if (draw.utf8.empty()) return {};
-                    if (!std::isfinite(draw.pointSizePixels) || draw.pointSizePixels <= 0.0F) {
-                        return Base::Err(RendererError(
-                            UiErrorCode::RuntimeState,
-                            "UI text point size must be finite and positive"));
-                    }
+                    // Layout produces positive finite sizes from validated documents.
+                    GYO_ASSERT(std::isfinite(draw.pointSizePixels) && draw.pointSizePixels > 0.0F);
                     auto text = impl_->ResolveText(draw);
                     if (!text) return Base::Err(std::move(text).error());
                     float x = draw.boundsPixels.x;

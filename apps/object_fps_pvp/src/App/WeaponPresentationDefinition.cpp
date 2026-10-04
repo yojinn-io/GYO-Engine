@@ -162,11 +162,11 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
         Engine::Model::Pose pose;
         const auto idle = Engine::Model::SamplePose(
             *definition->model, definition->clips[0], 0, Engine::Model::PlaybackMode::Clamp, pose);
-        if (!idle) throw std::runtime_error(idle.error());
+        if (!idle) throw std::runtime_error(idle.error().message);
         definition->idleAnchor = Engine::Math::TransformPoint(pose.globalTransforms[*anchor], {});
         const auto shoot = Engine::Model::SamplePose(
             *definition->model, definition->clips[1], 0, Engine::Model::PlaybackMode::Clamp, pose);
-        if (!shoot) throw std::runtime_error(shoot.error());
+        if (!shoot) throw std::runtime_error(shoot.error().message);
         const auto point = EvaluateWeaponMuzzleViewCameraPosition(*definition, pose);
         if (!Engine::Math::IsFinite(point) || point.z <= definition->camera.nearClip) {
             throw std::runtime_error("viewmodel muzzle must be finite and beyond the camera near clip");

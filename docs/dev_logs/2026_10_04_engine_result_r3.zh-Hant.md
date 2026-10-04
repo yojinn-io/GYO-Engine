@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R3：Error 語意與 asset
 
 日期：2026-10-04。Owner：Engine（`GYO::Base`、asset、io），連帶 render、text、ui、SDL 後端、ui_editor、pvp 的被迫修改。
-狀態：本機驗收完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 待 CI（分支 `claude/result-unification-r3`，基準 `dedeebd`）。
+狀態：完成，PR [#33](https://github.com/yojinn-io/GYO-Engine/pull/33) 已合併（`12abe2e`），L1 四列通過（分支 `claude/result-unification-r3`，基準 `dedeebd`）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r3-error-語意與-asset)，本文只記經過。
 
 ## 經過
@@ -17,5 +17,4 @@
 
 ## 留給下一步
 
-- R3 的 PR 與 L1 四列結果。
 - 使用者指示後開始 R4（Model、ui／render 的轉換與 API 誤用）。

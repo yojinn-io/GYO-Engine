@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "AssertTestSupport.hpp"
 
 #include "UiGoldenDocument.hpp"
 #include "UiLayoutGolden.hpp"
@@ -171,6 +172,15 @@ void CheckLayoutCase(const LayoutCase& testCase) {
 }
 
 } // namespace
+
+TEST_CASE("UiRuntime API misuse is a Programmer Error") {
+    UiRuntime runtime;
+    GYO_CHECK_ASSERTS(runtime.Initialize(nullptr));
+    GYO_CHECK_ASSERTS(runtime.ActivateCanvas("screen"));
+    GYO_CHECK_ASSERTS(runtime.ComposePreview({200.0F, 100.0F}));
+    REQUIRE(runtime.Initialize(Document()));
+    GYO_CHECK_ASSERTS(runtime.Compose(Bindings(), {200.0F, 100.0F}));
+}
 
 TEST_CASE("UiRuntime applies nested stretch layout and parent clipping") {
     UiRuntime runtime = Runtime();

@@ -33,8 +33,9 @@ std::size_t Node(const Engine::Model::ModelAsset& model, const std::string& name
     return *found;
 }
 
-void Require(const Engine::Base::Result<void, std::string>& result) {
-    if (!result) throw std::runtime_error(result.error());
+template <class E>
+void Require(const Engine::Base::Result<void, E>& result) {
+    if (!result) throw std::runtime_error(result.error().message);
 }
 
 std::shared_ptr<Resource> CreateResource(Engine::Render::IRenderDevice& device,
@@ -57,7 +58,7 @@ std::shared_ptr<Resource> CreateResource(Engine::Render::IRenderDevice& device,
         materials.push_back(material);
     }
     auto made = Resource::Create(device, character.model, materials);
-    if (!made) throw std::runtime_error(made.error());
+    if (!made) throw std::runtime_error(made.error().message);
     return std::move(made.value());
 }
 } // namespace
@@ -548,7 +549,7 @@ bool PlayerPresentation::Initialize(Engine::Render::IRenderDevice& device,
         const Vec3 offset = -definition.anchor;
         const auto instance = [&](const auto& resource, const Pose& pose) {
             auto created = Instance::Create(resource, pose, offset);
-            if (!created) throw std::runtime_error(created.error());
+            if (!created) throw std::runtime_error(created.error().message);
             return std::move(created.value());
         };
         next->slots.reserve(capacity);

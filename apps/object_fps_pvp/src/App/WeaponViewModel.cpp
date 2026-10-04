@@ -80,7 +80,7 @@ struct WeaponViewModel::Impl final {
     void Evaluate(std::size_t clip, double time) {
         const auto sampled = Engine::Model::SamplePose(
             *definition->model, clip, time, Engine::Model::PlaybackMode::Clamp, pose);
-        if (!sampled) throw std::runtime_error(sampled.error());
+        if (!sampled) throw std::runtime_error(sampled.error().message);
         muzzleViewCameraPosition = EvaluateWeaponMuzzleViewCameraPosition(*definition, pose);
     }
 
@@ -106,10 +106,10 @@ struct WeaponViewModel::Impl final {
             materials.push_back(material);
         }
         auto resource = Engine::ModelRenderer::ModelResource::Create(*device, definition->model, materials);
-        if (!resource) throw std::runtime_error(resource.error());
+        if (!resource) throw std::runtime_error(resource.error().message);
         modelResource = std::move(resource.value());
         auto instance = Engine::ModelRenderer::ModelInstance::Create(modelResource, pose, -definition->idleAnchor);
-        if (!instance) throw std::runtime_error(instance.error());
+        if (!instance) throw std::runtime_error(instance.error().message);
         modelInstance = std::move(instance.value());
         lastClip = definition->clips[0];
         lastTime = 0.0;
@@ -137,7 +137,7 @@ struct WeaponViewModel::Impl final {
         if (clip != lastClip || time != lastTime) {
             Evaluate(clip, time);
             const auto updated = modelInstance->UpdatePose(pose);
-            if (!updated) throw std::runtime_error(updated.error());
+            if (!updated) throw std::runtime_error(updated.error().message);
             lastClip = clip;
             lastTime = time;
             ++poseRevision;
@@ -149,7 +149,7 @@ struct WeaponViewModel::Impl final {
         const auto submitted = modelInstance->Submit(queue, placement,
             Engine::Render::MeshLayer::ViewModel);
         if (!submitted) {
-            error = submitted.error();
+            error = submitted.error().message;
             return false;
         }
         muzzleViewCameraPosition = EvaluateWeaponMuzzleViewCameraPosition(*definition, pose, placement);

@@ -1,4 +1,6 @@
 #include "render/Renderer.hpp"
+
+#include "engine/base/Assert.hpp"
 #include "render/ShaderAbi.hpp"
 #include "render/ColorTransform.hpp"
 #include "render/PrimitiveMesh.hpp"
@@ -301,7 +303,8 @@ Base::Result<void, RenderError> Renderer::Initialize(IRenderDevice& device, cons
 
 Base::Result<PresentStatus, RenderError> Renderer::Render(const RenderQueue& queue) {
     auto& state = *impl_;
-    if (!state.device) return Base::Err(Error("Renderer: not initialized"));
+    // Rendering before Initialize is API misuse.
+    GYO_ASSERT(state.device != nullptr);
     if (!IsFinite(queue.Frame().clearColor) || !IsValidSceneColorTransform(queue.Frame().sceneColorTransform))
         return Base::Err(Error("Renderer: invalid frame description"));
     // Revalidate cameras in case a caller changed them after submissions.
