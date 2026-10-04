@@ -121,10 +121,20 @@ v5 是單一 commit 同時升級三角色（`de87bb9`）。v6 也是這樣做（
 
 所以 v6 的實機驗收（L2／L3）只有 macOS Intel／Metal；其餘平台在各批的平台表中標「未執行」（使用者決定 D11⑩）。
 
-## 權威決定性
+## 權威決定性（第 03 批補上）
 
-目前 repo 沒有任何權威狀態 digest 或 golden 回放。Math B6a 的 62 情境全模擬 digest harness 只放在 scratch，沒有進 repo。
-第 03 批會補上這道閘門，並記錄本基準（`05042fa`）的 digest。在那之前，「權威結果不變」只能靠既有 CPU 測試。
+- 閘門：`tests/object_fps_pvp/AuthorityDigest.cpp`（digest 版本 1，35 個情境，其中 30 個屬 golden 子集），CTest `object_fps_pvp.authority_digest`。
+- 正式證明：`tests/object_fps_pvp/compare_authority_trees.py`（同機兩樹比對）。
+- `05042fa` 的 digest：第 01～03 批都沒有改權威相關來源（`git diff 05042fa -- apps/object_fps_pvp/src apps/object_fps_pvp/include engine/` 為空），
+  所以 2026-10-05 的 runner 輸出就是 `05042fa` 的 digest。macOS Intel、Apple clang 21.0.0、RelWithDebInfo：
+
+| 規模 | 紀錄數 | 輸出檔 SHA-256 |
+|---|---|---|
+| 1 | 17,226 | `34d0ca7f84cb778725aae61ed199513973b30f554525ed090a18e0d0c85d52c6` |
+| 10 | 171,927 | `f9e0ef413c5ede6d24efc962ece63280a5dfd6de11edc5a2025bb7d6292393db` |
+
+- 輸出檔（含每個情境的 digest）在 `build/target/_build/test/logs/pvp-v6-batch03-digest-20261005/`。
+- golden 子集的 digest 已提交在 `tests/object_fps_pvp/fixtures/authority_golden.txt`；-O0 與最佳化建置在規模 1、10 都相同。
 
 ## 第 02 批凍結的驗收工具（供第 04 批使用）
 

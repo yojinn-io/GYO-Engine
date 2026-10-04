@@ -1,6 +1,6 @@
 # 第 03 批：權威 digest 閘門
 
-狀態：未開始。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
+狀態：完成（2026-10-05；見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch03.zh-Hant.md)）。依 D15，CI 的 -O0 比對只對角度為 0 的情境強制。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [第01批](01-plan-and-baseline.md)。
 依賴：第01批（與第02批平行）。
 
 本批建立「權威不變」的量測工具：逐 Tick 權威狀態 digest，以及同機兩樹比對。
@@ -97,5 +97,6 @@
 
 - 同一樹在同機重跑 digest 不一致（非決定性）：停下，有限定位後回報，不放寬比對。
 - -O0 與 -O2 不一致：停下回報；這可能是產品既有問題，本批不修。
+  - 2026-10-05 已觸發並依 D15 處理：macos-arm64 只有非零角度的 `move-turning/contract` 不一致（最佳化版把 `sinf`、`cosf` 合併成 `__sincosf_stret`），golden 30／30 在四平台都一致；CI 的 -O0 比對改為只對 golden 子集強制，其餘差異只列出。產品不改。
 - 要達成 CI 自洽必須修改共通 workflow：停下，改為只在本機執行並回報。
 - 靈敏度未達宣告：停下回報，不事後降低宣告。

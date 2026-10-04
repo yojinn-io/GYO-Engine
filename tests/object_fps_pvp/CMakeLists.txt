@@ -113,3 +113,50 @@ set_tests_properties("${GYO_CURRENT_APP}.steady_clock" PROPERTIES LABELS "cpu;pv
 add_test(NAME "${GYO_CURRENT_APP}.service_startup"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_service_startup.py")
 set_tests_properties("${GYO_CURRENT_APP}.service_startup" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
+
+# Authority digest gate (v6 batch 03). The runner drives the real authority and
+# prediction through predeclared scenarios and chains each Tick's state with
+# SHA-256. A second runner recompiles the product's domain sources at -O0
+# (Engine Collision and Math stay as built); the test requires both runners to
+# agree on the zero-angle scenarios and those to match their golden file. Other
+# scenarios may legitimately differ with optimisation (libm call form), so their
+# differences are listed for information only (authority_digest_check.cmake).
+# Formal "authority unchanged" proof is the same-host two-tree comparison
+# (compare_authority_trees.py), not this test.
+set(digest_arena_definitions
+    PVP_DIGEST_CONTRACT_ARENA="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
+    PVP_DIGEST_PRODUCT_ARENA="${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_arena.json")
+set(digest "gyo_${GYO_CURRENT_APP}_authority_digest")
+add_executable(${digest} AuthorityDigest.cpp)
+target_compile_features(${digest} PRIVATE cxx_std_20)
+target_compile_definitions(${digest} PRIVATE ${digest_arena_definitions})
+target_link_libraries(${digest} PRIVATE ${match_domain} ${runtime_host})
+
+set(digest_app_root "${GYO_REPOSITORY_ROOT}/apps/${GYO_CURRENT_APP}")
+include("${digest_app_root}/sources.cmake")
+set(digest_domain_sources ${PVP_DOMAIN_SOURCES} src/Pvp/MatchRuntimeHost.cpp)
+list(TRANSFORM digest_domain_sources PREPEND "${digest_app_root}/")
+set(digest_o0 "gyo_${GYO_CURRENT_APP}_authority_digest_o0")
+add_executable(${digest_o0} AuthorityDigest.cpp ${digest_domain_sources})
+target_compile_features(${digest_o0} PRIVATE cxx_std_20)
+set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
+target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
+gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
+target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision nlohmann_json::nlohmann_json)
+# Appended after the configuration's flags, so the last optimisation flag wins.
+target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>
+    $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
+foreach(target ${digest} ${digest_o0})
+    if(WIN32)
+        target_compile_definitions(${target} PRIVATE NOMINMAX)
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /utf-8)
+    endif()
+endforeach()
+add_test(NAME "${GYO_CURRENT_APP}.authority_digest"
+    COMMAND "${CMAKE_COMMAND}" -DOPTIMIZED=$<TARGET_FILE:${digest}> -DUNOPTIMIZED=$<TARGET_FILE:${digest_o0}>
+        "-DGOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/authority_golden.txt"
+        "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/authority_digest" -P "${CMAKE_CURRENT_SOURCE_DIR}/authority_digest_check.cmake")
+set_tests_properties("${GYO_CURRENT_APP}.authority_digest" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 300)
