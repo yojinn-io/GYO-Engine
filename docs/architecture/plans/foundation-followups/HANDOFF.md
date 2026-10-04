@@ -94,7 +94,7 @@
 | 批次 | 狀態 | 紀錄 |
 |---|---|---|
 | FF-1 | 未開始 | — |
-| FF-2 | 未開始 | — |
+| FF-2 | 進行中 | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
 | FF-3 | 未開始 | — |
 | FF-4 | 未開始 | — |
 | FF-5 | 未開始 | — |
@@ -104,6 +104,11 @@
 | FF-9 | 未開始 | — |
 
 每批開始時在此新增一節：分支、base commit、檔位（含使用者同意的紀錄）、事前宣告（若有）、里程碑、證據位置、結果與停止理由。
+
+### FF-2（記錄器）
+
+- 2026-10-05：使用者指示「開始 Engine 側的工作」；依建議順序先做 FF-2（IP-2 的前提）。分支 `claude/engine-ff2`，base master `6381e9d`。
+  檔位照計畫：MeshUpdateSmoke 用 high，package checks、AssetWatcher 用 medium；不用 ultracode，沒有高於主對話的檔位，不需另外同意（D8）。
 
 ## 未結事項
 
