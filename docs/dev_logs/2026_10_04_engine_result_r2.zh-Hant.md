@@ -1,7 +1,7 @@
 # Engine Assert／Result 統一 R2：Result 的寫法
 
 日期：2026-10-04。Owner：Engine（`GYO::Base`），連帶 engine 全模組、tests 與文件。
-狀態：本機驗收完成，PR 待開（分支 `claude/result-unification-r2`，從 R1 的 head 建立）。
+狀態：本機驗收完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI（分支 `claude/result-unification-r2`，從 R1 的 head 建立）。
 計畫與證據見 [Assert／Result 統一](../architecture/plans/result-unification/README.md) 與 [HANDOFF](../architecture/plans/result-unification/HANDOFF.md#r2-result-的寫法)，本文只記經過。
 
 ## 經過

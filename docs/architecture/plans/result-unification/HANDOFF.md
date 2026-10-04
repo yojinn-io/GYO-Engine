@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 完成（PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 合併為 `9c51b32`）。R2 本機驗收完成，PR 待開。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1 完成（PR [#31](https://github.com/yojinn-io/GYO-Engine/pull/31) 合併為 `9c51b32`）。R2 本機驗收完成，PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI。**
 
 ## 閱讀入口
 
@@ -193,7 +193,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R2 Result 的寫法
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立，#31 合併後併入 master `9c51b32`），PR 待開。
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r2`，從 R1 的 head `c533b01` 建立，#31 合併後併入 master `9c51b32`），PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 待 CI。
 
 ### 變更
 
@@ -242,4 +242,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- 開 PR 並取得 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。`Result.hpp` 被大多數 TU include，Windows 列預計要重編大部分檔案（約 20 多分鐘）。
+- PR [#32](https://github.com/yojinn-io/GYO-Engine/pull/32) 的 L1 四列結果（特別是 MSVC 對 conditional explicit 與 CTAD 的處理）。`Result.hpp` 被大多數 TU include，Windows 列預計要重編大部分檔案（約 20 多分鐘）。
