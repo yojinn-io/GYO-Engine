@@ -27,6 +27,7 @@
 | 2026-10-04 | `UiError` 新增 `detail`；`CodedError` 要求 `code`、`message`、`detail`。理由：處理規則 5（跨模組轉換）與 `Describe` 需要統一的欄位 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | 跨模組轉換時外層 message 保留內層原文，內層 code 名稱放進 detail。理由：`UfbxModelTests.cpp:172-173` 鎖住了外層 message 含內層訊息 | R0 校正（對抗檢查建議） |
 | 2026-10-04 | `Result` 可從任何 `Err<G>` 建構（`is_constructible_v<E, G>`）。理由：R4 之前 model 有 42 處字串字面值 Err | R0 校正（對抗檢查建議） |
+| 2026-10-04 | MSVC 全專案改用符合標準的前處理器（`/Zc:preprocessor`），消除巨集寫法上的 MSVC 特例；設定位置為 `GyoBuild.cmake` 的全域 `add_compile_options`（比照 `-ffp-contract=off`），並在 `Assert.hpp` 加防呆 `#error`；放在 R1 | 使用者 |
 
 ## R0 任務校正
 
@@ -134,6 +135,42 @@ Vfs 的 10 個 `IsNotFound` 中，本批鎖住 Stat、讀取用 Open、Exists �
 | pvp | `.cpu`、`.start_phase_record`、`.presentation_cpu` 不改就通過 |
 
 MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證。
+
+### MSVC 符合標準的前處理器（R1 追加）
+
+使用者要求在 R1 合併前，讓 MSVC 全專案改用 `/Zc:preprocessor`，消除巨集寫法的 MSVC 特例（方針：統一實作優先於特例）。
+
+- **設定**：`build/cmake/GyoBuild.cmake` 在 `add_subdirectory(third_party)` 之後、`engine` 之前，以 `add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>" "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")` 全域加入。用 compiler ID 判斷，所以 clang-cl、Clang、GCC、AppleClang 都不受影響。shader host（`engine/render/shaders/pipeline`）是獨立的 CMake 專案，不繼承這個選項，所以在 `gyo_shader_tool` 的 MSVC 選項中另外加入。repo 內只有這兩個 CMake 專案。
+- **防呆**：`Assert.hpp` 開頭在 MSVC（排除 clang-cl）且 `_MSVC_TRADITIONAL` 未定義或非 0 時 `#error`。`Result.hpp` include 它，所以 MSVC 上幾乎所有 GYO 的 TU 都會檢查。`Sha256.hpp` 不受影響。
+- **證明選項生效**：`tests/common/base/PreprocessorTests.cpp` 用 `static_assert` 檢查兩件只有符合標準的前處理器才成立的事：把 `__VA_ARGS__` 轉交給另一個巨集後的參數個數，以及 `__VA_OPT__`。MSVC 上另外檢查 `_MSVC_TRADITIONAL == 0`。
+- **說明更新**：`Assert.hpp`、`AssertTestSupport.hpp` 的註解與 `error-handling.md` 改為說明所依賴的建置設定；PLAN 2.2 拿掉巨集寫法的限制；`docs/architecture.md` 補上這條全專案規則。
+
+#### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| 本機 core／test preset | 23／23、50／50 通過 |
+| 本機編譯指令（macOS、AppleClang） | `compile_commands.json` 與改動前相比，core 84→85、test 944→945 筆，只多出 `PreprocessorTests.cpp`，其餘 0 筆變動 |
+| windows-x64 基準（改動前，#31 第一次 CI） | 警告 138 個、22 組（檔案、代碼），全部在第三方（protobuf、absl、doctest、spirv-cross），加上 pvp 的 2 個 C4456 |
+| windows-x64（改動後） | 待 CI |
+
+#### 選項比較（決定時的依據）
+
+| 面向 | (A) GyoBuild 全域（採用） | (B) `gyo_base` 的 INTERFACE |
+|---|---|---|
+| 涵蓋範圍 | GyoBuild 底下所有目標，不論是否連 Base | 只有連 Base 的目標；`gyo_input` 等不連 Base 的目標會留在傳統模式 |
+| Ownership | 工具鏈一致性屬於建置層，與 `-ffp-contract=off` 同類 | 函式庫的使用需求變成決定使用端整個 TU 的編譯模式 |
+| Product Removability | 不含產品資訊，刪除產品不需改公共層 | 同上 |
+
+#### Architecture Delta（AGENTS.md §3）
+
+1. **需求來源**：使用者要求（R1 合併前），統一實作優先於特例。
+2. **現在的問題**：MSVC 使用傳統前處理器，GYO 的可變參數巨集因此限縮寫法（不轉送 `__VA_ARGS__`、不用 `__VA_OPT__`），註解與文件記載了這個特例；同一份巨集在不同編譯器上展開規則不同。
+3. **變化的 boundary**：Build Graph 的全域編譯選項（只在 MSVC 生效）。CMake target 與依賴邊沒有變化。
+4. **影響範圍**：MSVC 上所有 GYO 程式碼：engine、`object_fps_pvp`、`ui_editor`、tests、shader host，以及產品從自己目錄加入的相依套件。`third_party` 不受影響。Linux 與 macOS 的編譯指令不變。
+5. **依賴方向**：不變。
+6. **Ownership**：前處理器模式歸建置層（`GyoBuild.cmake`）；`Assert.hpp` 只宣告並強制它所依賴的前提。
+7. **為什麼沒有更小的做法**：維持現狀就是保留特例；改用 (B) 只涵蓋連 Base 的目標，會留下兩種前處理器模式；逐 target 設定會在每個新 target 重複同一個事實。
 
 ### 依賴 collision 例外做內容驗證的未編譯檔（R1 之後這些路徑會 abort）
 

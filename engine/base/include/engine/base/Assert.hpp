@@ -1,5 +1,14 @@
 #pragma once
 
+// GYO's macros assume a standard-conforming preprocessor on every compiler.
+// build/cmake/GyoBuild.cmake passes /Zc:preprocessor to MSVC; a target that
+// misses it fails here instead of expanding macros differently. clang-cl
+// defines _MSC_VER but always conforms.
+#if defined(_MSC_VER) && !defined(__clang__) && \
+    (!defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL)
+#error "GYO requires MSVC's standard-conforming preprocessor (/Zc:preprocessor, set in build/cmake/GyoBuild.cmake)"
+#endif
+
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -100,9 +109,8 @@ namespace Detail {
 } // namespace Engine::Base
 
 // Variadic so a condition containing commas (template arguments) needs no
-// extra parentheses. __VA_ARGS__ is only stringized and expanded in place,
-// never forwarded to another macro, which keeps MSVC's traditional
-// preprocessor happy.
+// extra parentheses. Relies on the standard-conforming preprocessor checked
+// at the top of this header.
 #define GYO_ASSERT(...)                                                        \
     ((__VA_ARGS__) ? static_cast<void>(0)                                      \
                    : ::Engine::Base::Detail::AssertionFailed(#__VA_ARGS__))

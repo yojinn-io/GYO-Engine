@@ -1,5 +1,6 @@
 add_executable(gyo_base_tests
     AssertTests.cpp
+    PreprocessorTests.cpp
     ResultTests.cpp
 )
 target_link_libraries(gyo_base_tests PRIVATE GYO::Base gyo_test_support doctest::doctest)

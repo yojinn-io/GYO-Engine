@@ -24,7 +24,9 @@ target_link_libraries(gyo_shader_tool PRIVATE
     gyo_host_shadercross spirv-cross-c nlohmann_json::nlohmann_json SDL3::SDL3-static)
 target_compile_features(gyo_shader_tool PRIVATE cxx_std_20)
 if(MSVC)
-    target_compile_options(gyo_shader_tool PRIVATE /W4 /utf-8 /permissive-)
+    # /Zc:preprocessor matches the rest of GYO (build/cmake/GyoBuild.cmake); this
+    # host project is configured separately and does not inherit those options.
+    target_compile_options(gyo_shader_tool PRIVATE /W4 /utf-8 /permissive- /Zc:preprocessor)
 else()
     target_compile_options(gyo_shader_tool PRIVATE -Wall -Wextra -Wpedantic)
 endif()

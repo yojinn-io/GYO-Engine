@@ -44,8 +44,8 @@ inline const bool abortReportingDisabled = [] {
 } // namespace Engine::Test
 
 // Checks that evaluating the expression fails a GYO_ASSERT. Variadic so the
-// expression may contain commas; __VA_ARGS__ is not forwarded to another
-// macro (MSVC's traditional preprocessor).
+// expression may contain commas; like GYO_ASSERT it relies on the
+// standard-conforming preprocessor (engine/base/Assert.hpp).
 #define GYO_CHECK_ASSERTS(...)                                                 \
     do {                                                                       \
         bool gyoAsserted = false;                                              \
