@@ -141,15 +141,13 @@ void ConfigureEditorChromeFont(ImGuiIO& io) {
     }
 }
 
-template <typename Error>
+template <Engine::Base::CodedError Error>
 void LogError(const char* context, const Error& error) {
     SDL_LogError(
         SDL_LOG_CATEGORY_APPLICATION,
-        "%s: %s%s%s",
+        "%s: %s",
         context,
-        error.message.c_str(),
-        error.detail.empty() ? "" : ": ",
-        error.detail.c_str());
+        Engine::Base::Describe(error).c_str());
 }
 
 class EditorClient final : public IRuntimeClient {
@@ -205,19 +203,12 @@ public:
         }
         rendererBackendInitialized_ = true;
 
-        std::string error;
-        if (!previewAssets_.Initialize(*renderer_.NativeRenderer(), error)) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Asset preview initialization failed: %s",
-                error.c_str());
+        if (const auto preview = previewAssets_.Initialize(*renderer_.NativeRenderer()); !preview) {
+            LogError("Asset preview initialization failed", preview.error());
             return false;
         }
-        if (!editor_.Initialize(error)) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "UI editor initialization failed: %s",
-                error.c_str());
+        if (const auto editor = editor_.Initialize(); !editor) {
+            LogError("UI editor initialization failed", editor.error());
             return false;
         }
         return true;

@@ -118,10 +118,11 @@ void DrawImagePlaceholder(
     ClipScope clip(drawList, image.clipPixels, viewport);
     const ImVec2 minimum = Minimum(image.destinationPixels, viewport);
     const ImVec2 maximum = Maximum(image.destinationPixels, viewport);
-    std::string assetError;
-    SDL_Texture* texture = assets != nullptr
-        ? assets->Texture(image.textureAssetId, assetError)
-        : nullptr;
+    // A failed load draws the UNRESOLVED placeholder below.
+    SDL_Texture* texture = nullptr;
+    if (assets != nullptr) {
+        if (const auto loaded = assets->Texture(image.textureAssetId)) texture = *loaded;
+    }
     if (texture != nullptr) {
         drawList.AddImage(
             ImTextureRef{static_cast<ImTextureID>(
@@ -162,10 +163,11 @@ void DrawText(
     ClipScope clip(drawList, text.clipPixels, viewport);
     const ImVec2 minimum = Minimum(text.boundsPixels, viewport);
     const float fontSize = Engine::Math::Max(text.pointSizePixels, 1.0F);
-    std::string assetError;
-    const TextTextureView raster = assets != nullptr
-        ? assets->Text(text.fontAssetId, text.utf8, fontSize, assetError)
-        : TextTextureView{};
+    // A failed rasterization falls back to ImGui's font below.
+    TextTextureView raster;
+    if (assets != nullptr) {
+        if (const auto rasterized = assets->Text(text.fontAssetId, text.utf8, fontSize)) raster = *rasterized;
+    }
     const ImVec2 extent = raster.texture != nullptr
         ? ImVec2{raster.width, raster.height}
         : ImGui::GetFont()->CalcTextSizeA(
@@ -211,7 +213,7 @@ struct PreviewAdapter::Impl final {
     std::shared_ptr<const Engine::Ui::UiDocument> document;
     Engine::Ui::UiBindingTable previewBindings;
     Engine::Ui::UiRuntime runtime;
-    std::optional<Result::GizmoField> activeGizmo;
+    std::optional<FrameOutput::GizmoField> activeGizmo;
     std::string activeGizmoNode;
 };
 
@@ -220,7 +222,7 @@ PreviewAdapter::~PreviewAdapter() = default;
 PreviewAdapter::PreviewAdapter(PreviewAdapter&&) noexcept = default;
 PreviewAdapter& PreviewAdapter::operator=(PreviewAdapter&&) noexcept = default;
 
-PreviewAdapter::Result PreviewAdapter::Draw(
+PreviewAdapter::FrameOutput PreviewAdapter::Draw(
     ImDrawList& drawList,
     const Json& sourceDocument,
     const std::string_view canvasId,
@@ -231,7 +233,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
     const bool inputEnabled,
     const bool snapToGrid,
     const float gridSize) const {
-    Result result;
+    FrameOutput result;
     if (viewport.width <= 0.0F || viewport.height <= 0.0F) {
         return result;
     }
@@ -241,14 +243,14 @@ PreviewAdapter::Result PreviewAdapter::Draw(
         auto parsed = Engine::Ui::UiDocumentCodec::Parse(
             snapshot, "ui-editor-preview");
         if (!parsed) {
-            result.error = parsed.error().message;
+            result.error = std::move(parsed).error();
             return result;
         }
         auto document = std::make_shared<const Engine::Ui::UiDocument>(
             std::move(parsed).value());
         auto initialized = impl_->runtime.Initialize(document);
         if (!initialized) {
-            result.error = initialized.error().message;
+            result.error = std::move(initialized).error();
             return result;
         }
         impl_->previewBindings.clear();
@@ -266,7 +268,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
     if (impl_->activeCanvas != canvasId) {
         auto activated = impl_->runtime.ActivateCanvas(canvasId);
         if (!activated) {
-            result.error = activated.error().message;
+            result.error = std::move(activated).error();
             return result;
         }
         impl_->activeCanvas = canvasId;
@@ -303,11 +305,11 @@ PreviewAdapter::Result PreviewAdapter::Draw(
     auto events = impl_->runtime.Update(
         input, impl_->previewBindings, runtimeViewport);
     if (!events) {
-        result.error = events.error().message;
+        result.error = std::move(events).error();
         return result;
     }
     for (const Engine::Ui::UiActionEvent& event : events.value()) {
-        Result::Action action;
+        FrameOutput::Action action;
         action.id = event.action;
         action.sourceElement = event.sourceElement;
         if (const double* number = std::get_if<double>(&event.payload)) {
@@ -331,7 +333,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
     auto evaluated = impl_->runtime.EvaluateLayout(
         impl_->previewBindings, runtimeViewport);
     if (!evaluated) {
-        result.error = evaluated.error().message;
+        result.error = std::move(evaluated).error();
         return result;
     }
     if (pointerInside) {
@@ -349,7 +351,7 @@ PreviewAdapter::Result PreviewAdapter::Draw(
     auto composed = impl_->runtime.Compose(
         impl_->previewBindings, runtimeViewport);
     if (!composed) {
-        result.error = composed.error().message;
+        result.error = std::move(composed).error();
         return result;
     }
     for (const Engine::Ui::UiDrawCommand& command : composed.value().commands) {
@@ -503,9 +505,9 @@ PreviewAdapter::Result PreviewAdapter::Draw(
                 constexpr float hitRadiusSquared = 10.0F * 10.0F;
                 float best = hitRadiusSquared;
                 for (const auto& [field, handle] : {
-                         std::pair{Result::GizmoField::AnchorMin, anchorMinHandle},
-                         std::pair{Result::GizmoField::AnchorMax, anchorMaxHandle},
-                         std::pair{Result::GizmoField::Pivot, pivotHandle}}) {
+                         std::pair{FrameOutput::GizmoField::AnchorMin, anchorMinHandle},
+                         std::pair{FrameOutput::GizmoField::AnchorMax, anchorMaxHandle},
+                         std::pair{FrameOutput::GizmoField::Pivot, pivotHandle}}) {
                     const float distance = DistanceSquared(mouse, handle);
                     if (distance <= best) {
                         best = distance;
@@ -517,13 +519,13 @@ PreviewAdapter::Result PreviewAdapter::Draw(
             }
             if (impl_->activeGizmo.has_value() &&
                 impl_->activeGizmoNode == selectedNodeId) {
-                const Result::GizmoField field = *impl_->activeGizmo;
-                const ImVec2 offset = field == Result::GizmoField::AnchorMin
+                const FrameOutput::GizmoField field = *impl_->activeGizmo;
+                const ImVec2 offset = field == FrameOutput::GizmoField::AnchorMin
                     ? anchorMinOffset
-                    : field == Result::GizmoField::AnchorMax
+                    : field == FrameOutput::GizmoField::AnchorMax
                         ? anchorMaxOffset
                         : pivotOffset;
-                const bool pivotField = field == Result::GizmoField::Pivot;
+                const bool pivotField = field == FrameOutput::GizmoField::Pivot;
                 const ImVec2 basis = pivotField ? minimum : parentMinimum;
                 const float width = Engine::Math::Max(0.001F, pivotField
                     ? selected->boundsPixels.width
@@ -540,16 +542,16 @@ PreviewAdapter::Result PreviewAdapter::Draw(
                 }
                 x = Engine::Math::Clamp(x, 0.0F, 1.0F);
                 y = Engine::Math::Clamp(y, 0.0F, 1.0F);
-                if (field == Result::GizmoField::AnchorMin) {
+                if (field == FrameOutput::GizmoField::AnchorMin) {
                     x = Engine::Math::Min(x, anchorMaxX);
                     y = Engine::Math::Min(y, anchorMaxY);
-                } else if (field == Result::GizmoField::AnchorMax) {
+                } else if (field == FrameOutput::GizmoField::AnchorMax) {
                     x = Engine::Math::Max(x, anchorMinX);
                     y = Engine::Math::Max(y, anchorMinY);
                 }
                 const bool finished =
                     ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-                result.gizmoEdit = Result::GizmoEdit{
+                result.gizmoEdit = FrameOutput::GizmoEdit{
                     field,
                     x,
                     y,

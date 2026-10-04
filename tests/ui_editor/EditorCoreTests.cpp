@@ -46,12 +46,12 @@ void TestCommandLine() {
         "--open", "working.json", "--output", "export.json",
         "--asset-root", "app-assets",
     };
-    const CommandLineResult parsed = ParseCommandLine(arguments);
+    const auto parsed = ParseCommandLine(arguments);
     Expect(static_cast<bool>(parsed), "valid editor command line parses");
     if (parsed) {
         Expect(
-            !parsed.options->catalogPath.has_value() &&
-                parsed.options->assetRoot == std::filesystem::path{"app-assets"},
+            !parsed->catalogPath.has_value() &&
+                parsed->assetRoot == std::filesystem::path{"app-assets"},
             "asset-root selects the content manifest without guessing a catalog");
     }
 
@@ -59,12 +59,12 @@ void TestCommandLine() {
     Expect(!ParseCommandLine(invalid), "validate rejects an output path");
     constexpr std::string_view local[]{"--asset-catalog", "catalog.json"};
     const auto single = ParseCommandLine(local);
-    Expect(single && single.options->catalogPath == "catalog.json" &&
-        single.options->assetRoot == ".", "explicit catalog retains the local-root mode");
+    Expect(single && single->catalogPath == "catalog.json" &&
+        single->assetRoot == ".", "explicit catalog retains the local-root mode");
     constexpr std::string_view both[]{"--asset-root", "assets", "--asset-catalog", "elsewhere/catalog.json"};
     const auto explicitRoot = ParseCommandLine(both);
-    Expect(explicitRoot && explicitRoot.options->assetRoot == "assets" &&
-        explicitRoot.options->catalogPath == "elsewhere/catalog.json", "explicit catalog overrides manifest selection");
+    Expect(explicitRoot && explicitRoot->assetRoot == "assets" &&
+        explicitRoot->catalogPath == "elsewhere/catalog.json", "explicit catalog overrides manifest selection");
 }
 
 void TestContentManifestMount(const std::filesystem::path& root) {
@@ -76,8 +76,7 @@ void TestContentManifestMount(const std::filesystem::path& root) {
     Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json",
         R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.bmp"}]})")), "write image catalog");
     ReadOnlyAssetCatalog catalog;
-    std::string error;
-    Expect(catalog.MountRoot(assets, error), "mount all manifest catalogs");
+    Expect(static_cast<bool>(catalog.MountRoot(assets)), "mount all manifest catalogs");
     Expect(catalog.IsMounted() && catalog.CatalogPath().empty() && catalog.Assets().size() == 2,
         "root mode exposes the complete content snapshot");
     const auto refs = UiDocumentBridge::AssetReferences(nlohmann::json{
@@ -88,13 +87,13 @@ void TestContentManifestMount(const std::filesystem::path& root) {
             R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"../escape.bmp"}]})",
             "broken"}) {
         Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json", bad)), "replace candidate catalog");
-        Expect(!catalog.MountRoot(assets, error), "invalid candidate is rejected");
+        Expect(!catalog.MountRoot(assets), "invalid candidate is rejected");
         Expect(catalog.Find("texture.logo") != nullptr && catalog.Find("font.default") != nullptr,
             "failed candidate preserves the previous complete snapshot");
     }
     Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
         R"({"version":1,"catalogs":["missing.json"],"shader_bundles":[]})")), "declare missing catalog");
-    Expect(!catalog.MountRoot(assets, error), "missing declared catalog does not partially mount");
+    Expect(!catalog.MountRoot(assets), "missing declared catalog does not partially mount");
     Expect(catalog.Assets().size() == 2, "missing file preserves old mount");
 }
 
@@ -159,20 +158,20 @@ void TestTransactionCoalescingAndSavePoint(const std::filesystem::path& root) {
 void TestExportAndExternalModification(const std::filesystem::path& root) {
     DocumentSession session;
     const std::filesystem::path output = root / "working" / "menu.json";
-    SessionResult exported = session.Export(output, nullptr);
+    auto exported = session.Export(output, nullptr);
     Expect(static_cast<bool>(exported), "valid document exports without a catalog");
 
-    const TextFileResult text = ReadTextFile(output);
+    const auto text = ReadTextFile(output);
     Expect(static_cast<bool>(text), "exported JSON can be read");
     if (text) {
-        Expect(text.text->starts_with("{\n  \"schema\": \"gyo.ui\""),
+        Expect(text->starts_with("{\n  \"schema\": \"gyo.ui\""),
                "export uses GYO codec field ordering and two-space indentation");
-        Expect(text.text->ends_with('\n'), "export has exactly a trailing newline");
-        const DocumentParseResult parsed = UiDocumentBridge::Parse(*text.text);
+        Expect(text->ends_with('\n'), "export has exactly a trailing newline");
+        const DocumentParseResult parsed = UiDocumentBridge::Parse(*text);
         Expect(static_cast<bool>(parsed), "export round-trips through GYO::Ui codec");
         if (parsed) {
             Expect(
-                UiDocumentBridge::SerializeCanonical(*parsed.document) == *text.text,
+                UiDocumentBridge::SerializeCanonical(*parsed.document) == *text,
                 "valid export is exactly the codec canonical representation");
         }
     }
@@ -182,9 +181,9 @@ void TestExportAndExternalModification(const std::filesystem::path& root) {
     Expect(
         static_cast<bool>(WriteTextFileAtomically(output, "externally changed\n")),
         "test can simulate an external edit");
-    const SessionResult guarded = session.Save(nullptr);
+    const auto guarded = session.Save(nullptr);
     Expect(
-        !guarded && guarded.saveFailure == SaveFailure::ExternalModification,
+        !guarded && guarded.error().code == SessionErrorCode::ExternalModification,
         "save detects external output changes");
 }
 
@@ -204,17 +203,16 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         "catalog fixture is written");
 
     ReadOnlyAssetCatalog mounted;
-    std::string error;
     Expect(
-        mounted.Mount(catalogPath, assetRoot, error),
+        static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
         "asset catalog mounts read-only");
     Expect(mounted.Find("texture.logo") != nullptr, "catalog lookup exposes AssetIds");
 
     DocumentSession session;
-    const SessionResult guarded = session.Export(assetRoot / "ui" / "menu.json", &mounted);
+    const auto guarded = session.Export(assetRoot / "ui" / "menu.json", &mounted);
     Expect(
         !guarded &&
-            guarded.saveFailure == SaveFailure::OutputInsideMountedAssetRoot,
+            guarded.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
         "export rejects every path below the mounted app asset root");
     Expect(
         !std::filesystem::exists(assetRoot / "ui" / "menu.json"),
@@ -227,10 +225,10 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
     Expect(
         HasErrors(missingDiagnostics),
         "a missing catalog AssetId is a validation error");
-    const SessionResult missingExport = missing.Export(
+    const auto missingExport = missing.Export(
         root / "working" / "missing.json", &mounted);
     Expect(
-        !missingExport && missingExport.saveFailure == SaveFailure::InvalidDocument,
+        !missingExport && missingExport.error().code == SessionErrorCode::InvalidDocument,
         "a missing catalog AssetId blocks export");
 
     DocumentSession wrongType;
@@ -241,11 +239,11 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
     Expect(
         HasErrors(wrongTypeDiagnostics),
         "a catalog AssetId with the wrong type is a validation error");
-    const SessionResult wrongTypeExport = wrongType.Export(
+    const auto wrongTypeExport = wrongType.Export(
         root / "working" / "wrong-type.json", &mounted);
     Expect(
         !wrongTypeExport &&
-            wrongTypeExport.saveFailure == SaveFailure::InvalidDocument,
+            wrongTypeExport.error().code == SessionErrorCode::InvalidDocument,
         "a wrong-type catalog AssetId blocks export");
 }
 

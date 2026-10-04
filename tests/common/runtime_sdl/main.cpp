@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "engine/base/Error.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "platform/sdl/SdlPlatform.hpp"
 #include "render/backend/sdl/SdlRenderer.hpp"
@@ -26,14 +27,9 @@ bool HasSmokeTestArgument(int argc, char* argv[]) {
     return false;
 }
 
-template <typename Error>
+template <Engine::Base::CodedError Error>
 void LogError(const Error& error) {
-    SDL_LogError(
-        SDL_LOG_CATEGORY_APPLICATION,
-        "%s%s%s",
-        error.message.c_str(),
-        error.detail.empty() ? "" : ": ",
-        error.detail.c_str());
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", Engine::Base::Describe(error).c_str());
 }
 
 class RuntimeClient final : public IRuntimeClient {

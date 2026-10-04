@@ -11,9 +11,13 @@ namespace {
            option == "--validate";
 }
 
+[[nodiscard]] CommandLineError Invalid(std::string message) {
+    return CommandLineError::Make(CommandLineErrorCode::InvalidArguments, std::move(message));
+}
+
 } // namespace
 
-CommandLineResult ParseCommandLine(
+Result<CommandLineOptions, CommandLineError> ParseCommandLine(
     const std::span<const std::string_view> arguments) {
     CommandLineOptions options;
     bool sawValidate = false;
@@ -22,62 +26,47 @@ CommandLineResult ParseCommandLine(
         const std::string_view argument = arguments[index];
         if (argument == "--help" || argument == "-h") {
             if (arguments.size() != 1U) {
-                return {std::nullopt, "--help cannot be combined with other options"};
+                return Engine::Base::Err(Invalid("--help cannot be combined with other options"));
             }
             options.mode = EditorMode::Help;
-            return {std::move(options), {}};
+            return options;
         }
 
         if (!NeedsValue(argument)) {
-            return {
-                std::nullopt,
-                argument.starts_with('-')
+            return Engine::Base::Err(Invalid(argument.starts_with('-')
                     ? "unknown option: " + std::string{argument}
                     : "positional arguments are not supported: " +
-                          std::string{argument},
-            };
+                          std::string{argument}));
         }
         if (index + 1U >= arguments.size() || arguments[index + 1U].empty() ||
             arguments[index + 1U].starts_with('-')) {
-            return {
-                std::nullopt,
-                "option requires a path value: " + std::string{argument},
-            };
+            return Engine::Base::Err(Invalid("option requires a path value: " + std::string{argument}));
         }
 
         const std::filesystem::path value{arguments[++index]};
         if (argument == "--open") {
             if (options.inputPath.has_value()) {
-                return {std::nullopt, "--open may be specified only once"};
+                return Engine::Base::Err(Invalid("--open may be specified only once"));
             }
             options.inputPath = value;
         } else if (argument == "--output") {
             if (options.outputPath.has_value()) {
-                return {std::nullopt, "--output may be specified only once"};
+                return Engine::Base::Err(Invalid("--output may be specified only once"));
             }
             options.outputPath = value;
         } else if (argument == "--asset-catalog") {
             if (options.catalogPath.has_value()) {
-                return {
-                    std::nullopt,
-                    "--asset-catalog may be specified only once",
-                };
+                return Engine::Base::Err(Invalid("--asset-catalog may be specified only once"));
             }
             options.catalogPath = value;
         } else if (argument == "--asset-root") {
             if (options.assetRoot.has_value()) {
-                return {
-                    std::nullopt,
-                    "--asset-root may be specified only once",
-                };
+                return Engine::Base::Err(Invalid("--asset-root may be specified only once"));
             }
             options.assetRoot = value;
         } else {
             if (sawValidate || options.inputPath.has_value()) {
-                return {
-                    std::nullopt,
-                    "--validate cannot be combined with --open or repeated",
-                };
+                return Engine::Base::Err(Invalid("--validate cannot be combined with --open or repeated"));
             }
             sawValidate = true;
             options.mode = EditorMode::Validate;
@@ -86,7 +75,7 @@ CommandLineResult ParseCommandLine(
     }
 
     if (sawValidate && options.outputPath.has_value()) {
-        return {std::nullopt, "--validate cannot be combined with --output"};
+        return Engine::Base::Err(Invalid("--validate cannot be combined with --output"));
     }
     if (options.catalogPath.has_value() && !options.assetRoot.has_value()) {
         options.assetRoot = options.catalogPath->parent_path();
@@ -95,7 +84,7 @@ CommandLineResult ParseCommandLine(
         }
     }
 
-    return {std::move(options), {}};
+    return options;
 }
 
 std::string_view CommandLineHelp() noexcept {

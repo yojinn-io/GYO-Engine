@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/ui_editor/EditorError.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -17,32 +19,21 @@ struct FileStamp final {
     friend bool operator==(const FileStamp&, const FileStamp&) noexcept = default;
 };
 
-struct TextFileResult final {
-    std::optional<std::string> text;
-    std::string error;
-
-    [[nodiscard]] explicit operator bool() const noexcept {
-        return text.has_value();
-    }
-};
-
-struct FileOperationResult final {
-    bool succeeded{};
-    std::string error;
-
-    [[nodiscard]] explicit operator bool() const noexcept { return succeeded; }
-};
-
-[[nodiscard]] TextFileResult ReadTextFile(
+[[nodiscard]] Result<std::string, FileError> ReadTextFile(
     const std::filesystem::path& path);
 
-[[nodiscard]] std::optional<FileStamp> ProbeFileStamp(
-    const std::filesystem::path& path,
-    std::string& error);
+// A path that does not exist is a success with exists == false.
+[[nodiscard]] Result<FileStamp, FileError> ProbeFileStamp(
+    const std::filesystem::path& path);
 
-[[nodiscard]] FileOperationResult WriteTextFileAtomically(
+[[nodiscard]] Result<void, FileError> WriteTextFileAtomically(
     const std::filesystem::path& path,
     std::string_view text);
+
+// The absolute, lexically normal form of path. Unlike std::filesystem::absolute
+// it never throws: if the current directory is unavailable the path is kept as
+// given, and the file operation that follows reports the failure.
+[[nodiscard]] std::filesystem::path AbsolutePath(const std::filesystem::path& path);
 
 [[nodiscard]] bool IsPathWithin(
     const std::filesystem::path& candidate,

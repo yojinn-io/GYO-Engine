@@ -37,26 +37,25 @@ int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
     ReadOnlyAssetCatalog catalog;
     const ReadOnlyAssetCatalog* catalogPointer = nullptr;
     if (options.assetRoot.has_value()) {
-        std::string error;
-        const bool mounted = options.catalogPath.has_value()
-            ? catalog.Mount(*options.catalogPath, *options.assetRoot, error)
-            : catalog.MountRoot(*options.assetRoot, error);
+        const auto mounted = options.catalogPath.has_value()
+            ? catalog.Mount(*options.catalogPath, *options.assetRoot)
+            : catalog.MountRoot(*options.assetRoot);
         if (!mounted) {
-            std::cerr << "error: failed to mount catalog: " << error << '\n';
+            std::cerr << "error: failed to mount catalog: "
+                      << Engine::Base::Describe(mounted.error()) << '\n';
             return 3;
         }
         catalogPointer = &catalog;
     }
 
     DocumentSession session;
-    SessionResult opened = session.Open(*options.inputPath);
-    PrintDiagnostics(opened.diagnostics);
+    const auto opened = session.Open(*options.inputPath);
     if (!opened) {
-        if (!opened.error.empty()) {
-            std::cerr << "error: " << opened.error << '\n';
-        }
-        return opened.saveFailure == SaveFailure::InvalidDocument ? 4 : 3;
+        PrintDiagnostics(opened.error().diagnostics);
+        std::cerr << "error: " << Engine::Base::Describe(opened.error()) << '\n';
+        return opened.error().code == SessionErrorCode::InvalidDocument ? 4 : 3;
     }
+    PrintDiagnostics(opened->diagnostics);
 
     const std::vector<Diagnostic> diagnostics = session.Validate(catalogPointer);
     PrintDiagnostics(diagnostics);
@@ -77,17 +76,17 @@ int main(const int argc, char* argv[]) {
         arguments.emplace_back(argv[index]);
     }
 
-    const CommandLineResult parsed = ParseCommandLine(arguments);
+    const auto parsed = ParseCommandLine(arguments);
     if (!parsed) {
-        std::cerr << "error: " << parsed.error << "\n\n" << CommandLineHelp();
+        std::cerr << "error: " << parsed.error().message << "\n\n" << CommandLineHelp();
         return 2;
     }
-    if (parsed.options->mode == EditorMode::Help) {
+    if (parsed->mode == EditorMode::Help) {
         std::cout << CommandLineHelp();
         return 0;
     }
-    if (parsed.options->mode == EditorMode::Validate) {
-        return Validate(*parsed.options);
+    if (parsed->mode == EditorMode::Validate) {
+        return Validate(*parsed);
     }
-    return RunEditorGui(*parsed.options);
+    return RunEditorGui(*parsed);
 }

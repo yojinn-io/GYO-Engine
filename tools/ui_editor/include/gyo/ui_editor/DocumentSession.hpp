@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gyo/ui_editor/Diagnostic.hpp"
+#include "gyo/ui_editor/EditorError.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/UndoStack.hpp"
 
@@ -17,30 +18,12 @@ namespace Gyo::Tools::UiEditor {
 
 class ReadOnlyAssetCatalog;
 
-enum class SaveFailure {
-    None,
-    InvalidDocument,
-    MissingOutputPath,
-    OutputInsideMountedAssetRoot,
-    ExternalModification,
-    IoFailure,
-};
-
-struct SessionResult final {
-    bool succeeded{};
-    std::string error;
-    std::vector<Diagnostic> diagnostics;
-    SaveFailure saveFailure{SaveFailure::None};
-
-    [[nodiscard]] explicit operator bool() const noexcept { return succeeded; }
-};
-
 class DocumentSession final {
 public:
     DocumentSession();
 
     void NewDocument();
-    [[nodiscard]] SessionResult Open(const std::filesystem::path& path);
+    [[nodiscard]] Result<SessionReport, SessionError> Open(const std::filesystem::path& path);
 
     [[nodiscard]] const nlohmann::json& Document() const noexcept;
     [[nodiscard]] nlohmann::json& EditDocument() noexcept;
@@ -57,25 +40,27 @@ public:
     void UpdateEdit();
     void EndEdit();
     void CancelEdit();
+    // False when there is nothing to undo or redo.
     [[nodiscard]] bool Undo();
     [[nodiscard]] bool Redo();
 
     [[nodiscard]] std::vector<Diagnostic> Validate(
         const ReadOnlyAssetCatalog* catalog) const;
-    [[nodiscard]] SessionResult Save(
+    [[nodiscard]] Result<SessionReport, SessionError> Save(
         const ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification = false);
-    [[nodiscard]] SessionResult Export(
+    [[nodiscard]] Result<SessionReport, SessionError> Export(
         const std::filesystem::path& path,
         const ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification = false);
 
-    [[nodiscard]] bool HasExternalModification(std::string& error) const;
+    // Whether the observed output file changed since it was opened or saved.
+    [[nodiscard]] Result<bool, FileError> HasExternalModification() const;
 
 private:
-    [[nodiscard]] bool Restore(std::string_view canonicalJson);
+    void Restore(std::string_view canonicalJson);
     void ResetHistory(bool saved);
-    [[nodiscard]] SessionResult SaveTo(
+    [[nodiscard]] Result<SessionReport, SessionError> SaveTo(
         const std::filesystem::path& path,
         const ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification);

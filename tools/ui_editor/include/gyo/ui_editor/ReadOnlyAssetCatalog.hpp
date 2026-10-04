@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/ui_editor/EditorError.hpp"
+
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -22,12 +24,12 @@ struct CatalogAsset final {
 // publishing the exported UI JSON and registering it remains an app-author step.
 class ReadOnlyAssetCatalog final {
 public:
-    [[nodiscard]] bool MountRoot(
-        const std::filesystem::path& assetRoot, std::string& error);
-    [[nodiscard]] bool Mount(
+    // A content root (content.json and every catalog it declares).
+    [[nodiscard]] Result<void, CatalogError> MountRoot(const std::filesystem::path& assetRoot);
+    // One explicit catalog whose entries resolve under assetRoot.
+    [[nodiscard]] Result<void, CatalogError> Mount(
         const std::filesystem::path& catalogPath,
-        const std::filesystem::path& assetRoot,
-        std::string& error);
+        const std::filesystem::path& assetRoot);
     void Unmount() noexcept;
 
     [[nodiscard]] bool IsMounted() const noexcept;

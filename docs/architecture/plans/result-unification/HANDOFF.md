@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1–R3 完成（#31 合併為 `9c51b32`，#32 為 `dedeebd`，#33 為 `12abe2e`）。R4 本機驗收完成，PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 待 CI。**
+更新：2026-10-04。**R0 完成（PR [#30](https://github.com/yojinn-io/GYO-Engine/pull/30) 合併為 `3b9765e`）。R1–R4 完成（#31 合併為 `9c51b32`，#32 為 `dedeebd`，#33 為 `12abe2e`，#34 為 `88e9641`）。R5 本機驗收完成，PR 待開。**
 
 ## 閱讀入口
 
@@ -35,6 +35,9 @@
 | 2026-10-04 | 規則 5 的 detail 以 `Base::CauseDetail(inner, outerDetail)` 產生：外層若有自己的 detail（例如路徑），格式為 `<outer>; <InnerCode>: <inner detail>`。外層 message 保留內層原文，可以在前後加上自己的說明 | R4 實作 |
 | 2026-10-04 | ShaderLibrary 的 artifact 讀取失敗改用帶型別的內部例外（`ArtifactReadFailure`，攜帶 `AssetError`），在 `AppendBundle` 邊界依規則 5 轉換。PLAN 原寫「不再經由例外」；但整個 bundle 解析都以例外運作（含 nlohmann `.at()`），只把 `Read` 改成 Result 仍無法去掉例外。重點在保留 code，而內部 throw、邊界轉換符合規則 6 | R4 實作 |
 | 2026-10-04 | `Result` 的 E 以 `CodedError` 約束（PLAN 2.4）。`ResultTests` 中為 R2–R3 過渡期寫的 `Result<int, std::string>` 測試改成檢查 string 會被拒絕 | R4 實作 |
+| 2026-10-04 | ui_editor 的錯誤型別集中在 `EditorError.hpp`：`FileError`、`CommandLineError`、`CatalogError`、`PreviewError`、`SessionError`（帶 diagnostics）、`EditorError`。只為呼叫端分支或測試斷言的區分建立 code（例如 `SessionErrorCode` 決定結束碼 3／4 與存檔對話框） | R5 實作 |
+| 2026-10-04 | `PreviewAdapter::Result` 改名為 `FrameOutput`：它是每一幀的輸出，舊名會遮蔽 ui_editor 的 `Result` 別名而難以閱讀 | R5 實作 |
+| 2026-10-04 | `AssetPreviewContext` 的 `Mount`、`Unmount`、第二個 `Initialize` 只有 API 誤用一種失敗，改成 `void` 加 `GYO_ASSERT`；`Texture`／`Text` 在沒有 catalog 時回傳空結果（屬於 Q2），失敗才是 `PreviewError` | R5 實作 |
 
 ## R0 任務校正
 
@@ -290,7 +293,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R4 Model、ui／render 的轉換與 API 誤用
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r4`，基準 `12abe2e`），PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 待 CI。
+狀態：**完成**。PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 於 2026-10-04 合併為 `88e9641`，L1 四列與 CI gate 通過；windows-x64 的警告與 R3 逐項相同（分支 `claude/result-unification-r4`）。
 
 ### 變更
 
@@ -332,4 +335,48 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#34](https://github.com/yojinn-io/GYO-Engine/pull/34) 的 L1 四列結果。
+- 無。
+
+## R5 ui_editor
+
+狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r5`，基準 `88e9641`），PR 待開。
+
+### 變更
+
+- **錯誤型別**：新增 `tools/ui_editor/include/gyo/ui_editor/EditorError.hpp`（見決策紀錄）與 `Result<T, E>` 別名。所有 E 都有 `static_assert(CodedError)`；engine 錯誤經 `Base::CauseDetail` 保留在 detail。
+- **手寫結果型別改用 Result**：
+  - `CommandLineResult` → `Result<CommandLineOptions, CommandLineError>`。
+  - `TextFileResult` → `Result<std::string, FileError>`。
+  - `FileOperationResult` → `Result<void, FileError>`。
+  - `ProbeFileStamp`（原本是 optional 加 out-param）→ `Result<FileStamp, FileError>`。
+  - `HasExternalModification`（原本是 bool 加 out-param，實際上有三種狀態）→ `Result<bool, FileError>`。
+  - `SessionResult`／`SaveFailure` → `Result<SessionReport, SessionError>`，成功與失敗都帶 diagnostics。
+- **out-param 改成回傳值**：`ReadOnlyAssetCatalog::Mount`／`MountRoot`、`AssetPreviewContext::Initialize`／`Texture`／`Text`、`EditorApp::Initialize`／`MountCatalog`、內部的 `Upload`。
+- **Programmer Error 改用 Assert**：
+  - `AssetPreviewContext.cpp` 的 `assert` 改成 `GYO_ASSERT`，刪除後面已經到不了的 if。
+  - 第二個 `Initialize`、`Mount`、`Unmount`、`BeginFrame`、在 frame 外呼叫 `Texture`／`Text`。
+  - `DocumentSession::Restore` 與 `UiDocumentBridge::Parse` 解析內部產生的 JSON，改用不丟例外的 parse 加 `GYO_ASSERT`，不再 try/catch。
+- **`std::filesystem::absolute`**：會丟例外的版本改成 `FileService` 的 `AbsolutePath`（使用 `std::error_code`，失敗時保留原路徑，由後續的檔案操作回報）。`DocumentSession` 4 處、`ReadOnlyAssetCatalog` 3 處；`FileService` 自己的 `AbsoluteNormalized` 也改用它。
+- **呈現**：`Describe`、`DescribeError`、ui_editor 的 `LogError`、`tests/common/runtime_sdl/main.cpp` 的 `LogError` 這 4 份 helper 改用 `Base::Describe`。Main 與 GUI 狀態列顯示 `<Code>: <message> (<detail>)`，codec diagnostics 也帶 code。
+- **`PreviewAdapter`**：`Result` 改名為 `FrameOutput`，`error` 改成 `std::optional<Engine::Ui::UiError>`，保留 code；資產載入失敗時照舊畫 placeholder。
+- **測試**：
+  - `EditorCoreTests`、`PreviewAssetTests` 改用新 API。
+  - 在 frame 中 Mount／Unmount 改成驗證會觸發 Assert：在測試本地安裝丟例外的 handler，因為這兩個測試不是 doctest。
+  - `EditorCliTests.cmake` 新增結束碼 2 的檢查（原本沒有覆蓋）。
+- **R4 遺留的修正**：`ResultTests.cpp` 的 `ToString` 只在 concept 中被引用，clang 會發出 `-Wunneeded-internal-declaration`。R4 的驗收漏看了這個警告，本批補上一個使用 `Describe` 的斷言。
+
+### 驗收
+
+| 項目 | 結果 |
+|---|---|
+| core preset | 23／23 通過 |
+| test preset | 50／50 通過（含 `gyo_ui_editor.core`、`.preview`、`.validate`、`.content_cli`、`.acceptance_contract`） |
+| 結束碼 | 0、2、3、4 不變：`content_cli`（含新增的 2）、`validate_cli.py`（`--help` 0、valid 0、invalid 4），手動確認不存在的檔案為 3 |
+| 稽核 | ui_editor 的 `string_error_out_param` 23→0、`cassert` 2→0；範圍內沒有會丟例外的 `std::filesystem::absolute` |
+| 第一方警告 | 0（修正上述 R4 遺留後） |
+| 依賴圖 | 與 R4 相同 |
+| 29 檔 syntax-only | 29／29 PASS |
+
+### 未結事項
+
+- 開 PR 並取得 L1 四列結果。
