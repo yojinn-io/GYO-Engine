@@ -2,6 +2,8 @@
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "RetroFPS/Collision/GridWorldCollision.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <array>
@@ -36,7 +38,7 @@ constexpr float kWaypointTolerance = 0.025f;
 
 [[nodiscard]] float DeadVisibilitySeconds(
     const EnemyDefinition& definition) noexcept {
-    return (std::max)(
+    return Engine::Math::Max(
         kEnemyHitFlashSeconds,
         ClipDurationSeconds(definition, EnemyState::Dead));
 }
@@ -64,7 +66,7 @@ void AddElapsed(float& elapsedSeconds, const float deltaSeconds) noexcept {
 }
 
 void SubtractElapsed(float& remainingSeconds, const float deltaSeconds) noexcept {
-    remainingSeconds = (std::max)(0.0f, remainingSeconds - deltaSeconds);
+    remainingSeconds = Engine::Math::Max(0.0f, remainingSeconds - deltaSeconds);
 }
 
 [[nodiscard]] bool SegmentIntersectsClosedCell(
@@ -321,7 +323,7 @@ struct OpenNodeCompare final {
     if (targetDistance <= kPositionEpsilon || maximumDistance <= 0.0f) {
         return position;
     }
-    const float distanceToMove = (std::min)(maximumDistance, targetDistance);
+    const float distanceToMove = Engine::Math::Min(maximumDistance, targetDistance);
     const float scale = distanceToMove / targetDistance;
     const Engine::Math::Vec3 displacement{
         (target.x - position.x) * scale,
@@ -486,7 +488,7 @@ bool EnemySystem::ValidateDefinition(
     const auto& rig = *definition.rig;
     if (!std::isfinite(rig.scale) || rig.scale <= 0 ||
         !std::isfinite(rig.transitionSeconds) || rig.transitionSeconds < 0 ||
-        !std::isfinite(rig.anchor.x) || !std::isfinite(rig.anchor.y) || !std::isfinite(rig.anchor.z)) {
+        !Engine::Math::IsFinite(rig.anchor)) {
         error = "Enemy rig calibration and transition duration must be finite and valid.";
         return false;
     }
@@ -508,8 +510,7 @@ bool EnemySystem::ValidateDefinition(
         return false;
     }
     const auto validPoint = [&rig](const EnemyBonePoint& point) {
-        return point.node < rig.model->nodes.size() && std::isfinite(point.offset.x) &&
-            std::isfinite(point.offset.y) && std::isfinite(point.offset.z);
+        return point.node < rig.model->nodes.size() && Engine::Math::IsFinite(point.offset);
     };
     if (rig.hurtRegions.empty() || !validPoint(rig.attackPoint) ||
         !std::isfinite(rig.attackRadius) || rig.attackRadius <= 0) {
@@ -1051,12 +1052,12 @@ void EnemySystem::Update(
                     break;
                 }
                 movementBudget =
-                    (std::max)(0.0f, movementBudget - movedDistance);
+                    Engine::Math::Max(0.0f, movementBudget - movedDistance);
                 if (Distance(enemy.position, waypoint) <= kWaypointTolerance) {
                     ++enemy.nextWaypointIndex;
                 }
                 if (movedDistance + kPositionEpsilon <
-                    (std::min)(movementBudget + movedDistance, waypointDistance)) {
+                    Engine::Math::Min(movementBudget + movedDistance, waypointDistance)) {
                     break;
                 }
             }
@@ -1125,7 +1126,7 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
             // A muzzle on the far side of a wall must not spawn a projectile through it.
             const Engine::Math::Vec3 from{enemy.position.x, origin.y, enemy.position.z};
             const Engine::Math::Vec3 direction{origin.x-from.x, 0, origin.z-from.z};
-            const float length = std::hypot(direction.x, direction.z);
+            const float length = Engine::Math::Length(direction);
             bool blocked = false;
             if (length > kPositionEpsilon)
                 for (const auto& wall : walls)
@@ -1146,19 +1147,19 @@ void EnemySystem::AdvanceAnimation(RuntimeEnemy& enemy, const EnemyTarget& playe
     const std::size_t steps = (std::max)(std::size_t{1}, static_cast<std::size_t>(std::ceil((end - begin) * 120.0)));
     for (std::size_t step = 1; step <= steps; ++step) {
         const auto to = pointAt(begin + (end - begin) * static_cast<double>(step) / static_cast<double>(steps));
-        const Engine::Math::Vec3 start{from.x,from.y,from.z}, finish{to.x,to.y,to.z};
+        const Engine::Math::Vec3 start = from, finish = to;
         const Engine::Math::Capsule swept{start,finish,radius};
         // The debug shape is the same latest active hand segment used here.
         if (current <= rig.attackEndSeconds) enemy.attackShape = swept;
         if (!enemy.attackEventEmitted) {
             const auto hit = Engine::Collision::SweepSphereAgainstCapsule({start, finish}, radius, playerBody);
             if (hit) {
-                const Engine::Math::Vec3 displacement{finish.x-start.x,finish.y-start.y,finish.z-start.z};
+                const Engine::Math::Vec3 displacement = finish - start;
                 const Engine::Collision::VerticalCapsule sphere{{start.x,start.y-radius,start.z},2*radius,radius};
-                const Engine::Math::Vec3 impact{from.x+(to.x-from.x)* *hit,from.y+(to.y-from.y)* *hit,from.z+(to.z-from.z)* *hit};
+                const Engine::Math::Vec3 impact = Engine::Math::Lerp(from, to, *hit);
                 const Engine::Math::Vec3 shoulder{enemy.position.x,impact.y,enemy.position.z};
                 const Engine::Math::Vec3 reach{impact.x-shoulder.x,0,impact.z-shoulder.z};
-                const float reachLength = std::hypot(reach.x, reach.z);
+                const float reachLength = Engine::Math::Length(reach);
                 bool blocked = false;
                 for (const auto& wall : walls) {
                     const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(sphere, displacement, wall);

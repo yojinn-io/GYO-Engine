@@ -8,6 +8,9 @@
 #include "RetroFPS/Gameplay/Player/PlayerController.hpp"
 #include "RetroFPS/Gameplay/Weapon/WeaponController.hpp"
 #include "RetroFPS/World/World.hpp"
+#include "engine/math/linear/Matrix4.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -36,33 +39,17 @@ struct ViewBasis final {
     Engine::Math::Vec3 up{};
 };
 
+// The camera axes under the renderer's orientation contract: pitch about X,
+// then yaw about Y (ComposeEulerXYZ), as the view matrix inverts.
 [[nodiscard]] ViewBasis MakeViewBasis(
     const float yawRadians,
     const float pitchRadians) noexcept {
-    const float sineYaw = std::sin(yawRadians);
-    const float cosineYaw = std::cos(yawRadians);
-    const float sinePitch = std::sin(pitchRadians);
-    const float cosinePitch = std::cos(pitchRadians);
+    const auto rotation = Engine::Math::ComposeEulerXYZ({}, {pitchRadians, yawRadians, 0.0F}, {1.0F, 1.0F, 1.0F});
     return {
-        {sineYaw * cosinePitch, -sinePitch, cosineYaw * cosinePitch},
-        {cosineYaw, 0.0F, -sineYaw},
-        {sineYaw * sinePitch, cosinePitch, cosineYaw * sinePitch},
+        Engine::Math::TransformVector(rotation, {0.0F, 0.0F, 1.0F}),
+        Engine::Math::TransformVector(rotation, {1.0F, 0.0F, 0.0F}),
+        Engine::Math::TransformVector(rotation, {0.0F, 1.0F, 0.0F}),
     };
-}
-
-[[nodiscard]] Engine::Math::Vec3 AddScaled(
-    const Engine::Math::Vec3 value,
-    const Engine::Math::Vec3 direction,
-    const float distance) noexcept {
-    return {
-        value.x + direction.x * distance,
-        value.y + direction.y * distance,
-        value.z + direction.z * distance,
-    };
-}
-
-[[nodiscard]] Engine::Math::Vec3 Subtract(const Engine::Math::Vec3 left, const Engine::Math::Vec3 right) noexcept {
-    return {left.x - right.x, left.y - right.y, left.z - right.z};
 }
 
 [[nodiscard]] std::vector<CombatTarget> MakeCombatTargets(
@@ -154,7 +141,7 @@ struct GameSession::Impl final {
             const float deltaSeconds,
             const GameSessionConfig& config) noexcept {
             if (phase == StageTransitionPhase::FadingOut) {
-                elapsed = (std::min)(config.fadeOutSeconds, elapsed + deltaSeconds);
+                elapsed = Engine::Math::Min(config.fadeOutSeconds, elapsed + deltaSeconds);
                 const float progress = elapsed / config.fadeOutSeconds;
                 opacity = progress * progress * (3.0F - 2.0F * progress);
                 if (elapsed >= config.fadeOutSeconds) {
@@ -163,7 +150,7 @@ struct GameSession::Impl final {
                     return true;
                 }
             } else if (phase == StageTransitionPhase::FadingIn) {
-                elapsed = (std::min)(config.fadeInSeconds, elapsed + deltaSeconds);
+                elapsed = Engine::Math::Min(config.fadeInSeconds, elapsed + deltaSeconds);
                 const float progress = elapsed / config.fadeInSeconds;
                 opacity = 1.0F - progress * progress * (3.0F - 2.0F * progress);
                 if (elapsed >= config.fadeInSeconds) {
@@ -670,7 +657,7 @@ struct GameSession::Impl final {
             },
             deltaSeconds);
 
-        const float recoveredRecoil = (std::max)(
+        const float recoveredRecoil = Engine::Math::Max(
             0.0F,
             weaponState.GetRecoilDegrees() -
                 config.weapon.recoilRecoveryDegreesPerSecond * deltaSeconds);
@@ -720,8 +707,7 @@ struct GameSession::Impl final {
                     return;
                 }
             } else {
-                const Engine::Math::Vec3 direction = Subtract(attack.target, attack.origin);
-                if (Engine::Math::Length(direction) > kLengthEpsilon) {
+                if (Engine::Math::Distance(attack.origin, attack.target) > kLengthEpsilon) {
                     static_cast<void>(stage->projectiles.SpawnEnemyProjectile(
                         attack.origin, attack.target, attack.damage));
                 }
@@ -766,9 +752,8 @@ struct GameSession::Impl final {
             stage->player.GetYawRadians(), stage->player.GetPitchRadians());
         const Engine::Math::Vec3 cameraMuzzle = ResolveWeaponMuzzleCameraPosition(
             weaponShotGeometry, config.worldVerticalFovRadians);
-        Engine::Math::Vec3 muzzle = AddScaled(cameraOrigin, basis.forward, cameraMuzzle.z);
-        muzzle = AddScaled(muzzle, basis.right, cameraMuzzle.x);
-        muzzle = AddScaled(muzzle, basis.up, cameraMuzzle.y);
+        const Engine::Math::Vec3 muzzle = cameraOrigin + basis.forward * cameraMuzzle.z +
+            basis.right * cameraMuzzle.x + basis.up * cameraMuzzle.y;
         // Authored offsets may extend past the body's collision radius. Keep
         // the ray's origin on the camera side of adjacent world geometry.
         return CombatCollision::ClampSegmentToWorld(
@@ -777,7 +762,7 @@ struct GameSession::Impl final {
 
     void SpawnPlayerShotTracer(const Engine::Math::Vec3 resolvedPoint) {
         const Engine::Math::Vec3 muzzle = ResolvePlayerMuzzle();
-        const Engine::Math::Vec3 direction = Subtract(resolvedPoint, muzzle);
+        const Engine::Math::Vec3 direction = resolvedPoint - muzzle;
         const float distance = Engine::Math::Length(direction);
         if (distance <= kLengthEpsilon) return;
         // Camera recoil can move the cosmetic path behind a corner even though
@@ -804,15 +789,12 @@ struct GameSession::Impl final {
             targets);
         const Engine::Math::Vec3 aimPoint = aimHit.has_value()
                                     ? aimHit->position
-                                    : AddScaled(
-                                          cameraOrigin,
-                                          basis.forward,
-                                          kMaximumShotDistance);
+                                    : cameraOrigin + basis.forward * kMaximumShotDistance;
         const Engine::Math::Vec3 muzzle = ResolvePlayerMuzzle();
 
         std::optional<CombatHit> resolvedHit;
         Engine::Math::Vec3 resolvedPoint = aimPoint;
-        const Engine::Math::Vec3 muzzleToAim = Subtract(aimPoint, muzzle);
+        const Engine::Math::Vec3 muzzleToAim = aimPoint - muzzle;
         const float muzzleDistance = Engine::Math::Length(muzzleToAim);
         if (muzzleDistance > kLengthEpsilon) {
             resolvedHit = CombatCollision::Raycast(

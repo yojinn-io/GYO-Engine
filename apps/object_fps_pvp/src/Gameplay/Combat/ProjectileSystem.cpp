@@ -2,6 +2,8 @@
 
 #include "RetroFPS/World/GridMap.hpp"
 #include "RetroFPS/World/WorldSettings.hpp"
+#include "engine/math/linear/Vec3.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,16 +22,7 @@ constexpr float kEpsilon = 0.000001f;
     if (!std::isfinite(length) || length <= kEpsilon) {
         throw std::invalid_argument("projectile direction must be finite and non-zero");
     }
-    return {value.x / length, value.y / length, value.z / length};
-}
-
-[[nodiscard]] Engine::Math::Vec3 AddScaled(
-    const Engine::Math::Vec3 value, const Engine::Math::Vec3 direction, const float distance) noexcept {
-    return {
-        value.x + direction.x * distance,
-        value.y + direction.y * distance,
-        value.z + direction.z * distance,
-    };
+    return value / length;
 }
 
 [[nodiscard]] bool ValidateSettings(const ProjectileSettings& settings) noexcept {
@@ -65,7 +58,7 @@ ProjectileId ProjectileSystem::SpawnPlayerTracer(const Engine::Math::Vec3 start,
     if (!Engine::Math::IsFinite(start) || !Engine::Math::IsFinite(end)) {
         throw std::invalid_argument("player tracer endpoints must be finite");
     }
-    const Engine::Math::Vec3 delta{end.x - start.x, end.y - start.y, end.z - start.z};
+    const Engine::Math::Vec3 delta = end - start;
     const float distance = Engine::Math::Length(delta);
     if (!std::isfinite(distance) || distance <= kEpsilon) {
         return 0;
@@ -76,11 +69,7 @@ ProjectileId ProjectileSystem::SpawnPlayerTracer(const Engine::Math::Vec3 start,
         id,
         ProjectileKind::PlayerTracer,
         start,
-        {
-            direction.x * settings_.playerTracerSpeed,
-            direction.y * settings_.playerTracerSpeed,
-            direction.z * settings_.playerTracerSpeed,
-        },
+        direction * settings_.playerTracerSpeed,
         settings_.playerTracerRadius,
         distance,
         distance / settings_.playerTracerSpeed,
@@ -96,18 +85,13 @@ ProjectileId ProjectileSystem::SpawnEnemyProjectile(
         throw std::invalid_argument(
             "enemy projectile requires finite endpoints and positive damage");
     }
-    const Engine::Math::Vec3 direction = NormalizeOrThrow(
-        {target.x - start.x, target.y - start.y, target.z - start.z});
+    const Engine::Math::Vec3 direction = NormalizeOrThrow(target - start);
     const ProjectileId id = nextId_++;
     projectiles_.push_back({
         id,
         ProjectileKind::EnemyBullet,
         start,
-        {
-            direction.x * settings_.enemyProjectileSpeed,
-            direction.y * settings_.enemyProjectileSpeed,
-            direction.z * settings_.enemyProjectileSpeed,
-        },
+        direction * settings_.enemyProjectileSpeed,
         settings_.enemyProjectileRadius,
         (std::numeric_limits<float>::max)(),
         settings_.enemyProjectileLifetimeSeconds,
@@ -133,14 +117,14 @@ std::span<const PlayerProjectileHit> ProjectileSystem::Update(
         }
 
         const float stepSeconds =
-            (std::min)(deltaSeconds, projectile.remainingLifetimeSeconds);
+            Engine::Math::Min(deltaSeconds, projectile.remainingLifetimeSeconds);
         const float velocityLength = Engine::Math::Length(projectile.velocity);
         float travelDistance = velocityLength * stepSeconds;
         if (projectile.kind == ProjectileKind::PlayerTracer) {
-            travelDistance = (std::min)(travelDistance, projectile.remainingDistance);
+            travelDistance = Engine::Math::Min(travelDistance, projectile.remainingDistance);
         }
         const Engine::Math::Vec3 direction = NormalizeOrThrow(projectile.velocity);
-        const Engine::Math::Vec3 end = AddScaled(projectile.position, direction, travelDistance);
+        const Engine::Math::Vec3 end = projectile.position + direction * travelDistance;
 
         if (projectile.kind == ProjectileKind::EnemyBullet) {
             const std::optional<CombatHit> worldHit = CombatCollision::Raycast(
@@ -158,8 +142,7 @@ std::span<const PlayerProjectileHit> ProjectileSystem::Update(
                                             ? worldHit->distance / travelDistance
                                             : (std::numeric_limits<float>::max)();
             if (playerFraction.has_value() && *playerFraction <= worldFraction) {
-                projectile.position = AddScaled(
-                    projectile.position, direction, travelDistance * *playerFraction);
+                projectile.position = projectile.position + direction * (travelDistance * *playerFraction);
                 playerHits_.push_back({projectile.id, projectile.damage});
                 projectile.remainingLifetimeSeconds = 0.0f;
                 continue;
@@ -173,10 +156,10 @@ std::span<const PlayerProjectileHit> ProjectileSystem::Update(
 
         projectile.position = end;
         projectile.remainingLifetimeSeconds =
-            (std::max)(0.0f, projectile.remainingLifetimeSeconds - stepSeconds);
+            Engine::Math::Max(0.0f, projectile.remainingLifetimeSeconds - stepSeconds);
         if (projectile.kind == ProjectileKind::PlayerTracer) {
             projectile.remainingDistance =
-                (std::max)(0.0f, projectile.remainingDistance - travelDistance);
+                Engine::Math::Max(0.0f, projectile.remainingDistance - travelDistance);
             if (projectile.remainingDistance <= kEpsilon) {
                 projectile.remainingLifetimeSeconds = 0.0f;
             }

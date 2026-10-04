@@ -1,4 +1,5 @@
 #include "RetroFPS/App/ObjectFpsUi.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <array>
@@ -118,7 +119,7 @@ struct HudLayout final {
         viewport.width <= 0.0F || viewport.height <= 0.0F) {
         return std::nullopt;
     }
-    const float scale = std::min(
+    const float scale = Engine::Math::Min(
         viewport.width / kReferenceWidth,
         viewport.height / kReferenceHeight);
     return HudLayout{
@@ -203,14 +204,14 @@ void AddHud(
         ? snapshot.player->maximumHealth
         : 0.0F;
     const float healthRatio = maximumHealth > 0.0F
-        ? std::clamp(health / maximumHealth, 0.0F, 1.0F)
+        ? Engine::Math::Clamp(health / maximumHealth, 0.0F, 1.0F)
         : 0.0F;
 
     AddQuad(drawList, Place(layout, 32.0F, 626.0F, 290.0F, 62.0F), kPanel);
     AddText(
         drawList,
         "HP " + std::to_string(
-            static_cast<std::uint32_t>(std::max(health, 0.0F))),
+            static_cast<std::uint32_t>(Engine::Math::Max(health, 0.0F))),
         Place(layout, 48.0F, 637.0F, 94.0F, 28.0F),
         20.0F * layout.scale);
     AddQuad(drawList, Place(layout, 142.0F, 644.0F, 160.0F, 16.0F), kBarTrack);
@@ -230,7 +231,7 @@ void AddHud(
         Engine::Ui::UiHorizontalAlign::Right);
 
     if (snapshot.weapon.reloading) {
-        const float progress = std::clamp(
+        const float progress = Engine::Math::Clamp(
             snapshot.weapon.reloadProgress,
             0.0F,
             1.0F);
@@ -259,7 +260,7 @@ void AddHud(
             18.0F * layout.scale);
     }
 
-    const float expansion = std::clamp(
+    const float expansion = Engine::Math::Clamp(
         snapshot.weapon.crosshairExpansion,
         0.0F,
         48.0F);

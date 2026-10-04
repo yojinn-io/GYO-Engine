@@ -15,6 +15,7 @@
 #include "render/RenderQueue.hpp"
 #include "render/Renderer.hpp"
 #include "ui/UiRenderer.hpp"
+#include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -37,15 +38,7 @@ namespace {
 
 [[nodiscard]] Engine::Render::Transform3D ConvertTransform(
     const SurfaceTransform& source) noexcept {
-    return {
-        {source.translation.x, source.translation.y, source.translation.z},
-        {
-            source.rotationRadians.x,
-            source.rotationRadians.y,
-            source.rotationRadians.z,
-        },
-        {source.scale.x, source.scale.y, source.scale.z},
-    };
+    return {source.translation, source.rotationRadians, source.scale};
 }
 
 } // namespace
@@ -294,11 +287,7 @@ struct ObjectFpsPresentation::Impl final {
             const float diameter = projectile.radius * 2.0F;
             Engine::Render::MeshSubmission submission;
             submission.mesh = cube;
-            submission.transform = {
-                    {projectile.position.x, projectile.position.y, projectile.position.z},
-                    {},
-                    {diameter, diameter, diameter},
-                };
+            submission.transform = {projectile.position, {}, {diameter, diameter, diameter}};
             submission.material.tint = projectile.kind == ProjectileKind::EnemyBullet
                     ? Engine::Render::Color{1.0F, 0.25F, 0.1F, 1.0F}
                     : Engine::Render::Color{1.0F, 0.9F, 0.2F, 1.0F};
@@ -484,7 +473,7 @@ bool ObjectFpsPresentation::PrepareFrame(
             0.0F,
             0.0F,
             0.0F,
-            std::clamp(snapshot.fadeOpacity, 0.0F, 1.0F),
+            Engine::Math::Clamp(snapshot.fadeOpacity, 0.0F, 1.0F),
         };
         if (!impl_->Submit(fade, error)) {
             return false;

@@ -1,6 +1,5 @@
 #include "RetroFPS/Gameplay/Player/Player.hpp"
-
-#include <numbers>
+#include "engine/math/scalar/Angle.hpp"
 
 namespace fps {
 
@@ -13,8 +12,7 @@ float Player::GetPitchRadians() const noexcept {
 }
 
 float Player::GetRecoilDegrees() const noexcept {
-    constexpr float kRadiansToDegrees = 180.0f / std::numbers::pi_v<float>;
-    return -recoilPitchRadians_ * kRadiansToDegrees;
+    return Engine::Math::RadiansToDegrees(-recoilPitchRadians_);
 }
 
 void Player::Reset(

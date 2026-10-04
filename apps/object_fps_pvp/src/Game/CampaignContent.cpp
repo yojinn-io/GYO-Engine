@@ -1,4 +1,5 @@
 #include "RetroFPS/Game/CampaignContent.hpp"
+#include "engine/math/linear/Vec3.hpp"
 
 #include <cstddef>
 #include <unordered_set>
@@ -29,8 +30,7 @@ CampaignContentBuildResult CampaignContent::Build(
         }
         const WeaponShotGeometry& geometry = found->second;
         const Engine::Math::Vec3 muzzle = geometry.muzzleViewCameraPosition;
-        if (!std::isfinite(muzzle.x) || !std::isfinite(muzzle.y) ||
-            !std::isfinite(muzzle.z) || muzzle.z <= 0.0F ||
+        if (!Engine::Math::IsFinite(muzzle) || muzzle.z <= 0.0F ||
             !IsValidWeaponVerticalFov(geometry.viewModelVerticalFovRadians)) {
             return {std::nullopt, "campaign weapon shot geometry requires a finite forward muzzle and FOV in (0, pi): " + weapon.id};
         }
