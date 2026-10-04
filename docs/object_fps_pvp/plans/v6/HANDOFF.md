@@ -92,6 +92,10 @@
   量測來源固定為 master `6381e9d`，在獨立 worktree `GYO-Engine-v6b04`（detached）以 test preset 從零建置。
 - 2026-10-05：L1：第 02 批凍結的 52 個工具檔與清單（`b5f4bf79…`）逐一相同。`05042fa..6381e9d` 沒有合併任何 Engine 批次；`engine`、`apps`、`services`、`tools` 之下只改了 `apps/object_fps_pvp/gateway/backpressure_test.go`（測試），產品執行期來源與 `05042fa` 相同。
 - 2026-10-05：跑次、分母與第 3、6 項的重現步驟已在量測前寫入 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch04.zh-Hant.md) 並 commit。
+- 2026-10-05：使用者開放螢幕錄製權限；第 6 項改為 Claude 以 probe 自動重現與連續擷取，未重現時才用正式 Client（量測前修改宣告）。
+- 2026-10-05：L1：CTest 55／55；權威 digest 規模 1、10 與 `05042fa` 逐位元相同。
+- 2026-10-05：跑次 1 動作短測 4／4 通過；跑次 2 人物短測 3 案通過、player144 `invalid_capacity`（join 120.01 FPS，與宣告一致，標未驗證）；跑次 3 雙 GUI 整合短測通過。
+- 2026-10-05：跑次 4 矩陣在 clean-30 失敗並停止（probe 一幀 57.7 ms 造成丟時，5 筆未配對）；保留，有限定位見 dev_log；停下回報。
 
 ## 延後項目：現況與對應批次
 
