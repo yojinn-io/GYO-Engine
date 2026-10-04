@@ -1,6 +1,6 @@
 # Assert／Result 統一：交接
 
-更新：2026-10-04。**R0–R5 完成（#30 `3b9765e`、#31 `9c51b32`、#32 `dedeebd`、#33 `12abe2e`、#34 `88e9641`、#35 `f72bfbd`）。R6 本機驗收完成，PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 待 CI。**
+更新：2026-10-04。**R0–R6 完成（#30 `3b9765e`、#31 `9c51b32`、#32 `dedeebd`、#33 `12abe2e`、#34 `88e9641`、#35 `f72bfbd`、#36 `a15c836`）。計劃完成。**
 
 ## 閱讀入口
 
@@ -383,7 +383,7 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ## R6 收尾
 
-狀態：**本機驗收完成**（2026-10-04，分支 `claude/result-unification-r6`，基準 `f72bfbd`），PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 待 CI。
+狀態：**完成**。PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 於 2026-10-04 合併為 `a15c836`，L1 四列與 CI gate 通過；windows-x64 的警告與 R5 逐項相同（139 個），50／50（分支 `claude/result-unification-r6`，基準 `f72bfbd`）。
 
 ### 變更
 
@@ -484,5 +484,4 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 未結事項
 
-- PR [#36](https://github.com/yojinn-io/GYO-Engine/pull/36) 的 L1 四列結果。
 - 範圍外、留待日後：Apps 剩餘項目（上表）、未啟用產品的遷移（[inactive_products.md](inactive_products.md)），以及 R1 記錄的 pvp 未編譯檔依賴 collision 例外做內容驗證（見「R1 概念文件與 Assert」）。
