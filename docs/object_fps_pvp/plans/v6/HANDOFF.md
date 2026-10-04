@@ -80,6 +80,7 @@
 - 2026-10-05：完成 runner（35 個情境，30 個屬 golden 子集）、-O0 runner 與 CTest、golden 檔、兩樹比對腳本；記錄 `05042fa` 的 digest。
   靈敏度第 1 項（x 加 1 ULP）未達宣告字面：只擾動 x，只沿 z 移動的情境沒被擾動。停下回報後，使用者決定追加 z 的改動（第 5 項），結果符合宣告。
   經過見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch03.zh-Hant.md)。
+- 2026-10-05：開 PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（base 為 #40 的分支）。CI 四平台會驗證 golden 子集。
 
 ## 延後項目：現況與對應批次
 
