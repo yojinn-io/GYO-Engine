@@ -346,7 +346,10 @@ class WorkflowGateTests(unittest.TestCase):
         native = job_block(self.shared, "native")
         self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
         self.assertIn('"-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS"', native)
-        self.assertNotRegex(native, r"GYO_BUILD_UI_EDITOR|GYO_UI_EDITOR_BUILD_GUI|GYO_BUILD_OBJECT_FPS_PREVIEW")
+        # Tools are selected only through GYO_TOOLS: no per-tool GYO_BUILD_<TOOL>
+        # switch (GYO_BUILD_CONFIG is the build configuration, not a tool) and no
+        # tool-specific GUI switch may come back.
+        self.assertNotRegex(native, r"GYO_BUILD_(?!CONFIG\b)[A-Z0-9_]+|GYO_[A-Z0-9_]+_BUILD_GUI")
         self.assertIn('"-DGYO_APPS=$apps"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.kind == 'toolchain'", native)
         for step in re.split(r"(?m)^      - ", native):

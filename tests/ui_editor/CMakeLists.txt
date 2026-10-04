@@ -9,7 +9,7 @@ set_tests_properties(gyo_ui_editor.core PROPERTIES LABELS "cpu;editor")
 # runs in both the cli and gui variants.
 add_executable(gyo_ui_editor_preview_srgb_tests PreviewSrgbCharacterizationTests.cpp)
 target_compile_features(gyo_ui_editor_preview_srgb_tests PRIVATE cxx_std_20)
-target_link_libraries(gyo_ui_editor_preview_srgb_tests PRIVATE GYO::Math)
+target_link_libraries(gyo_ui_editor_preview_srgb_tests PRIVATE GYO::Math gyo_test_support)
 add_test(NAME gyo_ui_editor.preview_srgb COMMAND gyo_ui_editor_preview_srgb_tests)
 set_tests_properties(gyo_ui_editor.preview_srgb PROPERTIES LABELS "cpu;editor")
 
