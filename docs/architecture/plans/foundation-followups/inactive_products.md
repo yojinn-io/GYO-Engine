@@ -35,9 +35,10 @@
 
 ### FF-3 FNV-1a 收為一份
 
-狀態：未開始，批次完成時更新。
+狀態：FF-3 完成（2026-10-05）。
 
-- 預計無：2026-10-04 grep 顯示未啟用產品沒有直接使用 asset 的 `Detail::Fnv1a64` 或 `detail/Hash.hpp`；`AssetId`、`AssetType` 的公開用法與雜湊值不變。批次完成時以 grep 確認。
+- 無：2026-10-05 以 grep 確認 `apps`、`tools`、`tests`、`build/acceptance` 都沒有使用 `Detail::Fnv1a64`、`Asset::Detail` 或 `detail/Hash.hpp`；`AssetId`、`AssetType` 的公開用法與雜湊值不變（characterization 測試鎖住）。
+- 未啟用產品若需要 FNV-1a，直接用 `engine/base/Fnv1a.hpp` 的 `Engine::Base::Fnv1a64`。
 
 ### FF-4 有限性檢查收斂
 

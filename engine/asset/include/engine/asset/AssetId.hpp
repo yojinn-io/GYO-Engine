@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 #include <functional>
-#include "detail/Hash.hpp"
+#include "engine/base/Fnv1a.hpp"
 
 namespace Engine::Asset {
 
@@ -23,7 +23,7 @@ struct AssetId final {
     explicit constexpr AssetId(ValueType v) noexcept : value(v) {}
 
     static AssetId FromString(std::string_view s) noexcept {
-        AssetId id{ Detail::Fnv1a64(s) };
+        AssetId id{ Base::Fnv1a64(s) };
         id.debugName = std::string(s);
         return id;
     }

@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 #include <functional>
-#include "detail/Hash.hpp"
+#include "engine/base/Fnv1a.hpp"
 
 namespace Engine::Asset {
 
@@ -27,7 +27,7 @@ struct AssetType final {
 
 
     static AssetType FromString(std::string_view s) noexcept {
-        AssetType t{ Detail::Fnv1a64(s) };
+        AssetType t{ Base::Fnv1a64(s) };
 
         t.debugName = std::string(s);
 
@@ -40,12 +40,12 @@ struct AssetType final {
     explicit AssetType(std::string_view s) noexcept : AssetType(FromString(s)) {}
 
     // よく使うエンジン標準タイプ（必要に応じて追加）
-    static constexpr AssetType Texture() noexcept { return AssetType(Detail::Fnv1a64("texture", 7)); }
-    static constexpr AssetType Sound()   noexcept { return AssetType(Detail::Fnv1a64("sound",   5)); }
-    static constexpr AssetType Font()    noexcept { return AssetType(Detail::Fnv1a64("font",    4)); }
-    static constexpr AssetType Text()    noexcept { return AssetType(Detail::Fnv1a64("text",    4)); }
-    static constexpr AssetType Binary()  noexcept { return AssetType(Detail::Fnv1a64("binary",  6)); }
-    static constexpr AssetType Data()  noexcept { return AssetType(Detail::Fnv1a64("data",  4)); }
+    static constexpr AssetType Texture() noexcept { return AssetType(Base::Fnv1a64("texture")); }
+    static constexpr AssetType Sound()   noexcept { return AssetType(Base::Fnv1a64("sound")); }
+    static constexpr AssetType Font()    noexcept { return AssetType(Base::Fnv1a64("font")); }
+    static constexpr AssetType Text()    noexcept { return AssetType(Base::Fnv1a64("text")); }
+    static constexpr AssetType Binary()  noexcept { return AssetType(Base::Fnv1a64("binary")); }
+    static constexpr AssetType Data()  noexcept { return AssetType(Base::Fnv1a64("data")); }
     static constexpr AssetType Invalid() noexcept { return {}; }
 
     // The hashed value is the identity. debugName is diagnostic metadata and

@@ -1,21 +1,13 @@
 #include "engine/input/InputActionMap.hpp"
 
+#include "engine/base/Fnv1a.hpp"
+
 namespace Engine::Input {
 namespace {
 
-constexpr std::uint64_t kFnvOffset = 14695981039346656037ull;
-constexpr std::uint64_t kFnvPrime = 1099511628211ull;
-
+// An empty name is the invalid id 0, not the FNV-1a offset basis.
 std::uint64_t HashName(std::string_view value) noexcept {
-    if (value.empty()) {
-        return 0;
-    }
-    std::uint64_t result = kFnvOffset;
-    for (const unsigned char character : value) {
-        result ^= character;
-        result *= kFnvPrime;
-    }
-    return result;
+    return value.empty() ? 0 : Engine::Base::Fnv1a64(value);
 }
 
 void Merge(InputActionState& destination, const ButtonState& source) noexcept {

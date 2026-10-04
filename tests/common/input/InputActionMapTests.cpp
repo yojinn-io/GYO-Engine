@@ -82,3 +82,13 @@ TEST_CASE("action and axis identity ignore diagnostic names") {
     CHECK(std::hash<InputAxisId>{}(axisA) ==
           std::hash<InputAxisId>{}(axisB));
 }
+
+TEST_CASE("action and axis ids hash names with FNV-1a and keep empty names invalid") {
+    // Pinned before FNV-1a moved to GYO::Base. The empty name maps to 0 (an
+    // invalid id), unlike the standard FNV-1a of an empty string.
+    CHECK(InputActionId::FromString("fire").value == 0xaa77f578efdfc4b9ULL);
+    CHECK(InputAxisId::FromString("move_forward").value == 0x3169083cdbee4a1eULL);
+    CHECK(InputActionId::FromString("").value == 0);
+    CHECK_FALSE(InputActionId::FromString("").IsValid());
+    CHECK(InputAxisId::FromString("").value == 0);
+}
