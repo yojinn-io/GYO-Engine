@@ -103,6 +103,12 @@
   **縮放的停頓在事件處理（0.4／3.0／1.0 秒），不在 render**，是新發現，已以文字摘要寫進 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md)。使用者沒有看到 `CONNECTION POOR`。
 - 2026-10-05：B0 寫入 [基線](BASELINE.md)；完成，停止。
 
+## Engine 批次對本產品的影響（記錄器）
+
+- 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
+  [基線](BASELINE.md) 的 wire 版本號檢查表中 `Wire.hpp:26`、`:36` 兩處，因此變成這一個常數（第 09 批改值時以它為準）。
+  位元組與拒絕集合以 `tests/object_fps_pvp/WireTests.cpp` 鎖住；權威 digest 兩樹比對相同。見 [基礎後續整理交接](../../../architecture/plans/foundation-followups/HANDOFF.md)。
+
 ## 延後項目：現況與對應批次
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批
