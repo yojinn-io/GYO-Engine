@@ -158,6 +158,20 @@
 
   - 動作短測涵蓋注入的擷取點擊、射擊、Tab、失焦、移動與縮放視窗、ESC 後重新加入，都通過。
   - 人物短測的 runner 結束碼為 1，只因 player144 不計次；依 D11③ 標「未驗證」，不算失敗。
+- 2026-10-05：L3（macOS Intel／Metal，使用者依 v5 原生操作清單 1～8 操作；Claude 啟動 Match、Gateway 與兩個 Client，關窗後另開一個 Client 重新加入；證據 `.../pvp-v6-batch06-20261005/l3/`）：**全部正常**。
+  - 使用者回報：快速連點時，射速有時會「加速」，鎖在一個較快的固定頻率。
+    - 判斷：不是第 06 批引起。第 06 批沒有改射擊判定，L2 的 before／after 也相同。
+    - 原因是已知的第 4 項：本機的牆鐘閘與 Snapshot Tick 閘不一致。
+      - 確認回來之前只有 10 Tick 的牆鐘閘；回來之後，落後約 2 Tick 的 Tick 閘再多擋一些。
+      - 被擋下的點擊不排隊，射速因此隨點擊相位跳動。
+    - 上限仍是權威的 10 Tick。由 [第 12 批](12-local-fire-gate.md) 處理，並作為第 12 批 L3 的重現項目。
+- 2026-10-05：完成。完成條件依序：
+  - characterization 與突變；
+  - grep 只剩例外；
+  - 兩樹 digest 相同；
+  - L2 before／after；
+  - L3。
+  CI 在 PR 上確認。暫時的 worktree `GYO-Engine-b06base` 已移除。
 
 ## Engine 批次對本產品的影響（記錄器）
 

@@ -1,6 +1,6 @@
 # 第 06 批：pvp 改經 Engine 取得輸入（第11項的產品端）
 
-狀態：未開始。依賴 Engine IP-1 與第 04 批完成。
+狀態：完成（2026-10-05；見 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch06.zh-Hant.md)）。依賴 Engine IP-1 與第 04 批完成。
 先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md)，以及 Engine 的
 [input-and-present 計畫](../../../architecture/plans/input-and-present/PLAN.md)（IP-1 的介面）。
 
