@@ -51,17 +51,40 @@ def is_life_seed_clamp(gap, reset):
             frame < .1 and dropped > 0 and abs(dropped-(frame-TICK_SECONDS)) < 1e-8)
 
 
+# The product's neutral lead at a seed (Movement.hpp InitialCommandLead).
+INITIAL_COMMAND_LEAD = 2
+
+
+def is_session_start_seed_clamp(gap):
+    """The join seed's fresh-seed clamp: the player's first frame after its first seed.
+
+    The first seed of a session starts epoch 1 of life 1 at sequence 1 with the neutral lead; its
+    first frame adds one step, so the gap names sequence and pending INITIAL_COMMAND_LEAD + 1. Like a
+    respawn's clamp it drops exactly its frame time beyond one tick and its frame is shorter than the
+    100 ms interference threshold. A stall reseed later in the same epoch names a higher sequence and
+    remains interference."""
+    frame, dropped = gap['frame_seconds'], gap['dropped_seconds']
+    first = INITIAL_COMMAND_LEAD + 1
+    return (gap.get('epoch') == 1 and gap.get('life_generation') == 1 and
+            gap.get('sequence') == first and gap.get('pending') == first and not gap.get('count') and
+            frame < .1 and dropped > 0 and abs(dropped-(frame-TICK_SECONDS)) < 1e-8)
+
+
 def match_life_seed_clamps(gaps, life_resets):
-    """Pair each gap with at most one unused reset of ``life_resets`` (LifeRespawn only); returns (clamps, unmatched gaps)."""
-    used, clamps, unmatched = set(), [], []
+    """Pair each gap with at most one unused reset of ``life_resets`` (LifeRespawn only), or accept it as
+    its player's one session-start seed clamp; returns (clamps, unmatched gaps)."""
+    used, started, clamps, unmatched = set(), set(), [], []
     for gap in gaps:
         found = next((index for index, reset in enumerate(life_resets)
                       if index not in used and is_life_seed_clamp(gap, reset)), None)
-        if found is None:
-            unmatched.append(gap)
-        else:
+        if found is not None:
             used.add(found)
             clamps.append({'event': gap, 'life_reset': life_resets[found]})
+        elif gap['player_id'] not in started and is_session_start_seed_clamp(gap):
+            started.add(gap['player_id'])
+            clamps.append({'event': gap, 'session_start': True})
+        else:
+            unmatched.append(gap)
     return clamps, unmatched
 
 
