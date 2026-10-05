@@ -2,9 +2,24 @@
 
 #include <utility>
 
+#include "engine/base/Assert.hpp"
+
 namespace Engine::Platform::Sdl {
 
 namespace {
+
+// Clears a flag when the scope ends, also when an observer throws.
+class FlagScope final {
+public:
+    explicit FlagScope(bool& flag) noexcept : flag_(&flag) { *flag_ = true; }
+    ~FlagScope() { *flag_ = false; }
+
+    FlagScope(const FlagScope&) = delete;
+    FlagScope& operator=(const FlagScope&) = delete;
+
+private:
+    bool* flag_;
+};
 
 SdlPlatformError MakeSdlError(
     SdlPlatformErrorCode code,
@@ -51,6 +66,7 @@ SdlPlatform::SdlPlatform(SDL_Window* window) noexcept
     : window_(window) {}
 
 SdlPlatform::~SdlPlatform() {
+    SDL_RemoveEventWatch(&SdlPlatform::WatchEvent, this);
     if (window_ != nullptr) {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
@@ -58,10 +74,44 @@ SdlPlatform::~SdlPlatform() {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
+void SdlPlatform::SetLiveFrameHandler(LiveFrameHandler handler) {
+    // Replacing the handler while it runs would destroy the running function.
+    GYO_ASSERT(!inLiveFrame_);
+    const bool wasSet = static_cast<bool>(liveFrameHandler_);
+    liveFrameHandler_ = std::move(handler);
+    const bool isSet = static_cast<bool>(liveFrameHandler_);
+    // The watch exists only while a handler is set.
+    if (isSet && !wasSet) {
+        SDL_AddEventWatch(&SdlPlatform::WatchEvent, this);
+    } else if (!isSet && wasSet) {
+        SDL_RemoveEventWatch(&SdlPlatform::WatchEvent, this);
+    }
+}
+
+bool SDLCALL SdlPlatform::WatchEvent(void* userdata, SDL_Event* event) {
+    // Watches run on whichever thread pushes an event, so the platform's state
+    // is read only after the main-thread check.
+    if (event->type != SDL_EVENT_WINDOW_EXPOSED || event->window.data1 != 1 ||
+        !SDL_IsMainThread()) {
+        return true;
+    }
+    auto* platform = static_cast<SdlPlatform*>(userdata);
+    if (event->window.windowID != SDL_GetWindowID(platform->window_) ||
+        !platform->pumping_ || platform->inLiveFrame_ || !platform->liveFrameHandler_) {
+        return true;
+    }
+
+    const FlagScope live(platform->inLiveFrame_);
+    platform->liveFrameHandler_();
+    return true;
+}
+
 Runtime::RuntimeControl SdlPlatform::PumpEvents(const NativeEventObserver& observer) {
     Runtime::RuntimeControl control = Runtime::RuntimeControl::Continue;
     const SDL_WindowID ownWindowId = SDL_GetWindowID(window_);
 
+    // Live frames may run only from inside this function.
+    const FlagScope pumping(pumping_);
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
         if (observer) {

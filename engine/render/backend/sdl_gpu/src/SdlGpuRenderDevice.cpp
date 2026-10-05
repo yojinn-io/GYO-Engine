@@ -929,9 +929,25 @@ struct SdlGpuRenderDevice::Impl final {
         auto* command = SDL_AcquireGPUCommandBuffer(device);
         if (!command) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
         SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
-        if (!SDL_WaitAndAcquireGPUSwapchainTexture(command, window, &swapchain, &width, &height)) {
+        // IP-2a measurement: the blocking acquire is split into its two waits,
+        // the in-flight fence and the drawable (Metal's nextDrawable), and a
+        // slow acquire logs both. Whether this stays is decided after the
+        // measurement (input-and-present plan, IP-2).
+        const Uint64 waitStarted = SDL_GetTicksNS();
+        if (!SDL_WaitForGPUSwapchain(device, window)) {
+            static_cast<void>(SDL_CancelGPUCommandBuffer(command));
+            return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain wait failed"));
+        }
+        const Uint64 acquireStarted = SDL_GetTicksNS();
+        if (!SDL_AcquireGPUSwapchainTexture(command, window, &swapchain, &width, &height)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
             return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain acquisition failed"));
+        }
+        const Uint64 acquired = SDL_GetTicksNS();
+        if (acquired - waitStarted >= 50'000'000) {
+            SDL_Log("SDL_GPU slow swapchain acquire fence_wait_ms=%.1f drawable_ms=%.1f texture=%d",
+                static_cast<double>(acquireStarted - waitStarted) / 1.0e6,
+                static_cast<double>(acquired - acquireStarted) / 1.0e6, swapchain != nullptr);
         }
         if (!swapchain || !width || !height) {
             if (swapchain) static_cast<void>(SDL_SubmitGPUCommandBuffer(command));
