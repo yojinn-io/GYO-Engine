@@ -60,6 +60,23 @@ add_test(NAME "${GYO_CURRENT_APP}.presentation_cpu" COMMAND ${presentation_tests
 set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
+# Batch 06: the in-world pointer capture policy against the pre-batch native
+# SDL handling, through Engine SDL input on the dummy video driver.
+set(capture_tests "gyo_${GYO_CURRENT_APP}_pointer_capture_tests")
+add_executable(${capture_tests} PointerCaptureCharacterizationTests.cpp)
+target_compile_features(${capture_tests} PRIVATE cxx_std_20)
+target_link_libraries(${capture_tests} PRIVATE ${support} GYO::InputBackendSDL doctest::doctest)
+if(WIN32)
+    target_compile_definitions(${capture_tests} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${capture_tests} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${capture_tests})
+add_test(NAME "${GYO_CURRENT_APP}.pointer_capture" COMMAND ${capture_tests})
+set_tests_properties("${GYO_CURRENT_APP}.pointer_capture" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")

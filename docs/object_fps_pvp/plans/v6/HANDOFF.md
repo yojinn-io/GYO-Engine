@@ -106,6 +106,73 @@
   **縮放的停頓在事件處理（0.4／3.0／1.0 秒），不在 render**，是新發現，已以文字摘要寫進 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md)。使用者沒有看到 `CONNECTION POOR`。
 - 2026-10-05：B0 寫入 [基線](BASELINE.md)；完成，停止。
 
+## 第 06 批進度（記錄器）
+
+- 2026-10-05：開始。
+  - 分支 `claude/pvp-v6-batch06`，疊在 IP-2 分支上（開始時 `98beb78`，IP-2 審查修正後 rebase 到 `2912232`）：兩者都改 `PvpApplication.cpp`，IP-2 合併後 rebase。
+  - 檔位：計畫建議 high，使用者已把主對話調為 xhigh，照 xhigh 進行。
+- 2026-10-05：probe 盤點（使用者確認）：4 檔全部保留 SDL，沒有適用 IP-1 的部分。
+  - `gui_main.cpp`：注入；event watch 計數 OS 視窗事件，需要 occluded／exposed／hidden 與推送當下的時點，IP-1 沒有。
+  - `player_short.hpp`：注入；event watch 記錄 timestamp、裝置 id、xrel／yrel，IP-1 的事件沒有這些欄位。
+  - `action_short.hpp`：注入、視窗大小與位置操作。
+  - `combat_latency.hpp`：只有注入。
+- 2026-10-05：事前宣告（使用者確認，實作前寫入）。遊戲中的擷取狀態機，從 `HandleNativeEvent` 的逐一原生事件，改為 pump 結束後依 IP-1 的 `PhysicalInputFrame::events` 依序處理。大廳的位址文字輸入維持原生處理（例外）。差異只有下列三條：
+  1. 處理時機：同一幀內事件順序相同，仍在 `Update` 之前。可觀察的差異：
+     - 釋放指標時的 `SetRelativeMouseMode(false)` 與 `ClearJumpRequest`，由事件當下改為 pump 結束後；
+     - 「PvP releasing pointer」日誌的時間稍晚；
+     - IP-2 的 live frame 看到的擷取狀態，尚未套用該次 pump 的事件。live frame 不消費輸入，命令不受影響。
+  2. 點擊是否在視窗內：由「產品依已處理的縮放事件更新的寬高」改為 IP-1 的 `insideWindow`（SDL 處理該事件當下的視窗大小）。只有在「點擊之後、同一次 pump 還有尚未處理的縮放」時不同。
+  3. 每個事件當下的焦點，由 pump 開始時的焦點加上 events 中的取得／失去焦點重建。這不是差異：以 characterization 證明與舊的逐事件 `Snapshot().windowFocused` 相同。
+
+  其餘都必須與舊行為相同：
+  - 其他視窗的事件；
+  - 按鍵重複；
+  - Tab；
+  - 左鍵的擷取與射擊上升沿；
+  - 失焦／移動／縮放／縮小時釋放指標；
+  - 縮放時更新寬高（`Max(1, ·)`）。
+
+  驗證：把舊邏輯原樣複製到測試當基準，對同一串合成 SDL 事件（手寫案例＋固定種子的隨機序列）比對擷取狀態與釋放次數；每一條差異都附突變測試。
+- 2026-10-05：實作（commit `382232b`，rebase 後為 `ddc1d44`）：
+  - 擷取政策抽成產品內的純函式 `ApplyPointerCaptureEvents`（`PointerCapture.hpp`／`.cpp`）。
+  - `ProcessEvents` 在 pump 後依序套用 `events`。
+  - `HandleNativeEvent` 刪除，只留 `HandleTextEditing`（例外）。
+- 2026-10-05：L1：
+  - characterization（`object_fps_pvp.pointer_capture`）：
+    - 手寫 14 幀、固定種子 5 組各 3000 幀：與舊邏輯 0 不一致。每組約 500 次擷取、100 次以上的射擊上升沿、1000 次釋放。
+    - 宣告差異 2 有單獨測試（點擊之後、處理之前 SDL 已縮小視窗）；釋放日誌的計數也有測試。
+  - 突變 10 個，抓到 9 個。沒被抓到的「失焦時不把焦點設為 false」是等價突變：同一幀內失焦後 `windowInteraction` 已是 true，之後的 Tab 與點擊本來就被擋下。
+  - CTest 58／58。
+  - grep：pvp 的 `src` 只剩 `HandleTextEditing` 與 `PumpEvents` 的觀察者簽名處理 SDL 事件。
+  - 權威 digest 同機兩樹（base `2912232`，暫時的 worktree `GYO-Engine-b06base`；rebase 到審查修正後的 IP-2 後重跑）35 個情境 0 不同。
+  - 消費端接線本身（漏呼叫 `ApplyInputEvents` 之類）不是單元測試的範圍，由 L2 的 GUI 短測（注入點擊、Tab、視窗事件）驗證。
+- 2026-10-05：L2 事前宣告寫入證據夾的 `declare.txt`：
+  - before／after 各跑動作短測 4 案、人物短測 4 案；
+  - player144 預期為 `invalid_capacity`（D11③）。
+- 2026-10-05：L2（macOS Intel／Metal，Claude 執行，機器閒置；證據 `build/target/_build/test/logs/pvp-v6-batch06-20261005/`）：
+
+  | 跑次 | before（`2912232`） | after（`693ea5a`，程式同 `ddc1d44`） |
+  |---|---|---|
+  | 動作短測 | action30／60／144／capture 全部通過 | 全部通過 |
+  | 人物短測 | player30／60、capture 通過；player144 為 `invalid_capacity`（join 只到 120.00 FPS） | 同 before（120.01 FPS） |
+
+  - 動作短測涵蓋注入的擷取點擊、射擊、Tab、失焦、移動與縮放視窗、ESC 後重新加入，都通過。
+  - 人物短測的 runner 結束碼為 1，只因 player144 不計次；依 D11③ 標「未驗證」，不算失敗。
+- 2026-10-05：L3（macOS Intel／Metal，使用者依 v5 原生操作清單 1～8 操作；Claude 啟動 Match、Gateway 與兩個 Client，關窗後另開一個 Client 重新加入；證據 `.../pvp-v6-batch06-20261005/l3/`）：**全部正常**。
+  - 使用者回報：快速連點時，射速有時會「加速」，鎖在一個較快的固定頻率。
+    - 判斷：不是第 06 批引起。第 06 批沒有改射擊判定，L2 的 before／after 也相同。
+    - 原因是已知的第 4 項：本機的牆鐘閘與 Snapshot Tick 閘不一致。
+      - 確認回來之前只有 10 Tick 的牆鐘閘；回來之後，落後約 2 Tick 的 Tick 閘再多擋一些。
+      - 被擋下的點擊不排隊，射速因此隨點擊相位跳動。
+    - 上限仍是權威的 10 Tick。由 [第 12 批](12-local-fire-gate.md) 處理，並作為第 12 批 L3 的重現項目。
+- 2026-10-05：完成。完成條件依序：
+  - characterization 與突變；
+  - grep 只剩例外；
+  - 兩樹 digest 相同；
+  - L2 before／after；
+  - L3。
+  CI 在 PR 上確認。暫時的 worktree `GYO-Engine-b06base` 已移除。
+
 ## Engine 批次對本產品的影響（記錄器）
 
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。

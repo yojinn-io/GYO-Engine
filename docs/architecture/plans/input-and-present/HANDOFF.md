@@ -226,6 +226,20 @@
   - 新測試的突變 5 個全部被抓到；CTest 57／57。
   - 未補：消費端 live frame 的單元測試（接線由 L2 驗證）、跨執行緒推送事件的測試。
 
+## 消費端回報（文字摘要，D12）
+
+- 2026-10-05：提出需求的消費端已改用 IP-1：
+  - 遊戲中的指標擷取政策改為在 pump 後依序讀 `PhysicalInputFrame::events`。
+  - 以舊的原生處理當基準做 characterization，0 不一致。
+  - 宣告的差異只有三點：
+    - 處理時機（同一幀內、`Update` 之前）；
+    - 視窗內判定改用 `insideWindow`；
+    - 每個事件當下的焦點以開始時的焦點加上 events 重建，證明與舊行為相同。
+  - IP-1 介面足以保持既有行為，沒有發現缺口。
+  - 仍直接使用 SDL 的部分：
+    - 文字輸入與剪貼簿（D11② 的候選）；
+    - 驗收 probe 的事件注入與 event watch。probe 需要 timestamp、裝置 id、相對位移，以及 occluded／exposed／hidden 這幾種視窗事件，IP-1 的事件沒有這些。
+
 ## 未結事項
 
 - IP-2：停頓位置已量測：在 `nextDrawable`（fence 0 ms）。觸發原因未查明（這次不是拖動標題列）；依 D19 延到分執行緒的計畫。

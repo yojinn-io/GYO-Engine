@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
+#include "RetroFPS/Pvp/PointerCapture.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/App/WeaponViewModel.hpp"
@@ -175,13 +176,30 @@ struct PvpApplication::Impl final {
         }
     }
 
-    void ReleasePointer() {
-        if (inputCaptured) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
+    // Applies this frame's window events from Engine input, after the pump and
+    // before the update: the new window size, then the in-world capture policy.
+    void ApplyInputEvents(bool focusedAtStart) {
+        const auto& events = input->Snapshot().events;
+        for (const auto& event : events) {
+            if (event.kind == Engine::Input::InputEventKind::WindowResized) {
+                width = static_cast<float>(Engine::Math::Max(1, event.windowWidth));
+                height = static_cast<float>(Engine::Math::Max(1, event.windowHeight));
+            }
+        }
+        if (!InWorld()) return;
+        PointerCaptureState capture{inputCaptured, leftButtonDown, pendingShotEdge, pendingReloadEdge,
+            pointerAcquiredThisFrame, windowInteraction};
+        const auto result = ApplyPointerCaptureEvents(capture, events, focusedAtStart);
+        inputCaptured = capture.inputCaptured;
+        leftButtonDown = capture.leftButtonDown;
+        pendingShotEdge = capture.pendingShotEdge;
+        pendingReloadEdge = capture.pendingReloadEdge;
+        pointerAcquiredThisFrame = capture.pointerAcquiredThisFrame;
+        windowInteraction = capture.windowInteraction;
+        if (result.releases == 0) return;
+        if (result.releasesWhileCaptured > 0) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
             static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(SDL_GetTicks()));
-        inputCaptured = false;
-        pendingShotEdge = pendingReloadEdge = false;
         if (prediction) prediction->ClearJumpRequest();
-        leftButtonDown = false;
         const auto released = input->SetRelativeMouseMode(false);
         if (!released) {
             lastError = Explain(released.error());
@@ -190,42 +208,10 @@ struct PvpApplication::Impl final {
         }
     }
 
-    void HandleNativeEvent(const SDL_Event& event) {
-        if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(platform->NativeWindow())) {
-            width = static_cast<float>(Engine::Math::Max(1, event.window.data1));
-            height = static_cast<float>(Engine::Math::Max(1, event.window.data2));
-        }
-        if (InWorld()) {
-            const auto windowId = SDL_GetWindowID(platform->NativeWindow());
-            if (((event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) && event.window.windowID != windowId) ||
-                (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID != windowId) ||
-                ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
-                    event.button.windowID != windowId)) return;
-            if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_MOVED ||
-                event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_MINIMIZED) {
-                // Release during the native event, before the next simulation
-                // update. Moving a window must not retain gameplay mouse lock.
-                windowInteraction = true;
-                ReleasePointer();
-            } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_TAB && !event.key.repeat &&
-                       input->Snapshot().windowFocused && !windowInteraction) {
-                if (inputCaptured) { windowInteraction = true; ReleasePointer(); }
-                else { inputCaptured = true; pointerAcquiredThisFrame = true; }
-            } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
-                       input->Snapshot().windowFocused && !windowInteraction &&
-                       event.button.x >= 0 && event.button.x < width && event.button.y >= 0 && event.button.y < height) {
-                const bool rising = !leftButtonDown;
-                leftButtonDown = true;
-                if (!inputCaptured) {
-                    inputCaptured = true;
-                    pointerAcquiredThisFrame = true;
-                } else if (rising && !pointerAcquiredThisFrame) pendingShotEdge = true;
-            } else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
-                leftButtonDown = false;
-            }
-            return;
-        }
-        if (!editing) return;
+    // Lobby address editing keeps native SDL text input and clipboard, which
+    // Engine input does not provide.
+    void HandleTextEditing(const SDL_Event& event) {
+        if (InWorld() || !editing) return;
         if (event.type == SDL_EVENT_TEXT_INPUT) AppendAddress(event.text.text);
         if (event.type != SDL_EVENT_KEY_DOWN) return;
         if (event.key.key == SDLK_BACKSPACE && !address.empty()) address.pop_back();
@@ -777,14 +763,16 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     impl_->pendingShotEdge = false;
     impl_->liveFramesThisPump = 0;
     impl_->input->BeginFrame();
+    const bool focusedAtStart = impl_->input->Snapshot().windowFocused;
     double observerMilliseconds = 0;
     const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const SDL_Event& event) {
         const auto observed = Clock::now();
         impl_->input->HandleEvent(event);
-        impl_->HandleNativeEvent(event);
+        impl_->HandleTextEditing(event);
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
+    impl_->ApplyInputEvents(focusedAtStart);
     const auto elapsed = Milliseconds(Clock::now(), started);
     // observer_ms is this product's event handling; the rest is SDL's polling,
     // including any OS modal loop and the live frames run inside it.
