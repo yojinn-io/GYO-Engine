@@ -268,6 +268,19 @@
     - 從 B0 到 B1，這條路徑上的產品改動只有 FF-7 的 include 路徑與 FF-8 的 GYOP 標頭，兩者都證明位元組不變。
     - **可疑點**：一個 19.8 ms 的幀就丟掉 3.1 ms，等於「超過 1 Tick 的部分」全丟。但 `LocalPlayerPrediction` 的追趕上限是 5 步（`LocalPlayerPrediction.hpp:73`），照理不該丟。這可能是產品的丟時計算問題（實戰中也會造成替代），也可能是工具的判定方式；需要調查才能分辨。
   - B0 的兩次矩陣是 1 敗 1 勝；B1 的兩次都失敗（clean-30、clean-60）。
+- 2026-10-06：調查（使用者指定；只讀程式與既有 trace，不改程式、不再量測）。
+  - 所有被判失敗的丟時，都與一次 seed（`LocalPlayerPrediction::SeedLead`）同時發生：seed 之後的第一幀若超過 1 Tick，就被夾到 1 Tick（`freshSeed_`，`LocalPlayerPrediction.cpp:254-256`），差額計為丟時。這是設計上的行為。
+  - 分析器（`gameplay_evidence.py` 的 `client_disturbance`，經 `command_evidence.py` 的 `match_life_seed_clamps`）只豁免「與 Match 的 LifeRespawn 配對」的夾住。檢查的是整份 trace，不只量測窗。
+  - 失敗分兩類：
+    - **A：連線時的初始 seed**（B1 4b 的 clean-60，t+0.037 秒）。
+      - 連線瞬間的 seed 之後，第一幀 19.8 ms 超過 1 Tick，丟時 3.1 ms。
+      - 對遊戲無影響，但分析器不豁免；是否發生取決於第一幀的長短，屬時好時壞的工具誤判。
+      - B0 唯一沒有 gap 的 clean-60，正是第一幀剛好短於 1 Tick。
+    - **B：主機卡頓後的停頓重設**（B1 的 clean-30，t+9.807 秒；B0 第一次的 clean-30 也是這類）。
+      - 30 FPS 下主機卡了一幀（B1 41.1 ms，B0 57.7 ms），權威解析超過 Client 的命令尖端。
+      - Client 依設計以中立命令重設（`LocalPlayerPrediction.cpp:180-183`），之後第一幀被夾而丟時。
+      - Match 對該玩家沒有任何 reset，所以分析器判為未配對。這是真的小停頓，分析器抓它正確，但是否發生取決於主機的計時抖動。
+  - 與 IP-2、第 06、08 批無關：矩陣路徑的程式與 B0 相同，B0 也出現過兩類中的 B。
 
 ## Engine 批次對本產品的影響（記錄器）
 
