@@ -2,10 +2,10 @@
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
 #include "AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
-#include "model_renderer/ModelRenderer.hpp"
-#include "render/PrimitiveMesh.hpp"
-#include "render/IRenderDevice.hpp"
-#include "render/RenderQueue.hpp"
+#include "engine/render/model/ModelRenderer.hpp"
+#include "engine/render/PrimitiveMesh.hpp"
+#include "engine/render/IRenderDevice.hpp"
+#include "engine/render/RenderQueue.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include <stdexcept>
 #include <unordered_map>

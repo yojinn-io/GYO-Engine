@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
-#include "render/RenderTypes.hpp"
+#include "engine/render/RenderTypes.hpp"
 
 #include <cstdint>
 #include <memory>

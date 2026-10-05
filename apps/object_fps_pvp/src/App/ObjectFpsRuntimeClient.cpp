@@ -8,9 +8,9 @@
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/input/InputActionMap.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "input/backend/sdl/SdlInput.hpp"
-#include "platform/sdl/SdlPlatform.hpp"
-#include "ui/UiDocumentCodec.hpp"
+#include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/ui/UiDocumentCodec.hpp"
 
 #include <cmath>
 #include <memory>

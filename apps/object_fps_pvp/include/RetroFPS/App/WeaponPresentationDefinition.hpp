@@ -2,8 +2,8 @@
 
 #include "RetroFPS/Gameplay/Weapon/WeaponShotGeometry.hpp"
 #include "engine/asset/AssetId.hpp"
-#include "model/Animation.hpp"
-#include "render/RenderTypes.hpp"
+#include "engine/model/Animation.hpp"
+#include "engine/render/RenderTypes.hpp"
 
 #include <array>
 #include <memory>

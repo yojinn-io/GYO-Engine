@@ -18,8 +18,8 @@
 #include <backends/imgui_impl_sdlrenderer3.h>
 
 #include "engine/runtime/RuntimeLoop.hpp"
-#include "platform/sdl/SdlPlatform.hpp"
-#include "render/backend/sdl/SdlRenderer.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/render/backend/sdl/SdlRenderer.hpp"
 
 namespace Gyo::Tools::UiEditor {
 namespace {

@@ -111,6 +111,8 @@
 - 2026-10-05：IP-1（Engine 輸入層）完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）：`Key` 擴充為完整鍵盤（含 `Tab`、數字列），`PhysicalInputFrame::events` 依序提供本視窗的按鍵、滑鍵（含座標與是否在視窗內）與視窗事件（失焦、移動、縮放含新寬高、縮小、還原）。
   [第 06 批](06-input-migration.md) 可以用它取代 `PvpApplication.cpp` 的 `HandleNativeEvent`（文字輸入與剪貼簿除外）；同一幀的點擊上升沿（`pendingShotEdge`）可由 `events` 的 `MouseButtonPressed` 取得。
 - 2026-10-05：Engine 的 FF-1～FF-6、FF-8、IP-1 依序合併（PR #43～#50，master `56e0033`）。本產品批次的 Engine 依賴：第 06 批（IP-1）、第 09 批（FF-3、FF-8）已滿足；第 07 批仍等 IP-2，第 10 批與 FF-9 同一個 PR。
+- 2026-10-05：FF-7（Engine 的 include 路徑統一）改了本產品的 include：公開 Engine header 一律在 `engine/<m>/` 之下（例如 `render/Renderer.hpp` → `engine/render/Renderer.hpp`、`platform/sdl/SdlPlatform.hpp` → `engine/platform/sdl/SdlPlatform.hpp`、`model_renderer/ModelRenderer.hpp` → `engine/render/model/ModelRenderer.hpp`）。
+  本產品的程式、驗收、測試共 54 行一併改好（含第 08 批要刪除的未編譯檔）；之後新寫的 include 依這個規則。行為不變：權威 digest 兩樹比對 35 個情境相同。
 
 ## 延後項目：現況與對應批次
 
@@ -231,10 +233,9 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 01 批：PR #39 等使用者合併。
-- 第 02 批之後都未開始，由使用者逐批指定。
+- 第 06～14 批未開始（第 05 批不執行），由使用者逐批指定。
 - 已知要在批次開始時決定的事：
-  - FF-7 的 include 統一方向。
+  - ~~FF-7 的 include 統一方向~~：2026-10-05 使用者決定 `engine/<m>/`，FF-7 已完成。
   - 第 11、13 批的呈現細節（D11⑥）。
   - 第 10 批與 FF-9 的容差選擇與事前宣告。
   - IP-2 量測後的修法選擇（D7）。

@@ -1,7 +1,7 @@
 # 基礎後續整理：分批計畫與進度
 
 更新：2026-10-05。Owner：Engine（collision、render、ui、base、asset、input、共通測試、建置登錄、`tools/ui_editor` 的對應部分）。
-**FF-1～FF-6、FF-8 完成並合併**（2026-10-05，PR #43～#49）；FF-7、FF-9 未開始。
+**FF-1～FF-6、FF-8 完成並合併**（2026-10-05，PR #43～#49）；FF-7 完成（2026-10-05，PR 待合併）；FF-9 未開始。
 
 本計畫承接三類 Engine 層的後續事項：
 
@@ -37,7 +37,7 @@
 - **FF-8**：1200 bytes 是 Engine 的傳輸契約（與 Go 的 `framing.go` `MaxDatagram` 一致），產品可以設更小的上限；@22 依 Go 命名為 `Channel`（v1 只用 channel 0）；版本與 Type 由呼叫端檢查，「拒絕條件等價」以消費端組合後的整體行為證明。
 - **FF-9**：容差選 `1e-7`（現行移動用的 `kTolerance`）時，預期移動與 Client 預測不變；選其他容差時，移動的變化必須事前宣告。停止條件是「出現未宣告的變化」。
 - **檔位**：xhigh 只用在局部。FF-9 主體為 high（ultracode 依 D8 開始時徵求同意），只有容差選擇、`IsValid`、差異歸因局部 xhigh。
-- **合併順序**只是建議，用來減少衝突與方便歸因，不是依賴：後合併的一方 rebase。依賴欄只寫真正的依賴；例外是 FF-2 必須先於 IP-2（MeshUpdateSmoke 語意），以及 FF-7 依賴 IP-1、IP-2、FF-4、FF-5（大範圍搬移，避免衝突）。
+- **合併順序**只是建議，用來減少衝突與方便歸因，不是依賴：後合併的一方 rebase。依賴欄只寫真正的依賴；例外是 FF-2 必須先於 IP-2（MeshUpdateSmoke 語意），以及 FF-7 在 IP-1、FF-4、FF-5 之後（大範圍搬移，避免衝突；原本也排在 IP-2 之後，2026-10-05 使用者決定 FF-7 先做，IP-2 建在搬移後的 master 上）。
 
 範圍不含未啟用產品（`object_fps`、`object_fps_v2`、`tools/object_fps_preview`）的程式碼；它們重新啟用前的遷移需求記在 [遷移清單](inactive_products.md)。
 維持候選、不在本計畫：文字輸入與剪貼簿、AssetManager `LoadShared`、產品登錄資料搬出 `engine/config`（D11②），以及 Logging（健檢的候選，不屬 D11②）；見 HANDOFF。
@@ -52,7 +52,7 @@
 | FF-4 有限性檢查收斂 | high | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`；原建議在 IP-2 之後合併，使用者指示依序先合併） | render 內 4 份 Color 有限性檢查收斂為一份；`UiValidation` 那份留在 Ui；兩個 Color 型別保留，兩者都記錄理由 |
 | FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證 | high（契約部分 medium） | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`）） | ui_editor 改用 Engine Ui 的 letterbox、viewport 判定、文字對齊；`UiRuntime` 走訪合併；`item_step` 驗證與契約文件 |
 | FF-6 共通層衛生與產品登錄 | medium | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`）） | characterization helper 收進 tests/common；共通層去除產品名；preview 停用並寫進遷移清單 |
-| FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 未開始 | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
+| FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 完成（PR 待合併；未用 ultracode，見 HANDOFF） | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
 | FF-8 GYOP 標頭 C++ 編解碼 | high（解碼拒絕條件局部 xhigh） | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`）（未升 xhigh，見 HANDOFF） | 新增最小 Engine 子系統（單一 target）；1200 bytes 為 Engine 傳輸契約；@22 命名 `Channel`；與 Go framing 共用合成 golden 向量；位元組不變 |
 | FF-9 Collision 統一與公開合法性檢查 | high（ultracode 開始時徵求同意；容差選擇、`IsValid`、差異歸因局部 xhigh） | 未開始 | D3 ①–④；事前宣告與事後兩樹比對；與消費端權威批同一 PR |
 
@@ -67,7 +67,7 @@ FF-2 共通測試計時 ─→ IP-2（MeshUpdateSmoke 語意）
 FF-3 FNV-1a ─→〔消費端協議批的 arena digest 使用它〕
 FF-8 GYOP 標頭 ─→〔消費端協議批之前〕
 FF-4 有限性、FF-5 Ui／item_step、FF-6 共通衛生與登錄（Engine 內無前置批次）
-IP-1、IP-2、FF-4、FF-5 ─→ FF-7 include 統一
+IP-1、FF-4、FF-5 ─→ FF-7 include 統一 ─→ IP-2（2026-10-05 改為 FF-7 先做）
 ```
 
 上圖只畫真正的依賴。
@@ -75,7 +75,7 @@ IP-1、IP-2、FF-4、FF-5 ─→ FF-7 include 統一
 建議合併順序（只用來減少同檔衝突與方便歸因，不是依賴；後合併的一方 rebase）：
 
 - Collision：FF-1→FF-9（FF-9 本來就依賴 FF-1）。
-- render：FF-2→IP-2→FF-4→FF-7。其中 FF-2→IP-2 與 →FF-7 是依賴；FF-4 排在 IP-2 之後只是建議（兩批都改 `SdlGpuRenderDevice.cpp`）。
+- render：實際為 FF-2→FF-4→FF-7→IP-2。FF-2→IP-2 是依賴；FF-4 原建議排在 IP-2 之後，使用者指示依序先合併；FF-7 依使用者 2026-10-05 的決定先於 IP-2。
 - `InputActionMap.cpp`：IP-1 與 FF-3 先完成者先合併，後者 rebase；不是依賴。
 
 FF-1、FF-2、FF-3、FF-4、FF-5、FF-6、FF-8 沒有 Engine 內的前置批次，由使用者分別啟動。

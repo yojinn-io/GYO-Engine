@@ -2,8 +2,8 @@
 #include <doctest/doctest.h>
 #include "AssertTestSupport.hpp"
 
-#include "model_renderer/ModelRenderer.hpp"
-#include "render/RenderQueue.hpp"
+#include "engine/render/model/ModelRenderer.hpp"
+#include "engine/render/RenderQueue.hpp"
 #include "RenderDeviceStub.hpp"
 
 #include <array>

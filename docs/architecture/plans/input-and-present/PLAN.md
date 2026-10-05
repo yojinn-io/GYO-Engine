@@ -14,7 +14,7 @@ file:line 以 master `05042fa` 為準，批次開始時重新核對。
 - **量測基線世代**：B0＝消費端在阻塞取得下的量測基線（含拖動重現），只作歷史參照；IP-2 本身也在自己的 base commit 上以同一流程量 before／after；IP-2 合併後由消費端重取 B1；之後各批在自己的 base commit 上以凍結工具量 before／after。消費端既有穩定基線的數字只用來對門檻，不作回歸比較。
 - **檔位**：主對話檔位由使用者決定。ultracode 與高於主對話的檔位，在批次開始時說明並徵求同意（D8）。xhigh 只用在局部。
 - **遷移清單**：每批同步更新未啟用產品（`object_fps`、`object_fps_v2`、`tools/object_fps_preview`）的遷移清單，寫入 [foundation-followups/inactive_products.md](../foundation-followups/inactive_products.md) 的「IP」節（本夾不另建），格式沿用 [Math](../math-foundation/inactive_products.md)。未啟用產品本身不修改。
-- **合併順序**：只是建議，用來減少衝突與方便歸因，不是依賴；後合併的一方 rebase。render 建議 FF-2 → IP-2 → FF-4 → FF-7；`InputActionMap.cpp` 的 IP-1 與 FF-3 不同時進行、先後不限。依賴欄只寫真正的依賴；例外是 FF-2 必須先於 IP-2（`MeshUpdateSmoke` 語意），FF-7 依賴 IP-1、IP-2、FF-4、FF-5。
+- **合併順序**：只是建議，用來減少衝突與方便歸因，不是依賴；後合併的一方 rebase。render 實際為 FF-2 → FF-4 → FF-7 → IP-2（2026-10-05 使用者決定 FF-7 先於 IP-2）；`InputActionMap.cpp` 的 IP-1 與 FF-3 不同時進行、先後不限。依賴欄只寫真正的依賴；例外是 FF-2 必須先於 IP-2（`MeshUpdateSmoke` 語意），FF-7 在 IP-1、FF-4、FF-5 之後。
 - **匿名（D12）**：本文件只寫「提出需求的消費端」，不寫產品名、不連結消費端文件；程式檔案路徑與證據路徑作為資料保留。
 - 平台表的六列固定；「預定執行」是計畫，不是結果。
 
@@ -201,7 +201,7 @@ Fitness：Engine 不出現產品名；刪除任何消費端不需修改 `engine/
 - FF-2（`MeshUpdateSmoke` 改為容許 `Skipped`，先在現行阻塞取得下通過）。這是依賴，不只是合併順序。
 - 消費端條件：需要一個 sdl_gpu 產品在 macOS 的拖動重現與阻塞下的基線 B0（目前由提出需求的消費端在其量測基線批次提供）。
 - 若 D7 選「暫停 acquire」：另需 IP-1 的視窗事件。
-- 下游：消費端重取 B1；FF-7 依賴本批。FF-4 排在本批之後只是合併順序建議（後合併的一方 rebase），不是依賴。
+- 下游：消費端重取 B1。FF-7 原本排在本批之後，2026-10-05 使用者決定 FF-7 先做，本批建在搬移後的 master 上（include 根目錄為 `engine/<m>/`）。
 
 ### Architecture Delta
 

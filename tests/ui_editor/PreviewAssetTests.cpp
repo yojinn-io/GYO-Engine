@@ -3,7 +3,7 @@
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
-#include "text/ITextRasterizer.hpp"
+#include "engine/text/ITextRasterizer.hpp"
 
 #include <SDL3/SDL.h>
 #include <imgui.h>

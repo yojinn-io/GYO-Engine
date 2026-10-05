@@ -4,7 +4,7 @@
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "engine/math/linear/Vec3.hpp"
-#include "model/Animation.hpp"
+#include "engine/model/Animation.hpp"
 
 #include <algorithm>
 #include <cmath>

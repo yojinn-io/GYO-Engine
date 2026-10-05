@@ -1,10 +1,10 @@
-#include "platform/sdl/SdlPlatform.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/base/Error.hpp"
-#include "render/PrimitiveMesh.hpp"
-#include "render/RenderQueue.hpp"
-#include "render/Renderer.hpp"
+#include "engine/render/PrimitiveMesh.hpp"
+#include "engine/render/RenderQueue.hpp"
+#include "engine/render/Renderer.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
-#include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "RenderFeatureSmoke.hpp"
 
 #include <cmath>

@@ -7,7 +7,7 @@
 
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec3.hpp"
-#include "render/RenderTypes.hpp"
+#include "engine/render/RenderTypes.hpp"
 
 #include <cmath>
 #include <numbers>

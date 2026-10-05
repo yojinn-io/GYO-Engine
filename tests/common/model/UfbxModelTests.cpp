@@ -1,8 +1,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include "model/backend/ufbx/UfbxModelLoader.hpp"
-#include "model/Animation.hpp"
+#include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
+#include "engine/model/Animation.hpp"
 
 #include <algorithm>
 #include <array>

@@ -13,8 +13,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include "engine/base/Sha256.hpp"
-#include "render/Renderer.hpp"
-#include "render/ShaderAbi.hpp"
+#include "engine/render/Renderer.hpp"
+#include "engine/render/ShaderAbi.hpp"
 
 namespace {
 using namespace Engine;

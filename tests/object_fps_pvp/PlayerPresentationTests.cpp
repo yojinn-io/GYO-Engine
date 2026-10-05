@@ -12,8 +12,8 @@
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "gyo/AppConfig.hpp"
-#include "model/Animation.hpp"
-#include "model/backend/ufbx/UfbxModelLoader.hpp"
+#include "engine/model/Animation.hpp"
+#include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
 
 #include <SDL3/SDL_filesystem.h>
 #include <nlohmann/json.hpp>

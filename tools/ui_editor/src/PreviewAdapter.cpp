@@ -9,8 +9,8 @@
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
-#include "ui/UiDocumentCodec.hpp"
-#include "ui/UiRuntime.hpp"
+#include "engine/ui/UiDocumentCodec.hpp"
+#include "engine/ui/UiRuntime.hpp"
 
 #include <algorithm>
 #include <cmath>

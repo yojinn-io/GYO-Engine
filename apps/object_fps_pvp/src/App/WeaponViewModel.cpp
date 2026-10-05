@@ -1,5 +1,5 @@
 #include "RetroFPS/App/WeaponViewModel.hpp"
-#include "render/RenderQueue.hpp"
+#include "engine/render/RenderQueue.hpp"
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
 #include "RetroFPS/Gameplay/Weapon/WeaponState.hpp"
 
@@ -8,9 +8,9 @@
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "model/Animation.hpp"
-#include "model_renderer/ModelRenderer.hpp"
-#include "render/IRenderDevice.hpp"
+#include "engine/model/Animation.hpp"
+#include "engine/render/model/ModelRenderer.hpp"
+#include "engine/render/IRenderDevice.hpp"
 
 #include <cmath>
 #include <stdexcept>
