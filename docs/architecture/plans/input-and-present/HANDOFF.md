@@ -139,6 +139,38 @@
   突變（不記錄放開、縮放不過濾）都被抓到。CTest 56／56；沒有改 CMake，依賴邊不變；權威 digest 兩樹比對 35／35 相同（附帶檢查）。完成，開 PR。
 - 2026-10-05：使用者指示依序合併。與已合併批次的文件衝突以合併 origin/master 解決，CI 四平台通過後合併到 master（`56e0033`）。
 
+## IP-2 紀錄（記錄器）
+
+- 2026-10-05：使用者決定 D14～D16 並確認擴大後的計畫；FF-7 先做（使用者決定）。分支 `claude/engine-ip2`，疊在 FF-7（`b2fda8c`）上；FF-7 合併後 rebase 到 master。檔位 high；xhigh 審查 agent 經使用者同意（D15）。
+  - 審查 agent 的定義檔放在使用者層 `~/.claude/agents/xhigh-reviewer.md`（使用者決定）。
+  - 這個定義要等 session 重新載入後才能使用，所以審查排在 IP-2c 之後，一次審 2b 與 2c。
+- 2026-10-05：IP-2b 實作（commit `2f76e59`）：
+  - `RuntimeLoop::RunLiveFrame`：在 `ProcessEvents` 進行中執行一組 `Update`／`Render`。
+    - frame 編號以 `Update`／`Render` 的組為單位；delta 為與前一組開始的時間差。
+    - 沒有 live frame 時，行為與先前逐一相同。
+    - live frame 中要求 Stop 時，在 `ProcessEvents` 返回後結束。
+    - `Run` 每次從 frame 0 開始。
+  - `SdlPlatform::SetLiveFrameHandler`：只在設定了處理函式時才註冊 event watch。
+    - 只處理本視窗的 `EXPOSED`（`data1`＝1）；先確認是主執行緒，才讀取平台狀態。
+    - 只在 `PumpEvents` 執行中呼叫，而且不會重入。
+  - 消費端接線（消費端的部分）：
+    - live frame 中使用空的輸入幀：不消費按鍵、指標與 UI 輸入，也不切換相對滑鼠模式。
+    - `pump` 前段的點擊與 R 邊緣保留給 `pump` 之後的正規更新。
+    - 慢事件處理的日誌加上 `observer_ms`（消費端自己的處理時間）與 `live_frames`。
+- 2026-10-05：IP-2a 量測碼：sdl_gpu 的取得拆成 `SDL_WaitForGPUSwapchain`（fence）與 `SDL_AcquireGPUSwapchainTexture`（drawable），兩者合計 ≥50 ms 時記錄 `fence_wait_ms`、`drawable_ms`。去留在量測後決定。
+- 2026-10-05：L1：
+  - CTest 57／57：新增 `platform_sdl_tests`；`engine_tests` 加了 4 個 live frame 案例。
+  - 突變 9 個全部被抓到：
+    - platform 4 個：不檢查 `data1`、`pumping_`、視窗、重入。
+    - runtime 5 個：不檢查 `ProcessEvents` 中、正規組沿用 `ProcessEvents` 的 context（兩種寫法）、忽略 live 的 Stop、組開始時間不前進。
+  - 「組開始時間不前進」一開始沒被抓到，所以補了 delta 上限的檢查。
+  - 兩個突變一開始讓測試無限迴圈，所以替測試的假 client 加了呼叫次數上限。
+  - 權威 digest 兩樹比對 35 個情境 0 不同（附帶檢查）。
+- 2026-10-05：L2 準備：
+  - before＝`b2fda8c`，在 scratch worktree `GYO-Engine-v6b04` 建置；after＝本分支。
+  - 流程：雙 Client 並排，A 拖動標題列 10 次、B 縮放 10 次。
+  - 使用者指定稍後進行。
+
 ## 未結事項
 
 - IP-2：停頓位置（fence 或 `nextDrawable`）未量測。
