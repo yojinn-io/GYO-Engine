@@ -188,3 +188,64 @@ v5 產品×第 02 批的凍結工具。IP-2 合併後由第 07 批重取 B1；�
 
 - 第 3 項：**重現**。拖動標題列時 `render_ms` 約 1197 ms（3 次中 2 次）。縮放時停頓在事件處理（0.4／3.0／1.0 秒），不在 render。Engine 側摘要寫在 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md)。
 - 第 6 項：**未重現**。probe 路徑兩次死亡共 18 張截圖都沒有第一人稱手臂；使用者看過自動測試畫面後決定不再以正式 Client 重現。第 05 批依停止條件不執行。
+
+## 量測基線 B1（第 07 批，2026-10-06）
+
+IP-2 合併後的來源×凍結工具。之後各批在自己的 base commit 上量 before／after，B0、B1 只作歷史參照；門檻只對 v5 STABLE_BASELINE。經過見 [第 07 批 dev_log](../../../dev_logs/2026_10_06_pvp_v6_batch07.zh-Hant.md)。
+
+### 來源與指紋
+
+- 來源：master `5b0553a`，獨立 worktree（detached），test preset 從零建置。
+  - 包含：v6 第 01～04、06、08 批；Engine FF-1～FF-8、IP-1、IP-2（縮小交付：live frame、取得的拆分診斷）。
+- 環境：同 B0（macOS 26.7.1、x86_64 Intel、Apple clang 21.0.0、Metal）。
+- 權威 digest：規模 1、10 與 B0 逐位元相同（`34d0ca7f…`、`f9e0ef41…`）。
+- CTest（只確認建置）：59／59，112.81 秒。
+- 工具：
+  - 短測（跑次 1～3）：使用第 02 批的分析器。52 檔中只有 `gui_main.cpp` 不同（FF-7 的 3 行 include 路徑）。
+  - 矩陣的定案跑次（4c）：使用第 07a 批的凍結清單 `9e086f1d…`。差異是初始 seed 夾住的豁免，見 HANDOFF 的第 07a 批。
+- 證據：`build/target/_build/test/logs/pvp-v6-batch07-20261005/`（git 忽略；含 `declare.txt`、`artifacts.sha256`、`tools.sha256`、`stdout.sha256`）。
+
+| 產物 | SHA-256 |
+|---|---|
+| Client | `bf598428d9fb14973ed14d490af44e563daecb80a9a20fe0b921a6a654ec1f59
+b89310a5a80477e97bc603ad302bb342771b26cd7109ed3da397680614e44481
+6ca5a222fdb83e9da56b9b68419314ff991e2bb53e58e8f657196b59273755ff
+b421004f96b3c7acbd92f8045c3612e8c007c30644c1646bcefcaeda336fd37c
+d2c39d6cf5d7c5d6a0971819b21f402ae0407b79f179bd587dd1490883122566
+61855bccb9d2e85158ed58683a5729b6bf500fb951441e70c511af6bd6ac7dc2
+6f716a4efa68a173d26d916ccfd072fa735ee2c69453c63a68575440581b16ce` |
+| Match | `` |
+| Gateway | `` |
+| GUI probe | `` |
+| action probe | `` |
+| `pvp_arena.json` | 與 B0 相同；`asset_catalog.json` 因第 08 批不同 |
+
+### 結果
+
+| 跑次 | B1 | B0 |
+|---|---|---|
+| 動作短測 | 4／4 通過；`skipped_frames` 全為 0 | 4／4 通過 |
+| 人物短測 | player30、player60、capture 通過；player144 `invalid_capacity`（join 120.01 FPS，未驗證） | 同 |
+| 雙 GUI 整合短測 | 通過，視窗未受干擾。移動 Actual 99.58%，P50／P95 27.1／36.3 ms；可見交越 20／20，P50／P95 33.6／37.3 ms；`skipped_frames` 0 | 通過；Actual 1.0，P50／P95 30.1／37.3 ms；交越 P50／P95 37.7／39.8 ms |
+| 25 案矩陣 | 第 1 次 clean-30 失敗、第 2 次（4b）clean-60 失敗（都保留）；第 07a 批修工具後的 4c：**25／25 通過** | 第 1 次 clean-30 失敗；重跑 25／25 |
+
+矩陣 clean 案的數字（B1 為 4c，B0 為重跑）：
+
+| 案例 | 合法動作 Match P95 | Client 取得裁決 P95 | 移動 Actual P95 |
+|---|---|---|---|
+| clean-60 | 16.2 ms（B0 11.9） | 102.0 ms（B0 100.5） | 33.5 ms（B0 28.0） |
+| clean-30 | 10.5 ms（B0 11.1） | 104.0 ms（B0 102.6） | 41.0 ms（B0 26.9） |
+| clean-144 | 17.8 ms（B0 20.1） | 97.9 ms（B0 110.8） | 38.7 ms（B0 37.6） |
+
+### 與 B0 的差異（分類）
+
+- **Skipped**：B1 的短測沒有任何 Skipped 幀。IP-2 縮小交付後仍是阻塞取得，`Skipped` 沒有變常見，與預期相符。
+- **幀節奏**：雙 GUI 短測的移動 Actual 由 1.0 變 99.58%，仍在門檻內；人物短測的達成 FPS 與 B0 相同。
+- **延遲**：
+  - 雙 GUI 短測的移動與交越延遲比 B0 略低。
+  - 矩陣的 Client 取得裁決 P95 在 ±13 ms 內。
+  - clean-30 的移動 Actual P95 明顯較高（41.0 ms，B0 26.9），但該案通過。單次跑次無法判斷是主機抖動還是趨勢，之後各批的 before／after 比較會再看到它。
+- **其他**：矩陣的失敗分兩類（見 HANDOFF）。
+  - A：連線時初始 seed 的夾住，屬工具誤判，第 07a 批已修。
+  - B：30 FPS 下主機卡頓後的停頓重設，是真的小停頓，取決於計時抖動，B0 也出現過。B 類仍判失敗，列為未結事項。
+
