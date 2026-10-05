@@ -95,7 +95,7 @@
 |---|---|---|
 | FF-1 | 未開始 | — |
 | FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
-| FF-3 | 未開始 | — |
+| FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
 | FF-4 | 未開始 | — |
 | FF-5 | 未開始 | — |
 | FF-6 | 未開始 | — |
@@ -113,6 +113,14 @@
 - 2026-10-05：**停止**：B3 的突變 20 次只有 18 次失敗。原因是 `AssetWatcher.cpp` 的 `FileTimeToSystemNs` 每次以當下時鐘換算，同一檔案時間約 2.2% 的換算結果不同，watcher 會偶發誤報 `Modified`。修正屬範圍擴大，等使用者決定。
 - 2026-10-05：使用者決定在 FF-2 一起修。`FileTimeToSystemNs` 改為 process 內只取樣一次時鐘差；新增「沒變的檔案 Poll 1,000 次不得回報」測試（舊實作 10／10 失敗、新實作 20／20 通過）；原宣告的突變改為 20／20 失敗。
 - 2026-10-05：全部 CTest 55／55；完成，開 PR。
+
+### FF-3（記錄器）
+
+- 2026-10-05：使用者離開前指示「把 Engine 側的功能完成」。依建議順序接著做 FF-3。分支 `claude/engine-ff3`，疊在 FF-2（`claude/engine-ff2`）上。
+  檔位 high（計畫建議值，等於主對話檔位），不用 ultracode。
+- 2026-10-05：先加 characterization 測試鎖住舊雜湊值（`AssetId`、`AssetType` 標準型別、`InputActionId`／`InputAxisId` 含空字串為 0、ui_editor 的檔案內容雜湊），在舊實作上通過。
+- 2026-10-05：新增 `engine/base/include/engine/base/Fnv1a.hpp`（`Engine::Base::Fnv1a64(std::string_view)`，constexpr）與參考向量測試；三處改用；刪除 `engine/asset/include/engine/asset/detail/Hash.hpp`（含沒有使用者的 `HashCombine`）。
+- 2026-10-05：CTest 55／55；依賴邊比對（`cmake --graphviz`，base 與 branch）只新增 `gyo_input→gyo_base`，沒有刪除的邊。完成，開 PR。
 
 ## 未結事項
 

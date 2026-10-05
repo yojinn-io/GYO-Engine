@@ -35,3 +35,14 @@ TEST_CASE("AssetType invalid and standard values follow value identity") {
     CHECK(Engine::Asset::AssetType::Texture() ==
           Engine::Asset::AssetType::FromString("texture"));
 }
+
+TEST_CASE("Standard AssetType values are the 64-bit FNV-1a of their names") {
+    // Pinned before FNV-1a moved to GYO::Base.
+    using Engine::Asset::AssetType;
+    CHECK(AssetType::Texture().value == 0x01c099c5225d78f4ULL);
+    CHECK(AssetType::Sound().value == 0x65d3e9609806fe14ULL);
+    CHECK(AssetType::Font().value == 0xdd0ef6790c22b410ULL);
+    CHECK(AssetType::Text().value == 0xfa04f4ef1995407eULL);
+    CHECK(AssetType::Binary().value == 0xee885e7447d3d73cULL);
+    CHECK(AssetType::Data().value == 0x855b556730a34a05ULL);
+}

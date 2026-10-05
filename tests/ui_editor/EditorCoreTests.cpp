@@ -247,6 +247,16 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         "a wrong-type catalog AssetId blocks export");
 }
 
+void TestContentHashIsFnv1a(const std::filesystem::path& root) {
+    // Pinned before FNV-1a moved to GYO::Base: external-change detection
+    // compares stamps, so the content hash must stay the same function.
+    const auto path = root / "content-hash.txt";
+    Expect(static_cast<bool>(WriteTextFileAtomically(path, "foobar")), "content hash fixture is written");
+    const auto stamp = ProbeFileStamp(path);
+    Expect(stamp && stamp.value().contentHash == 0x85944171f73967e8ULL,
+        "file content hash is the 64-bit FNV-1a of the text");
+}
+
 } // namespace
 
 int main() {
@@ -257,6 +267,7 @@ int main() {
     TestExportAndExternalModification(temporary.path);
     TestReadOnlyCatalogAndExportGuard(temporary.path);
     TestContentManifestMount(temporary.path);
+    TestContentHashIsFnv1a(temporary.path);
     if (failures != 0) {
         std::cerr << failures << " editor core test(s) failed\n";
         return 1;

@@ -10,6 +10,9 @@ target_include_directories(gyo_input PUBLIC
 
 target_compile_features(gyo_input PUBLIC cxx_std_20)
 
+# FNV-1a for action and axis ids.
+target_link_libraries(gyo_input PRIVATE GYO::Base)
+
 if(GYO_ENABLE_SDL_INPUT)
     add_subdirectory(backend/sdl)
 endif()

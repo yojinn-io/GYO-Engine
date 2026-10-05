@@ -1,5 +1,7 @@
 #include "gyo/ui_editor/FileService.hpp"
 
+#include "engine/base/Fnv1a.hpp"
+
 #include <array>
 #include <chrono>
 #include <cwctype>
@@ -17,15 +19,6 @@
 
 namespace Gyo::Tools::UiEditor {
 namespace {
-
-[[nodiscard]] std::uint64_t HashText(const std::string_view text) noexcept {
-    std::uint64_t hash = 14695981039346656037ULL;
-    for (const unsigned char value : text) {
-        hash ^= static_cast<std::uint64_t>(value);
-        hash *= 1099511628211ULL;
-    }
-    return hash;
-}
 
 [[nodiscard]] std::filesystem::path AbsoluteNormalized(
     const std::filesystem::path& path) {
@@ -144,7 +137,7 @@ Result<FileStamp, FileError> ProbeFileStamp(const std::filesystem::path& path) {
         return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
             "cannot inspect timestamp of '" + path.string() + "': " + fileError.message(), path));
     }
-    stamp.contentHash = HashText(*text);
+    stamp.contentHash = Engine::Base::Fnv1a64(*text);
     return stamp;
 }
 

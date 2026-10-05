@@ -46,3 +46,10 @@ TEST_CASE("AssetId unordered lookup follows value identity") {
     REQUIRE(values.contains(lookup));
     CHECK(values.at(lookup) == 7);
 }
+
+TEST_CASE("AssetId values are the 64-bit FNV-1a of the id string") {
+    // Pinned before FNV-1a moved to GYO::Base; catalogs and caches key on these.
+    using Engine::Asset::AssetId;
+    CHECK(AssetId::FromString("").value == 0xcbf29ce484222325ULL);
+    CHECK(AssetId::FromString("player_tex").value == 0xb52b0c137347c8a6ULL);
+}
