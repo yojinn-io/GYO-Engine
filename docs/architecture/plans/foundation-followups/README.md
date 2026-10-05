@@ -1,7 +1,7 @@
 # 基礎後續整理：分批計畫與進度
 
 更新：2026-10-05。Owner：Engine（collision、render、ui、base、asset、input、共通測試、建置登錄、`tools/ui_editor` 的對應部分）。
-**FF-2、FF-3、FF-8 完成**（2026-10-05，PR 待合併）；其餘批次未開始。
+**FF-1、FF-2、FF-3、FF-8 完成**（2026-10-05，PR 待合併）；其餘批次未開始。
 
 本計畫承接三類 Engine 層的後續事項：
 
@@ -46,7 +46,7 @@
 
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
-| FF-1 Collision 判定語料 | high | 未開始 | `tests/common/collision` 合成語料，涵蓋全部公開查詢；可比對紀錄；膠囊 float／double 公開多載的命中翻轉與 ULP 統計。不改 Collision |
+| FF-1 Collision 判定語料 | high | 完成（PR 待合併） | `tests/common/collision` 合成語料，涵蓋全部公開查詢；可比對紀錄；膠囊 float／double 公開多載的命中翻轉與 ULP 統計。不改 Collision |
 | FF-2 共通測試的計時假設 | high（MeshUpdateSmoke）／medium（其餘） | 完成（PR 待合併） | MeshUpdateSmoke、package checks、AssetWatcher 改為結構條件；`test_gpu_smoke` 寫進遷移清單 |
 | FF-3 FNV-1a 收為一份 | high | 完成（PR 待合併） | `GYO::Base` 公開 header；三份實作改用它；新增依賴邊 `gyo_input→GYO::Base` |
 | FF-4 有限性檢查收斂 | high | 未開始 | render 內 4 份 Color 有限性檢查收斂為一份；`UiValidation` 那份留在 Ui；兩個 Color 型別保留，兩者都記錄理由 |

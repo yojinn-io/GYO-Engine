@@ -93,7 +93,7 @@
 
 | 批次 | 狀態 | 紀錄 |
 |---|---|---|
-| FF-1 | 未開始 | — |
+| FF-1 | 完成（PR 待合併） | 見下方「FF-1」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff1.zh-Hant.md) |
 | FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
 | FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
 | FF-4 | 未開始 | — |
@@ -132,6 +132,52 @@
   突變：拿掉 channel／length／1200 檢查、encode 接受 channel 1，C++ 測試都失敗；過程中發現自己寫的測試以暫存物件做 range-for，迴圈其實沒跑，已修正後才得到這個結果。
 - 2026-10-05：消費端 `Wire.hpp` 改用（版本收成 `ProtocolVersion` 一個常數，Type 範圍與 TCP frame 留在產品）。characterization 通過；CTest 56／56；權威 digest 同機兩樹（base＝FF-3 tip）35 個情境 0 不同；L2 clean-60 冒煙 base／branch 都通過（report-only）。完成，開 PR。
 
+### FF-1（記錄器）
+
+- 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff1`，疊在 FF-8 上。檔位 high（計畫建議值），不用 ultracode。
+- 2026-10-05：語料完成：`tests/common/collision/CollisionCorpus.{hpp,cpp}`（12 類紀錄、16,940 筆）、`gyo_collision_corpus` runner（`--out`、`--stats`、`--degenerate`）、`CollisionCorpusTests.cpp`（涵蓋全部公開查詢、process 內決定性、統計自洽）。Collision 的程式沒有改，也沒有公開內部函式。
+- 2026-10-05：L1：同機重跑兩次紀錄逐位元相同（SHA-256 `666f17ca…`）；靈敏度（scratch，不提交）：float `kEpsilon` 1e-6→1e-5 改變 9 筆；double `kTolerance` 1e-7→1e-5 改變 32 筆、→1e-9 改變 14 筆。第一次檢查時 double 容差改動沒有任何影響，原因是語料缺「初始淺重疊後分離」的情境，補上後才有靈敏度。CTest 56／56。完成，開 PR。
+
+#### FF-1 結果：語料規模
+
+| 紀錄 | 筆數 |
+|---|---|
+| `RaycastAabb` | 850（5 個 box） |
+| `RaycastCapsule/vertical`、`/general`（同一輸入的兩個公開多載） | 各 2,490（5 個膠囊×3 種 sweep 半徑） |
+| `RaycastCapsule/arbitrary`（傾斜、水平的 `Math::Capsule`） | 1,494 |
+| `SweepSphereAgainstCapsule/vertical`、`/general` | 各 2,385 |
+| `SweepSphereAgainstCapsule/arbitrary` | 1,431 |
+| `OverlapVerticalCapsuleAabb`、`SweepVerticalCapsuleAgainstAabb` | 各 857 |
+| `OverlapVerticalCapsules`、`SweepVerticalCapsuleAgainstCapsule` | 各 840 |
+| `ToCapsule` | 5 |
+
+情境：正面、擦邊（切線、平面上平行、邊緣）、差 2^-20 的內外、近平行（方向分量在 1e-6 與水平分量 1e-3 的 float 容差邊界上下）、max distance 等於／略短於命中距離、零距離、長射線（1e4）、未正規化方向、極短掃掠（5e-7、2e-6）、零位移、初始接觸往內／往外／切線、淺重疊（5e-8～5e-5）往外與切線、高速（1000）、角與邊，以及以整數格點產生的隨機情境。
+所有輸入都通過現行驗證，box 每軸嚴格 min<max，膠囊 height 嚴格大於 2r（不放 height＝2r，以免 FF-9 的 `IsValid` 拒絕它們）。
+
+#### FF-1 結果：膠囊兩個公開多載（VerticalCapsule＝float 演算法；ToCapsule 後＝double 演算法）
+
+本機 macOS Intel、Apple clang 21、RelWithDebInfo：
+
+| 查詢 | 情境 | 兩者皆未中 | 兩者皆命中 | 只有 float 命中 | 只有 double 命中 | 距離 ULP 0／1／2-4／5-16／17-256／>256 | 最大 ULP |
+|---|---|---|---|---|---|---|---|
+| `RaycastCapsule` | 2,490 | 2,085 | 402 | 3 | 0 | 120／50／73／87／56／16 | 2,896 |
+| `SweepSphereAgainstCapsule` | 2,385 | 2,200 | 181 | 0 | 4 | 88／26／24／23／5／15 | 3,355 |
+
+命中翻轉合計 7 筆；兩者皆命中時有 31 筆差超過 256 ULP。FF-9 統一為 double 時，這些就是 `VerticalCapsule` 多載的預期變化範圍，需在 FF-9 事前宣告中歸因。
+
+#### FF-1 結果：退化膠囊現況（只記錄，不修）
+
+`gyo_collision_corpus --degenerate`：25 個 height＝2r 的膠囊（feet.y 1～65536，r 1e-3～1e-7）。
+- 兩份驗證（float `ValidateCapsule`、double `Validate`）都放行全部 25 個。
+- float 算出的 segment 上端低於下端：2 個（feet.y＝1、r＝1e-3；feet.y＝1000、r＝1e-4）。這兩個 float 查詢會在 noexcept 的 `RayCapsuleUnchecked` 內違反 `Math::Clamp` 前置條件；第一次執行時以可拋出的 handler 測試也直接 terminate（`AssertionFailure` 從 noexcept 函式拋出），所以報告不執行它們。
+- 其餘 23 個 float 查詢與全部 25 個 double 查詢（經 `ToCapsule`，長度 0 的球）都正常回傳。
+
+#### FF-1：重現方法（供 FF-9）
+
+1. 在 base 與 branch 兩個 worktree 各自建置 `gyo_collision_corpus`（test preset）。
+2. `python3 docs/architecture/plans/foundation-followups/scripts/compare_collision_corpus.py --base <base runner> --branch <branch runner> --output <dir>`。
+3. 回報每個查詢不同的筆數與第一筆差異；`comparison.json` 保存全部結果。統計以 `--stats`、退化現況以 `--degenerate` 取得。
+
 ## 未結事項
 
 - FF-2 發現：AssetWatcher 在檔案沒變時偶發回報 `Modified`（換算抖動，約 2.2%／次）；使用者決定在 FF-2 修正，已完成。
@@ -140,5 +186,6 @@
 - FF-9：容差（`1e-6f` 或 `1e-7`）與 AABB 規則（拒絕 `min>=max` 或只拒絕 `min>max`）未定，開始時事前宣告。選 `1e-7` 時預期移動與 Client 預測不變；選其他容差時，移動的變化要列入事前宣告。若選只拒絕 `min>max`，消費端的 arena 規則是否保留「牆必須有厚度」作為遊戲規則，由消費端決定。
 - FF-8：已定案（見決策紀錄）：@22 在 Engine C++ API 依 Go 命名為 `Channel`；1200 bytes 是 Engine 傳輸契約；Engine 解碼只做傳輸層檢查，版本與 Type 由呼叫端檢查。開始時只需確認實作與 Go 契約一致。
 - 合併順序：已定案為建議，不是依賴（見決策紀錄）。`InputActionMap.cpp` 由 IP-1 與 FF-3 先完成者先合併，後者 rebase；FF-4 建議排在 IP-2 之後合併，但不是依賴。
-- FF-1：兩樹比對腳本的位置（候選為本夾 `scripts/`）。
+- FF-1：兩樹比對腳本已定為本夾 [`scripts/compare_collision_corpus.py`](scripts/compare_collision_corpus.py)。
+- FF-9 須知（FF-1 發現）：height＝2r 的膠囊不必半徑極小也會讓 float 路徑的 segment 上端低於下端（例：feet.y＝1、r＝1e-3）；float 查詢會在 noexcept 函式內違反 `Math::Clamp` 前置條件而終止程式。
 - 既有文件的連結：Math 基礎統一 HANDOFF 的「範圍外，只回報」節與健檢報告，原本把這些項目指向消費端的交接；改指本夾由計畫落盤批處理，本文件不宣稱已完成。
