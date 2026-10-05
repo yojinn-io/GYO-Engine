@@ -201,6 +201,9 @@
   - 2a 的拆分改為常駐診斷（只在 ≥50 ms 時記錄），註解改寫。
   - 2c 不實作。
   - xhigh 審查只審 2b，需要 session 重新載入後執行。
+- 2026-10-05：FF-7（#52）合併後 rebase 到 master `ef12037`，沒有衝突。
+  - 使用者把主對話調為 xhigh，所以審查改用一般子 agent（繼承主對話檔位），不必重新載入 session。
+  - before 用的 scratch worktree `GYO-Engine-v6b04` 經使用者同意已移除；證據中的 `artifacts.sha256` 記錄了當時的雜湊值。
 
 ## 未結事項
 

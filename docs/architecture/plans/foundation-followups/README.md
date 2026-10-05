@@ -1,7 +1,7 @@
 # 基礎後續整理：分批計畫與進度
 
 更新：2026-10-05。Owner：Engine（collision、render、ui、base、asset、input、共通測試、建置登錄、`tools/ui_editor` 的對應部分）。
-**FF-1～FF-6、FF-8 完成並合併**（2026-10-05，PR #43～#49）；FF-7 完成（2026-10-05，PR 待合併）；FF-9 未開始。
+**FF-1～FF-6、FF-8 完成並合併**（2026-10-05，PR #43～#49）；FF-7 完成並合併（2026-10-05，PR #52）；FF-9 未開始。
 
 本計畫承接三類 Engine 層的後續事項：
 
@@ -52,7 +52,7 @@
 | FF-4 有限性檢查收斂 | high | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`；原建議在 IP-2 之後合併，使用者指示依序先合併） | render 內 4 份 Color 有限性檢查收斂為一份；`UiValidation` 那份留在 Ui；兩個 Color 型別保留，兩者都記錄理由 |
 | FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證 | high（契約部分 medium） | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`）） | ui_editor 改用 Engine Ui 的 letterbox、viewport 判定、文字對齊；`UiRuntime` 走訪合併；`item_step` 驗證與契約文件 |
 | FF-6 共通層衛生與產品登錄 | medium | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`）） | characterization helper 收進 tests/common；共通層去除產品名；preview 停用並寫進遷移清單 |
-| FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 完成（PR 待合併；未用 ultracode，見 HANDOFF） | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
+| FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 完成，PR [#52](https://github.com/yojinn-io/GYO-Engine/pull/52) 已合併（`ef12037`；未用 ultracode，見 HANDOFF） | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
 | FF-8 GYOP 標頭 C++ 編解碼 | high（解碼拒絕條件局部 xhigh） | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`）（未升 xhigh，見 HANDOFF） | 新增最小 Engine 子系統（單一 target）；1200 bytes 為 Engine 傳輸契約；@22 命名 `Channel`；與 Go framing 共用合成 golden 向量；位元組不變 |
 | FF-9 Collision 統一與公開合法性檢查 | high（ultracode 開始時徵求同意；容差選擇、`IsValid`、差異歸因局部 xhigh） | 未開始 | D3 ①–④；事前宣告與事後兩樹比對；與消費端權威批同一 PR |
 
