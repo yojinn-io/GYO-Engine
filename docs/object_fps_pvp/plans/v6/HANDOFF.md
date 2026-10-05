@@ -106,6 +106,34 @@
   **縮放的停頓在事件處理（0.4／3.0／1.0 秒），不在 render**，是新發現，已以文字摘要寫進 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md)。使用者沒有看到 `CONNECTION POOR`。
 - 2026-10-05：B0 寫入 [基線](BASELINE.md)；完成，停止。
 
+## 第 06 批進度（記錄器）
+
+- 2026-10-05：開始。
+  - 分支 `claude/pvp-v6-batch06`，疊在 IP-2 分支（`98beb78`）上：兩者都改 `PvpApplication.cpp`，IP-2 合併後 rebase。
+  - 檔位：計畫建議 high，使用者已把主對話調為 xhigh，照 xhigh 進行。
+- 2026-10-05：probe 盤點（使用者確認）：4 檔全部保留 SDL，沒有適用 IP-1 的部分。
+  - `gui_main.cpp`：注入；event watch 計數 OS 視窗事件，需要 occluded／exposed／hidden 與推送當下的時點，IP-1 沒有。
+  - `player_short.hpp`：注入；event watch 記錄 timestamp、裝置 id、xrel／yrel，IP-1 的事件沒有這些欄位。
+  - `action_short.hpp`：注入、視窗大小與位置操作。
+  - `combat_latency.hpp`：只有注入。
+- 2026-10-05：事前宣告（使用者確認，實作前寫入）。遊戲中的擷取狀態機，從 `HandleNativeEvent` 的逐一原生事件，改為 pump 結束後依 IP-1 的 `PhysicalInputFrame::events` 依序處理。大廳的位址文字輸入維持原生處理（例外）。差異只有下列三條：
+  1. 處理時機：同一幀內事件順序相同，仍在 `Update` 之前。可觀察的差異：
+     - 釋放指標時的 `SetRelativeMouseMode(false)` 與 `ClearJumpRequest`，由事件當下改為 pump 結束後；
+     - 「PvP releasing pointer」日誌的時間稍晚；
+     - IP-2 的 live frame 看到的擷取狀態，尚未套用該次 pump 的事件。live frame 不消費輸入，命令不受影響。
+  2. 點擊是否在視窗內：由「產品依已處理的縮放事件更新的寬高」改為 IP-1 的 `insideWindow`（SDL 處理該事件當下的視窗大小）。只有在「點擊之後、同一次 pump 還有尚未處理的縮放」時不同。
+  3. 每個事件當下的焦點，由 pump 開始時的焦點加上 events 中的取得／失去焦點重建。這不是差異：以 characterization 證明與舊的逐事件 `Snapshot().windowFocused` 相同。
+
+  其餘都必須與舊行為相同：
+  - 其他視窗的事件；
+  - 按鍵重複；
+  - Tab；
+  - 左鍵的擷取與射擊上升沿；
+  - 失焦／移動／縮放／縮小時釋放指標；
+  - 縮放時更新寬高（`Max(1, ·)`）。
+
+  驗證：把舊邏輯原樣複製到測試當基準，對同一串合成 SDL 事件（手寫案例＋固定種子的隨機序列）比對擷取狀態與釋放次數；每一條差異都附突變測試。
+
 ## Engine 批次對本產品的影響（記錄器）
 
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
