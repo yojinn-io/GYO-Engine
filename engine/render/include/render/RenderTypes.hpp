@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -21,6 +22,16 @@ struct Color final {
     float blue{1.0F};
     float alpha{1.0F};
 };
+
+// Finite in every channel: the single Color check of every render target
+// (queue submissions, frame clear colors, device clear values, model tints).
+// Ui keeps UiColor and its own check: gyo_ui does not depend on render
+// (gyo_ui_renderer bridges the two), and Math gains no color type without a
+// consumer of its own.
+[[nodiscard]] inline bool IsFinite(const Color& color) noexcept {
+    return std::isfinite(color.red) && std::isfinite(color.green) &&
+           std::isfinite(color.blue) && std::isfinite(color.alpha);
+}
 
 // GYO 3D presentation uses the Engine::Math conventions: left-handed, +Y up,
 // +Z forward, radians. Scale, X/Y/Z rotation, and translation are applied in

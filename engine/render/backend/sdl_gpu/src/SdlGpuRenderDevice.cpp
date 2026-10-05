@@ -18,11 +18,6 @@ std::atomic<std::uint64_t> nextFrameToken{1};
     return std::isfinite(value);
 }
 
-[[nodiscard]] bool IsFinite(Color value) noexcept {
-    return IsFinite(value.red) && IsFinite(value.green) &&
-           IsFinite(value.blue) && IsFinite(value.alpha);
-}
-
 [[nodiscard]] RenderError MakeError(
     RenderErrorCode code,
     std::string message,

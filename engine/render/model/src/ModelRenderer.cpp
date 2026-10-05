@@ -16,10 +16,6 @@ using Result = Base::Result<void, ModelRendererError>;
 ModelRendererError Failure(const ModelRendererErrorCode code, std::string message, std::string detail = {}) {
     return ModelRendererError::Make(code, std::move(message), std::move(detail));
 }
-bool Finite(const Render::Color color) {
-    return std::isfinite(color.red) && std::isfinite(color.green) &&
-           std::isfinite(color.blue) && std::isfinite(color.alpha);
-}
 }
 
 struct ModelResource::Impl final {
@@ -54,7 +50,7 @@ Base::Result<std::shared_ptr<ModelResource>, ModelRendererError> ModelResource::
     impl->model = std::move(model);
     impl->materials.reserve(materials.size());
     for (const auto& source : materials) {
-        if (!Finite(source.tint))
+        if (!Render::IsFinite(source.tint))
             return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument, "Model material tint must be finite."));
         Render::MaterialDesc material;
         material.tint = source.tint;
@@ -144,7 +140,7 @@ Result ModelInstance::UpdatePose(const Model::Pose& pose) {
 
 Result ModelInstance::Submit(Render::RenderQueue& queue, const Render::Transform3D& transform,
                               const Render::MeshLayer layer, const Render::Color tint) const {
-    if (!Finite(tint))
+    if (!Render::IsFinite(tint))
         return Base::Err(Failure(ModelRendererErrorCode::InvalidArgument, "Model instance tint must be finite."));
     const auto& resource = *impl_->resource->impl_;
     for (std::size_t mesh = 0; mesh < impl_->meshes.size(); ++mesh) {
