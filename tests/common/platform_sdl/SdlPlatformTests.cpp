@@ -4,6 +4,7 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
 
 #include <memory>
+#include <stdexcept>
 
 using Engine::Platform::Sdl::SdlPlatform;
 
@@ -112,4 +113,54 @@ TEST_CASE("SdlPlatform without a live frame handler pumps as before") {
     });
     CHECK(control == Engine::Runtime::RuntimeControl::Continue);
     CHECK(seen == 1);
+}
+
+TEST_CASE("SdlPlatform rethrows a live frame handler's exception from PumpEvents") {
+    auto platform = MakePlatform();
+    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    int runs = 0;
+    bool fail = true;
+    platform->SetLiveFrameHandler([&] {
+        ++runs;
+        if (fail) throw std::runtime_error("live frame failed");
+    });
+    CHECK_THROWS_WITH_AS(PushWhilePumping(*platform, Exposed(window, 1)), "live frame failed", std::runtime_error);
+    CHECK(runs == 1);
+
+    // The flags were restored: later requests run the handler again.
+    fail = false;
+    PushWhilePumping(*platform, Exposed(window, 1));
+    CHECK(runs == 2);
+}
+
+TEST_CASE("SdlPlatform keeps running live frames after a nested PumpEvents") {
+    auto platform = MakePlatform();
+    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    int runs = 0;
+    platform->SetLiveFrameHandler([&] { ++runs; });
+
+    SDL_Event trigger{};
+    trigger.type = SDL_EVENT_USER;
+    REQUIRE(SDL_PushEvent(&trigger));
+    bool done = false;
+    (void)platform->PumpEvents([&](const SDL_Event& seen) {
+        if (seen.type != SDL_EVENT_USER || done) return;
+        done = true;
+        (void)platform->PumpEvents();  // nested, then a request in the outer pump
+        SDL_Event again = Exposed(window, 1);
+        SDL_PushEvent(&again);
+    });
+    REQUIRE(done);
+    CHECK(runs == 1);
+}
+
+TEST_CASE("SdlPlatform replacing one handler with another keeps a single watch") {
+    auto platform = MakePlatform();
+    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    int first = 0, second = 0;
+    platform->SetLiveFrameHandler([&] { ++first; });
+    platform->SetLiveFrameHandler([&] { ++second; });
+    PushWhilePumping(*platform, Exposed(window, 1));
+    CHECK(first == 0);
+    CHECK(second == 1);
 }

@@ -12,8 +12,8 @@ namespace Engine::Runtime {
 // returns Stop.
 //
 // Live frames: while ProcessEvents has not returned, the platform may be held
-// inside an OS modal loop (a live window resize on macOS, a window move or
-// resize on Windows). RunLiveFrame lets the platform run Update and Render from
+// inside an OS modal loop (a live window resize on macOS; a window move or
+// resize, or an open system menu, on Windows). RunLiveFrame lets the platform run Update and Render from
 // there. A frame index belongs to one Update/Render pair; ProcessEvents carries
 // the index of the pair that follows it. Without live frames each frame's three
 // phases share one FrameContext, exactly as before. When live frames run, the

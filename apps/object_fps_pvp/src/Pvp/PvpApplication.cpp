@@ -462,8 +462,7 @@ struct PvpApplication::Impl final {
                 }
             }
         }
-        // Edges raised earlier in a pump that a live frame interrupts stay for
-        // the regular update after the pump.
+        // A live frame leaves the pending edges to the regular update.
         if (consumeInput) pendingShotEdge = pendingReloadEdge = false;
         weaponFeedback.reloadPending = pendingReload.has_value();
         double elapsed{}, duration{};
@@ -1007,13 +1006,27 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
 
 int PvpApplication::Run() {
     Engine::Runtime::RuntimeLoop loop(*this);
+    // The handler refers to this loop: it is removed however Run ends.
+    struct HandlerScope {
+        Engine::Platform::Sdl::SdlPlatform& platform;
+        ~HandlerScope() { platform.SetLiveFrameHandler({}); }
+    } handlerScope{*impl_->platform};
     impl_->platform->SetLiveFrameHandler([this, &loop] {
-        impl_->liveFrame = true;
+        // SDL applies a resize to the window before its queued event reaches
+        // the pump, so live frames take the size from the window itself.
+        int windowWidth{}, windowHeight{};
+        if (SDL_GetWindowSize(impl_->platform->NativeWindow(), &windowWidth, &windowHeight)) {
+            impl_->width = static_cast<float>(Engine::Math::Max(1, windowWidth));
+            impl_->height = static_cast<float>(Engine::Math::Max(1, windowHeight));
+        }
+        struct LiveScope {
+            bool& live;
+            explicit LiveScope(bool& value) : live(value) { live = true; }
+            ~LiveScope() { live = false; }
+        } liveScope{impl_->liveFrame};
         if (loop.RunLiveFrame()) ++impl_->liveFramesThisPump;
-        impl_->liveFrame = false;
     });
     loop.Run();
-    impl_->platform->SetLiveFrameHandler({});
     impl_->connection.Leave();
     impl_->RefreshState();
     if (!impl_->lastError.empty()) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", impl_->lastError.c_str());

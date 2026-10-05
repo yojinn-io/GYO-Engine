@@ -931,8 +931,8 @@ struct SdlGpuRenderDevice::Impl final {
         SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
         // The blocking acquire, split into its two waits so a slow acquire can
         // say which one stalled: the in-flight fence, or the drawable (Metal's
-        // nextDrawable, which can block for about a second). Logged only when
-        // slow.
+        // nextDrawable, which can block for about a second; on Vulkan and D3D12
+        // it also covers a swapchain rebuild). Logged only when slow.
         const Uint64 waitStarted = SDL_GetTicksNS();
         if (!SDL_WaitForGPUSwapchain(device, window)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));

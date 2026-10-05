@@ -1,5 +1,6 @@
 #pragma once
 
+#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
@@ -62,9 +63,11 @@ public:
     // allows drawing from an event watcher. The handler runs for those requests
     // of this window: on the main thread, only while PumpEvents is running, and
     // never re-entrantly. Input that arrives meanwhile stays queued for
-    // PumpEvents. Typically it runs RuntimeLoop::RunLiveFrame. The handler runs
-    // inside SDL, so it must not throw, and it must not replace itself. An empty
-    // handler turns this off, which is the default.
+    // PumpEvents. Typically it runs RuntimeLoop::RunLiveFrame. On Windows the
+    // same redraw requests also come while the window's system menu is open.
+    // An exception from the handler is kept until SDL returns and then
+    // rethrown by PumpEvents, which stops pumping. The handler must not replace
+    // itself. An empty handler turns this off, which is the default.
     void SetLiveFrameHandler(LiveFrameHandler handler);
 
     // This native handle belongs only to the concrete SDL adapter layer. It is
@@ -78,6 +81,7 @@ private:
 
     SDL_Window* window_{};
     LiveFrameHandler liveFrameHandler_;
+    std::exception_ptr liveFrameError_;
     bool pumping_{};
     bool inLiveFrame_{};
 };

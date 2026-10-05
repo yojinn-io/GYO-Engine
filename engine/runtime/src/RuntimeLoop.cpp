@@ -4,17 +4,19 @@ namespace Engine::Runtime {
 
 namespace {
 
-// Clears a flag when the scope ends, also when the client throws.
+// Sets a flag for a scope and restores its previous value when the scope ends,
+// also when the client throws.
 class FlagScope final {
 public:
-    explicit FlagScope(bool& flag) noexcept : flag_(&flag) { *flag_ = true; }
-    ~FlagScope() { *flag_ = false; }
+    explicit FlagScope(bool& flag) noexcept : flag_(&flag), previous_(flag) { *flag_ = true; }
+    ~FlagScope() { *flag_ = previous_; }
 
     FlagScope(const FlagScope&) = delete;
     FlagScope& operator=(const FlagScope&) = delete;
 
 private:
     bool* flag_;
+    bool previous_;
 };
 
 } // namespace

@@ -204,6 +204,27 @@
 - 2026-10-05：FF-7（#52）合併後 rebase 到 master `ef12037`，沒有衝突。
   - 使用者把主對話調為 xhigh，所以審查改用一般子 agent（繼承主對話檔位），不必重新載入 session。
   - before 用的 scratch worktree `GYO-Engine-v6b04` 經使用者同意已移除；證據中的 `artifacts.sha256` 記錄了當時的雜湊值。
+- 2026-10-05：審查（一般子 agent，繼承主對話的 xhigh；D17）。結論：沒有高嚴重度缺陷；`RuntimeLoop` 的時間與編號、watch 的執行緒與生命週期、GPU 取得拆分在 Metal／Vulkan／D3D12 上與阻塞版等價，都確認正確。依結果修正：
+  - 【中】live frame 用舊的視窗大小排版 HUD 與 lobby：SDL 送出縮放事件時已更新視窗大小，但事件要等 pump 返回才處理。修正：消費端在 live frame 前以 `SDL_GetWindowSize` 更新寬高。
+  - 【低】handler 的例外會穿過 SDL 與 OS 的 modal 迴圈。修正：
+    - platform 保存例外，pump 處理完這一輪後再 rethrow；出錯後同一輪不再呼叫 handler。
+    - 消費端的 `liveFrame` 旗標與 handler 的移除改用 RAII。
+    - 提早跳出輪詢會讓 SDL 的「一輪結束」標記留在佇列，截斷下一次 pump，所以改為處理完這一輪才 rethrow；這一點由測試發現。
+  - 【低】旗標 scope 不能巢狀。修正：platform 與 `RuntimeLoop` 都改為還原舊值。
+  - 註解：
+    - Windows 開著系統選單時也會跑 live frame；
+    - Vulkan／D3D12 的 `drawable_ms` 也包含 swapchain 重建；
+    - 刪除「pump 前段的邊緣保留」這個不成立的前提。
+  - 補測試：
+    - live frame 之後下一幀的 delta 與共用 context；
+    - 第 0 幀內的 live frame；
+    - live Render 回 Stop；
+    - live Stop 後再 Run；
+    - handler 例外由 `PumpEvents` rethrow 且旗標復原；
+    - 巢狀 `PumpEvents`；
+    - 更換 handler 時只保留一個 watch。
+  - 新測試的突變 5 個全部被抓到；CTest 57／57。
+  - 未補：消費端 live frame 的單元測試（接線由 L2 驗證）、跨執行緒推送事件的測試。
 
 ## 未結事項
 

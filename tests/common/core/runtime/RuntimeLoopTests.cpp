@@ -145,6 +145,7 @@ public:
     std::uint64_t liveFrameIndex = 1;   // ProcessEvents of this frame runs live frames
     int liveFrames = 0;                 // how many
     std::chrono::milliseconds liveUpdateSleep{0};
+    std::chrono::milliseconds regularUpdateSleep{0};
     Phase stopPhase = Phase::Never;
     std::uint64_t stopFrame = 0;
     std::vector<Call> calls;
@@ -172,6 +173,7 @@ public:
             std::this_thread::sleep_for(liveUpdateSleep);
         } else {
             outsideResult = loop->RunLiveFrame();
+            std::this_thread::sleep_for(regularUpdateSleep);
         }
         return Stop(Phase::Update, frame);
     }
@@ -309,4 +311,82 @@ TEST_CASE("RuntimeLoop: without live frames each run starts again at frame zero"
     REQUIRE(client.calls.size() == 12);
     CHECK(client.calls[6].frame.frameIndex == 0);
     CHECK(client.calls[6].frame.deltaSeconds == 0.0);
+}
+
+TEST_CASE("RuntimeLoop: after live frames the next frames measure from the regular pair") {
+    LiveFrameClient client;
+    client.liveFrames = 2;
+    client.regularUpdateSleep = std::chrono::milliseconds(5);
+    client.stopPhase = Phase::Render;
+    client.stopFrame = 5;
+    RuntimeLoop loop(client);
+    client.loop = &loop;
+    loop.Run();
+
+    // PE0 U0 R0 | PE1 U1 R1 U2 R2 U3 R3 | PE4 U4 R4 | PE5 U5 R5
+    REQUIRE(client.calls.size() == 16);
+    CHECK(Indices(client.calls) ==
+          std::vector<std::uint64_t>{0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5});
+    const auto& calls = client.calls;
+    const auto seconds = [&](std::size_t from, std::size_t to) {
+        return std::chrono::duration<double>(client.entered[to] - client.entered[from]).count();
+    };
+    // Frame 4 starts after the regular pair (calls 8, 9), whose Update slept.
+    CHECK(calls[10].frame.deltaSeconds >= 0.005);
+    CHECK(calls[10].frame.deltaSeconds <= seconds(7, 10));
+    // Without live frames a frame's three phases share one context again.
+    for (std::size_t first : {10u, 13u}) {
+        CHECK(calls[first].frame.deltaSeconds == calls[first + 1].frame.deltaSeconds);
+        CHECK(calls[first + 1].frame.deltaSeconds == calls[first + 2].frame.deltaSeconds);
+    }
+}
+
+TEST_CASE("RuntimeLoop: live frames inside the first ProcessEvents start from a zero delta") {
+    LiveFrameClient client;
+    client.liveFrameIndex = 0;
+    client.liveFrames = 1;
+    client.stopPhase = Phase::Render;
+    client.stopFrame = 1;
+    RuntimeLoop loop(client);
+    client.loop = &loop;
+    loop.Run();
+
+    using P = Phase;
+    CHECK(Phases(client.calls) == std::vector<Phase>{P::ProcessEvents, P::Update, P::Render, P::Update, P::Render});
+    CHECK(client.calls[1].frame.frameIndex == 0);
+    CHECK(client.calls[1].frame.deltaSeconds == 0.0);
+}
+
+TEST_CASE("RuntimeLoop: a stop from a live Render ends the loop when ProcessEvents returns") {
+    LiveFrameClient client;
+    client.liveFrames = 2;
+    client.stopPhase = Phase::Render;
+    client.stopFrame = 1;  // the first live frame's Render
+    RuntimeLoop loop(client);
+    client.loop = &loop;
+    loop.Run();
+
+    using P = Phase;
+    CHECK(Phases(client.calls) == std::vector<Phase>{
+        P::ProcessEvents, P::Update, P::Render, P::ProcessEvents, P::Update, P::Render});
+    CHECK(client.liveResults == std::vector<bool>{true, false});
+}
+
+TEST_CASE("RuntimeLoop: a run after a live-frame stop starts afresh") {
+    LiveFrameClient client;
+    client.liveFrames = 1;
+    client.stopPhase = Phase::Update;
+    client.stopFrame = 1;  // the live Update
+    RuntimeLoop loop(client);
+    client.loop = &loop;
+    loop.Run();
+    REQUIRE(client.calls.size() == 5);
+
+    client.calls.clear();
+    client.liveFrames = 0;
+    client.stopPhase = Phase::Render;
+    client.stopFrame = 2;
+    loop.Run();
+    CHECK(client.calls.size() == 9);
+    CHECK(client.calls[0].frame.frameIndex == 0);
 }

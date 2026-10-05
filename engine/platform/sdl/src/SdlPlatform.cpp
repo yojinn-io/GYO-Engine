@@ -1,5 +1,6 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
 
+#include <exception>
 #include <utility>
 
 #include "engine/base/Assert.hpp"
@@ -8,17 +9,19 @@ namespace Engine::Platform::Sdl {
 
 namespace {
 
-// Clears a flag when the scope ends, also when an observer throws.
+// Sets a flag for a scope and restores its previous value when the scope ends,
+// also when an observer throws, so nested scopes keep the outer one's value.
 class FlagScope final {
 public:
-    explicit FlagScope(bool& flag) noexcept : flag_(&flag) { *flag_ = true; }
-    ~FlagScope() { *flag_ = false; }
+    explicit FlagScope(bool& flag) noexcept : flag_(&flag), previous_(flag) { *flag_ = true; }
+    ~FlagScope() { *flag_ = previous_; }
 
     FlagScope(const FlagScope&) = delete;
     FlagScope& operator=(const FlagScope&) = delete;
 
 private:
     bool* flag_;
+    bool previous_;
 };
 
 SdlPlatformError MakeSdlError(
@@ -97,12 +100,19 @@ bool SDLCALL SdlPlatform::WatchEvent(void* userdata, SDL_Event* event) {
     }
     auto* platform = static_cast<SdlPlatform*>(userdata);
     if (event->window.windowID != SDL_GetWindowID(platform->window_) ||
-        !platform->pumping_ || platform->inLiveFrame_ || !platform->liveFrameHandler_) {
+        !platform->pumping_ || platform->inLiveFrame_ || !platform->liveFrameHandler_ ||
+        platform->liveFrameError_) {
         return true;
     }
 
     const FlagScope live(platform->inLiveFrame_);
-    platform->liveFrameHandler_();
+    // An exception must not unwind through SDL and the OS modal loop: it is
+    // kept and rethrown by PumpEvents once SDL returns.
+    try {
+        platform->liveFrameHandler_();
+    } catch (...) {
+        if (!platform->liveFrameError_) platform->liveFrameError_ = std::current_exception();
+    }
     return true;
 }
 
@@ -126,6 +136,11 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const NativeEventObserver& obser
             event.window.windowID == ownWindowId) {
             control = Runtime::RuntimeControl::Stop;
         }
+    }
+    // The pump finishes its pass first: leaving SDL_PollEvent early would leave
+    // SDL's end-of-pass marker queued and cut the next pump short.
+    if (liveFrameError_) {
+        std::rethrow_exception(std::exchange(liveFrameError_, nullptr));
     }
 
     return control;
