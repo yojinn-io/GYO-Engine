@@ -121,7 +121,85 @@ Fitness：Engine 不出現產品名；刪除任何消費端不需修改 `engine/
 
 ## IP-2：呈現不阻塞主迴圈
 
-狀態：未開始。
+狀態：重新規劃（2026-10-05，D14 擴大範圍到縮放），待使用者確認後開始。
+
+### 2026-10-05 範圍擴大：拖動＋縮放（D14）
+
+使用者決定 IP-2 同時處理拖動標題列與縮放兩種停頓。本節是擴大後的計畫；下方原有各節仍適用於拖動（render 側），與本節衝突處以本節為準。
+
+已查證的事實（SDL 3.4.0 原始碼，靜態）：
+
+- macOS 縮放：
+  - 拖動右下角時，Cocoa 在 `[NSApp sendEvent:]` 內執行 live resize 的追蹤迴圈，直到放開滑鍵才返回。這個呼叫位於 `SDL_PollEvent` → `Cocoa_PumpEventsUntilDate`（`src/video/cocoa/SDL_cocoaevents.m:588-624`）之內，所以縮放期間 `SDL_PollEvent` 不返回。
+  - B0 縮放的 394.9／2974.4／1006.4 ms 落在消費端的事件處理計時內，與此吻合：停頓長度約等於使用者按住縮放的時間。
+  - SDL 在 `windowWillStartLiveResize:` 掛上 60 Hz 的 `NSTimer`（`src/video/cocoa/SDL_cocoawindow.m:1140-1152`，`NSRunLoopCommonModes`，追蹤迴圈中也會觸發），呼叫 `SDL_OnWindowLiveResizeUpdate`（`src/video/SDL_video.c:4302-4313`）。沒有使用 main callbacks 時，它送出 `SDL_EVENT_WINDOW_EXPOSED`（`data1`＝1）。
+  - `SDL_PushEvent` 在入列前同步呼叫 event watcher（`src/events/SDL_events.c:1800-1806`），`SDL_events.h:139` 也寫明這個事件「可以直接在 event watcher 中重繪」。所以縮放期間，唯一能在主執行緒上執行一幀的地方，是 event watcher。
+- Windows：`WM_ENTERSIZEMOVE`（拖動與縮放都會進入 modal 迴圈）設定計時器，`WM_TIMER` 呼叫同一個 `SDL_OnWindowLiveResizeUpdate`（`src/video/windows/SDL_windowsevents.c:1869-1901`）。所以在 Windows，拖動與縮放都走這條路徑（靜態分析，沒有實機）。
+- macOS 拖動標題列：沒有 live resize 計時器（`windowWillMove:` 只設定旗標，`SDL_cocoawindow.m:1160-1166`）；B0 的停頓在 render，事件泵沒有停住。所以在 macOS，**拖動與縮放的原因不同**，修法分成兩部分。
+- Engine 目前沒有 event watcher，也沒有使用 main callbacks；`RuntimeLoop` 是單執行緒，依序 `ProcessEvents` → `Update` → `Render`。
+
+做（三部分，同一條功能線、同一個 PR）：
+
+1. **IP-2a 拆分量測**（先做，不改語意）：
+   - 拖動：分別計時 `SDL_WaitForGPUSwapchain`（fence）與 `SDL_AcquireGPUSwapchainTexture`（含 `nextDrawable`）。
+   - 縮放：分別計時 `SDL_PollEvent` 與消費端回呼，並記錄停頓期間收到的 `EXPOSED`（`data1`＝1）事件數與時間戳，確認停頓就是追蹤迴圈。
+   - 量測碼的去留在量測後決定。
+2. **IP-2b 縮放：live frame**（停頓在事件泵；macOS 縮放、Windows 拖動與縮放）：
+   - `SdlPlatform` 註冊一個 event watcher。只有本視窗、`EXPOSED` 且 `data1`＝1、在主執行緒、而且不在 live frame 之中時，才呼叫消費端設定的 live frame 處理函式。
+   - `RuntimeLoop` 新增「live frame」：在 `ProcessEvents` 尚未返回時，執行一次 `Update` → `Render`。它沿用同一個 frame 編號與時間基準，不再呼叫 `ProcessEvents`；live frame 中要求 Stop 時，在 `ProcessEvents` 返回後結束迴圈。
+   - 是否啟用由消費端決定（opt-in）：不設定處理函式時，行為與現在相同。`IRuntimeClient` 介面不變；契約寫進公開註解：live frame 中沒有新的輸入，`Update`／`Render` 可能在 `ProcessEvents` 的呼叫堆疊內被呼叫。
+   - 提出需求的消費端在同一個 PR 中接上處理函式（消費端的部分），並確認它的 `Update`／`Render` 可以在這個時點被呼叫。
+3. **IP-2c 拖動**（render 側）：照下方原計畫與 D7。停頓在 fence → 不阻塞取得＋`Skipped`＋節流；停頓在 `nextDrawable` → 停下，請使用者在 A'（暫停 acquire）與 B（分執行緒）之間選擇。
+
+不做（追加）：
+
+- 不改用 SDL main callbacks：那會改變所有消費端的進入點與主迴圈擁有權，屬更大的變更。
+- 不在 live frame 中處理輸入事件：期間到達的事件照常入列，在 `ProcessEvents` 返回後處理（Windows 進入 modal 迴圈時 SDL 會重設鍵盤，`SDL_windowsevents.c:1893-1894`）。
+
+驗收點（追加，其餘見下方「驗收點」）：
+
+- L1：
+  - `RuntimeLoop` 單元測試：
+    - live frame 的 `Update`／`Render` 次數與 frame 編號連續；
+    - 時間差不為負，且與外層幀的總和連續；
+    - live frame 中要求 Stop 時，在 `ProcessEvents` 返回後結束；
+    - 沒有設定處理函式時，呼叫順序與現在逐一相同。
+  - `SdlPlatform` 測試（dummy video driver，以合成事件驅動）：
+    - 只有本視窗的 `EXPOSED`（`data1`＝1）會觸發；`data1`＝0、其他視窗、其他事件都不觸發；
+    - 處理函式內再送出事件時不會重入。
+- L2（macOS Intel／Metal 實機，需要使用者操作）：
+  - 縮放 10 次、拖動 10 次，before／after 都量；記錄事件處理與 render 的最長停頓、10 秒窗口的 Held 比例（門檻 5%）、是否出現 `CONNECTION POOR`。
+  - 縮放期間的 live frame 數與幀間隔。
+
+平台表（追加）：Windows 的拖動與縮放都會走 IP-2b 的路徑，但沒有實機，標「未執行」，不宣稱已解決；Linux（X11／Wayland）沒有 live resize 計時器，行為未量測。
+
+建議檔位（追加）：
+- IP-2b 的重入與時間連續性局部 xhigh，與 IP-2c 的取得／節流／`Skipped` 一起，交給 1 個 xhigh 審查 agent 做對抗式審查。依 D8，使用者已同意這個 agent（2026-10-05）。
+- 其餘 high。
+
+Architecture Delta（IP-2b，七點）：
+
+1. 需求：縮放期間主迴圈停在事件泵（B0：394.9～2974.4 ms），Host 以 Held 替代，窗口 14.8%（門檻 5%）。
+2. 問題：作業系統在 `SDL_PollEvent` 內執行 modal 追蹤迴圈；單執行緒的 `RuntimeLoop` 在那段期間沒有任何地方可以前進。
+3. 邊界：
+   - `RuntimeLoop` 從「依序三段」擴充為「`ProcessEvents` 期間可以插入 live frame」，這是新的執行時契約，只對 opt-in 的消費端生效。
+   - `SdlPlatform` 新增 event watcher 與處理函式。
+4. 影響：
+   - Engine：`engine/runtime`（`RuntimeLoop`）、`engine/platform/sdl`（`SdlPlatform`）、`tests/common` 的對應測試。
+   - 提出需求的消費端：接上處理函式。
+   - 其他消費端（ui_editor、`tests/common/runtime_sdl`、未啟用產品）不設定處理函式，行為不變；未啟用產品寫進遷移清單。
+5. 依賴方向：不新增邊。`SdlPlatform` 已依賴 `engine/runtime`（`RuntimeControl`）；處理函式是 `std::function`，platform 不認識 `RuntimeLoop`；`RuntimeLoop` 不認識 platform。由消費端把兩者接起來。
+6. Ownership：何時插入 live frame 由 platform（知道作業系統事件）決定；live frame 做什麼由 `RuntimeLoop` 與消費端決定；消費端是否啟用由消費端決定。
+7. 更小的方案：
+   - 消費端無法在 `SDL_PollEvent` 內前進，必須由持有 SDL 的 platform 提供掛點。
+   - 只在 platform 掛點、讓消費端自己呼叫 `Update`／`Render`，會讓每個消費端各自複製時間與 Stop 的處理，所以把 live frame 放進 `RuntimeLoop`。
+   - main callbacks 與分執行緒都是更大的 Delta。
+
+停止條件（追加）：
+
+- 量測顯示縮放期間沒有收到 `EXPOSED`（`data1`＝1），或停頓不在追蹤迴圈內：停下回報。
+- 消費端的 `Update`／`Render` 必須重新設計才能在 `ProcessEvents` 的堆疊內被呼叫：停下。這部分改由消費端自己的批次處理，IP-2b 的 Engine 部分照常以 L1 定義。
+- live frame 中 Metal 取得也停住（例如 `nextDrawable` 在縮放中逾時）：照實記錄，與 IP-2c 一起請使用者選擇。
 
 ### 目標與範圍
 
