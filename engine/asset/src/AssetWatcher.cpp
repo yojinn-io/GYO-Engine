@@ -13,11 +13,18 @@ static std::uint64_t MsToNs(std::uint64_t ms) noexcept { return ms * 1'000'000ul
 // file_time_type -> system_clock ns（C++17 best-effort）
 static std::uint64_t FileTimeToSystemNs(const fs::file_time_type& ft) {
     // file_clock と system_clock の差分で変換する（よくある手法）
+    // The offset is sampled once per process: sampling both clocks on every
+    // call made one unchanged file time convert to values microseconds apart,
+    // which Poll reported as a modification.
     using namespace std::chrono;
-    const auto nowFile = fs::file_time_type::clock::now();
-    const auto nowSys  = system_clock::now();
+    static const auto offset = [] {
+        const auto nowFile = fs::file_time_type::clock::now();
+        const auto nowSys  = system_clock::now();
+        return nowSys.time_since_epoch() - duration_cast<system_clock::duration>(nowFile.time_since_epoch());
+    }();
 
-    const auto sysTp = time_point_cast<system_clock::duration>(ft - nowFile + nowSys);
+    const auto sysTp = system_clock::time_point(
+        duration_cast<system_clock::duration>(ft.time_since_epoch()) + offset);
     return static_cast<std::uint64_t>(
         duration_cast<nanoseconds>(sysTp.time_since_epoch()).count()
     );
