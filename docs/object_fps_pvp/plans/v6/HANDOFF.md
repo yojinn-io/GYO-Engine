@@ -109,7 +109,7 @@
 ## 第 06 批進度（記錄器）
 
 - 2026-10-05：開始。
-  - 分支 `claude/pvp-v6-batch06`，疊在 IP-2 分支（`98beb78`）上：兩者都改 `PvpApplication.cpp`，IP-2 合併後 rebase。
+  - 分支 `claude/pvp-v6-batch06`，疊在 IP-2 分支上（開始時 `98beb78`，IP-2 審查修正後 rebase 到 `2912232`）：兩者都改 `PvpApplication.cpp`，IP-2 合併後 rebase。
   - 檔位：計畫建議 high，使用者已把主對話調為 xhigh，照 xhigh 進行。
 - 2026-10-05：probe 盤點（使用者確認）：4 檔全部保留 SDL，沒有適用 IP-1 的部分。
   - `gui_main.cpp`：注入；event watch 計數 OS 視窗事件，需要 occluded／exposed／hidden 與推送當下的時點，IP-1 沒有。
@@ -133,7 +133,7 @@
   - 縮放時更新寬高（`Max(1, ·)`）。
 
   驗證：把舊邏輯原樣複製到測試當基準，對同一串合成 SDL 事件（手寫案例＋固定種子的隨機序列）比對擷取狀態與釋放次數；每一條差異都附突變測試。
-- 2026-10-05：實作（commit `382232b`）：
+- 2026-10-05：實作（commit `382232b`，rebase 後為 `ddc1d44`）：
   - 擷取政策抽成產品內的純函式 `ApplyPointerCaptureEvents`（`PointerCapture.hpp`／`.cpp`）。
   - `ProcessEvents` 在 pump 後依序套用 `events`。
   - `HandleNativeEvent` 刪除，只留 `HandleTextEditing`（例外）。
@@ -144,7 +144,7 @@
   - 突變 10 個，抓到 9 個。沒被抓到的「失焦時不把焦點設為 false」是等價突變：同一幀內失焦後 `windowInteraction` 已是 true，之後的 Tab 與點擊本來就被擋下。
   - CTest 58／58。
   - grep：pvp 的 `src` 只剩 `HandleTextEditing` 與 `PumpEvents` 的觀察者簽名處理 SDL 事件。
-  - 權威 digest 同機兩樹（base `98beb78`，暫時的 worktree `GYO-Engine-b06base`）35 個情境 0 不同。
+  - 權威 digest 同機兩樹（base `2912232`，暫時的 worktree `GYO-Engine-b06base`；rebase 到審查修正後的 IP-2 後重跑）35 個情境 0 不同。
   - 消費端接線本身（漏呼叫 `ApplyInputEvents` 之類）不是單元測試的範圍，由 L2 的 GUI 短測（注入點擊、Tab、視窗事件）驗證。
 - 2026-10-05：L2 事前宣告寫入證據夾的 `declare.txt`：
   - before／after 各跑動作短測 4 案、人物短測 4 案；
