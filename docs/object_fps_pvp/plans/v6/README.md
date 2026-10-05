@@ -29,9 +29,9 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 03 | [權威 digest 閘門](03-authority-digest.md) | high（golden 策略局部 xhigh） | 完成，PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41) 已合併（`6381e9d`） | 逐 Tick 權威狀態 digest、同機兩樹比對、CI 自洽檢查 |
 | 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 完成，PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42) 已合併（`30f87d5`；第 3 項重現，第 6 項未重現） | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
 | 05 | [死亡後第一人稱手臂](05-first-person-arms-after-death.md) | high | 不執行（第 04 批未重現；依停止條件） | 第 6 項的缺陷修正；無法重現就停下 |
-| 06 | [改經 Engine 取得輸入](06-input-migration.md) | high | 完成（PR 待合併；疊在 IP-2 #53 上） | 產品與 GUI probe 改用 IP-1；文字輸入例外 |
+| 06 | [改經 Engine 取得輸入](06-input-migration.md) | high | 完成，PR [#54](https://github.com/yojinn-io/GYO-Engine/pull/54) 已合併（`0e29d06`） | 產品與 GUI probe 改用 IP-1；文字輸入例外 |
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 未開始 | IP-2 之後重取基線 |
-| 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成（PR 待合併；疊在第 06 批 #54 上） | 29 檔與孤兒資產 |
+| 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成，PR [#55](https://github.com/yojinn-io/GYO-Engine/pull/55) 已合併（`5b0553a`） | 29 檔與孤兒資產 |
 | 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 未開始 | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
 | 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 未開始 | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 未開始 | 第 1 項 |
@@ -88,6 +88,6 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 
 ## 接續處理文字
 
-> v6 第 01～04 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-6、FF-8、IP-1 已合併。分批與決定見本文件、HANDOFF 與 BASELINE。
-> 下一步由使用者指定；可以開始的是第 06、08、09、11、12 批，Engine 的 FF-7 已合併（#52）、IP-2 已完成（PR 待合併）：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv5，第 09 批升 pv6，D20）。
+> v6 第 01～04、06、08 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-8、IP-1、IP-2 已合併（IP-2 縮小交付）。分批與決定見本文件、HANDOFF 與 BASELINE。
+> 第 07 批進行中。之後可以開始的是第 09、11、12 批。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv5，第 09 批升 pv6，D20）。
 > Windows／Linux 實機驗收與兩台機器的時鐘漂移實測需要另外授權。

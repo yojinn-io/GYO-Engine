@@ -219,6 +219,25 @@
   - 與 D19 的主執行緒／模擬／網路分離同方向。
   - 單機內容應從 `object_fps_v2` 有意識地移植到權威模擬上，而不是沿用已刪除的舊副本。
 
+## 第 07 批進度（記錄器）
+
+- 2026-10-05：開始（使用者指定）。
+  - 分支 `claude/pvp-v6-batch07`（只有文件；同時同步 #53～#55 與先前各批 dev_log 的合併狀態）。
+  - 檔位：計畫 medium，主對話 xhigh。
+- 2026-10-05：事前宣告（量測前寫入，全文在證據夾的 `declare.txt`）：
+  - 來源：master `5b0553a`，獨立 worktree `GYO-Engine-b07`，從零建置。
+  - 工具：52 檔中 51 檔與第 02 批凍結清單相同；`gui_main.cpp` 只差 FF-7 的 3 行 include 路徑，Python 分析器全部相同。
+  - 量測前的檢查（不算量測）：
+    - 全部 CTest 一次；
+    - 權威 digest 規模 1、10 的輸出雜湊與 B0 比對，不同就停下。
+  - 跑次與 B0 相同，各一次、依序、機器閒置：
+    1. 動作短測 4 案；
+    2. 人物短測 4 案（player144 預期 `invalid_capacity`）；
+    3. 雙 GUI 整合短測 1 輪；
+    4. 25 案矩陣。
+  - 每項與 B0 並列：結果、達成 FPS、`skipped_frames`（probe 有記錄者）、與 B0 相同的延遲數字。
+  - 差異分類為幀節奏、Skipped、延遲、其他；門檻只對 v5 STABLE_BASELINE。
+
 ## Engine 批次對本產品的影響（記錄器）
 
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
