@@ -133,6 +133,22 @@
   - 縮放時更新寬高（`Max(1, ·)`）。
 
   驗證：把舊邏輯原樣複製到測試當基準，對同一串合成 SDL 事件（手寫案例＋固定種子的隨機序列）比對擷取狀態與釋放次數；每一條差異都附突變測試。
+- 2026-10-05：實作（commit `382232b`）：
+  - 擷取政策抽成產品內的純函式 `ApplyPointerCaptureEvents`（`PointerCapture.hpp`／`.cpp`）。
+  - `ProcessEvents` 在 pump 後依序套用 `events`。
+  - `HandleNativeEvent` 刪除，只留 `HandleTextEditing`（例外）。
+- 2026-10-05：L1：
+  - characterization（`object_fps_pvp.pointer_capture`）：
+    - 手寫 14 幀、固定種子 5 組各 3000 幀：與舊邏輯 0 不一致。每組約 500 次擷取、100 次以上的射擊上升沿、1000 次釋放。
+    - 宣告差異 2 有單獨測試（點擊之後、處理之前 SDL 已縮小視窗）；釋放日誌的計數也有測試。
+  - 突變 10 個，抓到 9 個。沒被抓到的「失焦時不把焦點設為 false」是等價突變：同一幀內失焦後 `windowInteraction` 已是 true，之後的 Tab 與點擊本來就被擋下。
+  - CTest 58／58。
+  - grep：pvp 的 `src` 只剩 `HandleTextEditing` 與 `PumpEvents` 的觀察者簽名處理 SDL 事件。
+  - 權威 digest 同機兩樹（base `98beb78`，暫時的 worktree `GYO-Engine-b06base`）35 個情境 0 不同。
+  - 消費端接線本身（漏呼叫 `ApplyInputEvents` 之類）不是單元測試的範圍，由 L2 的 GUI 短測（注入點擊、Tab、視窗事件）驗證。
+- 2026-10-05：L2 事前宣告寫入證據夾的 `declare.txt`：
+  - before／after 各跑動作短測 4 案、人物短測 4 案；
+  - player144 預期為 `invalid_capacity`（D11③）。
 
 ## Engine 批次對本產品的影響（記錄器）
 
