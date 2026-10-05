@@ -2,8 +2,8 @@
 
 #include "RetroFPS/Game/GameSession.hpp"
 
-#include "ui/UiDocument.hpp"
-#include "ui/UiRuntime.hpp"
+#include "engine/ui/UiDocument.hpp"
+#include "engine/ui/UiRuntime.hpp"
 
 #include <memory>
 #include <string>

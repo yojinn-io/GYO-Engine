@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/asset/AssetId.hpp"
-#include "render/RenderTypes.hpp"
+#include "engine/render/RenderTypes.hpp"
 
 #include <cstddef>
 #include <cstdint>

@@ -1,5 +1,5 @@
-#include "ui/UiRenderer.hpp"
-#include "ui/UiRuntime.hpp"
+#include "engine/ui/UiRenderer.hpp"
+#include "engine/ui/UiRuntime.hpp"
 
 #include "engine/base/Assert.hpp"
 
@@ -11,11 +11,11 @@
 #include "engine/asset/loaders/FontAsset.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
 #include "engine/math/geometry/Rect.hpp"
-#include "render/IRenderDevice.hpp"
-#include "render/RenderQueue.hpp"
-#include "render/RenderTypes.hpp"
-#include "text/ITextRasterizer.hpp"
-#include "text/TextTypes.hpp"
+#include "engine/render/IRenderDevice.hpp"
+#include "engine/render/RenderQueue.hpp"
+#include "engine/render/RenderTypes.hpp"
+#include "engine/text/ITextRasterizer.hpp"
+#include "engine/text/TextTypes.hpp"
 
 #include <algorithm>
 #include <cmath>

@@ -13,11 +13,11 @@
 #include "engine/asset/loaders/FontLoader.hpp"
 #include "engine/asset/loaders/TextureLoader.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
-#include "render/IRenderDevice.hpp"
+#include "engine/render/IRenderDevice.hpp"
 #include "RenderDeviceStub.hpp"
-#include "render/RenderQueue.hpp"
-#include "text/ITextRasterizer.hpp"
-#include "ui/UiRenderer.hpp"
+#include "engine/render/RenderQueue.hpp"
+#include "engine/text/ITextRasterizer.hpp"
+#include "engine/ui/UiRenderer.hpp"
 
 #include <limits>
 #include <array>

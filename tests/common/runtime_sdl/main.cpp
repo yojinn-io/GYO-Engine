@@ -6,8 +6,8 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
-#include "platform/sdl/SdlPlatform.hpp"
-#include "render/backend/sdl/SdlRenderer.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/render/backend/sdl/SdlRenderer.hpp"
 
 namespace {
 

@@ -1,6 +1,6 @@
-#include "model/backend/ufbx/UfbxModelLoader.hpp"
+#include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "model/Animation.hpp"
+#include "engine/model/Animation.hpp"
 
 #include <ufbx.h>
 

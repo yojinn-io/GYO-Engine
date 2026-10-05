@@ -4,8 +4,8 @@
 #include "UiGoldenDocument.hpp"
 #include "UiLayoutGolden.hpp"
 #include "UiTestDocument.hpp"
-#include "ui/UiDocumentCodec.hpp"
-#include "ui/UiRuntime.hpp"
+#include "engine/ui/UiDocumentCodec.hpp"
+#include "engine/ui/UiRuntime.hpp"
 
 #include <array>
 #include <bit>

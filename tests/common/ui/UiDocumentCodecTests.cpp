@@ -2,7 +2,7 @@
 
 #include "UiGoldenDocument.hpp"
 #include "UiTestDocument.hpp"
-#include "ui/UiDocumentCodec.hpp"
+#include "engine/ui/UiDocumentCodec.hpp"
 
 #include <array>
 #include <bit>

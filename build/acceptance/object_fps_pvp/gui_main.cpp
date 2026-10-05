@@ -5,9 +5,9 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #define PVP_PROBE_MOVEMENT_TRACE 1
 #endif
-#include "platform/sdl/SdlPlatform.hpp"
-#include "render/Renderer.hpp"
-#include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/render/Renderer.hpp"
+#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "acceptance_protocol.hpp"
 #include "timer_baseline.hpp"
 

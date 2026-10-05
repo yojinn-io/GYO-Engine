@@ -24,7 +24,7 @@
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "render/RenderTypes.hpp"
+#include "engine/render/RenderTypes.hpp"
 
 #include <algorithm>
 #include <cmath>

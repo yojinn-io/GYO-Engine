@@ -10,11 +10,11 @@
 #include "engine/asset/AssetRequest.hpp"
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
-#include "render/IRenderDevice.hpp"
-#include "render/PrimitiveMesh.hpp"
-#include "render/RenderQueue.hpp"
-#include "render/Renderer.hpp"
-#include "ui/UiRenderer.hpp"
+#include "engine/render/IRenderDevice.hpp"
+#include "engine/render/PrimitiveMesh.hpp"
+#include "engine/render/RenderQueue.hpp"
+#include "engine/render/Renderer.hpp"
+#include "engine/ui/UiRenderer.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>

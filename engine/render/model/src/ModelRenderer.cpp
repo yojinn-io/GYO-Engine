@@ -1,7 +1,7 @@
-#include "model_renderer/ModelRenderer.hpp"
+#include "engine/render/model/ModelRenderer.hpp"
 
-#include "render/IRenderDevice.hpp"
-#include "render/RenderQueue.hpp"
+#include "engine/render/IRenderDevice.hpp"
+#include "engine/render/RenderQueue.hpp"
 
 #include "engine/base/Assert.hpp"
 

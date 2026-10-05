@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include "input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/input/InputActionMap.hpp"
 
 #include <array>

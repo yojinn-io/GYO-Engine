@@ -1,8 +1,8 @@
 #include "RenderFeatureSmoke.hpp"
 #include "engine/base/Error.hpp"
-#include "render/ColorTransform.hpp"
-#include "render/PrimitiveMesh.hpp"
-#include "render/ShaderAbi.hpp"
+#include "engine/render/ColorTransform.hpp"
+#include "engine/render/PrimitiveMesh.hpp"
+#include "engine/render/ShaderAbi.hpp"
 #include "engine/math/scalar/ColorSpace.hpp"
 #include <algorithm>
 #include <array>

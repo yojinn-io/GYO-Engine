@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/UiTypes.hpp"
+#include "engine/ui/UiTypes.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 

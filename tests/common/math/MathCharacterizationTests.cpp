@@ -41,7 +41,7 @@ namespace Legacy {
 namespace {
 
 // ---------------------------------------------------------------------------
-// engine/model. Types from engine/model/include/model/ModelAsset.hpp:14-27.
+// engine/model. Types from engine/model/include/engine/model/ModelAsset.hpp:14-27.
 namespace Model {
 
 struct Vec3 final { float x{}, y{}, z{}; };
@@ -215,7 +215,7 @@ Vec3 Clamp(Vec3 p, Vec3 lo, Vec3 hi) {
 } // namespace Collision
 
 // ---------------------------------------------------------------------------
-// engine/render. Types from engine/render/include/render/RenderTypes.hpp:12-55,
+// engine/render. Types from engine/render/include/engine/render/RenderTypes.hpp:12-55,
 // 145-153 (only the fields the frozen helpers read) and ShaderAbi.hpp:5.
 namespace Render {
 
@@ -518,7 +518,7 @@ float EncodeSrgbComponent(const float linear) noexcept {
 } // namespace Render
 
 // ---------------------------------------------------------------------------
-// engine/ui. Types from engine/ui/include/ui/UiTypes.hpp:40-50.
+// engine/ui. Types from engine/ui/include/engine/ui/UiTypes.hpp:40-50.
 namespace Ui {
 
 struct UiFloat2 final {

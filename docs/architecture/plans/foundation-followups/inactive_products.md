@@ -64,10 +64,16 @@
 
 ### FF-7 include 路徑風格徹底統一
 
-狀態：未開始，批次完成時更新。
+狀態：FF-7 完成（2026-10-05）。
 
-- 所有舊根目錄的 `#include` 要改成新的根目錄；不留別名，所以未遷移的 include 會直接編譯失敗。
-- 2026-10-04 粗略 grep：未啟用產品（程式、測試、驗收）約有 94 行使用 `<m>/` 風格（`render/`、`model/`、`text/`、`ui/`、`input/`、`platform/`、`model_renderer/`）。實際影響取決於 FF-7 選定的方向，批次完成時重新量測。
+- 所有公開 header 改到 `engine/<m>/` 之下；不留別名，所以未遷移的 include 會直接編譯失敗。
+- 對應（舊 → 新）：`render/` → `engine/render/`（含 `render/backend/sdl/`、`render/backend/sdl_gpu/`）、`model_renderer/` → `engine/render/model/`、`model/` → `engine/model/`（含 `model/backend/ufbx/`）、`text/` → `engine/text/`（含 `text/backend/sdl_ttf/`）、`ui/` → `engine/ui/`、`platform/sdl/` → `engine/platform/sdl/`、`input/backend/sdl/` → `engine/input/backend/sdl/`。檔名不變，target 名稱、namespace 不變。
+- 2026-10-05 重新量測：94 行、36 個檔案，全部只需改 include 前綴：
+  - `apps/object_fps` 9 檔、`apps/object_fps_v2` 12 檔；
+  - `tests/object_fps` 4 檔、`tests/object_fps_v2` 3 檔；
+  - `build/acceptance/object_fps` 4 檔、`build/acceptance/object_fps_v2` 3 檔；
+  - `tools/object_fps_preview` 1 檔。
+- 重新啟用時可以照上面的對應逐字取代：只取代「舊路徑恰好是被搬移的 Engine header」的 include，不要用前綴取代，以免改到產品自己的同名目錄。
 
 ### FF-8 GYOP 標頭 C++ 編解碼
 

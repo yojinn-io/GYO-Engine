@@ -16,13 +16,13 @@
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
-#include "input/backend/sdl/SdlInput.hpp"
-#include "model/backend/ufbx/UfbxModelLoader.hpp"
-#include "platform/sdl/SdlPlatform.hpp"
-#include "render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
-#include "render/Renderer.hpp"
-#include "render/ShaderLibrary.hpp"
-#include "text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
+#include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/render/Renderer.hpp"
+#include "engine/render/ShaderLibrary.hpp"
+#include "engine/text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
 
 #include <SDL3/SDL.h>
 #include <utility>

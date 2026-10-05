@@ -1,6 +1,6 @@
 # 基礎後續整理：交接
 
-更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7、FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
+更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7 完成（PR 待合併）；FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
 
 ## 閱讀入口
 
@@ -32,6 +32,10 @@
 | 2026-10-04 | FF-8：1200 bytes 是 Engine 的傳輸契約（與 Go `framing.go` 的 `MaxDatagram` 一致），產品可以設更小的上限；@22 依 Go 命名為 `Channel`（v1 只用 channel 0）；版本與 Type 由呼叫端檢查，「拒絕條件等價」以消費端組合後的整體行為證明 | 主對話依既有決定定案 |
 | 2026-10-04 | FF-9：容差選 `1e-7`（現行移動用的 `kTolerance`）時預期移動與 Client 預測不變；選其他容差時，移動的變化必須事前宣告；停止條件是「出現未宣告的變化」 | 主對話依既有決定定案 |
 | 2026-10-04 | 檔位：xhigh 只用在局部。FF-9 主體 high（ultracode 依 D8 開始時徵求同意），只有容差選擇、`IsValid`、差異歸因局部 xhigh | 主對話依既有決定定案 |
+| 2026-10-05 | FF-7 的統一方向：公開 include 根目錄統一為 `engine/<m>/`（多數模組已是此形式；有前綴，不與消費端或第三方 header 撞名） | 使用者 |
+| 2026-10-05 | FF-9 維持與提出需求的消費端的權威變更批同一個 PR，不單獨進行 | 使用者 |
+| 2026-10-05 | FF-7 先於 IP-2：IP-2 的程式尚未開始，搬移在沒有其他程式變更進行時最乾淨；IP-2 建在搬移後的 master 上 | 使用者 |
+| 2026-10-05 | PR 以功能線為單位，盡量少開（每次合併觸發全量 CI）；合併後的狀態同步併進同一條線的 PR | 使用者 |
 
 ## 正式項目清單
 
@@ -99,7 +103,7 @@
 | FF-4 | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
 | FF-5 | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`） | 見下方「FF-5」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md) |
 | FF-6 | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
-| FF-7 | 未開始 | — |
+| FF-7 | 完成（PR 待合併） | 見下方「FF-7」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff7.zh-Hant.md) |
 | FF-8 | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
 
@@ -213,6 +217,34 @@
   base＝FF-6 tip `57f3ef6`（`GYO-Engine-v6b04` worktree），branch＝本分支。
 - 對象：`assets/object_fps/ui/screens.json`、`assets/object_fps_v2/ui/screens.json`、`assets/object_fps_pvp/ui/screens.json`、`assets/object_fps_pvp/ui/pvp_lobby.json`、`tests/ui_editor/fixtures/minimal.ui.json`、`build/acceptance/ui_editor/fixtures/minimal.ui.json`（75 組 canvas×viewport，1,540 筆 layout 與 draw 紀錄）。
 - 結果：全部在新規則下載入成功；兩樹輸出逐位元相同（SHA-256 `768a15a8…`）。三個 `screens.json` 都有 `fixed_step_list`，其 `item_step` 都是有限值。
+
+### FF-7（記錄器）
+
+- 2026-10-05：使用者指示「先把 Engine 的任務清了」，並決定方向 `engine/<m>/`、FF-7 先於 IP-2。分支 `claude/engine-ff7`，自 master `0dfc4cc`。
+  檔位 high。計畫建議大範圍掃描用 ultracode，但**沒有使用**：盤點與改寫以腳本對「搬移前實際存在的 header 路徑」逐字比對（不靠前綴猜測），完整性由建置、CTest 與兩樹比對外部驗證。
+- 2026-10-05：盤點（搬移前）：11 個非 `engine/` 前綴的根目錄、30 個 header；全 repo 254 行 include 指向它們。其中 160 行在 Engine、`tests/common`、`tools/ui_editor`、`tests/ui_editor`、提出需求的消費端（程式、驗收、測試，含尚未刪除的未編譯檔）；94 行在未啟用產品（不改，寫進遷移清單）。
+- 2026-10-05：規則：header 路徑＝`engine/`＋模組在 `engine/` 下的目錄。target 名稱、namespace、CMake 的 include 目錄（仍是各模組的 `include`）都不變；只在 `include/` 之下多一層 `engine/`。
+
+  | 舊根目錄（所在） | 新根目錄 | header 數 |
+  |---|---|---|
+  | `render/`（`engine/render/include`） | `engine/render/` | 12 |
+  | `render/backend/sdl/`、`render/backend/sdl_gpu/`（各 backend 的 `include`） | `engine/render/backend/sdl/`、`engine/render/backend/sdl_gpu/` | 2 |
+  | `model_renderer/`（`engine/render/model/include`） | `engine/render/model/` | 1 |
+  | `model/`（`engine/model/include`） | `engine/model/` | 3 |
+  | `model/backend/ufbx/`（`engine/model/backend/ufbx/include`） | `engine/model/backend/ufbx/` | 1 |
+  | `text/`（`engine/text/include`） | `engine/text/` | 3 |
+  | `text/backend/sdl_ttf/`（`engine/text/backend/sdl_ttf/include`） | `engine/text/backend/sdl_ttf/` | 1 |
+  | `ui/`（`engine/ui/include`） | `engine/ui/` | 5 |
+  | `platform/sdl/`（`engine/platform/sdl/include`） | `engine/platform/sdl/` | 1 |
+  | `input/backend/sdl/`（`engine/input/backend/sdl/include`） | `engine/input/backend/sdl/` | 1 |
+
+  `model_renderer/` 改為 `engine/render/model/`，依上述規則對應它的目錄（target 仍是 `gyo_model_renderer`）。
+- 2026-10-05：驗證：
+  - grep：舊根目錄的 include 在使用中的程式為 0，剩下 94 行全在未啟用產品。
+  - CMake 沒有變更，依賴邊不變。
+  - 建置成功；CTest 56／56（test preset 的 52 個，加上 preset 標籤以外的 go vet、go test、worker、sdl_gpu mesh smoke 4 個）。
+  - 兩樹比對（base＝master `0dfc4cc`，在 scratch worktree 建置）：權威 digest 35 個情境 0 不同；collision 語料 16,940 筆 0 不同。
+  - 證據在 `build/target/_build/test/logs/engine-ff7-20261005/`。完成，開 PR。
 
 ## 未結事項
 

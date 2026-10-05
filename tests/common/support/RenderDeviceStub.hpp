@@ -1,5 +1,5 @@
 #pragma once
-#include "render/IRenderDevice.hpp"
+#include "engine/render/IRenderDevice.hpp"
 
 namespace Gyo::Tests {
 // Resource-only test fixtures reject accidental frame execution explicitly.

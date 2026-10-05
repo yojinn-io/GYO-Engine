@@ -16,7 +16,7 @@
 #include "engine/asset/loading/AssetPipeline.hpp"
 #include "engine/asset/loading/LoaderRegistry.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
-#include "text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
+#include "engine/text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
 
 #include "engine/base/Assert.hpp"
 

@@ -4,7 +4,7 @@
 #include "engine/asset/AssetId.hpp"
 #include "engine/collision/Collision.hpp"
 #include "engine/math/linear/Vec3.hpp"
-#include "model/Animation.hpp"
+#include "engine/model/Animation.hpp"
 #include <array>
 #include <memory>
 #include <optional>

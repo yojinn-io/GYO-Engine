@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/asset/AssetId.hpp"
-#include "model/ModelAsset.hpp"
+#include "engine/model/ModelAsset.hpp"
 
 #include <memory>
 #include <string>
