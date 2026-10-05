@@ -1,6 +1,6 @@
 # 輸入與呈現：交接
 
-更新：2026-10-05。**狀態：IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）；IP-2 未開始。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-05。**狀態：IP-2 完成（縮小交付，PR 待開）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
 2026-10-05：消費端完成第3項的重現與阻塞取得下的量測基線（B0），摘要見第3項「消費端重現（B0）」；縮放時的停頓位置與先前的前提不同，見未結事項。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。
 
@@ -27,9 +27,11 @@
 | 2026-10-04 | D13：IP-2 的 L2 必須在合併前完成。消費端的呈現分析器必須修改才能處理「`Skipped` 變常見」時，IP-2 停下；先由消費端做驗收工具修正批（在 IP-2 的 base commit 上，仍是阻塞取得），再回到 IP-2 跑 L2。消費端重取 B1 時的停止路徑只適用於「IP-2 的 L2 已通過，但重取 B1 時才暴露問題」 | 使用者 |
 | 2026-10-04 | 合併順序只是建議（減少衝突、方便歸因），不是依賴；後合併的一方 rebase。例外：FF-2 必須先於 IP-2；FF-7 依賴 IP-1、IP-2、FF-4、FF-5 | 主對話依既有決定定案 |
 | 2026-10-04 | IP-2 的 before 在 IP-2 自己的 base commit 上以同一流程重量，B0 只作歷史參照；IP-2 的實機量測不與消費端改用輸入那一批的量測同時進行；檔位 high、局部 xhigh | 主對話依既有決定定案 |
-| 2026-10-05 | D14：IP-2 同時處理拖動標題列（render 側）與縮放（事件泵側）的停頓。擴大後的計畫見 [PLAN](PLAN.md) 的「2026-10-05 範圍擴大」節（IP-2a 拆分量測、IP-2b live frame、IP-2c 拖動），確認後開始 | 使用者 |
-| 2026-10-05 | D15：IP-2 的取得／節流／`Skipped` 語意與 live frame 的重入／時間連續性，交給 1 個 xhigh 子 agent 做對抗式審查（高於主對話檔位，依 D8 經使用者同意）；實作本身用 high | 使用者 |
-| 2026-10-05 | D16：PR 以功能線為單位，盡量少開（每次合併觸發全量 CI）。IP-2a～c 同一個 PR；合併後的狀態同步併進同一條線的 PR，不另開 docs PR | 使用者 |
+| 2026-10-05 | D16：IP-2 同時處理拖動標題列（render 側）與縮放（事件泵側）的停頓。擴大後的計畫見 [PLAN](PLAN.md) 的「2026-10-05 範圍擴大」節（IP-2a 拆分量測、IP-2b live frame、IP-2c 拖動），確認後開始 | 使用者 |
+| 2026-10-05 | D17：IP-2 的取得／節流／`Skipped` 語意與 live frame 的重入／時間連續性，交給 1 個 xhigh 子 agent 做對抗式審查（高於主對話檔位，依 D8 經使用者同意）；實作本身用 high | 使用者 |
+| 2026-10-05 | （編號）本夾 2026-10-05 新增的決策原本編為 D14～D16，與消費端交接既有的 D14、D15 撞號，同日改為 D16～D18；commit 訊息中的舊編號不改 | 主對話 |
+| 2026-10-05 | D18：PR 以功能線為單位，盡量少開（每次合併觸發全量 CI）。IP-2a～c 同一個 PR；合併後的狀態同步併進同一條線的 PR，不另開 docs PR | 使用者 |
+| 2026-10-05 | D19：L2 之後，D7 選 B（分執行緒），但**延到消費端的下一個版本**另立計畫，不在 IP-2 實作：按下縮放角但尚未拖動的空窗（macOS 不送 live resize 通知）與 `nextDrawable` 停頓，在單執行緒上無法一一補齊。主執行緒（事件＋畫面）、模擬、網路三個角色的分離屬新的 Engine 計畫。IP-2 只交付 2b 與取得的拆分診斷；2c 不實作 | 使用者 |
 
 ## 正式項目清單
 
@@ -141,7 +143,7 @@
 
 ## IP-2 紀錄（記錄器）
 
-- 2026-10-05：使用者決定 D14～D16 並確認擴大後的計畫；FF-7 先做（使用者決定）。分支 `claude/engine-ip2`，疊在 FF-7（`b2fda8c`）上；FF-7 合併後 rebase 到 master。檔位 high；xhigh 審查 agent 經使用者同意（D15）。
+- 2026-10-05：使用者決定 D16～D18 並確認擴大後的計畫；FF-7 先做（使用者決定）。分支 `claude/engine-ip2`，疊在 FF-7（`b2fda8c`）上；FF-7 合併後 rebase 到 master。檔位 high；xhigh 審查 agent 經使用者同意（D17）。
   - 審查 agent 的定義檔放在使用者層 `~/.claude/agents/xhigh-reviewer.md`（使用者決定）。
   - 這個定義要等 session 重新載入後才能使用，所以審查排在 IP-2c 之後，一次審 2b 與 2c。
 - 2026-10-05：IP-2b 實作（commit `2f76e59`）：
@@ -170,15 +172,44 @@
   - before＝`b2fda8c`，在 scratch worktree `GYO-Engine-v6b04` 建置；after＝本分支。
   - 流程：雙 Client 並排，A 拖動標題列 10 次、B 縮放 10 次。
   - 使用者指定稍後進行。
+- 2026-10-05：L2（macOS Intel／Metal 實機，使用者操作），事前宣告與證據在 `build/target/_build/test/logs/engine-ip2-20261005/`（`declare.txt`、`l2-before/`、`l2-after/`，各含日誌、trace、`artifacts.sha256`、`logs.sha256`）。
+  使用者在兩輪中都對兩個 Client 做了縮放；A＝先加入的 Client。
+  - before（`b2fda8c`，阻塞取得、沒有 live frame）：
+    - 縮放：事件處理停頓 A 8 次（702～2293 ms）、B 6 次（346～3909 ms）。
+    - 最差 10 秒窗口的替代比例：30.5%、46.5%；Match 有 13 次 starvation reset。
+    - 使用者在兩個 Client 都看到 `CONNECTION POOR`。
+    - 拖動標題列：沒有 ≥100 ms 的 render 停頓（B0 是 3 次中 2 次）。
+  - after（本分支）：
+    - 縮放拖動中，每次 pump 插入 34～366 個 live frame（扣掉開始前的空窗，約 60 Hz）；這段期間沒有長串的替代。
+    - **按下縮放角到開始拖動之間沒有 live frame**：macOS 從按下就進入追蹤迴圈，但開始縮放才送 `windowWillStartLiveResize`。
+      - 空窗：A 為 388、421、655、1338 ms，B 為 541、1838 ms。
+      - B 另有兩次按住不動：3057 ms、4323 ms，0 個 live frame。
+      - 使用者也觀察到「只按住不拖時畫面停住，真的縮放後才恢復」。
+    - 最差窗口 7.7%、15.9%；Match 有 5 次 starvation reset。
+      - 超過 5% 的窗口，替代都來自 21～29 Tick 的連續替代。
+      - 這些連續替代與上述空窗一一對應；29 Tick 後 Match 以 starvation reset 中斷。
+    - 使用者在兩個 Client 仍看到 `CONNECTION POOR`。
+    - `nextDrawable` 停頓 3 次，`fence_wait_ms` 都是 0：
+      - 1016.2 ms 與 1016.9 ms：兩個 Client 在 lobby **同一時刻**停住。
+      - 461.8 ms：A，在 B 的 4.3 秒按住結束後。
+      - 都不是拖動標題列引起；觸發原因未查明。拖動標題列兩輪都沒有停頓。
+  - 判斷：
+    - 2b 有效，但只涵蓋縮放拖動中。
+    - 剩下的空窗與 `nextDrawable` 停頓，在單執行緒上無法消除；D7 的 A'（移動／縮放期間暫停 acquire）對這兩者都無效。
+    - 使用者決定 D19。
+- 2026-10-05：收尾：
+  - 2a 的拆分改為常駐診斷（只在 ≥50 ms 時記錄），註解改寫。
+  - 2c 不實作。
+  - xhigh 審查只審 2b，需要 session 重新載入後執行。
 
 ## 未結事項
 
-- IP-2：停頓位置（fence 或 `nextDrawable`）未量測。
-- IP-2：**縮放時的停頓在事件處理，不在 render**（B0，見第3項）。2026-10-05 使用者決定一併處理（D14）；靜態分析確認是 Cocoa 的 live resize 追蹤迴圈，修法為 IP-2b 的 live frame，見 [PLAN](PLAN.md)。拆分 `SDL_PollEvent` 與消費端回呼的時間在 IP-2a 量測。
+- IP-2：停頓位置已量測：在 `nextDrawable`（fence 0 ms）。觸發原因未查明（這次不是拖動標題列）；依 D19 延到分執行緒的計畫。
+- IP-2：縮放時的停頓在事件處理（B0）。IP-2b 的 live frame 已消除「縮放拖動中」的停頓；消費端回呼的時間是 0.0 ms，停頓全在 SDL 的輪詢（追蹤迴圈）內。
+  **按下縮放角到開始拖動之間的空窗**仍會停住（實測最長 4.3 秒），依 D19 延到分執行緒的計畫。
 - IP-2：Metal 長幀仍回報 `Presented`，Engine 如何辨識「沒有真正呈現」，待查。
-- IP-2：消費端日誌顯示視窗互動事件在停頓**之後**才被處理。若 D7 選「暫停 acquire」，以移動／縮放事件觸發暫停可能來不及避免第一次停頓；選擇前要以拆分量測確認。
-- IP-2：若選「暫停 acquire」，視窗事件到 render 的傳遞路徑未設計，不得新增 `render → input` 的邊。
-- IP-2：Windows（Win32 modal 迴圈）與 Linux 實機的行為未量測；本計畫結束時照實標「未執行」。
+- IP-2：D7 的「暫停 acquire」不採用（D19）；原本記錄的事件時序與傳遞路徑問題隨之結案。
+- IP-2：Windows（Win32 modal 迴圈，拖動與縮放都走 live frame 路徑）、Linux 與 macOS arm64 實機都未執行。Windows 按下標題列或邊框時 SDL 立即開始計時器（`WM_ENTERSIZEMOVE`），依原始碼推斷不會有 macOS 那種空窗，但沒有實測。
 - IP-1：完整 scancode 的表示方式（延伸 enum 或其他）在介面審查時決定；限制是保留既有名稱與列舉值。
 - IP-1：同一幀上升沿的表示方式（次數或依序的事件清單）在介面審查時決定；限制是既有 `pressed`／`released`／`held` 的語意不變。
 - 遷移清單：本夾不另建，寫入 [foundation-followups/inactive_products.md](../foundation-followups/inactive_products.md) 的「IP」節（該節已存在）。

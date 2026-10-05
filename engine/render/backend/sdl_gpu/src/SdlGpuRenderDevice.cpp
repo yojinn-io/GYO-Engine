@@ -929,10 +929,10 @@ struct SdlGpuRenderDevice::Impl final {
         auto* command = SDL_AcquireGPUCommandBuffer(device);
         if (!command) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
         SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
-        // IP-2a measurement: the blocking acquire is split into its two waits,
-        // the in-flight fence and the drawable (Metal's nextDrawable), and a
-        // slow acquire logs both. Whether this stays is decided after the
-        // measurement (input-and-present plan, IP-2).
+        // The blocking acquire, split into its two waits so a slow acquire can
+        // say which one stalled: the in-flight fence, or the drawable (Metal's
+        // nextDrawable, which can block for about a second). Logged only when
+        // slow.
         const Uint64 waitStarted = SDL_GetTicksNS();
         if (!SDL_WaitForGPUSwapchain(device, window)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
