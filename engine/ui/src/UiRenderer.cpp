@@ -1,4 +1,5 @@
 #include "ui/UiRenderer.hpp"
+#include "ui/UiRuntime.hpp"
 
 #include "engine/base/Assert.hpp"
 
@@ -407,18 +408,13 @@ UiResult<void> UiRenderer::Submit(
                     GYO_ASSERT(std::isfinite(draw.pointSizePixels) && draw.pointSizePixels > 0.0F);
                     auto text = impl_->ResolveText(draw);
                     if (!text) return Base::Err(std::move(text).error());
-                    float x = draw.boundsPixels.x;
-                    float y = draw.boundsPixels.y;
-                    if (draw.horizontalAlign == UiHorizontalAlign::Center) {
-                        x += (draw.boundsPixels.width - static_cast<float>(text.value()->width)) * 0.5F;
-                    } else if (draw.horizontalAlign == UiHorizontalAlign::Right) {
-                        x += draw.boundsPixels.width - static_cast<float>(text.value()->width);
-                    }
-                    if (draw.verticalAlign == UiVerticalAlign::Center) {
-                        y += (draw.boundsPixels.height - static_cast<float>(text.value()->height)) * 0.5F;
-                    } else if (draw.verticalAlign == UiVerticalAlign::Bottom) {
-                        y += draw.boundsPixels.height - static_cast<float>(text.value()->height);
-                    }
+                    const Math::Vec2 origin = AlignUiText(
+                        draw.boundsPixels,
+                        {static_cast<float>(text.value()->width), static_cast<float>(text.value()->height)},
+                        draw.horizontalAlign,
+                        draw.verticalAlign);
+                    const float x = origin.x;
+                    const float y = origin.y;
                     sprite.material.texture = text.value()->gpu;
                     sprite.destinationPixels = {
                         x,

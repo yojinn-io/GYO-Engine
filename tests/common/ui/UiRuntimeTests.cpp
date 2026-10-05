@@ -397,3 +397,30 @@ TEST_CASE("UiRuntime layout and draw list match exact master geometry") {
 }
 
 } // namespace Engine::Ui::Tests
+
+TEST_CASE("shared UI layout rules: canvas fit, half-open containment and text alignment") {
+    using namespace Engine::Ui;
+    // Pillarbox: the height limits the scale and the canvas is centred.
+    const UiCanvasFit fit = FitDesignCanvas({1920.0F, 1080.0F}, {1000.0F, 1000.0F});
+    CHECK(fit.scale == 1000.0F / 1920.0F);
+    CHECK(fit.offset.x == (1000.0F - 1920.0F * fit.scale) * 0.5F);
+    CHECK(fit.offset.y == (1000.0F - 1080.0F * fit.scale) * 0.5F);
+
+    const Engine::Math::Rect rect{10.0F, 20.0F, 30.0F, 40.0F};
+    CHECK(ContainsUiPoint(rect, {10.0F, 20.0F}));
+    CHECK_FALSE(ContainsUiPoint(rect, {40.0F, 30.0F}));   // right edge excluded
+    CHECK_FALSE(ContainsUiPoint(rect, {20.0F, 60.0F}));   // bottom edge excluded
+    CHECK_FALSE(ContainsUiPoint({5.0F, 5.0F, 0.0F, 10.0F}, {5.0F, 6.0F}));  // empty never hit
+
+    const Engine::Math::Rect bounds{100.0F, 50.0F, 200.0F, 80.0F};
+    const Engine::Math::Vec2 extent{40.0F, 10.0F};
+    const auto topLeft = AlignUiText(bounds, extent, UiHorizontalAlign::Left, UiVerticalAlign::Top);
+    CHECK(topLeft.x == 100.0F);
+    CHECK(topLeft.y == 50.0F);
+    const auto centred = AlignUiText(bounds, extent, UiHorizontalAlign::Center, UiVerticalAlign::Center);
+    CHECK(centred.x == 180.0F);
+    CHECK(centred.y == 85.0F);
+    const auto far = AlignUiText(bounds, extent, UiHorizontalAlign::Right, UiVerticalAlign::Bottom);
+    CHECK(far.x == 260.0F);
+    CHECK(far.y == 120.0F);
+}

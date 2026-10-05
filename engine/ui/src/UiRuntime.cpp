@@ -297,19 +297,8 @@ namespace {
     return color->second;
 }
 
-struct FitTransform final {
-    float scale{1.0F};
-    Math::Vec2 offset{};
-};
-
-[[nodiscard]] FitTransform MakeFit(const UiDocument& document, UiViewport viewport) noexcept {
-    const float scale = Math::Min(
-        viewport.width / document.designCanvas.size.x,
-        viewport.height / document.designCanvas.size.y);
-    return {scale, {
-        (viewport.width - document.designCanvas.size.x * scale) * 0.5F,
-        (viewport.height - document.designCanvas.size.y * scale) * 0.5F,
-    }};
+[[nodiscard]] UiCanvasFit MakeFit(const UiDocument& document, UiViewport viewport) noexcept {
+    return FitDesignCanvas(document.designCanvas.size, viewport);
 }
 
 [[nodiscard]] Math::Rect ResolveDesignRect(
@@ -331,20 +320,13 @@ struct FitTransform final {
     };
 }
 
-[[nodiscard]] Math::Rect ToPixels(Math::Rect design, FitTransform fit) noexcept {
+[[nodiscard]] Math::Rect ToPixels(Math::Rect design, UiCanvasFit fit) noexcept {
     return {
         fit.offset.x + design.x * fit.scale,
         fit.offset.y + design.y * fit.scale,
         design.width * fit.scale,
         design.height * fit.scale,
     };
-}
-
-// UI hit testing is half-open (right and bottom edges excluded, empty rects never
-// hit), unlike the closed Math::Contains.
-[[nodiscard]] bool ContainsHalfOpen(Math::Rect rect, Math::Vec2 point) noexcept {
-    return point.x >= rect.x && point.y >= rect.y &&
-           point.x < rect.x + rect.width && point.y < rect.y + rect.height;
 }
 
 [[nodiscard]] const UiElement* FindElement(
@@ -357,29 +339,30 @@ struct FitTransform final {
     return nullptr;
 }
 
-[[nodiscard]] UiResult<void> EvaluateElements(
+// The list item an element is evaluated in: the item for text and the index
+// for the evaluated layout. Both are empty outside fixed-step list templates.
+struct ListPosition final {
+    const UiListItem* item{};
+    std::optional<std::size_t> index;
+};
+
+// The single layout walk shared by evaluation and composition: each element is
+// resolved against its parent, visited, then its list items (fixed-step lists
+// only) and its children follow in document order.
+template <class Visit>
+[[nodiscard]] UiResult<void> WalkElements(
     const std::vector<UiElement>& elements,
     Math::Rect parent,
     Math::Rect parentClip,
-    FitTransform fit,
+    ListPosition position,
     const UiDocument& document,
     const UiBindingTable& bindings,
-    std::optional<std::size_t> listItemIndex,
-    std::vector<UiEvaluatedElement>& result,
-    std::size_t& drawOrder) {
+    Visit& visit) {
     for (const UiElement& element : elements) {
         const Math::Rect design = ResolveDesignRect(element.rect, parent);
         const Math::Rect clip = Math::Intersection(parentClip, design);
-        result.push_back({
-            element.id,
-            element.type,
-            ToPixels(design, fit),
-            ToPixels(clip, fit),
-            drawOrder++,
-            element.type == UiElementType::Button ||
-                element.type == UiElementType::HorizontalSlider,
-            listItemIndex,
-        });
+        auto visited = visit(element, design, clip, position);
+        if (!visited) return visited;
         if (element.type == UiElementType::FixedStepList) {
             auto listValue = ResolveBinding(document, bindings, element.binding);
             if (!listValue) return Base::Err(std::move(listValue).error());
@@ -389,29 +372,18 @@ struct FitTransform final {
                 Math::Rect itemRect = design;
                 itemRect.x += element.itemStep.x * static_cast<float>(index);
                 itemRect.y += element.itemStep.y * static_cast<float>(index);
-                auto itemLayout = EvaluateElements(
+                auto items = WalkElements(
                     element.itemTemplate,
                     itemRect,
                     Math::Intersection(clip, itemRect),
-                    fit,
+                    ListPosition{&list.items[index], index},
                     document,
                     bindings,
-                    index,
-                    result,
-                    drawOrder);
-                if (!itemLayout) return itemLayout;
+                    visit);
+                if (!items) return items;
             }
         }
-        auto children = EvaluateElements(
-            element.children,
-            design,
-            clip,
-            fit,
-            document,
-            bindings,
-            listItemIndex,
-            result,
-            drawOrder);
+        auto children = WalkElements(element.children, design, clip, position, document, bindings, visit);
         if (!children) return children;
     }
     return {};
@@ -471,7 +443,7 @@ struct ComposeContext final {
     const UiBindingTable& bindings;
     const UiInteractionState& interaction;
     std::string_view pressedElement;
-    FitTransform fit;
+    UiCanvasFit fit;
     UiDrawList& drawList;
 };
 
@@ -510,145 +482,153 @@ struct ComposeContext final {
     return {};
 }
 
-[[nodiscard]] UiResult<void> ComposeElements(
-    const std::vector<UiElement>& elements,
-    Math::Rect parent,
-    Math::Rect parentClip,
+// Composition of one element; WalkElements supplies its list items and children.
+[[nodiscard]] UiResult<void> ComposeElement(
+    const UiElement& element,
+    Math::Rect design,
+    Math::Rect designClip,
     const UiListItem* item,
     ComposeContext& context) {
-    for (const UiElement& element : elements) {
-        const Math::Rect design = ResolveDesignRect(element.rect, parent);
-        const Math::Rect pixels = ToPixels(design, context.fit);
-        const Math::Rect designClip = Math::Intersection(parentClip, design);
-        const Math::Rect clipPixels = ToPixels(designClip, context.fit);
-        if (pixels.width < 0.0F || pixels.height < 0.0F) {
-            return Base::Err(RuntimeError(
-                UiErrorCode::RuntimeState,
-                "element '" + element.id + "' resolved to a negative size"));
-        }
+    const Math::Rect pixels = ToPixels(design, context.fit);
+    const Math::Rect clipPixels = ToPixels(designClip, context.fit);
+    if (pixels.width < 0.0F || pixels.height < 0.0F) {
+        return Base::Err(RuntimeError(
+            UiErrorCode::RuntimeState,
+            "element '" + element.id + "' resolved to a negative size"));
+    }
 
-        switch (element.type) {
-        case UiElementType::Container:
-            break;
-        case UiElementType::Panel: {
-            auto color = EvaluateColor(element.color, context.document, context.bindings);
-            if (!color) return Base::Err(std::move(color).error());
-            context.drawList.commands.emplace_back(UiQuadDraw{pixels, color.value(), clipPixels});
-            break;
+    switch (element.type) {
+    case UiElementType::Container:
+        break;
+    case UiElementType::Panel: {
+        auto color = EvaluateColor(element.color, context.document, context.bindings);
+        if (!color) return Base::Err(std::move(color).error());
+        context.drawList.commands.emplace_back(UiQuadDraw{pixels, color.value(), clipPixels});
+        break;
+    }
+    case UiElementType::Image: {
+        auto tint = EvaluateColor(element.color, context.document, context.bindings);
+        if (!tint) return Base::Err(std::move(tint).error());
+        context.drawList.commands.emplace_back(UiImageDraw{
+            pixels, element.sourceUv, element.textureAsset, tint.value(), clipPixels});
+        break;
+    }
+    case UiElementType::Text: {
+        auto appended = AppendText(element, design, item, clipPixels, context);
+        if (!appended) return appended;
+        break;
+    }
+    case UiElementType::Button: {
+        std::string_view colorId = element.background.normal;
+        if (context.interaction.capturedElement == element.id || context.pressedElement == element.id) {
+            colorId = element.background.pressed;
+        } else if (context.interaction.focusedElement == element.id) {
+            colorId = element.background.focused;
         }
-        case UiElementType::Image: {
-            auto tint = EvaluateColor(element.color, context.document, context.bindings);
-            if (!tint) return Base::Err(std::move(tint).error());
-            context.drawList.commands.emplace_back(UiImageDraw{
-                pixels, element.sourceUv, element.textureAsset, tint.value(), clipPixels});
-            break;
+        auto background = NamedColor(context.document, colorId);
+        if (!background) return Base::Err(std::move(background).error());
+        context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
+        auto appended = AppendText(element, design, item, clipPixels, context);
+        if (!appended) return appended;
+        break;
+    }
+    case UiElementType::HorizontalSlider: {
+        std::string_view colorId = element.background.normal;
+        if (context.interaction.capturedElement == element.id || context.pressedElement == element.id) {
+            colorId = element.background.pressed;
+        } else if (context.interaction.focusedElement == element.id) {
+            colorId = element.background.focused;
         }
-        case UiElementType::Text: {
-            auto appended = AppendText(element, design, item, clipPixels, context);
-            if (!appended) return appended;
-            break;
-        }
-        case UiElementType::Button: {
-            std::string_view colorId = element.background.normal;
-            if (context.interaction.capturedElement == element.id || context.pressedElement == element.id) {
-                colorId = element.background.pressed;
-            } else if (context.interaction.focusedElement == element.id) {
-                colorId = element.background.focused;
-            }
-            auto background = NamedColor(context.document, colorId);
-            if (!background) return Base::Err(std::move(background).error());
-            context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
-            auto appended = AppendText(element, design, item, clipPixels, context);
-            if (!appended) return appended;
-            break;
-        }
-        case UiElementType::HorizontalSlider: {
-            std::string_view colorId = element.background.normal;
-            if (context.interaction.capturedElement == element.id || context.pressedElement == element.id) {
-                colorId = element.background.pressed;
-            } else if (context.interaction.focusedElement == element.id) {
-                colorId = element.background.focused;
-            }
-            auto background = NamedColor(context.document, colorId);
-            if (!background) return Base::Err(std::move(background).error());
-            context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
+        auto background = NamedColor(context.document, colorId);
+        if (!background) return Base::Err(std::move(background).error());
+        context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
 
-            auto value = SliderValue(context.document, context.bindings, element);
-            if (!value) return Base::Err(std::move(value).error());
-            const double clamped = Math::Clamp(value.value(), element.minimum, element.maximum);
-            const float ratio = static_cast<float>((clamped - element.minimum) / (element.maximum - element.minimum));
-            const Math::Rect textBounds{
-                pixels.x + pixels.width * 0.04F,
-                pixels.y + pixels.height * 0.08F,
-                pixels.width * 0.92F,
-                pixels.height * 0.48F,
-            };
-            auto label = AppendText(element, design, item, clipPixels, context, UiHorizontalAlign::Left, std::nullopt, textBounds);
-            if (!label) return label;
-            auto valueText = AppendText(
-                element,
-                design,
-                item,
-                clipPixels,
-                context,
-                UiHorizontalAlign::Right,
-                FormatScalar(UiScalarValue{clamped}, element.valueFormat),
-                textBounds);
-            if (!valueText) return valueText;
+        auto value = SliderValue(context.document, context.bindings, element);
+        if (!value) return Base::Err(std::move(value).error());
+        const double clamped = Math::Clamp(value.value(), element.minimum, element.maximum);
+        const float ratio = static_cast<float>((clamped - element.minimum) / (element.maximum - element.minimum));
+        const Math::Rect textBounds{
+            pixels.x + pixels.width * 0.04F,
+            pixels.y + pixels.height * 0.08F,
+            pixels.width * 0.92F,
+            pixels.height * 0.48F,
+        };
+        auto label = AppendText(element, design, item, clipPixels, context, UiHorizontalAlign::Left, std::nullopt, textBounds);
+        if (!label) return label;
+        auto valueText = AppendText(
+            element,
+            design,
+            item,
+            clipPixels,
+            context,
+            UiHorizontalAlign::Right,
+            FormatScalar(UiScalarValue{clamped}, element.valueFormat),
+            textBounds);
+        if (!valueText) return valueText;
 
-            auto trackColor = NamedColor(context.document, element.trackColor);
-            if (!trackColor) return Base::Err(std::move(trackColor).error());
-            auto fillColor = NamedColor(context.document, element.fillColor);
-            if (!fillColor) return Base::Err(std::move(fillColor).error());
-            auto thumbColor = NamedColor(context.document, element.thumbColor);
-            if (!thumbColor) return Base::Err(std::move(thumbColor).error());
-            const Math::Rect track{
-                pixels.x + pixels.width * 0.04F,
-                pixels.y + pixels.height * 0.72F,
-                pixels.width * 0.92F,
-                Math::Max(2.0F, pixels.height * 0.10F),
-            };
-            context.drawList.commands.emplace_back(UiQuadDraw{track, trackColor.value(), clipPixels});
-            context.drawList.commands.emplace_back(UiQuadDraw{
-                {track.x, track.y, track.width * ratio, track.height}, fillColor.value(), clipPixels});
-            const float thumbWidth = Math::Max(6.0F, pixels.height * 0.14F);
-            context.drawList.commands.emplace_back(UiQuadDraw{
-                {track.x + track.width * ratio - thumbWidth * 0.5F,
-                 track.y - track.height,
-                 thumbWidth,
-                 track.height * 3.0F},
-                thumbColor.value(),
-                clipPixels});
-            break;
-        }
-        case UiElementType::FixedStepList: {
-            auto listValue = ResolveBinding(context.document, context.bindings, element.binding);
-            if (!listValue) return Base::Err(std::move(listValue).error());
-            const UiList& list = std::get<UiList>(*listValue.value());
-            const std::size_t count = Math::Min(element.maxItems, list.items.size());
-            for (std::size_t index = 0; index < count; ++index) {
-                Math::Rect itemRect = design;
-                itemRect.x += element.itemStep.x * static_cast<float>(index);
-                itemRect.y += element.itemStep.y * static_cast<float>(index);
-                auto composed = ComposeElements(
-                    element.itemTemplate,
-                    itemRect,
-                    Math::Intersection(designClip, itemRect),
-                    &list.items[index],
-                    context);
-                if (!composed) return composed;
-            }
-            break;
-        }
-        }
-
-        auto children = ComposeElements(element.children, design, designClip, item, context);
-        if (!children) return children;
+        auto trackColor = NamedColor(context.document, element.trackColor);
+        if (!trackColor) return Base::Err(std::move(trackColor).error());
+        auto fillColor = NamedColor(context.document, element.fillColor);
+        if (!fillColor) return Base::Err(std::move(fillColor).error());
+        auto thumbColor = NamedColor(context.document, element.thumbColor);
+        if (!thumbColor) return Base::Err(std::move(thumbColor).error());
+        const Math::Rect track{
+            pixels.x + pixels.width * 0.04F,
+            pixels.y + pixels.height * 0.72F,
+            pixels.width * 0.92F,
+            Math::Max(2.0F, pixels.height * 0.10F),
+        };
+        context.drawList.commands.emplace_back(UiQuadDraw{track, trackColor.value(), clipPixels});
+        context.drawList.commands.emplace_back(UiQuadDraw{
+            {track.x, track.y, track.width * ratio, track.height}, fillColor.value(), clipPixels});
+        const float thumbWidth = Math::Max(6.0F, pixels.height * 0.14F);
+        context.drawList.commands.emplace_back(UiQuadDraw{
+            {track.x + track.width * ratio - thumbWidth * 0.5F,
+             track.y - track.height,
+             thumbWidth,
+             track.height * 3.0F},
+            thumbColor.value(),
+            clipPixels});
+        break;
+    }
+    case UiElementType::FixedStepList:
+        // The walk composes the list items.
+        break;
     }
     return {};
 }
 
 } // namespace
+
+UiCanvasFit FitDesignCanvas(Math::Vec2 designSize, UiViewport viewport) noexcept {
+    const float scale = Math::Min(viewport.width / designSize.x, viewport.height / designSize.y);
+    return {scale, {
+        (viewport.width - designSize.x * scale) * 0.5F,
+        (viewport.height - designSize.y * scale) * 0.5F,
+    }};
+}
+
+bool ContainsUiPoint(Math::Rect rect, Math::Vec2 point) noexcept {
+    return point.x >= rect.x && point.y >= rect.y &&
+           point.x < rect.x + rect.width && point.y < rect.y + rect.height;
+}
+
+Math::Vec2 AlignUiText(
+    Math::Rect bounds, Math::Vec2 extent,
+    UiHorizontalAlign horizontal, UiVerticalAlign vertical) noexcept {
+    Math::Vec2 position{bounds.x, bounds.y};
+    if (horizontal == UiHorizontalAlign::Center) {
+        position.x += (bounds.width - extent.x) * 0.5F;
+    } else if (horizontal == UiHorizontalAlign::Right) {
+        position.x += bounds.width - extent.x;
+    }
+    if (vertical == UiVerticalAlign::Center) {
+        position.y += (bounds.height - extent.y) * 0.5F;
+    } else if (vertical == UiVerticalAlign::Bottom) {
+        position.y += bounds.height - extent.y;
+    }
+    return position;
+}
 
 const UiEvaluatedElement* HitTestUiLayout(
     std::span<const UiEvaluatedElement> layout,
@@ -657,8 +637,8 @@ const UiEvaluatedElement* HitTestUiLayout(
     const UiEvaluatedElement* selected = nullptr;
     for (const UiEvaluatedElement& element : layout) {
         if (interactiveOnly && !element.interactive) continue;
-        if (!ContainsHalfOpen(element.boundsPixels, pointPixels) ||
-            !ContainsHalfOpen(element.clipPixels, pointPixels)) {
+        if (!ContainsUiPoint(element.boundsPixels, pointPixels) ||
+            !ContainsUiPoint(element.clipPixels, pointPixels)) {
             continue;
         }
         if (selected == nullptr || element.drawOrder >= selected->drawOrder) {
@@ -699,16 +679,22 @@ struct UiRuntime::Impl final {
         };
         std::vector<UiEvaluatedElement> result;
         std::size_t drawOrder = 0;
-        auto evaluated = EvaluateElements(
-            canvas->children,
-            root,
-            root,
-            MakeFit(*document, viewport),
-            *document,
-            bindings,
-            std::nullopt,
-            result,
-            drawOrder);
+        const UiCanvasFit fit = MakeFit(*document, viewport);
+        auto evaluate = [&](const UiElement& element, Math::Rect design, Math::Rect clip,
+                            ListPosition position) -> UiResult<void> {
+            result.push_back({
+                element.id,
+                element.type,
+                ToPixels(design, fit),
+                ToPixels(clip, fit),
+                drawOrder++,
+                element.type == UiElementType::Button ||
+                    element.type == UiElementType::HorizontalSlider,
+                position.index,
+            });
+            return {};
+        };
+        auto evaluated = WalkElements(canvas->children, root, root, {}, *document, bindings, evaluate);
         if (!evaluated) {
             return Base::Err(std::move(evaluated).error());
         }
@@ -733,7 +719,11 @@ struct UiRuntime::Impl final {
         ComposeContext context{
             *document, bindings, interaction, pressedElement, MakeFit(*document, viewport), result};
         const Math::Rect root{0.0F, 0.0F, document->designCanvas.size.x, document->designCanvas.size.y};
-        auto composed = ComposeElements(canvas->children, root, root, nullptr, context);
+        auto compose = [&context](const UiElement& element, Math::Rect design, Math::Rect clip,
+                                  ListPosition position) {
+            return ComposeElement(element, design, clip, position.item, context);
+        };
+        auto composed = WalkElements(canvas->children, root, root, {}, *document, bindings, compose);
         if (!composed) return Base::Err(std::move(composed).error());
         return std::move(result);
     }

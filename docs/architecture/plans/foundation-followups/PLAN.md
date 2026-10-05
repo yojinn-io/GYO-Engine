@@ -325,7 +325,7 @@ render 內只剩一份 Color 有限性檢查；characterization 逐位元不變�
 
 ## FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證
 
-狀態：未開始。
+狀態：完成（2026-10-05）。見 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md)。
 
 ### 目標與範圍
 

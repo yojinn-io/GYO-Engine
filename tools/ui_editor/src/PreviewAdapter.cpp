@@ -175,17 +175,12 @@ void DrawText(
               (std::numeric_limits<float>::max)(),
               0.0F,
               text.utf8.c_str());
-    ImVec2 position = minimum;
-    if (text.horizontalAlign == Engine::Ui::UiHorizontalAlign::Center) {
-        position.x += (text.boundsPixels.width - extent.x) * 0.5F;
-    } else if (text.horizontalAlign == Engine::Ui::UiHorizontalAlign::Right) {
-        position.x += text.boundsPixels.width - extent.x;
-    }
-    if (text.verticalAlign == Engine::Ui::UiVerticalAlign::Center) {
-        position.y += (text.boundsPixels.height - extent.y) * 0.5F;
-    } else if (text.verticalAlign == Engine::Ui::UiVerticalAlign::Bottom) {
-        position.y += text.boundsPixels.height - extent.y;
-    }
+    const Engine::Math::Vec2 aligned = Engine::Ui::AlignUiText(
+        {minimum.x, minimum.y, text.boundsPixels.width, text.boundsPixels.height},
+        {extent.x, extent.y},
+        text.horizontalAlign,
+        text.verticalAlign);
+    const ImVec2 position{aligned.x, aligned.y};
     if (raster.texture != nullptr) {
         drawList.AddImage(
             ImTextureRef{static_cast<ImTextureID>(
@@ -275,10 +270,8 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
     }
 
     const ImVec2 mouse = ImGui::GetMousePos();
-    const bool pointerInside =
-        inputEnabled && mouse.x >= viewport.x && mouse.y >= viewport.y &&
-        mouse.x < viewport.x + viewport.width &&
-        mouse.y < viewport.y + viewport.height;
+    const bool pointerInside = inputEnabled &&
+        Engine::Ui::ContainsUiPoint({viewport.x, viewport.y, viewport.width, viewport.height}, {mouse.x, mouse.y});
     Engine::Ui::UiInputFrame input;
     input.pointerAvailable = pointerInside && previewMode;
     input.pointerPixels = {mouse.x - viewport.x, mouse.y - viewport.y};
@@ -413,14 +406,11 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
         const Json& design = sourceDocument["design_canvas"]["size"];
         const float designWidth = design[0].get<float>();
         const float designHeight = design[1].get<float>();
-        const float designScale = Engine::Math::Min(
-            viewport.width / designWidth,
-            viewport.height / designHeight);
+        const Engine::Ui::UiCanvasFit fit = Engine::Ui::FitDesignCanvas(
+            {designWidth, designHeight}, {viewport.width, viewport.height});
+        const float designScale = fit.scale;
         if (source.parent == nullptr) {
-            parentBounds.width = designWidth * designScale;
-            parentBounds.height = designHeight * designScale;
-            parentBounds.x = (viewport.width - parentBounds.width) * 0.5F;
-            parentBounds.y = (viewport.height - parentBounds.height) * 0.5F;
+            parentBounds = {fit.offset.x, fit.offset.y, designWidth * designScale, designHeight * designScale};
         }
 
         if (parentBounds.width > 0.0F && parentBounds.height > 0.0F &&

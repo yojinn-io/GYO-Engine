@@ -49,10 +49,10 @@
 
 ### FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證
 
-狀態：未開始，批次完成時更新。
+狀態：FF-5 完成（2026-10-05）。
 
-- 未啟用產品的 UI 資料（`assets/object_fps/` 與 `assets/object_fps_v2/` 下的 `ui/screens.json`）須通過新的 `item_step` 規則：非有限值與超出 float 範圍的有限 double 會被拒絕。FF-5 的一次性 scratch 腳本會一併檢查並把結果記在這裡。提出需求的消費端自己的 UI 資料不在本清單，由消費端自行處理。
-- 若 Ui 新公開既有函式，屬加法，預計不需遷移。
+- 未啟用產品的 UI 資料（`assets/object_fps/ui/screens.json`、`assets/object_fps_v2/ui/screens.json`）：2026-10-05 的 scratch 比對中，兩者在新的 `item_step` 規則下都能載入，`gyo_ui_editor --validate` 也是 exit 0；layout 與 draw list 在 5 種 viewport 下與改動前逐位元相同。不需要遷移。
+- Ui 新公開的 `FitDesignCanvas`、`ContainsUiPoint`、`AlignUiText`（`ui/UiRuntime.hpp`）屬加法，不需遷移。
 
 ### FF-6 共通層衛生與產品登錄
 

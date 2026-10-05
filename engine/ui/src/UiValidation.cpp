@@ -393,6 +393,11 @@ struct CanvasElementState final {
             if (element.maxItems == 0 || element.itemTemplate.empty()) {
                 return Invalid("fixed_step_list requires max_items > 0 and a non-empty template", elementPath);
             }
+            // Finite in float: JSON numbers beyond the float range (1e39) load as
+            // infinity and are rejected here too (docs/ui_toolchain.md, JSON v1).
+            if (!IsFinite(element.itemStep)) {
+                return Invalid("fixed_step_list item_step must be finite", elementPath + "/item_step");
+            }
             auto validation = ValidateElements(
                 element.itemTemplate,
                 context,

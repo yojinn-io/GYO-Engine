@@ -97,7 +97,7 @@
 | FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
 | FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
 | FF-4 | 完成（PR 待合併） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
-| FF-5 | 未開始 | — |
+| FF-5 | 完成（PR 待合併） | 見下方「FF-5」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md) |
 | FF-6 | 完成（PR 待合併） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
 | FF-7 | 未開始 | — |
 | FF-8 | 完成（PR 待合併） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
@@ -199,7 +199,24 @@
 - 2026-10-05：Removability 通過：scratch worktree（`d397b32`）刪除消費端的程式、資產、測試、驗收、文件與 `projects.csv` 登錄列後，test preset configure（選取的遊戲為空、工具 ui_editor）、建置成功，CTest 34／34 通過。完成，開 PR。
   另記：`docs/architecture/plans/math-foundation/scripts/syntax_check.py`、`docs/architecture/plans/result-unification/scripts/` 兩個歷史計畫的腳本仍寫著消費端的路徑；它們不在建置與測試內，屬已結束計畫的紀錄，本批不改。
 
+### FF-5（記錄器）
+
+- 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff5`，疊在 FF-6 上。檔位 high（`item_step` 契約部分 medium），不用 ultracode。
+- 2026-10-05：Ui 公開既有規則 `FitDesignCanvas`、`ContainsUiPoint`、`AlignUiText`（`ui/UiRuntime.hpp`）；UiRuntime、UiRenderer、ui_editor `PreviewAdapter.cpp` 的 letterbox、viewport 內判定、文字對齊改用它們。
+  UiRuntime 的 Evaluate 與 Compose 改為同一個 `WalkElements` 走訪。
+- 2026-10-05：`item_step` 在 `UiValidation` 檢查有限性（float 之後；1e39 載入成 inf 也被拒絕），錯誤位置是元素的 `/item_step`；不升 `kUiSchemaVersion`；`docs/ui_toolchain.md` 的 JSON v1 契約註明。
+- 2026-10-05：驗證：`gyo_ui_tests` 既有的逐位元 layout／draw-list golden 照舊通過；CTest 56／56；scratch 兩樹比對（下節）逐位元相同。完成，開 PR。
+
+#### FF-5 結果：repo 內 UI 資料的 scratch 比對（不提交為共通測試）
+
+- 方法：一次性 scratch dumper（連結 `GYO::Ui`，不提交），對每個檔的每個 canvas、5 種 viewport（1280×720、1920×1080、800×600、1000×1000、333×777）印出 `EvaluatePreviewLayout` 與 `ComposePreview` 的全部欄位位元。
+  base＝FF-6 tip `57f3ef6`（`GYO-Engine-v6b04` worktree），branch＝本分支。
+- 對象：`assets/object_fps/ui/screens.json`、`assets/object_fps_v2/ui/screens.json`、`assets/object_fps_pvp/ui/screens.json`、`assets/object_fps_pvp/ui/pvp_lobby.json`、`tests/ui_editor/fixtures/minimal.ui.json`、`build/acceptance/ui_editor/fixtures/minimal.ui.json`（75 組 canvas×viewport，1,540 筆 layout 與 draw 紀錄）。
+- 結果：全部在新規則下載入成功；兩樹輸出逐位元相同（SHA-256 `768a15a8…`）。三個 `screens.json` 都有 `fixed_step_list`，其 `item_step` 都是有限值。
+
 ## 未結事項
+
+- ui_editor 既有缺陷（FF-5 冒煙時發現，不在範圍）：以命令列 `--open` 開檔時沒有選取文件的第一個 canvas（`EditorApp.cpp` 啟動路徑，選單開檔的 `OpenDocument` 有做），第一個 canvas 不叫 `main` 的文件會顯示 `unknown canvas 'main'`。已另開獨立任務建議。
 
 - FF-2 發現：AssetWatcher 在檔案沒變時偶發回報 `Modified`（換算抖動，約 2.2%／次）；使用者決定在 FF-2 修正，已完成。
 

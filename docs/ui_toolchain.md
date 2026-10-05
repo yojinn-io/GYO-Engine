@@ -39,6 +39,13 @@ The v1 element set is deliberately closed:
 - `container`, `panel`, `image`, `text`, `button`
 - `horizontal_slider`, `fixed_step_list`
 
+Numbers must be finite. Geometry is held as 32-bit floats, so a
+`fixed_step_list` `item_step` must also be finite after conversion to float: a
+finite JSON number beyond the float range (for example `1e39`) is rejected with
+the error located at that element's `item_step`, as are values made non-finite
+in memory before saving. Rejecting such out-of-range steps does not change the
+schema version.
+
 Every element uses `anchor_min`, `anchor_max`, `pivot`, `position`, and
 `size_delta`. For a parent rectangle, layout is evaluated as:
 
