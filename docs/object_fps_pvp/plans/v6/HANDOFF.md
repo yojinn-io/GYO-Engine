@@ -1,6 +1,6 @@
 # PvP v6 交接
 
-更新：2026-10-05。Owner：`object_fps_pvp`。**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)）。
+更新：2026-10-05。Owner：`object_fps_pvp`。**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成並合併**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)，`30f87d5`）。**第 05 批不執行**（第 04 批未重現）。
 其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 
 本文件原本收集 v5 期間使用者決定「延到 v6」的項目。2026-10-04 第 01 批開始後，它也是 v6 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
@@ -108,8 +108,9 @@
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
   [基線](BASELINE.md) 的 wire 版本號檢查表中 `Wire.hpp:26`、`:36` 兩處，因此變成這一個常數（第 09 批改值時以它為準）。
   位元組與拒絕集合以 `tests/object_fps_pvp/WireTests.cpp` 鎖住；權威 digest 兩樹比對相同。見 [基礎後續整理交接](../../../architecture/plans/foundation-followups/HANDOFF.md)。
-- 2026-10-05：IP-1（Engine 輸入層）完成，PR 待合併：`Key` 擴充為完整鍵盤（含 `Tab`、數字列），`PhysicalInputFrame::events` 依序提供本視窗的按鍵、滑鍵（含座標與是否在視窗內）與視窗事件（失焦、移動、縮放含新寬高、縮小、還原）。
+- 2026-10-05：IP-1（Engine 輸入層）完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）：`Key` 擴充為完整鍵盤（含 `Tab`、數字列），`PhysicalInputFrame::events` 依序提供本視窗的按鍵、滑鍵（含座標與是否在視窗內）與視窗事件（失焦、移動、縮放含新寬高、縮小、還原）。
   [第 06 批](06-input-migration.md) 可以用它取代 `PvpApplication.cpp` 的 `HandleNativeEvent`（文字輸入與剪貼簿除外）；同一幀的點擊上升沿（`pendingShotEdge`）可由 `events` 的 `MouseButtonPressed` 取得。
+- 2026-10-05：Engine 的 FF-1～FF-6、FF-8、IP-1 依序合併（PR #43～#50，master `56e0033`）。本產品批次的 Engine 依賴：第 06 批（IP-1）、第 09 批（FF-3、FF-8）已滿足；第 07 批仍等 IP-2，第 10 批與 FF-9 同一個 PR。
 
 ## 延後項目：現況與對應批次
 
