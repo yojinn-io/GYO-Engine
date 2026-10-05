@@ -1,6 +1,7 @@
 # 輸入與呈現：交接
 
-更新：2026-10-04。**狀態：未開始。** 2026-10-04 由提出需求的消費端在其規劃批次中建立；IP-1、IP-2 都沒有開始。
+更新：2026-10-05。**狀態：未開始。** 2026-10-04 由提出需求的消費端在其規劃批次中建立；IP-1、IP-2 都沒有開始。
+2026-10-05：消費端完成第3項的重現與阻塞取得下的量測基線（B0），摘要見第3項「消費端重現（B0）」；縮放時的停頓位置與先前的前提不同，見未結事項。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。
 
 ## 閱讀入口
@@ -47,6 +48,18 @@
   - 停頓全在 render_ms 內，事件泵沒有另外停住。例：render_ms=1199.0 的幀 frame_gap_ms=16.9；下一幀 frame_gap_ms=1202.1、render_ms=0.7。
   - 所有長幀都記為 `presented=1`。
   - client-2 的 5 筆中有 4 筆，在停頓幀之後約 3–4 ms 記錄到「釋放指標」，也就是視窗互動事件在 render 返回後才被事件泵處理。
+- 消費端重現（B0，2026-10-05，實機 macOS Intel／Metal，阻塞取得，來源與 2026-10-04 的計畫基準相同，沒有合併任何 IP／FF 批次）：
+  - 證據：`build/target/_build/test/logs/pvp-v6-batch04-20261005/7-manual/`（git 忽略）：兩個正式 Client 與 Match 的日誌、movement trace（三者都有 `trace_end`）、`commands.txt`、`artifacts.sha256`。
+  - 操作（使用者）：一個 Client 拖動標題列 3 次；另一個 Client 拖動右下角縮放 3 次；兩個視窗並排。
+  - **拖動標題列**：3 次中 2 次出現 render 停頓，`render_ms` 1196.8、1196.9 ms，`presented=1`；同一幀 frame_gap_ms 約 17 ms，下一幀約 1199 ms。與前一版的證據同型（停頓在 render 內）。第 3 次沒有 ≥100 ms 的幀。
+  - **縮放**：停頓**不在 render**。消費端在事件處理（`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:765-780`，計時涵蓋 `SdlPlatform::PumpEvents` 的 `SDL_PollEvent` 迴圈與消費端自己的事件回呼）記錄到 394.9、2974.4、1006.4 ms，該幀 `render_ms` 約 1 ms。
+    另有一次 `render_ms` 477.6 ms（同一時刻另一個 Client 也有 212 ms 的幀間隔），對應哪個操作未確認。`SDL_PollEvent` 與回呼各占多少沒有拆分量測。
+  - 替代比例（由 Match 的 movement trace 依權威 Tick 每 600 Tick 重算；窗口起點不保證與 Host 內部的品質窗口相同）：
+    - 拖動的 Client：兩個窗口各 5.7%。
+    - 縮放的 Client：兩個窗口 14.8%、6.8%（門檻 5%）。
+    - Match 共 4 次 starvation reset，兩個 Client 各 2 次。
+    - 使用者這次沒有看到 `CONNECTION POOR`；trace 重算的窗口超過門檻與畫面不一致的原因未查。
+  - 長幀之外的幀時間分布：兩個 Client 的 presentation P50 8.3 ms、P99 17.3 ms（trace 的 `frame_seconds`）。
 - 原因：
   - `engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp:937` 以阻塞的 `SDL_WaitAndAcquireGPUSwapchainTexture` 取得 swapchain。
   - 主迴圈單執行緒（`engine/runtime/src/RuntimeLoop.cpp:18-44`），render 停住期間不處理事件、不更新。
@@ -125,6 +138,8 @@
 ## 未結事項
 
 - IP-2：停頓位置（fence 或 `nextDrawable`）未量測。
+- IP-2：**縮放時的停頓在事件處理，不在 render**（B0，見第3項）。IP-2 的修法前提（不阻塞取得、暫停 acquire、分執行緒都是處理 render 側）不涵蓋這種停頓。
+  IP-2 開始時依執行規則「停頓位置與預期不同」先停下回報，由使用者決定範圍（例如只處理拖動、或另行處理事件泵停頓）；拆分 `SDL_PollEvent` 與消費端回呼的時間也在那時量測。
 - IP-2：Metal 長幀仍回報 `Presented`，Engine 如何辨識「沒有真正呈現」，待查。
 - IP-2：消費端日誌顯示視窗互動事件在停頓**之後**才被處理。若 D7 選「暫停 acquire」，以移動／縮放事件觸發暫停可能來不及避免第一次停頓；選擇前要以拆分量測確認。
 - IP-2：若選「暫停 acquire」，視窗事件到 render 的傳遞路徑未設計，不得新增 `render → input` 的邊。
