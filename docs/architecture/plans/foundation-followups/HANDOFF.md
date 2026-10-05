@@ -98,7 +98,7 @@
 | FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
 | FF-4 | 完成（PR 待合併） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
 | FF-5 | 未開始 | — |
-| FF-6 | 未開始 | — |
+| FF-6 | 完成（PR 待合併） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
 | FF-7 | 未開始 | — |
 | FF-8 | 完成（PR 待合併） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
@@ -188,6 +188,16 @@
 - 2026-10-05：CTest 56／56；沒有改 CMake，依賴邊不變。L2（report-only）：消費端 `action60` 通過；ui_editor 開啟 `minimal.ui.json` 4 秒，正常繪製並在 SIGTERM 後結束。完成，開 PR。
 
 **不合併兩個 Color 型別的理由（D11⑦）**：`gyo_ui` 只連結 `GYO::Engine` 與 `GYO::Math`，由 `gyo_ui_renderer` 橋接 Render；合併到 Render 會新增 ui→render 的邊。合併到 Math 違反健檢「沒有消費者前不要擴充 Math」。`UiValidation.cpp` 的 `UiColor` 有限性檢查因此也留在 Ui。
+
+### FF-6（記錄器）
+
+- 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff6`，疊在 FF-4 上。檔位 medium（計畫建議值，低於主對話），不用 ultracode。
+- 2026-10-05：三份 helper 的行為相同，差別只有 `noexcept` 有無與消費端多一個 double 版 `UlpDistance`，屬可單純合併（停止條件不成立）。共通版 `tests/common/support/CharacterizationBits.hpp`（`Engine::Test`，全部 `noexcept`），共通 Math 測試、ui_editor 測試、消費端測試改用；消費端只留自己的 `Random`。
+- 2026-10-05：`services/gyo_gateway/README.md` 改為不具名；`test_workflow_gates.py` 的舊開關守衛改為由 `engine/config/tools.csv` 的登錄名組出（守衛照舊，不寫產品名）。第一版曾用「任何 `GYO_BUILD_*`」的 regex，但 preset 有合法的 `GYO_BUILD_SDL_*` 開關，範圍過寬，改為登錄名。
+- 2026-10-05：`object_fps_preview` 在 `tools.csv` 停用（D11⑧），遷移需求已在遷移清單。
+- 2026-10-05：CTest 56／56；只選 ui_editor 的設定（`GYO_APPS=` 空、`GYO_TOOLS=ui_editor`）configure 通過，`gyo_ui_editor_preview_srgb_tests` 建置並通過。Removability 檢查進行中（scratch worktree）。
+- 2026-10-05：Removability 通過：scratch worktree（`d397b32`）刪除消費端的程式、資產、測試、驗收、文件與 `projects.csv` 登錄列後，test preset configure（選取的遊戲為空、工具 ui_editor）、建置成功，CTest 34／34 通過。完成，開 PR。
+  另記：`docs/architecture/plans/math-foundation/scripts/syntax_check.py`、`docs/architecture/plans/result-unification/scripts/` 兩個歷史計畫的腳本仍寫著消費端的路徑；它們不在建置與測試內，屬已結束計畫的紀錄，本批不改。
 
 ## 未結事項
 

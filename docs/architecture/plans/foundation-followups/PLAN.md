@@ -411,7 +411,7 @@ Fitness：刪除 ui_editor 後，既有有效資料仍可由 Runtime 讀取。
 
 ## FF-6 共通層衛生與產品登錄
 
-狀態：未開始。
+狀態：完成（2026-10-05）。見 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md)。
 
 ### 目標與範圍
 

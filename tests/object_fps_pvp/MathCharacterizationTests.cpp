@@ -14,6 +14,7 @@
 
 #include <doctest/doctest.h>
 
+#include "CharacterizationBits.hpp"
 #include "CharacterizationSupport.hpp"
 #include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
@@ -40,10 +41,10 @@
 namespace {
 
 namespace Math = Engine::Math;
-using CharacterizationSupport::Opaque;
+using Engine::Test::Opaque;
 using CharacterizationSupport::Random;
-using CharacterizationSupport::SameBits;
-using CharacterizationSupport::UlpDistance;
+using Engine::Test::SameBits;
+using Engine::Test::UlpDistance;
 
 namespace Legacy {
 

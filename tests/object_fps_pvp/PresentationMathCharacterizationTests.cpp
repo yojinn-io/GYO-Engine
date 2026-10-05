@@ -13,6 +13,7 @@
 
 #include <doctest/doctest.h>
 
+#include "CharacterizationBits.hpp"
 #include "CharacterizationSupport.hpp"
 #include "PresentationLegacyMath.hpp"
 #include "engine/math/geometry/Aabb.hpp"
@@ -36,10 +37,10 @@
 namespace {
 
 namespace Math = Engine::Math;
-using CharacterizationSupport::Opaque;
+using Engine::Test::Opaque;
 using CharacterizationSupport::Random;
-using CharacterizationSupport::SameBits;
-using CharacterizationSupport::UlpDistance;
+using Engine::Test::SameBits;
+using Engine::Test::UlpDistance;
 
 [[nodiscard]] Math::Vec3 OpaqueVector(Random& random, const float scale) {
     return {Opaque(random.Any(scale)), Opaque(random.Any(scale)), Opaque(random.Any(scale))};

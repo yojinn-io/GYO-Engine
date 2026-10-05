@@ -11,6 +11,7 @@
 // constant-fold std::pow (a compile-time evaluation may round differently
 // from the runtime libm that the editor actually uses).
 
+#include "CharacterizationBits.hpp"
 #include "engine/math/scalar/ColorSpace.hpp"
 
 #include <algorithm>
@@ -45,10 +46,7 @@ constexpr float kInfinity = std::numeric_limits<float>::infinity();
 // Read through a volatile at run time; see the file comment.
 volatile std::uint32_t gSeed = 0x2545F491U;
 
-[[nodiscard]] float Opaque(const float value) noexcept {
-    volatile float stored = value;
-    return stored;
-}
+using Engine::Test::Opaque;
 
 // Fixed-seed linear congruential generator (Numerical Recipes constants).
 class Lcg final {
@@ -70,10 +68,7 @@ private:
     std::uint32_t state_;
 };
 
-[[nodiscard]] bool SameBits(const float a, const float b) noexcept {
-    if (std::isnan(a) && std::isnan(b)) return true;
-    return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
-}
+using Engine::Test::SameBits;
 
 [[nodiscard]] std::string Describe(const float value) {
     std::ostringstream stream;
