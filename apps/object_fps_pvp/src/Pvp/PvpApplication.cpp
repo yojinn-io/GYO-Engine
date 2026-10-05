@@ -131,6 +131,11 @@ struct PvpApplication::Impl final {
     bool pendingReloadEdge{}, lifeBoundaryThisFrame{};
     bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
     bool leftButtonDown{}, pointerAcquiredThisFrame{}, pendingShotEdge{};
+    // A live frame runs inside the event pump while the OS holds it (window
+    // resize or move). Its input frame is incomplete, so it advances time and
+    // presents without consuming input.
+    bool liveFrame{};
+    std::uint64_t liveFramesThisPump{};
     int exitCode{};
 
     ~Impl() {
@@ -417,7 +422,7 @@ struct PvpApplication::Impl final {
         reloadAnchorStartTick = 0;
     }
 
-    void UpdateWeaponFeedback(Clock::time_point now) {
+    void UpdateWeaponFeedback(Clock::time_point now, bool consumeInput = true) {
         weaponFeedback.inputCaptured = InWorld() && inputCaptured && input->Snapshot().windowFocused;
         weaponFeedback.yaw = yaw;
         weaponFeedback.pitch = pitch;
@@ -427,7 +432,7 @@ struct PvpApplication::Impl final {
                 weaponFeedback.hitMarkerVisible = false;
             return;
         }
-        const bool canAct = !pointerAcquiredThisFrame && !windowInteraction && weaponFeedback.inputCaptured;
+        const bool canAct = consumeInput && !pointerAcquiredThisFrame && !windowInteraction && weaponFeedback.inputCaptured;
         if (pendingReloadEdge && canAct && state.combatRules && !pendingReload && !weaponFeedback.reloading) {
             if (const auto id = connection.SubmitAction(ActionKind::Reload, viewLife, state.snapshot->tick)) {
                 pendingReload = *id;
@@ -437,7 +442,7 @@ struct PvpApplication::Impl final {
                 weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
             }
         }
-        if (pendingShotEdge && !pendingReloadEdge && !pendingReload && !weaponFeedback.reloading &&
+        if (consumeInput && pendingShotEdge && !pendingReloadEdge && !pendingReload && !weaponFeedback.reloading &&
             weaponFeedback.magazineAmmo > 0 && !pointerAcquiredThisFrame && !windowInteraction &&
             weaponFeedback.inputCaptured && state.combatRules && now >= localCooldownUntil) {
             const auto combat = std::find_if(state.snapshot->combat.begin(), state.snapshot->combat.end(),
@@ -457,7 +462,8 @@ struct PvpApplication::Impl final {
                 }
             }
         }
-        pendingShotEdge = pendingReloadEdge = false;
+        // A live frame leaves the pending edges to the regular update.
+        if (consumeInput) pendingShotEdge = pendingReloadEdge = false;
         weaponFeedback.reloadPending = pendingReload.has_value();
         double elapsed{}, duration{};
         if (weaponFeedback.reloading && weaponFeedback.reloadEndTick > weaponFeedback.reloadStartTick) {
@@ -769,14 +775,22 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     impl_->windowInteraction = false;
     impl_->pointerAcquiredThisFrame = false;
     impl_->pendingShotEdge = false;
+    impl_->liveFramesThisPump = 0;
     impl_->input->BeginFrame();
-    const auto control = impl_->platform->PumpEvents([this](const SDL_Event& event) {
+    double observerMilliseconds = 0;
+    const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const SDL_Event& event) {
+        const auto observed = Clock::now();
         impl_->input->HandleEvent(event);
         impl_->HandleNativeEvent(event);
+        observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
     const auto elapsed = Milliseconds(Clock::now(), started);
-    if (elapsed >= 250) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow event processing elapsed_ms=%.1f", elapsed);
+    // observer_ms is this product's event handling; the rest is SDL's polling,
+    // including any OS modal loop and the live frames run inside it.
+    if (elapsed >= 250) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+        "PvP slow event processing elapsed_ms=%.1f observer_ms=%.1f live_frames=%llu",
+        elapsed, observerMilliseconds, static_cast<unsigned long long>(impl_->liveFramesThisPump));
     return control;
 }
 
@@ -791,7 +805,10 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         TraceMovement(event);
     }
     using Engine::Input::Key;
-    const auto& physical = impl_->input->Snapshot();
+    // A live frame sees no input: no keys, no pointer motion, no focus.
+    static const Engine::Input::PhysicalInputFrame noInput{};
+    const bool live = impl_->liveFrame;
+    const auto& physical = live ? noInput : impl_->input->Snapshot();
     impl_->assets.BeginFrame(frame.frameIndex);
     impl_->assets.Update();
     impl_->RefreshState();
@@ -824,7 +841,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->yaw, impl_->pitch,
                 controls && physical.Get(Key::Space).pressed))
                 impl_->connection.SendInput(impl_->prediction->PendingInput());
-            impl_->UpdateWeaponFeedback(Clock::now());
+            impl_->UpdateWeaponFeedback(Clock::now(), !live);
         }
     } else {
         Engine::Ui::UiInputFrame uiInput;
@@ -842,8 +859,10 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         for (const auto& event : updated.value()) impl_->Execute(event.action);
     }
     const auto mouseStarted = Clock::now();
-    const auto relative = impl_->input->SetRelativeMouseMode(impl_->InWorld() && impl_->inputCaptured && physical.windowFocused);
-    if (!relative) return impl_->Fail(Explain(relative.error()));
+    if (!live) {
+        const auto relative = impl_->input->SetRelativeMouseMode(impl_->InWorld() && impl_->inputCaptured && physical.windowFocused);
+        if (!relative) return impl_->Fail(Explain(relative.error()));
+    }
     const auto finished = Clock::now();
     if (Milliseconds(finished, started) >= 250)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow update player=%llu elapsed_ms=%.1f mouse_mode_ms=%.1f frame_gap_ms=%.1f",
@@ -987,6 +1006,26 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
 
 int PvpApplication::Run() {
     Engine::Runtime::RuntimeLoop loop(*this);
+    // The handler refers to this loop: it is removed however Run ends.
+    struct HandlerScope {
+        Engine::Platform::Sdl::SdlPlatform& platform;
+        ~HandlerScope() { platform.SetLiveFrameHandler({}); }
+    } handlerScope{*impl_->platform};
+    impl_->platform->SetLiveFrameHandler([this, &loop] {
+        // SDL applies a resize to the window before its queued event reaches
+        // the pump, so live frames take the size from the window itself.
+        int windowWidth{}, windowHeight{};
+        if (SDL_GetWindowSize(impl_->platform->NativeWindow(), &windowWidth, &windowHeight)) {
+            impl_->width = static_cast<float>(Engine::Math::Max(1, windowWidth));
+            impl_->height = static_cast<float>(Engine::Math::Max(1, windowHeight));
+        }
+        struct LiveScope {
+            bool& live;
+            explicit LiveScope(bool& value) : live(value) { live = true; }
+            ~LiveScope() { live = false; }
+        } liveScope{impl_->liveFrame};
+        if (loop.RunLiveFrame()) ++impl_->liveFramesThisPump;
+    });
     loop.Run();
     impl_->connection.Leave();
     impl_->RefreshState();

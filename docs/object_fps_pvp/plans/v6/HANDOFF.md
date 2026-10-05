@@ -50,6 +50,9 @@
 | D13 | IP-2 的 L2 必須在合併前完成；產品的分析器需要修改時，先做驗收工具的修正，再回到 IP-2 |
 | D14 | 第 02a 批：`weapon_short` 的多數斷言別處沒有涵蓋，所以先把獨有斷言移進 `action_short`，再刪除它（取代 D11④ 的「直接刪除」） |
 | D15 | 第 03 批：CI 的 -O0 比對只對角度為 0 的情境強制（Apple arm64 的 sincos 合併會讓非零角度差 1 ULP，本來就允許）；產品不改；加保險測試證明 ULP 差異不會在 Client 校正中累積 |
+| D16 | （Engine，2026-10-05）IP-2 同時處理拖動與縮放；D17：xhigh 審查 agent 1 個；D18：PR 以功能線為單位、盡量少開。詳見 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md) |
+| D19 | （2026-10-05）IP-2 的 L2 之後，D7 選「分執行緒」，但延到 **v7**：本產品的主執行緒（事件＋畫面）、模擬、網路三個角色分離（網路不應和畫面、主執行緒在一起）。IP-2 只交付縮放拖動中的 live frame |
+| D20 | （2026-10-05）版本號分兩層：**vN＝遊戲版本**，**pvN＝網路協議版本**。程式碼中的協議目前是 pv5（`Wire.hpp` 的 `wire::ProtocolVersion`、`ClientConnection.cpp` 的 join、Gateway `adapter.go` 的 `ClientVersion`／`RuntimeVersion`、`runtime_v5.proto`）。本計畫舊文中的「協議 v6」「protocol-v6」指的是 **pv6**（第 09 批） |
 
 ## 第 01 批進度（記錄器）
 
@@ -113,6 +116,11 @@
 - 2026-10-05：Engine 的 FF-1～FF-6、FF-8、IP-1 依序合併（PR #43～#50，master `56e0033`）。本產品批次的 Engine 依賴：第 06 批（IP-1）、第 09 批（FF-3、FF-8）已滿足；第 07 批仍等 IP-2，第 10 批與 FF-9 同一個 PR。
 - 2026-10-05：FF-7（Engine 的 include 路徑統一）改了本產品的 include：公開 Engine header 一律在 `engine/<m>/` 之下（例如 `render/Renderer.hpp` → `engine/render/Renderer.hpp`、`platform/sdl/SdlPlatform.hpp` → `engine/platform/sdl/SdlPlatform.hpp`、`model_renderer/ModelRenderer.hpp` → `engine/render/model/ModelRenderer.hpp`）。
   本產品的程式、驗收、測試共 54 行一併改好（含第 08 批要刪除的未編譯檔）；之後新寫的 include 依這個規則。行為不變：權威 digest 兩樹比對 35 個情境相同。
+- 2026-10-05：IP-2（Engine）在本產品的部分：
+  - `PvpApplication::Run` 接上 live frame：縮放拖動中畫面與命令持續。live frame 不消費輸入，使用空的輸入幀，點擊與 R 的邊緣留給正規更新。
+  - 慢事件處理的日誌多了 `observer_ms`、`live_frames`；sdl_gpu 在取得 ≥50 ms 時記錄 `fence_wait_ms`、`drawable_ms`。
+  - L2：最差窗口由 30.5%／46.5% 降到 7.7%／15.9%，但 `CONNECTION POOR` 仍會出現。原因是按下縮放角到開始拖動的空窗（macOS），以及原因未明的 `nextDrawable` 停頓，依 D19 由 v7 的執行緒分離處理。
+  - [第 07 批](07-measurement-baseline-b1.md) 的 B1 以這個狀態為準。
 
 ## 延後項目：現況與對應批次
 
@@ -238,4 +246,5 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
   - ~~FF-7 的 include 統一方向~~：2026-10-05 使用者決定 `engine/<m>/`，FF-7 已完成。
   - 第 11、13 批的呈現細節（D11⑥）。
   - 第 10 批與 FF-9 的容差選擇與事前宣告。
-  - IP-2 量測後的修法選擇（D7）。
+  - ~~IP-2 量測後的修法選擇（D7）~~：D19，分執行緒延到 v7。
+- v7 候選（D19）：主執行緒（事件＋畫面）、模擬、網路三個角色分離；需要 Engine 新計畫（`RuntimeLoop` 的執行緒模型）與本產品的連線、預測、狀態交接重構。依變速箱規則以 ultracode 規劃。證據見輸入與呈現交接的 IP-2 紀錄。

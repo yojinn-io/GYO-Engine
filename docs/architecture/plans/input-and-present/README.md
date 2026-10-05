@@ -1,7 +1,7 @@
 # 輸入與呈現：分批計畫與進度
 
 更新：2026-10-05。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；`engine/runtime` 只讀）。
-**狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 未開始。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。
+**狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 完成（縮小交付，D19；PR 待開）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。
 2026-10-05：IP-2 的消費端條件（拖動重現與量測基線 B0）已由消費端完成；縮放時的停頓落在事件處理而非 render，IP-2 開始時須先處理，見 [HANDOFF](HANDOFF.md) 未結事項。
 
 Engine 的輸入層與呈現路徑各有一個缺口：
@@ -36,7 +36,7 @@ Engine 的輸入層與呈現路徑各有一個缺口：
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
 | IP-1 輸入層：完整 scancode 與視窗互動事件 | high；公開介面以 ultracode 審查（開始時徵求同意） | 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）（未做 ultracode 審查，見 HANDOFF） | `Key` 以加法擴充為完整鍵盤 scancode；同一幀內的上升沿次數（或依序的事件清單）與點擊座標；視窗互動事件（含縮放的新寬高）與本視窗過濾；`tests/common/input` 測試（含同一幀按下再放開）；遷移清單加 preview 的數字鍵。不改任何消費端 |
-| IP-2 呈現不阻塞主迴圈 | high；取得、節流與 `Skipped` 語意局部 xhigh | 未開始 | 先拆分量測；停頓在 fence 時改為不阻塞取得＋節流，Engine 層假 device 單元測試；停頓在 `nextDrawable` 時停下請使用者選擇。before 在本批 base commit 重量；L2 在合併前完成（D13）。不宣稱 Windows 已解決 |
+| IP-2 呈現不阻塞主迴圈（拖動＋縮放，D16） | high；取得、節流、`Skipped` 語意與 live frame 的重入局部 xhigh（1 個審查 agent，D17） | 完成（縮小交付：2b＋拆分診斷；2c 依 D19 延到分執行緒的計畫；PR 待開） | 先拆分量測；停頓在 fence 時改為不阻塞取得＋節流，Engine 層假 device 單元測試；停頓在 `nextDrawable` 時停下請使用者選擇。before 在本批 base commit 重量；L2 在合併前完成（D13）。不宣稱 Windows 已解決 |
 
 ```text
 IP-1 ─────────────────────────────→ 消費端改用 Engine 輸入（消費端自己的批次）

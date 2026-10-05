@@ -1,5 +1,6 @@
 #pragma once
 
+#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
@@ -41,6 +42,7 @@ struct SdlPlatformOptions {
 class SdlPlatform final {
 public:
     using NativeEventObserver = std::function<void(const SDL_Event&)>;
+    using LiveFrameHandler = std::function<void()>;
 
     [[nodiscard]] static Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>
     Create(const SdlPlatformOptions& options = {});
@@ -55,6 +57,19 @@ public:
     [[nodiscard]] Runtime::RuntimeControl PumpEvents(
         const NativeEventObserver& observer = {});
 
+    // An OS modal loop can hold PumpEvents for as long as the user drags: a live
+    // window resize on macOS, a window move or resize on Windows. SDL then asks
+    // for redraws at about 60 Hz (SDL_EVENT_WINDOW_EXPOSED with data1 = 1) and
+    // allows drawing from an event watcher. The handler runs for those requests
+    // of this window: on the main thread, only while PumpEvents is running, and
+    // never re-entrantly. Input that arrives meanwhile stays queued for
+    // PumpEvents. Typically it runs RuntimeLoop::RunLiveFrame. On Windows the
+    // same redraw requests also come while the window's system menu is open.
+    // An exception from the handler is kept until SDL returns and then
+    // rethrown by PumpEvents, which stops pumping. The handler must not replace
+    // itself. An empty handler turns this off, which is the default.
+    void SetLiveFrameHandler(LiveFrameHandler handler);
+
     // This native handle belongs only to the concrete SDL adapter layer. It is
     // not part of GYO's backend-neutral runtime-facing API.
     [[nodiscard]] SDL_Window* NativeWindow() const noexcept;
@@ -62,7 +77,13 @@ public:
 private:
     explicit SdlPlatform(SDL_Window* window) noexcept;
 
+    static bool SDLCALL WatchEvent(void* userdata, SDL_Event* event);
+
     SDL_Window* window_{};
+    LiveFrameHandler liveFrameHandler_;
+    std::exception_ptr liveFrameError_;
+    bool pumping_{};
+    bool inLiveFrame_{};
 };
 
 } // namespace Engine::Platform::Sdl

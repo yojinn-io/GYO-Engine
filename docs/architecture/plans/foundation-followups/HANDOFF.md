@@ -1,6 +1,6 @@
 # 基礎後續整理：交接
 
-更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7 完成（PR 待合併）；FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
+更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7 完成並合併（PR #52，`ef12037`）；FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
 
 ## 閱讀入口
 
@@ -103,7 +103,7 @@
 | FF-4 | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
 | FF-5 | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`） | 見下方「FF-5」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md) |
 | FF-6 | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
-| FF-7 | 完成（PR 待合併） | 見下方「FF-7」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff7.zh-Hant.md) |
+| FF-7 | 完成，PR [#52](https://github.com/yojinn-io/GYO-Engine/pull/52) 已合併（`ef12037`） | 見下方「FF-7」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff7.zh-Hant.md) |
 | FF-8 | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
 
@@ -245,6 +245,7 @@
   - 建置成功；CTest 56／56（test preset 的 52 個，加上 preset 標籤以外的 go vet、go test、worker、sdl_gpu mesh smoke 4 個）。
   - 兩樹比對（base＝master `0dfc4cc`，在 scratch worktree 建置）：權威 digest 35 個情境 0 不同；collision 語料 16,940 筆 0 不同。
   - 證據在 `build/target/_build/test/logs/engine-ff7-20261005/`。完成，開 PR。
+- 2026-10-05：PR #52 的 CI 四平台通過，經使用者同意合併到 master（`ef12037`）。
 
 ## 未結事項
 

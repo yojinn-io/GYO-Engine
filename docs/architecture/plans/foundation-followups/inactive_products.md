@@ -103,6 +103,11 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
 
 ### IP-2 呈現不阻塞主迴圈
 
-狀態：未開始，批次完成時更新。
+狀態：IP-2 完成（2026-10-05，縮小交付）。
 
-- 未啟用產品使用 sdl_gpu；若 IP-2 改變取得語意，`Skipped` 會變常見。依賴「每幀都 `Presented`」的產品測試或呈現邏輯需要檢查。
+- 破損：無。
+  - 取得語意沒有改（仍是阻塞取得），`Skipped` 不會變常見。sdl_gpu 只在取得 ≥50 ms 時多一行診斷日誌。
+  - `RuntimeLoop` 沒有 live frame 時，呼叫順序、frame 編號與 delta 都與先前相同。
+- 選用：未啟用產品若要在縮放（macOS）或視窗移動／縮放（Windows）期間持續更新，可以呼叫 `SdlPlatform::SetLiveFrameHandler`，在處理函式中呼叫 `RuntimeLoop::RunLiveFrame`。
+  - live frame 中，`Update`／`Render` 是在 `ProcessEvents` 尚未返回時被呼叫，沒有新的輸入；產品要確認不會重複消費輸入邊緣。
+  - 提出需求的消費端的做法：live frame 中使用空的輸入幀。
