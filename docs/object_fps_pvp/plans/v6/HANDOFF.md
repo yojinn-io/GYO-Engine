@@ -108,6 +108,8 @@
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
   [基線](BASELINE.md) 的 wire 版本號檢查表中 `Wire.hpp:26`、`:36` 兩處，因此變成這一個常數（第 09 批改值時以它為準）。
   位元組與拒絕集合以 `tests/object_fps_pvp/WireTests.cpp` 鎖住；權威 digest 兩樹比對相同。見 [基礎後續整理交接](../../../architecture/plans/foundation-followups/HANDOFF.md)。
+- 2026-10-05：IP-1（Engine 輸入層）完成，PR 待合併：`Key` 擴充為完整鍵盤（含 `Tab`、數字列），`PhysicalInputFrame::events` 依序提供本視窗的按鍵、滑鍵（含座標與是否在視窗內）與視窗事件（失焦、移動、縮放含新寬高、縮小、還原）。
+  [第 06 批](06-input-migration.md) 可以用它取代 `PvpApplication.cpp` 的 `HandleNativeEvent`（文字輸入與剪貼簿除外）；同一幀的點擊上升沿（`pendingShotEdge`）可由 `events` 的 `MouseButtonPressed` 取得。
 
 ## 延後項目：現況與對應批次
 
