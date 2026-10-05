@@ -1,6 +1,6 @@
 # PvP v6 交接
 
-更新：2026-10-04。Owner：`object_fps_pvp`。**第 01 批完成**（計畫、分批與基線；PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)，CI 通過，等使用者合併；工作分支 `claude/pvp-v6-batch01`，自 master `05042fa`）。
+更新：2026-10-05。Owner：`object_fps_pvp`。**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)）。
 其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 
 本文件原本收集 v5 期間使用者決定「延到 v6」的項目。2026-10-04 第 01 批開始後，它也是 v6 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
@@ -85,6 +85,24 @@
 - 2026-10-05：CI 的 macos-arm64 出現 -O0 不一致（只有非零角度的 `move-turning/contract`，原因是 sincos 合併），依停止條件回報；使用者決定 D15，已實作並加保險測試。
 - 2026-10-05：修正後 CI 四平台全部通過；golden 子集在四平台逐位元相同。
 
+## 第 04 批進度（記錄器）
+
+- 2026-10-05：第 01～03 批的 PR 由使用者合併（#39→#40→#41，各自改指 master 後合併）。
+- 2026-10-05：使用者決定先執行第 04 批（Engine 的 IP-2 需要本批的重現）。檔位照計畫：medium。
+  量測來源固定為 master `6381e9d`，在獨立 worktree `GYO-Engine-v6b04`（detached）以 test preset 從零建置。
+- 2026-10-05：L1：第 02 批凍結的 52 個工具檔與清單（`b5f4bf79…`）逐一相同。`05042fa..6381e9d` 沒有合併任何 Engine 批次；`engine`、`apps`、`services`、`tools` 之下只改了 `apps/object_fps_pvp/gateway/backpressure_test.go`（測試），產品執行期來源與 `05042fa` 相同。
+- 2026-10-05：跑次、分母與第 3、6 項的重現步驟已在量測前寫入 [dev_log](../../../dev_logs/2026_10_05_pvp_v6_batch04.zh-Hant.md) 並 commit。
+- 2026-10-05：使用者開放螢幕錄製權限；第 6 項改為 Claude 以 probe 自動重現與連續擷取，未重現時才用正式 Client（量測前修改宣告）。
+- 2026-10-05：L1：CTest 55／55；權威 digest 規模 1、10 與 `05042fa` 逐位元相同。
+- 2026-10-05：跑次 1 動作短測 4／4 通過；跑次 2 人物短測 3 案通過、player144 `invalid_capacity`（join 120.01 FPS，與宣告一致，標未驗證）；跑次 3 雙 GUI 整合短測通過。
+- 2026-10-05：跑次 4 矩陣在 clean-30 失敗並停止（probe 一幀 57.7 ms 造成丟時，5 筆未配對）；保留，有限定位見 dev_log；停下回報。
+- 2026-10-05：使用者決定以新目錄重跑矩陣：25／25 通過（`4b-matrix/`）；clean-30 最長幀 38.3 ms，與 v5 同級。
+- 2026-10-05：第 6 項 probe 自動重現（不計次）：重疊的視窗、以及單視窗擷取時 probe 跑次失敗（保留）後，改用雙 GUI 戰鬥短測＋全螢幕擷取；join 兩次死亡共 18 張截圖都沒有第一人稱手臂。
+  使用者看過畫面後決定不再以正式 Client 重現：**第 6 項未重現，第 05 批依停止條件不執行**。
+- 2026-10-05：第 3 項正式 Client 重現（使用者操作）：**拖動標題列 `render_ms` 約 1197 ms（3 次中 2 次），重現**。
+  **縮放的停頓在事件處理（0.4／3.0／1.0 秒），不在 render**，是新發現，已以文字摘要寫進 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md)。使用者沒有看到 `CONNECTION POOR`。
+- 2026-10-05：B0 寫入 [基線](BASELINE.md)；完成，停止。
+
 ## 延後項目：現況與對應批次
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批
@@ -107,6 +125,8 @@
 - 素材：`Armature|Hit_Chest`（0.333 秒）、`Armature|Hit_Head`（0.433 秒）。v6 沒有爆頭，Hit_Head 沒有權威依據，不使用。
 
 ### 3. Engine 渲染阻塞主迴圈（macOS）→ 第 04 批（重現）、IP-2（修正）、第 07 批（B1）
+
+- **第 04 批（2026-10-05）**：重現。拖動標題列時 render 停頓約 1.2 秒；縮放時停頓在事件處理（0.4～3.0 秒），不在 render。見 [基線 B0](BASELINE.md)。
 
 Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/input-and-present/HANDOFF.md)。本產品這一側的事實：
 
@@ -138,6 +158,8 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 - 決定：D11④。
 
 ### 6. 自己死亡時的第一人稱持槍手臂 → 第 04 批（重現）、第 05 批（修正）
+
+- **第 04 批（2026-10-05）**：未重現（probe 路徑 18 張死亡期間截圖都沒有手臂；使用者決定不再以正式 Client 重現）。第 05 批不執行；若再看到，以正式 Client 並記錄時間重新開啟。
 
 - 來源：v5 第 04 批 L3（使用者）：「自己死亡時，持槍手臂還是在。」
 - 使用者 2026-10-04 釐清：看到的是**第一人稱手臂**，屬缺陷（D0b）。
