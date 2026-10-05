@@ -38,7 +38,7 @@ gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Net
     PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v5")
-gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp
+gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/PointerCapture.cpp
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
     PUBLIC_LIBRARIES ${domain} ${network} GYO::Render GYO::Model GYO::ModelRenderer
