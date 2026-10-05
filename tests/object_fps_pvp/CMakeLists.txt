@@ -78,6 +78,10 @@ set_tests_properties("${GYO_CURRENT_APP}.pointer_capture" PROPERTIES LABELS "cpu
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+# Batch 08: catalog entries exist, asset files are listed, and every id is used.
+add_test(NAME "${GYO_CURRENT_APP}.asset_catalog"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_asset_catalog.py")
+set_tests_properties("${GYO_CURRENT_APP}.asset_catalog" PROPERTIES LABELS "cpu;pvp;content" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

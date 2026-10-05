@@ -31,7 +31,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 05 | [死亡後第一人稱手臂](05-first-person-arms-after-death.md) | high | 不執行（第 04 批未重現；依停止條件） | 第 6 項的缺陷修正；無法重現就停下 |
 | 06 | [改經 Engine 取得輸入](06-input-migration.md) | high | 完成（PR 待合併；疊在 IP-2 #53 上） | 產品與 GUI probe 改用 IP-1；文字輸入例外 |
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 未開始 | IP-2 之後重取基線 |
-| 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 未開始 | 29 檔與孤兒資產 |
+| 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成（PR 待合併；疊在第 06 批 #54 上） | 29 檔與孤兒資產 |
 | 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 未開始 | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
 | 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 未開始 | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 未開始 | 第 1 項 |

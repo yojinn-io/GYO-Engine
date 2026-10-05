@@ -173,6 +173,52 @@
   - L3。
   CI 在 PR 上確認。暫時的 worktree `GYO-Engine-b06base` 已移除。
 
+## 第 08 批進度（記錄器）
+
+- 2026-10-05：開始。
+  - 使用者先問了這 29 檔的功能，以及「單機劇情＋聯機選項」能否沿用。
+  - 結論：
+    - 這些是從單機版複製過來、從未編譯的舊單機架構（Client 自己判定）。
+    - 原版在 `apps/object_fps_v2`：28 檔有同名原版，多數相同或只差 Engine 遷移；`GridWorldCollision` 只在本產品。
+    - 本產品刪除前的版本可由 commit `ccbd279`（或 master `ef12037`）取回。
+  - 使用者決定照計畫刪除。
+  - 分支 `claude/pvp-v6-batch08`，疊在第 06 批（#54）上：兩者都改 v6 文件。
+  - 檔位：計畫 medium，主對話 xhigh。
+- 2026-10-05：盤點與處置：
+  - 程式：
+    - 29 個 `.cpp`。
+    - 29 個 header：從所有已編譯來源（產品、測試、驗收 probe）沿 include 走不到的。
+    - `GameData.hpp`、`GridMap.hpp`、`GroundPoint.hpp` 仍被武器相關 header 引用，保留。
+    - `sources.cmake` 刪除 `APP_DOMAIN_SOURCES`、`APP_SUPPORT_SOURCES`，`PVP_DOMAIN_SOURCES` 不變。
+  - 資產：從程式引用的 id 出發、沿資產內容的 id 引用遞移，走不到的有 30 個。
+    - 29 個刪除（catalog 條目與檔案）：
+      - 敵人 6 個；CSV 3 個；`ui.screens`；地圖 3 個；天空；地板與牆貼圖；`common.texture.white` 的本產品副本；
+      - 男性角色（定義、模型、3 張貼圖）；女性角色定義（模型與貼圖仍被玩家使用，保留）；
+      - 簡單分線髮型 2 個；UAL1 的角色定義與 locomotion 動畫集（模型保留）；
+      - 動畫手槍第一人稱 2 個。
+    - 保留 1 個，附理由：`object_fps_pvp.arena`（Client 與 Match 以路徑 `pvp_arena.json` 載入）。
+    - 不在 catalog 的孤兒檔案 2 個，刪除：`fonts/PressStart2P-Regular.ttf`、`textures/weapons/gun.png`。
+    - 刪除的美術資產在 `assets/object_fps_v2` 都有逐位元相同的原版。
+    - catalog 從 50 個條目減為 21 個；沒有空目錄。
+- 2026-10-05：L1：
+  - 新增產品自有的 `object_fps_pvp.asset_catalog`（Python）：
+    - 每個條目的檔案存在；
+    - 資產夾的每個檔案都在 catalog（或是根目錄清單）；
+    - id 不重複；
+    - 每個 id 都被使用，或列在保留清單並附理由；
+    - 檢查本身會抓到孤兒。
+    - 突變 3 個（孤兒 id、路徑不存在、未登錄檔案）都被抓到。
+  - 已編譯來源不變：重新 configure 前後的 `compile_commands.json` 同為 957 個檔案、清單相同；`apps` 的差異只有刪除與 `sources.cmake`。
+  - CTest 59／59。
+  - grep：刪除的檔名、header、`APP_*_SOURCES`、catalog id 與資產路徑，在現行程式與資料中都沒有殘留。只剩健檢報告與 dev_log 等歷史紀錄，依計畫不改寫。
+  - 權威 digest 同機兩樹（base `ccbd279`，暫時的 worktree，用完已移除）：35 個情境 0 不同。
+- 2026-10-05：完成。CI 在 PR 上確認。L2、L3 依計畫不適用（沒有行為變更）。
+- 單機劇情＋聯機選項（v7 之後的產品方向候選，使用者 2026-10-05 提出）：
+  - Match 只處理命令與權威狀態，不知道 UDP／HTTP／房間，傳輸由 Gateway 負責。
+  - 單機時可以在本機執行同一套權威模擬，跳過 Gateway；劇情、敵人、關卡只寫一份。
+  - 與 D19 的主執行緒／模擬／網路分離同方向。
+  - 單機內容應從 `object_fps_v2` 有意識地移植到權威模擬上，而不是沿用已刪除的舊副本。
+
 ## Engine 批次對本產品的影響（記錄器）
 
 - 2026-10-05：FF-8（Engine 的 GYOP 標頭編解碼）改了本產品的 `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`：標頭編解碼改用 `Engine::Net`，wire 版本收成 `wire::ProtocolVersion` 一個常數（值仍為 5），Type 範圍與 TCP frame 留在產品。
@@ -289,8 +335,8 @@ Engine、工具、測試、登錄各列的正式來源是 [基礎後續整理](.
 | 項目 | 批次 |
 |---|---|
 | Client 與 server 只比對 arena 的 id 與 version，不比對內容；Client 以自己的 arena 檔做 prediction（`ClientConnection.cpp:180-184` 的 `CheckArena`，由 HTTP join `:276` 與 Welcome `:388` 呼叫；Gateway 轉送點 `server.go:276,440`） | 第 09 批（arena 內容 digest） |
-| `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（屬未編譯的 29 檔） | 第 08 批（隨刪除結案） |
-| `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（屬未編譯的 29 檔） | 第 08 批（隨刪除結案） |
+| `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除；`GroundPoint.hpp` 只剩型別定義） |
+| `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除） |
 | Collision 統一對本產品權威判定的影響、權威 golden 更新、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
 
 ### 11. Engine 輸入層的缺口 → IP-1（Engine）、第 06 批（本產品）
