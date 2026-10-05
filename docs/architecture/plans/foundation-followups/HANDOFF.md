@@ -1,6 +1,6 @@
 # 基礎後續整理：交接
 
-更新：2026-10-04。**全部批次未開始。** 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
+更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7、FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
 
 ## 閱讀入口
 
@@ -93,14 +93,14 @@
 
 | 批次 | 狀態 | 紀錄 |
 |---|---|---|
-| FF-1 | 完成（PR 待合併） | 見下方「FF-1」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff1.zh-Hant.md) |
-| FF-2 | 完成（PR 待開） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
-| FF-3 | 完成（PR 待合併） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
-| FF-4 | 完成（PR 待合併） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
-| FF-5 | 完成（PR 待合併） | 見下方「FF-5」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md) |
-| FF-6 | 完成（PR 待合併） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
+| FF-1 | 完成，PR [#46](https://github.com/yojinn-io/GYO-Engine/pull/46) 已合併（`0dc3697`） | 見下方「FF-1」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff1.zh-Hant.md) |
+| FF-2 | 完成，PR [#43](https://github.com/yojinn-io/GYO-Engine/pull/43) 已合併（`3520dd2`） | 見下方「FF-2」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff2.zh-Hant.md) |
+| FF-3 | 完成，PR [#44](https://github.com/yojinn-io/GYO-Engine/pull/44) 已合併（`006b3d2`） | 見下方「FF-3」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff3.zh-Hant.md) |
+| FF-4 | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`） | 見下方「FF-4」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff4.zh-Hant.md) |
+| FF-5 | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`） | 見下方「FF-5」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff5.zh-Hant.md) |
+| FF-6 | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
 | FF-7 | 未開始 | — |
-| FF-8 | 完成（PR 待合併） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
+| FF-8 | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
 | FF-9 | 未開始 | — |
 
 每批開始時在此新增一節：分支、base commit、檔位（含使用者同意的紀錄）、事前宣告（若有）、里程碑、證據位置、結果與停止理由。

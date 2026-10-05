@@ -27,7 +27,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 01 | [計畫、分批與基線](01-plan-and-baseline.md) | ultracode → medium → low | 完成，PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39) 已合併（`a687663`） | 分批計畫、HANDOFF 更正與決策紀錄、基線 CTest、v5 證據保存、契約骨架、兩個 Engine 計畫夾 |
 | 02 | [驗收工具可信化](02-acceptance-tools.md) | high（02c 計時判定局部 xhigh） | 完成，PR [#40](https://github.com/yojinn-io/GYO-Engine/pull/40) 已合併（`a36b319`；②③' 兩處待產品配合） | 02a 刪除 v4 語意模式與版本常數、02b 計時器基線、02c 計時假設改為結構條件並重新分析 v5 資料 |
 | 03 | [權威 digest 閘門](03-authority-digest.md) | high（golden 策略局部 xhigh） | 完成，PR [#41](https://github.com/yojinn-io/GYO-Engine/pull/41) 已合併（`6381e9d`） | 逐 Tick 權威狀態 digest、同機兩樹比對、CI 自洽檢查 |
-| 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 完成（第 3 項重現；第 6 項未重現） | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
+| 04 | [量測基線 B0 與缺陷重現](04-measurement-baseline.md) | medium | 完成，PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42) 已合併（`30f87d5`；第 3 項重現，第 6 項未重現） | 新工具量 v5 產品；重現第 3、6 項（需要使用者在場）；無程式變更 |
 | 05 | [死亡後第一人稱手臂](05-first-person-arms-after-death.md) | high | 不執行（第 04 批未重現；依停止條件） | 第 6 項的缺陷修正；無法重現就停下 |
 | 06 | [改經 Engine 取得輸入](06-input-migration.md) | high | 未開始 | 產品與 GUI probe 改用 IP-1；文字輸入例外 |
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 未開始 | IP-2 之後重取基線 |
@@ -88,6 +88,6 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 
 ## 接續處理文字
 
-> v6 第 01 批進行中：分批與決定見本文件、HANDOFF 與 BASELINE。
-> 下一步由使用者指定；可以並行的起點是第 02、03、08 批，以及 Engine 的 IP-1、FF-1～FF-6、FF-8（FF-7 依賴 IP-1、IP-2、FF-4、FF-5）。
+> v6 第 01～04 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-6、FF-8、IP-1 已合併。分批與決定見本文件、HANDOFF 與 BASELINE。
+> 下一步由使用者指定；可以開始的是第 06、08、09、11、12 批，以及 Engine 的 IP-2（範圍待使用者決定，見輸入與呈現交接的未結事項）。FF-7 依賴 IP-2；FF-9 與第 10 批同一個 PR。
 > Windows／Linux 實機驗收與兩台機器的時鐘漂移實測需要另外授權。
