@@ -14,21 +14,6 @@ namespace {
 // Calculations use doubles to retain accuracy for short sweeps and long rays.
 using Math::Vec3d;
 constexpr double kTolerance = 1.0e-7;
-void Validate(const VerticalCapsule &c) {
-    // Finite, positive and at least two radii high.
-    GYO_ASSERT(!(!Math::IsFinite(c.feet) || !std::isfinite(c.height) || !std::isfinite(c.radius) ||
-                 c.radius <= 0.0f || c.height < 2.0 * c.radius));
-}
-void Validate(const Math::Capsule &c) {
-    // Finite endpoints and a positive radius.
-    GYO_ASSERT(!(!Math::IsFinite(c.segmentStart) || !Math::IsFinite(c.segmentEnd) ||
-                 !std::isfinite(c.radius) || c.radius <= 0.0f));
-}
-void Validate(const Math::Aabb &b) {
-    // Finite with ordered bounds.
-    GYO_ASSERT(!(!Math::IsFinite(b.minimum) || !Math::IsFinite(b.maximum) || b.minimum.x > b.maximum.x ||
-                 b.minimum.y > b.maximum.y || b.minimum.z > b.maximum.z));
-}
 void ValidateSweep(Math::Vec3 start, Math::Vec3 end, float radius) {
     GYO_ASSERT(Math::IsFinite(start) && Math::IsFinite(end) && std::isfinite(radius) && !(radius < 0.0f));
 }
@@ -201,8 +186,27 @@ bool SeparatingContact(const Contact &c, Vec3d displacement) {
 }
 } // namespace
 
+bool IsValid(const Math::Aabb &b) noexcept {
+    return Math::IsFinite(b.minimum) && Math::IsFinite(b.maximum) && b.minimum.x <= b.maximum.x &&
+           b.minimum.y <= b.maximum.y && b.minimum.z <= b.maximum.z;
+}
+bool IsValid(const VerticalCapsule &c) noexcept {
+    // The double comparison is exact; it agrees with float 2.0f * radius,
+    // including when that overflows.
+    return Math::IsFinite(c.feet) && std::isfinite(c.height) && std::isfinite(c.radius) && c.radius > 0.0f &&
+           !(c.height < 2.0 * c.radius);
+}
+bool IsValid(const Math::Capsule &c) noexcept {
+    return Math::IsFinite(c.segmentStart) && Math::IsFinite(c.segmentEnd) && std::isfinite(c.radius) &&
+           c.radius > 0.0f;
+}
+bool IsValid(const Math::Ray &r) noexcept {
+    return Math::IsFinite(r.origin) && Math::IsFinite(r.direction) &&
+           (r.direction.x != 0.0f || r.direction.y != 0.0f || r.direction.z != 0.0f);
+}
+
 Math::Capsule ToCapsule(const VerticalCapsule &capsule) {
-    Validate(capsule);
+    GYO_ASSERT(IsValid(capsule));
     const auto c = Shape(capsule);
     return {Math::ToVec3(c.bottom), Math::ToVec3(c.bottom + Vec3d{0, c.length, 0}), capsule.radius};
 }
@@ -211,7 +215,7 @@ std::optional<float> RaycastCapsule(const Math::Ray &ray, float maximumDistance,
                                     const Math::Capsule &capsule, float sweepRadius) {
     const Math::Vec3 origin = ray.origin;
     const Math::Vec3 direction = ray.direction;
-    Validate(capsule);
+    GYO_ASSERT(IsValid(capsule) && IsValid(ray));
     ValidateSweep(origin, direction, sweepRadius);
     const double length = Length(Math::ToVec3d(direction));
     // A non-zero direction and a finite, non-negative distance.
@@ -226,7 +230,7 @@ std::optional<float> SweepSphereAgainstCapsule(const Math::Segment &path, float 
                                                const Math::Capsule &capsule) {
     const Math::Vec3 start = path.start;
     const Math::Vec3 end = path.end;
-    Validate(capsule);
+    GYO_ASSERT(IsValid(capsule));
     ValidateSweep(start, end, sweepRadius);
     const Vec3d delta = Math::ToVec3d(end) - Math::ToVec3d(start);
     // Parametric t is directly the sweep fraction, including a stationary query.
@@ -238,8 +242,7 @@ std::optional<float> SweepSphereAgainstCapsule(const Math::Segment &path, float 
 
 std::optional<Contact> OverlapVerticalCapsuleAabb(const VerticalCapsule &capsule,
                                                   const Math::Aabb &bounds) {
-    Validate(capsule);
-    Validate(bounds);
+    GYO_ASSERT(IsValid(capsule) && IsValid(bounds));
     const auto c = Shape(capsule);
     Vec3d lo = Math::ToVec3d(bounds.minimum);
     lo.y -= c.length;
@@ -250,8 +253,7 @@ std::optional<Contact> OverlapVerticalCapsuleAabb(const VerticalCapsule &capsule
 
 std::optional<Contact> OverlapVerticalCapsules(const VerticalCapsule &capsule,
                                                const VerticalCapsule &target) {
-    Validate(capsule);
-    Validate(target);
+    GYO_ASSERT(IsValid(capsule) && IsValid(target));
     const auto c = Shape(capsule), t = Shape(target);
     if (Length(c.bottom - Math::ClosestPoint(c.bottom, Math::Segmentd{t.bottom - Vec3d{0, c.length, 0},
                                                                 t.bottom + Vec3d{0, t.length, 0}})) >
@@ -262,8 +264,7 @@ std::optional<Contact> OverlapVerticalCapsules(const VerticalCapsule &capsule,
 
 std::optional<Contact> SweepVerticalCapsuleAgainstAabb(const VerticalCapsule &capsule,
                                                        Math::Vec3 displacement, const Math::Aabb &bounds) {
-    Validate(capsule);
-    Validate(bounds);
+    GYO_ASSERT(IsValid(capsule) && IsValid(bounds));
     GYO_ASSERT(Math::IsFinite(displacement));
     auto c = Shape(capsule);
     const Vec3d delta = Math::ToVec3d(displacement);
@@ -286,8 +287,7 @@ std::optional<Contact> SweepVerticalCapsuleAgainstAabb(const VerticalCapsule &ca
 std::optional<Contact> SweepVerticalCapsuleAgainstCapsule(const VerticalCapsule &capsule,
                                                           Math::Vec3 displacement,
                                                           const VerticalCapsule &target) {
-    Validate(capsule);
-    Validate(target);
+    GYO_ASSERT(IsValid(capsule) && IsValid(target));
     GYO_ASSERT(Math::IsFinite(displacement));
     auto c = Shape(capsule);
     const auto t = Shape(target);

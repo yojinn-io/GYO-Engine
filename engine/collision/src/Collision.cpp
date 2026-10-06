@@ -18,7 +18,7 @@ void ValidateQuery(
     const Math::Vec3 direction,
     const float maximumDistance,
     const float sweepRadius) {
-    GYO_ASSERT(IsFinite(origin) && IsFinite(direction));
+    GYO_ASSERT(IsValid(Math::Ray{origin, direction}));
     GYO_ASSERT(std::isfinite(maximumDistance) && !(maximumDistance < 0.0f));
     GYO_ASSERT(std::isfinite(sweepRadius) && !(sweepRadius < 0.0f));
     // A zero direction has no ray.
@@ -27,10 +27,7 @@ void ValidateQuery(
 }
 
 void ValidateCapsule(const VerticalCapsule& capsule) {
-    // Finite, positive and at least two radii high.
-    GYO_ASSERT(!(!IsFinite(capsule.feet) || !std::isfinite(capsule.height) ||
-                 !std::isfinite(capsule.radius) || capsule.radius <= 0.0f ||
-                 capsule.height < capsule.radius * 2.0f));
+    GYO_ASSERT(IsValid(capsule));
 }
 
 [[nodiscard]] std::optional<float> RaySphere(
@@ -166,10 +163,7 @@ std::optional<float> RaycastAabb(
     const Math::Vec3 origin = ray.origin;
     const Math::Vec3 direction = ray.direction;
     ValidateQuery(origin, direction, maximumDistance, 0.0f);
-    // Finite with ordered bounds.
-    GYO_ASSERT(!(!IsFinite(bounds.minimum) || !IsFinite(bounds.maximum) ||
-                 bounds.minimum.x > bounds.maximum.x || bounds.minimum.y > bounds.maximum.y ||
-                 bounds.minimum.z > bounds.maximum.z));
+    GYO_ASSERT(IsValid(bounds));
     return RayAabb(origin, Normalize(direction), maximumDistance, bounds.minimum, bounds.maximum);
 }
 

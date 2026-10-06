@@ -52,6 +52,7 @@ void ReportDegenerate() {
             }
             inverted += top < bottom ? 1 : 0;
             std::cout << "  feet.y=" << feetY << " radius=" << radius
+                      << " valid=" << (IsValid(capsule) ? "true" : "false")
                       << " ends=" << (top < bottom ? "top<bottom" : top == bottom ? "top==bottom" : "top>bottom")
                       << " vertical=" << vertical << " general=" << Outcome(generalAsserted, generalHit) << '\n';
             ++shown;

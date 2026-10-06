@@ -250,3 +250,56 @@ TEST_CASE("extended queries reject invalid geometry and nonfinite movement") {
     GYO_CHECK_ASSERTS(SweepVerticalCapsuleAgainstCapsule(upright, {}, {{},0.1f,0.25f}));
     GYO_CHECK_ASSERTS(OverlapVerticalCapsuleAabb(upright, {{1,0,0},{0,1,1}}));
 }
+
+TEST_CASE("public validity checks accept spheres and reject malformed geometry without asserting") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    // Aabb: zero thickness on any axis is valid; reversed or nonfinite bounds are not.
+    CHECK(IsValid(Aabb{{0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}}));
+    CHECK(IsValid(Aabb{{0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}}));
+    CHECK(IsValid(Aabb{{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}}));
+    CHECK(IsValid(Aabb{{-0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f}}));
+    CHECK_FALSE(IsValid(Aabb{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f}}));
+    CHECK_FALSE(IsValid(Aabb{{0.0f, nan, 0.0f}, {1.0f, 1.0f, 1.0f}}));
+    CHECK_FALSE(IsValid(Aabb{{0.0f, 0.0f, 0.0f}, {1.0f, inf, 1.0f}}));
+    // VerticalCapsule: height == 2r (a sphere) is valid; one representable value less is not.
+    CHECK(IsValid(VerticalCapsule{{}, 1.8f, 0.25f}));
+    CHECK(IsValid(VerticalCapsule{{}, 0.5f, 0.25f}));
+    CHECK(IsValid(VerticalCapsule{{0.0f, 65536.0f, 0.0f}, 2.0e-7f, 1.0e-7f}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{}, std::nextafter(0.5f, 0.0f), 0.25f}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{}, 1.0f, 0.0f}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{}, 1.0f, -0.25f}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{}, 1.0f, nan}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{}, inf, 0.25f}));
+    CHECK_FALSE(IsValid(VerticalCapsule{{nan, 0.0f, 0.0f}, 1.0f, 0.25f}));
+    // Math::Capsule: equal end points (a sphere) are valid.
+    CHECK(IsValid(Capsule{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.5f}));
+    CHECK(IsValid(Capsule{{0.0f, 0.0f, 0.0f}, {1.0f, 2.0f, 3.0f}, 0.5f}));
+    CHECK_FALSE(IsValid(Capsule{{0.0f, 0.0f, 0.0f}, {nan, 0.0f, 0.0f}, 0.5f}));
+    CHECK_FALSE(IsValid(Capsule{{}, {}, 0.0f}));
+    CHECK_FALSE(IsValid(Capsule{{}, {}, -0.5f}));
+    CHECK_FALSE(IsValid(Capsule{{}, {}, inf}));
+    // Ray: any nonzero finite direction; the zero vector, also as -0, is not a ray.
+    CHECK(IsValid(Engine::Math::Ray{{}, {0.0f, 0.0f, 1.0f}}));
+    CHECK(IsValid(Engine::Math::Ray{{}, {1.0e-30f, 0.0f, 0.0f}}));
+    CHECK_FALSE(IsValid(Engine::Math::Ray{{}, {}}));
+    CHECK_FALSE(IsValid(Engine::Math::Ray{{}, {-0.0f, -0.0f, -0.0f}}));
+    CHECK_FALSE(IsValid(Engine::Math::Ray{{nan, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}));
+    CHECK_FALSE(IsValid(Engine::Math::Ray{{}, {inf, 0.0f, 0.0f}}));
+}
+
+TEST_CASE("spheres give exact results through the Math::Capsule queries") {
+    // A zero-length Math::Capsule is a sphere: a ray through its center hits at d - r.
+    const Capsule sphere{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.5f};
+    const auto hit = RaycastCapsule({{-4.0f, 1.0f, 0.0f}, {2.0f, 0.0f, 0.0f}}, 8.0f, sphere);
+    REQUIRE(hit);
+    CHECK(*hit == 3.5f);
+    const auto sweep = SweepSphereAgainstCapsule({{-4.0f, 1.0f, 0.0f}, {4.0f, 1.0f, 0.0f}}, 0.5f, sphere);
+    REQUIRE(sweep);
+    CHECK(*sweep == 0.375f);
+    // A VerticalCapsule of height 2r converts to that sphere.
+    const Capsule converted = ToCapsule(VerticalCapsule{{0.0f, 0.5f, 0.0f}, 1.0f, 0.5f});
+    CHECK(converted.segmentStart.y == 1.0f);
+    CHECK(converted.segmentEnd.y == 1.0f);
+    CHECK(converted.radius == 0.5f);
+}

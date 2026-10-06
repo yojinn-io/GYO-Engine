@@ -33,6 +33,19 @@ struct Contact final {
     float penetrationDepth{};
 };
 
+// Validity of query inputs. Every query requires valid inputs: invalid input is
+// a Programmer Error (GYO_ASSERT). Content that is not trusted (loaded data)
+// is checked with these first. They never assert.
+// Aabb: finite, and minimum <= maximum on every axis (zero thickness is valid).
+[[nodiscard]] bool IsValid(const Math::Aabb& bounds) noexcept;
+// VerticalCapsule: finite, radius > 0 and height >= 2 * radius (a sphere is valid).
+[[nodiscard]] bool IsValid(const VerticalCapsule& capsule) noexcept;
+// Math::Capsule: finite end points and radius, radius > 0 (equal end points,
+// a sphere, are valid).
+[[nodiscard]] bool IsValid(const Math::Capsule& capsule) noexcept;
+// Ray: finite origin and direction, and a direction that is not the zero vector.
+[[nodiscard]] bool IsValid(const Math::Ray& ray) noexcept;
+
 [[nodiscard]] Math::Capsule ToCapsule(const VerticalCapsule& capsule);
 
 // The ray direction need not be normalized. Unlike Math::Intersect, results are
