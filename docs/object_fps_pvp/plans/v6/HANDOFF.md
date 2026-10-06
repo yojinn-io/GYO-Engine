@@ -394,6 +394,14 @@
 - 2026-10-06：開始（使用者指示「繼續 09 批」）。前置都已合併：第 02、03 批，FF-3、FF-8；第 07、07a 批（#56，`c1ee2b2`）。分支 `claude/pvp-v6-batch09` 自 master `c1ee2b2`，同一 PR 帶上 #56 的合併狀態同步與 v7 任務清單的追加。
   - 檔位：使用者已開啟 ultracode；commit 0（契約定稿）以 ultracode 規劃（3 案、1 位評審、1 次對抗檢查；設計者 high，評審與對抗 xhigh）。之後主體 high，版本閘、解碼與 arena 拒絕路徑局部 xhigh。
   - 開始時以 grep 重新產生版本與名稱的檢查表（185 列，涵蓋 `apps/object_fps_pvp`、`build/acceptance/object_fps_pvp`、`tests/object_fps_pvp`，不含產生的 `.pb.go`）；逐列結果寫進 dev_log。
+- 2026-10-06：commit 0 契約定稿（[protocol-v6](../../protocol-v6.zh-Hant.md)），以 ultracode 規劃（workflow `wf_315d6c56-0c0`；對抗檢查第一次因 API 529 失敗，續跑後完成）。對抗檢查判定成立：major 1（grep 允許殘留的類別太窄）、minor 12，全部套入。使用者核准。
+  - 受擊：`CombatState` 11～13（`last_damage_tick`、`damage_count`、`last_attacker_id`），三欄全 0＝沒有受擊，解碼驗證 4 條（Go 與 Client 相同）。
+  - arena：13 個成員依宣告順序的 big-endian 位元組，`Fnv1a64`；Ready 9、Welcome 10（fixed64），JSON 十進位；錯誤碼 `arena_identity_mismatch`、`arena_content_mismatch`（只在 Client 本機）。
+  - 版本：只接受 6；產品 Go 由 `adapter.ProtocolVersion` 導出兩種型別；跨語言一致性測試為產品 CTest，以原始碼文字解析 Go／Python 定義。
+  - 命名：`gameplay_v5`／`--gameplay-v5` 與 v5 測試名稱保留（v5 指遊戲版本）；指現行 wire 版本者改為中性或讀常數。
+  - 大小：完整 Snapshot 545 bytes（契約值域內最大；型別最大值 585），v5 為 487／527。
+  - 使用者決定：L1 的「同 Tick 多次命中」改測可達情境（同 Tick 互射、致命命中後死者同 Tick 的射擊被拒且不寫入），契約保留通用規則。
+  - 計畫與程式的差異（行號偏移、漏列的 `WireTests.cpp:79-81` 與 `network_main.cpp:116-122` 位元組版本測試、HTTP join 回覆版本的截斷）寫進 dev_log，在對應 commit 處理。
 
 ## 延後項目：現況與對應批次
 
