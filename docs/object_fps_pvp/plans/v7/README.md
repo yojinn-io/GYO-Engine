@@ -15,6 +15,7 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
 | 4 | runtime link（Gateway↔Match）的心跳對時：偏移、RTT、漂移。只作量測與診斷，遊戲邏輯不依賴對時（權威仍以 Tick 與序號運作）。屬 wire 變更 | 2026-10-06 使用者決定 |
 | 5 | 音效：Engine 新增 audio 模組，本產品加入射擊、受擊等聲音 | 2026-10-06 使用者決定（「有聲音遊戲才算完整」） |
 | 6 | 解析度與視窗模式切換，設定可保存。Engine 提供機制（顯示器與模式列舉、視窗／無邊框全螢幕／全螢幕、執行中改變大小、像素密度、實際繪製大小，以及每位使用者的可寫目錄與原子寫入）；本產品決定政策（提供哪些選項、預設值、設定選單、套用後未確認就還原、設定檔的格式與版本、UI 依解析度縮放；目前寫死 1280×720，`PvpApplication.cpp:121`、`:876`） | 2026-10-06 使用者決定 |
+| 7 | 產品不再直接依賴 SDL：產品只呼叫 Engine，由 Engine 呼叫 SDL。現存的直接使用（2026-10-06 盤點）：日誌 `SDL_Log*`；文字輸入與剪貼簿（`SDL_StartTextInput`／`StopTextInput`、`SDL_GetClipboardText`、文字事件與修飾鍵，`PvpApplication.cpp:165`、`:220`）；等待 `SDL_Delay`（`:742`、`:990`）；視窗大小 `SDL_GetWindowSize`（`:1006`）；執行檔目錄 `SDL_GetBasePath` 與進入點 `SDL_main`（`main.cpp:6`、`:37`）。驗收 GUI probe（`gui_main.cpp` 等 7 檔）直接連結 `GYO::PlatformSDL` 並以 `SDL_PushEvent` 注入事件，需要 Engine 提供測試用的事件注入介面。完成條件：產品與其驗收 probe 的原始碼不 include SDL 標頭（CMake 的後端元件選擇除外） | 2026-10-06 使用者決定 |
 
 ## 需要的 Engine 子系統（Engine 另立計畫）
 
@@ -28,6 +29,7 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
 | Trace | 結構化、帶統一時間戳的事件記錄與背景寫檔；日誌、量測、錄製重播共用 | 產品的 `MovementTraceWriter`、`PvpApplication` 與渲染的慢事件日誌 |
 | Audio | 音效播放與混音、即時執行緒 | 尚無（任務 5） |
 | Display（擴充 platform） | 顯示器與模式列舉、視窗模式切換、執行中改變大小、像素密度；render 端依新大小重建繪製目標 | `SdlPlatformOptions` 只有建立時的寬高（`SdlPlatform.hpp:35-38`），沒有切換；產品不得直接呼叫 SDL（第 06 批的方向）；工具（ui_editor、preview）也有視窗，是第二個使用者（任務 6） |
+| SDL 隔離層（擴充 platform、input） | 日誌、文字輸入與剪貼簿、執行檔與使用者目錄、進入點、測試用事件注入；與 Time（等待）、Display（視窗大小）分工 | 任務 7 的盤點 |
 | 使用者設定的保存（擴充 io） | 每位使用者的可寫目錄、原子寫入、讀取失敗時退回預設。鍵與值的意義、版本與驗證規則屬各產品的 Data Contract，Engine 不知道有哪些設定 | 目前沒有任何保存機制（任務 6） |
 
 - 錄製與重播成立的前提：時間、輸入、網路都經過 Engine（Time、Input、Net transport），由 Trace 記錄。
