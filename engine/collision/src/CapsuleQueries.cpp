@@ -217,9 +217,10 @@ std::optional<float> RaycastCapsule(const Math::Ray &ray, float maximumDistance,
     const Math::Vec3 direction = ray.direction;
     GYO_ASSERT(IsValid(capsule) && IsValid(ray));
     ValidateSweep(origin, direction, sweepRadius);
+    // IsValid(ray) excludes the zero direction; any other finite float
+    // direction normalizes in double without overflow or underflow.
     const double length = Length(Math::ToVec3d(direction));
-    // A non-zero direction and a finite, non-negative distance.
-    GYO_ASSERT(!(!std::isfinite(maximumDistance) || maximumDistance < 0.0f || length <= 1.0e-6));
+    GYO_ASSERT(std::isfinite(maximumDistance) && !(maximumDistance < 0.0f));
     const auto hit = RayCapsule(Math::ToVec3d(origin), Math::ToVec3d(direction) * (1.0 / length), maximumDistance,
                                 Math::ToVec3d(capsule.segmentStart), Math::ToVec3d(capsule.segmentEnd),
                                 static_cast<double>(capsule.radius) + sweepRadius);

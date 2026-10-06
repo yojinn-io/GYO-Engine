@@ -17,8 +17,8 @@ namespace Engine::Test::CollisionCorpus {
 
 [[nodiscard]] std::vector<std::string> Records();
 
-// The two public capsule overloads (VerticalCapsule, float algorithm; and
-// ToCapsule into Math::Capsule, double algorithm) over the same inputs.
+// The two public capsule overloads (VerticalCapsule; and ToCapsule into
+// Math::Capsule) over the same inputs. Since FF-9 both run the double algorithm.
 struct OverloadComparison final {
     std::size_t cases{};
     std::size_t bothMiss{};

@@ -34,3 +34,15 @@ TEST_CASE("capsule overload statistics account for every compared case") {
         CHECK(bucketed == stats.bothHit);
     }
 }
+
+TEST_CASE("the two public capsule overloads now agree on every corpus case") {
+    // FF-9: the VerticalCapsule overloads wrap the Math::Capsule overloads, so
+    // no case flips and every distance is identical (in-process, every platform).
+    for (const auto& [query, stats] : CompareCapsuleOverloads()) {
+        CAPTURE(query);
+        CHECK(stats.onlyFloatHits == 0);
+        CHECK(stats.onlyDoubleHits == 0);
+        CHECK(stats.ulpBuckets[0] == stats.bothHit);
+        CHECK(stats.maximumUlp == 0);
+    }
+}

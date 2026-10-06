@@ -13,6 +13,14 @@ namespace Engine::Collision {
 // Geometric primitives (Ray, Segment, Aabb, Capsule) come from Engine::Math;
 // this module owns the collision algorithms and their tolerances, validation
 // and contact policy.
+//
+// Numeric semantics: every query computes in double and rounds its result to
+// float once. There is one tolerance, 1e-7: an initial shallow overlap that
+// separates or moves tangentially is not blocking (the box and capsule
+// sweeps). The quadratic solver keeps a rounding guard of 16 double epsilons
+// and the rounded-box sweep a 1e-12 interval window; these absorb double
+// rounding only and are not tolerances. A ray is parallel to an axis only
+// when that direction component is exactly zero.
 
 // The character body shape specialised for collision: feet is the world-space
 // bottom of the upright capsule, not its center. height includes both

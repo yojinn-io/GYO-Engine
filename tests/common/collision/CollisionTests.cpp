@@ -95,7 +95,7 @@ TEST_CASE("arbitrary sphere sweeps handle nonunit segments, tangency and station
     CHECK_FALSE(SweepSphereAgainstCapsule({{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}}, 0.0f, c));
 }
 
-TEST_CASE("new arbitrary capsule queries agree with legacy upright queries") {
+TEST_CASE("VerticalCapsule overloads equal the Math::Capsule overloads on ToCapsule") {
     const VerticalCapsule upright{{1.0f, 0.4f, -2.0f}, 1.8f, 0.25f};
     const Capsule general = ToCapsule(upright);
     CHECK(general.segmentStart.y == doctest::Approx(0.65f));
@@ -103,10 +103,14 @@ TEST_CASE("new arbitrary capsule queries agree with legacy upright queries") {
     for (int height = -3; height <= 15; ++height) {
         const Vec3 start{-3.0f, height * 0.2f, -2.0f};
         const Vec3 end{3.0f, start.y, start.z};
-        const auto legacy = SweepSphereAgainstCapsule({start, end}, 0.1f, upright);
+        const auto vertical = SweepSphereAgainstCapsule({start, end}, 0.1f, upright);
         const auto current = SweepSphereAgainstCapsule({start, end}, 0.1f, general);
-        REQUIRE(legacy.has_value() == current.has_value());
-        if (legacy) CHECK(*current == doctest::Approx(*legacy));
+        REQUIRE(vertical.has_value() == current.has_value());
+        if (vertical) CHECK(*current == *vertical);
+        const auto verticalRay = RaycastCapsule({start, end - start}, 6.0f, upright, 0.1f);
+        const auto currentRay = RaycastCapsule({start, end - start}, 6.0f, general, 0.1f);
+        REQUIRE(verticalRay.has_value() == currentRay.has_value());
+        if (verticalRay) CHECK(*currentRay == *verticalRay);
     }
 }
 
@@ -302,4 +306,59 @@ TEST_CASE("spheres give exact results through the Math::Capsule queries") {
     CHECK(converted.segmentStart.y == 1.0f);
     CHECK(converted.segmentEnd.y == 1.0f);
     CHECK(converted.radius == 0.5f);
+}
+
+TEST_CASE("any nonzero finite ray direction is valid, including tiny and subnormal ones") {
+    const Aabb box{{1.0f, -1.0f, -1.0f}, {2.0f, 1.0f, 1.0f}};
+    const VerticalCapsule upright{{3.0f, -1.0f, 0.0f}, 2.0f, 0.5f};
+    for (const float length : {1.0e-6f, 1.0e-7f, 1.0e-30f, std::numeric_limits<float>::denorm_min()}) {
+        CAPTURE(length);
+        const Engine::Math::Ray ray{{0.0f, 0.0f, 0.0f}, {length, 0.0f, 0.0f}};
+        const auto boxHit = RaycastAabb(ray, 10.0f, box);
+        REQUIRE(boxHit);
+        CHECK(*boxHit == 1.0f);
+        const auto capsuleHit = RaycastCapsule(ray, 10.0f, upright);
+        REQUIRE(capsuleHit);
+        CHECK(*capsuleHit == 2.5f);
+        CHECK(RaycastCapsule(ray, 10.0f, ToCapsule(upright)) == capsuleHit);
+    }
+    // A component of 1e-6 is no longer treated as parallel: the slab is entered.
+    const Aabb wide{{0.0f, -1.0f, -1.0f}, {2.0e6f, 1.0f, 1.0f}};
+    const auto grazing = RaycastAabb({{0.0f, 2.0f, 0.0f}, {1.0f, -1.0e-6f, 0.0f}}, 1.0e7f, wide);
+    REQUIRE(grazing);
+    CHECK(*grazing == doctest::Approx(1.0e6f).epsilon(1.0e-6));
+}
+
+TEST_CASE("spheres and capsules of tiny radius are queried without aborting") {
+    // height == 2r is a sphere; with the float algorithm removed, rounding can
+    // no longer invert the segment ends.
+    const auto sphereHit = RaycastCapsule({{-4.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, 8.0f,
+        VerticalCapsule{{0.0f, 0.5f, 0.0f}, 1.0f, 0.5f});
+    REQUIRE(sphereHit);
+    CHECK(*sphereHit == 3.5f);
+    const auto sphereSweep = SweepSphereAgainstCapsule({{-4.0f, 1.0f, 0.0f}, {4.0f, 1.0f, 0.0f}}, 0.5f,
+        VerticalCapsule{{0.0f, 0.5f, 0.0f}, 1.0f, 0.5f});
+    REQUIRE(sphereSweep);
+    CHECK(*sphereSweep == 0.375f);
+    const Aabb box{{-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}};
+    for (const float feetY : {1.0f, 100.0f, 1000.0f, 4096.0f, 65536.0f}) {
+        for (const float radius : {1.0e-3f, 1.0e-4f, 1.0e-5f, 1.0e-6f, 1.0e-7f}) {
+            for (const float height : {2.0f * radius, std::nextafter(2.0f * radius, 1.0f)}) {
+                CAPTURE(feetY);
+                CAPTURE(radius);
+                const VerticalCapsule capsule{{0.0f, feetY, 0.0f}, height, radius};
+                REQUIRE(IsValid(capsule));
+                const Capsule general = ToCapsule(capsule);
+                CHECK(!(general.segmentEnd.y < general.segmentStart.y));
+                const Engine::Math::Ray ray{{-1.0f, feetY + radius, 0.0f}, {1.0f, 0.0f, 0.0f}};
+                CHECK(RaycastCapsule(ray, 4.0f, capsule) == RaycastCapsule(ray, 4.0f, general));
+                const Engine::Math::Segment path{{-1.0f, feetY + radius, 0.0f}, {1.0f, feetY + radius, 0.0f}};
+                CHECK(SweepSphereAgainstCapsule(path, 0.0f, capsule) == SweepSphereAgainstCapsule(path, 0.0f, general));
+                static_cast<void>(OverlapVerticalCapsuleAabb(capsule, box));
+                static_cast<void>(SweepVerticalCapsuleAgainstAabb(capsule, {0.0f, -1.0f, 0.0f}, box));
+                static_cast<void>(OverlapVerticalCapsules(capsule, capsule));
+                static_cast<void>(SweepVerticalCapsuleAgainstCapsule(capsule, {1.0f, 0.0f, 0.0f}, capsule));
+            }
+        }
+    }
 }
