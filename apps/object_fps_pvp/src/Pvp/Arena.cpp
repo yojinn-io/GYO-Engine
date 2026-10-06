@@ -1,9 +1,11 @@
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "engine/math/geometry/Aabb.hpp"
+#include "engine/base/Fnv1a.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
 #include <nlohmann/json.hpp>
+#include <bit>
 #include <cmath>
 #include <fstream>
 #include <stdexcept>
@@ -90,6 +92,30 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         error = exception.what();
         return std::nullopt;
     }
+}
+
+std::uint64_t ArenaContentDigest(const Arena& arena) {
+    // Thirteen names: adding, removing or reordering a member of Arena breaks
+    // this binding, so the canonical form changes with it (a wire change).
+    const auto& [version, id, width, depth, cellSize, movementSpeed, bodyHeight, radius, eyeHeight,
+        walls, spawns, jumpHeight, gravity] = arena;
+    std::string bytes;
+    const auto u32 = [&](std::uint32_t value) {
+        for (int shift = 24; shift >= 0; shift -= 8) bytes.push_back(static_cast<char>((value >> shift) & 0xffU));
+    };
+    const auto f32 = [&](float value) { u32(std::bit_cast<std::uint32_t>(value)); };
+    const auto vec3 = [&](const Engine::Math::Vec3& value) { f32(value.x); f32(value.y); f32(value.z); };
+    u32(version);
+    u32(static_cast<std::uint32_t>(id.size()));
+    bytes += id;
+    for (const float value : {width, depth, cellSize, movementSpeed, bodyHeight, radius, eyeHeight}) f32(value);
+    u32(static_cast<std::uint32_t>(walls.size()));
+    for (const auto& wall : walls) { vec3(wall.minimum); vec3(wall.maximum); }
+    u32(static_cast<std::uint32_t>(spawns.size()));
+    for (const auto& spawn : spawns) { vec3(spawn.position); f32(spawn.yaw); }
+    f32(jumpHeight);
+    f32(gravity);
+    return Engine::Base::Fnv1a64(bytes);
 }
 
 } // namespace fps::pvp

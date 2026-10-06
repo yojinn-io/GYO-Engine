@@ -14,6 +14,8 @@ message Ready {
   CombatRules combat_rules = 6;
   float jump_height = 7;
   float gravity = 8;
+  // Content digest of the served arena (pv6 contract §2); 0 means missing.
+  fixed64 arena_digest = 9;
 }
 message PlayerJoin { uint64 player_id = 1; }
 message PlayerLeave { uint64 player_id = 1; }

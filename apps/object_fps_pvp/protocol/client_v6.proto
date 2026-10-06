@@ -15,6 +15,8 @@ message Welcome {
   CombatRules combat_rules = 7;
   float jump_height = 8;
   float gravity = 9;
+  // Content digest of the served arena (pv6 contract §2), copied from Ready.
+  fixed64 arena_digest = 10;
 }
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {

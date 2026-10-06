@@ -31,6 +31,8 @@ void Require(bool condition,const char* message){if(!condition)throw std::runtim
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
 struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
 struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
+// Opaque content digest of the mock arena (pv6 contract §2).
+constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
 class MockGateway {
 public:
     MockGateway():socket(io,udp::endpoint(asio::ip::address_v4::loopback(),0)) {
@@ -42,7 +44,7 @@ public:
                 response.status=400;response.set_content(R"({"error":"protocol_version"})","application/json");return;
             }
             const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
-                {"arena_id","worker-test"},{"arena_version",1},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
+                {"arena_id","worker-test"},{"arena_version",1},{"arena_digest",joinArenaDigest.load()},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
             response.set_content(reply.dump(),"application/json");
         });
         http.Post("/rooms/1/leave",[&](const auto&,auto& response){
@@ -66,7 +68,7 @@ public:
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
-                welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);
+                welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
                 if(includeRules) {
                     auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
@@ -120,6 +122,7 @@ public:
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
     std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
+    std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
     bool autoAck{};
@@ -301,7 +304,10 @@ int main() {
     try {
         const auto maximumDatagram=CheckMaximumDatagrams();
         MockGateway gateway;ClientConnection connection;
-        connection.SetArenaIdentity("worker-test",1);connection.Join(gateway.address,"1");
+        bool zeroDigestRejected=false;
+        try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
+        Require(zeroDigestRejected,"zero arena digest accepted as identity");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
         connection.SendInput(Input(1,2));
         gateway.Until([&]{return gateway.attempts.size()>=2;});
@@ -387,6 +393,26 @@ int main() {
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
         gateway.includeRules=true;
+
+        // Same arena id and version with different content is refused on both
+        // join paths with the content code; the reason starts with the code.
+        const auto refusedWith=[&](const char* code){
+            connection.Join(gateway.address,"1");
+            gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
+            return connection.State().error.starts_with(code);
+        };
+        gateway.joinArenaDigest=WorkerArenaDigest^1;
+        Require(refusedWith("arena_content_mismatch:"),"HTTP join accepted different arena content");
+        gateway.joinArenaDigest=0;
+        Require(refusedWith("arena_content_mismatch:"),"HTTP join accepted a missing arena digest");
+        gateway.joinArenaDigest=WorkerArenaDigest;gateway.welcomeArenaDigest=WorkerArenaDigest^1;
+        Require(refusedWith("arena_content_mismatch:"),"Welcome accepted different arena content");
+        gateway.welcomeArenaDigest=0;
+        Require(refusedWith("arena_content_mismatch:"),"Welcome accepted a missing arena digest");
+        gateway.welcomeArenaDigest=WorkerArenaDigest;
+        connection.SetArenaIdentity("other-arena",1,WorkerArenaDigest);
+        Require(refusedWith("arena_identity_mismatch:"),"join accepted a different arena identity");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.

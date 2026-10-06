@@ -108,11 +108,15 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor
 struct IpcHost::Impl {
     MatchRuntimeHost& host;
     Arena arena;
+    std::uint64_t arenaDigest{};
     asio::io_context io;
     tcp::acceptor listener{io};
     std::jthread worker;
     std::uint64_t requestSequence{};
-    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content){}
+    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
+        // Zero is reserved for a missing digest: such an arena cannot be served.
+        if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
+    }
 
     void Connection(tcp::socket& socket,std::stop_token stop) {
         socket.non_blocking(true);
@@ -131,7 +135,7 @@ struct IpcHost::Impl {
         struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
         std::map<PlayerId,ActionLane> actionLanes;
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
-        auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version);
+        auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
         auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);

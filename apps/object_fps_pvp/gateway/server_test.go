@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -160,7 +161,11 @@ type credentials struct {
 	UDPPort   uint16 `json:"udp_port"`
 	Version   uint16 `json:"protocol_version"`
 	Arena     string `json:"arena_id"`
+	Digest    uint64 `json:"arena_digest"`
 }
+
+// testArenaDigest is an opaque nonzero digest; the Gateway only forwards it.
+const testArenaDigest uint64 = 0xfedcba9876543210
 
 func post(t *testing.T, s *Server, path string, body any) (int, []byte) {
 	t.Helper()
@@ -186,7 +191,7 @@ func reserve(t *testing.T, s *Server, id string) credentials {
 	if err := json.Unmarshal(body, &c); err != nil {
 		t.Fatal(err)
 	}
-	if c.SessionID == 0 || c.PlayerID == 0 || c.Token == "" || c.UDPPort == 0 || c.Arena != "test_arena" {
+	if c.SessionID == 0 || c.PlayerID == 0 || c.Token == "" || c.UDPPort == 0 || c.Arena != "test_arena" || c.Digest != testArenaDigest {
 		t.Fatalf("bad credentials %+v", c)
 	}
 	return c
@@ -285,7 +290,7 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	e.Message = &runtime.RuntimeEnvelope_JoinResult{JoinResult: &runtime.JoinResult{PlayerId: c.PlayerID, Accepted: true}}
 	f.send(e)
 	var welcome client.Welcome
-	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 {
+	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 || welcome.ArenaDigest != testArenaDigest {
 		t.Fatalf("welcome %v %v", &welcome, err)
 	}
 	sendPacket(t, p, c, 4, adapter.Hello, &client.Hello{SessionToken: c.Token})
@@ -532,7 +537,17 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 
+	// Every other version, and the current one without an arena digest.
+	type readyCase struct {
+		version uint32
+		digest  uint64
+	}
+	cases := []readyCase{{adapter.RuntimeVersion, 0}}
 	for _, version := range rejectedVersions() {
+		cases = append(cases, readyCase{version, testArenaDigest})
+	}
+	for _, c := range cases {
+		version, digest := c.version, c.digest
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -547,16 +562,40 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 			}
 			defer conn.Close()
 			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
-				ArenaId: "test_arena", ArenaVersion: 1, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
+				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()
 		if link, _, err := connectRuntime(context.Background(), listener.Addr().String()); err == nil {
 			link.close()
-			t.Fatalf("runtime v%d admitted", version)
+			t.Fatalf("runtime v%d with digest %x admitted", version, digest)
 		}
 		<-done
 	}
+}
+
+// The Gateway forwards the Match's arena digest verbatim (pv6 contract §2):
+// room list, HTTP join reply (checked by reserve) and Welcome.
+func TestRoomsAndJoinForwardTheArenaDigest(t *testing.T) {
+	s, _ := newTestServer(t)
+	if status, _ := post(t, s, "/rooms", map[string]any{}); status != http.StatusOK {
+		t.Fatal(status)
+	}
+	response, err := http.Get("http://" + s.HTTPAddress() + "/rooms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rooms struct {
+		Rooms []map[string]any `json:"rooms"`
+	}
+	decoder := json.NewDecoder(response.Body)
+	decoder.UseNumber() // The digest uses the full uint64 range.
+	err = decoder.Decode(&rooms)
+	_ = response.Body.Close()
+	if err != nil || len(rooms.Rooms) != 1 || rooms.Rooms[0]["arena_digest"] != json.Number(strconv.FormatUint(testArenaDigest, 10)) {
+		t.Fatalf("room list %v %v", rooms, err)
+	}
+	reserve(t, s, "digest")
 }
 
 func TestRuntimeMailboxMergesWindowsAtomicallyAndBoundsStorage(t *testing.T) {

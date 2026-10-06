@@ -285,16 +285,18 @@ func (x *Hello) GetSessionToken() string {
 }
 
 type Welcome struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	MatchId       uint64                 `protobuf:"varint,2,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
-	TickRate      uint32                 `protobuf:"varint,3,opt,name=tick_rate,json=tickRate,proto3" json:"tick_rate,omitempty"`
-	SnapshotRate  uint32                 `protobuf:"varint,4,opt,name=snapshot_rate,json=snapshotRate,proto3" json:"snapshot_rate,omitempty"`
-	ArenaId       string                 `protobuf:"bytes,5,opt,name=arena_id,json=arenaId,proto3" json:"arena_id,omitempty"`
-	ArenaVersion  uint32                 `protobuf:"varint,6,opt,name=arena_version,json=arenaVersion,proto3" json:"arena_version,omitempty"`
-	CombatRules   *CombatRules           `protobuf:"bytes,7,opt,name=combat_rules,json=combatRules,proto3" json:"combat_rules,omitempty"`
-	JumpHeight    float32                `protobuf:"fixed32,8,opt,name=jump_height,json=jumpHeight,proto3" json:"jump_height,omitempty"`
-	Gravity       float32                `protobuf:"fixed32,9,opt,name=gravity,proto3" json:"gravity,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId     uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	MatchId      uint64                 `protobuf:"varint,2,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	TickRate     uint32                 `protobuf:"varint,3,opt,name=tick_rate,json=tickRate,proto3" json:"tick_rate,omitempty"`
+	SnapshotRate uint32                 `protobuf:"varint,4,opt,name=snapshot_rate,json=snapshotRate,proto3" json:"snapshot_rate,omitempty"`
+	ArenaId      string                 `protobuf:"bytes,5,opt,name=arena_id,json=arenaId,proto3" json:"arena_id,omitempty"`
+	ArenaVersion uint32                 `protobuf:"varint,6,opt,name=arena_version,json=arenaVersion,proto3" json:"arena_version,omitempty"`
+	CombatRules  *CombatRules           `protobuf:"bytes,7,opt,name=combat_rules,json=combatRules,proto3" json:"combat_rules,omitempty"`
+	JumpHeight   float32                `protobuf:"fixed32,8,opt,name=jump_height,json=jumpHeight,proto3" json:"jump_height,omitempty"`
+	Gravity      float32                `protobuf:"fixed32,9,opt,name=gravity,proto3" json:"gravity,omitempty"`
+	// Content digest of the served arena (pv6 contract §2), copied from Ready.
+	ArenaDigest   uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -388,6 +390,13 @@ func (x *Welcome) GetJumpHeight() float32 {
 func (x *Welcome) GetGravity() float32 {
 	if x != nil {
 		return x.Gravity
+	}
+	return 0
+}
+
+func (x *Welcome) GetArenaDigest() uint64 {
+	if x != nil {
+		return x.ArenaDigest
 	}
 	return 0
 }
@@ -1401,7 +1410,7 @@ const file_client_v6_proto_rawDesc = "" +
 	"\n" +
 	"\x0fclient_v6.proto\x12\x18object_fps_pvp.client.v6\",\n" +
 	"\x05Hello\x12#\n" +
-	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\xc8\x02\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\xeb\x02\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x1b\n" +
@@ -1412,7 +1421,9 @@ const file_client_v6_proto_rawDesc = "" +
 	"\fcombat_rules\x18\a \x01(\v2%.object_fps_pvp.client.v6.CombatRulesR\vcombatRules\x12\x1f\n" +
 	"\vjump_height\x18\b \x01(\x02R\n" +
 	"jumpHeight\x12\x18\n" +
-	"\agravity\x18\t \x01(\x02R\agravity\"\xbe\x01\n" +
+	"\agravity\x18\t \x01(\x02R\agravity\x12!\n" +
+	"\farena_digest\x18\n" +
+	" \x01(\x06R\varenaDigest\"\xbe\x01\n" +
 	"\x0fMovementCommand\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12!\n" +
 	"\fmove_forward\x18\x02 \x01(\x02R\vmoveForward\x12\x1d\n" +

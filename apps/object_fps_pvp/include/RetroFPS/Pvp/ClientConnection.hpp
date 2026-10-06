@@ -52,7 +52,9 @@ public:
     void CreateAndJoin(std::string gateway);
     void Join(std::string gateway, std::string roomId);
     void Leave();
-    void SetArenaIdentity(std::string id, std::uint32_t version);
+    // The arena this Client loaded (pv6 contract §2): id, format version and
+    // ArenaContentDigest. A zero digest is invalid and throws.
+    void SetArenaIdentity(std::string id, std::uint32_t version, std::uint64_t digest);
     // Repeated submissions contain the entire immutable unacknowledged window.
     // The worker coalesces complete windows; it never keeps only their last step.
     void SendInput(PlayerInput input);

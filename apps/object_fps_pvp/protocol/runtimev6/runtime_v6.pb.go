@@ -302,8 +302,10 @@ type Ready struct {
 	CombatRules           *CombatRules           `protobuf:"bytes,6,opt,name=combat_rules,json=combatRules,proto3" json:"combat_rules,omitempty"`
 	JumpHeight            float32                `protobuf:"fixed32,7,opt,name=jump_height,json=jumpHeight,proto3" json:"jump_height,omitempty"`
 	Gravity               float32                `protobuf:"fixed32,8,opt,name=gravity,proto3" json:"gravity,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Content digest of the served arena (pv6 contract §2); 0 means missing.
+	ArenaDigest   uint64 `protobuf:"fixed64,9,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Ready) Reset() {
@@ -388,6 +390,13 @@ func (x *Ready) GetJumpHeight() float32 {
 func (x *Ready) GetGravity() float32 {
 	if x != nil {
 		return x.Gravity
+	}
+	return 0
+}
+
+func (x *Ready) GetArenaDigest() uint64 {
+	if x != nil {
+		return x.ArenaDigest
 	}
 	return 0
 }
@@ -1872,7 +1881,7 @@ var File_runtime_v6_proto protoreflect.FileDescriptor
 
 const file_runtime_v6_proto_rawDesc = "" +
 	"\n" +
-	"\x10runtime_v6.proto\x12\x19object_fps_pvp.runtime.v6\"\xc3\x02\n" +
+	"\x10runtime_v6.proto\x12\x19object_fps_pvp.runtime.v6\"\xe6\x02\n" +
 	"\x05Ready\x12\x19\n" +
 	"\barena_id\x18\x01 \x01(\tR\aarenaId\x12#\n" +
 	"\rarena_version\x18\x02 \x01(\rR\farenaVersion\x12\x1b\n" +
@@ -1883,7 +1892,8 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\fcombat_rules\x18\x06 \x01(\v2&.object_fps_pvp.runtime.v6.CombatRulesR\vcombatRules\x12\x1f\n" +
 	"\vjump_height\x18\a \x01(\x02R\n" +
 	"jumpHeight\x12\x18\n" +
-	"\agravity\x18\b \x01(\x02R\agravity\")\n" +
+	"\agravity\x18\b \x01(\x02R\agravity\x12!\n" +
+	"\farena_digest\x18\t \x01(\x06R\varenaDigest\")\n" +
 	"\n" +
 	"PlayerJoin\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"*\n" +

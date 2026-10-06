@@ -106,7 +106,7 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 }
 
 func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
-	ready := &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, CombatRules: testRules()}
+	ready := &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, ArenaDigest: 1, CombatRules: testRules()}
 	for ReadyFitsWelcome(ready) {
 		ready.ArenaId += "x"
 	}
@@ -117,7 +117,7 @@ func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	if !ReadyFitsWelcome(ready) {
 		t.Fatal("boundary descriptor rejected")
 	}
-	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, CombatRules: RulesForClient(ready.CombatRules)}
+	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules)}
 	if proto.Size(welcome)+24 != 1200 {
 		t.Fatalf("maximum admitted Welcome=%d", proto.Size(welcome)+24)
 	}

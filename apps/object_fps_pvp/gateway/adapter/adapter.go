@@ -253,10 +253,11 @@ func EqualDecision(a, b *runtime.ShotDecision) bool {
 
 // Bound the dynamic arena descriptor using the largest legal identity fields,
 // so every Welcome built from an admitted Ready fits the complete UDP envelope.
+// The digest is counted as nonzero: any nonzero fixed64 encodes to 9 bytes.
 func ReadyFitsWelcome(r *runtime.Ready) bool {
 	if r == nil || r.SnapshotIntervalTicks == 0 || !ValidRules(r.CombatRules) || !ValidMovementRules(r.JumpHeight, r.Gravity) {
 		return false
 	}
-	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity}
+	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

@@ -11,9 +11,11 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <deque>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <limits>
 #include <random>
@@ -27,6 +29,9 @@ using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
 namespace {
 std::string Id(const Json& value) {return value.is_string()?value.get<std::string>():value.dump();}
+std::string Hex64(std::uint64_t value) {
+    char text[17];std::snprintf(text,sizeof text,"%016llx",static_cast<unsigned long long>(value));return text;
+}
 std::string BaseUrl(std::string address) {
     if(!address.starts_with("http://")) address="http://"+address;
     if(address.size()>256 || address.find_first_of("\r\n\t ")!=std::string::npos)
@@ -101,6 +106,7 @@ struct ClientConnection::Impl {
     std::uint64_t snapshotOverflowCount{};
     std::string expectedArena;
     std::uint32_t expectedArenaVersion{};
+    std::uint64_t expectedArenaDigest{};
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
     udp::socket socket{io};
@@ -177,10 +183,17 @@ struct ClientConnection::Impl {
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
         ResetActions();
     }
-    void CheckArena(const std::string& id,std::uint32_t version) {
+    // Both join paths compare identity first, then content (pv6 contract §2).
+    // A missing, non-integer or zero digest is a content mismatch.
+    void CheckArena(const std::string& id,std::uint32_t version,std::optional<std::uint64_t> digest) {
         std::scoped_lock lock(mutex);
-        if(!expectedArena.empty() && (id!=expectedArena || version!=expectedArenaVersion))
-            throw std::runtime_error("Arena content version mismatch");
+        if(expectedArena.empty())return;
+        if(id!=expectedArena || version!=expectedArenaVersion)
+            throw std::runtime_error("arena_identity_mismatch: Match arena "+id+" version "+std::to_string(version)+
+                ", this Client has "+expectedArena+" version "+std::to_string(expectedArenaVersion));
+        if(!digest || *digest!=expectedArenaDigest)
+            throw std::runtime_error("arena_content_mismatch: arena "+id+" content differs (Match "+
+                (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(expectedArenaDigest)+")");
     }
     void DisconnectRemote() {
         Close();
@@ -275,7 +288,10 @@ struct ClientConnection::Impl {
         // Compare the full JSON value: a non-integer or wider value must not truncate to the version.
         if(const auto& version=joined.at("protocol_version");!version.is_number_unsigned() ||
            version.get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error("Client protocol mismatch");
-        CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>());
+        const auto digest=joined.find("arena_digest");
+        CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>(),
+            digest!=joined.end() && digest->is_number_unsigned() && digest->get<std::uint64_t>()!=0 ?
+                std::optional<std::uint64_t>{digest->get<std::uint64_t>()} : std::nullopt);
         udp::resolver resolver(io);
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
@@ -387,7 +403,8 @@ struct ClientConnection::Impl {
             if(!packet || packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
-                CheckArena(message.arena_id(),message.arena_version());
+                CheckArena(message.arena_id(),message.arena_version(),
+                    message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
@@ -584,7 +601,10 @@ void ClientConnection::Refresh(std::string gateway){impl_->Push(Impl::Action::Re
 void ClientConnection::CreateAndJoin(std::string gateway){impl_->Push(Impl::Action::Create,std::move(gateway));}
 void ClientConnection::Join(std::string gateway,std::string room){impl_->Push(Impl::Action::Join,std::move(gateway),std::move(room));}
 void ClientConnection::Leave(){impl_->Push(Impl::Action::Leave);}
-void ClientConnection::SetArenaIdentity(std::string id,std::uint32_t version){std::scoped_lock lock(impl_->mutex);impl_->expectedArena=std::move(id);impl_->expectedArenaVersion=version;}
+void ClientConnection::SetArenaIdentity(std::string id,std::uint32_t version,std::uint64_t digest){
+    if(!digest)throw std::invalid_argument("Arena content digest is zero");
+    std::scoped_lock lock(impl_->mutex);impl_->expectedArena=std::move(id);impl_->expectedArenaVersion=version;impl_->expectedArenaDigest=digest;
+}
 void ClientConnection::SendInput(PlayerInput input){
     std::scoped_lock lock(impl_->mutex);
     if((impl_->state.phase!=ConnectionPhase::Playing && impl_->state.phase!=ConnectionPhase::Connecting) ||
