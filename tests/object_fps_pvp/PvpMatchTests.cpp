@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <utility>
 #include <map>
 #include <numbers>
 #include <optional>
@@ -731,6 +732,20 @@ TEST_CASE("PvP arena validates content without campaign or rendering dependencie
     CHECK_FALSE(arena.Validate(error));
     arena = TestArena();
     arena.walls[0].maximum.x = std::numeric_limits<float>::quiet_NaN();
+    CHECK_FALSE(arena.Validate(error));
+    // A zero-thickness wall is valid geometry but an empty wall: content error.
+    arena = TestArena();
+    arena.walls[4].maximum.x = arena.walls[4].minimum.x;
+    CHECK_FALSE(arena.Validate(error));
+    CHECK(error == "Arena wall must be a finite non-empty AABB");
+    arena = TestArena();
+    std::swap(arena.walls[4].minimum.z, arena.walls[4].maximum.z);
+    CHECK_FALSE(arena.Validate(error));
+    // A body exactly two radii high (a sphere) is valid, one representable value less is not.
+    arena = TestArena();
+    arena.bodyHeight = arena.eyeHeight = 2 * arena.radius;
+    CHECK(arena.Validate(error));
+    arena.bodyHeight = arena.eyeHeight = std::nextafter(2 * arena.radius, 0.0F);
     CHECK_FALSE(arena.Validate(error));
 }
 
