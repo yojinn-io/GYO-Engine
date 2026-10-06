@@ -389,6 +389,12 @@
   - L2：最差窗口由 30.5%／46.5% 降到 7.7%／15.9%，但 `CONNECTION POOR` 仍會出現。原因是按下縮放角到開始拖動的空窗（macOS），以及原因未明的 `nextDrawable` 停頓，依 D19 由 v7 的執行緒分離處理。
   - [第 07 批](07-measurement-baseline-b1.md) 的 B1 以這個狀態為準。
 
+## 第 09 批進度（記錄器）：協議 pv6
+
+- 2026-10-06：開始（使用者指示「繼續 09 批」）。前置都已合併：第 02、03 批，FF-3、FF-8；第 07、07a 批（#56，`c1ee2b2`）。分支 `claude/pvp-v6-batch09` 自 master `c1ee2b2`，同一 PR 帶上 #56 的合併狀態同步與 v7 任務清單的追加。
+  - 檔位：使用者已開啟 ultracode；commit 0（契約定稿）以 ultracode 規劃（3 案、1 位評審、1 次對抗檢查；設計者 high，評審與對抗 xhigh）。之後主體 high，版本閘、解碼與 arena 拒絕路徑局部 xhigh。
+  - 開始時以 grep 重新產生版本與名稱的檢查表（185 列，涵蓋 `apps/object_fps_pvp`、`build/acceptance/object_fps_pvp`、`tests/object_fps_pvp`，不含產生的 `.pb.go`）；逐列結果寫進 dev_log。
+
 ## 延後項目：現況與對應批次
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批
