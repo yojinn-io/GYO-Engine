@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "description": "Declared mutants of object_fps_pvp. A mutant is killed only when its check fails with the expected message (run_mutations.py).",
+  "checks": {
+    "cpu": {
+      "build": [
+        "gyo_object_fps_pvp_tests"
+      ],
+      "ctest": "object_fps_pvp.cpu"
+    },
+    "worker": {
+      "build": [
+        "gyo_object_fps_pvp_worker_probe"
+      ],
+      "ctest": "object_fps_pvp.worker"
+    },
+    "go": {
+      "command": [
+        "{go}",
+        "test",
+        "./gateway/..."
+      ],
+      "cwd": "apps/object_fps_pvp"
+    },
+    "protocol_version": {
+      "ctest": "object_fps_pvp.protocol_version"
+    }
+  },
+  "mutants": [
+    {
+      "id": "09-hit-count",
+      "batch": "09",
+      "what": "Match stops counting hits",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "                    ++target.combat.damageCount;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hit record"
+    },
+    {
+      "id": "09-hit-attacker",
+      "batch": "09",
+      "what": "Match stops recording the attacker",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "                    target.combat.lastAttackerId = playerId;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hit record"
+    },
+    {
+      "id": "09-hit-dead-rule",
+      "batch": "09",
+      "what": "Client accepts a dead player without a lethal hit record",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    if (dead && (none || combat.lastDamageTick != lifeStateTick)) return false;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hit record decode check"
+    },
+    {
+      "id": "09-hit-self-rule",
+      "batch": "09",
+      "what": "Client accepts a self-inflicted hit",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "combat.lastAttackerId != combat.playerId && ",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hit record decode check"
+    },
+    {
+      "id": "09-hit-go-check",
+      "batch": "09",
+      "what": "Gateway skips hit record validation",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": " ||\n\t\t\t!validDamageRecord(state, seen[state.PlayerId], in.Tick, rules) {",
+      "replace": " {",
+      "check": "go",
+      "expect": "TestHitRecordIsValidatedAndKeptVerbatim"
+    },
+    {
+      "id": "09-arena-order",
+      "batch": "09",
+      "what": "canonical order changes",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "    f32(jumpHeight);\n    f32(gravity);\n",
+      "replace": "    f32(gravity);\n    f32(jumpHeight);\n",
+      "check": "cpu",
+      "expect": "arena content digest"
+    },
+    {
+      "id": "09-arena-yaw",
+      "batch": "09",
+      "what": "spawn yaw left out of the digest",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "vec3(spawn.position); f32(spawn.yaw); }",
+      "replace": "vec3(spawn.position); }",
+      "check": "cpu",
+      "expect": "arena content digest"
+    },
+    {
+      "id": "09-arena-client-compare",
+      "batch": "09",
+      "what": "Client does not compare digests",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "if(!digest || *digest!=expectedArenaDigest)",
+      "replace": "if(!digest)",
+      "check": "worker",
+      "expect": "HTTP join accepted different arena content"
+    },
+    {
+      "id": "09-arena-client-welcome",
+      "batch": "09",
+      "what": "Welcome path is not checked",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                CheckArena(message.arena_id(),message.arena_version(),\n                    message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "Welcome accepted different arena content"
+    },
+    {
+      "id": "09-arena-gateway-zero",
+      "batch": "09",
+      "what": "Gateway admits a Ready without digest",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "ready.ArenaDigest == 0 || ",
+      "replace": "",
+      "check": "go",
+      "expect": "with digest 0 admitted"
+    },
+    {
+      "id": "09-arena-gateway-welcome",
+      "batch": "09",
+      "what": "Gateway drops the digest from Welcome",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "ArenaDigest: s.ready.ArenaDigest, CombatRules",
+      "replace": "CombatRules",
+      "check": "go",
+      "expect": "welcome "
+    },
+    {
+      "id": "09-version-python",
+      "batch": "09",
+      "what": "one version definition disagrees",
+      "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
+      "find": "\nPROTOCOL_VERSION = 6\n",
+      "replace": "\nPROTOCOL_VERSION = 5\n",
+      "check": "protocol_version",
+      "expect": "acceptance Python"
+    }
+  ]
+}

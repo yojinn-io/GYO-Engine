@@ -398,8 +398,12 @@ int main() {
         // join paths with the content code; the reason starts with the code.
         const auto refusedWith=[&](const char* code){
             connection.Join(gateway.address,"1");
-            gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-            return connection.State().error.starts_with(code);
+            // Stop on acceptance too, so an accepted join fails with its own message.
+            gateway.Until([&]{const auto s=connection.State();
+                return (s.phase==ConnectionPhase::Lobby && !s.error.empty()) || s.phase==ConnectionPhase::Playing;});
+            const auto refused=connection.State().error.starts_with(code);
+            if(!refused)connection.Leave();
+            return refused;
         };
         gateway.joinArenaDigest=WorkerArenaDigest^1;
         Require(refusedWith("arena_content_mismatch:"),"HTTP join accepted different arena content");
