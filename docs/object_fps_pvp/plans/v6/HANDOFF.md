@@ -406,6 +406,8 @@
   - 權威不變：同機兩樹（base `c1ee2b2`，暫時的 worktree，用完已移除）35 個情境 0 不同，輸出逐位元相同。
   - 未以 L1 覆蓋：IpcHost 的 Snapshot 轉換（內部函式）；以程式審查與 L2 確認（Go 的規則 4 會讓漏寫在第一次死亡時暴露）。
   - commit 5（文件）：產品 `protocol/README.md` 改寫為 pv6、聯網架構文件的現行 wire 描述、dev_log。下一步：開 PR 取得四平台 CI，再以同一個 commit 做 L2（需要機器閒置，先徵求使用者同意）與 L3（使用者操作）。
+- 2026-10-06：PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 開啟，四平台 CI 通過。使用者要求把手動的突變檢查做成產品自有工具：`tests/object_fps_pvp/run_mutations.py`、`mutations.json`、說明書 `run_mutations.zh-Hant.md`（commit 6 `8fbc2e5`），第 09 批 12／12 killed。
+- 2026-10-06：L2（事前宣告 `e6fa12bf…`）：雙 GUI 短測 before／after 都通過；25 案矩陣 before 25／25、after 25／25；沒有疑似回歸。主機全程在約 4 ms 狀態。詳見 dev_log。下一步：L3（使用者）。
 
 ## 延後項目：現況與對應批次
 
