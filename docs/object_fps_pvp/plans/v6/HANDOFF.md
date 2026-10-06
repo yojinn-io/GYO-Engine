@@ -415,6 +415,9 @@
 - 2026-10-07：開始（使用者指示）。前置都已合併：第 03、09 批（#57，`5da939f`），FF-1。分支 `claude/pvp-v6-batch10` 自 master `5da939f`；Engine 端的 FF-9 在同一個 PR，紀錄寫在 Engine 計畫的記錄器（D12）。
   - 檔位：使用者同意以 ultracode 規劃事前宣告（3 案、1 位評審、1 次對抗檢查；評審與對抗 xhigh），容差、`IsValid` 規則、差異歸因局部 xhigh，其餘 high。
   - 事前宣告在寫程式之前完成，經使用者確認後寫進本批文件、dev_log 與 Engine 記錄器；之後不得事後放寬。
+- 2026-10-07：事前宣告完成（ultracode，workflow `wf_28494fb3-383`；對抗檢查 major 1、minor 10 全部套入），使用者核准：`RaycastAabb` 用 double slab；新增 commit 0（分析器先凍結）、退化膠囊拒絕移到 commit 1、golden 不更新；arena v1 不升版（比照 D11⑨）。
+  - 權威 digest 預期變化集合為空（35 個情境逐位元不變）；Engine 端 FF-1 語料恰好 435 筆不同。詳見本批文件的「事前宣告」與 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
+  - 下一步：commit 0（擴充並凍結分析器），之後才寫 Collision。
 
 ## 延後項目：現況與對應批次
 
@@ -518,7 +521,7 @@ Engine、工具、測試、登錄各列的正式來源是 [基礎後續整理](.
 | Client 與 server 只比對 arena 的 id 與 version，不比對內容；Client 以自己的 arena 檔做 prediction（`ClientConnection.cpp:180-184` 的 `CheckArena`，由 HTTP join `:276` 與 Welcome `:388` 呼叫；Gateway 轉送點 `server.go:276,440`） | 第 09 批（arena 內容 digest） |
 | `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除；`GroundPoint.hpp` 只剩型別定義） |
 | `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除） |
-| Collision 統一對本產品權威判定的影響、權威 golden 更新、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
+| Collision 統一對本產品權威判定的影響、權威 digest 不變的證明、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
 
 ### 11. Engine 輸入層的缺口 → IP-1（Engine）、第 06 批（本產品）
 

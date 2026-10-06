@@ -25,7 +25,7 @@
 
 - 完整 GUI 三輪與 1808 秒長測（→14b）。
 - 程式修正：失敗時保留跑次，有限定位後回報。
-- 不重新量測權威決定性：權威 golden 已在[第10批](10-collision-authority.md)更新並凍結，本批只確認[第03批](03-authority-digest.md)閘門通過。
+- 不重新量測權威決定性：權威 golden 在[第10批](10-collision-authority.md)確認不變並凍結，本批只確認[第03批](03-authority-digest.md)閘門通過。
 - 不改 wire（候選期規則 D11①）。
 
 ### 產品移除檢查
