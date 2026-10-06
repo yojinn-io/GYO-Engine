@@ -2,7 +2,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "runtime_v5.pb.h"
+#include "runtime_v6.pb.h"
 #include <asio.hpp>
 #include <array>
 #include <charconv>
@@ -14,7 +14,7 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v5;
+namespace pb = object_fps_pvp::runtime::v6;
 using asio::ip::tcp;
 namespace {
 pb::ShotRejection RejectionForWire(ShotRejection rejection) {

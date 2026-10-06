@@ -10,8 +10,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv5"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
+	client "gyo.local/object_fps_pvp/protocol/clientv6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
 )
 
 // Interleave publication between the two actual per-peer selection calls. This

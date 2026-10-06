@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv5"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
+	client "gyo.local/object_fps_pvp/protocol/clientv6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
 )
 
 func TestV5ActionKindPresenceAndLifeAreImmutable(t *testing.T) {

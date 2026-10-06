@@ -2,7 +2,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
-#include "client_v5.pb.h"
+#include "client_v6.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -21,7 +21,7 @@
 #include <thread>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v5;
+namespace pb=object_fps_pvp::client::v6;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;

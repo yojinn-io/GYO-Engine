@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v5;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv5";
+package object_fps_pvp.client.v6;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv6";
 
-// This remote-client contract is independent of runtime_v5.proto.
+// This remote-client contract is independent of runtime_v6.proto.
 message Hello { string session_token = 1; }
 message Welcome {
   uint64 player_id = 1;

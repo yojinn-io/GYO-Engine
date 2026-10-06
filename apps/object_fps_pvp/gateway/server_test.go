@@ -17,8 +17,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv5"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
+	client "gyo.local/object_fps_pvp/protocol/clientv6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
 )
 
 func TestCreateRoomWaitsForFragmentedJSON(t *testing.T) {

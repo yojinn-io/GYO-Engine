@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v5.pb.h"
+#include "client_v6.pb.h"
 #include <httplib.h>
 #include <algorithm>
 #include <chrono>
@@ -120,7 +120,7 @@ int main(int argc,char** argv) {
             oldVersion[5]=3;
             Require(!wire::Decode(oldVersion),"protocol v3 accepted");
             oldVersion[5]=4;Require(!wire::Decode(oldVersion),"protocol v4 accepted");
-            namespace pb=object_fps_pvp::client::v5;
+            namespace pb=object_fps_pvp::client::v6;
             const auto maximum=std::numeric_limits<std::uint64_t>::max();
             pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
             pb::ActionResults results;results.set_retired_through(maximum-MaxActionBatch);
