@@ -408,6 +408,7 @@
   - commit 5（文件）：產品 `protocol/README.md` 改寫為 pv6、聯網架構文件的現行 wire 描述、dev_log。下一步：開 PR 取得四平台 CI，再以同一個 commit 做 L2（需要機器閒置，先徵求使用者同意）與 L3（使用者操作）。
 - 2026-10-06：PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 開啟，四平台 CI 通過。使用者要求把手動的突變檢查做成產品自有工具：`tests/object_fps_pvp/run_mutations.py`、`mutations.json`、說明書 `run_mutations.zh-Hant.md`（commit 6 `8fbc2e5`），第 09 批 12／12 killed。
 - 2026-10-06：L2（事前宣告 `e6fa12bf…`）：雙 GUI 短測 before／after 都通過；25 案矩陣 before 25／25、after 25／25；沒有疑似回歸。主機全程在約 4 ms 狀態。詳見 dev_log。下一步：L3（使用者）。
+- 2026-10-06：L3（使用者）全部正常；arena 內容不一致的 Client 以 `arena_content_mismatch` 被拒（第一次因我的副本漏了 `lib` 沒有執行到，修正後重做）。取得視窗時的 `CONNECTION POOR` 對上已知的 `nextDrawable` 停頓（D19，v7）。**第 09 批完成**，PR #57 待合併；暫時的 worktree（before／after）移除。下一批由使用者指定。
 
 ## 延後項目：現況與對應批次
 
