@@ -420,6 +420,8 @@
   - 下一步：commit 0（擴充並凍結分析器），之後才寫 Collision。
 - 2026-10-07：使用者方向修正（實作前）：退化膠囊改為「中止一併消除」（D3 修訂），height == 2r 與長度 0 的膠囊維持合法；arena 的合法性與契約不變；commit 1 不改變任何輸入的合法性；digest 仍預期全部不變。PvP 骨骼 hitbox 列為 v7 候選。修訂後的宣告經使用者確認後寫入。
 - 2026-10-07：commit 0（Engine 端，FF-9 記錄器）：語料分析器擴充並凍結，自我檢查與宣告完全一致。凍結清單另含本產品的權威兩樹比對腳本與 digest runner（清單 SHA-256 `00841fe1d5ba82fc…`）。
+- 2026-10-07：commit 1（Engine：公開 `IsValid`）、commit 2（本產品：`Arena::Validate`、`QueryShot` 改用 `IsValid`）、commit 3（Engine：統一為 double、刪除 float 演算法）。每個 commit 都通過：語料（commit 1、2 全等；commit 3 恰好 435 筆、三項判定 0）、權威 digest 同機兩樹 35 個情境 0 不同、CTest 61／61。golden 未更新（30／30）。**事前宣告全部命中，沒有超出宣告的變化。**詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
+  - 下一步：開 PR（與 FF-9 同一個）取得四平台 CI，再以同一個 commit 做 L2（25 案矩陣與動作短測，before／after；需要機器閒置，先徵求使用者同意）。
 
 ## 延後項目：現況與對應批次
 

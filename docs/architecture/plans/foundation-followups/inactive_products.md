@@ -84,7 +84,7 @@
 
 ### FF-9 Collision 統一與公開合法性檢查
 
-狀態：未開始，批次完成時更新。
+狀態：FF-9 完成（2026-10-07）。
 
 - 數值：`RaycastAabb`、`VerticalCapsule` 版的 `RaycastCapsule` 與 `SweepSphereAgainstCapsule` 改為 double 實作；擦邊與容差邊界的命中可能翻轉，距離可能差數個 ULP。依賴這些結果的產品測試期望值可能要更新。
 - 合法性（2026-10-07 FF-9 事前宣告）：height＝2r 的球形 `VerticalCapsule` 與長度 0 的 `Math::Capsule` 仍然合法；`min==max` 的 AABB 也不會被拒。

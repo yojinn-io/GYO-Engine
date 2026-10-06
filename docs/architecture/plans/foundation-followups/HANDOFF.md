@@ -1,6 +1,6 @@
 # 基礎後續整理：交接
 
-更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7 完成並合併（PR #52，`ef12037`）；FF-9 未開始。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
+更新：2026-10-05。**FF-1～FF-6、FF-8 完成並合併**（PR #43～#49，2026-10-05 由使用者指示依序合併）；FF-7 完成並合併（PR #52，`ef12037`）；**FF-9 完成**（2026-10-07，與提出需求的消費端的權威變更批同一個 PR，待開）。 本文件建立於計畫落盤時（基準 master `05042fa`），之後每批開始、里程碑、停止時與工作同一變更更新。
 
 ## 閱讀入口
 
@@ -105,7 +105,7 @@
 | FF-6 | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`） | 見下方「FF-6」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff6.zh-Hant.md) |
 | FF-7 | 完成，PR [#52](https://github.com/yojinn-io/GYO-Engine/pull/52) 已合併（`ef12037`） | 見下方「FF-7」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff7.zh-Hant.md) |
 | FF-8 | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`） | 見下方「FF-8」節與 [dev_log](../../../dev_logs/2026_10_05_engine_ff8.zh-Hant.md) |
-| FF-9 | 未開始 | — |
+| FF-9 | 完成（2026-10-07，PR 待開，與消費端同一個 PR） | 見下方「FF-9」節與 [dev_log](../../../dev_logs/2026_10_07_engine_ff9.zh-Hant.md) |
 
 每批開始時在此新增一節：分支、base commit、檔位（含使用者同意的紀錄）、事前宣告（若有）、里程碑、證據位置、結果與停止理由。
 
@@ -354,7 +354,16 @@
 
 - 2026-10-07：commit 0（分析器擴充並凍結，不含 Collision 實作）。`scripts/compare_collision_corpus.py` 新增 `--check equal`（全部逐位元相同）與 `--check ff9`（`RaycastAabb` 對精確參考、`/vertical` 對 base `/general`、其餘逐位元相同；翻轉方向與 ULP 分桶）。
   - 自我檢查（base binary 同時當兩棵樹）：以 1 結束，恰好報告 `RaycastAabb` 53（miss→hit 10＝t0–t4 的 #10、#12；1 ULP 43）、`RaycastCapsule/vertical` 285（hit→miss 3＝t0#2、t1#2、t1#6；ULP 1／2-4／5-16／17-256／>256＝50／73／87／56／16，最大 2,896）、`SweepSphereAgainstCapsule/vertical` 97（miss→hit 4＝t0–t3 的 #3；26／24／23／5／15，最大 3,355），其餘 0。與宣告完全一致；1 ULP 的 43 個 key 與規劃時對抗檢查獨立算出的清單相同。`--check equal` 以 0 結束。
-  - 凍結清單：分析器、權威兩樹比對腳本、語料產生器（`CollisionCorpus.{cpp,hpp}`）、權威 digest runner（清單本身 SHA-256 `00841fe1d5ba82fc…`）。唯一宣告過的例外：§6 的 `CollisionCorpus.hpp:20-21` 說明註解在 commit 3 更新，屆時以 diff 證明只改註解。證據在 `build/target/_build/test/logs/pvp-v6-batch10-ff9-20261007/`。
+  - 凍結清單：分析器、權威兩樹比對腳本、語料產生器（`CollisionCorpus.{cpp,hpp}`）、權威 digest runner（清單本身 SHA-256 `00841fe1d5ba82fc…`）。唯一宣告過的例外：§6 的 `CollisionCorpus.hpp:20-21` 說明註解在 commit 3 更新，屆時以 diff 證明只改註解。證據在 `build/target/_build/test/logs/engine-ff9-20261007/`。
+- 2026-10-07：commit 1（公開 `IsValid`：Aabb、VerticalCapsule、Math::Capsule、Ray；Engine 內部 assert 改用；合法輸入集合不變）。語料 `--check equal` 16,940 筆與 base 逐位元相同；消費端的權威 digest 不變。
+- 2026-10-07：commit 2（消費端改用 `IsValid`）。語料 `--check equal` 逐位元相同。
+- 2026-10-07：commit 3（公開查詢統一為 double 的一套實作與一個容差；刪除 float 演算法、`kEpsilon 1e-6f`、方向長度 1e-6 檢查）。**事後量測全部在宣告內**：
+  - 凍結的分析器 `--check ff9`（凍結清單核對：只有宣告過的 `CollisionCorpus.hpp` 註解不同，diff 證明只改註解）：相對 base 恰好 435 筆不同（`RaycastAabb` 53：miss→hit 10、1 ULP 43；`RaycastCapsule/vertical` 285：hit→miss 3，ULP 50／73／87／56／16，最大 2,896；`SweepSphereAgainstCapsule/vertical` 97：miss→hit 4，ULP 26／24／23／5／15，最大 3,355）；三項判定（精確參考、`/vertical` 對 base `/general`、其餘逐位元相同）全部為 0。
+  - `--stats`：兩個多載翻轉 0、`max_ulp` 0（RaycastCapsule `both_miss=2088 both_hit=402`；SweepSphereAgainstCapsule `2200／185`）。`--degenerate`：25 個 `IsValid`＝true，全部執行，assert 0。
+  - 靈敏度（scratch，不提交）：容差改為 1e-6 時，分析器恰好報告宣告中的 16 筆（Sweep 對 AABB 8、Sweep 對膠囊 8）；還原後重新建置，`--check ff9` 回到 0。
+  - 消費端：權威 digest 同機兩樹 35 個情境 0 不同，golden 30／30（由消費端記錄）。
+  - CTest 61／61。新增測試：兩個多載逐位元一致、極小與次正規的方向、球（height==2r、長度 0）與極小半徑的各查詢、語料的多載翻轉 0。
+  - 一個測試寫錯又修正：近平行射線的第一版幾何讓射線根本到不了盒子，實作是對的；改用夠寬的盒子後，測到「原本被當成平行而未中、現在命中」。
 
 ### FF-4（記錄器）
 

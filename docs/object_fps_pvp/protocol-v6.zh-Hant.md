@@ -127,7 +127,10 @@ f32 jump_height gravity
 - 沿用 v5 §4 的裁決、彈匣、冷卻（權威 10 Tick）與拒絕語意。
 - 合法 Shot 命中玩家時，Match 另外寫入受害者的受擊欄位（§2）；拒絕或重送的 Shot 不寫入。裁決結果仍只送給射擊者，受害者與其他玩家從 Snapshot 得知受擊。
 - 射擊命中判定的 Collision 數值語意在第 10 批改變一次（使用者決定 D3：全部公開查詢統一為一套 double 實作與單一容差，並公開合法性檢查）。
-  - 會變動的公開函式與命中翻轉上限：待定，第 10 批開始時事前宣告。
+  - 第 10 批的變更（2026-10-07）：結果會變的只有 `RaycastAabb`，以及 `VerticalCapsule` 版的 `RaycastCapsule`、`SweepSphereAgainstCapsule`（改為 `Math::Capsule` 版的薄包裝）。
+    - 射擊判定的語意：`RaycastAabb` 只有方向分量恰為 0 才算平行，近平行射線不再視為平行；玩家膠囊改用 double，擦邊命中可能翻轉，距離有 ULP 等級的變化。容差維持 `1e-7`，移動與 Client 預測不變。
+    - 第 03 批的 35 個權威 digest 情境全部不變（同機兩樹 0 不同；golden 不重新產生，`authority_golden.txt` SHA-256 `f01f3a32…`）：這些語意變化在現有情境中觀測不到。
+    - arena 的合法性與契約不變：牆改用 Engine 的 `IsValid` 加上產品的「非空」規則；身體改用 `IsValid(VerticalCapsule)`，`body_height == 2·radius` 維持合法。
   - arena digest 只涵蓋解析後的內容值，Collision 實作與 `Validate` 合法性規則的改變（第 10 批）不影響它，也不是 wire 變更；新增或改變 `Arena` 的成員（含型別與順序），或改變正規化／演算法，屬 §1 的 wire 變更。
 - 本機冷卻閘（Client 自己的閘門）：以相位追蹤估計的權威 Tick 補償約 2 Tick 的落差，Tick 閘與牆鐘閘保持一致；乾淨跑次的權威冷卻拒絕必須為 0（D11⑤）。
   - 補償公式與安全邊際：待定，由第 12 批決定。
@@ -167,7 +170,7 @@ Authority Tick
 
 - 沿用 v5 §7 的全部門檻與分母；對玩家的門檻跨平台相同，不因平台放寬。
 - 人物短測的達成 FPS 未達名義×0.85 時判 invalid：不計次，報告列出達成 FPS 與計時器分布，同一跑次的延遲門檻照判；有效輪不足時該項標「未驗證」，不算通過（D11③）。
-- 權威不變的證明：第 03 批的同機兩樹 digest 比對。digest 程式（第 1 版與欄位清單）不修改；受擊欄位不進入此比對，由下列 Match 測試鎖住。只有第 10 批可以更新權威 golden。
+- 權威不變的證明：第 03 批的同機兩樹 digest 比對。digest 程式（第 1 版與欄位清單）不修改；受擊欄位不進入此比對，由下列 Match 測試鎖住。只有第 10 批可以更新權威 golden；第 10 批確認不變，沒有更新。
 - 量測：第 09 批的 before／after 都在本批 base commit 與 branch 上以凍結工具量；分析器除版本常數外逐位元組相同。B0＝第 04 批、B1＝第 07 批只作歷史參照。受擊欄位與 arena digest 只由 L1 驗證，本批不加入證據分析。
 - 實機驗收只在 macOS Intel／Metal；Windows、Linux 實機與 macOS arm64 實機標「未執行」（D11⑩）。
 
@@ -203,4 +206,12 @@ Architecture Delta（第 09 批，依 AGENTS §3）：
 6. Ownership：受擊欄位由 Match 產生；arena 正規化與 digest 函式屬產品 `Arena`，Match 發布、Client 驗證、Gateway 只轉送；版本常數由產品擁有，Engine framing 只接收；驗收端保留自己的預期值。
 7. 更小的變更不可行：不升版就無法拒絕舊端；以 HP 下降推導受擊違反純函數原則，且得不到攻擊者；只比 id／version 無法發現內容不同；雜湊檔案位元組會受換行轉換影響。
 
-Architecture Delta（第 10 批）：待定，第 10 批定稿時依 AGENTS §3 寫入。預計的邊界：Engine Collision 的數值結果契約改變（FF-9，與第 10 批同一 PR）；Engine 與 `services/gyo_gateway` 不依賴本產品。
+Architecture Delta（第 10 批，依 AGENTS §3；Engine 端的七點在 FF-9 計畫）：
+
+1. 需求：交接第 10 項（Collision float／double 兩套演算法並存）與決定 D3。
+2. 問題：同形狀的查詢有兩套精度與容差；本產品的 arena 合法性規則（`>=`）與 Engine 的前置條件（`>`）各自維護、不一致。
+3. 邊界：本產品權威判定的數值語意（§4）；arena 合法性改由 Engine 公開檢查提供，產品只保留自有的「非空牆」規則。wire、arena 格式版本與內容契約都不變。
+4. 影響：Match 的射擊判定（語意變化；現有 35 個情境觀測不到）、`Arena::Validate`、`QueryShot`、`tests/object_fps_pvp`。移動與 Client 預測不變。
+5. 依賴方向不變：產品→Engine Collision 是既有方向，沒有新邊。
+6. Ownership：幾何合法性歸 Engine Collision；arena 內容規則（數量、出生點、非空牆）仍歸本產品。
+7. 更小的變更不可行：本產品自行保留一份合法性判定，會延續兩份規則的不一致。
