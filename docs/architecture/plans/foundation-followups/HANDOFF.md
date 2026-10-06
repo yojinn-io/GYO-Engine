@@ -352,6 +352,10 @@
 - 因此 commit 1 不改變任何輸入的合法性：FF-1 語料在 commit 1、2 必須全等。原「退化膠囊拒絕移到 commit 1」刪除。
 - `RaycastCapsule(Math::Capsule)`、`SweepSphereAgainstCapsule(Math::Capsule)` 明列為不變的函式（本來就是 double 路徑）；語料上限（§5）不變。
 
+- 2026-10-07：commit 0（分析器擴充並凍結，不含 Collision 實作）。`scripts/compare_collision_corpus.py` 新增 `--check equal`（全部逐位元相同）與 `--check ff9`（`RaycastAabb` 對精確參考、`/vertical` 對 base `/general`、其餘逐位元相同；翻轉方向與 ULP 分桶）。
+  - 自我檢查（base binary 同時當兩棵樹）：以 1 結束，恰好報告 `RaycastAabb` 53（miss→hit 10＝t0–t4 的 #10、#12；1 ULP 43）、`RaycastCapsule/vertical` 285（hit→miss 3＝t0#2、t1#2、t1#6；ULP 1／2-4／5-16／17-256／>256＝50／73／87／56／16，最大 2,896）、`SweepSphereAgainstCapsule/vertical` 97（miss→hit 4＝t0–t3 的 #3；26／24／23／5／15，最大 3,355），其餘 0。與宣告完全一致；1 ULP 的 43 個 key 與規劃時對抗檢查獨立算出的清單相同。`--check equal` 以 0 結束。
+  - 凍結清單：分析器、權威兩樹比對腳本、語料產生器（`CollisionCorpus.{cpp,hpp}`）、權威 digest runner（清單本身 SHA-256 `00841fe1d5ba82fc…`）。唯一宣告過的例外：§6 的 `CollisionCorpus.hpp:20-21` 說明註解在 commit 3 更新，屆時以 diff 證明只改註解。證據在 `build/target/_build/test/logs/pvp-v6-batch10-ff9-20261007/`。
+
 ### FF-4（記錄器）
 
 - 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff4`，疊在 FF-1 上。檔位 high，不用 ultracode。
