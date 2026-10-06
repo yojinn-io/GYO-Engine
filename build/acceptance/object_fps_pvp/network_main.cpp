@@ -143,6 +143,7 @@ int main(int argc,char** argv) {
                 auto* combat=snapshot.add_combat();combat->set_player_id(maximum-i);
                 combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);combat->set_life_generation(maximum);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
                 combat->set_reload_action_id(maximum);combat->set_reload_start_tick(maximum);combat->set_reload_end_tick(maximum);combat->set_last_shot_action_id(maximum);combat->set_last_shot_tick(maximum);
+                combat->set_last_damage_tick(maximum);combat->set_damage_count(std::numeric_limits<std::uint32_t>::max());combat->set_last_attacker_id(maximum);
             }
             const auto actionBytes=wire::Encode({wire::Type::Actions,maximum,0xffffffffu,actions.SerializeAsString()});
             const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});

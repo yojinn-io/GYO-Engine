@@ -92,6 +92,8 @@ func TestV5SnapshotLifecycleReloadAndJumpValidation(t *testing.T) {
 	in.Combat[0].ReloadActionId = 0
 	in.Combat[0].ReloadStartTick = 0
 	in.Combat[0].ReloadEndTick = 0
+	// pv6: a dead player died of its last hit.
+	in.Combat[0].LastDamageTick, in.Combat[0].DamageCount, in.Combat[0].LastAttackerId = 10, 4, 2
 	if out, err := SnapshotForClient(in, testRules()); err != nil || out.Players[0].LifeState != client.LifeState_LIFE_DEAD || out.Players[0].RespawnTick != 200 {
 		t.Fatalf("dead state: %v %v", out, err)
 	}

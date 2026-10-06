@@ -114,16 +114,34 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			(state.ReloadActionId == 0 && (state.ReloadStartTick != 0 || state.ReloadEndTick != 0)) ||
 			(state.ReloadActionId != 0 && (state.Hp == 0 || state.ReloadStartTick > in.Tick || state.ReloadEndTick <= in.Tick ||
 				state.ReloadEndTick <= state.ReloadStartTick || state.ReloadEndTick-state.ReloadStartTick != rules.ReloadTicks)) ||
-			(state.LastShotActionId == 0) != (state.LastShotTick == 0) || state.LastShotTick > in.Tick {
+			(state.LastShotActionId == 0) != (state.LastShotTick == 0) || state.LastShotTick > in.Tick ||
+			!validDamageRecord(state, seen[state.PlayerId], in.Tick, rules) {
 			return nil, errors.New("invalid runtime combat state")
 		}
 		combatSeen[state.PlayerId] = true
 		out.Combat = append(out.Combat, &client.CombatState{PlayerId: state.PlayerId, Hp: state.Hp,
 			NextAllowedShotTick: state.NextAllowedShotTick, LifeGeneration: state.LifeGeneration,
 			MagazineAmmo: state.MagazineAmmo, ReloadActionId: state.ReloadActionId, ReloadStartTick: state.ReloadStartTick,
-			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick})
+			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick,
+			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId})
 	}
 	return out, nil
+}
+
+// validDamageRecord checks the presentation-only hit record (pv6 contract §2):
+// all zero or all set; a hit lies in the current life state and the snapshot,
+// is not self-inflicted, counts at most one per hit point, and a dead player
+// died of its last hit.
+func validDamageRecord(state *runtime.CombatState, player *runtime.PlayerState, tick uint64, rules *runtime.CombatRules) bool {
+	none := state.LastDamageTick == 0
+	if (state.DamageCount == 0) != none || (state.LastAttackerId == 0) != none {
+		return false
+	}
+	if player.LifeState == runtime.LifeState_LIFE_DEAD && (none || state.LastDamageTick != player.LifeStateTick) {
+		return false
+	}
+	return none || (player.LifeStateTick <= state.LastDamageTick && state.LastDamageTick <= tick &&
+		state.LastAttackerId != state.PlayerId && state.DamageCount <= rules.MaximumHp)
 }
 
 // EvictionNotice is the Client error for a Match eviction: a stable code and

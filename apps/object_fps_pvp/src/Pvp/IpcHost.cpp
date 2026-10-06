@@ -78,7 +78,8 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_life_generation(p.lifeGeneration);state->set_magazine_ammo(p.magazineAmmo);
         state->set_reload_action_id(p.reloadActionId);state->set_reload_start_tick(p.reloadStartTick);
         state->set_reload_end_tick(p.reloadEndTick);state->set_last_shot_action_id(p.lastShotActionId);
-        state->set_last_shot_tick(p.lastShotTick);
+        state->set_last_shot_tick(p.lastShotTick);state->set_last_damage_tick(p.lastDamageTick);
+        state->set_damage_count(p.damageCount);state->set_last_attacker_id(p.lastAttackerId);
     }
     return message;
 }

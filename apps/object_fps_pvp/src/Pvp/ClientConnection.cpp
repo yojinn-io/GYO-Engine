@@ -452,9 +452,12 @@ struct ClientConnection::Impl {
                     const auto& player=*std::find_if(snapshot.players.begin(),snapshot.players.end(),[&](const auto& p){return p.playerId==combat.player_id();});
                     if(combat.life_generation()!=player.lifeGeneration || (combat.hp()==0)!=(player.lifeState==LifeState::Dead) ||
                        (player.lifeState==LifeState::Dead && combat.reload_action_id()!=0)){valid=false;break;}
-                    snapshot.combat.push_back({combat.player_id(),combat.hp(),combat.next_allowed_shot_tick(),combat.life_generation(),
+                    const CombatState record{combat.player_id(),combat.hp(),combat.next_allowed_shot_tick(),combat.life_generation(),
                         combat.magazine_ammo(),combat.reload_action_id(),combat.reload_start_tick(),combat.reload_end_tick(),
-                        combat.last_shot_action_id(),combat.last_shot_tick()});
+                        combat.last_shot_action_id(),combat.last_shot_tick(),combat.last_damage_tick(),combat.damage_count(),
+                        combat.last_attacker_id()};
+                    if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
+                    snapshot.combat.push_back(record);
                 }
                 if(!valid)continue;
                 std::scoped_lock lock(mutex);

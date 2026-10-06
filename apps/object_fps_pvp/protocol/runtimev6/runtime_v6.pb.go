@@ -1538,8 +1538,13 @@ type CombatState struct {
 	ReloadEndTick       uint64                 `protobuf:"varint,8,opt,name=reload_end_tick,json=reloadEndTick,proto3" json:"reload_end_tick,omitempty"`
 	LastShotActionId    uint64                 `protobuf:"varint,9,opt,name=last_shot_action_id,json=lastShotActionId,proto3" json:"last_shot_action_id,omitempty"`
 	LastShotTick        uint64                 `protobuf:"varint,10,opt,name=last_shot_tick,json=lastShotTick,proto3" json:"last_shot_tick,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Presentation-only hit record of the current life (pv6 contract §2): all
+	// three are zero before the first hit and reset on respawn.
+	LastDamageTick uint64 `protobuf:"varint,11,opt,name=last_damage_tick,json=lastDamageTick,proto3" json:"last_damage_tick,omitempty"`
+	DamageCount    uint32 `protobuf:"varint,12,opt,name=damage_count,json=damageCount,proto3" json:"damage_count,omitempty"`
+	LastAttackerId uint64 `protobuf:"varint,13,opt,name=last_attacker_id,json=lastAttackerId,proto3" json:"last_attacker_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CombatState) Reset() {
@@ -1638,6 +1643,27 @@ func (x *CombatState) GetLastShotActionId() uint64 {
 func (x *CombatState) GetLastShotTick() uint64 {
 	if x != nil {
 		return x.LastShotTick
+	}
+	return 0
+}
+
+func (x *CombatState) GetLastDamageTick() uint64 {
+	if x != nil {
+		return x.LastDamageTick
+	}
+	return 0
+}
+
+func (x *CombatState) GetDamageCount() uint32 {
+	if x != nil {
+		return x.DamageCount
+	}
+	return 0
+}
+
+func (x *CombatState) GetLastAttackerId() uint64 {
+	if x != nil {
+		return x.LastAttackerId
 	}
 	return 0
 }
@@ -1953,7 +1979,7 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x18maximum_reference_age_ms\x18\x05 \x01(\rR\x15maximumReferenceAgeMs\x12+\n" +
 	"\x11magazine_capacity\x18\x06 \x01(\rR\x10magazineCapacity\x12!\n" +
 	"\freload_ticks\x18\a \x01(\x04R\vreloadTicks\x12#\n" +
-	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\"\x90\x03\n" +
+	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\"\x87\x04\n" +
 	"\vCombatState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x0e\n" +
 	"\x02hp\x18\x02 \x01(\rR\x02hp\x123\n" +
@@ -1965,7 +1991,10 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x0freload_end_tick\x18\b \x01(\x04R\rreloadEndTick\x12-\n" +
 	"\x13last_shot_action_id\x18\t \x01(\x04R\x10lastShotActionId\x12$\n" +
 	"\x0elast_shot_tick\x18\n" +
-	" \x01(\x04R\flastShotTick\"\x8a\x02\n" +
+	" \x01(\x04R\flastShotTick\x12(\n" +
+	"\x10last_damage_tick\x18\v \x01(\x04R\x0elastDamageTick\x12!\n" +
+	"\fdamage_count\x18\f \x01(\rR\vdamageCount\x12(\n" +
+	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\"\x8a\x02\n" +
 	"\vShotRequest\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x126\n" +
 	"\x17observed_authority_tick\x18\x02 \x01(\x04R\x15observedAuthorityTick\x12\x15\n" +

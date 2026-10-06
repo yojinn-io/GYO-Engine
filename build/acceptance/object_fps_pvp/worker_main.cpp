@@ -99,6 +99,7 @@ public:
         ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
+        combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
@@ -177,6 +178,7 @@ std::size_t CheckMaximumDatagrams() {
         p->set_connection_quality_failures(ConnectionQualityFailedWindows-1);
         auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
         c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
+        c->set_last_damage_tick(max64);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max64);
     }
     check(wire::Type::Snapshot,snapshot);
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
@@ -195,6 +197,9 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177,"client duplicated authoritative combat defaults");
     Require(connection.State().snapshot->combat.at(0).hp==74 &&
         connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
+    Require(connection.State().snapshot->combat.at(0).lastDamageTick==connection.State().snapshot->tick &&
+        connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2,
+        "snapshot lost the hit record");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
     std::vector<std::jthread> producers;

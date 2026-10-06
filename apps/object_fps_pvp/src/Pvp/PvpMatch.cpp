@@ -318,6 +318,9 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
                     decision.targetLifeGeneration = target.state.lifeGeneration;
                     decision.damage = Engine::Math::Min(PvpCombatRules.shotDamage, target.combat.hp);
                     target.combat.hp -= decision.damage;
+                    ++target.combat.damageCount;
+                    target.combat.lastDamageTick = tick_;
+                    target.combat.lastAttackerId = playerId;
                     if (target.combat.hp == 0) Kill(target);
                 }
             }

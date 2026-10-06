@@ -148,6 +148,11 @@ message CombatState {
   uint64 reload_end_tick = 8;
   uint64 last_shot_action_id = 9;
   uint64 last_shot_tick = 10;
+  // Presentation-only hit record of the current life (pv6 contract §2): all
+  // three are zero before the first hit and reset on respawn.
+  uint64 last_damage_tick = 11;
+  uint32 damage_count = 12;
+  uint64 last_attacker_id = 13;
 }
 // Historical names are retained; requests and decisions cover Shot and Reload.
 enum ActionKind {
