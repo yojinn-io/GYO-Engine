@@ -182,6 +182,12 @@
 2. `python3 docs/architecture/plans/foundation-followups/scripts/compare_collision_corpus.py --base <base runner> --branch <branch runner> --output <dir>`。
 3. 回報每個查詢不同的筆數與第一筆差異；`comparison.json` 保存全部結果。統計以 `--stats`、退化現況以 `--degenerate` 取得。
 
+### FF-9（記錄器）
+
+- 2026-10-07：開始。與提出需求的消費端的權威變更批同一個 PR（見 PLAN 的分工表）。消費端的協議升版已合併，消費端條件成立。
+  - 檔位：使用者同意事前宣告以 ultracode 規劃（3 案、1 位評審、1 次對抗檢查）；容差、`IsValid` 規則、差異歸因局部 xhigh，其餘 high。
+  - 事前宣告（變動的公開函式、FF-1 翻轉與 ULP 上限、容差與 AABB 規則）在實作前寫入本記錄器。
+
 ### FF-4（記錄器）
 
 - 2026-10-05：接續使用者「把 Engine 側的功能完成」。分支 `claude/engine-ff4`，疊在 FF-1 上。檔位 high，不用 ultracode。

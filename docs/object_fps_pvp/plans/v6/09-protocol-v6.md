@@ -1,6 +1,6 @@
 # 第 09 批：協議 v6（唯一的 wire 變更）
 
-狀態：完成（2026-10-06；PR #57 待合併）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與
+狀態：完成（2026-10-06；PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 已合併，`5da939f`）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與
 [v6 契約](../../protocol-v6.zh-Hant.md)（第 01 批的草稿，本批定稿）。
 
 執行規則沿用 v5／本計畫 README：只做指定範圍、先凍結再量測、失敗跑次保留、長測另外授權。
