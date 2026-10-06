@@ -234,32 +234,28 @@
 | 函式 | 規則 |
 |---|---|
 | `IsValid(const Math::Aabb&)` | min、max 有限，每軸 `min <= max`（允許零厚度） |
-| `IsValid(const VerticalCapsule&)` | feet、height、radius 有限；`radius > 0`；`double(height) > 2.0*radius`；`ToCapsule` 導出的兩端點轉成 float 後有限 |
+| `IsValid(const VerticalCapsule&)` | feet、height、radius 有限；`radius > 0`；`height >= 2r`（沿用 `CapsuleQueries.cpp:17-21` 的 double 判定；`Collision.hpp:19` 的契約 "at least two radii" 不變）。height == 2r（球）合法 |
+| `IsValid(const Math::Capsule&)` | 兩個端點與 radius 有限；`radius > 0`（等於現行 `CapsuleQueries.cpp:22-26`）。長度 0 的膠囊（球）合法 |
 | `IsValid(const Math::Ray&)` | origin、direction 有限；direction 不是零向量 |
 
 - **Aabb**：
   - 規則等於現行兩份 Engine 驗證（`Collision.cpp:170-172`、`CapsuleQueries.cpp:27-30`），也等於 `Math::Aabb` 的有效定義（`Aabb.hpp:10`）再加上有限性。
   - double 演算法對零厚度有定義。「非空」若有需要，由消費端以內容規則另外檢查。
-- **膠囊**：
-  - 拒絕 `height == 2r`，包括 FF-1 `--degenerate` 的 25 個。
+- **膠囊**（2026-10-07 方向修正，見文末修訂）：
+  - 退化膠囊造成的中止一併消除：height == 2r 維持合法，`IsValid` 沿用現行 double 驗證。
+  - 理由：FF-1 量過的 25 個 height == 2r 案例，double 路徑全部正常；只有 float 路徑會讓 segment 上下端顛倒，並在 `Collision.cpp:109` 中止。float 路徑刪除後這個危險不存在；double 的 `Shape` 以 double 計算長度，結果 ≥ 0（`CapsuleQueries.cpp:145-148`）。
   - float `radius*2.0f`（`Collision.cpp:33`）與 double `2.0*radius`（`CapsuleQueries.cpp:20`）對有限輸入的判定相同：2r 在 float 中精確，溢位時兩者都拒絕。
-  - 不設最小半徑（推論）：float 演算法刪除後，端點只由 double `Shape`（`:145-149`）導出，長度＝height−2r>0。`ToCapsule` 的捨入是單調的，端點可能重合成球（合法的 `Math::Capsule`），但不會上下顛倒。
-  - 端點有限：少了這條，`IsValid` 為真時，薄包裝仍可能在 `Math::Capsule` 驗證（`:22-26`）中止。這與退化膠囊是同一類坑。
-  - 端點由 `IsValid` 以與 `ToCapsule` 相同的運算式直接計算（`Shape`：double 的 feet.y＋r，再加上 height−2r；以 `ToVec3` 轉成 float 後檢查有限），不呼叫 `ToCapsule` 或任何會 assert 的函式（`IsValid` 是 noexcept）。
-  - `Collision.hpp:18-19` 的「at least two radii」改為「greater than two radii」。
-  - 註明 `VerticalCapsule` 不接受球，`Math::Capsule` 接受。
+  - 不設最小半徑，也不檢查 `ToCapsule` 導出端點的有限性（沿用現行）：極端輸入（例：feet.y＝3e38、height＝1e38）在 `IsValid` 為真時，仍在轉換後的內部 assert 中止，與現在相同，記為已知限制。
+  - `VerticalCapsule` 與 `Math::Capsule` 都接受球。
 - **射線**（推論）：任何非零的有限 float 方向，在 double 中正規化都不會溢位，也不會下溢。
-- **純量與 `Math::Capsule`**：
-  - `maximumDistance`、`sweepRadius`（有限且 ≥0）與 Segment 端點的檢查，以及 `Math::Capsule` 的驗證，維持內部 assert。
-  - 寫進 header 的前置條件，不公開。
-- **Engine 內部**：所有檢查改為 `GYO_ASSERT(IsValid(...))`。退化膠囊在非 noexcept 的 `ToCapsule` 中斷言，在可拋出的 handler 下可以 catch。
+- **純量**：`maximumDistance`、`sweepRadius`（有限且 ≥0）與 Segment 端點的檢查維持內部 assert，寫進 header 的前置條件，不公開。`Math::Capsule` 的驗證改為公開的 `IsValid(Math::Capsule)`。
+- **Engine 內部**：所有檢查改為 `GYO_ASSERT(IsValid(...))`。
   - commit 1、2 中，float 路徑在 `IsValid` 之外保留 `Collision.cpp:24-26` 與 `:193-194` 的內部長度檢查；下表兩個「放寬」列只在 commit 3（刪除 float 路徑）生效，對應的不中止測試也在 commit 3。
 
 合法輸入集合的變化（只有下列；對新舊規則都合法的輸入，結果見 §5）：
 
 | 方向 | 函式 | 輸入 |
 |---|---|---|
-| 收緊 | 接收 `VerticalCapsule` 的 7 個（`ToCapsule`、兩個 V 版查詢、Overlap×2、Sweep×2） | `height == 2r`；`ToCapsule` 端點溢位 |
 | 放寬 | `RaycastAabb`、`RaycastCapsule`×2 | 方向長度在 (0, 1e-6] |
 | 放寬 | `RaycastAabb`、V 版 `RaycastCapsule`、V 版 `SweepSphereAgainstCapsule` | float `Length` 溢位的有限方向或路徑（`Collision.cpp:25-26`、`:193-194`） |
 | 不變 | 接收 `Aabb` 的 3 個 | — |
@@ -297,29 +293,27 @@
 - **branch 的 `--stats`**：
   - RaycastCapsule：`both_miss=2088 both_hit=402`，兩種翻轉都是 0，ULP `{402,0,0,0,0,0}`，`max_ulp=0`。
   - SweepSphereAgainstCapsule：`both_miss=2200 both_hit=185`，翻轉 0，ULP `{185,0,0,0,0,0}`，`max_ulp=0`。
-- **branch 的 `--degenerate`**：25 個全部 `IsValid`＝false。
+- **branch 的 `--degenerate`**：25 個全部 `IsValid`＝true；commit 3 之後 25 個查詢全部執行並正常回傳（原本因 float 路徑中止而不執行的 2 個也執行）。
 - **靈敏度**（scratch，不提交）：`kTolerance` 改成 1e-6 時，分析器必須報告 §1 的 16 筆超出宣告。
 
 **6. 測試與工具**
 
-- **`CollisionTests.cpp:164-171`**：輸入 `{{-1,-1.5f,-1},1.0f,0.5f}` 的 height＝2r，在新規則下會 assert。
-  - commit 1 改成 `{{-1,-2.5f,-1},2.0f,0.5f}`。上半球中心仍是 (-1,-1,-1)；Sweep 的 `Roots` 運算元相同，fraction 逐位元相同；normal 只可能有捨入級差異，Approx 期望值不變。
-  - 註解改為「上半球接近頂點」。
-  - 這是唯一要改的既有輸入。
+- **既有輸入都不改**：`CollisionTests.cpp:164-171` 的 height＝2r 在新規則下仍合法（2026-10-07 方向修正）。
 - **`:98-111`**：統一後恆等。期望值不變；改名與逐位元比較在 commit 3。
 - **其餘既有期望值不變**：數值檢查是 Approx 或精確值；assert 案例（`:42-47`、`:59`、`:243-251`）在新規則下仍不合法。
 - **commit 1 新增 `IsValid` 邊界測試**：
   - Aabb：各軸 `min==max` 合法；`min>max`、NaN、inf 不合法。
-  - 膠囊：`height==2r` 不合法，`nextafter(2r)` 合法；r 為 0、負或非有限時不合法；端點溢位（例：feet.y＝3e38、height＝1e38）不合法。
+  - `VerticalCapsule`：`height==2r` 合法；比 2r 小一個可表示值時不合法；r 為 0、負或非有限時不合法。
+  - `Math::Capsule`：長度 0（球）合法；端點非有限、r 為 0 或負時不合法。
   - 射線：零向量、−0 向量、非有限都不合法。
-  - 退化膠囊讓 7 個函式都 `GYO_CHECK_ASSERTS`。
+  - 球（height == 2r 的 `VerticalCapsule`、長度 0 的 `Math::Capsule`）的查詢結果正確，例如射線穿過球心時距離恰為 d − r（double 多載在 commit 1；V 版多載在 commit 3 刪除 float 路徑後）。
 - **commit 3 新增**（float 路徑刪除後才成立）：
   - 次正規方向，以及長度在 (0,1e-6] 的方向，查詢都不中止。
-  - 半徑極小、height 略大於 2r 的膠囊，各查詢都不中止。
+  - 半徑極小、height 等於或略大於 2r 的膠囊，各查詢都不中止（含 FF-1 `--degenerate` 的 25 個）。
   - `CollisionCorpusTests` 加上「兩個多載翻轉為 0、`maximumUlp` 為 0」，作為四平台的程序內自洽檢查。
 - **`CollisionCorpus.{hpp,cpp}`**：輸入與紀錄格式不變，只改說明 float 演算法的註解（`hpp:20-21`）。
 - **`CollisionCorpusMain.cpp`**：
-  - `--degenerate` 在 commit 1 改為報告 `IsValid`，並刪除 float 端點與 not-run 分支。
+  - `--degenerate` 在 commit 1 改為報告 `IsValid`；float 端點與 not-run 分支在 commit 3 刪除。
   - `--stats` 的格式不變。
 - **分析器**：現行 `scripts/compare_collision_corpus.py` 只數不同筆數與第一筆差異（`:40-52`），不足以檢查本宣告。
   - 在任何實作之前（commit 0）擴充並凍結，內容包括：
@@ -347,11 +341,16 @@
 **9. 遷移清單 FF-9 節**
 
 - `min==max` 的 AABB 不會被拒。
-- 球形 `VerticalCapsule`（height＝2r）會被拒，未啟用產品有兩處用法。
+- 球形 `VerticalCapsule`（height＝2r）與長度 0 的 `Math::Capsule`（start == end）仍然合法；未啟用產品的兩處球形膠囊與球形頭部 hurt region 不受影響。
 - 近平行（\|d_i\|≤1e-6）的射線不再被當成平行，視線判定可能由未中變為命中。
 - 內容驗證改為在載入時呼叫 `IsValid`。
 
-使用者決定（2026-10-07）：`RaycastAabb` 用 double slab；接受 commit 0（分析器先凍結）與退化膠囊拒絕移到 commit 1；消費端 golden 不更新。
+使用者決定（2026-10-07）：`RaycastAabb` 用 double slab；接受 commit 0（分析器先凍結）；消費端 golden 不更新。
+
+**修訂（2026-10-07，使用者方向變更，實作前）**：「退化膠囊一併拒絕」改為「退化膠囊造成的中止一併消除」。
+- `IsValid(VerticalCapsule)` 沿用現行 double 驗證（height ≥ 2r，球合法）；新增公開 `IsValid(Math::Capsule)`（端點與 radius 有限、radius > 0，等於現行驗證；長度 0 合法）。不加 `ToCapsule` 端點有限的檢查。
+- 因此 commit 1 不改變任何輸入的合法性：FF-1 語料在 commit 1、2 必須全等。原「退化膠囊拒絕移到 commit 1」刪除。
+- `RaycastCapsule(Math::Capsule)`、`SweepSphereAgainstCapsule(Math::Capsule)` 明列為不變的函式（本來就是 double 路徑）；語料上限（§5）不變。
 
 ### FF-4（記錄器）
 

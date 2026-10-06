@@ -55,7 +55,7 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
 - 容差是 `1e-7`。
 - 結果會變的只有三個：`RaycastAabb`，以及 `VerticalCapsule` 版的 `RaycastCapsule`、`SweepSphereAgainstCapsule`。
 - `IsValid(Aabb)` 允許零厚度。
-- `IsValid(VerticalCapsule)` 拒絕 `height <= 2r`。
+- `IsValid(VerticalCapsule)` 沿用現行規則：`height >= 2r` 合法（球合法）；另有公開的 `IsValid(Math::Capsule)`（2026-10-07 方向修正）。
 
 ### pvp 使用的查詢（事實）
 
@@ -103,10 +103,7 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
 - **身體**（`Arena.cpp:30`）：
   - `bodyHeight < radius * 2` 改為 `!Engine::Collision::IsValid(Engine::Collision::VerticalCapsule{{}, bodyHeight, radius})`。
   - 其餘遊戲規則不動：`positive`、`eyeHeight <= bodyHeight`、出生點兩個、牆數 ≤1024。
-- **判定變化**：
-  - 唯一的收緊：`body_height == 2·radius` 由合法變為不合法（D3 的退化膠囊拒絕）。
-  - arena 格式版本維持 1；這項收緊記錄在 protocol-v6 §7。
-  - 過渡期：commit 1 之後、commit 2 之前，這種 arena 會在 Engine assert 中止，而不是被拒絕。現有內容與測試都沒有這種 arena。
+- **判定變化：無。** `IsValid(VerticalCapsule)` 沿用現行規則（height ≥ 2r），與 `bodyHeight < radius * 2` 的判定完全相同；`body_height == 2·radius` 維持合法，arena 格式版本與內容契約都不變（2026-10-07 方向修正）。
 - **現有內容的判定不變**（逐一確認）。以下 arena 的牆每軸 `min<max`，且 height＞2r：
   - `assets/object_fps_pvp/pvp_arena.json`（5 面牆，1.8／0.25）。
   - `tests/object_fps_pvp/fixtures/arena.json`（4 面牆，1.8／0.25）。
@@ -116,11 +113,10 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
 
 ### protocol-v6 §7 的紀錄
 
-本批完成時在 §7 記錄三項：
+本批完成時在 §7 記錄兩項：
 
 1. 射擊判定的語意：`RaycastAabb` 只有方向分量恰為 0 才算平行，近平行射線不再視為平行；V 版 `RaycastCapsule` 改用 double，擦邊命中可能翻轉、距離有 ULP 變化。
 2. 第 03 批 35 個情境的 digest 不變（記錄 base 的 `--run` 與 golden 雜湊）。
-3. arena v1 的 `body_height == 2·radius` 由合法變不合法，格式版本維持 1（比照 D11⑨：內容契約的驗證規則收緊、不升版，在契約註明）。本批 Architecture Delta 第 3 點同步加上這項。
 
 ### 射擊查詢
 
@@ -142,8 +138,7 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
   - 零厚度的牆被拒（產品規則）。
   - `min>max` 被拒。
   - NaN 被拒（既有，`PvpMatchTests.cpp:733`）。
-  - `body_height == 2·radius` 被拒。
-  - `body_height = nextafter(2·radius)` 且 `eye_height <= body_height` 時合法。
+  - `body_height == 2·radius` 合法（現行規則，2026-10-07 方向修正）；比 2·radius 小一個可表示值時被拒。
 - golden 不變。
 
 ### L2
@@ -158,7 +153,9 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
 - 現有 arena 內容的判定改變。
 - 本節以外的期望值改變。
 
-使用者決定（2026-10-07）：`RaycastAabb` 用 double slab；接受 commit 0（分析器先凍結）、退化膠囊拒絕移到 commit 1、golden 不更新；arena v1 不升版，在契約註明（比照 D11⑨）。規劃以 ultracode 進行（workflow `wf_28494fb3-383`，對抗檢查 major 1、minor 10，全部套入）。
+使用者決定（2026-10-07）：`RaycastAabb` 用 double slab；接受 commit 0（分析器先凍結）、golden 不更新。
+
+**方向修正（2026-10-07，實作前，使用者）**：「退化膠囊一併拒絕」改為「退化膠囊造成的中止一併消除」（見 HANDOFF D3 的修訂）。`IsValid(VerticalCapsule)` 沿用現行規則（球合法），新增公開 `IsValid(Math::Capsule)`；arena 的合法性與契約都不變；「退化膠囊拒絕移到 commit 1」刪除，commit 1、2 不改變任何輸入的合法性；權威 digest 仍預期全部不變。PvP 的骨骼 hitbox 不在本批，列為 v7 候選。規劃以 ultracode 進行（workflow `wf_28494fb3-383`，對抗檢查 major 1、minor 10，全部套入）。
 
 ## commit 拆分
 
@@ -167,12 +164,12 @@ Engine 側（容差、變動的公開函式、FF-1 語料上限、`IsValid` 規�
 | 順序 | 內容 | 負責 | 權威 digest |
 |---|---|---|---|
 | 0 | FF-9 分析器擴充並凍結（逐查詢翻轉與 ULP、`/vertical` 對 base `/general`、`RaycastAabb` 精確參考），以 base 對 base 自我檢查 | FF-9 | 不變 |
-| 1 | 公開 `IsValid`（含退化膠囊拒絕）；Engine 內部 assert 改用；`CollisionTests` 的退化輸入改為合法輸入 | FF-9 | 必須不變 |
+| 1 | 公開 `IsValid`（Aabb、VerticalCapsule、Math::Capsule、Ray；合法輸入集合不變）；Engine 內部 assert 改用 | FF-9 | 必須不變 |
 | 2 | `Arena::Validate`、`ShotQuery` 改用 `IsValid`；arena 測試 | 本批 | 必須不變 |
 | 3 | 公開查詢統一、刪除 float 演算法（`RaycastAabb` 改 double slab，`VerticalCapsule` 版改為薄包裝） | FF-9 | 必須不變（預期變化集合為空） |
 | 4 | 文件：FF PLAN／HANDOFF、本文件、protocol-v6 §7、dev_log | 各自 | — |
 
-- 2026-10-07 使用者決定：新增 commit 0，退化膠囊拒絕移到 commit 1，golden 不更新。
+- 2026-10-07 使用者決定：新增 commit 0，golden 不更新；方向修正後 commit 1 不改變任何輸入的合法性。
 - commit 2 證明「改用 `IsValid`」本身不改權威；commit 3 的語意變化（近平行、擦邊）在 35 個情境中都觀測不到，所以每個 commit 的 digest 都必須不變，每個 commit 都能通過 L1。
 
 ## 交付
@@ -240,7 +237,7 @@ pvp 端（Engine 端的七點由 FF-9 在 FF PLAN 記錄）：
 
 1. 需求：HANDOFF 第10項（Collision float／double 兩套演算法並存）與決定 D3。
 2. 問題：同形狀的查詢有兩套精度與容差；pvp 的 arena 合法性規則（`>=`）與 Engine 的前置條件（`>`）不一致，各自維護。
-3. 邊界：pvp 權威判定的數值結果（protocol-v6 §7）；pvp arena 合法性改由 Engine 公開檢查提供，產品只保留產品自有的額外規則；arena v1 內容契約的驗證規則收緊（`body_height == 2·radius` 不合法），不升版，理由同 D11⑨。
+3. 邊界：pvp 權威判定的數值結果（protocol-v6 §7）；pvp arena 合法性改由 Engine 公開檢查提供，產品只保留產品自有的額外規則。
 4. 影響：pvp Match（射擊；容差不是 `1e-7` 時含移動）、Client 預測（只在移動變化經事前宣告時）、`tests/object_fps_pvp`、權威 digest（預期不變）。
 5. 依賴方向不變：產品→Engine Collision 是既有方向；不新增邊。
 6. Ownership：幾何合法性歸 Engine Collision；arena 內容規則（數量、出生點、非空牆等）仍歸 pvp。

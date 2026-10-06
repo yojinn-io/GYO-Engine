@@ -27,7 +27,7 @@
 | D0c | 規劃用 ultracode：3 個分批方案、1 位評審、1 次對抗式檢查 |
 | D1 | Engine 工作的計畫與紀錄放在兩個 Engine 計畫夾（IP、FF），正式清單移過去；本文件只保留產品列 |
 | D2 | 受擊時點新增 wire 欄位：`last_damage_tick`、同一生命內遞增的受擊計數，**並帶最後攻擊者 id**；第 13 批做受擊方向指示 |
-| D3 | Collision（使用者原話：「這個地方不想再埋坑，用徹底的方案」）：全部公開查詢（含 `RaycastAabb`）共用一套 double 實作與單一容差；`VerticalCapsule` 多載改為薄包裝；公開合法性檢查，並讓產品的 `Arena::Validate`、`ShotQuery` 改用；退化膠囊一併拒絕（FF-9＋第 10 批） |
+| D3 | Collision（使用者原話：「這個地方不想再埋坑，用徹底的方案」）：全部公開查詢（含 `RaycastAabb`）共用一套 double 實作與單一容差；`VerticalCapsule` 多載改為薄包裝；公開合法性檢查，並讓產品的 `Arena::Validate`、`ShotQuery` 改用；~~退化膠囊一併拒絕~~ **退化膠囊造成的中止一併消除**（FF-9＋第 10 批）。2026-10-07 修訂（實作前，使用者原話）：「『退化膠囊一併拒絕』（D3④）改為『退化膠囊造成的中止一併消除』……IsValid(VerticalCapsule) 沿用現行 double 驗證：有限值、radius > 0、height ≥ 2r……height == 2r（球）維持合法。IsValid(Math::Capsule)：端點有限、radius > 0。長度 0 的膠囊（球）合法。理由：FF-1 量過 25 個 height == 2r 的案例，double 路徑全部正常，只有 float 路徑會讓 segment 上下端顛倒並在 Collision.cpp:109 中止。FF-9 刪掉 float 路徑後，這個危險就不存在了」 |
 | D4 | GYOP 24-byte 標頭的 C++ 編解碼收進 Engine，位元組不變，排在第 09 批之前（FF-8） |
 | D5 | 刪除未編譯的 29 檔，並清理只被它們使用的孤兒資產（第 08 批） |
 | D6 | 第 8 項的共通測試列全部改為結構條件（FF-2） |
@@ -418,6 +418,7 @@
 - 2026-10-07：事前宣告完成（ultracode，workflow `wf_28494fb3-383`；對抗檢查 major 1、minor 10 全部套入），使用者核准：`RaycastAabb` 用 double slab；新增 commit 0（分析器先凍結）、退化膠囊拒絕移到 commit 1、golden 不更新；arena v1 不升版（比照 D11⑨）。
   - 權威 digest 預期變化集合為空（35 個情境逐位元不變）；Engine 端 FF-1 語料恰好 435 筆不同。詳見本批文件的「事前宣告」與 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
   - 下一步：commit 0（擴充並凍結分析器），之後才寫 Collision。
+- 2026-10-07：使用者方向修正（實作前）：退化膠囊改為「中止一併消除」（D3 修訂），height == 2r 與長度 0 的膠囊維持合法；arena 的合法性與契約不變；commit 1 不改變任何輸入的合法性；digest 仍預期全部不變。PvP 骨骼 hitbox 列為 v7 候選。修訂後的宣告經使用者確認後寫入。
 
 ## 延後項目：現況與對應批次
 
