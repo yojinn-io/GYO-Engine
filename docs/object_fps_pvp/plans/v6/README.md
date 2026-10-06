@@ -33,7 +33,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 完成，PR [#56](https://github.com/yojinn-io/GYO-Engine/pull/56) 已合併（`c1ee2b2`；B1 見 BASELINE；交錯 A/B 調查與 D21 見 HANDOFF） | IP-2 之後重取基線 |
 | 07a | 驗收工具修正：連線時初始 seed 的夾住（見 [HANDOFF](HANDOFF.md) 的第 07a 批） | xhigh（主對話） | 完成，隨第 07 批的 PR | 豁免每位玩家一次的初始 seed 夾住；停頓重設仍判干擾 |
 | 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成，PR [#55](https://github.com/yojinn-io/GYO-Engine/pull/55) 已合併（`5b0553a`） | 29 檔與孤兒資產 |
-| 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 進行中（分支 `claude/pvp-v6-batch09`） | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
+| 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 進行中（分支 `claude/pvp-v6-batch09`；契約定稿、commit 1～4 完成，L1 通過；L2／L3 待執行） | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
 | 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 未開始 | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 未開始 | 第 1 項 |
 | 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 未開始 | 第 4 項 |

@@ -191,7 +191,7 @@ Authority Tick
   - 敏感性：每個成員、牆與出生點的順序、−0。
   - Gateway 拒絕 digest 為 0 的 Ready，並原值轉送。
   - id／version 相同而內容不同時，HTTP join 與 Welcome 兩條路徑都以 `arena_content_mismatch` 拒絕（Welcome 路徑由假 Gateway 讓兩者帶不同 digest）。
-- 大小：最大玩家數 2，所有欄位取契約允許的最大編碼時，完整 Snapshot UDP 為 545 bytes（v5 為 487）；連契約外的型別最大值也只有 585 bytes。Welcome 最壞為 213 bytes（arena_id 64 bytes）。都 ≤1200；既有的最大 datagram 測試加入新欄位。
+- 大小：最大玩家數 2，所有欄位取契約允許的最大編碼時，完整 Snapshot UDP 為 545 bytes（v5 為 487）；既有的最大 datagram 測試（worker probe，部分欄位取型別最大值）實測 587 bytes。Welcome 最壞為 213 bytes（arena_id 64 bytes）。都 ≤1200；既有的最大 datagram 測試加入新欄位。
 
 Architecture Delta（第 09 批，依 AGENTS §3）：
 

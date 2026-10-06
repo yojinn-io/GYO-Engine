@@ -402,6 +402,10 @@
   - 大小：完整 Snapshot 545 bytes（契約值域內最大；型別最大值 585），v5 為 487／527。
   - 使用者決定：L1 的「同 Tick 多次命中」改測可達情境（同 Tick 互射、致命命中後死者同 Tick 的射擊被拒且不寫入），契約保留通用規則。
   - 計畫與程式的差異（行號偏移、漏列的 `WireTests.cpp:79-81` 與 `network_main.cpp:116-122` 位元組版本測試、HTTP join 回覆版本的截斷）寫進 dev_log，在對應 commit 處理。
+- 2026-10-06：commit 1～4 完成（`708e877` 改名、`f255bf1` 版本 6、`fb6ec0a` 受擊欄位、`96ff97a` arena digest），每個 commit 都通過 `go test -race` 與完整 CTest（60／60）。突變 12 個全部被抓到。詳見 [dev_log](../../../dev_logs/2026_10_06_pvp_v6_batch09.zh-Hant.md)。
+  - 權威不變：同機兩樹（base `c1ee2b2`，暫時的 worktree，用完已移除）35 個情境 0 不同，輸出逐位元相同。
+  - 未以 L1 覆蓋：IpcHost 的 Snapshot 轉換（內部函式）；以程式審查與 L2 確認（Go 的規則 4 會讓漏寫在第一次死亡時暴露）。
+  - commit 5（文件）：產品 `protocol/README.md` 改寫為 pv6、聯網架構文件的現行 wire 描述、dev_log。下一步：開 PR 取得四平台 CI，再以同一個 commit 做 L2（需要機器閒置，先徵求使用者同意）與 L3（使用者操作）。
 
 ## 延後項目：現況與對應批次
 

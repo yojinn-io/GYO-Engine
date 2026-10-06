@@ -1,11 +1,14 @@
 # Object FPS PvP contracts
 
-Production Client, Gateway and Runtime use protocol v5 and reject v1–v4.
-The product-owned [v5 contract](../../../docs/object_fps_pvp/protocol-v5.zh-Hant.md)
-is the single source for gameplay, field validation, identity, timing and delivery
-rules. The [batch plan](../../../docs/object_fps_pvp/plans/v5/README.md) tracks
-implementation and acceptance; the prior [v4 baseline](../../../docs/object_fps_pvp/plans/v4/STABLE_BASELINE.md)
-does not certify v5.
+Production Client, Gateway and Runtime use protocol version 6 (pv6) and reject
+every other version. The product-owned [pv6 contract](../../../docs/object_fps_pvp/protocol-v6.zh-Hant.md)
+states what pv6 changes; every rule it does not restate stays as written in the
+[pv5 contract](../../../docs/object_fps_pvp/protocol-v5.zh-Hant.md). Together they are
+the single source for gameplay, field validation, identity, timing and delivery rules.
+The [v6 plan](../../../docs/object_fps_pvp/plans/v6/README.md) tracks implementation and
+acceptance. The version value has one definition per owner and language: C++
+`wire::ProtocolVersion`, Go `adapter.ProtocolVersion`, and the acceptance expected
+values; `object_fps_pvp.protocol_version` checks that they agree.
 
 `client_v6.proto` defines remote Client ↔ Gateway payloads.
 `runtime_v6.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
@@ -27,6 +30,18 @@ negative for a command that arrived after its sequence was substituted) and its
 sequence. Adapters keep their presence, reject |slack| above 1,000,000 us and a
 sequence outside 1..last_resolved_command; only the Client's phase tracking reads
 them (field 16, the former `epoch_start_wait_us`, is reserved).
+`CombatState.last_damage_tick`, `damage_count` and `last_attacker_id` are the
+presentation-only hit record of the current life: all zero before the first hit, written
+by the Match when a legal Shot hits the player, kept while dead and reset on respawn.
+Adapters require all zero or all set, a tick inside the current life state and the
+snapshot, an attacker other than the player, a count no larger than maximum_hp, and a
+dead player whose last hit is its death tick. Nothing in the authority reads them.
+`Ready.arena_digest` and `Welcome.arena_digest` (fixed64) carry the Match's arena content
+digest: FNV-1a 64 over the parsed arena in a canonical byte order, zero meaning missing.
+The Gateway rejects a zero digest at readiness and forwards it verbatim into Welcome,
+the HTTP join reply and the room list; it never computes or compares it. The Client
+compares it on both join paths and fails with `arena_identity_mismatch` or
+`arena_content_mismatch`.
 `PlayerState.connection_quality_failures` counts the failed 10-second connection-quality
 windows in a row (0-2); `PlayerInput.observed_authority_tick` is the latest snapshot
 tick the Client applied, and a merged window carries the largest. The Match evicts
