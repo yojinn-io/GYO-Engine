@@ -389,6 +389,27 @@
   - L2：最差窗口由 30.5%／46.5% 降到 7.7%／15.9%，但 `CONNECTION POOR` 仍會出現。原因是按下縮放角到開始拖動的空窗（macOS），以及原因未明的 `nextDrawable` 停頓，依 D19 由 v7 的執行緒分離處理。
   - [第 07 批](07-measurement-baseline-b1.md) 的 B1 以這個狀態為準。
 
+## 第 09 批進度（記錄器）：協議 pv6
+
+- 2026-10-06：開始（使用者指示「繼續 09 批」）。前置都已合併：第 02、03 批，FF-3、FF-8；第 07、07a 批（#56，`c1ee2b2`）。分支 `claude/pvp-v6-batch09` 自 master `c1ee2b2`，同一 PR 帶上 #56 的合併狀態同步與 v7 任務清單的追加。
+  - 檔位：使用者已開啟 ultracode；commit 0（契約定稿）以 ultracode 規劃（3 案、1 位評審、1 次對抗檢查；設計者 high，評審與對抗 xhigh）。之後主體 high，版本閘、解碼與 arena 拒絕路徑局部 xhigh。
+  - 開始時以 grep 重新產生版本與名稱的檢查表（185 列，涵蓋 `apps/object_fps_pvp`、`build/acceptance/object_fps_pvp`、`tests/object_fps_pvp`，不含產生的 `.pb.go`）；逐列結果寫進 dev_log。
+- 2026-10-06：commit 0 契約定稿（[protocol-v6](../../protocol-v6.zh-Hant.md)），以 ultracode 規劃（workflow `wf_315d6c56-0c0`；對抗檢查第一次因 API 529 失敗，續跑後完成）。對抗檢查判定成立：major 1（grep 允許殘留的類別太窄）、minor 12，全部套入。使用者核准。
+  - 受擊：`CombatState` 11～13（`last_damage_tick`、`damage_count`、`last_attacker_id`），三欄全 0＝沒有受擊，解碼驗證 4 條（Go 與 Client 相同）。
+  - arena：13 個成員依宣告順序的 big-endian 位元組，`Fnv1a64`；Ready 9、Welcome 10（fixed64），JSON 十進位；錯誤碼 `arena_identity_mismatch`、`arena_content_mismatch`（只在 Client 本機）。
+  - 版本：只接受 6；產品 Go 由 `adapter.ProtocolVersion` 導出兩種型別；跨語言一致性測試為產品 CTest，以原始碼文字解析 Go／Python 定義。
+  - 命名：`gameplay_v5`／`--gameplay-v5` 與 v5 測試名稱保留（v5 指遊戲版本）；指現行 wire 版本者改為中性或讀常數。
+  - 大小：完整 Snapshot 545 bytes（契約值域內最大；型別最大值 585），v5 為 487／527。
+  - 使用者決定：L1 的「同 Tick 多次命中」改測可達情境（同 Tick 互射、致命命中後死者同 Tick 的射擊被拒且不寫入），契約保留通用規則。
+  - 計畫與程式的差異（行號偏移、漏列的 `WireTests.cpp:79-81` 與 `network_main.cpp:116-122` 位元組版本測試、HTTP join 回覆版本的截斷）寫進 dev_log，在對應 commit 處理。
+- 2026-10-06：commit 1～4 完成（`708e877` 改名、`f255bf1` 版本 6、`fb6ec0a` 受擊欄位、`96ff97a` arena digest），每個 commit 都通過 `go test -race` 與完整 CTest（60／60）。突變 12 個全部被抓到。詳見 [dev_log](../../../dev_logs/2026_10_06_pvp_v6_batch09.zh-Hant.md)。
+  - 權威不變：同機兩樹（base `c1ee2b2`，暫時的 worktree，用完已移除）35 個情境 0 不同，輸出逐位元相同。
+  - 未以 L1 覆蓋：IpcHost 的 Snapshot 轉換（內部函式）；以程式審查與 L2 確認（Go 的規則 4 會讓漏寫在第一次死亡時暴露）。
+  - commit 5（文件）：產品 `protocol/README.md` 改寫為 pv6、聯網架構文件的現行 wire 描述、dev_log。下一步：開 PR 取得四平台 CI，再以同一個 commit 做 L2（需要機器閒置，先徵求使用者同意）與 L3（使用者操作）。
+- 2026-10-06：PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 開啟，四平台 CI 通過。使用者要求把手動的突變檢查做成產品自有工具：`tests/object_fps_pvp/run_mutations.py`、`mutations.json`、說明書 `run_mutations.zh-Hant.md`（commit 6 `8fbc2e5`），第 09 批 12／12 killed。
+- 2026-10-06：L2（事前宣告 `e6fa12bf…`）：雙 GUI 短測 before／after 都通過；25 案矩陣 before 25／25、after 25／25；沒有疑似回歸。主機全程在約 4 ms 狀態。詳見 dev_log。下一步：L3（使用者）。
+- 2026-10-06：L3（使用者）全部正常；arena 內容不一致的 Client 以 `arena_content_mismatch` 被拒（第一次因我的副本漏了 `lib` 沒有執行到，修正後重做）。取得視窗時的 `CONNECTION POOR` 對上已知的 `nextDrawable` 停頓（D19，v7）。**第 09 批完成**，PR #57 待合併；暫時的 worktree（before／after）移除。下一批由使用者指定。
+
 ## 延後項目：現況與對應批次
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批

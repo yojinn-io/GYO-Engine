@@ -21,8 +21,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv5"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
+	client "gyo.local/object_fps_pvp/protocol/clientv6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
 )
 
 const sessionTimeout = 5 * time.Second
@@ -197,7 +197,7 @@ func (s *Server) room() map[string]any {
 		status = "unavailable"
 	}
 	return map[string]any{"id": 1, "match_id": 1, "players": len(s.players), "capacity": s.ready.MaxPlayers,
-		"status": status, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion}
+		"status": status, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion, "arena_digest": s.ready.ArenaDigest}
 }
 
 type joinRequest struct {
@@ -273,7 +273,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 func (s *Server) reservationData(p *reservation) map[string]any {
 	return map[string]any{"match_id": 1, "player_id": p.playerID, "session_id": p.session.ID,
 		"session_token": p.session.Token, "udp_ip": s.config.AdvertiseIP, "udp_port": s.udp.LocalAddr().(*net.UDPAddr).Port,
-		"protocol_version": adapter.ClientVersion, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion}
+		"protocol_version": adapter.ClientVersion, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion, "arena_digest": s.ready.ArenaDigest}
 }
 func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -437,7 +437,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity})
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity})
 }
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)

@@ -87,7 +87,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     MovementTraceWriter trace(output/"clients-commands.jsonl");ActionEvidenceWriter evidence(output);
     std::string error;const auto arena=Arena::Load(arenaPath,error);Require(arena.has_value(),error);
     std::array<ClientConnection,2> clients;
-    for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version);
+    for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));
     clients[0].CreateAndJoin(gateway);
     Wait([&]{const auto s=clients[0].State();Require(s.error.empty(),s.error);return s.phase==ConnectionPhase::Playing;});
     clients[1].Refresh(gateway);

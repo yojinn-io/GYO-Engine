@@ -703,3 +703,99 @@ TEST_CASE("PvP respawn selects the farthest free spawn and dead opponents do not
         CHECK(LifePlayer(match, 2).lifeGeneration == 2);
     }
 }
+
+TEST_CASE("PvP hit record is written only by player hits and follows the victim's life") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    CombatStep(match);
+    CHECK(CombatPlayer(match, 2).lastDamageTick == 0);
+    CHECK(CombatPlayer(match, 2).damageCount == 0);
+    CHECK(CombatPlayer(match, 2).lastAttackerId == 0);
+
+    // A miss, a reload of a full magazine and a cooldown rejection write nothing.
+    REQUIRE(match.SubmitActions({1, {{1, 1, 0, -0.5F}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({2, {{1, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(Decisions(match).back().hitKind == ShotHitKind::Miss);
+    REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(Decisions(match).back().rejection == ShotRejection::Cooldown);
+    CHECK(CombatPlayer(match, 1).damageCount == 0);
+    CHECK(CombatPlayer(match, 2).damageCount == 0);
+
+    // Same-tick mutual fire: each victim records the other as attacker.
+    CombatStep(match, 8);
+    REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({2, {{2, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto tick = match.TickCount();
+    REQUIRE(Decisions(match).back().hitKind == ShotHitKind::Player);
+    REQUIRE(Decisions(match, 2).back().hitKind == ShotHitKind::Player);
+    for (const auto& [victim, attacker] : {std::pair<PlayerId, PlayerId>{2, 1}, {1, 2}}) {
+        const auto record = CombatPlayer(match, victim);
+        CHECK(record.lastDamageTick == tick);
+        CHECK(record.damageCount == 1);
+        CHECK(record.lastAttackerId == attacker);
+        CHECK(record.hp == PvpCombatRules.maximumHp - PvpCombatRules.shotDamage);
+    }
+
+    // A retransmitted action is not resolved again.
+    const auto before = CombatPlayer(match, 2);
+    REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match, 10);
+    CHECK(CombatPlayer(match, 2) == before);
+}
+
+TEST_CASE("PvP lethal hit records the killer at the death tick and respawn clears the record") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match); // Tick 31, victim has 25 HP and both weapons are ready.
+    CHECK(CombatPlayer(match, 2).damageCount == 3);
+    REQUIRE(match.SubmitActions({2, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    const auto dead = LifePlayer(match, 2);
+    const auto record = CombatPlayer(match, 2);
+    REQUIRE(dead.lifeState == LifeState::Dead);
+    CHECK(record.lastDamageTick == dead.lifeStateTick);
+    CHECK(record.damageCount == 4);
+    CHECK(record.lastAttackerId == 1);
+    CHECK(record.hp == PvpCombatRules.maximumHp - std::min(PvpCombatRules.maximumHp, record.damageCount * PvpCombatRules.shotDamage));
+    // The dead victim's same-tick shot is rejected and writes nothing.
+    CHECK(Decisions(match, 2).front().rejection == ShotRejection::Dead);
+    CHECK(CombatPlayer(match, 1).damageCount == 0);
+    CHECK(ValidDamageRecord(record, true, dead.lifeStateTick, match.TickCount(), PvpCombatRules.maximumHp));
+
+    while (match.TickCount() < dead.respawnTick - 1) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+        CHECK(CombatPlayer(match, 2).lastDamageTick == dead.lifeStateTick); // Kept while dead.
+    }
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 2).lifeGeneration == 2);
+    CHECK(CombatPlayer(match, 2).lastDamageTick == 0);
+    CHECK(CombatPlayer(match, 2).damageCount == 0);
+    CHECK(CombatPlayer(match, 2).lastAttackerId == 0);
+}
+
+TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
+    CombatState record{.playerId = 1, .hp = 50, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7};
+    CHECK(ValidDamageRecord(record, false, 10, 20, 100));
+    CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100));
+    auto bad = [&](auto edit, bool dead = false, std::uint64_t lifeStateTick = 10) {
+        auto copy = record;
+        edit(copy);
+        return !ValidDamageRecord(copy, dead, lifeStateTick, 20, 100);
+    };
+    CHECK(bad([](CombatState& c) { c.lastDamageTick = 0; }));
+    CHECK(bad([](CombatState& c) { c.damageCount = 0; }));
+    CHECK(bad([](CombatState& c) { c.lastAttackerId = 0; }));
+    CHECK(bad([](CombatState& c) { c.lastDamageTick = 9; }));
+    CHECK(bad([](CombatState& c) { c.lastDamageTick = 21; }));
+    CHECK(bad([](CombatState& c) { c.lastAttackerId = 1; }));
+    CHECK(bad([](CombatState& c) { c.damageCount = 101; }));
+    CHECK_FALSE(bad([](CombatState& c) { c.damageCount = 100; }));
+    CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1}; }, true, 18));
+    CHECK(bad([](CombatState&) {}, true, 18)); // Dead of an older hit.
+    CHECK_FALSE(bad([](CombatState& c) { c.lastDamageTick = 18; }, true, 18));
+}

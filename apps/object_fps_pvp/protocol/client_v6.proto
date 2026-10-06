@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v5;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv5";
+package object_fps_pvp.client.v6;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv6";
 
-// This remote-client contract is independent of runtime_v5.proto.
+// This remote-client contract is independent of runtime_v6.proto.
 message Hello { string session_token = 1; }
 message Welcome {
   uint64 player_id = 1;
@@ -15,6 +15,8 @@ message Welcome {
   CombatRules combat_rules = 7;
   float jump_height = 8;
   float gravity = 9;
+  // Content digest of the served arena (pv6 contract §2), copied from Ready.
+  fixed64 arena_digest = 10;
 }
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {
@@ -110,6 +112,11 @@ message CombatState {
   uint64 reload_end_tick = 8;
   uint64 last_shot_action_id = 9;
   uint64 last_shot_tick = 10;
+  // Presentation-only hit record of the current life (pv6 contract §2): all
+  // three are zero before the first hit and reset on respawn.
+  uint64 last_damage_tick = 11;
+  uint32 damage_count = 12;
+  uint64 last_attacker_id = 13;
 }
 // Historical names are retained; requests and decisions cover Shot and Reload.
 enum ActionKind {

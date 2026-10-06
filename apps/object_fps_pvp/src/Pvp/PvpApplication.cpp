@@ -668,7 +668,9 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!impl_->arena) return false;
     impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
     impl_->predictionElapsed.Reset();
-    impl_->connection.SetArenaIdentity(impl_->arena->id, impl_->arena->version);
+    const auto arenaDigest = ArenaContentDigest(*impl_->arena);
+    if (!arenaDigest) { error = "Arena content digest is zero"; return false; }
+    impl_->connection.SetArenaIdentity(impl_->arena->id, impl_->arena->version, arenaDigest);
     const auto loaded = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.pvp_lobby"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
     if (!loaded) { error = Explain(loaded.error()); return false; }

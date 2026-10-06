@@ -30,7 +30,7 @@ inline constexpr CombatRules PvpCombatRules{};
 
 enum class ActionKind { Shot = 0, Reload = 1 };
 
-// Historical Shot names also carry reload actions in protocol v5.
+// Historical Shot names also carry reload actions.
 struct ShotRequest final {
     ActionId actionId{};
     std::uint64_t observedAuthorityTick{};
@@ -78,8 +78,26 @@ struct CombatState final {
     std::uint64_t reloadEndTick{};
     ActionId lastShotActionId{};
     std::uint64_t lastShotTick{};
+    // Presentation-only hit record of this life (pv6 contract §2): the tick of
+    // the last hit, hits taken and the last attacker. All zero before the first
+    // hit; a respawn resets them with the rest of the state. Match never reads them.
+    std::uint64_t lastDamageTick{};
+    std::uint32_t damageCount{};
+    PlayerId lastAttackerId{};
     bool operator==(const CombatState&) const = default;
 };
+
+// Decode check of the hit record (pv6 contract §2): all zero or all set; a hit
+// lies within the current life state and the snapshot, is not self-inflicted
+// and counts at most one per hit point; a dead player died of its last hit.
+[[nodiscard]] constexpr bool ValidDamageRecord(const CombatState& combat, bool dead, std::uint64_t lifeStateTick,
+                                               std::uint64_t snapshotTick, std::uint32_t maximumHp) noexcept {
+    const bool none = combat.lastDamageTick == 0;
+    if ((combat.damageCount == 0) != none || (combat.lastAttackerId == 0) != none) return false;
+    if (dead && (none || combat.lastDamageTick != lifeStateTick)) return false;
+    return none || (lifeStateTick <= combat.lastDamageTick && combat.lastDamageTick <= snapshotTick &&
+                    combat.lastAttackerId != combat.playerId && combat.damageCount <= maximumHp);
+}
 
 struct ActionResults final {
     PlayerId playerId{};

@@ -4,7 +4,7 @@
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
 
-2026-10-04：目前 wire 為 v5（2026-10-03 升格穩定基線），契約見
+2026-10-06：目前 wire 為 pv6（v6 第 09 批；v6 升格前是候選），變更見 [pv6 契約](protocol-v6.zh-Hant.md)，其餘條款沿用
 [v5 契約](protocol-v5.zh-Hant.md)，批次狀態見文末 v5 一節。下列 v3 量測／長測、成本回顧
 及第 9 節 v4 記錄保留為歷史證據，不視為 v5 的驗收。Go Gateway 的建置平台宣告
 目前只有 linux-x64／windows-x64；v5 完整驗收在 macOS 同機三角色執行，範圍見
@@ -86,7 +86,7 @@ Client A / Client B (each process)
                           |                           +-> SnapshotTimeline
                           |                               remote render pose
                           v
-  HTTP control / UDP Client Protocol v5
+  HTTP control / UDP Client Protocol pv6
                           |
                           v
   Product Go Gateway
@@ -94,7 +94,7 @@ Client A / Client B (each process)
     input windows downstream; latest snapshot upstream to each peer
                           |
                           v
-  loopback TCP / Runtime Protocol v5
+  loopback TCP / Runtime Protocol pv6
                           |
                           v
   C++ IPC Host I/O <---- bounded owning handoff ----> MatchRuntimeHost
@@ -113,13 +113,13 @@ Client A / Client B (each process)
 
 ```text
 Client（SDL 輸入 / Lobby / GYO Render）
-    │ HTTP JSON 控制 / UDP Client Protocol v5
+    │ HTTP JSON 控制 / UDP Client Protocol pv6
     ▼
 Object_FPS_PVP Go 組合層
     ├─ Room、容量、加入資格、Session → PlayerId
     ├─ ObjectFPS Adapter：schema / version / 欄位轉換
     └─ 使用 services/gyo_gateway 的 HTTP / Session / framing
-    │ Runtime Protocol v5 / loopback TCP
+    │ Runtime Protocol pv6 / loopback TCP
     ▼
 C++ IPC Host：讀寫、framing、Protobuf 轉換
     │ 有界控制佇列 / per-player command window / owning Snapshot
@@ -366,8 +366,8 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol
 
-來源為產品的 `protocol/client_v5.proto` 與 `protocol/runtime_v5.proto`，彼此不 import。
-目前兩者版本都為 5，Client／Gateway／Match 必須一起升級，明確拒絕 v1–v4。Adapter 明確映射兩份生成型別，
+來源為產品的 `protocol/client_v6.proto` 與 `protocol/runtime_v6.proto`，彼此不 import。
+目前兩者版本都為 6（pv6，第 09 批），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本。Adapter 明確映射兩份生成型別，
 Match 核心只接收普通 C++ domain 值。
 
 Client Protocol 包含 Hello、Welcome、PlayerInput、WorldSnapshot、Error、ActionBatch、ActionResults。
@@ -386,26 +386,26 @@ Runtime PlayerInput 的 PlayerId 來自已驗證的 Session 映射，不信任 C
 Adapter 驗證 Protobuf、版本、finite 數值、移動軸範圍與線上欄位範圍；Match 自行
 裁定出生位置、速度、合法視角與碰撞。Arena identity 不符時 Client 拒絕加入。
 
-### UDP v5
+### UDP（pv6；標頭配置自 v5 起不變）
 
 最大 datagram 為 1,200 bytes，包括以下 24-byte big-endian header：
 
 | Offset | Bytes | 欄位 |
 |---|---:|---|
 | 0 | 4 | ASCII `GYOP` |
-| 4 | 2 | Client protocol version，現為 5 |
+| 4 | 2 | Client protocol version，現為 6 |
 | 6 | 2 | message type：Hello 1、Welcome 2、Input 3、Snapshot 4、Error 5、Actions 6、ActionResults 7 |
 | 8 | 8 | Session ID |
 | 16 | 4 | UDP sequence |
 | 20 | 2 | Protobuf payload length |
-| 22 | 2 | Channel，v5 只允許 0：unreliable sequenced |
+| 22 | 2 | Channel，只允許 0：unreliable sequenced |
 
 Header 後面是對應 message 的 Protobuf payload。公共 framing 驗證長度與 Channel，
 不解釋產品 message type；PvP 邊界驗證版本與類型。本輪只有 Channel 0；尚無
 多 channel、傳輸層 ACK／ack_bits 或 Reliable Ordered；動作層另有消費 ACK。UDP sequence 用半範圍比較處理 32-bit wrap。
 Hello 可重送，Welcome 可重發；完整 Snapshot 修復漏掉的加入／離開資訊。
 
-### IPC v5
+### IPC（pv6）
 
 Match 僅監聽 loopback TCP，預設 `127.0.0.1:27016`。每個 Protobuf
 RuntimeEnvelope 前有四個 bytes 的 big-endian 長度；payload 必須為 1–65,536
@@ -546,7 +546,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --version  # 必須為 libprotoc 36.2；PATH 指向本次 CMake 建置的 protoc
 protoc --proto_path=apps/object_fps_pvp/protocol `
   --go_out=apps/object_fps_pvp --go_opt=module=gyo.local/object_fps_pvp `
-  apps/object_fps_pvp/protocol/client_v5.proto apps/object_fps_pvp/protocol/runtime_v5.proto
+  apps/object_fps_pvp/protocol/client_v6.proto apps/object_fps_pvp/protocol/runtime_v6.proto
 git diff -- apps/object_fps_pvp/protocol
 ```
 
@@ -674,7 +674,7 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 | 遠端接收時間線 | `apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp` |
 | 幀內採樣、呈現與唯讀觀測整合 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp` |
 | Room／Session、轉接與背壓 | `apps/object_fps_pvp/gateway/server.go`、`runtime_link.go`、`adapter/adapter.go` |
-| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v5.proto`、`runtime_v5.proto`（規則見 [v5 契約](protocol-v5.zh-Hant.md)；第 9 節為 v4 歷史） |
+| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v6.proto`、`runtime_v6.proto`（規則見 [pv6 契約](protocol-v6.zh-Hant.md) 與它沿用的 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 
 Architecture Delta 是 Client 增加預測／呈現責任、產品輸入從持續狀態變為可確認的

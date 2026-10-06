@@ -1,8 +1,8 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
-// The mock is external to production: HTTP joins and wire-v5 UDP movement and action transport.
+// The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v5.pb.h"
+#include "client_v6.pb.h"
 #include "acceptance_protocol.hpp"
 #include <asio.hpp>
 #include <httplib.h>
@@ -24,13 +24,15 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v5;
+namespace pb=object_fps_pvp::client::v6;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
 struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
 struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
+// Opaque content digest of the mock arena (pv6 contract §2).
+constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
 class MockGateway {
 public:
     MockGateway():socket(io,udp::endpoint(asio::ip::address_v4::loopback(),0)) {
@@ -39,10 +41,10 @@ public:
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
             if(body.value("protocol_version",0u)!=AcceptanceProtocolVersion) {
-                response.status=400;response.set_content(R"({"error":"expected v5"})","application/json");return;
+                response.status=400;response.set_content(R"({"error":"protocol_version"})","application/json");return;
             }
             const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
-                {"arena_id","worker-test"},{"arena_version",1},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
+                {"arena_id","worker-test"},{"arena_version",1},{"arena_digest",joinArenaDigest.load()},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
             response.set_content(reply.dump(),"application/json");
         });
         http.Post("/rooms/1/leave",[&](const auto&,auto& response){
@@ -66,7 +68,7 @@ public:
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
-                welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);
+                welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
                 if(includeRules) {
                     auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
@@ -99,6 +101,7 @@ public:
         ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
+        combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
@@ -119,6 +122,7 @@ public:
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
     std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
+    std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
     bool autoAck{};
@@ -177,12 +181,15 @@ std::size_t CheckMaximumDatagrams() {
         p->set_connection_quality_failures(ConnectionQualityFailedWindows-1);
         auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
         c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
+        c->set_last_damage_tick(max64);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max64);
     }
     check(wire::Type::Snapshot,snapshot);
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
-    for(std::uint64_t version=1;version<=4;++version) {
+    // Every older version and the next one are refused.
+    for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
+        if(version==AcceptanceProtocolVersion) continue;
         wire::Write(std::span(legacy).subspan(4,2),version);
-        Require(!wire::Decode(legacy),"v5 accepted legacy UDP version");
+        Require(!wire::Decode(legacy),"UDP accepted another protocol version");
     }
     return largest;
 }
@@ -193,6 +200,9 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177,"client duplicated authoritative combat defaults");
     Require(connection.State().snapshot->combat.at(0).hp==74 &&
         connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
+    Require(connection.State().snapshot->combat.at(0).lastDamageTick==connection.State().snapshot->tick &&
+        connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2,
+        "snapshot lost the hit record");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
     std::vector<std::jthread> producers;
@@ -294,7 +304,10 @@ int main() {
     try {
         const auto maximumDatagram=CheckMaximumDatagrams();
         MockGateway gateway;ClientConnection connection;
-        connection.SetArenaIdentity("worker-test",1);connection.Join(gateway.address,"1");
+        bool zeroDigestRejected=false;
+        try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
+        Require(zeroDigestRejected,"zero arena digest accepted as identity");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
         connection.SendInput(Input(1,2));
         gateway.Until([&]{return gateway.attempts.size()>=2;});
@@ -375,11 +388,35 @@ int main() {
         // The previous version must be refused as a legacy join.
         gateway.protocolVersion=AcceptanceProtocolVersion-1;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v4 join");
+        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted the previous protocol version");
         gateway.protocolVersion=AcceptanceProtocolVersion;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
         gateway.includeRules=true;
+
+        // Same arena id and version with different content is refused on both
+        // join paths with the content code; the reason starts with the code.
+        const auto refusedWith=[&](const char* code){
+            connection.Join(gateway.address,"1");
+            // Stop on acceptance too, so an accepted join fails with its own message.
+            gateway.Until([&]{const auto s=connection.State();
+                return (s.phase==ConnectionPhase::Lobby && !s.error.empty()) || s.phase==ConnectionPhase::Playing;});
+            const auto refused=connection.State().error.starts_with(code);
+            if(!refused)connection.Leave();
+            return refused;
+        };
+        gateway.joinArenaDigest=WorkerArenaDigest^1;
+        Require(refusedWith("arena_content_mismatch:"),"HTTP join accepted different arena content");
+        gateway.joinArenaDigest=0;
+        Require(refusedWith("arena_content_mismatch:"),"HTTP join accepted a missing arena digest");
+        gateway.joinArenaDigest=WorkerArenaDigest;gateway.welcomeArenaDigest=WorkerArenaDigest^1;
+        Require(refusedWith("arena_content_mismatch:"),"Welcome accepted different arena content");
+        gateway.welcomeArenaDigest=0;
+        Require(refusedWith("arena_content_mismatch:"),"Welcome accepted a missing arena digest");
+        gateway.welcomeArenaDigest=WorkerArenaDigest;
+        connection.SetArenaIdentity("other-arena",1,WorkerArenaDigest);
+        Require(refusedWith("arena_identity_mismatch:"),"join accepted a different arena identity");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.

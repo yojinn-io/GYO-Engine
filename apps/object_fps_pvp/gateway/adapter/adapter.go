@@ -8,12 +8,15 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv5"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev5"
+	client "gyo.local/object_fps_pvp/protocol/clientv6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
 )
 
-const ClientVersion uint16 = 5
-const RuntimeVersion uint32 = 5
+// ProtocolVersion is the product wire version (pv6). ClientVersion (GYOP
+// header) and RuntimeVersion (IPC envelope) are its typed forms.
+const ProtocolVersion = 6
+const ClientVersion uint16 = ProtocolVersion
+const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 2
 const MaxPendingCommands = 12
 const MaxFutureCommands = 32
@@ -111,16 +114,34 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			(state.ReloadActionId == 0 && (state.ReloadStartTick != 0 || state.ReloadEndTick != 0)) ||
 			(state.ReloadActionId != 0 && (state.Hp == 0 || state.ReloadStartTick > in.Tick || state.ReloadEndTick <= in.Tick ||
 				state.ReloadEndTick <= state.ReloadStartTick || state.ReloadEndTick-state.ReloadStartTick != rules.ReloadTicks)) ||
-			(state.LastShotActionId == 0) != (state.LastShotTick == 0) || state.LastShotTick > in.Tick {
+			(state.LastShotActionId == 0) != (state.LastShotTick == 0) || state.LastShotTick > in.Tick ||
+			!validDamageRecord(state, seen[state.PlayerId], in.Tick, rules) {
 			return nil, errors.New("invalid runtime combat state")
 		}
 		combatSeen[state.PlayerId] = true
 		out.Combat = append(out.Combat, &client.CombatState{PlayerId: state.PlayerId, Hp: state.Hp,
 			NextAllowedShotTick: state.NextAllowedShotTick, LifeGeneration: state.LifeGeneration,
 			MagazineAmmo: state.MagazineAmmo, ReloadActionId: state.ReloadActionId, ReloadStartTick: state.ReloadStartTick,
-			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick})
+			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick,
+			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId})
 	}
 	return out, nil
+}
+
+// validDamageRecord checks the presentation-only hit record (pv6 contract §2):
+// all zero or all set; a hit lies in the current life state and the snapshot,
+// is not self-inflicted, counts at most one per hit point, and a dead player
+// died of its last hit.
+func validDamageRecord(state *runtime.CombatState, player *runtime.PlayerState, tick uint64, rules *runtime.CombatRules) bool {
+	none := state.LastDamageTick == 0
+	if (state.DamageCount == 0) != none || (state.LastAttackerId == 0) != none {
+		return false
+	}
+	if player.LifeState == runtime.LifeState_LIFE_DEAD && (none || state.LastDamageTick != player.LifeStateTick) {
+		return false
+	}
+	return none || (player.LifeStateTick <= state.LastDamageTick && state.LastDamageTick <= tick &&
+		state.LastAttackerId != state.PlayerId && state.DamageCount <= rules.MaximumHp)
 }
 
 // EvictionNotice is the Client error for a Match eviction: a stable code and
@@ -232,10 +253,11 @@ func EqualDecision(a, b *runtime.ShotDecision) bool {
 
 // Bound the dynamic arena descriptor using the largest legal identity fields,
 // so every Welcome built from an admitted Ready fits the complete UDP envelope.
+// The digest is counted as nonzero: any nonzero fixed64 encodes to 9 bytes.
 func ReadyFitsWelcome(r *runtime.Ready) bool {
 	if r == nil || r.SnapshotIntervalTicks == 0 || !ValidRules(r.CombatRules) || !ValidMovementRules(r.JumpHeight, r.Gravity) {
 		return false
 	}
-	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity}
+	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

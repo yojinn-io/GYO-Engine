@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package object_fps_pvp.runtime.v5;
-option go_package = "gyo.local/object_fps_pvp/protocol/runtimev5";
+package object_fps_pvp.runtime.v6;
+option go_package = "gyo.local/object_fps_pvp/protocol/runtimev6";
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
 // sessions, endpoints, or wire envelopes.
@@ -14,6 +14,8 @@ message Ready {
   CombatRules combat_rules = 6;
   float jump_height = 7;
   float gravity = 8;
+  // Content digest of the served arena (pv6 contract §2); 0 means missing.
+  fixed64 arena_digest = 9;
 }
 message PlayerJoin { uint64 player_id = 1; }
 message PlayerLeave { uint64 player_id = 1; }
@@ -148,6 +150,11 @@ message CombatState {
   uint64 reload_end_tick = 8;
   uint64 last_shot_action_id = 9;
   uint64 last_shot_tick = 10;
+  // Presentation-only hit record of the current life (pv6 contract §2): all
+  // three are zero before the first hit and reset on respawn.
+  uint64 last_damage_tick = 11;
+  uint32 damage_count = 12;
+  uint64 last_attacker_id = 13;
 }
 // Historical names are retained; requests and decisions cover Shot and Reload.
 enum ActionKind {

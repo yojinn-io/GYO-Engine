@@ -37,4 +37,10 @@ struct Arena final {
         const std::filesystem::path& path, std::string& error);
 };
 
+// Content digest of a loaded arena (pv6 contract §2): 64-bit FNV-1a over the
+// parsed members in declaration order, big-endian, floats as their binary32
+// bits. Line endings, whitespace, key order and number spelling do not matter.
+// Zero is reserved for "missing": a caller treats it as a load failure.
+[[nodiscard]] std::uint64_t ArenaContentDigest(const Arena& arena);
+
 } // namespace fps::pvp
