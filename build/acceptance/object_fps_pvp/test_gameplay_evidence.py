@@ -92,6 +92,15 @@ class GameplayEvidenceTests(unittest.TestCase):
         errors,_=client_disturbance([event],[],[])
         self.assertTrue(errors)
 
+    def test_session_start_seed_clamp_is_not_a_disturbance_but_a_stall_reseed_is(self):
+        start=dict(kind='runtime_gap',frame_seconds=.0198,dropped_seconds=.0198-1/60,player_id=1,epoch=1,
+                   life_generation=1,sequence=3,pending=3,count=0,time_ns=1000,authority_tick=5)
+        errors,clamps=client_disturbance([start],[dict(time_ns=1000,frame_seconds=.0198)],[])
+        self.assertFalse(errors);self.assertEqual(len(clamps),1)
+        stall=dict(start,frame_seconds=.0411,dropped_seconds=.0411-1/60,sequence=587,time_ns=9_000_000_000)
+        errors,clamps=client_disturbance([stall],[dict(time_ns=9_000_000_000,frame_seconds=.0411)],[])
+        self.assertTrue(errors);self.assertFalse(clamps)
+
     def test_fault_expiry_requires_original_reference_and_generation_inside_fault(self):
         sub=dict(player_id=1,time_ns=1_500_000_000,request=dict(action_id=1,observed_tick=10))
         d=dict(rejection=2,resolved_tick=30);fault=dict(start_ns=1_000_000_000,release_ns=2_000_000_000)

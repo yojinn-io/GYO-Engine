@@ -44,6 +44,8 @@ lead之外4ms，30 FPS等一幀含兩步時較舊的命令最壞只剩約4ms，�
 是本設計無法處理的範圍，由連線品質移出處理。依據見[fix/08](plans/v5/fix/08-a1-clock-drift.md)、
 [fix/09](plans/v5/fix/09-covered-gap-stuck-late.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)。
 
+**追記（2026-10-06，原文不改）**：上段「CPU 模擬 ≤0.5%」只模擬了一幀兩步與 ±0.5 ms 的抖動，不代表實機。30 FPS 的一幀正好等於 2 Tick 的 lead；固定步邊界落在幀喚醒的抖動帶內時，一幀會含 3 步，最舊的一步只剩約 4 ms 餘裕，主機 sleep 晚醒約 8 ms（macOS 常見）時會錯過自己的 Tick 而被 Held。實機量到收斂後每位玩家 1.5～9.1%（晚醒約 4 ms 時每跑次 0～0.96%），相位追蹤看不到這些損失。因此 **30 FPS 本身就是本設計的範圍邊界**：可以連線遊玩，但不保證 Held ≤0.5%，主機狀態差時可能觸發連線品質移出。根本處理交給 v7 的主執行緒／模擬／網路分離。經過見 [v6 交接](plans/v6/HANDOFF.md)的「第 07 批後續：交錯 A/B 調查」與 D21。
+
 由Match擁有並經Ready／Welcome發布規則：移動規則包含jumpHeight／gravity，
 戰鬥規則包含HP、傷害、射速、彈匣、reloadTicks、respawnTicks與既有射擊限制。
 Client／Match共用產品純移動步驟；Client使用已驗證的權威規則。CSV、FBX時長、

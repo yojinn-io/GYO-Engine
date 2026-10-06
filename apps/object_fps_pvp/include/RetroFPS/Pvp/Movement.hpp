@@ -41,8 +41,9 @@ inline constexpr double MovementPhaseTargetSeconds = 0.004;
 // The error of the latest commands is the 90th percentile of a window of
 // slack samples: commands the worker sent at once, not the ones that also
 // waited for a frame. The first decision after a seed uses the first samples
-// and a narrow deadband; tracking then uses about four seconds of samples and
-// corrects only beyond the wider deadband. Two late (negative) samples in a
+// and a narrow deadband; tracking then uses 240 samples (about four seconds at
+// 60 FPS; about eight at 30 FPS, where only the latest snapshot of a frame is
+// reconciled) and corrects only beyond the wider deadband. Two late (negative) samples in a
 // row correct at once. Each correction is at most two ticks and is slewed.
 inline constexpr std::size_t MovementPhaseFirstSamples = 8;
 inline constexpr std::size_t MovementPhaseWindowSamples = 240;
@@ -60,7 +61,9 @@ inline constexpr std::int32_t MaxMovementSlackMicros = 1'000'000;
 // movement reset happened. Three failed windows in a row evict the player.
 // 160 ms is where the 12-command Client window starts to fill at 60 FPS; below
 // 30 FPS a frame is longer than the two-command lead, and 25 FPS already loses
-// 7 % of its steps; ordinary play stays below 1 %.
+// 7 % of its steps; ordinary 60 FPS play stays below 1 %. 30 FPS is the design
+// boundary: the oldest of three steps published in one frame keeps about 4 ms,
+// and a host oversleeping about 8 ms loses 1.5-9 % of steps (v5 contract §1).
 inline constexpr std::uint64_t ConnectionQualityWindowTicks = 10 * AuthorityTickRate;
 inline constexpr std::uint32_t ConnectionQualityFailedWindows = 3;
 inline constexpr std::uint32_t ConnectionQualityMaximumReferenceAgeMillis = 160;

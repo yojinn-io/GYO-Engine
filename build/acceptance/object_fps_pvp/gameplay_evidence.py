@@ -118,7 +118,7 @@ def client_disturbance(events, frame_samples, life_resets):
         previous=f['time_ns']
     gaps=[e for e in events if e['kind']=='runtime_gap' and (e['frame_seconds']>=.1 or e['dropped_seconds']>0)]
     clamps,unmatched=match_life_seed_clamps(gaps,life_resets)
-    errors+=['Client runtime gap/dropped time is not a matched normal LifeRespawn clamp']*len(unmatched)
+    errors+=['Client runtime gap/dropped time is not a matched normal LifeRespawn or session-start seed clamp']*len(unmatched)
     return errors,clamps
 
 

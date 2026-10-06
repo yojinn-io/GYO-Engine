@@ -1,6 +1,6 @@
 # 第 07 批：量測基線 B1（IP-2 之後）
 
-狀態：未開始。依賴 Engine IP-2 合併。
+狀態：完成（2026-10-06；見 [dev_log](../../../dev_logs/2026_10_06_pvp_v6_batch07.zh-Hant.md)；矩陣以第 07a 批修正後的工具定案）。依賴 Engine IP-2 合併。
 先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md)、[第 04 批](04-measurement-baseline.md)，
 以及 Engine 的 [input-and-present 計畫](../../../architecture/plans/input-and-present/PLAN.md)（IP-2）。
 

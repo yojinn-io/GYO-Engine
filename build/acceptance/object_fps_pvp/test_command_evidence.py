@@ -355,6 +355,30 @@ class CommandEvidenceTests(unittest.TestCase):
         clamps, unmatched = evidence.match_life_seed_clamps([gap(.0231), gap(.0231)], [reset])
         self.assertEqual((len(clamps), len(unmatched)), (1, 1))
 
+    def test_session_start_seed_clamp_is_explicit(self):
+        # v6 batch 07, B1 matrix clean-60: the join seed's first frame took 19.8 ms and dropped 3.1 ms.
+        def gap(frame=.0198, dropped=None, **values):
+            fields = dict(kind='runtime_gap', player_id=1, epoch=1, life_generation=1, sequence=3, pending=3,
+                          count=0, time_ns=START, authority_tick=5, frame_seconds=frame,
+                          dropped_seconds=frame - evidence.TICK_SECONDS if dropped is None else dropped)
+            fields.update(values)
+            return fields
+        for frame in (.0168, .0198, 1 / 30, .099):
+            with self.subTest(frame=frame):
+                self.assertTrue(evidence.is_session_start_seed_clamp(gap(frame)))
+        # A stall reseed later in epoch 1 (B1 clean-30: sequence 587 after a 41 ms host stall) stays interference.
+        for name, candidate in (('stall reseed', gap(.0411, sequence=587)), ('pending differs', gap(pending=2)),
+                                ('second life', gap(life_generation=2)), ('second epoch', gap(epoch=2)),
+                                ('blocked steps', gap(count=1)), ('100 ms frame', gap(.1)),
+                                ('inexact drop', gap(dropped=.002)), ('nothing dropped', gap(.0160, dropped=0)),
+                                ('no life recorded', {k: v for k, v in gap().items() if k != 'life_generation'})):
+            with self.subTest(case=name):
+                self.assertFalse(evidence.is_session_start_seed_clamp(candidate))
+        # One per player: a second identical gap is interference.
+        clamps, unmatched = evidence.match_life_seed_clamps([gap(), gap(), gap(player_id=2)], [])
+        self.assertEqual((len(clamps), len(unmatched)), (2, 1))
+        self.assertTrue(all(c.get('session_start') for c in clamps))
+
     def test_clamp_in_another_epoch_remains_interference(self):
         directory, client, match, timing = self.make_run()
         self.life_respawn(match, client, clamp_epoch=1)
