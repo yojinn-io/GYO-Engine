@@ -57,7 +57,7 @@ bool WouldBlock(const asio::error_code& error) {
     return error==asio::error::would_block || error==asio::error::try_again;
 }
 pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
-    pb::RuntimeEnvelope message; message.set_protocol_version(5);
+    pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
     auto* out=message.mutable_snapshot(); out->set_tick(snapshot.tick);
     for(const auto& p:snapshot.players) {
         auto* state=out->add_players(); state->set_player_id(p.playerId);
@@ -83,7 +83,7 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
     return message;
 }
 pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor) {
-    pb::RuntimeEnvelope message;message.set_protocol_version(5);
+    pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
     auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
     out->set_retired_through(results.retiredThrough);
     if(results.decisions.empty()) {cursor=results.retiredThrough;return message;}
@@ -129,7 +129,7 @@ struct IpcHost::Impl {
         std::map<std::uint64_t,PlayerId> joins;
         struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
         std::map<PlayerId,ActionLane> actionLanes;
-        pb::RuntimeEnvelope ready; ready.set_protocol_version(5);
+        pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
@@ -153,7 +153,7 @@ struct IpcHost::Impl {
                 if(!length || length>wire::MaxFrame) return;
                 if(input.size()<length+4) break;
                 pb::RuntimeEnvelope message;
-                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=5) return;
+                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=wire::ProtocolVersion) return;
                 input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
                 if(message.has_join()) {
                     if(joins.size()>=64) return;
@@ -193,7 +193,7 @@ struct IpcHost::Impl {
             for(const auto& result:host.TakeControlResults()) {
                 const auto found=joins.find(result.requestId);
                 if(found==joins.end()) continue;
-                pb::RuntimeEnvelope message; message.set_protocol_version(5);
+                pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);
@@ -203,7 +203,7 @@ struct IpcHost::Impl {
             for(const auto& eviction:host.TakeEvictions()) {
                 // The Match already removed the player; the Gateway clears its
                 // reservation like a Leave and tells the Client why.
-                pb::RuntimeEnvelope message; message.set_protocol_version(5);
+                pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* evicted=message.mutable_evicted();evicted->set_player_id(eviction.playerId);
                 evicted->set_reason(EvictionForWire(eviction.reason));
                 evicted->set_reference_age_ms(eviction.referenceAgeMillis);

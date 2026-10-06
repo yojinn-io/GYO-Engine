@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "acceptance_protocol.hpp"
 #include "client_v6.pb.h"
 #include <httplib.h>
 #include <algorithm>
@@ -113,13 +114,12 @@ int main(int argc,char** argv) {
             const auto packet=wire::Decode(bytes);
             Require(packet && packet->session==0x0102030405060708ULL && packet->payload=="abc","UDP roundtrip");
             Require(wire::Newer(0,0xffffffffu) && !wire::Newer(0xffffffffu,0),"sequence wrapping");
-            auto oldVersion=bytes; oldVersion[5]=1;
-            Require(!wire::Decode(oldVersion),"protocol v1 accepted");
-            oldVersion[5]=2;
-            Require(!wire::Decode(oldVersion),"protocol v2 accepted");
-            oldVersion[5]=3;
-            Require(!wire::Decode(oldVersion),"protocol v3 accepted");
-            oldVersion[5]=4;Require(!wire::Decode(oldVersion),"protocol v4 accepted");
+            // Every older version and the next one are refused.
+            for(unsigned version=1;version<=AcceptanceProtocolVersion+1;++version) {
+                if(version==AcceptanceProtocolVersion) continue;
+                auto other=bytes; other[5]=static_cast<std::uint8_t>(version);
+                Require(!wire::Decode(other),"another protocol version accepted");
+            }
             namespace pb=object_fps_pvp::client::v6;
             const auto maximum=std::numeric_limits<std::uint64_t>::max();
             pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
@@ -148,14 +148,14 @@ int main(int argc,char** argv) {
             const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});
             const auto snapshotBytes=wire::Encode({wire::Type::Snapshot,maximum,0xffffffffu,snapshot.SerializeAsString()});
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
-                "maximum legal v5 protobuf plus24-byte UDP header exceeds1200 bytes");
+                "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }
             Require(oversizedRejected,"oversized UDP accepted");
             bytes[20]=1;Require(!wire::Decode(bytes),"invalid UDP length accepted");
-            std::cout<<"wire v5 self-test passed; maximum legal action/result/snapshot datagrams="
-                <<actionBytes.size()<<'/'<<resultBytes.size()<<'/'<<snapshotBytes.size()<<" bytes; versions1-4 rejected\n";return 0;
+            std::cout<<"wire self-test passed; maximum legal action/result/snapshot datagrams="
+                <<actionBytes.size()<<'/'<<resultBytes.size()<<'/'<<snapshotBytes.size()<<" bytes; other versions rejected\n";return 0;
         }
         ClientConnection a,b;
         a.CreateAndJoin(gateway);

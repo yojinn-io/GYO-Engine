@@ -267,12 +267,14 @@ struct ClientConnection::Impl {
         if(request.generation!=generation.load())return;
         static std::atomic<std::uint64_t> nextRequest{};
         const auto requestId=std::to_string(Clock::now().time_since_epoch().count())+"-"+std::to_string(++nextRequest);
-        const Json join={{"request_id",requestId},{"protocol_version",5}};
+        const Json join={{"request_id",requestId},{"protocol_version",wire::ProtocolVersion}};
         const auto joined=Response(http->Post("/rooms/"+room+"/join",join.dump(),"application/json"));
         // Keep credentials even if cancelled so the next action releases its reservation.
         session=joined.at("session_id").get<std::uint64_t>();token=joined.at("session_token").get<std::string>();
         if(request.generation!=generation.load())return;
-        if(joined.at("protocol_version").get<unsigned>()!=5)throw std::runtime_error("Client protocol mismatch");
+        // Compare the full JSON value: a non-integer or wider value must not truncate to the version.
+        if(const auto& version=joined.at("protocol_version");!version.is_number_unsigned() ||
+           version.get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error("Client protocol mismatch");
         CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>());
         udp::resolver resolver(io);
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));

@@ -532,7 +532,7 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 
-	for _, version := range []uint32{1, 2, 3, 4} {
+	for _, version := range rejectedVersions() {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -767,12 +767,13 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	}
 }
 
-func TestOldClientsAreRejectedAfterV5Upgrade(t *testing.T) {
+func TestOtherClientVersionsAreRejected(t *testing.T) {
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
-	c, p := reserve(t, s, "v5"), peer(t)
+	c, p := reserve(t, s, "current"), peer(t)
 	payload, _ := proto.Marshal(&client.Hello{SessionToken: c.Token})
-	for _, version := range []uint16{1, 2, 3, 4} {
+	for _, v := range rejectedVersions() {
+		version := uint16(v)
 		status, _ := post(t, s, "/rooms/1/join", map[string]any{"request_id": "old", "protocol_version": version})
 		if status != http.StatusConflict {
 			t.Fatalf("HTTP v%d accepted", version)
@@ -783,6 +784,17 @@ func TestOldClientsAreRejectedAfterV5Upgrade(t *testing.T) {
 		}
 		f.quiet(t)
 	}
+}
+
+// rejectedVersions lists every older protocol version and the next one.
+func rejectedVersions() []uint32 {
+	versions := []uint32{}
+	for version := uint32(1); version <= adapter.RuntimeVersion+1; version++ {
+		if version != adapter.RuntimeVersion {
+			versions = append(versions, version)
+		}
+	}
+	return versions
 }
 
 func testRules() *runtime.CombatRules {

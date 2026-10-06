@@ -12,7 +12,7 @@
 namespace fps::pvp::wire {
 // The GYOP header and its transport checks are the engine's (Engine::Net);
 // the protocol version, the message types and the TCP frame stay here.
-inline constexpr std::uint16_t ProtocolVersion = 5;
+inline constexpr std::uint16_t ProtocolVersion = 6;
 inline constexpr std::size_t HeaderSize = Engine::Net::GyopHeaderSize, MaxDatagram = Engine::Net::GyopMaxDatagram,
     MaxFrame = 65536;
 enum class Type : std::uint16_t { Hello=1, Welcome=2, Input=3, Snapshot=4, Error=5, Actions=6, ActionResults=7 };

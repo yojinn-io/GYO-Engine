@@ -280,7 +280,7 @@ class ActionRelay(_ImpairedGateway):
                     altered = [(n, w, v) for n, w, v in fields(original) if n != number and not (number == 5 and n in (3, 4))]
                     altered.append((number, 0, value))
                     self._send(packet_payload(payload, encoded([(1, 2, encoded(altered))])), destination, upstream, label)
-                # A well-framed v5 datagram with malformed protobuf cannot become
+                # A well-framed current-version datagram with malformed protobuf cannot become
                 # a shot or damage event and must not disconnect a valid Session.
                 self._send(packet_payload(payload, b'\x0a\x7f\x08'), destination, upstream, 'malformed_action')
                 self.held[('reorder', session)] = (payload, destination, upstream)

@@ -5,7 +5,7 @@ import math
 
 # The client/runtime protocol version the acceptance analyzers expect. This is the only
 # Python definition; the C++ probes have theirs in acceptance_protocol.hpp.
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 
 # How the analyzers' "100 ms stall" reads in practice. A Client frame catches up at most five
 # fixed steps (LocalPlayerPrediction.hpp), so time beyond about 83 ms is dropped, and a dropped

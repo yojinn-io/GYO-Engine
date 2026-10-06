@@ -82,6 +82,9 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME "${GYO_CURRENT_APP}.asset_catalog"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_asset_catalog.py")
 set_tests_properties("${GYO_CURRENT_APP}.asset_catalog" PROPERTIES LABELS "cpu;pvp;content" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.protocol_version"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_protocol_version.py")
+set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

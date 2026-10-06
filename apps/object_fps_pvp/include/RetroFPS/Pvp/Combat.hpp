@@ -30,7 +30,7 @@ inline constexpr CombatRules PvpCombatRules{};
 
 enum class ActionKind { Shot = 0, Reload = 1 };
 
-// Historical Shot names also carry reload actions in protocol v5.
+// Historical Shot names also carry reload actions.
 struct ShotRequest final {
     ActionId actionId{};
     std::uint64_t observedAuthorityTick{};

@@ -31,16 +31,17 @@ std::vector<std::uint8_t> Valid() { return wire::Encode(Sample(3)); }
 } // namespace
 
 // Pinned on the product's own header code before the GYOP header moved to the
-// engine: every message type must keep these exact bytes.
+// engine: every message type must keep these exact bytes. pv6 changed only the
+// version field (bytes 4-5) from 0x0005 to 0x0006.
 TEST_CASE("PvP datagram encoding of every message type is byte-for-byte stable") {
     constexpr std::array<std::string_view, 7> expected{
-        "47594f50000500010102030405060709fffffff1000300000100ff",
-        "47594f5000050002010203040506070afffffff200040000020200ff",
-        "47594f5000050003010203040506070bfffffff30005000003030300ff",
-        "47594f5000050004010203040506070cfffffff4000600000404040400ff",
-        "47594f5000050005010203040506070dfffffff500070000050505050500ff",
-        "47594f5000050006010203040506070efffffff60008000006060606060600ff",
-        "47594f5000050007010203040506070ffffffff7000900000707070707070700ff",
+        "47594f50000600010102030405060709fffffff1000300000100ff",
+        "47594f5000060002010203040506070afffffff200040000020200ff",
+        "47594f5000060003010203040506070bfffffff30005000003030300ff",
+        "47594f5000060004010203040506070cfffffff4000600000404040400ff",
+        "47594f5000060005010203040506070dfffffff500070000050505050500ff",
+        "47594f5000060006010203040506070efffffff60008000006060606060600ff",
+        "47594f5000060007010203040506070ffffffff7000900000707070707070700ff",
     };
     for (std::uint16_t type = 1; type <= 7; ++type) {
         CAPTURE(type);
@@ -76,9 +77,9 @@ TEST_CASE("PvP datagram decode accepts and rejects the same datagrams") {
     CHECK(rejected(extended));                                                   // length field too small
     CHECK(rejected(with(0, 'X')));                                               // magic
     CHECK(rejected(with(3, 'Q')));
-    CHECK(rejected(with(5, 4)));                                                 // version 4
-    CHECK(rejected(with(5, 6)));                                                 // version 6
-    CHECK(rejected(with(4, 1)));                                                 // version 0x0105
+    CHECK(rejected(with(5, static_cast<std::uint8_t>(wire::ProtocolVersion - 1)))); // previous version
+    CHECK(rejected(with(5, static_cast<std::uint8_t>(wire::ProtocolVersion + 1)))); // next version
+    CHECK(rejected(with(4, 1)));                                                 // version high byte set
     CHECK(rejected(with(22, 1)));                                                // channel / reserved @22
     CHECK(rejected(with(23, 1)));
     CHECK(rejected(with(7, 0)));                                                 // type 0

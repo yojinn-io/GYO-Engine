@@ -1,5 +1,5 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
-// The mock is external to production: HTTP joins and wire-v5 UDP movement and action transport.
+// The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v6.pb.h"
@@ -39,7 +39,7 @@ public:
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
             if(body.value("protocol_version",0u)!=AcceptanceProtocolVersion) {
-                response.status=400;response.set_content(R"({"error":"expected v5"})","application/json");return;
+                response.status=400;response.set_content(R"({"error":"protocol_version"})","application/json");return;
             }
             const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
                 {"arena_id","worker-test"},{"arena_version",1},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
@@ -180,9 +180,11 @@ std::size_t CheckMaximumDatagrams() {
     }
     check(wire::Type::Snapshot,snapshot);
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
-    for(std::uint64_t version=1;version<=4;++version) {
+    // Every older version and the next one are refused.
+    for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
+        if(version==AcceptanceProtocolVersion) continue;
         wire::Write(std::span(legacy).subspan(4,2),version);
-        Require(!wire::Decode(legacy),"v5 accepted legacy UDP version");
+        Require(!wire::Decode(legacy),"UDP accepted another protocol version");
     }
     return largest;
 }
@@ -375,7 +377,7 @@ int main() {
         // The previous version must be refused as a legacy join.
         gateway.protocolVersion=AcceptanceProtocolVersion-1;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted legacy v4 join");
+        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted the previous protocol version");
         gateway.protocolVersion=AcceptanceProtocolVersion;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");
