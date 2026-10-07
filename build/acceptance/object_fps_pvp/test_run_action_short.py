@@ -69,7 +69,7 @@ class ActionSummaryTests(unittest.TestCase):
         self.assertTrue(runner.summarize(self.directory(full), True)["passed"])
         short = {"create": self.report("create", captures=4), "join": self.report("join", captures=4)}
         summary = runner.summarize(self.directory(short), True)
-        self.assertIn("create: expected 8 GPU captures, found 4", summary["errors"])
+        self.assertIn("create: expected 9 GPU captures, found 4", summary["errors"])
 
     def test_dead_local_player_presenting_weapon_meshes_fails(self):
         reports = {role: self.report(role) for role in ("create", "join")}

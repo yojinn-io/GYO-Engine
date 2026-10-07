@@ -17,6 +17,7 @@ const char* UpperActionName(const fps::pvp::PlayerUpperAction action) {
     case fps::pvp::PlayerUpperAction::Hold: return "hold";
     case fps::pvp::PlayerUpperAction::Shoot: return "shoot";
     case fps::pvp::PlayerUpperAction::Reload: return "reload";
+    case fps::pvp::PlayerUpperAction::Hit: return "hit";
     }
     return "invalid";
 }
@@ -52,7 +53,8 @@ ActionJson LocalActionSample(const fps::pvp::WeaponFeedbackObservation& w) {
         {"hits", w.hitDecisions}, {"hit_marker", w.hitMarkerVisible},
         {"last_rejection", static_cast<int>(w.lastRejection)}, {"last_hit_kind", static_cast<int>(w.lastHitKind)},
         {"rejected", w.rejectedDecisions}, {"local_cooldown_blocks", w.localCooldownBlocks},
-        {"authority_cooldown_rejections", w.authorityCooldownRejections}};
+        {"authority_cooldown_rejections", w.authorityCooldownRejections},
+        {"hit_flash", w.hitFlashAlpha}, {"hit_direction", w.hitDirectionVisible}};
 }
 
 // Every action of the other player must appear in one contiguous run of
@@ -204,6 +206,7 @@ void RunActionShort(const Options& options) {
         std::uint64_t unscheduledYawFrames{};
         bool reloadAnimatingSeen{}, died{}, deadChecked{}, respawned{}, respawnShot{};
         bool remoteDeathScheduled{}, remoteReloadCaptured{}, remoteJumpCaptured{}, remoteShotCaptured{};
+        bool remoteHitCaptured{}, localHitCaptured{};
         std::optional<double> measurementStart;
         Engine::Math::Vec3 backStart{}, deathPosition{};
         std::optional<std::string> pendingCapture;
@@ -572,6 +575,10 @@ void RunActionShort(const Options& options) {
                         } else if (!actor && !remoteShotCaptured && character.actions.upper == PlayerUpperAction::Shoot &&
                                    character.actions.upperClipSeconds >= .15) {
                             remoteShotCaptured = true; pendingCapture = "capture-remote-shot";
+                        } else if (actor && !remoteHitCaptured && character.actions.upper == PlayerUpperAction::Hit &&
+                                   character.actions.upperClipSeconds >= .1) {
+                            // The actor's shot struck the target: its upper body reacts.
+                            remoteHitCaptured = true; pendingCapture = "capture-remote-hit";
                         }
                     }
                     if (actor && remote.death && !remoteDeathScheduled) {
@@ -581,6 +588,11 @@ void RunActionShort(const Options& options) {
                     }
                 }
                 ++presentedCount;
+            }
+            // The struck target's own first-person feedback: red flash and direction arc.
+            if (captureMode && measurementStart && !actor && !localHitCaptured && !pendingCapture &&
+                after.hitFlashAlpha > 0) {
+                localHitCaptured = true; pendingCapture = "capture-local-hit";
             }
             if (!event.empty()) evidence["events"].push_back({{"name", event}, {"seconds", elapsed},
                 {"before", LocalActionSample(before)}, {"after", LocalActionSample(after)}});
@@ -630,7 +642,7 @@ void RunActionShort(const Options& options) {
             Require(died && deadChecked && respawned && respawnShot, "Target death, suppression or respawn coverage incomplete");
             evidence["checks"]["remote_shot_reload_and_jump_presented"] = true;
         }
-        if (captureMode) Require(evidence["captures"].size() == (actor ? 8U : 4U), "Action GPU captures were not all produced");
+        if (captureMode) Require(evidence["captures"].size() == (actor ? 9U : 5U), "Action GPU captures were not all produced");
         evidence["passed"] = true;
         save();
         if (actor) { std::ofstream finished(finishedPath); finished << "Actor action probe complete\n"; }

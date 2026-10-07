@@ -916,6 +916,8 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         std::chrono::duration<double>(Clock::now().time_since_epoch()).count(), impl_->view.Input().yaw,
         impl_->hitSettings) : HitFeedbackSample{};
     impl_->view.Present(impl_->hitSample);
+    impl_->weaponFeedback.hitFlashAlpha = impl_->hitSample.flashAlpha;
+    impl_->weaponFeedback.hitDirectionVisible = impl_->hitSample.directionRadians.has_value();
     if (impl_->InWorld()) {
         const auto worldStarted = Clock::now();
         if (!impl_->PrepareWorld(context.deltaSeconds)) return impl_->Fail(impl_->lastError);

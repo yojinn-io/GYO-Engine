@@ -31,6 +31,9 @@ struct WeaponFeedbackObservation final {
     std::uint64_t reloadAnimationStarts{};
     // Shot clicks the local gate dropped, and authority Cooldown rejections.
     std::uint64_t localCooldownBlocks{}, authorityCooldownRejections{};
+    // The first-person hit feedback of the latest rendered frame (read-only).
+    float hitFlashAlpha{};
+    bool hitDirectionVisible{};
     std::uint32_t hp{}, maximumHp{}, lastDamage{};
     ShotRejection lastRejection{ShotRejection::None};
     ShotHitKind lastHitKind{ShotHitKind::Miss};
