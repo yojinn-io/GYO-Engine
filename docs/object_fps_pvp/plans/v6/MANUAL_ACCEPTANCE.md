@@ -82,6 +82,8 @@ $PVP_PROBES/gyo_object_fps_pvp_quad_probe --gateway 127.0.0.1:8080 --arena "$PVP
 
 `--gpu-driver` 可為 `auto|metal|vulkan|d3d12`；`auto` 選平台預設後端。
 
+地圖由 Match 的 `--arena` 決定（第 17 批）：`pvp_arena.json`（`pvp_training_v1`）是測試與驗收用的地圖，`pvp_corners.json`（`pvp_corners_v1`）是發行地圖，也是未指定時的預設。Client 安裝兩張，加入時依 Match 自動選擇。三個角色都可以加 `--log`（Gateway 為 `-log`）寫出帶時間戳的日誌；Client 未指定時寫到執行檔旁的 `logs/`。跨機器的聯機測試見 [LAN_TEST](LAN_TEST.md)。
+
 結束順序：先正常關閉 Client 視窗，再在 Gateway、Match 終端按 Ctrl+C。不要強制 kill Client，才能寫完 `trace_end`。強制中止、缺 `trace_end`、`dropped > 0` 都要回報，不能視為完整資料。
 
 ## L3 原生操作清單（人工；三平台共用）

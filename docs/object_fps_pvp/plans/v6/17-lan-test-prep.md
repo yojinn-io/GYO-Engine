@@ -1,6 +1,6 @@
 # 第 17 批：聯機測試準備（地圖與日誌）
 
-狀態：進行中（2026-10-08 開始，分支 `claude/pvp-v6-batch17` 自 `acbebc9`，第 14a 批之後）。使用者決定見 [HANDOFF](HANDOFF.md) 的 D25。
+狀態：實作完成，L1（本機）通過，等 CI 與聯機測試（2026-10-08 開始，分支 `claude/pvp-v6-batch17` 自 `acbebc9`，第 14a 批之後）。使用者決定見 [HANDOFF](HANDOFF.md) 的 D25。
 起因：使用者 2026-10-08 要和朋友做 LAN 聯機測試：Match 與 Gateway 在 Mac 上，Client 是 3 台 Windows。之後發行 v1.1.0（含本批）。
 
 ## 目標與範圍
@@ -10,7 +10,8 @@
 - **地圖**：目前的地圖（`pvp_arena.json`，`pvp_training_v1`）保留為測試與驗收用的地圖。新增發行用的地圖 `pvp_corners.json`（`pvp_corners_v1`）：牆與柱子相同，4 個出生點分散在四角 (3,3)、(17,17)、(17,3)、(3,17)，都朝向中心。
 - **Client 依 Match 選地圖**：Client 安裝 `arenas.json` 列出的全部地圖；加入時依 Match 宣布的 arena id 與版本選出對應的一張，再比對內容 digest。沒有對應的地圖時沿用 `arena_identity_mismatch`，訊息列出已安裝的地圖。用哪張地圖由啟動 Match 的人以 `--arena` 決定。
 - **日誌**：Client、Gateway、Match 各加 `--log`（Gateway 為 `-log`）。每行有牆鐘時間（毫秒，含時區）與單調時鐘；啟動時記錄自己執行檔的 SHA-256、OS 與設定。Client 未指定時寫到執行檔旁的 `logs/`。內容見下。
-- **聯機測試手冊**：Mac 的 LAN IP 與 `-advertise-ip`、防火牆、啟動命令、要上傳的檔案。
+- **聯機測試手冊**：[LAN_TEST](LAN_TEST.md)（Mac 的 LAN IP 與 `-advertise-ip`、防火牆、啟動命令、要上傳的檔案）。
+- Match 未指定 `--arena` 時，預設改為發行地圖；驗收與測試一律明確指定 `--arena`。
 
 不做：
 

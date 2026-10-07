@@ -528,6 +528,15 @@
 ## 第 17 批進度（記錄器）：聯機測試準備
 
 - 2026-10-08：使用者要和朋友做 LAN 聯機測試（Mac：Match＋Gateway；Client：3 台 Windows），要求出生點分開與三個角色的日誌；之後發行 v1.1.0。決定見 D25。分支 `claude/pvp-v6-batch17` 自 `acbebc9`（第 14a 批之後）。
+- 2026-10-08：實作完成。
+  - 四角地圖與 Client 依 Match 選地圖：`c0c04f9`。
+  - 三個角色的日誌：`bb4b873`。Match 未指定 `--arena` 時，預設改為發行地圖。
+  - 聯機測試手冊：[LAN_TEST](LAN_TEST.md)。
+  - L1（本機）：CTest 63／63、`go test -race` 通過；第 09 批有一個突變因變數改名而 stale，已更新；新增突變 2 個。
+  - 開發量測（不計次）：
+    - quad clean-60 在兩張地圖上都通過。
+    - 1 GUI＋3 bot 在發行地圖上通過：GUI 依 Match 自動選中 `pvp_corners_v1`，重生全部落在四角。
+    - 三個角色的 `--log` 檔案格式確認無誤。
 
 ## 延後項目：現況與對應批次
 
