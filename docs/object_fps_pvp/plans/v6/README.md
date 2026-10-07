@@ -37,8 +37,8 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 完成，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58) 已合併（`7226ca0`；與 FF-9 同一 PR） | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 完成，PR [#61](https://github.com/yojinn-io/GYO-Engine/pull/61) 已合併（`83440ef`）（L2 的 player144 因 120 FPS 上限未驗證） | 第 1 項 |
 | 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 完成，PR [#60](https://github.com/yojinn-io/GYO-Engine/pull/60) 已合併（`a9485bf`；L3 接受，剩餘差異交給 v7） | 第 4 項 |
-| 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 完成，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 待合併 | 第 2 項的呈現 |
-| 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 規劃完成，未開始（ultracode；決定 D23） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
+| 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 完成，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 已合併（`7886848`） | 第 2 項的呈現 |
+| 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 進行中（2026-10-07 開始；ultracode 規劃、決定 D23） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
 | 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 未開始 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
 
 ### Engine 計畫的批次（狀態以各計畫夾為準）

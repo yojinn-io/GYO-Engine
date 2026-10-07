@@ -1,9 +1,9 @@
 # 第 16 批：房間上限 4 人
 
-狀態：規劃完成，未開始實作（2026-10-07；ultracode workflow `wf_45d62ed8-68c`，對抗檢查的 major 3、minor 8 已處理）。
+狀態：進行中（2026-10-07 開始，分支 `claude/pvp-v6-batch16` 自 master `7886848`；規劃：ultracode workflow `wf_45d62ed8-68c`，對抗檢查的 major 3、minor 8 已處理）。
 執行順序在第 13 批之後、第 14 批之前（D22、D23）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md)。
 
-盤點的基準是 master `3607fe3`。第 11～13 批會修改 `PvpApplication.cpp` 等檔案，本批開始時先重新核對下文的行號與 2 人假設，再寫事前宣告。
+盤點的基準是 master `3607fe3`。開始時已在 `7886848` 重新核對（第 11～13 批之後）：Gateway、Match、Client 解碼與 arena 的位置不變；Client 的遠端呈現槽在 `PvpApplication.cpp:773`（容量 1），phase reanchor 的基準在 `:630`、`:654`（在迴圈內逐人更新，多個遠端時互相干擾）。
 
 執行規則沿用 v5 與本計畫的 README：只做指定範圍、先凍結再量測、失敗的跑次保留、長測另外授權。
 
@@ -80,18 +80,33 @@
 - Gateway 與 Match 跨版本：readiness 要求人數上限完全相等，啟動失敗。
 - 新 Match 用 `--arena` 載入舊的 2 點 arena：主持條件不成立，啟動失敗。
 
-## 事前宣告（commit 1 寫入，寫程式之前；之後不得放寬）
+## 事前宣告（2026-10-07，commit 1 寫入，寫程式之前；之後不得放寬）
 
-至少包含：
+**權威：**
 
-- 權威：35 個 digest 情境的預期變化集合為空；golden SHA-256 `f01f3a32…` 不變。檢查點以 commit 標題指定：容量常數化、arena 出生點、容量 2→4、head。
-- 新出生點的座標與 yaw，以內容測試鎖住：數量、間距 ≥4r、`spawns[0..1]` 不變、新點在兩端點之間的開線段上。
-- 凍結清單：列出會動到的第 07a 批凍結檔，宣告 Python 分析器除新增常數外逐位元組相同（第 09 批的先例）；容量常數放在新檔，不改 `acceptance_util.py`。完成後記錄新的凍結清單雜湊，並同步 v7 README。
-- L2 的比較範圍：
-  - 裁決逐筆 0 差異只用於 clean-30、clean-60 與動作短測。
+- 第 03 批的 35 個 digest 情境，在下列每個檢查點與 base（`7886848`）做同機兩樹比對，預期差異集合為空：容量常數化、arena 出生點、容量 2→4、head。golden（SHA-256 `f01f3a32…`）不變、不重新產生。
+- 理由：沒有任何情境加入第 3 位玩家；產品 arena 的新出生點加在既有兩點之後，位於兩點之間的開線段上，且 `FindSpawn` 用嚴格比較，所以 2 人時每個位置的選擇都不變（規劃時以模型與讀碼確認）；digest 程式與合成 arena 都不動。
+- 3 人以上才遇得到的規則（D23②）以 Match 單元測試鎖住：4 人加入、第 5 人 `match_full`、2 點 arena 的第 3 人 `spawn_blocked`、同 Tick 2 位與 3 位射擊者、致命後穿透、同時重生、出生點選擇、全部被擋時逐 Tick 重試。
+
+**產品 arena：**
+
+- 追加兩個出生點，放在既有兩點之後：(5, 0, 7.5) yaw 0、(5, 0, 9.5) yaw π（3.14159265）。yaw 沿用兩端的規則：朝向較近的那個端點的方向，也就是兩端點互相面對的方向。
+- 內容測試鎖住：出生點數 4、`spawns[0..1]` 不變、新點在兩端點之間的開線段上、彼此間距 ≥4r、座標與 yaw。
+- 已知限制（使用者 2026-10-07 已知）：新點在兩端出生點的交火線上，沒有出生保護，4 人時容易出生即被擊殺；正式的 4 人地圖留給 v8。
+
+**驗收工具：**
+
+- 2 個 Client 的工具與分析器的判定邏輯不改。容量常數放在新檔（C++ `AcceptanceMaxPlayers`、Python `MAX_PLAYERS`），不改 `acceptance_util.py`。
+- 4 人只新增檔案：quad probe、`run_quad.py`、`quad_evidence.py` 與它們的測試；`quad_evidence` 以 2 個 Client 的語料和 `command_evidence` 逐值交叉驗證，交叉驗證放進 CTest。
+- 完成後記錄新的凍結清單雜湊，並同步 v7 README。
+
+**L2 的比較範圍（這裡固定；跑次、分母與 IPC 的門檻在 L2 的 `declare.txt` 中，於任何量測之前寫入）：**
+
+- 2 個 Client，before（`7886848`）對 after：
+  - 裁決逐筆 0 差異只用於 clean-30、clean-60、clean-144 與動作短測。
   - 故障與網路劣化案例：比較結構計數（Miss／World／Player 與各拒絕類別），並逐案比對重生位置。
-- IPC 的指標與門檻：Match trace 的 `transport` 事件數、合併（coalesced）計數、snapshot age，依約 4 ms／8 ms 主機狀態分層。
-- 跑次、分母，以及「失敗保留、不重跑」的規則。
+- 4 人：quad 的功能判定、clean-60 判定、clean-30 只記錄（D21）、1 GUI＋3 bot、版本混用時的明確拒絕。
+- IPC 寫出：以 Match trace 的 `transport` 事件數、合併計數與 snapshot age，依約 4 ms／8 ms 主機狀態分層報告；約 8 ms 狀態撐不住時依 D23④ 標「未驗證」。commit「容量 2→4」之後、正式量測之前，先做一次不計入的 4 Client 開發量測。
 
 ## commit 拆分
 

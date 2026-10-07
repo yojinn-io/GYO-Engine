@@ -494,6 +494,7 @@
   - 已知的 2 人假設（開始時的初步搜尋，盤點會補全）：Gateway `adapter.MaxPlayers = 2`（`adapter.go:20`）與 readiness、加入、動作窗口；Match `set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）；Client 丟棄超過 2 人的 Snapshot（`ClientConnection.cpp:428`）、只有一份遠端移動觀測（`PvpApplication.cpp:115`）；arena v1 規定恰好兩個出生點（`Arena.cpp:32`）；契約的 Snapshot 最壞大小以 2 人計算（545 bytes，上限 1200）。
   - 對 v7 的影響（初步）：v7 的任務與人數無關；v7 的 30 FPS 對比沿用 2 個 Client 的案例才能比較；4 人會用掉更多 Snapshot 的 1200 bytes 空間。
   - 檔位：ultracode（3 個盤點、3 個方案、1 位評審、1 次對抗檢查，全部唯讀；子 agent 檔位沿用主對話），workflow `wf_45d62ed8-68c`。
+- 2026-10-07：#62 合併（使用者指示，`7886848`），第 13 批的 L2 worktree 已移除。第 16 批開始（使用者指示），分支 `claude/pvp-v6-batch16` 自 master `7886848`。重新核對 2 人假設的位置（見批次文件）；pv6 契約加入 2026-10-07 修訂（§1 房間容量、§2 同 Tick 命中與出生點數、§5 出生點選擇的明文化、§7 大小與 587 bytes 的更正）；事前宣告寫入批次文件（權威 35 情境預期不變、新出生點 (5,0,7.5) yaw 0 與 (5,0,9.5) yaw π、L2 的比較範圍）。L2 的跑次、分母與 IPC 門檻在量測前另寫 `declare.txt`。
 - 2026-10-07：規劃完成（8 個 agent 全部完成，唯讀）。建議方案：維持 pv6、8 個 commit、2 人權威預期不變；4 人 Snapshot 契約最大 1055 bytes。對抗檢查 major 3（14b 不涵蓋 4 人、IPC 寫出迴圈沒有預先同意的出路、L2「0 差異」不能用在故障案例）與 minor 8 已處理進計畫或改為使用者決定。
   - 使用者決定見 D23。出生點原選「四角分散」，說明會改變 2 人出生位置、需改寫驗收幾何、歷史矩陣不可比較之後，改選線段。
   - 盤點更正：D21 與 v7 README 引用的行號已漂移（`IpcHost.cpp:272`、`ClientConnection.cpp:589-592`）；§7 的 587 bytes 是 ActionResults。發現既有缺陷：逐出時不清 runtime link（D23⑥）。

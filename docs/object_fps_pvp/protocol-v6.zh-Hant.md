@@ -1,6 +1,6 @@
 # PvP Protocol v6：受擊、arena 內容與 Collision 契約
 
-更新：2026-10-06。Owner：`object_fps_pvp`。
+更新：2026-10-07（房間容量 4 人的修訂，第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
 **wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
@@ -50,6 +50,26 @@ v6 在第 14b 批升格之前是候選。v5 契約中沒有在此改寫的條款
   - 「改 wire」包含：proto 欄位的新增、刪除、改號、改型別或改語意，以及 §2 arena digest 的正規化或演算法（含 `Arena` 新增成員）。
   - arena 內容的修改不是 wire 變更：內容不同的 Client 與 Match 以 §2 的錯誤碼明確拒絕。
 
+### 房間容量（2026-10-07 修訂，第 16 批）
+
+使用者 2026-10-07 決定把房間上限由 2 人改為 4 人（D22），維持 pv6、proto 不變（D23①）。這是上述候選期規則中的「改語意」wire 變更，依 D11① 經使用者同意：三個角色在同一個 commit 切換，舊程序重啟，不混用修訂前後的 v6 候選。
+
+- Snapshot 的 `players`／`combat` 上限由 2 改為 4；`Ready.max_players` 的值為 4；房間容量 4。超過上限沿用既有的無效路徑（Gateway 視為 runtime 故障，Client 丟棄且不更新序號與活性）。
+- Gateway 的 readiness 維持 `max_players` 與自己的值完全相等。
+- 容量每個 owner、每種語言只有一個定義，比照版本的定義表，並以跨語言一致性測試確認四者相同：
+
+| Owner | 定義 |
+|---|---|
+| 產品 C++ | `fps::pvp::MaxPlayers`（`Movement.hpp`）；Match 的加入上限、Ready 與 Client 的解碼都引用它 |
+| 產品 Go | `adapter.MaxPlayers` |
+| 驗收 C++ | `AcceptanceMaxPlayers` |
+| 驗收 Python | `MAX_PLAYERS`（新檔，不改 `acceptance_util.py`） |
+
+- 修訂前後的二進位混用時一律明確失敗：
+  - 修訂前的 Client 只能載入 2 個出生點的 arena；修訂後的 Match 只主持出生點數不少於 4 的 arena（§2）。兩者的 arena digest 必然不同，Client 以 `arena_content_mismatch` 拒絕。
+  - 修訂前後的 Gateway 與 Match：readiness 的 `max_players` 不相等，Gateway 啟動失敗。
+  - 修訂後的 Match 以 `--arena` 載入 2 個出生點的 arena：主持條件不成立，Match 啟動失敗。
+
 ## 2. 身分與資料語意
 
 | 資料 | v6 增補與規則 |
@@ -69,7 +89,7 @@ v5 §2 的其餘身分、生命世代、動作帳本與 latest-wins 規則不變
 - 受擊＝合法 Shot 命中玩家（裁決的 `hit_kind` 為 `HIT_PLAYER`）。射偏、打牆、任何拒絕、重送與 Reload 都不寫入；射擊者自己的三欄不因射擊改變。
 - 寫入：只有 Match 寫入。裁決命中時，在扣血的同一處對受害者寫入：`damage_count` 加 1、`last_damage_tick`＝裁決 Tick（即該裁決的 `resolved_tick`）、`last_attacker_id`＝射擊者；之後才依 v5 §5 判斷 HP 歸零轉 Dead。致命命中同樣寫入。
 - 同 Tick 多次命中：依 v5 §5 的裁決順序（acceptedTick、PlayerId、ActionId）逐次寫入。每次命中計數加 1，Tick 與攻擊者取該順序中最後一次命中。致命命中後受害者不再是目標，所以死亡 Tick 的攻擊者就是擊殺者。
-  - v6 規則下（每局最多 2 人、冷卻 10 Tick、命中查詢排除射擊者），同一受害者每 Tick 至多被命中 1 次。可達的同 Tick 情境是互射，以及致命命中後死者在同 Tick 的射擊（以 Dead 拒絕，不寫入）。
+  - v6 規則下（每局最多 4 人、冷卻 10 Tick、命中查詢排除射擊者），同一受害者每 Tick 至多被命中 3 次（其餘三人各一次）。計數依命中次數增加，Tick 與攻擊者取裁決順序中最後一次命中；致命命中之後，同 Tick 中對該受害者的射擊穿過它（它已不是目標）。可達的同 Tick 情境還包括互射，以及致命命中後死者在同 Tick 的射擊（以 Dead 拒絕，不寫入）。（2026-10-07 修訂，第 16 批；原文為「每局最多 2 人……至多被命中 1 次」。）
 - 「沒有受擊」：三欄全為 0。權威 Tick 從 1 開始、PlayerId 0 無效，所以 0 不會與合法值混淆；三欄同時為 0 或同時非 0。
 - 生命隔離：死亡不清除，死亡期間保留到重生；成功重生時與其他戰鬥欄位一起歸零，新加入的玩家也從 0 開始。計數不跨生命累計，舊生命的值不殘留。
 - 溢位：每次受擊至少扣 1 HP（傷害＝min(shot_damage, hp)，目標必為存活），生命內不回血，所以 `damage_count` ≤ maximum_hp；uint32 不會溢位，不回繞也不飽和。
@@ -99,6 +119,7 @@ f32 jump_height gravity
 ```
 
 - 順序就是 `Arena` 成員的宣告順序。牆與出生點保持內容順序，不排序：出生點順序決定同距離的選擇（v5 §5）。
+- 出生點數（2026-10-07 修訂，第 16 批）：arena v1 的出生點數為 2～64，版本與正規化不變（先例 D11⑨）。Match 只主持出生點數不少於 `MaxPlayers` 的 arena。修訂前的 v6 二進位會拒絕出生點數不是 2 的 arena，所以內容的混用必定明確失敗；日後修改 arena 時要保持這個性質。
 - 正規化函式以 13 個名稱的 structured binding 取出 `Arena` 的全部成員；成員數或順序改變時編譯失敗，必須同時更新正規化（屬 §1 的 wire 變更）。
 - f32 是解析後 binary32 值的位元樣式，不做正規化：−0 與 +0 視為不同內容（寧可誤拒，不可誤收）。JSON 的 `-0` 解析為整數 0（+0），只有 `-0.0` 得到 −0；L1 的數字寫法不變性不使用 0，−0 的敏感性以 `-0.0` 驗證。NaN 與 Inf 已被 `Validate` 拒絕。id 是 JSON 跳脫解碼後的 UTF-8 位元組，不做 Unicode 正規化。
 - 演算法：Engine `Fnv1a64`（FF-3）對整個位元組串計算一次，64 bit。0 保留為「缺少」：結果為 0 的 arena 視為載入失敗，Match 不啟動，Client 啟動失敗（與 `Arena::Load` 失敗相同）；`SetArenaIdentity` 拒絕 digest 0。
@@ -152,6 +173,7 @@ Authority Tick
 - 死亡 Tick 的 Snapshot：hp＝0、Dead、`last_damage_tick`＝`life_state_tick`，`last_attacker_id` 是擊殺者。
 - Dead 期間不是命中目標，受擊欄位保持死亡時的值，直到成功重生。
 - 重生在裁決之前，所以重生 Tick 的命中屬於新生命；`last_damage_tick` 可以等於新生命的 `life_state_tick`。
+- 出生點選擇（2026-10-07 明文化，第 16 批；規則沿用 v5，未改）：在牆與其他存活玩家之外放得下身體的出生點中，選「到最近的存活玩家的水平平方距離」最大者；沒有其他存活玩家時，每個出生點的距離都視為最大，取內容順序的第一個；距離相同取內容順序較前者。沒有放得下的出生點時加入以 `spawn_blocked` 失敗，重生則逐 Tick 重試。
 
 ## 6. 人物呈現與內容邊界
 
@@ -195,6 +217,7 @@ Authority Tick
   - Gateway 拒絕 digest 為 0 的 Ready，並原值轉送。
   - id／version 相同而內容不同時，HTTP join 與 Welcome 兩條路徑都以 `arena_content_mismatch` 拒絕（Welcome 路徑由假 Gateway 讓兩者帶不同 digest）。
 - 大小：最大玩家數 2，所有欄位取契約允許的最大編碼時，完整 Snapshot UDP 為 545 bytes（v5 為 487）；既有的最大 datagram 測試（worker probe，部分欄位取型別最大值）實測 587 bytes。Welcome 最壞為 213 bytes（arena_id 64 bytes）。都 ≤1200；既有的最大 datagram 測試加入新欄位。
+  - 2026-10-07 修訂（第 16 批）：完整 Snapshot UDP 的契約最大值是 35＋255N bytes，N 為玩家數：4 人 1055 bytes（各欄取型別最大值時 1135），5 人 1310 bytes 超過 1200，所以上限 4 也受大小限制。上一行的 587 bytes 是 ActionResults 的實測，不是 Snapshot（更正）。Welcome 不變。
 
 Architecture Delta（第 09 批，依 AGENTS §3）：
 
