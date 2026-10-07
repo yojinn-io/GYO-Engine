@@ -130,7 +130,7 @@ void RunPlayerShort(const Options& options) {
         else connection.Refresh(options.gateway);
         bool joined = mover, leaving{}, rejoinRequested{}, rejoined{};
         bool expectedCapture{};
-        double expectedYaw{};
+        double expectedYaw{}, expectedPitch{};
         std::optional<Clock::time_point> lobbyEntered;
         PlayerId originalPlayer{};
         std::uint64_t frameIndex{}, presentedCount{};
@@ -138,14 +138,22 @@ void RunPlayerShort(const Options& options) {
         const auto started = Clock::now();
         auto previous = started, refreshed = started;
         struct Event { double at; const char* name; };
-        const std::vector<Event> schedule{{.15, "capture"}, {.3, "release"},
+        std::vector<Event> schedule{{.15, "capture"}, {.3, "release"},
             {.75, "forward"}, {1.55, "stop"}, {2.05, "backward"}, {2.85, "stop"},
             {3.15, "strafe"}, {3.65, "stop"}, {3.95, "diagonal"}, {4.45, "stop"},
             {4.7, "turn"}, {5.1, "turn-back"}, {5.5, "approach-wall"}, {7.8, "stop"},
             {8.05, "hold-motion"}, {8.95, "stop"}, {9.2, "escape"}, {9.3, "escape-up"},
             {10.1, "capture"}, {10.25, "release"}, {10.5, "forward"}, {11.2, "stop"}};
-        const std::vector<Event> captures{{.55, "idle"}, {1.25, "jog"}, {2.55, "backward"},
+        std::vector<Event> captures{{.55, "idle"}, {1.25, "jog"}, {2.55, "backward"},
             {3.45, "strafe"}, {4.85, "turn-upper-body"}, {7.65, "wall-stop"}, {8.45, "hold"}, {10.8, "rejoined"}};
+        // Capture mode only, after the timed schedule: the mover looks 60
+        // degrees up, 60 down, then level, and the observer captures each pose.
+        // The player-short timing cases never change pitch.
+        constexpr double AimSeconds = 2.5;
+        if (captureMode) {
+            schedule.insert(schedule.end(), {{11.5, "look-up"}, {12.2, "look-down"}, {12.9, "look-level"}});
+            captures.insert(captures.end(), {{11.95, "pitch-up"}, {12.65, "pitch-down"}, {13.35, "pitch-level"}});
+        }
         report["script_schedule"] = WeaponJson::array();
         for (std::size_t i = 0; i < schedule.size(); ++i)
             report["script_schedule"].push_back({{"ordinal", i + 1}, {"seconds", schedule[i].at}, {"name", schedule[i].name}});
@@ -179,7 +187,7 @@ void RunPlayerShort(const Options& options) {
                 catch (const WeaponJson::exception&) { /* A concurrent writer has not closed its file yet. */ }
             }
             const double elapsed = startSeconds ? stamp - *startSeconds : -1;
-            if (mover && elapsed >= options.duration) break;
+            if (mover && elapsed >= options.duration + (captureMode ? AimSeconds : 0)) break;
             if (!mover && startSeconds && std::filesystem::exists(finishPath)) break;
             std::string event, captureLabel;
             if (mover && startSeconds && nextEvent < schedule.size() && elapsed >= schedule[nextEvent].at) {
@@ -201,7 +209,11 @@ void RunPlayerShort(const Options& options) {
                     expectedCapture = false; expectedYaw = 0;
                 }
                 else if (event == "escape-up") PushKey(window, SDL_SCANCODE_ESCAPE, false);
-                else {
+                else if (event == "look-up" || event == "look-down" || event == "look-level") {
+                    // A positive pitch looks down; one mouse count turns 0.0025 rad.
+                    expectedPitch = event == "look-up" ? -1.0471975511965976 : event == "look-down" ? 1.0471975511965976 : 0;
+                    PushMotion(window, 0, static_cast<float>((expectedPitch - application.WeaponFeedback().pitch) / .0025));
+                } else {
                     const double desired = event == "turn" || event == "hold-motion" ? 1.5707963267948966 :
                         event == "approach-wall" ? -1.5707963267948966 : 0;
                     expectedYaw = desired;
@@ -229,11 +241,11 @@ void RunPlayerShort(const Options& options) {
             Require(!inputWatch.Overflowed(), "Bounded acceptance input event observation overflowed");
             if (mover && application.WeaponFeedback().active) {
                 const auto& weapon = application.WeaponFeedback();
-                const bool expected = weapon.inputCaptured == expectedCapture && std::abs(weapon.pitch) < .0001 &&
+                const bool expected = weapon.inputCaptured == expectedCapture && std::abs(weapon.pitch - expectedPitch) < .0001 &&
                     std::abs(std::remainder(weapon.yaw - expectedYaw, 6.283185307179586)) < .0001;
                 if (!expected) report["unexpected_input"] = {{"seconds", elapsed}, {"host_steady_seconds", stamp},
                     {"frame_id", frame.frameIndex}, {"scheduled_event", event},
-                    {"expected_capture", expectedCapture}, {"expected_yaw", expectedYaw},
+                    {"expected_capture", expectedCapture}, {"expected_yaw", expectedYaw}, {"expected_pitch", expectedPitch},
                     {"observed_weapon", WeaponSample(weapon)}, {"source", "undetermined; no corresponding scripted input"}};
                 Require(expected, "Unscripted desktop mouse/focus input disturbed the controlled player schedule");
             }
