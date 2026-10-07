@@ -436,13 +436,13 @@
 
 ## 第 12 批進度（記錄器）：本機射擊冷卻閘
 
-- 2026-10-07：開始（使用者指示）。分支 `claude/pvp-v6-batch16` 自 master `3607fe3`，第 16 批的規劃文件與 v8 骨架併入本批的 PR（使用者決定）。
+- 2026-10-07：開始（使用者指示）。分支 `claude/pvp-v6-batch12` 自 master `3607fe3`，第 16 批的規劃文件與 v8 骨架併入本批的 PR（使用者決定）。
   - 開始時的讀碼發現：射擊的送達時間本身就有抖動。Client 的動作以 30 Hz 共用期限送出（`ClientConnection.cpp:351`、`:373`），新的射擊最多等 33 ms；Gateway 轉給 Match 的動作批次也以每位玩家 30 Hz 的期限送出（`action_delivery.go:189`）。兩段合計，權威的裁決 Tick 最多可差約 4 Tick，而 12 Tick 點擊對 10 Tick 冷卻只有 2 Tick 的餘裕。所以只補償本機閘，權威仍可能拒絕；要同時滿足 D11⑤ 的兩個條件，需要先量化。
   - 下一步：徵求 Tick 估計與時序分析用 xhigh 的同意（D8），先做 CPU 模擬，再提出做法。
 
 ## 第 16 批進度（記錄器）：房間上限 4 人
 
-- 2026-10-07：使用者決定（D22）：房間最高人數 2→4，排在第 14 批之前。分支 `claude/pvp-v6-batch16` 自 master `7226ca0`。
+- 2026-10-07：使用者決定（D22）：房間最高人數 2→4，排在第 14 批之前。規劃文件隨第 12 批的 PR 合併（分支 `claude/pvp-v6-batch12`）；實作開始時另開第 16 批的分支。
   - 已知的 2 人假設（開始時的初步搜尋，盤點會補全）：Gateway `adapter.MaxPlayers = 2`（`adapter.go:20`）與 readiness、加入、動作窗口；Match `set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）；Client 丟棄超過 2 人的 Snapshot（`ClientConnection.cpp:428`）、只有一份遠端移動觀測（`PvpApplication.cpp:115`）；arena v1 規定恰好兩個出生點（`Arena.cpp:32`）；契約的 Snapshot 最壞大小以 2 人計算（545 bytes，上限 1200）。
   - 對 v7 的影響（初步）：v7 的任務與人數無關；v7 的 30 FPS 對比沿用 2 個 Client 的案例才能比較；4 人會用掉更多 Snapshot 的 1200 bytes 空間。
   - 檔位：ultracode（3 個盤點、3 個方案、1 位評審、1 次對抗檢查，全部唯讀；子 agent 檔位沿用主對話），workflow `wf_45d62ed8-68c`。
