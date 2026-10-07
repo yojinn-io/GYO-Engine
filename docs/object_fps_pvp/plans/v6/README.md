@@ -1,7 +1,7 @@
 # PvP v6 分批計畫與進度
 
 更新：2026-10-07。Owner：`object_fps_pvp`。
-**第 01～04、06～10 批完成並合併**（最後是第 10 批，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)，master `7226ca0`）；第 05 批不執行；第 11～14 批未開始；第 16 批（房間上限 4 人）規劃完成。剩下的順序 12→11→13→16→14。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。
+**第 01～04、06～13 批完成並合併**（最後是第 13 批，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)，master `7886848`）；第 05 批不執行；第 16 批（房間上限 4 人）進行中，實作完成、L2／L3 未開始；第 14 批未開始。剩下的順序 16→14。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
@@ -38,7 +38,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 完成，PR [#61](https://github.com/yojinn-io/GYO-Engine/pull/61) 已合併（`83440ef`）（L2 的 player144 因 120 FPS 上限未驗證） | 第 1 項 |
 | 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 完成，PR [#60](https://github.com/yojinn-io/GYO-Engine/pull/60) 已合併（`a9485bf`；L3 接受，剩餘差異交給 v7） | 第 4 項 |
 | 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 完成，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 已合併（`7886848`） | 第 2 項的呈現 |
-| 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 進行中（2026-10-07 開始；ultracode 規劃、決定 D23） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
+| 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 進行中（2026-10-07 開始；實作與本機 L1 完成，L2／L3 未開始；GUI probe 支援 4 人房為事前宣告的修訂） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
 | 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 未開始 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
 
 ### Engine 計畫的批次（狀態以各計畫夾為準）

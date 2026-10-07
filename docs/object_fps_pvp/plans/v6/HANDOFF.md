@@ -499,6 +499,16 @@
   - 使用者決定見 D23。出生點原選「四角分散」，說明會改變 2 人出生位置、需改寫驗收幾何、歷史矩陣不可比較之後，改選線段。
   - 盤點更正：D21 與 v7 README 引用的行號已漂移（`IpcHost.cpp:272`、`ClientConnection.cpp:589-592`）；§7 的 587 bytes 是 ActionResults。發現既有缺陷：逐出時不清 runtime link（D23⑥）。
   - 寫入 [第 16 批文件](16-four-player-room.md)；第 14 批文件加入依賴與 4 人項目。實作在第 13 批之後開始。
+- 2026-10-07：commit 2～7 完成（容量常數化、逐出修正、arena 出生點、reanchor、容量 2→4、4 Client 驗收）。另加大廳容量預設值的小修正（`7de9f47`）。權威兩樹在各檢查點都是 35／35、golden 不變；滿員 Snapshot 釘在 1055／1019 bytes；`cfb243a` 時突變 39／39 killed。開發量測（不計次）的 clean-60、clean-30、1 GUI＋3 bot、版本混用都通過。詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch16.zh-Hant.md)。
+- 2026-10-07：事前宣告的修訂（使用者核准）。使用者要求 GUI probe 等寫死的部分也要改，盤點後選擇「GUI probe 支援 4 人房」，計畫如下：
+  - commit 9：產品新增只供診斷的 `ObserveRemote`。
+  - commit 10：`gui_room.hpp`，以及 quad probe 的被動 bot。
+  - commit 11：GUI runner 加 `--bots`。
+  - 條件是 2 人房判定不變，以 `GuiRoomTests` 與 2 人房實跑確認。
+  - 2 GUI＋2 bot 的 action short、player short、GUI timing short 都通過。
+  - Python 分析器與第 07a 批相同；新工具清單 `b8eabc7c…`（61 檔）。
+  - head `c8b1276`：權威 35／35；第 16 批突變 14／14 killed。
+  - 下一步：寫 L2 的 `declare.txt`，經核准後量測；L3 由使用者執行。
 
 ## 延後項目：現況與對應批次
 
@@ -619,7 +629,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 13 批進行中；第 14、16 批未開始（第 05 批不執行），順序 13→16→14（D23⑦），由使用者逐批指定。
+- 第 16 批進行中：實作與本機 L1 完成，L2、L3 未開始。第 14 批未開始（第 05 批不執行），順序 16→14（D23⑦），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
