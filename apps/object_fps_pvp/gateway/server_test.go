@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -80,7 +81,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -382,10 +383,12 @@ func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {
 		t.Fatal(status)
 	}
 	a := reserve(t, s, "a")
-	_ = reserve(t, s, "b")
-	status, _ = post(t, s, "/rooms/1/join", map[string]any{"request_id": "c", "protocol_version": adapter.ClientVersion})
-	if status != 409 {
-		t.Fatalf("capacity status %d", status)
+	for i := 1; i < adapter.MaxPlayers; i++ {
+		_ = reserve(t, s, fmt.Sprintf("filler%d", i))
+	}
+	status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": "c", "protocol_version": adapter.ClientVersion})
+	if status != 409 || !bytes.Contains(body, []byte("room_full")) {
+		t.Fatalf("capacity status %d %s", status, body)
 	}
 	s.expireAt(time.Now().Add(6 * time.Second))
 	f.quiet(t)
@@ -562,7 +565,7 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 			}
 			defer conn.Close()
 			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
-				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
+				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()
@@ -838,4 +841,35 @@ func rejectedVersions() []uint32 {
 
 func testRules() *runtime.CombatRules {
 	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+}
+
+// Readiness requires the Match's capacity to equal the Gateway's (pv6 contract
+// §1): Gateway and Match of different capacities fail at startup, in both directions.
+func TestReadinessRequiresTheSameCapacity(t *testing.T) {
+	for _, capacity := range []uint32{adapter.MaxPlayers - 1, adapter.MaxPlayers + 1} {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			ready := envelope()
+			ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1,
+				ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: capacity, CombatRules: testRules()}}
+			b, _ := proto.Marshal(ready)
+			_ = framing.WriteFrame(conn, b)
+		}()
+		if link, _, err := connectRuntime(context.Background(), listener.Addr().String()); err == nil {
+			link.close()
+			t.Fatalf("runtime with capacity %d admitted", capacity)
+		}
+		<-done
+	}
 }

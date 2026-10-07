@@ -13,6 +13,11 @@ namespace fps::pvp {
 using PlayerId = std::uint64_t;
 
 inline constexpr std::uint32_t AuthorityTickRate = 60;
+// Room capacity (pv6 contract §1, 2026-10-07 revision): the Match's join limit,
+// Ready.max_players and the Client's snapshot bound. The Gateway, acceptance C++
+// and acceptance Python keep their own definitions; test_max_players.py checks
+// that all four agree.
+inline constexpr std::uint32_t MaxPlayers = 2;
 inline constexpr std::uint32_t SnapshotIntervalTicks = 1;
 inline constexpr std::uint32_t InputSendRate = 60;
 // Input sends draw from an InputSendRate token bucket of this many tokens. A

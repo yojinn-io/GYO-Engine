@@ -137,7 +137,7 @@ struct IpcHost::Impl {
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
-        r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(2);
+        r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(MaxPlayers);
         auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);
         rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(PvpCombatRules.cooldownTicks);
         rules->set_shot_range(PvpCombatRules.shotRange);

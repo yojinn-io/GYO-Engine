@@ -87,6 +87,9 @@ set_tests_properties("${GYO_CURRENT_APP}.asset_catalog" PROPERTIES LABELS "cpu;p
 add_test(NAME "${GYO_CURRENT_APP}.protocol_version"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_protocol_version.py")
 set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.max_players"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
+set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.mutation_tool"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_run_mutations.py")
 set_tests_properties("${GYO_CURRENT_APP}.mutation_tool" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

@@ -30,7 +30,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
     error.clear();
     if (playerId == 0) { error = "invalid_player"; return false; }
     if (players_.contains(playerId)) return true;
-    if (players_.size() >= 2) { error = "match_full"; return false; }
+    if (players_.size() >= MaxPlayers) { error = "match_full"; return false; }
     if (const auto* spawn = FindSpawn(playerId)) {
         Participant player;
         player.state = {playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};

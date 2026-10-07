@@ -425,7 +425,7 @@ struct ClientConnection::Impl {
             } else if(packet->type==wire::Type::Snapshot) {
                 if(!welcomed)continue;
                 pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
-                    message.tick()==0 || message.players_size()>2 || message.combat_size()!=message.players_size())continue;
+                    message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
                 PlayerId own;std::uint32_t maximumHp{},magazineCapacity{};{
                     std::scoped_lock lock(mutex);
