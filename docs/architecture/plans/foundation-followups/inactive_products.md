@@ -84,10 +84,12 @@
 
 ### FF-9 Collision 統一與公開合法性檢查
 
-狀態：未開始，批次完成時更新。
+狀態：FF-9 完成（2026-10-07）。
 
 - 數值：`RaycastAabb`、`VerticalCapsule` 版的 `RaycastCapsule` 與 `SweepSphereAgainstCapsule` 改為 double 實作；擦邊與容差邊界的命中可能翻轉，距離可能差數個 ULP。依賴這些結果的產品測試期望值可能要更新。
-- 合法性：退化膠囊與（依 FF-9 的決定）`min==max` 的 AABB 可能被拒；違反時 assert 中止。
+- 合法性（2026-10-07 FF-9 事前宣告）：height＝2r 的球形 `VerticalCapsule` 與長度 0 的 `Math::Capsule` 仍然合法；`min==max` 的 AABB 也不會被拒。
+  - `object_fps_v2` 的兩處球形 `VerticalCapsule`（`src/Collision/CombatCollision.cpp:99-100`、`src/Gameplay/Enemy/EnemySystem.cpp:1155`）與球形頭部 hurt region（start == end）在 FF-9 之後仍然合法；FF-9 刪除 float 路徑後，這類膠囊原本可能在 float 路徑中止的問題也一併消除。
+- 近平行射線：方向分量只有恰為 0 才算平行，近平行（|d_i|≤1e-6）不再被當成平行，視線判定可能由未中變為命中；影響 `EnemySystem.cpp:1130`、`:1164` 與兩個未啟用產品 `CombatCollision` 中的 `RaycastAabb`。
 - 內容驗證：未啟用產品原本以 catch `std::invalid_argument` 驗證內容；Collision 改為 assert 後這招已失效（見 Result 清單）。重新啟用時改為在載入時呼叫公開 `IsValid`。
 
 ## 3. IP（輸入與呈現計畫）

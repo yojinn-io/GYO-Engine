@@ -27,7 +27,7 @@
 | D0c | 規劃用 ultracode：3 個分批方案、1 位評審、1 次對抗式檢查 |
 | D1 | Engine 工作的計畫與紀錄放在兩個 Engine 計畫夾（IP、FF），正式清單移過去；本文件只保留產品列 |
 | D2 | 受擊時點新增 wire 欄位：`last_damage_tick`、同一生命內遞增的受擊計數，**並帶最後攻擊者 id**；第 13 批做受擊方向指示 |
-| D3 | Collision（使用者原話：「這個地方不想再埋坑，用徹底的方案」）：全部公開查詢（含 `RaycastAabb`）共用一套 double 實作與單一容差；`VerticalCapsule` 多載改為薄包裝；公開合法性檢查，並讓產品的 `Arena::Validate`、`ShotQuery` 改用；退化膠囊一併拒絕（FF-9＋第 10 批） |
+| D3 | Collision（使用者原話：「這個地方不想再埋坑，用徹底的方案」）：全部公開查詢（含 `RaycastAabb`）共用一套 double 實作與單一容差；`VerticalCapsule` 多載改為薄包裝；公開合法性檢查，並讓產品的 `Arena::Validate`、`ShotQuery` 改用；~~退化膠囊一併拒絕~~ **退化膠囊造成的中止一併消除**（FF-9＋第 10 批）。2026-10-07 修訂（實作前，使用者原話）：「『退化膠囊一併拒絕』（D3④）改為『退化膠囊造成的中止一併消除』……IsValid(VerticalCapsule) 沿用現行 double 驗證：有限值、radius > 0、height ≥ 2r……height == 2r（球）維持合法。IsValid(Math::Capsule)：端點有限、radius > 0。長度 0 的膠囊（球）合法。理由：FF-1 量過 25 個 height == 2r 的案例，double 路徑全部正常，只有 float 路徑會讓 segment 上下端顛倒並在 Collision.cpp:109 中止。FF-9 刪掉 float 路徑後，這個危險就不存在了」 |
 | D4 | GYOP 24-byte 標頭的 C++ 編解碼收進 Engine，位元組不變，排在第 09 批之前（FF-8） |
 | D5 | 刪除未編譯的 29 檔，並清理只被它們使用的孤兒資產（第 08 批） |
 | D6 | 第 8 項的共通測試列全部改為結構條件（FF-2） |
@@ -408,7 +408,28 @@
   - commit 5（文件）：產品 `protocol/README.md` 改寫為 pv6、聯網架構文件的現行 wire 描述、dev_log。下一步：開 PR 取得四平台 CI，再以同一個 commit 做 L2（需要機器閒置，先徵求使用者同意）與 L3（使用者操作）。
 - 2026-10-06：PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 開啟，四平台 CI 通過。使用者要求把手動的突變檢查做成產品自有工具：`tests/object_fps_pvp/run_mutations.py`、`mutations.json`、說明書 `run_mutations.zh-Hant.md`（commit 6 `8fbc2e5`），第 09 批 12／12 killed。
 - 2026-10-06：L2（事前宣告 `e6fa12bf…`）：雙 GUI 短測 before／after 都通過；25 案矩陣 before 25／25、after 25／25；沒有疑似回歸。主機全程在約 4 ms 狀態。詳見 dev_log。下一步：L3（使用者）。
-- 2026-10-06：L3（使用者）全部正常；arena 內容不一致的 Client 以 `arena_content_mismatch` 被拒（第一次因我的副本漏了 `lib` 沒有執行到，修正後重做）。取得視窗時的 `CONNECTION POOR` 對上已知的 `nextDrawable` 停頓（D19，v7）。**第 09 批完成**，PR #57 待合併；暫時的 worktree（before／after）移除。下一批由使用者指定。
+- 2026-10-06：L3（使用者）全部正常；arena 內容不一致的 Client 以 `arena_content_mismatch` 被拒（第一次因我的副本漏了 `lib` 沒有執行到，修正後重做）。取得視窗時的 `CONNECTION POOR` 對上已知的 `nextDrawable` 停頓（D19，v7）。**第 09 批完成**，PR #57 已合併（`5da939f`，2026-10-07）；暫時的 worktree（before／after）移除。下一批由使用者指定。
+
+## 第 10 批進度（記錄器）：Collision 權威變更（與 FF-9 同一 PR）
+
+- 2026-10-07：開始（使用者指示）。前置都已合併：第 03、09 批（#57，`5da939f`），FF-1。分支 `claude/pvp-v6-batch10` 自 master `5da939f`；Engine 端的 FF-9 在同一個 PR，紀錄寫在 Engine 計畫的記錄器（D12）。
+  - 檔位：使用者同意以 ultracode 規劃事前宣告（3 案、1 位評審、1 次對抗檢查；評審與對抗 xhigh），容差、`IsValid` 規則、差異歸因局部 xhigh，其餘 high。
+  - 事前宣告在寫程式之前完成，經使用者確認後寫進本批文件、dev_log 與 Engine 記錄器；之後不得事後放寬。
+- 2026-10-07：事前宣告完成（ultracode，workflow `wf_28494fb3-383`；對抗檢查 major 1、minor 10 全部套入），使用者核准：`RaycastAabb` 用 double slab；新增 commit 0（分析器先凍結）、退化膠囊拒絕移到 commit 1、golden 不更新；arena v1 不升版（比照 D11⑨）。
+  - 權威 digest 預期變化集合為空（35 個情境逐位元不變）；Engine 端 FF-1 語料恰好 435 筆不同。詳見本批文件的「事前宣告」與 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
+  - 下一步：commit 0（擴充並凍結分析器），之後才寫 Collision。
+- 2026-10-07：使用者方向修正（實作前）：退化膠囊改為「中止一併消除」（D3 修訂），height == 2r 與長度 0 的膠囊維持合法；arena 的合法性與契約不變；commit 1 不改變任何輸入的合法性；digest 仍預期全部不變。PvP 骨骼 hitbox 列為 v7 候選。修訂後的宣告經使用者確認後寫入。
+- 2026-10-07：commit 0（Engine 端，FF-9 記錄器）：語料分析器擴充並凍結，自我檢查與宣告完全一致。凍結清單另含本產品的權威兩樹比對腳本與 digest runner（清單 SHA-256 `00841fe1d5ba82fc…`）。
+- 2026-10-07：commit 1（Engine：公開 `IsValid`）、commit 2（本產品：`Arena::Validate`、`QueryShot` 改用 `IsValid`）、commit 3（Engine：統一為 double、刪除 float 演算法）。每個 commit 都通過：語料（commit 1、2 全等；commit 3 恰好 435 筆、三項判定 0）、權威 digest 同機兩樹 35 個情境 0 不同、CTest 61／61。golden 未更新（30／30）。**事前宣告全部命中，沒有超出宣告的變化。**詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
+  - 下一步：開 PR（與 FF-9 同一個）取得四平台 CI，再以同一個 commit 做 L2（25 案矩陣與動作短測，before／after；需要機器閒置，先徵求使用者同意）。
+- 2026-10-07：PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)（與 FF-9 同一個），四平台 CI 通過。
+- 2026-10-07：L2（事前宣告 `edc2f68d…`；before `5da939f`、after `e8f2ef8`；證據 `build/target/_build/test/logs/pvp-v6-batch10-l2-20261007/`）：
+  - 動作短測：before／after 全部通過，權威判定的序列逐筆相同。
+  - 25 案矩陣：after 25／25。before 在 clean-30 失敗後停止（2／25；矩陣工具在第一個失敗停止）；依宣告保留、不重跑。
+  - 有前後對照的 clean-60、clean-30：43 個動作的裁決、命中類別、目標、傷害 0 筆不同。after 每案被接受的射擊 Miss 5、Player 4 恆定，World 只在故障案因 `Expired` 減少。
+  - **沒有可歸因於 Collision 的變化。**before 的 clean-30 失敗是 D21 的邊界（38 筆 Held 分散在整段量測，與 A/B 調查的機制一致），但發生在約 4 ms 狀態（主機延遲 P99 3.6 ms），是 4 ms 狀態第一次觀察到的失敗。
+  - 參考（不在宣告內）：after 與第 09 批 L2 的 after（同一份 Collision 程式）逐一比對，24／25 案相同，1 發是故障案的拒絕類別不同（`Reloading` → `Expired`，時序）。
+  - 詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。下一步：使用者決定合併 #58。
 
 ## 延後項目：現況與對應批次
 
@@ -512,7 +533,7 @@ Engine、工具、測試、登錄各列的正式來源是 [基礎後續整理](.
 | Client 與 server 只比對 arena 的 id 與 version，不比對內容；Client 以自己的 arena 檔做 prediction（`ClientConnection.cpp:180-184` 的 `CheckArena`，由 HTTP join `:276` 與 Welcome `:388` 呼叫；Gateway 轉送點 `server.go:276,440`） | 第 09 批（arena 內容 digest） |
 | `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除；`GroundPoint.hpp` 只剩型別定義） |
 | `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除） |
-| Collision 統一對本產品權威判定的影響、權威 golden 更新、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
+| Collision 統一對本產品權威判定的影響、權威 digest 不變的證明、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
 
 ### 11. Engine 輸入層的缺口 → IP-1（Engine）、第 06 批（本產品）
 
@@ -529,8 +550,11 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 09～14 批未開始（第 05 批不執行），由使用者逐批指定。
+- 第 11～14 批未開始（第 05 批不執行），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
+  - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
+  - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
+  - 交給第 14 批：矩陣工具在第一個失敗的案例停止，clean-30 排在第 2 案，所以 clean-30 一失敗，其餘 23 案就沒有資料。決定 clean-30 的處理時，一併決定這個停止規則。
 - 已知要在批次開始時決定的事：
   - ~~FF-7 的 include 統一方向~~：2026-10-05 使用者決定 `engine/<m>/`，FF-7 已完成。
   - 第 11、13 批的呈現細節（D11⑥）。

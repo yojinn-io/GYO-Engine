@@ -666,7 +666,7 @@ Engine 子系統與共用向量完成；消費端改用後位元組與拒絕集�
 
 ## FF-9 Collision 統一與公開合法性檢查
 
-狀態：未開始。
+狀態：完成（2026-10-07；與消費端同一個 PR #58，待合併）。事前宣告、修訂與事後量測見 [HANDOFF](HANDOFF.md) 的 FF-9 節。
 
 ### 目標與範圍
 
@@ -715,7 +715,7 @@ Engine 子系統與共用向量完成；消費端改用後位元組與拒絕集�
 | 程式 | Collision 的 ①–④；Engine 內部 assert 改用 `IsValid` | 自己的 arena 驗證與射擊查詢改用公開 `IsValid` |
 | 事前宣告 | 變動的公開函式、FF-1 翻轉上限、容差與 AABB 規則 | 權威 digest 預期變化的情境集合 |
 | 事後量測 | FF-1 語料兩樹比對 | 權威 digest 第一個分歧 Tick 與原因分類 |
-| 基準更新 | `tests/common/collision` 期望值（附理由） | 權威 golden 只在此 PR 更新一次，舊基準保留在證據 |
+| 基準更新 | `tests/common/collision` 期望值（附理由） | 權威 golden：預期不變、不重新產生；base 的 digest 與 golden 雜湊記錄在證據（2026-10-07 事前宣告） |
 | 紀錄 | 本夾 HANDOFF、`Collision.hpp` 的數值語意註解 | 消費端的協議契約文件 |
 
 消費端的分析（依現況程式碼）：消費端已編譯的程式中，float 路徑只被射擊查詢使用（`RaycastAabb` 判牆、`VerticalCapsule` 版 `RaycastCapsule` 判玩家），而射擊查詢只在伺服器端的 Match 呼叫；移動與 Client 預測只走 double 的 Overlap／Sweep（`kTolerance 1e-7`）。所以影響取決於容差選擇：

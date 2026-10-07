@@ -27,13 +27,15 @@ bool Arena::Validate(std::string& error) const {
         !positive(movementSpeed) || !positive(bodyHeight) || !positive(radius) ||
         !positive(eyeHeight) || !positive(jumpHeight) || !positive(gravity) ||
         !std::isfinite(2 * gravity * jumpHeight) ||
-        bodyHeight < radius * 2 || eyeHeight > bodyHeight ||
+        !Engine::Collision::IsValid(Engine::Collision::VerticalCapsule{{}, bodyHeight, radius}) ||
+        eyeHeight > bodyHeight ||
         spawns.size() != 2 || walls.size() > 1024) {
         error = "Arena v1 requires an id, valid dimensions/movement settings and exactly two spawns";
         return false;
     }
     for (const auto& wall : walls) {
-        if (!Engine::Math::IsFinite(wall) ||
+        // Engine validity allows zero thickness; an empty wall is a content error.
+        if (!Engine::Collision::IsValid(wall) ||
             wall.minimum.x >= wall.maximum.x || wall.minimum.y >= wall.maximum.y ||
             wall.minimum.z >= wall.maximum.z) {
             error = "Arena wall must be a finite non-empty AABB";

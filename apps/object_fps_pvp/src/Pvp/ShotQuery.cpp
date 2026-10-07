@@ -19,13 +19,15 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     }
     const Engine::Math::Vec3 origin{
         shooter.position.x, shooter.position.y + arena.eyeHeight, shooter.position.z};
-    if (!Engine::Math::IsFinite(origin)) throw std::invalid_argument("Invalid shot origin");
 
     yaw = Engine::Math::WrapRadians(yaw);
     pitch = Engine::Math::Clamp(pitch, -MovementMaximumPitch, MovementMaximumPitch);
     const float cosinePitch = std::cos(pitch);
     const Engine::Math::Vec3 direction = Engine::Math::Normalize(Engine::Math::Vec3{
         std::sin(yaw) * cosinePitch, -std::sin(pitch), std::cos(yaw) * cosinePitch});
+    // The direction comes from validated angles; the origin may not be finite.
+    if (!Engine::Collision::IsValid(Engine::Math::Ray{origin, direction}))
+        throw std::invalid_argument("Invalid shot origin");
 
     ShotHit closest{ShotHitKind::Miss, 0, range};
     // The arena floor bounds a solid half-space; starting on/under it is overlap.

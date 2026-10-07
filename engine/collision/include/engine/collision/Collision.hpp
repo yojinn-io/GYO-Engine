@@ -13,6 +13,14 @@ namespace Engine::Collision {
 // Geometric primitives (Ray, Segment, Aabb, Capsule) come from Engine::Math;
 // this module owns the collision algorithms and their tolerances, validation
 // and contact policy.
+//
+// Numeric semantics: every query computes in double and rounds its result to
+// float once. There is one tolerance, 1e-7: an initial shallow overlap that
+// separates or moves tangentially is not blocking (the box and capsule
+// sweeps). The quadratic solver keeps a rounding guard of 16 double epsilons
+// and the rounded-box sweep a 1e-12 interval window; these absorb double
+// rounding only and are not tolerances. A ray is parallel to an axis only
+// when that direction component is exactly zero.
 
 // The character body shape specialised for collision: feet is the world-space
 // bottom of the upright capsule, not its center. height includes both
@@ -32,6 +40,19 @@ struct Contact final {
     Math::Vec3 normal{};
     float penetrationDepth{};
 };
+
+// Validity of query inputs. Every query requires valid inputs: invalid input is
+// a Programmer Error (GYO_ASSERT). Content that is not trusted (loaded data)
+// is checked with these first. They never assert.
+// Aabb: finite, and minimum <= maximum on every axis (zero thickness is valid).
+[[nodiscard]] bool IsValid(const Math::Aabb& bounds) noexcept;
+// VerticalCapsule: finite, radius > 0 and height >= 2 * radius (a sphere is valid).
+[[nodiscard]] bool IsValid(const VerticalCapsule& capsule) noexcept;
+// Math::Capsule: finite end points and radius, radius > 0 (equal end points,
+// a sphere, are valid).
+[[nodiscard]] bool IsValid(const Math::Capsule& capsule) noexcept;
+// Ray: finite origin and direction, and a direction that is not the zero vector.
+[[nodiscard]] bool IsValid(const Math::Ray& ray) noexcept;
 
 [[nodiscard]] Math::Capsule ToCapsule(const VerticalCapsule& capsule);
 

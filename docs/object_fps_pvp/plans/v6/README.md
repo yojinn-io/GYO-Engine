@@ -33,8 +33,8 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 07 | [量測基線 B1](07-measurement-baseline-b1.md) | medium | 完成，PR [#56](https://github.com/yojinn-io/GYO-Engine/pull/56) 已合併（`c1ee2b2`；B1 見 BASELINE；交錯 A/B 調查與 D21 見 HANDOFF） | IP-2 之後重取基線 |
 | 07a | 驗收工具修正：連線時初始 seed 的夾住（見 [HANDOFF](HANDOFF.md) 的第 07a 批） | xhigh（主對話） | 完成，隨第 07 批的 PR | 豁免每位玩家一次的初始 seed 夾住；停頓重設仍判干擾 |
 | 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成，PR [#55](https://github.com/yojinn-io/GYO-Engine/pull/55) 已合併（`5b0553a`） | 29 檔與孤兒資產 |
-| 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 完成（PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 待合併；L1／L2／L3 通過） | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
-| 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 未開始 | **唯一的權威變更**；與 FF-9 同一 PR |
+| 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 完成，PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 已合併（`5da939f`） | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
+| 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 完成，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58) 待合併（與 FF-9 同一 PR；L1、L2 通過） | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 未開始 | 第 1 項 |
 | 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 未開始 | 第 4 項 |
 | 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 未開始 | 第 2 項的呈現 |
@@ -90,5 +90,5 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 ## 接續處理文字
 
 > v6 第 01～04、06、08 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-8、IP-1、IP-2 已合併（IP-2 縮小交付）。分批與決定見本文件、HANDOFF 與 BASELINE。
-> 第 07、07a 批完成並合併（#56），B1 見 BASELINE；30 FPS 列為設計範圍的邊界（D21）。第 09 批完成（pv6，PR #57 待合併）；之後可以開始的是第 10（與 FF-9）、11、12 批。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv5，第 09 批升 pv6，D20）。
+> 第 07、07a 批完成並合併（#56），B1 見 BASELINE；30 FPS 列為設計範圍的邊界（D21）。第 09 批完成並合併（pv6，#57）。第 10 批（與 FF-9）完成，PR 待開；之後可以開始的是第 11、12 批。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv5，第 09 批升 pv6，D20）。
 > Windows／Linux 實機驗收與兩台機器的時鐘漂移實測需要另外授權。

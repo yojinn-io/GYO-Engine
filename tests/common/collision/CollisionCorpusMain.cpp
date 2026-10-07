@@ -1,6 +1,6 @@
 // Collision corpus runner: writes the records for a same-host two-tree
-// comparison, prints the capsule overload statistics, and reports how the
-// current validation treats degenerate capsules (observed, not fixed).
+// comparison, prints the capsule overload statistics, and runs every query on
+// degenerate capsules (height == 2r, valid since FF-9).
 #include "CollisionCorpus.hpp"
 
 // Only the scoped throwing assertion handler is used; no doctest tests here.
@@ -22,42 +22,31 @@ using Engine::Math::Ray;
 
 const char* Outcome(bool asserted, bool hit) { return asserted ? "asserted" : hit ? "hit" : "miss"; }
 
-// A degenerate capsule: height exactly two radii. Float rounding of the feet
-// height can put the segment top below its bottom; the vertical (float) query
-// then violates Math::Clamp's precondition inside a noexcept function, where an
-// assertion terminates the process even under a throwing handler (observed
-// when this report first ran every case). Those cases are reported, not run.
+// A degenerate capsule: height exactly two radii, a sphere. Valid since
+// FF-9; both public overloads run the double algorithm, so every case runs.
 void ReportDegenerate() {
     std::cout << "degenerate capsules (height == 2 * radius):\n";
-    int inverted = 0, shown = 0;
+    int shown = 0;
     for (float feetY : {1.0f, 100.0f, 1000.0f, 4096.0f, 65536.0f}) {
         for (float radius : {1.0e-3f, 1.0e-4f, 1.0e-5f, 1.0e-6f, 1.0e-7f}) {
             const VerticalCapsule capsule{{0.0f, feetY, 0.0f}, 2.0f * radius, radius};
-            // The same float expressions as the vertical query's segment ends.
-            const float bottom = capsule.feet.y + capsule.radius;
-            const float top = capsule.feet.y + capsule.height - capsule.radius;
             const Ray ray{{-1.0f, feetY + radius, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            bool generalAsserted = false, generalHit = false;
-            std::string vertical = "not-run(top<bottom: Math::Clamp precondition in a noexcept function)";
+            bool verticalAsserted = false, verticalHit = false, generalAsserted = false, generalHit = false;
             {
                 Engine::Test::ScopedAssertionHandler handler;
-                if (!(top < bottom)) {
-                    bool asserted = false, hit = false;
-                    try { hit = RaycastCapsule(ray, 4.0f, capsule).has_value(); }
-                    catch (const Engine::Base::AssertionFailure&) { asserted = true; }
-                    vertical = Outcome(asserted, hit);
-                }
+                try { verticalHit = RaycastCapsule(ray, 4.0f, capsule).has_value(); }
+                catch (const Engine::Base::AssertionFailure&) { verticalAsserted = true; }
                 try { generalHit = RaycastCapsule(ray, 4.0f, ToCapsule(capsule)).has_value(); }
                 catch (const Engine::Base::AssertionFailure&) { generalAsserted = true; }
             }
-            inverted += top < bottom ? 1 : 0;
             std::cout << "  feet.y=" << feetY << " radius=" << radius
-                      << " ends=" << (top < bottom ? "top<bottom" : top == bottom ? "top==bottom" : "top>bottom")
-                      << " vertical=" << vertical << " general=" << Outcome(generalAsserted, generalHit) << '\n';
+                      << " valid=" << (IsValid(capsule) ? "true" : "false")
+                      << " vertical=" << Outcome(verticalAsserted, verticalHit)
+                      << " general=" << Outcome(generalAsserted, generalHit) << '\n';
             ++shown;
         }
     }
-    std::cout << "  cases=" << shown << " top_below_bottom=" << inverted << '\n';
+    std::cout << "  cases=" << shown << '\n';
 }
 
 void ReportStatistics() {
