@@ -87,6 +87,14 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
   - 分析器：用 v6 的凍結清單（第 07a 批，`9e086f1d…`）分析兩棵 tree。v7 若修改分析器，after 的 trace 用新舊兩版各分析一次。
   - v6 第 16 批之後的工具清單是 `b8eabc7c…`（61 檔，`logs/pvp-v6-batch16-dev-20261007/frozen-tools.sha256`）。其中 Python 分析器與 07a 逐位元組相同；GUI probe 與 GUI runner 支援有 bot 的房間，2 人房的判定不變；4 人另有 `quad_evidence`（與 `command_evidence` 的重複，見「候選」的收斂項目）。
 
+### v6 L3 的觀察：切換工作區後斷線（v6 第 14a 批；v7 完成後重新確認）
+
+2026-10-08 使用者在 v6 第 14a 批的 L3 中，一邊連續射擊一邊切換 macOS 工作區（Spaces）去看其他畫面，回來後看到斷線訊息。使用者決定不判 v6 失敗，交給 v7 一起處理。
+
+- 當時的 Gateway／Match 輸出沒有保留，原因未查明；使用者不確定是切換工作區造成，還是程式的問題。
+- 推測（未驗證）：被遮住的視窗呈現被暫停或降速（`nextDrawable` 阻塞或 App Nap）；v6 的主迴圈是單執行緒，命令跟著停止產生，Match 的連線品質判定移出玩家。屬於任務 1（執行緒分離）的範圍，任務 3 也相關。
+- v7 完成後：在連續射擊中切換工作區、最小化與遮住視窗，確認不再斷線；重現時保留 Gateway／Match 的 log 與 movement trace。
+
 ### 本機射擊閘的兩個常數（v6 第 12 批；v7 完成後重新評估）
 
 2026-10-07 使用者指示：v7 完成後重新評估下列兩個常數（`apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp`）。它們都由 v6 的時序推導而來，任務 1～3 會改變那些時序。
