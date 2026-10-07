@@ -8,6 +8,7 @@ set(PVP_DOMAIN_SOURCES
     src/Pvp/LocalPlayerPrediction.cpp
     src/Pvp/FireGate.cpp
     src/Pvp/HitFeedback.cpp
+    src/Pvp/LogFile.cpp
     src/Gameplay/Player/PlanarMovement.cpp
     src/Collision/CharacterCollision.cpp
 )

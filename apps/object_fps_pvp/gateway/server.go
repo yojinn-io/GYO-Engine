@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -51,6 +52,9 @@ type reservation struct {
 	lifeGeneration uint64
 	commands       map[uint64]*runtime.MovementCommand
 	outSequence    uint32
+	// Diagnostics only: datagrams of this session and the last arrival.
+	received     uint64
+	lastReceived time.Time
 }
 type outbound struct {
 	actionPlayer uint64
@@ -132,6 +136,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	go s.receiveUDP(ctx)
 	go s.sendUDP(ctx)
 	go s.expire(ctx)
+	go s.logStatistics(ctx)
 	httpErr := make(chan error, 1)
 	go func() { httpErr <- s.http.Serve(s.listener) }()
 	select {
@@ -228,9 +233,11 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	data, status, code := s.reserveSlot(request)
 	if code != "" {
+		log.Printf("join refused remote=%s code=%s", r.RemoteAddr, code)
 		writeError(w, status, code)
 		return
 	}
+	log.Printf("join reserved player=%v remote=%s", data["player_id"], r.RemoteAddr)
 	writeJSON(w, status, data)
 }
 func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) {
@@ -309,6 +316,7 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 		e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}
 		failure = s.link.control(e)
 	}
+	log.Printf("player left player=%d", p.playerID)
 	s.remove(p)
 	s.mu.Unlock()
 	if failure != nil {
@@ -356,6 +364,8 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 	if p == nil {
 		return nil
 	}
+	p.received++
+	p.lastReceived = now
 	switch h.Type {
 	case adapter.Hello:
 		var hello client.Hello
@@ -371,6 +381,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		case reserved:
 			p.phase = joining
 			p.joinStarted = now
+			log.Printf("player hello player=%d udp=%s", p.playerID, peer)
 			e := envelope()
 			e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: p.playerID}}
 			return s.link.control(e)
@@ -470,11 +481,13 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			return
 		}
 		if !result.Accepted {
+			log.Printf("player join rejected player=%d reason=%s", p.playerID, result.Reason)
 			s.sendControl(p, adapter.Failure, &client.Error{Code: "join_rejected", Message: result.Reason})
 			s.remove(p)
 			return
 		}
 		p.phase = active
+		log.Printf("player active player=%d", p.playerID)
 		s.welcome(p)
 		return
 	}
@@ -668,6 +681,41 @@ func (s *Server) expireAt(now time.Time) {
 		s.runtimeFailed(failure)
 	}
 }
+
+// Every statisticsInterval: each player's phase, endpoint, datagrams and the
+// age of the last one, with the Gateway-wide rate counters. Diagnostics only.
+const statisticsInterval = 10 * time.Second
+
+func (s *Server) logStatistics(ctx context.Context) {
+	ticker := time.NewTicker(statisticsInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			s.mu.Lock()
+			ids := make([]uint64, 0, len(s.players))
+			for id := range s.players {
+				ids = append(ids, id)
+			}
+			slices.Sort(ids)
+			log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
+				s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
+			for _, id := range ids {
+				p := s.players[id]
+				age := int64(-1)
+				if !p.lastReceived.IsZero() {
+					age = now.Sub(p.lastReceived).Milliseconds()
+				}
+				log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
+					p.session.Endpoint(), p.received, age)
+			}
+			s.mu.Unlock()
+		}
+	}
+}
+
 func (s *Server) remove(p *reservation) {
 	delete(s.players, p.playerID)
 	delete(s.sessions, p.session.ID)
