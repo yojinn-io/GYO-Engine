@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/FireGate.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
@@ -61,6 +62,9 @@ public:
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,
                                float yaw, float pitch, bool jumpRequested = false);
     [[nodiscard]] PlayerInput PendingInput() const;
+    // Phase timing for the local shot gate; nullopt before the first snapshot
+    // or while no command can be generated.
+    [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept;
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
 
 private:

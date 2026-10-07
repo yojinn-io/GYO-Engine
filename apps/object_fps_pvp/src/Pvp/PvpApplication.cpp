@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/FireGate.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
 #include "RetroFPS/Pvp/PointerCapture.hpp"
@@ -105,7 +106,8 @@ struct PvpApplication::Impl final {
     double remoteSubmitMilliseconds{};
     WeaponFeedbackObservation weaponFeedback;
     fps::WeaponViewModelAction weaponAction{fps::WeaponViewModelAction::Idle};
-    Clock::time_point weaponStartedAt{}, localCooldownUntil{}, hitMarkerUntil{}, rejectionUntil{};
+    Clock::time_point weaponStartedAt{}, hitMarkerUntil{}, rejectionUntil{};
+    LocalFireGate fireGate;
     ClientConnection connection;
     ClientConnectionState state;
     std::unique_ptr<LocalPlayerPrediction> prediction;
@@ -324,7 +326,8 @@ struct PvpApplication::Impl final {
             reloadAnchorStartTick = 0;
             prediction->ClearJumpRequest();
             weaponAction = fps::WeaponViewModelAction::Idle;
-            weaponStartedAt = localCooldownUntil = hitMarkerUntil = rejectionUntil = {};
+            weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
+            fireGate.Reset();
             ++weaponFeedback.animationRevision;
         }
         weaponFeedback.active = Alive();
@@ -341,6 +344,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.magazineCapacity = state.combatRules ? state.combatRules->magazineCapacity : 0;
         for (const auto& combat : state.snapshot->combat) {
             if (combat.playerId != state.playerId || combat.lifeGeneration != self->lifeGeneration) continue;
+            fireGate.ObserveSnapshot(state.snapshot->tick, combat);
             weaponFeedback.hp = combat.hp;
             weaponFeedback.magazineAmmo = combat.magazineAmmo;
             weaponFeedback.reloadStartTick = combat.reloadStartTick;
@@ -356,8 +360,10 @@ struct PvpApplication::Impl final {
             ++weaponFeedback.decisionCount;
             if (decision.accepted) ++weaponFeedback.acceptedDecisions;
             else ++weaponFeedback.rejectedDecisions;
+            if (decision.rejection == ShotRejection::Cooldown) ++weaponFeedback.authorityCooldownRejections;
             // Drain/ACK includes old lives, but their cosmetic result cannot alter this life.
             if (decision.lifeGeneration != self->lifeGeneration) continue;
+            if (state.combatRules) fireGate.ObserveDecision(decision, state.combatRules->cooldownTicks);
             if (decision.kind == ActionKind::Reload && pendingReload == decision.actionId) {
                 if (decision.accepted && state.combatRules)
                     acceptedReloadEndTick = decision.resolvedTick + state.combatRules->reloadTicks;
@@ -401,7 +407,8 @@ struct PvpApplication::Impl final {
         weaponFeedback = {};
         weaponFeedback.ready = weapon != nullptr;
         weaponAction = fps::WeaponViewModelAction::Idle;
-        weaponStartedAt = localCooldownUntil = hitMarkerUntil = rejectionUntil = {};
+        weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
+        fireGate.Reset();
         pendingShotEdge = pendingReloadEdge = leftButtonDown = false;
         viewLife = 0;
         pendingReload.reset(); acceptedReloadEndTick = 0;
@@ -428,12 +435,18 @@ struct PvpApplication::Impl final {
                 weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
             }
         }
+        // One gate decides a shot: the earliest authority tick that can resolve
+        // it must reach every known cooldown (FireGate.hpp). A blocked click is
+        // dropped, never queued.
+        const auto shotTiming = prediction->ShotTiming();
         if (consumeInput && pendingShotEdge && !pendingReloadEdge && !pendingReload && !weaponFeedback.reloading &&
             weaponFeedback.magazineAmmo > 0 && !pointerAcquiredThisFrame && !windowInteraction &&
-            weaponFeedback.inputCaptured && state.combatRules && now >= localCooldownUntil) {
+            weaponFeedback.inputCaptured && state.combatRules) {
             const auto combat = std::find_if(state.snapshot->combat.begin(), state.snapshot->combat.end(),
                 [this](const CombatState& value) { return value.playerId == state.playerId; });
-            if (combat != state.snapshot->combat.end() && state.snapshot->tick >= combat->nextAllowedShotTick) {
+            if (combat != state.snapshot->combat.end() && !fireGate.Allows(shotTiming)) {
+                ++weaponFeedback.localCooldownBlocks;
+            } else if (combat != state.snapshot->combat.end()) {
                 if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, yaw, pitch)) {
                     weaponFeedback.lastActionId = *id;
                     weaponFeedback.lastActionKind = ActionKind::Shot;
@@ -443,8 +456,7 @@ struct PvpApplication::Impl final {
                     weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
                     weaponAction = fps::WeaponViewModelAction::Shoot;
                     weaponStartedAt = now;
-                    localCooldownUntil = now + std::chrono::duration_cast<Clock::duration>(
-                        std::chrono::duration<double>{static_cast<double>(state.combatRules->cooldownTicks) / AuthorityTickRate});
+                    fireGate.Submitted(*id, shotTiming, state.combatRules->cooldownTicks);
                 }
             }
         }
@@ -490,7 +502,8 @@ struct PvpApplication::Impl final {
         weaponFeedback.drawing = weaponAction == fps::WeaponViewModelAction::Draw;
         weaponFeedback.reloadAnimating = weaponAction == fps::WeaponViewModelAction::Reload;
         weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
-        weaponFeedback.cooldownRemainingSeconds = Engine::Math::Max(0.0, std::chrono::duration<double>(localCooldownUntil - now).count());
+        weaponFeedback.cooldownRemainingSeconds = state.combatRules ?
+            static_cast<double>(fireGate.RemainingTicks(prediction->ShotTiming())) / AuthorityTickRate : 0;
     }
 
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,

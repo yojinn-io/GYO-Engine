@@ -146,6 +146,56 @@
       "replace": "\nPROTOCOL_VERSION = 5\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
+    },
+    {
+      "id": "12-earliest-plus-one",
+      "batch": "12",
+      "what": "The gate expects a shot to resolve one tick later than it can",
+      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
+      "find": "    const auto earliest = newest - static_cast<std::int64_t>(InitialCommandLead) + steps;\n",
+      "replace": "    const auto earliest = newest - static_cast<std::int64_t>(InitialCommandLead) + steps + 1;\n",
+      "check": "cpu",
+      "expect": "the gate's bounds hold"
+    },
+    {
+      "id": "12-no-guard",
+      "batch": "12",
+      "what": "The earliest tick drops the phase-error guard",
+      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
+      "find": "MovementPhaseTargetSeconds - FireGateGuardSeconds -",
+      "replace": "MovementPhaseTargetSeconds -",
+      "check": "cpu",
+      "expect": "follows the newest command less the lead"
+    },
+    {
+      "id": "12-shift-ignored",
+      "batch": "12",
+      "what": "A slewing correction that delays the phase is ignored",
+      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
+      "find": " -\n        Engine::Math::Max(0.0, timing.phaseShiftSeconds);",
+      "replace": ";",
+      "check": "cpu",
+      "expect": "follows the newest command less the lead"
+    },
+    {
+      "id": "12-no-pending-spread",
+      "batch": "12",
+      "what": "A pending shot is assumed to resolve at its earliest tick",
+      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
+      "find": "*earliest + FireGatePendingSpreadTicks + cooldownTicks",
+      "replace": "*earliest + cooldownTicks",
+      "check": "cpu",
+      "expect": "holds a pending shot"
+    },
+    {
+      "id": "12-decision-ignored",
+      "batch": "12",
+      "what": "An accepted decision does not set the cooldown",
+      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
+      "find": "        decidedNextAllowed_ = Engine::Math::Max(decidedNextAllowed_, decision.resolvedTick + cooldownTicks);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "waits for every known cooldown"
     }
   ]
 }

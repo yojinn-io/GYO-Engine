@@ -358,6 +358,14 @@ void LocalPlayerPrediction::UpdatePresentation() {
         current_.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)();
 }
 
+std::optional<FireGateTiming> LocalPlayerPrediction::ShotTiming() const noexcept {
+    if (!observation_.active || observation_.frozen) return std::nullopt;
+    return FireGateTiming{.authorityTick = observation_.authorityTick,
+        .lastResolvedCommand = observation_.lastResolvedCommand, .latestCommand = current_.lastResolvedCommand,
+        .secondsSinceStep = static_cast<double>(alpha_) * MovementTickSeconds,
+        .phaseShiftSeconds = phaseShiftSeconds_, .phaseDecided = phaseDecided_};
+}
+
 PlayerInput LocalPlayerPrediction::PendingInput() const {
     return {current_.playerId, {pending_.begin(), pending_.end()}, current_.movementEpoch, current_.lifeGeneration,
             observation_.authorityTick};

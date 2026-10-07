@@ -6,6 +6,7 @@ set(PVP_DOMAIN_SOURCES
     src/Pvp/ShotQuery.cpp
     src/Pvp/Movement.cpp
     src/Pvp/LocalPlayerPrediction.cpp
+    src/Pvp/FireGate.cpp
     src/Gameplay/Player/PlanarMovement.cpp
     src/Collision/CharacterCollision.cpp
 )
