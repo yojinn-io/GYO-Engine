@@ -21,7 +21,7 @@ REPOSITORY = ROOT.parents[2]
 # Every owner runner that starts a Match and a Gateway.
 RUNNERS = ('action_probe.py', 'backpressure_probe.py', 'recovery_probe.py', 'run_action_short.py',
            'run_gameplay_gui.py', 'run_gameplay_soak.py',
-           'run_native_window.py', 'run_network.py', 'run_player_short.py', 'run_timing.py')
+           'run_native_window.py', 'run_network.py', 'run_player_short.py', 'run_quad.py', 'run_timing.py')
 LISTEN = '127.0.0.1:5000'
 
 

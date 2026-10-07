@@ -110,6 +110,10 @@ set_tests_properties("${GYO_CURRENT_APP}.presentation_evidence" PROPERTIES LABEL
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.command_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Room-capacity evidence, cross-validated value by value against command_evidence.
+add_test(NAME "${GYO_CURRENT_APP}.quad_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_quad_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.quad_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
 
 add_test(NAME "${GYO_CURRENT_APP}.recovery_relay"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_recovery_probe.py")
