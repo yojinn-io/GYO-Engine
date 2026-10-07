@@ -121,6 +121,37 @@ std::uint64_t ArenaContentDigest(const Arena& arena) {
     return Engine::Base::Fnv1a64(bytes);
 }
 
+std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::path& list, std::string& error) {
+    error.clear();
+    try {
+        std::ifstream stream(list, std::ios::binary);
+        if (!stream) throw std::runtime_error("Cannot open arena list: " + list.string());
+        const auto json = nlohmann::json::parse(stream);
+        if (!json.at("version").is_number_integer() || json.at("version").get<std::int64_t>() != 1)
+            throw std::runtime_error("Unsupported arena list version");
+        const auto& names = json.at("arenas");
+        if (!names.is_array() || names.empty() || names.size() > 16)
+            throw std::runtime_error("The arena list names 1-16 arenas");
+        std::vector<Arena> arenas;
+        for (const auto& name : names) {
+            const auto file = name.get<std::string>();
+            if (file.empty() || file.find_first_of("/\\:") != std::string::npos || file == "." || file == "..")
+                throw std::runtime_error("Arena list entries are plain file names: " + file);
+            auto arena = Arena::Load(list.parent_path() / file, error);
+            if (!arena) throw std::runtime_error(error);
+            for (const auto& other : arenas)
+                if (other.id == arena->id) throw std::runtime_error("Arena installed twice: " + arena->id);
+            if (!arenas.empty() && arena->bodyHeight != arenas.front().bodyHeight)
+                throw std::runtime_error("Installed arenas must share one body height: " + arena->id);
+            arenas.push_back(std::move(*arena));
+        }
+        return arenas;
+    } catch (const std::exception& exception) {
+        error = "arena list " + list.string() + ": " + exception.what();
+        return std::nullopt;
+    }
+}
+
 bool ArenaHostsRoom(const Arena& arena, std::string& error) {
     error.clear();
     if (arena.spawns.size() < MaxPlayers) {

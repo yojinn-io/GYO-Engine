@@ -52,4 +52,12 @@ inline constexpr std::size_t MaximumArenaSpawns = 64;
 // them with a hostable arena always fails at the arena digest.
 [[nodiscard]] bool ArenaHostsRoom(const Arena& arena, std::string& error);
 
+// Client content: the arenas a Client installs (arenas.json, version 1), plain
+// file names next to the list, in order. The Match chooses the arena; a
+// Client selects the installed one with the Match's id (ClientConnection), and
+// shows the first before it joins. Ids are unique and every arena shares the
+// first one's body height, which the character presentation is built for.
+[[nodiscard]] std::optional<std::vector<Arena>> LoadInstalledArenas(
+    const std::filesystem::path& list, std::string& error);
+
 } // namespace fps::pvp

@@ -104,9 +104,7 @@ struct ClientConnection::Impl {
     std::deque<ReceivedSnapshot> receivedSnapshots;
     bool snapshotOverflow{};
     std::uint64_t snapshotOverflowCount{};
-    std::string expectedArena;
-    std::uint32_t expectedArenaVersion{};
-    std::uint64_t expectedArenaDigest{};
+    std::vector<ArenaIdentity> installedArenas;
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
     udp::socket socket{io};
@@ -169,7 +167,7 @@ struct ClientConnection::Impl {
         std::osyncstream(std::clog)<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
             <<" reason="<<error<<'\n';
         state.phase=ConnectionPhase::Lobby;state.error=std::move(error);state.snapshot.reset();state.playerId=0;
-        state.rooms.clear();roomRefreshFailed=false;
+        state.rooms.clear();state.arenaId.clear();roomRefreshFailed=false;
     }
     void Push(Action action,std::string gateway={},std::string roomId={}) {
         std::scoped_lock lock(mutex);
@@ -177,7 +175,7 @@ struct ClientConnection::Impl {
         // atomic generation before locking cannot prevent a stale completion.
         const auto next=++generation;
         requests.clear();requests.push_back({action,std::move(gateway),std::move(roomId),next});
-        state.error.clear();state.snapshot.reset();state.playerId=0;state.rooms.clear();roomRefreshFailed=false;
+        state.error.clear();state.snapshot.reset();state.playerId=0;state.rooms.clear();state.arenaId.clear();roomRefreshFailed=false;
         state.phase=ConnectionPhase::Requesting;
         latestInput.reset();submittedCommands.clear();
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
@@ -185,15 +183,22 @@ struct ClientConnection::Impl {
     }
     // Both join paths compare identity first, then content (pv6 contract §2).
     // A missing, non-integer or zero digest is a content mismatch.
+    // The Match's arena selects one installed arena by id and version.
     void CheckArena(const std::string& id,std::uint32_t version,std::optional<std::uint64_t> digest) {
         std::scoped_lock lock(mutex);
-        if(expectedArena.empty())return;
-        if(id!=expectedArena || version!=expectedArenaVersion)
+        if(installedArenas.empty())return;
+        const auto installed=std::find_if(installedArenas.begin(),installedArenas.end(),
+            [&](const ArenaIdentity& arena){return arena.id==id && arena.version==version;});
+        if(installed==installedArenas.end()) {
+            std::string list;
+            for(const auto& arena:installedArenas)list+=(list.empty()?"":", ")+arena.id+" version "+std::to_string(arena.version);
             throw std::runtime_error("arena_identity_mismatch: Match arena "+id+" version "+std::to_string(version)+
-                ", this Client has "+expectedArena+" version "+std::to_string(expectedArenaVersion));
-        if(!digest || *digest!=expectedArenaDigest)
+                ", this Client has "+list);
+        }
+        if(!digest || *digest!=installed->digest)
             throw std::runtime_error("arena_content_mismatch: arena "+id+" content differs (Match "+
-                (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(expectedArenaDigest)+")");
+                (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(installed->digest)+")");
+        state.arenaId=id;
     }
     void DisconnectRemote() {
         Close();
@@ -224,7 +229,7 @@ struct ClientConnection::Impl {
             std::scoped_lock lock(mutex);
             if(requestGeneration!=generation.load())return;
             state.rooms=std::move(rooms);state.phase=ConnectionPhase::Lobby;
-            state.snapshot.reset();state.playerId=0;
+            state.snapshot.reset();state.playerId=0;state.arenaId.clear();
         } catch(const std::exception& error) {
             // Departure is already confirmed. This failure belongs only to
             // the room list and can be cleared by a later background refresh.
@@ -602,8 +607,15 @@ void ClientConnection::CreateAndJoin(std::string gateway){impl_->Push(Impl::Acti
 void ClientConnection::Join(std::string gateway,std::string room){impl_->Push(Impl::Action::Join,std::move(gateway),std::move(room));}
 void ClientConnection::Leave(){impl_->Push(Impl::Action::Leave);}
 void ClientConnection::SetArenaIdentity(std::string id,std::uint32_t version,std::uint64_t digest){
-    if(!digest)throw std::invalid_argument("Arena content digest is zero");
-    std::scoped_lock lock(impl_->mutex);impl_->expectedArena=std::move(id);impl_->expectedArenaVersion=version;impl_->expectedArenaDigest=digest;
+    SetArenaIdentities({{std::move(id),version,digest}});
+}
+void ClientConnection::SetArenaIdentities(std::vector<ArenaIdentity> installed){
+    for(std::size_t i=0;i<installed.size();++i) {
+        if(!installed[i].digest)throw std::invalid_argument("Arena content digest is zero");
+        for(std::size_t j=0;j<i;++j)
+            if(installed[j].id==installed[i].id)throw std::invalid_argument("Arena installed twice: "+installed[i].id);
+    }
+    std::scoped_lock lock(impl_->mutex);impl_->installedArenas=std::move(installed);
 }
 void ClientConnection::SendInput(PlayerInput input){
     std::scoped_lock lock(impl_->mutex);

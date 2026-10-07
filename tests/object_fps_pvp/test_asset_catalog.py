@@ -22,7 +22,9 @@ CODE_SUFFIXES = {'.cpp', '.hpp', '.h', '.py', '.go'}
 MANIFESTS = {'asset_catalog.json', 'content.json'}
 # Ids in use without a reference by id, with the reason.
 RETAINED = {
-    'object_fps_pvp.arena': 'loaded by path (pvp_arena.json) by the Client and the Match',
+    'object_fps_pvp.arena': 'loaded by path (pvp_arena.json) by the Match and, through arenas.json, by the Client',
+    'object_fps_pvp.arena.corners': 'loaded by path (pvp_corners.json) by the Match and, through arenas.json, by the Client',
+    'object_fps_pvp.arenas': 'loaded by path (arenas.json): the arenas the Client installs',
 }
 
 

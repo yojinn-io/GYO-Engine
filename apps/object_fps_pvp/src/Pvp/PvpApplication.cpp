@@ -88,6 +88,8 @@ struct PvpApplication::Impl final {
     Engine::Asset::Core::AssetCachePolicy cache{{
         Engine::Asset::Core::AssetCachePolicy::Mode::KeepWhileReferenced, 120, true, 0, 0}};
     Engine::Asset::AssetManager assets{catalog, pipeline, storage, lifetime, cache};
+    // Every installed arena, and the one shown: the first until a Match selects one.
+    std::vector<Arena> arenas;
     std::optional<Arena> arena;
     Engine::Render::ShaderLibrary shaders;
     std::unique_ptr<Engine::Platform::Sdl::SdlPlatform> platform;
@@ -290,6 +292,8 @@ struct PvpApplication::Impl final {
             characterPhaseReanchors = 0;
         }
         ingressHistoryDrops = received.snapshotHistoryOverflowCount;
+        // The joined Match chose the arena: show and predict in that one.
+        if (!state.arenaId.empty() && state.arenaId != arena->id) SelectArena(state.arenaId);
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
@@ -673,6 +677,18 @@ struct PvpApplication::Impl final {
         return SubmitWeapon();
     }
 
+    void SelectArena(const std::string& id) {
+        for (const auto& installed : arenas) {
+            if (installed.id != id) continue;
+            arena = installed;
+            // A new session follows (the view player changes), which resets the rest.
+            prediction = std::make_unique<LocalPlayerPrediction>(*arena);
+            predictionElapsed.Reset();
+            SDL_Log("PvP arena selected id=%s spawns=%zu", arena->id.c_str(), arena->spawns.size());
+            return;
+        }
+    }
+
     Control Fail(std::string message) {
         lastError = std::move(message);
         exitCode = 1;
@@ -705,13 +721,19 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
     impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    impl_->arena = Arena::Load(assetRoot / "pvp_arena.json", error);
-    if (!impl_->arena) return false;
+    auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error);
+    if (!installed) return false;
+    std::vector<ArenaIdentity> identities;
+    for (const auto& arena : *installed) {
+        const auto digest = ArenaContentDigest(arena);
+        if (!digest) { error = "Arena content digest is zero: " + arena.id; return false; }
+        identities.push_back({arena.id, arena.version, digest});
+    }
+    impl_->arenas = std::move(*installed);
+    impl_->arena = impl_->arenas.front();
     impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
     impl_->predictionElapsed.Reset();
-    const auto arenaDigest = ArenaContentDigest(*impl_->arena);
-    if (!arenaDigest) { error = "Arena content digest is zero"; return false; }
-    impl_->connection.SetArenaIdentity(impl_->arena->id, impl_->arena->version, arenaDigest);
+    impl_->connection.SetArenaIdentities(std::move(identities));
     const auto loaded = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.pvp_lobby"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
     if (!loaded) { error = Explain(loaded.error()); return false; }

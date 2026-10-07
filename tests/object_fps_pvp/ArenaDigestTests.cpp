@@ -90,6 +90,8 @@ TEST_CASE("PvP arena content digest changes with every member, order and signed 
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <numbers>
 #include <utility>
@@ -208,4 +210,85 @@ TEST_CASE("Equal-distance spawn choices keep content order") {
         REQUIRE(chosen);
         CHECK(Same(chosen->position, ordered.spawns[0].position));
     }
+}
+
+namespace {
+std::filesystem::path ProductAssets() { return std::filesystem::path(PVP_PRODUCT_ARENA_PATH).parent_path(); }
+
+Arena CornersArena() {
+    std::string error;
+    auto arena = Arena::Load(ProductAssets() / "pvp_corners.json", error);
+    REQUIRE_MESSAGE(arena, error);
+    return *arena;
+}
+} // namespace
+
+TEST_CASE("The release arena puts its four spawns in the corners, facing the centre") {
+    const auto corners = CornersArena();
+    const auto training = ProductArena();
+    std::string error;
+    CHECK(corners.id == "pvp_corners_v1");
+    CHECK(corners.Validate(error));
+    CHECK(ArenaHostsRoom(corners, error));
+    // The same walls and movement as the training arena; only the spawns differ.
+    REQUIRE(corners.walls.size() == training.walls.size());
+    for (std::size_t i = 0; i < corners.walls.size(); ++i) {
+        CHECK(Same(corners.walls[i].minimum, training.walls[i].minimum));
+        CHECK(Same(corners.walls[i].maximum, training.walls[i].maximum));
+    }
+    CHECK(corners.bodyHeight == training.bodyHeight);
+    CHECK(corners.movementSpeed == training.movementSpeed);
+    CHECK(ArenaContentDigest(corners) != ArenaContentDigest(training));
+    const std::array<Engine::Math::Vec3, 4> expected{{{3, 0, 3}, {17, 0, 17}, {17, 0, 3}, {3, 0, 17}}};
+    REQUIRE(corners.spawns.size() == expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        CAPTURE(i);
+        CHECK(Same(corners.spawns[i].position, expected[i]));
+        // Yaw turns +Z toward +X: atan2(dx, dz) toward the centre (10, 10).
+        const float toward = std::atan2(10 - expected[i].x, 10 - expected[i].z);
+        CHECK(std::abs(corners.spawns[i].yaw - toward) < 1e-6F);
+    }
+    // Two players start in opposite corners: the second is the farthest from the first.
+    const auto* first = SelectSpawn(corners, {});
+    REQUIRE(first);
+    CHECK(Same(first->position, expected[0]));
+    const auto* second = SelectSpawn(corners, std::span<const Engine::Math::Vec3>(&first->position, 1));
+    REQUIRE(second);
+    CHECK(Same(second->position, expected[1]));
+}
+
+TEST_CASE("A Client installs the arenas of its list: the training arena first, then the release arena") {
+    std::string error;
+    const auto installed = LoadInstalledArenas(ProductAssets() / "arenas.json", error);
+    REQUIRE_MESSAGE(installed, error);
+    REQUIRE(installed->size() == 2);
+    CHECK((*installed)[0].id == "pvp_training_v1");
+    CHECK((*installed)[1].id == "pvp_corners_v1");
+}
+
+TEST_CASE("An arena list rejects other versions, paths, repeats and a different body height") {
+    const auto directory = std::filesystem::temp_directory_path() /
+        ("gyo-arena-list-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(directory);
+    std::filesystem::copy_file(ProductAssets() / "pvp_arena.json", directory / "a.json");
+    std::filesystem::copy_file(ProductAssets() / "pvp_corners.json", directory / "b.json");
+    auto taller = nlohmann::json::parse(std::ifstream(ProductAssets() / "pvp_corners.json"));
+    taller["id"] = "taller";
+    taller["body_height"] = 2.0;
+    std::ofstream(directory / "tall.json") << taller.dump();
+    const auto load = [&](const std::string& text) {
+        std::ofstream(directory / "arenas.json") << text;
+        std::string error;
+        const auto loaded = LoadInstalledArenas(directory / "arenas.json", error);
+        CHECK(loaded.has_value() == error.empty());
+        return loaded.has_value();
+    };
+    CHECK(load(R"({"version": 1, "arenas": ["a.json", "b.json"]})"));
+    CHECK_FALSE(load(R"({"version": 2, "arenas": ["a.json"]})"));
+    CHECK_FALSE(load(R"({"version": 1, "arenas": []})"));
+    CHECK_FALSE(load(R"({"version": 1, "arenas": ["../a.json"]})"));
+    CHECK_FALSE(load(R"({"version": 1, "arenas": ["a.json", "a.json"]})"));
+    CHECK_FALSE(load(R"({"version": 1, "arenas": ["a.json", "missing.json"]})"));
+    CHECK_FALSE(load(R"({"version": 1, "arenas": ["a.json", "tall.json"]})"));
+    std::filesystem::remove_all(directory);
 }
