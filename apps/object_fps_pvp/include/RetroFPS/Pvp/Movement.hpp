@@ -17,7 +17,7 @@ inline constexpr std::uint32_t AuthorityTickRate = 60;
 // Ready.max_players and the Client's snapshot bound. The Gateway, acceptance C++
 // and acceptance Python keep their own definitions; test_max_players.py checks
 // that all four agree.
-inline constexpr std::uint32_t MaxPlayers = 2;
+inline constexpr std::uint32_t MaxPlayers = 4;
 inline constexpr std::uint32_t SnapshotIntervalTicks = 1;
 inline constexpr std::uint32_t InputSendRate = 60;
 // Input sends draw from an InputSendRate token bucket of this many tokens. A

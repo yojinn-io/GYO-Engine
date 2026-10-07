@@ -92,6 +92,7 @@ TEST_CASE("PvP arena content digest changes with every member, order and signed 
 
 #include <cmath>
 #include <numbers>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -188,4 +189,23 @@ TEST_CASE("Spawns added on the segment never change a two-player spawn choice") 
         }
     }
     CHECK(checked > 6000);
+}
+
+TEST_CASE("Equal-distance spawn choices keep content order") {
+    // pv6 contract §5: the farthest free spawn from the living players; a tie goes
+    // to the spawn earlier in content order.
+    auto arena = ProductArena();
+    arena.spawns.resize(2);
+    const auto middle = (arena.spawns[0].position + arena.spawns[1].position) * 0.5F;
+    REQUIRE(Engine::Math::LengthSquared(Engine::Math::ToVec3d(arena.spawns[0].position - middle)) ==
+            Engine::Math::LengthSquared(Engine::Math::ToVec3d(arena.spawns[1].position - middle)));
+    const std::span<const Engine::Math::Vec3> living(&middle, 1);
+    for (const bool reversed : {false, true}) {
+        CAPTURE(reversed);
+        auto ordered = arena;
+        if (reversed) std::swap(ordered.spawns[0], ordered.spawns[1]);
+        const auto* chosen = SelectSpawn(ordered, living);
+        REQUIRE(chosen);
+        CHECK(Same(chosen->position, ordered.spawns[0].position));
+    }
 }

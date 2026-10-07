@@ -799,3 +799,125 @@ TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     CHECK(bad([](CombatState&) {}, true, 18)); // Dead of an older hit.
     CHECK_FALSE(bad([](CombatState& c) { c.lastDamageTick = 18; }, true, 18));
 }
+
+namespace {
+// Four spawns on a square: joins take (2,2), (8,8), then (2,8) and (8,2) in
+// content order on the tie (pv6 contract §5). Player 2 at (8,8) is in the line
+// of fire of player 3 at (2,8) facing +X, player 4 at (8,2) facing +Z and
+// player 1 at (2,2) facing the diagonal.
+Arena QuadArena() {
+    Arena arena = CombatArena();
+    arena.id = "synthetic_quad_arena";
+    arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 8}, 0}, {{8, 0, 8}, 0}, {{8, 0, 2}, 0}};
+    return arena;
+}
+
+constexpr float AtVictim[] = {0, std::numbers::pi_v<float> / 4, 0, std::numbers::pi_v<float> / 2, 0};
+
+void JoinFour(PvpMatch& match) {
+    std::string error;
+    for (PlayerId id = 1; id <= 4; ++id) REQUIRE_MESSAGE(match.Join(id, error), error);
+}
+
+void Fire(PvpMatch& match, PlayerId shooter, ActionId id) {
+    REQUIRE(match.SubmitActions({shooter, {{id, 1, AtVictim[shooter], 0}}}) == ActionAdmission::Accepted);
+}
+} // namespace
+
+TEST_CASE("PvP rooms hold four players: the fifth is full and a two-spawn arena blocks the third") {
+    static_assert(MaxPlayers == 4);
+    PvpMatch match(QuadArena());
+    JoinFour(match);
+    const auto snapshot = match.Snapshot();
+    REQUIRE(snapshot.players.size() == 4);
+    const auto at = [&](PlayerId id) { return LifePlayer(match, id).position; };
+    CHECK((at(1).x == 2 && at(1).z == 2));
+    CHECK((at(2).x == 8 && at(2).z == 8));
+    CHECK((at(3).x == 2 && at(3).z == 8));
+    CHECK((at(4).x == 8 && at(4).z == 2));
+    std::string error;
+    CHECK(match.Join(3, error)); // A rejoin of a present player is idempotent.
+    CHECK_FALSE(match.Join(5, error));
+    CHECK(error == "match_full");
+
+    PvpMatch narrow(CombatArena());
+    JoinCombatPlayers(narrow);
+    CHECK_FALSE(narrow.Join(3, error));
+    CHECK(error == "spawn_blocked");
+}
+
+TEST_CASE("PvP same tick shots from two and three players all hit and the record keeps the last attacker") {
+    for (const std::vector<PlayerId>& shooters : {std::vector<PlayerId>{3, 4}, std::vector<PlayerId>{1, 3, 4}}) {
+        CAPTURE(shooters.size());
+        PvpMatch match(QuadArena());
+        JoinFour(match);
+        CombatStep(match);
+        for (const auto shooter : shooters) Fire(match, shooter, 1);
+        CombatStep(match);
+        for (const auto shooter : shooters) {
+            const auto decision = Decisions(match, shooter).back();
+            CAPTURE(shooter);
+            CHECK(decision.hitKind == ShotHitKind::Player);
+            CHECK(decision.targetId == 2);
+            CHECK(decision.damage == 25);
+        }
+        const auto victim = CombatPlayer(match, 2);
+        CHECK(victim.hp == 100 - 25 * shooters.size());
+        CHECK(victim.damageCount == shooters.size());
+        // Adjudication order is player id within the tick: the highest id hits last.
+        CHECK(victim.lastAttackerId == shooters.back());
+        CHECK(victim.lastDamageTick == 2);
+    }
+}
+
+TEST_CASE("PvP a lethal hit inside a tick lets the later shots of that tick pass through the body") {
+    PvpMatch match(QuadArena());
+    JoinFour(match);
+    CombatStep(match);
+    // Two earlier hits leave 50 HP.
+    Fire(match, 1, 1);
+    CombatStep(match, 10);
+    Fire(match, 1, 2);
+    CombatStep(match, 10);
+    REQUIRE(CombatPlayer(match, 2).hp == 50);
+    // Player 1 then 3 kill it; player 4's shot of the same tick is no longer at a target.
+    Fire(match, 1, 3);
+    Fire(match, 3, 1);
+    Fire(match, 4, 1);
+    CombatStep(match);
+    CHECK(Decisions(match, 1).back().hitKind == ShotHitKind::Player);
+    CHECK(Decisions(match, 3).back().hitKind == ShotHitKind::Player);
+    CHECK(Decisions(match, 3).back().damage == 25);
+    const auto passed = Decisions(match, 4).back();
+    CHECK(passed.accepted);
+    CHECK(passed.hitKind != ShotHitKind::Player);
+    CHECK(passed.damage == 0);
+    const auto victim = CombatPlayer(match, 2);
+    CHECK(victim.hp == 0);
+    CHECK(victim.damageCount == 4);
+    CHECK(victim.lastAttackerId == 3);
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Dead);
+}
+
+TEST_CASE("PvP players dying in the same tick respawn in the same tick at distinct free spawns") {
+    PvpMatch match(QuadArena());
+    JoinFour(match);
+    CombatStep(match);
+    // Player 3 kills 2 and player 1, facing +X, kills 4 (four hits each, ten ticks apart).
+    for (ActionId id = 1; id <= 4; ++id) {
+        Fire(match, 3, id);
+        REQUIRE(match.SubmitActions({1, {{id, 1, std::numbers::pi_v<float> / 2, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match, id < 4 ? 10 : 1);
+    }
+    const auto two = LifePlayer(match, 2), four = LifePlayer(match, 4);
+    REQUIRE(two.lifeState == LifeState::Dead);
+    REQUIRE(four.lifeState == LifeState::Dead);
+    REQUIRE(two.respawnTick == four.respawnTick);
+    while (match.TickCount() < two.respawnTick) CombatStep(match);
+    const auto two2 = LifePlayer(match, 2), four2 = LifePlayer(match, 4);
+    CHECK(two2.lifeState == LifeState::Alive);
+    CHECK(four2.lifeState == LifeState::Alive);
+    CHECK(two2.lifeGeneration == 2);
+    CHECK(four2.lifeGeneration == 2);
+    CHECK(Engine::Math::Length(two2.position - four2.position) >= 2 * CombatArena().radius);
+}

@@ -57,8 +57,9 @@ TEST_CASE("PvP authority joins at distinct valid spawns and owns membership") {
     REQUIRE(match.Join(7, error));
     REQUIRE(match.Join(8, error));
     CHECK(match.Join(7, error));
+    // Two spawns, both occupied: the third player cannot be placed (the room holds four).
     CHECK_FALSE(match.Join(9, error));
-    CHECK(error == "match_full");
+    CHECK(error == "spawn_blocked");
     const auto snapshot = match.Snapshot();
     REQUIRE(snapshot.players.size() == 2);
     CHECK(snapshot.players[0].position.x == 2);

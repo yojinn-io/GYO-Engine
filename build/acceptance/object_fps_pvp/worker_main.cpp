@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v6.pb.h"
 #include "acceptance_protocol.hpp"
+#include "acceptance_capacity.hpp"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -104,6 +105,15 @@ public:
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
+    // A snapshot of the given number of players (ids 1..count), player 1 first.
+    void Crowded(unsigned count) {
+        pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
+        for(unsigned id=1;id<=count;++id) {
+            auto* player=snapshot.add_players();player->set_player_id(id);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
+            auto* combat=snapshot.add_combat();combat->set_player_id(id);combat->set_hp(100);combat->set_life_generation(1);combat->set_magazine_ammo(7);
+        }
+        Send(wire::Type::Snapshot,snapshot.SerializeAsString());
+    }
     void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
         pb::ActionResults results;results.set_retired_through(retired);
         for(const auto id:ids) {
@@ -172,7 +182,7 @@ std::size_t CheckMaximumDatagrams() {
     }
     check(wire::Type::Input,movement);
     pb::WorldSnapshot snapshot;snapshot.set_tick(max64);
-    for(unsigned n=0;n<2;++n) {
+    for(unsigned n=0;n<AcceptanceMaxPlayers;++n) {
         auto* p=snapshot.add_players();p->set_player_id(max64-n);
         p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
         p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);p->set_vertical_velocity(4);p->set_grounded(true);
@@ -184,6 +194,8 @@ std::size_t CheckMaximumDatagrams() {
         c->set_last_damage_tick(max64);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max64);
     }
     check(wire::Type::Snapshot,snapshot);
+    // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
+    Require(largest==1055,"maximum-field full-room snapshot is not 1055 bytes");
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
@@ -354,6 +366,18 @@ int main() {
             Require(gateway.attempts[index].at-gateway.attempts[index-1].at>=14ms,"worker emitted a resend catch-up burst");
 
         gateway.Snapshot(6);gateway.Until([&]{return Acknowledged(connection,6);});
+        // Room capacity (pv6 contract §1): a full room's snapshot is accepted;
+        // one more player makes it invalid, dropped without changing the state.
+        gateway.Crowded(AcceptanceMaxPlayers);
+        gateway.Until([&]{const auto state=connection.State();
+            return state.snapshot && state.snapshot->players.size()==AcceptanceMaxPlayers;});
+        const auto fullTick=connection.State().snapshot->tick;
+        gateway.Crowded(AcceptanceMaxPlayers+1);
+        gateway.UntilTime(Clock::now()+60ms);
+        Require(connection.State().snapshot->tick==fullTick,"a snapshot above the room capacity was accepted");
+        gateway.Snapshot(6);
+        gateway.Until([&]{const auto state=connection.State();
+            return state.snapshot && state.snapshot->tick==fullTick+2 && state.snapshot->players.size()==1;});
         gateway.autoAck=true;
         const auto sixtyBegin=gateway.attempts.size();
         const auto frameStart=Clock::now();

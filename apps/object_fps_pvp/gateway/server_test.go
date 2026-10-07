@@ -873,3 +873,42 @@ func TestReadinessRequiresTheSameCapacity(t *testing.T) {
 		<-done
 	}
 }
+
+// Every peer of a full room receives the same snapshot (pv6 contract §1: four players).
+func TestSnapshotsReachEveryPeerOfAFullRoom(t *testing.T) {
+	s, f := newTestServer(t)
+	if status, _ := post(t, s, "/rooms", map[string]any{}); status != 200 {
+		t.Fatal(status)
+	}
+	type joined struct {
+		c credentials
+		p *net.UDPConn
+	}
+	var peers []joined
+	var players []*runtime.PlayerState
+	for i := 0; i < adapter.MaxPlayers; i++ {
+		c := reserve(t, s, fmt.Sprintf("peer%d", i))
+		p := peer(t)
+		sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
+		accept(t, f, c)
+		receivePacket(t, p, adapter.Welcome)
+		peers = append(peers, joined{c, p})
+		players = append(players, &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, X: float32(i)})
+	}
+	if status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": "fifth", "protocol_version": adapter.ClientVersion}); status != 409 || !bytes.Contains(body, []byte("room_full")) {
+		t.Fatalf("fifth join %d %s", status, body)
+	}
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: players}}
+	f.send(e)
+	first := receivePacket(t, peers[0].p, adapter.Snapshot)
+	for _, other := range peers[1:] {
+		if !bytes.Equal(first, receivePacket(t, other.p, adapter.Snapshot)) {
+			t.Fatal("peers observed different world payloads")
+		}
+	}
+	var snapshot client.WorldSnapshot
+	if err := proto.Unmarshal(first, &snapshot); err != nil || len(snapshot.Players) != adapter.MaxPlayers {
+		t.Fatalf("full room snapshot: %v %v", &snapshot, err)
+	}
+}

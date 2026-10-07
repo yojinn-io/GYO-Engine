@@ -3,4 +3,4 @@
 The only Python definition in acceptance; acceptance_capacity.hpp holds the C++ one.
 It is a separate file so the frozen analyzers of batch 07a stay byte-identical.
 """
-MAX_PLAYERS = 2
+MAX_PLAYERS = 4
