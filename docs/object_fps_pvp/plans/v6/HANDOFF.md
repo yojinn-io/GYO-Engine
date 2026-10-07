@@ -521,6 +521,7 @@
 - 2026-10-07：#63 合併（使用者指示，`5972451`），第 16 批的 L2 worktree 已移除。第 14 批開始（使用者指示），分支 `claude/pvp-v6-batch14` 自 master `5972451`；本次只做 14a，14b 需另外授權。使用者決定見 D24（clean-30 記錄不判定、矩陣逐案執行、4 人範圍）。
   - 14a 的量測對應（依 v5 第 05 批的定義）：25 案矩陣（逐案）；短操作／呈現回歸：action short 與 player short（30／60／144 FPS 與 capture）；雙 GUI 整合短測：`run_timing.py --gui --combat --short`；長測短模式：`run_gameplay_soak.py` 的 short 模式；4 人見 D24③。
   - 順序：產品移除檢查（需從零建置，先於量測）→ Engine 計畫狀態確認 → L2 事前宣告（使用者核准）→ 量測 → 手動指南與狀態表 → L3（使用者）。
+- 2026-10-08：產品移除檢查通過（刪除 254 檔與登錄列後建置與 CTest 35／35；D12 連結 0；發現：根 README 與 `docs/releasing.*` 以本產品為範例，只報告）。兩個 Engine 計畫的狀態已確認。L2（宣告 `889313d1…`，使用者核准）全部通過：矩陣判定 24／24（clean-30 這一輪也通過，只記錄）、action short 4／4、player short 4／4、雙 GUI 短測、長測短模式、quad clean-60 5／5、1 GUI＋3 bot、2 GUI＋2 bot 3／3。寫入 [MANUAL_ACCEPTANCE](MANUAL_ACCEPTANCE.md)、[ACCEPTANCE_STATUS](ACCEPTANCE_STATUS.md) 與 [dev_log](../../../dev_logs/2026_10_08_pvp_v6_batch14a.zh-Hant.md)。下一步：L3（使用者）。
 
 ## 延後項目：現況與對應批次
 
