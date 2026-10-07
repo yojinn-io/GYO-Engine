@@ -1,6 +1,6 @@
 # 第 10 批：Collision 權威變更的 pvp 端（與 FF-9 同一 PR）
 
-狀態：完成（2026-10-07；與 FF-9 同一個 PR，待開；L2 待執行）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md) §7，
+狀態：完成（2026-10-07；與 FF-9 同一個 PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)，待合併；L1、L2 通過，見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md) §7，
 以及 Engine 端的 [foundation-followups 計畫](../../../architecture/plans/foundation-followups/PLAN.md) FF-9。
 
 執行規則沿用 v5／本計畫 README：只做指定範圍、先凍結再量測、失敗跑次保留、長測另外授權。
@@ -213,8 +213,8 @@ L3（人工）：無。本批不改呈現與操作。
 
 | 平台 | 本批 | 理由 |
 |---|---|---|
-| macOS Intel／Metal 實機 | 預定執行 | L2、兩樹 digest 比對 |
-| CI 四平台 L1（windows-x64、linux-x64、macos-arm64、macos-x64） | 預定執行 | L1 全部 |
+| macOS Intel／Metal 實機 | 已執行 | L2、兩樹 digest 比對 |
+| CI 四平台 L1（windows-x64、linux-x64、macos-arm64、macos-x64） | 已執行（PR #58） | L1 全部 |
 | Linux lavapipe GPU | 未執行 | pvp 沒有宣告 GPU 檢查（`checks.json` 的 `gpu` 為 false）；CI toolchain 列的共通 `render.*` 照常執行，但不作為本批驗收依據 |
 | Windows D3D12 實機 | 未執行 | 沒有實機（決定 D11⑩） |
 | Linux 實機 | 未執行 | 沒有實機（決定 D11⑩） |

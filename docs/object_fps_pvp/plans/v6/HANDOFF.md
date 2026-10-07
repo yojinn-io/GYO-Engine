@@ -422,6 +422,14 @@
 - 2026-10-07：commit 0（Engine 端，FF-9 記錄器）：語料分析器擴充並凍結，自我檢查與宣告完全一致。凍結清單另含本產品的權威兩樹比對腳本與 digest runner（清單 SHA-256 `00841fe1d5ba82fc…`）。
 - 2026-10-07：commit 1（Engine：公開 `IsValid`）、commit 2（本產品：`Arena::Validate`、`QueryShot` 改用 `IsValid`）、commit 3（Engine：統一為 double、刪除 float 演算法）。每個 commit 都通過：語料（commit 1、2 全等；commit 3 恰好 435 筆、三項判定 0）、權威 digest 同機兩樹 35 個情境 0 不同、CTest 61／61。golden 未更新（30／30）。**事前宣告全部命中，沒有超出宣告的變化。**詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。
   - 下一步：開 PR（與 FF-9 同一個）取得四平台 CI，再以同一個 commit 做 L2（25 案矩陣與動作短測，before／after；需要機器閒置，先徵求使用者同意）。
+- 2026-10-07：PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)（與 FF-9 同一個），四平台 CI 通過。
+- 2026-10-07：L2（事前宣告 `edc2f68d…`；before `5da939f`、after `e8f2ef8`；證據 `build/target/_build/test/logs/pvp-v6-batch10-l2-20261007/`）：
+  - 動作短測：before／after 全部通過，權威判定的序列逐筆相同。
+  - 25 案矩陣：after 25／25。before 在 clean-30 失敗後停止（2／25；矩陣工具在第一個失敗停止）；依宣告保留、不重跑。
+  - 有前後對照的 clean-60、clean-30：43 個動作的裁決、命中類別、目標、傷害 0 筆不同。after 每案被接受的射擊 Miss 5、Player 4 恆定，World 只在故障案因 `Expired` 減少。
+  - **沒有可歸因於 Collision 的變化。**before 的 clean-30 失敗是 D21 的邊界（38 筆 Held 分散在整段量測，與 A/B 調查的機制一致），但發生在約 4 ms 狀態（主機延遲 P99 3.6 ms），是 4 ms 狀態第一次觀察到的失敗。
+  - 參考（不在宣告內）：after 與第 09 批 L2 的 after（同一份 Collision 程式）逐一比對，24／25 案相同，1 發是故障案的拒絕類別不同（`Reloading` → `Expired`，時序）。
+  - 詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)。下一步：使用者決定合併 #58。
 
 ## 延後項目：現況與對應批次
 
@@ -542,8 +550,10 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 09～14 批未開始（第 05 批不執行），由使用者逐批指定。
+- 第 11～14 批未開始（第 05 批不執行），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
+  - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
+  - 交給第 14 批：矩陣工具在第一個失敗的案例停止，clean-30 排在第 2 案，所以 clean-30 一失敗，其餘 23 案就沒有資料。決定 clean-30 的處理時，一併決定這個停止規則。
 - 已知要在批次開始時決定的事：
   - ~~FF-7 的 include 統一方向~~：2026-10-05 使用者決定 `engine/<m>/`，FF-7 已完成。
   - 第 11、13 批的呈現細節（D11⑥）。
