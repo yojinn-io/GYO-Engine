@@ -522,6 +522,7 @@
   - 14a 的量測對應（依 v5 第 05 批的定義）：25 案矩陣（逐案）；短操作／呈現回歸：action short 與 player short（30／60／144 FPS 與 capture）；雙 GUI 整合短測：`run_timing.py --gui --combat --short`；長測短模式：`run_gameplay_soak.py` 的 short 模式；4 人見 D24③。
   - 順序：產品移除檢查（需從零建置，先於量測）→ Engine 計畫狀態確認 → L2 事前宣告（使用者核准）→ 量測 → 手動指南與狀態表 → L3（使用者）。
 - 2026-10-08：產品移除檢查通過（刪除 254 檔與登錄列後建置與 CTest 35／35；D12 連結 0；發現：根 README 與 `docs/releasing.*` 以本產品為範例，只報告）。兩個 Engine 計畫的狀態已確認。L2（宣告 `889313d1…`，使用者核准）全部通過：矩陣判定 24／24（clean-30 這一輪也通過，只記錄）、action short 4／4、player short 4／4、雙 GUI 短測、長測短模式、quad clean-60 5／5、1 GUI＋3 bot、2 GUI＋2 bot 3／3。寫入 [MANUAL_ACCEPTANCE](MANUAL_ACCEPTANCE.md)、[ACCEPTANCE_STATUS](ACCEPTANCE_STATUS.md) 與 [dev_log](../../../dev_logs/2026_10_08_pvp_v6_batch14a.zh-Hant.md)。下一步：L3（使用者）。
+- 2026-10-08：L3（使用者）：清單 1～10 全部正常；第 3 項在 macOS 已驗證。觀察：切換 macOS 工作區（Spaces）去看其他畫面時仍在連續射擊，回來後看到斷線訊息，使用者決定不判失敗、交給 v7（記在 v7 README）。**14a 完成**，PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64) 待 CI 與合併；14b 需另外授權。
 
 ## 延後項目：現況與對應批次
 
@@ -642,7 +643,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 16 批完成並合併（#63）。第 14 批進行中（14a）；14b 需另外授權（第 05 批不執行）。第 14 批未開始（第 05 批不執行），順序 16→14（D23⑦），由使用者逐批指定。
+- 第 16 批完成並合併（#63）。第 14a 批完成（#64 待合併）；14b 需另外授權（第 05 批不執行）。第 14 批未開始（第 05 批不執行），順序 16→14（D23⑦），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
