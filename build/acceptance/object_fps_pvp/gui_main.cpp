@@ -54,6 +54,8 @@ struct Options {
     bool actionCapture{};
     unsigned events{200};
     double fps{60};
+    // The two GUI roles plus passive bots (gui_room.hpp); two is a room of the GUIs alone.
+    unsigned roomPlayers{2};
 };
 
 void Require(bool condition, const std::string& message) {
@@ -88,11 +90,14 @@ Options Parse(int argc, char* argv[]) {
         else if (argument == "--fps") options.fps = std::stod(value);
         else if (argument == "--output") options.output = value;
         else if (argument == "--gpu-driver") options.gpu = value;
+        else if (argument == "--room-players") options.roomPlayers = static_cast<unsigned>(std::stoul(value));
         else throw std::runtime_error("Unknown option: " + std::string(argument));
     }
     Require(!options.assetRoot.empty(), "--arena-root must name the deployed PvP assets directory");
     Require(!options.output.empty(), "--output must name the capture directory");
     Require(options.role == "create" || options.role == "join", "--role must be create or join");
+    Require(options.roomPlayers >= 2 && options.roomPlayers <= fps::pvp::MaxPlayers, "--room-players must be 2..room capacity");
+    Require(options.roomPlayers == 2 || !options.nativeWindow, "--native-window observes a room of the two GUIs only");
     Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
         unsigned(options.nativeWindow) +
         unsigned(options.playerShort) + unsigned(options.playerCapture) +
@@ -227,6 +232,7 @@ void WriteLatencyPresentation(std::ostream& stream,
 }
 
 #include "platform_fingerprint.hpp"
+#include "gui_room.hpp"
 #include "gui_input.hpp"
 #include "player_short.hpp"
 #include "action_short.hpp"
@@ -382,7 +388,8 @@ void RunLatency(const Options& options) {
     fps::pvp::MovementTraceWriter traceWriter(options.output / (options.role + "-commands.jsonl"));
 #endif
     fps::pvp::PvpApplication application;
-    CombatLatencyEvidence combat(options);
+    GuiRoom room(options.output, options.role, options.roomPlayers);
+    CombatLatencyEvidence combat(options, room);
     std::string error;
     Require(application.InitializeContent(options.assetRoot, error), error);
     fps::pvp::PvpApplicationOptions graphics;
@@ -429,8 +436,9 @@ void RunLatency(const Options& options) {
             if (!state.rooms.empty()) { connection.Join(options.gateway, state.rooms.front().id); joined = true; }
             else if (Seconds(now, refreshed) >= .5) { connection.Refresh(options.gateway); refreshed = now; }
         }
+        if (const auto peer = room.Observe(state)) application.ObserveRemote(peer);
         const auto* self = FindSelf(state);
-        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self && state.snapshot->players.size() == 2;
+        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self && room.Full(state);
         if (both && !togetherSince) {
             togetherSince = now;
             firstTick = state.snapshot->tick;
@@ -600,6 +608,7 @@ void RunPhaseStalls(const Options& options) {
     std::string error;
     Require(application.InitializeContent(options.assetRoot, error), error);
     fps::pvp::PvpApplicationOptions graphics;
+    GuiRoom room(options.output, options.role, options.roomPlayers);
     graphics.title = "Object FPS PVP phase stalls / " + options.role;
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
@@ -636,8 +645,9 @@ void RunPhaseStalls(const Options& options) {
             if (!state.rooms.empty()) { connection.Join(options.gateway, state.rooms.front().id); joined = true; }
             else if (Seconds(now, refreshed) >= .5) { connection.Refresh(options.gateway); refreshed = now; }
         }
+        if (const auto peer = room.Observe(state)) application.ObserveRemote(peer);
         const auto* self = FindSelf(state);
-        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self && state.snapshot->players.size() == 2;
+        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self && room.Full(state);
         if (both && !togetherSince) togetherSince = now;
         if (togetherSince) Require(both, "A client left during phase stall acceptance");
         const double together = togetherSince ? Seconds(now, *togetherSince) : 0;
@@ -782,6 +792,7 @@ void Run(const Options& options) {
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
+    GuiRoom room(options.output, options.role, options.roomPlayers);
 
     auto& connection = application.Connection();
     const auto started = Clock::now();
@@ -845,9 +856,9 @@ void Run(const Options& options) {
         if (submittedJoin && state.phase == fps::pvp::ConnectionPhase::Lobby && !state.error.empty())
             throw std::runtime_error("Gateway / Match rejected GUI probe: " + state.error);
 
+        if (const auto peer = room.Observe(state)) application.ObserveRemote(peer);
         const auto* self = FindSelf(state);
-        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self &&
-            state.snapshot->players.size() == 2;
+        const bool both = state.phase == fps::pvp::ConnectionPhase::Playing && self && room.Full(state);
         if (both && !togetherSince) {
             togetherSince = now;
             startingPosition = self->position;

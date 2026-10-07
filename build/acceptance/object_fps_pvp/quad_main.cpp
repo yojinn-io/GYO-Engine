@@ -37,6 +37,10 @@ struct Options {
     std::string gateway;std::filesystem::path arena,output;
     int fps{60};double duration{16};unsigned clients{AcceptanceMaxPlayers};unsigned expectPlayers{};
     bool create{true},fifth{};
+    // Passive bots fill a GUI probe's room: they never act, walk to the -X wall
+    // (off the line between the GUI spawns), then mark themselves parked and
+    // stand until the stop file appears.
+    bool passive{};std::filesystem::path trace,parkedFile,stopFile;
 };
 Options Parse(int argc,char** argv){
     Options o;bool expectSet{};
@@ -46,6 +50,8 @@ Options Parse(int argc,char** argv){
         else if(key=="--clients")o.clients=static_cast<unsigned>(std::stoul(value));
         else if(key=="--expect-players"){o.expectPlayers=static_cast<unsigned>(std::stoul(value));expectSet=true;}
         else if(key=="--create")o.create=value=="true";else if(key=="--fifth")o.fifth=value=="true";
+        else if(key=="--passive")o.passive=value=="true";else if(key=="--trace")o.trace=value;
+        else if(key=="--parked-file")o.parkedFile=value;else if(key=="--stop-file")o.stopFile=value;
         else throw std::runtime_error("Unknown option: "+key);}
     if(!expectSet)o.expectPlayers=o.create?o.clients:0;
     Require(!o.gateway.empty()&&!o.arena.empty()&&!o.output.empty(),"--gateway, --arena and --output are required");
@@ -54,6 +60,9 @@ Options Parse(int argc,char** argv){
     Require(o.clients>=1&&o.clients<=AcceptanceMaxPlayers,"--clients must be 1..room capacity");
     Require(o.expectPlayers==0||(o.expectPlayers>=o.clients&&o.expectPlayers<=AcceptanceMaxPlayers),"--expect-players must be 0 or clients..capacity");
     Require(!o.fifth||(o.create&&o.clients==AcceptanceMaxPlayers),"--fifth needs a full room this probe created");
+    Require(!o.passive||(!o.create&&!o.fifth&&!o.parkedFile.empty()&&!o.stopFile.empty()),
+        "--passive bots join an existing room and need --parked-file and --stop-file");
+    if(o.trace.empty())o.trace=o.output/"clients-commands.jsonl";
     return o;
 }
 const PlayerState* Find(const WorldSnapshot& snapshot,PlayerId id){
@@ -82,6 +91,8 @@ Json DecisionJson(const ShotDecision& d){return {{"action_id",d.actionId},{"reso
 // A bot fires at the nearest living opponent every BotActionSeconds and reloads
 // once its own count of shots reaches the magazine; a new life refills it.
 constexpr double BotActionSeconds=.25;
+// From any spawn of a 20 m arena at 3 m/s, 2.5 s reaches the -X wall.
+constexpr double PassiveParkSeconds=2.5;
 struct Bot {
     ClientConnection connection;
     LocalPlayerPrediction prediction;
@@ -102,7 +113,7 @@ int main(int argc,char** argv){
         std::filesystem::create_directories(output);
         const auto timer=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
         std::string error;const auto arena=Arena::Load(options.arena,error);Require(arena.has_value(),error);
-        MovementTraceWriter trace(output/"clients-commands.jsonl");
+        MovementTraceWriter trace(options.trace);
         std::vector<std::unique_ptr<Bot>> bots;
         for(unsigned i=0;i<options.clients;++i){bots.push_back(std::make_unique<Bot>(*arena));
             bots.back()->connection.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));}
@@ -145,6 +156,7 @@ int main(int argc,char** argv){
         std::vector<double> frameSeconds;std::vector<std::uint64_t> frameTimes;
         frameSeconds.reserve(static_cast<std::size_t>(options.duration*options.fps)+16);frameTimes.reserve(frameSeconds.capacity());
         for(std::size_t i=0;i<bots.size();++i)bots[i]->nextAction=.5+i*BotActionSeconds/bots.size();
+        bool parked=false;
         while(std::chrono::duration<double>(Clock::now()-started).count()<options.duration){
             const auto now=Clock::now();const double age=std::chrono::duration<double>(now-started).count();
             const double elapsed=std::chrono::duration<double>(now-previous).count();previous=now;frameSeconds.push_back(elapsed);frameTimes.push_back(MovementTraceNowNs());
@@ -162,14 +174,15 @@ int main(int argc,char** argv){
                 const auto& snapshot=*state.snapshot;const auto* self=Find(snapshot,b.id);const auto* own=FindCombat(snapshot,b.id);
                 Require(self&&own,"Own player missing from snapshot");
                 b.prediction.Reconcile(*self,snapshot.tick);
-                // Each bot strafes on its own phase so the four never move as one block.
-                const float right=static_cast<long long>(age/.4+i*.5)%2?-.5F:.5F;
+                // Each bot strafes on its own phase so the four never move as one block;
+                // a passive bot walks to the -X wall and stays against it.
+                const float right=options.passive?-1.F:static_cast<long long>(age/.4+i*.5)%2?-.5F:.5F;
                 if(b.prediction.Advance(elapsed,0,right,0,0))b.connection.SendInput(b.prediction.PendingInput());
                 if(self->lifeGeneration!=b.life){b.life=self->lifeGeneration;b.shotsThisMagazine=0;b.reload.reset();}
                 // An accepted reload refills the magazine once the authority reaches its end tick.
                 if(b.reload&&b.decisions.contains(*b.reload)&&own->reloadActionId==*b.reload&&snapshot.tick>=own->reloadEndTick){
                     b.reload.reset();b.shotsThisMagazine=0;}
-                if(age<b.nextAction||age>=options.duration-1)continue;
+                if(options.passive||age<b.nextAction||age>=options.duration-1)continue;
                 b.nextAction+=BotActionSeconds;
                 if(self->lifeState!=LifeState::Alive||b.reload)continue;
                 const auto& rules=*state.combatRules;
@@ -191,8 +204,14 @@ int main(int argc,char** argv){
                 b.submitted[*id]={{"action_id",*id},{"observed_tick",snapshot.tick},{"action_kind",static_cast<int>(ActionKind::Shot)},
                     {"life_generation",b.life},{"yaw",yaw},{"target_id",target->playerId},{"time_ns",MovementTraceNowNs()}};
             }
+            if(options.passive){
+                const double elapsed=std::chrono::duration<double>(Clock::now()-started).count();
+                if(!parked&&elapsed>=PassiveParkSeconds){std::ofstream file(options.parkedFile);file<<"parked\n";Require(bool(file),"Cannot mark the bots parked");parked=true;}
+                if(parked&&std::filesystem::exists(options.stopFile))break;
+            }
             deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
         }
+        Require(!options.passive||parked,"Passive bots ended before parking");
         const auto endNs=MovementTraceNowNs();
         // Outstanding decisions arrive after the last action second; wait for them before leaving.
         Wait([&]{bool done=true;for(auto& b:bots){auto drain=b->connection.Drain();Require(drain.state.error.empty(),drain.state.error);

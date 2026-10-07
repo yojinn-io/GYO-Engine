@@ -19,9 +19,10 @@ add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 30)
 
 # The acceptance probes' header-only start-phase recorder, driven by the real
-# prediction. Kept apart so the domain test target gains no JSON dependency.
+# prediction, and the GUI probes' room (gui_room.hpp). Kept apart so the
+# domain test target gains no JSON dependency.
 set(record_tests "gyo_${GYO_CURRENT_APP}_start_phase_record_tests")
-add_executable(${record_tests} TestMain.cpp StartPhaseRecordTests.cpp)
+add_executable(${record_tests} TestMain.cpp StartPhaseRecordTests.cpp GuiRoomTests.cpp)
 target_compile_features(${record_tests} PRIVATE cxx_std_20)
 target_include_directories(${record_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
 target_link_libraries(${record_tests} PRIVATE ${match_domain} nlohmann_json::nlohmann_json doctest::doctest)

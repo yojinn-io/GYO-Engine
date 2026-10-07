@@ -30,6 +30,15 @@
         "gyo_object_fps_pvp_presentation_tests"
       ],
       "ctest": "object_fps_pvp.presentation_cpu"
+    },
+    "acceptance_record": {
+      "build": [
+        "gyo_object_fps_pvp_start_phase_record_tests"
+      ],
+      "ctest": "object_fps_pvp.start_phase_record"
+    },
+    "quad_evidence": {
+      "ctest": "object_fps_pvp.quad_evidence"
     }
   },
   "mutants": [
@@ -432,6 +441,46 @@
       "replace": "    return last;",
       "check": "presentation",
       "expect": "Diagnostics observe the chosen remote, else the last remote in snapshot order"
+    },
+    {
+      "id": "16-gui-unparked",
+      "batch": "16",
+      "what": "A GUI room with bots counts as full before the bots park",
+      "file": "build/acceptance/object_fps_pvp/gui_room.hpp",
+      "find": "            (!WithBots() || parked_);",
+      "replace": "            true;",
+      "check": "acceptance_record",
+      "expect": "A room with bots finds the other GUI by its published ID and waits for parked bots"
+    },
+    {
+      "id": "16-gui-peer-stale",
+      "batch": "16",
+      "what": "A GUI keeps the peer ID after the peer rejoins",
+      "file": "build/acceptance/object_fps_pvp/gui_room.hpp",
+      "find": "        if (!peer_ || !InSnapshot(state, *peer_)) {",
+      "replace": "        if (!peer_) {",
+      "check": "acceptance_record",
+      "expect": "A room with bots finds the other GUI by its published ID and waits for parked bots"
+    },
+    {
+      "id": "16-quad-cooldown-allowed",
+      "batch": "16",
+      "what": "The quad verdict accepts cooldown rejections",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "ALLOWED_REJECTIONS = frozenset(('Dead', 'StaleLife'))",
+      "replace": "ALLOWED_REJECTIONS = frozenset(('Dead', 'StaleLife', 'Cooldown'))",
+      "check": "quad_evidence",
+      "expect": "test_only_racing_rejections_are_allowed"
+    },
+    {
+      "id": "16-quad-two-player-error",
+      "batch": "16",
+      "what": "The N-player command stage renames no two-player error",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "    expected_errors = [EVERY_PLAYER_ERROR if error == TWO_PLAYER_ERROR else error for error in reference['errors']]",
+      "replace": "    expected_errors = list(reference['errors'])",
+      "check": "quad_evidence",
+      "expect": "test_every_two_player_corpus_matches_command_evidence_value_by_value"
     }
   ]
 }
