@@ -19,7 +19,7 @@ from acceptance_util import digest
 
 CASES = {'action30': ('--action-short', 30), 'action60': ('--action-short', 60),
          'action144': ('--action-short', 144), 'capture': ('--action-capture', 60)}
-CAPTURES_PER_ROLE = {'create': 8, 'join': 4}
+CAPTURES_PER_ROLE = {'create': 9, 'join': 5}
 REQUIRED_CHECKS = {
     'create': ('held_fire_one_shot', 'reload-shot_suppressed', 'reload-again_suppressed', 'move_while_reloading',
                'reload_completes_and_refills', 'empty-shot_suppressed', 'empty_magazine_reload',

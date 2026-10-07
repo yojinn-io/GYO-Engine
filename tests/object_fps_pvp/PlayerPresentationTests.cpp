@@ -597,7 +597,8 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
 
 TEST_CASE("PvP player definitions reject missing clips bones and invalid stride calibration") {
     for (const std::string_view fault : {"mask", "leg_mask", "weapon", "clip", "action_clip", "speed", "stride",
-                                         "action_span", "aim_clip", "aim_zero", "aim_beyond", "aim_missing"}) {
+                                         "action_span", "aim_clip", "aim_zero", "aim_beyond", "aim_missing",
+                                         "hit_clip", "hit_span"}) {
         CAPTURE(fault);
         PresentationAssets fixture;
         if (fault == "clip") {
@@ -607,6 +608,14 @@ TEST_CASE("PvP player definitions reject missing clips bones and invalid stride 
         } else if (fault == "action_clip") {
             fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
                 json["clips"].erase("death");
+            });
+        } else if (fault == "hit_clip") {
+            fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
+                json["clips"].erase("hit");
+            });
+        } else if (fault == "hit_span") {
+            fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
+                json["actions"]["hit_seconds"] = 0;
             });
         } else if (fault == "aim_clip") {
             fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
@@ -1175,4 +1184,77 @@ TEST_CASE("PvP dead players ignore pitch and the aimed pose is a pure function o
         CheckMatrix(up.body.globalTransforms[node], down.body.globalTransforms[node]);
         CHECK(first.body.globalTransforms[node].values == second.body.globalTransforms[node].values);
     }
+}
+
+namespace {
+// A standing remote player of life 1 (alive since 0.5 s) at presentation time now.
+PlayerPresentationFrame Struck(double now, std::uint32_t damageCount, double damageSeconds) {
+    auto frame = Frame(now, 1.0 / 60);
+    frame.lifeStateSeconds = 0.5;
+    frame.damageCount = damageCount;
+    frame.damageSeconds = damageSeconds;
+    return frame;
+}
+} // namespace
+
+TEST_CASE("PvP remote hit reaction plays Hit_Chest from the latest damage, once, within its life") {
+    const auto& definition = ProductionDefinition();
+    PlayerLocomotionState state;
+    state.initialized = true;
+    const double span = definition.hitSeconds;
+    // Within the span after the latest damage: the hit, time-scaled onto the clip.
+    auto actions = Resolve(state, Struck(2.0 + span / 2, 1, 2.0));
+    CHECK(actions.upper == PlayerUpperAction::Hit);
+    CHECK(actions.upperClipSeconds == doctest::Approx(ClipSeconds(definition.hitClip) / 2));
+    CHECK(Resolve(state, Struck(2.0 + span, 1, 2.0)).upper == PlayerUpperAction::Hold);
+    CHECK(Resolve(state, Struck(1.99, 1, 2.0)).upper == PlayerUpperAction::Hold);
+    CHECK(Resolve(state, Struck(2.1, 0, 0)).upper == PlayerUpperAction::Hold);
+    // A count that jumped several hits plays one reaction anchored at the latest;
+    // a repeated or late sample of the same damage resolves the same pose.
+    const auto jumped = Resolve(state, Struck(2.05, 4, 2.0));
+    CHECK(jumped.upper == PlayerUpperAction::Hit);
+    CHECK(jumped.upperClipSeconds == Resolve(state, Struck(2.05, 1, 2.0)).upperClipSeconds);
+    // Damage before this life began never plays in it.
+    CHECK(Resolve(state, Struck(0.6, 1, 0.45)).upper == PlayerUpperAction::Hold);
+    // The hit outranks a shot and a reload; death outranks the hit.
+    auto busy = Struck(2.1, 1, 2.0);
+    busy.shotActionId = 3;
+    busy.shotSeconds = 2.05;
+    busy.reloadActionId = 4;
+    busy.reloadStartSeconds = 2.0;
+    busy.reloadEndSeconds = 3.5;
+    CHECK(Resolve(state, busy).upper == PlayerUpperAction::Hit);
+    busy.dead = true;
+    busy.lifeStateSeconds = 2.0;
+    CHECK(Resolve(state, busy).lower == PlayerLowerAction::Death);
+    CHECK(Resolve(state, busy).upper == PlayerUpperAction::Hold);
+}
+
+TEST_CASE("PvP remote hit reaction adds its motion to the pitched aim pose") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    const float pitch = static_cast<float>(-30.0 * std::numbers::pi / 180.0);
+    // At its first frame the hit adds nothing.
+    const auto start = Aimed(pitch, PlayerUpperAction::Hit, 0);
+    const auto aimed = Aimed(pitch);
+    for (std::size_t node = 0; node < model.nodes.size(); ++node)
+        CheckMatrix(start.body.globalTransforms[node], aimed.body.globalTransforms[node]);
+    const double seconds = ClipSeconds(definition.hitClip) / 2;
+    const auto struck = Aimed(pitch, PlayerUpperAction::Hit, seconds);
+    Pose aim, extreme, reference, motion;
+    REQUIRE(SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
+    REQUIRE(SamplePose(model, definition.aimUpClip, 0, PlaybackMode::Clamp, extreme));
+    const Pose neutral = aim;
+    REQUIRE(BlendPoses(model, neutral, extreme, static_cast<float>(-pitch / definition.aimUpRadians), aim));
+    REQUIRE(SamplePose(model, definition.hitClip, 0, PlaybackMode::Clamp, reference));
+    REQUIRE(SamplePose(model, definition.hitClip, seconds, PlaybackMode::Clamp, motion));
+    double moved{};
+    for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+        if (!definition.upperBodyMask[node]) continue;
+        CAPTURE(model.nodes[node].name);
+        CheckMatrix(ToMatrix(struck.body.localTransforms[node]), ToMatrix(WithMotion(aim.localTransforms[node],
+            reference.localTransforms[node], motion.localTransforms[node])));
+        moved += MatrixDifference(struck.body.globalTransforms[node], aimed.body.globalTransforms[node]);
+    }
+    CHECK(moved > 1e-3);
 }

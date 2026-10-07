@@ -2,6 +2,7 @@
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/FireGate.hpp"
+#include "RetroFPS/Pvp/HitFeedback.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
 #include "RetroFPS/Pvp/PointerCapture.hpp"
@@ -66,13 +67,13 @@ const PlayerState* FindPlayer(const WorldSnapshot& snapshot, PlayerId id) {
     return found == snapshot.players.end() ? nullptr : &*found;
 }
 void AddText(Engine::Ui::UiDrawList& list, std::string text,
-    Engine::Math::Rect bounds, float size = 18.0F) {
+    Engine::Math::Rect bounds, float size = 18.0F, Engine::Ui::UiColor color = {0.9F, 0.96F, 1.0F, 1.0F}) {
     Engine::Ui::UiTextDraw draw;
     draw.utf8 = std::move(text);
     draw.boundsPixels = bounds;
     draw.fontAssetId = "object_fps_pvp.font.ui";
     draw.pointSizePixels = size;
-    draw.color = {0.9F, 0.96F, 1.0F, 1.0F};
+    draw.color = color;
     list.commands.emplace_back(std::move(draw));
 }
 } // namespace
@@ -120,7 +121,12 @@ struct PvpApplication::Impl final {
     std::string address{"127.0.0.1:8080"};
     std::string lastError;
     std::string localStatus;
-    float width{1280}, height{720}, yaw{}, pitch{};
+    float width{1280}, height{720};
+    // The controlled view; the hit shake only reaches its camera.
+    ClientView view;
+    LocalHitFeedback hitFeedback;
+    HitFeedbackSettings hitSettings;
+    HitFeedbackSample hitSample;
     PlayerId viewPlayer{}, renderedPlayer{};
     std::uint64_t viewLife{};
     LifeState viewLifeState{LifeState::Alive};
@@ -303,8 +309,8 @@ struct PvpApplication::Impl final {
             lastSnapshotTick = 0;
             prediction->Reset();
             predictionElapsed.Reset();
-            yaw = self->yaw;
-            pitch = self->pitch;
+            view.Reset(self->yaw, self->pitch);
+            hitFeedback.Reset();
             viewPlayer = state.playerId;
             inputCaptured = false;
             ResetWeaponFeedback();
@@ -319,7 +325,7 @@ struct PvpApplication::Impl final {
             lifeBoundaryThisFrame = true;
             viewLife = self->lifeGeneration;
             viewLifeState = self->lifeState;
-            yaw = self->yaw; pitch = self->pitch;
+            view.Reset(self->yaw, self->pitch);
             pendingShotEdge = pendingReloadEdge = leftButtonDown = false;
             pendingReload.reset();
             acceptedReloadEndTick = 0;
@@ -345,6 +351,12 @@ struct PvpApplication::Impl final {
         for (const auto& combat : state.snapshot->combat) {
             if (combat.playerId != state.playerId || combat.lifeGeneration != self->lifeGeneration) continue;
             fireGate.ObserveSnapshot(state.snapshot->tick, combat);
+            // Both positions come from this snapshot; the attacker may be absent.
+            std::optional<Engine::Math::Vec3> attacker;
+            for (const auto& other : state.snapshot->players)
+                if (combat.lastAttackerId != 0 && other.playerId == combat.lastAttackerId) attacker = other.position;
+            hitFeedback.Observe(combat, self->lifeState, self->position, attacker,
+                std::chrono::duration<double>(Clock::now().time_since_epoch()).count());
             weaponFeedback.hp = combat.hp;
             weaponFeedback.magazineAmmo = combat.magazineAmmo;
             weaponFeedback.reloadStartTick = combat.reloadStartTick;
@@ -417,8 +429,8 @@ struct PvpApplication::Impl final {
 
     void UpdateWeaponFeedback(Clock::time_point now, bool consumeInput = true) {
         weaponFeedback.inputCaptured = InWorld() && inputCaptured && input->Snapshot().windowFocused;
-        weaponFeedback.yaw = yaw;
-        weaponFeedback.pitch = pitch;
+        weaponFeedback.yaw = view.Input().yaw;
+        weaponFeedback.pitch = view.Input().pitch;
         if (!weaponFeedback.active) {
             pendingShotEdge = pendingReloadEdge = false;
             weaponFeedback.shooting = weaponFeedback.drawing = weaponFeedback.reloadAnimating =
@@ -447,7 +459,7 @@ struct PvpApplication::Impl final {
             if (combat != state.snapshot->combat.end() && !fireGate.Allows(shotTiming)) {
                 ++weaponFeedback.localCooldownBlocks;
             } else if (combat != state.snapshot->combat.end()) {
-                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, yaw, pitch)) {
+                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, view.Input().yaw, view.Input().pitch)) {
                     weaponFeedback.lastActionId = *id;
                     weaponFeedback.lastActionKind = ActionKind::Shot;
                     ++weaponFeedback.submittedActions;
@@ -541,8 +553,9 @@ struct PvpApplication::Impl final {
         remoteMovement.reset();
         remoteSubmitMilliseconds = 0;
         const auto& position = prediction->Observation().renderPosition;
+        const auto camera = view.Camera();
         queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
-            {pitch, yaw, 0}, WorldVerticalFovRadians, 0.05F, 150.0F});
+            {camera.pitch, camera.yaw, camera.roll}, WorldVerticalFovRadians, 0.05F, 150.0F});
         // Simple checker floor gives movement depth cues without campaign assets.
         const float tile = arena->cellSize;
         for (float z = 0; z < arena->depth; z += tile) {
@@ -627,6 +640,10 @@ struct PvpApplication::Impl final {
                     characterFrame.shotActionId = combat.lastShotActionId;
                     characterFrame.shotSeconds = static_cast<double>(combat.lastShotTick) / AuthorityTickRate;
                 }
+                if (combat.damageCount) {
+                    characterFrame.damageCount = combat.damageCount;
+                    characterFrame.damageSeconds = static_cast<double>(combat.lastDamageTick) / AuthorityTickRate;
+                }
                 if (combat.reloadActionId && combat.reloadEndTick > combat.reloadStartTick) {
                     characterFrame.reloadActionId = combat.reloadActionId;
                     characterFrame.reloadStartSeconds = static_cast<double>(combat.reloadStartTick) / AuthorityTickRate;
@@ -701,6 +718,17 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!ready) { error = ExplainUi(ready.error()); return false; }
     const auto activated = impl_->ui.ActivateCanvas("lobby");
     if (!activated) { error = ExplainUi(activated.error()); return false; }
+    const auto feedback = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.hit_feedback"),
+        Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
+    if (!feedback) { error = Explain(feedback.error()); return false; }
+    const auto feedbackText = impl_->assets.GetSharedConst<Asset::Loaders::TextAsset>(feedback.value());
+    const auto settings = feedbackText ? ParseHitFeedbackSettings(feedbackText->text, error) : std::nullopt;
+    impl_->assets.Release(feedback.value());
+    if (!settings) {
+        if (error.empty()) error = "PvP hit feedback asset has no text payload";
+        return false;
+    }
+    impl_->hitSettings = *settings;
     return true;
 }
 
@@ -826,9 +854,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             if (impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused && physical.pointer.relativeMode) {
                 if (physical.pointer.deltaX != 0 || physical.pointer.deltaY != 0)
                     ++impl_->weaponFeedback.mouseDeltaConsumeCount;
-                impl_->yaw = Engine::Math::WrapRadians(impl_->yaw + physical.pointer.deltaX * .0025F);
-                impl_->pitch = Engine::Math::Clamp(impl_->pitch + physical.pointer.deltaY * .0025F,
-                    -MovementMaximumPitch, MovementMaximumPitch);
+                impl_->view.Turn(physical.pointer.deltaX, physical.pointer.deltaY);
             }
             const float forward = impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused ?
                 static_cast<float>(physical.Get(Key::W).held) - static_cast<float>(physical.Get(Key::S).held) : 0;
@@ -842,7 +868,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
                 !impl_->pointerAcquiredThisFrame && !impl_->windowInteraction;
             if (!controls) impl_->prediction->ClearJumpRequest();
             impl_->pendingReloadEdge = controls && physical.Get(Key::R).pressed;
-            if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->yaw, impl_->pitch,
+            if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
                 controls && physical.Get(Key::Space).pressed))
                 impl_->connection.SendInput(impl_->prediction->PendingInput());
             impl_->UpdateWeaponFeedback(Clock::now(), !live);
@@ -885,11 +911,23 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
     impl_->queue.Reset(frame);
     Engine::Ui::UiDrawList draws;
     double prepareWorldMilliseconds = 0;
+    // First-person hit feedback: sampled once per frame; the shake reaches the camera only.
+    impl_->hitSample = impl_->InWorld() ? impl_->hitFeedback.Sample(
+        std::chrono::duration<double>(Clock::now().time_since_epoch()).count(), impl_->view.Input().yaw,
+        impl_->hitSettings) : HitFeedbackSample{};
+    impl_->view.Present(impl_->hitSample);
+    impl_->weaponFeedback.hitFlashAlpha = impl_->hitSample.flashAlpha;
+    impl_->weaponFeedback.hitDirectionVisible = impl_->hitSample.directionRadians.has_value();
     if (impl_->InWorld()) {
         const auto worldStarted = Clock::now();
         if (!impl_->PrepareWorld(context.deltaSeconds)) return impl_->Fail(impl_->lastError);
         prepareWorldMilliseconds = Milliseconds(Clock::now(), worldStarted);
         const float scale = Engine::Math::Min(impl_->width/1280.0F, impl_->height/720.0F);
+        const auto& hit = impl_->hitSample;
+        const auto& feedback = impl_->hitSettings;
+        if (hit.flashAlpha > 0)
+            draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{0, 0, impl_->width, impl_->height},
+                {feedback.flash.color[0], feedback.flash.color[1], feedback.flash.color[2], hit.flashAlpha}});
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,680*scale,114*scale},{.015F,.025F,.04F,.88F}});
         AddText(draws, "PLAYERS ONLINE: " + std::to_string(impl_->state.snapshot->players.size()),
             {16+14*scale,16+8*scale,490*scale,25*scale},18*scale);
@@ -899,7 +937,9 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             std::to_string(impl_->weaponFeedback.maximumHp) + "    MARK23  " +
             std::to_string(impl_->weaponFeedback.magazineAmmo) + " / " +
             std::to_string(impl_->weaponFeedback.magazineCapacity) + "   reserve: unlimited",
-            {16+14*scale,16+58*scale,660*scale,22*scale},14*scale);
+            {16+14*scale,16+58*scale,660*scale,22*scale},14*scale, hit.hpHighlighted ?
+                Engine::Ui::UiColor{feedback.hpHighlight.color[0], feedback.hpHighlight.color[1],
+                                    feedback.hpHighlight.color[2], 1} : Engine::Ui::UiColor{0.9F, 0.96F, 1.0F, 1.0F});
         if (impl_->weaponFeedback.dead) {
             const auto remaining = impl_->weaponFeedback.respawnRemainingSeconds;
             AddText(draws, remaining > 0 ? "DEAD - respawn in " + std::to_string(static_cast<int>(std::ceil(remaining))) + "s" :
@@ -911,6 +951,18 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         }
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-5,impl_->height*.5F-1,10,2},{.9F,.96F,1,1}});
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{impl_->width*.5F-1,impl_->height*.5F-5,2,10},{.9F,.96F,1,1}});
+        if (hit.directionRadians) {
+            // A dotted arc around the crosshair toward the attacker; 0 is ahead, positive to the right.
+            const auto& direction = feedback.direction;
+            const float radius = direction.radiusPixels * scale, dot = direction.dotPixels * scale;
+            for (std::uint32_t i = 0; i < direction.dots; ++i) {
+                const float angle = *hit.directionRadians +
+                    direction.arcRadians * (static_cast<float>(i) / static_cast<float>(direction.dots - 1) - .5F);
+                draws.commands.emplace_back(Engine::Ui::UiQuadDraw{
+                    {impl_->width*.5F + radius*std::sin(angle) - dot*.5F, impl_->height*.5F - radius*std::cos(angle) - dot*.5F, dot, dot},
+                    {direction.color[0], direction.color[1], direction.color[2], hit.directionAlpha}});
+            }
+        }
         if (impl_->weaponFeedback.hitMarkerVisible) {
             for (const float x : {-9.0F, 6.0F}) for (const float y : {-9.0F, 6.0F})
                 draws.commands.emplace_back(Engine::Ui::UiQuadDraw{

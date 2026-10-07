@@ -155,6 +155,7 @@ def main(argv=None):
     killed = sum(r['status'] == 'killed' for r in results)
     print(f'{killed}/{len(results)} killed')
     if args.report:
+        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text(json.dumps({'results': results}, indent=2, ensure_ascii=False) + '\n',
                                      encoding='utf-8')
     return 0 if killed == len(results) else 1
