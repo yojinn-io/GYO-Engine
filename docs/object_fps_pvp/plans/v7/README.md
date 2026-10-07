@@ -101,6 +101,7 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
   - 在 v6 最終 tree 與 v7 tree 上，以同一份事前宣告比較動作短測，並加上 12 Tick 連點的情境；
   - 和上面的 30 FPS 對比一起執行。
 - 判定沿用 v6 第 12 批：乾淨跑次的權威 Cooldown 拒絕為 0，本機擋下與權威拒絕分開列出。
+- v6 第 12 批的 L3（使用者，2026-10-07）：連點仍有輕微差異，判斷與本節的時序問題相同，v7 之後再確認手感。
 - 參考：
   - 模擬：`build/target/_build/test/logs/pvp-v6-batch12-sim-20261007/`；
   - L1 突變：`build/target/_build/test/logs/pvp-v6-batch12-l1-20261007/`；
