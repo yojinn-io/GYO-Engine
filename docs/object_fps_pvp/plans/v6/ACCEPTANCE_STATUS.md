@@ -1,6 +1,6 @@
 # PvP v6 驗收狀態與回報表
 
-更新：2026-10-08。Owner：`object_fps_pvp`。**14a（短測與驗收交付）進行中：L1、L2 通過，L3 待使用者；完整驗收（14b）需另外授權，v6 尚未升格。**
+更新：2026-10-08。Owner：`object_fps_pvp`。**14a（短測與驗收交付）完成：L1、L2、L3 通過；完整驗收（14b）需另外授權，v6 尚未升格。**
 操作入口：[手動驗收指南](MANUAL_ACCEPTANCE.md)。契約：[v6 契約（pv6）](../../protocol-v6.zh-Hant.md)。
 v5 的[驗收狀態](../v5/ACCEPTANCE_STATUS.md)與[穩定基線](../v5/STABLE_BASELINE.md)原樣保留，不繼承其完成勾選。
 
@@ -30,8 +30,8 @@ v5 的[驗收狀態](../v5/ACCEPTANCE_STATUS.md)與[穩定基線](../v5/STABLE_B
 | 版本混用（容量 2 對 4） | 通過 | 未執行 | 未執行 | 第 16 批 L2（`pvp-v6-batch16-l2-20261007/12-quad-mixed/`）：舊 Client、舊 Match、舊 Gateway、舊 arena 都明確失敗；之後產品程式未變 |
 | Match 不連結 SDL／Renderer | 通過 | 未執行 | 未執行 | `otool -L` 只有系統庫；`match-links.txt` |
 | 產品移除 | 通過 | 未執行 | 未執行 | scratch worktree 刪除 254 檔與 `projects.csv` 的登錄列後，建置與 CTest 35／35 通過；沒有空目錄；D12 連結 0。發現：根 README（三語）與 `docs/releasing.*` 以本產品為建置範例，刪除後說明會過時（只報告）；`removal/` |
-| L3 原生操作清單 1～10 | 未執行 | 未執行 | 未執行 | 待使用者 |
-| 第 3 項（視窗拖動／縮放的呈現阻塞） | 未執行 | 未執行 | 未執行 | 依 L3 結果填寫；Windows／Linux 根因可能不同（Windows 拖動標題列會進入 Win32 modal 迴圈） |
+| L3 原生操作清單 1～10 | 通過 | 未執行 | 未執行 | 2026-10-08 使用者：「全部正常」（`f41c22a` 的量測樹建置，2 Client＋2 bot）。觀察（使用者決定不判失敗、交給 v7）：切換 macOS 工作區（Spaces）去看其他畫面時仍在連續射擊，回來後看到斷線訊息；原因未查明，見 v7 README |
+| 第 3 項（視窗拖動／縮放的呈現阻塞） | 通過 | 未執行 | 未執行 | macOS Intel／Metal 已驗證（L3 第 6 項）；Windows／Linux 未執行，根因可能不同（Windows 拖動標題列會進入 Win32 modal 迴圈）。按下縮放角到開始拖動之間的停頓依 D19 交給 v7 |
 
 ## 完整驗收（14b，需另外授權）
 
