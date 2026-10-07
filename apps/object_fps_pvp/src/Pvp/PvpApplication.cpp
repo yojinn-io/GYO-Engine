@@ -608,6 +608,7 @@ struct PvpApplication::Impl final {
             characterFrame.dead = presented.lifeState == LifeState::Dead;
             characterFrame.position = position;
             characterFrame.yaw = presented.yaw;
+            characterFrame.pitch = presented.pitch;
             characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
                 static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
             characterFrame.deltaSeconds = deltaSeconds;

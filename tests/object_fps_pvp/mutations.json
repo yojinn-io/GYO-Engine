@@ -24,6 +24,12 @@
     },
     "protocol_version": {
       "ctest": "object_fps_pvp.protocol_version"
+    },
+    "presentation": {
+      "build": [
+        "gyo_object_fps_pvp_presentation_tests"
+      ],
+      "ctest": "object_fps_pvp.presentation_cpu"
     }
   },
   "mutants": [
@@ -196,6 +202,66 @@
       "replace": "",
       "check": "cpu",
       "expect": "waits for every known cooldown"
+    },
+    {
+      "id": "11-pitch-ignored",
+      "batch": "11",
+      "what": "The remote upper body ignores the pitch",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        output.aimWeight = frame.pitch < 0 ?\n",
+      "replace": "        output.aimWeight = 0 * frame.pitch < 0 ?\n",
+      "check": "presentation",
+      "expect": "a positive pitch points the pistol down"
+    },
+    {
+      "id": "11-pitch-reversed",
+      "batch": "11",
+      "what": "Looking up shows the down pose",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "actions.aimWeight < 0 ? definition.aimUpClip :",
+      "replace": "actions.aimWeight > 0 ? definition.aimUpClip :",
+      "check": "presentation",
+      "expect": "a positive pitch points the pistol down"
+    },
+    {
+      "id": "11-pitch-unclamped",
+      "batch": "11",
+      "what": "A pitch beyond the down pose is not clamped",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "static_cast<float>(Engine::Math::Min(1.0, frame.pitch / definition.aimDownRadians));",
+      "replace": "static_cast<float>(frame.pitch / definition.aimDownRadians);",
+      "check": "presentation",
+      "expect": "clamps the pitch"
+    },
+    {
+      "id": "11-action-replaces",
+      "batch": "11",
+      "what": "A shot or reload replaces the upper body and drops the pitch",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "                    aim.localTransforms[i] = AddMotion(aim.localTransforms[i], reference.localTransforms[i],\n                                                       motion->localTransforms[i]);\n",
+      "replace": "                    aim.localTransforms[i] = motion->localTransforms[i];\n",
+      "check": "presentation",
+      "expect": "keep the remote pitch"
+    },
+    {
+      "id": "11-dead-aims",
+      "batch": "11",
+      "what": "A dead player's upper body still aims by pitch",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "            upper = nullptr; // Death owns the whole body, weapon hand included.\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "dead players ignore pitch"
+    },
+    {
+      "id": "11-limit-uncalibrated",
+      "batch": "11",
+      "what": "The down limit no longer matches the measured down pose",
+      "file": "assets/object_fps_pvp/players/presentation.json",
+      "find": "    \"down_pitch_radians\": 1.5236\n",
+      "replace": "    \"down_pitch_radians\": 1.3\n",
+      "check": "presentation",
+      "expect": "measured muzzle elevations"
     }
   ]
 }

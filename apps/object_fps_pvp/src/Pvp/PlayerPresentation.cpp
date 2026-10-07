@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 
+#include "RetroFPS/Pvp/Movement.hpp"
 #include "../App/AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
@@ -36,6 +37,17 @@ std::size_t Node(const Engine::Model::ModelAsset& model, const std::string& name
 template <class E>
 void Require(const Engine::Base::Result<void, E>& result) {
     if (!result) throw std::runtime_error(result.error().message);
+}
+
+// The base pose plus the motion of one clip since its reference frame, in the
+// node's own local space: the base rotation, then the clip's rotation since
+// the reference. Translation adds its offset; the base scale stays.
+Engine::Model::Transform AddMotion(const Engine::Model::Transform& base, const Engine::Model::Transform& reference,
+                                   const Engine::Model::Transform& motion) {
+    using namespace Engine::Math;
+    const auto delta = Multiply(Inverse(NormalizeOrIdentity(reference.rotation)), NormalizeOrIdentity(motion.rotation));
+    return {base.translation + (motion.translation - reference.translation),
+            NormalizeOrIdentity(Multiply(NormalizeOrIdentity(base.rotation), delta)), base.scale};
 }
 
 std::shared_ptr<Resource> CreateResource(Engine::Render::IRenderDevice& device,
@@ -100,6 +112,9 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         definition->jumpLoopClip = clip("jump_loop");
         definition->jumpLandClip = clip("jump_land");
         definition->deathClip = clip("death");
+        definition->aimUpClip = clip("aim_up");
+        definition->aimNeutralClip = clip("aim_neutral");
+        definition->aimDownClip = clip("aim_down");
         definition->bodyHeight = bodyHeight;
         definition->referenceSpeed = config.at("reference_speed").get<float>();
         const auto& locomotion = config.at("locomotion");
@@ -113,6 +128,12 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
             !std::isfinite(definition->transitionSeconds) || definition->transitionSeconds <= 0 ||
             !std::isfinite(definition->maxFrameDeltaSeconds) || definition->maxFrameDeltaSeconds <= 0)
             throw std::runtime_error("player locomotion calibration must be finite and positive, with jog faster than walk");
+        const auto& aim = config.at("aim");
+        definition->aimUpRadians = aim.at("up_pitch_radians").get<double>();
+        definition->aimDownRadians = aim.at("down_pitch_radians").get<double>();
+        for (const double limit : {definition->aimUpRadians, definition->aimDownRadians})
+            if (!std::isfinite(limit) || limit <= 0 || limit > MovementMaximumPitch)
+                throw std::runtime_error("player aim pitch limits must be positive and within the maximum pitch");
         const auto& actions = config.at("actions");
         definition->shotSeconds = actions.at("shot_seconds").get<double>();
         definition->jumpStartSeconds = actions.at("jump_start_seconds").get<double>();
@@ -341,12 +362,18 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
             definition.jumpStartSeconds <= 0 || !std::isfinite(definition.jumpLandSeconds) ||
             definition.jumpLandSeconds <= 0)
             throw std::runtime_error("player actions require finite times and positive spans");
+        if (!std::isfinite(frame.pitch))
+            throw std::runtime_error("player actions require a finite pitch");
         if (frame.dead) {
             // Full body; after the clip the last pose holds until the new life.
             output.lower = PlayerLowerAction::Death;
             output.lowerClipSeconds = Engine::Math::Clamp(now - frame.lifeStateSeconds, 0.0, duration(definition.deathClip));
             return true;
         }
+        // Clamp, then linear between neutral and the pose on that side.
+        output.aimWeight = frame.pitch < 0 ?
+            static_cast<float>(-Engine::Math::Min(1.0, -frame.pitch / definition.aimUpRadians)) :
+            static_cast<float>(Engine::Math::Min(1.0, frame.pitch / definition.aimDownRadians));
         const double inPhase = Engine::Math::Max(0.0, now - state.jumpPhaseSeconds);
         switch (state.jumpPhase) {
         case PlayerJumpPhase::Start:
@@ -406,8 +433,9 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
         if (definition.upperBodyMask.size() != model.nodes.size() ||
             definition.weaponNode >= model.nodes.size())
             throw std::runtime_error("player pose requires a resolved mask and weapon bone");
-        if (!std::isfinite(actions.upperClipSeconds) || !std::isfinite(actions.lowerClipSeconds))
-            throw std::runtime_error("player pose requires finite action clip times");
+        if (!std::isfinite(actions.upperClipSeconds) || !std::isfinite(actions.lowerClipSeconds) ||
+            !std::isfinite(actions.aimWeight) || actions.aimWeight < -1 || actions.aimWeight > 1)
+            throw std::runtime_error("player pose requires finite action clip times and an aim weight in [-1, 1]");
         using Engine::Model::PlaybackMode;
         Pose idle;
         Require(Engine::Model::SamplePose(model, definition.idleClip, state.idleSeconds,
@@ -445,12 +473,33 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
         default:
             throw std::runtime_error("player pose has an invalid lower-body action");
         }
-        if (upper && actions.upper != PlayerUpperAction::Hold) {
-            if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload)
-                throw std::runtime_error("player pose has an invalid upper-body action");
-            Require(Engine::Model::SamplePose(model,
-                actions.upper == PlayerUpperAction::Shoot ? definition.shootClip : definition.reloadClip,
-                actions.upperClipSeconds, PlaybackMode::Clamp, upperAction));
+        if (upper) {
+            // The aim pose by pitch is the upper-body base; the idle clip, or
+            // the shot or reload, adds its motion since its own first frame.
+            Pose aim, extreme, reference;
+            Require(Engine::Model::SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
+            if (actions.aimWeight != 0) {
+                Require(Engine::Model::SamplePose(model, actions.aimWeight < 0 ? definition.aimUpClip :
+                    definition.aimDownClip, 0, PlaybackMode::Clamp, extreme));
+                const Pose neutral = aim;
+                Require(Engine::Model::BlendPoses(model, neutral, extreme, std::abs(actions.aimWeight), aim));
+            }
+            std::size_t motionClip = definition.idleClip;
+            const Pose* motion = &idle;
+            if (actions.upper != PlayerUpperAction::Hold) {
+                if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload)
+                    throw std::runtime_error("player pose has an invalid upper-body action");
+                motionClip = actions.upper == PlayerUpperAction::Shoot ? definition.shootClip : definition.reloadClip;
+                Require(Engine::Model::SamplePose(model, motionClip, actions.upperClipSeconds,
+                    PlaybackMode::Clamp, upperAction));
+                motion = &upperAction;
+            }
+            Require(Engine::Model::SamplePose(model, motionClip, 0, PlaybackMode::Clamp, reference));
+            for (std::size_t i = 0; i < model.nodes.size(); ++i)
+                if (definition.upperBodyMask[i])
+                    aim.localTransforms[i] = AddMotion(aim.localTransforms[i], reference.localTransforms[i],
+                                                       motion->localTransforms[i]);
+            upperAction = std::move(aim);
             upper = &upperAction;
         }
         for (std::size_t i = 0; i < model.nodes.size(); ++i) {

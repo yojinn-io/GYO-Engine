@@ -2,6 +2,7 @@
 
 #include "PresentationLegacyMath.hpp"
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
@@ -127,6 +128,15 @@ void Advance(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
 void CheckMatrix(const Matrix4& actual, const Matrix4& expected) {
     for (std::size_t i = 0; i < actual.values.size(); ++i)
         CHECK(actual.values[i] == doctest::Approx(expected.values[i]).epsilon(1e-5).scale(1));
+}
+
+// The upper-body composition the product promises (D11-6): the base pose,
+// then the clip's local rotation since its first frame; translation adds.
+Transform WithMotion(const Transform& base, const Transform& reference, const Transform& motion) {
+    using namespace Engine::Math;
+    const auto delta = Multiply(Inverse(NormalizeOrIdentity(reference.rotation)), NormalizeOrIdentity(motion.rotation));
+    return {base.translation + (motion.translation - reference.translation),
+            NormalizeOrIdentity(Multiply(NormalizeOrIdentity(base.rotation), delta)), base.scale};
 }
 
 double MatrixDifference(const Matrix4& left, const Matrix4& right) {
@@ -385,8 +395,10 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
     state.jogWeight = 0.4;
     state.idleSeconds = 0.23;
     state.moveWeight = 1;
-    Pose idle, walk, gaitJog, jog;
+    Pose idle, walk, gaitJog, jog, idleStart, aim;
     REQUIRE(SamplePose(model, definition.idleClip, state.idleSeconds, PlaybackMode::Loop, idle));
+    REQUIRE(SamplePose(model, definition.idleClip, 0, PlaybackMode::Clamp, idleStart));
+    REQUIRE(SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
     REQUIRE(SamplePose(model, definition.walkClip, state.phaseCycles * model.clips[definition.walkClip].durationSeconds,
         PlaybackMode::Loop, walk));
     REQUIRE(SamplePose(model, definition.jogClip, state.phaseCycles * model.clips[definition.jogClip].durationSeconds,
@@ -401,7 +413,8 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
     for (std::size_t node = 0; node < model.nodes.size(); ++node) {
         CAPTURE(model.nodes[node].name);
         const auto local = ToMatrix(combined.body.localTransforms[node]);
-        const auto expected = ToMatrix((definition.upperBodyMask[node] ? idle : jog).localTransforms[node]);
+        const auto expected = ToMatrix(definition.upperBodyMask[node] ? WithMotion(aim.localTransforms[node],
+            idleStart.localTransforms[node], idle.localTransforms[node]) : jog.localTransforms[node]);
         CheckMatrix(local, expected);
         const auto parent = model.nodes[node].parentIndex;
         CheckMatrix(combined.body.globalTransforms[node], parent ?
@@ -584,7 +597,7 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
 
 TEST_CASE("PvP player definitions reject missing clips bones and invalid stride calibration") {
     for (const std::string_view fault : {"mask", "leg_mask", "weapon", "clip", "action_clip", "speed", "stride",
-                                         "action_span"}) {
+                                         "action_span", "aim_clip", "aim_zero", "aim_beyond", "aim_missing"}) {
         CAPTURE(fault);
         PresentationAssets fixture;
         if (fault == "clip") {
@@ -594,6 +607,16 @@ TEST_CASE("PvP player definitions reject missing clips bones and invalid stride 
         } else if (fault == "action_clip") {
             fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
                 json["clips"].erase("death");
+            });
+        } else if (fault == "aim_clip") {
+            fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
+                json["clips"].erase("aim_down");
+            });
+        } else if (fault == "aim_zero" || fault == "aim_beyond" || fault == "aim_missing") {
+            fixture.Override("object_fps_pvp.player.presentation", [&](auto& json) {
+                if (fault == "aim_zero") json["aim"]["up_pitch_radians"] = 0;
+                if (fault == "aim_beyond") json["aim"]["down_pitch_radians"] = 1.6; // Beyond the 89 degree camera limit.
+                if (fault == "aim_missing") json.erase("aim");
             });
         } else if (fault == "action_span") {
             fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
@@ -999,4 +1022,157 @@ TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations"
     const auto loaded = LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error);
     REQUIRE_MESSAGE(loaded, error);
     CHECK(loaded->weaponMount.rotation.w == doctest::Approx(1.0F));
+}
+
+namespace {
+// Elevation in degrees of the pistol barrel (the weapon model's +X axis) in a
+// composed body pose, relative to the horizontal model plane.
+double MuzzleElevation(const PlayerPresentationDefinition& definition, const std::vector<Matrix4>& global) {
+    const auto mount = Multiply(global.at(definition.weaponNode), ToMatrix(definition.weaponMount));
+    const auto origin = Engine::Math::TransformPoint(mount, Vec3{0, 0, 0});
+    const auto barrel = Engine::Math::TransformPoint(mount, Vec3{1, 0, 0}) - origin;
+    const auto length = std::sqrt(barrel.x * barrel.x + barrel.y * barrel.y + barrel.z * barrel.z);
+    return std::asin(barrel.y / length) * 180.0 / std::numbers::pi;
+}
+
+double ClipMuzzleElevation(const std::size_t clip) {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    Pose pose;
+    REQUIRE(SamplePose(model, clip, 0, PlaybackMode::Clamp, pose));
+    std::vector<Matrix4> global(model.nodes.size());
+    for (std::size_t i = 0; i < model.nodes.size(); ++i) {
+        const auto local = ToMatrix(pose.localTransforms[i]);
+        const auto parent = model.nodes[i].parentIndex;
+        global[i] = parent ? Multiply(global[*parent], local) : local;
+    }
+    return MuzzleElevation(definition, global);
+}
+
+// The composed pose of a standing player looking at pitch, optionally while
+// the action clip is at clipSeconds; idle time 0 leaves the aim pose exact.
+PlayerPresentationPose Aimed(float pitch, PlayerUpperAction upper = PlayerUpperAction::Hold, double clipSeconds = 0,
+                             bool dead = false, double idleSeconds = 0) {
+    PlayerLocomotionState state;
+    state.initialized = true;
+    state.idleSeconds = idleSeconds;
+    auto frame = Frame(1, 1.0 / 60);
+    frame.pitch = pitch;
+    frame.dead = dead;
+    auto actions = Resolve(state, frame);
+    if (!dead) {
+        actions.upper = upper;
+        actions.upperClipSeconds = clipSeconds;
+    }
+    PlayerPresentationPose pose;
+    std::string error;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(ProductionDefinition(), state, actions, pose, error), error);
+    return pose;
+}
+
+double Degrees(double radians) { return radians * 180.0 / std::numbers::pi; }
+} // namespace
+
+TEST_CASE("PvP aim pitch limits are the measured muzzle elevations of the aim poses") {
+    const auto& definition = ProductionDefinition();
+    const double neutral = ClipMuzzleElevation(definition.aimNeutralClip);
+    CHECK(std::abs(neutral) < 2.0);
+    // presentation.json keeps four decimals of radians: within 0.01 degrees.
+    CHECK(std::abs(Degrees(definition.aimUpRadians) - (ClipMuzzleElevation(definition.aimUpClip) - neutral)) < 0.01);
+    CHECK(std::abs(Degrees(definition.aimDownRadians) - (neutral - ClipMuzzleElevation(definition.aimDownClip))) < 0.01);
+}
+
+TEST_CASE("PvP aim weight clamps the pitch and maps down to positive weights") {
+    const auto& definition = ProductionDefinition();
+    PlayerLocomotionState state;
+    state.initialized = true;
+    const auto weight = [&](float pitch) {
+        auto frame = Frame(1, 1.0 / 60);
+        frame.pitch = pitch;
+        return Resolve(state, frame).aimWeight;
+    };
+    CHECK(weight(0) == 0);
+    CHECK(weight(static_cast<float>(definition.aimDownRadians / 2)) == doctest::Approx(0.5));
+    CHECK(weight(static_cast<float>(-definition.aimUpRadians / 2)) == doctest::Approx(-0.5));
+    CHECK(weight(static_cast<float>(definition.aimDownRadians)) == doctest::Approx(1));
+    CHECK(weight(MovementMaximumPitch) == 1);
+    CHECK(weight(-MovementMaximumPitch) == -1);
+    auto frame = Frame(1, 1.0 / 60);
+    frame.pitch = std::numeric_limits<float>::quiet_NaN();
+    PlayerActionPose actions;
+    std::string error;
+    CHECK_FALSE(ResolvePlayerActions(definition, state, frame, actions, error));
+    CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("PvP remote upper body follows the pitch: a positive pitch points the pistol down") {
+    // The muzzle follows the look direction within the blend's curvature.
+    for (const double degrees : {-80.0, -60.0, -30.0, -10.0, 0.0, 10.0, 30.0, 60.0, 80.0}) {
+        CAPTURE(degrees);
+        const auto pose = Aimed(static_cast<float>(degrees * std::numbers::pi / 180.0));
+        const double elevation = MuzzleElevation(ProductionDefinition(), pose.body.globalTransforms);
+        // Measured: within 2.1 degrees (the neutral pose itself points 0.9 down).
+        CHECK(std::abs(elevation + degrees) < 3.0);
+    }
+}
+
+TEST_CASE("PvP shots and reloads keep the remote pitch: the clip adds its motion to the aim pose") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    const auto bodiesEqual = [&](const PlayerPresentationPose& left, const PlayerPresentationPose& right) {
+        for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+            CAPTURE(model.nodes[node].name);
+            CheckMatrix(left.body.globalTransforms[node], right.body.globalTransforms[node]);
+        }
+    };
+    const float pitch = static_cast<float>(-40.0 * std::numbers::pi / 180.0);
+    // At its first frame an action adds nothing: the aim pose itself.
+    bodiesEqual(Aimed(pitch, PlayerUpperAction::Shoot, 0), Aimed(pitch));
+    bodiesEqual(Aimed(pitch, PlayerUpperAction::Reload, 0), Aimed(pitch));
+    for (const auto upper : {PlayerUpperAction::Shoot, PlayerUpperAction::Reload}) {
+        const auto clip = upper == PlayerUpperAction::Shoot ? definition.shootClip : definition.reloadClip;
+        for (const double fraction : {0.25, 0.5, 0.75}) {
+            CAPTURE(static_cast<int>(upper));
+            CAPTURE(fraction);
+            const double seconds = fraction * ClipSeconds(clip);
+            const auto level = Aimed(0, upper, seconds);
+            const auto raised = Aimed(pitch, upper, seconds);
+            // The clip moves the body, and the pitch still raises the pistol by about 40 degrees.
+            CHECK(MatrixDifference(level.body.globalTransforms.at(definition.weaponNode),
+                                   Aimed(0).body.globalTransforms.at(definition.weaponNode)) > 1e-3);
+            const double raise = MuzzleElevation(definition, raised.body.globalTransforms) -
+                                 MuzzleElevation(definition, level.body.globalTransforms);
+            // A shot keeps the barrel's raise (measured 38.8-39.3 degrees); a reload
+            // turns the pistol toward the body, so its barrel only stays raised.
+            if (upper == PlayerUpperAction::Shoot) CHECK(std::abs(raise - 40.0) < 3.0);
+            else CHECK(raise > 20.0);
+            // Exactly the aim pose plus the clip's local motion since its first frame.
+            Pose aim, extreme, reference, motion;
+            REQUIRE(SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
+            REQUIRE(SamplePose(model, definition.aimUpClip, 0, PlaybackMode::Clamp, extreme));
+            const Pose neutral = aim;
+            REQUIRE(BlendPoses(model, neutral, extreme, static_cast<float>(-pitch / definition.aimUpRadians), aim));
+            REQUIRE(SamplePose(model, clip, 0, PlaybackMode::Clamp, reference));
+            REQUIRE(SamplePose(model, clip, seconds, PlaybackMode::Clamp, motion));
+            for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+                if (!definition.upperBodyMask[node]) continue;
+                CAPTURE(model.nodes[node].name);
+                CheckMatrix(ToMatrix(raised.body.localTransforms[node]), ToMatrix(WithMotion(aim.localTransforms[node],
+                    reference.localTransforms[node], motion.localTransforms[node])));
+            }
+        }
+    }
+}
+
+TEST_CASE("PvP dead players ignore pitch and the aimed pose is a pure function of its inputs") {
+    const auto& model = *ProductionDefinition().character->model;
+    const auto up = Aimed(static_cast<float>(-1.2), PlayerUpperAction::Hold, 0, true);
+    const auto down = Aimed(static_cast<float>(1.2), PlayerUpperAction::Hold, 0, true);
+    const auto first = Aimed(0.7F, PlayerUpperAction::Shoot, 0.05, false, 0.31);
+    const auto second = Aimed(0.7F, PlayerUpperAction::Shoot, 0.05, false, 0.31);
+    for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+        CAPTURE(model.nodes[node].name);
+        CheckMatrix(up.body.globalTransforms[node], down.body.globalTransforms[node]);
+        CHECK(first.body.globalTransforms[node].values == second.body.globalTransforms[node].values);
+    }
 }

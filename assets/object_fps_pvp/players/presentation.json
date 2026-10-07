@@ -13,6 +13,10 @@
     "jump_start_seconds": 0.1,
     "jump_land_seconds": 0.1
   },
+  "aim": {
+    "up_pitch_radians": 1.4849,
+    "down_pitch_radians": 1.5236
+  },
   "upper_body_root": "spine_01",
   "weapon": {
     "character_asset_id": "object_fps_pvp.weapon.ultimate_pistol_1.world",

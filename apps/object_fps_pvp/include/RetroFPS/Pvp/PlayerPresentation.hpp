@@ -18,7 +18,8 @@ namespace fps::pvp {
 struct PlayerPresentationFrame final {
     std::uint64_t playerId{}, movementEpoch{};
     Engine::Math::Vec3 position{};
-    float yaw{};
+    // Look direction; a positive pitch looks down (the camera and ShotQuery sign).
+    float yaw{}, pitch{};
     double presentationSeconds{}, deltaSeconds{};
     // Planar speed between the two authority snapshots bracketing this sample:
     // independent of the render rate. Zero means unknown or not moving.
@@ -43,6 +44,12 @@ struct PlayerPresentationDefinition final {
     std::shared_ptr<const CharacterPresentationDefinition> character, weapon;
     std::size_t idleClip{}, walkClip{}, jogClip{}, upperBodyRoot{}, weaponNode{};
     std::size_t shootClip{}, reloadClip{}, jumpStartClip{}, jumpLoopClip{}, jumpLandClip{}, deathClip{};
+    // The upper body aims by blending these poses (their first frames) by
+    // pitch; the idle, shot and reload clips move relative to their first frame.
+    std::size_t aimUpClip{}, aimNeutralClip{}, aimDownClip{};
+    // Pitch magnitudes at which the up and down poses apply in full: the
+    // muzzle elevation of each pose relative to the neutral one.
+    double aimUpRadians{}, aimDownRadians{};
     std::vector<bool> upperBodyMask;
     Engine::Math::Vec3 anchor{};
     float scale{}, bodyHeight{}, referenceSpeed{};
@@ -100,6 +107,8 @@ struct PlayerActionPose final {
     PlayerUpperAction upper{PlayerUpperAction::Hold};
     PlayerLowerAction lower{PlayerLowerAction::Locomotion};
     double upperClipSeconds{}, lowerClipSeconds{};
+    // -1 is the full up pose, 0 neutral, 1 the full down pose.
+    float aimWeight{};
     std::uint64_t shotActionId{}, reloadActionId{};
 };
 
