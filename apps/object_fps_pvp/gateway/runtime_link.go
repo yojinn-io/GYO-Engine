@@ -71,14 +71,27 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 		return errors.New("runtime lifecycle queue full")
 	}
 	if leave := message.GetLeave(); leave != nil {
-		delete(l.inputs, leave.PlayerId)
-		delete(l.epochs, leave.PlayerId)
-		delete(l.lives, leave.PlayerId)
-		delete(l.actionWindows, leave.PlayerId)
+		l.forgetLocked(leave.PlayerId)
 	}
 	l.controls = append(l.controls, message)
 	l.notify()
 	return nil
+}
+
+// forget drops a player's pending link state: input window, epoch, life and
+// action window. A Leave does it before queuing the control; an eviction sends
+// no Leave (the Match already removed the player), so the Gateway calls it.
+func (l *runtimeLink) forget(player uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.forgetLocked(player)
+}
+
+func (l *runtimeLink) forgetLocked(player uint64) {
+	delete(l.inputs, player)
+	delete(l.epochs, player)
+	delete(l.lives, player)
+	delete(l.actionWindows, player)
 }
 
 func (l *runtimeLink) input(in *runtime.PlayerInput) error {

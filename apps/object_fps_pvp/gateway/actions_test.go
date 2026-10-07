@@ -368,3 +368,31 @@ func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
 		t.Fatal("UDP completion catch-up deadline")
 	}
 }
+
+// An eviction sends no Leave, so the Gateway forgets the evicted player's link
+// state itself: otherwise its action window keeps a slot and a replacement's
+// shots and reloads never reach the Match.
+func TestEvictionForgetsTheRuntimeLinkState(t *testing.T) {
+	s, p, _, _ := actionFixture(t)
+	l := s.link
+	l.actionWindows = map[uint64]*actionWindow{}
+	l.lives = map[uint64]uint64{}
+	if err := l.actions(&runtime.ActionBatch{PlayerId: p.playerID, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {
+		t.Fatal(err)
+	}
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: p.playerID,
+		Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 190}}
+	s.runtimeMessage(e)
+	if _, kept := l.actionWindows[p.playerID]; kept {
+		t.Fatal("evicted player's action window kept")
+	}
+	if _, kept := l.epochs[p.playerID]; kept {
+		t.Fatal("evicted player's epoch kept")
+	}
+	for id := uint64(100); id < 100+adapter.MaxPlayers; id++ {
+		if err := l.actions(&runtime.ActionBatch{PlayerId: id, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {
+			t.Fatalf("replacement %d could not deliver actions: %v", id, err)
+		}
+	}
+}
