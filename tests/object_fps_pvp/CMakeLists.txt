@@ -3,9 +3,10 @@ gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
-    ArenaDigestTests.cpp FireGateTests.cpp)
+    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
-target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json")
+target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
+    PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest)
 if(WIN32)
     target_compile_definitions(${tests} PRIVATE NOMINMAX)

@@ -11,7 +11,8 @@
   "actions": {
     "shot_seconds": 0.1666667,
     "jump_start_seconds": 0.1,
-    "jump_land_seconds": 0.1
+    "jump_land_seconds": 0.1,
+    "hit_seconds": 0.3333333
   },
   "aim": {
     "up_pitch_radians": 1.4849,

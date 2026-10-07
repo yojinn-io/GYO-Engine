@@ -37,6 +37,9 @@ struct PlayerPresentationFrame final {
     // Zero IDs mean none: the latest accepted shot and the active reload.
     std::uint64_t shotActionId{}, reloadActionId{};
     double shotSeconds{}, reloadStartSeconds{}, reloadEndSeconds{};
+    // The latest damage of this life: its count (zero means none) and time.
+    std::uint32_t damageCount{};
+    double damageSeconds{};
 };
 
 // Product-owned CPU binding. Loading needs neither a renderer nor Campaign/Enemy.
@@ -46,7 +49,7 @@ struct PlayerPresentationDefinition final {
     std::size_t shootClip{}, reloadClip{}, jumpStartClip{}, jumpLoopClip{}, jumpLandClip{}, deathClip{};
     // The upper body aims by blending these poses (their first frames) by
     // pitch; the idle, shot and reload clips move relative to their first frame.
-    std::size_t aimUpClip{}, aimNeutralClip{}, aimDownClip{};
+    std::size_t aimUpClip{}, aimNeutralClip{}, aimDownClip{}, hitClip{};
     // Pitch magnitudes at which the up and down poses apply in full: the
     // muzzle elevation of each pose relative to the neutral one.
     double aimUpRadians{}, aimDownRadians{};
@@ -59,7 +62,7 @@ struct PlayerPresentationDefinition final {
     double transitionSeconds{}, maxFrameDeltaSeconds{};
     // Contract presentation spans; the authored clips are time-scaled into
     // them. Reload follows the authoritative interval, death its own clip.
-    double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{};
+    double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{}, hitSeconds{};
     Engine::Model::Transform weaponMount{};
     Engine::Model::Pose weaponReferencePose;
 };
@@ -99,7 +102,7 @@ struct PlayerLocomotionState final {
     const PlayerPresentationFrame& frame, const PlayerPresentationDefinition& definition,
     std::string& error);
 
-enum class PlayerUpperAction : std::uint8_t { Hold, Shoot, Reload };
+enum class PlayerUpperAction : std::uint8_t { Hold, Shoot, Reload, Hit };
 enum class PlayerLowerAction : std::uint8_t { Locomotion, JumpStart, JumpLoop, JumpLand, Death };
 
 // Clip times already mapped from the contract spans; Death is full body.

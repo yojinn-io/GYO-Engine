@@ -262,6 +262,76 @@
       "replace": "    \"down_pitch_radians\": 1.3\n",
       "check": "presentation",
       "expect": "measured muzzle elevations"
+    },
+    {
+      "id": "13-shake-into-view",
+      "batch": "13",
+      "what": "The hit shake is written back into the controlled view",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "    shakePitch_ = feedback.shakePitchRadians;\n",
+      "replace": "    view_.pitch += feedback.shakePitchRadians;\n",
+      "check": "cpu",
+      "expect": "Hit shake reaches only the camera"
+    },
+    {
+      "id": "13-life-ignored",
+      "batch": "13",
+      "what": "A new life's first state replays its hits (life generation ignored)",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "    if (!seen_ || own.lifeGeneration != lifeGeneration_) {\n",
+      "replace": "    if (!seen_) {\n",
+      "check": "cpu",
+      "expect": "isolated per life"
+    },
+    {
+      "id": "13-dead-feedback",
+      "batch": "13",
+      "what": "The fatal hit still flashes and shakes",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "    if (lifeState == LifeState::Dead) {\n",
+      "replace": "    if (false) {\n",
+      "check": "cpu",
+      "expect": "suppressed by death"
+    },
+    {
+      "id": "13-direction-fixed",
+      "batch": "13",
+      "what": "The direction indicator ignores turning",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "Engine::Math::WrapRadians(*attackerBearing_ - viewYaw);",
+      "replace": "Engine::Math::WrapRadians(*attackerBearing_ - 0 * viewYaw);",
+      "check": "cpu",
+      "expect": "turns with the view"
+    },
+    {
+      "id": "13-hit-replays",
+      "batch": "13",
+      "what": "A duplicate snapshot restarts the hit effect",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "    if (own.damageCount <= damageCount_) return;\n",
+      "replace": "    if (own.damageCount < damageCount_) return;\n",
+      "check": "cpu",
+      "expect": "never replays old or late snapshots"
+    },
+    {
+      "id": "13-remote-old-life",
+      "batch": "13",
+      "what": "Damage from before the life began plays in it",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n",
+      "replace": "        if (frame.damageCount &&\n",
+      "check": "presentation",
+      "expect": "once, within its life"
+    },
+    {
+      "id": "13-remote-below-shot",
+      "batch": "13",
+      "what": "A shot or reload outranks the hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {",
+      "replace": "        if (!frame.shotActionId && !frame.reloadActionId && frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {",
+      "check": "presentation",
+      "expect": "once, within its life"
     }
   ]
 }

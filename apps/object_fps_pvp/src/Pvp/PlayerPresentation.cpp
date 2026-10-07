@@ -115,6 +115,7 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         definition->aimUpClip = clip("aim_up");
         definition->aimNeutralClip = clip("aim_neutral");
         definition->aimDownClip = clip("aim_down");
+        definition->hitClip = clip("hit");
         definition->bodyHeight = bodyHeight;
         definition->referenceSpeed = config.at("reference_speed").get<float>();
         const auto& locomotion = config.at("locomotion");
@@ -138,7 +139,9 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         definition->shotSeconds = actions.at("shot_seconds").get<double>();
         definition->jumpStartSeconds = actions.at("jump_start_seconds").get<double>();
         definition->jumpLandSeconds = actions.at("jump_land_seconds").get<double>();
-        for (const double span : {definition->shotSeconds, definition->jumpStartSeconds, definition->jumpLandSeconds})
+        definition->hitSeconds = actions.at("hit_seconds").get<double>();
+        for (const double span : {definition->shotSeconds, definition->jumpStartSeconds, definition->jumpLandSeconds,
+                                  definition->hitSeconds})
             if (!std::isfinite(span) || span <= 0)
                 throw std::runtime_error("player action spans must be finite and positive");
 
@@ -360,7 +363,8 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
             !std::isfinite(state.jumpPhaseSeconds) || !std::isfinite(definition.shotSeconds) ||
             definition.shotSeconds <= 0 || !std::isfinite(definition.jumpStartSeconds) ||
             definition.jumpStartSeconds <= 0 || !std::isfinite(definition.jumpLandSeconds) ||
-            definition.jumpLandSeconds <= 0)
+            definition.jumpLandSeconds <= 0 || !std::isfinite(frame.damageSeconds) ||
+            !std::isfinite(definition.hitSeconds) || definition.hitSeconds <= 0)
             throw std::runtime_error("player actions require finite times and positive spans");
         if (!std::isfinite(frame.pitch))
             throw std::runtime_error("player actions require a finite pitch");
@@ -394,7 +398,13 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
         }
         // Only actions of this alive period. The Match restarts combat state
         // on respawn; a tick before the life began cannot belong to it.
-        if (frame.reloadActionId && frame.reloadEndSeconds > frame.reloadStartSeconds &&
+        // A hit outranks a shot or reload; it is anchored at the latest damage,
+        // so repeated or late snapshots and several hits at once play it once.
+        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&
+            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {
+            output.upper = PlayerUpperAction::Hit;
+            output.upperClipSeconds = scaled(now - frame.damageSeconds, definition.hitSeconds, duration(definition.hitClip));
+        } else if (frame.reloadActionId && frame.reloadEndSeconds > frame.reloadStartSeconds &&
             frame.reloadStartSeconds >= frame.lifeStateSeconds &&
             now >= frame.reloadStartSeconds && now < frame.reloadEndSeconds) {
             output.upper = PlayerUpperAction::Reload;
@@ -487,9 +497,11 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
             std::size_t motionClip = definition.idleClip;
             const Pose* motion = &idle;
             if (actions.upper != PlayerUpperAction::Hold) {
-                if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload)
+                if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload &&
+                    actions.upper != PlayerUpperAction::Hit)
                     throw std::runtime_error("player pose has an invalid upper-body action");
-                motionClip = actions.upper == PlayerUpperAction::Shoot ? definition.shootClip : definition.reloadClip;
+                motionClip = actions.upper == PlayerUpperAction::Shoot ? definition.shootClip :
+                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.hitClip;
                 Require(Engine::Model::SamplePose(model, motionClip, actions.upperClipSeconds,
                     PlaybackMode::Clamp, upperAction));
                 motion = &upperAction;
@@ -668,8 +680,9 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             PlayerActionPose actions;
             if (!ResolvePlayerActions(definition, slot.locomotion, player, actions, error))
                 throw std::runtime_error(error);
+            // The prepared initial pose is the level aim pose: any pitch is sampled.
             const bool plain = actions.upper == PlayerUpperAction::Hold &&
-                actions.lower == PlayerLowerAction::Locomotion;
+                actions.lower == PlayerLowerAction::Locomotion && actions.aimWeight == 0;
             if (slot.locomotion.phaseReset && plain) {
                 if (!slot.idlePrepared) impl.Upload(slot, impl.initialPose);
                 slot.pose = impl.initialPose;

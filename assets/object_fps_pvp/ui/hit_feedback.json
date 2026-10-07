@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "flash": { "color": [0.85, 0.05, 0.05], "peak_alpha": 0.35, "seconds": 0.3 },
+  "hp_highlight": { "color": [1.0, 0.3, 0.25], "seconds": 0.6 },
+  "direction": { "radius_pixels": 110, "arc_degrees": 30, "dots": 7, "dot_pixels": 5, "color": [1.0, 0.2, 0.15], "seconds": 1.0 },
+  "shake": { "pitch_degrees": 1.0, "roll_degrees": 1.0, "seconds": 0.25 }
+}
