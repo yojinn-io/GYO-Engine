@@ -1,6 +1,6 @@
 # 第 16 批：房間上限 4 人
 
-狀態：進行中（2026-10-07 開始，分支 `claude/pvp-v6-batch16` 自 master `7886848`；規劃：ultracode workflow `wf_45d62ed8-68c`，對抗檢查的 major 3、minor 8 已處理）。程式（commit 1～7、9～11）完成，L1 本機通過；L2、L3 未開始。
+狀態：進行中（2026-10-07 開始，分支 `claude/pvp-v6-batch16` 自 master `7886848`；規劃：ultracode workflow `wf_45d62ed8-68c`，對抗檢查的 major 3、minor 8 已處理）。程式（commit 1～7、9～11）完成，L1 本機通過，L2 完成（[dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch16.zh-Hant.md)）；L3 未開始。
 執行順序在第 13 批之後、第 14 批之前（D22、D23）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md)。
 
 盤點的基準是 master `3607fe3`。開始時已在 `7886848` 重新核對（第 11～13 批之後）：Gateway、Match、Client 解碼與 arena 的位置不變；Client 的遠端呈現槽在 `PvpApplication.cpp:773`（容量 1），phase reanchor 的基準在 `:630`、`:654`（在迴圈內逐人更新，多個遠端時互相干擾）。
