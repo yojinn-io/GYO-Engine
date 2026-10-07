@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -82,6 +83,12 @@ struct PresentedMovementObservation final {
     double prepareWorldMilliseconds{}, remoteSubmitMilliseconds{};
 };
 
+// The remote player the diagnostics observe: the chosen one while it is in the
+// snapshot (none otherwise), or the last remote in snapshot order when none is
+// chosen. A two-player room observes its only remote either way.
+[[nodiscard]] std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, PlayerId local,
+                                                           std::optional<PlayerId> chosen) noexcept;
+
 struct PvpApplicationOptions final {
     std::string title{"Object_FPS PVP"};
     std::string gpuDriver{"auto"};
@@ -108,6 +115,10 @@ public:
     [[nodiscard]] Engine::Runtime::RuntimeControl Render(const Engine::Runtime::FrameContext& frame) override;
 
     void SetGatewayAddress(std::string address);
+    // Diagnostics only (acceptance probes in rooms with more remotes): which
+    // remote RemoteMovement and PresentedMovement describe. Presentation and
+    // simulation are unchanged.
+    void ObserveRemote(std::optional<PlayerId> playerId);
     [[nodiscard]] ClientConnection& Connection();
     [[nodiscard]] Engine::Render::Renderer& Renderer();
     [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& RenderDevice();

@@ -116,6 +116,7 @@ struct PvpApplication::Impl final {
     SnapshotTimeline timeline;
     std::uint64_t connectionGeneration{}, lastSnapshotTick{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
+    std::optional<PlayerId> observedRemote;
     std::optional<PresentedMovementObservation> presentedMovement;
     std::uint64_t skippedPresentationFrames{};
     std::string address{"127.0.0.1:8080"};
@@ -585,39 +586,42 @@ struct PvpApplication::Impl final {
         // each against the previous frame's value, and update it once per frame.
         const auto reanchorsBefore = characterPhaseReanchors;
         std::optional<std::uint64_t> reanchorsNow;
+        const auto observed = ObservedRemotePlayer(*state.snapshot, state.playerId, observedRemote);
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
             const auto sampled = timeline.Sample(player.playerId, presentationTime);
             const auto& presented = sampled ? sampled->player : player;
             const auto position = presented.position;
-            // Diagnostics observe one remote player: the last in snapshot order.
-            remoteMovement.emplace();
-            auto& observation = *remoteMovement;
-            observation.playerId = player.playerId;
-            observation.renderPosition = position;
-            observation.movementEpoch = presented.movementEpoch;
-            observation.lifeGeneration = presented.lifeGeneration;
-            observation.lifeState = presented.lifeState;
-            observation.yaw = presented.yaw;
-            observation.pitch = presented.pitch;
-            observation.ingressHistoryDrops = ingressHistoryDrops;
-            if (sampled) {
-                observation.lowerTick = sampled->lowerTick;
-                observation.upperTick = sampled->upperTick;
-                observation.presentationTick = sampled->presentationTick;
-                observation.interpolationAlpha = sampled->alpha;
-                observation.latestReceiveAgeSeconds = sampled->latestReceiveAgeSeconds;
-                observation.missingFutureSnapshot = sampled->missingFutureSnapshot;
-                observation.holdSeconds = sampled->holdSeconds;
-                observation.totalHoldSeconds = sampled->totalHoldSeconds;
-                observation.historySize = sampled->historySize;
-                observation.holdCount = sampled->holdCount;
-                observation.gapCount = sampled->gapCount;
-                observation.historyEvictions = sampled->historyEvictions;
-                observation.phaseReanchors = sampled->phaseReanchors;
-                observation.holding = sampled->holding;
-                observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
-                observation.upperResolvedCommand = sampled->upperResolvedCommand;
+            // Diagnostics observe one remote player (ObservedRemotePlayer).
+            if (player.playerId == observed) {
+                remoteMovement.emplace();
+                auto& observation = *remoteMovement;
+                observation.playerId = player.playerId;
+                observation.renderPosition = position;
+                observation.movementEpoch = presented.movementEpoch;
+                observation.lifeGeneration = presented.lifeGeneration;
+                observation.lifeState = presented.lifeState;
+                observation.yaw = presented.yaw;
+                observation.pitch = presented.pitch;
+                observation.ingressHistoryDrops = ingressHistoryDrops;
+                if (sampled) {
+                    observation.lowerTick = sampled->lowerTick;
+                    observation.upperTick = sampled->upperTick;
+                    observation.presentationTick = sampled->presentationTick;
+                    observation.interpolationAlpha = sampled->alpha;
+                    observation.latestReceiveAgeSeconds = sampled->latestReceiveAgeSeconds;
+                    observation.missingFutureSnapshot = sampled->missingFutureSnapshot;
+                    observation.holdSeconds = sampled->holdSeconds;
+                    observation.totalHoldSeconds = sampled->totalHoldSeconds;
+                    observation.historySize = sampled->historySize;
+                    observation.holdCount = sampled->holdCount;
+                    observation.gapCount = sampled->gapCount;
+                    observation.historyEvictions = sampled->historyEvictions;
+                    observation.phaseReanchors = sampled->phaseReanchors;
+                    observation.holding = sampled->holding;
+                    observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
+                    observation.upperResolvedCommand = sampled->upperResolvedCommand;
+                }
             }
             PlayerPresentationFrame characterFrame;
             characterFrame.playerId = player.playerId;
@@ -1095,6 +1099,18 @@ int PvpApplication::Run() {
     return impl_->exitCode;
 }
 void PvpApplication::SetGatewayAddress(std::string address) { impl_->address = std::move(address); }
+void PvpApplication::ObserveRemote(std::optional<PlayerId> playerId) { impl_->observedRemote = playerId; }
+
+std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, const PlayerId local,
+                                             const std::optional<PlayerId> chosen) noexcept {
+    std::optional<PlayerId> last;
+    for (const auto& player : snapshot.players) {
+        if (player.playerId == local) continue;
+        if (chosen && player.playerId == *chosen) return chosen;
+        last = player.playerId;
+    }
+    return chosen ? std::nullopt : last;
+}
 ClientConnection& PvpApplication::Connection() { return impl_->connection; }
 Engine::Render::Renderer& PvpApplication::Renderer() { return impl_->renderer; }
 Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevice() { return *impl_->device; }

@@ -422,6 +422,16 @@
       "replace": "",
       "check": "go",
       "expect": "evicted player's action window kept"
+    },
+    {
+      "id": "16-observed-falls-back",
+      "batch": "16",
+      "what": "A chosen remote that left falls back to the last remote",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpApplication.cpp",
+      "find": "    return chosen ? std::nullopt : last;",
+      "replace": "    return last;",
+      "check": "presentation",
+      "expect": "Diagnostics observe the chosen remote, else the last remote in snapshot order"
     }
   ]
 }
