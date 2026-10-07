@@ -581,11 +581,16 @@ struct PvpApplication::Impl final {
         }
         const auto presentationTime = Clock::now();
         std::vector<PlayerPresentationFrame> characterFrames;
+        // The timeline's reanchor count is shared by every remote player: compare
+        // each against the previous frame's value, and update it once per frame.
+        const auto reanchorsBefore = characterPhaseReanchors;
+        std::optional<std::uint64_t> reanchorsNow;
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
             const auto sampled = timeline.Sample(player.playerId, presentationTime);
             const auto& presented = sampled ? sampled->player : player;
             const auto position = presented.position;
+            // Diagnostics observe one remote player: the last in snapshot order.
             remoteMovement.emplace();
             auto& observation = *remoteMovement;
             observation.playerId = player.playerId;
@@ -627,7 +632,7 @@ struct PvpApplication::Impl final {
             characterFrame.deltaSeconds = deltaSeconds;
             characterFrame.planarSpeed = sampled ? sampled->planarSpeed : 0;
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
-                sampled->phaseReanchors == characterPhaseReanchors;
+                sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;
             characterFrame.grounded = presented.grounded;
             characterFrame.verticalVelocity = presented.verticalVelocity;
@@ -651,8 +656,9 @@ struct PvpApplication::Impl final {
                 }
             }
             characterFrames.push_back(characterFrame);
-            if (sampled) characterPhaseReanchors = sampled->phaseReanchors;
+            if (sampled) reanchorsNow = sampled->phaseReanchors;
         }
+        if (reanchorsNow) characterPhaseReanchors = *reanchorsNow;
         const auto characterStarted = Clock::now();
         if (!players->Submit(characterFrames, queue, lastError)) return false;
         remoteSubmitMilliseconds = Milliseconds(Clock::now(), characterStarted);
