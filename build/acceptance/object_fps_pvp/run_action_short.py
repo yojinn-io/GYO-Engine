@@ -15,6 +15,7 @@ import time
 import urllib.request
 
 from run_network import free_port, wait_for_match_ready
+from gui_bots import PassiveBots, add_arguments as add_bot_arguments, check_arguments as check_bot_arguments
 from acceptance_util import digest
 
 CASES = {'action30': ('--action-short', 30), 'action60': ('--action-short', 60),
@@ -128,19 +129,24 @@ def run_case(args, name):
                 if time.monotonic() >= deadline:
                     raise RuntimeError('Real Gateway startup timed out')
                 time.sleep(.03)
+        bots = PassiveBots(args.bots, args.quad_probe, args.arena, directory)
         gui = [start(role, [str(args.gui_probe), mode, '--fps', str(fps), '--arena-root', str(args.arena_root),
                             '--gateway', f'127.0.0.1:{http}', '--role', role, '--gpu-driver', args.gpu_driver,
-                            '--output', str(directory)]) for role in ('create', 'join')]
+                            '--output', str(directory)] + bots.gui_arguments()) for role in ('create', 'join')]
         deadline = time.monotonic() + 60
         # Both roles finish their own bounded runs, so each report is saved even
         # when the other role fails: the actor signals the target either way.
         while any(process.poll() is None for process in gui):
             if time.monotonic() >= deadline:
                 raise RuntimeError('Bounded action GUI deadline exceeded')
+            bots.poll(http, start)
             time.sleep(.05)
+        bots.stop()
+        result['bots'] = bots.evidence()
         result['evidence'] = summarize(directory, mode == '--action-capture')
         result['exit_codes'] = {role: process.poll() for role, process in zip(('create', 'join'), gui)}
-        result['passed'] = result['evidence']['passed'] and all(code == 0 for code in result['exit_codes'].values())
+        result['passed'] = (result['evidence']['passed'] and all(code == 0 for code in result['exit_codes'].values()) and
+                            (not args.bots or result['bots']['exit_code'] == 0))
         if not result['passed']:
             result['error'] = '; '.join(result['evidence']['errors']) or 'GUI exited with failure'
     except Exception as error:
@@ -170,7 +176,9 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--gpu-driver', default='auto', choices=('auto', 'vulkan', 'd3d12', 'metal'))
     parser.add_argument('--case', action='append', choices=tuple(CASES))
+    add_bot_arguments(parser)
     args = parser.parse_args()
+    check_bot_arguments(parser, args)
     for name in ('match', 'gateway', 'gui_probe', 'arena', 'arena_root', 'output'):
         setattr(args, name, getattr(args, name).resolve())
     for name in ('match', 'gateway', 'gui_probe', 'arena'):

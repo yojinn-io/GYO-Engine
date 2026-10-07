@@ -12,6 +12,7 @@ import traceback
 import urllib.request
 from command_evidence import analyze_commands
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
+from gui_bots import PassiveBots, add_arguments as add_bot_arguments, check_arguments as check_bot_arguments
 
 
 def require_verified_life_resets(evidence):
@@ -325,6 +326,8 @@ def wayland_warning(gui, report_only, environ=None, platform=None):
 
 
 def run_round(args, output, fps):
+    # Callers that predate passive bots pass no bot options: a room of the two GUIs.
+    bot_count, quad_probe = getattr(args, 'bots', 0), getattr(args, 'quad_probe', None)
     output.mkdir(parents=True,exist_ok=False)
     def fingerprint(path):
         digest=hashlib.sha256()
@@ -336,7 +339,7 @@ def run_round(args, output, fps):
         'runner':fingerprint(Path(__file__).resolve()),
         'fps':fps,'duration':args.duration,'gui':args.gui,'combat':args.combat,'short':args.short,'soak':args.soak,
         'stall_ms':args.stall_ms,'monotonic_start_ns':time.monotonic_ns(),
-        'steady_clock_start_ns':steady_clock_ns()},indent=2)+'\n')
+        'steady_clock_start_ns':steady_clock_ns(),**({'bots':bot_count} if bot_count else {})},indent=2)+'\n')
     processes, handles = [], []
     def start(name, command):
         log=(output/(name+'.log')).open('w');handles.append(log)
@@ -360,25 +363,40 @@ def run_round(args, output, fps):
                 if time.monotonic()>deadline:raise
                 time.sleep(.05)
         clients=[]
+        bots=PassiveBots(bot_count,quad_probe,args.arena,output)
         if args.gui:
             for role in ('create','join'):
                 command = [args.probe,'--latency-short' if args.short else '--latency','--role',role,'--arena-root',args.arena.parent,
                     '--gateway',f'127.0.0.1:{http}','--output',output,'--duration',args.duration,
                     '--fps',fps,'--events',args.events]
                 if args.combat:command.append('--combat')
-                clients.append(start(role,command))
+                clients.append(start(role,command+bots.gui_arguments()))
         else:
             command=[args.probe,'--arena',args.arena,'--gateway',f'127.0.0.1:{http}',
                 '--output',output,'--duration',args.duration,'--fps',fps]
             if args.stall_ms:command.extend(['--stall-at',5,'--stall-ms',args.stall_ms])
             clients.append(start('timing',command))
+        if bot_count:
+            # The bots join once both GUIs are in the room and leave after the GUIs finish.
+            deadline=time.monotonic()+args.duration+60
+            while any(client.poll() is None for client in clients):
+                if time.monotonic()>deadline:raise RuntimeError('Client probe timed out; inspect logs')
+                bots.poll(http,start);time.sleep(.05)
+            if any(client.returncode for client in clients):raise RuntimeError('Client probe failed; inspect logs')
+            if bots.stop()!=0:raise RuntimeError('Passive bots did not leave cleanly; inspect bots.log')
         for client in clients:
             if client.wait(timeout=args.duration+60):raise RuntimeError('Client probe failed; inspect logs')
         # Flush server diagnostics before analyzing; terminate is graceful SIGTERM.
         gateway.terminate();gateway.wait(timeout=10)
         match.terminate();match.wait(timeout=10)
         if match.returncode:raise RuntimeError('Match failed while flushing diagnostics')
-        evidence=analyze_commands(output,enforce=not args.report_only and not args.stall_ms)
+        if bot_count:
+            # command_evidence covers two players; the bots' room uses its N-player form.
+            from quad_evidence import command_metrics
+            evidence=command_metrics(output,enforce=not args.report_only)
+            evidence['bots']=bots.evidence()
+        else:
+            evidence=analyze_commands(output,enforce=not args.report_only and not args.stall_ms)
         if args.gui:
             from presentation_evidence import analyze_latency, analyze_short_latency
             evidence['presentation']=(analyze_short_latency if args.short else analyze_latency)(output)
@@ -521,7 +539,10 @@ def main():
     p.add_argument('--report-only',action='store_true');p.add_argument('--rounds',type=int,default=1)
     p.add_argument('--duration',type=float,default=120);p.add_argument('--fps',type=int,default=60)
     p.add_argument('--events',type=int,default=200);p.add_argument('--stall-ms',type=int,default=0)
+    add_bot_arguments(p)
     args=p.parse_args()
+    check_bot_arguments(p,args)
+    if args.bots and not args.gui:p.error('--bots fills the room of the --gui probes')
     if args.rounds<1:p.error('--rounds must be positive')
     if args.fps not in (30,60,144):p.error('--fps must be 30, 60 or 144')
     for key in ('match','gateway','probe','arena','output'):setattr(args,key,getattr(args,key).resolve())
