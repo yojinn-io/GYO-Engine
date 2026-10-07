@@ -21,6 +21,10 @@ def unexpected_changes():
     raise AssertionError("Changed paths must not be computed for this event")
 
 
+def unexpected_increment():
+    raise AssertionError("The documentation-increment check must not run for this event")
+
+
 def pull_request(draft):
     return {"pull_request": {"number": 7, "draft": draft}}
 
@@ -69,6 +73,70 @@ class ScopePolicyTests(unittest.TestCase):
                 self.assertEqual(select_scope("pull_request", pull_request(False), lambda: paths, live_draft=False),
                                  expected)
 
+    def test_documentation_increment_reuses_a_verified_l1_result(self):
+        code = lambda: ["engine/a.cpp", "docs/a.md"]  # noqa: E731
+        self.assertEqual(select_scope("pull_request", pull_request(False), code, False, lambda: ("c0ffee", "why")),
+                         Scope(run_l1=False, run_quick=False, reason="docs-increment", detail="why"))
+        self.assertEqual(select_scope("pull_request", pull_request(False), code, False, lambda: (None, "why not")),
+                         Scope(run_l1=True, run_quick=False, reason="pull-request", detail="why not"))
+        # Without the check the classification is unchanged.
+        self.assertEqual(select_scope("pull_request", pull_request(False), code, False),
+                         Scope(run_l1=True, run_quick=False, reason="pull-request"))
+
+    def test_documentation_increment_errors_run_l1(self):
+        for error in (ScopeError("listing"), OSError("gh missing"), subprocess.TimeoutExpired("gh", 60), ValueError("json")):
+            def failing(error=error):
+                raise error
+            with self.subTest(error=type(error).__name__):
+                scope = select_scope("pull_request", pull_request(False), lambda: ["engine/a.cpp"], False, failing)
+                self.assertEqual((scope.run_l1, scope.run_quick, scope.reason), (True, False, "pull-request"))
+                self.assertIn("failed", scope.detail)
+
+    def test_documentation_increment_is_only_checked_for_ready_pull_requests_with_code_changes(self):
+        for event_name in ("push", "workflow_dispatch"):
+            self.assertEqual(select_scope(event_name, {}, unexpected_changes, None, unexpected_increment).reason,
+                             "integration")
+        self.assertEqual(select_scope("pull_request", pull_request(True), unexpected_changes, True,
+                                      unexpected_increment).reason, "draft")
+        self.assertEqual(select_scope("pull_request", pull_request(False), lambda: ["docs/a.md"], False,
+                                      unexpected_increment).reason, "docs-only")
+
+    def test_l1_rows_must_all_have_passed_in_github_actions(self):
+        def run(platform, status="completed", conclusion="success", app="github-actions"):
+            return {"name": f"L1 / {platform}", "status": status, "conclusion": conclusion, "app": {"slug": app}}
+
+        def listing(runs):
+            return {"total_count": len(runs), "check_runs": runs}
+
+        passed = [run(platform) for platform in PLATFORMS]
+        self.assertTrue(ci_scope.l1_rows_passed(listing(passed + [run("extra", conclusion="failure")]), PLATFORMS))
+        for index, platform in enumerate(PLATFORMS):
+            with self.subTest(platform=platform):
+                self.assertFalse(ci_scope.l1_rows_passed(listing(passed[:index] + passed[index + 1:]), PLATFORMS))
+                for status, conclusion in (("completed", "failure"), ("completed", "cancelled"), ("completed", "skipped"),
+                                           ("completed", "neutral"), ("in_progress", None), ("queued", None)):
+                    changed = passed[:index] + [run(platform, status, conclusion)] + passed[index + 1:]
+                    self.assertFalse(ci_scope.l1_rows_passed(listing(changed), PLATFORMS), (status, conclusion))
+                # A same-named row from another app never verifies a commit.
+                spoofed = passed[:index] + [run(platform, app="other-app")] + passed[index + 1:]
+                self.assertFalse(ci_scope.l1_rows_passed(listing(spoofed), PLATFORMS))
+                # Every row of a name must have passed.
+                twice = passed + [run(platform, conclusion="failure")]
+                self.assertFalse(ci_scope.l1_rows_passed(listing(twice), PLATFORMS))
+        for malformed in ({"total_count": len(passed) + 1, "check_runs": passed}, {"check_runs": passed},
+                          {"total_count": 0}, [], None):
+            with self.subTest(malformed=malformed), self.assertRaises(ScopeError):
+                ci_scope.l1_rows_passed(malformed, PLATFORMS)
+
+    def test_failed_check_run_lookup_raises_and_runs_l1(self):
+        # Any executable that rejects the gh arguments stands in for a failed API call.
+        lookup = ci_scope.github_l1_lookup("owner/repository", PLATFORMS, gh=sys.executable)
+        with self.assertRaises(ScopeError):
+            lookup("0" * 40)
+        scope = select_scope("pull_request", pull_request(False), lambda: ["engine/a.cpp"], False,
+                             lambda: (lookup("0" * 40), "unreachable"))
+        self.assertEqual((scope.run_l1, scope.reason), (True, "pull-request"))
+
     def test_unclassifiable_events_fail_closed(self):
         for event in ({}, {"pull_request": None}, {"pull_request": []}, []):
             with self.subTest(event=event), self.assertRaises(ScopeError):
@@ -105,8 +173,8 @@ class ScopePolicyTests(unittest.TestCase):
                          ("macos-arm64", "rosetta2"))
 
 
-class MergeChangeTests(unittest.TestCase):
-    """Exercise the real git commands against GitHub-shaped merge commits."""
+class GitRepositoryCase(unittest.TestCase):
+    """A throwaway repository with one base commit on main."""
 
     def setUp(self):
         temporary = TemporaryDirectory(prefix="gyo-ci-scope-")
@@ -139,6 +207,11 @@ class MergeChangeTests(unittest.TestCase):
     def commit(self, message):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD").strip()
+
+
+class MergeChangeTests(GitRepositoryCase):
+    """Exercise the real git commands against GitHub-shaped merge commits."""
 
     def merge_like_github(self, branch_change, base_change):
         """Merge a topic branch into an advanced base with --no-ff, as refs/pull/N/merge does."""
@@ -184,6 +257,105 @@ class MergeChangeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         outputs = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
         self.assertEqual((outputs["run_l1"], outputs["run_quick"], outputs["reason"]), ("false", "false", "docs-only"))
+
+
+class DocumentationIncrementTests(GitRepositoryCase):
+    """verified_increment against real pull request histories merged as refs/pull/N/merge."""
+
+    def branch(self, *changes):
+        """Commit each change on a topic branch from main; returns the commits, oldest first."""
+        self.git("checkout", "-q", "-b", "topic")
+        commits = []
+        for index, change in enumerate(changes):
+            change()
+            commits.append(self.commit(f"topic {index}"))
+        return commits
+
+    def merge_into_main(self):
+        self.git("checkout", "-q", "main")
+        self.git("merge", "-q", "--no-ff", "-m", "merge", "topic")
+
+    def find(self, passed, limit=ci_scope.INCREMENT_LIMIT):
+        asked = []
+
+        def l1_passed(commit):
+            asked.append(commit)
+            return commit in passed
+        commit, note = ci_scope.verified_increment(self.repository, l1_passed, limit=limit)
+        return commit, note, asked
+
+    def code(self, content):
+        return lambda: self.write("engine/a.cpp", content)
+
+    def docs(self, content):
+        return lambda: self.write("docs/guide.md", content)
+
+    def test_nearest_verified_commit_whose_code_equals_the_head(self):
+        code, docs1, docs2 = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"), self.docs("v3\n"))
+        self.merge_into_main()
+        commit, note, asked = self.find({code})
+        self.assertEqual(commit, code)
+        self.assertIn("only under docs/", note)
+        # The head itself is never its own evidence; the walk stops at the first verified commit.
+        self.assertEqual(asked, [docs1, code])
+        self.assertEqual(self.find({code, docs1})[0], docs1)
+        self.assertEqual(ci_scope.merge_parents(self.repository)[1], docs2)
+
+    def test_no_reuse_without_a_verified_commit_or_beyond_the_limit(self):
+        code, docs1, docs2 = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"), self.docs("v3\n"))
+        self.merge_into_main()
+        # Past the code commit the walk reaches the base, which differs in code.
+        commit, note, asked = self.find(set())
+        self.assertIsNone(commit)
+        self.assertIn("outside docs/", note)
+        self.assertEqual(asked, [docs1, code])
+        self.assertIsNone(self.find({docs2})[0])
+        commit, note, asked = self.find({code}, limit=1)
+        self.assertIsNone(commit)
+        self.assertIn("within 1 commits", note)
+        self.assertEqual(asked, [docs1])
+
+    def test_code_after_the_verified_commit_runs_l1(self):
+        code, later, _ = self.branch(self.code("int a = 1;\n"), lambda: self.write("engine/b.cpp", "int b;\n"),
+                                     self.docs("v2\n"))
+        self.merge_into_main()
+        commit, note, asked = self.find({code})
+        self.assertIsNone(commit)
+        self.assertIn("outside docs/", note)
+        self.assertEqual(asked, [later])
+        self.assertEqual(self.find({later})[0], later)
+
+    def test_moving_code_into_docs_is_a_code_change(self):
+        code, _, _ = self.branch(self.code("int a = 1;\n"), lambda: self.git("mv", "engine/a.cpp", "docs/a.cpp"),
+                                 self.docs("v2\n"))
+        self.merge_into_main()
+        self.assertIsNone(self.find({code})[0])
+
+    def test_an_advanced_base_runs_l1(self):
+        # The verified commit was tested against an older base; the merge now
+        # also contains newer base code, so its tree was never tested.
+        code, _ = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"))
+        self.git("checkout", "-q", "main")
+        self.write("engine/c.cpp", "int c;\n")
+        self.commit("base advanced")
+        self.git("merge", "-q", "--no-ff", "-m", "merge", "topic")
+        commit, note, asked = self.find({code})
+        self.assertIsNone(commit)
+        self.assertIn("not an ancestor", note)
+        self.assertEqual(asked, [])
+
+    def test_a_verified_merge_of_the_base_into_the_branch_is_reused(self):
+        self.branch(self.code("int a = 1;\n"))
+        self.git("checkout", "-q", "main")
+        self.write("engine/c.cpp", "int c;\n")
+        self.commit("base advanced")
+        self.git("checkout", "-q", "topic")
+        self.git("merge", "-q", "--no-ff", "-m", "update from main", "main")
+        updated = self.git("rev-parse", "HEAD").strip()
+        self.write("docs/guide.md", "v2\n")
+        self.commit("docs")
+        self.merge_into_main()
+        self.assertEqual(self.find({updated})[0], updated)
 
 
 class CommandLineTests(unittest.TestCase):

@@ -27,10 +27,12 @@ jobs:
     name: Select CI scope
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Reading the live draft state needs only read access to pull requests.
+    # Reading the live draft state needs read access to pull requests; reusing
+    # an earlier L1 result of the pull request reads its check runs.
     permissions:
       contents: read
       pull-requests: read
+      checks: read
     outputs:
       run_l1: ${{ steps.scope.outputs.run_l1 }}
       run_quick: ${{ steps.scope.outputs.run_quick }}
@@ -40,14 +42,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          # Both parents of GitHub's pull request test merge commit.
-          fetch-depth: 2
+          # Full history: both parents of GitHub's pull request test merge
+          # commit, and the pull request history the documentation-increment
+          # check walks back through.
+          fetch-depth: 0
           persist-credentials: false
       # The classifier decides which tiers run, so its own policy tests run
       # before it; a broken classifier must not silently skip the merge gate.
       - name: Test the CI scope and gate policies
         run: python -m unittest discover -s tests/common/ci -v
-      - name: Classify draft, documentation-only and integration events
+      - name: Classify draft, documentation-only, documentation-increment and integration events
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -59,7 +63,7 @@ jobs:
             # A re-run replays the original payload, so its draft flag can be
             # stale; the current state decides whether L1 may be skipped.
             draft=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .draft)
-            arguments+=(--live-draft "$draft")
+            arguments+=(--live-draft "$draft" --github-repository "$GITHUB_REPOSITORY")
           fi
           python build/ci/common/ci_scope.py "${arguments[@]}" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 

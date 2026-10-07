@@ -55,6 +55,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 推送 feature 分支 | 無 | 不執行 CI（Cross-platform CI 的 push 觸發只限 master） | — |
 | 建立 Draft PR 或推送到 Draft PR | Cross-platform CI、Package trial | `Select CI scope`（CI 政策測試與範圍判定，理由 `draft`）。L1／Quick 略過，`CI gate` 以預期略過通過。Package trial 在沒有標籤時不建置 | `Select CI scope`、`CI gate`、`Select trial packaging`（略過的 job 也會顯示） |
 | 只變更 `docs/` 底下的 PR | 同上 | 理由 `docs-only`。略過 L1，`CI gate` 通過 | 同上 |
+| 已變更程式的 Ready PR，再推送只改 `docs/` 的 commit | 同上 | 理由 `docs-increment`。沿用較早一個 commit 已通過的 L1，略過 L1，`CI gate` 通過；條件見下方。條件不成立時理由為 `pull-request`，照常執行 L1 | 同上 |
 | Ready 的 PR（建立、推送、改為 Ready、重新開啟） | 同上 | 理由 `pull-request`。執行四列 `L1 / <platform>`；不跑 Quick，也不封裝 | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64`、`Quick acceptance`（略過）、`CI gate`、`Select trial packaging`（建立／推送／重新開啟時） |
 | 開啟中的 PR 加上 `package` 標籤 | Package trial | 以 Quick 封裝全部產品並上傳 Actions artifacts；標籤存在期間，每次推送都重新建置 | `Trial packages / ...`（不是必要檢查） |
 | 手動執行 **Package trial** | Package trial | 在所選分支執行相同的 Quick 封裝 | — |
@@ -65,6 +66,13 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 
 - 範圍判定（`build/ci/common/ci_scope.py`）在 job 內進行，不使用觸發條件的 path／draft 篩選，因此 `CI gate` 在每個 PR 事件都會回報。
 - `docs-only` 只認以 `docs/` 開頭的路徑。變更根目錄 `README*.md`、`AGENTS.md` 等檔案的 PR 會執行 L1。重新命名會拆開判定，從 `docs/` 以外移入 `docs/` 的檔案也算非文件變更。
+- `docs-increment`：從 PR head 的前一個 commit 沿第一親代往回找，最多 20 個，找到第一個同時滿足下列條件的 commit，就沿用它的 L1。
+  - 四列 `L1 / <platform>` 的最新 check run 都是 GitHub Actions 的 `success`。略過、取消、失敗或尚未完成都不算。
+  - 從它到 head 的變更只在 `docs/` 底下，判定方式與 `docs-only` 相同。
+  - 目前 master 的尖端是它的祖先。master 只會前進，所以它當時測試的合併結果就是它本身；現在的合併結果就是 head，兩者的程式完全相同。
+  - master 前進了、中間有程式變更、程式那次推送的 L1 被新推送取消、或讀取 check run 失敗，一律照常執行 L1。最壞情況是多跑一次，不會略過未測試的程式。
+  - `Select CI scope` 的 Summary 會寫出沿用的 commit，或不沿用的原因。
+  - 讀取 check run 需要 `checks: read`，往回找需要完整歷史（checkout 的 `fetch-depth: 0`）。前提是 master 不改寫歷史（不 force push）。
 - Draft 判定使用執行開始時讀取的 PR 目前狀態；重新執行舊的 Draft 執行時，若 PR 已改為 Ready 就會跑 L1，仍是 Draft 則再次略過。
 - 同一 PR 的新推送會取消舊執行；master 的執行彼此不取消。
 - 只改 PR 目標分支（`edited`）不會重新執行。目前未支援 merge queue（`merge_group`）；啟用前須先加入該觸發與範圍判定。
@@ -75,7 +83,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 建議以 branch protection（或 ruleset）把 master 的必要狀態檢查**只設為 `CI gate`**。這項設定在 GitHub 的 Settings → Branches（或 Rules → Rulesets）進行，不在儲存庫檔案中。
 
 - `CI gate` 一定會執行；只有在 `Select CI scope` 成功、被選中的層級（L1、Quick）全部 `success`、未選中的層級為 `skipped` 時才通過。失敗、取消或非預期的略過都算失敗。
-- 不要把 `L1 / <platform>` 或 Quick 各列個別設為必要檢查；它們在 Draft 與 docs-only 時會被略過，個別設定會讓 PR 無法合併。
+- 不要把 `L1 / <platform>` 或 Quick 各列個別設為必要檢查；它們在 Draft、docs-only 與 docs-increment 時會被略過，個別設定會讓 PR 無法合併。
 - Package trial 的 check 不設為必要檢查。
 
 ## 5. 平台與驗證等級
