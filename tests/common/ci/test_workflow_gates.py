@@ -207,10 +207,12 @@ class WorkflowGateTests(unittest.TestCase):
 
     def test_only_release_draft_and_snapshot_jobs_can_write_repository_contents(self):
         # Every permissions key of every workflow, exactly: contents is the only
-        # scope ever written, and pull-requests: read is the only extra scope.
+        # scope ever written; pull-requests: read and, for the CI scope, checks:
+        # read are the only extra scopes.
         read, pull_requests = {"contents": "read"}, {"contents": "read", "pull-requests": "read"}
         expected = {
-            "cross-platform.yml": {"workflow": read, "scope": pull_requests, "snapshot": {"contents": "write"}},
+            "cross-platform.yml": {"workflow": read, "scope": {**pull_requests, "checks": "read"},
+                                   "snapshot": {"contents": "write"}},
             "prepare-release.yml": {"workflow": read, "draft": {"contents": "write"}},
             "build-and-validate.yml": {"workflow": read},
             "package-trial.yml": {"workflow": read, "select": pull_requests},
@@ -492,7 +494,7 @@ xvfb-run() {
     def test_scope_job_alone_selects_tiers_through_the_tested_helper(self):
         scope = job_block(self.quick, "scope")
         self.assertIn("ref: ${{ github.sha }}", step_using(scope, "actions/checkout"))
-        self.assertIn("fetch-depth: 2", step_using(scope, "actions/checkout"))
+        self.assertIn("fetch-depth: 0", step_using(scope, "actions/checkout"))
         classifier = step_with(scope, "ci_scope.py")
         self.assertRegex(classifier, r"(?m)^        id: scope$")
         command = run_script(classifier)
@@ -512,8 +514,10 @@ xvfb-run() {
             "PR_NUMBER": "${{ github.event.pull_request.number }}",
             "GH_TOKEN": "${{ github.token }}",
         })
-        # Reading the live draft state is the only extra permission.
-        self.assertRegex(scope, r"(?m)^    permissions:\n      contents: read\n      pull-requests: read\n    outputs:$")
+        # Reading the live draft state and earlier check runs are the only extra permissions.
+        self.assertRegex(scope, r"(?m)^    permissions:\n      contents: read\n      pull-requests: read\n"
+                                r"      checks: read\n    outputs:$")
+        self.assertIn("--github-repository", python_options)
         # The classifier's own policy tests run first, exactly as in Quick.
         steps = steps_of(scope)
         tests = step_with(scope, "unittest discover")
@@ -572,8 +576,11 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                                                  "--event-path", "event.json"])
                 if expected_draft is None:
                     self.assertNotIn("--live-draft", arguments)
+                    # Earlier L1 results are reused only inside a pull request.
+                    self.assertNotIn("--github-repository", arguments)
                 else:
                     self.assertEqual(arguments[arguments.index("--live-draft") + 1], expected_draft)
+                    self.assertEqual(arguments[arguments.index("--github-repository") + 1], "owner/repository")
 
     def test_actual_ci_gate_accepts_only_selected_successes_and_unselected_skips(self):
         bash = find_bash()

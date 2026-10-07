@@ -55,6 +55,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | Feature branch への push | なし | CI は動きません（Cross-platform CI の push trigger は master だけ） | — |
 | Draft PR の作成・push | Cross-platform CI、Package trial | `Select CI scope`（CI policy tests と範囲判定、理由 `draft`）。L1／Quick は skip、`CI gate` は意図した skip として成功。Package trial は label がなければ build しません | `Select CI scope`、`CI gate`、`Select trial packaging`（skip された job も表示） |
 | `docs/` 配下だけを変える PR | 同上 | 理由 `docs-only`。L1 を skip し、`CI gate` は成功 | 同上 |
+| コードを変えた Ready PR に `docs/` 配下だけを変える commit を push | 同上 | 理由 `docs-increment`。より前の commit で成功した L1 を再利用して L1 を skip し、`CI gate` は成功。条件は下記。満たさない場合は理由 `pull-request` で通常どおり L1 を実行 | 同上 |
 | Ready の PR（作成、push、Ready への変更、reopen） | 同上 | 理由 `pull-request`。`L1 / <platform>` を 4 行実行。Quick と封装はしません | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64`、`Quick acceptance`（skip）、`CI gate`、`Select trial packaging`（open／push／reopen 時） |
 | Open な PR に `package` label | Package trial | Quick 封装（全製品）を Actions artifacts として upload。Label がある間は push のたびに再 build | `Trial packages / ...`（required ではない） |
 | **Package trial** の手動実行 | Package trial | 選んだ branch で同じ Quick 封装 | — |
@@ -65,6 +66,13 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 
 - 範囲判定（`build/ci/common/ci_scope.py`）は job の中で行い、trigger の path／draft filter は使いません。そのため `CI gate` はすべての PR event で報告されます。
 - `docs-only` の判定対象は `docs/` で始まる path だけです。Root の `README*.md`、`AGENTS.md` などを変えた PR は L1 を実行します。Rename は分割して判定するため、`docs/` の外から `docs/` へ移したファイルも非文書の変更として扱います。
+- `docs-increment`：PR head の 1 つ前の commit から first-parent をたどり（最大 20 個）、次の条件をすべて満たす最初の commit の L1 を再利用します。
+  - 4 行の `L1 / <platform>` の最新 check run がすべて GitHub Actions の `success`。skip、cancel、失敗、未完了は数えません。
+  - その commit から head までの変更が `docs/` 配下だけ（判定方法は `docs-only` と同じ）。
+  - 現在の master の先端がその commit の祖先。master は前進するだけなので、その commit を検証した時の merge 結果はその commit 自身であり、現在の merge 結果は head です。両者のコードは完全に同じです。
+  - master が進んだ、途中にコード変更がある、コードの push の L1 が新しい push で cancel された、check run を読めなかった、のいずれかなら通常どおり L1 を実行します。最悪でも 1 回多く実行するだけで、未検証のコードを skip することはありません。
+  - `Select CI scope` の Summary に、再利用した commit または再利用しなかった理由が表示されます。
+  - Check run の読み取りに `checks: read`、履歴をたどるために完全な履歴（checkout の `fetch-depth: 0`）が必要です。master の履歴を書き換えない（force push しない）ことが前提です。
 - Draft の判定には実行開始時に読む PR の現在の状態を使います。古い Draft 実行を re-run した場合、PR がすでに Ready なら L1 を実行し、まだ Draft なら再び skip します。
 - 同じ PR への新しい push は古い実行を取り消します。master の実行は互いに取り消しません。
 - Base branch の変更（`edited`）では再実行しません。Merge queue（`merge_group`）は未対応で、有効化する前にその trigger と範囲判定を追加します。
@@ -75,7 +83,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 Branch protection（または ruleset）で master の required status check に **`CI gate` だけ**を設定することを推奨します。設定は GitHub の Settings → Branches（または Rules → Rulesets）で行い、リポジトリのファイルには含まれません。
 
 - `CI gate` は常に実行され、`Select CI scope` が成功し、選ばれた段階（L1、Quick）がすべて `success`、選ばれなかった段階が `skipped` の場合だけ成功します。失敗、取消、意図しない skip は失敗です。
-- `L1 / <platform>` や Quick の各行を個別に required にしないでください。Draft や docs-only では skip されるため、個別に指定すると merge できなくなります。
+- `L1 / <platform>` や Quick の各行を個別に required にしないでください。Draft、docs-only、docs-increment では skip されるため、個別に指定すると merge できなくなります。
 - Package trial の check は required にしません。
 
 ## 5. Platform と検証水準
