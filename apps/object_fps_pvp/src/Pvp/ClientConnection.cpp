@@ -215,7 +215,7 @@ struct ClientConnection::Impl {
         const auto body=Response(http->Get("/rooms"));
         std::vector<LobbyRoom> rooms;
         const auto& values=body.is_array()?body:body.at("rooms");
-        for(const auto& r:values)rooms.push_back({Id(r.at("id")),r.value("players",0u),r.value("capacity",2u)});
+        for(const auto& r:values)rooms.push_back({Id(r.at("id")),r.value("players",0u),r.value("capacity",MaxPlayers)});
         return rooms;
     }
     void RefreshLobby(std::uint64_t requestGeneration) {

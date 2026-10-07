@@ -35,11 +35,13 @@ class MaxPlayersTests(unittest.TestCase):
         self.assertEqual(set(values.values()), {values['product C++']}, values)
 
     def test_product_code_has_no_capacity_literal(self):
-        # The former two-player literals: the Match join limit, Ready and the Client's bound.
-        sources = REPOSITORY / 'apps/object_fps_pvp/src/Pvp'
-        for name, literal in (('PvpMatch.cpp', 'players_.size() >= 2'), ('IpcHost.cpp', 'set_max_players(2)'),
-                              ('ClientConnection.cpp', 'players_size()>2')):
-            self.assertNotIn(literal, (sources / name).read_text(encoding='utf-8'), name)
+        # The former two-player literals: the Match join limit, Ready, the Client's bound and its room-list default.
+        product = REPOSITORY / 'apps/object_fps_pvp'
+        for name, literal in (('src/Pvp/PvpMatch.cpp', 'players_.size() >= 2'), ('src/Pvp/IpcHost.cpp', 'set_max_players(2)'),
+                              ('src/Pvp/ClientConnection.cpp', 'players_size()>2'),
+                              ('src/Pvp/ClientConnection.cpp', 'r.value("capacity",2u)'),
+                              ('include/RetroFPS/Pvp/ClientConnection.hpp', 'capacity{2}')):
+            self.assertNotIn(literal, (product / name).read_text(encoding='utf-8'), name)
 
     def test_the_check_finds_a_mismatch(self):
         # Guard against a pattern that matches nothing or everything.

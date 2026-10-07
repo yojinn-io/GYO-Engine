@@ -9,7 +9,7 @@
 
 namespace fps::pvp {
 enum class ConnectionPhase { Lobby, Requesting, Connecting, Playing };
-struct LobbyRoom { std::string id; unsigned players{}; unsigned capacity{2}; };
+struct LobbyRoom { std::string id; unsigned players{}; unsigned capacity{MaxPlayers}; };
 // A copied, read-only view of the worker-owned bounded action transport.
 struct ActionTransportState {
     std::size_t pending{}, retained{}, unconsumed{};
