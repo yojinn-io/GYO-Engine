@@ -15,6 +15,7 @@
 
 - 開跑前：凍結來源、產物與分析器；事前宣告跑次、事件分母與輸出目錄。
 - 25 案矩陣、雙 GUI 整合短測、長測短模式。
+- 4 人案例：第 16 批的 quad 案例與 1 GUI＋3 bot（D23⑤）。2 個 Client 的矩陣不變。
 - 產品移除檢查（AGENTS §7）：在 scratch worktree 刪除 pvp，確認其餘仍成立（見下）。
 - `MANUAL_ACCEPTANCE.md`、`ACCEPTANCE_STATUS.md`（v6 目錄內）依平台分欄；未執行的平台標「未執行」。
 - 確認兩個 Engine 計畫的狀態：[input-and-present](../../../architecture/plans/input-and-present/HANDOFF.md)、
@@ -96,7 +97,7 @@ medium。執行並記錄結果；機器需閒置。
 
 ### 依賴
 
-第 02～13 批（含 02a／02b／02c）已完成，或經使用者決定不執行（例如第04批沒有重現第6項時的第05批）。
+第 02～13 批（含 02a／02b／02c）與第 16 批（房間上限 4 人）已完成，或經使用者決定不執行（例如第04批沒有重現第6項時的第05批）。
 Engine 計畫 [IP-1、IP-2](../../../architecture/plans/input-and-present/PLAN.md)、[FF-1…FF-9](../../../architecture/plans/foundation-followups/PLAN.md)
 的狀態由本批確認並記錄，不由本批結案。
 
@@ -128,6 +129,7 @@ Engine 計畫 [IP-1、IP-2](../../../architecture/plans/input-and-present/PLAN.m
 
 - 完整 GUI 三輪（沿用 v5 規模：各至少 120 秒／200 個預先登記移動事件，死亡／重生窗口預先排程）。
 - Headless 長測 60 Hz 與 144 Hz 各 113 循環（1808 秒），串行執行，顯式長測參數，不自動重跑。
+- 4 人：1 GUI＋3 bot 一輪（D23⑤）。長測維持 2 個 Client，以便和過去比較。
 - 全部通過才寫 `STABLE_BASELINE.md`（v6 目錄內）並更新契約狀態行。
 
 不做：

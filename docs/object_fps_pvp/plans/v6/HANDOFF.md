@@ -53,8 +53,9 @@
 | D16 | （Engine，2026-10-05）IP-2 同時處理拖動與縮放；D17：xhigh 審查 agent 1 個；D18：PR 以功能線為單位、盡量少開。詳見 [輸入與呈現交接](../../../architecture/plans/input-and-present/HANDOFF.md) |
 | D19 | （2026-10-05）IP-2 的 L2 之後，D7 選「分執行緒」，但延到 **v7**：本產品的主執行緒（事件＋畫面）、模擬、網路三個角色分離（網路不應和畫面、主執行緒在一起）。IP-2 只交付縮放拖動中的 live frame |
 | D20 | （2026-10-05）版本號分兩層：**vN＝遊戲版本**，**pvN＝網路協議版本**。程式碼中的協議目前是 pv5（`Wire.hpp` 的 `wire::ProtocolVersion`、`ClientConnection.cpp` 的 join、Gateway `adapter.go` 的 `ClientVersion`／`RuntimeVersion`、`runtime_v5.proto`）。本計畫舊文中的「協議 v6」「protocol-v6」指的是 **pv6**（第 09 批） |
-| D21 | （2026-10-06）30 FPS 的相位餘裕缺口（第 07 批後續的 A/B 調查）**不在 v6 修正**：已規劃的第 15 批（完整觀測＋等待守門）不執行。根因是 Client 的移動命令在主迴圈依畫面幀產生，30 FPS 時一幀含多個固定步，較舊的步要等整幀才送出；v7 的主執行緒／模擬／網路分離（D19）會讓命令在固定步邊界產生，原因就不存在。v6 只更正文件，把 30 FPS 寫成設計範圍的邊界（[protocol-v5](../../protocol-v5.zh-Hant.md) §1 的追記）。網路路徑上以短休眠輪詢、實際長度依 OS 計時粒度而異的問題，也交給 v7：Match 與 Gateway 間的 IPC 迴圈每次休眠 1 ms（`IpcHost.cpp:267`），Client 的網路 worker 休眠 2 ms（`ClientConnection.cpp:567-570`） |
+| D21 | （2026-10-06）30 FPS 的相位餘裕缺口（第 07 批後續的 A/B 調查）**不在 v6 修正**：已規劃的第 15 批（完整觀測＋等待守門）不執行。根因是 Client 的移動命令在主迴圈依畫面幀產生，30 FPS 時一幀含多個固定步，較舊的步要等整幀才送出；v7 的主執行緒／模擬／網路分離（D19）會讓命令在固定步邊界產生，原因就不存在。v6 只更正文件，把 30 FPS 寫成設計範圍的邊界（[protocol-v5](../../protocol-v5.zh-Hant.md) §1 的追記）。網路路徑上以短休眠輪詢、實際長度依 OS 計時粒度而異的問題，也交給 v7：Match 與 Gateway 間的 IPC 迴圈每次休眠 1 ms（`IpcHost.cpp:267`；2026-10-07 時為 `:272`），Client 的網路 worker 休眠 2 ms（`ClientConnection.cpp:567-570`；2026-10-07 時為 `:589-592`） |
 | D22 | （2026-10-07）房間最高人數由 2 人改為 4 人，列為**第 16 批**，排在第 14 批（整合驗收與升格）之前，升格時一起驗收。牽涉協議與 arena 資料格式契約，依變速箱規則先以 ultracode 做唯讀盤點與規劃；計畫經使用者確認後才寫批次文件。若需要改 wire 或權威結果，依執行規則與 D11① 在確認計畫時徵求同意 |
+| D23 | （2026-10-07）第 16 批的規劃決定（ultracode）：①維持 pv6，人數上限 2→4 屬 §1 改語意的 wire 變更，依 D11① 同意；②同意作為權威變更的例外，只限 3 人以上才遇得到的規則，以 Match 單元測試鎖住，2 人 35 個情境預期不變；③產品 arena 新出生點放在現有兩點的線段上，四角分散留待正式 4 人地圖；④IPC 寫出迴圈撐不住時，8 ms 狀態標「未驗證」，不修迴圈（D21）；⑤14b 加 1 GUI＋3 bot 一輪；⑥逐出時不清 runtime link 的缺陷在本批修；⑦順序 12→11→13→16→14。見[第 16 批](16-four-player-room.md) |
 
 ## 第 01 批進度（記錄器）
 
@@ -436,9 +437,13 @@
 ## 第 16 批進度（記錄器）：房間上限 4 人
 
 - 2026-10-07：使用者決定（D22）：房間最高人數 2→4，排在第 14 批之前。分支 `claude/pvp-v6-batch16` 自 master `7226ca0`。
-  - 已知的 2 人假設（開始時的初步搜尋，盤點會補全）：Gateway `adapter.MaxPlayers = 2`（`adapter.go:20`）與 readiness、加入、動作窗口；Match `set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）；Client 丟棄超過 2 人的 Snapshot（`ClientConnection.cpp:428`）、只有一份遠端移動觀測（`PvpApplication.cpp:115`）；arena v1 規定恰好兩個出生點（`Arena.cpp:31`）；契約的 Snapshot 最壞大小以 2 人計算（545 bytes，上限 1200）。
+  - 已知的 2 人假設（開始時的初步搜尋，盤點會補全）：Gateway `adapter.MaxPlayers = 2`（`adapter.go:20`）與 readiness、加入、動作窗口；Match `set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）；Client 丟棄超過 2 人的 Snapshot（`ClientConnection.cpp:428`）、只有一份遠端移動觀測（`PvpApplication.cpp:115`）；arena v1 規定恰好兩個出生點（`Arena.cpp:32`）；契約的 Snapshot 最壞大小以 2 人計算（545 bytes，上限 1200）。
   - 對 v7 的影響（初步）：v7 的任務與人數無關；v7 的 30 FPS 對比沿用 2 個 Client 的案例才能比較；4 人會用掉更多 Snapshot 的 1200 bytes 空間。
   - 檔位：ultracode（3 個盤點、3 個方案、1 位評審、1 次對抗檢查，全部唯讀；子 agent 檔位沿用主對話），workflow `wf_45d62ed8-68c`。
+- 2026-10-07：規劃完成（8 個 agent 全部完成，唯讀）。建議方案：維持 pv6、8 個 commit、2 人權威預期不變；4 人 Snapshot 契約最大 1055 bytes。對抗檢查 major 3（14b 不涵蓋 4 人、IPC 寫出迴圈沒有預先同意的出路、L2「0 差異」不能用在故障案例）與 minor 8 已處理進計畫或改為使用者決定。
+  - 使用者決定見 D23。出生點原選「四角分散」，說明會改變 2 人出生位置、需改寫驗收幾何、歷史矩陣不可比較之後，改選線段。
+  - 盤點更正：D21 與 v7 README 引用的行號已漂移（`IpcHost.cpp:272`、`ClientConnection.cpp:589-592`）；§7 的 587 bytes 是 ActionResults。發現既有缺陷：逐出時不清 runtime link（D23⑥）。
+  - 寫入 [第 16 批文件](16-four-player-room.md)；第 14 批文件加入依賴與 4 人項目。實作在第 13 批之後開始。
 
 ## 延後項目：現況與對應批次
 
@@ -559,7 +564,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 11～14 批未開始（第 05 批不執行），第 16 批規劃中（D22），由使用者逐批指定。
+- 第 11～14、16 批未開始（第 05 批不執行），順序 12→11→13→16→14（D23⑦），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
@@ -570,3 +575,4 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
   - 第 10 批與 FF-9 的容差選擇與事前宣告。
   - ~~IP-2 量測後的修法選擇（D7）~~：D19，分執行緒延到 v7。
 - v7 的任務與規劃輸入（D19、D21 與 2026-10-06 的決定）已移到 [v7 任務清單](../v7/README.md)，以那裡為準。
+- 2026-10-07 使用者開立 [v8 玩法優化](../v8/README.md)，專門處理玩法調整；第 16 批留下的 4 人地圖、外觀區分等玩法候選收在那裡。
