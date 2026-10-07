@@ -116,6 +116,7 @@ struct IpcHost::Impl {
     Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
         // Zero is reserved for a missing digest: such an arena cannot be served.
         if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
+        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);
     }
 
     void Connection(tcp::socket& socket,std::stop_token stop) {

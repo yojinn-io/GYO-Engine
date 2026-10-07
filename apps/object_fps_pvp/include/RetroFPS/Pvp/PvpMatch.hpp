@@ -32,6 +32,12 @@ struct MovementQuality final {
 };
 
 // Sole gameplay authority. No player controller, camera, connection or clock.
+// The spawn a joining or respawning player takes (pv6 contract §5): among the
+// spawns where a body fits clear of the walls and of the given living players,
+// the one farthest from the nearest of them, in content order on ties; the first
+// placeable spawn when there is nobody else. Null when none fits.
+[[nodiscard]] const SpawnPoint* SelectSpawn(const Arena& arena, std::span<const Engine::Math::Vec3> living);
+
 class PvpMatch final {
 public:
     explicit PvpMatch(Arena arena);
