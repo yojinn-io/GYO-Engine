@@ -1140,12 +1140,12 @@ TEST_CASE("PvP shots and reloads keep the remote pitch: the clip adds its motion
             // The clip moves the body, and the pitch still raises the pistol by about 40 degrees.
             CHECK(MatrixDifference(level.body.globalTransforms.at(definition.weaponNode),
                                    Aimed(0).body.globalTransforms.at(definition.weaponNode)) > 1e-3);
-            const double raise = MuzzleElevation(definition, raised.body.globalTransforms) -
+            const double lift = MuzzleElevation(definition, raised.body.globalTransforms) -
                                  MuzzleElevation(definition, level.body.globalTransforms);
             // A shot keeps the barrel's raise (measured 38.8-39.3 degrees); a reload
             // turns the pistol toward the body, so its barrel only stays raised.
-            if (upper == PlayerUpperAction::Shoot) CHECK(std::abs(raise - 40.0) < 3.0);
-            else CHECK(raise > 20.0);
+            if (upper == PlayerUpperAction::Shoot) CHECK(std::abs(lift - 40.0) < 3.0);
+            else CHECK(lift > 20.0);
             // Exactly the aim pose plus the clip's local motion since its first frame.
             Pose aim, extreme, reference, motion;
             REQUIRE(SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
