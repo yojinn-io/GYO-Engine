@@ -1,7 +1,7 @@
 # PvP v6 分批計畫與進度
 
-更新：2026-10-05。Owner：`object_fps_pvp`。
-**第 01～03 批完成並合併**（PR #39、#40、#41；master `6381e9d`）。**第 04 批完成**（PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)）；其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)）。
+更新：2026-10-07。Owner：`object_fps_pvp`。
+**第 01～04、06～10 批完成並合併**（最後是第 10 批，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)，master `7226ca0`）；第 05 批不執行；第 11～14 批未開始；第 16 批（房間上限 4 人）規劃完成。剩下的順序 12→11→13→16→14。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
@@ -34,10 +34,11 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 07a | 驗收工具修正：連線時初始 seed 的夾住（見 [HANDOFF](HANDOFF.md) 的第 07a 批） | xhigh（主對話） | 完成，隨第 07 批的 PR | 豁免每位玩家一次的初始 seed 夾住；停頓重設仍判干擾 |
 | 08 | [刪除未編譯 29 檔](08-remove-uncompiled.md) | medium | 完成，PR [#55](https://github.com/yojinn-io/GYO-Engine/pull/55) 已合併（`5b0553a`） | 29 檔與孤兒資產 |
 | 09 | [協議 v6](09-protocol-v6.md) | high（ultracode 審查契約；版本閘與解碼局部 xhigh） | 完成，PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57) 已合併（`5da939f`） | **唯一的 wire 變更**：升 v6、受擊欄位（含攻擊者 id）、arena 內容 digest |
-| 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 完成，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58) 待合併（與 FF-9 同一 PR；L1、L2 通過） | **唯一的權威變更**；與 FF-9 同一 PR |
+| 10 | [Collision 權威變更（產品端）](10-collision-authority.md) | high（ultracode 審查證據；容差、`IsValid` 套用後的 arena 規則與差異歸因局部 xhigh） | 完成，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58) 已合併（`7226ca0`；與 FF-9 同一 PR） | **唯一的權威變更**；與 FF-9 同一 PR |
 | 11 | [遠端俯仰瞄準](11-remote-pitch-aim.md) | high | 未開始 | 第 1 項 |
-| 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 未開始 | 第 4 項 |
+| 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 完成，PR [#60](https://github.com/yojinn-io/GYO-Engine/pull/60) 待合併（L3 接受，剩餘差異交給 v7） | 第 4 項 |
 | 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 未開始 | 第 2 項的呈現 |
+| 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 規劃完成，未開始（ultracode；決定 D23） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
 | 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 未開始 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
 
 ### Engine 計畫的批次（狀態以各計畫夾為準）
@@ -66,7 +67,8 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
     │                                              └─ 13 ←── 11
     ├─ 08
     └─ 04 ──→ IP-2（另需 FF-2）──→ 07
-全部 ──→ 14a ──→〔另外授權〕14b
+09、10、11、13 ──→ 16（房間上限 4 人）
+全部（含 16）──→ 14a ──→〔另外授權〕14b
 ```
 
 關鍵路徑：01→02→04→IP-2→07，以及 01→03→09→10。
@@ -84,11 +86,11 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 - 長測與完整 GUI 三輪需要另外明確授權（第 14b 批）。
 - 對玩家的門檻（50／66.7／80／100／150 ms、≥99%、恢復 1.5 秒、窗口與包率上限）跨平台相同，不因平台放寬。
 - 實機驗收只在本機 macOS Intel／Metal；Windows、Linux 實機與 macOS arm64 實機標「未執行」（D11⑩）。每份批次文件都有平台表。
-- 合併順序只是建議，用來減少衝突、方便歸因，不是依賴：後合併的一方 rebase。例如 `PvpApplication.cpp` 會被多批修改，建議順序是 05→06→12→11→13。真正的依賴只寫在進度表和依賴圖。
+- 合併順序只是建議，用來減少衝突、方便歸因，不是依賴：後合併的一方 rebase。例如 `PvpApplication.cpp` 會被多批修改，建議順序是 05→06→12→11→13→16。真正的依賴只寫在進度表和依賴圖。
 - 範圍、門檻或 ownership 需要改變時，先報告具體證據，不以猜測改政策或放寬驗收。
 
 ## 接續處理文字
 
 > v6 第 01～04、06、08 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-8、IP-1、IP-2 已合併（IP-2 縮小交付）。分批與決定見本文件、HANDOFF 與 BASELINE。
-> 第 07、07a 批完成並合併（#56），B1 見 BASELINE；30 FPS 列為設計範圍的邊界（D21）。第 09 批完成並合併（pv6，#57）。第 10 批（與 FF-9）完成，PR 待開；之後可以開始的是第 11、12 批。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv5，第 09 批升 pv6，D20）。
+> 第 07、07a 批完成並合併（#56），B1 見 BASELINE；30 FPS 列為設計範圍的邊界（D21）。第 09 批完成並合併（pv6，#57）。第 10 批（與 FF-9）完成並合併（#58）；之後可以開始的是第 11、12 批。剩下的順序是 12→11→13→16→14（D23⑦）；第 16 批（房間上限 4 人，D22、D23）已規劃完成。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv6，D20）。
 > Windows／Linux 實機驗收與兩台機器的時鐘漂移實測需要另外授權。

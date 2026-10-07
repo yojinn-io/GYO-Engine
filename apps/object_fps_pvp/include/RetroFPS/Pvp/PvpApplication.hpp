@@ -29,6 +29,8 @@ struct WeaponFeedbackObservation final {
         mouseDeltaConsumeCount{}, animationRevision{}, lastDecisionTick{}, lastTargetId{};
     // Authority-observed reloads; animationStarts stays the immediate local shot count.
     std::uint64_t reloadAnimationStarts{};
+    // Shot clicks the local gate dropped, and authority Cooldown rejections.
+    std::uint64_t localCooldownBlocks{}, authorityCooldownRejections{};
     std::uint32_t hp{}, maximumHp{}, lastDamage{};
     ShotRejection lastRejection{ShotRejection::None};
     ShotHitKind lastHitKind{ShotHitKind::Miss};

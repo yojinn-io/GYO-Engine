@@ -1,6 +1,6 @@
 # 第 10 批：Collision 權威變更的 pvp 端（與 FF-9 同一 PR）
 
-狀態：完成（2026-10-07；與 FF-9 同一個 PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)，待合併；L1、L2 通過，見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md) §7，
+狀態：完成（2026-10-07；與 FF-9 同一個 PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)，已合併 `7226ca0`；L1、L2 通過，見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch10.zh-Hant.md)）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md) §7，
 以及 Engine 端的 [foundation-followups 計畫](../../../architecture/plans/foundation-followups/PLAN.md) FF-9。
 
 執行規則沿用 v5／本計畫 README：只做指定範圍、先凍結再量測、失敗跑次保留、長測另外授權。

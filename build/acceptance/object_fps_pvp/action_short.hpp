@@ -50,7 +50,9 @@ ActionJson LocalActionSample(const fps::pvp::WeaponFeedbackObservation& w) {
         {"last_action_kind", static_cast<int>(w.lastActionKind)}, {"grounded", w.grounded}, {"yaw", w.yaw},
         {"pitch", w.pitch}, {"mouse_consumptions", w.mouseDeltaConsumeCount}, {"decisions", w.decisionCount},
         {"hits", w.hitDecisions}, {"hit_marker", w.hitMarkerVisible},
-        {"last_rejection", static_cast<int>(w.lastRejection)}, {"last_hit_kind", static_cast<int>(w.lastHitKind)}};
+        {"last_rejection", static_cast<int>(w.lastRejection)}, {"last_hit_kind", static_cast<int>(w.lastHitKind)},
+        {"rejected", w.rejectedDecisions}, {"local_cooldown_blocks", w.localCooldownBlocks},
+        {"authority_cooldown_rejections", w.authorityCooldownRejections}};
 }
 
 // Every action of the other player must appear in one contiguous run of

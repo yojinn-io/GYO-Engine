@@ -1,0 +1,182 @@
+# 第 16 批：房間上限 4 人
+
+狀態：規劃完成，未開始實作（2026-10-07；ultracode workflow `wf_45d62ed8-68c`，對抗檢查的 major 3、minor 8 已處理）。
+執行順序在第 13 批之後、第 14 批之前（D22、D23）。先讀 [進度](README.md)、[交接](HANDOFF.md)、[v6 契約](../../protocol-v6.zh-Hant.md)。
+
+盤點的基準是 master `3607fe3`。第 11～13 批會修改 `PvpApplication.cpp` 等檔案，本批開始時先重新核對下文的行號與 2 人假設，再寫事前宣告。
+
+執行規則沿用 v5 與本計畫的 README：只做指定範圍、先凍結再量測、失敗的跑次保留、長測另外授權。
+
+## 目標與範圍
+
+房間最高人數由 2 人改為 4 人（使用者 2026-10-07 決定，D22）。
+
+做：
+
+- 人數上限在 Gateway、Match、Client 三個角色同時改為 4。C++ 與 Go 各有一個具名定義，加一致性測試。
+- arena v1 的出生點數放寬為 2～64；Match 只主持出生點數不少於人數上限的 arena；產品 arena 追加 2 個出生點。
+- Client 能同時呈現 3 個遠端玩家。
+- 修正既有缺陷：玩家被逐出時，Gateway 沒有清除他在 runtime link 的狀態。
+- 4 人驗收：quad 案例、1 GUI＋3 bot、版本混用時明確拒絕。
+
+不做：
+
+- 不升協議版本，proto 不變（決定 D23①）。
+- 不改 digest 程式與 golden（pv6 §7）；不重新產生 golden。
+- 不改 2 個 Client 的驗收工具與第 07a 批凍結的分析器的判定邏輯。
+- 不修 Match→Gateway 的 IPC 寫出迴圈（D21，交給 v7 任務 3）。
+- 不做正式的 4 人地圖（四角分散的出生點）、隊伍、外觀區分：留給玩法計畫 [v8](../v8/README.md)。
+
+## 使用者決定（2026-10-07，D23）
+
+| # | 決定 |
+|---|---|
+| ① | 維持 pv6。Snapshot 的人數上限與 `Ready.max_players` 由 2 改為 4，屬 pv6 §1 的「改語意」wire 變更，依 D11① 經使用者同意：三個角色同一個 commit 切換，舊程序重啟。pv6 契約加有日期的修訂 |
+| ② | 同意本批作為「權威結果只在第 10 批改變」的例外，範圍只限 3 人以上才遇得到的規則（第 3、4 人加入、同一 Tick 多位射擊者、多位阻擋者時的重生選擇）。以 Match 單元測試鎖住；digest 程式與 golden 不動。2 人的 35 個 digest 情境預期不變 |
+| ③ | 產品 arena 的新出生點放在現有兩點 (5,5)–(5,12) 的線段上：(5,7.5)、(5,9.5)。2 人時每個位置的出生選擇都不變。四角分散會改變 2 人的出生位置、需要改寫驗收幾何，已說明後由使用者改選線段；正式的 4 人地圖留給 [v8](../v8/README.md) |
+| ④ | 4 人量測時若 IPC 寫出迴圈撐不住：約 8 ms 主機狀態下的結果標「未驗證」並記錄，作為 v7 任務 3 的壓力證據；約 4 ms 狀態必須通過。不在本批修迴圈（D21） |
+| ⑤ | 第 14b 批加入 1 GUI＋3 bot 一輪，穩定基線涵蓋 4 人容量；長測維持 2 個 Client |
+| ⑥ | 逐出時不清 runtime link 的既有缺陷，在本批以獨立 commit 修正 |
+| ⑦ | 批次順序：12→11→13→16→14 |
+
+## 盤點摘要
+
+2 人的假設（基準 `3607fe3`）：
+
+- Gateway：`adapter.MaxPlayers = 2`（`adapter.go:20`）。依賴它的有 readiness 的完全相等檢查（`runtime_link.go:50`）、Snapshot 人數檢查（`adapter.go:77`）、輸入槽（`runtime_link.go:115`）、動作窗口（`action_delivery.go:141`）。房間 JSON 與 `room_full`（`server.go:199`、`:248`）讀 `Ready.max_players`，不需要改。
+- Match：`set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）是兩個獨立的字面值。
+- Client：超過 2 人的 Snapshot 直接丟棄（`ClientConnection.cpp:428`）。遠端呈現只有一個槽（`PvpApplication.cpp:731`），phase reanchor 的基準在迴圈內（`:602-603`、`:623`）。
+- arena：v1 規定恰好兩個出生點（`Arena.cpp:32`）。
+- 其他：同一個事實在 C++ 有 5 處字面值、Go 有 1 處常數，彼此沒有一致性檢查。
+- 既有缺陷：逐出時只移除預約（`server.go:558`），不清 runtime link 的動作窗口、epoch、生命與輸入。被逐出的玩家用過動作後，補進來的玩家在 2 人房間會撞到動作窗口上限，開槍與換彈默默送不到 Match。
+
+大小（以 repo 的 Go binding 實算，契約最大編碼）：
+
+| 玩家數 | 完整 Snapshot UDP |
+|---|---|
+| 2 | 545 bytes（與 §7 相同） |
+| 3 | 800 bytes |
+| 4 | 1055 bytes（型別最大值 1135） |
+| 5 | 1310 bytes（超過 1200） |
+
+- 公式：35＋255N bytes。4 人時剩 145 bytes。
+- §7 寫的「worker probe 實測 587 bytes」是 ActionResults，不是 Snapshot，本批更正。Welcome 最壞 213 bytes，不變。
+
+## 契約變更（pv6 修訂，加日期）
+
+- §1：
+  - Snapshot 的 players／combat 上限 2→4；`Ready.max_players` 的值為 4；readiness 維持完全相等；房間容量 4。超過上限沿用既有的無效路徑。
+  - 新增容量定義表：C++ `fps::pvp::MaxPlayers`、Go `adapter.MaxPlayers`、驗收 C++ 與 Python 各一個，加一致性測試（比照 `ProtocolVersion`）。
+- §2：
+  - arena v1 的出生點數為 2～64；Match 只主持出生點數不少於 `MaxPlayers` 的 arena；本批之前的 pv6 二進位會拒絕不是 2 點的 arena。版本與正規化不變（先例 D11⑨，契約中註明）。
+  - 同一受害者每 Tick 最多被命中 3 次；`last_attacker_id` 取裁決順序的最後一位；致命一擊之後的射擊穿透。
+  - 日後修改 arena 時，要保持「新舊版本混用必定明確失敗」的性質。
+- §5：出生點選擇（離存活對手最遠，同距時取內容順序較前者）寫成明文。
+- §7：大小改為上表；更正 587 bytes 的說明。`network-architecture.zh-Hant.md` 的相關段落一併更正。
+
+版本混用的結果（全部明確失敗）：
+
+- 舊 Client 只能載入 2 點 arena；新 Match 拒絕少於 4 點的 arena。兩者的 arena digest 必然不同，連線時報 `arena_content_mismatch`。
+- Gateway 與 Match 跨版本：readiness 要求人數上限完全相等，啟動失敗。
+- 新 Match 用 `--arena` 載入舊的 2 點 arena：主持條件不成立，啟動失敗。
+
+## 事前宣告（commit 1 寫入，寫程式之前；之後不得放寬）
+
+至少包含：
+
+- 權威：35 個 digest 情境的預期變化集合為空；golden SHA-256 `f01f3a32…` 不變。檢查點以 commit 標題指定：容量常數化、arena 出生點、容量 2→4、head。
+- 新出生點的座標與 yaw，以內容測試鎖住：數量、間距 ≥4r、`spawns[0..1]` 不變、新點在兩端點之間的開線段上。
+- 凍結清單：列出會動到的第 07a 批凍結檔，宣告 Python 分析器除新增常數外逐位元組相同（第 09 批的先例）；容量常數放在新檔，不改 `acceptance_util.py`。完成後記錄新的凍結清單雜湊，並同步 v7 README。
+- L2 的比較範圍：
+  - 裁決逐筆 0 差異只用於 clean-30、clean-60 與動作短測。
+  - 故障與網路劣化案例：比較結構計數（Miss／World／Player 與各拒絕類別），並逐案比對重生位置。
+- IPC 的指標與門檻：Match trace 的 `transport` 事件數、合併（coalesced）計數、snapshot age，依約 4 ms／8 ms 主機狀態分層。
+- 跑次、分母，以及「失敗保留、不重跑」的規則。
+
+## commit 拆分
+
+| # | commit | 內容 | 檔位 |
+|---|---|---|---|
+| 1 | 批次文書、pv6 契約修訂、事前宣告 | 本文件定稿、契約 §1／2／5／7、README、HANDOFF、事前宣告 | medium（§1 的分類局部 xhigh） |
+| 2 | 容量常數化（值仍為 2） | 四個定義與一致性測試；5 處字面值改用常數；Go 測試改引用常數、`room_full` 斷言錯誤碼、readiness 雙向不符、超過上限的 Snapshot 故障。兩樹 digest 不變 | high |
+| 3 | 逐出時清除 runtime link 的玩家狀態 | 比照 Leave 清除四個 map，不送 Leave；測試補進來的玩家動作送達 | high |
+| 4 | arena 出生點 2～64、主持條件、產品 arena 追加 2 點 | `Validate` 放寬；主持檢查做成純函式並測試；digest 對出生點數敏感；內容測試。兩樹 digest 不變 | high（出生點證明局部 xhigh） |
+| 5 | Client 遠端槽改為 `MaxPlayers − 1`，phase reanchor 改為每幀一次 | 遠端移動觀測維持一份，註明只供診斷；第 11、13 批的遠端呈現擴充到 3 人 | high |
+| 6 | 容量 2→4（三角色同一 commit） | 四個定義改為 4、大廳文字；Match 多人測試；Gateway 扇出 4 與第 5 人 `room_full`；Client 收 4 丟 5；大小測試釘 1055 與 1019；新增突變。兩樹 digest 不變 | high（多人決定性局部 xhigh） |
+| 7 | 4 Client 驗收 | 新檔：quad probe、`run_quad.py`、`quad_evidence.py` 與測試；以 2 Client 語料與 `command_evidence` 逐值交叉驗證，交叉驗證放進 CTest；quad runner 每段開始前斷言 `GET /rooms` 的 players==0 | high（交叉驗證局部 xhigh） |
+| 8 | L2、L3 結果與同步 | dev_log、HANDOFF、README、第 14 批、v7 README | medium |
+
+commit 6 之後、正式量測之前，先做一次不計入正式跑次的 4 Client 開發量測，確認 IPC 指標。
+
+## 驗收點
+
+L1（CI 四平台＋本機）：
+
+- CTest、`go test -race`；一致性測試確認四個定義都是 4（含自我檢查）；產品程式中沒有容量的字面值。
+- Match：4 人加入、第 5 人 `match_full`、重複 id 先於上限判定、2 點 arena 的第 3 人 `spawn_blocked`、同 Tick 2 位與 3 位射擊者、致命後穿透、同時重生、出生點選擇、全部被擋時逐 Tick 重試。
+- arena：`Validate` 接受 2／4／64 點、拒絕 0／1／65 點；digest 對出生點數敏感；fixture 的 golden 不變；內容與主持檢查測試。
+- Gateway：readiness 拒絕 3 與 5；第 5 人 409 `room_full`；5 人 Snapshot 故障；扇出 4；逐出後補進的玩家動作送達。
+- Client：收 4 人、丟 5 人且不更新活性；大小：worker 1055、自測 1019、Go 1055。
+- 權威：四個檢查點的兩樹比對 35／35；golden 不變；突變全部 killed，既有 12 個突變不 stale。
+
+L2（macOS Intel／Metal，事前宣告、凍結、機器閒置、先徵求同意，依主機狀態分層）：
+
+- 2 Client before／after：25 案矩陣、雙 GUI、動作與人物短測，比較範圍依事前宣告。
+- 版本混用：舊 Client 被拒、跨版本 readiness 失敗、新 Match 載入舊 arena 時啟動失敗。
+- 4 人：quad 功能判定；clean-60 五輪判定；clean-30 只記錄（D21）；1 GUI＋3 bot。IPC 合併造成失敗時依 D23④ 處理。
+
+L3（人工）：
+
+- 使用者以 1～2 個 GUI 加 bot 確認：人數顯示 n/4、3 個遠端角色、擊殺與重生、第 5 人 `room_full`。
+- 已知限制（不判失敗）：遠端外觀相同、同 Tick 時 id 較小者優先、出生點排成一線（新點在兩端點的交火線上，沒有重生保護）、受擊方向只指向最後一位攻擊者。
+
+## 平台
+
+| 平台 | 本批 | 理由 |
+|---|---|---|
+| macOS Intel／Metal 實機 | 預定執行 | L2、L3、兩樹 digest 比對 |
+| CI 四平台 L1 | 預定執行 | L1 全部 |
+| Windows、Linux、macOS arm64 實機 | 未執行 | 沒有實機（D11⑩） |
+
+## 建議檔位
+
+主體 high；文件 medium。局部升 xhigh：pv6 §1 的分類、出生點不變的證明、多人決定性、交叉驗證。
+
+## 依賴與順序
+
+- 依賴：第 09、10 批（已合併）；第 11、13 批（遠端呈現先完成，本批擴充到 3 人）。
+- 第 14 批依賴本批：14a 加入 4 人案例，14b 加 1 GUI＋3 bot 一輪（D23⑤）。
+- `PvpApplication.cpp` 的合併順序：05→06→12→11→13→16。
+
+## 對 v7 的影響
+
+- v7 的任務與人數無關。
+- 30 FPS 對比：before 是含本批的 v6 最終 tree；2 Client 工具與第 07a 批分析器不變，F1～F6 與幀率對照仍可比較。
+- 4 人的 IPC 寫出負載（每秒約 120→180 個 frame）的 L2 數據，作為 v7 任務 3 的壓力證據。
+- Snapshot 剩 145 bytes，v7 若要加 Snapshot 欄位，空間有限。v7 的心跳走 runtime link，不受影響。
+
+## Architecture Delta
+
+1. 需求：D22（房間上限 4 人）。
+2. 問題：容量散在 6 處、沒有單一定義，舊 Client 遇到 4 人會靜默丟棄；arena 寫死 2 個出生點；遠端呈現只有 1 個槽，且 reanchor 的基準有誤；逐出時的狀態洩漏。
+3. 邊界：Client／Runtime 契約的值域、arena 規則與主持條件、Join 上限。proto、版本號、arena 正規化、Engine 都不變。
+4. 影響：只有 `object_fps_pvp`（Match、Gateway、Client、驗收、測試）。
+5. 依賴方向不變。
+6. Ownership：Match 擁有上限與主持條件；Gateway 做相等檢查；Client 擁有解碼上限與呈現槽位。
+7. 更小的變更不可行：只改字面值會留下靜默的版本混用；升 pv7 或在 Welcome 加欄位則超出需要。
+
+將來 Refactoring：`quad_evidence.py` 與 `command_evidence.py` 有重複的職責，v7 收斂（AGENTS §12）。
+
+## 完成條件與停止條件
+
+完成：
+
+- 事前宣告寫入後才開始實作；L1 全過；四個檢查點的兩樹比對都在宣告內；L2 依宣告判定；L3 使用者確認。
+- README、HANDOFF、dev_log、第 14 批文件、v7 README 更新後停止，不自動開始下一批。
+
+停止：
+
+- 任一 2 人 digest 情境或 golden 改變。
+- 4 人 Snapshot 超過 1200 bytes，或需要改 proto。
+- 約 4 ms 主機狀態下 4 人驗收失敗（8 ms 狀態依 D23④）。
+- 需要改 Engine 或共通層。

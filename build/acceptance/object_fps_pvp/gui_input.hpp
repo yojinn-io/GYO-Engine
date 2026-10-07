@@ -39,6 +39,7 @@ WeaponJson WeaponSample(const fps::pvp::WeaponFeedbackObservation& w) {
         {"yaw", w.yaw}, {"pitch", w.pitch}, {"mouse_consumptions", w.mouseDeltaConsumeCount},
         {"animation_revision", w.animationRevision}, {"animation_elapsed", w.actionElapsedSeconds},
         {"animation_duration", w.actionDurationSeconds}, {"cooldown_remaining", w.cooldownRemainingSeconds},
+        {"local_cooldown_blocks", w.localCooldownBlocks}, {"authority_cooldown_rejections", w.authorityCooldownRejections},
         {"last_submitted_seconds", w.lastSubmittedSeconds}, {"last_decision_seconds", w.lastDecisionSeconds},
         {"last_decision_tick", w.lastDecisionTick}, {"last_target", w.lastTargetId}, {"last_damage", w.lastDamage},
         {"mesh_count", w.meshCount}, {"material_count", w.materialCount}, {"submitted_meshes", w.submittedMeshes},
