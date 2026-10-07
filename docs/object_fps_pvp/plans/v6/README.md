@@ -40,6 +40,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 完成，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 已合併（`7886848`） | 第 2 項的呈現 |
 | 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 完成，PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63)（L1／L2／L3 完成；GUI probe 支援 4 人房為事前宣告的修訂） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
 | 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 14a 完成，PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)（D24；L1／L2／L3 通過）；14b 需另外授權 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
+| 17 | [聯機測試準備](17-lan-test-prep.md) | high（地圖選擇與身分比對局部 xhigh） | 進行中（2026-10-08 開始；D25） | 發行用四角地圖、Client 依 Match 選地圖、三個角色的日誌、聯機測試手冊 |
 
 ### Engine 計畫的批次（狀態以各計畫夾為準）
 

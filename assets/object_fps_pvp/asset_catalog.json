@@ -5,6 +5,8 @@
     { "id": "object_fps_pvp.player.character", "type": "text", "path": "players/character.json" },
     { "id": "object_fps_pvp.player.animations", "type": "text", "path": "players/animations.animset.json" },
     { "id": "object_fps_pvp.arena", "type": "text", "path": "pvp_arena.json" },
+    { "id": "object_fps_pvp.arena.corners", "type": "text", "path": "pvp_corners.json" },
+    { "id": "object_fps_pvp.arenas", "type": "text", "path": "arenas.json" },
     { "id": "object_fps_pvp.ui.pvp_lobby", "type": "text", "path": "ui/pvp_lobby.json" },
     { "id": "object_fps_pvp.ui.hit_feedback", "type": "text", "path": "ui/hit_feedback.json" },
 

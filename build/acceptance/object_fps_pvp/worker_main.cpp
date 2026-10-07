@@ -440,6 +440,25 @@ int main() {
         gateway.welcomeArenaDigest=WorkerArenaDigest;
         connection.SetArenaIdentity("other-arena",1,WorkerArenaDigest);
         Require(refusedWith("arena_identity_mismatch:"),"join accepted a different arena identity");
+        // Several installed arenas: the Match's id selects one, whose content is then compared.
+        connection.SetArenaIdentities({{"other-arena",1,WorkerArenaDigest^1},{"worker-test",2,WorkerArenaDigest},{"third-arena",1,7}});
+        Require(refusedWith("arena_identity_mismatch:"),"join accepted an arena installed only in another version");
+        Require(connection.State().error.find("other-arena version 1, worker-test version 2, third-arena version 1")!=std::string::npos,
+            "identity mismatch did not list the installed arenas");
+        connection.SetArenaIdentities({{"other-arena",1,WorkerArenaDigest^1},{"worker-test",1,WorkerArenaDigest^1}});
+        Require(refusedWith("arena_content_mismatch:"),"join accepted the selected arena with different content");
+        connection.SetArenaIdentities({{"other-arena",1,WorkerArenaDigest^1},{"worker-test",1,WorkerArenaDigest}});
+        connection.Join(gateway.address,"1");
+        gateway.Until([&]{const auto s=connection.State();
+            return (s.phase==ConnectionPhase::Lobby && !s.error.empty()) || s.phase==ConnectionPhase::Playing;});
+        Require(connection.State().phase==ConnectionPhase::Playing && connection.State().arenaId=="worker-test",
+            "join did not select the installed Match arena");
+        connection.Leave();
+        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+        Require(connection.State().arenaId.empty(),"leaving kept the selected arena");
+        bool duplicateRejected=false;
+        try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
+        Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
 
         // Exercise real receipt overflow, then consume Drain concurrently with

@@ -88,6 +88,8 @@ struct PvpApplication::Impl final {
     Engine::Asset::Core::AssetCachePolicy cache{{
         Engine::Asset::Core::AssetCachePolicy::Mode::KeepWhileReferenced, 120, true, 0, 0}};
     Engine::Asset::AssetManager assets{catalog, pipeline, storage, lifetime, cache};
+    // Every installed arena, and the one shown: the first until a Match selects one.
+    std::vector<Arena> arenas;
     std::optional<Arena> arena;
     Engine::Render::ShaderLibrary shaders;
     std::unique_ptr<Engine::Platform::Sdl::SdlPlatform> platform;
@@ -278,6 +280,10 @@ struct PvpApplication::Impl final {
         lifeBoundaryThisFrame = false;
         auto received = connection.Drain();
         state = std::move(received.state);
+        if (!received.snapshots.empty()) {
+            sessionLog.snapshots += received.snapshots.size();
+            sessionLog.lastSnapshotAt = received.snapshots.back().receivedAt;
+        }
         if (connectionGeneration != received.generation) {
             connectionGeneration = received.generation;
             timeline.Reset();
@@ -290,6 +296,8 @@ struct PvpApplication::Impl final {
             characterPhaseReanchors = 0;
         }
         ingressHistoryDrops = received.snapshotHistoryOverflowCount;
+        // The joined Match chose the arena: show and predict in that one.
+        if (!state.arenaId.empty() && state.arenaId != arena->id) SelectArena(state.arenaId);
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
@@ -673,6 +681,85 @@ struct PvpApplication::Impl final {
         return SubmitWeapon();
     }
 
+    // Diagnostics only (SDL_Log, which the Client log file records): connection
+    // transitions, connection-quality warnings and one summary per second in a match.
+    struct SessionLog {
+        ConnectionPhase phase{ConnectionPhase::Lobby};
+        std::string error;
+        std::uint32_t qualityFailures{};
+        Clock::time_point windowStart{}, lastSnapshotAt{};
+        std::uint64_t frames{}, snapshots{};
+        double longestFrameSeconds{};
+        std::uint64_t submitted{}, accepted{}, rejected{}, hits{}, localBlocks{};
+    } sessionLog;
+
+    void LogSession(double frameSeconds) {
+        auto& log = sessionLog;
+        static constexpr const char* phases[] = {"lobby", "requesting", "connecting", "playing"};
+        if (state.phase != log.phase) {
+            SDL_Log("PvP connection phase=%s player=%llu arena=%s", phases[static_cast<int>(state.phase)],
+                    static_cast<unsigned long long>(state.playerId), state.arenaId.empty() ? "-" : state.arenaId.c_str());
+            log.phase = state.phase;
+        }
+        if (state.error != log.error) {
+            if (!state.error.empty()) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP connection error=%s", state.error.c_str());
+            log.error = state.error;
+        }
+        const PlayerState* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
+        const std::uint32_t failures = self ? self->connectionQualityFailures : 0;
+        if (failures != log.qualityFailures) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP connection quality failed_windows=%u of %u",
+                        failures, ConnectionQualityFailedWindows);
+            log.qualityFailures = failures;
+        }
+        const auto now = Clock::now();
+        if (state.phase != ConnectionPhase::Playing || !self) {
+            log.windowStart = now;
+            log.frames = log.snapshots = 0;
+            log.longestFrameSeconds = 0;
+            return;
+        }
+        ++log.frames;
+        log.longestFrameSeconds = Engine::Math::Max(log.longestFrameSeconds, frameSeconds);
+        const double window = std::chrono::duration<double>(now - log.windowStart).count();
+        if (window < 1) return;
+        const auto& weapon = weaponFeedback;
+        const double snapshotAge = log.lastSnapshotAt == Clock::time_point{} ? -1 :
+            std::chrono::duration<double>(now - log.lastSnapshotAt).count() * 1000;
+        SDL_Log("PvP summary player=%llu tick=%llu players=%zu fps=%.1f longest_frame_ms=%.1f snapshots_per_s=%.1f "
+                "snapshot_age_ms=%.1f pending_commands=%zu hp=%u life=%llu dead=%d actions_submitted=%llu accepted=%llu "
+                "rejected=%llu hits=%llu local_cooldown_blocks=%llu actions_pending=%zu",
+                static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(state.snapshot->tick),
+                state.snapshot->players.size(), log.frames / window, log.longestFrameSeconds * 1000, log.snapshots / window,
+                snapshotAge, static_cast<std::size_t>(prediction->Observation().pendingCommands), weapon.hp,
+                static_cast<unsigned long long>(self->lifeGeneration), self->lifeState == LifeState::Dead ? 1 : 0,
+                static_cast<unsigned long long>(weapon.submittedActions - log.submitted),
+                static_cast<unsigned long long>(weapon.acceptedDecisions - log.accepted),
+                static_cast<unsigned long long>(weapon.rejectedDecisions - log.rejected),
+                static_cast<unsigned long long>(weapon.hitDecisions - log.hits),
+                static_cast<unsigned long long>(weapon.localCooldownBlocks - log.localBlocks), state.actionTransport.pending);
+        log.submitted = weapon.submittedActions;
+        log.accepted = weapon.acceptedDecisions;
+        log.rejected = weapon.rejectedDecisions;
+        log.hits = weapon.hitDecisions;
+        log.localBlocks = weapon.localCooldownBlocks;
+        log.windowStart = now;
+        log.frames = log.snapshots = 0;
+        log.longestFrameSeconds = 0;
+    }
+
+    void SelectArena(const std::string& id) {
+        for (const auto& installed : arenas) {
+            if (installed.id != id) continue;
+            arena = installed;
+            // A new session follows (the view player changes), which resets the rest.
+            prediction = std::make_unique<LocalPlayerPrediction>(*arena);
+            predictionElapsed.Reset();
+            SDL_Log("PvP arena selected id=%s spawns=%zu", arena->id.c_str(), arena->spawns.size());
+            return;
+        }
+    }
+
     Control Fail(std::string message) {
         lastError = std::move(message);
         exitCode = 1;
@@ -705,13 +792,19 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
     impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    impl_->arena = Arena::Load(assetRoot / "pvp_arena.json", error);
-    if (!impl_->arena) return false;
+    auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error);
+    if (!installed) return false;
+    std::vector<ArenaIdentity> identities;
+    for (const auto& arena : *installed) {
+        const auto digest = ArenaContentDigest(arena);
+        if (!digest) { error = "Arena content digest is zero: " + arena.id; return false; }
+        identities.push_back({arena.id, arena.version, digest});
+    }
+    impl_->arenas = std::move(*installed);
+    impl_->arena = impl_->arenas.front();
     impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
     impl_->predictionElapsed.Reset();
-    const auto arenaDigest = ArenaContentDigest(*impl_->arena);
-    if (!arenaDigest) { error = "Arena content digest is zero"; return false; }
-    impl_->connection.SetArenaIdentity(impl_->arena->id, impl_->arena->version, arenaDigest);
+    impl_->connection.SetArenaIdentities(std::move(identities));
     const auto loaded = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.pvp_lobby"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
     if (!loaded) { error = Explain(loaded.error()); return false; }
@@ -903,6 +996,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         const auto relative = impl_->input->SetRelativeMouseMode(impl_->InWorld() && impl_->inputCaptured && physical.windowFocused);
         if (!relative) return impl_->Fail(Explain(relative.error()));
     }
+    impl_->LogSession(frame.deltaSeconds);
     const auto finished = Clock::now();
     if (Milliseconds(finished, started) >= 250)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow update player=%llu elapsed_ms=%.1f mouse_mode_ms=%.1f frame_gap_ms=%.1f",

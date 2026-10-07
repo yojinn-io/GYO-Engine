@@ -9,14 +9,61 @@
 #include <chrono>
 #include <deque>
 #include <future>
+#include <iostream>
 #include <map>
+#include <sstream>
 #include <string_view>
+#include <syncstream>
 #include <thread>
 
 namespace fps::pvp {
 namespace pb = object_fps_pvp::runtime::v6;
 using asio::ip::tcp;
 namespace {
+// Diagnostics only: lifecycle events and a statistics line every ten seconds
+// on std::clog (match_main copies it into --log). Never affects the session.
+class MatchEventLog final {
+public:
+    static void Line(const std::string& text) {
+        std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << text << '\n';
+    }
+    void Observe(const WorldSnapshot& snapshot, std::uint64_t coalescedSnapshots) {
+        std::map<PlayerId, Life> current;
+        for (const auto& player : snapshot.players) {
+            const auto known = lives_.find(player.playerId);
+            if (known != lives_.end() && player.lifeGeneration == known->second.generation &&
+                known->second.state != LifeState::Dead && player.lifeState == LifeState::Dead) {
+                PlayerId attacker{};
+                for (const auto& combat : snapshot.combat)
+                    if (combat.playerId == player.playerId) attacker = combat.lastAttackerId;
+                std::ostringstream line;
+                line << "death player=" << player.playerId << " tick=" << snapshot.tick << " attacker=" << attacker;
+                Line(line.str());
+            }
+            if (known != lives_.end() && player.lifeGeneration > known->second.generation) {
+                std::ostringstream line;
+                line << "respawn player=" << player.playerId << " life=" << player.lifeGeneration << " tick=" << snapshot.tick
+                     << " x=" << player.position.x << " z=" << player.position.z;
+                Line(line.str());
+            }
+            current[player.playerId] = {player.lifeGeneration, player.lifeState};
+        }
+        lives_ = std::move(current);
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastStatistics_ >= std::chrono::seconds(10)) {
+            lastStatistics_ = now;
+            std::ostringstream line;
+            line << "statistics tick=" << snapshot.tick << " players=" << snapshot.players.size()
+                 << " coalesced_snapshots=" << coalescedSnapshots;
+            Line(line.str());
+        }
+    }
+private:
+    struct Life { std::uint64_t generation{}; LifeState state{}; };
+    std::map<PlayerId, Life> lives_;
+    std::chrono::steady_clock::time_point lastStatistics_{};
+};
+
 pb::ShotRejection RejectionForWire(ShotRejection rejection) {
     switch(rejection) {
     case ShotRejection::None: return pb::REJECTION_NONE;
@@ -133,6 +180,7 @@ struct IpcHost::Impl {
         std::uint64_t writingTick{},coalescedSnapshots{};
         Clock::time_point writingQueuedAt{};
         std::map<std::uint64_t,PlayerId> joins;
+        MatchEventLog events;
         struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
         std::map<PlayerId,ActionLane> actionLanes;
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
@@ -167,6 +215,7 @@ struct IpcHost::Impl {
                     if(!host.QueueJoin(request,message.join().player_id())) return;
                     joins.emplace(request,message.join().player_id());
                 } else if(message.has_leave()) {
+                    MatchEventLog::Line("leave player="+std::to_string(message.leave().player_id()));
                     if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return;
                     actionLanes.erase(message.leave().player_id());
                 } else if(message.has_input()) {
@@ -202,6 +251,7 @@ struct IpcHost::Impl {
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
+                MatchEventLog::Line("join player="+std::to_string(found->second)+(result.accepted?" accepted":" rejected reason="+result.error));
                 if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);
                 controls.push_back(wire::Frame(message.SerializeAsString())); joins.erase(found);
                 if(controls.size()>64) return;
@@ -211,6 +261,9 @@ struct IpcHost::Impl {
                 // reservation like a Leave and tells the Client why.
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* evicted=message.mutable_evicted();evicted->set_player_id(eviction.playerId);
+                MatchEventLog::Line("evicted player="+std::to_string(eviction.playerId)+" reference_age_ms="+
+                    std::to_string(eviction.referenceAgeMillis)+" substituted_permille="+std::to_string(eviction.substitutedPermille)+
+                    " movement_resets="+std::to_string(eviction.movementResets));
                 evicted->set_reason(EvictionForWire(eviction.reason));
                 evicted->set_reference_age_ms(eviction.referenceAgeMillis);
                 evicted->set_substituted_permille(eviction.substitutedPermille);
@@ -220,6 +273,7 @@ struct IpcHost::Impl {
                 if(controls.size()>64) return;
             }
             if(auto snapshot=host.TakeSnapshot()) {
+                events.Observe(*snapshot,coalescedSnapshots);
                 if(latestSnapshot) {
                     ++coalescedSnapshots;
                     TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=snapshot->tick,

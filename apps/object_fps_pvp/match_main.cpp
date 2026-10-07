@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
+#include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "gyo/AppConfig.hpp"
 #include <chrono>
@@ -11,72 +12,41 @@
 #include <thread>
 #include <vector>
 
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
-
 namespace {
 volatile std::sig_atomic_t stopping=0;
 void Stop(int){stopping=1;}
 
-// Product executable composition only; no window backend or Engine dependency.
-std::filesystem::path ExecutablePath() {
-#if defined(_WIN32)
-    std::wstring buffer(256, L'\0');
-    for (;;) {
-        const DWORD length=GetModuleFileNameW(nullptr,buffer.data(),static_cast<DWORD>(buffer.size()));
-        if(length==0) throw std::system_error(static_cast<int>(GetLastError()),std::system_category(),
-                                             "Cannot locate Match executable");
-        if(length<buffer.size()) {
-            buffer.resize(length);
-            return std::filesystem::path(buffer);
-        }
-        if(buffer.size()>=32768) throw std::runtime_error("Match executable path is too long");
-        buffer.resize(buffer.size()*2);
-    }
-#elif defined(__linux__)
-    return std::filesystem::read_symlink("/proc/self/exe");
-#elif defined(__APPLE__)
-    std::vector<char> buffer(1024);
-    std::uint32_t size=static_cast<std::uint32_t>(buffer.size());
-    if(_NSGetExecutablePath(buffer.data(),&size)!=0) {
-        buffer.resize(size);
-        if(_NSGetExecutablePath(buffer.data(),&size)!=0)
-            throw std::runtime_error("Cannot locate Match executable");
-    }
-    return std::filesystem::canonical(buffer.data());
-#else
-    throw std::runtime_error("Cannot locate Match executable on this platform; use --arena");
-#endif
-}
 }
 
 int main(int argc,char** argv) {
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena;
-        std::filesystem::path movementTrace;
+        std::filesystem::path movementTrace,logPath;
         for(int index=1;index<argc;++index) {
             const std::string argument=argv[index];
             if(argument=="--help") {
-                std::cout<<"Match runtime: --arena path --listen 127.0.0.1:27016 --movement-trace path\n";return 0;
+                std::cout<<"Match runtime: [--arena path (default: the release arena pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
+                           "  [--movement-trace path] [--log path (also append console output, timestamped)]\n";return 0;
             }
             if(index+1>=argc){std::cerr<<"Missing argument\n";return 2;}
             if(argument=="--arena") explicitArena=argv[++index];
             else if(argument=="--listen") listen=argv[++index];
             else if(argument=="--movement-trace") movementTrace=argv[++index];
+            else if(argument=="--log") logPath=argv[++index];
             else {std::cerr<<"Unknown argument: "<<argument<<'\n';return 2;}
         }
+        std::optional<fps::pvp::LogFile> log;
+        if(!logPath.empty()) {log.emplace(logPath);log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
+        // Without --arena the Match hosts the release arena; tests and acceptance name theirs.
         const auto arenaPath=explicitArena ? *explicitArena
-            : ExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_arena.json";
+            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_corners.json";
+        std::clog<<"[ObjectFPS/PvP Match] start executable_sha256="<<fps::pvp::FileSha256(fps::pvp::RunningExecutablePath())
+                 <<" arena_file="<<arenaPath.string()<<'\n';
         std::string error;
         auto arena=fps::pvp::Arena::Load(arenaPath,error);
         if(!arena){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
         fps::pvp::MovementTraceWriter trace(movementTrace);
         fps::pvp::MatchRuntimeHost runtime(*arena);
         std::jthread simulation([&](std::stop_token stop){runtime.Run(stop);});

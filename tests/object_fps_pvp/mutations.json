@@ -117,7 +117,7 @@
       "batch": "09",
       "what": "Client does not compare digests",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "if(!digest || *digest!=expectedArenaDigest)",
+      "find": "if(!digest || *digest!=installed->digest)",
       "replace": "if(!digest)",
       "check": "worker",
       "expect": "HTTP join accepted different arena content"
@@ -481,6 +481,26 @@
       "replace": "    expected_errors = list(reference['errors'])",
       "check": "quad_evidence",
       "expect": "test_every_two_player_corpus_matches_command_evidence_value_by_value"
+    },
+    {
+      "id": "17-arena-any-version",
+      "batch": "17",
+      "what": "The Client selects an installed arena by id alone, ignoring its version",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "[&](const ArenaIdentity& arena){return arena.id==id && arena.version==version;});",
+      "replace": "[&](const ArenaIdentity& arena){return arena.id==id;});",
+      "check": "worker",
+      "expect": "join accepted an arena installed only in another version"
+    },
+    {
+      "id": "17-arena-list-repeat",
+      "batch": "17",
+      "what": "An arena list may install the same arena twice",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "                if (other.id == arena->id) throw std::runtime_error(\"Arena installed twice: \" + arena->id);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "An arena list rejects other versions, paths, repeats and a different body height"
     }
   ]
 }

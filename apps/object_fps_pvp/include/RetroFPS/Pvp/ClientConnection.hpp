@@ -17,8 +17,17 @@ struct ActionTransportState {
     std::uint64_t sentBatches{}, sentShots{}, sentAckOnlyBatches{}, rejectedResultBatches{};
     std::size_t maxPayloadBytes{}, maxDatagramBytes{}, maxBatchShots{};
 };
+// An arena this Client has installed (pv6 contract §2): id, format version and
+// ArenaContentDigest.
+struct ArenaIdentity {
+    std::string id;
+    std::uint32_t version{};
+    std::uint64_t digest{};
+};
 struct ClientConnectionState {
     ConnectionPhase phase{ConnectionPhase::Lobby};
+    // The installed arena the joined Match hosts; empty outside a session.
+    std::string arenaId;
     std::vector<LobbyRoom> rooms;
     std::string error;
     PlayerId playerId{};
@@ -55,6 +64,10 @@ public:
     // The arena this Client loaded (pv6 contract §2): id, format version and
     // ArenaContentDigest. A zero digest is invalid and throws.
     void SetArenaIdentity(std::string id, std::uint32_t version, std::uint64_t digest);
+    // Every installed arena. A join selects the one with the Match's id and
+    // version, then compares its content; none installed is an identity
+    // mismatch. Ids repeat or a zero digest throws.
+    void SetArenaIdentities(std::vector<ArenaIdentity> installed);
     // Repeated submissions contain the entire immutable unacknowledged window.
     // The worker coalesces complete windows; it never keeps only their last step.
     void SendInput(PlayerInput input);
