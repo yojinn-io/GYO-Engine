@@ -206,10 +206,10 @@
     {
       "id": "11-pitch-ignored",
       "batch": "11",
-      "what": "The remote upper body ignores the pitch",
+      "what": "The remote upper body ignores the pitch (no aim blend)",
       "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
-      "find": "        output.aimWeight = frame.pitch < 0 ?\n",
-      "replace": "        output.aimWeight = 0 * frame.pitch < 0 ?\n",
+      "find": "            if (actions.aimWeight != 0) {\n",
+      "replace": "            if (false) {\n",
       "check": "presentation",
       "expect": "a positive pitch points the pistol down"
     },
@@ -246,12 +246,12 @@
     {
       "id": "11-dead-aims",
       "batch": "11",
-      "what": "A dead player's upper body still aims by pitch",
+      "what": "Death no longer owns the whole body: the aim pose overrides its upper body",
       "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
       "find": "            upper = nullptr; // Death owns the whole body, weapon hand included.\n",
       "replace": "",
       "check": "presentation",
-      "expect": "dead players ignore pitch"
+      "expect": "plays Death01 once over the whole body"
     },
     {
       "id": "11-limit-uncalibrated",
