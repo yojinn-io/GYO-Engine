@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -80,7 +81,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -382,10 +383,12 @@ func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {
 		t.Fatal(status)
 	}
 	a := reserve(t, s, "a")
-	_ = reserve(t, s, "b")
-	status, _ = post(t, s, "/rooms/1/join", map[string]any{"request_id": "c", "protocol_version": adapter.ClientVersion})
-	if status != 409 {
-		t.Fatalf("capacity status %d", status)
+	for i := 1; i < adapter.MaxPlayers; i++ {
+		_ = reserve(t, s, fmt.Sprintf("filler%d", i))
+	}
+	status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": "c", "protocol_version": adapter.ClientVersion})
+	if status != 409 || !bytes.Contains(body, []byte("room_full")) {
+		t.Fatalf("capacity status %d %s", status, body)
 	}
 	s.expireAt(time.Now().Add(6 * time.Second))
 	f.quiet(t)
@@ -562,7 +565,7 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 			}
 			defer conn.Close()
 			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
-				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: 2, CombatRules: testRules()}}}
+				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()
@@ -838,4 +841,74 @@ func rejectedVersions() []uint32 {
 
 func testRules() *runtime.CombatRules {
 	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+}
+
+// Readiness requires the Match's capacity to equal the Gateway's (pv6 contract
+// §1): Gateway and Match of different capacities fail at startup, in both directions.
+func TestReadinessRequiresTheSameCapacity(t *testing.T) {
+	for _, capacity := range []uint32{adapter.MaxPlayers - 1, adapter.MaxPlayers + 1} {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			ready := envelope()
+			ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1,
+				ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: capacity, CombatRules: testRules()}}
+			b, _ := proto.Marshal(ready)
+			_ = framing.WriteFrame(conn, b)
+		}()
+		if link, _, err := connectRuntime(context.Background(), listener.Addr().String()); err == nil {
+			link.close()
+			t.Fatalf("runtime with capacity %d admitted", capacity)
+		}
+		<-done
+	}
+}
+
+// Every peer of a full room receives the same snapshot (pv6 contract §1: four players).
+func TestSnapshotsReachEveryPeerOfAFullRoom(t *testing.T) {
+	s, f := newTestServer(t)
+	if status, _ := post(t, s, "/rooms", map[string]any{}); status != 200 {
+		t.Fatal(status)
+	}
+	type joined struct {
+		c credentials
+		p *net.UDPConn
+	}
+	var peers []joined
+	var players []*runtime.PlayerState
+	for i := 0; i < adapter.MaxPlayers; i++ {
+		c := reserve(t, s, fmt.Sprintf("peer%d", i))
+		p := peer(t)
+		sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
+		accept(t, f, c)
+		receivePacket(t, p, adapter.Welcome)
+		peers = append(peers, joined{c, p})
+		players = append(players, &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, X: float32(i)})
+	}
+	if status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": "fifth", "protocol_version": adapter.ClientVersion}); status != 409 || !bytes.Contains(body, []byte("room_full")) {
+		t.Fatalf("fifth join %d %s", status, body)
+	}
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: players}}
+	f.send(e)
+	first := receivePacket(t, peers[0].p, adapter.Snapshot)
+	for _, other := range peers[1:] {
+		if !bytes.Equal(first, receivePacket(t, other.p, adapter.Snapshot)) {
+			t.Fatal("peers observed different world payloads")
+		}
+	}
+	var snapshot client.WorldSnapshot
+	if err := proto.Unmarshal(first, &snapshot); err != nil || len(snapshot.Players) != adapter.MaxPlayers {
+		t.Fatalf("full room snapshot: %v %v", &snapshot, err)
+	}
 }

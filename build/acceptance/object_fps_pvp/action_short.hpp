@@ -128,6 +128,7 @@ void RunActionShort(const Options& options) {
     };
     try {
         PvpApplication application;
+        GuiRoom guiRoom(options.output, options.role, options.roomPlayers);
         std::string error;
         Require(application.InitializeContent(options.assetRoot, error), error);
         PvpApplicationOptions graphics;
@@ -230,7 +231,8 @@ void RunActionShort(const Options& options) {
                     joined = true;
                 } else if (Seconds(now, refreshed) >= .3) { connection.Refresh(options.gateway); refreshed = now; }
             }
-            if (state.snapshot && state.snapshot->players.size() == 2 && !playerId) {
+            if (const auto peer = guiRoom.Observe(state)) application.ObserveRemote(peer);
+            if (guiRoom.Full(state) && !playerId) {
                 playerId = state.playerId;
                 evidence["player_id"] = playerId;
                 if (actor) {

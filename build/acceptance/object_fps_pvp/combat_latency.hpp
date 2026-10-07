@@ -48,6 +48,8 @@ class CombatLatencyEvidence {
         bool presented{}, hudDead{};
     };
     const Options& options_;
+    // Bots may share the room: only the two GUI participants are combat evidence.
+    const GuiRoom& room_;
     bool mover_{}, releaseMouse_{}, releaseReload_{};
     std::optional<CombatStep> expected_;
     unsigned planned_{}, dispatched_{}, suppressed_{};
@@ -69,7 +71,8 @@ class CombatLatencyEvidence {
         }
     }
 public:
-    explicit CombatLatencyEvidence(const Options& options) : options_(options), mover_(options.role == "create") {
+    CombatLatencyEvidence(const Options& options, const GuiRoom& room)
+        : options_(options), room_(room), mover_(options.role == "create") {
         if (!options.combat) return;
         if (mover_) while (CombatSlotStart + planned_ * CombatSlotPeriod < options.duration) ++planned_;
         bound_ = static_cast<std::size_t>(std::ceil((options.duration + 45) * options.fps)) + 1024;
@@ -106,9 +109,10 @@ public:
             reloadTicks_ = state.combatRules->reloadTicks;
             respawnTicks_ = state.combatRules->respawnTicks;
         }
-        if (state.snapshot && state.snapshot->combat.size() == 2) {
+        if (const auto peer = room_.Peer(state); state.snapshot && peer &&
+            GuiParticipants(state.snapshot->combat, state.playerId, *peer)) {
             local_ = state.playerId;
-            for (const auto& entry : state.snapshot->combat) if (entry.playerId != local_) target_ = entry.playerId;
+            target_ = *peer;
         }
         const bool shot = expected_ == CombatStep::Hit || expected_ == CombatStep::DeadTargetShot;
         if (shot)
@@ -157,15 +161,17 @@ public:
             awaiting_.reset();
         }
         const auto state = application.Connection().State();
-        if (!state.snapshot || state.snapshot->combat.size() != 2) return;
+        const auto peer = room_.Peer(state);
+        const auto combat = state.snapshot && peer ? GuiParticipants(state.snapshot->combat, state.playerId, *peer) : std::nullopt;
+        if (!combat) return;
         Require(frames_.size() < bound_, "Combat HP frame buffer exhausted");
         HpFrame sample;
         sample.frame = frame;
         sample.seconds = std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
         sample.tick = state.snapshot->tick;
         sample.local = state.playerId;
-        std::copy_n(state.snapshot->combat.begin(), 2, sample.combat.begin());
-        if (state.snapshot->players.size() == 2) std::copy_n(state.snapshot->players.begin(), 2, sample.players.begin());
+        sample.combat = *combat;
+        if (const auto players = GuiParticipants(state.snapshot->players, state.playerId, *peer)) sample.players = *players;
         sample.presented = presented.has_value();
         if (presented) {
             sample.hudTick = presented->local.authorityTick; sample.hud = presented->weapon.hp;

@@ -30,7 +30,7 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
     error.clear();
     if (playerId == 0) { error = "invalid_player"; return false; }
     if (players_.contains(playerId)) return true;
-    if (players_.size() >= 2) { error = "match_full"; return false; }
+    if (players_.size() >= MaxPlayers) { error = "match_full"; return false; }
     if (const auto* spawn = FindSpawn(playerId)) {
         Participant player;
         player.state = {playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};
@@ -181,18 +181,14 @@ std::optional<MovementQuality> PvpMatch::GetMovementQuality(PlayerId playerId) c
     return found->second.quality;
 }
 
-const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
+const SpawnPoint* SelectSpawn(const Arena& arena, const std::span<const Engine::Math::Vec3> living) {
     std::vector<Engine::Collision::VerticalCapsule> blockers;
-    for (const auto& [id, player] : players_) {
-        if (id == playerId || player.state.lifeState == LifeState::Dead) continue;
-        const auto p = player.state.position;
-        blockers.push_back({p, arena_.bodyHeight, arena_.radius});
-    }
+    for (const auto& position : living) blockers.push_back({position, arena.bodyHeight, arena.radius});
     const SpawnPoint* selected = nullptr;
     double bestDistance = -1;
-    for (const auto& spawn : arena_.spawns) {
+    for (const auto& spawn : arena.spawns) {
         const auto p = spawn.position;
-        if (!CanPlaceCharacterBody({p, arena_.bodyHeight, arena_.radius}, arena_.walls, blockers)) continue;
+        if (!CanPlaceCharacterBody({p, arena.bodyHeight, arena.radius}, arena.walls, blockers)) continue;
         double nearest = (std::numeric_limits<double>::max)();
         for (const auto& blocker : blockers) {
             // Float difference, then double squares: the established spawn distance.
@@ -206,6 +202,15 @@ const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
         }
     }
     return selected;
+}
+
+const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
+    std::vector<Engine::Math::Vec3> living;
+    for (const auto& [id, player] : players_) {
+        if (id == playerId || player.state.lifeState == LifeState::Dead) continue;
+        living.push_back(player.state.position);
+    }
+    return SelectSpawn(arena_, living);
 }
 
 void PvpMatch::Kill(Participant& player) {

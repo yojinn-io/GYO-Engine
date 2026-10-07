@@ -30,6 +30,15 @@
         "gyo_object_fps_pvp_presentation_tests"
       ],
       "ctest": "object_fps_pvp.presentation_cpu"
+    },
+    "acceptance_record": {
+      "build": [
+        "gyo_object_fps_pvp_start_phase_record_tests"
+      ],
+      "ctest": "object_fps_pvp.start_phase_record"
+    },
+    "quad_evidence": {
+      "ctest": "object_fps_pvp.quad_evidence"
     }
   },
   "mutants": [
@@ -332,6 +341,146 @@
       "replace": "        if (!frame.shotActionId && !frame.reloadActionId && frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {",
       "check": "presentation",
       "expect": "once, within its life"
+    },
+    {
+      "id": "16-match-one-over",
+      "batch": "16",
+      "what": "The Match admits one player above the room capacity",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (players_.size() >= MaxPlayers) { error = \"match_full\"; return false; }",
+      "replace": "if (players_.size() > MaxPlayers) { error = \"match_full\"; return false; }",
+      "check": "cpu",
+      "expect": "error == \"match_full\""
+    },
+    {
+      "id": "16-spawn-tie-last",
+      "batch": "16",
+      "what": "An equal-distance spawn choice with living players takes the later spawn",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (!selected || nearest > bestDistance) {",
+      "replace": "if (!selected || nearest > bestDistance || (!blockers.empty() && nearest == bestDistance)) {",
+      "check": "cpu",
+      "expect": "Equal-distance spawn choices keep content order"
+    },
+    {
+      "id": "16-attacker-first",
+      "batch": "16",
+      "what": "The hit record keeps the first attacker instead of the last",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "                    target.combat.lastAttackerId = playerId;",
+      "replace": "                    if (!target.combat.lastAttackerId) target.combat.lastAttackerId = playerId;",
+      "check": "cpu",
+      "expect": "PvP same tick shots from two and three players all hit and the record keeps the last attacker"
+    },
+    {
+      "id": "16-arena-three-spawns",
+      "batch": "16",
+      "what": "Arena v1 requires three spawns again",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "spawns.size() < MinimumArenaSpawns ||",
+      "replace": "spawns.size() <= MinimumArenaSpawns ||",
+      "check": "cpu",
+      "expect": "Arena v1 accepts 2 to 64 spawns and the Match hosts only arenas with a spawn per player"
+    },
+    {
+      "id": "16-hosting-two-spawns",
+      "batch": "16",
+      "what": "The Match hosts an arena with fewer spawns than players",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "if (arena.spawns.size() < MaxPlayers) {",
+      "replace": "if (arena.spawns.size() < MinimumArenaSpawns) {",
+      "check": "cpu",
+      "expect": "ArenaHostsRoom\\(WithSpawns\\(MaxPlayers - 1\\), error\\)"
+    },
+    {
+      "id": "16-client-one-over",
+      "batch": "16",
+      "what": "The Client accepts a snapshot with one player above the room capacity",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "message.players_size()>static_cast<int>(MaxPlayers)",
+      "replace": "message.players_size()>static_cast<int>(MaxPlayers)+1",
+      "check": "worker",
+      "expect": "a snapshot above the room capacity was accepted"
+    },
+    {
+      "id": "16-gateway-snapshot-one-over",
+      "batch": "16",
+      "what": "The Gateway converts a snapshot with one player above the room capacity",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "len(in.Players) > MaxPlayers ||",
+      "replace": "len(in.Players) > MaxPlayers+1 ||",
+      "check": "go",
+      "expect": "snapshot above capacity accepted"
+    },
+    {
+      "id": "16-gateway-ready-at-least",
+      "batch": "16",
+      "what": "Readiness accepts a runtime with a larger room",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "ready.MaxPlayers != adapter.MaxPlayers",
+      "replace": "ready.MaxPlayers < adapter.MaxPlayers",
+      "check": "go",
+      "expect": "runtime with capacity 5 admitted"
+    },
+    {
+      "id": "16-evict-keeps-link",
+      "batch": "16",
+      "what": "Eviction keeps the runtime link state of the evicted player",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\ts.link.forget(evicted.PlayerId)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "evicted player's action window kept"
+    },
+    {
+      "id": "16-observed-falls-back",
+      "batch": "16",
+      "what": "A chosen remote that left falls back to the last remote",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpApplication.cpp",
+      "find": "    return chosen ? std::nullopt : last;",
+      "replace": "    return last;",
+      "check": "presentation",
+      "expect": "Diagnostics observe the chosen remote, else the last remote in snapshot order"
+    },
+    {
+      "id": "16-gui-unparked",
+      "batch": "16",
+      "what": "A GUI room with bots counts as full before the bots park",
+      "file": "build/acceptance/object_fps_pvp/gui_room.hpp",
+      "find": "            (!WithBots() || parked_);",
+      "replace": "            true;",
+      "check": "acceptance_record",
+      "expect": "A room with bots finds the other GUI by its published ID and waits for parked bots"
+    },
+    {
+      "id": "16-gui-peer-stale",
+      "batch": "16",
+      "what": "A GUI keeps the peer ID after the peer rejoins",
+      "file": "build/acceptance/object_fps_pvp/gui_room.hpp",
+      "find": "        if (!peer_ || !InSnapshot(state, *peer_)) {",
+      "replace": "        if (!peer_) {",
+      "check": "acceptance_record",
+      "expect": "A room with bots finds the other GUI by its published ID and waits for parked bots"
+    },
+    {
+      "id": "16-quad-cooldown-allowed",
+      "batch": "16",
+      "what": "The quad verdict accepts cooldown rejections",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "ALLOWED_REJECTIONS = frozenset(('Dead', 'StaleLife'))",
+      "replace": "ALLOWED_REJECTIONS = frozenset(('Dead', 'StaleLife', 'Cooldown'))",
+      "check": "quad_evidence",
+      "expect": "test_only_racing_rejections_are_allowed"
+    },
+    {
+      "id": "16-quad-two-player-error",
+      "batch": "16",
+      "what": "The N-player command stage renames no two-player error",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "    expected_errors = [EVERY_PLAYER_ERROR if error == TWO_PLAYER_ERROR else error for error in reference['errors']]",
+      "replace": "    expected_errors = list(reference['errors'])",
+      "check": "quad_evidence",
+      "expect": "test_every_two_player_corpus_matches_command_evidence_value_by_value"
     }
   ]
 }

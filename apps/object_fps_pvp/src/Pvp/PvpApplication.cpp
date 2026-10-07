@@ -116,6 +116,7 @@ struct PvpApplication::Impl final {
     SnapshotTimeline timeline;
     std::uint64_t connectionGeneration{}, lastSnapshotTick{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
+    std::optional<PlayerId> observedRemote;
     std::optional<PresentedMovementObservation> presentedMovement;
     std::uint64_t skippedPresentationFrames{};
     std::string address{"127.0.0.1:8080"};
@@ -581,38 +582,46 @@ struct PvpApplication::Impl final {
         }
         const auto presentationTime = Clock::now();
         std::vector<PlayerPresentationFrame> characterFrames;
+        // The timeline's reanchor count is shared by every remote player: compare
+        // each against the previous frame's value, and update it once per frame.
+        const auto reanchorsBefore = characterPhaseReanchors;
+        std::optional<std::uint64_t> reanchorsNow;
+        const auto observed = ObservedRemotePlayer(*state.snapshot, state.playerId, observedRemote);
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
             const auto sampled = timeline.Sample(player.playerId, presentationTime);
             const auto& presented = sampled ? sampled->player : player;
             const auto position = presented.position;
-            remoteMovement.emplace();
-            auto& observation = *remoteMovement;
-            observation.playerId = player.playerId;
-            observation.renderPosition = position;
-            observation.movementEpoch = presented.movementEpoch;
-            observation.lifeGeneration = presented.lifeGeneration;
-            observation.lifeState = presented.lifeState;
-            observation.yaw = presented.yaw;
-            observation.pitch = presented.pitch;
-            observation.ingressHistoryDrops = ingressHistoryDrops;
-            if (sampled) {
-                observation.lowerTick = sampled->lowerTick;
-                observation.upperTick = sampled->upperTick;
-                observation.presentationTick = sampled->presentationTick;
-                observation.interpolationAlpha = sampled->alpha;
-                observation.latestReceiveAgeSeconds = sampled->latestReceiveAgeSeconds;
-                observation.missingFutureSnapshot = sampled->missingFutureSnapshot;
-                observation.holdSeconds = sampled->holdSeconds;
-                observation.totalHoldSeconds = sampled->totalHoldSeconds;
-                observation.historySize = sampled->historySize;
-                observation.holdCount = sampled->holdCount;
-                observation.gapCount = sampled->gapCount;
-                observation.historyEvictions = sampled->historyEvictions;
-                observation.phaseReanchors = sampled->phaseReanchors;
-                observation.holding = sampled->holding;
-                observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
-                observation.upperResolvedCommand = sampled->upperResolvedCommand;
+            // Diagnostics observe one remote player (ObservedRemotePlayer).
+            if (player.playerId == observed) {
+                remoteMovement.emplace();
+                auto& observation = *remoteMovement;
+                observation.playerId = player.playerId;
+                observation.renderPosition = position;
+                observation.movementEpoch = presented.movementEpoch;
+                observation.lifeGeneration = presented.lifeGeneration;
+                observation.lifeState = presented.lifeState;
+                observation.yaw = presented.yaw;
+                observation.pitch = presented.pitch;
+                observation.ingressHistoryDrops = ingressHistoryDrops;
+                if (sampled) {
+                    observation.lowerTick = sampled->lowerTick;
+                    observation.upperTick = sampled->upperTick;
+                    observation.presentationTick = sampled->presentationTick;
+                    observation.interpolationAlpha = sampled->alpha;
+                    observation.latestReceiveAgeSeconds = sampled->latestReceiveAgeSeconds;
+                    observation.missingFutureSnapshot = sampled->missingFutureSnapshot;
+                    observation.holdSeconds = sampled->holdSeconds;
+                    observation.totalHoldSeconds = sampled->totalHoldSeconds;
+                    observation.historySize = sampled->historySize;
+                    observation.holdCount = sampled->holdCount;
+                    observation.gapCount = sampled->gapCount;
+                    observation.historyEvictions = sampled->historyEvictions;
+                    observation.phaseReanchors = sampled->phaseReanchors;
+                    observation.holding = sampled->holding;
+                    observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
+                    observation.upperResolvedCommand = sampled->upperResolvedCommand;
+                }
             }
             PlayerPresentationFrame characterFrame;
             characterFrame.playerId = player.playerId;
@@ -627,7 +636,7 @@ struct PvpApplication::Impl final {
             characterFrame.deltaSeconds = deltaSeconds;
             characterFrame.planarSpeed = sampled ? sampled->planarSpeed : 0;
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
-                sampled->phaseReanchors == characterPhaseReanchors;
+                sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;
             characterFrame.grounded = presented.grounded;
             characterFrame.verticalVelocity = presented.verticalVelocity;
@@ -651,8 +660,9 @@ struct PvpApplication::Impl final {
                 }
             }
             characterFrames.push_back(characterFrame);
-            if (sampled) characterPhaseReanchors = sampled->phaseReanchors;
+            if (sampled) reanchorsNow = sampled->phaseReanchors;
         }
+        if (reanchorsNow) characterPhaseReanchors = *reanchorsNow;
         const auto characterStarted = Clock::now();
         if (!players->Submit(characterFrames, queue, lastError)) return false;
         remoteSubmitMilliseconds = Milliseconds(Clock::now(), characterStarted);
@@ -770,7 +780,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->players = std::make_unique<PlayerPresentation>();
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.
-    if (!impl_->players->Initialize(*impl_->device, impl_->assets, impl_->arena->bodyHeight, 1, error)) return false;
+    if (!impl_->players->Initialize(*impl_->device, impl_->assets, impl_->arena->bodyHeight, MaxPlayers - 1, error)) return false;
     // Prepare the actual viewmodel pass before joining. Model, images and GPU
     // resources are loaded above; rendering Idle also warms the lazy pipelines
     // shared by Draw and Shoot, so the first click performs no asset loading.
@@ -1089,6 +1099,18 @@ int PvpApplication::Run() {
     return impl_->exitCode;
 }
 void PvpApplication::SetGatewayAddress(std::string address) { impl_->address = std::move(address); }
+void PvpApplication::ObserveRemote(std::optional<PlayerId> playerId) { impl_->observedRemote = playerId; }
+
+std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, const PlayerId local,
+                                             const std::optional<PlayerId> chosen) noexcept {
+    std::optional<PlayerId> last;
+    for (const auto& player : snapshot.players) {
+        if (player.playerId == local) continue;
+        if (chosen && player.playerId == *chosen) return chosen;
+        last = player.playerId;
+    }
+    return chosen ? std::nullopt : last;
+}
 ClientConnection& PvpApplication::Connection() { return impl_->connection; }
 Engine::Render::Renderer& PvpApplication::Renderer() { return impl_->renderer; }
 Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevice() { return *impl_->device; }

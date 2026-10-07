@@ -43,4 +43,13 @@ struct Arena final {
 // Zero is reserved for "missing": a caller treats it as a load failure.
 [[nodiscard]] std::uint64_t ArenaContentDigest(const Arena& arena);
 
+// Arena v1 spawn counts (pv6 contract §2, 2026-10-07 revision).
+inline constexpr std::size_t MinimumArenaSpawns = 2;
+inline constexpr std::size_t MaximumArenaSpawns = 64;
+
+// The Match hosts only an arena with at least MaxPlayers spawns. Binaries from
+// before the revision reject any arena whose spawn count is not two, so mixing
+// them with a hostable arena always fails at the arena digest.
+[[nodiscard]] bool ArenaHostsRoom(const Arena& arena, std::string& error);
+
 } // namespace fps::pvp

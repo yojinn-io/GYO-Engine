@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "RetroFPS/Pvp/Movement.hpp"
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/base/Fnv1a.hpp"
 #include "engine/math/linear/Vec3.hpp"
@@ -29,8 +30,8 @@ bool Arena::Validate(std::string& error) const {
         !std::isfinite(2 * gravity * jumpHeight) ||
         !Engine::Collision::IsValid(Engine::Collision::VerticalCapsule{{}, bodyHeight, radius}) ||
         eyeHeight > bodyHeight ||
-        spawns.size() != 2 || walls.size() > 1024) {
-        error = "Arena v1 requires an id, valid dimensions/movement settings and exactly two spawns";
+        spawns.size() < MinimumArenaSpawns || spawns.size() > MaximumArenaSpawns || walls.size() > 1024) {
+        error = "Arena v1 requires an id, valid dimensions/movement settings and 2-64 spawns";
         return false;
     }
     for (const auto& wall : walls) {
@@ -118,6 +119,16 @@ std::uint64_t ArenaContentDigest(const Arena& arena) {
     f32(jumpHeight);
     f32(gravity);
     return Engine::Base::Fnv1a64(bytes);
+}
+
+bool ArenaHostsRoom(const Arena& arena, std::string& error) {
+    error.clear();
+    if (arena.spawns.size() < MaxPlayers) {
+        error = "Arena " + arena.id + " has " + std::to_string(arena.spawns.size()) +
+            " spawns; a room of " + std::to_string(MaxPlayers) + " players needs at least that many";
+        return false;
+    }
+    return true;
 }
 
 } // namespace fps::pvp

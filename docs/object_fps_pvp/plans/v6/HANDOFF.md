@@ -494,10 +494,26 @@
   - 已知的 2 人假設（開始時的初步搜尋，盤點會補全）：Gateway `adapter.MaxPlayers = 2`（`adapter.go:20`）與 readiness、加入、動作窗口；Match `set_max_players(2)`（`IpcHost.cpp:140`）與 `match_full`（`PvpMatch.cpp:33`）；Client 丟棄超過 2 人的 Snapshot（`ClientConnection.cpp:428`）、只有一份遠端移動觀測（`PvpApplication.cpp:115`）；arena v1 規定恰好兩個出生點（`Arena.cpp:32`）；契約的 Snapshot 最壞大小以 2 人計算（545 bytes，上限 1200）。
   - 對 v7 的影響（初步）：v7 的任務與人數無關；v7 的 30 FPS 對比沿用 2 個 Client 的案例才能比較；4 人會用掉更多 Snapshot 的 1200 bytes 空間。
   - 檔位：ultracode（3 個盤點、3 個方案、1 位評審、1 次對抗檢查，全部唯讀；子 agent 檔位沿用主對話），workflow `wf_45d62ed8-68c`。
+- 2026-10-07：#62 合併（使用者指示，`7886848`），第 13 批的 L2 worktree 已移除。第 16 批開始（使用者指示），分支 `claude/pvp-v6-batch16` 自 master `7886848`。重新核對 2 人假設的位置（見批次文件）；pv6 契約加入 2026-10-07 修訂（§1 房間容量、§2 同 Tick 命中與出生點數、§5 出生點選擇的明文化、§7 大小與 587 bytes 的更正）；事前宣告寫入批次文件（權威 35 情境預期不變、新出生點 (5,0,7.5) yaw 0 與 (5,0,9.5) yaw π、L2 的比較範圍）。L2 的跑次、分母與 IPC 門檻在量測前另寫 `declare.txt`。
 - 2026-10-07：規劃完成（8 個 agent 全部完成，唯讀）。建議方案：維持 pv6、8 個 commit、2 人權威預期不變；4 人 Snapshot 契約最大 1055 bytes。對抗檢查 major 3（14b 不涵蓋 4 人、IPC 寫出迴圈沒有預先同意的出路、L2「0 差異」不能用在故障案例）與 minor 8 已處理進計畫或改為使用者決定。
   - 使用者決定見 D23。出生點原選「四角分散」，說明會改變 2 人出生位置、需改寫驗收幾何、歷史矩陣不可比較之後，改選線段。
   - 盤點更正：D21 與 v7 README 引用的行號已漂移（`IpcHost.cpp:272`、`ClientConnection.cpp:589-592`）；§7 的 587 bytes 是 ActionResults。發現既有缺陷：逐出時不清 runtime link（D23⑥）。
   - 寫入 [第 16 批文件](16-four-player-room.md)；第 14 批文件加入依賴與 4 人項目。實作在第 13 批之後開始。
+- 2026-10-07：commit 2～7 完成（容量常數化、逐出修正、arena 出生點、reanchor、容量 2→4、4 Client 驗收）。另加大廳容量預設值的小修正（`7de9f47`）。權威兩樹在各檢查點都是 35／35、golden 不變；滿員 Snapshot 釘在 1055／1019 bytes；`cfb243a` 時突變 39／39 killed。開發量測（不計次）的 clean-60、clean-30、1 GUI＋3 bot、版本混用都通過。詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch16.zh-Hant.md)。
+- 2026-10-07：事前宣告的修訂（使用者核准）。使用者要求 GUI probe 等寫死的部分也要改，盤點後選擇「GUI probe 支援 4 人房」，計畫如下：
+  - commit 9：產品新增只供診斷的 `ObserveRemote`。
+  - commit 10：`gui_room.hpp`，以及 quad probe 的被動 bot。
+  - commit 11：GUI runner 加 `--bots`。
+  - 條件是 2 人房判定不變，以 `GuiRoomTests` 與 2 人房實跑確認。
+  - 2 GUI＋2 bot 的 action short、player short、GUI timing short 都通過。
+  - Python 分析器與第 07a 批相同；新工具清單 `b8eabc7c…`（61 檔）。
+  - head `c8b1276`：權威 35／35；第 16 批突變 14／14 killed。
+  - 下一步：寫 L2 的 `declare.txt`，經核准後量測；L3 由使用者執行。
+- 2026-10-07：PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63)。L2 完成（宣告 `c2bbaf6a…`，使用者核准）：
+  - 2 Client：矩陣兩棵樹都是 24／25，clean-30 屬 D21 邊界，只記錄。clean 案例逐筆 0 差異；重生位置全部相同。故障案例有 2 案的結構計數不同，都在故障時間窗內、屬於故障政策允許的結果。action short 0 差異；player144 兩棵樹都無效（120 FPS 上限）。
+  - 4 人：quad clean-60 5／5；clean-30 只記錄；1 GUI＋3 bot、版本混用 4 項、2 GUI＋2 bot 3 項都通過。4 人各輪都在 8 ms 狀態，IPC 合併 0。
+  - 下一步：L3（使用者）。
+- 2026-10-07：L3（使用者，1 GUI＋3 bot）：「4 人顯示和擊殺重生都正常」。**第 16 批完成**，待 CI 與使用者決定合併 #63。合併後移除 L2 worktree（`../GYO-Engine-b16base`、`../GYO-Engine-b16after`）。
 
 ## 延後項目：現況與對應批次
 
@@ -618,7 +634,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ## 未結事項
 
-- 第 13 批進行中；第 14、16 批未開始（第 05 批不執行），順序 13→16→14（D23⑦），由使用者逐批指定。
+- 第 16 批完成（#63 待合併）。剩下第 14 批（第 05 批不執行），由使用者指定開始。第 14 批未開始（第 05 批不執行），順序 16→14（D23⑦），由使用者逐批指定。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。

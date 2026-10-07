@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
 #include "client_v6.pb.h"
 #include <httplib.h>
@@ -133,7 +134,7 @@ int main(int argc,char** argv) {
                 decision->set_damage(PvpCombatRules.shotDamage);decision->set_kind(pb::ACTION_SHOT);decision->set_life_generation(maximum);decision->set_target_life_generation(maximum);
             }
             pb::WorldSnapshot snapshot;snapshot.set_tick(maximum);
-            for(std::size_t i=0;i<2;++i){
+            for(std::size_t i=0;i<AcceptanceMaxPlayers;++i){
                 auto* player=snapshot.add_players();player->set_player_id(maximum-i);
                 player->set_x(1);player->set_y(1);player->set_z(1);player->set_yaw(1);player->set_pitch(1);
                 player->set_last_resolved_command(maximum);player->set_movement_epoch(maximum);
@@ -150,6 +151,8 @@ int main(int argc,char** argv) {
             const auto snapshotBytes=wire::Encode({wire::Type::Snapshot,maximum,0xffffffffu,snapshot.SerializeAsString()});
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
                 "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
+            // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision).
+            Require(snapshotBytes.size()==1019,"maximum legal full-room snapshot is not 1019 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }

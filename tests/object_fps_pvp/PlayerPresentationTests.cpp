@@ -4,6 +4,7 @@
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/ContentManifest.hpp"
@@ -1257,4 +1258,30 @@ TEST_CASE("PvP remote hit reaction adds its motion to the pitched aim pose") {
         moved += MatrixDifference(struck.body.globalTransforms[node], aimed.body.globalTransforms[node]);
     }
     CHECK(moved > 1e-3);
+}
+
+TEST_CASE("Diagnostics observe the chosen remote, else the last remote in snapshot order") {
+    fps::pvp::WorldSnapshot two;
+    two.players.resize(2);
+    two.players[0].playerId = 1;
+    two.players[1].playerId = 2;
+    // A two-player room observes its only remote, chosen or not.
+    CHECK(fps::pvp::ObservedRemotePlayer(two, 1, std::nullopt) == 2);
+    CHECK(fps::pvp::ObservedRemotePlayer(two, 2, std::nullopt) == 1);
+    CHECK(fps::pvp::ObservedRemotePlayer(two, 1, 2) == 2);
+    auto four = two;
+    four.players.resize(4);
+    four.players[2].playerId = 7;
+    four.players[3].playerId = 5;
+    CHECK(fps::pvp::ObservedRemotePlayer(four, 1, std::nullopt) == 5);
+    CHECK(fps::pvp::ObservedRemotePlayer(four, 5, std::nullopt) == 7);
+    CHECK(fps::pvp::ObservedRemotePlayer(four, 1, 2) == 2);
+    CHECK(fps::pvp::ObservedRemotePlayer(four, 1, 7) == 7);
+    // A chosen player that left, or the local player, is observed by nobody.
+    CHECK_FALSE(fps::pvp::ObservedRemotePlayer(four, 1, 9));
+    CHECK_FALSE(fps::pvp::ObservedRemotePlayer(four, 1, 1));
+    fps::pvp::WorldSnapshot alone;
+    alone.players.resize(1);
+    alone.players[0].playerId = 1;
+    CHECK_FALSE(fps::pvp::ObservedRemotePlayer(alone, 1, std::nullopt));
 }

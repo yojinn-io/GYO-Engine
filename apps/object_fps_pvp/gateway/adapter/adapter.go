@@ -17,7 +17,7 @@ import (
 const ProtocolVersion = 6
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
-const MaxPlayers = 2
+const MaxPlayers = 4
 const MaxPendingCommands = 12
 const MaxFutureCommands = 32
 const MaxMovementSlackUs = 1_000_000

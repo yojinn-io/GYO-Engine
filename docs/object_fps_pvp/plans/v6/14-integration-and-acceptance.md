@@ -15,7 +15,7 @@
 
 - 開跑前：凍結來源、產物與分析器；事前宣告跑次、事件分母與輸出目錄。
 - 25 案矩陣、雙 GUI 整合短測、長測短模式。
-- 4 人案例：第 16 批的 quad 案例與 1 GUI＋3 bot（D23⑤）。2 個 Client 的矩陣不變。
+- 4 人案例：第 16 批的 quad 案例與 1 GUI＋3 bot（D23⑤）。2 個 Client 的矩陣不變。GUI 短測也可以用 `--bots` 在有 bot 的房間執行（第 16 批的修訂），要不要納入在本批開始時決定。
 - 產品移除檢查（AGENTS §7）：在 scratch worktree 刪除 pvp，確認其餘仍成立（見下）。
 - `MANUAL_ACCEPTANCE.md`、`ACCEPTANCE_STATUS.md`（v6 目錄內）依平台分欄；未執行的平台標「未執行」。
 - 確認兩個 Engine 計畫的狀態：[input-and-present](../../../architecture/plans/input-and-present/HANDOFF.md)、

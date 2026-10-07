@@ -10,6 +10,7 @@ import urllib.request
 from impaired_network import _ImpairedGateway
 from player_presentation_evidence import analyze
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
+from gui_bots import PassiveBots, add_arguments as add_bot_arguments, check_arguments as check_bot_arguments
 from acceptance_util import digest
 
 
@@ -91,11 +92,13 @@ def run_case(args,name):
                 if time.monotonic()>=deadline:raise RuntimeError('Real Gateway startup timed out')
                 time.sleep(.03)
         relay=SnapshotHold(http,udp)
+        # Bots join the Gateway directly: the relay holds only the GUI observer's snapshots.
+        bots=PassiveBots(args.bots,args.quad_probe,args.arena,directory)
         gui=[]
         for role in ('create','join'):
             gui.append(start(role,[str(args.gui_probe),'--player-capture' if capture else '--player-short',
                 '--fps',str(fps),'--duration','12','--arena-root',str(args.arena_root),'--gateway',relay.gateway,
-                '--role',role,'--gpu-driver',args.gpu_driver,'--output',str(directory)]))
+                '--role',role,'--gpu-driver',args.gpu_driver,'--output',str(directory)]+bots.gui_arguments()))
         deadline=time.monotonic()+40
         armed=False
         while any(process.poll() is None for process in gui):
@@ -109,8 +112,11 @@ def run_case(args,name):
                     armed=True
                 except (FileNotFoundError,json.JSONDecodeError):pass
             if time.monotonic()>=deadline:raise RuntimeError('Bounded player GUI deadline exceeded')
+            bots.poll(http,start)
             time.sleep(.02)
+        bots.stop();result['bots']=bots.evidence()
         if any(process.returncode!=0 for process in gui):raise RuntimeError('GUI exited with failure')
+        if args.bots and result['bots']['exit_code']!=0:raise RuntimeError('Passive bots did not leave cleanly')
         result['presentation']=analyze(directory)
         result['relay']=relay.evidence()
         result['passed']=result['presentation']['passed'] and bool(result['relay']['dropped_observer_snapshots']) and result['relay']['relay_error'] is None
@@ -143,7 +149,9 @@ def main():
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--gpu-driver',default='auto',choices=('auto','vulkan','d3d12','metal'))
     parser.add_argument('--case',action='append',choices=('player30','player60','player144','capture'))
+    add_bot_arguments(parser)
     args=parser.parse_args()
+    check_bot_arguments(parser,args)
     for name in ('match','gateway','gui_probe','arena','arena_root','output'):
         setattr(args,name,getattr(args,name).resolve())
     for name in ('match','gateway','gui_probe','arena'):

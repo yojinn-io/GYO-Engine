@@ -215,7 +215,7 @@ struct ClientConnection::Impl {
         const auto body=Response(http->Get("/rooms"));
         std::vector<LobbyRoom> rooms;
         const auto& values=body.is_array()?body:body.at("rooms");
-        for(const auto& r:values)rooms.push_back({Id(r.at("id")),r.value("players",0u),r.value("capacity",2u)});
+        for(const auto& r:values)rooms.push_back({Id(r.at("id")),r.value("players",0u),r.value("capacity",MaxPlayers)});
         return rooms;
     }
     void RefreshLobby(std::uint64_t requestGeneration) {
@@ -425,7 +425,7 @@ struct ClientConnection::Impl {
             } else if(packet->type==wire::Type::Snapshot) {
                 if(!welcomed)continue;
                 pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
-                    message.tick()==0 || message.players_size()>2 || message.combat_size()!=message.players_size())continue;
+                    message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
                 PlayerId own;std::uint32_t maximumHp{},magazineCapacity{};{
                     std::scoped_lock lock(mutex);
