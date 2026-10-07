@@ -86,6 +86,26 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
   - v7 預期（使用者 2026-10-07）：命令不再跟著畫面幀產生，所以 clean-30 與 clean-60 的結果應該相近，各幀率之間的差距要明顯小於上表的 v6 差距。延遲隨主機狀態的差異不在這項預期內。
   - 分析器：用 v6 的凍結清單（第 07a 批，`9e086f1d…`）分析兩棵 tree。v7 若修改分析器，after 的 trace 用新舊兩版各分析一次。
 
+### 本機射擊閘的兩個常數（v6 第 12 批；v7 完成後重新評估）
+
+2026-10-07 使用者指示：v7 完成後重新評估下列兩個常數（`apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp`）。它們都由 v6 的時序推導而來，任務 1～3 會改變那些時序。
+
+| 常數 | v6 的值 | 推導的依據 | v7 會改變的地方 |
+|---|---|---|---|
+| `FireGateGuardSeconds` | 2 ms | 相位追蹤的死區（`MovementPhaseDeadbandSeconds`），也就是已決定的相位誤差上界。追蹤控制的是到達餘裕的 P90，所以最壞時是「死區＋高於 P90 的主機晚醒」；v6 以合成時間線確認 2 ms 時下界成立，殘餘風險由第 12 批 L2 實測確認 | 任務 2：命令改在固定步邊界產生、相位追蹤處理每一份 Snapshot 的樣本，追蹤誤差的分布會不同；任務 3 與 Time 子系統可能改變主機晚醒的尾巴 |
+| `FireGatePendingSpreadTicks` | 7 Tick | 尚未判定的射擊最晚在最早判定 Tick 之後幾個 Tick 被判定：Client 與 Gateway 各一個 30 Hz 送出間隔、Gateway 寫出迴圈的喚醒、保護與 Tick 邊界各 1 | 任務 3：網路路徑改成事件驅動後，30 Hz 節拍與輪詢休眠可能取消或改變，延遲範圍會縮小 |
+
+- 做法：
+  - 依 v7 的時序重新推導兩個值；
+  - 更新合成時間線（`tests/object_fps_pvp/FireGateTests.cpp`）的建模；
+  - 在 v6 最終 tree 與 v7 tree 上，以同一份事前宣告比較動作短測，並加上 12 Tick 連點的情境；
+  - 和上面的 30 FPS 對比一起執行。
+- 判定沿用 v6 第 12 批：乾淨跑次的權威 Cooldown 拒絕為 0，本機擋下與權威拒絕分開列出。
+- 參考：
+  - 模擬：`build/target/_build/test/logs/pvp-v6-batch12-sim-20261007/`；
+  - L1 突變：`build/target/_build/test/logs/pvp-v6-batch12-l1-20261007/`；
+  - 紀錄：v6 [第 12 批 dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch12.zh-Hant.md)。
+
 ## 候選（未定案，有需求時再開）
 
 - 非同步資產載入（Job 的第一個實際需求）。
