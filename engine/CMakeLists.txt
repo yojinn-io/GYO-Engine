@@ -3,6 +3,10 @@
 # either.
 add_subdirectory(base)
 add_subdirectory(math)
+# The engine time base and role threads sit directly above Base, below
+# GYO::Engine, so modules that do not link the engine library may use them.
+add_subdirectory(time)
+add_subdirectory(threads)
 
 add_library(engine STATIC)
 add_library(GYO::Engine ALIAS engine)
@@ -57,7 +61,7 @@ target_sources(engine
     asset/src/NativeFileAssetSource.cpp
 )
 target_link_libraries(engine
-    PUBLIC GYO::Base GYO::Math
+    PUBLIC GYO::Base GYO::Math GYO::Time
     PRIVATE nlohmann_json::nlohmann_json
 )
 

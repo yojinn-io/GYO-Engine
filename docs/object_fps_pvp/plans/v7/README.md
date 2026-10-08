@@ -88,7 +88,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 
 | 批次 | 內容 | 建議檔位 | 本產品的關係 |
 |---|---|---|---|
-| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 和第 04 批同一個 PR（P1b） |
+| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 和第 04 批同一個 PR（P1b）。2026-10-08 實作與 L1 完成、xhigh 審查完成；L2 待核准 |
 | TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
 | IP-3 | Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`）；日誌轉送、執行檔目錄、進入點、文字輸入與剪貼簿、事件時間戳換算 | high（時間戳換算局部 xhigh） | 第 12 批依賴 |
 | IP-4 | 測試用事件注入與觀測、視窗查詢與擺放；SDL3 改為 PRIVATE 連結 | high | 第 12 批依賴 |

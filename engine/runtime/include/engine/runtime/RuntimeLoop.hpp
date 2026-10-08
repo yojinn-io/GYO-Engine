@@ -1,10 +1,10 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 
 #include "engine/runtime/FrameContext.hpp"
 #include "engine/runtime/IRuntimeClient.hpp"
+#include "engine/time/MonotonicClock.hpp"
 
 namespace Engine::Runtime {
 
@@ -20,7 +20,8 @@ namespace Engine::Runtime {
 // pending ProcessEvents context is followed by pairs with consecutive indices:
 // each live frame, then the regular pair after ProcessEvents returns. Each
 // pair's delta is the time since the previous pair started (zero for the first
-// pair), so the deltas of all pairs add up to the elapsed time.
+// pair), so the deltas of all pairs add up to the elapsed time. Times are read
+// from the engine time base (Time::MonotonicClock).
 class RuntimeLoop final {
 public:
     explicit RuntimeLoop(IRuntimeClient& client) noexcept;
@@ -36,7 +37,7 @@ public:
     bool RunLiveFrame();
 
 private:
-    using Clock = std::chrono::steady_clock;
+    using Clock = Time::MonotonicClock;
 
     [[nodiscard]] FrameContext MakeFrame(Clock::time_point start) const noexcept;
     [[nodiscard]] RuntimeControl RunPair(const FrameContext& frame, Clock::time_point start);

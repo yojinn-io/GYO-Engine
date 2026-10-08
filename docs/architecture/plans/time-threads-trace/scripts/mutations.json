@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the time-threads-trace plan. A mutant is killed only when its test run fails with the expected message (run_mutations.py).",
+  "mutants": [
+    {
+      "id": "tt1-waiter-early",
+      "what": "A deadline wake may return up to 1 ms before the deadline",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "        if (bounded && now >= deadline) return {WakeReason::Deadline, deadline, now, LateSince(deadline, now)};",
+      "replace": "        if (bounded && now + std::chrono::milliseconds(1) >= deadline) return {WakeReason::Deadline, deadline, now, LateSince(deadline, now)};",
+      "target": "gyo_time_tests",
+      "cases": "*never wakes before a deadline*",
+      "expect": "CHECK\\( wake.woke >= deadline \\) is NOT correct"
+    },
+    {
+      "id": "tt1-notify-dropped",
+      "what": "Notify signals the platform but never sets the latch",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "    impl_->notified.store(true, std::memory_order_release);\n    impl_->Signal();",
+      "replace": "    impl_->Signal();",
+      "target": "gyo_time_tests",
+      "cases": "*latches a notification sent before the wait*",
+      "timeout": 120,
+      "expect": "CHECK\\( wake.reason == WakeReason::Notified \\) is NOT correct"
+    },
+    {
+      "id": "tt1-latch-cleared-on-entry",
+      "what": "A wait discards a notification sent before it started",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "    const bool bounded = deadline != TimePoint::max();\n",
+      "replace": "    const bool bounded = deadline != TimePoint::max();\n    impl_->notified.store(false, std::memory_order_release);\n",
+      "target": "gyo_time_tests",
+      "cases": "*latches a notification sent before the wait*",
+      "timeout": 120,
+      "expect": "CHECK\\( wake.reason == WakeReason::Notified \\) is NOT correct"
+    },
+    {
+      "id": "tt1-latch-never-consumed",
+      "what": "A wake leaves the latch set, so notifications never coalesce",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "        if (impl_->notified.exchange(false, std::memory_order_acq_rel))",
+      "replace": "        if (impl_->notified.load(std::memory_order_acquire))",
+      "target": "gyo_time_tests",
+      "cases": "*coalesces several notifications*",
+      "expect": "CHECK\\( second.reason == WakeReason::Deadline \\) is NOT correct"
+    },
+    {
+      "id": "tt1-stop-without-notify",
+      "what": "A stop request sets the flag but does not wake the role's wait",
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    state_->stop.store(true, std::memory_order_release);\n    state_->waiter.Notify();",
+      "replace": "    state_->stop.store(true, std::memory_order_release);",
+      "target": "gyo_threads_tests",
+      "cases": "*a stop request wakes a role blocked in its wait*",
+      "timeout": 120,
+      "expect": "the stop request did not wake the role's wait"
+    },
+    {
+      "id": "tt1-no-recheck",
+      "what": "After a platform wake without the latch, the wait reports the deadline without re-reading the time base",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "        if (bounded) impl_->Block(std::min<Duration>(deadline - now, MaximumBlock));",
+      "replace": "        if (bounded) {\n            impl_->Block(std::min<Duration>(deadline - now, MaximumBlock));\n            if (!impl_->notified.load()) return {WakeReason::Deadline, deadline, Now(), Duration::zero()};\n        }",
+      "target": "gyo_time_tests",
+      "cases": "*coalesces several notifications*",
+      "expect": "CHECK\\( second.woke >= deadline \\) is NOT correct"
+    },
+    {
+      "id": "tt1-latch-before-deadline",
+      "what": "A pending notification is consumed before a passed deadline is reported",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "        const auto now = Now();\n        if (bounded && now >= deadline) return {WakeReason::Deadline, deadline, now, LateSince(deadline, now)};\n        if (impl_->notified.exchange(false, std::memory_order_acq_rel))\n            return {WakeReason::Notified, deadline, Now(), Duration::zero()};\n",
+      "replace": "        if (impl_->notified.exchange(false, std::memory_order_acq_rel))\n            return {WakeReason::Notified, deadline, Now(), Duration::zero()};\n        const auto now = Now();\n        if (bounded && now >= deadline) return {WakeReason::Deadline, deadline, now, LateSince(deadline, now)};\n",
+      "target": "gyo_time_tests",
+      "cases": "*reports a passed deadline first*",
+      "expect": "CHECK\\( passed.reason == WakeReason::Deadline \\) is NOT correct"
+    }
+  ]
+}
