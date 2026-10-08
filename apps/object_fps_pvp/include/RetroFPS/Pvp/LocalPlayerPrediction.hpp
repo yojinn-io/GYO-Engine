@@ -50,6 +50,31 @@ struct LocalMovementObservation final {
     std::uint64_t phaseSampleSequence{};
 };
 
+// What the display needs to place the local player at any time after the
+// prediction last advanced: the interpolation endpoints, the remaining display
+// correction and how far the newest step had progressed.
+struct LocalPresentationState final {
+    Engine::Math::Vec3 previousPosition{};
+    Engine::Math::Vec3 currentPosition{};
+    Engine::Math::Vec3 correction{};
+    double correctionSeconds{};
+    float alpha{};
+};
+
+struct LocalRenderSample final {
+    Engine::Math::Vec3 renderPosition{};
+    Engine::Math::Vec3 correctionOffset{};
+    float interpolationAlpha{};
+};
+
+// The display position secondsLater after the state was taken: the
+// interpolation advances by elapsed time, the correction decays as the
+// prediction would decay it, and the result is swept against the arena's walls
+// so no offset carries the camera through one. Zero seconds is exactly the
+// prediction's own presentation.
+[[nodiscard]] LocalRenderSample InterpolateLocalPresentation(const Arena& arena, const LocalPresentationState& state,
+                                                             double secondsLater);
+
 // Product-local movement prediction. The application samples mouse input once
 // per frame and supplies absolute aim; commands represent exactly one 60 Hz step.
 class LocalPlayerPrediction final {
@@ -76,6 +101,11 @@ public:
     // or while no command can be generated.
     [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept;
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
+    [[nodiscard]] LocalPresentationState Presentation() const noexcept;
+    // Elapsed time after the latest Advance at which the next Advance takes the
+    // next fixed step (one step before any Advance), including the pending phase
+    // slew: a caller that runs steps on time waits this long.
+    [[nodiscard]] double SecondsUntilNextStep() const noexcept;
 
 private:
     void SeedLead(const PlayerState& authority);
@@ -94,6 +124,7 @@ private:
     Engine::Math::Vec3 correction_{};
     double correctionSeconds_{};
     float alpha_{};
+    double secondsUntilNextStep_{MovementTickSeconds};
     bool sendPending_{};
     bool freshSeed_{};
     bool pendingJump_{};

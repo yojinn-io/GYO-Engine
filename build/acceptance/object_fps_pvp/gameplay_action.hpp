@@ -88,6 +88,11 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
     std::string error;const auto arena=Arena::Load(arenaPath,error);Require(arena.has_value(),error);
     std::array<ClientConnection,2> clients;
     for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));
+    // One simulation role per Client, running from before the join as in the
+    // application: the frame loop below only publishes intents.
+    std::array<std::unique_ptr<ClientSimulationRole>,2> simulation;
+    for(std::size_t i=0;i<2;++i)simulation[i]=std::make_unique<ClientSimulationRole>(clients[i],std::vector<Arena>{*arena});
+    std::array<std::uint64_t,2> jumpPresses{};
     clients[0].CreateAndJoin(gateway);
     Wait([&]{const auto s=clients[0].State();Require(s.error.empty(),s.error);return s.phase==ConnectionPhase::Playing;});
     clients[1].Refresh(gateway);
@@ -97,7 +102,6 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         return b.phase==ConnectionPhase::Playing&&a.snapshot&&a.snapshot->players.size()==2&&b.snapshot&&b.snapshot->players.size()==2;});
     const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
     for(const auto& c:clients)Require(c.State().combatRules&&c.State().movementRules,"Missing v5 authoritative rules");
-    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
     std::array<SnapshotTimeline,2> timelines;
     std::array<std::map<ActionId,Json>,2> submitted,decisions;
     std::array<std::size_t,2> maximumRetained{},maximumUnconsumed{};
@@ -119,18 +123,21 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
                 auto drain=clients[i].Drain();state=std::move(drain.state);
                 Require(!drain.overflow || drainStallMs>0,"Unexpected gameplay snapshot receipt overflow");
                 frame["snapshot_history_overflow_count"+std::string(i?"_b":"_a")]=drain.snapshotHistoryOverflowCount;
-                for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));simulation[i].ObserveSample(received.snapshot,ids[i]);}
+                for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));}
                 for(const auto& d:drain.decisions){Require(!decisions[i].contains(d.actionId)&&submitted[i].contains(d.actionId),"Duplicate/unknown gameplay decision");
                     decisions[i][d.actionId]=Decision(d);evidence.Push({{"kind","decision"},{"time_ns",ns},{"player_id",ids[i]},{"decision",Decision(d)}});}
             }
             Require(state.error.empty(),state.error);Require(state.phase==ConnectionPhase::Playing&&state.snapshot,"Gameplay Session lost");
-            const auto& authority=Player(*state.snapshot,ids[i]);simulation[i].Observe(authority,state.snapshot->tick,state.movementRules);
+            const auto& authority=Player(*state.snapshot,ids[i]);
             const bool jump=nextJump[i]<jumpEdges.size()&&age>=jumpEdges[nextJump[i]];
             if(jump){evidence.Push({{"kind","jump"},{"time_ns",ns},{"player_id",ids[i]},{"ordinal",nextJump[i]},
                 {"life_generation",authority.lifeGeneration},{"life_state",static_cast<int>(authority.lifeState)}});++nextJump[i];}
             const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
-            if(auto window=simulation[i].Frame(now,{0,right,0,0,jump}))clients[i].SendInput(std::move(*window));
-            const auto& p=simulation[i].Observation();startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
+            if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
+            if(jump)++jumpPresses[i];
+            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});
+            const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
+            startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
             const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
             frame["pending"+suffix]=p.pendingCommands;frame["queued"+suffix]=authority.contiguousPendingCommands;
             frame["epoch"+suffix]=authority.movementEpoch;frame["remote_age"+suffix]=remote?remote->latestReceiveAgeSeconds:1e9;
@@ -172,6 +179,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         if(submitted[i].size()!=decisions[i].size()||state.actionTransport.retained)result["passed"]=false;
     }
     for(auto& c:clients)c.Leave();Wait([&]{return clients[0].State().phase==ConnectionPhase::Lobby&&clients[1].State().phase==ConnectionPhase::Lobby;});
+    for(auto& role:simulation)role.reset();
     trace.Finish();evidence.Finish();Require(trace.Good()&&evidence.Good(),"Gameplay trace flush failed");
     std::ofstream summary(output/"action-client.json");summary<<result.dump(2)<<'\n';Require(bool(summary),"Cannot write gameplay result");
     return result["passed"].get<bool>()?0:1;

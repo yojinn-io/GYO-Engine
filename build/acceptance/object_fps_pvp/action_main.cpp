@@ -1,6 +1,6 @@
 // Product-owned real-socket action/movement acceptance. No GUI.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "acceptance_protocol.hpp"
@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <map>
 #include <condition_variable>
 #include <deque>
@@ -109,6 +110,10 @@ int main(int argc,char** argv){
         std::string error;const auto arena=Arena::Load(arenaPath,error);Require(arena.has_value(),error);
         std::array<ClientConnection,2> clients;
         for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));
+        // One simulation role per Client, running from before the join as in the
+        // application: the frame loop below only publishes intents.
+        std::array<std::unique_ptr<ClientSimulationRole>,2> simulation;
+        for(std::size_t i=0;i<2;++i)simulation[i]=std::make_unique<ClientSimulationRole>(clients[i],std::vector<Arena>{*arena});
         clients[0].CreateAndJoin(gateway);
         Wait([&]{const auto s=clients[0].State();Require(s.error.empty(),s.error);return s.phase==ConnectionPhase::Playing;});
         clients[1].Refresh(gateway);
@@ -118,7 +123,6 @@ int main(int argc,char** argv){
             return b.phase==ConnectionPhase::Playing && a.snapshot && a.snapshot->players.size()==2;});
         const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
         for(const auto& c:clients)Require(c.State().combatRules.has_value(),"Welcome omitted authoritative CombatRules");
-        std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
         std::array<SnapshotTimeline,2> timelines;
         std::array<std::map<ActionId,Json>,2> submitted,decisions;
         std::array<std::size_t,2> maximumRetained{},maximumUnconsumed{};
@@ -143,7 +147,7 @@ int main(int argc,char** argv){
                 if(stall)state=clients[i].State();
                 else{
                     auto drain=clients[i].Drain();state=std::move(drain.state);
-                    for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));simulation[i].ObserveSample(received.snapshot,ids[i]);}
+                    for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));}
                     for(const auto& d:drain.decisions){
                         const auto value=Decision(d);
                         Require(!decisions[i].contains(d.actionId),"Client delivered the same action twice");
@@ -155,11 +159,11 @@ int main(int argc,char** argv){
                 Require(state.error.empty(),state.error);
                 Require(state.phase==ConnectionPhase::Playing && state.snapshot.has_value(),"Live Session lost");
                 const auto& authority=Player(*state.snapshot,ids[i]);
-                simulation[i].Observe(authority,state.snapshot->tick,state.movementRules);
                 // Both players oscillate together on x, retaining a clear firing line.
                 const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
-                if(auto window=simulation[i].Frame(now,{0,right,0,0}))clients[i].SendInput(std::move(*window));
-                const auto& p=simulation[i].Observation();
+                if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
+                simulation[i]->PublishIntent({0,right,0,0,true,0,now});
+                const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
                 Require(p.pendingCommands<=MaxPendingCommands && authority.contiguousPendingCommands<=MaxFutureCommands,"Movement window overflow");
                 const auto remote=timelines[i].Sample(ids[1-i],now);
                 const std::string suffix=i?"_b":"_a";
@@ -207,6 +211,7 @@ int main(int argc,char** argv){
         }
         for(auto& c:clients)c.Leave();
         Wait([&]{return clients[0].State().phase==ConnectionPhase::Lobby && clients[1].State().phase==ConnectionPhase::Lobby;});
+        for(auto& role:simulation)role.reset();
         trace.Finish();Require(trace.Good(),"Trace lost data");
         evidence.Finish();Require(evidence.Good(),"Action evidence lost data");
         std::ofstream summary(output/"action-client.json");summary<<result.dump(2)<<'\n';

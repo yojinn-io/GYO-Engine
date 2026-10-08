@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/runtime/IRuntimeClient.hpp"
+#include "engine/time/MonotonicClock.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
@@ -98,8 +99,9 @@ struct PvpApplicationOptions final {
     bool vsync{true};
 };
 
-// Product composition owns input sampling, local movement prediction and
-// presentation. The remote Match retains authority over the world.
+// Product composition owns input sampling and presentation; its client
+// simulation role runs local movement prediction at fixed steps. The remote
+// Match retains authority over the world.
 class PvpApplication final : public Engine::Runtime::IRuntimeClient {
 public:
     PvpApplication();
@@ -123,7 +125,11 @@ public:
     [[nodiscard]] Engine::Render::Renderer& Renderer();
     [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& RenderDevice();
     [[nodiscard]] Engine::Platform::Sdl::SdlPlatform& Platform();
+    // The local movement placed at the latest Update's input sample, from the
+    // simulation role's newest step, and the sample time of the intent that
+    // step used: a probe that changes input waits for a later intent.
     [[nodiscard]] const LocalMovementObservation& LocalMovement() const noexcept;
+    [[nodiscard]] Engine::Time::TimePoint LocalMovementIntentSampledAt() const noexcept;
     [[nodiscard]] const std::optional<RemoteMovementObservation>& RemoteMovement() const noexcept;
     [[nodiscard]] const std::optional<PresentedMovementObservation>& PresentedMovement() const noexcept;
     [[nodiscard]] const WeaponFeedbackObservation& WeaponFeedback() const noexcept;

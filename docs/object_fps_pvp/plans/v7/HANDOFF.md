@@ -94,6 +94,7 @@
 - 2026-10-08：#70 合併（`f3d176d`），P1a 完成；worktree `../GYO-Engine-v7base`、`../GYO-Engine-p1b03` 移除；`claude/pvp-v7-p1b` rebase 到新的 master（第 03 批為 `a393f7e`）。
 - 2026-10-08：使用者決定：TT-1 的公開介面以 1 位 xhigh 審查 agent 檢查（D39）；相位追蹤的既有問題（settling 的樣本留在下一個視窗）先不改，第 04 批照計畫做，看 C1 的結果再決定。
 - 2026-10-08：TT-1 實作與 L1 完成、xhigh 審查完成並修正（Engine 計畫的交接）；L2（只記錄）等使用者核准事前宣告。下一步：第 04 批。
+- 2026-10-08：第 04 批開始（WIP commit）：模擬角色 `ClientSimulationRole`、PvpApplication 與無頭 probe 改接、GUI probe 斷言改寫、L1 (a)～(g)；產品路徑的回復測試在模擬角色下通過（第 03 批的已知失敗解除）。未完：分析器 v7、突變正式跑次、TSan、紀錄。待使用者決定的兩點寫在[第 04 批](04-client-roles.md)。
 
 ## P2 以後各批的範圍
 

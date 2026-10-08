@@ -1,6 +1,6 @@
 # 第 04 批：Client 三角色（任務 1、任務 2 的另一半）
 
-狀態：**未開始**。PR 線 P1b（03、TT-1、04、05，跨層同一 PR；第 03 批依 D40 移入）。依賴 P1a、第 03 批與 TT-1。
+狀態：**進行中**（2026-10-08 開始）。PR 線 P1b（03、TT-1、04、05，跨層同一 PR；第 03 批依 D40 移入）。依賴 P1a、第 03 批與 TT-1。
 完成條件之一：第 03 批留下的已知失敗（產品路徑的回復測試，fps 30 的 1 個組合）在本批之後通過。
 起因：
 - 命令在主執行緒的 Update 內產生。以下三種情況會讓命令停止，或成批產生：
@@ -109,3 +109,43 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
 | macOS Intel（Metal） | L1、TSan、開發跑次；L2 在第 05 批 |
 | Windows（D3D12） | CI 的 L1；實機在第 15 批的 LAN 場次 |
 | Linux、macOS arm64 | CI 的 L1；實機未驗證 |
+
+## 實作（2026-10-08，進行中）
+
+- **模擬角色**（`client_simulation`）：
+  - `ClientSimulationLoop`：一步的處理，沒有執行緒、時間由呼叫端給，L1 以注入時鐘驅動。順序：世代或玩家改變時從頭開始 → arena 改變時重選 → 每份 snapshot 的相位樣本 → 最新一份 Reconcile → 依意圖決定輸入 → `Frame`。
+  - `ClientSimulationRole`：`GYO::Threads` 的角色執行緒（Interactive）。每一步 `DrainSimulation` → `Run` → 有變化的視窗交給連線 → 發布呈現副本 → Waiter 等下一個期限。執行緒入口自己處理 Runtime Error，主執行緒讀 `Error()` 後明確失敗。
+  - 期限＝取樣時刻＋`SecondsUntilNextStep()`。這個值含相位 slew：解「經過時間 − slew＝剩餘時間」，延後時最多拉長到 1／(1−¼)，提前時最多縮短到 1／(1+¼)；換算成期限時無條件進位到 ns。不活動時每 1 Tick 跑一次。
+- **交接**：
+  - 意圖信箱：軸、**絕對**瞄準、controls、跳躍按下的累計次數、sampledAt。計畫寫的是「yaw／pitch 增量累加」，改為絕對值：主執行緒本來就擁有視角並整合滑鼠，絕對值不會遺失也不會重複套用，畫面的相機與命令也用同一個值。
+  - 過期依 D30（常數在 `ClientSimulationRole.hpp`）：近期發布間隔取最近 4 個間隔的最大值。
+  - 呈現副本：Observation、插值用的前後位置與修正、ShotTiming、步的時刻、步所用意圖的 sampledAt。主執行緒以 `PresentAt(now)` 放到 Update 的取樣時刻：插值與修正隨時間前進，ShotTiming 的 `secondsSinceStep` 加上經過時間（FireGate 依整步計算，所以和下一步發布的值算出同一個 Tick；L1 有核對）。
+  - 重設：主執行緒**不送**重設命令（計畫寫「以 Notify 送達」）。世代、玩家、arena 由角色從自己的 drain 判斷，和快照在同一把鎖內取得，沒有跨執行緒的先後問題；epoch 與生命邊界本來就由權威狀態的 reseed 處理；跳躍的清除由 controls＝false 處理。
+  - `ClientConnection::SendInput(input, generation)`：角色在 drain 與送出之間若跨過 session 邊界，舊視窗會被丟棄（世代的改變都在同一把鎖內）。
+- **PvpApplication**：每個 Update 只發布意圖；Render、HUD、FireGate 讀 `PresentAt` 的結果；主執行緒的 `RuntimeGap` 移除（改由角色的 Advance 依自己的喚醒間隔發出）；live frame 不發布意圖、不推進預測。新增唯讀診斷 `LocalMovementIntentSampledAt()`。
+- **probe**：
+  - 5 個無頭 probe（timing、action、gameplay、network、quad）每個 Client 一個角色，幀迴圈只發布意圖；結束時先停角色再結束 trace。
+  - timing probe 的主執行緒停頓：加上「epoch 不得改變」。
+  - network probe 的 6 秒停頓：原本斷言「lead 重建」（只在模擬停住時才會發生），改為斷言 epoch 不變。伺服器端的輸入逾時不再由這個 probe 涵蓋：意圖過期後，角色會送中立命令。
+  - drain-stall（action probe）：定義為只停主執行緒的 Drain。角色有自己的佇列，不受影響；這個案例的動作端預期（32 格、未消費的裁決）不變。
+  - GUI probe：phase stall 改為「所有停頓（含 250 ms）都不得重設 epoch，也不得出現晚到修正」，並加上兩次觀測之間步數的上下界（取代「重複計入停頓」的檢查）；視窗移動後的停止與死亡位置，改為等待反映該變化的呈現。
+  - 守衛（`test_probe_command_path.py`）：probe 不得寫出 ClientSimulation、ClientSimulationLoop、LocalPlayerPrediction、PredictionElapsedTime，也不得自己送命令視窗（傳輸用的 worker probe 除外）；發布意圖的 probe 必須建構 `ClientSimulationRole`，產品也是。
+- **依賴**：`client_simulation → client_network`（產品內的新邊；計畫第 5 點只列了 Engine 的邊）、`→ GYO::Time、GYO::Threads`。
+- **測試**：
+  - `ClientSimulationRoleTests.cpp`：(a)～(g) 與 PresentAt。
+  - `MovementRecoveryTests` 的產品路徑改由角色驅動（幀只發布意圖，模擬在自己的期限上走、和 worker 一樣晚醒）。**第 03 批留下的已知失敗通過**。
+  - 同一檔中「追蹤 vs 未追蹤」的比較，未追蹤的基準改為和追蹤同一路徑。原本基準一律是 v6 路徑；產品路徑換成角色後，跨架構比較的是不同的量（見下方「延遲」），產品的 144 FPS 起始相位與漂移案例有 7 個斷言因此失敗。測試的意圖是「同一路徑上，追蹤有沒有改善」。
+  - 突變目錄：`v7-02-probe-direct-prediction` 改寫為新守衛；`v7-03-probe-no-sample` 的規則被本批取代，換成 `v7-04-probe-steps-simulation`；新增 `v7-04-per-frame-advance`、`v7-04-wait-for-main-thread`、`v7-04-no-stale-intent`。
+- **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
+
+## 待使用者決定
+
+1. **D30 與 (d) 的範圍不一致**：D30 的門檻是 max(100 ms, 3×近期發布間隔)，60 FPS 時就是 100 ms；(d) 寫的是「單一 60～120 ms 的長幀不中途停步」。實測：110 ms 的長幀產生 1 個中立命令，120 ms 產生 2 個。現在的 (d) 只測到 100 ms。
+   - (i) 維持 D30，把 (d) 的範圍改為 60～100 ms。
+   - (ii) 最小門檻改為 3×(1／最低支援 FPS)＝150 ms，(d) 照原文。和「最低支援 20 FPS」是同一個數字；長停頓時多走約 50 ms。
+   - 建議 (ii)：100～150 ms 的偶發長幀（shader 編譯、視窗事件）常見，中途停 1～2 步會被權威執行。
+2. **輸入延遲**（記錄，C1 之後與相位追蹤一起決定）：常數不變時，產品路徑「產生→執行」的中位數固定約 37 ms（RTT 0）／47 ms（RTT 20），和幀率無關；v6 路徑是 24～35 ms／31～44 ms。
+   - 原因：v6 的相位樣本含「命令的 age」（步邊界到發布），幀相位被 age 吸收，命令實際的 slack 比目標少一個 age；角色在步邊界上產生命令，age 約為 0，同樣的目標下每個命令多出約 v6 的平均 age 的 slack。
+   - 從輸入的角度：步使用的是邊界之前最後一個意圖，所以「輸入取樣→執行」比 v6 多出約 1 幀（144 FPS 約 7 ms、60 FPS 約 17 ms）。
+   - 要縮短，需要改 MovementPhase 常數或相位追蹤的定義，屬於停止條件；本批不改。
+

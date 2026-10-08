@@ -550,10 +550,10 @@
       "batch": "v7-02",
       "what": "The matrix probe drives LocalPlayerPrediction itself",
       "file": "build/acceptance/object_fps_pvp/gameplay_action.hpp",
-      "find": "    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};\n",
-      "replace": "    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};\n    LocalPlayerPrediction bypass(*arena);static_cast<void>(bypass);\n",
+      "find": "    std::array<std::uint64_t,2> jumpPresses{};\n",
+      "replace": "    std::array<std::uint64_t,2> jumpPresses{};\n    LocalPlayerPrediction bypass(*arena);static_cast<void>(bypass);\n",
       "check": "probe_command_path",
-      "expect": "probes must use ClientSimulation"
+      "expect": "probes must generate commands only through ClientSimulationRole"
     },
     {
       "id": "v7-03-newest-only",
@@ -586,14 +586,44 @@
       "expect": "PvP prediction phase samples of another epoch or life are not evidence"
     },
     {
-      "id": "v7-03-probe-no-sample",
-      "batch": "v7-03",
-      "what": "The matrix probe reconciles without offering the drained snapshots as phase evidence",
+      "id": "v7-04-probe-steps-simulation",
+      "batch": "v7-04",
+      "what": "The matrix probe sends its own command windows instead of publishing intents to the role",
       "file": "build/acceptance/object_fps_pvp/gameplay_action.hpp",
-      "find": "simulation[i].ObserveSample(received.snapshot,ids[i]);",
-      "replace": "",
+      "find": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});\n",
+      "replace": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});\n            clients[i].SendInput(PlayerInput{});\n",
       "check": "probe_command_path",
-      "expect": "never calls ObserveSample"
+      "expect": "sends a command window itself"
+    },
+    {
+      "id": "v7-04-per-frame-advance",
+      "batch": "v7-04",
+      "what": "The simulation advances by the main thread's publish intervals (per-frame Advance) instead of its own clock",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    step.window = simulation_.Frame(now, input);\n",
+      "replace": "    step.window = simulation_.Frame(intent.sampledAt == TimePoint{} ? now : intent.sampledAt, input);\n",
+      "check": "cpu",
+      "expect": "PvP the simulation role generates the same commands at the same steps for 30 60 and 144 Hz intents"
+    },
+    {
+      "id": "v7-04-wait-for-main-thread",
+      "batch": "v7-04",
+      "what": "The simulation steps only while the main thread keeps publishing",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    step.window = simulation_.Frame(now, input);\n",
+      "replace": "    if (!stale) step.window = simulation_.Frame(now, input);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( command\\.sequence == commands\\[n - 1\\]\\.command\\.sequence \\+ 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-04-no-stale-intent",
+      "batch": "v7-04",
+      "what": "A stale intent keeps moving the player",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    const bool stale = IntentStale(now);\n",
+      "replace": "    const bool stale = false;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( command\\.moveForward == 0\\.0F \\) is NOT correct"
     }
   ]
 }

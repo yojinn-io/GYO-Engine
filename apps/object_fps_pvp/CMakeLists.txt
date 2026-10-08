@@ -39,9 +39,11 @@ gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConn
     PUBLIC_LIBRARIES ${domain} GYO::Net
     PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v6")
 # The one client command-generation path, shared by the application and the
-# headless acceptance probes so that measurements exercise product behaviour.
-gyo_app_add_library(client_simulation OUT_TARGET simulation SOURCES src/Pvp/ClientSimulation.cpp
-    PUBLIC_LIBRARIES ${domain})
+# headless acceptance probes so that measurements exercise product behaviour:
+# the simulation and the role thread that runs it at fixed-step deadlines.
+gyo_app_add_library(client_simulation OUT_TARGET simulation
+        SOURCES src/Pvp/ClientSimulation.cpp src/Pvp/ClientSimulationRole.cpp
+    PUBLIC_LIBRARIES ${domain} ${network} GYO::Time GYO::Threads)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/PointerCapture.cpp
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp

@@ -104,6 +104,9 @@ struct ClientConnection::Impl {
     std::deque<ReceivedSnapshot> receivedSnapshots;
     bool snapshotOverflow{};
     std::uint64_t snapshotOverflowCount{};
+    // The simulation role's own copy of the history (DrainSimulation).
+    std::deque<ReceivedSnapshot> simulationSnapshots;
+    std::uint64_t simulationOverflowCount{};
     std::vector<ArenaIdentity> installedArenas;
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
@@ -153,6 +156,7 @@ struct ClientConnection::Impl {
         CloseTransport();
         std::scoped_lock lock(mutex);latestInput.reset();submittedCommands.clear();submittedEpoch=1;
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
+        simulationSnapshots.clear();simulationOverflowCount=0;
         ResetActions();
     }
     void Failure(std::string error,std::uint64_t failedGeneration) {
@@ -163,6 +167,7 @@ struct ClientConnection::Impl {
         // reset together. Drain must not see an old generation's count reset.
         latestInput.reset();submittedCommands.clear();submittedEpoch=1;
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
+        simulationSnapshots.clear();simulationOverflowCount=0;
         ResetActions();
         std::osyncstream(std::clog)<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
             <<" reason="<<error<<'\n';
@@ -179,6 +184,7 @@ struct ClientConnection::Impl {
         state.phase=ConnectionPhase::Requesting;
         latestInput.reset();submittedCommands.clear();
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
+        simulationSnapshots.clear();simulationOverflowCount=0;
         ResetActions();
     }
     // Both join paths compare identity first, then content (pv6 contract §2).
@@ -523,6 +529,10 @@ struct ClientConnection::Impl {
                             .epoch=player.movementEpoch,.sequence=player.lastResolvedCommand,.authorityTick=snapshot.tick,
                             .queued=player.contiguousPendingCommands,.count=snapshotOverflowCount,.lifeGeneration=player.lifeGeneration});
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
+                    if(simulationSnapshots.size()==MaxReceivedSnapshots) {
+                        simulationSnapshots.pop_front();++simulationOverflowCount;
+                    }
+                    simulationSnapshots.push_back({snapshot,arrivedAt});
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
                 }
             } else if(packet->type==wire::Type::ActionResults) {
@@ -618,7 +628,12 @@ void ClientConnection::SetArenaIdentities(std::vector<ArenaIdentity> installed){
     std::scoped_lock lock(impl_->mutex);impl_->installedArenas=std::move(installed);
 }
 void ClientConnection::SendInput(PlayerInput input){
+    SendInput(std::move(input),impl_->generation.load());
+}
+void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
+    // Generation changes happen under this mutex, so the check cannot race them.
     std::scoped_lock lock(impl_->mutex);
+    if(generation!=impl_->generation.load())return;
     if((impl_->state.phase!=ConnectionPhase::Playing && impl_->state.phase!=ConnectionPhase::Connecting) ||
        input.playerId!=impl_->state.playerId || !PvpMatch::ValidInput(input))return;
     std::uint64_t resolved{},epoch{1},life{1};
@@ -686,6 +701,15 @@ ClientConnectionDrain ClientConnection::Drain(){
         ++impl_->actionTransport.acknowledgedThrough;
     }
     result.state.actionTransport=impl_->ActionState();
+    return result;
+}
+ClientSimulationDrain ClientConnection::DrainSimulation(){
+    std::scoped_lock lock(impl_->mutex);
+    ClientSimulationDrain result{{},impl_->generation.load(),impl_->state.playerId,impl_->state.arenaId,
+        impl_->state.movementRules,impl_->simulationOverflowCount};
+    result.snapshots.reserve(impl_->simulationSnapshots.size());
+    for(auto& received:impl_->simulationSnapshots)result.snapshots.push_back(std::move(received));
+    impl_->simulationSnapshots.clear();
     return result;
 }
 }

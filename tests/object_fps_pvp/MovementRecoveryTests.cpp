@@ -1,13 +1,15 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -91,8 +93,11 @@ struct ClockOptions {
 // cannot bootstrap from a synthetic pre-tick snapshot. Without hostSamples
 // the snapshots lose their slack samples: the untracked, seeded phase.
 // Path::V6 drives LocalPlayerPrediction with the newest snapshot of each frame
-// only; Path::Product runs the application's ClientSimulation, which also takes
-// the phase sample of every older snapshot drained since the previous frame.
+// only. Path::Product runs the application's simulation role: frames only
+// publish their intent, and ClientSimulationLoop steps at its own deadlines on
+// the Client clock (waking late like the worker), taking the phase sample of
+// every snapshot the worker received since its previous step. An untracked
+// baseline runs the same path as the tracked run it is compared with.
 enum class Path { V6, Product };
 
 RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
@@ -108,15 +113,17 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     });
     REQUIRE(host.QueueJoin(1, 1));
     LocalPlayerPrediction client(arena);
-    ClientSimulation simulation(arena);
-    // Snapshots the worker drained since the previous frame (product path) and the
-    // Client's own clock, advanced by each frame's measured interval.
-    std::vector<WorldSnapshot> drained;
-    std::chrono::steady_clock::time_point clientClock{};
+    ClientSimulationLoop simulation({arena});
+    // Snapshots the worker received since the simulation's previous step, and
+    // the intent the latest frame published (product path).
+    std::vector<ReceivedSnapshot> drained;
+    ClientIntent intent;
     const auto observation = [&]() -> const LocalMovementObservation& {
-        return path == Path::Product ? simulation.Observation() : client.Observation();
+        return path == Path::Product ? simulation.Simulation().Observation() : client.Observation();
     };
-    const auto pending = [&] { return path == Path::Product ? simulation.PendingInput() : client.PendingInput(); };
+    const auto pending = [&] {
+        return path == Path::Product ? simulation.Simulation().PendingInput() : client.PendingInput();
+    };
     struct InputPacket { Time due; PlayerInput input; };
     struct SnapshotPacket { Time due; WorldSnapshot snapshot; };
     std::vector<InputPacket> inputs;
@@ -145,12 +152,23 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
         return low + Time((clockState >> 8) % std::uint32_t(high - low + 1));
     };
     const double clientRate = 1.0 + clock.clientPpm * 1.0e-6;
+    // The Client's own clock at a host time, and the first host time it reaches a deadline.
+    const auto clientTime = [&](Time at) {
+        return Engine::Time::TimePoint{} + std::chrono::duration_cast<Engine::Time::Duration>(
+            std::chrono::duration<double>(double(at) / Units * clientRate));
+    };
+    const auto hostTime = [&](Engine::Time::TimePoint deadline) {
+        auto at = Time(std::ceil(std::chrono::duration<double>(deadline.time_since_epoch()).count() / clientRate * Units));
+        while (clientTime(at) < deadline) ++at;
+        return at;
+    };
     const Time framePeriod = Units / fps + Units / fps * clock.frameDriftPpm / 1000000;
     const Time workerPeriod = Time(double(Tick) / clientRate + 0.5);
     const Time runEnd = clock.runUntil ? clock.runUntil : reference + 3 * Units;
     Time frameGrid{};
     std::size_t frameIndex{}, activeFrames{};
     Time nextFrame{}, nextWorker = workerPhase, nextTick = authorityPhase;
+    Time nextSimulation = path == Path::Product ? Time(0) : (std::numeric_limits<Time>::max)();
     Time previousFrame{}, nextSend{};
     bool haveSent{};
     double tokens = InputSendBurst;
@@ -166,7 +184,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     Time actualRunStart{}, previousResolution{-Tick};
     std::map<std::pair<std::uint64_t, std::uint64_t>, Time> generatedAt;
     for (;;) {
-        now = (std::min)({nextFrame, nextWorker, nextTick});
+        now = (std::min)({nextFrame, nextWorker, nextTick, nextSimulation});
         for (const auto& packet : inputs) now = (std::min)(now, packet.due);
         if (now > runEnd) break;
         for (auto packet = inputs.begin(); packet != inputs.end();) {
@@ -192,7 +210,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 auto snapshot = std::move(snapshots.front().snapshot);
                 snapshots.erase(snapshots.begin());
                 if (snapshot.tick <= received.tick) continue;
-                if (path == Path::Product) drained.push_back(snapshot);
+                if (path == Path::Product) drained.push_back({snapshot, clientTime(now)});
                 received = std::move(snapshot);
                 const auto& state = received.players.front();
                 if (published.movementEpoch != state.movementEpoch) {
@@ -255,25 +273,19 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     if (!received.players.empty())
                         client.Reconcile(received.players.front(), received.tick);
                     if (client.Advance(elapsed, 1, 0, 0, 0)) published = client.PendingInput();
-                } else {
-                    for (const auto& snapshot : drained) simulation.ObserveSample(snapshot, 1);
-                    drained.clear();
-                    if (!received.players.empty())
-                        simulation.Observe(received.players.front(), received.tick, std::nullopt);
-                    clientClock += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                        std::chrono::duration<double>(elapsed));
-                    // Only an active client runs the frame, as in the application.
-                    if (!received.players.empty())
-                        if (auto window = simulation.Frame(clientClock, {1, 0, 0, 0})) published = *window;
+                    for (const auto& command : pending().commands)
+                        generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
+                } else if (!received.players.empty()) {
+                    // Only an active client publishes, as in the application.
+                    intent = {1, 0, 0, 0, true, 0, clientTime(now)};
                 }
                 if (firstAdvance && !received.players.empty() && bootstrapGap)
                     nextFrame = frameGrid = now + bootstrapGap;
-                for (const auto& command : pending().commands)
-                    generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
                 if (!received.players.empty()) {
                     firstAdvance = false;
                     ++activeFrames;
-                    if (observation().phaseErrorSeconds && !result.firstDecision) result.firstDecision = now;
+                    if (path == Path::V6 && observation().phaseErrorSeconds && !result.firstDecision)
+                        result.firstDecision = now;
                 }
                 previousFrame = now;
                 result.maximumPending = (std::max)(result.maximumPending, pending().commands.size());
@@ -284,6 +296,21 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     });
                 }
             }
+        }
+        if (now == nextSimulation) {
+            auto step = simulation.Run(clientTime(now), intent, {std::move(drained), 1, 1, {}, std::nullopt, 0});
+            drained.clear();
+            if (step.window) published = *step.window;
+            for (const auto& command : pending().commands)
+                generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
+            if (observation().phaseErrorSeconds && !result.firstDecision) result.firstDecision = now;
+            result.maximumPending = (std::max)(result.maximumPending, pending().commands.size());
+            if (!received.players.empty()) {
+                const auto ack = received.players.front().lastResolvedCommand;
+                std::erase_if(published.commands, [ack](const auto& command) { return command.sequence <= ack; });
+            }
+            nextSimulation = (std::max)(now + 1, hostTime(step.nextDeadline)) +
+                uniform(clock.overshootMin, clock.overshootMax);
         }
         if (now == nextTick) {
             nextTick += Tick;
@@ -449,7 +476,7 @@ TEST_CASE("PvP phase tracking removes the start lottery at every frame rate with
                     for (Time authority = 0; authority < Tick; authority += Tick / 12) {
                         INFO("fps ", fps, " rtt ", rtt, " worker ", worker, " authority ", authority);
                         const auto tracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, true, {}, path);
-                        const auto untracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, false);
+                        const auto untracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, false, {}, path);
                         REQUIRE(tracked.firstDecision);
                         CHECK(tracked.cleanFallbacks == 0);
                         CHECK(tracked.fallbacksAfterBound == 0);
@@ -496,7 +523,7 @@ TEST_CASE("PvP at 30-50 FPS and on vsync drops phase tracking aligns without Hel
                         clock.refreshPattern = model.refreshPattern;
                         clock.missedRefreshPerMille = model.missedPerMille;
                         const auto tracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
-                        const auto untracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
+                        const auto untracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
                         REQUIRE(tracked.firstDecision);
                         REQUIRE(tracked.resolved > 0);
                         // The untracked baseline may lose ticks to resets; tracking never does.
@@ -528,7 +555,7 @@ TEST_CASE("PvP phase tracking decides soon after startup hitches and a 58 FPS GU
                         clock.startupHitches = 4;
                         clock.startupHitch = 2 * Tick;
                         const auto tracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
-                        const auto untracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
+                        const auto untracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
                         REQUIRE(tracked.firstDecision);
                         CHECK(*tracked.firstDecision <= 4 * 2 * Tick + 12 * frame + Time(rtt) * Units / 1000 + 4 * Tick);
                         CHECK(tracked.resets <= untracked.resets);
@@ -552,7 +579,7 @@ TEST_CASE("PvP at 59.94 60 and 144 FPS phase tracking still aligns under driftin
                         const auto clock = ProductClock(rate.frameDriftPpm, Units / 1000,
                             std::uint32_t(worker * 31 + authority * 7 + rate.fps * 131 + rtt + rate.frameDriftPpm));
                         const auto tracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
-                        const auto untracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
+                        const auto untracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
                         REQUIRE(tracked.firstDecision);
                         CHECK(tracked.held == 0);
                         CHECK(tracked.resets == 0);
@@ -608,7 +635,7 @@ TEST_CASE("PvP phase tracking holds the latency while the Client clock drifts ag
                 auto clock = ProductClock(0, Units / 2000, std::uint32_t(rtt * 7 + ppm + 1000), 300 * Units);
                 clock.clientPpm = ppm;
                 const auto tracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, true, clock, path);
-                const auto untracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, false, clock);
+                const auto untracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, false, clock, path);
                 REQUIRE(tracked.firstDecision);
                 CHECK(tracked.corrections >= 10);
                 CHECK(tracked.held == 0);

@@ -1,5 +1,5 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -229,21 +230,24 @@ int main(int argc,char** argv) {
         std::string arenaError;
         const auto arena=Arena::Load(arenaPath,arenaError);
         if(!arena)throw std::runtime_error(arenaError);
-        ClientSimulation simulationA(*arena),simulationB(*arena);
+        // The simulation roles: this loop is the main thread and only publishes intents.
+        auto simulationA=std::make_unique<ClientSimulationRole>(a,std::vector<Arena>{*arena});
+        auto simulationB=std::make_unique<ClientSimulationRole>(b,std::vector<Arena>{*arena});
+        const auto simulated=[&](const ClientSimulationRole& role,const char* what){
+            if(const auto failure=role.Error())throw std::runtime_error(std::string(what)+": client simulation stopped: "+*failure);
+            Require(role.PresentAt(Clock::now()).observation.pendingCommands<=MaxPendingCommands,what);
+        };
         const auto started=Clock::now();
         const auto end=started+std::chrono::seconds(4);
         std::optional<Engine::Math::Vec3> stoppedA,stoppedB;
         while(Clock::now()<end){
             const auto now=Clock::now();
-            const auto beforeA=a.State(),beforeB=b.State();
-            simulationA.Observe(Player(*beforeA.snapshot,idA),beforeA.snapshot->tick,beforeA.movementRules);
-            simulationB.Observe(Player(*beforeB.snapshot,idB),beforeB.snapshot->tick,beforeB.movementRules);
             const double age=std::chrono::duration<double>(now-started).count();
             const bool moving=age<2.0 || age>=3.0;
-            if(auto window=simulationA.Frame(now,{0,moving?1.0F:0.0F,0,0}))a.SendInput(std::move(*window));
-            if(auto window=simulationB.Frame(now,{0,moving?-.5F:0.0F,0,0}))b.SendInput(std::move(*window));
-            Require(simulationA.Observation().pendingCommands<=MaxPendingCommands &&
-                simulationB.Observation().pendingCommands<=MaxPendingCommands,"unbounded prediction window");
+            simulationA->PublishIntent({0,moving?1.0F:0.0F,0,0,true,0,now});
+            simulationB->PublishIntent({0,moving?-.5F:0.0F,0,0,true,0,now});
+            simulated(*simulationA,"unbounded prediction window");
+            simulated(*simulationB,"unbounded prediction window");
             const auto sa=a.State(),sb=b.State();
             Require(sa.error.empty() && sb.error.empty(),"connection failed while moving");
             if(age>=2.7 && age<3.0) {
@@ -268,14 +272,15 @@ int main(int argc,char** argv) {
             for(const auto& p:sa.players){const auto& q=Player(found->second,p.playerId);Require(p.position.x==q.position.x && p.position.z==q.position.z,"clients disagree on same authority tick");}
         }
         Require(common>10,"insufficient common snapshots");
-        // Drain queued steps, then fifteen missing authority ticks must stop both.
+        // The intents stop here. The simulation roles keep stepping: the stale
+        // intents turn neutral (D30) and the queued steps drain, so both stop.
         std::this_thread::sleep_for(std::chrono::milliseconds(550));
         const auto stopped=Player(*a.State().snapshot,idA).position;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         Require(std::abs(Player(*a.State().snapshot,idA).position.x-stopped.x)<0.0001F,"input timeout did not stop movement");
         const auto idleBeforeA=a.State(),idleBeforeB=b.State();
         // Deliberately stop the application thread beyond the session timeout.
-        // Only each ClientConnection's worker is active during this interval.
+        // Only each ClientConnection's worker and simulation role run meanwhile.
         std::this_thread::sleep_for(std::chrono::seconds(6));
         const auto idleA=a.State(),idleB=b.State();
         Require(idleA.phase==ConnectionPhase::Playing && idleB.phase==ConnectionPhase::Playing &&
@@ -286,30 +291,25 @@ int main(int argc,char** argv) {
         Require(std::abs(Player(*idleA.snapshot,idA).position.x-Player(*idleBeforeA.snapshot,idA).position.x)<.0001F &&
             std::abs(Player(*idleB.snapshot,idB).position.x-Player(*idleBeforeB.snapshot,idB).position.x)<.0001F,
             "session keepalive refreshed stale movement input");
-        simulationA.Observe(Player(*idleA.snapshot,idA),idleA.snapshot->tick,idleA.movementRules);
-        simulationB.Observe(Player(*idleB.snapshot,idB),idleB.snapshot->tick,idleB.movementRules);
-        const auto lead=simulationA.PendingInput();
-        Require(lead.commands.size()==InitialCommandLead &&
-            lead.commands.front().sequence==Player(*idleA.snapshot,idA).lastResolvedCommand+1,
-            "stall recovery did not rebuild command lead");
-        for(const auto& command:lead.commands)
-            Require(command.moveForward==0 && command.moveRight==0,"stall recovery lead was not neutral");
+        // The simulation never stopped, so the stall started no new epoch.
+        Require(Player(*idleA.snapshot,idA).movementEpoch==Player(*idleBeforeA.snapshot,idA).movementEpoch &&
+            Player(*idleB.snapshot,idB).movementEpoch==Player(*idleBeforeB.snapshot,idB).movementEpoch,
+            "an application stall reset the movement epoch");
         const auto resumedUntil=Clock::now()+std::chrono::seconds(1);
         while(Clock::now()<resumedUntil) {
             const auto now=Clock::now();const auto sa=a.State(),sb=b.State();
             Require(sa.phase==ConnectionPhase::Playing && sb.phase==ConnectionPhase::Playing &&
                 sa.snapshot && sb.snapshot,"connection failed after application stall");
-            simulationA.Observe(Player(*sa.snapshot,idA),sa.snapshot->tick,sa.movementRules);
-            simulationB.Observe(Player(*sb.snapshot,idB),sb.snapshot->tick,sb.movementRules);
-            if(auto window=simulationA.Frame(now,{0,-1,0,0}))a.SendInput(std::move(*window));
-            if(auto window=simulationB.Frame(now,{0,1,0,0}))b.SendInput(std::move(*window));
-            Require(simulationA.Observation().pendingCommands<=MaxPendingCommands &&
-                simulationB.Observation().pendingCommands<=MaxPendingCommands,"stall recovery window overflowed");
+            simulationA->PublishIntent({0,-1,0,0,true,0,now});
+            simulationB->PublishIntent({0,1,0,0,true,0,now});
+            simulated(*simulationA,"stall recovery window overflowed");
+            simulated(*simulationB,"stall recovery window overflowed");
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         Require(Player(*idleA.snapshot,idA).position.x-Player(*a.State().snapshot,idA).position.x>.5F &&
             Player(*b.State().snapshot,idB).position.x-Player(*idleB.snapshot,idB).position.x>.5F,
-            "movement did not resume after rebuilding stalled command windows");
+            "movement did not resume after the application stall");
+        simulationA.reset();simulationB.reset();
         ClientConnection observer;
         observer.Refresh(gateway);
         WaitRoom(observer,2,"lobby observer did not see two players");

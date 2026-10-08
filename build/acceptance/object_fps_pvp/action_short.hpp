@@ -514,7 +514,9 @@ void RunActionShort(const Options& options) {
                 unscheduledYawFramesSeen = unscheduledYawFrames;
                 unscheduledYaw += std::abs(after.yaw - before.yaw);
             }
-            if (!actor && !died && after.dead) {
+            // The simulation role reconciles the death on its own step: wait until
+            // the local movement shows it before taking the dead position.
+            if (!actor && !died && after.dead && application.LocalMovement().lifeState == LifeState::Dead) {
                 died = true;
                 deathLife = after.lifeGeneration;
                 allocatedAtDeath = afterAllocated;

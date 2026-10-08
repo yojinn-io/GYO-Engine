@@ -56,6 +56,8 @@ public:
     [[nodiscard]] PlayerInput PendingInput() const { return prediction_.PendingInput(); }
     [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept { return prediction_.ShotTiming(); }
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept { return prediction_.Observation(); }
+    [[nodiscard]] LocalPresentationState Presentation() const noexcept { return prediction_.Presentation(); }
+    [[nodiscard]] double SecondsUntilNextStep() const noexcept { return prediction_.SecondsUntilNextStep(); }
 
 private:
     struct Sample final {
