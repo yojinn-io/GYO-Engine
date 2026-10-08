@@ -35,14 +35,16 @@ struct ClientIntent final {
 };
 
 // Decision D30: the simulation keeps using the latest intent until it is older
-// than max(this minimum, ClientIntentStaleIntervals x the longest recent publish
-// interval); then movement is neutral, aim stays and jumps are dropped. An
-// interval past that limit was a stall and is not a recent publish interval.
-// The product supports frame rates down to ClientMinimumSupportedFps.
-inline constexpr double ClientIntentMinimumStaleSeconds = 0.1;
+// than max(ClientIntentMinimumStaleSeconds, ClientIntentStaleIntervals x the
+// longest recent publish interval); then movement is neutral, aim stays and
+// jumps are dropped. An interval past that limit was a stall and is not a recent
+// publish interval. The product supports frame rates down to
+// ClientMinimumSupportedFps, and the minimum is that rate's limit, so a single
+// long frame of up to that many intervals never stops the player midway.
 inline constexpr double ClientIntentStaleIntervals = 3;
-inline constexpr std::size_t ClientIntentRecentIntervals = 4;
 inline constexpr double ClientMinimumSupportedFps = 20;
+inline constexpr double ClientIntentMinimumStaleSeconds = ClientIntentStaleIntervals / ClientMinimumSupportedFps;
+inline constexpr std::size_t ClientIntentRecentIntervals = 4;
 
 // What a simulation step publishes for the main thread: the observation, the
 // state that places the local player at a later render time, and the shot timing.

@@ -265,7 +265,7 @@ TEST_CASE("PvP a 250 ms main-thread stall keeps the simulation stepping and turn
         }
     }
     CHECK(during >= 14);
-    CHECK(stale >= 8);
+    CHECK(stale >= 5);
     // The press reaches exactly one command, never repeated by the stale intent.
     CHECK(jumps == 1);
     CHECK(run.held == 0);
@@ -297,14 +297,14 @@ TEST_CASE("PvP a long main-thread stall does not stretch the stale limit of the 
         CHECK(generated.command.moveForward == 0.0F);
         ++neutral;
     }
-    CHECK(neutral >= 8);
+    CHECK(neutral >= 5);
 }
 
-TEST_CASE("PvP the simulation keeps the intent at 20 and 25 FPS and across single long frames up to 100 ms") {
+TEST_CASE("PvP the simulation keeps the intent at 20 and 25 FPS and across single long frames up to 120 ms") {
     struct Case { const char* name; std::function<double(double, unsigned)> interval; };
     const Case cases[] = {{"20 FPS", Every(1.0 / 20.0)}, {"25 FPS", Every(1.0 / 25.0)},
         {"60 FPS with a 60 ms frame", LongFrame(1.5, 0.06)}, {"60 FPS with an 80 ms frame", LongFrame(1.5, 0.08)},
-        {"60 FPS with a 100 ms frame", LongFrame(1.5, 0.1)}};
+        {"60 FPS with a 100 ms frame", LongFrame(1.5, 0.1)}, {"60 FPS with a 120 ms frame", LongFrame(1.5, 0.12)}};
     for (const auto& item : cases) {
         INFO(std::string(item.name));
         const auto run = RunRole({item.interval, Moving});

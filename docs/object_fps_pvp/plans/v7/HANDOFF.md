@@ -24,7 +24,7 @@
 | D27 | （2026-10-08）Engine 子系統的分配。使用者的修正（原話）：「照這樣修正」，針對「Engine 做最小的角色執行緒，不做執行緒池」的提案。<br>①建進 Engine：Time、最小的 Threads（角色執行緒：名稱、協作停止、優先級提示）、精簡的 Trace、SDL 隔離、Display、Settings 的 io 機制、Audio。<br>②Channels 不先統一，各自實作，重複出現再抽出。<br>③Net transport 留在產品內（asio）。<br>④Job／執行緒池 v7 不建；方向寫進 README：建在 Threads 之上，worker 數＝核心數扣掉角色執行緒。<br>⑤不改 `FixedTickRuntime` 與 `RuntimeLoop` 的語意，不做 render 執行緒，不做錄製重播。<br>⑥修訂輸入與呈現計畫的 D19（原文：「主執行緒（事件＋畫面）、模擬、網路三個角色的分離屬新的 Engine 計畫」）：三角色的執行緒由 Engine 的 `GYO::Threads` 與 `GYO::Time` 提供；角色本身（迴圈、交接、政策）由消費端在產品內做。<br>⑦framework 層的現況與啟動條件寫進 README（使用者同意） |
 | D28 | （2026-10-08，照建議）Engine 計畫夾：新建 `time-threads-trace`（TT-1、TT-2）；SDL 隔離與顯示接續在輸入與呈現計畫，編為 IP-3～IP-5（owner 模組相同，另加 `engine/io`）；`audio` 等 P6 開始時再建 |
 | D29 | （2026-10-08）`GYO::Time` 是獨立的 Base 層 target（`engine/time`，不含 SDL），並且是 **Engine 的時間基準**。使用者原話：「D29 選 A，並把 GYO::Time 定為 Engine 的時間基準；RuntimeLoop 也在 TT-1 改用它，只換時鐘來源，不改 loop 的語意。」<br>Waiter 採 latch，不收 `std::stop_token`；後端：macOS kqueue、Windows 高解析度 waitable timer、其他平台 cv，都用相對期限加醒後依 steady 重新檢查。例外：`AssetWatcher` 的檔案時間屬牆鐘語意，v7 不改 |
-| D30 | （2026-10-08，照建議）主執行緒停住、沒有發布輸入時，模擬角色沿用最後的意圖，直到年齡超過 max(100 ms, 3×近期發布間隔)；之後軸回中立、瞄準維持、丟棄跳躍上升沿。宣告最低支援 20 FPS |
+| D30 | （2026-10-08，照建議；2026-10-09 修訂）主執行緒停住、沒有發布輸入時，模擬角色沿用最後的意圖，直到年齡超過 max(150 ms, 3×近期發布間隔)；之後軸回中立、瞄準維持、丟棄跳躍上升沿。宣告最低支援 20 FPS。修訂：最小門檻由 100 ms 改為 3×(1／20 FPS)＝150 ms，讓單一 120 ms 的長幀也不中途停步（第 04 批的驗收 (d) 照原文） |
 | D31 | （2026-10-08，照建議）30 FPS 對比拆成 C1（第 05 批：`fee92ff` 對 P1b 頭，只有任務 1、2，Gateway 缺陷兩樹都保留）與 C2（第 09 批：任務 3 之後、pv7 之前）。各指標的權威來源、主機狀態的分層與獨立性檢查、輪數，見 README 的對比做法 |
 | D32 | （2026-10-08，照建議）pv7 只在第 11 批升一次，嚴格版本相等，三個角色同一個 PR，舊程序重新啟動（沿用 v6 D11①） |
 | D33 | （2026-10-08，照建議）任務 7 的完成條件以 SDL 符號判定，範圍含產品測試；Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`），SDL3 改為 PRIVATE 連結。ui_editor 與未啟用產品只寫遷移清單 |
