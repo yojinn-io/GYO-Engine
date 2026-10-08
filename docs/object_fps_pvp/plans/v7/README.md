@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
 更新：2026-10-08。Owner：`object_fps_pvp`。
-**狀態：規劃完成，第 01 批（計畫）進行中。** v6 已於 2026-10-08 升格（[v6 穩定基線](../v6/STABLE_BASELINE.md)），v1.1.0 已發佈。現行協議仍是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）；v7 只在第 11 批升一次 pv7。
+**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（P1a，分支 `claude/pvp-v7-p1a`）。 v6 已於 2026-10-08 升格（[v6 穩定基線](../v6/STABLE_BASELINE.md)），v1.1.0 已發佈。現行協議仍是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）；v7 只在第 11 批升一次 pv7。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
 
@@ -63,8 +63,8 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 
 | 批次 | 文件 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|---|
-| 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 進行中 | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
-| 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 未開始 | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
+| 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 完成，PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併（`a7cba38`） | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
+| 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 實作與 L1 完成（P1a，PR 在 03a 之後） | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
 | 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh） | 未開始 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
 | 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium（宣告用 high） | 未開始 | 只記錄：分出 03 單獨的效果 |
 | 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 未開始 | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |

@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-08。Owner：`object_fps_pvp`。**狀態：規劃完成，第 01 批進行中**（分支 `claude/pvp-v7-batch01`，自 master `9a6fa8e`）。
+更新：2026-10-08。Owner：`object_fps_pvp`。**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（分支 `claude/pvp-v7-p1a`，自 master `a7cba38`）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -50,6 +50,23 @@
 - 本機證據（git 忽略）：
   - `build/target/_build/test/logs/pvp-v7-inventory-20261008/`：inventory.json、digest、規劃的 JSON、確認後的計畫草稿、分析輔助腳本；`files.sha256` 的 SHA-256 `ddc23da0…`。
   - `build/target/_build/test/logs/engine-time-platform-inventory-20261008/`：Engine 範圍的研究 JSON 與計時探針原始碼；`files.sha256` 的 SHA-256 `3f2822ba…`。
+- 2026-10-08：PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 開出。CI 的「Select CI scope」失敗：共通測試 `test_app_registry.py` 的 Prepare 測試以寫死的 `v2026.10.1` 在真正的 repo 上執行，`tools-v2026.10.1` 實際發佈之後，`9a6fa8e` 以外的 commit 都會失敗。改用不會發佈的 `v2099.12.99`（`1f7dfc6`），本機 `tests/common/ci` 241 個測試通過，CI 全綠。
+- 2026-10-08：#69 依使用者指示合併（`a7cba38`）。**第 01 批完成。**
+
+## 第 02 批進度（記錄器）：ClientSimulation 接縫
+
+- 2026-10-08：開始（使用者指示）。主對話檔位 high。分支 `claude/pvp-v7-p1a` 自 master `a7cba38`。
+- 2026-10-08：實作與 L1 完成。細節與結果見[第 02 批](02-client-simulation-seam.md)。
+  - 新的產品庫 `client_simulation`（`ClientSimulation`）：持有 `LocalPlayerPrediction`、`PredictionElapsedTime` 與 snapshot 閘；`Observe` 與 `Frame` 對應 v6 的 `PvpApplication.cpp:419-424` 與 `:969-976`。`SelectArena` 照 v6 保留 snapshot 閘。
+  - 邊界：Drain、`SnapshotTimeline.Push` 與 `SendInput` 留在呼叫端（`Frame` 回傳要發布的視窗）；本批的庫不依賴網路庫。這是相對於計畫文字（「包住 Drain 與 SendInput」）的調整，理由是 Drain 的其他結果屬於呈現，第 04 批的模擬角色改用另一個自身樣本佇列。
+  - 產品與 5 個無頭 probe（矩陣 `gameplay_action.hpp`、`action_main`、`timing_main`、`quad_main`、`network_main`）改走 `ClientSimulation`；GUI probe 經由 `PvpApplication`。
+  - 等價測試：v6 產品路徑的凍結參考模型與 `ClientSimulation` 在 60／30／144 FPS、停頓、長幀、重設、arena 重選、失去控制下逐位元組相同。
+  - 原始碼守衛 `object_fps_pvp.probe_command_path`；突變 `v7-02-*` 5／5 killed。
+  - CTest 全標籤 64／64；權威兩樹比對 35／35（base `a7cba38`，worktree `../GYO-Engine-v7base`）。
+  - 開發跑次（不計次）：矩陣 clean-60、clean-30 各 1 輪通過；`run_network.py` 1 次通過。
+  - probe 端的行為差異（第一幀 elapsed、`action_main`／`timing_main` 開始套用移動規則、`network_main` 停頓後的 elapsed）照實記在批次文件。
+  - 證據：`build/target/_build/test/logs/pvp-v7-batch02-20261008/`。
+- 下一步：第 03 批（每份 snapshot 進相位追蹤）。
 
 ## P2 以後各批的範圍
 
@@ -96,7 +113,8 @@
 
 ## 未結事項
 
-- 第 01 批：PR 待開。
+- P1a 的 PR 在第 03a 批之後開（02、03、03a 同一個 PR）。
+- worktree `../GYO-Engine-v7base`（master `a7cba38`，權威比對的 base）：P1a 結束時移除。
 - Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批 L3 確認；重現時提出程序活動宣告作為新的 Architecture Delta。
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。

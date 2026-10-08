@@ -3,7 +3,7 @@
 // The two-Client probes and analyzers are unchanged; quad_evidence.py reads
 // this probe's output.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/ClientSimulation.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
@@ -95,7 +95,7 @@ constexpr double BotActionSeconds=.25;
 constexpr double PassiveParkSeconds=2.5;
 struct Bot {
     ClientConnection connection;
-    LocalPlayerPrediction prediction;
+    ClientSimulation simulation;
     PlayerId id{};
     double nextAction{};
     std::uint64_t life{},shotsThisMagazine{};
@@ -103,7 +103,7 @@ struct Bot {
     std::map<ActionId,Json> submitted,decisions;
     std::vector<WorldSnapshot> received;
     std::size_t maximumPlayersSeen{};
-    explicit Bot(const Arena& arena):prediction(arena){}
+    explicit Bot(const Arena& arena):simulation(arena){}
 };
 }
 int main(int argc,char** argv){
@@ -131,7 +131,7 @@ int main(int argc,char** argv){
             if(!s.snapshot||s.snapshot->players.size()<options.expectPlayers)return false;}return true;};
         if(options.expectPlayers)Wait(full,15,"Room did not reach the expected players");
         for(auto& b:bots){const auto s=b->connection.State();Require(s.combatRules&&s.movementRules,"Missing authoritative rules");
-            b->prediction.SetMovementRules(*s.movementRules);}
+}
         Json fifth=nullptr;
         if(options.fifth){
             // The room is full: an extra Client sees it in the list and is refused.
@@ -173,11 +173,11 @@ int main(int argc,char** argv){
                     if(d.kind==ActionKind::Shot&&!d.accepted&&d.lifeGeneration==b.life&&b.shotsThisMagazine)--b.shotsThisMagazine;}
                 const auto& snapshot=*state.snapshot;const auto* self=Find(snapshot,b.id);const auto* own=FindCombat(snapshot,b.id);
                 Require(self&&own,"Own player missing from snapshot");
-                b.prediction.Reconcile(*self,snapshot.tick);
+                b.simulation.Observe(*self,snapshot.tick,state.movementRules);
                 // Each bot strafes on its own phase so the four never move as one block;
                 // a passive bot walks to the -X wall and stays against it.
                 const float right=options.passive?-1.F:static_cast<long long>(age/.4+i*.5)%2?-.5F:.5F;
-                if(b.prediction.Advance(elapsed,0,right,0,0))b.connection.SendInput(b.prediction.PendingInput());
+                if(auto window=b.simulation.Frame(now,{0,right,0,0}))b.connection.SendInput(std::move(*window));
                 if(self->lifeGeneration!=b.life){b.life=self->lifeGeneration;b.shotsThisMagazine=0;b.reload.reset();}
                 // An accepted reload refills the magazine once the authority reaches its end tick.
                 if(b.reload&&b.decisions.contains(*b.reload)&&own->reloadActionId==*b.reload&&snapshot.tick>=own->reloadEndTick){

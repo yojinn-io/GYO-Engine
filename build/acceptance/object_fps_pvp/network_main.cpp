@@ -1,5 +1,5 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/ClientSimulation.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
@@ -229,23 +229,21 @@ int main(int argc,char** argv) {
         std::string arenaError;
         const auto arena=Arena::Load(arenaPath,arenaError);
         if(!arena)throw std::runtime_error(arenaError);
-        LocalPlayerPrediction predictionA(*arena),predictionB(*arena);
-        auto previous=Clock::now();const auto started=previous;
-        const auto end=previous+std::chrono::seconds(4);
+        ClientSimulation simulationA(*arena),simulationB(*arena);
+        const auto started=Clock::now();
+        const auto end=started+std::chrono::seconds(4);
         std::optional<Engine::Math::Vec3> stoppedA,stoppedB;
         while(Clock::now()<end){
             const auto now=Clock::now();
             const auto beforeA=a.State(),beforeB=b.State();
-            predictionA.Reconcile(Player(*beforeA.snapshot,idA),beforeA.snapshot->tick);
-            predictionB.Reconcile(Player(*beforeB.snapshot,idB),beforeB.snapshot->tick);
-            const double elapsed=std::chrono::duration<double>(now-previous).count();
-            previous=now;
+            simulationA.Observe(Player(*beforeA.snapshot,idA),beforeA.snapshot->tick,beforeA.movementRules);
+            simulationB.Observe(Player(*beforeB.snapshot,idB),beforeB.snapshot->tick,beforeB.movementRules);
             const double age=std::chrono::duration<double>(now-started).count();
             const bool moving=age<2.0 || age>=3.0;
-            if(predictionA.Advance(elapsed,0,moving?1.0F:0.0F,0,0))a.SendInput(predictionA.PendingInput());
-            if(predictionB.Advance(elapsed,0,moving?-.5F:0.0F,0,0))b.SendInput(predictionB.PendingInput());
-            Require(predictionA.Observation().pendingCommands<=MaxPendingCommands &&
-                predictionB.Observation().pendingCommands<=MaxPendingCommands,"unbounded prediction window");
+            if(auto window=simulationA.Frame(now,{0,moving?1.0F:0.0F,0,0}))a.SendInput(std::move(*window));
+            if(auto window=simulationB.Frame(now,{0,moving?-.5F:0.0F,0,0}))b.SendInput(std::move(*window));
+            Require(simulationA.Observation().pendingCommands<=MaxPendingCommands &&
+                simulationB.Observation().pendingCommands<=MaxPendingCommands,"unbounded prediction window");
             const auto sa=a.State(),sb=b.State();
             Require(sa.error.empty() && sb.error.empty(),"connection failed while moving");
             if(age>=2.7 && age<3.0) {
@@ -288,26 +286,25 @@ int main(int argc,char** argv) {
         Require(std::abs(Player(*idleA.snapshot,idA).position.x-Player(*idleBeforeA.snapshot,idA).position.x)<.0001F &&
             std::abs(Player(*idleB.snapshot,idB).position.x-Player(*idleBeforeB.snapshot,idB).position.x)<.0001F,
             "session keepalive refreshed stale movement input");
-        predictionA.Reconcile(Player(*idleA.snapshot,idA),idleA.snapshot->tick);
-        predictionB.Reconcile(Player(*idleB.snapshot,idB),idleB.snapshot->tick);
-        const auto lead=predictionA.PendingInput();
+        simulationA.Observe(Player(*idleA.snapshot,idA),idleA.snapshot->tick,idleA.movementRules);
+        simulationB.Observe(Player(*idleB.snapshot,idB),idleB.snapshot->tick,idleB.movementRules);
+        const auto lead=simulationA.PendingInput();
         Require(lead.commands.size()==InitialCommandLead &&
             lead.commands.front().sequence==Player(*idleA.snapshot,idA).lastResolvedCommand+1,
             "stall recovery did not rebuild command lead");
         for(const auto& command:lead.commands)
             Require(command.moveForward==0 && command.moveRight==0,"stall recovery lead was not neutral");
-        previous=Clock::now();const auto resumedUntil=previous+std::chrono::seconds(1);
+        const auto resumedUntil=Clock::now()+std::chrono::seconds(1);
         while(Clock::now()<resumedUntil) {
             const auto now=Clock::now();const auto sa=a.State(),sb=b.State();
             Require(sa.phase==ConnectionPhase::Playing && sb.phase==ConnectionPhase::Playing &&
                 sa.snapshot && sb.snapshot,"connection failed after application stall");
-            predictionA.Reconcile(Player(*sa.snapshot,idA),sa.snapshot->tick);
-            predictionB.Reconcile(Player(*sb.snapshot,idB),sb.snapshot->tick);
-            const double elapsed=std::chrono::duration<double>(now-previous).count();previous=now;
-            if(predictionA.Advance(elapsed,0,-1,0,0))a.SendInput(predictionA.PendingInput());
-            if(predictionB.Advance(elapsed,0,1,0,0))b.SendInput(predictionB.PendingInput());
-            Require(predictionA.Observation().pendingCommands<=MaxPendingCommands &&
-                predictionB.Observation().pendingCommands<=MaxPendingCommands,"stall recovery window overflowed");
+            simulationA.Observe(Player(*sa.snapshot,idA),sa.snapshot->tick,sa.movementRules);
+            simulationB.Observe(Player(*sb.snapshot,idB),sb.snapshot->tick,sb.movementRules);
+            if(auto window=simulationA.Frame(now,{0,-1,0,0}))a.SendInput(std::move(*window));
+            if(auto window=simulationB.Frame(now,{0,1,0,0}))b.SendInput(std::move(*window));
+            Require(simulationA.Observation().pendingCommands<=MaxPendingCommands &&
+                simulationB.Observation().pendingCommands<=MaxPendingCommands,"stall recovery window overflowed");
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         Require(Player(*idleA.snapshot,idA).position.x-Player(*a.State().snapshot,idA).position.x>.5F &&

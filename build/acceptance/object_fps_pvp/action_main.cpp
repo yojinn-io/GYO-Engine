@@ -1,6 +1,6 @@
 // Product-owned real-socket action/movement acceptance. No GUI.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/ClientSimulation.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "acceptance_protocol.hpp"
@@ -118,7 +118,7 @@ int main(int argc,char** argv){
             return b.phase==ConnectionPhase::Playing && a.snapshot && a.snapshot->players.size()==2;});
         const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
         for(const auto& c:clients)Require(c.State().combatRules.has_value(),"Welcome omitted authoritative CombatRules");
-        std::array<LocalPlayerPrediction,2> prediction{LocalPlayerPrediction(*arena),LocalPlayerPrediction(*arena)};
+        std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
         std::array<SnapshotTimeline,2> timelines;
         std::array<std::map<ActionId,Json>,2> submitted,decisions;
         std::array<std::size_t,2> maximumRetained{},maximumUnconsumed{};
@@ -155,11 +155,11 @@ int main(int argc,char** argv){
                 Require(state.error.empty(),state.error);
                 Require(state.phase==ConnectionPhase::Playing && state.snapshot.has_value(),"Live Session lost");
                 const auto& authority=Player(*state.snapshot,ids[i]);
-                prediction[i].Reconcile(authority,state.snapshot->tick);
+                simulation[i].Observe(authority,state.snapshot->tick,state.movementRules);
                 // Both players oscillate together on x, retaining a clear firing line.
                 const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
-                if(prediction[i].Advance(elapsed,0,right,0,0))clients[i].SendInput(prediction[i].PendingInput());
-                const auto& p=prediction[i].Observation();
+                if(auto window=simulation[i].Frame(now,{0,right,0,0}))clients[i].SendInput(std::move(*window));
+                const auto& p=simulation[i].Observation();
                 Require(p.pendingCommands<=MaxPendingCommands && authority.contiguousPendingCommands<=MaxFutureCommands,"Movement window overflow");
                 const auto remote=timelines[i].Sample(ids[1-i],now);
                 const std::string suffix=i?"_b":"_a";
