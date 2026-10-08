@@ -1,0 +1,104 @@
+# PvP v7 交接
+
+更新：2026-10-08。Owner：`object_fps_pvp`。**狀態：規劃完成，第 01 批進行中**（分支 `claude/pvp-v7-batch01`，自 master `9a6fa8e`）。
+本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
+數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
+
+## 閱讀入口
+
+1. [進度與執行規則](README.md)：任務、子系統的處理、批次、PR 線、依賴、平台表。
+2. 本文件：決策、各批紀錄、P2 以後各批的範圍、未結事項。
+3. [盤點](INVENTORY.md)：時間、執行緒、sleep、socket 輪詢的唯讀盤點，以及更正與研究摘要。
+4. 指定批次的文件（02～05）。
+5. Engine 部分的正式來源：
+   - [時間、執行緒與 Trace](../../../architecture/plans/time-threads-trace/README.md)：TT-1、TT-2。
+   - [輸入與呈現](../../../architecture/plans/input-and-present/README.md)：IP-3～IP-5。
+6. v6 的紀錄：[v6 交接](../v6/HANDOFF.md)（D0～D26）、[v6 穩定基線](../v6/STABLE_BASELINE.md)。
+
+## 決策紀錄
+
+決策從 D27 接續編號（v6 交接與各 Engine 計畫夾共用同一套 D 編號）。引用 v6 的決策時寫「v6 Dxx」。
+
+| # | 決策 |
+|---|---|
+| D27 | （2026-10-08）Engine 子系統的分配。使用者的修正（原話）：「照這樣修正」，針對「Engine 做最小的角色執行緒，不做執行緒池」的提案。<br>①建進 Engine：Time、最小的 Threads（角色執行緒：名稱、協作停止、優先級提示）、精簡的 Trace、SDL 隔離、Display、Settings 的 io 機制、Audio。<br>②Channels 不先統一，各自實作，重複出現再抽出。<br>③Net transport 留在產品內（asio）。<br>④Job／執行緒池 v7 不建；方向寫進 README：建在 Threads 之上，worker 數＝核心數扣掉角色執行緒。<br>⑤不改 `FixedTickRuntime` 與 `RuntimeLoop` 的語意，不做 render 執行緒，不做錄製重播。<br>⑥修訂輸入與呈現計畫的 D19（原文：「主執行緒（事件＋畫面）、模擬、網路三個角色的分離屬新的 Engine 計畫」）：三角色的執行緒由 Engine 的 `GYO::Threads` 與 `GYO::Time` 提供；角色本身（迴圈、交接、政策）由消費端在產品內做。<br>⑦framework 層的現況與啟動條件寫進 README（使用者同意） |
+| D28 | （2026-10-08，照建議）Engine 計畫夾：新建 `time-threads-trace`（TT-1、TT-2）；SDL 隔離與顯示接續在輸入與呈現計畫，編為 IP-3～IP-5（owner 模組相同，另加 `engine/io`）；`audio` 等 P6 開始時再建 |
+| D29 | （2026-10-08）`GYO::Time` 是獨立的 Base 層 target（`engine/time`，不含 SDL），並且是 **Engine 的時間基準**。使用者原話：「D29 選 A，並把 GYO::Time 定為 Engine 的時間基準；RuntimeLoop 也在 TT-1 改用它，只換時鐘來源，不改 loop 的語意。」<br>Waiter 採 latch，不收 `std::stop_token`；後端：macOS kqueue、Windows 高解析度 waitable timer、其他平台 cv，都用相對期限加醒後依 steady 重新檢查。例外：`AssetWatcher` 的檔案時間屬牆鐘語意，v7 不改 |
+| D30 | （2026-10-08，照建議）主執行緒停住、沒有發布輸入時，模擬角色沿用最後的意圖，直到年齡超過 max(100 ms, 3×近期發布間隔)；之後軸回中立、瞄準維持、丟棄跳躍上升沿。宣告最低支援 20 FPS |
+| D31 | （2026-10-08，照建議）30 FPS 對比拆成 C1（第 05 批：`fee92ff` 對 P1b 頭，只有任務 1、2，Gateway 缺陷兩樹都保留）與 C2（第 09 批：任務 3 之後、pv7 之前）。各指標的權威來源、主機狀態的分層與獨立性檢查、輪數，見 README 的對比做法 |
+| D32 | （2026-10-08，照建議）pv7 只在第 11 批升一次，嚴格版本相等，三個角色同一個 PR，舊程序重新啟動（沿用 v6 D11①） |
+| D33 | （2026-10-08，照建議）任務 7 的完成條件以 SDL 符號判定，範圍含產品測試；Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`），SDL3 改為 PRIVATE 連結。ui_editor 與未啟用產品只寫遷移清單 |
+| D34 | （2026-10-08，照建議）跨平台驗收依 README 的平台表：Windows 只靠 LAN 場次；Linux 與 macOS arm64 標「未驗證」；不做 CI 只記錄的計時測試；LAN 排不出時，是否升格由使用者在第 16 批開始時決定（比照 v6 D26） |
+| — | （2026-10-08）P1 拆成 P1a（02、03、03a，只改產品）與 P1b（TT-1、04、05，跨層）；加做 03a 小量測（使用者決定） |
+
+在各功能線開始前確認（先附建議）：
+
+| # | 問題 | 建議 | 時點 |
+|---|---|---|---|
+| D35 | Client↔Gateway 時間回聲要不要放進 pv7 | 放進：LAN 實際的偏移（約 0.45 s）在 Client 與 Mac 之間，runtime link 同機；這是量兩機漂移的唯一方法 | P3 開始前 |
+| D36 | 任務 3 之後的動作送出語意 | 保持 30 Hz 的最小間隔，符合資格時在 SubmitAction 當下就送出（平均約縮短 16 ms，不改 wire） | P2 |
+| D37 | 設定與日誌的位置；ui_editor 的原子寫入要不要併入 `engine/io` | 設定放在 `SDL_GetPrefPath`；日誌留在執行檔旁（LAN 手冊依賴）；併入（工具 ownership 的變更） | P5 |
+| D38 | 音效資產的來源 | 由產品腳本程序生成 WAV（48 kHz），可重現、授權單純 | P6 |
+| D39 | 審查方式 | pv7 契約用 ultracode 審查（比照 v6 第 09 批）；TT-1 與 IP-3 的公開介面各 1 位 xhigh 審查；C1 宣告草案由 1 位評審加 1 次對抗式檢查。各批開始時徵求同意 | 各批開始時 |
+
+## 第 01 批進度（記錄器）：計畫
+
+- 2026-10-08：v7 開始（使用者指示）。先確認 v1.1.0 已發佈，紀錄寫進 v6 交接的第 17 批。
+- 2026-10-08：唯讀盤點（ultracode）：9 個區域 agent（Engine 核心、Engine 其他模組與 services、Client、Match、Gateway、驗收 C++、驗收 Python／測試／CI、其他產品與工具、本機證據日誌）＋1 次 xhigh 對抗式完整性檢查。303 個地點；結果見 [盤點](INVENTORY.md)。
+- 2026-10-08：分批規劃（ultracode）：研究 2 個、方案 3 個（證據優先、產品垂直切片、Engine 由下而上）、評審 1 個（xhigh，選垂直切片為主幹，嫁接 15 個做法）、對抗式檢查 1 次（xhigh，0 blocker、10 major，全部修進計畫）。
+- 2026-10-08：使用者決定 D27～D34，以及 P1 拆成 P1a／P1b、加做 03a。檔位：第 01 批 medium。
+- 本機證據（git 忽略）：
+  - `build/target/_build/test/logs/pvp-v7-inventory-20261008/`：inventory.json、digest、規劃的 JSON、確認後的計畫草稿、分析輔助腳本；`files.sha256` 的 SHA-256 `ddc23da0…`。
+  - `build/target/_build/test/logs/engine-time-platform-inventory-20261008/`：Engine 範圍的研究 JSON 與計時探針原始碼；`files.sha256` 的 SHA-256 `3f2822ba…`。
+
+## P2 以後各批的範圍
+
+批次文件在該線開始時撰寫；行號以那時的程式為準重新核對。
+
+### P2：網路路徑（任務 3）
+
+- **P2-log**（單獨的子批次，先 commit，作為 P2 的 before；06～08 的修正都依賴它）：
+  - Gateway 每 10 秒的統計：每個 session 的 results 與 snapshot 送出間隔分布、runtime link action batch 的間隔。
+  - Match：程序 CPU 秒數、IPC 迴圈每秒迭代、Tick 的預定與實際喚醒。
+  - Client worker：每 10 秒的喚醒次數與 CPU 秒數。
+- **06** Gateway 結果通道：資格判定改為只在 `now + I/2 < nextSend` 時才跳過（`action_delivery.go:205`），保留寫出後的重新錨定與「不爆量」。修正後若碰到分析器「每秒 ≤31」的窗口規則，停下由使用者決定。runtime link 的 action batch 不改，只量測。
+- **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。
+- **08** Client：worker 改為一條 asio io 執行緒（async receive、各期限一個 steady_timer），SendInput／SubmitAction 以 post 喚醒；速率語意不變；httplib 留在 worker（只在大廳切換與關閉時阻塞 UDP）。ACK 判定在 L1 顯示語意不變時改為網路角色收到裁決時前進，否則維持並記錄理由。動作送出語意依 D36。
+- **09** FireGate 與 C2：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
+- 停止條件：權威 digest 改變；需要改 wire；macOS 的 Tick 晚醒沒有改善；worker_main 的斷言需要放寬；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。
+
+### P3：診斷與 pv7（任務 8、4）
+
+- **TT-2**（Engine）：見 Engine 計畫。寫檔執行緒用 `GYO::Threads`；只在佇列由空轉為非空、或達到批次門檻時才 Notify。
+- **10** 任務 8 的紀錄：Client 的拒絕原因、未指定 `--gateway` 的提示、以 worker 收包時間戳計算的 snapshot 年齡、模擬步晚醒的 10 秒摘要；Match 的動作裁決與原因（`match-actions.jsonl`）、結束紀錄、runtime link 關閉紀錄（含原本吞掉的例外）、每位玩家每 10 秒的 Held／Neutral；Gateway 的收包間隔分布、拒絕原因、control lane 丟棄計數、週期性 IPC 寫出延遲、loopback advertise-ip 的警告。日誌格式是新的產品 Data Contract：帶版本與驗證規則，C++ 與 Go 兩端的測試解析同一份樣本。新紀錄寫到另外的檔案。
+- **11** pv7：契約文件 `docs/object_fps_pvp/protocol-v7.zh-Hant.md`；ProtocolVersion 6→7（ClientVersion 與 RuntimeVersion 都由它導出）；runtime link 每秒 1 次心跳（偏移、RTT 最小值濾波、漂移視窗回歸，每 10 秒寫進兩端日誌）；Client↔Gateway 時間回聲（D35）；版本不一致時給明確的錯誤；驗收工具升 pv7。紀錄若需要 wire 上的資料，併入本批，不做第二次 wire 變更。
+- 產品的 `-fexperimental-library` 在最後一個 `std::jthread`／`std::stop_token` 使用者遷移完時移除（`apps/object_fps_pvp/CMakeLists.txt:30-32`、`tests/object_fps_pvp/CMakeLists.txt:187`），並加守衛（產品、probe、產品測試中 0 件）。預計在 P3。
+
+### P4：SDL 隔離（任務 7）
+
+- IP-3、IP-4（Engine）：見輸入與呈現計畫。
+- **12**：main、PvpApplication（移除 `SdlPlatform&`／`SdlGpuRenderDevice&` 的公開暴露）、7 個 probe 檔（gui_main、gui_quad_main、gui_input、action_short、player_short、native_window、platform_fingerprint）、產品測試（PointerCaptureCharacterizationTests、PlayerPresentationTests）改用 Engine API；SDL_Delay 改用 Waiter；SDL_Log 經 facade 寫進 LogFile。完成條件的 CTest（只在選擇本產品時啟用）以符號判定（D33），例外清單從空開始。L2 在同一場次交錯跑 P4 的 base 與頭的 GUI 短測；L3 確認大廳的文字輸入與剪貼簿。
+
+### P5：解析度與設定（任務 6）
+
+- IP-5（Engine）：見輸入與呈現計畫。
+- **13**：選項與預設值在批次開始時提案確認；設定 Data Contract（`settings.json` 版本 1：視窗模式、解析度、顯示器，可選像素密度與 vsync；有驗證規則，失敗時退回預設並記一行日誌；可以手寫）；大廳的設定選單；套用後 15 秒未確認就還原（注入時鐘）；HUD 依解析度縮放；移除寫死的 1280×720。
+
+### P6：音效（任務 5）
+
+- AU-1（Engine）：P6 開始時建立 audio 計畫夾。中立混音器（PCM16、48 kHz、自己的樣本計數、即時安全的有界 SPSC、依時間戳換算樣本位置）＋SDL 後端（`SDL_OpenAudioDeviceStream` 的 callback）。
+- **14**：在事件真正發生的地方以 Engine 時間戳觸發：本機射擊（輸入事件的時間戳）、命中確認、受擊、換彈、遠端射擊。L2 以 `SDL_AUDIO_DRIVER=disk` 在 30 FPS 連射，分析起音間隔要對應射擊 Tick，而不是 33 ms 的幀格點。
+
+### P7：整合與升格
+
+- **15** LAN 場次（事前宣告，只記錄）：Windows Client 的模擬步晚醒（含縮小與遮住）、Windows 切換視窗時的 Held、Mac Gateway↔Windows Client 的偏移與漂移（至少 15 分鐘）、Gateway 各通道在真實網路下的分布、任務 8 的清單（只看日誌能否回答 v6 LAN 的問題）；朋友能主持時加測 Windows Match。
+- **16** 整合驗收與升格：CTest 全部、權威 35／35、Match 的連結閉包不含 SDL 與 audio、產品移除檢查、25 案矩陣（clean-30 是否計入判定在開始時依 C1 決定）、短測、quad、1 GUI＋3 bot、L3 清單、STABLE_BASELINE v7；是否發行由使用者決定。
+
+## 未結事項
+
+- 第 01 批：PR 待開。
+- Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批 L3 確認；重現時提出程序活動宣告作為新的 Architecture Delta。
+- Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
+- `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。
+- 驗收分析器 `quad_evidence` 與 `command_evidence` 的收斂：維持候選。
+- v6 文件中其他舊的行號（D20 的 `runtime_v5.proto`、D21 的 `IpcHost.cpp:267`、v6 交接延後項目 8 的 `backpressure_test.go:102-158` 等）：只列在[盤點](INVENTORY.md)，不修改（AGENTS §11）。

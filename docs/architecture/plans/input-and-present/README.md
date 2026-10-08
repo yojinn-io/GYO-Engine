@@ -1,7 +1,8 @@
 # 輸入與呈現：分批計畫與進度
 
-更新：2026-10-05。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；`engine/runtime` 只讀）。
+更新：2026-10-08。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；IP-5 另含 `engine/io` 的原子寫入；`engine/runtime` 只讀）。
 **狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 完成（縮小交付，D19），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。
+2026-10-08：消費端的新版本規劃中，使用者修訂 D19（D27：多角色的執行緒由 [時間、執行緒與 Trace](../time-threads-trace/README.md) 提供，角色本身由消費端做），並決定 SDL 隔離與顯示接續在本計畫，編為 IP-3～IP-5（D28，未開始）。
 2026-10-05：IP-2 的消費端條件（拖動重現與量測基線 B0）已由消費端完成；縮放時的停頓落在事件處理而非 render，IP-2 開始時須先處理，見 [HANDOFF](HANDOFF.md) 未結事項。
 
 Engine 的輸入層與呈現路徑各有一個缺口：
@@ -37,6 +38,9 @@ Engine 的輸入層與呈現路徑各有一個缺口：
 |---|---|---|---|
 | IP-1 輸入層：完整 scancode 與視窗互動事件 | high；公開介面以 ultracode 審查（開始時徵求同意） | 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）（未做 ultracode 審查，見 HANDOFF） | `Key` 以加法擴充為完整鍵盤 scancode；同一幀內的上升沿次數（或依序的事件清單）與點擊座標；視窗互動事件（含縮放的新寬高）與本視窗過濾；`tests/common/input` 測試（含同一幀按下再放開）；遷移清單加 preview 的數字鍵。不改任何消費端 |
 | IP-2 呈現不阻塞主迴圈（拖動＋縮放，D16） | high；取得、節流、`Skipped` 語意與 live frame 的重入局部 xhigh（1 個審查 agent，D17） | 完成（縮小交付：2b＋拆分診斷；2c 依 D19 延到分執行緒的計畫；PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併） | 先拆分量測；停頓在 fence 時改為不阻塞取得＋節流，Engine 層假 device 單元測試；停頓在 `nextDrawable` 時停下請使用者選擇。before 在本批 base commit 重量；L2 在合併前完成（D13）。不宣稱 Windows 已解決 |
+| IP-3 SDL 隔離核心 | high；SDL 事件時間戳→Engine 時間基準的換算局部 xhigh；公開介面由 1 位 xhigh 審查 agent 檢查（開始時徵求同意） | 未開始（2026-10-08 規劃） | 後端的公開標頭去掉 SDL 型別，帶 SDL 型別的 API 移到 `*Native.hpp`；SDL 日誌轉送進 Base 的日誌 facade（消費端選擇啟用，或預設保留 SDL 原本的輸出）；執行檔目錄；進入點；文字輸入與剪貼簿（以加法加入 IP-1 的輸入幀）；SDL 事件時間戳在平台邊界換算到 Engine 時間基準，每次 pump 重新取樣一次配對。依賴時間、執行緒與 Trace 計畫的 TT-2（日誌 facade） |
+| IP-4 測試用事件注入與觀測、視窗查詢 | high | 未開始（2026-10-08 規劃） | key／mouse／focus 走 `SDL_PushEvent` 的同一條佇列；move／resize 用真正的視窗操作；帶 Engine 時間戳的事件觀測 hook；視窗與顯示器的唯讀查詢、`SetWindowSize`／`SetWindowPosition`／`Raise`／`Sync`；capture 存檔工具；最後把 Engine SDL 後端改為 PRIVATE 連結 SDL3 |
+| IP-5 顯示、視窗模式與使用者目錄 | high；非同步模式切換與 swapchain 的順序、各 OS 的原子取代語意局部 xhigh | 未開始（2026-10-08 規劃） | 顯示器與全螢幕模式的列舉、`SetWindowMode`（視窗、無邊框桌面全螢幕、獨佔全螢幕）、執行中改變大小、`highPixelDensity` 選項（預設關閉）、像素大小與密度、`UserDataDirectory`（`SDL_GetPrefPath`）；`engine/io` 的 `AtomicWriteFile`。Engine 不知道任何設定的鍵 |
 
 ```text
 IP-1 ─────────────────────────────→ 消費端改用 Engine 輸入（消費端自己的批次）
