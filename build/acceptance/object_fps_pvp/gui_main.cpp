@@ -621,7 +621,7 @@ void RunPhaseStalls(const Options& options) {
     bool joined = mover;
     const auto started = Clock::now();
     auto previous = started, refreshed = started;
-    std::optional<Clock::time_point> togetherSince, previousUpdate, previousUpdateStart;
+    std::optional<Clock::time_point> togetherSince, previousUpdate, previousSteppedAt;
     std::optional<fps::pvp::LocalMovementObservation> previousMovement;
     std::optional<SDL_Scancode> held;
     unsigned nextFault{};
@@ -692,29 +692,29 @@ void RunPhaseStalls(const Options& options) {
                 local.movementEpoch == previousMovement->movementEpoch &&
                 local.lastResolvedCommand <= previousMovement->latestCommand &&
                 local.latestCommand >= previousMovement->latestCommand) {
-                // The simulation role steps on its own deadlines; each Update
-                // places its newest step at the Update's input sample. Between two
-                // samples, bracketed by the Updates around them, its fixed-step
-                // clock moves with time except for phase slew: at most one
-                // maximum correction pending at the first sample plus one per
-                // correction started since. With two steps for presentation lag
-                // and boundaries, it takes neither more nor fewer steps than that
-                // allows: a stalled main thread neither replays nor stops command
-                // generation. A new authoritative seed is excluded above.
+                // The simulation role steps on its own deadlines; each Update reads
+                // its newest step. Between the times of the two steps read, its
+                // fixed-step clock moved with time except for phase slew (at most
+                // one maximum correction pending at the first plus one per
+                // correction started since), and a step boundary on either side
+                // adds one. It takes neither more nor fewer steps than that: a
+                // stalled main thread neither replays nor stops command
+                // generation, and a simulation that dropped time fails the lower
+                // bound. A new authoritative seed is excluded above.
                 const double tick = fps::pvp::MovementTickSeconds;
                 const auto steps = local.latestCommand - previousMovement->latestCommand;
                 const double slew = fps::pvp::MovementPhaseMaximumCorrectionSeconds *
                     (1.0 + static_cast<double>(local.phaseCorrections - previousMovement->phaseCorrections));
-                const auto possibleSteps = static_cast<std::uint64_t>(std::floor(
-                    (Seconds(updateFinished, *previousUpdateStart) + slew) / tick)) + 2;
-                const auto requiredSteps = std::floor((Seconds(updateStarted, *previousUpdate) - slew) / tick) - 2;
+                const double stepped = Seconds(application.LocalMovementSteppedAt(), *previousSteppedAt);
+                const auto possibleSteps = static_cast<std::uint64_t>(std::floor((stepped + slew) / tick)) + 1;
+                const auto requiredSteps = std::floor((stepped - slew) / tick) - 1;
                 Require(steps <= possibleSteps, "The simulation generated more steps than the elapsed time allows");
                 Require(static_cast<double>(steps) >= requiredSteps, "The simulation skipped steps while the main thread stalled");
             }
             previousUpdate = updateFinished;
-            previousUpdateStart = updateStarted;
+            previousSteppedAt = application.LocalMovementSteppedAt();
             previousMovement = local;
-        } else { previousUpdate.reset(); previousUpdateStart.reset(); previousMovement.reset(); }
+        } else { previousUpdate.reset(); previousSteppedAt.reset(); previousMovement.reset(); }
         if (injecting && !injecting->beforeUpdate) {
             SDL_Delay(injecting->milliseconds);
             injecting->released = Clock::now();

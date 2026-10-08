@@ -142,6 +142,7 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - 60 Hz ±2 步：只有模擬的 gap 會跳過檢查；主執行緒的停頓（注入或觀測到的）不跳過。
   - STALL_RULE 的 v7 版（文字在檔內）。
   - 新規則：注入主執行緒停頓的跑次，從停頓開始到放開後 1.5 秒內不得有 Held／Neutral，量測窗內不得有 LifeRespawn 以外的 epoch 重設。
+  - 審查後的修正：seed 夾住豁免改回凍結版（frame < 100 ms），2 tick 以上的另列 `late_seed_clamps`（見下方的 xhigh 審查）。
   - 回合的種類：timing 與 GUI 用各自的量測窗，有產量檢查；遊戲矩陣的回合（`action-client.json`）用整段執行、沒有產量檢查，乾淨回合（`mode` 為 baseline）中模擬的 gap 是錯誤（和凍結的遊戲分析器同一種處理）。
   - self-test（CTest `object_fps_pvp.command_evidence_v7`）與突變 3 件。執行器（`run_timing.py` 等）不改；第 05 批的宣告寫明兩版都分析。
 - **驗收（截至目前，`aa9a342`）**：
@@ -161,6 +162,27 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - 原因：漏步時權威端以 Held 吃掉序號、Client 重新播種，而步數檢查本來就排除重新播種的觀測，所以變成空檢查。
   - 修正：觀測值新增唯讀的 `stallReseeds`（同一 epoch、life 中，因權威解析超過本地最新命令而重新播種的次數），phase stalls 斷言停頓期間它不變。第 3 次 killed（「let the authority resolve past the local commands (Held)」）；沒有突變的版本照樣通過。前兩次的結果保留。
 - **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
+
+## xhigh 審查（2026-10-09，使用者同意；唯讀，對象到 `ffdb571`）
+
+沒有 blocker；期限與 slew、session 邊界、生命週期與資料競爭逐項驗證後沒有缺陷。處理如下（修正在 `ffdb571` 之後的 commit）：
+
+- [major] **生命或 session 邊界之後，前 1～2 個命令帶著舊的瞄準**（角色先看到重生或新 session、主執行緒還沒重設視角時，`Advance` 用了意圖裡舊生命的 yaw；權威會把它寫進狀態，其他玩家看到朝向閃一下，主執行緒晚重設時連出生朝向都會遺失）→ 修正：意圖帶「所屬」（連線世代、玩家、生命，`IntentOwner(state)`），和預測目前的不一致（或從未發布）時，軸中立、不跳躍、瞄準用預測自己的（seed 時的權威瞄準）。`ClientConnectionState` 加上 `generation`。L1 加「新生命、新 session 的第一批命令瞄準權威方向」，突變 `v7-04-intent-any-owner`。
+- [minor] live frame 不發布意圖，拖曳或縮放開始後角色還會走 150 ms → live frame 也發布（沒有輸入，所以 controls＝false、軸中立）；預測照樣只由角色推進。
+- [minor] 分析器 v7 的 seed 夾住豁免比結構上需要的嚴（角色晚醒 11～17 ms 就會讓乾淨回合失敗，而丟掉的時間是刻意捨棄的）→ 豁免改回凍結版的公式（frame < 100 ms），2 tick 以上的另列 `late_seed_clamps`（角色晚醒的診斷，不判失敗）。
+- [minor] 重生瞬間，主執行緒比角色先看到新生命時，相機會用舊生命的位置 → 呈現副本的生命和權威不一致時，相機用權威位置，也不發布 presented 觀測。
+- [minor] 模擬步晚醒的摘要沒有輸出 → timing probe 寫進 `timing.json`、遊戲矩陣 probe 寫進 `action-client.json`（`simulation_wakes`：執行次數、晚醒次數、最大值、P50／P99 上界、分箱；只作解讀）。
+- [nit] 角色自己被延遲時，錯過的發布會被算成發布間隔 → 意圖由 `PublishIntent` 編號，只有連續編號的兩次發布才算間隔。
+- [nit] GUI 步數上下界仍隱含角色晚醒的假設 → 改用兩次呈現自己的步時刻（`LocalMovementSteppedAt()`）界定區間，完全是結構上的界限。
+- [nit] 沒有角色的連線也複製 snapshot → 只有在第一次 `DrainSimulation` 之後才保留。
+- [nit] 守衛沒有禁止 probe 呼叫 `DrainSimulation` → 已禁止。
+- 測試缺口：補上 controls＝false、沒有 controls 時看到的跳躍被丟棄、慢速發布者（3 個間隔超過 150 ms）、插值與修正衰減的精確值、玩家 id 變更（同一 pawn 換 id）與「最新 snapshot 沒有自己」分開測；突變 `v7-04-controls-ignored`、`v7-04-jump-deferred`、`v7-04-stale-floor-only`、`v7-04-interpolation-frozen`。
+- 留下、記錄（不修）：
+  - 時間倒退的意圖（只有多個發布者時才會發生）。
+  - 網路 probe 不再以真實 socket 涵蓋伺服器端的輸入逾時（`PvpMatchTests` 仍有 L1）。
+  - `SendInput(input, generation)` 的世代檢查、角色送出路徑沒有 L1（需要連線中的 session；worker probe 依計畫不改）。
+  - 負向 slew 期間 FireGate 最多保守 0.25×經過時間（審查手算；正向完全等價）。
+- **待使用者決定**：D30 的門檻可以被一連串逐漸變長的發布間隔逐級放大（150 ms → 450 ms → 1.35 s → 約 4 s；每個間隔都在當時的門檻內，所以照 D30 的公式都算「近期發布間隔」）。要擋住，得給記錄的間隔加上限（例如最低支援 FPS 的間隔的某個倍數），會改動 D30 的語意。機率低（發布者要持續變慢）。
 
 ## 使用者的決定（2026-10-09）
 

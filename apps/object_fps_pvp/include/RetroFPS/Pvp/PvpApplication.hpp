@@ -126,10 +126,12 @@ public:
     [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& RenderDevice();
     [[nodiscard]] Engine::Platform::Sdl::SdlPlatform& Platform();
     // The local movement placed at the latest Update's input sample, from the
-    // simulation role's newest step, and the sample time of the intent that
-    // step used: a probe that changes input waits for a later intent.
+    // simulation role's newest step; the sample time of the intent that step
+    // used (a probe that changes input waits for a later intent); and when the
+    // step was taken.
     [[nodiscard]] const LocalMovementObservation& LocalMovement() const noexcept;
     [[nodiscard]] Engine::Time::TimePoint LocalMovementIntentSampledAt() const noexcept;
+    [[nodiscard]] Engine::Time::TimePoint LocalMovementSteppedAt() const noexcept;
     [[nodiscard]] const std::optional<RemoteMovementObservation>& RemoteMovement() const noexcept;
     [[nodiscard]] const std::optional<PresentedMovementObservation>& PresentedMovement() const noexcept;
     [[nodiscard]] const WeaponFeedbackObservation& WeaponFeedback() const noexcept;

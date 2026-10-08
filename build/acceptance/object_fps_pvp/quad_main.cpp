@@ -178,7 +178,7 @@ int main(int argc,char** argv){
                 // a passive bot walks to the -X wall and stays against it.
                 const float right=options.passive?-1.F:static_cast<long long>(age/.4+i*.5)%2?-.5F:.5F;
                 if(const auto failure=b.simulation->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
-                b.simulation->PublishIntent({0,right,0,0,true,0,now});
+                b.simulation->PublishIntent({0,right,0,0,true,0,now,IntentOwner(state)});
                 if(self->lifeGeneration!=b.life){b.life=self->lifeGeneration;b.shotsThisMagazine=0;b.reload.reset();}
                 // An accepted reload refills the magazine once the authority reaches its end tick.
                 if(b.reload&&b.decisions.contains(*b.reload)&&own->reloadActionId==*b.reload&&snapshot.tick>=own->reloadEndTick){

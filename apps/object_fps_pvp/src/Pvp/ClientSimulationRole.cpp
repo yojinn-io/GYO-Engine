@@ -24,10 +24,17 @@ const PlayerState* FindSelf(const WorldSnapshot& snapshot, const PlayerId self) 
 }
 } // namespace
 
+ClientIntentOwner IntentOwner(const ClientConnectionState& state) noexcept {
+    ClientIntentOwner owner{state.generation, state.playerId, 0};
+    if (state.snapshot)
+        if (const auto* self = FindSelf(*state.snapshot, state.playerId)) owner.lifeGeneration = self->lifeGeneration;
+    return owner;
+}
+
 ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
                           const TimePoint now) {
     ClientPresented result{presentation.observation, presentation.shotTiming, presentation.intentSampledAt,
-        presentation.generation};
+        presentation.generation, presentation.steppedAt};
     if (!presentation.observation.active || presentation.arenaIndex >= arenas.size()) return result;
     const double since = std::max(0.0, Seconds(now - presentation.steppedAt));
     const auto sample = InterpolateLocalPresentation(arenas[presentation.arenaIndex], presentation.presentation, since);
@@ -52,14 +59,17 @@ double ClientSimulationLoop::StaleLimitSeconds() const noexcept {
 
 void ClientSimulationLoop::TrackIntent(const ClientIntent& intent) {
     if (intent.sampledAt <= lastIntentAt_) return;
-    // An interval past the stale limit was a stall, not the publisher's cadence:
+    // Only consecutive publications measure the publisher's interval: across one
+    // the simulation never saw, it would include the simulation's own delay. An
+    // interval past the stale limit was a stall, not the publisher's cadence:
     // kept, it would let the intent of the next stall stand three times as long.
-    if (lastIntentAt_ != TimePoint{})
+    if (lastIntentAt_ != TimePoint{} && intent.sequence == lastIntentSequence_ + 1)
         if (const double interval = Seconds(intent.sampledAt - lastIntentAt_); interval <= StaleLimitSeconds()) {
             intervals_[nextInterval_] = interval;
             nextInterval_ = (nextInterval_ + 1) % intervals_.size();
         }
     lastIntentAt_ = intent.sampledAt;
+    lastIntentSequence_ = intent.sequence;
 }
 
 bool ClientSimulationLoop::IntentStale(const TimePoint now) const noexcept {
@@ -96,10 +106,15 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
 
     TrackIntent(intent);
     const bool stale = IntentStale(now);
-    ClientInputSample input{0, 0, intent.yaw, intent.pitch, false, false};
-    if (!stale && intent.controls)
-        input = {intent.forward, intent.right, intent.yaw, intent.pitch, intent.jumpPresses > consumedJumps_, true};
-    // A press seen while stale or without controls is dropped, not deferred.
+    // An intent of another session, player or life (a boundary its publisher has
+    // not seen yet), or none at all, moves nothing and aims where the prediction does.
+    const ClientIntentOwner predicted{drain.generation, drain.playerId, simulation_.Observation().lifeGeneration};
+    const bool owned = intent.sampledAt != TimePoint{} && intent.owner == predicted;
+    const auto [yaw, pitch] = owned ? std::pair{intent.yaw, intent.pitch} : simulation_.PredictedAim();
+    ClientInputSample input{0, 0, yaw, pitch, false, false};
+    if (owned && !stale && intent.controls)
+        input = {intent.forward, intent.right, yaw, pitch, intent.jumpPresses > consumedJumps_, true};
+    // A press seen while stale, without controls or for another owner is dropped, not deferred.
     consumedJumps_ = std::max(consumedJumps_, intent.jumpPresses);
 
     Step step;
@@ -127,6 +142,7 @@ ClientSimulationRole::~ClientSimulationRole() = default;
 void ClientSimulationRole::PublishIntent(const ClientIntent& intent) {
     const std::lock_guard lock(mutex_);
     intent_ = intent;
+    intent_.sequence = ++published_;
 }
 
 ClientPresentation ClientSimulationRole::Latest() const {

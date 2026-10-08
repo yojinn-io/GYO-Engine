@@ -106,6 +106,7 @@ struct ClientConnection::Impl {
     std::uint64_t snapshotOverflowCount{};
     // The simulation role's own copy of the history (DrainSimulation).
     std::deque<ReceivedSnapshot> simulationSnapshots;
+    bool simulationConsumer{};
     std::uint64_t simulationOverflowCount{};
     std::vector<ArenaIdentity> installedArenas;
     std::atomic<std::uint64_t> generation{0};
@@ -142,7 +143,7 @@ struct ClientConnection::Impl {
         return result;
     }
     ClientConnectionState CopyState() const {
-        auto result=state;result.actionTransport=ActionState();return result;
+        auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
         asio::error_code error;socket.close(error);
@@ -529,10 +530,12 @@ struct ClientConnection::Impl {
                             .epoch=player.movementEpoch,.sequence=player.lastResolvedCommand,.authorityTick=snapshot.tick,
                             .queued=player.contiguousPendingCommands,.count=snapshotOverflowCount,.lifeGeneration=player.lifeGeneration});
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
-                    if(simulationSnapshots.size()==MaxReceivedSnapshots) {
-                        simulationSnapshots.pop_front();++simulationOverflowCount;
+                    if(simulationConsumer) {
+                        if(simulationSnapshots.size()==MaxReceivedSnapshots) {
+                            simulationSnapshots.pop_front();++simulationOverflowCount;
+                        }
+                        simulationSnapshots.push_back({snapshot,arrivedAt});
                     }
-                    simulationSnapshots.push_back({snapshot,arrivedAt});
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
                 }
             } else if(packet->type==wire::Type::ActionResults) {
@@ -705,6 +708,7 @@ ClientConnectionDrain ClientConnection::Drain(){
 }
 ClientSimulationDrain ClientConnection::DrainSimulation(){
     std::scoped_lock lock(impl_->mutex);
+    impl_->simulationConsumer=true;
     ClientSimulationDrain result{{},impl_->generation.load(),impl_->state.playerId,impl_->state.arenaId,
         impl_->state.movementRules,impl_->simulationOverflowCount};
     result.snapshots.reserve(impl_->simulationSnapshots.size());

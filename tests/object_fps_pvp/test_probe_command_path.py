@@ -3,7 +3,8 @@
 The application constructs one ClientSimulationRole and publishes intents to it;
 a probe that stepped ClientSimulation, ClientSimulationLoop or
 LocalPlayerPrediction (or its elapsed sampler) itself, by a Waiter, a sleep or
-its frame loop, would measure a command path the application does not run.
+its frame loop, or took the role's snapshot history (DrainSimulation), would
+measure a command path the application does not run.
 Only the transport probe (worker_main.cpp) sends hand-made command windows.
 """
 import re
@@ -14,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROBES = ROOT / "build" / "acceptance" / "object_fps_pvp"
 APPLICATION = ROOT / "apps" / "object_fps_pvp" / "src" / "Pvp" / "PvpApplication.cpp"
-FORBIDDEN = re.compile(r"\b(LocalPlayerPrediction|PredictionElapsedTime|ClientSimulation|ClientSimulationLoop)\b")
+FORBIDDEN = re.compile(r"\b(LocalPlayerPrediction|PredictionElapsedTime|ClientSimulation|ClientSimulationLoop|DrainSimulation)\b")
 SENDS = re.compile(r"\bSendInput\(")
 PUBLISHES = re.compile(r"\bPublishIntent\(")
 CONSTRUCTS = re.compile(r"make_unique<ClientSimulationRole>")
@@ -55,6 +56,7 @@ class ProbeCommandPathTests(unittest.TestCase):
         self.assertEqual(len(violations("x.cpp", "PredictionElapsedTime elapsed;\n")), 1)
         self.assertEqual(len(violations("x.cpp", "ClientSimulation simulation(*arena);\n")), 1)
         self.assertEqual(len(violations("x.cpp", "ClientSimulationLoop loop({*arena});\n")), 1)
+        self.assertEqual(len(violations("x.cpp", "auto stolen=c.DrainSimulation();\n")), 1)
         self.assertEqual(len(violations("x.cpp", "c.SendInput(std::move(*window));\n")), 1)
         self.assertEqual(violations(TRANSPORT_PROBE, "connection.SendInput(Input(1,2));\n"), [])
         role = "auto r=std::make_unique<ClientSimulationRole>(c,std::vector<Arena>{*arena});\nr->PublishIntent(i);\n"

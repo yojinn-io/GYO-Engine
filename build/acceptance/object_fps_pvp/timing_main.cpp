@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
+#include "simulation_wakes.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -100,7 +101,7 @@ int main(int argc, char** argv) {
                 const float axis=injected && MovementTraceNowNs()-releaseNs<1500000000LL ? 1.0F :
                     (measured && std::fmod(age,.6)<.3 ? (leg%2?-1.0F:1.0F):0.0F);
                 if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
-                simulation[i]->PublishIntent({axis,0,0,0,true,0,now});
+                simulation[i]->PublishIntent({axis,0,0,0,true,0,now,IntentOwner(drain.state)});
                 const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
                 Require(p.pendingCommands<=MaxPendingCommands,"Prediction window exceeded bound");
                 Require(authority.contiguousPendingCommands<=MaxFutureCommands,"Server window exceeded bound");
@@ -128,6 +129,8 @@ int main(int argc, char** argv) {
         const bool recoveryOK=!injected || (recoveredAt && std::chrono::duration<double>(stableSince->time_since_epoch()).count()-releaseNs/1e9<=1.5);
         for(auto& c:clients)c.Leave();
         Wait([&]{return clients[0].State().phase==ConnectionPhase::Lobby && clients[1].State().phase==ConnectionPhase::Lobby;});
+        std::array<std::string,2> wakes;
+        for(std::size_t i=0;i<2;++i)wakes[i]=SimulationWakesJson(simulation[i]->TakeWakeReport());
         for(auto& role:simulation)role.reset();
         trace.Finish();Require(trace.Good(),"Diagnostic trace lost/corrupted data");
         std::ofstream csv(output/"frames.csv");csv<<"time_ns,frame_seconds,pending_a,pending_b,queued_a,queued_b,epoch_a,epoch_b,remote_age_a,remote_age_b,resolved_a,resolved_b,authority_x_a,authority_z_a,authority_x_b,authority_z_b\n"<<std::setprecision(17);
@@ -141,7 +144,8 @@ int main(int argc, char** argv) {
             <<",\"frames\":"<<frames.size()<<",\"epoch_changes\":"<<resets<<",\"gaps_100ms\":"<<gaps
             <<",\"frozen_frames\":"<<frozen<<",\"history_overflows\":"<<overflowCounts[0]+overflowCounts[1]
             <<",\"injected\":"<<(injected?"true":"false")<<",\"release_ns\":"<<releaseNs
-            <<",\"recovery_client_passed\":"<<(recoveryOK?"true":"false")<<"}\n";
+            <<",\"recovery_client_passed\":"<<(recoveryOK?"true":"false")
+            <<",\"simulation_wakes\":["<<wakes[0]<<','<<wakes[1]<<"]}\n";
         Require(bool(summary),"Summary write failed");Require(recoveryOK,"Client recovery exceeded 1.5 seconds");
         // The simulation role keeps stepping through a main-thread stall: no epoch reset.
         Require(!injected || resets==0,"A main-thread stall reset a movement epoch");

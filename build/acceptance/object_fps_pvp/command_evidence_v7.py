@@ -13,11 +13,11 @@ v6 meaning -> v7 meaning:
   dropped or blocked. A main-thread stall no longer produces one; it shows only
   as a presentation interval (GUI) or the probe's frame gap (timing.json).
 - Seed clamp. The first step after a seed keeps at most one tick, so it drops
-  frame_seconds - one tick (frozen formula, unchanged). v6: frame_seconds was a
-  display frame, exempt below 100 ms. v7: it is the simulation's own interval,
-  at most about 1.33 ticks plus its wake lateness, so a clamp is exempt only
-  below two ticks; a longer one means the simulation itself woke late and stays
-  a simulation gap.
+  frame_seconds - one tick (frozen formula and exemption below 100 ms,
+  unchanged: the dropped time is discarded on purpose). v6: frame_seconds was a
+  display frame. v7: it is the simulation's own interval, at most about 1.33
+  ticks plus its wake lateness, so a clamp of two ticks or more is also listed
+  as a late simulation wake (a diagnostic, never a failure).
 - 60 Hz production (+-2 boundary steps, +3 per LifeRespawn). v6: skipped after
   any runtime gap, frame gap of 100 ms or injected stall, since a stalled frame
   stopped generation. v7: the simulation generates at 60 Hz whatever the main
@@ -44,7 +44,7 @@ import command_evidence as frozen
 
 ANALYZER_ID = "pvp-v7-commands-1"
 TICK_SECONDS = frozen.TICK_SECONDS
-SEED_CLAMP_MAXIMUM_FRAME_SECONDS = 2 * TICK_SECONDS
+LATE_SEED_CLAMP_FRAME_SECONDS = 2 * TICK_SECONDS
 STALL_RECOVERY_SECONDS = 1.5
 STALL_RULE_V7 = ("a simulation step interval of 100 ms or more, or time the simulation dropped or blocked; "
                  "the role catches up at most five fixed steps per run, so a wake gap of about 83 ms already "
@@ -69,11 +69,10 @@ def stall_length_ns(directory, timing):
 
 
 def split_seed_clamps(gaps, life_resets):
-    """The frozen clamp matching, offered only gaps shorter than two ticks."""
-    eligible = [gap for gap in gaps if gap["frame_seconds"] < SEED_CLAMP_MAXIMUM_FRAME_SECONDS]
-    late = [gap for gap in gaps if gap["frame_seconds"] >= SEED_CLAMP_MAXIMUM_FRAME_SECONDS]
-    clamps, unmatched = frozen.match_life_seed_clamps(eligible, life_resets)
-    return clamps, sorted(unmatched + late, key=lambda gap: gap["time_ns"])
+    """The frozen clamp matching; clamps of two ticks or more are also returned as late wakes."""
+    clamps, unmatched = frozen.match_life_seed_clamps(gaps, life_resets)
+    late = [clamp["event"] for clamp in clamps if clamp["event"]["frame_seconds"] >= LATE_SEED_CLAMP_FRAME_SECONDS]
+    return clamps, unmatched, late
 
 
 def round_window(directory):
@@ -122,7 +121,7 @@ def analyze_v7(directory):
             errors.append(str(exc))
     if not any(is_match_trace(path) for path in files) or not any(not is_match_trace(path) for path in files):
         errors.append("Missing Match or Client trace")
-    seed_clamps, simulation_gaps = split_seed_clamps(simulation_gaps, all_life_resets)
+    seed_clamps, simulation_gaps, late_seed_clamps = split_seed_clamps(simulation_gaps, all_life_resets)
     life_resets = [reset for reset in resets if reset.get("reset_reason") == "life_respawn"]
     other_resets = [reset for reset in resets if reset.get("reset_reason") != "life_respawn"]
 
@@ -162,12 +161,14 @@ def analyze_v7(directory):
         "window_ns": [start, end],
         "rules": {
             "runtime_gap": "Client runtime_gap events come only from the simulation role",
-            "seed_clamp": f"dropped == frame - one tick, frame below {SEED_CLAMP_MAXIMUM_FRAME_SECONDS:.6f} s",
+            "seed_clamp": "dropped == frame - one tick, frame below 100 ms (frozen); "
+                          f"a clamp of {LATE_SEED_CLAMP_FRAME_SECONDS:.6f} s or more is listed as a late simulation wake",
             "production": "60 Hz +-2 boundary steps (+3 per LifeRespawn); skipped only after a simulation gap",
             "stall_rule": STALL_RULE_V7,
             "main_thread_stall": f"no held/neutral resolution from the stall start to {STALL_RECOVERY_SECONDS} s "
                                  "after release; no non-LifeRespawn epoch reset"},
         "simulation_gaps": simulation_gaps, "host_gaps": host_gaps, "seed_clamps": seed_clamps,
+        "late_seed_clamps": late_seed_clamps,
         "disturbed_simulation": bool(simulation_gaps),
         "main_thread_frame_gaps": {"probe_gaps_100ms": timing.get("gaps_100ms", 0),
                                    "presentation_intervals_100ms": presentation_stalls},

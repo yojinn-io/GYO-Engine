@@ -1,6 +1,7 @@
 // Product-owned real-socket action/movement acceptance. No GUI.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
+#include "simulation_wakes.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "acceptance_protocol.hpp"
@@ -162,7 +163,7 @@ int main(int argc,char** argv){
                 // Both players oscillate together on x, retaining a clear firing line.
                 const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
                 if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
-                simulation[i]->PublishIntent({0,right,0,0,true,0,now});
+                simulation[i]->PublishIntent({0,right,0,0,true,0,now,IntentOwner(state)});
                 const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
                 Require(p.pendingCommands<=MaxPendingCommands && authority.contiguousPendingCommands<=MaxFutureCommands,"Movement window overflow");
                 const auto remote=timelines[i].Sample(ids[1-i],now);

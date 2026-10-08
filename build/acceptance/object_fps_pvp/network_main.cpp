@@ -244,8 +244,8 @@ int main(int argc,char** argv) {
             const auto now=Clock::now();
             const double age=std::chrono::duration<double>(now-started).count();
             const bool moving=age<2.0 || age>=3.0;
-            simulationA->PublishIntent({0,moving?1.0F:0.0F,0,0,true,0,now});
-            simulationB->PublishIntent({0,moving?-.5F:0.0F,0,0,true,0,now});
+            simulationA->PublishIntent({0,moving?1.0F:0.0F,0,0,true,0,now,IntentOwner(a.State())});
+            simulationB->PublishIntent({0,moving?-.5F:0.0F,0,0,true,0,now,IntentOwner(b.State())});
             simulated(*simulationA,"unbounded prediction window");
             simulated(*simulationB,"unbounded prediction window");
             const auto sa=a.State(),sb=b.State();
@@ -300,8 +300,8 @@ int main(int argc,char** argv) {
             const auto now=Clock::now();const auto sa=a.State(),sb=b.State();
             Require(sa.phase==ConnectionPhase::Playing && sb.phase==ConnectionPhase::Playing &&
                 sa.snapshot && sb.snapshot,"connection failed after application stall");
-            simulationA->PublishIntent({0,-1,0,0,true,0,now});
-            simulationB->PublishIntent({0,1,0,0,true,0,now});
+            simulationA->PublishIntent({0,-1,0,0,true,0,now,IntentOwner(sa)});
+            simulationB->PublishIntent({0,1,0,0,true,0,now,IntentOwner(sb)});
             simulated(*simulationA,"stall recovery window overflowed");
             simulated(*simulationB,"stall recovery window overflowed");
             std::this_thread::sleep_for(std::chrono::milliseconds(2));

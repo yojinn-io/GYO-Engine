@@ -40,6 +40,9 @@ Arena RoleArena(const char* id = "synthetic_role_arena") {
 struct MainThread final {
     std::function<double(double, unsigned)> interval;
     std::function<ClientIntent(double)> intent;
+    // Whose view the intent shows, from the host's (untransformed) authority;
+    // by default the session, player and life the host reports.
+    std::function<ClientIntentOwner(double, const PlayerState&)> owner;
 };
 
 std::function<double(double, unsigned)> Every(double seconds) {
@@ -110,6 +113,7 @@ RoleRun RunRole(const MainThread& main, const Options& options = {}) {
     std::set<std::pair<std::uint64_t, std::uint64_t>> accepted;
     std::optional<PlayerState> authority;
     ClientIntent intent;
+    std::uint64_t published{};
     RoleRun run;
     const TimePoint end = TimePoint{} + After(options.duration);
     std::uint64_t tickIndex = 1;
@@ -158,6 +162,9 @@ RoleRun RunRole(const MainThread& main, const Options& options = {}) {
         if (now == nextFrame) {
             intent = main.intent(seconds);
             intent.sampledAt = now;
+            intent.owner = !authority ? ClientIntentOwner{} :
+                main.owner ? main.owner(seconds, *authority) : ClientIntentOwner{1, 1, authority->lifeGeneration};
+            intent.sequence = ++published;
             run.publishes.push_back(seconds);
             nextFrame = now + After(main.interval(seconds, frame++));
         }
@@ -347,13 +354,34 @@ TEST_CASE("PvP the simulation role restarts on a new session or player and resee
         for (const auto& step : run.steps) CHECK(step.presentation.generation == (step.at >= ChangeAt ? 2U : 1U));
     }
     SUBCASE("player id") {
+        // The same pawn under a new id: only the id says it is another player.
         Options options;
-        options.transform = [&](double now, ClientSimulationDrain& drain) { if (now >= ChangeAt) drain.playerId = 2; };
+        options.transform = [&](double now, ClientSimulationDrain& drain) {
+            if (now < ChangeAt) return;
+            drain.playerId = 2;
+            for (auto& received : drain.snapshots)
+                for (auto& player : received.snapshot.players) player.playerId = 2;
+        };
+        const auto run = RunRole({Every(1.0 / 60.0), Moving}, options);
+        REQUIRE(before(run).phaseTracking == PhaseTrackingState::Tracking);
+        const auto changed = std::find_if(run.steps.begin(), run.steps.end(),
+            [&](const StepRecord& step) { return step.at >= ChangeAt && step.delivered > 0; });
+        REQUIRE(changed != run.steps.end());
+        CHECK(changed->observation.phaseTracking != PhaseTrackingState::Tracking);
+        CHECK(changed->observation.pendingCommands <= InitialCommandLead + 1);
+        REQUIRE(changed->window.has_value());
+        CHECK(changed->window->playerId == 2);
+    }
+    SUBCASE("a player missing from the newest snapshot") {
+        Options options;
+        options.transform = [&](double now, ClientSimulationDrain& drain) {
+            if (now < ChangeAt) return;
+            for (auto& received : drain.snapshots) received.snapshot.players.clear();
+        };
         const auto run = RunRole({Every(1.0 / 60.0), Moving}, options);
         REQUIRE(before(run).active);
-        // The snapshots carry no player 2: nothing is predicted or sent.
         for (const auto& step : run.steps) {
-            if (step.at < ChangeAt) continue;
+            if (step.at < ChangeAt || step.delivered == 0) continue;
             CHECK_FALSE(step.observation.active);
             CHECK_FALSE(step.window.has_value());
         }
@@ -396,6 +424,127 @@ TEST_CASE("PvP the simulation role restarts on a new session or player and resee
         for (const auto& step : run.steps) CHECK(step.presentation.arenaIndex == (step.at >= ChangeAt ? 1U : 0U));
         CHECK(run.steps.back().observation.active);
     }
+}
+
+TEST_CASE("PvP the first commands of a new life or session aim where the authority does until the main thread sees it") {
+    constexpr double ChangeAt = 2;
+    constexpr double SeenAt = ChangeAt + 0.05;
+    for (const bool session : {false, true}) {
+        INFO(std::string(session ? "new session" : "new life"));
+        Options options;
+        options.transform = [&](double now, ClientSimulationDrain& drain) {
+            if (now < ChangeAt) return;
+            if (session) drain.generation = 2;
+            for (auto& received : drain.snapshots)
+                for (auto& player : received.snapshot.players) {
+                    if (!session) { ++player.movementEpoch; ++player.lifeGeneration; }
+                    // The spawn orientation of the new life or session.
+                    player.yaw = 1.0F;
+                    player.pitch = -0.1F;
+                }
+        };
+        // The main thread keeps its old view until SeenAt, then resets it to the spawn.
+        MainThread main{Every(1.0 / 60.0), [&](double now) {
+            return now < SeenAt ? ClientIntent{1, 0, 0.3F, 0.1F, true, 0, {}} : ClientIntent{1, 0, 1.0F, -0.1F, true, 0, {}};
+        }, [&](double now, const PlayerState& authority) {
+            if (now < SeenAt) return ClientIntentOwner{1, 1, authority.lifeGeneration};
+            return session ? ClientIntentOwner{2, 1, authority.lifeGeneration} : ClientIntentOwner{1, 1, authority.lifeGeneration + 1};
+        }};
+        const auto run = RunRole(main, options);
+        std::size_t before{}, after{};
+        for (const auto& step : run.steps) {
+            if (step.at < ChangeAt || !step.window) continue;
+            CAPTURE(step.at);
+            for (const auto& command : step.window->commands) {
+                CHECK(command.yaw == 1.0F);
+                CHECK(command.pitch == -0.1F);
+                if (step.at < SeenAt) {
+                    // The old view's aim and movement never reach the new life or session.
+                    CHECK(command.moveForward == 0.0F);
+                    ++before;
+                } else if (step.at > SeenAt + 2 * MovementTickSeconds && command.moveForward == 1.0F) ++after;
+            }
+        }
+        CHECK(before > 0);
+        CHECK(after > 0);
+    }
+}
+
+TEST_CASE("PvP an intent without controls moves nothing, keeps its aim and drops the jumps it carries") {
+    MainThread main{Every(1.0 / 60.0), [](double now) {
+        // Controls drop for half a second with a new aim and a jump press that
+        // is still counted when controls return.
+        if (now >= 1.5 && now < 2.0) return ClientIntent{1, 0.5F, 0.6F, 0.2F, false, 1, {}};
+        return ClientIntent{1, 0, 0.3F, 0.1F, true, now >= 2.0 ? 1U : 0U, {}};
+    }};
+    const auto run = RunRole(main);
+    std::size_t without{}, with{};
+    for (const auto& generated : Commands(run)) {
+        CAPTURE(generated.at);
+        CHECK_FALSE(generated.command.jumpRequested);
+        if (generated.at > 1.5 + MovementTickSeconds && generated.at < 2.0) {
+            CHECK(generated.command.moveForward == 0.0F);
+            CHECK(generated.command.moveRight == 0.0F);
+            CHECK(generated.command.yaw == 0.6F);
+            CHECK(generated.command.pitch == 0.2F);
+            ++without;
+        } else if (generated.at > 2.0 + MovementTickSeconds) {
+            CHECK(generated.command.moveForward == 1.0F);
+            ++with;
+        }
+    }
+    CHECK(without >= 25);
+    CHECK(with >= 100);
+}
+
+TEST_CASE("PvP a slow publisher's intent stands for three of its intervals") {
+    // 12.5 FPS: three intervals are 240 ms, longer than the 150 ms minimum.
+    const auto interval = [first = false, second = false](double now, unsigned) mutable {
+        if (!first && now >= 1.5) { first = true; return 0.2; }
+        if (!second && now >= 2.5) { second = true; return 0.3; }
+        return 0.08;
+    };
+    const auto run = RunRole({interval, Moving});
+    std::optional<double> shortGap, longGap;
+    for (std::size_t n = 0; n + 1 < run.publishes.size(); ++n) {
+        const double gap = run.publishes[n + 1] - run.publishes[n];
+        if (gap > 0.19 && gap < 0.21) shortGap = run.publishes[n];
+        if (gap > 0.29 && gap < 0.31) longGap = run.publishes[n];
+    }
+    REQUIRE(shortGap);
+    REQUIRE(longGap);
+    std::size_t kept{}, neutral{};
+    for (const auto& generated : Commands(run)) {
+        CAPTURE(generated.at);
+        if (generated.at > *shortGap && generated.at < *shortGap + 0.2) {
+            CHECK(generated.command.moveForward == 1.0F);
+            ++kept;
+        }
+        if (generated.at > *longGap + 3 * 0.08 && generated.at < *longGap + 0.3) {
+            CHECK(generated.command.moveForward == 0.0F);
+            ++neutral;
+        }
+    }
+    CHECK(kept >= 10);
+    CHECK(neutral >= 2);
+}
+
+TEST_CASE("PvP a later placement advances interpolation by elapsed steps and decays the correction") {
+    const auto arena = RoleArena();
+    const LocalPresentationState state{{0, 0, 0}, {1, 0, 0}, {0.3F, 0, 0}, 0.1, 0.5F};
+    const auto own = InterpolateLocalPresentation(arena, state, 0.0);
+    CHECK(own.interpolationAlpha == 0.5F);
+    CHECK(own.renderPosition.x == doctest::Approx(0.8));
+    CHECK(own.correctionOffset.x == doctest::Approx(0.3));
+    const double later = 0.004;
+    const auto placed = InterpolateLocalPresentation(arena, state, later);
+    const double alpha = 0.5 + later / MovementTickSeconds;
+    CHECK(placed.interpolationAlpha == doctest::Approx(alpha));
+    // The correction decays as the prediction decays it: linearly over its remaining time.
+    CHECK(placed.correctionOffset.x == doctest::Approx(0.3 * (0.1 - later) / 0.1));
+    CHECK(placed.renderPosition.x == doctest::Approx(alpha + 0.3 * (0.1 - later) / 0.1));
+    // Past the next step the interpolation holds the newest state.
+    CHECK(InterpolateLocalPresentation(arena, state, MovementTickSeconds).interpolationAlpha == 1.0F);
 }
 
 TEST_CASE("PvP the simulation role takes one phase sample per own snapshot of a drained batch") {

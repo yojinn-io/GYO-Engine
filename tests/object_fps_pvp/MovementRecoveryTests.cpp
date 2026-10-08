@@ -118,6 +118,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     // the intent the latest frame published (product path).
     std::vector<ReceivedSnapshot> drained;
     ClientIntent intent;
+    std::uint64_t intents{};
     const auto observation = [&]() -> const LocalMovementObservation& {
         return path == Path::Product ? simulation.Simulation().Observation() : client.Observation();
     };
@@ -277,7 +278,8 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                         generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
                 } else if (!received.players.empty()) {
                     // Only an active client publishes, as in the application.
-                    intent = {1, 0, 0, 0, true, 0, clientTime(now)};
+                    intent = {1, 0, 0, 0, true, 0, clientTime(now), {1, 1, received.players.front().lifeGeneration},
+                        ++intents};
                 }
                 if (firstAdvance && !received.players.empty() && bootstrapGap)
                     nextFrame = frameGrid = now + bootstrapGap;

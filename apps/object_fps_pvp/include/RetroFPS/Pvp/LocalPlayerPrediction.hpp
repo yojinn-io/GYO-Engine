@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <utility>
 
 namespace fps::pvp {
 
@@ -106,6 +107,8 @@ public:
     [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept;
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
     [[nodiscard]] LocalPresentationState Presentation() const noexcept;
+    // The aim of the newest predicted state: the last command's, or the seed's.
+    [[nodiscard]] std::pair<float, float> PredictedAim() const noexcept { return {current_.yaw, current_.pitch}; }
     // Elapsed time after the latest Advance at which the next Advance takes the
     // next fixed step (one step before any Advance), including the pending phase
     // slew: a caller that runs steps on time waits this long.

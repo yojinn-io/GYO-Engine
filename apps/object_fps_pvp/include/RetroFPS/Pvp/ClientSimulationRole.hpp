@@ -16,9 +16,23 @@
 
 namespace fps::pvp {
 
+// The session, player and life a published intent's view belongs to.
+struct ClientIntentOwner final {
+    std::uint64_t generation{};
+    PlayerId playerId{};
+    std::uint64_t lifeGeneration{};
+    bool operator==(const ClientIntentOwner&) const = default;
+};
+
+// The owner of the view a publisher shows for this connection state: the local
+// player's life in its newest snapshot (none outside a session).
+[[nodiscard]] ClientIntentOwner IntentOwner(const ClientConnectionState& state) noexcept;
+
 // The main thread's latest movement intent. Aim is absolute: the main thread
 // owns the view and integrates pointer motion, so no delta can be lost or
-// applied twice between simulation steps.
+// applied twice between simulation steps. An intent whose owner is not the
+// predicted session, player and life (a boundary its publisher has not seen
+// yet) moves nothing and leaves the aim to the prediction.
 struct ClientIntent final {
     float forward{};
     float right{};
@@ -32,6 +46,10 @@ struct ClientIntent final {
     std::uint64_t jumpPresses{};
     // When the publisher sampled it; the default value means never published.
     Engine::Time::TimePoint sampledAt{};
+    ClientIntentOwner owner;
+    // Set by ClientSimulationRole::PublishIntent: consecutive publications
+    // have consecutive numbers.
+    std::uint64_t sequence{};
 };
 
 // Decision D30: the simulation keeps using the latest intent until it is older
@@ -66,6 +84,8 @@ struct ClientPresented final {
     std::optional<FireGateTiming> shotTiming;
     Engine::Time::TimePoint intentSampledAt{};
     std::uint64_t generation{};
+    // When the simulation took the step this presentation comes from.
+    Engine::Time::TimePoint steppedAt{};
 };
 
 [[nodiscard]] ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
@@ -109,6 +129,7 @@ private:
     PlayerId playerId_{};
     std::uint64_t consumedJumps_{};
     Engine::Time::TimePoint lastIntentAt_{};
+    std::uint64_t lastIntentSequence_{};
     std::array<double, ClientIntentRecentIntervals> intervals_{};
     std::size_t nextInterval_{};
 };
@@ -152,6 +173,7 @@ private:
     ClientSimulationLoop loop_;
     mutable std::mutex mutex_;
     ClientIntent intent_;
+    std::uint64_t published_{};
     ClientPresentation presentation_;
     std::optional<std::string> error_;
     WakeReport wakes_;

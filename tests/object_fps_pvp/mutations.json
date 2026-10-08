@@ -593,8 +593,8 @@
       "batch": "v7-04",
       "what": "The matrix probe sends its own command windows instead of publishing intents to the role",
       "file": "build/acceptance/object_fps_pvp/gameplay_action.hpp",
-      "find": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});\n",
-      "replace": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});\n            clients[i].SendInput(PlayerInput{});\n",
+      "find": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now,IntentOwner(state)});\n",
+      "replace": "            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now,IntentOwner(state)});\n            clients[i].SendInput(PlayerInput{});\n",
       "check": "probe_command_path",
       "expect": "sends a command window itself"
     },
@@ -629,14 +629,14 @@
       "expect": "CHECK\\( command\\.moveForward == 0\\.0F \\) is NOT correct"
     },
     {
-      "id": "v7-04-analyzer-clamp-any-frame",
+      "id": "v7-04-analyzer-late-clamp-unlisted",
       "batch": "v7-04",
-      "what": "Analyzer v7 exempts a seed clamp of any frame below 100 ms, as the frozen rule does",
+      "what": "Analyzer v7 never lists a seed clamp as a late simulation wake",
       "file": "build/acceptance/object_fps_pvp/command_evidence_v7.py",
-      "find": "SEED_CLAMP_MAXIMUM_FRAME_SECONDS = 2 * TICK_SECONDS\n",
-      "replace": "SEED_CLAMP_MAXIMUM_FRAME_SECONDS = .1\n",
+      "find": "LATE_SEED_CLAMP_FRAME_SECONDS = 2 * TICK_SECONDS\n",
+      "replace": "LATE_SEED_CLAMP_FRAME_SECONDS = .1\n",
       "check": "command_evidence_v7",
-      "expect": "test_a_seed_clamp_is_exempt_only_below_two_ticks"
+      "expect": "test_a_seed_clamp_of_two_ticks_or_more_is_listed_as_a_late_wake"
     },
     {
       "id": "v7-04-analyzer-frame-gap-skips-production",
@@ -667,6 +667,56 @@
       "replace": "        if (const double interval = Seconds(intent.sampledAt - lastIntentAt_); interval >= 0) {\n",
       "check": "cpu",
       "expect": "PvP a long main-thread stall does not stretch the stale limit of the next one"
+    },
+    {
+      "id": "v7-04-intent-any-owner",
+      "batch": "v7-04",
+      "what": "An intent of another session or life still moves and aims the new one",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    const bool owned = intent.sampledAt != TimePoint{} && intent.owner == predicted;\n",
+      "replace": "    const bool owned = intent.sampledAt != TimePoint{};\n",
+      "check": "cpu",
+      "expect": "PvP the first commands of a new life or session aim where the authority does until the main thread sees it"
+    },
+    {
+      "id": "v7-04-controls-ignored",
+      "batch": "v7-04",
+      "what": "An intent without controls still moves the player",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    if (owned && !stale && intent.controls)\n",
+      "replace": "    if (owned && !stale)\n",
+      "check": "cpu",
+      "expect": "PvP an intent without controls moves nothing, keeps its aim and drops the jumps it carries"
+    },
+    {
+      "id": "v7-04-jump-deferred",
+      "batch": "v7-04",
+      "what": "A jump press seen without controls is kept until controls return",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    consumedJumps_ = std::max(consumedJumps_, intent.jumpPresses);\n",
+      "replace": "    if (owned && !stale && intent.controls) consumedJumps_ = std::max(consumedJumps_, intent.jumpPresses);\n",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( generated\\.command\\.jumpRequested \\) is NOT correct"
+    },
+    {
+      "id": "v7-04-stale-floor-only",
+      "batch": "v7-04",
+      "what": "The stale limit ignores the publisher's recent intervals",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    return std::max(ClientIntentMinimumStaleSeconds, ClientIntentStaleIntervals * longest);\n",
+      "replace": "    return ClientIntentMinimumStaleSeconds;\n",
+      "check": "cpu",
+      "expect": "PvP a slow publisher's intent stands for three of its intervals"
+    },
+    {
+      "id": "v7-04-interpolation-frozen",
+      "batch": "v7-04",
+      "what": "A later placement does not advance the interpolation",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        alpha = Engine::Math::Clamp(static_cast<float>(alpha + secondsLater / MovementTickSeconds), 0.0F, 1.0F);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP a later placement advances interpolation by elapsed steps and decays the correction"
     }
   ]
 }

@@ -90,21 +90,23 @@ class AnalyzerV7Tests(unittest.TestCase):
         self.assertFalse(result["disturbed_simulation"])
         self.assertTrue(result["production"]["applies"])
 
-    def test_a_seed_clamp_is_exempt_only_below_two_ticks(self):
+    def test_a_seed_clamp_of_two_ticks_or_more_is_listed_as_a_late_wake(self):
         tick = 1 / 60
-        for frame, exempt in ((tick + .0005, True), (2 * tick - .0001, True), (2 * tick, False), (.05, False)):
+        for frame, late in ((tick + .0005, False), (2 * tick - .0001, False), (2 * tick, True), (.05, True)):
             with self.subTest(frame=frame):
                 # The session's first seed: sequence and pending are the lead plus one step.
                 clamp = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
                               frame_seconds=frame, dropped_seconds=frame - tick)
                 result = v7.analyze_v7(self.run_directory(client_extra=[clamp]))
-                self.assertEqual(len(result["seed_clamps"]), 1 if exempt else 0)
-                self.assertEqual(len(result["simulation_gaps"]), 0 if exempt else 1)
-                self.assertEqual(result["production"]["applies"], exempt)
-        # The frozen rule exempts any such clamp below 100 ms.
-        clamp = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
-                      frame_seconds=.05, dropped_seconds=.05 - tick)
-        self.assertEqual(len(frozen.match_life_seed_clamps([clamp], [])[0]), 1)
+                # The dropped time is discarded on purpose: exempt as in the frozen rule.
+                self.assertEqual(len(result["seed_clamps"]), 1)
+                self.assertEqual(len(result["simulation_gaps"]), 0)
+                self.assertTrue(result["production"]["applies"])
+                self.assertEqual(len(result["late_seed_clamps"]), 1 if late else 0)
+        # A clamp past 100 ms is no clamp at all.
+        long = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
+                     frame_seconds=.12, dropped_seconds=.12 - tick)
+        self.assertEqual(len(v7.analyze_v7(self.run_directory(client_extra=[long]))["simulation_gaps"]), 1)
 
     def test_an_injected_main_thread_stall_must_not_substitute_or_reset(self):
         release = START + 2 * SECOND
@@ -145,8 +147,7 @@ class AnalyzerV7Tests(unittest.TestCase):
 
     def test_a_gameplay_round_checks_simulation_gaps_only_when_clean(self):
         tick = 1 / 60
-        late = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
-                     frame_seconds=.05, dropped_seconds=.05 - tick)
+        late = event("runtime_gap", START + 2 * SECOND, 1, 50, frame_seconds=.12, dropped_seconds=.12 - 5 * tick)
         clean = v7.analyze_v7(self.gameplay_round("baseline", [late]))
         self.assertEqual(clean["round"], "gameplay")
         self.assertFalse(clean["production"]["applies"])

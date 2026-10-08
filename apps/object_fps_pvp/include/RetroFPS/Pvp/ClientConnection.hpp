@@ -35,6 +35,8 @@ struct ClientConnectionState {
     std::optional<CombatRules> combatRules;
     std::optional<MovementRules> movementRules;
     ActionTransportState actionTransport;
+    // The connection generation this state belongs to; each session request starts a new one.
+    std::uint64_t generation{};
 };
 inline constexpr std::size_t MaxReceivedSnapshots = 64;
 struct ReceivedSnapshot {
@@ -101,7 +103,8 @@ public:
     // only transferred contiguous decisions become eligible for acknowledgement.
     [[nodiscard]] ClientConnectionDrain Drain();
     // Consumes the simulation role's own history. Snapshots, actions and
-    // acknowledgements seen by Drain are unaffected.
+    // acknowledgements seen by Drain are unaffected. The history is kept only
+    // after the first call, so a connection without a role copies nothing.
     [[nodiscard]] ClientSimulationDrain DrainSimulation();
 private:
     struct Impl;

@@ -135,7 +135,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
             if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
             if(jump)++jumpPresses[i];
-            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now});
+            simulation[i]->PublishIntent({0,right,0,0,true,jumpPresses[i],now,IntentOwner(state)});
             const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
             startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
             const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
@@ -166,7 +166,10 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         }
         evidence.Push(std::move(frame),true);++frameIndex;deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
     }
-    Json result={{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",AcceptanceProtocolVersion},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
+    // Interpretation only: each Client's simulation deadline wakes over the run.
+    Json wakes=Json::array();
+    for(const auto& role:simulation)wakes.push_back(Json::parse(SimulationWakesJson(role->TakeWakeReport())));
+    Json result={{"simulation_wakes",wakes},{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",AcceptanceProtocolVersion},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
         {"player_ids",ids},{"fps",fps},{"duration",duration},{"cycles",cycles},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
         {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()},{"timer",timer.Json()}};
     for(unsigned i=0;i<2;++i){const auto state=clients[i].State();const auto& rules=*state.combatRules;

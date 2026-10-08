@@ -172,6 +172,11 @@ struct PvpApplication::Impl final {
         return player && player->lifeState == LifeState::Alive;
     }
     Engine::Ui::UiViewport Viewport() const { return {width, height}; }
+    // The presented local movement belongs to this frame's player and life.
+    bool LocalPresentationCurrent() const {
+        const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
+        return presented.observation.active && self && presented.observation.lifeGeneration == self->lifeGeneration;
+    }
 
     void EditAddress(bool value) {
         editing = value;
@@ -549,10 +554,10 @@ struct PvpApplication::Impl final {
     bool PrepareWorld(double deltaSeconds) {
         remoteMovement.reset();
         remoteSubmitMilliseconds = 0;
-        // Before the simulation role's first step of this session, the view
-        // starts where the authority shows the player.
+        // Until the simulation role has stepped in this session and life, the
+        // view stays where the authority shows the player.
         const auto* self = FindPlayer(*state.snapshot, state.playerId);
-        const auto position = presented.observation.active || !self ? presented.observation.renderPosition : self->position;
+        const auto position = LocalPresentationCurrent() || !self ? presented.observation.renderPosition : self->position;
         const auto camera = view.Camera();
         queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
             {camera.pitch, camera.yaw, camera.roll}, WorldVerticalFovRadians, 0.05F, 150.0F});
@@ -958,13 +963,11 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             const bool controls = impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused &&
                 !impl_->pointerAcquiredThisFrame && !impl_->windowInteraction;
             impl_->pendingReloadEdge = controls && physical.Get(Key::R).pressed;
-            // A live frame has no input: it neither publishes an intent nor
-            // advances the prediction, so the last intent ages as in a stall (D30).
-            if (!live) {
-                if (controls && physical.Get(Key::Space).pressed) ++impl_->jumpPresses;
-                impl_->simulation->PublishIntent({forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
-                    controls, impl_->jumpPresses, movementSampledAt});
-            }
+            // A live frame sees no input, so it publishes a neutral intent without
+            // controls and the player stops at once; it never advances the prediction.
+            if (controls && physical.Get(Key::Space).pressed) ++impl_->jumpPresses;
+            impl_->simulation->PublishIntent({forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
+                controls, impl_->jumpPresses, movementSampledAt, IntentOwner(impl_->state)});
             impl_->presented = impl_->simulation->PresentAt(movementSampledAt);
             // Until the role has stepped in this session, it has no local player to show.
             if (impl_->presented.generation != impl_->connectionGeneration) impl_->presented = {};
@@ -1130,9 +1133,9 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
                 impl_->remoteMovement->totalHoldSeconds = impl_->timeline.TotalHoldSeconds();
             } else (void)impl_->timeline.CommitPresented(finished, nullptr, false);
         }
-        // Until the simulation role has stepped in this session the frame shows
-        // the authority position and there is no local movement to present.
-        if (world && impl_->presented.observation.active) impl_->presentedMovement = PresentedMovementObservation{
+        // Until the simulation role has stepped in this session and life the frame
+        // shows the authority position and there is no local movement to present.
+        if (world && impl_->LocalPresentationCurrent()) impl_->presentedMovement = PresentedMovementObservation{
             context.frameIndex, std::chrono::duration<double>(finished.time_since_epoch()).count(),
             impl_->state.playerId, impl_->presented.observation, impl_->remoteMovement,
             impl_->skippedPresentationFrames, impl_->connectionGeneration, impl_->weaponFeedback,
@@ -1210,6 +1213,9 @@ const LocalMovementObservation& PvpApplication::LocalMovement() const noexcept {
 }
 Engine::Time::TimePoint PvpApplication::LocalMovementIntentSampledAt() const noexcept {
     return impl_->presented.intentSampledAt;
+}
+Engine::Time::TimePoint PvpApplication::LocalMovementSteppedAt() const noexcept {
+    return impl_->presented.steppedAt;
 }
 const std::optional<RemoteMovementObservation>& PvpApplication::RemoteMovement() const noexcept {
     return impl_->remoteMovement;
