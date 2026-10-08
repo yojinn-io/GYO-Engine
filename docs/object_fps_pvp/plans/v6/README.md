@@ -1,7 +1,7 @@
 # PvP v6 分批計畫與進度
 
 更新：2026-10-08。Owner：`object_fps_pvp`。
-**第 01～04、06～13 批完成並合併**（最後是第 13 批，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)，master `7886848`）；第 05 批不執行；第 16 批（房間上限 4 人）完成並合併（PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63)，master `5972451`）；第 14a 批完成並合併（PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)，`eadd001`），14b 需另外授權；第 17 批（聯機測試準備）完成並合併（PR [#65](https://github.com/yojinn-io/GYO-Engine/pull/65)，master `c7d6dd3`），LAN 聯機測試完成。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。
+**第 01～04、06～13 批完成並合併**（最後是第 13 批，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)，master `7886848`）；第 05 批不執行；第 16 批（房間上限 4 人）完成並合併（PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63)，master `5972451`）；第 14a 批完成並合併（PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)，`eadd001`）；第 17 批（聯機測試準備）完成並合併（PR [#65](https://github.com/yojinn-io/GYO-Engine/pull/65)，master `c7d6dd3`），LAN 聯機測試完成；第 14b 批依使用者決定（D26）縮減為最終來源上的短測，全部通過。**v6 於 2026-10-08 升格為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)）。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。下一步是 [v7](../v7/README.md)。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
@@ -39,7 +39,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 | 12 | [本機射擊冷卻閘](12-local-fire-gate.md) | high（Tick 估計局部 xhigh） | 完成，PR [#60](https://github.com/yojinn-io/GYO-Engine/pull/60) 已合併（`a9485bf`；L3 接受，剩餘差異交給 v7） | 第 4 項 |
 | 13 | [受擊反應與方向指示](13-hit-reaction.md) | high | 完成，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 已合併（`7886848`） | 第 2 項的呈現 |
 | 16 | [房間上限 4 人](16-four-player-room.md) | high（文件 medium；pv6 §1 分類、出生點證明、多人決定性、交叉驗證局部 xhigh） | 完成，PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63) 已合併（`5972451`；L1／L2／L3 完成；GUI probe 支援 4 人房為事前宣告的修訂） | 房間最高人數 2→4（維持 pv6）；出生點 2～64；Client 3 個遠端；逐出缺陷修正；4 人驗收。順序在第 13 批之後、第 14 批之前 |
-| 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 14a 完成並合併，PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)（D24；L1／L2／L3 通過）；14b 需另外授權 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
+| 14 | [整合驗收與升格](14-integration-and-acceptance.md) | medium | 完成。14a：PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)（D24；L1／L2／L3 通過）；14b：縮減範圍（D26），短測全部通過，v6 升格 | 14a 整合短測與產品移除檢查；14b 完整驗收與升格（另外授權） |
 | 17 | [聯機測試準備](17-lan-test-prep.md) | high（地圖選擇與身分比對局部 xhigh） | 完成並合併，PR [#65](https://github.com/yojinn-io/GYO-Engine/pull/65)（D25）；LAN 聯機測試完成（[驗收狀態](ACCEPTANCE_STATUS.md)） | 發行用四角地圖、Client 依 Match 選地圖、三個角色的日誌、聯機測試手冊 |
 
 ### Engine 計畫的批次（狀態以各計畫夾為準）
@@ -84,7 +84,7 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 - 權威結果只在第 10 批改變一次。其他批次都要以第 03 批的閘門證明權威不變：正式證明是同機兩樹 digest 比對。
 - 量測基線分世代：B0＝第 04 批；IP-2 合併後由第 07 批重取 B1。之後各批在自己的 base commit 上，以凍結的工具量 before／after。v5 穩定基線的數字只用來對門檻。
 - 先凍結來源、產物與分析器再量測；開發和乾淨量測不同時進行。失敗的跑次保留，先有限定位，再重驗受影響的項目，不用大量重跑代替分析。
-- 長測與完整 GUI 三輪需要另外明確授權（第 14b 批）。
+- 長測與完整 GUI 三輪需要另外明確授權（第 14b 批）。2026-10-08 使用者決定 v6 不跑（D26）。
 - 對玩家的門檻（50／66.7／80／100／150 ms、≥99%、恢復 1.5 秒、窗口與包率上限）跨平台相同，不因平台放寬。
 - 實機驗收只在本機 macOS Intel／Metal；Windows、Linux 實機與 macOS arm64 實機標「未執行」（D11⑩）。每份批次文件都有平台表。
 - 合併順序只是建議，用來減少衝突、方便歸因，不是依賴：後合併的一方 rebase。例如 `PvpApplication.cpp` 會被多批修改，建議順序是 05→06→12→11→13→16。真正的依賴只寫在進度表和依賴圖。

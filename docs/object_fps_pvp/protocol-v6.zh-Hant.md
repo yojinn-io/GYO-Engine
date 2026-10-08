@@ -1,11 +1,11 @@
 # PvP Protocol v6：受擊、arena 內容與 Collision 契約
 
-更新：2026-10-07（房間容量 4 人的修訂，第 16 批，D22／D23）。Owner：`object_fps_pvp`。
+更新：2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
 **wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
 §4、§6 中屬於第 10～13 批的項目標「待定，由第 NN 批決定」，在各批開始時補上。
-v6 在第 14b 批升格之前是候選。v5 契約中沒有在此改寫的條款，v6 原樣沿用；v5 的文件與證據保留，不被覆寫。進度見 [v6 計畫](plans/v6/README.md)。
+v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見 [STABLE_BASELINE](plans/v6/STABLE_BASELINE.md)。v5 契約中沒有在此改寫的條款，v6 原樣沿用；v5 的文件與證據保留，不被覆寫。進度見 [v6 計畫](plans/v6/README.md)。
 
 ## 1. 範圍、時間與預設
 
