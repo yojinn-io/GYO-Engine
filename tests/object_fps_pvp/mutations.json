@@ -42,6 +42,9 @@
     },
     "probe_command_path": {
       "ctest": "object_fps_pvp.probe_command_path"
+    },
+    "command_evidence_v7": {
+      "ctest": "object_fps_pvp.command_evidence_v7"
     }
   },
   "mutants": [
@@ -598,12 +601,12 @@
     {
       "id": "v7-04-per-frame-advance",
       "batch": "v7-04",
-      "what": "The simulation advances by the main thread's publish intervals (per-frame Advance) instead of its own clock",
+      "what": "The simulation advances once per 30 FPS frame instead of at its own fixed-step deadlines (frame-quantized generation)",
       "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
-      "find": "    step.window = simulation_.Frame(now, input);\n",
-      "replace": "    step.window = simulation_.Frame(intent.sampledAt == TimePoint{} ? now : intent.sampledAt, input);\n",
+      "find": "    step.nextDeadline = After(now, active ? simulation_.SecondsUntilNextStep() : MovementTickSeconds);\n",
+      "replace": "    step.nextDeadline = After(now, 1.0 / 30.0);\n",
       "check": "cpu",
-      "expect": "PvP the simulation role generates the same commands at the same steps for 30 60 and 144 Hz intents"
+      "expect": "CHECK\\( commands\\[n\\]\\.at - commands\\[n - 1\\]\\.at < 1\\.5 \\* MovementTickSeconds \\) is NOT correct"
     },
     {
       "id": "v7-04-wait-for-main-thread",
@@ -624,6 +627,36 @@
       "replace": "    const bool stale = false;\n",
       "check": "cpu",
       "expect": "CHECK\\( command\\.moveForward == 0\\.0F \\) is NOT correct"
+    },
+    {
+      "id": "v7-04-analyzer-clamp-any-frame",
+      "batch": "v7-04",
+      "what": "Analyzer v7 exempts a seed clamp of any frame below 100 ms, as the frozen rule does",
+      "file": "build/acceptance/object_fps_pvp/command_evidence_v7.py",
+      "find": "SEED_CLAMP_MAXIMUM_FRAME_SECONDS = 2 * TICK_SECONDS\n",
+      "replace": "SEED_CLAMP_MAXIMUM_FRAME_SECONDS = .1\n",
+      "check": "command_evidence_v7",
+      "expect": "test_a_seed_clamp_is_exempt_only_below_two_ticks"
+    },
+    {
+      "id": "v7-04-analyzer-frame-gap-skips-production",
+      "batch": "v7-04",
+      "what": "Analyzer v7 skips the 60 Hz production check after a main-thread frame gap, as the frozen rule does",
+      "file": "build/acceptance/object_fps_pvp/command_evidence_v7.py",
+      "find": "    production_applies = not simulation_gaps\n",
+      "replace": "    production_applies = not simulation_gaps and not timing.get(\"gaps_100ms\") and not timing.get(\"injected\")\n",
+      "check": "command_evidence_v7",
+      "expect": "test_main_thread_frame_gaps_no_longer_skip_the_production_check"
+    },
+    {
+      "id": "v7-04-analyzer-stall-ignores-substitutes",
+      "batch": "v7-04",
+      "what": "Analyzer v7 does not count substituted resolutions during an injected main-thread stall",
+      "file": "build/acceptance/object_fps_pvp/command_evidence_v7.py",
+      "find": "            inside = [event for event in substituted if begin <= event[\"time_ns\"] <= until]\n",
+      "replace": "            inside = []\n",
+      "check": "command_evidence_v7",
+      "expect": "test_an_injected_main_thread_stall_must_not_substitute_or_reset"
     }
   ]
 }
