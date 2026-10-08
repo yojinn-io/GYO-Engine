@@ -128,7 +128,7 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - timing probe 的主執行緒停頓：加上「epoch 不得改變」。
   - network probe 的 6 秒停頓：原本斷言「lead 重建」（只在模擬停住時才會發生），改為斷言 epoch 不變。伺服器端的輸入逾時不再由這個 probe 涵蓋：意圖過期後，角色會送中立命令。
   - drain-stall（action probe）：定義為只停主執行緒的 Drain。角色有自己的佇列，不受影響；這個案例的動作端預期（32 格、未消費的裁決）不變。
-  - GUI probe：phase stall 改為「所有停頓（含 250 ms）都不得重設 epoch，也不得出現晚到修正」，並加上兩次觀測之間步數的上下界（取代「重複計入停頓」的檢查）；視窗移動後的停止與死亡位置，改為等待反映該變化的呈現。
+  - GUI probe：phase stall 改為「所有停頓（含 250 ms）都不得重設 epoch、不得被權威追過（stall reseed），也不得出現晚到修正」，並加上兩次觀測之間步數的上下界（容許量＝最大修正量×(1＋期間的修正次數)，加減 2 步；取代「重複計入停頓」的檢查）；視窗移動後的停止與死亡位置，改為等待反映該變化的呈現。
   - 守衛（`test_probe_command_path.py`）：probe 不得寫出 ClientSimulation、ClientSimulationLoop、LocalPlayerPrediction、PredictionElapsedTime，也不得自己送命令視窗（傳輸用的 worker probe 除外）；發布意圖的 probe 必須建構 `ClientSimulationRole`，產品也是。
 - **依賴**：`client_simulation → client_network`（產品內的新邊；計畫第 5 點只列了 Engine 的邊）、`→ GYO::Time、GYO::Threads`。
 - **測試**：
@@ -156,6 +156,10 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - action60（`run_action_short.py`）：通過（含死亡位置的等待）。
   - network（`run_network.py`，含 GUI 移動與視窗移動）：第 1 次失敗——跨視窗延遲的分析器拿 create 的第一個呈現樣本當原點，而那一幀角色還沒在新 session 走第一步，本地位置是 (0,0)（v6 在第一個世界幀就已播種）。修正：本地預測啟動前不發布 presented 觀測（那一幀畫面用權威位置）。修正後第 2 次通過（中位延遲約 38 ms）。失敗的那一次保留在 `dev-gui/network/`。
   - latency short（`run_timing.py --gui --short`，60 FPS、16 秒、25 事件）：第 1 次是我給錯參數（事件數不足，`--short` 在啟動前拒絕），沒有數據；補上 `--events 25` 後通過，乾淨回合，可見延遲 P50 約 36.6 ms、P95 約 37.8 ms，分析器 v7 也通過（每位玩家正好 960 個命令）。
+- **GUI 突變**（`v7-04-wait-for-main-thread` 套到 GUI phase stalls，手動執行、自動還原；腳本 `dev-gui/gui_mutant.py`）：
+  - 第 1 次存活：「0.75 倍時間減 2 步」的下界太鬆。第 2 次（下界改為「時間減最大修正量×(1＋期間的修正次數)」）仍存活。
+  - 原因：漏步時權威端以 Held 吃掉序號、Client 重新播種，而步數檢查本來就排除重新播種的觀測，所以變成空檢查。
+  - 修正：觀測值新增唯讀的 `stallReseeds`（同一 epoch、life 中，因權威解析超過本地最新命令而重新播種的次數），phase stalls 斷言停頓期間它不變。第 3 次 killed（「let the authority resolve past the local commands (Held)」）；沒有突變的版本照樣通過。前兩次的結果保留。
 - **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
 
 ## 使用者的決定（2026-10-09）

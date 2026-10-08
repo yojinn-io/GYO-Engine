@@ -269,6 +269,8 @@ TEST_CASE("PvP a 250 ms main-thread stall keeps the simulation stepping and turn
     // The press reaches exactly one command, never repeated by the stale intent.
     CHECK(jumps == 1);
     CHECK(run.held == 0);
+    // The authority never resolved past the local commands.
+    CHECK(run.steps.back().observation.stallReseeds == 0);
     CHECK(std::any_of(run.steps.begin(), run.steps.end(), [](const StepRecord& step) { return step.stale; }));
     // Movement resumes with the next intent.
     CHECK(std::any_of(commands.begin(), commands.end(), [resumed](const Generated& generated) {

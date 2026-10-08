@@ -197,6 +197,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
             // Neutral future steps restore sequence lead after a stall. No
             // relationship between client and authority clocks is assumed.
             SeedLead(authority);
+            ++observation_.stallReseeds;
         } else {
             current_ = previous_ = authority;
             for (const auto& command : pending_) {

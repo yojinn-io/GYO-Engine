@@ -588,7 +588,7 @@ void RunPhaseStalls(const Options& options) {
         bool beforeUpdate{};
         unsigned milliseconds{};
         std::optional<Clock::time_point> released, healthySince;
-        std::uint64_t epoch{};
+        std::uint64_t epoch{}, stallReseeds{};
         std::uint32_t lateCorrections{};
         std::size_t maxPending{};
         std::uint32_t maxServerPending{};
@@ -673,6 +673,7 @@ void RunPhaseStalls(const Options& options) {
             injecting = &faults[*activeFault];
             injecting->epoch = application.LocalMovement().movementEpoch;
             injecting->lateCorrections = application.LocalMovement().phaseLateCorrections;
+            injecting->stallReseeds = application.LocalMovement().stallReseeds;
         }
         if (injecting && injecting->beforeUpdate) {
             SDL_Delay(injecting->milliseconds);
@@ -693,17 +694,20 @@ void RunPhaseStalls(const Options& options) {
                 local.latestCommand >= previousMovement->latestCommand) {
                 // The simulation role steps on its own deadlines; each Update
                 // places its newest step at the Update's input sample. Between two
-                // samples, bracketed by the Updates around them, it takes no more
-                // steps than the time allows with a phase slew running a quarter
-                // ahead plus one step of presentation lag, and no fewer than the
-                // time allows with a slew a quarter behind less that lag: a stalled
-                // main thread neither replays nor stops command generation. A new
-                // authoritative seed is excluded above.
+                // samples, bracketed by the Updates around them, its fixed-step
+                // clock moves with time except for phase slew: at most one
+                // maximum correction pending at the first sample plus one per
+                // correction started since. With two steps for presentation lag
+                // and boundaries, it takes neither more nor fewer steps than that
+                // allows: a stalled main thread neither replays nor stops command
+                // generation. A new authoritative seed is excluded above.
                 const double tick = fps::pvp::MovementTickSeconds;
                 const auto steps = local.latestCommand - previousMovement->latestCommand;
+                const double slew = fps::pvp::MovementPhaseMaximumCorrectionSeconds *
+                    (1.0 + static_cast<double>(local.phaseCorrections - previousMovement->phaseCorrections));
                 const auto possibleSteps = static_cast<std::uint64_t>(std::floor(
-                    1.25 * Seconds(updateFinished, *previousUpdateStart) / tick)) + 2;
-                const auto requiredSteps = std::floor(.75 * Seconds(updateStarted, *previousUpdate) / tick) - 2;
+                    (Seconds(updateFinished, *previousUpdateStart) + slew) / tick)) + 2;
+                const auto requiredSteps = std::floor((Seconds(updateStarted, *previousUpdate) - slew) / tick) - 2;
                 Require(steps <= possibleSteps, "The simulation generated more steps than the elapsed time allows");
                 Require(static_cast<double>(steps) >= requiredSteps, "The simulation skipped steps while the main thread stalled");
             }
@@ -732,9 +736,12 @@ void RunPhaseStalls(const Options& options) {
             fault.maxPending = std::max(fault.maxPending, local.pendingCommands);
             fault.maxServerPending = std::max(fault.maxServerPending, local.serverPendingCommands);
             // The simulation role keeps stepping through every main-thread stall,
-            // whatever its length: no stall resets the epoch, and no command
-            // arrives after its tick (which would start a late phase correction).
+            // whatever its length: no stall resets the epoch, the authority never
+            // runs out of local commands (a stall reseed), and no command arrives
+            // after its tick (which would start a late phase correction).
             Require(local.movementEpoch == fault.epoch, "A GUI main-thread stall reset the movement epoch");
+            Require(local.stallReseeds == fault.stallReseeds,
+                "A GUI main-thread stall let the authority resolve past the local commands (Held)");
             Require(local.phaseLateCorrections == fault.lateCorrections,
                 "A GUI main-thread stall made commands arrive after their tick");
             const bool healthy = local.active && !local.frozen && local.pendingCommands < fps::pvp::MaxPendingCommands &&

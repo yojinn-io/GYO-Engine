@@ -980,7 +980,9 @@ TEST_CASE("PvP authority catch-up reseeds neutral lead and lifecycle reset disca
     client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 1);
     for (std::size_t frame = 0; frame < MaxPendingCommands - InitialCommandLead; ++frame)
         static_cast<void>(client.Advance(MovementTickSeconds, 1, 0, 0, 0));
+    REQUIRE(client.Observation().stallReseeds == 0);
     client.Reconcile({1, {2, 0, 3}, 0, 0, 40}, 60);
+    CHECK(client.Observation().stallReseeds == 1);
     REQUIRE(client.PendingInput().commands.size() == InitialCommandLead);
     CHECK(client.PendingInput().commands.front().sequence == 41);
     CHECK(client.PendingInput().commands.back().sequence == 40 + InitialCommandLead);
@@ -994,6 +996,7 @@ TEST_CASE("PvP authority catch-up reseeds neutral lead and lifecycle reset disca
     CHECK(client.Observation().latestCommand == tip);
     client.Reset(); // leave/disconnect uses this same path
     CHECK_FALSE(client.Observation().active);
+    CHECK(client.Observation().stallReseeds == 0);
     CHECK(client.PendingInput().commands.empty());
     CHECK_FALSE(client.Advance(0.1, 1, 0, 0, 0));
     client.Reconcile({2, {20, 0, 2}, 0, 0, 0}, 90);

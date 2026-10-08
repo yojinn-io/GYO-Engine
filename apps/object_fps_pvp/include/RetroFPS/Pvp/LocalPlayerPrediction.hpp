@@ -48,6 +48,10 @@ struct LocalMovementObservation final {
     // Slack samples phase tracking took in this epoch and life, and the newest one's sequence.
     std::uint64_t phaseSamples{};
     std::uint64_t phaseSampleSequence{};
+    // Reseeds in this epoch and life because the authority resolved past the
+    // newest local command: it substituted (Held or Neutral) commands that
+    // had not arrived.
+    std::uint64_t stallReseeds{};
 };
 
 // What the display needs to place the local player at any time after the
