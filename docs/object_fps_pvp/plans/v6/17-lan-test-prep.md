@@ -1,6 +1,6 @@
 # 第 17 批：聯機測試準備（地圖與日誌）
 
-狀態：實作完成，L1（本機）通過，等 CI 與聯機測試（2026-10-08 開始，分支 `claude/pvp-v6-batch17` 自 `acbebc9`，第 14a 批之後）。使用者決定見 [HANDOFF](HANDOFF.md) 的 D25。
+狀態：**完成**。PR [#65](https://github.com/yojinn-io/GYO-Engine/pull/65) 已合併（master `c7d6dd3`）；2026-10-08 LAN 聯機測試完成，結果見[驗收狀態](ACCEPTANCE_STATUS.md)的「LAN 聯機測試」（分支 `claude/pvp-v6-batch17` 自 `acbebc9`，第 14a 批之後）。使用者決定見 [HANDOFF](HANDOFF.md) 的 D25。
 起因：使用者 2026-10-08 要和朋友做 LAN 聯機測試：Match 與 Gateway 在 Mac 上，Client 是 3 台 Windows。之後發行 v1.1.0（含本批）。
 
 ## 目標與範圍

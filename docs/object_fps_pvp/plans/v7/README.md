@@ -1,6 +1,6 @@
 # PvP v7 任務清單（未開始）
 
-更新：2026-10-07。Owner：`object_fps_pvp`。**v7 尚未開始**：v6 完結後開始。本文件只收集已決定放進 v7 的任務與規劃輸入，還沒有分批、契約或檔位。
+更新：2026-10-08。Owner：`object_fps_pvp`。**v7 尚未開始**：v6 完結後開始。本文件只收集已決定放進 v7 的任務與規劃輸入，還沒有分批、契約或檔位。
 v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點（所有用到時間、執行緒、sleep、socket 輪詢的地方，含 Engine、產品、工具），作為下列子系統的「觀測到的壓力」證據，再分批。
 
 版本號：v7＝遊戲版本，pvN＝網路協議版本（見 [v6 交接](../v6/HANDOFF.md) D20）。
@@ -16,6 +16,7 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
 | 5 | 音效：Engine 新增 audio 模組，本產品加入射擊、受擊等聲音 | 2026-10-06 使用者決定（「有聲音遊戲才算完整」） |
 | 6 | 解析度與視窗模式切換，設定可保存。Engine 提供機制（顯示器與模式列舉、視窗／無邊框全螢幕／全螢幕、執行中改變大小、像素密度、實際繪製大小，以及每位使用者的可寫目錄與原子寫入）；本產品決定政策（提供哪些選項、預設值、設定選單、套用後未確認就還原、設定檔的格式與版本、UI 依解析度縮放；目前寫死 1280×720，`PvpApplication.cpp:121`、`:876`） | 2026-10-06 使用者決定 |
 | 7 | 產品不再直接依賴 SDL：產品只呼叫 Engine，由 Engine 呼叫 SDL。現存的直接使用（2026-10-06 盤點）：日誌 `SDL_Log*`；文字輸入與剪貼簿（`SDL_StartTextInput`／`StopTextInput`、`SDL_GetClipboardText`、文字事件與修飾鍵，`PvpApplication.cpp:165`、`:220`）；等待 `SDL_Delay`（`:742`、`:990`）；視窗大小 `SDL_GetWindowSize`（`:1006`）；執行檔目錄 `SDL_GetBasePath` 與進入點 `SDL_main`（`main.cpp:6`、`:37`）。驗收 GUI probe（`gui_main.cpp` 等 7 檔）直接連結 `GYO::PlatformSDL` 並以 `SDL_PushEvent` 注入事件，需要 Engine 提供測試用的事件注入介面。完成條件：產品與其驗收 probe 的原始碼不 include SDL 標頭（CMake 的後端元件選擇除外） | 2026-10-06 使用者決定 |
+| 8 | 日誌與診斷補強：v6 LAN 聯機測試發現的缺口，建在 Trace 子系統之上（各缺口的 owner 見「v6 LAN 聯機測試的觀察」） | 2026-10-08 使用者決定（「下沉到 v7 的子系統中」） |
 
 ## 需要的 Engine 子系統（Engine 另立計畫）
 
@@ -26,7 +27,7 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
 | Time | 單調時鐘、等待原語（等到期限或事件發生就醒）、固定步時鐘（絕對格點、補步與丟步規則）、晚醒量測、各平台高精度計時 | `IpcHost`、`ClientConnection`、`RuntimeLoop`／`FixedTickRuntime`、驗收 probe 的 `sleep_until`、渲染取得畫面的計時 |
 | Threads／Channels | 執行緒生命週期與停止、各角色的迴圈、跨執行緒佇列與狀態交接 | `ClientConnection` worker、`IpcHost`、`MatchRuntimeHost`、`MovementTraceWriter` 各自開執行緒；任務 1 的三個角色 |
 | Net transport | 事件驅動 socket（包裝 asio）、framing、心跳與對時 | Engine `net` 目前只有 `GyopDatagram`；兩條傳輸都在產品內且為輪詢 |
-| Trace | 結構化、帶統一時間戳的事件記錄與背景寫檔；日誌、量測、錄製重播共用 | 產品的 `MovementTraceWriter`、`PvpApplication` 與渲染的慢事件日誌 |
+| Trace | 結構化、帶統一時間戳的事件記錄與背景寫檔；日誌、量測、錄製重播共用 | 產品的 `MovementTraceWriter`、`PvpApplication` 與渲染的慢事件日誌、v6 第 17 批的 `LogFile`（Client、Match 的日誌檔）；v6 LAN 聯機測試的日誌缺口（任務 8） |
 | Audio | 音效播放與混音、即時執行緒。音效事件帶時間戳（Time 的單調時鐘），經佇列送給音訊執行緒，由它排程到對應的樣本位置播放；不由幀迴圈觸發（使用者 2026-10-06 指定） | 尚無（任務 5）。若由幀迴圈觸發，30 FPS 時連射的聲音會被量化成 33 ms 一格；與 30 FPS 移動命令（任務 2）是同一類問題 |
 | Display（擴充 platform） | 顯示器與模式列舉、視窗模式切換、執行中改變大小、像素密度；render 端依新大小重建繪製目標 | `SdlPlatformOptions` 只有建立時的寬高（`SdlPlatform.hpp:35-38`），沒有切換；產品不得直接呼叫 SDL（第 06 批的方向）；工具（ui_editor、preview）也有視窗，是第二個使用者（任務 6） |
 | SDL 隔離層（擴充 platform、input） | 日誌、文字輸入與剪貼簿、執行檔與使用者目錄、進入點、測試用事件注入；與 Time（等待）、Display（視窗大小）分工 | 任務 7 的盤點 |
@@ -94,6 +95,34 @@ v7 開始時，依變速箱規則以 ultracode 規劃：先做一份唯讀盤點
 - 當時的 Gateway／Match 輸出沒有保留，原因未查明；使用者不確定是切換工作區造成，還是程式的問題。
 - 推測（未驗證）：被遮住的視窗呈現被暫停或降速（`nextDrawable` 阻塞或 App Nap）；v6 的主迴圈是單執行緒，命令跟著停止產生，Match 的連線品質判定移出玩家。屬於任務 1（執行緒分離）的範圍，任務 3 也相關。
 - v7 完成後：在連續射擊中切換工作區、最小化與遮住視窗，確認不再斷線；重現時保留 Gateway／Match 的 log 與 movement trace。
+- 2026-10-08 LAN 聯機測試的佐證（Windows）：切換視窗時事件處理阻塞 267 ms，Match 同時有 3 Tick 收不到命令；沒有斷線。見下一節。
+
+### v6 LAN 聯機測試的觀察（v6 第 17 批；v7 的真實網路基準）
+
+2026-10-08 使用者與朋友做了 LAN 聯機測試：Mac（Intel）上跑 Match＋Gateway，Client 是 2 台 Windows（D3D12，各 60 FPS 與 165 FPS），約 14.5 分鐘，2 人。功能全部正常、沒有斷線。結果見 v6 [驗收狀態](../v6/ACCEPTANCE_STATUS.md)的「LAN 聯機測試」。使用者的評語：這是真實網路下的樣態，強化了 v7 的重要性。
+
+證據：`build/target/_build/test/logs/pvp-v6-lan-20261008/`（git 忽略，只在本機；`artifacts.sha256`）。
+
+真實網路下看到三種中斷（Held＝Match 在該 Tick 沒有這位玩家的命令，以上一筆頂替）：
+
+| 樣態 | 時間與規模 | 推測原因 | 對應的 v7 任務 |
+|---|---|---|---|
+| 個別 Client 的網路抖動 | Held 連續 5～8 Tick（約 80～130 ms），同時那台 Client 的 Snapshot 也延遲（最大年齡 102 ms）；`CONNECTION POOR` 失敗窗口最多 2／3 | Client 端的 Wi-Fi | 任務 2（相位追蹤處理每一份樣本）與連線品質判定要以真實網路數據調整 |
+| 兩位玩家同時中斷 | 2 次，兩人同一時刻 Held 7～8 Tick；其中 1 次 Match 的 Tick 間隔正常、Gateway 收包數正常，另 1 次 Match 本身有 47 ms 的 Tick 間隔 | Mac 端（Wi-Fi 收包叢集、主機停頓） | 任務 3、Time 子系統 |
+| 切換視窗時中斷 | Windows Client 釋放指標後事件處理 267 ms、FPS 46；同時 Match 有 3 Tick 收不到這位玩家的命令 | 單執行緒主迴圈被事件／呈現阻塞（與「切換工作區後斷線」同類） | 任務 1 |
+
+- 整體：Match 收到實際命令的比例 99.46%／99.74%；Snapshot 每秒 60、年齡 P50／P95 約 8／19 ms；兩人各擊殺 19 次，38 次重生全部在四角。
+- Windows 上切換視窗 8 次，沒有斷線，只有上面的短暫中斷。
+
+日誌缺口（任務 8）。依 owner 分，Engine 的 Trace 提供結構化事件與背景寫檔，各產品角色決定記什麼：
+
+| 缺口 | 這次的影響 | owner |
+|---|---|---|
+| 動作被拒絕的原因沒有寫進日誌：Client 只記次數；Match 不記動作裁決 | 一台 Client 有 9 次被拒，原因（冷卻、換彈、彈匣已滿等）查不出來 | 產品 Client、Match（以 Trace 記錄） |
+| Match 結束時沒有記錄 | 分不出正常結束或異常終止 | 產品 Match；Trace 的生命週期事件 |
+| 沒有指定 Gateway 時，錯誤只顯示逾時 | 一台 Client 未加 `--gateway`，連到預設的 127.0.0.1，訊息沒有提示 | 產品 Client |
+| 每 10 秒統計缺每位玩家的 Held 次數（Match）與封包間隔分布（Gateway） | 這次的 Held 分析是從 movement trace 另外計算 | 產品 Match（Trace）；Gateway 是 Go，屬產品自有 |
+| 跨機器的時間無法對齊（各機牆鐘只能大致對照） | 跨機器事件靠牆鐘推估 | 任務 4（runtime link 對時）；Client↔Gateway 的對時未列入，規劃時決定 |
 
 ### 本機射擊閘的兩個常數（v6 第 12 批；v7 完成後重新評估）
 

@@ -33,6 +33,26 @@ v5 的[驗收狀態](../v5/ACCEPTANCE_STATUS.md)與[穩定基線](../v5/STABLE_B
 | L3 原生操作清單 1～10 | 通過 | 未執行 | 未執行 | 2026-10-08 使用者：「全部正常」（`f41c22a` 的量測樹建置，2 Client＋2 bot）。觀察（使用者決定不判失敗、交給 v7）：切換 macOS 工作區（Spaces）去看其他畫面時仍在連續射擊，回來後看到斷線訊息；原因未查明，見 v7 README |
 | 第 3 項（視窗拖動／縮放的呈現阻塞） | 通過 | 未執行 | 未執行 | macOS Intel／Metal 已驗證（L3 第 6 項）；Windows／Linux 未執行，根因可能不同（Windows 拖動標題列會進入 Win32 modal 迴圈）。按下縮放角到開始拖動之間的停頓依 D19 交給 v7 |
 
+## LAN 聯機測試（第 17 批的 L3，Windows 實機）
+
+2026-10-08，使用者與朋友，依 [LAN 聯機測試手冊](LAN_TEST.md)。證據：`build/target/_build/test/logs/pvp-v6-lan-20261008/`（git 忽略，只在本機；`artifacts.sha256`）。觀察與日誌缺口的分析見 [v7 任務清單](../v7/README.md)的「v6 LAN 聯機測試的觀察」。
+
+- 構成：Mac（Intel）跑 Match＋Gateway，Match 從主工作目錄的 master `c7d6dd3` 建置（SHA-256 `c19c9733…`），Gateway 在本機 `go build`（`ce4eb45d…`）；Client 是 2 台 Windows，snapshot `object_fps_pvp-snapshot-20261007-c7d6dd3`（兩台 SHA-256 相同，`e6654cd6…`）。同一個區域網路，Wi-Fi。原計畫 3 台 Client，日誌只有 2 台。
+- 正式對局：10:55:53～11:10:31（約 14.5 分鐘），2 人，發行地圖 `pvp_corners_v1`。
+
+| 項目 | Client A（Windows，D3D12，60 FPS） | Client B（Windows，D3D12，165 FPS） | 指標與證據 |
+|---|---|---|---|
+| 版本與地圖 | 通過 | 通過 | 兩台都依 Match 自動選中 `pvp_corners_v1` |
+| 連線與斷線 | 通過 | 通過 | 全程沒有斷線、逐出或 Gateway 限流；`CONNECTION POOR` 失敗窗口最多 2／3（A）、1／3（B） |
+| 移動命令 | 通過 | 通過 | Match 收到實際命令的比例 99.46%／99.74%；Held 連續最多 8 Tick |
+| Snapshot | 通過 | 通過 | 每秒 60；年齡 P50／P95 8.7／18.6 ms、8.1／19.2 ms |
+| 戰鬥 | 通過 | 通過 | 動作 382／338，接受 373／338，拒絕 9／0（原因沒有記錄，見 v7 任務 8）；命中 76／76；擊殺 19／19，與 Match 的死亡紀錄一致 |
+| 四角重生 | 通過 | 通過 | 38 次重生都在四角：(17,17) 11、(3,17) 11、(3,3) 10、(17,3) 6 |
+| 切換視窗 | 通過 | 通過 | A 切換 2 次、B 切換 6 次，沒有斷線；A 有一次事件處理阻塞 267 ms，Match 有 3 Tick 收不到命令（v7 任務 1） |
+| 三個角色的日誌 | 通過 | 通過 | 啟動 SHA-256、階段、地圖、每秒摘要、Match 事件、Gateway 事件與統計都有；缺口列在 v7 任務 8 |
+
+- 開測前的失敗都是環境因素：Mac 的網段改變，Gateway 以新的 `-advertise-ip` 重啟；一台 Client 第一次啟動沒有加 `--gateway`，連到預設的 127.0.0.1 而逾時。
+
 ## 完整驗收（14b，需另外授權）
 
 | 項目 | macOS | Windows | Linux | 指標與證據 |
