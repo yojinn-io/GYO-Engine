@@ -120,6 +120,8 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
         if (age.sequence == sequence) {
             phaseSamples_.push_back(*authority.movementSlackMicros * 1.0e-6 + age.seconds -
                 static_cast<double>(InitialCommandLead) * MovementTickSeconds - MovementPhaseTargetSeconds);
+            ++observation_.phaseSamples;
+            observation_.phaseSampleSequence = sequence;
             if (phaseSamples_.size() > MovementPhaseWindowSamples) phaseSamples_.pop_front();
             lateSamples_ = *authority.movementSlackMicros < 0 ? lateSamples_ + 1 : 0;
         }
@@ -141,6 +143,18 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     observation_.phaseErrorSeconds = error;
     observation_.phaseTracking = PhaseTrackingState::Tracking;
     if (std::abs(error) > deadband) Correct(error, false);
+}
+
+void LocalPlayerPrediction::ObservePhaseSample(const PlayerState& authority) {
+    if (!observation_.active || authority.playerId != current_.playerId ||
+        authority.movementEpoch != current_.movementEpoch || authority.lifeGeneration != current_.lifeGeneration) return;
+    TrackPhase(authority);
+}
+
+bool LocalPlayerPrediction::Reseeds(const PlayerState& authority) const noexcept {
+    return !observation_.active || current_.playerId != authority.playerId ||
+        authority.lifeGeneration != current_.lifeGeneration || authority.movementEpoch != current_.movementEpoch ||
+        authority.lastResolvedCommand > current_.lastResolvedCommand;
 }
 
 void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {

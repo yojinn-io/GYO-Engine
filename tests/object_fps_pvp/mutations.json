@@ -513,7 +513,7 @@
       "find": "    if (rules) prediction_.SetMovementRules(*rules);\n",
       "replace": "",
       "check": "cpu",
-      "expect": "PvP ClientSimulation reproduces the v6 application command path bit for bit across rates and stalls"
+      "expect": "PvP ClientSimulation reproduces the v6 application command path at one snapshot per frame"
     },
     {
       "id": "v7-02-frame-keeps-jump",
@@ -543,7 +543,7 @@
       "find": "elapsed_.Sample(now)",
       "replace": "elapsed_.Sample(Clock::now())",
       "check": "cpu",
-      "expect": "PvP ClientSimulation reproduces the v6 application command path bit for bit across rates and stalls"
+      "expect": "PvP ClientSimulation reproduces the v6 application command path at one snapshot per frame"
     },
     {
       "id": "v7-02-probe-direct-prediction",
@@ -554,6 +554,46 @@
       "replace": "    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};\n    LocalPlayerPrediction bypass(*arena);static_cast<void>(bypass);\n",
       "check": "probe_command_path",
       "expect": "probes must use ClientSimulation"
+    },
+    {
+      "id": "v7-03-newest-only",
+      "batch": "v7-03",
+      "what": "Phase tracking takes only the newest snapshot of a drained batch (v6)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "        prediction_.ObservePhaseSample(sample.self);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation counts each drained sample once and reconciles only the newest"
+    },
+    {
+      "id": "v7-03-no-tick-order",
+      "batch": "v7-03",
+      "what": "Queued samples feed phase tracking in arrival order, not tick order",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    std::stable_sort(samples_.begin(), samples_.end(), [](const Sample& a, const Sample& b) { return a.tick < b.tick; });\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation counts each drained sample once and reconciles only the newest"
+    },
+    {
+      "id": "v7-03-sample-any-epoch",
+      "batch": "v7-03",
+      "what": "A phase sample of another epoch or life is taken",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (!observation_.active || authority.playerId != current_.playerId ||\n        authority.movementEpoch != current_.movementEpoch || authority.lifeGeneration != current_.lifeGeneration) return;\n",
+      "replace": "    if (!observation_.active || authority.playerId != current_.playerId) return;\n",
+      "check": "cpu",
+      "expect": "PvP prediction phase samples of another epoch or life are not evidence"
+    },
+    {
+      "id": "v7-03-probe-no-sample",
+      "batch": "v7-03",
+      "what": "The matrix probe reconciles without offering the drained snapshots as phase evidence",
+      "file": "build/acceptance/object_fps_pvp/gameplay_action.hpp",
+      "find": "simulation[i].ObserveSample(received.snapshot,ids[i]);",
+      "replace": "",
+      "check": "probe_command_path",
+      "expect": "never calls ObserveSample"
     }
   ]
 }

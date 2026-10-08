@@ -45,6 +45,9 @@ struct LocalMovementObservation final {
     // Corrections in this epoch and life, and how many late samples forced.
     std::uint32_t phaseCorrections{};
     std::uint32_t phaseLateCorrections{};
+    // Slack samples phase tracking took in this epoch and life, and the newest one's sequence.
+    std::uint64_t phaseSamples{};
+    std::uint64_t phaseSampleSequence{};
 };
 
 // Product-local movement prediction. The application samples mouse input once
@@ -57,6 +60,13 @@ public:
     void SetMovementRules(MovementRules rules);
     void ClearJumpRequest() noexcept { pendingJump_ = false; }
     void Reconcile(const PlayerState& authority, std::uint64_t authorityTick);
+    // Phase evidence only: the slack sample of an authority state older than the
+    // next one Reconcile receives (several snapshots in one drained batch). No
+    // acknowledgement, correction of position or reseed happens here.
+    void ObservePhaseSample(const PlayerState& authority);
+    // Reconcile would seed a new lead from this state (new player, life or
+    // epoch, or an acknowledgement past the predicted tip): a fresh phase.
+    [[nodiscard]] bool Reseeds(const PlayerState& authority) const noexcept;
     // True publishes a changed complete window. The network worker owns its
     // independent 60 Hz retransmission deadlines and never creates commands.
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,

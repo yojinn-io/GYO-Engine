@@ -165,7 +165,7 @@ int main(int argc,char** argv){
                 Require(state.error.empty(),state.error);Require(state.phase==ConnectionPhase::Playing&&state.snapshot,"Session lost");
                 Require(!drain.overflow,"Snapshot receipt overflow");
                 for(const auto& r:drain.snapshots){b.maximumPlayersSeen=std::max(b.maximumPlayersSeen,r.snapshot.players.size());
-                    b.received.push_back(r.snapshot);}
+                    b.received.push_back(r.snapshot);b.simulation.ObserveSample(r.snapshot,b.id);}
                 for(const auto& d:drain.decisions){Require(!b.decisions.contains(d.actionId)&&b.submitted.contains(d.actionId),"Duplicate or unknown decision");
                     b.decisions[d.actionId]=DecisionJson(d);
                     if(b.reload&&*b.reload==d.actionId&&!d.accepted)b.reload.reset();

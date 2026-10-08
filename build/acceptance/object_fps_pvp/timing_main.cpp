@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
                 auto drain=clients[i].Drain();
                 Require(drain.state.error.empty(),drain.state.error);
                 Require(drain.state.phase==ConnectionPhase::Playing && drain.state.snapshot.has_value(),"Live session lost");
-                for(const auto& received:drain.snapshots)static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));
+                for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));simulation[i].ObserveSample(received.snapshot,ids[i]);}
                 const auto& authority=Player(*drain.state.snapshot,ids[i]);
                 if(measured && previousEpoch[i] && previousEpoch[i]!=authority.movementEpoch)++resets;
                 previousEpoch[i]=authority.movementEpoch;overflowCounts[i]=drain.snapshotHistoryOverflowCount;

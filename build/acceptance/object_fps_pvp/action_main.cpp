@@ -143,7 +143,7 @@ int main(int argc,char** argv){
                 if(stall)state=clients[i].State();
                 else{
                     auto drain=clients[i].Drain();state=std::move(drain.state);
-                    for(const auto& received:drain.snapshots)static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));
+                    for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));simulation[i].ObserveSample(received.snapshot,ids[i]);}
                     for(const auto& d:drain.decisions){
                         const auto value=Decision(d);
                         Require(!decisions[i].contains(d.actionId),"Client delivered the same action twice");

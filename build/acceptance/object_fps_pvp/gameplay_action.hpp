@@ -119,7 +119,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
                 auto drain=clients[i].Drain();state=std::move(drain.state);
                 Require(!drain.overflow || drainStallMs>0,"Unexpected gameplay snapshot receipt overflow");
                 frame["snapshot_history_overflow_count"+std::string(i?"_b":"_a")]=drain.snapshotHistoryOverflowCount;
-                for(const auto& received:drain.snapshots)static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));
+                for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));simulation[i].ObserveSample(received.snapshot,ids[i]);}
                 for(const auto& d:drain.decisions){Require(!decisions[i].contains(d.actionId)&&submitted[i].contains(d.actionId),"Duplicate/unknown gameplay decision");
                     decisions[i][d.actionId]=Decision(d);evidence.Push({{"kind","decision"},{"time_ns",ns},{"player_id",ids[i]},{"decision",Decision(d)}});}
             }

@@ -17,7 +17,8 @@ if(MSVC)
     target_compile_options(${tests} PRIVATE /utf-8)
 endif()
 add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
-set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 30)
+# The movement recovery matrix runs the v6 and the product command paths.
+set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 60)
 
 # The acceptance probes' header-only start-phase recorder, driven by the real
 # prediction, and the GUI probes' room (gui_room.hpp). Kept apart so the

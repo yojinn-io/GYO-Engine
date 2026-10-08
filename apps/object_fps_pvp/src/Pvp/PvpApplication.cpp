@@ -407,8 +407,10 @@ struct PvpApplication::Impl final {
         weaponFeedback.reloadPending = pendingReload.has_value();
         // Consume the complete receipt-stamped batch before selecting this
         // frame's timeline bracket. Never play a stalled backlog one frame at a time.
-        for (const auto& sample : received.snapshots)
+        for (const auto& sample : received.snapshots) {
             static_cast<void>(timeline.Push(sample.snapshot, sample.receivedAt));
+            simulation->ObserveSample(sample.snapshot, state.playerId);
+        }
         simulation->Observe(*self, state.snapshot->tick, state.movementRules);
     }
 

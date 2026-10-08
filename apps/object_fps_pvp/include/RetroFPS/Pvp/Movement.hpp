@@ -46,8 +46,8 @@ inline constexpr double MovementPhaseTargetSeconds = 0.004;
 // The error of the latest commands is the 90th percentile of a window of
 // slack samples: commands the worker sent at once, not the ones that also
 // waited for a frame. The first decision after a seed uses the first samples
-// and a narrow deadband; tracking then uses 240 samples (about four seconds at
-// 60 FPS; about eight at 30 FPS, where only the latest snapshot of a frame is
+// and a narrow deadband; tracking then uses 240 samples (about four seconds:
+// every snapshot of a frame contributes its sample, though only the latest is
 // reconciled) and corrects only beyond the wider deadband. Two late (negative) samples in a
 // row correct at once. Each correction is at most two ticks and is slewed.
 inline constexpr std::size_t MovementPhaseFirstSamples = 8;
