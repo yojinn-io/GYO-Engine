@@ -134,6 +134,31 @@ class AnalyzerV7Tests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("without its release time and length", " ".join(result["errors"]))
 
+    def gameplay_round(self, mode, client_extra=()):
+        """A gameplay matrix round: no timing.json; action-client.json bounds the run."""
+        directory = self.run_directory(client_extra=client_extra)
+        (directory / "timing.json").unlink()
+        (directory / "action-client.json").write_text(json.dumps(
+            {"start_ns": START, "end_ns": START + DURATION * SECOND, "player_ids": [1, 2], "fps": 30}), encoding="utf-8")
+        (directory / "result.json").write_text(json.dumps({"mode": mode}), encoding="utf-8")
+        return directory
+
+    def test_a_gameplay_round_checks_simulation_gaps_only_when_clean(self):
+        tick = 1 / 60
+        late = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
+                     frame_seconds=.05, dropped_seconds=.05 - tick)
+        clean = v7.analyze_v7(self.gameplay_round("baseline", [late]))
+        self.assertEqual(clean["round"], "gameplay")
+        self.assertFalse(clean["production"]["applies"])
+        self.assertFalse(clean["passed"])
+        self.assertIn("Clean gameplay round", " ".join(clean["errors"]))
+        faulted = v7.analyze_v7(self.gameplay_round("drain-stall", [late]))
+        self.assertTrue(faulted["passed"], faulted["errors"])
+        self.assertEqual(len(faulted["simulation_gaps"]), 1)
+        punctual = event("runtime_gap", START + SECOND, 1, 3, pending=3, life_generation=1,
+                         frame_seconds=tick + .0004, dropped_seconds=.0004)
+        self.assertTrue(v7.analyze_v7(self.gameplay_round("baseline", [punctual]))["passed"])
+
     def test_the_result_is_written_beside_the_frozen_evidence(self):
         directory = self.run_directory()
         v7.analyze_v7(directory)

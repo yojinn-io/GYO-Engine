@@ -36,8 +36,9 @@ struct ClientIntent final {
 
 // Decision D30: the simulation keeps using the latest intent until it is older
 // than max(this minimum, ClientIntentStaleIntervals x the longest recent publish
-// interval); then movement is neutral, aim stays and jumps are dropped. The
-// product supports frame rates down to ClientMinimumSupportedFps.
+// interval); then movement is neutral, aim stays and jumps are dropped. An
+// interval past that limit was a stall and is not a recent publish interval.
+// The product supports frame rates down to ClientMinimumSupportedFps.
 inline constexpr double ClientIntentMinimumStaleSeconds = 0.1;
 inline constexpr double ClientIntentStaleIntervals = 3;
 inline constexpr std::size_t ClientIntentRecentIntervals = 4;
@@ -51,8 +52,10 @@ struct ClientPresentation final {
     std::optional<FireGateTiming> shotTiming;
     Engine::Time::TimePoint steppedAt{};
     std::size_t arenaIndex{};
-    // The sample time of the intent the step used.
+    // The sample time of the intent the step used, and the connection
+    // generation of the snapshots it saw.
     Engine::Time::TimePoint intentSampledAt{};
+    std::uint64_t generation{};
 };
 
 // A presentation placed at a render time, with the shot timing advanced to it.
@@ -60,6 +63,7 @@ struct ClientPresented final {
     LocalMovementObservation observation;
     std::optional<FireGateTiming> shotTiming;
     Engine::Time::TimePoint intentSampledAt{};
+    std::uint64_t generation{};
 };
 
 [[nodiscard]] ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
@@ -93,6 +97,7 @@ public:
 
 private:
     void TrackIntent(const ClientIntent& intent);
+    [[nodiscard]] double StaleLimitSeconds() const noexcept;
     [[nodiscard]] bool IntentStale(Engine::Time::TimePoint now) const noexcept;
 
     std::vector<Arena> arenas_;

@@ -276,6 +276,30 @@ TEST_CASE("PvP a 250 ms main-thread stall keeps the simulation stepping and turn
     }));
 }
 
+TEST_CASE("PvP a long main-thread stall does not stretch the stale limit of the next one") {
+    // 60 FPS, a one-second stall at 1.5 s, three frames, then a 250 ms stall.
+    const auto interval = [first = std::optional<double>{}, frames = 0](double now, unsigned) mutable {
+        if (!first && now >= 1.5) { first = now; return 1.0; }
+        if (first && ++frames == 4) return 0.25;
+        return 1.0 / 60.0;
+    };
+    const auto run = RunRole({interval, Moving});
+    REQUIRE(run.publishes.size() > 10);
+    // The publish that starts the second stall.
+    std::optional<double> second;
+    for (std::size_t n = 1; n + 1 < run.publishes.size(); ++n)
+        if (run.publishes[n] > 2.5 && run.publishes[n + 1] - run.publishes[n] >= 0.25) { second = run.publishes[n]; break; }
+    REQUIRE(second);
+    std::size_t neutral{};
+    for (const auto& generated : Commands(run)) {
+        if (generated.at <= *second + ClientIntentMinimumStaleSeconds || generated.at >= *second + 0.25) continue;
+        CAPTURE(generated.at);
+        CHECK(generated.command.moveForward == 0.0F);
+        ++neutral;
+    }
+    CHECK(neutral >= 8);
+}
+
 TEST_CASE("PvP the simulation keeps the intent at 20 and 25 FPS and across single long frames up to 100 ms") {
     struct Case { const char* name; std::function<double(double, unsigned)> interval; };
     const Case cases[] = {{"20 FPS", Every(1.0 / 20.0)}, {"25 FPS", Every(1.0 / 25.0)},
@@ -317,6 +341,8 @@ TEST_CASE("PvP the simulation role restarts on a new session or player and resee
         CHECK(changed->observation.phaseCorrections == 0);
         CHECK(changed->observation.pendingCommands <= InitialCommandLead + 1);
         CHECK(run.steps.back().observation.active);
+        // Each presentation names its session, so the main thread can tell an earlier one.
+        for (const auto& step : run.steps) CHECK(step.presentation.generation == (step.at >= ChangeAt ? 2U : 1U));
     }
     SUBCASE("player id") {
         Options options;

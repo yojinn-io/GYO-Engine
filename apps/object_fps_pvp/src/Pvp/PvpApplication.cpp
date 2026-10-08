@@ -549,7 +549,10 @@ struct PvpApplication::Impl final {
     bool PrepareWorld(double deltaSeconds) {
         remoteMovement.reset();
         remoteSubmitMilliseconds = 0;
-        const auto& position = presented.observation.renderPosition;
+        // Before the simulation role's first step of this session, the view
+        // starts where the authority shows the player.
+        const auto* self = FindPlayer(*state.snapshot, state.playerId);
+        const auto position = presented.observation.active || !self ? presented.observation.renderPosition : self->position;
         const auto camera = view.Camera();
         queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
             {camera.pitch, camera.yaw, camera.roll}, WorldVerticalFovRadians, 0.05F, 150.0F});
@@ -963,6 +966,8 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
                     controls, impl_->jumpPresses, movementSampledAt});
             }
             impl_->presented = impl_->simulation->PresentAt(movementSampledAt);
+            // Until the role has stepped in this session, it has no local player to show.
+            if (impl_->presented.generation != impl_->connectionGeneration) impl_->presented = {};
             impl_->UpdateWeaponFeedback(Clock::now(), !live);
         }
     } else {

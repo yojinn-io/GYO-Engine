@@ -118,7 +118,7 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - 期限＝取樣時刻＋`SecondsUntilNextStep()`。這個值含相位 slew：解「經過時間 − slew＝剩餘時間」，延後時最多拉長到 1／(1−¼)，提前時最多縮短到 1／(1+¼)；換算成期限時無條件進位到 ns。不活動時每 1 Tick 跑一次。
 - **交接**：
   - 意圖信箱：軸、**絕對**瞄準、controls、跳躍按下的累計次數、sampledAt。計畫寫的是「yaw／pitch 增量累加」，改為絕對值：主執行緒本來就擁有視角並整合滑鼠，絕對值不會遺失也不會重複套用，畫面的相機與命令也用同一個值。
-  - 過期依 D30（常數在 `ClientSimulationRole.hpp`）：近期發布間隔取最近 4 個間隔的最大值。
+  - 過期依 D30（常數在 `ClientSimulationRole.hpp`）：近期發布間隔取最近 4 個間隔的最大值。超過當時門檻的間隔是停頓，不算進近期發布間隔（自我檢查時發現：算進去的話，6 秒的 modal loop 之後幾幀內再停一次，舊意圖會撐到 18 秒；已加測試與突變）。
   - 呈現副本：Observation、插值用的前後位置與修正、ShotTiming、步的時刻、步所用意圖的 sampledAt。主執行緒以 `PresentAt(now)` 放到 Update 的取樣時刻：插值與修正隨時間前進，ShotTiming 的 `secondsSinceStep` 加上經過時間（FireGate 依整步計算，所以和下一步發布的值算出同一個 Tick；L1 有核對）。
   - 重設：主執行緒**不送**重設命令（計畫寫「以 Notify 送達」）。世代、玩家、arena 由角色從自己的 drain 判斷，和快照在同一把鎖內取得，沒有跨執行緒的先後問題；epoch 與生命邊界本來就由權威狀態的 reseed 處理；跳躍的清除由 controls＝false 處理。
   - `ClientConnection::SendInput(input, generation)`：角色在 drain 與送出之間若跨過 session 邊界，舊視窗會被丟棄（世代的改變都在同一把鎖內）。
@@ -136,6 +136,18 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - `MovementRecoveryTests` 的產品路徑改由角色驅動（幀只發布意圖，模擬在自己的期限上走、和 worker 一樣晚醒）。**第 03 批留下的已知失敗通過**。
   - 同一檔中「追蹤 vs 未追蹤」的比較，未追蹤的基準改為和追蹤同一路徑。原本基準一律是 v6 路徑；產品路徑換成角色後，跨架構比較的是不同的量（見下方「延遲」），產品的 144 FPS 起始相位與漂移案例有 7 個斷言因此失敗。測試的意圖是「同一路徑上，追蹤有沒有改善」。
   - 突變目錄：`v7-02-probe-direct-prediction` 改寫為新守衛；`v7-03-probe-no-sample` 的規則被本批取代，換成 `v7-04-probe-steps-simulation`；新增 `v7-04-per-frame-advance`、`v7-04-wait-for-main-thread`、`v7-04-no-stale-intent`。
+- **分析器 v7**（`build/acceptance/object_fps_pvp/command_evidence_v7.py`，ID `pvp-v7-commands-1`）：凍結的檔案不動，只重新判定意義改變的規則，結果另存 `command-evidence-v7.json`。
+  - runtime_gap：Client 端只來自模擬角色（自己的喚醒間隔 ≥100 ms，或丟掉、擋下的時間）；主執行緒的停頓只出現在呈現間隔或 probe 的幀間隔。Host 的 runtime_gap 另列。
+  - seed 夾住豁免：公式不變（`dropped == frame − 1 tick`），但 frame 是模擬自己的間隔，只在 2 tick 以下豁免；更長的表示模擬自己晚醒，算模擬的 gap。
+  - 60 Hz ±2 步：只有模擬的 gap 會跳過檢查；主執行緒的停頓（注入或觀測到的）不跳過。
+  - STALL_RULE 的 v7 版（文字在檔內）。
+  - 新規則：注入主執行緒停頓的跑次，從停頓開始到放開後 1.5 秒內不得有 Held／Neutral，量測窗內不得有 LifeRespawn 以外的 epoch 重設。
+  - self-test（CTest `object_fps_pvp.command_evidence_v7`）與突變 3 件。執行器（`run_timing.py` 等）不改；第 05 批的宣告寫明兩版都分析。
+- **驗收（截至目前）**：
+  - 全量 CTest 66／66（`-j6`，見下方觀察）。
+  - 突變：`v7-02-probe-direct-prediction`、`v7-04-*` 8 件 killed。`v7-04-per-frame-advance` 第一版讓 CTest 逾時（期限沒有前進，喚醒變得極密），改成「每 30 FPS 幀前進一次」的形式後 killed。之後新增的 `v7-04-stall-stretches-limit` 待跑。
+  - 權威 digest：v6 最終 tree（`fee92ff`）對本分支，35／35 相同。
+  - Match 的連結閉包：ipc、runtime_host、match_domain、engine、gyo_time、collision、net、runtime_v6、protobuf、absl；動態庫只有系統的三個，沒有 SDL。
 - **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
 
 ## 待使用者決定

@@ -643,8 +643,8 @@
       "batch": "v7-04",
       "what": "Analyzer v7 skips the 60 Hz production check after a main-thread frame gap, as the frozen rule does",
       "file": "build/acceptance/object_fps_pvp/command_evidence_v7.py",
-      "find": "    production_applies = not simulation_gaps\n",
-      "replace": "    production_applies = not simulation_gaps and not timing.get(\"gaps_100ms\") and not timing.get(\"injected\")\n",
+      "find": "    production_applies = round_kind != \"gameplay\" and not simulation_gaps\n",
+      "replace": "    production_applies = round_kind != \"gameplay\" and not simulation_gaps and not timing.get(\"gaps_100ms\") and not timing.get(\"injected\")\n",
       "check": "command_evidence_v7",
       "expect": "test_main_thread_frame_gaps_no_longer_skip_the_production_check"
     },
@@ -657,6 +657,16 @@
       "replace": "            inside = []\n",
       "check": "command_evidence_v7",
       "expect": "test_an_injected_main_thread_stall_must_not_substitute_or_reset"
+    },
+    {
+      "id": "v7-04-stall-stretches-limit",
+      "batch": "v7-04",
+      "what": "A stalled publish interval counts as a recent publish interval, so the next stall's intent stands up to three stalls long",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "        if (const double interval = Seconds(intent.sampledAt - lastIntentAt_); interval <= StaleLimitSeconds()) {\n",
+      "replace": "        if (const double interval = Seconds(intent.sampledAt - lastIntentAt_); interval >= 0) {\n",
+      "check": "cpu",
+      "expect": "PvP a long main-thread stall does not stretch the stale limit of the next one"
     }
   ]
 }

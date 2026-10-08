@@ -28,6 +28,12 @@ v6 meaning -> v7 meaning:
   no substituted (held or neutral) resolution from the stall's start until
   STALL_RECOVERY_SECONDS after its release, and no epoch reset other than
   LifeRespawn in the measurement window.
+
+Rounds: timing and GUI rounds (timing.json or latency-plan.csv) use their
+measurement window and the production check. Gameplay matrix rounds
+(action-client.json) use the probe's whole run, as the frozen gameplay analyzer
+does for its gap rule, and have no production check; in a clean round
+(result.json mode "baseline") a simulation gap is an error, as it is there.
 """
 import argparse
 from collections import Counter
@@ -70,9 +76,23 @@ def split_seed_clamps(gaps, life_resets):
     return clamps, sorted(unmatched + late, key=lambda gap: gap["time_ns"])
 
 
+def round_window(directory):
+    """(kind, start_ns, end_ns, timing): timing and GUI rounds, else a gameplay round."""
+    if (directory / "timing.json").exists() or (directory / "latency-plan.csv").exists():
+        start, end, timing = frozen.measurement_window(directory)
+        return "timing" if (directory / "timing.json").exists() else "gui", start, end, timing
+    client = json.loads((directory / "action-client.json").read_text(encoding="utf-8"))
+    return "gameplay", client["start_ns"], client["end_ns"], {"player_ids": client.get("player_ids", [])}
+
+
+def clean_gameplay(directory):
+    result = directory / "result.json"
+    return result.exists() and json.loads(result.read_text(encoding="utf-8")).get("mode") == "baseline"
+
+
 def analyze_v7(directory):
     directory = Path(directory)
-    start, end, timing = frozen.measurement_window(directory)
+    round_kind, start, end, timing = round_window(directory)
     errors = []
     simulation_gaps, host_gaps, resets, all_life_resets = [], [], [], []
     presentation_stalls = 0
@@ -110,11 +130,14 @@ def analyze_v7(directory):
     expected_count = (end - start) * 60 / 1e9
     respawns = Counter(reset["player_id"] for reset in life_resets)
     allowance = {player: 2 + frozen.LIFE_RESPAWN_PRODUCTION_STEPS * respawns[player] for player in expected_players}
-    production_applies = not simulation_gaps
+    production_applies = round_kind != "gameplay" and not simulation_gaps
     production_ok = bool(expected_players) and all(
         abs(generated[player] - expected_count) <= allowance[player] for player in expected_players)
     if production_applies and not production_ok:
         errors.append("Command production differs from 60 Hz by more than its allowance without a simulation gap")
+    clean = round_kind == "gameplay" and clean_gameplay(directory)
+    if clean and simulation_gaps:
+        errors.append(f"Clean gameplay round: {len(simulation_gaps)} Client simulation gap(s) that are not seed clamps")
 
     stall = None
     if timing.get("injected"):
@@ -135,7 +158,8 @@ def analyze_v7(directory):
             stall["passed"] = not inside and not other_resets
 
     result = {
-        "analyzer_id": ANALYZER_ID, "passed": not errors, "errors": errors, "window_ns": [start, end],
+        "analyzer_id": ANALYZER_ID, "passed": not errors, "errors": errors, "round": round_kind, "clean_gameplay": clean,
+        "window_ns": [start, end],
         "rules": {
             "runtime_gap": "Client runtime_gap events come only from the simulation role",
             "seed_clamp": f"dropped == frame - one tick, frame below {SEED_CLAMP_MAXIMUM_FRAME_SECONDS:.6f} s",

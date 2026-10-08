@@ -26,7 +26,8 @@ const PlayerState* FindSelf(const WorldSnapshot& snapshot, const PlayerId self) 
 
 ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
                           const TimePoint now) {
-    ClientPresented result{presentation.observation, presentation.shotTiming, presentation.intentSampledAt};
+    ClientPresented result{presentation.observation, presentation.shotTiming, presentation.intentSampledAt,
+        presentation.generation};
     if (!presentation.observation.active || presentation.arenaIndex >= arenas.size()) return result;
     const double since = std::max(0.0, Seconds(now - presentation.steppedAt));
     const auto sample = InterpolateLocalPresentation(arenas[presentation.arenaIndex], presentation.presentation, since);
@@ -44,20 +45,25 @@ ClientSimulationLoop::ClientSimulationLoop(std::vector<Arena> installed)
     if (arenas_.empty()) throw std::invalid_argument("The client simulation needs an installed arena");
 }
 
+double ClientSimulationLoop::StaleLimitSeconds() const noexcept {
+    const double longest = *std::max_element(intervals_.begin(), intervals_.end());
+    return std::max(ClientIntentMinimumStaleSeconds, ClientIntentStaleIntervals * longest);
+}
+
 void ClientSimulationLoop::TrackIntent(const ClientIntent& intent) {
     if (intent.sampledAt <= lastIntentAt_) return;
-    if (lastIntentAt_ != TimePoint{}) {
-        intervals_[nextInterval_] = Seconds(intent.sampledAt - lastIntentAt_);
-        nextInterval_ = (nextInterval_ + 1) % intervals_.size();
-    }
+    // An interval past the stale limit was a stall, not the publisher's cadence:
+    // kept, it would let the intent of the next stall stand three times as long.
+    if (lastIntentAt_ != TimePoint{})
+        if (const double interval = Seconds(intent.sampledAt - lastIntentAt_); interval <= StaleLimitSeconds()) {
+            intervals_[nextInterval_] = interval;
+            nextInterval_ = (nextInterval_ + 1) % intervals_.size();
+        }
     lastIntentAt_ = intent.sampledAt;
 }
 
 bool ClientSimulationLoop::IntentStale(const TimePoint now) const noexcept {
-    if (lastIntentAt_ == TimePoint{}) return true;
-    const double longest = *std::max_element(intervals_.begin(), intervals_.end());
-    const double limit = std::max(ClientIntentMinimumStaleSeconds, ClientIntentStaleIntervals * longest);
-    return Seconds(now - lastIntentAt_) > limit;
+    return lastIntentAt_ == TimePoint{} || Seconds(now - lastIntentAt_) > StaleLimitSeconds();
 }
 
 ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const ClientIntent& intent,
@@ -103,7 +109,7 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
     const bool active = simulation_.Observation().active;
     step.nextDeadline = After(now, active ? simulation_.SecondsUntilNextStep() : MovementTickSeconds);
     step.presentation = {simulation_.Observation(), simulation_.Presentation(), simulation_.ShotTiming(), now,
-        arenaIndex_, intent.sampledAt};
+        arenaIndex_, intent.sampledAt, drain.generation};
     return step;
 }
 
