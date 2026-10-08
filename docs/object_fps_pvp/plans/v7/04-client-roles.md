@@ -151,6 +151,11 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - Match 的連結閉包：ipc、runtime_host、match_domain、engine、gyo_time、collision、net、runtime_v6、protobuf、absl；動態庫只有系統的三個，沒有 SDL。
   - TSan（本機 macOS，獨立的 build／輸出目錄，workflow 不改）：`gyo_time_tests`、`gyo_threads_tests`、角色與 ClientSimulation 的 14 個測試案例，警告 0；矩陣短測 clean-60（TSan 的 Match 與 probe、一般的 Gateway）通過，TSan 報告 0。
   - 開發跑次（一般建置，不計次、保留）：矩陣 clean-30、clean-60 都通過（凍結分析器）；Actual 1677／1680、P50 約 37 ms、P95 約 38 ms、first send P95 約 1.3 ms、30 Tick 佇列和最大 60；分析器 v7 也通過（模擬的 gap 0）。第 03 批的 clean-30 是 Actual 97.6% 的失敗。timing 的 250 ms 主執行緒停頓（60 FPS、30 秒）：通過，Actual 100%，每位玩家正好 1800 個命令，停頓到放開後 1.5 秒內沒有 Held／Neutral，沒有 epoch 重設。
+- **GUI 開發跑次**（2026-10-09，你不在時；caffeinate 開著）：
+  - phase stalls（64／83／250 ms × Update 前後，60 FPS）：通過。6 種停頓都沒有重設 epoch、沒有晚到修正，恢復約 3～5 ms，最大待送命令 3。
+  - action60（`run_action_short.py`）：通過（含死亡位置的等待）。
+  - network（`run_network.py`，含 GUI 移動與視窗移動）：第 1 次失敗——跨視窗延遲的分析器拿 create 的第一個呈現樣本當原點，而那一幀角色還沒在新 session 走第一步，本地位置是 (0,0)（v6 在第一個世界幀就已播種）。修正：本地預測啟動前不發布 presented 觀測（那一幀畫面用權威位置）。修正後第 2 次通過（中位延遲約 38 ms）。失敗的那一次保留在 `dev-gui/network/`。
+  - latency short（`run_timing.py --gui --short`，60 FPS、16 秒、25 事件）：第 1 次是我給錯參數（事件數不足，`--short` 在啟動前拒絕），沒有數據；補上 `--events 25` 後通過，乾淨回合，可見延遲 P50 約 36.6 ms、P95 約 37.8 ms，分析器 v7 也通過（每位玩家正好 960 個命令）。
 - **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
 
 ## 使用者的決定（2026-10-09）

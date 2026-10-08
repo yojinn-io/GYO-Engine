@@ -1130,7 +1130,9 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
                 impl_->remoteMovement->totalHoldSeconds = impl_->timeline.TotalHoldSeconds();
             } else (void)impl_->timeline.CommitPresented(finished, nullptr, false);
         }
-        if (world) impl_->presentedMovement = PresentedMovementObservation{
+        // Until the simulation role has stepped in this session the frame shows
+        // the authority position and there is no local movement to present.
+        if (world && impl_->presented.observation.active) impl_->presentedMovement = PresentedMovementObservation{
             context.frameIndex, std::chrono::duration<double>(finished.time_since_epoch()).count(),
             impl_->state.playerId, impl_->presented.observation, impl_->remoteMovement,
             impl_->skippedPresentationFrames, impl_->connectionGeneration, impl_->weaponFeedback,
