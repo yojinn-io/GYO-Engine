@@ -82,6 +82,13 @@
 - 證據：`build/target/_build/test/logs/pvp-v7-batch03-20261008/`。
 - 下一步：第 03a 批（量測含 03 的 P1b 分支頭），建議 medium。
 
+## 第 03a 批進度（記錄器）：相位追蹤的小量測
+
+- 2026-10-08：開始（使用者指示，主對話 medium）。worktree `../GYO-Engine-v6final`（`fee92ff`）與 `../GYO-Engine-p1b03`（`03b2ea7`）從零建置。事前宣告（使用者核准，`56bba67e…`）。
+- 2026-10-08：第一次嘗試因 runner 錯誤，12 輪都在啟動前結束（沒有數據，保留）；修正後經使用者同意照原宣告重跑，12 輪完成。結果與觀察見[第 03a 批](03a-phase-only-measurement.md)：11 輪在 4 ms 狀態；clean-30 看不出方向；clean-60 的 after 有 1 輪集中的 Held 與 2 輪延遲中位數約晚 1 幀（和審查指出的相位偏晚同方向）。**第 03a 批完成。**
+- 證據：`build/target/_build/test/logs/pvp-v7-batch03a-20261008/`（`08922f71…`）。
+- 下一步：開 P1a 的 PR（第 02 批的程式＋文件）。
+
 ## P2 以後各批的範圍
 
 批次文件在該線開始時撰寫；行號以那時的程式為準重新核對。
@@ -129,8 +136,8 @@
 
 - P1a 的 PR 在第 03a 批之後開（02 的程式，加上 03a 的結果與文件）。
 - P1b 分支 `claude/pvp-v7-p1b`：P1a 合併後 rebase 到新的 master。第 03 批留下的已知失敗（產品路徑的回復測試 1 個組合）是第 04 批的完成條件之一。
-- 相位追蹤的既有問題（第 03 批的 xhigh 審查）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。改它等於改相位追蹤的定義，需要使用者決定；建議在第 04 批（相位追蹤改由模擬喚醒驅動）或第 09 批（FireGate 重估）時評估。
-- worktree `../GYO-Engine-v7base`（master `a7cba38`，權威比對的 base）：P1a 結束時移除。
+- 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批的 clean-60 延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。改它等於改相位追蹤的定義，需要使用者決定；建議在第 04 批（相位追蹤改由模擬喚醒驅動）或第 09 批（FireGate 重估）時評估。
+- worktree `../GYO-Engine-v7base`（master `a7cba38`，權威比對的 base）：P1a 結束時移除。`../GYO-Engine-v6final`（`fee92ff`）保留給第 05 批 C1 與第 09 批 C2 的 before；`../GYO-Engine-p1b03`（`03b2ea7`）在 P1a 結束時移除。
 - Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批 L3 確認；重現時提出程序活動宣告作為新的 Architecture Delta。
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。
