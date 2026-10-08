@@ -1,6 +1,6 @@
 # 第 14 批：整合驗收與升格
 
-狀態：14a 完成（L1、L2、L3 通過；PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)；2026-10-07 開始，分支 `claude/pvp-v6-batch14` 自 master `5972451`；開始時的決定見 HANDOFF 的 D24）；14b 未開始。分 14a（整合短測、移除檢查、驗收交付）與 14b（完整驗收與升格，**需另外授權**）。
+狀態：**完成，v6 升格**（2026-10-08）。14a 完成（L1、L2、L3 通過；PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)；決定見 HANDOFF 的 D24）。14b 依使用者決定（D26）縮減範圍：跳過 GUI 三輪、兩組長測與時鐘漂移，只在最終來源（`fee92ff`）上重跑一次 14a 的短測，全部通過後升格（[STABLE_BASELINE](STABLE_BASELINE.md)）。分 14a（整合短測、移除檢查、驗收交付）與 14b（完整驗收與升格）。
 先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [v6 契約](../../protocol-v6.zh-Hant.md)。
 
 門檻依 v6 契約（與 v5 相同，不放寬）。v5 的歷史授權不套用到 v6。
