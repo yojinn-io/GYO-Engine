@@ -550,6 +550,10 @@
   - 真實網路下看到三種短暫中斷（Client 端抖動、Mac 端同時中斷、切換視窗的阻塞）。使用者：這是真實網路下的樣態，強化了 v7 的重要性。
   - 日誌缺口（拒絕原因、Match 結束紀錄、未指定 Gateway 的訊息、每位玩家的 Held 統計、跨機器時間）由使用者決定放進 v7 的子系統，記在 [v7 任務清單](../v7/README.md)的任務 8。
   - 這次結果作為 v1.1.0 的 Windows L4 證據。
+- 2026-10-08：v1.1.0 發佈（使用者）：tag `object_fps_pvp-v1.1.0` → `9a6fa8e`（[#68](https://github.com/yojinn-io/GYO-Engine/pull/68) 合併後的 master），標為 Latest。資產：Client 四平台（macOS x64／arm64、Linux x64、Windows x64）與 Gateway（Linux x64、Windows x64），各附 SHA-256。
+  - L4 證據 issue [#67](https://github.com/yojinn-io/GYO-Engine/issues/67)：macOS 用第 14b 批，Windows 用 LAN 聯機測試。L4 核對框未勾，因為 Windows 的 `gui_visible_latency`、Linux、macOS arm64 沒有實測。
+  - 說明的「What's Changed」由使用者手動改寫：自動產生的變更紀錄以遊戲的 snapshot 為比較基準。
+  - 發版過程中修了共通 CI 測試 [#68](https://github.com/yojinn-io/GYO-Engine/pull/68)：`app_copy_integration.py` 的複製清單加入 Engine 層的 `services/`。
 
 ## 延後項目：現況與對應批次
 
@@ -673,8 +677,8 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 - 第 16 批（#63）、第 14a 批（#64）、第 17 批（#65）完成並合併；LAN 聯機測試完成。
 - 第 14 批完成：14b 依 D26 縮減範圍，短測全部通過，**v6 於 2026-10-08 升格**（[STABLE_BASELINE](STABLE_BASELINE.md)）。
 - 剩下的事：
-  - v1.1.0 發行（`object_fps_pvp-v1.1.0`，D25）：L4 證據 issue（macOS 用 14b，Windows 用 LAN 聯機測試）與 Prepare Release，由使用者決定時機。
-  - v7 的準備（[v7 任務清單](../v7/README.md)）。
+  - ~~v1.1.0 發行（`object_fps_pvp-v1.1.0`，D25）~~：2026-10-08 發佈（見第 17 批紀錄）。L4 核對框未勾（Windows `gui_visible_latency`、Linux、macOS arm64 未實測）。
+  - ~~v7 的準備~~：2026-10-08 v7 開始，規劃見 [v7](../v7/README.md)。
 - 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
