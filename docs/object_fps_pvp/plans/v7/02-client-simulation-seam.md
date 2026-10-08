@@ -1,6 +1,6 @@
 # 第 02 批：ClientSimulation 接縫（行為不變）
 
-狀態：**實作與 L1 完成**（2026-10-08，分支 `claude/pvp-v7-p1a`，自 master `a7cba38`）。PR 線 P1a（02、03、03a），PR 在第 03a 批之後開。紀錄見[交接](HANDOFF.md)的「第 02 批進度」。
+狀態：**實作與 L1 完成**（2026-10-08，分支 `claude/pvp-v7-p1a`，自 master `a7cba38`）。PR 線 P1a（02、03a；第 03 批依 D40 移到 P1b），PR 在第 03a 批之後開。紀錄見[交接](HANDOFF.md)的「第 02 批進度」。
 起因：v7 README 的前提：矩陣用的無頭 probe 自己重做了命令產生（`gameplay_action.hpp:106-161`；`:128` 只取最新一份 snapshot，`:133` 逐幀 Advance，`:161` `sleep_until`）。timing_main、quad_main、network_main 也是同樣的結構。只改產品的話，矩陣量到的仍是 v6 的行為（[盤點](INVENTORY.md)第 4 節）。
 
 ## 目標與範圍
