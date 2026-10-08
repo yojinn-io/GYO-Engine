@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-08。Owner：`object_fps_pvp`。**狀態：規劃完成，第 01 批進行中**（分支 `claude/pvp-v7-batch01`，自 master `9a6fa8e`）。
+更新：2026-10-08。Owner：`object_fps_pvp`。**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（P1a，分支 `claude/pvp-v7-p1a`）；**第 03 批實作完成、依 D40 移到 P1b**（分支 `claude/pvp-v7-p1b`）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -30,6 +30,7 @@
 | D33 | （2026-10-08，照建議）任務 7 的完成條件以 SDL 符號判定，範圍含產品測試；Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`），SDL3 改為 PRIVATE 連結。ui_editor 與未啟用產品只寫遷移清單 |
 | D34 | （2026-10-08，照建議）跨平台驗收依 README 的平台表：Windows 只靠 LAN 場次；Linux 與 macOS arm64 標「未驗證」；不做 CI 只記錄的計時測試；LAN 排不出時，是否升格由使用者在第 16 批開始時決定（比照 v6 D26） |
 | — | （2026-10-08）P1 拆成 P1a（02、03、03a，只改產品）與 P1b（TT-1、04、05，跨層）；加做 03a 小量測（使用者決定） |
+| D40 | （2026-10-08）第 03 批移到 P1b，和第 04 批一起合併（使用者原話：「選 (1)，第 03 批移到 P1b」）。理由：產品路徑的回復測試在 fps 30 的 1 個組合出現 Held（v6 路徑沒有），原因是在命令跟著畫面幀產生的架構下相位更早收斂；不放寬測試，也不讓 master 出現 30 FPS 變差的中間狀態。P1a＝02、03a；P1b＝03、TT-1、04、05。03a 改在含 03 的 P1b 分支頭上量測，那個頭不合併。D35～D39 是預留給各功能線開始前確認的編號，所以本決定編為 D40 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -50,6 +51,43 @@
 - 本機證據（git 忽略）：
   - `build/target/_build/test/logs/pvp-v7-inventory-20261008/`：inventory.json、digest、規劃的 JSON、確認後的計畫草稿、分析輔助腳本；`files.sha256` 的 SHA-256 `ddc23da0…`。
   - `build/target/_build/test/logs/engine-time-platform-inventory-20261008/`：Engine 範圍的研究 JSON 與計時探針原始碼；`files.sha256` 的 SHA-256 `3f2822ba…`。
+- 2026-10-08：PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 開出。CI 的「Select CI scope」失敗：共通測試 `test_app_registry.py` 的 Prepare 測試以寫死的 `v2026.10.1` 在真正的 repo 上執行，`tools-v2026.10.1` 實際發佈之後，`9a6fa8e` 以外的 commit 都會失敗。改用不會發佈的 `v2099.12.99`（`1f7dfc6`），本機 `tests/common/ci` 241 個測試通過，CI 全綠。
+- 2026-10-08：#69 依使用者指示合併（`a7cba38`）。**第 01 批完成。**
+
+## 第 02 批進度（記錄器）：ClientSimulation 接縫
+
+- 2026-10-08：開始（使用者指示）。主對話檔位 high。分支 `claude/pvp-v7-p1a` 自 master `a7cba38`。
+- 2026-10-08：實作與 L1 完成。細節與結果見[第 02 批](02-client-simulation-seam.md)。
+  - 新的產品庫 `client_simulation`（`ClientSimulation`）：持有 `LocalPlayerPrediction`、`PredictionElapsedTime` 與 snapshot 閘；`Observe` 與 `Frame` 對應 v6 的 `PvpApplication.cpp:419-424` 與 `:969-976`。`SelectArena` 照 v6 保留 snapshot 閘。
+  - 邊界：Drain、`SnapshotTimeline.Push` 與 `SendInput` 留在呼叫端（`Frame` 回傳要發布的視窗）；本批的庫不依賴網路庫。這是相對於計畫文字（「包住 Drain 與 SendInput」）的調整，理由是 Drain 的其他結果屬於呈現，第 04 批的模擬角色改用另一個自身樣本佇列。
+  - 產品與 5 個無頭 probe（矩陣 `gameplay_action.hpp`、`action_main`、`timing_main`、`quad_main`、`network_main`）改走 `ClientSimulation`；GUI probe 經由 `PvpApplication`。
+  - 等價測試：v6 產品路徑的凍結參考模型與 `ClientSimulation` 在 60／30／144 FPS、停頓、長幀、重設、arena 重選、失去控制下逐位元組相同。
+  - 原始碼守衛 `object_fps_pvp.probe_command_path`；突變 `v7-02-*` 5／5 killed。
+  - CTest 全標籤 64／64；權威兩樹比對 35／35（base `a7cba38`，worktree `../GYO-Engine-v7base`）。
+  - 開發跑次（不計次）：矩陣 clean-60、clean-30 各 1 輪通過；`run_network.py` 1 次通過。
+  - probe 端的行為差異（第一幀 elapsed、`action_main`／`timing_main` 開始套用移動規則、`network_main` 停頓後的 elapsed）照實記在批次文件。
+  - 證據：`build/target/_build/test/logs/pvp-v7-batch02-20261008/`。
+- 下一步：第 03 批（每份 snapshot 進相位追蹤）。
+
+## 第 03 批進度（記錄器）：每份 snapshot 進相位追蹤
+
+- 2026-10-08：開始（使用者指示）。主對話 high；實作後由 1 位 xhigh 審查 agent 對抗式審查（使用者同意）。
+- 2026-10-08：實作與 L1。細節見[第 03 批](03-per-snapshot-phase.md)。
+  - `LocalPlayerPrediction::ObservePhaseSample`、`Reseeds`；`ClientSimulation::ObserveSample`；觀測值新增 `phaseSamples`、`phaseSampleSequence`。
+  - 一幀一份時與 v6 參考模型逐位元組相同；多份時每個樣本只用一次、依序；突變 v7-03 4／4 killed；權威 35／35；CTest 64／64（審查前）。
+  - 開發跑次：clean-60 通過；clean-30 在 8 ms 狀態失敗（Actual 97.6%、Held 21／20），保留不重跑；`run_network.py` 通過。
+- 2026-10-08：xhigh 審查：沒有 blocker。major：既有的收斂與 Held 測試只走 v6 路徑。minor：舊樣本觸發的修正被重新播種丟掉但計數照算；測試涵蓋與守衛的順序檢查；settling 期間的舊樣本留在下一個視窗（既有，屬定義，列為後續）。審查也解釋了 clean-30：樣本加倍讓相位更早收斂，在幀量化之下餘裕偏緊。
+- 2026-10-08：依審查修正（使用者同意 A）。`MovementRecoveryTests` 改為 v6／產品兩條路徑各跑一次之後，產品路徑出現 1 個失敗組合（fps 30、RTT 20、108 ms 停頓、受損網路：恢復期限後 Held 4 次）。拿掉「重新播種時丟掉舊樣本」仍失敗，原因是本批的核心。依變速箱規則停下回報。
+- 2026-10-08：使用者決定 D40：第 03 批移到 P1b。工作 commit 在 `claude/pvp-v7-p1b`（`03b2ea7`，含已知失敗的測試）；`claude/pvp-v7-p1a` 維持只有第 02 批。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch03-20261008/`。
+- 下一步：第 03a 批（量測含 03 的 P1b 分支頭），建議 medium。
+
+## 第 03a 批進度（記錄器）：相位追蹤的小量測
+
+- 2026-10-08：開始（使用者指示，主對話 medium）。worktree `../GYO-Engine-v6final`（`fee92ff`）與 `../GYO-Engine-p1b03`（`03b2ea7`）從零建置。事前宣告（使用者核准，`56bba67e…`）。
+- 2026-10-08：第一次嘗試因 runner 錯誤，12 輪都在啟動前結束（沒有數據，保留）；修正後經使用者同意照原宣告重跑，12 輪完成。結果與觀察見[第 03a 批](03a-phase-only-measurement.md)：11 輪在 4 ms 狀態；clean-30 看不出方向；clean-60 的 after 有 1 輪集中的 Held 與 2 輪延遲中位數約晚 1 幀（和審查指出的相位偏晚同方向）。**第 03a 批完成。**
+- 證據：`build/target/_build/test/logs/pvp-v7-batch03a-20261008/`（`08922f71…`）。
+- 下一步：開 P1a 的 PR（第 02 批的程式＋文件）。
 
 ## P2 以後各批的範圍
 
@@ -96,7 +134,10 @@
 
 ## 未結事項
 
-- 第 01 批：PR 待開。
+- P1a 的 PR 在第 03a 批之後開（02 的程式，加上 03a 的結果與文件）。
+- P1b 分支 `claude/pvp-v7-p1b`：P1a 合併後 rebase 到新的 master。第 03 批留下的已知失敗（產品路徑的回復測試 1 個組合）是第 04 批的完成條件之一。
+- 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批的 clean-60 延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。改它等於改相位追蹤的定義，需要使用者決定；建議在第 04 批（相位追蹤改由模擬喚醒驅動）或第 09 批（FireGate 重估）時評估。
+- worktree `../GYO-Engine-v7base`（master `a7cba38`，權威比對的 base）：P1a 結束時移除。`../GYO-Engine-v6final`（`fee92ff`）保留給第 05 批 C1 與第 09 批 C2 的 before；`../GYO-Engine-p1b03`（`03b2ea7`）在 P1a 結束時移除。
 - Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批 L3 確認；重現時提出程序活動宣告作為新的 Architecture Delta。
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。

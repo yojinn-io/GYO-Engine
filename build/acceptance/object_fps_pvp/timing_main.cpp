@@ -1,6 +1,6 @@
 // Owner-local real-clock network/prediction acceptance. Faults exist only here.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/ClientSimulation.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include <algorithm>
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
         clients[1].Join(gateway,clients[1].State().rooms.front().id);
         Wait([&]{const auto a=clients[0].State(),b=clients[1].State();Require(b.error.empty(),b.error);
             return b.phase==ConnectionPhase::Playing && a.snapshot && a.snapshot->players.size()==2;});
-        std::array<LocalPlayerPrediction,2> prediction{LocalPlayerPrediction(*arena),LocalPlayerPrediction(*arena)};
+        std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
         std::array<SnapshotTimeline,2> timelines;
         const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
         std::array<std::uint64_t,2> previousEpoch{},overflowCounts{};
@@ -90,14 +90,14 @@ int main(int argc, char** argv) {
                 const auto& authority=Player(*drain.state.snapshot,ids[i]);
                 if(measured && previousEpoch[i] && previousEpoch[i]!=authority.movementEpoch)++resets;
                 previousEpoch[i]=authority.movementEpoch;overflowCounts[i]=drain.snapshotHistoryOverflowCount;
-                prediction[i].Reconcile(authority,drain.state.snapshot->tick);
+                simulation[i].Observe(authority,drain.state.snapshot->tick,drain.state.movementRules);
                 const double age=std::chrono::duration<double>(now-measurement).count();
                 // Alternate 300 ms movement and 300 ms stop; no net drift into a wall.
                 const auto leg=static_cast<long long>(std::floor(std::max(0.0,age)/.6));
                 const float axis=injected && MovementTraceNowNs()-releaseNs<1500000000LL ? 1.0F :
                     (measured && std::fmod(age,.6)<.3 ? (leg%2?-1.0F:1.0F):0.0F);
-                if(prediction[i].Advance(elapsed,axis,0,0,0))clients[i].SendInput(prediction[i].PendingInput());
-                const auto& p=prediction[i].Observation();
+                if(auto window=simulation[i].Frame(now,{axis,0,0,0}))clients[i].SendInput(std::move(*window));
+                const auto& p=simulation[i].Observation();
                 Require(p.pendingCommands<=MaxPendingCommands,"Prediction window exceeded bound");
                 Require(authority.contiguousPendingCommands<=MaxFutureCommands,"Server window exceeded bound");
                 if(measured && p.frozen)++frozen;

@@ -38,10 +38,14 @@ gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Net
     PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v6")
+# The one client command-generation path, shared by the application and the
+# headless acceptance probes so that measurements exercise product behaviour.
+gyo_app_add_library(client_simulation OUT_TARGET simulation SOURCES src/Pvp/ClientSimulation.cpp
+    PUBLIC_LIBRARIES ${domain})
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/PointerCapture.cpp
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
-    PUBLIC_LIBRARIES ${domain} ${network} GYO::Render GYO::Model GYO::ModelRenderer
+    PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
     PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}

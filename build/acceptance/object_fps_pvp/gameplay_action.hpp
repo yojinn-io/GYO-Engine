@@ -97,8 +97,7 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         return b.phase==ConnectionPhase::Playing&&a.snapshot&&a.snapshot->players.size()==2&&b.snapshot&&b.snapshot->players.size()==2;});
     const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
     for(const auto& c:clients)Require(c.State().combatRules&&c.State().movementRules,"Missing v5 authoritative rules");
-    std::array<LocalPlayerPrediction,2> prediction{LocalPlayerPrediction(*arena),LocalPlayerPrediction(*arena)};
-    for(unsigned i=0;i<2;++i)prediction[i].SetMovementRules(*clients[i].State().movementRules);
+    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
     std::array<SnapshotTimeline,2> timelines;
     std::array<std::map<ActionId,Json>,2> submitted,decisions;
     std::array<std::size_t,2> maximumRetained{},maximumUnconsumed{};
@@ -125,13 +124,13 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
                     decisions[i][d.actionId]=Decision(d);evidence.Push({{"kind","decision"},{"time_ns",ns},{"player_id",ids[i]},{"decision",Decision(d)}});}
             }
             Require(state.error.empty(),state.error);Require(state.phase==ConnectionPhase::Playing&&state.snapshot,"Gameplay Session lost");
-            const auto& authority=Player(*state.snapshot,ids[i]);prediction[i].Reconcile(authority,state.snapshot->tick);
+            const auto& authority=Player(*state.snapshot,ids[i]);simulation[i].Observe(authority,state.snapshot->tick,state.movementRules);
             const bool jump=nextJump[i]<jumpEdges.size()&&age>=jumpEdges[nextJump[i]];
             if(jump){evidence.Push({{"kind","jump"},{"time_ns",ns},{"player_id",ids[i]},{"ordinal",nextJump[i]},
                 {"life_generation",authority.lifeGeneration},{"life_state",static_cast<int>(authority.lifeState)}});++nextJump[i];}
             const float right=static_cast<long long>(age/.4)%2?-.5F:.5F;
-            if(prediction[i].Advance(elapsed,0,right,0,0,jump))clients[i].SendInput(prediction[i].PendingInput());
-            const auto& p=prediction[i].Observation();startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
+            if(auto window=simulation[i].Frame(now,{0,right,0,0,jump}))clients[i].SendInput(std::move(*window));
+            const auto& p=simulation[i].Observation();startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
             const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
             frame["pending"+suffix]=p.pendingCommands;frame["queued"+suffix]=authority.contiguousPendingCommands;
             frame["epoch"+suffix]=authority.movementEpoch;frame["remote_age"+suffix]=remote?remote->latestReceiveAgeSeconds:1e9;

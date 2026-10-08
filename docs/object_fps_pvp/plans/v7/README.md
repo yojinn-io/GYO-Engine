@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
 更新：2026-10-08。Owner：`object_fps_pvp`。
-**狀態：規劃完成，第 01 批（計畫）進行中。** v6 已於 2026-10-08 升格（[v6 穩定基線](../v6/STABLE_BASELINE.md)），v1.1.0 已發佈。現行協議仍是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）；v7 只在第 11 批升一次 pv7。
+**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（P1a，分支 `claude/pvp-v7-p1a`）；**第 03 批實作完成、移到 P1b**（D40，分支 `claude/pvp-v7-p1b`；產品路徑的回復測試有 1 個已知失敗，等第 04 批）。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
 
@@ -63,10 +63,10 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 
 | 批次 | 文件 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|---|
-| 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 進行中 | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
-| 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 未開始 | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
-| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh） | 未開始 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
-| 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium（宣告用 high） | 未開始 | 只記錄：分出 03 單獨的效果 |
+| 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 完成，PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併（`a7cba38`） | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
+| 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 實作與 L1 完成（P1a，PR 在 03a 之後） | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
+| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 實作完成，移到 P1b（D40），與第 04 批一起合併 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
+| 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium | 完成（只記錄；4 ms 狀態 11／12 輪） | 只記錄：在含 03 的 P1b 分支頭上量 03 單獨的效果（不合併那個頭） |
 | 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 未開始 | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
 | 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 未開始 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
 | P2-log | （P2 開始時撰寫） | medium | 未開始 | 只加記錄的 commit，作為 P2 的 before |
@@ -100,8 +100,8 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | PR | 批次 | 理由 |
 |---|---|---|
 | P0 | 01 | 規劃本身的交付（比照 v6 #39） |
-| P1a | 02、03、03a | 只改產品；各批都有逐位元組相同的證明。P0 的狀態同步併入 |
-| P1b | TT-1、04、05 | 跨層必須一起合併：Waiter 與 Threads 的第一個消費端是第 04 批（Match Tick 先用的話，C1 的 after 就混入 Match 的改動）。P1a 的同步併入 |
+| P1a | 02、03a | 只改產品，行為不變（逐位元組相同的證明）。P0 的狀態同步併入。03a 的結果以文件併入 |
+| P1b | 03、TT-1、04、05 | 第 03 批在命令跟著畫面幀產生的架構下會讓 30 FPS 變差（D40），所以和讓命令改在固定步產生的第 04 批一起合併。跨層必須一起合併：Waiter 與 Threads 的第一個消費端是第 04 批（Match Tick 先用的話，C1 的 after 就混入 Match 的改動）。P1a 的同步併入 |
 | P2 | P2-log、06、07、08、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
 | P3 | TT-2、10、11 | 診斷：Trace、紀錄、跨機對齊用的對時；v7 唯一的 wire 變更，三個角色同一個 PR |
 | P4 | IP-3、IP-4、12 | 標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併 |
@@ -114,9 +114,9 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 ```text
 P0   [01 計畫]
        │
-P1a  [02 接縫] → [03 每份 snapshot] → [03a 小量測]
+P1a  [02 接縫] ─────────────→ [03a 小量測（量 P1b 分支上的 03）]
        │
-P1b  [TT-1 Time＋Threads] → [04 三角色] → [05 C1]
+P1b  [03 每份 snapshot] → [TT-1 Time＋Threads] → [04 三角色] → [05 C1]
        │
 P2   [P2-log] → [06 Gateway 30 Hz] ┐
                 [07 Match asio]    ├→ [09 FireGate 常數 → C2]

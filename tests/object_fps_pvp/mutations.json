@@ -39,6 +39,9 @@
     },
     "quad_evidence": {
       "ctest": "object_fps_pvp.quad_evidence"
+    },
+    "probe_command_path": {
+      "ctest": "object_fps_pvp.probe_command_path"
     }
   },
   "mutants": [
@@ -501,6 +504,56 @@
       "replace": "",
       "check": "cpu",
       "expect": "An arena list rejects other versions, paths, repeats and a different body height"
+    },
+    {
+      "id": "v7-02-observe-ignores-rules",
+      "batch": "v7-02",
+      "what": "ClientSimulation never applies the authoritative movement rules",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    if (rules) prediction_.SetMovementRules(*rules);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation reproduces the v6 application command path bit for bit across rates and stalls"
+    },
+    {
+      "id": "v7-02-frame-keeps-jump",
+      "batch": "v7-02",
+      "what": "A pending jump survives a frame without controls",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    if (!input.controls) prediction_.ClearJumpRequest();\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation drops a pending jump while controls are unavailable"
+    },
+    {
+      "id": "v7-02-select-arena-resets-gate",
+      "batch": "v7-02",
+      "what": "An arena reselection also clears the snapshot gate",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    prediction_ = LocalPlayerPrediction(arena);\n    elapsed_.Reset();\n",
+      "replace": "    prediction_ = LocalPlayerPrediction(arena);\n    elapsed_.Reset();\n    lastSnapshotTick_ = 0;\n",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation ignores snapshots that are not newer than the last observed tick"
+    },
+    {
+      "id": "v7-02-frame-wall-clock",
+      "batch": "v7-02",
+      "what": "ClientSimulation samples elapsed time from the wall clock instead of the caller's sample point",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "elapsed_.Sample(now)",
+      "replace": "elapsed_.Sample(Clock::now())",
+      "check": "cpu",
+      "expect": "PvP ClientSimulation reproduces the v6 application command path bit for bit across rates and stalls"
+    },
+    {
+      "id": "v7-02-probe-direct-prediction",
+      "batch": "v7-02",
+      "what": "The matrix probe drives LocalPlayerPrediction itself",
+      "file": "build/acceptance/object_fps_pvp/gameplay_action.hpp",
+      "find": "    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};\n",
+      "replace": "    std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};\n    LocalPlayerPrediction bypass(*arena);static_cast<void>(bypass);\n",
+      "check": "probe_command_path",
+      "expect": "probes must use ClientSimulation"
     }
   ]
 }

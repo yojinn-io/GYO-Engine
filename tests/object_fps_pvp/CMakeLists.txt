@@ -1,14 +1,15 @@
 gyo_get_app_target("${GYO_CURRENT_APP}" match_domain match_domain)
 gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
+gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
-    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp)
+    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json")
-target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest)
+target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest)
 if(WIN32)
     target_compile_definitions(${tests} PRIVATE NOMINMAX)
 endif()
@@ -86,6 +87,9 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME "${GYO_CURRENT_APP}.asset_catalog"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_asset_catalog.py")
 set_tests_properties("${GYO_CURRENT_APP}.asset_catalog" PROPERTIES LABELS "cpu;pvp;content" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.probe_command_path"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_probe_command_path.py")
+set_tests_properties("${GYO_CURRENT_APP}.probe_command_path" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 add_test(NAME "${GYO_CURRENT_APP}.protocol_version"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_protocol_version.py")
 set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

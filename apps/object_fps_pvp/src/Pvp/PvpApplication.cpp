@@ -3,8 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/FireGate.hpp"
 #include "RetroFPS/Pvp/HitFeedback.hpp"
-#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
-#include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
+#include "RetroFPS/Pvp/ClientSimulation.hpp"
 #include "RetroFPS/Pvp/PointerCapture.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
@@ -113,10 +112,9 @@ struct PvpApplication::Impl final {
     LocalFireGate fireGate;
     ClientConnection connection;
     ClientConnectionState state;
-    std::unique_ptr<LocalPlayerPrediction> prediction;
-    PredictionElapsedTime predictionElapsed;
+    std::unique_ptr<ClientSimulation> simulation;
     SnapshotTimeline timeline;
-    std::uint64_t connectionGeneration{}, lastSnapshotTick{}, ingressHistoryDrops{};
+    std::uint64_t connectionGeneration{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
     std::optional<PlayerId> observedRemote;
     std::optional<PresentedMovementObservation> presentedMovement;
@@ -210,7 +208,7 @@ struct PvpApplication::Impl final {
         if (result.releases == 0) return;
         if (result.releasesWhileCaptured > 0) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
             static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(SDL_GetTicks()));
-        if (prediction) prediction->ClearJumpRequest();
+        if (simulation) simulation->ClearJumpRequest();
         const auto released = input->SetRelativeMouseMode(false);
         if (!released) {
             lastError = Explain(released.error());
@@ -287,10 +285,8 @@ struct PvpApplication::Impl final {
         if (connectionGeneration != received.generation) {
             connectionGeneration = received.generation;
             timeline.Reset();
-            lastSnapshotTick = 0;
             viewPlayer = 0;
-            if (prediction) prediction->Reset();
-            predictionElapsed.Reset();
+            if (simulation) simulation->Reset();
             ResetWeaponFeedback();
             if (players) players->ResetPlayers();
             characterPhaseReanchors = 0;
@@ -301,13 +297,11 @@ struct PvpApplication::Impl final {
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
-            lastSnapshotTick = 0;
             remoteMovement.reset();
             viewPlayer = 0;
             renderedPlayer = 0;
             inputCaptured = false;
-            if (prediction) prediction->Reset();
-            predictionElapsed.Reset();
+            if (simulation) simulation->Reset();
             ResetWeaponFeedback();
             if (players) players->ResetPlayers();
             characterPhaseReanchors = 0;
@@ -315,9 +309,7 @@ struct PvpApplication::Impl final {
         }
         if (viewPlayer != state.playerId) {
             timeline.Reset();
-            lastSnapshotTick = 0;
-            prediction->Reset();
-            predictionElapsed.Reset();
+            simulation->Reset();
             view.Reset(self->yaw, self->pitch);
             hitFeedback.Reset();
             viewPlayer = state.playerId;
@@ -339,7 +331,7 @@ struct PvpApplication::Impl final {
             pendingReload.reset();
             acceptedReloadEndTick = 0;
             reloadAnchorStartTick = 0;
-            prediction->ClearJumpRequest();
+            simulation->ClearJumpRequest();
             weaponAction = fps::WeaponViewModelAction::Idle;
             weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
             fireGate.Reset();
@@ -417,11 +409,7 @@ struct PvpApplication::Impl final {
         // frame's timeline bracket. Never play a stalled backlog one frame at a time.
         for (const auto& sample : received.snapshots)
             static_cast<void>(timeline.Push(sample.snapshot, sample.receivedAt));
-        if (state.snapshot->tick > lastSnapshotTick) {
-            if (state.movementRules) prediction->SetMovementRules(*state.movementRules);
-            prediction->Reconcile(*self, state.snapshot->tick);
-            lastSnapshotTick = state.snapshot->tick;
-        }
+        simulation->Observe(*self, state.snapshot->tick, state.movementRules);
     }
 
     void ResetWeaponFeedback() {
@@ -459,7 +447,7 @@ struct PvpApplication::Impl final {
         // One gate decides a shot: the earliest authority tick that can resolve
         // it must reach every known cooldown (FireGate.hpp). A blocked click is
         // dropped, never queued.
-        const auto shotTiming = prediction->ShotTiming();
+        const auto shotTiming = simulation->ShotTiming();
         if (consumeInput && pendingShotEdge && !pendingReloadEdge && !pendingReload && !weaponFeedback.reloading &&
             weaponFeedback.magazineAmmo > 0 && !pointerAcquiredThisFrame && !windowInteraction &&
             weaponFeedback.inputCaptured && state.combatRules) {
@@ -524,7 +512,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.reloadAnimating = weaponAction == fps::WeaponViewModelAction::Reload;
         weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
         weaponFeedback.cooldownRemainingSeconds = state.combatRules ?
-            static_cast<double>(fireGate.RemainingTicks(prediction->ShotTiming())) / AuthorityTickRate : 0;
+            static_cast<double>(fireGate.RemainingTicks(simulation->ShotTiming())) / AuthorityTickRate : 0;
     }
 
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,
@@ -561,7 +549,7 @@ struct PvpApplication::Impl final {
     bool PrepareWorld(double deltaSeconds) {
         remoteMovement.reset();
         remoteSubmitMilliseconds = 0;
-        const auto& position = prediction->Observation().renderPosition;
+        const auto& position = simulation->Observation().renderPosition;
         const auto camera = view.Camera();
         queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
             {camera.pitch, camera.yaw, camera.roll}, WorldVerticalFovRadians, 0.05F, 150.0F});
@@ -731,7 +719,7 @@ struct PvpApplication::Impl final {
                 "rejected=%llu hits=%llu local_cooldown_blocks=%llu actions_pending=%zu",
                 static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(state.snapshot->tick),
                 state.snapshot->players.size(), log.frames / window, log.longestFrameSeconds * 1000, log.snapshots / window,
-                snapshotAge, static_cast<std::size_t>(prediction->Observation().pendingCommands), weapon.hp,
+                snapshotAge, static_cast<std::size_t>(simulation->Observation().pendingCommands), weapon.hp,
                 static_cast<unsigned long long>(self->lifeGeneration), self->lifeState == LifeState::Dead ? 1 : 0,
                 static_cast<unsigned long long>(weapon.submittedActions - log.submitted),
                 static_cast<unsigned long long>(weapon.acceptedDecisions - log.accepted),
@@ -753,8 +741,7 @@ struct PvpApplication::Impl final {
             if (installed.id != id) continue;
             arena = installed;
             // A new session follows (the view player changes), which resets the rest.
-            prediction = std::make_unique<LocalPlayerPrediction>(*arena);
-            predictionElapsed.Reset();
+            simulation->SelectArena(*arena);
             SDL_Log("PvP arena selected id=%s spawns=%zu", arena->id.c_str(), arena->spawns.size());
             return;
         }
@@ -802,8 +789,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     }
     impl_->arenas = std::move(*installed);
     impl_->arena = impl_->arenas.front();
-    impl_->prediction = std::make_unique<LocalPlayerPrediction>(*impl_->arena);
-    impl_->predictionElapsed.Reset();
+    impl_->simulation = std::make_unique<ClientSimulation>(*impl_->arena);
     impl_->connection.SetArenaIdentities(std::move(identities));
     const auto loaded = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.pvp_lobby"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
@@ -966,14 +952,13 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             // Refresh/reconciliation may cover a stall since the runtime took
             // its frame timestamp. Sample here, after that work, so the next
             // frame cannot charge the same elapsed interval a second time.
-            const double movementElapsed = impl_->predictionElapsed.Sample(Clock::now());
+            const auto movementSampledAt = Clock::now();
             const bool controls = impl_->Alive() && !impl_->lifeBoundaryThisFrame && impl_->inputCaptured && physical.windowFocused &&
                 !impl_->pointerAcquiredThisFrame && !impl_->windowInteraction;
-            if (!controls) impl_->prediction->ClearJumpRequest();
             impl_->pendingReloadEdge = controls && physical.Get(Key::R).pressed;
-            if (impl_->prediction->Advance(movementElapsed, forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
-                controls && physical.Get(Key::Space).pressed))
-                impl_->connection.SendInput(impl_->prediction->PendingInput());
+            if (auto window = impl_->simulation->Frame(movementSampledAt, {forward, right, impl_->view.Input().yaw,
+                    impl_->view.Input().pitch, physical.Get(Key::Space).pressed, controls}))
+                impl_->connection.SendInput(std::move(*window));
             impl_->UpdateWeaponFeedback(Clock::now(), !live);
         }
     } else {
@@ -1138,7 +1123,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         }
         if (world) impl_->presentedMovement = PresentedMovementObservation{
             context.frameIndex, std::chrono::duration<double>(finished.time_since_epoch()).count(),
-            impl_->state.playerId, impl_->prediction->Observation(), impl_->remoteMovement,
+            impl_->state.playerId, impl_->simulation->Observation(), impl_->remoteMovement,
             impl_->skippedPresentationFrames, impl_->connectionGeneration, impl_->weaponFeedback,
             prepareWorldMilliseconds, impl_->remoteSubmitMilliseconds};
         if (world) {
@@ -1147,9 +1132,9 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             event.lifeGeneration = impl_->weaponFeedback.lifeGeneration;
             event.timeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(finished.time_since_epoch()).count();
             event.playerId = impl_->state.playerId;
-            event.epoch = impl_->prediction->Observation().movementEpoch;
-            event.sequence = impl_->prediction->Observation().latestCommand;
-            event.authorityTick = impl_->prediction->Observation().authorityTick;
+            event.epoch = impl_->simulation->Observation().movementEpoch;
+            event.sequence = impl_->simulation->Observation().latestCommand;
+            event.authorityTick = impl_->simulation->Observation().authorityTick;
             event.frameSeconds = context.deltaSeconds;
             TraceMovement(event);
         }
@@ -1211,7 +1196,7 @@ Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevic
 Engine::Platform::Sdl::SdlPlatform& PvpApplication::Platform() { return *impl_->platform; }
 const LocalMovementObservation& PvpApplication::LocalMovement() const noexcept {
     static const LocalMovementObservation inactive;
-    return impl_->prediction ? impl_->prediction->Observation() : inactive;
+    return impl_->simulation ? impl_->simulation->Observation() : inactive;
 }
 const std::optional<RemoteMovementObservation>& PvpApplication::RemoteMovement() const noexcept {
     return impl_->remoteMovement;
