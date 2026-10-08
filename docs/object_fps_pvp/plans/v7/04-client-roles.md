@@ -119,7 +119,7 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
 - **交接**：
   - 意圖信箱：軸、**絕對**瞄準、controls、跳躍按下的累計次數、sampledAt。計畫寫的是「yaw／pitch 增量累加」，改為絕對值：主執行緒本來就擁有視角並整合滑鼠，絕對值不會遺失也不會重複套用，畫面的相機與命令也用同一個值。
   - 過期依 D30（常數在 `ClientSimulationRole.hpp`）：近期發布間隔取最近 4 個間隔的最大值。超過當時門檻的間隔是停頓，不算進近期發布間隔（自我檢查時發現：算進去的話，6 秒的 modal loop 之後幾幀內再停一次，舊意圖會撐到 18 秒；已加測試與突變）。
-  - 呈現副本：Observation、插值用的前後位置與修正、ShotTiming、步的時刻、步所用意圖的 sampledAt。主執行緒以 `PresentAt(now)` 放到 Update 的取樣時刻：插值與修正隨時間前進，ShotTiming 的 `secondsSinceStep` 加上經過時間（FireGate 依整步計算，所以和下一步發布的值算出同一個 Tick；L1 有核對）。
+  - 呈現副本：Observation、插值用的前後位置與修正、ShotTiming、步的時刻、步所用意圖的 sampledAt、所見 snapshot 的連線世代。主執行緒在世代不一致時（角色還沒在這個 session 走過一步）不顯示本地預測，首幀的視角從權威位置開始。主執行緒以 `PresentAt(now)` 放到 Update 的取樣時刻：插值與修正隨時間前進，ShotTiming 的 `secondsSinceStep` 加上經過時間（FireGate 依整步計算，所以和下一步發布的值算出同一個 Tick；L1 有核對）。
   - 重設：主執行緒**不送**重設命令（計畫寫「以 Notify 送達」）。世代、玩家、arena 由角色從自己的 drain 判斷，和快照在同一把鎖內取得，沒有跨執行緒的先後問題；epoch 與生命邊界本來就由權威狀態的 reseed 處理；跳躍的清除由 controls＝false 處理。
   - `ClientConnection::SendInput(input, generation)`：角色在 drain 與送出之間若跨過 session 邊界，舊視窗會被丟棄（世代的改變都在同一把鎖內）。
 - **PvpApplication**：每個 Update 只發布意圖；Render、HUD、FireGate 讀 `PresentAt` 的結果；主執行緒的 `RuntimeGap` 移除（改由角色的 Advance 依自己的喚醒間隔發出）；live frame 不發布意圖、不推進預測。新增唯讀診斷 `LocalMovementIntentSampledAt()`。
@@ -142,12 +142,15 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
   - 60 Hz ±2 步：只有模擬的 gap 會跳過檢查；主執行緒的停頓（注入或觀測到的）不跳過。
   - STALL_RULE 的 v7 版（文字在檔內）。
   - 新規則：注入主執行緒停頓的跑次，從停頓開始到放開後 1.5 秒內不得有 Held／Neutral，量測窗內不得有 LifeRespawn 以外的 epoch 重設。
+  - 回合的種類：timing 與 GUI 用各自的量測窗，有產量檢查；遊戲矩陣的回合（`action-client.json`）用整段執行、沒有產量檢查，乾淨回合（`mode` 為 baseline）中模擬的 gap 是錯誤（和凍結的遊戲分析器同一種處理）。
   - self-test（CTest `object_fps_pvp.command_evidence_v7`）與突變 3 件。執行器（`run_timing.py` 等）不改；第 05 批的宣告寫明兩版都分析。
-- **驗收（截至目前）**：
-  - 全量 CTest 66／66（`-j6`，見下方觀察）。
-  - 突變：`v7-02-probe-direct-prediction`、`v7-04-*` 8 件 killed。`v7-04-per-frame-advance` 第一版讓 CTest 逾時（期限沒有前進，喚醒變得極密），改成「每 30 FPS 幀前進一次」的形式後 killed。之後新增的 `v7-04-stall-stretches-limit` 待跑。
+- **驗收（截至目前，`aa9a342`）**：
+  - 全量 CTest 67／67（`-j6`）。
+  - 突變 9 件全部 killed：`v7-02-probe-direct-prediction`（改寫為新守衛）與 `v7-04-*` 8 件。`v7-04-per-frame-advance` 第一版讓 CTest 逾時（期限沒有前進，喚醒變得極密，不是預期的失敗方式），改成「每 30 FPS 幀前進一次」後 killed。
   - 權威 digest：v6 最終 tree（`fee92ff`）對本分支，35／35 相同。
   - Match 的連結閉包：ipc、runtime_host、match_domain、engine、gyo_time、collision、net、runtime_v6、protobuf、absl；動態庫只有系統的三個，沒有 SDL。
+  - TSan（本機 macOS，獨立的 build／輸出目錄，workflow 不改）：`gyo_time_tests`、`gyo_threads_tests`、角色與 ClientSimulation 的 14 個測試案例，警告 0；矩陣短測 clean-60（TSan 的 Match 與 probe、一般的 Gateway）通過，TSan 報告 0。
+  - 開發跑次（一般建置，不計次、保留）：矩陣 clean-30、clean-60 都通過（凍結分析器）；Actual 1677／1680、P50 約 37 ms、P95 約 38 ms、first send P95 約 1.3 ms、30 Tick 佇列和最大 60；分析器 v7 也通過（模擬的 gap 0）。第 03 批的 clean-30 是 Actual 97.6% 的失敗。timing 的 250 ms 主執行緒停頓（60 FPS、30 秒）：通過，Actual 100%，每位玩家正好 1800 個命令，停頓到放開後 1.5 秒內沒有 Held／Neutral，沒有 epoch 重設。
 - **觀察**：全量 CTest（`-j6`）中 `object_fps_pvp.worker` 失敗 1 次（「fully acknowledged 60 FPS publication caused excessive sends」）；單獨跑 5／5 通過，再跑一次全量也通過。worker 與連線的傳輸程式沒有改；判斷為既有的負載敏感，記錄於此。
 
 ## 待使用者決定
