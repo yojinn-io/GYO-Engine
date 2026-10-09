@@ -2,6 +2,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
+#include "engine/threads/RoleThread.hpp"
 #include "runtime_v6.pb.h"
 #include <asio.hpp>
 #include <array>
@@ -12,10 +13,12 @@
 #include <future>
 #include <iostream>
 #include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <syncstream>
-#include <thread>
 
 namespace fps::pvp {
 namespace pb = object_fps_pvp::runtime::v6;
@@ -153,29 +156,24 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor
     return message;
 }
 }
+// One asio io thread (gyo-match-ipc) serves the single Gateway connection.
+// Nothing polls: the host's publish notification, the socket becoming
+// readable or writable and the action lanes' deadline timer wake it. Phases:
+// accepting -> resetting (before a session) -> connected -> closing (reset
+// after it) -> accepting. A reset completes on the simulation role, whose
+// publish notification wakes this thread to continue.
 struct IpcHost::Impl {
-    MatchRuntimeHost& host;
-    Arena arena;
-    std::uint64_t arenaDigest{};
-    asio::io_context io;
-    tcp::acceptor listener{io};
-    std::jthread worker;
-    std::uint64_t requestSequence{};
-    // Diagnostics only: passes of the connection and accept loops.
-    std::atomic<std::uint64_t> iterations{};
-    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
-        // Zero is reserved for a missing digest: such an arena cannot be served.
-        if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
-        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);
-    }
-
-    void Connection(tcp::socket& socket,std::stop_token stop) {
-        socket.non_blocking(true);
-        socket.set_option(tcp::no_delay(true));
+    using Clock=std::chrono::steady_clock;
+    // The host notifies from its simulation role; Stop detaches this gate
+    // first, so no notification reaches a stopped or destroyed IpcHost.
+    struct WakeGate {std::mutex mutex;Impl* impl{};};
+    enum class Phase {Idle,Accepting,Resetting,Connected,Closing};
+    struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;};
+    struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
+    // One connection's state; replaced at each accept.
+    struct Session {
         std::vector<std::uint8_t> input;
         std::deque<std::vector<std::uint8_t>> controls;
-        using Clock=std::chrono::steady_clock;
-        struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;};
         std::optional<SnapshotFrame> latestSnapshot;
         std::vector<std::uint8_t> writing;
         std::size_t writeOffset{};
@@ -184,8 +182,78 @@ struct IpcHost::Impl {
         Clock::time_point writingQueuedAt{};
         std::map<std::uint64_t,PlayerId> joins;
         MatchEventLog events;
-        struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
         std::map<PlayerId,ActionLane> actionLanes;
+    };
+
+    MatchRuntimeHost& host;
+    Arena arena;
+    std::uint64_t arenaDigest{};
+    asio::io_context io;
+    tcp::acceptor listener{io};
+    tcp::socket socket{io};
+    asio::steady_timer laneTimer{io};
+    std::optional<Clock::time_point> laneTimerAt;
+    std::shared_ptr<WakeGate> gate=std::make_shared<WakeGate>();
+    std::atomic<bool> pumpPosted{};
+    Phase phase{Phase::Idle};
+    std::future<void> reset;
+    // Handlers of a closed connection still complete (aborted); they compare
+    // their connection number with this one and return.
+    std::uint64_t connection{};
+    Session session;
+    std::array<std::uint8_t,8192> buffer{};
+    bool reading{},waitingWrite{};
+    std::uint64_t requestSequence{};
+    // Diagnostics only: io handler passes (accept, read, write, timer, pump).
+    std::atomic<std::uint64_t> iterations{};
+    std::optional<Engine::Threads::RoleThread> role;
+
+    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
+        // Zero is reserved for a missing digest: such an arena cannot be served.
+        if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
+        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);
+        gate->impl=this;
+        host.SetPublishListener([gate=gate] {
+            const std::lock_guard lock(gate->mutex);
+            if(gate->impl) gate->impl->PostPump();
+        });
+    }
+    void Detach() {
+        const std::lock_guard lock(gate->mutex);
+        gate->impl=nullptr;
+    }
+    // Any thread: one pending Pump at a time is enough.
+    void PostPump() {
+        if(!pumpPosted.exchange(true)) asio::post(io,[this]{pumpPosted.store(false);Pump();});
+    }
+
+    void StartAccept() {
+        phase=Phase::Accepting;
+        listener.async_accept([this](const asio::error_code& error,tcp::socket accepted) {
+            iterations.fetch_add(1,std::memory_order_relaxed);
+            if(error==asio::error::operation_aborted) return;
+            if(error) {MatchEventLog::Line("ipc accept failed reason="+error.message()+"; no further connections");phase=Phase::Idle;return;}
+            socket=std::move(accepted);
+            ++connection;
+            phase=Phase::Resetting;
+            reset=host.RequestReset();
+            CheckReset();
+        });
+    }
+    // The reset before a session (Resetting) or after it (Closing) completed.
+    void CheckReset() {
+        if(!reset.valid() || reset.wait_for(std::chrono::seconds(0))!=std::future_status::ready) return;
+        reset.get();
+        if(phase==Phase::Resetting) BeginSession();
+        else if(phase==Phase::Closing) StartAccept();
+    }
+    void BeginSession() {
+        asio::error_code error;
+        socket.set_option(tcp::no_delay(true),error);
+        if(!error) socket.non_blocking(true,error);
+        session=Session{};
+        phase=Phase::Connected;
+        if(error) {Close("socket setup: "+error.message());return;}
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
@@ -197,68 +265,109 @@ struct IpcHost::Impl {
         rules->set_respawn_ticks(PvpCombatRules.respawnTicks);
         rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
-        controls.push_back(wire::Frame(ready.SerializeAsString()));
-        std::array<std::uint8_t,8192> buffer{};
-        while(!stop.stop_requested()) {
+        session.controls.push_back(wire::Frame(ready.SerializeAsString()));
+        StartRead();
+        Pump();
+    }
+    // The single path that ends a session: log why, close, reset the Match,
+    // then accept the next connection once the reset completed.
+    void Close(const std::string& reason) {
+        if(phase!=Phase::Connected) return;
+        MatchEventLog::Line("ipc closed reason="+reason);
+        asio::error_code ignored;
+        socket.close(ignored);
+        laneTimer.cancel();
+        laneTimerAt.reset();
+        reading=waitingWrite=false;
+        session=Session{};
+        ++connection;
+        phase=Phase::Closing;
+        reset=host.RequestReset();
+        CheckReset();
+    }
+
+    void StartRead() {
+        reading=true;
+        socket.async_read_some(asio::buffer(buffer),[this,current=connection](const asio::error_code& error,std::size_t received) {
             iterations.fetch_add(1,std::memory_order_relaxed);
-            asio::error_code error;
-            const auto received=socket.read_some(asio::buffer(buffer),error);
-            if(error && !WouldBlock(error)) return;
-            if(received) input.insert(input.end(),buffer.begin(),buffer.begin()+received);
-            if(input.size()>wire::MaxFrame+4+buffer.size()) return;
-            while(input.size()>=4) {
-                const auto length=static_cast<std::size_t>(wire::Read(std::span(input).first(4)));
-                if(!length || length>wire::MaxFrame) return;
-                if(input.size()<length+4) break;
-                pb::RuntimeEnvelope message;
-                if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=wire::ProtocolVersion) return;
-                input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
-                if(message.has_join()) {
-                    if(joins.size()>=64) return;
-                    const auto request=++requestSequence;
-                    if(!host.QueueJoin(request,message.join().player_id())) return;
-                    joins.emplace(request,message.join().player_id());
-                } else if(message.has_leave()) {
-                    MatchEventLog::Line("leave player="+std::to_string(message.leave().player_id()));
-                    if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return;
-                    actionLanes.erase(message.leave().player_id());
-                } else if(message.has_input()) {
-                    const auto& p=message.input();
-                    if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
-                    PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
-                    for(const auto& command:p.commands())
-                        window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
-                    static_cast<void>(host.SubmitInput(window));
-                } else if(message.has_actions()) {
-                    const auto& value=message.actions();
-                    if(value.shots_size()>static_cast<int>(MaxActionBatch)) continue;
-                    ActionBatch batch{value.player_id(),{}};
-                    bool valid=true;
-                    for(const auto& shot:value.shots()) {
-                        const bool shooting=shot.kind()==pb::ACTION_SHOT;
-                        const bool reloading=shot.kind()==pb::ACTION_RELOAD;
-                        if(!shot.life_generation() || (!shooting && !reloading) ||
-                           (shooting && (!shot.has_yaw() || !shot.has_pitch())) ||
-                           (reloading && (shot.has_yaw() || shot.has_pitch()))) {valid=false;break;}
-                        batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
-                            shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
-                    }
-                    if(!valid) continue;
-                    // Admission is distinct from a terminal shot decision. The
-                    // immutable request remains with the sender for retry.
-                    static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
-                } else return;
-            }
+            if(current!=connection) return;
+            reading=false;
+            if(error) {Close(error==asio::error::eof?"eof":"read: "+error.message());return;}
+            try {
+                if(const auto problem=Receive(received)) {Close(*problem);return;}
+                Pump();
+            } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());return;}
+            if(current==connection && phase==Phase::Connected) StartRead();
+        });
+    }
+    // Parses complete frames; returns why the session must end, if it must.
+    std::optional<std::string> Receive(std::size_t received) {
+        auto& input=session.input;
+        input.insert(input.end(),buffer.begin(),buffer.begin()+static_cast<std::ptrdiff_t>(received));
+        if(input.size()>wire::MaxFrame+4+buffer.size()) return "input overflow";
+        while(input.size()>=4) {
+            const auto length=static_cast<std::size_t>(wire::Read(std::span(input).first(4)));
+            if(!length || length>wire::MaxFrame) return "frame length";
+            if(input.size()<length+4) break;
+            pb::RuntimeEnvelope message;
+            if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=wire::ProtocolVersion)
+                return "frame parse or protocol version";
+            input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
+            if(message.has_join()) {
+                if(session.joins.size()>=64) return "pending joins over 64";
+                const auto request=++requestSequence;
+                if(!host.QueueJoin(request,message.join().player_id())) return "join refused by the Match queue";
+                session.joins.emplace(request,message.join().player_id());
+            } else if(message.has_leave()) {
+                MatchEventLog::Line("leave player="+std::to_string(message.leave().player_id()));
+                if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return "leave refused by the Match queue";
+                session.actionLanes.erase(message.leave().player_id());
+            } else if(message.has_input()) {
+                const auto& p=message.input();
+                if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
+                PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
+                for(const auto& command:p.commands())
+                    window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
+                static_cast<void>(host.SubmitInput(window));
+            } else if(message.has_actions()) {
+                const auto& value=message.actions();
+                if(value.shots_size()>static_cast<int>(MaxActionBatch)) continue;
+                ActionBatch batch{value.player_id(),{}};
+                bool valid=true;
+                for(const auto& shot:value.shots()) {
+                    const bool shooting=shot.kind()==pb::ACTION_SHOT;
+                    const bool reloading=shot.kind()==pb::ACTION_RELOAD;
+                    if(!shot.life_generation() || (!shooting && !reloading) ||
+                       (shooting && (!shot.has_yaw() || !shot.has_pitch())) ||
+                       (reloading && (shot.has_yaw() || shot.has_pitch()))) {valid=false;break;}
+                    batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
+                        shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
+                }
+                if(!valid) continue;
+                // Admission is distinct from a terminal shot decision. The
+                // immutable request remains with the sender for retry.
+                static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
+            } else return "unknown message";
+        }
+        return std::nullopt;
+    }
+
+    // Takes what the host published and schedules the next write.
+    void Pump() {
+        iterations.fetch_add(1,std::memory_order_relaxed);
+        if(phase==Phase::Resetting || phase==Phase::Closing) {CheckReset();return;}
+        if(phase!=Phase::Connected) return;
+        try {
             for(const auto& result:host.TakeControlResults()) {
-                const auto found=joins.find(result.requestId);
-                if(found==joins.end()) continue;
+                const auto found=session.joins.find(result.requestId);
+                if(found==session.joins.end()) continue;
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 MatchEventLog::Line("join player="+std::to_string(found->second)+(result.accepted?" accepted":" rejected reason="+result.error));
-                if(result.accepted && host.GetActionResults(found->second)) actionLanes.try_emplace(found->second);
-                controls.push_back(wire::Frame(message.SerializeAsString())); joins.erase(found);
-                if(controls.size()>64) return;
+                if(result.accepted && host.GetActionResults(found->second)) session.actionLanes.try_emplace(found->second);
+                session.controls.push_back(wire::Frame(message.SerializeAsString())); session.joins.erase(found);
+                if(session.controls.size()>64) {Close("pending controls over 64");return;}
             }
             for(const auto& eviction:host.TakeEvictions()) {
                 // The Match already removed the player; the Gateway clears its
@@ -272,89 +381,110 @@ struct IpcHost::Impl {
                 evicted->set_reference_age_ms(eviction.referenceAgeMillis);
                 evicted->set_substituted_permille(eviction.substitutedPermille);
                 evicted->set_movement_resets(eviction.movementResets);
-                controls.push_back(wire::Frame(message.SerializeAsString()));
-                actionLanes.erase(eviction.playerId);
-                if(controls.size()>64) return;
+                session.controls.push_back(wire::Frame(message.SerializeAsString()));
+                session.actionLanes.erase(eviction.playerId);
+                if(session.controls.size()>64) {Close("pending controls over 64");return;}
             }
             if(auto snapshot=host.TakeSnapshot()) {
-                events.Observe(*snapshot,coalescedSnapshots);
-                if(latestSnapshot) {
-                    ++coalescedSnapshots;
+                session.events.Observe(*snapshot,session.coalescedSnapshots);
+                if(session.latestSnapshot) {
+                    ++session.coalescedSnapshots;
                     TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=snapshot->tick,
-                        .count=coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-latestSnapshot->queuedAt).count()});
+                        .count=session.coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-session.latestSnapshot->queuedAt).count()});
                 }
-                latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now()};
+                session.latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now()};
             }
-            // An unstarted snapshot is still replaceable. Once TCP accepted
-            // even one byte, finish that frame before selecting anything else.
-            if(writingSnapshot && !writing.empty() && writeOffset==0 && latestSnapshot) {
-                ++coalescedSnapshots;
-                writing=std::move(latestSnapshot->bytes);writingTick=latestSnapshot->tick;
-                writingQueuedAt=latestSnapshot->queuedAt;latestSnapshot.reset();
-                TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=writingTick,.count=coalescedSnapshots});
-            }
-            if(writing.empty()) {
-                if(!controls.empty()) {
-                    writing=std::move(controls.front());controls.pop_front();writingSnapshot=false;writingTick=0;writingQueuedAt=Clock::now();
-                } else {
-                    // Results stay in Match until Client ACK. Only choose a
-                    // batch when a write slot is free; a blocked socket cannot
-                    // accumulate or overwrite a separate decision queue.
-                    const auto now=Clock::now();
-                    for(auto it=actionLanes.begin();it!=actionLanes.end();) {
-                        auto& [playerId,lane]=*it;
-                        if(now<lane.nextSend) {++it;continue;}
-                        lane.nextSend=now+std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
-                        const auto results=host.GetActionResults(playerId);
-                        if(!results) {it=actionLanes.erase(it);continue;}
-                        ++it;
-                        if(results->decisions.empty() && results->retiredThrough==0) continue;
-                        writing=wire::Frame(ActionMessage(*results,lane.cursor).SerializeAsString());
-                        writingSnapshot=false;writingTick=0;writingQueuedAt=now;
-                        break;
-                    }
-                }
-                if(writing.empty() && latestSnapshot) {
-                    writing=std::move(latestSnapshot->bytes);writingTick=latestSnapshot->tick;
-                    writingQueuedAt=latestSnapshot->queuedAt;writingSnapshot=true;latestSnapshot.reset();
-                }
-                writeOffset=0;
-            }
-            if(!writing.empty()) {
-                error.clear();
-                writeOffset+=socket.write_some(asio::buffer(writing.data()+writeOffset,writing.size()-writeOffset),error);
-                if(error && !WouldBlock(error)) return;
-                if(writeOffset==writing.size()) writing.clear();
-                else TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=writingTick,
-                    .count=coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-writingQueuedAt).count()});
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            ScheduleWrite();
+        } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
+    }
+
+    // Waits for the socket to become writable when there is, or may be,
+    // something to write; otherwise arms the lane timer for the next action
+    // deadline. The frame is chosen only when the socket is writable.
+    void ScheduleWrite() {
+        if(phase!=Phase::Connected || waitingWrite) return;
+        const auto now=Clock::now();
+        std::optional<Clock::time_point> nextLane;
+        for(const auto& [playerId,lane]:session.actionLanes)
+            if(!nextLane || lane.nextSend<*nextLane) nextLane=lane.nextSend;
+        const bool laneDue=nextLane && *nextLane<=now;
+        if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue) {
+            waitingWrite=true;
+            socket.async_wait(tcp::socket::wait_write,[this,current=connection](const asio::error_code& error) {
+                iterations.fetch_add(1,std::memory_order_relaxed);
+                if(current!=connection) return;
+                waitingWrite=false;
+                if(error) {Close("write wait: "+error.message());return;}
+                try {Write();} catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
+            });
+            return;
+        }
+        if(nextLane && (!laneTimerAt || *nextLane<*laneTimerAt)) {
+            laneTimerAt=*nextLane;
+            laneTimer.expires_at(*nextLane);
+            laneTimer.async_wait([this,current=connection](const asio::error_code& error) {
+                iterations.fetch_add(1,std::memory_order_relaxed);
+                if(error==asio::error::operation_aborted || current!=connection) return;
+                laneTimerAt.reset();
+                Pump();
+            });
         }
     }
-    void Run(std::stop_token stop) {
-        while(!stop.stop_requested()) {
-            iterations.fetch_add(1,std::memory_order_relaxed);
-            tcp::socket socket(io); asio::error_code error;
-            listener.accept(socket,error);
-            if(error) {
-                if(!WouldBlock(error)) return;
-                std::this_thread::sleep_for(std::chrono::milliseconds(5)); continue;
-            }
-            auto reset=host.RequestReset();
-            while(reset.wait_for(std::chrono::milliseconds(10))!=std::future_status::ready)
-                if(stop.stop_requested()) return;
-            try { Connection(socket,stop); } catch(const std::exception&) { /* Close the failed IPC session. */ }
-            socket.close(error);
-            auto cleared=host.RequestReset();
-            while(cleared.wait_for(std::chrono::milliseconds(10))!=std::future_status::ready)
-                if(stop.stop_requested()) return;
+    // Chooses (if nothing is in progress) and writes one frame without blocking.
+    void Write() {
+        auto& s=session;
+        // An unstarted snapshot is still replaceable. Once TCP accepted even
+        // one byte, finish that frame before selecting anything else.
+        if(s.writingSnapshot && !s.writing.empty() && s.writeOffset==0 && s.latestSnapshot) {
+            ++s.coalescedSnapshots;
+            s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
+            s.writingQueuedAt=s.latestSnapshot->queuedAt;s.latestSnapshot.reset();
+            TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=s.writingTick,.count=s.coalescedSnapshots});
         }
+        if(s.writing.empty()) {
+            if(!s.controls.empty()) {
+                s.writing=std::move(s.controls.front());s.controls.pop_front();s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=Clock::now();
+            } else {
+                // Results stay in Match until Client ACK. Only choose a batch
+                // when a write slot is free; a blocked socket cannot accumulate
+                // or overwrite a separate decision queue.
+                const auto now=Clock::now();
+                for(auto it=s.actionLanes.begin();it!=s.actionLanes.end();) {
+                    auto& [playerId,lane]=*it;
+                    if(now<lane.nextSend) {++it;continue;}
+                    lane.nextSend=now+std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+                    const auto results=host.GetActionResults(playerId);
+                    if(!results) {it=s.actionLanes.erase(it);continue;}
+                    ++it;
+                    if(results->decisions.empty() && results->retiredThrough==0) continue;
+                    s.writing=wire::Frame(ActionMessage(*results,lane.cursor).SerializeAsString());
+                    s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;
+                    break;
+                }
+            }
+            if(s.writing.empty() && s.latestSnapshot) {
+                s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
+                s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.latestSnapshot.reset();
+            }
+            s.writeOffset=0;
+        }
+        if(!s.writing.empty()) {
+            asio::error_code error;
+            s.writeOffset+=socket.write_some(asio::buffer(s.writing.data()+s.writeOffset,s.writing.size()-s.writeOffset),error);
+            if(error && !WouldBlock(error)) {Close("write: "+error.message());return;}
+            if(s.writeOffset==s.writing.size()) s.writing.clear();
+            else TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=s.writingTick,
+                .count=s.coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-s.writingQueuedAt).count()});
+        }
+        // Take anything published meanwhile, then write again or arm the timer.
+        Pump();
     }
 };
 IpcHost::IpcHost(MatchRuntimeHost& host,const Arena& arena):impl_(std::make_unique<Impl>(host,arena)){}
 IpcHost::~IpcHost(){Stop();}
 bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
     try {
+        if(impl_->role) throw std::logic_error("IpcHost is already started");
         const auto separator=listenAddress.rfind(':');
         if(separator==std::string::npos) throw std::invalid_argument("Expected loopback-ip:port");
         const auto address=asio::ip::make_address(listenAddress.substr(0,separator));
@@ -367,11 +497,32 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
         const tcp::endpoint endpoint(address,static_cast<unsigned short>(port));
         impl_->listener.open(endpoint.protocol());
         impl_->listener.set_option(tcp::acceptor::reuse_address(true));
-        impl_->listener.bind(endpoint); impl_->listener.listen(1); impl_->listener.non_blocking(true);
-        impl_->worker=std::jthread([this](std::stop_token stop){impl_->Run(stop);});
+        impl_->listener.bind(endpoint); impl_->listener.listen(1);
+        impl_->StartAccept();
+        auto started=Engine::Threads::RoleThread::Start({"gyo-match-ipc",Engine::Threads::ThreadPriority::Normal},
+            [impl=impl_.get()](Engine::Threads::RoleContext&) {
+                // Between phases nothing may be pending (a reset completes on
+                // the host's role); the work guard keeps run() waiting for its
+                // notification. Stop requests the stop, then stops the context.
+                // A handler's escaping exception ends the IPC thread visibly.
+                const auto work=asio::make_work_guard(impl->io);
+                try {impl->io.run();}
+                catch(const std::exception& failure) {MatchEventLog::Line(std::string("ipc thread failed reason=")+failure.what());}
+            });
+        if(!started) throw std::runtime_error(Engine::Base::Describe(started.error()));
+        impl_->role.emplace(std::move(*started));
         return true;
     } catch(const std::exception& failure) {error=failure.what();return false;}
 }
-void IpcHost::Stop(){if(impl_->worker.joinable()){impl_->worker.request_stop();impl_->worker.join();}}
+void IpcHost::Stop() {
+    impl_->Detach();
+    if(!impl_->role) return;
+    impl_->role->RequestStop();
+    impl_->io.stop();
+    impl_->role.reset();
+    asio::error_code ignored;
+    impl_->socket.close(ignored);
+    impl_->listener.close(ignored);
+}
 std::uint64_t IpcHost::Iterations() const noexcept{return impl_->iterations.load(std::memory_order_relaxed);}
 }

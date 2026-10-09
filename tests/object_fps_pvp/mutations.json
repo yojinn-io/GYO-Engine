@@ -45,6 +45,12 @@
     },
     "command_evidence_v7": {
       "ctest": "object_fps_pvp.command_evidence_v7"
+    },
+    "ipc": {
+      "build": [
+        "gyo_object_fps_pvp_ipc_tests"
+      ],
+      "ctest": "object_fps_pvp.ipc"
     }
   },
   "mutants": [
@@ -737,6 +743,36 @@
       "replace": "const resultSendTolerance = actionSendInterval\n",
       "check": "go",
       "expect": "released write sent a catch-up result"
+    },
+    {
+      "id": "v7-07-ipc-no-publish-wake",
+      "batch": "v7-07",
+      "what": "The host's publish notification does not wake the IPC thread",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(!pumpPosted.exchange(true)) asio::post(io,[this]{pumpPosted.store(false);Pump();});\n",
+      "replace": "        static_cast<void>(pumpPosted);\n",
+      "check": "ipc",
+      "expect": "REQUIRE\\( ready \\) is NOT correct"
+    },
+    {
+      "id": "v7-07-ipc-close-without-reset",
+      "batch": "v7-07",
+      "what": "A session's end goes back to accepting without resetting the Match",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        phase=Phase::Closing;\n        reset=host.RequestReset();\n        CheckReset();\n",
+      "replace": "        StartAccept();\n",
+      "check": "ipc",
+      "expect": "CHECK\\( cleared \\) is NOT correct"
+    },
+    {
+      "id": "v7-07-ipc-snapshot-before-controls",
+      "batch": "v7-07",
+      "what": "A pending snapshot is written before pending controls",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(!s.controls.empty()) {\n",
+      "replace": "            if(!s.controls.empty() && !s.latestSnapshot) {\n",
+      "check": "ipc",
+      "expect": "CHECK_FALSE\\( SnapshotHas\\(\\*message, 7\\) \\) is NOT correct"
     }
   ]
 }

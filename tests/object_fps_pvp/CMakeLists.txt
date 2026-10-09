@@ -21,6 +21,22 @@ add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 # The movement recovery matrix runs the v6 and the product command paths.
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 60)
 
+# The Match IPC over real loopback TCP (asio and the runtime contract), kept
+# apart so the domain test target gains no transport dependency.
+gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
+set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
+add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp)
+target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v6" doctest::doctest)
+if(WIN32)
+    target_compile_definitions(${ipc_tests} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${ipc_tests} PRIVATE /utf-8)
+endif()
+add_test(NAME "${GYO_CURRENT_APP}.ipc" COMMAND ${ipc_tests})
+set_tests_properties("${GYO_CURRENT_APP}.ipc" PROPERTIES LABELS "cpu;pvp;network" TIMEOUT 60)
+
 # The acceptance probes' header-only start-phase recorder, driven by the real
 # prediction, and the GUI probes' room (gui_room.hpp). Kept apart so the
 # domain test target gains no JSON dependency.
