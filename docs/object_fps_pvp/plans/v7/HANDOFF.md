@@ -213,6 +213,7 @@
 
 ## 未結事項
 
+- 「時鐘到網路路徑」系列紀錄（2026-10-10 使用者要求）：v7 完成後（第 16 批之後）撰寫，分 5 集：①時鐘、②命令脫離畫面幀、③網路路徑的節拍、④FireGate 與 C2、⑤跨機器的時間。附各批的 commit id、L2 數字與調試過程（含更正）。讀者與存放位置屆時決定。
 - **（嚴重度高，D44）偶發的 movement epoch 重設**：（第 08b 批草案已回答：08b 不直接改變輸入抵達與 backlog；可能機制是約 30～150 ms 的短停頓造成成對遲到，Client 相位前移 2 Tick，30 Tick 合計 ≥105，屬推論，見[第 08b 批](08b-event-driven-results.md)「對 movement 佇列與 backlog 的影響」。第 09 批規劃要回答是否影響常數的凍結。）第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
 - probe 幀格點的相位（D46⑦）：action probe 的起點綁在 join Wait 之後收到 snapshot 的時刻（`gameplay_action.hpp:109`；Wait 每 2 ms 輪詢，`action_main.cpp:79-82`），超時時重新錨定（`:170`）。所以建置不同時，probe 幀相對 Match Tick 的相位會系統性地移動，b、a＋b、`legal_match_p95_ms`、d 不能跨建置比較（第 08b 批「b 段變長的調查」）。起點隨機化留到第 09 批規劃時決定。
 - 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。第 08 批 L2（2026-10-09）的 clean-30 全部是 4 ms 狀態，無法對比；之後的量測出現 8 ms 狀態時再補。第 08 批的評估更正了 clean-30 的部分：它的快慢兩群來自 30 Hz 節拍的相位與 probe 的幀量化，不是主機狀態（見[第 07 批](07-match-tick-ipc.md)「橫向對比」的更正）。
