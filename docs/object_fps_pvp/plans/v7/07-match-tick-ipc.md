@@ -129,6 +129,13 @@
   - 限制：C 在 4 ms 狀態只有 1～2 次（主機大多在 8 ms 狀態），只供參考。
 - 證據：`build/target/_build/test/logs/pvp-v7-cross-20261009/`（`cross.py` `c61c85af…`、`cross.json` `4656cfeb…`）。
 
+### 更正（2026-10-09，第 08 批的評估）
+
+上面的結論有兩處不成立，原文保留：
+
+- 「仍受主機狀態影響的是 clean-30」不成立。clean-30 的快慢兩群同在 8 ms 狀態，差別來自路徑上幾個 30 Hz 節拍的相位，以及 probe 把時間戳記在幀開始（`legal_client_p95_ms` 只能是幀長的整數倍，P95 落在第 2 或第 3 幀）。見[第 08 批](08-client-worker-asio.md)的「評估」。
+- 「後段變慢的原因是 8 ms 主機狀態」只對 Tick 晚醒與 snapshot 間隔成立（這兩項是直接量到的）。`legal_match_p95_ms` 的快慢兩群在舊 Match 下 4 ms 狀態也會出現（第 07 批 L2 before 第 2 輪 21.0 ms），還受到 Gateway→Match action batch「每隔一次 ticker」的相位影響。新 Match 的 clean-60 不論狀態都是 8.8～11.9 ms。
+
 ## 架構
 
 - 模擬執行緒的擁有者從 `match_main` 移到 `MatchRuntimeHost`（產品內，和 Client 的模擬角色一致）。新的依賴邊：`runtime_host`→`GYO::Threads`（Engine 既有的模組，方向是產品→Engine）。

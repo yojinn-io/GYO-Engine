@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批開始）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批暫停，等範圍的決定）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -9,10 +9,11 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：
-  1. D36（動作送出的語意，P2 開始時漏了確認）：保持 30 Hz 的最小間隔，符合資格時在 `SubmitAction` 當下送出，不改 wire。建議採用；改成事件驅動後，`SubmitAction` 本來就要喚醒 worker。
-- **進行中**：第 08 批（[批次文件](08-client-worker-asio.md)）開始，等 D36 確認後實作。ACK 依批次範圍維持在主執行緒（理由見批次文件）。
-- **下一步**：D36 確認後，把 Client 的網路 worker 改為一條 asio io 執行緒。
-- **最後更新**：2026-10-09 16:19，依據 commit `67d990d`（PR #73 的頭）。
+  1. D36：已確認（「D36 照建議，開始實作」），但評估顯示它只能縮短約 1～2 ms。建議維持（事件驅動後本來就要這樣做）；或者撤回、改依下面的選項處理。
+  2. 第 08 批之後的範圍（[第 08 批](08-client-worker-asio.md)的「評估」第 4 節）：(1) Gateway→Match action batch 套用 I/2 容許，併入 08（建議）；(2) 結果改為事件驅動轉送，新批次 08b、在第 09 批之前（建議）；(3) Client 記錄 worker 收到裁決的時刻、分析器 v7 新增不量化的指標，併入 08（建議）。
+- **進行中**：第 08 批的實作暫停。worker 的改寫在本機的 stash（`batch08-wip`），`object_fps_pvp.worker` 目前失敗（「unexpected stalled action batch」），尚未調查。
+- **下一步**：依第 1、2 項的決定調整第 08 批的範圍，恢復 stash，調查 worker 測試的失敗。
+- **最後更新**：2026-10-09 16:29，依據 commit `cfc5542`（PR #73 的頭；第 08 批的評估）。
 
 ## 閱讀入口
 
@@ -133,6 +134,8 @@
 - 2026-10-09：第 07 批的實作與 L1 完成：A（`ffe9a99`）Match 的模擬角色以 Waiter 等絕對期限、發布通知、覆蓋計數；B（`10003b9`）IpcHost 改為一條 asio io 執行緒、移除輪詢、連線結束的路徑明確化。全量 CTest 69／69、突變 3／3、TSan 無報告、backpressure 6 案與 25 案矩陣通過。clean-60 的 Tick 晚醒全部 <250 µs（P2-log 以 2～4 ms 為主），Match 程序 CPU 約為 P2-log 的 1/3。L2 的事前宣告寫進批次文件，待使用者核准。
 - 2026-10-09：使用者核准第 07 批的 L2 宣告（Chrome 開著但不操作）。60 次全部完成，**通過**：after 的 Tick 晚醒全部 <250 µs（P99 上界 244 µs，兩種主機狀態都一樣），before 的 P99 上界 8 ms；Match 程序 CPU 約 -41％。**第 07 批完成。** 接著做橫向對比（見[第 07 批](07-match-tick-ipc.md)的「橫向對比」）：後段變慢是 8 ms 主機狀態下舊 Match 的晚醒與補步，第 07 批之後消失；clean-30 仍受主機狀態影響，來源可能在 Client 端，第 08 批之後再對比。
 - 2026-10-09：使用者指示開始第 08 批（「開始第 08 批，檔位照建議來」：high，局部 xhigh，對喚醒與期限的交接開 1 次 xhigh 審查）。批次文件 [08](08-client-worker-asio.md)。ACK 維持在主執行緒的 `Drain`（改了會讓尚未取走的裁決在退休時被刪除）。D36 在 P2 開始時漏了確認，現在請使用者確認。
+- 2026-10-09：使用者確認 D36（「D36 照建議，開始實作」）。worker 改寫中，`object_fps_pvp.worker` 失敗（「unexpected stalled action batch」）。
+- 2026-10-09：使用者要求在 D36 確認前評估 clean-30 的快慢雙峰（只用既有證據）。結論：probe 的時間戳記在幀開始，Client 延遲只能是幀長的整數倍；雙峰來自路徑上幾個 30 Hz 節拍的相位；Gateway→Match 的 action batch 仍有「每隔一次 ticker」的缺陷；D36 只能縮短約 1～2 ms。第 07 批「橫向對比」的結論加了更正。worker 的改寫先存成 stash，實作暫停。
 
 ## P2 以後各批的範圍
 
@@ -179,7 +182,7 @@
 
 ## 未結事項
 
-- 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。
+- 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。第 08 批的評估更正了 clean-30 的部分：它的快慢兩群來自 30 Hz 節拍的相位與 probe 的幀量化，不是主機狀態（見[第 07 批](07-match-tick-ipc.md)「橫向對比」的更正）。
 - C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
   - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
   - 延遲的位移（第 04 批記錄，C1 證實）：常數不變時，v7 的「產生→執行」約 38 ms（30／60 FPS 相同），v6 是 21～25 ms；「輸入取樣→執行」約多 1 幀。
