@@ -364,7 +364,8 @@ func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
 		t.Fatal("first result")
 	}
 	s.actionWritten(packets[0].actionPlayer, release)
-	if len(s.actionPackets(release.Add(actionSendInterval-1))) != 0 || len(s.actionPackets(release.Add(actionSendInterval))) != 1 {
+	// Results may leave half an interval early (resultSendTolerance), never sooner.
+	if len(s.actionPackets(release.Add(resultSendTolerance-1))) != 0 || len(s.actionPackets(release.Add(resultSendTolerance))) != 1 {
 		t.Fatal("UDP completion catch-up deadline")
 	}
 }

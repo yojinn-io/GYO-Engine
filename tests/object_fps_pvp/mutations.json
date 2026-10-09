@@ -717,6 +717,26 @@
       "replace": "",
       "check": "cpu",
       "expect": "PvP a later placement advances interpolation by elapsed steps and decays the correction"
+    },
+    {
+      "id": "v7-06-results-exact-deadline",
+      "batch": "v7-06",
+      "what": "Result eligibility waits for the exact re-anchored deadline (every other tick)",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "now.Add(resultSendTolerance).Before(w.nextSend)",
+      "replace": "now.Before(w.nextSend)",
+      "check": "go",
+      "expect": "result channel sent"
+    },
+    {
+      "id": "v7-06-results-full-tolerance",
+      "batch": "v7-06",
+      "what": "Results may leave a whole interval early, so a released write bursts",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "const resultSendTolerance = actionSendInterval / 2\n",
+      "replace": "const resultSendTolerance = actionSendInterval\n",
+      "check": "go",
+      "expect": "released write sent a catch-up result"
     }
   ]
 }

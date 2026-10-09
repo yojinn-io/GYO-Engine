@@ -8,7 +8,7 @@ import network_statistics as ns
 
 GATEWAY = """2026/10/09 12:00:10.000001 player statistics player=1 phase=2 udp=127.0.0.1:5000 received=600 last_received_ms=3
 2026/10/09 12:00:10.000002 player send statistics player=1 window_ms=10000 results=180 results_interval_ms=55.1/66.8/70.2/80.0 snapshots=300 snapshot_interval_ms=33.3/33.5/34.1/40.0 link_actions=0 link_action_interval_ms=-
-2026/10/09 12:00:20.000002 player send statistics player=1 window_ms=10000 results=300 results_interval_ms=33.3/34.0/35.0/36.0 snapshots=300 snapshot_interval_ms=33.3/33.6/34.0/41.0 link_actions=20 link_action_interval_ms=33.4/40.0/50.0/60.0
+2026/10/09 12:00:20.000002 player send statistics player=1 window_ms=10000 results=300 results_interval_ms=33.3/34.0/35.0/36.0 snapshots=300 snapshot_interval_ms=33.3/33.6/34.0/41.0 link_actions=20 link_action_interval_ms=33.4/40.0/50.0/60.0 results_min_interval_ms=17.2 snapshot_min_interval_ms=30.1 link_action_min_interval_ms=-
 2026/10/09 12:00:20.000003 gateway transport coalesced_snapshots=0 rate_accepted_packets=1 rate_limited_packets=0 max_session_window_packets=1
 """
 MATCH = """Object_FPS_PVP Match ready: 127.0.0.1:27016 arena=a authority=60Hz
@@ -39,6 +39,11 @@ class NetworkStatisticsTests(unittest.TestCase):
         self.assertEqual(gateway["summary"]["1"]["results_per_s"], 24.0)
         self.assertEqual(gateway["summary"]["1"]["link_actions_per_s"], 1.0)
         self.assertEqual(gateway["summary"]["1"]["link_action_interval_ms_p50_median"], 33.4)
+        # The first line predates the shortest-interval keys (P2-log); the second has them.
+        self.assertNotIn("results_min_interval_ms", gateway["windows"][0])
+        self.assertEqual((gateway["summary"]["1"]["results_min_interval_ms_min"],
+                          gateway["summary"]["1"]["snapshot_min_interval_ms_min"],
+                          gateway["summary"]["1"]["link_action_min_interval_ms_min"]), (17.2, 30.1, None))
 
         match = result["match"]["summary"]
         self.assertEqual(match["ipc_iterations_per_s"], 806.15)

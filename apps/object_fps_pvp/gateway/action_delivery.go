@@ -15,6 +15,13 @@ import (
 
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate
 
+// A result batch may go out up to half an interval before its deadline. The
+// deadline is re-anchored at each completed write, just after the tick that
+// selected the batch, so without this the next tick is always a hair early
+// and every other tick is skipped (half of ActionSendRate). Half an interval
+// still keeps two sends that far apart: a released write never bursts.
+const resultSendTolerance = actionSendInterval / 2
+
 // Each layer owns a bounded immutable action ledger. Movement acknowledgements
 // and snapshot replacement never touch this state.
 type actionWindow struct {
@@ -202,7 +209,7 @@ func (s *Server) actionPackets(now time.Time) []outbound {
 	}
 	for _, p := range s.players {
 		w := p.actions
-		if p.phase != active || w == nil || now.Before(w.nextSend) {
+		if p.phase != active || w == nil || now.Add(resultSendTolerance).Before(w.nextSend) {
 			continue
 		}
 		ids := make([]uint64, 0, len(w.decisions))

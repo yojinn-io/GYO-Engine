@@ -16,13 +16,15 @@ type intervalStats struct {
 	intervals []time.Duration
 }
 
-// One window of a channel: writes and the "p50/p90/p99/max" interval summary.
+// One window of a channel: writes, the "p50/p90/p99/max" interval summary
+// and the shortest interval (how close two writes came), in milliseconds.
 type intervalWindow struct {
 	count   uint64
 	summary string
+	minimum string
 }
 
-var noIntervals = intervalWindow{summary: "-"}
+var noIntervals = intervalWindow{summary: "-", minimum: "-"}
 
 func (s *intervalStats) record(at time.Time) {
 	if !s.last.IsZero() {
@@ -34,7 +36,10 @@ func (s *intervalStats) record(at time.Time) {
 
 // take ends the window. The interval across the boundary belongs to the next one.
 func (s *intervalStats) take() intervalWindow {
-	window := intervalWindow{count: s.count, summary: intervalSummary(s.intervals)}
+	window := intervalWindow{count: s.count, summary: intervalSummary(s.intervals), minimum: "-"}
+	if len(s.intervals) > 0 {
+		window.minimum = fmt.Sprintf("%.1f", float64(slices.Min(s.intervals))/float64(time.Millisecond))
+	}
 	s.count = 0
 	s.intervals = s.intervals[:0]
 	return window
@@ -58,11 +63,14 @@ func intervalSummary(intervals []time.Duration) string {
 // A session's writes to its Client: ActionResults and snapshots.
 type sendStatistics struct{ results, snapshots intervalStats }
 
+// The shortest intervals come last: they were added after the first logs
+// (v7 batch 06), so the earlier keys keep their order.
 func sendStatisticsLine(player uint64, window time.Duration, results, snapshots, linkActions intervalWindow) string {
 	return fmt.Sprintf("player send statistics player=%d window_ms=%d results=%d results_interval_ms=%s "+
-		"snapshots=%d snapshot_interval_ms=%s link_actions=%d link_action_interval_ms=%s",
+		"snapshots=%d snapshot_interval_ms=%s link_actions=%d link_action_interval_ms=%s "+
+		"results_min_interval_ms=%s snapshot_min_interval_ms=%s link_action_min_interval_ms=%s",
 		player, window.Milliseconds(), results.count, results.summary, snapshots.count, snapshots.summary,
-		linkActions.count, linkActions.summary)
+		linkActions.count, linkActions.summary, results.minimum, snapshots.minimum, linkActions.minimum)
 }
 
 // The Match side: each player's ActionBatch writes on the runtime link.

@@ -58,6 +58,9 @@ def summarize_gateway(rows):
             **{f"{key}_per_s": per_second(own, key, seconds) for key in ("results", "snapshots", "link_actions")},
             **{f"{key}_p50_median": statistics.median(p50s) if (p50s := [row[key]["p50"] for row in own if row[key]])
                else None for key in ("results_interval_ms", "snapshot_interval_ms", "link_action_interval_ms")},
+            # Shortest intervals: logs from before v7 batch 06 have no such keys.
+            **{f"{key}_min": min(values) if (values := [row[key] for row in own if row.get(key) is not None])
+               else None for key in ("results_min_interval_ms", "snapshot_min_interval_ms", "link_action_min_interval_ms")},
         }
     return players
 

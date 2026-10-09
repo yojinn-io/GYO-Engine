@@ -12,15 +12,15 @@ func TestIntervalStatisticsSummarizeOneWindowAndCarryTheBoundary(t *testing.T) {
 		stats.record(start.Add(time.Duration(ms) * time.Millisecond))
 	}
 	// Intervals 33, 33, 67 ms: nearest-rank P50 is the 2nd, P90 and P99 the 3rd.
-	if got := stats.take(); got != (intervalWindow{count: 4, summary: "33.0/67.0/67.0/67.0"}) {
+	if got := stats.take(); got != (intervalWindow{count: 4, summary: "33.0/67.0/67.0/67.0", minimum: "33.0"}) {
 		t.Fatalf("first window %+v", got)
 	}
-	if got := stats.take(); got != (intervalWindow{summary: "-"}) {
+	if got := stats.take(); got != noIntervals {
 		t.Fatalf("empty window %+v", got)
 	}
 	// The first write of a window measures from the last write of the previous one.
 	stats.record(start.Add(150 * time.Millisecond))
-	if got := stats.take(); got != (intervalWindow{count: 1, summary: "17.0/17.0/17.0/17.0"}) {
+	if got := stats.take(); got != (intervalWindow{count: 1, summary: "17.0/17.0/17.0/17.0", minimum: "17.0"}) {
 		t.Fatalf("boundary window %+v", got)
 	}
 }
@@ -36,10 +36,12 @@ func TestIntervalSummaryUsesNearestRankOverManySamples(t *testing.T) {
 }
 
 func TestSendStatisticsLineKeepsEveryKey(t *testing.T) {
-	got := sendStatisticsLine(7, 10*time.Second+3*time.Millisecond, intervalWindow{count: 180, summary: "55.1/66.8/70.2/80.0"},
-		intervalWindow{count: 300, summary: "33.3/33.5/34.1/40.0"}, noIntervals)
+	got := sendStatisticsLine(7, 10*time.Second+3*time.Millisecond,
+		intervalWindow{count: 180, summary: "55.1/66.8/70.2/80.0", minimum: "16.9"},
+		intervalWindow{count: 300, summary: "33.3/33.5/34.1/40.0", minimum: "30.2"}, noIntervals)
 	want := "player send statistics player=7 window_ms=10003 results=180 results_interval_ms=55.1/66.8/70.2/80.0 " +
-		"snapshots=300 snapshot_interval_ms=33.3/33.5/34.1/40.0 link_actions=0 link_action_interval_ms=-"
+		"snapshots=300 snapshot_interval_ms=33.3/33.5/34.1/40.0 link_actions=0 link_action_interval_ms=- " +
+		"results_min_interval_ms=16.9 snapshot_min_interval_ms=30.2 link_action_min_interval_ms=-"
 	if got != want {
 		t.Fatalf("\n got %s\nwant %s", got, want)
 	}
@@ -55,7 +57,7 @@ func TestSendStatisticsRecordCompletedWritesPerPlayerAndChannel(t *testing.T) {
 		s.link.actionWritten(7, at)
 	}
 	s.snapshotWritten(99, now) // not a player: ignored
-	if got := p.sent.results.take(); got.count != 3 || got.summary != "33.0/33.0/33.0/33.0" {
+	if got := p.sent.results.take(); got.count != 3 || got.summary != "33.0/33.0/33.0/33.0" || got.minimum != "33.0" {
 		t.Fatalf("results %+v", got)
 	}
 	if got := p.sent.snapshots.take(); got.count != 3 {
