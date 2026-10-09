@@ -126,6 +126,7 @@ PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 mediu
   - `legal_match_p95_ms` 中位數：clean-60 11.2→10.5 ms，clean-30 14.4→9.6 ms。
   - gateway-250ms 的 relay 最小間隔 3.68 ms，而 Gateway 端最小 20.6 ms：又一次 relay 端的壓縮（與 D42 的判斷一致；兩者是否落在同一視窗無法對應，只記錄）。
   - 主機：sleeper P99 3.4～7.9 ms（最大 8.3 ms）；背景主要是 WindowServer、avconferenced 與影片解碼服務（約 21％、16％、8％ CPU）。
+  - 第 4 輪結束起主機的計時變粗（sleeper P99 約 4→7.5 ms，probe 計時器間隔 P99 約 20→23～25 ms），第 5、6 輪 before 與 after 同樣變慢（`legal_match_p95_ms` 約 10→19～24 ms；clean-30 after 的 `legal_client_p95_ms` 68→100 ms）。before／after 交錯執行，所以不影響本批的判定。使用者懷疑是系統時鐘的問題，第 07 批完成後做橫向對比（交接的「未結事項」）。
 - 證據：`build/target/_build/test/logs/pvp-v7-batch06-l2-20261009/`（git 忽略）：`declaration.sha256`、`artifacts.sha256`、`session.sha256`（`run.py` `199b6b0f…`）、`judge.py`（`0bcf86ec…`）、`progress.jsonl`（`525a4128…`）、`judgement.json`（`d5f27e1a…`）、`runs/`。
 
 ## 證據

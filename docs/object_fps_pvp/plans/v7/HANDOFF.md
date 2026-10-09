@@ -13,7 +13,7 @@
 - **進行中**：
   - 無。PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）的 CI 全綠：第 06 批的程式（`2d63010`）4 個平台的 L1 通過，之後只改文件的推送沿用 L1。
 - **下一步**：你同意後開始第 07 批：讀 Match Tick 與 IpcHost 的現況，寫批次文件。
-- **最後更新**：2026-10-09 14:54，依據 commit `bc7cea3`（PR #73 的頭；CI 全綠）。
+- **最後更新**：2026-10-09 15:05，依據 commit `f020b46`（PR #73 的頭；CI 全綠）；記下系統時鐘的橫向對比（未結事項）。
 
 ## 閱讀入口
 
@@ -142,7 +142,7 @@
   - Match：程序 CPU 秒數、IPC 迴圈每秒迭代、Tick 的預定與實際喚醒。
   - Client worker：每 10 秒的喚醒次數與 CPU 秒數。
 - **06** Gateway 結果通道：資格判定改為只在 `now + I/2 < nextSend` 時才跳過（`action_delivery.go:205`），保留寫出後的重新錨定與「不爆量」。修正後若碰到分析器「每秒 ≤31」的窗口規則，停下由使用者決定。runtime link 的 action batch 不改，只量測。
-- **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。
+- **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。完成後做 P2-log、第 06、07 批的 clean-30／clean-60 橫向對比（2026-10-09 使用者要求，見「未結事項」）。
 - **08** Client：worker 改為一條 asio io 執行緒（async receive、各期限一個 steady_timer），SendInput／SubmitAction 以 post 喚醒；速率語意不變；httplib 留在 worker（只在大廳切換與關閉時阻塞 UDP）。ACK 判定在 L1 顯示語意不變時改為網路角色收到裁決時前進，否則維持並記錄理由。動作送出語意依 D36。
 - **09** FireGate 與 C2：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
 - 停止條件：權威 digest 改變；需要改 wire；macOS 的 Tick 晚醒沒有改善；worker_main 的斷言需要放寬；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。
@@ -176,6 +176,12 @@
 
 ## 未結事項
 
+- 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出，第 07 批完成後做橫向對比）：第 06 批的 L2 在第 4 輪結束起，主機整體的計時變粗，before 與 after 同樣受影響。
+  - sleeper（獨立的 Python）P99 約 4→7.5 ms；probe 的計時器間隔 P99 約 20→23～25 ms。
+  - `legal_match_p95_ms` 約 10→19～24 ms；clean-30 after 的 `legal_client_p95_ms` 68→100 ms。
+  - Gateway 量到的 snapshot 間隔 P50 16.1～16.5 ms，比名目的 16.67 ms 短（可能是晚醒後的補步）。
+  - 像是 v6 與 C1 見過的 4 ms／8 ms 兩種主機狀態。使用者懷疑是系統時鐘的問題。
+  - 做法：第 07 批（Match Tick 改用 Waiter）完成後，把 P2-log、第 06、07 批的 clean-30／clean-60 依主機狀態分組橫向對比，看 8 ms 狀態是否仍拖慢 Match，以及間隔短於名目值的原因。資料：`logs/pvp-v7-p2log-20261009/`、`logs/pvp-v7-batch06-l2-20261009/`（各輪的 sleeper 在 `progress.jsonl`）。
 - C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
   - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
   - 延遲的位移（第 04 批記錄，C1 證實）：常數不變時，v7 的「產生→執行」約 38 ms（30／60 FPS 相同），v6 是 21～25 ms；「輸入取樣→執行」約多 1 幀。
