@@ -5,6 +5,7 @@
 #include "runtime_v6.pb.h"
 #include <asio.hpp>
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <chrono>
 #include <deque>
@@ -160,6 +161,8 @@ struct IpcHost::Impl {
     tcp::acceptor listener{io};
     std::jthread worker;
     std::uint64_t requestSequence{};
+    // Diagnostics only: passes of the connection and accept loops.
+    std::atomic<std::uint64_t> iterations{};
     Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
         // Zero is reserved for a missing digest: such an arena cannot be served.
         if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
@@ -197,6 +200,7 @@ struct IpcHost::Impl {
         controls.push_back(wire::Frame(ready.SerializeAsString()));
         std::array<std::uint8_t,8192> buffer{};
         while(!stop.stop_requested()) {
+            iterations.fetch_add(1,std::memory_order_relaxed);
             asio::error_code error;
             const auto received=socket.read_some(asio::buffer(buffer),error);
             if(error && !WouldBlock(error)) return;
@@ -329,6 +333,7 @@ struct IpcHost::Impl {
     }
     void Run(std::stop_token stop) {
         while(!stop.stop_requested()) {
+            iterations.fetch_add(1,std::memory_order_relaxed);
             tcp::socket socket(io); asio::error_code error;
             listener.accept(socket,error);
             if(error) {
@@ -368,4 +373,5 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
     } catch(const std::exception& failure) {error=failure.what();return false;}
 }
 void IpcHost::Stop(){if(impl_->worker.joinable()){impl_->worker.request_stop();impl_->worker.join();}}
+std::uint64_t IpcHost::Iterations() const noexcept{return impl_->iterations.load(std::memory_order_relaxed);}
 }

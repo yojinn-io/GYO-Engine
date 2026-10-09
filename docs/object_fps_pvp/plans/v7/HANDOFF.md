@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**下一步：P2**（從 P2-log 開始）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（P2-log，分支 `claude/pvp-v7-p2`）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -107,6 +107,12 @@
 - 2026-10-09：#71 依使用者指示合併（`660310e`），**P1b 完成**；worktree `../GYO-Engine-p1b-c1` 移除。
 - 2026-10-09：使用者更正 D41：`--fps` 限幀與 30 FPS 手感的 L3 併進第 13 批，不另開第 05b 批與 P1c。下一步改回 P2。
 - 2026-10-09：使用者補充 D41：FPS 與解析度是玩家的選擇；v7 的第 13 批用命令列選項，設定 UI 與 `settings.json` 移到 v8（連帶 IP-5 的使用者目錄與原子寫入）。第 13 批、IP-5 與 v8 的 README 依此更新。
+
+## P2 進度（記錄器）
+
+- 2026-10-09：使用者指示開始 P2-log（「IP-5 照你的判斷，開始 P2-log」）。批次文件 [P2-log](p2-log-network-statistics.md)：Gateway、Match、Client worker 各自每 10 秒一行統計，只加記錄、不改行為。分支 `claude/pvp-v7-p2`（從 `660310e`）。
+- 2026-10-09：master 的 CI #244（#71 合併）只有 `Snapshot / object_fps_pvp` 失敗：剛建立的 snapshot tag 立刻讀回時還讀不到（GitHub 的讀取延遲），與 #71 的內容無關。依使用者指示重跑失敗的 job 後發布；發行流程的修正單獨開 PR [#72](https://github.com/yojinn-io/GYO-Engine/pull/72)（`fix(ci)`），依使用者指示合併（`247aa2b`）。
+- 2026-10-09：P2-log 的實作與 L1 完成：全量 CTest 68／68（權威 digest 不變）、Go 的 vet／test／race 通過；clean-60 開發跑次確認三個程序都有統計行（結果通道約 15 Hz，是第 06 批要修的缺陷）。見[批次文件](p2-log-network-statistics.md)的「結果」。P2 的 PR 待開。
 
 ## P2 以後各批的範圍
 

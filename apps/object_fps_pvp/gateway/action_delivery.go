@@ -320,6 +320,13 @@ func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
 	defer l.mu.Unlock()
 	if w := l.actionWindows[playerID]; w != nil {
 		w.nextSend = now.Add(actionSendInterval)
+		if l.actionStats == nil {
+			l.actionStats = map[uint64]*intervalStats{}
+		}
+		if l.actionStats[playerID] == nil {
+			l.actionStats[playerID] = &intervalStats{}
+		}
+		l.actionStats[playerID].record(now)
 	}
 }
 func (s *Server) actionWritten(playerID uint64, now time.Time) {
@@ -327,5 +334,6 @@ func (s *Server) actionWritten(playerID uint64, now time.Time) {
 	defer s.mu.Unlock()
 	if p := s.players[playerID]; p != nil && p.actions != nil {
 		p.actions.nextSend = now.Add(actionSendInterval)
+		p.sent.results.record(now)
 	}
 }

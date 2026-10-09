@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "gyo/AppConfig.hpp"
 #include <chrono>
 #include <csignal>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <optional>
 #include <stdexcept>
+#include <syncstream>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -54,7 +56,25 @@ int main(int argc,char** argv) {
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
         std::signal(SIGINT,Stop);std::signal(SIGTERM,Stop);
         std::cout<<"Object_FPS_PVP Match ready: "<<listen<<" arena="<<arena->id<<" authority=60Hz\n"<<std::flush;
-        while(!stopping) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Diagnostics: one statistics line per window, written here so that the
+        // tick and IPC threads do no logging I/O for it. The IPC thread logs too,
+        // so this line is emitted through osyncstream as well.
+        auto windowStart=std::chrono::steady_clock::now();
+        auto cpuAtStart=fps::pvp::ProcessCpuSeconds();
+        auto ipcAtStart=ipc.Iterations();
+        static_cast<void>(runtime.TakeTickWakeStatistics());
+        while(!stopping) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            const auto now=std::chrono::steady_clock::now();
+            const double window=std::chrono::duration<double>(now-windowStart).count();
+            if(window<fps::pvp::NetworkStatisticsSeconds) continue;
+            const auto cpu=fps::pvp::ProcessCpuSeconds();
+            const auto iterations=ipc.Iterations();
+            std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
+                .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
+                .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=runtime.TakeTickWakeStatistics()})<<'\n';
+            windowStart=now;cpuAtStart=cpu;ipcAtStart=iterations;
+        }
         ipc.Stop(); simulation.request_stop(); simulation.join();
         trace.Finish();
         if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");

@@ -52,9 +52,11 @@ type reservation struct {
 	lifeGeneration uint64
 	commands       map[uint64]*runtime.MovementCommand
 	outSequence    uint32
-	// Diagnostics only: datagrams of this session and the last arrival.
+	// Diagnostics only: datagrams of this session and the last arrival, and
+	// the intervals between this session's writes to its Client.
 	received     uint64
 	lastReceived time.Time
+	sent         sendStatistics
 }
 type outbound struct {
 	actionPlayer uint64
@@ -608,6 +610,9 @@ func (s *Server) sendUDP(ctx context.Context) {
 				var packet outbound
 				payload, packet = s.snapshotForPeer(playerID, payload)
 				s.writeUDP(packet)
+				if packet.peer.IsValid() {
+					s.snapshotWritten(playerID, time.Now())
+				}
 			}
 		}
 	}
@@ -683,17 +688,21 @@ func (s *Server) expireAt(now time.Time) {
 }
 
 // Every statisticsInterval: each player's phase, endpoint, datagrams and the
-// age of the last one, with the Gateway-wide rate counters. Diagnostics only.
+// age of the last one, with the Gateway-wide rate counters, then the player's
+// send intervals (results, snapshots and runtime link action batches).
+// Diagnostics only.
 const statisticsInterval = 10 * time.Second
 
 func (s *Server) logStatistics(ctx context.Context) {
 	ticker := time.NewTicker(statisticsInterval)
 	defer ticker.Stop()
+	windowStart := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
+			links := s.link.takeActionStatistics()
 			s.mu.Lock()
 			ids := make([]uint64, 0, len(s.players))
 			for id := range s.players {
@@ -710,8 +719,14 @@ func (s *Server) logStatistics(ctx context.Context) {
 				}
 				log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
 					p.session.Endpoint(), p.received, age)
+				link, ok := links[id]
+				if !ok {
+					link = noIntervals
+				}
+				log.Print(sendStatisticsLine(id, now.Sub(windowStart), p.sent.results.take(), p.sent.snapshots.take(), link))
 			}
 			s.mu.Unlock()
+			windowStart = now
 		}
 	}
 }

@@ -4,7 +4,8 @@ gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
-    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp)
+    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
+    NetworkStatisticsTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
@@ -120,6 +121,10 @@ set_tests_properties("${GYO_CURRENT_APP}.command_evidence" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence_v7"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence_v7.py")
 set_tests_properties("${GYO_CURRENT_APP}.command_evidence_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
+add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")
+set_tests_properties("${GYO_CURRENT_APP}.network_statistics" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 # Room-capacity evidence, cross-validated value by value against command_evidence.
 add_test(NAME "${GYO_CURRENT_APP}.quad_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_quad_evidence.py")

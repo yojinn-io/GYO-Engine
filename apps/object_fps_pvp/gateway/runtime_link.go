@@ -32,6 +32,8 @@ type runtimeLink struct {
 	once            sync.Once
 	coalescedInputs uint64
 	maxWriteAge     time.Duration
+	// Diagnostics only: intervals between each player's ActionBatch writes.
+	actionStats map[uint64]*intervalStats
 }
 
 func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime.Ready, error) {
@@ -92,6 +94,7 @@ func (l *runtimeLink) forgetLocked(player uint64) {
 	delete(l.epochs, player)
 	delete(l.lives, player)
 	delete(l.actionWindows, player)
+	delete(l.actionStats, player)
 }
 
 func (l *runtimeLink) input(in *runtime.PlayerInput) error {
@@ -306,6 +309,7 @@ func (l *runtimeLink) close() {
 	clear(l.epochs)
 	clear(l.lives)
 	clear(l.actionWindows)
+	clear(l.actionStats)
 	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
 	l.mu.Unlock()
 	_ = l.conn.Close()

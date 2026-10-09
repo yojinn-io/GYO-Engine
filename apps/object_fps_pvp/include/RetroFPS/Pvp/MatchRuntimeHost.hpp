@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <atomic>
@@ -62,6 +63,9 @@ public:
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
+    // Diagnostics only: how Run's waits for the next tick ended since the
+    // previous call (or the start); resets the window.
+    [[nodiscard]] TickWakeStatistics TakeTickWakeStatistics();
 
     // IPC must wait for completion before accepting a replacement connection.
     // The future is completed by the simulation thread, which never waits I/O.
@@ -133,6 +137,7 @@ private:
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;
     std::optional<std::promise<void>> pendingReset_;
+    TickWakeStatistics tickWakes_;
     std::atomic<bool> running_{};
 };
 

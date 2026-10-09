@@ -290,10 +290,20 @@ void MatchRuntimeHost::Run(std::stop_token stop) {
         const auto now = std::chrono::steady_clock::now();
         const auto result = Advance(std::chrono::duration<double>(now - previous).count());
         previous = now;
+        // Diagnostics: the tick grid point this wait aims at. The wait is
+        // relative and starts after Advance, so lateness includes Advance.
+        const auto planned = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            std::chrono::duration<double>(result.secondsUntilNextTick));
         std::unique_lock lock(mutex_);
-        wake_.wait_for(lock, stop, std::chrono::duration<double>(result.secondsUntilNextTick),
-                       [this] { return pendingReset_.has_value(); });
+        const bool reset = wake_.wait_for(lock, stop, std::chrono::duration<double>(result.secondsUntilNextTick),
+                                          [this] { return pendingReset_.has_value(); });
+        if (!stop.stop_requested()) tickWakes_.Record(planned, std::chrono::steady_clock::now(), reset);
     }
+}
+
+TickWakeStatistics MatchRuntimeHost::TakeTickWakeStatistics() {
+    std::lock_guard lock(mutex_);
+    return std::exchange(tickWakes_, {});
 }
 
 std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {

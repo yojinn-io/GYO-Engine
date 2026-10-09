@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "client_v6.pb.h"
@@ -598,6 +599,10 @@ struct ClientConnection::Impl {
         SendActions();
     }
     void Run(std::stop_token stop) {
+        // Diagnostics: this worker's wakes and CPU per statistics window.
+        auto statisticsAt=Clock::now();
+        auto cpuAt=CurrentThreadCpuSeconds();
+        std::uint64_t wakes{};
         while(!stop.stop_requested()) {
             std::optional<Request> request;
             {std::scoped_lock lock(mutex);if(!requests.empty()){request=std::move(requests.front());requests.pop_front();}}
@@ -608,6 +613,14 @@ struct ClientConnection::Impl {
             const auto remaining=nextInputSendAt-Clock::now();
             if(haveSentInput && remaining>Clock::duration::zero())sleep=std::min(sleep,remaining);
             std::this_thread::sleep_for(sleep);
+            ++wakes;
+            if(const auto now=Clock::now();std::chrono::duration<double>(now-statisticsAt).count()>=NetworkStatisticsSeconds) {
+                const auto cpu=CurrentThreadCpuSeconds();
+                PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
+                std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
+                    .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
+                statisticsAt=now;cpuAt=cpu;wakes=0;
+            }
         }
         try{DisconnectRemote();}
         catch(const std::exception& error){std::osyncstream(std::clog)<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
