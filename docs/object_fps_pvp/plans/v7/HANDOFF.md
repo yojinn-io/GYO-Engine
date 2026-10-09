@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批待使用者指示）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批開始）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -9,10 +9,10 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：
-  1. 是否開始第 08 批（Client 的網路 worker 改為一條 asio io 執行緒，SendInput／SubmitAction 以 post 喚醒）。建議開始；橫向對比顯示，剩下受主機狀態影響的部分在 Client 端。README 的建議檔位是 high、局部 xhigh；若要另開 xhigh 審查 agent，需要你同意。
-- **進行中**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：第 07 批的 L2 結果與橫向對比推送後重跑 CI。
-- **下一步**：你同意後開始第 08 批：讀 ClientConnection 的 worker 現況，寫批次文件。
-- **最後更新**：2026-10-09 16:14，依據 commit `10003b9`（第 07 批的程式；L2 通過，橫向對比完成）。
+  1. D36（動作送出的語意，P2 開始時漏了確認）：保持 30 Hz 的最小間隔，符合資格時在 `SubmitAction` 當下送出，不改 wire。建議採用；改成事件驅動後，`SubmitAction` 本來就要喚醒 worker。
+- **進行中**：第 08 批（[批次文件](08-client-worker-asio.md)）開始，等 D36 確認後實作。ACK 依批次範圍維持在主執行緒（理由見批次文件）。
+- **下一步**：D36 確認後，把 Client 的網路 worker 改為一條 asio io 執行緒。
+- **最後更新**：2026-10-09 16:19，依據 commit `67d990d`（PR #73 的頭）。
 
 ## 閱讀入口
 
@@ -132,6 +132,7 @@
 - 2026-10-09：使用者指示開始第 07 批（「開始第 07 批」）。批次文件 [07](07-match-tick-ipc.md)：模擬執行緒改由 `MatchRuntimeHost` 擁有（`GYO::Threads`）並以 Waiter 等絕對期限；IpcHost 改為一條 asio io 執行緒，移除 1／5／10 ms 的輪詢。檔位 high，沒有另開 xhigh 審查 agent。
 - 2026-10-09：第 07 批的實作與 L1 完成：A（`ffe9a99`）Match 的模擬角色以 Waiter 等絕對期限、發布通知、覆蓋計數；B（`10003b9`）IpcHost 改為一條 asio io 執行緒、移除輪詢、連線結束的路徑明確化。全量 CTest 69／69、突變 3／3、TSan 無報告、backpressure 6 案與 25 案矩陣通過。clean-60 的 Tick 晚醒全部 <250 µs（P2-log 以 2～4 ms 為主），Match 程序 CPU 約為 P2-log 的 1/3。L2 的事前宣告寫進批次文件，待使用者核准。
 - 2026-10-09：使用者核准第 07 批的 L2 宣告（Chrome 開著但不操作）。60 次全部完成，**通過**：after 的 Tick 晚醒全部 <250 µs（P99 上界 244 µs，兩種主機狀態都一樣），before 的 P99 上界 8 ms；Match 程序 CPU 約 -41％。**第 07 批完成。** 接著做橫向對比（見[第 07 批](07-match-tick-ipc.md)的「橫向對比」）：後段變慢是 8 ms 主機狀態下舊 Match 的晚醒與補步，第 07 批之後消失；clean-30 仍受主機狀態影響，來源可能在 Client 端，第 08 批之後再對比。
+- 2026-10-09：使用者指示開始第 08 批（「開始第 08 批，檔位照建議來」：high，局部 xhigh，對喚醒與期限的交接開 1 次 xhigh 審查）。批次文件 [08](08-client-worker-asio.md)。ACK 維持在主執行緒的 `Drain`（改了會讓尚未取走的裁決在退休時被刪除）。D36 在 P2 開始時漏了確認，現在請使用者確認。
 
 ## P2 以後各批的範圍
 
