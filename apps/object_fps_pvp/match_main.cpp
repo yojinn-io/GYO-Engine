@@ -51,8 +51,8 @@ int main(int argc,char** argv) {
         std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
         fps::pvp::MovementTraceWriter trace(movementTrace);
         fps::pvp::MatchRuntimeHost runtime(*arena);
-        std::jthread simulation([&](std::stop_token stop){runtime.Run(stop);});
         fps::pvp::IpcHost ipc(runtime,*arena);
+        if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
         std::signal(SIGINT,Stop);std::signal(SIGTERM,Stop);
         std::cout<<"Object_FPS_PVP Match ready: "<<listen<<" arena="<<arena->id<<" authority=60Hz\n"<<std::flush;
@@ -62,21 +62,26 @@ int main(int argc,char** argv) {
         auto windowStart=std::chrono::steady_clock::now();
         auto cpuAtStart=fps::pvp::ProcessCpuSeconds();
         auto ipcAtStart=ipc.Iterations();
-        static_cast<void>(runtime.TakeTickWakeStatistics());
-        while(!stopping) {
+        static_cast<void>(runtime.TakeStatistics());
+        std::optional<std::string> failed;
+        while(!stopping && !(failed=runtime.Error())) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             const auto now=std::chrono::steady_clock::now();
             const double window=std::chrono::duration<double>(now-windowStart).count();
             if(window<fps::pvp::NetworkStatisticsSeconds) continue;
             const auto cpu=fps::pvp::ProcessCpuSeconds();
             const auto iterations=ipc.Iterations();
+            auto host=runtime.TakeStatistics();
             std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
-                .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=runtime.TakeTickWakeStatistics()})<<'\n';
+                .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
+                .snapshotOverwrites=host.snapshotOverwrites})<<'\n';
             windowStart=now;cpuAtStart=cpu;ipcAtStart=iterations;
         }
-        ipc.Stop(); simulation.request_stop(); simulation.join();
+        // I/O first: it stops calling into the host before the host's role stops.
+        ipc.Stop(); runtime.Stop();
         trace.Finish();
+        if(failed){std::cerr<<"Match simulation failed: "<<*failed<<'\n';return 1;}
         if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
     return 0;

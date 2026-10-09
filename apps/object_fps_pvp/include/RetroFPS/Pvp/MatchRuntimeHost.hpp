@@ -2,10 +2,10 @@
 
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "engine/threads/RoleThread.hpp"
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <future>
@@ -13,7 +13,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
-#include <stop_token>
+#include <string>
 #include <vector>
 
 namespace fps::pvp {
@@ -42,10 +42,27 @@ struct Eviction final {
 
 // Product scheduler/host. Network I/O only exchanges values through bounded
 // ingress/results and one replaceable snapshot; it never drives world ticks.
+// The host owns its simulation role: a GYO::Threads role thread that steps at
+// absolute tick deadlines on the role's Waiter.
 class MatchRuntimeHost final {
 public:
     using ClockNow = std::function<std::chrono::steady_clock::time_point()>;
     explicit MatchRuntimeHost(Arena arena, ClockNow now = std::chrono::steady_clock::now);
+    MatchRuntimeHost(const MatchRuntimeHost&) = delete;
+    MatchRuntimeHost& operator=(const MatchRuntimeHost&) = delete;
+    ~MatchRuntimeHost();
+
+    // Starts the simulation role (gyo-match-sim). Returns false with an error
+    // when the thread cannot start. Stop joins it; both run on the owner's
+    // thread, never concurrently with other calls.
+    [[nodiscard]] bool Start(std::string& error);
+    void Stop();
+    // The role's Runtime Error, if a step threw; the role then stopped stepping.
+    [[nodiscard]] std::optional<std::string> Error() const;
+    // Called outside the host's lock, by whoever runs Advance, after a step that
+    // published a snapshot, control results or evictions, or completed a reset.
+    // Set before Start. It must not block: the I/O layer only posts a wake-up.
+    void SetPublishListener(std::function<void()> listener);
     [[nodiscard]] bool QueueJoin(std::uint64_t requestId, PlayerId playerId);
     [[nodiscard]] bool QueueLeave(std::uint64_t requestId, PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
@@ -58,17 +75,22 @@ public:
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
 
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Advance(double elapsedSeconds);
-    void Run(std::stop_token stop);
     [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot();
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
-    // Diagnostics only: how Run's waits for the next tick ended since the
-    // previous call (or the start); resets the window.
-    [[nodiscard]] TickWakeStatistics TakeTickWakeStatistics();
+    // Diagnostics only, since the previous call (or the start): how the
+    // simulation role's waits for the next tick ended, and how many published
+    // snapshots were replaced before the I/O layer took them. Resets the window.
+    struct Statistics final {
+        TickWakeStatistics ticks;
+        std::uint64_t snapshotOverwrites{};
+    };
+    [[nodiscard]] Statistics TakeStatistics();
 
     // IPC must wait for completion before accepting a replacement connection.
-    // The future is completed by the simulation thread, which never waits I/O.
+    // The future is completed by the next step (the role is woken at once),
+    // which never waits for I/O; the publish listener then fires.
     [[nodiscard]] std::future<void> RequestReset();
     // Only for a stopped host or deterministic tests.
     void Reset();
@@ -115,6 +137,9 @@ private:
         std::chrono::steady_clock::time_point publishedAt;
     };
     bool QueueControl(Control control);
+    // Advance's work under the lock; published tells Advance to notify.
+    [[nodiscard]] Engine::Runtime::FixedTickAdvance Step(double elapsedSeconds, bool& published);
+    void Body(Engine::Threads::RoleContext& context);
     void ClearState();
     void RemovePlayerState(PlayerId playerId);
     // `at` is this Advance's single clock reading, taken on first use.
@@ -122,7 +147,6 @@ private:
     void JudgeConnectionQuality(WorldSnapshot& state);
 
     mutable std::mutex mutex_;
-    std::condition_variable_any wake_;
     PvpMatch match_;
     ClockNow now_;
     Engine::Runtime::FixedTickRuntime ticker_{AuthorityTickRate};
@@ -137,8 +161,12 @@ private:
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;
     std::optional<std::promise<void>> pendingReset_;
-    TickWakeStatistics tickWakes_;
+    Statistics statistics_;
+    std::optional<std::string> error_;
+    std::function<void()> publishListener_;
     std::atomic<bool> running_{};
+    // Last: destroyed first, so the role stops before the state it uses.
+    std::optional<Engine::Threads::RoleThread> role_;
 };
 
 } // namespace fps::pvp

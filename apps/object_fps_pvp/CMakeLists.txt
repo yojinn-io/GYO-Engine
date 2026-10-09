@@ -31,7 +31,7 @@ gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
 # Every product target reaches the domain library, so the flag stays product-local.
 target_compile_options(${domain} PUBLIC $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
-    PUBLIC_LIBRARIES ${domain})
+    PUBLIC_LIBRARIES ${domain} GYO::Threads)
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
     PUBLIC_LIBRARIES ${host} GYO::Net
     PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v6")

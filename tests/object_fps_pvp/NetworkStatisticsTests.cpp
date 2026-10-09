@@ -4,6 +4,8 @@
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
 #include <chrono>
+#include <future>
+#include <string>
 #include <thread>
 
 namespace {
@@ -39,7 +41,7 @@ TEST_CASE("Tick wake statistics measure deadline wakes against the planned grid 
 
 TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
     MatchStatisticsWindow match{.windowSeconds = 10.0004, .cpuSeconds = 0.25, .cpuTotalSeconds = 12.5,
-                                .ipcIterations = 8123};
+                                .ipcIterations = 8123, .snapshotOverwrites = 3};
     const Engine::Time::TimePoint planned{1s};
     match.ticks.Record(planned, planned + 300us, false);
     match.ticks.Record(planned, planned + 5ms, false);
@@ -47,12 +49,12 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
     CHECK(MatchStatisticsLine(match) ==
           "[ObjectFPS/PvP Match] network statistics window_s=10.000 cpu_s=0.250 cpu_total_s=12.500 ipc_iterations=8123 "
           "ipc_iterations_per_s=812.3 tick_deadline_wakes=2 tick_notified=1 tick_early=0 tick_late_p50_le_us=500 "
-          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0");
+          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0 snapshot_overwrites=3");
 
     CHECK(MatchStatisticsLine({}) ==
           "[ObjectFPS/PvP Match] network statistics window_s=0.000 cpu_s=na cpu_total_s=na ipc_iterations=0 "
           "ipc_iterations_per_s=0.0 tick_deadline_wakes=0 tick_notified=0 tick_early=0 tick_late_p50_le_us=0 "
-          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0");
+          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0");
 
     CHECK(WorkerStatisticsLine({.player = 2, .windowSeconds = 10.0, .wakes = 4812, .cpuSeconds = 0.0514}) ==
           "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051");
@@ -78,25 +80,27 @@ TEST_CASE("CPU time readings never decrease and grow with work on the calling th
 
 TEST_CASE("The Match host reports its tick waits per window and resets them") {
     MatchRuntimeHost host{StatisticsArena()};
-    {
-        std::jthread simulation([&](std::stop_token stop) { host.Run(stop); });
-        // Poll rather than sleep a fixed time: a loaded machine may run the
-        // simulation thread late, and the windows together keep every wait.
-        std::uint64_t deadlineWakes{}, notified{};
-        const auto giveUp = std::chrono::steady_clock::now() + 10s;
-        while (deadlineWakes < 3 && std::chrono::steady_clock::now() < giveUp) {
-            std::this_thread::sleep_for(20ms);
-            const auto window = host.TakeTickWakeStatistics();
-            deadlineWakes += window.late.Count();
-            notified += window.notified;
-        }
-        CHECK(deadlineWakes >= 3);
-        CHECK(notified == 0);
-        static_cast<void>(host.RequestReset());
-        std::this_thread::sleep_for(50ms);
+    std::string error;
+    REQUIRE(host.Start(error));
+    // Poll rather than sleep a fixed time: a loaded machine may run the
+    // simulation role late, and the windows together keep every wait.
+    std::uint64_t deadlineWakes{}, notified{};
+    const auto giveUp = std::chrono::steady_clock::now() + 10s;
+    while (deadlineWakes < 3 && std::chrono::steady_clock::now() < giveUp) {
+        std::this_thread::sleep_for(20ms);
+        const auto window = host.TakeStatistics().ticks;
+        deadlineWakes += window.late.Count();
+        notified += window.notified;
     }
-    // Only the waits since the previous take: about 3 in 50 ms.
-    const auto last = host.TakeTickWakeStatistics();
-    CHECK(last.notified <= 1);
+    CHECK(deadlineWakes >= 3);
+    CHECK(notified == 0);
+    auto reset = host.RequestReset();
+    REQUIRE(reset.wait_for(2s) == std::future_status::ready);
+    std::this_thread::sleep_for(50ms);
+    host.Stop();
+    // Only the waits since the previous take: about 3 in 50 ms, and the reset
+    // request woke the role once.
+    const auto last = host.TakeStatistics().ticks;
+    CHECK(last.notified == 1);
     CHECK(last.late.Count() < 12);
 }

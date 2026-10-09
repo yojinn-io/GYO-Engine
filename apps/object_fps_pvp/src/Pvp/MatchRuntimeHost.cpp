@@ -25,6 +25,32 @@ MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now)
     if (!now_) throw std::invalid_argument("MatchRuntimeHost needs a monotonic clock");
 }
 
+MatchRuntimeHost::~MatchRuntimeHost() { Stop(); }
+
+bool MatchRuntimeHost::Start(std::string& error) {
+    if (role_) throw std::logic_error("MatchRuntimeHost is already started");
+    auto started = Engine::Threads::RoleThread::Start({"gyo-match-sim", Engine::Threads::ThreadPriority::Interactive},
+        [this](Engine::Threads::RoleContext& context) { Body(context); });
+    if (!started) {
+        error = Engine::Base::Describe(started.error());
+        return false;
+    }
+    role_.emplace(std::move(*started));
+    return true;
+}
+
+void MatchRuntimeHost::Stop() { role_.reset(); }
+
+std::optional<std::string> MatchRuntimeHost::Error() const {
+    std::lock_guard lock(mutex_);
+    return error_;
+}
+
+void MatchRuntimeHost::SetPublishListener(std::function<void()> listener) {
+    if (role_) throw std::logic_error("Set the publish listener before Start");
+    publishListener_ = std::move(listener);
+}
+
 bool MatchRuntimeHost::QueueControl(Control control) {
     std::lock_guard lock(mutex_);
     if (pendingReset_ || control.requestId == 0 || control.playerId == 0 ||
@@ -161,13 +187,23 @@ std::optional<ActionResults> MatchRuntimeHost::GetActionResults(PlayerId playerI
 }
 
 Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSeconds) {
+    bool published = false;
+    const auto advance = Step(elapsedSeconds, published);
+    if (published && publishListener_) publishListener_();
+    return advance;
+}
+
+Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, bool& published) {
     std::lock_guard lock(mutex_);
     if (pendingReset_) {
         ClearState();
         elapsedSeconds = 0;
         pendingReset_->set_value();
         pendingReset_.reset();
+        published = true;
     }
+    const auto resultsBefore = results_.size();
+    const auto evictionsBefore = evictions_.size();
     std::optional<WorldSnapshot> publication;
     // One clock reading per Advance serves slack timing and the publication reference.
     std::optional<std::chrono::steady_clock::time_point> advancedAt;
@@ -268,7 +304,9 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         if (!advancedAt) advancedAt = now_();
         publishedReferences_.push_back({publication->tick, *advancedAt});
         if (publishedReferences_.size() > MaxPublishedShotReferences) publishedReferences_.pop_front();
+        if (snapshot_) ++statistics_.snapshotOverwrites;
         snapshot_ = std::move(publication);
+        published = true;
         // Samples reach the Client through published snapshots only; catch-up
         // states replaced inside this Advance kept accumulating the minimum.
         for (auto& [playerId, track] : slack_) track.pending.reset();
@@ -276,34 +314,42 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
     if (elapsedSeconds >= 0.1 || advance.droppedSeconds > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .authorityTick = match_.TickCount(),
             .droppedSeconds = advance.droppedSeconds, .frameSeconds = elapsedSeconds});
+    published = published || results_.size() > resultsBefore || evictions_.size() > evictionsBefore;
     return advance;
 }
 
-void MatchRuntimeHost::Run(std::stop_token stop) {
-    if (running_.exchange(true)) throw std::logic_error("MatchRuntimeHost is already running");
+void MatchRuntimeHost::Body(Engine::Threads::RoleContext& context) {
+    running_.store(true);
     struct Guard final {
         std::atomic<bool>& running;
         ~Guard() { running.store(false); }
     } guard{running_};
-    auto previous = std::chrono::steady_clock::now();
-    while (!stop.stop_requested()) {
-        const auto now = std::chrono::steady_clock::now();
-        const auto result = Advance(std::chrono::duration<double>(now - previous).count());
-        previous = now;
-        // Diagnostics: the tick grid point this wait aims at. The wait is
-        // relative and starts after Advance, so lateness includes Advance.
-        const auto planned = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double>(result.secondsUntilNextTick));
-        std::unique_lock lock(mutex_);
-        const bool reset = wake_.wait_for(lock, stop, std::chrono::duration<double>(result.secondsUntilNextTick),
-                                          [this] { return pendingReset_.has_value(); });
-        if (!stop.stop_requested()) tickWakes_.Record(planned, std::chrono::steady_clock::now(), reset);
+    // A thread entry point handles its own Runtime Errors: match_main reads
+    // Error() and exits visibly.
+    try {
+        auto previous = std::chrono::steady_clock::now();
+        while (!context.StopRequested()) {
+            const auto sampled = std::chrono::steady_clock::now();
+            const auto result = Advance(std::chrono::duration<double>(sampled - previous).count());
+            previous = sampled;
+            // The next tick grid point, as an absolute deadline: the time
+            // Advance took does not delay it. A reset request wakes it early.
+            const auto deadline = sampled + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(result.secondsUntilNextTick));
+            const auto wake = context.WaitUntil(deadline);
+            if (context.StopRequested()) break;
+            std::lock_guard lock(mutex_);
+            statistics_.ticks.Record(deadline, wake.woke, wake.reason == Engine::Time::WakeReason::Notified);
+        }
+    } catch (const std::exception& failure) {
+        std::lock_guard lock(mutex_);
+        error_ = failure.what();
     }
 }
 
-TickWakeStatistics MatchRuntimeHost::TakeTickWakeStatistics() {
+MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
     std::lock_guard lock(mutex_);
-    return std::exchange(tickWakes_, {});
+    return std::exchange(statistics_, {});
 }
 
 std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
@@ -425,7 +471,7 @@ std::future<void> MatchRuntimeHost::RequestReset() {
     if (pendingReset_) throw std::logic_error("A match reset is already pending");
     pendingReset_.emplace();
     auto future = pendingReset_->get_future();
-    wake_.notify_all();
+    if (role_) role_->Notify();
     return future;
 }
 

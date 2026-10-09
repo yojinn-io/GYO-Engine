@@ -771,7 +771,8 @@ TEST_CASE("PvP arena loads its versioned standalone content contract") {
 
 TEST_CASE("PvP host owns its clock and reset completes independently of I/O") {
     fps::pvp::MatchRuntimeHost host(TestArena());
-    std::jthread simulation([&](std::stop_token stop) { host.Run(stop); });
+    std::string error;
+    REQUIRE(host.Start(error));
     auto reset = host.RequestReset();
     REQUIRE(reset.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
     CHECK_NOTHROW(reset.get());
@@ -786,7 +787,7 @@ TEST_CASE("PvP host owns its clock and reset completes independently of I/O") {
     REQUIRE(snapshot);
     REQUIRE(snapshot->players.size() == 1);
     CHECK(snapshot->players[0].playerId == 1);
-    simulation.request_stop();
+    host.Stop();
 }
 
 TEST_CASE("PvP exhausted lead rotates at the next boundary and awaits a new epoch without looping") {

@@ -35,6 +35,7 @@ struct MatchStatisticsWindow final {
     std::optional<double> cpuTotalSeconds; // process CPU since start
     std::uint64_t ipcIterations{};
     TickWakeStatistics ticks;
+    std::uint64_t snapshotOverwrites{}; // published snapshots replaced before the I/O layer took them
 };
 [[nodiscard]] std::string MatchStatisticsLine(const MatchStatisticsWindow& window);
 
