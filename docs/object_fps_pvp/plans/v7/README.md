@@ -3,7 +3,7 @@
 更新：2026-10-09。Owner：`object_fps_pvp`。
 **狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**下一步：P2**（從 P2-log 開始）。
 
-v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
+v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度與 FPS 的選擇、產品與 SDL 的隔離、日誌補強。
 
 規劃方法（2026-10-08，ultracode）：
 1. 唯讀盤點：9 個區域 agent，加 1 次 xhigh 對抗式完整性檢查，結果是 [盤點](INVENTORY.md)。
@@ -29,7 +29,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 3 | 網路路徑的短休眠輪詢改為事件驅動：Match IPC 每輪 1 ms（`IpcHost.cpp:327`；另有 `:336` 的 5 ms accept、`:339`／`:344` 的 10 ms future 輪詢）、Client 網路 worker 每輪 min(2 ms, 到下一次輸入期限)（`ClientConnection.cpp:594-597`）。實測成本在現有主機上只有 1～3 ms，屬推測的壓力；觀測到的是 SendInput／SubmitAction 不會喚醒 worker。v6 第 16 批的「4 人 IPC 寫出負載」沒有觀測到（合併 0 次），不作為證據 | v6 D21；[盤點](INVENTORY.md) |
 | 4 | runtime link（Gateway↔Match）的心跳對時：偏移、RTT、漂移，只作量測與診斷。移動以 Tick 與序號裁決；射擊的 Expired／InvalidReference（250 ms，`PvpMatch.cpp:281-286`）與逐出（參考年齡中位數 160 ms，`MatchRuntimeHost.cpp:86-101`、`:375-389`）用本機單調年齡，**對時結果不得用在這兩處**。屬 wire 變更：目前收到未知訊息會斷線、版本要求完全相等（`IpcHost.cpp:210`、`:246`；`runtime_link.go:48-51`、`:284-291`），所以必須升 pv7 | 2026-10-06 使用者決定；D32 |
 | 5 | 音效：Engine 新增 audio 模組，本產品加入射擊、受擊等聲音 | 2026-10-06 使用者決定（「有聲音遊戲才算完整」） |
-| 6 | 解析度、視窗模式與 FPS 上限的切換，設定可保存（FPS 上限與 `--fps` 限幀選項依 D41 於 2026-10-09 加入）。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
+| 6 | 解析度、視窗模式與 FPS 上限由玩家選擇。D41（2026-10-09）：加入 FPS 上限；v7 以命令列選項提供，遊戲內的設定 UI 與設定的保存移到 v8。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
 | 7 | 產品不再直接依賴 SDL。完成條件以 SDL 符號判定（D33）：產品、驗收 probe、產品測試中 `SDL_*`、`SDLK_*`、SDL 的型別與 include、Engine 的 `*Native.hpp` 都是 0 件（CMake 的後端元件選擇除外）。只看 include 不夠，因為 `SdlPlatform.hpp`、`SdlInput.hpp` 本身 include SDL，`PvpApplication.hpp` 也暴露 `SdlPlatform&`、`SdlGpuRenderDevice&`。現存使用的位置見[盤點](INVENTORY.md) | 2026-10-06 使用者決定；D33 |
 | 8 | 日誌與診斷補強：v6 LAN 聯機測試發現的缺口，建在 Trace 之上（各缺口的 owner 見「v6 LAN 聯機測試的觀察」） | 2026-10-08 使用者決定（「下沉到 v7 的子系統中」） |
 
@@ -45,8 +45,8 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | Net transport | 留在產品內：任務 3 以產品內的 asio 完成。C++ 消費端只有本產品，Gateway 是 Go | — | 弱：Go 端已是事件驅動；asio 由產品取得（`apps/object_fps_pvp/CMakeLists.txt:8-10`） |
 | Trace | `GYO::Trace`（精簡）：有界紀錄 sink、以通知喚醒的背景寫檔、Base 的日誌 facade。不做錄製重播 | 任務 8 的紀錄（P3） | 強：v6 LAN 的關鍵數字都要從 movement trace 離線重建 |
 | SDL 隔離 | 擴充 platform／input（IP-3、IP-4） | 產品與 probe 的遷移（P4） | 強：產品、7 個 probe 檔、2 個產品測試、Engine 測試 |
-| Display | 擴充 platform（IP-5）。工具不是第二個使用者：ui_editor 的大小與像素密度由 ImGui SDL3 後端吸收，preview 已停用；第二個消費端是驗收 probe 與產品測試的唯讀查詢 | 解析度設定（P5） | 弱（主要來自任務 6） |
-| 使用者設定的保存 | `engine/io` 的原子寫入＋每位使用者的目錄（IP-5）。已有兩份 temp＋rename 的原子寫入（`tools/ui_editor/src/FileService.cpp:54-94`、`engine/render/shaders/pipeline/src/main.cpp:64-72`）。鍵與值的意義、版本與驗證規則屬各產品的 Data Contract | 解析度設定（P5） | 弱 |
+| Display | 擴充 platform（IP-5）。工具不是第二個使用者：ui_editor 的大小與像素密度由 ImGui SDL3 後端吸收，preview 已停用；第二個消費端是驗收 probe 與產品測試的唯讀查詢 | 解析度與 FPS 的選擇（P5） | 弱（主要來自任務 6） |
+| 使用者設定的保存 | `engine/io` 的原子寫入＋每位使用者的目錄（IP-5）。已有兩份 temp＋rename 的原子寫入（`tools/ui_editor/src/FileService.cpp:54-94`、`engine/render/shaders/pipeline/src/main.cpp:64-72`）。鍵與值的意義、版本與驗證規則屬各產品的 Data Contract。D41：設定的保存隨設定 UI 移到 v8，v7 沒有消費端，所以不做 | v8 的設定 UI | 弱 |
 | Audio | `GYO::Audio`（中立混音器，自己維護樣本計數並依時間戳排程）＋SDL 後端。SDL 3.4 沒有時間戳排程的 API | 音效（P6） | 無（使用者決定的功能） |
 
 - **framework 層的現況**：
@@ -77,7 +77,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | high（局部 xhigh；契約建議 ultracode 審查） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
 | 12 | （P4 開始時撰寫） | high | 未開始 | 產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest |
-| 13 | （P5 開始時撰寫） | high（套用與還原局部 xhigh） | 未開始 | 解析度、視窗模式、FPS 上限與 `--fps` 限幀（D41）、設定 Data Contract、未確認就還原；30 FPS 手感的 L3（D41） |
+| 13 | （P5 開始時撰寫） | high（視窗模式的切換順序局部 xhigh） | 未開始 | 玩家以命令列選項選擇解析度、視窗模式與 FPS 上限（D41）；HUD 依解析度縮放；30 FPS 手感的 L3（D41）。設定 UI 與 `settings.json` 在 v8 |
 | 14 | （P6 開始時撰寫） | high | 未開始 | 射擊、命中、受擊、換彈的音效 |
 | 15 | （P7 開始時撰寫） | medium | 未開始 | v7 LAN 場次：Windows 實機、兩機漂移、Windows 的視窗切換 |
 | 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行 |
@@ -92,7 +92,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
 | IP-3 | Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`）；日誌轉送、執行檔目錄、進入點、文字輸入與剪貼簿、事件時間戳換算 | high（時間戳換算局部 xhigh） | 第 12 批依賴 |
 | IP-4 | 測試用事件注入與觀測、視窗查詢與擺放；SDL3 改為 PRIVATE 連結 | high | 第 12 批依賴 |
-| IP-5 | 顯示器與模式列舉、視窗模式、像素密度、使用者目錄、`engine/io` 的原子寫入 | high（模式切換順序、原子取代局部 xhigh） | 第 13 批依賴 |
+| IP-5 | 顯示器與模式列舉、視窗模式、像素密度（使用者目錄與 `engine/io` 的原子寫入依 D41 移到 v8） | high（模式切換順序局部 xhigh） | 第 13 批依賴 |
 | AU-1 | `GYO::Audio`＋SDL 後端 | high（callback 即時安全、時間戳→樣本位置局部 xhigh） | 第 14 批依賴 |
 
 ### PR 線
@@ -126,7 +126,7 @@ P3   [TT-2 Trace] → [10 診斷紀錄] → [11 pv7]   ← 唯一的 wire 變更
        │
 P4   [IP-3] → [IP-4] → [12 產品去 SDL]
                  │
-P5            [IP-5] → [13 解析度設定（含 --fps 限幀、30 FPS 的 L3）]
+P5            [IP-5] → [13 解析度與 FPS 的選擇（命令列選項、30 FPS 的 L3）]
 P6   [AU-1]（需 TT-1、IP-3）→ [14 音效]
 P7   [15 LAN 場次]（需 11）→ [16 整合與升格] ← 全部
 ```

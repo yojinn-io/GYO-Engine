@@ -79,7 +79,7 @@
   - 判定（以加入之後的整段 session 計，比只看拖動期間更嚴）：每位玩家 Match 的連續替代（Held 或 Neutral，不含 Match 停頓造成的）≤3 Tick，停頓重設 0，LifeRespawn 以外的 epoch 重設 0。
   - 停止條件「模擬晚醒 ≥100 ms」的來源：Client trace 中模擬角色發出的 `runtime_gap`（`frame_seconds` ≥0.1）。
 - L3：連續射擊中切換 Spaces、縮小、遮住視窗；保留 Client、Gateway、Match 的日誌與 movement trace。判定不斷線。
-  - 原計畫的「30 FPS 的手感」：產品 Client 沒有指定 FPS 的選項，本批不做；依 D41 在第 13 批（解析度與畫面設定，產品加 `--fps` 限幀選項）做。
+  - 原計畫的「30 FPS 的手感」：產品 Client 沒有指定 FPS 的選項，本批不做；依 D41 在第 13 批（玩家以命令列選項選擇解析度與 FPS，含 `--fps`）做。
 
 ### D39 審查的處理（2026-10-09）
 
