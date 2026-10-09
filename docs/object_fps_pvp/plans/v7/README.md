@@ -72,8 +72,8 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | P2-log | [網路路徑的 10 秒統計](p2-log-network-statistics.md) | medium | 完成（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)） | 只加記錄的 commit，作為 P2 的 before |
 | 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
 | 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
-| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 完成（2026-10-09；`730984e`，L2 第 2 次通過；b 段變長約 3.5 ms 待決定處理方式）（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
-| 08b | （開始時撰寫） | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 未開始（D43） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
+| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 完成（2026-10-09；`730984e`，L2 第 2 次通過；b 段變長約 3.5 ms 併入第 08b 批調查）（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
+| 08b | （開始時撰寫） | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 未開始（D43；含第 08 批 L2 的 b 段調查） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
 | 09 | （P2 開始時撰寫） | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
 | 10 | （P3 開始時撰寫） | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | pv7 契約 ultracode（D45）；實作 high（局部 xhigh） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |

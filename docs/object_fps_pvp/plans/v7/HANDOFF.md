@@ -8,9 +8,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：第 08 批 L2 的觀察：b 段（relay 上行→裁決 Tick）after 比 before 長約 3.5 ms，a 縮短約 1.8 ms，Match 端合計多約 2 ms（判定通過，原因未查）。要不要在第 08b 批的 ultracode 規劃裡一併調查，或另外處理（[第 08 批](08-client-worker-asio.md)「L2 第 2 次執行」）。
+- **等你決定**：開始第 08b 批時是否開 ultracode（D45）。
 - **進行中**：無（第 08 批完成）。
-- **下一步**：第 08b 批的規劃依 D45 用 ultracode：開始前先問你「要開 ultracode 嗎」。
+- **下一步**：第 08b 批的 ultracode 規劃，範圍包含第 08 批 L2 的 b 段變長（使用者 2026-10-09 決定）。
 - **最後更新**：2026-10-09，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
@@ -147,6 +147,7 @@
 - 2026-10-09：使用者決定「判定 2 照建議改，從頭重跑 L2」：判定 2 改為 after 每個視窗的 link 最短間隔 ≥ I−1 ms。L2 第 2 次開始。
 - 2026-10-09：使用者決定 D45（P2 剩下的部分與 P3 的換檔：08b 規劃、09 常數推導、11 契約、TT-2／10 規劃用 ultracode；每批 L2 的事前宣告先做 1 次對抗式檢查）。L2 第 2 次照常執行，沒有打斷。
 - 2026-10-09：第 08 批 L2 第 2 次通過（60 次；判定 1、2 成立）。觀察：b 段 after 長約 3.5 ms、a 短約 1.8 ms；worker 喚醒與 CPU 約減半。Client 端的主機狀態橫向對比沒有 8 ms 狀態的 clean-30 樣本，無法對比。第 08 批完成。
+- 2026-10-09：使用者決定「b 段併進第 08b 批的 ultracode 規劃一起查」：第 08 批 L2 的 b 段變長（after 長約 3.5 ms）在第 08b 批的規劃一起調查。
 
 ## P2 以後各批的範圍
 
@@ -161,7 +162,7 @@
 - **06** Gateway 結果通道：資格判定改為只在 `now + I/2 < nextSend` 時才跳過（`action_delivery.go:205`），保留寫出後的重新錨定與「不爆量」。修正後若碰到分析器「每秒 ≤31」的窗口規則，停下由使用者決定。runtime link 的 action batch 不改，只量測。
 - **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。完成後做 P2-log、第 06、07 批的 clean-30／clean-60 橫向對比（2026-10-09 使用者要求，見「未結事項」）。
 - **08** Client：worker 改為一條 asio io 執行緒（async receive、各期限一個 steady_timer），SendInput／SubmitAction 以 post 喚醒；速率語意不變；httplib 留在 worker（只在大廳切換與關閉時阻塞 UDP）。ACK 判定在 L1 顯示語意不變時改為網路角色收到裁決時前進，否則維持並記錄理由。動作送出語意依 D36。
-- **08b**（D43）結果改為事件驅動轉送：Match 的 action lane 與 Gateway 的結果，距上次送出 ≥I 就立即送；不到 I 就設計時器在「上次送出＋I」送出，不帶 I/2（2026-10-09 使用者更正：I/2 在事件觸發下會讓結果每秒約 60 次，碰到「結果每秒 ≤31」）。不改 wire；relay 的「結果每秒 ≤31」要重新確認。排在第 09 批之前，因為第 09 批要用這些通道推導 FireGate 常數。
+- **08b**（D43；規劃依 D45 用 ultracode，並一起調查第 08 批 L2 的 b 段變長）結果改為事件驅動轉送：Match 的 action lane 與 Gateway 的結果，距上次送出 ≥I 就立即送；不到 I 就設計時器在「上次送出＋I」送出，不帶 I/2（2026-10-09 使用者更正：I/2 在事件觸發下會讓結果每秒約 60 次，碰到「結果每秒 ≤31」）。不改 wire；relay 的「結果每秒 ≤31」要重新確認。排在第 09 批之前，因為第 09 批要用這些通道推導 FireGate 常數。
 - **09** FireGate 與 C2：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
 - 停止條件：權威 digest 改變；需要改 wire；macOS 的 Tick 晚醒沒有改善；worker_main 的斷言需要放寬；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。
 
