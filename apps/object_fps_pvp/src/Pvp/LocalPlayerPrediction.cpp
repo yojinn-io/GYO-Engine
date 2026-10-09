@@ -45,6 +45,7 @@ void LocalPlayerPrediction::SetMovementRules(MovementRules rules) {
 
 void LocalPlayerPrediction::Reset() noexcept {
     ticks_.Reset();
+    secondsUntilNextStep_ = MovementTickSeconds;
     pending_.clear();
     current_ = previous_ = {};
     correction_ = {};
@@ -65,6 +66,7 @@ void LocalPlayerPrediction::Reset() noexcept {
 
 void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     ticks_.Reset();
+    secondsUntilNextStep_ = MovementTickSeconds;
     pendingJump_ = false;
     alpha_ = 0;
     pending_.clear();
@@ -120,6 +122,8 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
         if (age.sequence == sequence) {
             phaseSamples_.push_back(*authority.movementSlackMicros * 1.0e-6 + age.seconds -
                 static_cast<double>(InitialCommandLead) * MovementTickSeconds - MovementPhaseTargetSeconds);
+            ++observation_.phaseSamples;
+            observation_.phaseSampleSequence = sequence;
             if (phaseSamples_.size() > MovementPhaseWindowSamples) phaseSamples_.pop_front();
             lateSamples_ = *authority.movementSlackMicros < 0 ? lateSamples_ + 1 : 0;
         }
@@ -141,6 +145,18 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     observation_.phaseErrorSeconds = error;
     observation_.phaseTracking = PhaseTrackingState::Tracking;
     if (std::abs(error) > deadband) Correct(error, false);
+}
+
+void LocalPlayerPrediction::ObservePhaseSample(const PlayerState& authority) {
+    if (!observation_.active || authority.playerId != current_.playerId ||
+        authority.movementEpoch != current_.movementEpoch || authority.lifeGeneration != current_.lifeGeneration) return;
+    TrackPhase(authority);
+}
+
+bool LocalPlayerPrediction::Reseeds(const PlayerState& authority) const noexcept {
+    return !observation_.active || current_.playerId != authority.playerId ||
+        authority.lifeGeneration != current_.lifeGeneration || authority.movementEpoch != current_.movementEpoch ||
+        authority.lastResolvedCommand > current_.lastResolvedCommand;
 }
 
 void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
@@ -181,6 +197,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
             // Neutral future steps restore sequence lead after a stall. No
             // relationship between client and authority clocks is assumed.
             SeedLead(authority);
+            ++observation_.stallReseeds;
         } else {
             current_ = previous_ = authority;
             for (const auto& command : pending_) {
@@ -311,6 +328,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     }
     alpha_ = Engine::Math::Clamp(static_cast<float>(1.0 - advance.secondsUntilNextTick / MovementTickSeconds),
                                  0.0F, 1.0F);
+    secondsUntilNextStep_ = advance.secondsUntilNextTick;
     if (frameSeconds >= 0.1 || frameSeconds > elapsed || advance.droppedSeconds > 0 || blockedSteps > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .playerId = current_.playerId,
             .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand,
@@ -333,22 +351,55 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     return send && !pending_.empty() && !neutralOnlyBootstrap;
 }
 
-void LocalPlayerPrediction::UpdatePresentation() {
-    const auto base = Engine::Math::Lerp(previous_.position, current_.position, alpha_);
-    const auto target = base + correction_;
-    const auto position = current_.position;
+LocalRenderSample InterpolateLocalPresentation(const Arena& arena, const LocalPresentationState& state,
+                                               const double secondsLater) {
+    auto alpha = state.alpha;
+    auto correction = state.correction;
+    if (secondsLater > 0) {
+        alpha = Engine::Math::Clamp(static_cast<float>(alpha + secondsLater / MovementTickSeconds), 0.0F, 1.0F);
+        if (state.correctionSeconds > 0) {
+            const auto remaining = Engine::Math::Max(0.0, state.correctionSeconds - secondsLater);
+            correction = correction * static_cast<float>(remaining / state.correctionSeconds);
+        }
+    }
+    const auto base = Engine::Math::Lerp(state.previousPosition, state.currentPosition, alpha);
+    const auto target = base + correction;
+    const auto position = state.currentPosition;
     // Sweep from the valid predicted body to the proposed display body. An
     // offset cannot carry the camera through a wall, including around corners.
     auto render = MoveCharacterBody(
-        {position, arena_.bodyHeight, arena_.radius}, target - position, arena_.walls, {}, false);
+        {position, arena.bodyHeight, arena.radius}, target - position, arena.walls, {}, false);
     render.y = Engine::Math::Max(0.0F, render.y);
+    return {render, render - base, alpha};
+}
+
+double LocalPlayerPrediction::SecondsUntilNextStep() const noexcept {
+    // Advance moves the clock by the elapsed time minus the slew it takes, at
+    // most PhaseSlewFraction of that time: a delay stretches the wait, an
+    // advance shortens it. Solves elapsed - shift(elapsed) = remaining.
+    const double remaining = secondsUntilNextStep_;
+    if (phaseShiftSeconds_ > 0)
+        return Engine::Math::Min(remaining / (1.0 - PhaseSlewFraction), remaining + phaseShiftSeconds_);
+    if (phaseShiftSeconds_ < 0)
+        return Engine::Math::Max(remaining / (1.0 + PhaseSlewFraction), remaining + phaseShiftSeconds_);
+    return remaining;
+}
+
+LocalPresentationState LocalPlayerPrediction::Presentation() const noexcept {
+    return {previous_.position, current_.position, correction_, correctionSeconds_, alpha_};
+}
+
+void LocalPlayerPrediction::UpdatePresentation() {
+    const auto sample = InterpolateLocalPresentation(arena_, Presentation(), 0.0);
+    const auto position = current_.position;
+    const auto render = sample.renderPosition;
     observation_.verticalVelocity = current_.verticalVelocity;
     observation_.grounded = current_.grounded;
     observation_.lifeGeneration = current_.lifeGeneration;
     observation_.lifeState = current_.lifeState;
     observation_.predictedPosition = position;
     observation_.renderPosition = render;
-    observation_.correctionOffset = render - base;
+    observation_.correctionOffset = sample.correctionOffset;
     observation_.latestCommand = current_.lastResolvedCommand;
     observation_.previousCommand = previous_.lastResolvedCommand;
     observation_.currentCommand = current_.lastResolvedCommand;

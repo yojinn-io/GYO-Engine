@@ -1,12 +1,15 @@
 #include <doctest/doctest.h>
 
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -89,10 +92,20 @@ struct ClockOptions {
 // with the latest received snapshot, just as in the application. A client
 // cannot bootstrap from a synthetic pre-tick snapshot. Without hostSamples
 // the snapshots lose their slack samples: the untracked, seeded phase.
+// Path::V6 drives LocalPlayerPrediction with the newest snapshot of each frame
+// only. Path::Product runs the application's simulation role: frames only
+// publish their intent, and ClientSimulationLoop steps at its own deadlines on
+// the Client clock (waking late like the worker), taking the phase sample of
+// every snapshot the worker received since its previous step. An untracked
+// baseline runs the same path as the tracked run it is compared with.
+enum class Path { V6, Product };
+
 RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                            Time workerPhase, Time authorityPhase, double firstElapsed,
                            Time bootstrapGap = 0, bool hostSamples = true,
-                           const ClockOptions& clock = {}) {
+                           const ClockOptions& clock = {}, Path path = Path::V6) {
+    // The product path samples elapsed time itself; its first sample is zero.
+    REQUIRE((path == Path::V6 || firstElapsed == 0.0));
     const auto arena = RecoveryArena();
     Time now{};
     MatchRuntimeHost host(arena, [&] {
@@ -100,6 +113,18 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     });
     REQUIRE(host.QueueJoin(1, 1));
     LocalPlayerPrediction client(arena);
+    ClientSimulationLoop simulation({arena});
+    // Snapshots the worker received since the simulation's previous step, and
+    // the intent the latest frame published (product path).
+    std::vector<ReceivedSnapshot> drained;
+    ClientIntent intent;
+    std::uint64_t intents{};
+    const auto observation = [&]() -> const LocalMovementObservation& {
+        return path == Path::Product ? simulation.Simulation().Observation() : client.Observation();
+    };
+    const auto pending = [&] {
+        return path == Path::Product ? simulation.Simulation().PendingInput() : client.PendingInput();
+    };
     struct InputPacket { Time due; PlayerInput input; };
     struct SnapshotPacket { Time due; WorldSnapshot snapshot; };
     std::vector<InputPacket> inputs;
@@ -128,12 +153,23 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
         return low + Time((clockState >> 8) % std::uint32_t(high - low + 1));
     };
     const double clientRate = 1.0 + clock.clientPpm * 1.0e-6;
+    // The Client's own clock at a host time, and the first host time it reaches a deadline.
+    const auto clientTime = [&](Time at) {
+        return Engine::Time::TimePoint{} + std::chrono::duration_cast<Engine::Time::Duration>(
+            std::chrono::duration<double>(double(at) / Units * clientRate));
+    };
+    const auto hostTime = [&](Engine::Time::TimePoint deadline) {
+        auto at = Time(std::ceil(std::chrono::duration<double>(deadline.time_since_epoch()).count() / clientRate * Units));
+        while (clientTime(at) < deadline) ++at;
+        return at;
+    };
     const Time framePeriod = Units / fps + Units / fps * clock.frameDriftPpm / 1000000;
     const Time workerPeriod = Time(double(Tick) / clientRate + 0.5);
     const Time runEnd = clock.runUntil ? clock.runUntil : reference + 3 * Units;
     Time frameGrid{};
     std::size_t frameIndex{}, activeFrames{};
     Time nextFrame{}, nextWorker = workerPhase, nextTick = authorityPhase;
+    Time nextSimulation = path == Path::Product ? Time(0) : (std::numeric_limits<Time>::max)();
     Time previousFrame{}, nextSend{};
     bool haveSent{};
     double tokens = InputSendBurst;
@@ -149,7 +185,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     Time actualRunStart{}, previousResolution{-Tick};
     std::map<std::pair<std::uint64_t, std::uint64_t>, Time> generatedAt;
     for (;;) {
-        now = (std::min)({nextFrame, nextWorker, nextTick});
+        now = (std::min)({nextFrame, nextWorker, nextTick, nextSimulation});
         for (const auto& packet : inputs) now = (std::min)(now, packet.due);
         if (now > runEnd) break;
         for (auto packet = inputs.begin(); packet != inputs.end();) {
@@ -175,6 +211,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 auto snapshot = std::move(snapshots.front().snapshot);
                 snapshots.erase(snapshots.begin());
                 if (snapshot.tick <= received.tick) continue;
+                if (path == Path::Product) drained.push_back({snapshot, clientTime(now)});
                 received = std::move(snapshot);
                 const auto& state = received.players.front();
                 if (published.movementEpoch != state.movementEpoch) {
@@ -230,23 +267,30 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             frameGrid += period;
             nextFrame = frameGrid + uniform(-clock.frameJitter, clock.frameJitter);
             if (now < 2 * Units || now >= resume) {
-                if (!received.players.empty())
-                    client.Reconcile(received.players.front(), received.tick);
                 // The Client measures frame time on its own clock.
                 const double elapsed = firstAdvance && !received.players.empty() ? firstElapsed :
                     double(now - previousFrame) / Units * clientRate;
+                if (path == Path::V6) {
+                    if (!received.players.empty())
+                        client.Reconcile(received.players.front(), received.tick);
+                    if (client.Advance(elapsed, 1, 0, 0, 0)) published = client.PendingInput();
+                    for (const auto& command : pending().commands)
+                        generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
+                } else if (!received.players.empty()) {
+                    // Only an active client publishes, as in the application.
+                    intent = {1, 0, 0, 0, true, 0, clientTime(now), {1, 1, received.players.front().lifeGeneration},
+                        ++intents};
+                }
                 if (firstAdvance && !received.players.empty() && bootstrapGap)
                     nextFrame = frameGrid = now + bootstrapGap;
-                if (client.Advance(elapsed, 1, 0, 0, 0)) published = client.PendingInput();
-                for (const auto& command : client.PendingInput().commands)
-                    generatedAt.try_emplace({client.PendingInput().movementEpoch, command.sequence}, now);
                 if (!received.players.empty()) {
                     firstAdvance = false;
                     ++activeFrames;
-                    if (client.Observation().phaseErrorSeconds && !result.firstDecision) result.firstDecision = now;
+                    if (path == Path::V6 && observation().phaseErrorSeconds && !result.firstDecision)
+                        result.firstDecision = now;
                 }
                 previousFrame = now;
-                result.maximumPending = (std::max)(result.maximumPending, client.PendingInput().commands.size());
+                result.maximumPending = (std::max)(result.maximumPending, pending().commands.size());
                 if (!received.players.empty()) {
                     const auto ack = received.players.front().lastResolvedCommand;
                     std::erase_if(published.commands, [ack](const auto& command) {
@@ -254,6 +298,21 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     });
                 }
             }
+        }
+        if (now == nextSimulation) {
+            auto step = simulation.Run(clientTime(now), intent, {std::move(drained), 1, 1, {}, std::nullopt, 0});
+            drained.clear();
+            if (step.window) published = *step.window;
+            for (const auto& command : pending().commands)
+                generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
+            if (observation().phaseErrorSeconds && !result.firstDecision) result.firstDecision = now;
+            result.maximumPending = (std::max)(result.maximumPending, pending().commands.size());
+            if (!received.players.empty()) {
+                const auto ack = received.players.front().lastResolvedCommand;
+                std::erase_if(published.commands, [ack](const auto& command) { return command.sequence <= ack; });
+            }
+            nextSimulation = (std::max)(now + 1, hostTime(step.nextDeadline)) +
+                uniform(clock.overshootMin, clock.overshootMax);
         }
         if (now == nextTick) {
             nextTick += Tick;
@@ -326,8 +385,8 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             std::erase_if(generatedAt, resolved);
         }
     }
-    result.corrections = client.Observation().phaseCorrections;
-    result.lateCorrections = client.Observation().phaseLateCorrections;
+    result.corrections = observation().phaseCorrections;
+    result.lateCorrections = observation().phaseLateCorrections;
     for (const auto& [second, count] : packetsPerSecond)
         result.maximumInputPacketsPerSecond = (std::max)(result.maximumInputPacketsPerSecond, count);
     return result;
@@ -335,48 +394,57 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
 } // namespace
 
 TEST_CASE("PvP exhausted lead recovers 108 ms 250 ms and six second render stalls across LAN phases") {
-    for (const int fps : {30, 60, 144})
-        for (const int rtt : {0, 20, 40})
-            for (const int stall : {108, 250, 6000})
-                for (const bool impaired : {false, true})
-                    for (const Time worker : {Time(0), Time(4000), Time(8000)})
-                        for (const Time authority : {Time(0), Time(6000), Time(11999)})
-                          for (const double firstElapsed : {0.0, 0.002}) {
-                            INFO("fps ", fps, " rtt ", rtt, " stall ", stall, " impaired ", impaired,
-                                " worker ", worker, " authority ", authority, " first elapsed ", firstElapsed);
-                            const auto result = RunRecovery(fps, rtt, stall, impaired, worker, authority, firstElapsed);
-                            CHECK(result.maximumPending <= MaxPendingCommands);
-                            CHECK(result.maximumFuture <= MaxFutureCommands);
-                            CHECK(result.unexpectedRejections == 0);
-                            CHECK(result.resets <= 3);
-                            REQUIRE(result.stableStart >= 0);
-                            CHECK(result.stableStart <= 3 * Units / 2);
-                            CHECK(result.fallbacksAfterBound == 0);
-                            CHECK(result.resetsAfterBound == 0);
-                            CHECK(result.excessiveQueueAfterBound == 0);
-                        }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (const int fps : {30, 60, 144})
+            for (const int rtt : {0, 20, 40})
+                for (const int stall : {108, 250, 6000})
+                    for (const bool impaired : {false, true})
+                        for (const Time worker : {Time(0), Time(4000), Time(8000)})
+                            for (const Time authority : {Time(0), Time(6000), Time(11999)})
+                              for (const double firstElapsed : {0.0, 0.002}) {
+                                INFO("fps ", fps, " rtt ", rtt, " stall ", stall, " impaired ", impaired,
+                                    " worker ", worker, " authority ", authority, " first elapsed ", firstElapsed);
+                                if (path == Path::Product && firstElapsed != 0.0) continue;
+                                const auto result = RunRecovery(fps, rtt, stall, impaired, worker, authority, firstElapsed,
+                                    0, true, {}, path);
+                                CHECK(result.maximumPending <= MaxPendingCommands);
+                                CHECK(result.maximumFuture <= MaxFutureCommands);
+                                CHECK(result.unexpectedRejections == 0);
+                                CHECK(result.resets <= 3);
+                                REQUIRE(result.stableStart >= 0);
+                                CHECK(result.stableStart <= 3 * Units / 2);
+                                CHECK(result.fallbacksAfterBound == 0);
+                                CHECK(result.resetsAfterBound == 0);
+                                CHECK(result.excessiveQueueAfterBound == 0);
+                            }
+    }
 }
 
 TEST_CASE("PvP a delayed first rendered frame does not establish a persistent bootstrap backlog") {
-    for (const int fps : {30, 60, 144})
-        for (const int rtt : {0, 20, 40})
-            for (const int gapMs : {49, 51, 64, 108})
-                for (const Time worker : {Time(0), Time(4000), Time(8000)})
-                    for (const Time authority : {Time(0), Time(6000), Time(11999)})
-                      for (const double firstElapsed : {0.0, 0.015}) {
-                        INFO("fps ", fps, " rtt ", rtt, " bootstrap gap ", gapMs,
-                            " worker ", worker, " authority ", authority, " first elapsed ", firstElapsed);
-                        const auto result = RunRecovery(fps, rtt, 0, false, worker, authority,
-                            firstElapsed, Time(gapMs) * Units / 1000);
-                        CHECK(result.maximumPending <= MaxPendingCommands);
-                        CHECK(result.maximumFuture <= MaxFutureCommands);
-                        CHECK(result.unexpectedRejections == 0);
-                        CHECK(result.resets == 0);
-                        REQUIRE(result.stableStart >= 0);
-                        CHECK(result.stableStart <= 3 * Units / 2);
-                        CHECK(result.fallbacksAfterBound == 0);
-                        CHECK(result.excessiveQueueAfterBound == 0);
-                    }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (const int fps : {30, 60, 144})
+            for (const int rtt : {0, 20, 40})
+                for (const int gapMs : {49, 51, 64, 108})
+                    for (const Time worker : {Time(0), Time(4000), Time(8000)})
+                        for (const Time authority : {Time(0), Time(6000), Time(11999)})
+                          for (const double firstElapsed : {0.0, 0.015}) {
+                            INFO("fps ", fps, " rtt ", rtt, " bootstrap gap ", gapMs,
+                                " worker ", worker, " authority ", authority, " first elapsed ", firstElapsed);
+                            if (path == Path::Product && firstElapsed != 0.0) continue;
+                            const auto result = RunRecovery(fps, rtt, 0, false, worker, authority,
+                                firstElapsed, Time(gapMs) * Units / 1000, true, {}, path);
+                            CHECK(result.maximumPending <= MaxPendingCommands);
+                            CHECK(result.maximumFuture <= MaxFutureCommands);
+                            CHECK(result.unexpectedRejections == 0);
+                            CHECK(result.resets == 0);
+                            REQUIRE(result.stableStart >= 0);
+                            CHECK(result.stableStart <= 3 * Units / 2);
+                            CHECK(result.fallbacksAfterBound == 0);
+                            CHECK(result.excessiveQueueAfterBound == 0);
+                        }
+    }
 }
 
 namespace {
@@ -401,31 +469,34 @@ ClockOptions ProductClock(int frameDriftPpm, Time frameJitter, std::uint32_t see
 } // namespace
 
 TEST_CASE("PvP phase tracking removes the start lottery at every frame rate without losing Actual commands") {
-    for (const int fps : {30, 60, 144})
-        for (const int rtt : {0, 20, 40})
-            for (const Time worker : {Time(0), Time(4000), Time(8000)}) {
-                Time trackedHigh{}, untrackedHigh{};
-                for (Time authority = 0; authority < Tick; authority += Tick / 12) {
-                    INFO("fps ", fps, " rtt ", rtt, " worker ", worker, " authority ", authority);
-                    const auto tracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0);
-                    const auto untracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, false);
-                    REQUIRE(tracked.firstDecision);
-                    CHECK(tracked.cleanFallbacks == 0);
-                    CHECK(tracked.fallbacksAfterBound == 0);
-                    CHECK(tracked.held == 0);
-                    CHECK(tracked.resets == 0);
-                    const auto trackedMedian = Median(tracked.actualLatencies);
-                    const auto untrackedMedian = Median(untracked.actualLatencies);
-                    // A start tighter than the target is loosened to it, which a frame
-                    // boundary can turn into one more frame.
-                    CHECK(trackedMedian <= untrackedMedian + Units / fps);
-                    trackedHigh = (std::max)(trackedHigh, trackedMedian);
-                    untrackedHigh = (std::max)(untrackedHigh, untrackedMedian);
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (const int fps : {30, 60, 144})
+            for (const int rtt : {0, 20, 40})
+                for (const Time worker : {Time(0), Time(4000), Time(8000)}) {
+                    Time trackedHigh{}, untrackedHigh{};
+                    for (Time authority = 0; authority < Tick; authority += Tick / 12) {
+                        INFO("fps ", fps, " rtt ", rtt, " worker ", worker, " authority ", authority);
+                        const auto tracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, true, {}, path);
+                        const auto untracked = RunRecovery(fps, rtt, 0, false, worker, authority, 0.0, 0, false, {}, path);
+                        REQUIRE(tracked.firstDecision);
+                        CHECK(tracked.cleanFallbacks == 0);
+                        CHECK(tracked.fallbacksAfterBound == 0);
+                        CHECK(tracked.held == 0);
+                        CHECK(tracked.resets == 0);
+                        const auto trackedMedian = Median(tracked.actualLatencies);
+                        const auto untrackedMedian = Median(untracked.actualLatencies);
+                        // A start tighter than the target is loosened to it, which a frame
+                        // boundary can turn into one more frame.
+                        CHECK(trackedMedian <= untrackedMedian + Units / fps);
+                        trackedHigh = (std::max)(trackedHigh, trackedMedian);
+                        untrackedHigh = (std::max)(untrackedHigh, untrackedMedian);
+                    }
+                    INFO("fps ", fps, " rtt ", rtt, " worker ", worker);
+                    // The worst start phase gains at least a third of a tick at every frame rate.
+                    CHECK(trackedHigh + Tick / 3 <= untrackedHigh);
                 }
-                INFO("fps ", fps, " rtt ", rtt, " worker ", worker);
-                // The worst start phase gains at least a third of a tick at every frame rate.
-                CHECK(trackedHigh + Tick / 3 <= untrackedHigh);
-            }
+    }
 }
 
 // With A1 (a single shift) at 30-50 FPS the shift landed on whole frames and
@@ -435,86 +506,95 @@ TEST_CASE("PvP phase tracking removes the start lottery at every frame rate with
 // age it really had, and the worker sends new commands at once, so these
 // rates align with no command lost and no reset, under drifting product clocks.
 TEST_CASE("PvP at 30-50 FPS and on vsync drops phase tracking aligns without Held commands under product clocks") {
-    struct Model { const char* name; int fps; std::vector<int> refreshPattern; unsigned missedPerMille; };
-    const Model models[] = {{"steady 30 FPS", 30, {}, 0}, {"steady 40 FPS", 40, {}, 0},
-        {"vsync 50 FPS (1,1,1,1,2)", 60, {1, 1, 1, 1, 2}, 0}, {"vsync 48 FPS (1,1,1,2)", 60, {1, 1, 1, 2}, 0},
-        {"vsync 45 FPS (1,1,2)", 60, {1, 1, 2}, 0},
-        {"vsync 50 FPS random misses", 60, {}, 200}, {"vsync 46 FPS random misses", 60, {}, 300}};
-    for (const auto& model : models)
-        for (const int rtt : {0, 20, 40})
-            for (const Time worker : {Time(0), Time(4000), Time(8000)})
-                for (Time authority = 0; authority < Tick; authority += Tick / 3) {
-                    INFO(std::string(model.name), " rtt ", rtt, " worker ", worker, " authority ", authority);
-                    const bool vsync = model.fps == 60;
-                    auto clock = ProductClock(1000, vsync ? Units / 2000 : Units * 15 / 10000,
-                        std::uint32_t(worker * 31 + authority * 7 + model.fps * 131 + rtt + model.missedPerMille + 1),
-                        11 * Units);
-                    clock.refreshPattern = model.refreshPattern;
-                    clock.missedRefreshPerMille = model.missedPerMille;
-                    const auto tracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock);
-                    const auto untracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
-                    REQUIRE(tracked.firstDecision);
-                    REQUIRE(tracked.resolved > 0);
-                    // The untracked baseline may lose ticks to resets; tracking never does.
-                    CHECK(tracked.resolved >= untracked.resolved);
-                    CHECK(tracked.resets == 0);
-                    // Two steps per frame: the older one may keep only the target slack,
-                    // so frame jitter can substitute an occasional command (at most 0.5 %).
-                    CHECK(tracked.held * 1000 <= untracked.held * 1000 + tracked.resolved * 5);
-                    if (vsync && !model.missedPerMille) CHECK(tracked.held == 0);
-                    CHECK(Median(tracked.latencies) <= Median(untracked.latencies) + Units / 60);
-                    CHECK(tracked.maximumInputPacketsPerSecond <= InputSendRate + 1);
-                }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        struct Model { const char* name; int fps; std::vector<int> refreshPattern; unsigned missedPerMille; };
+        const Model models[] = {{"steady 30 FPS", 30, {}, 0}, {"steady 40 FPS", 40, {}, 0},
+            {"vsync 50 FPS (1,1,1,1,2)", 60, {1, 1, 1, 1, 2}, 0}, {"vsync 48 FPS (1,1,1,2)", 60, {1, 1, 1, 2}, 0},
+            {"vsync 45 FPS (1,1,2)", 60, {1, 1, 2}, 0},
+            {"vsync 50 FPS random misses", 60, {}, 200}, {"vsync 46 FPS random misses", 60, {}, 300}};
+        for (const auto& model : models)
+            for (const int rtt : {0, 20, 40})
+                for (const Time worker : {Time(0), Time(4000), Time(8000)})
+                    for (Time authority = 0; authority < Tick; authority += Tick / 3) {
+                        INFO(std::string(model.name), " rtt ", rtt, " worker ", worker, " authority ", authority);
+                        const bool vsync = model.fps == 60;
+                        auto clock = ProductClock(1000, vsync ? Units / 2000 : Units * 15 / 10000,
+                            std::uint32_t(worker * 31 + authority * 7 + model.fps * 131 + rtt + model.missedPerMille + 1),
+                            11 * Units);
+                        clock.refreshPattern = model.refreshPattern;
+                        clock.missedRefreshPerMille = model.missedPerMille;
+                        const auto tracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
+                        const auto untracked = RunRecovery(model.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
+                        REQUIRE(tracked.firstDecision);
+                        REQUIRE(tracked.resolved > 0);
+                        // The untracked baseline may lose ticks to resets; tracking never does.
+                        CHECK(tracked.resolved >= untracked.resolved);
+                        CHECK(tracked.resets == 0);
+                        // Two steps per frame: the older one may keep only the target slack,
+                        // so frame jitter can substitute an occasional command (at most 0.5 %).
+                        CHECK(tracked.held * 1000 <= untracked.held * 1000 + tracked.resolved * 5);
+                        if (vsync && !model.missedPerMille) CHECK(tracked.held == 0);
+                        CHECK(Median(tracked.latencies) <= Median(untracked.latencies) + Units / 60);
+                        CHECK(tracked.maximumInputPacketsPerSecond <= InputSendRate + 1);
+                    }
+    }
 }
 
 // Startup hitches do not delay tracking beyond its frame and sample evidence:
 // the first decision comes within about ten frames, without Held commands.
 TEST_CASE("PvP phase tracking decides soon after startup hitches and a 58 FPS GUI cadence") {
-    for (const int frameDriftPpm : {0, 30800, 36000})
-        for (const int rtt : {0, 20, 40})
-            for (const Time worker : {Time(0), Time(4000), Time(8000)})
-                for (Time authority = 0; authority < Tick; authority += Tick / 6) {
-                    const Time frame = Tick + Tick * frameDriftPpm / 1000000;
-                    INFO("frame ", frame, " units, rtt ", rtt, " worker ", worker, " authority ", authority);
-                    auto clock = ProductClock(frameDriftPpm, Units * 3 / 10000,
-                        std::uint32_t(worker * 31 + authority * 7 + rtt + frameDriftPpm + 9), 4 * Units);
-                    clock.startupHitches = 4;
-                    clock.startupHitch = 2 * Tick;
-                    const auto tracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, true, clock);
-                    const auto untracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
-                    REQUIRE(tracked.firstDecision);
-                    CHECK(*tracked.firstDecision <= 4 * 2 * Tick + 12 * frame + Time(rtt) * Units / 1000 + 4 * Tick);
-                    CHECK(tracked.resets <= untracked.resets);
-                    CHECK(tracked.held == 0);
-                }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (const int frameDriftPpm : {0, 30800, 36000})
+            for (const int rtt : {0, 20, 40})
+                for (const Time worker : {Time(0), Time(4000), Time(8000)})
+                    for (Time authority = 0; authority < Tick; authority += Tick / 6) {
+                        const Time frame = Tick + Tick * frameDriftPpm / 1000000;
+                        INFO("frame ", frame, " units, rtt ", rtt, " worker ", worker, " authority ", authority);
+                        auto clock = ProductClock(frameDriftPpm, Units * 3 / 10000,
+                            std::uint32_t(worker * 31 + authority * 7 + rtt + frameDriftPpm + 9), 4 * Units);
+                        clock.startupHitches = 4;
+                        clock.startupHitch = 2 * Tick;
+                        const auto tracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
+                        const auto untracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
+                        REQUIRE(tracked.firstDecision);
+                        CHECK(*tracked.firstDecision <= 4 * 2 * Tick + 12 * frame + Time(rtt) * Units / 1000 + 4 * Tick);
+                        CHECK(tracked.resets <= untracked.resets);
+                        CHECK(tracked.held == 0);
+                    }
+    }
 }
 
 TEST_CASE("PvP at 59.94 60 and 144 FPS phase tracking still aligns under drifting product clocks") {
-    struct Rate { int fps; int frameDriftPpm; };
-    for (const auto rate : {Rate{60, 1000}, Rate{60, 0}, Rate{144, 0}})
-        for (const int rtt : {0, 20, 40})
-            for (const Time worker : {Time(0), Time(4000), Time(8000)}) {
-                Time trackedHigh{}, untrackedHigh{};
-                for (Time authority = 0; authority < Tick; authority += Tick / 12) {
-                    INFO("fps ", rate.fps, " drift ppm ", rate.frameDriftPpm, " rtt ", rtt,
-                         " worker ", worker, " authority ", authority);
-                    // Ordinary frame jitter of +-1 ms.
-                    const auto clock = ProductClock(rate.frameDriftPpm, Units / 1000,
-                        std::uint32_t(worker * 31 + authority * 7 + rate.fps * 131 + rtt + rate.frameDriftPpm));
-                    const auto tracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock);
-                    const auto untracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock);
-                    REQUIRE(tracked.firstDecision);
-                    CHECK(tracked.held == 0);
-                    CHECK(tracked.resets == 0);
-                    const auto trackedMedian = Median(tracked.latencies);
-                    const auto untrackedMedian = Median(untracked.latencies);
-                    CHECK(trackedMedian <= untrackedMedian + Units / rate.fps + Units / 1000);
-                    trackedHigh = (std::max)(trackedHigh, trackedMedian);
-                    untrackedHigh = (std::max)(untrackedHigh, untrackedMedian);
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        struct Rate { int fps; int frameDriftPpm; };
+        for (const auto rate : {Rate{60, 1000}, Rate{60, 0}, Rate{144, 0}})
+            for (const int rtt : {0, 20, 40})
+                for (const Time worker : {Time(0), Time(4000), Time(8000)}) {
+                    Time trackedHigh{}, untrackedHigh{};
+                    for (Time authority = 0; authority < Tick; authority += Tick / 12) {
+                        INFO("fps ", rate.fps, " drift ppm ", rate.frameDriftPpm, " rtt ", rtt,
+                             " worker ", worker, " authority ", authority);
+                        // Ordinary frame jitter of +-1 ms.
+                        const auto clock = ProductClock(rate.frameDriftPpm, Units / 1000,
+                            std::uint32_t(worker * 31 + authority * 7 + rate.fps * 131 + rtt + rate.frameDriftPpm));
+                        const auto tracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
+                        const auto untracked = RunRecovery(rate.fps, rtt, 0, false, worker, authority, 0.0, 0, false, clock, path);
+                        REQUIRE(tracked.firstDecision);
+                        CHECK(tracked.held == 0);
+                        CHECK(tracked.resets == 0);
+                        const auto trackedMedian = Median(tracked.latencies);
+                        const auto untrackedMedian = Median(untracked.latencies);
+                        CHECK(trackedMedian <= untrackedMedian + Units / rate.fps + Units / 1000);
+                        trackedHigh = (std::max)(trackedHigh, trackedMedian);
+                        untrackedHigh = (std::max)(untrackedHigh, untrackedMedian);
+                    }
+                    INFO("fps ", rate.fps, " drift ppm ", rate.frameDriftPpm, " rtt ", rtt, " worker ", worker);
+                    CHECK(trackedHigh + Tick / 3 <= untrackedHigh);
                 }
-                INFO("fps ", rate.fps, " drift ppm ", rate.frameDriftPpm, " rtt ", rtt, " worker ", worker);
-                CHECK(trackedHigh + Tick / 3 <= untrackedHigh);
-            }
+    }
 }
 
 // A 60 Hz display that drops one refresh in N frames (N = 12-30, 55.3-58.1
@@ -523,21 +603,24 @@ TEST_CASE("PvP at 59.94 60 and 144 FPS phase tracking still aligns under driftin
 // tick). Tracking with the token-bucket worker aligns every start without
 // a reset or a substituted command, wherever the first drop falls.
 TEST_CASE("PvP a 60 Hz display dropping one refresh in 12-30 frames aligns without resets") {
-    for (std::size_t every = 12; every <= 30; ++every)
-        for (const std::size_t first : {std::size_t(1), std::size_t(9), std::size_t(11), every})
-            for (const int rtt : {0, 20, 40})
-                for (const auto& [worker, authority] : {std::pair{Time(0), Time(0)}, std::pair{Time(8000), Tick / 2}}) {
-                    INFO("one refresh dropped in ", every, " frames from interval ", first, " rtt ", rtt,
-                         " worker ", worker, " authority ", authority);
-                    auto clock = ProductClock(1000, Units / 2000,
-                        std::uint32_t(worker * 31 + authority * 7 + Time(every) * 131 + rtt + Time(first) * 17 + 1), 4 * Units);
-                    clock.droppedRefreshEvery = every;
-                    clock.firstDroppedRefresh = first;
-                    const auto tracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, true, clock);
-                    REQUIRE(tracked.firstDecision);
-                    CHECK(tracked.resets == 0);
-                    CHECK(tracked.held == 0);
-                }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (std::size_t every = 12; every <= 30; ++every)
+            for (const std::size_t first : {std::size_t(1), std::size_t(9), std::size_t(11), every})
+                for (const int rtt : {0, 20, 40})
+                    for (const auto& [worker, authority] : {std::pair{Time(0), Time(0)}, std::pair{Time(8000), Tick / 2}}) {
+                        INFO("one refresh dropped in ", every, " frames from interval ", first, " rtt ", rtt,
+                             " worker ", worker, " authority ", authority);
+                        auto clock = ProductClock(1000, Units / 2000,
+                            std::uint32_t(worker * 31 + authority * 7 + Time(every) * 131 + rtt + Time(first) * 17 + 1), 4 * Units);
+                        clock.droppedRefreshEvery = every;
+                        clock.firstDroppedRefresh = first;
+                        const auto tracked = RunRecovery(60, rtt, 0, false, worker, authority, 0.0, 0, true, clock, path);
+                        REQUIRE(tracked.firstDecision);
+                        CHECK(tracked.resets == 0);
+                        CHECK(tracked.held == 0);
+                    }
+    }
 }
 
 // Client and Host clocks differ by ppm on separate machines. A1 measured the
@@ -546,22 +629,25 @@ TEST_CASE("PvP a 60 Hz display dropping one refresh in 12-30 frames aligns witho
 // +-200 ppm drift 60 ms: the untracked phase resets, tracking keeps
 // correcting and its latency stays within a frame, with no command lost.
 TEST_CASE("PvP phase tracking holds the latency while the Client clock drifts against the Host") {
-    for (const int ppm : {-200, 200})
-        for (const int rtt : {0, 20, 40}) {
-            INFO("client clock ppm ", ppm, " rtt ", rtt);
-            auto clock = ProductClock(0, Units / 2000, std::uint32_t(rtt * 7 + ppm + 1000), 300 * Units);
-            clock.clientPpm = ppm;
-            const auto tracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, true, clock);
-            const auto untracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, false, clock);
-            REQUIRE(tracked.firstDecision);
-            CHECK(tracked.corrections >= 10);
-            CHECK(tracked.held == 0);
-            CHECK(tracked.resets == 0);
-            CHECK(untracked.resets > 0);
-            const auto early = Median(tracked.earlyLatencies);
-            const auto late = Median(tracked.lateLatencies);
-            CHECK(late <= early + Units / 60);
-            CHECK(late + Units / 60 >= early);
-            CHECK(tracked.maximumInputPacketsPerSecond <= InputSendRate + 1);
-        }
+    for (const Path path : {Path::V6, Path::Product}) {
+        INFO("path ", std::string(path == Path::Product ? "product" : "v6"));
+        for (const int ppm : {-200, 200})
+            for (const int rtt : {0, 20, 40}) {
+                INFO("client clock ppm ", ppm, " rtt ", rtt);
+                auto clock = ProductClock(0, Units / 2000, std::uint32_t(rtt * 7 + ppm + 1000), 300 * Units);
+                clock.clientPpm = ppm;
+                const auto tracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, true, clock, path);
+                const auto untracked = RunRecovery(60, rtt, 0, false, Time(4000), Time(6000), 0.0, 0, false, clock, path);
+                REQUIRE(tracked.firstDecision);
+                CHECK(tracked.corrections >= 10);
+                CHECK(tracked.held == 0);
+                CHECK(tracked.resets == 0);
+                CHECK(untracked.resets > 0);
+                const auto early = Median(tracked.earlyLatencies);
+                const auto late = Median(tracked.lateLatencies);
+                CHECK(late <= early + Units / 60);
+                CHECK(late + Units / 60 >= early);
+                CHECK(tracked.maximumInputPacketsPerSecond <= InputSendRate + 1);
+            }
+    }
 }

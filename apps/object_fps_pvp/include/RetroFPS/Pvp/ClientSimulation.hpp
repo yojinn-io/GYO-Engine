@@ -2,10 +2,12 @@
 
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/PredictionElapsedTime.hpp"
+#include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace fps::pvp {
 
@@ -37,8 +39,14 @@ public:
     void SelectArena(const Arena& arena);
     void ClearJumpRequest() noexcept;
 
+    // Every snapshot of a drained batch, in any order, before Observe: phase
+    // tracking takes the slack sample of each one older than the newest.
+    void ObserveSample(const WorldSnapshot& snapshot, PlayerId self);
     // The newest authoritative state of the local player in this drained batch.
-    // Ticks not newer than the last observed one are ignored.
+    // Ticks not newer than the last observed one are ignored. Samples queued by
+    // ObserveSample between the last observed tick and this one feed phase
+    // tracking in tick order first, unless this state reseeds the prediction;
+    // only this state is reconciled.
     void Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules);
 
     // Samples elapsed time at `now` and advances. Returns the complete window to
@@ -48,11 +56,20 @@ public:
     [[nodiscard]] PlayerInput PendingInput() const { return prediction_.PendingInput(); }
     [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept { return prediction_.ShotTiming(); }
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept { return prediction_.Observation(); }
+    [[nodiscard]] LocalPresentationState Presentation() const noexcept { return prediction_.Presentation(); }
+    [[nodiscard]] double SecondsUntilNextStep() const noexcept { return prediction_.SecondsUntilNextStep(); }
+    [[nodiscard]] std::pair<float, float> PredictedAim() const noexcept { return prediction_.PredictedAim(); }
 
 private:
+    struct Sample final {
+        std::uint64_t tick{};
+        PlayerState self;
+    };
+
     LocalPlayerPrediction prediction_;
     PredictionElapsedTime elapsed_;
     std::uint64_t lastSnapshotTick_{};
+    std::vector<Sample> samples_;
 };
 
 } // namespace fps::pvp

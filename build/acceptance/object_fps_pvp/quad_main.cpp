@@ -3,7 +3,7 @@
 // The two-Client probes and analyzers are unchanged; quad_evidence.py reads
 // this probe's output.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
@@ -95,7 +95,8 @@ constexpr double BotActionSeconds=.25;
 constexpr double PassiveParkSeconds=2.5;
 struct Bot {
     ClientConnection connection;
-    ClientSimulation simulation;
+    // After the connection: destroyed first.
+    std::unique_ptr<ClientSimulationRole> simulation;
     PlayerId id{};
     double nextAction{};
     std::uint64_t life{},shotsThisMagazine{};
@@ -103,7 +104,7 @@ struct Bot {
     std::map<ActionId,Json> submitted,decisions;
     std::vector<WorldSnapshot> received;
     std::size_t maximumPlayersSeen{};
-    explicit Bot(const Arena& arena):simulation(arena){}
+    explicit Bot(const Arena& arena):simulation(std::make_unique<ClientSimulationRole>(connection,std::vector<Arena>{arena})){}
 };
 }
 int main(int argc,char** argv){
@@ -173,11 +174,11 @@ int main(int argc,char** argv){
                     if(d.kind==ActionKind::Shot&&!d.accepted&&d.lifeGeneration==b.life&&b.shotsThisMagazine)--b.shotsThisMagazine;}
                 const auto& snapshot=*state.snapshot;const auto* self=Find(snapshot,b.id);const auto* own=FindCombat(snapshot,b.id);
                 Require(self&&own,"Own player missing from snapshot");
-                b.simulation.Observe(*self,snapshot.tick,state.movementRules);
                 // Each bot strafes on its own phase so the four never move as one block;
                 // a passive bot walks to the -X wall and stays against it.
                 const float right=options.passive?-1.F:static_cast<long long>(age/.4+i*.5)%2?-.5F:.5F;
-                if(auto window=b.simulation.Frame(now,{0,right,0,0}))b.connection.SendInput(std::move(*window));
+                if(const auto failure=b.simulation->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
+                b.simulation->PublishIntent({0,right,0,0,true,0,now,IntentOwner(state)});
                 if(self->lifeGeneration!=b.life){b.life=self->lifeGeneration;b.shotsThisMagazine=0;b.reload.reset();}
                 // An accepted reload refills the magazine once the authority reaches its end tick.
                 if(b.reload&&b.decisions.contains(*b.reload)&&own->reloadActionId==*b.reload&&snapshot.tick>=own->reloadEndTick){
@@ -237,6 +238,7 @@ int main(int argc,char** argv){
             Require(bool(snapshots),"Cannot write received snapshots");}
         for(auto& b:bots)b->connection.Leave();
         Wait([&]{for(const auto& b:bots)if(b->connection.State().phase!=ConnectionPhase::Lobby)return false;return true;},8,"Clients did not leave");
+        for(auto& b:bots)b->simulation.reset();
         trace.Finish();Require(trace.Good(),"Client trace lost data");
         std::ofstream summary(output/"quad-client.json");summary<<result.dump(2)<<'\n';Require(bool(summary),"Cannot write quad result");
         std::cout<<"quad probe: "<<bots.size()<<" clients completed\n";return 0;

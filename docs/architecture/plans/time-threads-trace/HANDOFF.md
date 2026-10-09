@@ -1,6 +1,6 @@
 # 時間、執行緒與 Trace：交接
 
-更新：2026-10-08。**狀態：已規劃，TT-1、TT-2 未開始。** 2026-10-08 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-09。**狀態：TT-1 實作、L1、L2（只記錄）完成**（xhigh 審查完成並修正；和消費端的第一個使用者同一個 PR，尚未合併；L2 的量測程式留待之後的 PR）；**TT-2 未開始**。2026-10-08 由提出需求的消費端在其規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 D12 匿名。
 
 ## 閱讀入口
@@ -59,8 +59,50 @@
 - Linux：libstdc++ 的 `steady_clock` 是 `CLOCK_MONOTONIC`；cv 的 `wait_until(steady)` 用 `pthread_cond_clockwait`。SDL 用 `CLOCK_MONOTONIC_RAW`。
 - 詳細的 file:line 見證據夾的 `research.json`。
 
+## TT-1 紀錄（記錄器）
+
+- 2026-10-08：開始（使用者指示）。主對話 xhigh。
+- 2026-10-08：實作。
+  - `engine/time`（`GYO::Time`）：`MonotonicClock`、`Now()`、`NowNs()`；`Waiter`（kqueue／高解析度 waitable timer／cv）；`LateWakeStats`（10 個固定 bin）。`Waiter::Create` 回傳 `Result<Waiter, TimeError>`。
+  - `engine/threads`（`GYO::Threads`）：`RoleThread`（`Start` 等新執行緒套用完名稱與優先級才返回；`RequestStop` 設旗標並 Notify；解構時停止並 join）、`RoleContext`。
+  - `GYO::Engine` PUBLIC 連結 `GYO::Time`；`RuntimeLoop` 的 `Clock` 改為 `Time::MonotonicClock`（型別相同，語意不變）；SdlGpu 的慢 acquire 計時改為 `Time::NowNs()`。
+  - macOS 後端選 `NOTE_CRITICAL`（未決事項的二選一）：研究實測 ≤0.11 ms，開發量測 P99 約 0.11～0.12 ms。
+- 2026-10-08：L1。
+  - `gyo_time_tests` 13 個案例、`gyo_threads_tests` 6 個案例；時間相關的斷言都是結構條件。
+  - configure 時的依賴檢查：`gyo_time` 只連 `GYO::Base`、`Threads::Threads`，`gyo_threads` 只連 `GYO::Time`、`Threads::Threads`（私有與介面一起檢查，延到最上層目錄結束時；加入 SDL 邊時確認 configure 會失敗）。
+  - 突變 7／7 killed（`scripts/run_mutations.py`，以位元組讀寫還原）；本機 TSan 乾淨。
+  - 全標籤 CTest 65／66：唯一的失敗是消費端已知、和本計畫無關的那一個（消費端的批次會處理）。
+- 2026-10-08：xhigh 審查（D39，1 位）：沒有 blocker。處理：
+  - [major] 「醒後重新檢查」沒有測到 → coalesce 測試補上 `woke >= deadline`（平台殘留的訊號會製造一次假喚醒），新增突變 `tt1-no-recheck`。
+  - [minor] `GYO_ASSERT` 條件有副作用 → 先取值再斷言。
+  - [minor] 期限已過又有通知時回傳 Notified → 改為先回報 Deadline、通知留在 latch（新增測試與突變 `tt1-latch-before-deadline`），不會讓 tick 被頻繁的通知往後推，也不會讓晚醒統計偏低。
+  - [minor] 哨兵期限 `TimePoint::min()` 的溢位 → 飽和運算並加測試。
+  - [minor] Linux 優先級的說明、moved-from 的 Notify、`RoleContext` 不可複製、`std::function` 必須可複製 → 文件與型別修正。
+  - [minor] 測試失敗時會卡住或 terminate → 等待都有上界、producer 測試先 join 再判斷、stop 測試保證 role 已進入等待。
+  - [minor] 依賴檢查只看 `LINK_LIBRARIES` → 一併檢查介面並延後檢查。
+  - [minor] 突變工具在 Windows 的還原 → 改用位元組。
+  - [minor] PLAN 中 cv 後端的寫法前後矛盾 → 統一為相對期限。
+- 開發量測（不計次，CLI，4 ms 狀態）：16.667 ms 的絕對期限各 600 次 × 2 輪。Waiter 的晚醒 P99 0.110／0.123 ms，cv 3.740／3.947 ms，`sleep_until` 3.948／3.950 ms。方向和計畫的停止條件一致。
+- 證據：`build/target/_build/test/logs/engine-tt1-20261008/`（開發量測的探針與結果、`ctest.log`、`tsan.txt`、`mutations.txt`；`files.sha256` 的 SHA-256 `7bed6d5f…`）。
+- 下一步：L2（只記錄，CLI 與 Engine 自有的 SDL 視窗程式）的事前宣告，等使用者核准。
+
 ## 未結事項
 
-- TT-1 開始時：依本機實測，在 `NOTE_CRITICAL` 與明確的小 `NOTE_LEEWAY` 之間二選一。
+- ~~TT-1 開始時：依本機實測，在 `NOTE_CRITICAL` 與明確的小 `NOTE_LEEWAY` 之間二選一~~：選 `NOTE_CRITICAL`（見 TT-1 紀錄）。
+- TT-1 的 L2（只記錄）：2026-10-09 使用者核准並執行（下方紀錄）。
 - Windows 不初始化 SDL 的程序（消費端的伺服器端）的計時精度，從未量過；只能在消費端主持的 LAN 場次量，否則標「未驗證」。
 - `AssetWatcher` 的偵測時刻 `detectedNs` 改用時間基準：候選，本計畫不做。
+
+## TT-1 L2（只記錄，2026-10-09）
+
+- 程式：`tests/common/time/WakeRecord.cpp`（`gyo_time_wake_record`、`gyo_time_wake_record_window`，不是 CTest）。依消費端的決定，它不放進第一個使用者的 PR（那裡的量測宣告禁止之後的非文件變更），提交在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`），之後的 PR 再合入。
+- 每種等待 30 秒、60 Hz 的絕對期限；兩種情境依序跑，每段前後各 5 秒 sleeper。主機正處於受干擾的狀態（sleeper 最大 34～36 ms，15 分鐘負載平均約 6）。
+- CLI（後端 Kqueue）：Waiter P50 0.065 ms、P99 4.01 ms（1786 次中 26 次超過 1 ms，最大 60 ms，與主機的尖峰同時）；cv P50 1.95、P99 4.19 ms；`sleep_until` P50 2.24、P99 4.22 ms。
+- Engine SDL 視窗：Waiter P50 0.060、P99 0.121、最大 0.66 ms（超過 1 ms 0 次）；cv P99 1.07 ms；`sleep_until` P99 1.11 ms。
+- 方向規則（同一輪 Waiter 的 P99 低於 cv）：兩種情境都成立。預期的「P99 ≤1 ms」在視窗情境成立；CLI 情境的 P99 落在主機尖峰的範圍內，只記錄。
+- 主機閒置時再記錄一次（11:18，`logs/tt1-l2-20261009-idle/`，sleeper 最大約 4.2 ms）：
+  - CLI：Waiter P50 0.025、P99 0.10 ms（1800 次中 2 次超過 1 ms，最大 13.8 ms）；cv P99 4.06 ms；`sleep_until` P99 3.92 ms。
+  - 視窗：Waiter P50 0.077、P99 0.133、最大 0.20 ms；cv P99 1.10 ms；`sleep_until` P99 1.10 ms。
+  - 方向規則兩種情境都成立；「P99 ≤1 ms」兩種情境都成立。
+- 證據：`build/target/_build/test/logs/tt1-l2-20261009/`（`meta.txt` 含程式雜湊、`cli.json`、`window.json`、sleeper）。
+

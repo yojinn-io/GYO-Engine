@@ -35,6 +35,8 @@ struct ClientConnectionState {
     std::optional<CombatRules> combatRules;
     std::optional<MovementRules> movementRules;
     ActionTransportState actionTransport;
+    // The connection generation this state belongs to; each session request starts a new one.
+    std::uint64_t generation{};
 };
 inline constexpr std::size_t MaxReceivedSnapshots = 64;
 struct ReceivedSnapshot {
@@ -48,6 +50,19 @@ struct ClientConnectionDrain {
     bool overflow{};
     std::uint64_t snapshotHistoryOverflowCount{};
     std::vector<ShotDecision> decisions;
+};
+
+// The client simulation role's own receipt-stamped history, independent of
+// Drain: a stalled main thread does not hold back the simulation.
+struct ClientSimulationDrain {
+    std::vector<ReceivedSnapshot> snapshots;
+    std::uint64_t generation{};
+    PlayerId playerId{};
+    // The installed arena the joined Match hosts; empty outside a session.
+    std::string arenaId;
+    std::optional<MovementRules> movementRules;
+    // Snapshots dropped from this history because it was full, cumulative within a generation.
+    std::uint64_t overflowCount{};
 };
 
 // Owns background I/O. All values crossing this boundary own their storage.
@@ -71,6 +86,10 @@ public:
     // Repeated submissions contain the entire immutable unacknowledged window.
     // The worker coalesces complete windows; it never keeps only their last step.
     void SendInput(PlayerInput input);
+    // The same, dropped when the connection generation is no longer the one the
+    // window's authority came from (a caller on another thread than the session
+    // changes, such as the simulation role).
+    void SendInput(PlayerInput input, std::uint64_t generation);
     // Assigns a contiguous immutable ID only when the active player's bounded
     // window has room. Retries, decisions and ACKs stay alive across movement
     // epochs and stalled game frames. Nullopt never allocates/skips an ID.
@@ -83,6 +102,10 @@ public:
     // Decisions transfer exactly once here, independently of snapshot overflow;
     // only transferred contiguous decisions become eligible for acknowledgement.
     [[nodiscard]] ClientConnectionDrain Drain();
+    // Consumes the simulation role's own history. Snapshots, actions and
+    // acknowledgements seen by Drain are unaffected. The history is kept only
+    // after the first call, so a connection without a role copies nothing.
+    [[nodiscard]] ClientSimulationDrain DrainSimulation();
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

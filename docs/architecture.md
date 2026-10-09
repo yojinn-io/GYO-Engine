@@ -54,7 +54,9 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 |---|---|---|
 | `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); other domain-free helpers | C++ standard library only |
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | Base |
-| `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math; C++ library; JSON parser privately |
+| `GYO::Time` | the engine time base (`MonotonicClock`), the deadline-or-notify `Waiter` and `LateWakeStats` | Base; the operating system (kqueue, Win32 waitable timers, or a condition variable) |
+| `GYO::Threads` | named role threads with a cooperative stop through the role's `Waiter` and a priority hint; no pool or scheduler | Time; the operating system |
+| `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
 | `GYO::Input` | physical input and action/axis evaluation | neutral input types |
 | `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS) | Engine, Math |
@@ -84,8 +86,11 @@ step. IDs start at 1 and count executed steps only. Excess whole-step debt is
 discarded after the catch-up limit; fractional time is retained.
 
 The fixed-step core does not read a clock, sleep, own threads, expose `Run()`,
-or depend on network or gameplay. The product host owns process lifetime,
-monotonic clock, waiting, cancellation and the decision to reset a match.
+or depend on network or gameplay. `GYO::Time` provides the clock (the engine
+time base), the wait (a `Waiter` that wakes at a deadline or on a notification,
+never early) and late-wake statistics; `GYO::Threads` provides named role
+threads. The product host owns process lifetime, its loops and deadlines,
+cancellation and the decision to reset a match.
 
 Object_FPS_PVP uses its `MatchRuntimeHost::Run()` to call this engine mechanism
 at 60 Hz. The host processes ordered join/leave controls, consumes each player's
@@ -256,5 +261,7 @@ At the user's request, Math was made the engine foundation (a requested refactor
 Structural verification checks one-way dependencies, absence of test/CI code in products, CSV-only game selection, single-app and zero-app builds, manual-copy isolation, and self-contained executable-relative content. Functional verification includes engine tests, editor validation, asset/shader failure cases, game diagnostics and installed-product execution. A successful build does not prove physical GPU support on an untested machine.
 
 At the user's request, failure handling was unified on "Assert = Programmer Error, Result = Runtime Error" (a requested refactoring; [error-handling contract](architecture/error-handling.md), [plan](architecture/plans/result-unification/README.md)). The mechanisms already existed in `engine/base` since early 2026 but were undocumented, so later modules reported failures with exceptions, string errors, hand-written result structs and out-parameters, and the engine had no assertion facility (Math used `<cassert>`, which the RelWithDebInfo presets compile out). `engine/base` was an include directory of `GYO::Engine`, so Math and Collision could not use it without depending on the engine library. It is now `GYO::Base`, a header-only leaf below Math that depends only on the C++ standard library; Engine links it publicly, Math through its interface, Collision privately, and test helpers add a test-only `gyo_test_support`. No cycle is introduced, products keep their dependency edges, and the host shader tool keeps including only `Sha256.hpp` by path. The same refactoring made MSVC compile all GYO code with its standard-conforming preprocessor (`/Zc:preprocessor` in `build/cmake/GyoBuild.cmake`; the host shader tool sets it on its own target), so macros such as `GYO_ASSERT` expand alike on every compiler.
+
+The engine time base and role threads (2026-10-08) answer observed pressure from a networked game's inventory of clocks, waits and threads ([time-threads-trace plan](architecture/plans/time-threads-trace/README.md)). The engine used three clocks (`RuntimeLoop` the steady clock, the SDL GPU backend `SDL_GetTicksNS`, the asset watcher the system clock) and had no wait primitive or thread facility, so consumers and acceptance loops each paired a clock with a sleep or condition variable; on macOS those waits are coalesced late by about a quarter to a half of their interval, and nothing recorded late wakes. Thread owners each started and stopped threads their own way, and the consumer's build carried a compiler flag for `std::jthread`. `GYO::Time` is a new leaf above `GYO::Base` (OS libraries only, no SDL): `MonotonicClock` is the steady clock, now the engine time base used by `RuntimeLoop` (the clock source changed, not the loop's semantics) and by the SDL GPU slow-acquire log; `Waiter` arms relative OS timers (kqueue with `NOTE_CRITICAL`, high-resolution waitable timers, or a condition variable) and re-reads the time base after every wake. `GYO::Threads` sits above Time. `GYO::Engine` links Time publicly; Net, Collision and PlatformSDL edges are unchanged, so roles without a window still link no SDL. Placing Time inside `GYO::Engine` would have left Base-level modules without it, keeping the wait in each consumer would have kept the platform knowledge there, and a thread pool or scheduler has no consumer. File times stay on the wall clock.
 
 Historical results in `docs/dev_logs/` and explicitly dated sections describe their original commits and paths. They are not evidence that a later refactor or release passed. Current build logs, CTest output and Actions artifacts are the evidence for a particular revision.

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <utility>
 
 namespace fps::pvp {
 
@@ -45,7 +46,39 @@ struct LocalMovementObservation final {
     // Corrections in this epoch and life, and how many late samples forced.
     std::uint32_t phaseCorrections{};
     std::uint32_t phaseLateCorrections{};
+    // Slack samples phase tracking took in this epoch and life, and the newest one's sequence.
+    std::uint64_t phaseSamples{};
+    std::uint64_t phaseSampleSequence{};
+    // Reseeds in this epoch and life because the authority resolved past the
+    // newest local command: it substituted (Held or Neutral) commands that
+    // had not arrived.
+    std::uint64_t stallReseeds{};
 };
+
+// What the display needs to place the local player at any time after the
+// prediction last advanced: the interpolation endpoints, the remaining display
+// correction and how far the newest step had progressed.
+struct LocalPresentationState final {
+    Engine::Math::Vec3 previousPosition{};
+    Engine::Math::Vec3 currentPosition{};
+    Engine::Math::Vec3 correction{};
+    double correctionSeconds{};
+    float alpha{};
+};
+
+struct LocalRenderSample final {
+    Engine::Math::Vec3 renderPosition{};
+    Engine::Math::Vec3 correctionOffset{};
+    float interpolationAlpha{};
+};
+
+// The display position secondsLater after the state was taken: the
+// interpolation advances by elapsed time, the correction decays as the
+// prediction would decay it, and the result is swept against the arena's walls
+// so no offset carries the camera through one. Zero seconds is exactly the
+// prediction's own presentation.
+[[nodiscard]] LocalRenderSample InterpolateLocalPresentation(const Arena& arena, const LocalPresentationState& state,
+                                                             double secondsLater);
 
 // Product-local movement prediction. The application samples mouse input once
 // per frame and supplies absolute aim; commands represent exactly one 60 Hz step.
@@ -57,6 +90,13 @@ public:
     void SetMovementRules(MovementRules rules);
     void ClearJumpRequest() noexcept { pendingJump_ = false; }
     void Reconcile(const PlayerState& authority, std::uint64_t authorityTick);
+    // Phase evidence only: the slack sample of an authority state older than the
+    // next one Reconcile receives (several snapshots in one drained batch). No
+    // acknowledgement, correction of position or reseed happens here.
+    void ObservePhaseSample(const PlayerState& authority);
+    // Reconcile would seed a new lead from this state (new player, life or
+    // epoch, or an acknowledgement past the predicted tip): a fresh phase.
+    [[nodiscard]] bool Reseeds(const PlayerState& authority) const noexcept;
     // True publishes a changed complete window. The network worker owns its
     // independent 60 Hz retransmission deadlines and never creates commands.
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,
@@ -66,6 +106,13 @@ public:
     // or while no command can be generated.
     [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept;
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
+    [[nodiscard]] LocalPresentationState Presentation() const noexcept;
+    // The aim of the newest predicted state: the last command's, or the seed's.
+    [[nodiscard]] std::pair<float, float> PredictedAim() const noexcept { return {current_.yaw, current_.pitch}; }
+    // Elapsed time after the latest Advance at which the next Advance takes the
+    // next fixed step (one step before any Advance), including the pending phase
+    // slew: a caller that runs steps on time waits this long.
+    [[nodiscard]] double SecondsUntilNextStep() const noexcept;
 
 private:
     void SeedLead(const PlayerState& authority);
@@ -84,6 +131,7 @@ private:
     Engine::Math::Vec3 correction_{};
     double correctionSeconds_{};
     float alpha_{};
+    double secondsUntilNextStep_{MovementTickSeconds};
     bool sendPending_{};
     bool freshSeed_{};
     bool pendingJump_{};

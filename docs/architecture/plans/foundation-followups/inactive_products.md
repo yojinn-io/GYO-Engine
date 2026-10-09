@@ -113,3 +113,16 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
 - 選用：未啟用產品若要在縮放（macOS）或視窗移動／縮放（Windows）期間持續更新，可以呼叫 `SdlPlatform::SetLiveFrameHandler`，在處理函式中呼叫 `RuntimeLoop::RunLiveFrame`。
   - live frame 中，`Update`／`Render` 是在 `ProcessEvents` 尚未返回時被呼叫，沒有新的輸入；產品要確認不會重複消費輸入邊緣。
   - 提出需求的消費端的做法：live frame 中使用空的輸入幀。
+
+## 4. TT（時間、執行緒與 Trace 計畫）
+
+TT 計畫的批次完成時，由該批更新本節。
+
+### TT-1 Time 與 Threads
+
+狀態：TT-1 實作與 L1 完成（2026-10-08）。
+
+- 破損：無。`RuntimeLoop` 的時鐘型別改為 `Engine::Time::MonotonicClock`，它就是 `std::chrono::steady_clock`，private 成員之外沒有介面變化；`FrameContext.deltaSeconds` 的定義不變。
+- 連結：`GYO::Engine` 多了 PUBLIC 依賴 `GYO::Time`（只依賴 Base 與 OS 函式庫）；未啟用產品不需要改 CMake。
+- 選用：未啟用產品若要等待或開角色執行緒，使用 `Engine::Time::Waiter` 與 `Engine::Threads::RoleThread`，不要直接用 `SDL_Delay` 或手寫 cv。
+

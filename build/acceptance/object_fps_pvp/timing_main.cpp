@@ -1,14 +1,16 @@
 // Owner-local real-clock network/prediction acceptance. Faults exist only here.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
+#include "simulation_wakes.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -53,6 +55,10 @@ int main(int argc, char** argv) {
         std::string error; const auto arena=Arena::Load(arenaPath,error); Require(arena.has_value(),error);
         std::array<ClientConnection,2> clients;
         for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));
+        // One simulation role per Client, running from before the join as in the
+        // application: the frame loop below only publishes intents.
+        std::array<std::unique_ptr<ClientSimulationRole>,2> simulation;
+        for(std::size_t i=0;i<2;++i)simulation[i]=std::make_unique<ClientSimulationRole>(clients[i],std::vector<Arena>{*arena});
         clients[0].CreateAndJoin(gateway);
         Wait([&]{const auto s=clients[0].State();Require(s.error.empty(),s.error);return s.phase==ConnectionPhase::Playing;});
         clients[1].Refresh(gateway);
@@ -60,7 +66,6 @@ int main(int argc, char** argv) {
         clients[1].Join(gateway,clients[1].State().rooms.front().id);
         Wait([&]{const auto a=clients[0].State(),b=clients[1].State();Require(b.error.empty(),b.error);
             return b.phase==ConnectionPhase::Playing && a.snapshot && a.snapshot->players.size()==2;});
-        std::array<ClientSimulation,2> simulation{ClientSimulation(*arena),ClientSimulation(*arena)};
         std::array<SnapshotTimeline,2> timelines;
         const std::array ids{clients[0].State().playerId,clients[1].State().playerId};
         std::array<std::uint64_t,2> previousEpoch{},overflowCounts{};
@@ -86,18 +91,18 @@ int main(int argc, char** argv) {
                 auto drain=clients[i].Drain();
                 Require(drain.state.error.empty(),drain.state.error);
                 Require(drain.state.phase==ConnectionPhase::Playing && drain.state.snapshot.has_value(),"Live session lost");
-                for(const auto& received:drain.snapshots)static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));
+                for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));}
                 const auto& authority=Player(*drain.state.snapshot,ids[i]);
                 if(measured && previousEpoch[i] && previousEpoch[i]!=authority.movementEpoch)++resets;
                 previousEpoch[i]=authority.movementEpoch;overflowCounts[i]=drain.snapshotHistoryOverflowCount;
-                simulation[i].Observe(authority,drain.state.snapshot->tick,drain.state.movementRules);
                 const double age=std::chrono::duration<double>(now-measurement).count();
                 // Alternate 300 ms movement and 300 ms stop; no net drift into a wall.
                 const auto leg=static_cast<long long>(std::floor(std::max(0.0,age)/.6));
                 const float axis=injected && MovementTraceNowNs()-releaseNs<1500000000LL ? 1.0F :
                     (measured && std::fmod(age,.6)<.3 ? (leg%2?-1.0F:1.0F):0.0F);
-                if(auto window=simulation[i].Frame(now,{axis,0,0,0}))clients[i].SendInput(std::move(*window));
-                const auto& p=simulation[i].Observation();
+                if(const auto failure=simulation[i]->Error())throw std::runtime_error("Client simulation stopped: "+*failure);
+                simulation[i]->PublishIntent({axis,0,0,0,true,0,now,IntentOwner(drain.state)});
+                const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
                 Require(p.pendingCommands<=MaxPendingCommands,"Prediction window exceeded bound");
                 Require(authority.contiguousPendingCommands<=MaxFutureCommands,"Server window exceeded bound");
                 if(measured && p.frozen)++frozen;
@@ -124,6 +129,9 @@ int main(int argc, char** argv) {
         const bool recoveryOK=!injected || (recoveredAt && std::chrono::duration<double>(stableSince->time_since_epoch()).count()-releaseNs/1e9<=1.5);
         for(auto& c:clients)c.Leave();
         Wait([&]{return clients[0].State().phase==ConnectionPhase::Lobby && clients[1].State().phase==ConnectionPhase::Lobby;});
+        std::array<std::string,2> wakes;
+        for(std::size_t i=0;i<2;++i)wakes[i]=SimulationWakesJson(simulation[i]->TakeWakeReport());
+        for(auto& role:simulation)role.reset();
         trace.Finish();Require(trace.Good(),"Diagnostic trace lost/corrupted data");
         std::ofstream csv(output/"frames.csv");csv<<"time_ns,frame_seconds,pending_a,pending_b,queued_a,queued_b,epoch_a,epoch_b,remote_age_a,remote_age_b,resolved_a,resolved_b,authority_x_a,authority_z_a,authority_x_b,authority_z_b\n"<<std::setprecision(17);
         for(const auto& f:frames)csv<<f.timeNs<<','<<f.seconds<<','<<f.pending[0]<<','<<f.pending[1]<<','<<f.queued[0]<<','<<f.queued[1]<<','<<f.epoch[0]<<','<<f.epoch[1]<<','<<f.remoteAge[0]<<','<<f.remoteAge[1]<<','<<f.resolved[0]<<','<<f.resolved[1]<<','<<f.authority[0].x<<','<<f.authority[0].z<<','<<f.authority[1].x<<','<<f.authority[1].z<<'\n';
@@ -136,8 +144,11 @@ int main(int argc, char** argv) {
             <<",\"frames\":"<<frames.size()<<",\"epoch_changes\":"<<resets<<",\"gaps_100ms\":"<<gaps
             <<",\"frozen_frames\":"<<frozen<<",\"history_overflows\":"<<overflowCounts[0]+overflowCounts[1]
             <<",\"injected\":"<<(injected?"true":"false")<<",\"release_ns\":"<<releaseNs
-            <<",\"recovery_client_passed\":"<<(recoveryOK?"true":"false")<<"}\n";
+            <<",\"recovery_client_passed\":"<<(recoveryOK?"true":"false")
+            <<",\"simulation_wakes\":["<<wakes[0]<<','<<wakes[1]<<"]}\n";
         Require(bool(summary),"Summary write failed");Require(recoveryOK,"Client recovery exceeded 1.5 seconds");
+        // The simulation role keeps stepping through a main-thread stall: no epoch reset.
+        Require(!injected || resets==0,"A main-thread stall reset a movement epoch");
         std::cout<<"timing probe completed: "<<frames.size()<<" frames, "<<resets<<" epoch changes, "<<gaps<<" large gaps\n";
         return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

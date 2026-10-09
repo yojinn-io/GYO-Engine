@@ -1,6 +1,6 @@
 # 時間、執行緒與 Trace：批次計畫
 
-更新：2026-10-08。狀態：TT-1、TT-2 未開始。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
+更新：2026-10-08。狀態：TT-1 實作與 L1 完成（L2 待核准）；TT-2 未開始。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
 file:line 以 master `9a6fa8e` 為準，批次開始時重新核對。本文件依 D12 匿名。
 
 ---
@@ -26,7 +26,7 @@ file:line 以 master `9a6fa8e` 為準，批次開始時重新核對。本文件�
 - **後端**（全部用相對期限，醒來後依 steady 重新檢查，不使用換算出來的絕對時間）：
   - macOS：kqueue 的 `EVFILT_TIMER`，加 `NOTE_CRITICAL` 或明確的小 `NOTE_LEEWAY`（批次開始時依實測二選一）；Notify 用 `EVFILT_USER`。
   - Windows：`CreateWaitableTimerExW(CREATE_WAITABLE_TIMER_HIGH_RESOLUTION)` 加 auto-reset event，以 `WaitForMultipleObjects` 等待；系統不支援時退回一般的 waitable timer，並由能力查詢回報。
-  - 其他平台：`std::condition_variable` 的 `wait_until(steady)`。
+  - 其他平台：`std::condition_variable` 的 `wait_for`（相對期限，和其他後端一致）。
 - **LateWakeStats**：固定 bin 的直方圖，加上 max 與 count；不配置記憶體，沒有自己的執行緒。
 - 例外：`AssetWatcher` 把檔案時間換算成 `system_clock`（`engine/asset/src/AssetWatcher.cpp:13-27`），屬於牆鐘語意的檔案時間，本批不改；在 `GYO::Time` 的文件寫明。
 

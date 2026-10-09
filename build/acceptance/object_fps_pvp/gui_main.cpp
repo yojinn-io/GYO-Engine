@@ -588,7 +588,8 @@ void RunPhaseStalls(const Options& options) {
         bool beforeUpdate{};
         unsigned milliseconds{};
         std::optional<Clock::time_point> released, healthySince;
-        std::uint64_t epoch{};
+        std::uint64_t epoch{}, stallReseeds{};
+        std::uint32_t lateCorrections{};
         std::size_t maxPending{};
         std::uint32_t maxServerPending{};
         double recoverySeconds{};
@@ -620,7 +621,7 @@ void RunPhaseStalls(const Options& options) {
     bool joined = mover;
     const auto started = Clock::now();
     auto previous = started, refreshed = started;
-    std::optional<Clock::time_point> togetherSince, previousUpdate, previousUpdateStart;
+    std::optional<Clock::time_point> togetherSince, previousUpdate, previousSteppedAt;
     std::optional<fps::pvp::LocalMovementObservation> previousMovement;
     std::optional<SDL_Scancode> held;
     unsigned nextFault{};
@@ -671,6 +672,8 @@ void RunPhaseStalls(const Options& options) {
             activeFault = nextFault++;
             injecting = &faults[*activeFault];
             injecting->epoch = application.LocalMovement().movementEpoch;
+            injecting->lateCorrections = application.LocalMovement().phaseLateCorrections;
+            injecting->stallReseeds = application.LocalMovement().stallReseeds;
         }
         if (injecting && injecting->beforeUpdate) {
             SDL_Delay(injecting->milliseconds);
@@ -689,19 +692,29 @@ void RunPhaseStalls(const Options& options) {
                 local.movementEpoch == previousMovement->movementEpoch &&
                 local.lastResolvedCommand <= previousMovement->latestCommand &&
                 local.latestCommand >= previousMovement->latestCommand) {
-                // The product samples its own clock inside Update, so its elapsed
-                // time since the previous sample is bracketed by this Update's end
-                // and the previous Update's start: an upper bound with no timing
-                // tolerance. A new authoritative seed is excluded above.
-                const auto possibleSteps = static_cast<std::uint64_t>(std::floor(
-                    Seconds(updateFinished, *previousUpdateStart) / fps::pvp::MovementTickSeconds)) + 1;
-                Require(local.latestCommand - previousMovement->latestCommand <= possibleSteps,
-                    "Command generation charged a previous frame's already-covered stall again");
+                // The simulation role steps on its own deadlines; each Update reads
+                // its newest step. Between the times of the two steps read, its
+                // fixed-step clock moved with time except for phase slew (at most
+                // one maximum correction pending at the first plus one per
+                // correction started since), and a step boundary on either side
+                // adds one. It takes neither more nor fewer steps than that: a
+                // stalled main thread neither replays nor stops command
+                // generation, and a simulation that dropped time fails the lower
+                // bound. A new authoritative seed is excluded above.
+                const double tick = fps::pvp::MovementTickSeconds;
+                const auto steps = local.latestCommand - previousMovement->latestCommand;
+                const double slew = fps::pvp::MovementPhaseMaximumCorrectionSeconds *
+                    (1.0 + static_cast<double>(local.phaseCorrections - previousMovement->phaseCorrections));
+                const double stepped = Seconds(application.LocalMovementSteppedAt(), *previousSteppedAt);
+                const auto possibleSteps = static_cast<std::uint64_t>(std::floor((stepped + slew) / tick)) + 1;
+                const auto requiredSteps = std::floor((stepped - slew) / tick) - 1;
+                Require(steps <= possibleSteps, "The simulation generated more steps than the elapsed time allows");
+                Require(static_cast<double>(steps) >= requiredSteps, "The simulation skipped steps while the main thread stalled");
             }
             previousUpdate = updateFinished;
-            previousUpdateStart = updateStarted;
+            previousSteppedAt = application.LocalMovementSteppedAt();
             previousMovement = local;
-        } else { previousUpdate.reset(); previousUpdateStart.reset(); previousMovement.reset(); }
+        } else { previousUpdate.reset(); previousSteppedAt.reset(); previousMovement.reset(); }
         if (injecting && !injecting->beforeUpdate) {
             SDL_Delay(injecting->milliseconds);
             injecting->released = Clock::now();
@@ -722,11 +735,15 @@ void RunPhaseStalls(const Options& options) {
             if (previousLowerBound) fault.productElapsedLowerBound = std::max(fault.productElapsedLowerBound, *previousLowerBound);
             fault.maxPending = std::max(fault.maxPending, local.pendingCommands);
             fault.maxServerPending = std::max(fault.maxServerPending, local.serverPendingCommands);
-            // A stall the product provably saw as 100 ms or more is a long stall,
-            // whatever was requested; every shorter one must keep its epoch.
-            if (fault.milliseconds < 100 && fault.productElapsedLowerBound < .1)
-                Require(local.movementEpoch == fault.epoch,
-                    "A short GUI phase stall produced persistent backlog/epoch reset");
+            // The simulation role keeps stepping through every main-thread stall,
+            // whatever its length: no stall resets the epoch, the authority never
+            // runs out of local commands (a stall reseed), and no command arrives
+            // after its tick (which would start a late phase correction).
+            Require(local.movementEpoch == fault.epoch, "A GUI main-thread stall reset the movement epoch");
+            Require(local.stallReseeds == fault.stallReseeds,
+                "A GUI main-thread stall let the authority resolve past the local commands (Held)");
+            Require(local.phaseLateCorrections == fault.lateCorrections,
+                "A GUI main-thread stall made commands arrive after their tick");
             const bool healthy = local.active && !local.frozen && local.pendingCommands < fps::pvp::MaxPendingCommands &&
                 local.serverPendingCommands <= 3 && application.RemoteMovement() &&
                 application.RemoteMovement()->latestReceiveAgeSeconds < .1;
@@ -803,7 +820,7 @@ void Run(const Options& options) {
     std::optional<Clock::time_point> movementStarted;
     std::optional<Engine::Math::Vec3> startingPosition;
     std::optional<Engine::Math::Vec3> pointerReleasePosition;
-    std::optional<Clock::time_point> pointerReleasedAt;
+    std::optional<Clock::time_point> pointerReleaseRequested, pointerReleasedAt;
     bool submittedJoin = options.role == "create";
     bool beforeCaptured = false;
     bool afterCaptured = false;
@@ -883,8 +900,7 @@ void Run(const Options& options) {
             movementStarted = now;
         }
         if (movementPressed && !movementReleased && Seconds(now, *movementStarted) >= .7) {
-            pointerReleasePosition = application.LocalMovement().predictedPosition;
-            pointerReleasedAt = now;
+            pointerReleaseRequested = Clock::now();
             movementReleased = true;
             SDL_Event moved{};
             moved.type = SDL_EVENT_WINDOW_MOVED;
@@ -909,7 +925,14 @@ void Run(const Options& options) {
         const auto updateStarted = Clock::now();
         Require(application.Update(frame) == Control::Continue, application.LastError());
         const auto updateFinished = Clock::now();
-        if (testedWindowMove && !testedCursorToggle && Seconds(now, *pointerReleasedAt) >= .05) {
+        // The simulation role steps on its own: the stop is observed from the
+        // first presentation whose step used an intent sampled after the release.
+        if (pointerReleaseRequested && !pointerReleasePosition &&
+            application.LocalMovementIntentSampledAt() > *pointerReleaseRequested) {
+            pointerReleasePosition = application.LocalMovement().predictedPosition;
+            pointerReleasedAt = now;
+        }
+        if (testedWindowMove && !testedCursorToggle && pointerReleasedAt && Seconds(now, *pointerReleasedAt) >= .05) {
             const auto stoppedPrediction = application.LocalMovement().predictedPosition;
             Require(std::hypot(stoppedPrediction.x - pointerReleasePosition->x,
                                stoppedPrediction.z - pointerReleasePosition->z) < .01,

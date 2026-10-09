@@ -1,4 +1,5 @@
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/time/MonotonicClock.hpp"
 #include <SDL3/SDL_gpu.h>
 #include <algorithm>
 #include <array>
@@ -933,17 +934,18 @@ struct SdlGpuRenderDevice::Impl final {
         // say which one stalled: the in-flight fence, or the drawable (Metal's
         // nextDrawable, which can block for about a second; on Vulkan and D3D12
         // it also covers a swapchain rebuild). Logged only when slow.
-        const Uint64 waitStarted = SDL_GetTicksNS();
+        // Engine time base, so these stalls line up with the consumer's own records.
+        const std::int64_t waitStarted = Time::NowNs();
         if (!SDL_WaitForGPUSwapchain(device, window)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
             return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain wait failed"));
         }
-        const Uint64 acquireStarted = SDL_GetTicksNS();
+        const std::int64_t acquireStarted = Time::NowNs();
         if (!SDL_AcquireGPUSwapchainTexture(command, window, &swapchain, &width, &height)) {
             static_cast<void>(SDL_CancelGPUCommandBuffer(command));
             return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: swapchain acquisition failed"));
         }
-        const Uint64 acquired = SDL_GetTicksNS();
+        const std::int64_t acquired = Time::NowNs();
         if (acquired - waitStarted >= 50'000'000) {
             SDL_Log("SDL_GPU slow swapchain acquire fence_wait_ms=%.1f drawable_ms=%.1f texture=%d",
                 static_cast<double>(acquireStarted - waitStarted) / 1.0e6,
