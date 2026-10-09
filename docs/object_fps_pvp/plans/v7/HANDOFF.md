@@ -148,11 +148,17 @@
 
 ## 未結事項
 
-- P1a 的 PR 在第 03a 批之後開（02 的程式，加上 03a 的結果與文件）。
-- P1b 分支 `claude/pvp-v7-p1b`：P1a 合併後 rebase 到新的 master。第 03 批留下的已知失敗（產品路徑的回復測試 1 個組合）是第 04 批的完成條件之一。
-- 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批的 clean-60 延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。改它等於改相位追蹤的定義，需要使用者決定；建議在第 04 批（相位追蹤改由模擬喚醒驅動）或第 09 批（FireGate 重估）時評估。
-- worktree `../GYO-Engine-v7base`（master `a7cba38`，權威比對的 base）：P1a 結束時移除。`../GYO-Engine-v6final`（`fee92ff`）保留給第 05 批 C1 與第 09 批 C2 的 before；`../GYO-Engine-p1b03`（`03b2ea7`）在 P1a 結束時移除。
-- Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批 L3 確認；重現時提出程序活動宣告作為新的 Architecture Delta。
+- P1b：PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71)（第 03、TT-1、04、05 批）。合併前只剩使用者操作的 L2（標題列拖動、角落縮放）與 L3（Spaces、縮小、遮住視窗）。
+- C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
+  - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
+  - 延遲的位移（第 04 批記錄，C1 證實）：常數不變時，v7 的「產生→執行」約 38 ms（30／60 FPS 相同），v6 是 21～25 ms；「輸入取樣→執行」約多 1 幀。
+  - 這兩項都要改相位常數或相位追蹤的定義，屬於停止條件，要另立批次；候選是第 09 批（FireGate 重估）。
+  - D30 門檻可能被逐漸變長的發布間隔逐級放大（低機率）：使用者決定 C1 之後再看（見[第 04 批](04-client-roles.md)）。
+- C1 的 8 ms 狀態未驗證（第 2 次 session 中 after 沒有落到 8 ms 狀態）：之後的量測出現 8 ms 狀態時再補。
+- TT-1 L2 的量測程式在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`，未推送）：為了不讓 C1 作廢，沒有放進 PR #71；之後的 PR（例如 TT-2）再合入。
+- 第 04 批 xhigh 審查留下、只記錄的項目（時間倒退的意圖、網路 probe 不再涵蓋伺服器端的輸入逾時、世代檢查與送出路徑沒有 L1、負向 slew 時 FireGate 偏保守）：見[第 04 批](04-client-roles.md)的「xhigh 審查」。
+- worktree：`../GYO-Engine-v6final`（`fee92ff`）保留給第 09 批 C2 的 before；`../GYO-Engine-p1b-c1`（`805bd11`，C1 的 after）在 PR #71 合併後移除。
+- Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批的 L3 確認（待做）；重現時提出程序活動宣告作為新的 Architecture Delta。
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。
 - 自旋（期限前忙等）：2026-10-09 使用者決定目前不加，現行的分離執行緒已經夠用。等第 07 批（Match Tick 改用 Waiter）與第 15 批（Windows 退回一般 waitable timer 時的精度）的數據再評估；要加就是 Architecture Delta，先量測再決定。
