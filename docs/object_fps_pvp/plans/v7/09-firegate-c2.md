@@ -88,7 +88,7 @@
 
 ## 重推條件（凍結之後，任一成立就重推兩個常數，重跑 M0 型的量測、時間線與突變）
 
-1. 相位追蹤改變：`MovementPhaseTarget`／`Deadband`／`FirstDeadband`／`Percentile`／`WindowSamples`／`LateSamples`／`MaximumCorrection`、`InitialCommandLead`、樣本年齡的定義（`Movement.hpp:36`、`:45-59`；`LocalPlayerPrediction.cpp:97-98`、`:120-151`、`:316-321`）。HANDOFF「C1 之後要決定的事」的兩項若處理，也算在這裡。
+1. 相位追蹤改變（S2b 本身在凍結之前，不算重推）：`MovementPhaseTarget`／`Deadband`／`FirstDeadband`／`Percentile`／`WindowSamples`／`LateSamples`／`MaximumCorrection`、`InitialCommandLead`、樣本年齡的定義（`Movement.hpp:36`、`:45-59`；`LocalPlayerPrediction.cpp:97-98`、`:120-151`、`:316-321`）。HANDOFF「C1 之後要決定的事」的兩項若處理，也算在這裡。
 2. 輸入送出規則改變：`InputSendRate`、`InputSendBurst`、token bucket（`ClientConnection.cpp:593-628`、`:672-682`），包含決定 1 的修正。
 3. 動作通道改變：`ActionSendRate`、Client 共用期限、D36、`CoarseWakeLead`；link 的節拍、獨立重送與計時器；snapshot 轉送頻率、Match IPC 或 Tick 排程、結果路徑。
 4. 第 11 批 pv7：心跳對時或時間回聲若共用輸入 token、`nextActionSendAt` 或 link 的 `nextSend`，或改變 link 寫出迴圈的喚醒來源。只是新增獨立通道時記錄確認即可。
@@ -106,7 +106,8 @@
   - A：修正 token bucket 停頓後回不來的問題（產品內的 `ClientConnection`）。恢復步數 N 在實作前由補充率推出並寫進宣告（例如故障結束後 ≤3 步），不由實作自己的單元測試訂出。先核對 Gateway 的 session 封包率上限（每秒 120，`session.go:117-125`），回歸中記錄 `rate_limited_packets`。
   - B：`ShotTiming` 帶入最新命令的送出等待並加進 margin（worker→模擬角色→主執行緒的資料流，小的 Architecture Delta）。
   - 驗收：CTest 全過、權威 digest 不變、突變 killed、開發跑次記錄被釘住的秒數。
-- **S3 = M0 影子量測**（常數變更前的頭；若有 S2 則在 S2 之後）。宣告 high＋1 次 xhigh 對抗式檢查；執行 medium。
+- **S2b = 第 09b 批（暫稱）：相位追蹤的既有缺陷**（D47⑤ 的更正）：settling 期間收進來的舊樣本留在下一個視窗（修正後第一個視窗的 P90 實際約 P93）、settling 期間累積的 late 樣本在 settle 完成時立刻觸發第二次 late 修正，以及延遲的位移（v7 的「產生→執行」約 38 ms，v6 是 21～25 ms）。這會改相位常數或相位追蹤的定義，屬於重推條件 1，所以排在 M0 與凍結之前。可能與 D44 的 late 修正有關（hypothesis）；若修正確認會改變遲到修正或 backlog 的行為，依 D44 的提前條件停下問使用者。規劃與檔位在開始時決定。
+- **S3 = M0 影子量測**（常數變更前、S2 與 S2b 之後的頭）。宣告 high＋1 次 xhigh 對抗式檢查；執行 medium。
   - probe-only 修補：headless probe 在送出時記錄 `presented.shotTiming` 與閘門算出的 earliest（`gameplay_action.hpp:142` 的 `PresentAt` 回傳 `ClientPresented.shotTiming`，可行），寫進另一個檔案，避免凍結分析器拒絕；每段起點加 seed 偏移。
   - 跑次：clean-30／60／144 與 gateway-250ms、host-ipc-250ms、downstream-250ms 各 ≥6 次，兩種主機狀態都要有（約 30～40 分鐘）。
   - 窗口的事先定義：停頓＝resolved 時刻的 Tick 間隔 ≥ step＋1.5 ms，窗口涵蓋其後 0～3 Tick；被釘住＝每秒送出等待中位數 >2 ms 的玩家秒；領先跳升＝`lead_jumps.py`。
@@ -150,7 +151,7 @@
 2. **guard 的值**：(A)【建議】維持 2 ms，殘餘類別寫明並列為重推條件。(B) 2.5 ms：比 v6 大，需要你核准；設計上的最壞值約 3.1 ms，2.5 也蓋不住。
 3. **spread**：維持 7（建議，不必另外決定）。
 4. **M0 影子量測**：凍結前在常數變更前的頭做（建議要做；README 允許）。門檻與窗口照「步驟」S3。
-5. **相位追蹤的既有缺陷**（HANDOFF「C1 之後要決定的事」：settling 期間的舊樣本與 late 樣本、延遲位移約 38 對 21～25 ms）：要不要在第 09 批處理。屬重推條件 1，若處理必須排在 M0 與凍結之前，否則凍結後馬上要重推；可能與 D44 的 late 修正有關（hypothesis）。建議：本批不處理，維持「另立批次」，並在重推條件寫明；但若你希望先處理，就排在 09a 之後、M0 之前。
+5. **（2026-10-10 使用者更正：在 P2 處理，排在 09a 之後、M0 與凍結之前，暫稱第 09b 批）相位追蹤的既有缺陷**（HANDOFF「C1 之後要決定的事」：settling 期間的舊樣本與 late 樣本、延遲位移約 38 對 21～25 ms）：要不要在第 09 批處理。屬重推條件 1，若處理必須排在 M0 與凍結之前，否則凍結後馬上要重推；可能與 D44 的 late 修正有關（hypothesis）。建議：本批不處理，維持「另立批次」，並在重推條件寫明；但若你希望先處理，就排在 09a 之後、M0 之前。
 6. **probe 相位**：(A)【建議】矩陣、回歸、30 FPS 記錄都不隨機化；只有 M0 的每段起點用 seed 偏移；GUI 連點本來就會漂移。(B) 矩陣也隨機化：會失去與 C1、06～08b 的可比性。
 7. **C2 連點的內容**：(A)【建議】(i) 12 Tick（判定）、(ii) 冷卻邊緣連點（after 判定）、(iii)(iv) 只記錄；earliest 只在 M0 量。(B) 只做 12 Tick（與 v6 第 12 批相同）：對 1 Tick 的下界錯誤沒有檢定力，不建議。
 8. **C2 的主機狀態**：宣告為偏離 C1，以 TimerBaseline 分層，前後 sleeper 判定轉換，舊 Match 用自己的晚醒交叉確認（建議）。
