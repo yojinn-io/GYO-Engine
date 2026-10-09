@@ -89,6 +89,16 @@
 ## 未結事項
 
 - ~~TT-1 開始時：依本機實測，在 `NOTE_CRITICAL` 與明確的小 `NOTE_LEEWAY` 之間二選一~~：選 `NOTE_CRITICAL`（見 TT-1 紀錄）。
-- TT-1 的 L2（只記錄）：等使用者核准事前宣告。
+- TT-1 的 L2（只記錄）：2026-10-09 使用者核准並執行（下方紀錄）。
 - Windows 不初始化 SDL 的程序（消費端的伺服器端）的計時精度，從未量過；只能在消費端主持的 LAN 場次量，否則標「未驗證」。
 - `AssetWatcher` 的偵測時刻 `detectedNs` 改用時間基準：候選，本計畫不做。
+
+## TT-1 L2（只記錄，2026-10-09）
+
+- 程式：`tests/common/time/WakeRecord.cpp`（`gyo_time_wake_record`、`gyo_time_wake_record_window`，不是 CTest）。依消費端的決定，它不放進第一個使用者的 PR（那裡的量測宣告禁止之後的非文件變更），提交在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`），之後的 PR 再合入。
+- 每種等待 30 秒、60 Hz 的絕對期限；兩種情境依序跑，每段前後各 5 秒 sleeper。主機正處於受干擾的狀態（sleeper 最大 34～36 ms，15 分鐘負載平均約 6）。
+- CLI（後端 Kqueue）：Waiter P50 0.065 ms、P99 4.01 ms（1786 次中 26 次超過 1 ms，最大 60 ms，與主機的尖峰同時）；cv P50 1.95、P99 4.19 ms；`sleep_until` P50 2.24、P99 4.22 ms。
+- Engine SDL 視窗：Waiter P50 0.060、P99 0.121、最大 0.66 ms（超過 1 ms 0 次）；cv P99 1.07 ms；`sleep_until` P99 1.11 ms。
+- 方向規則（同一輪 Waiter 的 P99 低於 cv）：兩種情境都成立。預期的「P99 ≤1 ms」在視窗情境成立；CLI 情境的 P99 落在主機尖峰的範圍內，只記錄。主機閒置時可以再記錄一次，涵蓋另一種狀態。
+- 證據：`build/target/_build/test/logs/tt1-l2-20261009/`（`meta.txt` 含程式雜湊、`cli.json`、`window.json`、sleeper）。
+

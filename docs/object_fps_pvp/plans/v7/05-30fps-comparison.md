@@ -1,6 +1,6 @@
 # 第 05 批：C1——30 FPS 修正前後對比（任務 1、2）與視窗操作
 
-狀態：**C1 執行中**（2026-10-09 使用者核准宣告；`declare.txt` 的 SHA-256 `f4c4396f…`，session `logs/pvp-v7-batch05-20261009/`，10:27 開始）。PR 線 P1b。依賴第 04 批與 TT-1；C1 只在 PR #71 的 CI 全綠之後執行。
+狀態：**C1 第 1 次 session 依停止條件停下**（2026-10-09，宣告 `f4c4396f…`；主機不在閒置狀態）。待使用者決定是否在閒置的機器上以同一宣告開新的 session。PR 線 P1b。依賴第 04 批與 TT-1；C1 只在 PR #71 的 CI 全綠之後執行。
 起因：2026-10-07 使用者指示保存 v6 的 30 FPS 失敗案例，在 v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近（v7 README「v6 的 30 FPS 失敗案例與各幀率的對照」）。定義見 D31。
 
 ## 事前宣告草案（未核准；2026-10-09 具體化，D39 審查後修訂，待使用者核准）
@@ -113,3 +113,20 @@ medium（執行與記錄）；宣告草案以 high 撰寫。依 D39，宣告草�
 | macOS Intel（Metal、120 Hz） | L2、L3 |
 | Windows（D3D12） | 第 15 批的 LAN 場次 |
 | Linux、macOS arm64 | 未驗證 |
+
+## 結果
+
+### C1 第 1 次 session（2026-10-09 10:27～10:42，停止）
+
+- 宣告 `declare.txt`（SHA-256 `f4c4396f…`），session `build/target/_build/test/logs/pvp-v7-batch05-20261009/`。預檢通過（before 的產物與 03a 一致；40 個凍結分析器在兩棵 tree 與清單一致；分析器 v7 `394d5e25…`、參考抽取器 `68ee027a…`）。
+- 基本 30 輪跑完（分類 E、A 都沒有），`summarize.py --stage base` 觸發停止條件「before 無法重現 v6 參考範圍」，依宣告停下，沒有補跑也沒有重跑：
+  - before clean-30 的 8 ms 狀態：P50 中位數 22.8 ms，在參考範圍［26.0, 28.2］±3 ms 之外。
+  - before clean-60 的 8 ms 狀態：3 輪全部失敗（參考為 15／15 與 6／6）。
+- 有限定位（不判定）：
+  - 這次的「8 ms 狀態」不是參考包的 8 ms 狀態：`host_late_p99` 在 10～47 ms（參考的 8 ms 狀態約 6～8 ms），失敗輪大多帶著「Clean Match runtime gap/dropped time」或「Client full-run frame reached100ms」，兩棵 tree 都有。
+  - 每輪前後的 sleeper 在兩棵 tree 都間歇出現 20～75 ms 的最大值（參考 session 約 4 ms）；停下時的 15 分鐘負載平均約 6，前景以外的 Chrome renderer 約 50% CPU。判斷為機器沒有處於宣告要求的閒置狀態（之前的從零建置與 app 重啟剛結束、瀏覽器在背景運作）。
+  - TimerBaseline 與主分類的一致率 18／30。
+- 只記錄、不作判定的觀察：在 4 ms 狀態，after clean-30 的 4 輪 Client 替代都是 0（1 輪因「Client full-run frame reached100ms」失敗），before clean-30 只有 1 輪落在 4 ms 狀態（替代 28、Actual 未達 99%）；after clean-60 第 1 輪在 4 ms 狀態因延遲門檻失敗（P50 45.3、P95 69.4 ms，Match 停頓替代 6）。
+- 部分判定（基本輪數時點，不構成結論）：結論「未證明」；4 ms 狀態的第 2a、3 條成立，其餘未驗證；第 4 條（v7 的停頓重設與 epoch 重設）成立。
+- 證據：`progress.jsonl`（SHA-256 `3560d459…`）、`summary.json`（`1e2b470f…`）、`judgement.json`（`0c8f5878…`）、`runs/`、`session.log`、`summarize-base.txt`。
+
