@@ -80,15 +80,23 @@ TEST_CASE("The Match host reports its tick waits per window and resets them") {
     MatchRuntimeHost host{StatisticsArena()};
     {
         std::jthread simulation([&](std::stop_token stop) { host.Run(stop); });
-        std::this_thread::sleep_for(200ms);
-        const auto first = host.TakeTickWakeStatistics();
-        // About 12 ticks in 200 ms at 60 Hz; generous for a loaded machine.
-        CHECK(first.late.Count() >= 3);
-        CHECK(first.notified == 0);
+        // Poll rather than sleep a fixed time: a loaded machine may run the
+        // simulation thread late, and the windows together keep every wait.
+        std::uint64_t deadlineWakes{}, notified{};
+        const auto giveUp = std::chrono::steady_clock::now() + 10s;
+        while (deadlineWakes < 3 && std::chrono::steady_clock::now() < giveUp) {
+            std::this_thread::sleep_for(20ms);
+            const auto window = host.TakeTickWakeStatistics();
+            deadlineWakes += window.late.Count();
+            notified += window.notified;
+        }
+        CHECK(deadlineWakes >= 3);
+        CHECK(notified == 0);
         static_cast<void>(host.RequestReset());
         std::this_thread::sleep_for(50ms);
     }
-    const auto second = host.TakeTickWakeStatistics();
-    CHECK(second.notified <= 1);
-    CHECK(second.late.Count() < 12);
+    // Only the waits since the previous take: about 3 in 50 ms.
+    const auto last = host.TakeTickWakeStatistics();
+    CHECK(last.notified <= 1);
+    CHECK(last.late.Count() < 12);
 }
