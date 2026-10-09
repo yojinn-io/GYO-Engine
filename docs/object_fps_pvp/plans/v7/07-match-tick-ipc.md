@@ -1,6 +1,6 @@
 # 第 07 批：Match 的 Tick 改用 Waiter，IpcHost 改用 asio
 
-狀態：**實作與 L1 完成，L2 的事前宣告待使用者核准**（2026-10-09；A `ffe9a99`、B `10003b9`）。PR 線 P2（PR #73）。依賴第 06 批（`7da6b0d`，本批的 before 是第 06 批的頭）。
+狀態：**完成**（2026-10-09；A `ffe9a99`、B `10003b9`；L2 通過）。PR 線 P2（PR #73）。依賴第 06 批（`7da6b0d`，本批的 before 是第 06 批的頭）。
 建議檔位 high；重設的交接、停止與 join 的順序、寫出的選擇（未開始的 snapshot 可替換）局部 xhigh。本批沒有另開 xhigh 審查 agent（需要使用者同意）。
 
 ## 起因
@@ -61,7 +61,9 @@
   - `run_gameplay.py` 完整的 25 案矩陣：25／25 通過。
 - 證據：`build/target/_build/test/logs/pvp-v7-batch07-20261009/`（git 忽略）：`mutations.json`、`ctest-full.log`、`tsan-ipc.txt`、`tsan-host.txt`、`dev-a-clean-60/`、`dev-b-clean-60/`、`dev-backpressure/`、`dev-matrix/`。
 
-## L2 的事前宣告（草案，待使用者核准）
+## L2 的事前宣告（2026-10-09 使用者核准）
+
+使用者原話：「L2 宣告核准，開始跑，chrome 我還需要做其他工作，但是我可以不動他。」宣告的 SHA-256 是 `e5ef8087…`（`5749c6a` 時的本文件）。Chrome 開著但沒有操作，記在 `progress.jsonl` 的開頭。
 
 - **目的**：
   - 確認停止條件「macOS 的 Tick 晚醒沒有改善」不成立。
@@ -90,6 +92,42 @@
   - after 出現 gameplay 失敗，或判定 2 不成立時，停下回報（後者就是本批的停止條件）。
   - 產物雜湊不符時停下。
 - **證據**：`build/target/_build/test/logs/pvp-v7-batch07-l2-<日期>/`。
+
+## L2 結果（2026-10-09，**通過**）
+
+- before 的 Match 在 worktree 從零建置（第 06 批的頭 `dcc14be`）。建置與刪除 worktree 觸發 Spotlight 索引，等它平靜（10 秒）後才開始。
+- 60 次全部完成，沒有停止。三項判定都成立：after 全部通過（before 也全部通過）；after 的 Tick 晚醒 P99 上界 244 µs；before 的 P99 上界 8 ms。
+- 主機：第 1 輪是 4 ms 狀態，第 2 輪起進入 8 ms 狀態（sleeper P99 約 7.3～8.2 ms）。每棵 tree 有 6 次落在 4 ms 狀態、24 次落在 8 ms 狀態。
+
+| tree／主機狀態 | Tick 晚醒的分布 | 最大 | P99 上界 |
+|---|---|---|---|
+| before／4 ms | 以 2～4 ms 為主（bins 139,100,200,684,2935,144,1,1,…） | 24.6 ms | 8 ms |
+| before／8 ms | 以 4～8 ms 為主（bins 257,264,608,1627,3726,7872,57,…） | 8.4 ms | 8 ms |
+| after／4 ms | 全部 <250 µs | 207 µs | 207 µs |
+| after／8 ms | 全部 <250 µs | 244 µs | 244 µs |
+
+- 只記錄的項目（中位數，before→after）：Match 程序 CPU 0.0315→0.0185 秒／秒；IPC 處理次數 722→501 次／秒；`snapshot_overwrites`（after）3。clean-60 的 `legal_match_p95_ms` 21.9→11.0 ms、`legal_client_p95_ms` 77.2→68.2 ms；clean-30 的 `legal_match_p95_ms` 21.8→16.2 ms、`legal_client_p95_ms` 100.4→84.9 ms。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch07-l2-20261009/`（git 忽略）：`build-before.sh`／`.log`、`artifacts.sha256`、`declaration.sha256`、`session.sha256`、`progress.jsonl`（`a12b6c3d…`）、`judgement.json`（`10500660…`）、`runs/`。
+
+## 橫向對比（2026-10-09，使用者要求）
+
+- 對象：兩次 L2 涵蓋三種組合。A＝P2-log 的 Gateway＋舊 Match（第 06 批 L2 的 before）；B＝第 06 批的 Gateway＋舊 Match（第 06 批 L2 的 after 與第 07 批 L2 的 before，兩個 session）；C＝第 06 批的 Gateway＋第 07 批的 Match（第 07 批 L2 的 after）。每個跑次依 probe 的 TimerBaseline 分主機狀態（間隔 P99 ≥22 ms 為 8 ms 狀態）。
+
+| 組合 | 主機狀態 | clean-60 `legal_match_p95_ms` | clean-30 `legal_match_p95_ms` | clean-30 `legal_client_p95_ms` | Gateway 量到的 snapshot 間隔 P50 | Tick 晚醒 P99 上界 |
+|---|---|---|---|---|---|---|
+| A | 4 ms | 11.1 | 9.9 | 100.6 | 16.6 | 4 ms |
+| A | 8 ms | 12.8 | 19.0 | 116.1 | 16.35～16.6 | 8 ms |
+| B | 4 ms | 10.0 | 9.5 | 68.1 | 16.6～16.65 | 8 ms |
+| B | 8 ms | 23.1 | 22.0 | 100.8 | 16.4～16.5 | 8 ms |
+| C | 4 ms | 11.0 | 12.6（1 次） | 70.2（1 次） | 16.7 | 207 µs |
+| C | 8 ms | 10.3 | 19.8 | 99.6 | 16.7 | 244 µs |
+
+- 結論：
+  - 第 06 批 L2 後段變慢的原因，是主機進入 8 ms 狀態（系統的計時器合併）時，舊 Match 的相對等待晚醒 4～8 ms。晚醒後補步，讓 Gateway 量到的 snapshot 間隔短於名目的 16.67 ms，`legal_match_p95_ms` 約翻倍。
+  - 第 07 批之後 Match 不再受主機狀態影響：兩種狀態下 Tick 晚醒都 <250 µs，snapshot 間隔回到 16.7 ms，clean-60 的 `legal_match_p95_ms` 在 8 ms 狀態也是 10.3 ms。
+  - 仍受主機狀態影響的是 clean-30：`legal_match_p95_ms` 與 `legal_client_p95_ms` 在 8 ms 狀態仍偏高。可能的來源在 Client 端：網路 worker 每 2 ms 的睡眠輪詢（第 08 批要改），以及 probe 自己 30 FPS 的幀節拍（結果在幀上觀測）。第 08 批之後再對比一次。
+  - 限制：C 在 4 ms 狀態只有 1～2 次（主機大多在 8 ms 狀態），只供參考。
+- 證據：`build/target/_build/test/logs/pvp-v7-cross-20261009/`（`cross.py` `c61c85af…`、`cross.json` `4656cfeb…`）。
 
 ## 架構
 

@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；第 07 批的實作與 L1 完成，L2 宣告待核准）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批待使用者指示）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -9,10 +9,10 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：
-  1. 第 07 批 L2 的事前宣告（[第 07 批](07-match-tick-ipc.md)的「L2 的事前宣告」）：核准、修改或不做。建議核准。內容：before＝第 06 批的 Match、after＝本批的 Match（Gateway 與 probe 共用），5 案 × 6 輪 × before／after，共 60 次，約 30 分鐘；判定 after 全部通過、after 的 Tick 晚醒 P99 ≤1 ms、before 的 P99 ≥2 ms；依 probe 的 TimerBaseline 分兩種主機狀態記錄。跑的時候機器要閒置。
-- **進行中**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：第 07 批（A `ffe9a99`、B `10003b9`）推送後重跑 CI。
-- **下一步**：核准後執行第 07 批的 L2；之後做 P2-log、第 06、07 批的橫向對比（未結事項），再請你決定是否開始第 08 批。
-- **最後更新**：2026-10-09 15:32，依據 commit `10003b9`（第 07 批的實作與 L1 完成）。
+  1. 是否開始第 08 批（Client 的網路 worker 改為一條 asio io 執行緒，SendInput／SubmitAction 以 post 喚醒）。建議開始；橫向對比顯示，剩下受主機狀態影響的部分在 Client 端。README 的建議檔位是 high、局部 xhigh；若要另開 xhigh 審查 agent，需要你同意。
+- **進行中**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：第 07 批的 L2 結果與橫向對比推送後重跑 CI。
+- **下一步**：你同意後開始第 08 批：讀 ClientConnection 的 worker 現況，寫批次文件。
+- **最後更新**：2026-10-09 16:14，依據 commit `10003b9`（第 07 批的程式；L2 通過，橫向對比完成）。
 
 ## 閱讀入口
 
@@ -131,6 +131,7 @@
 - 2026-10-09：使用者核准第 06 批的 L2 宣告（「L2 宣告核准，Chrome 關了，開始跑」）。60 次全部完成，**通過**：after 全部通過，結果間隔 P50 66.7→33.3 ms，Gateway 端最小間隔 ≥20.6 ms，relay 的任一秒結果數全部 ≤31。Client 端「產生到收到結果」的 P95 中位數下降（clean-30 101.4→68.7 ms）。**第 06 批完成。**
 - 2026-10-09：使用者指示開始第 07 批（「開始第 07 批」）。批次文件 [07](07-match-tick-ipc.md)：模擬執行緒改由 `MatchRuntimeHost` 擁有（`GYO::Threads`）並以 Waiter 等絕對期限；IpcHost 改為一條 asio io 執行緒，移除 1／5／10 ms 的輪詢。檔位 high，沒有另開 xhigh 審查 agent。
 - 2026-10-09：第 07 批的實作與 L1 完成：A（`ffe9a99`）Match 的模擬角色以 Waiter 等絕對期限、發布通知、覆蓋計數；B（`10003b9`）IpcHost 改為一條 asio io 執行緒、移除輪詢、連線結束的路徑明確化。全量 CTest 69／69、突變 3／3、TSan 無報告、backpressure 6 案與 25 案矩陣通過。clean-60 的 Tick 晚醒全部 <250 µs（P2-log 以 2～4 ms 為主），Match 程序 CPU 約為 P2-log 的 1/3。L2 的事前宣告寫進批次文件，待使用者核准。
+- 2026-10-09：使用者核准第 07 批的 L2 宣告（Chrome 開著但不操作）。60 次全部完成，**通過**：after 的 Tick 晚醒全部 <250 µs（P99 上界 244 µs，兩種主機狀態都一樣），before 的 P99 上界 8 ms；Match 程序 CPU 約 -41％。**第 07 批完成。** 接著做橫向對比（見[第 07 批](07-match-tick-ipc.md)的「橫向對比」）：後段變慢是 8 ms 主機狀態下舊 Match 的晚醒與補步，第 07 批之後消失；clean-30 仍受主機狀態影響，來源可能在 Client 端，第 08 批之後再對比。
 
 ## P2 以後各批的範圍
 
@@ -177,12 +178,7 @@
 
 ## 未結事項
 
-- 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出，第 07 批完成後做橫向對比）：第 06 批的 L2 在第 4 輪結束起，主機整體的計時變粗，before 與 after 同樣受影響。
-  - sleeper（獨立的 Python）P99 約 4→7.5 ms；probe 的計時器間隔 P99 約 20→23～25 ms。
-  - `legal_match_p95_ms` 約 10→19～24 ms；clean-30 after 的 `legal_client_p95_ms` 68→100 ms。
-  - Gateway 量到的 snapshot 間隔 P50 16.1～16.5 ms，比名目的 16.67 ms 短（可能是晚醒後的補步）。
-  - 像是 v6 與 C1 見過的 4 ms／8 ms 兩種主機狀態。使用者懷疑是系統時鐘的問題。
-  - 做法：第 07 批（Match Tick 改用 Waiter）完成後，把 P2-log、第 06、07 批的 clean-30／clean-60 依主機狀態分組橫向對比，看 8 ms 狀態是否仍拖慢 Match，以及間隔短於名目值的原因。資料：`logs/pvp-v7-p2log-20261009/`、`logs/pvp-v7-batch06-l2-20261009/`（各輪的 sleeper 在 `progress.jsonl`）。
+- 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。
 - C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
   - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
   - 延遲的位移（第 04 批記錄，C1 證實）：常數不變時，v7 的「產生→執行」約 38 ms（30／60 FPS 相同），v6 是 21～25 ms；「輸入取樣→執行」約多 1 幀。
