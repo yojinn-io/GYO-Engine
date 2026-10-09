@@ -73,10 +73,10 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
 | 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
 | 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 實作、L1 與開發跑次完成；L2 第 2 次執行中（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
-| 08b | （開始時撰寫） | high（局部 xhigh） | 未開始（D43） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
-| 09 | （P2 開始時撰寫） | high（常數推導局部 xhigh）；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
-| 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
-| 11 | （P3 開始時撰寫） | high（局部 xhigh；契約建議 ultracode 審查） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
+| 08b | （開始時撰寫） | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 未開始（D43） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
+| 09 | （P2 開始時撰寫） | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
+| 10 | （P3 開始時撰寫） | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
+| 11 | （P3 開始時撰寫） | pv7 契約 ultracode（D45）；實作 high（局部 xhigh） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
 | 12 | （P4 開始時撰寫） | high | 未開始 | 產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest |
 | 13 | （P5 開始時撰寫） | high（視窗模式的切換順序局部 xhigh） | 未開始 | 玩家以命令列選項選擇解析度、視窗模式與 FPS 上限（D41）；HUD 依解析度縮放；30 FPS 手感的 L3（D41）。設定 UI 與 `settings.json` 在 v8 |
 | 14 | （P6 開始時撰寫） | high | 未開始 | 射擊、命中、受擊、換彈的音效 |
@@ -90,7 +90,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | 批次 | 內容 | 建議檔位 | 本產品的關係 |
 |---|---|---|---|
 | TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 完成：和第 04 批同一個 PR（P1b，#71 合併，`660310e`）。2026-10-08 實作與 L1 完成、xhigh 審查完成；2026-10-09 L2（只記錄）完成 |
-| TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
+| TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
 | IP-3 | Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`）；日誌轉送、執行檔目錄、進入點、文字輸入與剪貼簿、事件時間戳換算 | high（時間戳換算局部 xhigh） | 第 12 批依賴 |
 | IP-4 | 測試用事件注入與觀測、視窗查詢與擺放；SDL3 改為 PRIVATE 連結 | high | 第 12 批依賴 |
 | IP-5 | 顯示器與模式列舉、視窗模式、像素密度（使用者目錄與 `engine/io` 的原子寫入依 D41 移到 v8） | high（模式切換順序局部 xhigh） | 第 13 批依賴 |
