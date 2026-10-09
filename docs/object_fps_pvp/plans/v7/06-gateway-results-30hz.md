@@ -1,6 +1,6 @@
 # 第 06 批：Gateway→Client 結果通道改為 30 Hz
 
-狀態：**L2 的事前宣告待使用者核准**（2026-10-09）。實作、L1、開發跑次完成；停止條件依 D42 處理（選 (a)）。
+狀態：**完成**（2026-10-09）。實作與 L1（`7da6b0d`）、L2 通過；停止條件依 D42 處理（選 (a)）。
 PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 medium（資格容許局部可用 xhigh；本批沒有做 xhigh 審查）。
 
 ## 起因
@@ -80,7 +80,9 @@ PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 mediu
   - Gateway 端的結果最小間隔是 18.0～32.7 ms，全部 ≥16.7 ms（I/2）。
   - 有一次 relay 量到最小 4.1 ms，同一位玩家在 Gateway 端的最小值是 18.0 ms。不過 Gateway 的統計只涵蓋第一個 10 秒視窗，那個 4.1 ms 是否落在同一視窗無法對應，所以不把它當作證明，只記錄。
 
-## L2 的事前宣告（草案，待使用者核准）
+## L2 的事前宣告（2026-10-09 使用者核准）
+
+使用者原話：「L2 宣告核准，Chrome 關了，開始跑」。宣告的 SHA-256 是 `5dc0b496…`（`2d63010` 時的本文件）。
 
 - **目的**：
   - 記錄結果通道在 before／after 的實際分布，作為第 09 批推導 FireGate 常數的輸入。
@@ -107,6 +109,24 @@ PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 mediu
   - after 出現 gameplay 失敗，或判定 3 不成立時，停下回報。
   - 產物雜湊不符時停下。
 - **證據**：`build/target/_build/test/logs/pvp-v7-batch06-l2-<日期>/`，含宣告的 SHA-256、runner、`progress.jsonl`、判定的 JSON。
+
+## L2 結果（2026-10-09，**通過**）
+
+- 60 次全部完成，沒有停止。三項判定都成立：after 全部通過；結果間隔 P50 都在帶內（after 33.3 ms、before 66.7 ms）；after 的 Gateway 結果最小間隔全部 ≥16.6 ms。before 也全部通過。
+- 只記錄的項目：
+
+| 案例 | relay 任一秒結果數 before→after | after 出現 32 的跑次 | relay 最小間隔 after | Gateway 最小間隔 after | `legal_client_p95_ms` 中位數 before→after |
+|---|---|---|---|---|---|
+| clean-60 | 20→31 | 0／6 | 31.42 ms | 31.7 ms | 99.8→82.1 ms |
+| clean-30 | 21→31 | 0／6 | 31.33 ms | 31.4 ms | 101.4→68.7 ms |
+| gateway-250ms | 21→31 | 0／6 | 3.68 ms | 20.6 ms | （故障案例不計） |
+| upstream-250ms | 21→31 | 0／6 | 31.64 ms | 31.8 ms | （故障案例不計） |
+| host-ipc-1000ms | 21→31 | 0／6 | 31.18 ms | 31.8 ms | （故障案例不計） |
+
+  - `legal_match_p95_ms` 中位數：clean-60 11.2→10.5 ms，clean-30 14.4→9.6 ms。
+  - gateway-250ms 的 relay 最小間隔 3.68 ms，而 Gateway 端最小 20.6 ms：又一次 relay 端的壓縮（與 D42 的判斷一致；兩者是否落在同一視窗無法對應，只記錄）。
+  - 主機：sleeper P99 3.4～7.9 ms（最大 8.3 ms）；背景主要是 WindowServer、avconferenced 與影片解碼服務（約 21％、16％、8％ CPU）。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch06-l2-20261009/`（git 忽略）：`declaration.sha256`、`artifacts.sha256`、`session.sha256`（`run.py` `199b6b0f…`）、`judge.py`（`0bcf86ec…`）、`progress.jsonl`（`525a4128…`）、`judgement.json`（`d5f27e1a…`）、`runs/`。
 
 ## 證據
 

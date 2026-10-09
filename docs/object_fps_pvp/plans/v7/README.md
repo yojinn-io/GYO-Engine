@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
 更新：2026-10-09。Owner：`object_fps_pvp`。
-**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log 完成；第 06 批的 L2 宣告待核准）。
+**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06 批完成）。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度與 FPS 的選擇、產品與 SDL 的隔離、日誌補強。
 
@@ -70,7 +70,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 完成（PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 合併，`660310e`；D30 門檻的放大由使用者決定 C1 之後再看） | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
 | 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 完成（2026-10-09）：C1 通過（4 ms 狀態；8 ms 未驗證），使用者操作的 L2、L3 通過 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
 | P2-log | [網路路徑的 10 秒統計](p2-log-network-statistics.md) | medium | 完成（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)） | 只加記錄的 commit，作為 P2 的 before |
-| 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 實作與 L1 完成（`7da6b0d`；停止條件依 D42 處理）；L2 的事前宣告待核准（2026-10-09） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
+| 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
 | 07 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
 | 08 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
 | 09 | （P2 開始時撰寫） | high（常數推導局部 xhigh）；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |

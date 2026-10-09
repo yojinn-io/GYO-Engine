@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；第 06 批的實作與 L1 完成，L2 的事前宣告待核准）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；第 07 批待使用者指示）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -9,11 +9,11 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：
-  1. 第 06 批 L2 的事前宣告（[第 06 批](06-gateway-results-30hz.md)的「L2 的事前宣告」）：核准、修改或不做。建議核准。內容：5 案 × 6 輪 × before／after，共 60 次，約 30 分鐘；判定 after 全部通過、結果間隔 P50 約 33.3 ms、Gateway 端最小間隔 ≥16.6 ms。跑的時候機器要閒置（像 C1 第 2 次那樣關掉 Chrome 等）。
+  1. 是否開始第 07 批（Match Tick 改用 Waiter 的絕對期限與發布通知、IpcHost 改用 asio）。建議開始。README 的建議檔位是 high、局部 xhigh；若要另開 xhigh 審查 agent，需要你同意。
 - **進行中**：
-  - PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）：`61ca497` 的 CI 全綠（macos-arm64 的測試修正生效）。第 06 批（`7da6b0d`）與本次文件推送後重跑 CI。
-- **下一步**：核准後執行第 06 批的 L2，結果寫回批次文件，再請你決定是否開始第 07 批。
-- **最後更新**：2026-10-09 14:05，依據 commit `7da6b0d`（第 06 批）。
+  - PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）：第 06 批的 L2 結果推送後重跑 CI。
+- **下一步**：你同意後開始第 07 批：讀 Match Tick 與 IpcHost 的現況，寫批次文件。
+- **最後更新**：2026-10-09 15:05，依據 commit `7da6b0d`（第 06 批；L2 通過）。
 
 ## 閱讀入口
 
@@ -129,6 +129,7 @@
 - 2026-10-09：使用者指示繼續，第 06 批開始（[批次文件](06-gateway-results-30hz.md)）。實作、L1、開發跑次完成；`action_probe.py` 的「結果每秒 ≤31」在 2 案超出，依停止條件停下，等使用者決定。程式留在本機，未推送。
 - 2026-10-09：PR #73 的 `L1 / macos-arm64` 失敗：P2-log 的 Match host 測試以固定 200 ms 等 Tick，忙碌的 runner 只量到 2 次。改為輪詢累計（`364884f`），重跑後 CI 全綠（`61ca497`）。
 - 2026-10-09：使用者選 (a)（D42）。Gateway 的統計行加上最短間隔；故障案例的確認跑次 6 次全部通過，Gateway 端的最短間隔 ≥18.0 ms。全量 CTest 68／68。第 06 批的程式為 `7da6b0d`，推上 PR #73。L2 的事前宣告寫進批次文件，待使用者核准。
+- 2026-10-09：使用者核准第 06 批的 L2 宣告（「L2 宣告核准，Chrome 關了，開始跑」）。60 次全部完成，**通過**：after 全部通過，結果間隔 P50 66.7→33.3 ms，Gateway 端最小間隔 ≥20.6 ms，relay 的任一秒結果數全部 ≤31。Client 端「產生到收到結果」的 P95 中位數下降（clean-30 101.4→68.7 ms）。**第 06 批完成。**
 
 ## P2 以後各批的範圍
 
