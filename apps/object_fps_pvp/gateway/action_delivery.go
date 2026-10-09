@@ -19,7 +19,9 @@ const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.
 // deadline is re-anchored at each completed write, just after the tick that
 // selected the batch, so without this the next tick is always a hair early
 // and every other tick is skipped (half of ActionSendRate). Half an interval
-// still keeps two sends that far apart: a released write never bursts.
+// still keeps two sends that far apart: a released write never bursts. Only
+// the send loop's ticker selects results; the runtime link's action batches,
+// which other events also wake, keep a strict interval and a deadline timer.
 const resultSendTolerance = actionSendInterval / 2
 
 // Each layer owns a bounded immutable action ledger. Movement acknowledgements
@@ -196,6 +198,27 @@ func (l *runtimeLink) actionBatch(now time.Time) []*runtime.RuntimeEnvelope {
 		w.nextSend = now.Add(actionSendInterval)
 	}
 	return out
+}
+
+// The earliest action deadline among players with something to send (an
+// undecided request, or an acknowledgement the Match has not retired), so the
+// link loop can wake at it. Called with the link's mutex held.
+func (l *runtimeLink) nextActionDeadline() (time.Time, bool) {
+	var next time.Time
+	found := false
+	for _, w := range l.actionWindows {
+		pending := w.acknowledged > w.retired
+		for id := range w.requests {
+			if w.decisions[id] == nil {
+				pending = true
+				break
+			}
+		}
+		if pending && (!found || w.nextSend.Before(next)) {
+			next, found = w.nextSend, true
+		}
+	}
+	return next, found
 }
 
 // Results bypass the lossy control and latest-snapshot queues. They remain in

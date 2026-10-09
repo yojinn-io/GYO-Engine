@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
+#include "engine/threads/RoleThread.hpp"
 #include "client_v6.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
@@ -21,7 +22,6 @@
 #include <limits>
 #include <random>
 #include <syncstream>
-#include <thread>
 
 namespace fps::pvp {
 namespace pb=object_fps_pvp::client::v6;
@@ -97,6 +97,7 @@ struct ClientConnection::Impl {
         ShotRequest request;
         std::optional<ShotDecision> decision;
         bool delivered{};
+        Clock::time_point receivedAt{}; // diagnostics: when the decision first arrived
     };
     std::map<ActionId,ActionEntry> actions; // Guarded by mutex, including allocation.
     ActionTransportState actionTransport;
@@ -126,9 +127,38 @@ struct ClientConnection::Impl {
     std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
-    std::jthread worker;
-    Impl():worker([this](std::stop_token stop){Run(stop);}){}
-    ~Impl(){worker.request_stop();worker.join();}
+    // The worker is one asio io thread. Nothing polls: the socket becoming
+    // readable, a post from another thread (a request, new input, a new action,
+    // an ACK advance) and one timer at the earliest deadline wake it, and each
+    // wake runs Service, the same request/network/lobby pass as before.
+    asio::steady_timer deadlineTimer{io};
+    std::optional<Clock::time_point> deadlineAt;
+    std::atomic<bool> servicePosted{};
+    bool readWaiting{};
+    std::uint64_t transport{}; // bumped when the socket closes; stale waits compare it
+    // Diagnostics: this worker's wakes (Service passes) and CPU per statistics window.
+    Clock::time_point statisticsAt{};
+    std::optional<double> cpuAt;
+    std::uint64_t wakes{};
+    Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
+    std::optional<Engine::Threads::RoleThread> worker;
+    Impl() {
+        auto started=Engine::Threads::RoleThread::Start({"gyo-client-net",Engine::Threads::ThreadPriority::Interactive},
+            [this](Engine::Threads::RoleContext& context){role=&context;Run();});
+        if(!started)throw std::runtime_error(Engine::Base::Describe(started.error()));
+        worker.emplace(std::move(*started));
+    }
+    ~Impl(){
+        if(!worker)return;
+        worker->RequestStop();io.stop();worker.reset();
+    }
+    // Any thread: one pending Service pass is enough. Never throws: a failed
+    // post clears the flag, so a later post (or the timer) still wakes the worker.
+    void PostService() noexcept {
+        if(servicePosted.exchange(true))return;
+        try{asio::post(io,[this]{servicePosted.store(false);Service();});}
+        catch(...){servicePosted.store(false);}
+    }
 
     // Called only while holding mutex at a connection-generation boundary.
     void ResetActions() {
@@ -152,6 +182,7 @@ struct ClientConnection::Impl {
         // them on a failed request can leave an old pawn occupying a room slot.
         welcomed=false;haveSequence=false;sentSequence=0;activeGeneration=0;
         haveSentInput=false;nextInputSendAt={};nextActionSendAt={};
+        readWaiting=false;++transport;
         inputTokens=InputSendBurst;inputTokensAt={};
     }
     void Close() {
@@ -188,6 +219,7 @@ struct ClientConnection::Impl {
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
         simulationSnapshots.clear();simulationOverflowCount=0;
         ResetActions();
+        PostService();
     }
     // Both join paths compare identity first, then content (pv6 contract §2).
     // A missing, non-integer or zero digest is a content mismatch.
@@ -322,7 +354,7 @@ struct ClientConnection::Impl {
     }
     // Validate the complete batch before mutating either decisions or retirement.
     // Snapshot replacement and the game thread never own the only result copy.
-    bool AcceptResults(const pb::ActionResults& message) {
+    bool AcceptResults(const pb::ActionResults& message,Clock::time_point arrivedAt) {
         if(!state.combatRules || message.decisions_size()>static_cast<int>(MaxActionBatch) ||
            message.retired_through()>actionTransport.acknowledgedThrough)return false;
         std::vector<ShotDecision> decoded;decoded.reserve(message.decisions_size());
@@ -351,7 +383,9 @@ struct ClientConnection::Impl {
         }
         for(const auto& decision:decoded) {
             const auto found=actions.find(decision.actionId);
-            if(found!=actions.end())found->second.decision=decision;
+            if(found==actions.end())continue;
+            if(!found->second.decision)found->second.receivedAt=arrivedAt;
+            found->second.decision=decision;
         }
         actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,message.retired_through());
         while(!actions.empty() && actions.begin()->first<=actionTransport.retiredThrough)actions.erase(actions.begin());
@@ -545,7 +579,7 @@ struct ClientConnection::Impl {
                 const bool parsed=message.ParseFromString(packet->payload);
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
-                if(!parsed || !AcceptResults(message)){++actionTransport.rejectedResultBatches;continue;}
+                if(!parsed || !AcceptResults(message,arrivedAt)){++actionTransport.rejectedResultBatches;continue;}
             } else if(packet->type==wire::Type::Error) {
                 pb::Error message;if(!message.ParseFromString(packet->payload))continue;
                 throw std::runtime_error(message.message());
@@ -598,28 +632,115 @@ struct ClientConnection::Impl {
         }
         SendActions();
     }
-    void Run(std::stop_token stop) {
-        // Diagnostics: this worker's wakes and CPU per statistics window.
-        auto statisticsAt=Clock::now();
-        auto cpuAt=CurrentThreadCpuSeconds();
-        std::uint64_t wakes{};
-        while(!stop.stop_requested()) {
-            std::optional<Request> request;
-            {std::scoped_lock lock(mutex);if(!requests.empty()){request=std::move(requests.front());requests.pop_front();}}
-            const auto workGeneration=request?request->generation:activeGeneration;
-            try {if(request)Handle(*request);Network();PollLobby();}
-            catch(const std::exception& error){Failure(error.what(),workGeneration);}
-            auto sleep=std::chrono::duration_cast<Clock::duration>(std::chrono::milliseconds(2));
-            const auto remaining=nextInputSendAt-Clock::now();
-            if(haveSentInput && remaining>Clock::duration::zero())sleep=std::min(sleep,remaining);
-            std::this_thread::sleep_for(sleep);
-            ++wakes;
-            if(const auto now=Clock::now();std::chrono::duration<double>(now-statisticsAt).count()>=NetworkStatisticsSeconds) {
-                const auto cpu=CurrentThreadCpuSeconds();
-                PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
-                std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
-                    .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
-                statisticsAt=now;cpuAt=cpu;wakes=0;
+    // One worker pass: a queued request (HTTP may block, as before), then the
+    // network and lobby work, then the next wake-ups.
+    void Service() {
+        ++wakes;
+        std::optional<Request> request;
+        {std::scoped_lock lock(mutex);if(!requests.empty()){request=std::move(requests.front());requests.pop_front();}}
+        const auto workGeneration=request?request->generation:activeGeneration;
+        try {if(request)Handle(*request);Network();PollLobby();}
+        catch(const std::exception& error){Failure(error.what(),workGeneration);}
+        bool more=false;
+        {std::scoped_lock lock(mutex);more=!requests.empty();}
+        if(more)PostService();
+        ReportStatistics();
+        Arm();
+    }
+    // Waits for the socket to become readable and arms the timer at the
+    // earliest deadline the pass above would act on. An early wake only runs a
+    // pass that finds nothing due; it never sends sooner than before.
+    void Arm() {
+        const auto now=Clock::now();
+        const bool live=socket.is_open() && activeGeneration==generation.load();
+        if(live && !readWaiting) {
+            readWaiting=true;
+            socket.async_wait(udp::socket::wait_read,[this,current=transport](const asio::error_code& error) {
+                if(current!=transport)return;
+                readWaiting=false;
+                if(error==asio::error::operation_aborted)return;
+                Service();
+            });
+        }
+        std::optional<Clock::time_point> next=statisticsAt+std::chrono::duration_cast<Clock::duration>(
+            std::chrono::duration<double>(NetworkStatisticsSeconds));
+        const auto consider=[&](Clock::time_point at){if(!next || at<*next)next=at;};
+        if(live) {
+            consider(helloAt+(welcomed?std::chrono::milliseconds(1000):std::chrono::milliseconds(250)));
+            consider((welcomed?receivedAt:connectedAt)+std::chrono::seconds(5)+std::chrono::milliseconds(1));
+            std::scoped_lock lock(mutex);
+            if(welcomed && latestInput) {
+                const auto period=std::chrono::duration<double>(1.0/InputSendRate);
+                // The same rule as Network: a window with a command never sent
+                // waits for one token; an unchanged one for its deadline with a
+                // full bucket.
+                const bool fresh=!haveSentInput || latestInput->movementEpoch!=sentInputEpoch ||
+                    latestInput->lifeGeneration!=sentInputLife ||
+                    (!latestInput->commands.empty() && latestInput->commands.back().sequence>sentInputThrough);
+                const auto refill=[&](double tokens){return inputTokensAt+std::chrono::duration_cast<Clock::duration>(
+                    period*Engine::Math::Max(0.0,tokens-inputTokens));};
+                consider(fresh?refill(1.0):std::max(nextInputSendAt,refill(InputSendBurst)));
+            }
+            if(welcomed && (std::any_of(actions.begin(),actions.end(),[](const auto& entry){return !entry.second.decision;}) ||
+                            actionTransport.acknowledgedThrough>actionTransport.retiredThrough))
+                consider(nextActionSendAt);
+        } else if(!session && !base.empty()) {
+            std::scoped_lock lock(mutex);
+            if(state.phase==ConnectionPhase::Lobby)consider(lobbyPollAt+std::chrono::seconds(1));
+        }
+        if(!next)return;
+        // asio's timer is subject to OS timer coalescing (on macOS even a short
+        // wait wakes about half a millisecond late, which would slow the 60 Hz
+        // resend). A far deadline is woken CoarseWakeLead early by the timer;
+        // the last stretch waits on the role's Waiter (kqueue NOTE_CRITICAL),
+        // blocking this thread at most CoarseWakeLead, like the old loop's last
+        // short sleep. A stop request wakes that wait too.
+        constexpr auto CoarseWakeLead=std::chrono::milliseconds(2);
+        if(*next-now<=CoarseWakeLead) {
+            if(deadlineAt && *deadlineAt<=*next)return; // an earlier wake is already pending
+            deadlineAt=*next;
+            asio::post(io,[this,at=*next]{
+                if(role && !role->StopRequested())static_cast<void>(role->WaitUntil(at));
+                deadlineAt.reset();
+                Service();
+            });
+            return;
+        }
+        const auto at=*next-CoarseWakeLead;
+        if(deadlineAt && *deadlineAt<=at && *deadlineAt>now)return; // an earlier wake is already armed
+        deadlineAt=at;
+        deadlineTimer.expires_at(at);
+        deadlineTimer.async_wait([this](const asio::error_code& error) {
+            if(error==asio::error::operation_aborted)return;
+            deadlineAt.reset();
+            Service();
+        });
+    }
+    void ReportStatistics() {
+        const auto now=Clock::now();
+        if(std::chrono::duration<double>(now-statisticsAt).count()<NetworkStatisticsSeconds)return;
+        const auto cpu=CurrentThreadCpuSeconds();
+        PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
+        std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
+            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
+        statisticsAt=now;cpuAt=cpu;wakes=0;
+    }
+    void Run() {
+        statisticsAt=Clock::now();
+        cpuAt=CurrentThreadCpuSeconds();
+        asio::post(io,[this]{Arm();});
+        {
+            // Between events nothing may be pending; the guard keeps run()
+            // waiting. The destructor requests the stop, then stops the context.
+            const auto work=asio::make_work_guard(io);
+            // A handler's exception outside Service's own handling (an allocation
+            // failure, say) ends the session visibly and the worker keeps running.
+            for(;;) {
+                try{io.run();break;}
+                catch(const std::exception& error){
+                    std::osyncstream(std::clog)<<"[ObjectFPS/PvP] network worker failed reason="<<error.what()<<'\n';
+                    try{Failure(std::string("Network worker failed: ")+error.what(),activeGeneration);}catch(...){}
+                }
             }
         }
         try{DisconnectRemote();}
@@ -673,6 +794,7 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     }
     impl_->submittedCommands=input.commands;
     impl_->latestInput=std::move(input);
+    impl_->PostService();
 }
 std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch){
     const auto state=State();
@@ -696,6 +818,8 @@ std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint
     if(id<=impl_->actionTransport.retiredThrough || id-impl_->actionTransport.retiredThrough>MaxActionWindow)return {};
     impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration},{},false});
     impl_->actionTransport.allocatedThrough=id;
+    // D36: an eligible action leaves now, not at the worker's next pass.
+    impl_->PostService();
     return id;
 }
 ClientConnectionState ClientConnection::State()const{std::scoped_lock lock(impl_->mutex);return impl_->CopyState();}
@@ -706,17 +830,20 @@ ClientConnectionDrain ClientConnection::Drain(){
     // anything. Returning this owning batch is the game-consumption boundary.
     result.snapshots.reserve(impl_->receivedSnapshots.size());
     result.decisions.reserve(impl_->actions.size());
+    result.decisionReceivedAt.reserve(impl_->actions.size());
     for(const auto& [id,entry]:impl_->actions)
-        if(entry.decision && !entry.delivered)result.decisions.push_back(*entry.decision);
+        if(entry.decision && !entry.delivered){result.decisions.push_back(*entry.decision);result.decisionReceivedAt.push_back(entry.receivedAt);}
     for(auto& received:impl_->receivedSnapshots)result.snapshots.push_back(std::move(received));
     impl_->receivedSnapshots.clear();impl_->snapshotOverflow=false;
     for(const auto& decision:result.decisions)impl_->actions.at(decision.actionId).delivered=true;
+    const auto acknowledged=impl_->actionTransport.acknowledgedThrough;
     while(impl_->actionTransport.acknowledgedThrough<impl_->actionTransport.allocatedThrough) {
         const auto next=impl_->actions.find(impl_->actionTransport.acknowledgedThrough+1);
         if(next==impl_->actions.end() || !next->second.delivered)break;
         ++impl_->actionTransport.acknowledgedThrough;
     }
     result.state.actionTransport=impl_->ActionState();
+    if(impl_->actionTransport.acknowledgedThrough!=acknowledged)impl_->PostService();
     return result;
 }
 ClientSimulationDrain ClientConnection::DrainSimulation(){

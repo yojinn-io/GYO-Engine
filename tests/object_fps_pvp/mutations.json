@@ -773,6 +773,56 @@
       "replace": "            if(!s.controls.empty() && !s.latestSnapshot) {\n",
       "check": "ipc",
       "expect": "CHECK_FALSE\\( SnapshotHas\\(\\*message, 7\\) \\) is NOT correct"
+    },
+    {
+      "id": "v7-08-link-no-deadline-timer",
+      "batch": "v7-08",
+      "what": "The runtime link waits a fixed interval instead of its action deadline, so resends ride later wakes",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\twait = max(time.Until(deadline), 0)\n",
+      "replace": "\t\t\t\t_ = deadline\n",
+      "check": "go",
+      "expect": "runtime link sent"
+    },
+    {
+      "id": "v7-08-link-half-tolerance",
+      "batch": "v7-08",
+      "what": "Runtime link action batches leave half an interval early, so every wake can resend",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tif now.Before(w.nextSend) {\n\t\t\tcontinue\n\t\t}\n\t\tids := make([]uint64, 0, len(w.requests))\n",
+      "replace": "\t\tif now.Add(actionSendInterval / 2).Before(w.nextSend) {\n\t\t\tcontinue\n\t\t}\n\t\tids := make([]uint64, 0, len(w.requests))\n",
+      "check": "go",
+      "expect": "runtime link sent|action batches .* apart"
+    },
+    {
+      "id": "v7-08-drain-no-wake",
+      "batch": "v7-08",
+      "what": "An ACK advanced by Drain does not wake the network worker",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(impl_->actionTransport.acknowledgedThrough!=acknowledged)impl_->PostService();\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an advanced ACK waited for an unrelated wake"
+    },
+    {
+      "id": "v7-08-submit-no-wake",
+      "batch": "v7-08",
+      "what": "SubmitAction does not wake the network worker (D36)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    // D36: an eligible action leaves now, not at the worker's next pass.\n    impl_->PostService();\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an eligible action waited for an unrelated wake"
+    },
+    {
+      "id": "v7-08-receipt-overwritten",
+      "batch": "v7-08",
+      "what": "A repeated result moves the decision's receipt time",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            if(!found->second.decision)found->second.receivedAt=arrivedAt;\n",
+      "replace": "            found->second.receivedAt=arrivedAt;\n",
+      "check": "worker",
+      "expect": "decision receipt time is not the first arrival"
     }
   ]
 }

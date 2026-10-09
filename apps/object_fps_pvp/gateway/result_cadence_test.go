@@ -86,3 +86,49 @@ func TestResultChannelKeepsHalfAnIntervalAndNoBurstAfterABlockedWrite(t *testing
 		t.Fatalf("only %d of 120 ticks sent", len(sent))
 	}
 }
+
+// The real runtime link loop, woken by other events at 60 Hz (as inputs do),
+// resends an undecided request at ActionSendRate: not on every wake, and not
+// only on the wakes that happen to come after its deadline.
+func TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes(t *testing.T) {
+	s, f := newTestServer(t)
+	in := &runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(1)}}
+	if err := s.link.actions(in); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(time.Second / 60)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				s.link.notify()
+			}
+		}
+	}()
+	var arrivals []time.Time
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		select {
+		case e := <-f.got:
+			if e.GetActions() != nil {
+				arrivals = append(arrivals, time.Now())
+			}
+		case <-time.After(time.Until(deadline)):
+		}
+	}
+	// 500 ms at 30 Hz is 15 batches; a resend on every wake would be about 30,
+	// and one that waits for the next wake after its deadline about 10.
+	if len(arrivals) < 13 || len(arrivals) > 17 {
+		t.Fatalf("runtime link sent %d action batches in 500 ms", len(arrivals))
+	}
+	for i := 1; i < len(arrivals); i++ {
+		if gap := arrivals[i].Sub(arrivals[i-1]); gap < actionSendInterval-3*time.Millisecond {
+			t.Fatalf("action batches %v apart", gap)
+		}
+	}
+}

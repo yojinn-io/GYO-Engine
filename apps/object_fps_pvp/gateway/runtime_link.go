@@ -235,8 +235,12 @@ func (l *runtimeLink) batch() []*runtime.RuntimeEnvelope {
 func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnvelope), failed func(error)) {
 	fail := func(err error) { l.once.Do(func() { l.close(); failed(err) }) }
 	go func() {
-		ticker := time.NewTicker(actionSendInterval)
-		defer ticker.Stop()
+		// Inputs, controls, actions and results wake the loop (l.wake). Action
+		// batches keep a strict ActionSendRate interval from each completed
+		// write; this timer wakes the loop at the earliest such deadline, so a
+		// resend neither waits for an unrelated wake nor rides every wake.
+		timer := time.NewTimer(actionSendInterval)
+		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -244,7 +248,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			case <-l.done:
 				return
 			case <-l.wake:
-			case <-ticker.C:
+			case <-timer.C:
 			}
 			for _, message := range l.batch() {
 				payload, err := proto.Marshal(message)
@@ -266,6 +270,13 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 					return
 				}
 			}
+			wait := actionSendInterval
+			l.mu.Lock()
+			if deadline, ok := l.nextActionDeadline(); ok {
+				wait = max(time.Until(deadline), 0)
+			}
+			l.mu.Unlock()
+			timer.Reset(wait)
 		}
 	}()
 	go func() {

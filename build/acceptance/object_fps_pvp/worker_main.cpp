@@ -228,6 +228,10 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     Require(allocated.size()==MaxActionWindow,"concurrent submission lost capacity");
     for(std::size_t n=0;n<allocated.size();++n)Require(allocated[n]==n+1,"action allocation duplicated or skipped an ID");
     Require(!connection.SubmitShot(1,0,0),"full action window accepted another request");
+    // An eligible action leaves at SubmitAction (v7 D36), so a batch can go out
+    // while the producers still allocate; let it arrive before the stalled
+    // window's first counted batch.
+    gateway.UntilTime(Clock::now()+50ms);
     const auto firstActions=gateway.actionAttempts.size();
     gateway.autoAck=false;connection.SendInput(Input(67,67));
     const auto coexistenceStart=Clock::now();
@@ -284,13 +288,26 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     gateway.Results({2,3,4,5,6,7,8,9});gateway.UntilTime(Clock::now()+10ms);
     Require(connection.Drain().decisions.empty(),"duplicate results were delivered twice");
     Require(!connection.SubmitShot(1,0,0),"consumed but unretired results freed the distance window");
+    const auto firstResultAt=Clock::now();
     gateway.Results({1});gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
+    // A repeated result does not move the receipt time (v7 batch 08).
+    gateway.UntilTime(Clock::now()+10ms);
+    const auto repeatAt=Clock::now();
+    gateway.Results({1});
+    // Let the deadline armed while ID 1 was pending pass, so only the ACK's own
+    // wake-up (or the next Hello, up to a second away) can send the ACK.
+    gateway.UntilTime(Clock::now()+50ms);
+    const auto drainedAt=Clock::now();
     const auto last=connection.Drain();
     Require(last.decisions.size()==1 && last.decisions[0].actionId==1 &&
         last.state.actionTransport.acknowledgedThrough==32,"contiguous consumed results failed to ACK through 32");
+    Require(last.decisionReceivedAt.size()==1 && last.decisionReceivedAt[0]>=firstResultAt && last.decisionReceivedAt[0]<repeatAt,
+        "decision receipt time is not the first arrival");
     const auto ackStart=gateway.actionAttempts.size();
     // Drop two ACK-only transmissions: no authority retirement is returned.
     gateway.Until([&]{return gateway.actionAttempts.size()>=ackStart+3;});
+    // The ACK advanced by Drain wakes the worker (v7 batch 08), not its next Hello.
+    Require(gateway.actionAttempts[ackStart].at-drainedAt<40ms,"an advanced ACK waited for an unrelated wake");
     for(std::size_t n=ackStart;n<gateway.actionAttempts.size();++n)
         Require(gateway.actionAttempts[n].actions.shots().empty() && gateway.actionAttempts[n].actions.acknowledged_through()==32,
             "ACK loss stopped acknowledgements or replayed decided shots");
@@ -298,9 +315,16 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     gateway.Results({},16);gateway.Until([&]{return connection.State().actionTransport.retiredThrough==16;});
     gateway.Results({},0);gateway.Results({},32);
     gateway.Until([&]{return connection.State().actionTransport.retained==0;});
+    // Idle first: the last ACK-only batch's deadline passes, so the new action is
+    // eligible at once and nothing but SubmitAction's wake-up is pending.
+    gateway.UntilTime(Clock::now()+50ms);
+    const auto submittedAt=Clock::now();
     const auto resumed=connection.SubmitShot(connection.State().snapshot->tick,0,0);
     Require(resumed && *resumed==33,"retirement or failed submission skipped an allocated ID");
     gateway.Until([&]{return !gateway.actionAttempts.back().actions.shots().empty() && gateway.actionAttempts.back().actions.shots(0).action_id()==33;});
+    // D36: a lone action leaves at SubmitAction once eligible (at most one
+    // ActionSendRate interval after the previous batch), not at a later wake.
+    Require(gateway.actionAttempts.back().at-submittedAt<40ms,"an eligible action waited for an unrelated wake");
     gateway.Results({33},32);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     Require(connection.Drain().decisions.size()==1,"new action failed after clearing loss");
     gateway.Results({},33);gateway.Until([&]{return connection.State().actionTransport.retained==0;});

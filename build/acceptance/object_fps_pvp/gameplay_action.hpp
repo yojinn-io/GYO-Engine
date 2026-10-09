@@ -124,8 +124,11 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
                 Require(!drain.overflow || drainStallMs>0,"Unexpected gameplay snapshot receipt overflow");
                 frame["snapshot_history_overflow_count"+std::string(i?"_b":"_a")]=drain.snapshotHistoryOverflowCount;
                 for(const auto& received:drain.snapshots){static_cast<void>(timelines[i].Push(received.snapshot,received.receivedAt));}
-                for(const auto& d:drain.decisions){Require(!decisions[i].contains(d.actionId)&&submitted[i].contains(d.actionId),"Duplicate/unknown gameplay decision");
-                    decisions[i][d.actionId]=Decision(d);evidence.Push({{"kind","decision"},{"time_ns",ns},{"player_id",ids[i]},{"decision",Decision(d)}});}
+                for(std::size_t k=0;k<drain.decisions.size();++k){const auto& d=drain.decisions[k];
+                    Require(!decisions[i].contains(d.actionId)&&submitted[i].contains(d.actionId),"Duplicate/unknown gameplay decision");
+                    // received_ns: when the worker received it (v7 batch 08), unquantized by this frame.
+                    const auto received=std::chrono::duration_cast<std::chrono::nanoseconds>(drain.decisionReceivedAt.at(k).time_since_epoch()).count();
+                    decisions[i][d.actionId]=Decision(d);evidence.Push({{"kind","decision"},{"time_ns",ns},{"received_ns",received},{"player_id",ids[i]},{"decision",Decision(d)}});}
             }
             Require(state.error.empty(),state.error);Require(state.phase==ConnectionPhase::Playing&&state.snapshot,"Gameplay Session lost");
             const auto& authority=Player(*state.snapshot,ids[i]);

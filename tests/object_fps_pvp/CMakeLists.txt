@@ -141,6 +141,10 @@ set_tests_properties("${GYO_CURRENT_APP}.command_evidence_v7" PROPERTIES LABELS 
 add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")
 set_tests_properties("${GYO_CURRENT_APP}.network_statistics" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Analyzer v7 (batch 08): action latency measures that the probe frame does not quantize.
+add_test(NAME "${GYO_CURRENT_APP}.action_latency_v7"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_action_latency_v7.py")
+set_tests_properties("${GYO_CURRENT_APP}.action_latency_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 # Room-capacity evidence, cross-validated value by value against command_evidence.
 add_test(NAME "${GYO_CURRENT_APP}.quad_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_quad_evidence.py")
