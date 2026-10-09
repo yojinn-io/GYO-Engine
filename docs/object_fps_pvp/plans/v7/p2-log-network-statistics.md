@@ -1,6 +1,6 @@
 # P2-log：網路路徑的 10 秒統計（P2 的 before）
 
-狀態：**實作與 L1 完成**（2026-10-09；分支 `claude/pvp-v7-p2`，PR 待開）。PR 線 P2（P2-log、06、07、08、09）。依賴 P1b（`660310e`）。建議檔位 medium。
+狀態：**完成**（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)）。PR #73 的 CI（macos-arm64）發現 host 的測試對時間太敏感，已修正（`364884f`）。PR 線 P2（P2-log、06、07、08、09）。依賴 P1b（`660310e`）。建議檔位 medium。
 本批只加記錄、不改行為。它的 commit 是第 06～08 批的 before：之後每一批的修正，都用同一組統計行比較前後。
 
 ## 起因

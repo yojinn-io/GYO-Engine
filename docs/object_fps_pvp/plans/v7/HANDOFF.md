@@ -1,15 +1,27 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（P2-log，分支 `claude/pvp-v7-p2`）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；第 06 批停在停止條件，等使用者決定）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
+
+## 現況（每次停下來時更新）
+
+停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
+
+- **等你決定**：
+  1. 第 06 批碰到停止條件：`action_probe.py` 的「結果每秒 ≤31」在 `upstream-250`、`host-ipc-1000` 兩案於 relay 量到 32（最小間隔 2.4／9.1 ms）。選項：(a) 接受，不改凍結的分析器，「不爆量」改以 Gateway 端的最小間隔判定（建議）；(b) 讓 Gateway 送得更保守，但不能保證；(c) 做分析器 v7 的結果速率規則。細節見[第 06 批](06-gateway-results-30hz.md)的「停止條件」與「選項」。
+- **進行中**：
+  - PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）：`L1 / macos-arm64` 曾失敗（P2-log 的新測試用固定 200 ms 等 Tick，忙碌的 runner 只量到 2 次），已改為輪詢累計（`364884f`）並推送，CI 重跑中。前一次的 linux-x64、windows-x64 已通過。
+  - 第 06 批：實作、L1（Go 測試、突變 2／2）、開發跑次（run_gameplay 7 案 14 次全部通過，結果間隔 P50 66.6→33.3 ms）完成；程式在本機的 WIP commit，未推送。
+- **下一步**：依第 1 項的決定修改第 06 批，再寫第 06 批 L2 的事前宣告送你核准；核准後執行 L2，並把第 06 批推上 PR #73。
+- **最後更新**：2026-10-09 13:05，依據 commit `364884f`（PR #73；本機另有第 06 批的 WIP commit）。
 
 ## 閱讀入口
 
 1. [進度與執行規則](README.md)：任務、子系統的處理、批次、PR 線、依賴、平台表。
-2. 本文件：決策、各批紀錄、P2 以後各批的範圍、未結事項。
+2. 本文件：先看「現況」；再看決策、各批紀錄、P2 以後各批的範圍、未結事項。
 3. [盤點](INVENTORY.md)：時間、執行緒、sleep、socket 輪詢的唯讀盤點，以及更正與研究摘要。
-4. 指定批次的文件（02～05）。
+4. 指定批次的文件（02～06、P2-log）。
 5. Engine 部分的正式來源：
    - [時間、執行緒與 Trace](../../../architecture/plans/time-threads-trace/README.md)：TT-1、TT-2。
    - [輸入與呈現](../../../architecture/plans/input-and-present/README.md)：IP-3～IP-5。
@@ -113,6 +125,9 @@
 - 2026-10-09：使用者指示開始 P2-log（「IP-5 照你的判斷，開始 P2-log」）。批次文件 [P2-log](p2-log-network-statistics.md)：Gateway、Match、Client worker 各自每 10 秒一行統計，只加記錄、不改行為。分支 `claude/pvp-v7-p2`（從 `660310e`）。
 - 2026-10-09：master 的 CI #244（#71 合併）只有 `Snapshot / object_fps_pvp` 失敗：剛建立的 snapshot tag 立刻讀回時還讀不到（GitHub 的讀取延遲），與 #71 的內容無關。依使用者指示重跑失敗的 job 後發布；發行流程的修正單獨開 PR [#72](https://github.com/yojinn-io/GYO-Engine/pull/72)（`fix(ci)`），依使用者指示合併（`247aa2b`）。
 - 2026-10-09：P2-log 的實作與 L1 完成：全量 CTest 68／68（權威 digest 不變）、Go 的 vet／test／race 通過；clean-60 開發跑次確認三個程序都有統計行（結果通道約 15 Hz，是第 06 批要修的缺陷）。見[批次文件](p2-log-network-statistics.md)的「結果」。P2 的 PR 待開。
+- 2026-10-09：#72 合併後，`claude/pvp-v7-p2` rebase 到 `247aa2b`，P2-log 的 commit 為 `983e091`（P2 的 before）。PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已開（auto-fix）。
+- 2026-10-09：使用者指示繼續，第 06 批開始（[批次文件](06-gateway-results-30hz.md)）。實作、L1、開發跑次完成；`action_probe.py` 的「結果每秒 ≤31」在 2 案超出，依停止條件停下，等使用者決定。程式留在本機，未推送。
+- 2026-10-09：PR #73 的 `L1 / macos-arm64` 失敗：P2-log 的 Match host 測試以固定 200 ms 等 Tick，忙碌的 runner 只量到 2 次。改為輪詢累計（`364884f`）。
 
 ## P2 以後各批的範圍
 
