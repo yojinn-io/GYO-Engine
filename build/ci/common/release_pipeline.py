@@ -42,6 +42,9 @@ class TransientApiError(ReleaseError):
 
 
 RETRY_DELAYS = (2, 4, 8)
+# GitHub may not serve a ref just created by this run yet (its reads lag its
+# writes). Seconds to wait between rereads of a created tag still missing.
+TAG_VISIBILITY_DELAYS = (1, 2, 4, 8)
 TRANSIENT_HTTP_STATUS = frozenset((500, 502, 503, 504))
 _PLATFORM_ALTERNATIVES = "(?:" + "|".join(re.escape(platform) for platform in PLATFORMS) + ")"
 MANAGED_PACKAGE_ASSET = re.compile(
@@ -151,6 +154,21 @@ def verify_remote_tag(api, tag: str, commit: str) -> None:
         raise ReleaseError("Remote version tag is missing or moved away from the verified commit")
 
 
+def verify_created_tag(api, tag: str, commit: str, *, sleep=time.sleep) -> None:
+    """Verify a tag this run has just created (or found created concurrently).
+
+    Only a missing tag is reread, after each of TAG_VISIBILITY_DELAYS: a tag
+    that resolves to another commit fails at once, exactly like verify_remote_tag."""
+    for delay in (*TAG_VISIBILITY_DELAYS, None):
+        resolved = remote_tag_commit(api, tag)
+        if resolved is not None or delay is None:
+            break
+        print(f"Created version tag {tag} is not readable yet; rereading in {delay:g}s", file=sys.stderr, flush=True)
+        sleep(delay)
+    if resolved != commit:
+        raise ReleaseError("Remote version tag is missing or moved away from the verified commit")
+
+
 def list_releases(api) -> list[dict]:
     # The tag endpoint is not sufficient for drafts. Authenticated release lists
     # include drafts for a token with push access; examine every page.
@@ -242,7 +260,8 @@ def plan_uploads(api, assets: dict, packages: list[Package], commit: str,
 
 def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[Package], *,
                   expected_pairs: list[tuple[str, str]], expected_services=frozenset(),
-                  profile: str = "release", notes: str | None = None, generate_notes: bool = True) -> dict:
+                  profile: str = "release", notes: str | None = None, generate_notes: bool = True,
+                  sleep=time.sleep) -> dict:
     """Tag the commit and fill an unpublished draft with exactly the expected
     archives: native packages (expected_pairs) and service archives
     (expected_services as owner/role/platform). Notes only seed a new draft."""
@@ -286,7 +305,7 @@ def prepare_draft(api, tag: str, commit: str, prerelease: bool, packages: list[P
                                    "token with Contents and Workflows write permissions.") from error
             if error.status != 422:  # Another run may have created the identical ref.
                 raise
-        verify_remote_tag(api, tag, commit)
+        verify_created_tag(api, tag, commit, sleep=sleep)
     if release is None:
         # Recheck for a release created while the tag request was in flight.
         release = find_release(api, tag)
@@ -369,7 +388,8 @@ def with_retries(operation, *, sleep=time.sleep):
 
 def prepare_draft_with_retries(api, tag: str, commit: str, prerelease: bool,
                                packages: list[Package], *, sleep=time.sleep, **options) -> dict:
-    return with_retries(lambda: prepare_draft(api, tag, commit, prerelease, packages, **options), sleep=sleep)
+    return with_retries(lambda: prepare_draft(api, tag, commit, prerelease, packages, sleep=sleep, **options),
+                        sleep=sleep)
 
 
 def snapshot_tag_refs(api, train_id: str) -> list[str]:
