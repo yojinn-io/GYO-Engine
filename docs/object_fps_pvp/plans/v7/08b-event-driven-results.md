@@ -1,6 +1,6 @@
 # 第 08b 批：結果改為事件驅動轉送
 
-狀態：**實作、L1 與開發跑次完成（`a954aa3`）；L2 的事前宣告已定稿，待使用者核准**（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
+狀態：**實作、L1 與開發跑次完成（`a954aa3`）；L2 執行中**（宣告 2026-10-10 核准）（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-09「開始第 08b 批，開 ultracode，檔位照建議」）；實作 high，計時器迴圈、期限一致性、lane 的到期判斷局部 xhigh；文件與執行 medium。
 
 用語：本文件把「每 I 重送一次、只帶 retired 的包」稱為**只帶 retired 的重複包**（簡稱重複包），不叫心跳，以免和第 11 批 runtime link 的心跳對時混淆。
@@ -233,7 +233,7 @@
   - D44：遲到修正／領先跳升 0 次（`d44-adversarial/lead_jumps.py`）。非 respawn 的重設：starvation 29 次（全部在 1000 ms 的故障案例與 `run_network.py` 的 6 秒停頓測試，屬預期），backlog 2 次（都在 upstream-1000ms，第 08 批的開發矩陣同一案例也到 294）。30 Tick 合計的中位數 60。
 - 證據：`build/target/_build/test/logs/pvp-v7-batch08b-20261009/`（`dev.sh`、`dev-matrix/`、`dev-bp-*`、`dev-net-*`）。
 
-## L2 的事前宣告（定稿，待使用者核准；依 D45 做了 2 次門檻來源的對抗式檢查：規劃時 1 次、定稿時 1 次（xhigh），修正已併入）
+## L2 的事前宣告（2026-10-10 使用者核准：「L2 宣告核准，D44 照建議，開始跑」；依 D45 做了 2 次門檻來源的對抗式檢查：規劃時 1 次、定稿時 1 次（xhigh），修正已併入）
 
 - **目的**：
   1. 確認 c（裁決 Tick 的 snapshot_produced → relay 第一次看到該裁決的下行 kind 7）縮短（判定 4）。「兩段都改為事件驅動」由 L1 證明（Gateway：G1、G2、G8；Match lane：M1、M2），L2 只以 c//P 的分布與「距上次結果寫出 <I 或 ≥I」的分組佐證（只記錄）。只改一段時 c 的中位數約 16.7 ms，仍可能小於 before 的 17.7 ms，所以判定 4 不能單獨證明兩段都改了。
@@ -261,7 +261,7 @@
 - **停止條件**：
   - 跑次錯誤時停下，不自行重跑；after 的 gameplay 失敗，或判定 2～5 任一不成立；產物雜湊不符。
   - D44：clean 案例的 backlog／starvation 重設已由 `gameplay_evidence.py:289-291` 判為 gameplay 失敗，落在判定 1，不另外放寬。故障案例中出現 backlog 重設，或在 (`fault.start_ns`, `fault.release_ns`＋1.5 s] 之外出現非 respawn 的重設（含故障開始之前；`backlog`、`starvation`、`sequence_exhausted`、`none` 都算，`MovementTrace.hpp:118-127`；不分玩家，因為兩位玩家共用 probe 的同一個 UDP 端點與 relay；和 `command_evidence.py:413-422` 同一規則），停下回報；這個區間內的 starvation 只記錄。故障窗取該跑次 `result.json` 的 `fault.start_ns`／`fault.release_ns`（定稿時核對：開發矩陣 upstream／gateway／downstream-250ms 都有，和 Match trace 同一個時鐘域；clean 案例是 0／0，不套用本條）。
-  - 本條只對 after 停下；before 出現時只記錄，新舊分開累計（D44）。（待使用者確認）
+  - 本條只對 after 停下；before 出現時只記錄，新舊分開累計（D44；使用者 2026-10-10 照建議）。
   - 遲到修正／領先跳升的偵測固定用 `pvp-v7-08b-plan-20261009/d44-adversarial/lead_jumps.py`（sha256 `14cd5b5c81ef73f9dee4d9d8593fdc6518dd183f8bcc8df14bf0098230ae3a07`）：每個 (player, epoch)，epoch 第一個 resolved Tick 1 秒之後，30 個 resolved actual 命令的 gen→exec 中位數比前 60 個高出 20 ms 以上。只記錄。
   - 檢定力：過去 L2 180 次為 0 次（95％上限約每次 1.65％），after 36 次中至少出現 1 次的機率約 45％。所以 after 出現 1 次只代表「停下來回報」，不代表 08b 是原因。
 - **L2 抓不到、只靠 L1 的回歸**：只帶 retired 的重複包回來（持續 30 Hz 不超過判定 3 的 31，判定 2、5 不受影響；靠 G4、M1 與記錄項）；`results-anchor-at-selection-only`（誤差是寫出耗時，微秒級，小於 0.083 ms；靠 G3）；只改一段的事件驅動（判定 4 只比方向；靠 L1）；每個跑次後約 55％期間的間隔違反（判定 2、5 沒有覆蓋）。
