@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批暫停，等範圍的決定）。
+更新：2026-10-09。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批實作中）。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
@@ -8,12 +8,10 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：
-  1. D36：已確認（「D36 照建議，開始實作」），但評估顯示它只能縮短約 1～2 ms。建議維持（事件驅動後本來就要這樣做）；或者撤回、改依下面的選項處理。
-  2. 第 08 批之後的範圍（[第 08 批](08-client-worker-asio.md)的「評估」第 4 節）：(1) Gateway→Match action batch 套用 I/2 容許，併入 08（建議）；(2) 結果改為事件驅動轉送，新批次 08b、在第 09 批之前（建議）；(3) Client 記錄 worker 收到裁決的時刻、分析器 v7 新增不量化的指標，併入 08（建議）。
-- **進行中**：第 08 批的實作暫停。worker 的改寫在本機的 stash（`batch08-wip`），`object_fps_pvp.worker` 目前失敗（「unexpected stalled action batch」），尚未調查。
-- **下一步**：依第 1、2 項的決定調整第 08 批的範圍，恢復 stash，調查 worker 測試的失敗。
-- **最後更新**：2026-10-09 16:29，依據 commit `cfc5542`（PR #73 的頭；第 08 批的評估）。
+- **等你決定**：無。
+- **進行中**：第 08 批（D43 的範圍）：恢復 stash 的 worker 改寫，調查 `object_fps_pvp.worker` 的失敗；之後加入 action batch 的 I/2 容許與 worker 收到裁決的時刻。
+- **下一步**：第 08 批的實作與 L1 完成後，寫 L2 的事前宣告送你核准。
+- **最後更新**：2026-10-09 16:30，依據 commit `f62a342`（PR #73 的頭）。
 
 ## 閱讀入口
 
@@ -44,6 +42,7 @@
 | D40 | （2026-10-08）第 03 批移到 P1b，和第 04 批一起合併（使用者原話：「選 (1)，第 03 批移到 P1b」）。理由：產品路徑的回復測試在 fps 30 的 1 個組合出現 Held（v6 路徑沒有），原因是在命令跟著畫面幀產生的架構下相位更早收斂；不放寬測試，也不讓 master 出現 30 FPS 變差的中間狀態。P1a＝02、03a；P1b＝03、TT-1、04、05。03a 改在含 03 的 P1b 分支頭上量測，那個頭不合併。D35～D39 是預留給各功能線開始前確認的編號，所以本決定編為 D40 |
 | D41 | （2026-10-09，同日更正與補充）FPS 和解析度一樣是玩家的選擇（如同遊戲內的畫面設定），不只是限幀。v7 沒有 UI，第 13 批以命令列選項讓玩家選擇解析度、視窗模式與 FPS 上限（`--fps <上限>` 等），30 FPS 手感的 L3 也在第 13 批做；在 v7 收尾時和解析度功能一起做，不另開批次與 PR。遊戲內的設定 UI（設定選單、套用後未確認就還原）與保存選擇的 `settings.json` 移到 v8。連帶：IP-5 的使用者目錄與 `engine/io` 的原子寫入只服務設定的保存，也一起移到 v8。使用者原話：「30 FPS 手感：PR #71 合併後另開小批，可以開在v7驗收之前的批次裡，產品加 --fps 限幀選項，再做 30 FPS 的 L3。在調整畫面的功能裡，要有畫面分辨率和fps選擇。」；更正：「D41 理解有誤：30 FPS 的 --fps 限幀和 30 FPS 手感的 L3 併進第 13 批（解析度與畫面設定），在 v7 收尾時和解析度功能一起做，不另開 05b／P1c。」；補充：「D41 我來說說我的想法，首先這個不單單是一個fps限制，也應該是玩家的選擇，像是在遊戲中那樣調整fps和解析度那樣。不過現在可以用 --fps 的方式來做，因為現在沒有UI。UI的部分我想是放到v8裡來實現。」「1 照建議用命令列，2 放到 v8」。最初誤記為另開第 05b 批（PR 線 P1c），已刪除 |
 | D42 | （2026-10-09）第 06 批碰到停止條件（`action_probe.py` 的「結果每秒 ≤31」在 relay 量到 32）的處理選 (a)：接受本批的行為，不改凍結的 `action_probe.py`；Gateway 的統計行加上最短的寫出間隔，「不爆量」改在 Gateway 端判定。使用者原話：「a 照建議，繼續」 |
+| D43 | （2026-10-09）第 08 批的評估之後：D36 維持（評估顯示只縮短約 1～2 ms，但事件驅動後本來就要這樣做）；Gateway→Match 的 action batch 套用 I/2 容許，以及 Client 記錄 worker 收到裁決的時刻（分析器 v7 新增不量化的指標），併入第 08 批；結果改為事件驅動轉送另開第 08b 批，排在第 09 批之前。使用者原話：「D36 維持，三個選項都照建議做」 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -136,6 +135,7 @@
 - 2026-10-09：使用者指示開始第 08 批（「開始第 08 批，檔位照建議來」：high，局部 xhigh，對喚醒與期限的交接開 1 次 xhigh 審查）。批次文件 [08](08-client-worker-asio.md)。ACK 維持在主執行緒的 `Drain`（改了會讓尚未取走的裁決在退休時被刪除）。D36 在 P2 開始時漏了確認，現在請使用者確認。
 - 2026-10-09：使用者確認 D36（「D36 照建議，開始實作」）。worker 改寫中，`object_fps_pvp.worker` 失敗（「unexpected stalled action batch」）。
 - 2026-10-09：使用者要求在 D36 確認前評估 clean-30 的快慢雙峰（只用既有證據）。結論：probe 的時間戳記在幀開始，Client 延遲只能是幀長的整數倍；雙峰來自路徑上幾個 30 Hz 節拍的相位；Gateway→Match 的 action batch 仍有「每隔一次 ticker」的缺陷；D36 只能縮短約 1～2 ms。第 07 批「橫向對比」的結論加了更正。worker 的改寫先存成 stash，實作暫停。
+- 2026-10-09：使用者決定 D43：D36 維持；I/2 容許與 worker 收到裁決的時刻併入第 08 批；結果的事件驅動轉送另開第 08b 批。第 08 批恢復實作。
 
 ## P2 以後各批的範圍
 
@@ -150,6 +150,7 @@
 - **06** Gateway 結果通道：資格判定改為只在 `now + I/2 < nextSend` 時才跳過（`action_delivery.go:205`），保留寫出後的重新錨定與「不爆量」。修正後若碰到分析器「每秒 ≤31」的窗口規則，停下由使用者決定。runtime link 的 action batch 不改，只量測。
 - **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。完成後做 P2-log、第 06、07 批的 clean-30／clean-60 橫向對比（2026-10-09 使用者要求，見「未結事項」）。
 - **08** Client：worker 改為一條 asio io 執行緒（async receive、各期限一個 steady_timer），SendInput／SubmitAction 以 post 喚醒；速率語意不變；httplib 留在 worker（只在大廳切換與關閉時阻塞 UDP）。ACK 判定在 L1 顯示語意不變時改為網路角色收到裁決時前進，否則維持並記錄理由。動作送出語意依 D36。
+- **08b**（D43）結果改為事件驅動轉送：Match 產生裁決時，action lane 符合資格就立即送；Gateway 收到新裁決時立即轉送給 Client（保留 30 Hz 最小間隔與 I/2 容許），不再等固定 ticker 的相位。不改 wire；relay 的「結果每秒 ≤31」要重新確認。排在第 09 批之前，因為第 09 批要用這些通道推導 FireGate 常數。
 - **09** FireGate 與 C2：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
 - 停止條件：權威 digest 改變；需要改 wire；macOS 的 Tick 晚醒沒有改善；worker_main 的斷言需要放寬；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。
 

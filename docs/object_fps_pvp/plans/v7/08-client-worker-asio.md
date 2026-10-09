@@ -1,6 +1,6 @@
 # 第 08 批：Client 的網路 worker 改用 asio
 
-狀態：**實作暫停，評估完成，等使用者決定範圍**（2026-10-09）。worker 的改寫在本機的 stash（`batch08-wip`），`object_fps_pvp.worker` 目前失敗（「unexpected stalled action batch」），尚未調查。PR 線 P2（PR #73）。依賴第 07 批。
+狀態：**實作中**（2026-10-09；範圍依 D43）。worker 的改寫從 stash（`batch08-wip`）恢復，`object_fps_pvp.worker` 的失敗（「unexpected stalled action batch」）調查中。PR 線 P2（PR #73）。依賴第 07 批。
 檔位 high；喚醒與期限的交接、generation 邊界、停止與離開房間的順序局部 xhigh（使用者 2026-10-09「檔位照建議來」，對這部分開 1 次 xhigh 審查）。
 
 ## 起因
@@ -26,6 +26,10 @@
   - 改了語意會變：Match 會在 Client 的遊戲取走裁決之前就退休它們，而 Client 收到 `retired_through` 時會刪除對應的紀錄（`ClientConnection.cpp:353`），主執行緒尚未取走的裁決就會遺失。
   - 維持的代價只是主執行緒停頓時 ACK 晚一點送出，32 筆的動作視窗為上限，不影響正確性。
 - P2-log 的 worker 統計：`wakes` 改為計算 io 處理函式的執行次數。
+- **D43 加入**：
+  - Gateway→Match 的 action batch 套用第 06 批的 I/2 容許（評估的選項 (1)）。
+  - Client 在 worker 收到裁決時記下時刻，`Drain` 帶出；分析器 v7 新增不量化的「產生→worker 收到」指標，凍結的分析器不改（選項 (3)）。
+  - 結果的事件驅動轉送另開第 08b 批（選項 (2)）。
 
 ## 驗收
 

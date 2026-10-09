@@ -72,7 +72,8 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | P2-log | [網路路徑的 10 秒統計](p2-log-network-statistics.md) | medium | 完成（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)） | 只加記錄的 commit，作為 P2 的 before |
 | 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
 | 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
-| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 實作暫停：評估完成，等範圍的決定（2026-10-09） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
+| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 實作中（範圍依 D43：加入 action batch 的 I/2 容許與 worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
+| 08b | （開始時撰寫） | high（局部 xhigh） | 未開始（D43） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway），消除固定 ticker 的相位；排在第 09 批之前 |
 | 09 | （P2 開始時撰寫） | high（常數推導局部 xhigh）；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
 | 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | high（局部 xhigh；契約建議 ultracode 審查） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
@@ -102,7 +103,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | P0 | 01 | 規劃本身的交付（比照 v6 #39） |
 | P1a | 02、03a | 只改產品，行為不變（逐位元組相同的證明）。P0 的狀態同步併入。03a 的結果以文件併入 |
 | P1b | 03、TT-1、04、05 | 第 03 批在命令跟著畫面幀產生的架構下會讓 30 FPS 變差（D40），所以和讓命令改在固定步產生的第 04 批一起合併。跨層必須一起合併：Waiter 與 Threads 的第一個消費端是第 04 批（Match Tick 先用的話，C1 的 after 就混入 Match 的改動）。P1a 的同步併入 |
-| P2 | P2-log、06、07、08、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
+| P2 | P2-log、06、07、08、08b、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
 | P3 | TT-2、10、11 | 診斷：Trace、紀錄、跨機對齊用的對時；v7 唯一的 wire 變更，三個角色同一個 PR |
 | P4 | IP-3、IP-4、12 | 標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併 |
 | P5 | IP-5、13 | 機制與唯一消費端的政策一起審查 |
@@ -120,7 +121,7 @@ P1b  [03 每份 snapshot] → [TT-1 Time＋Threads] → [04 三角色] → [05 C
        │
 P2   [P2-log] → [06 Gateway 30 Hz] ┐
                 [07 Match asio]    ├→ [09 FireGate 常數 → C2]
-                [08 Client asio]   ┘
+                [08 Client asio] → [08b 結果事件驅動] ┘
        │            （↑ 所有新舊對比到這裡結束）
 P3   [TT-2 Trace] → [10 診斷紀錄] → [11 pv7]   ← 唯一的 wire 變更
        │
