@@ -1,6 +1,6 @@
 # 第 09 批：FireGate 常數的重推與 C2
 
-狀態：**執行中：S1 準備與第 09a 批的設計**（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
+狀態：**S1 宣告與第 09a 批的設計完成，待使用者決定**（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-10「開始第 09 批，開 ultracode，檔位照建議」）。之後各步的檔位見「步驟」。
 
 ## 起因與範圍
@@ -131,6 +131,143 @@
   - 判定（沿用 v6 第 12 批）：after 在 clean 的 (i)(ii) 中權威 Cooldown 拒絕＝0；**明文排除** action short 既有的刻意注入的那 1 次拒絕（v6 dev_log:69）。窗口內的拒絕仍然停下，但定位程序事先宣告。本機擋下只記錄；L1 的參考值引用凍結後的模型版本（commit）。
 - **25 案回歸**：同一個凍結頭，結果不進入 C2 的判定。relay 的「結果任一秒 ≤31」由 judge 套用；Gateway 的兩個最短間隔以字面值比較 ≥33.3，每跑次至少 1 個有值的視窗（第 08b 批判定 2、5）。`backpressure_probe.py` 6 案與 `run_network.py` 各 1 次；非 respawn 的重設照 08b 的 D44 規則。只記錄：D44 領先跳升、被釘住秒數、停頓、c 的分布。
 - **「P2 頭 30 FPS 只記錄」**：P1b 頭 `805bd11`（從零重建）對 P2 頭 `a954aa3`，clean-30 各 6 輪交錯，依狀態分層。決定 1 選 A 或 B 時必須在修正之前跑（S1）；選 C 時併入 M0 的 session。
+
+## S1 的事前宣告（待使用者核准）
+
+下面是證據目錄 `build/target/_build/test/logs/pvp-v7-batch09-s1-20261010/declaration.md`（SHA-256 `9e0869a0…`）的全文；核准時以那個檔案的雜湊寫進 `declaration.sha256`。準備：P1b `805bd11` 與 P2 `a954aa3` 在 detached worktree 從零建置（單元測試 197／197、206／206），xhigh 對抗式檢查要求的修正 A～J 已套用，並由另一位 high 核對（沒有缺漏）。核對另提 5 點非阻擋的觀察（例如 `result.json` 沒有 `timer_baseline` 時，可改用 `action-client.json` 的 `timer` 算主機狀態），沒有改。
+
+**請特別看兩點**：
+1. **P1b 沒有重現 C1 的雜湊**：執行檔內嵌了工作樹的絕對路徑、目的檔的時刻（Mach-O 的 N_OSO）與由此衍生的 UUID，所以任何重建都不會得到 C1 的雜湊。同源對照（同一產品程式在兩個位置建置）反組譯正規化後 0 行不同。「程式內容相同」仍是 hypothesis，需要你核准才開跑。
+2. **S1 只記錄**：除了「12 次跑次完成、沒有觸發停止條件」，沒有通過或不通過的判定；結果不當作任何門檻的來源。
+
+#### S1 的事前宣告：P2 頭 30 FPS，只記錄（草案；依計畫「步驟」S1，xhigh 對抗式檢查已完成，修正 A～J 已套用；使用者核准時，本檔 `declaration.md` 的 SHA-256 寫進證據目錄的 `declaration.sha256`）
+
+- **目的**：在任何產品變更（第 09a 批）之前，於同一個 session 交錯量測 P1b 頭與 P2 頭的 clean-30，單獨顯示 P2 線對 30 FPS 的影響（HANDOFF 第 09 批：「P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響」）。
+  - 兩棵 tree 的差異是整條 P2 線：P2-log、第 06 批（Gateway 結果 30 Hz）、第 07 批（Match Tick 與 IPC）、第 08 批（Client 網路 worker 改用 asio，即任務 3）、第 08b 批（事件驅動轉送）。本次量測無法在這條線內部再分開歸因。
+  - **只記錄**：除了「12 次跑次全部完成、沒有觸發停止條件」以外，沒有任何通過或不通過的判定。結果不進入 C2 的判定，也不當作 M0 或常數推導的門檻來源（D45：分布不向其他建置借用）。
+- **對象與產物**（雜湊寫在 `artifacts.sha256`，開跑前與結束後各核對一次；不一致就停下）：
+  - p1b＝`805bd11`（C1 的 after，PR #71 的頭）；p2＝`a954aa3`（第 08b 批的產品程式；`git diff --stat a954aa3..HEAD -- apps build engine tests` 為空）。
+  - 兩棵都在 detached worktree（`../GYO-Engine-p1b-s1`、`../GYO-Engine-p2-s1`）從零建置。`build.sh` 由 C1 的 `build.sh` 複製，只改註解、輸出目錄與 worktree 清單（`build.sh.diff`）。
+  - p1b：Match `aca1578b…`、Gateway `a1e68523…`（內嵌 `vcs.revision=805bd11`、`vcs.modified=false`）、probe `a1c4503e…`。
+  - p2：Match `1d753abc…`、Gateway `5ba59cbb…`（內嵌 `vcs.revision=a954aa3`、`vcs.modified=false`）、probe `6e62bed7…`。
+  - arena 兩棵都是 `0026013c…`。
+  - **P1b 沒有重現 C1 的雜湊**：C1 after 是 Match `5884b869…`、Gateway `0fd81f75…`、probe `a5a13c26…`，本次三者都不同，只有 arena 相同。
+    - 已知的差異有兩類：
+      - ①執行檔內嵌絕對的工作樹路徑 `GYO-Engine-p1b-s1`。原始位元組出現次數 Match 172、probe 188、Gateway 11；`strings -a` 為 5／11／11 行。
+      - ②Mach-O 的 debug map（N_OSO，P1b 的 Match 有 154 筆）在 n_value 記錄每個目的檔的修改時刻（第一筆 `0x6ac92312`＝2026-10-09T17:23:30Z），LC_UUID 由內容衍生。
+      - 所以即使在同長度的路徑重建，Match 與 probe 也不會得到 C1 的雜湊；把路徑字串原地換回 `GYO-Engine-p1b-c1` 也不相等（`adversarial/path_substitution.txt`）。
+    - 同源的對照（`adversarial/binary_compare.txt`）：
+      - 比對兩組：本次 p2 的 Match 對主 checkout 的 Match（`c9cc6617…`，即第 08b 批 L2 的 match-after）；本次 p2 的 probe 對主 checkout 的 probe（`d45a1f0b…`，第 08b 批 L2 用的 probe）。
+      - `nm -U` 符號集合相同（10210／11790），`__text` 大小相同。
+      - `otool -tV` 反組譯只正規化 RIP 位移、分支與呼叫目標、位址註解（保留立即值）後，0 行不同。
+      - `__cstring` 只差 0x40／0x36 bytes。
+    - 建置條件：
+      - C1 的 `build-p1b-c1.log` 與本次 `build-p1b-s1.log` 統一路徑、去掉 ninja 計數與秒數後，只差 configure／generate 的秒數與 1 行 ninja 狀態。
+      - 11 個依賴來源都是乾淨的固定 tag（2026-10-03）；Go 1.27.1 於 2026-08-28 安裝。兩者都早於 C1。
+    - 「程式內容相同，差異只在路徑、目的檔時刻與由此衍生的 UUID」是 hypothesis（未驗證：C1 的執行檔已移除，無法逐位元組比對）。以上是支持它的證據，沒有反證。
+    - 依「本批另加的停止條件」2 的精神，這一點**請使用者核准**後才開跑。
+  - 每棵 tree 用自己的 runner、Match、Gateway、probe 與 arena。
+    - `805bd11..a954aa3` 中 `build/acceptance` 只改 7 個檔。其中 runner 與 probe 端只有 `gameplay_action.hpp`：多記一個 `received_ns`，不改送出與判定。另外 `judge.py` 從 p2 tree 匯入 `network_statistics.py`（只讀 Match 統計行）。
+    - `run_gameplay.py`、`gameplay_evidence.py`、`command_evidence.py`、`command_evidence_v7.py`、`start_phase_evidence.py` 兩棵逐位元組相同。
+- **分析器與腳本**（`analyzers.sha256`，開跑前與結束時由 `run.py` 核對）：
+  - v6 最終清單的凍結子集：39 個 Python 檔，在兩棵 tree 都與 C1 的 `analyzers.sha256` 一致。
+    - 原本有 40 個；`run_network.py` 在 `a954aa3` 改過（`--movement-trace`），S1 不使用，所以排除。
+  - 分析器 v7：`command_evidence_v7.py` `394d5e25…` 與它匯入的 `command_evidence.py` `5fa9779b…`，兩棵相同。
+  - 唯讀匯入的檔案：
+    - C1 的 `summarize.py` `bbf51ddc…`：用它的 `substitutes`、`fisher_two_sided`、`STRUCTURAL`、`PROBE_FAILURES`。
+    - 參考包 `analyze.py` `68ee027a…`：用它的 `host_late_p99`。
+    - `pvp-v7-08-eval-20261009/segments.py` `6a3fa237…`。
+    - `pvp-v7-08b-plan-20261009/d44-adversarial/lead_jumps.py` `14cd5b5c…`。
+    - p2 worktree 的 `network_statistics.py` `b37baf63…`。
+  - 本批腳本：`run.py`、`judge.py`、`sleeper.py`（C1 版 `98105dbf…`）、`build.sh`、`prep_hashes.py`。
+    - 對抗式檢查改動了 `run.py`（`bd41e62b…`）與 `judge.py`（`51b7f294…`），已重跑 `prep_hashes.py`，以新的雜湊為準。
+- **主機**：
+  - 閒置：session 期間不做開發，開 caffeinate，前景沒有其他使用者程式。暫停 PR #73 的 auto-fix。
+  - 閒置閘門（沿用 C1 第 2 次 session 的附註）：第 1 回之前連續 3 次 5 秒 sleeper，每次最大值都 <10 ms。不成立就每 30 秒重試，最多 30 分鐘，仍不成立就停下。
+  - 每次跑次前後各跑一次 5 秒 sleeper，並記錄 CPU 最高的 5 個程序（C1 的做法；第 08b 批 L2 是每回 6 案的前後）。
+  - 分層的依據是 probe 的 TimerBaseline（連線前 3 秒，`result.json` 的 `timer_baseline`）：
+    - 主分類：`late_p99_ms` ≥6.0 為 8 ms 狀態（C1 `05-30fps-comparison.md:41`，與第 14b 批相同）。
+    - 另列：`interval_p99_ms` ≥22（第 08b 批 L2 `judge.py:59`）的分類與不一致的跑次。兩者是同一次量測的兩個欄位，所以一致率不能當作分類正確的根據（本計畫 C2 的主機狀態一項）。
+  - TimerBaseline 的 P99 是 nearest-rank，約 180 個樣本中的第 2 大（`timer_baseline.hpp:87-90`）；sleeper 的 P99 是約 300 個樣本中的第 4 大（`sleeper.py` 的 `int(q*(n-1))`）。TimerBaseline 量測時，同一 tree 的 Match 與 Gateway 已在執行（`action_probe.py:528`、`:533`、`:554`），沒有 session 流量，但不是沒有其他程序。兩棵 tree 的背景負載不同是否影響分類是 hypothesis（未驗證）。
+  - 轉換：前後兩次 sleeper 各以 P99 ≥6.0 ms 判狀態，兩者不同就算「轉換」。只列出，不進入分層。TimerBaseline 只量連線前 3 秒，會漏掉跑次中途的轉換。
+  - 交叉確認：p1b 的舊 Match 用參考抽取器的 `host_late_p99`（`start_ns` 後 1～15 秒）。p2 的 Match 晚醒不反映主機狀態（08b after 兩種狀態下 `tick_late` 都 ≤446 µs），只列出它的 `host_late_p99` 與 `tick_late_max_us`。
+  - 兩棵 tree 8 ms 狀態頻率的雙側 Fisher 精確檢定：只記錄。S1 沒有判定，所以不設停止條件；C2 的 p<0.05 停止條件不套用到 S1。主機狀態算不出來的跑次不進入檢定。
+- **跑次**：
+  - 只跑遊戲矩陣的 clean-30（`run_gameplay.py --case clean-30`），每棵 tree 6 輪。
+  - 第 k 回：k 為奇數時先 p1b 後 p2，偶數時先 p2 後 p1b。
+  - 不隨機化（D47⑥）；不補跑（S1 只記錄，本宣告新訂，計畫未規定補跑）。
+  - 目錄：`runs/clean-30-r<k>-<tree>/`，由 `run_gameplay.py` 建立，`run.py` 不得預先建立。另有 `progress.jsonl`、`judgement.json`，結束或停止時寫 `files.sha256`。
+  - 每次跑次結束、做完後 sleeper 之後，用該 tree 自己的分析器 v7 在案例目錄寫出 `command-evidence-v7.json`。
+  - 預計約 10 分鐘（12 次，每次約 20 秒加上兩次 sleeper 與分析器 v7），另加閒置閘門的時間。
+- **每次跑次的分類**（沿用 C1）：
+  - E：runner 逾時、沒有判定行、`ready.json` 或 `result.json` 缺漏。
+  - A（與 C1 `summarize.py:96-109` 相同）：
+    - `result.json` 的錯誤含 `summarize.STRUCTURAL` 的字樣；
+    - `result.json` 沒有 `movement`，而錯誤不是以 `summarize.PROBE_FAILURES` 開頭（分析器本身拋出例外）；
+    - 分析器 v7 的結束碼不是 0／1，或本跑次沒有寫出 `command-evidence-v7.json`。Python 未捕捉的例外結束碼也是 1，只看結束碼抓不到。
+  - F：其他不通過，包括 `ready.json` 之後的 probe 失敗（`PROBE_FAILURES`）。沒有 `movement` 時替代列為「未知」；主機狀態算不出來的跑次只列在 tree×全部。
+  - P：通過。
+  - `run.py` 的判斷順序：
+    1. 錯誤含 STRUCTURAL 字樣 → A。
+    2. 沒有 movement：錯誤是 PROBE_FAILURES → F（不再看 v7）；否則 → A。
+    3. v7 結束碼不是 0／1，或 `case_dir/command-evidence-v7.json` 不存在 → A。
+    4. 其餘依 passed 分為 P／F。
+- **停止條件**（立即停下，保留全部證據、不重跑，交使用者決定）：
+  1. 分類 E 或 A。
+  2. 任一棵 tree 出現權威 Cooldown 拒絕（`rejection==3`，`Combat.hpp:51-53`）。這是 P2 的停止條件；gameplay 計畫中沒有預期的 Cooldown（`gameplay-plan.json` 的 `expected_rejection` 沒有 3）。
+     - 同一跑次若又有領先跳升，同時符合本計畫 D44 一節「要把 D44 提前的條件」。
+  3. 產物或分析器的雜湊不符。
+  4. 任一 worktree 的 HEAD 改變或追蹤檔有變更（每次跑次前核對）。
+  5. 閒置閘門 30 分鐘內不成立。
+  - `run.py` 本身的其他例外（sleeper 輸出無法解析、分析器 v7 逾時、`OSError` 等）也照停止處理：在 `progress.jsonl` 記為停止，照常寫 `files.sha256`。
+  - 主 checkout 的 HEAD 在開始與結束時記錄。S1 結束前，第 09a 批的產品變更不得 commit（計畫：S1「必須在任何產品變更之前」）。
+- **本批另加的停止條件在 S1 的對應**（內容請使用者確認）：
+  1. 不適用（M0）。
+  2. 依精神適用：P1b 的雜湊需使用者核准。
+  3. 適用（E／A）。
+  4. 只記錄；是否套用由使用者決定（見未決 5）。
+  5. D44 提前條件：
+     - Cooldown 與領先跳升出現在同一跑次時，已由停止條件 2 停下。
+     - S1 結束後，若 p1b（舊版）出現 LifeRespawn 以外的 epoch 重設或領先跳升，報告中明列「D44 提前條件：舊版也出現」，並停下問使用者。
+  6. 主 checkout 的 HEAD 在開始與結束時記錄。期間若出現非文件的 commit，該 session 依條件 6 作廢（S1 的產物在 worktree，不受影響，但仍照條件處理）。
+  7. 不適用。
+- **只記錄的指標**（每次跑次各一份，再依 tree×主機狀態與 tree×全部狀態彙總；不足 3 輪的格只列出。缺少輸入檔的跑次，例如 probe 失敗只留下 `client-failure.json`、沒有 `action-client.json`，需要該檔的項目記為 null，彙總時跳過並列出「未知」的輪數）：
+  1. 通過與否：凍結分析器（`result.json` 的 `passed`／`errors`）與分析器 v7 的結果並列。C1 對 after 改用分析器 v7 判定的規則，在這裡不構成判定。
+  2. 替代（Held＋Neutral）：用 C1 的 `summarize.substitutes`。
+     - 範圍：`start_ns` 後［1, 15）秒，依解析時刻。
+     - 拆成兩類：Match 停頓造成的（`snapshot_produced` 間隔 ≥40 ms 的那個 Tick 起 0～3 Tick，C1 `05-30fps-comparison.md:48`）與其他。
+     - 列出筆數、來源、秒數與玩家。比率以兩種方式列出，以 `Fraction` 精確計算：排除 Match 停頓（Σ其他 ÷ Σ`remaining_originals`）與不排除（Σ（其他＋Match 停頓）÷ Σ`remaining_originals`）。C1 排除 Match 停頓的前提是兩棵 tree 的 Match 相同（`05-30fps-comparison.md:48`）；S1 的 p1b 是第 07 批之前的 Match，前提不成立，處理方式與 C2 計畫的更正相同。
+  3. Actual 比率＝`movement.actual` ÷ `remaining_originals`。
+  4. 停頓重設：`start_phase` 各 epoch 的 `stall_reseeds` 合計（凍結的 `start_phase_evidence.py` `e719dab6…`）。另列 LifeRespawn 以外的 epoch 重設。
+  5. 移動延遲：`actual_p50_ms`／`actual_p95_ms`（產生→執行）。兩棵 tree 的「產生」都是模擬角色的步邊界，定義相同。
+  6. a（probe 送出→relay 第一次上行）與 c（裁決 Tick 的 `snapshot_produced`→relay 第一次下行 kind 7）：
+     - 用 `segments.run_actions`，只取合法裁決且五個時刻（送出、relay 上行、Tick、relay 下行、probe 取得）齊全的（`segments.py` 的 `run_actions`）。
+     - 列出 P50／P95／最大，以及 c 換算成整 Tick 的分布。
+     - p1b 的 Gateway 結果走 30 Hz 的 ticker，但寫出後重新錨定，多數間隔是兩個 ticker（平均約 15～18 包／秒，`06-gateway-results-30hz.md:8`、`:14`；第 06 批修正），c 的差異是預期中的。
+     - b、d、`legal_match_p95_ms` 不跨 tree 解讀（第 08b 批 L2 宣告的只記錄項）；`legal_match_p95_ms`／`legal_client_p95_ms` 只列出。
+  7. 被釘住的秒數：每位玩家、以該玩家第一筆 generated 起算的每一秒，非 seed 命令「第一次 sent−generated」的中位數 >2 ms 就算一秒；排除最後 1 秒（`pvp-v7-09-plan-20261010/adversarial/pinned_count.py:2-3`）。
+     - 列出秒數、最長連續秒數，以及每位玩家整段的等待 P50／P95／最大。
+     - 只對 p2（新 worker）有意義；p1b 照列，附等待中位數供判讀。
+  8. D44 領先跳升：在每個案例目錄執行凍結的 `lead_jumps.py`（sha256 `14cd5b5c81ef73f9dee4d9d8593fdc6518dd183f8bcc8df14bf0098230ae3a07`），新舊分開累計。
+  9. Tick 間隔：相鄰 authority Tick 第一筆 `resolved` 的時刻差 ≥ step＋1.5 ms（M0 的停頓定義，預先記錄）。只對 p2 的 Match 有意義：舊 Match 的 Tick 晚醒使大多數間隔都超過，試算時 C1 第 2 次的 P1b 12 輪有 1324 個。
+  10. 主機：見「主機」一節，另列模擬角色晚醒的最大值（`action-client.json` 的 `simulation_wakes`）。
+- **報告**：
+  - 依 tree×狀態並列：輪數、通過（凍結／v7）、替代合計（排除與不排除 Match 停頓兩種比率）與每輪的筆數與秒數（Match 停頓另列）、Actual、P50／P95、停頓重設、a／c、被釘住秒數、領先跳升、Tick 間隔、Cooldown、轉換次數，以及各項「未知」的輪數。
+  - 另列 TimerBaseline 兩種分類的不一致與 Fisher p。
+  - 不寫「比較好」或「比較差」的結論；只以記錄的方式描述 P2 線的影響，並註明差異涵蓋第 06～08b 批與 P2-log。
+- **門檻的來源（D45）**：S1 沒有判定門檻，只有以下分類與記錄用的界線。
+  - TimerBaseline 主狀態：`late_p99_ms` ≥6.0 ms。來源 C1 `05:41`、第 14b 批；指標是 probe 連線前 3 秒的絕對期限晚醒 P99；不混入其他流量（在連線之前量）。
+  - TimerBaseline 次狀態：`interval_p99_ms` ≥22 ms。來源第 08b 批 L2 `judge.py:59`；同一次量測。
+  - sleeper 狀態：P99 ≥6.0 ms。`sleeper.py` 也用絕對的 1/60 秒期限；第 08b 批 L2 每回 sleeper P99 在 4 ms 狀態為 3.87～4.18 ms，在 8 ms 狀態為 6.42～8.24 ms（本次以該 session 的 `progress.jsonl` 計算）。
+  - 閒置閘門：最大 <10 ms。來源 C1 第 2 次 session（使用者核准的附註）；建置與流量：獨立的 sleeper 程序。
+  - Match 停頓：≥40 ms。來源 C1 `05:48`；指標是 Match 的 `snapshot_produced`。C1 以 v6 與 P1b 的 Match 在 clean-30／60 定義；套用到 p2 的 Match 是跨建置使用，只作記錄界線。
+  - 被釘住：2 ms。來源本計畫 `09-firegate-c2.md:57`、`:113`；本次試算時第 08b 批 L2 after clean-30 的等待 P50 每位玩家 0.082～0.142 ms。建置與流量：第 08 批之後的 worker；非 seed 的移動命令，不含動作；計畫證據 `pvp-v7-09-plan-20261010/c2risk/send-wait-*.jsonl`。
+  - Tick 間隔：step＋1.5 ms。來源本計畫 S3（`09-firegate-c2.md:113`）；指標是 Match 的 `resolved` 時刻。為新 Match 定義；舊 Match 上無效（試算 1324／1691）。
+  - 領先跳升：20 ms。來源 `lead_jumps.py` 文件字串；指標是 gen→exec 中位數。建置與流量：第 08b 批規劃的 d44-adversarial，第 08 批 L2 的 trace。
+- **證據**：`build/target/_build/test/logs/pvp-v7-batch09-s1-20261010/`。內容：
+  - `declaration.md`（本宣告）、`run.py`、`judge.py`、`sleeper.py`、`build.sh`、`prep_hashes.py`、`artifacts.sha256`、`analyzers.sha256`、`prep.json`、`commands.txt`、`sha256.txt`。
+  - `adversarial/`：xhigh 對抗式檢查的腳本與輸出（`path_substitution.txt`、`binary_compare.txt` 等）。
+  - `dryrun/`：用既有證據（第 08b 批 L2、C1 第 2 次）對 judge 試算的結果；缺 `action-client.json` 的合成 F 跑次試算（`make_synthetic_f.py`、`judgement-synthetic-f.json`）；`run.py` 分類與例外處理的模擬（`mock_run_d.py`、`mock_main_e.py` 與輸出）。
 
 ## 本批另加的停止條件
 
