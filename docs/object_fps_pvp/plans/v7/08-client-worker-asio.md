@@ -1,6 +1,6 @@
 # 第 08 批：Client 的網路 worker 改用 asio
 
-狀態：**實作中**（2026-10-09；範圍依 D43）。worker 的改寫從 stash（`batch08-wip`）恢復，`object_fps_pvp.worker` 的失敗（「unexpected stalled action batch」）調查中。PR 線 P2（PR #73）。依賴第 07 批。
+狀態：**實作、L1 與開發跑次完成；L2 的事前宣告待使用者核准**（2026-10-09；範圍依 D43 與使用者的補充）。PR 線 P2（PR #73）。依賴第 07 批。
 檔位 high；喚醒與期限的交接、generation 邊界、停止與離開房間的順序局部 xhigh（使用者 2026-10-09「檔位照建議來」，對這部分開 1 次 xhigh 審查）。
 
 ## 起因
@@ -30,6 +30,44 @@
   - Gateway→Match 的 action batch 套用第 06 批的 I/2 容許（評估的選項 (1)）。
   - Client 在 worker 收到裁決時記下時刻，`Drain` 帶出；分析器 v7 新增不量化的「產生→worker 收到」指標，凍結的分析器不改（選項 (3)）。
   - 結果的事件驅動轉送另開第 08b 批（選項 (2)）。
+- **使用者的補充（2026-10-09）**：
+  - link 迴圈會被輸入、動作、結果叫醒（`runtime_link.go:246`），留著 I/2 等於允許待決的請求約 60 Hz 重送。兩個選項：(a) 嚴格的最小間隔 I 加到期計時器；(b) 保留 I/2 並記錄上限。**選 (a)**：和 IpcHost 的 action lane、第 08b 批的規格一致。
+  - 實作：資格回到 `now.Before(w.nextSend)`；link 迴圈的固定 ticker 改為一個計時器，每次處理後設在「有待送內容的玩家中最早的 `nextSend`」（`nextActionDeadline`），沒有待送時以 I 為週期。
+
+## 實作與 L1（2026-10-09）
+
+- worker：一條 asio io 執行緒（`gyo-client-net`）。每次喚醒跑和舊版相同的處理（`Handle`、`Network`、`PollLobby`），所以資格判斷的程式不變；喚醒來源是 socket 可讀、其他執行緒的 post、以及一個等最早期限的計時器（`Arm`）。
+- 計時器的精度：
+  - 只用 asio 的計時器時，沒確認的輸入視窗重送是 57 次／秒：macOS 的計時器合併讓每次晚約 0.9 ms。
+  - 改成「期限前 2 ms 由 asio 計時器叫醒，最後一段用角色的 Waiter（kqueue NOTE_CRITICAL）等」之後是 58 次／秒，和舊的輪詢版本相同（舊版暫時重建後量 10 次，都是 58）。io 執行緒在最後一段會阻塞最多 2 ms，和舊輪詢的最後一次短睡相同。
+- `worker_main` 的修改（使用者核准「worker_main 照建議改」）：
+  - 記下 `firstActions` 之前先等 50 ms，讓 D36 在分配途中送出的那一批先抵達。「停頓期間每批 8 發、沒有 ACK」的斷言不變。
+  - 新增（只加不放寬）：ACK 前進後 40 ms 內送出、單發 `SubmitShot` 在 40 ms 內送出（D36）、重複到達的結果不改變收到的時刻。前兩項之前先讓 worker 閒置 50 ms：第一版沒有閒置，殘留的期限計時器會帶出送出，突變存活，改了之後 killed。
+- xhigh 審查（1 位）：沒有 blocker、major。
+  - minor 2 件已修：handler 在 `Service` 之外拋出例外時，記錄並公開為連線失敗，io 繼續執行（原本 worker 會悄悄停擺）；`PostService` 改為 `noexcept`，post 失敗時清掉旗標。
+  - nit：持鎖時 post（審查確認不會死結，維持）；計時器的精度（已如上處理）；除錯輸出殘留（每次量完都已還原，commit 前再確認沒有）。
+  - 測試缺口：`Drain`／`SubmitAction` 的喚醒、`receivedAt` 已補斷言與突變；「新視窗只等 1 個 token」的期限規則沒有能單獨抓到的測試，留作已知的缺口。
+  - 審查確認 `worker_main` 的失敗是測試的時間競態，不是產品的錯誤。
+- 驗證：
+  - 全量 CTest 70／70（新增 `object_fps_pvp.action_latency_v7`；權威 digest 不變）；`go vet`、`go test`、`go test -race`。
+  - `object_fps_pvp.worker` 連跑 30 次全部通過；新舊版本各 40 次也都通過。
+  - 突變 5／5 killed：`v7-08-link-no-deadline-timer`、`v7-08-link-half-tolerance`、`v7-08-drain-no-wake`、`v7-08-submit-no-wake`、`v7-08-receipt-overwritten`。
+  - TSan：worker 驗收 3 次，沒有報告。
+- 開發跑次（clean-30，1 次，只記錄）：Gateway→Match 的 action batch 間隔 P50 從約 68～70 ms 變成 33.4 ms；worker 收到裁決只比 relay 下行晚約 0.2 ms；worker 每個 Client 約 210～218 次／秒（P2-log 約 416）。
+- 開發跑次（矩陣與兩個 probe）：
+  - 25 案矩陣全部通過。
+  - 偶發失敗 2 次，原因未確定：
+    - `run_network.py` 1 次「an application stall reset the movement epoch」。
+    - `backpressure_probe.py` 的 host-ipc-250ms 1 次「Unexplained epoch reset for player 1 (reason backlog)」。重設前，sim 角色的 generation 間隔縮成 13.3 ms（相位追蹤加速）。
+  - 為了判斷是不是新 worker 造成的，用 `1e81da9`（本批之前的頭）重建舊的 network／timing probe，配第 07 批 L2 的 Gateway，和新版交錯跑（`ab/baseline.sh`）：
+
+    | | `run_network.py`（失敗／次數） | `backpressure_probe.py`（失敗案例／案例數） |
+    |---|---|---|
+    | 新 worker | 1／12 | 1／19（失敗的那次在第 1 案停下） |
+    | 舊 worker | 0／8 | 0／18 |
+
+  - 判讀：次數太少，分不出新舊（1／12 對 0／8，Fisher 精確檢定 p＝1）。不能說是新 worker 造成的，也不能排除；失敗的跑次保留，沒有重跑來取代。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch08-20261009/`（git 忽略）：`mutations.json`、`ctest-full.log`、`tsan-worker-*.txt`、`dev-clean-30/`、`dev-matrix/`、`dev-network/`、`dev-backpressure/`、`ab/`（舊 probe 與交錯跑次）；`dev-*.argument-error.txt` 是第一次因 zsh 沒有拆開參數、runner 立刻結束的紀錄。
 
 ## 驗收
 
@@ -116,6 +154,26 @@
 - clean-30 至少 12 次，報告各跑次的分布，並依相位分組。
 - 凍結的分析器不改；新指標放在分析器 v7 或新的分析腳本。
 - 要新的跑次才能回答的：b 段內部（Gateway 收到、送往 Match、Match 收到）與 c 段內部（Match 送出、Gateway 收到）沒有時間戳，要在 Gateway 與 Match 加 trace 才能拆開；這次不跑。
+
+## L2 的事前宣告（草案，待使用者核准）
+
+- **目的**：
+  - 確認 b 段（relay 上行 → 裁決 Tick）的約 10 ms 差距，是否因 link 的修正而縮小。
+  - 確認 Client 的 worker 改為事件驅動後，gameplay 沒有變差，喚醒與 CPU 減少。
+  - 留下不量化的「產生→worker 收到」（after）作為第 08b、09 批的基準。
+- **產物**：before 是第 07 批的頭建置的 Gateway 與 action probe（probe 含 Client 端的程式），after 是本批的頭建置的版本。Match 共用（兩者之間 Match 的原始碼沒有差異）。雜湊寫進 `artifacts.sha256`，跑次前後各核對一次。
+- **主機**：沿用之前 L2 的做法（每輪前後 5 秒 sleeper、記錄背景的高 CPU 程序、機器閒置）；每個跑次依 probe 的 TimerBaseline 記錄主機狀態。
+- **案例與順序**：clean-30 12 輪；clean-60、upstream-250ms、gateway-250ms 各 6 輪。每輪 before 與 after 各 1 次，奇數輪先跑 before。共 60 次，約 30 分鐘。
+- **判定**（全部成立才算通過）：
+  1. after 的所有跑次，gameplay 判定都通過。
+  2. after 的 Gateway `link_action_interval_ms` P50，在有樣本的每個視窗都在 33.3±2 ms。
+- **記錄並比較**（使用者的補充）：
+  - 每個合法動作的相位：probe 幀相對 Match Tick 格點；relay 下行相對 Tick 格點。
+  - b 段依相位分組的中位數與 P95，before 對 after；同時列出 probe 幀的相位，因為 b 段的差距也可能來自 Tick 的相位。
+  - a、c、d 段與「產生→worker 收到」（after）。
+  - worker 的喚醒與 CPU、`legal_match_p95_ms`／`legal_client_p95_ms`、relay 的「任一秒結果數」。
+- **停止條件**：跑次錯誤時停下，不自行重跑；after 出現 gameplay 失敗、判定 2 不成立、產物雜湊不符時停下回報。
+- **證據**：`build/target/_build/test/logs/pvp-v7-batch08-l2-<日期>/`。
 
 ## 停止條件
 
