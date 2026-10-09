@@ -1,6 +1,6 @@
 # 第 08b 批：結果改為事件驅動轉送
 
-狀態：**實作與 L1 完成（`a954aa3`），開發跑次進行中**（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
+狀態：**實作、L1 與開發跑次完成（`a954aa3`）；L2 的事前宣告已定稿，待使用者核准**（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-09「開始第 08b 批，開 ultracode，檔位照建議」）；實作 high，計時器迴圈、期限一致性、lane 的到期判斷局部 xhigh；文件與執行 medium。
 
 用語：本文件把「每 I 重送一次、只帶 retired 的包」稱為**只帶 retired 的重複包**（簡稱重複包），不叫心跳，以免和第 11 批 runtime link 的心跳對時混淆。
@@ -223,46 +223,62 @@
 - 記錄 relay 的「結果任一秒」、Gateway 的最短間隔、c、D44 新舊的 epoch 重設次數（`reset_reason≠life_respawn`）。
 - 「結果 ≤31」在 L2 與矩陣跑次走的 gameplay v5 路徑中，凍結的分析器**不執行**：`action_probe.py:336-338` 把分析交給 `gameplay_evidence.analyze`，而 `gameplay_evidence.py` 只在 `:207` 檢查 kind 6。所以開發跑次與 L2 都要由 judge 以唯讀匯入的 `maximum_window` 計算。
 
-## L2 的事前宣告（草案，待使用者核准；依 D45 已做 1 次門檻來源的對抗式檢查，修正已併入）
+## 開發跑次（2026-10-09；Match `c9cc6617…` 由 `a954aa3` 的原始碼建置；Gateway `cfc647e3…` 是提交前的工作樹建置，內嵌 `vcs.revision=c9b0992`、`vcs.modified=true`）
+
+- 25 案矩陣 25／25 通過；`backpressure_probe.py` 2 次各 6／6 案通過；`run_network.py` 3／3 通過（第一次帶 `--movement-trace`）。
+- 只記錄：
+  - relay 的「結果任一秒」最大 30（矩陣 25 案的每個 session；backpressure 與 `run_network.py` 沒有 relay 紀錄）。30 出現在 downstream-1000ms、drain-stall、cross-life；L2 用的 5 案是 8～15。
+  - Gateway 的 `results_min_interval_ms` 最小 33.4、`link_action_min_interval_ms` 最小 33.4（50 個視窗，每案每位玩家 1 個；backpressure 與 `run_network.py` 的視窗都是「-」）。
+  - c（矩陣的 clean 案例，各 34 筆合法動作）：clean-30 P50 0.3／P95 0.7 ms、clean-60 0.3／0.6 ms。第 08 批的開發矩陣是 clean-30 17.8／51.0、clean-60 34.3／51.1。各 1 次，只當方向；判定在 L2。
+  - D44：遲到修正／領先跳升 0 次（`d44-adversarial/lead_jumps.py`）。非 respawn 的重設：starvation 29 次（全部在 1000 ms 的故障案例與 `run_network.py` 的 6 秒停頓測試，屬預期），backlog 2 次（都在 upstream-1000ms，第 08 批的開發矩陣同一案例也到 294）。30 Tick 合計的中位數 60。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch08b-20261009/`（`dev.sh`、`dev-matrix/`、`dev-bp-*`、`dev-net-*`）。
+
+## L2 的事前宣告（定稿，待使用者核准；依 D45 做了 2 次門檻來源的對抗式檢查：規劃時 1 次、定稿時 1 次（xhigh），修正已併入）
 
 - **目的**：
-  1. 確認兩段都改為事件驅動：c（裁決 Tick 的 snapshot_produced → relay 第一次看到該裁決的下行 kind 7）縮短，不再落在兩條 30 Hz 格點上。
+  1. 確認 c（裁決 Tick 的 snapshot_produced → relay 第一次看到該裁決的下行 kind 7）縮短（判定 4）。「兩段都改為事件驅動」由 L1 證明（Gateway：G1、G2、G8；Match lane：M1、M2），L2 只以 c//P 的分布與「距上次結果寫出 <I 或 ≥I」的分組佐證（只記錄）。只改一段時 c 的中位數約 16.7 ms，仍可能小於 before 的 17.7 ms，所以判定 4 不能單獨證明兩段都改了。
   2. 確認不爆量：Gateway 寫出端是嚴格的 I；relay 量到的「結果任一秒」≤31。
   3. 確認 gameplay（含 Client 的 action／ACK ≤31）沒有變差。
   4. 記錄第 09 批推導 FireGate 常數要用的通道分布。
-- **產物**（雜湊寫進 `artifacts.sha256`，跑次前後各核對一次；宣告寫進 `declaration.sha256`）：
-  - before：沿用第 08 批 L2 第 2 次 after 的 gateway（`f670fbe1…`，第 08 批程式 `730984e`）與 match（`13d70680…`，第 07 批 L2 的 match-after）。跑次前確認「`10003b9` 到 08b 基準之間，Match 連結的原始碼沒有變動」（規劃時：`git diff --stat 10003b9..HEAD` 在 Match 範圍只有 `ClientConnection` 與 client_network 的連結）；有變動就從第 08 批頭重建。
-  - after：08b 頭建置的 Gateway 與 Match。
-  - probe：兩邊共用 `d45a1f0b0808b7fc25a9f31500b9007854f9bc893917f9706c8b539226607abf`。08b 不改 Client 與 acceptance，跑次前以 git diff 確認。
+- **產物**（雜湊寫進 `artifacts.sha256`，跑次前後各核對一次；宣告寫進 `declaration.sha256`；arena `0026013c…` 一併寫入）：
+  - before：沿用第 08 批 L2 第 2 次 after 的 gateway（`f670fbe1…`，內嵌 `vcs.revision=1dc5ab9`、`vcs.modified=false`，第 08 批程式 `730984e`）與 match（`13d70680…`，第 07 批 L2 的 match-after）。定稿時核對：`git diff --stat 10003b9..c9b0992` 在 Match 連結範圍（`apps/object_fps_pvp/src`、`include`、`protocol`、`CMakeLists.txt`、`sources.cmake`、`match_main.cpp`、`engine`、`third_party`、`cmake`）只有 `ClientConnection.cpp`／`.hpp` 與 `client_network` 的連結（Match 只連結 `ipc`→`runtime_host`→`match_domain`）；`c9b0992..HEAD` 只有 08b 的 `IpcHost.cpp`。`730984e..c9b0992` 的 gateway 沒有變動。
+  - after：先提交本宣告，再從乾淨的工作樹建置 Gateway 與 Match。Go 建置會內嵌 `vcs.revision`／`vcs.modified`，跑次前確認 Gateway 是 `vcs.modified=false`，並把 revision 寫進 `artifacts.sha256` 的註解。開發跑次的 Gateway `cfc647e3…` 是提交前的工作樹建置，不沿用。Match 從 08b 頭重建，雜湊和開發跑次的 `c9cc6617…` 不同時只記錄。
+  - probe：兩邊共用 `d45a1f0b0808b7fc25a9f31500b9007854f9bc893917f9706c8b539226607abf`。`730984e..HEAD` 中 acceptance 只改了 `run_network.py`（gameplay L2 不使用）；probe 連結的原始碼，以及 `run_gameplay.py`、`gameplay_evidence.py`、`action_probe.py` 都沒有變動；目前建置目錄的 probe 也是 `d45a1f0b…`。
 - **主機**：沿用第 08 批（每輪前後 5 秒 sleeper、記錄背景的高 CPU 程序、TimerBaseline 的主機狀態）。
-- **案例**（待決定 5）：第 08 批的 4 案保留可比性（clean-30 ×12，clean-60、upstream-250ms、gateway-250ms 各 ×6），加 downstream-250ms ×6（下行阻塞，涵蓋重送與 poke）。每輪 before、after 各 1 次，奇數輪先跑 before。
+- **案例**（D46⑤）：第 08 批的 4 案保留可比性（clean-30 ×12，clean-60、upstream-250ms、gateway-250ms 各 ×6），加 downstream-250ms ×6（下行阻塞，涵蓋重送與 poke）。每輪 before、after 各 1 次，奇數輪先跑 before。共 72 次，約 36 分鐘。
 - **判定**（全部成立才通過）：
   1. after 的所有跑次，gameplay 判定通過（凍結的 `gameplay_evidence.py`，含 action／ACK ≤31）。
-  2. after 每個有樣本的 Gateway 統計視窗，`results_min_interval_ms` ≥33.3。judge 解析字串，和字面值 `33.3` 比較：統計行以 `%.1f` 印出（`send_statistics.go:41`），嚴格的 I＝33.333334 ms 印成 `33.3`，用浮點的 1000/30 比較會誤判失敗。值為「-」的視窗略過。小於 0.05 ms 的違反看不到，交給 L1 的 G3。最後一個統計視窗之後的尾段只有判定 3 的計數保護，沒有間隔保護。
-  3. after 每個跑次、每個 session，relay 的下行 kind 7 以 `action_probe.maximum_window`（唯讀匯入）計算 ≤31。凍結的分析器在這條路徑不執行這條規則，所以由 judge 套用。超過時停下，先分辨是 relay 端壓縮（之前有 ≥I 的 relay 空白、同時段 snapshot 也有空白，比照 `adversarial/window33.py`）還是寫出端，再交使用者決定（決定 2）。
-  4. clean-30、clean-60：after 的 c 中位數 < 同一 session 中 before 的 c 中位數。只比方向，不設數值；判定或只記錄，待決定 4。
-  5. after 每個有樣本的視窗，`link_action_min_interval_ms` ≥ 門檻（待決定 3：33.3 或 32.3）。
+  2. after 每個有樣本的 Gateway 統計視窗，`results_min_interval_ms` ≥33.3。judge 解析字串，和字面值 `33.3` 比較：統計行以 `%.1f` 印出（`send_statistics.go:41`），嚴格的 I＝33.333334 ms 印成 `33.3`，用浮點的 1000/30 比較會誤判失敗。值為「-」的視窗略過，但 after 的每個跑次至少要有 1 個視窗的值不是「-」，否則判定 2 不成立（開發矩陣 50／50 個視窗都有值）。
+     - 覆蓋範圍：印成 `33.3` 的範圍是 33.25～33.35 ms，所以比 I 短不到約 0.083 ms 的違反看不到，交給 L1 的 G3。統計行每 10 秒一次（`server.go:729`），gameplay 跑次的 Gateway 只活約 19 秒，所以每個跑次每位玩家只有 1 個視窗，只涵蓋 active 之後約 7 秒；之後約 9 秒（開發矩陣中約 45％的下行 kind 7）只有判定 3 的計數保護，沒有間隔保護。故障與恢復落在這個視窗內（開發矩陣：故障結束距視窗結束 2.6～5.2 秒）。
+  3. after 每個跑次、每個 session，relay 的下行 kind 7 以 `action_probe.maximum_window`（唯讀匯入）計算 ≤31。凍結的分析器在這條路徑不執行這條規則，所以由 judge 套用。超過時停下，先分辨是 relay 端壓縮（之前有 ≥I 的 relay 空白、同時段 snapshot 也有空白，比照 `adversarial/window33.py`）還是寫出端，再交使用者決定。
+  4. clean-30、clean-60 各自判定：以該案 after 全部輪次的合法裁決（`rejection==0`，四個時刻齊全）合併，取 c 的中位數，必須小於同一 L2 session 中 before 全部輪次合併的中位數。c 以唯讀匯入 `pvp-v7-08-eval-20261009/segments.py` 的 `run_actions` 計算。只比方向，不設數值（D46④）。參考：本批 before 的建置在第 08 批 L2 第 2 次的合併中位數為 clean-30 17.7 ms、clean-60 34.2 ms。
+  5. after 每個有樣本的視窗，`link_action_min_interval_ms` ≥33.3，以字面值比較（D46③）。覆蓋範圍同判定 2，每個跑次至少要有 1 個視窗有值。
 - **只記錄**：
   - c 的 P50／P95、c//P 的分布；c 依「距該玩家上次結果寫出 <I 或 ≥I」分組的分布，以及 kind 7 相對前一個 kind 4 的偏移（確認計時器路徑的實際觸發與鎖定）。
   - a、b、d、k 率、probe 起點相位、同一送出相位組內的 a＋b。b、a＋b、`legal_match_p95_ms`、d 不跨 tree 解讀。
   - 產生→worker 收到；relay 每 session 每秒的結果包數與其中沒有新內容的比例；Gateway 每 10 秒的 results 數與間隔；Client 的 ACK-only 批次數；Match 的 `ipc_iterations_per_s` 與 `tick_late`；故障案例的恢復秒數。
-  - D44：上一節「08b 要記錄的項目」，before／after 分開。
+  - D44：「對 movement 佇列與 backlog 的影響」一節的「08b 要記錄的項目」，before／after 分開。
 - **停止條件**：
-  - 跑次錯誤時停下，不自行重跑；after 的 gameplay 失敗，或判定 2～5 任一不成立（判定 4 只在被列為判定時）；產物雜湊不符。
-  - D44：clean 案例的 backlog／starvation 重設已由 `gameplay_evidence.py:289-291` 判為 gameplay 失敗，落在判定 1，不另外放寬。故障案例中出現 backlog 重設，或在故障結束 1.5 秒之後出現非 respawn 的重設（和 `command_evidence.py:413-422` 同一規則），停下回報；故障窗內的 starvation 只記錄。故障窗的時刻要從該跑次自己的故障紀錄取得，有沒有這個欄位要在定稿宣告時核對（未驗證）。依上一節的檢定力限制，after 出現 1 次只代表「停下來回報」，不代表 08b 是原因。
+  - 跑次錯誤時停下，不自行重跑；after 的 gameplay 失敗，或判定 2～5 任一不成立；產物雜湊不符。
+  - D44：clean 案例的 backlog／starvation 重設已由 `gameplay_evidence.py:289-291` 判為 gameplay 失敗，落在判定 1，不另外放寬。故障案例中出現 backlog 重設，或在 (`fault.start_ns`, `fault.release_ns`＋1.5 s] 之外出現非 respawn 的重設（含故障開始之前；`backlog`、`starvation`、`sequence_exhausted`、`none` 都算，`MovementTrace.hpp:118-127`；不分玩家，因為兩位玩家共用 probe 的同一個 UDP 端點與 relay；和 `command_evidence.py:413-422` 同一規則），停下回報；這個區間內的 starvation 只記錄。故障窗取該跑次 `result.json` 的 `fault.start_ns`／`fault.release_ns`（定稿時核對：開發矩陣 upstream／gateway／downstream-250ms 都有，和 Match trace 同一個時鐘域；clean 案例是 0／0，不套用本條）。
+  - 本條只對 after 停下；before 出現時只記錄，新舊分開累計（D44）。（待使用者確認）
+  - 遲到修正／領先跳升的偵測固定用 `pvp-v7-08b-plan-20261009/d44-adversarial/lead_jumps.py`（sha256 `14cd5b5c81ef73f9dee4d9d8593fdc6518dd183f8bcc8df14bf0098230ae3a07`）：每個 (player, epoch)，epoch 第一個 resolved Tick 1 秒之後，30 個 resolved actual 命令的 gen→exec 中位數比前 60 個高出 20 ms 以上。只記錄。
+  - 檢定力：過去 L2 180 次為 0 次（95％上限約每次 1.65％），after 36 次中至少出現 1 次的機率約 45％。所以 after 出現 1 次只代表「停下來回報」，不代表 08b 是原因。
+- **L2 抓不到、只靠 L1 的回歸**：只帶 retired 的重複包回來（持續 30 Hz 不超過判定 3 的 31，判定 2、5 不受影響；靠 G4、M1 與記錄項）；`results-anchor-at-selection-only`（誤差是寫出耗時，微秒級，小於 0.083 ms；靠 G3）；只改一段的事件驅動（判定 4 只比方向；靠 L1）；每個跑次後約 55％期間的間隔違反（判定 2、5 沒有覆蓋）。
+- **證據**：`build/target/_build/test/logs/pvp-v7-batch08b-l2-<日期>/`。定稿時的對抗式檢查：`pvp-v7-08b-l2-check-20261009/`。
 
 ### 判定門檻的來源（D45 的核對）
 
 | 判定 | 門檻 | 來源建置 | 指標 | 混入的流量 |
 |---|---|---|---|---|
-| 2 | `results_min_interval_ms` ≥33.3（字面值比較） | 由程式推導，不取自任何跑次：I（`action_delivery.go:16`）、寫出完成＋I（`:362-368`）、嚴格判定取代 `:235`；戳記是寫出後的 `time.Now()`（`server.go:594`）。第 08 批 L2（帶 I/2）最小 16.9 ms，能分辨兩種建置 | gateway.log 統計行的 `results_min_interval_ms`（同一玩家相鄰兩次 `actionWritten` 的最小差） | 新裁決、重送、退休、poke 回應全部共用同一個玩家期限，混合不會讓真實的最小值變小；用最小值，不用 P50 |
-| 3 | relay 結果任一秒 ≤31 | 凍結規則的文字 `action_probe.py:410-412`（D42 不改）；視窗演算法 `:319-327`。寫出端上限推導為 30，31 容許 1 個邊界包。第 08 批 before 的 33 只當背景 | relay.json 中 `upstream==false`、`received`、kind 7、同一 session，套用 `maximum_window` | relay 收到的所有結果包，和凍結規則的原意相同；不含 kind 6 與 snapshot。relay 端停頓會壓縮戳記，超過時不自動歸因 |
-| 1 的一部分 | Client action／ACK 任一秒 ≤31 | 凍結規則 `gameplay_evidence.py:207`。08b 不改 Client（`ClientConnection.cpp:394-420` 的單一期限） | relay.json 上行 kind 6，依 session 計 `maximum_window` | 新請求、Client 重送、ACK-only 都受同一個 Client 期限約束；08b 只可能減少 ACK-only |
-| 4 | after 的 c 中位數 < before（只比方向） | 同一個 L2 session 交錯執行的 before，不借用其他建置；預期幅度只是 hypothesis，不放進門檻 | `segments.py` 的 tick_to_down（每個合法裁決只取第一次出現） | 重送、只帶退休的包、poke 回應都不進入；起點是 Match Tick，不受 probe 幀相位影響。L2 沒有逐跳戳記，不成立時分不出是 Match 還是 Gateway |
-| 5 | `link_action_min_interval_ms` ≥33.3 或 32.3（決定 3） | 33.3：由程式推導（寫出完成的戳記 `runtime_link.go:265-266`、`action_delivery.go:352`，嚴格判定 `:188`）。32.3：沿用第 08 批 L2 判定 2（`08-client-worker-asio.md:171`），I−1 ms 的餘裕沒有推導依據 | gateway.log 的 `link_action_min_interval_ms` | 請求、重送、ACK-only 批次都經過同一個 `nextSend` 閘門，所以只能用最小值；P50 不能當成動作間隔 |
+| 2 | `results_min_interval_ms` ≥33.3（字面值比較；每個跑次至少 1 個有值的視窗） | 由程式推導，不取自任何跑次：I（`action_delivery.go:16`）、寫出完成＋I（`action_delivery.go:427-434`）、嚴格判定（`:249`）；只有 `sendUDP` 一個 goroutine 呼叫 `actionPackets`（`server.go:612`），戳記是寫出後的 `time.Now()`（`server.go:615`）。第 08 批 L2 第 2 次 after（帶 I/2）最小 16.9 ms、before 20.4 ms，能分辨建置 | gateway.log 統計行的 `results_min_interval_ms`（同一玩家相鄰兩次 `actionWritten` 的最小差） | 新裁決、重送、退休、poke 回應全部共用同一個玩家期限，混合不會讓真實的最小值變小；`p.actions` 不會被重建，`forget` 時統計與窗一起刪掉；用最小值，不用 P50 |
+| 3 | relay 結果任一秒 ≤31 | 凍結規則的文字 `action_probe.py:410-412`（D42 不改）；視窗演算法 `:319-327`。寫出端上限推導為 30，31 容許 1 個邊界包。第 08 批 before 的 33 只當背景 | relay.json 中 `upstream==false`、`received`、kind 7、同一 session，套用 `maximum_window` | relay 收到的所有結果包，和凍結規則的原意相同；不含 kind 6 與 snapshot。relay 端停頓會壓縮戳記，超過時不自動歸因。L2 的 5 案在開發矩陣只有 8～15，檢測力低 |
+| 1 的一部分 | Client action／ACK 任一秒 ≤31 | 凍結規則 `gameplay_evidence.py:207`。08b 不改 Client（`ClientConnection.cpp:394-420`，ACK-only 條件在 `:413`、期限在 `:420`） | relay.json 上行 kind 6，依 session 計 `maximum_window` | 新請求、Client 重送、ACK-only 都受同一個 Client 期限約束，上限不變；ACK-only 的數量會隨退休送達的時刻改變（預期減少，hypothesis，未驗證） |
+| 4 | after 的 c 合併中位數 < before（只比方向；D46④） | 同一個 L2 session 交錯執行的 before，不借用其他建置；預期幅度只是 hypothesis，不放進門檻 | `segments.py` 的 `run_actions` 的 tick_to_down（每個合法裁決只取第一次出現；全部輪次合併） | 重送、只帶退休的包、poke 回應都不進入；起點是 Match Tick，不受 probe 幀相位影響。計時器鎖定最多加約 16.7 ms，不足以讓判定翻轉。L2 沒有逐跳戳記，不成立時分不出是 Match 還是 Gateway |
+| 5 | `link_action_min_interval_ms` ≥33.3（字面值比較；D46③；每個跑次至少 1 個有值的視窗） | 由程式推導：寫出完成後以 `time.Now()` 重新錨定（`runtime_link.go:265-266` → `action_delivery.go:413-426`），嚴格判定 `now.Before(w.nextSend)`（`action_delivery.go:173`），寫出迴圈只有一個 goroutine。08b 沒有改 link 的函式。第 08 批 L2 第 2 次兩棵樹都是 33.4。第 08 批 L2 的 32.3 是沿用的回歸門檻，沒有推導依據，不再使用 | gateway.log 的 `link_action_min_interval_ms` | 請求、重送、ACK-only 批次都經過同一個 `nextSend` 閘門，所以只能用最小值；P50 不能當成動作間隔 |
 | L1 G3 | 相鄰寫出 ≥I；任一半開 1 秒 ≤30；放行後不補送 | 由程式推導：30＝floor((1 s−1 ns)/I)+1 | 測試中 `actionWritten` 的時刻 | 測試帳本混合新裁決、重送、退休、poke |
 | L1 M3 | 3 秒內 action_results frame ≤91 | 由程式推導：選出到選出 ≥I；ceil(3 s/I)+1 | 測試 Gateway 收到的 action_results frame 數 | 只算 action_results frame，不含同一條 TCP 上的 snapshot 與 control |
-| L1 M4 | 閒置 500 ms 的 `Iterations()` 增量 < 校準上限 | 待 L1 在 08b 之前的頭量測，寫明來源跑次；目前沒有數字，不得先寫進宣告 | `IpcHost::Iterations()` | 含每個 Tick 的 snapshot 寫出與 publish 的 pump，所以要用同一個測試校準，不能用 match.log 的 `ipc_iterations_per_s` |
+| L1 M4 | 閒置 500 ms 的 `Iterations()` 增量 <600（`IpcHostTests.cpp:429`） | 改之前的頭 `11d0d04` 同一測試 34 次量到 146～150；改之後 84～90；空轉突變約 541,000 | `IpcHost::Iterations()` | 含每個 Tick 的 snapshot 寫出與 publish 的 pump，所以用同一個測試校準，不用 match.log 的 `ipc_iterations_per_s` |
 
 ## 停止條件
 
