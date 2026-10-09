@@ -72,7 +72,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | P2-log | [網路路徑的 10 秒統計](p2-log-network-statistics.md) | medium | 完成（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)） | 只加記錄的 commit，作為 P2 的 before |
 | 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
 | 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
-| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 實作、L1 與開發跑次完成；L2 的事前宣告待核准（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
+| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 實作、L1 與開發跑次完成；L2 第 1 次停下，判定 2 的修改待決定（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
 | 08b | （開始時撰寫） | high（局部 xhigh） | 未開始（D43） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
 | 09 | （P2 開始時撰寫） | high（常數推導局部 xhigh）；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
 | 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
@@ -81,7 +81,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 13 | （P5 開始時撰寫） | high（視窗模式的切換順序局部 xhigh） | 未開始 | 玩家以命令列選項選擇解析度、視窗模式與 FPS 上限（D41）；HUD 依解析度縮放；30 FPS 手感的 L3（D41）。設定 UI 與 `settings.json` 在 v8 |
 | 14 | （P6 開始時撰寫） | high | 未開始 | 射擊、命中、受擊、換彈的音效 |
 | 15 | （P7 開始時撰寫） | medium | 未開始 | v7 LAN 場次：Windows 實機、兩機漂移、Windows 的視窗切換 |
-| 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行 |
+| 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行；偶發 epoch 重設的整體回歸（D44） |
 
 P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會過時。在那之前，範圍、驗收與停止條件以[交接](HANDOFF.md)的「P2 以後各批的範圍」為準。
 

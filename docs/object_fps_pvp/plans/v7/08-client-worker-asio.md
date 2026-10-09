@@ -1,6 +1,6 @@
 # 第 08 批：Client 的網路 worker 改用 asio
 
-狀態：**實作、L1 與開發跑次完成；L2 的事前宣告待使用者核准**（2026-10-09；範圍依 D43 與使用者的補充）。PR 線 P2（PR #73）。依賴第 07 批。
+狀態：**實作、L1 與開發跑次完成；L2 第 1 次在第 1 輪依停止條件停下（判定 2 的前提錯誤），判定 2 的修改待使用者決定**（2026-10-09；範圍依 D43 與使用者的補充）。PR 線 P2（PR #73）。依賴第 07 批。
 檔位 high；喚醒與期限的交接、generation 邊界、停止與離開房間的順序局部 xhigh（使用者 2026-10-09「檔位照建議來」，對這部分開 1 次 xhigh 審查）。
 
 ## 起因
@@ -54,6 +54,7 @@
   - 突變 5／5 killed：`v7-08-link-no-deadline-timer`、`v7-08-link-half-tolerance`、`v7-08-drain-no-wake`、`v7-08-submit-no-wake`、`v7-08-receipt-overwritten`。
   - TSan：worker 驗收 3 次，沒有報告。
 - 開發跑次（clean-30，1 次，只記錄）：Gateway→Match 的 action batch 間隔 P50 從約 68～70 ms 變成 33.4 ms；worker 收到裁決只比 relay 下行晚約 0.2 ms；worker 每個 Client 約 210～218 次／秒（P2-log 約 416）。
+  - 更正（2026-10-09，L2 停下之後）：這次跑的是改成嚴格間隔之前、帶 I/2 容許的建置（最短間隔 16.8 ms，小於 I），所以 33.4 ms 是 I/2 下頻繁重送的結果，不是嚴格間隔的結果。L2 的判定 2 照這個數字訂，是錯的（見「L2 第 1 次執行」）。
 - 開發跑次（矩陣與兩個 probe）：
   - 25 案矩陣全部通過。
   - 偶發失敗 2 次，原因未確定：
@@ -112,6 +113,7 @@
 | before／慢 | 2、4、5、6 | 136 | 2.1／3.2 | 14.0／19.9 | 30.8／51.3 | 31.9／35.7 | 16.4／22.0 | 66.7／100.9 |
 
 - **約 10 ms（Match 之前）的差距在 b**（relay 上行 → 裁決 Tick）：after 的 P95 9.7 對 16.7 ms，before 15.3 對 19.9 ms。a 在兩群相同（約 2～3 ms）。b 裡面沒有時間戳，但 Gateway→Match 的 action batch 間隔 P50 在所有跑次都約 68～70 ms（P2-log 的 `link_action_interval_ms`），也就是兩個 ticker：見下面的節拍清單第 3 項。
+  - 更正（2026-10-09，第 08 批 L2 停下之後；上文保留原文）：「68～70 ms＝兩個 ticker」沒有根據。`link_action_interval_ms` 同時計入請求、重送與只有 ACK 前進的批次（`action_delivery.go` 的 `actionBatch`：`acknowledged > retired` 也會送）。動作之間約隔 265 ms，所以 P50 量到的是同一個動作前後兩批的間隔，不是 link 的節拍。改成嚴格間隔加計時器之後，P50 仍是 68.4 ms，最短間隔 33.4 ms（≥I）。所以 b 的差距不能用這個指標歸因到節拍 3；節拍 3 的「每隔一次 ticker」是讀程式得到的，只影響重送與 ACK 的批次。
 - **約 33 ms（Match 之後）的差距分在 c 與 d**：
   - c 的中位數只有約 18 ms 與約 34 ms 兩個值，由 Gateway 結果 ticker 相對 Match Tick 格點的相位決定：relay 下行相位約 17.5 ms 時是 18 ms，約 1 ms 時多等一個 ticker，變成 34 ms。
   - d 是 probe 的幀相位（10 對 29 ms）。
@@ -155,7 +157,7 @@
 - 凍結的分析器不改；新指標放在分析器 v7 或新的分析腳本。
 - 要新的跑次才能回答的：b 段內部（Gateway 收到、送往 Match、Match 收到）與 c 段內部（Match 送出、Gateway 收到）沒有時間戳，要在 Gateway 與 Match 加 trace 才能拆開；這次不跑。
 
-## L2 的事前宣告（草案，待使用者核准）
+## L2 的事前宣告（2026-10-09 使用者核准）
 
 - **目的**：
   - 確認 b 段（relay 上行 → 裁決 Tick）的約 10 ms 差距，是否因 link 的修正而縮小。
@@ -174,6 +176,23 @@
   - worker 的喚醒與 CPU、`legal_match_p95_ms`／`legal_client_p95_ms`、relay 的「任一秒結果數」。
 - **停止條件**：跑次錯誤時停下，不自行重跑；after 出現 gameplay 失敗、判定 2 不成立、產物雜湊不符時停下回報。
 - **證據**：`build/target/_build/test/logs/pvp-v7-batch08-l2-<日期>/`。
+
+### L2 第 1 次執行（2026-10-09，第 1 輪停下）
+
+- 證據：`build/target/_build/test/logs/pvp-v7-batch08-l2-20261009/`（`run.py`、`judge.py`、`progress.jsonl`、`judgement.json`；宣告的雜湊在 `declaration.sha256`，產物在 `artifacts.sha256`）。
+- 第 1 輪 clean-30：before、after 的 gameplay 都通過（主機都是 4 ms 狀態）。after 的 `link_action_interval_ms` P50 是 68.4／66.6 ms，判定 2 不成立，依停止條件停下，沒有重跑。
+- 原因是判定 2 的前提錯了，不是產品退步：
+  - 判定 2 的 33.3 ms 來自開發跑次，但那次跑的是帶 I/2 的建置（見「實作與 L1」的更正）。
+  - 這個指標同時計入請求、重送與 ACK 的批次；動作之間約隔 265 ms，P50 量到的是同一個動作前後兩批的間隔。before（第 07 批的 Gateway）同樣是 69.4 ms。
+  - 嚴格間隔本身成立：after 的最短間隔 33.4／35.4 ms（≥I）；帶 I/2 的建置是 16.8 ms。
+- 這一輪只記錄的數字（各 1 次，不下結論）：
+
+  | | b 中位數 | probe 幀相位中位數 | `legal_client_p95_ms` | worker 喚醒／秒 | worker CPU／秒 | 產生→worker 收到（P50／P95） | relay 任一秒結果數 |
+  |---|---|---|---|---|---|---|---|
+  | before | 7.8 ms | 7.0 ms | 68.2 | 425／427 | 0.019 | — | 31 |
+  | after | 10.2 ms | 6.2 ms | 69.4 | 222／211 | 0.008～0.012 | 29.1／64.3 ms | 31 |
+
+- 判定 2 的修改提案（待使用者決定）：改成「after 每個有樣本的視窗，`link_action_min_interval_ms` ≥ I−1 ms（32.3 ms）」。這是 link 嚴格間隔的直接證據；帶 I/2 的建置會不成立。其餘的宣告不變，從頭重跑 60 次，證據放新的目錄；第 1 次的目錄保留。
 
 ## 停止條件
 
