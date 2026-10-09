@@ -68,7 +68,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 實作完成，移到 P1b（D40），與第 04 批一起合併 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
 | 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium | 完成（只記錄；4 ms 狀態 11／12 輪） | 只記錄：在含 03 的 P1b 分支頭上量 03 單獨的效果（不合併那個頭） |
 | 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 實作與 L1 完成（xhigh 審查與修正完成；D30 門檻的放大由使用者決定 C1 之後再看）；PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 未合併 | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
-| 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | C1 通過（2026-10-09，4 ms 狀態；8 ms 未驗證）；使用者操作的 L2／L3 待做 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
+| 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 完成（2026-10-09）：C1 通過（4 ms 狀態；8 ms 未驗證），使用者操作的 L2、L3 通過 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
 | P2-log | （P2 開始時撰寫） | medium | 未開始 | 只加記錄的 commit，作為 P2 的 before |
 | 06 | （P2 開始時撰寫） | medium（資格容許局部 xhigh） | 未開始 | Gateway→Client 結果通道約 18 Hz→30 Hz |
 | 07 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |

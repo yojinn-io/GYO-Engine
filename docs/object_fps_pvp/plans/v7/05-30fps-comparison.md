@@ -1,6 +1,6 @@
 # 第 05 批：C1——30 FPS 修正前後對比（任務 1、2）與視窗操作
 
-狀態：**C1 通過**（2026-10-09 第 2 次 session，4 ms 狀態判定且有對照；8 ms 狀態未驗證）。剩下使用者操作的 L2（拖動與縮放）與 L3。PR 線 P1b。依賴第 04 批與 TT-1；C1 只在 PR #71 的 CI 全綠之後執行。
+狀態：**完成**（2026-10-09）。C1 通過（第 2 次 session，4 ms 狀態判定且有對照；8 ms 狀態未驗證）；使用者操作的 L2、L3 通過。PR 線 P1b。依賴第 04 批與 TT-1；C1 只在 PR #71 的 CI 全綠之後執行。
 起因：2026-10-07 使用者指示保存 v6 的 30 FPS 失敗案例，在 v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近（v7 README「v6 的 30 FPS 失敗案例與各幀率的對照」）。定義見 D31。
 
 ## 事前宣告草案（未核准；2026-10-09 具體化，D39 審查後修訂，待使用者核准）
@@ -152,4 +152,12 @@ medium（執行與記錄）；宣告草案以 high 撰寫。依 D39，宣告草�
   - 移動延遲（產生→執行）：v7 的 P50 約 38 ms，在 30 與 60 FPS 都一樣；v6 是 21～25 ms。這是第 04 批已知的位移（v7 的「產生」是步邊界、不含意圖的年齡），C1 之後與相位追蹤一起決定。
   - after 的模擬步晚醒：每輪的 P99 上界 ≤0.25 ms；全 session 最大 65.9 ms 的晚醒出現 1 次（沒有停頓重設）。
 - 證據：`progress.jsonl`（SHA-256 `a7ea5920…`）、`summary.json`（`e3302d94…`）、`judgement.json`（`2717b3fb…`）、`idle-gate.jsonl`（`d70fdc11…`）、`runs/`、`session.log`、`summarize-*.txt`。
+
+### 使用者操作的 L2 與 L3（2026-10-09 11:37～11:41，**通過**）
+
+- after 建置（`805bd11`）的 Match（`--movement-trace`）、Gateway、兩個 Client（`--movement-trace`、`--log`）。使用者建房、加入，依宣告做標題列拖動與角落縮放，再於連續射擊中切換 Spaces、縮小、遮住視窗。目錄 `build/target/_build/test/logs/pvp-v7-batch05-l2l3-20261009-1137/`，判定腳本 `judge.py`。
+- 期間兩個 Client 共出現 11 次 OS 的 modal loop（「slow event processing」1.1～4.0 秒，其中多次只有 live frame 在更新畫面）；兩位玩家各有死亡與重生（LifeRespawn 1 次與 6 次）。
+- L2（每位玩家加入後的整段 session，約 140 秒）：Match 的替代（Held 或 Neutral）**0 筆**，最長連續 0 Tick（門檻 ≤3）；Match 停頓（間隔 ≥40 ms）1 次，沒有造成替代；停頓重設 0；LifeRespawn 以外的 epoch 重設 0。**通過**。v6 在同樣的 modal loop 中命令會停住（任務 1 的起因）。
+- L3：兩個 Client 都沒有斷線（`connection failed` 0）；模擬角色的晚醒沒有 ≥100 ms 的（Client trace 的 `runtime_gap` 0 筆），停止條件沒有觸發。**通過**。App Nap 造成斷線的疑慮在這次沒有重現。
+- 「30 FPS 的手感」依宣告沒有做（產品 Client 沒有指定 FPS 的選項，列為後續）。
 

@@ -102,6 +102,7 @@
 - 2026-10-09：使用者核准 C1 宣告與 TT-1 的 L2（「C1 宣告核准，TT-1 的 L2 也核准，可以啟動了」）。TT-1 L2 的量測程式不放進 PR #71（會讓 C1 作廢），留在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`），之後的 PR 再合入（使用者選 (b)）。after tree 從零建置（`../GYO-Engine-p1b-c1`，`805bd11`）、預檢通過；暫停 PR #71 的 auto-fix；C1 於 10:27 開始。
 - 2026-10-09：C1 第 1 次 session 在基本 30 輪後依停止條件停下（before 無法重現參考範圍；主機不在閒置狀態：`host_late_p99` 10～47 ms、sleeper 間歇 20～75 ms、背景的瀏覽器約 50% CPU）。依規則沒有重跑。TT-1 的 L2（只記錄）已執行：方向規則兩種情境都成立。待使用者決定：在閒置的機器上以同一宣告開新的 session。PR #71 的 auto-fix 維持暫停，直到 C1 結束。
 - 2026-10-09：C1 第 2 次 session（使用者核准閒置檢查；關掉 Chrome、ChatGPT／Codex）**通過**：4 ms 狀態有對照，v7 clean-30 的 Client 替代 0.010%（12／12 通過）對 v6 0.570%（9／11）；v7 clean-60 0%（12／12）；停頓重設 0。8 ms 狀態未驗證（after 沒有樣本）。TT-1 的 L2 在閒置主機再記錄一次（Waiter P99 0.10／0.13 ms）。剩下：使用者操作的 L2（拖動與縮放）與 L3，之後合併 PR #71；C1 之後要決定的：延遲位移與相位追蹤、D30 門檻的放大。
+- 2026-10-09：使用者操作的 L2、L3 通過：拖動與縮放造成的 11 次 modal loop（1.1～4.0 秒）中，兩位玩家的 Match 替代 0 筆、停頓重設 0、LifeRespawn 以外的 epoch 重設 0；Spaces、縮小、遮住都沒有斷線，模擬角色沒有 ≥100 ms 的晚醒。第 05 批完成，P1b 的驗收全部完成。
 
 ## P2 以後各批的範圍
 
@@ -148,7 +149,7 @@
 
 ## 未結事項
 
-- P1b：PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71)（第 03、TT-1、04、05 批）。合併前只剩使用者操作的 L2（標題列拖動、角落縮放）與 L3（Spaces、縮小、遮住視窗）。
+- P1b：PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71)（第 03、TT-1、04、05 批）。所有驗收完成（2026-10-09），待使用者確認合併。
 - C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
   - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
   - 延遲的位移（第 04 批記錄，C1 證實）：常數不變時，v7 的「產生→執行」約 38 ms（30／60 FPS 相同），v6 是 21～25 ms；「輸入取樣→執行」約多 1 幀。
@@ -158,7 +159,7 @@
 - TT-1 L2 的量測程式在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`，未推送）：為了不讓 C1 作廢，沒有放進 PR #71；之後的 PR（例如 TT-2）再合入。
 - 第 04 批 xhigh 審查留下、只記錄的項目（時間倒退的意圖、網路 probe 不再涵蓋伺服器端的輸入逾時、世代檢查與送出路徑沒有 L1、負向 slew 時 FireGate 偏保守）：見[第 04 批](04-client-roles.md)的「xhigh 審查」。
 - worktree：`../GYO-Engine-v6final`（`fee92ff`）保留給第 09 批 C2 的 before；`../GYO-Engine-p1b-c1`（`805bd11`，C1 的 after）在 PR #71 合併後移除。
-- Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了），第 05 批的 L3 確認（待做）；重現時提出程序活動宣告作為新的 Architecture Delta。
+- Spaces、縮小時的斷線可能來自 App Nap（任務 1 解決不了）：第 05 批的 L3（2026-10-09）沒有重現，模擬角色也沒有 ≥100 ms 的晚醒。之後若重現，提出程序活動宣告作為新的 Architecture Delta。
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。
 - 自旋（期限前忙等）：2026-10-09 使用者決定目前不加，現行的分離執行緒已經夠用。等第 07 批（Match Tick 改用 Waiter）與第 15 批（Windows 退回一般 waitable timer 時的精度）的數據再評估；要加就是 Architecture Delta，先量測再決定。
