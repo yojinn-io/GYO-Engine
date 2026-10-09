@@ -86,9 +86,11 @@ TEST_CASE("The Match host reports its tick waits per window and resets them") {
     // simulation role late, and the windows together keep every wait.
     std::uint64_t deadlineWakes{}, notified{};
     const auto giveUp = std::chrono::steady_clock::now() + 10s;
+    auto lastTake = std::chrono::steady_clock::now();
     while (deadlineWakes < 3 && std::chrono::steady_clock::now() < giveUp) {
         std::this_thread::sleep_for(20ms);
         const auto window = host.TakeStatistics().ticks;
+        lastTake = std::chrono::steady_clock::now();
         deadlineWakes += window.late.Count();
         notified += window.notified;
     }
@@ -98,9 +100,11 @@ TEST_CASE("The Match host reports its tick waits per window and resets them") {
     REQUIRE(reset.wait_for(2s) == std::future_status::ready);
     std::this_thread::sleep_for(50ms);
     host.Stop();
-    // Only the waits since the previous take: about 3 in 50 ms, and the reset
-    // request woke the role once.
+    const std::chrono::duration<double> window = std::chrono::steady_clock::now() - lastTake;
+    // Only the waits since the previous take, and the reset request woke the
+    // role once. The window includes the reset itself, which a loaded machine
+    // stretches, so the bound is the window's tick count plus a little slack.
     const auto last = host.TakeStatistics().ticks;
     CHECK(last.notified == 1);
-    CHECK(last.late.Count() < 12);
+    CHECK(static_cast<double>(last.late.Count()) <= window.count() * 60.0 + 3.0);
 }
