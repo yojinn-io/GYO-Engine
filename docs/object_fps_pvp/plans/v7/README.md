@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
-更新：2026-10-08。Owner：`object_fps_pvp`。
-**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（P1a，分支 `claude/pvp-v7-p1a`）；**第 03 批實作完成、移到 P1b**（D40，分支 `claude/pvp-v7-p1b`；產品路徑的回復測試有 1 個已知失敗，等第 04 批）。
+更新：2026-10-09。Owner：`object_fps_pvp`。
+**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**下一步：第 05b 批**（D41，P1c）。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
 
@@ -65,11 +65,11 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 |---|---|---|---|---|
 | 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 完成，PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併（`a7cba38`） | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
 | 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 完成，隨 P1a 的 PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) 合併（`f3d176d`） | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
-| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 實作完成，移到 P1b（D40），與第 04 批一起合併 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
+| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 完成（D40，與第 04 批一起在 PR #71 合併，`660310e`） | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
 | 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium | 完成（只記錄；4 ms 狀態 11／12 輪） | 只記錄：在含 03 的 P1b 分支頭上量 03 單獨的效果（不合併那個頭） |
-| 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 實作與 L1 完成（xhigh 審查與修正完成；D30 門檻的放大由使用者決定 C1 之後再看）；PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 未合併 | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
+| 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 完成（PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 合併，`660310e`；D30 門檻的放大由使用者決定 C1 之後再看） | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
 | 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 完成（2026-10-09）：C1 通過（4 ms 狀態；8 ms 未驗證），使用者操作的 L2、L3 通過 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
-| 05b | （開工時撰寫） | 建議在開工時提出 | 未開始（D41，PR #71 合併後） | 產品的 `--fps` 限幀選項，以及 30 FPS 的手感 L3；排在第 15、16 批之前 |
+| 05b | （開工時撰寫） | 建議在開工時提出 | 未開始（D41；PR #71 已合併，可以開工） | 產品的 `--fps` 限幀選項，以及 30 FPS 的手感 L3；排在第 15、16 批之前 |
 | P2-log | （P2 開始時撰寫） | medium | 未開始 | 只加記錄的 commit，作為 P2 的 before |
 | 06 | （P2 開始時撰寫） | medium（資格容許局部 xhigh） | 未開始 | Gateway→Client 結果通道約 18 Hz→30 Hz |
 | 07 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
@@ -89,7 +89,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 
 | 批次 | 內容 | 建議檔位 | 本產品的關係 |
 |---|---|---|---|
-| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 和第 04 批同一個 PR（P1b）。2026-10-08 實作與 L1 完成、xhigh 審查完成；2026-10-09 L2（只記錄）完成 |
+| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 完成：和第 04 批同一個 PR（P1b，#71 合併，`660310e`）。2026-10-08 實作與 L1 完成、xhigh 審查完成；2026-10-09 L2（只記錄）完成 |
 | TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
 | IP-3 | Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`）；日誌轉送、執行檔目錄、進入點、文字輸入與剪貼簿、事件時間戳換算 | high（時間戳換算局部 xhigh） | 第 12 批依賴 |
 | IP-4 | 測試用事件注入與觀測、視窗查詢與擺放；SDL3 改為 PRIVATE 連結 | high | 第 12 批依賴 |
