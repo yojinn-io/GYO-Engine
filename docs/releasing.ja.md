@@ -445,6 +445,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 一時的な失敗：**Re-run failed jobs** で同じ実行の SHA を保ったままやり直します。
 - Artifacts の期限切れ：元の実行の **Re-run all jobs** を使います。
 - 一部だけ添付された Draft：再実行で既存の添付を検証して不足分を追加し、手書きの title と説明を保持します。
+- 作成した直後の tag はまだ読めないことがあります（GitHub の読み取りは書き込みより少し遅れます）。その場合は 1／2／4／8 秒の間隔で読み直し、それでも読めない時だけ失敗します。読めた tag が別の commit を指す時は直ちに失敗します。
 - 同名 tag は同じ commit を指す場合だけ許可し、tag の移動や不一致の添付の上書きはしません。既存 Draft の tag が消えている場合は失敗します（tag を元に戻すか、新しい version を使います）。
 - 未完了の `starter` 添付は有限回再確認し、解決しなければ自動削除せずに報告します。
 - 古い実行の再実行はその commit の workflow を使い、新しい修正を取り込みません。同じ train と version の Prepare Release は並行実行せず、新しい要求で実行中の準備を取り消しません。既存 Draft の prerelease、title、説明は保持します。

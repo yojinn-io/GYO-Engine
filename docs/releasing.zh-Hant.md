@@ -445,6 +445,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 暫時失敗：使用 **Re-run failed jobs**，維持該次執行的 SHA。
 - Artifacts 已過期：對原執行使用 **Re-run all jobs**。
 - Draft 附件只上傳一部分：重跑會核對既有附件並補齊，保留手寫的標題與說明。
+- 剛建立的 tag 可能還讀不到（GitHub 的讀取比寫入慢一點）。這時依 1／2／4／8 秒重新讀取，仍讀不到才失敗；讀到的 tag 指向別的 commit 時立即失敗。
 - 同名 tag 只允許指向同一 commit；不移動 tag，也不覆寫不符的附件。既有 Draft 的 tag 若已被刪除會失敗（請恢復 tag 或改用新版本）。
 - 未完成的 `starter` 附件先有限次重查，仍未完成則回報，不自動刪除。
 - 重跑舊執行時使用該 commit 的 workflow，不會取得新版本的修正。同一 train 與版本的 Prepare Release 不並行；新的請求不取消正在進行的準備。既有 Draft 的 prerelease、標題與說明保持原值。

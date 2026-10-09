@@ -31,6 +31,14 @@ class ReleaseRetryTests(unittest.TestCase):
             api, "v1.2.3", COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS,
             sleep=self.delays.append if sleep is None else sleep)
 
+    def test_created_tag_read_lag_uses_the_injected_sleep(self):
+        api = FakeApi(release=False, commit=None)
+        api.tag_read_lag = 1
+        self.run_draft(api)
+        self.assertEqual(self.delays, [1])
+        self.assertIn("not readable yet", self.stderr.getvalue())
+        self.assertEqual(len(api.assets), ASSET_COUNT)
+
     def test_transient_read_recovers_and_reports_the_retry(self):
         for status in (500, 502, 503, 504):
             with self.subTest(status=status):

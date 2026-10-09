@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 
-from release_pipeline import (ApiError, GitHubApi, SafeRedirectHandler, TransientApiError,
+from release_pipeline import (TAG_VISIBILITY_DELAYS, ApiError, GitHubApi, SafeRedirectHandler, TransientApiError,
                               prepare_draft as _prepare_draft, retry_after_seconds, verify_remote_tag)
 from release_support import (PLATFORMS, Package,
                              ReleaseError, archive_name as _archive_name, checksum_document,
@@ -184,6 +184,11 @@ class FakeApi:
         self.fail_upload_at = None
         self.race_create = False
         self.race_tag = False
+        # The commit a concurrently created tag points to (default: the requested one).
+        self.race_tag_commit = None
+        # Reads of a just-created tag that still answer 404 (GitHub's read lag).
+        self.tag_read_lag = 0
+        self.unreadable_tag_reads = 0
         self.race_upload = False
         self.annotated = False
         self.move_after_upload = False
@@ -199,6 +204,9 @@ class FakeApi:
     def request(self, method, path, data=None):
         self.calls.append((method, path, data))
         if method == "GET" and path.startswith("/git/ref/tags/"):
+            if self.unreadable_tag_reads:
+                self.unreadable_tag_reads -= 1
+                raise ApiError(404, "Not found")
             if self.commit is None:
                 raise ApiError(404, "Not found")
             return {"object": {"type": "tag" if self.annotated else "commit", "sha": self.commit}}
@@ -206,7 +214,8 @@ class FakeApi:
             return {"object": {"type": "commit", "sha": self.commit}}
         if method == "POST" and path == "/git/refs":
             self.mutations.append((method, path, data))
-            self.commit = data["sha"]
+            self.commit = self.race_tag_commit or data["sha"]
+            self.unreadable_tag_reads = self.tag_read_lag
             if self.race_tag:
                 raise ApiError(422, "Concurrent tag created")
             return {"object": {"type": "commit", "sha": self.commit}}
@@ -726,6 +735,36 @@ class DraftTests(unittest.TestCase):
         prepare_draft(api, "v1.2.3", COMMIT, False, packages())
         self.assertEqual(len(api.assets), ASSET_COUNT)
         self.assertTrue(api.release["draft"])
+
+    def test_created_tag_not_yet_readable_is_reread_before_the_draft(self):
+        api = FakeApi(release=False, commit=None)
+        api.tag_read_lag = 2
+        delays = []
+        _prepare_draft(api, "v1.2.3", COMMIT, False, packages(), expected_pairs=EXPECTED_PAIRS, sleep=delays.append)
+        self.assertEqual(delays, list(TAG_VISIBILITY_DELAYS[:2]))
+        self.assertEqual([path for _, path, _ in api.mutations[:2]], ["/git/refs", "/releases"])
+        self.assertEqual(len(api.assets), ASSET_COUNT)
+
+    def test_created_tag_that_stays_unreadable_fails_before_the_draft(self):
+        api = FakeApi(release=False, commit=None)
+        api.tag_read_lag = len(TAG_VISIBILITY_DELAYS) + 1
+        delays = []
+        with self.assertRaisesRegex(ReleaseError, "missing or moved away"):
+            _prepare_draft(api, "v1.2.3", COMMIT, False, packages(), expected_pairs=EXPECTED_PAIRS,
+                           sleep=delays.append)
+        self.assertEqual(delays, list(TAG_VISIBILITY_DELAYS))
+        self.assertEqual([path for _, path, _ in api.mutations], ["/git/refs"])
+
+    def test_concurrent_tag_on_another_commit_fails_without_waiting(self):
+        api = FakeApi(release=False, commit=None)
+        api.race_tag = True
+        api.race_tag_commit = OTHER_COMMIT
+        delays = []
+        with self.assertRaisesRegex(ReleaseError, "missing or moved away"):
+            _prepare_draft(api, "v1.2.3", COMMIT, False, packages(), expected_pairs=EXPECTED_PAIRS,
+                           sleep=delays.append)
+        self.assertEqual(delays, [])
+        self.assertEqual([path for _, path, _ in api.mutations], ["/git/refs"])
 
     def test_annotated_tag_is_peeled(self):
         api = FakeApi()
