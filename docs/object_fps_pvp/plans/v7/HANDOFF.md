@@ -8,9 +8,12 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：無。
+- **等你決定**：無（已完成批次的對抗式核對要用的子 agent 檔位，會在開始前再問）。
 - **進行中**：第 08b 批的 ultracode 規劃（workflow：方案 3 位 high、評審 1 位 high、對抗式檢查 1 位 xhigh；範圍含第 08 批 L2 的 b 段變長）。只做規劃與既有證據的分析，不改程式。
-- **下一步**：規劃結果寫成第 08b 批文件的草案，送你確認後才實作。
+- **下一步**：
+  1. 規劃結果寫成第 08b 批文件的草案，加一節「對 movement 佇列與 backlog 的影響」（D44）；送你確認後才實作。
+  2. 草案送出後、實作開始前：第 06、07、08 批（含 P2-log）結論的對抗式核對（ultracode，1 次逐條核對＋1 次對抗式檢查）。若和第 09 批的規劃重疊，就併進去一起做。
+  3. 第 09 批的 ultracode 規劃把 D44 列為輸入。
 - **最後更新**：2026-10-09，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
@@ -149,6 +152,7 @@
 - 2026-10-09：第 08 批 L2 第 2 次通過（60 次；判定 1、2 成立）。觀察：b 段 after 長約 3.5 ms、a 短約 1.8 ms；worker 喚醒與 CPU 約減半。Client 端的主機狀態橫向對比沒有 8 ms 狀態的 clean-30 樣本，無法對比。第 08 批完成。
 - 2026-10-09：使用者決定「b 段併進第 08b 批的 ultracode 規劃一起查」：第 08 批 L2 的 b 段變長（after 長約 3.5 ms）在第 08b 批的規劃一起調查。
 - 2026-10-09：使用者「開始第 08b 批，開 ultracode，檔位照建議」。第 08b 批開始，先做 ultracode 規劃（方案 high ×3、評審 high、對抗式檢查 xhigh）。
+- 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 
 ## P2 以後各批的範圍
 
@@ -164,7 +168,7 @@
 - **07** Match：Tick 改為 Waiter 的絕對期限（Advance 前的取樣時刻加 `secondsUntilNextTick`），晚醒寫進 10 秒統計；MatchRuntimeHost 在 snapshot、results、evictions、重設完成時通知 IpcHost，並計數 `snapshot_` 槽被覆蓋的次數；IpcHost 改為一條 asio io 執行緒（async accept／read／write，pump 的優先序 controls > actions > snapshot 不變），1／5／10 ms 的輪詢全部移除；連線結束的路徑明確化。執行緒改用 `GYO::Threads`。完成後做 P2-log、第 06、07 批的 clean-30／clean-60 橫向對比（2026-10-09 使用者要求，見「未結事項」）。
 - **08** Client：worker 改為一條 asio io 執行緒（async receive、各期限一個 steady_timer），SendInput／SubmitAction 以 post 喚醒；速率語意不變；httplib 留在 worker（只在大廳切換與關閉時阻塞 UDP）。ACK 判定在 L1 顯示語意不變時改為網路角色收到裁決時前進，否則維持並記錄理由。動作送出語意依 D36。
 - **08b**（D43；規劃依 D45 用 ultracode，並一起調查第 08 批 L2 的 b 段變長）結果改為事件驅動轉送：Match 的 action lane 與 Gateway 的結果，距上次送出 ≥I 就立即送；不到 I 就設計時器在「上次送出＋I」送出，不帶 I/2（2026-10-09 使用者更正：I/2 在事件觸發下會讓結果每秒約 60 次，碰到「結果每秒 ≤31」）。不改 wire；relay 的「結果每秒 ≤31」要重新確認。排在第 09 批之前，因為第 09 批要用這些通道推導 FireGate 常數。
-- **09** FireGate 與 C2：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
+- **09** FireGate 與 C2（規劃依 D45 用 ultracode；D44 列為輸入：是否要在常數推導前查清楚，或在什麼條件下要重推常數）：先推導常數並凍結，再跑 C2 與 25 案回歸（README「本機射擊閘的兩個常數」）。P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
 - 停止條件：權威 digest 改變；需要改 wire；macOS 的 Tick 晚醒沒有改善；worker_main 的斷言需要放寬；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。
 
 ### P3：診斷與 pv7（任務 8、4）
@@ -196,7 +200,7 @@
 
 ## 未結事項
 
-- **（嚴重度高，D44）偶發的 movement epoch 重設**：第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
+- **（嚴重度高，D44）偶發的 movement epoch 重設**：（第 08b 批草案要回答 08b 的改動對 backlog 的影響；第 09 批規劃要回答是否影響常數的凍結。）第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
 - 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。第 08 批 L2（2026-10-09）的 clean-30 全部是 4 ms 狀態，無法對比；之後的量測出現 8 ms 狀態時再補。第 08 批的評估更正了 clean-30 的部分：它的快慢兩群來自 30 Hz 節拍的相位與 probe 的幀量化，不是主機狀態（見[第 07 批](07-match-tick-ipc.md)「橫向對比」的更正）。
 - C1 之後要決定的事（C1 已在 2026-10-09 完成，現在待使用者決定）：
   - 相位追蹤的既有問題（第 03 批的 xhigh 審查；第 03a 批 clean-60 的延遲中位數約晚 1 幀，方向相同）：settling 期間收進來的舊樣本留在下一個視窗，修正後第一個視窗的 P90 實際約 P93；settling 期間累積的 late 樣本，會在 settle 完成時立刻觸發第二次 late 修正。
