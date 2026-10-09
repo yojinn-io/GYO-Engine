@@ -11,9 +11,9 @@
 - **等你決定**：
   1. 是否開始第 07 批（Match Tick 改用 Waiter 的絕對期限與發布通知、IpcHost 改用 asio）。建議開始。README 的建議檔位是 high、局部 xhigh；若要另開 xhigh 審查 agent，需要你同意。
 - **進行中**：
-  - PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）：第 06 批的 L2 結果推送後重跑 CI。
+  - 無。PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)（P2 線）的 CI 全綠：第 06 批的程式（`2d63010`）4 個平台的 L1 通過，之後只改文件的推送沿用 L1。
 - **下一步**：你同意後開始第 07 批：讀 Match Tick 與 IpcHost 的現況，寫批次文件。
-- **最後更新**：2026-10-09 14:33，依據 commit `7da6b0d`（第 06 批；L2 通過），記錄於 `e96fcc4`。
+- **最後更新**：2026-10-09 14:54，依據 commit `bc7cea3`（PR #73 的頭；CI 全綠）。
 
 ## 閱讀入口
 
