@@ -1,6 +1,6 @@
 # 第 08b 批：結果改為事件驅動轉送
 
-狀態：**實作中**（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
+狀態：**實作與 L1 完成（`a954aa3`），開發跑次進行中**（2026-10-09；決定 1～9 照建議，D46：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-09「開始第 08b 批，開 ultracode，檔位照建議」）；實作 high，計時器迴圈、期限一致性、lane 的到期判斷局部 xhigh；文件與執行 medium。
 
 用語：本文件把「每 I 重送一次、只帶 retired 的包」稱為**只帶 retired 的重複包**（簡稱重複包），不叫心跳，以免和第 11 批 runtime link 的心跳對時混淆。
@@ -152,6 +152,25 @@
 - 08b 自己的風險：Gateway 的 CPU 與 `sendUDP` 的喚醒次數（偵測空轉）；Match 的 `tick_late`（`ScheduleWrite` 多取的鎖）。
 - 新舊版本的失敗次數分別累計（D44）。
 - 分析的腳本與輸出：`build/target/_build/test/logs/pvp-v7-08b-plan-20261009/d44-analysis/`、`d44-adversarial/`（`commands.txt`、`sha256.txt`）。
+
+## 實作與 L1（2026-10-09，`a954aa3`）
+
+- 做法：workflow（S1 Gateway 與 S2 Match lane 並行，high；review xhigh；blocker／major 由 high 修正）。
+- Gateway（`action_delivery.go`、`server.go`）：
+  - 刪掉 `resultSendTolerance`，資格改為嚴格的 `now.Before(w.nextSend)`。
+  - 共用判斷 `resultsPending()`（(a) 未 ACK 的裁決、(b) 退休前進、(c) poke）同時用在選出與期限（`nextResultDeadline`，只算 active 玩家、`s.available` 時）。
+  - `actionPackets` 回傳封包與下一個期限；選出時先設 `nextSend=now+I`、`retiredSent`，清掉 poke 旗標，再編碼。
+  - `sendUDP` 的 ticker 換成 `time.Timer`＋`resultWake`（容量 1）；寫出之後重讀期限，`Reset(resultWait(...))`。`resultWait`＝max(期限−now, 0)，沒有期限時為 I。
+  - `receiveActionResults` 只在出現新裁決或退休前進時喚醒；非 active 的丟棄處寫明不變式。
+- Match lane（`IpcHost.cpp`）：`ActionLane{lastSend, sentRetired, sent}`；`LanePending` 同時用在 `ScheduleWrite` 與 `Write`；沒有內容時不推進錨點；`static_assert(SnapshotIntervalTicks==1)`。
+- `run_network.py`：Match 加 `--movement-trace`（D46⑧）。路徑要 `resolve()`，因為 Match 在隔離的暫存目錄執行；review 時以相對的 `--output` 重現了「Cannot open movement trace」，已修正。
+- 測試：
+  - Go：G1～G10。G8 用純函式 `resultWait` 加虛擬時鐘區分固定計時器；review 指出迴圈本身用固定計時器時所有測試都會通過，所以加了真實時間的 `TestSendLoopSendsADecisionWithinAnIntervalAtItsDeadline`（上次寫出後 20 ms 來的裁決，要在期限後 10 ms 內到達；16 次容許 1 次慢）與迴圈層的突變。
+  - 改寫的舊測試：`TestResultChannelSendsOnEveryTickDespiteWriteReanchoring`（原斷言「每個 30 Hz tick 都送」，只在 I/2＋固定 ticker 下成立）刪除，由 G2、G6 取代；`TestResultChannelKeepsHalfAnIntervalAndNoBurstAfterABlockedWrite`（原斷言：間隔 ≥I/2、每秒 ≤31、放行後不補送、至少 60 次）改為 G3（間隔 ≥I、每秒 ≤30、放行後 ≥release+I、至少 150 次），都是收緊；`actions_test.go` 的 I/2 檢查改為嚴格的 I−1 ns 送 0、I 送 1。
+  - C++：M1～M6。M2 比文件嚴格（裁決 frame 要先於自己 Tick 的 snapshot，`>=`），因為 `>` 只會機率性地抓到 `lane-anchor-every-pump`。M3 3 秒內 89～90 個 frame（上限 91）。M4 的上限 600：改之前的頭（`11d0d04`）同一測試 34 次量到 146～150，改之後 84～90，空轉突變約 541,000。M5 不含 eviction（真實時間要 40 秒以上），eviction 與 Leave 共用 lane 的刪除路徑。
+- review（xhigh）：核心邏輯沒有找到遺失的喚醒、Reset 競態、0 等待空轉或期限與選出不一致。major 2 件已修（上面的 `resolve()` 與迴圈層的測試）；minor：`results-no-resend` 突變改為「送一次、之後不重送」的版本（原版連第一次都不送），`IpcHost.cpp` 加 `#include <algorithm>`。未處理的 nit：編碼失敗時退休會被當成已送（實務上到不了，靠 poke 補救）、寫出後重讀期限沒有測試（只影響效率）、M5 的「計時器已設定」前提是機率性的。
+- 驗證：全量 CTest 70／70（權威 digest 不變）；`go vet`、`go test`、`go test -race -count=3`；`object_fps_pvp.worker` 連跑 30 次全部通過；`object_fps_pvp.ipc` 連跑 30 次與 TSan 3 次（無報告）；突變 v7-08b 17／17 killed，`v7-06-results-exact-deadline`、`v7-06-results-full-tolerance` 已移除（stale）。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch08b-20261009/`（`l1.sh`、`ctest-full.log`、`go.log`、`worker-30.log`、`mutations.json`／`.log`）。
 
 ## 驗收
 
