@@ -51,7 +51,13 @@
 4. `Write`：只選「pending 且 now≥lastSend+I」的 lane。未送的裁決依 ID 遞增取前 8 個，加上 `retiredThrough`。選出時才設 `lastSend=now`、併入 `sent`、`sentRetired=retiredThrough`。刪掉 `:455`「沒內容也推進錨點」的行為。
 5. 不重送，理由：
    - 走 TCP，每次 accept 都重建 `Session{}`（`:254`、`:282`）。
-   - 對 active 玩家，Gateway 不會靜默丟掉 Match 的結果：不是 active 才丟（`action_delivery.go:303`）；驗證失敗會回傳錯誤（`:309-311`），經 `runtimeFailed` 結束連線，Match 隨之重設（`server.go:473-474`、`IpcHost.cpp:274-286`）。
+   - 對 active 玩家，Gateway 不會靜默丟掉 Match 的結果：不是 active 才丟（`action_delivery.go:303`）；驗證失敗會回傳錯誤（`:309-311`），經 `runtimeFailed` 結束連線，Match 隨之重設（`server.go:473-474`、`IpcHost.cpp:274-286`）。link 的 merge 與 session 的 commit 在同一段 `s.mu` 之內（`server.go:360-361`、`action_delivery.go:284-293`、`session.go:80-103`），不會出現「請求只合併了一半」的不一致。
+   - **非 active 期間的結果**（使用者 2026-10-09 的問題；分析 1 位＋對抗式檢查 1 位，都用 high）：會被 `:303` 丟掉的情況只有兩種，兩種都不會遺失可補送的內容，所以今天的重複包原本就救不回任何東西，08b 改成只送一次，結果相同。
+     - **加入完成之前**（reserved、joining）：Match 不可能有該玩家的裁決或退休。裁決與退休只從 ActionBatch 產生（`IpcHost.cpp:332-349`、`MatchRuntimeHost.cpp:140-173`、`:224-226`）；Gateway 只轉送 active 玩家的動作（`server.go:394`）；Gateway 在處理 JoinResult 時才轉成 active（`:491`，由 link 唯一的讀取 goroutine 在 `s.mu` 下同步處理）。Match 這邊也是同一次 Pump 先放 JoinResult、再建立 lane，寫出時 controls 先於 lane（`IpcHost.cpp:361-370`、`:445`）。
+     - **移除之後**（leave、逾時、eviction、join rejected、`runtimeFailed`）：會發生。例如動作已經送出、玩家剛好離開，Match 在讀到 Leave 之前做出裁決送回來，就會被丟掉。但移除是終態：phase 只往前走（只有 `server.go:384`、`:491` 兩處賦值），player id 單調遞增、不重用（`:271-275`；既有測試 `TestPendingJoinTimeoutCannotResurrectSession`），runtime link 也不會重連（`:110`、`:116`、`:131-132`）。Match 讀到 Leave 或 eviction 時，同時刪除 lane 與玩家的動作狀態（`IpcHost.cpp:324`、`:385`、`:457`，`PvpMatch.cpp:45`）。被移除的 Client 在連線世代的邊界清空帳本（`ClientConnection.cpp:163-165`），重新加入拿到新的 id，動作窗不會卡住。
+     - 既有日誌：1087 份 gateway.log 依程序切段後，同一程序內 id 再次 active、id 重用、移除後又出現，都是 0 次。被丟掉的結果不寫 log，所以「離開時正好有結果在路上」發生過幾次數不出來，這一點靠程式論證。
+     - **不變式**（寫進程式註解，`action_delivery.go:303`）：phase 只往前走、id 不重用、只轉送 active 玩家的動作。將來如果加入「沿用同一個 id 重連」或 link 重連，必須同時加上「玩家 active 時由 Match 補送全部未退休的狀態」，否則只送一次的 lane 會遺失結果。
+     - 不採用的修法：把 `:303` 改成錯誤或 `runtimeFailed`（正常的離開會讓整個 Match 重設）；Gateway 替非 active 玩家暫存結果（沒有人會再取用）；在統計行加丟棄計數（會改統計行的格式）。
    - Match 對已裁決的重複請求不產生新內容（`MatchRuntimeHost.cpp:163-164`）。
 6. 寫出優先序 controls > lanes > snapshot 不變（`:441-468`）。
 7. 依賴「每個 Tick 都 publish」（`SnapshotIntervalTicks==1`，`MatchRuntimeHost.cpp:293`）：裁決在有 publish 的 Tick 才會被 Pump 看到。用 `static_assert` 或註解寫明。
@@ -161,6 +167,10 @@
   - 在上次寫出後 30 ms 送新裁決：正確的實作約在 t0+I 送出，固定 I 的計時器約在 t0+63 ms。上限設 t0+I+15 ms，這樣抓得到 `results-fixed-timer` 突變。或把「下一次等待時間」抽成純函式，用虛擬時鐘測（實作時選一個，寫進文件）。
   - 新裁決的 wake 要喚醒迴圈；1 kHz 的多餘 wake 打 200 ms，送出數不變。
 - G9 計時器等待中發生 `runtimeFailed`、Leave、evict、ctx 取消：沒有封包、不空轉，迴圈結束。
+- G10 非 active 的結果不起作用，身分不會回來（`server_test.go`，用既有的 `newTestServer`、fake runtime）：
+  - (a) joining 的玩家送 Actions：runtime 沒收到 ActionBatch；之後 runtime 送來該玩家的 ActionResults：房間仍可用、peer 沒收到 kind 7、沒有建立動作帳本。
+  - (b) active 之後經 `/rooms/1/leave` 離開（runtime 收到 Leave），之後 runtime 送來該 id 的 ActionResults：房間仍可用、沒有 Failure、link 的動作窗沒有這個 id。
+  - (c) 用同一個 request_id 再 reserve：拿到新的 player id。
 - 改寫舊語意的測試（比照第 06 批，在本文件列出原文與理由）：`result_cadence_test.go:40`、`:52-88`（每個 tick 都送、I/2；`:64`、`:69` 用到 `resultSendTolerance`），`actions_test.go:367-368`。
 - 照常通過：`TestActionsRealUDPAndTCPResendUntilContiguousClientACK`、`TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes`。
 - 執行：`go vet`、`go test`、`go test -race -count=3`；G1～G7 另跑 `-count=20`。
@@ -183,6 +193,7 @@
 - `results-deadline-ignores-phase` → G7。
 - `results-anchor-at-selection-only`（`actionWritten` 不重新錨定）→ G3。
 - `results-fixed-timer`（計時器用固定 I）→ G8。
+- `nonactive-drop-is-error`（`:303` 的丟棄改成錯誤）→ G10 (b)；`nonactive-actions-forwarded`（拿掉 `server.go:394` 的 active 檢查）→ G10 (a)；`player-id-reused`（重用最小的空閒 id）→ G10 (c)。
 - `lane-repeat` → M1；`lane-unpaced`（拿掉 L+I）→ M3；`lane-anchor-every-pump`（沒有內容也推進 `lastSend`）→ M2；`lane-due-ignores-content` → M4；`lane-no-sent-tracking` → M1。
 - 只會機率性被 kill 的突變，加大 trials 並寫出存活機率；kill 不了的不列入。
 - 同一變更移除 `v7-06-results-exact-deadline`、`v7-06-results-full-tolerance`（`mutations.json:728-746`）：它們依賴的 `resultSendTolerance` 會消失，`run_mutations.py:80` 會判為 stale。指向同一批檔案的 `v7-07-ipc-snapshot-before-controls`、`v7-08-link-half-tolerance` 也要確認沒有變成 stale。
@@ -258,6 +269,7 @@
 ## 規劃的過程與證據
 
 - workflow（ultracode）：方案 3 位（high；最小改動、證據優先、風險優先）、評審 1 位（high）、對抗式檢查 1 位（xhigh）。以風險優先的方案為主體，取最小改動方案的「Match 走 TCP 不重送」、送出迴圈的寫法與 v7-06 突變的處理，取證據優先方案的 c 量化分析。
+- 非 active 期間的結果：分析 1 位、對抗式檢查 1 位（都用 high）。對抗式檢查的提示漏傳了分析原文（workflow 腳本的疏失），所以它是從頭獨立推導；兩邊的結論一致，對抗式檢查另外補上「移除之後會發生、但沒有影響」的具體順序與「改成錯誤」不可採用的理由。證據在 `pvp-v7-08b-plan-20261009/nonactive-analysis/`、`nonactive-adversarial/`。
 - D44 一節：分析 1 位（high）＋對抗式檢查 1 位（xhigh），使用者 2026-10-09 同意（「xhigh 可以，照建議配置」）。對抗式檢查撤回了分析中「Gateway 嫌疑最大」與「延遲只會讓排隊命令變少」兩句，改寫為上面的說法，並補上快照轉送、host mutex 的取鎖頻率、Client worker 的 2 ms 阻塞三個共用點，以及 network20 屬於同一條鏈。
 - 規劃的對抗式檢查結論是「可行，但要先更正」。已併入本草案的修正：計時器鎖定改為記錄並列為第 09 批的輸入；D44 的停止條件改為明確定義；M3 改用長視窗計數；G8 指定上限與情境；判定 2 用字面值比較；寫明判定 3 由 judge 套用；判定 5 的門檻改為待決定；probe 相位機制加上 `gameplay_action.hpp:170`；probe 的雜湊與兩處行號；b 的結論限定在 Tick 解析度。
 - 證據：`build/target/_build/test/logs/pvp-v7-08b-plan-20261009/`（git 忽略）：`minimal/`、`evidence/`、`risk/`、`judge/`、`adversarial/`，各自的 `commands.txt` 與 `sha256.txt`。
