@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
 更新：2026-10-09。Owner：`object_fps_pvp`。
-**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**下一步：第 05b 批**（D41，P1c）。
+**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**下一步：P2**（從 P2-log 開始）。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
 
@@ -29,7 +29,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 3 | 網路路徑的短休眠輪詢改為事件驅動：Match IPC 每輪 1 ms（`IpcHost.cpp:327`；另有 `:336` 的 5 ms accept、`:339`／`:344` 的 10 ms future 輪詢）、Client 網路 worker 每輪 min(2 ms, 到下一次輸入期限)（`ClientConnection.cpp:594-597`）。實測成本在現有主機上只有 1～3 ms，屬推測的壓力；觀測到的是 SendInput／SubmitAction 不會喚醒 worker。v6 第 16 批的「4 人 IPC 寫出負載」沒有觀測到（合併 0 次），不作為證據 | v6 D21；[盤點](INVENTORY.md) |
 | 4 | runtime link（Gateway↔Match）的心跳對時：偏移、RTT、漂移，只作量測與診斷。移動以 Tick 與序號裁決；射擊的 Expired／InvalidReference（250 ms，`PvpMatch.cpp:281-286`）與逐出（參考年齡中位數 160 ms，`MatchRuntimeHost.cpp:86-101`、`:375-389`）用本機單調年齡，**對時結果不得用在這兩處**。屬 wire 變更：目前收到未知訊息會斷線、版本要求完全相等（`IpcHost.cpp:210`、`:246`；`runtime_link.go:48-51`、`:284-291`），所以必須升 pv7 | 2026-10-06 使用者決定；D32 |
 | 5 | 音效：Engine 新增 audio 模組，本產品加入射擊、受擊等聲音 | 2026-10-06 使用者決定（「有聲音遊戲才算完整」） |
-| 6 | 解析度、視窗模式與 FPS 上限的切換，設定可保存（FPS 上限依 D41 於 2026-10-09 加入）。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
+| 6 | 解析度、視窗模式與 FPS 上限的切換，設定可保存（FPS 上限與 `--fps` 限幀選項依 D41 於 2026-10-09 加入）。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
 | 7 | 產品不再直接依賴 SDL。完成條件以 SDL 符號判定（D33）：產品、驗收 probe、產品測試中 `SDL_*`、`SDLK_*`、SDL 的型別與 include、Engine 的 `*Native.hpp` 都是 0 件（CMake 的後端元件選擇除外）。只看 include 不夠，因為 `SdlPlatform.hpp`、`SdlInput.hpp` 本身 include SDL，`PvpApplication.hpp` 也暴露 `SdlPlatform&`、`SdlGpuRenderDevice&`。現存使用的位置見[盤點](INVENTORY.md) | 2026-10-06 使用者決定；D33 |
 | 8 | 日誌與診斷補強：v6 LAN 聯機測試發現的缺口，建在 Trace 之上（各缺口的 owner 見「v6 LAN 聯機測試的觀察」） | 2026-10-08 使用者決定（「下沉到 v7 的子系統中」） |
 
@@ -69,7 +69,6 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium | 完成（只記錄；4 ms 狀態 11／12 輪） | 只記錄：在含 03 的 P1b 分支頭上量 03 單獨的效果（不合併那個頭） |
 | 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 完成（PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 合併，`660310e`；D30 門檻的放大由使用者決定 C1 之後再看） | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
 | 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 完成（2026-10-09）：C1 通過（4 ms 狀態；8 ms 未驗證），使用者操作的 L2、L3 通過 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
-| 05b | （開工時撰寫） | 建議在開工時提出 | 未開始（D41；PR #71 已合併，可以開工） | 產品的 `--fps` 限幀選項，以及 30 FPS 的手感 L3；排在第 15、16 批之前 |
 | P2-log | （P2 開始時撰寫） | medium | 未開始 | 只加記錄的 commit，作為 P2 的 before |
 | 06 | （P2 開始時撰寫） | medium（資格容許局部 xhigh） | 未開始 | Gateway→Client 結果通道約 18 Hz→30 Hz |
 | 07 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
@@ -78,7 +77,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | high（局部 xhigh；契約建議 ultracode 審查） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
 | 12 | （P4 開始時撰寫） | high | 未開始 | 產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest |
-| 13 | （P5 開始時撰寫） | high（套用與還原局部 xhigh） | 未開始 | 解析度、視窗模式、FPS 上限（D41）、設定 Data Contract、未確認就還原 |
+| 13 | （P5 開始時撰寫） | high（套用與還原局部 xhigh） | 未開始 | 解析度、視窗模式、FPS 上限與 `--fps` 限幀（D41）、設定 Data Contract、未確認就還原；30 FPS 手感的 L3（D41） |
 | 14 | （P6 開始時撰寫） | high | 未開始 | 射擊、命中、受擊、換彈的音效 |
 | 15 | （P7 開始時撰寫） | medium | 未開始 | v7 LAN 場次：Windows 實機、兩機漂移、Windows 的視窗切換 |
 | 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行 |
@@ -103,7 +102,6 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | P0 | 01 | 規劃本身的交付（比照 v6 #39） |
 | P1a | 02、03a | 只改產品，行為不變（逐位元組相同的證明）。P0 的狀態同步併入。03a 的結果以文件併入 |
 | P1b | 03、TT-1、04、05 | 第 03 批在命令跟著畫面幀產生的架構下會讓 30 FPS 變差（D40），所以和讓命令改在固定步產生的第 04 批一起合併。跨層必須一起合併：Waiter 與 Threads 的第一個消費端是第 04 批（Match Tick 先用的話，C1 的 after 就混入 Match 的改動）。P1a 的同步併入 |
-| P1c（建議） | 05b | 小批單獨合併，不混進 P2 的 before；PR 線在開工時決定（D41） |
 | P2 | P2-log、06、07、08、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
 | P3 | TT-2、10、11 | 診斷：Trace、紀錄、跨機對齊用的對時；v7 唯一的 wire 變更，三個角色同一個 PR |
 | P4 | IP-3、IP-4、12 | 標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併 |
@@ -120,8 +118,6 @@ P1a  [02 接縫] ─────────────→ [03a 小量測（量
        │
 P1b  [03 每份 snapshot] → [TT-1 Time＋Threads] → [04 三角色] → [05 C1]
        │
-P1c  [05b --fps 限幀 → 30 FPS 的 L3]（D41；第 13 批的 FPS 選擇共用同一個機制）
-       │
 P2   [P2-log] → [06 Gateway 30 Hz] ┐
                 [07 Match asio]    ├→ [09 FireGate 常數 → C2]
                 [08 Client asio]   ┘
@@ -130,7 +126,7 @@ P3   [TT-2 Trace] → [10 診斷紀錄] → [11 pv7]   ← 唯一的 wire 變更
        │
 P4   [IP-3] → [IP-4] → [12 產品去 SDL]
                  │
-P5            [IP-5] → [13 解析度設定]
+P5            [IP-5] → [13 解析度設定（含 --fps 限幀、30 FPS 的 L3）]
 P6   [AU-1]（需 TT-1、IP-3）→ [14 音效]
 P7   [15 LAN 場次]（需 11）→ [16 整合與升格] ← 全部
 ```
