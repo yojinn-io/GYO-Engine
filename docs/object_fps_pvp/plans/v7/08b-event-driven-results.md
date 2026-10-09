@@ -262,7 +262,7 @@
 4. **c 變短**：建議列為判定，clean-30 與 clean-60 只比方向。另一個選項：只記錄。
 5. **L2 規模**：建議第 08 批的 4 案加 downstream-250ms ×6，共 72 次，約 36 分鐘。另一個選項：再加 network20 ×6（84 次）；network20 歷史上會出現 backlog 重設、跑次照樣通過（`adversarial/nonrespawn_resets.txt`），只能記錄次數。
 6. **診斷欄位**：Gateway 統計行要不要加「收到 Match 結果的最短間隔」。建議不加：TT-2／第 10 批的日誌格式會成為 Data Contract（D45），08b 不先擴充；Match lane 的間隔由 L1 的 M3 釘住。
-7. **b 的結論**：建議在第 08 批文件「L2 第 2 次執行」的 b 觀察下加「更正」（Tick 解析度下沒有退步；機制含 `gameplay_action.hpp:109`、`:170` 與 `action_main.cpp:79-82`），並在「未結事項」記錄 probe 幀格點的相位問題；probe 起點隨機化留到第 09 批規劃時決定。這也可以併進已完成批次的對抗式核對一起做。
+7. **b 的結論**：第 08 批文件的「更正」已由已完成批次的對抗式核對加上（2026-10-09）。剩下的建議：在「未結事項」記錄 probe 幀格點的相位問題（起點綁在 join Wait 之後收到 snapshot 的時刻，`gameplay_action.hpp:109`、`action_main.cpp:79-82`；超時時重新錨定，`:170`）；probe 起點隨機化留到第 09 批規劃時決定。
 8. **`run_network.py` 加 `--movement-trace`**：目前 D44 型的失敗在這個驗收中無法歸因（`run_network.py:161`）。加上要改受追蹤的驗收腳本。建議在 08b 一起加（只多寫 trace，不改判定）；另一個選項是另外處理，加之前只保留 match.log 與 gateway.log。
 9. **計時器鎖定**（對抗式檢查的發現）：從第 07 批的 Match 起，Gateway 的計時器只在 snapshot 轉送喚醒時觸發。建議只記錄（判定外），並列為第 09 批推導常數的輸入；原因不在 08b 調查。
 

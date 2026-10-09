@@ -11,6 +11,7 @@ PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 mediu
   - 寫出完成總是比選出它的 ticker 晚一點點，所以下一次 ticker 永遠「早一點點」，被跳過。
   - 結果是每隔一次 ticker 才送一次。
 - 盤點在 relay 後量到的「約 18 Hz」，原因相同。
+  - 更正（2026-10-09，核對）：「下一次 ticker 永遠『早一點點』、每隔一次 ticker 才送」是多數而不是全部。選出用的是 ticker 被處理時的 `time.Now()`（`983e091` 的 `server.go:592`），所以只有當下一次 ticker 的處理延遲大於上一次的處理延遲加寫出時間時才會送出。relay 量到 before 的結果間隔約 12～25％ 是單一 ticker（約 33 ms），其餘約 67 ms，平均約 15～18 包／秒；這些單一 ticker 的間隔看不出與 snapshot 轉送有關，何時剛好趕上未查。盤點的「約 18 Hz」是 v6 矩陣 relay 的平均速率（約 34％ 的間隔是單一 ticker），機制相同。I/2 容許修正後 30／30 的結論不變。
 
 ## 範圍
 
@@ -124,9 +125,11 @@ PR 線 P2。依賴 P2-log（`983e091`，本批的 before）。建議檔位 mediu
 | host-ipc-1000ms | 21→31 | 0／6 | 31.18 ms | 31.8 ms | （故障案例不計） |
 
   - `legal_match_p95_ms` 中位數：clean-60 11.2→10.5 ms，clean-30 14.4→9.6 ms。
+  - 更正（2026-10-09，核對）：數字正確，但第 09 批使用時要注意兩點。(1) clean-30 的 `legal_match_p95_ms` before 14.4 ms 是 3 快 3 慢的中點（快 7.8～10.0 ms，慢 18.8～19.4 ms），不是出現過的值；本批只改 Gateway→Client，不在送出→裁決 Tick 的路徑上，14.4→9.6 不是本批的效果。慢的跑次是第 5、6 輪（8 ms 狀態，舊 Match 晚醒），以及第 2 輪 before 有 2 個動作在 Tick 前 0.1～0.2 ms 才到 relay、晚一個 Tick 裁決（34 筆的 nearest-rank P95 是第 2 大的值）。(2) `legal_client_p95_ms` 是幀量化的：clean-30 before 6 次都在 3 幀以上（第 5 輪 4 幀），after 4 次 2 幀、第 5、6 輪 3 幀；clean-60 由約 6 幀（1 次 5 幀）變成 4～5 幀。這部分才是本批的效果。
   - gateway-250ms 的 relay 最小間隔 3.68 ms，而 Gateway 端最小 20.6 ms：又一次 relay 端的壓縮（與 D42 的判斷一致；兩者是否落在同一視窗無法對應，只記錄）。
   - 主機：sleeper P99 3.4～7.9 ms（最大 8.3 ms）；背景主要是 WindowServer、avconferenced 與影片解碼服務（約 21％、16％、8％ CPU）。
   - 第 4 輪結束起主機的計時變粗（sleeper P99 約 4→7.5 ms，probe 計時器間隔 P99 約 20→23～25 ms），第 5、6 輪 before 與 after 同樣變慢（`legal_match_p95_ms` 約 10→19～24 ms；clean-30 after 的 `legal_client_p95_ms` 68→100 ms）。before／after 交錯執行，所以不影響本批的判定。使用者懷疑是系統時鐘的問題，第 07 批完成後做橫向對比（交接的「未結事項」）。
+    - 更正（2026-10-09，核對）：第 5、6 輪 8 個 clean 跑次中，`legal_match_p95_ms` 變慢（18.8～23.8 ms）的是 6 個；clean-60 before 是 11.1／14.4 ms，沒有變慢。以 Match 自己的 Tick 晚醒分布看，這 8 個跑次都在粗的計時狀態（落在 4～8 ms 的佔 46～82％；第 1～4 輪 ≤3％），所以「第 4 輪結束起主機的計時變粗」成立，只是舊 Match 的晚醒不一定把每個跑次的 P95 推高。第 1～4 輪唯一的慢跑次（第 2 輪 clean-30 before，19.4 ms）來自 2 個在 Tick 前 0.1～0.2 ms 才到 relay、晚一個 Tick 裁決的動作（34 筆的 nearest-rank P95 是第 2 大的值）。probe 計時器間隔 P99 在第 5、6 輪是 22.2～30.1 ms。交錯執行、判定不受影響的結論不變。
 - 證據：`build/target/_build/test/logs/pvp-v7-batch06-l2-20261009/`（git 忽略）：`declaration.sha256`、`artifacts.sha256`、`session.sha256`（`run.py` `199b6b0f…`）、`judge.py`（`0bcf86ec…`）、`progress.jsonl`（`525a4128…`）、`judgement.json`（`d5f27e1a…`）、`runs/`。
 
 ## 證據

@@ -71,6 +71,7 @@
 - 自我檢查：`match_main` 直接寫 `std::clog`，而 IPC 執行緒用 `osyncstream` 寫同一個 streambuf，兩邊同時寫會競爭 → 改用 `osyncstream`。修正後重跑受影響的 CTest 5 件（`cpu`、`network_statistics`、`service_startup`、`authority_digest`、`worker`）與第 3 次 clean-60，都通過。
 - 開發跑次 clean-60（第 2 次，通過；只跑約 20 秒，每個程序 1 個完整視窗；只記錄，不是正式比較）：
   - Gateway：結果通道的間隔 P50 66.6／66.7 ms，約 15 Hz，是 `ActionSendRate`（30 Hz）的一半。寫出後重新錨定讓每隔一次 ticker 才送（第 06 批要修的缺陷；盤點在 relay 後量到的「約 18 Hz」是同一個原因）。snapshot 的間隔 P50 16.6 ms（60 Hz）。runtime link 的 action batch 只在有請求或 ACK 時送，間隔 P50 約 70 ms。
+    - 更正（2026-10-09，核對）：P50 66.6／66.7 ms 只表示多數間隔是兩個 ticker；nearest-rank 的 P50 看不出單一 ticker 的間隔，本批的統計行也沒有最小值欄位（第 06 批才加）。relay 量到的結果間隔中，約 12％（本批開發跑次）～25％（第 06 批 L2 before）是單一 ticker（約 33 ms），本批開發跑次的平均約 15～17 包／秒，不是嚴格的「每隔一次 ticker」。盤點的「約 18 Hz」是 v6 矩陣 relay 的平均速率（每個 session 每秒 17.7～18.3 包，約 34％ 的間隔是單一 ticker）：機制相同（寫出完成後重新錨定），只是單一 ticker 的比例不同。
   - Match：IPC 迴圈約 787 次／秒（1 ms 睡眠）；程序 CPU 約 0.042 秒／秒；Tick 601 次，晚醒以 2～4 ms 為主（bins 24,13,26,51,482,5,…，P50 ≤4 ms，最大 4.2 ms，含 Advance 的時間）。
   - Client worker：每個 Client 約 416 次／秒、CPU 約 0.022 秒／秒。
 - 證據：`build/target/_build/test/logs/pvp-v7-p2log-20261009/`（git 忽略）：`ctest-full.log`、`ctest-full-2.log`、`go-test.log`、`dev-clean-60/`（第 1 次）、`dev2-clean-60/` 與 `dev2-network-statistics.json`（第 2 次）、`dev3-clean-60/`（第 3 次）。
