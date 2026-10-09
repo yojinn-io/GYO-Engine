@@ -3,6 +3,8 @@
 狀態：**規劃完成（草案），待使用者確認「需要決定的事」**（2026-10-09）。PR 線 P2（PR #73）。依賴第 08 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-09「開始第 08b 批，開 ultracode，檔位照建議」）；實作 high，計時器迴圈、期限一致性、lane 的到期判斷局部 xhigh；文件與執行 medium。
 
+用語：本文件把「每 I 重送一次、只帶 retired 的包」稱為**只帶 retired 的重複包**（簡稱重複包），不叫心跳，以免和第 11 批 runtime link 的心跳對時混淆。
+
 ## 起因
 
 - D43：第 08 批的評估顯示，結果在路徑上要等兩條固定 30 Hz 節拍的相位（第 08 批文件的節拍清單第 4、5 項）。第 09 批要用這些通道推導 FireGate 常數，所以先改成事件驅動。
@@ -17,7 +19,7 @@
 - `ActionLane` 只有 `{cursor, nextSend}`（`:172`），在 join 被接受時建立（`:368`）。
 - `ScheduleWrite`（`:404`）取所有 lane 中最小的 `nextSend`：到期就等 socket 可寫；還沒到期就在 `nextSend` 設 `laneTimer`（`:410`、`:422-428`）。
 - `Write`：`now<nextSend` 就跳過（`:454`）。到期後**先**設 `nextSend=now+I`（`:455`），**之後**才檢查「裁決空且 `retiredThrough==0` 就不送」（`:459`）。
-- 所以第一次退休之後，每個到期的 lane 每 I 一定送一包，等於心跳。內容是全部未退休的裁決，每包最多 8 個，cursor 輪轉（`:136-157`）。機制上已經是「到期就送、沒到期設計時器」，但因為永遠有內容，新裁決要等這條自由運轉的 30 Hz 格點。
+- 所以第一次退休之後，每個到期的 lane 每 I 一定送一包，也就是只帶 retired 的重複包。內容是全部未退休的裁決，每包最多 8 個，cursor 輪轉（`:136-157`）。機制上已經是「到期就送、沒到期設計時器」，但因為永遠有內容，新裁決要等這條自由運轉的 30 Hz 格點。
 - 喚醒來源：publish 通知 Pump、socket 讀寫、`laneTimer`。退休在 `MatchRuntimeHost.cpp:224-225`（Tick 內），裁決在 `:268` 的 `match_.Tick`（`PvpMatch.cpp:270-300`）；Step 有 publish 時才通知（`MatchRuntimeHost.cpp:189-193`）。
 
 **Gateway 的結果**（Gateway→Client，UDP）
@@ -27,7 +29,7 @@
 - 玩家不是 active 時，Gateway 收到的 Match 結果直接丟掉（`:303`）。
 
 **證據**（第 08 批 L2 第 2 次；評審與對抗式檢查各自重算）
-- 下行 kind 7 中帶新內容（新的裁決 ID，或 retired 前進）的只有 9.2～9.4％（clean-30 after n＝11130），其餘都是心跳。
+- 下行 kind 7 中帶新內容（新的裁決 ID，或 retired 前進）的只有 9.2～9.4％（clean-30 after n＝11130），其餘都是只帶 retired 的重複包。
 - c 段（裁決 Tick 的 snapshot_produced → relay 第一次看到該裁決的下行）：
   - clean-30 after 平均 30.2 ms。以 P＝16.67 ms 分組，c//P 的分布 {0:2, 1:225, 2:52, 3:129}，c mod P 的中位數 0.90 ms。
   - 對抗式檢查的補充：從第 07 批的 Match 起，Gateway 的 30 Hz 送出鎖在 snapshot 轉送之後。kind 7 落在同 session 前一個 kind 4 之後 1 ms 內的比例：第 06 批 L2 約 1％，第 07 批 L2 before（舊 Match）約 1.8％、after（新 Match）約 100％。兩樹用同一個 Gateway，只有 Match 不同。第 08 批 L2 兩樹都約 100％。
@@ -38,9 +40,9 @@
 ## 設計
 
 **核心判斷：「事件」要定義成「有新內容」**
-- 只把時機改成「≥I 立即、不到 I 計時器」而保留心跳，兩段都不會改善：通道永遠不閒置，新內容一定落在「上次＋I」的格點上。
+- 只把時機改成「≥I 立即、不到 I 計時器」而保留重複包，兩段都不會改善：通道永遠不閒置，新內容一定落在「上次＋I」的格點上。
 - Match lane 本來就有計時器，照字面改幾乎沒有效果。
-- 所以 08b 要同時拿掉兩段只帶 retired 的心跳。wire 不變，但語意有變，要使用者先確認（決定 1）。
+- 所以 08b 要同時拿掉兩段只帶 retired 的重複包。wire 不變，但語意有變，要使用者先確認（決定 1）。
 
 **A. Match 的 action lane（只改 `IpcHost.cpp`）**
 1. `ActionLane`（`:172`）改成 `{optional lastSend; ActionId sentRetired; 已送的裁決 ID 集合 sent}`。每次選出時刪掉 ≤`retiredThrough` 的 ID，集合最多 32 個（`MaxActionWindow`，`Combat.hpp:14`）。
@@ -76,7 +78,7 @@
 **C. 「結果每秒 ≤31」的論證（由程式推導）**
 - 同一玩家下一次選出 ≥ 上一次寫出完成＋I，戳記是單調時鐘。
 - 在半開的 1 秒視窗內（`action_probe.py:319-327`），(n−1)·I<1 s，所以 n≤30。kind 7 只從 `actionPackets` 寫出，這個上限涵蓋所有結果包：新裁決、重送、退休、poke 回應。
-- relay 端的 ≤31 無法由產品保證：relay 端的時間壓縮會讓間隔變小（上面的 33）。08b 拿掉約 90％的心跳之後，持續 30 Hz 只會出現在「未 ACK 的裁決留超過 1 秒」的期間（下行阻塞、drain-stall）。
+- relay 端的 ≤31 無法由產品保證：relay 端的時間壓縮會讓間隔變小（上面的 33）。08b 拿掉約 90％的重複包之後，持續 30 Hz 只會出現在「未 ACK 的裁決留超過 1 秒」的期間（下行阻塞、drain-stall）。
 - Match lane 同樣論證：選出到選出 ≥I。
 
 **D. 預期效果（hypothesis，未驗證，不放進門檻）**
@@ -148,7 +150,7 @@
 ## 驗收
 
 **L1：Go**（`apps/object_fps_pvp/gateway`；用 `result_cadence_test.go` 的手動時刻法，由 `actionPackets` 回報的期限推進虛擬時鐘，不用固定 tick，避免重現第 06 批的「每隔一次」）
-- G1 閒置時立即送：退休之後沒有封包（沒有心跳）；新裁決在 ≥L+I 到達，同一個 now 就送出。
+- G1 閒置時立即送：退休之後沒有封包（沒有重複包）；新裁決在 ≥L+I 到達，同一個 now 就送出。
 - G2 不到 I 時等到期限：寫出完成在 t0，t0+10 ms 來了新裁決 → 回報的期限＝t0+I；t0+I−1 ns 時 0 包，t0+I 時 1 包。
 - G3 不爆量：固定 seed 的隨機事件時刻，寫出延遲 0～30 ms，加一次 250 ms 的阻塞寫出。斷言相鄰間隔 ≥I、任一半開 1 秒視窗 ≤30、放行後不補送。
 - G4 退休只送一次：Client ACK、Match 退休 → 送 1 包帶 retired；之後 1 秒內，計時器與 wake 都送 0 包。
@@ -167,21 +169,21 @@
 - M1 閒置不寫：動作、ACK、退休之後，500 ms 內沒有 action_results frame；同一個 ID 在 ACK 前只出現在 1 個 frame。
 - M2 立即送：閒置 ≥100 ms 後送一個動作，帶它裁決的 frame 要先於 tick>resolved_tick 的 snapshot。只需要有裁決（沒帶已發布的 observed tick 時會是 InvalidReference，`PvpMatch.cpp:281-291`），不要求 MagazineFull。
 - M3 間隔：每個 Tick 都送新動作並 ACK，3 秒內的 action_results frame ≤ ceil(3 s/I)+1＝91（不節流的突變約 180）。接收端是每 1 ms 輪詢、每次讀 4096 bytes（`IpcHostTests.cpp:96-111`），負載下兩個 frame 會在同一次讀取到達，所以最小間隔只記錄，不斷言。
-- M4 不空轉：閒置 500 ms 的 `Iterations()` 增量 < 校準上限。上限在 08b 之前的頭、用同一個測試量現況再定，寫明來源跑次與次數；這個上限只用來偵測 0 等待的空轉（心跳會把基準拉高，上限偏鬆）。
+- M4 不空轉：閒置 500 ms 的 `Iterations()` 增量 < 校準上限。上限在 08b 之前的頭、用同一個測試量現況再定，寫明來源跑次與次數；這個上限只用來偵測 0 等待的空轉（重複包會把基準拉高，上限偏鬆）。
 - M5 lane 計時器等待中發生 Leave、evict、Stop：不當掉、沒有那位玩家的 frame、Stop 及時結束。
 - M6 換連線：新連線的 lane 是空的，不沿用 `sent`。
 - M1～M5 是真實時間：用計數與順序斷言，連跑 30 次。
 
 **突變**（`tests/object_fps_pvp/mutations.json`，batch `v7-08b`；只有出現預期的失敗訊息才算 killed）
 - `results-half-tolerance`（`:235` 改回 I/2）→ G2、G3。
-- `results-heartbeat`（pending 改回 `:245` 的條件）→ G4。
+- `results-repeat`（pending 改回 `:245` 的條件）→ G4。
 - `results-no-poke` → G5。
 - `results-no-wake` → G8。
 - `results-no-resend`（pending 拿掉 (a)）→ 既有的 `ResendUntilContiguousClientACK`。
 - `results-deadline-ignores-phase` → G7。
 - `results-anchor-at-selection-only`（`actionWritten` 不重新錨定）→ G3。
 - `results-fixed-timer`（計時器用固定 I）→ G8。
-- `lane-heartbeat` → M1；`lane-unpaced`（拿掉 L+I）→ M3；`lane-anchor-every-pump`（沒有內容也推進 `lastSend`）→ M2；`lane-due-ignores-content` → M4；`lane-no-sent-tracking` → M1。
+- `lane-repeat` → M1；`lane-unpaced`（拿掉 L+I）→ M3；`lane-anchor-every-pump`（沒有內容也推進 `lastSend`）→ M2；`lane-due-ignores-content` → M4；`lane-no-sent-tracking` → M1。
 - 只會機率性被 kill 的突變，加大 trials 並寫出存活機率；kill 不了的不列入。
 - 同一變更移除 `v7-06-results-exact-deadline`、`v7-06-results-full-tolerance`（`mutations.json:728-746`）：它們依賴的 `resultSendTolerance` 會消失，`run_mutations.py:80` 會判為 stale。指向同一批檔案的 `v7-07-ipc-snapshot-before-controls`、`v7-08-link-half-tolerance` 也要確認沒有變成 stale。
 
@@ -235,14 +237,14 @@
 ## 停止條件
 
 - 實作與 L1：需要改 wire；權威 digest 改變；`worker_main` 的斷言需要放寬；需要修改凍結的分析器；需要改 `MatchRuntimeHost`／`PvpMatch` 的公開介面，或需要改 Client、probe（範圍擴大，先停下回報）；有突變無法被 kill，或 v7-06 兩條以外出現 stale；改寫舊測試時，放寬了「本批要改的語意本身」以外的斷言；開發跑次中 D44 的重設比例升高，或舊版也出現。
-- 決定 1（拿掉心跳）沒有得到使用者確認，就不開始實作。
+- 決定 1（拿掉重複包）沒有得到使用者確認，就不開始實作。
 - 實作開始前，先完成第 06、07、08 批（含 P2-log）結論的對抗式核對（使用者 2026-10-09 的補充）。
 
 ## 需要決定的事
 
 1. **（必須先決定）「事件」的定義**
-   - 建議 Q'：拿掉兩段只帶 retired 的心跳。Match lane 走 TCP，每個裁決與每次退休只送一次，不重送。Gateway 對 Client：未 ACK 的裁決照現在每 I 重送；退休前進時送一次；Client 送來只帶 ACK 且 ACK≤Gateway 已知的 retired 時，補送退休（poke）。
-   - H：保留心跳，只拿掉 I/2。由程式推導，c 幾乎不會改善。
+   - 建議 Q'：拿掉兩段只帶 retired 的重複包。Match lane 走 TCP，每個裁決與每次退休只送一次，不重送。Gateway 對 Client：未 ACK 的裁決照現在每 I 重送；退休前進時送一次；Client 送來只帶 ACK 且 ACK≤Gateway 已知的 retired 時，補送退休（poke）。
+   - H：保留重複包，只拿掉 I/2。由程式推導，c 幾乎不會改善。
    - R：Gateway 也不主動重送未 ACK 的裁決，完全靠 Client 的重送請求。會改變現有「重送直到連續 ACK」的語意，不建議。
 2. **relay 的「結果任一秒 ≤31」**：建議列為判定（判定 3），超過就停下分辨原因再交你決定。另一個選項：照 D42 只記錄，只以 Gateway 端的最短間隔判定。
 3. **最短間隔的門檻**：建議結果與 link 都用由程式推導的 33.3（字面值比較）。另一個選項：link 沿用第 08 批的 32.3，並在宣告中註明「沿用的回歸門檻，不是推導值」。
