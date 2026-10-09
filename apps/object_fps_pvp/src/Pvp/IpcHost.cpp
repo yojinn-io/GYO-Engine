@@ -1,10 +1,10 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
 #include "runtime_v6.pb.h"
 #include <asio.hpp>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <charconv>
@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string_view>
 #include <syncstream>
@@ -134,16 +135,44 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
     }
     return message;
 }
-pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor) {
+// A lane writes only new content: decisions it has not sent and a retirement
+// beyond the one it sent. TCP delivers each once, and a lane never outlives its
+// connection (each accept starts a new Session), so nothing is resent. That
+// relies on the Gateway dropping results only for a removed player, which
+// never comes back under the same id.
+// The host wakes Pump only on a step that publishes; with a snapshot every
+// tick, a decision is seen on the tick that makes it.
+static_assert(SnapshotIntervalTicks==1,"Action lanes rely on a publish every tick");
+constexpr auto ActionInterval=std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+struct ActionLane {
+    std::optional<std::chrono::steady_clock::time_point> lastSend;
+    ActionId sentRetired{};
+    // Sent decision ids above sentRetired; at most MaxActionWindow.
+    std::set<ActionId> sent;
+};
+// The one test for new content: ScheduleWrite's deadline and Write's choice
+// must agree, or a due lane with nothing to choose would wake writes forever.
+bool LanePending(const ActionResults& results, const ActionLane& lane) {
+    return results.retiredThrough>lane.sentRetired || std::any_of(results.decisions.begin(),results.decisions.end(),
+        [&](const auto& decision){return !lane.sent.contains(decision.actionId);});
+}
+// At most one choice per ActionInterval; the first may go at once.
+std::chrono::steady_clock::time_point LaneDue(const ActionLane& lane, std::chrono::steady_clock::time_point now) {
+    return lane.lastSend?*lane.lastSend+ActionInterval:now;
+}
+// Chooses the retirement and up to MaxActionBatch unsent decisions in id order
+// (decisions arrive sorted by id) and records them as sent at `now`.
+pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane, std::chrono::steady_clock::time_point now) {
     pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
     auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
     out->set_retired_through(results.retiredThrough);
-    if(results.decisions.empty()) {cursor=results.retiredThrough;return message;}
-    const auto first=std::find_if(results.decisions.begin(),results.decisions.end(),
-        [&](const auto& decision){return decision.actionId>cursor;});
-    const auto offset=first==results.decisions.end()?0:static_cast<std::size_t>(first-results.decisions.begin());
-    for(std::size_t i=0;i<Engine::Math::Min(MaxActionBatch,results.decisions.size());++i) {
-        const auto& decision=results.decisions[(offset+i)%results.decisions.size()];
+    lane.lastSend=now;
+    lane.sentRetired=results.retiredThrough;
+    lane.sent.erase(lane.sent.begin(),lane.sent.upper_bound(results.retiredThrough));
+    for(const auto& decision:results.decisions) {
+        if(static_cast<std::size_t>(out->decisions_size())==MaxActionBatch) break;
+        if(lane.sent.contains(decision.actionId)) continue;
+        lane.sent.insert(decision.actionId);
         auto* value=out->add_decisions();value->set_action_id(decision.actionId);
         value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
         value->set_rejection(RejectionForWire(decision.rejection));
@@ -151,7 +180,6 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionId& cursor
         value->set_target_id(decision.targetId);value->set_damage(decision.damage);
         value->set_kind(KindForWire(decision.kind));value->set_life_generation(decision.lifeGeneration);
         value->set_target_life_generation(decision.targetLifeGeneration);
-        cursor=decision.actionId;
     }
     return message;
 }
@@ -169,7 +197,6 @@ struct IpcHost::Impl {
     struct WakeGate {std::mutex mutex;Impl* impl{};};
     enum class Phase {Idle,Accepting,Resetting,Connected,Closing};
     struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;};
-    struct ActionLane {ActionId cursor{};Clock::time_point nextSend{};};
     // One connection's state; replaced at each accept.
     struct Session {
         std::vector<std::uint8_t> input;
@@ -398,15 +425,21 @@ struct IpcHost::Impl {
         } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
     }
 
-    // Waits for the socket to become writable when there is, or may be,
-    // something to write; otherwise arms the lane timer for the next action
-    // deadline. The frame is chosen only when the socket is writable.
+    // Waits for the socket to become writable when there is something to
+    // write; otherwise arms the lane timer for the earliest lane with new
+    // content. The frame is chosen only when the socket is writable.
     void ScheduleWrite() {
         if(phase!=Phase::Connected || waitingWrite) return;
         const auto now=Clock::now();
         std::optional<Clock::time_point> nextLane;
-        for(const auto& [playerId,lane]:session.actionLanes)
-            if(!nextLane || lane.nextSend<*nextLane) nextLane=lane.nextSend;
+        for(auto it=session.actionLanes.begin();it!=session.actionLanes.end();) {
+            const auto results=host.GetActionResults(it->first);
+            if(!results) {it=session.actionLanes.erase(it);continue;}
+            if(!LanePending(*results,it->second)) {++it;continue;}
+            const auto due=LaneDue(it->second,now);
+            if(!nextLane || due<*nextLane) nextLane=due;
+            ++it;
+        }
         const bool laneDue=nextLane && *nextLane<=now;
         if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue) {
             waitingWrite=true;
@@ -447,17 +480,17 @@ struct IpcHost::Impl {
             } else {
                 // Results stay in Match until Client ACK. Only choose a batch
                 // when a write slot is free; a blocked socket cannot accumulate
-                // or overwrite a separate decision queue.
+                // or overwrite a separate decision queue. A lane without new
+                // content keeps its anchor: new content may go at once.
                 const auto now=Clock::now();
                 for(auto it=s.actionLanes.begin();it!=s.actionLanes.end();) {
                     auto& [playerId,lane]=*it;
-                    if(now<lane.nextSend) {++it;continue;}
-                    lane.nextSend=now+std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+                    if(now<LaneDue(lane,now)) {++it;continue;}
                     const auto results=host.GetActionResults(playerId);
                     if(!results) {it=s.actionLanes.erase(it);continue;}
                     ++it;
-                    if(results->decisions.empty() && results->retiredThrough==0) continue;
-                    s.writing=wire::Frame(ActionMessage(*results,lane.cursor).SerializeAsString());
+                    if(!LanePending(*results,lane)) continue;
+                    s.writing=wire::Frame(ActionMessage(*results,lane,now).SerializeAsString());
                     s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;
                     break;
                 }

@@ -725,26 +725,6 @@
       "expect": "PvP a later placement advances interpolation by elapsed steps and decays the correction"
     },
     {
-      "id": "v7-06-results-exact-deadline",
-      "batch": "v7-06",
-      "what": "Result eligibility waits for the exact re-anchored deadline (every other tick)",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "now.Add(resultSendTolerance).Before(w.nextSend)",
-      "replace": "now.Before(w.nextSend)",
-      "check": "go",
-      "expect": "result channel sent"
-    },
-    {
-      "id": "v7-06-results-full-tolerance",
-      "batch": "v7-06",
-      "what": "Results may leave a whole interval early, so a released write bursts",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "const resultSendTolerance = actionSendInterval / 2\n",
-      "replace": "const resultSendTolerance = actionSendInterval\n",
-      "check": "go",
-      "expect": "released write sent a catch-up result"
-    },
-    {
       "id": "v7-07-ipc-no-publish-wake",
       "batch": "v7-07",
       "what": "The host's publish notification does not wake the IPC thread",
@@ -823,6 +803,176 @@
       "replace": "            found->second.receivedAt=arrivedAt;\n",
       "check": "worker",
       "expect": "decision receipt time is not the first arrival"
+    },
+    {
+      "id": "v7-08b-results-half-tolerance",
+      "batch": "v7-08b",
+      "what": "Results leave half an interval before their deadline again (the removed resultSendTolerance), so a wake can send early",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "w == nil || now.Before(w.nextSend)",
+      "replace": "w == nil || now.Add(actionSendInterval/2).Before(w.nextSend)",
+      "check": "go",
+      "expect": "before its deadline|results \\S+ apart \\(write"
+    },
+    {
+      "id": "v7-08b-results-repeat",
+      "batch": "v7-08b",
+      "what": "Every interval after the first retirement sends a retired-only repeat",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tif w.retired > w.retiredSent || w.retirementAsked {\n",
+      "replace": "\tif w.retired > 0 || w.retirementAsked {\n",
+      "check": "go",
+      "expect": "retired-only repeat after|retirement repeated"
+    },
+    {
+      "id": "v7-08b-results-no-poke",
+      "batch": "v7-08b",
+      "what": "An ACK-only batch behind the retirement does not ask for the retirement again",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tp.actions.retirementAsked = true\n",
+      "replace": "",
+      "check": "go",
+      "expect": "ACK-only batch behind the retirement asked for nothing"
+    },
+    {
+      "id": "v7-08b-results-no-wake",
+      "batch": "v7-08b",
+      "what": "New Match results do not wake the send loop; they wait for its timer",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tif fresh {\n\t\ts.wakeResults()\n\t}\n",
+      "replace": "\t_ = fresh\n",
+      "check": "go",
+      "expect": "a new decision did not wake the send loop"
+    },
+    {
+      "id": "v7-08b-results-no-resend",
+      "batch": "v7-08b",
+      "what": "An unacknowledged decision is sent once but never resent until the contiguous ACK",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tif id > w.acknowledged {\n\t\t\treturn true\n",
+      "replace": "\t\tif id > w.acknowledged && id > w.cursor {\n\t\t\treturn true\n",
+      "check": "go",
+      "expect": "--- FAIL: TestActionsRealUDPAndTCPResendUntilContiguousClientACK"
+    },
+    {
+      "id": "v7-08b-results-deadline-ignores-phase",
+      "batch": "v7-08b",
+      "what": "The send loop's deadline counts players that are not active, which selection skips",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tif p.phase != active || p.actions == nil || !p.actions.resultsPending() {\n",
+      "replace": "\t\tif p.actions == nil || !p.actions.resultsPending() {\n",
+      "check": "go",
+      "expect": "but nothing was sent|left due after selection"
+    },
+    {
+      "id": "v7-08b-results-anchor-at-selection-only",
+      "batch": "v7-08b",
+      "what": "A completed result write does not re-anchor the deadline, so a blocked write's release sends a catch-up",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tp.actions.nextSend = now.Add(actionSendInterval)\n\t\tp.sent.results.record(now)\n",
+      "replace": "\t\tp.sent.results.record(now)\n",
+      "check": "go",
+      "expect": "results \\S+ apart \\(write|released write sent a catch-up result"
+    },
+    {
+      "id": "v7-08b-results-fixed-timer",
+      "batch": "v7-08b",
+      "what": "The send loop waits a fixed interval instead of until the earliest result deadline",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\treturn max(deadline.Sub(now), 0)\n",
+      "replace": "\treturn actionSendInterval\n",
+      "check": "go",
+      "expect": "result wait \\S+ after a decision 30 ms after the write"
+    },
+    {
+      "id": "v7-08b-results-loop-fixed-timer",
+      "batch": "v7-08b",
+      "what": "The send loop re-arms its timer for a fixed interval after each pass instead of until the earliest result deadline, so a decision that wakes it before the deadline waits a full interval from the wake",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\ttimer.Reset(resultWait(deadline, pending, time.Now()))\n",
+      "replace": "\t\t_, _ = deadline, pending\n\t\ttimer.Reset(actionSendInterval)\n",
+      "check": "go",
+      "expect": "decisions 20 ms after a write waited more than 10 ms past the deadline"
+    },
+    {
+      "id": "v7-08b-nonactive-drop-is-error",
+      "batch": "v7-08b",
+      "what": "Match results for a removed player fail the runtime instead of being dropped",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tif p == nil || p.phase != active {\n\t\treturn nil\n\t}\n\tif p.actions == nil {\n\t\tp.actions = newActionWindow()\n\t}\n\tw := p.actions\n",
+      "replace": "\tif p == nil {\n\t\treturn adapter.ErrActions\n\t}\n\tif p.phase != active {\n\t\treturn nil\n\t}\n\tif p.actions == nil {\n\t\tp.actions = newActionWindow()\n\t}\n\tw := p.actions\n",
+      "check": "go",
+      "expect": "a removed player's results failed the room"
+    },
+    {
+      "id": "v7-08b-nonactive-actions-forwarded",
+      "batch": "v7-08b",
+      "what": "Actions of a player that is not active yet reach the Match",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tif p.phase != active || s.admit(p, peer, h.Sequence, now) != nil {\n",
+      "replace": "\t\tif s.admit(p, peer, h.Sequence, now) != nil {\n",
+      "check": "go",
+      "expect": "a joining player's actions reached the runtime"
+    },
+    {
+      "id": "v7-08b-player-id-reused",
+      "batch": "v7-08b",
+      "what": "A reservation reuses the smallest free player id",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\ts.nextPlayer++\n\tplayer := &reservation{",
+      "replace": "\ts.nextPlayer = 1\n\tfor s.players[s.nextPlayer] != nil {\n\t\ts.nextPlayer++\n\t}\n\tplayer := &reservation{",
+      "check": "go",
+      "expect": "a removed player's id was reused"
+    },
+    {
+      "id": "v7-08b-lane-repeat",
+      "batch": "v7-08b",
+      "what": "The Match lane counts any unretired decision or nonzero retirement as content again: retired-only repeats every 1/30 s",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    return results.retiredThrough>lane.sentRetired || std::any_of(results.decisions.begin(),results.decisions.end(),\n        [&](const auto& decision){return !lane.sent.contains(decision.actionId);});\n",
+      "replace": "    static_cast<void>(lane);\n    return !results.decisions.empty() || results.retiredThrough!=0;\n",
+      "check": "ipc",
+      "expect": "CHECK\\( resultsWhileIdle == 0 \\) is NOT correct"
+    },
+    {
+      "id": "v7-08b-lane-unpaced",
+      "batch": "v7-08b",
+      "what": "The Match lane is due at once after every choice (no last send + I)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    return lane.lastSend?*lane.lastSend+ActionInterval:now;\n",
+      "replace": "    static_cast<void>(lane);\n    return now;\n",
+      "check": "ipc",
+      "expect": "CHECK\\( frames <= 91 \\) is NOT correct"
+    },
+    {
+      "id": "v7-08b-lane-anchor-every-pump",
+      "batch": "v7-08b",
+      "what": "A Match lane without new content moves its anchor at every Pump, so new content waits for anchor + I",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(!LanePending(*results,it->second)) {++it;continue;}\n",
+      "replace": "            if(!LanePending(*results,it->second)) {it->second.lastSend=now;++it;continue;}\n",
+      "check": "ipc",
+      "expect": "CHECK\\( latestSnapshot < resolvedTick \\) is NOT correct"
+    },
+    {
+      "id": "v7-08b-lane-due-ignores-content",
+      "batch": "v7-08b",
+      "what": "ScheduleWrite counts a Match lane as due without new content, which Write cannot choose: zero-wait write wakes",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(!LanePending(*results,it->second)) {++it;continue;}\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CHECK\\( idleIterations < 600 \\) is NOT correct"
+    },
+    {
+      "id": "v7-08b-lane-no-sent-tracking",
+      "batch": "v7-08b",
+      "what": "The Match lane does not record sent decisions, so it resends each until the ACK",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        lane.sent.insert(decision.actionId);\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CHECK\\( decisionFrames == 1 \\) is NOT correct"
     }
   ]
 }

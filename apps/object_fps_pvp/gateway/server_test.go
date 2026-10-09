@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -910,5 +911,106 @@ func TestSnapshotsReachEveryPeerOfAFullRoom(t *testing.T) {
 	var snapshot client.WorldSnapshot
 	if err := proto.Unmarshal(first, &snapshot); err != nil || len(snapshot.Players) != adapter.MaxPlayers {
 		t.Fatalf("full room snapshot: %v %v", &snapshot, err)
+	}
+}
+
+// G10: results of a player that is not active do nothing, and a removed
+// player's identity never comes back. (a) A joining player's actions do not
+// reach the Match and Match results for it leave no ledger and no packet. (b)
+// Results for a player who left are dropped without failing the room. (c) The
+// same request id reserves a new player id.
+func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.T) {
+	s, f := newTestServer(t)
+	post(t, s, "/rooms", map[string]any{})
+	shotBatch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
+	results := func(player uint64) {
+		e := envelope()
+		e.Message = &runtime.RuntimeEnvelope_ActionResults{ActionResults: &runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}}}
+		f.send(e)
+	}
+	// Packet kinds reaching a peer until one of the given kind, or a Failure,
+	// arrives.
+	until := func(p *net.UDPConn, kind uint16) []uint16 {
+		t.Helper()
+		var kinds []uint16
+		buf := make([]byte, framing.MaxDatagram+1)
+		_ = p.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			n, _, err := p.ReadFromUDP(buf)
+			if err != nil {
+				t.Fatalf("no packet of kind %d (got %v): %v", kind, kinds, err)
+			}
+			if h, _, err := framing.DecodeDatagram(buf[:n]); err == nil {
+				kinds = append(kinds, h.Type)
+				if h.Type == kind || h.Type == adapter.Failure {
+					return kinds
+				}
+			}
+		}
+	}
+
+	// (a) Joining.
+	joiner, joinerPeer := reserve(t, s, "g10-joining"), peer(t)
+	sendPacket(t, joinerPeer, joiner, 1, adapter.Hello, &client.Hello{SessionToken: joiner.Token})
+	if join := f.next(t).GetJoin(); join == nil || join.PlayerId != joiner.PlayerID {
+		t.Fatal("missing join")
+	}
+	sendPacket(t, joinerPeer, joiner, 2, adapter.Actions, shotBatch)
+	select {
+	case e := <-f.got:
+		t.Fatalf("a joining player's actions reached the runtime: %v", e)
+	case <-time.After(60 * time.Millisecond):
+	}
+	results(joiner.PlayerID)
+	joined := envelope()
+	joined.Message = &runtime.RuntimeEnvelope_JoinResult{JoinResult: &runtime.JoinResult{PlayerId: joiner.PlayerID, Accepted: true}}
+	f.send(joined)
+	// The runtime link handles its messages in order: the Welcome comes after
+	// the results were handled.
+	if kinds := until(joinerPeer, adapter.Welcome); slices.Contains(kinds, adapter.Failure) {
+		t.Fatal("a joining player's results failed the room")
+	} else if slices.Contains(kinds, adapter.ActionResults) {
+		t.Fatal("a joining player's results reached its Client")
+	}
+	s.mu.Lock()
+	ledger := s.players[joiner.PlayerID].actions
+	s.mu.Unlock()
+	if ledger != nil {
+		t.Fatal("a joining player's actions or results left a ledger")
+	}
+
+	// (b) Left.
+	leaver, leaverPeer := reserve(t, s, "g10-leaver"), peer(t)
+	sendPacket(t, leaverPeer, leaver, 1, adapter.Hello, &client.Hello{SessionToken: leaver.Token})
+	accept(t, f, leaver)
+	receivePacket(t, leaverPeer, adapter.Welcome)
+	sendPacket(t, leaverPeer, leaver, 2, adapter.Actions, shotBatch)
+	for in := f.next(t); in.GetActions() == nil || in.GetActions().PlayerId != leaver.PlayerID; in = f.next(t) {
+	}
+	if status, _ := post(t, s, "/rooms/1/leave", map[string]any{"session_id": leaver.SessionID, "session_token": leaver.Token}); status != 200 {
+		t.Fatal(status)
+	}
+	for in := f.next(t); in.GetLeave() == nil; in = f.next(t) {
+	}
+	results(leaver.PlayerID)
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 5, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: joiner.PlayerID}}}}
+	f.send(e)
+	if kinds := until(joinerPeer, adapter.Snapshot); slices.Contains(kinds, adapter.Failure) {
+		t.Fatal("a removed player's results failed the room")
+	}
+	s.mu.Lock()
+	available := s.available
+	s.mu.Unlock()
+	s.link.mu.Lock()
+	_, kept := s.link.actionWindows[leaver.PlayerID]
+	s.link.mu.Unlock()
+	if !available || kept {
+		t.Fatalf("after a removed player's results: available=%v link window kept=%v", available, kept)
+	}
+
+	// (c) The same request id again.
+	if again := reserve(t, s, "g10-leaver"); again.PlayerID == leaver.PlayerID || again.PlayerID <= joiner.PlayerID {
+		t.Fatalf("a removed player's id was reused: %d after %d", again.PlayerID, leaver.PlayerID)
 	}
 }

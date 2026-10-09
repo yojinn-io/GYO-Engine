@@ -82,6 +82,7 @@ type Server struct {
 	udp                     *net.UDPConn
 	controlOut              chan outbound
 	snapshotOut             chan []byte
+	resultWake              chan struct{}
 	closeOnce               sync.Once
 	snapshotReplacements    atomic.Uint64
 	rateAcceptedPackets     atomic.Uint64
@@ -115,7 +116,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
-		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
+		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1),
+		resultWake: make(chan struct{}, 1)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rooms", s.listRooms)
 	mux.HandleFunc("POST /rooms", s.createRoom)
@@ -581,18 +583,51 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 	}
 }
 
+// Wakes the send loop when a Client has something new: a decision, a
+// retirement, or a retirement its ACK-only batch showed it missed.
+func (s *Server) wakeResults() {
+	select {
+	case s.resultWake <- struct{}{}:
+	default:
+	}
+}
+
+// How long the send loop waits for the earliest result deadline: until it
+// (none if it has passed), or one interval with nothing pending, a wake that
+// sends nothing.
+func resultWait(deadline time.Time, pending bool, now time.Time) time.Duration {
+	if !pending {
+		return actionSendInterval
+	}
+	return max(deadline.Sub(now), 0)
+}
+
 func (s *Server) sendUDP(ctx context.Context) {
-	ticker := time.NewTicker(actionSendInterval)
-	defer ticker.Stop()
+	// Results go out on a wake (something new for a Client) or at the earliest
+	// result deadline, a strict ActionSendRate interval from that player's last
+	// completed write: at once after an idle interval, never sooner.
+	timer := time.NewTimer(actionSendInterval)
+	defer timer.Stop()
+	results := func() {
+		packets, deadline, pending := s.actionPackets(time.Now())
+		for _, packet := range packets {
+			s.writeUDP(packet)
+			s.actionWritten(packet.actionPlayer, time.Now())
+		}
+		if len(packets) > 0 {
+			// The writes re-anchored their players' deadlines.
+			deadline, pending = s.resultDeadline()
+		}
+		timer.Reset(resultWait(deadline, pending, time.Now()))
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			for _, packet := range s.actionPackets(time.Now()) {
-				s.writeUDP(packet)
-				s.actionWritten(packet.actionPlayer, time.Now())
-			}
+		case <-s.resultWake:
+			results()
+		case <-timer.C:
+			results()
 		case packet := <-s.controlOut:
 			s.writeUDP(packet)
 		case payload := <-s.snapshotOut:

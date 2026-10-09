@@ -34,7 +34,7 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 	}
 	p := &reservation{lifeGeneration: 1, playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
 	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1)}
-	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1), resultWake: make(chan struct{}, 1)}
 	return s, p, endpoint, now
 }
 func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.AddrPort, seq uint32, b *client.ActionBatch, now time.Time) {
@@ -171,7 +171,7 @@ func TestActionWindowsBoundedCircularAndDeadlineRecovery(t *testing.T) {
 			}
 			seen = map[uint64]bool{}
 			for round := 0; round < 4; round++ {
-				packets := s.actionPackets(release.Add(time.Duration(round) * actionSendInterval))
+				packets, _, _ := s.actionPackets(release.Add(time.Duration(round) * actionSendInterval))
 				if len(packets) != 1 {
 					t.Fatal("missing result batch")
 				}
@@ -187,7 +187,7 @@ func TestActionWindowsBoundedCircularAndDeadlineRecovery(t *testing.T) {
 			if len(seen) != 32 || len(p.actions.decisions) != 32 {
 				t.Fatal("result coverage/retention")
 			}
-			if packets := s.actionPackets(release.Add(100 * time.Millisecond)); len(packets) != 0 {
+			if packets, _, _ := s.actionPackets(release.Add(100 * time.Millisecond)); len(packets) != 0 {
 				t.Fatal("result burst")
 			}
 			// Leave is the cleanup boundary, regardless of movement epoch.
@@ -359,13 +359,15 @@ func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
 	if s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}}) != nil {
 		t.Fatal("result")
 	}
-	packets := s.actionPackets(now)
+	packets, _, _ := s.actionPackets(now)
 	if len(packets) != 1 {
 		t.Fatal("first result")
 	}
 	s.actionWritten(packets[0].actionPlayer, release)
-	// Results may leave half an interval early (resultSendTolerance), never sooner.
-	if len(s.actionPackets(release.Add(resultSendTolerance-1))) != 0 || len(s.actionPackets(release.Add(resultSendTolerance))) != 1 {
+	// Results keep a strict interval from the completed write.
+	earlyResults, _, _ := s.actionPackets(release.Add(actionSendInterval - 1))
+	dueResults, _, _ := s.actionPackets(release.Add(actionSendInterval))
+	if len(earlyResults) != 0 || len(dueResults) != 1 {
 		t.Fatal("UDP completion catch-up deadline")
 	}
 }
