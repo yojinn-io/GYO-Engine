@@ -306,13 +306,14 @@ workflow 5 個階段：原型 1 位（high）、審查 1 位（xhigh）、修正
 - **開發跑次**（每棵 2 次，共 6 次；超過任務文字「每棵 1 次」，記錄、不判定）：三棵都照預測的方向行為。base W_post 12 ms、不越線；09a W_post 約 0.1 ms、領先 70.7 ms、重設；09a-b2 在 t_c 後 181 ms 撤回 +30.2 ms、合計 73、不重設。chain 案例的 B2 只撤回 +13.4 ms（延遲還沒結束就以 8 個樣本決定），殘餘 −19.9 ms、領先 57 ms 約 4 秒，是 B2 正式實作的設計輸入。
 - **D45 對抗式檢查（xhigh）**：草稿「不能送核准」，套用修正後可以。推翻 2 項：產生空檔的固定帶（正向 slew 的最後一步是部分步，20.06～21.78 ms 的間隔有 17 個，草稿全算成主機停頓，B2 會在結構上判不了）；J2d 的比較型門檻（09a 與 B2 的 Held 觀測視窗約 0.3 秒對 2.8 秒，不可比）。需修正：撤回與來回修正要在重設處截止（草稿對第②步 session 乾跑就把 r4／r7 重設後的 reseed 首次決定記成「撤回」）、J2 的事件母體不能因 B2 自己的反應而排除、J1 的天花板、J3 的可計算性、量測腳本沒檢查宣告寫的 4 個停止條件。成立：循環性、J1 的檢定力、獨立單位、三棵 tree 的可比性、`session3.py`、REACHED（偏保守）。修正 C1～C7（`measure3.py`）與 R1～R13（宣告）都已套用；主對話以同一份證據重跑三組乾跑，輸出與檢查者的逐位元組相同。
 
-## D48 第③步的事前宣告（待使用者核准）
+## D48 第③步的事前宣告（2026-10-10 使用者核准：「宣告核准，四件事照建議，檔位照建議，開始跑」）
 
-下面是證據目錄 `build/target/_build/test/logs/pvp-v7-d48-step3-prep-20261010/declare/declaration.md`（SHA-256 `757e1f4c…`）的全文。核准時複製到 session 的證據目錄，雜湊寫進 `declaration.sha256`。準備：三棵 tree 的原型與建置（上一節）、driver `session3.py`（`a3acafea…`）、量測腳本 `measure3.py` 凍結候選（`18ffde15…`，唯讀重用第②步的 `measure.py`）；D45 的 xhigh 對抗式檢查判定「修正後可以送核准」，修正已套用，主對話再依檢查原文逐項核對替換文字。
+下面是證據目錄 `build/target/_build/test/logs/pvp-v7-d48-step3-prep-20261010/declare/declaration.md`（核准版 SHA-256 `55d5ef06…`；送核准時是 `757e1f4c…`，核准版只多了核准記錄與使用者要求的範圍限制）的全文。核准時複製到 session 的證據目錄，雜湊寫進 `declaration.sha256`。準備：三棵 tree 的原型與建置（上一節）、driver `session3.py`（`a3acafea…`）、量測腳本 `measure3.py` 凍結候選（`18ffde15…`，唯讀重用第②步的 `measure.py`）；D45 的 xhigh 對抗式檢查判定「修正後可以送核准」，修正已套用，主對話再依檢查原文逐項核對替換文字。
 
 ### D48 第③步 宣告：三棵 tree 的原型對照（base／09a／09a＋B2）
 
-- 狀態：**待使用者核准，未執行**。D45 的對抗式檢查（xhigh，專門核對每個門檻的來源）已做完：2 項推翻（產生空檔的固定帶、J2d 的比較型門檻）、多項需修正，`measure3.py` 的修正 C1～C7 與本宣告的替換文字 R1～R13 都已套用（`adversarial/`；主對話以同一份證據重跑三組乾跑，輸出與檢查者的逐位元組相同）。核准前不跑 session。
+- 狀態：**2026-10-10 使用者核准**（原話：「宣告核准，四件事照建議，檔位照建議，開始跑」）：決定 1＝三棵 tree 共用 base 的 Match、Gateway 與 arena；決定 2＝84 個項目；J2d＝絕對門檻（每個 B2 J2 事件 `held_post`＝0）；開發跑次每棵 2 次（共 6 次）已確認、不計入判定。核准前另依使用者的要求補上第 1 節的範圍限制。
+- D45 的對抗式檢查（xhigh，專門核對每個門檻的來源）已做完：2 項推翻（產生空檔的固定帶、J2d 的比較型門檻）、多項需修正，`measure3.py` 的修正 C1～C7 與本宣告的替換文字 R1～R13 都已套用（`adversarial/`；主對話以同一份證據重跑三組乾跑，輸出與檢查者的逐位元組相同）。
 - 草稿（修正前）：`declare/declaration-draft.md`（`3e3b71da…`）、`declare/measure3-draft.py`（`01402a06…`），保留作記錄。
 - 依據的頭：主 checkout `claude/pvp-v7-p2` 的 `8fabfa6`（任務文字寫的 `a5f3ce4` 之後多了一個只改 HANDOFF 的 docs commit；`git diff --name-only a5f3ce4 8fabfa6` 只有 `docs/`）。產品程式碼＝`a954aa3` 加上第②步的 runner 與它的測試（`6a298f4`）。
 - 三棵 tree（detached worktree，原型不合併、不推送、不 commit 進 `claude/pvp-v7-p2`）：
@@ -342,6 +343,8 @@ workflow 5 個階段：原型 1 位（high）、審查 1 位（xhigh）、修正
 - 邊界附近一律用**實測的領先**，不用預測值（第②步：模型有 +0.04～+0.65 ms 的正偏差，r4 的預測 66.4 ms 在門檻下、實測 66.9 ms 在門檻上而且重設）。
 
 本步不改權威、wire、FireGate 常數、late 修正上限、target、lead、backlog 門檻；原型也都沒有改這些（`proto/`、`fix/` 的說明）。
+
+**範圍限制**（2026-10-10 使用者要求補上）：結論只在現在的 Gateway 過濾下成立；Client→Gateway 的遲到被過濾，不在本步範圍（D49）。Gateway 會略過 ≤`lastResolved` 的命令（`gateway/server.go:420-423`），所以 Client 端網路遲到現在幾乎不會產生 late 修正（第②步的試跑 0／5）；本步只注入 Gateway→Match 的 IPC 延遲。D49 第二階段（丟棄回報給 Match）實作後，Client→Gateway 的遲到會開始觸發 late 修正，屆時要依第 09 批的重推條件 11 重跑 M0，並用本步的方式加跑 Client→Gateway 短停頓的注入。
 
 #### 2. 產物與建置
 
@@ -607,8 +610,8 @@ python3 -I $E/measure3.py $L/pvp-v7-d48-step2-20261010/measure.py $L/pvp-v7-d48-
 
 #### 14. 核准時要決定的事與未決事項
 
-1. **決定 1：Match 與 Gateway 的來源**（第 2 節）。建議三棵 tree 共用 base 的 Match 與 Gateway，只有 probe 不同；替代案是各用自己的，以 P1' 形式比較 Gateway、以原始碼差異與符號論證 Match。
-2. **決定 2：跑次**。建議 84 個項目（single 10、chain 6、只記錄 4 案例×3，每棵 tree），約 45 分鐘。若要縮短，可把只記錄的案例只排在第 1～8 輪（每個案例每棵 2 次，共 72 個項目），約 37 分鐘；single 不建議少於 10 次（J1 的檢定力）。
+1. **決定 1：Match 與 Gateway 的來源**（第 2 節；2026-10-10 核准：照建議）。建議三棵 tree 共用 base 的 Match 與 Gateway，只有 probe 不同；替代案是各用自己的，以 P1' 形式比較 Gateway、以原始碼差異與符號論證 Match。
+2. **決定 2：跑次**（2026-10-10 核准：照建議，84 個項目）。建議 84 個項目（single 10、chain 6、只記錄 4 案例×3，每棵 tree），約 45 分鐘。若要縮短，可把只記錄的案例只排在第 1～8 輪（每個案例每棵 2 次，共 72 個項目），約 37 分鐘；single 不建議少於 10 次（J1 的檢定力）。
 3. 本宣告、`session3.py` 與 `measure3.py` 的凍結（核准時記錄 sha256 並複製到證據目錄），以及 D45 對抗式檢查的修正（C1～C7、R1～R13，已套用）。其中要使用者確認的兩點：
    - **J2d 改為絕對門檻**：每個 B2 J2 事件 `held_post`＝0（取代草稿的「B2 ≤ 09a」）。
    - **開發跑次每棵 2 次**（共 6 次），超過「每棵 1 次」的字面；不計入判定。

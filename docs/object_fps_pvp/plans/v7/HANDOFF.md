@@ -8,9 +8,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：核准 D48 第③步的事前宣告（[09b](09b-phase-tracking.md)「D48 第③步的事前宣告」）。要一起決定的有 4 件：①Match 與 Gateway 的來源（建議三棵 tree 共用 base 的）；②跑次（建議 84 個項目、約 45 分鐘）；③J2d 改為絕對門檻（每個 B2 事件 `held_post`＝0）；④確認開發跑次每棵 2 次（超過「每棵 1 次」的字面，不計入判定）。
-- **進行中**：無。D48 第③步的準備完成：三棵 tree 在 worktree（base `8fabfa6`、09a `e6885b7`、09a-b2 `c2705be`，原型不合併、不推送），全量 CTest 70／70；審查（xhigh）的 4 個 major 中 3 個已修進原型、1 個改宣告；D45 的對抗式檢查（xhigh）推翻 2 項、修正多項，都已套用。
-- **下一步**：核准後依宣告第 11 節：commit H（只改 docs）→ preflight P1～P3 → 暫停 PR #73 的 auto-fix → 閒置閘門 → session（84 個項目）→ 恢復 auto-fix → `measure3.py` 判定 → 記錄結果並停下。
+- **等你決定**：無。
+- **進行中**：D48 第③步的 session（宣告已核准；主對話直接執行，不開子 agent）：commit H（只改 docs）→ preflight P1～P3 → 暫停 PR #73 的 auto-fix → 閒置閘門 → 84 個項目 → 恢復 auto-fix → `measure3.py` 判定。從 H 到 session 結束，主 checkout 與三棵 worktree 都不能改。
+- **下一步**：記錄第③步的結果並停下，結果送你決定 D48 的 (a)／(b)。
 - **最後更新**：2026-10-10，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
@@ -186,6 +186,7 @@
 - 2026-10-10：D48 第②步的 session 完成，`step2`＝passed（V1 8／8、V2 8／8、V3 16 事件最大差 0.645 ms、V4 不越線側一致、越線側無法判定）。2／8 個跑次自然走進脆弱窗（W_post 3.1～3.9 ms），領先 66.8～67.4 ms，都重設；模型有 +0.04～+0.65 ms 的正偏差，邊界附近要用實測的領先。
 - 2026-10-10：使用者「開始第③步，檔位照建議」。D48 第③步的準備開始。
 - 2026-10-10：D48 第③步的準備完成（workflow 5 位：原型 high、審查 xhigh、修正 high、宣告 high、D45 對抗式檢查 xhigh）。原型：09a 的 worker 等待 16.5／12.3／8.1／3.9／≤0.4 ms，和推導 N＝4 相符；審查推翻「09a 的折讓與晚醒相消」（已修，並加 bucket 剩餘空間的上限）、指出第②步的量測在結構上判不了 B2（改寫 `measure3.py`）、B2 與 09a 的測試缺口（已補，突變改為被殺）。對抗式檢查推翻產生空檔的固定帶與 J2d 的比較型門檻，修正已套用並由主對話重跑乾跑核對。宣告送使用者核准。
+- 2026-10-10：使用者先要求補三處文件（第 09 批的重推條件 11、第③步宣告的範圍限制、D44 未結事項的 D49 第二階段），再核准 D48 第③步的宣告（「宣告核准，四件事照建議，檔位照建議，開始跑」）：三棵 tree 共用 base 的 Match、Gateway 與 arena；84 個項目；J2d 為絕對門檻；開發跑次每棵 2 次已確認。session 由主對話直接執行。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
@@ -250,6 +251,7 @@
 - **Gateway 與 Match 重複過濾已解析的命令**（2026-10-10 使用者要求記錄）：Gateway 在 `gateway/server.go:420-423` 略過 ≤`lastResolved` 的命令，`lastResolved` 在收到 snapshot 時更新（`:520-534`）；Match 的 host 在 `MatchRuntimeHost.cpp:88`、`PvpMatch` 在 `PvpMatch.cpp:78-81` 也只收下 >`lastResolvedCommand` 的命令。這是協議契約定下的（`docs/object_fps_pvp/network-architecture.zh-Hant.md:230-233`：「已完成／舊 epoch 不重執行」），平常無害；副作用是 Client→Gateway 路上遲到的命令被 Gateway 吞掉，到不了 Match，也不產生相位樣本（D48 第②步在 client→Gateway 注入短停頓，0／5 跑次觸發 late 修正）。要不要改屬於協議契約的決定，另立，不在 09a／09b 順手改。另有第二道過濾：`runtime_link.go` 的 `acknowledge()` 在 snapshot 經過時剪掉 link 待送視窗中序號 ≤lastResolved 的命令（`:192-197`），所以只拔 `server.go` 那一行，遲到的命令仍可能在這裡被剪掉。原則見 D49（丟棄的決定權與知情權留在 Match）。
 - 「時鐘到網路路徑」系列紀錄（2026-10-10 使用者要求）：v7 完成後（第 16 批之後）撰寫，分 5 集：①時鐘、②命令脫離畫面幀、③網路路徑的節拍、④FireGate 與 C2、⑤跨機器的時間。附各批的 commit id、L2 數字與調試過程（含更正）。讀者與存放位置屆時決定。
 - **（嚴重度高，D44）偶發的 movement epoch 重設**：（第 08b 批草案已回答：08b 不直接改變輸入抵達與 backlog；可能機制是約 30～150 ms 的短停頓造成成對遲到，Client 相位前移 2 Tick，30 Tick 合計 ≥105，屬推論，見[第 08b 批](08b-event-driven-results.md)「對 movement 佇列與 backlog 的影響」。第 09 批規劃要回答是否影響常數的凍結。）第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
+  - D49 第二階段（2026-10-10 使用者要求記錄）：D49 第二階段會讓 Client 端網路遲到開始觸發 late 修正，D44 的暴露會上升；第 16 批的整體回歸要在 D49 第二階段之後，或明寫它涵蓋的範圍。（依據：D48 第②步的試跑，Client→Gateway 的短停頓 0／5 跑次產生 late 修正，原因是 Gateway 略過 ≤`lastResolved` 的命令；第 09 批的重推條件 11。）
 - probe 幀格點的相位（D46⑦）：action probe 的起點綁在 join Wait 之後收到 snapshot 的時刻（`gameplay_action.hpp:109`；Wait 每 2 ms 輪詢，`action_main.cpp:79-82`），超時時重新錨定（`:170`）。所以建置不同時，probe 幀相對 Match Tick 的相位會系統性地移動，b、a＋b、`legal_match_p95_ms`、d 不能跨建置比較（第 08b 批「b 段變長的調查」）。起點隨機化留到第 09 批規劃時決定。
 - 系統時鐘（主機計時狀態）與後段變慢（2026-10-09 使用者提出）：第 07 批之後做了橫向對比（[第 07 批](07-match-tick-ipc.md)的「橫向對比」）。Match 端的原因（8 ms 狀態下舊 Match 的晚醒與補步）已由第 07 批消除。剩下：clean-30 的 `legal_match_p95_ms`／`legal_client_p95_ms` 在 8 ms 狀態仍偏高，來源可能是 Client 的 worker 輪詢或 probe 的 30 FPS 幀節拍；第 08 批之後用同樣的分組再對比一次。第 08 批 L2（2026-10-09）的 clean-30 全部是 4 ms 狀態，無法對比；之後的量測出現 8 ms 狀態時再補。第 08 批的評估更正了 clean-30 的部分：它的快慢兩群來自 30 Hz 節拍的相位與 probe 的幀量化，不是主機狀態（見[第 07 批](07-match-tick-ipc.md)「橫向對比」的更正）。
   - 更正（2026-10-09，核對）：「Match 端的原因已由第 07 批消除」成立：新 Match 在兩種狀態都沒有晚醒、Tick 間隔最大 16.8 ms，clean-60 的 `legal_match_p95_ms` 8.8～11.9 ms；機制是舊 Match 的 Tick 晚到，而不是補步。本條中段「clean-30 在 8 ms 狀態仍偏高，來源可能是 worker 輪詢或幀節拍」已由末尾的更正推翻（舊 worker 的送出側在 8 ms 狀態也沒有變慢，a 的 P95 3.0～3.6 ms）。仍未結的只有：新 worker 在 8 ms 狀態下沒有樣本。另外，主機狀態以 probe 連線前 3 秒的 TimerBaseline 判定，第 07 批 L2 有 1 次在跑次中轉換而被分錯（見第 07 批「橫向對比」的補充更正）；舊 Match 的跑次可以改用 Match 自己的晚醒分布判定。

@@ -98,6 +98,7 @@
 8. `cooldownTicks`、`AuthorityTickRate`、`SnapshotIntervalTicks` 改變。
 9. 第 10 批／TT-2 的日誌寫出進入熱路徑，使射擊路徑的 P99 增加 >1 ms。
 10. 任何 clean 量測（M0、C2、回歸、第 16 批）出現：窗口外的 R<earliest；R>earliest＋7；權威 Cooldown 拒絕（這同時是停止條件）。
+11. D49 第二階段（丟棄回報給 Match）實作後，重跑 M0，並用 D48 第③步的方式加跑 Client→Gateway 短停頓的注入（2026-10-10 使用者追加）。理由：現在 Client→Gateway 的遲到被 Gateway 過濾（`gateway/server.go:420-423`），幾乎不產生 late 修正；丟棄回報讓 Match 看見這些遲到之後，late 修正與 W_post 的分布都可能改變，D48 第③步的結論也只在現在的過濾下成立。
 
 ## 步驟（決定確認後執行）
 
