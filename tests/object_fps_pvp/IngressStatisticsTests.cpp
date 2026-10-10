@@ -250,7 +250,10 @@ std::string ReadText(const std::filesystem::path& path) {
     REQUIRE(input);
     std::ostringstream text;
     text << input.rdbuf();
-    return text.str();
+    // A Windows checkout may turn the golden's line ends into CRLF; the writer emits LF.
+    auto content = text.str();
+    std::erase(content, '\r');
+    return content;
 }
 
 // The records of the golden match-ingress.jsonl, as the host would hand them over.
