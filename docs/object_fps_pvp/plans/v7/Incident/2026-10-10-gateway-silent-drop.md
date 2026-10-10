@@ -2,7 +2,7 @@
 
 ## 1. 摘要
 
-Gateway 用權威狀態的延遲副本 `lastResolved` 判斷命令是否過時，悄悄丟掉序號不大於它的命令（`apps/object_fps_pvp/gateway/server.go:421-423`）。這段過濾是 v3 加的（`391ca00`，2026-09-26），當時成立；`a4ccaa5`（2026-10-02）讓 Match 開始量「被替代之後才到的命令晚了多少」，需要的正是被丟掉的那些命令，過濾卻沒有重新檢視。Gateway 的副本只比 Match 落後約 0.5 ms，所以從那時起 Match 幾乎量不到任何遲到；late 修正的規則、backlog 餘裕、FireGate guard 的推導都在截斷的資料上校準，2026-10-10 一整天的 D48 調查也在這個盲區上展開。D48 第①步開始到問題被重新定義（D51）是 8 小時 39 分。目前已重新定義問題、盤點受影響的工作，並在分批規劃讓 Match 知道 Gateway 丟了哪些命令、為什麼丟的機制（只規劃，未實作）。
+Gateway 用權威狀態的延遲副本 `lastResolved` 判斷命令是否過時，悄悄丟掉序號不大於它的命令（`apps/object_fps_pvp/gateway/server.go:421-423`）。這段過濾是 v3 加的（`391ca00`，2026-09-26），當時成立；`a4ccaa5`（2026-10-02）讓 Match 開始量「被替代之後才到的命令晚了多少」，需要的正是被丟掉的那些命令，過濾卻沒有重新檢視。Gateway 的副本只比 Match 落後約 0.5 ms，所以從那時起 Match 幾乎量不到任何遲到；late 修正的規則、backlog 餘裕、FireGate guard 的推導都在截斷的資料上校準，2026-10-10 一整天的 D48 調查也在這個盲區上展開。D48 第①步開始到問題被重新定義（D51）是 8 小時 39 分。v5 與 v6 的穩定基線（`f97beb5`、`c7d6dd3`／`object_fps_pvp-v1.1.0`）也帶著這個缺陷；權威狀態與裁決沒有錯，損失的是資訊。目前已重新定義問題、盤點受影響的工作，並在分批規劃讓 Match 知道 Gateway 丟了哪些命令、為什麼丟的機制（只規劃，未實作）。
 
 ## 2. 狀態與嚴重度
 
@@ -11,20 +11,30 @@ Gateway 用權威狀態的延遲副本 `lastResolved` 判斷命令是否過時�
   - 被截斷的是權威（Match）做決定的輸入，不是某一次量測的雜訊。建在它上面的頻率類結論全部要在新基準上重做（見第 3 節）。
   - 缺陷從 `a4ccaa5`（2026-10-02）存在到 2026-10-10。v5 在 10-03 升為穩定基準，10-04 起是 pvp-v6，最早的 L2 記錄是 10-05；所以 v5 收尾、v6 全部與 v7 的驗收都在截斷的資訊流上做（推論）。
   - `a4ccaa5` 的相位追蹤常數（負樣本連續 2 次、修正夾在 ±2 Tick、240 個樣本的 P90）從 v5 起就在 master 上，也是在截斷的樣本上決定的。M0、FireGate 常數凍結與 09a 的產品實作還沒發生（D51 ⑤ 把它們排在修資訊流之後）。
+  - v5 與 v6 的穩定基線也受影響（見 3.5）。
+- **嚴重度的界線（它不是什麼）：**
+  - **權威狀態沒有錯。** 被過濾的都是 Match 不會執行的命令：Gateway 的 `lastResolved` 只等於或落後 Match 的游標，序號 ≤ 它的命令在 Match 端本來也會被略過（`PvpMatch.cpp:67`、`MatchRuntimeHost.cpp:88`）（推論，依程式的順序：`lastResolved` 只在接受 snapshot 時更新，`server.go:520-534`）。
+  - **沒有錯誤的裁決，權威 digest 不受影響。** digest 的情境直接驅動 `PvpMatch`／`MatchRuntimeHost`，不經過 Gateway，而且明確排除 `movementSlack*`（`tests/object_fps_pvp/AuthorityDigest.cpp:46`）。
+  - **損失的是資訊。** 控制器（late 規則）的校準和我們的分析都建立在截斷的資料上。真實網路變差時，系統走 Held、starvation 或重設，而不是平順的相位修正（推論，U1，待重新量測確認）。
 
 ## 3. 影響
 
 ### 3.1 被截斷的是什麼
 
 - 截斷只發生在一種情況：**命令被 Match 替代之後才到**。Match 的負 slack 樣本只來自這類命令（`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:104-112` 的 `substituted`）。
-- Gateway 的 `lastResolved` 只在 snapshot 經過時更新（`server.go:520-534`，賦值在 `:528`），落後 Match 典型 <0.5 ms、最壞約 2 ms（`pvp-v7-infoflow-plan-20261010/facts-gateway/edge_lag.tsv`）。所以命令只有晚到約 0～0.4 ms 時 Match 才量得到，晚得更多就在 Gateway 被吞掉。
-  - 例：D48 的原型 x1（純延遲 50 ms、視窗 100 ms）有 8 個被替代的命令，第一份副本晚了 12.7～14.5 ms，全部在 Gateway 被略過（`facts-gateway/arrival_vs_edge.tsv`）。
+- Gateway 的 `lastResolved` 只在 snapshot 經過時更新（`server.go:520-534`，賦值在 `:528`），落後 Match 典型 <0.5 ms、最壞約 2 ms（推論：上界取自 `pvp-v7-infoflow-plan-20261010/facts-gateway/edge_lag.tsv` 的「snapshot 產生 → Client 收到」，clean 與 x1 跑次 p50 0.33～0.55 ms、p99 0.67～1.06 ms、最大 0.9～2.3 ms；Gateway 的更新落在這段之內）。所以命令只要晚到超過這個量，就在 `server.go:421-423` 被吞掉：late 規則對 Client 端的網路遲到幾乎完全看不見。
+  - 例：D48 的原型 x1（純延遲 50 ms、視窗 100 ms）兩個跑次各有 8 個被替代的命令，第一份副本都在 Gateway 知道已解析之後才到，全部被略過；兩個跑次中最晚的分別晚 14.5、12.7 ms（`facts-gateway/arrival_vs_edge.tsv`）。
+- late 規則只看得到「Gateway 的過濾看不到的延遲」，有兩種情況：
+  1. **Gateway 的水位線本身被拖慢**：host-ipc-250ms 的「snapshot 產生 → Client 收到」p99 89.8 ms、最大 254.8 ms（`edge_lag.tsv`），Gateway 的 `lastResolved` 跟著落後，晚到的命令才過得了過濾。推論：這解釋了 D44 為什麼出現在 host-ipc 的跑次。
+  2. **延遲發生在過濾之後**：D48 第②③步的 Gateway→Match IPC 延遲（D50）讓命令準時通過 Gateway、再晚到 Match。這是 D48 只有這種注入能產生 late 修正的原因。
 - 同一條路徑上還有其他沒有計數的丟棄（是否發生過大多判斷不了，見 U3）：
   - link 寫出前再剪一次（`apps/object_fps_pvp/gateway/runtime_link.go:192-197`）。
   - epoch／life 前進時整個刪掉待送視窗（`runtime_link.go:189-191`）。
   - link 合併上限（`runtime_link.go:146-148`）超過時回傳 `ErrInput`，整批在 `server.go:439-441` 被悄悄丟掉；而 `:432` 的 `CommitSequence` 在那之前就已提交。
   - epoch／life 不符（`server.go:413-415`）、超過未來上限（`:424-426`）、內容衝突（`:427-429`）。
-  - 第 1 批的普查（20:22）：Gateway 有 30 多處「收到卻不轉送」，只有速率限制有計數（全 Gateway 的總數）；Match 自己的拒絕也是無聲的（`IpcHost.cpp:354`、`:358`，`MatchRuntimeHost.cpp:72`、`:90`、`:93`）。完整清單見 `facts-gateway/report-from-workflow.md`、`facts-contract/report-from-workflow.md`。
+  - 第 1 批的普查（20:22）：Gateway 有 30 多處「收到卻不轉送」，只有速率限制有計數，而且是全 Gateway 的總數（`action_delivery.go:394-396`）。完整清單見 `facts-gateway/report-from-workflow.md`、`facts-contract/report-from-workflow.md`。
+  - 不在 D49 清單上的幾處：link 對舊 epoch／life 的輸入直接回 nil（`runtime_link.go:117-119`）；UDP 舊序號回 `ErrStale`（`services/gyo_gateway/session/session.go:89-91`），還在 `action_delivery.go:398-403` 被算成「接受」；解碼失敗（`server.go:407-410`）；未授權（`action_delivery.go:391-393`，不計數）。
+  - Match 自己的拒絕也是無聲的：`IpcHost.cpp:354`（命令數 0 或超過 12 時 `continue`）、`:358`（丟掉 `SubmitInput` 的回傳值）；`MatchRuntimeHost.cpp:72`（重設中或 `CanSubmitInput` 不成立）、`:90`（內容衝突）、`:93`（超過 32 個）都回 false，沒有紀錄。
 - 沒有替代的跑次不受影響：Gateway 在那裡丟的只是 Match 早就收過的重送。佐證是 `facts-gateway/relay_input_fate.tsv`：clean／burst／loss 類的替代都是 0，故障案例是 2～88。這份表只涵蓋 08b 的 dev-matrix 與 D48 第②步的開發跑次，不含 L2。
 - 修好之後仍有的限制：Match 的 `substituted` 只保留 64 個序號（約 1.07 秒），epoch 一換就清空（`MatchRuntimeHost.cpp:15`、`:396-397`、`:409`），所以晚超過約 1 秒的遲到仍量不到。
 
@@ -64,11 +74,25 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 - Cooldown：存在與力學保留（K12），發生率重做（R8）。
 - FireGate：D51 只說公式保留；guard 的實測值也可保留（K7），但「領先＝2」的前提多常被打破要重做（R7）。
 - 注入的位置：「被迫改到 Gateway→Match」只說對一半。第②步試跑的 0／5 有三層原因：
-  1. 我們的 relay「擋住再放出」時，每個 session 只保留最新一包，其餘丟棄（例：upstream-250ms 收到 1922 包、沒送達 28 包；`facts-gateway/relay_input_fate.tsv`）；
+  1. 我們的 relay「擋住再放出」時，每個 session 只保留最新一包，其餘丟棄（`build/acceptance/object_fps_pvp/action_probe.py:254`；例：upstream-250ms 收到 1922 包、沒送達 28 包；`facts-gateway/relay_input_fate.tsv`）；
   2. 放出的那一包只落在一次發布裡（`pilot_scan.txt` 中 p1～p3 都是 `longest consecutive 1`），而 late 修正需要連續 2 次發布都帶負樣本；
   3. 送得到的少數晚到命令再被 Gateway 過濾。
 
   也就是說，注入工具本身也在丟資料。只有原型 x1（純延遲）是單純被過濾擋下的。
+
+### 3.5 穩定基線
+
+**結論：v5 與 v6 的穩定基線都帶著這個缺陷；v4 不受影響（推論）。**
+
+| 基線 | 識別 | 含 `391ca00`（過濾） | 含 `a4ccaa5`（遲到量測） | 判斷 |
+|---|---|---|---|---|
+| v4（2026-09-28 升格） | 起始 HEAD `bfeb047`（`plans/v4/STABLE_BASELINE.md:17`；工作樹另有未提交的內容，見同檔） | 是 | 否 | 有過濾、沒有需要已解析命令的消費者，前提仍成立。推論：不受影響（依 blame，`MatchRuntimeHost.cpp:104-112` 由 `a4ccaa5` 加入） |
+| v5（2026-10-03 升格，`plans/v4/HANDOFF.md:5`） | master 合併 `f97beb5`（`plans/v5/STABLE_BASELINE.md:22`） | 是 | 是 | 受影響 |
+| v6（2026-10-08 升格，`protocol-v6.zh-Hant.md:3`） | master `c7d6dd3`、量測來源 `fee92ff`（`plans/v6/STABLE_BASELINE.md:23`）；tag `object_fps_pvp-v1.1.0`＝`9a6fa8e` | 是 | 是 | 受影響 |
+
+- 核對命令：`git merge-base --is-ancestor <commit> <基線>`，對 `bfeb047`、`f97beb5`、`c7d6dd3`、`fee92ff`、`object_fps_pvp-v1.1.0` 逐一執行（2026-10-10 20:32）。另外，2026-10-02 的 snapshot tag 中，`0bd5363`、`1f96b50` 只含 `391ca00`，`bec86b7`（PR #11，v5 相位追蹤）起兩者都含。
+- **對 C1／C2 的意義：** C1／C2 比較的「v6final 對 v7」兩邊都在同一個盲區裡。比較本身仍然成立（同一個盲區下的新舊對比），但兩邊都不代表修正後的世界。
+- 穩定基線在修正之後要怎麼處理（重新發佈，或在各 `STABLE_BASELINE.md` 加註），由使用者決定（第 8 節）。
 
 ## 4. 時間線（JST）
 
@@ -117,6 +141,9 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 | 20:02:19 | 使用者指出估計超過單一問題 2 小時的上限，要求分批 | 主對話 |
 | 20:02:47 / 20:03:02 | 一次跑完版停掉（6 分 16 秒）/ 第 1 批（事實核對）啟動 | `wsu7h2j4s`；`wuq2e3wc2`；`505627d`（20:03:14） |
 | 20:03～20:22 | 第 1 批完成：30 多處無聲丟棄、Gateway 副本落後 <0.5 ms、注入工具也在丟資料、只刪過濾會讓 `:424` 下溢、新增回報欄位依 `protocol-v6.zh-Hant.md:50` 算改 wire | `26805e5`；`pvp-v7-infoflow-plan-20261010/facts-*/` |
+| 20:00～20:26 | 事故紀錄的 workflow（時間線與盤點 2 位、撰寫 1 位、對抗式核對 1 位）完成；子 agent 寫報告檔被 harness 拒絕，結果由主對話存成各子目錄的 `from-workflow.md` | `wybzpf4fx`；`pvp-v7-incident-20261010/` |
+| 20:31:33 | 套用核對的 18 項修正，初版放進 `docs/`（本資料夾） | `08a02c7` |
+| 20:32 | 使用者要求補完：第 1 批的五點與穩定基線的確認；穩定基線的 ancestry 核對 | 使用者訊息；3.5 |
 
 ## 5. 根因
 
@@ -135,6 +162,8 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 2. **沒有丟棄計數。** 輸入路徑（`server.go:400-441`）的丟棄沒有計數，也沒有 log（`:421` 是 `continue`，其餘是 `return nil`）。例外只有速率限制（`rateRejectedPackets`，`server.go:89`；log 在 `:163`、`:748`），而且是全 Gateway 的總數。截斷在證據裡沒有痕跡。
 3. **Match 端也過濾，所以看起來無害。** 讀到 Gateway 過濾的人很容易把它當成 Match 那道檢查的重複、無害的提前執行。本 session 內，10-09 19:53 到 10-10 01:01，三個 workflow 的四個 agent 讀到這一行，都沒有標出；08b 草案把「已解析過的序號會被丟掉」只歸給 Match（`08b-event-driven-results.md:132`）。
 4. **症狀不像故障。** 截斷的後果是「沒有 late 修正」，或只以 Held／starvation 重設的形式出現（推論，U1），這兩者都可以被解讀成系統健康或別的原因。
+5. **注入工具本身也在丟資料。** 我們的 relay「擋住再放出」時，每個 session 只保留最新一包，其餘丟棄（`build/acceptance/object_fps_pvp/action_probe.py:254`；例：upstream-250ms 收到 1922 包、轉送 1892、放出 2、沒送達 28；D48 第②步 p1～p3 各放出 2 包、沒送達 4～16 包；`facts-gateway/relay_input_fate.tsv`）。Gateway 再把少數送得到的晚到命令過濾掉。所以 Client→Gateway 型的注入「量不到 late 修正」，有一部分是工具造成的，看起來就更像系統性質。
+6. **沒有任何測試釘住過濾，而且「只拔一行」會更糟。** 第 1 批在副本上逐一刪除各個丟棄（`facts-gateway/probe_mutants.tsv`）：只刪過濾的突變 M1 跑完所有 Go 測試都存活。刪掉過濾之後，`server.go:424` 的 `command.Sequence-p.lastResolved` 會無號數下溢（`lastResolved` 是 `uint64`，`server.go:50`），整包被丟、連包內的新命令一起；要同時把 `:424` 改成只檢查 `Sequence > lastResolved` 的命令（M2），`server_test.go:690` 才會失敗。
 
 ## 6. 流程上的因素
 
@@ -182,7 +211,9 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 | `network-architecture.zh-Hant.md:230-233` 的條文歧義 | 丟棄回報計畫或第 11 批 | 未開始 | 協議文件 |
 | U4：用既有的 `match-commands.jsonl` 分出閒置主機的替代 | Claude | 未開始 | 第①步證據目錄 |
 | 實作丟棄回報（轉送已解析的命令並處理 link 的剪除、合併上限與 `:424` 的下溢；每一種丟棄都讓 Match 知道；Match 記下自己的拒絕），加入「晚到的命令會送到 Match」的測試、丟棄計數與突變 | 使用者核准規劃後 | 未開始 | D51 ⑥⑩；P2 |
-| 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者 18:31:20 的原文是「用 D48 第③步的方式」；改用 x1 型的純延遲（不經過只保留最新一包的 relay）是盤點的建議，**待使用者決定** | 實作後 | 未開始 | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
+| 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者在補完指示（20:32）中要求之後的注入用**純延遲型**（例如原型 x1，或 D48 第③步的 IPC 延遲那種不丟包的延遲），不用只保留最新一包的「擋住再放出」 | 實作後 | 未開始 | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
+| 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）在修正之後怎麼處理：重新發佈，或在 `STABLE_BASELINE.md` 加註 | 使用者決定 | 未開始 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
+| 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補（第 10 批或重新量測之前） | 使用者決定排程 | 未開始 | `build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，修改要另立） |
 | 09b 重做（R3、R4、R12；09a 與 B2 的順序 U6） | 重新量測後 | 未開始 | `09b-phase-tracking.md` |
 | M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 未開始 | D51 ⑤⑥；`09-firegate-c2.md` |
 | D44 的頻率與歸因重做（R2）；第 16 批的整體回歸照 D44 不變，但基準換成修好之後的資訊流 | 重新量測後；第 16 批 | 未開始 | HANDOFF D44、未結事項 |
@@ -193,20 +224,25 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
    之後怎麼做：丟棄或過濾資料的地方，把前提寫成測試（例如「晚到的命令會送到 Match」）；新增消費者的 commit，要列出它依賴的上游資料，並檢查上游有沒有丟掉它。
 2. **看不見的丟棄等於沒有證據。**
    之後怎麼做：每一種丟棄都要有計數與原因（D49、D51 ⑩）；量測報告裡「0 次」要附上「這個 0 有沒有可能是被上游丟掉」的核對，包括我們自己的注入工具。
-3. **發現盲區時，先問基準是否成立，再決定要不要繞過。**
+3. **注入工具要先確認自己不丟資料。**
+   之後怎麼做：之後的注入用純延遲型（不丟包、不只保留最新一包）；注入前先核對工具的轉送紀錄（收到、轉送、放出、沒送達），「擋住再放出」只在要測的就是遺失時使用，並寫明。
+4. **「只拔一行」之前，先看那個值還被誰用。**
+   之後怎麼做：移除過濾或檢查時，先列出同一個變數的所有用途（例如 `lastResolved` 還用在 `:424` 的上限），並為移除的那一行補上能單獨失敗的測試與突變。
+5. **發現盲區時，先問基準是否成立，再決定要不要繞過。**
    之後怎麼做：碰到「量不到預期的現象」的停止條件時，先停下來回報「這是系統性質，還是觀測路徑的缺口」，由使用者決定要不要繼續在現在的基準上做。
-4. **探索與驗收要用不同的嚴格度。**
+6. **探索與驗收要用不同的嚴格度。**
    之後怎麼做：每一步開始前寫出時間估計，超過 1.5 倍或單一問題累計超過 2 小時就停下回報；估計一開始就超過上限時，先分批或先問；每個關卡先問「這一步的結果會改變哪個決定？」，答不出來就不做（memory `time-box-and-decision-gate.md`）。事前宣告與對抗式檢查留給驗收與要凍結的東西。
-5. **不要把缺陷描述成無害或好處。**
+7. **不要把缺陷描述成無害或好處。**
    之後怎麼做：Claude 碰到「意外的保護／緩衝」「失去的只有某某訊號」這類說法時，先把它當成缺陷描述清楚（誰做了什麼決定、誰不知道、誰需要被丟掉的東西），再討論它有沒有好處；修正範圍的取捨交給使用者決定。
-6. **讀程式的 agent 要看元件之間的假設，不只是單一元件的行為。**
+8. **讀程式的 agent 要看元件之間的假設，不只是單一元件的行為。**
    之後怎麼做：跨 Gateway／Match 的分析，要求列出「這個元件丟掉或改寫了什麼、下游誰需要它」；對抗式檢查也要涵蓋元件之間的假設。
 
 ## 10. 證據位置
 
 - 程式：`apps/object_fps_pvp/gateway/server.go:413-441`、`:520-534`；`apps/object_fps_pvp/gateway/runtime_link.go:146-148`、`:189-197`；`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:88`、`:104-112`；`apps/object_fps_pvp/src/Pvp/PvpMatch.cpp:67`、`:78-81`；`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:354`、`:358`。
 - commit：`391ca00`、`de87bb9`、`a4ccaa5`；這一天的 `491fcb6`、`7054128`、`190a827`、`9fedd79`、`50ea0fc`、`fcda6e0`、`ae5678d`、`fe25ba6`、`7d6dce5`、`e1fa218`、`4c227f0`、`856569d`、`a5f3ce4`、`eac65bb`、`b345bbd`、`d0192db`、`7666734`、`6ee80c7`、`505627d`、`26805e5`。原型 worktree：`8fabfa6`、`e6885b7`、`c2705be`。
+- 穩定基線：`docs/object_fps_pvp/plans/v4/STABLE_BASELINE.md:17`、`plans/v5/STABLE_BASELINE.md:22`、`plans/v6/STABLE_BASELINE.md:23`、`plans/v4/HANDOFF.md:5`、`docs/object_fps_pvp/protocol-v6.zh-Hant.md:3`；ancestry 核對見 3.5。
 - 文件：`docs/object_fps_pvp/plans/v7/HANDOFF.md`（D44～D51、進度記錄器 2026-10-10、未結事項）、`09-firegate-c2.md`（重推條件 11）、`09a-input-send-pinning.md`、`09b-phase-tracking.md`（D48 各節）、`08b-event-driven-results.md:132`、`docs/object_fps_pvp/network-architecture.zh-Hant.md:230-233`、`protocol-v6.zh-Hant.md:50`。
-- 證據目錄（`build/target/_build/test/logs/`，不在儲存庫內）：`pvp-v7-d48-step1-20261010`、`pvp-v7-d48-step2-dev-20261010`（`pilot_scan.txt`、`p4-gateway-100-at2.0/plan.json`）、`pvp-v7-d48-step2-20261010`、`pvp-v7-d48-step3-prep-20261010`、`pvp-v7-d48-step3-20261010`（`session-wallclock.txt`）、`pvp-v7-infoflow-plan-20261010`（`facts-*/report-from-workflow.md`；`facts-gateway/*.tsv`）。
+- 證據目錄（`build/target/_build/test/logs/`，不在儲存庫內）：`pvp-v7-d48-step1-20261010`、`pvp-v7-d48-step2-dev-20261010`（`pilot_scan.txt`、`p4-gateway-100-at2.0/plan.json`）、`pvp-v7-d48-step2-20261010`、`pvp-v7-d48-step3-prep-20261010`、`pvp-v7-d48-step3-20261010`（`session-wallclock.txt`）、`pvp-v7-infoflow-plan-20261010`（`facts-*/report-from-workflow.md`；`facts-gateway/edge_lag.tsv`、`arrival_vs_edge.tsv`、`relay_input_fate.tsv`、`probe_mutants.tsv` 等）。
 - 本事故的工作檔：`pvp-v7-incident-20261010/`（`timeline/`、`inventory/`、`draft/`、`check/` 的 `from-workflow.md`，以及各自的 `commands.txt`）。
 - 對話紀錄與 workflow 紀錄：Claude Code 的 session 紀錄（本機，不在儲存庫內），時刻由這些紀錄的 UTC timestamp 換算成 JST。
