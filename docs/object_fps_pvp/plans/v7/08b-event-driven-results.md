@@ -340,3 +340,7 @@
 - D44 一節：分析 1 位（high）＋對抗式檢查 1 位（xhigh），使用者 2026-10-09 同意（「xhigh 可以，照建議配置」）。對抗式檢查撤回了分析中「Gateway 嫌疑最大」與「延遲只會讓排隊命令變少」兩句，改寫為上面的說法，並補上快照轉送、host mutex 的取鎖頻率、Client worker 的 2 ms 阻塞三個共用點，以及 network20 屬於同一條鏈。
 - 規劃的對抗式檢查結論是「可行，但要先更正」。已併入本草案的修正：計時器鎖定改為記錄並列為第 09 批的輸入；D44 的停止條件改為明確定義；M3 改用長視窗計數；G8 指定上限與情境；判定 2 用字面值比較；寫明判定 3 由 judge 套用；判定 5 的門檻改為待決定；probe 相位機制加上 `gameplay_action.hpp:170`；probe 的雜湊與兩處行號；b 的結論限定在 Tick 解析度。
 - 證據：`build/target/_build/test/logs/pvp-v7-08b-plan-20261009/`（git 忽略）：`minimal/`、`evidence/`、`risk/`、`judge/`、`adversarial/`，各自的 `commands.txt` 與 `sha256.txt`。
+
+## 之後
+
+- **上下行同一原則：事件＝新內容**（第 08c 批，[Gateway 丟棄回報](08c-drop-report.md)）。下行由 08b 拿掉只帶 retired 的重複包；上行由第 08c 批的 runtime link 拿掉已寫出命令的副本（已寫出去重：同一（玩家、epoch、life、序號）而且內容相同的命令不再寫出，換代與 Leave 時清空）。兩者都是可靠 TCP 上發送端的已送集合，失敗時連線致命；上行的去重是最佳化：Match 仍把重複的命令當成無操作，不依賴它。

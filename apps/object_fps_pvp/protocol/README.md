@@ -19,9 +19,18 @@ Gateway codec owns game rules.
 UDP retains the shared 24-byte framing header and 1200-byte total packet limit.
 Runtime IPC retains length-prefixed TCP frames. Ready supplies Match-owned combat
 and movement rules; Gateway forwards them in Welcome. Snapshot movement and
-combat records carry matching life generations. Movement windows are discarded
-at an authoritative life/epoch transition, while the immutable action ledger and
-ACK/retirement cursors survive until Leave/disconnect. Nonzero stale/future-life
+combat records carry matching life generations. The Match alone decides which
+movement commands are resolved, stale, conflicting or beyond the bound, and
+discards its queued movement commands at an authoritative life/epoch
+transition; it counts every refusal and discard by reason. The
+Gateway merges windows and does not write a command again that the link already
+wrote with the same content in the current epoch/life (a transport
+optimization; the Match still treats repeats as no-ops). Windows the Match may
+refuse as a whole (an old or future epoch/life, a conflict, beyond the bound,
+the pending window at an authoritative life/epoch transition) are forwarded
+unmerged; the drops the Gateway still executes are counted per player and
+reason. The immutable action ledger and ACK/retirement cursors survive until
+Leave/disconnect. Nonzero stale/future-life
 actions reach Match for a terminal decision.
 `PlayerState.movement_slack_sequence` and `movement_slack_us` are an optional Host
 timing observation, present together or not at all: the smallest movement slack since

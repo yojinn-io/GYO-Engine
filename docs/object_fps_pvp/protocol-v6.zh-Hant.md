@@ -1,6 +1,6 @@
 # PvP Protocol v6：受擊、arena 內容與 Collision 契約
 
-更新：2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
+更新：2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
 **wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
@@ -69,6 +69,28 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
   - 修訂前的 Client 只能載入 2 個出生點的 arena；修訂後的 Match 只主持出生點數不少於 4 的 arena（§2）。兩者的 arena digest 必然不同，Client 以 `arena_content_mismatch` 拒絕。
   - 修訂前後的 Gateway 與 Match：readiness 的 `max_players` 不相等，Gateway 啟動失敗。
   - 修訂後的 Match 以 `--arena` 載入 2 個出生點的 arena：主持條件不成立，Match 啟動失敗。
+
+### Runtime 輸入流（P2 資訊流修訂）
+
+Gateway→Match 的 `PlayerInput` 不再是 Client 未確認窗口的完整副本：已寫出、而且內容相同的命令不再寫出；舊或未來 epoch、衝突與超過上限的窗口以不合併的單獨訊息轉送；舊序號的 Input 照樣轉送但不刷新 liveness。proto 欄位與 Match 的處理都不變。這屬於上述候選期規則定義的「改語意」。v6 已在第 14b 批升格，這次比照該規則與房間容量修訂的先例處理，經使用者同意（v7 交接 D53）：版本維持 6，Gateway 與 Match 在同一個 commit 切換，不混用修訂前後的 v6 二進位。
+
+- 「已解析、過時、衝突、超過上限」由 Match 判斷（D49）。Gateway 照常轉送已解析的命令，讓 Match 量測遲到；Gateway 的游標副本只用來限制合併窗口的大小（游標以後最多 32 個，已解析的部分最多保留 32 個），不用來丟棄命令。
+- 已寫出去重是傳輸層的最佳化，不是保證：鍵是（玩家、epoch、life、序號）加內容，內容不同的副本走拒絕線；保留期是寫出過的最大序號往回 632 個（Match 帳本 600＋未來上限 32），超過的副本照常轉送；換代與 Leave 時清空；拒絕線不記入。Match 仍必須把重複的命令當成無操作，不得依賴去重。
+- 每則 IPC 的 `PlayerInput` 最多 12 個命令；較大的窗口切成多則，拒絕線的窗口不和主線合併。
+- Match 拒絕或丟棄的命令與 Gateway 執行的丟棄都依原因計數，寫進 ingress 統計行；Gateway 執行的丟棄 P2 只有人看得到，Match 不知道（下面的已知缺口）。
+- 這次修訂的 Data Contract（ingress v1：三種統計行與 Match 的細節檔 `match-ingress.jsonl`，暫定 v1，第 10 批決定沿用或改版）的格式、鍵名規則與守恆式見 [`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md`](../../tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md)；設計與 I1 的判定條件見 [第 08c 批](plans/v7/08c-drop-report.md)。
+
+已知缺口（到 pv7 或第 10 批為止）：
+
+1. Gateway 拿不到內容的丟棄（速率限制、解碼失敗、未授權、舊序號的 Actions 與其他種類、未知種類、非 active 時的 input／actions）：P2 只計數，Match 不知道。未授權只能記到宣稱的 session，可被偽造，只能看、不能拿來處罰。
+2. 轉送之後仍由 Gateway 執行的兩種丟棄：拒絕線溢出（每位玩家最多 4 個窗口，超過丟最舊的）、主線已解析部分超過 32 個時的截短。
+3. 動作的語意丟棄 A3、A5：P2 只計數。
+4. 下行：Gateway 拒收 Match 的 snapshot（D1、D2）只計數，Match 不知道；D5、D6 在第 10 批。
+5. 時間：Gateway 的收包時刻沒有送給 Match（pv7 的 dwell 是候選），Match 分不開 IPC 延遲與網路遲到。
+6. Client 端的樣本流失（每次發布只帶最小值、`snapshot_` 被覆寫、IPC latest-wins、Client 佇列溢出）：host 端的計數由 Match 的 ingress 統計行提供；Client 端的欄位在第 10 批。
+7. Match 的替代紀錄保留 600 Tick；晚超過 10 s 的記為 `aged`。
+8. kernel 的 UDP 接收緩衝溢出（Gateway 讀不到，不屬於「Gateway 收到」），以及 Gateway 寫出 `final=1` 行之後才處理的資料包，不在計數之內。
+9. 不正常的 Client：衝突窗口被併進主線時整則被 Match 拒絕，同一則裡其他已被標記為寫出的命令之後的副本會被去重，損失變成永久的（限該玩家）。`conflict_*` > 0 的玩家，其遲到與替代統計不可信。
 
 ## 2. 身分與資料語意
 

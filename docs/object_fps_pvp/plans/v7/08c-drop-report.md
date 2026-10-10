@@ -38,7 +38,7 @@
   - 換代（`acknowledge`）與 Leave（`forgetLocked`）時清空。**換代清空是正確性條件**：每個 epoch 的序號從 1 重新開始，沒清空的話新 epoch 的序號 1、2 會被當成副本丟掉，Match 就等不到序號 1。
   - 整包被去重時，若已有待送窗口，就把這個包的 `observed_authority_tick` 併進去（不建立新窗口），和現行行為等價。
   - Match 不改，仍必須把副本當成無操作；去重是最佳化，不是保證。
-- **★ 舊序號的 Input**（D53 第 1 項）：`session.go:89-91` 只看標頭就回 `ErrStale`，但 payload 完整（Client 的 Hello、Input、Actions 共用 `++sentSequence`，`ClientConnection.cpp:349-350`）。改成照樣解碼並轉送，但**不呼叫** `CommitSequence`（不刷新 liveness、不影響速率計算）。重播估計 network* 約 4～5% 的 Input 首份副本原本因此被丟（推論，第 2 批方案 ③）。
+- **★ 舊序號的 Input**（D53 第 1 項）：`session.go:89-91` 只看標頭就回 `ErrStale`，但 payload 完整（Client 的 Hello、Input、Actions 共用 `++sentSequence`，`ClientConnection.cpp:349-350`）。改成照樣解碼並轉送，但**不呼叫** `CommitSequence`（不刷新 liveness、不影響速率計算）。（更正，2026-10-11，F3 核對：「不影響速率計算」不對；舊序號的包照樣算進速率限制與 `rate_accepted_packets`（`server.go` Input 分支的 `admit` 已計入，見該處註解「The rate limit already counted it」），和 ③ 一致；契約只寫「不刷新 liveness」。）重播估計 network* 約 4～5% 的 Input 首份副本原本因此被丟（推論，第 2 批方案 ③）。
 - **仍由 Gateway 執行、依玩家計數的兩種丟棄**：拒絕線溢出、主線已解析部分超過 32 個時的截短。去重之後這兩個數字等於真正的資訊損失。
 - **轉送量**（推論，`facts-gateway/arrival_peak.tsv`、`arrival_vs_edge.tsv`）：約 60 命令／s／玩家（HEAD 照轉未解析命令的重送，約 180；只做主線不去重約 210、峰值 630）；Client 停頓時多出的 IPC 是 0 則。
 
