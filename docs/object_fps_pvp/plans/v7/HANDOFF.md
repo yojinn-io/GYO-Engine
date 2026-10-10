@@ -8,9 +8,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：F0 留給 F1b／F2a 的三個小決定（見進度記錄器）：①Gateway 拒收 Match 的 snapshot（D1、D2）新增單位 `snapshots`；②`fwd_stale_sequence_input_packets` 定為互斥的結果；③不認得的 admission 錯誤改成丟棄並計數（fail-closed，現在是當成接受；目前可重用層只回三種型別化錯誤，實際碰不到）。
-- **進行中**：第 08c 批 F1a（Go：主線、拒絕線、已寫出去重、★、link 的 I0 計數）與 F2a（C++：`AdmitInput`、拒絕計數、IpcHost、統計行、final 行）並行，各 1 位 high 在主 checkout 實作（檔案不重疊；`mutations.json` 由主對話合併），完成後各做 1 次局部 xhigh 審查（F1a：拒絕線的順序與切段、★ 的提交與 liveness；F2a：`AdmitInput` 的等價性）。各估約 3 小時，23:3x 開始。
-- **下一步**：F1a、F2a 完成並審查後回報，再開 F1b-1 與 F2b-1。
+- **等你決定**：(1) F2b-1 要不要為 ClearState 清掉的暫存（命令、動作、動作的 ack）與 Leave／踢出時丟掉的暫存動作加原因計數（建議加：每個跑次結束都會經過）；(2) F0 留下的三個小決定（`snapshots` 單位、舊序號計數互斥、不認得的 admission 錯誤 fail-closed；建議都照做），F1b-1 開始前要定。
+- **進行中**：無。第 08c 批 F1a、F2a 完成（各 1 位 high 實作、各 1 次局部 xhigh 審查、依審查修正）。
+- **下一步**：F1b-1（③ 的計數與鍵、IG）與 F2b-1（晚到紀錄、保留期）；F1b-2 要讓 `flushFinal` 等 writer 結束後才取計數。
 - **最後更新**：2026-10-10，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
@@ -210,6 +210,7 @@
 - 2026-10-10：第 08c 批（Gateway 丟棄回報）的批次文件完成：[08c-drop-report.md](08c-drop-report.md)。第 3 批的修正全部併入（IG、I1 的前提、J4／J5／J7、三棵樹各建 Client、注入工具不經過既有的丟包路徑、★ 的測試、死碼、protocol-v6 修訂節、拆批）。整體估 15～19 小時，分 8 批加 L1、L2。
 - 2026-10-10：使用者核准第 08c 批的分批與檔位（D54）。F0 開始。
 - 2026-10-10：第 08c 批 F0 完成：鍵名的單一來源（Go `gateway/ingress_statistics.go`、C++ `IngressStatistics.hpp`，都還沒接到執行路徑上，行為不變）、golden 樣本 v1（`tests/object_fps_pvp/fixtures/ingress_v1/`）、Go 與 C++ 的格式與凍結分析器約束測試。和計畫不同的命名：全域四類加 `drop_` 前綴；全域行多 `received_datagrams`、`drop_rate_limited_packets`；「交給 link」與「已寫出」依線分開；close 清掉與寫出後放棄分成兩個鍵；Match 端多 `accepted_inputs`、動作的 `resetting`。留給 F2b 接在行尾：替代計數與關閉原因、樣本流失計數。
+- 2026-10-11：第 08c 批 F1a（Go）與 F2a（C++）完成並 commit。F1a：主線照常轉送並修 `:424` 的下溢、拒絕線、已寫出去重、★、link 的 I0 計數；xhigh 審查沒有 blocker／major，補了 5 個測試缺口（速率限制、提交時機、換代清 `newestWritten`、寫出時標記已解析的命令）、主線在已解析游標先切一刀、link 退回原因細分。F2a：`AdmitInput`、Match 依原因的拒絕計數、IpcHost 不再無聲、統計行與 final 行；xhigh 審查以差分實驗（300 種子 × 3000 步等）確認和 HEAD 行為相同，修了踢出時 `leave_discarded` 多算。驗證：go vet／test／race、全量 CTest 66／66、權威 digest 兩棵樹 0 差分；`mutations.json` 新增 75 個（Go 52、C++ 23），用 `run_mutations.py` 全部 killed。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 

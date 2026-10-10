@@ -69,6 +69,8 @@ const (
 	reasonRoutedLinkCap
 	reasonRoutedWrittenConflict
 	reasonRoutedRotation
+	reasonRoutedLinkEpochMismatch
+	reasonRoutedMalformed
 	// Datagrams that belong to no session.
 	reasonUndecodable
 	reasonOtherVersion
@@ -143,6 +145,8 @@ var (
 		reasonRoutedLinkCap:           "routed_link_cap",
 		reasonRoutedWrittenConflict:   "routed_written_conflict",
 		reasonRoutedRotation:          "routed_rotation",
+		reasonRoutedLinkEpochMismatch: "routed_link_epoch_mismatch",
+		reasonRoutedMalformed:         "routed_malformed",
 		reasonUndecodable:             "undecodable",
 		reasonOtherVersion:            "other_version",
 		reasonRoomUnavailable:         "room_unavailable",
@@ -216,6 +220,12 @@ const (
 	playerFwdRoutedLinkCapInputs
 	playerFwdRoutedWrittenConflictInputs
 	playerFwdRoutedRotationInputs // pending main windows moved by an epoch or life change
+	// The link refused a window the Server routed to the main lane: its epoch
+	// or life disagreed with the Server's (unreachable while acknowledge keeps
+	// both in step), or it broke the input schema (unreachable after
+	// DecodeInput). Both still reach the Match on the rejected lane.
+	playerFwdRoutedLinkEpochMismatchInputs
+	playerFwdRoutedMalformedInputs
 	playerIngressCounterCount
 )
 
@@ -267,6 +277,8 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerFwdRoutedLinkCapInputs:             {ingressForwarded, reasonRoutedLinkCap, ingressAnyKind, unitInputs},
 	playerFwdRoutedWrittenConflictInputs:     {ingressForwarded, reasonRoutedWrittenConflict, ingressAnyKind, unitInputs},
 	playerFwdRoutedRotationInputs:            {ingressForwarded, reasonRoutedRotation, ingressAnyKind, unitInputs},
+	playerFwdRoutedLinkEpochMismatchInputs:   {ingressForwarded, reasonRoutedLinkEpochMismatch, ingressAnyKind, unitInputs},
+	playerFwdRoutedMalformedInputs:           {ingressForwarded, reasonRoutedMalformed, ingressAnyKind, unitInputs},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64

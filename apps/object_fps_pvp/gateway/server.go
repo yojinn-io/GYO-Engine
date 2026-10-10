@@ -401,50 +401,20 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		if p.phase != active {
 			return nil
 		}
-		if s.admit(p, peer, h.Sequence, now) != nil {
+		// A stale transport sequence still carries a complete payload (Hello,
+		// Input and Actions share the Client's packet sequence): it is decoded
+		// and forwarded, but never commits the sequence, so it neither extends
+		// liveness nor moves the sequence. The rate limit already counted it.
+		admission := s.admit(p, peer, h.Sequence, now)
+		stale := errors.Is(admission, session.ErrStale)
+		if admission != nil && !stale {
 			return nil
 		}
 		in, err := adapter.DecodeInput(payload, p.playerID)
 		if err != nil {
 			return nil
 		}
-		// Epochs are authority-owned. Old packets are inert; future packets
-		// cannot initiate a movement reset or replace an existing window.
-		if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
-			return nil
-		}
-		// Validate the whole batch before committing any new command. Resolved
-		// steps are obsolete; unacknowledged steps are immutable across packets.
-		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch, LifeGeneration: p.lifeGeneration,
-			ObservedAuthorityTick: in.ObservedAuthorityTick}
-		for _, command := range in.Commands {
-			if command.Sequence <= p.lastResolved {
-				continue
-			}
-			if command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
-				return nil
-			}
-			if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
-				return nil
-			}
-			pending.Commands = append(pending.Commands, command)
-		}
-		if p.session.CommitSequence(h.Sequence, now) != nil {
-			return nil
-		}
-		if len(pending.Commands) == 0 {
-			return nil
-		}
-		if err := s.link.input(pending); err != nil {
-			if errors.Is(err, adapter.ErrInput) {
-				return nil
-			}
-			return err
-		}
-		for _, command := range pending.Commands {
-			p.commands[command.Sequence] = command
-		}
-		return nil
+		return s.forwardInput(p, in, h.Sequence, stale, now)
 	default:
 		_ = s.admit(p, peer, h.Sequence, now)
 	}
@@ -789,4 +759,46 @@ func (s *Server) runtimeFailed(err error) {
 	s.mu.Unlock()
 	s.link.close()
 	log.Printf("runtime disconnected; room unavailable: %v", err)
+}
+
+// forwardInput hands a decoded window to the Match (D49: the Match decides what
+// is stale, resolved or conflicting). The main lane merges windows and keeps
+// resolved commands, whose late arrival the Match measures. A window the Match
+// may refuse as a whole goes unmerged through the rejected lane, so it cannot
+// make the Match refuse a merge with valid commands: another epoch or life,
+// beyond the future bound, a conflict, or a window the link refused.
+func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) error {
+	if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
+		return s.link.reject(in, playerFwdRoutedEpochMismatchInputs)
+	}
+	// Validate the whole batch before committing the sequence. Unresolved
+	// steps are immutable across packets; the bound counts only steps after
+	// the cursor (a resolved step must not underflow it).
+	for _, command := range in.Commands {
+		if command.Sequence > p.lastResolved && command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
+			return s.link.reject(in, playerFwdRoutedFutureLimitInputs)
+		}
+		if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
+			return s.link.reject(in, playerFwdRoutedConflictInputs)
+		}
+	}
+	// A stale sequence is never committed. Admit and CommitSequence both run
+	// under s.mu and Admit found this sequence fresh, so the commit cannot
+	// fail. A window the link refuses below is routed after the commit, as
+	// before 08c.
+	if !stale {
+		_ = p.session.CommitSequence(sequence, now)
+	}
+	if err := s.link.input(in); err != nil {
+		if errors.Is(err, adapter.ErrInput) {
+			return s.link.reject(in, linkRefusalReason(err))
+		}
+		return err
+	}
+	for _, command := range in.Commands {
+		if command.Sequence > p.lastResolved {
+			p.commands[command.Sequence] = command
+		}
+	}
+	return nil
 }
