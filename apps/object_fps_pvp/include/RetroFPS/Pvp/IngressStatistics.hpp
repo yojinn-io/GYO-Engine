@@ -24,11 +24,12 @@ namespace fps::pvp {
 
 inline constexpr int IngressStatisticsVersion = 1;
 
-// Each command of an admitted input falls in exactly one class (I2).
-// Provisional until the host keeps its own substitution records (batch 08c
-// F2b): late_first is a first late arrival the 64-entry slack track still
-// holds, every other command at or below the cursor is resolved_untracked,
-// and late_copy and resolved_copy stay 0.
+// Each command of an admitted input falls in exactly one class (I2). Above
+// the cursor: accepted_new or pending_copy. At or below it, by the substitution
+// records of MatchIngressLedger.hpp: late_first (first copy of an open
+// record), late_copy (a later copy), resolved_copy (a copy of a sequence the
+// Match executed within the retention) or resolved_untracked (anything else:
+// beyond the retention, overflowed, or resolved before the ledger saw it).
 enum class IngressCommandClass : std::uint8_t {
     AcceptedNew, PendingCopy, LateFirst, LateCopy, ResolvedCopy, ResolvedUntracked, Count
 };
@@ -37,16 +38,19 @@ enum class IngressInputRejection : std::uint8_t {
     Resetting, UnknownPlayer, Malformed, EpochOld, EpochFuture, LifeOld, LifeFuture,
     BeyondWindow, ConflictQueued, ConflictStaged, StagedOverWindow, Count
 };
-// Commands the host admitted and later discarded unresolved.
+// Commands the host admitted and later discarded unresolved. A reset's
+// discards are counted apart (MatchIngressCounts::resetDiscardedCommands)
+// because their key was added after this list's.
 enum class IngressStagedDiscard : std::uint8_t { HandoffRejected, RotationDiscarded, LeaveDiscarded, Count };
 // Why an action batch was refused: OverBatch and Malformed at the wire, the
-// rest by the host.
+// rest by the host. Full should stay 0 (D55): every candidate action id lies
+// in (floor, floor + MaxActionWindow], so neither bound can be exceeded.
 enum class IngressActionRejection : std::uint8_t {
     OverBatch, Malformed, Resetting, InvalidPlayer, InvalidBatch, Conflict, OutsideWindow, Full, Count
 };
-// How a substitution record of match-ingress.jsonl closed.
+// How a substitution record closed (MatchIngressLedger.hpp).
 enum class IngressSubstitutionClose : std::uint8_t { Aged, Epoch, Life, Removed, Reset, Overflow, End, Count };
-enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots };
+enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots, Acks };
 
 // The only spelling of each word, shared by the statistics line and the
 // detail file (its reason and close fields).
@@ -121,6 +125,7 @@ inline constexpr std::string_view IngressName(IngressUnit value) noexcept {
     case IngressUnit::Commands: return "commands";
     case IngressUnit::Batches: return "batches";
     case IngressUnit::Shots: return "shots";
+    case IngressUnit::Acks: return "acks";
     }
     return "invalid";
 }
@@ -144,18 +149,30 @@ struct IngressActionCount final {
 //       received.inputs   == acceptedInputs + sum(rejected[].inputs)
 //   receivedActions == acceptedActions + sum(rejectedActions[]), per unit
 // Staged discards are outside I2: those commands were classified accepted_new.
+// Substitution records (J5a, once every record is closed):
+//   substitutedCommands == classified[LateFirst] + sum(unarrived[])
 struct MatchIngressCounts final {
     IngressInputCount received;
     std::uint64_t acceptedInputs{};
     std::array<std::uint64_t, IngressCount<IngressCommandClass>> classified{};
-    // Admitted inputs whose every command was late. Not produced yet: always 0
-    // until F2b defines it together with late_copy and resolved_copy.
+    // Admitted inputs whose every command was late_first or late_copy.
     std::uint64_t lateOnlyInputs{};
     std::array<IngressInputCount, IngressCount<IngressInputRejection>> rejected{};
     std::array<std::uint64_t, IngressCount<IngressStagedDiscard>> discarded{};
     IngressActionCount receivedActions;
     IngressActionCount acceptedActions;
     std::array<IngressActionCount, IngressCount<IngressActionRejection>> rejectedActions{};
+    // Appended keys (batch 08c F2b-1), in line order.
+    // Substitution records opened, and records closed before any copy arrived, by close reason.
+    std::uint64_t substitutedCommands{};
+    std::array<std::uint64_t, IngressCount<IngressSubstitutionClose>> unarrived{};
+    // Admitted commands and accepted shots a reset (ClearState) discarded
+    // unresolved, and shots a Leave or eviction discarded before handoff.
+    std::uint64_t resetDiscardedCommands{};
+    std::uint64_t resetDiscardedActionShots{};
+    std::uint64_t leaveDiscardedActionShots{};
+    // Players whose pending action acknowledgement a reset discarded.
+    std::uint64_t resetDiscardedActionAcks{};
 };
 
 struct MatchIngressWindow final {
@@ -201,6 +218,14 @@ void ForEachMatchIngressField(Counts& counts, Field&& field) {
         field(IngressKey(reason, actions, IngressUnit::Batches), counts.rejectedActions[i].batches);
         field(IngressKey(reason, actions, IngressUnit::Shots), counts.rejectedActions[i].shots);
     }
+    field(IngressKey("substituted", none, IngressUnit::Commands), counts.substitutedCommands);
+    for (std::size_t i = 0; i < counts.unarrived.size(); ++i)
+        field(IngressKey("unarrived_" + std::string(IngressName(static_cast<IngressSubstitutionClose>(i))), none,
+                         IngressUnit::Commands), counts.unarrived[i]);
+    field(IngressKey("reset_discarded", none, IngressUnit::Commands), counts.resetDiscardedCommands);
+    field(IngressKey("reset_discarded", actions, IngressUnit::Shots), counts.resetDiscardedActionShots);
+    field(IngressKey("leave_discarded", actions, IngressUnit::Shots), counts.leaveDiscardedActionShots);
+    field(IngressKey("reset_discarded", actions, IngressUnit::Acks), counts.resetDiscardedActionAcks);
 }
 
 [[nodiscard]] inline std::string MatchIngressStatisticsLine(const MatchIngressWindow& window) {

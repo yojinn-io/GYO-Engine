@@ -96,7 +96,7 @@ int main(int argc,char** argv) {
         ipc.Stop(); runtime.Stop();
         // The last ingress window: what the stopped IPC and host counted since the previous line.
         const auto stoppedAt=std::chrono::steady_clock::now();
-        WriteIngress(ingress.Lines(runtime.TakeIngressStatistics(),WindowMillis(stoppedAt-windowStart),true));
+        WriteIngress(ingress.Lines(runtime.TakeIngressStatistics(true),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed){std::cerr<<"Match simulation failed: "<<*failed<<'\n';return 1;}
         if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");

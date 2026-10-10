@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
+#include "RetroFPS/Pvp/MatchIngressLedger.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -93,8 +94,9 @@ public:
     // and batches of a player the Match does not hold count under player 0.
     // Counts survive Leave, eviction and resets until taken. The result holds
     // player 0 and every current player, even with nothing counted, and any
-    // other player with counts. Resets the window.
-    [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics();
+    // other player with counts. Resets the window. final (the process's last
+    // window, host stopped) first closes every open substitution record as end.
+    [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics(bool final = false);
     // An action batch the I/O layer refused before it could become a request
     // (OverBatch or Malformed): counted like the host's own refusals.
     void NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots);
@@ -151,6 +153,8 @@ private:
     // The counts an input or batch of this player falls under (player 0 when
     // the Match does not hold it). Under the lock.
     [[nodiscard]] MatchIngressCounts& IngressBucket(PlayerId playerId);
+    // Counts a substitution record the ledger closed. Under the lock.
+    void SubstitutionClosed(const IngressSubstitution& record);
     // Advance's work under the lock; published tells Advance to notify.
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Step(double elapsedSeconds, bool& published);
     void Body(Engine::Threads::RoleContext& context);
@@ -180,6 +184,9 @@ private:
     Statistics statistics_;
     // Not part of the match state: ClearState and RemovePlayerState keep it.
     std::map<PlayerId, MatchIngressCounts> ingress_;
+    // Substitution records; ClearState and RemovePlayerState close them.
+    // Only observes: slack samples, quality and the Match never read it.
+    MatchIngressLedger ledger_;
     std::optional<std::string> error_;
     std::function<void()> publishListener_;
     std::atomic<bool> running_{};

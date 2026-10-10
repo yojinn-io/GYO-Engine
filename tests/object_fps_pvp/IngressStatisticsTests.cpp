@@ -108,6 +108,10 @@ TEST_CASE("Match ingress lines equal the golden windows and keep the I2 classifi
               counts.receivedActions.batches);
         CHECK(counts.acceptedActions.shots + Sum(counts.rejectedActions, [](const auto& v) { return v.shots; }) ==
               counts.receivedActions.shots);
+        // J5a with every record closed: substituted = late_first + closed before any copy arrived.
+        const auto goldenSubstituted = counts.substitutedCommands;
+        CHECK(goldenSubstituted == counts.classified[IngressIndex(IngressCommandClass::LateFirst)] +
+                                       Sum(counts.unarrived, [](auto value) { return value; }));
     }
     CHECK_FALSE(ParseMatchLine(lines[1]).window.final);
     CHECK(ParseMatchLine(lines[2]).window.final);
@@ -124,7 +128,7 @@ TEST_CASE("Match ingress lines equal the golden windows and keep the I2 classifi
 }
 
 TEST_CASE("Match ingress keys are unique, follow the naming rule and stay out of the frozen parsers") {
-    const std::regex rule("^[a-z]+(_[a-z]+)*_(inputs|commands|batches|shots)$");
+    const std::regex rule("^[a-z]+(_[a-z]+)*_(inputs|commands|batches|shots|acks)$");
     std::set<std::string> seen{"version", "player", "window_ms", "final"};
     for (const auto& key : MatchIngressKeys()) {
         CAPTURE(key);

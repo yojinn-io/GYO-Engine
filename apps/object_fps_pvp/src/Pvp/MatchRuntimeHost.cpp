@@ -96,6 +96,10 @@ MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) {
     return ingress_[match_.ContainsPlayer(playerId) ? playerId : PlayerId{}];
 }
 
+void MatchRuntimeHost::SubstitutionClosed(const IngressSubstitution& record) {
+    if (!record.firstArrival) ++ingress_[record.playerId].unarrived[IngressIndex(record.close)];
+}
+
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     std::lock_guard lock(mutex_);
     // Every return below is counted exactly once: received = accepted + refused.
@@ -145,39 +149,43 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     // and pure retransmissions leave it untouched.
     std::optional<std::chrono::steady_clock::time_point> received;
     const auto at = [&] { if (!received) received = now_(); return *received; };
+    // The age of the snapshot this window says the Client applied. A tick
+    // older than every retained reference is at least as old as the oldest
+    // one; an unknown newer tick has no age.
+    const auto referenceAge = [&]() -> std::optional<std::int64_t> {
+        if (input.observedAuthorityTick == 0 || publishedReferences_.empty()) return std::nullopt;
+        const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
+            [&](const auto& entry) { return entry.tick == input.observedAuthorityTick; });
+        if (reference != publishedReferences_.end()) return Micros(at() - reference->publishedAt);
+        if (input.observedAuthorityTick < publishedReferences_.front().tick)
+            return Micros(at() - publishedReferences_.front().publishedAt);
+        return std::nullopt;
+    };
     auto& track = slack_[input.playerId];
     if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration)
         track = {input.movementEpoch, input.lifeGeneration, cursor, {}, {}, std::nullopt};
     for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
+    std::size_t lateCommands{};
     for (const auto& command : input.commands) {
-        // A command whose sequence was already substituted reports how late it came.
         if (command.sequence > cursor) continue;
-        // Counting only: until the ingress ledger keeps its own substitution
-        // records, late_first is a first arrival the slack track still holds
-        // and every other resolved command is resolved_untracked.
+        // Counting only, by the ledger's substitution records; the ledger
+        // reads the clock only for a late_first.
+        const auto arrival = ledger_.Arrive(input.playerId, input.movementEpoch, input.lifeGeneration,
+            command.sequence, cursor, at, referenceAge);
+        ++ingress.classified[IngressIndex(arrival)];
+        if (arrival == IngressCommandClass::LateFirst || arrival == IngressCommandClass::LateCopy) ++lateCommands;
+        // A command whose sequence was already substituted reports how late it came.
         const auto late = track.substituted.find(command.sequence);
-        if (late == track.substituted.end()) {
-            ++ingress.classified[IngressIndex(IngressCommandClass::ResolvedUntracked)];
-            continue;
-        }
-        ++ingress.classified[IngressIndex(IngressCommandClass::LateFirst)];
+        if (late == track.substituted.end()) continue;
         const auto micros = -Micros(at() - late->second);
         if (!track.pending || micros < track.pending->second) track.pending = std::pair{command.sequence, micros};
         track.substituted.erase(late);
     }
-    // Connection quality: the age of the snapshot this window says the Client
-    // applied. A tick older than every retained reference is at least as old
-    // as the oldest one; an unknown newer tick is ignored.
+    if (lateCommands == input.commands.size()) ++ingress.lateOnlyInputs;
+    // Connection quality samples the reference age of windows bringing new commands.
     if (const auto quality = quality_.find(input.playerId); quality != quality_.end() &&
-        !newlyAccepted.empty() && input.observedAuthorityTick != 0 && !publishedReferences_.empty() &&
-        quality->second.referenceAgesMicros.size() < kMaximumReferenceAgeSamples) {
-        const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
-            [&](const auto& entry) { return entry.tick == input.observedAuthorityTick; });
-        std::optional<std::int64_t> age;
-        if (reference != publishedReferences_.end()) age = Micros(at() - reference->publishedAt);
-        else if (input.observedAuthorityTick < publishedReferences_.front().tick)
-            age = Micros(at() - publishedReferences_.front().publishedAt);
-        if (age) quality->second.referenceAgesMicros.push_back(
+        !newlyAccepted.empty() && quality->second.referenceAgesMicros.size() < kMaximumReferenceAgeSamples) {
+        if (const auto age = referenceAge()) quality->second.referenceAgesMicros.push_back(
             static_cast<std::uint32_t>(Engine::Math::Clamp<std::int64_t>(*age, 0, kMaximumReferenceAgeMicros)));
     }
     for (const auto sequence : newlyAccepted)
@@ -450,8 +458,9 @@ MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
     return std::exchange(statistics_, {});
 }
 
-std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics() {
+std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics(bool final) {
     std::lock_guard lock(mutex_);
+    if (final) ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });
     ingress_.try_emplace(PlayerId{});
     for (const auto& player : match_.Snapshot().players) ingress_.try_emplace(player.playerId);
     return std::exchange(ingress_, {});
@@ -484,6 +493,9 @@ void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolv
         ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] +=
             static_cast<std::uint64_t>(std::distance(commands.upper_bound(resolvedThrough), commands.end()));
     }
+    if (const auto actions = pendingActions_.find(playerId); actions != pendingActions_.end())
+        ingress_[playerId].leaveDiscardedActionShots += actions->second.size();
+    ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });
     pendingInputs_.erase(playerId);
     pendingActions_.erase(playerId);
     pendingActionAcknowledgements_.erase(playerId);
@@ -505,13 +517,22 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
         auto& track = found->second;
         if (player.lastResolvedCommand > track.lastResolved + kMaximumSubstitutedSequences)
             track.lastResolved = player.lastResolvedCommand - kMaximumSubstitutedSequences;
+        // The ledger follows the sequences this loop visits, from the same
+        // starting cursor, and takes its times from the same clock reading.
+        const auto closed = [this](const auto& record) { SubstitutionClosed(record); };
+        ledger_.Observe(player.playerId, player.movementEpoch, player.lifeGeneration, track.lastResolved, closed);
         for (auto sequence = track.lastResolved + 1; sequence <= player.lastResolvedCommand; ++sequence) {
             if (!at) at = now_();
             const auto receipt = track.receipts.find(sequence);
             if (receipt != track.receipts.end()) {
                 const auto micros = Micros(*at - receipt->second);
                 if (!track.pending || micros < track.pending->second) track.pending = std::pair{sequence, micros};
-            } else track.substituted[sequence] = *at;
+                ledger_.Resolved(player.playerId, sequence, std::nullopt, match_.TickCount(), closed);
+            } else {
+                track.substituted[sequence] = *at;
+                ++ingress_[player.playerId].substitutedCommands;
+                ledger_.Resolved(player.playerId, sequence, *at, match_.TickCount(), closed);
+            }
         }
         track.lastResolved = Engine::Math::Max(track.lastResolved, player.lastResolvedCommand);
         while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
@@ -595,6 +616,17 @@ std::future<void> MatchRuntimeHost::RequestReset() {
 }
 
 void MatchRuntimeHost::ClearState() {
+    // Staging holds only unresolved commands of current identities here:
+    // ingress admits the current identity and each tick prunes the rest.
+    for (const auto& [playerId, pending] : pendingInputs_)
+        ingress_[playerId].resetDiscardedCommands += pending.commands.size();
+    for (const auto& [playerId, shots] : pendingActions_)
+        ingress_[playerId].resetDiscardedActionShots += shots.size();
+    for (const auto& [playerId, through] : pendingActionAcknowledgements_) {
+        static_cast<void>(through);
+        ++ingress_[playerId].resetDiscardedActionAcks;
+    }
+    ledger_.Clear(IngressSubstitutionClose::Reset, [this](const auto& record) { SubstitutionClosed(record); });
     match_.Reset();
     ticker_.Reset();
     controls_.clear();

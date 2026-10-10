@@ -72,6 +72,15 @@ void CheckIngressConservation(const fps::pvp::MatchIngressCounts& counts) {
     CHECK(hostSettledShots == counts.receivedActions.shots);
 }
 
+// J5a for one bucket whose substitution records are all closed: every
+// substituted sequence either arrived once (late_first) or closed unarrived.
+void CheckSubstitutionConservation(const fps::pvp::MatchIngressCounts& counts) {
+    const auto substitutedRecords = counts.substitutedCommands;
+    const auto lateFirstAndUnarrived = counts.classified[fps::pvp::IngressIndex(fps::pvp::IngressCommandClass::LateFirst)] +
+        SumOf(counts.unarrived, [](auto value) { return value; });
+    CHECK(substitutedRecords == lateFirstAndUnarrived);
+}
+
 fps::pvp::PlayerInput EpochInput(fps::pvp::PlayerId playerId, std::uint64_t first, std::uint64_t last,
     std::uint64_t epoch, std::uint64_t life = 1, float forward = 1) {
     auto result = Window(playerId, first, last, forward);
@@ -1145,8 +1154,13 @@ TEST_CASE("PvP host counts every input it refuses by reason, in inputs and in co
     CHECK(pendingCopies == 5);
     const auto lateFirstCommands = classified(IngressCommandClass::LateFirst);
     CHECK(lateFirstCommands == 1);
+    // Sequence 1 was executed: its copy is resolved_copy. The second copy of
+    // the substituted 4 is late_copy.
     const auto resolvedUntracked = classified(IngressCommandClass::ResolvedUntracked);
-    CHECK(resolvedUntracked == 2);
+    CHECK(resolvedUntracked == 0);
+    CHECK(classified(IngressCommandClass::ResolvedCopy) == 1);
+    CHECK(classified(IngressCommandClass::LateCopy) == 1);
+    CHECK(counts.lateOnlyInputs == 2);
     CHECK(counts.acceptedInputs == 5);
     CHECK(counts.discarded[IngressIndex(IngressStagedDiscard::HandoffRejected)] == 0);
     CheckIngressConservation(counts);
@@ -1268,4 +1282,165 @@ TEST_CASE("PvP host counts only the unresolved staged commands of an evicted pla
     CHECK(evictedLeaveDiscarded == 1);
     CHECK(counts.classified[IngressIndex(IngressCommandClass::AcceptedNew)] == next);
     CheckIngressConservation(counts);
+}
+
+TEST_CASE("PvP host ledger classifies late copies and copies of executed commands, reading the clock only for a late first") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    std::size_t reads{};
+    MatchRuntimeHost host(TestArena(), [&] { ++reads; return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+    REQUIRE(host.Advance(4.0 / 60).steps == 4); // 1 and 2 executed, 3 and 4 substituted
+    now += 8ms;
+    auto readsBefore = reads;
+    REQUIRE(host.SubmitInput(Window(5, 1, 2))); // copies of executed commands
+    const auto copyClockReads = reads - readsBefore;
+    CHECK(copyClockReads == 0);
+    readsBefore = reads;
+    REQUIRE(host.SubmitInput(Window(5, 3, 3))); // the first copy of a substituted sequence
+    const auto lateFirstClockReads = reads - readsBefore;
+    CHECK(lateFirstClockReads == 1);
+    readsBefore = reads;
+    REQUIRE(host.SubmitInput(Window(5, 3, 3)));
+    REQUIRE(host.SubmitInput(Window(5, 3, 3)));
+    const auto lateCopyClockReads = reads - readsBefore;
+    CHECK(lateCopyClockReads == 0);
+    REQUIRE(host.SubmitInput(Window(5, 3, 4))); // 3 again, 4 for the first time
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 5 substituted
+    REQUIRE(host.QueueLeave(2, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // Leave closes 3, 4 and the never-arrived 5
+
+    const auto taken = host.TakeIngressStatistics();
+    const auto& counts = taken.at(5);
+    const auto classified = [&](IngressCommandClass value) { return counts.classified[IngressIndex(value)]; };
+    const auto lateFirst = classified(IngressCommandClass::LateFirst);
+    CHECK(lateFirst == 2);
+    const auto lateCopies = classified(IngressCommandClass::LateCopy);
+    CHECK(lateCopies == 3);
+    const auto resolvedCopies = classified(IngressCommandClass::ResolvedCopy);
+    CHECK(resolvedCopies == 2);
+    CHECK(classified(IngressCommandClass::ResolvedUntracked) == 0);
+    const auto lateOnlyInputs = counts.lateOnlyInputs;
+    CHECK(lateOnlyInputs == 4);
+    const auto substitutedSequences = counts.substitutedCommands;
+    CHECK(substitutedSequences == 3);
+    const auto unarrivedOnLeave = counts.unarrived[IngressIndex(IngressSubstitutionClose::Removed)];
+    CHECK(unarrivedOnLeave == 1);
+    CheckIngressConservation(counts);
+    CheckSubstitutionConservation(counts);
+}
+
+TEST_CASE("PvP host ledger keeps late arrivals beyond the slack sample bound without publishing them as samples") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    // Every even sequence is substituted while the odd one after it waits:
+    // 70 substitutions, more than the 64 the slack track keeps, no reset.
+    for (std::uint64_t k = 1; k <= 70; ++k) {
+        REQUIRE(host.SubmitInput(Input(5, 2 * k + 1)));
+        now += 17ms;
+        REQUIRE(host.Advance(2.0 / 60).steps == 2);
+    }
+    auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].movementEpoch == 1);
+    REQUIRE(snapshot->players[0].lastResolvedCommand == 141);
+    now += 5ms;
+    REQUIRE(host.SubmitInput(Input(5, 2))); // beyond the sample track, within the ledger
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const bool beyondSampleSequence = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{2};
+    CHECK_FALSE(beyondSampleSequence);
+    REQUIRE(host.SubmitInput(Input(5, 140))); // within both
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const auto withinSampleSequence = snapshot->players[0].movementSlackSequence;
+    CHECK(withinSampleSequence == std::optional<std::uint64_t>{140});
+
+    auto taken = host.TakeIngressStatistics();
+    const auto beyondSampleLate = taken.at(5).classified[IngressIndex(IngressCommandClass::LateFirst)];
+    CHECK(beyondSampleLate == 2);
+    // The last window closes every record still open as end.
+    const auto finalWindow = host.TakeIngressStatistics(true);
+    auto total = taken.at(5);
+    const auto& last = finalWindow.at(5);
+    total.unarrived[IngressIndex(IngressSubstitutionClose::End)] += last.unarrived[IngressIndex(IngressSubstitutionClose::End)];
+    const auto endClosedUnarrived = last.unarrived[IngressIndex(IngressSubstitutionClose::End)];
+    CHECK(endClosedUnarrived == 70);
+    CheckSubstitutionConservation(total);
+}
+
+TEST_CASE("PvP host ledger closes the records of a rotated epoch") {
+    using namespace fps::pvp;
+    MatchRuntimeHost host(TestArena());
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    std::uint64_t epoch = 1;
+    for (unsigned step = 0; step < 4 * MovementBacklogSampleTicks && epoch == 1; ++step) {
+        REQUIRE(host.Advance(1.0 / 60).steps == 1); // starved after 1: substituted until it rotates
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        epoch = snapshot->players[0].movementEpoch;
+    }
+    REQUIRE(epoch == 2);
+    const auto taken = host.TakeIngressStatistics();
+    const auto& counts = taken.at(5);
+    const auto rotationSubstituted = counts.substitutedCommands;
+    CHECK(rotationSubstituted > 0);
+    const auto rotationClosedUnarrived = counts.unarrived[IngressIndex(IngressSubstitutionClose::Epoch)];
+    CHECK(rotationClosedUnarrived == rotationSubstituted);
+    CHECK(counts.unarrived[IngressIndex(IngressSubstitutionClose::Life)] == 0);
+    CheckSubstitutionConservation(counts);
+}
+
+TEST_CASE("PvP host counts what Leave and reset discard, and closes their records, across the reset") {
+    using namespace fps::pvp;
+    MatchRuntimeHost host(TestArena());
+    REQUIRE(host.QueueJoin(1, 1));
+    REQUIRE(host.QueueJoin(2, 2));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(1, 1)));
+    REQUIRE(host.SubmitInput(Input(2, 1)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // both execute 1
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // both substitute 2
+    REQUIRE(host.SubmitActionBatch({1, {{1, 1, 0, 0}}}, 0) == ActionAdmission::Accepted);
+    REQUIRE(host.QueueLeave(3, 1));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // Leave drops the staged shot; 2 substitutes 3
+    REQUIRE(host.SubmitInput(Window(2, 5, 7)));
+    REQUIRE(host.SubmitActionBatch({2, {{1, 1, 0, 0}}}, 0) == ActionAdmission::Accepted);
+    REQUIRE(host.QueueActionAcknowledgement(2, 0));
+    auto reset = host.RequestReset();
+    CHECK(host.Advance(1).steps == 0);
+    REQUIRE(reset.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+
+    const auto taken = host.TakeIngressStatistics();
+    const auto& departed = taken.at(1);
+    const auto leaveDiscardedShots = departed.leaveDiscardedActionShots;
+    CHECK(leaveDiscardedShots == 1);
+    const auto unarrivedLeft = departed.unarrived[IngressIndex(IngressSubstitutionClose::Removed)];
+    CHECK(unarrivedLeft == 1);
+    CheckSubstitutionConservation(departed);
+    const auto& reset2 = taken.at(2);
+    const auto resetDiscardedCommands = reset2.resetDiscardedCommands;
+    CHECK(resetDiscardedCommands == 3);
+    const auto resetDiscardedShots = reset2.resetDiscardedActionShots;
+    CHECK(resetDiscardedShots == 1);
+    const auto resetDiscardedAcks = reset2.resetDiscardedActionAcks;
+    CHECK(resetDiscardedAcks == 1);
+    const auto unarrivedReset = reset2.unarrived[IngressIndex(IngressSubstitutionClose::Reset)];
+    CHECK(unarrivedReset == 2);
+    CHECK(reset2.discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] == 0);
+    CheckSubstitutionConservation(reset2);
+    CheckIngressConservation(reset2);
 }
