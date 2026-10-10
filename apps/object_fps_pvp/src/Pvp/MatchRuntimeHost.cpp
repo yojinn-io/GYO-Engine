@@ -18,6 +18,31 @@ constexpr std::int64_t kMaximumReferenceAgeMicros = 1'000'000;
 std::int64_t Micros(std::chrono::steady_clock::duration value) {
     return std::chrono::duration_cast<std::chrono::microseconds>(value).count();
 }
+IngressInputRejection Rejection(InputAdmission admission) {
+    switch (admission) {
+    case InputAdmission::UnknownPlayer: return IngressInputRejection::UnknownPlayer;
+    case InputAdmission::Malformed: return IngressInputRejection::Malformed;
+    case InputAdmission::EpochOld: return IngressInputRejection::EpochOld;
+    case InputAdmission::EpochFuture: return IngressInputRejection::EpochFuture;
+    case InputAdmission::LifeOld: return IngressInputRejection::LifeOld;
+    case InputAdmission::LifeFuture: return IngressInputRejection::LifeFuture;
+    case InputAdmission::BeyondWindow: return IngressInputRejection::BeyondWindow;
+    case InputAdmission::ConflictQueued: return IngressInputRejection::ConflictQueued;
+    case InputAdmission::Accepted: break;
+    }
+    throw std::logic_error("An accepted input has no rejection reason");
+}
+IngressActionRejection Rejection(ActionAdmission admission) {
+    switch (admission) {
+    case ActionAdmission::InvalidPlayer: return IngressActionRejection::InvalidPlayer;
+    case ActionAdmission::InvalidBatch: return IngressActionRejection::InvalidBatch;
+    case ActionAdmission::Conflict: return IngressActionRejection::Conflict;
+    case ActionAdmission::OutsideWindow: return IngressActionRejection::OutsideWindow;
+    case ActionAdmission::Full: return IngressActionRejection::Full;
+    case ActionAdmission::Accepted: break;
+    }
+    throw std::logic_error("An accepted action batch has no rejection reason");
+}
 }
 
 MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now)
@@ -67,9 +92,25 @@ bool MatchRuntimeHost::QueueLeave(std::uint64_t requestId, PlayerId playerId) {
     return QueueControl({requestId, playerId, ControlKind::Leave});
 }
 
+MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) {
+    return ingress_[match_.ContainsPlayer(playerId) ? playerId : PlayerId{}];
+}
+
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     std::lock_guard lock(mutex_);
-    if (pendingReset_ || !match_.CanSubmitInput(input)) return false;
+    // Every return below is counted exactly once: received = accepted + refused.
+    auto& ingress = IngressBucket(input.playerId);
+    ++ingress.received.inputs;
+    ingress.received.commands += input.commands.size();
+    const auto refuse = [&](IngressInputRejection reason) {
+        auto& refused = ingress.rejected[IngressIndex(reason)];
+        ++refused.inputs;
+        refused.commands += input.commands.size();
+        return false;
+    };
+    if (pendingReset_) return refuse(IngressInputRejection::Resetting);
+    if (const auto admission = match_.AdmitInput(input); admission != InputAdmission::Accepted)
+        return refuse(Rejection(admission));
     const auto snapshot = match_.Snapshot();
     const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
         [&](const auto& state) { return state.playerId == input.playerId; });
@@ -84,15 +125,22 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         merged.lifeGeneration = input.lifeGeneration;
     }
     std::vector<std::uint64_t> newlyAccepted;
+    std::uint64_t pendingCopies{};
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue;
         const auto [found, inserted] = merged.commands.try_emplace(command.sequence, command);
-        if (!inserted && found->second != command) return false;
+        if (!inserted && found->second != command) return refuse(IngressInputRejection::ConflictStaged);
         if (inserted) { newlyAccepted.push_back(command.sequence); merged.stagedSequences.insert(command.sequence); }
+        else ++pendingCopies;
     }
-    if (merged.commands.size() > MaxFutureCommands) return false;
+    // Should stay 0: admission already bounds each command to (cursor,
+    // cursor + MaxFutureCommands] and staging only keeps commands past the cursor.
+    if (merged.commands.size() > MaxFutureCommands) return refuse(IngressInputRejection::StagedOverWindow);
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
+    ++ingress.acceptedInputs;
+    ingress.classified[IngressIndex(IngressCommandClass::AcceptedNew)] += newlyAccepted.size();
+    ingress.classified[IngressIndex(IngressCommandClass::PendingCopy)] += pendingCopies;
     // The clock is read only when something new needs a timestamp, so reads
     // and pure retransmissions leave it untouched.
     std::optional<std::chrono::steady_clock::time_point> received;
@@ -104,8 +152,15 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     for (const auto& command : input.commands) {
         // A command whose sequence was already substituted reports how late it came.
         if (command.sequence > cursor) continue;
+        // Counting only: until the ingress ledger keeps its own substitution
+        // records, late_first is a first arrival the slack track still holds
+        // and every other resolved command is resolved_untracked.
         const auto late = track.substituted.find(command.sequence);
-        if (late == track.substituted.end()) continue;
+        if (late == track.substituted.end()) {
+            ++ingress.classified[IngressIndex(IngressCommandClass::ResolvedUntracked)];
+            continue;
+        }
+        ++ingress.classified[IngressIndex(IngressCommandClass::LateFirst)];
         const auto micros = -Micros(at() - late->second);
         if (!track.pending || micros < track.pending->second) track.pending = std::pair{command.sequence, micros};
         track.substituted.erase(late);
@@ -133,15 +188,45 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
 }
 
 ActionAdmission MatchRuntimeHost::SubmitActions(const ActionBatch& batch) {
-    if (batch.shots.empty()) return ActionAdmission::InvalidBatch;
+    if (batch.shots.empty()) {
+        std::lock_guard lock(mutex_);
+        auto& ingress = IngressBucket(batch.playerId);
+        ++ingress.receivedActions.batches;
+        ++ingress.rejectedActions[IngressIndex(IngressActionRejection::InvalidBatch)].batches;
+        return ActionAdmission::InvalidBatch;
+    }
     return SubmitActionBatch(batch, 0);
+}
+
+void MatchRuntimeHost::NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots) {
+    if (reason != IngressActionRejection::OverBatch && reason != IngressActionRejection::Malformed)
+        throw std::logic_error("Only the wire refuses an action batch for its shape");
+    std::lock_guard lock(mutex_);
+    auto& ingress = IngressBucket(playerId);
+    ++ingress.receivedActions.batches;
+    ingress.receivedActions.shots += shots;
+    auto& refused = ingress.rejectedActions[IngressIndex(reason)];
+    ++refused.batches;
+    refused.shots += shots;
 }
 
 ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough) {
     std::lock_guard lock(mutex_);
-    if (pendingReset_) return ActionAdmission::InvalidPlayer;
-    if (!match_.ContainsPlayer(batch.playerId)) return ActionAdmission::InvalidPlayer;
-    if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
+    // Every return below is counted exactly once: received = accepted + refused.
+    auto& ingress = IngressBucket(batch.playerId);
+    ++ingress.receivedActions.batches;
+    ingress.receivedActions.shots += batch.shots.size();
+    const auto refuse = [&](IngressActionRejection reason, ActionAdmission admission) {
+        auto& refused = ingress.rejectedActions[IngressIndex(reason)];
+        ++refused.batches;
+        refused.shots += batch.shots.size();
+        return admission;
+    };
+    if (pendingReset_) return refuse(IngressActionRejection::Resetting, ActionAdmission::InvalidPlayer);
+    if (!match_.ContainsPlayer(batch.playerId))
+        return refuse(IngressActionRejection::InvalidPlayer, ActionAdmission::InvalidPlayer);
+    if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough))
+        return refuse(IngressActionRejection::InvalidBatch, ActionAdmission::InvalidBatch);
     const auto queuedAck = pendingActionAcknowledgements_.find(batch.playerId);
     const auto through = queuedAck == pendingActionAcknowledgements_.end() ? acknowledgedThrough :
         Engine::Math::Max(acknowledgedThrough, queuedAck->second);
@@ -150,7 +235,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
         ? std::span<const ShotRequest>{} : pending->second;
     const auto admission = batch.shots.empty() ? ActionAdmission::Accepted :
         match_.CanSubmitActions(batch, staged, through);
-    if (admission != ActionAdmission::Accepted) return admission;
+    if (admission != ActionAdmission::Accepted) return refuse(Rejection(admission), admission);
 
     const auto retained = match_.GetActionResults(batch.playerId);
     auto merged = pending == pendingActions_.end() ? std::vector<ShotRequest>{} : pending->second;
@@ -169,6 +254,8 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
     if (!merged.empty()) pendingActions_[batch.playerId] = std::move(merged);
     else pendingActions_.erase(batch.playerId);
     if (through > retained->retiredThrough) pendingActionAcknowledgements_[batch.playerId] = through;
+    ++ingress.acceptedActions.batches;
+    ingress.acceptedActions.shots += batch.shots.size();
     return ActionAdmission::Accepted;
 }
 
@@ -217,7 +304,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 if (result.accepted) quality_[control.playerId] = {match_.TickCount(), {}, {}, false, 0};
             } else {
                 static_cast<void>(match_.Leave(control.playerId));
-                RemovePlayerState(control.playerId);
+                // Staging was pruned to unresolved commands after the previous tick.
+                RemovePlayerState(control.playerId, 0);
             }
             results_.push_back(std::move(result));
         }
@@ -241,6 +329,13 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 // A snapshot may have advanced life after ingress validation.
                 // Recheck the complete identity at the simulation boundary.
                 if (!match_.CanSubmitInput(input)) {
+                    // Should stay 0: rotation below discards a stale identity
+                    // before the next handoff, and ingress checks the current one.
+                    // Were it not, these commands stay staged and a rotation
+                    // after this tick counts them again as rotation_discarded.
+                    ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::HandoffRejected)] +=
+                        static_cast<std::uint64_t>(std::count_if(input.commands.begin(), input.commands.end(),
+                            [&](const auto& command) { return pending.stagedSequences.contains(command.sequence); }));
                     const auto current = match_.Snapshot();
                     const auto player = std::find_if(current.players.begin(), current.players.end(),
                         [&](const auto& p) { return p.playerId == playerId; });
@@ -281,6 +376,9 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 [&](const auto& candidate) { return candidate.playerId == input->first; });
             if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||
                 player->lifeGeneration != input->second.lifeGeneration) {
+                const auto discard = player == state.players.end() ? IngressStagedDiscard::LeaveDiscarded
+                                                                   : IngressStagedDiscard::RotationDiscarded;
+                ingress_[input->first].discarded[IngressIndex(discard)] += input->second.commands.size();
                 input = pendingInputs_.erase(input);
                 continue;
             }
@@ -352,6 +450,13 @@ MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
     return std::exchange(statistics_, {});
 }
 
+std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics() {
+    std::lock_guard lock(mutex_);
+    ingress_.try_emplace(PlayerId{});
+    for (const auto& player : match_.Snapshot().players) ingress_.try_emplace(player.playerId);
+    return std::exchange(ingress_, {});
+}
+
 std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
     std::lock_guard lock(mutex_);
     auto result = std::move(snapshot_);
@@ -373,7 +478,12 @@ std::vector<Eviction> MatchRuntimeHost::TakeEvictions() {
     return result;
 }
 
-void MatchRuntimeHost::RemovePlayerState(PlayerId playerId) {
+void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough) {
+    if (const auto pending = pendingInputs_.find(playerId); pending != pendingInputs_.end()) {
+        const auto& commands = pending->second.commands;
+        ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] +=
+            static_cast<std::uint64_t>(std::distance(commands.upper_bound(resolvedThrough), commands.end()));
+    }
     pendingInputs_.erase(playerId);
     pendingActions_.erase(playerId);
     pendingActionAcknowledgements_.erase(playerId);
@@ -459,8 +569,17 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
         if (player != state.players.end()) player->connectionQualityFailures = track.failures;
     }
     for (const auto playerId : evicted) {
+        // Eviction runs before staging is pruned for this tick: what this tick
+        // executed is not a discard. A staged identity this tick rotated away
+        // is wholly unresolved.
+        const auto player = std::find_if(state.players.begin(), state.players.end(),
+            [&](const auto& candidate) { return candidate.playerId == playerId; });
+        const auto pending = pendingInputs_.find(playerId);
+        const bool current = player != state.players.end() && pending != pendingInputs_.end() &&
+            player->movementEpoch == pending->second.movementEpoch && player->lifeGeneration == pending->second.lifeGeneration;
+        const auto resolvedThrough = current ? player->lastResolvedCommand : 0;
         static_cast<void>(match_.Leave(playerId));
-        RemovePlayerState(playerId);
+        RemovePlayerState(playerId, resolvedThrough);
         std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });
         std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });
     }

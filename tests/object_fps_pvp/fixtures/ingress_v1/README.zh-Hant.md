@@ -46,6 +46,11 @@ gateway ingress statistics version=1 window_ms=<int> final=<0|1> <key>=<int> ...
   - `received_actions_batches`／`_shots`＝`accepted_actions_*`＋各拒絕原因的 `*_actions_*`。
   - `handoff_rejected`、`rotation_discarded`、`leave_discarded` 是收下之後才丟掉的命令（收到時已計為 `accepted_new`），不在 I2 之內。
 - 屬性鍵不在守恆式之內：`fwd_resolved_at_write_commands`、`fwd_retention_expired_commands`、`fwd_routed_*_inputs`、`late_only_inputs`。
+- **暫定的鍵（F2a 階段）**：Match 端的晚到紀錄在 F2b 才實作，在那之前：
+  - `late_copy_commands`、`resolved_copy_commands`、`late_only_inputs` 恆為 0，這個 0 不代表量到；
+  - `late_first_commands` 只計 slack 樣本路徑（上限 64 個被替代序號）還留著的第一份到達；
+  - 其餘不大於游標的命令都計成 `resolved_untracked_commands`。
+  - I2 照樣成立。F2b 讓這幾個鍵依帳本產生，鍵名與順序不變。
 - I1（Gateway 寫出數＝Match 的 `received_commands`）跨兩個程序，不在 golden 之內，判定條件見 `docs/object_fps_pvp/plans/v7/08c-drop-report.md`。
 
 ## `match-ingress.jsonl`

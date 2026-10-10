@@ -13,15 +13,22 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace fps::pvp {
 
 inline constexpr int IngressStatisticsVersion = 1;
 
 // Each command of an admitted input falls in exactly one class (I2).
+// Provisional until the host keeps its own substitution records (batch 08c
+// F2b): late_first is a first late arrival the 64-entry slack track still
+// holds, every other command at or below the cursor is resolved_untracked,
+// and late_copy and resolved_copy stay 0.
 enum class IngressCommandClass : std::uint8_t {
     AcceptedNew, PendingCopy, LateFirst, LateCopy, ResolvedCopy, ResolvedUntracked, Count
 };
@@ -141,7 +148,9 @@ struct MatchIngressCounts final {
     IngressInputCount received;
     std::uint64_t acceptedInputs{};
     std::array<std::uint64_t, IngressCount<IngressCommandClass>> classified{};
-    std::uint64_t lateOnlyInputs{}; // admitted inputs whose every command was late
+    // Admitted inputs whose every command was late. Not produced yet: always 0
+    // until F2b defines it together with late_copy and resolved_copy.
+    std::uint64_t lateOnlyInputs{};
     std::array<IngressInputCount, IngressCount<IngressInputRejection>> rejected{};
     std::array<std::uint64_t, IngressCount<IngressStagedDiscard>> discarded{};
     IngressActionCount receivedActions;
@@ -203,5 +212,29 @@ void ForEachMatchIngressField(Counts& counts, Field&& field) {
     });
     return line;
 }
+
+// The lines of one window from the counts the Match host handed over (keyed
+// by player). Every window has a player=0 line. The final window also closes
+// each player written before with a final=1 line, zero counts included, so
+// every (process, player) ends with exactly one final=1 line. Lines are in
+// player order.
+class MatchIngressStatisticsWriter final {
+public:
+    [[nodiscard]] std::vector<std::string> Lines(std::map<std::uint64_t, MatchIngressCounts> taken,
+                                                 std::uint64_t windowMs, bool final) {
+        taken.try_emplace(0);
+        for (const auto& [player, counts] : taken) written_.insert(player);
+        if (final)
+            for (const auto player : written_) taken.try_emplace(player);
+        std::vector<std::string> lines;
+        lines.reserve(taken.size());
+        for (const auto& [player, counts] : taken)
+            lines.push_back(MatchIngressStatisticsLine({.player = player, .windowMs = windowMs, .final = final, .counts = counts}));
+        return lines;
+    }
+
+private:
+    std::set<std::uint64_t> written_;
+};
 
 } // namespace fps::pvp

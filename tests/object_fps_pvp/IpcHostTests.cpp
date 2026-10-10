@@ -214,6 +214,17 @@ void JoinPlayer(Gateway& gateway, PlayerId player) {
     REQUIRE(joined.join_result().accepted());
 }
 
+pb::RuntimeEnvelope InputWindow(PlayerId player, std::uint64_t first, std::uint64_t last) {
+    pb::RuntimeEnvelope message;
+    message.set_protocol_version(wire::ProtocolVersion);
+    auto* input = message.mutable_input();
+    input->set_player_id(player);
+    input->set_movement_epoch(1);
+    input->set_life_generation(1);
+    for (auto sequence = first; sequence <= last; ++sequence) input->add_commands()->set_sequence(sequence);
+    return message;
+}
+
 // One action through its decision, then its ACK through the retirement.
 void ActAndRetire(Gateway& gateway, PlayerId player, ActionId id) {
     gateway.Send(Actions(player, {id}, id - 1));
@@ -489,4 +500,62 @@ TEST_CASE("PvP IPC starts each connection with empty action lanes") {
     second.Send(Actions(5, {1}, 0));
     const auto decision = ReceiveFirst(second, [](const auto& message) { return Carries(message, 1); });
     CHECK(decision.action_results().player_id() == 5);
+}
+
+TEST_CASE("PvP IPC hands every malformed input and action batch to the host's ingress counts") {
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 5);
+    static_cast<void>(server.host.TakeIngressStatistics());
+    gateway.Send(InputWindow(5, 1, 0));                     // no command
+    gateway.Send(InputWindow(5, 1, MaxPendingCommands + 1)); // one over the window
+    gateway.Send(InputWindow(99, 1, 1));                    // a player the Match does not hold
+    auto overBatch = Actions(5, {}, 0);
+    for (ActionId id = 1; id <= MaxActionBatch + 1; ++id) {
+        auto* shot = overBatch.mutable_actions()->add_shots();
+        shot->set_action_id(id);
+        shot->set_kind(object_fps_pvp::runtime::v6::ACTION_RELOAD);
+        shot->set_life_generation(1);
+    }
+    gateway.Send(overBatch);
+    auto noYaw = Actions(5, {}, 0);
+    auto* aimless = noYaw.mutable_actions()->add_shots();
+    aimless->set_action_id(1);
+    aimless->set_kind(object_fps_pvp::runtime::v6::ACTION_SHOT);
+    aimless->set_life_generation(1);
+    aimless->set_pitch(0);
+    gateway.Send(noYaw);
+    gateway.Send(Actions(5, {1}, 0));
+    auto conflicting = Actions(5, {}, 0);
+    auto* shot = conflicting.mutable_actions()->add_shots();
+    shot->set_action_id(1);
+    shot->set_kind(object_fps_pvp::runtime::v6::ACTION_SHOT);
+    shot->set_life_generation(1);
+    shot->set_yaw(0.5F);
+    shot->set_pitch(0);
+    gateway.Send(conflicting);
+    // Frames are handled in order: once this join is answered, all of the above was counted.
+    gateway.Send(Join(6));
+    const auto joined = ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); });
+    REQUIRE(joined.join_result().player_id() == 6);
+
+    const auto taken = server.host.TakeIngressStatistics();
+    REQUIRE(taken.contains(5));
+    const auto& counts = taken.at(5);
+    const auto ipcMalformedInputs = counts.rejected[IngressIndex(IngressInputRejection::Malformed)].inputs;
+    CHECK(ipcMalformedInputs == 2);
+    const auto ipcReceivedCommands = counts.received.commands;
+    CHECK(ipcReceivedCommands == 13);
+    const auto ipcOverBatchShots = counts.rejectedActions[IngressIndex(IngressActionRejection::OverBatch)].shots;
+    CHECK(ipcOverBatchShots == MaxActionBatch + 1);
+    const auto ipcMalformedActions = counts.rejectedActions[IngressIndex(IngressActionRejection::Malformed)].batches;
+    CHECK(ipcMalformedActions == 1);
+    const auto actionConflicts = counts.rejectedActions[IngressIndex(IngressActionRejection::Conflict)].batches;
+    CHECK(actionConflicts == 1);
+    CHECK(counts.acceptedActions.batches == 1);
+    CHECK(counts.receivedActions.batches == 4);
+    const auto& unknown = taken.at(0);
+    const auto ipcUnknownPlayerCommands = unknown.rejected[IngressIndex(IngressInputRejection::UnknownPlayer)].commands;
+    CHECK(ipcUnknownPlayerCommands == 1);
+    CHECK(unknown.received.commands == 1);
 }

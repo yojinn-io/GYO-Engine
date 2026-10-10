@@ -351,14 +351,18 @@ struct IpcHost::Impl {
                 session.actionLanes.erase(message.leave().player_id());
             } else if(message.has_input()) {
                 const auto& p=message.input();
-                if(p.commands_size()==0 || p.commands_size()>static_cast<int>(MaxPendingCommands)) continue;
                 PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
                 for(const auto& command:p.commands())
                     window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
+                // The host counts every outcome by reason: an empty or
+                // oversized window as unknown_player (player 0) when the Match
+                // does not hold the player, as resetting during a reset, and
+                // as malformed otherwise. Nothing is answered here.
                 static_cast<void>(host.SubmitInput(window));
             } else if(message.has_actions()) {
                 const auto& value=message.actions();
-                if(value.shots_size()>static_cast<int>(MaxActionBatch)) continue;
+                const auto shots=static_cast<std::size_t>(value.shots_size());
+                if(shots>MaxActionBatch) {host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);continue;}
                 ActionBatch batch{value.player_id(),{}};
                 bool valid=true;
                 for(const auto& shot:value.shots()) {
@@ -370,9 +374,10 @@ struct IpcHost::Impl {
                     batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
                         shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
                 }
-                if(!valid) continue;
+                if(!valid) {host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);continue;}
                 // Admission is distinct from a terminal shot decision. The
-                // immutable request remains with the sender for retry.
+                // immutable request remains with the sender for retry. The
+                // host counts the admission by reason.
                 static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
             } else return "unknown message";
         }

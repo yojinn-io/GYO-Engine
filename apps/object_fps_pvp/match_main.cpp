@@ -1,3 +1,4 @@
+#include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
@@ -18,6 +19,14 @@ namespace {
 volatile std::sig_atomic_t stopping=0;
 void Stop(int){stopping=1;}
 
+std::uint64_t WindowMillis(std::chrono::steady_clock::duration window) {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(window).count());
+}
+// One window's ingress lines, written together so no other log line splits them.
+void WriteIngress(const std::vector<std::string>& lines) {
+    std::osyncstream out(std::clog);
+    for(const auto& line:lines) out<<line<<'\n';
+}
 }
 
 int main(int argc,char** argv) {
@@ -63,6 +72,8 @@ int main(int argc,char** argv) {
         auto cpuAtStart=fps::pvp::ProcessCpuSeconds();
         auto ipcAtStart=ipc.Iterations();
         static_cast<void>(runtime.TakeStatistics());
+        // Ingress lines share the window; nothing is taken before the first one.
+        fps::pvp::MatchIngressStatisticsWriter ingress;
         std::optional<std::string> failed;
         while(!stopping && !(failed=runtime.Error())) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -72,14 +83,20 @@ int main(int argc,char** argv) {
             const auto cpu=fps::pvp::ProcessCpuSeconds();
             const auto iterations=ipc.Iterations();
             auto host=runtime.TakeStatistics();
+            // Taken next to `now`, before any line is written, so window_ms is its window.
+            auto taken=runtime.TakeIngressStatistics();
             std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
                 .snapshotOverwrites=host.snapshotOverwrites})<<'\n';
+            WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             windowStart=now;cpuAtStart=cpu;ipcAtStart=iterations;
         }
         // I/O first: it stops calling into the host before the host's role stops.
         ipc.Stop(); runtime.Stop();
+        // The last ingress window: what the stopped IPC and host counted since the previous line.
+        const auto stoppedAt=std::chrono::steady_clock::now();
+        WriteIngress(ingress.Lines(runtime.TakeIngressStatistics(),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed){std::cerr<<"Match simulation failed: "<<*failed<<'\n';return 1;}
         if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");

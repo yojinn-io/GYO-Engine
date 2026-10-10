@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <numeric>
 #include <regex>
 #include <set>
@@ -188,4 +189,38 @@ TEST_CASE("The match-ingress.jsonl sample uses the shared vocabulary and ends wi
         }
     }
     CHECK(kinds == std::set<std::string>{"rejection", "substitution", "trace_end"});
+}
+
+TEST_CASE("Match ingress windows always carry player 0 and the final window closes every player once") {
+    MatchIngressStatisticsWriter writer;
+    std::map<std::uint64_t, MatchIngressCounts> first;
+    first[7].received = {.inputs = 2, .commands = 5};
+    const auto opening = writer.Lines(first, 10000, false);
+    REQUIRE(opening.size() == 2);
+    CHECK(opening[0].starts_with("[ObjectFPS/PvP Match] ingress statistics version=1 player=0 window_ms=10000 final=0 "
+                                 "received_inputs=0 received_commands=0 "));
+    CHECK(opening[1].starts_with("[ObjectFPS/PvP Match] ingress statistics version=1 player=7 window_ms=10000 final=0 "
+                                 "received_inputs=2 received_commands=5 "));
+    // A quiet window still has its player=0 line; player 7 had nothing to hand over.
+    const auto quiet = writer.Lines({}, 10002, false);
+    REQUIRE(quiet.size() == 1);
+    CHECK(quiet[0].starts_with("[ObjectFPS/PvP Match] ingress statistics version=1 player=0 window_ms=10002 final=0 "));
+
+    std::map<std::uint64_t, MatchIngressCounts> last;
+    last[8].received = {.inputs = 1, .commands = 1};
+    const auto closing = writer.Lines(last, 4217, true);
+    std::map<std::uint64_t, MatchIngressWindow> closed;
+    for (const auto& line : closing) {
+        const auto parsed = ParseMatchLine(line);
+        CHECK(parsed.window.final);
+        CHECK(parsed.window.windowMs == 4217);
+        CHECK(closed.emplace(parsed.window.player, parsed.window).second);
+    }
+    // Player 7 was quiet in the last window and still gets its final=1 line.
+    const bool finalLineWritten = closed.contains(7);
+    CHECK(finalLineWritten);
+    CHECK(closed.size() == 3);
+    CHECK(closed.contains(0));
+    REQUIRE(closed.contains(8));
+    CHECK(closed.at(8).counts.received.inputs == 1);
 }

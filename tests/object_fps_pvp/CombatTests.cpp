@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <set>
 
 namespace {
 using namespace fps::pvp;
@@ -920,4 +921,50 @@ TEST_CASE("PvP players dying in the same tick respawn in the same tick at distin
     CHECK(two2.lifeGeneration == 2);
     CHECK(four2.lifeGeneration == 2);
     CHECK(Engine::Math::Length(two2.position - four2.position) >= 2 * CombatArena().radius);
+}
+
+TEST_CASE("PvP match names each input admission and CanSubmitInput agrees with it") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // Lethal: player 2 respawns in a later epoch and life.
+    const auto due = LifePlayer(match, 2).respawnTick;
+    while (match.TickCount() < due) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+    }
+    const auto victim = LifePlayer(match, 2);
+    REQUIRE(victim.lifeGeneration == 2);
+    REQUIRE(victim.movementEpoch >= 2);
+    REQUIRE(victim.lastResolvedCommand == 0);
+    const auto epoch = victim.movementEpoch;
+    const auto window = [&](std::uint64_t sequence, std::uint64_t movementEpoch, std::uint64_t life, float forward = 0) {
+        return PlayerInput{2, {{sequence, forward, 0, 0, 0}}, movementEpoch, life};
+    };
+    std::set<InputAdmission> named;
+    const auto admits = [&](const PlayerInput& input, InputAdmission expected) {
+        const auto admission = match.AdmitInput(input);
+        named.insert(admission);
+        CHECK(admission == expected);
+        CHECK(match.CanSubmitInput(input) == (expected == InputAdmission::Accepted));
+    };
+    admits(window(1, epoch, 2), InputAdmission::Accepted);
+    REQUIRE(match.SubmitInput(window(1, epoch, 2)));
+    admits({3, {{1, 0, 0, 0, 0}}, 1, 1}, InputAdmission::UnknownPlayer);
+    // The player is checked before the window: an unknown player's malformed window is unknown.
+    const auto unknownMalformed = match.AdmitInput({99, {}, 1, 1});
+    CHECK(unknownMalformed == InputAdmission::UnknownPlayer);
+    admits({2, {}, epoch, 2}, InputAdmission::Malformed);
+    admits(window(1, epoch - 1, 2), InputAdmission::EpochOld);
+    admits(window(1, epoch + 1, 2), InputAdmission::EpochFuture);
+    admits(window(1, epoch, 1), InputAdmission::LifeOld);
+    admits(window(1, epoch, 3), InputAdmission::LifeFuture);
+    admits(window(MaxFutureCommands + 1, epoch, 2), InputAdmission::BeyondWindow);
+    admits(window(1, epoch, 2, 1), InputAdmission::ConflictQueued);
+    // The epoch is checked before the life, the window before a queued conflict.
+    admits(window(1, epoch - 1, 1), InputAdmission::EpochOld);
+    admits({2, {{1, 1, 0, 0, 0}, {MaxFutureCommands + 1, 0, 0, 0, 0}}, epoch, 2}, InputAdmission::ConflictQueued);
+    admits({2, {{2, 0, 0, 0, 0}, {MaxFutureCommands + 1, 0, 0, 0, 0}}, epoch, 2}, InputAdmission::BeyondWindow);
+    CHECK(named.size() == 9);
 }

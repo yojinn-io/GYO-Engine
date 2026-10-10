@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -87,6 +88,16 @@ public:
         std::uint64_t snapshotOverwrites{};
     };
     [[nodiscard]] Statistics TakeStatistics();
+    // Diagnostics only, since the previous call (or the start): what became
+    // of every input and action batch the host received, per player. Inputs
+    // and batches of a player the Match does not hold count under player 0.
+    // Counts survive Leave, eviction and resets until taken. The result holds
+    // player 0 and every current player, even with nothing counted, and any
+    // other player with counts. Resets the window.
+    [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics();
+    // An action batch the I/O layer refused before it could become a request
+    // (OverBatch or Malformed): counted like the host's own refusals.
+    void NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots);
 
     // IPC must wait for completion before accepting a replacement connection.
     // The future is completed by the next step (the role is woken at once),
@@ -137,11 +148,16 @@ private:
         std::chrono::steady_clock::time_point publishedAt;
     };
     bool QueueControl(Control control);
+    // The counts an input or batch of this player falls under (player 0 when
+    // the Match does not hold it). Under the lock.
+    [[nodiscard]] MatchIngressCounts& IngressBucket(PlayerId playerId);
     // Advance's work under the lock; published tells Advance to notify.
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Step(double elapsedSeconds, bool& published);
     void Body(Engine::Threads::RoleContext& context);
     void ClearState();
-    void RemovePlayerState(PlayerId playerId);
+    // resolvedThrough: the player's resolved cursor for its staged epoch and
+    // life; staged commands at or below it were executed, not discarded.
+    void RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough);
     // `at` is this Advance's single clock reading, taken on first use.
     void TrackSlack(WorldSnapshot& state, std::optional<std::chrono::steady_clock::time_point>& at);
     void JudgeConnectionQuality(WorldSnapshot& state);
@@ -162,6 +178,8 @@ private:
     std::optional<WorldSnapshot> snapshot_;
     std::optional<std::promise<void>> pendingReset_;
     Statistics statistics_;
+    // Not part of the match state: ClearState and RemovePlayerState keep it.
+    std::map<PlayerId, MatchIngressCounts> ingress_;
     std::optional<std::string> error_;
     std::function<void()> publishListener_;
     std::atomic<bool> running_{};
