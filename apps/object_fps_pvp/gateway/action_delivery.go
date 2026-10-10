@@ -310,22 +310,31 @@ func (s *Server) resultDeadline() (time.Time, bool) {
 func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte, now time.Time) error {
 	in, err := adapter.DecodeActions(payload, p.playerID)
 	if err != nil {
+		s.countIngress(p, playerDropMalformedActionsPackets, 1)
 		return nil
 	}
 	if p.actions == nil {
 		p.actions = newActionWindow()
 	}
+	// The two semantic action drops (A3 here, A5 below) are only counted in
+	// P2 (D53 item 8): batches and their shots.
 	if p.actions.validate(in) != nil {
+		s.countIngress(p, playerDropInvalidActionsPackets, 1)
+		s.countIngress(p, playerDropInvalidActionsShots, uint64(len(in.Shots)))
 		return nil
 	}
 	// Link admission happens before committing the session's ledger or ACK. A
 	// rejected batch can be retried unchanged without losing any request/result.
 	if err = s.link.actions(in); err != nil {
 		if err == adapter.ErrActions {
+			s.countIngress(p, playerDropLinkRejectedActionsPackets, 1)
+			s.countIngress(p, playerDropLinkRejectedActionsShots, uint64(len(in.Shots)))
 			return nil
 		}
 		return err
 	}
+	// The link holds the batch: it reaches the Match whatever follows.
+	s.countIngress(p, playerFwdHandedActionsPackets, 1)
 	if p.session.CommitSequence(h.Sequence, now) != nil {
 		return nil
 	}
@@ -382,17 +391,38 @@ func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
 // Product diagnostics observe the shared Session limiter; its120-packet policy
 // and inclusion of Hello, stale and malformed authenticated traffic are intact.
 // All per-reservation accounting occurs under Server.mu, matching receivePacket.
-func (s *Server) admit(p *reservation, peer netip.AddrPort, sequence uint32, now time.Time) error {
-	err := p.session.Admit(peer, sequence, now)
-	s.trackAdmission(p, now, err)
+func (s *Server) admit(p *reservation, kind ingressKind, peer netip.AddrPort, sequence uint32, now time.Time) error {
+	err := sessionAdmit(p.session, peer, sequence, now)
+	s.trackAdmission(p, kind, now, err)
 	return err
 }
-func (s *Server) trackAdmission(p *reservation, now time.Time, err error) {
-	if errors.Is(err, session.ErrUnauthorized) {
+
+// trackAdmission counts the drop an admission error means for a datagram of
+// kind, classified by the reusable layer's typed errors (session.go), and
+// keeps the limiter diagnostics. Every caller drops a datagram whose
+// admission failed, except a stale Input: it is forwarded and counted by its
+// forwarding outcome. An error this Gateway does not know (the Session
+// returns none today, nor ErrStale for a Hello) is dropped and counted, never
+// accepted (fail-closed, D55 ④).
+func (s *Server) trackAdmission(p *reservation, kind ingressKind, now time.Time, err error) {
+	switch {
+	case err == nil:
+	case errors.Is(err, session.ErrUnauthorized):
+		// Unauthenticated: the session it claims, which a forger can name.
+		s.countIngress(p, unauthorizedPackets[kind], 1)
 		return
-	}
-	if errors.Is(err, session.ErrRateLimit) {
+	case errors.Is(err, session.ErrRateLimit):
 		s.rateRejectedPackets.Add(1)
+		s.ingress[gatewayDropRateLimitedPackets]++
+		s.countIngress(p, rateLimitedPackets[kind], 1)
+		return
+	case errors.Is(err, session.ErrStale) && kind != ingressHello:
+		// The limiter accepted it, as before 08c.
+		if kind != ingressInput {
+			s.countIngress(p, staleSequencePackets[kind], 1)
+		}
+	default:
+		s.countIngress(p, playerDropAdmissionUnknownPackets, 1)
 		return
 	}
 	if now.Sub(p.packetWindow) >= time.Second {

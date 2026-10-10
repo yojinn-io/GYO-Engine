@@ -76,6 +76,9 @@ const (
 	reasonOtherVersion
 	reasonRoomUnavailable
 	reasonUnknownSession
+	// Snapshots of the Match the Gateway refused (D55 ②).
+	reasonOldTick
+	reasonRegressed
 )
 
 // The datagram kind from the header; ingressAnyKind leaves it out of the key.
@@ -98,6 +101,7 @@ const (
 	unitCommands
 	unitBatches
 	unitShots
+	unitSnapshots
 )
 
 type ingressKey struct {
@@ -151,11 +155,13 @@ var (
 		reasonOtherVersion:            "other_version",
 		reasonRoomUnavailable:         "room_unavailable",
 		reasonUnknownSession:          "unknown_session",
+		reasonOldTick:                 "old_tick",
+		reasonRegressed:               "regressed",
 	}
 	ingressKindNames = [...]string{ingressAnyKind: "", ingressHello: "_hello", ingressInput: "_input",
 		ingressActions: "_actions", ingressOther: "_other"}
 	ingressUnitNames = [...]string{unitDatagrams: "_datagrams", unitPackets: "_packets", unitInputs: "_inputs",
-		unitCommands: "_commands", unitBatches: "_batches", unitShots: "_shots"}
+		unitCommands: "_commands", unitBatches: "_batches", unitShots: "_shots", unitSnapshots: "_snapshots"}
 )
 
 func ingressKeyName(k ingressKey) string {
@@ -298,6 +304,11 @@ const (
 	// T3: the players' drop_rate_limited_*_packets sum to this. It is the
 	// window's share of the Session limiter's rate_limited_packets.
 	gatewayDropRateLimitedPackets
+	// Snapshots of the Match the Gateway refused, so neither the cursors nor
+	// the Clients saw them: a tick not after the last accepted one (D1), or a
+	// player's life, epoch or resolved cursor going back (D2).
+	gatewayDropOldTickSnapshots
+	gatewayDropRegressedSnapshots
 	gatewayIngressCounterCount
 )
 
@@ -308,9 +319,33 @@ var gatewayIngressKeys = [gatewayIngressCounterCount]ingressKey{
 	gatewayDropRoomUnavailableDatagrams: {ingressDropped, reasonRoomUnavailable, ingressAnyKind, unitDatagrams},
 	gatewayDropUnknownSessionDatagrams:  {ingressDropped, reasonUnknownSession, ingressAnyKind, unitDatagrams},
 	gatewayDropRateLimitedPackets:       {ingressDropped, reasonRateLimited, ingressAnyKind, unitPackets},
+	gatewayDropOldTickSnapshots:         {ingressDropped, reasonOldTick, ingressAnyKind, unitSnapshots},
+	gatewayDropRegressedSnapshots:       {ingressDropped, reasonRegressed, ingressAnyKind, unitSnapshots},
 }
 
 type gatewayIngressCounts [gatewayIngressCounterCount]uint64
+
+// add accumulates another take of the same player's counters: the Server
+// counts the datagram outcomes and the link the commands (disjoint keys).
+func (c *playerIngressCounts) add(other *playerIngressCounts) {
+	for i, n := range other {
+		c[i] += n
+	}
+}
+
+// The drop an admission error means for a datagram, by the kind in its
+// header (never ingressAnyKind). Hello has no stale outcome: the Session
+// never answers a Hello with ErrStale.
+var (
+	unauthorizedPackets = [...]playerIngressCounter{ingressHello: playerDropUnauthorizedHelloPackets,
+		ingressInput: playerDropUnauthorizedInputPackets, ingressActions: playerDropUnauthorizedActionsPackets,
+		ingressOther: playerDropUnauthorizedOtherPackets}
+	rateLimitedPackets = [...]playerIngressCounter{ingressHello: playerDropRateLimitedHelloPackets,
+		ingressInput: playerDropRateLimitedInputPackets, ingressActions: playerDropRateLimitedActionsPackets,
+		ingressOther: playerDropRateLimitedOtherPackets}
+	staleSequencePackets = [...]playerIngressCounter{ingressActions: playerDropStaleSequenceActionsPackets,
+		ingressOther: playerDropStaleSequenceOtherPackets}
+)
 
 func playerIngressStatisticsLine(player uint64, window time.Duration, final bool, counts *playerIngressCounts) string {
 	head := fmt.Sprintf("player ingress statistics version=%d player=%d window_ms=%d final=%d",

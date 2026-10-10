@@ -88,7 +88,20 @@ type Server struct {
 	rateAcceptedPackets     atomic.Uint64
 	rateRejectedPackets     atomic.Uint64
 	maxSessionWindowPackets atomic.Uint64
+	// Ingress statistics (v7 batch 08c), under mu: the Gateway-wide counters
+	// and each player's datagram outcomes (IG). A player's counters outlive
+	// its reservation (remove, runtimeFailed) until taken, like the link's.
+	ingress       gatewayIngressCounts
+	playerIngress map[uint64]*playerIngressCounts
 }
+
+// The reusable Session's admission checks. Tests replace them to reach an
+// admission error this Gateway does not know: the Session returns only
+// ErrUnauthorized, ErrRateLimit and ErrStale.
+var (
+	sessionAdmit = (*session.Session).Admit
+	sessionHello = (*session.Session).Hello
+)
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	ip, err := netip.ParseAddr(cfg.AdvertiseIP)
@@ -349,35 +362,69 @@ func (s *Server) receiveUDP(ctx context.Context) {
 			}
 			return
 		}
-		header, payload, err := framing.DecodeDatagram(buffer[:n])
-		if err != nil || header.Version != adapter.ClientVersion {
-			continue
-		}
-		if err = s.receivePacket(header, payload, peer, time.Now()); err != nil {
+		if err = s.receiveDatagram(buffer[:n], peer, time.Now()); err != nil {
 			s.runtimeFailed(err)
 		}
 	}
 }
-func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) error {
+
+// receiveDatagram handles one datagram read from the UDP socket; an error
+// fails the runtime.
+func (s *Server) receiveDatagram(datagram []byte, peer netip.AddrPort, now time.Time) error {
+	header, payload, err := framing.DecodeDatagram(datagram)
+	if err != nil {
+		s.mu.Lock()
+		s.ingress[gatewayReceivedDatagrams]++
+		s.ingress[gatewayDropUndecodableDatagrams]++
+		s.mu.Unlock()
+		return nil
+	}
+	return s.receivePacket(header, payload, peer, now)
+}
+
+// receivePacket gives every datagram exactly one outcome. One that belongs to
+// no session is a Gateway-wide drop; a session's datagram is counted received
+// for its player and, at each return, in exactly one fwd_ or drop_ counter, so
+// the player's received_datagrams equals the sum of its outcomes (IG).
+func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.available || h.Version != adapter.ClientVersion {
+	s.ingress[gatewayReceivedDatagrams]++
+	if h.Version != adapter.ClientVersion {
+		s.ingress[gatewayDropOtherVersionDatagrams]++
+		return nil
+	}
+	if !s.available {
+		s.ingress[gatewayDropRoomUnavailableDatagrams]++
 		return nil
 	}
 	p := s.sessions[h.SessionID]
 	if p == nil {
+		s.ingress[gatewayDropUnknownSessionDatagrams]++
 		return nil
 	}
 	p.received++
 	p.lastReceived = now
+	s.countIngress(p, playerReceivedDatagrams, 1)
+	defer func() {
+		// The runtime link failed on this datagram (receiveUDP then makes the
+		// room unavailable). No outcome was counted for it: it leaves its
+		// player's IG and is dropped as for an unavailable room.
+		if err != nil {
+			s.playerIngress[p.playerID][playerReceivedDatagrams]--
+			s.ingress[gatewayDropRoomUnavailableDatagrams]++
+		}
+	}()
 	switch h.Type {
 	case adapter.Hello:
 		var hello client.Hello
 		if proto.Unmarshal(payload, &hello) != nil {
+			// Before authentication: the session it claims.
+			s.countIngress(p, playerDropMalformedHelloPackets, 1)
 			return nil
 		}
-		admission := p.session.Hello(hello.SessionToken, peer, h.Sequence, now)
-		s.trackAdmission(p, now, admission)
+		admission := sessionHello(p.session, hello.SessionToken, peer, h.Sequence, now)
+		s.trackAdmission(p, ingressHello, now, admission)
 		if admission != nil {
 			return nil
 		}
@@ -388,37 +435,74 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 			log.Printf("player hello player=%d udp=%s", p.playerID, peer)
 			e := envelope()
 			e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: p.playerID}}
-			return s.link.control(e)
+			if err := s.link.control(e); err != nil {
+				return err
+			}
 		case active:
 			s.welcome(p)
 		}
+		s.countIngress(p, playerFwdAdmittedHelloPackets, 1)
 	case adapter.Actions:
-		if p.phase != active || s.admit(p, peer, h.Sequence, now) != nil {
+		if p.phase != active {
+			s.countIngress(p, playerDropInactiveActionsPackets, 1)
+			return nil
+		}
+		if s.admit(p, ingressActions, peer, h.Sequence, now) != nil {
 			return nil
 		}
 		return s.receiveActions(p, h, payload, now)
 	case adapter.Input:
 		if p.phase != active {
+			s.countIngress(p, playerDropInactiveInputPackets, 1)
 			return nil
 		}
 		// A stale transport sequence still carries a complete payload (Hello,
 		// Input and Actions share the Client's packet sequence): it is decoded
 		// and forwarded, but never commits the sequence, so it neither extends
 		// liveness nor moves the sequence. The rate limit already counted it.
-		admission := s.admit(p, peer, h.Sequence, now)
+		admission := s.admit(p, ingressInput, peer, h.Sequence, now)
 		stale := errors.Is(admission, session.ErrStale)
 		if admission != nil && !stale {
 			return nil
 		}
 		in, err := adapter.DecodeInput(payload, p.playerID)
 		if err != nil {
+			s.countIngress(p, playerDropMalformedInputPackets, 1)
 			return nil
 		}
 		return s.forwardInput(p, in, h.Sequence, stale, now)
 	default:
-		_ = s.admit(p, peer, h.Sequence, now)
+		if s.admit(p, ingressOther, peer, h.Sequence, now) == nil {
+			s.countIngress(p, playerDropUnknownKindPackets, 1)
+		}
 	}
 	return nil
+}
+
+// countIngress adds n to one of a player's ingress counters. Called with s.mu
+// held.
+func (s *Server) countIngress(p *reservation, counter playerIngressCounter, n uint64) {
+	if s.playerIngress == nil {
+		s.playerIngress = make(map[uint64]*playerIngressCounts)
+	}
+	counts := s.playerIngress[p.playerID]
+	if counts == nil {
+		counts = new(playerIngressCounts)
+		s.playerIngress[p.playerID] = counts
+	}
+	counts[counter] += n
+}
+
+// takeIngress hands over the Server's ingress counters accumulated since the
+// previous call: each player's datagram outcomes, and the Gateway-wide
+// counters. The link's command counters (I0) are taken by its own
+// takeIngress; a player's line adds both (disjoint keys).
+func (s *Server) takeIngress() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	players, gateway := s.playerIngress, s.ingress
+	s.playerIngress, s.ingress = nil, gatewayIngressCounts{}
+	return players, gateway
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
@@ -472,7 +556,12 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			return
 		}
 		s.mu.Lock()
-		if !s.available || (s.hasSnapshot && out.Tick <= s.lastSnapshot) {
+		if !s.available {
+			s.mu.Unlock()
+			return
+		}
+		if s.hasSnapshot && out.Tick <= s.lastSnapshot {
+			s.ingress[gatewayDropOldTickSnapshots]++
 			s.mu.Unlock()
 			return
 		}
@@ -481,6 +570,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 				(state.LifeGeneration < p.lifeGeneration || state.MovementEpoch < p.movementEpoch ||
 					(state.LifeGeneration > p.lifeGeneration && state.MovementEpoch <= p.movementEpoch) ||
 					(state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
+				s.ingress[gatewayDropRegressedSnapshots]++
 				s.mu.Unlock()
 				return
 			}
@@ -767,7 +857,22 @@ func (s *Server) runtimeFailed(err error) {
 // may refuse as a whole goes unmerged through the rejected lane, so it cannot
 // make the Match refuse a merge with valid commands: another epoch or life,
 // beyond the future bound, a conflict, or a window the link refused.
-func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) error {
+//
+// The datagram's one outcome (IG) is the lane it took: the main lane, the
+// rejected lane, or neither when every command was a written copy; a stale
+// sequence is its own outcome on any of them (D55 ③). A failed link counts
+// none (receivePacket counts the datagram for the unavailable room).
+func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) (err error) {
+	outcome := playerFwdRejectedLaneInputPackets
+	defer func() {
+		if err != nil {
+			return
+		}
+		if stale {
+			outcome = playerFwdStaleSequenceInputPackets
+		}
+		s.countIngress(p, outcome, 1)
+	}()
 	if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
 		return s.link.reject(in, playerFwdRoutedEpochMismatchInputs)
 	}
@@ -789,11 +894,16 @@ func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence 
 	if !stale {
 		_ = p.session.CommitSequence(sequence, now)
 	}
-	if err := s.link.input(in); err != nil {
+	var copies bool
+	if err := s.link.inputWindow(in, &copies); err != nil {
 		if errors.Is(err, adapter.ErrInput) {
 			return s.link.reject(in, linkRefusalReason(err))
 		}
 		return err
+	}
+	outcome = playerFwdMainInputPackets
+	if copies {
+		outcome = playerFwdWrittenDuplicateInputPackets
 	}
 	for _, command := range in.Commands {
 		if command.Sequence > p.lastResolved {

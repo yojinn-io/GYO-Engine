@@ -261,7 +261,7 @@ func TestMovementActionsHelloShareUnchanged120PacketBudget(t *testing.T) {
 		seq++
 		_ = s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: 99, SessionID: p.session.ID, Sequence: seq}, nil, endpoint, now)
 	}
-	if err := s.admit(p, endpoint, seq+1, now); err != session.ErrRateLimit {
+	if err := s.admit(p, ingressOther, endpoint, seq+1, now); err != session.ErrRateLimit {
 		t.Fatalf("all authenticated traffic not counted: %v", err)
 	}
 	if s.maxSessionWindowPackets.Load() != 120 || s.rateRejectedPackets.Load() != 1 {

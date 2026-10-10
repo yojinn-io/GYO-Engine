@@ -14,7 +14,7 @@ import (
 var ingressFixtures = filepath.Join("..", "..", "..", "tests", "object_fps_pvp", "fixtures", "ingress_v1")
 
 var (
-	ingressKeyRule = regexp.MustCompile(`^(fwd_|drop_)?[a-z]+(_[a-z]+)*_(datagrams|packets|inputs|commands|batches|shots)$`)
+	ingressKeyRule = regexp.MustCompile(`^(fwd_|drop_)?[a-z]+(_[a-z]+)*_(datagrams|packets|inputs|commands|batches|shots|snapshots)$`)
 	ingressValue   = regexp.MustCompile(`^\d+$`)
 	// build/acceptance/object_fps_pvp/action_probe.py:594 (and run_gameplay_soak.py:29) read the
 	// first match; network_statistics.py:17-19 parse the lines that carry these phrases.

@@ -197,6 +197,13 @@ func (l *runtimeLink) takeIngress() map[uint64]*playerIngressCounts {
 // already wrote with the same content are dropped and counted; a refused
 // window changes nothing, and the caller routes it to the rejected lane.
 func (l *runtimeLink) input(in *runtime.PlayerInput) error {
+	return l.inputWindow(in, new(bool))
+}
+
+// inputWindow is input that also sets *copies when every command of the
+// window was a written copy: nothing was merged, the packet's outcome is a
+// written duplicate.
+func (l *runtimeLink) inputWindow(in *runtime.PlayerInput, copies *bool) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
@@ -247,6 +254,7 @@ func (l *runtimeLink) input(in *runtime.PlayerInput) error {
 		if old != nil {
 			old.ObservedAuthorityTick = max(old.ObservedAuthorityTick, in.ObservedAuthorityTick)
 		}
+		*copies = true
 		l.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))
 		l.countLocked(in.PlayerId, playerFwdWrittenDuplicateCommands, duplicates)
 		return nil
