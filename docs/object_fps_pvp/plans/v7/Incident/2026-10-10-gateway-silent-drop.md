@@ -205,17 +205,17 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 | 時間上限的套用：每次規劃開始前先檢查估計有沒有超過 2 小時，超過就先分批或先問（P9） | Claude | 進行中（丟棄回報的規劃已分三批） | 本紀錄 |
 | 受影響工作的盤點 | Claude（workflow） | 完成 | `pvp-v7-incident-20261010/inventory/from-workflow.md` |
 | 本事故紀錄 | Claude（workflow）；使用者核對 | 完成初版 | 本檔 |
-| 丟棄回報機制的規劃（只規劃）：第 1 批事實核對 → 第 2 批方案與評審 → 第 3 批對抗式檢查，每批停下回報 | Claude（workflow）；使用者在每批後決定 | 第 1 批完成（`wuq2e3wc2`）；第 2 批等使用者的三個決定；一次跑完版 `wsu7h2j4s` 已停 | HANDOFF 現況；`pvp-v7-infoflow-plan-20261010/` |
-| 依盤點回寫 D51 ⑨③ 的分類與 U1 的推論標記 | Claude；使用者核准 | 未開始 | HANDOFF D51 |
-| 加註建在截斷資訊流上的說法：`HANDOFF.md:258` 的「平常無害」、`09b-phase-tracking.md:44` 的「意涵」、`:12` 的「意外的緩衝」 | Claude；使用者核准 | 未開始 | HANDOFF、09b |
+| 丟棄回報機制的規劃（只規劃）：第 1 批事實核對 → 第 2 批方案與評審（另評估第 6 項的去重）→ 第 3 批對抗式檢查，每批停下回報 | Claude（workflow／agent）；使用者在每批後決定 | 三批完成（D52、D53）；批次文件撰寫中 | HANDOFF D52、D53；`pvp-v7-infoflow-plan-20261010/` |
+| 依盤點回寫 D51 ⑨③ 的分類與 U1 的推論標記 | Claude；使用者核准（2026-10-10） | 完成 | HANDOFF D51 ⑨ 的更正 |
+| 加註建在截斷資訊流上的說法：`HANDOFF.md` 未結事項「重複過濾」的「平常無害」、`09b-phase-tracking.md` 的「意涵」與「意外的緩衝」 | Claude；使用者核准（2026-10-10） | 完成 | HANDOFF 未結事項；`09b-phase-tracking.md` |
 | `network-architecture.zh-Hant.md:230-233` 的條文歧義 | 丟棄回報計畫或第 11 批 | 未開始 | 協議文件 |
-| U4：用既有的 `match-commands.jsonl` 分出閒置主機的替代 | Claude | 未開始 | 第①步證據目錄 |
+| U4：用既有的 `match-commands.jsonl` 分出閒置主機的替代 | 使用者決定（2026-10-10）：不單獨做，併入重新量測 | 併入 | 丟棄回報計畫的 L2 |
 | 實作丟棄回報（轉送已解析的命令並處理 link 的剪除、合併上限與 `:424` 的下溢；每一種丟棄都讓 Match 知道；Match 記下自己的拒絕），加入「晚到的命令會送到 Match」的測試、丟棄計數與突變 | 使用者核准規劃後 | 未開始 | D51 ⑥⑩；P2 |
 | 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者在補完指示（20:32）中要求之後的注入用**純延遲型**（例如原型 x1，或 D48 第③步的 IPC 延遲那種不丟包的延遲），不用只保留最新一包的「擋住再放出」 | 實作後 | 未開始 | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
-| 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）在修正之後怎麼處理：重新發佈，或在 `STABLE_BASELINE.md` 加註 | 使用者決定 | 未開始 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
-| 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補（第 10 批或重新量測之前） | 使用者決定排程 | 未開始 | `build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，修改要另立） |
+| 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）：先在 `STABLE_BASELINE.md` 加「已知問題」並連到本紀錄；要不要重新發佈，修好之後再決定 | 使用者決定（2026-10-10） | 「已知問題」完成；重新發佈待修正後決定 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
+| 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補 | 使用者決定（2026-10-10）：併入丟棄回報計畫的 L2（斜坡注入） | 併入 | 丟棄回報計畫的 L2；`build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，不改；新注入另寫分支） |
 | 09b 重做（R3、R4、R12；09a 與 B2 的順序 U6） | 重新量測後 | 未開始 | `09b-phase-tracking.md` |
-| M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 未開始 | D51 ⑤⑥；`09-firegate-c2.md` |
+| M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 已決定（D51 ⑤） | D51 ⑤⑥；`09-firegate-c2.md` |
 | D44 的頻率與歸因重做（R2）；第 16 批的整體回歸照 D44 不變，但基準換成修好之後的資訊流 | 重新量測後；第 16 批 | 未開始 | HANDOFF D44、未結事項 |
 
 ## 9. 學到的事

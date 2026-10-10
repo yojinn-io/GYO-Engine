@@ -10,6 +10,7 @@
 - **機制**：Client 相位追蹤的 late 修正，在遲到來自傳輸路徑時會被夾在 2 Tick（−33.3 ms，`LocalPlayerPrediction.cpp:97-98`、`Movement.hpp:59`），命令領先從 2 變成 4。v7 的穩態每 Tick 排隊 2 個命令，30 Tick 合計 60（v6 是每 Tick 1 個、合計 30），所以 backlog 門檻 105 的餘裕只有 45（v6 是 75）。領先 4 時約 23 Tick 後合計 ≥105，epoch 重設，這就是 D44 的推論鏈。
 - **新的證據**（對抗式檢查重新分類 `defects/late-outcomes.jsonl`）：真正的 late 修正有 5 次（另外 4 筆是停頓 reseed 之後的首次決定，原本被誤算進來）。送出被釘住的 4 次，30 Tick 合計停在 89～99，沒有重設；沒被釘住的 1 次就是 D44（合計 108，Tick 622 重設）。被釘住時命令晚送 3～10 ms，吃掉了一部分多出來的領先。
 - **為什麼重要**：第 09a 批要修的正是「送出被釘住」。修好之後，這個「意外的緩衝」就沒了，傳輸型的 late 修正很可能每次都變成 backlog 重設。這符合 D44 的提前條件（`09-firegate-c2.md`：「決定 1 選了修正，而修正確認會改變遲到修正或 backlog 的行為」）。樣本只有 5 次，結論是方向一致的小樣本，不是證明。
+  - 加註（2026-10-10，D51 ⑨，使用者核准）：「意外的緩衝」是在截斷的資訊流上看到的現象。被釘住能吸收多出來的領先這件事仍是 09a 的機制（保留），但「傳輸型 late 修正」有多常發生，要在修好資訊流之後重新量；見[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md) 3.4（R12）。
 - **所以 09a 的實作先停下**，等你決定 D44 要不要提前（見「需要決定的事」1）。
 - **證據位置**：`build/target/_build/test/logs/pvp-v7-09b-plan-20261010/adversarial/step_context*.txt`、`queue_recount.txt`；`defects/late-outcomes.jsonl`（原始 9 列）。D44 的完整 trace 在 `pvp-v7-batch08-20261009/dev-backpressure/host-ipc-250ms/`。
 
@@ -42,6 +43,7 @@
   2. 擋住再放出的封包只會落在一次發布裡，而 late 修正需要連續 2 次發布都帶負樣本（`MovementPhaseLateSamples`＝2，`Movement.hpp:58`、`LocalPlayerPrediction.cpp:134`）。即使改成「連續 4 個命令各晚 12～15 ms、分在 4 次發布」（原型 1），仍然 0 次，因為被 Gateway 略過。
   3. 第①步的 M1～M5 都帶有產生空檔，和這兩點不矛盾。推論（未驗證）：host-ipc 跑次的 relay 讓 Match→Gateway 的 snapshot 變慢，拉長了那一小段，這可能是 D44（M3）出現在 host-ipc 跑次的原因。
 - **意涵**（未結，要寫進 D44）：client 端的網路遲到幾乎不會觸發 late 修正；真正的觸發來源是伺服器端的輸入延遲（Gateway→Match）或邊界巧合。
+  - 加註（2026-10-10，D51 ⑨，使用者核准）：這段「意涵」是在截斷的資訊流上寫的，把 Gateway 過濾的效果當成了系統性質。Client 端的遲到觸發不了 late 修正，是因為晚到的命令在 Gateway 被吞掉（`gateway/server.go:421-423`），而不是遲到本身不重要；見[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md) 3.2、P2。
 - **新的注入可以重現**：在 Gateway→Match 的 IPC 輸入路徑加延遲（原型 2，δ 40～50 ms、視窗 100 ms），tracking 型、−33.3 ms 的 late 修正 8／8 事件；故障前後沒有 >20 ms 的產生空檔、沒有 runtime_gap；注入在 slew 結束前就結束。模型預覽：8 個單次修正的 Match 端領先，實測與預測（修正前＋33.33−W_post）相差 ≤0.3 ms，全部沒有重設（領先 58.6～64.3 ms）。
 - **但脆弱窗沒有碰到**：W_post 6.5～12.0 ms，0／4 個跑次落在約 <3.6～3.9 ms。同一跑次兩位玩家的 W_post 相差 ≤0.2 ms，所以獨立單位是跑次。經驗擬合（不是推導）：W_post ≈ (26.8−16.667·x_before) mod 16.667 ms，x_before 約 1.39～1.60 時才會碰到脆弱窗；既有現頭跑次估計每個跑次的機率約 0.24。
 - **第二條重設途徑**（1 個跑次，δ 80 ms、視窗 150 ms）：兩次 late 修正串接（缺陷 B），共 −66.7 ms，Match 端領先約 94 ms，兩位玩家都 backlog 重設。不管 W_post 多少都會重設，09a 管不到。
