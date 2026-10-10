@@ -1,6 +1,6 @@
 # 第 09 批：FireGate 常數的重推與 C2
 
-狀態：**S1 宣告與第 09a 批的設計完成，待使用者決定**（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
+狀態：**S1 完成（只記錄）；第 09a 批的實作等 D48 的證據**（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-10「開始第 09 批，開 ultracode，檔位照建議」）。之後各步的檔位見「步驟」。
 
 ## 起因與範圍
@@ -132,7 +132,7 @@
 - **25 案回歸**：同一個凍結頭，結果不進入 C2 的判定。relay 的「結果任一秒 ≤31」由 judge 套用；Gateway 的兩個最短間隔以字面值比較 ≥33.3，每跑次至少 1 個有值的視窗（第 08b 批判定 2、5）。`backpressure_probe.py` 6 案與 `run_network.py` 各 1 次；非 respawn 的重設照 08b 的 D44 規則。只記錄：D44 領先跳升、被釘住秒數、停頓、c 的分布。
 - **「P2 頭 30 FPS 只記錄」**：P1b 頭 `805bd11`（從零重建）對 P2 頭 `a954aa3`，clean-30 各 6 輪交錯，依狀態分層。決定 1 選 A 或 B 時必須在修正之前跑（S1）；選 C 時併入 M0 的 session。
 
-## S1 的事前宣告（待使用者核准）
+## S1 的事前宣告（2026-10-10 使用者核准）
 
 下面是證據目錄 `build/target/_build/test/logs/pvp-v7-batch09-s1-20261010/declaration.md`（SHA-256 `9e0869a0…`）的全文；核准時以那個檔案的雜湊寫進 `declaration.sha256`。準備：P1b `805bd11` 與 P2 `a954aa3` 在 detached worktree 從零建置（單元測試 197／197、206／206），xhigh 對抗式檢查要求的修正 A～J 已套用，並由另一位 high 核對（沒有缺漏）。核對另提 5 點非阻擋的觀察（例如 `result.json` 沒有 `timer_baseline` 時，可改用 `action-client.json` 的 `timer` 算主機狀態），沒有改。
 
@@ -268,6 +268,29 @@
   - `declaration.md`（本宣告）、`run.py`、`judge.py`、`sleeper.py`、`build.sh`、`prep_hashes.py`、`artifacts.sha256`、`analyzers.sha256`、`prep.json`、`commands.txt`、`sha256.txt`。
   - `adversarial/`：xhigh 對抗式檢查的腳本與輸出（`path_substitution.txt`、`binary_compare.txt` 等）。
   - `dryrun/`：用既有證據（第 08b 批 L2、C1 第 2 次）對 judge 試算的結果；缺 `action-client.json` 的合成 F 跑次試算（`make_synthetic_f.py`、`judgement-synthetic-f.json`）；`run.py` 分類與例外處理的模擬（`mock_run_d.py`、`mock_main_e.py` 與輸出）。
+
+## S1 結果（2026-10-10，只記錄）
+
+- 宣告 2026-10-10 使用者核准（「S1 宣告核准，開始跑，檔位照建議」）；`declaration.sha256`＝`9e0869a0…`。開跑前 preflight 通過；量測期間暫停 PR #73 的 auto-fix、背景的 D48 分析也先停下，跑完後恢復。
+- 12 次全部完成，全部是 P（凍結分析器與分析器 v7 都通過），沒有觸發停止條件。主 checkout 的 HEAD 開始與結束相同（`fcda6e0`），兩個 worktree 沒有變動。
+- 主機：12 次全部是 4 ms 狀態（TimerBaseline），沒有 8 ms 的樣本，所以兩種狀態的比較這次沒有資料。
+- 只記錄的數字（每棵 tree 6 輪，clean-30）：
+
+  | | P1b 頭 `805bd11` | P2 頭 `a954aa3` |
+  |---|---|---|
+  | `legal_client_p95_ms`（每輪） | 100.0～133.3 ms（3～4 幀） | 35.5～37.8 ms（約 1 幀） |
+  | c 落在第幾個 Tick（0／1／2／3／4／5） | 18／68／48／34／26／10 | 204／0／0／0／0／0 |
+  | 移動「產生→執行」每位玩家 P50 的中位數 | 37.9 ms | 37.8 ms |
+  | Client 替代（Held＋Neutral） | 0／10062 | 0／10062 |
+  | 被釘住的玩家秒 | 1（1 個跑次） | 0 |
+  | 領先跳升、非 respawn 重設、Cooldown 拒絕 | 0 | 0 |
+
+- 讀法：
+  - Client 看到的動作延遲（產生→probe 取得裁決的 P95）從 3～4 幀變成約 1 幀，這是 P2 線整體（第 06、07、08、08b 批）的效果。這次量測無法在 P2 線內部再分開歸因。
+  - c（裁決 Tick→結果到 relay）在 P2 頭全部落在 1 ms 內，在 P1b 頭分散在 0～5 個 Tick：舊的兩條 30 Hz 節拍加上「每隔一次 ticker」的缺陷。
+  - 移動的「產生→執行」兩邊相同（約 37.8 ms），符合第 09b 批的分解（領先 2 步＋目標 4 ms，與網路路徑無關）。
+  - `legal_match_p95_ms`（P1b 7.1～21.6、P2 13.2～15.2 ms）受 probe 幀相位影響，不跨建置解讀（第 08b 批）。
+- 證據：`build/target/_build/test/logs/pvp-v7-batch09-s1-20261010/`（`progress.jsonl`、`judgement.json`、`judge.stdout.txt`、`files.sha256`、`runs/`）。
 
 ## 本批另加的停止條件
 
