@@ -291,6 +291,34 @@ python3 -I $E/measure.py $L/pvp-v7-d48-step1-20261010/detector.py $E/session > $
 4. V3 的系統性偏差：10 個事件的 model_diff 全部為正（+0.11～+0.31 ms）。模型沒有扣掉 W_pre（0.08～0.12 ms），扣掉之後還剩 +0.01～+0.19 ms，其餘原因沒有查（hypothesis）。不改模型（決定 3 照第①步的形式寫），只記錄；1.0 ms 的容許已涵蓋這個偏差。
 5. relay 送出比預定晚的值（`maximum_send_lateness_ms`，z1 為 2.15 ms）在非閒置主機上量到；只記錄。若閒置主機上仍明顯，第③步要把它列進可比性的前提。
 
+## D48 第③步的結果（2026-10-10，**stopped**）
+
+- 證據：`build/target/_build/test/logs/pvp-v7-d48-step3-20261010/`（`declaration.md`／`declaration.sha256`、`artifacts.sha256`、`preflight.txt`、`post-session.txt`、`session/`、`measure.jsonl`、`commands.txt`、`sha256.txt`）。session 頭 H＝`eac65bb`（相對 `8fabfa6` 只改 `docs/`）。
+- 執行：preflight P1～P3 全部通過，跑前 `shasum -c` 24／24 OK；量測期間暫停 PR #73 的 auto-fix，結束後恢復；閒置閘門第一次就通過（3 次 sleeper 最大 3.7／4.2／8.7 ms）；18:33～19:15，84 個項目全部 completed；結束時 `shasum -c` 24／24 OK，主 checkout 與三棵 worktree 都沒變。
+- **判定（凍結的 `measure3.py` 機械地給出）：`step3`＝stopped**。停止條件 7：兩個 chain 項目各有 1 次權威 Cooldown 拒絕（`actions.jsonl` rejection＝3）。依宣告第 8 節，停止條件優先；下面 J1～J3 的值是同一行 `judgement` 算出來的，**只記錄，不構成判定**。不補跑。
+- **兩次 Cooldown 拒絕**（宣告要求標明那一發是否在注入視窗內被延遲）：
+
+  | 項目 | 被拒的那一發 | 前一發 | 權威的間隔 |
+  |---|---|---|---|
+  | chain-r2-base（11.5 秒） | 玩家 1 的 31 號：release 之後 19 ms 才送出，**本身沒有被延遲**；observed 889 → resolved 890 | 30 號：注入開始時送出（−0.04 ms），**在視窗內被延遲**；observed 874 → resolved 881（晚 7 Tick） | 9 Tick＜`cooldownTicks` 10（`Combat.hpp:22`） |
+  | chain-r5-09a-b2（2.0 秒） | 玩家 1 的 8 號：release 之後 31 ms 送出，本身沒有被延遲；observed 319 → resolved 320 | 7 號：注入開始後 3.9 ms 送出，在視窗內被延遲；observed 304 → resolved 311（晚 7 Tick） | 9 Tick |
+
+  - 兩次的共同點：Client 在送出被拒的那一發之前約 139 ms，就已經收到前一發的裁決（resolved 881／311）；被拒的那一發都在 late 修正（t_c）之後約 114～115 ms 送出，在任何撤回之前。
+  - 推論（未驗證）：late 修正之後，FireGate 對「這一發在哪個 Tick 解析」的預測偏了，guard 擋不住被注入壓縮的間隔。trace 沒有記錄 FireGate 的 R 預測，無法直接確認（觀測缺口）。
+  - 次數：single 30 個跑次 0 次、chain 18 個跑次 2 次；第②步 8 個跑次 0 次。不是 clean 量測，不觸發第 09 批的重推條件 10，但和 FireGate 的前提（「領先＝目標」）直接相關。
+- **只記錄的計算值**（同一行 `judgement`；第 8 節的讀法照套只供參考）：
+  - **V4X**：一致。帶內 3 個事件：single-r1-base 66.1／66.2 ms 沒有重設，single-r8-base 67.46 ms 重設。
+  - **J1**（算出來是成立）：base 2／10 對 09a 10／10，單側 Fisher p＝0.00036。P1 符合預測：09a 的 W_post 最大 0.156 ms，領先 70.35～70.76 ms，30 Tick 合計 105～108。base 的 W_post 散在 1.6～15.8 ms，重設的 2 個跑次就是領先 >67.4 ms 的那 2 個。
+  - **J2**（算出來是成立）：20 個事件、10 個跑次碰到脆弱窗（`lead_after_max` 70.05～70.83 ms），全部撤回 +29.85～+32.75 ms，殘餘 −3.46～−0.60 ms，30 Tick 合計 71～74，沒有重設、沒有來回修正、`held_post` 0。`J2c_jitter`＝無法判定（09a-b2 的 network20／40 共 6 個跑次，late 修正 0 次）。
+  - **J3**（算出來是不成立）：串接單位／重設單位：base 9／12、9／12；09a 10／12、12／12；09a-b2 2／10、4／10。09a-b2 重設的是 chain-r4、chain-r6（都是 11.5 秒，兩位玩家）：
+    - r4：第一次 late 修正後 151 ms、重新擷取之前，又來一次 late 修正（共 −73.3 ms，缺陷 B 的串接）；重新擷取只撤回 33.3 ms，淨 −40 ms，領先 103.8 ms，t_c 後 529 ms 重設。
+    - r6：t_c 後 168 ms 有一次重新擷取的修正，但找不到撤回的正向步（撤回量算不出來），領先停在約 67 ms，t_c 後 579 ms 重設。
+    - r2 只撤回 +16.0 ms（殘餘 −17.3 ms），合計 92、沒有重設；r1、r5 完整撤回（+30.2、+29.8 ms）。
+    - 時間線（相對注入開始；release 都在 220～230 ms）：完整撤回的 r1、r5，late 修正在 136～137 ms；部分撤回、沒有撤回或串接的 r2、r3、r4、r6，late 修正都較早（113～119 ms）。撤回的決定都在 release 之後（281～319 ms，r4 是 414 ms）。推論（未驗證）：late 修正越早，重新擷取用的 8 個樣本中，注入期間產生、仍帶著延遲的命令就越多，撤回量就越小。和開發跑次的「部分撤回」一致。
+  - 只記錄的 36 個項目（network20／40、host-ipc／gateway-250ms）：late 修正 0 次、重設 0 次。
+  - 主機（宣告第 4 節）：每棵 tree 的 sleeper 最大值中位數 5.6～7.1 ms、最大 9.6 ms，≥10 ms 的項目 0 個；relay 送出晚醒中位數 5.9～7.0 ms（最大 10.1 ms），比第②步閒置 session 的 3.1～4.9 ms 高，三棵 tree 相近。
+- **意涵**（只記錄，交使用者決定）：照第 8 節的讀法套到計算值，是「J1 成立、J3 不成立：09a 不能單獨做，B2 也不夠；停下重新規劃」。也就是說，不管停止條件怎麼處理，下一步都是重新規劃 B2：單次短延遲（J2）擋得住，延遲比重新擷取長時（J3）擋不住。另外，Cooldown 拒絕顯示 FireGate 在 late 修正之後可能失去保證，這是第 09 批的新輸入。
+
 ## D48 第③步的準備：原型、審查與修正（2026-10-10）
 
 workflow 5 個階段：原型 1 位（high）、審查 1 位（xhigh）、修正 1 位（high）、宣告 1 位（high）、D45 對抗式檢查 1 位（xhigh）。證據：`build/target/_build/test/logs/pvp-v7-d48-step3-prep-20261010/`（`proto/`、`review/`、`fix/`、`declare/`、`adversarial/`，各有 `commands.txt` 與 `sha256.txt`）。原型只在 worktree，不合併、不推送；主 checkout 全程乾淨。
