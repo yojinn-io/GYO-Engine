@@ -1,15 +1,18 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
+#include "RetroFPS/Pvp/MatchIngressTrace.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <numeric>
 #include <regex>
+#include <stdexcept>
 #include <set>
 #include <sstream>
 #include <string>
@@ -112,6 +115,14 @@ TEST_CASE("Match ingress lines equal the golden windows and keep the I2 classifi
         const auto goldenSubstituted = counts.substitutedCommands;
         CHECK(goldenSubstituted == counts.classified[IngressIndex(IngressCommandClass::LateFirst)] +
                                        Sum(counts.unarrived, [](auto value) { return value; }));
+        // S1 and S2: every slack sample candidate ends merged, discarded or
+        // published, and every published one overwritten, taken or unclaimed.
+        const auto slackCandidates = counts.slackExecutedSamples + counts.slackLateSamples;
+        CHECK(slackCandidates == counts.slackMergedSamples + counts.slackDiscardedSamples + counts.slackPublishedSamples);
+        const auto slackPublished = counts.slackPublishedSamples;
+        CHECK(slackPublished == counts.slackOverwrittenSamples + counts.slackTakenSamples + counts.slackUnclaimedSamples);
+        CHECK(counts.slackPublishedNegativeSamples <= counts.slackPublishedSamples);
+        CHECK(counts.slackCoalescedSamples <= counts.slackTakenSamples);
     }
     CHECK_FALSE(ParseMatchLine(lines[1]).window.final);
     CHECK(ParseMatchLine(lines[2]).window.final);
@@ -128,7 +139,7 @@ TEST_CASE("Match ingress lines equal the golden windows and keep the I2 classifi
 }
 
 TEST_CASE("Match ingress keys are unique, follow the naming rule and stay out of the frozen parsers") {
-    const std::regex rule("^[a-z]+(_[a-z]+)*_(inputs|commands|batches|shots|acks)$");
+    const std::regex rule("^[a-z]+(_[a-z]+)*_(inputs|commands|batches|shots|acks|samples)$");
     std::set<std::string> seen{"version", "player", "window_ms", "final"};
     for (const auto& key : MatchIngressKeys()) {
         CAPTURE(key);
@@ -227,4 +238,185 @@ TEST_CASE("Match ingress windows always carry player 0 and the final window clos
     CHECK(closed.contains(0));
     REQUIRE(closed.contains(8));
     CHECK(closed.at(8).counts.received.inputs == 1);
+}
+
+namespace {
+std::chrono::steady_clock::time_point SteadyAt(std::int64_t nanoseconds) {
+    return std::chrono::steady_clock::time_point{} + std::chrono::nanoseconds(nanoseconds);
+}
+
+std::string ReadText(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    REQUIRE(input);
+    std::ostringstream text;
+    text << input.rdbuf();
+    return text.str();
+}
+
+// The records of the golden match-ingress.jsonl, as the host would hand them over.
+std::vector<IngressRecord> GoldenRecords() {
+    std::vector<IngressRecord> records;
+    records.emplace_back(IngressRejectionRecord{.timeNs = 5000120000, .playerId = 7, .reason = IngressInputRejection::EpochOld,
+        .epoch = 2, .life = 2, .firstSequence = 398, .lastSequence = 409, .commands = 12, .cursor = 411,
+        .currentEpoch = 3, .currentLife = 2});
+    records.emplace_back(IngressRejectionRecord{.timeNs = 5000250000, .playerId = 9,
+        .reason = IngressInputRejection::UnknownPlayer, .epoch = 1, .life = 1, .firstSequence = 1, .lastSequence = 3,
+        .commands = 3});
+    records.emplace_back(IngressSubstitution{.playerId = 7, .epoch = 3, .life = 2, .sequence = 412,
+        .substitutedAt = SteadyAt(5016000000), .substitutedTick = 301, .firstArrival = SteadyAt(5016041000),
+        .copiesAfterFirst = 2, .referenceAgeMicros = 58000, .close = IngressSubstitutionClose::End});
+    records.emplace_back(IngressSubstitution{.playerId = 7, .epoch = 3, .life = 2, .sequence = 413,
+        .substitutedAt = SteadyAt(5032700000), .substitutedTick = 302, .close = IngressSubstitutionClose::Aged});
+    records.emplace_back(IngressRejectionRecord{.timeNs = 5040000000, .playerId = 7,
+        .reason = IngressInputRejection::ConflictQueued, .epoch = 3, .life = 2, .firstSequence = 414, .lastSequence = 416,
+        .commands = 3, .cursor = 413, .currentEpoch = 3, .currentLife = 2});
+    return records;
+}
+
+std::vector<std::string> SplitLines(const std::string& text) {
+    std::vector<std::string> lines;
+    std::istringstream input(text);
+    for (std::string line; std::getline(input, line);) lines.push_back(line);
+    return lines;
+}
+} // namespace
+
+TEST_CASE("The match-ingress.jsonl writer reproduces the golden sample across drains") {
+    auto records = GoldenRecords();
+    IngressRecords first{.records = std::vector<IngressRecord>(records.begin(), records.begin() + 2), .suppressed = 2};
+    IngressRecords last{.records = std::vector<IngressRecord>(records.begin() + 2, records.end()), .suppressed = 1};
+    std::ostringstream output;
+    MatchIngressTraceWriter writer(output);
+    writer.Write(first);
+    writer.Finish(last);
+    CHECK(writer.Good());
+    const auto written = output.str();
+    const auto golden = ReadText(Fixtures / "match-ingress.jsonl");
+    CHECK(written == golden);
+    // trace_end comes once, after every record, and nothing follows it.
+    CHECK_THROWS_AS(writer.Write({}), std::logic_error);
+}
+
+TEST_CASE("The match-ingress.jsonl writer ends with trace_end after the last drain and counts what it was not given") {
+    std::ostringstream output;
+    MatchIngressTraceWriter writer(output);
+    writer.Write({.records = {}, .suppressed = 4, .dropped = 1});
+    IngressRecords last;
+    last.records.emplace_back(IngressRejectionRecord{.timeNs = 1, .playerId = 2, .reason = IngressInputRejection::Malformed,
+        .epoch = 1, .life = 1});
+    last.records.emplace_back(IngressSubstitution{.playerId = 2, .epoch = 1, .life = 1, .sequence = 8,
+        .substitutedAt = SteadyAt(1000), .close = IngressSubstitutionClose::Reset});
+    last.dropped = 2;
+    writer.Finish(last);
+    const auto lines = SplitLines(output.str());
+    REQUIRE(lines.size() == 3);
+    const auto traceEnd = nlohmann::json::parse(lines.back());
+    const bool traceEndIsLast = traceEnd.at("kind") == "trace_end";
+    CHECK(traceEndIsLast);
+    CHECK(traceEnd.at("records") == 2);
+    const auto traceSuppressed = traceEnd.at("suppressed").get<std::uint64_t>();
+    CHECK(traceSuppressed == 4);
+    const auto traceDropped = traceEnd.at("dropped").get<std::uint64_t>();
+    CHECK(traceDropped == 3);
+    // An input without commands has no sequences; the substitution never arrived.
+    const auto malformed = nlohmann::json::parse(lines[0]);
+    CHECK(malformed.at("first_sequence").is_null());
+    CHECK(malformed.at("last_sequence").is_null());
+    CHECK(malformed.at("commands") == 0);
+    const auto reset = nlohmann::json::parse(lines[1]);
+    CHECK(reset.at("close") == "reset");
+    CHECK(reset.at("late_us").is_null());
+}
+
+TEST_CASE("The match-ingress.jsonl writer reports a failed write when it ends") {
+    std::ostringstream output;
+    MatchIngressTraceWriter writer(output);
+    output.setstate(std::ios::badbit);
+    writer.Write({});
+    CHECK_FALSE(writer.Good());
+    output.clear(); // even a stream that recovers does not hide the lost lines
+    const bool failureRemembered = !writer.Good();
+    CHECK(failureRemembered);
+    bool ingressFailureThrown = false;
+    try {
+        writer.Finish({});
+    } catch (const std::runtime_error&) {
+        ingressFailureThrown = true;
+    }
+    CHECK(ingressFailureThrown);
+
+    std::ostringstream healthy;
+    MatchIngressTraceWriter fine(healthy);
+    CHECK_NOTHROW(fine.Finish({.records = {}, .suppressed = 9, .dropped = 9}));
+}
+
+TEST_CASE("The ingress detail file sits next to the movement trace and never ends in commands.jsonl") {
+    std::string error;
+    const auto derived = MatchIngressTracePath("runs/a/match-commands.jsonl", {}, error);
+    CHECK(error.empty());
+    const auto derivedName = derived.filename().string();
+    CHECK(derivedName == "match-ingress.jsonl");
+    CHECK(derived.parent_path() == std::filesystem::path("runs/a"));
+    const bool ingressNameEndsWithCommands = derivedName.ends_with("commands.jsonl");
+    CHECK_FALSE(ingressNameEndsWithCommands);
+    CHECK(MatchIngressTracePath("trace.jsonl", {}, error) == std::filesystem::path("trace.jsonl.ingress.jsonl"));
+    CHECK(MatchIngressTracePath("commands.jsonl", {}, error) == std::filesystem::path("commands.jsonl.ingress.jsonl"));
+    CHECK(error.empty());
+    CHECK(MatchIngressTracePath("runs/match-commands.jsonl", "other/detail.jsonl", error) ==
+          std::filesystem::path("other/detail.jsonl"));
+    CHECK(error.empty());
+
+    // No movement trace: no detail file, and naming one is a usage error.
+    const auto withoutMovementTrace = MatchIngressTracePath({}, {}, error);
+    CHECK(withoutMovementTrace.empty());
+    CHECK(error.empty());
+    CHECK(MatchIngressTracePath({}, "detail.jsonl", error).empty());
+    const bool ingressWithoutMovementRefused = !error.empty();
+    CHECK(ingressWithoutMovementRefused);
+
+    error.clear();
+    CHECK(MatchIngressTracePath("runs/match-commands.jsonl", "runs/ingress-commands.jsonl", error).empty());
+    const bool commandsSuffixRefused = error.find("commands.jsonl") != std::string::npos;
+    CHECK(commandsSuffixRefused);
+    error.clear();
+    CHECK(MatchIngressTracePath("runs/trace.jsonl", "runs/./trace.jsonl", error).empty());
+    CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("The ingress record buffer keeps the first rejections of each player and reason per window") {
+    MatchIngressRecordBuffer buffer(5, 2);
+    const auto rejection = [&](PlayerId bucket, IngressInputRejection reason) {
+        if (buffer.AdmitRejection(bucket, reason))
+            buffer.Add(IngressRejectionRecord{.playerId = bucket, .reason = reason});
+    };
+    for (int i = 0; i < 3; ++i) rejection(1, IngressInputRejection::EpochOld);
+    rejection(1, IngressInputRejection::EpochFuture);
+    rejection(0, IngressInputRejection::EpochOld);
+    auto drained = buffer.Drain();
+    const auto keptRejections = drained.records.size();
+    CHECK(keptRejections == 4);
+    const auto suppressedRejections = drained.suppressed;
+    CHECK(suppressedRejections == 1);
+    CHECK(drained.dropped == 0);
+    // Draining is not a new window; a new window is.
+    rejection(1, IngressInputRejection::EpochOld);
+    CHECK(buffer.Drain().suppressed == 1);
+    buffer.NewWindow();
+    rejection(1, IngressInputRejection::EpochOld);
+    rejection(1, IngressInputRejection::EpochOld);
+    drained = buffer.Drain();
+    const auto keptInNewWindow = drained.records.size();
+    CHECK(keptInNewWindow == 2);
+    CHECK(drained.suppressed == 0);
+
+    // A full buffer drops; suppression is judged first.
+    for (std::uint64_t sequence = 1; sequence <= 6; ++sequence)
+        buffer.Add(IngressSubstitution{.playerId = 1, .sequence = sequence});
+    rejection(2, IngressInputRejection::Malformed);
+    rejection(1, IngressInputRejection::EpochOld);
+    drained = buffer.Drain();
+    CHECK(drained.records.size() == 5);
+    const auto droppedRecords = drained.dropped;
+    CHECK(droppedRecords == 2);
+    CHECK(drained.suppressed == 1);
 }

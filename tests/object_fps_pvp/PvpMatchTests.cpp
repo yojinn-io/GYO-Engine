@@ -15,6 +15,7 @@
 #include <numbers>
 #include <optional>
 #include <thread>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -1443,4 +1444,208 @@ TEST_CASE("PvP host counts what Leave and reset discard, and closes their record
     CHECK(reset2.discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] == 0);
     CheckSubstitutionConservation(reset2);
     CheckIngressConservation(reset2);
+}
+
+TEST_CASE("PvP host keeps the first rejections of each player and reason per window for the detail file") {
+    using namespace fps::pvp;
+    MatchRuntimeHost host(TestArena());
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+    REQUIRE(host.Advance(2.0 / 60).steps == 2);
+    // Twenty players the Match does not hold share the player=0 bucket's bound.
+    for (PlayerId unknown = 9; unknown < 29; ++unknown) CHECK_FALSE(host.SubmitInput(Input(unknown, 1)));
+    CHECK_FALSE(host.SubmitInput(EpochInput(5, 3, 5, 2)));
+    auto drained = host.DrainIngressRecords();
+    std::size_t unknownRecords{};
+    std::optional<IngressRejectionRecord> epochFuture;
+    for (const auto& record : drained.records) {
+        const auto* rejection = std::get_if<IngressRejectionRecord>(&record);
+        REQUIRE(rejection);
+        CHECK(rejection->timeNs > 0);
+        if (rejection->reason == IngressInputRejection::UnknownPlayer) {
+            ++unknownRecords;
+            CHECK(rejection->playerId >= 9);
+            CHECK(rejection->cursor == 0);
+            CHECK(rejection->currentEpoch == 0);
+        } else epochFuture = *rejection;
+    }
+    const auto keptUnknownRejections = unknownRecords;
+    CHECK(keptUnknownRejections == MatchIngressRejectionsPerWindow);
+    const auto suppressedUnknownRejections = drained.suppressed;
+    CHECK(suppressedUnknownRejections == 4);
+    CHECK(drained.dropped == 0);
+    REQUIRE(epochFuture);
+    CHECK(epochFuture->reason == IngressInputRejection::EpochFuture);
+    CHECK(epochFuture->playerId == 5);
+    CHECK(epochFuture->epoch == 2);
+    CHECK(epochFuture->firstSequence == std::optional<std::uint64_t>{3});
+    CHECK(epochFuture->lastSequence == std::optional<std::uint64_t>{5});
+    CHECK(epochFuture->commands == 3);
+    CHECK(epochFuture->cursor == 2);
+    CHECK(epochFuture->currentEpoch == 1);
+    CHECK(epochFuture->currentLife == 1);
+    // The statistics window, not the drain, renews the bound.
+    CHECK_FALSE(host.SubmitInput(Input(9, 1)));
+    CHECK(host.DrainIngressRecords().suppressed == 1);
+    // Undrained records fill the buffer over many windows; the next is dropped.
+    for (std::size_t window = 0; window < MatchIngressRecordCapacity / MatchIngressRejectionsPerWindow; ++window) {
+        static_cast<void>(host.TakeIngressStatistics());
+        for (std::size_t i = 0; i < MatchIngressRejectionsPerWindow; ++i) CHECK_FALSE(host.SubmitInput(Input(9, 1)));
+    }
+    static_cast<void>(host.TakeIngressStatistics());
+    CHECK_FALSE(host.SubmitInput(Input(9, 1)));
+    drained = host.DrainIngressRecords();
+    CHECK(drained.records.size() == MatchIngressRecordCapacity);
+    const auto droppedOnFullBuffer = drained.dropped;
+    CHECK(droppedOnFullBuffer == 1);
+    CHECK(drained.suppressed == 0);
+}
+
+TEST_CASE("PvP host substitution records time a late arrival exactly as its published slack sample") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::time_point{} + 1h;
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 1 executed
+    now += 17ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 2 substituted at `now`
+    const auto substitutedAt = now;
+    static_cast<void>(host.TakeSnapshot());
+    now += 23ms;
+    REQUIRE(host.SubmitInput(Window(5, 2, 3))); // 2 late by 23 ms, 3 in time
+    REQUIRE(host.SubmitInput(Window(5, 2, 3)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    const auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    REQUIRE(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{2});
+    const auto slackMicros = snapshot->players[0].movementSlackMicros;
+    REQUIRE(slackMicros);
+    CHECK(*slackMicros == -23000);
+
+    static_cast<void>(host.TakeIngressStatistics(true));
+    const auto drained = host.DrainIngressRecords();
+    std::optional<IngressSubstitution> late;
+    for (const auto& record : drained.records)
+        if (const auto* substitution = std::get_if<IngressSubstitution>(&record); substitution && substitution->sequence == 2)
+            late = *substitution;
+    REQUIRE(late);
+    CHECK(late->substitutedAt == substitutedAt);
+    CHECK(late->firstArrival == std::optional{substitutedAt + 23ms});
+    CHECK(late->copiesAfterFirst == 1);
+    CHECK(late->close == IngressSubstitutionClose::End);
+    const auto ledgerLateMicros = late->LateMicros();
+    REQUIRE(ledgerLateMicros);
+    CHECK(*ledgerLateMicros == -std::int64_t{*slackMicros});
+    const auto line = MatchIngressRecordLine(*late);
+    const bool lineCarriesLateMicros = line.find("\"late_us\":23000,") != std::string::npos;
+    CHECK(lineCarriesLateMicros);
+}
+
+TEST_CASE("PvP host counts where each movement slack sample went on its way to the IPC") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::time_point{} + 1h;
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    static_cast<void>(host.TakeSnapshot());
+    REQUIRE(host.SubmitInput(Window(5, 1, 3)));
+    now += 1ms;
+    REQUIRE(host.SubmitInput(Input(5, 4)));
+    now += 3ms;
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 1 executed: published
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 2 executed: published over the untaken 1
+    REQUIRE(host.TakeSnapshot());
+    REQUIRE(host.Advance(2.0 / 60).steps == 2); // 3 and 4 executed: one publication, 4 (smaller) replaces 3
+    REQUIRE(host.TakeSnapshot());
+    REQUIRE(host.Advance(3.0 / 60).steps == 3); // 5, 6 and 7 substituted: no sample
+    REQUIRE(host.TakeSnapshot());
+    now += 8ms;
+    REQUIRE(host.SubmitInput(Window(5, 5, 6))); // two late candidates, 6 merged
+    REQUIRE(host.SubmitInput(Input(5, 8)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 8 executed and merged; 5 published negative
+    const std::vector<PlayerId> replaced{5};
+    host.NoteCoalescedSlackSamples(replaced);
+    REQUIRE(host.TakeSnapshot());
+    REQUIRE(host.SubmitInput(Input(5, 9)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 9 executed: published, left untaken
+    REQUIRE(host.SubmitInput(Input(5, 7))); // 7 late: pending
+    auto reset = host.RequestReset();
+    CHECK(host.Advance(1).steps == 0); // the reset discards 7 and leaves 9 unclaimed
+    REQUIRE(reset.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+
+    auto taken = host.TakeIngressStatistics(true);
+    const auto& counts = taken.at(5);
+    CHECK(counts.slackExecutedSamples == 6);
+    CHECK(counts.slackLateSamples == 3);
+    const auto mergedSamples = counts.slackMergedSamples;
+    CHECK(mergedSamples == 3);
+    const auto discardedSamples = counts.slackDiscardedSamples;
+    CHECK(discardedSamples == 1);
+    const auto publishedSamples = counts.slackPublishedSamples;
+    CHECK(publishedSamples == 5);
+    const auto publishedNegativeSamples = counts.slackPublishedNegativeSamples;
+    CHECK(publishedNegativeSamples == 1);
+    const auto overwrittenSamples = counts.slackOverwrittenSamples;
+    CHECK(overwrittenSamples == 1);
+    const auto takenSamples = counts.slackTakenSamples;
+    CHECK(takenSamples == 3);
+    const auto coalescedSamples = counts.slackCoalescedSamples;
+    CHECK(coalescedSamples == 1);
+    const auto unclaimedSamples = counts.slackUnclaimedSamples;
+    CHECK(unclaimedSamples == 1);
+    CHECK(counts.slackExecutedSamples + counts.slackLateSamples == mergedSamples + discardedSamples + publishedSamples);
+    CHECK(publishedSamples == overwrittenSamples + takenSamples + unclaimedSamples);
+}
+
+TEST_CASE("PvP host final window discards pending slack samples and counts an untaken publication") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::time_point{} + 1h;
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 1 executed
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 2 substituted
+    REQUIRE(host.TakeSnapshot());
+    REQUIRE(host.SubmitInput(Input(5, 3)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // 3 executed: published, left untaken
+    now += 5ms;
+    REQUIRE(host.SubmitInput(Input(5, 2))); // late: pending at the end
+    auto taken = host.TakeIngressStatistics(true);
+    const auto& counts = taken.at(5);
+    const auto endDiscardedSamples = counts.slackDiscardedSamples;
+    CHECK(endDiscardedSamples == 1);
+    const auto endUnclaimedSamples = counts.slackUnclaimedSamples;
+    CHECK(endUnclaimedSamples == 1);
+    CHECK(counts.slackExecutedSamples + counts.slackLateSamples ==
+          counts.slackMergedSamples + counts.slackDiscardedSamples + counts.slackPublishedSamples);
+    CHECK(counts.slackPublishedSamples ==
+          counts.slackOverwrittenSamples + counts.slackTakenSamples + counts.slackUnclaimedSamples);
+}
+
+TEST_CASE("PvP host discards the pending slack sample of a player who leaves") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::time_point{} + 1h;
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    REQUIRE(host.Advance(2.0 / 60).steps == 2); // 1 executed, 2 substituted
+    now += 5ms;
+    REQUIRE(host.SubmitInput(Input(5, 2))); // late: pending
+    REQUIRE(host.QueueLeave(2, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    const auto taken = host.TakeIngressStatistics();
+    const auto& counts = taken.at(5);
+    const auto leaveDiscardedSamples = counts.slackDiscardedSamples;
+    CHECK(leaveDiscardedSamples == 1);
+    CHECK(counts.slackExecutedSamples + counts.slackLateSamples ==
+          counts.slackMergedSamples + counts.slackDiscardedSamples + counts.slackPublishedSamples);
 }

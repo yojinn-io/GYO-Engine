@@ -196,7 +196,9 @@ struct IpcHost::Impl {
     // first, so no notification reaches a stopped or destroyed IpcHost.
     struct WakeGate {std::mutex mutex;Impl* impl{};};
     enum class Phase {Idle,Accepting,Resetting,Connected,Closing};
-    struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;};
+    // samples: the players whose movement slack sample the frame carries,
+    // counted by the host when latest-wins replaces the frame unwritten.
+    struct SnapshotFrame {std::vector<std::uint8_t> bytes;std::uint64_t tick;Clock::time_point queuedAt;std::vector<PlayerId> samples;};
     // One connection's state; replaced at each accept.
     struct Session {
         std::vector<std::uint8_t> input;
@@ -206,6 +208,7 @@ struct IpcHost::Impl {
         std::size_t writeOffset{};
         bool writingSnapshot{};
         std::uint64_t writingTick{},coalescedSnapshots{};
+        std::vector<PlayerId> writingSamples;
         Clock::time_point writingQueuedAt{};
         std::map<std::uint64_t,PlayerId> joins;
         MatchEventLog events;
@@ -421,10 +424,13 @@ struct IpcHost::Impl {
                 session.events.Observe(*snapshot,session.coalescedSnapshots);
                 if(session.latestSnapshot) {
                     ++session.coalescedSnapshots;
+                    host.NoteCoalescedSlackSamples(session.latestSnapshot->samples);
                     TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=snapshot->tick,
                         .count=session.coalescedSnapshots,.ageSeconds=std::chrono::duration<double>(Clock::now()-session.latestSnapshot->queuedAt).count()});
                 }
-                session.latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now()};
+                std::vector<PlayerId> samples;
+                for(const auto& player:snapshot->players) if(player.movementSlackSequence) samples.push_back(player.playerId);
+                session.latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now(),std::move(samples)};
             }
             ScheduleWrite();
         } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
@@ -475,13 +481,14 @@ struct IpcHost::Impl {
         // one byte, finish that frame before selecting anything else.
         if(s.writingSnapshot && !s.writing.empty() && s.writeOffset==0 && s.latestSnapshot) {
             ++s.coalescedSnapshots;
+            host.NoteCoalescedSlackSamples(s.writingSamples);
             s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
-            s.writingQueuedAt=s.latestSnapshot->queuedAt;s.latestSnapshot.reset();
+            s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
             TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=s.writingTick,.count=s.coalescedSnapshots});
         }
         if(s.writing.empty()) {
             if(!s.controls.empty()) {
-                s.writing=std::move(s.controls.front());s.controls.pop_front();s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=Clock::now();
+                s.writing=std::move(s.controls.front());s.controls.pop_front();s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=Clock::now();s.writingSamples.clear();
             } else {
                 // Results stay in Match until Client ACK. Only choose a batch
                 // when a write slot is free; a blocked socket cannot accumulate
@@ -496,13 +503,13 @@ struct IpcHost::Impl {
                     ++it;
                     if(!LanePending(*results,lane)) continue;
                     s.writing=wire::Frame(ActionMessage(*results,lane,now).SerializeAsString());
-                    s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;
+                    s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;s.writingSamples.clear();
                     break;
                 }
             }
             if(s.writing.empty() && s.latestSnapshot) {
                 s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
-                s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.latestSnapshot.reset();
+                s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
             }
             s.writeOffset=0;
         }

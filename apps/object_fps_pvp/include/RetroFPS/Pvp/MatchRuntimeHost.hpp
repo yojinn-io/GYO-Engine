@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
+#include "RetroFPS/Pvp/MatchIngressTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -15,6 +16,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -95,8 +97,19 @@ public:
     // Counts survive Leave, eviction and resets until taken. The result holds
     // player 0 and every current player, even with nothing counted, and any
     // other player with counts. Resets the window. final (the process's last
-    // window, host stopped) first closes every open substitution record as end.
+    // window, host stopped) first closes every open substitution record as end
+    // and counts the slack samples still pending or unclaimed as such. Each
+    // call also starts a new window for the detail file's rejection bound.
     [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics(bool final = false);
+    // Diagnostics only, since the previous call: the bounded records of
+    // match-ingress.jsonl (MatchIngressTrace.hpp). Rejections keep the first
+    // MatchIngressRejectionsPerWindow per (player, reason) and statistics
+    // window, substitutions are added as their records close; the rest is
+    // counted as suppressed or dropped. Survives Leave and resets until taken.
+    [[nodiscard]] IngressRecords DrainIngressRecords();
+    // The I/O layer replaced a taken snapshot (latest wins) before writing
+    // it; these players' slack samples in it never reach the Gateway.
+    void NoteCoalescedSlackSamples(std::span<const PlayerId> players);
     // An action batch the I/O layer refused before it could become a request
     // (OverBatch or Malformed): counted like the host's own refusals.
     void NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots);
@@ -153,6 +166,16 @@ private:
     // The counts an input or batch of this player falls under (player 0 when
     // the Match does not hold it). Under the lock.
     [[nodiscard]] MatchIngressCounts& IngressBucket(PlayerId playerId);
+    [[nodiscard]] PlayerId IngressBucketId(PlayerId playerId) const;
+    // Keeps a detail record of a refused input if the buffer admits it. Under the lock.
+    void RecordRejection(const PlayerInput& input, IngressInputRejection reason);
+    // A slack sample candidate competes for the next publication; one that
+    // loses (or is replaced) is merged. Under the lock.
+    void OfferSlackSample(PlayerId playerId, SlackTrack& track, std::uint64_t sequence, std::int64_t micros);
+    // A track's pending candidate dropped before any publication. Under the lock.
+    void DiscardSlack(PlayerId playerId, const SlackTrack& track);
+    // Adds one to field for every player whose slack sample this snapshot carries. Under the lock.
+    void CountSlackSamples(const WorldSnapshot& snapshot, std::uint64_t MatchIngressCounts::*field);
     // Counts a substitution record the ledger closed. Under the lock.
     void SubstitutionClosed(const IngressSubstitution& record);
     // Advance's work under the lock; published tells Advance to notify.
@@ -187,6 +210,8 @@ private:
     // Substitution records; ClearState and RemovePlayerState close them.
     // Only observes: slack samples, quality and the Match never read it.
     MatchIngressLedger ledger_;
+    // match-ingress.jsonl records waiting for DrainIngressRecords.
+    MatchIngressRecordBuffer records_;
     std::optional<std::string> error_;
     std::function<void()> publishListener_;
     std::atomic<bool> running_{};

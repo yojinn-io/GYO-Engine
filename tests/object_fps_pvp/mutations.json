@@ -51,6 +51,12 @@
         "gyo_object_fps_pvp_ipc_tests"
       ],
       "ctest": "object_fps_pvp.ipc"
+    },
+    "match_ingress_cli": {
+      "build": [
+        "gyo_object_fps_pvp-match"
+      ],
+      "ctest": "object_fps_pvp.match_ingress_cli"
     }
   },
   "mutants": [
@@ -1689,8 +1695,8 @@
       "batch": "v7-flow",
       "what": "An unknown player's input counts under the id it claims, not player 0",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "return ingress_[match_.ContainsPlayer(playerId) ? playerId : PlayerId{}];",
-      "replace": "return ingress_[playerId];",
+      "find": "    return match_.ContainsPlayer(playerId) ? playerId : PlayerId{};\n",
+      "replace": "    return playerId;\n",
       "check": "ipc",
       "expect": "CHECK\\( ipcUnknownPlayerCommands == 1 \\) is NOT correct"
     },
@@ -2309,8 +2315,8 @@
       "batch": "v7-flow",
       "what": "the final window leaves open records uncounted",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "    if (final) ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });\n",
-      "replace": "    static_cast<void>(final);\n",
+      "find": "        ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });\n",
+      "replace": "        static_cast<void>(final);\n",
       "check": "cpu",
       "expect": "CHECK\\( endClosedUnarrived == 70 \\) is NOT correct"
     },
@@ -2533,6 +2539,356 @@
       "replace": "\t\t\tfor _, abandoned := range writes[i+1:] {\n",
       "check": "go",
       "expect": "write_failure: player \\d+: link settled 0 of 3 handed commands"
+    },
+    {
+      "id": "v7-flow-trace-rejection-cap-off-by-one",
+      "batch": "v7-flow",
+      "what": "a (player, reason) keeps 17 rejection records per window",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        if (used >= rejectionsPerWindow_) {\n",
+      "replace": "        if (used > rejectionsPerWindow_) {\n",
+      "check": "cpu",
+      "expect": "CHECK\\( keptRejections == 4 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-suppressed-uncounted",
+      "batch": "v7-flow",
+      "what": "rejections over the per-window bound vanish without a suppressed count",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "            ++drained_.suppressed;\n            return false;\n",
+      "replace": "            return false;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( suppressedUnknownRejections == 4 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-rejection-dropped-uncounted",
+      "batch": "v7-flow",
+      "what": "a rejection that finds the buffer full is not counted as dropped",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "            ++drained_.dropped;\n            return false;\n",
+      "replace": "            return false;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( droppedOnFullBuffer == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-record-dropped-uncounted",
+      "batch": "v7-flow",
+      "what": "a substitution record that finds the buffer full is not counted as dropped",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "            ++drained_.dropped;\n            return;\n",
+      "replace": "            return;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( droppedRecords == 2 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-window-never-renewed",
+      "batch": "v7-flow",
+      "what": "the rejection bound never renews",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "    void NewWindow() { window_.clear(); }\n",
+      "replace": "    void NewWindow() {}\n",
+      "check": "cpu",
+      "expect": "CHECK\\( keptInNewWindow == 2 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-window-not-renewed-by-statistics",
+      "batch": "v7-flow",
+      "what": "the statistics window does not renew the rejection bound",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    records_.NewWindow();\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( drained\\.records\\.size\\(\\) == MatchIngressRecordCapacity \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-bound-by-claimed-player",
+      "batch": "v7-flow",
+      "what": "unknown players each get their own rejection bound (unbounded map)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    if (!records_.AdmitRejection(IngressBucketId(input.playerId), reason)) return;\n",
+      "replace": "    if (!records_.AdmitRejection(input.playerId, reason)) return;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( keptUnknownRejections == MatchIngressRejectionsPerWindow \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-rejection-unrecorded",
+      "batch": "v7-flow",
+      "what": "refused inputs leave no detail record",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        RecordRejection(input, reason);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "REQUIRE\\( epochFuture \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-rejection-cursor-wrong",
+      "batch": "v7-flow",
+      "what": "the rejection record carries the epoch as the cursor",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            record.cursor = player->lastResolvedCommand;\n",
+      "replace": "            record.cursor = player->movementEpoch;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( epochFuture\\->cursor == 2 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-substitution-unrecorded",
+      "batch": "v7-flow",
+      "what": "closed substitution records never reach the detail file",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    records_.Add(record);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "REQUIRE\\( late \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-end-not-last",
+      "batch": "v7-flow",
+      "what": "trace_end is written before the last drain",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        Write(last);\n        output_ << MatchIngressTraceEndLine(records_, suppressed_, dropped_) << '\\n';\n",
+      "replace": "        output_ << MatchIngressTraceEndLine(records_, suppressed_, dropped_) << '\\n';\n        Write(last);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( traceEndIsLast \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-io-failure-ignored",
+      "batch": "v7-flow",
+      "what": "a failed write does not fail the Match at the end",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        if (failed_) throw std::runtime_error(\"Ingress trace failed to write\");\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( ingressFailureThrown \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-io-failure-forgotten",
+      "batch": "v7-flow",
+      "what": "a failed write is forgotten once the stream recovers",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        output_.flush();\n        if (!output_) failed_ = true;\n    }\n    void Finish",
+      "replace": "        output_.flush();\n    }\n    void Finish",
+      "check": "cpu",
+      "expect": "CHECK\\( failureRemembered \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-open-failure-ignored",
+      "batch": "v7-flow",
+      "what": "an unopenable detail file does not stop the Match",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        if (!file_) throw std::runtime_error(\"Cannot open ingress trace: \" + path.string());\n",
+      "replace": "",
+      "check": "match_ingress_cli",
+      "expect": "unopenable ingress trace: stderr does not match"
+    },
+    {
+      "id": "v7-flow-trace-name-keeps-commands-suffix",
+      "batch": "v7-flow",
+      "what": "the derived name keeps the movement trace name (-commands.jsonl)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-ingress.jsonl\"\n",
+      "replace": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-commands.jsonl\"\n",
+      "check": "cpu",
+      "expect": "CHECK\\( derivedName == \"match\\-ingress\\.jsonl\" \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-name-suffix-accepted",
+      "batch": "v7-flow",
+      "what": "an explicit name ending in commands.jsonl is accepted",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "    if (path.filename().string().ends_with(commands)) {\n",
+      "replace": "    if (path.filename().string().ends_with(commands) && false) {\n",
+      "check": "cpu",
+      "expect": "CHECK\\( commandsSuffixRefused \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-written-without-movement-trace",
+      "batch": "v7-flow",
+      "what": "the detail file is written without a movement trace",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "    if (movementTrace.empty()) {\n        if (!ingressTrace.empty()) error = \"--ingress-trace needs --movement-trace\";\n        return {};\n    }\n",
+      "replace": "    if (movementTrace.empty() && !ingressTrace.empty()) {\n        error = \"--ingress-trace needs --movement-trace\";\n        return {};\n    }\n",
+      "check": "cpu",
+      "expect": "CHECK\\( withoutMovementTrace\\.empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-ingress-alone-accepted",
+      "batch": "v7-flow",
+      "what": "--ingress-trace without --movement-trace is silently ignored",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
+      "find": "        if (!ingressTrace.empty()) error = \"--ingress-trace needs --movement-trace\";\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( ingressWithoutMovementRefused \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-late-us-sign",
+      "batch": "v7-flow",
+      "what": "late_us is first arrival minus substitution with the sign flipped",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
+      "find": "        return std::chrono::duration_cast<std::chrono::microseconds>(*firstArrival - substitutedAt).count();\n",
+      "replace": "        return std::chrono::duration_cast<std::chrono::microseconds>(substitutedAt - *firstArrival).count();\n",
+      "check": "cpu",
+      "expect": "CHECK\\( \\*ledgerLateMicros == \\-std::int64_t\\{\\*slackMicros\\} \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-trace-late-us-unit",
+      "batch": "v7-flow",
+      "what": "late_us is written in nanoseconds",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
+      "find": "        return std::chrono::duration_cast<std::chrono::microseconds>(*firstArrival - substitutedAt).count();\n",
+      "replace": "        return std::chrono::duration_cast<std::chrono::nanoseconds>(*firstArrival - substitutedAt).count();\n",
+      "check": "cpu",
+      "expect": "CHECK\\( lineCarriesLateMicros \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-executed-uncounted",
+      "batch": "v7-flow",
+      "what": "executed sequences offer samples uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                ++ingress_[player.playerId].slackExecutedSamples;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( counts\\.slackExecutedSamples == 6 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-late-uncounted",
+      "batch": "v7-flow",
+      "what": "late first arrivals offer samples uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        ++ingress.slackLateSamples;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( counts\\.slackLateSamples == 3 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-losing-candidate-unmerged",
+      "batch": "v7-flow",
+      "what": "a candidate that loses to the pending minimum is not counted as merged",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    } else ++ingress_[playerId].slackMergedSamples;\n",
+      "replace": "    }\n",
+      "check": "cpu",
+      "expect": "CHECK\\( mergedSamples == 3 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-replaced-candidate-unmerged",
+      "batch": "v7-flow",
+      "what": "a pending candidate replaced by a smaller one is not counted as merged",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (track.pending) ++ingress_[playerId].slackMergedSamples;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( counts.slackExecutedSamples \\+ counts.slackLateSamples == mergedSamples \\+ discardedSamples \\+ publishedSamples \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-discard-uncounted",
+      "batch": "v7-flow",
+      "what": "pending samples dropped before publication are never counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    if (track.pending) ++ingress_[playerId].slackDiscardedSamples;\n",
+      "replace": "    static_cast<void>(playerId);\n    static_cast<void>(track);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( leaveDiscardedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-reset-discard-uncounted",
+      "batch": "v7-flow",
+      "what": "a reset drops pending samples uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    for (const auto& [playerId, track] : slack_) DiscardSlack(playerId, track);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( discardedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-end-discard-uncounted",
+      "batch": "v7-flow",
+      "what": "the final window drops pending samples uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            DiscardSlack(playerId, track);\n            track.pending.reset();\n",
+      "replace": "            track.pending.reset();\n",
+      "check": "cpu",
+      "expect": "CHECK\\( endDiscardedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-published-uncounted",
+      "batch": "v7-flow",
+      "what": "published samples are not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                ++counts.slackPublishedSamples;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( publishedSamples == 5 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-negative-sign",
+      "batch": "v7-flow",
+      "what": "positive samples are counted as negative",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                if (track.pending->second < 0) ++counts.slackPublishedNegativeSamples;\n",
+      "replace": "                if (track.pending->second > 0) ++counts.slackPublishedNegativeSamples;\n",
+      "check": "cpu",
+      "expect": "CHECK\\( publishedNegativeSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-overwrite-uncounted",
+      "batch": "v7-flow",
+      "what": "a published snapshot overwritten before the IPC took it loses its sample uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            CountSlackSamples(*snapshot_, &MatchIngressCounts::slackOverwrittenSamples);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( overwrittenSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-taken-uncounted",
+      "batch": "v7-flow",
+      "what": "samples the IPC takes are not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    if (result) CountSlackSamples(*result, &MatchIngressCounts::slackTakenSamples);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( takenSamples == 3 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-coalesced-uncounted",
+      "batch": "v7-flow",
+      "what": "samples the IPC replaced (latest wins) are not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    for (const auto playerId : players) ++ingress_[playerId].slackCoalescedSamples;\n",
+      "replace": "    static_cast<void>(players);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( coalescedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-reset-unclaimed-uncounted",
+      "batch": "v7-flow",
+      "what": "a reset drops the untaken publication uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);\n    match_.Reset();\n",
+      "replace": "    match_.Reset();\n",
+      "check": "cpu",
+      "expect": "CHECK\\( unclaimedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-end-unclaimed-uncounted",
+      "batch": "v7-flow",
+      "what": "the final window drops the untaken publication uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);\n        snapshot_.reset();\n",
+      "replace": "        snapshot_.reset();\n",
+      "check": "cpu",
+      "expect": "CHECK\\( endUnclaimedSamples == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-slack-keys-swapped",
+      "batch": "v7-flow",
+      "what": "two slack keys swap places in the line",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp",
+      "find": "    field(IngressKey(\"slack_merged\", none, IngressUnit::Samples), counts.slackMergedSamples);\n    field(IngressKey(\"slack_discarded\", none, IngressUnit::Samples), counts.slackDiscardedSamples);\n",
+      "replace": "    field(IngressKey(\"slack_discarded\", none, IngressUnit::Samples), counts.slackDiscardedSamples);\n    field(IngressKey(\"slack_merged\", none, IngressUnit::Samples), counts.slackMergedSamples);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( parsed\\.keys == keys \\) is NOT correct"
     }
   ]
 }

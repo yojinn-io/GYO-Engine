@@ -38,6 +38,15 @@ endif()
 add_test(NAME "${GYO_CURRENT_APP}.ipc" COMMAND ${ipc_tests})
 set_tests_properties("${GYO_CURRENT_APP}.ipc" PROPERTIES LABELS "cpu;pvp;network" TIMEOUT 60)
 
+# The Match's command line for its ingress detail file (match-ingress.jsonl):
+# name derivation and refusal, and exit 1 when the file cannot be opened.
+gyo_get_app_target("${GYO_CURRENT_APP}" match match)
+add_test(NAME "${GYO_CURRENT_APP}.match_ingress_cli"
+    COMMAND "${CMAKE_COMMAND}" -DMATCH=$<TARGET_FILE:${match}>
+        "-DARENA=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
+        "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/match_ingress_cli" -P "${CMAKE_CURRENT_SOURCE_DIR}/match_ingress_cli_check.cmake")
+set_tests_properties("${GYO_CURRENT_APP}.match_ingress_cli" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
+
 # The acceptance probes' header-only start-phase recorder, driven by the real
 # prediction, and the GUI probes' room (gui_room.hpp). Kept apart so the
 # domain test target gains no JSON dependency.

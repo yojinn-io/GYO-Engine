@@ -50,7 +50,7 @@ enum class IngressActionRejection : std::uint8_t {
 };
 // How a substitution record closed (MatchIngressLedger.hpp).
 enum class IngressSubstitutionClose : std::uint8_t { Aged, Epoch, Life, Removed, Reset, Overflow, End, Count };
-enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots, Acks };
+enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots, Acks, Samples };
 
 // The only spelling of each word, shared by the statistics line and the
 // detail file (its reason and close fields).
@@ -126,6 +126,7 @@ inline constexpr std::string_view IngressName(IngressUnit value) noexcept {
     case IngressUnit::Batches: return "batches";
     case IngressUnit::Shots: return "shots";
     case IngressUnit::Acks: return "acks";
+    case IngressUnit::Samples: return "samples";
     }
     return "invalid";
 }
@@ -173,6 +174,30 @@ struct MatchIngressCounts final {
     std::uint64_t leaveDiscardedActionShots{};
     // Players whose pending action acknowledgement a reset discarded.
     std::uint64_t resetDiscardedActionAcks{};
+    // Appended keys (batch 08c F2b-2): the movement slack samples of this
+    // player on their way to the IPC (known gap 6, host side). A candidate is
+    // an executed sequence's first receipt or a late first arrival still in
+    // the 64-entry substitution track. Each publication carries only the
+    // smallest candidate since the previous one; the others are merged.
+    //   S1: slackExecuted + slackLate == slackMerged + slackDiscarded + slackPublished
+    //   S2: slackPublished == slackOverwritten + slackTaken + slackUnclaimed
+    // (exact once nothing is pending: after a reset or the final window).
+    // slackPublishedNegative is part of slackPublished; slackCoalesced is part
+    // of slackTaken (samples the IPC replaced, latest wins, before writing them).
+    std::uint64_t slackExecutedSamples{};
+    std::uint64_t slackLateSamples{};
+    std::uint64_t slackMergedSamples{};
+    // Candidates dropped before a publication: identity change, Leave,
+    // eviction, reset or the end of the process.
+    std::uint64_t slackDiscardedSamples{};
+    std::uint64_t slackPublishedSamples{};
+    std::uint64_t slackPublishedNegativeSamples{};
+    // Published snapshots replaced before the IPC took them.
+    std::uint64_t slackOverwrittenSamples{};
+    std::uint64_t slackTakenSamples{};
+    std::uint64_t slackCoalescedSamples{};
+    // Published samples still waiting for the IPC at a reset or the end.
+    std::uint64_t slackUnclaimedSamples{};
 };
 
 struct MatchIngressWindow final {
@@ -226,6 +251,16 @@ void ForEachMatchIngressField(Counts& counts, Field&& field) {
     field(IngressKey("reset_discarded", actions, IngressUnit::Shots), counts.resetDiscardedActionShots);
     field(IngressKey("leave_discarded", actions, IngressUnit::Shots), counts.leaveDiscardedActionShots);
     field(IngressKey("reset_discarded", actions, IngressUnit::Acks), counts.resetDiscardedActionAcks);
+    field(IngressKey("slack_executed", none, IngressUnit::Samples), counts.slackExecutedSamples);
+    field(IngressKey("slack_late", none, IngressUnit::Samples), counts.slackLateSamples);
+    field(IngressKey("slack_merged", none, IngressUnit::Samples), counts.slackMergedSamples);
+    field(IngressKey("slack_discarded", none, IngressUnit::Samples), counts.slackDiscardedSamples);
+    field(IngressKey("slack_published", none, IngressUnit::Samples), counts.slackPublishedSamples);
+    field(IngressKey("slack_published_negative", none, IngressUnit::Samples), counts.slackPublishedNegativeSamples);
+    field(IngressKey("slack_overwritten", none, IngressUnit::Samples), counts.slackOverwrittenSamples);
+    field(IngressKey("slack_taken", none, IngressUnit::Samples), counts.slackTakenSamples);
+    field(IngressKey("slack_coalesced", none, IngressUnit::Samples), counts.slackCoalescedSamples);
+    field(IngressKey("slack_unclaimed", none, IngressUnit::Samples), counts.slackUnclaimedSamples);
 }
 
 [[nodiscard]] inline std::string MatchIngressStatisticsLine(const MatchIngressWindow& window) {

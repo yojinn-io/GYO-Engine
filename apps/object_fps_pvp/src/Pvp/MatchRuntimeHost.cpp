@@ -92,12 +92,59 @@ bool MatchRuntimeHost::QueueLeave(std::uint64_t requestId, PlayerId playerId) {
     return QueueControl({requestId, playerId, ControlKind::Leave});
 }
 
-MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) {
-    return ingress_[match_.ContainsPlayer(playerId) ? playerId : PlayerId{}];
+PlayerId MatchRuntimeHost::IngressBucketId(PlayerId playerId) const {
+    return match_.ContainsPlayer(playerId) ? playerId : PlayerId{};
 }
+
+MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) { return ingress_[IngressBucketId(playerId)]; }
 
 void MatchRuntimeHost::SubstitutionClosed(const IngressSubstitution& record) {
     if (!record.firstArrival) ++ingress_[record.playerId].unarrived[IngressIndex(record.close)];
+    records_.Add(record);
+}
+
+void MatchRuntimeHost::RecordRejection(const PlayerInput& input, IngressInputRejection reason) {
+    if (!records_.AdmitRejection(IngressBucketId(input.playerId), reason)) return;
+    // The trace's own steady clock, as the movement trace: the host's clock
+    // (now_) serves timing and stays unread by refusals.
+    IngressRejectionRecord record{.timeNs = MovementTraceNowNs(), .playerId = input.playerId, .reason = reason,
+        .epoch = input.movementEpoch, .life = input.lifeGeneration, .commands = input.commands.size()};
+    if (!input.commands.empty()) {
+        record.firstSequence = input.commands.front().sequence;
+        record.lastSequence = input.commands.back().sequence;
+    }
+    if (match_.ContainsPlayer(input.playerId)) {
+        const auto snapshot = match_.Snapshot();
+        const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
+            [&](const auto& state) { return state.playerId == input.playerId; });
+        if (player != snapshot.players.end()) {
+            record.cursor = player->lastResolvedCommand;
+            record.currentEpoch = player->movementEpoch;
+            record.currentLife = player->lifeGeneration;
+        }
+    }
+    records_.Add(std::move(record));
+}
+
+void MatchRuntimeHost::OfferSlackSample(PlayerId playerId, SlackTrack& track, std::uint64_t sequence, std::int64_t micros) {
+    if (!track.pending || micros < track.pending->second) {
+        if (track.pending) ++ingress_[playerId].slackMergedSamples;
+        track.pending = std::pair{sequence, micros};
+    } else ++ingress_[playerId].slackMergedSamples;
+}
+
+void MatchRuntimeHost::DiscardSlack(PlayerId playerId, const SlackTrack& track) {
+    if (track.pending) ++ingress_[playerId].slackDiscardedSamples;
+}
+
+void MatchRuntimeHost::CountSlackSamples(const WorldSnapshot& snapshot, std::uint64_t MatchIngressCounts::*field) {
+    for (const auto& player : snapshot.players)
+        if (player.movementSlackSequence) ++(ingress_[player.playerId].*field);
+}
+
+void MatchRuntimeHost::NoteCoalescedSlackSamples(std::span<const PlayerId> players) {
+    std::lock_guard lock(mutex_);
+    for (const auto playerId : players) ++ingress_[playerId].slackCoalescedSamples;
 }
 
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
@@ -110,6 +157,7 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         auto& refused = ingress.rejected[IngressIndex(reason)];
         ++refused.inputs;
         refused.commands += input.commands.size();
+        RecordRejection(input, reason);
         return false;
     };
     if (pendingReset_) return refuse(IngressInputRejection::Resetting);
@@ -162,8 +210,10 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         return std::nullopt;
     };
     auto& track = slack_[input.playerId];
-    if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration)
+    if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration) {
+        DiscardSlack(input.playerId, track);
         track = {input.movementEpoch, input.lifeGeneration, cursor, {}, {}, std::nullopt};
+    }
     for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
     std::size_t lateCommands{};
     for (const auto& command : input.commands) {
@@ -178,7 +228,8 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         const auto late = track.substituted.find(command.sequence);
         if (late == track.substituted.end()) continue;
         const auto micros = -Micros(at() - late->second);
-        if (!track.pending || micros < track.pending->second) track.pending = std::pair{command.sequence, micros};
+        ++ingress.slackLateSamples;
+        OfferSlackSample(input.playerId, track, command.sequence, micros);
         track.substituted.erase(late);
     }
     if (lateCommands == input.commands.size()) ++ingress.lateOnlyInputs;
@@ -410,12 +461,23 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
         if (!advancedAt) advancedAt = now_();
         publishedReferences_.push_back({publication->tick, *advancedAt});
         if (publishedReferences_.size() > MaxPublishedShotReferences) publishedReferences_.pop_front();
-        if (snapshot_) ++statistics_.snapshotOverwrites;
+        if (snapshot_) {
+            ++statistics_.snapshotOverwrites;
+            CountSlackSamples(*snapshot_, &MatchIngressCounts::slackOverwrittenSamples);
+        }
         snapshot_ = std::move(publication);
         published = true;
         // Samples reach the Client through published snapshots only; catch-up
         // states replaced inside this Advance kept accumulating the minimum.
-        for (auto& [playerId, track] : slack_) track.pending.reset();
+        // With a publication every tick, each pending sample is in this one.
+        for (auto& [playerId, track] : slack_) {
+            if (track.pending) {
+                auto& counts = ingress_[playerId];
+                ++counts.slackPublishedSamples;
+                if (track.pending->second < 0) ++counts.slackPublishedNegativeSamples;
+            }
+            track.pending.reset();
+        }
     }
     if (elapsedSeconds >= 0.1 || advance.droppedSeconds > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .authorityTick = match_.TickCount(),
@@ -460,16 +522,31 @@ MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
 
 std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics(bool final) {
     std::lock_guard lock(mutex_);
-    if (final) ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });
+    if (final) {
+        ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });
+        for (auto& [playerId, track] : slack_) {
+            DiscardSlack(playerId, track);
+            track.pending.reset();
+        }
+        if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);
+        snapshot_.reset();
+    }
+    records_.NewWindow();
     ingress_.try_emplace(PlayerId{});
     for (const auto& player : match_.Snapshot().players) ingress_.try_emplace(player.playerId);
     return std::exchange(ingress_, {});
+}
+
+IngressRecords MatchRuntimeHost::DrainIngressRecords() {
+    std::lock_guard lock(mutex_);
+    return records_.Drain();
 }
 
 std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
     std::lock_guard lock(mutex_);
     auto result = std::move(snapshot_);
     snapshot_.reset();
+    if (result) CountSlackSamples(*result, &MatchIngressCounts::slackTakenSamples);
     return result;
 }
 
@@ -496,6 +573,7 @@ void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolv
     if (const auto actions = pendingActions_.find(playerId); actions != pendingActions_.end())
         ingress_[playerId].leaveDiscardedActionShots += actions->second.size();
     ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });
+    if (const auto track = slack_.find(playerId); track != slack_.end()) DiscardSlack(playerId, track->second);
     pendingInputs_.erase(playerId);
     pendingActions_.erase(playerId);
     pendingActionAcknowledgements_.erase(playerId);
@@ -511,9 +589,11 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
     for (auto& player : state.players) {
         auto found = slack_.find(player.playerId);
         if (found == slack_.end() || found->second.movementEpoch != player.movementEpoch ||
-            found->second.lifeGeneration != player.lifeGeneration)
+            found->second.lifeGeneration != player.lifeGeneration) {
+            if (found != slack_.end()) DiscardSlack(player.playerId, found->second);
             found = slack_.insert_or_assign(player.playerId, SlackTrack{player.movementEpoch, player.lifeGeneration,
                 player.lastResolvedCommand, {}, {}, std::nullopt}).first;
+        }
         auto& track = found->second;
         if (player.lastResolvedCommand > track.lastResolved + kMaximumSubstitutedSequences)
             track.lastResolved = player.lastResolvedCommand - kMaximumSubstitutedSequences;
@@ -526,7 +606,8 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
             const auto receipt = track.receipts.find(sequence);
             if (receipt != track.receipts.end()) {
                 const auto micros = Micros(*at - receipt->second);
-                if (!track.pending || micros < track.pending->second) track.pending = std::pair{sequence, micros};
+                ++ingress_[player.playerId].slackExecutedSamples;
+                OfferSlackSample(player.playerId, track, sequence, micros);
                 ledger_.Resolved(player.playerId, sequence, std::nullopt, match_.TickCount(), closed);
             } else {
                 track.substituted[sequence] = *at;
@@ -545,8 +626,10 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
         }
     }
     std::erase_if(slack_, [&](const auto& entry) {
-        return std::none_of(state.players.begin(), state.players.end(),
+        const bool gone = std::none_of(state.players.begin(), state.players.end(),
             [&](const auto& player) { return player.playerId == entry.first; });
+        if (gone) DiscardSlack(entry.first, entry.second);
+        return gone;
     });
 }
 
@@ -627,6 +710,8 @@ void MatchRuntimeHost::ClearState() {
         ++ingress_[playerId].resetDiscardedActionAcks;
     }
     ledger_.Clear(IngressSubstitutionClose::Reset, [this](const auto& record) { SubstitutionClosed(record); });
+    for (const auto& [playerId, track] : slack_) DiscardSlack(playerId, track);
+    if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);
     match_.Reset();
     ticker_.Reset();
     controls_.clear();
