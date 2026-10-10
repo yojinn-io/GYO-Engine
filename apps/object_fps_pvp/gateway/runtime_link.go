@@ -50,7 +50,17 @@ type runtimeLink struct {
 	ingress map[uint64]*playerIngressCounts
 	// Diagnostics only: intervals between each player's ActionBatch writes.
 	actionStats map[uint64]*intervalStats
+	// The writer goroutine run started, and a channel closed once it exited:
+	// close() does not wait for it, and a pass it took still counts its
+	// commands written or abandoned (I0) until then.
+	writerStarted bool
+	writerExited  chan struct{}
+	writerOnce    sync.Once
 }
+
+// The write of one runtime frame. Tests replace it to block or fail a write
+// the writer goroutine is in.
+var runtimeWrite = (*framing.TCPConnection).Write
 
 func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime.Ready, error) {
 	conn, err := framing.DialTCP(ctx, address, 3*time.Second)
@@ -540,7 +550,7 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 		payload, err := proto.Marshal(w.message)
 		if err == nil {
 			started := time.Now()
-			err = l.conn.Write(payload, 3*time.Second)
+			err = runtimeWrite(l.conn, payload, 3*time.Second)
 			elapsed := time.Since(started)
 			l.mu.Lock()
 			if elapsed > l.maxWriteAge {
@@ -570,7 +580,13 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 
 func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnvelope), failed func(error)) {
 	fail := func(err error) { l.once.Do(func() { l.close(); failed(err) }) }
+	l.mu.Lock()
+	l.writerStarted = true
+	exited := l.writerExitedLocked()
+	l.mu.Unlock()
+	stopped := func() { l.writerOnce.Do(func() { close(exited) }) }
 	go func() {
+		defer stopped()
 		// Inputs, controls, actions and results wake the loop (l.wake). Action
 		// batches keep a strict ActionSendRate interval from each completed
 		// write; this timer wakes the loop at the earliest such deadline, so a
@@ -587,6 +603,9 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			case <-timer.C:
 			}
 			if err := l.write(l.take()); err != nil {
+				// This goroutine counts nothing more. The failure reaches
+				// runtimeFailed on it, whose final flush waits for it.
+				stopped()
 				fail(err)
 				return
 			}
@@ -625,6 +644,25 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			}
 		}
 	}()
+}
+
+func (l *runtimeLink) writerExitedLocked() chan struct{} {
+	if l.writerExited == nil {
+		l.writerExited = make(chan struct{})
+	}
+	return l.writerExited
+}
+
+// waitWriter returns once the writer goroutine exited, at once if run never
+// started it. Only after close(): the writer runs until the link closes or the
+// context ends.
+func (l *runtimeLink) waitWriter() {
+	l.mu.Lock()
+	started, exited := l.writerStarted, l.writerExitedLocked()
+	l.mu.Unlock()
+	if started {
+		<-exited
+	}
 }
 
 func (l *runtimeLink) close() {

@@ -69,6 +69,14 @@ type fakeRuntime struct {
 
 func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 	t.Helper()
+	s, f, _, _ := startTestServer(t)
+	return s, f
+}
+
+// startTestServer also returns Serve's cancel and a channel closed when Serve
+// returned.
+func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <-chan struct{}) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +116,13 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 	go func() { _ = s.Serve(ctx); close(done) }()
 	t.Cleanup(func() {
 		cancel()
-		s.Close()
+		closed := make(chan struct{})
+		go func() { s.Close(); close(closed) }()
+		select {
+		case <-closed:
+		case <-time.After(3 * time.Second):
+			t.Error("server did not close")
+		}
 		_ = listener.Close()
 		f.mu.Lock()
 		if f.conn != nil {
@@ -121,7 +135,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 			t.Error("server did not stop")
 		}
 	})
-	return s, f
+	return s, f, cancel, done
 }
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {

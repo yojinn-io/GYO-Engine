@@ -2393,6 +2393,146 @@
       "replace": "        static_cast<void>(playerId);\n",
       "check": "cpu",
       "expect": "CHECK\\( resetDiscardedAcks == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-final-not-once",
+      "batch": "v7-flow",
+      "what": "The final ingress window is not guarded by sync.Once: a runtime failure and Close each write one",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\ts.finalOnce.Do(s.writeFinalIngress)\n",
+      "replace": "\ts.writeFinalIngress()\n",
+      "check": "go",
+      "expect": "runtime_failure: gateway has 2 final lines, want 1"
+    },
+    {
+      "id": "v7-flow-final-before-writer-exit",
+      "batch": "v7-flow",
+      "what": "flushFinal takes the link counters without waiting for the writer to exit",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\ts.link.waitWriter()\n",
+      "replace": "",
+      "check": "go",
+      "expect": "blocked_writer: final line written while the writer was blocked"
+    },
+    {
+      "id": "v7-flow-final-writer-exit-early",
+      "batch": "v7-flow",
+      "what": "The writer goroutine reports its exit as soon as it starts",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tdefer stopped()\n",
+      "replace": "\t\tstopped()\n",
+      "check": "go",
+      "expect": "blocked_writer: final line written while the writer was blocked"
+    },
+    {
+      "id": "v7-flow-final-writer-exit-after-fail",
+      "batch": "v7-flow",
+      "what": "A failed write reaches runtimeFailed before the writer reports its exit: the final flush waits for itself",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tstopped()\n\t\t\t\tfail(err)\n",
+      "replace": "\t\t\t\tfail(err)\n",
+      "check": "go",
+      "expect": "write_failure: no final line after the runtime failure"
+    },
+    {
+      "id": "v7-flow-final-skips-close",
+      "batch": "v7-flow",
+      "what": "Close does not write the final window (a cancelled context reaches no other end path)",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\ts.flushFinal()\n\t})\n}\n",
+      "replace": "\t})\n}\n",
+      "check": "go",
+      "expect": "cancel: gateway has 0 final lines, want 1"
+    },
+    {
+      "id": "v7-flow-final-skips-runtime-failure",
+      "batch": "v7-flow",
+      "what": "A runtime failure does not write the final window",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n\ts.flushFinal()\n",
+      "replace": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n",
+      "check": "go",
+      "expect": "runtime_failure: no final line after the runtime failure"
+    },
+    {
+      "id": "v7-flow-final-skips-earlier-player",
+      "batch": "v7-flow",
+      "what": "The final window leaves out players whose counters were all taken in earlier windows",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tfor id := range s.ingressPlayers {\n",
+      "replace": "\t\tfor id := range map[uint64]struct{}{} {\n",
+      "check": "go",
+      "expect": "player 8 has no final line"
+    },
+    {
+      "id": "v7-flow-window-not-incremental",
+      "batch": "v7-flow",
+      "what": "The Server's per-player counters are not reset when a window takes them",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\ts.playerIngress, s.ingress = nil, gatewayIngressCounts{}\n",
+      "replace": "\ts.ingress = gatewayIngressCounts{}\n",
+      "check": "go",
+      "expect": "window 2: player 7 received 3 datagrams, want 1"
+    },
+    {
+      "id": "v7-flow-window-link-not-incremental",
+      "batch": "v7-flow",
+      "what": "The link's counters are not reset when a window takes them",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\ttaken := l.ingress\n\tl.ingress = nil\n",
+      "replace": "\ttaken := map[uint64]*playerIngressCounts{}\n\tfor id, counts := range l.ingress {\n\t\tcopied := *counts\n\t\ttaken[id] = &copied\n\t}\n",
+      "check": "go",
+      "expect": "window 2: player 7 handed 8 commands, want 3"
+    },
+    {
+      "id": "v7-flow-window-removed-player-unwritten",
+      "batch": "v7-flow",
+      "what": "A removed player with counters left gets no line in the window",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tfor _, line := range removed {\n\t\tlog.Print(line.line)\n\t}\n",
+      "replace": "",
+      "check": "go",
+      "expect": "removed player 8 has no line in window 2"
+    },
+    {
+      "id": "v7-flow-window-after-final",
+      "batch": "v7-flow",
+      "what": "Windows keep writing ingress lines after the final one",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tif !s.ingressFinal {\n",
+      "replace": "\tif true {\n",
+      "check": "go",
+      "expect": "windows: ingress line after the final window"
+    },
+    {
+      "id": "v7-flow-final-written-before-write",
+      "batch": "v7-flow",
+      "what": "Written commands are counted before the frame is written, so a failed write counts them written",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "check": "go",
+      "expect": "write_failure: player \\d+: link settled 6 of 3 handed commands"
+    },
+    {
+      "id": "v7-flow-final-close-rejected-uncounted",
+      "batch": "v7-flow",
+      "what": "Rejected-lane windows cleared by close are not counted (I0)",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tfor _, in := range lane {\n\t\t\tl.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))\n",
+      "replace": "\t\tfor _, in := range lane {\n\t\t\t_, _ = id, in\n",
+      "check": "go",
+      "expect": "blocked_writer: player \\d+: link settled 5 of 7 handed commands"
+    },
+    {
+      "id": "v7-flow-final-abandoned-skips-failed",
+      "batch": "v7-flow",
+      "what": "The message whose write failed is not counted abandoned, only the rest of its pass",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tfor _, abandoned := range writes[i:] {\n",
+      "replace": "\t\t\tfor _, abandoned := range writes[i+1:] {\n",
+      "check": "go",
+      "expect": "write_failure: player \\d+: link settled 0 of 3 handed commands"
     }
   ]
 }

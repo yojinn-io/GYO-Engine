@@ -93,6 +93,13 @@ type Server struct {
 	// its reservation (remove, runtimeFailed) until taken, like the link's.
 	ingress       gatewayIngressCounts
 	playerIngress map[uint64]*playerIngressCounts
+	// The ingress lines, under mu: where the current window started, the
+	// players that had a line, and whether the final one was written. The
+	// final window is written once (finalOnce), on the first end path.
+	ingressWindowStart time.Time
+	ingressPlayers     map[uint64]struct{}
+	ingressFinal       bool
+	finalOnce          sync.Once
 }
 
 // The reusable Session's admission checks. Tests replace them to reach an
@@ -130,7 +137,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
 		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1),
-		resultWake: make(chan struct{}, 1)}
+		resultWake: make(chan struct{}, 1), ingressWindowStart: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rooms", s.listRooms)
 	mux.HandleFunc("POST /rooms", s.createRoom)
@@ -174,6 +181,7 @@ func (s *Server) Close() {
 		_ = s.http.Close()
 		_ = s.listener.Close()
 		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
+		s.flushFinal()
 	})
 }
 
@@ -500,6 +508,9 @@ func (s *Server) countIngress(p *reservation, counter playerIngressCounter, n ui
 func (s *Server) takeIngress() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.takeIngressLocked()
+}
+func (s *Server) takeIngressLocked() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
 	players, gateway := s.playerIngress, s.ingress
 	s.playerIngress, s.ingress = nil, gatewayIngressCounts{}
 	return players, gateway
@@ -797,32 +808,142 @@ func (s *Server) logStatistics(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			links := s.link.takeActionStatistics()
-			s.mu.Lock()
-			ids := make([]uint64, 0, len(s.players))
-			for id := range s.players {
-				ids = append(ids, id)
-			}
-			slices.Sort(ids)
-			log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
-				s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
-			for _, id := range ids {
-				p := s.players[id]
-				age := int64(-1)
-				if !p.lastReceived.IsZero() {
-					age = now.Sub(p.lastReceived).Milliseconds()
-				}
-				log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
-					p.session.Endpoint(), p.received, age)
-				link, ok := links[id]
-				if !ok {
-					link = noIntervals
-				}
-				log.Print(sendStatisticsLine(id, now.Sub(windowStart), p.sent.results.take(), p.sent.snapshots.take(), link))
-			}
-			s.mu.Unlock()
+			s.logStatisticsWindow(now, now.Sub(windowStart))
 			windowStart = now
 		}
+	}
+}
+
+// logStatisticsWindow writes one window's lines. The ingress lines go with
+// them until the final one: the Gateway's after the gateway statistics line,
+// each current player's after its send statistics line, then those of removed
+// players with counters left.
+func (s *Server) logStatisticsWindow(now time.Time, window time.Duration) {
+	links := s.link.takeActionStatistics()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]uint64, 0, len(s.players))
+	for id := range s.players {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
+		s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
+	ingress := map[uint64]string{}
+	var removed []playerIngressLine
+	if !s.ingressFinal {
+		gateway, lines := s.ingressWindowLocked(now, false)
+		log.Print(gateway)
+		for _, line := range lines {
+			if s.players[line.player] != nil {
+				ingress[line.player] = line.line
+			} else {
+				removed = append(removed, line)
+			}
+		}
+	}
+	for _, id := range ids {
+		p := s.players[id]
+		age := int64(-1)
+		if !p.lastReceived.IsZero() {
+			age = now.Sub(p.lastReceived).Milliseconds()
+		}
+		log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
+			p.session.Endpoint(), p.received, age)
+		link, ok := links[id]
+		if !ok {
+			link = noIntervals
+		}
+		log.Print(sendStatisticsLine(id, window, p.sent.results.take(), p.sent.snapshots.take(), link))
+		if line, ok := ingress[id]; ok {
+			log.Print(line)
+		}
+	}
+	for _, line := range removed {
+		log.Print(line.line)
+	}
+}
+
+// One player's ingress line of a window.
+type playerIngressLine struct {
+	player uint64
+	line   string
+}
+
+// ingressWindowLocked takes the ingress counters since the previous window,
+// the Server's (datagram outcomes, Gateway-wide) and the link's (commands),
+// and formats them: the Gateway line, and by ascending id a line for every
+// current player and every player with counters taken, a removed one
+// included. The final window (final=1) also has a line for every player that
+// had one before, so each player's lines end with exactly one final line.
+// Called with s.mu held.
+func (s *Server) ingressWindowLocked(now time.Time, final bool) (string, []playerIngressLine) {
+	var window time.Duration
+	if !s.ingressWindowStart.IsZero() {
+		window = max(now.Sub(s.ingressWindowStart), 0)
+	}
+	s.ingressWindowStart = now
+	players, gateway := s.takeIngressLocked()
+	if players == nil {
+		players = map[uint64]*playerIngressCounts{}
+	}
+	for id, counts := range s.link.takeIngress() {
+		if players[id] == nil {
+			players[id] = new(playerIngressCounts)
+		}
+		players[id].add(counts)
+	}
+	for id := range s.players {
+		if players[id] == nil {
+			players[id] = new(playerIngressCounts)
+		}
+	}
+	if final {
+		s.ingressFinal = true
+		for id := range s.ingressPlayers {
+			if players[id] == nil {
+				players[id] = new(playerIngressCounts)
+			}
+		}
+	}
+	ids := make([]uint64, 0, len(players))
+	for id := range players {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	lines := make([]playerIngressLine, 0, len(ids))
+	for _, id := range ids {
+		s.noteIngressPlayerLocked(id)
+		lines = append(lines, playerIngressLine{id, playerIngressStatisticsLine(id, window, final, players[id])})
+	}
+	return gatewayIngressStatisticsLine(window, final, &gateway), lines
+}
+
+func (s *Server) noteIngressPlayerLocked(id uint64) {
+	if s.ingressPlayers == nil {
+		s.ingressPlayers = map[uint64]struct{}{}
+	}
+	s.ingressPlayers[id] = struct{}{}
+}
+
+// flushFinal writes the last ingress window (final=1) once, on the first end
+// path that reaches it: Close (the context or the HTTP server ended Serve) or
+// runtimeFailed, each after link.close(). A concurrent second caller returns
+// once the first wrote it.
+func (s *Server) flushFinal() {
+	s.finalOnce.Do(s.writeFinalIngress)
+}
+
+func (s *Server) writeFinalIngress() {
+	// close() does not wait for the writer: a pass it took counts its commands
+	// written or abandoned until it exits, and I0 needs them in this window.
+	s.link.waitWriter()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gateway, lines := s.ingressWindowLocked(time.Now(), true)
+	log.Print(gateway)
+	for _, line := range lines {
+		log.Print(line.line)
 	}
 }
 
@@ -842,6 +963,8 @@ func (s *Server) runtimeFailed(err error) {
 		if p.phase != reserved {
 			s.sendControl(p, adapter.Failure, &client.Error{Code: "runtime_unavailable", Message: "Match ended; restart services and join again"})
 		}
+		// The final ingress window writes them although the reservations go.
+		s.noteIngressPlayerLocked(p.playerID)
 	}
 	clear(s.players)
 	clear(s.sessions)
@@ -849,6 +972,7 @@ func (s *Server) runtimeFailed(err error) {
 	s.mu.Unlock()
 	s.link.close()
 	log.Printf("runtime disconnected; room unavailable: %v", err)
+	s.flushFinal()
 }
 
 // forwardInput hands a decoded window to the Match (D49: the Match decides what
