@@ -57,6 +57,16 @@
         "gyo_object_fps_pvp-match"
       ],
       "ctest": "object_fps_pvp.match_ingress_cli"
+    },
+    "ingress_evidence": {
+      "ctest": "object_fps_pvp.ingress_evidence"
+    },
+    "ingress_cross": {
+      "build": [
+        "gyo_object_fps_pvp-match",
+        "gyo_object_fps_pvp_timing_probe"
+      ],
+      "ctest": "object_fps_pvp.ingress_cross"
     }
   },
   "mutants": [
@@ -2889,6 +2899,166 @@
       "replace": "    field(IngressKey(\"slack_discarded\", none, IngressUnit::Samples), counts.slackDiscardedSamples);\n    field(IngressKey(\"slack_merged\", none, IngressUnit::Samples), counts.slackMergedSamples);\n",
       "check": "cpu",
       "expect": "CHECK\\( parsed\\.keys == keys \\) is NOT correct"
+    },
+    {
+      "id": "v7-flow-evidence-missing-final-as-zero",
+      "batch": "v7-flow",
+      "what": "the analyzer sums a log without its final=1 window as if it were complete (missing counts read as 0)",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    elif not state[\"final\"]:\n        reasons.append(f\"{name} log has no final=1 window: the process did not reach its end path\")\n",
+      "replace": "",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_missing_final_is_undetermined_never_zero"
+    },
+    {
+      "id": "v7-flow-evidence-window-gap-unreported",
+      "batch": "v7-flow",
+      "what": "a statistics window without its ingress lines is not reported",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    state[\"gaps\"].append(text)\n",
+      "replace": "    return\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_missing_gateway_window_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-player-window-unchecked",
+      "batch": "v7-flow",
+      "what": "a current player's window without its ingress line is not noticed",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "        waiting_players[int(match[\"player\"])] = number\n",
+      "replace": "        pass\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_missing_player_window_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-version-unchecked",
+      "batch": "v7-flow",
+      "what": "a line of another ingress version is read as version 1",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    if pairs[0][1] != str(INGRESS_VERSION):\n",
+      "replace": "    if False:\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_other_version_stops"
+    },
+    {
+      "id": "v7-flow-evidence-i1-eof-unchecked",
+      "batch": "v7-flow",
+      "what": "I1 is judged without an 'ipc closed reason=eof' before the Match's final window",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    preconditions[\"eof_before_final\"] = any(reason == \"eof\" and line < final_line for line, reason in closes)\n",
+      "replace": "    preconditions[\"eof_before_final\"] = True\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1_without_eof_before_final_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-i1-second-connection-unchecked",
+      "batch": "v7-flow",
+      "what": "I1 is judged although the Match served more than one IPC connection",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    preconditions[\"single_connection\"] = (len(closes) == 1 and not match[\"accept_failed\"]\n",
+      "replace": "    preconditions[\"single_connection\"] = (len(closes) >= 1 and not match[\"accept_failed\"]\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1_with_a_second_connection_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-i1-relay-unchecked",
+      "batch": "v7-flow",
+      "what": "I1 is judged although the Gateway dialed a relay (IpcPause) instead of the Match",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    preconditions[\"no_ipc_pause\"] = (gateway[\"runtime_address\"] is not None\n",
+      "replace": "    preconditions[\"no_ipc_pause\"] = True or (gateway[\"runtime_address\"] is not None\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1_through_an_ipc_pause_relay_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-i1-player-zero-left-out",
+      "batch": "v7-flow",
+      "what": "I1's link total leaves out the Match's player=0 bucket",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    received = {p: c.get(\"received_commands\", 0) for p, c in match[\"players\"].items()}\n",
+      "replace": "    received = {p: c.get(\"received_commands\", 0) for p, c in match[\"players\"].items() if p}\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1_counts_the_player_zero_bucket_in_the_link_total"
+    },
+    {
+      "id": "v7-flow-evidence-i2-class-missing",
+      "batch": "v7-flow",
+      "what": "I2 leaves resolved_untracked out of the classes",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "                     sum(c.get(f\"{name}_commands\", 0) for name in COMMAND_CLASSES) + rejected(\"commands\"),\n",
+      "replace": "                     sum(c.get(f\"{name}_commands\", 0) for name in COMMAND_CLASSES[:-1]) + rejected(\"commands\"),\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_every_golden_line_satisfies_its_conservations"
+    },
+    {
+      "id": "v7-flow-evidence-j5a-close-missing",
+      "batch": "v7-flow",
+      "what": "J5a leaves unarrived_end out of the closed records",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "                                                  for close in SUBSTITUTION_CLOSES),\n",
+      "replace": "                                                  for close in SUBSTITUTION_CLOSES[:-1]),\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_every_golden_line_satisfies_its_conservations"
+    },
+    {
+      "id": "v7-flow-evidence-never-arrived-term-missing",
+      "batch": "v7-flow",
+      "what": "never_arrived (tentative J5a reading) leaves unarrived_end out",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "NEVER_ARRIVED = (\"unarrived_removed_commands\", \"unarrived_overflow_commands\", \"unarrived_end_commands\")\n",
+      "replace": "NEVER_ARRIVED = (\"unarrived_removed_commands\", \"unarrived_overflow_commands\")\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_injection_requires_never_arrived_zero"
+    },
+    {
+      "id": "v7-flow-evidence-trace-end-not-last",
+      "batch": "v7-flow",
+      "what": "a record after trace_end is accepted",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "            state[\"errors\"].append(f\"trace line {number}: a record after trace_end\")\n",
+      "replace": "            pass\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_trace_end_must_be_last_and_count_the_records"
+    },
+    {
+      "id": "v7-flow-evidence-trace-end-records-unchecked",
+      "batch": "v7-flow",
+      "what": "trace_end records is not compared with the lines before it",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    if end is not None and end[\"records\"] != end[\"line\"] - 1:\n",
+      "replace": "    if False:\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_trace_end_must_be_last_and_count_the_records"
+    },
+    {
+      "id": "v7-flow-evidence-trace-missing-end-passes",
+      "batch": "v7-flow",
+      "what": "a detail file without trace_end is reconciled as if complete",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    if end is None:\n        return dict(result, status=\"undetermined\",\n",
+      "replace": "    if end is None:\n        end = {\"suppressed\": 0, \"dropped\": 0}\n    if False:\n        return dict(result, status=\"undetermined\",\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_missing_trace_end_is_undetermined"
+    },
+    {
+      "id": "v7-flow-evidence-trace-dropped-ignored",
+      "batch": "v7-flow",
+      "what": "per-record reconciliation is applied although records were dropped on a full buffer",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    if end[\"dropped\"] == 0:\n        parts[\"rejection_events\"]",
+      "replace": "    if True:\n        parts[\"rejection_events\"]",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_suppressed_and_dropped_limit_the_reconciliation"
+    },
+    {
+      "id": "v7-flow-cross-ipc-drops-input-silently",
+      "batch": "v7-flow",
+      "what": "the Match's IPC drops one input in fifty unseen (I1, across the processes, notices it)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                static_cast<void>(host.SubmitInput(window));\n",
+      "replace": "                if(p.commands_size()!=1 || p.commands(0).sequence()%50!=0) static_cast<void>(host.SubmitInput(window));\n",
+      "check": "ingress_cross",
+      "expect": "I1 is failed"
     }
   ]
 }

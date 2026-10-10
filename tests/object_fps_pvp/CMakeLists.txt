@@ -147,6 +147,20 @@ set_tests_properties("${GYO_CURRENT_APP}.command_evidence" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence_v7"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence_v7.py")
 set_tests_properties("${GYO_CURRENT_APP}.command_evidence_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Batch 08c F3: the ingress v1 evidence (IG, I0, I1, I2, I3, T3, J5a, S1, S2, trace) on the golden lines.
+add_test(NAME "${GYO_CURRENT_APP}.ingress_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_ingress_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.ingress_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
+# Batch 08c F3: a real Gateway (built with Go) and a real Match in one short clean run of the timing probe; the
+# ingress evidence must hold IG, I0, I1, I2, T3, J5a, S1, S2 and the trace. It needs Go and POSIX signals
+# (77 = skipped on Windows), so it stays outside the cpu preset like the worker test: run it with -R.
+add_test(NAME "${GYO_CURRENT_APP}.ingress_cross"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ingress_cross_check.py"
+        --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_timing_probe>
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_corners.json"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ingress_cross" --go "${GYO_GO_EXECUTABLE}")
+set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300
+    SKIP_RETURN_CODE 77)
 # P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
 add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")
