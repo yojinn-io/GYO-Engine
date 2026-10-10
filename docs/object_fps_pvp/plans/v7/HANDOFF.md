@@ -9,8 +9,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：F0 留給 F1b／F2a 的三個小決定（見進度記錄器）：①Gateway 拒收 Match 的 snapshot（D1、D2）新增單位 `snapshots`；②`fwd_stale_sequence_input_packets` 定為互斥的結果；③不認得的 admission 錯誤改成丟棄並計數（fail-closed，現在是當成接受；目前可重用層只回三種型別化錯誤，實際碰不到）。
-- **進行中**：無。第 08c 批 F0 完成（23:16～23:31，1 位 high；主對話核對：go vet／test 通過、`object_fps_pvp.cpu` 通過、ingress doctest 5／5）。
-- **下一步**：F1a（Go：主線、拒絕線、已寫出去重、★）與 F2a（C++：`AdmitInput`、拒絕計數、IpcHost、統計行、final 行）並行。
+- **進行中**：第 08c 批 F1a（Go：主線、拒絕線、已寫出去重、★、link 的 I0 計數）與 F2a（C++：`AdmitInput`、拒絕計數、IpcHost、統計行、final 行）並行，各 1 位 high 在主 checkout 實作（檔案不重疊；`mutations.json` 由主對話合併），完成後各做 1 次局部 xhigh 審查（F1a：拒絕線的順序與切段、★ 的提交與 liveness；F2a：`AdmitInput` 的等價性）。各估約 3 小時，23:3x 開始。
+- **下一步**：F1a、F2a 完成並審查後回報，再開 F1b-1 與 F2b-1。
 - **最後更新**：2026-10-10，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
