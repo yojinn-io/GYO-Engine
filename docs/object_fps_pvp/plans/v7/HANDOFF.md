@@ -205,6 +205,14 @@
 
 - **TT-2**（Engine）：見 Engine 計畫。寫檔執行緒用 `GYO::Threads`；只在佇列由空轉為非空、或達到批次門檻時才 Notify。
 - **10** 任務 8 的紀錄：Client 的拒絕原因、未指定 `--gateway` 的提示、以 worker 收包時間戳計算的 snapshot 年齡、模擬步晚醒的 10 秒摘要；Match 的動作裁決與原因（`match-actions.jsonl`）、結束紀錄、runtime link 關閉紀錄（含原本吞掉的例外）、每位玩家每 10 秒的 Held／Neutral；Gateway 的收包間隔分布、拒絕原因、control lane 丟棄計數、週期性 IPC 寫出延遲、loopback advertise-ip 的警告。日誌格式是新的產品 Data Contract：帶版本與驗證規則，C++ 與 Go 兩端的測試解析同一份樣本。新紀錄寫到另外的檔案。
+  - **輸入：觀測缺口清單**（2026-10-10 使用者要求；規劃依 D45 用 ultracode，開始前先問）。這次 v7 有不少「未驗證／無法判定」，不是事情沒發生，而是沒有 log 可以觀測。第 10 批的規劃以這份清單排優先順序，目標是之後像 D44 這種問題能從 log 直接回答。每一項附上目前的繞法，以及因此只能標成推論的結論：
+    1. **Gateway 略過已解析的命令，沒有計數也沒有 log**（`gateway/server.go:420-423`；同一段 `:413-415` 也會略過 epoch／life 不符的封包）。繞法：只能由 Client 的 `sent` 與 Match 的 `host_accepted` 對不上來推。推論：D48 第②步「client→Gateway 的遲到大多被 Gateway 吞掉」是由程式與 0／5 的試跑推出的，沒有直接的計數。
+    2. **Match 的 `host_accepted` 只記新收下的序號**（`MatchRuntimeHost.cpp:86-92`、`:128-131`），遲到、已被替代的命令不寫 trace。它們會在 `:104-112` 變成負的 slack 樣本、隨 snapshot 送給 Client，但只有最小的一個，而且不落地。繞法：由 `resolved`（source＝held／neutral）與 Client 的 `sent` 重建。推論：第①步「遲到命令」的認定、late 修正的觸發條件。
+    3. **相位決策（首次決定、視窗修正、late 修正與幅度）不寫進 match／clients trace**（`MovementTrace.hpp:95-105` 沒有對應的事件）。只能從 action probe 每幀的計數器推回來（`gameplay_action.hpp:153-154`：`phase_state`、`phase_corrections`、`phase_late_corrections`），時間解析度 16～33 ms；timing／network probe 沒有這些計數器，只能用產生間隔的相位步重建（D48 第①步的輔助偵測器）。推論：late 修正的幅度、是否串接（缺陷 B）、settle 時刻；第 09b 批的開環重播只吻合 72／131 的視窗決策。
+    4. **Gateway 丟掉非 active 玩家的結果，不寫 log**（`gateway/action_delivery.go:350-359`）。繞法：第 08b 批只能靠程式論證（加入完成之前不可能有結果、移除是終態）與 1087 份 gateway.log 的 id 掃描。推論：「移除之後到達的結果有多少」數不出來。
+    5. **match.log 的 `tick_late` 會漏掉 Tick 間隔**：第 08 批 L2 第 2 次 clean-60-r3-before 的 `tick_late_max_us`＝146，但 resolved 時刻的 Tick 間隔有 28.0 ms（第 09 批規劃的對抗式檢查；以 `snapshot_produced` 重算，最大間隔 30.9 ms）。繞法：用 resolved／`snapshot_produced` 時刻的 Tick 間隔偵測停頓。推論：第 09 批「新 Match 的 Tick 停頓 9／162」等計數依賴這個繞法。
+    6. **TimerBaseline 只在 probe 連線前量一次 3 秒**（`timer_baseline.hpp:3-5`、`:20`），跑次中途的主機狀態轉換抓不到；第 07 批 L2 有 1 次因此分錯（第 07 批文件 L2 宣告「主機」的更正）。繞法：每輪前後的獨立 sleeper；舊 Match 用自己的晚醒交叉確認（新 Match 的晚醒不反映主機狀態）。推論：各批 L2 依主機狀態分層的結果。
+    7. **Match lane（IpcHost）的送出間隔沒有統計欄位**：第 08b 批 D46⑥ 決定不加、留給第 10 批。繞法：L1 的 M3 測試（3 秒內的 frame 數）與 relay 下行的 c 段。推論：L2 中 Match lane 實際的送出節奏。
 - **11** pv7：契約文件 `docs/object_fps_pvp/protocol-v7.zh-Hant.md`；ProtocolVersion 6→7（ClientVersion 與 RuntimeVersion 都由它導出）；runtime link 每秒 1 次心跳（偏移、RTT 最小值濾波、漂移視窗回歸，每 10 秒寫進兩端日誌）；Client↔Gateway 時間回聲（D35）；版本不一致時給明確的錯誤；驗收工具升 pv7。紀錄若需要 wire 上的資料，併入本批，不做第二次 wire 變更。
 - 產品的 `-fexperimental-library` 在最後一個 `std::jthread`／`std::stop_token` 使用者遷移完時移除（`apps/object_fps_pvp/CMakeLists.txt:30-32`、`tests/object_fps_pvp/CMakeLists.txt:187`），並加守衛（產品、probe、產品測試中 0 件）。預計在 P3。
 
@@ -230,6 +238,7 @@
 
 ## 未結事項
 
+- **Gateway 與 Match 重複過濾已解析的命令**（2026-10-10 使用者要求記錄）：Gateway 在 `gateway/server.go:420-423` 略過 ≤`lastResolved` 的命令，`lastResolved` 在收到 snapshot 時更新（`:520-534`）；Match 的 host 在 `MatchRuntimeHost.cpp:88`、`PvpMatch` 在 `PvpMatch.cpp:78-81` 也只收下 >`lastResolvedCommand` 的命令。這是協議契約定下的（`docs/object_fps_pvp/network-architecture.zh-Hant.md:230-233`：「已完成／舊 epoch 不重執行」），平常無害；副作用是 Client→Gateway 路上遲到的命令被 Gateway 吞掉，到不了 Match，也不產生相位樣本（D48 第②步在 client→Gateway 注入短停頓，0／5 跑次觸發 late 修正）。要不要改屬於協議契約的決定，另立，不在 09a／09b 順手改。
 - 「時鐘到網路路徑」系列紀錄（2026-10-10 使用者要求）：v7 完成後（第 16 批之後）撰寫，分 5 集：①時鐘、②命令脫離畫面幀、③網路路徑的節拍、④FireGate 與 C2、⑤跨機器的時間。附各批的 commit id、L2 數字與調試過程（含更正）。讀者與存放位置屆時決定。
 - **（嚴重度高，D44）偶發的 movement epoch 重設**：（第 08b 批草案已回答：08b 不直接改變輸入抵達與 backlog；可能機制是約 30～150 ms 的短停頓造成成對遲到，Client 相位前移 2 Tick，30 Tick 合計 ≥105，屬推論，見[第 08b 批](08b-event-driven-results.md)「對 movement 佇列與 backlog 的影響」。第 09 批規劃要回答是否影響常數的凍結。）第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
 - probe 幀格點的相位（D46⑦）：action probe 的起點綁在 join Wait 之後收到 snapshot 的時刻（`gameplay_action.hpp:109`；Wait 每 2 ms 輪詢，`action_main.cpp:79-82`），超時時重新錨定（`:170`）。所以建置不同時，probe 幀相對 Match Tick 的相位會系統性地移動，b、a＋b、`legal_match_p95_ms`、d 不能跨建置比較（第 08b 批「b 段變長的調查」）。起點隨機化留到第 09 批規劃時決定。
