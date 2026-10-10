@@ -42,6 +42,7 @@
 **C 的兩種寫法**（對抗式檢查推翻了設計稿「不受 `worker_main:428` 限制」的理由）：
 - bool 版（設計稿）：只要等待過，不論等多久都打折 0.25 個 token。從未滿的 bucket（x≈1.99）開始時，送出 i 與 i−2 的最短間隔只有 12.70 ms（<14 ms），和 A、B 在 R＝80 的最壞值相同（`adversarial/check_rule.txt` B）。原因：只等了 0.17 ms 的送出也拿到整整 0.25 個 token。要用就得改寫 `Movement.hpp`「突發兩個封包」的契約為「任三個送出至少間隔 1/R」，並加一段從未滿 bucket 開始的檢查。
 - **與等待時間成比例的折讓【建議】**：記下第一次看到「新命令且 token<1」的時刻，送出時扣 `1 − min(1−60/R, 等待時間/period)`。恢復剖面、恢復步數、Gateway 上界、worker 序列的結果都與 bool 版相同，而且任何水位下三包間隔 ≥16.70 ms（`check_rule.txt` A～E 的 prop:80）。
+  - **更正（D48 第③步的原型審查與修正，2026-10-10）**：上面的式子把 token 已經到 1 之後的晚醒時間也算進「等待」，「三包間隔 ≥16.70 ms」只在模型晚醒 0.03 ms 時成立。晚醒 4 ms 時最短間隔 13.33 ms（審查的模型）；只改成「等待算到 token 出現為止」，工作執行緒偶發停頓 ≥20 ms 時仍會降到 12.53 ms（停頓期間 bucket 已補到 2，沒有欠債卻仍折讓 0.25）。原型改用 `charge −= Min(1−60/R, Max(0, Min(wait/P−(tokens−1), InputSendBurst−tokens)))`：晚醒 0.03～40 ms 下三包間隔都 ≥P＋晚醒、送出後 token ≤1.00，恢復剖面與每秒上限 81 不變。證據：`pvp-v7-d48-step3-prep-20261010/review/`（`span_wake.txt`）、`fix/`（`span_cap.py`／`.txt`）。正式實作照這個式子，`Movement.hpp` 的契約註解寫成「等待只算到 token 出現為止，送出後不超過 1 個 token」。
 
 **R 的選擇**（對抗式檢查更正了「可改 75」）：往前修正的 slew 期間，產生間隔是 1/60÷1.25＝13.33 ms，也就是 75 Hz（`LocalPlayerPrediction.cpp:17`、`:287-298`、`:383-384`）。R＝75 時等待在整段 slew 都不減少，R＝70 反而增加。所以 R 必須 >75；R＝90 時惡意發布的最壞值 92＋31＋2＝125 超過 Gateway 每秒 120 的上限（`session.go:117-125`）。可選範圍 75<R≤85，**建議 R＝80**（最壞 82＋31＋2＝115）。`PhaseSlewFraction` 改變時 R 要重推。
 
@@ -61,6 +62,7 @@
   - 總預算：`:261` 的 ≤120 窗口裡其實沒有輸入流量（`:236` 的 Input(67,67) 在 ack 77 之後是空操作），所以「輸入＋動作＋Hello」的總和沒有實跑測試在檢查。改成尚未確認的 Input(78,78)，或在文件寫明總預算只由 `static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+2<=120)` 保證。
 - `MovementRecoveryTests` 的模型複本：token 區塊是 `Path::V6` 與 `Path::Product` 共用的，打折只加在 `Path::Product`（V6 要繼續代表 v6final 的規則）。`:539`、`:650` 的 ≤61 計的是日曆秒，可能失敗（回放的滑動窗口是 62～64），改寫的界線要先宣告。這個檔的 Held／Actual 期望值若有變化，就是 D44 互動的訊號，停下。
 - 突變（batch `v7-09a`；只在預期的失敗訊息出現時算 killed，對抗式檢查更正了每條的 expect）：`charge-off`（打折改回扣 1）→「did not drain」；`charge-every-send`、`waited-sticky` → w0 斷言的訊息；`drain-70` →「did not drain」；`drain-120` → 只在沒有 static_assert 時宣告；另加 `drain-75` 讓「outlived four commands」也有突變涵蓋。
+  - **更正（D48 第③步的原型審查）**：原型上 `waited-sticky` 與「epoch 變更、完整 ack 時不清除」都通過上面的 worker 測試（存活）；`charge-every-send` 被殺，但訊息是既有的「burst beyond two packets」，不是 w0。原型補了兩段檢查：第 8 步之後連發 2 個新命令（所有 gap(i,i−2) ≥14 ms，訊息「a discounted send left more than one token」；第 3 個要等待 ≥10 ms），以及「等待中遇到完整 ack／epoch 變更」（下一個命令與第二次送出的間隔 ≥2P−2 ms）。補上後預期表改為：`charge-every-send` →「burst beyond two packets」、`waited-sticky` →「left more than one token」、`wait-not-cleared-at-epoch` →「new movement epoch credited」、`wait-not-cleared-at-full-ack` →「full acknowledgement credited」，都以預期的訊息被殺（`fix/mutate_09a.txt`）。`drain-85` 存活（在設計允許的範圍內）；晚醒與 bucket 上限只靠模型涵蓋。實時斷言的容許值仍照上面的規則由 L1 重複 30 次推導，原型的 ±1.0／1.5 ms 只有本機 10 次的依據。
 - 文件同步：`Movement.hpp` 的契約註解（「nothing is repaid」）、`08-client-worker-asio.md:20`、`network-architecture.zh-Hant.md:81`、`:222-223`、第 09 批文件的 S2 與 S3。
 - Architecture Delta（小）：`Movement.hpp` 新增 1 個常數 `InputSendDrainRate` 並改契約註解；不增加依賴邊，owner 不變，不改 wire 與 Data Contract。另外，這條規則現在有三份拷貝（Network、Arm、測試模型），屬 code smell；抽成純函式是替代案，需要另外核准。
 
