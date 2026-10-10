@@ -75,6 +75,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
 | 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 完成（2026-10-09；`730984e`，L2 第 2 次通過；b 段變長約 3.5 ms 併入第 08b 批調查）（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
 | 08b | [結果改為事件驅動轉送](08b-event-driven-results.md) | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 完成（2026-10-10；`a954aa3`，L2 通過；規劃 ultracode，決定照建議 D46） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
+| 08c | [Gateway 丟棄回報](08c-drop-report.md) | 規劃 ultracode（分三批，D51、D52、D53）；實作 high（拒絕線、★、`AdmitInput` 局部 xhigh） | 規劃完成（2026-10-10），待核准實作的分批 | 讓 Match 知道 Gateway 丟了什麼、為什麼丟：照常轉送並去重、Match 帳本、Gateway 依原因計數；不改 wire（[事故](Incident/2026-10-10-gateway-silent-drop.md)） |
 | 09 | [FireGate 常數的重推與 C2](09-firegate-c2.md) | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 執行中（2026-10-10；決定照建議 D47，⑤更正為 P2 處理）：S1 宣告待核准；[09a](09a-input-send-pinning.md)、[09b](09b-phase-tracking.md) 的草案待決定（D44 提前條件）；之後 M0、凍結、C2 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
 | 10 | （P3 開始時撰寫） | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | pv7 契約 ultracode（D45）；實作 high（局部 xhigh） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
