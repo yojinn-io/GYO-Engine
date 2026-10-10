@@ -8,12 +8,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**（D48 第②步碰到停止條件，[第 09b 批](09b-phase-tracking.md)「D48 第②步」）：
-  1. 注入的重新定義：原本的「client→Gateway 短停頓」在現在的頭機制上碰不到脆弱窗，記為「無法判定」；改成「Gateway→Match 輸入路徑的延遲」（可穩定重現 late 修正）？
-  2. 實作路線：(b1) runner 在自己的行程裡替換 `action_probe.IpcPause`，凍結檔不變（建議）；(b2) 另寫 orchestrator；(c) 擴充凍結工具、更新凍結清單。
-  3. 怎樣確保碰到脆弱窗：加跑次數（N＝16～20，以 x 的經驗擬合估計全部碰不到的機率 1.2％／0.4％）；或先開發跑次確認擬合；或第②步只驗證注入與模型，脆弱窗交給第③步。
+- **等你決定**：D48 第②步的決定 3（怎樣碰到脆弱窗）：(i) 加跑次數到 16～20；(ii) 先跑 6～8 次開發跑次確認 x 的經驗擬合；(iii) 第②步只驗證注入與模型，脆弱窗交給第③步（我的建議）。注入方式與實作路線已由 D50 決定。
 - **進行中**：無。
-- **下一步**：依你的決定寫第②步的宣告（D45 的對抗式檢查）。
+- **下一步**：依決定 3 寫第②步的宣告（含 D50 的四個條件），做 D45 的對抗式檢查後送你核准。
 - **最後更新**：2026-10-09，依據 PR #73 的頭（本次推送）。
 
 ## 閱讀入口
@@ -51,6 +48,8 @@
 | D46 | （2026-10-09）第 08b 批草案的決定 1～9 照建議：①「事件」＝有新內容，拿掉兩段只帶 retired 的重複包；Match lane 每個裁決與每次退休只送一次，不重送；Gateway 對 Client 未 ACK 的裁決每 I 重送、退休送一次、對 ACK≤retired 的 ACK-only 批次補送退休（poke）。②relay 的「結果任一秒 ≤31」列為 L2 判定（由 judge 套用）。③結果與 link 的最短間隔都用由程式推導的 33.3（字面值比較）。④c 變短列為判定，只比方向。⑤L2＝第 08 批的 4 案加 downstream-250ms，共 72 次。⑥統計行不加欄位。⑦b 的更正已由核對加上；probe 幀格點的相位問題記進未結事項，起點隨機化留到第 09 批規劃。⑧`run_network.py` 加 `--movement-trace`（只多寫 trace，不改判定）。⑨計時器鎖定只記錄，列為第 09 批的輸入。另外，已完成批次核對的 2 項待量測不補量。使用者原話：「決定 1～9 照建議，待量測不補，開始實作，檔位照建議」 |
 | D47 | （2026-10-10）第 09 批草案的決定 1～11 照建議：①輸入送出被釘住另開第 09a 批，修正 Client 的 token bucket（產品內的 `ClientConnection`）；②guard 維持 2 ms；③spread 維持 7；④凍結前做 M0 影子量測；⑤相位追蹤的既有缺陷本批不處理，寫進重推條件（同日更正：在 P2 處理，排在 09a 之後、M0 與凍結之前；使用者原話：「抱歉，改一下，決定 5 也在 P2 處理，排在 09a 之後、M0 和凍結之前。」）；⑥只有 M0 的每段起點加 seed 偏移，矩陣、回歸、30 FPS 記錄不隨機化；⑦C2 連點＝12 Tick（判定）＋冷卻邊緣連點（after 判定），其餘只記錄，earliest 只在 M0 量；⑧C2 的主機狀態宣告為偏離 C1，以 TimerBaseline 分層、前後 sleeper 判定轉換；⑨矩陣沿用 v6final 並核對雜湊，連點另開 worktree 加 probe-only 修補；⑩D44 維持第 16 批；⑪檔位：主力 high，09a 與凍結的局部、各宣告的對抗式檢查用 xhigh。使用者原話：「決定 1～11 照建議，開始第 09a 批，檔位照建議」 |
 | D48 | （2026-10-10）第 09b 批決定 1（D44 的提前條件）先不選 (a)／(b)，先用測試確認。理由（使用者）：如果 D44 是結構性問題，(a) 只是在補證據；但如果 (b) 的推論是真的，而 09a 照 (a) 做也能通過驗收（閒置主機的 clean 跑次幾乎不會出現 late 修正，碰不到脆弱窗），問題就會被埋得更深。分三步，每步結束先回報：①只讀既有證據擴大樣本（先凍結 late 修正偵測器，以 action-frames.jsonl 的 phase_late_corrections 為主，輔以「大於 20 ms 的負向步之前 30 Tick 內有遲到、且不是 reseed 後的首次決定」；掃過所有 v7 跑次，依「當時是否被釘住」與「之後 30 Tick 合計的最大值」分類，報告 n、2×2 表與每筆證據位置）；②新增 30～150 ms 短停頓的驗收案例（要宣告；先驗證注入乾淨、能穩定重現成對遲到→late 修正）；③三棵 tree 的原型對照（現在的頭／09a 原型／09a＋B2 原型，獨立 worktree、不合併不推送；要宣告並經核准）。測試必須設計成「推論為真時會失敗」，碰不到脆弱窗就判為「無法判定」。09a 的產品實作在這之前不開始；S1 不受影響。 |
+| D49 | （2026-10-10）Gateway 職責原則：**Gateway 可以執行丟棄，但丟棄的決定權和知情權留在 Match**；每一次丟棄都要讓 Match 知道丟了什麼、為什麼丟（機制在邊緣，政策與真相在權威）。①Gateway 的職責：翻譯；守門（擋下無效的：格式錯誤、未授權、超過速率、epoch 不符、內容衝突）；執行權威交代的政策。②遊戲語意與時間的判斷（例如「這個命令過時了」「它晚了多少」）屬於 Match。③告知 Match（帶進 runtime link，Match 可以拿來做決定）與寫 log（給人觀測）分開處理，可以分階段：先 log（第 10 批），協議升版時再進 Match（第 11 批，pv7）。④回報要有界：每個視窗回報計數，細節只回報前 N 筆或取樣，避免被惡意流量放大。⑤將來的丟棄政策（例如反作弊）由 Match 或後端訂成 Data Contract，交給 Gateway 執行再回報；Gateway 不自己發明規則。背景（使用者）：Gateway 不一定要無狀態（session、授權、速率限制本來就是狀態），但職責必須明確；丟棄不一定是錯的，問題在 Match 不知道。產品層的 Gateway 持有遊戲狀態的延遲副本（epoch、life、lastResolved、命令表、動作視窗、結果帳本），會拿它做判斷並丟棄，遊戲語意的決定權因此在看不見的情況下從 Match 轉移到 Gateway。目前的丟棄清單（主對話逐項核對）：(1) 已解析（過時）的命令：`server.go:420-423` 逐個命令略過，同一封包裡較新的命令照樣轉送（`:435-438`）；第二道在 `runtime_link.go` 的 `acknowledge()`（`:167-198`），snapshot 經過時剪掉 link 待送視窗中序號 ≤lastResolved 的命令（`:192-197`），epoch／life 升高時整個待送視窗刪除（`:189-191`）。Match 端早就能收已解析的命令：`PvpMatch.cpp:67` 略過（註解「An irrevocably resolved step」）、`MatchRuntimeHost.cpp:88` 合併時略過、`:104-112` 把「已被替代的命令晚到」記成負的 slack 樣本。判斷是保守的：Gateway 的 lastResolved 只在 Match 的 snapshot 經過時更新（`server.go:520-534`），永遠落後 Match，所以它丟的命令 Match 一定也會忽略；執行結果與權威 digest 不受影響，失去的只有時間訊號。(2) epoch／life 不符的整個封包：`server.go:413-415`。(3) 超過未來 32 個、同序號內容衝突的整個封包：`server.go:424-429`。(4) 速率限制：通用層 `services/gyo_gateway/session/session.go:122-123`（每秒 120 包）。(5) 非 active 玩家的結果（下行）：`action_delivery.go:357-359`。lastResolved 不只用來過濾，還用在未來 32 個的上限（`:424-426`）、命令表清理（`:529-533`）、通知 link 剪除（`:534`）、epoch／life 檢查（`:413-415`），所以拔掉一行換不到「無狀態」。正式條文（`network-architecture.zh-Hant.md` 的「Gateway 職責」一節）在第 11 批的契約規劃時寫，現在不改（待寫）。使用者原話（標題）：「記錄：Gateway 職責原則 → 第 10、11 批的輸入（只記錄，不實作）」 |
+| D50 | （2026-10-10）D48 第②步：注入改為 Gateway→Match 的 IPC 延遲（原本的 client→Gateway 短停頓記為「無法判定」），實作採 (b1)：runner 在自己的行程裡替換 `action_probe.IpcPause`，凍結檔不變。條件：①宣告寫明注入延遲的是 Gateway→Match 方向的全部流量（輸入、動作、ACK、控制一起延遲），不只是輸入；②宣告寫明 Python relay（IpcPause）整場都在 Gateway 與 Match 之間（`action_probe.py:531-533`），不是正式的部署拓撲；第③步三棵 tree 都經過同一個 relay，所以彼此可比；③runner 開頭核對 `action_probe.py` 與 `backpressure_probe.py` 的 sha256，不符就拒絕執行；每次跑完確認 evidence 裡有 delay 欄位，證明替換真的生效；④run_case 的判定只記錄，判定來自凍結後的量測腳本。之後若這個注入要變成常設回歸（第 16 批的 D44 回歸或第 10 批），再走 (c) 升級成凍結工具的正式模式，並宣告更新凍結清單。使用者原話（標題）：「附加：D48 第②步採用 b1 的條件」 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -206,7 +205,7 @@
 - **TT-2**（Engine）：見 Engine 計畫。寫檔執行緒用 `GYO::Threads`；只在佇列由空轉為非空、或達到批次門檻時才 Notify。
 - **10** 任務 8 的紀錄：Client 的拒絕原因、未指定 `--gateway` 的提示、以 worker 收包時間戳計算的 snapshot 年齡、模擬步晚醒的 10 秒摘要；Match 的動作裁決與原因（`match-actions.jsonl`）、結束紀錄、runtime link 關閉紀錄（含原本吞掉的例外）、每位玩家每 10 秒的 Held／Neutral；Gateway 的收包間隔分布、拒絕原因、control lane 丟棄計數、週期性 IPC 寫出延遲、loopback advertise-ip 的警告。日誌格式是新的產品 Data Contract：帶版本與驗證規則，C++ 與 Go 兩端的測試解析同一份樣本。新紀錄寫到另外的檔案。
   - **輸入：觀測缺口清單**（2026-10-10 使用者要求；規劃依 D45 用 ultracode，開始前先問）。這次 v7 有不少「未驗證／無法判定」，不是事情沒發生，而是沒有 log 可以觀測。第 10 批的規劃以這份清單排優先順序，目標是之後像 D44 這種問題能從 log 直接回答。每一項附上目前的繞法，以及因此只能標成推論的結論：
-    1. **Gateway 略過已解析的命令，沒有計數也沒有 log**（`gateway/server.go:420-423`；同一段 `:413-415` 也會略過 epoch／life 不符的封包）。繞法：只能由 Client 的 `sent` 與 Match 的 `host_accepted` 對不上來推。推論：D48 第②步「client→Gateway 的遲到大多被 Gateway 吞掉」是由程式與 0／5 的試跑推出的，沒有直接的計數。
+    1. **Gateway 的所有丟棄都沒有計數或 log**（D49 的丟棄清單 (1)～(5)：已解析的命令 `server.go:420-423` 與 link 的剪除 `runtime_link.go:189-197`；epoch／life 不符 `server.go:413-415`；超過未來 32 個或內容衝突 `:424-429`；速率限制 `services/gyo_gateway/session/session.go:122-123`；非 active 玩家的結果 `action_delivery.go:357-359`）。這是 D49 原則的第一階段：只計數與寫 log，不改行為，零風險。繞法：只能由 Client 的 `sent` 與 Match 的 `host_accepted` 對不上來推。推論：D48 第②步「client→Gateway 的遲到大多被 Gateway 吞掉」是由程式與 0／5 的試跑推出的，沒有直接的計數。
     2. **Match 的 `host_accepted` 只記新收下的序號**（`MatchRuntimeHost.cpp:86-92`、`:128-131`），遲到、已被替代的命令不寫 trace。它們會在 `:104-112` 變成負的 slack 樣本、隨 snapshot 送給 Client，但只有最小的一個，而且不落地。繞法：由 `resolved`（source＝held／neutral）與 Client 的 `sent` 重建。推論：第①步「遲到命令」的認定、late 修正的觸發條件。
     3. **相位決策（首次決定、視窗修正、late 修正與幅度）不寫進 match／clients trace**（`MovementTrace.hpp:95-105` 沒有對應的事件）。只能從 action probe 每幀的計數器推回來（`gameplay_action.hpp:153-154`：`phase_state`、`phase_corrections`、`phase_late_corrections`），時間解析度 16～33 ms；timing／network probe 沒有這些計數器，只能用產生間隔的相位步重建（D48 第①步的輔助偵測器）。推論：late 修正的幅度、是否串接（缺陷 B）、settle 時刻；第 09b 批的開環重播只吻合 72／131 的視窗決策。
     4. **Gateway 丟掉非 active 玩家的結果，不寫 log**（`gateway/action_delivery.go:350-359`）。繞法：第 08b 批只能靠程式論證（加入完成之前不可能有結果、移除是終態）與 1087 份 gateway.log 的 id 掃描。推論：「移除之後到達的結果有多少」數不出來。
@@ -214,6 +213,9 @@
     6. **TimerBaseline 只在 probe 連線前量一次 3 秒**（`timer_baseline.hpp:3-5`、`:20`），跑次中途的主機狀態轉換抓不到；第 07 批 L2 有 1 次因此分錯（第 07 批文件 L2 宣告「主機」的更正）。繞法：每輪前後的獨立 sleeper；舊 Match 用自己的晚醒交叉確認（新 Match 的晚醒不反映主機狀態）。推論：各批 L2 依主機狀態分層的結果。
     7. **Match lane（IpcHost）的送出間隔沒有統計欄位**：第 08b 批 D46⑥ 決定不加、留給第 10 批。繞法：L1 的 M3 測試（3 秒內的 frame 數）與 relay 下行的 c 段。推論：L2 中 Match lane 實際的送出節奏。
 - **11** pv7：契約文件 `docs/object_fps_pvp/protocol-v7.zh-Hant.md`；ProtocolVersion 6→7（ClientVersion 與 RuntimeVersion 都由它導出）；runtime link 每秒 1 次心跳（偏移、RTT 最小值濾波、漂移視窗回歸，每 10 秒寫進兩端日誌）；Client↔Gateway 時間回聲（D35）；版本不一致時給明確的錯誤；驗收工具升 pv7。紀錄若需要 wire 上的資料，併入本批，不做第二次 wire 變更。
+  - **輸入：runtime link 的丟棄回報**（D49 的第二階段；規劃依 D45 用 ultracode，開始前先問）。第一列的建議做法是「轉送身分，不轉送內容」：把被剔掉的序號隨下一筆 IPC 訊息帶給 Match，Match 用自己的時鐘就能算出晚了多少，沿用 `MatchRuntimeHost.cpp:104-112` 的邏輯，不需要跨機器對時；若要回報 Gateway 的收包時刻，才要依賴本批的心跳對時。回報要有界（每個視窗計數，細節只取前 N 筆或取樣）。
+    - **提醒（推論）**：讓 Match 看見網路遲到之後，late 修正會變多；在現在的常數下 D44 的風險會上升。所以丟棄回報要和 late 修正（第 09b 批的 B2）、backlog 門檻（105 從 v3 沒改；v7 的穩態排隊是 v6 的兩倍）一起決定，不能單獨改。
+    - `network-architecture.zh-Hant.md` 的正式條文（「Gateway 職責」一節）在本批的契約規劃時寫（待寫，現在不改）。
 - 產品的 `-fexperimental-library` 在最後一個 `std::jthread`／`std::stop_token` 使用者遷移完時移除（`apps/object_fps_pvp/CMakeLists.txt:30-32`、`tests/object_fps_pvp/CMakeLists.txt:187`），並加守衛（產品、probe、產品測試中 0 件）。預計在 P3。
 
 ### P4：SDL 隔離（任務 7）
@@ -238,7 +240,7 @@
 
 ## 未結事項
 
-- **Gateway 與 Match 重複過濾已解析的命令**（2026-10-10 使用者要求記錄）：Gateway 在 `gateway/server.go:420-423` 略過 ≤`lastResolved` 的命令，`lastResolved` 在收到 snapshot 時更新（`:520-534`）；Match 的 host 在 `MatchRuntimeHost.cpp:88`、`PvpMatch` 在 `PvpMatch.cpp:78-81` 也只收下 >`lastResolvedCommand` 的命令。這是協議契約定下的（`docs/object_fps_pvp/network-architecture.zh-Hant.md:230-233`：「已完成／舊 epoch 不重執行」），平常無害；副作用是 Client→Gateway 路上遲到的命令被 Gateway 吞掉，到不了 Match，也不產生相位樣本（D48 第②步在 client→Gateway 注入短停頓，0／5 跑次觸發 late 修正）。要不要改屬於協議契約的決定，另立，不在 09a／09b 順手改。
+- **Gateway 與 Match 重複過濾已解析的命令**（2026-10-10 使用者要求記錄）：Gateway 在 `gateway/server.go:420-423` 略過 ≤`lastResolved` 的命令，`lastResolved` 在收到 snapshot 時更新（`:520-534`）；Match 的 host 在 `MatchRuntimeHost.cpp:88`、`PvpMatch` 在 `PvpMatch.cpp:78-81` 也只收下 >`lastResolvedCommand` 的命令。這是協議契約定下的（`docs/object_fps_pvp/network-architecture.zh-Hant.md:230-233`：「已完成／舊 epoch 不重執行」），平常無害；副作用是 Client→Gateway 路上遲到的命令被 Gateway 吞掉，到不了 Match，也不產生相位樣本（D48 第②步在 client→Gateway 注入短停頓，0／5 跑次觸發 late 修正）。要不要改屬於協議契約的決定，另立，不在 09a／09b 順手改。另有第二道過濾：`runtime_link.go` 的 `acknowledge()` 在 snapshot 經過時剪掉 link 待送視窗中序號 ≤lastResolved 的命令（`:192-197`），所以只拔 `server.go` 那一行，遲到的命令仍可能在這裡被剪掉。原則見 D49（丟棄的決定權與知情權留在 Match）。
 - 「時鐘到網路路徑」系列紀錄（2026-10-10 使用者要求）：v7 完成後（第 16 批之後）撰寫，分 5 集：①時鐘、②命令脫離畫面幀、③網路路徑的節拍、④FireGate 與 C2、⑤跨機器的時間。附各批的 commit id、L2 數字與調試過程（含更正）。讀者與存放位置屆時決定。
 - **（嚴重度高，D44）偶發的 movement epoch 重設**：（第 08b 批草案已回答：08b 不直接改變輸入抵達與 backlog；可能機制是約 30～150 ms 的短停頓造成成對遲到，Client 相位前移 2 Tick，30 Tick 合計 ≥105，屬推論，見[第 08b 批](08b-event-driven-results.md)「對 movement 佇列與 backlog 的影響」。第 09 批規劃要回答是否影響常數的凍結。）第 08 批的開發跑次中 `run_network.py`「an application stall reset the movement epoch」1 次、`backpressure_probe.py` host-ipc-250ms「Unexplained epoch reset … (reason backlog)」1 次（重設前 sim 角色的 generation 間隔縮成 13.3 ms）。和本批之前的 probe 交錯跑分不出新舊（見[第 08 批](08-client-worker-asio.md)「實作與 L1」）。使用者懷疑的方向：多執行緒造成的堆積（backlog 判定是 30 Tick 內排隊命令合計 ≥105）、Gateway 頻率的修改（第 06、08 批）。處理：各批的開發跑次記下新舊的失敗次數；比例變高或舊版也出現時停下調查；v7 完成後（第 16 批）做整體回歸。失敗的跑次保留在 `pvp-v7-batch08-20261009/`。
 - probe 幀格點的相位（D46⑦）：action probe 的起點綁在 join Wait 之後收到 snapshot 的時刻（`gameplay_action.hpp:109`；Wait 每 2 ms 輪詢，`action_main.cpp:79-82`），超時時重新錨定（`:170`）。所以建置不同時，probe 幀相對 Match Tick 的相位會系統性地移動，b、a＋b、`legal_match_p95_ms`、d 不能跨建置比較（第 08b 批「b 段變長的調查」）。起點隨機化留到第 09 批規劃時決定。
