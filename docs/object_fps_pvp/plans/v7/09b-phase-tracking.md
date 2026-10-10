@@ -31,6 +31,22 @@
 
 **第②步若要做，必須量的東西**（核對的建議）：注入要能穩定產生 tracking 型 −33 ms 的 late 修正，並記錄注入有沒有造成產生空檔；每次修正記錄 W_pre（1 秒與 0.25 秒）、slew 期間每個命令的等待與 W_post、修正前後的 Match 端領先、每 Tick 的排隊與 30 Tick 合計的軌跡；修正後 2～3 秒內不能有排程中的故障解除或延遲改變，並標記右設限；事前宣告可被推翻的預測：「重設 ⇔ Match 端領先 >66.7 ms ⇔ W_post 小於（修正前領先 − 33.4），約 3.6～3.9 ms」。
 
+## D48 第②步：試跑時碰到停止條件（2026-10-10）
+
+工具與試跑 1 位（high）。證據：`build/target/_build/test/logs/pvp-v7-d48-step2-dev-20261010/`（12 次開發跑次全部保留，沒有重跑；主機沒有閒置閘門，只供開發）。新的 runner `build/acceptance/object_fps_pvp/run_short_stall.py` 與它的測試還沒有 commit；凍結檔沒有改動（S1 的 `analyzers.sha256` 試跑前後都吻合）。
+
+**停止的理由：原本的注入（relay 擋住 client→Gateway 的封包 30～150 ms 再放出）在現在的頭，機制上就產生不了「成對遲到 → late 修正」。** 試跑 0／5 個跑次（每位玩家擋下 1～7 個命令，都落在同一次發布裡）。
+
+- **機制**（主對話已核對程式）：
+  1. Gateway 收到 Match 的 snapshot 就更新 `lastResolved`（`gateway/server.go:519-531`），之後封包裡 ≤`lastResolved` 的命令直接略過，不轉給 Match（`:420-422`）。所以 client→Gateway 路徑上晚到的命令，只有落在「Match 替代它」到「Gateway 處理那個 snapshot」之間的那一小段才會到 Match、產生負的 slack 樣本；晚得更多的會被 Gateway 吞掉，連樣本都沒有。
+  2. 擋住再放出的封包只會落在一次發布裡，而 late 修正需要連續 2 次發布都帶負樣本（`MovementPhaseLateSamples`＝2，`Movement.hpp:58`、`LocalPlayerPrediction.cpp:134`）。即使改成「連續 4 個命令各晚 12～15 ms、分在 4 次發布」（原型 1），仍然 0 次，因為被 Gateway 略過。
+  3. 第①步的 M1～M5 都帶有產生空檔，和這兩點不矛盾。推論（未驗證）：host-ipc 跑次的 relay 讓 Match→Gateway 的 snapshot 變慢，拉長了那一小段，這可能是 D44（M3）出現在 host-ipc 跑次的原因。
+- **意涵**（未結，要寫進 D44）：client 端的網路遲到幾乎不會觸發 late 修正；真正的觸發來源是伺服器端的輸入延遲（Gateway→Match）或邊界巧合。
+- **新的注入可以重現**：在 Gateway→Match 的 IPC 輸入路徑加延遲（原型 2，δ 40～50 ms、視窗 100 ms），tracking 型、−33.3 ms 的 late 修正 8／8 事件；故障前後沒有 >20 ms 的產生空檔、沒有 runtime_gap；注入在 slew 結束前就結束。模型預覽：8 個單次修正的 Match 端領先，實測與預測（修正前＋33.33−W_post）相差 ≤0.3 ms，全部沒有重設（領先 58.6～64.3 ms）。
+- **但脆弱窗沒有碰到**：W_post 6.5～12.0 ms，0／4 個跑次落在約 <3.6～3.9 ms。同一跑次兩位玩家的 W_post 相差 ≤0.2 ms，所以獨立單位是跑次。經驗擬合（不是推導）：W_post ≈ (26.8−16.667·x_before) mod 16.667 ms，x_before 約 1.39～1.60 時才會碰到脆弱窗；既有現頭跑次估計每個跑次的機率約 0.24。
+- **第二條重設途徑**（1 個跑次，δ 80 ms、視窗 150 ms）：兩次 late 修正串接（缺陷 B），共 −66.7 ms，Match 端領先約 94 ms，兩位玩家都 backlog 重設。不管 W_post 多少都會重設，09a 管不到。
+- **量測腳本**（草稿，未凍結）：`measure_draft.py`，定義寫在 docstring；用第①步的 M3 驗證：前／後／預測領先 36.89／69.71／69.72，與第①步一致。
+
 ## 缺陷 A：settling 期間收到的舊樣本留在下一個視窗
 
 - **機制**：`Correct()` 只在修正開始時清掉樣本（`LocalPlayerPrediction.cpp:97-101`）。settling 期間 `:117-130` 照常收樣本，用的是舊的 `settledAfter_`；settle 時（`:323-328`）只前移 `settledAfter_`，不清視窗。所以修正後滿 240 個樣本時，視窗裡還有 m 個「修正前相位」的樣本。`Percentile` 取 `sorted[216]`（`:24-30`）。
