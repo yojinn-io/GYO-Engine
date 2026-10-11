@@ -89,10 +89,12 @@ def line_of(prefix, keys, values, head):
 
 
 def run_logs(players, *, windows=1, eof=True, written=None, match_received=None, runtime="127.0.0.1:27016",
-             extra_closes=(), gateway_values=None, match_values=None):
+             extra_closes=(), gateway_values=None, match_values=None, appended=()):
     """Consistent Gateway and Match logs of one run: each player hands and writes `written` commands, which the
-    Match receives and accepts as new; `windows` windows, the last one final."""
+    Match receives and accepts as new; `windows` windows, the last one final. The Gateway's player lines carry the
+    known appended key groups in `appended` (none: a log written before D56)."""
     gateway_values = gateway_values or {}
+    player_keys = evidence.GATEWAY_PLAYER_KEYS + tuple(key for group in appended for key in group)
     match_values = match_values or {}
     gw = [GATEWAY_START, GATEWAY_READY.replace("runtime=127.0.0.1:27016", f"runtime={runtime}")]
     ma = [MATCH_START, MATCH_READY]
@@ -114,7 +116,7 @@ def run_logs(players, *, windows=1, eof=True, written=None, match_received=None,
                       "fwd_handed_main_commands": count, "fwd_link_written_main_commands": count}
             if final:
                 values.update(gateway_values.get(player, {}))
-            gw.append(line_of("player ingress statistics ", evidence.GATEWAY_PLAYER_KEYS, values,
+            gw.append(line_of("player ingress statistics ", player_keys, values,
                               [f"player={player}", "window_ms=10000", flag]))
         if final:
             if eof:
@@ -135,8 +137,8 @@ def run_logs(players, *, windows=1, eof=True, written=None, match_received=None,
 
 class GoldenTests(unittest.TestCase):
     def test_key_lists_equal_the_golden_lines(self):
-        for name, keys, head in (("gateway-player.txt",
-                                  evidence.GATEWAY_PLAYER_KEYS + evidence.GATEWAY_PLAYER_APPENDED, 4),
+        for name, keys, head in (("gateway-player.txt", evidence.GATEWAY_PLAYER_KEYS
+                                  + evidence.GATEWAY_PLAYER_APPENDED + evidence.GATEWAY_PLAYER_APPENDED_D59, 4),
                                  ("gateway-global.txt", evidence.GATEWAY_GLOBAL_KEYS, 3),
                                  ("match.txt", evidence.MATCH_KEYS + evidence.MATCH_APPENDED, 4)):
             for line in golden_lines(name):
@@ -144,7 +146,8 @@ class GoldenTests(unittest.TestCase):
                 self.assertEqual(tuple(field.split("=")[0] for field in fields[head:]), keys, name)
 
     def test_every_golden_line_satisfies_its_conservations(self):
-        """README: each golden line alone satisfies IG, I0, T3, I2, J5a, S1, S2 (and the Gateway-wide one)."""
+        """README: each golden line alone satisfies IG, I0, T3, I2, J5a, S1, S2, the Gateway-wide one and the link's
+        shot conservation (link_shots)."""
         for index in range(3):
             glob = golden_lines("gateway-global.txt")[index]
             player = golden_lines("gateway-player.txt")[index]
@@ -155,6 +158,9 @@ class GoldenTests(unittest.TestCase):
             m = evidence.match_checks(dict(ma, final=True, gaps=[]), injection=False)
             for name in ("IG", "gateway_global", "I0", "T3"):
                 self.assertEqual(g[name]["status"], "passed", (index, name, g[name]))
+            shots = evidence.link_shots(dict(gw, final=True, gaps=[]))
+            self.assertEqual(shots["status"], "passed", (index, shots))
+            self.assertEqual(shots["complete"], {"carried": 1, "lines": 1})
             for name in ("I2", "J5a", "S1", "S2"):
                 self.assertEqual(m[name]["status"], "passed", (index, name, m[name]))
 
@@ -175,8 +181,14 @@ class GoldenTests(unittest.TestCase):
         # J4 is reported only; the golden values are its sum.
         self.assertEqual(result["checks"]["J4"]["total"],
                          {"drop_rejected_lane_overflow_commands": 410 + 205, "drop_resolved_trim_commands": 408 + 204})
-        # never_arrived (tentative J5a reading): removed + overflow + end.
-        self.assertEqual(result["checks"]["J5a"]["never_arrived"]["total"], 93 + 95 + 96 + 44 + 46 + 47)
+        # never_arrived (D58 (2)): overflow + end; removed is reported apart.
+        self.assertEqual(result["checks"]["J5a"]["never_arrived"]["total"], 95 + 96 + 46 + 47)
+        self.assertEqual(result["checks"]["J5a"]["unarrived_removed"]["total"], 93 + 44)
+        self.assertEqual(result["checks"]["J5a"]["unarrived_removed"]["players"], {"0": 0, "7": 93 + 44})
+        # link_shots (D59): every line carries the eight keys; handed 3746 + 3786 = written 950 + 960 + drops.
+        shots = result["checks"]["link_shots"]
+        self.assertEqual((shots["status"], shots["complete"]), ("passed", {"carried": 3, "lines": 3}))
+        self.assertEqual(shots["players"]["7"][0]["lhs"], 3746 + 3786)
         self.assertEqual(result["checks"]["I1"]["status"], "failed")
         # I3: the golden routes conflicts, so it is not judged.
         self.assertEqual(result["checks"]["I3"]["status"], "undetermined")
@@ -362,11 +374,12 @@ class CompletenessTests(unittest.TestCase):
         self.assertEqual(drops["match"]["total"], {"leave_discarded_actions_acks": 122 + 121})
         self.assertEqual(drops["match"]["players"]["0"], {"leave_discarded_actions_acks": 0})
         self.assertEqual(drops["match"]["lines"], {"with": 6, "without": 0})
-        # Reported only: a changed value changes no status.
-        changed = corrupt(golden_gateway(), "player ingress statistics", "drop_cleared_on_close_actions_shots", 5)
+        # Reported only: a changed value changes no status (the _shots drops also enter link_shots, D59: change an
+        # ACK drop).
+        changed = corrupt(golden_gateway(), "player ingress statistics", "drop_cleared_on_close_actions_acks", 5)
         changed = evidence.analyze_text(changed, corrupt(golden_match(), "player=7", "leave_discarded_actions_acks", 7))
-        self.assertEqual(changed["checks"]["action_drops"]["gateway"]["total"]["drop_cleared_on_close_actions_shots"],
-                         932 + 942 + 5)
+        self.assertEqual(changed["checks"]["action_drops"]["gateway"]["total"]["drop_cleared_on_close_actions_acks"],
+                         933 + 943 + 5)
         self.assertEqual(changed["checks"]["action_drops"]["match"]["total"]["leave_discarded_actions_acks"],
                          122 + 121 + 7)
         self.assertEqual({name: check["status"] for name, check in changed["checks"].items()},
@@ -377,8 +390,9 @@ class CompletenessTests(unittest.TestCase):
         def strip(text, keys):
             return "\n".join(" ".join(token for token in line.split(" ") if token.split("=")[0] not in keys)
                              for line in text.splitlines()) + "\n"
-        result = evidence.analyze_text(strip(golden_gateway(), evidence.GATEWAY_PLAYER_APPENDED),
-                                       strip(golden_match(), evidence.MATCH_APPENDED))
+        result = evidence.analyze_text(
+            strip(golden_gateway(), evidence.GATEWAY_PLAYER_APPENDED + evidence.GATEWAY_PLAYER_APPENDED_D59),
+            strip(golden_match(), evidence.MATCH_APPENDED))
         for name in ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2"):
             self.assertEqual(result["checks"][name]["status"], "passed", name)
         drops = result["checks"]["action_drops"]
@@ -486,15 +500,190 @@ class LinkTests(unittest.TestCase):
         j5a = evidence.analyze_text(gateway, match, injection=True)["checks"]["J5a"]
         self.assertEqual(j5a["status"], "failed")
         self.assertEqual(j5a["never_arrived"]["total"], 1)
-        for close in ("removed", "overflow"):
+        for close in ("overflow", "end"):
             values = {1: {"substituted_commands": 1, f"unarrived_{close}_commands": 1}}
             gateway, match = run_logs([1, 2], written=self.WRITTEN, match_values=values)
             self.assertEqual(evidence.analyze_text(gateway, match, injection=True)["checks"]["J5a"]["status"],
                              "failed", close)
+        # D58 (2): a record the run's final Leave closed is not never_arrived; it is reported apart.
+        values = {1: {"substituted_commands": 2, "unarrived_removed_commands": 1, "late_first_commands": 1,
+                      "late_copy_commands": 0, "accepted_new_commands": 589}}
+        gateway, match = run_logs([1, 2], written=self.WRITTEN, match_values=values)
+        j5a = evidence.analyze_text(gateway, match, injection=True)["checks"]["J5a"]
+        self.assertEqual(j5a["status"], "passed", json.dumps(j5a, indent=1))
+        self.assertEqual((j5a["never_arrived"]["total"], j5a["unarrived_removed"]["total"]), (0, 1))
+        self.assertEqual(j5a["unarrived_removed"]["players"]["1"], 1)
+        self.assertFalse(j5a["unarrived_removed"]["decisive"])
         values = {1: {"substituted_commands": 4, "unarrived_aged_commands": 1, "unarrived_epoch_commands": 1,
                       "unarrived_life_commands": 1, "unarrived_reset_commands": 1}}
         gateway, match = run_logs([1, 2], written=self.WRITTEN, match_values=values)
         self.assertEqual(evidence.analyze_text(gateway, match, injection=True)["checks"]["J5a"]["status"], "passed")
+
+
+LINK_GROUPS = (evidence.GATEWAY_PLAYER_APPENDED, evidence.GATEWAY_PLAYER_APPENDED_D59)
+# One player's link values that conserve: 9 handed = 5 written + 1 left + 2 cleared + 1 abandoned (the ACK drops
+# are outside the conservation).
+LINK_VALUES = {"fwd_handed_actions_shots": 9, "fwd_link_written_actions_shots": 5,
+               "drop_discarded_on_leave_actions_shots": 1, "drop_cleared_on_close_actions_shots": 2,
+               "drop_abandoned_on_close_actions_shots": 1, "drop_cleared_on_close_actions_acks": 4}
+
+
+class LinkShotsTests(unittest.TestCase):
+    """D59: fwd_handed_actions_shots == fwd_link_written_actions_shots + three drop_*_actions_shots, per player,
+    judged only when every player ingress line carries the eight D56/D59 keys."""
+    WRITTEN = {1: 600, 2: 590}
+
+    def run_link(self, values=None, appended=LINK_GROUPS, windows=2):
+        values = values if values is not None else {1: LINK_VALUES, 2: dict(LINK_VALUES, fwd_handed_actions_shots=12,
+                                                                             fwd_link_written_actions_shots=8)}
+        gateway, match = run_logs([1, 2], windows=windows, written=self.WRITTEN, gateway_values=values,
+                                  appended=appended)
+        return gateway, match
+
+    def test_a_conserving_run_passes(self):
+        result = evidence.analyze_text(*self.run_link())
+        shots = result["checks"]["link_shots"]
+        self.assertEqual(shots["status"], "passed", json.dumps(shots, indent=1))
+        self.assertEqual(shots["complete"], {"carried": 4, "lines": 4})
+        self.assertEqual([shots["players"][p][0]["lhs"] for p in ("1", "2")], [9, 12])
+        self.assertEqual(result["status"], "passed")
+
+    def test_each_term_breaks_it(self):
+        for key in ("fwd_handed_actions_shots", "fwd_link_written_actions_shots") + evidence.LINK_SHOT_DROPS:
+            gateway, match = self.run_link()
+            result = evidence.analyze_text(corrupt(gateway, "player=2", key, 1), match)
+            self.assertEqual(result["checks"]["link_shots"]["status"], "failed", key)
+            self.assertFalse(result["checks"]["link_shots"]["players"]["2"][0]["holds"], key)
+            self.assertTrue(result["checks"]["link_shots"]["players"]["1"][0]["holds"], key)
+            self.assertEqual(result["status"], "failed", key)
+            for name in ("IG", "I0", "I1"):
+                self.assertEqual(result["checks"][name]["status"], "passed", (key, name))
+
+    def test_ack_drops_are_outside_it(self):
+        gateway, match = self.run_link()
+        for key in ("drop_discarded_on_leave_actions_acks", "drop_cleared_on_close_actions_acks",
+                    "drop_abandoned_on_close_actions_acks"):
+            gateway = corrupt(gateway, "player=1", key, 3)
+        self.assertEqual(evidence.analyze_text(gateway, match)["checks"]["link_shots"]["status"], "passed")
+
+    def test_lines_without_the_keys_are_undetermined_never_zero(self):
+        """A log that carries the eight keys on some lines only: the others' share is unknown, so link_shots is
+        undetermined (D59 (11): the keys stay optional) and the run is decided by the other checks."""
+        gateway, match = self.run_link()
+        lines = gateway.splitlines()
+        first = [i for i, line in enumerate(lines) if "player ingress statistics" in line and "final=0" in line][0]
+        for key in evidence.GATEWAY_PLAYER_APPENDED + evidence.GATEWAY_PLAYER_APPENDED_D59:
+            lines[first] = lines[first].replace(f" {key}=0", "")
+        result = evidence.analyze_text("\n".join(lines) + "\n", match)
+        shots = result["checks"]["link_shots"]
+        self.assertEqual(shots["status"], "undetermined", json.dumps(shots, indent=1))
+        self.assertEqual(shots["complete"], {"carried": 3, "lines": 4})
+        self.assertIn("1 of 4 player ingress lines lack", " ".join(shots["reasons"]))
+        self.assertEqual(result["status"], "passed")
+        # D56 keys without the D59 ones (a Gateway built between the two): no line is complete.
+        result = evidence.analyze_text(*self.run_link(appended=LINK_GROUPS[:1]))
+        self.assertEqual(result["checks"]["link_shots"]["status"], "undetermined")
+        self.assertEqual(result["checks"]["link_shots"]["complete"], {"carried": 0, "lines": 4})
+        self.assertEqual(result["totals"]["gateway"]["unknown_keys"], [])
+        # Neither (written before D56): undetermined; the run passes.
+        result = evidence.analyze_text(*self.run_link(values={}, appended=()))
+        self.assertEqual(result["checks"]["link_shots"]["status"], "undetermined")
+        self.assertEqual(result["checks"]["link_shots"]["complete"], {"carried": 0, "lines": 4})
+        self.assertEqual(result["status"], "passed")
+
+    def test_a_partial_log_is_undetermined_even_when_its_sums_break(self):
+        gateway, match = self.run_link(appended=LINK_GROUPS[:1])
+        result = evidence.analyze_text(corrupt(gateway, "player=1", "drop_cleared_on_close_actions_shots", 1), match)
+        self.assertEqual(result["checks"]["link_shots"]["status"], "undetermined")
+
+    def test_an_incomplete_gateway_log_is_undetermined(self):
+        gateway, match = self.run_link()
+        gateway = "\n".join(line for line in gateway.splitlines() if " final=1 " not in line) + "\n"
+        shots = evidence.analyze_text(gateway, match)["checks"]["link_shots"]
+        self.assertEqual(shots["status"], "undetermined")
+        self.assertIn("no final=1 window", " ".join(shots["reasons"]))
+        self.assertEqual(evidence.analyze_text(None, match)["checks"]["link_shots"]["status"], "undetermined")
+
+
+# The Gateway's drops the Match never sees content of (08c known gap 1, D58), spelled out here rather than read
+# from the analyzer: reason -> {kind: key}.
+CONTENTLESS = {
+    "rate_limited": {"hello": "drop_rate_limited_hello_packets", "input": "drop_rate_limited_input_packets",
+                     "actions": "drop_rate_limited_actions_packets", "other": "drop_rate_limited_other_packets"},
+    "malformed": {"hello": "drop_malformed_hello_packets", "input": "drop_malformed_input_packets",
+                  "actions": "drop_malformed_actions_packets"},
+    "unauthorized": {"hello": "drop_unauthorized_hello_packets", "input": "drop_unauthorized_input_packets",
+                     "actions": "drop_unauthorized_actions_packets", "other": "drop_unauthorized_other_packets"},
+    "stale_sequence": {"actions": "drop_stale_sequence_actions_packets", "other": "drop_stale_sequence_other_packets"},
+    "unknown_kind": {"any": "drop_unknown_kind_packets"},
+    "inactive": {"input": "drop_inactive_input_packets", "actions": "drop_inactive_actions_packets"},
+}
+GLOBAL_DATAGRAM_DROPS = ("drop_undecodable_datagrams", "drop_other_version_datagrams",
+                         "drop_room_unavailable_datagrams", "drop_unknown_session_datagrams")
+
+
+class ContentlessDropsTests(unittest.TestCase):
+    """D58: reported only, by reason and kind, per player, with the Gateway-wide datagram drops."""
+
+    @staticmethod
+    def expected(player_lines, global_lines):
+        reasons = {reason: {kind: sum(value_of(line, key) for line in player_lines) for kind, key in kinds.items()}
+                   for reason, kinds in CONTENTLESS.items()}
+        for values in reasons.values():
+            values["total"] = sum(values.values())
+        datagrams = {key: sum(value_of(line, key) for line in global_lines) for key in GLOBAL_DATAGRAM_DROPS}
+        datagrams["total"] = sum(datagrams.values())
+        return reasons, datagrams
+
+    def test_golden_values_by_reason_kind_and_player(self):
+        result = evidence.analyze_text(golden_gateway(), golden_match())
+        drops = result["checks"]["gateway_contentless_drops"]
+        reasons, datagrams = self.expected(golden_lines("gateway-player.txt"), golden_lines("gateway-global.txt"))
+        self.assertEqual(drops["status"], "reported")
+        self.assertEqual(drops["reasons"], reasons)
+        self.assertEqual(drops["total"], sum(values["total"] for values in reasons.values()))
+        self.assertEqual(drops["players"]["7"], dict(reasons, total=drops["total"]))
+        self.assertEqual(drops["gateway_datagrams"], datagrams)
+        self.assertEqual(drops["incomplete"], [])
+        # Every listed key is a v1 key, every one non-zero in the golden lines (so a missing one shows).
+        for kinds in CONTENTLESS.values():
+            for key in kinds.values():
+                self.assertIn(key, evidence.GATEWAY_PLAYER_KEYS)
+                self.assertGreater(sum(value_of(line, key) for line in golden_lines("gateway-player.txt")), 0, key)
+
+    def test_per_player_and_reported_only(self):
+        values = {1: {"drop_rate_limited_input_packets": 3, "drop_malformed_hello_packets": 2,
+                      "drop_unknown_kind_packets": 1, "received_datagrams": 66},
+                  2: {"drop_unauthorized_other_packets": 4, "drop_stale_sequence_actions_packets": 5,
+                      "drop_inactive_actions_packets": 6, "drop_rate_limited_hello_packets": 7, "received_datagrams": 81},
+                  "global": {"drop_rate_limited_packets": 10, "drop_unknown_session_datagrams": 8,
+                             "received_datagrams": 66 + 81 + 8}}
+        gateway, match = run_logs([1, 2], written={1: 600, 2: 590}, gateway_values=values)
+        result = evidence.analyze_text(gateway, match)
+        self.assertEqual(result["status"], "passed", json.dumps(result["checks"], indent=1)[:3000])
+        drops = result["checks"]["gateway_contentless_drops"]
+        self.assertEqual(drops["total"], 28)
+        self.assertEqual((drops["players"]["1"]["total"], drops["players"]["2"]["total"]), (6, 22))
+        self.assertEqual(drops["players"]["2"]["rate_limited"], {"hello": 7, "input": 0, "actions": 0, "other": 0,
+                                                                 "total": 7})
+        self.assertEqual(drops["reasons"]["rate_limited"]["total"], 10)
+        self.assertEqual(drops["reasons"]["unknown_kind"], {"any": 1, "total": 1})
+        self.assertEqual(drops["gateway_datagrams"]["drop_unknown_session_datagrams"], 8)
+        self.assertEqual(drops["gateway_datagrams"]["total"], 8)
+        # Not contentless: the semantic action drops and the unknown admission error.
+        others = dict(values)
+        others[1] = dict(values[1], drop_invalid_actions_packets=1, drop_link_rejected_actions_packets=1,
+                         drop_admission_unknown_packets=1)
+        gateway2, _ = run_logs([1, 2], written={1: 600, 2: 590}, gateway_values=others)
+        self.assertEqual(evidence.analyze_text(gateway2, match)["checks"]["gateway_contentless_drops"]["total"], 28)
+
+    def test_an_incomplete_or_missing_log_is_reported_as_such(self):
+        gateway = "\n".join(line for line in golden_gateway().splitlines() if " final=1 " not in line) + "\n"
+        drops = evidence.analyze_text(gateway, golden_match())["checks"]["gateway_contentless_drops"]
+        self.assertEqual(drops["status"], "reported")
+        self.assertIn("no final=1 window", " ".join(drops["incomplete"]))
+        self.assertEqual(evidence.analyze_text(None, golden_match())["checks"]["gateway_contentless_drops"],
+                         {"status": "absent"})
 
 
 def trace_line(kind, **fields):

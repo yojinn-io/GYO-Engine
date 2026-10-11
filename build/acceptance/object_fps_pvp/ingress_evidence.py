@@ -14,8 +14,18 @@ docs/object_fps_pvp/plans/v7/08c-drop-report.md exactly:
   the Gateway routed nothing for a future limit, a conflict, the link cap or a written conflict.
 - match-ingress.jsonl: schema, version and kinds, trace_end as the last line, and the reconciliation with the
   Match lines that its suppressed and dropped counts allow.
+- link_shots (D59): per player, the shot requests handed to the runtime link equal those it wrote plus its three
+  drops (fwd_handed_actions_shots == fwd_link_written_actions_shots + drop_{discarded_on_leave,cleared_on_close,
+  abandoned_on_close}_actions_shots), exactly. The eight D56/D59 keys stay optional (D59 (11)): unless every player
+  ingress line of the Gateway log carries them, link_shots is "undetermined" with the reason and does not decide
+  the run; "complete" gives the lines that carried them out of all player ingress lines.
 - action_drops (D56) is reported only: what the runtime link dropped of the actions before writing them, and the
   action acknowledgements the Match discarded on a Leave.
+- gateway_contentless_drops (D58) is reported only: the drops of the Gateway that the Match never sees content of
+  (08c known gap 1: rate limited, malformed, unauthorized, stale Actions/other, unknown kind, inactive), by reason
+  and kind, per player, and the Gateway-wide datagram drops.
+- J5a's never_arrived (decisive with --injection) is unarrived_overflow + unarrived_end (D58 (2)); records closed
+  removed (the run's final Leave) are reported apart, as unarrived_removed.
 
 A missing final=1 line, a missing window line or a missing trace_end makes the affected checks "undetermined";
 they are never read as zero. A line of another version, or one that breaks the line format, stops the analysis
@@ -27,7 +37,7 @@ from pathlib import Path
 import re
 import sys
 
-ANALYZER_ID = "pvp-v7-ingress-1"
+ANALYZER_ID = "pvp-v7-ingress-2"
 INGRESS_VERSION = 1
 TRACE_SCHEMA = "object_fps_pvp.match_ingress"
 TRACE_VERSION = 1
@@ -78,12 +88,15 @@ MATCH_KEYS = (
        "reset_discarded_actions_acks", "slack_executed_samples", "slack_late_samples", "slack_merged_samples",
        "slack_discarded_samples", "slack_published_samples", "slack_published_negative_samples",
        "slack_overwritten_samples", "slack_taken_samples", "slack_coalesced_samples", "slack_unclaimed_samples"))
-# Known keys appended after the v1 keys (D56, 2026-10-11), in line order. A line carries all of them right after the
-# v1 keys or none (written before D56); they are reported only (action_drops) and enter no conservation.
+# Known keys appended after the v1 keys, in line order, by group: D56 (2026-10-11), then D59 (Gateway only). A line
+# carries the groups in order, each whole, right after the v1 keys: none (written before D56), D56 only (before
+# D59) or all. The D56 keys are reported (action_drops); the eight Gateway keys together make link_shots.
 GATEWAY_PLAYER_APPENDED = (
     "drop_discarded_on_leave_actions_shots", "drop_discarded_on_leave_actions_acks",
     "drop_cleared_on_close_actions_shots", "drop_cleared_on_close_actions_acks",
     "drop_abandoned_on_close_actions_shots", "drop_abandoned_on_close_actions_acks")
+GATEWAY_PLAYER_APPENDED_D59 = ("fwd_handed_actions_shots", "fwd_link_written_actions_shots")
+GATEWAY_PLAYER_GROUPS = (GATEWAY_PLAYER_APPENDED, GATEWAY_PLAYER_APPENDED_D59)
 MATCH_APPENDED = ("leave_discarded_actions_acks",)
 
 # IG: every *_packets outcome from fwd_main_input_packets to drop_admission_unknown_packets.
@@ -102,10 +115,28 @@ I3_GATES = ("fwd_routed_future_limit_inputs", "fwd_routed_conflict_inputs", "fwd
             "fwd_routed_written_conflict_inputs")
 I3_MATCH_COPIES = ("pending_copy_commands", "late_copy_commands", "resolved_copy_commands")
 I3_GATEWAY_COPIES = ("fwd_link_written_rejected_lane_commands", "fwd_retention_expired_commands")
-# J5a as the L2 judgement reads it (HANDOFF "等你決定" (2), tentative): records that closed before any copy
-# arrived for a reason other than aged, epoch, life or reset.
-NEVER_ARRIVED = ("unarrived_removed_commands", "unarrived_overflow_commands", "unarrived_end_commands")
+# J5a as the L2 judgement reads it (D58 (2)): records that closed before any copy arrived for a reason other than
+# aged, epoch, life, reset or removed. Removed records (closed by the run's final Leave) are reported apart.
+NEVER_ARRIVED = ("unarrived_overflow_commands", "unarrived_end_commands")
+UNARRIVED_REMOVED = ("unarrived_removed_commands",)
 J4_KEYS = ("drop_rejected_lane_overflow_commands", "drop_resolved_trim_commands")
+# link_shots (D59): fwd_handed_actions_shots == fwd_link_written_actions_shots + these three.
+LINK_SHOT_DROPS = ("drop_discarded_on_leave_actions_shots", "drop_cleared_on_close_actions_shots",
+                   "drop_abandoned_on_close_actions_shots")
+# The Gateway's drops the Match never sees content of (08c known gap 1, D58), reported only: reason -> datagram
+# kinds of its player keys ("" for a key without a kind). The Gateway-wide datagram drops are reported with them.
+CONTENTLESS_DROPS = (
+    ("rate_limited", ("hello", "input", "actions", "other")),
+    ("malformed", ("hello", "input", "actions")),
+    ("unauthorized", ("hello", "input", "actions", "other")),
+    ("stale_sequence", ("actions", "other")),
+    ("unknown_kind", ("",)),
+    ("inactive", ("input", "actions")))
+
+
+def contentless_key(reason, kind):
+    return f"drop_{reason}_{kind}_packets" if kind else f"drop_{reason}_packets"
+
 
 # Fixed log strings (file:line of the writer at batch 08c).
 GATEWAY_PLAYER_LINE = re.compile(r"player ingress statistics (?P<fields>.*)$")  # ingress_statistics.go
@@ -145,8 +176,9 @@ class ContractStop(Exception):
 
 
 def parse_line(fields, head, keys, number, appended=()):
-    """(head values, counts, unknown keys) of one ingress line; raises ContractStop. The known appended keys are
-    counted when the line carries all of them right after keys (head["appended"] tells whether it did)."""
+    """(head values, counts, unknown keys) of one ingress line; raises ContractStop. appended holds the groups of
+    known appended keys in line order: a group is counted when the line carries it whole right after keys and the
+    groups before it (head["appended"] is how many groups it carried)."""
     pairs = []
     for token in fields.split():
         name, separator, value = token.partition("=")
@@ -174,9 +206,12 @@ def parse_line(fields, head, keys, number, appended=()):
     if final not in ("0", "1"):
         raise ContractStop(f"line {number}: final={final!r}")
     known = len(keys)
-    carried = bool(appended) and tuple(name for name, _ in body[known:known + len(appended)]) == appended
-    if carried:
-        known += len(appended)
+    carried = 0
+    for group in appended:
+        if tuple(name for name, _ in body[known:known + len(group)]) != group:
+            break
+        known += len(group)
+        carried += 1
     return ({"player": int(values["player"]) if "player" in values else None,
              "window_ms": int(values["window_ms"]), "final": final == "1", "line": number, "appended": carried},
             {name: int(value) for name, value in body[:known]},
@@ -196,7 +231,7 @@ def read_gateway(text):
     """Windows, per-player and Gateway-wide totals and lifecycle facts of one Gateway log."""
     state = {"starts": 0, "runtime_address": None, "evicted": set(), "windows": 0, "final": False,
              "final_line": None, "gaps": [], "players": {}, "global": {}, "unknown_keys": set(),
-             "appended_lines": {"with": 0, "without": 0}}
+             "appended_lines": {"with": 0, "without": 0}, "link_lines": {"carried": 0, "lines": 0}}
     awaiting = None  # line of a "gateway statistics" line still waiting for its ingress window
     current = None  # {"window_ms", "final", "players": set}
     waiting_players = {}  # player -> line of its "player send statistics" line in the current window
@@ -238,9 +273,12 @@ def read_gateway(text):
             continue
         if match := GATEWAY_PLAYER_LINE.search(line):
             head, counts, unknown = parse_line(match["fields"], ("version", "player", "window_ms", "final"),
-                                               GATEWAY_PLAYER_KEYS, number, GATEWAY_PLAYER_APPENDED)
+                                               GATEWAY_PLAYER_KEYS, number, GATEWAY_PLAYER_GROUPS)
             state["unknown_keys"].update(unknown)
-            state["appended_lines"]["with" if head["appended"] else "without"] += 1
+            state["appended_lines"]["with" if head["appended"] >= 1 else "without"] += 1
+            state["link_lines"]["lines"] += 1
+            if head["appended"] == len(GATEWAY_PLAYER_GROUPS):
+                state["link_lines"]["carried"] += 1
             player = head["player"]
             if current is None:
                 window_problem(state, f"line {number}: a player ingress line before any Gateway ingress window")
@@ -311,9 +349,9 @@ def read_match(text):
             continue
         if match := MATCH_LINE.search(line):
             head, counts, unknown = parse_line(match["fields"], ("version", "player", "window_ms", "final"),
-                                               MATCH_KEYS, number, MATCH_APPENDED)
+                                               MATCH_KEYS, number, (MATCH_APPENDED,))
             state["unknown_keys"].update(unknown)
-            state["appended_lines"]["with" if head["appended"] else "without"] += 1
+            state["appended_lines"]["with" if head["appended"] >= 1 else "without"] += 1
             player = head["player"]
             if player == 0:  # every window starts with the player=0 bucket (lines are in player order)
                 if state["final"]:
@@ -447,9 +485,12 @@ def match_checks(match, injection):
             "slack_published", "slack_overwritten + slack_taken + slack_unclaimed")]),
     }
     never = {str(p): total(c, NEVER_ARRIVED) for p, c in sorted(players.items())}
+    removed = {str(p): total(c, UNARRIVED_REMOVED) for p, c in sorted(players.items())}
     j5a = checks["J5a"]
     j5a["never_arrived"] = {"terms": list(NEVER_ARRIVED), "players": never, "total": sum(never.values()),
                             "zero": not any(never.values()), "decisive": injection}
+    j5a["unarrived_removed"] = {"terms": list(UNARRIVED_REMOVED), "players": removed,
+                                "total": sum(removed.values()), "decisive": False}
     if injection and any(never.values()) and j5a["status"] == "passed":
         j5a["status"] = "failed"
     return checks
@@ -468,6 +509,53 @@ def action_drops(gateway, match):
                         "lines": dict(state["appended_lines"]),
                         "complete": state["appended_lines"]["without"] == 0}
     return report
+
+
+def link_shots(gateway):
+    """D59, exact per player: fwd_handed_actions_shots == fwd_link_written_actions_shots + three
+    drop_*_actions_shots. Judged only when every player ingress line carries the eight D56/D59 keys: a line without
+    them has an unknown share, not zero (the keys stay optional, D59 (11))."""
+    reasons = completeness(gateway, "Gateway")
+    if gateway is None:
+        return undetermined(reasons)
+    lines = gateway["link_lines"]
+    complete = {"carried": lines["carried"], "lines": lines["lines"]}
+    if not lines["lines"]:
+        reasons.append("the Gateway log has no player ingress line")
+    elif lines["carried"] != lines["lines"]:
+        reasons.append(f"{lines['lines'] - lines['carried']} of {lines['lines']} player ingress lines lack the "
+                       "D56/D59 keys (written before D59, or before D56): their share is unknown, not zero")
+    if reasons:
+        return dict(undetermined(reasons), complete=complete)
+    check = per_bucket_check(gateway["players"], lambda c: [equality(
+        c.get("fwd_handed_actions_shots", 0), c.get("fwd_link_written_actions_shots", 0) + total(c, LINK_SHOT_DROPS),
+        "fwd_handed_actions_shots", "fwd_link_written_actions_shots + three drop_*_actions_shots")])
+    return dict(check, complete=complete)
+
+
+def contentless_drops(gateway):
+    """D58, reported only: the Gateway's drops the Match never sees content of, by reason and kind, per player, and
+    the Gateway-wide datagram drops; "incomplete" lists why the totals may not be the whole process's."""
+    if gateway is None:
+        return {"status": "absent"}
+
+    def by_reason(counts):
+        out = {}
+        for reason, kinds in CONTENTLESS_DROPS:
+            values = {kind or "any": counts.get(contentless_key(reason, kind), 0) for kind in kinds}
+            out[reason] = dict(values, total=sum(values.values()))
+        return out
+
+    players = {str(p): by_reason(c) for p, c in sorted(gateway["players"].items())}
+    reasons = {}
+    for reason, kinds in CONTENTLESS_DROPS:
+        reasons[reason] = {kind: sum(player[reason][kind] for player in players.values())
+                           for kind in [kind or "any" for kind in kinds] + ["total"]}
+    datagrams = {key: gateway["global"].get(key, 0) for key in GLOBAL_DROPS}
+    return {"status": "reported", "total": sum(reason["total"] for reason in reasons.values()), "reasons": reasons,
+            "players": {p: dict(by, total=sum(reason["total"] for reason in by.values())) for p, by in players.items()},
+            "gateway_datagrams": dict(datagrams, total=sum(datagrams.values())),
+            "incomplete": completeness(gateway, "Gateway")}
 
 
 def judge_i1(gateway, match):
@@ -683,14 +771,17 @@ def analyze_text(gateway_text, match_text, trace_text=None, injection=False):
     checks["I1"] = judge_i1(gateway, match)
     checks["I3"] = judge_i3(gateway, match)
     checks["trace"] = trace_checks(trace, match) if trace_text is not None else {"status": "absent"}
+    checks["link_shots"] = link_shots(gateway)
     checks["action_drops"] = action_drops(gateway, match)
+    checks["gateway_contentless_drops"] = contentless_drops(gateway)
     exact = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2")
     statuses = [checks[name]["status"] for name in exact] + [checks["I1"]["status"], checks["I3"]["status"],
-                                                              checks["trace"]["status"]]
+                                                              checks["link_shots"]["status"], checks["trace"]["status"]]
     if "failed" in statuses:
         status = "failed"
     elif any(checks[name]["status"] == "undetermined" for name in exact) or checks["trace"]["status"] == "undetermined":
-        status = "undetermined"  # I1 and I3 are conditional: their undetermined alone does not decide the run
+        # I1, I3 and link_shots are conditional: their undetermined alone does not decide the run
+        status = "undetermined"
     else:
         status = "passed"
     summary = {}

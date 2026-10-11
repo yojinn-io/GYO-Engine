@@ -72,6 +72,17 @@ func actionDrops(l *runtimeLink, player uint64) [6]uint64 {
 	return out
 }
 
+// linkShots reads one player's two D59 counters from the link: the shot
+// requests handed to it and those a successful write carried.
+func linkShots(l *runtimeLink, player uint64) (handed, written uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if c := l.ingress[player]; c != nil {
+		return c[playerFwdHandedActionsShots], c[playerFwdLinkWrittenActionsShots]
+	}
+	return 0, 0
+}
+
 func shotBatch(player, ack uint64, ids ...uint64) *runtime.ActionBatch {
 	in := &runtime.ActionBatch{PlayerId: player, AcknowledgedThrough: ack}
 	for _, id := range ids {
@@ -91,6 +102,8 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 		name string
 		run  func(t *testing.T, l *runtimeLink, wire *actionWire)
 		want [6]uint64
+		// D59: the distinct requests handed to the link and those written.
+		handed, written uint64
 	}{
 		{name: "leave", run: func(t *testing.T, l *runtimeLink, _ *actionWire) {
 			// Shots 1 and 2 written, 1 decided; the ACK of 1 and shot 3 never taken.
@@ -99,7 +112,7 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 			l.actionResults(&runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}})
 			mustActions(t, l, shotBatch(player, 1, 2, 3))
 			leave(t, l, player)
-		}, want: [6]uint64{1, 1, 0, 0, 0, 0}},
+		}, want: [6]uint64{1, 1, 0, 0, 0, 0}, handed: 3, written: 2},
 		{name: "leave_after_the_ack_was_written", run: func(t *testing.T, l *runtimeLink, _ *actionWire) {
 			mustActions(t, l, shotBatch(player, 0, 1))
 			mustWrite(t, l)
@@ -107,7 +120,7 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 			mustActions(t, l, shotBatch(player, 1))
 			mustWrite(t, l)
 			leave(t, l, player)
-		}, want: [6]uint64{}},
+		}, want: [6]uint64{}, handed: 1, written: 1},
 		{name: "leave_after_the_match_retired_the_ack", run: func(t *testing.T, l *runtimeLink, _ *actionWire) {
 			mustActions(t, l, shotBatch(player, 0, 1))
 			mustWrite(t, l)
@@ -116,7 +129,7 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 			mustWrite(t, l)
 			l.actionResults(&runtime.ActionResults{PlayerId: player, RetiredThrough: 1})
 			leave(t, l, player)
-		}, want: [6]uint64{}},
+		}, want: [6]uint64{}, handed: 1, written: 1},
 		{name: "leave_while_a_pass_holds_the_batch", run: func(t *testing.T, l *runtimeLink, _ *actionWire) {
 			// The pass took shot 1 before the Leave: it writes it.
 			mustActions(t, l, shotBatch(player, 0, 1))
@@ -127,14 +140,14 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 			if err := l.write(pass); err != nil {
 				t.Fatal(err)
 			}
-		}, want: [6]uint64{1, 0, 0, 0, 0, 0}},
+		}, want: [6]uint64{1, 0, 0, 0, 0, 0}, handed: 2, written: 1},
 		{name: "close", run: func(t *testing.T, l *runtimeLink, _ *actionWire) {
 			mustActions(t, l, shotBatch(player, 0, 1, 2))
 			mustWrite(t, l)
 			l.actionResults(&runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}})
 			mustActions(t, l, shotBatch(player, 1, 2, 3, 4))
 			l.close()
-		}, want: [6]uint64{0, 0, 2, 1, 0, 0}},
+		}, want: [6]uint64{0, 0, 2, 1, 0, 0}, handed: 4, written: 2},
 		{name: "write_failure", run: func(t *testing.T, l *runtimeLink, wire *actionWire) {
 			// Shot 1 written; the failed pass first took 2 and 3 and the ACK
 			// of 1; shot 4 and the ACK of 2 came after it and close clears them.
@@ -151,7 +164,7 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 				t.Fatal("injected failure did not fail the write")
 			}
 			l.close()
-		}, want: [6]uint64{0, 0, 1, 1, 2, 1}},
+		}, want: [6]uint64{0, 0, 1, 1, 2, 1}, handed: 4, written: 1},
 		{name: "write_failure_of_a_resend", run: func(t *testing.T, l *runtimeLink, wire *actionWire) {
 			// Every shot of the failed pass was written before: nothing is lost.
 			mustActions(t, l, shotBatch(player, 0, 1, 2))
@@ -162,7 +175,7 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 				t.Fatal("injected failure did not fail the write")
 			}
 			l.close()
-		}, want: [6]uint64{}},
+		}, want: [6]uint64{}, handed: 2, written: 2},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -171,6 +184,9 @@ func TestLinkCountsTheActionsNoPassTookByExit(t *testing.T) {
 			c.run(t, l, wire)
 			if got := actionDrops(l, player); got != c.want {
 				t.Fatalf("drops (leave shots, acks; close shots, acks; abandoned shots, acks) %v, want %v", got, c.want)
+			}
+			if handed, written := linkShots(l, player); handed != c.handed || written != c.written {
+				t.Fatalf("link shots handed %d, written %d; want %d, %d", handed, written, c.handed, c.written)
 			}
 		})
 	}
@@ -202,15 +218,18 @@ func leave(t *testing.T, l *runtimeLink, player uint64) {
 
 // Over random interleavings of batches, write passes (some held while other
 // things happen), Match results, Leaves, a failed write and the close, each
-// player's shot requests are conserved exactly in the link:
+// player's shot requests are conserved exactly in the link, on its counters
+// (D59):
 //
-//	distinct handed ids == distinct ids a successful write carried
-//	                     + drop_discarded_on_leave + drop_cleared_on_close
-//	                     + drop_abandoned_on_close (_actions_shots)
+//	fwd_handed_actions_shots == fwd_link_written_actions_shots
+//	                          + drop_discarded_on_leave + drop_cleared_on_close
+//	                          + drop_abandoned_on_close (_actions_shots)
 //
-// (a re-handed request, a copy within a batch and a retired id are merged
-// into the one request). An acknowledgement is counted dropped, at least
-// once, exactly when the highest one handed is neither written nor retired.
+// and the two D59 counters are the distinct ids the Client handed (a
+// re-handed request, a copy within a batch and a retired id are merged into
+// the one request) and the distinct ids a successful write carried. An
+// acknowledgement is counted dropped, at least once, exactly when the highest
+// one handed is neither written nor retired.
 func TestLinkConservesActionRequestsAcrossEveryExit(t *testing.T) {
 	players := []uint64{1, 2, 3}
 	var exercised [6]int // seeds in which each counter was non-zero
@@ -315,9 +334,17 @@ func TestLinkConservesActionRequestsAcrossEveryExit(t *testing.T) {
 						exercised[i]++
 					}
 				}
-				written := uint64(len(wire.written[p]))
-				if handed, settled := uint64(len(c.handed)), written+d[0]+d[2]+d[4]; handed != settled {
-					t.Fatalf("player %d: %d distinct requests handed, %d written + drops %v", p, handed, written, d)
+				handed, written := linkShots(l, p)
+				if handed != written+d[0]+d[2]+d[4] {
+					t.Fatalf("player %d: fwd_handed_actions_shots %d != fwd_link_written_actions_shots %d + drops %v",
+						p, handed, written, d)
+				}
+				if distinct := uint64(len(c.handed)); handed != distinct {
+					t.Fatalf("player %d: fwd_handed_actions_shots %d, %d distinct requests handed", p, handed, distinct)
+				}
+				if distinct := uint64(len(wire.written[p])); written != distinct {
+					t.Fatalf("player %d: fwd_link_written_actions_shots %d, %d distinct requests written", p, written,
+						distinct)
 				}
 				highest := c.acked
 				lost := highest > max(wire.acked[p], c.retired)
@@ -390,5 +417,17 @@ func TestActionDropsReachTheWindowAndFinalLines(t *testing.T) {
 	}
 	if want := []seen{{0, 0}, {0, 3}}; fmt.Sprint(got[9]) != fmt.Sprint(want) {
 		t.Errorf("player 9 (closed) windows %v, want %v", got[9], want)
+	}
+	// D59: the handed shots reach the lines too; nothing was written.
+	handed := map[uint64][2]uint64{}
+	for _, line := range lines {
+		if line.player != 0 {
+			h := handed[line.player]
+			handed[line.player] = [2]uint64{h[0] + line.counts[playerFwdHandedActionsShots],
+				h[1] + line.counts[playerFwdLinkWrittenActionsShots]}
+		}
+	}
+	if want := map[uint64][2]uint64{7: {2, 0}, 9: {3, 0}}; fmt.Sprint(handed) != fmt.Sprint(want) {
+		t.Errorf("players' (handed, written) shots %v, want %v", handed, want)
 	}
 }

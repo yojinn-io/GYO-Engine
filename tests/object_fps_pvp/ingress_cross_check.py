@@ -10,7 +10,8 @@ also writes match-ingress.jsonl), the Gateway directly on the Match's IPC port, 
 an 8-second run, so the Gateway (10-second windows) also writes one window before its final one. The ending is ordered so that I1's preconditions hold by construction: the probe leaves, the
 Gateway stops (its final=1 lines follow the link's close), the Match logs its 'ipc closed' line, and only then
 does the Match stop. ingress_evidence.py must judge IG, the Gateway-wide conservation, I0, T3, I2, J5a, S1, S2,
-I1 and the trace as passed, on non-trivial counts.
+I1, link_shots (the Gateway of this tree writes the D56/D59 keys on every line) and the trace as passed, on
+non-trivial counts.
 
 The Gateway closes its runtime link with a plain Close while Match snapshots may still sit unread in its socket;
 the kernel then resets the connection and the Match logs 'ipc closed reason=read: ...' instead of eof (seen in
@@ -41,7 +42,7 @@ from run_network import free_port, wait_for_match_ready  # noqa: E402
 
 GATEWAY_MODULE = ROOT / "apps" / "object_fps_pvp"
 SKIPPED = 77
-REQUIRED = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "I1", "trace")
+REQUIRED = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "I1", "link_shots", "trace")
 CLOSED_LINE = "[ObjectFPS/PvP Match] ipc closed reason="
 ATTEMPTS = 3
 

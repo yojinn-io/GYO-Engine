@@ -84,13 +84,17 @@ func (w *actionWindow) validate(in *runtime.ActionBatch) error {
 	}
 	return nil
 }
-func (w *actionWindow) merge(in *runtime.ActionBatch) {
+func (w *actionWindow) merge(in *runtime.ActionBatch) (added uint64) {
+	// added: the requests the window holds for the first time; a copy, a
+	// request it holds and a retired id add none.
 	for _, shot := range in.Shots {
 		if shot.ActionId > w.retired && w.requests[shot.ActionId] == nil {
 			w.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)
+			added++
 		}
 	}
 	w.acknowledged = max(w.acknowledged, in.AcknowledgedThrough)
+	return added
 }
 func (w *actionWindow) validateResults(in *runtime.ActionResults) error {
 	if in.RetiredThrough > w.acknowledged {
@@ -199,7 +203,10 @@ func (l *runtimeLink) actions(in *runtime.ActionBatch) error {
 	if err := w.validate(in); err != nil {
 		return err
 	}
-	w.merge(in)
+	// D59: each request once, when the link first holds it. It is then
+	// written (fwd_link_written_actions_shots) or dropped by an exit
+	// (drop_*_actions_shots), exactly one of the four.
+	l.countLocked(in.PlayerId, playerFwdHandedActionsShots, w.merge(in))
 	l.actionWindows[in.PlayerId] = w
 	l.notify()
 	return nil

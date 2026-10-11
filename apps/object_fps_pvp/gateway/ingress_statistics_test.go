@@ -116,6 +116,11 @@ func TestIngressStatisticsLinesEqualTheGoldenWindows(t *testing.T) {
 		if settled := sumIngress(p[:], playerFwdLinkWrittenMainCommands, playerDropAbandonedOnCloseCommands); settled != handed {
 			t.Fatalf("window %d: link settled %d of %d handed commands", i, settled, handed)
 		}
+		// D59: the link's shot conservation.
+		if settled := p[playerFwdLinkWrittenActionsShots] + p[playerDropDiscardedOnLeaveActionsShots] +
+			p[playerDropClearedOnCloseActionsShots] + p[playerDropAbandonedOnCloseActionsShots]; settled != p[playerFwdHandedActionsShots] {
+			t.Fatalf("window %d: link settled %d of %d handed shots", i, settled, p[playerFwdHandedActionsShots])
+		}
 		if rate := sumIngress(p[:], playerDropRateLimitedHelloPackets, playerDropRateLimitedOtherPackets); rate != g[gatewayDropRateLimitedPackets] {
 			t.Fatalf("window %d: per-player rate drops %d != gateway %d", i, rate, g[gatewayDropRateLimitedPackets])
 		}

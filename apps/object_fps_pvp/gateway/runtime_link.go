@@ -550,6 +550,9 @@ func (l *runtimeLink) wroteLocked(w linkWrite) {
 	case rejectedLane:
 		l.countLocked(w.player, playerFwdLinkWrittenRejectedLaneCommands, w.commands)
 	}
+	// The shot requests this pass first took (D59); a resent one was counted
+	// by the pass that first took it.
+	l.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)
 }
 
 // write sends one pass in order. A failed Marshal or Write fails the link;

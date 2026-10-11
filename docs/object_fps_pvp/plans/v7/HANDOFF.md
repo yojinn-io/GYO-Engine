@@ -32,9 +32,9 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；(3) F2a 測試斷言的改寫、(4) 單位 `acks`、(5) 單位 `samples` 與 `--ingress-trace` 的用法錯誤，未回覆、維持暫定；其餘已決定（D56～D58）。（11）（12）已決定（D59）。
-- **進行中**：L2 準備 1（L2P，2026-10-11 13:2x 開始，檔位照建議）分三批：L2P-analyzer（射擊的兩個 fwd 鍵與 link 內 shot 守恆的 log 判定、`ingress_evidence.py` 依 D58／D59 修改並準備凍結；high）、L2P-injector（純延遲與斜坡，不改凍結檔；high），兩者並行；之後 L2P-trees（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。估計 3～3.5 小時。
+- **進行中**：L2P-trees（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。L2P-analyzer、L2P-injector 完成。
 - **下一步**：L2P-analyzer、L2P-injector、L2P-trees 完成後停下回報；之後 L2P-declare（宣告草稿、xhigh 對抗式檢查）→ 送核准。
-- **最後更新**：2026-10-11 13:xx，依據本機 commit。
+- **最後更新**：2026-10-11 14:2x，依據本次推送。
 
 ## 閱讀入口
 
@@ -246,6 +246,8 @@
 - 2026-10-11：第 08c 批 L1 完成（1 位 medium，05:05～06:39）。沒有觸發停止條件：go vet／test／race×3；全量 CTest 68／68，另外 label 外 5／5（含 `ingress_cross`）；`ingress_cross` 5 次都通過、沒有觸發重試；TSan `object_fps_pvp.ipc` 3 次 0 警告；權威 digest 和 `c2b76cd`（08c 之前）比較 scale 1、3 各 35 個情境 0 差分；整份突變目錄 299／299 killed（v7-flow 207 個：Go 107、C++ 100），約 78 分；`backpressure_probe.py` 2 次各 6／6、`run_network.py` 3 次、凍結 runner `run_gameplay.py --case clean-60` 通過；凍結分析器 40 檔 sha256 吻合。每個驗收跑次的 log 交給 `ingress_evidence.py`：19 份全部 passed（IG、I0、全域、T3、I2、J5a、S1、S2、I3、trace 對帳）；I1 未判定 10 份，原因都符合前提（host-ipc 經過 relay；`run_network.py` 讓同一個 Match 先後接兩個 Gateway）。只記錄：gateway-1000ms 的拒絕線溢出 36、132；gateway-250ms 的 `late_first` 20、21（修之前這類遲到看不到）；250 ms 案例的 never_arrived 2～8 全部是 `unarrived_removed`（見「現況」(2)）。證據：`l1/`（`summary.md`、`ingress-summary.json`）。
 - 2026-10-11：死信隊列 A（未結事項的記錄）、B（評估：1 位 high 兩輪各約 5 分鐘；疑似無聲出口由 1 位 xhigh 核對約 10 分鐘）完成，D56～D58 決定。
 - 2026-10-11：D56 修正批完成（1 位 high，約 53 分）：Gateway link 為每個動作請求記「是否被某一輪取走」，Leave／踢出、close、寫出失敗時，依玩家與原因計數從沒寫出過的 shot 與還沒轉送的 ACK（Gateway 玩家行尾 6 個鍵，單位 `acks` 兩端共用）；Match 的 Leave 計 `leave_discarded_actions_acks`；改正 `action_delivery.go:336` 的註解；`ingress_evidence.py` 認得新鍵、只輸出（`action_drops`）。交付行為不變（選取與輪轉不動）。主對話重跑時，新測試的「每個出口至少出現 10 次」在 300 個種子下不穩定（Go map 的走訪順序讓亂數的消耗不固定，最少的計數 9～12）：改成依序號排序走訪、種子加到 600（最少 25，5 次重跑結果相同）。驗證：go vet／test／race×3、全量 CTest 68／68、`ingress_cross`、權威 digest 和 `ab181dc` 0 差分（scale 1、3）；`mutations.json` 新增 12 個，12／12 killed，改動檔上的既有 136 個也 killed。證據：`pvp-v7-dlq-eval-20261011/fix/`。
+- 2026-10-11：L2P-injector 完成（1 位 high，約 20 分）：`build/acceptance/object_fps_pvp/run_client_delay.py`（固定延遲型與斜坡型；不改凍結檔，比照 D50 (b1) 在自己的行程裡替換 ActionRelay；開頭核對凍結檔 sha256；每輪核對兩方向收發相等、佇列清空、延遲分布，不成立就判無效並停止）與 16 個測試。開發跑次（`698dfdf`）：固定 200 ms×2 s、斜坡 0→250 ms（2 s）→0（0.5 s），兩次都不丟包，Match 每位玩家 `late_first` 71、59，`ingress_evidence.py` 全部通過。L2 宣告要定的：延遲上限（建議 ≤250 ms，瓶頸是 Gateway 每 session 每秒 120 包）、注入開始時刻（建議 7.5 s，避開預排的射擊）、工具自訂的無效門檻、runner 列入凍結清單。證據：`l2p-injector/`。
+- 2026-10-11：L2P-analyzer 完成（1 位 high，約 35 分）：Gateway 玩家行尾加 `fwd_handed_actions_shots`、`fwd_link_written_actions_shots`，link 內 shot 的守恆在 log 上精確判定（`link_shots`；8 個鍵只有部分行帶齊時記未判定）；`ingress_evidence.py` 依 D58 修改（never_arrived 不含 removed；新增「Gateway 拿不到內容的丟棄」統計，只記錄），`ANALYZER_ID` 改成 `pvp-v7-ingress-2`。L1 的 19 份舊 log 重判仍全部 passed；250 ms 案例的 never_arrived 由 5～8 變成 0；拿不到內容的丟棄只有 gateway-1000ms 各 2 個速率限制。驗證（兩批合併後）：go vet／test／race、全量 CTest 69／69、`ingress_cross` 與 `client_delay_runner` 通過、權威 digest 0 差分；`mutations.json` 新增 14 個、更新 2 個，16／16 killed（跑完突變後重建，避免突變過的 Match 留在 build 目錄）。L2 凍結候選的 sha256：`pvp-v7-08c-impl-20261011/l2-frozen-candidates.sha256`。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 

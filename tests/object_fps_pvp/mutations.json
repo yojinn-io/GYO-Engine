@@ -3005,8 +3005,8 @@
       "batch": "v7-flow",
       "what": "never_arrived (tentative J5a reading) leaves unarrived_end out",
       "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
-      "find": "NEVER_ARRIVED = (\"unarrived_removed_commands\", \"unarrived_overflow_commands\", \"unarrived_end_commands\")\n",
-      "replace": "NEVER_ARRIVED = (\"unarrived_removed_commands\", \"unarrived_overflow_commands\")\n",
+      "find": "NEVER_ARRIVED = (\"unarrived_overflow_commands\", \"unarrived_end_commands\")\n",
+      "replace": "NEVER_ARRIVED = (\"unarrived_overflow_commands\",)\n",
       "check": "ingress_evidence",
       "expect": "FAIL: test_injection_requires_never_arrived_zero"
     },
@@ -3174,11 +3174,151 @@
       "id": "v7-flow-d56-evidence-d56-keys-unknown",
       "batch": "v7-flow",
       "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
-      "find": "    carried = bool(appended) and tuple(name for name, _ in body[known:known + len(appended)]) == appended\n",
-      "replace": "    carried = False\n",
+      "find": "        if tuple(name for name, _ in body[known:known + len(group)]) != group:\n            break\n",
+      "replace": "        break\n",
       "check": "ingress_evidence",
       "expect": "Tuples differ: \\(\\['drop_abandoned_on_close_actions_acks'",
       "what": "the analyzer keeps the D56 keys apart as unknown keys and reports them missing"
+    },
+    {
+      "id": "v7-flow-d59-handed-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tl.countLocked(in.PlayerId, playerFwdHandedActionsShots, w.merge(in))\n",
+      "replace": "\tw.merge(in)\n",
+      "check": "go",
+      "expect": "link shots handed 0, written 2; want 3, 2",
+      "what": "the link stops counting the shot requests it is handed (fwd_handed_actions_shots)"
+    },
+    {
+      "id": "v7-flow-d59-written-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "link shots handed 3, written 0; want 3, 2",
+      "what": "the link stops counting the shot requests a successful write carried (fwd_link_written_actions_shots)"
+    },
+    {
+      "id": "v7-flow-d59-written-before-write",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t// The shot requests this pass first took (D59); a resent one was counted\n\t// by the pass that first took it.\n\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n}\n\n// write sends one pass in order. A failed Marshal or Write fails the link;\n// that message and the rest of the pass are abandoned and counted, because\n// the Match may not have received them.\nfunc (l *runtimeLink) write(writes []linkWrite) error {\n\tfor i, w := range writes {\n\t\tpayload, err := proto.Marshal(w.message)\n",
+      "replace": "}\n\n// write sends one pass in order. A failed Marshal or Write fails the link;\n// that message and the rest of the pass are abandoned and counted, because\n// the Match may not have received them.\nfunc (l *runtimeLink) write(writes []linkWrite) error {\n\tfor i, w := range writes {\n\t\tl.mu.Lock()\n\t\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n\t\tl.mu.Unlock()\n\t\tpayload, err := proto.Marshal(w.message)\n",
+      "check": "go",
+      "expect": "link shots handed 4, written 3; want 4, 1",
+      "what": "the written shots are counted before l.conn.Write, so a failed write counts them written and abandoned"
+    },
+    {
+      "id": "v7-flow-d59-resend-counted-handed",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\t\tw.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)\n\t\t\tadded++\n\t\t}\n",
+      "replace": "\t\t\tw.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)\n\t\t}\n\t\tadded++\n",
+      "check": "go",
+      "expect": "link shots handed 4, written 2; want 3, 2",
+      "what": "a resent request, a copy within a batch or a retired id is counted handed again"
+    },
+    {
+      "id": "v7-flow-d59-gateway-key-order",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/ingress_statistics.go",
+      "find": "\tplayerFwdHandedActionsShots:              {ingressForwarded, reasonHanded, ingressActions, unitShots},\n\tplayerFwdLinkWrittenActionsShots:         {ingressForwarded, reasonLinkWritten, ingressActions, unitShots},\n",
+      "replace": "\tplayerFwdHandedActionsShots:              {ingressForwarded, reasonLinkWritten, ingressActions, unitShots},\n\tplayerFwdLinkWrittenActionsShots:         {ingressForwarded, reasonHanded, ingressActions, unitShots},\n",
+      "check": "go",
+      "expect": "ingress key \\d+ is fwd_handed_actions_shots, want fwd_link_written_actions_shots",
+      "what": "the two D59 keys swap their names in the Gateway player line"
+    },
+    {
+      "id": "v7-flow-l2p-link-term-missing",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "LINK_SHOT_DROPS = (\"drop_discarded_on_leave_actions_shots\", \"drop_cleared_on_close_actions_shots\",\n                   \"drop_abandoned_on_close_actions_shots\")\n",
+      "replace": "LINK_SHOT_DROPS = (\"drop_discarded_on_leave_actions_shots\", \"drop_cleared_on_close_actions_shots\")\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_every_golden_line_satisfies_its_conservations",
+      "what": "link_shots leaves out the abandoned shots"
+    },
+    {
+      "id": "v7-flow-l2p-partial-judged",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    elif lines[\"carried\"] != lines[\"lines\"]:\n",
+      "replace": "    elif lines[\"carried\"] == 0:\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_lines_without_the_keys_are_undetermined_never_zero",
+      "what": "link_shots judges a log whose lines carry the D56/D59 keys only in part, as if the rest were zero"
+    },
+    {
+      "id": "v7-flow-l2p-d56-only-complete",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "            if head[\"appended\"] == len(GATEWAY_PLAYER_GROUPS):\n",
+      "replace": "            if head[\"appended\"] >= 1:\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_a_partial_log_is_undetermined_even_when_its_sums_break",
+      "what": "a line with the D56 keys but not the D59 ones counts as carrying all eight"
+    },
+    {
+      "id": "v7-flow-l2p-link-not-deciding",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "                                                              checks[\"link_shots\"][\"status\"], checks[\"trace\"][\"status\"]]\n",
+      "replace": "                                                              checks[\"trace\"][\"status\"]]\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_each_term_breaks_it",
+      "what": "a failed link_shots does not fail the run"
+    },
+    {
+      "id": "v7-flow-l2p-link-undetermined-decides",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    elif any(checks[name][\"status\"] == \"undetermined\" for name in exact) or checks[\"trace\"][\"status\"] == \"undetermined\":\n",
+      "replace": "    elif any(checks[name][\"status\"] == \"undetermined\" for name in exact + (\"link_shots\",)) or checks[\"trace\"][\"status\"] == \"undetermined\":\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_lines_without_the_keys_are_undetermined_never_zero",
+      "what": "an undetermined link_shots (a log without the optional keys) makes the run undetermined"
+    },
+    {
+      "id": "v7-flow-l2p-never-arrived-includes-removed",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "NEVER_ARRIVED = (\"unarrived_overflow_commands\", \"unarrived_end_commands\")\n",
+      "replace": "NEVER_ARRIVED = (\"unarrived_removed_commands\", \"unarrived_overflow_commands\", \"unarrived_end_commands\")\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_injection_requires_never_arrived_zero",
+      "what": "J5a never_arrived still counts the records the final Leave closed (D58 (2))"
+    },
+    {
+      "id": "v7-flow-l2p-removed-unreported",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    j5a[\"unarrived_removed\"] = {\"terms\": list(UNARRIVED_REMOVED), \"players\": removed,\n                                \"total\": sum(removed.values()), \"decisive\": False}\n",
+      "replace": "",
+      "check": "ingress_evidence",
+      "expect": "KeyError: 'unarrived_removed'",
+      "what": "J5a no longer reports unarrived_removed apart"
+    },
+    {
+      "id": "v7-flow-l2p-contentless-reason-missing",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    (\"stale_sequence\", (\"actions\", \"other\")),\n",
+      "replace": "",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_golden_values_by_reason_kind_and_player",
+      "what": "the Gateway contentless drop report leaves out the stale-sequence drops"
+    },
+    {
+      "id": "v7-flow-l2p-contentless-kind-missing",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    (\"unauthorized\", (\"hello\", \"input\", \"actions\", \"other\")),\n",
+      "replace": "    (\"unauthorized\", (\"hello\", \"input\", \"actions\")),\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_golden_values_by_reason_kind_and_player",
+      "what": "the Gateway contentless drop report leaves out the unauthorized drops of other kinds"
     }
   ]
 }

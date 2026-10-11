@@ -17,8 +17,9 @@ import (
 // "[fwd_|drop_]<reason>[_<kind>]_<unit>": fwd_ was handed on to the Match,
 // which classifies it; drop_ is a discard the Gateway executed. A handed
 // actions packet is fwd_ although the link may still drop what it carried
-// before writing it (drop_*_actions_shots and _acks). New keys are only ever
-// appended. The golden lines live in
+// before writing it (drop_*_actions_shots and _acks; the shots it was handed
+// and wrote are fwd_handed_actions_shots and fwd_link_written_actions_shots).
+// New keys are only ever appended. The golden lines live in
 // tests/object_fps_pvp/fixtures/ingress_v1.
 const ingressStatisticsVersion = 1
 
@@ -81,6 +82,8 @@ const (
 	// Snapshots of the Match the Gateway refused (D55 ②).
 	reasonOldTick
 	reasonRegressed
+	// Action requests the runtime link wrote (D59).
+	reasonLinkWritten
 )
 
 // The datagram kind from the header; ingressAnyKind leaves it out of the key.
@@ -160,6 +163,7 @@ var (
 		reasonUnknownSession:          "unknown_session",
 		reasonOldTick:                 "old_tick",
 		reasonRegressed:               "regressed",
+		reasonLinkWritten:             "link_written",
 	}
 	ingressKindNames = [...]string{ingressAnyKind: "", ingressHello: "_hello", ingressInput: "_input",
 		ingressActions: "_actions", ingressOther: "_other"}
@@ -248,6 +252,14 @@ const (
 	playerDropClearedOnCloseActionsAcks
 	playerDropAbandonedOnCloseActionsShots // first taken by a pass whose write failed
 	playerDropAbandonedOnCloseActionsAcks
+	// Appended (D59): the link's shot conservation, per player. The distinct
+	// requests handed to the link (a resent request, a copy within a batch and
+	// a retired id are the one request, counted when the window first holds
+	// it) equal the distinct requests a write carried (counted after
+	// l.conn.Write succeeded, for the pass that first took them) plus the three
+	// drop_*_actions_shots above.
+	playerFwdHandedActionsShots
+	playerFwdLinkWrittenActionsShots
 	playerIngressCounterCount
 )
 
@@ -307,6 +319,8 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerDropClearedOnCloseActionsAcks:      {ingressDropped, reasonClearedOnClose, ingressActions, unitAcks},
 	playerDropAbandonedOnCloseActionsShots:   {ingressDropped, reasonAbandonedOnClose, ingressActions, unitShots},
 	playerDropAbandonedOnCloseActionsAcks:    {ingressDropped, reasonAbandonedOnClose, ingressActions, unitAcks},
+	playerFwdHandedActionsShots:              {ingressForwarded, reasonHanded, ingressActions, unitShots},
+	playerFwdLinkWrittenActionsShots:         {ingressForwarded, reasonLinkWritten, ingressActions, unitShots},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64
