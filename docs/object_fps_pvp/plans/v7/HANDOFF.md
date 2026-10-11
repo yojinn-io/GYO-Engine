@@ -56,6 +56,7 @@
 | D54 | （2026-10-10，照建議）核准第 08c 批（[Gateway 丟棄回報](08c-drop-report.md)）實作的分批 F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、L2 與檔位（high；拒絕線的順序與切段、★ 的提交與 liveness、`AdmitInput` 的等價性局部 xhigh）；批次名稱 08c。每批結束停下回報。使用者原話：「可以，照建議。」 |
 | D55 | （2026-10-11，照建議）第 08c 批 F1b-1、F2b-1 開始前的四個小決定：①F2b-1 為 `ClearState` 清掉的暫存（命令、動作、動作的 ack）與 Leave／踢出時丟掉的暫存動作加原因計數（每個跑次結束都會經過 `ClearState`）；②Gateway 拒收 Match 的 snapshot（D1、D2）新增單位 `snapshots`，鍵接在全域行尾；③`fwd_stale_sequence_input_packets` 是互斥的結果：舊序號的 Input 不論走主線、拒絕線或被整包去重，都只計在這裡，IG 才精確；④不認得的 admission 錯誤由「當成接受」改成丟棄並計 `drop_admission_unknown_packets`（fail-closed；可重用層目前只回三種錯誤，這條路走不到）。另外 Match 動作拒絕的 `full` 依程式推導走不到，比照 `staged_over_window` 註明「應恆為 0」。使用者原話：「照建議，繼續」 |
 | D56 | （2026-10-11，照建議）死信隊列評估 B 依停止規則中斷之後：①先把評估 B 做完（B1～B5，1 位 high）；②再把找到的所有無聲出口放進同一批修，排在 L2 宣告與 `ingress_evidence.py` 凍結之前：S1（Gateway link 在 Leave、close、寫出失敗時清掉從沒寫出過的 shot 與還沒轉送的 ACK）補計數（選項 (ii)：記錄每個請求是否寫出過，依玩家與原因計數，鍵接在 Gateway 行尾），加上文件（已知缺口補 S1、D4、D7、D9，修正 `action_delivery.go:336` 的註解），加上 Match 端 Leave 時丟掉的動作 ACK 計數。使用者原話：「先照這個建議跑完」 |
+| D57 | （2026-10-11，照建議）死信隊列定位成**設計原則**（評估 B6 的 (b)）：「每個出口只有兩種結果：執行，或帶原因的死信」「序號連續＋到期替代＝Match 偵測得到缺號」「死信有界」，作為 Architecture Fitness 的檢查項，寫進 `network-architecture.zh-Hant.md`；第 10 批的 log 契約與第 11 批的 `GatewayDropReport` 以這些原則對齊，不另開死信的子系統或 Data Contract 概念（不採 (a) 只當名稱、(c) 統一成一份死信契約）。使用者原話：「照建議。繼續」 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -335,6 +336,6 @@
      - 「逐則移入死信、其餘照常」：**不成立**。缺號與晚到現在就是逐則處理；依序執行只讓重放不可行。
      - `rotation_discarded`：jsonl 沒有逐筆紀錄、原因混在一起；開了 movement trace 時，被清掉的命令的身分可由 `HostAccepted` 減去 `Resolved(Actual)` 推出（推論，未驗證）。
   6. 之後的缺口（評估 B4）：`rotation_discarded` 的逐筆紀錄與原因拆分（第 10 批或 D44 的調查）；動作拒絕的本體與是否回 NACK（第 10 批的紀錄、第 11 批的 NACK）；Client 端的本地丟棄與送出失敗的原因計數（第 10 批，觀測缺口第 3 項）；推論走不到的無聲分支（`MatchRuntimeHost.cpp:173-175`、`:372`，`server.go:523-531`，D8）改成 assert（Programmer Error，第 10 批或之後）。都不影響 L2；`ingress_evidence.py` 的凍結排在 D56 修正批之後。
-  7. 定位（評估 B 的建議，待使用者決定）：寫成設計原則，不另開一個死信的子系統或 Data Contract 概念：「序號連續＋到期替代＝consumer 能偵測缺號」「每個出口恰好一個結果：執行，或帶原因的死信」「死信有界」，作為 Architecture Fitness 的檢查項；第 10、11 批規劃 log 契約與 `GatewayDropReport` 時以這些原則對齊。
+  7. 定位（已決定，D57）：寫成設計原則，不另開一個死信的子系統或 Data Contract 概念：「序號連續＋到期替代＝consumer 能偵測缺號」「每個出口恰好一個結果：執行，或帶原因的死信」「死信有界」，作為 Architecture Fitness 的檢查項；第 10、11 批規劃 log 契約與 `GatewayDropReport` 時以這些原則對齊。
 - 驗收分析器 `quad_evidence` 與 `command_evidence` 的收斂：維持候選。
 - v6 文件中其他舊的行號（D20 的 `runtime_v5.proto`、D21 的 `IpcHost.cpp:267`、v6 交接延後項目 8 的 `backpressure_test.go:102-158` 等）：只列在[盤點](INVENTORY.md)，不修改（AGENTS §11）。
