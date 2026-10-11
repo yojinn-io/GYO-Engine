@@ -194,6 +194,11 @@ add_test(NAME "${GYO_CURRENT_APP}.action_runner"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_action_short.py")
 set_tests_properties("${GYO_CURRENT_APP}.action_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
 
+# Batch 08c L2 preparation: the Client->Gateway pure-delay runner (fake clock, no sockets or services).
+add_test(NAME "${GYO_CURRENT_APP}.client_delay_runner"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_client_delay.py")
+set_tests_properties("${GYO_CURRENT_APP}.client_delay_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_soak"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_soak_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_soak" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
