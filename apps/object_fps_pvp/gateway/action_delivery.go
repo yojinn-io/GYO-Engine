@@ -27,6 +27,11 @@ type actionWindow struct {
 	// ACK-only batch showed that the Client missed it.
 	retiredSent     uint64
 	retirementAsked bool
+	// Runtime link direction only (D56): the requests a write pass took at
+	// least once, and the highest acknowledgement a pass took. What no pass
+	// took is what the link drops unwritten on a Leave or a close.
+	taken    map[uint64]bool
+	ackTaken uint64
 }
 
 func newActionWindow() *actionWindow {
@@ -117,8 +122,51 @@ func (w *actionWindow) mergeResults(in *runtime.ActionResults) {
 		if id <= w.retired {
 			delete(w.requests, id)
 			delete(w.decisions, id)
+			delete(w.taken, id)
 		}
 	}
+}
+
+// takeActionsLocked marks what a write pass takes in one ActionBatch of the
+// link and returns the write: the shots no earlier pass took, and the
+// acknowledgement if no earlier pass took it and the Match has not retired
+// it. The pass then writes them, or counts them abandoned.
+func (l *runtimeLink) takeActionsLocked(message *runtime.RuntimeEnvelope) linkWrite {
+	in := message.GetActions()
+	write := linkWrite{message: message, player: in.GetPlayerId()}
+	w := l.actionWindows[write.player]
+	if w == nil {
+		return write
+	}
+	if w.taken == nil {
+		w.taken = map[uint64]bool{}
+	}
+	for _, shot := range in.Shots {
+		if !w.taken[shot.ActionId] {
+			w.taken[shot.ActionId] = true
+			write.shots++
+		}
+	}
+	if in.AcknowledgedThrough > max(w.retired, w.ackTaken) {
+		w.ackTaken = in.AcknowledgedThrough
+		write.acks = 1
+	}
+	return write
+}
+
+// untaken is what the link's window holds that no write pass took: the
+// requests, and 1 for a pending acknowledgement. Called with the link's
+// mutex held, before the window is dropped.
+func (w *actionWindow) untaken() (shots, acks uint64) {
+	for id := range w.requests {
+		if !w.taken[id] {
+			shots++
+		}
+	}
+	if w.acknowledged > max(w.retired, w.ackTaken) {
+		acks = 1
+	}
+	return shots, acks
 }
 func circularIDs(ids []uint64, cursor uint64) []uint64 {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
@@ -333,7 +381,9 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 		}
 		return err
 	}
-	// The link holds the batch: it reaches the Match whatever follows.
+	// The link holds the batch. It reaches the Match unless the link drops the
+	// window first: a Leave, an eviction, a close or a failed write before a
+	// pass wrote it (counted by the link, drop_*_actions_shots and _acks).
 	s.countIngress(p, playerFwdHandedActionsPackets, 1)
 	if p.session.CommitSequence(h.Sequence, now) != nil {
 		return nil

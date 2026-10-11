@@ -198,6 +198,9 @@ struct MatchIngressCounts final {
     std::uint64_t slackCoalescedSamples{};
     // Published samples still waiting for the IPC at a reset or the end.
     std::uint64_t slackUnclaimedSamples{};
+    // Appended key (D56): players whose pending action acknowledgement a
+    // Leave or an eviction discarded before the tick handed it on.
+    std::uint64_t leaveDiscardedActionAcks{};
 };
 
 struct MatchIngressWindow final {
@@ -261,6 +264,7 @@ void ForEachMatchIngressField(Counts& counts, Field&& field) {
     field(IngressKey("slack_taken", none, IngressUnit::Samples), counts.slackTakenSamples);
     field(IngressKey("slack_coalesced", none, IngressUnit::Samples), counts.slackCoalescedSamples);
     field(IngressKey("slack_unclaimed", none, IngressUnit::Samples), counts.slackUnclaimedSamples);
+    field(IngressKey("leave_discarded", actions, IngressUnit::Acks), counts.leaveDiscardedActionAcks);
 }
 
 [[nodiscard]] inline std::string MatchIngressStatisticsLine(const MatchIngressWindow& window) {

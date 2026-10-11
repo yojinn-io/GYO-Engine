@@ -135,9 +135,10 @@ def run_logs(players, *, windows=1, eof=True, written=None, match_received=None,
 
 class GoldenTests(unittest.TestCase):
     def test_key_lists_equal_the_golden_lines(self):
-        for name, keys, head in (("gateway-player.txt", evidence.GATEWAY_PLAYER_KEYS, 4),
+        for name, keys, head in (("gateway-player.txt",
+                                  evidence.GATEWAY_PLAYER_KEYS + evidence.GATEWAY_PLAYER_APPENDED, 4),
                                  ("gateway-global.txt", evidence.GATEWAY_GLOBAL_KEYS, 3),
-                                 ("match.txt", evidence.MATCH_KEYS, 4)):
+                                 ("match.txt", evidence.MATCH_KEYS + evidence.MATCH_APPENDED, 4)):
             for line in golden_lines(name):
                 fields = line.split(" ingress statistics ")[1].split(" ")
                 self.assertEqual(tuple(field.split("=")[0] for field in fields[head:]), keys, name)
@@ -167,6 +168,7 @@ class GoldenTests(unittest.TestCase):
         totals = result["totals"]
         self.assertEqual(totals["gateway"]["windows"], 3)
         self.assertEqual(totals["gateway"]["players"]["7"]["received_datagrams"], 0 + 719 + 445)
+        self.assertEqual((totals["gateway"]["unknown_keys"], totals["match"]["unknown_keys"]), ([], []))
         self.assertEqual(totals["gateway"]["global"]["received_datagrams"], 733 + 455)
         self.assertEqual(totals["match"]["players"]["7"]["received_commands"], 4445 + 2230)
         self.assertEqual(totals["match"]["windows"], 3)
@@ -344,6 +346,53 @@ class CompletenessTests(unittest.TestCase):
             changed = list(lines)
             changed[index] = broken
             self.assertEqual(evidence.analyze_text("\n".join(changed) + "\n", golden_match())["status"], "stopped")
+
+    def test_d56_keys_are_reported_only(self):
+        """The D56 keys are known: summed and reported (action_drops), never unknown, never judged."""
+        result = evidence.analyze_text(golden_gateway(), golden_match())
+        drops = result["checks"]["action_drops"]
+        self.assertEqual(drops["status"], "reported")
+        self.assertEqual(drops["gateway"]["total"], {
+            "drop_discarded_on_leave_actions_shots": 930 + 940, "drop_discarded_on_leave_actions_acks": 931 + 941,
+            "drop_cleared_on_close_actions_shots": 932 + 942, "drop_cleared_on_close_actions_acks": 933 + 943,
+            "drop_abandoned_on_close_actions_shots": 934 + 944, "drop_abandoned_on_close_actions_acks": 935 + 945})
+        self.assertEqual(drops["gateway"]["players"]["7"], drops["gateway"]["total"])
+        self.assertEqual(drops["gateway"]["lines"], {"with": 3, "without": 0})
+        self.assertTrue(drops["gateway"]["complete"])
+        self.assertEqual(drops["match"]["total"], {"leave_discarded_actions_acks": 122 + 121})
+        self.assertEqual(drops["match"]["players"]["0"], {"leave_discarded_actions_acks": 0})
+        self.assertEqual(drops["match"]["lines"], {"with": 6, "without": 0})
+        # Reported only: a changed value changes no status.
+        changed = corrupt(golden_gateway(), "player ingress statistics", "drop_cleared_on_close_actions_shots", 5)
+        changed = evidence.analyze_text(changed, corrupt(golden_match(), "player=7", "leave_discarded_actions_acks", 7))
+        self.assertEqual(changed["checks"]["action_drops"]["gateway"]["total"]["drop_cleared_on_close_actions_shots"],
+                         932 + 942 + 5)
+        self.assertEqual(changed["checks"]["action_drops"]["match"]["total"]["leave_discarded_actions_acks"],
+                         122 + 121 + 7)
+        self.assertEqual({name: check["status"] for name, check in changed["checks"].items()},
+                         {name: check["status"] for name, check in result["checks"].items()})
+
+    def test_lines_without_the_d56_keys_still_parse(self):
+        """A line written before D56 has no appended keys: it parses, and the report says it lacked them."""
+        def strip(text, keys):
+            return "\n".join(" ".join(token for token in line.split(" ") if token.split("=")[0] not in keys)
+                             for line in text.splitlines()) + "\n"
+        result = evidence.analyze_text(strip(golden_gateway(), evidence.GATEWAY_PLAYER_APPENDED),
+                                       strip(golden_match(), evidence.MATCH_APPENDED))
+        for name in ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2"):
+            self.assertEqual(result["checks"][name]["status"], "passed", name)
+        drops = result["checks"]["action_drops"]
+        self.assertEqual(drops["gateway"]["lines"], {"with": 0, "without": 3})
+        self.assertFalse(drops["gateway"]["complete"])
+        self.assertEqual(drops["match"]["lines"], {"with": 0, "without": 6})
+        # Out of order, they are not the known keys: kept apart.
+        lines = golden_gateway().splitlines()
+        lines = [line.replace("drop_discarded_on_leave_actions_shots=", "x_shots=").replace(
+                     "drop_discarded_on_leave_actions_acks=", "drop_discarded_on_leave_actions_shots=").replace(
+                     "x_shots=", "drop_discarded_on_leave_actions_acks=") for line in lines]
+        result = evidence.analyze_text("\n".join(lines) + "\n", golden_match())
+        self.assertIn("drop_discarded_on_leave_actions_shots", result["totals"]["gateway"]["unknown_keys"])
+        self.assertEqual(result["checks"]["action_drops"]["gateway"]["lines"], {"with": 0, "without": 3})
 
     def test_appended_keys_are_kept_apart(self):
         lines = golden_gateway().splitlines()

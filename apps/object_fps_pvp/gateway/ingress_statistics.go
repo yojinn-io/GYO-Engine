@@ -15,8 +15,10 @@ import (
 // Each line counts what happened since the previous line of the same player
 // (or of the Gateway); final=1 marks the last one. Keys are
 // "[fwd_|drop_]<reason>[_<kind>]_<unit>": fwd_ was handed on to the Match,
-// which classifies it; drop_ is a discard the Gateway executed. New keys are
-// only ever appended. The golden lines live in
+// which classifies it; drop_ is a discard the Gateway executed. A handed
+// actions packet is fwd_ although the link may still drop what it carried
+// before writing it (drop_*_actions_shots and _acks). New keys are only ever
+// appended. The golden lines live in
 // tests/object_fps_pvp/fixtures/ingress_v1.
 const ingressStatisticsVersion = 1
 
@@ -102,6 +104,7 @@ const (
 	unitBatches
 	unitShots
 	unitSnapshots
+	unitAcks
 )
 
 type ingressKey struct {
@@ -161,7 +164,8 @@ var (
 	ingressKindNames = [...]string{ingressAnyKind: "", ingressHello: "_hello", ingressInput: "_input",
 		ingressActions: "_actions", ingressOther: "_other"}
 	ingressUnitNames = [...]string{unitDatagrams: "_datagrams", unitPackets: "_packets", unitInputs: "_inputs",
-		unitCommands: "_commands", unitBatches: "_batches", unitShots: "_shots", unitSnapshots: "_snapshots"}
+		unitCommands: "_commands", unitBatches: "_batches", unitShots: "_shots", unitSnapshots: "_snapshots",
+		unitAcks: "_acks"}
 )
 
 func ingressKeyName(k ingressKey) string {
@@ -232,6 +236,18 @@ const (
 	// DecodeInput). Both still reach the Match on the rejected lane.
 	playerFwdRoutedLinkEpochMismatchInputs
 	playerFwdRoutedMalformedInputs
+	// Appended (D56): what the runtime link's action window held for the Match
+	// but never wrote, by exit. A shot request counts when no write pass ever
+	// took it (a pass that took it writes it, or counts it abandoned); an ACK
+	// counts once per pending acknowledgement cursor (advances merged before a
+	// write count once) that no pass took and the Match has not retired.
+	// Requests and ACKs a pass took before are on the Match already.
+	playerDropDiscardedOnLeaveActionsShots // Leave or eviction (forget)
+	playerDropDiscardedOnLeaveActionsAcks
+	playerDropClearedOnCloseActionsShots // the link closed
+	playerDropClearedOnCloseActionsAcks
+	playerDropAbandonedOnCloseActionsShots // first taken by a pass whose write failed
+	playerDropAbandonedOnCloseActionsAcks
 	playerIngressCounterCount
 )
 
@@ -285,6 +301,12 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerFwdRoutedRotationInputs:            {ingressForwarded, reasonRoutedRotation, ingressAnyKind, unitInputs},
 	playerFwdRoutedLinkEpochMismatchInputs:   {ingressForwarded, reasonRoutedLinkEpochMismatch, ingressAnyKind, unitInputs},
 	playerFwdRoutedMalformedInputs:           {ingressForwarded, reasonRoutedMalformed, ingressAnyKind, unitInputs},
+	playerDropDiscardedOnLeaveActionsShots:   {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitShots},
+	playerDropDiscardedOnLeaveActionsAcks:    {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitAcks},
+	playerDropClearedOnCloseActionsShots:     {ingressDropped, reasonClearedOnClose, ingressActions, unitShots},
+	playerDropClearedOnCloseActionsAcks:      {ingressDropped, reasonClearedOnClose, ingressActions, unitAcks},
+	playerDropAbandonedOnCloseActionsShots:   {ingressDropped, reasonAbandonedOnClose, ingressActions, unitShots},
+	playerDropAbandonedOnCloseActionsAcks:    {ingressDropped, reasonAbandonedOnClose, ingressActions, unitAcks},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64

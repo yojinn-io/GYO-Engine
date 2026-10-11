@@ -26,8 +26,9 @@ gateway ingress statistics version=1 window_ms=<int> final=<0|1> <key>=<int> ...
 - 計數的鍵依 golden 的順序排列；鍵的完整清單與順序以上表的產生者為準（Go 一份、C++ 一份，各自只有一個名稱對照）。
 - 鍵名規則：`[fwd_|drop_]<原因>[_<種類>]_<單位>`。
   - Gateway：`fwd_`＝已交給 Match（由 Match 分類）；`drop_`＝Gateway 執行的丟棄；沒有前綴的是守恆式的輸入（`received_datagrams`）。
-  - 種類是資料包標頭的種類：`hello`、`input`、`actions`、`other`；Match 端的動作那一側用 `actions`。
-  - 單位只用 `datagrams`、`packets`、`inputs`、`commands`、`batches`、`shots`、`snapshots`（Gateway 全域行拒收 Match 的 snapshot，D55 ②）、`acks`（Match 行：重設時丟掉的動作 ack，D55 ①）、`samples`（Match 行：movement slack 樣本，F2b-2）。
+    - 例外（D56）：`fwd_handed_actions_packets` 是交給 runtime link 的動作包，裡面的 shot 請求與 ACK 在 link 寫出之前仍可能被丟掉：Leave／踢出、close、寫出失敗時，**沒有任何一輪寫出取走過**的部分丟掉，計在玩家行尾的 `drop_<原因>_actions_shots`／`_acks`（見下面「動作在 link 內的丟棄」）。取走過的那一輪會寫出它，或在寫出失敗時計成 `abandoned_on_close`，所以已寫出的部分 Match 都有。
+  - 種類是資料包標頭的種類：`hello`、`input`、`actions`、`other`；Match 端的動作那一側，以及 Gateway 玩家行 link 內的動作丟棄（D56），也用 `actions`。
+  - 單位只用 `datagrams`、`packets`、`inputs`、`commands`、`batches`、`shots`、`snapshots`（Gateway 全域行拒收 Match 的 snapshot，D55 ②）、`acks`（動作 ack：Match 行是重設或 Leave／踢出時丟掉的，D55 ①、D56；Gateway 玩家行是 link 丟掉的，D56）、`samples`（Match 行：movement slack 樣本，F2b-2）。
 - 值一律是十進位整數（`^\d+$`），0 也照寫。
 - **每行是自上一行以來的增量**；`final=1` 是最後一段。分析器加總同一程序、同一玩家的所有行，並要求視窗連續。缺 `final=1` 或缺某個視窗行時判成未判定或停止，絕不當成 0。
 - Match 的 player=0 桶（未知玩家）每個視窗都寫一行。
@@ -48,6 +49,7 @@ gateway ingress statistics version=1 window_ms=<int> final=<0|1> <key>=<int> ...
   - `received_inputs`＝`accepted_inputs`＋各拒絕原因的 `*_inputs`；
   - `received_actions_batches`／`_shots`＝`accepted_actions_*`＋各拒絕原因的 `*_actions_*`。
   - `handoff_rejected`、`rotation_discarded`、`leave_discarded`、`reset_discarded` 是收下之後才丟掉的命令（收到時已計為 `accepted_new`），不在 I2 之內；`reset_discarded_actions_shots`、`leave_discarded_actions_shots` 是收下之後、交給模擬之前被重設或 Leave／踢出丟掉的 shot（收到時已計在 `accepted_actions_shots`），也不在之內。`reset_discarded_actions_acks` 是重設時丟掉、還沒送出的動作 ack（每位玩家最多一個），也不在之內。
+  - `leave_discarded_actions_acks`（D56，接在 Match 行尾）是 Leave／踢出時丟掉、還沒交給模擬的動作 ack（每位玩家最多一個），不在 I2 之內。
   - `handoff_rejected`、`staged_over_window` 與動作的 `full` 依程式推導走不到，應恆為 0；L2 的 0 不當證據。
 - 不大於游標的命令依 Match 的替代紀錄（`MatchIngressLedger.hpp`）分類：
   - 每個被替代（Tick 解析時 host 還沒收到）的序號開一筆紀錄，計 `substituted_commands`。紀錄在游標超過序號 600 個（`ConnectionQualityWindowTicks`，每 Tick 解析一個序號）之後以 `aged` 關閉；每位玩家最多 1024 筆（保留期內最多 601 筆，所以 `overflow` 應恆為 0）。
@@ -62,6 +64,12 @@ gateway ingress statistics version=1 window_ms=<int> final=<0|1> <key>=<int> ...
   - S1：`slack_executed`＋`slack_late`＝`slack_merged`＋`slack_discarded`＋`slack_published`；S2：`slack_published`＝`slack_overwritten`＋`slack_taken`＋`slack_unclaimed`（單位都是 `_samples`）。沒有待發布或待取走的樣本時精確成立；每個跑次結束都經過重設，最後的 `final=1` 行之前也會把剩下的計入，所以加總整個程序時精確成立。
   - IPC 取走之後的去向（寫出、連線關閉時丟掉）與 Client 端（佇列溢出、settling 期間忽略）不在這裡，屬於第 10 批的觀測缺口第 3 項。計數是加總，看不出「連續幾次發布都帶負樣本」。
 - 屬性鍵不在守恆式之內：`fwd_resolved_at_write_commands`、`fwd_retention_expired_commands`、`fwd_routed_*_inputs`、`late_only_inputs`、`slack_published_negative_samples`、`slack_coalesced_samples`。Gateway 全域行的 `drop_old_tick_snapshots`（tick 不晚於上一個，D1）與 `drop_regressed_snapshots`（某位玩家的 life、epoch 或已解析游標倒退，D2）也不在之內。
+- **動作在 link 內的丟棄**（D56，Gateway 玩家行尾的六個鍵，只記錄、不在任何守恆式之內）：
+  - 鍵依序是 `drop_discarded_on_leave_actions_shots`、`drop_discarded_on_leave_actions_acks`（Leave 或踢出：`forget`）、`drop_cleared_on_close_actions_shots`、`drop_cleared_on_close_actions_acks`（link 關閉）、`drop_abandoned_on_close_actions_shots`、`drop_abandoned_on_close_actions_acks`（寫出失敗時放棄的那一輪）。
+  - link 的動作視窗為每個 shot 請求記「是否被某一輪寫出取走過」，也記取走過的最高 ACK。`shots`：Leave／close 時視窗裡沒有被取走過的請求；寫出失敗時，那一輪裡**第一次**被取走的請求（之前取走過的已經寫出過）。`acks`：視窗的 ACK 高於取走過的最高 ACK 與 Match 的 retired 時計 1（取走之前合併的多次前進只算一次）；寫出失敗時，那一輪帶的 ACK 是第一次取走的就計 1。
+  - 每個請求最多計一次：取走過的請求一定由那一輪寫出，或計成 `abandoned_on_close`，之後不再計 Leave／close。所以 link 內的 shot 守恆是：交給 link 的不同 action id 數＝成功寫出過的不同 id 數＋三種 `_actions_shots`（同一個 id 重送、批次內的副本、已 retired 的 id 合併成同一個請求）。這條只由 Go 的決定性測試釘住（`action_drops_test.go`）：行裡沒有交給 link 與寫出的 shot 數，分析器無法判定。
+  - 玩家被移除之後，計數仍保留到被取走：Leave 的在之後那一段的已移除玩家行，close 與寫出失敗的在 `final=1` 那一段。
+  - 不計數：close 與寫出失敗時被清掉的 controls（Join／Leave 訊息），房間已經結束。
 - I1（Gateway 寫出數＝Match 的 `received_commands`）跨兩個程序，不在 golden 之內，判定條件見 `docs/object_fps_pvp/plans/v7/08c-drop-report.md`。
 
 ## `match-ingress.jsonl`

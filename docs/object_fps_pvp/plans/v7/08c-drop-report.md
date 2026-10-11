@@ -95,7 +95,7 @@
 7. 帳本保留 600 Tick；晚超過 10 s 的記為 `aged`。
 8. kernel 的 UDP 接收緩衝溢出（Gateway 讀不到，不屬於「Gateway 收到」）、Close 之後收到的包（範圍寫成「`final=1` 行之前處理的資料包」）。
 9. 不正常的 Client：衝突窗口被併進主線時整則被 Match 拒絕，同一則裡其他已被標記的命令之後的副本會被去重，損失變成永久的（限該玩家）。契約寫明「`conflict_*` > 0 的玩家，其遲到與替代統計不可信」。
-10. 動作在 link 內的丟棄（2026-10-11 死信隊列評估找到，D56 補計數）：Leave／踢出、close、寫出失敗時，link 動作視窗裡**從沒寫出過**的 shot 請求與還沒轉送的 ACK 被清掉；P2 由 Gateway 依玩家與原因計數（鍵見 fixtures README），Match 不知道（和第 1 項同一等級）。已寫出的部分 Match 已有，Leave 時計成 `leave_discarded_actions_shots`。close 與寫出失敗時被清掉的 controls（Join／Leave 訊息）不計數：房間已經結束。
+10. 動作在 link 內的丟棄（2026-10-11 死信隊列評估找到，D56 補計數）：Leave／踢出、close、寫出失敗時，link 動作視窗裡**從沒寫出過**的 shot 請求與還沒轉送的 ACK 被清掉；P2 由 Gateway 依玩家與原因計數（鍵見 fixtures README），Match 不知道（和第 1 項同一等級）。已寫出的部分 Match 已有，Leave 時計成 `leave_discarded_actions_shots`。close 與寫出失敗時被清掉的 controls（Join／Leave 訊息）不計數：房間已經結束。link 內 shot 的守恆（交給 link 的不同請求＝寫出過的＋三種丟棄）目前只由 Gateway 的決定性測試釘住；log 裡沒有「交給 link」與「寫出」的 shot 數，分析器判定不了。
 
 ## 契約與文件（和實作同一個 PR）
 

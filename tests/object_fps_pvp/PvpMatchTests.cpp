@@ -1416,8 +1416,9 @@ TEST_CASE("PvP host counts what Leave and reset discard, and closes their record
     REQUIRE(host.Advance(1.0 / 60).steps == 1); // both execute 1
     REQUIRE(host.Advance(1.0 / 60).steps == 1); // both substitute 2
     REQUIRE(host.SubmitActionBatch({1, {{1, 1, 0, 0}}}, 0) == ActionAdmission::Accepted);
+    REQUIRE(host.QueueActionAcknowledgement(1, 0));
     REQUIRE(host.QueueLeave(3, 1));
-    REQUIRE(host.Advance(1.0 / 60).steps == 1); // Leave drops the staged shot; 2 substitutes 3
+    REQUIRE(host.Advance(1.0 / 60).steps == 1); // Leave drops the staged shot and ack; 2 substitutes 3
     REQUIRE(host.SubmitInput(Window(2, 5, 7)));
     REQUIRE(host.SubmitActionBatch({2, {{1, 1, 0, 0}}}, 0) == ActionAdmission::Accepted);
     REQUIRE(host.QueueActionAcknowledgement(2, 0));
@@ -1429,6 +1430,8 @@ TEST_CASE("PvP host counts what Leave and reset discard, and closes their record
     const auto& departed = taken.at(1);
     const auto leaveDiscardedShots = departed.leaveDiscardedActionShots;
     CHECK(leaveDiscardedShots == 1);
+    const auto leaveDiscardedAcks = departed.leaveDiscardedActionAcks;
+    CHECK(leaveDiscardedAcks == 1);
     const auto unarrivedLeft = departed.unarrived[IngressIndex(IngressSubstitutionClose::Removed)];
     CHECK(unarrivedLeft == 1);
     CheckSubstitutionConservation(departed);
@@ -1439,6 +1442,8 @@ TEST_CASE("PvP host counts what Leave and reset discard, and closes their record
     CHECK(resetDiscardedShots == 1);
     const auto resetDiscardedAcks = reset2.resetDiscardedActionAcks;
     CHECK(resetDiscardedAcks == 1);
+    const auto resetLeaveAcks = reset2.leaveDiscardedActionAcks;
+    CHECK(resetLeaveAcks == 0);
     const auto unarrivedReset = reset2.unarrived[IngressIndex(IngressSubstitutionClose::Reset)];
     CHECK(unarrivedReset == 2);
     CHECK(reset2.discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] == 0);

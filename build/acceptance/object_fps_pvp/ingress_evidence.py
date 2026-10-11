@@ -14,6 +14,8 @@ docs/object_fps_pvp/plans/v7/08c-drop-report.md exactly:
   the Gateway routed nothing for a future limit, a conflict, the link cap or a written conflict.
 - match-ingress.jsonl: schema, version and kinds, trace_end as the last line, and the reconciliation with the
   Match lines that its suppressed and dropped counts allow.
+- action_drops (D56) is reported only: what the runtime link dropped of the actions before writing them, and the
+  action acknowledgements the Match discarded on a Leave.
 
 A missing final=1 line, a missing window line or a missing trace_end makes the affected checks "undetermined";
 they are never read as zero. A line of another version, or one that breaks the line format, stops the analysis
@@ -32,7 +34,8 @@ TRACE_VERSION = 1
 
 # Key lists of version 1 in line order (apps/object_fps_pvp/gateway/ingress_statistics.go and
 # apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp); test_ingress_evidence.py compares them with
-# the golden lines. Keys appended later are kept apart (unknown_keys) and enter no conservation.
+# the golden lines. Keys appended later are kept apart (unknown_keys) and enter no conservation, except the
+# known appended keys below.
 GATEWAY_PLAYER_KEYS = (
     "received_datagrams", "fwd_main_input_packets", "fwd_rejected_lane_input_packets",
     "fwd_written_duplicate_input_packets", "fwd_stale_sequence_input_packets", "fwd_admitted_hello_packets",
@@ -75,6 +78,13 @@ MATCH_KEYS = (
        "reset_discarded_actions_acks", "slack_executed_samples", "slack_late_samples", "slack_merged_samples",
        "slack_discarded_samples", "slack_published_samples", "slack_published_negative_samples",
        "slack_overwritten_samples", "slack_taken_samples", "slack_coalesced_samples", "slack_unclaimed_samples"))
+# Known keys appended after the v1 keys (D56, 2026-10-11), in line order. A line carries all of them right after the
+# v1 keys or none (written before D56); they are reported only (action_drops) and enter no conservation.
+GATEWAY_PLAYER_APPENDED = (
+    "drop_discarded_on_leave_actions_shots", "drop_discarded_on_leave_actions_acks",
+    "drop_cleared_on_close_actions_shots", "drop_cleared_on_close_actions_acks",
+    "drop_abandoned_on_close_actions_shots", "drop_abandoned_on_close_actions_acks")
+MATCH_APPENDED = ("leave_discarded_actions_acks",)
 
 # IG: every *_packets outcome from fwd_main_input_packets to drop_admission_unknown_packets.
 IG_OUTCOMES = GATEWAY_PLAYER_KEYS[GATEWAY_PLAYER_KEYS.index("fwd_main_input_packets"):
@@ -134,8 +144,9 @@ class ContractStop(Exception):
     """A line this analyzer must not interpret: another version, or a broken line format."""
 
 
-def parse_line(fields, head, keys, number):
-    """(head values, counts, unknown keys) of one ingress line; raises ContractStop."""
+def parse_line(fields, head, keys, number, appended=()):
+    """(head values, counts, unknown keys) of one ingress line; raises ContractStop. The known appended keys are
+    counted when the line carries all of them right after keys (head["appended"] tells whether it did)."""
     pairs = []
     for token in fields.split():
         name, separator, value = token.partition("=")
@@ -162,10 +173,14 @@ def parse_line(fields, head, keys, number):
     final = values.get("final")
     if final not in ("0", "1"):
         raise ContractStop(f"line {number}: final={final!r}")
+    known = len(keys)
+    carried = bool(appended) and tuple(name for name, _ in body[known:known + len(appended)]) == appended
+    if carried:
+        known += len(appended)
     return ({"player": int(values["player"]) if "player" in values else None,
-             "window_ms": int(values["window_ms"]), "final": final == "1", "line": number},
-            {name: int(value) for name, value in body[:len(keys)]},
-            {name: int(value) for name, value in body[len(keys):]})
+             "window_ms": int(values["window_ms"]), "final": final == "1", "line": number, "appended": carried},
+            {name: int(value) for name, value in body[:known]},
+            {name: int(value) for name, value in body[known:]})
 
 
 def add_counts(total, counts):
@@ -180,7 +195,8 @@ def window_problem(state, text):
 def read_gateway(text):
     """Windows, per-player and Gateway-wide totals and lifecycle facts of one Gateway log."""
     state = {"starts": 0, "runtime_address": None, "evicted": set(), "windows": 0, "final": False,
-             "final_line": None, "gaps": [], "players": {}, "global": {}, "unknown_keys": set()}
+             "final_line": None, "gaps": [], "players": {}, "global": {}, "unknown_keys": set(),
+             "appended_lines": {"with": 0, "without": 0}}
     awaiting = None  # line of a "gateway statistics" line still waiting for its ingress window
     current = None  # {"window_ms", "final", "players": set}
     waiting_players = {}  # player -> line of its "player send statistics" line in the current window
@@ -222,8 +238,9 @@ def read_gateway(text):
             continue
         if match := GATEWAY_PLAYER_LINE.search(line):
             head, counts, unknown = parse_line(match["fields"], ("version", "player", "window_ms", "final"),
-                                               GATEWAY_PLAYER_KEYS, number)
+                                               GATEWAY_PLAYER_KEYS, number, GATEWAY_PLAYER_APPENDED)
             state["unknown_keys"].update(unknown)
+            state["appended_lines"]["with" if head["appended"] else "without"] += 1
             player = head["player"]
             if current is None:
                 window_problem(state, f"line {number}: a player ingress line before any Gateway ingress window")
@@ -262,7 +279,7 @@ def read_match(text):
     """Windows, per-bucket totals and IPC lifecycle facts of one Match log."""
     state = {"starts": 0, "listen_address": None, "ipc_closed": [], "accept_failed": False, "joins": [],
              "evicted": set(), "windows": 0, "final": False, "final_line": None, "gaps": [], "players": {},
-             "unknown_keys": set()}
+             "unknown_keys": set(), "appended_lines": {"with": 0, "without": 0}}
     awaiting = None  # line of a network statistics line still waiting for its ingress window
     current = None
     seen_players = set()
@@ -294,8 +311,9 @@ def read_match(text):
             continue
         if match := MATCH_LINE.search(line):
             head, counts, unknown = parse_line(match["fields"], ("version", "player", "window_ms", "final"),
-                                               MATCH_KEYS, number)
+                                               MATCH_KEYS, number, MATCH_APPENDED)
             state["unknown_keys"].update(unknown)
+            state["appended_lines"]["with" if head["appended"] else "without"] += 1
             player = head["player"]
             if player == 0:  # every window starts with the player=0 bucket (lines are in player order)
                 if state["final"]:
@@ -435,6 +453,21 @@ def match_checks(match, injection):
     if injection and any(never.values()) and j5a["status"] == "passed":
         j5a["status"] = "failed"
     return checks
+
+
+def action_drops(gateway, match):
+    """D56, reported only: per process, the appended keys' totals and per-bucket values, and how many ingress lines
+    carried them (a line written before D56 does not; its share is unknown, not zero)."""
+    report = {"status": "reported"}
+    for name, state, keys in (("gateway", gateway, GATEWAY_PLAYER_APPENDED), ("match", match, MATCH_APPENDED)):
+        if state is None:
+            continue
+        players = state["players"]
+        report[name] = {"total": {key: sum(c.get(key, 0) for c in players.values()) for key in keys},
+                        "players": {str(p): {key: c.get(key, 0) for key in keys} for p, c in sorted(players.items())},
+                        "lines": dict(state["appended_lines"]),
+                        "complete": state["appended_lines"]["without"] == 0}
+    return report
 
 
 def judge_i1(gateway, match):
@@ -650,6 +683,7 @@ def analyze_text(gateway_text, match_text, trace_text=None, injection=False):
     checks["I1"] = judge_i1(gateway, match)
     checks["I3"] = judge_i3(gateway, match)
     checks["trace"] = trace_checks(trace, match) if trace_text is not None else {"status": "absent"}
+    checks["action_drops"] = action_drops(gateway, match)
     exact = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2")
     statuses = [checks[name]["status"] for name in exact] + [checks["I1"]["status"], checks["I3"]["status"],
                                                               checks["trace"]["status"]]

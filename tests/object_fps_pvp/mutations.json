@@ -3059,6 +3059,126 @@
       "replace": "                if(p.commands_size()!=1 || p.commands(0).sequence()%50!=0) static_cast<void>(host.SubmitInput(window));\n",
       "check": "ingress_cross",
       "expect": "I1 is failed"
+    },
+    {
+      "id": "v7-flow-d56-leave-shots-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n",
+      "replace": "\t\t_ = shots\n",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 1 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
+      "what": "a Leave drops the shot requests no pass took without counting them"
+    },
+    {
+      "id": "v7-flow-d56-leave-acks-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n",
+      "replace": "\t\t_ = acks\n",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[1 0 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
+      "what": "a Leave drops the acknowledgement no pass took without counting it"
+    },
+    {
+      "id": "v7-flow-d56-written-counted-dropped",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tfor id := range w.requests {\n\t\tif !w.taken[id] {\n\t\t\tshots++\n",
+      "replace": "\tfor id := range w.requests {\n\t\tif w.taken[id] || true {\n\t\t\tshots++\n",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[3 1 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
+      "what": "a Leave or close also counts the requests a pass took (written, or counted abandoned): counted twice"
+    },
+    {
+      "id": "v7-flow-d56-resend-counted-abandoned",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tif !w.taken[shot.ActionId] {\n\t\t\tw.taken[shot.ActionId] = true\n",
+      "replace": "\t\tif true {\n\t\t\tw.taken[shot.ActionId] = true\n",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 0 0 2 0\\], want \\[0 0 0 0 0 0\\]",
+      "what": "a failed write counts the resent requests an earlier pass wrote as abandoned"
+    },
+    {
+      "id": "v7-flow-d56-close-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tfor id, w := range l.actionWindows {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(id, playerDropClearedOnCloseActionsShots, shots)\n\t\tl.countLocked(id, playerDropClearedOnCloseActionsAcks, acks)\n\t}\n",
+      "replace": "",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 0 0 0 0\\], want \\[0 0 2 1 0 0\\]",
+      "what": "close clears the action windows without counting what no pass took"
+    },
+    {
+      "id": "v7-flow-d56-write-failure-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsShots, abandoned.shots)\n\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsAcks, abandoned.acks)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 1 1 0 0\\], want \\[0 0 1 1 2 1\\]",
+      "what": "a failed write abandons the action batches of its pass without counting them"
+    },
+    {
+      "id": "v7-flow-d56-forget-loses-counts",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n\tdelete(l.inputs, player)\n\tdelete(l.resolved, player)\n\tdelete(l.rejected, player)\n\tdelete(l.written, player)\n\tdelete(l.newestWritten, player)\n\tdelete(l.epochs, player)\n\tdelete(l.lives, player)\n\tdelete(l.actionWindows, player)\n",
+      "replace": "\tdelete(l.inputs, player)\n\tdelete(l.resolved, player)\n\tdelete(l.rejected, player)\n\tdelete(l.written, player)\n\tdelete(l.newestWritten, player)\n\tdelete(l.epochs, player)\n\tdelete(l.lives, player)\n\tdelete(l.actionWindows, player)\n\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n",
+      "check": "go",
+      "expect": "player 7 \\(left\\) windows \\[\\{0 0\\} \\{0 0\\}\\], want \\[\\{2 0\\} \\{0 0\\}\\]",
+      "what": "forget drops the action window before counting it: the Leave never reaches the window or final lines"
+    },
+    {
+      "id": "v7-flow-d56-gateway-key-order",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/gateway/ingress_statistics.go",
+      "find": "\tplayerDropDiscardedOnLeaveActionsShots:   {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitShots},\n\tplayerDropDiscardedOnLeaveActionsAcks:    {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitAcks},\n",
+      "replace": "\tplayerDropDiscardedOnLeaveActionsShots:   {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitAcks},\n\tplayerDropDiscardedOnLeaveActionsAcks:    {ingressDropped, reasonDiscardedOnLeave, ingressActions, unitShots},\n",
+      "check": "go",
+      "expect": "ingress key \\d+ is drop_discarded_on_leave_actions_shots, want drop_discarded_on_leave_actions_acks",
+      "what": "the two Leave action keys swap names"
+    },
+    {
+      "id": "v7-flow-d56-match-leave-ack-uncounted",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    if (pendingActionAcknowledgements_.contains(playerId)) ++ingress_[playerId].leaveDiscardedActionAcks;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( leaveDiscardedAcks == 1 \\) is NOT correct",
+      "what": "the Match drops a pending action acknowledgement on a Leave uncounted"
+    },
+    {
+      "id": "v7-flow-d56-match-key-order",
+      "batch": "v7-flow",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp",
+      "find": "    field(IngressKey(\"slack_unclaimed\", none, IngressUnit::Samples), counts.slackUnclaimedSamples);\n    field(IngressKey(\"leave_discarded\", actions, IngressUnit::Acks), counts.leaveDiscardedActionAcks);\n",
+      "replace": "    field(IngressKey(\"leave_discarded\", actions, IngressUnit::Acks), counts.leaveDiscardedActionAcks);\n    field(IngressKey(\"slack_unclaimed\", none, IngressUnit::Samples), counts.slackUnclaimedSamples);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( (parsed\\.keys == keys|ingressLine == expectedIngressLine) \\) is NOT correct",
+      "what": "the appended Match key moves before slack_unclaimed"
+    },
+    {
+      "id": "v7-flow-d56-evidence-omits-action-drops",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    checks[\"action_drops\"] = action_drops(gateway, match)\n",
+      "replace": "",
+      "check": "ingress_evidence",
+      "expect": "KeyError: 'action_drops'",
+      "what": "the analyzer does not report the D56 keys"
+    },
+    {
+      "id": "v7-flow-d56-evidence-d56-keys-unknown",
+      "batch": "v7-flow",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    carried = bool(appended) and tuple(name for name, _ in body[known:known + len(appended)]) == appended\n",
+      "replace": "    carried = False\n",
+      "check": "ingress_evidence",
+      "expect": "Tuples differ: \\(\\['drop_abandoned_on_close_actions_acks'",
+      "what": "the analyzer keeps the D56 keys apart as unknown keys and reports them missing"
     }
   ]
 }

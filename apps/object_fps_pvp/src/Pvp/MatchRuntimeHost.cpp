@@ -572,6 +572,7 @@ void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolv
     }
     if (const auto actions = pendingActions_.find(playerId); actions != pendingActions_.end())
         ingress_[playerId].leaveDiscardedActionShots += actions->second.size();
+    if (pendingActionAcknowledgements_.contains(playerId)) ++ingress_[playerId].leaveDiscardedActionAcks;
     ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });
     if (const auto track = slack_.find(playerId); track != slack_.end()) DiscardSlack(playerId, track->second);
     pendingInputs_.erase(playerId);

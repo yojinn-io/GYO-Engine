@@ -109,6 +109,8 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 // forget drops a player's pending link state: input window, epoch, life and
 // action window. A Leave does it before queuing the control; an eviction sends
 // no Leave (the Match already removed the player), so the Gateway calls it.
+// The commands, and the action requests and acknowledgement no write pass
+// took, are counted into the player's ingress counters, which outlive it.
 func (l *runtimeLink) forget(player uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -124,6 +126,11 @@ func (l *runtimeLink) forgetLocked(player uint64) {
 		discarded += uint64(len(in.Commands))
 	}
 	l.countLocked(player, playerDropDiscardedOnLeaveCommands, discarded)
+	if w := l.actionWindows[player]; w != nil {
+		shots, acks := w.untaken()
+		l.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)
+		l.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)
+	}
 	delete(l.inputs, player)
 	delete(l.resolved, player)
 	delete(l.rejected, player)
@@ -430,13 +437,16 @@ type linkWrite struct {
 	player   uint64
 	commands uint64
 	resolved uint64 // main-lane commands at or below the resolved cursor when taken
+	// An ActionBatch: the shots and the acknowledgement no earlier pass took.
+	shots, acks uint64
 }
 
 // take empties the queues for one write pass: controls in order, then per
 // player (ascending id) the main window followed by the rejected lane, then
 // the due action batches. Only the main window is marked written, here, in
 // the same critical section that takes it; trimmed or overflowed commands
-// were removed before and are never marked.
+// were removed before and are never marked. The action requests and the
+// acknowledgement a batch carries are marked taken the same way.
 func (l *runtimeLink) take() []linkWrite {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -467,7 +477,7 @@ func (l *runtimeLink) take() []linkWrite {
 		delete(l.rejected, id)
 	}
 	for _, message := range l.actionBatch(time.Now()) {
-		writes = append(writes, linkWrite{message: message})
+		writes = append(writes, l.takeActionsLocked(message))
 	}
 	return writes
 }
@@ -570,6 +580,8 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 				if abandoned.lane != noLane {
 					l.countLocked(abandoned.player, playerDropAbandonedOnCloseCommands, abandoned.commands)
 				}
+				l.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsShots, abandoned.shots)
+				l.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsAcks, abandoned.acks)
 			}
 			l.mu.Unlock()
 			return err
@@ -689,6 +701,11 @@ func (l *runtimeLink) close() {
 	clear(l.newestWritten)
 	clear(l.epochs)
 	clear(l.lives)
+	for id, w := range l.actionWindows {
+		shots, acks := w.untaken()
+		l.countLocked(id, playerDropClearedOnCloseActionsShots, shots)
+		l.countLocked(id, playerDropClearedOnCloseActionsAcks, acks)
+	}
 	clear(l.actionWindows)
 	clear(l.actionStats)
 	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
