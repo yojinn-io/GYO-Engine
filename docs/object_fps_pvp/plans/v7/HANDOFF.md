@@ -30,10 +30,10 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**（使用者休息中，下面都先照建議暫定、可撤回，F1b-2 以後照暫定做）：(1) runtime link 在處理某個資料包時失效（只在關閉的空檔，每個跑次最多幾個），這個包怎麼計：F1b-1 暫定把它從玩家的 `received_datagrams` 退回、改計全域 `drop_room_unavailable_datagrams`；建議改成玩家行尾新增 `drop_runtime_failed_packets`（保留玩家歸屬，不用遞減計數；代價是 IG 的加總改用明列的鍵）；(2) J5a 的「never_arrived＝0」解讀成 `unarrived_removed`＋`unarrived_overflow`＋`unarrived_end`＝0（建議照這個，F3 的 `ingress_evidence.py` 依此實作）。**L1 發現這個解讀要修**：backpressure 的 250 ms 案例每個跑次 never_arrived＝2～8，全部是 `unarrived_removed`（推論：跑次結尾 probe Leave 時，最後幾個被替代的命令還沒到，不是資訊損失）；1000 ms 與 clean 為 0。L2 宣告前要改成「排除跑次結尾 Leave 的 removed」或把 removed 移出 never_arrived，並同步改 `ingress_evidence.py`（凍結前）；(3) F2b-1 改寫了 F2a 的一個測試斷言（`PvpMatchTests.cpp`「counts every input it refuses by reason」：原文 `resolvedUntracked == 2`，改成 `== 0` 並加 `ResolvedCopy == 1`、`LateCopy == 1`、`lateOnlyInputs == 2`；理由：F2a 的分類是 README 明訂的暫定，帳本落地後分類更細，判定沒有放寬；建議接受）；(4) D55 ① 的「動作 ack」計數需要新單位 `acks`（比照 D55 ② 的 `snapshots`），已照 D55 ① 補上 `reset_discarded_actions_acks`；不同意可撤回。（5）F2b-2 新增單位 `samples`（movement slack 樣本的流失計數，比照 `acks`、`snapshots`）；只給 `--ingress-trace`、沒有 `--movement-trace` 時當用法錯誤（exit 2）；不同意可撤回。（6）**L2 宣告前要處理：J5b**（host 端「連續 ≥`MovementPhaseLateSamples`（2）次發布帶負樣本、沒有被覆寫或取代」）。F3 查過：(a) 由既有紀錄推**不可行**（`snapshot_produced` 沒有 slack；Client 的 `start_phase` 是彙總、沒有順序）。剩 (b) IPC 開始寫出 snapshot 時為每位帶樣本的玩家寫一筆新 jsonl 紀錄（約 2～3 小時 high，改產品的 Data Contract；細節檔要升 v2 或讓 v1 容許新 kind；Client 端的流失仍可能讓 J5b 誤判失敗），或 (c) J5b 降為只記錄（Client 的 late 修正次數照樣記）。P3 的推翻條件需要同樣的逐次資料。建議 (c)：J5b 原本就不是資訊流修好與否的判定，第 10 批補 Client 端欄位時再一起做逐次紀錄。（7）跨端測試 `object_fps_pvp.ingress_cross` 用 network label（需要 Go 與 POSIX 信號，CI 不跑，L1 另外跑）；Match 關閉時偶爾不是 EOF（推論：Gateway 關 link 時 socket 裡還有沒讀的 snapshot，kernel 送 RST），這時 I1 依前提記成未判定，測試整個重跑、最多 3 次（其他判定每次都要通過）。代價：L2 會有一部分跑次的 J2 是未判定；要提高 EOF 的比例得改產品碼（Gateway 關閉前先 half-close 或讀乾淨）。建議先接受，L2 宣告寫明未判定的比例。（8）I3 的「拒絕線的命令數」用寫出數（`fwd_link_written_rejected_lane_commands`），不用交給 link 的數；建議接受（Match 只看得到寫出的）。（9）**L2 預測 P1 可能被推翻**：F3 的開發機 clean timing probe 約 22 次中 2 次出現 `late_first>0`（晚 2～25 ms；推論：不是資訊流的問題，而是 clean 環境本來就有少量遲到，修好之後才看得到）。L2 宣告前要改寫 P1（例如「late_first 的比例 ≤某值」或只記錄）。（10）死信隊列評估 B 與 S1：已決定（D56）。
-- **進行中**：評估 B 的剩餘部分（B1～B5，1 位 high，估 45～60 分鐘），之後是修無聲出口的一批（D56）。
-- **下一步**：評估 B 完成 → 依結果定修正批的範圍（若找到 S1 以外的無聲出口，先停下回報）→ 修正批（high）→ 停下回報；L2 宣告草稿在那之後。
-- **最後更新**：2026-10-11 12:1x，依據本次推送。
+- **等你決定**：(1)(8) 維持暫定（D58）；(3) F2a 測試斷言的改寫、(4) 單位 `acks`、(5) 單位 `samples` 與 `--ingress-trace` 的用法錯誤，未回覆、維持暫定；其餘已決定（D56～D58）。
+- **進行中**：D56 修正批（link 內動作丟棄的計數、Match 的 Leave ACK 計數；1 位 high）。
+- **下一步**：D56 完成後，L2 準備分兩批、各自停下回報：L2 準備 1（`ingress_evidence.py` 依 D58 修改後凍結、純延遲與斜坡注入工具、三棵樹、開發跑次）；L2 準備 2（宣告草稿、D45 的 xhigh 對抗式檢查）→ 送核准。
+- **最後更新**：2026-10-11 12:5x，依據本機 commit（D56 完成後一起推送）。
 
 ## 閱讀入口
 
@@ -79,6 +79,7 @@
 | D55 | （2026-10-11，照建議）第 08c 批 F1b-1、F2b-1 開始前的四個小決定：①F2b-1 為 `ClearState` 清掉的暫存（命令、動作、動作的 ack）與 Leave／踢出時丟掉的暫存動作加原因計數（每個跑次結束都會經過 `ClearState`）；②Gateway 拒收 Match 的 snapshot（D1、D2）新增單位 `snapshots`，鍵接在全域行尾；③`fwd_stale_sequence_input_packets` 是互斥的結果：舊序號的 Input 不論走主線、拒絕線或被整包去重，都只計在這裡，IG 才精確；④不認得的 admission 錯誤由「當成接受」改成丟棄並計 `drop_admission_unknown_packets`（fail-closed；可重用層目前只回三種錯誤，這條路走不到）。另外 Match 動作拒絕的 `full` 依程式推導走不到，比照 `staged_over_window` 註明「應恆為 0」。使用者原話：「照建議，繼續」 |
 | D56 | （2026-10-11，照建議）死信隊列評估 B 依停止規則中斷之後：①先把評估 B 做完（B1～B5，1 位 high）；②再把找到的所有無聲出口放進同一批修，排在 L2 宣告與 `ingress_evidence.py` 凍結之前：S1（Gateway link 在 Leave、close、寫出失敗時清掉從沒寫出過的 shot 與還沒轉送的 ACK）補計數（選項 (ii)：記錄每個請求是否寫出過，依玩家與原因計數，鍵接在 Gateway 行尾），加上文件（已知缺口補 S1、D4、D7、D9，修正 `action_delivery.go:336` 的註解），加上 Match 端 Leave 時丟掉的動作 ACK 計數。使用者原話：「先照這個建議跑完」 |
 | D57 | （2026-10-11，照建議）死信隊列定位成**設計原則**（評估 B6 的 (b)）：「每個出口只有兩種結果：執行，或帶原因的死信」「序號連續＋到期替代＝Match 偵測得到缺號」「死信有界」，作為 Architecture Fitness 的檢查項，寫進 `network-architecture.zh-Hant.md`；第 10 批的 log 契約與第 11 批的 `GatewayDropReport` 以這些原則對齊，不另開死信的子系統或 Data Contract 概念（不採 (a) 只當名稱、(c) 統一成一份死信契約）。使用者原話：「照建議。繼續」 |
+| D58 | （2026-10-11）「等你決定」的回覆：(2)(6)(7)(9) 照建議：J5a 的 never_arrived 改成不含 `unarrived_removed`（跑次結尾 Leave 關掉的紀錄；removed 另外輸出、只記錄），`ingress_evidence.py` 在凍結前同步修改；J5b 降為只記錄（Client 的 late 修正次數照記）；跨端測試的非 EOF 重跑（最多 3 次）接受，L2 宣告寫明 I1 未判定的比例；P1 在 L2 宣告前改寫。(1)(8) 維持暫定（link 失效時的資料包改計全域；I3 用寫出數）。同意 L2 宣告前依 D45 做 xhigh 的門檻來源對抗式檢查。L2 宣告**加一個記錄項**：統計每個跑次 Gateway 拿不到內容的丟棄（08c 已知缺口 1：速率限制、解碼失敗、未授權、舊序號的 Actions／其他、未知種類、非 active）的數量，作為以後要不要提前 pv7（`GatewayDropReport`）的依據。(3)(4)(5) 未回覆，維持暫定。使用者原話：「(2)(6)(7)(9) 照建議、(1)(8) 維持暫定、同意 xhigh 檢查。在宣告裡加一項記錄，統計 Gateway 拿不到內容的丟棄有多少，作為以後要不要提前 pv7 的依據」 |
 
 在各功能線開始前確認（先附建議）：
 
