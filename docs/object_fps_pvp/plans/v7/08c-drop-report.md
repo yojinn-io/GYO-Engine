@@ -10,7 +10,7 @@
 ## 先讀這一段
 
 - **問題**：產品層的 Gateway 用權威狀態的延遲副本 `lastResolved` 悄悄丟掉已解析的命令（`gateway/server.go:421-423`），link 寫出前再剪一次（`runtime_link.go:192-197`）。Gateway 的副本只比 Match 落後約 0.5 ms，所以 Match 幾乎量不到 Client 端的網路遲到；late 修正、backlog 餘裕、FireGate 的推導都在截斷的樣本上校準。Gateway 還有 30 多處「收到卻不轉送」，只有速率限制有計數；Match 自己的拒絕也是無聲的。
-- **目標**：Gateway 收到、屬於某個 session 的每個資料包，只會有兩種結果之一，沒有第三種（無聲）：
+- **目標**：Gateway 收到、屬於某個 session 的每個資料包，只會有兩種結果之一，沒有第三種（無聲）：（更正，2026-10-11 死信隊列評估：這一條在資料包層成立（IG）；動作交給 link 之後，在 Leave、close、寫出失敗時仍可能在 link 內被清掉，見已知缺口第 10 項，D56 補計數。）
   - **(F) 轉送**：命令送到 Match，由 Match 用自己的游標與時鐘分類並記帳；
   - **(G) Gateway 執行的丟棄**：依（玩家、原因、種類）計數並寫進 log；P2 期間是「人看得到、Match 不知道」的已知缺口，第 11 批 pv7 以累計值回報給 Match。
 - **不改 wire**：所有 `.proto` 的欄位不變，版本仍是 6。變的是 Gateway→Match 輸入流的行為（D52 ①、D53 ②），以及 `runtime_v6.proto:31` 的註解（比照 D22／D23，維持 pv6、Gateway 與 Match 同一個 commit 切換）。
@@ -89,12 +89,13 @@
 1. Gateway 拿不到內容的丟棄（③ 的各類）：P2 只計數，Match 不知道。
 2. ① 留下的兩種執行丟棄：拒絕線溢出、已解析截短。
 3. 動作的語意丟棄 A3、A5。
-4. 下行：D1、D2（Match 不知道自己的 snapshot 被拒）；D5、D6 在第 10 批。
+4. 下行：D1、D2（Match 不知道自己的 snapshot 被拒）；D5、D6 在第 10 批。另外，下面幾個下行出口不計數，也不是 ingress 丟棄：D4（給已移除或非 active 玩家的 snapshot；編碼失敗的分支走不到）、D7（非 active 玩家的整批 ActionResults；規劃時已決定「Match 已知、不計數」：Match 自己的帳本保留未退役的決定，直到移除玩家）、D9（玩家不存在時的 JoinResult、Evicted；Match 最終一定知道，因為 Leave 排在前面、TCP 有序）、D8（結果編碼失敗，走不到）。（2026-10-11 依死信隊列評估補記，D56。）
 5. 時間：Gateway 的收包時刻沒有送給 Match（pv7 的 dwell 是候選），Match 分不開 IPC 延遲與網路遲到。
 6. Client 端的樣本流失（每次發布只帶最小值、`snapshot_` 被覆寫、IPC latest-wins、Client 佇列溢出）：host 端的計數由 ② 提供；Client 端的欄位在第 10 批（觀測缺口第 3 項）。
 7. 帳本保留 600 Tick；晚超過 10 s 的記為 `aged`。
 8. kernel 的 UDP 接收緩衝溢出（Gateway 讀不到，不屬於「Gateway 收到」）、Close 之後收到的包（範圍寫成「`final=1` 行之前處理的資料包」）。
 9. 不正常的 Client：衝突窗口被併進主線時整則被 Match 拒絕，同一則裡其他已被標記的命令之後的副本會被去重，損失變成永久的（限該玩家）。契約寫明「`conflict_*` > 0 的玩家，其遲到與替代統計不可信」。
+10. 動作在 link 內的丟棄（2026-10-11 死信隊列評估找到，D56 補計數）：Leave／踢出、close、寫出失敗時，link 動作視窗裡**從沒寫出過**的 shot 請求與還沒轉送的 ACK 被清掉；P2 由 Gateway 依玩家與原因計數（鍵見 fixtures README），Match 不知道（和第 1 項同一等級）。已寫出的部分 Match 已有，Leave 時計成 `leave_discarded_actions_shots`。close 與寫出失敗時被清掉的 controls（Join／Leave 訊息）不計數：房間已經結束。
 
 ## 契約與文件（和實作同一個 PR）
 

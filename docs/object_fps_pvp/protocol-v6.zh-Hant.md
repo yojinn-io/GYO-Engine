@@ -85,12 +85,13 @@ Gateway→Match 的 `PlayerInput` 不再是 Client 未確認窗口的完整副�
 1. Gateway 拿不到內容的丟棄（速率限制、解碼失敗、未授權、舊序號的 Actions 與其他種類、未知種類、非 active 時的 input／actions）：P2 只計數，Match 不知道。未授權只能記到宣稱的 session，可被偽造，只能看、不能拿來處罰。
 2. 轉送之後仍由 Gateway 執行的兩種丟棄：拒絕線溢出（每位玩家最多 4 個窗口，超過丟最舊的）、主線已解析部分超過 32 個時的截短。
 3. 動作的語意丟棄 A3、A5：P2 只計數。
-4. 下行：Gateway 拒收 Match 的 snapshot（D1、D2）只計數，Match 不知道；D5、D6 在第 10 批。
+4. 下行：Gateway 拒收 Match 的 snapshot（D1、D2）只計數，Match 不知道；D5、D6 在第 10 批。另外，下面幾個下行出口不計數，也不是 ingress 丟棄：D4（給已移除或非 active 玩家的 snapshot；編碼失敗的分支走不到）、D7（非 active 玩家的整批 ActionResults；規劃時已決定「Match 已知、不計數」：Match 自己的帳本保留未退役的決定，直到移除玩家）、D9（玩家不存在時的 JoinResult、Evicted；Match 最終一定知道，因為 Leave 排在前面、TCP 有序）、D8（結果編碼失敗，走不到）。（2026-10-11 依死信隊列評估補記，D56。）
 5. 時間：Gateway 的收包時刻沒有送給 Match（pv7 的 dwell 是候選），Match 分不開 IPC 延遲與網路遲到。
 6. Client 端的樣本流失（每次發布只帶最小值、`snapshot_` 被覆寫、IPC latest-wins、Client 佇列溢出）：host 端的計數由 Match 的 ingress 統計行提供；Client 端的欄位在第 10 批。
 7. Match 的替代紀錄保留 600 Tick；晚超過 10 s 的記為 `aged`。
 8. kernel 的 UDP 接收緩衝溢出（Gateway 讀不到，不屬於「Gateway 收到」），以及 Gateway 寫出 `final=1` 行之後才處理的資料包，不在計數之內。
 9. 不正常的 Client：衝突窗口被併進主線時整則被 Match 拒絕，同一則裡其他已被標記為寫出的命令之後的副本會被去重，損失變成永久的（限該玩家）。`conflict_*` > 0 的玩家，其遲到與替代統計不可信。
+10. 動作在 link 內的丟棄（2026-10-11 死信隊列評估找到，D56 補計數）：Leave／踢出、close、寫出失敗時，link 動作視窗裡**從沒寫出過**的 shot 請求與還沒轉送的 ACK 被清掉；P2 由 Gateway 依玩家與原因計數（鍵見 fixtures README），Match 不知道（和第 1 項同一等級）。已寫出的部分 Match 已有，Leave 時計成 `leave_discarded_actions_shots`。close 與寫出失敗時被清掉的 controls（Join／Leave 訊息）不計數：房間已經結束。
 
 ## 2. 身分與資料語意
 

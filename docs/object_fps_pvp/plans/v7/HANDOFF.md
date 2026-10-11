@@ -322,5 +322,19 @@
      - Match 現在用 backlog／starvation 的 epoch 重設處理堵住的佇列（`PvpMatch.cpp:452-461`，30 Tick 合計 ≥105），等於整條清空加上重新同步。
      - 清掉的命令只有 `rotation_discarded_commands` 計數，沒有寫進 `match-ingress.jsonl`，看不到是哪些序號、等了多久。記成缺口，連到 D44。
      - 「逐則移入死信、其餘照常執行」：移動命令必須依序執行，推論不可行（待評估 B 確認）。
+  5. 評估結果（2026-10-11，評估 B：1 位 high 兩輪各約 5 分鐘；S1、S2 由 1 位 xhigh 核對約 10 分鐘；證據 `pvp-v7-dlq-eval-20261011/`）。上面 1～4 依程式核對後的更正（原文保留）：
+     - TTL：**不成立**。命令真正的期限是它的序號被解析的那個 Tick（到期就替代，`PvpMatch.cpp:405-425`）；600 是替代紀錄（死信索引）等晚到副本的保留期，而且以序號量。動作那一側的期限是決定時的 `Expired`。
+     - `lastResolvedCommand`：是「已處理**或已略過**」的 offset，不代表收到；Client 看到它前進就丟掉 ≤offset 的命令。
+     - Gateway＝broker：只對移動命令大致成立；Gateway 仍用權威副本選路，A3、A5、D1、D2 仍是 Gateway 的判斷（第 11 批）。
+     - 舊 epoch／life 的命令有 owner，只是世代過期（expired／rejected）；真正的無主訊息是 `unknown_session`、`other_version`，只在 Gateway 全域行計數。
+     - IG、I2：IG 只到資料包層；動作從 link 到 Match 原本沒有守恆，評估因此找到 S1（Leave、close、寫出失敗時 link 清掉從沒寫出過的 shot 與還沒轉送的 ACK，無聲），D56 補計數；下行不在守恆之內（D4、D7、D9、D8 已寫進 08c 已知缺口 4）。
+     - 16 筆的上限只套在 rejection 紀錄；替代紀錄的上限是每位玩家 1024 筆未關閉的紀錄加 16384 筆輸出緩衝。
+     - `GatewayDropReport` 送進 Match 的是累計值，不是訊息本體。
+     - 已知缺口 9 不是毒訊息（不會造成重試迴圈）；比較接近毒訊息的是動作那一側：Match 整批拒收時不回覆，link 與 Client 會一直重送到 Leave（每次都計成拒絕；推論正常情況走不到）。
+     - 「backlog／starvation 重設處理堵住的佇列」：**定性錯誤**。starvation 判定時佇列是空的（重新對齊），backlog 是領先太多；防止阻塞的是每個 Tick 的到期替代，加上「收下的上限是游標＋32」，所以每個移動命令最多 32 Tick 內一定有結果。
+     - 「逐則移入死信、其餘照常」：**不成立**。缺號與晚到現在就是逐則處理；依序執行只讓重放不可行。
+     - `rotation_discarded`：jsonl 沒有逐筆紀錄、原因混在一起；開了 movement trace 時，被清掉的命令的身分可由 `HostAccepted` 減去 `Resolved(Actual)` 推出（推論，未驗證）。
+  6. 之後的缺口（評估 B4）：`rotation_discarded` 的逐筆紀錄與原因拆分（第 10 批或 D44 的調查）；動作拒絕的本體與是否回 NACK（第 10 批的紀錄、第 11 批的 NACK）；Client 端的本地丟棄與送出失敗的原因計數（第 10 批，觀測缺口第 3 項）；推論走不到的無聲分支（`MatchRuntimeHost.cpp:173-175`、`:372`，`server.go:523-531`，D8）改成 assert（Programmer Error，第 10 批或之後）。都不影響 L2；`ingress_evidence.py` 的凍結排在 D56 修正批之後。
+  7. 定位（評估 B 的建議，待使用者決定）：寫成設計原則，不另開一個死信的子系統或 Data Contract 概念：「序號連續＋到期替代＝consumer 能偵測缺號」「每個出口恰好一個結果：執行，或帶原因的死信」「死信有界」，作為 Architecture Fitness 的檢查項；第 10、11 批規劃 log 契約與 `GatewayDropReport` 時以這些原則對齊。
 - 驗收分析器 `quad_evidence` 與 `command_evidence` 的收斂：維持候選。
 - v6 文件中其他舊的行號（D20 的 `runtime_v5.proto`、D21 的 `IpcHost.cpp:267`、v6 交接延後項目 8 的 `backpressure_test.go:102-158` 等）：只列在[盤點](INVENTORY.md)，不修改（AGENTS §11）。
