@@ -206,6 +206,7 @@
 - **D44**：暴露上升，L2 依樹記錄偶發 epoch 重設的頻率。**第 16 批**：整體回歸的基準換成修好之後的資訊流。
 - **第 10 批**：觀測缺口第 1、2、4 項大部分在本批完成；剩下 D5、D6、舊序號的 Actions、Client 端的欄位（第 3 項）；log 契約決定沿用或取代 ingress v1。
 - **第 11 批**：pv7 的 `GatewayDropReport`（原因列舉一次定完整，dwell 的定義只有一個）；「Gateway 職責」一節；重新檢視 Gateway 的狀態；是否轉送 A3／A5。
+- **第 10、11 批共通**：本批的丟棄回報就是 Match 端的死信隊列；ingress v1 與 `GatewayDropReport` 要不要統一成一個死信的 Data Contract，見 HANDOFF 未結事項「死信隊列（命名與概念）」。
 - **穩定基線**：v5、v6 的 `STABLE_BASELINE.md` 已加「已知問題」；要不要重新發佈，本批修好之後再決定。
 
 ## 停止條件（實作期間）

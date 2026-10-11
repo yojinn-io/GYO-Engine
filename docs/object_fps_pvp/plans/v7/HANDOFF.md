@@ -301,5 +301,25 @@
 - Windows Match 的 Tick 與 IPC 精度從未量過；Match 不連結 SDL，所以 SDL 調高計時器解析度的效果不適用。朋友能主持時在第 15 批量，否則標「未驗證」。
 - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib），維持已知限制。
 - 自旋（期限前忙等）：2026-10-09 使用者決定目前不加，現行的分離執行緒已經夠用。等第 07 批（Match Tick 改用 Waiter）與第 15 批（Windows 退回一般 waitable timer 時的精度）的數據再評估；要加就是 Architecture Delta，先量測再決定。
+- **死信隊列（命名與概念）**（2026-10-11 使用者提出）：第 08c 批做的「每一種丟棄都要讓 Match 知道丟了什麼、為什麼丟」，就是 Match 端的死信隊列（dead letter queue）。這是 MQ 的常見做法，用途有兩個：防止佇列阻塞、收容無主訊息。Client -udp-> Gateway -tcp-> Match 適合這個機制：Gateway 把命令完全交給 Match，要不要執行由 Match 決定，而這些訊息不能一直停在待執行的狀態。對應是否成立、出口的盤點、缺口與建議，由評估 B 回答（`pvp-v7-dlq-eval-20261011/`），評估完成前下面都是使用者提出的對應，尚未逐條核對程式。
+  1. MQ 角色的對應：
+     - Client＝producer；Gateway＝broker（只路由、不判斷；08c 之後才回到這個角色）；Match＝consumer（決定執行、丟棄或記成晚到）。
+     - `lastResolvedCommand`＝ack／offset；Client 重送未確認窗口＝重送；Match 把重複當成無操作＝冪等；Gateway 的已寫出去重是最佳化。
+     - 無主訊息＝player=0 桶（不認得的玩家）、舊 epoch／life 的命令、Leave 之後的暫存。
+     - TTL＝替代紀錄保留 600 Tick，超過記成 `aged`。
+  2. 已經做到的部分：
+     - IG、I2「每個資料包、每個命令恰好一個結果」＝不得無聲消失；
+     - Match 的拒絕原因計數與 `match-ingress.jsonl` 的 rejection 紀錄＝帶原因的死信；
+     - 每（桶、原因、視窗）16 筆、`suppressed`、`dropped`＝有界的死信隊列；
+     - 死信由 Match（PDP）持有，對應 D49、D51 ⑩。
+  3. 和一般死信隊列不同的地方：
+     - 不可重放：輸入有時效，死信只用來觀察與記帳。
+     - Gateway 拿不到內容的丟棄只有計數、沒有本體，Match 不知道（08c 已知缺口 1）；第 11 批 pv7 的 `GatewayDropReport` 等於把這些送進 Match 的死信隊列。
+     - 拒絕線不是死信：Gateway 只轉送或計數，不製造死信；進死信的是 Match 判完之後拒絕的。
+     - 08c 已知缺口 9（衝突窗口連帶造成永久損失）屬於毒訊息的問題。
+  4. 「不能一直放在待執行中」：
+     - Match 現在用 backlog／starvation 的 epoch 重設處理堵住的佇列（`PvpMatch.cpp:452-461`，30 Tick 合計 ≥105），等於整條清空加上重新同步。
+     - 清掉的命令只有 `rotation_discarded_commands` 計數，沒有寫進 `match-ingress.jsonl`，看不到是哪些序號、等了多久。記成缺口，連到 D44。
+     - 「逐則移入死信、其餘照常執行」：移動命令必須依序執行，推論不可行（待評估 B 確認）。
 - 驗收分析器 `quad_evidence` 與 `command_evidence` 的收斂：維持候選。
 - v6 文件中其他舊的行號（D20 的 `runtime_v5.proto`、D21 的 `IpcHost.cpp:267`、v6 交接延後項目 8 的 `backpressure_test.go:102-158` 等）：只列在[盤點](INVENTORY.md)，不修改（AGENTS §11）。
