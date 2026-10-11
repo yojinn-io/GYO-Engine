@@ -1,7 +1,7 @@
 # 時間、執行緒與 Trace：分批計畫與進度
 
 更新：2026-10-08。Owner：Engine（新增 `engine/time`、`engine/threads`、`engine/trace`；`engine/runtime` 與 `engine/render/backend/sdl_gpu` 只改時鐘來源）。
-**狀態：TT-1 實作與 L1 完成**（2026-10-08，和消費端的第一個使用者同一個 PR，尚未合併）；**TT-2 未開始**。 本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-08 由提出需求的消費端在其規劃批次中建立。
+**狀態：TT-1 完成**（2026-10-09，和消費端的第一個使用者同一個 PR 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 未開始**。 本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-08 由提出需求的消費端在其規劃批次中建立。
 
 Engine 目前沒有自己的時間基準、等待原語、執行緒管理，也沒有結構化紀錄：
 
@@ -29,7 +29,7 @@ Engine 目前沒有自己的時間基準、等待原語、執行緒管理，也�
 
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
-| TT-1 Time 與 Threads | high；後端、Notify 與期限的競爭、不早醒規則、晚醒的定義、停止與 join 順序局部 xhigh；公開介面由 1 位 xhigh 審查 agent 檢查（開始時徵求同意） | 實作與 L1 完成；xhigh 審查完成並修正；L2（只記錄）待事前宣告核准 | `GYO::Time`（時間基準、Waiter、LateWakeStats、各平台後端）、`GYO::Threads`（角色執行緒）；`RuntimeLoop` 與 SdlGpu 改用時間基準。與消費端第一個使用者同一個 PR |
+| TT-1 Time 與 Threads | high；後端、Notify 與期限的競爭、不早醒規則、晚醒的定義、停止與 join 順序局部 xhigh；公開介面由 1 位 xhigh 審查 agent 檢查（開始時徵求同意） | 完成（`660310e` 合併）：實作與 L1、xhigh 審查與修正、L2（只記錄，2026-10-09） | `GYO::Time`（時間基準、Waiter、LateWakeStats、各平台後端）、`GYO::Threads`（角色執行緒）；`RuntimeLoop` 與 SdlGpu 改用時間基準。與消費端第一個使用者同一個 PR |
 | TT-2 Trace | high；寫檔關閉與 flush 的順序、丟棄計數局部 xhigh | 未開始 | `GYO::Trace`：有界多生產者 sink、以通知喚醒的背景寫檔、Base 的日誌 facade；SdlGpu 的慢 acquire 日誌改走 facade |
 
 ```text

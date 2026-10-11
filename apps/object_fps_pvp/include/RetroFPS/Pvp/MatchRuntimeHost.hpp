@@ -1,10 +1,14 @@
 #pragma once
 
+#include "RetroFPS/Pvp/IngressStatistics.hpp"
+#include "RetroFPS/Pvp/MatchIngressLedger.hpp"
+#include "RetroFPS/Pvp/MatchIngressTrace.hpp"
+#include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "engine/threads/RoleThread.hpp"
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <future>
@@ -12,7 +16,8 @@
 #include <mutex>
 #include <optional>
 #include <set>
-#include <stop_token>
+#include <span>
+#include <string>
 #include <vector>
 
 namespace fps::pvp {
@@ -41,10 +46,27 @@ struct Eviction final {
 
 // Product scheduler/host. Network I/O only exchanges values through bounded
 // ingress/results and one replaceable snapshot; it never drives world ticks.
+// The host owns its simulation role: a GYO::Threads role thread that steps at
+// absolute tick deadlines on the role's Waiter.
 class MatchRuntimeHost final {
 public:
     using ClockNow = std::function<std::chrono::steady_clock::time_point()>;
     explicit MatchRuntimeHost(Arena arena, ClockNow now = std::chrono::steady_clock::now);
+    MatchRuntimeHost(const MatchRuntimeHost&) = delete;
+    MatchRuntimeHost& operator=(const MatchRuntimeHost&) = delete;
+    ~MatchRuntimeHost();
+
+    // Starts the simulation role (gyo-match-sim). Returns false with an error
+    // when the thread cannot start. Stop joins it; both run on the owner's
+    // thread, never concurrently with other calls.
+    [[nodiscard]] bool Start(std::string& error);
+    void Stop();
+    // The role's Runtime Error, if a step threw; the role then stopped stepping.
+    [[nodiscard]] std::optional<std::string> Error() const;
+    // Called outside the host's lock, by whoever runs Advance, after a step that
+    // published a snapshot, control results or evictions, or completed a reset.
+    // Set before Start. It must not block: the I/O layer only posts a wake-up.
+    void SetPublishListener(std::function<void()> listener);
     [[nodiscard]] bool QueueJoin(std::uint64_t requestId, PlayerId playerId);
     [[nodiscard]] bool QueueLeave(std::uint64_t requestId, PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
@@ -57,14 +79,44 @@ public:
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
 
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Advance(double elapsedSeconds);
-    void Run(std::stop_token stop);
     [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot();
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
+    // Diagnostics only, since the previous call (or the start): how the
+    // simulation role's waits for the next tick ended, and how many published
+    // snapshots were replaced before the I/O layer took them. Resets the window.
+    struct Statistics final {
+        TickWakeStatistics ticks;
+        std::uint64_t snapshotOverwrites{};
+    };
+    [[nodiscard]] Statistics TakeStatistics();
+    // Diagnostics only, since the previous call (or the start): what became
+    // of every input and action batch the host received, per player. Inputs
+    // and batches of a player the Match does not hold count under player 0.
+    // Counts survive Leave, eviction and resets until taken. The result holds
+    // player 0 and every current player, even with nothing counted, and any
+    // other player with counts. Resets the window. final (the process's last
+    // window, host stopped) first closes every open substitution record as end
+    // and counts the slack samples still pending or unclaimed as such. Each
+    // call also starts a new window for the detail file's rejection bound.
+    [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics(bool final = false);
+    // Diagnostics only, since the previous call: the bounded records of
+    // match-ingress.jsonl (MatchIngressTrace.hpp). Rejections keep the first
+    // MatchIngressRejectionsPerWindow per (player, reason) and statistics
+    // window, substitutions are added as their records close; the rest is
+    // counted as suppressed or dropped. Survives Leave and resets until taken.
+    [[nodiscard]] IngressRecords DrainIngressRecords();
+    // The I/O layer replaced a taken snapshot (latest wins) before writing
+    // it; these players' slack samples in it never reach the Gateway.
+    void NoteCoalescedSlackSamples(std::span<const PlayerId> players);
+    // An action batch the I/O layer refused before it could become a request
+    // (OverBatch or Malformed): counted like the host's own refusals.
+    void NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots);
 
     // IPC must wait for completion before accepting a replacement connection.
-    // The future is completed by the simulation thread, which never waits I/O.
+    // The future is completed by the next step (the role is woken at once),
+    // which never waits for I/O; the publish listener then fires.
     [[nodiscard]] std::future<void> RequestReset();
     // Only for a stopped host or deterministic tests.
     void Reset();
@@ -111,14 +163,33 @@ private:
         std::chrono::steady_clock::time_point publishedAt;
     };
     bool QueueControl(Control control);
+    // The counts an input or batch of this player falls under (player 0 when
+    // the Match does not hold it). Under the lock.
+    [[nodiscard]] MatchIngressCounts& IngressBucket(PlayerId playerId);
+    [[nodiscard]] PlayerId IngressBucketId(PlayerId playerId) const;
+    // Keeps a detail record of a refused input if the buffer admits it. Under the lock.
+    void RecordRejection(const PlayerInput& input, IngressInputRejection reason);
+    // A slack sample candidate competes for the next publication; one that
+    // loses (or is replaced) is merged. Under the lock.
+    void OfferSlackSample(PlayerId playerId, SlackTrack& track, std::uint64_t sequence, std::int64_t micros);
+    // A track's pending candidate dropped before any publication. Under the lock.
+    void DiscardSlack(PlayerId playerId, const SlackTrack& track);
+    // Adds one to field for every player whose slack sample this snapshot carries. Under the lock.
+    void CountSlackSamples(const WorldSnapshot& snapshot, std::uint64_t MatchIngressCounts::*field);
+    // Counts a substitution record the ledger closed. Under the lock.
+    void SubstitutionClosed(const IngressSubstitution& record);
+    // Advance's work under the lock; published tells Advance to notify.
+    [[nodiscard]] Engine::Runtime::FixedTickAdvance Step(double elapsedSeconds, bool& published);
+    void Body(Engine::Threads::RoleContext& context);
     void ClearState();
-    void RemovePlayerState(PlayerId playerId);
+    // resolvedThrough: the player's resolved cursor for its staged epoch and
+    // life; staged commands at or below it were executed, not discarded.
+    void RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough);
     // `at` is this Advance's single clock reading, taken on first use.
     void TrackSlack(WorldSnapshot& state, std::optional<std::chrono::steady_clock::time_point>& at);
     void JudgeConnectionQuality(WorldSnapshot& state);
 
     mutable std::mutex mutex_;
-    std::condition_variable_any wake_;
     PvpMatch match_;
     ClockNow now_;
     Engine::Runtime::FixedTickRuntime ticker_{AuthorityTickRate};
@@ -133,7 +204,19 @@ private:
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;
     std::optional<std::promise<void>> pendingReset_;
+    Statistics statistics_;
+    // Not part of the match state: ClearState and RemovePlayerState keep it.
+    std::map<PlayerId, MatchIngressCounts> ingress_;
+    // Substitution records; ClearState and RemovePlayerState close them.
+    // Only observes: slack samples, quality and the Match never read it.
+    MatchIngressLedger ledger_;
+    // match-ingress.jsonl records waiting for DrainIngressRecords.
+    MatchIngressRecordBuffer records_;
+    std::optional<std::string> error_;
+    std::function<void()> publishListener_;
     std::atomic<bool> running_{};
+    // Last: destroyed first, so the role stops before the state it uses.
+    std::optional<Engine::Threads::RoleThread> role_;
 };
 
 } // namespace fps::pvp

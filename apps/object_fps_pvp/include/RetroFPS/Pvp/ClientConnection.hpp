@@ -50,6 +50,9 @@ struct ClientConnectionDrain {
     bool overflow{};
     std::uint64_t snapshotHistoryOverflowCount{};
     std::vector<ShotDecision> decisions;
+    // Diagnostics: when the network worker received each decision (same order
+    // as decisions), unquantized by the frame that drains it.
+    std::vector<std::chrono::steady_clock::time_point> decisionReceivedAt;
 };
 
 // The client simulation role's own receipt-stamped history, independent of

@@ -18,11 +18,62 @@ constexpr std::int64_t kMaximumReferenceAgeMicros = 1'000'000;
 std::int64_t Micros(std::chrono::steady_clock::duration value) {
     return std::chrono::duration_cast<std::chrono::microseconds>(value).count();
 }
+IngressInputRejection Rejection(InputAdmission admission) {
+    switch (admission) {
+    case InputAdmission::UnknownPlayer: return IngressInputRejection::UnknownPlayer;
+    case InputAdmission::Malformed: return IngressInputRejection::Malformed;
+    case InputAdmission::EpochOld: return IngressInputRejection::EpochOld;
+    case InputAdmission::EpochFuture: return IngressInputRejection::EpochFuture;
+    case InputAdmission::LifeOld: return IngressInputRejection::LifeOld;
+    case InputAdmission::LifeFuture: return IngressInputRejection::LifeFuture;
+    case InputAdmission::BeyondWindow: return IngressInputRejection::BeyondWindow;
+    case InputAdmission::ConflictQueued: return IngressInputRejection::ConflictQueued;
+    case InputAdmission::Accepted: break;
+    }
+    throw std::logic_error("An accepted input has no rejection reason");
+}
+IngressActionRejection Rejection(ActionAdmission admission) {
+    switch (admission) {
+    case ActionAdmission::InvalidPlayer: return IngressActionRejection::InvalidPlayer;
+    case ActionAdmission::InvalidBatch: return IngressActionRejection::InvalidBatch;
+    case ActionAdmission::Conflict: return IngressActionRejection::Conflict;
+    case ActionAdmission::OutsideWindow: return IngressActionRejection::OutsideWindow;
+    case ActionAdmission::Full: return IngressActionRejection::Full;
+    case ActionAdmission::Accepted: break;
+    }
+    throw std::logic_error("An accepted action batch has no rejection reason");
+}
 }
 
 MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now)
     : match_(std::move(arena)), now_(std::move(now)) {
     if (!now_) throw std::invalid_argument("MatchRuntimeHost needs a monotonic clock");
+}
+
+MatchRuntimeHost::~MatchRuntimeHost() { Stop(); }
+
+bool MatchRuntimeHost::Start(std::string& error) {
+    if (role_) throw std::logic_error("MatchRuntimeHost is already started");
+    auto started = Engine::Threads::RoleThread::Start({"gyo-match-sim", Engine::Threads::ThreadPriority::Interactive},
+        [this](Engine::Threads::RoleContext& context) { Body(context); });
+    if (!started) {
+        error = Engine::Base::Describe(started.error());
+        return false;
+    }
+    role_.emplace(std::move(*started));
+    return true;
+}
+
+void MatchRuntimeHost::Stop() { role_.reset(); }
+
+std::optional<std::string> MatchRuntimeHost::Error() const {
+    std::lock_guard lock(mutex_);
+    return error_;
+}
+
+void MatchRuntimeHost::SetPublishListener(std::function<void()> listener) {
+    if (role_) throw std::logic_error("Set the publish listener before Start");
+    publishListener_ = std::move(listener);
 }
 
 bool MatchRuntimeHost::QueueControl(Control control) {
@@ -41,9 +92,77 @@ bool MatchRuntimeHost::QueueLeave(std::uint64_t requestId, PlayerId playerId) {
     return QueueControl({requestId, playerId, ControlKind::Leave});
 }
 
+PlayerId MatchRuntimeHost::IngressBucketId(PlayerId playerId) const {
+    return match_.ContainsPlayer(playerId) ? playerId : PlayerId{};
+}
+
+MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) { return ingress_[IngressBucketId(playerId)]; }
+
+void MatchRuntimeHost::SubstitutionClosed(const IngressSubstitution& record) {
+    if (!record.firstArrival) ++ingress_[record.playerId].unarrived[IngressIndex(record.close)];
+    records_.Add(record);
+}
+
+void MatchRuntimeHost::RecordRejection(const PlayerInput& input, IngressInputRejection reason) {
+    if (!records_.AdmitRejection(IngressBucketId(input.playerId), reason)) return;
+    // The trace's own steady clock, as the movement trace: the host's clock
+    // (now_) serves timing and stays unread by refusals.
+    IngressRejectionRecord record{.timeNs = MovementTraceNowNs(), .playerId = input.playerId, .reason = reason,
+        .epoch = input.movementEpoch, .life = input.lifeGeneration, .commands = input.commands.size()};
+    if (!input.commands.empty()) {
+        record.firstSequence = input.commands.front().sequence;
+        record.lastSequence = input.commands.back().sequence;
+    }
+    if (match_.ContainsPlayer(input.playerId)) {
+        const auto snapshot = match_.Snapshot();
+        const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
+            [&](const auto& state) { return state.playerId == input.playerId; });
+        if (player != snapshot.players.end()) {
+            record.cursor = player->lastResolvedCommand;
+            record.currentEpoch = player->movementEpoch;
+            record.currentLife = player->lifeGeneration;
+        }
+    }
+    records_.Add(std::move(record));
+}
+
+void MatchRuntimeHost::OfferSlackSample(PlayerId playerId, SlackTrack& track, std::uint64_t sequence, std::int64_t micros) {
+    if (!track.pending || micros < track.pending->second) {
+        if (track.pending) ++ingress_[playerId].slackMergedSamples;
+        track.pending = std::pair{sequence, micros};
+    } else ++ingress_[playerId].slackMergedSamples;
+}
+
+void MatchRuntimeHost::DiscardSlack(PlayerId playerId, const SlackTrack& track) {
+    if (track.pending) ++ingress_[playerId].slackDiscardedSamples;
+}
+
+void MatchRuntimeHost::CountSlackSamples(const WorldSnapshot& snapshot, std::uint64_t MatchIngressCounts::*field) {
+    for (const auto& player : snapshot.players)
+        if (player.movementSlackSequence) ++(ingress_[player.playerId].*field);
+}
+
+void MatchRuntimeHost::NoteCoalescedSlackSamples(std::span<const PlayerId> players) {
+    std::lock_guard lock(mutex_);
+    for (const auto playerId : players) ++ingress_[playerId].slackCoalescedSamples;
+}
+
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     std::lock_guard lock(mutex_);
-    if (pendingReset_ || !match_.CanSubmitInput(input)) return false;
+    // Every return below is counted exactly once: received = accepted + refused.
+    auto& ingress = IngressBucket(input.playerId);
+    ++ingress.received.inputs;
+    ingress.received.commands += input.commands.size();
+    const auto refuse = [&](IngressInputRejection reason) {
+        auto& refused = ingress.rejected[IngressIndex(reason)];
+        ++refused.inputs;
+        refused.commands += input.commands.size();
+        RecordRejection(input, reason);
+        return false;
+    };
+    if (pendingReset_) return refuse(IngressInputRejection::Resetting);
+    if (const auto admission = match_.AdmitInput(input); admission != InputAdmission::Accepted)
+        return refuse(Rejection(admission));
     const auto snapshot = match_.Snapshot();
     const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
         [&](const auto& state) { return state.playerId == input.playerId; });
@@ -58,45 +177,66 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         merged.lifeGeneration = input.lifeGeneration;
     }
     std::vector<std::uint64_t> newlyAccepted;
+    std::uint64_t pendingCopies{};
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue;
         const auto [found, inserted] = merged.commands.try_emplace(command.sequence, command);
-        if (!inserted && found->second != command) return false;
+        if (!inserted && found->second != command) return refuse(IngressInputRejection::ConflictStaged);
         if (inserted) { newlyAccepted.push_back(command.sequence); merged.stagedSequences.insert(command.sequence); }
+        else ++pendingCopies;
     }
-    if (merged.commands.size() > MaxFutureCommands) return false;
+    // Should stay 0: admission already bounds each command to (cursor,
+    // cursor + MaxFutureCommands] and staging only keeps commands past the cursor.
+    if (merged.commands.size() > MaxFutureCommands) return refuse(IngressInputRejection::StagedOverWindow);
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
+    ++ingress.acceptedInputs;
+    ingress.classified[IngressIndex(IngressCommandClass::AcceptedNew)] += newlyAccepted.size();
+    ingress.classified[IngressIndex(IngressCommandClass::PendingCopy)] += pendingCopies;
     // The clock is read only when something new needs a timestamp, so reads
     // and pure retransmissions leave it untouched.
     std::optional<std::chrono::steady_clock::time_point> received;
     const auto at = [&] { if (!received) received = now_(); return *received; };
+    // The age of the snapshot this window says the Client applied. A tick
+    // older than every retained reference is at least as old as the oldest
+    // one; an unknown newer tick has no age.
+    const auto referenceAge = [&]() -> std::optional<std::int64_t> {
+        if (input.observedAuthorityTick == 0 || publishedReferences_.empty()) return std::nullopt;
+        const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
+            [&](const auto& entry) { return entry.tick == input.observedAuthorityTick; });
+        if (reference != publishedReferences_.end()) return Micros(at() - reference->publishedAt);
+        if (input.observedAuthorityTick < publishedReferences_.front().tick)
+            return Micros(at() - publishedReferences_.front().publishedAt);
+        return std::nullopt;
+    };
     auto& track = slack_[input.playerId];
-    if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration)
+    if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration) {
+        DiscardSlack(input.playerId, track);
         track = {input.movementEpoch, input.lifeGeneration, cursor, {}, {}, std::nullopt};
+    }
     for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
+    std::size_t lateCommands{};
     for (const auto& command : input.commands) {
-        // A command whose sequence was already substituted reports how late it came.
         if (command.sequence > cursor) continue;
+        // Counting only, by the ledger's substitution records; the ledger
+        // reads the clock only for a late_first.
+        const auto arrival = ledger_.Arrive(input.playerId, input.movementEpoch, input.lifeGeneration,
+            command.sequence, cursor, at, referenceAge);
+        ++ingress.classified[IngressIndex(arrival)];
+        if (arrival == IngressCommandClass::LateFirst || arrival == IngressCommandClass::LateCopy) ++lateCommands;
+        // A command whose sequence was already substituted reports how late it came.
         const auto late = track.substituted.find(command.sequence);
         if (late == track.substituted.end()) continue;
         const auto micros = -Micros(at() - late->second);
-        if (!track.pending || micros < track.pending->second) track.pending = std::pair{command.sequence, micros};
+        ++ingress.slackLateSamples;
+        OfferSlackSample(input.playerId, track, command.sequence, micros);
         track.substituted.erase(late);
     }
-    // Connection quality: the age of the snapshot this window says the Client
-    // applied. A tick older than every retained reference is at least as old
-    // as the oldest one; an unknown newer tick is ignored.
+    if (lateCommands == input.commands.size()) ++ingress.lateOnlyInputs;
+    // Connection quality samples the reference age of windows bringing new commands.
     if (const auto quality = quality_.find(input.playerId); quality != quality_.end() &&
-        !newlyAccepted.empty() && input.observedAuthorityTick != 0 && !publishedReferences_.empty() &&
-        quality->second.referenceAgesMicros.size() < kMaximumReferenceAgeSamples) {
-        const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
-            [&](const auto& entry) { return entry.tick == input.observedAuthorityTick; });
-        std::optional<std::int64_t> age;
-        if (reference != publishedReferences_.end()) age = Micros(at() - reference->publishedAt);
-        else if (input.observedAuthorityTick < publishedReferences_.front().tick)
-            age = Micros(at() - publishedReferences_.front().publishedAt);
-        if (age) quality->second.referenceAgesMicros.push_back(
+        !newlyAccepted.empty() && quality->second.referenceAgesMicros.size() < kMaximumReferenceAgeSamples) {
+        if (const auto age = referenceAge()) quality->second.referenceAgesMicros.push_back(
             static_cast<std::uint32_t>(Engine::Math::Clamp<std::int64_t>(*age, 0, kMaximumReferenceAgeMicros)));
     }
     for (const auto sequence : newlyAccepted)
@@ -107,15 +247,45 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
 }
 
 ActionAdmission MatchRuntimeHost::SubmitActions(const ActionBatch& batch) {
-    if (batch.shots.empty()) return ActionAdmission::InvalidBatch;
+    if (batch.shots.empty()) {
+        std::lock_guard lock(mutex_);
+        auto& ingress = IngressBucket(batch.playerId);
+        ++ingress.receivedActions.batches;
+        ++ingress.rejectedActions[IngressIndex(IngressActionRejection::InvalidBatch)].batches;
+        return ActionAdmission::InvalidBatch;
+    }
     return SubmitActionBatch(batch, 0);
+}
+
+void MatchRuntimeHost::NoteWireRejection(PlayerId playerId, IngressActionRejection reason, std::size_t shots) {
+    if (reason != IngressActionRejection::OverBatch && reason != IngressActionRejection::Malformed)
+        throw std::logic_error("Only the wire refuses an action batch for its shape");
+    std::lock_guard lock(mutex_);
+    auto& ingress = IngressBucket(playerId);
+    ++ingress.receivedActions.batches;
+    ingress.receivedActions.shots += shots;
+    auto& refused = ingress.rejectedActions[IngressIndex(reason)];
+    ++refused.batches;
+    refused.shots += shots;
 }
 
 ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough) {
     std::lock_guard lock(mutex_);
-    if (pendingReset_) return ActionAdmission::InvalidPlayer;
-    if (!match_.ContainsPlayer(batch.playerId)) return ActionAdmission::InvalidPlayer;
-    if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough)) return ActionAdmission::InvalidBatch;
+    // Every return below is counted exactly once: received = accepted + refused.
+    auto& ingress = IngressBucket(batch.playerId);
+    ++ingress.receivedActions.batches;
+    ingress.receivedActions.shots += batch.shots.size();
+    const auto refuse = [&](IngressActionRejection reason, ActionAdmission admission) {
+        auto& refused = ingress.rejectedActions[IngressIndex(reason)];
+        ++refused.batches;
+        refused.shots += batch.shots.size();
+        return admission;
+    };
+    if (pendingReset_) return refuse(IngressActionRejection::Resetting, ActionAdmission::InvalidPlayer);
+    if (!match_.ContainsPlayer(batch.playerId))
+        return refuse(IngressActionRejection::InvalidPlayer, ActionAdmission::InvalidPlayer);
+    if (!match_.CanAcknowledgeActions(batch.playerId, acknowledgedThrough))
+        return refuse(IngressActionRejection::InvalidBatch, ActionAdmission::InvalidBatch);
     const auto queuedAck = pendingActionAcknowledgements_.find(batch.playerId);
     const auto through = queuedAck == pendingActionAcknowledgements_.end() ? acknowledgedThrough :
         Engine::Math::Max(acknowledgedThrough, queuedAck->second);
@@ -124,7 +294,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
         ? std::span<const ShotRequest>{} : pending->second;
     const auto admission = batch.shots.empty() ? ActionAdmission::Accepted :
         match_.CanSubmitActions(batch, staged, through);
-    if (admission != ActionAdmission::Accepted) return admission;
+    if (admission != ActionAdmission::Accepted) return refuse(Rejection(admission), admission);
 
     const auto retained = match_.GetActionResults(batch.playerId);
     auto merged = pending == pendingActions_.end() ? std::vector<ShotRequest>{} : pending->second;
@@ -143,6 +313,8 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
     if (!merged.empty()) pendingActions_[batch.playerId] = std::move(merged);
     else pendingActions_.erase(batch.playerId);
     if (through > retained->retiredThrough) pendingActionAcknowledgements_[batch.playerId] = through;
+    ++ingress.acceptedActions.batches;
+    ingress.acceptedActions.shots += batch.shots.size();
     return ActionAdmission::Accepted;
 }
 
@@ -161,13 +333,23 @@ std::optional<ActionResults> MatchRuntimeHost::GetActionResults(PlayerId playerI
 }
 
 Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSeconds) {
+    bool published = false;
+    const auto advance = Step(elapsedSeconds, published);
+    if (published && publishListener_) publishListener_();
+    return advance;
+}
+
+Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, bool& published) {
     std::lock_guard lock(mutex_);
     if (pendingReset_) {
         ClearState();
         elapsedSeconds = 0;
         pendingReset_->set_value();
         pendingReset_.reset();
+        published = true;
     }
+    const auto resultsBefore = results_.size();
+    const auto evictionsBefore = evictions_.size();
     std::optional<WorldSnapshot> publication;
     // One clock reading per Advance serves slack timing and the publication reference.
     std::optional<std::chrono::steady_clock::time_point> advancedAt;
@@ -181,7 +363,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
                 if (result.accepted) quality_[control.playerId] = {match_.TickCount(), {}, {}, false, 0};
             } else {
                 static_cast<void>(match_.Leave(control.playerId));
-                RemovePlayerState(control.playerId);
+                // Staging was pruned to unresolved commands after the previous tick.
+                RemovePlayerState(control.playerId, 0);
             }
             results_.push_back(std::move(result));
         }
@@ -205,6 +388,13 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
                 // A snapshot may have advanced life after ingress validation.
                 // Recheck the complete identity at the simulation boundary.
                 if (!match_.CanSubmitInput(input)) {
+                    // Should stay 0: rotation below discards a stale identity
+                    // before the next handoff, and ingress checks the current one.
+                    // Were it not, these commands stay staged and a rotation
+                    // after this tick counts them again as rotation_discarded.
+                    ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::HandoffRejected)] +=
+                        static_cast<std::uint64_t>(std::count_if(input.commands.begin(), input.commands.end(),
+                            [&](const auto& command) { return pending.stagedSequences.contains(command.sequence); }));
                     const auto current = match_.Snapshot();
                     const auto player = std::find_if(current.players.begin(), current.players.end(),
                         [&](const auto& p) { return p.playerId == playerId; });
@@ -245,6 +435,9 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
                 [&](const auto& candidate) { return candidate.playerId == input->first; });
             if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||
                 player->lifeGeneration != input->second.lifeGeneration) {
+                const auto discard = player == state.players.end() ? IngressStagedDiscard::LeaveDiscarded
+                                                                   : IngressStagedDiscard::RotationDiscarded;
+                ingress_[input->first].discarded[IngressIndex(discard)] += input->second.commands.size();
                 input = pendingInputs_.erase(input);
                 continue;
             }
@@ -268,38 +461,92 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
         if (!advancedAt) advancedAt = now_();
         publishedReferences_.push_back({publication->tick, *advancedAt});
         if (publishedReferences_.size() > MaxPublishedShotReferences) publishedReferences_.pop_front();
+        if (snapshot_) {
+            ++statistics_.snapshotOverwrites;
+            CountSlackSamples(*snapshot_, &MatchIngressCounts::slackOverwrittenSamples);
+        }
         snapshot_ = std::move(publication);
+        published = true;
         // Samples reach the Client through published snapshots only; catch-up
         // states replaced inside this Advance kept accumulating the minimum.
-        for (auto& [playerId, track] : slack_) track.pending.reset();
+        // With a publication every tick, each pending sample is in this one.
+        for (auto& [playerId, track] : slack_) {
+            if (track.pending) {
+                auto& counts = ingress_[playerId];
+                ++counts.slackPublishedSamples;
+                if (track.pending->second < 0) ++counts.slackPublishedNegativeSamples;
+            }
+            track.pending.reset();
+        }
     }
     if (elapsedSeconds >= 0.1 || advance.droppedSeconds > 0)
         TraceMovement({.kind = MovementTraceKind::RuntimeGap, .authorityTick = match_.TickCount(),
             .droppedSeconds = advance.droppedSeconds, .frameSeconds = elapsedSeconds});
+    published = published || results_.size() > resultsBefore || evictions_.size() > evictionsBefore;
     return advance;
 }
 
-void MatchRuntimeHost::Run(std::stop_token stop) {
-    if (running_.exchange(true)) throw std::logic_error("MatchRuntimeHost is already running");
+void MatchRuntimeHost::Body(Engine::Threads::RoleContext& context) {
+    running_.store(true);
     struct Guard final {
         std::atomic<bool>& running;
         ~Guard() { running.store(false); }
     } guard{running_};
-    auto previous = std::chrono::steady_clock::now();
-    while (!stop.stop_requested()) {
-        const auto now = std::chrono::steady_clock::now();
-        const auto result = Advance(std::chrono::duration<double>(now - previous).count());
-        previous = now;
-        std::unique_lock lock(mutex_);
-        wake_.wait_for(lock, stop, std::chrono::duration<double>(result.secondsUntilNextTick),
-                       [this] { return pendingReset_.has_value(); });
+    // A thread entry point handles its own Runtime Errors: match_main reads
+    // Error() and exits visibly.
+    try {
+        auto previous = std::chrono::steady_clock::now();
+        while (!context.StopRequested()) {
+            const auto sampled = std::chrono::steady_clock::now();
+            const auto result = Advance(std::chrono::duration<double>(sampled - previous).count());
+            previous = sampled;
+            // The next tick grid point, as an absolute deadline: the time
+            // Advance took does not delay it. A reset request wakes it early.
+            const auto deadline = sampled + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(result.secondsUntilNextTick));
+            const auto wake = context.WaitUntil(deadline);
+            if (context.StopRequested()) break;
+            std::lock_guard lock(mutex_);
+            statistics_.ticks.Record(deadline, wake.woke, wake.reason == Engine::Time::WakeReason::Notified);
+        }
+    } catch (const std::exception& failure) {
+        std::lock_guard lock(mutex_);
+        error_ = failure.what();
     }
+}
+
+MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
+    std::lock_guard lock(mutex_);
+    return std::exchange(statistics_, {});
+}
+
+std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics(bool final) {
+    std::lock_guard lock(mutex_);
+    if (final) {
+        ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });
+        for (auto& [playerId, track] : slack_) {
+            DiscardSlack(playerId, track);
+            track.pending.reset();
+        }
+        if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);
+        snapshot_.reset();
+    }
+    records_.NewWindow();
+    ingress_.try_emplace(PlayerId{});
+    for (const auto& player : match_.Snapshot().players) ingress_.try_emplace(player.playerId);
+    return std::exchange(ingress_, {});
+}
+
+IngressRecords MatchRuntimeHost::DrainIngressRecords() {
+    std::lock_guard lock(mutex_);
+    return records_.Drain();
 }
 
 std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
     std::lock_guard lock(mutex_);
     auto result = std::move(snapshot_);
     snapshot_.reset();
+    if (result) CountSlackSamples(*result, &MatchIngressCounts::slackTakenSamples);
     return result;
 }
 
@@ -317,7 +564,16 @@ std::vector<Eviction> MatchRuntimeHost::TakeEvictions() {
     return result;
 }
 
-void MatchRuntimeHost::RemovePlayerState(PlayerId playerId) {
+void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough) {
+    if (const auto pending = pendingInputs_.find(playerId); pending != pendingInputs_.end()) {
+        const auto& commands = pending->second.commands;
+        ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] +=
+            static_cast<std::uint64_t>(std::distance(commands.upper_bound(resolvedThrough), commands.end()));
+    }
+    if (const auto actions = pendingActions_.find(playerId); actions != pendingActions_.end())
+        ingress_[playerId].leaveDiscardedActionShots += actions->second.size();
+    ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });
+    if (const auto track = slack_.find(playerId); track != slack_.end()) DiscardSlack(playerId, track->second);
     pendingInputs_.erase(playerId);
     pendingActions_.erase(playerId);
     pendingActionAcknowledgements_.erase(playerId);
@@ -333,19 +589,31 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
     for (auto& player : state.players) {
         auto found = slack_.find(player.playerId);
         if (found == slack_.end() || found->second.movementEpoch != player.movementEpoch ||
-            found->second.lifeGeneration != player.lifeGeneration)
+            found->second.lifeGeneration != player.lifeGeneration) {
+            if (found != slack_.end()) DiscardSlack(player.playerId, found->second);
             found = slack_.insert_or_assign(player.playerId, SlackTrack{player.movementEpoch, player.lifeGeneration,
                 player.lastResolvedCommand, {}, {}, std::nullopt}).first;
+        }
         auto& track = found->second;
         if (player.lastResolvedCommand > track.lastResolved + kMaximumSubstitutedSequences)
             track.lastResolved = player.lastResolvedCommand - kMaximumSubstitutedSequences;
+        // The ledger follows the sequences this loop visits, from the same
+        // starting cursor, and takes its times from the same clock reading.
+        const auto closed = [this](const auto& record) { SubstitutionClosed(record); };
+        ledger_.Observe(player.playerId, player.movementEpoch, player.lifeGeneration, track.lastResolved, closed);
         for (auto sequence = track.lastResolved + 1; sequence <= player.lastResolvedCommand; ++sequence) {
             if (!at) at = now_();
             const auto receipt = track.receipts.find(sequence);
             if (receipt != track.receipts.end()) {
                 const auto micros = Micros(*at - receipt->second);
-                if (!track.pending || micros < track.pending->second) track.pending = std::pair{sequence, micros};
-            } else track.substituted[sequence] = *at;
+                ++ingress_[player.playerId].slackExecutedSamples;
+                OfferSlackSample(player.playerId, track, sequence, micros);
+                ledger_.Resolved(player.playerId, sequence, std::nullopt, match_.TickCount(), closed);
+            } else {
+                track.substituted[sequence] = *at;
+                ++ingress_[player.playerId].substitutedCommands;
+                ledger_.Resolved(player.playerId, sequence, *at, match_.TickCount(), closed);
+            }
         }
         track.lastResolved = Engine::Math::Max(track.lastResolved, player.lastResolvedCommand);
         while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
@@ -358,8 +626,10 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
         }
     }
     std::erase_if(slack_, [&](const auto& entry) {
-        return std::none_of(state.players.begin(), state.players.end(),
+        const bool gone = std::none_of(state.players.begin(), state.players.end(),
             [&](const auto& player) { return player.playerId == entry.first; });
+        if (gone) DiscardSlack(entry.first, entry.second);
+        return gone;
     });
 }
 
@@ -403,8 +673,17 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
         if (player != state.players.end()) player->connectionQualityFailures = track.failures;
     }
     for (const auto playerId : evicted) {
+        // Eviction runs before staging is pruned for this tick: what this tick
+        // executed is not a discard. A staged identity this tick rotated away
+        // is wholly unresolved.
+        const auto player = std::find_if(state.players.begin(), state.players.end(),
+            [&](const auto& candidate) { return candidate.playerId == playerId; });
+        const auto pending = pendingInputs_.find(playerId);
+        const bool current = player != state.players.end() && pending != pendingInputs_.end() &&
+            player->movementEpoch == pending->second.movementEpoch && player->lifeGeneration == pending->second.lifeGeneration;
+        const auto resolvedThrough = current ? player->lastResolvedCommand : 0;
         static_cast<void>(match_.Leave(playerId));
-        RemovePlayerState(playerId);
+        RemovePlayerState(playerId, resolvedThrough);
         std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });
         std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });
     }
@@ -415,11 +694,24 @@ std::future<void> MatchRuntimeHost::RequestReset() {
     if (pendingReset_) throw std::logic_error("A match reset is already pending");
     pendingReset_.emplace();
     auto future = pendingReset_->get_future();
-    wake_.notify_all();
+    if (role_) role_->Notify();
     return future;
 }
 
 void MatchRuntimeHost::ClearState() {
+    // Staging holds only unresolved commands of current identities here:
+    // ingress admits the current identity and each tick prunes the rest.
+    for (const auto& [playerId, pending] : pendingInputs_)
+        ingress_[playerId].resetDiscardedCommands += pending.commands.size();
+    for (const auto& [playerId, shots] : pendingActions_)
+        ingress_[playerId].resetDiscardedActionShots += shots.size();
+    for (const auto& [playerId, through] : pendingActionAcknowledgements_) {
+        static_cast<void>(through);
+        ++ingress_[playerId].resetDiscardedActionAcks;
+    }
+    ledger_.Clear(IngressSubstitutionClose::Reset, [this](const auto& record) { SubstitutionClosed(record); });
+    for (const auto& [playerId, track] : slack_) DiscardSlack(playerId, track);
+    if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);
     match_.Reset();
     ticker_.Reset();
     controls_.clear();

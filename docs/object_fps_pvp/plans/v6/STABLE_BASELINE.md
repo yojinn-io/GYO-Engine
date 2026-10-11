@@ -6,6 +6,12 @@
 這是已驗證範圍的開發基線。GUI 長時間運行、1808 秒長測、兩台機器的時鐘漂移、Linux 與 macOS arm64 實機都沒有驗證（見「跳過與未執行」）。
 v5 的[穩定基線](../v5/STABLE_BASELINE.md)原樣保留。
 
+## 已知問題（2026-10-10 追加）
+
+- **Gateway 悄悄丟掉已解析的命令，Match 的遲到量測被截斷。** 本基線（master `c7d6dd3`、量測來源 `fee92ff`、tag `object_fps_pvp-v1.1.0`（`9a6fa8e`））同時帶著 Gateway 的過濾（`391ca00`）與 Match 的遲到量測（`a4ccaa5`）：Gateway 用權威狀態的延遲副本 `lastResolved` 丟掉序號不大於它的命令，Match 因此幾乎量不到 Client 端的網路遲到，Client 的 late 修正在截斷的樣本上校準。
+- 權威狀態與裁決沒有錯（被過濾的都是 Match 不會執行的命令）；損失的是資訊。本基線的驗收數字都是在這個盲區下量到的。
+- 經過、影響與處置見 [v7 事故紀錄](../v7/Incident/2026-10-10-gateway-silent-drop.md)。修正在 v7 的 P2（丟棄回報計畫，D53）。要不要重新發佈本基線，修好之後再決定。
+
 ## 固定契約與版本
 
 Client／Gateway／Match 共同使用 pv6，詳細政策以 [v6 契約](../../protocol-v6.zh-Hant.md)為準。v6 相對 v5 的重點：

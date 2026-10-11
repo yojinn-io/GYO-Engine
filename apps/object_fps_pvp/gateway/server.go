@@ -52,9 +52,11 @@ type reservation struct {
 	lifeGeneration uint64
 	commands       map[uint64]*runtime.MovementCommand
 	outSequence    uint32
-	// Diagnostics only: datagrams of this session and the last arrival.
+	// Diagnostics only: datagrams of this session and the last arrival, and
+	// the intervals between this session's writes to its Client.
 	received     uint64
 	lastReceived time.Time
+	sent         sendStatistics
 }
 type outbound struct {
 	actionPlayer uint64
@@ -80,12 +82,33 @@ type Server struct {
 	udp                     *net.UDPConn
 	controlOut              chan outbound
 	snapshotOut             chan []byte
+	resultWake              chan struct{}
 	closeOnce               sync.Once
 	snapshotReplacements    atomic.Uint64
 	rateAcceptedPackets     atomic.Uint64
 	rateRejectedPackets     atomic.Uint64
 	maxSessionWindowPackets atomic.Uint64
+	// Ingress statistics (v7 batch 08c), under mu: the Gateway-wide counters
+	// and each player's datagram outcomes (IG). A player's counters outlive
+	// its reservation (remove, runtimeFailed) until taken, like the link's.
+	ingress       gatewayIngressCounts
+	playerIngress map[uint64]*playerIngressCounts
+	// The ingress lines, under mu: where the current window started, the
+	// players that had a line, and whether the final one was written. The
+	// final window is written once (finalOnce), on the first end path.
+	ingressWindowStart time.Time
+	ingressPlayers     map[uint64]struct{}
+	ingressFinal       bool
+	finalOnce          sync.Once
 }
+
+// The reusable Session's admission checks. Tests replace them to reach an
+// admission error this Gateway does not know: the Session returns only
+// ErrUnauthorized, ErrRateLimit and ErrStale.
+var (
+	sessionAdmit = (*session.Session).Admit
+	sessionHello = (*session.Session).Hello
+)
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	ip, err := netip.ParseAddr(cfg.AdvertiseIP)
@@ -113,7 +136,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
-		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
+		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1),
+		resultWake: make(chan struct{}, 1), ingressWindowStart: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rooms", s.listRooms)
 	mux.HandleFunc("POST /rooms", s.createRoom)
@@ -157,6 +181,7 @@ func (s *Server) Close() {
 		_ = s.http.Close()
 		_ = s.listener.Close()
 		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
+		s.flushFinal()
 	})
 }
 
@@ -345,35 +370,69 @@ func (s *Server) receiveUDP(ctx context.Context) {
 			}
 			return
 		}
-		header, payload, err := framing.DecodeDatagram(buffer[:n])
-		if err != nil || header.Version != adapter.ClientVersion {
-			continue
-		}
-		if err = s.receivePacket(header, payload, peer, time.Now()); err != nil {
+		if err = s.receiveDatagram(buffer[:n], peer, time.Now()); err != nil {
 			s.runtimeFailed(err)
 		}
 	}
 }
-func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) error {
+
+// receiveDatagram handles one datagram read from the UDP socket; an error
+// fails the runtime.
+func (s *Server) receiveDatagram(datagram []byte, peer netip.AddrPort, now time.Time) error {
+	header, payload, err := framing.DecodeDatagram(datagram)
+	if err != nil {
+		s.mu.Lock()
+		s.ingress[gatewayReceivedDatagrams]++
+		s.ingress[gatewayDropUndecodableDatagrams]++
+		s.mu.Unlock()
+		return nil
+	}
+	return s.receivePacket(header, payload, peer, now)
+}
+
+// receivePacket gives every datagram exactly one outcome. One that belongs to
+// no session is a Gateway-wide drop; a session's datagram is counted received
+// for its player and, at each return, in exactly one fwd_ or drop_ counter, so
+// the player's received_datagrams equals the sum of its outcomes (IG).
+func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.available || h.Version != adapter.ClientVersion {
+	s.ingress[gatewayReceivedDatagrams]++
+	if h.Version != adapter.ClientVersion {
+		s.ingress[gatewayDropOtherVersionDatagrams]++
+		return nil
+	}
+	if !s.available {
+		s.ingress[gatewayDropRoomUnavailableDatagrams]++
 		return nil
 	}
 	p := s.sessions[h.SessionID]
 	if p == nil {
+		s.ingress[gatewayDropUnknownSessionDatagrams]++
 		return nil
 	}
 	p.received++
 	p.lastReceived = now
+	s.countIngress(p, playerReceivedDatagrams, 1)
+	defer func() {
+		// The runtime link failed on this datagram (receiveUDP then makes the
+		// room unavailable). No outcome was counted for it: it leaves its
+		// player's IG and is dropped as for an unavailable room.
+		if err != nil {
+			s.playerIngress[p.playerID][playerReceivedDatagrams]--
+			s.ingress[gatewayDropRoomUnavailableDatagrams]++
+		}
+	}()
 	switch h.Type {
 	case adapter.Hello:
 		var hello client.Hello
 		if proto.Unmarshal(payload, &hello) != nil {
+			// Before authentication: the session it claims.
+			s.countIngress(p, playerDropMalformedHelloPackets, 1)
 			return nil
 		}
-		admission := p.session.Hello(hello.SessionToken, peer, h.Sequence, now)
-		s.trackAdmission(p, now, admission)
+		admission := sessionHello(p.session, hello.SessionToken, peer, h.Sequence, now)
+		s.trackAdmission(p, ingressHello, now, admission)
 		if admission != nil {
 			return nil
 		}
@@ -384,67 +443,77 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 			log.Printf("player hello player=%d udp=%s", p.playerID, peer)
 			e := envelope()
 			e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: p.playerID}}
-			return s.link.control(e)
+			if err := s.link.control(e); err != nil {
+				return err
+			}
 		case active:
 			s.welcome(p)
 		}
+		s.countIngress(p, playerFwdAdmittedHelloPackets, 1)
 	case adapter.Actions:
-		if p.phase != active || s.admit(p, peer, h.Sequence, now) != nil {
+		if p.phase != active {
+			s.countIngress(p, playerDropInactiveActionsPackets, 1)
+			return nil
+		}
+		if s.admit(p, ingressActions, peer, h.Sequence, now) != nil {
 			return nil
 		}
 		return s.receiveActions(p, h, payload, now)
 	case adapter.Input:
 		if p.phase != active {
+			s.countIngress(p, playerDropInactiveInputPackets, 1)
 			return nil
 		}
-		if s.admit(p, peer, h.Sequence, now) != nil {
+		// A stale transport sequence still carries a complete payload (Hello,
+		// Input and Actions share the Client's packet sequence): it is decoded
+		// and forwarded, but never commits the sequence, so it neither extends
+		// liveness nor moves the sequence. The rate limit already counted it.
+		admission := s.admit(p, ingressInput, peer, h.Sequence, now)
+		stale := errors.Is(admission, session.ErrStale)
+		if admission != nil && !stale {
 			return nil
 		}
 		in, err := adapter.DecodeInput(payload, p.playerID)
 		if err != nil {
+			s.countIngress(p, playerDropMalformedInputPackets, 1)
 			return nil
 		}
-		// Epochs are authority-owned. Old packets are inert; future packets
-		// cannot initiate a movement reset or replace an existing window.
-		if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
-			return nil
-		}
-		// Validate the whole batch before committing any new command. Resolved
-		// steps are obsolete; unacknowledged steps are immutable across packets.
-		pending := &runtime.PlayerInput{PlayerId: p.playerID, MovementEpoch: p.movementEpoch, LifeGeneration: p.lifeGeneration,
-			ObservedAuthorityTick: in.ObservedAuthorityTick}
-		for _, command := range in.Commands {
-			if command.Sequence <= p.lastResolved {
-				continue
-			}
-			if command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
-				return nil
-			}
-			if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
-				return nil
-			}
-			pending.Commands = append(pending.Commands, command)
-		}
-		if p.session.CommitSequence(h.Sequence, now) != nil {
-			return nil
-		}
-		if len(pending.Commands) == 0 {
-			return nil
-		}
-		if err := s.link.input(pending); err != nil {
-			if errors.Is(err, adapter.ErrInput) {
-				return nil
-			}
-			return err
-		}
-		for _, command := range pending.Commands {
-			p.commands[command.Sequence] = command
-		}
-		return nil
+		return s.forwardInput(p, in, h.Sequence, stale, now)
 	default:
-		_ = s.admit(p, peer, h.Sequence, now)
+		if s.admit(p, ingressOther, peer, h.Sequence, now) == nil {
+			s.countIngress(p, playerDropUnknownKindPackets, 1)
+		}
 	}
 	return nil
+}
+
+// countIngress adds n to one of a player's ingress counters. Called with s.mu
+// held.
+func (s *Server) countIngress(p *reservation, counter playerIngressCounter, n uint64) {
+	if s.playerIngress == nil {
+		s.playerIngress = make(map[uint64]*playerIngressCounts)
+	}
+	counts := s.playerIngress[p.playerID]
+	if counts == nil {
+		counts = new(playerIngressCounts)
+		s.playerIngress[p.playerID] = counts
+	}
+	counts[counter] += n
+}
+
+// takeIngress hands over the Server's ingress counters accumulated since the
+// previous call: each player's datagram outcomes, and the Gateway-wide
+// counters. The link's command counters (I0) are taken by its own
+// takeIngress; a player's line adds both (disjoint keys).
+func (s *Server) takeIngress() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.takeIngressLocked()
+}
+func (s *Server) takeIngressLocked() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
+	players, gateway := s.playerIngress, s.ingress
+	s.playerIngress, s.ingress = nil, gatewayIngressCounts{}
+	return players, gateway
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
@@ -498,7 +567,12 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			return
 		}
 		s.mu.Lock()
-		if !s.available || (s.hasSnapshot && out.Tick <= s.lastSnapshot) {
+		if !s.available {
+			s.mu.Unlock()
+			return
+		}
+		if s.hasSnapshot && out.Tick <= s.lastSnapshot {
+			s.ingress[gatewayDropOldTickSnapshots]++
 			s.mu.Unlock()
 			return
 		}
@@ -507,6 +581,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 				(state.LifeGeneration < p.lifeGeneration || state.MovementEpoch < p.movementEpoch ||
 					(state.LifeGeneration > p.lifeGeneration && state.MovementEpoch <= p.movementEpoch) ||
 					(state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
+				s.ingress[gatewayDropRegressedSnapshots]++
 				s.mu.Unlock()
 				return
 			}
@@ -579,18 +654,51 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 	}
 }
 
+// Wakes the send loop when a Client has something new: a decision, a
+// retirement, or a retirement its ACK-only batch showed it missed.
+func (s *Server) wakeResults() {
+	select {
+	case s.resultWake <- struct{}{}:
+	default:
+	}
+}
+
+// How long the send loop waits for the earliest result deadline: until it
+// (none if it has passed), or one interval with nothing pending, a wake that
+// sends nothing.
+func resultWait(deadline time.Time, pending bool, now time.Time) time.Duration {
+	if !pending {
+		return actionSendInterval
+	}
+	return max(deadline.Sub(now), 0)
+}
+
 func (s *Server) sendUDP(ctx context.Context) {
-	ticker := time.NewTicker(actionSendInterval)
-	defer ticker.Stop()
+	// Results go out on a wake (something new for a Client) or at the earliest
+	// result deadline, a strict ActionSendRate interval from that player's last
+	// completed write: at once after an idle interval, never sooner.
+	timer := time.NewTimer(actionSendInterval)
+	defer timer.Stop()
+	results := func() {
+		packets, deadline, pending := s.actionPackets(time.Now())
+		for _, packet := range packets {
+			s.writeUDP(packet)
+			s.actionWritten(packet.actionPlayer, time.Now())
+		}
+		if len(packets) > 0 {
+			// The writes re-anchored their players' deadlines.
+			deadline, pending = s.resultDeadline()
+		}
+		timer.Reset(resultWait(deadline, pending, time.Now()))
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			for _, packet := range s.actionPackets(time.Now()) {
-				s.writeUDP(packet)
-				s.actionWritten(packet.actionPlayer, time.Now())
-			}
+		case <-s.resultWake:
+			results()
+		case <-timer.C:
+			results()
 		case packet := <-s.controlOut:
 			s.writeUDP(packet)
 		case payload := <-s.snapshotOut:
@@ -608,6 +716,9 @@ func (s *Server) sendUDP(ctx context.Context) {
 				var packet outbound
 				payload, packet = s.snapshotForPeer(playerID, payload)
 				s.writeUDP(packet)
+				if packet.peer.IsValid() {
+					s.snapshotWritten(playerID, time.Now())
+				}
 			}
 		}
 	}
@@ -683,36 +794,156 @@ func (s *Server) expireAt(now time.Time) {
 }
 
 // Every statisticsInterval: each player's phase, endpoint, datagrams and the
-// age of the last one, with the Gateway-wide rate counters. Diagnostics only.
+// age of the last one, with the Gateway-wide rate counters, then the player's
+// send intervals (results, snapshots and runtime link action batches).
+// Diagnostics only.
 const statisticsInterval = 10 * time.Second
 
 func (s *Server) logStatistics(ctx context.Context) {
 	ticker := time.NewTicker(statisticsInterval)
 	defer ticker.Stop()
+	windowStart := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			s.mu.Lock()
-			ids := make([]uint64, 0, len(s.players))
-			for id := range s.players {
-				ids = append(ids, id)
-			}
-			slices.Sort(ids)
-			log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
-				s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
-			for _, id := range ids {
-				p := s.players[id]
-				age := int64(-1)
-				if !p.lastReceived.IsZero() {
-					age = now.Sub(p.lastReceived).Milliseconds()
-				}
-				log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
-					p.session.Endpoint(), p.received, age)
-			}
-			s.mu.Unlock()
+			s.logStatisticsWindow(now, now.Sub(windowStart))
+			windowStart = now
 		}
+	}
+}
+
+// logStatisticsWindow writes one window's lines. The ingress lines go with
+// them until the final one: the Gateway's after the gateway statistics line,
+// each current player's after its send statistics line, then those of removed
+// players with counters left.
+func (s *Server) logStatisticsWindow(now time.Time, window time.Duration) {
+	links := s.link.takeActionStatistics()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]uint64, 0, len(s.players))
+	for id := range s.players {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
+		s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
+	ingress := map[uint64]string{}
+	var removed []playerIngressLine
+	if !s.ingressFinal {
+		gateway, lines := s.ingressWindowLocked(now, false)
+		log.Print(gateway)
+		for _, line := range lines {
+			if s.players[line.player] != nil {
+				ingress[line.player] = line.line
+			} else {
+				removed = append(removed, line)
+			}
+		}
+	}
+	for _, id := range ids {
+		p := s.players[id]
+		age := int64(-1)
+		if !p.lastReceived.IsZero() {
+			age = now.Sub(p.lastReceived).Milliseconds()
+		}
+		log.Printf("player statistics player=%d phase=%d udp=%s received=%d last_received_ms=%d", id, p.phase,
+			p.session.Endpoint(), p.received, age)
+		link, ok := links[id]
+		if !ok {
+			link = noIntervals
+		}
+		log.Print(sendStatisticsLine(id, window, p.sent.results.take(), p.sent.snapshots.take(), link))
+		if line, ok := ingress[id]; ok {
+			log.Print(line)
+		}
+	}
+	for _, line := range removed {
+		log.Print(line.line)
+	}
+}
+
+// One player's ingress line of a window.
+type playerIngressLine struct {
+	player uint64
+	line   string
+}
+
+// ingressWindowLocked takes the ingress counters since the previous window,
+// the Server's (datagram outcomes, Gateway-wide) and the link's (commands),
+// and formats them: the Gateway line, and by ascending id a line for every
+// current player and every player with counters taken, a removed one
+// included. The final window (final=1) also has a line for every player that
+// had one before, so each player's lines end with exactly one final line.
+// Called with s.mu held.
+func (s *Server) ingressWindowLocked(now time.Time, final bool) (string, []playerIngressLine) {
+	var window time.Duration
+	if !s.ingressWindowStart.IsZero() {
+		window = max(now.Sub(s.ingressWindowStart), 0)
+	}
+	s.ingressWindowStart = now
+	players, gateway := s.takeIngressLocked()
+	if players == nil {
+		players = map[uint64]*playerIngressCounts{}
+	}
+	for id, counts := range s.link.takeIngress() {
+		if players[id] == nil {
+			players[id] = new(playerIngressCounts)
+		}
+		players[id].add(counts)
+	}
+	for id := range s.players {
+		if players[id] == nil {
+			players[id] = new(playerIngressCounts)
+		}
+	}
+	if final {
+		s.ingressFinal = true
+		for id := range s.ingressPlayers {
+			if players[id] == nil {
+				players[id] = new(playerIngressCounts)
+			}
+		}
+	}
+	ids := make([]uint64, 0, len(players))
+	for id := range players {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	lines := make([]playerIngressLine, 0, len(ids))
+	for _, id := range ids {
+		s.noteIngressPlayerLocked(id)
+		lines = append(lines, playerIngressLine{id, playerIngressStatisticsLine(id, window, final, players[id])})
+	}
+	return gatewayIngressStatisticsLine(window, final, &gateway), lines
+}
+
+func (s *Server) noteIngressPlayerLocked(id uint64) {
+	if s.ingressPlayers == nil {
+		s.ingressPlayers = map[uint64]struct{}{}
+	}
+	s.ingressPlayers[id] = struct{}{}
+}
+
+// flushFinal writes the last ingress window (final=1) once, on the first end
+// path that reaches it: Close (the context or the HTTP server ended Serve) or
+// runtimeFailed, each after link.close(). A concurrent second caller returns
+// once the first wrote it.
+func (s *Server) flushFinal() {
+	s.finalOnce.Do(s.writeFinalIngress)
+}
+
+func (s *Server) writeFinalIngress() {
+	// close() does not wait for the writer: a pass it took counts its commands
+	// written or abandoned until it exits, and I0 needs them in this window.
+	s.link.waitWriter()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gateway, lines := s.ingressWindowLocked(time.Now(), true)
+	log.Print(gateway)
+	for _, line := range lines {
+		log.Print(line.line)
 	}
 }
 
@@ -732,6 +963,8 @@ func (s *Server) runtimeFailed(err error) {
 		if p.phase != reserved {
 			s.sendControl(p, adapter.Failure, &client.Error{Code: "runtime_unavailable", Message: "Match ended; restart services and join again"})
 		}
+		// The final ingress window writes them although the reservations go.
+		s.noteIngressPlayerLocked(p.playerID)
 	}
 	clear(s.players)
 	clear(s.sessions)
@@ -739,4 +972,67 @@ func (s *Server) runtimeFailed(err error) {
 	s.mu.Unlock()
 	s.link.close()
 	log.Printf("runtime disconnected; room unavailable: %v", err)
+	s.flushFinal()
+}
+
+// forwardInput hands a decoded window to the Match (D49: the Match decides what
+// is stale, resolved or conflicting). The main lane merges windows and keeps
+// resolved commands, whose late arrival the Match measures. A window the Match
+// may refuse as a whole goes unmerged through the rejected lane, so it cannot
+// make the Match refuse a merge with valid commands: another epoch or life,
+// beyond the future bound, a conflict, or a window the link refused.
+//
+// The datagram's one outcome (IG) is the lane it took: the main lane, the
+// rejected lane, or neither when every command was a written copy; a stale
+// sequence is its own outcome on any of them (D55 ③). A failed link counts
+// none (receivePacket counts the datagram for the unavailable room).
+func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) (err error) {
+	outcome := playerFwdRejectedLaneInputPackets
+	defer func() {
+		if err != nil {
+			return
+		}
+		if stale {
+			outcome = playerFwdStaleSequenceInputPackets
+		}
+		s.countIngress(p, outcome, 1)
+	}()
+	if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
+		return s.link.reject(in, playerFwdRoutedEpochMismatchInputs)
+	}
+	// Validate the whole batch before committing the sequence. Unresolved
+	// steps are immutable across packets; the bound counts only steps after
+	// the cursor (a resolved step must not underflow it).
+	for _, command := range in.Commands {
+		if command.Sequence > p.lastResolved && command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
+			return s.link.reject(in, playerFwdRoutedFutureLimitInputs)
+		}
+		if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
+			return s.link.reject(in, playerFwdRoutedConflictInputs)
+		}
+	}
+	// A stale sequence is never committed. Admit and CommitSequence both run
+	// under s.mu and Admit found this sequence fresh, so the commit cannot
+	// fail. A window the link refuses below is routed after the commit, as
+	// before 08c.
+	if !stale {
+		_ = p.session.CommitSequence(sequence, now)
+	}
+	var copies bool
+	if err := s.link.inputWindow(in, &copies); err != nil {
+		if errors.Is(err, adapter.ErrInput) {
+			return s.link.reject(in, linkRefusalReason(err))
+		}
+		return err
+	}
+	outcome = playerFwdMainInputPackets
+	if copies {
+		outcome = playerFwdWrittenDuplicateInputPackets
+	}
+	for _, command := range in.Commands {
+		if command.Sequence > p.lastResolved {
+			p.commands[command.Sequence] = command
+		}
+	}
+	return nil
 }

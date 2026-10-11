@@ -1,9 +1,9 @@
 # PvP v7 分批計畫與進度
 
-更新：2026-10-08。Owner：`object_fps_pvp`。
-**狀態：第 01 批完成**（PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併，`a7cba38`）；**第 02 批實作與 L1 完成**（P1a，分支 `claude/pvp-v7-p1a`）；**第 03 批實作完成、移到 P1b**（D40，分支 `claude/pvp-v7-p1b`；產品路徑的回復測試有 1 個已知失敗，等第 04 批）。
+更新：2026-10-09。Owner：`object_fps_pvp`。
+**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06 批完成；P2-log、第 06、07 批完成）。
 
-v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度設定、產品與 SDL 的隔離、日誌補強。
+v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度與 FPS 的選擇、產品與 SDL 的隔離、日誌補強。
 
 規劃方法（2026-10-08，ultracode）：
 1. 唯讀盤點：9 個區域 agent，加 1 次 xhigh 對抗式完整性檢查，結果是 [盤點](INVENTORY.md)。
@@ -12,6 +12,7 @@ v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節�
 4. 使用者決定 D27～D34，見[交接](HANDOFF.md)。
 
 先讀[交接](HANDOFF.md)、[盤點](INVENTORY.md)與指定批次。
+事故紀錄放在 [Incident](Incident/README.md)（2026-10-10 起：量測基準、資訊流或工作流程出問題，讓我們在錯誤前提上做了決定或花了大量時間的事件）。
 版本號：v7＝遊戲版本，pvN＝網路協議版本（v6 D20）。
 
 Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除本產品後，那些紀錄仍然完整：
@@ -29,7 +30,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 3 | 網路路徑的短休眠輪詢改為事件驅動：Match IPC 每輪 1 ms（`IpcHost.cpp:327`；另有 `:336` 的 5 ms accept、`:339`／`:344` 的 10 ms future 輪詢）、Client 網路 worker 每輪 min(2 ms, 到下一次輸入期限)（`ClientConnection.cpp:594-597`）。實測成本在現有主機上只有 1～3 ms，屬推測的壓力；觀測到的是 SendInput／SubmitAction 不會喚醒 worker。v6 第 16 批的「4 人 IPC 寫出負載」沒有觀測到（合併 0 次），不作為證據 | v6 D21；[盤點](INVENTORY.md) |
 | 4 | runtime link（Gateway↔Match）的心跳對時：偏移、RTT、漂移，只作量測與診斷。移動以 Tick 與序號裁決；射擊的 Expired／InvalidReference（250 ms，`PvpMatch.cpp:281-286`）與逐出（參考年齡中位數 160 ms，`MatchRuntimeHost.cpp:86-101`、`:375-389`）用本機單調年齡，**對時結果不得用在這兩處**。屬 wire 變更：目前收到未知訊息會斷線、版本要求完全相等（`IpcHost.cpp:210`、`:246`；`runtime_link.go:48-51`、`:284-291`），所以必須升 pv7 | 2026-10-06 使用者決定；D32 |
 | 5 | 音效：Engine 新增 audio 模組，本產品加入射擊、受擊等聲音 | 2026-10-06 使用者決定（「有聲音遊戲才算完整」） |
-| 6 | 解析度、視窗模式與 FPS 上限的切換，設定可保存（FPS 上限依 D41 於 2026-10-09 加入）。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
+| 6 | 解析度、視窗模式與 FPS 上限由玩家選擇。D41（2026-10-09）：加入 FPS 上限；v7 以命令列選項提供，遊戲內的設定 UI 與設定的保存移到 v8。Engine 提供機制，本產品決定政策；目前寫死 1280×720（`PvpApplication.cpp:127`、`:895-896`、`:1029` 的 HUD 參考值、`PvpApplication.hpp:96-97`） | 2026-10-06 使用者決定 |
 | 7 | 產品不再直接依賴 SDL。完成條件以 SDL 符號判定（D33）：產品、驗收 probe、產品測試中 `SDL_*`、`SDLK_*`、SDL 的型別與 include、Engine 的 `*Native.hpp` 都是 0 件（CMake 的後端元件選擇除外）。只看 include 不夠，因為 `SdlPlatform.hpp`、`SdlInput.hpp` 本身 include SDL，`PvpApplication.hpp` 也暴露 `SdlPlatform&`、`SdlGpuRenderDevice&`。現存使用的位置見[盤點](INVENTORY.md) | 2026-10-06 使用者決定；D33 |
 | 8 | 日誌與診斷補強：v6 LAN 聯機測試發現的缺口，建在 Trace 之上（各缺口的 owner 見「v6 LAN 聯機測試的觀察」） | 2026-10-08 使用者決定（「下沉到 v7 的子系統中」） |
 
@@ -45,8 +46,8 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | Net transport | 留在產品內：任務 3 以產品內的 asio 完成。C++ 消費端只有本產品，Gateway 是 Go | — | 弱：Go 端已是事件驅動；asio 由產品取得（`apps/object_fps_pvp/CMakeLists.txt:8-10`） |
 | Trace | `GYO::Trace`（精簡）：有界紀錄 sink、以通知喚醒的背景寫檔、Base 的日誌 facade。不做錄製重播 | 任務 8 的紀錄（P3） | 強：v6 LAN 的關鍵數字都要從 movement trace 離線重建 |
 | SDL 隔離 | 擴充 platform／input（IP-3、IP-4） | 產品與 probe 的遷移（P4） | 強：產品、7 個 probe 檔、2 個產品測試、Engine 測試 |
-| Display | 擴充 platform（IP-5）。工具不是第二個使用者：ui_editor 的大小與像素密度由 ImGui SDL3 後端吸收，preview 已停用；第二個消費端是驗收 probe 與產品測試的唯讀查詢 | 解析度設定（P5） | 弱（主要來自任務 6） |
-| 使用者設定的保存 | `engine/io` 的原子寫入＋每位使用者的目錄（IP-5）。已有兩份 temp＋rename 的原子寫入（`tools/ui_editor/src/FileService.cpp:54-94`、`engine/render/shaders/pipeline/src/main.cpp:64-72`）。鍵與值的意義、版本與驗證規則屬各產品的 Data Contract | 解析度設定（P5） | 弱 |
+| Display | 擴充 platform（IP-5）。工具不是第二個使用者：ui_editor 的大小與像素密度由 ImGui SDL3 後端吸收，preview 已停用；第二個消費端是驗收 probe 與產品測試的唯讀查詢 | 解析度與 FPS 的選擇（P5） | 弱（主要來自任務 6） |
+| 使用者設定的保存 | `engine/io` 的原子寫入＋每位使用者的目錄（IP-5）。已有兩份 temp＋rename 的原子寫入（`tools/ui_editor/src/FileService.cpp:54-94`、`engine/render/shaders/pipeline/src/main.cpp:64-72`）。鍵與值的意義、版本與驗證規則屬各產品的 Data Contract。D41：設定的保存隨設定 UI 移到 v8，v7 沒有消費端，所以不做 | v8 的設定 UI | 弱 |
 | Audio | `GYO::Audio`（中立混音器，自己維護樣本計數並依時間戳排程）＋SDL 後端。SDL 3.4 沒有時間戳排程的 API | 音效（P6） | 無（使用者決定的功能） |
 
 - **framework 層的現況**：
@@ -65,23 +66,24 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 |---|---|---|---|---|
 | 01 | [盤點](INVENTORY.md)、本文件、[交接](HANDOFF.md) | ultracode（規劃）→ medium（文件） | 完成，PR [#69](https://github.com/yojinn-io/GYO-Engine/pull/69) 已合併（`a7cba38`） | 計畫、盤點、README 更正、v7 交接（D27～D34）、v6 的 v1.1.0 紀錄、Engine 計畫夾 |
 | 02 | [ClientSimulation 接縫](02-client-simulation-seam.md) | high（等價性局部 xhigh） | 完成，隨 P1a 的 PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) 合併（`f3d176d`） | 產品庫 `client_simulation`，行為不變（golden）；產品與 4 個無頭 probe 改走同一條命令產生路徑 |
-| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 實作完成，移到 P1b（D40），與第 04 批一起合併 | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
+| 03 | [每份 snapshot 進相位追蹤](03-per-snapshot-phase.md) | high（樣本順序與死區局部 xhigh；xhigh 審查 1 次） | 完成（D40，與第 04 批一起在 PR #71 合併，`660310e`） | 同一批中每份含自己的 snapshot 都交一個樣本；一幀一份時與 v6 逐位元組相同 |
 | 03a | [相位追蹤的小量測](03a-phase-only-measurement.md) | medium | 完成（只記錄；4 ms 狀態 11／12 輪） | 只記錄：在含 03 的 P1b 分支頭上量 03 單獨的效果（不合併那個頭） |
-| 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 實作與 L1 完成（xhigh 審查與修正完成；D30 門檻的放大由使用者決定 C1 之後再看）；PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 未合併 | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
+| 04 | [Client 三角色](04-client-roles.md) | high（交接、過期、生命週期、GUI 斷言局部 xhigh） | 完成（PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 合併，`660310e`；D30 門檻的放大由使用者決定 C1 之後再看） | 模擬角色在固定步期限產生命令；主執行緒只發布意圖並讀呈現副本 |
 | 05 | [C1：30 FPS 修正前後對比](05-30fps-comparison.md) | medium（宣告草案用 high） | 完成（2026-10-09）：C1 通過（4 ms 狀態；8 ms 未驗證），使用者操作的 L2、L3 通過 | C1（任務 1、2）；拖動與縮放的 L2；Spaces、縮小、遮住的 L3 |
-| 05b | （開工時撰寫） | 建議在開工時提出 | 未開始（D41，PR #71 合併後） | 產品的 `--fps` 限幀選項，以及 30 FPS 的手感 L3；排在第 15、16 批之前 |
-| P2-log | （P2 開始時撰寫） | medium | 未開始 | 只加記錄的 commit，作為 P2 的 before |
-| 06 | （P2 開始時撰寫） | medium（資格容許局部 xhigh） | 未開始 | Gateway→Client 結果通道約 18 Hz→30 Hz |
-| 07 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
-| 08 | （P2 開始時撰寫） | high（局部 xhigh） | 未開始 | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
-| 09 | （P2 開始時撰寫） | high（常數推導局部 xhigh）；量測 medium | 未開始 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
-| 10 | （P3 開始時撰寫） | high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
-| 11 | （P3 開始時撰寫） | high（局部 xhigh；契約建議 ultracode 審查） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
+| P2-log | [網路路徑的 10 秒統計](p2-log-network-statistics.md) | medium | 完成（2026-10-09；`983e091`，PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)） | 只加記錄的 commit，作為 P2 的 before |
+| 06 | [Gateway 結果通道改為 30 Hz](06-gateway-results-30hz.md) | medium（資格容許局部 xhigh） | 完成（2026-10-09；`7da6b0d`，L2 通過；停止條件依 D42 處理） | Gateway→Client 結果通道約 15 Hz→30 Hz（P2-log 實測 15 Hz） |
+| 07 | [Match Tick 與 IpcHost](07-match-tick-ipc.md) | high（局部 xhigh） | 完成（2026-10-09；A `ffe9a99`、B `10003b9`，L2 通過；橫向對比完成） | Match Tick 改為絕對期限的 Waiter＋發布通知；IpcHost 改用 asio |
+| 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 完成（2026-10-09；`730984e`，L2 第 2 次通過；b 段變長約 3.5 ms 併入第 08b 批調查）（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
+| 08b | [結果改為事件驅動轉送](08b-event-driven-results.md) | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 完成（2026-10-10；`a954aa3`，L2 通過；規劃 ultracode，決定照建議 D46） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
+| 08c | [Gateway 丟棄回報](08c-drop-report.md) | 規劃 ultracode（分三批，D51、D52、D53）；實作 high（拒絕線、★、`AdmitInput` 局部 xhigh） | 規劃完成（2026-10-10），待核准實作的分批 | 讓 Match 知道 Gateway 丟了什麼、為什麼丟：照常轉送並去重、Match 帳本、Gateway 依原因計數；不改 wire（[事故](Incident/2026-10-10-gateway-silent-drop.md)） |
+| 09 | [FireGate 常數的重推與 C2](09-firegate-c2.md) | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 執行中（2026-10-10；決定照建議 D47，⑤更正為 P2 處理）：S1 宣告待核准；[09a](09a-input-send-pinning.md)、[09b](09b-phase-tracking.md) 的草案待決定（D44 提前條件）；之後 M0、凍結、C2 | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
+| 10 | （P3 開始時撰寫） | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
+| 11 | （P3 開始時撰寫） | pv7 契約 ultracode（D45）；實作 high（局部 xhigh） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
 | 12 | （P4 開始時撰寫） | high | 未開始 | 產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest |
-| 13 | （P5 開始時撰寫） | high（套用與還原局部 xhigh） | 未開始 | 解析度、視窗模式、FPS 上限（D41）、設定 Data Contract、未確認就還原 |
+| 13 | （P5 開始時撰寫） | high（視窗模式的切換順序局部 xhigh） | 未開始 | 玩家以命令列選項選擇解析度、視窗模式與 FPS 上限（D41）；HUD 依解析度縮放；30 FPS 手感的 L3（D41）。設定 UI 與 `settings.json` 在 v8 |
 | 14 | （P6 開始時撰寫） | high | 未開始 | 射擊、命中、受擊、換彈的音效 |
 | 15 | （P7 開始時撰寫） | medium | 未開始 | v7 LAN 場次：Windows 實機、兩機漂移、Windows 的視窗切換 |
-| 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行 |
+| 16 | （P7 開始時撰寫） | medium | 未開始 | 整合驗收、STABLE_BASELINE v7、是否發行；偶發 epoch 重設的整體回歸（D44） |
 
 P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會過時。在那之前，範圍、驗收與停止條件以[交接](HANDOFF.md)的「P2 以後各批的範圍」為準。
 
@@ -89,11 +91,11 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 
 | 批次 | 內容 | 建議檔位 | 本產品的關係 |
 |---|---|---|---|
-| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 和第 04 批同一個 PR（P1b）。2026-10-08 實作與 L1 完成、xhigh 審查完成；2026-10-09 L2（只記錄）完成 |
-| TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
+| TT-1 | `GYO::Time`（時間基準、Waiter、晚醒統計、kqueue／高解析度 waitable timer／cv 後端）、`GYO::Threads`（角色執行緒）、`RuntimeLoop` 改用時間基準 | high（後端、Notify 與期限的競爭、不早醒、停止與 join 順序局部 xhigh） | 完成：和第 04 批同一個 PR（P1b，#71 合併，`660310e`）。2026-10-08 實作與 L1 完成、xhigh 審查完成；2026-10-09 L2（只記錄）完成 |
+| TT-2 | `GYO::Trace`：有界 sink、通知喚醒的寫檔、Base 日誌 facade | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high（寫檔關閉順序局部 xhigh） | 第 10 批依賴 |
 | IP-3 | Engine 後端公開標頭去掉 SDL 型別（`*Native.hpp`）；日誌轉送、執行檔目錄、進入點、文字輸入與剪貼簿、事件時間戳換算 | high（時間戳換算局部 xhigh） | 第 12 批依賴 |
 | IP-4 | 測試用事件注入與觀測、視窗查詢與擺放；SDL3 改為 PRIVATE 連結 | high | 第 12 批依賴 |
-| IP-5 | 顯示器與模式列舉、視窗模式、像素密度、使用者目錄、`engine/io` 的原子寫入 | high（模式切換順序、原子取代局部 xhigh） | 第 13 批依賴 |
+| IP-5 | 顯示器與模式列舉、視窗模式、像素密度（使用者目錄與 `engine/io` 的原子寫入依 D41 移到 v8） | high（模式切換順序局部 xhigh） | 第 13 批依賴 |
 | AU-1 | `GYO::Audio`＋SDL 後端 | high（callback 即時安全、時間戳→樣本位置局部 xhigh） | 第 14 批依賴 |
 
 ### PR 線
@@ -103,8 +105,7 @@ P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會�
 | P0 | 01 | 規劃本身的交付（比照 v6 #39） |
 | P1a | 02、03a | 只改產品，行為不變（逐位元組相同的證明）。P0 的狀態同步併入。03a 的結果以文件併入 |
 | P1b | 03、TT-1、04、05 | 第 03 批在命令跟著畫面幀產生的架構下會讓 30 FPS 變差（D40），所以和讓命令改在固定步產生的第 04 批一起合併。跨層必須一起合併：Waiter 與 Threads 的第一個消費端是第 04 批（Match Tick 先用的話，C1 的 after 就混入 Match 的改動）。P1a 的同步併入 |
-| P1c（建議） | 05b | 小批單獨合併，不混進 P2 的 before；PR 線在開工時決定（D41） |
-| P2 | P2-log、06、07、08、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
+| P2 | P2-log、06、07、08、08b、09 | 網路路徑一條功能線；全部在 wire 變更之前 |
 | P3 | TT-2、10、11 | 診斷：Trace、紀錄、跨機對齊用的對時；v7 唯一的 wire 變更，三個角色同一個 PR |
 | P4 | IP-3、IP-4、12 | 標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併 |
 | P5 | IP-5、13 | 機制與唯一消費端的政策一起審查 |
@@ -120,17 +121,15 @@ P1a  [02 接縫] ─────────────→ [03a 小量測（量
        │
 P1b  [03 每份 snapshot] → [TT-1 Time＋Threads] → [04 三角色] → [05 C1]
        │
-P1c  [05b --fps 限幀 → 30 FPS 的 L3]（D41；第 13 批的 FPS 選擇共用同一個機制）
-       │
 P2   [P2-log] → [06 Gateway 30 Hz] ┐
                 [07 Match asio]    ├→ [09 FireGate 常數 → C2]
-                [08 Client asio]   ┘
+                [08 Client asio] → [08b 結果事件驅動] ┘
        │            （↑ 所有新舊對比到這裡結束）
 P3   [TT-2 Trace] → [10 診斷紀錄] → [11 pv7]   ← 唯一的 wire 變更
        │
 P4   [IP-3] → [IP-4] → [12 產品去 SDL]
                  │
-P5            [IP-5] → [13 解析度設定]
+P5            [IP-5] → [13 解析度與 FPS 的選擇（命令列選項、30 FPS 的 L3）]
 P6   [AU-1]（需 TT-1、IP-3）→ [14 音效]
 P7   [15 LAN 場次]（需 11）→ [16 整合與升格] ← 全部
 ```

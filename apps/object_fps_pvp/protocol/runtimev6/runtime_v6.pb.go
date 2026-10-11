@@ -574,7 +574,9 @@ func (x *MovementCommand) GetJumpRequested() bool {
 	return false
 }
 
-// Entire unacknowledged window, strictly ordered, at most 12 commands.
+// Commands this link has not written before for the current epoch/life,
+// strictly ordered, at most 12 per message. Merged and deduplicated by the
+// Gateway; the Match treats repeats as no-ops.
 type PlayerInput struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`

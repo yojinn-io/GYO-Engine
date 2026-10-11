@@ -4,9 +4,11 @@ gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
-    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp)
+    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
+    NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
+    PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest)
@@ -19,6 +21,31 @@ endif()
 add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 # The movement recovery matrix runs the v6 and the product command paths.
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 60)
+
+# The Match IPC over real loopback TCP (asio and the runtime contract), kept
+# apart so the domain test target gains no transport dependency.
+gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
+set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
+add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp)
+target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v6" doctest::doctest)
+if(WIN32)
+    target_compile_definitions(${ipc_tests} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${ipc_tests} PRIVATE /utf-8)
+endif()
+add_test(NAME "${GYO_CURRENT_APP}.ipc" COMMAND ${ipc_tests})
+set_tests_properties("${GYO_CURRENT_APP}.ipc" PROPERTIES LABELS "cpu;pvp;network" TIMEOUT 60)
+
+# The Match's command line for its ingress detail file (match-ingress.jsonl):
+# name derivation and refusal, and exit 1 when the file cannot be opened.
+gyo_get_app_target("${GYO_CURRENT_APP}" match match)
+add_test(NAME "${GYO_CURRENT_APP}.match_ingress_cli"
+    COMMAND "${CMAKE_COMMAND}" -DMATCH=$<TARGET_FILE:${match}>
+        "-DARENA=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
+        "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/match_ingress_cli" -P "${CMAKE_CURRENT_SOURCE_DIR}/match_ingress_cli_check.cmake")
+set_tests_properties("${GYO_CURRENT_APP}.match_ingress_cli" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
 
 # The acceptance probes' header-only start-phase recorder, driven by the real
 # prediction, and the GUI probes' room (gui_room.hpp). Kept apart so the
@@ -120,6 +147,28 @@ set_tests_properties("${GYO_CURRENT_APP}.command_evidence" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence_v7"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence_v7.py")
 set_tests_properties("${GYO_CURRENT_APP}.command_evidence_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Batch 08c F3: the ingress v1 evidence (IG, I0, I1, I2, I3, T3, J5a, S1, S2, trace) on the golden lines.
+add_test(NAME "${GYO_CURRENT_APP}.ingress_evidence"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_ingress_evidence.py")
+set_tests_properties("${GYO_CURRENT_APP}.ingress_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
+# Batch 08c F3: a real Gateway (built with Go) and a real Match in one short clean run of the timing probe; the
+# ingress evidence must hold IG, I0, I1, I2, T3, J5a, S1, S2 and the trace. It needs Go and POSIX signals
+# (77 = skipped on Windows), so it stays outside the cpu preset like the worker test: run it with -R.
+add_test(NAME "${GYO_CURRENT_APP}.ingress_cross"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ingress_cross_check.py"
+        --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_timing_probe>
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_corners.json"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ingress_cross" --go "${GYO_GO_EXECUTABLE}")
+set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300
+    SKIP_RETURN_CODE 77)
+# P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
+add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")
+set_tests_properties("${GYO_CURRENT_APP}.network_statistics" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Analyzer v7 (batch 08): action latency measures that the probe frame does not quantize.
+add_test(NAME "${GYO_CURRENT_APP}.action_latency_v7"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_action_latency_v7.py")
+set_tests_properties("${GYO_CURRENT_APP}.action_latency_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 # Room-capacity evidence, cross-validated value by value against command_evidence.
 add_test(NAME "${GYO_CURRENT_APP}.quad_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_quad_evidence.py")
@@ -190,7 +239,7 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision nlohmann_json::nlohmann_json)
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>
     $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)

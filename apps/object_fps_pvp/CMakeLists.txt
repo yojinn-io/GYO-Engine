@@ -25,19 +25,19 @@ foreach(contract client_v6 runtime_v6)
 endforeach()
 
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision
+    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 # Apple libc++ hides std::jthread/std::stop_token behind its experimental gate.
 # Every product target reaches the domain library, so the flag stays product-local.
 target_compile_options(${domain} PUBLIC $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
-    PUBLIC_LIBRARIES ${domain})
+    PUBLIC_LIBRARIES ${domain} GYO::Threads)
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
-    PUBLIC_LIBRARIES ${host} GYO::Net
+    PUBLIC_LIBRARIES ${host} GYO::Net GYO::Threads
     PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v6")
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Net
-    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json "gyo_${GYO_APP_ID}_client_v6")
+    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json GYO::Threads "gyo_${GYO_APP_ID}_client_v6")
 # The one client command-generation path, shared by the application and the
 # headless acceptance probes so that measurements exercise product behaviour:
 # the simulation and the role thread that runs it at fixed-step deadlines.

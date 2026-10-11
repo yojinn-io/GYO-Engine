@@ -79,7 +79,7 @@
   - 判定（以加入之後的整段 session 計，比只看拖動期間更嚴）：每位玩家 Match 的連續替代（Held 或 Neutral，不含 Match 停頓造成的）≤3 Tick，停頓重設 0，LifeRespawn 以外的 epoch 重設 0。
   - 停止條件「模擬晚醒 ≥100 ms」的來源：Client trace 中模擬角色發出的 `runtime_gap`（`frame_seconds` ≥0.1）。
 - L3：連續射擊中切換 Spaces、縮小、遮住視窗；保留 Client、Gateway、Match 的日誌與 movement trace。判定不斷線。
-  - 原計畫的「30 FPS 的手感」：產品 Client 沒有指定 FPS 的選項，本批不做；依 D41 在第 05b 批（產品加 `--fps` 限幀選項）之後做。
+  - 原計畫的「30 FPS 的手感」：產品 Client 沒有指定 FPS 的選項，本批不做；依 D41 在第 13 批（玩家以命令列選項選擇解析度與 FPS，含 `--fps`）做。
 
 ### D39 審查的處理（2026-10-09）
 
@@ -159,5 +159,5 @@ medium（執行與記錄）；宣告草案以 high 撰寫。依 D39，宣告草�
 - 期間兩個 Client 共出現 11 次 OS 的 modal loop（「slow event processing」1.1～4.0 秒，其中多次只有 live frame 在更新畫面）；兩位玩家各有死亡與重生（LifeRespawn 1 次與 6 次）。
 - L2（每位玩家加入後的整段 session，約 140 秒）：Match 的替代（Held 或 Neutral）**0 筆**，最長連續 0 Tick（門檻 ≤3）；Match 停頓（間隔 ≥40 ms）1 次，沒有造成替代；停頓重設 0；LifeRespawn 以外的 epoch 重設 0。**通過**。v6 在同樣的 modal loop 中命令會停住（任務 1 的起因）。
 - L3：兩個 Client 都沒有斷線（`connection failed` 0）；模擬角色的晚醒沒有 ≥100 ms 的（Client trace 的 `runtime_gap` 0 筆），停止條件沒有觸發。**通過**。App Nap 造成斷線的疑慮在這次沒有重現。
-- 「30 FPS 的手感」依宣告沒有做（產品 Client 沒有指定 FPS 的選項）；依 D41 在第 05b 批做。
+- 「30 FPS 的手感」依宣告沒有做（產品 Client 沒有指定 FPS 的選項）；依 D41 在第 13 批做。
 
