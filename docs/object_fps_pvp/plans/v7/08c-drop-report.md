@@ -1,6 +1,6 @@
 # 第 08c 批：Gateway 丟棄回報（讓 Match 知道丟了什麼、為什麼丟）
 
-狀態：**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1 完成；L2 待宣告）。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
+狀態：**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、D56 修正批、L2 準備（L2P-analyzer、L2P-injector、L2P-trees）完成；L2 宣告草稿待核准）。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
 依據的決定：D49（Gateway＝PEP、Match＝PDP）、D51（問題的重新定義；⑨ 定性為整合缺陷；⑩ 每一種丟棄都要讓 Match 知道）、D52（第 1 批之後的三個決定）、D53（照建議的組合）。
 起因：[2026-10-10 事故](Incident/2026-10-10-gateway-silent-drop.md)。
 檔位：規劃 ultracode，分三批、每批停下回報（使用者 2026-10-10）：第 1 批事實核對 3 位（high）；第 2 批方案 3 位＋評審 1 位（high），另評估第 6 項的去重 1 位（high）；第 3 批對抗式檢查 1 位（xhigh）。實作 high，局部 xhigh（見「分批」）。
@@ -178,6 +178,10 @@
   | J7（驗證項） | downstream-1000ms 的 Match `tick_late_p99` 與 Tick 間隔最大值 after 不比 before 差超過 1 Tick（16.7 ms）；`cpu_s`、`ipc_iterations` 只比方向（預測 after ≤ before） | 程式常數；去重後 IPC 則數下降 |
 
 - **停止條件**：digest 改變；J2／J3 不相等；after 出現 before 沒有的 epoch 重設種類，或比例明顯上升（D44）；乾淨跑次出現權威 Cooldown 拒絕；需要改 wire。
+
+## L2 宣告草稿（2026-10-11，待核准）
+
+草稿與腳本在 `build/target/_build/test/logs/pvp-v7-08c-l2-prep-20261011/`（`declaration-draft.md` sha256 `15de5512…`、`run_l2.py` `f95839db…`、`judge_l2.py` `e6a8916f…`、凍結清單 `frozen-l2.sha256` 44 檔 `d2a8699b…`）。依 D45 做過 1 次門檻來源的對抗式檢查（xhigh，`xhigh-check.md`），必修 6 項與順手修已併入（草稿第 15 節逐條對照）。和上面大綱不同的地方列在草稿第 13 節；待使用者決定的列在第 14 節。核准後定稿併進本節。
 
 ## 分批與時間（推論；整體約 15～19 小時，超過單一問題 2 小時的上限，每批結束都停下回報）
 

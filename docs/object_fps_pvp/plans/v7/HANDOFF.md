@@ -31,10 +31,10 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D60）。
-- **進行中**：L2P-declare 修正輪（依 xhigh 檢查修草稿與腳本；1 位 high，估 45～60 分）。
-- **下一步**：L2P-declare（L2 宣告草稿 high＋D45 的 xhigh 門檻來源檢查，約 1.5 小時）→ 送核准；正式 session 約 45～60 分，主 checkout 從宣告的 commit 到 session 結束不得改動。
-- **最後更新**：2026-10-11 15:3x，依據本機 commit。
+- **等你決定**：L2 宣告草稿（`pvp-v7-08c-l2-prep-20261011/declaration-draft.md` 第 14 節）：①J5a 的補強（「送出過卻沒到」＝0、注入跑次 late_first ≥1、end 只在 EOF 條件下計、ramp 也判）；②D44 事後規則的兩個數字（每跑次平均多 ≥1 個事件、新原因 ≥2 個跑次才停；沒有程式來源）；③D44 即時規則從 08b 放寬（拿掉故障案例的 backlog 規則）；④J2 的覆蓋要求；⑤修好的樹上 ingress 未判定或 I3 失敗即停；⑥Cooldown 停止只對修好的樹；⑦P1、P8 的新數字是推論。另外 (1)(8) 維持暫定（D58）。
+- **進行中**：無。L2P-declare 完成（草稿、xhigh 檢查、修正輪），使用者休息中。
+- **下一步**：使用者決定 L2 宣告第 14 節 → 定稿併進 08c 文件並 commit（＝commit H）→ 在 before worktree 與 H 建 digest runner → 正式 session（約 45～60 分，主 checkout 從 H 到結束不得改動；Auto-fix 依慣例在量測期間暫停）→ 判定與回報。
+- **最後更新**：2026-10-11 15:5x，依據本次推送。
 
 ## 閱讀入口
 
@@ -252,6 +252,7 @@
 - 2026-10-11：PR #73 的 L1 / windows-x64 失敗（`client_delay_runner`）：Windows 的 checkout 把凍結檔轉成 CRLF，runner 的 sha256 核對不符。改成追跡的文字檔先把 CRLF 換成 LF 再算（執行檔照舊），本機模擬 CRLF 重現並確認修好（`b57291d`）；L2 凍結候選的 runner sha256 更新為 `4f522e92…`。
 - 2026-10-11：L2P-trees 完成（1 位 medium，約 55 分，其中建置 40 分）：三棵 worktree `../GYO-Engine-l2-before`（`c2b76cd`）、`../GYO-Engine-l2-flow`（`eabb107`）、`../GYO-Engine-l2-flow09a`（`cb921e0`＝`eabb107`＋D48 第③步的 09a 原型 `e6885b7` 的 Client 改動，4 檔無衝突；本地分支 `l2-flow09a-cb921e0` 保留，不推送），各自乾淨建 Match、Gateway 與 probe。開發跑次 12 次（每棵樹 clean-60、固定 200 ms×2 s、斜坡 250 ms、network20；注入 7.5 s 開始）：注入有效性全部通過、Gateway 速率拒絕 0；flow 兩棵樹 8 次 `ingress_evidence.py` 全部 passed，`link_shots` 每一行帶齊（D59）、J4 為 0、注入的 never_arrived 0；late_first 每位玩家 54～71，probe 的 late 修正 2～3 次，before 樹 0 次；拿不到內容的丟棄只在 network20（舊序號的 Actions 9、11）；沒有權威的 Cooldown 拒絕。before 的固定延遲跑次 run_case 判 failed（`post-life-recovery-shot`，只記錄）。正式 session 估 45～60 分。證據：`l2p-trees/`。
 - 2026-10-11：L2P-declare 草稿完成（1 位 high，約 17 分）：`pvp-v7-08c-l2-prep-20261011/declaration-draft.md`、`run_l2.py`（114 次、三棵樹交錯、每跑次前核對主 checkout 與凍結清單 44 檔）、`judge_l2.py`；backpressure runner 在三棵樹各 1 次開發跑次通過。D45 的門檻來源檢查（1 位 xhigh，約 19 分，`xhigh-check.md`）：多數來源成立，但 ①`judge_l2.py` 的 passed 沒納入 D44 事後規則（已用測試確認會誤判通過）；②中斷或不完整的 session 也能判 passed；③J5a 的 never_arrived（overflow＋end）在這次 L2 結構上恆為 0，判不出「注入的遲到 Match 看得到」；④I3 失敗會讓 status＝failed，等於暗中的停止條件；⑤D44 即時規則其實是從 08b 放寬；⑥`run_l2.py` 的必要參數、J1 閘門的 runner 身分、子程序的 Ctrl-C 與逾時處理。更正 D58 (2) 的理由：L1 `bp-1/downstream-250ms` 的 8 筆 removed 是故障窗內被替代、**Client 從未產生**的序號（`clients-commands.jsonl` 缺號），到跑次結尾才由 Leave 關閉；結論（良性、不算 never_arrived）不變。修正輪開始（同一位 high）。
+- 2026-10-11：L2P-declare 修正輪完成（同一位 high，約 12 分）：xhigh 的必修 6 項與順手修全部併入（草稿第 15 節對照）。要點：judge 的 passed 納入 D44 事後旗標與 session 完整性（負向測試不通過）；J5a 改成「Client 送出過、Match 從沒收到、以 removed／reset／overflow／aged 關閉」＝0，加上每個注入跑次 `late_first ≥1`，end 只在 EOF 條件下計；I3 失敗即停寫明；D44 即時規則寫明從 08b 放寬；`run_l2.py` 強制必要參數、自己跑 J1 的 digest 比較並核對 runner 身分、子程序獨立 session 與逾時清理；新增「relay 上行 forwarded＝Gateway 全域 received」的精確核對。L1 的 digest base runner 內嵌了已移除 worktree 的路徑、已不能用：J1 改在 before worktree 重建 base runner；正式 session 前要先在 before worktree 與 H 各建一次 digest runner（`commands.txt`）。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
