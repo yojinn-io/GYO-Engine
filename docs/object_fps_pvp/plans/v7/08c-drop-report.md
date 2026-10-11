@@ -1,6 +1,6 @@
 # 第 08c 批：Gateway 丟棄回報（讓 Match 知道丟了什麼、為什麼丟）
 
-狀態：**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、D56 修正批、L2 準備（L2P-analyzer、L2P-injector、L2P-trees）完成；L2 宣告核准（D61），正式 session 進行中）。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
+狀態：**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、D56 修正批、L2 準備（L2P-analyzer、L2P-injector、L2P-trees）完成；L2 通過（2026-10-11，D61 的宣告；114／114 次，J1～J7 全部成立））。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
 依據的決定：D49（Gateway＝PEP、Match＝PDP）、D51（問題的重新定義；⑨ 定性為整合缺陷；⑩ 每一種丟棄都要讓 Match 知道）、D52（第 1 批之後的三個決定）、D53（照建議的組合）。
 起因：[2026-10-10 事故](Incident/2026-10-10-gateway-silent-drop.md)。
 檔位：規劃 ultracode，分三批、每批停下回報（使用者 2026-10-10）：第 1 批事實核對 3 位（high）；第 2 批方案 3 位＋評審 1 位（high），另評估第 6 項的去重 1 位（high）；第 3 批對抗式檢查 1 位（xhigh）。實作 high，局部 xhigh（見「分批」）。
@@ -685,6 +685,43 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 | 順手修 P1、P3、P5 | P1 寫出 p 的不確定性；P3 加 ±1 Tick 的時刻容差；P5 只適用 flow |
 | 建議的精確核對 | 注入跑次：relay 的上行 forwarded＝Gateway 全域的 `received_datagrams` |
 | 引用 | `backpressure_probe.py:342-343`（xhigh 寫 `:336-338`，實際行號是 342-343）；`run_network.py` 不在凍結清單的註記 |
+
+## L2 的結果（2026-10-11 17:13～17:51，commit H `3e5870c`；**通過**）
+
+證據：`build/target/_build/test/logs/pvp-v7-08c-l2-20261011/`（`declaration.md` 是宣告的副本，`session/` 是 driver 的輸出，`session/judgement.json` 是判定，`summary-main.txt` 是下面數字的整理）。session 期間主 checkout 沒有改動，PR #73 的 Auto-fix 暫停。
+
+**判定**（`judge_l2.py --session`：`passed`＝true）
+
+| 判定 | 結果 |
+|---|---|
+| session | 114／114 completed，沒有停止、沒有中斷；凍結清單 44 檔開頭與結尾都吻合 |
+| J1 | before（`c6e53a31…`）對 H（`ab678e56…`），scale 1、3 各 35 情境 `all_same` |
+| J2（I1） | 修好的樹 76 次：74 次精確相等、2 次未判定（2.6％；`x1-r4-flow09a`、`downstream-respawn-1000ms-r2-flow09a`，原因都是 final 前沒有 `ipc closed reason=eof`）；每個（樹、案例）都有條件成立的跑次 |
+| J3 | 76 次全部 passed（IG、I0、I2、全域、T3、S1、S2、trace、I3、`link_shots`；新鍵每一行帶齊） |
+| J4 | clean-60 溢出＝0、截短＝0；只記錄：gateway-1000ms 的拒絕線溢出 36、228（flow）、24、12（flow+09a） |
+| J5a | x1、ramp 20 次全部成立：送出過卻沒到＝0，未到達的紀錄全是 epoch 關閉；late_first 每跑次 x1 138～141、ramp 103～112；relay 轉出＝Gateway 收到（逐次精確相等） |
+| J5b（記錄） | probe 的 late 修正（兩位合計）：修好的樹 x1 4～6、ramp 4～6；before 全部 0；network0／20／40、clean、respawn 三棵樹都是 0 |
+| J6 | 44 檔吻合、每次都能解析 |
+| J7 | downstream-1000ms：`tick_late_p99_le_us` 最大 before 161、flow 250、flow+09a 170；權威間隔最大 16 797～16 845 µs；差都 ≤1 Tick |
+
+**預測**（推論；推翻不是停止條件）
+- P1 成立：clean-60 修好的樹 8 次，副本類 0、late_first 0；`fwd_written_duplicate`／寫出約 1.99。
+- P2、P3 成立：注入時修好的樹有 late 修正、before 0；starvation 與 backlog 的次數三棵樹逐案相同。
+- **P4 被推翻**：network0／20／40 三棵樹的 late 修正都是 0（修好的樹 late_first 每跑次 2～4，但都是單發的遲到，達不到連續 2 次負樣本的規則）。
+- P5（只對 flow）：`fwd_stale_sequence_input_packets` 中位數 3／15.5／39（預測約 18／32／32）：network0、network20 低於預測的一半，**推翻條件成立**，依預測先核對 relay 的 forwarded 與 Gateway 的資料包數、再判斷重播模型（之後處理，屬記錄）。flow+09a 10.5／19.5／32.5（只記錄）。
+- P6 成立：downstream-1000ms 修好的樹 late_first 0、副本類 0。
+- P7 成立（不為 0）：respawn 案例 `epoch_old` 每跑次 828（flow）、804（flow+09a），`life_old` 0；量比預測的約 147 大（單位與來源之後核對）。
+- P8 成立：gateway-1000ms 速率拒絕 4、4（flow）、0、2（flow+09a），T3 成立。
+- P11 成立：替代的千分比 after ≤ before（例如 network40 1.74 對 3.74，x1 84.3 對 84.8）。
+
+**記錄項**
+- Gateway 拿不到內容的丟棄（D58，pv7 的依據）：只出現在 network 案例的**舊序號 Actions**（每跑次 0～34，各樹案例合計 11～99）與 gateway-1000ms 的速率限制（每跑次 0～4）；其他案例 0。
+- D44：三棵樹逐案相同（x1、ramp 每跑次 5 個事件＝starvation 4＋backlog 1；downstream 2、gateway 2、respawn 1；其他 0），全部在故障窗內；停止與檢視旗標都沒有。
+- U4：clean-60 的替代三棵樹都是 0。
+- 權威 Cooldown 拒絕：只在 network20／40 出現（before 4、flow 1、flow+09a 1），clean 沒有。
+- run_case 的遊戲判定（只記錄）：before 的 x1 有 2 次 failed，其餘通過。
+
+**結論**：資訊流修好了。Client→Gateway 的遲到在修好的樹上 Match 都收得到、分得出來，並驅動 late 修正；修之前的樹在同樣的注入下 0 次。權威結果、D44 的重設、Match 的 Tick 都沒有變差。下游（late 修正規則、B2、backlog 餘裕、09a／09b 的範圍）依 D51 ⑤ 在這份資料上重新決定。
 
 ## 分批與時間（推論；整體約 15～19 小時，超過單一問題 2 小時的上限，每批結束都停下回報）
 
