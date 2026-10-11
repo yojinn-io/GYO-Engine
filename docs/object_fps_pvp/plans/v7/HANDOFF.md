@@ -15,6 +15,7 @@
 | F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3 | 第 08c 批的實作分批：鍵名與格式、Gateway 轉送與拒絕線、Gateway 收包計數、Gateway 統計行與 final 行、Match 依原因數拒絕、晚到帳本、Match 細節紀錄檔、驗收工具與協議文件 | `08c-drop-report.md`「分批與時間」 |
 | L2P-analyzer、L2P-injector、L2P-trees、L2P-declare | 第 08c 批 L2 的準備：驗收工具的射擊守恆與 D58／D59 修改並凍結；純延遲與斜坡注入工具；三棵樹（修之前、修之後、修之後＋09a 原型）與開發跑次；宣告草稿與 xhigh 檢查 | 本文件「現況」 |
 | 09R-eval | 第 08c 批 L2 之後，在修好的資料上重新評估 09a／09b（結論的存廢、要重量的項目、範圍與分批），並處理 P4、P5 | 本文件 D62 |
+| 09R-doc、09R-map、09b-plan、09a-impl、09b-impl | 09R-eval 建議的後續：文件更正；Client→Gateway 短延遲格點的量測；09b 的 A／B 重新規劃；09a 實作；09b 實作與合併 L2 | `pvp-v7-09r-eval-20261011/report-from-agent.md` |
 | L1／L2／L3 | 驗收層級：本機測試與突變／實機量測（要宣告核准）／跨機器 | 各批文件 |
 | IG、I0、I1、I2、I3、T3 | 08c 的守恆式：Gateway 每個資料包一個結局、link 內命令的去向、Gateway 寫出數＝Match 收到數、Match 每個命令一類、副本的條件式上限、速率限制的總和 | `08c-drop-report.md`「不變量與守恆」 |
 | S1、S2（樣本守恆） | slack 樣本的兩條守恆：產生＝合併＋丟棄＋發布；發布＝覆寫＋取走＋未取走 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` |
@@ -32,10 +33,10 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D62）。
-- **進行中**：09R-eval（1 位 high，估 1～1.5 小時，只讀與分析）。
-- **下一步**：09R-eval 完成後停下回報（09a／09b 的新範圍與分批送核准）。
-- **最後更新**：2026-10-11 18:xx，依據本機 commit。
+- **等你決定**（09R-eval）：①分類：類 2 為 0 件，全部歸類 1，同意嗎；②09a 的時機：先做 09R-map（約 3 小時，量短延遲區域，決定 09a 能否單獨先上）或直接把 09a 與 B 一起規劃；③D48 第③步的 J3 歸「保留（條件力學）」；④09b-plan 要不要用 ultracode；⑤兩個已知缺口的歸屬：J5b 的計數方式（之後的 L2 宣告改用凍結偵測器的增量）、network 的固定種子（驗收工具，第 16 批）。另外 (1)(8) 維持暫定。
+- **進行中**：無。09R-eval 完成。
+- **下一步**：依使用者決定，先做 09R-doc（把 09R-eval 的分類與更正寫進 08c／09a／09b 文件；medium，0.5～1 小時），再接 09R-map 或 09b-plan。
+- **最後更新**：2026-10-11 18:3x，依據本次推送。
 
 ## 閱讀入口
 
@@ -257,6 +258,7 @@
 - 2026-10-11：L2P-declare 草稿完成（1 位 high，約 17 分）：`pvp-v7-08c-l2-prep-20261011/declaration-draft.md`、`run_l2.py`（114 次、三棵樹交錯、每跑次前核對主 checkout 與凍結清單 44 檔）、`judge_l2.py`；backpressure runner 在三棵樹各 1 次開發跑次通過。D45 的門檻來源檢查（1 位 xhigh，約 19 分，`xhigh-check.md`）：多數來源成立，但 ①`judge_l2.py` 的 passed 沒納入 D44 事後規則（已用測試確認會誤判通過）；②中斷或不完整的 session 也能判 passed；③J5a 的 never_arrived（overflow＋end）在這次 L2 結構上恆為 0，判不出「注入的遲到 Match 看得到」；④I3 失敗會讓 status＝failed，等於暗中的停止條件；⑤D44 即時規則其實是從 08b 放寬；⑥`run_l2.py` 的必要參數、J1 閘門的 runner 身分、子程序的 Ctrl-C 與逾時處理。更正 D58 (2) 的理由：L1 `bp-1/downstream-250ms` 的 8 筆 removed 是故障窗內被替代、**Client 從未產生**的序號（`clients-commands.jsonl` 缺號），到跑次結尾才由 Leave 關閉；結論（良性、不算 never_arrived）不變。修正輪開始（同一位 high）。
 - 2026-10-11：L2P-declare 修正輪完成（同一位 high，約 12 分）：xhigh 的必修 6 項與順手修全部併入（草稿第 15 節對照）。要點：judge 的 passed 納入 D44 事後旗標與 session 完整性（負向測試不通過）；J5a 改成「Client 送出過、Match 從沒收到、以 removed／reset／overflow／aged 關閉」＝0，加上每個注入跑次 `late_first ≥1`，end 只在 EOF 條件下計；I3 失敗即停寫明；D44 即時規則寫明從 08b 放寬；`run_l2.py` 強制必要參數、自己跑 J1 的 digest 比較並核對 runner 身分、子程序獨立 session 與逾時清理；新增「relay 上行 forwarded＝Gateway 全域 received」的精確核對。L1 的 digest base runner 內嵌了已移除 worktree 的路徑、已不能用：J1 改在 before worktree 重建 base runner；正式 session 前要先在 before worktree 與 H 各建一次 digest runner（`commands.txt`）。
 - 2026-10-11：第 08c 批 L2 **通過**（17:13～17:51，commit H `3e5870c`，114／114 次，`judge_l2.py` passed，D44 旗標 0）：J1 digest 0 差分；J2 74／76 精確、2 次未判定（非 EOF）；J3 76／76；J4 clean 0；J5a 20／20（送出過卻沒到 0，late_first 每跑次 103～141）；J7 Tick 沒有變差。修好的樹在注入下 late 修正每跑次 4～6、before 0；D44 的重設三棵樹逐案相同。預測：P4 被推翻（network 的 late 修正三棵樹都是 0；late_first 每跑次 2～4 但都是單發）；P5 的推翻條件成立（flow 的舊序號 Input 中位數 3／15.5／39，預測 18／32／32），待核對；其餘成立。Gateway 拿不到內容的丟棄：只有 network 案例的舊序號 Actions（每跑次 0～34）與 gateway-1000ms 的速率限制（0～4）。結果寫進 `08c-drop-report.md`「L2 的結果」。Auto-fix 恢復。
+- 2026-10-11：09R-eval 完成（1 位 high，約 30 分，只讀）：類 2（讓證明失效的邏輯錯誤）0 件，其餘都是類 1。要點：09a 的機制在 L2 成立（注入後 flow 有送出被釘住、flow+09a 0），但 L2 的案例碰不到 09a／B2 要判斷的短延遲區域；缺陷 B 的串接在 x1／ramp 已觀察到（09b 原寫「未觀察到」）；P4 的機制是「每次發布只帶最小樣本」＋「遺失造成的遲到一次到達」，連續 2 次規則不觸發；P5 是前提錯（預測借了其他建置的分布），計數本身與 IG 已驗證正確；**更正**：L2 記錄的 probe late 修正少算約一半（`judge_l2.py:129` 取計數器最大值，但計數器在 epoch 重設時歸零），實際每跑次 x1 約 10～14、ramp 約 8～10；只記錄，判定不變；network 案例的遺失是固定種子，跑次不是獨立樣本。建議的下一步：09R-doc（文件更正）→ 09R-map（Client→Gateway 短延遲格點，量單次與串接修正）→ 09b-plan → 09a-impl → 09b-impl＋L2。證據：`pvp-v7-09r-eval-20261011/`。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
