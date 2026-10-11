@@ -13,6 +13,7 @@
 | D1～D57（決策紀錄的列） | 使用者的決定 | 本文件「決策紀錄」 |
 | 第 NN 批、08b、08c、09a、09b | 工作批次；各自一份批次文件 | 本目錄的 `NN-*.md` |
 | F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3 | 第 08c 批的實作分批：鍵名與格式、Gateway 轉送與拒絕線、Gateway 收包計數、Gateway 統計行與 final 行、Match 依原因數拒絕、晚到帳本、Match 細節紀錄檔、驗收工具與協議文件 | `08c-drop-report.md`「分批與時間」 |
+| L2P-analyzer、L2P-injector、L2P-trees、L2P-declare | 第 08c 批 L2 的準備：驗收工具的射擊守恆與 D58／D59 修改並凍結；純延遲與斜坡注入工具；三棵樹（修之前、修之後、修之後＋09a 原型）與開發跑次；宣告草稿與 xhigh 檢查 | 本文件「現況」 |
 | L1／L2／L3 | 驗收層級：本機測試與突變／實機量測（要宣告核准）／跨機器 | 各批文件 |
 | IG、I0、I1、I2、I3、T3 | 08c 的守恆式：Gateway 每個資料包一個結局、link 內命令的去向、Gateway 寫出數＝Match 收到數、Match 每個命令一類、副本的條件式上限、速率限制的總和 | `08c-drop-report.md`「不變量與守恆」 |
 | S1、S2（樣本守恆） | slack 樣本的兩條守恆：產生＝合併＋丟棄＋發布；發布＝覆寫＋取走＋未取走 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` |
@@ -31,8 +32,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；(3) F2a 測試斷言的改寫、(4) 單位 `acks`、(5) 單位 `samples` 與 `--ingress-trace` 的用法錯誤，未回覆、維持暫定；其餘已決定（D56～D58）。（11）（12）已決定（D59）。
-- **進行中**：L2 準備 1 待使用者確認後開始，分三批：L2 準備-驗收工具（射擊的兩個 fwd 鍵與 link 內 shot 守恆的 log 判定、`ingress_evidence.py` 依 D58／D59 修改並準備凍結；high）、L2 準備-注入工具（純延遲與斜坡，不改凍結檔；high），兩者並行；之後 L2 準備-三棵樹（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。估計 3～3.5 小時。
-- **下一步**：L2 準備 1 完成後停下回報；L2 準備 2（宣告草稿、xhigh 對抗式檢查）→ 送核准。
+- **進行中**：L2 準備 1（L2P）待使用者確認後開始，分三批：L2P-analyzer（射擊的兩個 fwd 鍵與 link 內 shot 守恆的 log 判定、`ingress_evidence.py` 依 D58／D59 修改並準備凍結；high）、L2P-injector（純延遲與斜坡，不改凍結檔；high），兩者並行；之後 L2P-trees（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。估計 3～3.5 小時。
+- **下一步**：L2P-analyzer、L2P-injector、L2P-trees 完成後停下回報；之後 L2P-declare（宣告草稿、xhigh 對抗式檢查）→ 送核准。
 - **最後更新**：2026-10-11 13:xx，依據本機 commit。
 
 ## 閱讀入口
