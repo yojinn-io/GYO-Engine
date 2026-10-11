@@ -388,6 +388,11 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def source_sha256(path):
+    """sha256 of a tracked text file as committed: a Windows checkout may turn its LF line ends into CRLF."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 def read_frozen_list(path):
     """shasum format: '<sha256>  <path relative to the repository root>' per line."""
     entries = {}
@@ -408,14 +413,14 @@ def frozen_problems(frozen_list, root=ROOT, modules=(action_probe, impaired_netw
         file = root/name
         if not file.is_file():
             problems.append(f'{name}: listed but missing')
-        elif sha256(file) != digest:
-            problems.append(f'{name}: sha256 {sha256(file)} differs from the list {digest}')
+        elif source_sha256(file) != digest:
+            problems.append(f'{name}: sha256 {source_sha256(file)} differs from the list {digest}')
     for module in modules:
         path = Path(module.__file__).resolve()
         listed = {str((root/name).resolve()): digest for name, digest in entries.items()}
         if str(path) not in listed:
             problems.append(f'{path}: imported but not in the frozen list')
-        actual = sha256(path)
+        actual = source_sha256(path)
         if actual != FROZEN.get(path.name):
             problems.append(f'{path}: sha256 {actual} differs from FROZEN {FROZEN.get(path.name)}')
     return problems
@@ -536,7 +541,7 @@ def execute(args, case=action_probe.run_case, repository=repository_state):
             'verdict': 'run_case verdict recorded only', 'fault_at': args.fault_at, 'fps': args.fps,
             'rounds': args.rounds, 'gameplay_v5': True, 'schedule': schedule,
             'frozen': FROZEN, 'frozen_list': {'path': str(args.frozen_list), 'sha256': sha256(args.frozen_list)},
-            'tools': {name: sha256(HERE/name) for name in RECORDED},
+            'tools': {name: source_sha256(HERE/name) for name in RECORDED},
             'artifacts': {name: {'path': str(getattr(args, name)), 'sha256': sha256(getattr(args, name))}
                           for name in ('match', 'gateway', 'probe', 'arena') if Path(getattr(args, name)).is_file()},
             'repository': start_state, 'python': sys.version.split()[0]}

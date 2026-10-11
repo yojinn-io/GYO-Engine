@@ -262,7 +262,7 @@ class RunnerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.frozen = self.root/'frozen.sha256'
-        self.frozen.write_text(''.join(f'{runner.sha256(runner.HERE/name)}  build/acceptance/object_fps_pvp/{name}\n'
+        self.frozen.write_text(''.join(f'{runner.source_sha256(runner.HERE/name)}  build/acceptance/object_fps_pvp/{name}\n'
                                        for name in runner.FROZEN))
         self.argv = ['--match', 'm', '--gateway', 'g', '--probe', 'p', '--arena', 'a', '--output', str(self.root/'run'),
                      '--frozen-list', str(self.frozen), '--profile', 'x1', '--delay-ms', '200', '--window-ms', '2000',
