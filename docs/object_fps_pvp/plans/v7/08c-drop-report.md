@@ -150,12 +150,12 @@
 | P2 | Client→Gateway 純延遲（x1 型） | 被替代的命令全部被 Gateway 吞掉，0 次 late 修正 | 見 J5a、J5b | — |
 | P3 | Client→Gateway 延遲持續上升（斜坡） | 沒有負樣本、沒有 late 修正，靠 starvation 重設恢復 | 出現 late 修正（幅度被 ±2 Tick 夾住）；starvation 重設比 before 少或延後 | after 仍 0 次 late 修正，而 host 端有**連續**兩次發布都帶負樣本（中間沒有非負樣本），Client 收到且序號 > `settledAfter_` |
 | P4 | network0／20／40 | late 修正次數為 before 的值 | late 修正次數上升（總和 after > before，只比方向）；late_first 每跑次 0～50 個（去重後 late_copy≈0） | 總和 after ≤ before |
-| P5 | network*（★） | 舊序號的 Input 被丟 | `fwd_stale_sequence_input_packets` 中位數約 18／32／32（network0／20／40，故障 4 秒內；重播） | 差兩倍以上 → 先核對 relay 的 forwarded 與 Gateway 的 IG 資料包數，再判斷重播模型或前提 |
+| P5 | network*（★） | 舊序號的 Input 被丟 | `fwd_stale_sequence_input_packets` 中位數約 18／32／32（network0／20／40，故障 4 秒內；重播）（更正，2026-10-11，09R-eval：約 18／32／32 借自其他建置的分布；v7 自己約 13／16.5／24.5，而且隨送出相位變動。見「L2 的結果」的 P5。） | 差兩倍以上 → 先核對 relay 的 forwarded 與 Gateway 的 IG 資料包數，再判斷重播模型或前提 |
 | P6 | downstream-1000ms | 已解析的副本不轉送 | Gateway 去重的副本約 1118～1284／跑次；Match 的 late_first＝0 | late_first > 0 |
 | P7 | downstream-respawn-1000ms | 舊 life 的副本在 `server.go:413-415` 被丟 | Match 記 life_old／epoch_old 約 147 份（`arrival_identity.tsv`） | 為 0 |
 | P8 | gateway-1000ms（SIGSTOP） | 只有全域的 rate_limited 總數 | 依玩家總和等於全域（T3）；47～60 包／跑次 | 不相等 |
 | P9 | 所有跑次 | — | IG、I0、I2 精確成立；I1 在條件成立時精確成立 | 任何不相等 |
-| P10 | D44 | 偶發的 epoch 重設 | 暴露上升（late 修正變多），只記錄 | 比例上升時依 D44 停下 |
+| P10 | D44 | 偶發的 epoch 重設 | 暴露上升（late 修正變多），只記錄（更正，2026-10-11，09R-eval：只在持續延遲（x1、ramp）時成立；network 型（遺失加 ≤30 ms 抖動）不成立，L2 的 late 修正 0，機制見「L2 的結果」的 P4。） | 比例上升時依 D44 停下 |
 | P11 | network*（★） | — | 替代的千分比 after ≤ before | after > before |
 
 ## L2 重新量測（事前宣告的大綱；宣告送核准前依 D45 做 1 次對抗式檢查，專門核對門檻來源）
@@ -477,12 +477,12 @@ J5a 能判的範圍（依 xhigh 檢查 A 更正；第 1 版寫「注入的遲到
 | P2 | x1 | 被替代的命令全部被 Gateway 吞掉，0 次 late 修正 | 見 J5a、J5b（開發：late_first 每位 70～71；probe 的 late 修正每位 2～3；before 0） | — |
 | P3（改寫） | ramp | 沒有負樣本、沒有 late 修正。延遲期間 Match 的佇列變空，以 starvation 重設**重新對齊**（starvation 的條件包含佇列為空，`PvpMatch.cpp:452-453`；是重新對齊，不是清除堵塞） | 出現 late 修正：修好的樹每個 ramp 跑次，兩位 Client 的 late 修正合計 ≥1（幅度被 ±2 Tick 夾住，`LocalPlayerPrediction.cpp:98`）。starvation 重設的次數和 before 相同，時刻（相對 `fault.start_ns`）和 before 相差在 ±1 Tick（16.7 ms）以內（late 修正最多搬 2 Tick＝33 ms；延遲到 250 ms 時佇列照樣變空） | 修好的樹有 ramp 跑次的 late 修正合計為 0；或 starvation 次數的樹平均和 before 差 ≥1／跑次；或同一順位的 starvation 時刻，樹中位數和 before 差 >1 Tick |
 | P4 | network0／20／40 | late 修正次數為 before 的值 | late 修正次數上升（總和 after > before，只比方向）；late_first 每跑次 0～50 個（去重後 late_copy≈0） | 總和 after ≤ before |
-| P5（加限定） | network*（★） | 舊序號的 Input 被丟 | **只對 flow**：`fwd_stale_sequence_input_packets` 每跑次（兩位玩家合計）的中位數約 18／32／32（network0／20／40；第 2 批 ③ 的重播，`batch2/design3-counts-pv7.md`）。flow+09a 預期偏低，只記錄（開發 network20：flow 25、flow+09a 15） | flow 差兩倍以上 → 先核對 relay 的 forwarded 與 Gateway 的 IG 資料包數，再判斷是重播模型還是前提出錯 |
+| P5（加限定） | network*（★） | 舊序號的 Input 被丟 | **只對 flow**：`fwd_stale_sequence_input_packets` 每跑次（兩位玩家合計）的中位數約 18／32／32（network0／20／40；第 2 批 ③ 的重播，`batch2/design3-counts-pv7.md`）。flow+09a 預期偏低，只記錄（開發 network20：flow 25、flow+09a 15）（更正，2026-10-11，09R-eval：約 18／32／32 借自其他建置的分布；v7 自己約 13／16.5／24.5，而且隨送出相位變動。見「L2 的結果」的 P5。） | flow 差兩倍以上 → 先核對 relay 的 forwarded 與 Gateway 的 IG 資料包數，再判斷是重播模型還是前提出錯 |
 | P6（改寫） | downstream-1000ms | 已解析的副本不轉送 | Match 的 late_first＝0、副本類＝0（副本被已寫出去重吸收）；Gateway 的 `fwd_written_duplicate_commands` 只記錄 | late_first >0，或副本類 >0 |
 | P7 | downstream-respawn-1000ms | 舊 life 的副本在 `server.go:413-415` 被丟 | Match 記 `life_old`／`epoch_old` 約 147 個命令／跑次（`arrival_identity.tsv`） | 為 0 |
 | P8（改寫） | gateway-1000ms（SIGSTOP） | 只有全域的 rate_limited 總數 | 依玩家的總和等於全域（T3，屬 J3）；速率拒絕 0～4 包／跑次 | T3 不相等；或任一跑次 >8 包 |
 | P9 | 所有跑次 | — | IG、I0、I2 精確成立；I1 在條件成立時精確成立（＝J2、J3） | 任何不相等 |
-| P10 | D44 | 偶發的 epoch 重設 | 暴露上升（late 修正變多），只記錄；規則見第 10、11 節 | 第 11 節的 D44 停止條件 |
+| P10 | D44 | 偶發的 epoch 重設 | 暴露上升（late 修正變多），只記錄；規則見第 10、11 節（更正，2026-10-11，09R-eval：只在持續延遲（x1、ramp）時成立；network 型（遺失加 ≤30 ms 抖動）不成立，L2 的 late 修正 0，機制見「L2 的結果」的 P4。） | 第 11 節的 D44 停止條件 |
 | P11 | network*（★） | — | 替代的千分比 after ≤ before（`match-commands.jsonl` 的 resolved 中 source≠actual 的比例；三棵樹都有 trace） | after > before |
 
 - **P1**
@@ -700,15 +700,15 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 | J3 | 76 次全部 passed（IG、I0、I2、全域、T3、S1、S2、trace、I3、`link_shots`；新鍵每一行帶齊） |
 | J4 | clean-60 溢出＝0、截短＝0；只記錄：gateway-1000ms 的拒絕線溢出 36、228（flow）、24、12（flow+09a） |
 | J5a | x1、ramp 20 次全部成立：送出過卻沒到＝0，未到達的紀錄全是 epoch 關閉；late_first 每跑次 x1 138～141、ramp 103～112；relay 轉出＝Gateway 收到（逐次精確相等） |
-| J5b（記錄） | probe 的 late 修正（兩位合計）：修好的樹 x1 4～6、ramp 4～6；before 全部 0；network0／20／40、clean、respawn 三棵樹都是 0 |
+| J5b（記錄） | probe 的 late 修正（兩位合計）：修好的樹 x1 4～6、ramp 4～6；before 全部 0；network0／20／40、clean、respawn 三棵樹都是 0。（更正，2026-10-11，09R-eval：修好的樹的數字少算約一半。`judge_l2.py:129` 取每一側計數器的最大值，而計數器在 epoch 重設時歸零（例：`x1-r1-flow` 的 action-frames 從 2、3、2 歸零）；依凍結 D48 偵測器的計數器增量，實際每跑次 x1 約 10～14、ramp 約 8～10（合計 x1 flow 69、flow+09a 63；ramp flow 37、flow+09a 40）。J5b 只記錄，判定不變；network／clean／respawn 的 0 仍正確（最大值 0 就是沒有發生）。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `detector/`、`late_chain.txt`、`report-from-agent.md` 第 1-b 節。計數方式見下面的已知缺口。） |
 | J6 | 44 檔吻合、每次都能解析 |
 | J7 | downstream-1000ms：`tick_late_p99_le_us` 最大 before 161、flow 250、flow+09a 170；權威間隔最大 16 797～16 845 µs；差都 ≤1 Tick |
 
 **預測**（推論；推翻不是停止條件）
 - P1 成立：clean-60 修好的樹 8 次，副本類 0、late_first 0；`fwd_written_duplicate`／寫出約 1.99。
 - P2、P3 成立：注入時修好的樹有 late 修正、before 0；starvation 與 backlog 的次數三棵樹逐案相同。
-- **P4 被推翻**：network0／20／40 三棵樹的 late 修正都是 0（修好的樹 late_first 每跑次 2～4，但都是單發的遲到，達不到連續 2 次負樣本的規則）。
-- P5（只對 flow）：`fwd_stale_sequence_input_packets` 中位數 3／15.5／39（預測約 18／32／32）：network0、network20 低於預測的一半，**推翻條件成立**，依預測先核對 relay 的 forwarded 與 Gateway 的資料包數、再判斷重播模型（之後處理，屬記錄）。flow+09a 10.5／19.5／32.5（只記錄）。
+- **P4 被推翻**：network0／20／40 三棵樹的 late 修正都是 0（修好的樹 late_first 每跑次 2～4，但都是單發的遲到，達不到連續 2 次負樣本的規則）。（補充，2026-10-11，09R-eval：機制。Match 每次發布只帶「自上次發布以來的最小樣本」（`MatchRuntimeHost.cpp:129-134`、`:466-479`）；遺失造成的遲到（該玩家的 Input 在 relay 連續被丟 2～3 包）由下一個倖存的包一次帶到（每次到達是 1 個 Input、1～2 個命令），所以只產生 1 次負樣本的發布；下一次發布帶準時樣本，Client 的 `lateSamples_` 歸零（`LocalPlayerPrediction.cpp:128`），連續 2 次的規則（`:133-137`、`Movement.hpp:58`）因此不觸發。L2 的 32 個 network 跑次共 67 次這樣的到達，相鄰兩個 Tick 的發布都帶負樣本的 0 對；位置固定（遺失用固定種子，見已知缺口）。P4 是預測錯誤，不推翻已得的結論，08c 的判定不依賴它。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `p4_late.txt`、`report-from-agent.md` 第 2 節。）
+- P5（只對 flow）：`fwd_stale_sequence_input_packets` 中位數 3／15.5／39（預測約 18／32／32）：network0、network20 低於預測的一半，**推翻條件成立**，依預測先核對 relay 的 forwarded 與 Gateway 的資料包數、再判斷重播模型（之後處理，屬記錄）。flow+09a 10.5／19.5／32.5（只記錄）。（更正，2026-10-11，09R-eval：核對完畢，是預測的前提錯了，不是計數或模型錯了。①relay 轉出＝Gateway 收到，32／32 個 network 跑次精確相等；②依 relay 實際的轉出順序重建，`fwd_stale_sequence_input_packets` 和 Gateway 計數 31／32 跑次逐位玩家相等、1 個跑次差 1，舊序號 Actions 32／32 相等，計數與 IG 正確；③重播模型套在 L2 自己的 relay log 上能重現，差額是模型沒算的 Hello 超車；④約 18／32／32 是 v5、v6 與早期 v7 共 66 份 relay log 的合併中位數，借用了其他建置的分布（D45 的型態），只取 v7 約 13／16.5／24.5，而且隨 probe 幀與模擬格點之間的送出相位每跑次變動。不影響任何判定，不需要新的量測。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `p5_stale.txt`、`p5_overtaker.txt`、`report-from-agent.md` 第 3 節。）
 - P6 成立：downstream-1000ms 修好的樹 late_first 0、副本類 0。
 - P7 成立（不為 0）：respawn 案例 `epoch_old` 每跑次 828（flow）、804（flow+09a），`life_old` 0；量比預測的約 147 大（單位與來源之後核對）。
 - P8 成立：gateway-1000ms 速率拒絕 4、4（flow）、0、2（flow+09a），T3 成立。
@@ -722,6 +722,11 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 - run_case 的遊戲判定（只記錄）：before 的 x1 有 2 次 failed，其餘通過。
 
 **結論**：資訊流修好了。Client→Gateway 的遲到在修好的樹上 Match 都收得到、分得出來，並驅動 late 修正；修之前的樹在同樣的注入下 0 次。權威結果、D44 的重設、Match 的 Tick 都沒有變差。下游（late 修正規則、B2、backlog 餘裕、09a／09b 的範圍）依 D51 ⑤ 在這份資料上重新決定。
+
+**已知缺口（驗收工具；補充，2026-10-11，09R-eval，歸屬依 D63 ④）**
+- **probe late 修正的計數方式**：`judge_l2.py:129` 取計數器的最大值，計數器在 epoch 重設時歸零，所以有重設的跑次會少算（J5b 的更正）。之後的 L2 宣告改用凍結 D48 偵測器的計數器增量（P 事件），不用 judge 的最大值。歸屬：之後的 L2 宣告。
+- **network 案例的遺失是固定種子**：relay 的亂數用 `random.Random(0x47594F+…)`（`action_probe.py:230`），每次 network 跑次都在同樣位置連續丟 2～3 包（玩家 2 在故障後 +0.36～0.43 s 與 +3.82～3.90 s；network40 另有玩家 1 在 +3.82 s）。所以 network 的「每跑次次數」是同一個情境的重複量測，不是獨立樣本；頻率類的說法不得把跑次當作獨立單位。改種子要動凍結的 `action_probe.py`，屬計畫外。歸屬：驗收工具，第 16 批的回歸要說明。
+- 證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `report-from-agent.md`「另外發現」兩節、`p4_late.txt`。
 
 ## 分批與時間（推論；整體約 15～19 小時，超過單一問題 2 小時的上限，每批結束都停下回報）
 
@@ -748,7 +753,7 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 - **D48 第③步**：結果保留，標示「在截斷的資料上量到」；不重跑。
 - **M0、FireGate 凍結、C2**：排在本批、L2、09a／09b 的決定之後（D51 ⑤）。C2 的 after 要宣告包含資訊流修正；C2 的 before（`fee92ff`）不變，凍結分析器照常可用（版本仍是 6）。
 - **FireGate 重推條件 11**（`09-firegate-c2.md`）：M0 還沒跑，P2 的部分靠順序滿足；建議改寫成「第 11 批若讓 Gateway 的回報進入相位樣本或品質判定，就重推；只做計數時不重推」，加跑的注入用純延遲型。
-- **D44**：暴露上升，L2 依樹記錄偶發 epoch 重設的頻率。**第 16 批**：整體回歸的基準換成修好之後的資訊流。
+- **D44**：暴露上升，L2 依樹記錄偶發 epoch 重設的頻率。（更正，2026-10-11，09R-eval：只在持續延遲（x1、ramp）時成立；network 型（遺失加 ≤30 ms 抖動）不成立，L2 的 late 修正 0，機制見「L2 的結果」的 P4。）**第 16 批**：整體回歸的基準換成修好之後的資訊流。
 - **第 10 批**：觀測缺口第 1、2、4 項大部分在本批完成；剩下 D5、D6、舊序號的 Actions、Client 端的欄位（第 3 項）；log 契約決定沿用或取代 ingress v1。
 - **第 11 批**：pv7 的 `GatewayDropReport`（原因列舉一次定完整，dwell 的定義只有一個）；「Gateway 職責」一節；重新檢視 Gateway 的狀態；是否轉送 A3／A5。
 - **第 10、11 批共通**：本批的丟棄回報就是 Match 端的死信隊列；ingress v1 與 `GatewayDropReport` 要不要統一成一個死信的 Data Contract，見 HANDOFF 未結事項「死信隊列（命名與概念）」。

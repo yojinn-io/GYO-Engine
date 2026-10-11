@@ -14,6 +14,28 @@
 - **所以 09a 的實作先停下**，等你決定 D44 要不要提前（見「需要決定的事」1）。
 - **證據位置**：`build/target/_build/test/logs/pvp-v7-09b-plan-20261010/adversarial/step_context*.txt`、`queue_recount.txt`；`defects/late-outcomes.jsonl`（原始 9 列）。D44 的完整 trace 在 `pvp-v7-batch08-20261009/dev-backpressure/host-ipc-250ms/`。
 
+## 09R-eval：在修好的資料上的狀態（補充，2026-10-11）
+
+第 08c 批（Gateway 丟棄回報）的 L2 通過之後，09R-eval 在修好的資料上重新檢查了[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md) 3.4 列為「重做」「判斷不了」的項目。L2 是 `build/target/_build/test/logs/pvp-v7-08c-l2-20261011/session/`；分析是 `build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`（`report-from-agent.md` 第 1-b 節；「flow」是只修資訊流的樹，「flow+09a」是加上 09a 原型的樹）。狀態分四種：**成立**、**加限定**、**要重量**（等 09R-map，D63 ①）、**不再需要**。
+
+| 項目 | 狀態 | 依據（L2） |
+|---|---|---|
+| R1 第①步普查的次數 | 不再需要（以 L2 取代，不重做舊普查） | 修好的樹 clean 16 次、network 32 次，late 修正都是 0；注入以外，非 respawn 的重設 0 |
+| R2 D44 的頻率與歸因 | 成立（clean／network 型）；短延遲型要重量 | clean／network 型的流量上 0；Client→Gateway 短延遲（單次 40～80 ms、持續 100～300 ms）L2 沒有案例 |
+| R5 backlog 餘裕需要多少 | 加限定 | network40 故障解除後 30 Tick 合計 90（餘裕剩 15），三棵樹相同，第①步第 5 點成立；「需要多少」仍取決於短延遲的區域（要重量） |
+| R7「領先＝2」的前提 | 成立（閒置主機的穩態） | clean 100％ q＝2；network 83～94％，network40 有 6.5％ q＝3；注入以外沒有領先 4（`lead_share.txt`） |
+| R8 Cooldown 拒絕的發生率 | 加限定 | clean 0；network before 4、flow 1、flow+09a 1（各 16 跑次），全是玩家 1、故障中段，那些跑次 late 修正 0；推論是 network 抖動壓縮了射擊間隔，和 late 修正無關，屬 FireGate「常數涵蓋不了的失敗」，作為 M0 的輸入。network 的遺失是固定種子，跑次不是獨立樣本 |
+| R9 08b 的「late 修正 0 次」 | 成立（clean／network 型） | 修好的樹 clean、network 的 late 修正 0 |
+| R10 有損傷網路下的延遲位移 | 不再需要 | 決定 4 只改文件，結果不會改變任何決定 |
+| R11 注入的位置與方式 | 不再需要 | L2P-injector 已提供 Client→Gateway 的純延遲注入 |
+| U1「脆弱度以 Held／starvation 的形式看不見」 | 加限定（持續延遲成立）；短延遲要重量 | x1 的替代 before 84.8 對 flow 84.3‰，重設時刻相同：持續延遲的區域裡，修好資訊流沒有改變 Match 的結果 |
+| U4 閒置主機的「0 筆」 | 成立 | clean 的替代三棵樹都是 0 |
+| U7 network 的故障解除事件 | 成立（同 R5） | network40 每次都是 90，約在故障解除後 0.47 s（`q30.txt`） |
+
+- 另外兩項（不在上表）：缺陷 B 的影響大小（R3）是新證據，已觀察到串接，見「缺陷 B」一節的更正；09a 的 R12「修好之後 D44 變多」要重量，見 [09a](09a-input-send-pinning.md)「為什麼重要」3 的補充。缺陷 A（R3）成立、不必重量：clean 的修好樹 late_first 0、替代 0，≤0.27 ms 仍適用（推論）。
+- D48 第③步的 J3（延遲比重新擷取長時擋不住）歸「保留（條件力學）」（D63 ②）。
+- 之後 09a／09b 的 L2 必須包含 Client→Gateway 的短延遲注入；late 修正用凍結 D48 偵測器的計數器增量，不用 `judge_l2.py` 的最大值（D63 ④）。
+
 ## D48 第①步：既有證據的普查（2026-10-10，只讀）
 
 分析 1 位（high）＋對抗式核對 1 位（high）。證據：`build/target/_build/test/logs/pvp-v7-d48-step1-20261010/`（偵測器 `detector.py` 在普查前凍結，sha256 `445271ce…`；核對在 `adversarial/`）。
@@ -44,6 +66,7 @@
   3. 第①步的 M1～M5 都帶有產生空檔，和這兩點不矛盾。推論（未驗證）：host-ipc 跑次的 relay 讓 Match→Gateway 的 snapshot 變慢，拉長了那一小段，這可能是 D44（M3）出現在 host-ipc 跑次的原因。
 - **意涵**（未結，要寫進 D44）：client 端的網路遲到幾乎不會觸發 late 修正；真正的觸發來源是伺服器端的輸入延遲（Gateway→Match）或邊界巧合。
   - 加註（2026-10-10，D51 ⑨，使用者核准）：這段「意涵」是在截斷的資訊流上寫的，把 Gateway 過濾的效果當成了系統性質。Client 端的遲到觸發不了 late 修正，是因為晚到的命令在 Gateway 被吞掉（`gateway/server.go:421-423`），而不是遲到本身不重要；見[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md) 3.2、P2。
+  - 更正（2026-10-11，09R-eval）：修好資訊流之後，這句對 network 型損傷（遺失加 ≤30 ms 抖動）又成立了（第 08c 批 L2 的 network0／20／40 late 修正 0），但機制不同，不是 Gateway 的過濾：Match 每次發布只帶最小樣本（`MatchRuntimeHost.cpp:129-134`、`:466-479`），遺失造成的遲到由下一個倖存的包一次帶到，只產生 1 次負樣本的發布，達不到連續 2 次的規則（`LocalPlayerPrediction.cpp:128`、`:133-137`）。對持續延遲（x1、ramp）不成立：L2 的修好的樹有 late 修正。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `p4_late.txt`、`report-from-agent.md` 第 2 節；L2 是 `build/target/_build/test/logs/pvp-v7-08c-l2-20261011/session/`。
 - **新的注入可以重現**：在 Gateway→Match 的 IPC 輸入路徑加延遲（原型 2，δ 40～50 ms、視窗 100 ms），tracking 型、−33.3 ms 的 late 修正 8／8 事件；故障前後沒有 >20 ms 的產生空檔、沒有 runtime_gap；注入在 slew 結束前就結束。模型預覽：8 個單次修正的 Match 端領先，實測與預測（修正前＋33.33−W_post）相差 ≤0.3 ms，全部沒有重設（領先 58.6～64.3 ms）。
 - **但脆弱窗沒有碰到**：W_post 6.5～12.0 ms，0／4 個跑次落在約 <3.6～3.9 ms。同一跑次兩位玩家的 W_post 相差 ≤0.2 ms，所以獨立單位是跑次。經驗擬合（不是推導）：W_post ≈ (26.8−16.667·x_before) mod 16.667 ms，x_before 約 1.39～1.60 時才會碰到脆弱窗；既有現頭跑次估計每個跑次的機率約 0.24。
 - **第二條重設途徑**（1 個跑次，δ 80 ms、視窗 150 ms）：兩次 late 修正串接（缺陷 B），共 −66.7 ms，Match 端領先約 94 ms，兩位玩家都 backlog 重設。不管 W_post 多少都會重設，09a 管不到。
@@ -319,6 +342,7 @@ python3 -I $E/measure.py $L/pvp-v7-d48-step1-20261010/detector.py $E/session > $
     - 時間線（相對注入開始；release 都在 220～230 ms）：完整撤回的 r1、r5，late 修正在 136～137 ms；部分撤回、沒有撤回或串接的 r2、r3、r4、r6，late 修正都較早（113～119 ms）。撤回的決定都在 release 之後（281～319 ms，r4 是 414 ms）。推論（未驗證）：late 修正越早，重新擷取用的 8 個樣本中，注入期間產生、仍帶著延遲的命令就越多，撤回量就越小。和開發跑次的「部分撤回」一致。
   - 只記錄的 36 個項目（network20／40、host-ipc／gateway-250ms）：late 修正 0 次、重設 0 次。
   - 主機（宣告第 4 節）：每棵 tree 的 sleeper 最大值中位數 5.6～7.1 ms、最大 9.6 ms，≥10 ms 的項目 0 個；relay 送出晚醒中位數 5.9～7.0 ms（最大 10.1 ms），比第②步閒置 session 的 3.1～4.9 ms 高，三棵 tree 相近。
+  - （補充，2026-10-11，D63 ②）J3（延遲比重新擷取長時擋不住）歸「保留（條件力學）」：它是給定串接或長延遲之後的力學，被延遲的命令已過 Gateway 的過濾，不依賴截斷的頻率。見[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md) 3.4。
 - **意涵**（只記錄，交使用者決定）：照第 8 節的讀法套到計算值，是「J1 成立、J3 不成立：09a 不能單獨做，B2 也不夠；停下重新規劃」。也就是說，不管停止條件怎麼處理，下一步都是重新規劃 B2：單次短延遲（J2）擋得住，延遲比重新擷取長時（J3）擋不住。另外，Cooldown 拒絕顯示 FireGate 在 late 修正之後可能失去保證，這是第 09 批的新輸入。
 
 ## D48 第③步的準備：原型、審查與修正（2026-10-10）
@@ -672,6 +696,7 @@ python3 -I $E/measure3.py $L/pvp-v7-d48-step2-20261010/measure.py $L/pvp-v7-d48-
 - **機制**：`:128` 在 settling 中照樣累加 `lateSamples_`（`slack<0 ? +1 : 0`，任何一個準時樣本就歸零）；settle 不重設；下一次 TrackPhase 走 `:134-137`，用沒有換算的舊相位樣本再修正一次，同樣夾在 2 Tick。觸發條件是 settle 前最後 ≥2 個樣本連續遲到，持續延遲或間歇性的成對遲到都可能。`:113-116` 的註解與 `PredictionTests.cpp:1229-1238`（far 測試，−150 ms → 2 次）把它寫成設計意圖。
 - **為什麼重要**：多修一次就是多 2 Tick 的領先，可能直接推向 backlog。
 - **證據**：v7 建置中有相位觀測的 late 修正只有 8 次，其中 0 次串接成第二次；唯一有完整 trace 的 D44 是單次修正。模型（`judge/sim_judge.txt`）在 60～250 ms 的短停頓下也只修 1 次。但模型每個命令送 1 個樣本，實機是「每次發布取最小值」（`MatchRuntimeHost.cpp:110`、`:312`、`:403`），模型高估了遲到樣本數，所以「短停頓不發生」在實機只會更成立。檢定力很低，寫成「未觀察到」，不寫「排除」。
+  - 更正（2026-10-11，09R-eval）：「0 次串接」「未觀察到」是在截斷的資訊流上的結論。L2 的 x1／ramp 已觀察到串接：結算（settle）之後隔一個 Tracking 幀、128～155 ms 就再修正一次；非首次的修正中串接的比例 ramp flow 21／21、ramp flow+09a 24／24、x1 flow 29／39、x1 flow+09a 25／37（late 修正合計 ramp 37、40，x1 69、63；依凍結 D48 偵測器的計數器增量）。這些案例的串接不影響 Match 的重設（重設完全由注入決定，三棵樹逐案相同）。所以 B0 的前提（未觀察到）不成立，B 要在 09R-map 之後於 09b-plan 重新規劃（D63 ①③）。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `late_chain.txt`、`detector/`、`report-from-agent.md` 第 1-b 節。
 - **持續延遲時，第二次修正其實有用**（模型，hypothesis）：持續 +60／+70 ms 的延遲，現行碼修正 2 次，最後 slack 44.0／34.0 ms（目標 37.3）；「清空」或「只換算」的修法只修 1 次，slack 只剩 10.7／0.7 ms，維持到約 4 秒後的視窗修正。也就是說，直接把 B 修掉會更差。L1 雖然執行了 94 次缺陷 B，但只有 far 測試有斷言，所以「持續延遲下有用」只有模型支持。
 - **選項**：
   - B0【建議】不改程式，把限制寫進文件。
@@ -739,7 +764,7 @@ python3 -I $E/measure3.py $L/pvp-v7-d48-step2-20261010/measure.py $L/pvp-v7-d48-
 3. **缺陷 B**：B0，不改程式、寫明限制（建議）。若決定 1 選 (b)，B2 在那時重新規劃。
 4. **延遲位移**：只修文件，常數不變（建議）。拆出追蹤 lead＝1 是替代方案，會觸發 D44 停下，不建議放進 09b。
 5. **文件更正**（建議同意）：
-   - HANDOFF「C1 之後要決定的事」：「約 P93」改成「m≈8 時約 P93.1；v7 clean 偏移 ≤0.3 ms」；缺陷 B 寫成「未觀察到、hypothesis 層級」，不寫「排除」。
+   - HANDOFF「C1 之後要決定的事」：「約 P93」改成「m≈8 時約 P93.1；v7 clean 偏移 ≤0.3 ms」；缺陷 B 寫成「未觀察到、hypothesis 層級」，不寫「排除」。（更正，2026-10-11，09R-eval：缺陷 B 已在第 08c 批 L2 的 x1／ramp 觀察到，不再是「未觀察到」；數字見「缺陷 B」一節的證據。）
    - 03a「晚約 1 幀、方向相同」不成立：主要理由是兩棵 tree 的 settle 程式完全相同，缺陷不可能造成兩者的差；「方向相反」只是輔助；「probe 幀相位與 age 繞回」標為 hypothesis。
 6. **D44 未結事項補上**（建議）：v7 穩態 30 Tick 合計 60 對 v6 的 30；傳輸型的 late 修正才夾在 2 Tick；一次傳輸型 late 修正就會 ≥105（模型 120，實測 1／1 是 108）；送出被釘住時是 89～99（4／4）。
 7. **其他發現列進未結事項**（建議）：停頓 reseed 後領先歸零；權威 digest 不保護相位追蹤。

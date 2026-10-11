@@ -18,13 +18,14 @@
   - 所有 clean 跑次的 x 中位數都 <2（最大 1.881；08b clean 1.04～1.88，08-2 clean 0.408～1.876），也就是穩態就停在任意的中性水位（`bucket_census_summary.txt`）。
   - 08-2 clean-30 r10 after 玩家 1：6.6 秒的一次停頓之後 x＝0.330，等待 11.19 ms，送出相位固定在約 3.0 ms，一直到 16 秒（`timeline_08-2_clean30_r10_after_p1.txt`）。relay 的上行每秒 60 個、client→relay 中位數 0.079 ms，所以延遲在 Client 端。
   - 08b gateway-250ms r6 after 玩家 1：100 ms 的停頓與往前修正後，x 依序 1.17→0.775→0.575→0.373→0.183，等待固定在 13.7 ms（`timeline_08b_gw250_r6_after_p1.txt`）；合成模型能逐步重現（`synth.txt` S1）。
+  - （補充，2026-10-11，09R-eval：機制在第 08c 批的 L2 成立。注入之後，flow（只修資訊流的樹）有送出被釘住（每秒送出等待的中位數 >2 ms 的「玩家·秒」：x1 3、ramp 4），flow+09a（加了 09a 原型的樹）全部為 0；late 修正之後的送出等待中位數 flow x1 7.9 ms、ramp 8.5 ms，flow+09a 都是 3.5 ms；clean／network 兩棵樹都是 0。08c 沒有改 Client（`git diff c2b76cd eabb107 -- apps/object_fps_pvp` 中沒有 Client 檔）。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `send_wait.txt`、`report-from-agent.md` 第 1-a、1-b 節。L2 是 `build/target/_build/test/logs/pvp-v7-08c-l2-20261011/session/`。）
 - **v6 呢**：規則的行相同（v6final 的 `:549`、`:556`、`:580`）。但 v6 每個畫面幀發布一次：30 FPS 每次發布帶 2 個新命令，bucket 一直頂在上限，結構上不會被釘住（C1 的 v6 clean-30 36 個玩家跑次 0 秒）；60 FPS 很少（2 秒）；144 FPS 發布被量化到 6.9 ms 的幀格，經常被釘住（128 個玩家秒，約 3 ms）。v7 由角色以 60 Hz 發布、與 FPS 無關，所以每個 FPS 都暴露。
 
 ## 為什麼重要
 
 1. **FireGate**：命令晚送、射擊不晚，「同路」前提失效，射擊可能早 1 Tick 被判定（第 09 批文件「常數涵蓋不了的失敗」1）。
-2. **移動延遲**：被釘住期間輸入多晚 11～16 ms，也會污染 C2 的移動指標。
-3. **D44（實作前要先停下的原因）**：被釘住時，權威端的待處理命令從 2 掉到 1（r10 p1 的 7～13 秒，`queued_by_second.txt`），約 3.6～4 秒後相位追蹤往前修正、折返，佇列回到 2。被釘住「吸收」了相位修正與 late 修正多出來的領先。第 09b 批的對抗式檢查把真正的 late 修正重新分類：被釘住的 4 次沒有重設，沒被釘住的 1 次就是 D44。同一跑次的 r6 玩家 2 有同樣的停頓，但沒有往前修正、沒有被釘住，佇列一直是 2（`adversarial/r6_p2_natural_experiment.txt`），是自然對照。修好之後，late 修正會實際移動到達時刻、不再被吸收，可能讓傳輸型 late 修正更常變成 backlog 重設（hypothesis；修正事件沒有記錄在 trace 裡）。這符合第 09 批文件的 D44 提前條件。
+2. **移動延遲**：被釘住期間輸入多晚 11～16 ms，也會污染 C2 的移動指標。（更正，2026-10-11，09R-eval：要加條件。閒置主機的 L2（clean、network，三棵樹）中被釘住 0 次，只在主機停頓或相位修正之後出現，所以只有在 C2 的跑次裡發生停頓或相位修正時才會污染。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `send_wait.txt`。）
+3. **D44（實作前要先停下的原因）**：被釘住時，權威端的待處理命令從 2 掉到 1（r10 p1 的 7～13 秒，`queued_by_second.txt`），約 3.6～4 秒後相位追蹤往前修正、折返，佇列回到 2。被釘住「吸收」了相位修正與 late 修正多出來的領先。第 09b 批的對抗式檢查把真正的 late 修正重新分類：被釘住的 4 次沒有重設，沒被釘住的 1 次就是 D44。同一跑次的 r6 玩家 2 有同樣的停頓，但沒有往前修正、沒有被釘住，佇列一直是 2（`adversarial/r6_p2_natural_experiment.txt`），是自然對照。修好之後，late 修正會實際移動到達時刻、不再被吸收，可能讓傳輸型 late 修正更常變成 backlog 重設（hypothesis；修正事件沒有記錄在 trace 裡）。這符合第 09 批文件的 D44 提前條件。（補充，2026-10-11，09R-eval：要重量，等 09R-map（D63 ①）。條件力學保留：給定一次 tracking 型的 −33 ms 修正，09a 原型 10／10 重設、對照 2／10（D48 第③步，K4）。缺的是在 Client→Gateway 路徑上，單次延遲 40～80 ms、持續 100～300 ms 的短延遲會不會產生單次 late 修正、會不會串接；第 08c 批 L2 的 x1／ramp 的重設完全由注入決定（三棵樹逐案相同），碰不到這個區域。09R-map 的結果決定 09a 能不能先於 B 的重新設計單獨上線。證據：`build/target/_build/test/logs/pvp-v7-09r-eval-20261011/`的 `report-from-agent.md` 第 1-a、1-b、4 節。）
 
 ## 修法的選項
 
