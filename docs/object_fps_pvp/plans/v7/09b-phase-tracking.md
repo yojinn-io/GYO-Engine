@@ -675,6 +675,323 @@ python3 -I $E/measure3.py $L/pvp-v7-d48-step2-20261010/measure.py $L/pvp-v7-d48-
 7. 原型的程式不在本步修改。若 session 發現原型本身的錯誤（例如 09a 的 P1 不符合），回報，不修改後重跑。
 8. 主 checkout 的 runner 只服務 D48（第②步宣告第 14 節第 3 點）；第③步結束後是否保留，屆時決定。
 
+## 09R-map 的事前宣告（2026-10-11 使用者核准，D64；依 D45 做了 1 次門檻來源的對抗式檢查（xhigh），修正已併入）
+
+09R-map：在修好資訊流的樹上，用 Client→Gateway 的短延遲格點量 late 修正、領先與重設，回答「09a 能不能單獨先上線」與「B 怎麼重新規劃」需要的資料。草稿原檔 `build/target/_build/test/logs/pvp-v7-09r-map-prep-20261011/declaration-draft.md`（sha256 `23ae410d…`），`run_map.py` `cc8be0ed…`、`measure_map.py` `f263cb2d…`、`sleeper.py` `98105dbf…`、凍結清單 `frozen-map.sha256` `908f2a5a…`（47 檔）。第 14 節的 7 點全部照建議核准。下文的 `prep/` 指那個目錄。
+
+09R-map 的意思是：在修好資訊流（08c）的樹上，用 Client→Gateway 的短延遲（45～80 ms、持續 100～300 ms）做格點量測，取得「09a（Client 送命令的節奏）能不能單獨先上線」與「B（缺陷 B：late 修正串接；B2：修正後重新擷取）要怎麼重新規劃」需要的資料。
+
+- 狀態：**草稿・修正輪**（2026-10-11）。
+  - 第 1 版：18:34～18:58，1 位 high；保留在 `prep/scratch/declaration-draft.v1.md`（腳本 `prep/scratch/run_map.v1.py`、`measure_map.v1.py`）。
+  - D45 的門檻來源對抗式檢查：1 位 xhigh，`prep/xhigh-check.md`。
+  - 本版（19:16 起）依該檢查的「必須在送核准前修正」1～7 與「順手修」各項修正；對應表在第 16 節。第 14 節的新預設都標「建議，待使用者確認」。
+  - 下一步：主對話整合後送使用者核准。
+- 依據的頭：主 checkout `claude/pvp-v7-p2` 的 `6fb18f2`（乾淨）。工具都以這個 commit 的版本為準（記為 MAIN_BASE）。宣告提交後的 commit 記為 **H**；`MAIN_BASE..H` 只能改 `docs/`，主 checkout 從 H 到 session 結束不得改動（driver 要求 `--main-head H`，每個跑次之前核對）。
+- 依據的決定：D44（偶發重設的嚴重度）、D45（宣告前的門檻來源對抗式檢查）、D48（原型對照的做法；「推論為真時會失敗、碰不到脆弱窗就判無法判定」）、D50（b1：在 runner 自己的行程裡替換，不改凍結檔）、D58（記錄 Gateway 拿不到內容的丟棄）、D60（注入工具的無效門檻、凍結清單）、D61（08c L2 的格式）、D62、D63（先做 09R-map；late 修正改用凍結偵測器的增量）。
+- 大綱：09R-eval 回報 `pvp-v7-09r-eval-20261011/report-from-agent.md` 第 5 節「09R-map 宣告的大綱」。和大綱不同的地方在第 13 節。
+- 本草稿的工具、開發跑次與數字都在 `build/target/_build/test/logs/pvp-v7-09r-map-prep-20261011/`（以下簡稱 `prep/`）。指令見 `prep/commands.txt`，雜湊見 `prep/prep-files.sha256`。
+- 先例：第 08c 批「L2 的事前宣告」（`08c-drop-report.md`；`pvp-v7-08c-l2-prep-20261011/`）；D48 第②步、第③步的宣告與 `measure.py`、`measure3.py`。
+- 數字沒有標「實測」的，是程式推導或推論。
+
+### 1. 目的
+
+只取得兩個決定需要的資料，**不判定 09a／09b 的好壞**：
+
+1. **09a 的時機**（U6：09a 和 B 的實作順序）：上行路徑（Client→Gateway）的短延遲，在 flow 與 flow+09a 上，各會產生多少單次的 tracking 型 late 修正、修正後的 Match 端領先多少、會不會走到 backlog 重設。
+2. **B 的重新規劃**（09b-plan：B0 或 B2）：在哪些（延遲、持續時間）組合下，late 修正會串接（缺陷 B）；串接時重設的情況；B2 原型在同樣的刺激下撤回多少、會不會來回修正（只記錄）。
+
+判定 Jm1～Jm3 只確認「D48 的模型可以搬到上行路徑」，讓上面的資料能用同一套模型讀。Jm2 的結果本身就是第 1 點的答案，不是通過條件。
+
+不在本批範圍：權威、wire、FireGate 常數、late 修正上限、target、lead、backlog 門檻都不改；不做 09a／09b 的實作；不量 network 型損傷（network 案例的遺失是固定種子，09R-eval 已記錄，不適用於本批）。
+
+### 2. 三棵樹
+
+| 樹 | worktree | commit | 內容 | 角色 |
+|---|---|---|---|---|
+| flow | `/Users/karasu/Code/Source/GYO-Engine-l2-flow` | `eabb107e610a0423aa7c6903e37a9e3be424524b` | 08c（修好資訊流） | 判定 |
+| flow+09a | `/Users/karasu/Code/Source/GYO-Engine-l2-flow09a` | `cb921e013a51205965fd3779aac78088b7049d1b` | `eabb107`＋09a 原型（`git diff 8fabfa6 e6885b7`，L2P-trees） | 判定 |
+| flow+09a+B2 | `/Users/karasu/Code/Source/GYO-Engine-l2-flow09a-b2` | `0e1fabb33e8a2a15db757ba2e6f130ad17ddab2e` | `cb921e0`＋B2 原型相對 09a 原型的差分（`git diff e6885b7 c2705be`） | **只記錄** |
+
+- flow、flow+09a 沿用 08c L2 的 worktree 與建置（L2P-trees；`pvp-v7-08c-impl-20261011/l2p-trees/artifacts.sha256`），本批不修改。
+- flow+09a+B2 是本批新建（`prep/tree/`）：
+  - `git worktree add --detach ../GYO-Engine-l2-flow09a-b2 cb921e0`；差分存為 `prep/tree/b2-e6885b7-c2705be.diff`（sha256 `2551c0ec…`），`git apply --index` 無衝突：4 個檔在 `e6885b7` 與 `cb921e0` 的 blob 相同，套用後 4 個檔的 blob 和 `c2705be` 逐一相同，`git diff cb921e0 0e1fabb` 的 sha256 等於差分檔。
+  - 本地 commit `0e1fabb`，本地分支 `l2-flow09a-b2-0e1fabb`，不推送。
+  - 差分的 4 個檔：`LocalPlayerPrediction.{hpp,cpp}`（Client 的相位追蹤）、`Movement.hpp`（只改註解）、`PredictionTests.cpp`（測試）。Match 與 Gateway 不讀這些檔（D48 第③步：Match 執行檔裡沒有 `LocalPlayerPrediction` 的符號）。
+  - 乾淨建置：`prep/tree/build-trees.sh`（`l2p-trees/build-trees.sh` 的複本，只改輸出目錄），Match、Gateway、action probe、timing／network／worker probe，18:36～18:51（14 分），錯誤 0（`prep/tree/build-flow09a-b2.log`）。Gateway 的 `vcs.revision=0e1fabb…`、`vcs.modified=false`（`prep/tree/gateway-vcs.txt`）。worktree 建置後仍乾淨。CTest 本批沒有跑（B2 原型的 L1 在 D48 第③步 `fix/ctest-09a-b2.log` 已通過；本批只用它的 probe）。
+- 執行檔 sha256（完整值寫在 `run_map.py` 的 `ARTIFACTS`；flow+09a+B2 的完整清單在 `prep/tree/artifacts.sha256`；driver 每個跑次之前核對）：
+
+| 樹 | Match | Gateway | action probe |
+|---|---|---|---|
+| flow | `8d154a3a…` | `4f0caaca…` | `4949302f…` |
+| flow+09a | `b83f3548…` | `e5041519…` | `adf1d13f…` |
+| flow+09a+B2 | `2f6dc26c…` | `277d50eb…` | `76b0d154…` |
+
+- 每棵樹用自己的 Match、Gateway 與 probe（和 08c L2 相同）。三棵樹的 Match 與 Gateway 程式相同（差分只在 Client），雜湊不同只來自建置路徑與 Gateway 的 `vcs.revision`。本批不重跑權威 digest（08c L2 的 J1 已證明 flow 與 flow+09a 的 Match 等價；B2 的差分不碰 Match）。
+- arena：主 checkout 的 `assets/object_fps_pvp/pvp_arena.json`，`0026013c731a7d7317ce6be4f84f897b91fa1b807c9621d60fb608570f1775a5`。
+
+### 3. 工具與凍結清單
+
+- 所有 runner 與分析器都從主 checkout 執行；三棵樹用同一份工具。
+- **凍結清單 `prep/frozen-map.sha256`**：47 檔，清單本身的 sha256 `908f2a5a68f64c542520cf3c2c2b5fa7d7f5f326c02161c6db6aa42acb635c7f`。內容＝08c L2 的 44 檔（`pvp-v7-08c-l2-prep-20261011/frozen-l2.sha256`，`d2a8699b…`）＋下面 3 個既有的凍結量測腳本：
+
+  | 檔 | sha256 | 用途 |
+  |---|---|---|
+  | `pvp-v7-d48-step1-20261010/detector.py` | `445271ced691b25e1c87a38bb70ea9b3754d32b741a1b0331f1e00c0578194cd` | late 修正的 P 事件（計數器增量） |
+  | `pvp-v7-d48-step2-20261010/measure.py` | `045714f12dd5020d88b4d34e0df07d85a6e6607d17651f76ee08263fc6fadf14` | W_post、修正前後的領先、模型差、排隊重播、重設、設限 |
+  | `pvp-v7-d48-step3-20261010/measure3.py` | `18ffde156b59bf822f0fcc15a50d7d6f2a57745daa2d2ba92694850845278d79` | v3 的產生空檔規則、撤回、來回修正、串接單位 |
+
+  （路徑在 `build/target/_build/test/logs/` 之下。）
+- 核對時點：2026-10-11 在 `6fb18f2` 上 `shasum -a 256 -c` 47／47 OK；session 開頭不符就拒絕；每個跑次之前核對；結尾記在 `summary.json` 的 `frozen_ok_end`。
+- `run_client_delay.py` 以 `--frozen-list prep/frozen-map.sha256` 執行，自己再核對清單中的每個檔（`run_client_delay.py:409-427`）。`run_gameplay.py` 由 driver 核對。`run_network.py` 不在清單內（同 08c L2），只受 git 狀態核對保護。
+- **本批新寫、核准時一起凍結的檔**（雜湊在 `prep/prep-files.sha256`；修正輪的版本：`run_map.py` `cc8be0eda4e69023f3e0f6fa504f6936191919f7706258b9ba35cff45a278589`（＝`measure_map.DRIVER_SHA`）、`measure_map.py` `f263cb2d13d78d05f58f41a2aec94e8d3a0d7940d8f08333a406ac436582dc69`、`sleeper.py` `98105dbf…`；第 1 版是 `d643fced…`／`39221640…`。核准前再修改時，先重算 `run_map.py` 的 sha、寫進 `DRIVER_SHA`，再重算 `measure_map.py`）：
+  - `run_map.py`：session 驅動。
+  - `measure_map.py`：量測與判定。**量測路徑上唯一的新程式是一個轉接**（見下）；其餘的量都由上面 3 個凍結腳本算出。
+  - `sleeper.py`：照抄 08c L2 的 `sleeper.py`（`98105dbf…`）。
+- **轉接（adapter）**：凍結的 `measure.py` 從 `result.json` 讀故障欄位，而且要求 `delayed_chunks`（它原本的 Gateway→Match runner 的欄位）。`run_client_delay.py` 寫的故障欄位是 `start_ns`、`release_ns`、`delay_ms`、`window_ms`，延遲的資料包數記在 `relay.json` 的 `client_delay.delayed`。`measure_map.py` 在自己的行程裡把 `measure.py` 的模組函式 `load_json` 換成包裝：只對故障機制是 `client-gateway-pure-delay` 的 `result.json` 補上 `delayed_chunks`＝`client_delay.delayed`，其餘原樣傳回。檔案不改（D50 b1 的作法）。`measure.DECLARED` 由 `measure3.analyze_inject` 在每次呼叫時設成該格的延遲與持續時間（和 D48 第③步相同）。
+- **判定腳本核對 session 是不是宣告的設計**（xhigh M3）：`measure_map.py --session` 要求 `plan.json` 的 `declared` 等於 `measure_map.DECLARED`、`schedule` 等於它自己重算的 `schedule()`、`plan.state.driver` 等於寫死的 `DRIVER_SHA`（核准版 `run_map.py` 的 sha256）、`plan.state.judge` 等於它自己的 sha256（每個跑次的 `evaluate` 和最後的彙整是同一個版本）。任一不符，`plan_check` 不成立、`passed` 為 false。排程與宣告值只定義在 `measure_map.py`，`run_map.py` 直接使用（同一件事只維護一處）。
+- driver 的核對：正式執行強制 `--output`、`--idle-gate`、`--main-head`、`--judge-sha`、`--driver-sha`，和實際檔案不符就拒絕；`sleeper.py` 的 sha256 寫死；三者與 3 個凍結量測腳本、`ingress_evidence.py` 都在每個跑次之前的狀態核對之內。
+
+### 4. 主機
+
+- 照 08c L2：session 期間不做開發；以 `caffeinate -dims` 執行；前景沒有其他使用者程式；**暫停 PR #73 的 auto-fix**；背景的其他 agent 與分析先停。
+- **閒置閘門**（`--idle-gate`，正式執行必須帶）：第一個項目之前連續 3 次 5 秒 sleeper，每次最大值 <10 ms；不成立就每 30 秒重試，最多 30 分鐘。
+- 每輪（前置、第 1～3 輪）前後各記 1 次 5 秒 sleeper 與前 5 名 CPU 程序（`host.jsonl`）。結尾那一次失敗時照樣寫 `summary.json`（記成停止）。
+- 子程序：每個都跑在自己的 session（`start_new_session`），終端機的 Ctrl-C 只打到 driver，driver 跑完目前的項目後停下；閒置閘門期間也會在 0.5 秒內回應並停下。
+- 逾時 300 秒時先送 SIGTERM：`run_gameplay.py` 會執行清理；`run_client_delay.py` 只把它當成「這一輪跑完再停」（`run_client_delay.py:552-556`），卡住的那一輪不會被清理。兩種情況都在 15 秒後對整個 process group 送 SIGKILL 收拾（Match、Gateway 由 runner 直接啟動，在同一個 group）。每個項目結束後，group 裡留下的程序一律殺掉並記錄。
+- 項目開始前的 sleeper 或狀態核對失敗時，那一項記為 `not_run`（它沒有跑），session 停下。
+
+### 5. 格點、次數、順序與時間
+
+- **注入**：`run_client_delay.py --profile x1`（固定延遲型），δ∈{45, 60, 80} ms × 視窗∈{100, 150, 300} ms，每格每棵樹 2 次；**核心的單次格 45／100、60／100 每棵樹 3 次**（建議，待使用者確認；xhigh 第 5 節第 6 點：合格事件幾乎只來自這兩格，2 次時 Jm2 的 ≥6 個跑次沒有餘裕）：9×3×2＋2×3＝60 次。
+- **前置**：每棵樹 1 次 clean-60（`run_gameplay.py --case clean-60`），在第 1 輪之前。合計 **63 個項目**。
+- **起點**：每個注入都在 probe 時鐘的 **12.0 s** 開始（`--fault-at 12.0`，固定偏移）。理由（gameplay 計畫 `gameplay-plan.json` 與 08c L2 的 clean 跑次實測）：
+  - **Cooldown 的機制**（D48 第③步的停止原因，`09b-phase-tracking.md:319-334`（行號以 `ad2c1c4` 為準））：被延遲的那一發晚約 7 Tick 才解析，250 ms 後沒有被延遲的下一發照常解析，兩者在權威上只隔 9 Tick，小於 `cooldownTicks`＝10（`Combat.hpp:22`），被拒（rejection＝3）。所以危險的是「被延遲的一發，後面 250 ms 內緊跟著一發沒有被延遲的射擊」。
+  - 預排的射擊（`gameplay-plan.json`）：玩家 1 在 10.25～12.0 s 每 0.25 s 一發，12.5 s 換彈，**下一發射擊是 14.25 s**；玩家 2 是 13.1 s。
+  - 12.0 s 起點：注入期間（12.0～12.38 s，含放出）只有 12.0 s 那一發可能被延遲，它後面 2.25 s 都沒有射擊；延遲只會拉長它和 11.75 s 那一發的間隔（250＋δ ms）。所以上面的機制在結構上不會發生。
+  - 2.0 s 起點（D48 第②③步用過）與 11.0～11.75 s：被延遲的那一發之後 250 ms 都有一發沒被延遲的射擊（2.0～3.25 s、10.25～12.0 s 每 0.25 s 一發），正是上面的機制。在允許的範圍（respawn 之後、≤12.0 s）內，12.0 s 是唯一沒有這個風險的起點。
+  - 生命事件：玩家 2 在約 6.75 s 被擊殺、約 9.78 s respawn（`life_respawn` 重設與 `lifecycle_cancelled` 約 9.79 s，08c L2 的 clean-60-r1-flow 與 x1-r2-flow 實測）。之後到 16 s 兩位玩家都沒有生命事件。凍結 `measure.py` 的 `life` 設限看 ［t_c−1 s, t_end），12.0 s 起點讓它落在 ［11.0 s, 15.4 s］，碰不到 respawn。
+  - 08c L2 用的 7.5 s 不適用：玩家 2 在 7.5～9.78 s 是死亡狀態，而且 respawn 落在結果視窗（t_c＋3 s）內，會讓沒有重設的事件被 `life` 設限、有重設的事件不受影響，造成偏向重設的偏差。
+  - `run_client_delay.py` 的界限：fault_at 1.0～12.0 s（`:85`），注入加放出要在 13 s 之前結束（`:82`、`:155-161`）；12.0＋0.300＋0.080＝12.38 s。結果視窗到 t_c＋3 s ≈ 15.4 s，probe 跑到 16 s（`trace_end` 設限不會觸發）。
+- **順序**：
+  - 前置：flow、flow+09a、flow+09a+B2。
+  - 第 1 輪：9 格依 (45,100)、(60,100)、(80,100)、(45,150)、(60,150)、(80,150)、(45,300)、(60,300)、(80,300)；第 2 輪反序。
+  - 第 3 輪：核心格 45／100、60／100 的第 3 次（依 CELLS 的順序）。
+  - 每格三棵樹連續跑，起頭的樹輪替：TREES 依（格的序號＋輪次−1）mod 3 旋轉。起頭次數 flow 7、flow+09a 6、flow+09a+B2 7（`run_map.py --list-only`）。
+  - 不隨機化，不補跑。
+- **獨立單位是跑次**：同一跑次的兩位玩家共用同一個注入與主機狀態（D48 第②步：同跑次兩位玩家的 W_post 相差 ≤0.6 ms）。但固定起點下，跑次之間在相位上也不完全獨立（開發跑次的 token 水位重建 x_before 都在 1.16～1.48；xhigh 第 3 節 H3），比例類的說法只對這個起點與這台主機成立。
+- **時間**：開發跑次每項 20～21 秒（實測，`prep/dev/*/timing.txt`），每項的判定（`ingress_evidence.py`＋量測）約 2 秒。63 項約 24 分，加閒置閘門（最少 15 秒）與每輪前後的 sleeper（8×5 秒），**約 27 分**；閒置閘門重試時最多再加 30 分。
+
+### 6. 注入的參數與有效性（D60）
+
+- 所有格都通過 `run_client_delay.py` 的事前檢查（`profile_problems`，`:133-163`）：最大延遲 80 ms×240 包／秒＝19.2 <256；視窗 100～300 ms 在 100～8000 之內；起點與結束時刻如第 5 節。也就是 **9 格都做得到**；開發跑次的實測見第 11 節。
+- 每個跑次由 `run_client_delay.py` 自己核對（`round_problems`，`:429-470`），任一不成立就記為 `injection_invalid`，session 停下：
+  - 延遲欄位與參數相符、延遲的資料包 ≥1；
+  - 注入開始與結束時，兩個方向的收＝送、佇列清空；沒有無法路由的 Gateway 資料包、沒有 relay 錯誤；
+  - 佇列深度 <192（`QUEUE_NEAR`，`:78`）；
+  - 送出延遲的 p99 ≤10 ms（`LATENESS_P99_MS`，`:80`）；
+  - Gateway 的速率拒絕＝0（`rate_limited_packets`，`:467-469`）。
+- 注入延遲的是 Client→Gateway 方向的全部資料包（輸入、動作、ACK），Gateway→Client 照收照轉；沒有丟包、不超車（x1 結束時排在延遲包後面一起放出，相當於斜率 −1 的放出）。
+- `run_case` 的遊戲判定只記錄（D60）。
+
+### 7. 量的定義（摘要；完整定義在 `measure_map.py`、`measure.py`、`measure3.py` 的 docstring）
+
+- **late 修正**：凍結偵測器的 P 事件＝`action-frames.jsonl` 裡 `phase_late_corrections_{a,b}` 的每一次**增量**（不用最大值；計數器在 epoch 重設時歸零，歸零後的值照算，D63 ④、09R-eval「J5b 少算」）。每個跑次記全部與注入後 1 秒內（`in_span`）的增量總和。
+- **事件的量**（`measure.py`）：t_c、W_post（slew 結束後 0.25 s 內產生的命令的送出等待中位數，至少 8 個）、lead_before（t_c 前 1 s 的 Match 端領先中位數）、lead_after（slew 結束後 0.25 s 內產生的命令的 Match 端領先中位數，至少 8 個）、lead_pred＝lead_before＋33.333−W_post、model_diff＝lead_after−lead_pred、30 Tick 合計的重播與最大值（q30_max）、［t_c, t_c＋3 s］內的 backlog 重設與其他非 respawn 重設、設限。Match 端領先＝`resolved`（actual）−`host_accepted`。
+- **v3 的追加**（`measure3.py`）：產生空檔的 v3 規則（正向 slew 的間隔不算主機停頓，B2 的撤回因此不會讓跑次不乾淨）、size_v3、撤回（late 修正後 1 秒內、下一次非 respawn 重設之前，`phase_corrections` 增加而 `phase_late_corrections` 不變的幀）、撤回量與殘餘、來回修正的特徵、lead_after_max、lead_settled。
+- **合格事件 E(樹)**（`eligible_v3`，Jm1～Jm3 的母體）：
+  - 跑次乾淨（v3）：延遲欄位與參數相符、有相位計數器、注入視窗內沒有 >20 ms 的產生空檔（v3 規則）、沒有 seeded、沒有 Client／Match 的 runtime_gap，而且**注入在 slew 結束之前已放出**（`release_before_slew_end`）；
+  - 事件在注入後 1 秒內、不是重設後的事件；tracking、增量 1、沒有串接、|size_v3＋33.333| ≤1.0 ms；沒有設限（v3）；W_post 與 lead_after 算得出來。
+  - 「放出在 slew 結束之前」這一條讓視窗 300 ms 的全部格在結構上沒有合格事件：放出之前 Match 收到的命令仍帶著注入的延遲，lead_after 量到的不是修正後的穩態（凍結 `measure.py` 的 V1 與 `fault_boundary` 設限也是同樣的理由）。**δ 80／視窗 150 沒有合格事件的原因是串接**，不是放出條件（開發跑次 flow 與 B2 在這一格都是放出早於 slew 結束，`dev-summary.txt`；第 1 版的寫法是錯的）。這些格只提供只記錄的串接資料。
+  - **放出到 slew 結束的餘裕和第②步不同**：第②步的放出都在 slew 結束前 64～93 ms（`09b-phase-tracking.md:307`）。本批開發跑次：45／100 是 58～70 ms，60／150 只有 17 ms；推算 45／150 約 7～20 ms（xhigh 第 3 節 M1）。小餘裕的區間是第②步沒有驗證過的；每個事件的 `t_post` 與 `release_to_t_post_ms` 都記下來，供事後核對。
+  - **沒有合格、但可能藏住違反的事件**（xhigh M4）：有重設的事件只看到重設為止（約 0.5 s），沒有重設的要看滿 3 s，所以「越線卻沒重設」的事件比一致的事件更容易被設限排除。注入後 1 秒內、qualifies_v3、算得出 lead_after、但被設限或所在跑次不乾淨的事件，只要在帶外，就列成使用者判斷旗標（`not_eligible_outside_band_flags`，比照第②步的 `censored_crossing`）。
+- **串接單位**（`measure3.py` 的 chain 單位）：每位玩家在注入後 1 秒內的第一個 tracking 型 P 事件；是否串接（增量 >1，或 0.5 秒內同一玩家又有 P 事件）、後續 late 修正數、size_v3 合計、q30_max、backlog 重設、撤回、來回修正。這裡不要求注入在 slew 結束前放出。
+
+### 8. 判定（plan 核對、session 完整、Jm1 成立、Jm3 沒有被推翻，才算「這張圖可以用模型讀」；Jm2 是答案，不是通過條件）
+
+由凍結的 `measure_map.py --session` 機械地給出（`judgement.json`）。
+
+| 判定 | 內容 | 成立 | 不成立／推翻 | 其餘 |
+|---|---|---|---|---|
+| plan 核對 | `declared`、重算的 schedule、driver sha、judge sha 都等於宣告值（第 3 節） | 全部相等 | — | 不相等（`passed` 為 false） |
+| session | 排程的 63 項全部完成；沒有中斷、沒有停下；凍結清單開頭與結尾都 OK；結尾的狀態等於開頭 | 全部滿足 | — | 不完整（`passed` 為 false） |
+| **Jm1**（模型能不能搬到上行路徑） | E(flow)＋E(flow+09a) 的 \|model_diff\| ≤1.0 ms | 合計 ≥12 個事件、≥6 個跑次，**而且每棵判定樹各自 ≥6 個事件、≥3 個跑次**，全部 ≤1.0 | 任一 >1.0 | 無法判定 |
+| **Jm2**（flow+09a：單次 tracking 修正越過脆弱窗並重設） | E(flow+09a) 的 lead_after 對 66.667±1.0 ms，加上 ［t_c, t_c＋3 s］ 的 backlog 重設 | 沒有違反，而且 ≥6 個跑次有「lead_after >67.667 而且重設」的事件 | 違反＝lead_after <65.667，或 >67.667 而沒有重設 | 無法判定（帶內的事件列出、不檢定） |
+| **Jm3**（flow：重設 ⇔ 領先 >66.667 ms） | E(flow) 在帶外的事件，**分兩側**：越線側（>67.667，必須重設）、不越線側（<65.667，必須不重設） | 沒有推翻、帶外 ≥8 個事件，而且**兩側都有事件**：「一致」；只有一側：「越線側一致（不越線側無法判定）」或反過來 | 帶外的事件和規則相反（「推翻」） | 帶外不到 8 個：無法判定 |
+| passed | plan 核對、session、Jm1 成立、Jm3 沒有被推翻、沒有任何停止旗標 | | | |
+
+- **讀法**（只供 09a-時機與 09b-plan 參考；決定由使用者做）：
+  - Jm1 成立、Jm2 成立：在本起點、本主機、本格點的條件下，flow+09a 上的上行短延遲單次 late 修正**沒有例外地**走到 backlog 重設，和 D48 第③步的 IPC 延遲記錄值一致。這不是「09a 每次都會重設」的證明（Jm2 的統計強度見門檻表）。
+  - **四點限定**（xhigh M2）：
+    1. **flow 的基準頻率不能用本批的比例**：12.0 s 起點下 flow 的 W_post 集中在 2.5～4.7 ms（開發跑次），落在帶的上緣附近，flow 的重設比例偏高，拿「flow 對 flow+09a 的重設比例」讀 09a 的增量會低估。flow 的基準頻率參考 D48 第③步 base 的 2／10（W_post 1.6～15.8 ms；stopped session 的記錄值）。
+    2. **串接的格在三棵樹都重設**（開發跑次 9 個串接單位全部重設，含 B2），不能用來區分 09a；它們是 B 的資料。
+    3. **格點只表示條件暴露**：δ 與視窗是人工設定的，推不出實際網路下單次 late 修正的頻率；只能說「在這個延遲與持續時間下會發生什麼」。
+    4. **Jm1 只檢驗放出之後的穩態**：合格事件都是放出早於 slew 結束的事件；延遲持續期間（長視窗）的領先不在 Jm1 的範圍內。
+  - 09a 單獨上線時暴露的大小，由「哪些格會產生單次 late 修正」決定（第 10 節的圖），讀的時候套上面四點。
+  - Jm2 不成立：09a 在上行路徑上沒有把 W_post 壓到 0，或模型的邊界在上行路徑上不同；列出違反的事件，停下交使用者判斷。
+  - Jm1 不成立或 Jm3 被推翻：模型不能直接搬到上行路徑，第 10 節的圖只能當描述，不能用 D48 的推論鏈讀。
+  - 無法判定不視為支持，也不視為反證；不補跑。
+
+#### 判定門檻與來源（D45 的核對對象）
+
+| 門檻 | 值 | 來源（建置、指標、範圍） |
+|---|---|---|
+| 模型容許（Jm1） | \|model_diff\| ≤1.0 ms | **來源是 D48 第②步的宣告**（`pvp-v7-d48-step2-20261010/declaration.md:190`：試跑 10 個事件最大 0.312 ms，約 3 倍餘裕；`a954aa3`，Gateway→Match IPC 延遲 δ 50／視窗 100）；常數 `measure.py:114` `MODEL_TOL`。之後的實測：V3 16 個事件、8 個跑次，最大 **0.645**、中位 0.256 ms（`measure.jsonl:25`），餘裕降到約 1.55 倍。指標：Match `resolved`−`host_accepted` 的中位數，只算 actual 的移動命令；W_post 是 Client 端的等待，兩條路徑相同。注意：第②步的放出到 slew 結束有 64～93 ms 的餘裕，本批的部分格只有約 8～20 ms（第 7 節），是第②步沒驗證過的區間 |
+| Jm1 最少事件與跑次 | 合計 12 個、6 個跑次；每棵判定樹各 6 個、3 個跑次 | 合計值沿用 V3 的 `V3_MIN_EVENTS`、`V3_MIN_RUNS`（`measure.py:122-123`；第②步為「8 個跑次×2 位玩家」設計的提議值，不是推導）。每棵樹的最少數是本版新增（xhigh H1）：flow+09a 的 W_post≈0.1 ms，模型的「−W_post」那一項在它身上等於沒有被檢驗，所以 flow 必須自己達到最少數。可達性（推論，依開發跑次）：合格事件只來自單次修正、而且放出在 slew 結束前的格；45／100、60／100 每棵樹各 3 次＝6 個跑次、約 12 個事件，45／150、60／150 是邊界 |
+| 脆弱窗的門檻（Jm2、Jm3） | 4T＝66.667 ms | 每 Tick 排隊數 ≈ floor(領先÷16.667 ms)；領先 >4 Tick 時每 Tick 排 4 個，30 Tick 合計 120 ≥105（`Movement.hpp:38-39` `MovementBacklogSampleTicks`＝30、`MovementBacklogCommandSum`＝105，行號以 flow 樹與主機 checkout 為準，flow+09a 樹是 `:51-52`；`PvpMatch.cpp:452-459`，三棵樹相同）；`measure.py:112` `THRESHOLD`。這是 Match 端的量，和注入路徑無關 |
+| 帶寬（Jm2、Jm3） | ±1.0 ms | D48 第②步 V4 的帶寬（`measure.py:113` `BAND`）：試跑的逐命令領先 P10～P90 寬度 ≤0.63 ms；第②步的帶內 4 個事件（66.8～67.4 ms）全部重設（`d48-step2/declaration.md:193`、`measure.jsonl:25`）；第③步帶內 3 個事件（66.1、66.2 ms 不重設，67.46 ms 重設）是 **stopped session 的記錄值**（`pvp-v7-d48-step3-20261010/measure.jsonl:203` V4X；`09b-phase-tracking.md:319-335`），不是判定 |
+| Jm2 的預期與來源 | 09a 的單次事件越線並重設 | D48 第③步 J1 的**記錄值**：09a 10／10 個跑次重設，W_post 最大 0.156 ms，領先 70.35～70.76 ms，30 Tick 合計 105～108（`pvp-v7-d48-step3-20261010/measure.jsonl:203`）。那一行的 `step3` 是 **stopped**（chain 跑次出現 Cooldown），所以 J1 只是計算出來的記錄值，不是判定。那是 Gateway→Match IPC 延遲；本批檢驗上行路徑 |
+| Jm2 最少跑次 | 6 | 提議。單臂、零失敗：(1−p)^6＝0.05 → p＝0.39；6 個跑次在 95% 單側下排除「每跑次失敗機率 >39%」。這個算法要求跑次獨立，而固定起點下跑次在相位上不完全獨立（第 5 節），所以「排除 >39%」**只對本起點、本主機成立**；Jm2 成立的意思是「本條件下沒有例外」。可達性（xhigh M1，依開發跑次的時刻重寫）：t_post−start 在 δ45 約 204～208 ms、δ60 約 222～227 ms、δ80 約 238～244 ms；放出約在 視窗＋δ−7～＋2 ms。所以 45／100、60／100 是合格的主要來源（各 3 次＝6 個跑次），45／150 屬邊界（餘裕約 7～20 ms），60／150 一半串接，80／100 推論串接。flow+09a 的合格跑次**約 6～8 個**，剛好在門檻上，沒有餘裕：一個跑次不乾淨就會變成無法判定 |
+| Jm3 的規則來源 | 重設 ⇔ lead_after >66.667 ms，兩側分開判 | D48 第②步 V4 只驗了**不越線那一側**（below 12、crossing 0，`d48-step2/measure.jsonl:25`）；越線那一側的證據只有第③步 V4X 的記錄值（stopped session）與開發跑次。所以本批要求兩側都有事件才叫「一致」（xhigh H2；比照 `measure.py:503-506` 的兩側判定） |
+| Jm3 最少帶外事件 | 8 | 提議。**可達性（xhigh H3，依開發跑次重寫；第 1 版「W_post 在 0～16.7 ms 均勻」借自別的設定與未驗證的假說 `09b-phase-tracking.md:51`，撤回）**：12.0 s 起點下 flow 的 W_post 實測是 2.48、2.50、2.68、2.82、4.38、4.73 ms（token 水位 x_before 1.16～1.48，經驗擬合的 W_hat 約 2.1～7.5 ms），換算 lead_after 約 63～68.5 ms，剛好橫跨帶的上緣（W_post 在 2.93～4.93 ms 時落在帶內）。開發的 6 個值裡 2 個在帶內，另外 4 個只比帶的上緣高 0.2～0.35 ms。所以 **Jm3 很可能「無法判定」，或只有越線那一側**；不越線那一側可能接近 0 個事件。flow 的合格跑次約 6～8 個、12～16 個事件，帶外約一半 |
+| late 修正的幅度 | −2T＝−33.333 ms，容許 1.0 ms | `LocalPlayerPrediction.cpp:98` 的夾限（flow 與 flow+09a 樹；B2 樹是 `:100`）；`Movement.hpp:59` `MovementPhaseMaximumCorrectionSeconds`＝2 Tick（flow 樹；flow+09a 樹是 `:72`）；`measure.py:115-116` |
+| 注入無效（停止） | 佇列 ≥192、送出延遲 p99 >10 ms、速率拒絕 >0、收發不等 | 工具門檻（D60；`run_client_delay.py:78-80`、`:429-470`）。p99 10 ms 與佇列 192 是 L2P-injector 的提議，不是推導 |
+| Cooldown（clean 前置停止） | rejection＝3 出現 1 次 | `Combat.hpp:22`（`cooldownTicks`＝10）、`:52`（`ShotRejection::Cooldown`）；08c L2 的 clean-60 在修好的樹上是 0（09R-eval R8）；和 08c L2 一樣只對 clean 停 |
+| ingress `failed`（修好的兩棵樹停止） | `ingress_evidence.py` 的 status＝failed | 建議，待使用者確認（第 14 節第 4 點）。D61 的前例在修好的樹上停止；本批的前提是「修好資訊流」，而上行短延遲是 08c L2 沒驗證過的刺激。`undetermined` 只記錄 |
+
+### 9. 預測（可被推翻；只記錄，不是判定）
+
+依開發跑次（第 11 節，每格最多 1 次）與機制推論，**全部是推論**：
+
+| 格（δ／視窗） | 預測 | 依據 |
+|---|---|---|
+| 45／100、60／100（45／150 是邊界） | 每位玩家 1 次單次的 tracking 型 late 修正（−33.3 ms），放出在 slew 結束前，是合格事件；45／150 的放出餘裕只有約 7～20 ms | 開發跑次 45／100 三棵樹 6／6 位玩家單次；晚約 7.7～22.7 ms <33.3 ms |
+| 60／150、80／100 | 邊界：單次與串接混在一起 | 開發跑次 60／150（flow+09a）1 位單次、1 位串接（第二次 −40 ms，注入後 249 ms） |
+| 80／150、45／300、60／300、80／300 | 串接（δ 45／300 推論單次，但放出在 slew 之後，不合格）；80／150 不合格的原因是串接 | 開發跑次 80／150（flow、B2）、60／300（flow）、80／300（flow+09a）全部串接；串接的機制：slew 期間仍收到 late 樣本，slew 結束後立刻再修正（`LocalPlayerPrediction.cpp:114-116` 的註解、`:128`、`:134-135`） |
+| flow 的單次事件 | W_post 集中在約 2～7.5 ms（本起點的 token 相位），lead_after 約 63～68.5 ms，橫跨帶的上緣；重設 ⇔ lead_after >66.667 | 開發跑次 45／100：W_post 2.68、2.82 ms，lead_after 68.00、67.95 ms，兩位都重設；W_post 實測全部 2.48～4.73 ms（第 8 節 Jm3 的可達性） |
+| flow+09a 的單次事件 | W_post ≤1 ms，lead_after 約 70.5～70.8 ms，全部重設（約 t_c＋0.5 s） | D48 第③步 J1；開發跑次 3 個事件：W_post 0.08～0.11，lead_after 70.68～70.71，全部重設 |
+| 串接（所有樹） | 領先 100 ms 以上，全部重設（不能區分 09a） | 開發跑次所有串接單位（9 個）都重設，lead_after_max 99.7～123.5 ms |
+| B2 的單次事件（只記錄） | 約 t_c＋150 ms 撤回約 +30 ms，q30 約 69，不重設 | 開發跑次 45／100：撤回 +29.9／+29.8 ms，殘餘 −3.4／−3.5 ms，q30 69，不重設 |
+
+推論的依據：
+- late 樣本要命令晚於它的 Tick 被替代，也就是單程延遲超過目標餘裕 37.3 ms（`InitialCommandLead`＝2 Tick＋`MovementPhaseTargetSeconds`＝4 ms，`Movement.hpp:36`、`:45`）；要連續 2 次發布帶負樣本才修正（`Movement.hpp:58`、`LocalPlayerPrediction.cpp:128`、`:134-135`）。
+- δ＝45 ms：晚約 7.7 ms；δ＝60：約 22.7 ms；δ＝80：約 42.7 ms。一次修正只移 33.3 ms，所以 δ＝80 在延遲持續到修正之後時，推論會再修一次（串接）；δ＝45、60 推論只修一次。
+- x1 結束時以斜率 −1 放出：視窗結束後 δ−37.3 ms 內送出的命令仍會晚到。
+
+### 10. 記錄項（只記錄）
+
+- **圖**：每個（樹、格）：跑次數、每跑次 late 修正的增量（全部與注入後 1 秒內）、串接單位的比例（B 隨視窗的變化）、backlog 重設的單位數、注入後 3.5 s 內非 respawn 重設的原因分布、size_v3 合計、q30_max、lead_after_max、合格事件的 W_post、lead_after、model_diff。
+- **B2 樹**：撤回的有無、撤回量、殘餘、來回修正的跑次；它的合格事件也照列，但不進 Jm1～Jm3（lead_after 混入撤回）。
+- **D58：Gateway 拿不到內容的丟棄**：每個跑次的總數與依原因（速率限制、解碼失敗、未授權、舊序號的 Actions／其他、未知種類、非 active），由凍結的 `ingress_evidence.py`（`gateway_contentless_drops`）給出。
+- **沒有合格、但在帶外的候選事件**（第 7 節，`not_eligible_outside_band_flags`）：逐筆列出交使用者判斷。
+- 每個事件的 `t_post` 與放出到 slew 結束的餘裕（`release_to_t_post_ms`）。
+- 每個跑次的 `ingress_evidence.py` 狀態（`undetermined` 只記錄；`failed` 見第 12 節）、權威 Cooldown 拒絕數、`run_case` 的判定、注入的實測（延遲的資料包、佇列最大、送出延遲分布、放出時刻）。
+- **D44 的觀察旗標**：注入跑次在 ［start, release＋3 s］ 之外、或 clean 前置跑次的任何非 respawn 重設，逐筆列出交使用者判斷（D44 的累計）。在 ［start, release＋3 s］ 之內的 D44 型 backlog 重設，會被當成注入的結果（低機率；xhigh 第 5 節第 5 點）。
+- 主機：閒置閘門、每輪前後的 sleeper 與 CPU。
+
+### 11. 開發跑次（只記錄；不計入判定）
+
+10 次（每棵判定樹 3 格各 1 次；B2 樹 clean＋3 格），2026-10-11 18:52～18:56，主機沒有閒置閘門。腳本 `prep/dev.sh`，輸出 `prep/dev/<樹>/`，逐事件的摘要 `prep/dev-summary.txt`（`prep/summarize_dev.py`）。
+
+| 樹 | 格 | 注入（延遲包、佇列最大、送出延遲 p99、速率拒絕、放出） | late 修正（增量，兩位合計） | 單次／串接 | 合格事件 | 結果 |
+|---|---|---|---|---|---|---|
+| flow | 45／100 | 22、10、2.69 ms、0、138 ms | 2 | 單次 2 | 2（W_post 2.68／2.82，lead_after 68.00／67.95，model_diff +0.07／+0.18） | 兩位 backlog 重設（612 ms） |
+| flow | 80／150 | 34、15、2.06、0、227 | 4 | 串接 2 | 0（串接） | 兩位重設（576 ms），lead_after_max 101.5 |
+| flow | 60／300 | 48、12、2.65、0、361 | 4 | 串接 2 | 0（串接、放出在 slew 後） | 兩位重設（715 ms） |
+| flow+09a | 45／100 | 23、10、2.36、0、145 | 2 | 單次 2 | 2（W_post 0.11／0.08，lead_after 70.71／70.70，model_diff +0.21／+0.18） | 兩位重設（608 ms），q30 105 |
+| flow+09a | 60／150 | 31、11、2.03、0、205 | 3 | 單次 1、串接 1 | 1（W_post 0.09，lead_after 70.68，+0.13） | 兩位重設（560、660 ms） |
+| flow+09a | 80／300 | 55、14、2.60、0、371 | 6 | 串接 2（各 3 次） | 0 | 兩位重設（632 ms），size 合計 −110 ms |
+| B2 | clean-60 | — | 0 | — | — | 重設 0、Cooldown 0 |
+| B2 | 45／100 | 24、10、2.79、0、146 | 2 | 單次 2 | 2（只記錄） | 撤回 +29.9／+29.8（t_c＋150 ms），q30 69，不重設 |
+| B2 | 80／150 | 36、15、1.81、0、230 | 4 | 串接 2 | 0 | 撤回 +18.3 後又 late 修正，兩位重設（646 ms） |
+| B2 | 60／300 | 53、11、2.76、0、357 | 2 | 單次 2 | 0（放出在 slew 後） | 撤回的幀在 t_c＋150 ms，但找不到正向步；放出後兩位重設（711 ms），lead_after_max 97.4 |
+
+- **注入在必要的格點做得到**：10／10 次 `run_client_delay.py` 的 `completed`，佇列最大 10～15（<192）、送出延遲 p99 1.8～2.8 ms（≤10）、Gateway 速率拒絕 0。9 格的參數都通過事前檢查（第 6 節），沒有做不到的格。
+- **凍結偵測器能產生 late 修正的 P 事件**：每個注入跑次都有，計數器增量 2～6（兩位合計）。Jm1～Jm3 需要的量（W_post、lead_before、lead_after、lead_pred、model_diff、q30_max、backlog 重設、撤回）在合格事件上全部算得出來。
+- 全部 10 次：`ingress_evidence.py` passed、`run_case` passed、權威 Cooldown 0、D58 的拿不到內容的丟棄 0、D44 旗標 0。
+- 合格事件的 model_diff：+0.07～+0.21 ms（5 個事件），在 1.0 ms 之內，正偏差和 D48 第②步（+0.04～+0.65）同向。
+- 讀法上的注意（只記錄）：**flow 在 45／100 也重設了**（W_post 2.7 ms 讓領先 68.0 ms，剛好越過 67.667）。flow 的 W_post 實測全部在 2.48～4.73 ms，集中在帶的上緣附近（第 8 節 Jm3 的可達性、第 8 節讀法的限定 1）。
+- 放出到 slew 結束的餘裕（`release_to_t_post_ms`）：flow 45／100 70 ms、flow+09a 45／100 58 ms、flow+09a 60／150 17 ms（合格事件）；300 ms 的格是負值（放出在 slew 之後）。
+- 開發跑次不計入判定，也不用來調整門檻，只用來確認可達性（Jm2 的最少跑次由 4 提高到 6、核心格改成 3 次，都是依可達性的推論，不是依結果）。
+- 修正輪：開發跑次的判定紀錄以本版 `measure_map.py` 重算（`dev/*/*.judge/record.json`；新增 `t_post`、餘裕與候選事件，其他值不變）。
+
+模擬 session 的測試（`prep/mock_session.py`、`prep/mock_tamper.py`、`prep/scratch/ingress_stop_check.py`；輸出 `prep/mock/`，結果 `prep/mock/results.txt`）。模擬 session 用宣告的 63 項排程與 `plan.json`（declared、driver／judge 的 sha），每一項套用同一棵樹的開發跑次紀錄（只測判定的邏輯與數量，不是量測）：
+
+| 測試 | 預期 | 結果 |
+|---|---|---|
+| full（宣告的 63 項） | plan 核對成立、session 完整、Jm1 成立、Jm2 成立、Jm3「越線側一致（不越線側無法判定）」、`passed` true | 符合 |
+| twoside（flow 加 1 個帶下的不重設事件） | Jm3「一致」、`passed` true | 符合 |
+| incomplete（最後 1 項沒跑、中斷） | session false、`passed` false | 符合 |
+| diff（flow+09a 的一個 model_diff 改成 1.2） | Jm1 不成立、`passed` false | 符合 |
+| jm2（flow+09a 的一個越線事件改成不重設） | Jm2 不成立；`passed` 仍 true（Jm2 不是通過條件） | 符合 |
+| jm3（flow 的一個越線事件改成不重設） | Jm3 推翻、`passed` false | 符合 |
+| stop（clean 前置的 Cooldown 停止） | session false、`passed` false | 符合 |
+| stopflag（紀錄上有停止旗標，summary 宣稱完整） | `passed` false | 符合 |
+| **noflow**（flow 沒有任何合格事件；xhigh H1） | Jm1 無法判定、`passed` false | 符合 |
+| **plantamper**（schedule 只剩 45／100、declared 改掉；xhigh M3） | plan 核對不成立、`passed` false | 符合 |
+| driversha（plan 的 driver sha 不符） | plan 核對不成立、`passed` false | 符合 |
+| `evaluate`：clean 跑次加 1 筆 rejection＝3 | cooldown 停止 | 符合（`prep/scratch/neg-cooldown.judge`） |
+| `evaluate`：ingress 換成 stub（failed／undetermined／passed × flow／B2） | 只有「flow、failed」停止 | 符合（`prep/mock/ingress-stop-check.txt`） |
+
+driver 的測試：`--list-only`（63 項，每棵樹 21 項，各輪 3／27／27／6，起頭次數 flow 7、flow+09a 6、B2 7）；`--dry-run`（preflight 問題 0，exit 0，`prep/dryrun.txt`；主 checkout 已到 `ad2c1c4`，相對 `6fb18f2` 只改 `docs/`）；正式執行缺 `--main-head`／`--judge-sha`／`--driver-sha`／`--idle-gate` 時拒絕、什麼都不寫；值錯誤時拒絕；閒置閘門期間的 Ctrl-C（1 秒後送出 → 1.5 秒內回傳 false）。`spawn()` 的逾時與殘留子程序的測試在第 1 版做過，本版沒有改 `spawn()`。
+
+### 12. 停止條件（立即停下，保留全部證據，不重跑，交使用者決定）
+
+- 注入無效（`injection_invalid`：第 6 節任一項）。
+- 狀態改變（「digest 改變」）：主 checkout 的 HEAD 或 `git status --porcelain`、三棵 worktree 的 HEAD 或狀態、任何執行檔、arena、凍結清單的任何檔、`measure_map.py`、`run_map.py`、`sleeper.py` 與開頭不同。
+- clean 前置跑次出現權威 Cooldown 拒絕（任何一棵樹）。
+- runner 錯誤（沒有 case 目錄、缺 `gateway.log`／`match.log`／`match-commands.jsonl`／`clients-commands.jsonl`／`action-frames.jsonl`、`result.json` 沒有 `artifacts`）、逾時、量測的例外（分析錯誤）。
+- sleeper 失敗、閒置閘門 30 分鐘不成立、SIGINT／SIGTERM（跑完目前的項目後；閒置閘門期間也會停）。
+- **修好的兩棵樹（flow、flow+09a）上 `ingress_evidence.py` 的 status＝failed**（建議，待使用者確認；第 14 節第 4 點）。`undetermined` 只記錄。B2 樹只記錄。
+
+注入跑次的 Cooldown、D44 的旗標、沒有合格的帶外候選事件都只記錄（第 14 節的決定點 3、5）。clean 前置的 Cooldown 在**任何一棵樹**（包括只記錄的 B2 樹）都會停下整個 session，這是待確認的設計選擇（第 14 節第 7 點）。
+
+### 13. 和大綱不同的地方
+
+1. **起點**：大綱寫「固定 seed 偏移」；本草稿用固定的 12.0 s（第 5 節）。不用 08c L2 的 7.5 s（玩家 2 的死亡與 respawn）。
+2. **前置跑次**：大綱只在停止條件寫「clean 前置跑次」；本草稿定為每棵樹 1 次 clean-60，在第 1 輪之前。
+3. **Jm1 的母體**：只含「注入在 slew 結束前放出」的事件（第 7 節），長視窗的格在結構上不參與；Jm1 合併 flow 與 flow+09a，另要求每棵樹各自達到最少數。
+4. **Jm2、Jm3 的成立條件**：大綱只寫規則；本草稿加了違反的定義、帶內事件不檢定、最少跑次／事件，Jm3 分兩側。
+8. **次數**：大綱是每格每樹 2 次；本草稿把核心單次格 45／100、60／100 提高到 3 次（建議，待使用者確認）。
+9. **plan 核對**：判定腳本核對 session 的宣告值、排程與兩個腳本的 sha（第 3 節）。
+5. **「digest 改變」**：解讀成狀態與雜湊的改變（第 12 節）。本批不重跑權威 digest（第 2 節的理由）。
+6. **量測的轉接**：大綱沒提；凍結的 `measure.py` 需要 `delayed_chunks`，以行程內的包裝補上（第 3 節）。這是量測路徑上唯一的新程式，xhigh 檢查請特別看。
+7. 三棵樹各用自己的 Match 與 Gateway（同 08c L2；D48 第③步是共用 base 的）。
+
+### 14. 需要使用者決定的地方（附建議；本版依 xhigh 第 5 節改了預設，標「建議，待使用者確認」）
+
+1. **起點 12.0 s**（建議，待使用者確認）：在允許的範圍內，它是唯一沒有第③步 Cooldown 機制的起點（第 5 節）。代價是 flow 的 W_post 集中在帶的上緣附近，所以讀法禁止拿 flow 的比例當 09a 的效果，以第③步 base 的 2／10 為基準頻率（第 8 節限定 1）。替代案：flow 與 flow+09a 交錯用 11.0 s 讓 W_post 分散（注入跑次的 Cooldown 本來就只記錄，不影響移動的量測），代價是 Cooldown 的機制會出現。
+2. **門檻**（建議，待使用者確認）：Jm1 合計 12 個事件／6 個跑次、每棵判定樹 6 個／3 個；Jm2 至少 6 個跑次；Jm3 至少 8 個帶外事件、兩側都有才「一致」；Jm3 無法判定或只有一側時仍可 `passed`（只要求沒被推翻；理由同 D48 第②步，而且 Jm1 已要求 flow 自己達到最少數）。Jm2 很可能落在門檻邊上（約 6～8 個合格跑次），Jm3 很可能無法判定或只有一側。
+3. **注入跑次的 Cooldown**：只記錄（建議；和 08c L2 一致；12.0 s 起點下結構上幾乎不會發生，萬一出現，照第③步的格式標明那一發是否被延遲）。
+4. **`ingress_evidence.py` 的 `failed`**（建議，待使用者確認）：在修好的兩棵樹上**停止**；`undetermined` 只記錄；B2 樹只記錄。理由：D61 的前例在修好的樹上停止，本批的前提是「修好資訊流」，而上行短延遲是 08c L2 沒驗證過的刺激。替代案：只把那個跑次排除在 Jm 的母體之外，不停止。
+5. **D44 的旗標**：只記錄、逐筆交使用者判斷（建議；D44 的累計）。
+6. **次數**（建議，待使用者確認）：核心格 45／100、60／100 每格每樹 3 次，其他 2 次；合計 63 項、約 27 分。替代案：全部 2 次（57 項、約 25 分），但 Jm2 幾乎一定無法判定。
+7. **B2 樹的 clean 前置出現 Cooldown 也停下整個 session**（待確認的設計選擇）：B2 只記錄，但 clean 出現 Cooldown 在閒置主機上是新現象（08c L2 修好的樹是 0），先停下交你判斷。替代案：B2 的 clean Cooldown 只記錄。
+
+### 15. 證據目錄、腳本與執行步驟
+
+- 準備：`prep/`＝`build/target/_build/test/logs/pvp-v7-09r-map-prep-20261011/`。
+  - 樹：`prep/tree/`（差分、建置腳本與 log、`artifacts.sha256`、`gateway-vcs.txt`）。
+  - 腳本：`run_map.py`、`measure_map.py`、`sleeper.py`、`frozen-map.sha256`；開發用 `dev.sh`、`summarize_dev.py`、`mock_session.py`、`mock_tamper.py`、`scratch/ingress_stop_check.py`。雜湊 `prep-files.sha256`，指令 `commands.txt`。
+- 正式 session（核准後；不在本準備中執行）：
+
+```
+E=build/target/_build/test/logs/pvp-v7-09r-map-<YYYYMMDD>
+P=build/target/_build/test/logs/pvp-v7-09r-map-prep-20261011
+shasum -a 256 -c $P/frozen-map.sha256                       # 47/47 OK
+python3 -I -B $P/run_map.py --dry-run --main-head <H> --judge-sha <..> --driver-sha <..>   # exit 0, preflight 問題 0
+caffeinate -dims python3 -I -B $P/run_map.py --output $E/session --idle-gate --main-head <H> \
+  --judge-sha <measure_map.py の sha256> --driver-sha <run_map.py の sha256（＝ measure_map.DRIVER_SHA）>
+python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
+```
+
+- 核准時把本宣告、`run_map.py`、`measure_map.py`、`sleeper.py`、`frozen-map.sha256` 複製到 `$E/`，雜湊寫進 `$E/declaration.sha256`。
+
+### 16. 本版對 xhigh 檢查的修正（對照）
+
+| xhigh 的項目 | 修正 |
+|---|---|
+| 必修 1（H1：flow 沒有合格事件也能 `passed`） | Jm1 加每棵判定樹的最少數（6 個事件、3 個跑次；`measure_map.py` `JM1_MIN_*_PER_TREE`）；負向 mock `noflow` 確認 `passed` false |
+| 必修 2（H2：Jm3 只靠一側就「一致」） | Jm3 輸出 `crossing_side`、`non_crossing_side`；兩側都有帶外事件才叫「一致」，只有一側時叫「越線側一致（不越線側無法判定）」或反過來；正向 mock `twoside` |
+| 必修 3（H3：Jm3 的可達性借了別的分布） | 第 8 節門檻表以開發跑次的 W_post（2.48～4.73 ms）重寫，撤回「0～16.7 ms 均勻」；寫明很可能無法判定或只有一側。第 9 節的預測同步改寫 |
+| 必修 4（M1：Jm2 的可達性與統計說法） | 可達性改為約 6～8 個合格跑次（附 t_post 與放出的實測時刻）；「排除 >39%」限定為本起點、本主機，並寫明跑次在相位上不完全獨立；讀法的「每次都走到」改成「本條件下沒有例外」 |
+| 必修 5（M2：讀法） | 第 8 節讀法加四點限定：flow 的基準頻率參考第③步 base 2／10；串接的格不能區分 09a；格點只是條件暴露；Jm1 只檢驗放出之後的穩態 |
+| 必修 6（M3：判定腳本不核對 plan） | `--session` 核對 declared、重算的 schedule、driver sha（`DRIVER_SHA`）、judge sha；排程與宣告值移到 `measure_map.py`，`run_map.py` 直接使用；負向 mock `plantamper`、`driversha` |
+| 必修 7（引用與事實） | Jm1 容許改引 `d48-step2/declaration.md:190`（試跑 0.312），並寫明實測 0.645、餘裕 1.55 倍；第③步的 J1、V4X 標成 stopped session 的記錄值；第 7 節 80／150 的原因改為串接；註明放出到 slew 結束的餘裕和第②步不同，事件記錄 `t_post` 與 `release_to_t_post_ms` |
+| 第 14 節的新預設 | ingress `failed` 在修好的兩棵樹停止、`undetermined` 只記錄；核心格 3 次（63 項）；起點 12.0 s 保留並寫進 Cooldown 機制；B2 的 clean Cooldown 停止列為待確認的設計選擇。全部標「建議，待使用者確認」 |
+| M4 | 沒有合格、但在帶外的候選事件列成使用者判斷旗標（`not_eligible_outside_band_flags`）；EVENT_KEYS 加 `t_post_after_start_ms`、`release_to_t_post_ms` |
+| `run_map.py` 的低項 | 結尾的 host sample 失敗照樣寫 `summary.json`；逾時 SIGTERM 的描述改正（`run_client_delay.py` 不清理，靠 group SIGKILL）；閒置閘門期間回應 Ctrl-C；項目開始前失敗記成 `not_run`，不再記成 runner_error |
+| 引用的行號 | `Movement.hpp`、`LocalPlayerPrediction.cpp` 的行號標明是哪一棵樹（flow 與主 checkout 相同；flow+09a 的 `Movement.hpp` 位移 13 行；B2 的 `LocalPlayerPrediction.cpp` 位移 2 行）；`09b-phase-tracking.md` 的行號以 `ad2c1c4` 為準 |
+
 ## 缺陷 A：settling 期間收到的舊樣本留在下一個視窗
 
 - **機制**：`Correct()` 只在修正開始時清掉樣本（`LocalPlayerPrediction.cpp:97-101`）。settling 期間 `:117-130` 照常收樣本，用的是舊的 `settledAfter_`；settle 時（`:323-328`）只前移 `settledAfter_`，不清視窗。所以修正後滿 240 個樣本時，視窗裡還有 m 個「修正前相位」的樣本。`Percentile` 取 `sorted[216]`（`:24-30`）。
