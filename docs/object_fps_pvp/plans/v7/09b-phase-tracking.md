@@ -992,6 +992,45 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 | `run_map.py` 的低項 | 結尾的 host sample 失敗照樣寫 `summary.json`；逾時 SIGTERM 的描述改正（`run_client_delay.py` 不清理，靠 group SIGKILL）；閒置閘門期間回應 Ctrl-C；項目開始前失敗記成 `not_run`，不再記成 runner_error |
 | 引用的行號 | `Movement.hpp`、`LocalPlayerPrediction.cpp` 的行號標明是哪一棵樹（flow 與主 checkout 相同；flow+09a 的 `Movement.hpp` 位移 13 行；B2 的 `LocalPlayerPrediction.cpp` 位移 2 行）；`09b-phase-tracking.md` 的行號以 `ad2c1c4` 為準 |
 
+## 09R-map 的結果（2026-10-11 19:27～19:51，commit H `6a0e4d5`）
+
+證據：`build/target/_build/test/logs/pvp-v7-09r-map-20261011/`（`declaration.md` 與腳本的副本、`session/`、`session/judgement.json`、`summary-main.txt`、事後計算 `posthoc-jm1-deltaW.txt`）。63／63 項完成，沒有停止；凍結清單 47 檔開頭與結尾都吻合；ingress 63 次 passed；Cooldown、D44 旗標、D58 的丟棄都是 0。
+
+**判定（依宣告；`passed`＝false）**
+
+| 判定 | 結果 |
+|---|---|
+| plan 核對、session | 成立 |
+| **Jm1** | **不成立**：43 個合格事件（flow 22／12 跑次、flow+09a 21／12 跑次），中位差 0.118 ms，只有 1 個事件超出 1.0 ms：`x1-60-100-r3-flow` 玩家 1，差 7.307 ms（flow+09a 最大 0.411） |
+| Jm2（答案） | 成立：flow+09a 的單次 tracking 修正 12／12 個跑次越線並重設（修正後領先 70.15～70.9 ms，W_post ≤0.22 ms），沒有例外 |
+| Jm3 | 一致（兩側）：不越線側 18 個事件都沒重設，越線側 3 個都重設；帶內 1 個（66.425 ms，沒重設） |
+
+**Jm1 不成立的那個事件（事後的分析，只記錄；不改宣告的判定）**：
+- 那位玩家在修正**之前**就已經有 7.444 ms 的送出等待（`W_pre_1s`），其他 42 個事件都在 0.07～0.22 ms。
+- 宣告的模型是「修正後領先＝修正前＋33.3−W_post」，隱含 W_pre≈0（xhigh 檢查也這樣假設）。
+- 改用等待的**變化量**（W_post−W_pre）時，43 個事件的差全部 ≤0.332 ms，這個事件是 −0.154 ms。
+- 推論：模型本身在上行路徑成立，失敗來自「W_pre≈0」這個沒有寫進判定的前提；這個事件的玩家在注入之前就處於送出被釘住的狀態（09a 要修的現象，出現在 flow 樹）。
+
+**格點（只記錄；單位＝每位玩家的修正單位：總數／串接／backlog 重設）**
+
+| 格 | flow | flow+09a | flow+09a+B2 |
+|---|---|---|---|
+| 45 ms／100 ms | 6／0／2 | 6／0／6 | 6／0／0 |
+| 60 ms／100 ms | 6／0／1 | 6／0／6 | 6／0／0 |
+| 80 ms／100 ms | 4／0／0 | 4／0／4 | 4／0／0 |
+| 45 ms／150 ms | 4／2／2 | 4／1／4 | 4／0／2 |
+| 60 ms／150 ms | 4／2／2 | 4／2／4 | 4／0／3 |
+| 80 ms／150 ms | 4／2／2 | 4／4／4 | 4／0／2 |
+| 45～80 ms／300 ms | 12／12／12 | 12／8／12 | 12／4／12 |
+
+- B2 在 100 ms 的格撤回約 +29.5～30.5 ms，殘餘約 −2.9～−3.8 ms，沒有來回修正；150 ms 以上的格沒有撤回紀錄。
+- 讀法（宣告第 8 節的限定照用）：起點固定 12.0 s，flow 的重設比例只代表這個條件；格點是條件暴露，不是實際頻率。
+
+**意涵（推論，給 09b-plan）**：
+1. 09a 單獨上線時，短延遲造成的每一次單次修正都走到 backlog 重設（Jm2；和 D48 第③步的條件力學一致）。所以 09a 不能單獨先上，要和 B 一起規劃。
+2. B2 原型在 100 ms 的短延遲上把重設從 16／16 降到 0／16；150 ms 時部分有效（7／12）；300 ms 的持續延遲三棵樹都重設。
+3. 串接（缺陷 B）在 150 ms 以上的格普遍出現，B2 原型讓串接在 150 ms 的格消失。
+
 ## 缺陷 A：settling 期間收到的舊樣本留在下一個視窗
 
 - **機制**：`Correct()` 只在修正開始時清掉樣本（`LocalPlayerPrediction.cpp:97-101`）。settling 期間 `:117-130` 照常收樣本，用的是舊的 `settledAfter_`；settle 時（`:323-328`）只前移 `settledAfter_`，不清視窗。所以修正後滿 240 個樣本時，視窗裡還有 m 個「修正前相位」的樣本。`Percentile` 取 `sorted[216]`（`:24-30`）。
