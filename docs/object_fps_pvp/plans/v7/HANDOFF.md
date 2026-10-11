@@ -32,7 +32,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；(3) F2a 測試斷言的改寫、(4) 單位 `acks`、(5) 單位 `samples` 與 `--ingress-trace` 的用法錯誤，未回覆、維持暫定；其餘已決定（D56～D58）。（11）（12）已決定（D59）。
-- **進行中**：L2 準備 1（L2P）待使用者確認後開始，分三批：L2P-analyzer（射擊的兩個 fwd 鍵與 link 內 shot 守恆的 log 判定、`ingress_evidence.py` 依 D58／D59 修改並準備凍結；high）、L2P-injector（純延遲與斜坡，不改凍結檔；high），兩者並行；之後 L2P-trees（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。估計 3～3.5 小時。
+- **進行中**：L2 準備 1（L2P，2026-10-11 13:2x 開始，檔位照建議）分三批：L2P-analyzer（射擊的兩個 fwd 鍵與 link 內 shot 守恆的 log 判定、`ingress_evidence.py` 依 D58／D59 修改並準備凍結；high）、L2P-injector（純延遲與斜坡，不改凍結檔；high），兩者並行；之後 L2P-trees（三棵樹各建 Client／Gateway／Match，開發跑次；medium）。估計 3～3.5 小時。
 - **下一步**：L2P-analyzer、L2P-injector、L2P-trees 完成後停下回報；之後 L2P-declare（宣告草稿、xhigh 對抗式檢查）→ 送核准。
 - **最後更新**：2026-10-11 13:xx，依據本機 commit。
 
