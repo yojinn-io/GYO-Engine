@@ -4,6 +4,28 @@
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
 
+## 代號對照（2026-10-11 起）
+
+本文件主要給 agent 接手用，大量使用代號；人看的說明在 README 與 dev_log。查驗時用下表對照。
+
+| 代號 | 意思 | 出處 |
+|---|---|---|
+| D1～D57（決策紀錄的列） | 使用者的決定 | 本文件「決策紀錄」 |
+| 第 NN 批、08b、08c、09a、09b | 工作批次；各自一份批次文件 | 本目錄的 `NN-*.md` |
+| F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3 | 第 08c 批的實作分批：鍵名與格式、Gateway 轉送與拒絕線、Gateway 收包計數、Gateway 統計行與 final 行、Match 依原因數拒絕、晚到帳本、Match 細節紀錄檔、驗收工具與協議文件 | `08c-drop-report.md`「分批與時間」 |
+| L1／L2／L3 | 驗收層級：本機測試與突變／實機量測（要宣告核准）／跨機器 | 各批文件 |
+| IG、I0、I1、I2、I3、T3 | 08c 的守恆式：Gateway 每個資料包一個結局、link 內命令的去向、Gateway 寫出數＝Match 收到數、Match 每個命令一類、副本的條件式上限、速率限制的總和 | `08c-drop-report.md`「不變量與守恆」 |
+| S1、S2（樣本守恆） | slack 樣本的兩條守恆：產生＝合併＋丟棄＋發布；發布＝覆寫＋取走＋未取走 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` |
+| S1、S2（死信評估） | 和上一列同名、不同物：評估找到的出口：Leave／close 時 link 裡沒寫出的射擊與 ACK；下行的 D4、D7、D8、D9 | `pvp-v7-dlq-eval-20261011/` |
+| J1～J7、J5a、J5b | 08c 的 L2 判定 | `08c-drop-report.md`「L2 重新量測」 |
+| P1～P11 | 08c 的可被推翻的預測 | `08c-drop-report.md`「預期的行為變化」 |
+| D1～D10（下行丟棄） | 和決策編號同名、不同物：Gateway 下行的丟棄點（D1 舊 Tick 的 snapshot、D2 倒退的 snapshot、D4 給已移除玩家的 snapshot、D5 UDP 寫出錯誤、D6 control 佇列滿、D7 非 active 玩家的結果、D8 結果編碼失敗、D9 玩家不存在時的 JoinResult／Evicted） | 第 1 批事實核對 `pvp-v7-infoflow-plan-20261010/facts-*/` |
+| A3、A5 | 動作的語意丟棄：session 帳本驗證失敗、link 拒收 | `08c-drop-report.md` ③ |
+| ★ | 舊序號的 Input 照樣轉送、但不刷新 liveness | `08c-drop-report.md` ① |
+| 拒絕線 | Match 可能整則拒絕的窗口，不合併、單獨轉送 | `08c-drop-report.md` ① |
+| 「等你決定」(1)～(10) | 現況裡待使用者回覆的項目 | 本文件「現況」 |
+| pvN／vN | 網路協議版本／遊戲版本 | v6 交接 D20 |
+
 ## 現況（每次停下來時更新）
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
