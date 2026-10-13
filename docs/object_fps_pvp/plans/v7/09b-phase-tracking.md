@@ -1410,6 +1410,384 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 12. **前置核對失敗時的處理**（3-5 節）：建議照本版的三類流程；有行為變更時，借自原型的門檻全部降為提議值並重新送核准。
 13. **檔位**：照 3-1 節（D47⑪、09b 文件決定 9 的形式）：主力 high；09a 的 token 與清除點、09b 的換算交界、審查與兩次 D45 檢查用 xhigh；文件與執行 medium。xhigh 高於主對話檔位的部分需要你同意。
 
+## 09ab-L2 的事前宣告（2026-10-14 核准，D70：依 D69 照建議；依 D45 做了工具與宣告各 1 次 xhigh 檢查，修正已併入）
+
+草稿原檔 `build/target/_build/test/logs/pvp-v7-09ab-l2-prep-20261014/declaration-draft.md`（sha256 `eb8282f5f2489d14871d8c439fb34e5386d77f1d5c32107486e7e85a6d799b00`）。字面值：JUDGE_SHA `ac5cdb5dbc6a457af80fc2078d75eb14e175a93afe0e163f0a3e404cc1881ded`、DRIVER_SHA `4d2ec0813f8368740ec5ea76924367d888797f8c2b0ed28d4476e5134a3ba7ef`、TREES_SHA `e3b0a9f0ec2fc7c8a5fff5eb16020f751123fa5f0421544d4e4e60eb89d86560`、凍結清單 `frozen-ab.sha256` `e695e0e6f85bf4a31dee42f03fca7cfc8c236607b7d86e0c6aa00828c53be668`（49 檔）；H＝本宣告的 commit。第 16 節 9 點全部照建議核准（第 9 點依 D45 檢查寫死條件）。下文的 `P/` 指那個目錄。
+
+09ab-L2：09a（停頓後送輸入不再被釘住）＋09b（B2：late 修正後換算樣本、重新擷取一次）的合併實機量測。修之前（`eabb107`，08c 的 flow）對修之後（09a＋09b 的頭 `b205615`）兩棵樹，每棵 66 次、共 132 次。
+
+- 狀態：**草稿・修正輪**（2026-10-14，09ab-L2P，1 位 high）。
+  - 第 1 版：04:04～04:28；保留在 scratchpad 的 `declaration-draft.v1.md`（sha256 `74831f39…`）。
+  - D45 的門檻來源對抗式檢查：1 位 xhigh，`P/xhigh-check-declaration.md`（腳本 `P/xhigh-check-declaration-scripts/`）。
+  - 本版依該檢查第 6 節「送正式量測前必須修正」H1～H3、M1～M3 與「只記錄」L1～L6 修正，只改宣告文字；凍結工具、`trees-ab.json` 都沒動。對照表在第 17 節末。
+  - 下一步：主對話整合 → 依 D69 第 16 節照建議核准。
+- 下文 `L/`＝`build/target/_build/test/logs/`，`P/`＝`L/pvp-v7-09ab-l2-prep-20261014/`，`plan`＝`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md`「09b-plan」。判定章節的全文（定義、程式位置）是 `P/judge-spec.md`（`bb387a84…`）；本宣告引用它，不重複全部的程式位置。
+- 依據的頭：
+  - 主 checkout `claude/pvp-v7-p2`，寫宣告時是 `82458399f9ada4283281538a28cde164398370d8`（乾淨）。修正輪時是 `26883b3`（主對話的 commit，只改 `docs/`）。
+  - 工具的 commit（`main_base`）＝`b205615cf6b77dfd6d2024d1de9654aecc3025b3`；`b205615..8245839` 只改 `docs/`（已核對）。
+  - 宣告提交後的 commit 記為 **H**。`main_base..H` 只能改 `docs/`；主 checkout 從 H 到 session 結束不得改動（driver 要求 `--main-head H`，每個跑次之前核對）。
+- 依據的決定：D44、D45、D48（第②③步的做法與 `measure.py`、`measure3.py`）、D58、D60、D61（08c L2 的格式與 D44 事後規則）、D63④（late 用偵測器增量）、D64（09R-map 的格點與 plan 核對）、D65（ΔW 模型）、D66（09b-plan 核准）、D68（`Correct()` 只加註解）、D69（照建議）。
+- 大綱：plan 3-4、3-5、4-1。先例：08c「L2 的事前宣告」（`08c-drop-report.md`）、09R-map 的事前宣告（`09b-phase-tracking.md`）。
+- 數字沒有標「實測」的，是程式推導或推論。〔提議〕＝沒有直接來源、要交 D45 與使用者核准的值。
+
+#### 1. 目的
+
+確認 09a＋09b 的頭在實機上做到計畫的兩件事，而且沒有讓其他地方退步：
+
+1. **09a**：Client 送輸入不再被釘住（Jab3）。
+2. **09b（B2）**：100 ms 的短延遲之後完整撤回多推的 2 Tick、不重設、不來回修正（Jab4）；100／150 ms 不再串接（Jab5）。
+3. **沒有退步**：資訊流守恆（Jab2）、閒置主機（Jab6）、抖動網路（Jab7）、08c 的故障案例與 150 ms 格（Jab8）。
+
+通過的意思是「在這台主機、這些刺激與起點下，沒有例外」，不是一般網路下的頻率。
+
+不在範圍：權威、wire、FireGate 常數、late 修正上限、target、lead、backlog 門檻都不改。150 ms 只部分有效、300 ms 不處理，是已知限制（plan 1-6），只記錄。
+
+#### 2. 兩棵樹
+
+| 樹 | worktree | commit | 內容 | 角色 |
+|---|---|---|---|---|
+| before | `/Users/karasu/Code/Source/GYO-Engine-l2-flow` | `eabb107e610a0423aa7c6903e37a9e3be424524b` | 08c（修好資訊流） | 判定（比較基準；每跑次的停止也適用，D61） |
+| after | `/Users/karasu/Code/Source/GYO-Engine-l2-ab` | `b205615cf6b77dfd6d2024d1de9654aecc3025b3` | 09a＋09b 的頭（PR #73） | 判定 |
+
+- before 沿用 08c L2 的 worktree 與建置，不修改；執行檔 sha 寫死在 `judge_ab.BEFORE`（＝`L/pvp-v7-08c-impl-20261011/l2p-trees/artifacts.sha256` 的 flow 列）。
+- after 是本批新建（`P/tree/`）：
+  - `git worktree add --detach ../GYO-Engine-l2-ab b205615`，worktree 乾淨。
+  - 乾淨建置：`P/tree/build-trees.sh ab`（09R-map `tree/build-trees.sh` 的複本，只改輸出目錄與註解），Match、Gateway、action／timing／network／worker probe。2026-10-14 04:05:09～04:19:55（約 15 分），exit 0，編譯錯誤 0（`P/tree/build-ab.log`；configure log `build-ab-configure.log`）。和 09R-map 一樣，host-tools 的 dxc 在建置中 clone（先例的 log 也有）。
+  - Gateway：`vcs.revision=b205615cf6b77dfd6d2024d1de9654aecc3025b3`、`vcs.modified=false`（go1.27.1）（`P/tree/gateway-vcs.txt`）。
+  - 建置後 worktree 仍乾淨（`git status --porcelain` 0 行），HEAD＝`b205615`。CTest 本批沒有跑（09ab-L1 已在主 checkout 的 `b205615` 同內容上通過）。
+- `eabb107..b205615` 在 `docs/`、`tests/` 以外的差分只有 Client 端（`ClientConnection.cpp`＝09a、`LocalPlayerPrediction.{hpp,cpp}`、`Movement.hpp`＝09b）與驗收的 `worker_main.cpp`、`run_client_delay.py`（＋測試）。Match 與 Gateway 的程式相同（09ab-rev 2-d：Match 執行檔沒有 `LocalPlayerPrediction::`、`ClientConnection` 的符號）；執行檔雜湊不同只來自建置路徑與 Gateway 的 `vcs.revision`。`run_client_delay.py` 一律用主 checkout 的（它在凍結清單裡）。
+- 執行檔 sha256（完整值寫在 `P/trees-ab.json`；driver 每個跑次之前核對；after 的完整清單 `P/tree/artifacts.sha256`）：
+
+| 樹 | Match | Gateway | action probe | timing probe |
+|---|---|---|---|---|
+| before | `8d154a3a117ddf76746c8d8feed4beecc8a7d375f61ea8c5c16f1c3cfa4e98c0` | `4f0caaca8eae0c533e6a0f8d00cb5475a287d81bf25b76fd728b5c9d377ffb8f` | `4949302f1283b71332d31f54165a1ecec6d9f19d479a5ca6557c7a862aaf470c` | `ea5c569eacc8cc27f87e21e0dffec3a64a68b10df8ca6e876276a475ea9ece21` |
+| after | `02b1b09f6f73d2402fb1fc1534c47671261c64593a1a0617f5f106e199d2ae3e` | `bbe29889ed3fa5f9f6616a0879edabdbd99778d08feef741e850e9b870bb74d6` | `fe3fd799aff8a25cd5162a9628d19657d6ba198dc0e0b9016bb1f795f7dd3e3d` | `25eac43a56708bbc00fd0a14f3f5415c886e02003c79c7caad71d9464bbd0d7d` |
+
+（after 的 network probe `8e66db4e…`、worker probe `c5068866…` 也建了，L2 不用，只列在 `P/tree/artifacts.sha256`。）
+
+- **`P/trees-ab.json`**（sha256＝TREES_SHA，第 3 節）：`after.worktree`＝`/Users/karasu/Code/Source/GYO-Engine-l2-ab`、`after.head`＝`b205615cf6b77dfd6d2024d1de9654aecc3025b3`、上表 after 的 4 個 sha、`main_base`＝`b205615cf6b77dfd6d2024d1de9654aecc3025b3`。09ab-L2T 的草稿（after head `bb9ffa1`、執行檔 null、worktree `…-l2-after`）已被覆寫。
+
+- arena：主 checkout 的 `assets/object_fps_pvp/pvp_arena.json`，`0026013c731a7d7317ce6be4f84f897b91fa1b807c9621d60fb608570f1775a5`。
+- 本批不重跑權威 digest：09ab-L1 已對 `03e99e2` 比過 scale 1、3 各 35 情境 0 差分；B2 與 09a 的差分不碰 Match。
+
+#### 3. 工具與凍結清單（字面值）
+
+| 檔 | sha256 | 用途 |
+|---|---|---|
+| `P/run_ab.py` | `4d2ec0813f8368740ec5ea76924367d888797f8c2b0ed28d4476e5134a3ba7ef` | driver（＝`judge_ab.DRIVER_SHA`）＝**DRIVER_SHA** |
+| `P/judge_ab.py` | `ac5cdb5dbc6a457af80fc2078d75eb14e175a93afe0e163f0a3e404cc1881ded` | 判定＝**JUDGE_SHA** |
+| `P/trees-ab.json` | `e3b0a9f0ec2fc7c8a5fff5eb16020f751123fa5f0421544d4e4e60eb89d86560` | after 樹的宣告值＝**TREES_SHA** |
+| `P/sleeper.py` | `98105dbf71a5818d20bb2c82083f7a3cbbdb9c236b43514537c45845442a9567` | 08c L2 的照抄（`judge_ab.SLEEPER_SHA`） |
+| `P/frozen-ab.sha256` | `e695e0e6f85bf4a31dee42f03fca7cfc8c236607b7d86e0c6aa00828c53be668` | 凍結清單 49 檔（`judge_ab.FROZEN_LIST_SHA`） |
+| `P/frozen/decompose.py` | `aa69db2976af84a4e3a5ba71505689f26c110a55e20f41c997680857d4ffc981` | G2E（`L/pvp-v7-09b-plan-20261010/latency/decompose.py` 的副本） |
+| `P/frozen/send_wait.py` | `d12cee323f631d5aa5dedf65fc258e9f89518aa78561f5dbcf37d94d9ffefaca` | 被釘住（`L/pvp-v7-09r-eval-20261011/scripts/send_wait.py` 的副本） |
+| `P/judge-spec.md` | `bb387a84f671caff29433503885cfe562b3273bf7945d80cb7a1029743461a01` | 判定章節 |
+
+- **凍結清單**（49 檔）＝09R-map 的 47 檔（08c L2 的 44 檔＋D48 偵測器 `445271ce…`、`measure.py` `045714f1…`、`measure3.py` `18ffde15…`）＋上表的兩份副本。2026-10-14 在 `8245839` 上 `shasum -a 256 -c` 49／49 OK。`run_network.py` 和往例相同只受 git 狀態核對保護。
+- 和以前的 L2 相同：所有 runner 與分析器都從主 checkout 執行，兩棵樹用同一份工具；每棵樹用自己的 Match、Gateway 與 probe。
+- **執行時一律用本表的字面值**（`--judge-sha`、`--driver-sha`、`--trees-sha`），不從當下的檔案計算（09ab-L2T xhigh D：從當下檔案算會讓核對變成循環）。
+- 09ab-L2T 的乾跑（凍結前）：09R-map 469 項、08c L2 45 項逐值相同；正向 mock 通過；負向 mock 15 種全部被拒（`P/report-l2t-fix.md`）。
+
+#### 4. 主機
+
+- 照 08c L2 與 09R-map：session 期間不做開發；`caffeinate -dims`；前景沒有其他使用者程式；**暫停 PR #73 的 auto-fix**；背景的其他 agent 與分析先停。
+- **閒置閘門**（`--idle-gate`，正式執行必須帶）：第一個項目之前連續 3 次 5 秒 sleeper，每次最大值 <10 ms；不成立每 30 秒重試，最多 30 分鐘，仍不成立就停下。
+- 每輪（6 輪）前後各記 1 次 5 秒 sleeper 與前 5 名 CPU 程序（`host.jsonl`）。
+- 子程序：每個都跑在自己的 session，終端機的 Ctrl-C 只打到 driver；第一次停止訊號：跑完目前的項目後停下；第二次：0.5 秒內結束目前的項目。逾時（300 秒）先 SIGTERM，15 秒後對整個 process group 送 SIGKILL；項目結束後 group 裡留下的程序一律殺掉並記錄。
+- **TimerBaseline 分層（只記錄）**：每個跑次記 probe 的 `timer_baseline`；`late_p99_ms` ≥6.0 ms 記為 8 ms 狀態（第 05 批的定義，`L/pvp-v7-09b-plan-20261010/latency/aggregate.py:7`），同時記 `interval_p99_ms` ≥22 ms（`L/pvp-v7-cross-20261009/cross.py:44`）與兩者的一致率。分層只用於解讀與並列（clean-30／60、G2E、Jab4 的事件依狀態分欄），**不是判定、門檻或分母**。它是 probe 的代理值，不是 role 自己的晚醒。
+- **整個 session 可能全部落在 8 ms 狀態**（只記錄）：開發跑次有 TimerBaseline 的 8 次全部是 8 ms 狀態，sleeper 7.1～8.0 ms 也低於閒置閘門的 10 ms，所以分層可能只有一側。
+
+#### 5. 案例、次數、順序與時間
+
+每棵樹 66 次、合計 **132 次**（`judge_ab.CASES`；`run_ab.py --list-only`）：
+
+| 案例 | 每樹次數 | runner | probe | 參數／判定上的角色 |
+|---|---|---|---|---|
+| clean-60 | 4 | `run_gameplay.py --case clean-60` | action | Jab6 |
+| clean-30 | 4 | `run_gameplay.py --case clean-30` | action | 只記錄（Jab3(a) 的範圍內） |
+| x1-δ-100（δ＝45、60、80 ms） | 各 3 | `run_client_delay.py --profile x1 --delay-ms δ --window-ms 100 --fault-at 12.0` | action | Jab3(b)、Jab4、Jab5 |
+| x1-δ-150 | 各 3 | 同上，`--window-ms 150` | action | Jab3(b)、Jab5、Jab8（grid-150） |
+| x1-δ-300 | 各 2 | 同上，`--window-ms 300` | action | 只記錄（Pab5；Jab3(a) 的範圍內） |
+| network0 | 4 | `run_gameplay.py --case network0` | action | Jab7、Jab8 |
+| network20 | 6 | `run_gameplay.py --case network20` | action | Jab7、Jab8 |
+| network40 | 6 | `run_gameplay.py --case network40` | action | Jab7、Jab8 |
+| downstream-1000ms | 4 | `backpressure_probe.py --layers downstream --durations-ms 1000` | timing | Jab8 |
+| downstream-respawn-1000ms | 2 | `run_gameplay.py --case downstream-respawn-1000ms` | action | Jab8 |
+| gateway-1000ms | 2 | `backpressure_probe.py --layers gateway --durations-ms 1000` | timing | Jab8 |
+| x1 | 6 | `run_client_delay.py --profile x1 --delay-ms 200 --window-ms 2000 --fault-at 7.5` | action | Jab8 |
+| ramp | 4 | `run_client_delay.py --profile ramp --peak-ms 250 --rise-ms 1500 --fall-ms 500 --fault-at 7.5` | action | Jab8 |
+
+- `run_client_delay.py` 一律帶 `--frozen-list P/frozen-ab.sha256`（自己再核對 49 檔）。
+- 格點的起點 12.0 s 沿用 D64 的理由（被延遲的那一發之後 2.25 s 沒有射擊，D48③ 的 Cooldown 機制在結構上不會發生；12.0～15.4 s 碰不到 respawn）。x1、ramp 照 08c L2 的 7.5 s。
+- **順序**：6 輪，每輪 22 項。第 k 輪依 `CASE_ORDER`（clean-60、clean-30、9 個格、network0／20／40、downstream-1000ms、downstream-respawn-1000ms、gateway-1000ms、x1、ramp）跑「輪次含 k」的案例；每個案例兩棵樹連續跑，起頭的樹依 (rep−1＋案例序號) mod 2 輪替。
+  - 起頭次數：合計 before 33／after 33；偶數次的案例 1:1；3 次的格點每格是 2:1 或 1:2，**100 ms 三格合計 before 先 5、after 先 4，150 ms 三格反過來 4:5**（Jab4 的 9 個 after 跑次裡有 5 個是第二個跑的；只記錄）。
+  - 輪次：clean-60、clean-30、ramp 在第 1、3、4、6 輪；network0 第 1、2、4、5 輪；network20／40、x1 每輪；downstream-1000ms 第 2、3、5、6 輪；downstream-respawn、gateway 第 2、5 輪；100／150 ms 的格交替在 {1,3,5} 或 {2,4,6}；300 ms 的格各 2 輪。
+  - 不隨機化、不補跑。完整清單：`python3 -I -B P/run_ab.py --list-only`（`P/dryrun/list-only.txt`）。
+- **時間**：依開發跑次的實測（`P/dev/progress.jsonl`）：action probe 的跑次每次 19.8～21.8 秒、backpressure 13.4 秒；每次 `judge_ab.evaluate()` 約 1～2 秒，狀態核對約 0.5 秒。
+  - 120 個 action probe 跑次 ×約 22.5 秒＋12 個 backpressure ×約 15.5 秒 ≈ 48 分；每輪前後的 sleeper 12 次 ×約 5.2 秒 ≈ 1 分；閒置閘門 ≥15 秒；結尾的 send_wait、decompose 與 `--session` 判定約 1～3 分。
+  - **合計約 50～55 分**（plan 的「約 60 分」之內）。閒置閘門要等時最多再加 30 分。準備與收尾（步驟 1～4、6、7）約 10 分。
+
+#### 6. 注入的有效性（D60）
+
+- Client→Gateway 的格點、x1、ramp：`run_client_delay.py` 自己的事前檢查（`profile_problems`）與每輪核對（`round_problems`：延遲欄位相符、延遲包 ≥1、開始與結束時收＝送、佇列清空、沒有無法路由的包與 relay 錯誤、佇列 <192、送出延遲 p99 ≤10 ms、Gateway 速率拒絕＝0）。任一不成立記 `injection_invalid`，session 停下。和 09R-map 相同（09b 文件「09R-map 的事前宣告」第 6 節）。
+- backpressure 兩案與 network 三案：照 08c L2。`run_case` 的遊戲判定只記錄（D60）；`passed` 為 False 列成使用者旗標（第 10 節）。
+
+#### 7. 量的定義（摘要；全文 `P/judge-spec.md` 第 1 節）
+
+- **late 修正**：凍結 D48 偵測器的 P 事件，計數器**增量的總和**（D63④；不是 `judge_l2.py` 的最大值）。P 讀產品自己的計數器，只有 `Correct(.., late=true)` 會加（`LocalPlayerPrediction.cpp:114`）；B2 的重新擷取走 `Correct(error, false)`（after 樹 `:167`，`0e1fabb` 是 `:160`），不會被算成 late。
+- **合格事件**：`measure3.py` 的 `eligible_v3`（跑次 clean_v3、放出早於 slew 結束、in_span、qualifies_v3、沒有設限、W_post 與 lead_after 算得出），和 09R-map 相同。
+- **W_post（slew 結束後的口徑）**：該玩家在 [t_post, t_post＋0.25 s) 產生的命令，送出等待的中位數；t_post＝late slew 最後一個命令的產生時刻（`measure.py:29`、`:357`）。slew 期間的平衡等待 3.33 ms 不在視窗裡（09ab-rev §7-2）。
+- **撤回量**：late 修正後 1 秒內、下一次非 respawn 重設之前，`phase_corrections` 增加而 `phase_late_corrections` 不變的那一步的位移（`measure3.py:42`、`:353-367`）；**殘餘量**只記錄。
+- **串接單位**：每位玩家在 span 裡的第一個 tracking P 事件；增量 >1、0.5 s 內同玩家還有 P 事件、或 span 裡有 >1 個事件，就是串接。
+- **被釘住**：`send_wait.py`，每位玩家每秒（≥10 個命令）送出等待的中位數 >2 ms，算 1 個玩家·秒；只涵蓋 action probe 的 runner。
+- **G2E**：`decompose.py`，action-client.json 的 [start_ns, end_ns) 內產生、以 actual 解析的非 seeded 命令，resolved−generated；每位玩家的 P50，取 (跑次, 玩家) 的中位數。
+
+#### 8. 判定（plan 核對、session 完整、Jab1～Jab8 全部成立、而且沒有任何跑次帶停止旗標，才通過）
+
+由凍結的 `judge_ab.py --session DIR --trees-sha TREES_SHA` 機械地給出（`judgement.json`）。任何一條「無法判定」都讓 `passed`＝false，交使用者；不補跑。
+
+| 代號 | 白話 | 條件（`judge_ab.py` 的位置） | 門檻 | 門檻的來源（建置、指標、範圍） | 提議？ | 開發跑次（只記錄、不是來源） |
+|---|---|---|---|---|---|---|
+| Jab1 | session 是宣告的那一個 | plan.json 的 declared＝`DECLARED`、schedule＝重算值（132 項）、`state.driver`＝DRIVER_SHA、`state.judge`＝本檔 sha、trees 文字的 sha＝`--trees-sha`（**第 3 節的字面值**），而且 after 的 head／執行檔和 state 一致、凍結清單 sha＝`FROZEN_LIST_SHA`；session 完整（132 項全部完成、沒有中斷或停下、凍結清單頭尾 OK、結尾狀態＝開頭）。`judgement.json` 的 `binding` 印出 trees.after.head、main_base、state.main.head，**判完由人和本宣告對照**（after head＝`b205615…`、main_base＝`b205615…`、main head＝H） | — | 09R-map 的 plan 核對（`L/pvp-v7-09r-map-prep-20261011/measure_map.py:343-354`、D64）；08c xhigh B／C；09R-map xhigh M3；09ab-L2T xhigh D | 否 | — |
+| Jab2 | 資訊流守恆沒有壞 | 每個完成的跑次 ingress＝passed、沒有 ingress／d59／j5a／relay 的停止；**D61 的 J2**：沒有 I1 failed，每個（樹、案例）至少 1 次 I1 有判定；輸出 I1 未判定的比例與原因（D58(7)）（`# Jab2`，`:760`） | 0 次；每組 ≥1 次 | D61、D64；`L/pvp-v7-08c-l2-prep-20261011/judge_l2.py:373-378`。乾跑：08c 修好的兩棵樹 74 passed／2 undetermined（0.026），09R-map 63 次 0 undetermined | 否 | 9 次全部 ingress passed、I1 passed |
+| Jab3 (a) | 送輸入不再被釘住 | `send_wait.py` 的每個 (案例, after) 列，被釘住玩家·秒＝0；after 的每個 action probe 案例都要有列，缺列＝無法判定。**範圍**：action probe 的 17 個案例，**包括** clean-30 與 300 ms 格（這兩者其他地方只記錄）；**不含** backpressure 2 案 | 0 | 實測：08c L2 flow+09a 7 個案例為 0（`L/pvp-v7-09r-eval-20261011/send_wait.txt`）；09R-map 的 B2 原型 9 個格點為 0（09R-map session `L/pvp-v7-09r-map-20261011/session/` 的 B2 跑次，經 `send_wait.py` 副本重算；09ab-L2T 的 `mock/full` 以這些跑次為輸入）。**clean-30、x1、ramp 在 B2 上，除了開發跑次之外沒有資料**；0 是 09a 的設計要求（送出不被釘住），不是從分布推出來的值。結構上的餘裕（D45 xhigh L5）：被釘住要某位玩家某一秒 >50% 的命令等待 >2 ms，已量到的最大比例是 09a-only 的 ramp 0.32～0.41、B2 的 300 ms ≤0.29、150 ms ≤0.18 | 否 | after 的 7 個 action probe 跑次（100 ms 三格、x1、ramp、clean-30、clean-60）與 before clean-30 全部 0 |
+| Jab3 (b) | late 事件之後送出不再等待 | after 的 100／150 ms 格，**in_span、沒有串接、W_post 算得出的 P 事件**（合格事件是它的子集；串接由 Jab5 判），每個 W_post ≤1.0 ms；沒有事件＝無法判定（`# Jab3 b`，`:796`） | 1.0 ms（`:206`） | 09R-map B2 原型、同一母體：28 個事件最大 **0.192** ms（合格 18 個最大 0.184；`P/dryrun/r09map/report.txt`），餘裕約 5 倍；09R-map flow+09a 合格 21 個最大 0.217（`L/pvp-v7-09r-map-20261011/summary-main.txt:1`）；D48③ 0.156 旁證。1.0 本身出自 D48③ 宣告的預測。**口徑**：slew 結束後（第 7 節），slew 期間的 3.33 ms 不在內 | **是** | after 100 ms 三格 6 個事件 0.062～0.127 |
+| Jab4 | 100 ms 完整撤回 | after 的 100 ms 三格，每個合格事件：撤回量 ∈ [28.5, 31.5] ms、`held_post`＝0、沒有 backlog 重設、[t_c, t_c＋3 s] 與撤回後沒有非 respawn 重設、沒有來回修正；這 9 個跑次每一個在 [start, release＋3 s] 沒有非 respawn 重設、沒有來回修正；9 個跑次中 ≥6 個有合格事件，否則「無法判定」（`# Jab4`，`:811`）。撤回量 >31.5 但小於該事件自己的修正量（結構上界）時**仍判不成立**，交使用者，結構上界的結果並列 | [28.5, 31.5] ms（`:207`）；≥6 跑次（`:208`） | 撤回量：09R-map B2 16 個事件 29.54～30.45 ms（`summary-main.txt:22-24`，乾跑逐值重現），兩側餘裕 1.04／1.05；同一跑次的兩位玩家幾乎相同，**獨立的單位是 8 個跑次**。**中心值 30.0 有機制來源**：33.33−P·(1−60/75)＝33.33−3.33（09ab-rev §1-a、§7-1，`L/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`）。依 TimerBaseline：8 ms 狀態 5 跑次 10 個事件 29.54～30.26，4 ms 狀態 3 跑次 6 個事件 29.62～30.45（上偏沒有出現；見第 11 節 Pab2 的敏感度）。`held_post`：`measure3.py:56`、`:377`，D48③ 的 J2d。最少跑次：沿用 D64 的 Jm2（`measure_map.py:114`），不是推導 | **是**（撤回範圍）；**沿用 D64／提議**（≥6 跑次） | after 100 ms 三格 6 個事件 29.76～30.10，全部 8 ms 狀態 |
+| Jab5 | 100／150 ms 不串接 | after 的 100／150 ms 格，串接單位＝0；沒有任何單位＝無法判定（`# Jab5`，`:848`） | 0 | 09R-map B2 0／28 單位（`summary-main.txt:13-18`，乾跑重現）。不要求 clean_chain（比來源保守）。**放出到 t_post 的餘裕**：09R-map B2 150 ms 三格是 10.9～18.8 ms（80/150：18.8、10.9；`P/dryrun/r09map/x1-*-150-r*-flow09a-b2.judge/record.json` 的 `release_to_t_post_ms`），不到 1 Tick（plan Pab3 的「約 40 ms」出自 `L/pvp-v7-09b-plan-20261011/adversarial.md:50`，和實測不符，撤回） | 否 | after 100 ms 三格 0／6 單位串接（150 ms 沒有跑） |
+| Jab6 | 閒置主機沒有退步 | clean-60 after：每個跑次 late＝0、非 respawn 重設＝0、Cooldown＝0；send_wait 的 (clean-60, after) 被釘住＝0；G2E 合併中位數 \|after−before\| ≤1.0 ms，兩邊都來自本 session、每個跑次 2 列（`# Jab6`，`:855`） | 0；1.0 ms（`:209`） | 0：08c L2 的 flow、flow+09a 各 4 次（乾跑重現）；09R-map 的 B2 clean-60 前置 1 次。G2E：08c L2 clean-60 重算 flow+09a−flow＝−0.110 ms、flow−before＝+0.097 ms，樹內範圍 flow 37.692～37.978、flow+09a 37.531～37.979（`P/dryrun/g2e/report.txt`）；1.0 約是樹間差的 9 倍、樹內寬度的 2～3 倍。參考值只有 09a，B2 在 clean 沒有資料 | **是**（1.0 ms） | after clean-60 1 次：四個 0 |
+| Jab7 | 抖動網路下沒有 late 修正 | after 的 network0／20／40 每個跑次 late＝0（`# Jab7`，`:890`）；同時是每跑次的立即停止，停下交使用者並附 T-B9 的行為（第 11 節 Pab7） | 0 | 08c L2 flow、flow+09a 32／32 跑次為 0（乾跑重現）。B2 沒有資料，支持度「中」 | 否 | 沒有跑 |
+| Jab8 | 故障案例與 150 ms 沒有整體惡化 | (1) D61 的 D44 事後規則（`judge_l2.py:341-449` 原樣搬到 `d61_rule()`，`:633`），單位＝每位玩家的非 respawn 重設事件，after 對 before：before 沒有的原因在 after ≥2 個跑次出現、或每跑次平均多 ≥1 個事件 → 停止旗標；只在 1 個跑次 → 給使用者的旗標。組＝network0／20／40、downstream-1000ms、downstream-respawn-1000ms、gateway-1000ms、x1、ramp 各一組，150 ms 三格合併為 `grid-150`（`:195`）。(2) **上限（grid-150）**：after 的 150 ms「全部單位都重設」，或每跑次事件 ≥2.0 → 停止旗標，**不看 before**（`# CEILING`，`:900`）。(3) 每格各自的 D61 比較：只記錄 | (1) 2 個跑次；1 個事件／跑次。(2) 2.0 事件／跑次（`:210`） | (1) D61（08c 的故障案例是原本的適用範圍；**150 ms 是借用**：D61 是在三棵樹逐案相同的案例上核准的，150 ms 預期兩棵樹不同）。(2) 為什麼要上限：150 ms 每位玩家最多重設 1 次，after 每跑次的上限約 2.0，「多 ≥1」只有在 before ≤1.0 時才可能觸發；before 9 跑次 18 單位、每單位 p＝0.5（09R-map flow 6／12）時，before >1.0 的機率＝P(Bin(18, 0.5) ≥10)≈**0.41**，這時連「只有 09a」型的 18／18 全部重設也擋不住（09ab-L2T xhigh A，mock `jab8ceiling` 重現並修正）。2.0＝plan 3-4 自己寫的靈敏度（「每個單位都重設，等於只有 09a 沒有 B2」）。B2 原型 7 個事件／6 跑次＝1.17（7／12 個單位）、09R-map flow 6 個事件／6 跑次＝1.0（6／12 個單位），都在上限之下 | (1) 否；**(2) 是** | x1、ramp 的重設和 08c flow／flow+09a 逐項相同；downstream-1000ms 相同 |
+
+- **Jab4 的讀法**：上界 31.5 對 role 的晚醒抖動敏感（j >1.5 ms；第 11 節第 2 點）。撤回量 >31.5 而且小於該事件的修正量時，判定照樣是「不成立」，但交使用者時並列「結構上界（不過度撤回）成立」、**該跑次 slew 期間的產生間隔偏差**（`clients-commands.jsonl` 的 generated 間隔對 13.333 ms 的偏差；用它取代或補充計時器狀態）與計時器狀態，由使用者判斷是退步還是晚醒。
+- **Jab4 的不合格候選**（D45 xhigh L6）：合格事件若被 1～3 s 內的其他修正設限，就不再受判（最多可藏 3 個跑次）。100 ms 的不合格候選事件（`not_eligible_candidates`）中，撤回量落在 [28.5, 31.5] 之外的，列為使用者旗標（讀法；判定不改）。
+- **Jab5 的讀法（80/150）**：80/150 的串接單位若 `release_to_t_post_ms` ≤0（放出晚於 slew 結束），判定照樣是「不成立」；交使用者時標明這是「>70.6 ms 的已知限制，被放出時刻觸發」，並附上該單位的 `release_to_t_post_ms`（每跑次 `events` 裡已有）。
+- **Jab3(a) 的範圍**：只宣稱 action probe 的 17 個案例。backpressure 兩案其實有 `clients-commands.jsonl`，缺口來自凍結的 `send_wait.py` 只看 gameplay 與 client_delay（和 08c 的缺口相同），不是資料不存在。Jab3(a) 只輸出被釘住的秒數，等待 >2 ms 的比例從 0.3 升到 0.49 這種退化看不出來（D45 xhigh 的測試缺口；每玩家·秒的最大比例建議之後列為只記錄，本次判定不改）。
+- **讀法的限定**：起點固定（格點 12.0 s、x1／ramp 7.5 s），跑次在相位上不完全獨立；格點只是條件暴露，推不出實際網路下的頻率；0 違反只代表「本條件下沒有例外」。**network 的遺失是固定種子**（`build/acceptance/object_fps_pvp/impaired_network.py:156-157`；`08c-drop-report.md:728`），Jab7 的 0 只代表這個遺失樣式；08c 的 32／32 與本次的 16 次都是同一個情境的重複量測，不是獨立樣本。
+
+#### 9. 每個跑次的立即停止（停下，保留全部證據，不重跑，剩下的記 not_run，交使用者決定）
+
+`judge_ab.evaluate()` 在每個項目結束後執行，`stops` 不是空的就停下 session（`P/judge-spec.md` 第 2 節）。**兩棵樹都是修好資訊流的樹，每跑次的停止對兩棵樹都適用**（D61；08c 的只記錄樹是 `c2b76cd`，不在本批）。
+
+| 代號 | 條件 | 適用 | 來源 |
+|---|---|---|---|
+| ingress | `ingress_evidence.py` 的 status 不是 passed（failed、undetermined、stopped、missing） | 兩棵樹、全部案例 | D61；`judge_l2.py:294-296` |
+| d59 | link_shots 不是 passed、carried≠lines 或 lines＝0；action_drops 任一側不完整 | 兩棵樹、全部案例 | D61；`judge_l2.py:297-302` |
+| j5a、relay | x1、ramp：never_arrived＞0、送出卻沒到＞0 或判不出、late_first＝0；relay 的上行轉出≠Gateway 收到 | 兩棵樹、x1／ramp | D61；`judge_l2.py:303-309` |
+| d44 | 格點以外：故障窗 (start, release＋1.5 s] 之外的非 respawn 重設；clean 沒有故障窗，出現就停 | 兩棵樹、格點以外 | D61；`judge_l2.py:310-315`。格點照 D64 只記錄（窗 [start, release＋3 s]） |
+| cooldown | clean-60／clean-30 出現 Cooldown 拒絕（rejection＝3） | 兩棵樹 | plan 4-1 第 7 點；`Combat.hpp:52` |
+| jab6 | after 的 clean-60 有 late 修正 | after | plan 4-1 第 7 點 |
+| jab7 | after 的 network0／20／40 有 late 修正 | after | plan 3-4 Jab7（停下交使用者，附 T-B9） |
+| analysis | 偵測器或 measure3 丟出例外；action probe 的跑次缺 phase 計數器（否則 late 會讀成 0）；格點跑次沒有故障窗（否則 Jab4 的跑次層級檢查會變空） | 兩棵樹 | 09R-map 的作法；後兩條是 09ab-L2T 新增（xhigh E） |
+| driver | runner 錯誤（缺 case 目錄或必要的 log、`result.json` 沒有 artifacts、backpressure 的 failure.json）、注入無效（第 6 節）、逾時、第二次 Ctrl-C、狀態改變（主 checkout 的 HEAD 或 porcelain、兩棵 worktree、任何執行檔、arena、凍結清單的任何檔、judge、driver、sleeper、trees 檔與開頭不同）、sleeper 失敗、閒置閘門 30 分鐘不過 | — | `run_ab.py` 的 docstring |
+
+- 第一次 SIGINT／SIGTERM：目前的項目跑完後停下（記為中斷，session 不完整）。
+- 注入跑次（格點、x1、ramp、network、backpressure）的 Cooldown 只記錄（和 08c L2、09R-map 相同）。
+- 停下之後不補跑；`judge_ab.py --session` 照樣執行，結果是 `passed`＝false，交使用者。
+
+#### 10. 只記錄
+
+`judgement.json` 的 `*_recorded` 等欄位（`P/judge-spec.md` 第 4 節）：
+
+- **TimerBaseline**：每個跑次的兩種判法與一致率；clean-30／clean-60 的 late、重設、Cooldown、被釘住、G2E，依樹與狀態並列（`clean_recorded`）。**clean-30 只記錄**（修好的樹上目前只有本批開發跑次的資料；Cooldown 與故障窗外的非 respawn 重設仍是停止條件）。若出現 8 ms 狀態的 clean-30，順便補 memory「v7 clock cross comparison」的 Client 端比較。
+- **格點地圖**（兩棵樹 × 9 格）：每跑次 late（全部與 in_span）、單位、串接、依原因的重設、size_v3 合計、q30_max、lead_after_max、W_post、`held_post`、撤回量與殘餘量、放出－t_frame（Pab4）、來回修正的跑次、放出時刻、佇列、計時器狀態（`grid_recorded`）。300 ms 格（Pab5）只在這裡。
+- **殘餘量**：撤回後的殘餘。`measure3` 的 `residual_ms` 預期約 −3.3（09R-map −2.9～−3.8、開發跑次 −3.22～−3.55）；**`residual_ms`≈−3.3 就是「相位偏早 3.3 ms」**（第 11 節第 1 點）。
+- **ΔW 模型**（D65；事後得出、本次才預先宣告）：每個合格事件 `lead_after−(lead_before＋2T−(W_post−W_pre_1s))`（`dW_model_diff`）。**指定 W_pre_1s**。09R-map 事後的 0.332 ms 重現不了，同樣 43 個事件重算為 **0.319** ms（09ab-L2T 與其 xhigh 都只得到 0.319）。
+- **Jab4 的附帶紀錄**：結構上界替代（撤回量 < −size_v3）的違反清單、每個事件所在跑次的計時器狀態、不合格的候選事件。
+- **Jab8 的附帶紀錄**：`grid_150_ceiling` 的數字（單位、重設單位、事件／跑次）與每個 150 ms 格各自的 D61 比較（補償三格合併的稀釋）。
+- **Jab8 上限的讀法**（D45 xhigh L4）：以原型 p＝7／12 計，18／18 全部重設的機率約 6e−5、D61 的「多 ≥1」誤停約 0.8%；若真實的 p 接近 7／12 的 95% 上界 0.85，兩者合計約 24%（主要來自 D61，不是上限）。「≥2.0 事件／跑次」那條算的是**整個跑次**的非 respawn 重設，不限格點視窗；觸發時列出多出來那些重設的原因與時刻。
+- **x1／ramp／network**：每跑次 late、撤回次數、來回修正、依原因的重設、send_wait 的修正後等待（x1／ramp 的 W_post；**這裡的口徑含 slew 期間**，所以 flow+09a 是 3.47～4.92 ms，不套 Jab3(b)）；ramp 的來回修正數與 late 數（Pab8）。
+- **Jab2**：I1 的狀態分佈、未判定比例與原因（D58(7)）。
+- **使用者旗標**：完成的跑次中 `run_case` 的 passed 為 False（frames 可能提早結束，late 會少算；08c 與 09R-map 修好的樹全部是 True）。**本批開發跑次的 after x1 是 False**，原因是換彈在 250 ms 邊界被判 Expired 的連鎖（08c 的 before 也有 2／6），讀法見第 14 節與第 16 節第 9 點（條件寫死）；**判完後另記**：依樹的 x1 action 24 是 13 Tick 或 15 Tick 的次數（判定程式不輸出，由主對話從 `actions.jsonl`、`match-commands.jsonl` 計算）；Jab8 只在 1 個跑次出現的新原因。
+- **綁定資訊**：`binding`（trees.after.head、worktree、main_base、state.main.head、state 的 after head、給的 trees sha）。
+- D58 的 Gateway 拿不到內容的丟棄（每跑次總數與依原因）、每跑次 Cooldown、`run_case` 的判定、D64 的格點 D44 旗標、各案例 before 的被釘住、主機（閒置閘門、每輪前後的 sleeper 與 CPU）。
+
+#### 11. 預測（可被推翻；Pab1～Pab8）
+
+plan 第 2 節的預測，加上 09ab-rev 與本批的資料。判定在第 8 節；預測不成立時照判定處理，Pab4、Pab5、Pab8 只記錄。
+
+| 代號 | 白話 | 預測（after） | 推翻條件 | 支持與依據 | 開發跑次（只記錄、不是來源） |
+|---|---|---|---|---|---|
+| Pab1 | 送輸入不再被釘住 | (a) action probe 的 17 個案例被釘住玩家·秒＝0；(b) 100／150 ms 格 in_span、沒串接的 P 事件 W_post ≤1.0 ms〔提議〕（slew 結束後的口徑） | 任一不成立（Jab3） | (a) 強：08c L2 flow+09a 7 案為 0；09R-map B2 9 格為 0；clean-30、x1、ramp 在 B2 上沒有開發跑次以外的資料，0 是設計要求。(b) 強：09R-map B2 28 個事件最大 0.192。x1／ramp 不套 (b)（含 slew 期間的口徑是 3.47～4.92 ms，09ab-rev §7-2） | (a) after 7 個 action probe 跑次與 before clean-30 全部 0；(b) 6 個事件 0.062～0.127 |
+| Pab2 | 100 ms 延遲後完整撤回、不重設 | 100 ms 三格的每個合格事件：撤回量 ∈ [28.5, 31.5] ms〔提議〕（預期約 30.0）、`held_post`＝0、0 次非 respawn 重設、沒有來回修正 | 任一不成立（Jab4） | 強：09R-map B2 16 個事件 29.54～30.45、重設 0／16、`held_post` 0／16、來回修正 0 | after 100 ms 三格各 1 次（全部 8 ms 狀態）：6 個合格事件 29.76～30.10、`residual_ms` −3.22～−3.55、`held_post` 0、重設 0、來回修正 0 |
+| Pab3 | 100／150 ms 不串接 | 串接單位＝0 | ≥1（Jab5） | 中：09R-map B2 0／28。150 ms 靠「放出早於 slew 結束」，09R-map B2 的放出到 t_post 是 10.9～18.8 ms（80/150：18.8、10.9），不到 1 Tick；δ＝80 ms 超過 70.6 ms，**只要放出晚於 slew 結束，80/150 就會串接**（plan 3-2「持續延遲 >70.6 ms 時仍會串接」；09R-map B2 的 80/300 是 4／4 串接）。風險低～中，B2 每格只有 2 次資料，無法精算 | 150 ms 沒有跑 |
+| Pab4 | （敘述，不是預測）150 ms 只部分有效 | 部分單位重設、部分只部分撤回；放出－t_frame 越接近 70 ms 越可能完整撤回 | 不判定 | 低：凍結的 `measure3` 在 150 ms 給 `withdraw_ms`＝None；09R-map B2 7／12 單位重設 | — |
+| Pab5 | 300 ms 照舊重設 | 兩棵樹全部重設；45／60 ms 的單次修正領先＝37.3＋δ ±3 ms（排除 80／300 的串接單位） | 有單位沒重設，或偏差 >3 | 強：09R-map 12／12。只記錄 | — |
+| Pab6 | 閒置主機沒有退步 | clean-60：late、非 respawn 重設、Cooldown、被釘住都是 0；G2E 和同 session 的 before 相差 ≤1.0 ms〔提議〕。clean-30：不預測，只記錄 | clean-60 任一不成立（Jab6） | 0：中～強（08c L2 各 4 次；09R-map B2 1 次）。G2E：中（參考 −0.110 只有 09a） | after clean-60 1 次四個 0；clean-30 兩棵樹各 1 次 late 0、重設 0 |
+| Pab7 | 抖動網路下不觸發 late 修正 | network0／20／40 的 late＝0（固定種子的這個遺失樣式） | ≥1（Jab7；立即停止） | 中：08c 32／32 是 flow 與 flow+09a，沒有 B2；固定種子，是同一情境的重複。〔程式〕每次發布只帶最小樣本（`MatchRuntimeHost.cpp:129`），late 要連續 2 次（`LocalPlayerPrediction.cpp:128`、`:134`）。**T-B9**（下面） | 沒有跑 |
+| Pab8 | 持續延遲（x1、ramp）不預測 | 不做預測，照 D61 的事後規則比較兩棵樹（Jab8） | D61 的旗標 | B2 在這兩案沒有開發跑次以外的資料。〔推論〕ramp 上升期間重新擷取取最大值，可能再往前修，下降時領先更大 | x1 late 10、ramp 8（08c 的 x1：flow 9～14、flow+09a 10～12；ramp：flow 8～10、flow+09a 10）；非 respawn 重設的原因與數量和 08c 的 flow、flow+09a 逐跑次相同（玩家 1 backlog 1、兩位各 starvation 2）；撤回每位玩家 x1 2 次、ramp 3 次；來回修正的特徵 x1 1 位、ramp 2 位 |
+
+**09ab-rev 的發現（寫進預測的讀法；`L/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md` §1-a、§2-a、§7）**
+
+1. **撤回≈|late|−3.33 ms，殘餘（相位偏早 3.3 ms，`residual_ms`≈−3.3）是結構性的。** 往前修的 late slew 期間，命令以 75 Hz 產生、token 以 60 Hz 補充，09a 的折讓式讓每個命令停在平衡等待 0.2P＝3.33 ms（＝P·(1−60/75)，和 R 無關；`LocalPlayerPrediction.cpp:291-313`、`ClientConnection.cpp:607-623`）。100 ms 格決定那一刻最大的樣本正是這些命令，所以撤回≈33.33−3.33＝30.0 ms，撤回後相位偏早約 3.3 ms（`residual_ms`≈−3.3），要到下一次視窗決定（約 4 秒）才修回。這是**原型本身的行為**（09R-map 的 +29.5～30.5 正是它），本批不改（改了屬 (c) 類）。方向是安全的（不會造成 late、重設或串接）；殘餘超過 FireGate 的 2 ms guard，交 M0（第 12 節）。
+2. **Jab4 的上界對 role 晚醒敏感。** 撤回量≈33.33−（決定那一刻最大樣本的發布→送出等待）；role 晚醒 j ms 時那個命令的等待是 max(0, 3.33−j)，要超過 31.5，等待必須 <1.83 ms，所以 **j >1.5 ms 就可能讓撤回超過 31.5**（推論，未實測；09ab-rev 原寫 1.8，D45 xhigh M1 依同一條式子更正）。**j 是單一命令相對於 75 Hz 節拍的晚醒抖動**；整體固定的偏移不會降低平衡等待。開發跑次三個 clean（8 ms 狀態）的產生間隔最大偏差 0.13 ms（D45 xhigh M1），比 1.5 ms 小一個數量級以上；probe 的 TimerBaseline 反映不了這個抖動。資料：
+   - 09R-map 的 B2 100 ms 跑次：8 ms 狀態 5 跑次、10 個事件 29.54～30.26；4 ms 狀態 3 跑次、6 個事件 29.62～30.45。**已量到的 8 ms 狀態下沒有往上偏**；最大 30.45 對應 j≈0.45 ms（xhigh 實測 j≈0～0.45 ms）。
+   - 獨立的單位只有 8 個跑次；計時器狀態是 probe 的代理值，不是 role 自己的晚醒。
+   - D48③（Gateway→Match IPC、08c 之前的樹、stopped session）的 32.75 可以用同一個機制解釋，只是旁證。
+   - 本批開發跑次：after 100 ms 三格各 1 次，**3 次都是 8 ms 狀態**（late_p99 7.40～7.98 ms），6 個事件 29.76～30.10，也沒有往上偏。合計 8 ms 狀態 16 個事件（09R-map 10＋開發 6）最大 30.26。
+   - 處理：上界保持 31.5〔提議〕，結構上界（撤回量 < 該事件的修正量）只記錄並在違反時並列（第 8 節 Jab4 的讀法；第 16 節第 2 點）。
+3. **W_post 的口徑**：一律用 slew 結束後的視窗 [t_post, t_post＋0.25 s)。把 slew 期間的命令算進去會得到結構性的 3.33 ms 而誤判失敗（09ab-rev §7-2；x1／ramp 的 3.47～4.92 ms 就是這個原因）。Jab3(b) 用 `measure.py` 的 W_post，符合這個口徑。
+4. 偵測器：持續延遲時重新擷取得出的負向修正若 ≥20 ms，可能被偵測器的「size」類事件看到；**P 事件只讀產品計數器，不受影響**（09ab-L2T 確認）。
+
+**Pab7 與 T-B9**（`tests/object_fps_pvp/PredictionTests.cpp:1791-1838`，09b-impl）：樣本的換算是「原始值－（該命令產生時尚未吸收的決定量）」（`LocalPlayerPrediction.cpp` 的 rebase：`raw − (phaseAppliedSeconds_ + phaseShiftSeconds_ − age.appliedSeconds)`）；修正開始前產生的命令，扣的是整個修正量（T-B9 的註解：rebased by all of it）。這對**任何往後的修正**都適用，包括視窗決定與首次決定，不只限於 late 之後的撤回；所以在 network 案例裡，不需要先有 late 修正，前提也可能成立。若 settle 前最後兩個樣本是**「≥修正後餘裕的成對延遲尖峰」**（原始 slack 是小正值、小於該命令產生時尚未吸收的決定量，換算後變負），而 settle 那一幀又沒有樣本，會立刻觸發一次 late 修正，接著重新擷取、再撤回一次（多一對修正）；同樣的兩個樣本若在 slew 中段，會被下一個準時樣本清掉，不觸發。這是原型本身的行為，測試只釘住現在的行為，沒有新增規則。實際風險仍低：以 Match 端的近似 slack（resolved−host_accepted）看 08c network40 flow+09a，11487 個命令中 <5 ms 的 14 個、<2 ms 的 4 個；每個 client 每跑次只有約 1 次額外的修正（D45 xhigh H2）。撤回後殘餘（`residual_ms`≈−3.3，相位偏早）也讓樣本更不容易被判 late（09ab-rev §7-5）。**Jab7 觸發時**，停下並把那個 late 事件的時刻、所在跑次的修正與撤回紀錄、以 `match-commands.jsonl` 重建（近似）的事件前兩次發布的樣本交使用者，判斷是不是 T-B9 的情境（slack 樣本本身不在任何 log 裡，只能近似重建）。
+
+#### 12. M0 的待決事項（交給第 09 批，不在本批定案）
+
+plan 4-3 與 09ab-rev 的整理。本批的格點**不記錄 FireGate 的 earliest、也不量 R 對 earliest，不能代替重推條件 11 的 FireGate 那一半**（`09-firegate-c2.md:101`）。
+
+1. **M0 要不要加跑 Client→Gateway 短延遲注入**：交 M0 規劃決定（D66 決定 10；傾向加跑）。
+2. **late 修正之後的射擊怎麼判**：不當排除區；建議當成另行判定的類別，至少保留「Cooldown＝0」。依據：D48③ 的 2 次 Cooldown（base 的 chain-r2、09a-b2 的 chain-r5）都在 t_c 之後約 114～115 ms、late slew 期間、撤回之前；late slew 期間 `FireGate.cpp:18-19` 的 `Max(0, phaseShift)` 不提供保守（09ab-rev 2-b：B2 沒有改變這個風險）。這 2 次 Cooldown 和 R8 一起作為 M0 的輸入。
+3. **撤回後的殘餘：相位偏早 3.3 ms（`residual_ms`≈−3.3）**（09ab-rev §2-a）：撤回期間 FireGate 扣掉的剩餘量正好等於實際多出的餘裕（準確）；撤回結束後，殘餘超過 guard 的前提「決定後的相位誤差 ≤ 死區 2 ms」（`FireGate.hpp:24-27`），到下一次視窗決定（約 4 秒）前 `earliest` 可能比實際晚 1 Tick（只落在壓著冷卻邊界的射擊，約 8%）。M0 要確認這段期間的影響；之後的修法候選是 plan 第 5 節第 1 項的 S（只收 slew 結束之後產生的命令）。
+4. **C2** 要記錄被釘住的秒數和 late 修正數（plan 4-3）。
+5. 前置條件：09ab-L2 通過、PR #73 的頭＝09a＋09b，之後才做 S3（M0）→ S4（凍結）→ C2。
+
+#### 13. 前置核對（plan 3-5；L2P 開始時與 session 開跑前各一次）
+
+`0e1fabb`（09R-map 量過的 09a＋B2 原型，門檻的來源）對**核准時的 after commit** `b205615`，產品的 Client 端只能有註解：
+
+```
+git diff 0e1fabb33e8a2a15db757ba2e6f130ad17ddab2e b205615cf6b77dfd6d2024d1de9654aecc3025b3 -- apps/object_fps_pvp/src apps/object_fps_pvp/include
+```
+
+- **第 1 次**（09ab-L2P 開始時，2026-10-14 04:05，主 checkout `8245839`）：輸出 `P/precheck/precheck-1.txt`（`db32a709…`）。
+  - 唯一的差分：`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp` 的 1 段，`Correct()` 前面加 7 行不變式註解（D68，09ab-rev 修正輪）。沒有刪除行，沒有程式碼的改動。
+  - 分類：**(a) 類**（行為不變；D68 已記為 (a) 類）。沒有 (b)、(c) 類。照 plan 3-5 第 2 點，借自原型的門檻（Jab3(b)、Jab4、Jab5）保留原本的來源與標記，不走第 3 點（(c) 類）的重新宣告流程。
+  - 參考（不在核對範圍）：`0e1fabb..b205615` 在 `docs/` 以外另改了 `tests/object_fps_pvp/PredictionTests.cpp`、`mutations.json`（測試）、`build/acceptance/object_fps_pvp/worker_main.cpp`（worker probe 的測試）、`run_client_delay.py`（＋測試；L2 用主 checkout 的版本，在凍結清單裡）。Match 與 Gateway 的來源在 `eabb107..b205615` 沒有改動。
+- **第 2 次**（session 開跑前，執行步驟 3）：同一個指令，輸出必須和 `precheck-1.txt` 的差分部分逐位元組相同（`tail -n +3` 之後的 sha256＝`bee77d5b13a66320cafab6bf6a5a4d864d7a7705ed79220146e8a93b6743e355`）。不同就不開 session，照 plan 3-5 的流程重新分類。
+
+#### 14. 開發跑次（只記錄；不計入判定，不當門檻來源，不調整門檻）
+
+**9 次**（after 的 action probe 7 次、before clean-30 1 次、after downstream-1000ms 1 次），2026-10-14 04:20～04:24，主機沒有閒置閘門（每項之前 1 次 5 秒 sleeper，最大 7.1～8.0 ms）。每一項用**正式 session 的同一個指令**（`run_ab.command_for` 加填好的 `trees-ab.json`、`run_ab.spawn`、`run_ab.runner_error`），之後用凍結的 `judge_ab.py --one` 判（`P/dev_ab.py`，不凍結）。輸出 `P/dev/`（`progress.jsonl`、`runs/<名稱>/`、`runs/<名稱>.judge/record.json`、`send_wait.txt`）。**9 次全部 completed、`--one` 的 stops 全部是空的**；ingress 全部 passed（I1 也是 passed）；D58 的丟棄 0；Cooldown 0；**有 TimerBaseline 的 8 次全部是 8 ms 狀態**（late_p99 6.71～8.12 ms，cross 判法也一致；downstream-1000ms 用 timing probe，沒有 `timer_baseline`）。
+
+| 樹 | 案例 | 秒 | late（兩位合計） | 非 respawn 重設 | 撤回量（ms）／殘餘 | W_post（ms） | 其他 |
+|---|---|---|---|---|---|---|---|
+| after | x1-45-100 | 21.8 | 2（單次 2） | 0 | 29.76、29.83／−3.55、−3.46 | 0.092、0.080 | 合格 2；`held_post` 0；來回修正 0；q30 69／71；延遲包 23、佇列最大 10、送出延遲 p99 2.83、速率拒絕 0；放出到 t_post 60.9 ms |
+| after | x1-60-100 | 20.2 | 2（單次 2） | 0 | 30.10、30.01／−3.22、−3.27 | 0.095、0.062 | 合格 2；`held_post` 0；來回修正 0；q30 70／70；延遲包 25、佇列 12、p99 2.82；放出到 t_post 70.5／70.7 ms |
+| after | x1-80-100 | 20.1 | 2（單次 2） | 0 | 29.87、29.80／−3.42、−3.47 | 0.102、0.127 | 合格 2；`held_post` 0；來回修正 0；q30 69／69；延遲包 28、佇列 14、p99 2.82；放出到 t_post 57.5 ms |
+| after | x1 | 20.2 | 10（5／5） | 玩家 1 backlog 1、兩位各 starvation 2（全部在故障窗內） | 撤回每位 2 次 | 修正後等待 3.44～3.49（偵測器口徑，含 slew 期間，n＝2） | J5a 成立（never_arrived 0、送出沒到 0、late_first 142）；relay 2072＝Gateway 2072；來回修正特徵 玩家 2 1 次；**`run_case` passed＝False**（下面） |
+| after | ramp | 20.2 | 8（4／4） | 同上 | 撤回每位 3 次 | 0.067～0.102（n＝6） | J5a 成立（late_first 112）；relay 2064＝2064；來回修正特徵 兩位各 1 次 |
+| after | clean-30 | 19.9 | 0 | 0 | — | — | 被釘住 0 |
+| after | clean-60 | 19.9 | 0 | 0 | — | — | 被釘住 0 |
+| before | clean-30 | 19.8 | 0 | 0 | — | — | 被釘住 0 |
+| after | downstream-1000ms | 13.4 | （timing probe） | starvation 2（窗內） | — | — | 和 08c L2 的 flow／flow+09a 各 4 次相同（starvation 2） |
+
+- **停止條件 6（plan 4-1）沒有觸發**：after 的 100 ms 三格沒有重設、沒有來回修正。
+- **Jab3(a) 的預覽**（`P/dev/send_wait.txt`）：after 的 7 個 action probe 跑次與 before clean-30（`send_wait.txt` 的 8 列），被釘住玩家·秒全部 0；送出等待 >2 ms 的比例 x1 0.022、ramp 0.022、100 ms 格 0.006～0.009、clean 0。**x1／ramp 是 B2 第一次有被釘住的資料**。
+- **Jab4 的預覽**：6 個事件 29.76～30.10，都在 [28.5, 31.5]；全部是 8 ms 狀態，沒有往上偏（第 11 節第 2 點）。
+- **x1 的 `run_case` passed＝False**（使用者旗標，不是停止）：錯誤只有 `Unexpected verdict for post-life-recovery-shot: 8`。機制（`gameplay_evidence.py:64-75`、`:170-175`）：故障窗內 8.4 s 的換彈（玩家 1 的 action 24）在 resolved−observed＝15 Tick（703−688）、參照年齡 250.0057 ms 時被判 Expired（rejection 2，判定允許，`fault_expiry_reasons` 只有它），彈匣沒有補滿，12.0 s 那一發就變成 EmptyMagazine（8），而這一發不在允許範圍內。**這是 250 ms 邊界的擲硬幣**：08c L2 的 x1 18 次裡，action 24 是 15 Tick 的有 5 次，其餘 13 次是 13 Tick（216.7 ms）。15 Tick 的 5 次：before（`c2b76cd`）r2／r4 年齡 250.044 ms，兩次都 Expired（就是 08c 的那 2 個 False，錯誤字串相同）；flow r4 249.89 ms、flow+09a r1 250.0004 ms、r5 249.94 ms 都被接受。flow+09a r1 已超過 250 ms 仍被接受，邊界在 µs 等級（D45 xhigh 逐值核對）。所以不是 after 特有的行為，正式 session 的 x1 兩棵樹都可能出現這個使用者旗標；late 計數不受影響（frames 沒有提早結束：late 10 在 08c 的範圍內）。讀法的條件寫死在第 16 節第 9 點。
+- 重設的原因與數量：x1、ramp 和 08c L2 的 flow、flow+09a 每個跑次逐項相同（玩家 1 backlog 1、兩位各 starvation 2），Jab8 的 D61 規則在這兩組預期不會觸發。
+- clean-30：兩棵修好的樹第一次有資料，兩者都是 8 ms 狀態、late 0、重設 0、Cooldown 0。
+- 開發跑次不計入判定，也不用來調整門檻。
+
+#### 15. 和計畫不同的地方
+
+09ab-L2T 的 8 點（`P/report-l2t.md` 第 4 節）經 D45 xhigh 修正後的版本，加上本批的：
+
+1. **network0／20／40 的 runner**：用 `run_gameplay.py --case networkN`（和 08c L2 的 `run_l2.py:96-98`、`:165` 相同）。plan 3-3 寫 `run_network.py`，但它是每個 runner 都 import 的模組，只受 git 狀態核對保護。
+2. **Jab3(a) 的範圍**：action probe 的 17 個案例（含 clean-30、300 ms 格），不含 backpressure 2 案。plan 寫「全部案例」。
+3. **Jab3(b) 的母體**：in_span、沒有串接、W_post 算得出的 P 事件（plan 寫「每個 late 事件」；串接事件的 W_post 會混進下一次 slew 的等待，由 Jab5 判）。
+4. **Jab4 加了跑次層級的條件**（每個跑次沒有重設、沒有來回修正；來回修正會讓事件被設限而變成不合格，等於被藏起來）。
+5. **停止的範圍擴大**：ingress 為 undetermined 也停、d59 也套到格點與 clean-30（D61）；缺 phase 計數器、格點缺故障窗也停。
+6. **Jab8**：組的切法（08c 的 8 案各一組、150 ms 三格合併）與 **grid-150 的上限**〔提議〕；每格各自的 D61 比較只記錄。
+7. **ΔW** 指定 W_pre_1s；09R-map 的 0.332 重現不了，重算為 0.319。
+8. **after 樹的宣告方式**：after 的宣告值放在 `P/trees-ab.json`，它的 sha 當必要參數；判定印出 `binding`，after 是哪個 commit 由本宣告與前置核對保證（第 13 節）。
+9. **after 樹的 worktree 名稱**：09ab-L2T 的草稿寫 `../GYO-Engine-l2-after`，本批建在 `../GYO-Engine-l2-ab`（判定與 driver 只讀 trees 檔的值，不影響工具）。
+10. **開發跑次**：plan 3-5 的 7 次（after 的 100 ms 三格、x1、ramp、clean-30、clean-60）之外，加了 **before clean-30 ×1**（09ab-L2T xhigh：兩棵修好的樹在 clean-30 都沒有資料），x1／ramp 先算一次 send_wait（第 14 節）。
+11. **開發跑次另加 after 的 downstream-1000ms ×1**（plan 3-5 沒有列）：確認 after 樹的 timing probe 在新 driver 的指令下能跑完（Client 端的改動可能連進 timing probe；08c L2 只在 flow 樹跑過）。只記錄。
+
+#### 16. 需要使用者決定的地方（附建議；依 D69 照建議核准，仍列出）
+
+每一項附建議、替代方案與代價。依 D69，主對話照建議核准；這裡仍全部列出，供使用者事後查看。
+
+1. **Jab3(b) 的 W_post 上限 1.0 ms**〔提議〕。
+   - 建議：1.0 ms，母體＝in_span、沒串接、W_post 算得出的 P 事件。來源 09R-map B2 28 個事件最大 0.192（約 5 倍餘裕）。
+   - 替代：0.5 ms（仍有 2.6 倍餘裕）。代價：沒有直接來源，主機 8 ms 狀態下的 W_post 分布只有 09R-map 的資料。
+2. **Jab4 的撤回範圍 [28.5, 31.5] ms**〔提議〕與 ≥6 跑次〔沿用 D64〕。
+   - 建議：照 D66 已核准的 [28.5, 31.5]；違反上界但符合結構上界時照樣判不成立、並列結構上界與計時器狀態交使用者。理由：中心值 30.0 有機制來源，上偏只在 role 相對 75 Hz 節拍的晚醒抖動 >1.5 ms 時出現，09R-map 的 8 ms 狀態沒有看到。
+   - 替代甲：上界改成結構上界（撤回量 < 該事件的修正量）。好處：不會因晚醒誤判；代價：擋不住 31.5～33 ms 的偏移，而 D45 xhigh 沒有檢查過這個寫法的可達性。
+   - 替代乙：依 TimerBaseline 分層定兩個上界。代價：8 ms 狀態下的上偏沒有資料，第二個上界沒有來源。
+3. **Jab6 的 G2E 容許差 1.0 ms**〔提議〕。
+   - 建議：1.0 ms，只和同 session 的 before 比較（參考 −0.110 ms 的約 9 倍）。
+   - 替代：只記錄。代價：Client 端的延遲退步不會被擋下。
+4. **Jab8 grid-150 的上限 2.0 事件／跑次（或全部單位重設）**〔提議〕。
+   - 建議：加（09ab-L2T xhigh A；沒有它時 before >1.0 的機率約 0.41，連 18／18 全部重設也擋不住）。
+   - 替代：只用 D61 的比較規則。代價：如上。
+5. **clean-30**：建議只記錄（D66 決定 8），Cooldown 與故障窗外的非 respawn 重設仍是停止條件。本批開發跑次兩棵樹各 1 次（兩次都是 8 ms 狀態）：late 0、重設 0、Cooldown 0、被釘住 0。
+6. **Jab7 觸發時的處理**：建議立即停下，附 T-B9 的資料交使用者（plan 3-4）。替代：只記錄、跑完 session。代價：若是 B2 引起的新行為，後面的資料無法用同一份宣告解讀。
+7. **開發跑次的結果是否改變任何宣告值**：建議不改。開發跑次沒有觸發任何停止，數字都在既有的範圍內（第 14 節）；開發跑次本來就不用來調整門檻。
+8. **前置核對的分類**：D68 的 7 行 `Correct()` 註解屬 (a) 類（行為不變），借自原型的門檻保留，不降為提議值。D45 xhigh 請確認這個分類。
+9. **x1 的 `run_case` 使用者旗標怎麼讀**（開發跑次新看到的；D45 xhigh H3 把條件寫死）：
+   - 建議：**以下全部成立時**，讀成 250 ms 邊界的連鎖（第 14 節），不算退步：
+     - `errors` 只有 `Unexpected verdict for post-life-recovery-shot: 8` 這一條；
+     - `fault_expiry_reasons` 只有玩家 1 的 action 24；
+     - 那一筆的 resolved−observed＝15 Tick；
+     - 250 < `original_reference_age_ms` ≤250.1。
+   - 任一不成立（例如 17 Tick、283 ms 才 Expired，或還有別的錯誤），照原定「frames 可能提早結束、late 可能少算，或延遲有變化」交使用者。判定程式不改（只是讀法）。
+   - 另外依樹記錄 x1 的 action 24 是 13 Tick 還是 15 Tick 的次數（08c：15 Tick 合計 5／18）；判定程式不輸出，判完由主對話從 `actions.jsonl` 與 `match-commands.jsonl` 計算（第 10 節）。
+   - 替代：把它當成 Jab8 之外的退步訊號，after 的次數多於 before 就停下。代價：08c 的資料顯示這是 15 Tick 邊界的擲硬幣（before 2／2、flow 0／1、flow+09a 0／2），每棵樹 6 次的樣本分不出樹的差異。
+
+#### 17. 證據目錄、腳本與執行步驟
+
+- **準備**：`P/`。
+  - 樹：`P/tree/`（`build-trees.sh`、建置 log、`artifacts.sha256`、`gateway-vcs.txt`）。
+  - 前置核對：`P/precheck/precheck-1.txt`。
+  - 凍結（核准時一起凍結，sha 見第 3 節）：`run_ab.py`、`judge_ab.py`、`sleeper.py`、`frozen-ab.sha256`、`frozen/decompose.py`、`frozen/send_wait.py`、`trees-ab.json`、`judge-spec.md`。
+  - 開發用、不凍結：`dev_ab.py`、`dev/`（開發跑次）、`dryrun-l2p.txt`（本批的 dry-run）、09ab-L2T 的 `recompute.py`、`mock_ab.py`、`dryrun/`、`mock/`。雜湊：`P/prep-files.sha256`（09ab-L2T）＋`P/prep-files-l2p.sha256`（本批）。
+- **證據目錄**（session）：`L/pvp-v7-09ab-l2-<YYYYMMDD>/`：`declaration.md` 與 `declaration.sha256`、`commands.txt`、`precheck-2.txt`、`session/`（`plan.json`、`idle_gate.jsonl`、`host.jsonl`、`progress.jsonl`、`runs/<名稱>/`、`runs/<名稱>.judge/`、`summary.json`、`judge-ab/`、`judgement.json`）。
+- **步驟**（核准後；字面值一律抄本節，不從當下的檔案算）：
+
+```
+# 0. 宣告提交為 H（只改 docs/）。H 寫進 HANDOFF 的進度記錄器。
+R=/Users/karasu/Code/Source/GYO-Engine; cd $R
+P=build/target/_build/test/logs/pvp-v7-09ab-l2-prep-20261014
+E=build/target/_build/test/logs/pvp-v7-09ab-l2-<YYYYMMDD>
+JUDGE_SHA=ac5cdb5dbc6a457af80fc2078d75eb14e175a93afe0e163f0a3e404cc1881ded
+DRIVER_SHA=4d2ec0813f8368740ec5ea76924367d888797f8c2b0ed28d4476e5134a3ba7ef
+TREES_SHA=e3b0a9f0ec2fc7c8a5fff5eb16020f751123fa5f0421544d4e4e60eb89d86560
+H=<宣告 commit 的完整 sha（字面值）>
+# 1. 凍結檔的核對
+shasum -a 256 -c $P/frozen-ab.sha256                                  # 49/49 OK
+shasum -a 256 $P/judge_ab.py $P/run_ab.py $P/trees-ab.json $P/sleeper.py $P/frozen-ab.sha256   # = 第 3 節
+git diff --name-only b205615cf6b77dfd6d2024d1de9654aecc3025b3 $H | grep -v '^docs/'          # 空
+# 2. 暫停 PR #73 的 auto-fix、背景 agent 與分析；前景不開其他程式
+# 3. 前置核對（第 2 次）
+mkdir -p $E; git diff 0e1fabb33e8a2a15db757ba2e6f130ad17ddab2e b205615cf6b77dfd6d2024d1de9654aecc3025b3 \
+  -- apps/object_fps_pvp/src apps/object_fps_pvp/include > $E/precheck-2.txt
+shasum -a 256 $E/precheck-2.txt     # = bee77d5b13a66320cafab6bf6a5a4d864d7a7705ed79220146e8a93b6743e355
+# 4. dry-run：exit 0、preflight_problems []
+python3 -I -B $P/run_ab.py --dry-run --main-head $H --judge-sha $JUDGE_SHA --driver-sha $DRIVER_SHA --trees-sha $TREES_SHA
+# 5. 正式執行（約 1 h；閒置閘門要等時最多再加 30 分）
+caffeinate -dims python3 -I -B $P/run_ab.py --output $E/session --idle-gate --main-head $H \
+  --judge-sha $JUDGE_SHA --driver-sha $DRIVER_SHA --trees-sha $TREES_SHA
+# 6. 判定
+python3 -I -B $P/judge_ab.py --session $E/session --trees-sha $TREES_SHA
+# 7. judgement.json 的 binding 和本宣告對照：trees.after.head = b205615c…、main_base = b205615c…、state.main.head = H
+```
+
+- 第 3 步的輸出和第 1 次的差分逐位元組相同（`precheck-1.txt` 開頭兩行是說明，`precheck-2.txt` 沒有，所以兩者的 sha 比的是差分本體：`precheck-1.txt` 的 `tail -n +3`＝`bee77d5b…`）。
+- 核准時把本宣告與第 3 節的檔複製到 `$E/`，雜湊寫進 `$E/declaration.sha256`。
+- 結果寫進 `09b-phase-tracking.md` 與 HANDOFF（09ab-doc 之前，照 HANDOFF 記錄器的規則同步更新）。
+
+##### 對 D45 檢查（`P/xhigh-check-declaration.md`）的處理對照
+
+| 項目 | 處理 | 位置 |
+|---|---|---|
+| H1 Jab5／Pab3 的餘裕「約 40 ms」不成立 | 改為 09R-map B2 150 ms 放出到 t_post 10.9～18.8 ms（80/150：18.8、10.9），撤回「約 40 ms」並註明出處；加讀法：80/150 的串接單位若 `release_to_t_post_ms` ≤0 照樣判不成立，交使用者時標明「>70.6 ms 的已知限制，被放出時刻觸發」並附該值 | 第 8 節 Jab5 與讀法；第 11 節 Pab3 |
+| H2 Pab7／T-B9 的機制、固定種子、交付 | 換算改為「原始值－（該命令產生時尚未吸收的決定量）」，寫明任何往後的修正都適用（視窗決定、首次決定也是）；讀法加「network 是固定種子，0 只代表這個遺失樣式」；Jab7 交付的「事件前兩次發布的樣本」改為以 `match-commands.jsonl` 重建（近似） | 第 8 節讀法的限定；第 11 節 Pab7 列與「Pab7 與 T-B9」 |
+| H3 x1 使用者旗標的讀法太寬 | 條件寫死（只有那一條錯誤、`fault_expiry_reasons` 只有玩家 1 的 action 24、15 Tick、250 < 年齡 ≤250.1 ms）；依樹記錄 action 24 的 13／15 Tick 次數；第 14 節改成逐值的年齡 | 第 16 節第 9 點；第 10 節使用者旗標；第 14 節 |
+| M1 j 的門檻 1.8 → 1.5 ms | 改為 j >1.5 ms，寫明 j 是相對 75 Hz 節拍的晚醒抖動；Jab4 交付時附該跑次 slew 期間的產生間隔偏差 | 第 8 節 Jab4 的讀法；第 11 節第 2 點；第 16 節第 2 點 |
+| M2 開發跑次的次數 | 9 次（after action probe 7 次、before clean-30 1 次、after downstream 1 次）；有 TimerBaseline 的 8 次全是 8 ms 狀態；HANDOFF 由主對話改 | 第 14 節；第 8 節 Jab3(a)；第 11 節 Pab1 |
+| M3 開發跑次混進來源欄 | 第 8 節與第 11 節的表另立「開發跑次（只記錄、不是來源）」欄，來源欄拿掉開發跑次；寫明 clean-30、x1、ramp 在 B2 上沒有開發跑次以外的資料，0 是設計要求 | 第 8 節表、Jab3(a)、Jab6；第 11 節表 Pab1、Pab2、Pab6、Pab8 |
+| L1「7／12＝1.17」 | 改為「7 個事件／6 跑次＝1.17（7／12 個單位）」，flow 同樣寫法 | 第 8 節 Jab8 |
+| L2 殘餘量的正負號 | 寫明 `residual_ms`≈−3.3 就是相位偏早 3.3 ms | 第 10 節、第 11 節第 1 點、第 12 節第 3 點、Pab7 |
+| L3 mock 引用 | 改引 09R-map session 的 B2 跑次（`mock/full` 以它為輸入） | 第 8 節 Jab3(a) |
+| L4 上限的機率與整跑次計數 | 寫明 p＝7／12 與 0.85 時的機率；「≥2.0」算整跑次的非 respawn 重設，觸發時列出多出來的重設 | 第 8 節 Jab8 上限的讀法 |
+| L5 被釘住的餘裕；backpressure 其實有資料 | 寫明結構餘裕（最大比例 0.32～0.41 等）；backpressure 的缺口來自凍結腳本的範圍；最大比例看不到的退化列為測試缺口 | 第 8 節 Jab3(a) 與其範圍的讀法 |
+| L6 100 ms 不合格候選 | 撤回量落在 [28.5, 31.5] 之外的列為使用者旗標（讀法） | 第 8 節 Jab4 的不合格候選 |
+| 整個 session 可能全是 8 ms 狀態 | 只記錄 | 第 4 節 |
+| 測試缺口（80/150 放出時刻串接、合格事件被設限消失、被釘住比例的退化） | 只記錄；判定與 mock 不改 | 本表；第 8 節 |
+| 第 2 次前置核對在結構上必然相同 | 只記錄；照 plan 3-5 保留，真正綁住 after 的是 TREES_SHA | 本表 |
+| 第 16 節 1～8 | xhigh 全部同意；第 2、6、7 點已照 M1、H2、M2／M3 修正文字 | 第 16 節 |
+
 ## 09b-impl（2026-10-13～14，D66）
 
 - 實作：`LocalPlayerPrediction.hpp/.cpp`、`Movement.hpp` 和 B2 原型 `c2705be`（09R-map 量過的 `0e1fabb`）逐字相同，前置核對（3-5）是空差分。`PredictionTests.cpp` 加原型的 LaggedHost、T-B1、T-B2、reseed、X1～X4，以及缺陷 A（在 `c26f9c4` 上失敗，偏移 66.7 µs）、每串 late 修正只重新擷取一次、持續延遲 >70.6 ms 仍串接、特性測試（放出晚於 slew 結束時只部分撤回；之後若改善這個限制，這個測試會失敗）、T-B9、SeedLead、reseed 後的 late 修正不計舊 seed 的命令、重新擷取計入 settle 前產生的命令。`:1241` 的測試名稱改成只對非 late 修正成立，斷言不變。
