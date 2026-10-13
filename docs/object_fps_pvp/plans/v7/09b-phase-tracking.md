@@ -1410,6 +1410,15 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 12. **前置核對失敗時的處理**（3-5 節）：建議照本版的三類流程；有行為變更時，借自原型的門檻全部降為提議值並重新送核准。
 13. **檔位**：照 3-1 節（D47⑪、09b 文件決定 9 的形式）：主力 high；09a 的 token 與清除點、09b 的換算交界、審查與兩次 D45 檢查用 xhigh；文件與執行 medium。xhigh 高於主對話檔位的部分需要你同意。
 
+## 09b-impl（2026-10-13～14，D66）
+
+- 實作：`LocalPlayerPrediction.hpp/.cpp`、`Movement.hpp` 和 B2 原型 `c2705be`（09R-map 量過的 `0e1fabb`）逐字相同，前置核對（3-5）是空差分。`PredictionTests.cpp` 加原型的 LaggedHost、T-B1、T-B2、reseed、X1～X4，以及缺陷 A（在 `c26f9c4` 上失敗，偏移 66.7 µs）、每串 late 修正只重新擷取一次、持續延遲 >70.6 ms 仍串接、特性測試（放出晚於 slew 結束時只部分撤回；之後若改善這個限制，這個測試會失敗）、T-B9、SeedLead、reseed 後的 late 修正不計舊 seed 的命令、重新擷取計入 settle 前產生的命令。`:1241` 的測試名稱改成只對非 late 修正成立，斷言不變。
+- 恆等式：沒有修正進行時，和 `c26f9c4` 逐值相同（差分 harness，100／100 種子；對照模式 0／20 相同），證據放在證據目錄（不寫成 commit 的單元測試：逐位元的參考值在 arm64／Windows 可能不穩定）。
+- 突變 batch `v7-09b`：11 個，全部 killed（`mutations.json`）。**預期存活**：`seedlead-keeps-applied`（留下的常數位移在換算時相減抵消，只差捨入 1.2e-15 s）。`seedlead-keeps-ages` 原本誤判為等價，xhigh 審查以探針推翻後補測試殺掉；`seedlead-keeps-reacquiring` 原型審查曾記為存活，其實不等價，也已補測試殺掉。
+- 驗證：全量 CTest 69／69（cpu 248）、probe 29／30（1 次是既有的負載敏感斷言，probe 不含 `LocalPlayerPrediction`）、權威 digest 0 差分（scale 1、3 各 35）。換算交界的局部 xhigh 審查：產品沒有缺陷。證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/09b/`。
+- 給 L2 宣告（Pab7）：往後修的 slew 期間，若 settle 前最後兩個樣本是「≥修正後餘裕的成對延遲尖峰」、settle 那一幀又沒有樣本，會觸發一次 late 修正、接著重新擷取再撤回（T-B9；原型本身的行為）。推論：network／抖動型下增量接近 0。
+- 交 09ab-rev：A、B、A 的重複計數（`c26f9c4` 也有；Host 每個序號只發布一次、Client 依 tick 去重，實際到不了）；「Correct 只在剩餘量為 0 時被呼叫」的不變式要寫明或加 assert；「每串 late 修正」的用語；恆等式 harness 的兩點限制；時鐘丟棄的時間不進 `phaseAppliedSeconds_`（既有近似）。
+
 ## 缺陷 A：settling 期間收到的舊樣本留在下一個視窗
 
 - **機制**：`Correct()` 只在修正開始時清掉樣本（`LocalPlayerPrediction.cpp:97-101`）。settling 期間 `:117-130` 照常收樣本，用的是舊的 `settledAfter_`；settle 時（`:323-328`）只前移 `settledAfter_`，不清視窗。所以修正後滿 240 個樣本時，視窗裡還有 m 個「修正前相位」的樣本。`Percentile` 取 `sorted[216]`（`:24-30`）。

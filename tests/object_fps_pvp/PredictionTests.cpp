@@ -1112,6 +1112,43 @@ struct PhaseTwins {
     LocalPlayerPrediction tracked, untracked;
     std::uint64_t tick{1};
 };
+// A Host that reports, each frame, the command the tracked twin published
+// `lag` frames earlier, as a real Host reports a command about a lead and a
+// latency after it was generated. `fixedError` is that command's error if no
+// correction had moved the phase: a command generated after the tracked clock
+// had slewed `trail` (Frame's value) arrives that much later, so the twin hears
+// fixedError - trail. `slackSeconds` overrides the slack as given.
+struct LaggedHost {
+    struct Published { std::uint64_t sequence; double age; double trail; };
+    LaggedHost(PhaseTwins& twins, std::size_t lag) : twins(twins), lag(lag) {}
+    double Frame(std::optional<double> fixedError, std::optional<double> slackSeconds = std::nullopt) {
+        ++twins.tick;
+        for (auto* client : {&twins.tracked, &twins.untracked})
+            static_cast<void>(client->Advance(MovementTickSeconds, 0, 0, 0, 0));
+        const double trail = PhaseTwins::Clock(twins.untracked) - PhaseTwins::Clock(twins.tracked);
+        published.push_back({twins.tracked.Observation().latestCommand, NewestAge(twins.tracked), trail});
+        for (auto* client : {&twins.tracked, &twins.untracked}) {
+            const auto latest = client->Observation().latestCommand;
+            PlayerState authority{1, {2, 0, 2}, 0, 0, latest - InitialCommandLead};
+            if (client == &twins.tracked && published.size() > lag && (fixedError || slackSeconds)) {
+                const auto& command = published[published.size() - 1 - lag];
+                SetSlack(authority, command.sequence,
+                    slackSeconds ? *slackSeconds : SlackFor(*fixedError - command.trail, command.age));
+            }
+            client->Reconcile(authority, twins.tick);
+            REQUIRE(client->Observation().pendingCommands == InitialCommandLead);
+        }
+        return trail;
+    }
+    PhaseTwins& twins;
+    std::size_t lag;
+    std::vector<Published> published;
+};
+// The shot gate keeps the phase it decided while tracking reacquires.
+bool GateDecided(const LocalPlayerPrediction& client) {
+    const auto timing = client.ShotTiming();
+    return timing && timing->phaseDecided;
+}
 } // namespace
 
 TEST_CASE("PvP phase tracking decides from eight samples and frames and slews the clock without moving the display backwards") {
@@ -1238,7 +1275,9 @@ TEST_CASE("PvP two late slack samples correct the phase at once") {
     CHECK(far.tracked.Observation().phaseTracking == PhaseTrackingState::Settling);
 }
 
-TEST_CASE("PvP samples for commands generated before a correction settled do not count") {
+// Only for a correction that is not late: after a late correction the next
+// decision reacquires on every rebased sample of the seed (B2, below).
+TEST_CASE("PvP samples for commands generated before a correction that is not late settled do not count") {
     const auto arena = PredictionArena();
     constexpr double T = MovementTickSeconds;
     PhaseTwins twins(arena);
@@ -1254,6 +1293,545 @@ TEST_CASE("PvP samples for commands generated before a correction settled do not
     }
     CHECK(twins.tracked.Observation().phaseCorrections == 1);
     CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
+}
+
+// B2 (v7 09b, from the D48 step 3 prototype): a late correction is followed by a first
+// decision on samples rebased by the part of the correction their commands had
+// not slewed in yet. A passed short stall is then withdrawn within one slew
+// (T-B1, with T-B4: the shot gate stays decided); a sustained delay is
+// corrected by its rebased remainder, not by another two ticks (T-B2). The far
+// test above (T-B3) still makes two late corrections.
+TEST_CASE("PvP a late correction for a passed short stall is withdrawn by the reacquired first decision") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 0);
+    // A short stall: two commands in a row arrive after their ticks.
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    CHECK(*twins.tracked.Observation().phaseCorrectionSeconds == doctest::Approx(-MovementPhaseMaximumCorrectionSeconds));
+    // Every later command arrives on time. Rebased, each says the phase may
+    // move two ticks later again; the first decision after the slew withdraws it.
+    int frames{};
+    while (twins.tracked.Observation().phaseCorrections < 2 && frames < 12) {
+        static_cast<void>(host.Frame(0.0));
+        CHECK(GateDecided(twins.tracked));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 2);
+    CHECK(frames <= 10);
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 1);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    CHECK(std::abs(*twins.tracked.Observation().phaseCorrectionSeconds - MovementPhaseMaximumCorrectionSeconds) < 1.0e-5);
+    double trail{};
+    for (int frame = 0; frame < 30; ++frame) {
+        trail = host.Frame(0.0);
+        CHECK(GateDecided(twins.tracked));
+    }
+    CHECK(std::abs(trail) < 1.0e-5);
+    CHECK(twins.tracked.Observation().phaseCorrections == 2);
+    CHECK(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Tracking);
+}
+
+TEST_CASE("PvP a sustained delay beyond two ticks is corrected by its rebased remainder after the late correction") {
+    const auto arena = PredictionArena();
+    constexpr double remainder = -0.020;
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    // From now on every command arrives two ticks and 20 ms later than its phase allows.
+    const double delayed = -MovementPhaseMaximumCorrectionSeconds + remainder;
+    int frames{};
+    while (twins.tracked.Observation().phaseLateCorrections == 0 && frames < 6) {
+        static_cast<void>(host.Frame(delayed));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    CHECK(*twins.tracked.Observation().phaseCorrectionSeconds == doctest::Approx(-MovementPhaseMaximumCorrectionSeconds));
+    // Rebased by the correction their commands had not slewed in, the samples
+    // are on time and 20 ms early of the target: no second late correction,
+    // and the reacquired decision moves the phase by those 20 ms.
+    frames = 0;
+    while (twins.tracked.Observation().phaseCorrections < 2 && frames < 12) {
+        static_cast<void>(host.Frame(delayed));
+        CHECK(GateDecided(twins.tracked));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 2);
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 1);
+    CHECK(std::abs(*twins.tracked.Observation().phaseCorrectionSeconds - remainder) < 1.0e-5);
+    double trail{};
+    for (int frame = 0; frame < 30; ++frame) trail = host.Frame(delayed);
+    CHECK(std::abs(trail - delayed) < 1.0e-5);
+    CHECK(twins.tracked.Observation().phaseCorrections == 2);
+}
+
+TEST_CASE("PvP a stall reseed during a late correction drops the rebase and the reacquisition") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    static_cast<void>(host.Frame(0.0));
+    REQUIRE(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Settling);
+    const auto tip = twins.tracked.Observation().latestCommand;
+    twins.tracked.Reconcile({1, {2, 0, 2}, 0, 0, tip + 3}, ++twins.tick); // authority passed the tip
+    REQUIRE(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Acquiring);
+    // Late samples of commands from before the seed never count, even right
+    // after a late correction.
+    for (const auto sequence : {tip - 1, tip}) {
+        PlayerState authority{1, {2, 0, 2}, 0, 0, tip + 3};
+        SetSlack(authority, sequence, -0.050);
+        twins.tracked.Reconcile(authority, ++twins.tick);
+    }
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 1);
+    CHECK(twins.tracked.Observation().phaseCorrections == 1);
+    CHECK(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Acquiring);
+}
+
+// After a seed no older sequence is evidence, not even for the repeat check: a
+// report of an older command between two reports of the seed's first real
+// command does not let the repeat count again.
+TEST_CASE("PvP a stall reseed during a late correction leaves older sequences out of the repeat check") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    static_cast<void>(host.Frame(0.0));
+    REQUIRE(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Settling);
+    const auto tip = twins.tracked.Observation().latestCommand;
+    twins.tracked.Reconcile({1, {2, 0, 2}, 0, 0, tip + 3}, ++twins.tick); // authority passed the tip
+    REQUIRE(twins.tracked.Observation().phaseTracking == PhaseTrackingState::Acquiring);
+    static_cast<void>(twins.tracked.Advance(MovementTickSeconds, 0, 0, 0, 0));
+    const auto first = twins.tracked.Observation().latestCommand;
+    const double age = NewestAge(twins.tracked);
+    const auto report = [&](std::uint64_t sequence) {
+        PlayerState authority{1, {2, 0, 2}, 0, 0, tip + 3};
+        SetSlack(authority, sequence, SlackFor(0.0, age));
+        twins.tracked.Reconcile(authority, ++twins.tick);
+        return twins.tracked.Observation().phaseSamples;
+    };
+    const auto samples = report(first);
+    CHECK(twins.tracked.Observation().phaseSampleSequence == first);
+    CHECK(report(tip) == samples);
+    CHECK(report(first) == samples);
+}
+
+// The seed clears the command ages: after a reseed, a late correction of the
+// new seed reopens the reacquisition, and late reports of the old seed's
+// commands must then find no age to count with.
+TEST_CASE("PvP a late correction after a stall reseed does not count the old seed's commands") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    const auto& observation = twins.tracked.Observation();
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    const auto tip = observation.latestCommand;
+    twins.tracked.Reconcile({1, {2, 0, 2}, 0, 0, tip + 3}, ++twins.tick); // authority passed the tip
+    REQUIRE(observation.phaseTracking == PhaseTrackingState::Acquiring);
+    // The new seed's own commands: on time, then two late ones.
+    for (int frame = 0; frame < 3; ++frame) static_cast<void>(host.Frame(0.0));
+    REQUIRE(observation.phaseSampleSequence > tip + 3);
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(observation.phaseLateCorrections == 1);
+    REQUIRE(observation.phaseTracking == PhaseTrackingState::Settling);
+    const auto samples = observation.phaseSamples;
+    for (const auto sequence : {tip - 1, tip}) {
+        PlayerState authority{1, {2, 0, 2}, 0, 0, observation.latestCommand - InitialCommandLead};
+        SetSlack(authority, sequence, -0.050);
+        twins.tracked.Reconcile(authority, ++twins.tick);
+    }
+    CHECK(observation.phaseSamples == samples);
+    int frames{};
+    while (observation.phaseTracking == PhaseTrackingState::Settling && frames < 20) {
+        static_cast<void>(host.Frame(std::nullopt));
+        ++frames;
+    }
+    REQUIRE(observation.phaseTracking != PhaseTrackingState::Settling);
+    for (int frame = 0; frame < 2; ++frame) static_cast<void>(host.Frame(std::nullopt));
+    CHECK(observation.phaseLateCorrections == 1);
+    CHECK(observation.phaseCorrections == 1);
+}
+
+// The reacquisition takes every rebased sample of the seed, also of commands
+// generated before the late correction settled: when none arrived while it
+// slewed, the first samples after it still decide at once, not only once
+// commands generated after the slew arrive.
+TEST_CASE("PvP the reacquisition counts commands generated before the late correction settled") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 3);
+    const auto& observation = twins.tracked.Observation();
+    for (int frame = 0; frame < 5; ++frame) static_cast<void>(host.Frame(0.0));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(observation.phaseLateCorrections == 1);
+    // No sample reaches the client while the late correction slews.
+    int frames{};
+    while (observation.phaseTracking == PhaseTrackingState::Settling && frames < 20) {
+        static_cast<void>(host.Frame(std::nullopt));
+        ++frames;
+    }
+    REQUIRE(observation.phaseTracking != PhaseTrackingState::Settling);
+    REQUIRE(observation.phaseCorrections == 1);
+    // On time from now on; the first three reports are of commands from before the settle.
+    frames = 0;
+    while (observation.phaseCorrections < 2 && frames < 20) {
+        static_cast<void>(host.Frame(0.0));
+        ++frames;
+    }
+    REQUIRE(observation.phaseCorrections == 2);
+    CHECK(frames == static_cast<int>(MovementPhaseFirstSamples));
+    REQUIRE(observation.phaseCorrectionSeconds);
+    CHECK(std::abs(*observation.phaseCorrectionSeconds - MovementPhaseMaximumCorrectionSeconds) < 1.0e-4);
+}
+
+// B2, from the review of the D48 step 3 prototypes (X1 to X4): what the cases above do
+// not pin. Their lag of two frames leaves the settling samples carrying almost
+// the whole correction, and the decision falls where nothing is left to slew.
+TEST_CASE("PvP a late flag is judged on rebased slack even when every settling sample predates the correction") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 8);
+    for (int frame = 0; frame < 10; ++frame) static_cast<void>(host.Frame(0.0));
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 0);
+    // Two ticks and 20 ms late: after the late correction, raw slack stays
+    // late for the eight lagging commands; rebased, it is 20 ms early.
+    const double delayed = -MovementPhaseMaximumCorrectionSeconds - 0.020;
+    int frames{};
+    while (twins.tracked.Observation().phaseLateCorrections == 0 && frames < 6) {
+        static_cast<void>(host.Frame(delayed));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    frames = 0;
+    while (twins.tracked.Observation().phaseCorrections < 2 && frames < 20) {
+        static_cast<void>(host.Frame(delayed));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 2);
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 1);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    CHECK(std::abs(*twins.tracked.Observation().phaseCorrectionSeconds - (-0.020)) < 1.0e-5);
+}
+
+TEST_CASE("PvP the reacquisition ends with its decision and later decisions use the window and its deadband") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    static_cast<void>(host.Frame(std::nullopt, -0.010));
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    int frames{};
+    while (twins.tracked.Observation().phaseCorrections < 2 && frames < 12) {
+        static_cast<void>(host.Frame(0.0));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 2);
+    // 1 ms: beyond the first deadband (0.5 ms), inside the tracking deadband
+    // (2 ms), and fewer samples than a tracking window.
+    for (int frame = 0; frame < 60; ++frame) static_cast<void>(host.Frame(0.001));
+    CHECK(twins.tracked.Observation().phaseCorrections == 2);
+}
+
+TEST_CASE("PvP the reacquired decision uses the first deadband") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    // A remainder of 1 ms beyond the late correction: inside the tracking
+    // deadband, outside the first one.
+    const double delayed = -MovementPhaseMaximumCorrectionSeconds - 0.001;
+    int frames{};
+    while (twins.tracked.Observation().phaseLateCorrections == 0 && frames < 6) {
+        static_cast<void>(host.Frame(delayed));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    frames = 0;
+    while (twins.tracked.Observation().phaseCorrections < 2 && frames < 12) {
+        static_cast<void>(host.Frame(delayed));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 2);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    CHECK(std::abs(*twins.tracked.Observation().phaseCorrectionSeconds - (-0.001)) < 1.0e-5);
+}
+
+TEST_CASE("PvP samples kept from a settling window are rebased by the whole correction") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    LaggedHost host(twins, 8);
+    int frames{};
+    while (twins.tracked.Observation().phaseCorrections == 0 && frames < 30) {
+        static_cast<void>(host.Frame(0.020));
+        ++frames;
+    }
+    REQUIRE(twins.tracked.Observation().phaseCorrections == 1);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    REQUIRE(std::abs(*twins.tracked.Observation().phaseCorrectionSeconds - 0.020) < 1.0e-5);
+    // 22 samples 3 ms beyond the corrected phase among 260: the window's P90
+    // stays inside the deadband unless the settling samples (commands from
+    // before the correction) keep the part of it not yet slewed in.
+    for (int index = 0; index < 260; ++index)
+        static_cast<void>(host.Frame(index >= 20 && index < 42 ? 0.023 : 0.020));
+    CHECK(twins.tracked.Observation().phaseCorrections == 1);
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
+}
+
+// B2 (v7 09b-impl): what the cases above leave open, and two limits it keeps.
+// Defect A: samples taken while a correction slewed stayed in the next window
+// with the old phase. Rebased, they describe the corrected phase, so the first
+// full window after a correction is the percentile of the corrected errors.
+TEST_CASE("PvP the first full window after a correction holds no sample of the old phase") {
+    const auto arena = PredictionArena();
+    constexpr double correction = 0.020;
+    PhaseTwins twins(arena);
+    LaggedHost host(twins, 8);
+    const auto& observation = twins.tracked.Observation();
+    int frames{};
+    while (observation.phaseCorrections == 0 && frames < 30) {
+        static_cast<void>(host.Frame(correction));
+        ++frames;
+    }
+    REQUIRE(observation.phaseCorrections == 1);
+    REQUIRE(observation.phaseCorrectionSeconds);
+    REQUIRE(std::abs(*observation.phaseCorrectionSeconds - correction) < 1.0e-5);
+    REQUIRE(observation.phaseErrorSeconds);
+    const double first = *observation.phaseErrorSeconds;
+    // In the corrected phase every command's error is one of 240 distinct
+    // values inside the tracking deadband, in a scrambled order.
+    const auto spread = [](int index) { return -0.003 + 0.004 * static_cast<double>((index * 97) % 240) / 240.0; };
+    std::vector<double> taken; // corrected error of each sample taken since the correction
+    std::size_t settling{};    // of them, taken while it slewed (commands of the old phase)
+    auto samples = observation.phaseSamples;
+    for (int index = 0; index < 400 && *observation.phaseErrorSeconds == first; ++index) {
+        static_cast<void>(host.Frame(correction + spread(index)));
+        if (observation.phaseSamples == samples) continue;
+        samples = observation.phaseSamples;
+        taken.push_back(spread(index));
+        if (observation.phaseTracking == PhaseTrackingState::Settling) ++settling;
+    }
+    REQUIRE(settling >= 4);
+    // The next decision waits for a whole window: a correction that is not late does not reacquire.
+    REQUIRE(taken.size() == MovementPhaseWindowSamples);
+    std::sort(taken.begin(), taken.end());
+    const double expected = taken[static_cast<std::size_t>(static_cast<double>(taken.size()) * MovementPhasePercentile)];
+    CHECK(std::abs(*observation.phaseErrorSeconds - expected) < 2.0e-6);
+    CHECK(observation.phaseCorrections == 1);
+}
+
+// Every late correction is followed by exactly one first decision; until a
+// tracking window fills, nothing else decides. The rebased error rises by a
+// microsecond a frame, so any further decision would change the decided error.
+TEST_CASE("PvP each late correction reacquires once and later decisions wait for the window") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    const auto& observation = twins.tracked.Observation();
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    // A sustained delay of two ticks and 0.2 ms: the late correction takes the
+    // two ticks, the reacquired decision finds 0.2 ms, inside the first deadband.
+    const double delayed = -MovementPhaseMaximumCorrectionSeconds - 0.0002;
+    int ramp{};
+    const auto frame = [&](std::optional<double> slackSeconds = std::nullopt) {
+        static_cast<void>(host.Frame(delayed + 1.0e-6 * ramp++, slackSeconds));
+    };
+    // Decisions (changes of the decided error) until `samples` were taken after the latest correction.
+    const auto decisionsUntilWindow = [&](std::uint64_t samples) {
+        int decisions{};
+        auto decided = observation.phaseErrorSeconds;
+        auto corrections = observation.phaseCorrections;
+        auto since = observation.phaseSamples;
+        for (int index = 0; index < 400 && observation.phaseSamples - since < samples; ++index) {
+            frame();
+            if (observation.phaseCorrections != corrections) {
+                corrections = observation.phaseCorrections;
+                since = observation.phaseSamples;
+            }
+            if (observation.phaseErrorSeconds != decided) {
+                ++decisions;
+                decided = observation.phaseErrorSeconds;
+            }
+        }
+        return decisions;
+    };
+    int frames{};
+    while (observation.phaseLateCorrections == 0 && frames < 6) {
+        frame();
+        ++frames;
+    }
+    REQUIRE(observation.phaseLateCorrections == 1);
+    CHECK(decisionsUntilWindow(MovementPhaseWindowSamples - 10) == 1);
+    CHECK(observation.phaseCorrections == 1);
+    REQUIRE(observation.phaseErrorSeconds);
+    CHECK(std::abs(*observation.phaseErrorSeconds) < MovementPhaseFirstDeadbandSeconds);
+    // A short stall now: the second late correction is withdrawn by its one
+    // reacquired decision, and after that slew the window decides again.
+    frame(-0.010);
+    frame(-0.010);
+    REQUIRE(observation.phaseLateCorrections == 2);
+    CHECK(decisionsUntilWindow(MovementPhaseWindowSamples - 10) == 1);
+    CHECK(observation.phaseCorrections == 3);
+    CHECK(observation.phaseLateCorrections == 2);
+    REQUIRE(observation.phaseCorrectionSeconds);
+    CHECK(std::abs(*observation.phaseCorrectionSeconds - MovementPhaseMaximumCorrectionSeconds) < 1.0e-4);
+}
+
+// A delay that stays beyond what one late correction and the lead's slack
+// cover (two ticks, the lead and the target, less the command's age: about
+// 70.6 ms at the publication age of a 60 FPS frame) is still late once rebased,
+// so the next late correction follows as soon as the first settles.
+TEST_CASE("PvP a sustained delay beyond one late correction and the lead's slack still chains late corrections") {
+    const auto arena = PredictionArena();
+    for (const auto& [delay, lateCorrections] : {std::pair{0.060, 1U}, std::pair{0.080, 2U}}) {
+        CAPTURE(delay);
+        PhaseTwins twins(arena);
+        REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+        LaggedHost host(twins, 2);
+        const auto& observation = twins.tracked.Observation();
+        for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+        int frames{};
+        while (observation.phaseLateCorrections == 0 && frames < 6) {
+            static_cast<void>(host.Frame(-delay));
+            ++frames;
+        }
+        REQUIRE(observation.phaseLateCorrections == 1);
+        // Until the reacquired decision: either it decides, or a chained late correction comes first.
+        frames = 0;
+        while (observation.phaseTracking != PhaseTrackingState::Tracking && frames < 30) {
+            static_cast<void>(host.Frame(-delay));
+            ++frames;
+        }
+        for (int frame = 0; frame < 40; ++frame) static_cast<void>(host.Frame(-delay));
+        CHECK(observation.phaseLateCorrections == lateCorrections);
+        // The reacquired decision takes the rebased remainder: the phase ends where the delay is.
+        double trail{};
+        for (int frame = 0; frame < 30; ++frame) trail = host.Frame(-delay);
+        CHECK(std::abs(trail + delay) < 1.0e-5);
+        CHECK(observation.phaseCorrections == lateCorrections + 1);
+        CHECK(observation.phaseTracking == PhaseTrackingState::Tracking);
+    }
+}
+
+// Known limit of B2 (v7 09b-plan 1-2): the reacquired decision is taken when
+// the late correction has slewed in, on the samples it has by then. When the
+// delay drains only after that, the decision withdraws only what those samples
+// show; the rest waits for a tracking window. This pins the limit, it does not
+// prove an improvement: should a later change withdraw the rest sooner, this
+// test fails, as expected.
+TEST_CASE("PvP a delay that drains after the late correction slewed in is only partly withdrawn (known limit)") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    LaggedHost host(twins, 2);
+    const auto& observation = twins.tracked.Observation();
+    for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+    // A queue: commands arrive 50 ms late, then each later one 3 ms less late
+    // than the one before, until they are on time again.
+    double delay = 0.050;
+    int frames{};
+    while (observation.phaseLateCorrections == 0 && frames < 6) {
+        static_cast<void>(host.Frame(-delay));
+        ++frames;
+    }
+    REQUIRE(observation.phaseLateCorrections == 1);
+    REQUIRE(observation.phaseCorrectionSeconds);
+    CHECK(*observation.phaseCorrectionSeconds == doctest::Approx(-MovementPhaseMaximumCorrectionSeconds));
+    frames = 0;
+    while (observation.phaseCorrections < 2 && frames < 20) {
+        delay = (std::max)(0.0, delay - 0.003);
+        static_cast<void>(host.Frame(-delay));
+        ++frames;
+    }
+    REQUIRE(observation.phaseCorrections == 2);
+    REQUIRE(delay > 0);
+    REQUIRE(observation.phaseCorrectionSeconds);
+    const double withdrawn = *observation.phaseCorrectionSeconds;
+    CHECK(withdrawn > 0.002);
+    CHECK(withdrawn < MovementPhaseMaximumCorrectionSeconds - 0.010);
+    double trail{};
+    for (int frame = 0; frame < 60; ++frame) {
+        delay = (std::max)(0.0, delay - 0.003);
+        trail = host.Frame(-delay);
+    }
+    REQUIRE(delay == 0);
+    CHECK(observation.phaseCorrections == 2);
+    CHECK(observation.phaseLateCorrections == 1);
+    CHECK(std::abs(trail - (withdrawn - MovementPhaseMaximumCorrectionSeconds)) < 1.0e-5);
+}
+
+// T-B9 (v7 09b-plan, Pab7): while a correction withdraws (slews the phase
+// later), a sample of a command generated before that slew is rebased by all
+// of it, so a small positive raw slack counts as late. This pins today's
+// behaviour and adds no rule: two such samples mid-slew are cleared by the next
+// on-time sample; two that are the last before the slew settles, with no sample
+// in the frame it settles, start a late correction at once.
+TEST_CASE("PvP small positive raw slack while a correction withdraws is late once rebased (T-B9)") {
+    const auto arena = PredictionArena();
+    constexpr double small = 0.002;
+    for (const bool lastBeforeSettle : {false, true}) {
+        CAPTURE(lastBeforeSettle);
+        PhaseTwins twins(arena);
+        REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+        LaggedHost host(twins, 2);
+        const auto& observation = twins.tracked.Observation();
+        for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
+        static_cast<void>(host.Frame(std::nullopt, -0.010));
+        static_cast<void>(host.Frame(std::nullopt, -0.010));
+        REQUIRE(observation.phaseLateCorrections == 1);
+        int frames{};
+        while (observation.phaseCorrections < 2 && frames < 12) {
+            static_cast<void>(host.Frame(0.0));
+            ++frames;
+        }
+        REQUIRE(observation.phaseCorrections == 2);
+        REQUIRE(observation.phaseCorrectionSeconds);
+        REQUIRE(*observation.phaseCorrectionSeconds > MovementPhaseMaximumCorrectionSeconds - 1.0e-4);
+        REQUIRE(observation.phaseTracking == PhaseTrackingState::Settling);
+        if (!lastBeforeSettle) {
+            static_cast<void>(host.Frame(std::nullopt, small));
+            static_cast<void>(host.Frame(std::nullopt, small));
+            REQUIRE(observation.phaseTracking == PhaseTrackingState::Settling);
+        } else {
+            // Raw slack of `small` until the slew settles; that frame brings no sample.
+            frames = 0;
+            while (observation.phaseTracking == PhaseTrackingState::Settling && frames < 12) {
+                auto probe = twins.tracked;
+                static_cast<void>(probe.Advance(MovementTickSeconds, 0, 0, 0, 0));
+                const bool settles = probe.Observation().phaseTracking != PhaseTrackingState::Settling;
+                static_cast<void>(settles ? host.Frame(std::nullopt) : host.Frame(std::nullopt, small));
+                ++frames;
+            }
+        }
+        double trail{};
+        for (int frame = 0; frame < 40; ++frame) trail = host.Frame(0.0);
+        CHECK(observation.phaseLateCorrections == (lastBeforeSettle ? 2U : 1U));
+        // The late correction moves the phase two ticks earlier again, and its
+        // reacquired decision withdraws it once more: one extra pair.
+        CHECK(observation.phaseCorrections == (lastBeforeSettle ? 4U : 2U));
+        CHECK(std::abs(trail) < 1.0e-5);
+    }
 }
 
 TEST_CASE("PvP a stall reseed restarts phase tracking from its first real command") {

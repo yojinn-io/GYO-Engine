@@ -137,24 +137,35 @@ private:
     bool pendingJump_{};
     // Remaining phase correction, slewed into the fixed-step clock.
     double phaseShiftSeconds_{};
+    // Phase shift slewed into the clock since the seed. With the remaining
+    // shift it is where corrections have put the phase; a command generated
+    // earlier lacks the difference, which its sample is rebased by.
+    double phaseAppliedSeconds_{};
     // Positive frame intervals seen, up to the first decision's evidence. They
     // describe the display loop, so a seed keeps them; Reset() clears them.
     std::size_t frameEvidence_{};
-    // Each real command's age when its window was published, by sequence.
+    // Each real command's age when its window was published, by sequence,
+    // and the phase shift the clock had applied when it was generated.
     struct CommandAge final {
         std::uint64_t sequence{};
         double seconds{};
+        double appliedSeconds{};
     };
     std::array<CommandAge, 64> commandAges_{};
     // Error samples of the current phase (slack beyond the lead and target).
     std::deque<double> phaseSamples_;
     // Samples count only for commands generated after this sequence: the seed
-    // lead, or the tip when the latest correction finished slewing.
+    // lead, or the tip when the latest correction finished slewing. While
+    // reacquiring, every command of this seed counts, rebased.
     std::uint64_t settledAfter_{};
     std::uint64_t lastSlackSequence_{};
     std::size_t lateSamples_{};
     bool settling_{};
     bool phaseDecided_{};
+    // After a late correction the next decision takes the first decision's
+    // samples and deadband, so a delay that has passed is withdrawn at once.
+    // phaseDecided_ stays set: the shot gate keeps its timing meanwhile.
+    bool reacquiring_{};
     LocalMovementObservation observation_{};
 };
 

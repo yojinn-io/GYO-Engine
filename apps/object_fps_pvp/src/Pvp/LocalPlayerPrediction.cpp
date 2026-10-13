@@ -54,13 +54,13 @@ void LocalPlayerPrediction::Reset() noexcept {
     sendPending_ = false;
     freshSeed_ = false;
     pendingJump_ = false;
-    phaseShiftSeconds_ = 0;
+    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;
     frameEvidence_ = 0;
     commandAges_ = {};
     phaseSamples_.clear();
     settledAfter_ = lastSlackSequence_ = 0;
     lateSamples_ = 0;
-    settling_ = phaseDecided_ = false;
+    settling_ = phaseDecided_ = reacquiring_ = false;
     observation_ = {};
 }
 
@@ -84,12 +84,14 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     freshSeed_ = true;
     // Every seed (epoch start or stall reseed) starts a new fixed-step phase.
     // Tracking measures it from its first real command; the remaining part of
-    // any correction described the old phase.
-    phaseShiftSeconds_ = 0;
+    // any correction described the old phase, and so does every older
+    // command's applied shift.
+    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;
+    commandAges_ = {};
     phaseSamples_.clear();
     settledAfter_ = current_.lastResolvedCommand;
     lateSamples_ = 0;
-    settling_ = phaseDecided_ = false;
+    settling_ = phaseDecided_ = reacquiring_ = false;
     observation_.phaseTracking = PhaseTrackingState::Acquiring;
     observation_.phaseErrorSeconds.reset();
 }
@@ -110,22 +112,31 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     // command's age when its window was published, is the slack it would have
     // had if sent at its fixed-step boundary. Less the sequence lead and the
     // target it is how far the phase may move later (positive) or must move
-    // earlier (negative). The same quantity A1 took once per epoch. Samples
-    // keep arriving while a correction slews: if commands were still late,
-    // the next correction follows as soon as this one settles, so a phase
-    // more than one correction behind recovers before the Host's Starvation fuse.
+    // earlier (negative). The same quantity A1 took once per epoch. A command
+    // generated before part of the corrections so far was slewed in arrives
+    // that much earlier or later than one generated now: its slack is rebased
+    // by that part, so samples taken while a correction slews describe the
+    // corrected phase. Samples keep arriving while a correction slews: if
+    // commands were still late after the rebase, the next correction follows
+    // as soon as this one settles, so a phase more than one correction behind
+    // recovers before the Host's Starvation fuse. After a late correction the
+    // next decision is a first decision again (reacquiring_), on every rebased
+    // sample of the seed: a delay that has passed is withdrawn within one slew.
     if (authority.movementSlackSequence && authority.movementSlackMicros &&
-        *authority.movementSlackSequence > settledAfter_ && *authority.movementSlackSequence != lastSlackSequence_) {
+        (*authority.movementSlackSequence > settledAfter_ || reacquiring_) &&
+        *authority.movementSlackSequence != lastSlackSequence_) {
         const auto sequence = *authority.movementSlackSequence;
         lastSlackSequence_ = sequence;
         const auto& age = commandAges_[sequence % commandAges_.size()];
         if (age.sequence == sequence) {
-            phaseSamples_.push_back(*authority.movementSlackMicros * 1.0e-6 + age.seconds -
+            const double slack = *authority.movementSlackMicros * 1.0e-6 -
+                (phaseAppliedSeconds_ + phaseShiftSeconds_ - age.appliedSeconds);
+            phaseSamples_.push_back(slack + age.seconds -
                 static_cast<double>(InitialCommandLead) * MovementTickSeconds - MovementPhaseTargetSeconds);
             ++observation_.phaseSamples;
             observation_.phaseSampleSequence = sequence;
             if (phaseSamples_.size() > MovementPhaseWindowSamples) phaseSamples_.pop_front();
-            lateSamples_ = *authority.movementSlackMicros < 0 ? lateSamples_ + 1 : 0;
+            lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;
         }
     }
     if (settling_ || phaseShiftSeconds_ != 0) return;
@@ -133,15 +144,17 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     // from the latest of them instead of waiting for a window.
     if (lateSamples_ >= MovementPhaseLateSamples && phaseSamples_.size() >= lateSamples_) {
         Correct(*std::min_element(phaseSamples_.end() - static_cast<std::ptrdiff_t>(lateSamples_), phaseSamples_.end()), true);
-        phaseDecided_ = true;
+        phaseDecided_ = reacquiring_ = true;
         return;
     }
     if (frameEvidence_ < PhaseFrameEvidence) return;
-    const auto needed = phaseDecided_ ? MovementPhaseWindowSamples : MovementPhaseFirstSamples;
+    const bool first = !phaseDecided_ || reacquiring_;
+    const auto needed = first ? MovementPhaseFirstSamples : MovementPhaseWindowSamples;
     if (phaseSamples_.size() < needed) return;
     const double error = Percentile(phaseSamples_);
-    const double deadband = phaseDecided_ ? MovementPhaseDeadbandSeconds : MovementPhaseFirstDeadbandSeconds;
+    const double deadband = first ? MovementPhaseFirstDeadbandSeconds : MovementPhaseDeadbandSeconds;
     phaseDecided_ = true;
+    reacquiring_ = false;
     observation_.phaseErrorSeconds = error;
     observation_.phaseTracking = PhaseTrackingState::Tracking;
     if (std::abs(error) > deadband) Correct(error, false);
@@ -296,6 +309,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
         const double shift = Engine::Math::Clamp(phaseShiftSeconds_, -ahead, limit);
         advanceSeconds -= shift;
         phaseShiftSeconds_ -= shift;
+        phaseAppliedSeconds_ += shift;
     }
     std::uint64_t blockedSteps{};
     std::array<std::uint64_t, CatchUpSteps + 1> generated{};
@@ -315,11 +329,12 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
         } else { ++blockedSteps; pendingJump_ = false; }
     });
     // Each real command's age when this frame publishes it: the newest step
-    // boundary passed (step - secondsUntilNextTick) ago, older ones a step each before.
+    // boundary passed (step - secondsUntilNextTick) ago, older ones a step each
+    // before. Their boundaries are on the clock after this frame's slew.
     for (std::size_t index = 0; index < generatedCount; ++index)
         commandAges_[generated[index] % commandAges_.size()] = {generated[index],
             static_cast<double>(generatedCount - 1 - index) * MovementTickSeconds +
-            (MovementTickSeconds - advance.secondsUntilNextTick)};
+            (MovementTickSeconds - advance.secondsUntilNextTick), phaseAppliedSeconds_};
     if (settling_ && phaseShiftSeconds_ == 0) {
         // Only commands generated from now on describe the corrected phase.
         settling_ = false;

@@ -3389,6 +3389,116 @@
       "replace": "inline constexpr double InputSendDrainRate = 75;\n",
       "check": "worker",
       "expect": "outlived four commands"
+    },
+    {
+      "id": "v7-09b-rebase-off",
+      "batch": "v7-09b",
+      "what": "Samples are not rebased: the raw slack is taken as the corrected phase's",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            const double slack = *authority.movementSlackMicros * 1.0e-6 -\n                (phaseAppliedSeconds_ + phaseShiftSeconds_ - age.appliedSeconds);\n",
+      "replace": "            const double slack = *authority.movementSlackMicros * 1.0e-6;\n",
+      "check": "cpu",
+      "expect": "PvP a late correction for a passed short stall is withdrawn by the reacquired first decision"
+    },
+    {
+      "id": "v7-09b-rebase-sign-flip",
+      "batch": "v7-09b",
+      "what": "Samples are rebased the wrong way (the correction not yet in their command is added)",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "1.0e-6 -\n                (phaseAppliedSeconds_",
+      "replace": "1.0e-6 +\n                (phaseAppliedSeconds_",
+      "check": "cpu",
+      "expect": "PvP a late correction for a passed short stall is withdrawn by the reacquired first decision"
+    },
+    {
+      "id": "v7-09b-late-raw-slack",
+      "batch": "v7-09b",
+      "what": "The late flag counts raw slack, not rebased slack",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;",
+      "replace": "lateSamples_ = *authority.movementSlackMicros < 0 ? lateSamples_ + 1 : 0;",
+      "check": "cpu",
+      "expect": "PvP a late flag is judged on rebased slack even when every settling sample predates the correction"
+    },
+    {
+      "id": "v7-09b-reacquire-never-clears",
+      "batch": "v7-09b",
+      "what": "The reacquisition is never cleared: every later decision uses the first decision's samples and deadband",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    phaseDecided_ = true;\n    reacquiring_ = false;\n",
+      "replace": "    phaseDecided_ = true;\n",
+      "check": "cpu",
+      "expect": "PvP each late correction reacquires once and later decisions wait for the window"
+    },
+    {
+      "id": "v7-09b-reacquire-window-deadband",
+      "batch": "v7-09b",
+      "what": "The decision after a late correction uses the tracking window (240 samples) and its 2 ms deadband",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    const bool first = !phaseDecided_ || reacquiring_;\n",
+      "replace": "    const bool first = !phaseDecided_;\n",
+      "check": "cpu",
+      "expect": "PvP a late correction for a passed short stall is withdrawn by the reacquired first decision"
+    },
+    {
+      "id": "v7-09b-conversion-missing-unslewed",
+      "batch": "v7-09b",
+      "what": "The rebase leaves out the part of the correction not slewed in yet",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "(phaseAppliedSeconds_ + phaseShiftSeconds_ - age.appliedSeconds)",
+      "replace": "(phaseAppliedSeconds_ - age.appliedSeconds)",
+      "check": "cpu",
+      "expect": "PvP samples kept from a settling window are rebased by the whole correction"
+    },
+    {
+      "id": "v7-09b-seedlead-partial-clear",
+      "batch": "v7-09b",
+      "what": "A seed clears only what it cleared before B2: the applied shift, the command ages and the reacquisition survive it",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = 0;\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "check": "cpu",
+      "expect": "PvP a stall reseed during a late correction drops the rebase and the reacquisition"
+    },
+    {
+      "id": "v7-09b-reacquire-on-window-correction",
+      "batch": "v7-09b",
+      "what": "Every correction a decision starts (not only a late one) is followed by a reacquisition",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (std::abs(error) > deadband) Correct(error, false);\n",
+      "replace": "    if (std::abs(error) > deadband) { Correct(error, false); reacquiring_ = true; }\n",
+      "check": "cpu",
+      "expect": "PvP the first full window after a correction holds no sample of the old phase"
+    },
+    {
+      "id": "v7-09b-seedlead-keeps-reacquiring",
+      "batch": "v7-09b",
+      "what": "A seed keeps the reacquisition: an older sequence passes the seed filter and resets the repeat check",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "check": "cpu",
+      "expect": "PvP a stall reseed during a late correction leaves older sequences out of the repeat check"
+    },
+    {
+      "id": "v7-09b-seedlead-keeps-ages",
+      "batch": "v7-09b",
+      "what": "A seed keeps the command ages: after the new seed's late correction reopens the reacquisition, the old seed's commands count",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n",
+      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    phaseSamples_.clear();\n",
+      "check": "cpu",
+      "expect": "PvP a late correction after a stall reseed does not count the old seed's commands"
+    },
+    {
+      "id": "v7-09b-reacquire-bypass-off",
+      "batch": "v7-09b",
+      "what": "The reacquisition keeps the settled filter: commands generated before the late correction settled no longer count",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "(*authority.movementSlackSequence > settledAfter_ || reacquiring_) &&",
+      "replace": "(*authority.movementSlackSequence > settledAfter_) &&",
+      "check": "cpu",
+      "expect": "PvP the reacquisition counts commands generated before the late correction settled"
     }
   ]
 }
