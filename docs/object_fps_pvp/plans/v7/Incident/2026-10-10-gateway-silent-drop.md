@@ -215,7 +215,7 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 | U4：用既有的 `match-commands.jsonl` 分出閒置主機的替代 | 使用者決定（2026-10-10）：不單獨做，併入重新量測 | 併入 | 丟棄回報計畫的 L2 |
 | 實作丟棄回報（轉送已解析的命令並處理 link 的剪除、合併上限與 `:424` 的下溢；每一種丟棄都讓 Match 知道；Match 記下自己的拒絕），加入「晚到的命令會送到 Match」的測試、丟棄計數與突變 | 使用者核准規劃後 | 未開始 | D51 ⑥⑩；P2 |
 | 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者在補完指示（20:32）中要求之後的注入用**純延遲型**（例如原型 x1，或 D48 第③步的 IPC 延遲那種不丟包的延遲），不用只保留最新一包的「擋住再放出」 | 實作後 | 未開始 | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
-| 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）：先在 `STABLE_BASELINE.md` 加「已知問題」並連到本紀錄；要不要重新發佈，修好之後再決定 | 使用者決定（2026-10-10） | 「已知問題」完成；重新發佈待修正後決定 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
+| 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）：先在 `STABLE_BASELINE.md` 加「已知問題」並連到本紀錄；要不要重新發佈，修好之後再決定 | 使用者決定（2026-10-10） | 「已知問題」完成；2026-10-14 使用者決定不重新發佈，在兩份 `STABLE_BASELINE.md` 開頭標明「缺陷版」（HANDOFF D69），已完成 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
 | 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補 | 使用者決定（2026-10-10）：併入丟棄回報計畫的 L2（斜坡注入） | 併入 | 丟棄回報計畫的 L2；`build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，不改；新注入另寫分支） |
 | 09b 重做（R3、R4、R12；09a 與 B2 的順序 U6） | 重新量測後 | 未開始 | `09b-phase-tracking.md` |
 | M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 已決定（D51 ⑤） | D51 ⑤⑥；`09-firegate-c2.md` |
