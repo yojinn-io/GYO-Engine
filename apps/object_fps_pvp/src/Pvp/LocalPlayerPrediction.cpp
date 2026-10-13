@@ -96,6 +96,13 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     observation_.phaseErrorSeconds.reset();
 }
 
+// Called only when the previous correction has fully slewed in
+// (phaseShiftSeconds_ == 0, not settling): the caller's guard in TrackPhase
+// ensures it. A decided error is relative to the phase as it will be once every
+// correction so far has slewed in, so it replaces a remainder of zero. Called
+// mid-slew it would have to add to the remainder: overwriting it drops the part
+// not slewed in yet, and the rebase of every sample, which takes the decided
+// total as the applied part plus the remainder, would be wrong too.
 void LocalPlayerPrediction::Correct(double error, bool late) {
     phaseShiftSeconds_ = Engine::Math::Clamp(error, -MovementPhaseMaximumCorrectionSeconds, MovementPhaseMaximumCorrectionSeconds);
     settling_ = true;

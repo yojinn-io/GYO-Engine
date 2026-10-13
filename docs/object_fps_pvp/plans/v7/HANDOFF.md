@@ -35,8 +35,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D68）。
-- **進行中**：09ab-rev 修正輪（1 位 high：lag≥4 的串接測試與突變、`Correct()` 的註解、「每串」用語）。
-- **下一步**：修正輪完成後停下回報 → 09ab-L1。
+- **進行中**：無。09ab-rev 完成並 commit。
+- **下一步**：09ab-L1（本機全量驗收：全量 CTest、權威 digest、整份突變目錄、TSan、worker probe 30 次；medium，約 1.5 小時），使用者說繼續就開始。
 - **最後更新**：2026-10-14，依據本次推送。
 
 ## 閱讀入口
@@ -277,6 +277,7 @@
 - 2026-10-13：09b-impl 完成、未 commit（1 位 high，約 45 分）：B2（late 修正後換算樣本並重新擷取一次）照原型寫進產品。產品 3 檔和原型 `c2705be`、09R-map 量過的 `0e1fabb` 逐字相同（3-5 節的前置核對差分為空）。測試：原型的 T-B1、T-B2、reseed 與 X1～X4，加 7 個（缺陷 A：`c26f9c4` 上 P90 偏 66.7 µs 而失敗；每次 late 修正只重新擷取一次；>70.6 ms 仍串接；放出晚於 slew 結束只部分撤回（已知限制，33.3 ms 中撤回 10.3 ms）；T-B9；reseed 後舊序號不參與重複檢查）；`:1241` 的測試名稱改成只對非 late 修正成立，既有斷言沒改。恆等式用差分 harness（比照 08c）：沒有修正進行時，100 個種子和 `c26f9c4` 逐值相同；對照模式 0／20 相同。全量 CTest 69／69、digest 0 差分（scale 1、3）、probe 29／30（1 次是 action worker 既有的負載敏感斷言，probe 不含 `LocalPlayerPrediction`）。`v7-09b` 突變 9 個 killed（另加 `seedlead-keeps-reacquiring`）；SeedLead 單項清除只有 `keeps-applied` 是等價（只差捨入）。既有突變 4 個 killed（drain-75 第一次是 wrong_failure，重跑 3／3 killed）。證據：`pvp-v7-09ab-impl-20261013/09b/`。
 - 2026-10-14：09b-impl 換算交界的局部 xhigh 審查（`09b/xhigh-review.md`）：沒有產品缺陷；兩個測試缺口已補（產品碼不動）。①`keeps-ages` 原本誤判為等價：reseed 後新 seed 的 late 修正會重開重新擷取，舊 seed 的命令就會被計入；加測試、突變 `v7-09b-seedlead-keeps-ages`。②重新擷取時連 settle 前產生的命令也計入（`|| reacquiring_`）原本沒有測試；加測試（slew 期間沒樣本時，settle 後第 8 幀就決定）、突變 `v7-09b-reacquire-bypass-off`。兩個突變 2／2 killed，`mutations.json` 的 `v7-09b` 共 11 個。
 - 2026-10-14：09ab-rev 的 xhigh 審查完成（約 65 分，`pvp-v7-09ab-impl-20261013/rev/`）：產品沒有 commit 前要修的缺陷。新發現：09a 在往前的 late slew 期間（75 Hz 產生、60 Hz 補 token）讓每個命令固定多等約 3.33 ms（＝P·(1−60/75)，和 R 無關），所以 B2 撤回系統性少 3.3 ms（09R-map 的 +29.5～30.5 正是這個值），撤回後殘餘相位偏早約 3.3 ms、超過 FireGate 的 2 ms guard 約 4 秒；原型本身的行為，本批不改，寫進已知限制、M0 待決與 L2 宣告（Jab4 上界對 role 晚醒敏感、W_post 要用 slew 結束後的口徑）。修正輪要做：補 lag≥4 的串接測試與突變 `v7-09b-age-records-decided-shift`（`age-total` 突變只被特性測試擋住）；`Correct()` 的不變式補註解；「每次」改「每串」。另外 pv5／pv6 契約裡的送出政策與相位追蹤規則已和實作不符、不在同步清單上。
+- 2026-10-14：09ab-rev 修正輪完成（1 位 high，約 7 分）：串接測試加 Host lag 4、60 ms 的案例；突變 `v7-09b-age-records-decided-shift`（排除 T-B9 後仍只由串接測試殺掉）；`Correct()` 加 7 行不變式註解（不加 assert，D68）；「每串 late 修正」改名並同步 `reacquire-never-clears` 的 expect。全量 CTest 69／69、2／2 killed；產品和 `c2705be`／`0e1fabb` 的差分只有那 7 行註解（前置核對 (a) 類）；只改註解，digest 不重跑。證據 `rev/fix/`。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 

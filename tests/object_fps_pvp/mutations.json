@@ -3428,7 +3428,7 @@
       "find": "    phaseDecided_ = true;\n    reacquiring_ = false;\n",
       "replace": "    phaseDecided_ = true;\n",
       "check": "cpu",
-      "expect": "PvP each late correction reacquires once and later decisions wait for the window"
+      "expect": "PvP each chain of late corrections reacquires once and later decisions wait for the window"
     },
     {
       "id": "v7-09b-reacquire-window-deadband",
@@ -3499,6 +3499,16 @@
       "replace": "(*authority.movementSlackSequence > settledAfter_) &&",
       "check": "cpu",
       "expect": "PvP the reacquisition counts commands generated before the late correction settled"
+    },
+    {
+      "id": "v7-09b-age-records-decided-shift",
+      "batch": "v7-09b",
+      "what": "A command's age records the whole decided shift, not the part slewed in: commands generated while a correction slews are not rebased by the rest of it",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "(MovementTickSeconds - advance.secondsUntilNextTick), phaseAppliedSeconds_};",
+      "replace": "(MovementTickSeconds - advance.secondsUntilNextTick), phaseAppliedSeconds_ + phaseShiftSeconds_};",
+      "check": "cpu",
+      "expect": "PvP a sustained delay beyond one late correction and the lead's slack still chains late corrections"
     }
   ]
 }

@@ -1640,10 +1640,11 @@ TEST_CASE("PvP the first full window after a correction holds no sample of the o
     CHECK(observation.phaseCorrections == 1);
 }
 
-// Every late correction is followed by exactly one first decision; until a
-// tracking window fills, nothing else decides. The rebased error rises by a
-// microsecond a frame, so any further decision would change the decided error.
-TEST_CASE("PvP each late correction reacquires once and later decisions wait for the window") {
+// Every chain of late corrections is followed by exactly one first decision
+// (chained late corrections share it); until a tracking window fills, nothing
+// else decides. The rebased error rises by a microsecond a frame, so any
+// further decision would change the decided error.
+TEST_CASE("PvP each chain of late corrections reacquires once and later decisions wait for the window") {
     const auto arena = PredictionArena();
     PhaseTwins twins(arena);
     REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
@@ -1701,14 +1702,20 @@ TEST_CASE("PvP each late correction reacquires once and later decisions wait for
 // A delay that stays beyond what one late correction and the lead's slack
 // cover (two ticks, the lead and the target, less the command's age: about
 // 70.6 ms at the publication age of a 60 FPS frame) is still late once rebased,
-// so the next late correction follows as soon as the first settles.
+// so the next late correction follows as soon as the first settles. A delay
+// within that is not chained at a longer Host lag either (v7 09ab-rev): there
+// more of the samples that decide come from commands generated while the late
+// correction slewed, and each must be rebased by the part of it not slewed in
+// yet when that command was generated.
 TEST_CASE("PvP a sustained delay beyond one late correction and the lead's slack still chains late corrections") {
     const auto arena = PredictionArena();
-    for (const auto& [delay, lateCorrections] : {std::pair{0.060, 1U}, std::pair{0.080, 2U}}) {
+    struct Case { std::size_t lag; double delay; std::uint32_t lateCorrections; };
+    for (const auto& [lag, delay, lateCorrections] : {Case{2, 0.060, 1}, Case{2, 0.080, 2}, Case{4, 0.060, 1}}) {
+        CAPTURE(lag);
         CAPTURE(delay);
         PhaseTwins twins(arena);
         REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
-        LaggedHost host(twins, 2);
+        LaggedHost host(twins, lag);
         const auto& observation = twins.tracked.Observation();
         for (int frame = 0; frame < 4; ++frame) static_cast<void>(host.Frame(0.0));
         int frames{};
