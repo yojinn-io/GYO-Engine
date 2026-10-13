@@ -1410,6 +1410,37 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 12. **前置核對失敗時的處理**（3-5 節）：建議照本版的三類流程；有行為變更時，借自原型的門檻全部降為提議值並重新送核准。
 13. **檔位**：照 3-1 節（D47⑪、09b 文件決定 9 的形式）：主力 high；09a 的 token 與清除點、09b 的換算交界、審查與兩次 D45 檢查用 xhigh；文件與執行 medium。xhigh 高於主對話檔位的部分需要你同意。
 
+## 09ab-L2 的結果（2026-10-14 04:54～05:41，commit H `02c755c`；**依宣告 `passed`＝false：Jab5 不成立**）
+
+證據：`build/target/_build/test/logs/pvp-v7-09ab-l2-20261014/`（`declaration.md` 與腳本的副本、`precheck-2.txt`（和第 1 次逐位元組相同）、`session/`、`session/judgement.json`、`summary-main.txt`）。132／132 completed，沒有停止、沒有中斷；凍結清單 49 檔開頭與結尾都吻合；binding 和宣告相同（after head `b205615`、main_base `b205615`、主 checkout `02c755c`、TREES_SHA `e3b0a9f0…`）。
+
+| 判定 | 結果 |
+|---|---|
+| Jab1 | 成立（plan 核對、session 完整、sha） |
+| Jab2 | 成立：ingress 132／132 passed；I1 130 passed、2 未判定（1.5％，非 EOF），每個（樹、案例）都有判定 |
+| Jab3 | 成立：(a) after 被釘住 17 個案例全部 0（before 在 x1、ramp 與格點有 1～37）；(b) 32 個事件 W_post 最大 0.833 ms（≤1.0） |
+| Jab4 | 成立：100 ms 三格 18 個事件撤回 29.71～30.08 ms，9／9 跑次有事件，不重設、不來回修正 |
+| **Jab5** | **不成立**：80/150 的 r2、r3 兩個跑次，兩位玩家都串接（4 個單位）；其餘格點 0 串接 |
+| Jab6 | 成立：clean-60 的 late、非 respawn 重設、Cooldown、被釘住都是 0；G2E 差 −0.012 ms |
+| Jab7 | 成立：network0／20／40 after 的 late 修正 16／16 為 0 |
+| Jab8 | 成立：停止與檢視旗標都沒有 |
+
+**Jab5 不成立的那幾個單位**：
+- 80/150 的 after：r1 不串接（放出到 t_post 22.6、22.7 ms）；r2、r3 串接，放出到 t_post 都是 **11.4～11.5 ms**（放出仍早於 slew 結束），串接後領先 84～87 ms，backlog 重設。
+- 宣告的讀法只把「放出到 t_post ≤0」的串接寫成「被放出時刻觸發的已知限制」；這次是 >0 仍串接，**不在宣告的讀法之內**。
+- 參考（只記錄）：09R-map 的 B2 原型（程式相同）在 80/150 是 18.8、10.9 ms 都沒有串接；before（flow，沒有 B2）在 80/150 是 6／6 串接。推論：δ＝80 ms 超過 70.6 ms 時，B2 只有在放出早於 slew 結束「足夠多」時才不串接，界線落在約 11 ms 附近、跑次間會變動。
+
+**格點（只記錄；單位＝總數／串接／backlog 重設）**
+
+| 格 | before（flow） | after（09a＋09b） |
+|---|---|---|
+| 45、60、80 ms／100 ms | 18／0／7 | 18／0／0 |
+| 45、60 ms／150 ms | 12／7／7 | 12／0／8 |
+| 80 ms／150 ms | 6／6／6 | 6／4／5 |
+| 45～80 ms／300 ms | 12／10／12 | 12／4／12 |
+
+**其他（只記錄）**：x1 與 ramp 的 after 每跑次都有撤回（4～6 次），4／4 跑次有來回修正；非 respawn 重設兩棵樹逐案相同（x1：starvation 24＋backlog 6；ramp：16＋4）；after 的 x1 修正後送出等待中位數 3.54 ms（slew 期間的結構性等待，09ab-rev）；使用者旗標只有 before 的 x1-r2（run_case）。
+
 ## 09ab-L2 的事前宣告（2026-10-14 核准，D70：依 D69 照建議；依 D45 做了工具與宣告各 1 次 xhigh 檢查，修正已併入）
 
 草稿原檔 `build/target/_build/test/logs/pvp-v7-09ab-l2-prep-20261014/declaration-draft.md`（sha256 `eb8282f5f2489d14871d8c439fb34e5386d77f1d5c32107486e7e85a6d799b00`）。字面值：JUDGE_SHA `ac5cdb5dbc6a457af80fc2078d75eb14e175a93afe0e163f0a3e404cc1881ded`、DRIVER_SHA `4d2ec0813f8368740ec5ea76924367d888797f8c2b0ed28d4476e5134a3ba7ef`、TREES_SHA `e3b0a9f0ec2fc7c8a5fff5eb16020f751123fa5f0421544d4e4e60eb89d86560`、凍結清單 `frozen-ab.sha256` `e695e0e6f85bf4a31dee42f03fca7cfc8c236607b7d86e0c6aa00828c53be668`（49 檔）；H＝本宣告的 commit。第 16 節 9 點全部照建議核准（第 9 點依 D45 檢查寫死條件）。下文的 `P/` 指那個目錄。
