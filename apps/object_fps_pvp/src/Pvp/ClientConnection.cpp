@@ -124,6 +124,9 @@ struct ClientConnection::Impl {
     // Input token bucket (InputSendBurst) and what the last input send carried.
     double inputTokens{InputSendBurst};
     Clock::time_point inputTokensAt{};
+    // When a window with a never-sent command first found less than one token
+    // (unset while nothing waits): its send is charged less (InputSendDrainRate).
+    std::optional<Clock::time_point> inputWaitSince;
     std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
@@ -181,7 +184,7 @@ struct ClientConnection::Impl {
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
         welcomed=false;haveSequence=false;sentSequence=0;activeGeneration=0;
-        haveSentInput=false;nextInputSendAt={};nextActionSendAt={};
+        haveSentInput=false;nextInputSendAt={};nextActionSendAt={};inputWaitSince.reset();
         readWaiting=false;++transport;
         inputTokens=InputSendBurst;inputTokensAt={};
     }
@@ -543,7 +546,7 @@ struct ClientConnection::Impl {
                         [&](const auto& player){return player.playerId==own;});
                     if(authority.movementEpoch!=submittedEpoch) {
                         latestInput.reset();submittedCommands.clear();submittedEpoch=authority.movementEpoch;
-                        haveSentInput=false;nextInputSendAt={};
+                        haveSentInput=false;nextInputSendAt={};inputWaitSince.reset();
                     }
                     std::erase_if(submittedCommands,[&](const auto& command){return command.sequence<=authority.lastResolvedCommand;});
                     if(latestInput) {
@@ -553,7 +556,7 @@ struct ClientConnection::Impl {
                             // A fully acknowledged window has no retransmission
                             // deadline. The next available window must not wait
                             // behind a redundant send of the completed one.
-                            haveSentInput=false;nextInputSendAt={};
+                            haveSentInput=false;nextInputSendAt={};inputWaitSince.reset();
                         }
                     }
                     if(receivedSnapshots.size()==MaxReceivedSnapshots) {
@@ -602,7 +605,21 @@ struct ClientConnection::Impl {
                     latestInput->lifeGeneration!=sentInputLife ||
                     (!latestInput->commands.empty() && latestInput->commands.back().sequence>sentInputThrough);
                 if((fresh && inputTokens>=1) || (now>=nextInputSendAt && inputTokens>=InputSendBurst)) {
-                    input=latestInput;inputTokens-=1;
+                    // A new command that waited for its token pays less in
+                    // proportion to the wait (Movement.hpp, InputSendDrainRate):
+                    // without it the debt never drains, refill equalling production.
+                    // Only the wait until the token existed counts (a late wake
+                    // adds nothing), and never past a full bucket, so a send
+                    // leaves at most one token.
+                    double charge=1;
+                    if(fresh && inputWaitSince) {
+                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);
+                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,
+                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));
+                    }
+                    input=latestInput;inputTokens-=charge;inputWaitSince.reset();
+                } else if(fresh && !inputWaitSince) {
+                    inputWaitSince=now;
                 }
             }}
         if(input) {

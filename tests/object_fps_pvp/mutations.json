@@ -3319,6 +3319,76 @@
       "check": "ingress_evidence",
       "expect": "FAIL: test_golden_values_by_reason_kind_and_player",
       "what": "the Gateway contentless drop report leaves out the unauthorized drops of other kinds"
+    },
+    {
+      "id": "v7-09a-charge-off",
+      "batch": "v7-09a",
+      "what": "A send that waited is charged a whole token again (no discount)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "did not drain"
+    },
+    {
+      "id": "v7-09a-charge-every-send",
+      "batch": "v7-09a",
+      "what": "Every send is charged 60/R, waited or not",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
+      "replace": "                    charge-=1.0-InputSendRate/InputSendDrainRate;\n",
+      "check": "worker",
+      "expect": "burst beyond two packets"
+    },
+    {
+      "id": "v7-09a-waited-sticky",
+      "batch": "v7-09a",
+      "what": "The recorded wait is not cleared when its send goes",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "input=latestInput;inputTokens-=charge;inputWaitSince.reset();",
+      "replace": "input=latestInput;inputTokens-=charge;",
+      "check": "worker",
+      "expect": "left more than one token"
+    },
+    {
+      "id": "v7-09a-wait-not-cleared-at-epoch",
+      "batch": "v7-09a",
+      "what": "A new movement epoch keeps the recorded wait",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "haveSentInput=false;nextInputSendAt={};inputWaitSince.reset();\n                    }\n                    std::erase_if(submittedCommands",
+      "replace": "haveSentInput=false;nextInputSendAt={};\n                    }\n                    std::erase_if(submittedCommands",
+      "check": "worker",
+      "expect": "new movement epoch credited"
+    },
+    {
+      "id": "v7-09a-wait-not-cleared-at-full-ack",
+      "batch": "v7-09a",
+      "what": "A full acknowledgement keeps the recorded wait",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "haveSentInput=false;nextInputSendAt={};inputWaitSince.reset();\n                        }",
+      "replace": "haveSentInput=false;nextInputSendAt={};\n                        }",
+      "check": "worker",
+      "expect": "full acknowledgement credited"
+    },
+    {
+      "id": "v7-09a-drain-70",
+      "batch": "v7-09a",
+      "what": "InputSendDrainRate 70 (below the 75 Hz slew production)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp",
+      "find": "inline constexpr double InputSendDrainRate = 80;\n",
+      "replace": "inline constexpr double InputSendDrainRate = 70;\n",
+      "check": "worker",
+      "expect": "did not drain"
+    },
+    {
+      "id": "v7-09a-drain-75",
+      "batch": "v7-09a",
+      "what": "InputSendDrainRate 75 (the debt outlives four commands)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp",
+      "find": "inline constexpr double InputSendDrainRate = 80;\n",
+      "replace": "inline constexpr double InputSendDrainRate = 75;\n",
+      "check": "worker",
+      "expect": "outlived four commands"
     }
   ]
 }

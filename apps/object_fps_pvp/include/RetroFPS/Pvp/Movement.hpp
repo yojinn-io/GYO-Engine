@@ -23,9 +23,22 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // Input sends draw from an InputSendRate token bucket of this many tokens. A
 // window carrying a command never sent goes at the worker's next poll once a
 // token exists; an unchanged window is resent at the 1/InputSendRate deadline
-// only while one token stays in reserve for the next new command. The average
-// stays at InputSendRate, bursts are two packets, nothing is repaid.
+// only while one token stays in reserve for the next new command. Refill equals
+// command production (60 Hz), so a token debt left by a stall or an earlier
+// phase would keep every later new command waiting by the same amount. A send
+// of a new command that waited for its token is charged less in proportion to
+// that wait, 1 - min(1 - InputSendRate / InputSendDrainRate, wait * InputSendRate)
+// tokens, where the wait ends when the token exists (a late wake adds nothing)
+// and the credit never lifts the bucket above one token after the send. The
+// debt drains within InputSendDrainRate / (InputSendDrainRate - InputSendRate)
+// = 4 commands. The average stays at InputSendRate, bursts are two packets,
+// any three sends span at least 1/InputSendRate, and at most
+// InputSendDrainRate + InputSendBurst sends go in any second, which together
+// with actions and Hello stays inside the Gateway's per-session packet limit.
 inline constexpr double InputSendBurst = 2;
+// Above the 75 Hz production of an earlier-moving phase slew (a quarter of
+// each frame, LocalPlayerPrediction), which a lower rate could not outpace.
+inline constexpr double InputSendDrainRate = 80;
 inline constexpr double MovementTickSeconds = 1.0 / AuthorityTickRate;
 inline constexpr float MovementMaximumPitch = Engine::Math::DegreesToRadians(89.0F);
 inline constexpr double MovementCorrectionSeconds = 0.1;

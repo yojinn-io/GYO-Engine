@@ -61,7 +61,8 @@ struct RecoveryResult {
 // deadline. A product worker mirrors ClientConnection.cpp: each sleep wakes
 // late by a seeded overshoot and sends draw from the 60/s token bucket of two
 // tokens (a window with a never-sent command goes at the next poll; an
-// unchanged one at the deadline, sentAt + period, with a token in reserve).
+// unchanged one at the deadline, sentAt + period, with a token in reserve; on
+// the product path a new command that waited is charged less, InputSendDrainRate).
 // Frames may drift against the steady clock (a display clock in ppm) and
 // jitter uniformly around that grid; the Client's own clock may run fast or
 // slow against the Host's (clientPpm), which scales both its frame-time
@@ -174,6 +175,10 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     bool haveSent{};
     double tokens = InputSendBurst;
     Time tokensAt{};
+    // Product path only (ClientConnection.cpp since v7 batch 09a): when a new
+    // command first found less than one token; its send is charged less in
+    // proportion to the wait. Path::V6 keeps v6final's charge of one token.
+    std::optional<Time> waitSince;
     std::uint64_t sentEpoch{}, sentLife{}, sentThrough{};
     std::map<Time, unsigned> packetsPerSecond;
     bool firstAdvance = true;
@@ -218,6 +223,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     published.commands.clear();
                     haveSent = false;
                     nextSend = 0;
+                    waitSince.reset();
                 }
                 const bool hadCommands = !published.commands.empty();
                 std::erase_if(published.commands, [&](const auto& command) {
@@ -226,6 +232,7 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 if (hadCommands && published.commands.empty()) {
                     haveSent = false;
                     nextSend = 0;
+                    waitSince.reset();
                 }
             }
             if (!published.commands.empty()) {
@@ -234,7 +241,14 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 const bool fresh = !haveSent || published.movementEpoch != sentEpoch ||
                     published.lifeGeneration != sentLife || published.commands.back().sequence > sentThrough;
                 if ((fresh && tokens >= 1) || (now >= nextSend && tokens >= InputSendBurst)) {
-                    tokens -= 1;
+                    double charge = 1;
+                    if (path == Path::Product && fresh && waitSince) {
+                        const double waited = double(now - *waitSince) / double(workerPeriod) - (tokens - 1.0);
+                        charge -= (std::min)(1.0 - InputSendRate / InputSendDrainRate,
+                            (std::max)(0.0, (std::min)(waited, InputSendBurst - tokens)));
+                    }
+                    tokens -= charge;
+                    waitSince.reset();
                     ++inputNumber;
                     ++result.inputPackets;
                     ++packetsPerSecond[now / Units];
@@ -250,6 +264,8 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                     sentEpoch = published.movementEpoch;
                     sentLife = published.lifeGeneration;
                     sentThrough = published.commands.back().sequence;
+                } else if (path == Path::Product && fresh && !waitSince) {
+                    waitSince = now;
                 }
             }
             nextWorker = now + (haveSent && nextSend > now ?

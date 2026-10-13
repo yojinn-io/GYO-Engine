@@ -12,6 +12,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <map>
@@ -20,6 +21,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 namespace {
 using namespace fps::pvp;
@@ -233,7 +235,11 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     // window's first counted batch.
     gateway.UntilTime(Clock::now()+50ms);
     const auto firstActions=gateway.actionAttempts.size();
-    gateway.autoAck=false;connection.SendInput(Input(67,67));
+    // An unacknowledged input after the last acknowledged command (99 in the
+    // current epoch), so movement resends share the budget window below.
+    gateway.autoAck=false;
+    auto pendingInput=Input(100,100);pendingInput.movementEpoch=gateway.epoch;connection.SendInput(std::move(pendingInput));
+    const auto inputsBefore=gateway.attempts.size();
     const auto coexistenceStart=Clock::now();
     // No Drain: the main-thread consumer is stalled for a full second while
     // movement, Hello and the independent circular action worker continue.
@@ -258,7 +264,13 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         while(last<gateway.packets.size() && gateway.packets[last].at-gateway.packets[first].at<1s)++last;
         maxPacketsInSecond=std::max(maxPacketsInSecond,last-first);
     }
+    Require(gateway.attempts.size()-inputsBefore>=55,"the budget window carried no input resends");
     Require(maxPacketsInSecond<=120,"60+30+Hello exceeded the actual 120-packet session budget");
+    // The window above carries resends of one window but no waiting new
+    // commands, so the drained input rate is bounded here instead: draining
+    // sends, a full burst, actions with one resend, and Hello.
+    static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+2<=120,
+        "input drain rate exceeds the 120-packet session budget");
     // Reordered results leave an ID-1 hole. Invalid/conflicting batches cannot
     // partially publish ID 1 or retire data which the game has never consumed.
     for(ActionId first=2;first<=32;first+=8) {
@@ -427,6 +439,110 @@ int main() {
         for(auto index=fastBegin+2;index<gateway.attempts.size();++index)
             Require(gateway.attempts[index].at-gateway.attempts[index-2].at>=14ms,"worker emitted an input burst beyond two packets");
         gateway.Snapshot(77);gateway.Until([&]{return Acknowledged(connection,77);});
+        // A token debt drains (v7 batch 09a). With a full bucket three new
+        // commands go out at once, so the third waits about a step for its
+        // token; then one is published each step, as production does. A send
+        // that waited is charged less in proportion to its wait
+        // (InputSendDrainRate 80), so each later command waits a quarter step
+        // (4.17 ms) less than the one before, and none waits after four.
+        gateway.UntilTime(Clock::now()+100ms);
+        constexpr double stepMs=1000.0/InputSendRate;
+        // Timing tolerances (v7 batch 09a-impl; logs pvp-v7-09ab-impl-20261013/09a/derive):
+        // midway, to the nearest 0.25 ms, between the largest deviation in 30
+        // runs of this probe (0.13, 0.37, 0.34 ms) and the smallest one a wrong
+        // drain rate or a stale wait produces (drain 70/s: 1.79 ms a step;
+        // 75/s: a fourth wait of 3.1 ms; a stale wait: a quarter step, 4.17 ms).
+        constexpr double drainToleranceMs=1.0;     // per-step drain against a quarter step
+        constexpr double settledWaitMs=1.75;       // a wait after the fourth command
+        constexpr double staleGapToleranceMs=2.25; // two steps after the second send
+        std::vector<double> drainWaits,drainIntervals;
+        Clock::time_point previousPublish{};
+        const auto publishWait=[&](std::uint64_t last){
+            const auto before=gateway.attempts.size();
+            const auto publishedAt=Clock::now();
+            connection.SendInput(Input(78,last));
+            const auto sentLast=[&]{const auto& input=gateway.attempts.back().input;
+                return input.commands(input.commands_size()-1).sequence()==last;};
+            gateway.Until([&]{return gateway.attempts.size()>before && sentLast();});
+            if(previousPublish!=Clock::time_point{})
+                drainIntervals.push_back(std::chrono::duration<double,std::milli>(publishedAt-previousPublish).count());
+            previousPublish=publishedAt;
+            return std::chrono::duration<double,std::milli>(gateway.attempts.back().at-publishedAt).count();
+        };
+        const auto drainBegin=gateway.attempts.size();
+        publishWait(78);publishWait(79);previousPublish={};drainIntervals.clear();
+        const auto drainStart=Clock::now();
+        for(std::uint64_t k=0;k<8;++k) {
+            gateway.UntilTime(drainStart+std::chrono::nanoseconds(k*1'000'000'000/InputSendRate));
+            drainWaits.push_back(publishWait(80+k));
+        }
+        Require(drainWaits[0]>=12,"the third new command did not wait for a token");
+        for(std::size_t k=1;k<=3;++k) {
+            // Each step's wait falls by a quarter step, plus any lateness of this publication.
+            const double drained=drainWaits[k-1]-drainWaits[k]-(drainIntervals[k-1]-stepMs);
+            Require(std::abs(drained-stepMs/4)<=drainToleranceMs,"the waiting sends did not drain the token debt");
+        }
+        for(std::size_t k=4;k<drainWaits.size();++k)
+            Require(drainWaits[k]<=settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]),"a token wait outlived four commands");
+        // Publishes a window and returns when its newest command was sent.
+        const auto sendWindow=[&](PlayerInput input){
+            const auto last=input.commands.back().sequence;
+            const auto before=gateway.attempts.size();
+            connection.SendInput(std::move(input));
+            gateway.Until([&]{
+                if(gateway.attempts.size()<=before)return false;
+                const auto& sent=gateway.attempts.back().input;
+                return sent.commands(sent.commands_size()-1).sequence()==last;});
+            return gateway.attempts.back().at;
+        };
+        // Right after the last step's send, two more new commands one after
+        // another (the window then holds MaxPendingCommands), three in a row
+        // with the last step's. A discounted send leaves at most one token, so
+        // no three sends since the drain began span less than a step, and the
+        // third waits for its token. A wait that stayed recorded after its send
+        // would credit every later send and let the bucket refill above one token.
+        Clock::time_point thirdPublished{};
+        for(std::uint64_t last=88;last<=89;++last){thirdPublished=Clock::now();sendWindow(Input(78,last));}
+        const double burstThirdWaitMs=std::chrono::duration<double,std::milli>(gateway.attempts.back().at-thirdPublished).count();
+        double discountedMinSpanMs=std::numeric_limits<double>::infinity();
+        for(auto index=drainBegin+2;index<gateway.attempts.size();++index) {
+            const auto span=gateway.attempts[index].at-gateway.attempts[index-2].at;
+            discountedMinSpanMs=std::min(discountedMinSpanMs,std::chrono::duration<double,std::milli>(span).count());
+            Require(span>=14ms,"a discounted send left more than one token");
+        }
+        Require(burstThirdWaitMs>=10,"the third back-to-back command did not wait for its token");
+        gateway.Snapshot(89);gateway.Until([&]{return Acknowledged(connection,89);});
+        // A wait that ends without its send (the command acknowledged, or
+        // dropped by a new movement epoch) leaves no credit behind. From a full
+        // bucket two commands go at once, and a third is still waiting when the
+        // acknowledgement or epoch arrives. A step after the second send a new
+        // command goes at once and pays a whole token, so the next one goes two
+        // steps after the second send; a stale wait would credit the first and
+        // let the next go a quarter step early.
+        std::vector<double> staleWaitGapsMs;
+        const auto staleWait=[&](std::uint64_t first,bool newEpoch,const char* message){
+            gateway.UntilTime(Clock::now()+100ms);
+            const auto window=[&](std::uint64_t from,std::uint64_t last){
+                auto input=Input(from,last);input.movementEpoch=gateway.epoch;return input;};
+            sendWindow(window(first,first));
+            const auto secondAt=sendWindow(window(first,first+1));
+            const auto waiting=gateway.attempts.size();
+            connection.SendInput(window(first,first+2));
+            gateway.UntilTime(Clock::now()+2ms);
+            if(newEpoch)++gateway.epoch;
+            gateway.Snapshot(first+2);
+            gateway.Until([&]{return Acknowledged(connection,first+2) &&
+                connection.State().snapshot->players.at(0).movementEpoch==gateway.epoch;});
+            Require(gateway.attempts.size()==waiting,"the waiting command was sent before its wait ended");
+            gateway.UntilTime(secondAt+std::chrono::nanoseconds(1'000'000'000/InputSendRate)+3ms);
+            sendWindow(window(first+3,first+3));
+            const auto nextAt=sendWindow(window(first+3,first+4));
+            staleWaitGapsMs.push_back(std::chrono::duration<double,std::milli>(nextAt-secondAt).count());
+            Require(staleWaitGapsMs.back()>=2*stepMs-staleGapToleranceMs,message);
+            gateway.Snapshot(first+4);gateway.Until([&]{return Acknowledged(connection,first+4);});
+        };
+        staleWait(90,false,"a wait ended by a full acknowledgement credited a later send");
+        staleWait(95,true,"a wait ended by a new movement epoch credited a later send");
         const auto actionEvidence=CheckActions(gateway,connection);
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
         Require(!connection.State().combatRules && connection.State().actionTransport.retained==0 &&
@@ -532,6 +648,8 @@ int main() {
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
         std::cout<<Json{{"passed",true},{"restart_ms",restartMs},{"completed_window_gap_ms",completedWindowGapMs},
             {"partial_ack_gap_ms",partialGapMs},{"unacknowledged_resends_1s",resends},{"fully_acknowledged_60fps_attempts",sixtyAttempts},
+            {"token_debt_waits_ms",drainWaits},{"token_debt_publish_intervals_ms",drainIntervals},
+            {"burst_third_wait_ms",burstThirdWaitMs},{"discounted_min_span_ms",discountedMinSpanMs},{"stale_wait_next_gaps_ms",staleWaitGapsMs},
             {"atomic_failure_cycles",failureCycles},{"snapshot_history_overflows_exercised",overflowObserved},
             {"largest_maximum_field_datagram_bytes",maximumDatagram},{"actions",actionEvidence}}.dump()<<'\n';
         return 0;
