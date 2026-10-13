@@ -1031,6 +1031,385 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 2. B2 原型在 100 ms 的短延遲上把重設從 16／16 降到 0／16；150 ms 時部分有效（7／12）；300 ms 的持續延遲三棵樹都重設。
 3. 串接（缺陷 B）在 150 ms 以上的格普遍出現，B2 原型讓串接在 150 ms 的格消失。
 
+## 09b-plan：09a 與 09b 同批實作、合併一次 L2（2026-10-13 使用者核准，D66）
+
+規劃用 ultracode（3 個方案、1 位評審、1 次 xhigh 對抗式檢查，D63 ③），之後 1 輪修正。原檔與各方案：`build/target/_build/test/logs/pvp-v7-09b-plan-20261011/`（`plan-final.md`、`judge.md`、`adversarial.md`、`design-*.md`）。
+
+狀態：**核准**（2026-10-13，D66：「照建議，繼續」；第 7 節 13 項全部照建議）。本文件以 `judge.md` 第三節為骨架，併入 `adversarial.md` 第五節的 9 項修正與第六節可直接改的項目。全程只讀：沒有改追蹤的檔案、沒有 commit、沒有建置、沒有量測、沒有留下背景程序。下文 `L/` 指 `/Users/karasu/Code/Source/GYO-Engine/build/target/_build/test/logs/`。依據標記：〔實測〕〔程式〕〔推論〕〔提議〕（提議＝沒有直接來源、要交 D45 對抗式檢查與使用者核准的值）。
+
+### 白話摘要
+
+1. 要修兩件事：Client 停頓後送輸入會一直「被釘住」（09a）；短暫網路延遲觸發的追趕修正之後，Client 不會把多推的 2 Tick 收回來，容易連帶觸發重設（09b，修法叫 B2，順便消掉舊樣本混進視窗的小缺陷 A）。
+2. 兩者放在同一條 PR #73：先 commit 09a，再 commit 09b；只有 09a 的中間版本不量測、不合併，因為單獨上 09a 會讓 100 ms 延遲的重設從 3／16 變成 16／16。
+3. 程式照已量過的原型正式化，不改設計；150 ms 延遲只部分改善、300 ms 延遲不處理，都寫成已知限制。
+4. 分 8 批：09a 實作、09b 實作、對抗式審查、本機測試與突變、新寫並凍結 L2 工具、L2 準備與宣告、L2 執行、文件同步。
+5. L2：修之前（`eabb107`）對修之後兩棵樹，每棵 66 次、共 132 次，約 60 分鐘機器時間；案例＝100／150／300 ms 短延遲格點＋第 08c 批 L2 的全部案例＋clean-30。
+6. 判定的門檻改為取自「同一條注入路徑、修好的樹」的 09R-map 原型量測並寫明餘裕；沒有資料的部分（clean-30、150 ms）只記錄或和同一 session 的修之前比較。
+7. 總時間約 18～23 h（含新寫 L2 工具 3.5～4.5 h）；前置核對失敗、要重新宣告時再加 1.5～2.5 h。超過 1.5 倍或單一問題累計超過 2 h 就停下回報。
+
+---
+
+### 代號對照（本文件用到的）
+
+| 代號 | 白話 |
+|---|---|
+| `09a-impl` | 把 09a 原型（送輸入不再被釘住）正式寫進產品，加測試與突變 |
+| `09b-impl` | 把 B2 原型（late 修正後換算樣本並重新擷取一次）正式寫進產品，加測試與突變 |
+| `09ab-rev` | 1 位審查者對兩者做對抗式實作審查，之後修 1 輪 |
+| `09ab-L1` | 本機的全量測試、權威 digest、突變、TSan |
+| `09ab-L2T` | 新寫合併 L2 要用的 driver 與判定腳本，乾跑重現既有結果，凍結並交 D45 檢查（本版新增） |
+| `09ab-L2P` | 建置修之後的樹、跑開發跑次、寫 L2 宣告、做 D45 門檻來源檢查 |
+| `09ab-L2` | 執行合併 L2 並記錄結果 |
+| `09ab-doc` | 契約註解、架構文件、批次文件的同步 |
+| `Pab1`～`Pab8` | 對修之後的樹事先寫下、可以被量測推翻的預測（第 2 節各列有白話） |
+| `Jab1`～`Jab8` | L2 的判定條件（第 3 節各列有白話） |
+| D45 | 「每個 L2 判定門檻送核准前，先由 1 位 xhigh 檢查它取自哪個建置、哪個指標」的規則 |
+| D61 | 第 08c 批 L2 核准的規則；本文件只用其中「D44 事後規則」：同一案例在 ≥2 個跑次出現新的重設原因，或平均每跑次多 ≥1 個重設事件，就停下交使用者 |
+| M0 | 第 09 批凍結 FireGate 常數之前的影子量測（`09-firegate-c2.md` 的 S3） |
+| t_frame | 量測工具在 Client 幀上看到 late 修正的時刻（`events.jsonl` 的 `t_frame_after_start_ms`）；本文件的時間一律用它 |
+
+---
+
+### 0. 本版對對抗式檢查的處理
+
+#### 0-1. 第五節「必須修正」1～9
+
+| # | 對抗式檢查的要求 | 本版的處理 | 位置 |
+|---|---|---|---|
+| 1 | Pab2／Jab4 只用一個量、改用 09R-map B2 的來源並寫出餘裕、補 `held_post`＝0、標提議 | 只判「撤回量」，殘餘量改只記錄（殘餘＝撤回＋修正量，不獨立）。門檻 [28.5, 31.5] ms 取自 09R-map B2 的 16 個事件（29.54～30.45），兩側餘裕 1.04／1.05 ms；D48③ 只當旁證並寫出它會越過上界。補 `held_post`＝0（16／16 實測為 0）、0 次重設、沒有來回修正。整條標〔提議〕交 D45；另加最少 6 個跑次有合格事件（D64 的 Jm2 先例） | 2 節 Pab2；3-4 節 Jab4 |
+| 2 | Pab6／Jab6：clean-30 沒有資料；改為同 session 比較或只記錄；G2E 寫腳本與視窗；閒置閘門與 TimerBaseline 分層 | Pab6 拆成 clean-60（判定，來源 08c L2）與 clean-30（修好的樹上 0 筆資料，只記錄，和同一 session 的 before 並列）。G2E 用 `L/pvp-v7-09b-plan-20261010/latency/decompose.py` 的凍結副本，視窗＝`action-client.json` 的 [start_ns, end_ns)，只取 actual 解析的非 seeded 命令；1.0 ms 標〔提議〕，比較對象是同一 session 的 before。寫明閒置閘門（3 次 5 秒 sleeper 都 <10 ms）與 TimerBaseline 分層（`timer.late_p99_ms` ≥6.0 ms＝8 ms 狀態，只用於分層與解讀） | 2 節 Pab6；3-4 節主機與 Jab6 |
+| 3 | Pab7 支持度改「中」，加一個 L1 情境 | 改「中」，寫出機制：往後修的 slew 期間，換算後的 slack＝原始值－已位移量，原始值是小正值的樣本會變成負值。加 L1 特性情境 T-B9（正向 slew 期間連續收到 2 個小正值原始樣本，記下會不會觸發 late）；檔名更正為 `LocalPlayerPrediction.cpp:128`、`:134` 與 `MatchRuntimeHost.cpp:129` | 2 節 Pab7；3-2 節 |
+| 4 | M0 銜接：刪「重推條件 11 由本次格點滿足」；late 修正窗口改為 M0 規劃的待決事項 | 刪除。改寫為：重推條件 11 的觸發條件（D49 第二階段）尚未發生；本批的格點不記錄 FireGate 的 earliest，不能代替它的 FireGate 那一半；「短延遲注入是否併入 M0」交使用者決定。「late 修正窗口」不當排除區，列為 M0 規劃的待決事項，並寫明至少保留 Cooldown＝0 的檢查與 D48③ 兩次 Cooldown 發生在撤回之前 | 4-3 節；7 節決定 10 |
+| 5 | Pab4 與已知限制：統一時間基準；邊界約 70～87 ms（t_frame）；降成敘述或凍結新定義 | 時間一律用 t_frame，並寫出換成 measure.py 的 t_c 時的數字。邊界改為約 70～87 ms，附 D48③ r1／r2／r5 的值與 09R-map 的範圍。Pab4 降成敘述（不判定、不當預測），支持度「低」；新定義與凍結列進「之後再評估」 | 1-2 節已知限制；2 節 Pab4 |
+| 6 | Jab8：寫明 D61 門檻是借來的與它的靈敏度 | 寫明：D61 在 08c 的故障案例（三棵樹逐案相同）核准，套到 150 ms 格是借用；靈敏度：before 每跑次 1.0 次重設，規則要 after 到 2.0 次（每個單位都重設，等於只有 09a 沒有 B2）才會停，或出現新的重設原因。決定 7 依此改寫 | 3-4 節 Jab8；7 節決定 7 |
+| 7 | 新工具：列出新寫並凍結的 driver 與判定腳本，交 D45；重估時間 | 新增批次 `09ab-L2T`：`run_ab.py`（driver，涵蓋 run_gameplay、run_network、backpressure_probe、run_client_delay 四種 runner）、`judge_ab.py`（判定）、`sleeper.py`（照抄），以及要加進凍結清單的既有腳本副本。乾跑必須重現 09R-map 與 08c L2 的已發表數字。交 D45。時間 +3.5～4.5 h，總計改為 18～23 h | 3-3 節；3-1 節 |
+| 8 | 刪停止條件 6 的 q30 >95 | 刪除。停止條件 6 只留「開發跑次的 100 ms 格出現重設或來回修正」（Pab2 預測為 0，來源 09R-map 0／16） | 4-1 節 |
+| 9 | 開發跑次包含 after 樹的 x1、ramp、100 ms 格；寫出前置核對失敗時的重新宣告流程 | 開發跑次（after 樹）：100 ms 三格各 1、x1 ×1、ramp ×1、clean-30 ×1、clean-60 ×1，ramp 記錄來回修正與 late 數；只記錄，不當門檻來源。前置核對在 L2P 開始與 session 前各做一次；失敗時依差分分三類處理（3-5 節） | 3-5 節 |
+
+#### 0-2. 第六節「可以只記錄」：本版直接改了哪些
+
+| 項目 | 處理 |
+|---|---|
+| 「一律夾在 2 Tick」→「最多 2 Tick」；`:97`→`:98` | 已改（1-2 節） |
+| 「8 個樣本的 P90＝最大值」→「n≤10 時取最大值，決定時的樣本數可能超過 8」 | 已改（1-2 節） |
+| Pab7 引用的檔名 | 已改（2 節） |
+| 09a 清除點有四個（連線重設處也清），補 `wait-not-cleared-at-reset` | 已改（1-1 節、3-2 節） |
+| 「要修 300 ms 就得改 105」→「或新增計畫外的規則」 | 已改（1-6 節） |
+| `PredictionTests.cpp:1241-1257` 的測試名稱只對非 late 修正成立，要更新註解 | 已列進 09b-impl（只改註解，不改斷言） |
+| HANDOFF 每批開始與結束都要更新 | 已寫進 3-1 節（每批的完成條件之一） |
+| Fisher 單側 p 的單位、0／9 上界的獨立性 | 列進第 6 節「已知、只記錄」 |
+| `send_wait.txt` 只涵蓋 7 個案例 | 寫進 Pab1 的來源，並列進第 6 節 |
+| 格點注入期間碰到 D44 型自發重設會被算成注入造成 | 列進第 6 節 |
+| b2-extend「docs 以外多 1 個檔」應為 2 個 | 列進第 6 節 |
+
+#### 0-3. 本版另外順手改的（第二節裡沒有列進第五節，但會影響判定）
+
+- **Pab1 的口徑與範圍**：被釘住只用「每秒送出等待中位數 >2 ms 的玩家·秒」一個口徑（和 `send_wait.txt`、M0 相同），拿掉逐命令的「每個 epoch 的前 2 個命令」排除；W_post ≤1.0 ms 只套用在 100／150 ms 格的 late 事件，因為 08c L2 的 x1／ramp 上，flow+09a 每個 late 事件的修正後等待中位數是 3.47～4.92 ms〔實測，`L/pvp-v7-09r-eval-20261011/send_wait.txt`〕，套上去會誤判失敗。1.0 ms 標〔提議〕（它出自 D48③ 宣告的預測，不是實測）。
+- **Pab3 支持度改「中」**：80／150 不串接靠的是「放出早於 slew 結束」，餘裕約 40 ms（adversarial 第二節 Jab5）。
+
+---
+
+### 1. 要修的東西與設計
+
+#### 1-1. 09a：照 `09a-input-send-pinning.md` 的修正版與原型 `e6885b7`
+
+- 設計：`charge −= Min(1−60/R, Max(0, Min(wait/P−(tokens−1), Burst−tokens)))`，R＝80。
+- 清除點**四個**〔程式，`e6885b7`〕：送出時；連線重設（diff 後約 `ClientConnection.cpp:187`，和 `haveSentInput`、`nextActionSendAt` 一起清）；epoch 變更（約 `:549`）；完整 ACK（約 `:559`）。
+- 實測證據：D48③ 的 W_post 最大 0.156 ms（Gateway→Match IPC 注入）；09R-map 的 flow+09a 21 個事件 W_post ≤0.217 ms（`L/pvp-v7-09r-map-20261011/summary-main.txt`，同一條 Client→Gateway 路徑）；08c L2 的 flow+09a 被釘住 0 玩家·秒（`send_wait.txt`，涵蓋 7 個案例，沒有 downstream-1000ms 與 gateway-1000ms）。
+- 程式證據：補充率等於產生率（`ClientConnection.cpp:593-628`；`Movement.hpp:22`、`:28`）。
+- 推論：恢復步數 N＝ceil(R/(R−60))＝4；R 的可選範圍 75<R≤85。
+
+#### 1-2. 缺陷 B：B2 照原型 `c2705be` 正式化，不改重新擷取用哪些樣本（P）
+
+- 設計三部分：
+  - 換算：`phaseAppliedSeconds_`，每個命令記下它產生時的 `appliedSeconds`。
+  - late 判定改用換算後的 slack。
+  - late 修正後的下一次決定改用首次決定的規則（`MovementPhaseFirstSamples`＝8 個樣本、`MovementPhaseFirstDeadbandSeconds`＝0.5 ms 死區，`Movement.hpp:53`、`:56`），`phaseDecided_` 不清。
+- 程式證據：
+  - late 修正**最多** 2 Tick（`LocalPlayerPrediction.cpp:98` 是 Clamp；`Movement.hpp:59`；09b 文件 `:1077` 已更正為「並非一律 2 Tick」）。
+  - 往回修要等 240 個樣本的視窗（`Movement.hpp:54`）。
+  - backlog 的條件是 30 Tick 合計 ≥105（`PvpMatch.cpp:452-458`、`Movement.hpp:38-39`）。
+  - 串接的來源是 `LocalPlayerPrediction.cpp:128` 在 settling 中照樣累加、`:134-137` 立即再修。
+- 實測證據：
+  - 09R-map 的 B2（`0e1fabb`），100 ms 三格 0／16 重設；撤回 +29.54～+30.45 ms；`held_post` 16／16 為 0；q30 69～72。
+  - D48③ 的 20 個事件撤回 +29.85～+32.75 ms（Gateway→Match IPC 注入，旁證）。
+  - 100 與 150 ms 格串接 0／28（`judgement.json` 的 `map_recorded.flow09a-b2/*`）。
+- **已知限制（寫進文件；時間基準＝t_frame）**：
+  - 程式證據：已執行命令的 slack 樣本到它被解析的那個 Tick 才發布（`MatchRuntimeHost.cpp:605-611`）；遲到樣本在到達時發布（`:228-232`）；每次發布只留最小樣本（`:129-134`）。百分位索引是 min(n−1, ⌊0.9n⌋)，n≤10 時 P90 就是最大值，n＝11 起是第二大（`LocalPlayerPrediction.cpp:24-30`）；決定在 slew 結束時做，當時的樣本數可能超過 8。
+  - 實測證據（放出時刻－t_frame）：
+    - 09R-map：100 ms 格 31～48 ms，16 個單位全部完整撤回；150 ms 格 87～101 ms，12 個單位中 7 個重設、5 個只部分撤回（size_v3 −22.1～−28.5，淨撤回 5～11 ms；重設的單位 size_v3 −34.2～−39.9，即重新擷取反而再往前修）。
+    - D48③（IPC 注入）：r1、r5 約 70 ms 仍完整撤回（29.73～30.23）；r2 約 81 ms 部分撤回（16.0）；r3、r4、r6 約 93～97 ms 沒有撤回或重設。
+    - **邊界約在 70～87 ms 之間**（t_frame 基準）。
+    - 換成凍結 `measure.py` 的 t_c（比 t_frame 早 13.7～24.1 ms）時：100 ms 是 49～70 ms、150 ms 是 103～115 ms。兩種基準不得混用。
+  - 推論：放出得晚時，決定那一刻的樣本裡還沒有反映延遲已經消失的樣本，撤回量變小，甚至反向。
+- 為什麼現在不改：改了就要重新取得 100 ms 的證據；而改用「只收 late 修正之後的樣本」（M）的涵蓋範圍估計也到不了 150 ms 的 87～101 ms。
+
+#### 1-3. 缺陷 A：由換算取代 A1
+
+- 程式證據：病因是 settle 只前移 `settledAfter_`、不清視窗（`LocalPlayerPrediction.cpp:323-328`）。換算之後，settling 期間收到的樣本描述的就是修正後的相位。
+- 實測證據：缺陷 A 的量級 ≤0.27 ms（09b 文件「缺陷 A」）。
+- 用一個 L1 測試釘住：現在的頭要失敗，修改後通過。
+
+#### 1-4. 不採用的路線：A1＋B0′
+
+- 09a 上線後，100 ms 的重設全是單次修正（串接 0、重設 16／16），B0′ 碰不到（minimal-a-b0 第 0 節）。
+- 它和 B2 互相取代、不能疊加。
+
+#### 1-5. 順序：同一條 PR #73，先 commit 09a，再 commit 09b
+
+- 只有 09a 的中間頭禁止任何量測或合併；L2 只在兩者合併後的頭上做。
+- 依據〔實測〕：09a 單獨上線時 Jm2 是 12／12，100 ms 格從 3／16 變成 16／16。
+- 依據〔推論〕：被釘住時，換算的前提「slack 隨產生時刻 1:1 移動」不成立，所以 B2 也需要 09a。
+
+#### 1-6. 範圍外：300 ms 型的「延遲消失型」重設
+
+- 實測證據：B2 在 45／60 ms 的領先約等於 37.3＋δ；三棵樹都是 12／12 重設。
+- 要修它，得改 backlog 門檻 105 或 late 修正的上限（停止條件），**或新增計畫外的 Client 規則**（例如延遲消失時快速正向回收，列在「之後再評估」）。
+- 每次重設會讓 1 個連線品質視窗判失敗，連續 3 個就踢人（`Movement.hpp:72-73`）；實際網路上的頻率未知〔推論〕。
+
+---
+
+### 2. 可被推翻的預測（after＝09a＋09b 的頭）
+
+| 代號 | 白話 | 預測 | 推翻條件 | 支持 |
+|---|---|---|---|---|
+| Pab1 | 送輸入不再被釘住 | (a) 全部案例被釘住的玩家·秒＝0（口徑：每秒送出等待中位數 >2 ms）；(b) 100／150 ms 格的每個 late 事件 W_post ≤1.0 ms〔提議〕 | 任一不成立 | (a) 強：08c L2 flow+09a 7 個案例為 0（`send_wait.txt`）。(b) 強：09R-map 21 個事件最大 0.217（餘裕 0.78）、D48③ 0.156 旁證。x1／ramp 不套 (b)（flow+09a 為 3.47～4.92 ms），只記錄 |
+| Pab2 | 100 ms 延遲後完整撤回、不重設 | 100 ms 三格的每個合格 late 事件：撤回量 ∈ [28.5, 31.5] ms〔提議〕、`held_post`＝0、0 次非 respawn 重設、沒有來回修正 | 任一不成立 | 強：09R-map B2 16 個事件 29.54～30.45（下界餘裕 1.04、上界餘裕 1.05）、重設 0／16、`held_post` 0／16、來回修正 0。D48③ 旁證 29.85～32.75（IPC 路徑；32.75 會越過上界，見決定 6） |
+| Pab3 | 100／150 ms 不再串接修正 | 100 和 150 ms 格的串接單位＝0 | ≥1 | 中：09R-map B2 0／28；80／150 靠「放出早於 slew 結束」，餘裕約 40 ms |
+| Pab4 | （敘述，不是預測）150 ms 只部分有效 | 150 ms 格：部分單位重設、部分只部分撤回；放出－t_frame 越接近 70 ms 越可能完整撤回 | 不判定 | 低：凍結的 `measure3` 在 150 ms 給 `withdraw_ms`＝None（late slew 與重新擷取併成一步），「第一個乾淨樣本」也沒有定義；09R-map 裡「完整撤回」那一類是空的 |
+| Pab5 | 300 ms 照舊重設 | 兩棵樹全部重設；45／60 ms 的單次修正領先＝37.3＋δ ±3 ms（排除 80／300 的串接單位） | 有單位沒重設，或偏差 >3 | 強：12／12；實測偏差 +0.10～+1.95。只記錄 |
+| Pab6 | 閒置主機上沒有退步 | clean-60：late 修正、非 respawn 重設、Cooldown、被釘住都是 0；G2E（產生→執行）每位玩家 P50 的合併中位數和同一 session 的 before 相差 ≤1.0 ms〔提議〕。clean-30：不預測（修好的樹上 0 筆資料），只記錄 | clean-60 任一不成立 | clean-60 的 0：中～強（08c L2 flow／flow+09a 各 4 次為 0；09R-map B2 clean-60 前置 1 次；B2 只有這 1 次）。G2E：中（clean 也有首次決定與視窗修正，slew 期間換算不是恆等；1.0 ms 出自舊版 09b-3 草案，沒有來源） |
+| Pab7 | 抖動網路下不觸發 late 修正 | network0／20／40 的 late 修正＝0 | ≥1 | 中：08c 32／32 是 flow 與 flow+09a，沒有 B2。〔程式〕每次發布只帶最小樣本（`MatchRuntimeHost.cpp:129`），late 要連續 2 次（`LocalPlayerPrediction.cpp:128`、`:134`）；但往後修的 slew 期間，換算後 slack＝原始值－已位移量，原始值在 (0, 位移量) 的樣本會變負，network40 的遺失加抖動下可能湊成連續 2 次〔推論，機率低〕。L1 用 T-B9 釘住行為 |
+| Pab8 | 持續延遲（x1、ramp）不預測 | 不做預測，照 D61 的事後規則比較兩棵樹 | D61 的旗標 | B2 在這兩個案例沒有資料；開發跑次先看（3-5 節）。〔推論〕ramp 上升期間重新擷取取最大值，可能再往前修，下降時領先更大 |
+
+---
+
+### 3. 實作分批、L1、L2
+
+#### 3-1. 分批、檔位、時間
+
+| 代號 | 白話 | 檔位 | 時間 |
+|---|---|---|---|
+| 09a-impl | 09a 原型正式化，加 worker 測試與突變 | high；token 折讓式與四個清除點局部 xhigh | 2.5～3.5 h |
+| 09b-impl | B2 正式化，加測試（含 T-B9）與突變 | high；換算的正負號、settle／late／重新擷取的交界局部 xhigh | 3.25～4.25 h |
+| 09ab-rev | 1 位對抗式審查，之後 1 輪修正 | xhigh 審查＋high 修正 | 1.5～2 h |
+| 09ab-L1 | 全量 CTest、權威 digest、全部突變、TSan、probe 30 次 | medium | 約 1.5 h |
+| 09ab-L2T | 新寫 driver 與判定腳本、乾跑重現、凍結、D45 檢查工具 | high 撰寫＋xhigh 檢查 | 3.5～4.5 h |
+| 09ab-L2P | 建置 after 樹、前置核對、開發跑次、宣告、D45 門檻來源檢查 | 宣告 high＋xhigh 檢查；開發跑次 medium | 3.5～4.5 h |
+| 09ab-L2 | 執行，記錄結果 | medium | 約 1.5 h（機器約 60 分） |
+| 09ab-doc | 文件同步 | medium | 約 1 h |
+
+- 合計 **18.25～22.75 h（約 18～23 h）**。前置核對失敗而要重新宣告（3-5 節的 (c) 類）時 +1.5～2.5 h。超過 1.5 倍，或單一問題累計超過 2 h，就停下回報。
+- 每批開始、里程碑、結束時，HANDOFF 的「現況」與 P2 記錄器和工作同一個變更更新（不是只在 09ab-doc 才做）。
+- 09ab-L2T 和 09a-impl／09b-impl 互不依賴，可以並行；09ab-L2T 的 D45 檢查要在 09ab-L2P 寫宣告之前完成。
+- 09ab-doc 要同步：`Movement.hpp` 的契約註解、`network-architecture.zh-Hant.md:81`、`:222-223`、`08-client-worker-asio.md:20`、第 09 批的 S2／S3、09a 與 09b 文件、HANDOFF。
+
+#### 3-2. L1 大綱
+
+- **09a**：照 09a 文件。
+  - `worker_main` 的測試放在 `:429` 之後、序號 ≥78；容許值由 probe 重複 30 次推導。
+  - 補「第 8 步之後連發 2 個」和「等待中遇到 ack／epoch 變更」兩段檢查。
+  - 加 Input(78,78) 或 `static_assert` 的總預算。
+  - `MovementRecoveryTests` 的打折只加在 `Path::Product`。
+  - 突變 `v7-09a`：`charge-off`、`charge-every-send`、`waited-sticky`、`wait-not-cleared-at-epoch`、`wait-not-cleared-at-full-ack`、**`wait-not-cleared-at-reset`**、`drain-70`、`drain-75` 必須被殺；`drain-85` 預期存活，寫明理由。
+- **09b 的測試**：
+  - 原型已有的 T-B1、T-B2，以及原型審查補的 X1～X4。
+  - 恆等式：沒有修正時，與現在的頭逐值相同，≥80 個種子。
+  - 缺陷 A：修正後第一個滿窗的 P90 沒有舊相位的偏移；現在的頭要失敗。
+  - 每次 late 修正只觸發一次重新擷取。
+  - SeedLead 清掉 `phaseAppliedSeconds_` 和 `commandAges_`。
+  - 持續延遲 >70.6 ms 時仍會串接。
+  - 特性測試：放出晚於 slew 結束時，P 只部分撤回。這是把已知限制釘住，不是改善的證明；測試註解寫明「之後若改善這個限制，這個測試會失敗，屬預期」。
+  - **T-B9（Pab7 的特性情境）**：往後修（撤回方向）的 slew 期間，連續收到 2 個原始 slack 為小正值（小於已位移量）的樣本。斷言只記錄現在的行為（會不會觸發 late 修正），不新增規則；結果寫進 L2 宣告的 Pab7 說明。
+  - far 測試（`PredictionTests.cpp:1229-1238`）和 `:1241-1257` 的斷言都不改；`:1241-1257` 的測試名稱註解改成「只對非 late 的修正成立」。
+- **09b 的突變 `v7-09b`**：`rebase-off`、`rebase-sign-flip`、`late-raw-slack`、`reacquire-never-clears`、`reacquire-window-deadband`（改用 240 個樣本、2 ms 死區）、`conversion-missing-unslewed`、`seedlead-partial-clear`、`reacquire-on-window-correction`。每一條都只在預期的訊息出現時算 killed。
+- **閘門**：全量 CTest、權威 digest scale 1 和 3 各 35／35 為 0 差分（只是閘門，它不保護相位追蹤）、TSan `object_fps_pvp.ipc`、沒有 stale 的突變。
+
+#### 3-3. 新寫並凍結的 L2 工具（09ab-L2T）
+
+09R-map 的 `run_map.py`／`measure_map.py` 把宣告值、排程與三棵樹寫死，只有 run_gameplay 與 run_client_delay；08c L2 的 `run_l2.py`／`judge_l2.py` 也寫死三棵樹，沒有格點的量測。合併 L2 要新寫：
+
+| 檔 | 內容 | 起點 |
+|---|---|---|
+| `run_ab.py`（driver） | 兩棵樹、DECLARED、排程、執行檔 sha、四種 runner（`run_gameplay.py`：clean-30／60；`run_network.py`：network0／20／40；`backpressure_probe.py`：downstream-1000ms、downstream-respawn-1000ms、gateway-1000ms；`run_client_delay.py`：x1、ramp、格點）、閒置閘門、每輪前後 sleeper、`--main-head`／`--judge-sha`／`--driver-sha`、每個跑次之前的狀態核對、逾時與 process group 的收拾 | 08c `run_l2.py`（`f95839db…`）與 09R-map `run_map.py`（`cc8be0ed…`） |
+| `judge_ab.py`（判定） | plan 核對（宣告值、排程、driver sha、自己的 sha，同一件事只定義在它裡面）；只呼叫凍結的分析器：`ingress_evidence.py`（Jab2）、D48 偵測器的計數器增量（late 數）、`measure.py`＋`measure3.py`（經 09R-map 的轉接，格點事件）、G2E 的 `decompose.py` 副本、被釘住的 `send_wait.py` 副本；D61 事後規則照 `judge_l2.py` 的實作搬過來 | 09R-map `measure_map.py`（`f263cb2d…`）與 08c `judge_l2.py`（`e6a8916f…`） |
+| `sleeper.py` | 照抄（`98105dbf…`） | 08c L2 |
+
+- **凍結清單**：09R-map 的 47 檔（08c 的 44 檔＋D48 偵測器、`measure.py`、`measure3.py`）＋`L/pvp-v7-09b-plan-20261010/latency/decompose.py`＋`L/pvp-v7-09r-eval-20261011/scripts/send_wait.py`，共 49 檔。後兩者以副本的 sha256 凍結；`run_network.py` 與往例相同只受 git 狀態核對保護。
+- **乾跑（凍結前必須通過）**：
+  - `judge_ab.py` 對 09R-map session 重算的 B2 撤回量、重設數、串接數、`held_post`，和 `summary-main.txt` 逐值相同。
+  - 對 08c L2 session 重算的 late 數、被釘住、D61 旗標，和 `summary-main.txt`、`send_wait.txt` 相同。
+  - 對 08c L2 的 clean-60（flow 對 flow+09a）算出 G2E 的差，作為 Jab6 提議值的參考（記錄來源與數字）。
+  - mock session（不完整、plan 不符）要被拒。
+- **D45**：xhigh 檢查兩支新腳本的每個判定是否照宣告、門檻取自哪個建置與指標；修正後重算 sha，核准時一起凍結。
+
+#### 3-4. L2 宣告大綱
+
+**兩棵樹**
+- before：`../GYO-Engine-l2-flow`（`eabb107`），沿用 08c L2 的建置，開跑前核對 `artifacts.sha256`。
+- after：09a＋09b 的頭，在 detached worktree 從零建置。
+
+**案例**（每棵樹 66 次，共 132 次）
+- Client→Gateway 短延遲格點：x1，起點 12.0 s（D64 的理由）；δ∈{45, 60, 80} ms × {100, 150} ms 各 3 次；× 300 ms 各 2 次，只記錄。
+- 08c L2 的全部案例，照原次數與 x1、ramp 的 7.5 s 起點：clean-60 ×4、network0 ×4、network20 ×6、network40 ×6、downstream-1000ms ×4、downstream-respawn-1000ms ×2、gateway-1000ms ×2、x1 ×6、ramp ×4。
+- clean-30 ×4。
+
+**主機**
+- 照 08c L2 與 09R-map：session 期間不做開發；`caffeinate -dims`；前景沒有其他使用者程式；暫停 PR #73 的 auto-fix；背景 agent 與分析先停。
+- 閒置閘門（`--idle-gate`，正式執行必須帶）：第一個項目之前連續 3 次 5 秒 sleeper，每次最大值 <10 ms；不成立每 30 秒重試，最多 30 分鐘，仍不成立就停下。每輪前後各記 1 次 sleeper 與前 5 名 CPU 程序。
+- **TimerBaseline 分層**：每個跑次記 probe 的 `timer_baseline`；`late_p99_ms` ≥6.0 ms 記為 8 ms 狀態（第 05 批的定義），同時記 `interval_p99_ms`（`cross.py` 的 ≥22 ms）與兩者的一致率。分層只用於解讀與並列（clean-30／60、G2E 依狀態分欄），不是判定、門檻或分母。
+
+**判定與門檻來源**
+
+| 代號 | 白話 | 條件 | 來源 |
+|---|---|---|---|
+| Jab1 | session 是宣告的那一個 | plan 核對、session 完整（132 項）、腳本 sha 等於宣告值 | 09R-map 的作法（D64） |
+| Jab2 | 資訊流守恆沒有壞 | 每個跑次 ingress passed；修好的樹上 failed 或未判定就停止 | D61、D64 |
+| Jab3 | 送輸入不再被釘住（Pab1） | after 全部案例被釘住玩家·秒＝0；100／150 ms 格的 late 事件 W_post ≤1.0 ms〔提議〕 | 被釘住：08c L2 flow+09a（7 個案例）。W_post：09R-map flow+09a 21 個事件最大 0.217（同路徑、原型）；D48③ 0.156 旁證 |
+| Jab4 | 100 ms 完整撤回（Pab2） | 100 ms 三格每個合格事件：撤回量 ∈ [28.5, 31.5] ms〔提議〕、`held_post`＝0、0 次非 respawn 重設、沒有來回修正；而且 9 個跑次中 ≥6 個有合格事件，否則記「無法判定」並交使用者 | 09R-map B2 16 個事件（`0e1fabb`，同一條路徑、修好的樹），經前置核對；最少跑次照 D64 的 Jm2；`held_post` 照 D48③ 已核准的 J2d。殘餘量只記錄 |
+| Jab5 | 100／150 ms 不串接（Pab3） | 串接單位＝0 | 09R-map B2 0／28，經前置核對 |
+| Jab6 | 閒置主機沒有退步（Pab6） | clean-60：after 的 late 修正（偵測器增量）、非 respawn 重設、Cooldown、被釘住都是 0；G2E 合併中位數 \|after−before\| ≤1.0 ms〔提議〕，before 取同一個 session、同一支凍結腳本、同一個視窗。clean-30：只記錄，和 before 依 TimerBaseline 分層並列 | clean-60 的 0：08c L2；G2E：同 session 的 before，1.0 ms 的參考值在 09ab-L2T 由 08c L2 重算 |
+| Jab7 | 抖動網路下沒有 late 修正（Pab7） | network0／20／40 的 late 修正＝0；不成立就停下交使用者，附 T-B9 的行為 | 08c L2（flow、flow+09a 32／32；沒有 B2，支持度中） |
+| Jab8 | 故障案例與 150 ms 沒有整體惡化 | 08c 的故障案例（x1、ramp、downstream、gateway、network）和 150 ms 格，套用 D61 的 D44 事後規則（同一案例新原因 ≥2 個跑次，或平均每跑次多 ≥1 個事件），成立就停下交使用者 | 故障案例：D61 原本的適用範圍。**150 ms 格是借用**：D61 在三棵樹逐案相同的 08c 故障案例上核准，150 ms 格預期兩棵樹不同。靈敏度：before（flow）150 ms 每跑次 1.0 次重設（09R-map 6／12 單位），規則要 after ≥2.0 次（每個單位都重設，等於只有 09a 沒有 B2；B2 原型是 7／12＝1.17）才會停；另一條是出現 backlog 以外的新重設原因 |
+
+**計數方式**：late 修正一律用凍結 D48 偵測器的計數器增量（D63④），不用 `judge_l2.py` 的最大值。
+
+**只記錄**
+- Pab4（含 150 ms 每個單位的 size_v3、放出－t_frame、重設、q30）、Pab5、Pab8。
+- clean-30 的全部量（late、重設、G2E），依 TimerBaseline 分層，和同 session 的 before 並列。
+- 殘餘量；x1／ramp 的 W_post；ramp 的來回修正數與 late 數。
+- 以等待變化量（ΔW）表示的模型，寫明「事後得出、本次才預先宣告」（D65）。
+- q30_max、撤回的時刻與量、D58 的丟棄、注入跑次的 Cooldown、D44 旗標、主機狀態。
+
+#### 3-5. 前置核對、開發跑次與重新宣告
+
+**前置核對**（L2P 開始時一次、session 開跑前一次）
+- `git diff 0e1fabb <after> -- apps/object_fps_pvp/src apps/object_fps_pvp/include`（`0e1fabb` 同時含 09a 與 B2 原型）只能有註解。
+
+**開發跑次**（after 樹；只記錄，不計入判定，不當門檻來源）
+- 100 ms 三格各 1 次、x1 ×1、ramp ×1、clean-30 ×1、clean-60 ×1；ramp 記錄來回修正與 late 數。機器約 10～15 分。
+- 用途：確認新工具在 after 樹上能跑完；提早看到 x1／ramp 會不會碰到 D61 停止、clean-30 在修好的樹上的行為。
+- 開發跑次的 100 ms 格出現重設或來回修正 → 停止條件 6。
+
+**前置核對失敗時的重新宣告流程**
+1. 停下，不跑開發跑次（或不開 session）。把差分逐段分類並記進 HANDOFF：
+   - (a) 只有改名、搬移、`static_assert`、常數的寫法改變，產生的行為不變；
+   - (b) 只動測試或註解以外的非執行路徑（例如 log 文字）；
+   - (c) 會改變行為的程式修正（例如審查之後的修正）。
+2. 只有 (a)(b)：宣告寫明每一段的分類與理由，借自原型的門檻保留；D45 的 xhigh 檢查要確認分類。
+3. 有 (c)：Jab3 的 W_post、Jab4、Jab5 與 Pab1(b)、Pab2、Pab3 全部降為〔提議〕；after 樹的 100 ms 三格開發跑次加到各 2 次（只記錄）；xhigh 只重新檢查受影響的判定；改版的宣告送使用者核准。時間 +1.5～2.5 h。
+4. 不論哪一類，宣告裡的前置核對改成對「核准時的 after commit」比對，session 前再核一次。
+
+---
+
+### 4. 停止條件、風險、M0 銜接
+
+#### 4-1. 停止條件
+
+1. 需要改權威、wire、FireGate 常數、late 修正上限、target、lead 或 backlog 門檻。
+2. 既有斷言需要放寬：`MovementRecoveryTests` 的 Held／Actual、`worker_main`、far 測試、`PredictionTests.cpp:1241-1257`。
+3. 有突變沒被殺，或既有突變變成 stale。
+4. 權威 digest 不是 0 差分。
+5. 前置核對失敗（照 3-5 節處理）。
+6. 開發跑次的 100 ms 格出現重設或來回修正。
+7. clean 出現 Cooldown，或 Jab1、Jab2、Jab6 不成立。
+8. 有人要在只有 09a 的頭上量測。
+9. 超出 time-box。
+10. 新工具的乾跑不能重現 09R-map 或 08c L2 的已發表數字。
+
+#### 4-2. 風險
+
+1. 150 ms 只部分有效（已知限制，寫進文件）。
+2. 抖動下會不會來回修正量不到：network 的 late 修正若為 0，B2 根本不會被觸發。
+3. Pab7 支持度只有「中」：往後修的 slew 期間換算會讓 slack 變小（T-B9 釘住）。
+4. x1／ramp 上 B2 沒有資料，ramp 可能觸發 D61 停止；開發跑次先看。
+5. network40 故障解除時合計已到 90，餘裕只剩 15。
+6. 固定起點下，跑次之間不完全獨立。
+7. `worker_main` 的既有斷言偶發失敗（base 也有 1／20）。
+8. token 規則有三份拷貝（code smell）。
+9. Jab4 的上界：after 若像 D48③ 的 IPC 路徑那樣出現 32～33 ms 的撤回，會誤判失敗（見決定 6）。
+
+#### 4-3. 和 M0、FireGate 凍結、C2 的銜接
+
+- 前置條件：09ab-L2 通過，PR #73 的頭＝09a＋09b，之後才做 S3（M0）→ S4（凍結）→ C2。
+- 重推條件 1、2 發生在凍結之前，不算重推（`09-firegate-c2.md:91`、`:92`）。
+- **重推條件 11**（`09-firegate-c2.md:101`）的觸發是「D49 第二階段實作後」，目前沒有發生；08c 建議的改寫（`08c-drop-report.md:755`）尚未核准，本批不動它。本批的格點不記錄 FireGate 的 earliest、也不量 R 對 earliest，**不能代替 11 的 FireGate 那一半**。「M0 要不要加跑 Client→Gateway 短延遲注入」交使用者決定（決定 10）。
+- **交給 M0 規劃的待決事項**（不在本批定案）：
+  - late 修正之後的射擊怎麼處理。不當排除區；建議當成另行判定的類別，至少保留「Cooldown＝0」的檢查。
+  - 依據：D48③ 的 2 次 Cooldown（base 的 chain-r2 與 09a-b2 的 chain-r5 各 1 次）都在 t_c 之後約 114～115 ms、late slew 期間、撤回之前（09b 文件「D48 第③步的結果」）。撤回期間 phaseShift 是正值，FireGate 偏保守（`FireGate.cpp:18-19` 的 `Max(0, phaseShift)`）；late slew 期間沒有這個保守，由 M0 確認。
+  - 這 2 次 Cooldown 和 R8 一起作為 M0 的輸入。
+- C2 要記錄被釘住的秒數和 late 修正數。
+
+---
+
+### 5. 之後再評估（計畫外，本批不做）
+
+1. 重新擷取用哪些樣本：M（只收 late 修正當下 tip 之後的命令）或 S（只收 slew 結束之後產生的命令），附第 1-2 節的機制證據與 70～87 ms 的邊界。
+2. Match 改成在命令到達時就發布 slack 樣本。
+3. late 修正的幅度改成依遲到量決定，或改變「連續 N 次」。
+4. 依 D51④ 重推 backlog 門檻 105；延遲消失時的快速正向回收。
+5. 短延遲加抖動的複合注入（量來回修正）。
+6. network 案例改用每次不同的遺失種子。
+7. token 規則抽成純函式。
+8. 加跑 200 ms 的視窗，量出撤回的邊界。
+9. 之後的模型宣告一律改用 ΔW 形式。
+10. 為 150 ms 型事件定義並凍結「第一個反映延遲消失的樣本」的量測（讓 Pab4 可以變成預測）。
+11. 各量測工具的時間基準統一（t_frame 與 measure.py 的 t_c 並存）。
+12. Jab4 的上界改成結構上界（撤回量 < 該事件的修正量，即不過度撤回），取代分布上界。
+
+---
+
+### 6. 已知、只記錄
+
+- Fisher 單側 p＝0.113 把同一跑次的兩位玩家當成獨立單位；改用跑次（flow 2／8 對 B2 0／8）是 0.233。0／9 的 95% 上界 28.3% 假設跑次獨立，但起點固定。
+- `send_wait.txt` 沒有 downstream-1000ms 與 gateway-1000ms，「08c 被釘住 0」只涵蓋 7 個案例。
+- 格點注入期間若碰到 D44 型的自發重設，會被算成注入造成的重設（機率低）。
+- b2-extend 的「小問題」：`eabb107..HEAD` 在 docs 以外多出的是 `run_client_delay.py` 和它的測試 2 個檔。
+- clean-30 在主機 8 ms 狀態下，修好的樹（08c 之後）沒有資料；08b L2（舊樹）有 8 ms 狀態的 clean-30，late 0（`L/pvp-v7-09b-plan-20261010/latency/aggregate.txt`），但不能借用。memory「v7 clock cross comparison」的 Client 端比較，若本次 L2 出現 8 ms 狀態的 clean-30，可以順便補做。
+- D48③ 的撤回量 29.85～32.75 來自 Gateway→Match IPC 注入、08c 之前的樹、stopped session，只當旁證。
+
+---
+
+### 7. 需要使用者決定的地方
+
+每一項都附建議、替代方案與代價。
+
+1. **09a 和 B2 要不要放在同一批、只做一次合併的實機量測？**
+   - 建議：同一批、同一次 L2（也就是 D48 的 (b) 路線，D44 的提前條件）。
+   - 替代甲：先修 B2、09a 延後。代價：多一次 L2；而且 B2 的前提（送輸入不被釘住）不成立。
+   - 替代乙：兩者都延後到 M0 之後。代價：M0、凍結、C2 都要做兩次，違反 D47⑤。
+2. **late 修正後重新擷取，要用哪些樣本？**
+   - 建議：照原型（收重新擷取開始以來的全部換算後樣本）。
+   - 替代：只收 late 修正之後的命令。代價：+1～1.5 h 開發格點量測；100 ms 借來的門檻全部降為提議值；150 ms 的改善估計到不了實測的 87～101 ms，理由比上一版更弱。
+3. **缺陷 A（舊樣本混進視窗）怎麼修？**
+   - 建議：由換算一併取代，加一個 L1 測試釘住。
+   - 替代：另外再做 A1。代價：效果重複，多一組突變。
+4. **09a 的待決 2～5**：建議全部照 09a 文件的建議（比例折讓修正版、R＝80、Input(78,78)、這次不抽純函式）。
+5. **commit 粒度**：
+   - 建議：09a、09b 各一個 commit，只有 09a 的中間頭禁止量測。
+   - 替代：壓成一個 commit。代價：中間頭和原型不再一一對應，審查時比對不方便。
+6. **100 ms 撤回量的門檻**（Jab4）：
+   - 建議：[28.5, 31.5] ms，兩側都取自 09R-map 原型（同一條注入路徑、修好的樹），餘裕各約 1 ms，標提議值交 D45；9 個跑次中至少 6 個有合格事件。
+   - 替代：下界照建議，上界改成「撤回量小於該事件自己的修正量」（不過度撤回）。好處：不借分布，不會因為 32～33 ms 這種正常撤回誤判失敗（D48③ 的 IPC 路徑有 32.75）；代價：上界變寬，擋不住 31.5～33 ms 的偏移。
+7. **150 ms 延遲怎麼判？**（Jab8）
+   - 建議：沿用第 08c 批核准的事後規則，但明說它是借來的，只擋得住「每個單位都重設」這種整體惡化，或出現新的重設原因。
+   - 替代甲：只記錄。代價：退步到「只有 09a」的程度也不會停下。
+   - 替代乙：以原型的 7／12 為基準另定門檻。代價：需要新提議值與 D45 檢查，樣本只有 12 個單位。
+8. **clean-30（30 FPS 閒置）怎麼判？**
+   - 建議：只記錄，和同一次 session 的修之前並列、依主機計時器狀態分層；Cooldown 和故障窗外的非 respawn 重設仍是停止條件。
+   - 替代：和同一次 session 的修之前比較，after 多於 before 就判失敗。代價：每棵樹只有 4 次，主機 8 ms 狀態下的行為未知，容易誤判。
+9. **產生→執行延遲（G2E）的容許差 1.0 ms**：
+   - 建議：保留 1.0 ms 作為提議值，只和同一次 session 的修之前比較；在 09ab-L2T 用同一支腳本對 08c L2 的 clean-60 重算兩棵樹的差，作為 D45 檢查的參考。
+   - 替代：只記錄。代價：Client 端的延遲退步不會被擋下。
+10. **M0 要不要加跑短延遲注入？late 修正之後的射擊怎麼判？**
+    - 建議：交給 M0 規劃決定，本批只把它列為 M0 的待決事項；傾向加跑（因為本批量不到 FireGate 在 late 修正前後的行為），而且 late 修正之後的射擊當成另行判定的類別，至少保留「Cooldown＝0」。
+    - 替代：M0 不加跑，等重推條件 11 觸發時再做。代價：FireGate 在 late 修正期間的行為，在凍結前沒有任何量測；D48③ 看到的 2 次 Cooldown 沒有後續驗證。
+11. **合併 L2 的工具**：
+    - 建議：新寫一份 driver 和判定腳本（`09ab-L2T`，+3.5～4.5 h），乾跑重現既有數字後凍結，交 D45。
+    - 替代：把 09R-map 和 08c 的既有腳本各複製一份，只改樹與排程，分兩次 session 跑。代價：省約 1 h，但有兩份判定、兩次 D45、兩次閒置閘門，結果要人工合併。
+12. **前置核對失敗時的處理**（3-5 節）：建議照本版的三類流程；有行為變更時，借自原型的門檻全部降為提議值並重新送核准。
+13. **檔位**：照 3-1 節（D47⑪、09b 文件決定 9 的形式）：主力 high；09a 的 token 與清除點、09b 的換算交界、審查與兩次 D45 檢查用 xhigh；文件與執行 medium。xhigh 高於主對話檔位的部分需要你同意。
+
 ## 缺陷 A：settling 期間收到的舊樣本留在下一個視窗
 
 - **機制**：`Correct()` 只在修正開始時清掉樣本（`LocalPlayerPrediction.cpp:97-101`）。settling 期間 `:117-130` 照常收樣本，用的是舊的 `settledAfter_`；settle 時（`:323-328`）只前移 `settledAfter_`，不清視窗。所以修正後滿 240 個樣本時，視窗裡還有 m 個「修正前相位」的樣本。`Percentile` 取 `sorted[216]`（`:24-30`）。
