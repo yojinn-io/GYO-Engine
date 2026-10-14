@@ -107,7 +107,7 @@ high；局部 xhigh：意圖與過期的交接、期限與 `phaseShiftSeconds_` 
 | 平台 | 本批 |
 |---|---|
 | macOS Intel（Metal） | L1、TSan、開發跑次；L2 在第 05 批 |
-| Windows（D3D12） | CI 的 L1；實機在第 15 批的 LAN 場次 |
+| Windows（D3D12） | CI 的 L1；實機在第 15 批的 LAN 場次（補充，2026-10-14，D76：第 15 批移到 v7.1） |
 | Linux、macOS arm64 | CI 的 L1；實機未驗證 |
 
 ## 實作（2026-10-08，進行中）

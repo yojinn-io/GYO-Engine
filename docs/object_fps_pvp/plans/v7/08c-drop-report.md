@@ -65,6 +65,8 @@
 
 ### log 行族與細節檔（D53 第 3 項：暫定 v1，第 10 批決定沿用或改版）
 
+補充（2026-10-14，D76）：第 10 批移到 [v7.1](../v7.1/README.md)；v1 在整個 v7 期間維持暫定。
+
 - 三種行，鍵名規則 `<原因>[_<種類>]_<單位>`，開頭固定 `version`、`player`、`window_ms`、`final`，新鍵只加在行尾，值一律十進位整數；鍵名由單一的名稱對照函式產生（Go、C++ 各一份）：
   - `player ingress statistics version=1 player=<id> window_ms=<int> final=<0|1> …`（Gateway，`fwd_*`＝已交給 Match，`drop_*`＝Gateway 執行的丟棄）
   - `gateway ingress statistics version=1 window_ms=<int> final=<0|1> …`（Gateway 全域）
@@ -87,6 +89,8 @@
 ## 已知缺口（寫進協議文件，到 pv7 或第 10 批為止）
 
 補充（2026-10-14，D73）：pv7 移到 v7.1，所以「到 pv7 為止」的缺口在整個 v7 期間都存在，到 [v7.1](../v7.1/README.md) 的 pv7 才處理；「到第 10 批為止」的部分不變。
+
+補充（2026-10-14，D76）：第 10 批也移到 [v7.1](../v7.1/README.md)，所以「到第 10 批為止」的部分（下面第 4 項的 D5、D6，第 6 項 Client 端的欄位）也在整個 v7 期間存在；ingress v1 在 v7 維持暫定。
 
 1. Gateway 拿不到內容的丟棄（③ 的各類）：P2 只計數，Match 不知道。
 2. ① 留下的兩種執行丟棄：拒絕線溢出、已解析截短。
@@ -756,7 +760,7 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 - **M0、FireGate 凍結、C2**：排在本批、L2、09a／09b 的決定之後（D51 ⑤）。C2 的 after 要宣告包含資訊流修正；C2 的 before（`fee92ff`）不變，凍結分析器照常可用（版本仍是 6）。
 - **FireGate 重推條件 11**（`09-firegate-c2.md`）：M0 還沒跑，P2 的部分靠順序滿足；建議改寫成「第 11 批若讓 Gateway 的回報進入相位樣本或品質判定，就重推；只做計數時不重推」，加跑的注入用純延遲型。補充（2026-10-14，D73）：第 11 批移到 v7.1，這條建議（尚未核准）一起移到 v7.1 的 FireGate 重推。
 - **D44**：暴露上升，L2 依樹記錄偶發 epoch 重設的頻率。（更正，2026-10-11，09R-eval：只在持續延遲（x1、ramp）時成立；network 型（遺失加 ≤30 ms 抖動）不成立，L2 的 late 修正 0，機制見「L2 的結果」的 P4。）**第 16 批**：整體回歸的基準換成修好之後的資訊流。
-- **第 10 批**：觀測缺口第 1、2、4 項大部分在本批完成；剩下 D5、D6、舊序號的 Actions、Client 端的欄位（第 3 項）；log 契約決定沿用或取代 ingress v1。
+- **第 10 批**：觀測缺口第 1、2、4 項大部分在本批完成；剩下 D5、D6、舊序號的 Actions、Client 端的欄位（第 3 項）；log 契約決定沿用或取代 ingress v1。補充（2026-10-14，D76）：第 10 批移到 v7.1，這一列的剩餘項目一起移過去（v7.1 README「從 v7 移入的項目」第 11 項）。
 - **第 11 批**：pv7 的 `GatewayDropReport`（原因列舉一次定完整，dwell 的定義只有一個）；「Gateway 職責」一節；重新檢視 Gateway 的狀態；是否轉送 A3／A5。更正（2026-10-14，D73）：這一列整列移到 [v7.1](../v7.1/README.md)，v7 不做。
 - **第 10、11 批共通**：本批的丟棄回報就是 Match 端的死信隊列；ingress v1 與 `GatewayDropReport` 要不要統一成一個死信的 Data Contract，見 HANDOFF 未結事項「死信隊列（命名與概念）」。補充（2026-10-14，D73）：第 11 批的那一半（是否統一成一個死信 Data Contract）移到 v7.1；第 10 批的 log 契約仍在 v7。
 - **穩定基線**：v5、v6 的 `STABLE_BASELINE.md` 已加「已知問題」；要不要重新發佈，本批修好之後再決定。

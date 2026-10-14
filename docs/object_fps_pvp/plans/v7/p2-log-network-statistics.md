@@ -41,6 +41,7 @@
 - 不改任何節拍、佇列或送出語意。既有的日誌行（`gateway statistics`、`player statistics`、`gateway transport`、`runtime transport`）一個字都不改：驗收工具解析其中幾行（`action_probe.py:594`）。
 - 日誌格式不是正式的 Data Contract：版本與驗證規則在第 10 批訂。本批的統計行到那時再決定是否納入。
 - Gateway 的 CPU、Client 的程序 CPU、收包間隔：不在 P2-log 的定義內；收包時間戳的 snapshot 年齡在第 10 批。
+  - 補充（2026-10-14，D76）：第 10 批移到 [v7.1](../v7.1/README.md)；本批的統計行在 v7 期間維持非正式的日誌格式。
 
 ## 驗收
 

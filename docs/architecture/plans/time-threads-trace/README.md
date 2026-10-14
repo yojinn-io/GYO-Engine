@@ -2,6 +2,7 @@
 
 更新：2026-10-08。Owner：Engine（新增 `engine/time`、`engine/threads`、`engine/trace`；`engine/runtime` 與 `engine/render/backend/sdl_gpu` 只改時鐘來源）。
 **狀態：TT-1 完成**（2026-10-09，和消費端的第一個使用者同一個 PR 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 未開始**。 本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-08 由提出需求的消費端在其規劃批次中建立。
+2026-10-14：消費端 D76 的連帶：TT-2 的第一個消費端（消費端的日誌與診斷補強，紀錄格式會成為它的 Data Contract）移到消費端的下一個版本（重構版），和它的網路契約一起設計。本計畫的 TT-2 範圍與檔位不變，不重新規劃；開始時點跟著第一個消費端（每個 Engine 子系統與它的第一個消費端放在同一個 PR）。
 
 Engine 目前沒有自己的時間基準、等待原語、執行緒管理，也沒有結構化紀錄：
 

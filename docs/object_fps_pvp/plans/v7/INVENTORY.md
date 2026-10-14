@@ -77,6 +77,8 @@ v7 README 要求：「v7 開始時，先做一份唯讀盤點（所有用到時�
 | Settings | 弱 | 原子寫入已有兩份（ui_editor、shader pipeline）；使用者目錄沒有消費端（沒有任何地方呼叫 `SDL_GetPrefPath`） | `engine/io`（IP-5） |
 | Audio | 無 | `engine/asset` 的 SoundLoader 沒有使用者；SDL_AUDIO 有編進來，但 `SdlPlatform.cpp:44` 只初始化 VIDEO | Engine（AU-1，使用者決定的功能） |
 
+補充（2026-10-14，D76）：上表的結論（分配到哪裡）不變，時點改變：v7 只做 Time、Threads（TT-1）；Trace（TT-2）、SDL 隔離（IP-3、IP-4）與任務 7、8 的消費端移到 [v7.1](../v7.1/README.md)，Display、Settings（IP-5）、Audio（AU-1）與任務 5、6 的消費端移到 [v8](../v8/README.md)。下面第 4 節中任務 7、8 的判定，留作 v7.1 的輸入。
+
 其他產品與工具：
 - `object_fps`、`object_fps_v2`：在 `engine/config/projects.csv` 為 `enabled=0`。兩者都用 `RuntimeLoop`、可變 dt（夾在 0～0.05 s），沒有執行緒、sleep、網路、音效。
 - `ui_editor`：用 `RuntimeLoop`，但忽略 `FrameContext`。
