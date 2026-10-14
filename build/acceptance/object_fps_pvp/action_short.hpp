@@ -662,3 +662,392 @@ void RunActionShort(const Options& options) {
         throw;
     }
 }
+
+// Rapid-fire record for the C2 comparison (v7 batch 09, step S5). Clicks are
+// injected at the SDL layer, so every click takes PvpApplication's normal path
+// and its real local fire gate decides it; nothing is submitted around the
+// gate and no authority rejection is injected (unlike the action short above,
+// whose create role deliberately submits one cooldown request; its report names
+// it in "cooldown_injection_action_id"). The actor captures input, turns to
+// the wall used by the action short and clicks in segments of eleven submitted
+// shots, each followed by a reload. Scenarios:
+//   intervalN  one click every N authority ticks from the segment start (four segments);
+//   edge       one click every frame for 5 s of clicking (the gate decides);
+//   pause      the runner stops the Gateway for 250 ms, then 6 s of clicks every frame.
+// Record only: the probe fails on its own bounded schedule, never on a decision.
+// The product exposes per frame only the newest decision and its counters, so
+// when one frame drains several decisions only the newest is exact; the others
+// are marked ambiguous unless the counters prove them all accepted.
+struct RapidClickPlan final {
+    std::string scenario;
+    unsigned intervalTicks{};   // 0 = every frame
+    unsigned segments{};        // interval scenarios stop after this many segments
+    double clickingSeconds{};   // every-frame scenarios stop after this much clicking time
+    bool clean{true};
+};
+
+RapidClickPlan PlanRapidClicks(const std::string& scenario) {
+    RapidClickPlan plan{scenario};
+    if (scenario.starts_with("interval")) {
+        plan.intervalTicks = static_cast<unsigned>(std::stoul(scenario.substr(8)));
+        plan.segments = 4;
+    } else if (scenario == "edge") plan.clickingSeconds = 5;
+    else if (scenario == "pause") { plan.clickingSeconds = 6; plan.clean = false; }
+    return plan;
+}
+
+void RunActionRapid(const Options& options) {
+    using namespace fps::pvp;
+    const bool actor = options.role == "create";
+    const auto plan = PlanRapidClicks(options.actionRapid);
+    static constexpr unsigned ShotsPerSegment = 11;
+    static constexpr double MaximumWaitSeconds = 3;
+    std::filesystem::create_directories(options.output);
+    const auto startPath = options.output / "rapid-start.txt";
+    const auto finishedPath = options.output / "rapid-finished.txt";
+    const auto pauseReadyPath = options.output / "rapid-pause-ready.txt";
+    const auto pausePath = options.output / "rapid-pause.json";
+    if (actor) for (const auto& path : {startPath, finishedPath, pauseReadyPath}) std::filesystem::remove(path);
+    ActionJson evidence{{"passed", false}, {"role", options.role}, {"protocol", AcceptanceProtocolVersion},
+        {"mode", "action-rapid"}, {"scenario", plan.scenario}, {"nominal_fps", options.fps},
+        {"interval_ticks", plan.intervalTicks}, {"segments_planned", plan.segments},
+        {"clicking_seconds_planned", plan.clickingSeconds}, {"shots_per_segment", ShotsPerSegment},
+        {"clean", plan.clean}, {"deliberate_cooldown_injections", ActionJson::array()},
+        {"scope", "Two real GUI processes, SDL-injected clicks through PvpApplication's own fire gate, real Match and "
+                  "Gateway on localhost. Record only: no verdict on decisions."}};
+    std::vector<ActionJson> frames, clicks;
+    frames.reserve(static_cast<std::size_t>(options.fps * (options.duration + 25)));
+    std::uint64_t unscheduledYawFrames{};
+    double unscheduledYaw{};
+    auto save = [&] {
+        std::ofstream report(options.output / (options.role + "-rapid.json"));
+        report << evidence.dump(2) << '\n';
+        std::ofstream trace(options.output / (options.role + "-rapid-frames.jsonl"));
+        for (const auto& frame : frames) trace << frame.dump() << '\n';
+        std::ofstream clickTrace(options.output / (options.role + "-rapid-clicks.jsonl"));
+        for (const auto& click : clicks) clickTrace << click.dump() << '\n';
+        Require(bool(report) && bool(trace) && bool(clickTrace), "Cannot write rapid evidence");
+    };
+    try {
+        PvpApplication application;
+        GuiRoom guiRoom(options.output, options.role, options.roomPlayers);
+        std::string error;
+        Require(application.InitializeContent(options.assetRoot, error), error);
+        PvpApplicationOptions graphics;
+        graphics.title = "Object FPS PVP rapid-fire acceptance / " + options.role;
+        graphics.gateway = options.gateway;
+        graphics.gpuDriver = options.gpu;
+        graphics.width = 960;
+        graphics.height = 540;
+        graphics.vsync = false;
+        Require(application.InitializeGraphics(graphics, error), error);
+        auto& connection = application.Connection();
+        auto* window = application.Platform().NativeWindow();
+        evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
+        if (actor) connection.CreateAndJoin(options.gateway);
+        else connection.Refresh(options.gateway);
+
+        enum class Phase { Setup, AwaitPause, Clicking, AwaitLastDecision, ReloadKey, Reloading, Settle, Draining, Done };
+        const auto phaseName = [](const Phase phase) {
+            switch (phase) {
+            case Phase::Setup: return "setup";
+            case Phase::AwaitPause: return "await-pause";
+            case Phase::Clicking: return "clicking";
+            case Phase::AwaitLastDecision: return "await-last-decision";
+            case Phase::ReloadKey: return "reload-key";
+            case Phase::Reloading: return "reloading";
+            case Phase::Settle: return "settle";
+            case Phase::Draining: return "draining";
+            case Phase::Done: return "done";
+            }
+            return "invalid";
+        };
+        Phase phase = Phase::Setup;
+        double phaseSince{};
+        const auto enter = [&](const Phase next, const double at) { phase = next; phaseSince = at; };
+        bool joined = actor, setupCaptured{}, setupReleased{}, setupTurned{};
+        PlayerId playerId{};
+        std::string room;
+        std::optional<double> measurementStart;
+        std::uint64_t frameIndex{}, presentedCount{};
+        double maximumFrameGap{}, clickingSeconds{}, segmentStart{};
+        unsigned segment{}, segmentClicks{}, segmentSent{};
+        // Decisions arrive in action-ID order; decidedThrough is the newest drained ID.
+        ActionId decidedThrough{}, previousSent{}, lastSent{};
+        std::map<ActionId, std::size_t> clickOfAction;
+        std::set<ActionId> reloadActions;
+        std::uint64_t attributionMismatches{}, decisionOrderViolations{}, reloadsSubmitted{}, lostCapture{};
+        std::optional<WeaponFeedbackObservation> baseline;
+        const auto started = Clock::now();
+        auto previous = started, refreshed = started;
+        for (;;) {
+            const auto now = Clock::now();
+            Require(Seconds(now, started) < options.duration + 25, "Rapid probe exceeded bounded deadline");
+            const double stamp = std::chrono::duration<double>(now.time_since_epoch()).count();
+            auto state = connection.State();
+            Require(state.error.empty(), "Rapid connection failed: " + state.error);
+            if (!joined && state.phase == ConnectionPhase::Lobby) {
+                if (!state.rooms.empty()) {
+                    room = state.rooms.front().id;
+                    connection.Join(options.gateway, room);
+                    joined = true;
+                } else if (Seconds(now, refreshed) >= .3) { connection.Refresh(options.gateway); refreshed = now; }
+            }
+            if (const auto peer = guiRoom.Observe(state)) application.ObserveRemote(peer);
+            if (guiRoom.Full(state) && !playerId) {
+                playerId = state.playerId;
+                evidence["player_id"] = playerId;
+                if (actor) {
+                    measurementStart = stamp + .25;
+                    std::ofstream start(startPath);
+                    start << std::setprecision(17) << *measurementStart;
+                    Require(bool(start), "Cannot signal rapid start");
+                    SDL_RaiseWindow(window);
+                }
+            }
+            if (!actor && !measurementStart && std::filesystem::exists(startPath)) {
+                std::ifstream start(startPath);
+                double value{};
+                if (start >> value) measurementStart = value;
+            }
+            const double elapsed = measurementStart ? stamp - *measurementStart : -1;
+            if (actor && phase == Phase::Done) break;
+            if (!actor && measurementStart && std::filesystem::exists(finishedPath)) break;
+
+            const auto before = application.WeaponFeedback();
+            std::string event;
+            bool click{};
+            ActionJson clickRecord;
+            if (actor && measurementStart && elapsed >= 0) {
+                if (!baseline && before.active) baseline = before;
+                const auto waited = elapsed - phaseSince;
+                switch (phase) {
+                case Phase::Setup:
+                    if (!setupCaptured && elapsed >= .10) {
+                        PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
+                        PushMouse(window, true);
+                        setupCaptured = true; event = "capture";
+                    } else if (setupCaptured && !setupReleased && elapsed >= .20) {
+                        PushMouse(window, false);
+                        setupReleased = true; event = "release";
+                    } else if (setupReleased && !setupTurned && elapsed >= .30) {
+                        // The wall the action short's eleven wall shots hit.
+                        PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
+                        setupTurned = true; event = "turn-wall";
+                    } else if (setupTurned && elapsed >= .60) {
+                        Require(before.active && before.inputCaptured && before.magazineAmmo == before.magazineCapacity,
+                            "Rapid setup did not capture input with a full magazine");
+                        if (plan.clean) { enter(Phase::Clicking, elapsed); segmentStart = elapsed; }
+                        else {
+                            std::ofstream ready(pauseReadyPath);
+                            ready << std::setprecision(17) << stamp;
+                            Require(bool(ready), "Cannot signal pause readiness");
+                            enter(Phase::AwaitPause, elapsed);
+                        }
+                        event = "setup-done";
+                    }
+                    break;
+                case Phase::AwaitPause:
+                    Require(waited <= 5, "Runner did not release the Gateway pause within 5 s");
+                    if (std::filesystem::exists(pausePath)) {
+                        std::ifstream pause(pausePath);
+                        ActionJson fault = ActionJson::parse(pause, nullptr, false);
+                        if (!fault.is_discarded()) {
+                            evidence["gateway_pause"] = fault;
+                            evidence["gateway_pause_observed_seconds"] = elapsed;
+                            enter(Phase::Clicking, elapsed);
+                            segmentStart = elapsed;
+                            event = "pause-released";
+                        }
+                    }
+                    break;
+                case Phase::Clicking: {
+                    const double due = plan.intervalTicks ?
+                        segmentStart + segmentClicks * double(plan.intervalTicks) / AuthorityTickRate : elapsed;
+                    if (elapsed >= due) {
+                        click = true;
+                        const CombatState* own{};
+                        if (state.snapshot)
+                            for (const auto& combat : state.snapshot->combat)
+                                if (combat.playerId == state.playerId) own = &combat;
+                        clickRecord = {{"index", clicks.size()}, {"segment", segment}, {"segment_click", segmentClicks},
+                            {"scheduled_seconds", plan.intervalTicks ? ActionJson(due) : ActionJson(nullptr)},
+                            {"seconds", elapsed}, {"host_steady_seconds", stamp}, {"frame_id", frameIndex},
+                            {"ammo_before", before.magazineAmmo}, {"captured_before", before.inputCaptured},
+                            {"snapshot_tick", state.snapshot ? ActionJson(state.snapshot->tick) : ActionJson(nullptr)},
+                            {"next_allowed_shot_tick", own ? ActionJson(own->nextAllowedShotTick) : ActionJson(nullptr)},
+                            {"local_cooldown_remaining_seconds", before.cooldownRemainingSeconds},
+                            {"previous_sent_action", previousSent ? ActionJson(previousSent) : ActionJson(nullptr)}};
+                        PushMouse(window, true);
+                        PushMouse(window, false);
+                        ++segmentClicks;
+                        event = "click";
+                    }
+                    break;
+                }
+                case Phase::AwaitLastDecision:
+                    Require(waited <= MaximumWaitSeconds, "The segment's last shot decision did not arrive within 3 s");
+                    if (decidedThrough >= lastSent && before.cooldownRemainingSeconds <= 0) {
+                        PushKey(window, SDL_SCANCODE_R, true);
+                        enter(Phase::ReloadKey, elapsed);
+                        event = "reload";
+                    }
+                    break;
+                case Phase::ReloadKey:
+                    PushKey(window, SDL_SCANCODE_R, false);
+                    enter(Phase::Reloading, elapsed);
+                    event = "reload-key-up";
+                    break;
+                case Phase::Reloading:
+                    Require(waited <= MaximumWaitSeconds, "The segment reload did not complete within 3 s");
+                    if (!before.reloading && !before.reloadPending && before.magazineAmmo == before.magazineCapacity &&
+                        decidedThrough >= before.lastActionId) {
+                        enter(Phase::Settle, elapsed);
+                        event = "reload-done";
+                    }
+                    break;
+                case Phase::Settle:
+                    if (waited >= .15) {
+                        ++segment;
+                        segmentClicks = segmentSent = 0;
+                        segmentStart = elapsed;
+                        enter(Phase::Clicking, elapsed);
+                        event = "segment-start";
+                    }
+                    break;
+                case Phase::Draining:
+                    Require(waited <= MaximumWaitSeconds, "Rapid shot decisions did not all arrive within 3 s");
+                    if (decidedThrough >= lastSent) { enter(Phase::Done, elapsed); event = "done"; }
+                    break;
+                case Phase::Done:
+                    break;
+                }
+            }
+            const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
+            previous = now;
+            if (elapsed >= 0) maximumFrameGap = std::max(maximumFrameGap, frame.deltaSeconds);
+            if (phase == Phase::Clicking) clickingSeconds += frame.deltaSeconds;
+            Require(application.ProcessEvents(frame) == Control::Continue, "Rapid acceptance window closed");
+            Require(application.Update(frame) == Control::Continue, application.LastError());
+            const auto after = application.WeaponFeedback();
+
+            // Decisions drained by this Update (before the gate saw this frame's click).
+            const auto drained = after.decisionCount - before.decisionCount;
+            if (drained > 0) {
+                const ActionId newest = after.lastDecisionActionId;
+                if (newest < decidedThrough) ++decisionOrderViolations;
+                const auto first = decidedThrough + 1;
+                if (newest + 1 != first + drained) ++attributionMismatches;
+                const auto rejected = after.rejectedDecisions - before.rejectedDecisions;
+                const auto cooldown = after.authorityCooldownRejections - before.authorityCooldownRejections;
+                const bool newestRejected = after.lastRejection != ShotRejection::None;
+                const bool othersAccepted = rejected == (newestRejected ? 1U : 0U);
+                for (ActionId id = first; id <= newest; ++id) {
+                    const auto found = clickOfAction.find(id);
+                    if (found == clickOfAction.end()) continue;  // a reload, or not a rapid click
+                    auto& verdict = clicks[found->second]["verdict"];
+                    verdict = {{"arrived_seconds", elapsed}, {"arrived_frame_id", frame.frameIndex},
+                        {"drained_with", drained}};
+                    if (id == newest) {
+                        verdict["state"] = newestRejected ? "rejected" : "accepted";
+                        verdict["rejection"] = static_cast<int>(after.lastRejection);
+                        verdict["hit_kind"] = static_cast<int>(after.lastHitKind);
+                        verdict["resolved_tick"] = after.lastDecisionTick;
+                        verdict["host_steady_seconds"] = after.lastDecisionSeconds;
+                        verdict["exact"] = true;
+                    } else if (othersAccepted) {
+                        verdict["state"] = "accepted";
+                        verdict["exact"] = true;
+                    } else {
+                        verdict["state"] = "ambiguous";
+                        verdict["frame_rejected"] = rejected;
+                        verdict["frame_cooldown_rejections"] = cooldown;
+                        verdict["exact"] = false;
+                    }
+                }
+                decidedThrough = std::max(decidedThrough, newest);
+            }
+            const bool sent = after.submittedActions > before.submittedActions && after.lastActionKind == ActionKind::Shot;
+            if (after.submittedActions > before.submittedActions && after.lastActionKind == ActionKind::Reload) {
+                reloadActions.insert(after.lastActionId);
+                ++reloadsSubmitted;
+            }
+            if (click) {
+                const bool blocked = after.localCooldownBlocks > before.localCooldownBlocks;
+                Require(!(sent && blocked), "One click was both submitted and locally blocked");
+                clickRecord["outcome"] = sent ? "sent" : blocked ? "local_block" : "none";
+                clickRecord["previous_verdict_arrived"] = previousSent ? ActionJson(decidedThrough >= previousSent) :
+                    ActionJson(nullptr);
+                clickRecord["verdict"] = nullptr;
+                if (!after.inputCaptured) ++lostCapture;
+                if (sent) {
+                    clickRecord["action_id"] = after.lastActionId;
+                    clickRecord["submitted_host_steady_seconds"] = after.lastSubmittedSeconds;
+                    clickOfAction[after.lastActionId] = clicks.size();
+                    previousSent = lastSent = after.lastActionId;
+                    ++segmentSent;
+                } else clickRecord["action_id"] = nullptr;
+                clicks.push_back(std::move(clickRecord));
+                const bool budgetSpent = plan.clickingSeconds > 0 && clickingSeconds >= plan.clickingSeconds;
+                if (budgetSpent) enter(Phase::Draining, elapsed);
+                else if (segmentSent == ShotsPerSegment) {
+                    if (plan.segments && segment + 1 >= plan.segments) enter(Phase::Draining, elapsed);
+                    else enter(Phase::AwaitLastDecision, elapsed);
+                }
+            } else Require(!sent, "A shot was submitted without a rapid click");
+            // Only the setup turn may change the aim; anything else is external input.
+            if (measurementStart && event != "turn-wall" && before.active && after.active &&
+                std::abs(after.yaw - before.yaw) > 1e-6F) {
+                ++unscheduledYawFrames;
+                unscheduledYaw += std::abs(after.yaw - before.yaw);
+            }
+            Require(application.Render(frame) == Control::Continue, application.LastError());
+            const bool presented = application.PresentedMovement().has_value();
+            if (presented) ++presentedCount;
+            Require(frames.size() < frames.capacity(), "Bounded rapid frame buffer exhausted");
+            frames.push_back({{"frame_id", frame.frameIndex}, {"seconds", elapsed}, {"frame_seconds", frame.deltaSeconds},
+                {"phase", phaseName(phase)}, {"event", event}, {"presented", presented},
+                {"decisions", after.decisionCount}, {"submitted", after.submittedActions},
+                {"local_cooldown_blocks", after.localCooldownBlocks},
+                {"authority_cooldown_rejections", after.authorityCooldownRejections}, {"ammo", after.magazineAmmo},
+                {"captured", after.inputCaptured}, {"hp", after.hp}, {"dead", after.dead}});
+            const double remaining = 1 / options.fps - Seconds(Clock::now(), now);
+            if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        }
+        const auto last = application.WeaponFeedback();
+        evidence["presentation_frames"] = presentedCount;
+        evidence["maximum_frame_seconds"] = maximumFrameGap;
+        evidence["unscheduled_yaw_frames"] = unscheduledYawFrames;
+        evidence["unscheduled_yaw_radians"] = unscheduledYaw;
+        evidence["disturbed"] = unscheduledYawFrames > 0;
+        evidence["final_local"] = LocalActionSample(last);
+        Require(presentedCount >= 10, "Insufficient successful real GUI presentations");
+        if (actor) {
+            Require(baseline.has_value(), "Rapid actor never became active");
+            ActionJson counts{{"clicks", clicks.size()}, {"segments_started", segment + 1},
+                {"clicking_seconds", clickingSeconds}, {"reloads_submitted", reloadsSubmitted},
+                {"clicks_without_capture", lostCapture},
+                {"local_cooldown_blocks", last.localCooldownBlocks - baseline->localCooldownBlocks},
+                {"decisions", last.decisionCount - baseline->decisionCount},
+                {"accepted", last.acceptedDecisions - baseline->acceptedDecisions},
+                {"rejected", last.rejectedDecisions - baseline->rejectedDecisions},
+                {"authority_cooldown_rejections", last.authorityCooldownRejections - baseline->authorityCooldownRejections},
+                {"player_hits", last.hitDecisions - baseline->hitDecisions},
+                {"attribution_mismatches", attributionMismatches}, {"decision_order_violations", decisionOrderViolations}};
+            evidence["counts"] = counts;
+            Require(lostCapture == 0, "A rapid click arrived without input capture");
+        }
+        evidence["passed"] = true;
+        save();
+        if (actor) { std::ofstream finished(finishedPath); finished << "Actor rapid probe complete\n"; }
+        connection.Leave();
+        std::cout << options.role << ": rapid evidence recorded; " << clicks.size() << " clicks\n";
+    } catch (const std::exception& exception) {
+        evidence["error"] = exception.what();
+        evidence["unscheduled_yaw_frames"] = unscheduledYawFrames;
+        evidence["disturbed"] = unscheduledYawFrames > 0;
+        save();
+        if (actor) { std::ofstream finished(finishedPath); finished << "Actor rapid probe failed\n"; }
+        throw;
+    }
+}

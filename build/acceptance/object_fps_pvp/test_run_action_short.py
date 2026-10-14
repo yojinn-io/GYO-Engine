@@ -109,6 +109,82 @@ class ActionSummaryTests(unittest.TestCase):
         self.assertEqual(len(summary["errors"]), 2)
 
 
+class RapidRecordTests(unittest.TestCase):
+    """The rapid-fire cases are record-only: tallies come from the actor's per-click record, nothing is judged."""
+    def directory(self, reports, clicks):
+        temporary = tempfile.TemporaryDirectory(prefix="pvp-rapid-summary-")
+        self.addCleanup(temporary.cleanup)
+        directory = Path(temporary.name)
+        for role, report in reports.items():
+            (directory / f"{role}-rapid.json").write_text(json.dumps(report), encoding="utf-8")
+        if clicks is not None:
+            (directory / "create-rapid-clicks.jsonl").write_text(
+                "".join(json.dumps(click) + "\n" for click in clicks), encoding="utf-8")
+        return directory
+
+    @staticmethod
+    def click(index, outcome, segment_click, previous=None, arrived=None, verdict=None):
+        return {"index": index, "segment": 0, "segment_click": segment_click, "outcome": outcome,
+                "previous_sent_action": previous, "previous_verdict_arrived": arrived,
+                "action_id": index + 1 if outcome == "sent" else None, "verdict": verdict}
+
+    def clicks(self):
+        accepted = {"state": "accepted", "rejection": 0, "exact": True}
+        return [self.click(0, "sent", 0, verdict=accepted),
+                self.click(1, "local_block", 1, previous=1, arrived=False),
+                self.click(2, "sent", 2, previous=1, arrived=True, verdict={"state": "rejected", "rejection": 3,
+                                                                            "exact": True}),
+                self.click(3, "sent", 3, previous=3, arrived=False, verdict={"state": "ambiguous", "exact": False}),
+                self.click(4, "sent", 4, previous=4, arrived=True, verdict=None)]
+
+    @staticmethod
+    def reports(**changes):
+        create = {"passed": True, "disturbed": False, "platform": {"os": "macOS"},
+                  "counts": {"authority_cooldown_rejections": 1, "local_cooldown_blocks": 1, "player_hits": 0,
+                             "attribution_mismatches": 0}}
+        create.update(changes)
+        return {"create": create, "join": {"passed": True, "disturbed": False, "platform": {"os": "macOS"}}}
+
+    def test_cases_cover_every_scenario_at_30_60_144_and_the_default_matrix_is_unchanged(self):
+        self.assertEqual(set(runner.CASES), {"action30", "action60", "action144", "capture"})
+        self.assertEqual(len(runner.RAPID_CASES), len(runner.RAPID_SCENARIOS) * 3)
+        self.assertEqual(runner.RAPID_CASES["rapid-interval12-30"], ("interval12", 30))
+        self.assertEqual(runner.RAPID_CASES["rapid-edge-144"], ("edge", 144))
+        self.assertFalse(set(runner.CASES) & set(runner.RAPID_CASES))
+
+    def test_tallies_split_outcomes_verdicts_and_previous_decision_arrival(self):
+        counts = runner.rapid_counts(self.clicks())
+        self.assertEqual((counts["clicks"], counts["sent"], counts["local_blocks"], counts["neither"]), (5, 4, 1, 0))
+        self.assertEqual((counts["accepted"], counts["rejected"], counts["ambiguous"], counts["missing"]), (1, 1, 1, 1))
+        self.assertEqual(counts["cooldown_rejections_attributed"], 1)
+        self.assertEqual(counts["previous_verdict_arrived"], {"eligible": 4, "arrived": 2})
+        self.assertEqual(counts["previous_verdict_arrived_sent"], {"eligible": 3, "arrived": 2})
+
+    def test_completed_record_reports_the_product_cooldown_count_without_judging_it(self):
+        summary = runner.summarize_rapid(self.directory(self.reports(), self.clicks()), "edge")
+        self.assertTrue(summary["passed"], summary["errors"])
+        self.assertTrue(summary["record_only"])
+        self.assertTrue(summary["clean"])
+        self.assertEqual(summary["excluded_injections"], [])
+        self.assertEqual(summary["counts"]["authority_cooldown_rejections"], 1)
+        self.assertFalse(runner.summarize_rapid(self.directory(self.reports(), self.clicks()), "pause")["clean"])
+
+    def test_disturbance_failure_missing_clicks_and_counter_mismatch_are_named(self):
+        disturbed = runner.summarize_rapid(self.directory(self.reports(disturbed=True, unscheduled_yaw_frames=3),
+                                                          self.clicks()), "interval12")
+        self.assertFalse(disturbed["passed"])
+        self.assertEqual(disturbed["disturbed"], ["create"])
+        failed = runner.summarize_rapid(self.directory(self.reports(passed=False, error="Rapid probe exceeded bounded "
+                                                                    "deadline"), self.clicks()), "interval12")
+        self.assertIn("create: Rapid probe exceeded bounded deadline", failed["errors"])
+        missing = runner.summarize_rapid(self.directory(self.reports(), None), "interval12")
+        self.assertIn("create-rapid-clicks.jsonl: missing or malformed", missing["errors"])
+        reports = self.reports()
+        reports["create"]["counts"]["local_cooldown_blocks"] = 2
+        mismatch = runner.summarize_rapid(self.directory(reports, self.clicks()), "interval12")
+        self.assertIn("create: per-click local blocks do not equal the product counter", mismatch["errors"])
+
+
 class TimerBaselineIsNeverAVerdict(unittest.TestCase):
     """The empty-loop timer baseline is interpretation only: the analyzer may pass it through, never read it."""
     def test_source_only_passes_the_timer_baseline_through(self):
