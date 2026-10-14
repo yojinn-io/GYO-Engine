@@ -44,7 +44,7 @@
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D75）。S4-lite 的範圍已核准（使用者：「S4-lite 照建議，同步完開始，快速處理掉p2 ，然後結束掉v7。」）。
 - **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。下一步：縮小版的第 16 批（D76：P1、P2 範圍的整合驗收、STABLE_BASELINE v7（Windows 標未驗證）、D44 整體回歸（不含 D49 第二階段）、是否發行），開始時先提案具體清單；做完 v7 結束。分支 `claude/pvp-v7-p7`。
-- **進行中**：16-removal（產品移除檢查；medium；估 1～1.5 h）與 16-D44T（D44 回歸工具；high；估 2～3 h）並行（使用者：「照建議，16-L1 完成後繼續 16-removal 和 16-D44T」）。16-L1 完成（見進度記錄）。
+- **進行中**：16-D44T（D44 回歸與整合量測的工具；high；估 2～3 h）。16-removal 完成（見進度記錄）。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。
 - **m0-to-v71**（2026-10-14，D75）：M0 移到 v7.1，只在 C2 觸發時補做。M0-probe 的 xhigh 審查在開始後中止（未完成，補做 M0 時先完成審查）；`../GYO-Engine-m0` 本機 commit `5ef8a89`（分支 `m0-probe-5ef8a89`，不推送）保留，probe sha256 `8e44de9c…`；證據 `pvp-v7-09-m0-prep-20261014/probe/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
@@ -330,6 +330,7 @@
 - 2026-10-14：16-plan 完成（1 位 high）：清單（16-L1、16-removal、16-D44T、16-declare、16-L2、16-L3、16-baseline、視決定 16-release）、D44 整體回歸設計（P1＋P2、不含 D49 第二階段；D79 U9 使「舊版也出現」不能再當停止條件，改用新規則）、STABLE_BASELINE v7 大綱（不標缺陷版，除非 D44 推翻設計前提）。停下等 U1～U12。
 - 2026-10-14：D80（U1～U12 照建議）。16-L1 開始。
 - 2026-10-14：16-L1 完成（1 位 medium，21:36～22:25）：`../GYO-Engine-v7final`（`6d3f287`）從零建置；和 c2-after 正規化比對 C++ 反組譯 0 差異、Gateway 只差 vcs 資訊與 pclntab、資產 31 檔相同。CTest 69／69（突變後重建再跑 69／69）、label 外 5／5；go gofmt／vet／test 通過，race 6 次中 1 次失敗（`TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes` 量到 24.0 ms＜下限 30.3 ms，同時 C++ 建置、load 約 22；保留 `go.log`，建置結束後重跑 1 次通過；時間敏感測試在高負載下不穩，只記錄）；TSan ipc 3／3 警告 0、worker probe 30／30；權威 digest 對 v6final scale 1／3 各 35 情境 0 差分、golden 30 個 0 不符；Match 不連 SDL（`otool -L`、`_SDL_` 符號 0）；突變（U7：`4927d40..6d3f287` 改過的檔案）26／26 killed、整份目錄 349 個 0 stale；master CI run 38561353343 19 job 全綠、snapshot `snapshot-20261014-6d3f287` 已發佈。16-L2 用 `pvp-v7-16-l1-20261014/artifacts.sha256`（突變後重建的最終狀態）。
+- 2026-10-14：16-removal 完成（1 位 medium，約 35 分）：在 `6d3f287` 的暫時 worktree 移除 object_fps_pvp（329 個追蹤檔＋`engine/config/projects.csv` 1 列；v6 第 14b 批是 262 檔）。擁有者依登錄判定：`services/gyo_gateway` 在 `GyoBuild.cmake` 登錄為 `OWNER engine`，保留；產品自己的 `apps/object_fps_pvp/gateway` 一起刪。從零 configure／build exit 0，CTest 37／37（Engine 含 `gyo_time_tests`、`gyo_threads_tests`）；共通層除 `projects.csv` 外修改 0；CMake、`build/`、`.github`、engine、services、tools、tests、third_party 的 `pvp` grep 0 筆；dummy target 與空目錄 0；殘留提及：README 12 行（和 v6 相同），文件多 3 行在 `time-threads-trace/HANDOFF.md`（文字提及，非連結）。沒有 Architecture Delta。證據 `pvp-v7-16-removal-20261014/`。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
