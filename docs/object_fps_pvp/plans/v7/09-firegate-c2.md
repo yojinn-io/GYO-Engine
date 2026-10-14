@@ -1,6 +1,6 @@
 # 第 09 批：FireGate 常數的重推與 C2
 
-狀態：**S1、S2（09a）、S2b（09b）完成；S3（M0）移到 v7.1（D75），只在 C2 觸發時補做；S4 改成 S4-lite（縮小版凍結），範圍等使用者確認**（2026-10-14，D75）。先前的狀態：S1 完成（只記錄）；第 09a 批的實作等 D48 的證據（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
+狀態：**S1、S2（09a）、S2b（09b）完成；S3（M0）移到 v7.1（D75），只在 C2 觸發時補做；S4 改成 S4-lite（縮小版凍結），範圍已照建議核准、實作進行中**（2026-10-14，D75）。先前的狀態：S1 完成（只記錄）；第 09a 批的實作等 D48 的證據（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-10「開始第 09 批，開 ultracode，檔位照建議」）。之後各步的檔位見「步驟」。
 
 ## 起因與範圍
@@ -51,6 +51,25 @@
 - 下行結果通道 c：P50 0.36～0.37、P95 0.70 ms（第 08b 批 L2）。
 - 上行動作通道：Match 端沒有記錄動作的收件時刻，只量到 Tick 解析度（k＝0）；Client→relay 段由 relay 實測（上面）。
 
+### 縮小版凍結（D75，S4-lite）
+
+2026-10-14 執行（範圍照 D75 ①～⑤，使用者核准）。證據：`build/target/_build/test/logs/pvp-v7-09-s4lite-20261014/`。
+
+- **值**：`FireGateGuardSeconds`＝2 ms（定義上等於 `MovementPhaseDeadbandSeconds`）、`FireGatePendingSpreadTicks`＝7 Tick，和 v6 相同，不變。
+- **依據**：
+  - 本節的推導（08b L2 after clean）：guard 的實際需求上界約 1.0 ms，對 2 ms 的餘裕約 1.0 ms；spread 在 y_shot ≥ −5 ms 時、δ＋ε_c ≤ 約 43 ms 時成立；43 ms 是界線，不是餘裕（2＋5＋66.7＋43＝7 step）。clean 中保持路徑 0／612，δ、ε_c 沒有量到，δ 的喚醒來源是 hypothesis（上面 spread 節）。
+  - 09-M0-plan 的離線推估〔離線推估，不是 M0 的實測〕：`b205615`（09ab-L2 after 的建置）13 次 clean、20170 個命令，max(ys) 的 p99 分箱口徑約 0.81 ms、逐命令口徑 0.651 ms（`pvp-v7-09-m0-plan-20261014/revise/lw_percmd.txt`、`derivation/preestimate_b205615.txt`）。和 08b 的結論一致，沒有變大。
+  - 沒有的：M0 的實測確認（臨界窗射擊的 R−earliest、窗口外的 yw）。所以這是「值不變、適用範圍與殘餘寫明」的凍結，不是完整重推。
+- **程式**（只改註解與測試，產品行為不變）：
+  - `FireGate.hpp`：guard 與 spread 的推導改用 v7 的各項（命令由模擬角色在步邊界醒來後交給 worker 送出；Gateway 先寫輸入、後寫動作；spread 的上界 ceil((guard＋晚到＋保持)/step)）；寫明 guard 本身的殘餘：P90 落在死區邊緣（設計最壞值約 3.1 ms，上面 guard 節）；列出不大於 v6 值的常數都蓋不住的「同路／領先＝2」例外（延遲已消失後的 late slew、撤回後殘餘、延遲下降、D44 領先跳升、主機與 Match 停頓，長的 Match 停頓可能超過 2 Tick；送出被釘住已由 09a 處理）；spread 的「晚到 ≤5 ms」標明是假設、沒有量；指向本文件與 v7.1 的候選 A1、B1、B6。
+  - `FireGateTests.cpp`：新增「The fire gate constants keep their frozen values」，以字面值釘住 `FireGateGuardSeconds == 0.002`、`MovementPhaseDeadbandSeconds == 0.002`、`FireGatePendingSpreadTicks == 7`。先前 spread 只由「holds a pending shot」的算術（102＋7＋10）間接釘住，guard 只由「follows the newest command less the lead」的 6.0／6.1 ms 邊界間接釘住；`guard==死區` 是恆等式，擋不住沒有重推的死區變更，所以死區也用字面值釘住。
+  - 同檔的最小來源更新：`Pacing` 註解原本引用 v6 第 10 批 L2，改成 08b L2 after clean 的量（612 發中 0 發在前一個間隔內有上行 Actions；a（probe 送出→relay 第一次上行，只有 Client 段；Gateway→Match 段沒有量）P50 0.37、最大 1.68 ms；`Measured` 模型的參數仍是 v6 的）；主機模型的「batch 07」標明是 v6 第 07 批，並註明 v7 的改寫移到 v7.1。
+- **突變**：新增 batch `v7-09` 的 5 個突變（`FireGate.hpp`）。4 個值突變（guard −0.5 ms、guard ＋2 ms、spread 6、spread 10）的預期訊息是上面的字面值釘住測試，但它們同時也被既有測試殺掉（guard −0.5 ms 與 ＋2 ms：「follows the newest command less the lead」的 6.0／6.1 ms 邊界；spread 6／10：「holds a pending shot」的 102＋7＋10），所以證明不了釘住測試多擋了什麼。第 5 個 `v7-09-guard-plus-50us`（guard＋0.05 ms，落在 6.0／6.1 ms 邊界的 0.1 ms 間隔之內）只有字面值釘住測試會殺掉。連同既有的 `12-no-guard`、`12-no-pending-spread`（確認沒有 stale：搜尋文字各找到 1 次）共 7 個，`run_mutations.py --only … --allow-dirty` 的結果 **7／7 killed**（`fix/mutations.log`、`fix/mutations.json`）。另做臨時確認：套用 `v7-09-guard-plus-50us` 時，`gyo_object_fps_pvp_tests` 除了字面值釘住測試以外的 248 個 test case 全部通過，只有釘住測試失敗（`mutations-fix.sh`）。突變後重建，執行檔和突變前只差 LC_UUID（第一次執行，`after-mutations/`）。
+- **權威 digest**：只改註解與測試。修改前（`4dcbbcf`）與修改後在同一個 build 目錄（`build/target/_build/test`）建置，object_fps_pvp 的 7 個 probe（含 GUI probe，連結 `PvpApplication` 與 `FireGate`）、digest runner 2 個、其他測試執行檔 4 個與 `gyo_object_fps_pvp_tests`，共 14 個以 `strip -S -x` 後逐位元組比對：前 13 個的差異全部在 LC_UUID（0～16 bytes，macOS 連結器的 debug map 時間戳），LC_UUID 以外 0 bytes；第 14 個 `gyo_object_fps_pvp_tests`（本批改的測試）不同。test preset 不建遊戲本體，所以以同一套原始碼的 probe 代替。審查修正後（`fix/`）再比一次時，同一個 checkout 有第 S5 批並行修改 `build/acceptance/object_fps_pvp/`，`gyo_object_fps_pvp_gui_probe` 因此不同；其餘 12 個（含 digest runner 2 個）仍只差 LC_UUID。`object_fps_pvp.authority_digest` 通過；`ctest --preset test` 69／69、`object_fps_pvp.*` 37／37 通過。
+- **「常數涵蓋不了的失敗」第 2 項**：依 D74 U3／U8 加了補充（原文保留），見該節。
+- **沒有做的（移到 v7.1，[v7.1](../v7.1/README.md)「從 v7 移入的項目」第 10 項）**：M0 影子量測；「合成時間線」1～10 項的改寫（主機模型、命令與動作分開走、DelayDrop／LeadJump／TokenLock 情境等）；v7-09 突變由對應情境殺掉（現在由字面值釘住測試與既有測試殺掉）。
+- **M0 的條件式補做**：C2 的 clean 案例（12 Tick 連點、冷卻邊緣連點、30 FPS 矩陣）出現權威 Cooldown 拒絕時，停下回報，再補 M0（用 M0 宣告草案 v2 與 M0 probe，先完成中止的 xhigh 審查；見步驟 S3 的更正）。「重推條件」第 10 項同時成立。
+
 ## 常數涵蓋不了的失敗
 
 1. **輸入送出被釘住**（決定 1）：
@@ -60,6 +79,16 @@
    - **不是 v7 特有**：06 after gateway-250ms-r5 也有 1 發 s′ 8.265 ms 早 1 Tick（w 11.2 ms），v6final 有相同的 token 規則（`../GYO-Engine-v6final` 的 `ClientConnection.cpp:549-556`、`Movement.hpp:28`）；v6 是否也會被釘住未驗證。舊 worker 的等待中位數本來就約 0.7～1.0 ms，2 ms 門檻對它會誤判，只記錄。
    - 用 guard 涵蓋需要約 1 step，比 v6 大，觸發停止條件。被釘住期間輸入也晚 11～16 ms，會污染 C2 的移動指標。
 2. **領先跳升**（D44 的推論機制）：佇列變 4 時，earliest 最多估晚 2 Tick（`FireGate.cpp:22` 固定減 2）。任何不觸發停止條件的常數都蓋不住。
+   - 補充（2026-10-14，D75 S4-lite；依 D74 U3／U8）：本項的範圍比「佇列變 4」大。改寫為：**Match 端的領先超過 2 step＋4 ms＋guard 時，earliest 可能估晚 1～2 Tick**，冷卻邊緣的點擊被閘門放行、再被權威以 Cooldown 拒絕。觸發包括：
+     - **late slew 與撤回後殘餘**（D74 U3）：
+       - late slew：觸發 late 修正的延遲在 slew 期間已消失時，已往前修的部分讓命令與射擊早到，最多約一次修正量（≤2 step）；閘門忽略負的 phaseShift（`FireGate.cpp:18-19`），earliest 可能估晚 1～2 Tick〔推論／離線：grid100 late_slew 命令 ys 中位數約 24 ms、最大約 34 ms，`pvp-v7-09-m0-plan-20261014/derivation/preestimate_b205615.txt`；M0 預測 Pm-slew〕。延遲仍在時方向安全，只會多擋。
+       - 撤回後殘餘：從撤回開始（含撤回的 slew）到下一次視窗決定（約 4 秒），相位偏早約 3.3 ms，超過 guard 的 2 ms（[09b](09b-phase-tracking.md) 1-7 節第 2 點），earliest 可能估晚 1 Tick。
+       - 兩者記為已知殘餘；修法候選是 v7.1 的 B1（重新擷取的樣本邊界 S／M；S＝只收 slew 結束之後產生的命令）。
+     - **延遲下降**（Wdrop，D74 U8）：相位在延遲較大的期間決定；單程延遲下降 Δ 之後，命令比閘門假設的早 Δ 到達，直到下一次視窗決定（240 個樣本；約 4 秒是修正剛清空視窗之後的上界，穩定狀態下約 24 個樣本、約 0.4 秒就會反應）。期間 m∈(0, Δ−guard] 的射擊 earliest 晚 1 Tick。不需要 late 修正，`lead_jumps.py` 偵測不到（它量 gen→exec），network20 的那一種領先不到 1 Tick（`queued` 仍是 2）。〔已驗證，`b205615` 09ab-L2 after〕network20／40 共 12 跑次，12／12 都有 Wdrop；Wdrop 內命令的 ys 中位數在 network20 是 5.4～9.3 ms、network40 是 14.7～17.7 ms。每跑次 Wdrop 內只有 1 發射擊（玩家 A 在 4.20 s 那一發，是 gameplay 計畫刻意的換彈中射擊，權威以 Reloading 拒絕，不是 Cooldown）。〔推論：重播的 E，headless probe 不記錄 E〕這 12 發中有 4 發 R−E＝−1，12 發都符合 m 帶的預測。Δ−guard 在 network20 約 3.4～7.3 ms、network40 約 12.7～15.7 ms（`pvp-v7-09-m0-plan-20261014/revise/wdrop.txt`、`revise/lead_windows.txt`、`adversarial/net_window.txt`）。要蓋住需要 guard ≥ Δ（5～18 ms；ys 最大 17.71 ms），比 v6 大，觸發停止條件，所以 guard 的適用範圍寫成「決定之後單程延遲沒有下降超過約 guard」。代價〔推論：(Δ−guard)/step〕：每次延遲下降後至多約 4 秒內，冷卻邊緣的點擊在 network20 約 20～45%、network40 約 75～95% 會被權威拒絕；實際網路的頻率未知。記為已知殘餘；對應 v7.1 的 B6（B6 記的是問題本身：`FireGate.cpp` 的 earliest 寫死減 2，領先改變時估晚；修法在 v7.1 決定）。
+     - **D44 領先跳升**：原文（佇列變 4，最多估晚 2 Tick）。
+     - **送出被釘住的解除**：已由第 09a 批處理（第 1 項）。
+     - 主機與 Match 停頓見第 3 項。
+   - C2 的 clean 預期不受影響〔推論：同一建置 13 次 clean，在 acq 與已知停頓以外 0 段，`revise/lead_windows.txt`；clean 的 late 修正與延遲下降都是 0〕；C2 的 network 與回歸案例本來就只記錄。v7.1 的 A1（射擊併入輸入命令）若採用，這一類連同兩個常數一起消失。
 3. **主機停頓與 Match Tick 停頓**：2 ms 以上的小停頓就足以讓 y 超過 guard；新 Match 的跑次中 9／162 有 >5 ms 的 Tick 停頓，同一跑次都有 Client 模擬角色晚醒 >5 ms（可能是主機層級的停頓，是否同一時刻未驗證）。08b after 0／36。屬殘餘。
 
 ## D44
@@ -100,10 +129,10 @@
 3. 動作通道改變：`ActionSendRate`、Client 共用期限、D36、`CoarseWakeLead`；link 的節拍、獨立重送與計時器；snapshot 轉送頻率、Match IPC 或 Tick 排程、結果路徑。
 4. 第 11 批 pv7：心跳對時或時間回聲若共用輸入 token、`nextActionSendAt` 或 link 的 `nextSend`，或改變 link 寫出迴圈的喚醒來源。只是新增獨立通道時記錄確認即可。補充（2026-10-14，D73）：第 11 批與 pv7 移到 v7.1，本條在 v7.1 觸發（v7 不改 wire，v7 期間不會成立）。
 5. D44 的調查或修正改到 1～3 的任一項，或證實送出被釘住與 D44 同源。
-6. 第 15 批 Windows／LAN：在 ≥15 分鐘的場次量 P90 範圍、窗口外的尾巴與射擊比命令快的量。尾巴 >0.5 ms、P90 偏離死區中心 >1.5 ms，或 Client 段射擊比命令快 >0.3 ms，就重推 guard；Client worker 加 Gateway 計時器的晚醒 P99.9 >約 43 ms 就重推 spread。Windows 的計時器解析度會改變被釘住的頻率。
-7. 第 13 批 FPS 上限：低於 30 FPS 時，「裁決在 pending 上界生效前回來」的論證要重新確認。
+6. 第 15 批 Windows／LAN：在 ≥15 分鐘的場次量 P90 範圍、窗口外的尾巴與射擊比命令快的量。尾巴 >0.5 ms、P90 偏離死區中心 >1.5 ms，或 Client 段射擊比命令快 >0.3 ms，就重推 guard；Client worker 加 Gateway 計時器的晚醒 P99.9 >約 43 ms 就重推 spread。Windows 的計時器解析度會改變被釘住的頻率。 補充（2026-10-14，D76）：第 15 批移到 v7.1，本條在 v7.1 的 LAN 場次觸發。
+7. 第 13 批 FPS 上限：低於 30 FPS 時，「裁決在 pending 上界生效前回來」的論證要重新確認。 補充（2026-10-14，D76）：第 13 批移到 v8，本條在 v8 觸發。
 8. `cooldownTicks`、`AuthorityTickRate`、`SnapshotIntervalTicks` 改變。
-9. 第 10 批／TT-2 的日誌寫出進入熱路徑，使射擊路徑的 P99 增加 >1 ms。
+9. 第 10 批／TT-2 的日誌寫出進入熱路徑，使射擊路徑的 P99 增加 >1 ms。 補充（2026-10-14，D76）：第 10 批與 TT-2 移到 v7.1，本條在 v7.1 觸發。
 10. 任何 clean 量測（M0、C2、回歸、第 16 批）出現：窗口外的 R<earliest；R>earliest＋7；權威 Cooldown 拒絕（這同時是停止條件）。
 11. D49 第二階段（丟棄回報給 Match）實作後，重跑 M0，並用 D48 第③步的方式加跑 Client→Gateway 短停頓的注入（2026-10-10 使用者追加）。理由：現在 Client→Gateway 的遲到被 Gateway 過濾（`gateway/server.go:420-423`），幾乎不產生 late 修正；丟棄回報讓 Match 看見這些遲到之後，late 修正與 W_post 的分布都可能改變，D48 第③步的結論也只在現在的過濾下成立。補充（2026-10-14，D73）：D49 第二階段（`GatewayDropReport`）移到 v7.1，本條在 v7.1 觸發；08c 已提前的部分（已解析命令照常轉送）在凍結之前發生，不觸發本條。
 
@@ -125,7 +154,7 @@
   - （補充，2026-10-14，09ab-doc）M0 規劃要處理的待決事項見 [09b](09b-phase-tracking.md)「09ab-L2 的事前宣告」第 12 節，其中新增的一條：B2 撤回後約 4 秒內相位誤差約 3.3 ms，超過 guard 的 2 ms（`FireGate.hpp:24-27`）。
   - 門檻（宣告時寫明根據）：窗口外 clean 射擊 R<earliest＝0 發；窗口外 yw＋L_w 的最大值 ≤ guard−0.5 ms；clean 的 R−earliest ≤7；臨界窗 s∈(6, 8] ms 至少約 100 發，不足就標「未驗證」；落在前一次上行 Actions 之後 I 以內的射擊另列最少發數。
 - **S4 凍結**：`FireGate.hpp` 的註解（值不變）、`FireGateTests` 依上節改寫、v7-09 突變、本文件的推導節。high；時間線模型與確定性案例的局部 xhigh；1 次對抗式檢查。驗收：全量 CTest 與權威 digest、突變全部 killed；commit 並推送，CI 綠燈。
-  - 更正（2026-10-14，D75）：改成 **S4-lite（縮小版凍結，建議範圍，待使用者確認）**：①值不變：`FireGateGuardSeconds`＝2 ms、`FireGatePendingSpreadTicks`＝7；依據是「常數的推導」（08b L2 after）與 09-M0-plan 的離線推估（`b205615` clean ys 最大約 0.81 ms，〔推論／離線〕）。②`FireGate.hpp` 註解：v7 的各項與「同路」前提的例外（送出被釘住已由 09a 處理；領先超過 2 step＋4 ms：late slew、撤回後殘餘、延遲下降 Wdrop、D44 領先跳升；主機與 Match 停頓），指向本文件；註明 v7.1 會重新檢討（A1、B1、B6）。③`FireGateTests`：釘住字面值（`CHECK(FireGateGuardSeconds==0.002)`、`CHECK(MovementPhaseDeadbandSeconds==0.002)`、spread 7）；「合成時間線」1～10 項的完整改寫移到 v7.1，v7 只做必要的最小更新（例如 `:174-179` 對 v6 第 10 批的引用改成 v7 來源）。④突變：值的變更由字面值釘住殺掉；既有 `12-no-guard`、`12-no-pending-spread` 確認沒有 stale。⑤本文件推導節標「縮小版凍結（D75）」，殘餘清單依 D74 U3／U8 改寫「常數涵蓋不了的失敗」第 2 項。檔位：high（實作）、1 次 xhigh 對抗式檢查（局部）；估 1.5～2.5 h。驗收照原文（全量 CTest 與權威 digest、突變 killed、CI 綠燈）。
+  - 更正（2026-10-14，D75）：改成 **S4-lite（縮小版凍結；範圍 2026-10-14 照建議核准）**：①值不變：`FireGateGuardSeconds`＝2 ms、`FireGatePendingSpreadTicks`＝7；依據是「常數的推導」（08b L2 after）與 09-M0-plan 的離線推估（`b205615` clean ys 最大約 0.81 ms，〔推論／離線〕）。②`FireGate.hpp` 註解：v7 的各項與「同路」前提的例外（送出被釘住已由 09a 處理；領先超過 2 step＋4 ms：late slew、撤回後殘餘、延遲下降 Wdrop、D44 領先跳升；主機與 Match 停頓），指向本文件；註明 v7.1 會重新檢討（A1、B1、B6）。③`FireGateTests`：釘住字面值（`CHECK(FireGateGuardSeconds==0.002)`、`CHECK(MovementPhaseDeadbandSeconds==0.002)`、spread 7）；「合成時間線」1～10 項的完整改寫移到 v7.1，v7 只做必要的最小更新（例如 `:174-179` 對 v6 第 10 批的引用改成 v7 來源）。④突變：值的變更由字面值釘住殺掉；既有 `12-no-guard`、`12-no-pending-spread` 確認沒有 stale。⑤本文件推導節標「縮小版凍結（D75）」，殘餘清單依 D74 U3／U8 改寫「常數涵蓋不了的失敗」第 2 項。檔位：high（實作）、1 次 xhigh 對抗式檢查（局部）；估 1.5～2.5 h。驗收照原文（全量 CTest 與權威 digest、突變 killed、CI 綠燈）。
 - **S5 SDL 注入連點模式**：`action_short.hpp`／`run_action_short.py` 加 rapid 模式，用 SDL 事件注入按下與放開，走 `PvpApplication` 的正常路徑（經過真正的 FireGate）；v6 的 probe-only 修補放在從 `fee92ff` 另開的 worktree（例如 `../GYO-Engine-v6c2`），產品執行檔要與 v6final 逐位元組一致，`git diff --stat` 只能出現 `build/acceptance`。high。
 - **S6 C2 宣告**：high 撰寫＋xhigh 對抗式檢查，使用者核准。
 - **S7 C2 執行**，加 25 案回歸、`backpressure_probe.py`、`run_network.py`。medium。

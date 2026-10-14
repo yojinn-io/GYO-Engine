@@ -3509,6 +3509,56 @@
       "replace": "(MovementTickSeconds - advance.secondsUntilNextTick), phaseAppliedSeconds_ + phaseShiftSeconds_};",
       "check": "cpu",
       "expect": "PvP a sustained delay beyond one late correction and the lead's slack still chains late corrections"
+    },
+    {
+      "id": "v7-09-guard-minus-half-ms",
+      "batch": "v7-09",
+      "what": "The guard is half a millisecond below the frozen 2 ms",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
+      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
+      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds - 0.0005;",
+      "check": "cpu",
+      "expect": "The fire gate constants keep their frozen values"
+    },
+    {
+      "id": "v7-09-guard-plus-2ms",
+      "batch": "v7-09",
+      "what": "The guard is 2 ms above the frozen 2 ms",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
+      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
+      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds + 0.002;",
+      "check": "cpu",
+      "expect": "The fire gate constants keep their frozen values"
+    },
+    {
+      "id": "v7-09-spread-6",
+      "batch": "v7-09",
+      "what": "The pending spread is 6 ticks instead of the frozen 7",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
+      "find": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 7;",
+      "replace": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 6;",
+      "check": "cpu",
+      "expect": "The fire gate constants keep their frozen values"
+    },
+    {
+      "id": "v7-09-spread-10",
+      "batch": "v7-09",
+      "what": "The pending spread is 10 ticks instead of the frozen 7",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
+      "find": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 7;",
+      "replace": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 10;",
+      "check": "cpu",
+      "expect": "The fire gate constants keep their frozen values"
+    },
+    {
+      "id": "v7-09-guard-plus-50us",
+      "batch": "v7-09",
+      "what": "The guard is 0.05 ms above the frozen 2 ms, inside the earliest-tick test's 0.1 ms boundary step, so only the literal pin catches it",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
+      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
+      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds + 0.00005;",
+      "check": "cpu",
+      "expect": "The fire gate constants keep their frozen values"
     }
   ]
 }
