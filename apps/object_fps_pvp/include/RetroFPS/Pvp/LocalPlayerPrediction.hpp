@@ -163,7 +163,10 @@ private:
     bool settling_{};
     bool phaseDecided_{};
     // After a late correction the next decision takes the first decision's
-    // samples and deadband, so a delay that has passed is withdrawn at once.
+    // samples and deadband, so a delay that has passed is withdrawn at once,
+    // less the send wait of the commands produced during the late slew (about
+    // 3.3 ms) and only as far as the samples at that decision show it (known
+    // limitation, v7 batch 09b).
     // phaseDecided_ stays set: the shot gate keeps its timing meanwhile.
     bool reacquiring_{};
     LocalMovementObservation observation_{};

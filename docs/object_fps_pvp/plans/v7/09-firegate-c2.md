@@ -107,11 +107,14 @@
   - A：修正 token bucket 停頓後回不來的問題（產品內的 `ClientConnection`）。恢復步數 N 在實作前由補充率推出並寫進宣告（例如故障結束後 ≤3 步），不由實作自己的單元測試訂出。先核對 Gateway 的 session 封包率上限（每秒 120，`session.go:117-125`），回歸中記錄 `rate_limited_packets`。
   - B：`ShotTiming` 帶入最新命令的送出等待並加進 margin（worker→模擬角色→主執行緒的資料流，小的 Architecture Delta）。
   - 驗收：CTest 全過、權威 digest 不變、突變 killed、開發跑次記錄被釘住的秒數。
+  - （補充，2026-10-14，09ab-doc）：已完成，採 A 的比例折讓修正版（`InputSendDrainRate`＝80，D66、D67），見 [09a](09a-input-send-pinning.md)「09a-impl」。和 09b 合併做一次 L2（09ab-L2）：被釘住的玩家·秒在 17 個案例全部 0。
 - **S2b = 第 09b 批（暫稱）：相位追蹤的既有缺陷**（D47⑤ 的更正）：settling 期間收進來的舊樣本留在下一個視窗（修正後第一個視窗的 P90 實際約 P93）、settling 期間累積的 late 樣本在 settle 完成時立刻觸發第二次 late 修正，以及延遲的位移（v7 的「產生→執行」約 38 ms，v6 是 21～25 ms）。這會改相位常數或相位追蹤的定義，屬於重推條件 1，所以排在 M0 與凍結之前。可能與 D44 的 late 修正有關（hypothesis）；若修正確認會改變遲到修正或 backlog 的行為，依 D44 的提前條件停下問使用者。規劃與檔位在開始時決定。
+  - （補充，2026-10-14，09ab-doc）：已完成（B2：樣本換算＋late 修正後重新擷取一次，D66），見 [09b](09b-phase-tracking.md)「09b-impl」與「09ab-L2 的結果」。合併 L2 依宣告 Jab5 不成立（δ＞70.6 ms 的串接），D71 記為已知限制並繼續；已知限制彙整在 09b 文件 1-7 節。
 - **S3 = M0 影子量測**（常數變更前、S2 與 S2b 之後的頭）。宣告 high＋1 次 xhigh 對抗式檢查；執行 medium。
   - probe-only 修補：headless probe 在送出時記錄 `presented.shotTiming` 與閘門算出的 earliest（`gameplay_action.hpp:142` 的 `PresentAt` 回傳 `ClientPresented.shotTiming`，可行），寫進另一個檔案，避免凍結分析器拒絕；每段起點加 seed 偏移。
   - 跑次：clean-30／60／144 與 gateway-250ms、host-ipc-250ms、downstream-250ms 各 ≥6 次，兩種主機狀態都要有（約 30～40 分鐘）。
   - 窗口的事先定義：停頓＝resolved 時刻的 Tick 間隔 ≥ step＋1.5 ms，窗口涵蓋其後 0～3 Tick；被釘住＝每秒送出等待中位數 >2 ms 的玩家秒；領先跳升＝`lead_jumps.py`。
+  - （補充，2026-10-14，09ab-doc）M0 規劃要處理的待決事項見 [09b](09b-phase-tracking.md)「09ab-L2 的事前宣告」第 12 節，其中新增的一條：B2 撤回後約 4 秒內相位誤差約 3.3 ms，超過 guard 的 2 ms（`FireGate.hpp:24-27`）。
   - 門檻（宣告時寫明根據）：窗口外 clean 射擊 R<earliest＝0 發；窗口外 yw＋L_w 的最大值 ≤ guard−0.5 ms；clean 的 R−earliest ≤7；臨界窗 s∈(6, 8] ms 至少約 100 發，不足就標「未驗證」；落在前一次上行 Actions 之後 I 以內的射擊另列最少發數。
 - **S4 凍結**：`FireGate.hpp` 的註解（值不變）、`FireGateTests` 依上節改寫、v7-09 突變、本文件的推導節。high；時間線模型與確定性案例的局部 xhigh；1 次對抗式檢查。驗收：全量 CTest 與權威 digest、突變全部 killed；commit 並推送，CI 綠燈。
 - **S5 SDL 注入連點模式**：`action_short.hpp`／`run_action_short.py` 加 rapid 模式，用 SDL 事件注入按下與放開，走 `PvpApplication` 的正常路徑（經過真正的 FireGate）；v6 的 probe-only 修補放在從 `fee92ff` 另開的 worktree（例如 `../GYO-Engine-v6c2`），產品執行檔要與 v6final 逐位元組一致，`git diff --stat` 只能出現 `build/acceptance`。high。

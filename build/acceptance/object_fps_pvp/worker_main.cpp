@@ -425,7 +425,8 @@ int main() {
         const auto sixtyAttempts=gateway.attempts.size()-sixtyBegin;
         Require(sixtyAttempts>=60 && sixtyAttempts<=70,"fully acknowledged 60 FPS publication caused excessive sends");
         // Publishing a new command every 4 ms without acknowledgement still sends
-        // at most the bucket: two at once, then 60 per second, never a burst.
+        // at most the bucket: two at once, then sends that waited for a token at
+        // most InputSendDrainRate (80) per second, never a burst.
         gateway.autoAck=false;
         const auto fastBegin=gateway.attempts.size();
         const auto fastStart=Clock::now();
@@ -448,10 +449,14 @@ int main() {
         gateway.UntilTime(Clock::now()+100ms);
         constexpr double stepMs=1000.0/InputSendRate;
         // Timing tolerances (v7 batch 09a-impl; logs pvp-v7-09ab-impl-20261013/09a/derive):
-        // midway, to the nearest 0.25 ms, between the largest deviation in 30
-        // runs of this probe (0.13, 0.37, 0.34 ms) and the smallest one a wrong
-        // drain rate or a stale wait produces (drain 70/s: 1.79 ms a step;
-        // 75/s: a fourth wait of 3.1 ms; a stale wait: a quarter step, 4.17 ms).
+        // midway, to the nearest 0.25 ms, between the largest deviation in 29
+        // runs of this probe (30 launched, one wrote no output; 0.13, 0.37,
+        // 0.34 ms) and the smallest one a wrong drain rate or a stale wait
+        // produces (drain 70/s: 1.79 ms a step; 75/s: a fourth wait of 3.1 ms;
+        // a stale wait: a quarter step, 4.17 ms). Those three are model values,
+        // not measured mutants. On the final build 30 probe runs
+        // (09a/probe30) deviated at most 0.233, 0.405 and 0.480 ms; the
+        // midpoints stay the same.
         constexpr double drainToleranceMs=1.0;     // per-step drain against a quarter step
         constexpr double settledWaitMs=1.75;       // a wait after the fourth command
         constexpr double staleGapToleranceMs=2.25; // two steps after the second send

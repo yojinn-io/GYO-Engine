@@ -128,7 +128,10 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     // as soon as this one settles, so a phase more than one correction behind
     // recovers before the Host's Starvation fuse. After a late correction the
     // next decision is a first decision again (reacquiring_), on every rebased
-    // sample of the seed: a delay that has passed is withdrawn within one slew.
+    // sample of the seed: a delay that has passed is withdrawn within one slew,
+    // less the send wait of the commands produced during the late slew (about
+    // 3.3 ms, Movement.hpp InputSendDrainRate), and only as far as the samples
+    // at the moment of that decision show it (known limitation, v7 batch 09b).
     if (authority.movementSlackSequence && authority.movementSlackMicros &&
         (*authority.movementSlackSequence > settledAfter_ || reacquiring_) &&
         *authority.movementSlackSequence != lastSlackSequence_) {

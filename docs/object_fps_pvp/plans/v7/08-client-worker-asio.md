@@ -17,7 +17,7 @@
   - 每種期限各一個 `steady_timer`：Hello、輸入的重送與 token 補充、動作、收包逾時、大廳的輪詢。
 - `SendInput`、`SubmitAction`，以及 `Drain` 讓 ACK 前進時，以 post 喚醒 worker。
 - 速率語意不變：
-  - 輸入：60 Hz 的 token bucket（`InputSendBurst`），沒變的視窗在期限時重送。
+  - 輸入：60 Hz 的 token bucket（`InputSendBurst`），沒變的視窗在期限時重送。（第 09a 批起：等待過的新命令依比例少扣，`InputSendDrainRate`；見 [09a](09a-input-send-pinning.md)。）
   - Hello：連線中每 1 秒，連線前每 250 ms。
   - 收包逾時 5 秒。
   - 動作：30 Hz 的最小間隔；依 D36（2026-10-09 使用者確認：「D36 照建議，開始實作」），符合資格時在 `SubmitAction` 當下送出。

@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
-更新：2026-10-09。Owner：`object_fps_pvp`。
-**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06 批完成；P2-log、第 06、07 批完成）。
+更新：2026-10-14。Owner：`object_fps_pvp`。
+**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06、07、08、08b、08c 批，以及第 09 批的 09a、09b 完成；下一步是第 09 批的 M0）。
 
 v7 處理 v6 留下的核心問題：單執行緒主迴圈與以畫面幀為節拍的時序（v6 D19、D21，以及 LAN 聯機測試）。另外加入音效、解析度與 FPS 的選擇、產品與 SDL 的隔離、日誌補強。
 
@@ -76,7 +76,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 08 | [Client worker 改用 asio](08-client-worker-asio.md) | high（局部 xhigh） | 完成（2026-10-09；`730984e`，L2 第 2 次通過；b 段變長約 3.5 ms 併入第 08b 批調查）（範圍依 D43 與使用者的補充：link 改為嚴格間隔加計時器、worker 收到裁決的時刻） | ClientConnection 改用 asio；SendInput／SubmitAction 喚醒 worker |
 | 08b | [結果改為事件驅動轉送](08b-event-driven-results.md) | 規劃 ultracode（事件驅動轉送、時序、「結果每秒 ≤31」；D45）；實作 high（局部 xhigh） | 完成（2026-10-10；`a954aa3`，L2 通過；規劃 ultracode，決定照建議 D46） | 結果改為事件驅動轉送（Match 的 action lane 與 Gateway）：≥I 立即送、不到 I 設計時器，不帶 I/2；排在第 09 批之前 |
 | 08c | [Gateway 丟棄回報](08c-drop-report.md) | 規劃 ultracode（分三批，D51、D52、D53）；實作 high（拒絕線、★、`AdmitInput` 局部 xhigh）；L1 medium | 實作與 L1 完成（2026-10-11，PR #73，L1 `a960b07`：突變 299／299、權威 digest 0 差分）；補漏批（D56）完成；L2 通過（2026-10-11，114／114 次，三棵樹交錯：修之前、修之後、修之後＋09a 原型；修好之後 Client→Gateway 的遲到 Match 看得到並驅動 late 修正，修之前 0 次；權威結果與 epoch 重設不變） | 讓 Match 知道每一則訊息的結局：Gateway 不再悄悄丟掉 Match 已處理過的命令（晚到的副本照常轉送，Match 才量得到網路遲到）；每個進到 Gateway 的資料包、每個到 Match 的命令都恰好一個結局，執行或依原因計數的丟棄；Match 把被拒的命令與缺號（被替代的序號）留下細節紀錄。補漏批（D56）：玩家離開或連線結束時，Gateway 連線佇列裡還沒送出的射擊與確認原本沒有計數，補上。原則：每個出口只有「執行」或「帶原因的死信」（D57）。不改 wire（[事故](Incident/2026-10-10-gateway-silent-drop.md)） |
-| 09 | [FireGate 常數的重推與 C2](09-firegate-c2.md) | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 暫停（2026-10-10 起，D51 ⑤）：資訊流修正（第 08c 批）與它的 L2 之後，先在修好的資料上重做 [09a](09a-input-send-pinning.md)、[09b](09b-phase-tracking.md) 的決定，再做 M0、常數凍結、C2；S1 宣告與第③步的結果保留（在截斷的資料上量到） | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸 |
+| 09 | [FireGate 常數的重推與 C2](09-firegate-c2.md) | 常數推導 ultracode（用證據證明，推導完凍結；D45）；實作 high；量測 medium | 進行中（2026-10-14）：[09a](09a-input-send-pinning.md)（停頓之後送輸入不再被卡住）與 [09b](09b-phase-tracking.md)（網路延遲消失後，相位修正能撤回，不再連續修過頭）已完成，PR #73；兩者合併做一次 L2（132 次）：送輸入被卡住全部 0、100 ms 延遲後完整撤回且不重設、閒置與抖動網路沒有退步；只有「80 ms 量級的延遲在 150 ms 後消失」仍有 2 次跑次連續修正，記為已知限制（D71）。**下一步：M0**（影子量測，規劃與常數推導用 ultracode），再做常數凍結、C2。S1 宣告與第③步的結果保留（在截斷的資料上量到）。（2026-10-10～13 曾暫停，D51 ⑤：等資訊流修正與它的 L2） | FireGate 常數先推導並凍結，再跑 C2 與 25 案回歸。09a：輸入送出的 token 在等待過後少扣一點，停頓留下的欠帳 4 個命令內還清。09b：相位追蹤把修正途中收到的樣本換算成修正後的相位，延遲造成的修正之後重新判斷一次，延遲消失時把多修的部分撤回 |
 | 10 | （P3 開始時撰寫） | 規劃 ultracode（日誌格式會成為 Data Contract；D45）；實作 high | 未開始 | 任務 8 的紀錄；日誌格式定為產品 Data Contract |
 | 11 | （P3 開始時撰寫） | pv7 契約 ultracode（D45）；實作 high（局部 xhigh） | 未開始 | **pv7**（唯一的 wire 變更）：runtime link 心跳對時＋Client↔Gateway 時間回聲 |
 | 12 | （P4 開始時撰寫） | high | 未開始 | 產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest |

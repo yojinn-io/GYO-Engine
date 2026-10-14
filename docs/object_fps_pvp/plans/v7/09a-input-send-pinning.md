@@ -94,8 +94,8 @@
   - `wait-not-cleared-at-reset`（等價突變，xhigh 審查確認）：能改 token 的地方只有送出區塊與 `CloseTransport`；重設後 token 設回 Burst，第一次送出時 `InputSendBurst−inputTokens`＝0，折讓恆為 0，那次送出又清掉殘留的等待。**等價依賴兩個條件**：`CloseTransport` 補滿 token（`ClientConnection.cpp:189`），以及上限項 `Burst−tokens`（`:618`）；拿掉上限項，這個突變就不再等價，所以第四個清除點保留。
 - 驗證：全量 CTest 69／69、probe 30／30、權威 digest 0 差分（scale 1、3 各 35）。局部 xhigh 審查（token 折讓式、四個清除點、等價推論、容許值、和原型逐字相同）：沒有產品缺陷。證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/09a/`。
 - 已知、只記錄（09ab-doc 或下次碰到時修）：
-  - `Movement.hpp:34`「平均維持 InputSendRate」與 `worker_main.cpp:428`「then 60 per second」在發布快於 60 Hz 時不成立（等待過的送出最高可到 80／秒）。
-  - `worker_main.cpp:451-454` 的「30 runs」實為 29 份（run-05 沒有輸出）；最終建置 probe30 的最大偏差 0.233／0.405／0.480 ms 比註解引用的大，中點不變；三個「突變偏差」是模型值。
+  - `Movement.hpp:34`「平均維持 InputSendRate」與 `worker_main.cpp:428`「then 60 per second」在發布快於 60 Hz 時不成立（等待過的送出最高可到 80／秒）。**已改（09ab-doc，2026-10-14）**：兩處註解改成「60 Hz 產生時平均維持 InputSendRate；往前 slew 時送出跟著產生率，每次約等 3.3 ms」與「等待過的送出最多每秒 80 個」。
+  - `worker_main.cpp:451-454` 的「30 runs」實為 29 份（run-05 沒有輸出）；最終建置 probe30 的最大偏差 0.233／0.405／0.480 ms 比註解引用的大，中點不變；三個「突變偏差」是模型值。**已改（09ab-doc，2026-10-14）**：註解改成 29 份、補上 probe30 的最大偏差並註明模型值（容許值不變）。
   - 測試缺口：拿掉晚醒扣除項 `−(inputTokens−1)` 或上限項 `Burst−tokens` 的突變會存活；`MovementRecoveryTests` 的模型複本沒有和產品連動（token 規則三份拷貝的 code smell）；產品 `:555`、`:666` 的「每個日曆秒 ≤61」已不是契約保證。
   - 第一次全量 CI 要看 Linux／Windows 上 `worker_main.cpp:483`、`:486`、`:541` 的穩定度（容許值只用 macOS 推導）。
   - Gateway 的每秒 115 包預算是送出時刻的口徑；relay 一次放出或 SIGSTOP 會把封包壓進同一個 Gateway 窗，以 08c L2 與 09R-map 的實測為準。

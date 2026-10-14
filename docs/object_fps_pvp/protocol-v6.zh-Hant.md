@@ -1,6 +1,6 @@
 # PvP Protocol v6：受擊、arena 內容與 Collision 契約
 
-更新：2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
+更新：2026-10-14：輸入送出與相位追蹤的修訂註記（v7 第 09a／09b 批，D68）。2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
 **wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
@@ -11,6 +11,7 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
 
 - 沿用 v5 §1 的全部政策與門檻：60 Hz 權威、移動 worker、lead、相位追蹤、插值、動作交付、恢復、連線品質移出，以及完整 UDP ≤1200 bytes（含 24-byte 標頭）。
   - 相位追蹤不修改。30 FPS 是設計範圍的邊界，見 v5 §1 的 2026-10-06 追記；根本處理在 v7（D21）。
+  - （修訂，2026-10-14，v7 第 09a／09b 批，D68）：上一行的「相位追蹤不修改」只對 v6 升格時成立。v7 第 09a 批修改了輸入送出的 token 規則（等待過的送出依比例少扣），第 09b 批修改了相位追蹤（樣本換算、late 判定用換算後的樣本、late 修正後重新擷取）。兩者都是 Client 本機的規則，wire 與 Match 不變，版本維持 6。內容與已知限制見 v5 §1 的 2026-10-14 追記。
 - v6 新增（第 09 批）：
   - 受擊欄位：`CombatState` 的最後受擊 Tick、同一生命內的受擊計數與最後攻擊者（§2），只供呈現。
   - arena 內容 digest：Match 在 Ready 發布，Gateway 轉送，Client 在 HTTP join 與 Welcome 兩條路徑比對（§2）。

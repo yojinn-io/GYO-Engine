@@ -1167,6 +1167,17 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 - 要修它，得改 backlog 門檻 105 或 late 修正的上限（停止條件），**或新增計畫外的 Client 規則**（例如延遲消失時快速正向回收，列在「之後再評估」）。
 - 每次重設會讓 1 個連線品質視窗判失敗，連續 3 個就踢人（`Movement.hpp:72-73`）；實際網路上的頻率未知〔推論〕。
 
+#### 1-7. 已知限制（補充，2026-10-14，09ab-doc：彙整 09ab-rev、09ab-L2 與 D71）
+
+09a＋09b 合併後的頭（`b205615`）上已知、本批不修的行為。產品程式的對應註解在 `LocalPlayerPrediction.cpp` 的 `TrackPhase`、`LocalPlayerPrediction.hpp` 的 `reacquiring_`、`Movement.hpp` 的 `InputSendBurst`／`InputSendDrainRate`；契約面見 `protocol-v5.zh-Hant.md` §1 的 2026-10-14 追記。
+
+1. **撤回少 3.3 ms，殘餘是結構性的（Pab2 的機制）。** 往前修的 late slew 期間，命令以 75 Hz 產生、token 以 60 Hz 補充，09a 的折讓式讓每個命令停在平衡等待 P·(1−60/75)＝3.33 ms（和 R 無關；`ClientConnection.cpp:607-623`、`LocalPlayerPrediction.cpp:291-313`）。重新擷取決定那一刻最大的樣本正是這些命令，所以**撤回量≈|late|−3.33 ms**（100 ms 格：33.33−3.33＝30.0），撤回後相位偏早約 3.3 ms（`residual_ms`≈−3.3），要到下一次視窗決定（約 4 秒）才修回。方向安全（不會造成 late、重設或串接）。實測：09R-map 原型 +29.54～+30.45、09ab-L2 after 29.71～30.08 ms。證據：09ab-rev §1-a（`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`）、`build/target/_build/test/logs/pvp-v7-09ab-l2-20261014/summary-main.txt`。
+2. **撤回後約 4 秒內，相位誤差 3.3 ms 超過 FireGate 的 guard 2 ms**（guard 的前提是「決定後的相位誤差 ≤ 死區 2 ms」，`FireGate.hpp:24-27`）。這段期間 `earliest` 可能比實際晚 1 Tick，只影響壓著冷卻邊界的射擊（約 8%）。交 M0（4-3 節；宣告第 12 節第 3 點）。修法候選：第 5 節第 1 項的 S（只收 slew 結束之後產生的命令），可以直接消掉這 3.3 ms。
+3. **只撤回決定那一刻樣本看得到的部分。** 延遲消失得晚（放出晚於 late 修正的 slew 結束；t_frame 基準的邊界約 70～87 ms）時只部分撤回或反向，150 ms 格部分單位重設（1-2 節、Pab4）。
+4. **δ＞70.6 ms 時，B2 要放出比 slew 結束早超過約 11～19 ms 才不串接**（界線約 11 ms、跑次間會變動；D71）。09ab-L2 的 80/150：r1 放出到 t_post 22.6、22.7 ms 不串接；r2、r3 是 11.4～11.5 ms 仍串接（4 個單位，Jab5 不成立）；09R-map 原型是 18.8、10.9 ms 不串接。宣告原本只把「放出到 t_post ≤0」的串接當成已知限制，D71 把界線改寫成這一條。不另開修正批；重新擷取的樣本邊界（S／M）仍是第 5 節第 1 項，留到 v7 完成後統一評估。
+5. **300 ms 型的延遲消失照舊重設**（1-6 節，範圍外）。
+6. **送出的平均率只在 60 Hz 產生時是 60／秒。** 往前 slew 期間送出跟著 75 Hz 產生率，每個命令固定等約 3.3 ms；任何 1 秒最多 82 個輸入封包（09a 文件；`Movement.hpp`）。
+
 ---
 
 ### 2. 可被推翻的預測（after＝09a＋09b 的頭）
@@ -1181,6 +1192,12 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 | Pab6 | 閒置主機上沒有退步 | clean-60：late 修正、非 respawn 重設、Cooldown、被釘住都是 0；G2E（產生→執行）每位玩家 P50 的合併中位數和同一 session 的 before 相差 ≤1.0 ms〔提議〕。clean-30：不預測（修好的樹上 0 筆資料），只記錄 | clean-60 任一不成立 | clean-60 的 0：中～強（08c L2 flow／flow+09a 各 4 次為 0；09R-map B2 clean-60 前置 1 次；B2 只有這 1 次）。G2E：中（clean 也有首次決定與視窗修正，slew 期間換算不是恆等；1.0 ms 出自舊版 09b-3 草案，沒有來源） |
 | Pab7 | 抖動網路下不觸發 late 修正 | network0／20／40 的 late 修正＝0 | ≥1 | 中：08c 32／32 是 flow 與 flow+09a，沒有 B2。〔程式〕每次發布只帶最小樣本（`MatchRuntimeHost.cpp:129`），late 要連續 2 次（`LocalPlayerPrediction.cpp:128`、`:134`）；但往後修的 slew 期間，換算後 slack＝原始值－已位移量，原始值在 (0, 位移量) 的樣本會變負，network40 的遺失加抖動下可能湊成連續 2 次〔推論，機率低〕。L1 用 T-B9 釘住行為 |
 | Pab8 | 持續延遲（x1、ramp）不預測 | 不做預測，照 D61 的事後規則比較兩棵樹 | D61 的旗標 | B2 在這兩個案例沒有資料；開發跑次先看（3-5 節）。〔推論〕ramp 上升期間重新擷取取最大值，可能再往前修，下降時領先更大 |
+
+（補充，2026-10-14，09ab-doc；來源 09ab-rev §1-a、§7（`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`），L2 宣告第 11 節已採用）：
+- **Pab2 的機制**：撤回≈|late|−3.33 ms，殘餘 +3.3 ms（相位偏早）是結構性的，見 1-7 節第 1 點。預期中心值 30.0 ms 有機制來源（33.33−P·(1−60/75)），不只是分布。
+- **Jab4 上界對 role 晚醒的敏感度**：撤回量≈33.33−（決定那一刻最大樣本的發布→送出等待）；role 晚醒 j ms 時那個命令的等待是 max(0, 3.33−j)，所以 **j＞1.5 ms 就可能讓撤回超過 31.5**（09ab-rev 原寫 1.8，L2 宣告的 D45 xhigh M1 依同一條式子更正）。j 是單一命令相對 75 Hz 節拍的晚醒抖動，整體固定偏移不影響。已量到的 j≈0～0.45 ms；09ab-L2 的 18 個事件 29.71～30.08，沒有往上偏。
+- **W_post 的口徑**：Pab1(b) 一律用 slew 結束後的視窗 [t_post, t_post＋0.25 s)（和 09R-map 相同）；把 slew 期間的命令算進去會得到結構性的 3.33 ms 而誤判失敗（x1／ramp 的 3.47～4.92 ms 就是這個原因）。
+- **Pab3 的「餘裕約 40 ms」**：和實測不符，L2 宣告已撤回（09R-map B2 的放出到 t_post 是 10.9～18.8 ms）；結果見 1-7 節第 4 點。
 
 ---
 
@@ -1216,7 +1233,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
   - 原型已有的 T-B1、T-B2，以及原型審查補的 X1～X4。
   - 恆等式：沒有修正時，與現在的頭逐值相同，≥80 個種子。
   - 缺陷 A：修正後第一個滿窗的 P90 沒有舊相位的偏移；現在的頭要失敗。
-  - 每次 late 修正只觸發一次重新擷取。
+  - 每串 late 修正只觸發一次重新擷取。（更正，2026-10-14，09ab-doc：原寫「每次」；連在一起的多次 late 修正共用 1 次重新擷取，見 `tests/object_fps_pvp/PredictionTests.cpp` 的串接測試與 09ab-rev §3。）
   - SeedLead 清掉 `phaseAppliedSeconds_` 和 `commandAges_`。
   - 持續延遲 >70.6 ms 時仍會串接。
   - 特性測試：放出晚於 slew 結束時，P 只部分撤回。這是把已知限制釘住，不是改善的證明；測試註解寫明「之後若改善這個限制，這個測試會失敗，屬預期」。
@@ -1332,12 +1349,15 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 #### 4-3. 和 M0、FireGate 凍結、C2 的銜接
 
 - 前置條件：09ab-L2 通過，PR #73 的頭＝09a＋09b，之後才做 S3（M0）→ S4（凍結）→ C2。
+  - （補充，2026-10-14，09ab-doc）：09ab-L2 依宣告 `passed`＝false（只有 Jab5 不成立）；D71 把它記為已知限制（1-7 節第 4 點），照建議繼續第 09 批。
 - 重推條件 1、2 發生在凍結之前，不算重推（`09-firegate-c2.md:91`、`:92`）。
 - **重推條件 11**（`09-firegate-c2.md:101`）的觸發是「D49 第二階段實作後」，目前沒有發生；08c 建議的改寫（`08c-drop-report.md:755`）尚未核准，本批不動它。本批的格點不記錄 FireGate 的 earliest、也不量 R 對 earliest，**不能代替 11 的 FireGate 那一半**。「M0 要不要加跑 Client→Gateway 短延遲注入」交使用者決定（決定 10）。
 - **交給 M0 規劃的待決事項**（不在本批定案）：
   - late 修正之後的射擊怎麼處理。不當排除區；建議當成另行判定的類別，至少保留「Cooldown＝0」的檢查。
   - 依據：D48③ 的 2 次 Cooldown（base 的 chain-r2 與 09a-b2 的 chain-r5 各 1 次）都在 t_c 之後約 114～115 ms、late slew 期間、撤回之前（09b 文件「D48 第③步的結果」）。撤回期間 phaseShift 是正值，FireGate 偏保守（`FireGate.cpp:18-19` 的 `Max(0, phaseShift)`）；late slew 期間沒有這個保守，由 M0 確認。
   - 這 2 次 Cooldown 和 R8 一起作為 M0 的輸入。
+  - （更正，2026-10-14，09ab-doc）：上面「撤回期間 phaseShift 是正值，FireGate 偏保守」不準確。09ab-rev §2-a：撤回期間 FireGate 扣掉的剩餘量正好等於相位實際多出的餘裕，是**準確**的，不是偏保守；問題在撤回結束後。
+  - **（補充，2026-10-14，09ab-doc）撤回後的殘餘**：撤回後約 4 秒內（到下一次視窗決定）相位誤差約 3.3 ms，超過 guard 的 2 ms（`FireGate.hpp:24-27`），`earliest` 可能比實際晚 1 Tick（1-7 節第 2 點）。M0 要確認這段期間的影響；L2 宣告第 12 節第 3 點已列為 M0 的待決事項。
 - C2 要記錄被釘住的秒數和 late 修正數。
 
 ---
@@ -1429,6 +1449,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 - 80/150 的 after：r1 不串接（放出到 t_post 22.6、22.7 ms）；r2、r3 串接，放出到 t_post 都是 **11.4～11.5 ms**（放出仍早於 slew 結束），串接後領先 84～87 ms，backlog 重設。
 - 宣告的讀法只把「放出到 t_post ≤0」的串接寫成「被放出時刻觸發的已知限制」；這次是 >0 仍串接，**不在宣告的讀法之內**。
 - 參考（只記錄）：09R-map 的 B2 原型（程式相同）在 80/150 是 18.8、10.9 ms 都沒有串接；before（flow，沒有 B2）在 80/150 是 6／6 串接。推論：δ＝80 ms 超過 70.6 ms 時，B2 只有在放出早於 slew 結束「足夠多」時才不串接，界線落在約 11 ms 附近、跑次間會變動。
+- **使用者決定（D71，2026-10-14）**：照宣告記為不成立，寫成已知限制「δ＞70.6 ms 時，B2 要放出比 slew 結束早超過約 11～19 ms 才不串接（界線約 11 ms、跑次間會變動）」（plan 1-7 節第 4 點）；不另開修正批，S／M 留到 v7 完成後統一評估；繼續 09ab-doc 與第 09 批。
 
 **格點（只記錄；單位＝總數／串接／backlog 重設）**
 

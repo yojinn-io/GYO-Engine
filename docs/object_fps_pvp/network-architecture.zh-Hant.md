@@ -70,6 +70,7 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 以下字符圖中的 Client A、B 各有自己的 worker；兩者共用同一 Gateway／Match。
 箭頭表示資料流，不表示底層程式碼依賴上層。
 v5 的輸入送出（60/s token bucket）、持續相位追蹤與連線品質移出見 [v5 契約](protocol-v5.zh-Hant.md) §1–§2。
+（補充，2026-10-14，v7 第 09a 批）：等過 token 的新命令依等待比例少扣，等待過的送出最多每秒 80 個（`InputSendDrainRate`）；見下面「Input：不可修改的單步命令窗口」與 v5 契約 §1 的 2026-10-14 追記。
 
 ```text
 Client A / Client B (each process)
@@ -81,6 +82,7 @@ Client A / Client B (each process)
     ClientConnection worker (60/s token bucket)     local camera
       HTTP lifecycle + Hello keepalive                ^
       resend full unacked window <= 12                | reconcile latest ACK
+      waited sends charged less, <= 80/s (v7 09a)     |
       received snapshot history <= 64 ----------------+
                           |                           |
                           |                           +-> SnapshotTimeline
@@ -227,6 +229,11 @@ Network worker 以每秒 60 個、容量 2 的 token bucket 送出完整未確�
 這項 bootstrap 補充已由使用者批准；沒有額外產生步數或增加中立命令。
 每批最多 12 個，含 24-byte header 的完整 UDP 不超過 1,200 bytes。延遲 deadline
 不補送過期批次，worker 不產生命令，主執行緒正常 30 FPS 每幀可產生兩步。
+（補充，2026-10-14，v7 第 09a 批）：新命令等過 token 時，依等待時間比例少扣（最多少扣 0.25 個；
+等待只算到 token 出現為止；送出後不超過 1 個），60 Hz 產生下 4 個命令內還清，任何 1 秒最多 82 個
+輸入封包（`Movement.hpp` 的 `InputSendDrainRate`＝80、`InputSendBurst`；`ClientConnection.cpp` 的送出區塊）。
+往前修相位的 slew 期間命令以 75 Hz 產生，每個命令仍固定等約 3.3 ms（1/60 秒×(1−60/75)），slew 結束後回到 0
+（證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md` §1-a）。
 Gateway／Host 合併不可變命令，未來命令數量及距離游標都不超過 32；32 只算游標以後的
 命令，游標以 Match 為準。Gateway 只用自己的游標副本限制合併窗口的大小（已解析的部分
 最多保留 32 個），超出上限的窗口原樣轉送，不丟棄。

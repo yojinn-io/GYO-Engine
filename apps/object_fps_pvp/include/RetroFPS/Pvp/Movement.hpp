@@ -31,13 +31,17 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // tokens, where the wait ends when the token exists (a late wake adds nothing)
 // and the credit never lifts the bucket above one token after the send. The
 // debt drains within InputSendDrainRate / (InputSendDrainRate - InputSendRate)
-// = 4 commands. The average stays at InputSendRate, bursts are two packets,
+// = 4 commands. With 60 Hz production the average stays at InputSendRate;
+// while an earlier-moving phase slew produces at 75 Hz, sends follow
+// production and each command waits about
+// (1 - InputSendRate / 75) / InputSendRate = 3.3 ms. Bursts are two packets,
 // any three sends span at least 1/InputSendRate, and at most
 // InputSendDrainRate + InputSendBurst sends go in any second, which together
 // with actions and Hello stays inside the Gateway's per-session packet limit.
 inline constexpr double InputSendBurst = 2;
 // Above the 75 Hz production of an earlier-moving phase slew (a quarter of
-// each frame, LocalPlayerPrediction), which a lower rate could not outpace.
+// each frame, LocalPlayerPrediction), so an earlier debt drains down to the
+// slew's own wait (about 3.3 ms a command, above); the slew's wait remains.
 inline constexpr double InputSendDrainRate = 80;
 inline constexpr double MovementTickSeconds = 1.0 / AuthorityTickRate;
 inline constexpr float MovementMaximumPitch = Engine::Math::DegreesToRadians(89.0F);
@@ -62,8 +66,9 @@ inline constexpr double MovementPhaseTargetSeconds = 0.004;
 // after a late correction, use the first samples and a narrow deadband;
 // tracking then uses 240 samples (about four seconds: every snapshot of a
 // frame contributes its sample, though only the latest is reconciled) and
-// corrects only beyond the wider deadband. Two late (negative) samples in a
-// row correct at once. Each correction is at most two ticks and is slewed.
+// corrects only beyond the wider deadband. Two late (negative, rebased)
+// samples in a row correct at once. Each correction is at most two ticks and
+// is slewed.
 inline constexpr std::size_t MovementPhaseFirstSamples = 8;
 inline constexpr std::size_t MovementPhaseWindowSamples = 240;
 inline constexpr double MovementPhasePercentile = 0.9;
