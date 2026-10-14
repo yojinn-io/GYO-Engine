@@ -91,14 +91,14 @@
 1. 相位追蹤改變（S2b 本身在凍結之前，不算重推）：`MovementPhaseTarget`／`Deadband`／`FirstDeadband`／`Percentile`／`WindowSamples`／`LateSamples`／`MaximumCorrection`、`InitialCommandLead`、樣本年齡的定義（`Movement.hpp:36`、`:45-59`；`LocalPlayerPrediction.cpp:97-98`、`:120-151`、`:316-321`）。HANDOFF「C1 之後要決定的事」的兩項若處理，也算在這裡。
 2. 輸入送出規則改變：`InputSendRate`、`InputSendBurst`、token bucket（`ClientConnection.cpp:593-628`、`:672-682`），包含決定 1 的修正。
 3. 動作通道改變：`ActionSendRate`、Client 共用期限、D36、`CoarseWakeLead`；link 的節拍、獨立重送與計時器；snapshot 轉送頻率、Match IPC 或 Tick 排程、結果路徑。
-4. 第 11 批 pv7：心跳對時或時間回聲若共用輸入 token、`nextActionSendAt` 或 link 的 `nextSend`，或改變 link 寫出迴圈的喚醒來源。只是新增獨立通道時記錄確認即可。
+4. 第 11 批 pv7：心跳對時或時間回聲若共用輸入 token、`nextActionSendAt` 或 link 的 `nextSend`，或改變 link 寫出迴圈的喚醒來源。只是新增獨立通道時記錄確認即可。補充（2026-10-14，D73）：第 11 批與 pv7 移到 v7.1，本條在 v7.1 觸發（v7 不改 wire，v7 期間不會成立）。
 5. D44 的調查或修正改到 1～3 的任一項，或證實送出被釘住與 D44 同源。
 6. 第 15 批 Windows／LAN：在 ≥15 分鐘的場次量 P90 範圍、窗口外的尾巴與射擊比命令快的量。尾巴 >0.5 ms、P90 偏離死區中心 >1.5 ms，或 Client 段射擊比命令快 >0.3 ms，就重推 guard；Client worker 加 Gateway 計時器的晚醒 P99.9 >約 43 ms 就重推 spread。Windows 的計時器解析度會改變被釘住的頻率。
 7. 第 13 批 FPS 上限：低於 30 FPS 時，「裁決在 pending 上界生效前回來」的論證要重新確認。
 8. `cooldownTicks`、`AuthorityTickRate`、`SnapshotIntervalTicks` 改變。
 9. 第 10 批／TT-2 的日誌寫出進入熱路徑，使射擊路徑的 P99 增加 >1 ms。
 10. 任何 clean 量測（M0、C2、回歸、第 16 批）出現：窗口外的 R<earliest；R>earliest＋7；權威 Cooldown 拒絕（這同時是停止條件）。
-11. D49 第二階段（丟棄回報給 Match）實作後，重跑 M0，並用 D48 第③步的方式加跑 Client→Gateway 短停頓的注入（2026-10-10 使用者追加）。理由：現在 Client→Gateway 的遲到被 Gateway 過濾（`gateway/server.go:420-423`），幾乎不產生 late 修正；丟棄回報讓 Match 看見這些遲到之後，late 修正與 W_post 的分布都可能改變，D48 第③步的結論也只在現在的過濾下成立。
+11. D49 第二階段（丟棄回報給 Match）實作後，重跑 M0，並用 D48 第③步的方式加跑 Client→Gateway 短停頓的注入（2026-10-10 使用者追加）。理由：現在 Client→Gateway 的遲到被 Gateway 過濾（`gateway/server.go:420-423`），幾乎不產生 late 修正；丟棄回報讓 Match 看見這些遲到之後，late 修正與 W_post 的分布都可能改變，D48 第③步的結論也只在現在的過濾下成立。補充（2026-10-14，D73）：D49 第二階段（`GatewayDropReport`）移到 v7.1，本條在 v7.1 觸發；08c 已提前的部分（已解析命令照常轉送）在凍結之前發生，不觸發本條。
 
 ## 步驟（決定確認後執行）
 

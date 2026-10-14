@@ -12,7 +12,7 @@
 - **問題**：產品層的 Gateway 用權威狀態的延遲副本 `lastResolved` 悄悄丟掉已解析的命令（`gateway/server.go:421-423`），link 寫出前再剪一次（`runtime_link.go:192-197`）。Gateway 的副本只比 Match 落後約 0.5 ms，所以 Match 幾乎量不到 Client 端的網路遲到；late 修正、backlog 餘裕、FireGate 的推導都在截斷的樣本上校準。Gateway 還有 30 多處「收到卻不轉送」，只有速率限制有計數；Match 自己的拒絕也是無聲的。
 - **目標**：Gateway 收到、屬於某個 session 的每個資料包，只會有兩種結果之一，沒有第三種（無聲）：（更正，2026-10-11 死信隊列評估：這一條在資料包層成立（IG）；動作交給 link 之後，在 Leave、close、寫出失敗時仍可能在 link 內被清掉，見已知缺口第 10 項，D56 補計數。）
   - **(F) 轉送**：命令送到 Match，由 Match 用自己的游標與時鐘分類並記帳；
-  - **(G) Gateway 執行的丟棄**：依（玩家、原因、種類）計數並寫進 log；P2 期間是「人看得到、Match 不知道」的已知缺口，第 11 批 pv7 以累計值回報給 Match。
+  - **(G) Gateway 執行的丟棄**：依（玩家、原因、種類）計數並寫進 log；P2 期間是「人看得到、Match 不知道」的已知缺口，第 11 批 pv7 以累計值回報給 Match（補充，2026-10-14，D73：第 11 批與 pv7 移到 v7.1）。
 - **不改 wire**：所有 `.proto` 的欄位不變，版本仍是 6。變的是 Gateway→Match 輸入流的行為（D52 ①、D53 ②），以及 `runtime_v6.proto:31` 的註解（比照 D22／D23，維持 pv6、Gateway 與 Match 同一個 commit 切換）。
 - **權威狀態與裁決不受影響**：被過濾的都是 Match 不會執行的命令；權威 digest 不變。會變的是資訊，以及 live 跑次中由資訊驅動的行為（late 修正次數、替代比例）。
 
@@ -86,6 +86,8 @@
 
 ## 已知缺口（寫進協議文件，到 pv7 或第 10 批為止）
 
+補充（2026-10-14，D73）：pv7 移到 v7.1，所以「到 pv7 為止」的缺口在整個 v7 期間都存在，到 [v7.1](../v7.1/README.md) 的 pv7 才處理；「到第 10 批為止」的部分不變。
+
 1. Gateway 拿不到內容的丟棄（③ 的各類）：P2 只計數，Match 不知道。
 2. ① 留下的兩種執行丟棄：拒絕線溢出、已解析截短。
 3. 動作的語意丟棄 A3、A5。
@@ -107,13 +109,13 @@
 - `runtime_v6.proto:31` 的註解改成：`Commands this link has not written before for the current epoch/life, strictly ordered, at most 12 per message. Merged and deduplicated by the Gateway; the Match treats repeats as no-ops.`；`protocol/README.md:22-23` 一起改。
 - `network-architecture.zh-Hant.md`：
   - `:230`：32 只算游標以後的命令；游標以 Match 為準；Gateway 只用副本限制合併大小，超出的窗口原樣轉送。
-  - `:231-233`：「不重執行、拒絕」由 Match 判斷；Gateway 照常轉送已解析的命令；已寫出去重的條文（四元組、保留期、換代清空、拒絕線不記入、Match 不得依賴去重）；每則 IPC ≤12 個命令；Gateway 執行的丟棄依原因計數（已知缺口到 pv7）。
+  - `:231-233`：「不重執行、拒絕」由 Match 判斷；Gateway 照常轉送已解析的命令；已寫出去重的條文（四元組、保留期、換代清空、拒絕線不記入、Match 不得依賴去重）；每則 IPC ≤12 個命令；Gateway 執行的丟棄依原因計數（已知缺口到 pv7；補充，2026-10-14，D73：pv7 在 v7.1）。
   - `:242`「各層失效舊窗口」：改成由 Match 失效、Gateway 單獨轉送。
   - `:411-413` 附近：Match 略過移動輸入時也要依原因記錄。
   - `:856-858`：每秒 120 包的上限，被限制的包依玩家計數。
 - 上下行同一原則（加在本批文件與 `08b-event-driven-results.md` 的「之後」）：事件＝新內容。下行由 08b 拿掉只帶 retired 的重複包；上行由 link 拿掉已寫出命令的副本。兩者都是可靠 TCP 上發送端的已送集合，失敗時連線致命。
 - HANDOFF 未結事項「Gateway 與 Match 重複過濾已解析的命令」在實作後標為已解決。
-- 「Gateway 職責」一節照 D49 留給第 11 批；第 11 批的 pv7 `GatewayDropReport` 規格見 `batch2/design3-counts-pv7.md` B（原因列舉要一次定完整）。
+- 「Gateway 職責」一節照 D49 留給第 11 批；第 11 批的 pv7 `GatewayDropReport` 規格見 `batch2/design3-counts-pv7.md` B（原因列舉要一次定完整）。補充（2026-10-14，D73）：兩者隨第 11 批移到 [v7.1](../v7.1/README.md)。
 
 ## Architecture Delta
 
@@ -122,7 +124,7 @@
 3. **介面**：`PvpMatch` 新增公開的 `AdmitInput`／`InputAdmission`；`MatchRuntimeHost` 新增 `TakeIngressStatistics()`、`DrainIngressRecords()`、`NoteWireRejection()`；Match 新增 CLI `--ingress-trace`。
 4. **依賴**：沒有新的邊；`services/gyo_gateway` 與 Engine 不改。
 5. **Removability**：沒有影響，全部在 object_fps_pvp 之下。
-6. **Code smell（記錄，不在這次修）**：`substituted`（64）與帳本（600）重複保存被替代的序號，一致性靠測試；Gateway 仍持有 `lastResolved` 的副本（上限、清理、通知、epoch），留給第 11 批重新檢視；`p.commands` 的衝突檢查和 link 的內容比對重疊。
+6. **Code smell（記錄，不在這次修）**：`substituted`（64）與帳本（600）重複保存被替代的序號，一致性靠測試；Gateway 仍持有 `lastResolved` 的副本（上限、清理、通知、epoch），留給第 11 批重新檢視；`p.commands` 的衝突檢查和 link 的內容比對重疊。補充（2026-10-14，D73）：重新檢視隨第 11 批移到 v7.1；這裡的三個 code smell 列進 v7.1 的重構候選（C2、C3）。
 
 ## 測試與突變（batch `v7-flow`，id 前綴 `v7-flow-`）
 
@@ -752,11 +754,11 @@ session 之後（`judge_l2.py --session`；成立時 `passed`＝false，停下�
 - **09b**：缺陷 A／B 的影響大小、B2 的設計、頻率類的結論（R3、R4、R12）在 L2 之後於新基準上重做。
 - **D48 第③步**：結果保留，標示「在截斷的資料上量到」；不重跑。
 - **M0、FireGate 凍結、C2**：排在本批、L2、09a／09b 的決定之後（D51 ⑤）。C2 的 after 要宣告包含資訊流修正；C2 的 before（`fee92ff`）不變，凍結分析器照常可用（版本仍是 6）。
-- **FireGate 重推條件 11**（`09-firegate-c2.md`）：M0 還沒跑，P2 的部分靠順序滿足；建議改寫成「第 11 批若讓 Gateway 的回報進入相位樣本或品質判定，就重推；只做計數時不重推」，加跑的注入用純延遲型。
+- **FireGate 重推條件 11**（`09-firegate-c2.md`）：M0 還沒跑，P2 的部分靠順序滿足；建議改寫成「第 11 批若讓 Gateway 的回報進入相位樣本或品質判定，就重推；只做計數時不重推」，加跑的注入用純延遲型。補充（2026-10-14，D73）：第 11 批移到 v7.1，這條建議（尚未核准）一起移到 v7.1 的 FireGate 重推。
 - **D44**：暴露上升，L2 依樹記錄偶發 epoch 重設的頻率。（更正，2026-10-11，09R-eval：只在持續延遲（x1、ramp）時成立；network 型（遺失加 ≤30 ms 抖動）不成立，L2 的 late 修正 0，機制見「L2 的結果」的 P4。）**第 16 批**：整體回歸的基準換成修好之後的資訊流。
 - **第 10 批**：觀測缺口第 1、2、4 項大部分在本批完成；剩下 D5、D6、舊序號的 Actions、Client 端的欄位（第 3 項）；log 契約決定沿用或取代 ingress v1。
-- **第 11 批**：pv7 的 `GatewayDropReport`（原因列舉一次定完整，dwell 的定義只有一個）；「Gateway 職責」一節；重新檢視 Gateway 的狀態；是否轉送 A3／A5。
-- **第 10、11 批共通**：本批的丟棄回報就是 Match 端的死信隊列；ingress v1 與 `GatewayDropReport` 要不要統一成一個死信的 Data Contract，見 HANDOFF 未結事項「死信隊列（命名與概念）」。
+- **第 11 批**：pv7 的 `GatewayDropReport`（原因列舉一次定完整，dwell 的定義只有一個）；「Gateway 職責」一節；重新檢視 Gateway 的狀態；是否轉送 A3／A5。更正（2026-10-14，D73）：這一列整列移到 [v7.1](../v7.1/README.md)，v7 不做。
+- **第 10、11 批共通**：本批的丟棄回報就是 Match 端的死信隊列；ingress v1 與 `GatewayDropReport` 要不要統一成一個死信的 Data Contract，見 HANDOFF 未結事項「死信隊列（命名與概念）」。補充（2026-10-14，D73）：第 11 批的那一半（是否統一成一個死信 Data Contract）移到 v7.1；第 10 批的 log 契約仍在 v7。
 - **穩定基線**：v5、v6 的 `STABLE_BASELINE.md` 已加「已知問題」；要不要重新發佈，本批修好之後再決定。
 
 ## 停止條件（實作期間）

@@ -398,7 +398,7 @@ workflow 5 個階段：原型 1 位（high）、審查 1 位（xhigh）、修正
 
 本步不改權威、wire、FireGate 常數、late 修正上限、target、lead、backlog 門檻；原型也都沒有改這些（`proto/`、`fix/` 的說明）。
 
-**範圍限制**（2026-10-10 使用者要求補上）：結論只在現在的 Gateway 過濾下成立；Client→Gateway 的遲到被過濾，不在本步範圍（D49）。Gateway 會略過 ≤`lastResolved` 的命令（`gateway/server.go:420-423`），所以 Client 端網路遲到現在幾乎不會產生 late 修正（第②步的試跑 0／5）；本步只注入 Gateway→Match 的 IPC 延遲。D49 第二階段（丟棄回報給 Match）實作後，Client→Gateway 的遲到會開始觸發 late 修正，屆時要依第 09 批的重推條件 11 重跑 M0，並用本步的方式加跑 Client→Gateway 短停頓的注入。
+**範圍限制**（2026-10-10 使用者要求補上）：結論只在現在的 Gateway 過濾下成立；Client→Gateway 的遲到被過濾，不在本步範圍（D49）。Gateway 會略過 ≤`lastResolved` 的命令（`gateway/server.go:420-423`），所以 Client 端網路遲到現在幾乎不會產生 late 修正（第②步的試跑 0／5）；本步只注入 Gateway→Match 的 IPC 延遲。D49 第二階段（丟棄回報給 Match）實作後，Client→Gateway 的遲到會開始觸發 late 修正，屆時要依第 09 批的重推條件 11 重跑 M0，並用本步的方式加跑 Client→Gateway 短停頓的注入。補充（2026-10-14，D73）：D49 第二階段中已解析命令的轉送由 08c 提前完成；剩下的 `GatewayDropReport` 移到 v7.1，重推條件 11 在 v7.1 觸發。
 
 #### 2. 產物與建置
 
@@ -1079,7 +1079,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 | 1 | Pab2／Jab4 只用一個量、改用 09R-map B2 的來源並寫出餘裕、補 `held_post`＝0、標提議 | 只判「撤回量」，殘餘量改只記錄（殘餘＝撤回＋修正量，不獨立）。門檻 [28.5, 31.5] ms 取自 09R-map B2 的 16 個事件（29.54～30.45），兩側餘裕 1.04／1.05 ms；D48③ 只當旁證並寫出它會越過上界。補 `held_post`＝0（16／16 實測為 0）、0 次重設、沒有來回修正。整條標〔提議〕交 D45；另加最少 6 個跑次有合格事件（D64 的 Jm2 先例） | 2 節 Pab2；3-4 節 Jab4 |
 | 2 | Pab6／Jab6：clean-30 沒有資料；改為同 session 比較或只記錄；G2E 寫腳本與視窗；閒置閘門與 TimerBaseline 分層 | Pab6 拆成 clean-60（判定，來源 08c L2）與 clean-30（修好的樹上 0 筆資料，只記錄，和同一 session 的 before 並列）。G2E 用 `L/pvp-v7-09b-plan-20261010/latency/decompose.py` 的凍結副本，視窗＝`action-client.json` 的 [start_ns, end_ns)，只取 actual 解析的非 seeded 命令；1.0 ms 標〔提議〕，比較對象是同一 session 的 before。寫明閒置閘門（3 次 5 秒 sleeper 都 <10 ms）與 TimerBaseline 分層（`timer.late_p99_ms` ≥6.0 ms＝8 ms 狀態，只用於分層與解讀） | 2 節 Pab6；3-4 節主機與 Jab6 |
 | 3 | Pab7 支持度改「中」，加一個 L1 情境 | 改「中」，寫出機制：往後修的 slew 期間，換算後的 slack＝原始值－已位移量，原始值是小正值的樣本會變成負值。加 L1 特性情境 T-B9（正向 slew 期間連續收到 2 個小正值原始樣本，記下會不會觸發 late）；檔名更正為 `LocalPlayerPrediction.cpp:128`、`:134` 與 `MatchRuntimeHost.cpp:129` | 2 節 Pab7；3-2 節 |
-| 4 | M0 銜接：刪「重推條件 11 由本次格點滿足」；late 修正窗口改為 M0 規劃的待決事項 | 刪除。改寫為：重推條件 11 的觸發條件（D49 第二階段）尚未發生；本批的格點不記錄 FireGate 的 earliest，不能代替它的 FireGate 那一半；「短延遲注入是否併入 M0」交使用者決定。「late 修正窗口」不當排除區，列為 M0 規劃的待決事項，並寫明至少保留 Cooldown＝0 的檢查與 D48③ 兩次 Cooldown 發生在撤回之前 | 4-3 節；7 節決定 10 |
+| 4 | M0 銜接：刪「重推條件 11 由本次格點滿足」；late 修正窗口改為 M0 規劃的待決事項 | 刪除。改寫為：重推條件 11 的觸發條件（D49 第二階段）尚未發生（補充，2026-10-14，D73：移到 v7.1）；本批的格點不記錄 FireGate 的 earliest，不能代替它的 FireGate 那一半；「短延遲注入是否併入 M0」交使用者決定。「late 修正窗口」不當排除區，列為 M0 規劃的待決事項，並寫明至少保留 Cooldown＝0 的檢查與 D48③ 兩次 Cooldown 發生在撤回之前 | 4-3 節；7 節決定 10 |
 | 5 | Pab4 與已知限制：統一時間基準；邊界約 70～87 ms（t_frame）；降成敘述或凍結新定義 | 時間一律用 t_frame，並寫出換成 measure.py 的 t_c 時的數字。邊界改為約 70～87 ms，附 D48③ r1／r2／r5 的值與 09R-map 的範圍。Pab4 降成敘述（不判定、不當預測），支持度「低」；新定義與凍結列進「之後再評估」 | 1-2 節已知限制；2 節 Pab4 |
 | 6 | Jab8：寫明 D61 門檻是借來的與它的靈敏度 | 寫明：D61 在 08c 的故障案例（三棵樹逐案相同）核准，套到 150 ms 格是借用；靈敏度：before 每跑次 1.0 次重設，規則要 after 到 2.0 次（每個單位都重設，等於只有 09a 沒有 B2）才會停，或出現新的重設原因。決定 7 依此改寫 | 3-4 節 Jab8；7 節決定 7 |
 | 7 | 新工具：列出新寫並凍結的 driver 與判定腳本，交 D45；重估時間 | 新增批次 `09ab-L2T`：`run_ab.py`（driver，涵蓋 run_gameplay、run_network、backpressure_probe、run_client_delay 四種 runner）、`judge_ab.py`（判定）、`sleeper.py`（照抄），以及要加進凍結清單的既有腳本副本。乾跑必須重現 09R-map 與 08c L2 的已發表數字。交 D45。時間 +3.5～4.5 h，總計改為 18～23 h | 3-3 節；3-1 節 |
@@ -1351,7 +1351,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 - 前置條件：09ab-L2 通過，PR #73 的頭＝09a＋09b，之後才做 S3（M0）→ S4（凍結）→ C2。
   - （補充，2026-10-14，09ab-doc）：09ab-L2 依宣告 `passed`＝false（只有 Jab5 不成立）；D71 把它記為已知限制（1-7 節第 4 點），照建議繼續第 09 批。
 - 重推條件 1、2 發生在凍結之前，不算重推（`09-firegate-c2.md:91`、`:92`）。
-- **重推條件 11**（`09-firegate-c2.md:101`）的觸發是「D49 第二階段實作後」，目前沒有發生；08c 建議的改寫（`08c-drop-report.md:755`）尚未核准，本批不動它。本批的格點不記錄 FireGate 的 earliest、也不量 R 對 earliest，**不能代替 11 的 FireGate 那一半**。「M0 要不要加跑 Client→Gateway 短延遲注入」交使用者決定（決定 10）。
+- **重推條件 11**（`09-firegate-c2.md:101`）的觸發是「D49 第二階段實作後」，目前沒有發生（補充，2026-10-14，D73：D49 第二階段移到 v7.1，所以在 v7 內不會發生）；08c 建議的改寫（`08c-drop-report.md:755`）尚未核准，本批不動它。本批的格點不記錄 FireGate 的 earliest、也不量 R 對 earliest，**不能代替 11 的 FireGate 那一半**。「M0 要不要加跑 Client→Gateway 短延遲注入」交使用者決定（決定 10）。
 - **交給 M0 規劃的待決事項**（不在本批定案）：
   - late 修正之後的射擊怎麼處理。不當排除區；建議當成另行判定的類別，至少保留「Cooldown＝0」的檢查。
   - 依據：D48③ 的 2 次 Cooldown（base 的 chain-r2 與 09a-b2 的 chain-r5 各 1 次）都在 t_c 之後約 114～115 ms、late slew 期間、撤回之前（09b 文件「D48 第③步的結果」）。撤回期間 phaseShift 是正值，FireGate 偏保守（`FireGate.cpp:18-19` 的 `Max(0, phaseShift)`）；late slew 期間沒有這個保守，由 M0 確認。

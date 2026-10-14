@@ -20,7 +20,7 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
   - 回合準備期（第 9 項，維持候選）。
   - 文字輸入的協議變更。
   - 受擊呈現（第 13 批，不改 wire）。
-  - runtime 連線（Gateway↔Match）的心跳對時（v7）。
+  - runtime 連線（Gateway↔Match）的心跳對時（v7）。更正（2026-10-14，v7 D73）：移到 v7.1，和 pv7 一起做；v7 停在 pv6。
 
 ### 版本
 
@@ -82,6 +82,8 @@ Gateway→Match 的 `PlayerInput` 不再是 Client 未確認窗口的完整副�
 - 這次修訂的 Data Contract（ingress v1：三種統計行與 Match 的細節檔 `match-ingress.jsonl`，暫定 v1，第 10 批決定沿用或改版）的格式、鍵名規則與守恆式見 [`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md`](../../tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md)；設計與 I1 的判定條件見 [第 08c 批](plans/v7/08c-drop-report.md)。
 
 已知缺口（到 pv7 或第 10 批為止）：
+
+補充（2026-10-14，v7 D73）：pv7 移到 v7.1（[v7.1 計畫](plans/v7.1/README.md)），v7 不改 wire；「到 pv7 為止」的缺口在整個 v7 期間都存在。
 
 1. Gateway 拿不到內容的丟棄（速率限制、解碼失敗、未授權、舊序號的 Actions 與其他種類、未知種類、非 active 時的 input／actions）：P2 只計數，Match 不知道。未授權只能記到宣稱的 session，可被偽造，只能看、不能拿來處罰。
 2. 轉送之後仍由 Gateway 執行的兩種丟棄：拒絕線溢出（每位玩家最多 4 個窗口，超過丟最舊的）、主線已解析部分超過 32 個時的截短。
