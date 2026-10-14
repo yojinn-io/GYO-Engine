@@ -52,7 +52,7 @@ lead之外4ms，30 FPS等一幀含兩步時較舊的命令最壞只剩約4ms，�
   - 換算：每個命令記下它產生時已經 slew 進去的修正量。樣本扣掉「到目前為止決定的修正總量」中，該命令產生時還沒 slew 進去的部分，再算 e。所以 slew 期間收到的樣本描述的是修正完成後的相位（`LocalPlayerPrediction.cpp` 的 `TrackPhase`）。
   - late 判定：「連續2個負值樣本」改為連續 2 個**換算後**為負的樣本，修正量取換算後的最小者。
   - 視窗：仍然在 slew 結束後才再決定，平常只計 slew 結束時已存在序號之後的命令；但 **late 修正之後**的下一次決定改用首次決定的規則（8 個樣本、0.5 ms 死區），並計入這次播種以來全部換算後的樣本（重新擷取）。連在一起的多次 late 修正（一串）只重新擷取一次；「相位已決定」的狀態（`phaseDecided_`，射擊閘依它計時）不清。
-  - 已知限制：撤回量約等於「延遲造成的 late 修正量－3.3 ms」，撤回後相位偏早約 3.3 ms，要到下一次視窗決定（約 4 秒）才修回，期間超過 FireGate 的 2 ms guard（交第 09 批 M0）；延遲消失得晚（放出晚於 late 修正的 slew 結束，或延遲 δ＞70.6 ms 而放出早於 slew 結束不到約 11～19 ms）時，只部分撤回或再串接一次 late 修正；300 ms 型的延遲消失照舊 backlog 重設。
+  - 已知限制：撤回量約等於「延遲造成的 late 修正量－3.3 ms」，撤回後相位偏早約 3.3 ms，要到下一次視窗決定（約 4 秒）才修回，期間超過 FireGate 的 2 ms guard（交第 09 批 M0）（補充，2026-10-14，v7 D75：M0 移到 v7.1，v7 記為已知殘餘）；延遲消失得晚（放出晚於 late 修正的 slew 結束，或延遲 δ＞70.6 ms 而放出早於 slew 結束不到約 11～19 ms）時，只部分撤回或再串接一次 late 修正；300 ms 型的延遲消失照舊 backlog 重設。
   - 證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`（§1-a、§4、§6）、`build/target/_build/test/logs/pvp-v7-09ab-l2-20261014/`（合併 L2 的結果，Jab5 不成立，D71）。
 
 由Match擁有並經Ready／Welcome發布規則：移動規則包含jumpHeight／gravity，

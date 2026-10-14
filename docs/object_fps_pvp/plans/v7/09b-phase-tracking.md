@@ -24,7 +24,7 @@
 | R2 D44 的頻率與歸因 | 成立（clean／network 型）；短延遲型要重量 | clean／network 型的流量上 0；Client→Gateway 短延遲（單次 40～80 ms、持續 100～300 ms）L2 沒有案例 |
 | R5 backlog 餘裕需要多少 | 加限定 | network40 故障解除後 30 Tick 合計 90（餘裕剩 15），三棵樹相同，第①步第 5 點成立；「需要多少」仍取決於短延遲的區域（要重量） |
 | R7「領先＝2」的前提 | 成立（閒置主機的穩態） | clean 100％ q＝2；network 83～94％，network40 有 6.5％ q＝3；注入以外沒有領先 4（`lead_share.txt`） |
-| R8 Cooldown 拒絕的發生率 | 加限定 | clean 0；network before 4、flow 1、flow+09a 1（各 16 跑次），全是玩家 1、故障中段，那些跑次 late 修正 0；推論是 network 抖動壓縮了射擊間隔，和 late 修正無關，屬 FireGate「常數涵蓋不了的失敗」，作為 M0 的輸入。network 的遺失是固定種子，跑次不是獨立樣本 |
+| R8 Cooldown 拒絕的發生率 | 加限定 | clean 0；network before 4、flow 1、flow+09a 1（各 16 跑次），全是玩家 1、故障中段，那些跑次 late 修正 0；推論是 network 抖動壓縮了射擊間隔，和 late 修正無關，屬 FireGate「常數涵蓋不了的失敗」，作為 M0 的輸入。（補充，2026-10-14，D75：M0 移到 v7.1。）network 的遺失是固定種子，跑次不是獨立樣本 |
 | R9 08b 的「late 修正 0 次」 | 成立（clean／network 型） | 修好的樹 clean、network 的 late 修正 0 |
 | R10 有損傷網路下的延遲位移 | 不再需要 | 決定 4 只改文件，結果不會改變任何決定 |
 | R11 注入的位置與方式 | 不再需要 | L2P-injector 已提供 Client→Gateway 的純延遲注入 |
@@ -1172,7 +1172,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 09a＋09b 合併後的頭（`b205615`）上已知、本批不修的行為。產品程式的對應註解在 `LocalPlayerPrediction.cpp` 的 `TrackPhase`、`LocalPlayerPrediction.hpp` 的 `reacquiring_`、`Movement.hpp` 的 `InputSendBurst`／`InputSendDrainRate`；契約面見 `protocol-v5.zh-Hant.md` §1 的 2026-10-14 追記。
 
 1. **撤回少 3.3 ms，殘餘是結構性的（Pab2 的機制）。** 往前修的 late slew 期間，命令以 75 Hz 產生、token 以 60 Hz 補充，09a 的折讓式讓每個命令停在平衡等待 P·(1−60/75)＝3.33 ms（和 R 無關；`ClientConnection.cpp:607-623`、`LocalPlayerPrediction.cpp:291-313`）。重新擷取決定那一刻最大的樣本正是這些命令，所以**撤回量≈|late|−3.33 ms**（100 ms 格：33.33−3.33＝30.0），撤回後相位偏早約 3.3 ms（`residual_ms`≈−3.3），要到下一次視窗決定（約 4 秒）才修回。方向安全（不會造成 late、重設或串接）。實測：09R-map 原型 +29.54～+30.45、09ab-L2 after 29.71～30.08 ms。證據：09ab-rev §1-a（`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`）、`build/target/_build/test/logs/pvp-v7-09ab-l2-20261014/summary-main.txt`。
-2. **撤回後約 4 秒內，相位誤差 3.3 ms 超過 FireGate 的 guard 2 ms**（guard 的前提是「決定後的相位誤差 ≤ 死區 2 ms」，`FireGate.hpp:24-27`）。這段期間 `earliest` 可能比實際晚 1 Tick，只影響壓著冷卻邊界的射擊（約 8%）。交 M0（4-3 節；宣告第 12 節第 3 點）。修法候選：第 5 節第 1 項的 S（只收 slew 結束之後產生的命令），可以直接消掉這 3.3 ms。
+2. **撤回後約 4 秒內，相位誤差 3.3 ms 超過 FireGate 的 guard 2 ms**（guard 的前提是「決定後的相位誤差 ≤ 死區 2 ms」，`FireGate.hpp:24-27`）。這段期間 `earliest` 可能比實際晚 1 Tick，只影響壓著冷卻邊界的射擊（約 8%）。交 M0（4-3 節；宣告第 12 節第 3 點）。修法候選：第 5 節第 1 項的 S（只收 slew 結束之後產生的命令），可以直接消掉這 3.3 ms。（補充，2026-10-14，D75：M0 移到 v7.1，只在第 09 批 C2 的 clean 案例出現權威 Cooldown 拒絕時補做；本項記為已知殘餘，寫進第 09 批 S4-lite 的 `FireGate.hpp` 註解與 `09-firegate-c2.md` 的殘餘清單〔D74 U3〕，修法併入 v7.1 候選 B1。）
 3. **只撤回決定那一刻樣本看得到的部分。** 延遲消失得晚（放出晚於 late 修正的 slew 結束；t_frame 基準的邊界約 70～87 ms）時只部分撤回或反向，150 ms 格部分單位重設（1-2 節、Pab4）。
 4. **δ＞70.6 ms 時，B2 要放出比 slew 結束早超過約 11～19 ms 才不串接**（界線約 11 ms、跑次間會變動；D71）。09ab-L2 的 80/150：r1 放出到 t_post 22.6、22.7 ms 不串接；r2、r3 是 11.4～11.5 ms 仍串接（4 個單位，Jab5 不成立）；09R-map 原型是 18.8、10.9 ms 不串接。宣告原本只把「放出到 t_post ≤0」的串接當成已知限制，D71 把界線改寫成這一條。不另開修正批；重新擷取的樣本邊界（S／M）仍是第 5 節第 1 項，留到 v7 完成後統一評估。
 5. **300 ms 型的延遲消失照舊重設**（1-6 節，範圍外）。
@@ -1348,11 +1348,13 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 
 #### 4-3. 和 M0、FireGate 凍結、C2 的銜接
 
+更正／補充（2026-10-14，D75）：M0 與 FireGate 常數的完整推導移到 v7.1；第 09 批改成 S4-lite（縮小版凍結，值不變）＋C2，M0 只在 C2 的 clean 案例出現權威 Cooldown 拒絕時補做（用 M0 宣告草案 v2 與 M0 probe）。下面「交給 M0 規劃的待決事項」已在草案 v2 與 D74 的 U1～U9 處理，只在補做 M0 時適用；已知的限制（撤回後殘餘〔U3〕、延遲下降後的領先〔U8〕）記為已知殘餘，寫進 S4-lite 的註解。原文保留。
+
 - 前置條件：09ab-L2 通過，PR #73 的頭＝09a＋09b，之後才做 S3（M0）→ S4（凍結）→ C2。
   - （補充，2026-10-14，09ab-doc）：09ab-L2 依宣告 `passed`＝false（只有 Jab5 不成立）；D71 把它記為已知限制（1-7 節第 4 點），照建議繼續第 09 批。
 - 重推條件 1、2 發生在凍結之前，不算重推（`09-firegate-c2.md:91`、`:92`）。
 - **重推條件 11**（`09-firegate-c2.md:101`）的觸發是「D49 第二階段實作後」，目前沒有發生（補充，2026-10-14，D73：D49 第二階段移到 v7.1，所以在 v7 內不會發生）；08c 建議的改寫（`08c-drop-report.md:755`）尚未核准，本批不動它。本批的格點不記錄 FireGate 的 earliest、也不量 R 對 earliest，**不能代替 11 的 FireGate 那一半**。「M0 要不要加跑 Client→Gateway 短延遲注入」交使用者決定（決定 10）。
-- **交給 M0 規劃的待決事項**（不在本批定案）：
+- **交給 M0 規劃的待決事項**（不在本批定案）：（補充，2026-10-14，D75：見本節開頭的更正，M0 移到 v7.1。）
   - late 修正之後的射擊怎麼處理。不當排除區；建議當成另行判定的類別，至少保留「Cooldown＝0」的檢查。
   - 依據：D48③ 的 2 次 Cooldown（base 的 chain-r2 與 09a-b2 的 chain-r5 各 1 次）都在 t_c 之後約 114～115 ms、late slew 期間、撤回之前（09b 文件「D48 第③步的結果」）。撤回期間 phaseShift 是正值，FireGate 偏保守（`FireGate.cpp:18-19` 的 `Max(0, phaseShift)`）；late slew 期間沒有這個保守，由 M0 確認。
   - 這 2 次 Cooldown 和 R8 一起作為 M0 的輸入。
@@ -1683,6 +1685,8 @@ plan 第 2 節的預測，加上 09ab-rev 與本批的資料。判定在第 8 �
 **Pab7 與 T-B9**（`tests/object_fps_pvp/PredictionTests.cpp:1791-1838`，09b-impl）：樣本的換算是「原始值－（該命令產生時尚未吸收的決定量）」（`LocalPlayerPrediction.cpp` 的 rebase：`raw − (phaseAppliedSeconds_ + phaseShiftSeconds_ − age.appliedSeconds)`）；修正開始前產生的命令，扣的是整個修正量（T-B9 的註解：rebased by all of it）。這對**任何往後的修正**都適用，包括視窗決定與首次決定，不只限於 late 之後的撤回；所以在 network 案例裡，不需要先有 late 修正，前提也可能成立。若 settle 前最後兩個樣本是**「≥修正後餘裕的成對延遲尖峰」**（原始 slack 是小正值、小於該命令產生時尚未吸收的決定量，換算後變負），而 settle 那一幀又沒有樣本，會立刻觸發一次 late 修正，接著重新擷取、再撤回一次（多一對修正）；同樣的兩個樣本若在 slew 中段，會被下一個準時樣本清掉，不觸發。這是原型本身的行為，測試只釘住現在的行為，沒有新增規則。實際風險仍低：以 Match 端的近似 slack（resolved−host_accepted）看 08c network40 flow+09a，11487 個命令中 <5 ms 的 14 個、<2 ms 的 4 個；每個 client 每跑次只有約 1 次額外的修正（D45 xhigh H2）。撤回後殘餘（`residual_ms`≈−3.3，相位偏早）也讓樣本更不容易被判 late（09ab-rev §7-5）。**Jab7 觸發時**，停下並把那個 late 事件的時刻、所在跑次的修正與撤回紀錄、以 `match-commands.jsonl` 重建（近似）的事件前兩次發布的樣本交使用者，判斷是不是 T-B9 的情境（slack 樣本本身不在任何 log 裡，只能近似重建）。
 
 #### 12. M0 的待決事項（交給第 09 批，不在本批定案）
+
+更正／補充（2026-10-14，D75）：M0 移到 v7.1，只在第 09 批 C2 的 clean 案例出現權威 Cooldown 拒絕時補做。下列 1～3 已由 M0 宣告草案 v2 與 D74 的 U1～U9 處理（只在補做時適用）；第 3 項（撤回後的殘餘）依 U3 記為已知殘餘，寫進 S4-lite 的 `FireGate.hpp` 註解；第 4 項（C2 的記錄）照舊；第 5 項的順序改成 S4-lite → C2。
 
 plan 4-3 與 09ab-rev 的整理。本批的格點**不記錄 FireGate 的 earliest、也不量 R 對 earliest，不能代替重推條件 11 的 FireGate 那一半**（`09-firegate-c2.md:101`）。
 

@@ -1,6 +1,6 @@
 # PvP v7.1 重構版（未規劃）
 
-更新：2026-10-14（建立種子文件，[v7 交接](../v7/HANDOFF.md) D73，批次代號 pv7-to-v71）。Owner：`object_fps_pvp`。
+更新：2026-10-14（建立種子文件，[v7 交接](../v7/HANDOFF.md) D73，批次代號 pv7-to-v71；同日加入 M0，D75，批次代號 m0-to-v71）。Owner：`object_fps_pvp`。
 **狀態：未規劃；v7 完成後用 ultracode 規劃。** 本文件只收集從 v7 移入的項目與重構候選，還沒有分批、契約或檔位。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6、不改 wire；**pv7 在 v7.1**。
@@ -26,6 +26,7 @@
 | 7 | 第 15 批拿掉的量測：Mac Gateway↔Windows Client 的偏移與漂移（≥15 分鐘，需要時間回聲） | [v7 交接](../v7/HANDOFF.md)「P7」第 15 批；[v7 README](../v7/README.md) 平台表 |
 | 8 | 第 16 批之後的 D44 再回歸：v7 第 16 批的整體回歸不含 D49 第二階段；v7.1 做完 pv7 後再回歸一次 | [v7 交接](../v7/HANDOFF.md) D44、未結事項 D44 的子項 |
 | 9 | FireGate 重推條件 4（心跳對時、時間回聲）與 11（D49 第二階段）在 v7.1 觸發 | [09-firegate-c2](../v7/09-firegate-c2.md)「重推條件」；08c 對條件 11 的改寫建議（[08c](../v7/08c-drop-report.md)「對既有順序的影響」，未核准） |
+| 10 | M0 影子量測與 FireGate 常數的完整推導（`09-firegate-c2.md`「合成時間線」1～10 項的改寫）。輸入：M0 宣告草案 v2（`build/target/_build/test/logs/pvp-v7-09-m0-plan-20261014/draft-v2.md`）；M0 probe（worktree `../GYO-Engine-m0`，本機 commit `5ef8a89`，分支 `m0-probe-5ef8a89`，未推送；xhigh 審查中止、未完成，使用前先完成）；v7 D74 的 U1～U9；09-M0-plan 的發現：30／60 FPS 的每段起點偏移無效→改每發忙等控制 s、延遲下降後的領先＞2（Wdrop）、撤回後殘餘。**若採用 [A1](#a-架構與協議)，兩個常數廢棄，M0 不必做**；[B1](#b-相位追蹤)、[B6](#b-相位追蹤) 會改變 M0 要量的對象，M0 排在它們之後。v7 只做縮小版凍結（S4-lite，值不變）與 C2；C2 的 clean 案例出現權威 Cooldown 拒絕時，M0 在 v7 補做 | [v7 交接](../v7/HANDOFF.md) D75、D74；[09-firegate-c2](../v7/09-firegate-c2.md) 步驟 S3、S4、「合成時間線」；[09b](../v7/09b-phase-tracking.md) 4-3 節、L2 宣告第 12 節 |
 
 ## 設計上的連動
 
@@ -109,5 +110,5 @@
   1. 先做行為不變的重構和 golden（例如 C 類、B5）。
   2. 需要 pv6 凍結分析器的新舊對比，排在 pv7 之前。
   3. pv7 契約定稿後才實作（A1 要在定稿前決定放進 pv7 或延到 pv8）。
-  4. 之後重推 FireGate（重推條件 4、11）、重跑 M0 型量測和 D44 回歸。
+  4. 之後重推 FireGate（重推條件 4、11）、重跑 M0 型量測和 D44 回歸。（補充，2026-10-14，D75：v7 沒有做 M0，這裡是第一次完整的 M0 與常數推導，見「從 v7 移入的項目」第 10 項；A1 採用時改為確認常數已廢棄。）
 - 範圍、門檻或 ownership 的變更照 AGENTS.md 處理：觀測到的壓力才改架構，Architecture Delta 要明寫。
