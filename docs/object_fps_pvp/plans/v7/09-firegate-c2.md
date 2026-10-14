@@ -1,6 +1,6 @@
 # 第 09 批：FireGate 常數的重推與 C2
 
-狀態：**S1、S2（09a）、S2b（09b）完成；S3（M0）移到 v7.1（D75），只在 C2 觸發時補做；S4 改成 S4-lite（縮小版凍結），範圍已照建議核准、實作進行中**（2026-10-14，D75）。先前的狀態：S1 完成（只記錄）；第 09a 批的實作等 D48 的證據（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
+狀態：**完成（2026-10-14）**：S1、S2（09a）、S2b（09b）、S4-lite（`6587030`）、S5（`793c4f5`）、S6（宣告 D79）、S7（C2 **通過**）、S8；S3（M0）移到 v7.1（D75），C2 沒有觸發補做。先前的狀態：**S1、S2（09a）、S2b（09b）完成；S3（M0）移到 v7.1（D75），只在 C2 觸發時補做；S4 改成 S4-lite（縮小版凍結），範圍已照建議核准、實作進行中**（2026-10-14，D75）。先前的狀態：S1 完成（只記錄）；第 09a 批的實作等 D48 的證據（2026-10-10；決定 1～11 照建議，D47：「決定 1～11 照建議，開始第 09a 批，檔位照建議」）。PR 線 P2（PR #73）。依賴第 08b 批。
 檔位：規劃 ultracode（D45；使用者 2026-10-10「開始第 09 批，開 ultracode，檔位照建議」）。之後各步的檔位見「步驟」。
 
 ## 起因與範圍
@@ -781,6 +781,28 @@ caffeinate -dims python3 -I -B $P/run_c2.py --output build/target/_build/test/lo
 python3 -I -B $P/judge_c2.py --session build/target/_build/test/logs/pvp-v7-09-c2-<日期> --frozen-sha $FROZEN --artifacts-sha $ARTIFACTS --declaration-sha $DECLARATION
 ```
 
+
+## C2 結果（2026-10-14 19:39～21:03，commit H `a6127cc`；**依宣告 `passed`＝true**）
+
+- session：165 項全部完成，沒有停止、沒有完整性問題、沒有使用者旗標；主 checkout 與遠端 PR 分支在 session 期間只有文件（開始與結束都核對）。PR #73 的 auto-fix 在 session 期間暫停，結束後恢復。受干擾（D 類）0 次。
+- **C2-A（30 FPS 對比矩陣）：通過。** 主機：兩棵 tree 的 24 次全部在 8 ms 狀態（TimerBaseline），Fisher p＝1.0，sleeper 沒有轉換；4 ms 狀態沒有樣本，標「未驗證」。補跑 0 項。
+
+  | 8 ms 狀態 | before（v6final `fee92ff`） | after（`d685d1e`） |
+  |---|---|---|
+  | clean-30 通過 | 1／6 | 6／6 |
+  | clean-30 替代（Held＋Neutral，排除 Match 停頓） | 109／10045（1.09%） | 0／10062 |
+  | clean-60 通過、替代 | 6／6、0／10053 | 6／6、0／10061 |
+  | clean-144 通過、替代 | 3／3、0／5028 | 3／3、0／5031 |
+
+  Match 停頓造成的替代兩棵 tree 都是 0，所以排除與不排除兩種比率相同（D78 U2）。v6 的 clean-30 在 8 ms 狀態失敗是 C1 已知的現象；v7 在同一狀態 6／6 通過，替代 0。
+- **C2-B（GUI 連點，經過真正的 FireGate）：通過。** after 的判定格（12 Tick 與冷卻邊緣，30／60／144 FPS，各 3 輪）18 次全部 P，**權威 Cooldown 拒絕 0**（12 Tick 每格送出 132 發；冷卻邊緣送出 92～96 發，點擊 432～1954 次、本機擋下 340～1858 次）。刻意注入的排除 0 件。判定跑次的 sleeper 狀態：8 ms 13、4 ms 5。
+  - 只記錄：after 的 10／11／13 Tick 與暫停後連點 Cooldown 也都是 0。before 有 3 次 Cooldown（interval10-60、interval10-144、pause-144 各 1，D78 U4 只記錄）。
+  - 送出→裁決的中位數：after 30 FPS 約 34 ms、60 FPS 約 18 ms、144 FPS 約 15 ms；before 各 FPS 約 52～72 ms（含 1 次 102 ms）。
+  - 檢定力：每格 0／92～132 發，95% 上限約每發 2.3～3.3%；這是「沒有看到」，不是比例的確認（宣告「判定」）。
+- **回歸（25 案＋backpressure 6 案＋network）：通過**，D61 規則下即時與事後的問題都是 0。
+- **只記錄**：late 修正 A／before 2 次（clean-30-r4）、A／after 0、R／after 0；D44 舊版的領先跳升 0、非 respawn 重設 0（D79 U9）。
+- **M0 的條件式補做（D75）：沒有觸發**（C2 的 clean 案例沒有權威 Cooldown 拒絕）。
+- 證據：`build/target/_build/test/logs/pvp-v7-09-c2-20261014/`（`progress.jsonl`、`judgement.json`、`files.sha256`、`runs/`）；執行與判定的 log 在同層的 `pvp-v7-09-c2-20261014.run.log`、`.judge.log`。
 
 ## S1 結果（2026-10-10，只記錄）
 
