@@ -23,6 +23,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <mutex>
 #include <optional>
@@ -52,6 +53,8 @@ struct Options {
     bool playerCapture{};
     bool actionShort{};
     bool actionCapture{};
+    // Rapid-fire record scenario (action_short.hpp RunActionRapid); empty = off.
+    std::string actionRapid;
     unsigned events{200};
     double fps{60};
     // The two GUI roles plus passive bots (gui_room.hpp); two is a room of the GUIs alone.
@@ -88,6 +91,7 @@ Options Parse(int argc, char* argv[]) {
         else if (argument == "--duration") { options.duration = std::stod(value); explicitDuration = true; }
         else if (argument == "--events") { options.events = static_cast<unsigned>(std::stoul(value)); explicitEvents = true; }
         else if (argument == "--fps") options.fps = std::stod(value);
+        else if (argument == "--action-rapid") options.actionRapid = value;
         else if (argument == "--output") options.output = value;
         else if (argument == "--gpu-driver") options.gpu = value;
         else if (argument == "--room-players") options.roomPlayers = static_cast<unsigned>(std::stoul(value));
@@ -101,7 +105,7 @@ Options Parse(int argc, char* argv[]) {
     Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
         unsigned(options.nativeWindow) +
         unsigned(options.playerShort) + unsigned(options.playerCapture) +
-        unsigned(options.actionShort) + unsigned(options.actionCapture) <= 1,
+        unsigned(options.actionShort) + unsigned(options.actionCapture) + unsigned(!options.actionRapid.empty()) <= 1,
         "Choose one explicit probe mode");
     Require(!options.combat || options.latency || options.latencyShort, "--combat requires an explicit latency mode");
     if (options.latency && !explicitDuration) options.duration = 120;
@@ -110,6 +114,7 @@ Options Parse(int argc, char* argv[]) {
     if (options.nativeWindow && !explicitDuration) options.duration = 180;
     if ((options.playerShort || options.playerCapture) && !explicitDuration) options.duration = 12;
     if ((options.actionShort || options.actionCapture) && !explicitDuration) options.duration = 18;
+    if (!options.actionRapid.empty() && !explicitDuration) options.duration = 45;
     Require(std::isfinite(options.duration) && options.duration >= (options.latency ? 120 : 2) && options.duration <= 3600,
         "--duration must be 120..3600 seconds for latency, 2..3600 otherwise");
     Require(options.events >= (options.latencyShort ? 20U : 200U) && options.events <= 6000,
@@ -122,6 +127,11 @@ Options Parse(int argc, char* argv[]) {
         "Player presentation probes use an explicit bounded 12-second schedule");
     Require(!(options.actionShort || options.actionCapture) || (options.duration >= 18 && options.duration <= 25),
         "Action probes need 18..25 seconds for their fixed schedule, the target respawn and the rejoin");
+    Require(options.actionRapid.empty() || options.actionRapid == "interval10" || options.actionRapid == "interval11" ||
+        options.actionRapid == "interval12" || options.actionRapid == "interval13" || options.actionRapid == "edge" ||
+        options.actionRapid == "pause", "--action-rapid must be interval10..interval13, edge or pause");
+    Require(options.actionRapid.empty() || (options.duration >= 20 && options.duration <= 120),
+        "The rapid probe's bound must be 20..120 seconds");
     Require(std::isfinite(options.fps) && options.fps >= 30 && options.fps <= 144, "--fps must be 30..144");
     return options;
 }
@@ -1123,13 +1133,15 @@ int main(int argc, char* argv[]) {
                   << "--player-capture --fps 60 (separate real GPU character captures)\n"
                   << "--native-window --duration 180 (passive native X11 input/lifecycle observer)\n"
                   << "--action-short --fps 30|60|144 (18 seconds, SDL-injected v5 actions, window interactions and rejoin on any platform)\n"
-                  << "--action-capture --fps 60 (the same schedule with first-person and remote GPU captures)\n";
+                  << "--action-capture --fps 60 (the same schedule with first-person and remote GPU captures)\n"
+                  << "--action-rapid interval10..13|edge|pause --fps 30|60|144 (SDL-injected clicks through the local fire gate; record only)\n";
         return 0;
     }
     try { const auto options = Parse(argc, argv);
         if (options.latency || options.latencyShort) RunLatency(options);
         else if (options.playerShort || options.playerCapture) RunPlayerShort(options);
         else if (options.actionShort || options.actionCapture) RunActionShort(options);
+        else if (!options.actionRapid.empty()) RunActionRapid(options);
         else if (options.nativeWindow) RunNativeWindow(options);
         else if (options.phaseStalls) RunPhaseStalls(options);
         else Run(options);

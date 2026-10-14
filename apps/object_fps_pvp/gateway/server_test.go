@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +69,14 @@ type fakeRuntime struct {
 
 func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 	t.Helper()
+	s, f, _, _ := startTestServer(t)
+	return s, f
+}
+
+// startTestServer also returns Serve's cancel and a channel closed when Serve
+// returned.
+func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <-chan struct{}) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +116,13 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 	go func() { _ = s.Serve(ctx); close(done) }()
 	t.Cleanup(func() {
 		cancel()
-		s.Close()
+		closed := make(chan struct{})
+		go func() { s.Close(); close(closed) }()
+		select {
+		case <-closed:
+		case <-time.After(3 * time.Second):
+			t.Error("server did not close")
+		}
 		_ = listener.Close()
 		f.mu.Lock()
 		if f.conn != nil {
@@ -119,7 +135,7 @@ func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
 			t.Error("server did not stop")
 		}
 	})
-	return s, f
+	return s, f, cancel, done
 }
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {
@@ -141,6 +157,18 @@ func (f *fakeRuntime) next(t *testing.T) *runtime.RuntimeEnvelope {
 		return e
 	case <-time.After(2 * time.Second):
 		t.Fatal("runtime request missing")
+		return nil
+	}
+}
+
+// nextInput fails with missing, so each forwarding test names its own loss.
+func (f *fakeRuntime) nextInput(t *testing.T, missing string) *runtime.PlayerInput {
+	t.Helper()
+	select {
+	case e := <-f.got:
+		return e.GetInput()
+	case <-time.After(2 * time.Second):
+		t.Fatal(missing)
 		return nil
 	}
 }
@@ -302,14 +330,16 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 {
 		t.Fatalf("bad input %v", in)
 	}
-	// Redundant batches keep every command and remain valid after the mailbox drains.
+	// Redundant batches remain valid after the mailbox drains. Their commands
+	// were written already, so the link drops the copy instead of writing it.
 	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
-	if repeated := f.next(t).GetInput(); repeated == nil || len(repeated.Commands) != 2 || repeated.Commands[0].Sequence != 2 {
-		t.Fatalf("redundant window lost: %v", repeated)
-	}
-	// One conflict rejects the entire batch, including its new command.
-	sendPacket(t, p, c, 7, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: -1}, {Sequence: 4}}})
 	f.quiet(t)
+	// A conflict reaches the Match unmerged, which rejects the entire batch,
+	// including its new command.
+	sendPacket(t, p, c, 7, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: -1}, {Sequence: 4}}})
+	if in := f.nextInput(t, "conflicting window did not reach the runtime"); in == nil || len(in.Commands) != 2 || in.Commands[0].MoveForward != -1 {
+		t.Fatalf("conflicting window did not reach the runtime: %v", in)
+	}
 	e = envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, X: 5, Z: 7, LastResolvedCommand: 3}}}}
 	f.send(e)
@@ -649,13 +679,18 @@ func TestRuntimeMailboxMergesWindowsAtomicallyAndBoundsStorage(t *testing.T) {
 			t.Fatalf("mutated or missing command %d: %v", i, command)
 		}
 	}
-	if err := l.input(window(30, 32)); err != nil {
+	// Resolved commands stay until written: the Match measures late arrivals.
+	if err := l.input(window(33, 35)); err != nil {
 		t.Fatal(err)
 	}
-	l.acknowledge(1, 1, 1, 31)
+	l.acknowledge(1, 1, 1, 34)
 	batch = l.batch()
-	if len(batch) != 1 || len(batch[0].GetInput().Commands) != 1 || batch[0].GetInput().Commands[0].Sequence != 32 {
-		t.Fatalf("stale commands retained: %v", batch)
+	commands = commands[:0]
+	for _, message := range batch {
+		commands = append(commands, message.GetInput().Commands...)
+	}
+	if len(commands) != 3 || commands[0].Sequence != 33 {
+		t.Fatalf("acknowledge pruned a resolved command before the write: %v", batch)
 	}
 }
 
@@ -671,20 +706,24 @@ func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
 	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 2 || in.Commands[1].MoveForward != 0 {
 		t.Fatalf("stop command lost: %v", in)
 	}
-	// Packet sequence increases; command sequences can repeat and overlap.
+	// Packet sequence increases; command sequences can repeat and overlap. A
+	// repeat is no error; its commands were written, so the link drops it.
 	sendPacket(t, p, c, 3, adapter.Input, first)
-	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 2 {
-		t.Fatalf("redundancy dropped: %v", in)
-	}
-	sendPacket(t, p, c, 4, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
 	f.quiet(t)
-	// Reordered transport packet must not resurrect movement either.
+	// A mutation reaches the Match unmerged, for it to refuse.
+	sendPacket(t, p, c, 4, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	if in := f.nextInput(t, "mutated window did not reach the runtime unmerged"); in == nil || len(in.Commands) != 2 || in.Commands[0].MoveForward != 1 {
+		t.Fatalf("mutated window did not reach the runtime unmerged: %v", in)
+	}
+	// A reordered transport packet is forwarded without committing its
+	// sequence, but its commands were written: it must not resurrect movement.
 	sendPacket(t, p, c, 2, adapter.Input, first)
 	f.quiet(t)
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 9, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, LastResolvedCommand: 2}}}}
 	f.send(e)
 	receivePacket(t, p, adapter.Snapshot)
+	// Resolved and written already: the copy is dropped, and never recorded.
 	sendPacket(t, p, c, 5, adapter.Input, first)
 	f.quiet(t)
 	s.mu.Lock()
@@ -740,12 +779,13 @@ func TestRuntimeMailboxEpochOnlyAdvancesFromAuthority(t *testing.T) {
 	if err := l.input(input(2, -1)); err == nil {
 		t.Fatal("input advanced epoch")
 	}
+	// The old epoch's pending window reaches the Match unmerged, to refuse.
 	l.acknowledge(1, 2, 1, 0)
-	if len(l.batch()) != 0 {
-		t.Fatal("epoch reset retained old commands")
+	if batch := l.batch(); len(batch) != 1 || batch[0].GetInput().MovementEpoch != 1 {
+		t.Fatalf("epoch change dropped the pending window: %v", batch)
 	}
-	if err := l.input(input(1, 1)); err != nil {
-		t.Fatal(err)
+	if err := l.input(input(1, 1)); !errors.Is(err, adapter.ErrInput) {
+		t.Fatal("link silently accepted a stale epoch")
 	}
 	if len(l.batch()) != 0 {
 		t.Fatal("old epoch reactivated command")
@@ -784,16 +824,23 @@ func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
 	if err := proto.Unmarshal(receivePacket(t, p, adapter.Snapshot), &snapshot); err != nil || snapshot.Players[0].MovementEpoch != 2 || snapshot.Players[0].LastResolvedCommand != 0 {
 		t.Fatalf("reset snapshot %v %v", &snapshot, err)
 	}
+	// Old and future epochs reach the Match unmerged; it refuses them.
 	sendPacket(t, p, c, 3, adapter.Input, input(1, 1))
-	f.quiet(t)
+	if in := f.nextInput(t, "stale epoch window did not reach the runtime"); in == nil || in.MovementEpoch != 1 {
+		t.Fatalf("stale epoch window did not reach the runtime: %v", in)
+	}
 	sendPacket(t, p, c, 4, adapter.Input, input(3, -1))
-	f.quiet(t)
+	if in := f.nextInput(t, "future epoch window did not reach the runtime"); in == nil || in.MovementEpoch != 3 {
+		t.Fatalf("future epoch window did not reach the runtime: %v", in)
+	}
 	sendPacket(t, p, c, 5, adapter.Input, input(2, -1))
 	if in := f.next(t).GetInput(); in == nil || in.MovementEpoch != 2 || in.Commands[0].MoveForward != -1 {
 		t.Fatalf("fresh epoch could not restart sequence1: %v", in)
 	}
 	sendPacket(t, p, c, 6, adapter.Input, input(2, 1))
-	f.quiet(t)
+	if in := f.nextInput(t, "conflicting epoch window did not reach the runtime"); in == nil || in.Commands[0].MoveForward != 1 {
+		t.Fatalf("conflicting epoch window did not reach the runtime: %v", in)
+	}
 	// A delayed old epoch can carry a numerically larger ACK and even an
 	// otherwise newer tick. It must not prune the replacement epoch's window.
 	stale := envelope()
@@ -910,5 +957,106 @@ func TestSnapshotsReachEveryPeerOfAFullRoom(t *testing.T) {
 	var snapshot client.WorldSnapshot
 	if err := proto.Unmarshal(first, &snapshot); err != nil || len(snapshot.Players) != adapter.MaxPlayers {
 		t.Fatalf("full room snapshot: %v %v", &snapshot, err)
+	}
+}
+
+// G10: results of a player that is not active do nothing, and a removed
+// player's identity never comes back. (a) A joining player's actions do not
+// reach the Match and Match results for it leave no ledger and no packet. (b)
+// Results for a player who left are dropped without failing the room. (c) The
+// same request id reserves a new player id.
+func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.T) {
+	s, f := newTestServer(t)
+	post(t, s, "/rooms", map[string]any{})
+	shotBatch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
+	results := func(player uint64) {
+		e := envelope()
+		e.Message = &runtime.RuntimeEnvelope_ActionResults{ActionResults: &runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}}}
+		f.send(e)
+	}
+	// Packet kinds reaching a peer until one of the given kind, or a Failure,
+	// arrives.
+	until := func(p *net.UDPConn, kind uint16) []uint16 {
+		t.Helper()
+		var kinds []uint16
+		buf := make([]byte, framing.MaxDatagram+1)
+		_ = p.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			n, _, err := p.ReadFromUDP(buf)
+			if err != nil {
+				t.Fatalf("no packet of kind %d (got %v): %v", kind, kinds, err)
+			}
+			if h, _, err := framing.DecodeDatagram(buf[:n]); err == nil {
+				kinds = append(kinds, h.Type)
+				if h.Type == kind || h.Type == adapter.Failure {
+					return kinds
+				}
+			}
+		}
+	}
+
+	// (a) Joining.
+	joiner, joinerPeer := reserve(t, s, "g10-joining"), peer(t)
+	sendPacket(t, joinerPeer, joiner, 1, adapter.Hello, &client.Hello{SessionToken: joiner.Token})
+	if join := f.next(t).GetJoin(); join == nil || join.PlayerId != joiner.PlayerID {
+		t.Fatal("missing join")
+	}
+	sendPacket(t, joinerPeer, joiner, 2, adapter.Actions, shotBatch)
+	select {
+	case e := <-f.got:
+		t.Fatalf("a joining player's actions reached the runtime: %v", e)
+	case <-time.After(60 * time.Millisecond):
+	}
+	results(joiner.PlayerID)
+	joined := envelope()
+	joined.Message = &runtime.RuntimeEnvelope_JoinResult{JoinResult: &runtime.JoinResult{PlayerId: joiner.PlayerID, Accepted: true}}
+	f.send(joined)
+	// The runtime link handles its messages in order: the Welcome comes after
+	// the results were handled.
+	if kinds := until(joinerPeer, adapter.Welcome); slices.Contains(kinds, adapter.Failure) {
+		t.Fatal("a joining player's results failed the room")
+	} else if slices.Contains(kinds, adapter.ActionResults) {
+		t.Fatal("a joining player's results reached its Client")
+	}
+	s.mu.Lock()
+	ledger := s.players[joiner.PlayerID].actions
+	s.mu.Unlock()
+	if ledger != nil {
+		t.Fatal("a joining player's actions or results left a ledger")
+	}
+
+	// (b) Left.
+	leaver, leaverPeer := reserve(t, s, "g10-leaver"), peer(t)
+	sendPacket(t, leaverPeer, leaver, 1, adapter.Hello, &client.Hello{SessionToken: leaver.Token})
+	accept(t, f, leaver)
+	receivePacket(t, leaverPeer, adapter.Welcome)
+	sendPacket(t, leaverPeer, leaver, 2, adapter.Actions, shotBatch)
+	for in := f.next(t); in.GetActions() == nil || in.GetActions().PlayerId != leaver.PlayerID; in = f.next(t) {
+	}
+	if status, _ := post(t, s, "/rooms/1/leave", map[string]any{"session_id": leaver.SessionID, "session_token": leaver.Token}); status != 200 {
+		t.Fatal(status)
+	}
+	for in := f.next(t); in.GetLeave() == nil; in = f.next(t) {
+	}
+	results(leaver.PlayerID)
+	e := envelope()
+	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 5, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: joiner.PlayerID}}}}
+	f.send(e)
+	if kinds := until(joinerPeer, adapter.Snapshot); slices.Contains(kinds, adapter.Failure) {
+		t.Fatal("a removed player's results failed the room")
+	}
+	s.mu.Lock()
+	available := s.available
+	s.mu.Unlock()
+	s.link.mu.Lock()
+	_, kept := s.link.actionWindows[leaver.PlayerID]
+	s.link.mu.Unlock()
+	if !available || kept {
+		t.Fatalf("after a removed player's results: available=%v link window kept=%v", available, kept)
+	}
+
+	// (c) The same request id again.
+	if again := reserve(t, s, "g10-leaver"); again.PlayerID == leaver.PlayerID || again.PlayerID <= joiner.PlayerID {
+		t.Fatalf("a removed player's id was reused: %d after %d", again.PlayerID, leaver.PlayerID)
 	}
 }

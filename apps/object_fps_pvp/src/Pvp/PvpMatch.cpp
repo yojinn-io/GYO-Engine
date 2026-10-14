@@ -56,20 +56,29 @@ bool PvpMatch::ValidInput(const PlayerInput& input) noexcept {
     return true;
 }
 
-bool PvpMatch::CanSubmitInput(const PlayerInput& input) const noexcept {
+InputAdmission PvpMatch::AdmitInput(const PlayerInput& input) const noexcept {
     const auto found = players_.find(input.playerId);
-    if (found == players_.end() || !ValidInput(input)) return false;
+    if (found == players_.end()) return InputAdmission::UnknownPlayer;
+    if (!ValidInput(input)) return InputAdmission::Malformed;
     const auto& participant = found->second;
-    if (input.movementEpoch != participant.state.movementEpoch ||
-        input.lifeGeneration != participant.state.lifeGeneration) return false;
+    const auto epoch = participant.state.movementEpoch;
+    if (input.movementEpoch != epoch)
+        return input.movementEpoch < epoch ? InputAdmission::EpochOld : InputAdmission::EpochFuture;
+    const auto life = participant.state.lifeGeneration;
+    if (input.lifeGeneration != life)
+        return input.lifeGeneration < life ? InputAdmission::LifeOld : InputAdmission::LifeFuture;
     const auto cursor = participant.state.lastResolvedCommand;
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue; // An irrevocably resolved step.
-        if (command.sequence - cursor > MaxFutureCommands) return false;
+        if (command.sequence - cursor > MaxFutureCommands) return InputAdmission::BeyondWindow;
         const auto queued = participant.commands.find(command.sequence);
-        if (queued != participant.commands.end() && queued->second != command) return false;
+        if (queued != participant.commands.end() && queued->second != command) return InputAdmission::ConflictQueued;
     }
-    return true;
+    return InputAdmission::Accepted;
+}
+
+bool PvpMatch::CanSubmitInput(const PlayerInput& input) const noexcept {
+    return AdmitInput(input) == InputAdmission::Accepted;
 }
 
 bool PvpMatch::SubmitInput(const PlayerInput& input) {

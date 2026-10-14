@@ -23,9 +23,26 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // Input sends draw from an InputSendRate token bucket of this many tokens. A
 // window carrying a command never sent goes at the worker's next poll once a
 // token exists; an unchanged window is resent at the 1/InputSendRate deadline
-// only while one token stays in reserve for the next new command. The average
-// stays at InputSendRate, bursts are two packets, nothing is repaid.
+// only while one token stays in reserve for the next new command. Refill equals
+// command production (60 Hz), so a token debt left by a stall or an earlier
+// phase would keep every later new command waiting by the same amount. A send
+// of a new command that waited for its token is charged less in proportion to
+// that wait, 1 - min(1 - InputSendRate / InputSendDrainRate, wait * InputSendRate)
+// tokens, where the wait ends when the token exists (a late wake adds nothing)
+// and the credit never lifts the bucket above one token after the send. The
+// debt drains within InputSendDrainRate / (InputSendDrainRate - InputSendRate)
+// = 4 commands. With 60 Hz production the average stays at InputSendRate;
+// while an earlier-moving phase slew produces at 75 Hz, sends follow
+// production and each command waits about
+// (1 - InputSendRate / 75) / InputSendRate = 3.3 ms. Bursts are two packets,
+// any three sends span at least 1/InputSendRate, and at most
+// InputSendDrainRate + InputSendBurst sends go in any second, which together
+// with actions and Hello stays inside the Gateway's per-session packet limit.
 inline constexpr double InputSendBurst = 2;
+// Above the 75 Hz production of an earlier-moving phase slew (a quarter of
+// each frame, LocalPlayerPrediction), so an earlier debt drains down to the
+// slew's own wait (about 3.3 ms a command, above); the slew's wait remains.
+inline constexpr double InputSendDrainRate = 80;
 inline constexpr double MovementTickSeconds = 1.0 / AuthorityTickRate;
 inline constexpr float MovementMaximumPitch = Engine::Math::DegreesToRadians(89.0F);
 inline constexpr double MovementCorrectionSeconds = 0.1;
@@ -45,11 +62,13 @@ inline constexpr std::uint64_t MovementResetCooldownTicks = 60;
 inline constexpr double MovementPhaseTargetSeconds = 0.004;
 // The error of the latest commands is the 90th percentile of a window of
 // slack samples: commands the worker sent at once, not the ones that also
-// waited for a frame. The first decision after a seed uses the first samples
-// and a narrow deadband; tracking then uses 240 samples (about four seconds:
-// every snapshot of a frame contributes its sample, though only the latest is
-// reconciled) and corrects only beyond the wider deadband. Two late (negative) samples in a
-// row correct at once. Each correction is at most two ticks and is slewed.
+// waited for a frame. The first decision after a seed, and the next decision
+// after a late correction, use the first samples and a narrow deadband;
+// tracking then uses 240 samples (about four seconds: every snapshot of a
+// frame contributes its sample, though only the latest is reconciled) and
+// corrects only beyond the wider deadband. Two late (negative, rebased)
+// samples in a row correct at once. Each correction is at most two ticks and
+// is slewed.
 inline constexpr std::size_t MovementPhaseFirstSamples = 8;
 inline constexpr std::size_t MovementPhaseWindowSamples = 240;
 inline constexpr double MovementPhasePercentile = 0.9;

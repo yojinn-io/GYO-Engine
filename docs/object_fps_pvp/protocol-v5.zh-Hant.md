@@ -1,6 +1,6 @@
 # PvP Protocol v5：人物、跳躍與生命循環契約
 
-更新：2026-10-04。Owner：`object_fps_pvp`。
+更新：2026-10-04（2026-10-14：§1 加 v7 第 09a／09b 批的契約修訂追記，D68）。Owner：`object_fps_pvp`。
 **v5自2026-10-03起為穩定基線**（[STABLE_BASELINE](plans/v5/STABLE_BASELINE.md)）：Client／Gateway／Match
 共同使用v5並拒絕v1–v4；第01–05批全部完成，完整驗收於macOS通過。
 歷史：2026-10-01經使用者批准加入啟動相位對齊（方案A1），2026-10-02加入低幀率守門；同日經使用者核准，
@@ -45,6 +45,15 @@ lead之外4ms，30 FPS等一幀含兩步時較舊的命令最壞只剩約4ms，�
 [fix/09](plans/v5/fix/09-covered-gap-stuck-late.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)。
 
 **追記（2026-10-06，原文不改）**：上段「CPU 模擬 ≤0.5%」只模擬了一幀兩步與 ±0.5 ms 的抖動，不代表實機。30 FPS 的一幀正好等於 2 Tick 的 lead；固定步邊界落在幀喚醒的抖動帶內時，一幀會含 3 步，最舊的一步只剩約 4 ms 餘裕，主機 sleep 晚醒約 8 ms（macOS 常見）時會錯過自己的 Tick 而被 Held。實機量到收斂後每位玩家 1.5～9.1%（晚醒約 4 ms 時每跑次 0～0.96%），相位追蹤看不到這些損失。因此 **30 FPS 本身就是本設計的範圍邊界**：可以連線遊玩，但不保證 Held ≤0.5%，主機狀態差時可能觸發連線品質移出。根本處理交給 v7 的主執行緒／模擬／網路分離。經過見 [v6 交接](plans/v6/HANDOFF.md)的「第 07 批後續：交錯 A/B 調查」與 D21。
+
+**追記（2026-10-14，v7 第 09a／09b 批的契約修訂，原文不改；使用者決定比照 D53 處理，見 [v7 交接](plans/v7/HANDOFF.md) D68）**：上表「移動worker／Snapshot」與「持續相位追蹤」兩列的部分文字已和實作不符。兩項都是 Client 本機的規則：**wire、proto 欄位、Match 與 Gateway 都不變**，版本維持 5／6，v5、v6 基線不重新發佈（D69）。改動如下：
+- **送出政策（第 09a 批，[09a 文件](plans/v7/09a-input-send-pinning.md)）**：新命令等過 token 時，這次送出依等待時間比例少扣，扣 1−min(1−60/80, 等待×60) 個 token；等待只算到 token 出現為止（worker 晚醒不算），送出後 token 不超過 1 個（`Movement.hpp` 的 `InputSendDrainRate`＝80；`ClientConnection.cpp` 的送出區塊）。停頓或前一段相位留下的 token 債在 60 Hz 產生下 4 個命令內還清。因此「平均≤60包／秒」只在 60 Hz 產生時成立：往前修相位的 slew 期間命令以 75 Hz 產生，送出跟著產生率，每個命令固定等約 3.3 ms（1/60 秒×(1−60/75)），slew 結束後回到 0；任何 1 秒最多 80＋2＝82 個輸入封包，加上動作與 Hello 仍在 Gateway 每 session 120 包／秒之內。「最多連送2包、不補送過期批次，worker不產生命令」不變。
+- **相位追蹤（第 09b 批，[09b 文件](plans/v7/09b-phase-tracking.md)）**：
+  - 換算：每個命令記下它產生時已經 slew 進去的修正量。樣本扣掉「到目前為止決定的修正總量」中，該命令產生時還沒 slew 進去的部分，再算 e。所以 slew 期間收到的樣本描述的是修正完成後的相位（`LocalPlayerPrediction.cpp` 的 `TrackPhase`）。
+  - late 判定：「連續2個負值樣本」改為連續 2 個**換算後**為負的樣本，修正量取換算後的最小者。
+  - 視窗：仍然在 slew 結束後才再決定，平常只計 slew 結束時已存在序號之後的命令；但 **late 修正之後**的下一次決定改用首次決定的規則（8 個樣本、0.5 ms 死區），並計入這次播種以來全部換算後的樣本（重新擷取）。連在一起的多次 late 修正（一串）只重新擷取一次；「相位已決定」的狀態（`phaseDecided_`，射擊閘依它計時）不清。
+  - 已知限制：撤回量約等於「延遲造成的 late 修正量－3.3 ms」，撤回後相位偏早約 3.3 ms，要到下一次視窗決定（約 4 秒）才修回，期間超過 FireGate 的 2 ms guard（交第 09 批 M0）（補充，2026-10-14，v7 D75：M0 移到 v7.1，v7 記為已知殘餘）；延遲消失得晚（放出晚於 late 修正的 slew 結束，或延遲 δ＞70.6 ms 而放出早於 slew 結束不到約 11～19 ms）時，只部分撤回或再串接一次 late 修正；300 ms 型的延遲消失照舊 backlog 重設。
+  - 證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md`（§1-a、§4、§6）、`build/target/_build/test/logs/pvp-v7-09ab-l2-20261014/`（合併 L2 的結果，Jab5 不成立，D71）。
 
 由Match擁有並經Ready／Welcome發布規則：移動規則包含jumpHeight／gravity，
 戰鬥規則包含HP、傷害、射速、彈匣、reloadTicks、respawnTicks與既有射擊限制。

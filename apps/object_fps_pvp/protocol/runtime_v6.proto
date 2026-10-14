@@ -28,7 +28,9 @@ message MovementCommand {
   float pitch = 5;
   bool jump_requested = 6;
 }
-// Entire unacknowledged window, strictly ordered, at most 12 commands.
+// Commands this link has not written before for the current epoch/life,
+// strictly ordered, at most 12 per message. Merged and deduplicated by the
+// Gateway; the Match treats repeats as no-ops.
 message PlayerInput {
   uint64 player_id = 1;
   repeated MovementCommand commands = 2;

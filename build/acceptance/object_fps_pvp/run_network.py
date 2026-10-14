@@ -158,8 +158,10 @@ def main():
                     time.sleep(0.05)
             default_match.terminate()
             default_match.wait(timeout=10)
+            # The movement trace records each epoch reset's reason; the verdict does not read it.
             match = start("match", [str(staged), "--arena", str(args.arena.resolve()),
-                                    "--listen", f"127.0.0.1:{ipc}"])
+                                    "--listen", f"127.0.0.1:{ipc}",
+                                    "--movement-trace", str((args.output / "match-commands.jsonl").resolve())])
             wait_for_match_ready(match, args.output / "match.log", f"127.0.0.1:{ipc}")
             gateway_command = [str(args.gateway.resolve()), "--runtime", f"127.0.0.1:{ipc}",
                                "--http", f"127.0.0.1:{http}", "--udp", f"127.0.0.1:{udp}",

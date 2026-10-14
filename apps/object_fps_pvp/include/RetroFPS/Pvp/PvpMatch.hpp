@@ -31,6 +31,12 @@ struct MovementQuality final {
     std::uint64_t resets{};
 };
 
+// Why the authority would refuse a whole input window (Accepted admits it):
+// the first failing check in AdmitInput's order decides the reason.
+enum class InputAdmission : std::uint8_t {
+    Accepted, UnknownPlayer, Malformed, EpochOld, EpochFuture, LifeOld, LifeFuture, BeyondWindow, ConflictQueued
+};
+
 // Sole gameplay authority. No player controller, camera, connection or clock.
 // The spawn a joining or respawning player takes (pv6 contract §5): among the
 // spawns where a body fits clear of the walls and of the given living players,
@@ -45,6 +51,7 @@ public:
     [[nodiscard]] bool Leave(PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
     // Read-only ingress validation; the host does not mutate authority on I/O.
+    [[nodiscard]] InputAdmission AdmitInput(const PlayerInput& input) const noexcept;
     [[nodiscard]] bool CanSubmitInput(const PlayerInput& input) const noexcept;
     [[nodiscard]] ActionAdmission SubmitActions(const ActionBatch& batch);
     // Host staging participates in the same capacity/immutability validation.

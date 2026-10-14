@@ -70,6 +70,7 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 以下字符圖中的 Client A、B 各有自己的 worker；兩者共用同一 Gateway／Match。
 箭頭表示資料流，不表示底層程式碼依賴上層。
 v5 的輸入送出（60/s token bucket）、持續相位追蹤與連線品質移出見 [v5 契約](protocol-v5.zh-Hant.md) §1–§2。
+（補充，2026-10-14，v7 第 09a 批）：等過 token 的新命令依等待比例少扣，等待過的送出最多每秒 80 個（`InputSendDrainRate`）；見下面「Input：不可修改的單步命令窗口」與 v5 契約 §1 的 2026-10-14 追記。
 
 ```text
 Client A / Client B (each process)
@@ -81,6 +82,7 @@ Client A / Client B (each process)
     ClientConnection worker (60/s token bucket)     local camera
       HTTP lifecycle + Hello keepalive                ^
       resend full unacked window <= 12                | reconcile latest ACK
+      waited sends charged less, <= 80/s (v7 09a)     |
       received snapshot history <= 64 ----------------+
                           |                           |
                           |                           +-> SnapshotTimeline
@@ -227,10 +229,31 @@ Network worker 以每秒 60 個、容量 2 的 token bucket 送出完整未確�
 這項 bootstrap 補充已由使用者批准；沒有額外產生步數或增加中立命令。
 每批最多 12 個，含 24-byte header 的完整 UDP 不超過 1,200 bytes。延遲 deadline
 不補送過期批次，worker 不產生命令，主執行緒正常 30 FPS 每幀可產生兩步。
-Gateway／Host 合併不可變命令，未來命令數量及距離游標都不超過 32。
+（補充，2026-10-14，v7 第 09a 批）：新命令等過 token 時，依等待時間比例少扣（最多少扣 0.25 個；
+等待只算到 token 出現為止；送出後不超過 1 個），60 Hz 產生下 4 個命令內還清，任何 1 秒最多 82 個
+輸入封包（`Movement.hpp` 的 `InputSendDrainRate`＝80、`InputSendBurst`；`ClientConnection.cpp` 的送出區塊）。
+往前修相位的 slew 期間命令以 75 Hz 產生，每個命令仍固定等約 3.3 ms（1/60 秒×(1−60/75)），slew 結束後回到 0
+（證據：`build/target/_build/test/logs/pvp-v7-09ab-impl-20261013/rev/xhigh-review.md` §1-a）。
+Gateway／Host 合併不可變命令，未來命令數量及距離游標都不超過 32；32 只算游標以後的
+命令，游標以 Match 為準。Gateway 只用自己的游標副本限制合併窗口的大小（已解析的部分
+最多保留 32 個），超出上限的窗口原樣轉送，不丟棄。
 命令識別為 `(playerId, movementEpoch, sequence)`：epoch 只由 Match 提升，從 1
 開始；每個 epoch 的 sequence 從 1 開始，兩者不回繞。重複未完成命令為無操作；
 相同識別但內容衝突則原子拒絕整批；已完成／舊 epoch 不重執行，未來 epoch 拒絕。
+這些判斷都由 Match 做（第 08c 批，D49）：Gateway 照常轉送已解析的命令，讓 Match
+量測遲到；舊或未來 epoch／life、衝突與超過上限的窗口走拒絕線，不合併、單獨轉送，
+每位玩家最多 4 個窗口。Gateway 的 runtime link 做已寫出去重：同一（玩家、epoch、
+life、序號）而且內容相同、已經寫出過的命令不再寫出；保留期是寫出過的最大序號往回
+632 個，超過的照常轉送；換代與 Leave 時清空（每個 epoch 的序號從 1 重新開始）；
+拒絕線不記入。去重是最佳化，Match 不得依賴它，仍把重複的命令當成無操作。
+每則 IPC 的 `PlayerInput` 最多 12 個命令。Gateway 仍執行的丟棄（拒絕線溢出、
+已解析部分的截短，以及拿不到內容的丟棄）依玩家與原因計數，寫進 ingress 統計行；
+Match 不知道這些丟棄，是到 pv7 為止的已知缺口（[pv6 契約](protocol-v6.zh-Hant.md)
+§1「Runtime 輸入流」）。
+補充（2026-10-14，v7 D73）：pv7 移到 v7.1（[v7.1 計畫](plans/v7.1/README.md)），v7 停在 pv6，
+所以這個缺口在整個 v7 期間都存在。
+
+死信原則（D57）：Client→Gateway→Match 的每一則訊息離開「待處理」時，只有兩種結果：執行，或帶原因的死信（至少依玩家與原因計數，能拿到內容時寫細節紀錄）；沒有第三種（無聲）。移動命令的序號連續、每 Tick 到期就替代，所以 Match 偵測得到缺號（替代紀錄就是缺號的死信）；每個收下的移動命令最多 32 Tick 內一定有結果。死信有界：細節紀錄與保留期都有上限，超過的只計數。死信只用來觀察與記帳，不可重放。新增出口、改丟棄路徑或審查時，依這三條檢查（Architecture Fitness）；第 10 批的 log 契約與第 11 批的 `GatewayDropReport` 以這些原則對齊，不另開死信的子系統或 Data Contract 概念。補充（2026-10-14，v7 D73）：第 11 批與 `GatewayDropReport` 移到 v7.1；本節之後要寫的「Gateway 職責」條文也在 v7.1 寫。補充（2026-10-14，v7 D76）：第 10 批的 log 契約也移到 v7.1。
 
 Match 等到當前 epoch 的序號 1 後，每 Tick 恰好完成下一序號。缺命令時沿用最近
 **實際執行的真實命令**最多 15 Tick，之後中立移動。Actual／Held／Neutral 都推進
@@ -239,7 +262,8 @@ Match 等到當前 epoch 的序號 1 後，每 Tick 恰好完成下一序號。�
 每步後記錄游標後連續待執行命令數，最近 30 Tick 總和達 105、且重設冷卻至少
 60 Tick，於下一個 Tick 邊界提升 epoch。該邊界不移動，保留身分、位置、視角與
 世界 Tick，清除命令／替代輸入／統計，游標歸零等新序號 1。後續每份 Snapshot
-均攜帶新 epoch，首份遺失仍可恢復。各層失效舊窗口，Host 交接再次驗證。
+均攜帶新 epoch，首份遺失仍可恢復。舊窗口由 Match 失效：Gateway 把換代時待送的
+舊窗口移到拒絕線單獨轉送，Match 拒絕並依原因計數；Host 交接再次驗證。
 另針對已證實的停頓後永久晚到：最近 30 個 Running Tick 的連續待執行數總和為 0、
 同窗曾使用 Held／Neutral、且整個未來命令佇列為空時，視為提前量耗盡；同樣經
 60 Tick 冷卻、於下一邊界重設 epoch。全為 Actual 時 queue 為 0 不觸發此條件，
@@ -410,7 +434,9 @@ Hello 可重送，Welcome 可重發；完整 Snapshot 修復漏掉的加入／�
 Match 僅監聽 loopback TCP，預設 `127.0.0.1:27016`。每個 Protobuf
 RuntimeEnvelope 前有四個 bytes 的 big-endian 長度；payload 必須為 1–65,536
 bytes。讀取處理半包／黏包；截斷、錯版本、無效 frame 或控制交接超載屬於
-連線失敗，不能靜默遺失 Join／Leave 後繼續假裝同步。
+連線失敗，不能靜默遺失 Join／Leave 後繼續假裝同步。移動輸入與動作批次被 Match
+略過或拒絕時連線不中斷，但每一筆都依原因計數（Match 的 ingress 統計行），不得無聲
+丟棄；有 `--movement-trace` 時，移動輸入的拒絕另在 `match-ingress.jsonl` 寫有界的細節。
 
 ## 4. Room、Session 與失敗
 
@@ -869,6 +895,9 @@ Product Host: atomic shots + ACK handoff -> Authority Tick
                                                       v
                                      Gateway -> Client worker -> Drain
 ```
+
+Gateway 每個 Session 每秒 120 包的固定窗口上限照舊；第 08c 批起被限制的包依玩家與種類
+（含 Hello）計數，各玩家的總和等於全 Gateway 的 `rate_limited_packets`。
 
 Network Snapshot 是可替換狀態，ActionResults 是必須保存到連續消費確認的終局答案。
 兩者各有來源；不把裁決僅存於快照或有丟棄策略的通知佇列。即使首結果或 ACK 遺失，

@@ -21,15 +21,39 @@ namespace fps::pvp {
 // MovementPhaseTargetSeconds before it executes. An action sent now takes the
 // same path in the same frame, so it reaches the Match no earlier than the tick
 // InitialCommandLead steps before the newest command, and one step later once
-// that step is older than the target plus the guard. The guard is the tracking
-// deadband, the bound of the decided phase error; a correction still slewing
-// that delays the phase is added to it.
+// that step is older than the target plus the guard; a correction still
+// slewing that delays the phase is added to the guard.
+//
+// The guard covers how much earlier than the tracked phase a shot can arrive:
+// the decided phase error, bounded by the tracking deadband, plus the command's
+// own delay at the Client (it leaves when the simulation role wakes at its step
+// boundary and the worker sends it) and what a shot gains on the command's
+// path (up to about 0.1 ms on the Client-to-relay leg; none after the Gateway,
+// which writes inputs before actions). By design these add up to about 3.1 ms
+// when the decided error sits at the deadband edge, a residual; the v7 batch
+// 08b clean runs needed about 1 ms of the 2 ms. The same-path, lead-of-two
+// premise has exceptions that no constant at or below the v6 values covers:
+// while the Match-side lead exceeds two steps plus the target and the guard,
+// the earliest tick can be one or two ticks late (a long Match stall can
+// exceed two ticks) and a click at the cooldown edge can be rejected by the
+// authority. Known triggers: a late correction slewing after the delay that
+// caused it has passed, the residual from its withdrawal on (about 3.3 ms
+// until the next window decision, about 4 s), a drop in one-way delay after
+// the phase was decided (until the next window decision), a lead jump (D44),
+// and host or Match stalls. A pinned input send is handled by the Client's
+// token bucket (v7 batch 09a). Frozen at these values in v7 batch 09
+// (docs/object_fps_pvp/plans/v7/09-firegate-c2.md); v7.1 revisits both
+// constants (candidates A1, B1 and B6 in
+// docs/object_fps_pvp/plans/v7.1/README.md).
 inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;
 // The latest resolve tick of a submitted shot, in ticks after its earliest:
-// the Client and the Gateway each hold a new action up to one send interval
-// (1 / ActionSendRate), the Gateway writer wakes at least once a step, plus
-// one step for the guard and one for the tick boundary:
-// ceil(2 * 60 / 30 + 1) + 1 + 1 = 7.
+// ceil((guard + lateness + hold) / step), where lateness is how much later
+// than the tracked phase the shot arrives (taken as at most 5 ms; not
+// measured). The Client and the Gateway link each hold a new action up to one
+// send interval (1 / ActionSendRate) on their own pacing, plus the link
+// writer's and the Client timer's late wakes; 7 holds while those wakes stay
+// within about 43 ms, a bound rather than a margin:
+// ceil((2 + 5 + 2 * 1000 / 30 + 43) / (1000 / 60)) = 7.
 inline constexpr std::uint64_t FireGatePendingSpreadTicks = 7;
 
 struct FireGateTiming final {

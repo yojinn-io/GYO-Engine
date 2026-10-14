@@ -1,6 +1,6 @@
 # PvP Protocol v6：受擊、arena 內容與 Collision 契約
 
-更新：2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
+更新：2026-10-14：輸入送出與相位追蹤的修訂註記（v7 第 09a／09b 批，D68）。2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
 **wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
@@ -11,6 +11,7 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
 
 - 沿用 v5 §1 的全部政策與門檻：60 Hz 權威、移動 worker、lead、相位追蹤、插值、動作交付、恢復、連線品質移出，以及完整 UDP ≤1200 bytes（含 24-byte 標頭）。
   - 相位追蹤不修改。30 FPS 是設計範圍的邊界，見 v5 §1 的 2026-10-06 追記；根本處理在 v7（D21）。
+  - （修訂，2026-10-14，v7 第 09a／09b 批，D68）：上一行的「相位追蹤不修改」只對 v6 升格時成立。v7 第 09a 批修改了輸入送出的 token 規則（等待過的送出依比例少扣），第 09b 批修改了相位追蹤（樣本換算、late 判定用換算後的樣本、late 修正後重新擷取）。兩者都是 Client 本機的規則，wire 與 Match 不變，版本維持 6。內容與已知限制見 v5 §1 的 2026-10-14 追記。
 - v6 新增（第 09 批）：
   - 受擊欄位：`CombatState` 的最後受擊 Tick、同一生命內的受擊計數與最後攻擊者（§2），只供呈現。
   - arena 內容 digest：Match 在 Ready 發布，Gateway 轉送，Client 在 HTTP join 與 Welcome 兩條路徑比對（§2）。
@@ -19,7 +20,7 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
   - 回合準備期（第 9 項，維持候選）。
   - 文字輸入的協議變更。
   - 受擊呈現（第 13 批，不改 wire）。
-  - runtime 連線（Gateway↔Match）的心跳對時（v7）。
+  - runtime 連線（Gateway↔Match）的心跳對時（v7）。更正（2026-10-14，v7 D73）：移到 v7.1，和 pv7 一起做；v7 停在 pv6。
 
 ### 版本
 
@@ -69,6 +70,33 @@ v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見
   - 修訂前的 Client 只能載入 2 個出生點的 arena；修訂後的 Match 只主持出生點數不少於 4 的 arena（§2）。兩者的 arena digest 必然不同，Client 以 `arena_content_mismatch` 拒絕。
   - 修訂前後的 Gateway 與 Match：readiness 的 `max_players` 不相等，Gateway 啟動失敗。
   - 修訂後的 Match 以 `--arena` 載入 2 個出生點的 arena：主持條件不成立，Match 啟動失敗。
+
+### Runtime 輸入流（P2 資訊流修訂）
+
+Gateway→Match 的 `PlayerInput` 不再是 Client 未確認窗口的完整副本：已寫出、而且內容相同的命令不再寫出；舊或未來 epoch、衝突與超過上限的窗口以不合併的單獨訊息轉送；舊序號的 Input 照樣轉送但不刷新 liveness。proto 欄位與 Match 的處理都不變。這屬於上述候選期規則定義的「改語意」。v6 已在第 14b 批升格，這次比照該規則與房間容量修訂的先例處理，經使用者同意（v7 交接 D53）：版本維持 6，Gateway 與 Match 在同一個 commit 切換，不混用修訂前後的 v6 二進位。
+
+- 「已解析、過時、衝突、超過上限」由 Match 判斷（D49）。Gateway 照常轉送已解析的命令，讓 Match 量測遲到；Gateway 的游標副本只用來限制合併窗口的大小（游標以後最多 32 個，已解析的部分最多保留 32 個），不用來丟棄命令。
+- 已寫出去重是傳輸層的最佳化，不是保證：鍵是（玩家、epoch、life、序號）加內容，內容不同的副本走拒絕線；保留期是寫出過的最大序號往回 632 個（Match 帳本 600＋未來上限 32），超過的副本照常轉送；換代與 Leave 時清空；拒絕線不記入。Match 仍必須把重複的命令當成無操作，不得依賴去重。
+- 每則 IPC 的 `PlayerInput` 最多 12 個命令；較大的窗口切成多則，拒絕線的窗口不和主線合併。
+- Match 拒絕或丟棄的命令與 Gateway 執行的丟棄都依原因計數，寫進 ingress 統計行；Gateway 執行的丟棄 P2 只有人看得到，Match 不知道（下面的已知缺口）。
+- 這次修訂的 Data Contract（ingress v1：三種統計行與 Match 的細節檔 `match-ingress.jsonl`，暫定 v1，第 10 批決定沿用或改版）的格式、鍵名規則與守恆式見 [`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md`](../../tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md)；設計與 I1 的判定條件見 [第 08c 批](plans/v7/08c-drop-report.md)。
+
+已知缺口（到 pv7 或第 10 批為止）：
+
+補充（2026-10-14，v7 D73）：pv7 移到 v7.1（[v7.1 計畫](plans/v7.1/README.md)），v7 不改 wire；「到 pv7 為止」的缺口在整個 v7 期間都存在。
+
+補充（2026-10-14，v7 D76）：第 10 批也移到 v7.1，所以「到第 10 批為止」的缺口（第 4 項的 D5、D6，第 6 項 Client 端的欄位）以及 ingress v1「第 10 批決定沿用或改版」，在整個 v7 期間也維持現狀，到 v7.1 才處理；ingress v1 在 v7 維持暫定。
+
+1. Gateway 拿不到內容的丟棄（速率限制、解碼失敗、未授權、舊序號的 Actions 與其他種類、未知種類、非 active 時的 input／actions）：P2 只計數，Match 不知道。未授權只能記到宣稱的 session，可被偽造，只能看、不能拿來處罰。
+2. 轉送之後仍由 Gateway 執行的兩種丟棄：拒絕線溢出（每位玩家最多 4 個窗口，超過丟最舊的）、主線已解析部分超過 32 個時的截短。
+3. 動作的語意丟棄 A3、A5：P2 只計數。
+4. 下行：Gateway 拒收 Match 的 snapshot（D1、D2）只計數，Match 不知道；D5、D6 在第 10 批。另外，下面幾個下行出口不計數，也不是 ingress 丟棄：D4（給已移除或非 active 玩家的 snapshot；編碼失敗的分支走不到）、D7（非 active 玩家的整批 ActionResults；規劃時已決定「Match 已知、不計數」：Match 自己的帳本保留未退役的決定，直到移除玩家）、D9（玩家不存在時的 JoinResult、Evicted；Match 最終一定知道，因為 Leave 排在前面、TCP 有序）、D8（結果編碼失敗，走不到）。（2026-10-11 依死信隊列評估補記，D56。）
+5. 時間：Gateway 的收包時刻沒有送給 Match（pv7 的 dwell 是候選），Match 分不開 IPC 延遲與網路遲到。
+6. Client 端的樣本流失（每次發布只帶最小值、`snapshot_` 被覆寫、IPC latest-wins、Client 佇列溢出）：host 端的計數由 Match 的 ingress 統計行提供；Client 端的欄位在第 10 批。
+7. Match 的替代紀錄保留 600 Tick；晚超過 10 s 的記為 `aged`。
+8. kernel 的 UDP 接收緩衝溢出（Gateway 讀不到，不屬於「Gateway 收到」），以及 Gateway 寫出 `final=1` 行之後才處理的資料包，不在計數之內。
+9. 不正常的 Client：衝突窗口被併進主線時整則被 Match 拒絕，同一則裡其他已被標記為寫出的命令之後的副本會被去重，損失變成永久的（限該玩家）。`conflict_*` > 0 的玩家，其遲到與替代統計不可信。
+10. 動作在 link 內的丟棄（2026-10-11 死信隊列評估找到，D56 補計數）：Leave／踢出、close、寫出失敗時，link 動作視窗裡**從沒寫出過**的 shot 請求與還沒轉送的 ACK 被清掉；P2 由 Gateway 依玩家與原因計數（鍵見 fixtures README），Match 不知道（和第 1 項同一等級）。已寫出的部分 Match 已有，Leave 時計成 `leave_discarded_actions_shots`。close 與寫出失敗時被清掉的 controls（Join／Leave 訊息）不計數：房間已經結束。link 內 shot 的守恆（交給 link 的不同請求＝寫出過的＋三種丟棄）由 `fwd_handed_actions_shots`、`fwd_link_written_actions_shots` 兩個鍵在 log 上判定（D59，`ingress_evidence.py` 的 `link_shots`）。
 
 ## 2. 身分與資料語意
 

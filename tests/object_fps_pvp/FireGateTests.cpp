@@ -40,6 +40,15 @@ ShotDecision Decision(ActionId id, bool accepted, std::uint64_t resolvedTick, Ac
 
 } // namespace
 
+TEST_CASE("The fire gate constants keep their frozen values") {
+    // Frozen in v7 batch 09 with the v6 values (docs/object_fps_pvp/plans/v7/
+    // 09-firegate-c2.md). Literals: the guard is the deadband by definition, so
+    // a deadband change without a new derivation fails here as well.
+    CHECK(FireGateGuardSeconds == 0.002);
+    CHECK(MovementPhaseDeadbandSeconds == 0.002);
+    CHECK(FireGatePendingSpreadTicks == 7);
+}
+
 TEST_CASE("Earliest shot resolve tick follows the newest command less the lead") {
     // newest = 100 + 4; a shot sent at the step boundary reaches the tick two
     // steps before it, one step later once the step is older than 4 + 2 ms.
@@ -174,18 +183,24 @@ struct TimelineResult final {
 // How long a shot waits for the action pacing after its frame, beyond the
 // command's own one-way delay. Worst: anywhere up to one Client and one
 // Gateway send interval, a Gateway wake and a late worker wake, for every shot.
-// Measured: mostly an idle 30 Hz deadline, sometimes one interval; the batch 10
-// L2 clean cases measured 4.5-28 ms from submission to the resolving tick.
+// Measured: mostly an idle 30 Hz deadline, sometimes one interval (the model
+// keeps its v6 parameters; its v7 rewrite moved to v7.1). In the v7 batch 08b
+// L2 clean runs (after), none of 612 shots followed an upstream Actions packet
+// within one interval, and a shot reached the relay 0.37 ms after submission
+// at the median and 1.68 ms at most (the Client segment only; the
+// Gateway-to-Match segment was not measured; docs/object_fps_pvp/plans/v7/
+// 09-firegate-c2.md).
 enum class Pacing { Worst, Measured };
 
 // A synthetic match of one shooter, in milliseconds. The host executes tick k
 // at k * step plus its wake lateness, in the about 4 ms or about 8 ms state of
-// the batch 07 A/B investigation. Phase tracking aligns the 90th percentile of
-// the commands' slack with the lead and the 4 ms target, within the 2 ms
-// deadband: the shooter's step boundaries follow the 90th percentile of the
-// lateness plus a fixed error within the deadband. A shot leaves with the
-// frame's command and reaches the Match after the same one-way delay plus the
-// pacing. Snapshots arrive every tick, results on a 30 Hz ticker.
+// the v6 batch 07 A/B investigation (rewriting this host model for v7 moved to
+// v7.1). Phase tracking aligns the 90th percentile of the commands' slack with
+// the lead and the 4 ms target, within the 2 ms deadband: the shooter's step
+// boundaries follow the 90th percentile of the lateness plus a fixed error
+// within the deadband. A shot leaves with the frame's command and reaches the
+// Match after the same one-way delay plus the pacing. Snapshots arrive every
+// tick, results on a 30 Hz ticker.
 TimelineResult RunTimeline(std::uint64_t seed, double fps, bool lateHost, std::uint64_t intervalTicks, int clicks,
                            Pacing pacing) {
     Random random{seed};

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -46,8 +47,9 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 			t.Fatal("wrong-life movement leaked")
 		}
 	}
-	if err := s.link.input(move); err != nil || len(s.link.inputs) != 0 {
-		t.Fatal("old runtime input was not inert")
+	// An old life is refused for the rejected lane, never silently accepted.
+	if err := s.link.input(move); !errors.Is(err, adapter.ErrInput) || len(s.link.inputs) != 0 {
+		t.Fatal("link silently accepted a stale life")
 	}
 	move.MovementEpoch = 2
 	move.LifeGeneration = 3

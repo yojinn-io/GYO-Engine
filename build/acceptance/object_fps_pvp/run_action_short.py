@@ -4,22 +4,36 @@ Besides the v5 actions it owns the first-person weapon checks of the retired wea
 local feedback on the first successful presentation, an authority cooldown rejection, wall and hit
 decisions, one mouse delta per combined frame, window interactions without ghost shots, ESC and
 rejoin. Native OS input is not part of this runner; it stays the manual checklist of batch 04.
+
+The rapid-* cases (v7 batch 09 step S5) are record-only rapid-fire runs for the C2 comparison: SDL-injected
+clicks through the product's own local fire gate, one per-click record each. They run only when named with
+--case; the default matrix is the action short above.
 """
 import argparse
 import json
 import math
 from pathlib import Path
+import signal
 import socket
 import subprocess
 import time
 import urllib.request
 
-from run_network import free_port, wait_for_match_ready
+from run_network import free_port, steady_clock_ns, wait_for_match_ready
 from gui_bots import PassiveBots, add_arguments as add_bot_arguments, check_arguments as check_bot_arguments
 from acceptance_util import digest
 
 CASES = {'action30': ('--action-short', 30), 'action60': ('--action-short', 60),
          'action144': ('--action-short', 144), 'capture': ('--action-capture', 60)}
+# Rapid-fire record scenarios (gui_main.cpp --action-rapid): intervalN clicks every N authority ticks,
+# edge clicks every frame for 5 s, pause clicks every frame for 6 s after a Gateway pause (non-clean).
+RAPID_SCENARIOS = ('interval12', 'edge', 'interval10', 'interval11', 'interval13', 'pause')
+RAPID_CASES = {f'rapid-{scenario}-{fps}': (scenario, fps) for scenario in RAPID_SCENARIOS for fps in (30, 60, 144)}
+RAPID_PAUSE_SECONDS = .25
+COOLDOWN_REJECTION = 3  # ShotRejection::Cooldown (Combat.hpp)
+# The action short's create role deliberately submits one request inside the authority cooldown (action_short.hpp
+# 'held-shot'; its report names it in cooldown_injection_action_id). A Cooldown judge over action short records
+# must exclude that one rejection. The rapid cases inject none, so their excluded_injections is empty.
 CAPTURES_PER_ROLE = {'create': 9, 'join': 5}
 REQUIRED_CHECKS = {
     'create': ('held_fire_one_shot', 'reload-shot_suppressed', 'reload-again_suppressed', 'move_while_reloading',
@@ -98,13 +112,87 @@ def summarize(directory, capture):
             'platform': platforms, 'disturbed': disturbed}
 
 
+def rapid_counts(clicks):
+    """Per-click tallies of one actor record. A verdict is exact when the product's newest decision named it or
+    the frame's counters proved every other drained decision accepted; otherwise it is ambiguous."""
+    sent = [click for click in clicks if click.get('outcome') == 'sent']
+    verdicts = [click.get('verdict') for click in sent]
+    states = [verdict.get('state') if isinstance(verdict, dict) else 'missing' for verdict in verdicts]
+    within = [click for click in clicks if click.get('previous_sent_action') is not None and click.get('segment_click', 0) > 0]
+    within_sent = [click for click in within if click.get('outcome') == 'sent']
+    return {
+        'clicks': len(clicks), 'sent': len(sent),
+        'local_blocks': sum(click.get('outcome') == 'local_block' for click in clicks),
+        'neither': sum(click.get('outcome') == 'none' for click in clicks),
+        'accepted': states.count('accepted'), 'rejected': states.count('rejected'),
+        'ambiguous': states.count('ambiguous'), 'missing': states.count('missing'),
+        'cooldown_rejections_attributed': sum(isinstance(verdict, dict) and verdict.get('rejection') == COOLDOWN_REJECTION
+                                              for verdict in verdicts),
+        # Whether the previous submitted shot's decision had reached the client when the gate saw this click,
+        # inside one segment (the first click after a reload always follows a decided shot).
+        'previous_verdict_arrived': {'eligible': len(within),
+                                     'arrived': sum(click.get('previous_verdict_arrived') is True for click in within)},
+        'previous_verdict_arrived_sent': {'eligible': len(within_sent),
+                                          'arrived': sum(click.get('previous_verdict_arrived') is True
+                                                         for click in within_sent)},
+    }
+
+
+def summarize_rapid(directory, scenario):
+    """Record-only: the run completed when both roles finished their bounded schedule undisturbed. The authority
+    Cooldown count is reported, never judged here; the rapid mode injects no rejection, so nothing is excluded."""
+    errors, roles = [], {}
+    for role in ('create', 'join'):
+        path = directory / f'{role}-rapid.json'
+        try:
+            report = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError) as error:
+            errors.append(f'{path.name}: {error}')
+            continue
+        if not isinstance(report, dict):
+            errors.append(f'{path.name}: not a JSON object')
+            continue
+        if report.get('disturbed') is True:
+            errors.append(f"{role}: disturbed by external input ({report.get('unscheduled_yaw_frames')} frame(s) of "
+                          'unscheduled mouse motion); not a product record')
+        if report.get('passed') is not True:
+            errors.append(f"{role}: {report.get('error') or 'probe did not complete'}")
+        roles[role] = report
+    actor = roles.get('create') or {}
+    clicks = read_frames(directory / 'create-rapid-clicks.jsonl')
+    if clicks is None:
+        errors.append('create-rapid-clicks.jsonl: missing or malformed')
+    counts = rapid_counts(clicks or [])
+    product = actor.get('counts') if isinstance(actor.get('counts'), dict) else {}
+    counts['authority_cooldown_rejections'] = product.get('authority_cooldown_rejections')
+    counts['product_local_cooldown_blocks'] = product.get('local_cooldown_blocks')
+    counts['player_hits'] = product.get('player_hits')
+    counts['attribution_mismatches'] = product.get('attribution_mismatches')
+    if clicks is not None and product and product.get('local_cooldown_blocks') != counts['local_blocks']:
+        errors.append('create: per-click local blocks do not equal the product counter')
+    return {'passed': not errors and len(roles) == 2, 'errors': errors, 'scenario': scenario,
+            'clean': scenario != 'pause', 'record_only': True, 'excluded_injections': [],
+            'counts': counts, 'platform': {role: report.get('platform') for role, report in roles.items()},
+            'disturbed': [role for role, report in roles.items() if report.get('disturbed') is True]}
+
+
 def run_case(args, name):
     directory = args.output / name
     directory.mkdir(parents=True, exist_ok=False)
-    mode, fps = CASES[name]
+    rapid = RAPID_CASES.get(name)
+    if rapid:
+        scenario, fps = rapid
+        mode_arguments = ['--action-rapid', scenario]
+    else:
+        mode, fps = CASES[name]
+        mode_arguments = [mode]
     ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
     processes, logs, commands = [], [], []
     result = {'passed': False, 'case': name, 'commands': commands, 'input': 'sdl_injected', 'long_run_executed': False}
+    if rapid:
+        result.update({'scenario': scenario, 'record_only': True, 'clean': scenario != 'pause'})
+    pause_pending = bool(rapid) and scenario == 'pause'
+    gateway, stopped = None, False
 
     def start(label, command):
         commands.append(command)
@@ -130,20 +218,35 @@ def run_case(args, name):
                     raise RuntimeError('Real Gateway startup timed out')
                 time.sleep(.03)
         bots = PassiveBots(args.bots, args.quad_probe, args.arena, directory)
-        gui = [start(role, [str(args.gui_probe), mode, '--fps', str(fps), '--arena-root', str(args.arena_root),
+        gui = [start(role, [str(args.gui_probe)] + mode_arguments + ['--fps', str(fps), '--arena-root', str(args.arena_root),
                             '--gateway', f'127.0.0.1:{http}', '--role', role, '--gpu-driver', args.gpu_driver,
                             '--output', str(directory)] + bots.gui_arguments()) for role in ('create', 'join')]
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + (100 if rapid else 60)
         # Both roles finish their own bounded runs, so each report is saved even
         # when the other role fails: the actor signals the target either way.
         while any(process.poll() is None for process in gui):
             if time.monotonic() >= deadline:
                 raise RuntimeError('Bounded action GUI deadline exceeded')
             bots.poll(http, start)
-            time.sleep(.05)
+            if pause_pending and (directory / 'rapid-pause-ready.txt').exists():
+                # Stop only the child Gateway, then let the actor start clicking (action_probe.py's mechanism).
+                fault = {'requested_seconds': RAPID_PAUSE_SECONDS, 'mechanism': 'SIGSTOP/SIGCONT Gateway',
+                         'start_ns': steady_clock_ns()}
+                gateway.send_signal(signal.SIGSTOP)
+                stopped = True
+                time.sleep(RAPID_PAUSE_SECONDS)
+                gateway.send_signal(signal.SIGCONT)
+                stopped = False
+                fault['release_ns'] = steady_clock_ns()
+                staged = directory / 'rapid-pause.json.tmp'
+                staged.write_text(json.dumps(fault) + '\n')
+                staged.replace(directory / 'rapid-pause.json')
+                result['gateway_pause'] = fault
+                pause_pending = False
+            time.sleep(.005 if pause_pending else .05)
         bots.stop()
         result['bots'] = bots.evidence()
-        result['evidence'] = summarize(directory, mode == '--action-capture')
+        result['evidence'] = summarize_rapid(directory, scenario) if rapid else summarize(directory, mode == '--action-capture')
         result['exit_codes'] = {role: process.poll() for role, process in zip(('create', 'join'), gui)}
         result['passed'] = (result['evidence']['passed'] and all(code == 0 for code in result['exit_codes'].values()) and
                             (not args.bots or result['bots']['exit_code'] == 0))
@@ -152,6 +255,8 @@ def run_case(args, name):
     except Exception as error:
         result['error'] = str(error)
     finally:
+        if stopped and gateway.poll() is None:
+            gateway.send_signal(signal.SIGCONT)
         for process in reversed(processes):
             if process.poll() is None:
                 process.terminate()
@@ -175,7 +280,7 @@ def main():
     for name in ('match', 'gateway', 'gui-probe', 'arena', 'arena-root', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--gpu-driver', default='auto', choices=('auto', 'vulkan', 'd3d12', 'metal'))
-    parser.add_argument('--case', action='append', choices=tuple(CASES))
+    parser.add_argument('--case', action='append', choices=tuple(CASES) + tuple(RAPID_CASES))
     add_bot_arguments(parser)
     args = parser.parse_args()
     check_bot_arguments(parser, args)
@@ -186,6 +291,8 @@ def main():
             parser.error(f'Missing {name}: {getattr(args, name)}')
     if not (args.arena_root / 'asset_catalog.json').is_file():
         parser.error('Missing deployed asset catalog')
+    if any(RAPID_CASES.get(name, ('',))[0] == 'pause' for name in args.case or ()) and not hasattr(signal, 'SIGSTOP'):
+        parser.error('The rapid pause case requires POSIX SIGSTOP/SIGCONT')
     args.output.mkdir(parents=True, exist_ok=True)
     names = args.case or list(CASES)
     results = []
@@ -193,6 +300,8 @@ def main():
         result = run_case(args, name)
         results.append({'case': name, 'passed': result['passed'], 'error': result.get('error'),
                         'platform': (result.get('evidence') or {}).get('platform')})
+        if name in RAPID_CASES:
+            results[-1]['rapid_counts'] = (result.get('evidence') or {}).get('counts')
         print(json.dumps(results[-1]), flush=True)
         if not result['passed']:
             break
