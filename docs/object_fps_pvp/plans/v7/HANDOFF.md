@@ -19,6 +19,7 @@
 | 09a-impl、09b-impl、09ab-rev、09ab-L1、09ab-L2T、09ab-L2P、09ab-L2、09ab-doc | 09b-plan 的 8 批：09a 正式實作、B2 正式實作、對抗式審查、本機驗收、新寫並凍結合併 L2 工具、L2 準備與宣告、L2 執行、文件同步 | `09b-phase-tracking.md`「09b-plan」 |
 | 09-M0-plan | 第 09 批 S3（M0 影子量測：常數變更前，在 09a＋09b 的頭上量 FireGate 的 earliest 對實際判定 Tick）的規劃與宣告草案；ultracode（D69） | `09-firegate-c2.md` 步驟 S3、`pvp-v7-09-m0-plan-20261014/` |
 | pv7-to-v71 | 範圍變更（只改文件）：pv7 與相關任務（原第 11 批、任務 4、`GatewayDropReport` 等）從 v7 移到 v7.1；v7 停在 pv6 | 本文件 D73；[v7.1](../v7.1/README.md) |
+| M0-probe、M0-tools、M0-dev、M0-declare、M0-run、M0-judge-doc | M0 的 6 批：probe 修補（忙等控制 s、逐發記錄 earliest、影子閘門）；runner／judge／逐命令計算；開發跑次；宣告與 D45 檢查；正式量測；判定與文件 | `pvp-v7-09-m0-plan-20261014/draft-v2.md` 第 18 節 |
 | L1／L2／L3 | 驗收層級：本機測試與突變／實機量測（要宣告核准）／跨機器 | 各批文件 |
 | IG、I0、I1、I2、I3、T3 | 08c 的守恆式：Gateway 每個資料包一個結局、link 內命令的去向、Gateway 寫出數＝Match 收到數、Match 每個命令一類、副本的條件式上限、速率限制的總和 | `08c-drop-report.md`「不變量與守恆」 |
 | S1、S2（樣本守恆） | slack 樣本的兩條守恆：產生＝合併＋丟棄＋發布；發布＝覆寫＋取走＋未取走 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` |
@@ -37,9 +38,9 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D71）。
-- **等你決定（09-M0-plan）**：M0 宣告草案 v2（`pvp-v7-09-m0-plan-20261014/draft-v2.md`；xhigh 檢查的 MF1～MF8 已套用）的 U1～U9，其中 U3（撤回後的殘餘）與 U8（延遲下降後領先＞2：network20／40 12／12 跑次都有、4／12 有射擊早 1 Tick；`lead_jumps.py` 偵測不到）要在 M0 工具實作前定方向。建議：U1 加跑上行短延遲、U2 注入案例分三段預測／clean 出現 late 修正就停、U3＝A 與 U8＝A 記為已知殘餘並凍結 2 ms／7（修法併入 v7.1 候選 B1、B6）、U4 每發忙等控制 s、U5 不足時另開 session B、U6 文件更正、U7 檔位、U9 hold path 不設最少發數。
+- **進行中**：M0-probe（D74；high，忙等與時間對齊用 xhigh 審查；估 1.5～2 h）：`../GYO-Engine-m0`（detached，`b205615`）只改 `build/acceptance/object_fps_pvp/`，本機 commit 不推送，只建 action probe。證據 `pvp-v7-09-m0-prep-20261014/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
-- **下一步**：U1～U9 決定後 → M0-probe、M0-tools、M0-dev、M0-declare（D45 xhigh）、M0-run、M0-judge-doc（估 7.5～10 小時）→ S4 凍結 → C2 → PR #73 通過後合併。
+- **下一步**：M0-probe 之後 → M0-tools、M0-dev、M0-declare（D45 xhigh）、M0-run、M0-judge-doc（估 7.5～10 小時）→ S4 凍結 → C2 → PR #73 通過後合併。
 - **最後更新**：2026-10-14，依據本次推送。
 
 ## 閱讀入口
@@ -103,6 +104,7 @@
 | D71 | （2026-10-14，照建議）09ab-L2 的 Jab5：照宣告記為不成立，寫成已知限制「δ＞70.6 ms 時，B2 要放出比 slew 結束早超過約 11～19 ms 才不串接（界線約 11 ms、跑次間會變動）」；不另開修正批（重新擷取的樣本邊界 S／M 仍是 09b-plan「之後再評估」第 1 項，留到 v7 完成後統一評估）。繼續 09ab-doc 與第 09 批。使用者原話：「照建議，繼續」 |
 | D72 | （2026-10-14）使用者：「09ab-doc 之後跑一次25案，還有clean-30、clean-60，我看看結果，不過得先等等，我叫你開始才開始。」所以 09ab-doc 完成後停下；使用者說開始時，在 09a＋09b 的頭上跑 25 案矩陣與 clean-30、clean-60（給使用者看結果），之後才是第 09 批。補充（同日）：使用者改為「三棵樹」，再選「四棵都跑」，所以四棵樹都跑同樣的組合。 |
 | D73 | （2026-10-14）**範圍變更：v7 停在 pv6、不改 wire；pv7 和相關任務移到 v7.1**（v7 之後、v8 之前的重構版），和 v7.1 的重構一起設計。使用者原話：「我要把pv7和相關任務從v7裡面拔掉，然後合併到v7.1裡面去。否則pv7會經歷2次架構調整沒有必要。」白話：v7.1 的重構會動到 Gateway 的職責（D49）、late 修正與 backlog，甚至射擊的送法。如果 pv7 先在 v7 定案，這些重構會讓 wire 再改一次；一起設計，wire 只改一次。<br>**從 v7 移出**：①第 11 批整批：pv7 契約、ProtocolVersion 6→7、版本不一致的明確錯誤、驗收工具升 pv7；runtime link 心跳對時（README 任務 4、D32）；Client↔Gateway 時間回聲（D35）。②`GatewayDropReport`（D49 第二階段；`08c-drop-report.md` 的已知缺口與「對既有順序的影響」）。③依 D49 重新檢視 Gateway 的狀態與 `lastResolved` 副本；是否轉送 A3／A5（08c Architecture Delta 第 6 項）。④`network-architecture.zh-Hant.md`「Gateway 職責」一節的正式條文。⑤ingress v1 與 `GatewayDropReport` 是否統一成一個死信 Data Contract（08c「對既有順序的影響」中第 11 批的那一半）。⑥[事故紀錄](Incident/2026-10-10-gateway-silent-drop.md)後續表中「`network-architecture.zh-Hant.md:230-233` 的條文歧義」。<br>**邊界**：第 10 批和 TT-2 留在 v7；原本「需要 wire 資料的紀錄併入第 11 批」改成「移到 v7.1」。第 15 批留在 v7，但「Mac Gateway↔Windows Client 的偏移與漂移（≥15 分鐘）」移到 v7.1（需要時間回聲）。第 16 批的 D44 整體回歸明寫「涵蓋範圍不含 D49 第二階段」（未結事項 D44 子項的二擇一，選後者）；v7.1 做完 pv7 後再回歸一次。FireGate 重推條件 4（心跳）、11（D49 第二階段）在 v7.1 觸發（`09-firegate-c2.md`）。<br>**受影響的既有決定**（原文保留，各列加註）：D32（pv7 的時點）、D35（時間回聲）、D39（pv7 契約的審查）、D45（第 11 批的 ultracode）、D49 ③ 與正式條文、D52 ②、D57（第 11 批的 `GatewayDropReport`）。<br>文件：v7.1 的種子文件 [`../v7.1/README.md`](../v7.1/README.md)（未規劃；v7 完成後用 ultracode 規劃）；批次代號 pv7-to-v71。只改文件，不動程式。 |
+| D74 | （2026-10-14，照建議）使用者：「U1～U9 照建議，開始 M0-probe」。M0 宣告草案 v2（`pvp-v7-09-m0-plan-20261014/draft-v2.md`）的 U1～U9 全部照建議：U1 加跑上行短延遲（M0-res 8＋M0-latec 4）；U2 注入案例的 late 類別分三段預測、clean 的 late 類別照樣進 Jm0-guard、clean 出現 late 修正就停下問；U3＝A 撤回後的殘餘記為已知殘餘（修法併入 v7.1 候選 B1）；U4 每發忙等控制 s；U5 不足時另開 session B；U6 文件更正併進宣告的 commit；U7 檔位（工具與宣告 high、局部 xhigh、執行 medium）；U8＝A 延遲下降後的領先記為已知殘餘、2 ms／7 照舊凍結（修法併入 v7.1 候選 B6），S4 改寫「常數涵蓋不了的失敗」第 2 項；U9 hold path 不設最少發數。 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -298,6 +300,7 @@
 - 2026-10-14：使用者看完 D72 的結果：「照建議，開始第 09 批」。09-M0-plan 開始（ultracode workflow `wf_14b65dab-4f8`：3 方案 high、評審 high、對抗式 xhigh；估 60～90 分）。
 - 2026-10-14：pv7-to-v71（使用者的範圍變更，D73；medium；只改文件，不動程式、不打斷第 09 批）：pv7 與相關任務從 v7 移到 v7.1。同步 README（任務 4、批次表 11／15／16、依賴圖、PR 線 P3、「v7 不改 wire」、新舊對比的說法、平台表、觀測缺口表）、本文件（代號、D73、受影響決定的加註、P3 與第 11 批、第 15／16 批、未結事項的 D44 與死信隊列）、`09-firegate-c2.md` 重推條件 4、11、`09b-phase-tracking.md`、`08b`、`08c`、事故紀錄、`network-architecture.zh-Hant.md`、`protocol-v6.zh-Hant.md`；新增 v7.1 的種子文件 [`../v7.1/README.md`](../v7.1/README.md)（未規劃）。原文保留，照慣例加「更正／補充（2026-10-14，D73）」。變更紀錄 `build/target/_build/test/logs/pvp-v7-pv7-to-v71-20261014/edit-log.md`。
 - 2026-10-14：09-M0-plan 完成（ultracode 約 47 分＋修訂 1 位 high 約 15 分）：三份方案、評審草案、xhigh 檢查（「不能照原樣核准」，MF1～MF8）、草案 v2 全部在 `pvp-v7-09-m0-plan-20261014/`。主要發現：每段起點偏移在 30／60 FPS 無效，改每發忙等控制 s；網路延遲下降後的領先＞2（Wdrop）在 network20／40 每次都出現，是「常數涵蓋不了的失敗」第 2 項的新觸發；乾淨案例的 ys 最大約 0.8 ms（離線推估）。停下等 U1～U9。
+- 2026-10-14：D74（U1～U9 照建議）。M0-probe 開始（1 位 high＋xhigh 審查；估 1.5～2 h）。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
