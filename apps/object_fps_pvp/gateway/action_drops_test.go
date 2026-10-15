@@ -14,7 +14,7 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // actionWire stands in for the runtime connection of a link's writer: it

@@ -2,7 +2,7 @@
 // The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v6.pb.h"
+#include "client_v7.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include <asio.hpp>
@@ -27,7 +27,7 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v6;
+namespace pb=object_fps_pvp::client::v7;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}

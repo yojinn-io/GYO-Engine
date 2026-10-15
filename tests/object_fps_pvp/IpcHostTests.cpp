@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v6.pb.h"
+#include "runtime_v7.pb.h"
 
 #include <asio.hpp>
 
@@ -20,7 +20,7 @@ namespace {
 using namespace fps::pvp;
 using namespace std::chrono_literals;
 using asio::ip::tcp;
-namespace pb = object_fps_pvp::runtime::v6;
+namespace pb = object_fps_pvp::runtime::v7;
 
 Arena IpcArena() {
     Arena arena;
@@ -514,14 +514,14 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     for (ActionId id = 1; id <= MaxActionBatch + 1; ++id) {
         auto* shot = overBatch.mutable_actions()->add_shots();
         shot->set_action_id(id);
-        shot->set_kind(object_fps_pvp::runtime::v6::ACTION_RELOAD);
+        shot->set_kind(object_fps_pvp::runtime::v7::ACTION_RELOAD);
         shot->set_life_generation(1);
     }
     gateway.Send(overBatch);
     auto noYaw = Actions(5, {}, 0);
     auto* aimless = noYaw.mutable_actions()->add_shots();
     aimless->set_action_id(1);
-    aimless->set_kind(object_fps_pvp::runtime::v6::ACTION_SHOT);
+    aimless->set_kind(object_fps_pvp::runtime::v7::ACTION_SHOT);
     aimless->set_life_generation(1);
     aimless->set_pitch(0);
     gateway.Send(noYaw);
@@ -529,7 +529,7 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     auto conflicting = Actions(5, {}, 0);
     auto* shot = conflicting.mutable_actions()->add_shots();
     shot->set_action_id(1);
-    shot->set_kind(object_fps_pvp::runtime::v6::ACTION_SHOT);
+    shot->set_kind(object_fps_pvp::runtime::v7::ACTION_SHOT);
     shot->set_life_generation(1);
     shot->set_yaw(0.5F);
     shot->set_pitch(0);

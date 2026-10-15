@@ -2,7 +2,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "runtime_v6.pb.h"
+#include "runtime_v7.pb.h"
 #include <asio.hpp>
 #include <algorithm>
 #include <array>
@@ -22,7 +22,7 @@
 #include <syncstream>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v6;
+namespace pb = object_fps_pvp::runtime::v7;
 using asio::ip::tcp;
 namespace {
 // Diagnostics only: lifecycle events and a statistics line every ten seconds

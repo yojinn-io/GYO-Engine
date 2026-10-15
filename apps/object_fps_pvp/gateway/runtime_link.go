@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // This queue is product-owned: ordered lifecycle requests and bounded command

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 func dedupLink() *runtimeLink {
