@@ -142,6 +142,27 @@ P7   [16 整合與升格（縮小版：P1、P2 的範圍）] ← P1、P2
   - 更正（2026-10-14，D73）：v7 不改 wire，整個 v7 都在 pv6 上，所以 v7 的所有新舊對比（C1、C2、第 16 批的回歸）都能用 pv6 凍結的分析器。pv7 移到 v7.1：v7.1 裡需要 pv6 凍結分析器的新舊對比，要排在 v7.1 的 pv7 契約批之前（見 [v7.1](../v7.1/README.md)「規劃方式」）。
 - C1 的 after 只含任務 1、2：Gateway、Match、網路 worker 的輪詢與送出節拍都沒有改。ClientConnection 只多一個給模擬角色的佇列。
 
+## 開發紀錄
+
+各批的白話紀錄（做了什麼、驗證與經過、證據位置），依批次排列：
+
+- [第 01 批：盤點、分批規劃與計畫文件](../../../dev_logs/2026_10_08_pvp_v7_batch01.zh-Hant.md)
+- [第 02 批：ClientSimulation 接縫（行為不變）](../../../dev_logs/2026_10_08_pvp_v7_batch02.zh-Hant.md)
+- [第 03 批：每份 snapshot 進相位追蹤](../../../dev_logs/2026_10_08_pvp_v7_batch03.zh-Hant.md)
+- [第 03a 批：相位追蹤的小量測（只記錄）](../../../dev_logs/2026_10_08_pvp_v7_batch03a.zh-Hant.md)
+- [第 04 批：Client 的模擬角色](../../../dev_logs/2026_10_09_pvp_v7_batch04.zh-Hant.md)
+- [第 05 批：C1——30 FPS 修正前後對比](../../../dev_logs/2026_10_09_pvp_v7_batch05.zh-Hant.md)
+- [第 06 批：Gateway→Client 結果通道改為 30 Hz](../../../dev_logs/2026_10_09_pvp_v7_batch06.zh-Hant.md)
+- [P2-log：網路路徑的 10 秒統計](../../../dev_logs/2026_10_09_pvp_v7_p2log.zh-Hant.md)
+- [第 07 批：Match 的 Tick 改用 Waiter，IpcHost 改用 asio](../../../dev_logs/2026_10_09_pvp_v7_batch07.zh-Hant.md)
+- [第 08 批：Client 的網路 worker 改用 asio](../../../dev_logs/2026_10_09_pvp_v7_batch08.zh-Hant.md)
+- [第 08b 批：結果改為事件驅動轉送](../../../dev_logs/2026_10_10_pvp_v7_batch08b.zh-Hant.md)
+- [第 08c 批：Gateway 丟棄回報（讓 Match 知道丟了什麼、為什麼丟）](../../../dev_logs/2026_10_11_pvp_v7_batch08c.zh-Hant.md)
+- [第 09 批：射擊閘的兩個常數與 v6 對 v7 的比較（C2）](../../../dev_logs/2026_10_14_pvp_v7_batch09.zh-Hant.md)
+- [第 09a 批：停頓之後，輸入送出不再被釘住](../../../dev_logs/2026_10_14_pvp_v7_batch09a.zh-Hant.md)
+- [第 09b 批：late 修正之後，把多推的 2 Tick 收回來](../../../dev_logs/2026_10_14_pvp_v7_batch09b.zh-Hant.md)
+- [第 16 批：整合驗收，v7 升格為穩定基線](../../../dev_logs/2026_10_15_pvp_v7_batch16.zh-Hant.md)
+
 ## 執行規則
 
 - 每次只執行使用者指定的批次；一條功能線一個 PR，commit 與 PR 用日語。依賴未完成時，不得以部分成果頂替。
