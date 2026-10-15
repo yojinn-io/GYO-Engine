@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
@@ -70,10 +71,18 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 	frame, err := conn.Read(3 * time.Second)
 	var envelope runtime.RuntimeEnvelope
 	if err == nil {
-		err = proto.Unmarshal(frame, &envelope)
+		var version uint64
+		var other bool
+		if version, other, err = decodeRuntime(frame, &envelope); other {
+			// The Gateway reads Ready first, so it is the side that detects
+			// another version; it tells the Match its own version before
+			// closing.
+			writeVersionNotice(conn)
+			err = fmt.Errorf("runtime readiness contract mismatch: protocol version expected %d, received %d", adapter.RuntimeVersion, version)
+		}
 	}
 	ready := envelope.GetReady()
-	if err == nil && (envelope.ProtocolVersion != adapter.RuntimeVersion || ready == nil ||
+	if err == nil && (ready == nil ||
 		ready.ArenaId == "" || ready.ArenaVersion == 0 || ready.ArenaDigest == 0 || ready.TickRate != adapter.AuthorityTickRate ||
 		ready.SnapshotIntervalTicks != adapter.SnapshotIntervalTicks || ready.MaxPlayers != adapter.MaxPlayers || !adapter.ValidRules(ready.CombatRules) || !adapter.ReadyFitsWelcome(ready)) {
 		err = errors.New("runtime readiness contract mismatch")
@@ -83,6 +92,51 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 		return nil, nil, err
 	}
 	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{})}, ready, nil
+}
+
+// decodeRuntime checks the version before the content (pv7 contract §1). Field
+// 1 is always serialized first and never moves, so it is read on its own first:
+// another version whose content this schema cannot parse still names its
+// version. other is true for any version but this Gateway's; message is then
+// left unparsed.
+func decodeRuntime(payload []byte, message *runtime.RuntimeEnvelope) (version uint64, other bool, err error) {
+	if number, kind, n := protowire.ConsumeTag(payload); n > 0 && number == 1 && kind == protowire.VarintType {
+		if value, m := protowire.ConsumeVarint(payload[n:]); m > 0 && value != uint64(adapter.RuntimeVersion) {
+			return value, true, nil
+		}
+	}
+	if err := proto.Unmarshal(payload, message); err != nil {
+		return 0, false, err
+	}
+	return uint64(message.ProtocolVersion), message.ProtocolVersion != adapter.RuntimeVersion, nil
+}
+
+// writeVersionNotice tells the peer this Gateway's protocol version: an
+// envelope with only field 1, whose position never changes. Best effort: the
+// link is closing anyway.
+func writeVersionNotice(conn *framing.TCPConnection) {
+	if payload, err := proto.Marshal(&runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion}); err == nil {
+		_ = conn.Write(payload, 500*time.Millisecond)
+	}
+}
+
+// unknownRuntimeMessage names the field numbers of a message this version does
+// not know, apart from an envelope that carries no message at all.
+func unknownRuntimeMessage(message *runtime.RuntimeEnvelope) error {
+	unknown := message.ProtoReflect().GetUnknown()
+	var fields []int32
+	for len(unknown) > 0 {
+		number, _, length := protowire.ConsumeField(unknown)
+		if length < 0 {
+			break
+		}
+		fields = append(fields, int32(number))
+		unknown = unknown[length:]
+	}
+	if len(fields) == 0 {
+		return errors.New("runtime protocol mismatch: empty message")
+	}
+	return fmt.Errorf("unknown runtime message fields=%v", fields)
 }
 
 func envelope() *runtime.RuntimeEnvelope {
@@ -638,10 +692,13 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			payload, err := l.conn.Read(5 * time.Second)
 			var message runtime.RuntimeEnvelope
 			if err == nil {
-				err = proto.Unmarshal(payload, &message)
-			}
-			if err == nil && (message.ProtocolVersion != adapter.RuntimeVersion || message.Message == nil) {
-				err = errors.New("runtime protocol mismatch")
+				var version uint64
+				var other bool
+				if version, other, err = decodeRuntime(payload, &message); other {
+					err = fmt.Errorf("runtime protocol version mismatch: expected %d, received %d", adapter.RuntimeVersion, version)
+				} else if err == nil && message.Message == nil {
+					err = unknownRuntimeMessage(&message)
+				}
 			}
 			if err != nil {
 				if ctx.Err() == nil {

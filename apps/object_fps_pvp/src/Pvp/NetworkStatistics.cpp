@@ -120,6 +120,8 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
          << (window.windowSeconds > 0 ? static_cast<double>(window.wakes) / window.windowSeconds : 0.0)
          << " cpu_s=";
     Optional(line, window.cpuSeconds, 3);
+    // Added in pv7 (v7.1 version-errors), so it comes last.
+    line << " other_version_datagrams=" << window.otherVersionDatagrams;
     return line.str();
 }
 

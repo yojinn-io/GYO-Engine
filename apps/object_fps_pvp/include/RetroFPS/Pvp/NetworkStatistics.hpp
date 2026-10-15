@@ -44,6 +44,7 @@ struct WorkerStatisticsWindow final {
     double windowSeconds{};
     std::uint64_t wakes{};
     std::optional<double> cpuSeconds; // the worker thread's CPU during the window
+    std::uint64_t otherVersionDatagrams{}; // from the Gateway, well-formed but another protocol version (pv7)
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 

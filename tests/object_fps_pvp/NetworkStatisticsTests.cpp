@@ -57,9 +57,13 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
           "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0");
 
     CHECK(WorkerStatisticsLine({.player = 2, .windowSeconds = 10.0, .wakes = 4812, .cpuSeconds = 0.0514}) ==
-          "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051");
+          "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051 "
+          "other_version_datagrams=0");
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1}) ==
-          "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na");
+          "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na "
+          "other_version_datagrams=0");
+    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1, .otherVersionDatagrams = 3}).ends_with(
+          " cpu_s=na other_version_datagrams=3"));
 }
 
 TEST_CASE("CPU time readings never decrease and grow with work on the calling thread") {

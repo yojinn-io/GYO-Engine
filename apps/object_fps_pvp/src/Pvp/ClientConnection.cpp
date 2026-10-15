@@ -40,11 +40,21 @@ std::string BaseUrl(std::string address) {
     while(address.ends_with('/'))address.pop_back();
     return address;
 }
+// Names both versions: every protocol_version key carries its sender's own
+// version (pv7 contract §1); a Gateway that sends none is "unknown".
+std::string VersionMismatch(const Json& gateway) {
+    const auto version=gateway.find("protocol_version");
+    return "protocol_version_mismatch: Client "+std::to_string(wire::ProtocolVersion)+", Gateway "+
+        (version!=gateway.end() && version->is_number_unsigned()?std::to_string(version->get<std::uint64_t>()):std::string("unknown"));
+}
 Json Response(const httplib::Result& result) {
     if(!result)throw std::runtime_error("Gateway HTTP request failed: "+std::string(httplib::to_string(result.error())));
     auto body=Json::parse(result->body);
-    if(result->status<200 || result->status>=300)
-        throw std::runtime_error(body.value("error",std::string("Gateway rejected request")));
+    if(result->status<200 || result->status>=300) {
+        // The error code decides, not the status: room_full is a 409 too.
+        const auto code=body.value("error",std::string("Gateway rejected request"));
+        throw std::runtime_error(code=="protocol_version"?VersionMismatch(body):code);
+    }
     return body;
 }
 std::unique_ptr<httplib::Client> Http(const std::string& base) {
@@ -143,6 +153,7 @@ struct ClientConnection::Impl {
     Clock::time_point statisticsAt{};
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
+    std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
     Impl() {
@@ -333,9 +344,10 @@ struct ClientConnection::Impl {
         // Keep credentials even if cancelled so the next action releases its reservation.
         session=joined.at("session_id").get<std::uint64_t>();token=joined.at("session_token").get<std::string>();
         if(request.generation!=generation.load())return;
-        // Compare the full JSON value: a non-integer or wider value must not truncate to the version.
-        if(const auto& version=joined.at("protocol_version");!version.is_number_unsigned() ||
-           version.get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error("Client protocol mismatch");
+        // Compare the full JSON value: a non-integer or wider value must not truncate to the version;
+        // a reply without one is a mismatch with an unknown version too.
+        if(const auto version=joined.find("protocol_version");version==joined.end() || !version->is_number_unsigned() ||
+           version->get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error(VersionMismatch(joined));
         const auto digest=joined.find("arena_digest");
         CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>(),
             digest!=joined.end() && digest->is_number_unsigned() && digest->get<std::uint64_t>()!=0 ?
@@ -449,8 +461,14 @@ struct ClientConnection::Impl {
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
             if(sender!=endpoint)continue;
-            const auto packet=wire::Decode(std::span(bytes).first(size));
-            if(!packet || packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
+            const auto datagram=std::span(bytes).first(size);
+            const auto packet=wire::Decode(datagram);
+            if(!packet) {
+                // Dropped silently as before; counted apart from malformed datagrams.
+                if(wire::OtherVersion(datagram))++otherVersionDatagrams;
+                continue;
+            }
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
                 CheckArena(message.arena_id(),message.arena_version(),
@@ -739,8 +757,9 @@ struct ClientConnection::Impl {
         const auto cpu=CurrentThreadCpuSeconds();
         PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
-            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
-        statisticsAt=now;cpuAt=cpu;wakes=0;
+            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
+            .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+        statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
     }
     void Run() {
         statisticsAt=Clock::now();

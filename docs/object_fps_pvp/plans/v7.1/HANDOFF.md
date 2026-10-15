@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`proto-rename-v7` 完成；下一批 `version-errors` 等使用者說開始。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`version-errors` 完成；下一批 `heartbeat-sync` 等使用者說開始。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D91 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D98 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -38,11 +38,12 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：
-  1. 開 pv7-line 的 PR（draft），讓四平台 CI 跑 L1（建議：之後每批推送都有 L1）。
-  2. 開始 `version-errors`（檔位 high，估 12 h）。
-- **進行中**：無。
-- **下一步**：`version-errors`。
-- **最後更新**：2026-10-16，依據本次推送（`proto-rename-v7` 完成）。
+  1. **版本告知的範圍**（protocol-v7 §1「版本不符時的告知」）。契約原文是「偵測到版本不符的一方」關閉前送告知；實作只有 Gateway 在讀 Ready 時送。Match 先送 Ready，所以實際會偵測到不符的只有這裡；Ready 之後的不符只會來自實作錯誤，那時再送告知，會讓 link 出現第二個寫入者（Gateway 的寫入 goroutine 已經在跑）。wire 與實際行為不變，差的是條文。選項：(a) 核准，在契約那一列加上實作範圍的附註（建議）；(b) 不核准，Ready 之後的偵測方也要送告知（Gateway 經寫入 goroutine 送，Match 排進控制佇列）。證據：`runtime_link.go` 的 `connectRuntime`，ultracode 審查的 architecture-F3。
+  2. **Gateway 拒絕 log 行的格式**。契約寫 `join refused code=protocol_version expected=7 received=<n>`；實作是 `join refused remote=<addr> code=protocol_version expected=7 received=<n>`，和既有的 `join refused remote=<addr> code=<code>` 同一系。選項：(a) 契約那一列加上 `remote=<addr>`（建議：同系一致；日誌格式在 `log-contract` 之前是暫定，但 §2 規定之後只能在行尾加鍵）；(b) 程式拿掉 `remote=`。測試只比對 `code=protocol_version expected=7 received=<n>`，兩種都會通過。
+  3. 開始 `heartbeat-sync`（檔位 high，時鐘域局部 xhigh，估 9 h）。
+- **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，全部通過；`version-errors` 的 L1 見規劃紀錄。
+- **下一步**：`heartbeat-sync`。
+- **最後更新**：2026-10-16，`version-errors` 完成並推送；契約文字的兩處等你決定（這次的 commit 保留契約原文）。
 
 ## 閱讀入口
 
@@ -68,6 +69,7 @@
 | D95 | （2026-10-16）`pv7-design` 與 Gateway 方向的其餘決定全部照建議：D-1 不再需要；D-2～D-6 照建議；D-7 確認排除清單（第 2 項改為「逐命令的完整丟棄身分」）；D-9 順序守住 D90，edge 批「結果先、動作後」，丟棄回報先照現行出口實作再縮減；D-10 IPC 依到達順序、controls 不丟、資料每位玩家有界 FIFO（丟最舊並回報）、結果 30 Hz 由 Gateway 只記上次送出時刻來守；D-11 解碼成功就提交活性；D-12 移除 snapshot 守衛 D1、D2；D-13 丟棄回報上 wire（約 29 個原因），逐出時佇列中的資料轉給 Match；D-14 Gateway 約束條文與白名單守衛；D-15 保留兩份 proto 加 adapter。檔位：`pv7-design` 的 IPC 送達語意做 1 次 xhigh 對抗式檢查、`edge-input-passthrough` 局部 xhigh，都同意。設計事故的行動 4（AGENTS.md）交給文件會話 | 使用者：「D-9～D-15、重評後的 D-1～D-7 全部照建議；pv7-design 做 1 次 xhigh 檢查、edge-input-passthrough 局部 xhigh 都同意；事故行動 4 交給文件會話。修訂草案與 README 後 commit 並推送。」 |
 | D96 | （2026-10-16）**protocol-v7 定稿**（§2a 的 xhigh 檢查已套用：結果的 30 Hz 改為 Gateway 單槽持有、Match 最小 id 優先；中間 commit 轉送 ACK-only 批；結果重送不刷新期限；唯一 UDP 寫出者；給已移除玩家的結果不算損失；鍵對應與事前宣告的例外；FIFO 上限準則不少於 64 則窗口；守衛加強）。`PlayerInput`／`ActionBatch` 加 Client 的 GYOP 序號作為診斷欄位（runtime 7、5）。接受 pv7-line 約 177～191 h（加上序號欄位約 178～193 h）。定稿後改 wire 要先徵求同意 | 使用者：「草案定稿；PlayerInput／ActionBatch 加 Client 的 GYOP 序號作為診斷欄位；接受 pv7-line 約 177～191 h。更新文件後 commit 並推送。」 |
 | D97 | （2026-10-16）開始 `proto-rename-v7`；規劃文件併進 pv7-line 的 PR，pv7-line 在 `claude/pvp-v71-plan` 接著做 | 使用者：「開始 proto-rename-v7。規劃文件併進 pv7-line 的 PR，在這個分支接著做。」；fewer-prs |
+| D98 | （2026-10-16）開 pv7-line 的 draft PR #78（標題與內容用日語），開 Auto-fix；確認 `proto-rename-v7` 的四平台 L1 後開始 `version-errors` | 使用者：「開 pv7-line 的 draft PR（標題與內容用日語），讓四平台 CI 跑 L1。」「為 PR #78 開 Auto-fix。」「CI 可以了」「開始 version-errors。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -91,6 +93,40 @@
 
 - 2026-10-16：`proto-rename-v7` 完成（D97）。`client_v6`／`runtime_v6` 改名為 `client_v7`／`runtime_v7`（proto 檔名、package `object_fps_pvp.{client,runtime}.v7`、Go 套件 `clientv7`／`runtimev7`、CMake target `gyo_<app>_{client,runtime}_v7`、C++ 的 include 與 namespace、`protocol/README.md`），版本值仍是 6。Go 綁定用專案建置中的 protoc 36.2.0 與從本機模組快取離線建置的 protoc-gen-go v1.36.11 重產；先確認重產 v6 與提交版逐位元一致，新舊的差只有 v6→v7 的名稱。驗收（L1，本機）：`go vet`、`go test ./...` 通過；`test` preset 全量 CTest 70／70 通過；權威 digest 同機兩樹比較（base＝v7final `6d3f287`）scale 1、3 各 35 情境 0 差異（`build/target/_build/test/logs/pvp-v71-proto-rename-20261016/`）。四平台 CI 等 PR。Architecture Delta：Build Graph 的 target 名稱（只改名，依賴關係不變）。實際約 1 h（估 3 h）。
 
+- 2026-10-16：開 draft PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（pv7-line，含計畫文件，D97）。CI 對 draft PR 跳過 L1，改以手動觸發 Cross-platform CI 跑四平台 L1（`d5104a0`：run 38771828429）。 四平台 L1、Quick acceptance、CI gate 全部通過，`proto-rename-v7` 驗收完成。
+
+- 2026-10-16 02:01：`version-errors` 開始（D98，檔位 high，估 12 h）。
+
+- 2026-10-16：`version-errors` 實作與驗收。
+  - 版本值 6→7：Client、Gateway、Match、驗收工具四處一起改，`test_protocol_version.py` 核對四者一致。
+  - HTTP：Gateway 的拒絕 body 帶自己的版本，並寫一行 log（期望值、收到值）。Client 依 body 的 `error` 判斷，產生 `protocol_version_mismatch: Client 7, Gateway <n|unknown>`；join 成功回覆的版本不符也用同一個錯誤。
+  - IPC：兩端把版本不符、解析失敗、訊息為空、未知欄位（寫出欄位號）分開。Gateway 讀到其他版本的 Ready 時，關閉前送出只含版本的 envelope；Match 對「Connected 之後沒收到任何框架就 eof」寫一行提示。告知只在 Ready 時送：Match 先送 Ready，實際會偵測到不符的只有這裡；之後再送會讓 link 出現第二個寫入者。這比契約原文窄，是否在契約加附註等你決定（現況第 1 項）。
+  - Client：其他版本的 GYOP 照舊靜默丟棄，另外計數，寫進 worker 統計行的 `other_version_datagrams`。
+  - 測試：Go 新增 3 個；IPC 新增 2 個（各種協議違反的關閉原因、eof 提示）；Wire 的位元組黃金值改為 `0x0007`，並測 `OtherVersion`；worker 的模擬 Gateway 測 4 種拒絕（上一版、下一版、沒寫版本、`room_full`）。突變新增 7 個（`v71-version-errors`），`09-version-python` 改 find 字串。
+  - 建置中途的修正：IpcHostTests 的 `pb` 別名在 doctest 的測試函式（全域範圍）與 protobuf 的 `::pb` 衝突，改用匿名命名空間裡的 `Envelope`。
+  - 驗收（L1，本機）：`test` preset 全量 CTest 70／70（含權威 golden 30／30）；突變 7／7 與 `09-version-python` 都 killed；權威 digest 同機兩樹比較（base＝v7final `6d3f287`）scale 1、3 各 35 情境 0 差異。
+  - 凍結 pv7 版分析器：`frozen-pv7.sha256`（54 檔，清單的 sha256 `b4a8963001883160d5bb7642b7da89afd343c686d29752874461762e17a291c2`，審查修正後重產）。和 v7final 相比只改了 `acceptance_util.py`（版本常數）與 `run_quad.py`（mixed）。
+  - 凍結前的 pv6 語料核對（16-L2 的 43 項工作：遊戲 25、backpressure 6、soak 1、quad 10、GUI 1；每項分析複本，不寫入語料）：
+    - 舊分析器 43／43 重現 session 存下的結果（確認輸入重建正確）。
+    - 新舊的差只在事前列出的版本比對項：`gameplay_evidence.py:140-141`、`gameplay_soak_evidence.py:178-181`、`combat_gui_evidence.py:155`，以及輸出的 `protocol` 欄位。GUI 在版本檢查就提前返回，所以另做一輪：把 pv6 報告的版本欄位改成 7 再比，只剩 `protocol` 欄位本身不同，GUI 的其餘證據也逐值一致。
+  - `run_quad` 的 mixed 改寫成 pv7 版（protocol-v7 §1「驗收工具」）：older-client 只接受版本錯誤；older-match 要求 pv7 Gateway 寫出期望值與收到值；older-gateway 要求 pv7 Match 寫出 eof 提示。`older-arena` 退役：它驗的是 v6 的容量變更，pv7 不改 arena（v7final 的 arena 逐位元相同），容量拒絕由 `ArenaDigestTests.cpp:133-134` 與突變覆蓋。對 v7final 的 pv6 執行檔跑一次，3／3 通過；改寫前那一次的 older-arena 失敗保留在 `short/mixed/`。
+  - 短跑次（只記錄；pv7 工具與執行檔，沒有閒置閘門）：clean-60、network、backpressure 6 情境、soak-short、quad clean-60 一輪，全部通過；network 的 `other_version_datagrams` 都是 0。有 11 個數值落在 16-L2 的範圍外，最大的是 quad 一輪有 8 個替代命令、actual P95 42 ms。之後 v7final 與 pv7 交錯各跑 4 輪 quad clean-60：兩邊都偶爾出現替代命令（v7final 一輪 4 個、pv7 一輪 11 個），其餘輪次都是 0、P95 37.5～38.0 ms。判斷為主機擾動，不是回歸。
+  - Gateway 執行檔 `gyo_object_fps_pvp-gateway` 是不在 ALL 裡的自訂 target，跑驗收前要單獨建（`cmake --build --preset test --target gyo_object_fps_pvp-gateway`）；這次建之前，它還是 10-11 的舊版。
+  - 證據：`build/target/_build/test/logs/pvp-v71-version-errors-20261016/`（`digest-scale{1,3}`、`frozen-pv7.sha256`、`pv6-corpus/`、`short/`、`short/quad-ab/`）。
+  - ultracode 審查（3 位審查者：契約一致性、測試與驗收工具、架構與跨平台；1 位對抗式檢查；沿用主對話檔位；約 25 分）：19 項發現，對抗式檢查確認 17 項（有重複）、推翻 2 項。在契約範圍內的都已修正：
+    - HTTP join 先讀版本，再做嚴格解碼與 request_id 檢查：之後版本的 Client 多帶一個鍵，仍然得到 409 與 Gateway 的版本（原本會是 400 `invalid_join`）。
+    - Gateway 讀 IPC envelope 時先單獨讀欄位 1：另一版的內容在本版 schema 下解析失敗時，仍報版本不符，Ready 時也照樣送告知。Match 端不改：Ready 之後它會收到的另一版框架只有只含欄位 1 的告知，一定能解析。
+    - Client：join 成功回覆缺少 `protocol_version` 時也是 `protocol_version_mismatch`（原本是 JSON 例外）。
+    - Match 的 eof 提示：閒置的同版 Gateway 停下時也會觸發，措辭改為「it was idle or speaks another protocol version」（前綴不變）。`heartbeat-sync` 的心跳之後會讓這種情況變少。
+    - 補測試：join 的版本優先與 log 行；400 的版本拒絕；不是無號整數的版本（null、-1、"8"、7.5）；join 回覆缺版本；只含版本的告知（版本 1～6 與 8）；另一版加上本版會拒絕或無法解析的內容；eof 之後沒有提示的反面案例；arena 出生點不足時 `IpcHost` 拒絕建構。IPC 違規測試改成只看該次連線之後的 log；eof 提示的測試改成正常關閉（shutdown 後讀到 Match 關閉），避免連線被重設造成的偶發失敗。
+    - 突變再加 7 個（這批共 14 個）：join 先判內容再判版本、envelope 先解析再讀版本、Client 只認 409、Client 接受任何數字、Match 先判空訊息、提示不看框架數、Match 接受出生點不足的 arena。`v71ve-envelope-version-unnamed` 改 find 字串。
+    - `run_quad` 的 mixed：older-match 加上端到端確認（pv6 Match 以自己的原因 `frame parse or protocol version` 關閉，表示收到了告知）；Match 記錄連線重設（`read:`）時標為無法判定，最多跑 3 次並保留每次的紀錄；docstring 改指 IpcHostTests 的 arena 測試（審查指出 `ArenaDigestTests` 只測判斷函式，沒測到 `IpcHost` 的呼叫）。
+    - 推翻的 2 項：§1 附註的措辭（屬措辭偏好）；v6 驗收文件裡 mixed 的說明（v6 的歷史紀錄，不改）。
+    - 動到已定稿契約文字的 2 項沒有改，轉成「等你決定」（現況第 1、2 項）；這次的 commit 保留契約原文。
+  - 修正後重驗：`test` preset 全量 CTest 70／70；`go vet`、`go test ./...` 通過（新的 Go 測試另以 `-race -count=3` 跑過）；突變 14／14 與 `09-version-python` 都 killed（`v71ve-ipc-version-as-parse` 第一次是 wrong_failure：測試改用 `mismatch(version)` 組字串後，doctest 只印出運算式，改 expect 後重跑 killed）；權威 digest 兩樹比較 scale 1、3 各 35 情境 0 差異；mixed 對 v7final 的 pv6 執行檔 3／3 通過，都在第一次判定。分析器只多改了 `run_quad.py`（runner，不在 pv6 語料核對的範圍內），核對結果仍然有效。證據 `after-review/`。
+  - Architecture Delta：無。wire 不變；契約文字的兩處等你決定。新的依賴只有產品內部的：`IpcHost.cpp` 用 protobuf 的 `UnknownFieldSet` 列出未知欄位，Gateway 用 `protowire` 寫版本告知；Engine 與共通層沒有改。
+  - 實際約 1.3 h（02:01～03:20，含審查 25 分；估 12 h）。
+
 ## 未結事項
 
 - **保留的 worktree 與本機分支**：
@@ -101,3 +137,5 @@
 - **D58 (1)(8) 的暫定決定**：在 `log-contract` 一起確認。
 - **檔位**：`pv7-design`、`log-contract` 開始前先問 ultracode（v7 D45）；`pv7-design` 另做 1 次 xhigh 對抗式檢查；每次 L2 宣告前做門檻來源的對抗式檢查（D45）。
 - **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。
+- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。
+- **`edge-contract` 的約束**（文件會話，設計事故行動 4，PR #79 已合併到 master `23457e1`）：AGENTS.md 不點名產品，而是用 `git grep -n "不可破壞的契約" -- docs` 找各元件的設計約束。把 Gateway 的正式條文寫進 network-architecture 時，「不可破壞的契約」的標題文字要逐字保持不變。

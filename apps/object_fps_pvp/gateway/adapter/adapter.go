@@ -12,9 +12,9 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
-// ProtocolVersion is the product wire version (pv6). ClientVersion (GYOP
+// ProtocolVersion is the product wire version (pv7). ClientVersion (GYOP
 // header) and RuntimeVersion (IPC envelope) are its typed forms.
-const ProtocolVersion = 6
+const ProtocolVersion = 7
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 4

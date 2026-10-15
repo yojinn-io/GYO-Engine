@@ -3,6 +3,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -237,7 +238,26 @@ type joinRequest struct {
 
 func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	decoder := json.NewDecoder(r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_join")
+		return
+	}
+	version, ok := joinVersion(body)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_join")
+		return
+	}
+	if version != adapter.ClientVersion {
+		// The version is read before the rest (pv7 contract §1): a Client of
+		// another version may send keys this version rejects. The Gateway
+		// states its own version so the Client can name both; every
+		// protocol_version key is the sender's.
+		log.Printf("join refused remote=%s code=protocol_version expected=%d received=%d", r.RemoteAddr, adapter.ClientVersion, version)
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "protocol_version", "protocol_version": adapter.ClientVersion})
+		return
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var request joinRequest
 	if err := decoder.Decode(&request); err != nil {
@@ -252,10 +272,6 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_id")
 		return
 	}
-	if request.ProtocolVersion != adapter.ClientVersion {
-		writeError(w, http.StatusConflict, "protocol_version")
-		return
-	}
 	data, status, code := s.reserveSlot(request)
 	if code != "" {
 		log.Printf("join refused remote=%s code=%s", r.RemoteAddr, code)
@@ -265,6 +281,23 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	log.Printf("join reserved player=%v remote=%s", data["player_id"], r.RemoteAddr)
 	writeJSON(w, status, data)
 }
+// joinVersion reads only protocol_version from a join body that is one JSON
+// object: missing or null is 0, and anything but an integer in 0..65535 is not
+// a version (400 invalid_join).
+func joinVersion(body []byte) (uint16, bool) {
+	var peek struct {
+		ProtocolVersion json.RawMessage `json:"protocol_version"`
+	}
+	if err := json.Unmarshal(body, &peek); err != nil {
+		return 0, false
+	}
+	var version uint16
+	if len(peek.ProtocolVersion) > 0 && json.Unmarshal(peek.ProtocolVersion, &version) != nil {
+		return 0, false
+	}
+	return version, true
+}
+
 func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

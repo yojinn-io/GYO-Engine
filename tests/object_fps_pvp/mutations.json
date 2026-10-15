@@ -185,8 +185,8 @@
       "batch": "09",
       "what": "one version definition disagrees",
       "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
-      "find": "\nPROTOCOL_VERSION = 6\n",
-      "replace": "\nPROTOCOL_VERSION = 5\n",
+      "find": "\nPROTOCOL_VERSION = 7\n",
+      "replace": "\nPROTOCOL_VERSION = 6\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
     },
@@ -3559,6 +3559,146 @@
       "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds + 0.00005;",
       "check": "cpu",
       "expect": "The fire gate constants keep their frozen values"
+    },
+    {
+      "id": "v71ve-client-dispatch-on-409",
+      "batch": "v71-version-errors",
+      "what": "The Client takes any 409 for a version refusal, so a full room reads as a version mismatch",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "throw std::runtime_error(code==\"protocol_version\"?VersionMismatch(body):code);",
+      "replace": "throw std::runtime_error(result->status==409?VersionMismatch(body):code);",
+      "check": "worker",
+      "expect": "a full room was reported as something else"
+    },
+    {
+      "id": "v71ve-gateway-refusal-without-version",
+      "batch": "v71-version-errors",
+      "what": "The Gateway refuses a join without naming its own version",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "writeJSON(w, http.StatusConflict, map[string]any{\"error\": \"protocol_version\", \"protocol_version\": adapter.ClientVersion})",
+      "replace": "writeError(w, http.StatusConflict, \"protocol_version\")",
+      "check": "go",
+      "expect": "refusal body"
+    },
+    {
+      "id": "v71ve-ready-without-notice",
+      "batch": "v71-version-errors",
+      "what": "A Ready of another version is refused without telling the Match the Gateway's version",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\twriteVersionNotice(conn)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "no version notice"
+    },
+    {
+      "id": "v71ve-envelope-version-unnamed",
+      "batch": "v71-version-errors",
+      "what": "An envelope of another version after Ready is reported like an empty one",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\t\terr = fmt.Errorf(\"runtime protocol version mismatch: expected %d, received %d\", adapter.RuntimeVersion, version)\n",
+      "replace": "\t\t\t\t\t_, err = version, errors.New(\"runtime protocol mismatch: empty message\")\n",
+      "check": "go",
+      "expect": "runtime protocol version mismatch: expected"
+    },
+    {
+      "id": "v71ve-ipc-version-as-parse",
+      "batch": "v71-version-errors",
+      "what": "The Match reports another version as a parse failure",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                return \"protocol version mismatch: expected \"+std::to_string(wire::ProtocolVersion)+\", received \"+\n                    std::to_string(message.protocol_version());",
+      "replace": "                return \"frame parse\";",
+      "check": "ipc",
+      "expect": "mismatch\\(version\\)"
+    },
+    {
+      "id": "v71ve-ipc-no-eof-hint",
+      "batch": "v71-version-errors",
+      "what": "The Match gives no hint when a Gateway closes before any frame",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(reason==\"eof\" && session.frames==0)\n",
+      "replace": "        if(false)\n",
+      "check": "ipc",
+      "expect": "ipc hint: the Gateway closed before sending any frame"
+    },
+    {
+      "id": "v71ve-other-version-unrecognised",
+      "batch": "v71-version-errors",
+      "what": "A datagram of another version is not told apart from a malformed one",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "    return decoded && decoded->header.version != ProtocolVersion;",
+      "replace": "    return false;",
+      "check": "cpu",
+      "expect": "wire::OtherVersion"
+    },
+    {
+      "id": "v71ve-join-content-before-version",
+      "batch": "v71-version-errors",
+      "what": "The Gateway judges the join body strictly before its version, so a newer Client's extra key hides the version",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tif err := json.Unmarshal(body, &peek); err != nil {\n\t\treturn 0, false\n\t}\n",
+      "replace": "\tstrict := json.NewDecoder(bytes.NewReader(body))\n\tstrict.DisallowUnknownFields()\n\tvar full struct {\n\t\tRequestID       string          `json:\"request_id\"`\n\t\tProtocolVersion json.RawMessage `json:\"protocol_version\"`\n\t}\n\tif err := strict.Decode(&full); err != nil {\n\t\treturn 0, false\n\t}\n\tpeek.ProtocolVersion = full.ProtocolVersion\n",
+      "check": "go",
+      "expect": "client_reason:1 .*\\]: status 400"
+    },
+    {
+      "id": "v71ve-runtime-version-after-parse",
+      "batch": "v71-version-errors",
+      "what": "The Gateway parses a runtime envelope before reading its version, so another version this schema cannot parse reads as a parse failure",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "n > 0 && number == 1 && kind == protowire.VarintType {",
+      "replace": "n > 0 && number == 0 && kind == protowire.VarintType {",
+      "check": "go",
+      "expect": "content this version cannot parse: error"
+    },
+    {
+      "id": "v71ve-client-dispatch-on-status",
+      "batch": "v71-version-errors",
+      "what": "The Client takes a version refusal only from a 409, so a 400 version refusal reads as a bare error code",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "throw std::runtime_error(code==\"protocol_version\"?VersionMismatch(body):code);",
+      "replace": "throw std::runtime_error(code==\"protocol_version\" && result->status==409?VersionMismatch(body):code);",
+      "check": "worker",
+      "expect": "a version refusal of status 400 was not a version mismatch"
+    },
+    {
+      "id": "v71ve-client-version-any-number",
+      "batch": "v71-version-errors",
+      "what": "The Client takes any JSON number for the Gateway's version, so 7.5 or -1 is named as a version",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "(version!=gateway.end() && version->is_number_unsigned()?",
+      "replace": "(version!=gateway.end() && version->is_number()?",
+      "check": "worker",
+      "expect": "a refusal without an unsigned version did not say unknown"
+    },
+    {
+      "id": "v71ve-ipc-empty-before-version",
+      "batch": "v71-version-errors",
+      "what": "The Match judges an envelope without a message before its version, so another Gateway's version notice reads as an empty message",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(message.protocol_version()!=wire::ProtocolVersion)\n",
+      "replace": "            if(message.protocol_version()!=wire::ProtocolVersion && message.message_case()!=pb::RuntimeEnvelope::MESSAGE_NOT_SET)\n",
+      "check": "ipc",
+      "expect": "mismatch\\(version\\)"
+    },
+    {
+      "id": "v71ve-ipc-hint-after-frames",
+      "batch": "v71-version-errors",
+      "what": "The Match hints at another version whenever a Gateway closes, also after it sent frames",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(reason==\"eof\" && session.frames==0)\n",
+      "replace": "        if(reason==\"eof\")\n",
+      "check": "ipc",
+      "expect": "CHECK_FALSE\\( log\\.Shows\\(\"ipc hint\""
+    },
+    {
+      "id": "v71ve-ipc-hosts-small-arena",
+      "batch": "v71-version-errors",
+      "what": "The Match serves an arena with fewer spawns than the room holds",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "IpcHost\\(host, small\\)"
     }
   ]
 }

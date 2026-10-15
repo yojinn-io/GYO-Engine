@@ -17,10 +17,12 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -43,11 +45,15 @@ public:
         http.Get("/rooms",[](const auto&,auto& response){response.set_content(R"({"rooms":[]})","application/json");});
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
-            if(body.value("protocol_version",0u)!=AcceptanceProtocolVersion) {
-                response.status=400;response.set_content(R"({"error":"protocol_version"})","application/json");return;
-            }
-            const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
+            std::optional<std::pair<int,Json>> refused;
+            {std::scoped_lock lock(refusalMutex);refused=refusal;}
+            // A Client of another version is refused naming this version (pv7 contract §1).
+            if(!refused && body.value("protocol_version",0u)!=AcceptanceProtocolVersion)
+                refused={409,Json{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion}}};
+            if(refused) {response.status=refused->first;response.set_content(refused->second.dump(),"application/json");return;}
+            Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
                 {"arena_id","worker-test"},{"arena_version",1},{"arena_digest",joinArenaDigest.load()},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
+            if(replyWithoutVersion)reply.erase("protocol_version");
             response.set_content(reply.dump(),"application/json");
         });
         http.Post("/rooms/1/leave",[&](const auto&,auto& response){
@@ -133,7 +139,11 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
+    // The join route answers every join with this status and body until Accept().
+    void Refuse(int status,Json body){std::scoped_lock lock(refusalMutex);refusal.emplace(status,std::move(body));}
+    void Accept(){std::scoped_lock lock(refusalMutex);refusal.reset();}
     std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
+    std::atomic<bool> replyWithoutVersion{};
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
@@ -148,6 +158,8 @@ private:
     std::jthread server;
     std::uint64_t ack{},tick{};
     std::uint32_t sequence{};
+    std::mutex refusalMutex;
+    std::optional<std::pair<int,Json>> refusal;
 };
 PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
@@ -554,10 +566,37 @@ int main() {
             connection.State().actionTransport.allocatedThrough==0 && connection.Drain().decisions.empty(),"Leave retained action lifecycle state");
         gateway.epoch=1;
 
-        // The previous version must be refused as a legacy join.
-        gateway.protocolVersion=AcceptanceProtocolVersion-1;connection.Join(gateway.address,"1");
-        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted the previous protocol version");
+        // Version refusals name both versions (pv7 contract §1); the error code
+        // decides, so a full room is not reported as a version mismatch.
+        const auto joinError=[&]{
+            connection.Join(gateway.address,"1");
+            gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
+            return connection.State().error;
+        };
+        const auto mismatch=[](const std::string& gatewayVersion){
+            return "protocol_version_mismatch: Client "+std::to_string(AcceptanceProtocolVersion)+", Gateway "+gatewayVersion;
+        };
+        const auto newer=std::to_string(AcceptanceProtocolVersion+1);
+        gateway.protocolVersion=AcceptanceProtocolVersion-1;
+        Require(joinError()==mismatch(std::to_string(AcceptanceProtocolVersion-1)),
+            "HTTP accepted the previous protocol version in the join reply");
+        gateway.protocolVersion=AcceptanceProtocolVersion;gateway.replyWithoutVersion=true;
+        Require(joinError()==mismatch("unknown"),"a join reply without a version was not a mismatch");
+        gateway.replyWithoutVersion=false;
+        gateway.Refuse(409,{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion+1}});
+        Require(joinError()==mismatch(newer),"a newer Gateway's refusal did not name both versions");
+        gateway.Refuse(409,{{"error","room_full"}});
+        Require(joinError()=="room_full","a full room was reported as something else");
+        gateway.Refuse(400,{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion+1}});
+        Require(joinError()==mismatch(newer),"a version refusal of status 400 was not a version mismatch");
+        // Only a JSON unsigned integer is a version.
+        for(const auto& unnamed:{Json(),Json(-1),Json("8"),Json(7.5)}) {
+            Json refusal={{"error","protocol_version"}};
+            if(!unnamed.is_null())refusal["protocol_version"]=unnamed;
+            gateway.Refuse(409,refusal);
+            Require(joinError()==mismatch("unknown"),"a refusal without an unsigned version did not say unknown");
+        }
+        gateway.Accept();
         gateway.protocolVersion=AcceptanceProtocolVersion;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");

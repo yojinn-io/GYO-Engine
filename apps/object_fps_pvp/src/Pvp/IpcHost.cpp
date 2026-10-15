@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
 #include "runtime_v7.pb.h"
+#include <google/protobuf/unknown_field_set.h>
 #include <asio.hpp>
 #include <algorithm>
 #include <array>
@@ -213,6 +214,7 @@ struct IpcHost::Impl {
         std::map<std::uint64_t,PlayerId> joins;
         MatchEventLog events;
         std::map<PlayerId,ActionLane> actionLanes;
+        std::uint64_t frames{}; // frames of this connection that passed the version check
     };
 
     MatchRuntimeHost& host;
@@ -304,6 +306,11 @@ struct IpcHost::Impl {
     void Close(const std::string& reason) {
         if(phase!=Phase::Connected) return;
         MatchEventLog::Line("ipc closed reason="+reason);
+        // A Gateway of another version refuses Ready and closes without a
+        // frame; a pv7 Gateway sends its version first (pv7 contract §1). An
+        // idle Gateway of this version also sends nothing before it stops.
+        if(reason=="eof" && session.frames==0)
+            MatchEventLog::Line("ipc hint: the Gateway closed before sending any frame; it was idle or speaks another protocol version");
         asio::error_code ignored;
         socket.close(ignored);
         laneTimer.cancel();
@@ -330,6 +337,17 @@ struct IpcHost::Impl {
             if(current==connection && phase==Phase::Connected) StartRead();
         });
     }
+    // Names a message this side does not take: a known one sent the wrong way,
+    // field numbers this version does not know, or an envelope with none.
+    static std::string UnknownMessage(const pb::RuntimeEnvelope& message) {
+        if(message.message_case()!=pb::RuntimeEnvelope::MESSAGE_NOT_SET)
+            return "unknown message field="+std::to_string(static_cast<int>(message.message_case()));
+        const auto& unknown=message.GetReflection()->GetUnknownFields(message);
+        if(unknown.field_count()==0) return "unknown message: empty";
+        std::string fields;
+        for(int i=0;i<unknown.field_count();++i) fields+=(i?",":"")+std::to_string(unknown.field(i).number());
+        return "unknown message fields="+fields;
+    }
     // Parses complete frames; returns why the session must end, if it must.
     std::optional<std::string> Receive(std::size_t received) {
         auto& input=session.input;
@@ -340,8 +358,12 @@ struct IpcHost::Impl {
             if(!length || length>wire::MaxFrame) return "frame length";
             if(input.size()<length+4) break;
             pb::RuntimeEnvelope message;
-            if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=wire::ProtocolVersion)
-                return "frame parse or protocol version";
+            if(!message.ParseFromArray(input.data()+4,static_cast<int>(length))) return "frame parse";
+            // The version is checked before the content (pv7 contract §1).
+            if(message.protocol_version()!=wire::ProtocolVersion)
+                return "protocol version mismatch: expected "+std::to_string(wire::ProtocolVersion)+", received "+
+                    std::to_string(message.protocol_version());
+            ++session.frames;
             input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
             if(message.has_join()) {
                 if(session.joins.size()>=64) return "pending joins over 64";
@@ -382,7 +404,7 @@ struct IpcHost::Impl {
                 // immutable request remains with the sender for retry. The
                 // host counts the admission by reason.
                 static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
-            } else return "unknown message";
+            } else return UnknownMessage(message);
         }
         return std::nullopt;
     }

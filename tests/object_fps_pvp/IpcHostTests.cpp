@@ -9,9 +9,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
+#include <streambuf>
 #include <string>
 #include <thread>
 #include <vector>
@@ -21,6 +24,8 @@ using namespace fps::pvp;
 using namespace std::chrono_literals;
 using asio::ip::tcp;
 namespace pb = object_fps_pvp::runtime::v7;
+// Test bodies sit outside this namespace, where protobuf's own ::pb makes pb ambiguous.
+using Envelope = pb::RuntimeEnvelope;
 
 Arena IpcArena() {
     Arena arena;
@@ -114,6 +119,14 @@ public:
         }
     }
     [[nodiscard]] bool Closed() const noexcept { return closed_; }
+    // Closes gracefully: no more frames, then read until the Match closes, so
+    // the Match sees end of stream and nothing it sent is left unread (which
+    // would reset the connection instead).
+    void Finish() {
+        socket_.shutdown(tcp::socket::shutdown_send);
+        for (int frames = 0; frames < 600 && !closed_; ++frames) static_cast<void>(Receive(200ms));
+        REQUIRE(closed_);
+    }
 
 private:
     asio::io_context io_;
@@ -305,6 +318,144 @@ TEST_CASE("PvP IPC resets the Match between connections") {
         CHECK_FALSE(SnapshotHas(*message, 3));
     }
     CHECK(snapshots == 10);
+}
+
+// Captures what the Match writes to std::clog (its event log). The IPC thread
+// writes through std::osyncstream, so the buffer locks its own reads and writes.
+class ClogCapture final : public std::streambuf {
+public:
+    ClogCapture() : previous_(std::clog.rdbuf(this)) {}
+    ~ClogCapture() override { std::clog.rdbuf(previous_); }
+    ClogCapture(const ClogCapture&) = delete;
+    ClogCapture& operator=(const ClogCapture&) = delete;
+    // True once the log holds text past offset from, within the deadline.
+    [[nodiscard]] bool Shows(const std::string& text, std::chrono::milliseconds timeout = 3000ms, std::size_t from = 0) {
+        const auto giveUp = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            {
+                std::scoped_lock lock(mutex_);
+                if (text_.find(text, from) != std::string::npos) return true;
+            }
+            if (std::chrono::steady_clock::now() >= giveUp) return false;
+            std::this_thread::sleep_for(5ms);
+        }
+    }
+
+    // The offset of what is logged next.
+    [[nodiscard]] std::size_t Size() {
+        std::scoped_lock lock(mutex_);
+        return text_.size();
+    }
+
+protected:
+    std::streamsize xsputn(const char* data, std::streamsize count) override {
+        std::scoped_lock lock(mutex_);
+        text_.append(data, static_cast<std::size_t>(count));
+        return count;
+    }
+    int_type overflow(int_type value) override {
+        if (traits_type::eq_int_type(value, traits_type::eof())) return traits_type::not_eof(value);
+        std::scoped_lock lock(mutex_);
+        text_.push_back(traits_type::to_char_type(value));
+        return value;
+    }
+
+private:
+    std::streambuf* previous_;
+    std::mutex mutex_;
+    std::string text_;
+};
+
+// One frame from a test Gateway that is closed, and the reason the Match logs.
+bool ClosesWith(ClogCapture& log, const std::string& address, const std::vector<std::uint8_t>& frame,
+                const std::string& reason) {
+    const auto from = log.Size(); // only this session's close counts
+    Gateway gateway(address);
+    REQUIRE(gateway.Receive());
+    gateway.SendRaw(frame);
+    for (int frames = 0; frames < 600 && !gateway.Closed(); ++frames) static_cast<void>(gateway.Receive(200ms));
+    return gateway.Closed() && log.Shows("ipc closed reason=" + reason, 3000ms, from);
+}
+
+std::vector<std::uint8_t> Framed(std::string payload) { return wire::Frame(payload); }
+
+// pv7 contract §1: the version is read before the content, a mismatch names both
+// versions, and a parse failure, an unknown field and a message sent the wrong
+// way are told apart.
+TEST_CASE("PvP IPC names each protocol violation") {
+    ClogCapture log;
+    Server server;
+    const auto mismatch = [](std::uint32_t version) {
+        return "protocol version mismatch: expected " + std::to_string(wire::ProtocolVersion) + ", received " +
+               std::to_string(version);
+    };
+    // Another Gateway's version notice (only field 1), every older version and
+    // the next one.
+    for (std::uint32_t version = 1; version <= wire::ProtocolVersion + 1; ++version) {
+        if (version == wire::ProtocolVersion) continue;
+        CAPTURE(version);
+        Envelope notice;
+        notice.set_protocol_version(version);
+        CHECK(ClosesWith(log, server.address, Framed(notice.SerializeAsString()), mismatch(version)));
+    }
+    // The version is judged before the content: a message of another version
+    // that this version would also refuse is named by its version.
+    Envelope other = Join(1);
+    other.set_protocol_version(wire::ProtocolVersion + 1);
+    CHECK(ClosesWith(log, server.address, Framed(other.SerializeAsString()), mismatch(wire::ProtocolVersion + 1)));
+    other.mutable_ready();
+    CHECK(ClosesWith(log, server.address, Framed(other.SerializeAsString()), mismatch(wire::ProtocolVersion + 1)));
+    CHECK(ClosesWith(log, server.address, Framed(std::string(1, '\xff')), "frame parse"));
+    Envelope empty;
+    empty.set_protocol_version(wire::ProtocolVersion);
+    std::string unknown = empty.SerializeAsString();
+    unknown += std::string{static_cast<char>((99 << 3) & 0x7f | 0x80), static_cast<char>(99 >> 4), 1}; // field 99, varint 1
+    CHECK(ClosesWith(log, server.address, Framed(unknown), "unknown message fields=99"));
+    CHECK(ClosesWith(log, server.address, Framed(empty.SerializeAsString()), "unknown message: empty"));
+    Envelope wrongWay = empty;
+    wrongWay.mutable_ready();
+    CHECK(ClosesWith(log, server.address, Framed(wrongWay.SerializeAsString()),
+                     "unknown message field=" + std::to_string(Envelope::kReadyFieldNumber)));
+}
+
+// A Gateway of another version refuses Ready and closes without a frame.
+TEST_CASE("PvP IPC hints at another protocol version when the Gateway closes before any frame") {
+    ClogCapture log;
+    Server server;
+    {
+        Gateway silent(server.address);
+        REQUIRE(silent.Receive());
+        silent.Finish();
+    }
+    CHECK(log.Shows("ipc closed reason=eof"));
+    CHECK(log.Shows("ipc hint: the Gateway closed before sending any frame"));
+}
+
+TEST_CASE("PvP IPC gives no version hint once the Gateway sent a frame") {
+    ClogCapture log;
+    Server server;
+    {
+        Gateway gateway(server.address);
+        REQUIRE(gateway.Receive());
+        gateway.Send(Join(1));
+        gateway.Finish();
+    }
+    // The next Ready follows the reset, so the first session's close is logged.
+    Gateway next(server.address);
+    const auto ready = next.Receive();
+    REQUIRE(ready);
+    CHECK(ready->has_ready());
+    CHECK(log.Shows("ipc closed reason=eof"));
+    CHECK_FALSE(log.Shows("ipc hint", 0ms));
+}
+
+TEST_CASE("PvP IPC refuses an arena with fewer spawns than the room holds") {
+    Arena small = IpcArena();
+    small.spawns.resize(MaxPlayers - 1);
+    MatchRuntimeHost host{IpcArena()};
+    const auto refusal = "Arena " + small.id + " has " + std::to_string(MaxPlayers - 1) + " spawns; a room of " +
+                         std::to_string(MaxPlayers) + " players needs at least that many";
+    CHECK_THROWS_WITH_AS(IpcHost(host, small), refusal.c_str(), std::runtime_error);
 }
 
 TEST_CASE("PvP IPC ends a session on a protocol violation and accepts the next Gateway") {
