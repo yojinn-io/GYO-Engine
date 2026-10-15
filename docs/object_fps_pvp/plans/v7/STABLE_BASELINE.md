@@ -53,7 +53,7 @@ v7 的主題是「30 FPS 與網路時序」，只交付任務 1～3（D76）。
 |---|---|
 | 產品程式 | master `6d3f287`（PR #73 合併）；產品程式＝C2 after `d685d1e`（`git diff --stat d685d1e 6d3f287 -- . ':!docs' ':!*.md'` 為空） |
 | 驗收工具的追加 | 分支 `claude/pvp-v7-p7` 的 `ab992f5`（16-L2b 的 commit H，D84）：`build/acceptance/object_fps_pvp/combat_gui_evidence_v7.py`、`test_combat_gui_evidence_v7.py` 與 `tests/object_fps_pvp/CMakeLists.txt` 的 CTest 登記。對 `6d3f287` 的非文件差異只有這 3 檔，產品程式不變 |
-| PR 合併後的 master | P7 的 PR 合併後補上 |
+| PR 合併後的 master | `0f0bc91`（PR #74 合併，2026-10-15） |
 | 建置 | detached worktree `../GYO-Engine-v7final`（`6d3f287`）從零建置（test preset，`pvp-v7-16-l1-20261014/build.sh`）；相依套件原始碼取自主工作目錄已下載的同版本；和 `../GYO-Engine-c2-after` 正規化比對：C++ 四個執行檔與 8 個產品靜態庫的反組譯 0 差異、Gateway 只差 `vcs.revision`／`vcs.time` 與 pclntab、資產 31 檔相同 |
 | Client SHA-256 | `8b62e42ddfb3f546d9fc52d4b02f6f515a63351703dc1226ecf8f77d8fe020c9` |
 | Match SHA-256 | `ce76bfa28c96500538c9bb0fa255b7420a05ab9fd060de0a4048367c684c80eb` |

@@ -1,6 +1,6 @@
 # PvP v7 交接
 
-更新：2026-10-14。Owner：`object_fps_pvp`。**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批實作中）。
+更新：2026-10-14。Owner：`object_fps_pvp`。**狀態：v7 結束（2026-10-15，PR #74 `0f0bc91`）**；先前：**P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批實作中）。
 **範圍縮小（2026-10-14，D76）**：v7 只留第 09 批的剩餘（S4-lite、S5～S8，PR #73 合併）與縮小版的第 16 批；P3、P4 與第 15 批移到 [v7.1](../v7.1/README.md)，P5、P6 移到 [v8](../v8/README.md)。v7 交付任務 1～3。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
@@ -47,7 +47,7 @@
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D75）。S4-lite 的範圍已核准（使用者：「S4-lite 照建議，同步完開始，快速處理掉p2 ，然後結束掉v7。」）。
 - **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。下一步：縮小版的第 16 批（D76：P1、P2 範圍的整合驗收、STABLE_BASELINE v7（Windows 標未驗證）、D44 整體回歸（不含 D49 第二階段）、是否發行），開始時先提案具體清單；做完 v7 結束。分支 `claude/pvp-v7-p7`。
-- **第 16 批完成**（D85）：STABLE_BASELINE v7 升格完成（L3 部分略過）。下一步：PR #74 的 CI 通過後合併（使用者先前：「L3 完成、記錄、CI 通過後合併」），v7 結束；之後 v7.1 的規劃（ultracode，先問使用者）。
+- **v7 結束**（2026-10-15）：PR [#74](https://github.com/yojinn-io/GYO-Engine/pull/74) 合併（`0f0bc91`）；STABLE_BASELINE v7 升格完成（L3 部分略過，D85）；這次不發行（D80 U8，tag 候選 `object_fps_pvp-v1.2.0`）。下一步：v7.1 的規劃（[v7.1 README](../v7.1/README.md)；ultracode，先問使用者）。未處理：3 人 LAN 測試改期（D83，測試包 `~/gyo-lan-v7/`、`LAN_TEST.md`）；Gateway race 測試在高負載下不穩的建議任務卡片。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。
 - **m0-to-v71**（2026-10-14，D75）：M0 移到 v7.1，只在 C2 觸發時補做。M0-probe 的 xhigh 審查在開始後中止（未完成，補做 M0 時先完成審查）；`../GYO-Engine-m0` 本機 commit `5ef8a89`（分支 `m0-probe-5ef8a89`，不推送）保留，probe sha256 `8e44de9c…`；證據 `pvp-v7-09-m0-prep-20261014/probe/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
@@ -350,6 +350,7 @@
 - 2026-10-15：16-baseline 完成（1 位 medium）：`STABLE_BASELINE.md`（狀態「L3 待做」、不標缺陷版、產品 `6d3f287`＋`ab992f5` 的 3 個驗收工具檔、D44 各母體上限與不獨立的說明、已知限制 1～9、這次不發行、tag 候選 `object_fps_pvp-v1.2.0`）；README 狀態與第 16 列改白話。待補：PR 合併後的 master commit。開 P7 的 PR（使用者：「照建議，baseline 完成後開 PR」）。
 - 2026-10-15：16-L3 的第一次 session（15:17:36～15:21:07，`pvp-v7-16-l3-20261015-151542`；Match 與 Gateway 由 agent 在背景啟動，兩個產品 Client＋2 個 bot）：C1 凍結 judge（`e2a7ec9d…`）判 L3-1 不斷線（`connection failed` 0）、模擬晚醒 ≥100 ms 0；L3-2 每位玩家最長連續替代 1 Tick、停頓重設 0、重設全為 life_respawn（24 次）；trace 都有 `trace_end`、dropped 0；4 人房成立。bot 的「Gateway connection timed out」是 agent 停掉 Gateway 時 bot 的 300 秒還沒跑完，不是產品問題。待使用者補充：L3-1 的操作次數、L3-2 在哪個 Client 做、L3-4 第 6 項（重新加入）與第 10 項（`room_full`）在 Gateway 沒有紀錄、L3-3 手感與 L3-4 第 1、3、5 項的觀察。使用者觀察：重生點沒有保護，佔著重生點時新加入的人會疊在一起 → 補進 v8 候選「出生點分散、出生保護」與 STABLE_BASELINE 已知限制第 9 項。
 - 2026-10-15：D85，16-L3 結案、STABLE_BASELINE v7 升格完成；v8 候選新增「多武器與本機射擊閘」。
+- 2026-10-15：PR #74 合併（`0f0bc91`；含分析器與 CMake 登記的 `9daf1f4` L1 四平台通過，之後只改文件、CI gate 通過）。**v7 結束。** STABLE_BASELINE 的合併 commit 補上。本記錄 commit 在分支 `claude/pvp-v71-plan`，併入 v7.1 的第一個 PR（fewer PRs）。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
