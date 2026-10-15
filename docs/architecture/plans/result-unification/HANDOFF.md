@@ -190,8 +190,8 @@ MSVC 上的含逗號條件式與 abort probe 由 PR 的 L1 windows-x64 列驗證
 
 ### 依賴 collision 例外做內容驗證的未編譯檔（R1 之後這些路徑會 abort）
 
-- `apps/object_fps_pvp/src/Gameplay/Player/PlayerController.cpp:43-62`：try 包住 `CanPlaceCharacterBody`（`:46`），catch 在 `:55`、`:59`（後者是 `catch (...)`）。
-- `apps/object_fps_pvp/src/Gameplay/Enemy/EnemySystem.cpp:584-620`：try 包住 `CanPlaceCharacterBody`（`:595`）與字串 E 的 `Play`（`:608`），catch 在 `:615`、`:618`。
+- `apps/object_fps_pvp/src/Gameplay/Player/PlayerController.cpp:43-62`（之後已刪除，`957f666`）：try 包住 `CanPlaceCharacterBody`（`:46`），catch 在 `:55`、`:59`（後者是 `catch (...)`）。
+- `apps/object_fps_pvp/src/Gameplay/Enemy/EnemySystem.cpp:584-620`（之後已刪除，`957f666`）：try 包住 `CanPlaceCharacterBody`（`:595`）與字串 E 的 `Play`（`:608`），catch 在 `:615`、`:618`。
 - 會順帶吞掉例外的 catch-all：`src/Game/GameSession.cpp:366-372`、`570-574`。
 
 這些檔案從未編譯；重新啟用時，內容驗證應移到載入時進行。

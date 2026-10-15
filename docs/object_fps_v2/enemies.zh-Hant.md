@@ -1,5 +1,7 @@
 # Object_FPS v2：3D 敵人與碰撞檢視
 
+> **目前狀態（2026-10-15）**：`object_fps_v2` 在 `engine/config/projects.csv` 為停用，且已無法以目前的 engine API 編譯；重新啟用前須依 `docs/architecture/plans/` 下各計畫的 `inactive_products.md` 遷移。本文是停用前的設計與驗證紀錄。
+
 v2 使用 Superhero Male 作為近戰敵人、Superhero Female 作為遠程敵人，
 保留人物原有的身體、眉毛與眼睛貼圖，並分別配上側分短髮與髮髻。各模型以自己的 reference pose
 計算固定腳底 anchor，再等比例縮放至 1.6 公尺。近戰仍使用拳頭，

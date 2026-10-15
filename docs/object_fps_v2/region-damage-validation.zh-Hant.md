@@ -1,5 +1,7 @@
 # 2026-09-23：骨骼部位傷害資料化驗證
 
+> **目前狀態（2026-10-15）**：`object_fps_v2` 在 `engine/config/projects.csv` 為停用，且已無法以目前的 engine API 編譯；重新啟用前須依 `docs/architecture/plans/` 下各計畫的 `inactive_products.md` 遷移。本文是停用前的設計與驗證紀錄。
+
 男女敵人的 11 個受擊區均由 `damage_multiplier` 配置：頭部 2.0、軀幹／骨盆 1.0、
 四肢 0.75。結算使用槍口射線最後命中的部位，先乘倍率再扣敵人防禦，最低傷害 1。
 完整契約與 Architecture Delta 見[敵人文件](enemies.zh-Hant.md#部位傷害)。

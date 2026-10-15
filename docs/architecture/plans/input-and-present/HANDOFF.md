@@ -90,7 +90,7 @@
 
 ### 第11項：Engine 輸入層的缺口（Engine 部分）→ IP-1
 
-- 來源：[架構漂移健檢（2026-10-04）](../../../checkup/2026_10_04_architecture.zh-Hant.md)「應收進 Engine 的功能」中優先度最高的一項；使用者 2026-10-04 決定處理。
+- 來源：[架構漂移健檢（2026-10-04）](../../../checkup/architecture/2026_10_04_architecture.zh-Hant.md)「應收進 Engine 的功能」中優先度最高的一項；使用者 2026-10-04 決定處理。
 - 現況：
   - `engine/input/include/engine/input/PhysicalInputFrame.hpp:8-24` 的 `Key` 是 14 鍵的封閉清單，沒有 Tab 與數字鍵。過去 F3、H、R 都是為了產品需求直接改 Engine 的 enum 加進去的。
   - SDL 轉換在 `engine/input/backend/sdl/src/SdlInput.cpp`，不在 `engine/platform/sdl`。
@@ -102,7 +102,7 @@
     - 遊戲（提出需求的消費端）：在原生事件回呼中處理 Tab 切換指標擷取、失焦／移動／縮放／縮小時釋放指標、windowID 過濾、點擊擷取（只收視窗內的點擊），並從縮放事件更新視窗寬高。它以 `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:209-217` 的 `pendingShotEdge` 保留同一幀的點擊上升沿，這個判斷依賴它與 `windowInteraction`、`pointerAcquiredThisFrame` 的先後順序。
     - 工具 `tools/object_fps_preview/ViewmodelPreview.cpp:74-82`：直接讀 `SDL_SCANCODE_1..6` 等。preview 依賴停用的 `object_fps`（`requires_apps.game=object_fps`，選取時 `build/cmake/GyoTools.cmake:41` FATAL_ERROR），目前無法建置驗證。
   - `Key` 只在程式碼中使用，沒有資料檔以名稱引用；以加法擴充不涉及 Data Contract。
-- `NativeEventObserver`（`engine/platform/sdl/include/platform/sdl/SdlPlatform.hpp:43,56`）必須保留：
+- `NativeEventObserver`（`engine/platform/sdl/include/platform/sdl/SdlPlatform.hpp:43,56`，FF-7 前的路徑）必須保留：
   - ui_editor 的 ImGui（`tools/ui_editor/src/ImGuiSdlRendererHost.cpp:218`）需要原生事件。
   - preview（`ViewmodelPreview.cpp:74`）與未啟用產品的 `ObjectFpsRuntimeClient.cpp`、`build/acceptance/object_fps*/` 也經由它。
   - `tests/common/runtime_sdl/main.cpp:44`、`tests/common/render/sdl_gpu/MeshUpdateSmoke.cpp:239` 呼叫 `PumpEvents()` 但不帶 observer。

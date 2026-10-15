@@ -8,11 +8,11 @@ Root `tools/` contains design support. Compiler, integration and release support
 
 ```csv
 name,description,version,enabled,default,release,windows,linux,macos
-ui_editor,UI design editor,,1,1,1,1,1,1
-object_fps_preview,Object FPS local preview,,1,0,0,1,1,1
+ui_editor,GYO UI Editor,1,true,true,true,true,true,true
+object_fps_preview,Object FPS local design preview,1,false,false,false,true,true,true
 ```
 
-The description/version fields are notes. `enabled` and platform flags permit selection; `default` selects a tool in `AUTO`; `release` selects its default variant for that platform's toolchain. Release selection must be nonempty on every supported package platform (windows-x64, linux-x64, macos-arm64, macos-x64; the `macos` flag covers both macOS architectures). The CMake parser is authoritative for both local builds and CI; directory discovery and a second Python CSV parser are not selection mechanisms.
+Boolean columns accept `true`, `false`, `1` or `0`. The description/version fields are notes. `enabled` and platform flags permit selection; `default` selects a tool in `AUTO`; `release` selects its default variant for that platform's toolchain. Release selection must be nonempty on every supported package platform (windows-x64, linux-x64, macos-arm64, macos-x64; the `macos` flag covers both macOS architectures). The CMake parser is authoritative for both local builds and CI; directory discovery and a second Python CSV parser are not selection mechanisms.
 
 ```sh
 # Games only; no tool sources are required.
@@ -22,13 +22,13 @@ cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 # Local CLI-only mode.
 cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor:cli
 # A game-specific preview requires that game to be selected separately.
-# (object_fps is currently disabled; see the note below.)
+# (object_fps_preview and object_fps are currently disabled; see the note below.)
 cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=object_fps_preview
 ```
 
 An explicit list uses semicolons, for example `-DGYO_TOOLS=ui_editor;object_fps_preview` (quote the entire argument in the shell). `GYO_TOOLS=AUTO` selects enabled default tools on the current platform. `dev` and `core` default to no tools, while `test` selects `AUTO`. Use separate build trees and output roots for concurrent configurations.
 
-Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. Object_FPS preview depends on game libraries and content, so it remains local. Object_FPS is currently disabled in `projects.csv` and no longer compiles against the current engine API, so the preview cannot build until the game is migrated ([Math](architecture/plans/math-foundation/inactive_products.md), [Result](architecture/plans/result-unification/inactive_products.md)). It cannot simultaneously be a fixed game-independent release tool. UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
+Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. Object_FPS preview depends on game libraries and content, so it remains local. The preview is currently disabled in `tools.csv`, so selecting it fails with "not enabled"; Object_FPS is disabled in `projects.csv` and no longer compiles against the current engine API. Both must be re-enabled after the game is migrated ([Math](architecture/plans/math-foundation/inactive_products.md), [Result](architecture/plans/result-unification/inactive_products.md), [foundation follow-ups](architecture/plans/foundation-followups/inactive_products.md)). It cannot simultaneously be a fixed game-independent release tool. UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
 
 ## Add a tool by hand
 

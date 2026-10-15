@@ -65,7 +65,7 @@
 ## 接續處理文字
 
 > v5已於2026-10-03升格穩定基線（macOS Intel／Metal、同機），先讀 STABLE_BASELINE.md 與 HANDOFF.md。
-> 下一步是v6：2026-10-04已開始，分批與進度見 ../v6/README.md（延後項目的來源見 ../v6/HANDOFF.md）。
+> 後續：v6於2026-10-08升格（[v6穩定基線](../v6/STABLE_BASELINE.md)，延後項目的結果見[v6交接](../v6/HANDOFF.md)），v7於2026-10-15升格（[v7穩定基線](../v7/STABLE_BASELINE.md)）；現行wire是pv6。
 > Windows／Linux驗收與兩台機器的時鐘漂移實測須另行授權。
 
 ## 第02批結果

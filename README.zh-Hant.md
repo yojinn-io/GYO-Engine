@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Math、Input、Collision、Model、Text、Render 與 UI。引擎程式庫靜態連結進遊戲與設計工具；遊戲擁有自己的規則與內容，引擎不依賴特定遊戲。
+GYO 是 C++20 遊戲引擎，明確區分 Base、Runtime、Asset、Math、Time、Threads、Net、Input、Collision、Model、Text、Render 與 UI。引擎程式庫靜態連結進遊戲與設計工具；遊戲擁有自己的規則與內容，引擎不依賴特定遊戲。
 
 ## 目錄與責任
 
@@ -11,7 +11,7 @@ GYO 是 C++20 遊戲引擎，明確區分 Runtime、Asset、Math、Input、Colli
 | `apps/` | 遊戲程式碼與最小專案宣告 |
 | `assets/<game>/` | 準備完成的 runtime 內容、catalog 與 `content.json` |
 | `engine/` | 所有引擎模組、adapter、`config/projects.csv` 與 `config/tools.csv` |
-| `tools/` | 設計支援，包含 UI editor 與本機遊戲 preview |
+| `tools/` | 設計支援，包含 UI editor 與本機遊戲 preview（目前停用） |
 | `services/` | 引擎擁有的可重用 Go 服務機制（`gyo_gateway`）；遊戲自己的服務放在 `apps/<game>/` |
 | `tests/common`、`tests/<project>` | 共通引擎測試與專案專屬驗證 |
 | `build/cmake`、`build/ci` | 編譯、整合、封裝及驗收支援 |
@@ -72,4 +72,4 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 - [3D 資產與動畫限制](docs/architecture/3d-assets.md)
 - [發佈程序](docs/releasing.zh-Hant.md)
 
-`apps/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；`object_fps` 與 `object_fps_v2` 已停用，在 Math／Result 統一後須先遷移才能重新啟用。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。
+`apps/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；`object_fps` 與 `object_fps_v2` 已停用，Engine 的基礎統一（Math、Result、include 路徑、輸入層、Collision）之後須先遷移才能重新啟用，遷移清單見 `docs/architecture/plans/` 下各計畫的 `inactive_products.md`。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。

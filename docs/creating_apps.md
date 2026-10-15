@@ -38,7 +38,7 @@ gyo_app_add_executable(main MAIN OUT_TARGET app
     COMPONENTS SDL_RENDERER SDL_PLATFORM)
 ```
 
-Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
+Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::Time`, `GYO::Threads`, `GYO::Net`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
 
 A game that ships its own Go service keeps a `go.mod` in `apps/<game>/` and declares each service in the game CMake file. The game must be enabled on Linux, and `PLATFORMS` must be a subset of the game's enabled platforms; configuration fails otherwise. Normal native builds never need Go; CI checks the module and cross-builds the declared platforms. Reusable Go mechanisms belong to the engine-owned `services/gyo_gateway` module, not to a game.
 
@@ -139,8 +139,8 @@ For shader-enabled content, supply the declared compiled bundles, for example `-
 
 <a id="manual-copy"></a>
 
-1. Copy `apps/object_fps` to `apps/my_variant`.
-2. Copy `assets/object_fps` to `assets/my_variant` so content changes are independent.
+1. Copy an enabled game, currently `apps/object_fps_pvp`, to `apps/my_variant`. Disabled games (`object_fps`, `object_fps_v2`) no longer compile against the current engine API and must be migrated first (see the `inactive_products.md` lists under `docs/architecture/plans/`).
+2. Copy `assets/object_fps_pvp` to `assets/my_variant` so content changes are independent. If the game has a Go module, review the copied `go.mod` module path (`gyo.local/<game>`) and its imports.
 3. Change `display_name` in the new `project.json` if desired. Review copied component requirements and relative shader sources.
 4. Add and enable `my_variant` in `engine/config/projects.csv` for the intended platforms.
 5. Build with `-DGYO_APPS=my_variant`; the product identity and runtime asset root derive from the new directory name.

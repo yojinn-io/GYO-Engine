@@ -14,6 +14,9 @@ GYO-Engine/
     base/, io/                foundational values and filesystem/stream IO
     runtime/, asset/          frame lifecycle and CPU asset management
     math/                     value types, pure geometry and coordinate conventions
+    time/                     engine time base, deadline-or-notify waits, late-wake statistics
+    threads/                  named role threads with cooperative stop
+    net/                      GYOP datagram header codec (byte transport only)
     collision/                collision raycasts, sweeps, overlaps and contacts
     config/projects.csv       integrated game selection
     config/tools.csv          design-tool default/release/platform selection
@@ -56,9 +59,10 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | Base |
 | `GYO::Time` | the engine time base (`MonotonicClock`), the deadline-or-notify `Waiter` and `LateWakeStats` | Base; the operating system (kqueue, Win32 waitable timers, or a condition variable) |
 | `GYO::Threads` | named role threads with a cooperative stop through the role's `Waiter` and a priority hint; no pool or scheduler | Time; the operating system |
+| `GYO::Net` | the GYOP 24-byte datagram header codec and size limits; message kinds, payloads and protocol versions belong to products | Base |
 | `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
-| `GYO::Input` | physical input and action/axis evaluation | neutral input types |
+| `GYO::Input` | physical input (full keyboard scancodes, mouse, modifiers), window interaction events (focus, move, resize, minimize, restore) and action/axis evaluation | Base (private) |
 | `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS) | Engine, Math |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
@@ -92,14 +96,17 @@ never early) and late-wake statistics; `GYO::Threads` provides named role
 threads. The product host owns process lifetime, its loops and deadlines,
 cancellation and the decision to reset a match.
 
-Object_FPS_PVP uses its `MatchRuntimeHost::Run()` to call this engine mechanism
-at 60 Hz. The host processes ordered join/leave controls, consumes each player's
-latest input, updates `PvpMatch` and captures a full state every third authority
-tick. Publication is coalesced after one `Advance` call. IPC exchanges owning
+Object_FPS_PVP's `MatchRuntimeHost::Start()` runs this engine mechanism at 60 Hz
+on a named role thread (`GYO::Threads`), waiting on absolute tick deadlines with
+the engine `Waiter`. The host processes ordered join/leave controls, consumes
+each player's latest input, updates `PvpMatch` and publishes a full state every
+authority tick. Publication is coalesced after one `Advance` call. IPC exchanges owning
 values through bounded handoff; it does not invoke world updates or advance the
 simulation clock. Local tests drive the same host via `Advance` without IPC.
 
-The PvP client has an independent 60 Hz input-sampling clock. Client tick IDs
+The PvP client runs its simulation (input sampling, prediction, sending) on a
+separate fixed-step role thread (`ClientSimulationRole`); the main thread owns
+the window, view and presentation. Client tick IDs
 and authority tick IDs are **not synchronized clocks**; no direct subtraction,
 execution-time mapping or latency estimate is valid. Presentation continues to
 use `RuntimeLoop` frames. Object_FPS v1 and v2 remain on their existing variable
@@ -124,7 +131,11 @@ error returns, and transport framing/ordering mechanisms.
 It does not import product code or define Room, Match, player or FPS rules.
 The PvP Go module owns the executable, one-room policy, capacity, HTTP routes,
 Session → PlayerId mapping, runtime link lifecycle and adapter. The engine does
-not depend on this service module, Go, sockets or either wire protocol.
+not depend on this service module, Go, sockets or either wire protocol. The one
+shared transport fact is the GYOP datagram header: `GYO::Net` is its C++ codec
+and `services/gyo_gateway/framing` its Go codec, both checked against the same
+synthetic vectors (`tests/common/net/fixtures/gyop_datagram_vectors.json`);
+message kinds and protocol versions stay with the product.
 
 `match_domain` contains the product's pure movement/collision policy and owning
 world values. It does not reuse the client-oriented `PlayerController`, camera,

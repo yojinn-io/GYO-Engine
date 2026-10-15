@@ -4,11 +4,12 @@
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
 
-2026-10-06：目前 wire 為 pv6（v6 第 09 批；v6 升格前是候選），變更見 [pv6 契約](protocol-v6.zh-Hant.md)，其餘條款沿用
-[v5 契約](protocol-v5.zh-Hant.md)，批次狀態見文末 v5 一節。下列 v3 量測／長測、成本回顧
-及第 9 節 v4 記錄保留為歷史證據，不視為 v5 的驗收。Go Gateway 的建置平台宣告
-目前只有 linux-x64／windows-x64；v5 完整驗收在 macOS 同機三角色執行，範圍見
-[v5 穩定基線](plans/v5/STABLE_BASELINE.md)。
+2026-10-15：目前 wire 為 pv6（v6 第 09 批，PR #57），變更見 [pv6 契約](protocol-v6.zh-Hant.md)，其餘條款沿用
+[v5 契約](protocol-v5.zh-Hant.md)。v7 停在 pv6，pv7 在 [v7.1](plans/v7.1/README.md)。程序與執行緒結構以
+[v7 穩定基線](plans/v7/STABLE_BASELINE.md)（2026-10-15 升格）為準，第 1 節依此繪製；各版變更見文末
+「v6、v7 的聯網架構變更」。第 0 節與第 6 節的 v3 量測／長測、第 8 節成本回顧、第 9 節 v4 記錄及
+v5 一節保留為歷史證據，不視為 v6／v7 的驗收。Go Gateway 的建置平台宣告目前只有
+linux-x64／windows-x64；v7 驗收在 macOS 同機三角色執行，範圍見 v7 穩定基線。
 
 ## 0. 本次修復總結：做了什麼、證明了什麼
 
@@ -67,86 +68,120 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 
 ### 程序、執行緒與雙向資料流
 
-以下字符圖中的 Client A、B 各有自己的 worker；兩者共用同一 Gateway／Match。
-箭頭表示資料流，不表示底層程式碼依賴上層。
-v5 的輸入送出（60/s token bucket）、持續相位追蹤與連線品質移出見 [v5 契約](protocol-v5.zh-Hant.md) §1–§2。
-（補充，2026-10-14，v7 第 09a 批）：等過 token 的新命令依等待比例少扣，等待過的送出最多每秒 80 個（`InputSendDrainRate`）；見下面「Input：不可修改的單步命令窗口」與 v5 契約 §1 的 2026-10-14 追記。
+v7 穩定基線的結構（master `0f0bc91`）。Client A、B 是各自的程序，共用同一 Gateway／Match。
+箭頭表示資料流，不表示底層程式碼依賴上層。執行緒名稱是 `GYO::Threads` 的角色名稱
+（`engine/threads/include/engine/threads/RoleThread.hpp`）；固定步期限以 `GYO::Time` 的 Waiter
+等待（`engine/time/include/engine/time/Waiter.hpp`），晚醒依 `LateWakeStats` 計數。
+v5 以前的結構（主執行緒產生命令、worker 每 ≤2 ms 輪詢、IPC 以短休眠輪詢）見 git 歷史與
+[v5 計畫](plans/v5/README.md)、[v7 盤點](plans/v7/INVENTORY.md)。
 
 ```text
-Client A / Client B (each process)
-  Main / render thread
-    SDL input -> fixed-step accumulator (60 Hz) -> LocalPlayerPrediction
-                          |                           |
-                          | immutable command window | predicted pose
-                          v                           v
-    ClientConnection worker (60/s token bucket)     local camera
-      HTTP lifecycle + Hello keepalive                ^
-      resend full unacked window <= 12                | reconcile latest ACK
-      waited sends charged less, <= 80/s (v7 09a)     |
-      received snapshot history <= 64 ----------------+
-                          |                           |
-                          |                           +-> SnapshotTimeline
-                          |                               remote render pose
-                          v
+Client A / Client B (each process; v7 batch 04: three roles)
+  Main thread (SDL events + render; PvpApplication)
+    keys / mouse -> PublishIntent(latest intent: axes, absolute yaw/pitch,
+                    jump presses, owner)          -- never waits for the role
+    PresentAt(now) <- local pose + FireGateTiming (copy published by the role)
+    Drain() -> HUD, action results, SnapshotTimeline -> remote pose
+    click -> LocalFireGate -> SubmitAction / SubmitShot -> wakes worker
+         |                                  ^
+         | intent mailbox (latest wins)     | presentation copy
+         v                                  |
+  gyo-client-sim (ClientSimulationRole, library client_simulation)
+    WaitUntil(next fixed-step deadline, 60 Hz)
+    DrainSimulation() -> per-snapshot phase samples + reconcile newest
+    ClientSimulationLoop -> ClientSimulation -> LocalPlayerPrediction
+    changed window -> SendInput(window, generation) -> wakes worker
+         |
+         v
+  gyo-client-net (ClientConnection worker; asio io_context, v7 batch 08)
+    woken by: socket readable, SendInput / SubmitAction / ACK post,
+              one timer at the earliest deadline (last 2 ms on the Waiter)
+    HTTP lifecycle (may block) + Hello keepalive + lobby poll
+    input: 60/s token bucket, burst 2; waited sends charged less, <= 80/s (09a)
+    actions + ACK: 30 Hz (ActionSendRate)
+    snapshot history <= 64 -> Drain() (main) / DrainSimulation() (sim role)
+         |
+         v
   HTTP control / UDP Client Protocol pv6
-                          |
-                          v
-  Product Go Gateway
-    Room / Session -> PlayerId; version / schema adapter
-    input windows downstream; latest snapshot upstream to each peer
-                          |
-                          v
+         |
+         v
+  Product Go Gateway (goroutines; apps/object_fps_pvp/gateway)
+    receiveUDP: Session -> PlayerId, adapter, admission + ingress counts
+    runtime link writer: woken by input / control / action (wake chan)
+      + strict 30 Hz action timer; written-dedup; reject lane (08c)
+    runtime link reader: JoinResult / Snapshot / ActionResults / Evicted
+    sendUDP: latest snapshot per peer; results on wake or at
+      last send + 1/30 s (08b event-driven; 06 raised 15 -> 30 Hz)
+    expire, logStatistics (ingress / drop counts), HTTP serve
+         |
+         v
   loopback TCP / Runtime Protocol pv6
-                          |
-                          v
-  C++ IPC Host I/O <---- bounded owning handoff ----> MatchRuntimeHost
-    frame read/write                                  authority clock 60 Hz
-    socket waits stay here                            PvpMatch::Tick
-                          ^                           command cursor / epoch
-                          |                           StepMovement
-                          +---- full Snapshot <-------+
-
-  Return path: Match -> IPC -> Gateway -> Client worker
-               -> atomic Drain(state, generation, history)
-               -> local reconciliation + remote timeline -> Presented
+         |
+         v
+  Match process (v7 batch 07)
+    gyo-match-ipc (IpcHost; asio io_context)
+      accept / read / write; action lanes + laneTimer (30 Hz, 08b)
+      SubmitInput / SubmitActionBatch / QueueJoin -> bounded handoff
+      Pump on publish listener -> latest-wins Snapshot, results, control
+         ^ publish listener (post only)         | owning values
+         |                                      v
+    gyo-match-sim (MatchRuntimeHost::Body)
+      Advance(elapsed) -> FixedTickRuntime -> PvpMatch::Tick (60 Hz)
+      WaitUntil(absolute next-tick deadline); RequestReset notifies
 ```
+
+回程：`gyo-match-sim` 發布 Snapshot／結果 → 發布通知只 post 一次 Pump → `gyo-match-ipc` 寫出 →
+Gateway reader → `sendUDP` → `gyo-client-net` 收進歷史 → 模擬角色以 `DrainSimulation()` 校正與追蹤相位，
+主執行緒以 `Drain()` 取 HUD、動作結果與遠端時間線 → Presented。三個 Client 角色都不等待彼此：
+畫面或事件卡住時，模擬角色照固定步期限產生命令（v7 任務 1、2）。
 
 ### Ownership 與程式碼依賴
 
 ```text
-Client（SDL 輸入 / Lobby / GYO Render）
+Client 程序（產品 CMake 庫，apps/object_fps_pvp/CMakeLists.txt）
+    app_support：PvpApplication（SDL 輸入 / Lobby / GYO Render）、LocalFireGate、呈現
+        │ PublishIntent / PresentAt
+        ▼
+    client_simulation：ClientSimulationRole → ClientSimulationLoop → ClientSimulation
+        │ SendInput / DrainSimulation          （GYO::Time、GYO::Threads）
+        ▼
+    client_network：ClientConnection（asio、httplib、client_v6 Protobuf）
     │ HTTP JSON 控制 / UDP Client Protocol pv6
     ▼
 Object_FPS_PVP Go 組合層
     ├─ Room、容量、加入資格、Session → PlayerId
     ├─ ObjectFPS Adapter：schema / version / 欄位轉換
+    ├─ runtime link：合併、已寫出去重、拒絕線、ingress／丟棄計數
     └─ 使用 services/gyo_gateway 的 HTTP / Session / framing
     │ Runtime Protocol pv6 / loopback TCP
     ▼
-C++ IPC Host：讀寫、framing、Protobuf 轉換
-    │ 有界控制佇列 / per-player command window / owning Snapshot
-    ▼
-MatchRuntimeHost：程序生命週期、clock、Wait、停止與 reset
-    ├─ GYO FixedTickRuntime.Advance(elapsed)
-    └─ PvpMatch.Tick(TickContext)
-           ├─ 純 Movement / Collision 規則
-           └─ GYO Collision 幾何查詢
+Match 程序
+    ipc：IpcHost（asio、runtime_v6 Protobuf）：讀寫、framing、action lane
+        │ 有界控制佇列 / per-player command window / owning Snapshot / 發布通知
+        ▼
+    runtime_host：MatchRuntimeHost：模擬角色、絕對期限、停止與 reset（GYO::Threads）
+        ├─ GYO FixedTickRuntime.Advance(elapsed)
+        └─ match_domain：PvpMatch.Tick(TickContext)
+               ├─ 純 Movement / Collision 規則
+               └─ GYO Collision 幾何查詢
 ```
 
-Engine 決定時間如何切成 Tick；Host 決定程序如何存活；Match 決定世界如何變化；
-IPC 只交換資料。Go 不計算移動結果、碰撞、合法出生或其他遊戲規則。
+Engine 決定時間如何切成 Tick 與如何等到期限；Host 與兩個 Client 角色決定執行緒如何存活；
+Match 決定世界如何變化；IPC 與 worker 只交換資料。Go 不計算移動結果、碰撞、合法出生或其他遊戲規則。
+`match_domain` 以外的庫都依賴它，`client_simulation` 依賴 `client_network`，反方向沒有依賴；
+Match 執行檔只連 `ipc`，不連 SDL。
 
 ```text
   object_fps_pvp owner
-    Client prediction ----+
-                          +--> StepMovement(Arena, State, Command)
-    Match authority ------+       pure product movement / collision policy
-                                  |
-                                  v
-                            reusable Engine geometry / fixed-tick / rendering
+    Client prediction (gyo-client-sim) --+
+                                         +--> StepMovement(Arena, State, Command)
+    Match authority (gyo-match-sim) -----+    pure product movement / collision policy
+                                              |
+                                              v
+                      reusable Engine geometry / fixed-tick / time / threads / rendering
 
     Product Gateway adapter ----> services/gyo_gateway transport / Session tools
-    Product probes -------------> product libraries + read-only observations
+    Product probes -------------> product libraries (client_simulation) + read-only observations
 
   Forbidden reverse edges: Engine -> PvP; public Gateway -> PvP rules
 ```
@@ -175,9 +210,11 @@ Room 是產品語意，路由與容量留在 `apps/object_fps_pvp/gateway`。產
 `FixedTickAdvance{steps, droppedSeconds, secondsUntilNextTick}`。
 
 Tick ID 從 1 開始，只計算真正執行的步進。超額整步積欠被捨棄，保留小於一步的
-餘量。Engine 核心沒有 `Run()`、clock、sleep 或 thread。
-`MatchRuntimeHost::Run()` 使用 `steady_clock` 讀 elapsed，呼叫 `Advance`，再等待
-下一步或停止／重置。離線測試直接呼叫同一 Host 的 `Advance`。
+餘量。`FixedTickRuntime` 本身沒有 `Run()`、clock、sleep 或 thread；等待與角色執行緒由
+`GYO::Time`、`GYO::Threads` 另外提供（v7 TT-1）。
+Match 的模擬角色 `gyo-match-sim`（`MatchRuntimeHost::Body`）使用 `steady_clock` 讀 elapsed，呼叫
+`Advance`，再以 Waiter 等到下一個 Tick 格點的絕對期限（Advance 的耗時不延後它），停止或
+`RequestReset` 會提前喚醒（v7 第 07 批）。離線測試直接呼叫同一 Host 的 `Advance`。
 
 | 名稱 | 意義 | 不可作為 |
 |---|---|---|
@@ -221,14 +258,16 @@ object_fps_v2 的 variable-frame gameplay 不受影響；本次只改 PvP。
 
 Client 60 Hz 產生命令，每個序號固定代表 1/60 秒，欄位只有移動軸與絕對 yaw／pitch。
 滑鼠 delta 每個 presentation frame 只消費一次，不在 catch-up 重複消費。
-Network worker 以每秒 60 個、容量 2 的 token bucket 送出完整未確認窗口：含從未送出命令的窗口在下一次輪詢
-（≤2 ms）有 token 即送，沒有新命令的窗口在 60 Hz 期限（上次送出＋1/60 秒）重送並保留一個 token 給下一個新命令
+Network worker 以每秒 60 個、容量 2 的 token bucket 送出完整未確認窗口：含從未送出命令的窗口有 token 即送
+（v7 第 08 批起由 `SendInput` 喚醒 worker，沒有 token 時以計時器等到 token 出現；v5／v6 是下一次 ≤2 ms 的輪詢），
+沒有新命令的窗口在 60 Hz 期限（上次送出＋1/60 秒）重送並保留一個 token 給下一個新命令
 （2026-10-02，見 [v5 fix/03](plans/v5/fix/03-a1-missed-frame-starvation.md)）；
 新 epoch 的 ACK=0 階段，首次窗口等第一個合法固定步形成後才發布，包含原來的
 兩個中立命令及已產生的當前命令，避免僅有 neutral 的窗口提前耗掉 headroom。
 這項 bootstrap 補充已由使用者批准；沒有額外產生步數或增加中立命令。
 每批最多 12 個，含 24-byte header 的完整 UDP 不超過 1,200 bytes。延遲 deadline
-不補送過期批次，worker 不產生命令，主執行緒正常 30 FPS 每幀可產生兩步。
+不補送過期批次，worker 不產生命令。v7 第 04 批起由模擬角色在固定步期限產生命令，
+不再跟著畫面幀（v5／v6 是主執行緒正常 30 FPS 每幀產生兩步）。
 （補充，2026-10-14，v7 第 09a 批）：新命令等過 token 時，依等待時間比例少扣（最多少扣 0.25 個；
 等待只算到 token 出現為止；送出後不超過 1 個），60 Hz 產生下 4 個命令內還清，任何 1 秒最多 82 個
 輸入封包（`Movement.hpp` 的 `InputSendDrainRate`＝80、`InputSendBurst`；`ClientConnection.cpp` 的送出區塊）。
@@ -304,8 +343,10 @@ sum=0、曾替代、整個 future map 空，避免把 queue=0 但全為 Actual �
 
 產品內 `StepMovement` 讓 Client／Match 共用方向正規化、速度、視角限制及靜態牆壁碰撞。
 `LocalPlayerPrediction` 負責本機 60 Hz 模擬及重播，遠端玩家使用一 Tick（16.67 ms）延遲插值。
-Application 在實際呼叫 Advance 前取樣 steady_clock 間隔，避免幀內停頓被下一個
-FrameContext delta 重複計入；domain 本身仍不讀時鐘。
+`ClientSimulation` 在實際呼叫 Advance 前取樣 steady_clock 間隔（v7 起在模擬角色上；v5／v6 在
+Application 的幀內），避免停頓被下一次間隔重複計入；domain 本身仍不讀時鐘。主執行緒以
+`PresentAt(now)` 把模擬角色發布的呈現狀態放到畫面時刻；意圖超過過期門檻（D30，
+`ClientSimulationRole.hpp`）時移動改為中立、保留視角。
 Snapshot 到達時還原自己的權威狀態，移除已完成命令並依序重播剩餘命令；鏡頭使用
 相鄰預測狀態的逐幀插值，不直接讀權威快照位置。小校正的顯示偏移在 100 ms 內消除，
 誤差達 1 世界單位則直接重新定位。完整 ACK 也保留相鄰命令的插值配對，
@@ -323,8 +364,9 @@ frame gap 超過 50 ms 時亦最多計入一步，保留既有餘數，避免重
 窗口達 12 時凍結位置預測，持續視角與重送。失焦產生中立新命令；既有命令不可改。
 加入、離開、斷線及身分變更清除預測、歷史與校正。
 
-worker 保存最多 64 份實際接收時間戳快照，`Drain()` 原子取得狀態、連線 generation
-及接收歷史。本機只校正最新狀態；遠端 `SnapshotTimeline` 使用相對 Authority Tick、
+worker 保存最多 64 份實際接收時間戳快照，`Drain()`（主執行緒）原子取得狀態、連線 generation
+及接收歷史；模擬角色另以 `DrainSimulation()` 取得自己的副本，每份 snapshot 都交相位追蹤樣本（v7 第 03 批）。
+本機只校正最新狀態；遠端 `SnapshotTimeline` 使用相對 Authority Tick、
 固定 60 Hz 斜率、最近 64 樣本的 `min(receiveTime − q/60)` 作時間原點。
 顯示游標落後一 Tick、單調且限制於歷史；位置線性插值、yaw 最短角度插值，缺未來
 資料保持最新姿態、不外推。玩家 epoch 切換只分割其呈現區段，不跨世代插值。
@@ -691,15 +733,23 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 
 | 責任 | 主要入口 |
 |---|---|
-| 時序常數與命令／玩家型別 | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp` |
+| 時序常數與命令／玩家型別（含 `InputSendRate`、`InputSendDrainRate`、相位追蹤常數） | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp` |
 | 共用純移動 | `apps/object_fps_pvp/src/Pvp/Movement.cpp` |
-| ACK、重播、窗口與本機顯示校正 | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp` |
+| ACK、重播、窗口、相位追蹤與本機顯示校正 | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp` |
+| 命令產生路徑（產品與無頭 probe 共用）：elapsed 取樣、每份 snapshot 的樣本 | `apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp` |
+| Client 模擬角色：固定步期限、意圖信箱與過期（D30）、呈現副本 | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp`、`include/RetroFPS/Pvp/ClientSimulationRole.hpp` |
+| 本機射擊閘（FireGate 常數） | `apps/object_fps_pvp/src/Pvp/FireGate.cpp`、`include/RetroFPS/Pvp/FireGate.hpp` |
 | 玩家游標、替代輸入、epoch | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp` |
-| 權威排程與 owning 交接 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp`、`IpcHost.cpp` |
-| 網路 worker、保活、原子 Drain | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp` |
+| Match 模擬角色、絕對 Tick 期限、owning 交接、ingress 統計 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp` |
+| Match IPC（asio）：讀寫、latest-wins Snapshot、action lane | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp` |
+| Client 網路 worker（asio）：token bucket、喚醒、保活、Drain／DrainSimulation | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp` |
+| 網路路徑的 10 秒統計 | `apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp` |
 | 遠端接收時間線 | `apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp` |
-| 幀內採樣、呈現與唯讀觀測整合 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp` |
-| Room／Session、轉接與背壓 | `apps/object_fps_pvp/gateway/server.go`、`runtime_link.go`、`adapter/adapter.go` |
+| 意圖發布、呈現與唯讀觀測整合 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp` |
+| Room／Session、Snapshot 與結果的轉送（`sendUDP`）、背壓 | `apps/object_fps_pvp/gateway/server.go`、`action_delivery.go`、`adapter/adapter.go` |
+| runtime link：合併、已寫出去重、拒絕線、動作節拍 | `apps/object_fps_pvp/gateway/runtime_link.go`、`action_delivery.go` |
+| Gateway ingress 與丟棄計數；送出間隔統計 | `apps/object_fps_pvp/gateway/ingress_statistics.go`；`send_statistics.go` |
+| 時間基準、Waiter、角色執行緒（Engine，不屬本產品） | `engine/time/include/engine/time/Waiter.hpp`、`engine/threads/include/engine/threads/RoleThread.hpp` |
 | 線上資料契約 | `apps/object_fps_pvp/protocol/client_v6.proto`、`runtime_v6.proto`（規則見 [pv6 契約](protocol-v6.zh-Hant.md) 與它沿用的 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 
@@ -713,6 +763,8 @@ Owner 仍為 `object_fps_pvp`，沒有新 Top-level Directory、產品間依賴�
 公共 Gateway 與獨立 clone fixture 仍成立。其他兩個大型 GUI 產品完成無 PvP 的
 configure，未完整重建執行；完整範圍見 dev_log。未來若第二個產品出現相同責任，
 應先比較實際共同契約，再決定可重用機制；lead、復原門檻及插值策略仍是產品政策。
+以上是 v3 的記錄。v7 的產品移除檢查（2026-10-14）刪除 329 檔＋`projects.csv` 1 列，共通層修改 0，
+見 [v7 穩定基線](plans/v7/STABLE_BASELINE.md)「L1 與產品移除」。
 
 ### 驗證順序與開發成本教訓
 
@@ -1093,3 +1145,38 @@ Client窗口滿仍更新允許的視角／網路，丟棄未分配跳躍沿。�
 Renderer，公共Gateway及Engine無FPS分支。第04批才處理完整骨骼動作與素材重定時。
 三角色版本、短驗證結果與原始證據入口見
 [第03批dev_log](../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)及[v5交接](plans/v5/HANDOFF.md)。
+
+## v6、v7 的聯網架構變更
+
+版本號：vN＝遊戲版本，pvN＝網路協議版本。只列與聯網架構有關的批次；完整進度見各版計畫。
+
+### v6（2026-10-08 升格，pv6）
+
+- 第 09 批（PR #57）：**唯一的 wire 變更**，Client／Runtime 協議升為 pv6（受擊欄位含攻擊者 id、arena 內容 digest），
+  見 [pv6 契約](protocol-v6.zh-Hant.md)。
+- 第 12 批（PR #60）：Client 的本機射擊閘 `LocalFireGate`，估計最早可裁決的 Tick，避免送出權威會拒絕的射擊。
+- 第 16 批（PR #63）：房間上限 2→4 人，維持 pv6。第 17 批（PR #65）：Client 依 Match 選地圖、三個角色的日誌。
+- 程序與執行緒結構沿用 v5：主執行緒產生命令、worker 與 IPC 以短休眠輪詢。
+- 入口：[v6 計畫](plans/v6/README.md)、[v6 穩定基線](plans/v6/STABLE_BASELINE.md)（2026-10-14 標為缺陷版：
+  Gateway 悄悄丟掉已解析的命令，修正在 v7 第 08c 批）。
+
+### v7（2026-10-15 升格，仍是 pv6）
+
+主題是「30 FPS 與網路時序」，交付任務 1～3（D76），不改 wire（D73）。
+
+- 第 02 批（PR #70）：產品庫 `client_simulation`，產品與無頭 probe 改走同一條命令產生路徑（行為不變）。
+- 第 03、04 批與 TT-1（PR #71）：每份 snapshot 都進相位追蹤；Client 分成主執行緒、`gyo-client-sim`、
+  `gyo-client-net` 三個角色，命令在固定步期限產生；Engine 新增 `GYO::Time`（Waiter、晚醒統計）與 `GYO::Threads`。
+- PR #73（P2）：
+  - P2-log：網路路徑的 10 秒統計。
+  - 第 06 批：Gateway→Client 的結果通道約 15 Hz→30 Hz。
+  - 第 07 批：Match Tick 改為絕對期限的 Waiter＋發布通知，`IpcHost` 改用 asio（`gyo-match-ipc`）。
+  - 第 08 批：`ClientConnection` 改用 asio，`SendInput`／`SubmitAction` 喚醒 worker。
+  - 第 08b 批：Match 的 action lane 與 Gateway 的結果改為事件驅動：距上次送出 ≥1/30 秒立即送，否則設計時器。
+  - 第 08c 批：Gateway 不再丟掉已解析的命令（Match 是唯一的判斷者）、拒絕線、依原因計數的丟棄（死信原則 D57）。
+  - 第 09a 批：停頓後送輸入不再被卡住（`InputSendDrainRate`）。第 09b 批：延遲消失時撤回多修的相位修正。
+  - 第 09 批：FireGate 兩個常數維持 v6 的值（2 ms、7 Tick）並在測試釘住（縮小版凍結，D75）。
+- 第 16 批（PR #74）：整合驗收與升格。
+- 移到 v7.1：pv7（runtime link 心跳對時、`GatewayDropReport`）、日誌 Data Contract、產品去 SDL、Windows LAN 場次。
+- 入口：[v7 計畫](plans/v7/README.md)、[v7 交接](plans/v7/HANDOFF.md)、[v7 穩定基線](plans/v7/STABLE_BASELINE.md)、
+  [v7.1](plans/v7.1/README.md)。

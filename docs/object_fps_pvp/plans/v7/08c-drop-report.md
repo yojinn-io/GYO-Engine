@@ -1,6 +1,6 @@
 # 第 08c 批：Gateway 丟棄回報（讓 Match 知道丟了什麼、為什麼丟）
 
-狀態：**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、D56 修正批、L2 準備（L2P-analyzer、L2P-injector、L2P-trees）完成；L2 通過（2026-10-11，D61 的宣告；114／114 次，J1～J7 全部成立））。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
+狀態：**完成**，隨 P2 的 PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 合併（`6d3f287`，2026-10-14）。（先前：）**實作中**（2026-10-10 分批與檔位核准，D54；F0、F1a、F1b-1、F1b-2、F2a、F2b-1、F2b-2、F3、L1、D56 修正批、L2 準備（L2P-analyzer、L2P-injector、L2P-trees）完成；L2 通過（2026-10-11，D61 的宣告；114／114 次，J1～J7 全部成立））。PR 線 P2（PR #73）。排在 09a、09b 的重做、M0 與 FireGate 常數凍結、C2 之前（D51 ⑤）。
 依據的決定：D49（Gateway＝PEP、Match＝PDP）、D51（問題的重新定義；⑨ 定性為整合缺陷；⑩ 每一種丟棄都要讓 Match 知道）、D52（第 1 批之後的三個決定）、D53（照建議的組合）。
 起因：[2026-10-10 事故](Incident/2026-10-10-gateway-silent-drop.md)。
 檔位：規劃 ultracode，分三批、每批停下回報（使用者 2026-10-10）：第 1 批事實核對 3 位（high）；第 2 批方案 3 位＋評審 1 位（high），另評估第 6 項的去重 1 位（high）；第 3 批對抗式檢查 1 位（xhigh）。實作 high，局部 xhigh（見「分批」）。

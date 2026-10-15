@@ -1,13 +1,13 @@
 # 基礎後續整理：分批計畫與進度
 
-更新：2026-10-05。Owner：Engine（collision、render、ui、base、asset、input、共通測試、建置登錄、`tools/ui_editor` 的對應部分）。
+更新：2026-10-07。Owner：Engine（collision、render、ui、base、asset、input、共通測試、建置登錄、`tools/ui_editor` 的對應部分）。
 **FF-1～FF-6、FF-8 完成並合併**（2026-10-05，PR #43～#49）；FF-7 完成並合併（2026-10-05，PR #52）；FF-9 完成並合併（2026-10-07，與消費端同一個 PR #58，`7226ca0`）。
 
 本計畫承接三類 Engine 層的後續事項：
 
 - [Math 基礎統一](../math-foundation/README.md)（PR #17～#28，含後續 #28）各批「範圍外，只回報」的項目中，屬於 Engine、工具、共通測試與建置登錄的部分。
 - 測試與驗收器跨平台稽核中，屬於共通測試的部分（依賴主機計時精度或檔案系統精度的判定）。
-- [架構漂移健檢（2026-10-04）](../../../checkup/2026_10_04_architecture.zh-Hant.md)的兩個候選：GYOP 傳輸標頭的 C++ 編解碼（Engine 只有 Go 版）、Collision 合法性檢查公開（Engine 只在內部 assert，消費端各自重寫且規則已不一致）。
+- [架構漂移健檢（2026-10-04）](../../../checkup/architecture/2026_10_04_architecture.zh-Hant.md)的兩個候選：GYOP 傳輸標頭的 C++ 編解碼（Engine 只有 Go 版）、Collision 合法性檢查公開（Engine 只在內部 assert，消費端各自重寫且規則已不一致）。
 
 本夾是上述項目的**正式來源**。提出需求的消費端只保留自己的產品項目，並以連結指向本夾。本夾文件依 D12 完全匿名：一律寫「提出需求的消費端」，不寫產品名，也不連結消費端的文件；程式檔案路徑與證據路徑作為資料保留。
 同時進行的姊妹計畫是 [輸入與呈現](../input-and-present/README.md)（IP-1、IP-2），兩者的依賴與建議合併順序見下。
@@ -46,15 +46,15 @@
 
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
-| FF-1 Collision 判定語料 | high | 完成，PR [#46](https://github.com/yojinn-io/GYO-Engine/pull/46) 已合併（`0dc3697`）） | `tests/common/collision` 合成語料，涵蓋全部公開查詢；可比對紀錄；膠囊 float／double 公開多載的命中翻轉與 ULP 統計。不改 Collision |
-| FF-2 共通測試的計時假設 | high（MeshUpdateSmoke）／medium（其餘） | 完成，PR [#43](https://github.com/yojinn-io/GYO-Engine/pull/43) 已合併（`3520dd2`）） | MeshUpdateSmoke、package checks、AssetWatcher 改為結構條件；`test_gpu_smoke` 寫進遷移清單 |
-| FF-3 FNV-1a 收為一份 | high | 完成，PR [#44](https://github.com/yojinn-io/GYO-Engine/pull/44) 已合併（`006b3d2`）） | `GYO::Base` 公開 header；三份實作改用它；新增依賴邊 `gyo_input→GYO::Base` |
+| FF-1 Collision 判定語料 | high | 完成，PR [#46](https://github.com/yojinn-io/GYO-Engine/pull/46) 已合併（`0dc3697`） | `tests/common/collision` 合成語料，涵蓋全部公開查詢；可比對紀錄；膠囊 float／double 公開多載的命中翻轉與 ULP 統計。不改 Collision |
+| FF-2 共通測試的計時假設 | high（MeshUpdateSmoke）／medium（其餘） | 完成，PR [#43](https://github.com/yojinn-io/GYO-Engine/pull/43) 已合併（`3520dd2`） | MeshUpdateSmoke、package checks、AssetWatcher 改為結構條件；`test_gpu_smoke` 寫進遷移清單 |
+| FF-3 FNV-1a 收為一份 | high | 完成，PR [#44](https://github.com/yojinn-io/GYO-Engine/pull/44) 已合併（`006b3d2`） | `GYO::Base` 公開 header；三份實作改用它；新增依賴邊 `gyo_input→GYO::Base` |
 | FF-4 有限性檢查收斂 | high | 完成，PR [#47](https://github.com/yojinn-io/GYO-Engine/pull/47) 已合併（`70aa2c9`；原建議在 IP-2 之後合併，使用者指示依序先合併） | render 內 4 份 Color 有限性檢查收斂為一份；`UiValidation` 那份留在 Ui；兩個 Color 型別保留，兩者都記錄理由 |
-| FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證 | high（契約部分 medium） | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`）） | ui_editor 改用 Engine Ui 的 letterbox、viewport 判定、文字對齊；`UiRuntime` 走訪合併；`item_step` 驗證與契約文件 |
-| FF-6 共通層衛生與產品登錄 | medium | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`）） | characterization helper 收進 tests/common；共通層去除產品名；preview 停用並寫進遷移清單 |
+| FF-5 Ui 與 ui_editor 的重複、`item_step` 驗證 | high（契約部分 medium） | 完成，PR [#49](https://github.com/yojinn-io/GYO-Engine/pull/49) 已合併（`d66a442`） | ui_editor 改用 Engine Ui 的 letterbox、viewport 判定、文字對齊；`UiRuntime` 走訪合併；`item_step` 驗證與契約文件 |
+| FF-6 共通層衛生與產品登錄 | medium | 完成，PR [#48](https://github.com/yojinn-io/GYO-Engine/pull/48) 已合併（`c6eed3d`） | characterization helper 收進 tests/common；共通層去除產品名；preview 停用並寫進遷移清單 |
 | FF-7 include 路徑風格徹底統一 | high（大範圍掃描建議 ultracode） | 完成，PR [#52](https://github.com/yojinn-io/GYO-Engine/pull/52) 已合併（`ef12037`；未用 ultracode，見 HANDOFF） | 全部公開 include 根目錄統一、所有消費端一次改完、無別名 |
 | FF-8 GYOP 標頭 C++ 編解碼 | high（解碼拒絕條件局部 xhigh） | 完成，PR [#45](https://github.com/yojinn-io/GYO-Engine/pull/45) 已合併（`745590b`）（未升 xhigh，見 HANDOFF） | 新增最小 Engine 子系統（單一 target）；1200 bytes 為 Engine 傳輸契約；@22 命名 `Channel`；與 Go framing 共用合成 golden 向量；位元組不變 |
-| FF-9 Collision 統一與公開合法性檢查 | high（ultracode 開始時徵求同意；容差選擇、`IsValid`、差異歸因局部 xhigh） | 完成，PR #58 已合併（`7226ca0`） | D3 ①–④；事前宣告與事後兩樹比對；與消費端權威批同一 PR |
+| FF-9 Collision 統一與公開合法性檢查 | high（ultracode 開始時徵求同意；容差選擇、`IsValid`、差異歸因局部 xhigh） | 完成，PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58) 已合併（`7226ca0`） | D3 ①–④；事前宣告與事後兩樹比對；與消費端權威批同一 PR |
 
 ## 依賴圖
 

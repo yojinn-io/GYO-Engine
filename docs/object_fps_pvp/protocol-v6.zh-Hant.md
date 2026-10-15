@@ -2,9 +2,9 @@
 
 更新：2026-10-14：輸入送出與相位追蹤的修訂註記（v7 第 09a／09b 批，D68）。2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
-**wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值；合併前，現行程式仍是 [v5](protocol-v5.zh-Hant.md)。
+**wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併（PR #57，`5da939f`）起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值。現行 wire 是 pv6（v7 也停在 pv6，pv7 在 v7.1）。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
-§4、§6 中屬於第 10～13 批的項目標「待定，由第 NN 批決定」，在各批開始時補上。
+§4、§6 中屬於第 10～13 批的項目原標「待定，由第 NN 批決定」，已依各批的結果補上。
 v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見 [STABLE_BASELINE](plans/v6/STABLE_BASELINE.md)。v5 契約中沒有在此改寫的條款，v6 原樣沿用；v5 的文件與證據保留，不被覆寫。進度見 [v6 計畫](plans/v6/README.md)。
 
 ## 1. 範圍、時間與預設
@@ -182,7 +182,7 @@ f32 jump_height gravity
     - arena 的合法性與契約不變：牆改用 Engine 的 `IsValid` 加上產品的「非空」規則；身體改用 `IsValid(VerticalCapsule)`，`body_height == 2·radius` 維持合法。
   - arena digest 只涵蓋解析後的內容值，Collision 實作與 `Validate` 合法性規則的改變（第 10 批）不影響它，也不是 wire 變更；新增或改變 `Arena` 的成員（含型別與順序），或改變正規化／演算法，屬 §1 的 wire 變更。
 - 本機冷卻閘（Client 自己的閘門）：以相位追蹤估計的權威 Tick 補償約 2 Tick 的落差，Tick 閘與牆鐘閘保持一致；乾淨跑次的權威冷卻拒絕必須為 0（D11⑤）。
-  - 補償公式與安全邊際：待定，由第 12 批決定。
+  - 補償公式與安全邊際（第 12 批，[批次文件](plans/v6/12-local-fire-gate.md)）：兩道閘合成單一判斷式（`FireGate.hpp`）。最早判定 Tick 由 Snapshot Tick 加上未解析的命令數，再依相位追蹤提前 2 Tick；保護 2 ms（＝相位追蹤的死區）；尚未判定的射擊以「最早＋7 Tick＋10」為最晚可能值（7 Tick 來自兩段 30 Hz 節拍、Gateway 喚醒、保護與 Tick 邊界）。相位尚未決定時退回 Snapshot Tick 閘。點擊不排隊；權威的 10 Tick 冷卻與 wire 不變。v7 第 09 批維持這兩個值（2 ms、7 Tick）。
 
 ## 5. 死亡／重生與 Tick 順序
 
@@ -207,14 +207,14 @@ Authority Tick
 
 - 沿用 v5 §6：呈現是同區間、同生命權威資料的純函數，不重播、不補播。
 - 遠端上半身依時間線內插後的 pitch，在 Pistol_Aim_Up／Neutral／Down 之間混合，作為持槍基底，再疊上射擊與換彈（第 11 批）。
-  - 映射範圍、射擊與換彈時是否保留俯仰：待定，第 11 批開始時提案、使用者確認（D11⑥）。
+  - 映射範圍與動作時的俯仰（第 11 批，D11⑥ 使用者確認，[批次文件](plans/v6/11-remote-pitch-aim.md)）：上下限用 Aim 姿勢實測的槍口角度（`presentation.json` 的 `aim`），範圍內線性、超過夾限，正 `pitch` 朝下；射擊、換彈與待命都以 clip 相對第一幀的變化量疊在俯仰姿勢上，所以保留俯仰；死亡時忽略俯仰。
 - 受擊反應（第 13 批）：
   - 權威依據只有 §2 的受擊欄位：以（player_id、life_generation）為鍵，`damage_count` 相對同一生命上一次觀察值的增加就是新的受擊（增加量＝次數；新生命的基準為 0，所以重生 Tick 的命中或合併、遺失的 Snapshot 也不會漏掉），時點取 `last_damage_tick`，攻擊者取 `last_attacker_id`。不由 HP 下降推導；攻擊者可能不在同一份 Snapshot，呈現必須容許。
   - 遠端使用 Hit_Chest；Hit_Head 沒有權威依據，不使用。
   - 第一人稱有閃紅與 HUD，並依攻擊者位置顯示受擊方向。
   - 晃動只作呈現，不改變送出的 yaw／pitch 或射線。
-  - 優先順序：死亡＞受擊＞射擊／換彈＞俯仰基底。細節待定，第 13 批開始時提案；需要 §2 以外的 wire 資料時，依 §1 的候選期規則處理。
-- 死亡後的第一人稱武器（第 6 項，第 05 批）：自己死亡時不得呈現第一人稱持槍手臂。
+  - 優先順序：死亡＞受擊＞射擊／換彈＞俯仰基底（第 13 批，D11⑥ 使用者確認，[批次文件](plans/v6/13-hit-reaction.md)）。遠端的 Hit_Chest 以第 11 批的方式疊在俯仰姿勢上；第一人稱閃紅（峰值 0.35、0.3 秒）、HP 文字變紅 0.6 秒、方向弧線 1 秒淡出；鏡頭晃動（俯仰、翻滾各 1°、0.25 秒）只進渲染相機。只讀 §2 的欄位，沒有新增 wire 資料。
+- 死亡後的第一人稱武器（第 6 項）：自己死亡時不得呈現第一人稱持槍手臂。第 04 批未重現，[第 05 批](plans/v6/05-first-person-arms-after-death.md)不執行；現行 Client 在死亡時不送出武器（`SubmitWeapon` 跳過）。
 
 ## 7. 驗收、分母與 Architecture Delta
 
