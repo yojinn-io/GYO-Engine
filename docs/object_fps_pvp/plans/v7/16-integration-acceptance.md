@@ -1,6 +1,6 @@
 # 第 16 批：整合驗收與升格（縮小版，D76）
 
-狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 依宣告不通過（168／171，GUI 戰鬥短測的 HUD 規則）、16-L2b 補判進行中；16-L3 等使用者；16-baseline 未開始**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
+狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 依宣告不通過（168／171，GUI 戰鬥短測的 HUD 規則），16-L2b 補判通過 → 16-L2 整體通過；16-L3 等使用者；16-baseline 未開始**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
 
 - 清單提案：`build/target/_build/test/logs/pvp-v7-16-plan-20261014/proposal.md`（U1～U12 照建議，D80）。
 - 16-L1、16-removal、16-D44T 的結果見 HANDOFF 的進度記錄器。
@@ -590,3 +590,10 @@ python3 -I -B $P/judge_16b.py --session build/target/_build/test/logs/pvp-v7-16-
 - **U5 整體判定**：依建議採用上面「16-L2 整體通過」的寫法；記錄到 `16-integration-acceptance.md` 時，16-L2 的 `timing-gui-short` 寫成 F（保留），L2-6 寫成「16-L2b 補判」。替代：把 16-L2b 當成獨立的 L2-6，不連結 16-L2。
 - **U6 再次失敗時**：依建議採用：timing 項目在 v7 規則下仍不通過 → 停下回報，不自動重跑，不再改規則（要改就是新的宣告）。如果每個不通過的幀都在 [前一行 `snapshot_tick`, `hud_tick`) 的某個 t 相符，回報為「**F，疑似下界假失敗**」（MUST-FIX 1；唯讀的事後計算），仍是 F、仍不重跑。**對稱條款**（SHOULD 8）：16-L2b 的結果之後也不會用更新的規則改判，和 16-L2 一樣保留原判定。替代：疑似下界假失敗時允許依新宣告重跑一次。
 
+
+## 16-L2b 的結果（2026-10-15 14:39～14:42，commit H `ab992f5`；依宣告 `passed`＝true，**16-L2 整體通過**）
+
+- 4 項全部 P：`timing-gui-short`、`bots2-action60`、`bots2-player60`、`bots2-timing-gui-short`。沒有停止、沒有完整性問題、沒有使用者旗標。
+- 兩個 timing 項目：凍結分析器各判 19、18 幀 HUD 不一致（F），v7 規則 `pvp-v7-combat-hud-2` 判 P：其他 combat 錯誤 0、`disturbed` False、runtime gap 0、來源 tick 倒退 0、只在區間相符的幀寬度最大 2 Tick（旗標門檻 6）、疑似下界假失敗 0。HUD 落後分布（timing-gui-short）：0 Tick 78、1 Tick 2217、2 Tick 32 幀。
+- 16-L2 的 `timing-gui-short` 保留為 F、不改判（D83）；L2-6＝16-L2 的 action-short、player-short（P）＋本次 4 項。
+- 證據：`build/target/_build/test/logs/pvp-v7-16-l2b-20261015/`（`progress.jsonl`、`judgement.json`、`files.sha256`、`runs/`）。
