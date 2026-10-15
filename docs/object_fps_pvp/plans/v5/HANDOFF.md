@@ -3,6 +3,19 @@
 更新：2026-10-03。**v5已升格穩定基線（[STABLE_BASELINE](STABLE_BASELINE.md)）。第01–05批已完成（第03批2026-10-02結案驗收通過；第04批PR #14合併為`cef1b39`）。**
 **第04批2026-10-02完成**（計畫複審PR #13合併為`dcb19d1`；工作分支`claude/pvp-v5-batch04`；經過見[第04批dev_log](../../../dev_logs/2026_10_02_pvp_v5_batch04.zh-Hant.md)），**第05批2026-10-03完成**（2026-10-02使用者啟動；工作分支`claude/pvp-v5-batch05`，自`cef1b39`；PR #15合併為`f97beb5`）：完整驗收通過，v5升格穩定基線。
 
+## 代號對照（2026-10-15補）
+
+| 代號 | 意思 | 出處 |
+|---|---|---|
+| 第01–05批 | 工作批次；各自一份批次文件 | [README](README.md)、`0N-*.md` |
+| 04-1～04-5、05-1～05-5 | 第04、05批的子批次 | 本文件各批的子批次表 |
+| fix/01～fix/10 | 修正與已知問題，每個問題一份 | [fix/README](fix/README.md) |
+| 方案A1 | 啟動相位對齊（每epoch量一次）；已由持續相位追蹤取代並刪除 | [fix/08](fix/08-a1-clock-drift.md) |
+| `StartPhaseSkip`、HostLate | A1的Client本機診斷與其原因之一（主機晚醒）；隨A1刪除 | 本文件「第03批結案前的阻擋」 |
+| epoch、stall reseed | Client移動命令的一段連續序列；卡頓後Host已替補、Client以權威為準重新播種並開始新的epoch | [v4契約](../../protocol-v4.zh-Hant.md)的移動ACK、[fix/02](fix/02-a1-cancelled-by-stall-reseed.md) |
+| RTT0／20／40 | 注入的網路往返延遲（ms）的量測格 | 各批dev_log |
+| L1、L2、L3 | 驗證層級：本機測試與短測；實機量測與截圖；使用者親手操作 | 第04批子批次表04-4 |
+
 ## 第05批進度（記錄器，隨工作更新）
 
 使用者決定（2026-10-02）：

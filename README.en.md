@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO is a C++20 game engine with explicit runtime, asset, math, input, collision, model, text, rendering and UI boundaries. Engine libraries are linked statically into games and design tools. Games own their rules and content; the engine does not depend on a concrete game.
+GYO is a C++20 game engine with explicit base, runtime, asset, math, time, threads, net, input, collision, model, text, rendering and UI boundaries. Engine libraries are linked statically into games and design tools. Games own their rules and content; the engine does not depend on a concrete game.
 
 ## Repository
 
@@ -11,7 +11,7 @@ GYO is a C++20 game engine with explicit runtime, asset, math, input, collision,
 | `apps/` | Game source and minimal project declarations |
 | `assets/<game>/` | Prepared runtime content, catalogs and `content.json` |
 | `engine/` | All reusable engine modules, adapters, `config/projects.csv` and `config/tools.csv` |
-| `tools/` | Design support: the UI editor and local game previews |
+| `tools/` | Design support: the UI editor and local game previews (currently disabled) |
 | `services/` | Engine-owned reusable Go service mechanisms (`gyo_gateway`); a game's own services live under `apps/<game>/` |
 | `tests/common`, `tests/<project>` | Common engine and project-specific validation |
 | `build/cmake`, `build/ci` | Build, integration, packaging and acceptance support |
@@ -72,4 +72,4 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [3D asset ownership and animation limits](docs/architecture/3d-assets.md)
 - [Release procedure](docs/releasing.zh-Hant.md)
 
-Each game under `apps/` is an independent project; the engine depends on none of them and does not define a generic game framework. The active game is `object_fps_pvp` (server-authoritative LAN PvP; see the [network architecture](docs/object_fps_pvp/network-architecture.zh-Hant.md), in Traditional Chinese). `object_fps` and `object_fps_v2` are disabled and must be migrated after the Math/Result unification before they can be re-enabled. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.
+Each game under `apps/` is an independent project; the engine depends on none of them and does not define a generic game framework. The active game is `object_fps_pvp` (server-authoritative LAN PvP; see the [network architecture](docs/object_fps_pvp/network-architecture.zh-Hant.md), in Traditional Chinese). `object_fps` and `object_fps_v2` are disabled and must be migrated after the engine foundation work (Math, Result, include paths, input layer, Collision) before they can be re-enabled; see the `inactive_products.md` lists under `docs/architecture/plans/`. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.

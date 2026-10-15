@@ -1,10 +1,25 @@
 # PvP v6 交接
 
-更新：2026-10-05。Owner：`object_fps_pvp`。**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成並合併**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)，`30f87d5`）。**第 05 批不執行**（第 04 批未重現）。
-其餘批次都未開始；現行 wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
+更新：2026-10-15。Owner：`object_fps_pvp`。**v6 完成**：第 01～04、06～14、16、17 批完成並合併（最後是 LAN 結果 PR [#66](https://github.com/yojinn-io/GYO-Engine/pull/66)，`ff25ab4`），第 05 批不執行；**2026-10-08 升格**（[穩定基線](STABLE_BASELINE.md)，2026-10-14 標缺陷版，D69 見 v7）。現行 wire 是 pv6。後續：v7 於 2026-10-15 升格（[v7 穩定基線](../v7/STABLE_BASELINE.md)），v7 也停在 pv6。
+（2026-10-05 時的狀態：）**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成並合併**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)，`30f87d5`）。**第 05 批不執行**（第 04 批未重現）。
+當時其餘批次都未開始，wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 
 本文件原本收集 v5 期間使用者決定「延到 v6」的項目。2026-10-04 第 01 批開始後，它也是 v6 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
+
+## 代號對照（2026-10-15 補）
+
+| 代號 | 意思 | 出處 |
+|---|---|---|
+| D0～D26（含 D0b、D0c、D11①～⑪） | 使用者的決定 | 本文件「決策紀錄」 |
+| 第 1～11 項 | v5 期間延到 v6 的項目（例如第 1 項＝遠端俯仰、第 6 項＝死亡後的第一人稱手臂） | 本文件「延後項目」 |
+| 第 NN 批、02a／02b／02c、07a、14a／14b | 工作批次；各自一份批次文件 | [README](README.md) 的進度表 |
+| FF-1～FF-9 | Engine 的基礎後續整理（Math、include、Collision 等） | [基礎後續整理](../../../architecture/plans/foundation-followups/HANDOFF.md) |
+| IP-1、IP-2 | Engine 的輸入與呈現（輸入經 Engine、縮放拖動中的畫面更新） | [輸入與呈現](../../../architecture/plans/input-and-present/HANDOFF.md) |
+| B0、B1 | 量測基線：B0＝第 04 批量的 v5 產品，B1＝IP-2 之後第 07 批重量 | [BASELINE](BASELINE.md) |
+| L1、L2、L3、L4 | 驗證層級：本機測試與突變；實機量測；使用者親手操作；發行的實機證據 | 各批 dev_log；`docs/releasing.zh-Hant.md` |
+| S1～S9 | 第 14b 批在最終來源上重跑的短測 | 本文件「第 14 批進度」 |
+| pvN／vN | 網路協議版本／遊戲版本 | 本文件 D20 |
 
 ## 閱讀入口
 
@@ -486,7 +501,7 @@
 - 2026-10-07：實作（`5d0a516`）與 L1：
   - `HitFeedback`（領域層）：設定解析、`LocalHitFeedback`（新受擊的判定與取樣）、`ClientView`；`PvpApplication` 的 yaw／pitch 改由 `ClientView` 管理。遠端在 `PlayerPresentation` 加 `Hit` 上半身動作。
   - 順手修正第 11 批的遺漏：相位重設後的待命幀用預先準備的水平姿勢，忽略了俯仰（只差一幀，但方向錯）。現在有俯仰時照常取樣。
-  - L1：CPU 測試 11 項（含揺れ開關時送出角度逐位元相同）、呈現測試 36 項、CTest 61／61；突變 7／7 killed（`pvp-v6-batch13-l1-20261007/`）。第一次執行在寫報告時失敗（報告目錄不存在，突變本身已跑完並還原），工具改為自動建立目錄後重跑。
+  - L1：CPU 測試 11 項（含鏡頭晃動開關時送出角度逐位元相同）、呈現測試 36 項、CTest 61／61；突變 7／7 killed（`pvp-v6-batch13-l1-20261007/`）。第一次執行在寫報告時失敗（報告目錄不存在，突變本身已跑完並還原），工具改為自動建立目錄後重跑。
   - L1 測不到：App 的接線（把 `ClientView`、受擊回饋接到畫面與 HUD），由 L3 與 L2 確認。
 - 2026-10-07：PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)，四平台 CI 通過。L3（使用者）：「受擊反應和方向指示都正常」。
 - 2026-10-07：L2（宣告 `e1ee1989…`；動作短測的 capture 加入遠端受擊與第一人稱受擊）：權威 35／35；雙 GUI 戰鬥短測與動作短測在 before／after 全部通過；Cooldown 拒絕只有刻意注入的 1 次；新截圖符合宣告（閃紅與弧線在 UI 層，以記錄值佐證）。before 的 CTest 有 2 項跨過 Mac 休眠而失敗，喚醒後重跑通過。詳見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch13.zh-Hant.md)。**第 13 批完成**，待使用者決定合併 #62。
@@ -559,6 +574,7 @@
 
 ### 1. 遠端人物上半身的俯仰瞄準 → 第 11 批
 
+- **結果**：完成，第 11 批，PR [#61](https://github.com/yojinn-io/GYO-Engine/pull/61)（`83440ef`）。下列行號是當時的。
 - 來源：v5 第 04 批 L3 人工驗收（2026-10-02，使用者）：A 抬頭看天時，B 畫面中的 A 沒有任何變化。
 - 現況：
   - `PlayerPresentationFrame`（`PlayerPresentation.hpp:18-21`）只有 yaw，填值在 `PvpApplication.cpp:599-605`。
@@ -568,6 +584,7 @@
 
 ### 2. 受擊反應 → 第 09 批（wire 欄位）、第 13 批（呈現）
 
+- **結果**：完成，wire 欄位在第 09 批（PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57)），呈現在第 13 批（PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)）。
 - 來源：同上（使用者）：被擊中沒有反應。
 - 現況：
   - Snapshot 只有 `CombatState.hp`，沒有受擊時點。
@@ -578,6 +595,7 @@
 
 ### 3. Engine 渲染阻塞主迴圈（macOS）→ 第 04 批（重現）、IP-2（修正）、第 07 批（B1）
 
+- **結果**：IP-2 縮小交付（縮放拖動中以 live frame 持續更新）；三角色分離依 D19 移到 v7 任務 1，v7 完成（[v7 穩定基線](../v7/STABLE_BASELINE.md)）。
 - **第 04 批（2026-10-05）**：重現。拖動標題列時 render 停頓約 1.2 秒；縮放時停頓在事件處理（0.4～3.0 秒），不在 render。見 [基線 B0](BASELINE.md)。
 
 Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/input-and-present/HANDOFF.md)。本產品這一側的事實：
@@ -595,15 +613,17 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ### 4. 本機射擊冷卻閘的落差 → 第 12 批
 
+- **結果**：完成，第 12 批，PR [#60](https://github.com/yojinn-io/GYO-Engine/pull/60)（`a9485bf`）；兩道閘合成 `FireGate.hpp` 的單一判斷式，`localCooldownUntil` 已刪除。v7 第 09 批維持其常數並做 C2。
 - 來源：v5 第 04 批 04-3 開發實跑。
 - 現況：
   - Tick 閘：Client 以最新 Snapshot 的 Tick 比對 `nextAllowedShotTick`（`PvpApplication.cpp:445`），該 Tick 約比權威晚 2 Tick。
-  - **更正**：另有一道牆鐘閘 `localCooldownUntil`（`:442,455`），HANDOFF 原本沒有記錄。
+  - **更正**：另有一道牆鐘閘 `localCooldownUntil`（`:442,455`），HANDOFF 原本沒有記錄（第 12 批已刪除）。
   - 權威的 10 Tick 冷卻（`PvpMatch.cpp:296-312`）本身正確。
 - 決定：D11⑤。
 
 ### 5. 驗收工具清理 → 第 02a 批
 
+- **結果**：完成，第 02a 批，PR [#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）；`weapon_short` 的獨有斷言移進 `action_short` 後刪除（D14），`run_action_legal.py`、`run_weapon_short.py` 已刪除。
 - 現況：`weapon_short.hpp` 的觀察方仍檢查 v4「HP=0 仍可移動與射擊」；`run_action_legal.py`、probe 的 `--legal-shots`、`action_evidence.analyze_legal` 假設「全部接受、無限彈藥」。
 - **補列**（對抗式檢查）：`run_native_window.py` 的 HP 歸零段（:428-437）是同類的 v4 斷言；該 runner 只支援 Linux X11。
 - **刪除前的前提**：`weapon_short` 是唯一逐幀記錄第一人稱 `submitted_meshes` 的 probe，第 04 批重現第 6 項要用到。第 02a 批要先把這個欄位移進存續的 probe，再刪除。共用 helper 的依賴見第 02 批文件。
@@ -611,6 +631,7 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ### 6. 自己死亡時的第一人稱持槍手臂 → 第 04 批（重現）、第 05 批（修正）
 
+- **結果**：未重現，第 05 批不執行（見下）。屍體手上的世界手槍列入 [v8](../v8/README.md) 候選。
 - **第 04 批（2026-10-05）**：未重現（probe 路徑 18 張死亡期間截圖都沒有手臂；使用者決定不再以正式 Client 重現）。第 05 批不執行；若再看到，以正式 Client 並記錄時間重新開啟。
 
 - 來源：v5 第 04 批 L3（使用者）：「自己死亡時，持槍手臂還是在。」
@@ -623,12 +644,14 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ### 7. 驗收紀錄的計時器基線 → 第 02b 批
 
+- **結果**：完成，第 02b 批，PR [#40](https://github.com/yojinn-io/GYO-Engine/pull/40)。
 - 來源：v5 第 05 批 05-5 的 60 Hz 長測失敗。headless probe 以 `sleep_until` 跑 60 Hz 迴圈，macOS 常晚醒 3～8 ms（空迴圈 P99 20.5 ms）。
 - v5 的處理：重生首幀時間重設的配對規則改為結構條件。
 - v6：probe 開始時量一次計時器抖動，寫進平台指紋與報告，**只用來解讀結果，不當門檻**；不依 OS 名稱分支。
 
 ### 8. 測試與驗收器的跨平台相容性 → 第 02c 批（產品列）、FF-2（共通列）
 
+- **結果**：完成，產品列在第 02c 批（PR [#40](https://github.com/yojinn-io/GYO-Engine/pull/40)），共通列在 FF-2（PR [#43](https://github.com/yojinn-io/GYO-Engine/pull/43)）。下列行號是當時的。
 - 原則（使用者 2026-10-03 定案）：對玩家的門檻跨平台相同，不因平台放寬；測量工具對主機計時精度或視窗／GPU 行為的假設，優先改成結構條件；非得用時間常數時以實測基線解讀；不依 OS 名稱分支。
 - 共通測試列（`MeshUpdateSmoke`、package checks、AssetWatcher、未啟用產品的 `test_gpu_smoke`）的正式來源是 [基礎後續整理](../../../architecture/plans/foundation-followups/HANDOFF.md) B 節。
 - 本產品的列（`build/acceptance/object_fps_pvp/` 簡稱 BA）：
@@ -645,8 +668,8 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 
 ### 9. 未排程的候選（維持候選）
 
-- CS 式開局／回合準備期：全員凍結、無敵、倒數；需 Match 回合狀態與契約變更。見 [v5 fix/02](../v5/fix/02-a1-cancelled-by-stall-reseed.md)。
-- 相位估計器在 WAN 雜訊下的穩定性：先收集真實餘裕樣本分布再決定。見 [延遲整改回顧 v2](../v5/LATENCY_CASE_STUDY_v2.md) 第 6 節。
+- CS 式開局／回合準備期：全員凍結、無敵、倒數；需 Match 回合狀態與契約變更。見 [v5 fix/02](../v5/fix/02-a1-cancelled-by-stall-reseed.md)。**結果**：列入 [v8](../v8/README.md) 候選。
+- 相位估計器在 WAN 雜訊下的穩定性：先收集真實餘裕樣本分布再決定。見 [延遲整改回顧 v2](../v5/LATENCY_CASE_STUDY_v2.md) 第 6 節。**結果**：未結；還沒有列進 v7.1 或 v8（2026-10-15）。
 
 ### 10. Math 基礎統一的範圍外事項
 
@@ -654,15 +677,16 @@ Engine、工具、測試、登錄各列的正式來源是 [基礎後續整理](.
 
 | 項目 | 批次 |
 |---|---|
-| Client 與 server 只比對 arena 的 id 與 version，不比對內容；Client 以自己的 arena 檔做 prediction（`ClientConnection.cpp:180-184` 的 `CheckArena`，由 HTTP join `:276` 與 Welcome `:388` 呼叫；Gateway 轉送點 `server.go:276,440`） | 第 09 批（arena 內容 digest） |
+| Client 與 server 只比對 arena 的 id 與 version，不比對內容；Client 以自己的 arena 檔做 prediction（`ClientConnection.cpp:180-184` 的 `CheckArena`，由 HTTP join `:276` 與 Welcome `:388` 呼叫；Gateway 轉送點 `server.go:276,440`） | 第 09 批（arena 內容 digest）：**已結案**（PR [#57](https://github.com/yojinn-io/GYO-Engine/pull/57)） |
 | `GroundPoint` 的有限性檢查三份、格子線段檢查兩份（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除；`GroundPoint.hpp` 只剩型別定義） |
 | `EnemyPresentationDefinition` 與 `EnemySystem` 的攻擊時間容差不一致（屬未編譯的 29 檔） | 第 08 批：**已結案**（2026-10-05 隨刪除） |
-| Collision 統一對本產品權威判定的影響、權威 digest 不變的證明、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR） |
+| Collision 統一對本產品權威判定的影響、權威 digest 不變的證明、`Arena::Validate`／`ShotQuery` 改用公開合法性檢查 | 第 10 批（與 FF-9 同一 PR）：**已結案**（PR [#58](https://github.com/yojinn-io/GYO-Engine/pull/58)） |
 
 ### 11. Engine 輸入層的缺口 → IP-1（Engine）、第 06 批（本產品）
 
 Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/input-and-present/HANDOFF.md)。本產品這一側：
 
+- **結果**：完成，IP-1（PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50)）、第 06 批（PR [#54](https://github.com/yojinn-io/GYO-Engine/pull/54)）；`HandleNativeEvent` 已刪除，文字輸入與剪貼簿維持例外（SDL 隔離在 v7.1 的 P4）。下列是當時的現況。
 - `PvpApplication.cpp` 的 `HandleNativeEvent`（:188-237）繞過 Engine 直接處理 `SDL_Event`：
   - 縮放時更新寬高，並釋放指標。
   - windowID 過濾；失焦、移動、縮小時釋放指標。
@@ -679,14 +703,14 @@ Engine 部分的正式來源是 [輸入與呈現](../../../architecture/plans/in
 - 剩下的事：
   - ~~v1.1.0 發行（`object_fps_pvp-v1.1.0`，D25）~~：2026-10-08 發佈（見第 17 批紀錄）。L4 核對框未勾（Windows `gui_visible_latency`、Linux、macOS arm64 未實測）。
   - ~~v7 的準備~~：2026-10-08 v7 開始，規劃見 [v7](../v7/README.md)。
-- 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理；矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
+- 30 FPS 相位追蹤的餘裕缺口（矩陣 B 類的停頓重設與 Held 替代）：依 D21 列為設計範圍的邊界，v7 處理。**後續**：v7 的 C1（[第 05 批](../v7/05-30fps-comparison.md)，4 ms 狀態）與 C2（[第 09 批](../v7/09-firegate-c2.md)，8 ms 狀態）通過。當時：矩陣的 clean-30 在主機約 8 ms 晚醒狀態下仍可能判失敗。
   - 2026-10-07 更正：約 4 ms 狀態下也會失敗（第 10 批 L2 的 before，Held 2.3%），只是較少見。
   - 2026-10-07 使用者指示：v6 的 6 個 clean-30 失敗跑次整理成對比基準，clean-60、clean-144 作為幀率的對照一併整理；v7 分執行緒完成後再跑一次比較，預期 clean-30 與 clean-60 的結果相近。基準包與比較方式見 [v7 任務清單](../v7/README.md) 的「v6 的 30 FPS 失敗案例與各幀率的對照」。
-  - 交給第 14 批：矩陣工具在第一個失敗的案例停止，clean-30 排在第 2 案，所以 clean-30 一失敗，其餘 23 案就沒有資料。決定 clean-30 的處理時，一併決定這個停止規則。
+  - ~~交給第 14 批：矩陣工具在第一個失敗的案例停止，clean-30 排在第 2 案，所以 clean-30 一失敗，其餘 23 案就沒有資料。決定 clean-30 的處理時，一併決定這個停止規則。~~ D24②：25 案各自以 `--case` 執行，不改工具。
 - 已知要在批次開始時決定的事：
   - ~~FF-7 的 include 統一方向~~：2026-10-05 使用者決定 `engine/<m>/`，FF-7 已完成。
-  - 第 11、13 批的呈現細節（D11⑥）。
-  - 第 10 批與 FF-9 的容差選擇與事前宣告。
+  - ~~第 11、13 批的呈現細節（D11⑥）~~：第 11、13 批開始時確認（見各批 dev_log）。
+  - ~~第 10 批與 FF-9 的容差選擇與事前宣告~~：第 10 批完成（PR #58）。
   - ~~IP-2 量測後的修法選擇（D7）~~：D19，分執行緒延到 v7。
 - v7 的任務與規劃輸入（D19、D21 與 2026-10-06 的決定）已移到 [v7 任務清單](../v7/README.md)，以那裡為準。
 - 2026-10-07 使用者開立 [v8 玩法優化](../v8/README.md)，專門處理玩法調整；第 16 批留下的 4 人地圖、外觀區分等玩法候選收在那裡。

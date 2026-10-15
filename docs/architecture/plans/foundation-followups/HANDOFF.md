@@ -57,7 +57,7 @@
 | A3 | FNV-1a 是 **三份**（原記兩份）：`engine/asset/include/engine/asset/detail/Hash.hpp:11-27`（`Detail` 命名空間，非公開 API）、`engine/input/src/InputActionMap.cpp:6-19`（空字串回傳 0，和標準 FNV 不同）、`tools/ui_editor/src/FileService.cpp:21-28`。三份常數相同。`gyo_input` 目前不連結任何模組，收進 Base 會新增 `gyo_input→GYO::Base` | Engine、工具 | PLAN 第2節 | FF-3 |
 | A4 | include 路徑風格不一致：`engine/{asset,base,collision,input,io,math,runtime}` 為 `engine/<m>/`；model、render、text、ui 與各 backend、`render/model`（`model_renderer/`）、`platform/sdl`（`platform/`）為 `<m>/`。統一屬大規模 File Move 與 Public Interface 變更 | Engine、工具 | PLAN 第2節 | FF-7 |
 | A5 | `object_fps_preview` 的登錄無效：`engine/config/tools.csv` 為 `enabled=true`、`default=false`；它的 `requires_apps.game=object_fps`，而 object_fps 在 `projects.csv` 為停用；選取 preview 時 `build/cmake/GyoTools.cmake:41` FATAL_ERROR。它的 2 個 TU 可以編譯，但 link 依賴 object_fps 的 `app_support`，所以它的輸入遷移目前無法建置驗證 | 建置登錄 | PLAN 第2節 | FF-6 |
-| A6 | gyo.ui 的 `item_step` 沒有有限性驗證：`{NaN, 1}` 能通過 Validate，序列化後變成 `null` 而無法讀回。另外 codec 先以 double 檢查有限性再轉 float，所以手寫的 1e39 現在可載入（變成 float 的 +inf），新規則會拒絕它。契約文件是 `docs/ui_toolchain.md`（JSON v1），版本常數 `kUiSchemaVersion`（`engine/ui/include/ui/UiDocument.hpp:16`）。屬資料契約變更 | Engine（Ui）、資料契約 | B5 | FF-5 |
+| A6 | gyo.ui 的 `item_step` 沒有有限性驗證：`{NaN, 1}` 能通過 Validate，序列化後變成 `null` 而無法讀回。另外 codec 先以 double 檢查有限性再轉 float，所以手寫的 1e39 現在可載入（變成 float 的 +inf），新規則會拒絕它。契約文件是 `docs/ui_toolchain.md`（JSON v1），版本常數 `kUiSchemaVersion`（`engine/ui/include/ui/UiDocument.hpp:16`，FF-7 前的路徑）。屬資料契約變更 | Engine（Ui）、資料契約 | B5 | FF-5 |
 | A7 | ui_editor 與 Ui 的 letterbox、viewport 內判定、文字對齊各有一份；`UiRuntime` 的 Evaluate 與 Compose 重複 layout 走訪。**更正**：點擊判定已改用 Engine 的 `HitTestUiLayout`，不再重複 | Engine（Ui）、工具 | B5 | FF-5 |
 | A8 | characterization 的共用 helper（`SameBits`、`UlpDistance`、`Opaque`）在 tests/common、消費端測試、tests/ui_editor 各一份；共通測試不能依賴產品測試 | 測試 | B7 | FF-6 |
 | A9 | 共通層出現產品名：`services/gyo_gateway/README.md:8-9,13` 實際寫出產品名與路徑；`tests/common/ci/test_workflow_gates.py:349` 是確認舊 CMake 變數已移除的負向檢查（性質不同，可改為不具名或註明保留理由） | 共通層 | B7 | FF-6 |
@@ -400,7 +400,7 @@
 
 - 方法：一次性 scratch dumper（連結 `GYO::Ui`，不提交），對每個檔的每個 canvas、5 種 viewport（1280×720、1920×1080、800×600、1000×1000、333×777）印出 `EvaluatePreviewLayout` 與 `ComposePreview` 的全部欄位位元。
   base＝FF-6 tip `57f3ef6`（`GYO-Engine-v6b04` worktree），branch＝本分支。
-- 對象：`assets/object_fps/ui/screens.json`、`assets/object_fps_v2/ui/screens.json`、`assets/object_fps_pvp/ui/screens.json`、`assets/object_fps_pvp/ui/pvp_lobby.json`、`tests/ui_editor/fixtures/minimal.ui.json`、`build/acceptance/ui_editor/fixtures/minimal.ui.json`（75 組 canvas×viewport，1,540 筆 layout 與 draw 紀錄）。
+- 對象：`assets/object_fps/ui/screens.json`、`assets/object_fps_v2/ui/screens.json`、`assets/object_fps_pvp/ui/screens.json`（之後已刪除）、`assets/object_fps_pvp/ui/pvp_lobby.json`、`tests/ui_editor/fixtures/minimal.ui.json`、`build/acceptance/ui_editor/fixtures/minimal.ui.json`（75 組 canvas×viewport，1,540 筆 layout 與 draw 紀錄）。
 - 結果：全部在新規則下載入成功；兩樹輸出逐位元相同（SHA-256 `768a15a8…`）。三個 `screens.json` 都有 `fixed_step_list`，其 `item_step` 都是有限值。
 
 ### FF-7（記錄器）

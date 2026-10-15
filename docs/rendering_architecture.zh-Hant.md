@@ -155,7 +155,7 @@ Overlay / HUD → Present
 模型與材質可共用，動態頂點與 mesh handle 由各實例持有。
 產品如何使用這些能力，記錄於各產品自己的架構與資料契約文件。
 
-`AcquireFrame` 在視窗最小化時可以沒有 frame；成功取得的 token 必須經 `SubmitFrame` 或 `AbandonFrame` 恰好消耗一次。提交使用的 CPU 資料在呼叫期間被消費；後端負責保護尚在 GPU 執行的資源。畫面大小改變時重建對應 render target，清理時先解除 Renderer 的 device 資源，再銷毀 device。
+`AcquireFrame` 在視窗最小化時可以沒有 frame；成功取得的 token 必須經 `SubmitFrame` 或 `AbandonFrame` 恰好消耗一次。提交使用的 CPU 資料在呼叫期間被消費；後端負責保護尚在 GPU 執行的資源。畫面大小改變時重建對應 render target，清理時先解除 Renderer 的 device 資源，再銷毀 device。SDL_GPU 後端仍以阻塞方式取得 swapchain；取得超過 50 ms 時會記錄一行診斷日誌（`SDL_GPU slow swapchain acquire`），分別列出等待 fence 與等待 drawable 的時間。
 
 動畫每幀更新固定大小的頂點內容，保留 mesh handle 與 index topology。診斷讀回只在明確請求時等待 GPU，日常呈現不進行這種同步。Scene capture 包含 WorldOverlay 與武器，但在曝光／gamma／螢幕 Overlay／HUD 之前，並非最終螢幕截圖。
 

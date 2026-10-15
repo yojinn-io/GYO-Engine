@@ -1,6 +1,6 @@
 # 第 13 批：受擊反應與方向指示
 
-狀態：未開始。對應 v6 [交接](HANDOFF.md)第2項（呈現部分；wire 欄位在[第09批](09-protocol-v6.md)）。
+狀態：**完成**，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62) 已合併（`7886848`，2026-10-07）；紀錄見 [dev_log](../../../dev_logs/2026_10_07_pvp_v6_batch13.zh-Hant.md)。（先前：未開始。）對應 v6 [交接](HANDOFF.md)第2項（呈現部分；wire 欄位在[第09批](09-protocol-v6.md)）。
 先讀 [進度](README.md)、[交接](HANDOFF.md)、[基線](BASELINE.md) 與 [v6 契約](../../protocol-v6.zh-Hant.md)。
 
 執行規則沿用 v5／本計畫 README：只做指定範圍、先凍結再量測、失敗跑次保留、長測另外授權。

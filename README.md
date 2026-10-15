@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO は C++20 のゲームエンジンです。Runtime、Asset、Math、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
+GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、Time、Threads、Net、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
 
 ## ディレクトリと責務
 
@@ -11,7 +11,7 @@ GYO は C++20 のゲームエンジンです。Runtime、Asset、Math、Input、
 | `apps/` | ゲームのコードと最小限のプロジェクト宣言 |
 | `assets/<game>/` | 準備済み runtime コンテンツ、catalog、`content.json` |
 | `engine/` | エンジン全モジュール、adapter、`config/projects.csv` と `config/tools.csv` |
-| `tools/` | 設計支援。UI editor と本機専用のゲーム preview |
+| `tools/` | 設計支援。UI editor と本機専用のゲーム preview（現在は無効） |
 | `services/` | エンジンが所有する再利用可能な Go service 機構（`gyo_gateway`）。ゲーム固有の service は `apps/<game>/` に置く |
 | `tests/common`、`tests/<project>` | エンジン共通とプロジェクト固有の検証 |
 | `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受入検証の支援 |
@@ -72,4 +72,4 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [3D 資産とアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)
 
-`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。`object_fps` と `object_fps_v2` は無効化されており、Math／Result の統一後は移行してから再有効化する必要があります。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。
+`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。`object_fps` と `object_fps_v2` は無効化されており、Engine の基盤統一（Math、Result、include パス、入力層、Collision）の後は移行してから再有効化する必要があります。移行一覧は `docs/architecture/plans/` 配下の各計画の `inactive_products.md` です。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。

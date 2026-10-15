@@ -8,6 +8,17 @@ v5 第01–02批完成；第03批已建成三角色v5候選，但可見延遲守
 更新：2026-09-28。**第 05 批完整驗收已完成，依使用者追加授權將 v4 升格為穩定基線。**
 **範圍為 Linux／X11／Vulkan、同機雙玩家。** 手動指南與回報表保留供未來測試案例參考。
 
+## 代號對照（2026-10-15 補）
+
+| 代號 | 意思 | 出處 |
+|---|---|---|
+| 第 01～05 批 | 工作批次；各自一份批次文件 | [README](README.md)、`0N-*.md` |
+| V1～V8 | 原生視窗的人工操作清單（移動、射擊、指標捕捉、拖曳、縮放、失焦、重入等） | [MANUAL_ACCEPTANCE](MANUAL_ACCEPTANCE.md) |
+| `native-window-6` | 執行 V1～V8 的原生視窗跑次的名稱 | 第 05 批 dev_log |
+| RTT0／20／40、burst2 | 注入的網路往返延遲（ms）的短案；連續丟包的短案 | 第 05 批 dev_log |
+| Actual | Host 執行的是 Client 實際送來的移動命令（不是替補） | 各批 dev_log |
+| epoch | Client 移動命令的一段連續序列；重新播種時開始新的一段 | [v4 契約](../../protocol-v4.zh-Hant.md)的移動 ACK |
+
 ## 現況與閱讀順序
 
 1. [進度與執行規則](README.md)：只執行使用者這次指定的批次。
@@ -186,7 +197,7 @@ Client／Gateway／Match 的 wire、HTTP join、Ready／Welcome 已一起升為 
 所有原始 Update 幀、成功 Presented 與跳過幀均保留；離開重入跨 Lobby 的世界樣本
 間距另列，不能將沒有世界樣本的 Lobby 幀誤稱作 GPU 卡頓。
 
-腳本入口 `build/acceptance/object_fps_pvp/run_weapon_short.py` 預設只跑五項短測，
+腳本入口 `build/acceptance/object_fps_pvp/run_weapon_short.py`（v6 第 02a 批已刪除）預設只跑五項短測，
 可用 `--case weapon60` 單獨重現；完整命令在 dev_log。`--latency-short` 顯式 16 秒／
 20 事件，原 `--latency` 的 120 秒／200 事件與完整驗收門檻不變。
 第 05 批重用相同正式產品來源的證據，不為整理文件重跑全部短矩陣；

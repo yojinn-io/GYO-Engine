@@ -2,7 +2,7 @@
 
 `GYO::Math` (`engine/math`, namespace `Engine::Math`) is the engine-wide math foundation: value types, pure geometry and the coordinate conventions every module shares. It is header-only and depends only on the C++ standard library and `GYO::Base`, the failure-handling layer below it (for `GYO_ASSERT`, see [error handling](error-handling.md)); it knows no module, product or tool.
 
-All active code that used the removed vector, matrix and geometry types (Collision, Model, Render, Ui, object_fps_pvp, the UI editor) now uses Math; inactive products still use the removed names and must migrate before re-enabling ([migration list](plans/math-foundation/inactive_products.md)). History and evidence: [math-foundation plan](plans/math-foundation/README.md).
+All active code that used the removed vector, matrix and geometry types (Collision, Model, Render, Ui, object_fps_pvp, the UI editor) now uses Math; inactive products still use the removed names and must migrate before re-enabling ([Math migration list](plans/math-foundation/inactive_products.md); later engine work adds the [Result](plans/result-unification/inactive_products.md) and [foundation follow-up](plans/foundation-followups/inactive_products.md) lists). History and evidence: [math-foundation plan](plans/math-foundation/README.md).
 
 ## Boundary
 
