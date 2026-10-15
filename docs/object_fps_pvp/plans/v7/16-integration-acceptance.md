@@ -1,6 +1,6 @@
 # 第 16 批：整合驗收與升格（縮小版，D76）
 
-狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 正式 session 進行中；16-L3 等使用者；16-baseline 未開始**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
+狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 依宣告不通過（168／171，GUI 戰鬥短測的 HUD 規則）、16-L2b 補判進行中；16-L3 等使用者；16-baseline 未開始**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
 
 - 清單提案：`build/target/_build/test/logs/pvp-v7-16-plan-20261014/proposal.md`（U1～U12 照建議，D80）。
 - 16-L1、16-removal、16-D44T 的結果見 HANDOFF 的進度記錄器。
@@ -419,4 +419,174 @@ python3 -I -B $P/judge_16.py --session build/target/_build/test/logs/pvp-v7-16-l
 ```
 
 - L2 結束後、使用者的 LAN 測試之前，把 L2 的結果補進 `plans/v7/LAN_TEST.md`（LAN 測試包和量測沒有交互）。
+
+
+## 16-L2 的結果（2026-10-15 01:06～03:49，commit H `68e8c51`；依宣告 `passed`＝false、未完成 168／171）
+
+- I 30／30 P、D 134／134 P，G：quad-gui-bots、action-short、player-short P；`timing-gui-short` F（凍結分析器 `combat_gui_evidence.py:296-302` 判 13 幀 HUD 不一致）→ 停止條件 6，剩 3 項 not_run。失敗跑次保留、不重跑。
+- D44 回歸：260 個 case-run 全部完成、事件 0（95% 上限：遊戲 95 次 3.1%、背壓 120 次 2.5%、網路一般 30 次 9.5%、impairments 15 次 18.1%；重複只抽樣主機時序，不抽樣丟包型態或故障情境）。
+- 診斷（`build/target/_build/test/logs/pvp-v7-16-l2-20261015/hud-diagnosis.md`）：v6 的 `hud_tick` 是主執行緒 Reconcile 用的 snapshot；第 04 批把 Reconcile 移到 Client 模擬角色後，`hud_tick` 落後 HUD 值的來源 1～2 Tick。HUD 的值是主執行緒最新的權威 snapshot，正確；不是產品顯示錯誤。v7 以前沒有跑過這項檢查。
+- D83：只改分析器、以補充宣告重跑剩下 4 項（16-L2b）。
+
+## 16-L2b 的補充宣告（2026-10-15 核准，D84；依建議）
+
+下面是 `build/target/_build/test/logs/pvp-v7-16-l2b-prep-20261015/declaration.md`（SHA-256 `5b1466f6b8782ba04c57699b0d4212255df0c0cdb38cb9026e9298b7cf8911b2`）的全文，和同目錄 `declaration-draft.md` 逐位元組相同。D45 的 xhigh 檢查見同目錄 `xhigh-d45-check.md`（MUST-FIX 1～3、SHOULD 1～8 已套用）。
+
+### 第 16 批 L2 的補充宣告（16-L2b，D83；草案 v2，D45 的 xhigh 檢查已套用，未核准）
+
+核准時，本檔原樣複製為同目錄的 `declaration.md`，它的 SHA-256 就是「執行步驟」的 `DECLARATION` 字面值。`run_16b.py` 開跑時核對這個字面值並寫進開始紀錄，`judge_16b.py` 再核對一次。字面值（`--frozen-sha`、`--artifacts-sha`、`--declaration-sha`、`judge_16b.DRIVER_SHA`）一律抄本檔，不從手邊的檔案重算。xhigh 的 D45 檢查見同目錄 `xhigh-d45-check.md`（MUST-FIX 1～3、SHOULD 1～8 與只記錄的資料集補充都已套用；v1 草稿保留在 scratchpad）。本宣告只補充 16-L2 的宣告（`pvp-v7-16-prep-20261014/declaration.md`，SHA-256 `1b2d2fbf26dbee80cce38ee33f4ff8b7dc66c5afd56554f778ca698471a380ce`）；沒有寫到的部分照原宣告。
+
+#### 白話摘要
+
+- **要做什麼**：只補跑 16-L2 沒跑完的 G 部分 4 項（16-L2 排程第 168～171 行）：`timing-gui-short`、`bots2-action60`、`bots2-player60`、`bots2-timing-gui-short`。程式、產物、runner 與檢查都和 16-L2 相同（master `6d3f287`，worktree `../GYO-Engine-v7final`）。
+- **為什麼**：16-L2 停在第 168 項 `timing-gui-short`。原因是凍結的 v6 分析器假設「HUD 的值屬於 `hud_tick` 那個 snapshot」，而 v7 第 04 批把 Reconcile 移到 Client 模擬角色之後，`hud_tick` 會比 HUD 實際用的 snapshot 落後 1～2 Tick。這是分析器的假設失效，不是產品顯示錯誤（`pvp-v7-16-l2-20261015/hud-diagnosis.md`）。D83 選 (a)：只改分析器，事先宣告 v7 規則。
+- **怎麼判**：兩個 timing 項目的分類照凍結 runner，只把 HUD 這一條換成 v7 規則（`combat_gui_evidence_v7.py`）；其他 combat 檢查一條都不放寬，必須全部沒有錯誤。v7 規則把凍結的 F 改判成 P 時，另外要求這一輪沒有受干擾、沒有 runtime gap（短測模式本來不檢查這兩項）。另外 2 項（bots2 action／player）完全照 16-L2。
+- **16-L2 原本的失敗跑次保留，不用新規則改判**：它在 16-L2 的紀錄裡永遠是 F。
+- **16-L2 整體怎麼算通過**：16-L2 已通過的部分（I、D、L2-1～L2-5、action-short、player-short）照原判定；加上本次 4 項全部通過。
+- **時間**：量測約 3 分鐘（4 項約 154 秒＋閒置閘門最少約 20 秒），判定約 1.5 分鐘（其中重跑 16-L2 的 judge 約 66 秒）；含 preflight 約 6～8 分鐘。G 項目會開遊戲視窗：**這 3 分鐘不要碰滑鼠、觸控板、鍵盤，打開勿擾**，量測期間不做其他工作。
+- **需要你決定的**：最後一節 U1～U6；主 session 已依使用者同意「照建議進行」，各項寫成「依建議採用」並列出替代方案。
+
+#### 目的
+
+- D83：以事先宣告的 v7 HUD 規則，補完 16-L2 的 L2-6（GUI 短測）。這 4 項都是**第一次在 v7 程式上判定**（CROSS-BUILD）。
+- 同時補上「combat 裁決抵達、逐命重播與 HUD」這條跨版本主張在 v7 上的第一份證據（診斷第 3 節：v7 以前從沒判定過）。
+
+#### v7 HUD 規則與 D45 來源
+
+##### v6 規則（凍結，不改）
+
+`combat_gui_evidence.py:295-302`：每個 Presented 幀，`hud_tick <= snapshot_tick`、`life_at(hud_tick) == hud_life`，而且 HUD 的 HP／ammo 等於本地玩家在 `hud_tick` 的逐命重播狀態，`hud_dead` 恰好在 HP 為 0 時成立。
+
+##### 為什麼在 v7 不成立（第 04 批的設計改變）
+
+- 探針沒有改（兩棵樹相同）：`combat_latency.hpp:177-179` 記錄 `hud_tick = presented->local.authorityTick`，HP／ammo／life 取自 `presented->weapon`。
+- HUD 的值兩版都取自主執行緒最新的 `state.snapshot`（v6 `PvpApplication.cpp:369-370`，v7 `:366-367`）。
+- v6：`Refresh` 在同一個主執行緒、用同一份 snapshot 呼叫 `Reconcile`（v6 `PvpApplication.cpp:420-423`），`presentedMovement` 取它的觀測（`:1139-1143`），所以 `hud_tick` 就是 HUD 值所屬的 snapshot。
+- v7（第 04 批，commit `6983b2b` 新增 `ClientSimulationRole.cpp`，`347d375` 為 xhigh 修正）：Reconcile 在模擬角色的執行緒、在它自己的喚醒時刻觀察最新 snapshot（`ClientSimulationRole.cpp:96-104, 176-178`）；主執行緒用 `PresentAt` 取得它最後一步的結果（v7 `PvpApplication.cpp:971`），`presentedMovement` 帶的是那個觀測（`:1138-1141`）。主執行緒的 Drain（`:287`）可能比模擬角色多看到 1～2 Tick。
+- 所以 v7 的 `hud_tick` 是「本地移動預測對齊用的權威 tick」，不再是 HUD 值的來源 tick。
+
+##### v7 規則（`combat_gui_evidence_v7.py`，analyzer id `pvp-v7-combat-hud-2`）
+
+每個 Presented 幀：`hud_tick <= snapshot_tick`，而且區間 [下界, `snapshot_tick`] 裡**存在**某個 t，使 `life_at(t) == hud_life`，並且 (本地玩家, `hud_life`) 在 t 的逐命重播狀態的 HP、ammo 等於 HUD，`hud_dead` 恰好在那個 HP 為 0 時成立。**下界＝max(`hud_tick`, 同一角色前一行的 `snapshot_tick`)**（SHOULD 2，依建議採用；第一行只用 `hud_tick`）。另外，同一角色連續的 Presented 幀必須能選出**不遞減**的相符 t（HUD 來源 tick 不倒退，SHOULD 3，依建議採用；用貪婪法選最小的可行 t）。
+
+- 其餘全部照凍結分析器：凍結分析器在**私有複本**上原樣執行（證據目錄不被改寫），它的錯誤除了 HUD 不一致訊息（`<role>-combat-hp.jsonl: displayed HUD HP/ammo/life mismatch at frame N`）以外，必須全部為空。
+- 一致性檢查：v7 分析器自己重建逐命重播，它對每個 Presented 幀的 v6 判定必須和凍結分析器的 HUD 訊息**逐幀完全相同**（不只是幀數相同），否則不通過。
+- 只在區間內相符（v6 規則不符）而且區間寬度超過 **6 Tick** 的幀：**使用者旗標**，不是錯誤（U2 的 C）。6＝`presentation_evidence.py:17` 的 `MAXIMUM_CROSSING_BRACKET_SECONDS = .1`（既有的 runtime／presentation 干擾邊界）×`Movement.hpp:15` 的 60 Hz，不是從 16-L2 的資料取的。
+- 分析器只回傳結果；命令列要加 `--write` 才寫 `combat-gui-evidence-v7.json`，而且上層目錄有 `files.sha256`（session 內）時拒絕寫入（SHOULD 6）。
+
+##### 為什麼是這個區間
+
+- **上界 `snapshot_tick`**（程式推導）：HUD 讀的是主執行緒在該幀已有的 snapshot；探針在 Render 之後記錄 `snapshot_tick`，看到的 snapshot 不會比 HUD 用的舊。v6 也有這種情形（AfterRender 讀到更新的 snapshot，v6 規則本來就允許 `hud_tick < snapshot_tick`）。比 `snapshot_tick` 更新的 HUD 值一定不通過。
+- **前一行的 `snapshot_tick`**（程式推導，MUST-FIX 1）：Client 只接受 tick 更大的 snapshot（v7final `ClientConnection.cpp:533,535`），第 k 幀的 `RefreshState`（`PvpApplication.cpp:943`）在第 k−1 幀 AfterRender 記錄之後，所以 HUD 的來源不會比前一行的 `snapshot_tick` 舊。HUD 正確時，這個下界不會多出假失敗；它封住了 16-L2 中 2 幀 `hud_tick` 小於前一行 `snapshot_tick` 的情形（那 2 幀 HUD 都在新下界之後相符）。
+- **`hud_tick` 只是經驗下界**（MUST-FIX 1 修正 v1 的錯誤理由）：模擬角色有自己的 snapshot 歷史副本（`ClientConnection.cpp:109-110`）；每個被接受的 snapshot 在同一把 mutex 下同時寫進 `state.snapshot` 與 `simulationSnapshots`（`:572-575`），模擬角色的 `DrainSimulation`（`:866-874`）與主執行緒的 `Drain`（`:843`）互相獨立。snapshot 在主執行緒 `RefreshState`（`:943`）之後、`PresentAt`（`:971`）之前抵達，而模擬角色剛好醒來時，`hud_tick` 會比 HUD 的真正來源新，該幀**不通過**（假失敗，不會變成假通過）。機率從證據估不出（0／17 個區間內有狀態變化的幀）。這種情形的事後回報見 U6。
+- **擬合檢查，不是驗證**（SHOULD 8）：下面的證據是用來設計規則的同一批資料，只說明規則和既有資料一致；唯一的驗證是 16-L2b 新跑的兩個 timing 項目。
+- **證據**（`v7-rule-check.json`、`dryrun/dryrun_l2_round.json`）：
+  - 16-L2 失敗的那一輪：2268 個 Presented 幀。`hud_tick` 落後 `snapshot_tick` 0／1／2 Tick 各 295／1969／4 幀；套用新下界後的區間寬度 0／1／2 各 297／1967／4 幀。凍結分析器的 13 個 HUD 不一致**正好**是只在 t > `hud_tick` 才相符的 13 幀，全部落在區間內（12 幀落後 1、在 t＝`snapshot_tick` 相符；frame 352 落後 2，在 +1、+2 相符）；沒有任何一幀不通過；來源 tick 倒退 0；其餘 combat 錯誤為 0。
+  - v6 的 12 輪（目前協議版本：batch09-l2 的 2-after-gui、batch13-l2、14a、14b、16-dev、16-l2；含 bots）：v7 規則不改變任何判定，旗標 0、倒退 0。**v6 的落後只有 0、1 Tick**，0 占 46～77 %；v7 的 0 只占 13 %，2 Tick 是 v7 才出現（MUST-FIX 2）：v7 讓分布往後移了 1 Tick。區間內有兩種以上重播狀態的 120 幀，HUD **全部**等於 `hud_tick` 的狀態，v7 多給的寬限一次都沒用到。
+  - 更舊的 v6 輪（batch04、07、09 的 1-before-gui）是舊協議，凍結分析器本來就拒絕（unsupported schema），不列入。
+
+##### 比 v6 寬多少、可能藏住什麼
+
+- 寬多少：每幀多容許「區間寬度」＝`snapshot_tick` − 下界 個 Tick（16-L2 最大 2 Tick＝33 ms）。分析器輸出每輪的寬度分布、落後分布、最大寬度，以及「區間內有兩種以上狀態」的幀數（`frames_with_state_change_in_interval`，也就是 v7 實際比 v6 寬的幀）。
+- 寬度會變大的原因（MUST-FIX 3 修正 v1）：模擬角色停住，**或主執行緒從 `RefreshState` 到 AfterRender 變慢**。短測模式下 `run_timing.py:410-411` 只在 `not args.short` 時呼叫 `require_clean_gui_round`，所以凍結 runner 不會因為受干擾而判失敗。因此（U2，依建議採用 B＋C）：v7 把凍結 F 改判 P 時，要求 `disturbed is False` 且 `runtime_gap_events == []`；只在區間內相符而且寬度 > 6 Tick 的幀立使用者旗標。
+- 可能藏住的：HUD 比主執行緒的 snapshot 落後、但不超過區間寬度；HUD 改成讀模擬角色那份較舊的 snapshot 這種退步也看不出來（它會在 `hud_tick` 相符）。
+- 藏不住的：HP／ammo 和區間內任何 Tick 的重播都不同（傷害、彈藥、換彈錯誤）、life 不符、死亡旗標不符、比 `snapshot_tick` 新的值、比前一行 `snapshot_tick` 舊的值、來源 tick 倒退、`hud_tick > snapshot_tick`，以及 snapshot 本身的 combat 狀態（照凍結規則逐幀重播，不放寬）。
+- 新下界讓 v7 在一種情形比 v6 **嚴**：HUD 等於 `hud_tick` 的狀態、但比前一行 `snapshot_tick` 舊時，v6 通過、v7 不通過。12 輪 v6 與 16-L2 都沒有這種幀。凍結判 P 而 v7 不通過時記為 A（見停止條件）。
+- 精確版（之後的工作，v7.1 候選）：在 `WeaponFeedbackObservation` 加 HUD 來源 tick，由探針記錄。會改產品觀測 API（Architecture Delta）與產品 SHA，凍結的 `6d3f287` 與已完成的 L2 項目要重新評估，所以本批不做。
+
+#### 項目（16-L2 排程第 168～171 行，順序不變）
+
+| # | 項目 | runner（照 `run_16.command`） | 估計秒數 | 分類 |
+|---|---|---|---|---|
+| 1 | `timing-gui-short` | `run_timing.py --gui --combat --short --duration 16 --events 20 --fps 60` | 37 | 凍結 runner＋v7 HUD 規則 |
+| 2 | `bots2-action60` | `run_action_short.py --case action60 --bots 2` | 40 | 照 16-L2 |
+| 3 | `bots2-player60` | `run_player_short.py --case player60 --bots 2` | 34 | 照 16-L2 |
+| 4 | `bots2-timing-gui-short` | 同 1，加 `--bots 2` | 43 | 凍結 runner＋v7 HUD 規則 |
+
+估計秒數沿用 `run_16.SECONDS`（含前後 5 秒 sleeper 與檢查）。
+
+#### 不重跑的部分
+
+- 16-L2 的 I（30 項）、D（134 項）與 G 的前 3 項（`quad-gui-bots`、`action-short`、`player-short`）照 16-L2 的判定，不重跑：`judgement.json`（SHA-256 `215aa30899a3607798d4889a9f573d159f1f9d20d0d089611281b3b689274025`）、`files.sha256`（`f3a8e2cf9387e85472350cfba66d7e14cb9eb165e46509274c8f575828804ddf`）。D44 的讀法（I、D 兩部分完整）：0／260 case-run，95 % 上界 0.0115。
+- 16-L2 的 `timing-gui-short`（F）保留原樣，**不以 v7 規則改判**。準備時的 dry run 對它的複本套過 v7 規則（結果是通過），只是為了測程式，不算判定。
+- `judge_16b.py` 每次判定都用 16-L2 自己的字面值重跑 `judge_16.judge`，並和它的 `judgement.json` 逐欄比對；指定 16-L2 的目錄給 `judge_16b.py` 會被拒絕。
+
+#### 停止條件
+
+照 16-L2（`judge_16.item_stop`，`run_16b.py` 立刻停下、保留全部、由你決定，不重跑）：
+
+- **1**：類別 E 或 A；凍結清單或產物雜湊不符；量測 worktree 的 HEAD 或追蹤檔變動；主 checkout 或遠端 PR 分支在 `6d3f287` 之後有**文件與允許清單以外**的變動。
+- **6**：整合判定不通過（4 項的任何一項不是 P）；閒置閘門 30 分鐘內沒通過。
+- 停止條件 2～5、7 針對 D44 與 clean 項目，本次 4 項都不適用（程式照樣評估）。
+- 本次新增（開跑前或每項之前）：16-L2 的 `files.sha256` 或 `judgement.json` 和字面值不符；`frozen-16b.sha256` 本身或清單內任何檔案不符；**開跑前允許清單的 3 個檔案沒有全部出現在主 checkout 與遠端的變動裡**（沒 commit 或沒 push，SHOULD 1）；`STOP-REQUEST` 檔；`run_16b.py` 和 `DRIVER_SHA` 不符；本檔的 SHA-256 和字面值不符；腳本本身的任何例外。
+- 凍結判 P 而 v7 規則不通過：只可能來自新下界或來源順序檢查（v6 相符的 t＝`hud_tick` 在 `hud_tick` 不小於前一行時一定在區間內），記為 **A**（停止條件 1），由你判斷。
+- v7 的寬區間旗標（U2 的 C）**不停下**：寫進 `progress.jsonl`，session 繼續；判定時讓 `passed`＝false，由你決定。
+
+#### 判定
+
+- **每項的類別**：`judge_16b.classify`＝`judge_16.classify`；兩個 timing 項目若凍結類別是 F，改用 v7 規則重評，**全部**條件成立才是 P：
+  1. 只有 1 輪；`results.json` 是 `--gui --combat --short`，而且 `soak` 與 `report_only` 都是 false（SHOULD 5）；
+  2. 該輪狀態是 passed，或是 failed 且錯誤**正好**是 `RuntimeError: Acceptance did not meet its fixed thresholds; see round.json`（其他 runner 錯誤一律 F）；
+  3. `results.json` 裡的 evidence 和 `round.json` 完全相同；
+  4. movement 通過、presentation 通過、視窗閘門 `clean`；
+  5. `overall_passed` 等於 movement、presentation、凍結 combat 三者的 AND。這一條在 combat 失敗時本身是空檢查；真正的保證來自 `run_timing.py:409-413` 的 `overall_passed` 公式，加上視窗閘門 clean（閘門沒改寫結果）與 short 為 true、soak 為 false（不套 clean／soak 條件）（SHOULD 5）；
+  6. 凍結 combat 在私有複本上重算的錯誤＝`round.json` 的＝`combat-gui-evidence.json` 的；
+  7. 凍結 combat 錯誤中 HUD 以外的為 0（含 LifeRespawn 對照、逐命 snapshot 重播、裁決、P95 ≤ 150 ms、回饋、傳輸歸零）；
+  8. v7 HUD 規則通過（含一致性檢查與來源順序）；
+  9. 因 v7 規則而從 F 改判 P 時：`disturbed is False` 且 `runtime_gap_events == []`（U2 的 B）。
+- **旗標**：只在區間內相符、寬度 > 6 Tick 的幀（U2 的 C；只針對這種幀，SHOULD 4）。
+- **事後回報**：不通過的 timing 項目，如果每個不通過的幀都在 [前一行 `snapshot_tick`, `hud_tick`) 的某個 t 相符，原因欄加「suspected lower-bound false failure」（U6），仍是 F。
+- **16-L2b 通過**：session 完整、沒有停下、完整性沒有問題、4 項都是 P、沒有給你的旗標。判定檔另外記錄每個 timing 項目的 v7 摘要（區間內才相符的幀、寬度與落後分布、最大寬度、區間內有狀態變化的幀數、`hud_tick` 小於前一行的幀數、倒退數）。
+- **16-L2 整體通過**＝16-L2b 通過，而且（`judge_16b.l2_state`）16-L2 用自己的字面值重判的結果和它的 `judgement.json` 一致、I 和 D 完整、L2-1～L2-5 通過、`action-short` 與 `player-short` 是 P、沒有完整性問題與旗標、唯一的停止是 `timing-gui-short`。L2-6＝16-L2 的 `action-short`、`player-short`＋本次 4 項。`judge_16b.py` 只在 16-L2 整體通過時 exit 0。
+
+#### 完整性
+
+- **凍結清單** `frozen-16b.sha256`（SHA-256 `bb61cb4f9b1e1c46d691d8c32ecac271bb0fc45e76e1ce185d2554b7f5429735`，9 行），每項之前核對清單本身與每個檔案：
+  - 16-L2 的 `frozen.sha256`（`8263d38c5497f909477e4893dd5190fe45771ff047da2edc0bcd23e6ecba2272`；117 行的內容也每項之前核對，含 `run_16.py`、`judge_16.py`、`judge_c2.py`、v7final 與 c2-after 的驗收工具）；
+  - `run_16b.py`（`14ef62b1098c6172d49ac73508e6c7e966b704be63d051ee2fcb656558667ca4`）、`judge_16b.py`（`6fcfb4d359ef278e50550b11d1982a02dfe8e5a0446339eaf1fd2f8a61493f6b`；內含 `DRIVER_SHA`＝`14ef62b1…`）；
+  - 主 checkout 的 `combat_gui_evidence_v7.py`（`0e0648a05afea4f8dcc424b31ddb55cf33e3c9683e875d56e06d2217911e2ada`）、`test_combat_gui_evidence_v7.py`（`7fe52df7aea2fd3920325d3a5fe9acddb52d41f5c5e38a99287d0e2a59d6e4be`）、`tests/object_fps_pvp/CMakeLists.txt`（`79c04f7e49f33f3d50308abf7f6558a3fef64f0d966e3c50bea08e150f329abe`）；
+  - v7 規則直接 import 的凍結模組（主 checkout 的複本，和 v7final 相同）：`combat_gui_evidence.py`（`70341518…`）、`gameplay_evidence.py`（`01a45228…`）、`acceptance_util.py`（`227d021f…`）。`judge_16b.py` 載入後再核對實際執行的模組檔（`judge_c2` 會把 c2-after 放在 `sys.path` 最前面；三份內容相同）。間接 import 由 16-L2 的凍結清單涵蓋。
+- **產物清單**：照 16-L2，`pvp-v7-16-l1-20261014/artifacts.sha256`（`f0a87dd78827a42dfab75546b69a73785d35442019fca03893775d4824f3b3cc`）。
+- **主 checkout 與遠端 PR 分支的允許清單**（`judge_16b.ALLOWED_NONDOC`）：`6d3f287` 之後除了文件，只允許上面 3 個檔案，而且內容必須**正好**是上面的 SHA-256（遠端用該 commit 的 blob 比對）。其他非文件變動、或這 3 個檔案內容不同，都停下。**開跑前（與 preflight）這 3 個檔案必須全部出現在主 checkout 與遠端的變動裡**；`judge_16b.py` 用開始與結束紀錄再核對（SHOULD 1）。
+- 16-L2 的 `files.sha256` 與 `judgement.json` 開跑前核對字面值，並寫進開始紀錄。
+
+#### 準備時的驗證（已完成，v2）
+
+- `test_combat_gui_evidence_v7.py`：15 項全部通過。v1 的 10 項（依新下界調整）之外，新增：比前一行 snapshot 舊的 HUD 即使在 `hud_tick` 相符也不通過（凍結版會通過）；presented=false、HUD 欄位全 0 的行不算 HUD 幀；「幀數相同、幀不同」的不一致；來源順序（貪婪、角色分開）；寬區間只立旗標（並核對 6＝`presentation_evidence.MAXIMUM_CROSSING_BRACKET_SECONDS`×60）；疑似下界假失敗的回報；寫入只在要求時進行，session 內拒寫。凍結的 `test_combat_gui_evidence.py` 照舊通過。
+- 突變 17 個：16 個被殺，1 個存活的是等價突變（拿掉 `matched` 的 `hud_tick <= tick` 條件；`passed` 已經要求它）（`dryrun/analyzer-mutations.txt`）。
+- `check_v7_rule.py` → `v7-rule-check.json`：12 輪 v6＋16-L2，全部如預期（見上方「證據」）。
+- dry run（`dryrun/dryrun_l2_round.py`）：16-L2 失敗輪的複本在 v7 規則下為 P（13 幀在區間內，`disturbed` false、`runtime_gap_events` 空，旗標 0）；16-L2 自己的 `timing-gui-short` 仍是 F；16-L2 的檔案沒有被改；dry run 本身 `passed`＝false（只有 1／4 項）。
+- 模擬與竄改 35 情境全部如預期（`dryrun/mock_16b.py`、`mock_16b.json`）：v1 的 27 個，加上沒 commit／沒 push、改判時受干擾、改判時有 runtime gap、report-only、寬區間旗標（session 繼續、判定不通過）、疑似下界假失敗的原因欄、開始紀錄的允許清單不完整。
+- preflight（宣告還不存在、3 個檔案還沒 commit 時）：問題只有 `declaration.md` 不存在、`main_allowed` 只有 CMakeLists、`remote_allowed` 為空（都是預期的）；凍結清單、產物、v7final、16-L2 字面值與遠端（`b125c45`，只有文件）都通過（`dryrun/preflight-before-declaration.txt`）。
+- 沒有做的：CTest 登記沒有經 `ctest` 實跑（主 checkout 沒有重新 configure；直接執行 15 項全過約 6 秒）；第一次真正的 CTest 是合併後的 CI。
+
+#### 執行步驟
+
+前提（`run_16b.py` 會強制檢查）：主 session 把 3 個檔案（`combat_gui_evidence_v7.py`、`test_combat_gui_evidence_v7.py`、`tests/object_fps_pvp/CMakeLists.txt`）原樣 commit 並 push（遠端 head 要在本機看得到）；之後到量測結束只推文件。
+
+```sh
+P=build/target/_build/test/logs/pvp-v7-16-l2b-prep-20261015
+cp $P/declaration-draft.md $P/declaration.md          # 核准的版本；它的 sha256 就是 DECLARATION
+FROZEN=bb61cb4f9b1e1c46d691d8c32ecac271bb0fc45e76e1ce185d2554b7f5429735
+ARTIFACTS=f0a87dd78827a42dfab75546b69a73785d35442019fca03893775d4824f3b3cc
+DECLARATION=<核准時 declaration.md 的 sha256>
+python3 -I -B $P/prep_16b.py --check                  # judge_16b 的常數與 frozen-16b.sha256 仍是凍結狀態
+python3 -I -B $P/run_16b.py --preflight --frozen-sha $FROZEN --artifacts-sha $ARTIFACTS --declaration-sha $DECLARATION
+caffeinate -dims python3 -I -B $P/run_16b.py --output build/target/_build/test/logs/pvp-v7-16-l2b-<日期> --frozen-sha $FROZEN --artifacts-sha $ARTIFACTS --declaration-sha $DECLARATION
+python3 -I -B $P/judge_16b.py --session build/target/_build/test/logs/pvp-v7-16-l2b-<日期> --frozen-sha $FROZEN --artifacts-sha $ARTIFACTS --declaration-sha $DECLARATION
+```
+
+- 量測期間（約 3 分鐘）不要碰桌面；打開勿擾；不做建置、打包、開 PR、推非文件。
+- 停下時：保留全部（`progress.jsonl`、`runs/`、`files.sha256`），回報你，不重跑。
+
+#### 需要你決定的
+
+主 session 已依使用者同意「照建議進行」，以下各項都是**依建議採用**；替代方案列在後面，要改就重做凍結。
+
+- **U1 規則**：依建議採用區間規則，下界＝max(`hud_tick`, 前一行 `snapshot_tick`)（SHOULD 2），並檢查來源 tick 不倒退（SHOULD 3）。替代：(a) 下界只用 `hud_tick`（v1；比較寬，16-L2 的 2 幀會落在前一行之前的區間）；(b) 只接受 t＝下界或 t＝`snapshot_tick` 兩個端點（更窄；對 16-L2 的資料結果相同）。
+- **U2 寬度與干擾**：依建議採用 **B＋C**：v7 把凍結 F 改判 P 時要求 `disturbed is False` 且 `runtime_gap_events == []`；只在區間內相符而且寬度 > 6 Tick（`presentation_evidence.py:17` 的 0.1 s × 60 Hz）的幀立使用者旗標（不停下，判定不通過，由你決定）。替代：(A) 不設上限、只記錄（v1；理由有誤，見 MUST-FIX 3）；只用 B；只用 C；把旗標改成停下。
+- **U3 CTest 登記**：依建議採用，把 `tests/object_fps_pvp/CMakeLists.txt` 放進允許清單（第 3 個檔案）。替代：16-L2b 結束後再登記（允許清單只剩 2 個檔案）。
+- **U4 突變登記**：依建議採用，`tests/object_fps_pvp/mutations.json` 這次**不加**（不擴大允許清單）；v7 分析器的突變在 16-L2b 之後當一般變更補登。替代：這次一起加（允許清單變 4 個檔案）。
+- **U5 整體判定**：依建議採用上面「16-L2 整體通過」的寫法；記錄到 `16-integration-acceptance.md` 時，16-L2 的 `timing-gui-short` 寫成 F（保留），L2-6 寫成「16-L2b 補判」。替代：把 16-L2b 當成獨立的 L2-6，不連結 16-L2。
+- **U6 再次失敗時**：依建議採用：timing 項目在 v7 規則下仍不通過 → 停下回報，不自動重跑，不再改規則（要改就是新的宣告）。如果每個不通過的幀都在 [前一行 `snapshot_tick`, `hud_tick`) 的某個 t 相符，回報為「**F，疑似下界假失敗**」（MUST-FIX 1；唯讀的事後計算），仍是 F、仍不重跑。**對稱條款**（SHOULD 8）：16-L2b 的結果之後也不會用更新的規則改判，和 16-L2 一樣保留原判定。替代：疑似下界假失敗時允許依新宣告重跑一次。
 

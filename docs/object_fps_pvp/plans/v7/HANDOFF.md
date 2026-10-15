@@ -47,7 +47,7 @@
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D75）。S4-lite 的範圍已核准（使用者：「S4-lite 照建議，同步完開始，快速處理掉p2 ，然後結束掉v7。」）。
 - **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。下一步：縮小版的第 16 批（D76：P1、P2 範圍的整合驗收、STABLE_BASELINE v7（Windows 標未驗證）、D44 整體回歸（不含 D49 第二階段）、是否發行），開始時先提案具體清單；做完 v7 結束。分支 `claude/pvp-v7-p7`。
-- **進行中**：16-L2b（D83）：v7 的 combat GUI 分析規則、補充宣告與 driver（high）＋D45 xhigh 檢查，完成後請使用者核准並重跑 4 項（約 15 分，期間不碰滑鼠）。16-L2 的結果與診斷見進度記錄與 `pvp-v7-16-l2-20261015/hud-diagnosis.md`。
+- **進行中**：16-L2b 正式重跑（commit H＝本次推送；4 項約 3 分；期間不碰滑鼠、不推非文件）。通過後 16-baseline（使用者：「照建議，16-L2b 通過後繼續 16-baseline」）；16-L3 等使用者。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。
 - **m0-to-v71**（2026-10-14，D75）：M0 移到 v7.1，只在 C2 觸發時補做。M0-probe 的 xhigh 審查在開始後中止（未完成，補做 M0 時先完成審查）；`../GYO-Engine-m0` 本機 commit `5ef8a89`（分支 `m0-probe-5ef8a89`，不推送）保留，probe sha256 `8e44de9c…`；證據 `pvp-v7-09-m0-prep-20261014/probe/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
@@ -126,6 +126,7 @@
 | D81 | （2026-10-14）使用者：「我先去休息了，剩下的任務照建議。v7跑完並且通過之後，給我一個可執行版本，明天我會和朋友進行3人聯機測試，你需要提供建置好的pvp，gateway，match。並且還有啟動命令，包含日誌的紀錄。我測試完畢之後，會把日誌回傳給你做分析。」所以：D44 回歸的網路照建議為一般模式 30 次＋`--network-impairments` 15 次；16-declare 經 D45 的 xhigh 檢查並套用修正後，依 D69 的方式照建議核准並執行 16-L2；16-L3（使用者操作）留給使用者，STABLE_BASELINE v7 在 L3 完成前標「L3 待做」；另做 lan-kit-v7：v7 的 3 人 LAN 測試包（Mac 的 Match、Gateway 與 Client，Windows Client 用同一個 commit 的 CI snapshot）與啟動、日誌命令（`plans/v7/LAN_TEST.md`）。 |
 | D82 | （2026-10-15，依 D81 照建議）核准 16-L2 的事前宣告（D45 xhigh 檢查的 MUST-FIX 1～4、SHOULD 5～11 已套用；SHOULD 5～9 的選項依建議採用：網路加只記錄的「重設數≠每階段 1 次」旗標；impairments 移到第 30 塊之後、失敗只立旗標；第 1 輪的 D44 型失敗只讓 `passed`＝false、不停 D；順序 I→D→G；`ls-remote` 逾時記 `remote_error`）。宣告 SHA-256 `1b2d2fbf26dbee80cce38ee33f4ff8b7dc66c5afd56554f778ca698471a380ce`，全文在 `16-integration-acceptance.md`。勿擾（專注模式）無法以指令確認（不改系統設定），記「未確認勿擾」；`IOConsoleLocked`＝No。 |
 | D83 | （2026-10-15）使用者：「今天測試改期，先把16-L2處理了吧」。3 人 LAN 測試改期（測試包 `~/gyo-lan-v7/` 與 `LAN_TEST.md` 保留）。16-L2 的 GUI 戰鬥短測照建議 (a)：只改分析器，事先宣告 v7 規則（HUD 等於 [hud_tick, snapshot_tick] 區間內某個 t 的逐命重播狀態，t 時的 life 等於 hud_life；其餘 combat 檢查不變），以補充宣告重跑 `timing-gui-short` 與沒跑的 3 項（批次代號 16-L2b）；原本失敗的跑次保留、不以新規則改判。 |
+| D84 | （2026-10-15，照建議）使用者：「照建議，修完開始重跑」「照建議，16-L2b 通過後繼續 16-baseline」。16-L2b 補充宣告（D45 xhigh 檢查的 MUST-FIX 1～3、SHOULD 1～8 已套用）核准：v7 規則 `pvp-v7-combat-hud-2`（下界 max(hud_tick, 前一行 snapshot_tick)、上界 snapshot_tick、來源 tick 不倒退；凍結 F 改判 P 時要求 disturbed False 且 runtime_gap_events 為空；只在區間相符且寬度＞6 Tick 立使用者旗標）；U1～U6 依建議；新增 `combat_gui_evidence_v7.py`、`test_combat_gui_evidence_v7.py` 與 CTest 登記。宣告 SHA-256 `5b1466f6b8782ba04c57699b0d4212255df0c0cdb38cb9026e9298b7cf8911b2`。 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -343,6 +344,7 @@
 - 2026-10-15：16-declare 完成（1 位 high＋1 位 xhigh D45 檢查；修正後重新凍結 FROZEN `8263d38c…`、DRIVER_SHA `ebc7e282…`、judge `29258be1…`；模擬 27 情境、竄改 34／34、缺口突變 6／6）。D82 核准，宣告 `1b2d2fbf…`，全文在新的批次文件 `16-integration-acceptance.md`。本次推送為 commit H，16-L2 開始。
 - 2026-10-15：16-L2 正式 session（01:06～03:49，commit H `68e8c51`）依宣告 `passed`＝false、未完成（168／171）：I 30／30 P、D 134／134 P（D44 0／260 事件）、G：quad-gui-bots、action-short、player-short P，`timing-gui-short` F（combat HUD 不一致 13 幀）→ 停止條件 6，剩 3 項 not_run。失敗跑次保留、不重跑。證據 `pvp-v7-16-l2-20261015/`。
 - 2026-10-15：D83（LAN 測試改期；16-L2 照建議 (a)）。16-L2b 開始。
+- 2026-10-15：16-L2b 準備完成（1 位 high＋1 位 xhigh D45 檢查；單元 15／15、突變 16／17（1 個等價）、v6 12 輪＋16-L2 規則核對如預期、模擬與竄改 35 情境、dry run 如預期）。D84 核准，宣告 `5b1466f6…`，全文併入 `16-integration-acceptance.md`；本次推送為 commit H。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
