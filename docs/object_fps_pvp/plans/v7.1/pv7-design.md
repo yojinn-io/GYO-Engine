@@ -1,6 +1,6 @@
 # pv7-design：pv7 契約的設計
 
-更新：2026-10-15。Owner：`object_fps_pvp`。**狀態：D-1～D-7 已決定（[交接](HANDOFF.md) D95）；草案已依 D94（Gateway 回到無狀態邊緣）修訂。下一步是「IPC 送達語意」的 xhigh 對抗式檢查。**
+更新：2026-10-15。Owner：`object_fps_pvp`。**狀態：完成（2026-10-16，[交接](HANDOFF.md) D96）。** protocol-v7 定稿；PlayerInput／ActionBatch 加 Client 的 GYOP 序號作為診斷欄位；pv7-line 約 178～193 h（使用者接受 177～191 h，加上序號欄位的 1～2 h）。
 產出：[protocol-v7 草案](../../protocol-v7.zh-Hant.md)。本文件記錄這一批的過程、待決事項、需要新量測的設定、各批的測試清單與重估的工時。
 決策編號 D-1～D-7 只在本批使用（決定後轉成交接的 Dxx）；和 v7 交接的 D1～D85 不同。
 
@@ -93,6 +93,25 @@
 - **取捨**：排除 B7 代表 re-evaluate 若選了「到達即發布」，就要徵求同意再改一次 wire；加入則要現在定語意，而 B7 的效果還沒評估。DropReason 的新值：Gateway 之後新增丟棄出口（例如 re-evaluate 後的修正）就要徵求同意；接收端已依 D-5 容忍未知值，風險低。
 - **建議**：(a)。
 
+## §2a 的 xhigh 對抗式檢查（2026-10-16，D95）
+
+1 位 xhigh 審查者，約 22 分鐘。結論：§2a 的前提成立（Match 對未合併、可能重複的輸入與動作本來就冪等，Client 能冪等接受重送的結果），**沒有任何發現推翻 D94**。必須修正 2、應修正 6、附註 5，都已套用到草案：
+
+| 問題 | 處置 |
+|---|---|
+| 結果的 30 Hz 上限串了兩個同值的限速器（Gateway 間隔內到達就丟），有抖動就丟，可能讓一部分裁決長時間送不到（必須修正） | Gateway 改為每位玩家單槽持有（latest-wins，到期放出，被取代計數）；Match 每框架先放最小的 4 筆未確認 id（§2a） |
+| `edge-results-passthrough` 這個中間 commit：link 仍擋住 ACK-only 批，最後一次退役遺失就不再送（必須修正） | 同一批讓 link 原樣轉送 ACK-only 批，加測試（§9） |
+| 結果重送仍刷新 5 秒 runtime 期限 | 期限只由 Snapshot、JoinResult、Evicted、Error 刷新（§2） |
+| GYOP 序號若在 reader 先指定，結果會被 Client 當成舊封包丟掉 | 唯一的 UDP 寫出者在寫出前指定序號（§2a） |
+| 給已移除玩家的結果沒有歸類 | 歸入 (d)「不算損失」，只寫 log（§2a、§4） |
+| 凍結分析器的鍵對應（I3 必然失敗等） | 寫明沿用的鍵、輸出 0 的鍵與事前宣告的例外（§9） |
+| FIFO 丟最舊＝丟遲到證據；深度量不到；host mutex 沒有量具 | 上限準則不少於 64 則窗口；用 Go 測試驗證；IpcHost 加鎖等待直方圖（§2a、§9） |
+| 測試清單缺 edge 批，cause-records 的 dwell 測試還寫舊定義 | 已補齊（上一節） |
+| 附註：Leave 同 Tick 的資料、次要的行為變化、條文字面、守衛的盲點、proto 的 reserved 與送達註解、v4 的 latest-wins 條文 | 都已寫進草案 |
+| 附註：PlayerInput／ActionBatch 帶 Client 的 GYOP 序號作為診斷欄位 | 列為待使用者決定（protocol-v7 §10 第 9 項） |
+
+工時：審查者建議 pv7-line 加 7～12 h，變成約 177～191 h（超過已接受的上界 179 h，約 1.07 倍；未達 1.5 倍的停止規則）。
+
 ## 需要新量測的設定（都不是 wire 欄位）
 
 | 設定 | 為什麼現在定不了 | 在哪裡量 |
@@ -108,8 +127,13 @@
 - **heartbeat-sync**：四時間戳公式的單元測試（假時鐘：offset、delay、保留時間、負 delay、跳變）；origin 比對最近 8 個；Match 回覆單槽只回最新一則；回覆排在 snapshot 之後、不佔 controls；有無心跳時 action batch 的寫出時刻、順序與 `take()` 次數都相同；活性：診斷回覆恰好在 5 s 邊界前到達時，link 仍在 5 s 失效（假時鐘）；突變「剩餘 ≤0 仍呼叫 Read」「心跳走 `l.wake`」「心跳刷新活性」「offset 進參考年齡或品質」都要被殺，後兩者用差分測試當 oracle。
 - **time-echo**：Hello／Welcome 樣本的比對；樣本不合法時 Hello 仍維持 liveness 與 Join、Welcome 仍設定 welcomed；Welcome 遺失不影響連線；`ReadyFitsWelcome` 計入 ClockSample；有回聲流量時，凍結 ingress 分析器的 IG、gateway_global、T3 仍然精確。
 - **drop-report**：DropReason↔ingress 鍵的 golden（Go、C++、Python 讀同一份）；每個 reason 一個單元測試（出口恰好加一，且出現在下一則回報）；累計不倒退、只在變化時送、每秒 ≤1、final 恰好 1 則、樣本 ≤4、`samples_omitted` 正確、身分欄位符合 reason；10 秒歸零的 ingress 行與累計值由同一入口更新；下行新計數（注入寫出錯誤、讓 control 佇列滿）；送出迴圈中途注入新 snapshot：玩家 1 已寫出不計、玩家 2～4 各計 1、45 不變；1000 次 join／leave 之後每秒的回報數不超過上限；優雅關閉時所有非空串流都送出 final；鎖順序與 `-race` 測試；runtimeWrite 的替身讓第一則阻塞 500 ms，第二則的 dwell ≥500 ms；Match 端違規依 D-5 處置；最大組合 ≤MaxFrame；突變「拿掉任一出口的計數」「回報進 TrackSlack 或品質」都要被殺。L2 事前宣告：Match 收到的回報與 Gateway 寫出的回報依 `report_sequence` 逐則相等。
-- **gateway-duties**：Go 測試與 race、digest 不變；A3／A5 的條文和程式一致。
-- **cause-records**：dwell（假時鐘）：合併窗口取最舊、切段同值、拒絕線、換代移線、ActionBatch 只算第一次取走的請求、10 s 夾住、寫出阻塞；Leave 原因：三條路徑各帶正確的原因，UNSPECIFIED 時照常移除；動作拒收回覆（依 D-6）：每種拒收產生對應的原因（包括 Resetting）、累計正確、拒收會觸發結果送出；hold（依 D-4）：Match 段的起點＝發布時刻、被取代的 snapshot 不帶、Gateway 段每位玩家各自填、超界只記錄；突變「dwell 或 hold 進 slack／品質」「dwell 進 EqualShot」都要被殺。
+- **edge-results-resend**（D94 新增）：IpcHost 測試：Client ACK 之前以 ≤30 Hz 重送、每框架先放最小的 4 筆未確認 id、退役前進送一次、ACK-only 且 ack ≤ 已退役值時補送退役、拒收觸發送出；改寫 `IpcHostTests.cpp:347`、`:391` 的「每個裁決只送一次」與 v7-08b-lane-*、v7-08b-results-* 突變。Go 測試：「每個裁決只送一次」與「30 Hz 重送」兩種 IPC 輸入，假時鐘下 Gateway 的 UDP 輸出逐則相同。突變「拿掉最小 id 優先」要被殺。
+- **edge-input-passthrough**（D94 新增）：一個資料包對一則 IPC 訊息；Match 的去重（重複窗口、已解析命令的副本、舊 epoch／life 的窗口）；同一玩家依到達順序，Leave 不超車；FIFO 滿了丟最舊並回報，深度用替換 `runtimeWrite` 的 Go 測試驗證（上限不少於 64 則窗口）；逐出後資料照轉，Match 計成未知玩家；解碼成功才提交活性；移除 D1／D2 後 Client 拒收舊 tick；被刪路徑的 ingress v1 鍵照樣輸出 0。突變「Leave 先寫」「丟最新」「解碼前提交」都要被殺。L2 另含 host mutex 的鎖等待直方圖（門檻事前宣告）。
+- **edge-results-passthrough**（D94 新增）：Gateway 每位玩家的單槽持有（latest-wins，在上次送出＋1/30 s 放出，被取代計入 34）；唯一的 UDP 寫出者在寫出前指定序號；link 原樣轉送 ACK-only 批；給已移除玩家的結果只寫 log。假時鐘：框架以 I±0.5 ms 到達時 0 丟棄；「每隔一則丟一則」時未確認 16 或 32 筆在 ≤2⌈n/8⌉ 則內送達；退役框架被丟後，Client 在 2 個間隔內收到退役。突變「到達即丟且門檻＝I」要被殺。
+- **edge-actions-passthrough**（D94 新增）：動作批原樣轉送；link 動作視窗、A5、30 Hz 持有與重送刪除後，Match 的重複、衝突、窗口判斷照常；被閘門擋下的點擊數記錄（spread 在這批到 A1 之間過度保守）。
+- **edge-analyzers**（D94 新增）：ingress 守恆式改寫並重新凍結（鍵對應見 protocol-v7 §9）；新舊各分析一次。
+- **edge-contract**（D94，取代 gateway-duties）：Gateway 狀態型別的遞迴走訪（含 map、slice、any／interface 欄位）、`go/ast` 掃描套件變數與 `go` 啟動的函式和閉包裡的區域狀態；突變「新增未分類欄位」要被殺；Runtime 期限只由 Snapshot、JoinResult、Evicted、Error 刷新（假時鐘），突變「ActionResults 刷新期限」要被殺。
+- **cause-records**：Client 的 GYOP 序號（D96）：原樣帶入 PlayerInput／ActionBatch；差分測試證明它不影響去重與任何判斷；Match 的序號缺口統計（扣掉 Hello 與回報的丟棄）。dwell（假時鐘）：一對一（一則訊息對一個資料包）、10 s 夾住、寫出阻塞（runtimeWrite 的替身讓第一則阻塞 500 ms，第二則的 dwell ≥500 ms）；Leave 原因：三條路徑各帶正確的原因，UNSPECIFIED 時照常移除；動作拒收回覆（依 D-6）：每種拒收產生對應的原因（包括 Resetting）、累計正確、拒收會觸發結果送出；hold（依 D-4）：Match 段的起點＝發布時刻、被取代的 snapshot 不帶、Gateway 段每位玩家各自填、超界只記錄；突變「dwell 或 hold 進 slack／品質」「dwell 進 EqualShot」都要被殺。
 - **hitbox-fields**：HitPart 的正反例（Gateway、Client、EqualDecision）；`last_hit_part` 的四欄規則；`maximum_shot_damage` 的三條規則與 damage 上限；Match 只產生 BODY；`view_tick_q16` 的紀錄性檢查（0、邊界、溢位、Reload≠0），永不拒絕，而且取的是全域游標（遠端剛重生的案例）；`EqualShot` 與 `operator==` 包含欄位 7～9；同一請求帶不同的 E、S、`view_tick_q16` 時，裁決逐欄相同；E 與 S 取自同一個模擬步；預測未啟用時點擊照樣送出（E＝0）；凍結 action_probe 的 duplicate-reorder-conflict 判定不變；依 D-2 的影子紀錄。
 - **pv7-checkpoint**：四平台 L1；用凍結 pv7 工具和 v7 基準比較，有差異時在線內 commit 之間二分；產出 K 與 S 取法的影子資料（事前宣告＋D45 檢查）。
 - **a1-shot-step**：準時 J＝T(S)、late／epoch／life 退回、上限 A＋13、epoch 未開始、S＝0、命令 S 被替代、冷卻保留 ≤K 與 >K、保留後重判、每位玩家依 ActionId 的順序（含 Reload 排在保留中的 Shot 之後）、同 Tick 跨玩家的順序、參考年齡在 A 量；不變式：同一 epoch 內照序號閘門送出時權威 Cooldown＝0；預測凍結時不送；新的 digest 情境；golden 依事前宣告重產並保留舊檔；`FireGateTests` 換成序號閘門的測試，`mutations.json` 中 FireGate 的突變一起退役或改寫；L2 事前宣告＋D45；L3 你的連點手感。

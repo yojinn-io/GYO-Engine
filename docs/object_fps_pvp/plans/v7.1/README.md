@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design` 進行中**：草案已依 D94、D95 修訂（[protocol-v7 草案](../../protocol-v7.zh-Hant.md)），下一步是「IPC 送達語意」的 xhigh 對抗式檢查，之後定稿。
+**狀態：`pv7-design` 完成**（D96）：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿，尚未生效。下一批是 `proto-rename-v7`，等使用者說開始。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -22,7 +22,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 ├── prep
 │   └── plan-sync-docs ▶              「low｜同步 master（PR #75～77），寫 plans/v7.1」
 ├── pv7-line                          「同一條 PR 線，三角色，最後一次合併」
-│   ├── pv7-design ▶                  「high＋xhigh 檢查｜所有 wire 欄位與 IPC 送達語意一次定完」
+│   ├── pv7-design ✓                  「high＋xhigh 檢查｜所有 wire 欄位與 IPC 送達語意一次定完」
 │   ├── proto-rename-v7               「low｜proto 與套件改名為 v7，版本值仍是 6」
 │   ├── version-errors                「high｜P1：版本 6→7、明確錯誤、凍結 pv7 版分析器」
 │   ├── heartbeat-sync                「high（時鐘域局部 xhigh）｜P2：心跳對時」
@@ -63,7 +63,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | 區塊 | 工時 |
 |---|---|
 | prep | 約 3 h |
-| pv7-line | 約 170～179 h〔推論〕（README 初版估 91 h；pv7-design 重估 111 h；D94 改為無狀態邊緣後增加，使用者已接受） |
+| pv7-line | 約 178～193 h〔推論〕（README 初版估 91 h；pv7-design 重估 111 h；D94 改為無狀態邊緣後為 170～179 h；§2a 的 xhigh 檢查後為 177～191 h，使用者已接受（D96）；再加 GYOP 序號欄位的 1～2 h） |
 | after-pv7 | 約 54～64 h |
 | after-re-evaluate | 約 91～101 h，另加 re-evaluate 決定的修正（未估） |
 
@@ -75,19 +75,19 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 
 | 代號 | 範圍 | 驗收（L1／L2／L3） | 工時 | 備註 |
 |---|---|---|---|---|
-| pv7-design | 一次定完所有 wire 欄位與語意，包括 §2a 的 IPC 送達語意（D94）；產出 `protocol-v7.zh-Hant.md` 草案；IPC 送達語意做 1 次 xhigh 對抗式檢查 | 只改文件／—／使用者核准草案 | 18 | 哪個欄位需要新量測才能決定，就停下問使用者。之後再改 wire 要先徵求同意 |
+| pv7-design | 一次定完所有 wire 欄位與語意，包括 §2a 的 IPC 送達語意（D94）；產出 `protocol-v7.zh-Hant.md` 草案；IPC 送達語意做 1 次 xhigh 對抗式檢查 | 只改文件／—／使用者核准草案 | 19～20 | 哪個欄位需要新量測才能決定，就停下問使用者。之後再改 wire 要先徵求同意 |
 | proto-rename-v7 | `client_v6`／`runtime_v6` 改名為 v7（proto、Go 套件、CMake target、include），版本值仍是 6；照 v6 的先例（`708e877`→`f255bf1`） | 全量 CTest＋Go、digest 不變／—／— | 3 | Architecture Delta：Build Graph 的 target 名稱 |
 | version-errors | ProtocolVersion 6→7；版本不符時寫出期望值與收到值（HTTP、IPC、Client）；驗收工具與突變升 pv7；凍結 pv7 版分析器（ingress 的部分守恆式列為事前宣告的例外，到 `edge-analyzers` 重新凍結） | 版本與不符測試、突變、digest 兩樹比較與 golden／短跑次確認新工具重現 v7 基準（只記錄）／— | 12 | 從這批起，凍結的 pv6 工具讀不了新跑次 |
 | heartbeat-sync | runtime link 每秒心跳，用獨立計時器；偏移、RTT 最小值、漂移每 10 秒寫進兩端日誌；活性規則（診斷訊框不刷新）；D32 的結構隔離與差分測試 | 測試、突變、digest 不變／同機長跑次，只記錄（含睡眠後的跳變）／— | 9 | 新增 RuntimeEnvelope 訊息 |
 | time-echo | Client↔Gateway 的往返時間戳（搭在 Hello／Welcome），RTT 最小值濾波，兩端日誌 | 測試、digest 不變／只記錄／跨機器在 Windows LAN 場次量 | 4 | |
 | drop-report | Gateway 依原因累計丟棄數回報 Match；**先照現行出口實作**（含之後會刪除的過渡原因），edge 批刪掉對應程式時一起縮減；優雅關閉送 final、回報日誌 | 測試、golden、突變、digest 不變／注入跑次：Match 收到的回報與 Gateway 寫出的回報依 report_sequence 逐則相等（事前宣告）／— | 13～16 | D49 第二階段。排在 edge 批之前（守住 D90），edge 批的前後對照因此有丟棄回報可用 |
-| edge-results-resend | Match 的結果通道改成在 Client ACK 之前以 ≤30 Hz 重送（循環游標），退役補送，拒收觸發送出；Gateway 這時仍有帳本、會冪等合併 | IpcHost 測試（改寫 08b 的「每個裁決只送一次」）、digest 不變／—／— | 6 | Client 看到的不變 |
-| edge-input-passthrough | ★輸入一個資料包對一則 IPC 訊息、原樣轉送；刪除 `lastResolved` 副本、命令表、路由、拒絕線、已寫出去重、截短、D1、D2；link 改成依到達順序的有界 FIFO；解碼成功就提交活性 | Go 測試、突變；被刪路徑的 ingress v1 鍵照樣輸出 0／事前宣告＋D45：命令證據、替代率、連線品質與逐出（含 Gateway→Match 延遲注入）、Match 的副本計數與負載（host mutex 等待、Tick 晚醒）／— | 18～22 | 事故根因元件在這批刪除。Match 每個 clean 跑次要多處理約 1.15 萬個重複命令，負載上升就停下重評 |
-| edge-results-passthrough | ★結果原樣轉送給 Client；刪除 session 帳本、retiredSent、retirementAsked、結果節拍與 A3；Gateway 只記每位玩家上次送出結果的時刻，守 30 Hz | Go 測試、突變／事前宣告＋D45：裁決到 Client 的延遲、送出間隔 ≤30 Hz（含 host-ipc 停頓案例）、射擊時序與權威 Cooldown＝0／— | 10～13 | 排在動作直通之前，避免帳本在沒有 A3 時合併請求 |
+| edge-results-resend | Match 的結果通道改成在 Client ACK 之前以 ≤30 Hz 重送（循環游標），退役補送，拒收觸發送出；Gateway 這時仍有帳本、會冪等合併 | IpcHost 測試（改寫 08b 的「每個裁決只送一次」）、digest 不變／—／— | 7～8 | Client 看到的不變 |
+| edge-input-passthrough | ★輸入一個資料包對一則 IPC 訊息、原樣轉送；刪除 `lastResolved` 副本、命令表、路由、拒絕線、已寫出去重、截短、D1、D2；link 改成依到達順序的有界 FIFO；解碼成功就提交活性 | Go 測試、突變；被刪路徑的 ingress v1 鍵照樣輸出 0／事前宣告＋D45：命令證據、替代率、連線品質與逐出（含 Gateway→Match 延遲注入）、Match 的副本計數與負載（host mutex 等待、Tick 晚醒）／— | 20～26 | 事故根因元件在這批刪除。Match 每個 clean 跑次要多處理約 1.15 萬個重複命令，負載上升就停下重評 |
+| edge-results-passthrough | ★結果原樣轉送給 Client；刪除 session 帳本、retiredSent、retirementAsked、結果節拍與 A3；Gateway 只記每位玩家上次送出結果的時刻，守 30 Hz | Go 測試、突變／事前宣告＋D45：裁決到 Client 的延遲、送出間隔 ≤30 Hz（含 host-ipc 停頓案例）、射擊時序與權威 Cooldown＝0／— | 12～16 | 排在動作直通之前，避免帳本在沒有 A3 時合併請求 |
 | edge-actions-passthrough | ★動作批原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | Go 測試、突變／事前宣告＋D45：射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數／— | 14～17 | FireGate 的 spread 在這批到 A1 之間會變得過度保守 |
-| edge-analyzers | 改寫 ingress 分析器的 Gateway 守恆式並重新凍結；同步突變目錄 | 新舊各分析一次／—／— | 6 | |
+| edge-analyzers | 改寫 ingress 分析器的 Gateway 守恆式並重新凍結；同步突變目錄 | 新舊各分析一次／—／— | 5～6 | |
 | edge-contract | 把無狀態邊緣的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」與 protocol-v7；Go 狀態欄位的白名單守衛（遞迴走訪型別、掃描套件變數）與突變 | Go 測試、突變、digest 不變／—／— | 4 | 取代 `gateway-duties`。依內容的判斷靠審查，並由 AGENTS.md 連到條文（事故行動 4，文件會話） |
-| cause-records | dwell（一對一）、snapshot 的兩段停留、動作拒收回覆（ActionResults）、Leave 原因 | 測試、突變、digest 不變／只記錄／— | 7 | 有了對時與回聲才能判斷原因 |
+| cause-records | dwell（一對一）、Client 的 GYOP 序號（只作診斷，D96）、snapshot 的兩段停留、動作拒收回覆（ActionResults）、Leave 原因 | 測試、突變、digest 不變／只記錄／— | 8～9 | 有了對時與回聲才能判斷原因 |
 | hitbox-fields | 命中部位一律填 Body；射手看到的時刻由 Client 照實填；加 A1 的 E、S 與影子紀錄（D-2）；Match 驗證並記錄，不改判定 | 編解碼與驗證測試、digest 不變／只記錄／— | 8 | |
 | pv7-checkpoint | A1 前的整體回歸：四平台 L1、digest；先扣掉三個 edge 批事前宣告的差異帶，再用凍結 pv7 工具和 v7 基準比較；產出 K 與 S 取法的影子資料 | 全量／事前宣告＋D45／— | 8 | |
 | a1-shot-step | ★Match 在命令步 T(S) 判定射擊，趕不上時有界退回到達判定；Client 改用序號閘門，刪除 FireGate；combat golden 依宣告重產；K 的值交使用者決定 | 測試、突變、golden 依宣告更新／事前宣告＋D45：clean 下權威 Cooldown＝0、退回率／使用者的連點手感 | 20 | Architecture Delta：FireGate 退役、射擊判定語意改變。命中回饋可能慢約 20～37 ms〔推論〕 |

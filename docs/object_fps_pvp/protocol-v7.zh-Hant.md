@@ -1,6 +1,6 @@
-# PvP Protocol v7（草案）：檢測、丟棄回報、射擊步序與 hitbox 的契約支持
+# PvP Protocol v7：檢測、無狀態邊緣、丟棄回報、射擊步序與 hitbox 的契約支持
 
-更新：2026-10-16（依 D94 改為無狀態邊緣，依 D95 的決定修訂）；初稿 2026-10-15。**狀態：草案。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94、D95；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定；「IPC 送達語意」（§2a）還要做 1 次 xhigh 對抗式檢查，之後定稿。
+更新：2026-10-16（定稿，D96）；初稿 2026-10-15。**狀態：定稿，尚未生效。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94～D96；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定，§2a 已做 xhigh 對抗式檢查。定稿之後，任何 wire 的新增、刪除、改號、改型別或改語意，都要先徵求使用者同意。
 本文件的 vN 指網路協議版本 pvN。現行 wire 仍是 pv6（[protocol-v6](protocol-v6.zh-Hant.md)）；本契約在 v7.1 的 pv7-line 分批實作，`pv7-merge` 時一次生效。
 pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標明原出處。程式行號以 `95bac31` 為準。
 
@@ -49,7 +49,7 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 ### 診斷不進判定（D32）
 
-- 下列值只供觀察：ClockSample 算出的 offset、delay、漂移；dwell、hold；丟棄回報；動作拒收回覆；Leave 原因；v7.1 的 `view_tick_q16`、`hit_part`。
+- 下列值只供觀察：ClockSample 算出的 offset、delay、漂移；dwell、hold；Client 的 GYOP 序號（`client_transport_sequence`）；丟棄回報；動作拒收回覆；Leave 原因；v7.1 的 `view_tick_q16`、`hit_part`。
 - 它們絕不被下列任何一處讀取：250 ms 的 InvalidReference／Expired；160 ms 的品質門檻與逐出；TrackSlack 與 slack 樣本；backlog／starvation；5 秒的 session／runtime／Client 逾時；A1 的判定與冷卻；Client 的相位追蹤、token 規則、射擊閘門與 SnapshotTimeline；Gateway 的 admission 與速率。
 - **結構隔離**：時鐘估計器、dwell、hold 與丟棄回報只存在於 I/O 層（Gateway、`IpcHost`、`ClientConnection`），由 `IpcHost` 自己寫對時與 `gw_` 前綴的日誌。`MatchRuntimeHost` 的公開介面不新增任何帶這些值的參數；若一定要經過它，只收不透明的 `DiagnosticCounts`，而且只准在 `TakeIngressStatistics` 內使用。
 - **守衛**：原始碼守衛 CTest 涵蓋 `PvpMatch.cpp`、`LocalPlayerPrediction.cpp`、`MatchRuntimeHost.cpp`／`.hpp`（至少 `SubmitInput`、`Step`、`TrackSlack`、`JudgeConnectionQuality`）、`SnapshotTimeline.hpp`、`PvpApplication.cpp`，以及 `a1-shot-step` 之前的 `FireGate.cpp`。Go 端加測試，確認 session 套件與 `server.go` 的逾時、admission 不引用 ClockSample、dwell、hold 的符號。
@@ -65,9 +65,9 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 ### 診斷訊框不刷新活性
 
-- Gateway 的 runtime 讀取期限 5 秒，只由 pv6 的訊息種類（JoinResult、Snapshot、Error、ActionResults、Evicted）刷新。
+- Gateway 的 runtime 讀取期限 5 秒，只由 Snapshot、JoinResult、Evicted、Error 刷新。pv7 的 ActionResults 由 Match 的 IPC 執行緒以計時器重送（§2a），和心跳同一類，所以也不刷新。Match 每個 Tick 都發布 snapshot（0 位玩家時也一樣，`MatchRuntimeHost.cpp:450-451`），所以模擬正常時不會誤判。
 - 實作：記下最後一個這類框架的時刻，以剩餘時間呼叫 Read。**剩餘時間 ≤0 時不得呼叫 Read**（可重用層的 framing 遇到 timeout≤0 會取消期限），直接走既有的逾時失效路徑。
-- 理由：Match 的 IPC 由獨立的 `gyo-match-ipc` 執行緒服務（`IpcHost.cpp:187`），模擬卡住時照樣回覆心跳；若回覆刷新期限，原本 5 秒就失效的 link 會一直存活。
+- 理由：Match 的 IPC 由獨立的 `gyo-match-ipc` 執行緒服務（`IpcHost.cpp:187`），模擬卡住時照樣回覆心跳、照樣重送結果；若這些框架刷新期限，原本 5 秒就失效的 link 會一直存活。
 - Hello、Welcome 帶的 clock 不改變 session 與 Client 的活性規則。
 
 ### 診斷訊框的計時與佇列
@@ -104,7 +104,9 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 ## 2a. IPC 送達語意（v7.1 D94、D95）
 
-Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送達只由端點負責。這一節改寫 runtime proto 的送達註解（`runtime_v6.proto:31-33`、`:39`）與 protocol-v4 中由 Gateway 合併、重送的條款。
+Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送達只由端點負責。這一節改寫 runtime proto 的送達註解（`runtime_v6.proto:31-33`、`:39`、`:123-131`）與 protocol-v4 中由 Gateway 合併、重送的條款，包括「結果不能套用 latest-wins」（`protocol-v4.zh-Hant.md:193-195`）：pv7 的結果框架由 Match 重送到 ACK 為止，被較新的框架取代不會造成永久遺失，所以 Gateway 的單槽持有（下述）可以 latest-wins。
+
+runtime proto 的 `ActionBatch`／`ActionResults` 要寫入送達註解：批可能重複；ACK-only 而且 ack ≤ 已退役值，表示要求補送退役；結果會重送，而且冪等。
 
 ### 各訊息的語意
 
@@ -112,16 +114,19 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 |---|---|---|
 | `PlayerInput`（Gateway→Match） | Gateway 依 `lastResolved` 副本合併、去重、截短，只送這條 link 沒寫過的命令；另有拒絕線 | **一個 Client 資料包的窗口原樣轉送**，可能重複，也可能含已解析命令的副本；Match 以 (player, epoch, life, sequence) 去重（既有的 AdmitInput 與暫存去重）；`observed_authority_tick` 取該資料包自己的值 |
 | `ActionBatch`（Gateway→Match） | Gateway 的 link 動作視窗聚合請求，依帳本驗證（A3、A5），以 30 Hz 持有與重送 | **一則 Client 批次原樣轉送**（請求加累計 ACK），可能重複；Match 既有的接納檢查判斷並依原因計數 |
-| `ActionResults`（Match→Gateway→Client） | Match 每個裁決與退役只送一次，由 Gateway 的 session 帳本對 Client 重送 | **Match 對每位玩家重送**：Client ACK 之前，以 ≤`ActionSendRate` 重送未確認的裁決（每框架 ≤8 筆，循環游標）；退役前進時送一次；收到 ACK ≤ 已退役值的 ACK-only 批時，再補送一次退役；拒收也觸發一次送出（D-6）。Gateway 逐則檢查後原樣轉給 Client |
+| `ActionResults`（Match→Gateway→Client） | Match 每個裁決與退役只送一次，由 Gateway 的 session 帳本對 Client 重送 | **Match 對每位玩家重送**：Client ACK 之前，以 ≤`ActionSendRate` 重送未確認的裁決，每框架 ≤8 筆，**先放最小的 4 筆未確認 id，其餘槽位循環**（Client 只能連續 ACK，最小 id 送不到會卡住退役）；退役前進時送一次；收到 ACK ≤ 已退役值的 ACK-only 批時，再補送一次退役；拒收也觸發一次送出（D-6）。Gateway 逐則檢查後轉給 Client，送出節奏見下面的單槽持有 |
 | `WorldSnapshot`、Join／Leave、JoinResult、Evicted | — | 語意不變。Gateway 仍負責把 snapshot 分送給每位玩家（latest-wins） |
 
 ### 順序與背壓（D-10）
 
 - link 依到達順序寫出；**同一玩家的 controls 與資料保持到達順序**，Leave 不會超車同一玩家還在佇列中的輸入。
 - controls 不丟：待寫超過 64 則照舊讓 link 失效。
-- 資料（輸入、動作）每位玩家一個有界 FIFO；滿了丟最舊的，計入 §4 的佇列溢出原因並回報。上限在 `edge-input-passthrough` 量過 FIFO 深度後決定。
-- **結果的「最多 30 Hz」由 Gateway 執行**：Gateway 對每位玩家只記「上次送出結果的時刻」（傳輸層的軟狀態）；間隔內到達的結果丟棄，計入 `DROP_RESULTS_OVER_RATE_PACKETS` 並回報。結果是冪等的，Match 下一個間隔會再送，所以 Gateway 不保存、也不合併任何內容。
-- 逐出或 Leave 時，佇列中這位玩家的資料照樣轉給 Match，由 Match 依「未知玩家」計數；link 失效或寫出失敗時的清除，結構上無法回報，只寫 Gateway log。
+- 資料（輸入、動作）每位玩家一個有界 FIFO；滿了丟最舊的，計入 §4 的佇列溢出原因並回報。**上限準則：每位玩家不少於 64 則輸入窗口**（pv6 的對應上限是 32 個已解析命令，`runtime_link.go:182-185`）。被替代的命令只存在於最舊的窗口，所以溢出＝遲到證據的損失；這和 2026-10-10 事故同一類，差別是現在有計數與回報。深度與回報用替換 `runtimeWrite` 的 Go 測試驗證（既有的延遲注入在 relay 端吸收，量不到 Gateway 的 FIFO 深度）。
+- **結果的「最多 30 Hz」由 Gateway 的單槽持有執行**：Gateway 對每位玩家記「上次送出結果的時刻」，並至多持有 1 則待送的結果框架（latest-wins）；在「上次送出＋1/30 s」時放出，被較新的框架取代時，舊的那則計入 `DROP_RESULTS_OVER_RATE_PACKETS` 並回報。它不依內容選擇，也不重送；延後送出不是重送。這和 snapshot 的 latest-wins 佇列同一類，屬於允許的有界外送佇列。
+  - 不採「間隔內到達就丟」：它和 Match 的節拍同值（兩邊都是 33,333,334 ns），只要有抖動就會丟，新裁決最多晚約一個間隔；丟棄若和循環游標的相位耦合，固定一部分裁決可能長時間送不到（xhigh 檢查第 1 項）。
+- **唯一的 UDP 寫出者**：每位玩家的 GYOP 序號，在唯一的 UDP 寫出處、寫出前才指定；30 Hz 的放出判斷也在同一處。Client 會無聲丟掉序號不比上一則新的封包（`ClientConnection.cpp:453`、`:590`），所以序號不能在 reader goroutine 先指定。
+- 逐出或 Leave 時，佇列中這位玩家的資料照樣轉給 Match，由 Match 依「未知玩家」計數；和 Leave 同一個 Tick 到達的資料，Match 先處理 controls，所以仍會被丟（計數位置從 Gateway 的 `drop_discarded_on_leave_*` 移到 Match 的 `leave_discarded_*`）。link 失效或寫出失敗時的清除，結構上無法回報，只寫 Gateway log。
+- 給已移除玩家的結果（Match 讀到 Leave 之前可能還在重送）：歸入出口完整性的 (d)「不算損失」，只寫 Gateway log；Match 已經知道這位玩家離開了（和 pv6 的 D7 同類）。
 
 ### session 活性（D-11）
 
@@ -130,10 +135,10 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 
 ### Gateway 的約束（D-14；由 `edge-contract` 寫進 network-architecture 的「不可破壞的契約」）
 
-- **允許**（可以重建、不參與遊戲判定的軟狀態）：連線與 session（token、endpoint、傳輸序號、速率、活性、生命週期）、房間與保留、Ready 的設定副本、有界的外送與 IPC 佇列（溢出要計數並回報）、每位玩家上次送出結果的時刻、診斷計數與時鐘樣本。對每則訊息只做翻譯，以及單則訊息內的版本、格式、範圍與授權檢查。
-- **禁止**：Match 決策狀態的副本（游標、epoch、life、命令表、動作帳本、裁決、退役）；跨訊息、依內容的判斷（去重、合併、過時、衝突）；排程重送。
+- **允許**（可以重建、不參與遊戲判定的軟狀態）：連線與 session（token、endpoint、傳輸序號、速率、活性、生命週期）、房間與保留、Ready 的設定副本、有界的外送與 IPC 佇列（溢出要計數並回報）、每位玩家上次送出結果的時刻與至多 1 則待送的結果框架、診斷計數與時鐘樣本。對每則訊息只做翻譯，以及單則訊息內的版本、格式、範圍與授權檢查。依傳輸序號、速率與 session 生命週期的跨訊息判斷（例如舊序號、未認證、非 active）是允許的。
+- **禁止**：Match 決策狀態的副本（游標、epoch、life、命令表、動作帳本、裁決、退役）；**依遊戲項目的身分或內容做的跨訊息判斷**（去重、合併、過時、衝突）；排程重送。
 - 判斷準則：這個 Gateway 欄位或判斷，是否要知道「Match 已經有什麼」才能做對？是的話，它屬於 Match。新增任何 Gateway 狀態欄位都是 Architecture Delta，要經使用者同意。
-- 守衛：Go 測試遞迴走訪 Gateway 狀態型別的欄位（含 map、slice 的元素與具名型別），並用 `go/ast` 掃描套件層級的變數，和分類表比對；配一個「新增未分類欄位」的突變。依內容的判斷測不到，靠審查，並從 AGENTS.md 連到這份約束（設計事故行動 4）。
+- 守衛：Go 測試遞迴走訪 Gateway 狀態型別的欄位（含 map、slice 的元素、具名型別與 any／interface 欄位），並用 `go/ast` 掃描套件層級的變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對；配一個「新增未分類欄位」的突變。依內容的判斷測不到，靠審查，並從 AGENTS.md 連到這份約束（設計事故行動 4）。
 
 ### 兩份 proto（D-15）
 
@@ -210,7 +215,7 @@ Gateway 執行了、但沒能轉送內容的丟棄，依原因回報給 Match（
 
 ### DropReason
 
-值名＝ingress v1 的 `drop_` 鍵轉大寫，一個值對應一個鍵；原因字只在 `gateway/ingress_statistics.go` 的名稱表定義一次，Go、C++、Python 讀同一份跨語言 golden。1～34 是玩家範圍，40～45 是 Gateway 範圍；16、17、20～26、43、44 不使用（D94 之前的草案用過，定稿時刪除）。新增值就是 wire 變更（D-7）。
+值名＝ingress v1 的 `drop_` 鍵轉大寫，一個值對應一個鍵；原因字只在 `gateway/ingress_statistics.go` 的名稱表定義一次，Go、C++、Python 讀同一份跨語言 golden。1～34 是玩家範圍，40～45 是 Gateway 範圍；16、17、20～26、43、44 在 proto 宣告為 `reserved`（D94 之前的草案用過，定稿時刪除，之後不得重用）。新增值就是 wire 變更（D-7）。
 
 | 值 | 名稱 | 出口 | dwell 起點 |
 |---|---|---|---|
@@ -228,7 +233,7 @@ Gateway 執行了、但沒能轉送內容的丟棄，依原因回報給 Match（
 | 31 | `DROP_REPLACED_SNAPSHOT_PACKETS` | 送出迴圈中途 snapshot 被較新的取代：還沒拿到被取代那一份的每位 active 玩家各計 1；樣本帶 `snapshot_tick`（新鍵） | 事件 |
 | 32 | `DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS` | §2a：這位玩家的 IPC 資料佇列滿，最舊的輸入被丟；樣本帶命令身分（新鍵） | 收包 |
 | 33 | `DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS` | 同上，最舊的動作批被丟；樣本帶 action id 範圍（新鍵） | 收包 |
-| 34 | `DROP_RESULTS_OVER_RATE_PACKETS` | §2a：結果在 30 Hz 的間隔內到達而被丟（Match 會再送）；樣本帶 action id 範圍（新鍵） | 事件 |
+| 34 | `DROP_RESULTS_OVER_RATE_PACKETS` | §2a：為了守 30 Hz 而沒有送出的結果框架，包括在單槽中被較新的框架取代的那一則（Match 會再送）；樣本帶 action id 範圍（新鍵） | 事件 |
 | 40 | `DROP_UNDECODABLE_DATAGRAMS` | Gateway 範圍：GYOP 標頭無法解碼 | 收包 |
 | 41 | `DROP_OTHER_VERSION_DATAGRAMS` | Gateway 範圍：標頭版本不是 7 | 收包 |
 | 42 | `DROP_UNKNOWN_SESSION_DATAGRAMS` | Gateway 範圍：不屬於任何 session | 收包 |
@@ -249,7 +254,7 @@ Gateway 執行了、但沒能轉送內容的丟棄，依原因回報給 Match（
 
 ### Gateway 出口的完整性
 
-Gateway 處理的每個項目恰好有一個結果：(a) 寫出到 link（`fwd_` 鍵）；(b) 可回報的丟棄（上表）；(c) 只寫 Gateway log（link 已失效、可導出的總和）；(d) 不算損失（D4、D7、D8、D9 等轉送結果）。新增出口時，要同時更新名稱表、列舉、範圍與測試。
+Gateway 處理的每個項目恰好有一個結果：(a) 寫出到 link（`fwd_` 鍵）；(b) 可回報的丟棄（上表）；(c) 只寫 Gateway log（link 已失效、可導出的總和）；(d) 不算損失（D4、D7、D8、D9 等轉送結果，以及給已移除玩家的結果，§2a）。新增出口時，要同時更新名稱表、列舉、範圍與測試。
 
 ### 動作內容的判斷（D-1 不再需要）
 
@@ -261,11 +266,12 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 
 ## 5. 原因紀錄（E2、動作拒收回覆、Leave 原因，`cause-records`）
 
-### Gateway 停留時間
+### Gateway 停留時間與 Client 的 GYOP 序號
 
 - `PlayerInput.gateway_dwell_us`（runtime，6，optional uint32）：承載這則 IPC 輸入的那個 Client 資料包在 Gateway 的停留時間（§2 的定義，一對一）。
 - `ActionBatch.gateway_dwell_us`（runtime，4，optional uint32）：同上，承載這則動作批的 Client 資料包。
-- 放在 IPC 訊息層級，不放進 ShotRequest 或 MovementCommand，不參與任何身分或內容比對。
+- `PlayerInput.client_transport_sequence`（runtime，7，optional uint32）與 `ActionBatch.client_transport_sequence`（runtime，5，optional uint32）：承載這則訊息的 Client 資料包的 GYOP 序號（Client 的序號空間，每個 session 從 1 起算；Hello、Input、Actions 共用）。只作診斷：Match 用它逐位玩家觀察 Client→Gateway 的序號缺口。缺口由三種來源組成：Hello（Gateway 自己處理、不轉送）、Gateway 回報的丟棄（`DropSample.transport_sequence` 可以逐筆對上）、網路遺失；逐窗的精確核對要配合 Gateway 的 ingress 計數離線做。Match 絕不拿它去重或判斷新舊（去重只看命令與動作的身分）。
+- 以上欄位都放在 IPC 訊息層級，不放進 ShotRequest 或 MovementCommand，不參與任何身分或內容比對。
 - 缺少或超界時只記錄，視為缺少，輸入照常處理。
 
 ### 端到端 snapshot 年齡（依 D-4）
@@ -402,18 +408,22 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 | `heartbeat-sync` | ClockSample（runtime）、oneof 20、活性規則、診斷計時與槽 | 不變 |
 | `time-echo` | `Hello.clock`、`Welcome.clock` | 不變 |
 | `drop-report` | oneof 21、GatewayDropReport、DropCount、DropSample、DropReason（先含過渡原因，§4） | 不變 |
-| `edge-results-resend` | ActionResults 的重送語意（欄位不變）；Gateway 這時仍有帳本，會冪等合併 | Client 看到的不變；IpcHost 測試 |
-| `edge-input-passthrough` | PlayerInput 原樣轉送（§2a）；FIFO、順序、活性（D-10、D-11）；移除 D1、D2；刪除對應的過渡原因 | **行為改變**：事前宣告，L2 前後對照（命令證據、替代率、連線品質與逐出、Match 的副本計數與負載） |
-| `edge-results-passthrough` | 結果原樣轉送，Gateway 只記上次送出時刻（D-10）；刪除 session 帳本與 A3 | **行為改變**：事前宣告，L2 前後對照（裁決到 Client 的延遲、送出間隔 ≤30 Hz、射擊時序） |
+| `edge-results-resend` | ActionResults 的重送語意（欄位不變，最小 id 優先）；Gateway 這時仍有帳本，會冪等合併 | Client 看到的不變：IpcHost 測試，加上 Go 測試（「每個裁決只送一次」與「30 Hz 重送」兩種 IPC 輸入，假時鐘下 Gateway 的 UDP 輸出逐則相同） |
+| `edge-input-passthrough` | PlayerInput 原樣轉送（§2a）；FIFO、順序、活性（D-10、D-11）；移除 D1、D2；刪除對應的過渡原因 | **行為改變**：事前宣告，L2 前後對照（命令證據、替代率、連線品質與逐出、Match 的副本計數；IpcHost 層新增 host mutex 的鎖等待直方圖，門檻事前宣告）。宣告中要列出的次要變化：參考年齡的樣本權重（pv6 合併時只抽一次樣，pv7 每個帶新命令的資料包各抽一次）、LateFirst 的參考年齡改用該資料包自己的 tick、copy 類計數大增 |
+| `edge-results-passthrough` | 結果轉送，Gateway 的單槽持有與唯一寫出者（D-10）；刪除 session 帳本與 A3；**同一批讓 link 原樣轉送 ACK-only 批**（拿掉 link 對 ACK 的過濾，否則 Match 收不到補送退役的要求，最後一次退役遺失就不再送） | **行為改變**：事前宣告，L2 前後對照（裁決到 Client 的延遲、送出間隔 ≤30 Hz、射擊時序；中間 commit 也跑 loss 與 network 模式）。Go 測試：退役框架被丟後，Client 在 2 個間隔內收到退役；框架以 I±0.5 ms 到達時 0 丟棄；「每隔一則丟一則」時，未確認 16 或 32 筆都在 ≤2⌈n/8⌉ 則內送達 |
 | `edge-actions-passthrough` | ActionBatch 原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | **行為改變**：事前宣告，L2 前後對照（射擊到達、權威 Cooldown＝0、Expired 率） |
-| `edge-analyzers` | 無 | 改寫並重新凍結 ingress 的守恆式；從 `edge-input-passthrough` 起，被刪路徑的 ingress v1 鍵照樣輸出 0 |
+| `edge-analyzers` | 無 | 改寫並重新凍結 ingress 的守恆式（見下面的鍵對應） |
 | `edge-contract` | 無（約束條文與守衛，§2a） | 不變 |
-| `cause-records` | dwell、snapshot hold（D-4）、動作拒收回覆（D-6）、Leave 原因 | 不變 |
+| `cause-records` | dwell、Client 的 GYOP 序號（D96）、snapshot hold（D-4）、動作拒收回覆（D-6）、Leave 原因 | 不變 |
 | `hitbox-fields` | HitPart、`hit_part`、`last_hit_part`、`view_tick_q16`、`maximum_shot_damage`；E、S 與影子紀錄（D-2） | 不變 |
 | `pv7-checkpoint` | 無 | 先扣掉三個 edge 批事前宣告的差異帶，再和 v7 基準比較 |
 | `a1-shot-step` | 只改判定語意與 Client 閘門 | **依事前宣告改變權威結果**（golden 重產、舊檔保留） |
 
 - 權威 digest 不經過 Gateway 與 IpcHost（`AuthorityDigest.cpp:1-10`）。只改 PvpMatch、Host、Client 預測的批，以 `compare_authority_trees.py` 同機兩樹比較（scale 1、3 各 35／35 情境 0 差分）、golden 30／30 證明行為不變；只改 Gateway 或 IpcHost 的批，digest 不是有效證據，行為不變的批以 Go 測試與 IpcHostTests 證明，行為改變的批以事前宣告的 L2 前後對照證明（宣告前做 D45 的門檻來源檢查）。
+- **ingress 鍵的對應**（從 `edge-input-passthrough` 起適用，`edge-analyzers` 重新凍結）：
+  - 直通的轉送沿用 `fwd_main_input_packets`、`fwd_handed_main_commands`、`fwd_link_written_main_commands`，IG 與 I1 照常成立。
+  - 被刪路徑的 v1 鍵照原順序輸出 0；`fwd_handed_actions_shots`（D59 的「不同的請求」）與 ACK 類鍵輸出 0，另加逐批的新鍵（行尾）。
+  - 事前宣告的例外：I3（Match 的副本數每個跑次上萬，對照的 Gateway 鍵是 0）、I0（只在有佇列溢出時）、`link_shots`。
 - 每批的測試清單見 [pv7-design](plans/v7.1/pv7-design.md)。
 
 ## 10. 不在 pv7 的項目（D-7）
@@ -429,11 +439,13 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 7. 房間列表的版本鍵、HTTP leave 帶 Client 端原因。
 8. DropReason 的新值（Gateway 之後新增丟棄出口時）。
 
+（定稿時決定納入 pv7、不在本清單：`PlayerInput`／`ActionBatch` 帶 Client 的 GYOP 序號，§5，D96。）
+
 ## 附錄：Architecture Delta
 
 - **Gateway 的 Ownership 改變**（v7.1 D94）：可靠送達與去重從 Gateway 移到端點（Match 的 IpcHost 與 Host、Client）；Gateway 刪除 Match 決策狀態的副本（`lastResolved`、命令表、動作帳本、結果帳本、拒絕線、已寫出去重、截短、D1、D2）。約束寫進 network-architecture 的「不可破壞的契約」，並由白名單測試守住（`edge-contract`）。
 - **runtime Data Contract 的送達語意改變**（§2a）：PlayerInput、ActionBatch 原樣轉送且可能重複；ActionResults 由 Match 重送。
-- 新增的產品內 Data Contract：IPC oneof 20～21、ActionResults 的拒收欄位（D-6）、Hello／Welcome 的 clock、ShotRequest／ShotDecision／CombatState／CombatRules 的新欄位、HTTP 409 body 的鍵。
+- 新增的產品內 Data Contract：IPC oneof 20～21、ActionResults 的拒收欄位（D-6）、PlayerInput／ActionBatch 的 dwell 與 Client 的 GYOP 序號、Hello／Welcome 的 clock、ShotRequest／ShotDecision／CombatState／CombatRules 的新欄位、HTTP 409 body 的鍵。
 - Build Graph：proto、Go 套件、CMake target 改名（`proto-rename-v7`，單獨一個 commit）。
 - Gateway：Server 擁有的診斷 goroutine、link 的診斷槽；runtime 活性只看 pv6 種類；link 改成依到達順序的有界 FIFO。
 - IpcHost：新增結果重送（循環游標、退役補送）、診斷槽與對時估計器；`MatchRuntimeHost` 的介面不接收診斷值。
