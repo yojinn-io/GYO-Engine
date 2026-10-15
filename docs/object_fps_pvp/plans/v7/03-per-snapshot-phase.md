@@ -1,6 +1,6 @@
 # 第 03 批：每份 snapshot 進相位追蹤（任務 2 的一半）
 
-狀態：**實作完成，移到 P1b**（2026-10-08，使用者決定 D40）。分支 `claude/pvp-v7-p1b`（`03b2ea7`，自 P1a 的 `7f13f03`）；和第 04 批一起合併。依賴第 02 批。
+狀態：**完成**，和第 04 批一起隨 P1b 的 PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) 合併（`660310e`，2026-10-09）。（先前：）**實作完成，移到 P1b**（2026-10-08，使用者決定 D40）。分支 `claude/pvp-v7-p1b`（`03b2ea7`，自 P1a 的 `7f13f03`）；和第 04 批一起合併。依賴第 02 批。
 起因：相位追蹤每幀只用最新一份 snapshot（`PvpApplication.cpp:416-424`、`LocalPlayerPrediction.cpp:106-126`、`:155-158`）。30 FPS 時一幀約 2 份，約一半的樣本到不了；LAN 上 60 FPS 也有 20.2% 的自身 snapshot 落在一幀多份（[盤點](INVENTORY.md)第 4 節）。
 
 ## 目標與範圍

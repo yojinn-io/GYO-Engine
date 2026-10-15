@@ -1,6 +1,6 @@
 # 第 09b 批：相位追蹤的既有缺陷與延遲位移
 
-狀態：**規劃完成（草案），待使用者確認「需要決定的事」**（2026-10-10）。PR 線 P2（PR #73）。排在第 09a 批之後、第 09 批的 M0 與常數凍結之前（D47⑤ 的更正）。
+狀態：**完成**：09b-plan 核准（D66），09b-impl（`f0de61c`）；09ab-L2 132／132（Jab5 不成立，記為已知限制，D71）；隨 P2 的 PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 合併（`6d3f287`，2026-10-14）。（先前：）**規劃完成（草案），待使用者確認「需要決定的事」**（2026-10-10）。PR 線 P2（PR #73）。排在第 09a 批之後、第 09 批的 M0 與常數凍結之前（D47⑤ 的更正）。
 檔位：規劃 ultracode（使用者 2026-10-10「09b 的規劃開 ultracode，檔位照建議」）：方案 3 位 high（缺陷、延遲位移、交互與風險）、評審 high、對抗式檢查 xhigh。
 
 這份草案依使用者的要求（memory「decision points for learning」），每一項都寫出機制、為什麼重要、選項與代價、決定它的證據在哪裡，以及途中被推翻的說法。
@@ -681,7 +681,7 @@ python3 -I $E/measure3.py $L/pvp-v7-d48-step2-20261010/measure.py $L/pvp-v7-d48-
 
 09R-map 的意思是：在修好資訊流（08c）的樹上，用 Client→Gateway 的短延遲（45～80 ms、持續 100～300 ms）做格點量測，取得「09a（Client 送命令的節奏）能不能單獨先上線」與「B（缺陷 B：late 修正串接；B2：修正後重新擷取）要怎麼重新規劃」需要的資料。
 
-- 狀態：**草稿・修正輪**（2026-10-11）。
+- 狀態：**草稿／修正輪**（2026-10-11）。
   - 第 1 版：18:34～18:58，1 位 high；保留在 `prep/scratch/declaration-draft.v1.md`（腳本 `prep/scratch/run_map.v1.py`、`measure_map.v1.py`）。
   - D45 的門檻來源對抗式檢查：1 位 xhigh，`prep/xhigh-check.md`。
   - 本版（19:16 起）依該檢查的「必須在送核准前修正」1～7 與「順手修」各項修正；對應表在第 16 節。第 14 節的新預設都標「建議，待使用者確認」。
@@ -1470,7 +1470,7 @@ python3 -I -B $P/measure_map.py --session $E/session         # judgement.json
 
 09ab-L2：09a（停頓後送輸入不再被釘住）＋09b（B2：late 修正後換算樣本、重新擷取一次）的合併實機量測。修之前（`eabb107`，08c 的 flow）對修之後（09a＋09b 的頭 `b205615`）兩棵樹，每棵 66 次、共 132 次。
 
-- 狀態：**草稿・修正輪**（2026-10-14，09ab-L2P，1 位 high）。
+- 狀態：**草稿／修正輪**（2026-10-14，09ab-L2P，1 位 high）。
   - 第 1 版：04:04～04:28；保留在 scratchpad 的 `declaration-draft.v1.md`（sha256 `74831f39…`）。
   - D45 的門檻來源對抗式檢查：1 位 xhigh，`P/xhigh-check-declaration.md`（腳本 `P/xhigh-check-declaration-scripts/`）。
   - 本版依該檢查第 6 節「送正式量測前必須修正」H1～H3、M1～M3 與「只記錄」L1～L6 修正，只改宣告文字；凍結工具、`trees-ab.json` 都沒動。對照表在第 17 節末。

@@ -255,12 +255,12 @@ high。跨 base、asset、input、ui_editor 的整理，要確認依賴邊與 Ow
 
 做：
 
-- `Render::Color`（`engine/render/include/render/RenderTypes.hpp:15`）的有限性檢查有 4 份，收斂為 render 內一份：
+- `Render::Color`（`engine/render/include/render/RenderTypes.hpp:15`，FF-7 前的路徑）的有限性檢查有 4 份，收斂為 render 內一份：
   - `engine/render/src/RenderQueue.cpp:11,15`
   - `engine/render/src/Renderer.cpp:79,83`
   - `engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp:17,21`
   - `engine/render/model/src/ModelRenderer.cpp:19-22`（`Finite`）
-- `UiColor`（`engine/ui/include/ui/UiTypes.hpp:74`）的檢查（`engine/ui/src/UiValidation.cpp:24`）是第 5 份，留在 Ui，不改程式，只記錄理由（與下列不合併型別的理由相同：`gyo_ui` 不依賴 render，放進 Math 違反健檢）。
+- `UiColor`（`engine/ui/include/ui/UiTypes.hpp:74`，FF-7 前的路徑）的檢查（`engine/ui/src/UiValidation.cpp:24`）是第 5 份，留在 Ui，不改程式，只記錄理由（與下列不合併型別的理由相同：`gyo_ui` 不依賴 render，放進 Math 違反健檢）。
 - 依 D11⑦ 保留兩個型別，在文件記錄不合併的理由：
   - `gyo_ui` 只連結 `GYO::Engine` 與 `GYO::Math`（`engine/ui/CMakeLists.txt:13-16`），由 `gyo_ui_renderer` 橋接 Render；合併到 Render 會新增 ui→render 的邊。
   - 合併到 Math 違反健檢「沒有消費者前不要擴充 Math」。
@@ -338,7 +338,7 @@ render 內只剩一份 Color 有限性檢查；characterization 逐位元不變�
 - `UiRuntime` 的 Evaluate（`:360` 的 `EvaluateElements`、`:390`）與 Compose（`:513` 的 `ComposeElements`、`:631`）重複的 layout 走訪合併為一次，輸出不得改變。
 - `item_step` 驗證依 D11⑨：
   - 規則：`UiValidation.cpp:382-404`（`FixedStepList`）拒絕非有限值；codec 先以 double 檢查有限性再轉 float（`UiDocumentCodec.cpp:145-147,187-188,624`），所以超出 float 範圍的有限 double（例如 1e39）也要拒絕。
-  - 不升 `kUiSchemaVersion`（定義在 `engine/ui/include/ui/UiDocument.hpp:16`，寫出在 `UiSerialization.cpp:281`）。
+  - 不升 `kUiSchemaVersion`（定義在 `engine/ui/include/ui/UiDocument.hpp:16`（FF-7 前的路徑），寫出在 `UiSerialization.cpp:281`）。
   - 在 `docs/ui_toolchain.md` 的 JSON v1 契約註明新規則，含「超出 float 範圍的有限 double 也會被拒絕」。
   - 提交的共通測試只用合成 fixture；repo 內產品的 UI 資料以一次性 scratch 腳本比對，結果寫進 HANDOFF。
 

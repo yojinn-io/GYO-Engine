@@ -1,7 +1,7 @@
 # PvP v7 分批計畫與進度
 
 更新：2026-10-15。Owner：`object_fps_pvp`。
-**狀態（2026-10-15）：P1、P2 完成；第 16 批的機器驗收全部合格，[穩定基線](STABLE_BASELINE.md)升格完成（L3 部分項目由使用者略過）。** 白話：v7 最終程式（master `6d3f287`）上，全部測試、權威結果不變、產品移除、整合量測都通過；偶發的 epoch 重設在 260 次容易出事的跑次中一次都沒有出現（未再現，但還不能結案）。使用者親手操作的 L3 也做了：切換工作區、縮小、遮住都沒有斷線，拖動縮放沒有卡住，連點手感「好了很多」；略過的項目照實記錄。P7 的 PR（#74）合併後 v7 結束。這次不正式發行（D80）；Windows 實機未驗證，3 人 LAN 測試改期（D83）。
+**狀態（2026-10-15）：P1、P2 完成；第 16 批的機器驗收全部合格，[穩定基線](STABLE_BASELINE.md)升格完成（L3 部分項目由使用者略過）。** 白話：v7 最終程式（master `6d3f287`）上，全部測試、權威結果不變、產品移除、整合量測都通過；偶發的 epoch 重設在 260 次容易出事的跑次中一次都沒有出現（未再現，但還不能結案）。使用者親手操作的 L3 也做了：切換工作區、縮小、遮住都沒有斷線，拖動縮放沒有卡住，連點手感「好了很多」；略過的項目照實記錄。P7 的 PR [#74](https://github.com/yojinn-io/GYO-Engine/pull/74) 已合併（`0f0bc91`），v7 結束；下一步是 [v7.1](../v7.1/README.md) 的規劃。這次不正式發行（D80）；Windows 實機未驗證，3 人 LAN 測試改期（D83）。
 （先前：）**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06、07、08、08b、08c 批，以及第 09 批的 09a、09b 完成；下一步是第 09 批的縮小版凍結與 C2。2026-10-14 決定 M0 移到 v7.1，見 [HANDOFF](HANDOFF.md) D75）。
 **範圍變更（2026-10-14，D73）**：v7 停在 pv6、不改 wire。pv7 與相關任務（原第 11 批、任務 4、Gateway 丟棄回報的第二階段等）移到 [v7.1](../v7.1/README.md)（v7 之後、v8 之前的重構版），和 v7.1 的重構一起設計，wire 只改一次。
 **範圍縮小（2026-10-14，D76）**：v7 只留第 09 批的剩餘（縮小版凍結、連點、C2，之後合併 PR #73）與縮小版的第 16 批（整合驗收、STABLE_BASELINE v7、偶發 epoch 重設的整體回歸、是否發行）。Trace 與日誌補強（P3）、產品去 SDL（P4）、Windows LAN 場次（第 15 批）移到 [v7.1](../v7.1/README.md)；解析度與 FPS 的選擇（P5）、音效（P6）移到 [v8](../v8/README.md)。所以 v7 交付的是任務 1～3：三角色分離、命令在固定步邊界產生、網路路徑改為事件驅動，也就是「30 FPS 與網路時序」。
@@ -88,7 +88,7 @@ Engine 的工作放在 Engine 計畫夾（v6 D1、D12），文件匿名。刪除
 | 13 | （P5 開始時撰寫） | high（視窗模式的切換順序局部 xhigh） | 未開始。**移到 v8**（2026-10-14，D76；見 [v8](../v8/README.md)） | 玩家以命令列選項選擇解析度、視窗模式與 FPS 上限（D41）；HUD 依解析度縮放；30 FPS 手感的 L3（D41）。設定 UI 與 `settings.json` 在 v8 |
 | 14 | （P6 開始時撰寫） | high | 未開始。**移到 v8**（2026-10-14，D76） | 射擊、命中、受擊、換彈的音效 |
 | 15 | （P7 開始時撰寫） | medium | 未開始。**移到 v7.1**（2026-10-14，D76；排在 pv7 之後，有時間回聲時一次量到最多） | v7 LAN 場次：Windows 實機、Windows 的視窗切換（D73：「兩機漂移」拿掉，Mac Gateway↔Windows Client 的偏移與漂移需要時間回聲，移到 v7.1） |
-| 16 | [整合驗收與升格](16-integration-acceptance.md)、[穩定基線](STABLE_BASELINE.md) | medium（工具與宣告 high；D45 檢查 xhigh） | **完成（2026-10-15）：機器驗收合格，L3 完成（部分略過）**：在 v7 最終程式上，全部測試、權威結果、產品移除檢查都通過；整合量測（25 案、背壓、網路、長測、4 人、GUI 短測）通過，其中 GUI 戰鬥短測第一次被舊分析器判 HUD 不一致，查明是分析器沿用 v6 的假設（HUD 顯示本身正確），改用事先宣告的 v7 規則補跑後通過；偶發 epoch 重設 260 次 0 次（未再現、未結案，修法在 v7.1）；30 分鐘長測通過。剩使用者操作的 L3；這次不發行（tag 候選 `object_fps_pvp-v1.2.0`）。（先前：）未開始（**縮小，2026-10-14，D76**） | 整合驗收、STABLE_BASELINE v7、是否發行；偶發 epoch 重設的整體回歸（D44；D73：涵蓋範圍不含 D49 第二階段（`GatewayDropReport`），v7.1 做完 pv7 後再回歸一次）。D76：縮小為 P1、P2 範圍（任務 1～3）的整合驗收、STABLE_BASELINE v7、D44 整體回歸、是否發行；依賴 P3～P6 的項目不在 v7 |
+| 16 | [整合驗收與升格](16-integration-acceptance.md)、[穩定基線](STABLE_BASELINE.md) | medium（工具與宣告 high；D45 檢查 xhigh） | **完成（2026-10-15）：機器驗收合格，L3 完成（部分略過）**：在 v7 最終程式上，全部測試、權威結果、產品移除檢查都通過；整合量測（25 案、背壓、網路、長測、4 人、GUI 短測）通過，其中 GUI 戰鬥短測第一次被舊分析器判 HUD 不一致，查明是分析器沿用 v6 的假設（HUD 顯示本身正確），改用事先宣告的 v7 規則補跑後通過；偶發 epoch 重設 260 次 0 次（未再現、未結案，修法在 v7.1）；30 分鐘長測通過。使用者操作的 L3 完成（部分略過，D85）；這次不發行（tag 候選 `object_fps_pvp-v1.2.0`）。（先前：）未開始（**縮小，2026-10-14，D76**） | 整合驗收、STABLE_BASELINE v7、是否發行；偶發 epoch 重設的整體回歸（D44；D73：涵蓋範圍不含 D49 第二階段（`GatewayDropReport`），v7.1 做完 pv7 後再回歸一次）。D76：縮小為 P1、P2 範圍（任務 1～3）的整合驗收、STABLE_BASELINE v7、D44 整體回歸、是否發行；依賴 P3～P6 的項目不在 v7 |
 
 P2 之後的批次文件在該線開始時寫進該線的 PR，行號才不會過時。在那之前，範圍、驗收與停止條件以[交接](HANDOFF.md)的「P2 以後各批的範圍」為準。
 
@@ -141,6 +141,27 @@ P7   [16 整合與升格（縮小版：P1、P2 的範圍）] ← P1、P2
 - 所有新舊對比（C1、C2）都在 pv7 之前完成，凍結的分析器一直可用。
   - 更正（2026-10-14，D73）：v7 不改 wire，整個 v7 都在 pv6 上，所以 v7 的所有新舊對比（C1、C2、第 16 批的回歸）都能用 pv6 凍結的分析器。pv7 移到 v7.1：v7.1 裡需要 pv6 凍結分析器的新舊對比，要排在 v7.1 的 pv7 契約批之前（見 [v7.1](../v7.1/README.md)「規劃方式」）。
 - C1 的 after 只含任務 1、2：Gateway、Match、網路 worker 的輪詢與送出節拍都沒有改。ClientConnection 只多一個給模擬角色的佇列。
+
+## 開發紀錄
+
+各批的白話紀錄（做了什麼、驗證與經過、證據位置），依批次排列：
+
+- [第 01 批：盤點、分批規劃與計畫文件](../../../dev_logs/2026_10_08_pvp_v7_batch01.zh-Hant.md)
+- [第 02 批：ClientSimulation 接縫（行為不變）](../../../dev_logs/2026_10_08_pvp_v7_batch02.zh-Hant.md)
+- [第 03 批：每份 snapshot 進相位追蹤](../../../dev_logs/2026_10_08_pvp_v7_batch03.zh-Hant.md)
+- [第 03a 批：相位追蹤的小量測（只記錄）](../../../dev_logs/2026_10_08_pvp_v7_batch03a.zh-Hant.md)
+- [第 04 批：Client 的模擬角色](../../../dev_logs/2026_10_09_pvp_v7_batch04.zh-Hant.md)
+- [第 05 批：C1——30 FPS 修正前後對比](../../../dev_logs/2026_10_09_pvp_v7_batch05.zh-Hant.md)
+- [第 06 批：Gateway→Client 結果通道改為 30 Hz](../../../dev_logs/2026_10_09_pvp_v7_batch06.zh-Hant.md)
+- [P2-log：網路路徑的 10 秒統計](../../../dev_logs/2026_10_09_pvp_v7_p2log.zh-Hant.md)
+- [第 07 批：Match 的 Tick 改用 Waiter，IpcHost 改用 asio](../../../dev_logs/2026_10_09_pvp_v7_batch07.zh-Hant.md)
+- [第 08 批：Client 的網路 worker 改用 asio](../../../dev_logs/2026_10_09_pvp_v7_batch08.zh-Hant.md)
+- [第 08b 批：結果改為事件驅動轉送](../../../dev_logs/2026_10_10_pvp_v7_batch08b.zh-Hant.md)
+- [第 08c 批：Gateway 丟棄回報（讓 Match 知道丟了什麼、為什麼丟）](../../../dev_logs/2026_10_11_pvp_v7_batch08c.zh-Hant.md)
+- [第 09 批：射擊閘的兩個常數與 v6 對 v7 的比較（C2）](../../../dev_logs/2026_10_14_pvp_v7_batch09.zh-Hant.md)
+- [第 09a 批：停頓之後，輸入送出不再被釘住](../../../dev_logs/2026_10_14_pvp_v7_batch09a.zh-Hant.md)
+- [第 09b 批：late 修正之後，把多推的 2 Tick 收回來](../../../dev_logs/2026_10_14_pvp_v7_batch09b.zh-Hant.md)
+- [第 16 批：整合驗收，v7 升格為穩定基線](../../../dev_logs/2026_10_15_pvp_v7_batch16.zh-Hant.md)
 
 ## 執行規則
 

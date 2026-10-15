@@ -1,7 +1,8 @@
 # PvP v6 分批計畫與進度
 
-更新：2026-10-08。Owner：`object_fps_pvp`。
+更新：2026-10-15。Owner：`object_fps_pvp`。
 **第 01～04、06～13 批完成並合併**（最後是第 13 批，PR [#62](https://github.com/yojinn-io/GYO-Engine/pull/62)，master `7886848`）；第 05 批不執行；第 16 批（房間上限 4 人）完成並合併（PR [#63](https://github.com/yojinn-io/GYO-Engine/pull/63)，master `5972451`）；第 14a 批完成並合併（PR [#64](https://github.com/yojinn-io/GYO-Engine/pull/64)，`eadd001`）；第 17 批（聯機測試準備）完成並合併（PR [#65](https://github.com/yojinn-io/GYO-Engine/pull/65)，master `c7d6dd3`），LAN 聯機測試完成；第 14b 批依使用者決定（D26）縮減為最終來源上的短測，全部通過。**v6 於 2026-10-08 升格為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)）。現行協議是 pv6（[v6 契約](../../protocol-v6.zh-Hant.md)）。下一步是 [v7](../v7/README.md)。
+後續：LAN 結果 PR [#66](https://github.com/yojinn-io/GYO-Engine/pull/66)（`ff25ab4`）合併；v7 於 2026-10-15 升格（[v7 穩定基線](../v7/STABLE_BASELINE.md)），v7 也停在 pv6。
 
 v6 處理 v5 期間延後的項目（[交接](HANDOFF.md)），並在同一次協議升級中收下 Math 基礎統一的範圍外事項。
 範圍分四群，使用者 2026-10-04 決定全部納入：
@@ -92,6 +93,6 @@ Engine 與共通層的工作不屬於本產品，計畫與紀錄放在兩個 Eng
 
 ## 接續處理文字
 
-> v6 第 01～04、06、08 批完成並合併，第 05 批不執行；Engine 的 FF-1～FF-8、IP-1、IP-2 已合併（IP-2 縮小交付）。分批與決定見本文件、HANDOFF 與 BASELINE。
-> 第 07、07a 批完成並合併（#56），B1 見 BASELINE；30 FPS 列為設計範圍的邊界（D21）。第 09 批完成並合併（pv6，#57）。第 10 批（與 FF-9）完成並合併（#58）；之後可以開始的是第 11、12 批。剩下的順序是 12→11→13→16→14（D23⑦）；第 16 批（房間上限 4 人，D22、D23）已規劃完成。Engine 的現況：include 根目錄統一為 `engine/<m>/`；縮放拖動中以 live frame 持續更新，主執行緒／模擬／網路的分離延到 v7（D19）。FF-9 與第 10 批同一個 PR。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv6，D20）。
+> v6 已完成：第 01～04、06～14、16、17 批完成並合併，第 05 批不執行；2026-10-08 升格（[STABLE_BASELINE](STABLE_BASELINE.md)，2026-10-14 依 v7 D69 標缺陷版）。分批與決定見本文件、HANDOFF 與 BASELINE。
+> 留給後續的：三角色分離與 30 FPS（D19、D21）在 v7 完成；時鐘對齊與日誌補強在 [v7.1](../v7.1/README.md)；玩法候選在 [v8](../v8/README.md)。版本號：vN＝遊戲版本，pvN＝協議版本（目前 pv6，D20）。
 > Windows／Linux 實機驗收與兩台機器的時鐘漂移實測需要另外授權。

@@ -1,5 +1,7 @@
 # 2026-09-23：人物與手槍敵人驗證
 
+> **目前狀態（2026-10-15）**：`object_fps_v2` 在 `engine/config/projects.csv` 為停用，且已無法以目前的 engine API 編譯；重新啟用前須依 `docs/architecture/plans/` 下各計畫的 `inactive_products.md` 遷移。本文是停用前的設計與驗證紀錄。
+
 本次以 Superhero Male 取代近戰 mannequin，以 Superhero Female 取代遠程 mannequin。
 近戰保留拳擊；遠程改為右手持 Ultimate Pistol 1，以 Pistol_Shoot 的起始姿勢發射。
 設計、資料契約與 Architecture Delta 見[敵人文件](enemies.zh-Hant.md)。
