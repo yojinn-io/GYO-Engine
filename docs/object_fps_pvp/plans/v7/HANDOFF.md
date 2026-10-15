@@ -47,7 +47,7 @@
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D75）。S4-lite 的範圍已核准（使用者：「S4-lite 照建議，同步完開始，快速處理掉p2 ，然後結束掉v7。」）。
 - **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。下一步：縮小版的第 16 批（D76：P1、P2 範圍的整合驗收、STABLE_BASELINE v7（Windows 標未驗證）、D44 整體回歸（不含 D49 第二階段）、是否發行），開始時先提案具體清單；做完 v7 結束。分支 `claude/pvp-v7-p7`。
-- **等你（16-L3）**：STABLE_BASELINE v7 已寫好（`STABLE_BASELINE.md`，狀態「L3 待做」）；P7 的 PR 已開（本次推送），**L3 完成、結果記入、CI 通過後才合併**，v7 結束。L3 項目見 `STABLE_BASELINE.md` 的 L3-1～L3-4（約 45 分，使用者操作）。LAN 測試改期（D83），測試包保留。
+- **第 16 批完成**（D85）：STABLE_BASELINE v7 升格完成（L3 部分略過）。下一步：PR #74 的 CI 通過後合併（使用者先前：「L3 完成、記錄、CI 通過後合併」），v7 結束；之後 v7.1 的規劃（ultracode，先問使用者）。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。
 - **m0-to-v71**（2026-10-14，D75）：M0 移到 v7.1，只在 C2 觸發時補做。M0-probe 的 xhigh 審查在開始後中止（未完成，補做 M0 時先完成審查）；`../GYO-Engine-m0` 本機 commit `5ef8a89`（分支 `m0-probe-5ef8a89`，不推送）保留，probe sha256 `8e44de9c…`；證據 `pvp-v7-09-m0-prep-20261014/probe/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
@@ -127,6 +127,7 @@
 | D82 | （2026-10-15，依 D81 照建議）核准 16-L2 的事前宣告（D45 xhigh 檢查的 MUST-FIX 1～4、SHOULD 5～11 已套用；SHOULD 5～9 的選項依建議採用：網路加只記錄的「重設數≠每階段 1 次」旗標；impairments 移到第 30 塊之後、失敗只立旗標；第 1 輪的 D44 型失敗只讓 `passed`＝false、不停 D；順序 I→D→G；`ls-remote` 逾時記 `remote_error`）。宣告 SHA-256 `1b2d2fbf26dbee80cce38ee33f4ff8b7dc66c5afd56554f778ca698471a380ce`，全文在 `16-integration-acceptance.md`。勿擾（專注模式）無法以指令確認（不改系統設定），記「未確認勿擾」；`IOConsoleLocked`＝No。 |
 | D83 | （2026-10-15）使用者：「今天測試改期，先把16-L2處理了吧」。3 人 LAN 測試改期（測試包 `~/gyo-lan-v7/` 與 `LAN_TEST.md` 保留）。16-L2 的 GUI 戰鬥短測照建議 (a)：只改分析器，事先宣告 v7 規則（HUD 等於 [hud_tick, snapshot_tick] 區間內某個 t 的逐命重播狀態，t 時的 life 等於 hud_life；其餘 combat 檢查不變），以補充宣告重跑 `timing-gui-short` 與沒跑的 3 項（批次代號 16-L2b）；原本失敗的跑次保留、不以新規則改判。 |
 | D84 | （2026-10-15，照建議）使用者：「照建議，修完開始重跑」「照建議，16-L2b 通過後繼續 16-baseline」。16-L2b 補充宣告（D45 xhigh 檢查的 MUST-FIX 1～3、SHOULD 1～8 已套用）核准：v7 規則 `pvp-v7-combat-hud-2`（下界 max(hud_tick, 前一行 snapshot_tick)、上界 snapshot_tick、來源 tick 不倒退；凍結 F 改判 P 時要求 disturbed False 且 runtime_gap_events 為空；只在區間相符且寬度＞6 Tick 立使用者旗標）；U1～U6 依建議；新增 `combat_gui_evidence_v7.py`、`test_combat_gui_evidence_v7.py` 與 CTest 登記。宣告 SHA-256 `5b1466f6b8782ba04c57699b0d4212255df0c0cdb38cb9026e9298b7cf8911b2`。 |
+| D85 | （2026-10-15）使用者：「我略過了一些測試，沒有多大關係，沒做的紀錄就好。連擊手感好了很多，但是不知道後面如果換武器就不知道了……未來換武器會如何？如果是個問題，請寫到v8中。」所以 16-L3 結案：L3-1、L3-2 依 C1 凍結 judge 通過；略過的項目（操作次數不足、重新加入、`room_full`）照實記為「略過（使用者決定）」；L3-3 記使用者評語；多武器的 FireGate 重推列進 v8 候選（排在 v7.1 A1 的決定之後），重生點保護補進 v8 既有候選。STABLE_BASELINE v7 改為升格完成。 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -348,6 +349,7 @@
 - 2026-10-15：16-L2b（14:39～14:42，commit H `ab992f5`）**通過**：4 項 P；兩個 timing 項目凍結分析器判 19／18 幀 HUD 不一致、v7 規則判 P（其他 combat 錯誤 0、乾淨、旗標 0、寬度最大 2 Tick）。**16-L2 整體通過**（I、D、L2-1～L2-5 照 16-L2；L2-6＝16-L2 的 action／player short＋本次 4 項；16-L2 的 timing-gui-short 保留 F）。16-baseline 開始。
 - 2026-10-15：16-baseline 完成（1 位 medium）：`STABLE_BASELINE.md`（狀態「L3 待做」、不標缺陷版、產品 `6d3f287`＋`ab992f5` 的 3 個驗收工具檔、D44 各母體上限與不獨立的說明、已知限制 1～9、這次不發行、tag 候選 `object_fps_pvp-v1.2.0`）；README 狀態與第 16 列改白話。待補：PR 合併後的 master commit。開 P7 的 PR（使用者：「照建議，baseline 完成後開 PR」）。
 - 2026-10-15：16-L3 的第一次 session（15:17:36～15:21:07，`pvp-v7-16-l3-20261015-151542`；Match 與 Gateway 由 agent 在背景啟動，兩個產品 Client＋2 個 bot）：C1 凍結 judge（`e2a7ec9d…`）判 L3-1 不斷線（`connection failed` 0）、模擬晚醒 ≥100 ms 0；L3-2 每位玩家最長連續替代 1 Tick、停頓重設 0、重設全為 life_respawn（24 次）；trace 都有 `trace_end`、dropped 0；4 人房成立。bot 的「Gateway connection timed out」是 agent 停掉 Gateway 時 bot 的 300 秒還沒跑完，不是產品問題。待使用者補充：L3-1 的操作次數、L3-2 在哪個 Client 做、L3-4 第 6 項（重新加入）與第 10 項（`room_full`）在 Gateway 沒有紀錄、L3-3 手感與 L3-4 第 1、3、5 項的觀察。使用者觀察：重生點沒有保護，佔著重生點時新加入的人會疊在一起 → 補進 v8 候選「出生點分散、出生保護」與 STABLE_BASELINE 已知限制第 9 項。
+- 2026-10-15：D85，16-L3 結案、STABLE_BASELINE v7 升格完成；v8 候選新增「多武器與本機射擊閘」。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 

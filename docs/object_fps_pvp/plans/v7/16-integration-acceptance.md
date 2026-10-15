@@ -1,6 +1,6 @@
 # 第 16 批：整合驗收與升格（縮小版，D76）
 
-狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 依宣告不通過（168／171，GUI 戰鬥短測的 HUD 規則），16-L2b 補判通過 → 16-L2 整體通過；16-L3 等使用者；16-baseline 未開始**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
+狀態：**16-plan、16-L1、16-removal、16-D44T、16-declare 完成；16-L2 依宣告不通過（168／171，GUI 戰鬥短測的 HUD 規則），16-L2b 補判通過 → 16-L2 整體通過；16-baseline 完成；16-L3 完成（部分略過，D85）；第 16 批完成**（2026-10-15）。PR 線 P7（分支 `claude/pvp-v7-p7`）。
 
 - 清單提案：`build/target/_build/test/logs/pvp-v7-16-plan-20261014/proposal.md`（U1～U12 照建議，D80）。
 - 16-L1、16-removal、16-D44T 的結果見 HANDOFF 的進度記錄器。
@@ -597,3 +597,7 @@ python3 -I -B $P/judge_16b.py --session build/target/_build/test/logs/pvp-v7-16-
 - 兩個 timing 項目：凍結分析器各判 19、18 幀 HUD 不一致（F），v7 規則 `pvp-v7-combat-hud-2` 判 P：其他 combat 錯誤 0、`disturbed` False、runtime gap 0、來源 tick 倒退 0、只在區間相符的幀寬度最大 2 Tick（旗標門檻 6）、疑似下界假失敗 0。HUD 落後分布（timing-gui-short）：0 Tick 78、1 Tick 2217、2 Tick 32 幀。
 - 16-L2 的 `timing-gui-short` 保留為 F、不改判（D83）；L2-6＝16-L2 的 action-short、player-short（P）＋本次 4 項。
 - 證據：`build/target/_build/test/logs/pvp-v7-16-l2b-20261015/`（`progress.jsonl`、`judgement.json`、`files.sha256`、`runs/`）。
+
+## 16-L3 的結果（2026-10-15）
+
+見 [STABLE_BASELINE](STABLE_BASELINE.md)「L3」：L3-1、L3-2 依 C1 的凍結 judge 通過；L3-3 使用者評語「連擊手感好了很多」；L3-4 的重新加入與 `room_full` 由使用者略過（D85）。使用者觀察的重生點保護與多武器的 FireGate 列進 v8 候選。
