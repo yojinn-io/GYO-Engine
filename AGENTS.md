@@ -114,6 +114,8 @@ not predicted pressure.
 * Product Registration 構造の変更
 * Runtime と Editor の Data Contract の変更
 * 大規模な File Move
+* Edge Component への、判定に関わる状態や判断の追加（下記「Edge Component の状態」）
+* Component の「不可破壊の契約」に反する変更（下記「Component の設計約束」）
 
 Architecture Delta が必要な場合、変更理由を明確にする。
 
@@ -130,6 +132,41 @@ Architecture Delta が必要な場合、変更理由を明確にする。
 Architecture Delta は禁止事項ではない。
 
 ただし、暗黙の Architecture Drift は禁止する。
+
+### Component の設計約束（不可破壊の契約）
+
+複数の Agent と複数の版にまたがって守るべき設計意図は、
+思考や会話の中だけに置かず、検査できる約束として文書に書く。
+
+* 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下）に
+  見出し「不可破壞的契約」の節として書く。可能なものは、守衛となる Test も用意する。
+* Component を変更する前に、その owner の該当節を読む。節の場所は次で探せる。
+
+~~~sh
+git grep -n "不可破壞的契約" -- docs
+~~~
+
+* 該当節に反する変更は、変更が小さくても Architecture Delta として扱い、ユーザーの同意を得る。
+* 一般原則（「Ownership の変更は提出する」）だけでは、
+  個々の変更がその Ownership 変更に当たるかを判断できない。
+  判断できる形で書かれた約束だけが、局所的に妥当な修正の積み重ねによる Drift を止められる。
+
+### Edge Component の状態
+
+Edge Component とは、権威（判定を持つ側）と外部の間に立って、
+接続・変換・中継を担う Component である（Gateway、Proxy、Relay、Transport Adapter など）。
+
+* **持ってよい状態**：再構築でき、判定に参加しない Soft State。
+  接続と session（認証情報、endpoint、伝送のシーケンス番号、レート制限、活性、寿命）、
+  上限のある送出キュー（溢れは計数して報告する）、設定の写し、診断の計数。
+* **持ってはならない状態と判断**：権威の判定状態の写し、
+  複数メッセージにまたがる内容依存の判断（重複除去、統合、古さの判定、衝突の解決）、
+  再送の予定。
+* 各メッセージに対して行ってよいのは、変換と、そのメッセージ単体での版、形式、範囲、認可の検査だけである。
+* 判断基準：そのフィールドや判断を正しく行うために「権威がすでに何を持っているか」を知る必要があるか。
+  必要なら、それは権威側に属する。
+* Edge Component に状態のフィールドを追加すること自体が Ownership の変更であり、Architecture Delta である。
+  局所的に妥当な修正であっても同じである。
 
 ---
 
@@ -580,6 +617,8 @@ Architecture Drift を確認する。
 * Product-specific Branch が公共層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
+* Edge Component に追加された状態や、内容に依存する判断
+* Component の「不可破壊の契約」に反する変更
 
 Code Style や Formatting の問題より、
 Architecture / Ownership / Dependency の問題を優先する。
