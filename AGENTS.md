@@ -74,6 +74,26 @@ Architecture を変更してよい。
 Architecture Change SHOULD solve observed pressure,
 not predicted pressure.
 
+### Derivation Order：Feature → Contract → Architecture
+
+任務を計画・分割するときは、次の順序で推導する。
+三者は排他的な分類ではない。Contract も Architecture の一部であり、
+この順序は推導と優先の標準過程を定めるものである。
+
+1. **Feature**：何を作るかを先に決める。利用者（プレイヤー）から見える部分。
+2. **Contract**：その Feature のために、Data や Wire で何を約束する必要があるか。
+3. **Architecture**：その Contract を支えるために、構造をどう変える必要があるか。
+   Contract が変わっても、Architecture が変わるとは限らない。
+   支えきれない場合にのみ変更する。
+
+目的：
+
+* 事故、Contract の変更、Architecture の再構成が衝突したときに、
+  三者が同時に止まり Feature が停滞する事態（難産）を防ぐ。
+* 衝突した場合は Feature の方向を保ち、深い層ほど範囲を縮める。
+* Contract と Architecture の作業は、それが支える Feature（次の版の Feature を含む）を明示する。
+  支える Feature を示せない項目は延期する。
+
 ---
 
 ## 3. Architecture Drift Control
