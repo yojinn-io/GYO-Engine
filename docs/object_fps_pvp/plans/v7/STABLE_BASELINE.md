@@ -187,7 +187,8 @@ C1、C2 只對同一台 Intel Mac、同機三角色成立。
 6. **HUD 的 `hud_tick` 落後 1～2 Tick（產品正確，分析器 v7 規則）**：第 04 批把 Reconcile 移到模擬角色後，探針記錄的 `hud_tick` 是模擬角色最後觀察到的 snapshot，HUD 的值是主執行緒最新的權威 snapshot。HUD 顯示正確，玩家看不出差異。凍結的 `combat_gui_evidence.py` 會判不一致；v7 用 `combat_gui_evidence_v7.py`（`pvp-v7-combat-hud-2`，區間 [max(hud_tick, 前一行 snapshot_tick), snapshot_tick]）。16-L2b 的落後分布（timing-gui-short）：0 Tick 78、1 Tick 2217、2 Tick 32 幀。精確版（在觀測 API 加 HUD 來源 tick）會改產品，列為之後的工作。診斷：`pvp-v7-16-l2-20261015/hud-diagnosis.md`。
 7. **Gateway 的時間敏感測試在高負載下不穩（只記錄）**：16-L1 的 go race 6 次中 1 次失敗（`TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes` 量到 24.0 ms＜下限 30.3 ms，同時 C++ 從零建置、load 約 22），建置結束後重跑通過（`pvp-v7-16-l1-20261014/go.log`、`go-race-rerun.log`）。
 8. **腳本在背景啟動的 Client 忽略 SIGINT（只記錄）**：非互動 shell 把背景工作的 SIGINT 設為忽略，SDL 只在預設處理時才裝自己的處理器；SIGTERM 立即結束。Match 與 Gateway 自己註冊，不受影響；使用者在前景執行、用 Esc 或關閉視窗結束也不受影響（`pvp-v7-lan-kit-20261014/summary.md`）。
-9. **其他（沿用 HANDOFF「未結事項」）**：
+9. **重生點沒有保護（L3 的觀察，2026-10-15）**：玩家不移動、佔著重生點時，之後加入或重生的人可能疊在一起。v6 起就是這樣（v7 沒有改出生規則）；很多 FPS 也有。列進 [v8](../v8/README.md) 的候選「出生點分散、出生保護」，到時決定要不要處理。
+10. **其他（沿用 HANDOFF「未結事項」）**：
    - `ClientConnection` 關閉時最多約 3 秒的阻塞（httplib）。
    - D30 門檻可能被逐漸變長的發布間隔逐級放大（低機率）。
    - Spaces、縮小時的斷線可能來自 App Nap（C1 沒有重現；本基線的 L3-1 再確認）。
