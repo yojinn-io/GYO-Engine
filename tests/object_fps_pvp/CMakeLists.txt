@@ -206,6 +206,10 @@ set_tests_properties("${GYO_CURRENT_APP}.gameplay_soak" PROPERTIES LABELS "cpu;p
 add_test(NAME "${GYO_CURRENT_APP}.combat_gui_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_combat_gui_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.combat_gui_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# Analyzer v7 (D83): the HUD rule whose meaning changed with the simulation role.
+add_test(NAME "${GYO_CURRENT_APP}.combat_gui_evidence_v7"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_combat_gui_evidence_v7.py")
+set_tests_properties("${GYO_CURRENT_APP}.combat_gui_evidence_v7" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 
 add_test(NAME "${GYO_CURRENT_APP}.steady_clock"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_steady_clock.py")

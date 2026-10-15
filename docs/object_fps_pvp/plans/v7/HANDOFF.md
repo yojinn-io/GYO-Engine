@@ -24,6 +24,10 @@
 | m0-to-v71 | 範圍變更（只改文件）：M0 影子量測與 FireGate 常數的完整推導移到 v7.1；第 09 批改成 S4-lite＋C2 | 本文件 D75 |
 | v7-scope-cut | 範圍變更（只改文件）：v7 只留第 09 批的剩餘（S4-lite、S5～S8）與縮小版的第 16 批；P3（TT-2、第 10 批）、P4（IP-3、IP-4、第 12 批）與第 15 批移到 v7.1；P5（IP-5、第 13 批）、P6（AU-1、第 14 批）移到 v8 | 本文件 D76；[v7.1](../v7.1/README.md)、[v8](../v8/README.md) |
 | S4-lite | 第 09 批的縮小版凍結：值不變（2 ms／7）、`FireGate.hpp` 註解、`FireGateTests` 釘住字面值與最小更新、突變確認、09 文件推導節（範圍待使用者確認） | 本文件 D75；`09-firegate-c2.md` 步驟 S4 |
+| 16-plan | 第 16 批（縮小版整合驗收與升格，D76）的具體清單提案 | `pvp-v7-16-plan-20261014/` |
+| 16-L1、16-removal、16-D44T、16-declare、16-L2、16-L3、16-baseline、16-release | 第 16 批的分批：本機驗收；產品移除檢查；D44 回歸與整合量測的工具；宣告；正式量測；使用者操作；STABLE_BASELINE v7；是否發行 | `pvp-v7-16-plan-20261014/proposal.md` |
+| lan-kit-v7 | v7 的 3 人 LAN 測試包與手冊（D81） | `plans/v7/LAN_TEST.md` |
+| 16-L2b | 16-L2 的補充：v7 的 combat GUI 分析規則與重跑 4 項（D83） | `16-integration-acceptance.md` |
 | L1／L2／L3 | 驗收層級：本機測試與突變／實機量測（要宣告核准）／跨機器 | 各批文件 |
 | IG、I0、I1、I2、I3、T3 | 08c 的守恆式：Gateway 每個資料包一個結局、link 內命令的去向、Gateway 寫出數＝Match 收到數、Match 每個命令一類、副本的條件式上限、速率限制的總和 | `08c-drop-report.md`「不變量與守恆」 |
 | S1、S2（樣本守恆） | slack 樣本的兩條守恆：產生＝合併＋丟棄＋發布；發布＝覆寫＋取走＋未取走 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` |
@@ -42,12 +46,13 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
 - **等你決定**：(1)(8) 維持暫定（D58）；其餘已決定（D56～D75）。S4-lite 的範圍已核准（使用者：「S4-lite 照建議，同步完開始，快速處理掉p2 ，然後結束掉v7。」）。
-- **進行中**：S8 收尾（本次推送）之後，PR #73 的 CI 通過就合併（D69）。之後是縮小版的第 16 批（D76），做完 v7 結束。
+- **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。下一步：縮小版的第 16 批（D76：P1、P2 範圍的整合驗收、STABLE_BASELINE v7（Windows 標未驗證）、D44 整體回歸（不含 D49 第二階段）、是否發行），開始時先提案具體清單；做完 v7 結束。分支 `claude/pvp-v7-p7`。
+- **第 16 批完成**（D85）：STABLE_BASELINE v7 升格完成（L3 部分略過）。下一步：PR #74 的 CI 通過後合併（使用者先前：「L3 完成、記錄、CI 通過後合併」），v7 結束；之後 v7.1 的規劃（ultracode，先問使用者）。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。
 - **m0-to-v71**（2026-10-14，D75）：M0 移到 v7.1，只在 C2 觸發時補做。M0-probe 的 xhigh 審查在開始後中止（未完成，補做 M0 時先完成審查）；`../GYO-Engine-m0` 本機 commit `5ef8a89`（分支 `m0-probe-5ef8a89`，不推送）保留，probe sha256 `8e44de9c…`；證據 `pvp-v7-09-m0-prep-20261014/probe/`。
 - **pv7-to-v71**（2026-10-14，D73）：只改文件的範圍變更完成（pv7 與相關任務移到 [v7.1](../v7.1/README.md)；不動程式、不打斷第 09 批）。
 - **下一步**： S6 C2 宣告 → S7 C2 → S8 收尾 → PR #73 合併。（D75 之前的下一步是 M0-tools～M0-judge-doc 再 S4 凍結，已移到 v7.1。）之後是縮小版的第 16 批，做完 v7 就結束（D76）。
-- **最後更新**：2026-10-14，依據本次推送（S5 完成）。
+- **最後更新**：2026-10-14，依據本次推送（P2 完成，PR #73 合併）。
 
 ## 閱讀入口
 
@@ -117,6 +122,12 @@
 | D77 | （2026-10-14，照建議）使用者：「(a)(b) 照建議，開始 S6」。(a) C2 before 連點的建置：Match、Gateway、資產用 `../GYO-Engine-v6final` 自己的，只有 GUI probe 來自 `../GYO-Engine-v6c2`（`1be1edd`）；產品執行檔因內嵌 worktree 路徑無法逐位元組相同，以正規化比對（C++ 反組譯 0 差異、Gateway 只差 build ID 與 pclntab）作為同一程式的證據，比照 S1；本批停止條件 2 依此解讀。(b) 12 Tick 連點維持「從段起點每 12 Tick 排程、在第一個到期的幀點擊」（60 FPS 實際間隔 11.2～12.4 Tick，都大於冷卻 10）。 |
 | D78 | （2026-10-14，照建議）使用者：「U1～U8 照建議，檢查完繼續」。C2 宣告草案（`pvp-v7-09-c2-prep-20261014/declaration-draft.md`）的 U1～U8 照建議：U1 一次跑完、順序 A→B→R；U2 Match 停頓替代的比率排除與不排除兩種都成立才算成立，不一致交使用者；U3 after 的 (iii) 出現 Cooldown 也停下，補不補 M0 由使用者決定；U4 before 連點的 Cooldown 只記錄；U5 回歸的 08b D44 重設規則只用在 250 ms 故障與無故障案例，1000 ms 只記錄；U6 v6 的領先跳升只立旗標、留給第 16 批；U7 受干擾的跑次記 D 類、不重跑、累計 3 次停下；U8 relay 門檻維持 ≤31。D45 的 xhigh 檢查完成並套用修正後，依 D69 的方式核准宣告並執行 S7。 |
 | D79 | （2026-10-14，照建議）使用者：「照建議，修完開始 S7」。C2 宣告（D45 的 xhigh 檢查 MUST-FIX 1～4、SHOULD 1～11 已套用）核准：U5 改寫為 D61 的規則（25 案一律用即時規則：故障窗外的非 respawn 重設或無故障窗案例出現就停；事後以 `b205615` 為基準逐案立旗標），取代 D78 的 1000 ms 豁免；U9：D44「舊版也出現」在 C1 的資料（v6 clean-30 r2～r4、clean-60 r8 共 6 次 late 修正）就已成立，只記錄，D44 整體回歸留在第 16 批、修法留在 v7.1 候選 A3，不停下 C2，C2 對 before 的領先跳升、late 修正與重設只記錄。宣告 `declaration.md` SHA-256 `eb4caa6d432897ef952f14d657858af0935f16be9e972c05a49082072932e19b`。 |
+| D80 | （2026-10-14，照建議）使用者：「U1～U12 照建議，開始 16-L1」。第 16 批清單提案（`pvp-v7-16-plan-20261014/proposal.md`）的 U1～U12 照建議：U1 沒有 Windows 實機也升格（STABLE_BASELINE 標未驗證，D34）；U2 clean-30 計入 25 案判定；U3 D44 回歸只跑最終程式、以既有證據普查為基準；U4 245 次、事件累計 3 次停；U5 寫宣告並做 1 次 xhigh 門檻來源檢查；U6 照 v6 跳過 GUI 三輪、144 Hz 長測、完整 4 人一輪，加跑 1 次 60 Hz 長測；U7 突變只跑有改動的部分；U8 這次只升格、不正式發行（tag 候選 `object_fps_pvp-v1.2.0` 留待之後）；U9～U12 照提案（L3 範圍、從零建置 `6d3f287`、TT-1 量測分支留給 v7.1、保留 v6final／m0／c2-after worktree）。 |
+| D81 | （2026-10-14）使用者：「我先去休息了，剩下的任務照建議。v7跑完並且通過之後，給我一個可執行版本，明天我會和朋友進行3人聯機測試，你需要提供建置好的pvp，gateway，match。並且還有啟動命令，包含日誌的紀錄。我測試完畢之後，會把日誌回傳給你做分析。」所以：D44 回歸的網路照建議為一般模式 30 次＋`--network-impairments` 15 次；16-declare 經 D45 的 xhigh 檢查並套用修正後，依 D69 的方式照建議核准並執行 16-L2；16-L3（使用者操作）留給使用者，STABLE_BASELINE v7 在 L3 完成前標「L3 待做」；另做 lan-kit-v7：v7 的 3 人 LAN 測試包（Mac 的 Match、Gateway 與 Client，Windows Client 用同一個 commit 的 CI snapshot）與啟動、日誌命令（`plans/v7/LAN_TEST.md`）。 |
+| D82 | （2026-10-15，依 D81 照建議）核准 16-L2 的事前宣告（D45 xhigh 檢查的 MUST-FIX 1～4、SHOULD 5～11 已套用；SHOULD 5～9 的選項依建議採用：網路加只記錄的「重設數≠每階段 1 次」旗標；impairments 移到第 30 塊之後、失敗只立旗標；第 1 輪的 D44 型失敗只讓 `passed`＝false、不停 D；順序 I→D→G；`ls-remote` 逾時記 `remote_error`）。宣告 SHA-256 `1b2d2fbf26dbee80cce38ee33f4ff8b7dc66c5afd56554f778ca698471a380ce`，全文在 `16-integration-acceptance.md`。勿擾（專注模式）無法以指令確認（不改系統設定），記「未確認勿擾」；`IOConsoleLocked`＝No。 |
+| D83 | （2026-10-15）使用者：「今天測試改期，先把16-L2處理了吧」。3 人 LAN 測試改期（測試包 `~/gyo-lan-v7/` 與 `LAN_TEST.md` 保留）。16-L2 的 GUI 戰鬥短測照建議 (a)：只改分析器，事先宣告 v7 規則（HUD 等於 [hud_tick, snapshot_tick] 區間內某個 t 的逐命重播狀態，t 時的 life 等於 hud_life；其餘 combat 檢查不變），以補充宣告重跑 `timing-gui-short` 與沒跑的 3 項（批次代號 16-L2b）；原本失敗的跑次保留、不以新規則改判。 |
+| D84 | （2026-10-15，照建議）使用者：「照建議，修完開始重跑」「照建議，16-L2b 通過後繼續 16-baseline」。16-L2b 補充宣告（D45 xhigh 檢查的 MUST-FIX 1～3、SHOULD 1～8 已套用）核准：v7 規則 `pvp-v7-combat-hud-2`（下界 max(hud_tick, 前一行 snapshot_tick)、上界 snapshot_tick、來源 tick 不倒退；凍結 F 改判 P 時要求 disturbed False 且 runtime_gap_events 為空；只在區間相符且寬度＞6 Tick 立使用者旗標）；U1～U6 依建議；新增 `combat_gui_evidence_v7.py`、`test_combat_gui_evidence_v7.py` 與 CTest 登記。宣告 SHA-256 `5b1466f6b8782ba04c57699b0d4212255df0c0cdb38cb9026e9298b7cf8911b2`。 |
+| D85 | （2026-10-15）使用者：「我略過了一些測試，沒有多大關係，沒做的紀錄就好。連擊手感好了很多，但是不知道後面如果換武器就不知道了……未來換武器會如何？如果是個問題，請寫到v8中。」所以 16-L3 結案：L3-1、L3-2 依 C1 凍結 judge 通過；略過的項目（操作次數不足、重新加入、`room_full`）照實記為「略過（使用者決定）」；L3-3 記使用者評語；多武器的 FireGate 重推列進 v8 候選（排在 v7.1 A1 的決定之後），重生點保護補進 v8 既有候選。STABLE_BASELINE v7 改為升格完成。 |
 
 在各功能線開始前確認（先附建議）：
 
@@ -322,6 +333,23 @@
 - 2026-10-14：S6 的宣告與工具完成（1 位 high，約 35 分）：after 樹 `../GYO-Engine-c2-after`（`d685d1e`）從零建置；before＝v6final（雜湊與 C1、03a 一致）＋v6c2 GUI probe；權威 digest 兩棵都通過、跨 tree 35 情境 0 差異；乾跑 C2-A 結論同 C1、C2-B 正確報未驗證、回歸 25 案通過；竄改 17／17 拒絕；排程 A 30（＋補跑 0～24）、B 108、R 27，約 1.7～2.0 h。D78（U1～U8 照建議）。D45 xhigh 檢查開始。
 - 2026-10-14：S6 完成：D45 xhigh 檢查（MUST-FIX 4 項：回歸重設規則改 D61、補 late 修正數與 after／before 差異、作廢檢查改以 `d685d1e` 與遠端為基準、C2-B 樣本改數送出）全部套用；乾跑重跑通過、竄改 29／29 拒絕。D79 核准，宣告 SHA-256 `eb4caa6d…`，全文併入 `09-firegate-c2.md`「C2 的事前宣告」。本次推送為 commit H，S7 開始。
 - 2026-10-14：S7（C2 正式 session，19:39～21:03，commit H `a6127cc`）**通過**：165 項完成、0 停止。C2-A：兩棵 tree 24 次都在 8 ms 狀態（Fisher p＝1.0），clean-30 before 1／6 通過、替代 1.09%，after 6／6、替代 0；clean-60、144 兩棵都全過。C2-B：after 判定格 18 次全部 P、權威 Cooldown 0（送出→裁決中位數 after 15～34 ms、before 52～72 ms）；before 3 次 Cooldown 只記錄。回歸通過（D61 即時與事後 0）。late 修正 before 2、after 0。M0 沒有觸發。PR #73 的 auto-fix 已恢復。S8：結果寫進 09 文件「C2 結果」、README 第 09 列。
+- 2026-10-14：PR #73 合併（`6d3f287`；最後一個程式 commit `793c4f5` 的 L1 四平台通過，之後只改文件、CI gate 通過；本 repo 不允許 auto-merge，照 #70／#71 用 merge commit）。**P2 完成。** PR 描述已更新為整條 P2 線與 D73～D79 的範圍變更。
+- 2026-10-14：第 16 批開始（使用者：「照建議，開始第 16 批」）：先做 16-plan（具體清單提案，1 位 high）。
+- 2026-10-14：16-plan 完成（1 位 high）：清單（16-L1、16-removal、16-D44T、16-declare、16-L2、16-L3、16-baseline、視決定 16-release）、D44 整體回歸設計（P1＋P2、不含 D49 第二階段；D79 U9 使「舊版也出現」不能再當停止條件，改用新規則）、STABLE_BASELINE v7 大綱（不標缺陷版，除非 D44 推翻設計前提）。停下等 U1～U12。
+- 2026-10-14：D80（U1～U12 照建議）。16-L1 開始。
+- 2026-10-14：16-L1 完成（1 位 medium，21:36～22:25）：`../GYO-Engine-v7final`（`6d3f287`）從零建置；和 c2-after 正規化比對 C++ 反組譯 0 差異、Gateway 只差 vcs 資訊與 pclntab、資產 31 檔相同。CTest 69／69（突變後重建再跑 69／69）、label 外 5／5；go gofmt／vet／test 通過，race 6 次中 1 次失敗（`TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes` 量到 24.0 ms＜下限 30.3 ms，同時 C++ 建置、load 約 22；保留 `go.log`，建置結束後重跑 1 次通過；時間敏感測試在高負載下不穩，只記錄）；TSan ipc 3／3 警告 0、worker probe 30／30；權威 digest 對 v6final scale 1／3 各 35 情境 0 差分、golden 30 個 0 不符；Match 不連 SDL（`otool -L`、`_SDL_` 符號 0）；突變（U7：`4927d40..6d3f287` 改過的檔案）26／26 killed、整份目錄 349 個 0 stale；master CI run 38561353343 19 job 全綠、snapshot `snapshot-20261014-6d3f287` 已發佈。16-L2 用 `pvp-v7-16-l1-20261014/artifacts.sha256`（突變後重建的最終狀態）。
+- 2026-10-14：16-removal 完成（1 位 medium，約 35 分）：在 `6d3f287` 的暫時 worktree 移除 object_fps_pvp（329 個追蹤檔＋`engine/config/projects.csv` 1 列；v6 第 14b 批是 262 檔）。擁有者依登錄判定：`services/gyo_gateway` 在 `GyoBuild.cmake` 登錄為 `OWNER engine`，保留；產品自己的 `apps/object_fps_pvp/gateway` 一起刪。從零 configure／build exit 0，CTest 37／37（Engine 含 `gyo_time_tests`、`gyo_threads_tests`）；共通層除 `projects.csv` 外修改 0；CMake、`build/`、`.github`、engine、services、tools、tests、third_party 的 `pvp` grep 0 筆；dummy target 與空目錄 0；殘留提及：README 12 行（和 v6 相同），文件多 3 行在 `time-threads-trace/HANDOFF.md`（文字提及，非連結）。沒有 Architecture Delta。證據 `pvp-v7-16-removal-20261014/`。
+- 2026-10-14：16-D44T 完成（1 位 high，約 2 h 50 分）：`run_16.py`、`judge_16.py`、普查、凍結清單（`frozen.sha256` `ce0fe6e8…`）；普查：25 案 1／414（第 08 批開發 gateway-1000ms 窗外 backlog，新發現）、背壓 1／73、網路 1／24（impairments 模式），08b 起 0；代替 session 乾跑通過、模擬 driver 20 情境、竄改 26／26 拒絕；開發跑次 quad clean-60 與長測短模式通過（P50 37.6／38.0 ms）。排程 156 項約 2.3 h。摘要 `pvp-v7-16-prep-20261014/summary.md`。
+- 2026-10-14：D81（使用者休息；剩下照建議；明天 3 人 LAN 測試）。16-declare 與 lan-kit-v7 開始。
+- 2026-10-14：lan-kit-v7 完成（1 位 medium，約 20 分，沒有下載）：`~/gyo-lan-v7/`（本機以 CI `ci-macos-x64` 設定從 `6d3f287` 打包：Match、Mac Client（SDL 隨包）、`build_metadata.json` 的 `source_revision`＝`6d3f287`；Gateway 和 v7final 逐位元組相同；Match 與 Client 和 v7final 正規化比對 0 差異）；Windows Client 用 snapshot `object_fps_pvp-snapshot-20261014-6d3f287` 的 `gyo-object_fps_pvp-windows-x64.tar.gz`。煙霧測試（127.0.0.1）通過：Match ready、`/rooms`、2 人 headless probe、Mac Client 進大廳、Ctrl+C 後兩者 exit 0 且 trace 有 `trace_end`、統計有 `final=1`。手冊 `plans/v7/LAN_TEST.md`。插曲：第一次 configure 的輸出預設寫進 v7final 的 `build/target`，約 2 分內停下、沒有產品輸出，事後 v7final 0 新檔、git status 乾淨。只記錄：腳本在背景啟動的 Client 忽略 SIGINT（SIGTERM 立即停）。證據 `pvp-v7-lan-kit-20261014/`。
+- 2026-10-15：16-declare 完成（1 位 high＋1 位 xhigh D45 檢查；修正後重新凍結 FROZEN `8263d38c…`、DRIVER_SHA `ebc7e282…`、judge `29258be1…`；模擬 27 情境、竄改 34／34、缺口突變 6／6）。D82 核准，宣告 `1b2d2fbf…`，全文在新的批次文件 `16-integration-acceptance.md`。本次推送為 commit H，16-L2 開始。
+- 2026-10-15：16-L2 正式 session（01:06～03:49，commit H `68e8c51`）依宣告 `passed`＝false、未完成（168／171）：I 30／30 P、D 134／134 P（D44 0／260 事件）、G：quad-gui-bots、action-short、player-short P，`timing-gui-short` F（combat HUD 不一致 13 幀）→ 停止條件 6，剩 3 項 not_run。失敗跑次保留、不重跑。證據 `pvp-v7-16-l2-20261015/`。
+- 2026-10-15：D83（LAN 測試改期；16-L2 照建議 (a)）。16-L2b 開始。
+- 2026-10-15：16-L2b 準備完成（1 位 high＋1 位 xhigh D45 檢查；單元 15／15、突變 16／17（1 個等價）、v6 12 輪＋16-L2 規則核對如預期、模擬與竄改 35 情境、dry run 如預期）。D84 核准，宣告 `5b1466f6…`，全文併入 `16-integration-acceptance.md`；本次推送為 commit H。
+- 2026-10-15：16-L2b（14:39～14:42，commit H `ab992f5`）**通過**：4 項 P；兩個 timing 項目凍結分析器判 19／18 幀 HUD 不一致、v7 規則判 P（其他 combat 錯誤 0、乾淨、旗標 0、寬度最大 2 Tick）。**16-L2 整體通過**（I、D、L2-1～L2-5 照 16-L2；L2-6＝16-L2 的 action／player short＋本次 4 項；16-L2 的 timing-gui-short 保留 F）。16-baseline 開始。
+- 2026-10-15：16-baseline 完成（1 位 medium）：`STABLE_BASELINE.md`（狀態「L3 待做」、不標缺陷版、產品 `6d3f287`＋`ab992f5` 的 3 個驗收工具檔、D44 各母體上限與不獨立的說明、已知限制 1～9、這次不發行、tag 候選 `object_fps_pvp-v1.2.0`）；README 狀態與第 16 列改白話。待補：PR 合併後的 master commit。開 P7 的 PR（使用者：「照建議，baseline 完成後開 PR」）。
+- 2026-10-15：16-L3 的第一次 session（15:17:36～15:21:07，`pvp-v7-16-l3-20261015-151542`；Match 與 Gateway 由 agent 在背景啟動，兩個產品 Client＋2 個 bot）：C1 凍結 judge（`e2a7ec9d…`）判 L3-1 不斷線（`connection failed` 0）、模擬晚醒 ≥100 ms 0；L3-2 每位玩家最長連續替代 1 Tick、停頓重設 0、重設全為 life_respawn（24 次）；trace 都有 `trace_end`、dropped 0；4 人房成立。bot 的「Gateway connection timed out」是 agent 停掉 Gateway 時 bot 的 300 秒還沒跑完，不是產品問題。待使用者補充：L3-1 的操作次數、L3-2 在哪個 Client 做、L3-4 第 6 項（重新加入）與第 10 項（`room_full`）在 Gateway 沒有紀錄、L3-3 手感與 L3-4 第 1、3、5 項的觀察。使用者觀察：重生點沒有保護，佔著重生點時新加入的人會疊在一起 → 補進 v8 候選「出生點分散、出生保護」與 STABLE_BASELINE 已知限制第 9 項。
+- 2026-10-15：D85，16-L3 結案、STABLE_BASELINE v7 升格完成；v8 候選新增「多武器與本機射擊閘」。
 - 2026-10-09：使用者的補充（不打斷規劃 workflow，完成後處理）：(1) 第 08b 批草案加一節「對 movement 佇列與 backlog 的影響」，回答 08b 的改動會不會改變 movement 輸入抵達 Match 的時機或集中度、會不會讓 backlog（30 Tick 內排隊命令合計 ≥105）更容易觸發；只用既有證據與程式分析，回答不了的列出需要的量測。(2) 第 09 批的 ultracode 規劃把 D44 列為輸入：D44 是否要在常數推導前查清楚，或在什麼條件下要重推常數。D44 的排程不變，規劃認為必須提前時停下來問。(3) 第 08b 批草案送出後、實作前，用 ultracode 對第 06、07、08 批（含 P2-log）的推論與結論做對抗式核對：證據、數字的來源建置與指標、是否混入其他流量；只讀不量測，有問題的照慣例加「更正」並保留原文，腳本放新的證據目錄並記雜湊。
 - 2026-10-09：使用者同意檔位（「xhigh 可以，照建議配置」）：第 08b 批草案的 D44 一節由 1 位分析（high）＋1 位對抗式檢查（xhigh）撰寫；已完成批次的核對由 1 位逐條核對（high）＋1 位對抗式檢查（xhigh）。
 
