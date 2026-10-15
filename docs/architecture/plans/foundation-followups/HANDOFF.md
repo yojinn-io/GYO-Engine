@@ -8,7 +8,7 @@
 2. [批次計畫](PLAN.md)：FF-1…FF-9 的範圍、驗收、平台表、Architecture Delta、停止條件。
 3. 本文件：決策、正式項目清單、各批紀錄、未結事項。
 4. [未啟用產品的遷移清單](inactive_products.md)：object_fps、object_fps_v2、object_fps_preview 重新啟用前要做的遷移（本計畫與 IP 計畫共用）。
-5. 相關：[Math 基礎統一](../math-foundation/HANDOFF.md)（項目的原始來源）、[輸入與呈現](../input-and-present/HANDOFF.md)（姊妹計畫）、[架構漂移健檢](../../../checkup/2026_10_04_architecture.zh-Hant.md)。
+5. 相關：[Math 基礎統一](../math-foundation/HANDOFF.md)（項目的原始來源）、[輸入與呈現](../input-and-present/HANDOFF.md)（姊妹計畫）、[架構漂移健檢](../../../checkup/architecture/2026_10_04_architecture.zh-Hant.md)。
 
 ## 決策紀錄
 

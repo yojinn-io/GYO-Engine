@@ -90,7 +90,7 @@
 
 ### 第11項：Engine 輸入層的缺口（Engine 部分）→ IP-1
 
-- 來源：[架構漂移健檢（2026-10-04）](../../../checkup/2026_10_04_architecture.zh-Hant.md)「應收進 Engine 的功能」中優先度最高的一項；使用者 2026-10-04 決定處理。
+- 來源：[架構漂移健檢（2026-10-04）](../../../checkup/architecture/2026_10_04_architecture.zh-Hant.md)「應收進 Engine 的功能」中優先度最高的一項；使用者 2026-10-04 決定處理。
 - 現況：
   - `engine/input/include/engine/input/PhysicalInputFrame.hpp:8-24` 的 `Key` 是 14 鍵的封閉清單，沒有 Tab 與數字鍵。過去 F3、H、R 都是為了產品需求直接改 Engine 的 enum 加進去的。
   - SDL 轉換在 `engine/input/backend/sdl/src/SdlInput.cpp`，不在 `engine/platform/sdl`。
