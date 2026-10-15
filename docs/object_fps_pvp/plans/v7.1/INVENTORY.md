@@ -1,6 +1,6 @@
 # PvP v7.1 清單核對結果
 
-更新：2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
+更新：2026-10-16（P5 等項目的處置依 D94 改為 `edge-contract`）；初版 2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
 
 v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法：5 位讀者分組對照程式與文件；2 位對抗式核對，提出的更正已套用；1 位完整性評審補列缺項。各 agent 的原始輸出留在規劃會話的工作檔，不放進 repo；本文件是核對後的結論。
 
@@ -38,7 +38,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | P2 | runtime link 每秒 1 次心跳對時（偏移、RTT 最小值濾波、漂移回歸，每 10 秒寫進兩端日誌），不得用在本機年齡判斷 | 未解決 | `apps/object_fps_pvp/protocol/runtime_v6.proto:107-121`<br>`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:385` | 要 | 否 | heartbeat-sync |
 | P3 | Client↔Gateway 時間回聲（D35），量跨機器偏移與漂移（含第 15 批移出的 ≥15 分鐘量測） | 暫定 | `apps/object_fps_pvp/protocol/client_v6.proto:7`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:440-443` | 要 | 否 | time-echo |
 | P4 | GatewayDropReport（D49 第二階段）：原因列舉一次定完整、dwell 只有一個定義、回報有界、轉送身分不轉送內容 | 部分（a700b66、cb6bbe0） | `apps/object_fps_pvp/gateway/ingress_statistics.go:120-170`<br>`apps/object_fps_pvp/gateway/server.go:373` | 要 | 否 | drop-report |
-| P5 | 依 D49 分類 Gateway 在 06／08／08b／08c 加的狀態，決定是否轉送 A3／A5，寫「Gateway 職責」正式條文（PEP／PDP） | 未解決 | `apps/object_fps_pvp/gateway/action_delivery.go:20-35`<br>`apps/object_fps_pvp/gateway/action_delivery.go:225-252、:257-273、:500-512` | 可選 | 否 | pv7-design（A3／A5）＋gateway-duties |
+| P5 | 依 D49 分類 Gateway 在 06／08／08b／08c 加的狀態，決定是否轉送 A3／A5，寫「Gateway 職責」正式條文（PEP／PDP） | 未解決 | `apps/object_fps_pvp/gateway/action_delivery.go:20-35`<br>`apps/object_fps_pvp/gateway/action_delivery.go:225-252、:257-273、:500-512` | 可選 | 否 | edge-contract（D94：Gateway 回到無狀態邊緣，A3／A5 隨帳本刪除） |
 | P6 | ingress v1 和 GatewayDropReport 是否統一成一個死信 Data Contract。更正：D57 已決定死信只當原則；D73⑤ 又把問題移到 v7.1，待確認 D57 是否仍成立。 | 暫定 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:102`<br>`docs/object_fps_pvp/plans/v7.1/README.md:25` | 可選 | 否 | dead-letter-position |
 | P7 | 讓 Match 看見更多遲到 → late 修正變多、D44 風險上升，所以 P4 要和 B6／B8／A5 一起設計 | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:396`<br>`docs/object_fps_pvp/plans/v7.1/README.md:37-38` | 可選 | 可能 | pv7-design |
 | P8 | pv7 之後重推 FireGate（重推條件 4、11：重跑 M0 型量測並加跑 Client→Gateway 短延遲注入）與 D44 整體回歸 | 未解決 | `docs/object_fps_pvp/plans/v7/09-firegate-c2.md:125`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:761` | 否 | 否 | d44-regression-pv7（FireGate 重推部分隨 A1 取消） |
@@ -143,7 +143,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
-| N-netarch-ambiguity | network-architecture 原第 230-233 行的條文歧義（事故後續表）（合併：N-netarch-230-ambiguity） | 部分（082d4b6） | `docs/object_fps_pvp/network-architecture.zh-Hant.md:237-239`<br>`docs/object_fps_pvp/network-architecture.zh-Hant.md:240-248` | 否 | 否 | gateway-duties |
+| N-netarch-ambiguity | network-architecture 原第 230-233 行的條文歧義（事故後續表）（合併：N-netarch-230-ambiguity） | 部分（082d4b6） | `docs/object_fps_pvp/network-architecture.zh-Hant.md:237-239`<br>`docs/object_fps_pvp/network-architecture.zh-Hant.md:240-248` | 否 | 否 | edge-contract |
 | N-dropreport-enum-drift | design3 B 的原因列舉早於 08c 定案，和 HEAD 的原因集合不一致 | 未解決 | `build/target/_build/test/logs/pvp-v7-infoflow-plan-20261010/batch2/design3-counts-pv7.md`<br>`apps/object_fps_pvp/gateway/ingress_statistics.go:120-170` | 要 | 否 | pv7-design＋drop-report |
 | N-leave-reason | Gateway 送給 Match 的 Leave 不帶原因 | 未解決 | `apps/object_fps_pvp/protocol/runtime_v6.proto:21`<br>`apps/object_fps_pvp/gateway/server.go:29-30` | 可選 | 否 | cause-records |
 | N-action-nack | Match 整批拒收動作時不回覆（沒有 NACK）（合併：N-action-reject-nack）。更正：pv6 已有 RuntimeError；要讓 Client 停止重送才需改 wire。 | 未解決 | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp:384`<br>`apps/object_fps_pvp/gateway/server.go:652-654` | 可選 | 否 | cause-records |
