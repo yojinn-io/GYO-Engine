@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-resend` 完成，等你決定一件事。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-resend` 完成；下一批 `edge-input-passthrough`，等你說開始。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D106 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D107 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,16 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：
-  1. **§9 對 `edge-results-resend` 的驗收說法太強**（xhigh should-1）。
-     - §9 寫「Client 看到的不變」。實際上 Client 收到的內容不變，但時序會變：只要還有較舊的裁決沒退役，Match 的通道每 1/30 秒重送一次，新裁決要等下一個時段。這個中間 commit 有兩層 30 Hz 排程疊在一起（Match 的通道、Gateway 的帳本）。
-     - 量測（無損模型，8 個種子，`results_resend_test.go`；上限「≤1 個間隔＋1 ms」在跑之前寫定）：369 個裁決中 63 個（17%）比「立刻送」晚到，最多晚 33 ms（1 個間隔）。未確認超過 8 筆時，新 id 只能靠循環槽位，最晚約 7 個間隔（約 233 ms，推論；在射擊冷卻下很少見）。
-     - `edge-results-passthrough` 刪掉 Gateway 帳本後只剩 Match 一層排程，和現在 Gateway 帳本對 Client 的重送節奏同一類。
-     - 選項：(a) §9 改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照（建議）；(b) 循環槽位優先放從沒送過的 id，可消除超過 8 筆時的延遲，但偏離 §2a「其餘槽位循環」的字面，要改契約；(c) 要求時序完全不變：在每間隔一框的上限下做不到，除非讓重送少於每間隔一次（也偏離 §2a）。
+- **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：等你決定上面一件事；之後 `edge-input-passthrough`（照 README 順序，說「開始」才啟動）。這批是行為改變：依 AGENTS.md §14.1，L2 的事前宣告（門檻、試行次數、重試規則）要在看結果之前經你核准。
+- **下一步**：`edge-input-passthrough`（照 README 順序，說「開始」才啟動）。這批是行為改變：依 AGENTS.md §14.1，L2 的事前宣告（門檻、試行次數、重試規則）要在看結果之前經你核准。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 18:19，`edge-results-resend` 完成並 commit，四平台 L1 已觸發。
+- **最後更新**：2026-10-16，D107（§9 的 `edge-results-resend` 驗收措辭）。
 
 ## 閱讀入口
 
@@ -81,6 +76,7 @@
 | D104 | （2026-10-16）protocol-v7 §2「診斷訊框的計時與佇列」改成配合實作：GatewayDropReport 不經過單槽，計時器只標記一輪，writer 寫出前一刻才組回報（序號、樣本、dwell 終點在寫出時決定）。wire 與 Match 的檢查不變 | 使用者：「1a」；`drop-report` 的 xhigh should-3 |
 | D105 | （2026-10-16）核准 `heartbeat-sync`、`time-echo`、`drop-report` 新增的 Gateway 欄位為診斷狀態（D-14 的 Architecture Delta）。條件：`edge-contract` 的白名單分三類——診斷狀態（判定路徑不得讀取）、單次呼叫的脈絡（`datagram`，不得跨資料包保留）、測試縫隙（正式路徑只用預設值）；分類先寫進 protocol-v7 §2a | 使用者：「2a（含條件）」；`drop-report` 的 xhigh should-4 |
 | D106 | （2026-10-16）開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh，估 7～8 h） | 使用者：「開始 edge-results-resend」 |
+| D107 | （2026-10-16）protocol-v7 §9 的 `edge-results-resend` 驗收改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照。量測：無損模型 8 個種子，369 個裁決中 63 個晚到，最多晚 33 ms；未確認超過 8 筆時新 id 要等循環槽位（推論最晚約 7 個間隔），條文以括號註明 | 使用者：「§9 照 (a)」；`edge-results-resend` 的 xhigh should-1 |
 
 ## 規劃紀錄（記錄器）
 
@@ -256,7 +252,7 @@
   - 突變：本批 12 個（`v71-edge-results-resend`）加上受影響的 v7-08b 與 `v7-flow-ledger-ipc-*` 共 31 個，全部殺死。`v7-08b-lane-no-sent-tracking` 刪除（它描述的「重送到 ACK 為止」就是現在要的行為）；`v7-08b-lane-repeat`、兩個 `v7-flow-ledger-ipc-*-silent` 改成新寫法。第一輪有 2 個是錯誤訊息不符：`v7-08b-lane-unpaced` 讓差分測試的讀取迴圈停不下來（重送不設節奏時 Match 一直在寫），整個 ipc 測試逾時；讀取迴圈加上 2 秒期限後，用預期的訊息失敗。`v71rr-cursor-stuck` 讓 id 14／16 永遠送不出去，在等那一個裁決時就失敗，期望值加上這個訊息。
   - 驗收（L1，本機）：`test` preset 全量 CTest 72／72；`go vet`、`go test -race -count=3`；權威 digest 同機兩樹比較 scale 1、3 各 35 情境 0 差異（IpcHost 不在 digest 的路徑上，只作確認）。
   - 局部 xhigh 檢查（通道計時，1 位，約 13 分）：must 0、should 3、note 8。
-    - should-1：新裁決可能晚到，§9「Client 看到的不變」的說法太強。量測與選項記在「等你決定」。
+    - should-1：新裁決可能晚到，§9「Client 看到的不變」的說法太強。無損模型 8 個種子：369 個裁決中 63 個（17%）比「立刻送」晚到，最多晚 33 ms（上限「≤1 個間隔＋1 ms」在跑之前寫定）。§9 依 D107 修改。
     - should-2（已補）：連續觸發時的速率上限測試，與「被觸發的通道立即到期」突變。
     - should-3（已補）：循環槽位在框內繞回的情形、框內嚴格遞增（Client 會整框拒收重複 id），與「不排序」「不繞回」兩個突變。
     - note（已處理）：只有 ACK-only 批才讀 Host 的結果；補「超過 8 筆的拒收不回覆」突變；更正兩處註解。
