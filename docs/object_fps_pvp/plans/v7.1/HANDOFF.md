@@ -40,11 +40,11 @@
 - **等你決定**：
   1. **§9 對 `edge-results-resend` 的驗收說法太強**（xhigh should-1）。
      - §9 寫「Client 看到的不變」。實際上 Client 收到的內容不變，但時序會變：只要還有較舊的裁決沒退役，Match 的通道每 1/30 秒重送一次，新裁決要等下一個時段。這個中間 commit 有兩層 30 Hz 排程疊在一起（Match 的通道、Gateway 的帳本）。
-     - 量測（無損模型，8 個種子，`results_resend_test.go`）：369 個裁決中 63 個（17%）比「立刻送」晚到，最多晚 33 ms（1 個間隔）。未確認超過 8 筆時，新 id 只能靠循環槽位，最晚約 7 個間隔（約 233 ms，推論；在射擊冷卻下很少見）。
+     - 量測（無損模型，8 個種子，`results_resend_test.go`；上限「≤1 個間隔＋1 ms」在跑之前寫定）：369 個裁決中 63 個（17%）比「立刻送」晚到，最多晚 33 ms（1 個間隔）。未確認超過 8 筆時，新 id 只能靠循環槽位，最晚約 7 個間隔（約 233 ms，推論；在射擊冷卻下很少見）。
      - `edge-results-passthrough` 刪掉 Gateway 帳本後只剩 Match 一層排程，和現在 Gateway 帳本對 Client 的重送節奏同一類。
      - 選項：(a) §9 改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照（建議）；(b) 循環槽位優先放從沒送過的 id，可消除超過 8 筆時的延遲，但偏離 §2a「其餘槽位循環」的字面，要改契約；(c) 要求時序完全不變：在每間隔一框的上限下做不到，除非讓重送少於每間隔一次（也偏離 §2a）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：同步 master（PR #80 的 `Design Invariants`、AGENTS.md 新 §14）；之後等你決定上面一件事，再開始 `edge-input-passthrough`（照 README 順序）。
+- **下一步**：等你決定上面一件事；之後 `edge-input-passthrough`（照 README 順序，說「開始」才啟動）。這批是行為改變：依 AGENTS.md §14.1，L2 的事前宣告（門檻、試行次數、重試規則）要在看結果之前經你核准。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-16 18:19，`edge-results-resend` 完成並 commit，四平台 L1 已觸發。
 
@@ -264,6 +264,7 @@
   - 證據：`build/target/_build/test/logs/pvp-v71-edge-results-resend-20261016/`。
   - Architecture Delta：無（Match 的通道狀態多 `cursor`、`asked`，少了 `sent`；屬 IpcHost 內部）。
   - 實際約 1 h（17:25～18:19，含 xhigh 檢查約 13 分；估 7～8 h）。
+- 2026-10-16：同步 master（`497c138`，PR #79、#80）。只有 AGENTS.md 與 network-architecture 的標題改變，沒有衝突。之後照新的 AGENTS.md 做：§3 的 `Design Invariants`（含 `Replacement Criteria`）與「状態の権威」、§14 Test and Defect Handling（改既有測試的判定要寫理由；受入判定與 Design Invariants 守衛的判定要經你核准；事前宣告的門檻要在看結果之前核准）。本批改動既有測試判定的理由已寫在上面的紀錄與 commit 訊息。
 
 ## 未結事項
 
