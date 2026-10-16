@@ -4179,6 +4179,36 @@
       "replace": "        const auto index=std::min(first+start%rest+k,decisions.size()-1);\n",
       "check": "ipc",
       "expect": "adjacent_find|cycled\\.size\\(\\) == decisions - 4"
+    },
+    {
+      "id": "v71ip-input-wait-unrecorded",
+      "batch": "v71-edge-input-passthrough",
+      "what": "SubmitInput's wait for the host mutex is not recorded",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    statistics_.lockWaits.input.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only\n",
+      "replace": "    static_cast<void>(waiting);\n",
+      "check": "cpu",
+      "expect": "lockWaits\\.input\\.Count\\(\\) == 4"
+    },
+    {
+      "id": "v71ip-input-wait-after-lock",
+      "batch": "v71-edge-input-passthrough",
+      "what": "SubmitInput starts timing after it holds the mutex: the wait is never seen",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    const auto waiting = std::chrono::steady_clock::now();\n    std::lock_guard lock(mutex_);\n    statistics_.lockWaits.input.Record(",
+      "replace": "    std::lock_guard lock(mutex_);\n    const auto waiting = std::chrono::steady_clock::now();\n    statistics_.lockWaits.input.Record(",
+      "check": "cpu",
+      "expect": "lockWaits\\.input\\.Max\\(\\) >= 10ms"
+    },
+    {
+      "id": "v71ip-step-wait-unrecorded",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The step's wait for the host mutex is not recorded",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    statistics_.lockWaits.step.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only\n",
+      "replace": "    static_cast<void>(waiting);\n",
+      "check": "cpu",
+      "expect": "lockWaits\\.step\\.Count\\(\\) == 1"
     }
   ]
 }

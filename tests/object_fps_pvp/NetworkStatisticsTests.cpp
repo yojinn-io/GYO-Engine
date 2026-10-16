@@ -46,15 +46,24 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
     match.ticks.Record(planned, planned + 300us, false);
     match.ticks.Record(planned, planned + 5ms, false);
     match.ticks.Record(planned, planned, true);
+    match.lockWaits.input.Record(100us);
+    match.lockWaits.input.Record(3ms);
+    match.lockWaits.step.Record(600us);
     CHECK(MatchStatisticsLine(match) ==
           "[ObjectFPS/PvP Match] network statistics window_s=10.000 cpu_s=0.250 cpu_total_s=12.500 ipc_iterations=8123 "
           "ipc_iterations_per_s=812.3 tick_deadline_wakes=2 tick_notified=1 tick_early=0 tick_late_p50_le_us=500 "
-          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0 snapshot_overwrites=3");
+          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0 snapshot_overwrites=3 "
+          "host_lock_input_waits=2 host_lock_input_wait_p99_le_us=3000 host_lock_input_wait_max_us=3000 "
+          "host_lock_input_wait_bins=1,0,0,0,1,0,0,0,0,0 host_lock_step_waits=1 host_lock_step_wait_p99_le_us=600 "
+          "host_lock_step_wait_max_us=600 host_lock_step_wait_bins=0,0,1,0,0,0,0,0,0,0");
 
     CHECK(MatchStatisticsLine({}) ==
           "[ObjectFPS/PvP Match] network statistics window_s=0.000 cpu_s=na cpu_total_s=na ipc_iterations=0 "
           "ipc_iterations_per_s=0.0 tick_deadline_wakes=0 tick_notified=0 tick_early=0 tick_late_p50_le_us=0 "
-          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0");
+          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0 "
+          "host_lock_input_waits=0 host_lock_input_wait_p99_le_us=0 host_lock_input_wait_max_us=0 "
+          "host_lock_input_wait_bins=0,0,0,0,0,0,0,0,0,0 host_lock_step_waits=0 host_lock_step_wait_p99_le_us=0 "
+          "host_lock_step_wait_max_us=0 host_lock_step_wait_bins=0,0,0,0,0,0,0,0,0,0");
 
     CHECK(WorkerStatisticsLine({.player = 2, .windowSeconds = 10.0, .wakes = 4812, .cpuSeconds = 0.0514}) ==
           "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051 "

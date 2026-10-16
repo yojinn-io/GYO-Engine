@@ -41,6 +41,17 @@ class DiagnosticIsolationTest(unittest.TestCase):
                        if 'ClockSync' in path.read_text(encoding='utf-8'))
         self.assertEqual(users, ['ClientConnection.cpp', 'ClockSync.hpp', 'IpcHost.cpp'])
 
+    def test_the_host_only_records_its_lock_waits(self):
+        # edge-input-passthrough: the host times its own mutex for the L2 load
+        # comparison. Like its tick wake statistics, it only records them for
+        # TakeStatistics; nothing it decides reads them.
+        lines = [line.strip() for line in (SOURCE / 'MatchRuntimeHost.cpp').read_text(encoding='utf-8').splitlines()
+                 if 'lockWaits' in line]
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertRegex(line, r'^statistics_\.lockWaits\.(input|step)\.Record\(')
+
 
 if __name__ == '__main__':
     unittest.main()

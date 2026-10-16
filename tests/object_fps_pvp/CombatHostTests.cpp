@@ -2,7 +2,9 @@
 
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
+#include <atomic>
 #include <chrono>
+#include <thread>
 
 namespace {
 using namespace fps::pvp;
@@ -255,4 +257,32 @@ TEST_CASE("PvP wire action and acknowledgement handoff is atomic and can release
     fixture.Step();
     CHECK(fixture.host.GetActionResults(1)->retiredThrough==33);
     CHECK(fixture.host.GetActionResults(1)->decisions.empty());
+}
+
+// edge-input-passthrough (diagnostics only): the host times the wait for its
+// mutex once per SubmitInput and once per step, and a SubmitInput that waits
+// while a step holds the mutex records that wait.
+TEST_CASE("PvP host records each wait for its mutex") {
+    std::atomic<bool> hold{false}, holding{false};
+    MatchRuntimeHost host{CombatHostArena(), [&] {
+        if (hold.exchange(false)) {
+            holding = true;
+            std::this_thread::sleep_for(100ms); // inside Step, under the mutex
+        }
+        return std::chrono::steady_clock::time_point{};
+    }};
+    REQUIRE(host.QueueJoin(1, 1));
+    REQUIRE(host.Advance(MovementTickSeconds).steps == 1);
+    static_cast<void>(host.TakeStatistics());
+    const PlayerInput input{1, {{1, 1.0f, 0.0f, 0.0f, 0.0f, false}}, 1, 1};
+    for (int k = 0; k < 3; ++k) static_cast<void>(host.SubmitInput(input));
+    hold = true;
+    std::thread step([&] { static_cast<void>(host.Advance(MovementTickSeconds)); });
+    while (!holding) std::this_thread::yield();
+    static_cast<void>(host.SubmitInput(input));
+    step.join();
+    const auto statistics = host.TakeStatistics();
+    CHECK(statistics.lockWaits.input.Count() == 4);
+    CHECK(statistics.lockWaits.step.Count() == 1);
+    CHECK(statistics.lockWaits.input.Max() >= 10ms);
 }

@@ -148,7 +148,9 @@ void MatchRuntimeHost::NoteCoalescedSlackSamples(std::span<const PlayerId> playe
 }
 
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
+    const auto waiting = std::chrono::steady_clock::now();
     std::lock_guard lock(mutex_);
+    statistics_.lockWaits.input.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only
     // Every return below is counted exactly once: received = accepted + refused.
     auto& ingress = IngressBucket(input.playerId);
     ++ingress.received.inputs;
@@ -340,7 +342,9 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
 }
 
 Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, bool& published) {
+    const auto waiting = std::chrono::steady_clock::now();
     std::lock_guard lock(mutex_);
+    statistics_.lockWaits.step.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only
     if (pendingReset_) {
         ClearState();
         elapsedSeconds = 0;
