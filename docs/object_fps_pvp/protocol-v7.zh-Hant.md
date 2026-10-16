@@ -1,6 +1,6 @@
 # PvP Protocol v7：檢測、無狀態邊緣、丟棄回報、射擊步序與 hitbox 的契約支持
 
-更新：2026-10-16（定稿，D96）；初稿 2026-10-15。**狀態：定稿，尚未生效。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94～D96；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定，§2a 已做 xhigh 對抗式檢查。定稿之後，任何 wire 的新增、刪除、改號、改型別或改語意，都要先徵求使用者同意。
+更新：2026-10-16（定稿，D96；§1 兩處條文依 D99 修改）；初稿 2026-10-15。**狀態：定稿，尚未生效。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94～D96；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定，§2a 已做 xhigh 對抗式檢查。定稿之後，任何 wire 的新增、刪除、改號、改型別或改語意，都要先徵求使用者同意。
 本文件的 vN 指網路協議版本 pvN。現行 wire 仍是 pv6（[protocol-v6](protocol-v6.zh-Hant.md)）；本契約在 v7.1 的 pv7-line 分批實作，`pv7-merge` 時一次生效。
 pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標明原出處。程式行號以 `95bac31` 為準。
 
@@ -30,13 +30,13 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 | 位置 | 版本不是 7 時 |
 |---|---|
-| HTTP join 請求（Gateway） | 在保留名額之前回 409，body 為 `{"error":"protocol_version","protocol_version":7}`。缺少視為 0；不是 0～65535 的整數照舊回 400 `invalid_join`。Gateway 寫一行 log：`join refused code=protocol_version expected=7 received=<n>` |
+| HTTP join 請求（Gateway） | 在保留名額之前回 409，body 為 `{"error":"protocol_version","protocol_version":7}`。缺少視為 0；不是 0～65535 的整數照舊回 400 `invalid_join`。Gateway 寫一行 log：`join refused remote=<addr> code=protocol_version expected=7 received=<n>`（和既有的 `join refused remote=<addr> code=<code>` 同一系，D99） |
 | HTTP 回覆的錯誤（Client） | **以 body 的 `error` 判斷，不看狀態碼**：`error`＝`"protocol_version"`（不論 409 或 400）才產生 `protocol_version_mismatch: Client 7, Gateway <n\|unknown>`，n 取 body 的 `protocol_version`（只接受 JSON 無號整數，沒有就寫 unknown）。其他錯誤（例如 409 `room_full`）照舊 |
 | HTTP join 成功回覆（Client） | 回覆的版本不是 7 時，錯誤為 `protocol_version_mismatch: Client 7, Gateway <n>`，取代 `Client protocol mismatch`。保留還在 reserved 階段，Gateway 不會送 PlayerLeave；Client 照舊在下一個動作以 HTTP leave 釋放 |
 | GYOP 標頭（Client、Gateway） | 靜默丟棄：不回覆，不改序號與活性。Gateway 計入 `drop_other_version_datagrams`，經 Gateway 串流的 `DROP_OTHER_VERSION_DATAGRAMS` 讓 Match 知道（§4）。Client 新增本機計數，把版本不符和其他解碼失敗分開，寫進 worker 統計行 |
 | IPC Ready（Gateway） | 版本不符獨立成一種啟動失敗，訊息保留既有前綴：`runtime readiness contract mismatch: protocol version expected 7, received <n>` |
 | 之後的 IPC envelope | 兩端都把「版本不符」和「解析失敗、訊息為空」分開，未知 oneof 要寫出欄位號，然後走既有的關閉路徑。既有的 close 原因字串（`eof`、`read: …`、`pending controls over 64`）逐字不變 |
-| 版本不符時的告知 | 偵測到版本不符的一方，關閉前盡力寫出一個只含欄位 1（自己的版本）的 envelope。收方先檢查版本，再寫出期望值與收到值。Match 對「Connected 之後還沒收到任何框架就 eof」另寫一行提示 |
+| 版本不符時的告知 | 偵測到版本不符的一方，關閉前盡力寫出一個只含欄位 1（自己的版本）的 envelope。收方先檢查版本，再寫出期望值與收到值。Match 對「Connected 之後還沒收到任何框架就 eof」另寫一行提示。**實作範圍**（D99）：Match 先送 Ready，所以實際會偵測到不符的只有 Gateway 讀 Ready 的時候；告知只在這裡送（寫入逾時 500 ms）。Gateway 接受 Ready 之後兩端版本已一致，之後的不符只會來自實作錯誤：偵測方寫出期望值與收到值後直接關閉，不送告知，避免 link 上出現第二個寫入者 |
 | `GET`／`POST /rooms`、leave | 照舊不帶版本 |
 
 ### 驗收工具
