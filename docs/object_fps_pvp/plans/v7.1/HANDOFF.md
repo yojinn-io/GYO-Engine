@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 的 L2 進行中。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 完成（L2 通過）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：L2 第 2 次 session 進行中（D110；`build/target/_build/test/logs/pvp-v71-edge-input-l2-20261017b/`，約 2 h 10 分＋閒置門檻；插電、不移動機器；PR 的 Auto-fix 暫停）；結束後判定，再做 heartbeat-sync 的睡眠那段。
+- **下一步**：heartbeat-sync 的睡眠那段（D102、D109，要你讓機器睡眠）；之後 `edge-results-passthrough`（說「開始」才啟動）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 00:57，D110；L2 第 1 次 session 停在第 58 項（宣告缺漏），修正 I1 規則後重跑。
+- **最後更新**：2026-10-17 03:09，`edge-input-passthrough` 的 L2 通過；PR 的 Auto-fix 恢復。
 
 ## 閱讀入口
 
@@ -278,6 +278,15 @@
   - D45 門檻來源檢查（L2 草稿第 1 版，1 位 xhigh，約 17 分）：送核准前必須修正 7、應修正 8；改寫成 [第 2 版](edge-input-passthrough-l2.md)，對應表在其第 11 節。也發現 clean 時 B 本來就是一包一則 IPC，D-8 擔心的負載主要在故障情境。
   - 兩個 commit：B `42f6e88`（只加鎖等待量測；B 樹全量 CTest 72／72）、A `6d9ecf5`；四平台 L1 是 run 38914084925。兩棵樹：`../GYO-Engine-ip-before`、`../GYO-Engine-ip-after`（detached、乾淨）。L2 工具在 `build/target/_build/test/logs/pvp-v71-edge-input-l2-prep-20261016/`，乾跑 31 種情況全部符合預期，A 沒有跑過任何項目。
   - 時間：22:46 時，實作、L1、兩次 xhigh 檢查完成；接著是兩個 commit、L2 工具與乾跑，然後停下來等你核准宣告。
+
+- 2026-10-17：`edge-input-passthrough` 的 L2（D109、D110）**通過**。
+  - 第 1 次 session 停在第 58 項（B 樹 clean-60 的 I1：關閉時被 reset，宣告缺漏），依 D110 只改 I1 的規則後整個重跑；第 1 次保留在 `build/target/_build/test/logs/pvp-v71-edge-input-l2-20261017/`。
+  - 第 2 次 session（`pvp-v71-edge-input-l2-20261017b/`，00:58～03:08）：98／98 完成，逐跑次判定沒有停下，受干擾 1 個（network-impairments-r2-A，上限 3）；`judgement.md`。
+  - J2 替代率：各情境 A−B 都在門檻內（clean、quad 0／0；network-impairments 21.9→22.7‰，門檻 +1.25；backpressure、short-stall 差 ≤0.03‰；x1 −0.4‰）。ramp、soak 只記錄（61.2→60.7、0.05→0.03‰）。
+  - J3（soak）：兩棵樹逐出 0、`connection_quality_failures_max` 0。J4a（soak 180 個視窗）：A／B＝0.97（門檻 1.5）。J4b：所有情境的晚醒 p99 都在第 0 格。J4c：鎖等待 ≥250 µs 的比例兩棵樹都是 0。J7：成立。
+  - 預測都沒有被推翻：P0 clean 的 `received_inputs` A 1921／B 1920，host-ipc-1000ms +101（預測約 +100）；P1 clean 的 Match 命令 A／B＝2.99；P2 clean 的 Match 副本 3838（B 的 written duplicate 3836）；P4 CPU clean 1.06、quad 1.02。故障情境的佇列溢出也都是 0。
+  - 差異帶（給 `pv7-checkpoint`，宣告第 9 節）：以上的 A−B。
+  - 實際約 7 h（2026-10-16 20:09～10-17 03:15；含 xhigh 兩次、L2 工具、兩次 session 約 3.5 h；估 20～26 h）。
 
 ## 未結事項
 
