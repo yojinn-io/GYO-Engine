@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 實作完成，L2 宣告等你核准。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 的 L2 進行中。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D108 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D109 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,16 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：核准 [`edge-input-passthrough` 的 L2 事前宣告](edge-input-passthrough-l2.md)（第 3 版；AGENTS.md §14.1：核准後不放寬）。其中第 10 節的 4 個選擇：
-  1. J4a（soak 的 Match CPU）的倍數：建議 1.5 倍（可選 2 倍或只記錄）。
-  2. soak-long 要不要跑：建議跑（兩棵樹各 1 次，約 68 分；J3、J4a 只在 soak 判）。
-  3. heartbeat-sync 的睡眠那段：本 session 結束後接著做，或另外排。
-  4. 次數：照第 5 節（98 個項目，約 2 h 10 分＋閒置門檻）。
-  - 另外請確認：`ingress_cross_check.py` 改成只接受 protocol-v7 §9 宣告形狀的 I3 失敗（既有檢查的判定變更，AGENTS.md §14.4）。
+- **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：核准後依 `commands.txt` 跑 L2 session（約 2 h 10 分＋閒置門檻；插電、不移動機器），再依判定決定本批是否完成。
+- **下一步**：L2 session 進行中（`build/target/_build/test/logs/pvp-v71-edge-input-l2-20261017/`，約 2 h 10 分＋閒置門檻；插電、不移動機器；PR 的 Auto-fix 暫停）；結束後判定，再做 heartbeat-sync 的睡眠那段。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 23:52，`edge-input-passthrough` 的兩個 commit（`42f6e88`、`6d9ecf5`）、兩棵樹、L2 工具與乾跑完成；等你核准宣告。
+- **最後更新**：2026-10-16 23:58，D109；L2 session 開始。
 
 ## 閱讀入口
 
@@ -83,6 +78,7 @@
 | D106 | （2026-10-16）開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh，估 7～8 h） | 使用者：「開始 edge-results-resend」 |
 | D107 | （2026-10-16）protocol-v7 §9 的 `edge-results-resend` 驗收改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照。量測：無損模型 8 個種子，369 個裁決中 63 個晚到，最多晚 33 ms；未確認超過 8 筆時新 id 要等循環槽位（推論最晚約 7 個間隔），條文以括號註明 | 使用者：「§9 照 (a)」；`edge-results-resend` 的 xhigh should-1 |
 | D108 | （2026-10-16）開始 `edge-input-passthrough`（檔位 high，局部 xhigh，估 20～26 h）。行為改變：L2 的事前宣告（門檻、試行次數、重試規則）在看結果之前經使用者核准（AGENTS.md §14.1），宣告前做門檻來源的對抗式檢查（D45） | 使用者：「開始」 |
+| D109 | （2026-10-16）核准 `edge-input-passthrough` 的 L2 事前宣告第 3 版；第 10 節照建議：J4a 1.5 倍、跑 soak-long、heartbeat-sync 的睡眠那段在本 session 結束後接著做、次數照第 5 節（98 個項目）。確認 `ingress_cross_check.py` 只接受 protocol-v7 §9 宣告形狀的 I3 失敗（AGENTS.md §14.4） | 使用者：「核准 edge-input-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…ingress_cross_check 的 I3 例外也確認。」 |
 
 ## 規劃紀錄（記錄器）
 
