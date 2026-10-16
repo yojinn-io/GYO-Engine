@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`heartbeat-sync` 完成（睡眠那段 L2 待做）；下一批 `time-echo` 等使用者說開始。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`time-echo` 完成；下一批 `drop-report` 等使用者說開始。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D101 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D102 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,13 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：
-  1. `heartbeat-sync` 的睡眠那段 L2：soak 中途讓系統睡眠幾分鐘，量兩端的跳變（只記錄，約 40 分，要你在場）。現在做，或等之後的 L2 一起做。
-  2. 開始 `time-echo`（檔位 high，估 4 h）。
+- **等你決定**：開始 `drop-report`（檔位 high，列舉與上限局部 xhigh，估 13～16 h）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`time-echo`。
+- **下一步**：`drop-report`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 13:30，`heartbeat-sync` 完成並推送。
+- **最後更新**：2026-10-16 14:30，`time-echo` 完成並推送。
 
 ## 閱讀入口
 
@@ -73,6 +71,7 @@
 | D99 | （2026-10-16）protocol-v7 §1 的兩處條文照建議修改：「版本不符時的告知」加上實作範圍的附註（只有 Gateway 在讀 Ready 時送告知；Ready 之後的不符直接關閉、不送告知）；Gateway 拒絕 join 的 log 行加上 `remote=<addr>`，和既有的 `join refused remote=<addr> code=<code>` 同一系。wire 與實際行為不變 | 使用者：「契約兩處都照建議：§1 加上版本告知範圍的附註；拒絕 log 行加上 remote=<addr>。」；`version-errors` 的 ultracode 審查 architecture-F3、contract-F5 |
 | D100 | （2026-10-16）開始 `heartbeat-sync`（檔位 high，時鐘域局部 xhigh，估 9 h） | 使用者：「開始 heartbeat-sync。」 |
 | D101 | （2026-10-16）會話的 ultracode 開關不覆蓋計畫的檔位：每批照 README 樹狀總覽標的檔位做；標 ultracode 的批才用，標「ultracode（先問）」的到了先問一次；其餘不逐批確認，也不因為開關另開 workflow | 使用者（經分叉會話）：「一開始計劃裡有檔位規劃，以那個為準，計劃太多了，我沒法每一個都確認。」起因：`version-errors` 在開關打開後，事前沒問就跑了審查 workflow |
+| D102 | （2026-10-16）開始 `time-echo`（檔位 high，估 4 h）；`heartbeat-sync` 的睡眠那段 L2 等之後的 L2 一起做 | 使用者：「開始 time-echo。睡眠那段 L2 等之後的 L2 一起做。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -172,7 +171,7 @@
     - 第 1 次（`long/`，10:56～11:29）：Client 的長幀與 gap 發生在第 1246、1399、1599 秒，同一段時間 xhigh 審查者正在反覆跑整套 `go test -race`。
     - 第 2 次（`long2/`，12:54～13:27）：唯一的異常（Match 的 runtime gap、兩位玩家的 Client gap、111 ms 長幀）全都在第 1206.6 秒，也就是 13:14:18。系統電源紀錄顯示 13:12～13:15 用電池（使用者移動機器）。其餘 Client gap 都是正常的復活（序號 3）。
     - 判斷：心跳不碰 Client 與模擬，時鐘數據全程正常，所以不算這批的回歸；soak 的正式判定留到之後的 L2。
-    - 睡眠那段（中途讓系統睡眠，量跳變）要你在場，還沒做。
+    - 睡眠那段（中途讓系統睡眠，量跳變）要你在場，等之後的 L2 一起做（D102）。
   - 證據：`build/target/_build/test/logs/pvp-v71-heartbeat-sync-20261016/`。
   - Architecture Delta：無。新的依賴只在產品內：ipc 函式庫多一個原始檔 `ClockSync.cpp`；Gateway 多 `clock_sync.go`、`diagnostics.go`。Engine 與共通層（`services/gyo_gateway`）沒有改。wire 新增 `ClockSample`（契約 §3 已定）。
   - 實際約 3.1 h（10:22～13:30，含 xhigh 檢查約 30 分、突變約 1 h、soak 兩次各 30 分；估 9 h）。
@@ -185,6 +184,31 @@
   - 新發現記到 INVENTORY：`N-summary-counter-wrap`、`N-hit-feedback-not-logged`（使用者回報 Main 有一次受擊沒閃紅，時間不記得，日誌無法定位）、`N-windows-max-path`；F7 加上這次的數據。
   - 端到端延遲和凍結分析器的 trace 分析（方案 B）沒有做。
   - 證據：`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/`（`logs/`、`Info.txt`、分析腳本 `scripts/`；10/08 的舊日誌已排除）。
+
+- 2026-10-16 13:50：`time-echo` 開始（D102，檔位 high，估 4 h）。`heartbeat-sync`（`4a66b58`）的四平台 L1 是 run 38850836007。
+
+- 2026-10-16：`time-echo` 實作與驗收。
+  - wire：`client_v7.proto` 加 `ClockSample`（和 runtime 同號同型）、`Hello.clock`（2）、`Welcome.clock`（11）；Go 綁定照前兩批的方式重產。不新增封包與 GYOP 種類。
+  - 估計器：C++ 的 `ClockSync` 改成只有標頭檔（`ClockSync.cpp` 刪除），讓 ipc 與 client_network 兩個函式庫共用，不新增 build target。三個突變的檔案路徑跟著改，find 字串不變。
+  - Gateway（`echo.go`，時鐘程式不進 `server.go`）：
+    - 每個 session 一份估計器；Hello 通過認證後才讀它的 clock，不合法就計數、忽略，Hello 的 admission、活性、Join、Welcome 照常。
+    - Welcome 回聲最新的已認證 Hello，transmit 在編碼時蓋。
+    - 每次 Hello 檢查 10 秒視窗，寫 `client clock sync player=… window_ms=…`；session 移除時寫最後一個視窗。runtime 失效時直接清空玩家，不寫最後一個視窗。
+  - Client（`ClientConnection`）：每次建立 UDP 連線時重設估計器；Welcome 一解析出來就量測，排在 `CheckArena` 與規則檢查之前，不影響 welcomed；Hello 帶回聲並蓋 transmit；每次網路處理檢查 10 秒視窗，寫 `clock sync` 行；關閉連線時寫最後一個視窗。
+  - `ReadyFitsWelcome` 把最大的 ClockSample（三個欄位都是最大值）算進最壞情況的 Welcome；既有的邊界測試改成含 clock 時剛好 1200 bytes。
+  - D32 守衛：估計器的使用者改為 `ClientConnection.cpp`、`ClockSync.hpp`、`IpcHost.cpp`。
+  - 測試：
+    - Go：Welcome 回聲最新的已認證 Hello 並量到樣本；回聲不合法或沒有回聲時一切照常；未認證的 Hello 不被量測；離開時寫最後一個視窗；最壞情況 Welcome 含 clock。
+    - C++（worker 的模擬 Gateway）：第一個 Welcome 的回聲不合法時 Client 照樣進入 Playing；每個 Hello 回聲最新的 Welcome、transmit 遞增；第一個 Hello 沒有回聲。
+    - 突變 5 個（`v71-time-echo`）。
+  - 驗收（L1，本機）：`test` preset 全量 CTest 71／71；`go vet`、`go test -race` 通過；權威 digest 同機兩樹比較 scale 1、3 各 35 情境 0 差異；突變選出 80 個（這批 5 個，以及目標檔案在這批被改過的既有突變 75 個），全部 killed。
+  - 短跑次（只記錄，pv7 工具與執行檔）：clean-60、network、soak-short、quad clean-60 一輪全部通過，凍結的分析器能接受新的 log 行。回聲的數據互相吻合：
+    - Gateway 量到的 offset（C−G）和 Client 量到的（G−C）正負相反、大小相同，差在幾十 µs 以內。
+    - 同一台機器上 Match 和 Client 都用 steady_clock，所以 Gateway 對兩者量到的 offset 幾乎相同。
+    - delay 最小值 0.1～0.4 ms；沒有不合法、負 delay 或缺樣本。
+  - 證據：`build/target/_build/test/logs/pvp-v71-time-echo-20261016/`。
+  - Architecture Delta：無。產品內的變動：`ClockSync` 改成只有標頭檔，ipc 的原始檔少一個；Gateway 多 `echo.go`。
+  - 實際約 0.7 h（13:48～14:30；估 4 h）。
 
 ## 未結事項
 

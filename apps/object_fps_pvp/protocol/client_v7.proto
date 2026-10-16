@@ -4,7 +4,12 @@ package object_fps_pvp.client.v7;
 option go_package = "gyo.local/object_fps_pvp/protocol/clientv7";
 
 // This remote-client contract is independent of runtime_v7.proto.
-message Hello { string session_token = 1; }
+message Hello {
+  string session_token = 1;
+  // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
+  // after the Hello is authenticated, and never part of admission or liveness.
+  ClockSample clock = 2;
+}
 message Welcome {
   uint64 player_id = 1;
   uint64 match_id = 2;
@@ -17,6 +22,20 @@ message Welcome {
   float gravity = 9;
   // Content digest of the served arena (pv6 contract §2), copied from Ready.
   fixed64 arena_digest = 10;
+  // Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
+  ClockSample clock = 11;
+}
+// Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
+// runtime_v7.proto: times are the sender's own monotonic clock in
+// microseconds; a time of the other side is only ever copied back.
+message ClockSample {
+  // The transmit_us of the peer's latest ClockSample this side read, as is;
+  // present exactly when receive_us is.
+  optional uint64 origin_us = 1;
+  // When this side read that sample; not after transmit_us.
+  optional uint64 receive_us = 2;
+  // When this side serialized this sample: at least 1 and strictly increasing.
+  uint64 transmit_us = 3;
 }
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {

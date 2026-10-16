@@ -58,6 +58,7 @@ type reservation struct {
 	received     uint64
 	lastReceived time.Time
 	sent         sendStatistics
+	echo         sessionEcho // the time echo on Hello and Welcome (echo.go)
 }
 type outbound struct {
 	actionPlayer uint64
@@ -473,6 +474,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		if admission != nil {
 			return nil
 		}
+		s.noteHello(p, &hello, now)
 		switch p.phase {
 		case reserved:
 			p.phase = joining
@@ -554,7 +556,8 @@ func (s *Server) takeIngressLocked() (map[uint64]*playerIngressCounts, gatewayIn
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity})
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
+		Clock: s.welcomeSample(p, time.Now())})
 }
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
@@ -985,6 +988,7 @@ func (s *Server) writeFinalIngress() {
 }
 
 func (s *Server) remove(p *reservation) {
+	s.endEcho(p, time.Now())
 	delete(s.players, p.playerID)
 	delete(s.sessions, p.session.ID)
 	delete(s.requests, p.requestID)

@@ -38,7 +38,7 @@ class DiagnosticIsolationTest(unittest.TestCase):
     def test_the_estimator_stays_in_the_io_layer(self):
         users = sorted(path.name for path in [*SOURCE.glob('*.cpp'), *INCLUDE.glob('*.hpp')]
                        if 'ClockSync' in path.read_text(encoding='utf-8'))
-        self.assertEqual(users, ['ClockSync.cpp', 'ClockSync.hpp', 'IpcHost.cpp'])
+        self.assertEqual(users, ['ClientConnection.cpp', 'ClockSync.hpp', 'IpcHost.cpp'])
 
 
 if __name__ == '__main__':

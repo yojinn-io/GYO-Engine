@@ -83,6 +83,13 @@ public:
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
                     rules->set_magazine_capacity(7);rules->set_reload_ticks(88);rules->set_respawn_ticks(177);
                 }
+                // The time echo (pv7 §3): echo the Hello, stamp this Welcome. A bad
+                // echo (receive after transmit) must change nothing for the Client.
+                if(hello.has_clock())helloClocks.push_back(hello.clock());
+                auto* clock=welcome.mutable_clock();welcomeTransmit+=1000;
+                if(hello.has_clock()) {clock->set_origin_us(hello.clock().transmit_us());clock->set_receive_us(welcomeTransmit-(badWelcomeClock?0:1));}
+                if(badWelcomeClock)clock->set_receive_us(welcomeTransmit+1);
+                clock->set_transmit_us(welcomeTransmit);welcomeTransmits.push_back(welcomeTransmit);
                 Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
                 pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
@@ -144,6 +151,11 @@ public:
     void Accept(){std::scoped_lock lock(refusalMutex);refusal.reset();}
     std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
     std::atomic<bool> replyWithoutVersion{};
+    // The time echo seen on Hellos and the transmits of the Welcomes sent.
+    std::vector<pb::ClockSample> helloClocks;
+    std::vector<std::uint64_t> welcomeTransmits;
+    std::uint64_t welcomeTransmit{};
+    bool badWelcomeClock{};
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
@@ -367,8 +379,21 @@ int main() {
         bool zeroDigestRejected=false;
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
-        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);connection.Join(gateway.address,"1");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        gateway.badWelcomeClock=true; // a bad echo on the first Welcome changes nothing
+        connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+        gateway.badWelcomeClock=false;
+        // Each Hello carries the echo of the latest Welcome (pv7 §3): origin is
+        // that Welcome's transmit, and its own transmit increases.
+        gateway.Until([&]{return gateway.helloClocks.size()>=3;},std::chrono::milliseconds(4000));
+        for(std::size_t i=1;i<gateway.helloClocks.size();++i) {
+            const auto& hello=gateway.helloClocks[i];
+            Require(hello.has_origin_us() && hello.has_receive_us() && hello.origin_us()==gateway.welcomeTransmits[i-1] &&
+                hello.transmit_us()>gateway.helloClocks[i-1].transmit_us() && hello.transmit_us()>=hello.receive_us(),
+                "a Hello did not echo the latest Welcome");
+        }
+        Require(!gateway.helloClocks.front().has_origin_us(),"the first Hello echoed a Welcome it never read");
         connection.SendInput(Input(1,2));
         gateway.Until([&]{return gateway.attempts.size()>=2;});
         const auto lastOldSend=gateway.attempts.back().at;

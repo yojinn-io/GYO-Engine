@@ -3764,7 +3764,7 @@
       "id": "v71hb-stamp-not-increasing",
       "batch": "v71-heartbeat-sync",
       "what": "The Match stamps a transmit that does not increase",
-      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
       "find": "    lastTransmitUs_ = std::max(nowUs, lastTransmitUs_ + 1);\n",
       "replace": "    lastTransmitUs_ = nowUs;\n",
       "check": "ipc",
@@ -3774,7 +3774,7 @@
       "id": "v71hb-origin-unchecked",
       "batch": "v71-heartbeat-sync",
       "what": "The Match measures a reply whose origin is none of its remembered transmits",
-      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
       "find": "    if (t2 > t3 || std::find(transmits_.begin(), transmits_.end(), t1) == transmits_.end()) {\n",
       "replace": "    if (t2 > t3) {\n",
       "check": "ipc",
@@ -3824,7 +3824,7 @@
       "id": "v71hb-jump-without-uncertainty",
       "batch": "v71-heartbeat-sync",
       "what": "The Match's jump rule ignores the samples' uncertainty",
-      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
       "find": "> allowance + uncertainty) {",
       "replace": "> allowance) {",
       "check": "ipc",
@@ -3849,6 +3849,56 @@
       "replace": "\tif peer.transmit >= clockMaxTimeUs",
       "check": "go",
       "expect": "transmit 0 taken"
+    },
+    {
+      "id": "v71te-echo-before-authentication",
+      "batch": "v71-time-echo",
+      "what": "The Gateway reads a Hello's time echo before the Hello is authenticated",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tif admission != nil {\n\t\t\treturn nil\n\t\t}\n\t\ts.noteHello(p, &hello, now)\n",
+      "replace": "\t\ts.noteHello(p, &hello, now)\n\t\tif admission != nil {\n\t\t\treturn nil\n\t\t}\n",
+      "check": "go",
+      "expect": "an unauthenticated Hello was measured"
+    },
+    {
+      "id": "v71te-welcome-without-echo",
+      "batch": "v71-time-echo",
+      "what": "The Gateway's Welcome carries no time echo",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": ",\n\t\tClock: s.welcomeSample(p, time.Now())})",
+      "replace": "})",
+      "check": "go",
+      "expect": "first Welcome echo"
+    },
+    {
+      "id": "v71te-welcome-bound-without-echo",
+      "batch": "v71-time-echo",
+      "what": "ReadyFitsWelcome leaves the largest time echo out of the worst-case Welcome",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": ", Gravity: r.Gravity, Clock: clock}",
+      "replace": ", Gravity: r.Gravity}\n\t_ = clock",
+      "check": "go",
+      "expect": "maximum admitted Welcome="
+    },
+    {
+      "id": "v71te-hello-without-echo",
+      "batch": "v71-time-echo",
+      "what": "The Client's Hello does not echo the latest Welcome",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "a Hello did not echo the latest Welcome"
+    },
+    {
+      "id": "v71te-bad-echo-drops-welcome",
+      "batch": "v71-time-echo",
+      "what": "The Client ignores a Welcome whose time echo is invalid",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(message.has_clock()) { // diagnostics only, before and apart from every check\n",
+      "replace": "                if(message.has_clock() && message.clock().receive_us()>message.clock().transmit_us())continue;\n                if(message.has_clock()) { // diagnostics only, before and apart from every check\n",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
     }
   ]
 }

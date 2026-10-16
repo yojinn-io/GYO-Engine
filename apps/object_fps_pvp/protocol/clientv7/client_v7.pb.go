@@ -241,8 +241,11 @@ func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
 
 // This remote-client contract is independent of runtime_v7.proto.
 type Hello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionToken  string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	SessionToken string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	// Diagnostics only (pv7 §3): the time echo with the Gateway; read only
+	// after the Hello is authenticated, and never part of admission or liveness.
+	Clock         *ClockSample `protobuf:"bytes,2,opt,name=clock,proto3" json:"clock,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -284,6 +287,13 @@ func (x *Hello) GetSessionToken() string {
 	return ""
 }
 
+func (x *Hello) GetClock() *ClockSample {
+	if x != nil {
+		return x.Clock
+	}
+	return nil
+}
+
 type Welcome struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId     uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -296,7 +306,9 @@ type Welcome struct {
 	JumpHeight   float32                `protobuf:"fixed32,8,opt,name=jump_height,json=jumpHeight,proto3" json:"jump_height,omitempty"`
 	Gravity      float32                `protobuf:"fixed32,9,opt,name=gravity,proto3" json:"gravity,omitempty"`
 	// Content digest of the served arena (pv6 contract §2), copied from Ready.
-	ArenaDigest   uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
+	ArenaDigest uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
+	// Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
+	Clock         *ClockSample `protobuf:"bytes,11,opt,name=clock,proto3" json:"clock,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -401,6 +413,80 @@ func (x *Welcome) GetArenaDigest() uint64 {
 	return 0
 }
 
+func (x *Welcome) GetClock() *ClockSample {
+	if x != nil {
+		return x.Clock
+	}
+	return nil
+}
+
+// Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
+// runtime_v7.proto: times are the sender's own monotonic clock in
+// microseconds; a time of the other side is only ever copied back.
+type ClockSample struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The transmit_us of the peer's latest ClockSample this side read, as is;
+	// present exactly when receive_us is.
+	OriginUs *uint64 `protobuf:"varint,1,opt,name=origin_us,json=originUs,proto3,oneof" json:"origin_us,omitempty"`
+	// When this side read that sample; not after transmit_us.
+	ReceiveUs *uint64 `protobuf:"varint,2,opt,name=receive_us,json=receiveUs,proto3,oneof" json:"receive_us,omitempty"`
+	// When this side serialized this sample: at least 1 and strictly increasing.
+	TransmitUs    uint64 `protobuf:"varint,3,opt,name=transmit_us,json=transmitUs,proto3" json:"transmit_us,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClockSample) Reset() {
+	*x = ClockSample{}
+	mi := &file_client_v7_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClockSample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClockSample) ProtoMessage() {}
+
+func (x *ClockSample) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v7_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClockSample.ProtoReflect.Descriptor instead.
+func (*ClockSample) Descriptor() ([]byte, []int) {
+	return file_client_v7_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ClockSample) GetOriginUs() uint64 {
+	if x != nil && x.OriginUs != nil {
+		return *x.OriginUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetReceiveUs() uint64 {
+	if x != nil && x.ReceiveUs != nil {
+		return *x.ReceiveUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetTransmitUs() uint64 {
+	if x != nil {
+		return x.TransmitUs
+	}
+	return 0
+}
+
 // A single immutable 1/60-second movement step. No client time or position.
 type MovementCommand struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -416,7 +502,7 @@ type MovementCommand struct {
 
 func (x *MovementCommand) Reset() {
 	*x = MovementCommand{}
-	mi := &file_client_v7_proto_msgTypes[2]
+	mi := &file_client_v7_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -428,7 +514,7 @@ func (x *MovementCommand) String() string {
 func (*MovementCommand) ProtoMessage() {}
 
 func (x *MovementCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[2]
+	mi := &file_client_v7_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -441,7 +527,7 @@ func (x *MovementCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MovementCommand.ProtoReflect.Descriptor instead.
 func (*MovementCommand) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{2}
+	return file_client_v7_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MovementCommand) GetSequence() uint64 {
@@ -501,7 +587,7 @@ type PlayerInput struct {
 
 func (x *PlayerInput) Reset() {
 	*x = PlayerInput{}
-	mi := &file_client_v7_proto_msgTypes[3]
+	mi := &file_client_v7_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -513,7 +599,7 @@ func (x *PlayerInput) String() string {
 func (*PlayerInput) ProtoMessage() {}
 
 func (x *PlayerInput) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[3]
+	mi := &file_client_v7_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -526,7 +612,7 @@ func (x *PlayerInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInput.ProtoReflect.Descriptor instead.
 func (*PlayerInput) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{3}
+	return file_client_v7_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PlayerInput) GetCommands() []*MovementCommand {
@@ -592,7 +678,7 @@ type PlayerState struct {
 
 func (x *PlayerState) Reset() {
 	*x = PlayerState{}
-	mi := &file_client_v7_proto_msgTypes[4]
+	mi := &file_client_v7_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -604,7 +690,7 @@ func (x *PlayerState) String() string {
 func (*PlayerState) ProtoMessage() {}
 
 func (x *PlayerState) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[4]
+	mi := &file_client_v7_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -617,7 +703,7 @@ func (x *PlayerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerState.ProtoReflect.Descriptor instead.
 func (*PlayerState) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{4}
+	return file_client_v7_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PlayerState) GetPlayerId() uint64 {
@@ -757,7 +843,7 @@ type WorldSnapshot struct {
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_client_v7_proto_msgTypes[5]
+	mi := &file_client_v7_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -769,7 +855,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[5]
+	mi := &file_client_v7_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -782,7 +868,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{5}
+	return file_client_v7_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WorldSnapshot) GetTick() uint64 {
@@ -816,7 +902,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_client_v7_proto_msgTypes[6]
+	mi := &file_client_v7_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -828,7 +914,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[6]
+	mi := &file_client_v7_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -841,7 +927,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{6}
+	return file_client_v7_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Error) GetCode() string {
@@ -868,7 +954,7 @@ type ActionBatch struct {
 
 func (x *ActionBatch) Reset() {
 	*x = ActionBatch{}
-	mi := &file_client_v7_proto_msgTypes[7]
+	mi := &file_client_v7_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +966,7 @@ func (x *ActionBatch) String() string {
 func (*ActionBatch) ProtoMessage() {}
 
 func (x *ActionBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[7]
+	mi := &file_client_v7_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +979,7 @@ func (x *ActionBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionBatch.ProtoReflect.Descriptor instead.
 func (*ActionBatch) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{7}
+	return file_client_v7_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ActionBatch) GetShots() []*ShotRequest {
@@ -920,7 +1006,7 @@ type ActionResults struct {
 
 func (x *ActionResults) Reset() {
 	*x = ActionResults{}
-	mi := &file_client_v7_proto_msgTypes[8]
+	mi := &file_client_v7_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -932,7 +1018,7 @@ func (x *ActionResults) String() string {
 func (*ActionResults) ProtoMessage() {}
 
 func (x *ActionResults) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[8]
+	mi := &file_client_v7_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -945,7 +1031,7 @@ func (x *ActionResults) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionResults.ProtoReflect.Descriptor instead.
 func (*ActionResults) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{8}
+	return file_client_v7_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ActionResults) GetRetiredThrough() uint64 {
@@ -978,7 +1064,7 @@ type CombatRules struct {
 
 func (x *CombatRules) Reset() {
 	*x = CombatRules{}
-	mi := &file_client_v7_proto_msgTypes[9]
+	mi := &file_client_v7_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -990,7 +1076,7 @@ func (x *CombatRules) String() string {
 func (*CombatRules) ProtoMessage() {}
 
 func (x *CombatRules) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[9]
+	mi := &file_client_v7_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1003,7 +1089,7 @@ func (x *CombatRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatRules.ProtoReflect.Descriptor instead.
 func (*CombatRules) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{9}
+	return file_client_v7_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CombatRules) GetMaximumHp() uint32 {
@@ -1085,7 +1171,7 @@ type CombatState struct {
 
 func (x *CombatState) Reset() {
 	*x = CombatState{}
-	mi := &file_client_v7_proto_msgTypes[10]
+	mi := &file_client_v7_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1097,7 +1183,7 @@ func (x *CombatState) String() string {
 func (*CombatState) ProtoMessage() {}
 
 func (x *CombatState) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[10]
+	mi := &file_client_v7_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1110,7 +1196,7 @@ func (x *CombatState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatState.ProtoReflect.Descriptor instead.
 func (*CombatState) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{10}
+	return file_client_v7_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CombatState) GetPlayerId() uint64 {
@@ -1218,7 +1304,7 @@ type ShotRequest struct {
 
 func (x *ShotRequest) Reset() {
 	*x = ShotRequest{}
-	mi := &file_client_v7_proto_msgTypes[11]
+	mi := &file_client_v7_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1230,7 +1316,7 @@ func (x *ShotRequest) String() string {
 func (*ShotRequest) ProtoMessage() {}
 
 func (x *ShotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[11]
+	mi := &file_client_v7_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1243,7 +1329,7 @@ func (x *ShotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotRequest.ProtoReflect.Descriptor instead.
 func (*ShotRequest) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{11}
+	return file_client_v7_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ShotRequest) GetActionId() uint64 {
@@ -1306,7 +1392,7 @@ type ShotDecision struct {
 
 func (x *ShotDecision) Reset() {
 	*x = ShotDecision{}
-	mi := &file_client_v7_proto_msgTypes[12]
+	mi := &file_client_v7_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1404,7 @@ func (x *ShotDecision) String() string {
 func (*ShotDecision) ProtoMessage() {}
 
 func (x *ShotDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v7_proto_msgTypes[12]
+	mi := &file_client_v7_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1417,7 @@ func (x *ShotDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotDecision.ProtoReflect.Descriptor instead.
 func (*ShotDecision) Descriptor() ([]byte, []int) {
-	return file_client_v7_proto_rawDescGZIP(), []int{12}
+	return file_client_v7_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ShotDecision) GetActionId() uint64 {
@@ -1408,9 +1494,10 @@ var File_client_v7_proto protoreflect.FileDescriptor
 
 const file_client_v7_proto_rawDesc = "" +
 	"\n" +
-	"\x0fclient_v7.proto\x12\x18object_fps_pvp.client.v7\",\n" +
+	"\x0fclient_v7.proto\x12\x18object_fps_pvp.client.v7\"i\n" +
 	"\x05Hello\x12#\n" +
-	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\xeb\x02\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12;\n" +
+	"\x05clock\x18\x02 \x01(\v2%.object_fps_pvp.client.v7.ClockSampleR\x05clock\"\xa8\x03\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x1b\n" +
@@ -1423,7 +1510,17 @@ const file_client_v7_proto_rawDesc = "" +
 	"jumpHeight\x12\x18\n" +
 	"\agravity\x18\t \x01(\x02R\agravity\x12!\n" +
 	"\farena_digest\x18\n" +
-	" \x01(\x06R\varenaDigest\"\xbe\x01\n" +
+	" \x01(\x06R\varenaDigest\x12;\n" +
+	"\x05clock\x18\v \x01(\v2%.object_fps_pvp.client.v7.ClockSampleR\x05clock\"\x91\x01\n" +
+	"\vClockSample\x12 \n" +
+	"\torigin_us\x18\x01 \x01(\x04H\x00R\boriginUs\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"receive_us\x18\x02 \x01(\x04H\x01R\treceiveUs\x88\x01\x01\x12\x1f\n" +
+	"\vtransmit_us\x18\x03 \x01(\x04R\n" +
+	"transmitUsB\f\n" +
+	"\n" +
+	"_origin_usB\r\n" +
+	"\v_receive_us\"\xbe\x01\n" +
 	"\x0fMovementCommand\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12!\n" +
 	"\fmove_forward\x18\x02 \x01(\x02R\vmoveForward\x12\x1d\n" +
@@ -1561,7 +1658,7 @@ func file_client_v7_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v7_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_client_v7_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_client_v7_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_client_v7_proto_goTypes = []any{
 	(LifeState)(0),          // 0: object_fps_pvp.client.v7.LifeState
 	(ActionKind)(0),         // 1: object_fps_pvp.client.v7.ActionKind
@@ -1569,35 +1666,38 @@ var file_client_v7_proto_goTypes = []any{
 	(ShotHitKind)(0),        // 3: object_fps_pvp.client.v7.ShotHitKind
 	(*Hello)(nil),           // 4: object_fps_pvp.client.v7.Hello
 	(*Welcome)(nil),         // 5: object_fps_pvp.client.v7.Welcome
-	(*MovementCommand)(nil), // 6: object_fps_pvp.client.v7.MovementCommand
-	(*PlayerInput)(nil),     // 7: object_fps_pvp.client.v7.PlayerInput
-	(*PlayerState)(nil),     // 8: object_fps_pvp.client.v7.PlayerState
-	(*WorldSnapshot)(nil),   // 9: object_fps_pvp.client.v7.WorldSnapshot
-	(*Error)(nil),           // 10: object_fps_pvp.client.v7.Error
-	(*ActionBatch)(nil),     // 11: object_fps_pvp.client.v7.ActionBatch
-	(*ActionResults)(nil),   // 12: object_fps_pvp.client.v7.ActionResults
-	(*CombatRules)(nil),     // 13: object_fps_pvp.client.v7.CombatRules
-	(*CombatState)(nil),     // 14: object_fps_pvp.client.v7.CombatState
-	(*ShotRequest)(nil),     // 15: object_fps_pvp.client.v7.ShotRequest
-	(*ShotDecision)(nil),    // 16: object_fps_pvp.client.v7.ShotDecision
+	(*ClockSample)(nil),     // 6: object_fps_pvp.client.v7.ClockSample
+	(*MovementCommand)(nil), // 7: object_fps_pvp.client.v7.MovementCommand
+	(*PlayerInput)(nil),     // 8: object_fps_pvp.client.v7.PlayerInput
+	(*PlayerState)(nil),     // 9: object_fps_pvp.client.v7.PlayerState
+	(*WorldSnapshot)(nil),   // 10: object_fps_pvp.client.v7.WorldSnapshot
+	(*Error)(nil),           // 11: object_fps_pvp.client.v7.Error
+	(*ActionBatch)(nil),     // 12: object_fps_pvp.client.v7.ActionBatch
+	(*ActionResults)(nil),   // 13: object_fps_pvp.client.v7.ActionResults
+	(*CombatRules)(nil),     // 14: object_fps_pvp.client.v7.CombatRules
+	(*CombatState)(nil),     // 15: object_fps_pvp.client.v7.CombatState
+	(*ShotRequest)(nil),     // 16: object_fps_pvp.client.v7.ShotRequest
+	(*ShotDecision)(nil),    // 17: object_fps_pvp.client.v7.ShotDecision
 }
 var file_client_v7_proto_depIdxs = []int32{
-	13, // 0: object_fps_pvp.client.v7.Welcome.combat_rules:type_name -> object_fps_pvp.client.v7.CombatRules
-	6,  // 1: object_fps_pvp.client.v7.PlayerInput.commands:type_name -> object_fps_pvp.client.v7.MovementCommand
-	0,  // 2: object_fps_pvp.client.v7.PlayerState.life_state:type_name -> object_fps_pvp.client.v7.LifeState
-	8,  // 3: object_fps_pvp.client.v7.WorldSnapshot.players:type_name -> object_fps_pvp.client.v7.PlayerState
-	14, // 4: object_fps_pvp.client.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.client.v7.CombatState
-	15, // 5: object_fps_pvp.client.v7.ActionBatch.shots:type_name -> object_fps_pvp.client.v7.ShotRequest
-	16, // 6: object_fps_pvp.client.v7.ActionResults.decisions:type_name -> object_fps_pvp.client.v7.ShotDecision
-	1,  // 7: object_fps_pvp.client.v7.ShotRequest.kind:type_name -> object_fps_pvp.client.v7.ActionKind
-	2,  // 8: object_fps_pvp.client.v7.ShotDecision.rejection:type_name -> object_fps_pvp.client.v7.ShotRejection
-	3,  // 9: object_fps_pvp.client.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.client.v7.ShotHitKind
-	1,  // 10: object_fps_pvp.client.v7.ShotDecision.kind:type_name -> object_fps_pvp.client.v7.ActionKind
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	6,  // 0: object_fps_pvp.client.v7.Hello.clock:type_name -> object_fps_pvp.client.v7.ClockSample
+	14, // 1: object_fps_pvp.client.v7.Welcome.combat_rules:type_name -> object_fps_pvp.client.v7.CombatRules
+	6,  // 2: object_fps_pvp.client.v7.Welcome.clock:type_name -> object_fps_pvp.client.v7.ClockSample
+	7,  // 3: object_fps_pvp.client.v7.PlayerInput.commands:type_name -> object_fps_pvp.client.v7.MovementCommand
+	0,  // 4: object_fps_pvp.client.v7.PlayerState.life_state:type_name -> object_fps_pvp.client.v7.LifeState
+	9,  // 5: object_fps_pvp.client.v7.WorldSnapshot.players:type_name -> object_fps_pvp.client.v7.PlayerState
+	15, // 6: object_fps_pvp.client.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.client.v7.CombatState
+	16, // 7: object_fps_pvp.client.v7.ActionBatch.shots:type_name -> object_fps_pvp.client.v7.ShotRequest
+	17, // 8: object_fps_pvp.client.v7.ActionResults.decisions:type_name -> object_fps_pvp.client.v7.ShotDecision
+	1,  // 9: object_fps_pvp.client.v7.ShotRequest.kind:type_name -> object_fps_pvp.client.v7.ActionKind
+	2,  // 10: object_fps_pvp.client.v7.ShotDecision.rejection:type_name -> object_fps_pvp.client.v7.ShotRejection
+	3,  // 11: object_fps_pvp.client.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.client.v7.ShotHitKind
+	1,  // 12: object_fps_pvp.client.v7.ShotDecision.kind:type_name -> object_fps_pvp.client.v7.ActionKind
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_client_v7_proto_init() }
@@ -1605,15 +1705,16 @@ func file_client_v7_proto_init() {
 	if File_client_v7_proto != nil {
 		return
 	}
-	file_client_v7_proto_msgTypes[4].OneofWrappers = []any{}
-	file_client_v7_proto_msgTypes[11].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[2].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[5].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v7_proto_rawDesc), len(file_client_v7_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

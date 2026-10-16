@@ -117,7 +117,10 @@ func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	if !ReadyFitsWelcome(ready) {
 		t.Fatal("boundary descriptor rejected")
 	}
-	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules)}
+	// The largest time echo (pv7 §3) is part of the worst case.
+	largest := uint64(math.MaxUint64)
+	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules),
+		Clock: &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}}
 	if proto.Size(welcome)+24 != 1200 {
 		t.Fatalf("maximum admitted Welcome=%d", proto.Size(welcome)+24)
 	}

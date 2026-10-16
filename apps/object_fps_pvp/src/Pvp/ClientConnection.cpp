@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
@@ -30,6 +31,10 @@ using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
 namespace {
 std::string Id(const Json& value) {return value.is_string()?value.get<std::string>():value.dump();}
+// The C clock domain of pv7 §2: steady_clock in microseconds.
+std::uint64_t MicrosNow() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+}
 std::string Hex64(std::uint64_t value) {
     char text[17];std::snprintf(text,sizeof text,"%016llx",static_cast<unsigned long long>(value));return text;
 }
@@ -140,6 +145,10 @@ struct ClientConnection::Impl {
     std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
+    // Diagnostics only (pv7 §3): the time echo with the Gateway on Hello and
+    // Welcome, per connection; nothing here reaches a decision (D32).
+    ClockSync clock;
+    bool clockActive{};
     // The worker is one asio io thread. Nothing polls: the socket becoming
     // readable, a post from another thread (a request, new input, a new action,
     // an ACK advance) and one timer at the earliest deadline wake it, and each
@@ -191,6 +200,10 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
+        if(clockActive) {
+            if(const auto window=clock.Roll(MicrosNow(),true))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
+            clockActive=false;
+        }
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
@@ -356,6 +369,7 @@ struct ClientConnection::Impl {
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
         connectedAt=receivedAt=Clock::now();helloAt={};
+        clock=ClockSync(MicrosNow());clockActive=true;
         std::scoped_lock lock(mutex);
         if(request.generation!=generation.load())return;
         activeGeneration=request.generation;
@@ -451,8 +465,13 @@ struct ClientConnection::Impl {
         // movement input: active Hello only receives another Welcome.
         const auto helloInterval=welcomed?std::chrono::milliseconds(1000):std::chrono::milliseconds(250);
         if(now-helloAt>=helloInterval) {
-            pb::Hello hello;hello.set_session_token(token);Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
+            pb::Hello hello;hello.set_session_token(token);
+            auto* echo=hello.mutable_clock();
+            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
+            echo->set_transmit_us(clock.Stamp(MicrosNow()));
+            Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
+        if(const auto window=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -471,6 +490,14 @@ struct ClientConnection::Impl {
             if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
+                if(message.has_clock()) { // diagnostics only, before and apart from every check
+                    const auto& sample=message.clock();
+                    ClockStamp peer{.transmitUs=sample.transmit_us()};
+                    if(sample.has_origin_us())peer.originUs=sample.origin_us();
+                    if(sample.has_receive_us())peer.receiveUs=sample.receive_us();
+                    static_cast<void>(clock.Observe(peer,static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::microseconds>(arrivedAt.time_since_epoch()).count())));
+                }
                 CheckArena(message.arena_id(),message.arena_version(),
                     message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
