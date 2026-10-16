@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 進行中。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 實作完成，L2 宣告等你核准。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,16 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：核准 [`edge-input-passthrough` 的 L2 事前宣告](edge-input-passthrough-l2.md)（第 3 版；AGENTS.md §14.1：核准後不放寬）。其中第 10 節的 4 個選擇：
+  1. J4a（soak 的 Match CPU）的倍數：建議 1.5 倍（可選 2 倍或只記錄）。
+  2. soak-long 要不要跑：建議跑（兩棵樹各 1 次，約 68 分；J3、J4a 只在 soak 判）。
+  3. heartbeat-sync 的睡眠那段：本 session 結束後接著做，或另外排。
+  4. 次數：照第 5 節（98 個項目，約 2 h 10 分＋閒置門檻）。
+  - 另外請確認：`ingress_cross_check.py` 改成只接受 protocol-v7 §9 宣告形狀的 I3 失敗（既有檢查的判定變更，AGENTS.md §14.4）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：本批拆成兩個 commit（B：鎖等待；A：原樣轉送），建兩棵樹、寫 L2 工具並乾跑，然後停下來等你核准[事前宣告](edge-input-passthrough-l2.md)。
+- **下一步**：核准後依 `commands.txt` 跑 L2 session（約 2 h 10 分＋閒置門檻；插電、不移動機器），再依判定決定本批是否完成。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 22:46，`edge-input-passthrough` 實作、L1、xhigh 檢查完成；L2 宣告第 2 版待工具乾跑後送核准。
+- **最後更新**：2026-10-16 23:52，`edge-input-passthrough` 的兩個 commit（`42f6e88`、`6d9ecf5`）、兩棵樹、L2 工具與乾跑完成；等你核准宣告。
 
 ## 閱讀入口
 
@@ -274,6 +279,7 @@
   - 突變：舊的 50 個（去重、路由、拒絕線、截短、D1、D2）隨程式刪除；7 個改成新寫法；本批新增。第一輪 214 個中 205 個殺死，其餘是新程式下的寫法或期望值問題，修正後殺死（其中 `v71ip-match-takes-another-life` 讓副本差分的未來 life 窗口改帶不同內容才抓得到）。
   - 局部 xhigh 檢查（程式，1 位，約 27 分）：must 0、should 5、note 11。should 全部補測試與突變（控制訊息上限與歸零、另一位玩家的佇列、Server 組的樣本身分、輸入喚醒、溢出命令數）；note 處理了 link 拒收不再讓房間失效、Client 的 epoch 倒退、副本差分的計數斷言、測試持鎖 100 ms、過時註解；其餘記在未結事項。
   - D45 門檻來源檢查（L2 草稿第 1 版，1 位 xhigh，約 17 分）：送核准前必須修正 7、應修正 8；改寫成 [第 2 版](edge-input-passthrough-l2.md)，對應表在其第 11 節。也發現 clean 時 B 本來就是一包一則 IPC，D-8 擔心的負載主要在故障情境。
+  - 兩個 commit：B `42f6e88`（只加鎖等待量測；B 樹全量 CTest 72／72）、A `6d9ecf5`；四平台 L1 是 run 38914084925。兩棵樹：`../GYO-Engine-ip-before`、`../GYO-Engine-ip-after`（detached、乾淨）。L2 工具在 `build/target/_build/test/logs/pvp-v71-edge-input-l2-prep-20261016/`，乾跑 31 種情況全部符合預期，A 沒有跑過任何項目。
   - 時間：22:46 時，實作、L1、兩次 xhigh 檢查完成；接著是兩個 commit、L2 工具與乾跑，然後停下來等你核准宣告。
 
 ## 未結事項
