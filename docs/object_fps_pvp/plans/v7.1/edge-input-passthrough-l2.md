@@ -44,7 +44,7 @@ L2 **判定**：
 | `compare_reports.py`（`pvp-v71-drop-report-20261016/`） | `36e65f3a9f302b85…` | J7 |
 | `sleeper.py`（`pvp-v7-16-prep-20261014/`） | `98105dbf71a5818d…` | 閒置門檻與每跑次的 sleeper |
 | `run_l2.py`（新寫） | `c9e5cc01483c175515f5cd1a2569ba0501d621e409524a386f91ac58bf787653` | driver |
-| `judge_l2.py`（新寫；J4a 的倍數寫死為 1.5，你選別的值時雜湊會變） | `58ade1c1b9baefabefdcf80ee2c086e151d1206a95f95d9589d2d2dd5b4af72b` | 判定 |
+| `judge_l2.py`（新寫；J4a 1.5 倍；D110 修正 I1 的規則後重算） | `fe8edb4ba231804d7e905cc2467053693cf86172341ca5491e53407db4c506c5`（第 1 次嘗試用的是 `58ade1c1…`） | 判定 |
 | `artifacts.sha256`（兩棵樹的 Match、Gateway，B 的 4 個 probe 與 arena） | `c708b1add9fb16e722612e1192a2948a4e63d12cd51d14e5c65efac628c4ad9f` | 執行檔 |
 
 driver 在 session 開始與每個跑次之前核對以上雜湊、兩棵樹的 HEAD 與乾淨狀態、執行檔雜湊、主 checkout 的非文件變更（未追蹤的非文件檔也算變更）。另外，每個 Match 與 Gateway 的啟動行記的執行檔雜湊要等於該樹的 artifact。兩棵樹都用 B 部署的 arena（`0026013c…`）。
@@ -113,7 +113,7 @@ J4 的覆蓋範圍（限制）：Match 的 `network statistics` 行只在滿 10 
 | IG、gateway_global、T3、I2、S1、S2、trace、link_shots | passed | passed |
 | J5a | 所有跑次 passed（不加 `--injection`，分析器逐桶相等；`never_arrived` 只記錄） | 同 B |
 | I0 | passed | passed；溢出 > 0 的跑次不判（溢出以封包計） |
-| I1 | host-ipc-1000ms、short-stall（中間有 relay）、network（2 條 IPC 連線）允許 undetermined（passed 也可）；其餘必須 passed；failed 一律不成立 | 同 B |
+| I1 | host-ipc-1000ms、short-stall（中間有 relay）、network（2 條 IPC 連線）允許 undetermined（passed 也可）；其餘必須 passed；failed 一律不成立。D110：任何情境，只有前提 `eof_before_final` 不成立（Gateway 關閉時 Match 還有 snapshot 沒被讀走，kernel 送 reset，約 13 次 1 次）而其他前提都成立的 undetermined，只記錄、不停；其他原因的 undetermined 照樣停 | 同 B |
 | I3 | passed | failed，而且 gates 都是 0、Gateway 端允許數 0、Match 副本 > 0（宣告的形狀）；其他形狀算失敗 |
 | 被刪路徑的鍵 | — | 都是 0：`fwd_rejected_lane_input_packets`、`fwd_written_duplicate_input_packets`、`fwd_handed_rejected_lane_commands`、`fwd_link_written_rejected_lane_commands`、`fwd_merged_duplicate_commands`、`fwd_written_duplicate_commands`、`drop_resolved_trim_commands`、`drop_rejected_lane_overflow_commands`、`drop_discarded_on_leave_commands`、`fwd_resolved_at_write_commands`、`fwd_retention_expired_commands`、全部 `fwd_routed_*_inputs`、Gateway 的 `drop_old_tick_snapshots`、`drop_regressed_snapshots`、`runtime transport` 行的 `coalesced_input_windows` |
 
@@ -186,3 +186,10 @@ J4 的覆蓋範圍（限制）：Match 的 `network statistics` 行只在滿 10 
 | 9 | J1e 的偵測範圍 | quad 以 round 目錄判 E1、E2；基準不含 quad、short-stall、client-delay |
 | 10 | 排程細節、soak 順序、arena、未追蹤檔、J4 無值 | 寫進第 3、5 節與 6.2 |
 | 11 | J4a 的倍數 | `judge_l2.py` 寫死 1.5；你選別的值時改這一個常數、重算雜湊、再送一次確認 |
+
+## 13. 第 1 次嘗試與 D110（2026-10-17）
+
+- 第 1 次 session（`build/target/_build/test/logs/pvp-v71-edge-input-l2-20261016` 的 prep，輸出 `pvp-v71-edge-input-l2-20261017/`）完成 58 個項目後，在第 58 項停下：B 樹的 clean-60 第 7 次（`clean-60-r7-B`），J6 的 I1 是 undetermined，而 clean 要求 passed。
+- 原因：Match 的 log 是 `ipc closed reason=read: Connection reset by peer`；前提只有 `eof_before_final` 不成立（`single_connection`、`no_ipc_pause` 都成立），這個跑次的其他判定都成立。這是 `ingress_cross_check.py` 說明中已知的關閉競態，跟本批無關（發生在 B）；宣告漏了這個前提。
+- 依 §14.1 先回報，使用者選 (a)：只改 I1 的這一條規則（上表），整個 session 重跑（輸出 `pvp-v71-edge-input-l2-20261017b/`）。第 1 次 session 保留為證據，不覆寫、不併入判定。
+- 修正後的 judge 對停下的跑次判為成立；「兩條連線」或 I1 failed 的合成情況照樣停；乾跑矩陣除了 judge 的雜湊以外完全相同（`dryrun-v1/` 與 `dryrun/`）。

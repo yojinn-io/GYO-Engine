@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D109 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D110 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：L2 session 進行中（`build/target/_build/test/logs/pvp-v71-edge-input-l2-20261017/`，約 2 h 10 分＋閒置門檻；插電、不移動機器；PR 的 Auto-fix 暫停）；結束後判定，再做 heartbeat-sync 的睡眠那段。
+- **下一步**：L2 第 2 次 session 進行中（D110；`build/target/_build/test/logs/pvp-v71-edge-input-l2-20261017b/`，約 2 h 10 分＋閒置門檻；插電、不移動機器；PR 的 Auto-fix 暫停）；結束後判定，再做 heartbeat-sync 的睡眠那段。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 23:58，D109；L2 session 開始。
+- **最後更新**：2026-10-17 00:57，D110；L2 第 1 次 session 停在第 58 項（宣告缺漏），修正 I1 規則後重跑。
 
 ## 閱讀入口
 
@@ -79,6 +79,7 @@
 | D107 | （2026-10-16）protocol-v7 §9 的 `edge-results-resend` 驗收改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照。量測：無損模型 8 個種子，369 個裁決中 63 個晚到，最多晚 33 ms；未確認超過 8 筆時新 id 要等循環槽位（推論最晚約 7 個間隔），條文以括號註明 | 使用者：「§9 照 (a)」；`edge-results-resend` 的 xhigh should-1 |
 | D108 | （2026-10-16）開始 `edge-input-passthrough`（檔位 high，局部 xhigh，估 20～26 h）。行為改變：L2 的事前宣告（門檻、試行次數、重試規則）在看結果之前經使用者核准（AGENTS.md §14.1），宣告前做門檻來源的對抗式檢查（D45） | 使用者：「開始」 |
 | D109 | （2026-10-16）核准 `edge-input-passthrough` 的 L2 事前宣告第 3 版；第 10 節照建議：J4a 1.5 倍、跑 soak-long、heartbeat-sync 的睡眠那段在本 session 結束後接著做、次數照第 5 節（98 個項目）。確認 `ingress_cross_check.py` 只接受 protocol-v7 §9 宣告形狀的 I3 失敗（AGENTS.md §14.4） | 使用者：「核准 edge-input-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…ingress_cross_check 的 I3 例外也確認。」 |
+| D110 | （2026-10-17）L2 第 1 次 session 在第 58 項停下（B 樹 clean-60 的 I1 undetermined：關閉時被 reset，已知的競態）。依 §14.1 回報後選 (a)：只改 I1 的規則（任何情境，只有 `eof_before_final` 不成立、其他前提成立的 undetermined 只記錄），整個 session 重跑；第 1 次保留為證據 | 使用者：「照 (a)」 |
 
 ## 規劃紀錄（記錄器）
 
