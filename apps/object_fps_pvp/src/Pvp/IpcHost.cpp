@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <deque>
@@ -186,6 +187,62 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
     return message;
 }
 }
+// Diagnostics only (pv7 §4): the Gateway's drop reports as the Match reads
+// them, per stream. A violation is logged, counted and ignored (D-5, no veto:
+// the link stays open); every report is logged as read, the same body the
+// Gateway logs as written, so L2 can compare them by report_sequence. Nothing
+// here reaches the host (D32).
+class DropReports {
+public:
+    void Read(const pb::GatewayDropReport& report) {
+        auto& stream=streams_[report.player_id()];
+        std::string body="player="+std::to_string(report.player_id())+" report_sequence="+std::to_string(report.report_sequence())+
+            " final="+(report.final()?"1":"0")+" samples="+std::to_string(report.samples_size())+
+            " samples_omitted="+std::to_string(report.samples_omitted())+" merged_streams="+std::to_string(report.merged_streams());
+        std::vector<std::string> problems;
+        if(stream.final) problems.push_back("after_final");
+        if(report.report_sequence()!=stream.sequence+1) problems.push_back("sequence");
+        if(report.merged_streams()<stream.merged || (report.player_id()!=0 && report.merged_streams()!=0)) problems.push_back("merged_streams");
+        if(report.samples_omitted()<stream.omitted) problems.push_back("samples_omitted");
+        std::map<int,std::uint64_t> totals;
+        int previous=0;
+        for(const auto& count:report.counts()) {
+            const int reason=count.reason();
+            body+=" "+Key(reason)+"="+std::to_string(count.total());
+            const bool inScope=report.player_id()==0?(reason>=40 && reason<=45):(reason>=1 && reason<=34);
+            if(!pb::DropReason_IsValid(reason) || !inScope) problems.push_back("reason_range");
+            if(reason<=previous || count.total()==0) problems.push_back("counts_order");
+            previous=reason;
+            totals[reason]=count.total();
+        }
+        for(const auto& [reason,total]:stream.totals)
+            if(const auto found=totals.find(reason);found==totals.end() || found->second<total) {problems.push_back("counts_regress");break;}
+        if(report.samples_size()>4) problems.push_back("samples_over_4");
+        for(const auto& sample:report.samples())
+            if(!totals.contains(sample.reason())) {problems.push_back("sample_reason");break;}
+        for(const auto& sample:report.samples())
+            if(sample.dwell_us()>10'000'000) {problems.push_back("dwell_range");break;} // pv7 §2 clamps it
+        MatchEventLog::Line("gw_drop report "+body);
+        for(const auto& problem:problems) {
+            MatchEventLog::Line("gw_drop violation player="+std::to_string(report.player_id())+" report_sequence="+
+                std::to_string(report.report_sequence())+" problem="+problem);
+        }
+        // The stream goes on from what was read, trusted or not.
+        stream.sequence=report.report_sequence();stream.totals=std::move(totals);stream.final=stream.final || report.final();
+        stream.omitted=std::max(stream.omitted,report.samples_omitted());
+        if(report.player_id()==0) stream.merged=std::max(stream.merged,report.merged_streams()); // only the Gateway stream merges
+    }
+private:
+    // The ingress key of a reason: its proto name in lower case (pv7 §4).
+    static std::string Key(int reason) {
+        std::string name=pb::DropReason_IsValid(reason)?pb::DropReason_Name(static_cast<pb::DropReason>(reason)):"drop_reason_"+std::to_string(reason);
+        for(auto& c:name) c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return name;
+    }
+    struct Stream {std::uint64_t sequence{},omitted{},merged{};std::map<int,std::uint64_t> totals;bool final{};};
+    std::map<std::uint64_t,Stream> streams_;
+};
+
 // One asio io thread (gyo-match-ipc) serves the single Gateway connection.
 // Nothing polls: the host's publish notification, the socket becoming
 // readable or writable and the action lanes' deadline timer wake it. Phases:
@@ -225,6 +282,7 @@ struct IpcHost::Impl {
         // after controls, action lanes and snapshots; never in controls.
         ClockSync clock;
         std::optional<pb::ClockSample> clockReply;
+        DropReports drops; // the Gateway's drop reports on this connection
     };
 
     MatchRuntimeHost& host;
@@ -416,6 +474,8 @@ struct IpcHost::Impl {
                 // immutable request remains with the sender for retry. The
                 // host counts the admission by reason.
                 static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
+            } else if(message.has_drop_report()) {
+                session.drops.Read(message.drop_report()); // diagnostics only: logged, checked, never answered
             } else if(message.has_clock()) {
                 // Diagnostics only: measured here and answered once; nothing
                 // reaches the host (D32). A semantic violation is counted and

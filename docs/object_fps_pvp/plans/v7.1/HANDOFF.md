@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`time-echo` 完成；下一批 `drop-report` 等使用者說開始。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`drop-report` 完成，等你決定三件事。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D102 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D103 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,11 +37,18 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：開始 `drop-report`（檔位 high，列舉與上限局部 xhigh，估 13～16 h）。
+- **等你決定**：
+  1. **§2 的條文與 `drop-report` 的做法不同**（xhigh should-3）。§2「診斷訊框的計時與佇列」寫的是：1 Hz goroutine 組好 GatewayDropReport 放進單槽，新蓋舊時把舊回報的樣本數併進 samples_omitted。實作是：計時器只標記「該送一輪」，writer 在寫出前一刻才從帳本組每條串流的回報，不經過單槽。好處：report_sequence 與 dwell 終點都在寫出時決定，不會有被蓋掉的回報與序號空洞，符合 §2 的 dwell 定義。wire 不變。選項：(a) 修改 §2 的措辭配合實作（建議）；(b) 改回單槽。
+  2. **Gateway 新增的診斷狀態欄位**（§2a D-14：新增狀態欄位就是 Architecture Delta，要經你同意；xhigh should-4）。`heartbeat-sync`、`time-echo` 加的欄位當時也沒有申報，這次一起列：
+     - 診斷狀態（不參與判定、可重建）：link 的 `diagnostic`、`diagnosticWake`、`clockMu`、`clock`（heartbeat-sync），`drops`、`dropPass`、`lastDropPass`（drop-report）；Server 的 `diagnosticsOnce`（heartbeat-sync）；reservation 的 `echo`（time-echo）；帳本 `dropLedger`（其中 `ended` 依移除的玩家數只增不減）。
+     - 單次呼叫的脈絡：Server 的 `datagram`（處理一個資料包期間有效）。
+     - 測試縫隙：link 的 `now`、`takes`；套件變數 `runtimeLiveness`、`writerIdleWait`、`diagnosticInterval`、`udpWrite`。
+     - 選項：(a) 核准為診斷狀態，`edge-contract` 的白名單照此分類（建議）；(b) 要求先縮減。
+  3. 開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`drop-report`。
+- **下一步**：等你決定上面三件事；之後 `edge-results-resend`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 14:30，`time-echo` 完成並推送。
+- **最後更新**：2026-10-16 17:40，`drop-report` 完成並 commit，四平台 L1 已觸發。
 
 ## 閱讀入口
 
@@ -72,6 +79,7 @@
 | D100 | （2026-10-16）開始 `heartbeat-sync`（檔位 high，時鐘域局部 xhigh，估 9 h） | 使用者：「開始 heartbeat-sync。」 |
 | D101 | （2026-10-16）會話的 ultracode 開關不覆蓋計畫的檔位：每批照 README 樹狀總覽標的檔位做；標 ultracode 的批才用，標「ultracode（先問）」的到了先問一次；其餘不逐批確認，也不因為開關另開 workflow | 使用者（經分叉會話）：「一開始計劃裡有檔位規劃，以那個為準，計劃太多了，我沒法每一個都確認。」起因：`version-errors` 在開關打開後，事前沒問就跑了審查 workflow |
 | D102 | （2026-10-16）開始 `time-echo`（檔位 high，估 4 h）；`heartbeat-sync` 的睡眠那段 L2 等之後的 L2 一起做 | 使用者：「開始 time-echo。睡眠那段 L2 等之後的 L2 一起做。」 |
+| D103 | （2026-10-16）開始 `drop-report`（檔位 high，列舉與上限局部 xhigh，估 13～16 h） | 使用者：「開始 drop-report。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -210,6 +218,33 @@
   - Architecture Delta：無。產品內的變動：`ClockSync` 改成只有標頭檔，ipc 的原始檔少一個；Gateway 多 `echo.go`。
   - 實際約 0.7 h（13:48～14:30；估 4 h）。
 
+- 2026-10-16 14:41：`drop-report` 開始（D103，檔位 high，列舉與上限局部 xhigh，估 13～16 h）。`time-echo`（`55dc734`）的四平台 L1 是 run 38855969436。
+
+- 2026-10-16：`drop-report` 實作與驗收。
+  - wire：`runtime_v7.proto` 加 `GatewayDropReport`、`DropCount`、`DropSample`、`DropReason` 與 oneof 21。過渡原因的號碼由契約的保留號與 `ingress_statistics.go` 的鍵順序還原：16、17＝A3／A5 的封包，20、21＝其射擊數，22＝截短，23＝拒絕線溢出，24～26＝Leave 時清除（命令、射擊、ACK），43、44＝D1、D2；這個中間 commit 先用，edge 批刪掉出口時一起刪、改成 reserved。32～34 只定名稱，出口在 edge 批。
+  - 名稱表：`drop_report.go` 的 `dropReasons` 是 DropReason↔ingress 鍵的唯一綁定；`tests/object_fps_pvp/fixtures/drop_reasons.json` 是 Go、C++、Python 共用的 golden（40 個值）。
+  - 新出口（新鍵加在行尾）：玩家的 `drop_write_failed_{snapshot,results,control}_packets`（D5）、`drop_control_queue_full_control_packets`（D6）、`drop_replaced_snapshot_packets`（送出迴圈中途被取代，每位還沒拿到的 active 玩家各 1）；Gateway 的 `drop_coalesced_snapshots`（讀取端新蓋舊）。它們不在 IG 內（是事件，不是收到的資料包）。ingress golden fixture 維持凍結分析器釘住的 v1 鍵，Go 測試另外確認行尾的新鍵。
+  - 帳本（`dropLedger`，葉鎖）：Server 的 `countIngress`／`countIngressAt`／`countGatewayLocked` 與 link 的 `countLocked` 在更新 10 秒行的同一處記入累計值。樣本帶收包時刻與 GYOP 序號（Server 在處理資料包時記下）或事件時刻與身分（下行的 Gateway 序號、snapshot tick）；link 內的過渡原因只帶項目數與事件時刻。
+  - 回報：1 Hz 計時器隨心跳標記一輪；writer 在寫出前一刻才組每條串流的回報（report_sequence、樣本、dwell 都在那時決定），每輪最多 MaxPlayers×2 條；玩家移除後送一則 final（從沒計數過的不送），延後佇列滿了就併進 Gateway 串流的 `merged_streams`；每寫出一則記一行 `drop report player=… report_sequence=… …`。
+  - 優雅關閉：`Server.Close` 改成先寫所有非空串流的 final（含 Gateway 串流與延後中的）再關 link；writer 正在寫時照原本的方式中斷，不寫 final（記一行 log）。link 已失效時無法回報（契約的「只寫 log」）。
+  - Match（`IpcHost` 的 `DropReports`）：每則回報記 `gw_drop report <同 Gateway 的內容>`；序號、累計倒退或消失、final 之後、範圍、樣本原因、samples_omitted／merged_streams 倒退都記 `gw_drop violation …` 並計數，不關 link（D-5）。
+  - D32：守衛加入丟棄回報的符號；差分測試的有心跳那一輪也送極端值的回報。
+  - 驗收（L1，本機）：`test` preset 全量 CTest 72／72；`go vet`、`go test -race -count=3`；權威 digest 同機兩樹比較 scale 1、3 各 35 情境 0 差異；突變：本批 17 個（`v71-drop-report`）加上受影響的既有突變共 194 個全部殺死。第一輪有 6 個沒殺死，都是突變或測試寫法的問題，修正後重跑全部殺死：兩個 Go 突變改成仍能編譯的替換；兩個 C++ 違規檢查改成逐行字串常值（doctest 原本印出的是變數名，不是內容）；`v7-flow-snapshot-regressed-uncounted` 的期望容許行尾新增的鍵；`v7-flow-final-before-writer-exit` 見下面 must-1。
+  - 短跑次（只記錄）：clean-60、loss-shot、backpressure 6 情境、network、soak-short、quad clean-60 一輪全部通過。有回報的跑次（backpressure 的 gateway 與 host-ipc 故障）兩端依 (player, report_sequence) 逐則相等、沒有違規；乾淨跑次沒有丟棄、也沒有回報。host-ipc 的串流沒有 final：Match 那端先停，Gateway 讀到 EOF、link 失效，無法回報，符合契約。比對腳本 `compare_reports.py`。
+  - 局部 xhigh 檢查（列舉與上限，1 位，約 38 分）：列舉、範圍、名稱、golden 四方一致，累計、上限、合併與單一寫出者都核對為正確；must 1、should 6、note 7。處理：
+    - must-1（已修）：優雅關閉時 writer 正在寫，所有 final 都不送。改成一律有上限地等 writer 退出（3.5 秒，長於一次寫出的期限）再寫 final；writer 在每則寫出前看到 link 關閉，就把剩下的記為 abandoned 並返回，不再觸發 runtime 失效。等待上限改成套件變數；既有的 `blocked_writer` 收尾測試把它縮成 20 ms，讓 writer 撐過等待、關閉放棄 final 並中斷寫出，期望值維持 abandoned 3（這樣「final 行要等 writer 退出」的突變仍會被抓到）。
+    - should-1（已修）：「每條串流每秒最多 1 則」原本只做到「每次觸發最多 1 輪」。現在距離上一輪不到 1 秒時延後，並在滿 1 秒時喚醒 writer。
+    - should-2（已修）：Match 對 dwell 超過 10 秒的樣本記 `dwell_range` 違規。
+    - should-5、should-6（已補）：
+      - Go：執行中的 Server 有變化才送、離開後恰好一則 final；關閉時已回報過的串流與延後中的 final 也送；不先取消 ctx 的 Close；生產路徑的下行出口（Welcome、snapshot）帶 Gateway 序號與 tick；43、44 帶 tick；上行樣本帶 GYOP 序號、dwell 從收包起算；dwell 夾在 10 秒；每秒最多一輪；上限對照契約值；排序用 7 個原因；log 行格式釘死（C++ 測試用同一字串）。
+      - C++：補齊各類違規（merged_streams、samples_omitted 倒退、超過 4 個樣本、counts 亂序／重複／為 0、counts 消失、dwell 範圍）。
+      - 測試改用 `setForTest`（`t.Cleanup` 還原全域變數），避免 race detector 抓到的「還原早於背景 goroutine 結束」。
+    - should-3、should-4：動到定稿契約與架構，記在「等你決定」。
+    - note：拿掉沒人讀的 `Violations()`；更正 IG 的註解（新增的下行 `_packets` 不在 IG 內）。其餘記在未結事項。
+  - 證據：`build/target/_build/test/logs/pvp-v71-drop-report-20261016/`。
+  - Architecture Delta：Gateway 新增的診斷狀態欄位，等你核准（現況第 2 項）。其餘在產品內：Gateway 多 `drop_report.go`；`Server.Close` 的收尾改成先寫 final；ipc 測試多連結 nlohmann_json（讀 golden）。
+  - 實際約 3 h（14:41～17:40，含 xhigh 檢查約 38 分、突變約 1 h；估 13～16 h）。
+
 ## 未結事項
 
 - **保留的 worktree 與本機分支**：
@@ -229,4 +264,10 @@
   - 只為測試存在的狀態：`runtimeLink.now`、`takes`，套件變數 `runtimeLiveness`、`writerIdleWait`、`diagnosticInterval`。`edge-contract` 的白名單（D-14）到時要分類。
   - 差分測試的結尾等 300 ms 沒有訊息，已改成整體截止 3 秒；`edge-results-resend` 之後 Match 會重送未確認的結果，到時再確認。
   - L2 的預期（xhigh 推導，〔推論〕）：Windows 上 Go 的單調時鐘解析度可能是 15.6 ms，Gateway 在 Windows 時會出現假的 `jump=1` 與 `negative_delay`（`lan15-windows` 要事前宣告）；macOS 上 Go 用 `mach_absolute_time`（睡眠時停），libc++ 的 steady_clock 可能睡眠時繼續走，所以睡眠那段兩端都預期出現一次約等於睡眠長度的跳變，不算失敗。
+- **`drop-report` 留下的項目**（xhigh 的 note）：
+  - 記憶體只增不減：Gateway 帳本的 `ended` 與 Match 的串流表都依玩家 id 累積；惡意的 join／leave 推不高訊息數，但推得高記憶體。
+  - 過渡原因的樣本身分不完整：16、17、20、21、28 沒有 action id 範圍；22～26 的 dwell 起點是計數時刻。edge 批刪除過渡原因時一併消失；28（結果寫出失敗）的 action id 範圍在 `edge-results-*` 補。
+  - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
+  - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。
+  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4，PR #79 已合併到 master `23457e1`）：AGENTS.md 不點名產品，而是用 `git grep -n "不可破壞的契約" -- docs` 找各元件的設計約束。把 Gateway 的正式條文寫進 network-architecture 時，「不可破壞的契約」的標題文字要逐字保持不變。

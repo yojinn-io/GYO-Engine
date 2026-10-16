@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -747,6 +749,30 @@ pb::RuntimeEnvelope Heartbeat(std::uint64_t transmit, std::optional<std::uint64_
     return message;
 }
 
+pb::RuntimeEnvelope DropReport(std::uint64_t player, std::uint64_t sequence, std::vector<std::pair<int, std::uint64_t>> counts,
+                               std::vector<int> samples = {}, bool final = false) {
+    pb::RuntimeEnvelope message;
+    message.set_protocol_version(wire::ProtocolVersion);
+    auto* report = message.mutable_drop_report();
+    report->set_player_id(player);
+    report->set_report_sequence(sequence);
+    report->set_final(final);
+    for (const auto& [reason, total] : counts) {
+        auto* count = report->add_counts();
+        count->set_reason(static_cast<pb::DropReason>(reason));
+        count->set_total(total);
+    }
+    for (const auto reason : samples) {
+        auto* sample = report->add_samples();
+        sample->set_reason(static_cast<pb::DropReason>(reason));
+        sample->set_item_count(1);
+    }
+    return message;
+}
+
+bool DropReasonValid(int value) { return pb::DropReason_IsValid(value); }
+std::string DropReasonName(int value) { return pb::DropReason_Name(static_cast<pb::DropReason>(value)); }
+
 // The sum of `key` over the logged clock windows.
 std::uint64_t LoggedClockCount(ClogCapture& log, const std::string& key) {
     std::uint64_t total = 0;
@@ -913,6 +939,9 @@ DecisionOutcome RunDecisionScenario(bool clockSamples) {
             gateway.Send(Heartbeat(transmit, base + 777, base)); // unmatched origin
             transmit += 3;
             gateway.Send(Heartbeat(transmit, 5, transmit + 10)); // receive after transmit
+            // Drop reports with extreme values, violations included (pv7 §4).
+            gateway.Send(DropReport(static_cast<std::uint64_t>(k % 3), static_cast<std::uint64_t>(k + 1),
+                                    {{k % 3 ? 14 : 45, 1'000'000'000ull * static_cast<std::uint64_t>(k + 1)}}, {k % 3 ? 14 : 45}, k == Steps));
             if (lastReply) { // measured, with a jump every 7th step
                 transmit += k % 7 ? 3 : 900'000'000;
                 gateway.Send(Heartbeat(transmit, *lastReply, transmit - 1));
@@ -994,4 +1023,97 @@ TEST_CASE("PvP IPC clock samples have the agreed bytes") {
     REQUIRE(back.ParseFromString(transmitOnly));
     CHECK_FALSE(back.clock().has_origin_us());
     CHECK_FALSE(back.clock().has_receive_us());
+}
+
+// pv7 §4: each report is logged as read, with the body the Gateway logs as
+// written; a violation is logged and counted, never closing the link (D-5).
+TEST_CASE("PvP IPC logs the Gateway's drop reports and flags violations without closing") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    gateway.Send(DropReport(3, 1, {{14, 2}}, {14}));
+    gateway.Send(DropReport(3, 2, {{14, 1}}, {13}));              // a total going back; a sample of no count
+    gateway.Send(DropReport(3, 4, {{14, 1}}));                    // a gap
+    gateway.Send(DropReport(0, 1, {{14, 1}}));                    // a player reason on the Gateway stream
+    gateway.Send(DropReport(5, 1, {{1, 1}}, {}, true));           // a final
+    gateway.Send(DropReport(5, 2, {{1, 1}}));                     // after it
+    gateway.Send(Join(7));
+    const auto joined = ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); });
+    CHECK(joined.join_result().accepted());
+    CHECK_FALSE(gateway.Closed());
+    CHECK(log.Shows("gw_drop report player=3 report_sequence=1 final=0 samples=1 samples_omitted=0 merged_streams=0 "
+                    "drop_inactive_input_packets=2\n"));
+    CHECK(log.Shows("gw_drop violation player=3 report_sequence=2 problem=counts_regress"));
+    CHECK(log.Shows("gw_drop violation player=3 report_sequence=2 problem=sample_reason"));
+    CHECK(log.Shows("gw_drop violation player=3 report_sequence=4 problem=sequence"));
+    CHECK(log.Shows("gw_drop violation player=0 report_sequence=1 problem=reason_range"));
+    CHECK(log.Shows("gw_drop violation player=5 report_sequence=2 problem=after_final"));
+    CHECK_FALSE(log.Shows("player=3 report_sequence=1 problem", 0ms));
+}
+
+// Every violation class is logged and the link stays open (D-5).
+TEST_CASE("PvP IPC flags every drop report violation class") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    auto merged = DropReport(9, 1, {{1, 1}});
+    merged.mutable_drop_report()->set_merged_streams(1); // only the Gateway stream merges
+    gateway.Send(merged);
+    auto omitted = DropReport(9, 2, {{1, 1}});
+    omitted.mutable_drop_report()->set_samples_omitted(5);
+    gateway.Send(omitted);
+    auto back = DropReport(9, 3, {{1, 1}});
+    back.mutable_drop_report()->set_samples_omitted(4); // going back
+    gateway.Send(back);
+    gateway.Send(DropReport(9, 4, {{1, 1}}, {1, 1, 1, 1, 1}));     // five samples
+    gateway.Send(DropReport(9, 5, {{2, 1}, {1, 1}}));              // out of order
+    gateway.Send(DropReport(9, 6, {{1, 1}, {1, 1}}));              // twice
+    gateway.Send(DropReport(9, 7, {{1, 0}}));                      // a zero total
+    gateway.Send(DropReport(9, 8, {{3, 1}}));                      // reason 1 vanished
+    auto dwell = DropReport(9, 9, {{3, 1}}, {3});
+    dwell.mutable_drop_report()->mutable_samples(0)->set_dwell_us(10'000'001);
+    gateway.Send(dwell);
+    auto gatewayStream = DropReport(0, 1, {{45, 1}});
+    gatewayStream.mutable_drop_report()->set_merged_streams(3);
+    gateway.Send(gatewayStream);
+    auto gatewayBack = DropReport(0, 2, {{45, 1}});
+    gatewayBack.mutable_drop_report()->set_merged_streams(2); // going back
+    gateway.Send(gatewayBack);
+    gateway.Send(Join(7));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    CHECK_FALSE(gateway.Closed());
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=1 problem=merged_streams"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=3 problem=samples_omitted"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=4 problem=samples_over_4"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=5 problem=counts_order"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=6 problem=counts_order"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=7 problem=counts_order"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=8 problem=counts_regress"));
+    CHECK(log.Shows("gw_drop violation player=9 report_sequence=9 problem=dwell_range"));
+    CHECK(log.Shows("gw_drop violation player=0 report_sequence=2 problem=merged_streams"));
+    for (const auto* clean : {"player=9 report_sequence=2 problem", "player=0 report_sequence=1 problem"}) {
+        CAPTURE(clean);
+        CHECK_FALSE(log.Shows(std::string("gw_drop violation ") + clean, 0ms));
+    }
+}
+
+// The DropReason golden shared with Go (TestDropReasonsMatchTheGoldenAndTheKeys)
+// and Python (test_drop_reasons.py): the same values and names.
+TEST_CASE("PvP IPC drop reasons match the shared golden") {
+    std::ifstream file(PVP_DROP_REASONS_PATH);
+    REQUIRE(file);
+    const auto golden = nlohmann::json::parse(file);
+    std::set<int> values;
+    for (const auto& entry : golden) {
+        const int value = entry.at("value").get<int>();
+        values.insert(value);
+        REQUIRE(DropReasonValid(value));
+        CHECK(DropReasonName(value) == entry.at("name").get<std::string>());
+    }
+    for (int value = 1; value < 128; ++value) {
+        CAPTURE(value);
+        CHECK(DropReasonValid(value) == values.contains(value));
+    }
 }

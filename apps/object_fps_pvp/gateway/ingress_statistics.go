@@ -84,6 +84,13 @@ const (
 	reasonRegressed
 	// Action requests the runtime link wrote (D59).
 	reasonLinkWritten
+	// Downlink and queue discards of the pv7 GatewayDropReport (§4).
+	reasonWriteFailed
+	reasonControlQueueFull
+	reasonReplaced
+	reasonIpcQueueOverflow
+	reasonResultsOverRate
+	reasonCoalesced
 )
 
 // The datagram kind from the header; ingressAnyKind leaves it out of the key.
@@ -95,6 +102,10 @@ const (
 	ingressInput
 	ingressActions
 	ingressOther
+	// Downlink kinds (pv7 §4).
+	ingressSnapshot
+	ingressResults
+	ingressControl
 )
 
 type ingressUnit uint8
@@ -164,9 +175,16 @@ var (
 		reasonOldTick:                 "old_tick",
 		reasonRegressed:               "regressed",
 		reasonLinkWritten:             "link_written",
+		reasonWriteFailed:             "write_failed",
+		reasonControlQueueFull:        "control_queue_full",
+		reasonReplaced:                "replaced",
+		reasonIpcQueueOverflow:        "ipc_queue_overflow",
+		reasonResultsOverRate:         "results_over_rate",
+		reasonCoalesced:               "coalesced",
 	}
 	ingressKindNames = [...]string{ingressAnyKind: "", ingressHello: "_hello", ingressInput: "_input",
-		ingressActions: "_actions", ingressOther: "_other"}
+		ingressActions: "_actions", ingressOther: "_other", ingressSnapshot: "_snapshot", ingressResults: "_results",
+		ingressControl: "_control"}
 	ingressUnitNames = [...]string{unitDatagrams: "_datagrams", unitPackets: "_packets", unitInputs: "_inputs",
 		unitCommands: "_commands", unitBatches: "_batches", unitShots: "_shots", unitSnapshots: "_snapshots",
 		unitAcks: "_acks"}
@@ -181,8 +199,10 @@ func ingressKeyName(k ingressKey) string {
 type playerIngressCounter uint8
 
 const (
-	// IG: received_datagrams equals the sum of every *_packets counter below,
-	// because each datagram of a session ends in exactly one outcome.
+	// IG: received_datagrams equals the sum of the *_packets counters from
+	// fwd_main_input_packets to drop_admission_unknown_packets, because each
+	// datagram of a session ends in exactly one outcome. The downlink *_packets
+	// counters appended at the end (pv7 §4) are events, outside IG.
 	playerReceivedDatagrams playerIngressCounter = iota
 	playerFwdMainInputPackets
 	playerFwdRejectedLaneInputPackets
@@ -260,6 +280,12 @@ const (
 	// drop_*_actions_shots above.
 	playerFwdHandedActionsShots
 	playerFwdLinkWrittenActionsShots
+	// Downlink discards (pv7 §4), outside IG: events, not received datagrams.
+	playerDropWriteFailedSnapshotPackets
+	playerDropWriteFailedResultsPackets
+	playerDropWriteFailedControlPackets
+	playerDropControlQueueFullControlPackets
+	playerDropReplacedSnapshotPackets
 	playerIngressCounterCount
 )
 
@@ -321,6 +347,11 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerDropAbandonedOnCloseActionsAcks:    {ingressDropped, reasonAbandonedOnClose, ingressActions, unitAcks},
 	playerFwdHandedActionsShots:              {ingressForwarded, reasonHanded, ingressActions, unitShots},
 	playerFwdLinkWrittenActionsShots:         {ingressForwarded, reasonLinkWritten, ingressActions, unitShots},
+	playerDropWriteFailedSnapshotPackets:     {ingressDropped, reasonWriteFailed, ingressSnapshot, unitPackets},
+	playerDropWriteFailedResultsPackets:      {ingressDropped, reasonWriteFailed, ingressResults, unitPackets},
+	playerDropWriteFailedControlPackets:      {ingressDropped, reasonWriteFailed, ingressControl, unitPackets},
+	playerDropControlQueueFullControlPackets: {ingressDropped, reasonControlQueueFull, ingressControl, unitPackets},
+	playerDropReplacedSnapshotPackets:        {ingressDropped, reasonReplaced, ingressSnapshot, unitPackets},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64
@@ -345,6 +376,8 @@ const (
 	// player's life, epoch or resolved cursor going back (D2).
 	gatewayDropOldTickSnapshots
 	gatewayDropRegressedSnapshots
+	// The reader replaced an unsent snapshot with a newer one (pv7 §4, 45).
+	gatewayDropCoalescedSnapshots
 	gatewayIngressCounterCount
 )
 
@@ -357,6 +390,7 @@ var gatewayIngressKeys = [gatewayIngressCounterCount]ingressKey{
 	gatewayDropRateLimitedPackets:       {ingressDropped, reasonRateLimited, ingressAnyKind, unitPackets},
 	gatewayDropOldTickSnapshots:         {ingressDropped, reasonOldTick, ingressAnyKind, unitSnapshots},
 	gatewayDropRegressedSnapshots:       {ingressDropped, reasonRegressed, ingressAnyKind, unitSnapshots},
+	gatewayDropCoalescedSnapshots:       {ingressDropped, reasonCoalesced, ingressAnyKind, unitSnapshots},
 }
 
 type gatewayIngressCounts [gatewayIngressCounterCount]uint64

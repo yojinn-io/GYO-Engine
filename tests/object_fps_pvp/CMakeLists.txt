@@ -28,7 +28,8 @@ gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
 set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
 add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
-target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v7" doctest::doctest)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v7" nlohmann_json::nlohmann_json doctest::doctest)
+target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json")
 if(WIN32)
     target_compile_definitions(${ipc_tests} PRIVATE NOMINMAX)
 endif()
@@ -123,6 +124,9 @@ set_tests_properties("${GYO_CURRENT_APP}.probe_command_path" PROPERTIES LABELS "
 add_test(NAME "${GYO_CURRENT_APP}.protocol_version"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_protocol_version.py")
 set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.drop_reasons"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_drop_reasons.py")
+set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

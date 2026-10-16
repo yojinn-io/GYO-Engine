@@ -33,8 +33,8 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 		t.Fatal("hello")
 	}
 	p := &reservation{lifeGeneration: 1, playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
-	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1)}
-	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1), resultWake: make(chan struct{}, 1)}
+	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1), drops: newDropLedger()}
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan snapshotFrame, 1), resultWake: make(chan struct{}, 1)}
 	return s, p, endpoint, now
 }
 func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.AddrPort, seq uint32, b *client.ActionBatch, now time.Time) {

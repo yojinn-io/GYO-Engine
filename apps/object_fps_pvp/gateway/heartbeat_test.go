@@ -17,6 +17,15 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
+// setForTest overrides a package variable until the test and every cleanup
+// registered after this call (servers, links and their goroutines) are done.
+func setForTest[T any](t *testing.T, variable *T, value T) {
+	t.Helper()
+	previous := *variable
+	*variable = value
+	t.Cleanup(func() { *variable = previous })
+}
+
 // scriptedRuntime is a Match that sends a valid Ready and then whatever the
 // test writes; it reads and keeps every envelope the Gateway sends.
 type scriptedRuntime struct {
@@ -86,7 +95,7 @@ func linkToScriptedRuntime(t *testing.T) (*runtimeLink, *scriptedRuntime) {
 		t.Fatal(err)
 	}
 	r := <-accepted
-	t.Cleanup(func() { link.close(); r.conn.Close() })
+	t.Cleanup(func() { link.close(); link.waitWriter(); r.conn.Close() })
 	return link, r
 }
 
@@ -179,9 +188,7 @@ func TestOnlyAuthoritativeFramesRefreshRuntimeLiveness(t *testing.T) {
 // A snapshot refreshes liveness; once they stop, only diagnostic frames arrive
 // and the link fails one budget after the last snapshot.
 func TestSnapshotsKeepTheRuntimeLinkAliveAndOnlyThey(t *testing.T) {
-	previous := runtimeLiveness
-	runtimeLiveness = time.Second
-	defer func() { runtimeLiveness = previous }()
+	setForTest(t, &runtimeLiveness, time.Second)
 	link, r := linkToScriptedRuntime(t)
 	failed := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,9 +251,7 @@ func TestHeartbeatUsesOnlyTheDiagnosticSlot(t *testing.T) {
 // the writer takes nothing, however many heartbeats it writes, and each
 // heartbeat's transmit is stamped when written, strictly increasing.
 func TestHeartbeatWritesTakeNoDataPass(t *testing.T) {
-	previous := writerIdleWait
-	writerIdleWait = time.Hour
-	defer func() { writerIdleWait = previous }()
+	setForTest(t, &writerIdleWait, time.Hour)
 	link, r := linkToScriptedRuntime(t)
 	defer link.close() // before the writer's wait is restored
 	ctx, cancel := context.WithCancel(context.Background())
@@ -281,9 +286,7 @@ func TestHeartbeatWritesTakeNoDataPass(t *testing.T) {
 // idle wait, heartbeats every few milliseconds do not postpone the timed data
 // passes.
 func TestHeartbeatWritesKeepTheWriterTimer(t *testing.T) {
-	previous := writerIdleWait
-	writerIdleWait = 50 * time.Millisecond
-	defer func() { writerIdleWait = previous }()
+	setForTest(t, &writerIdleWait, 50*time.Millisecond)
 	link, _ := linkToScriptedRuntime(t)
 	defer link.close()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -304,18 +307,17 @@ func TestHeartbeatWritesKeepTheWriterTimer(t *testing.T) {
 // A data wake-up that arrives while a heartbeat is being written still gets
 // its data pass: the diagnostic branch consumes only its own wake-up.
 func TestHeartbeatWritesLeaveDataWakeups(t *testing.T) {
-	previousIdle, previousWrite := writerIdleWait, runtimeWrite
-	writerIdleWait = time.Hour
+	setForTest(t, &writerIdleWait, time.Hour)
+	previousWrite := runtimeWrite
 	entered, release := make(chan struct{}), make(chan struct{})
 	var blocking atomic.Bool
-	runtimeWrite = func(c *framing.TCPConnection, payload []byte, timeout time.Duration) error {
+	setForTest(t, &runtimeWrite, func(c *framing.TCPConnection, payload []byte, timeout time.Duration) error {
 		if blocking.CompareAndSwap(true, false) {
 			entered <- struct{}{}
 			<-release
 		}
 		return previousWrite(c, payload, timeout)
-	}
-	defer func() { writerIdleWait, runtimeWrite = previousIdle, previousWrite }()
+	})
 	link, _ := linkToScriptedRuntime(t)
 	defer link.close()
 	ctx, cancel := context.WithCancel(context.Background())

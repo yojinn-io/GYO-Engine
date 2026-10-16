@@ -70,7 +70,18 @@ type runtimeLink struct {
 	now func() time.Time
 	// Diagnostics only: write passes taken; a diagnostic write takes none.
 	takes uint64
+	// The pv7 GatewayDropReport (drop_report.go): the ledger, and whether the
+	// timer asked for a pass of reports with the heartbeat.
+	drops    *dropLedger
+	dropPass bool
+	// When the writer last wrote a pass of reports: a stream reports at most
+	// once a second (pv7 §4). Only the writer goroutine touches it.
+	lastDropPass time.Time
 }
+
+// errLinkClosing ends a write pass the close interrupted: what it had not
+// written is abandoned, and the close (not the writer) ends the link.
+var errLinkClosing = errors.New("runtime link closing")
 
 // runtimeLiveness: the reader fails the link when no Snapshot, JoinResult,
 // Evicted or Error arrived for this long (pv7 §2). Tests shorten it.
@@ -113,7 +124,7 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 		return nil, nil, err
 	}
 	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{}),
-		diagnosticWake: make(chan struct{}, 1), clock: newClockSync(gatewayMicros(time.Now())), now: time.Now}, ready, nil
+		diagnosticWake: make(chan struct{}, 1), clock: newClockSync(gatewayMicros(time.Now())), now: time.Now, drops: newDropLedger()}, ready, nil
 }
 
 // decodeRuntime checks the version before the content (pv7 contract §1). Field
@@ -273,6 +284,8 @@ func (l *runtimeLink) countLocked(player uint64, counter playerIngressCounter, n
 		l.ingress[player] = counts
 	}
 	counts[counter] += n
+	// The same entry counts the reported discards cumulatively (pv7 §4).
+	l.countDrop(player, counter, n, dropEvent{at: time.Now()})
 }
 
 // takeIngress hands over each player's link counters accumulated since the
@@ -638,6 +651,11 @@ func (l *runtimeLink) wroteLocked(w linkWrite) {
 func (l *runtimeLink) write(writes []linkWrite) error {
 	for i, w := range writes {
 		payload, err := proto.Marshal(w.message)
+		select {
+		case <-l.done: // closing: the rest is abandoned, not written
+			err = errLinkClosing
+		default:
+		}
 		if err == nil {
 			started := time.Now()
 			err = runtimeWrite(l.conn, payload, 3*time.Second)
@@ -695,14 +713,18 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			case <-timer.C:
 			case <-l.diagnosticWake:
 				// Only the diagnostic slot: no take(), no timer reset (pv7 §2).
-				if err := l.writeDiagnostic(); err != nil {
+				if err := l.writeDiagnostic(); errors.Is(err, errLinkClosing) {
+					return
+				} else if err != nil {
 					stopped()
 					fail(err)
 					return
 				}
 				continue
 			}
-			if err := l.write(l.take()); err != nil {
+			if err := l.write(l.take()); errors.Is(err, errLinkClosing) {
+				return
+			} else if err != nil {
 				// This goroutine counts nothing more. The failure reaches
 				// runtimeFailed on it, whose final flush waits for it.
 				stopped()
@@ -778,6 +800,9 @@ func (l *runtimeLink) heartbeat(now time.Time) (clockWindow, bool) {
 	}
 	window, rolled := l.clock.roll(gatewayMicros(now), false)
 	l.clockMu.Unlock()
+	l.mu.Lock()
+	l.dropPass = true // the drop reports go with each timer tick
+	l.mu.Unlock()
 	l.queueDiagnostic(&runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion, Message: &runtime.RuntimeEnvelope_Clock{Clock: sample}})
 	return window, rolled
 }
@@ -806,27 +831,59 @@ func (l *runtimeLink) queueDiagnostic(message *runtime.RuntimeEnvelope) {
 		l.clock.noteReplaced()
 		l.clockMu.Unlock()
 	}
+	l.wakeDiagnostic()
+}
+
+// writeDiagnostic writes the slot's envelope, if any, then the drop reports
+// the timer asked for. A heartbeat's transmit is stamped here, when it is
+// serialized (pv7 §3).
+func (l *runtimeLink) writeDiagnostic() error {
+	l.mu.Lock()
+	message, pass := l.diagnostic, l.dropPass
+	l.diagnostic, l.dropPass = nil, false
+	l.mu.Unlock()
+	select {
+	case <-l.done:
+		return errLinkClosing
+	default:
+	}
+	if pass && !l.lastDropPass.IsZero() {
+		if wait := time.Second - time.Since(l.lastDropPass); wait > 0 {
+			// Too soon after the previous pass: it waits for the second to end.
+			l.mu.Lock()
+			l.dropPass = true
+			l.mu.Unlock()
+			time.AfterFunc(wait, l.wakeDiagnostic)
+			pass = false
+		}
+	}
+	if message != nil {
+		if sample := message.GetClock(); sample != nil {
+			l.clockMu.Lock()
+			sample.TransmitUs = l.clock.stamp(gatewayMicros(time.Now()))
+			l.clockMu.Unlock()
+		}
+		if err := l.writeEnvelope(message); err != nil {
+			return err
+		}
+	}
+	if pass {
+		l.lastDropPass = time.Now()
+		return l.writeDrops(false)
+	}
+	return nil
+}
+
+// wakeDiagnostic wakes the writer for the diagnostic slot only.
+func (l *runtimeLink) wakeDiagnostic() {
 	select {
 	case l.diagnosticWake <- struct{}{}:
 	default:
 	}
 }
 
-// writeDiagnostic writes the slot's envelope, if any. A heartbeat's transmit
-// is stamped here, when it is serialized (pv7 §3).
-func (l *runtimeLink) writeDiagnostic() error {
-	l.mu.Lock()
-	message := l.diagnostic
-	l.diagnostic = nil
-	l.mu.Unlock()
-	if message == nil {
-		return nil
-	}
-	if sample := message.GetClock(); sample != nil {
-		l.clockMu.Lock()
-		sample.TransmitUs = l.clock.stamp(gatewayMicros(time.Now()))
-		l.clockMu.Unlock()
-	}
+// writeEnvelope writes one diagnostic envelope.
+func (l *runtimeLink) writeEnvelope(message *runtime.RuntimeEnvelope) error {
 	payload, err := proto.Marshal(message)
 	if err == nil {
 		err = runtimeWrite(l.conn, payload, 3*time.Second)
@@ -852,6 +909,26 @@ func (l *runtimeLink) writerExitedLocked() chan struct{} {
 // waitWriter returns once the writer goroutine exited, at once if run never
 // started it. Only after close(): the writer runs until the link closes or the
 // context ends.
+// gracefulWriterWait bounds a graceful close's wait for the writer: longer
+// than one runtime write's deadline. Tests shorten it.
+var gracefulWriterWait = 3500 * time.Millisecond
+
+// waitWriterFor is waitWriter with a bound; false when the writer still runs.
+func (l *runtimeLink) waitWriterFor(limit time.Duration) bool {
+	l.mu.Lock()
+	started, exited := l.writerStarted, l.writerExitedLocked()
+	l.mu.Unlock()
+	if !started {
+		return true
+	}
+	select {
+	case <-exited:
+		return true
+	case <-time.After(limit):
+		return false
+	}
+}
+
 func (l *runtimeLink) waitWriter() {
 	l.mu.Lock()
 	started, exited := l.writerStarted, l.writerExitedLocked()
@@ -861,7 +938,13 @@ func (l *runtimeLink) waitWriter() {
 	}
 }
 
-func (l *runtimeLink) close() {
+func (l *runtimeLink) close() { l.shutdown(false) }
+
+// closeGracefully closes the link after writing every stream's final drop
+// report (pv7 §4), once the writer exited: only on a graceful close.
+func (l *runtimeLink) closeGracefully() { l.shutdown(true) }
+
+func (l *runtimeLink) shutdown(graceful bool) {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
@@ -895,6 +978,18 @@ func (l *runtimeLink) close() {
 	clear(l.actionStats)
 	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
 	l.mu.Unlock()
+	if graceful {
+		// The writer stops at its next frame (done is closed); a write in
+		// progress ends within its own deadline. Only then is the connection
+		// free for the finals: one writer at a time.
+		if l.waitWriterFor(gracefulWriterWait) {
+			if err := l.writeDrops(true); err != nil {
+				log.Printf("drop report final writes failed: %v", err)
+			}
+		} else {
+			log.Print("drop report finals not written: the writer did not stop in time")
+		}
+	}
 	_ = l.conn.Close()
 	l.notify()
 }

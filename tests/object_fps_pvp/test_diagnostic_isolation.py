@@ -24,6 +24,7 @@ DECIDING = [
 ]
 DIAGNOSTIC_SYMBOLS = [
     'ClockSync', 'ClockSample', 'ClockStamp', 'ClockWindow', 'has_clock', 'mutable_clock', '.clock()',
+    'GatewayDropReport', 'DropReason', 'DropReports', 'drop_report',
 ]
 
 

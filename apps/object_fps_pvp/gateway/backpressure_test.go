@@ -19,7 +19,7 @@ import (
 // blocking switch or pretending an ordinary loopback UDP socket is saturated.
 func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing.T) {
 	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation),
-		controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1)}
+		controlOut: make(chan outbound, 64), snapshotOut: make(chan snapshotFrame, 1)}
 	for id := uint64(1); id <= 2; id++ {
 		peer, err := session.New(time.Now())
 		if err != nil {
@@ -44,7 +44,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, first := s.snapshotForPeer(1, payload)
+	frame, first := s.snapshotForPeer([]uint64{1, 2}, snapshotFrame{payload: payload, tick: 1})
 	firstHeader, firstTick := decode(first)
 	if firstTick != 1 || firstHeader.Sequence != 1 || firstHeader.SessionID != s.players[1].session.ID {
 		t.Fatal("first peer did not receive the initial publication")
@@ -57,7 +57,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
 		s.runtimeMessage(e)
 	}
-	payload, second := s.snapshotForPeer(2, payload)
+	frame, second := s.snapshotForPeer([]uint64{2}, frame)
 	secondHeader, secondTick := decode(second)
 	if secondTick != 3 || secondHeader.Sequence != 3 || secondHeader.SessionID != secondPeer.session.ID ||
 		len(s.snapshotOut) != 0 || s.snapshotReplacements.Load() != 2 {
@@ -70,12 +70,12 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		}
 	}
 	delete(s.players, 2)
-	_, removed := s.snapshotForPeer(2, payload)
+	_, removed := s.snapshotForPeer([]uint64{2}, frame)
 	if removed.peer.IsValid() || len(removed.packet) != 0 || secondPeer.outSequence != 3 {
 		t.Fatal("a peer removed after the batch was selected still received a snapshot")
 	}
 	s.available = false
-	_, unavailable := s.snapshotForPeer(1, payload)
+	_, unavailable := s.snapshotForPeer([]uint64{1}, frame)
 	if unavailable.peer.IsValid() || len(unavailable.packet) != 0 {
 		t.Fatal("runtime failure revived a selected snapshot")
 	}
@@ -89,7 +89,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 	// 15 and 60 publications are the 250 ms and one-second stalls at 60 Hz.
 	for _, blocked := range []uint64{15, 60} {
 		t.Run(fmt.Sprintf("%d-publications", blocked), func(t *testing.T) {
-			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan []byte, 1)}
+			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan snapshotFrame, 1)}
 			publish := func(first, last uint64) {
 				done := make(chan struct{})
 				go func() {
@@ -109,9 +109,9 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 			}
 			receive := func() uint64 {
 				select {
-				case payload := <-s.snapshotOut:
+				case frame := <-s.snapshotOut:
 					var snapshot client.WorldSnapshot
-					if err := proto.Unmarshal(payload, &snapshot); err != nil {
+					if err := proto.Unmarshal(frame.payload, &snapshot); err != nil {
 						t.Fatal(err)
 					}
 					return snapshot.Tick

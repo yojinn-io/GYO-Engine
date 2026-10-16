@@ -1795,7 +1795,7 @@
       "batch": "v7-flow",
       "what": "An undecodable datagram is not counted",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.ingress[gatewayDropUndecodableDatagrams]++\n",
+      "find": "\t\ts.countGatewayLocked(gatewayDropUndecodableDatagrams, dropEvent{at: now})\n",
       "replace": "",
       "check": "go",
       "expect": "case undecodable: gateway counted none"
@@ -1805,8 +1805,8 @@
       "batch": "v7-flow",
       "what": "An undecodable datagram is dropped without being counted as read",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.ingress[gatewayReceivedDatagrams]++\n\t\ts.ingress[gatewayDropUndecodableDatagrams]++\n",
-      "replace": "\t\ts.ingress[gatewayDropUndecodableDatagrams]++\n",
+      "find": "\t\ts.ingress[gatewayReceivedDatagrams]++\n\t\ts.countGatewayLocked(gatewayDropUndecodableDatagrams, dropEvent{at: now})\n",
+      "replace": "\t\ts.countGatewayLocked(gatewayDropUndecodableDatagrams, dropEvent{at: now})\n",
       "check": "go",
       "expect": "gateway-wide drops and players' datagrams 1 != received 0"
     },
@@ -1815,7 +1815,7 @@
       "batch": "v7-flow",
       "what": "A datagram of another protocol version is not counted",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.ingress[gatewayDropOtherVersionDatagrams]++\n",
+      "find": "\t\ts.countGatewayLocked(gatewayDropOtherVersionDatagrams, s.datagram)\n",
       "replace": "",
       "check": "go",
       "expect": "case other_version: gateway counted none"
@@ -1835,7 +1835,7 @@
       "batch": "v7-flow",
       "what": "A datagram of an unknown session is not counted",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.ingress[gatewayDropUnknownSessionDatagrams]++\n",
+      "find": "\t\ts.countGatewayLocked(gatewayDropUnknownSessionDatagrams, s.datagram)\n",
       "replace": "",
       "check": "go",
       "expect": "case unknown_session: gateway counted none"
@@ -2115,7 +2115,7 @@
       "batch": "v7-flow",
       "what": "A snapshot whose tick is not after the last one is refused uncounted (D1)",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\ts.ingress[gatewayDropOldTickSnapshots]++\n",
+      "find": "\t\t\ts.countGatewayLocked(gatewayDropOldTickSnapshots, dropEvent{at: time.Now(), tick: out.Tick})\n",
       "replace": "",
       "check": "go",
       "expect": "refused snapshots counted drop_regressed_snapshots=1"
@@ -2125,10 +2125,10 @@
       "batch": "v7-flow",
       "what": "A snapshot in which a player's cursor goes back is refused uncounted (D2)",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\t\ts.ingress[gatewayDropRegressedSnapshots]++\n",
+      "find": "\t\t\t\ts.countGatewayLocked(gatewayDropRegressedSnapshots, dropEvent{at: time.Now(), tick: out.Tick})\n",
       "replace": "",
       "check": "go",
-      "expect": "(?m)refused snapshots counted drop_old_tick_snapshots=2$"
+      "expect": "(?m)refused snapshots counted drop_old_tick_snapshots=2( drop_coalesced_snapshots=[0-9]+)?$"
     },
     {
       "id": "v7-flow-snapshot-key-renamed",
@@ -3735,8 +3735,8 @@
       "batch": "v71-heartbeat-sync",
       "what": "The heartbeat wakes the data writer instead of its own slot's",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tcase l.diagnosticWake <- struct{}{}:\n",
-      "replace": "\tcase l.wake <- struct{}{}:\n",
+      "find": "\tl.wakeDiagnostic()\n",
+      "replace": "\tl.notify()\n",
       "check": "go",
       "expect": "wake 1, diagnostic wake 0"
     },
@@ -3899,6 +3899,176 @@
       "replace": "                if(message.has_clock() && message.clock().receive_us()>message.clock().transmit_us())continue;\n                if(message.has_clock()) { // diagnostics only, before and apart from every check\n",
       "check": "worker",
       "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "v71dr-server-count-unreported",
+      "batch": "v71-drop-report",
+      "what": "Server counts a reported discard into its 10 s line only",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tcounts[counter] += n\n\ts.link.countDrop(player, counter, n, e)\n",
+      "replace": "\tcounts[counter] += n\n",
+      "check": "go",
+      "expect": "report <nil>"
+    },
+    {
+      "id": "v71dr-gateway-count-unreported",
+      "batch": "v71-drop-report",
+      "what": "A Gateway-wide discard is not reported",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\te.reason = reason\n\t\ts.link.ledger().add(0, 1, e)\n",
+      "replace": "\t\te.reason = reason\n",
+      "check": "go",
+      "expect": "report <nil>"
+    },
+    {
+      "id": "v71dr-link-count-unreported",
+      "batch": "v71-drop-report",
+      "what": "The link counts a reported discard into its 10 s line only",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.countDrop(player, counter, n, dropEvent{at: time.Now()})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "link counters"
+    },
+    {
+      "id": "v71dr-write-failure-uncounted",
+      "batch": "v71-drop-report",
+      "what": "A failed UDP write is not counted",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\ts.countIngressAt(packet.player, packet.writeFailed, 1, dropEvent{at: time.Now(), transport: packet.sequence, tick: packet.tick})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "write failure report"
+    },
+    {
+      "id": "v71dr-control-queue-full-uncounted",
+      "batch": "v71-drop-report",
+      "what": "A full control queue drops a control uncounted",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\ts.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now(), transport: p.outSequence})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "control queue report"
+    },
+    {
+      "id": "v71dr-replaced-snapshot-uncounted",
+      "batch": "v71-drop-report",
+      "what": "The send loop replaces a snapshot uncounted",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t\ts.countIngressAt(id, playerDropReplacedSnapshotPackets, 1, dropEvent{at: now, tick: old.tick})\n",
+      "replace": "\t\t\t\t_, _ = now, old\n",
+      "check": "go",
+      "expect": "player 2: "
+    },
+    {
+      "id": "v71dr-coalesced-uncounted",
+      "batch": "v71-drop-report",
+      "what": "The reader replaces a snapshot uncounted",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t\ts.countGatewayLocked(gatewayDropCoalescedSnapshots, dropEvent{at: time.Now(), tick: replaced.tick})\n",
+      "replace": "\t\t\t\t_ = replaced\n",
+      "check": "go",
+      "expect": "coalesced report"
+    },
+    {
+      "id": "v71dr-remove-without-final",
+      "batch": "v71-drop-report",
+      "what": "A removed player's stream never ends with a final",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\ts.link.ledger().remove(p.playerID) // its stream ends with one final report\n",
+      "replace": "",
+      "check": "go",
+      "expect": "reports after the leave"
+    },
+    {
+      "id": "v71dr-heartbeat-without-pass",
+      "batch": "v71-drop-report",
+      "what": "The timer never asks for a pass of reports",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.dropPass = true // the drop reports go with each timer tick\n",
+      "replace": "",
+      "check": "go",
+      "expect": "reports after one drop"
+    },
+    {
+      "id": "v71dr-close-without-finals",
+      "batch": "v71-drop-report",
+      "what": "A graceful close sends no finals",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\ts.link.closeGracefully() // every stream's final drop report first (pv7 §4)\n",
+      "replace": "\t\ts.link.close()\n",
+      "check": "go",
+      "expect": "no final for the player"
+    },
+    {
+      "id": "v71dr-passes-unpaced",
+      "batch": "v71-drop-report",
+      "what": "Passes of reports come faster than once a second",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tif pass && !l.lastDropPass.IsZero() {\n",
+      "replace": "\tif pass && false {\n",
+      "check": "go",
+      "expect": "the deferred pass was never woken"
+    },
+    {
+      "id": "v71dr-samples-unbounded",
+      "batch": "v71-drop-report",
+      "what": "A report carries a fifth sample",
+      "file": "apps/object_fps_pvp/gateway/drop_report.go",
+      "find": "\tdropSamplesPerReport = 4\n",
+      "replace": "\tdropSamplesPerReport = 5\n",
+      "check": "go",
+      "expect": "first report"
+    },
+    {
+      "id": "v71dr-pass-bound-raised",
+      "batch": "v71-drop-report",
+      "what": "A pass sends more streams than MaxPlayers×2",
+      "file": "apps/object_fps_pvp/gateway/drop_report.go",
+      "find": "\tdropStreamsPerPass = adapter.MaxPlayers * 2\n",
+      "replace": "\tdropStreamsPerPass = adapter.MaxPlayers * 3\n",
+      "check": "go",
+      "expect": "pass of [0-9]+ streams"
+    },
+    {
+      "id": "v71dr-dwell-unclamped",
+      "batch": "v71-drop-report",
+      "what": "A sample's dwell is not clamped at 10 s",
+      "file": "apps/object_fps_pvp/gateway/drop_report.go",
+      "find": "\t\tdwell := min(max(now.Sub(e.at), 0), dropMaximumDwell)\n",
+      "replace": "\t\tdwell := max(now.Sub(e.at), 0)\n",
+      "check": "go",
+      "expect": "TestDropSampleDwellIsClamped"
+    },
+    {
+      "id": "v71dr-match-sequence-unchecked",
+      "batch": "v71-drop-report",
+      "what": "The Match takes a gap in report_sequence",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(report.report_sequence()!=stream.sequence+1) problems.push_back(\"sequence\");\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "problem=sequence"
+    },
+    {
+      "id": "v71dr-match-dwell-unchecked",
+      "batch": "v71-drop-report",
+      "what": "The Match takes a dwell above 10 s",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(sample.dwell_us()>10'000'000) {problems.push_back(\"dwell_range\");break;} // pv7 §2 clamps it\n",
+      "replace": "            if(false) {problems.push_back(\"dwell_range\");break;}\n",
+      "check": "ipc",
+      "expect": "problem=dwell_range"
+    },
+    {
+      "id": "v71dr-report-reaches-host",
+      "batch": "v71-drop-report",
+      "what": "A drop report reaches a decision: it makes the Match drop its player",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                session.drops.Read(message.drop_report()); // diagnostics only: logged, checked, never answered\n",
+      "replace": "                session.drops.Read(message.drop_report()); static_cast<void>(host.QueueLeave(++requestSequence,message.drop_report().player_id()));\n",
+      "check": "ipc",
+      "expect": "without\\.(decisions|joins|snapshot) == with\\."
     }
   ]
 }

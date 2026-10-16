@@ -68,6 +68,7 @@ type fakeRuntime struct {
 	// Heartbeats (diagnostics) go apart, so requests read by next and quiet
 	// are only the ones the tests drive; a full channel drops the newest.
 	clocks chan *runtime.ClockSample
+	drops  chan *runtime.GatewayDropReport // the same for drop reports
 }
 
 func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
@@ -84,7 +85,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeRuntime{listener: listener, got: make(chan *runtime.RuntimeEnvelope, 32), clocks: make(chan *runtime.ClockSample, 64)}
+	f := &fakeRuntime{listener: listener, got: make(chan *runtime.RuntimeEnvelope, 32), clocks: make(chan *runtime.ClockSample, 64), drops: make(chan *runtime.GatewayDropReport, 256)}
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -108,6 +109,13 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 			if clock := e.GetClock(); clock != nil {
 				select {
 				case f.clocks <- clock:
+				default:
+				}
+				continue
+			}
+			if report := e.GetDropReport(); report != nil {
+				select {
+				case f.drops <- report:
 				default:
 				}
 				continue

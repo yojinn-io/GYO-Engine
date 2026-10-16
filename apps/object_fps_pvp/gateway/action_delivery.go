@@ -333,7 +333,8 @@ func (s *Server) actionPackets(now time.Time) ([]outbound, time.Time, bool) {
 		if err != nil {
 			continue
 		}
-		packets = append(packets, outbound{peer: p.session.Endpoint(), packet: packet, actionPlayer: p.playerID})
+		packets = append(packets, outbound{peer: p.session.Endpoint(), packet: packet, actionPlayer: p.playerID,
+			player: p.playerID, writeFailed: playerDropWriteFailedResultsPackets, sequence: p.outSequence})
 	}
 	deadline, ok := s.nextResultDeadline()
 	return packets, deadline, ok

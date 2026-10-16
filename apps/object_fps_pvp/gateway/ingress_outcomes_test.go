@@ -519,6 +519,11 @@ func TestGatewayCountsRefusedSnapshots(t *testing.T) {
 	}
 	if s.lastSnapshot != 12 {
 		t.Fatalf("snapshot after the refused ones not accepted: last tick %d", s.lastSnapshot)
+	} // The same entry reports them (pv7 §4, 43 and 44), each with its tick.
+	r := s.link.drops.report(0, time.Now())
+	if r == nil || totalsOf(r)[runtime.DropReason_DROP_OLD_TICK_SNAPSHOTS] != 2 || totalsOf(r)[runtime.DropReason_DROP_REGRESSED_SNAPSHOTS] != 1 ||
+		r.Samples[0].SnapshotTick != 10 || r.Samples[1].SnapshotTick != 9 || r.Samples[2].SnapshotTick != 11 {
+		t.Fatalf("refused snapshots reported %v", r)
 	}
 }
 

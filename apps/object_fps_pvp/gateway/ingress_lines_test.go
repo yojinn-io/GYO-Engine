@@ -371,6 +371,10 @@ func TestEveryEndPathWritesTheFinalWindowOnceAfterTheWriter(t *testing.T) {
 			e.close(t, "failure_racing_close")
 		}, want: expect{written: 3}},
 		{name: "blocked_writer", end: func(t *testing.T, e *endPathFixture, logs *ingressLog, entered <-chan struct{}, release chan<- struct{}, block, _ *atomic.Bool) {
+			// The writer outlasts the graceful close's wait: the close gives
+			// up its finals and aborts the write, and the final line still
+			// waits for the writer.
+			setForTest(t, &gracefulWriterWait, 20*time.Millisecond)
 			block.Store(true)
 			e.send(t, adapter.Input, inputMessage(1, moves(1, 3)))
 			select {

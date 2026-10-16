@@ -118,6 +118,7 @@ message RuntimeEnvelope {
     ActionResults action_results = 18;
     PlayerEvicted evicted = 19;
     ClockSample clock = 20;
+    GatewayDropReport drop_report = 21;
   }
 }
 
@@ -216,4 +217,84 @@ message ShotDecision {
   ActionKind kind = 8;
   uint64 life_generation = 9;
   uint64 target_life_generation = 10;
+}
+
+// Diagnostics only (pv7 contract §4): the discards the Gateway executed, by
+// reason, per stream (a player, or the Gateway as player 0). Identity only,
+// never content; bounded; cumulative, so a lost or merged report loses no
+// count. No value of it may reach a decision (D32).
+message GatewayDropReport {
+  uint64 player_id = 1;           // 0: the Gateway's stream
+  uint64 report_sequence = 2;     // from 1 per link and stream, assigned when written
+  bool final = 3;                 // the stream's last report
+  repeated DropCount counts = 4;  // every non-zero total, reasons ascending, never going back
+  repeated DropSample samples = 5;  // the earliest events since the previous report, at most 4
+  uint64 samples_omitted = 6;     // cumulative: events not sampled
+  uint64 merged_streams = 7;      // Gateway stream only, cumulative: finals merged away
+}
+message DropCount {
+  DropReason reason = 1;
+  uint64 total = 2;  // the Gateway's cumulative drop_ count when written, at least 1
+}
+message DropSample {
+  DropReason reason = 1;
+  uint32 dwell_us = 2;               // pv7 §2 dwell, clamped at 10,000,000
+  uint32 transport_sequence = 3;     // the uplink GYOP sequence or the Gateway's downlink one; 0 if none
+  uint64 movement_epoch = 4;         // command reasons; 0 otherwise
+  uint64 life_generation = 5;        // command reasons; 0 otherwise
+  uint64 first_command_sequence = 6; // command reasons: the bounds of the dropped commands
+  uint64 last_command_sequence = 7;
+  uint64 first_action_id = 8;        // action reasons: the bounds of the dropped ids; ACK reasons: both
+  uint64 last_action_id = 9;         //   are the dropped acknowledged_through
+  uint64 snapshot_tick = 10;         // snapshot reasons; 0 otherwise
+  uint32 item_count = 11;            // items the event dropped
+}
+// Each name is an ingress v1 drop_ key in upper case; the words are defined
+// once, in gateway/ingress_statistics.go, and checked against
+// tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
+// 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
+// (16, 17, 20-26, 43, 44) exist only in pv7-line's intermediate commits: the
+// edge batches delete them with their exits, and they become reserved.
+enum DropReason {
+  DROP_REASON_UNSPECIFIED = 0;
+  DROP_RATE_LIMITED_HELLO_PACKETS = 1;
+  DROP_RATE_LIMITED_INPUT_PACKETS = 2;
+  DROP_RATE_LIMITED_ACTIONS_PACKETS = 3;
+  DROP_RATE_LIMITED_OTHER_PACKETS = 4;
+  DROP_UNAUTHORIZED_HELLO_PACKETS = 5;
+  DROP_UNAUTHORIZED_INPUT_PACKETS = 6;
+  DROP_UNAUTHORIZED_ACTIONS_PACKETS = 7;
+  DROP_UNAUTHORIZED_OTHER_PACKETS = 8;
+  DROP_STALE_SEQUENCE_ACTIONS_PACKETS = 9;
+  DROP_STALE_SEQUENCE_OTHER_PACKETS = 10;
+  DROP_MALFORMED_HELLO_PACKETS = 11;
+  DROP_MALFORMED_INPUT_PACKETS = 12;
+  DROP_MALFORMED_ACTIONS_PACKETS = 13;
+  DROP_INACTIVE_INPUT_PACKETS = 14;
+  DROP_INACTIVE_ACTIONS_PACKETS = 15;
+  DROP_INVALID_ACTIONS_PACKETS = 16;          // transitional (A3)
+  DROP_LINK_REJECTED_ACTIONS_PACKETS = 17;    // transitional (A5)
+  DROP_UNKNOWN_KIND_PACKETS = 18;
+  DROP_ADMISSION_UNKNOWN_PACKETS = 19;
+  DROP_INVALID_ACTIONS_SHOTS = 20;            // transitional (A3)
+  DROP_LINK_REJECTED_ACTIONS_SHOTS = 21;      // transitional (A5)
+  DROP_RESOLVED_TRIM_COMMANDS = 22;           // transitional
+  DROP_REJECTED_LANE_OVERFLOW_COMMANDS = 23;  // transitional
+  DROP_DISCARDED_ON_LEAVE_COMMANDS = 24;      // transitional
+  DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS = 25; // transitional
+  DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS = 26;  // transitional
+  DROP_WRITE_FAILED_SNAPSHOT_PACKETS = 27;
+  DROP_WRITE_FAILED_RESULTS_PACKETS = 28;
+  DROP_WRITE_FAILED_CONTROL_PACKETS = 29;
+  DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS = 30;
+  DROP_REPLACED_SNAPSHOT_PACKETS = 31;
+  DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS = 32;
+  DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS = 33;
+  DROP_RESULTS_OVER_RATE_PACKETS = 34;
+  DROP_UNDECODABLE_DATAGRAMS = 40;
+  DROP_OTHER_VERSION_DATAGRAMS = 41;
+  DROP_UNKNOWN_SESSION_DATAGRAMS = 42;
+  DROP_OLD_TICK_SNAPSHOTS = 43;               // transitional (D1)
+  DROP_REGRESSED_SNAPSHOTS = 44;              // transitional (D2)
+  DROP_COALESCED_SNAPSHOTS = 45;
 }
