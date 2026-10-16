@@ -114,6 +114,8 @@ not predicted pressure.
 * Product Registration 構造の変更
 * Runtime と Editor の Data Contract の変更
 * 大規模な File Move
+* 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加（下記「状態の権威」）
+* Component の Design Invariants に反する変更（下記「Component の設計約束」）
 
 Architecture Delta が必要な場合、変更理由を明確にする。
 
@@ -130,6 +132,40 @@ Architecture Delta が必要な場合、変更理由を明確にする。
 Architecture Delta は禁止事項ではない。
 
 ただし、暗黙の Architecture Drift は禁止する。
+
+### Component の設計約束（Design Invariants）
+
+複数の Agent と複数の版にまたがって守るべき設計意図は、
+思考や会話の中だけに置かず、検査できる約束として文書に書く。
+
+* 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下）に
+  見出し `Design Invariants` の節として書く。
+  見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
+* 可能なものは、守衛となる Test も用意する。
+* Component を変更する前に、その owner の `Design Invariants` 節を読む。
+* 該当節に反する変更は、変更が小さくても Architecture Delta として扱い、ユーザーの同意を得る。
+* 節そのものの変更・削除も、ユーザーの同意を要する Architecture Delta とする。
+* 一般原則（「Ownership の変更は提出する」）だけでは、
+  個々の変更がその Ownership 変更に当たるかを判断できない。
+  判断できる形で書かれた約束だけが、局所的に妥当な修正の積み重ねによる Drift を止められる。
+* 新しい Component を作るとき、または既存の Component に大きな責務を加えるときは、
+  その Component を置き換える条件を、`Design Invariants` 節の中に `Replacement Criteria` として書く
+  （例：Feature を追加するたびに同じ検証をやり直す必要がある、Design Invariants を保てない）。
+  条件は、その Component に機能を積み上げる前に書く。積み上げた後では、失うものを惜しんで判断が歪むためである。
+* 条件を満たしたときは、修正を続けずに、置き換えるか修正を続けるかをユーザーに提案する。
+
+### 状態の権威（State Authority）
+
+判定に使われる状態は、それぞれ一つの Component が権威（Authority）として所有する。
+
+* 他の Component が持ってよいのは、自分の責務のための、再構築でき判定に参加しない状態だけである
+  （接続、session、上限のあるキュー、設定の写し、診断の計数など）。
+* 他の Component が権威を持つ状態の写しを持たない。
+  それに基づく判断（重複除去、統合、古さの判定、衝突の解決、再送の予定など）を行わない。
+* 判断基準：そのフィールドや判断を正しく行うために「権威を持つ Component がすでに何を持っているか」を
+  知る必要があるか。必要なら、それは権威側に属する。
+* 他の Component が権威を持つ状態に関わるフィールドや判断を追加すること自体が Ownership の変更であり、
+  Architecture Delta である。局所的に妥当な修正であっても同じである。
 
 ---
 
@@ -580,6 +616,8 @@ Architecture Drift を確認する。
 * Product-specific Branch が公共層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
+* 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
+* Component の Design Invariants に反する変更
 
 Code Style や Formatting の問題より、
 Architecture / Ownership / Dependency の問題を優先する。
@@ -591,7 +629,60 @@ Architecture / Ownership / Dependency の問題を優先する。
 
 ---
 
-## 14. Before Completing a Task
+## 14. Test and Defect Handling
+
+Test は作業を検証する重要な根拠だが、Test 自身も仮説である。
+Test と実装が一致しないときは、どちらが（あるいは前提や計測経路が）誤っているかを先に判断する。
+Test が正しいと決めつけて実装を合わせることも、実装が正しいと決めつけて Test を合わせることもしない。
+
+同じ問題で Test・計測・判定の方法を 2 回変えても結論が出ない、または見積もりを大きく超えた場合は、
+続けずにユーザーに報告する（使った時間、分かったこと、次の試行で変わる判断）。
+
+### 14.1 Test の結果の扱い
+
+* 再実行で結果が変わる Test は、原因がどれに当たるか（複数ありうる）を切り分けて報告する：
+  実装（Defect）、Test 自身（Script・Analyzer の誤り）、環境（ネットワーク・ホストの状態など）。
+  切り分けられない場合は、その事実を報告する。
+* 受け入れ判定に使う試行（事前宣言した計測など）の失敗は、後の成功で上書きせず、記録に残す。
+  探索のための試行や、不要と判断して取りやめた Test は、この対象ではない。取りやめた場合は理由を書く。
+* 計測に基づく受け入れ判定（閾値、試行回数、再試行の規則）は、結果を見る前に宣言し、ユーザーの承認を得る。
+  結果を見た後に緩めない。宣言した判定が不成立のときは、再実行や修正の前にユーザーに報告する。
+
+### 14.2 Test の根拠
+
+* Test の根拠は、可能な限り Agent の理解以外から得る（観測された現象、実データの Replay、Contract の規則など）。
+* Agent の理解だけに基づく Test を受け入れの唯一の根拠にする場合は、
+  実装を壊したときにその Test が失敗すること（突然変異検査など）で検出力を示すことが望ましい。
+
+### 14.3 Defect の対応
+
+1. 現象を再現する。
+2. 現象を表す Assertion で失敗する Test として固定し、失敗（Red）を確認する。
+3. その Test を変えずに実装を修正し、成功（Green）を確認する。
+4. 修正が Feature Scope や Architecture に影響する場合、§3 に従い Architecture Delta として報告する。
+5. その Test を Regression Test として残す。
+
+* 確率的にしか再現しない場合は、試行回数と判定を宣言し、修正の前後を同じ宣言で比較する。
+* 既知の現象を入れても計測に現れない、または計測が 0 件のときは、測り方を変えて再現させる前に、
+  観測経路が途中で捨てていないか（送った数・届いた数・計数した破棄の収支）を確かめ、ユーザーに報告する。
+* 再現できない（Test として固定できない、必要な試行回数が現実的でない場合を含む）ときは、
+  その事実と観測した証拠を記録し、修正の前に観測手段（診断・計数）を追加して、そこで止めて報告する。
+  「修正済み」とは報告しない。
+* 前提（Contract、Architecture、計測の基準）が誤っている疑いがあり、
+  正しい Test を書けない、または Defect であることを証明できない場合は、
+  修正を進めず、その状況をユーザーに報告する。
+* 原因が特定できない状態で「修正済み」と報告しない。
+
+### 14.4 Test を変える場合
+
+* 既存 Test の判定（期待値、条件、許容差、skip、実行対象からの除外など）を変えるときは、
+  その理由を変更の説明に書く。
+* Test を通すためだけに判定を緩めない。実装の中で Test の入力を識別して分岐しない。
+* 受け入れ判定や Design Invariants の守衛 Test の判定を変えるときは、ユーザーの承認を得る。
+
+---
+
+## 15. Before Completing a Task
 
 作業終了前に以下を確認する。
 
@@ -600,6 +691,7 @@ Architecture / Ownership / Dependency の問題を優先する。
 * Build が成功する。
 * 必要な Test が成功する。
 * 要求された Feature が動作する。
+* 変えた Test の判定と、切り分けた失敗の原因を報告した（§14）。
 
 ### Structural
 
@@ -639,7 +731,7 @@ Architecture Report を無理に生成する必要はない。
 
 ---
 
-## 15. Final Rule
+## 16. Final Rule
 
 Agent の役割は Architecture を完成させることではない。
 
