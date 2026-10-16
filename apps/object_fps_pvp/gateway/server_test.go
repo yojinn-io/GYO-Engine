@@ -65,6 +65,9 @@ type fakeRuntime struct {
 	conn     net.Conn
 	mu       sync.Mutex
 	got      chan *runtime.RuntimeEnvelope
+	// Heartbeats (diagnostics) go apart, so requests read by next and quiet
+	// are only the ones the tests drive; a full channel drops the newest.
+	clocks chan *runtime.ClockSample
 }
 
 func newTestServer(t *testing.T) (*Server, *fakeRuntime) {
@@ -81,7 +84,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeRuntime{listener: listener, got: make(chan *runtime.RuntimeEnvelope, 32)}
+	f := &fakeRuntime{listener: listener, got: make(chan *runtime.RuntimeEnvelope, 32), clocks: make(chan *runtime.ClockSample, 64)}
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -101,6 +104,13 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 			var e runtime.RuntimeEnvelope
 			if proto.Unmarshal(b, &e) != nil {
 				return
+			}
+			if clock := e.GetClock(); clock != nil {
+				select {
+				case f.clocks <- clock:
+				default:
+				}
+				continue
 			}
 			f.got <- &e
 		}

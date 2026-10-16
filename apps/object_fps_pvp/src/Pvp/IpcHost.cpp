@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
+#include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -193,6 +194,10 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
 // publish notification wakes this thread to continue.
 struct IpcHost::Impl {
     using Clock=std::chrono::steady_clock;
+    // The M clock domain of pv7 §2: steady_clock, as the Match trace's time_ns.
+    static std::uint64_t NowMicros() {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+    }
     // The host notifies from its simulation role; Stop detaches this gate
     // first, so no notification reaches a stopped or destroyed IpcHost.
     struct WakeGate {std::mutex mutex;Impl* impl{};};
@@ -215,6 +220,11 @@ struct IpcHost::Impl {
         MatchEventLog events;
         std::map<PlayerId,ActionLane> actionLanes;
         std::uint64_t frames{}; // frames of this connection that passed the version check
+        // Diagnostics only (pv7 §2, §3): the clock sampling with the Gateway
+        // and the one reply to its latest heartbeat (newest wins), written
+        // after controls, action lanes and snapshots; never in controls.
+        ClockSync clock;
+        std::optional<pb::ClockSample> clockReply;
     };
 
     MatchRuntimeHost& host;
@@ -284,6 +294,7 @@ struct IpcHost::Impl {
         socket.set_option(tcp::no_delay(true),error);
         if(!error) socket.non_blocking(true,error);
         session=Session{};
+        session.clock=ClockSync(NowMicros());
         phase=Phase::Connected;
         if(error) {Close("socket setup: "+error.message());return;}
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
@@ -305,6 +316,7 @@ struct IpcHost::Impl {
     // then accept the next connection once the reset completed.
     void Close(const std::string& reason) {
         if(phase!=Phase::Connected) return;
+        if(const auto window=session.clock.Roll(NowMicros(),true)) MatchEventLog::Line(ClockWindowLine(*window));
         MatchEventLog::Line("ipc closed reason="+reason);
         // A Gateway of another version refuses Ready and closes without a
         // frame; a pv7 Gateway sends its version first (pv7 contract §1). An
@@ -404,6 +416,20 @@ struct IpcHost::Impl {
                 // immutable request remains with the sender for retry. The
                 // host counts the admission by reason.
                 static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
+            } else if(message.has_clock()) {
+                // Diagnostics only: measured here and answered once; nothing
+                // reaches the host (D32). A semantic violation is counted and
+                // ignored (pv7 §2).
+                const auto& sample=message.clock();
+                ClockStamp peer{.transmitUs=sample.transmit_us()};
+                if(sample.has_origin_us()) peer.originUs=sample.origin_us();
+                if(sample.has_receive_us()) peer.receiveUs=sample.receive_us();
+                if(const auto echo=session.clock.Observe(peer,NowMicros())) {
+                    if(session.clockReply) session.clock.NoteReplaced();
+                    session.clockReply.emplace();
+                    session.clockReply->set_origin_us(echo->first);
+                    session.clockReply->set_receive_us(echo->second);
+                }
             } else return UnknownMessage(message);
         }
         return std::nullopt;
@@ -454,6 +480,7 @@ struct IpcHost::Impl {
                 for(const auto& player:snapshot->players) if(player.movementSlackSequence) samples.push_back(player.playerId);
                 session.latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now(),std::move(samples)};
             }
+            if(const auto window=session.clock.Roll(NowMicros())) MatchEventLog::Line(ClockWindowLine(*window));
             ScheduleWrite();
         } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
     }
@@ -474,7 +501,7 @@ struct IpcHost::Impl {
             ++it;
         }
         const bool laneDue=nextLane && *nextLane<=now;
-        if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue) {
+        if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue || session.clockReply) {
             waitingWrite=true;
             socket.async_wait(tcp::socket::wait_write,[this,current=connection](const asio::error_code& error) {
                 iterations.fetch_add(1,std::memory_order_relaxed);
@@ -532,6 +559,14 @@ struct IpcHost::Impl {
             if(s.writing.empty() && s.latestSnapshot) {
                 s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
                 s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+            }
+            if(s.writing.empty() && s.clockReply) {
+                // Last in priority; transmit is stamped now, when the frame is chosen.
+                pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
+                *message.mutable_clock()=*s.clockReply;s.clockReply.reset();
+                message.mutable_clock()->set_transmit_us(s.clock.Stamp(NowMicros()));
+                s.writing=wire::Frame(message.SerializeAsString());
+                s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=Clock::now();s.writingSamples.clear();
             }
             s.writeOffset=0;
         }

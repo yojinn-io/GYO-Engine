@@ -117,7 +117,23 @@ message RuntimeEnvelope {
     ActionBatch actions = 17;
     ActionResults action_results = 18;
     PlayerEvicted evicted = 19;
+    ClockSample clock = 20;
   }
+}
+
+// Diagnostics only (pv7 contract §2, §3): one four-timestamp clock sample.
+// Times are the sender's own monotonic clock in microseconds; a time of the
+// other side is only ever copied back (origin_us), never compared directly.
+// No value derived from it may reach a decision.
+message ClockSample {
+  // The transmit_us of the peer's latest ClockSample this side read, as is;
+  // present exactly when receive_us is.
+  optional uint64 origin_us = 1;
+  // When this side read that sample; not after transmit_us.
+  optional uint64 receive_us = 2;
+  // When this side serialized this sample: at least 1 and strictly increasing
+  // per sender and stream.
+  uint64 transmit_us = 3;
 }
 
 message ActionBatch {

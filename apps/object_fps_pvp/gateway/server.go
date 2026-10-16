@@ -85,6 +85,7 @@ type Server struct {
 	snapshotOut             chan []byte
 	resultWake              chan struct{}
 	closeOnce               sync.Once
+	diagnosticsOnce         sync.Once // the last diagnostic window is logged once
 	snapshotReplacements    atomic.Uint64
 	rateAcceptedPackets     atomic.Uint64
 	rateRejectedPackets     atomic.Uint64
@@ -158,6 +159,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	defer cancel()
 	defer s.Close()
 	s.link.run(ctx, s.runtimeMessage, s.runtimeFailed)
+	go s.runDiagnostics(ctx)
 	go s.receiveUDP(ctx)
 	go s.sendUDP(ctx)
 	go s.expire(ctx)
@@ -182,6 +184,7 @@ func (s *Server) Close() {
 		_ = s.http.Close()
 		_ = s.listener.Close()
 		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
+		s.flushDiagnostics()
 		s.flushFinal()
 	})
 }
@@ -281,6 +284,7 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	log.Printf("join reserved player=%v remote=%s", data["player_id"], r.RemoteAddr)
 	writeJSON(w, status, data)
 }
+
 // joinVersion reads only protocol_version from a join body that is one JSON
 // object: missing or null is 0, and anything but an integer in 0..65535 is not
 // a version (400 invalid_join).

@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design`、`proto-rename-v7`、`version-errors` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `heartbeat-sync`。
+**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `time-echo`。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -25,7 +25,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── pv7-design ✓                  「high＋xhigh 檢查｜所有 wire 欄位與 IPC 送達語意一次定完」
 │   ├── proto-rename-v7 ✓             「low｜proto 與套件改名為 v7，版本值仍是 6」
 │   ├── version-errors ✓              「high｜P1：版本 6→7、明確錯誤、凍結 pv7 版分析器」
-│   ├── heartbeat-sync                「high（時鐘域局部 xhigh）｜P2：心跳對時」
+│   ├── heartbeat-sync ✓             「high（時鐘域局部 xhigh）｜P2：心跳對時」
 │   ├── time-echo                     「high｜P3：時間回聲」
 │   ├── drop-report ◆                 「high（列舉與上限局部 xhigh）｜P4：丟棄回報，先照現行出口」
 │   ├── edge-results-resend           「high（通道計時局部 xhigh）｜Match 在 ACK 前重送結果」

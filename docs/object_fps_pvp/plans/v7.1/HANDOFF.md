@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`version-errors` 完成；下一批 `heartbeat-sync` 等使用者說開始。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`heartbeat-sync` 完成（睡眠那段 L2 待做）；下一批 `time-echo` 等使用者說開始。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D99 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D101 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,10 +37,12 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：開始 `heartbeat-sync`（檔位 high，時鐘域局部 xhigh，估 9 h）。
+- **等你決定**：
+  1. `heartbeat-sync` 的睡眠那段 L2：soak 中途讓系統睡眠幾分鐘，量兩端的跳變（只記錄，約 40 分，要你在場）。現在做，或等之後的 L2 一起做。
+  2. 開始 `time-echo`（檔位 high，估 4 h）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`heartbeat-sync`。
-- **最後更新**：2026-10-16，`version-errors` 的四平台 L1 通過；契約文字的兩處依 D99 修改。
+- **下一步**：`time-echo`。
+- **最後更新**：2026-10-16 13:30，`heartbeat-sync` 完成並推送。
 
 ## 閱讀入口
 
@@ -68,6 +70,8 @@
 | D97 | （2026-10-16）開始 `proto-rename-v7`；規劃文件併進 pv7-line 的 PR，pv7-line 在 `claude/pvp-v71-plan` 接著做 | 使用者：「開始 proto-rename-v7。規劃文件併進 pv7-line 的 PR，在這個分支接著做。」；fewer-prs |
 | D98 | （2026-10-16）開 pv7-line 的 draft PR #78（標題與內容用日語），開 Auto-fix；確認 `proto-rename-v7` 的四平台 L1 後開始 `version-errors` | 使用者：「開 pv7-line 的 draft PR（標題與內容用日語），讓四平台 CI 跑 L1。」「為 PR #78 開 Auto-fix。」「CI 可以了」「開始 version-errors。」 |
 | D99 | （2026-10-16）protocol-v7 §1 的兩處條文照建議修改：「版本不符時的告知」加上實作範圍的附註（只有 Gateway 在讀 Ready 時送告知；Ready 之後的不符直接關閉、不送告知）；Gateway 拒絕 join 的 log 行加上 `remote=<addr>`，和既有的 `join refused remote=<addr> code=<code>` 同一系。wire 與實際行為不變 | 使用者：「契約兩處都照建議：§1 加上版本告知範圍的附註；拒絕 log 行加上 remote=<addr>。」；`version-errors` 的 ultracode 審查 architecture-F3、contract-F5 |
+| D100 | （2026-10-16）開始 `heartbeat-sync`（檔位 high，時鐘域局部 xhigh，估 9 h） | 使用者：「開始 heartbeat-sync。」 |
+| D101 | （2026-10-16）會話的 ultracode 開關不覆蓋計畫的檔位：每批照 README 樹狀總覽標的檔位做；標 ultracode 的批才用，標「ultracode（先問）」的到了先問一次；其餘不逐批確認，也不因為開關另開 workflow | 使用者（經分叉會話）：「一開始計劃裡有檔位規劃，以那個為準，計劃太多了，我沒法每一個都確認。」起因：`version-errors` 在開關打開後，事前沒問就跑了審查 workflow |
 
 ## 規劃紀錄（記錄器）
 
@@ -126,6 +130,52 @@
   - 實際約 1.3 h（02:01～03:20，含審查 25 分；估 12 h）。
   - 四平台 L1（手動觸發，`046a0fd`）：run 38784720725，L1 四平台、Quick acceptance、CI gate 全部通過。
 
+- 2026-10-16：D99，protocol-v7 §1 的兩處條文照建議修改（`16216ff`）。
+
+- 2026-10-16 10:22：`heartbeat-sync` 開始（D100，檔位 high，時鐘域局部 xhigh，估 9 h）。一開始依會話的 ultracode 開關啟動了設計 workflow，D101 之後停止（沒有 agent 完成），改照計畫的檔位：high 實作，時鐘域局部 xhigh。
+
+- 2026-10-16：`heartbeat-sync` 實作與驗收。
+  - wire：`runtime_v7.proto` 加 `ClockSample`（欄位 1～3）與 `RuntimeEnvelope.clock`（oneof 20）；Go 綁定照上一批的方式重產。`client_v7` 的 ClockSample 留到 `time-echo` 再加（這批用不到）。
+  - 估計器：Match 的 `ClockSync`（`ClockSync.hpp/.cpp`，放在 ipc 函式庫、不依賴 protobuf，`time-echo` 時 Client 也能用）與 Gateway 的 `clock_sync.go` 是同一套演算法，時間都由呼叫者傳入：
+    - transmit＝max(now, 上一則＋1)；比對自己最近 8 個 transmit；四時間戳公式；負 delay 丟棄並計數。
+    - 語意違規計數後忽略（沒有否決權）；時間 ≥2^53 µs 視為不合法，int64 運算因此精確。
+    - 視窗不用固定格線：滿 10 秒（或連線結束）時結算，offset 取 delay 最小的樣本。
+    - 跳變：兩個視窗的 offset 差，超過 max(1 ms, 100 ppm × 兩樣本的間隔)，再加上兩邊 delay 的一半（各自的不確定度）。
+    - 漂移：跳變之後最多 30 個視窗的最小平方回歸（ppm）。
+    - log 行族兩端同格式：`clock sync window_ms=… samples=… missing=… invalid=… negative_delay=… replaced=… offset_us=… delay_min_us=… delay_max_us=… drift_ppm=… jump=… final=…`（日誌格式在 `log-contract` 之前暫定）。
+  - Match（IpcHost）：
+    - 心跳回覆放在 session 的單槽（新蓋舊，計入 replaced），寫出排在 controls、action lane、snapshot 之後，transmit 在選中框架時才蓋；ScheduleWrite 也看這個槽。
+    - 每次 Pump 檢查視窗；連線關閉時寫最後一個視窗（`final=1`）。
+    - 心跳本身也是框架，所以送過心跳的同版 Gateway 停下時，不再觸發 eof 提示。
+  - Gateway：
+    - Server 擁有的 1 Hz 診斷 goroutine（`diagnostics.go`）組心跳，放進 link 的單槽診斷佇列（新蓋舊並計數）。
+    - writer 只多一條獨立喚醒的分支：寫出這個槽，不呼叫 `take()`、不動 `l.wake` 與動作計時器。
+    - reader 的活性改成以剩餘時間呼叫 Read，只由 Snapshot、JoinResult、Evicted、Error 刷新（ActionResults 與時鐘回覆不刷新）；剩餘 ≤0 時不呼叫 Read，直接以 `runtime liveness: i/o timeout` 失效。活性從 `run()` 起算。
+    - `Server.Close` 時同步寫最後一個視窗（和診斷 goroutine 共用一次）。
+  - D32：
+    - 原始碼守衛：`test_diagnostic_isolation.py`（CTest `object_fps_pvp.diagnostic_isolation`）確認契約列出的決策檔案不引用時鐘符號、估計器只在 I/O 層；Go 的 `TestClockStaysOutOfDecisions` 確認 session 套件與 `server.go` 不引用。
+    - 差分測試：IpcHost＋host（假時鐘，由測試推進 tick；每步以 Leave(99) 的 log 行當柵欄）同一情境跑兩次，一次沒有心跳，一次有極端值的心跳（相隔 10 s、重複、比對不到的 origin、receive 晚於 transmit、跳變）。決策（含由參考年齡判出的 EXPIRED）、join 結果與最後一個 snapshot 逐位元相同；有心跳那次 Match 確實量到樣本。
+  - 測試：
+    - Go：估計器 7 個；活性表格（4 種刷新、2 種不刷新，假時鐘）；實時預算；單槽；寫出分支 3 個（不取資料 pass、不延後計時器、不吃掉資料喚醒）；往返量測；golden bytes；守衛。
+    - C++：估計器 7 個；IPC 4 個（回覆與量測、burst 的「回覆數＋replaced＝送出數」、差分、golden bytes）。
+    - 突變 15 個（`v71-heartbeat-sync`）。
+  - 時鐘域局部 xhigh 檢查（1 位，約 30 分）：沒有 must 級缺陷；活性、寫出分支、鎖順序、時鐘域、D32 隔離都核對為正確。should 4、note 10 都是測試面的缺口：
+    - 已補：寫出分支的計時器與資料喚醒、回覆計數、差分測試量到樣本並正常關閉、golden bytes、活性表格、跳變的兩項容許、驗證順序、Gateway 結束時的最後一個視窗、實時測試的預算放寬到 1 s。
+    - 審查中發現、已修：reader 的活性原本從 goroutine 啟動時起算，改成從 `run()` 起算（測試推進假時鐘時暴露）。
+    - 未做，記在未結事項：見下方。
+  - 驗收（L1，本機）：`test` preset 全量 CTest 71／71；`go vet`、`go test -race -count=3` 通過；權威 digest 同機兩樹比較（base＝v7final `6d3f287`）scale 1、3 各 35 情境 0 差異；突變選出 149 個（這批 15、`v71-version-errors` 14，以及目標檔案在這批被改過的既有突變 120），全部 killed。過程中有兩個先是逾時、判讀失敗，修測試後重跑 killed：
+    - `v7-07-ipc-no-publish-wake`：Match 完全不回應時，IPC 測試逐一等待逾時，超過 CTest 上限。修法：違規測試開頭先用 REQUIRE 做一次檢查；ipc 測試的 TIMEOUT 由 60 秒放寬到 120 秒。
+    - `v71hb-heartbeat-wakes-data`：Go 測試等心跳寫出時沒有截止時間，加上了。
+    - 改過 IPC 測試之後，21 個 ipc 突變重跑一次，全部 killed。
+  - 同機長跑次（只記錄，soak-long 113 個循環約 30 分，pv7 工具與執行檔）：兩端各約 180 個時鐘視窗、約 1810 個樣本。缺樣本、跳變、不合法、負 delay、被替換都是 0；offset 在 30 分鐘內只飄 32～87 µs；delay 最小值的中位數約 0.1 ms；漂移約 0 ppm。soak 本身的判定兩次都沒有通過，都是主機干擾：
+    - 第 1 次（`long/`，10:56～11:29）：Client 的長幀與 gap 發生在第 1246、1399、1599 秒，同一段時間 xhigh 審查者正在反覆跑整套 `go test -race`。
+    - 第 2 次（`long2/`，12:54～13:27）：唯一的異常（Match 的 runtime gap、兩位玩家的 Client gap、111 ms 長幀）全都在第 1206.6 秒，也就是 13:14:18。系統電源紀錄顯示 13:12～13:15 用電池（使用者移動機器）。其餘 Client gap 都是正常的復活（序號 3）。
+    - 判斷：心跳不碰 Client 與模擬，時鐘數據全程正常，所以不算這批的回歸；soak 的正式判定留到之後的 L2。
+    - 睡眠那段（中途讓系統睡眠，量跳變）要你在場，還沒做。
+  - 證據：`build/target/_build/test/logs/pvp-v71-heartbeat-sync-20261016/`。
+  - Architecture Delta：無。新的依賴只在產品內：ipc 函式庫多一個原始檔 `ClockSync.cpp`；Gateway 多 `clock_sync.go`、`diagnostics.go`。Engine 與共通層（`services/gyo_gateway`）沒有改。wire 新增 `ClockSample`（契約 §3 已定）。
+  - 實際約 3.1 h（10:22～13:30，含 xhigh 檢查約 30 分、突變約 1 h、soak 兩次各 30 分；估 9 h）。
+
 ## 未結事項
 
 - **保留的 worktree 與本機分支**：
@@ -137,4 +187,12 @@
 - **檔位**：`pv7-design`、`log-contract` 開始前先問 ultracode（v7 D45）；`pv7-design` 另做 1 次 xhigh 對抗式檢查；每次 L2 宣告前做門檻來源的對抗式檢查（D45）。
 - **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。
 - **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。
+- **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note）：
+  - Match 回覆「排在 controls、action lane、snapshot 之後」沒有可決定的測試（asio 下同一個 socket 可寫優先於可讀），只靠審查與 L2。
+  - 差分測試不到 10 秒，所以視窗只在關閉時結算一次，跳變與漂移沒有在差分中算到（估計器另有單元測試，且結構上隔離）；也不跑滿品質視窗（600 tick × 3），逐出與 160 ms 門檻沒有在差分中判定。要延長會讓 CI 多數十秒。
+  - Match 被 `Stop()`（不經過 `Close`）時沒有最後一個視窗的 log；runner 先停 Gateway，所以平常會走 `Close`。
+  - 活性逾時有兩種字串：Read 逾時是 `read tcp …: i/o timeout`，剩餘 ≤0 是 `runtime liveness: i/o timeout`，兩者都含 `i/o timeout`；在 `log-contract` 統一。
+  - 只為測試存在的狀態：`runtimeLink.now`、`takes`，套件變數 `runtimeLiveness`、`writerIdleWait`、`diagnosticInterval`。`edge-contract` 的白名單（D-14）到時要分類。
+  - 差分測試的結尾等 300 ms 沒有訊息，已改成整體截止 3 秒；`edge-results-resend` 之後 Match 會重送未確認的結果，到時再確認。
+  - L2 的預期（xhigh 推導，〔推論〕）：Windows 上 Go 的單調時鐘解析度可能是 15.6 ms，Gateway 在 Windows 時會出現假的 `jump=1` 與 `negative_delay`（`lan15-windows` 要事前宣告）；macOS 上 Go 用 `mach_absolute_time`（睡眠時停），libc++ 的 steady_clock 可能睡眠時繼續走，所以睡眠那段兩端都預期出現一次約等於睡眠長度的跳變，不算失敗。
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4，PR #79 已合併到 master `23457e1`）：AGENTS.md 不點名產品，而是用 `git grep -n "不可破壞的契約" -- docs` 找各元件的設計約束。把 Gateway 的正式條文寫進 network-architecture 時，「不可破壞的契約」的標題文字要逐字保持不變。

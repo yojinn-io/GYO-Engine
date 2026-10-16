@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
+#include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "runtime_v7.pb.h"
 
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -26,6 +28,8 @@ using asio::ip::tcp;
 namespace pb = object_fps_pvp::runtime::v7;
 // Test bodies sit outside this namespace, where protobuf's own ::pb makes pb ambiguous.
 using Envelope = pb::RuntimeEnvelope;
+using WireDecision = pb::ShotDecision;
+constexpr auto Expired = pb::REJECTION_EXPIRED;
 
 Arena IpcArena() {
     Arena arena;
@@ -341,6 +345,24 @@ public:
         }
     }
 
+    // True once the log holds text at least `times` times, within the deadline.
+    [[nodiscard]] bool ShowsTimes(const std::string& text, std::size_t times, std::chrono::milliseconds timeout = 3000ms) {
+        const auto giveUp = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            {
+                std::scoped_lock lock(mutex_);
+                std::size_t found = 0;
+                for (auto at = text_.find(text); at != std::string::npos; at = text_.find(text, at + text.size())) ++found;
+                if (found >= times) return true;
+            }
+            if (std::chrono::steady_clock::now() >= giveUp) return false;
+            std::this_thread::sleep_for(1ms);
+        }
+    }
+    [[nodiscard]] std::string Text() {
+        std::scoped_lock lock(mutex_);
+        return text_;
+    }
     // The offset of what is logged next.
     [[nodiscard]] std::size_t Size() {
         std::scoped_lock lock(mutex_);
@@ -389,6 +411,8 @@ TEST_CASE("PvP IPC names each protocol violation") {
         return "protocol version mismatch: expected " + std::to_string(wire::ProtocolVersion) + ", received " +
                std::to_string(version);
     };
+    // A Match that never greets fails this case once, not once per violation.
+    REQUIRE(ClosesWith(log, server.address, Framed(std::string(1, '\xff')), "frame parse"));
     // Another Gateway's version notice (only field 1), every older version and
     // the next one.
     for (std::uint32_t version = 1; version <= wire::ProtocolVersion + 1; ++version) {
@@ -709,4 +733,265 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     const auto ipcUnknownPlayerCommands = unknown.rejected[IngressIndex(IngressInputRejection::UnknownPlayer)].commands;
     CHECK(ipcUnknownPlayerCommands == 1);
     CHECK(unknown.received.commands == 1);
+}
+
+namespace {
+pb::RuntimeEnvelope Heartbeat(std::uint64_t transmit, std::optional<std::uint64_t> origin = {},
+                              std::optional<std::uint64_t> receive = {}) {
+    pb::RuntimeEnvelope message;
+    message.set_protocol_version(wire::ProtocolVersion);
+    auto* clock = message.mutable_clock();
+    clock->set_transmit_us(transmit);
+    if (origin) clock->set_origin_us(*origin);
+    if (receive) clock->set_receive_us(*receive);
+    return message;
+}
+
+// The sum of `key` over the logged clock windows.
+std::uint64_t LoggedClockCount(ClogCapture& log, const std::string& key) {
+    std::uint64_t total = 0;
+    const auto text = log.Text();
+    for (auto at = text.find("clock sync "); at != std::string::npos; at = text.find("clock sync ", at + 1)) {
+        const auto line = text.substr(at, text.find('\n', at) - at);
+        const auto field = line.find(" " + key + "=");
+        if (field != std::string::npos) total += std::stoull(line.substr(field + key.size() + 2));
+    }
+    return total;
+}
+} // namespace
+
+// pv7 §3: the Match answers a heartbeat with one clock reply that echoes it,
+// stamped when written; a heartbeat echoing that reply is measured, and the
+// window is logged when the link closes.
+TEST_CASE("PvP IPC answers a heartbeat and measures the echoed reply") {
+    ClogCapture log;
+    Server server;
+    {
+        Gateway gateway(server.address);
+        REQUIRE(gateway.Receive());
+        gateway.Send(Heartbeat(100));
+        const auto first = ReceiveFirst(gateway, [](const auto& message) { return message.has_clock(); });
+        CHECK(first.clock().origin_us() == 100);
+        REQUIRE(first.clock().has_receive_us());
+        CHECK(first.clock().transmit_us() >= first.clock().receive_us());
+        gateway.Send(Heartbeat(200, first.clock().transmit_us(), 199));
+        const auto second = ReceiveFirst(gateway, [](const auto& message) { return message.has_clock(); });
+        CHECK(second.clock().origin_us() == 200);
+        CHECK(second.clock().transmit_us() > first.clock().transmit_us());
+        gateway.Finish();
+    }
+    CHECK(log.Shows("clock sync"));
+    CHECK(log.Shows("samples=1 missing=0 invalid=0 negative_delay=0"));
+    CHECK(log.Shows("final=1"));
+    CHECK_FALSE(log.Shows("ipc hint", 0ms)); // a heartbeat is a frame
+}
+
+// Replies never enter the controls (which close the link over 64): a burst of
+// heartbeats leaves the link open, each answered at most once, newest wins.
+TEST_CASE("PvP IPC keeps heartbeat replies out of the controls") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    constexpr std::uint64_t Heartbeats = 300;
+    for (std::uint64_t transmit = 1; transmit <= Heartbeats; ++transmit) gateway.Send(Heartbeat(transmit));
+    gateway.Send(Join(5));
+    std::uint64_t replies = 0, lastOrigin = 0;
+    bool joined = false;
+    for (int frames = 0; frames < 2000 && !(joined && lastOrigin == Heartbeats); ++frames) {
+        const auto message = gateway.Receive();
+        REQUIRE(message);
+        if (message->has_clock()) {
+            ++replies;
+            CHECK(message->clock().origin_us() > lastOrigin);
+            lastOrigin = message->clock().origin_us();
+        }
+        joined = joined || message->has_join_result();
+    }
+    CHECK_FALSE(gateway.Closed());
+    CHECK(joined);
+    CHECK(lastOrigin == Heartbeats);
+    // No silent exit (D57): every heartbeat was answered or its reply replaced, counted.
+    gateway.Finish();
+    REQUIRE(log.Shows("final=1"));
+    CHECK(replies + LoggedClockCount(log, "replaced") == Heartbeats);
+}
+
+namespace {
+// What the Match decided in one run of the scenario below.
+struct DecisionOutcome {
+    std::map<ActionId, std::string> decisions; // by action id, as serialized
+    std::vector<std::string> joins;            // join results, in order
+    std::string snapshot;                      // the last one written
+    std::uint64_t clockReplies{};
+    std::uint64_t clockSamples{}; // measured by the Match, from its logged windows
+};
+
+pb::RuntimeEnvelope MovementInput(PlayerId player, std::uint64_t sequence, float forward, std::uint64_t observedTick) {
+    pb::RuntimeEnvelope message;
+    message.set_protocol_version(wire::ProtocolVersion);
+    auto* input = message.mutable_input();
+    input->set_player_id(player);
+    input->set_observed_authority_tick(observedTick); // the reference age the host samples
+    input->set_movement_epoch(1);
+    input->set_life_generation(1);
+    auto* command = input->add_commands();
+    command->set_sequence(sequence);
+    command->set_move_forward(forward);
+    return message;
+}
+
+pb::RuntimeEnvelope Shot(PlayerId player, ActionId id, std::uint64_t observedTick, bool reload = false) {
+    pb::RuntimeEnvelope message;
+    message.set_protocol_version(wire::ProtocolVersion);
+    auto* actions = message.mutable_actions();
+    actions->set_player_id(player);
+    auto* shot = actions->add_shots();
+    shot->set_action_id(id);
+    shot->set_life_generation(1);
+    shot->set_observed_authority_tick(observedTick);
+    if (reload) {
+        shot->set_kind(pb::ACTION_RELOAD);
+    } else {
+        shot->set_kind(pb::ACTION_SHOT);
+        shot->set_yaw(0);
+        shot->set_pitch(0);
+    }
+    return message;
+}
+
+// The same frames, with or without clock samples. The host steps on a fake
+// clock the test drives; each step's frames are fenced by a Leave of an
+// absent player, whose log line shows the IPC thread handed them to the host
+// before the step. Clock samples carry extreme values: other-domain times
+// 10 s apart, jumps, repeats, unmatched origins and a receive after transmit.
+DecisionOutcome RunDecisionScenario(bool clockSamples) {
+    ClogCapture log;
+    auto now = Clock::time_point{} + 1000s;
+    MatchRuntimeHost host{IpcArena(), [&now] { return now; }};
+    IpcHost ipc{host, IpcArena()};
+    const auto address = "127.0.0.1:" + std::to_string(FreePort());
+    std::string error;
+    REQUIRE(ipc.Start(address, error));
+    const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(MovementTickSeconds));
+    const auto step = [&] {
+        static_cast<void>(host.Advance(MovementTickSeconds));
+        now += tick;
+    };
+    DecisionOutcome outcome;
+    std::optional<std::uint64_t> lastReply;
+    const auto take = [&](const pb::RuntimeEnvelope& message) {
+        if (message.has_action_results())
+            for (const auto& decision : message.action_results().decisions())
+                outcome.decisions.emplace(decision.action_id(), decision.SerializeAsString());
+        if (message.has_join_result()) outcome.joins.push_back(message.join_result().SerializeAsString());
+        if (message.has_snapshot()) outcome.snapshot = message.snapshot().SerializeAsString();
+        if (message.has_clock()) {
+            ++outcome.clockReplies;
+            lastReply = message.clock().transmit_us();
+        }
+    };
+    Gateway gateway(address);
+    // The accept's reset completes on a step (the Match restarts at tick 0),
+    // then Ready comes; no step runs between the reset and Ready.
+    std::optional<pb::RuntimeEnvelope> ready;
+    for (int attempt = 0; attempt < 4 && !ready; ++attempt) {
+        step();
+        ready = gateway.Receive(1000ms);
+    }
+    REQUIRE(ready);
+    REQUIRE(ready->has_ready());
+    std::size_t fences = 0;
+    std::uint64_t transmit = 1;
+    constexpr int Steps = 60;
+    for (int k = 0; k <= Steps; ++k) {
+        if (clockSamples) {
+            const auto base = static_cast<std::uint64_t>(k + 1) * 10'000'000;
+            gateway.Send(Heartbeat(transmit += 10'000'000));                        // 10 s apart
+            gateway.Send(Heartbeat(transmit));                                      // a repeat
+            transmit += 3;
+            gateway.Send(Heartbeat(transmit, base + 777, base)); // unmatched origin
+            transmit += 3;
+            gateway.Send(Heartbeat(transmit, 5, transmit + 10)); // receive after transmit
+            if (lastReply) { // measured, with a jump every 7th step
+                transmit += k % 7 ? 3 : 900'000'000;
+                gateway.Send(Heartbeat(transmit, *lastReply, transmit - 1));
+            }
+        }
+        std::vector<pb::RuntimeEnvelope> frames;
+        if (k == 0) frames = {Join(1), Join(2)};
+        else {
+            const auto observed = static_cast<std::uint64_t>(k);
+            frames = {MovementInput(1, observed, 1.0f, observed - 1), MovementInput(2, observed, 0.0f, observed - 1)};
+            if (k == 20 || k == 30 || k == 40) frames.push_back(Shot(2, static_cast<ActionId>(k / 10 - 1), observed));
+            if (k == 45) frames.push_back(Shot(2, 4, 1)); // an old reference: expired
+            if (k == 50) frames.push_back(Shot(2, 5, observed, true));
+        }
+        for (const auto& frame : frames) gateway.Send(frame);
+        gateway.Send(Leave(99));
+        REQUIRE(log.ShowsTimes("leave player=99", ++fences));
+        step();
+        while (const auto message = gateway.Receive(1ms)) take(*message);
+    }
+    for (int k = 0; k < 30; ++k) {
+        step();
+        while (const auto message = gateway.Receive(1ms)) take(*message);
+    }
+    // No more steps: what is left arrives, the last snapshot last. Bounded,
+    // as results resent until acknowledged would never fall quiet.
+    for (const auto giveUp = Clock::now() + 3s; Clock::now() < giveUp;) {
+        const auto message = gateway.Receive(300ms);
+        if (!message) break;
+        take(*message);
+    }
+    gateway.Finish(); // the Match logs its last clock window
+    REQUIRE(log.Shows("final=1"));
+    outcome.clockSamples = LoggedClockCount(log, "samples");
+    ipc.Stop();
+    return outcome;
+}
+} // namespace
+
+// D32 (pv7 §2): clock samples never reach a decision. The same frames give
+// the same decisions, join results and final snapshot (positions, combat,
+// slack sample) bit for bit, with no samples and with extreme ones.
+TEST_CASE("PvP IPC decisions do not depend on clock samples") {
+    const auto without = RunDecisionScenario(false);
+    const auto with = RunDecisionScenario(true);
+    REQUIRE(without.decisions.size() == 5);
+    // The reference age decides one of them: the shot of tick 1, seen at tick 45.
+    WireDecision expired;
+    REQUIRE(expired.ParseFromString(without.decisions.at(4)));
+    CHECK(expired.rejection() == Expired);
+    CHECK(with.clockReplies > 0);
+    CHECK(with.clockSamples > 0); // the Match measured, not only answered
+    CHECK(without.clockSamples == 0);
+    CHECK(without.joins == with.joins);
+    CHECK(without.snapshot == with.snapshot);
+    CHECK(without.decisions == with.decisions);
+}
+
+// The ClockSample envelope's bytes, shared with the Gateway's
+// TestClockSampleBytesMatchTheMatchBinding: both bindings agree.
+TEST_CASE("PvP IPC clock samples have the agreed bytes") {
+    const std::string full("\x08\x07\xa2\x01\x06\x08\x01\x10\x02\x18\x03", 11);
+    const std::string transmitOnly("\x08\x07\xa2\x01\x02\x18\x03", 7);
+    Envelope message;
+    message.set_protocol_version(7);
+    message.mutable_clock()->set_origin_us(1);
+    message.mutable_clock()->set_receive_us(2);
+    message.mutable_clock()->set_transmit_us(3);
+    CHECK(message.SerializeAsString() == full);
+    message.mutable_clock()->clear_origin_us();
+    message.mutable_clock()->clear_receive_us();
+    CHECK(message.SerializeAsString() == transmitOnly);
+    Envelope back;
+    REQUIRE(back.ParseFromString(full));
+    CHECK(back.clock().has_origin_us());
+    CHECK(back.clock().origin_us() == 1);
+    CHECK(back.clock().receive_us() == 2);
+    CHECK(back.clock().transmit_us() == 3);
+    REQUIRE(back.ParseFromString(transmitOnly));
+    CHECK_FALSE(back.clock().has_origin_us());
+    CHECK_FALSE(back.clock().has_receive_us());
 }

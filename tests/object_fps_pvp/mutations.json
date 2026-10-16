@@ -3699,6 +3699,156 @@
       "replace": "",
       "check": "ipc",
       "expect": "IpcHost\\(host, small\\)"
+    },
+    {
+      "id": "v71hb-read-past-deadline",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Gateway reads the runtime link past its liveness budget, whose non-positive timeout cancels the deadline",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tif remaining <= 0 {\n",
+      "replace": "\t\t\tif remaining < -time.Hour {\n",
+      "check": "go",
+      "expect": "kept the runtime link alive"
+    },
+    {
+      "id": "v71hb-clock-refreshes-liveness",
+      "batch": "v71-heartbeat-sync",
+      "what": "A clock reply keeps the runtime link alive",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tcase *runtime.RuntimeEnvelope_Clock:\n\t\t\t\tl.observeClock(",
+      "replace": "\t\t\tcase *runtime.RuntimeEnvelope_Clock:\n\t\t\t\tlive = l.now()\n\t\t\t\tl.observeClock(",
+      "check": "go",
+      "expect": "kept the runtime link alive"
+    },
+    {
+      "id": "v71hb-results-refresh-liveness",
+      "batch": "v71-heartbeat-sync",
+      "what": "Action results keep the runtime link alive",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tcase *runtime.RuntimeEnvelope_ActionResults:\n\t\t\t\treceive(&message)\n",
+      "replace": "\t\t\tcase *runtime.RuntimeEnvelope_ActionResults:\n\t\t\t\tlive = l.now()\n\t\t\t\treceive(&message)\n",
+      "check": "go",
+      "expect": "kept the runtime link alive"
+    },
+    {
+      "id": "v71hb-heartbeat-wakes-data",
+      "batch": "v71-heartbeat-sync",
+      "what": "The heartbeat wakes the data writer instead of its own slot's",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tcase l.diagnosticWake <- struct{}{}:\n",
+      "replace": "\tcase l.wake <- struct{}{}:\n",
+      "check": "go",
+      "expect": "wake 1, diagnostic wake 0"
+    },
+    {
+      "id": "v71hb-diagnostic-pass-takes-data",
+      "batch": "v71-heartbeat-sync",
+      "what": "A diagnostic write also takes a data pass and resets the action timer",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\t\treturn\n\t\t\t\t}\n\t\t\t\tcontinue\n",
+      "replace": "\t\t\t\t\treturn\n\t\t\t\t}\n",
+      "check": "go",
+      "expect": "diagnostic writes took [1-9]"
+    },
+    {
+      "id": "v71hb-go-offset-sign",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Gateway's clock offset takes the reply leg with the wrong sign",
+      "file": "apps/object_fps_pvp/gateway/clock_sync.go",
+      "find": "(int64(t3) - int64(t4))) / 2",
+      "replace": "(int64(t4) - int64(t3))) / 2",
+      "check": "go",
+      "expect": "FAIL: TestClockSampleFollowsTheFourTimestampFormula"
+    },
+    {
+      "id": "v71hb-stamp-not-increasing",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Match stamps a transmit that does not increase",
+      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "find": "    lastTransmitUs_ = std::max(nowUs, lastTransmitUs_ + 1);\n",
+      "replace": "    lastTransmitUs_ = nowUs;\n",
+      "check": "ipc",
+      "expect": "clock\\.Stamp\\(0\\) == 1"
+    },
+    {
+      "id": "v71hb-origin-unchecked",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Match measures a reply whose origin is none of its remembered transmits",
+      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "find": "    if (t2 > t3 || std::find(transmits_.begin(), transmits_.end(), t1) == transmits_.end()) {\n",
+      "replace": "    if (t2 > t3) {\n",
+      "check": "ipc",
+      "expect": "window->invalid == 5"
+    },
+    {
+      "id": "v71hb-clock-reaches-reference",
+      "batch": "v71-heartbeat-sync",
+      "what": "A clock sample reaches a decision: it shifts the shot's observed tick (reference age)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),",
+      "replace": "batch.shots.push_back({shot.action_id(),shot.observed_authority_tick()+(session.clock.Echo()?30u:0u),",
+      "check": "ipc",
+      "expect": "without\\.decisions == with\\.decisions"
+    },
+    {
+      "id": "v71hb-diagnostic-branch-resets-timer",
+      "batch": "v71-heartbeat-sync",
+      "what": "A diagnostic write resets the writer's action timer",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\t\treturn\n\t\t\t\t}\n\t\t\t\tcontinue\n",
+      "replace": "\t\t\t\t\treturn\n\t\t\t\t}\n\t\t\t\ttimer.Reset(writerIdleWait)\n\t\t\t\tcontinue\n",
+      "check": "go",
+      "expect": "heartbeats postponed the timer"
+    },
+    {
+      "id": "v71hb-diagnostic-branch-eats-wake",
+      "batch": "v71-heartbeat-sync",
+      "what": "A diagnostic write consumes a data wake-up that arrived meanwhile",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\t\treturn\n\t\t\t\t}\n\t\t\t\tcontinue\n",
+      "replace": "\t\t\t\t\treturn\n\t\t\t\t}\n\t\t\t\tselect {\n\t\t\t\tcase <-l.wake:\n\t\t\t\tdefault:\n\t\t\t\t}\n\t\t\t\tcontinue\n",
+      "check": "go",
+      "expect": "round [0-9]+: [0-9]+ data passes"
+    },
+    {
+      "id": "v71hb-reply-replaced-uncounted",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Match replaces an unsent clock reply without counting it",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    if(session.clockReply) session.clock.NoteReplaced();\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "LoggedClockCount\\(log, \"replaced\"\\) == Heartbeats"
+    },
+    {
+      "id": "v71hb-jump-without-uncertainty",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Match's jump rule ignores the samples' uncertainty",
+      "file": "apps/object_fps_pvp/src/Pvp/ClockSync.cpp",
+      "find": "> allowance + uncertainty) {",
+      "replace": "> allowance) {",
+      "check": "ipc",
+      "expect": "CHECK_FALSE\\( first->jump \\)"
+    },
+    {
+      "id": "v71hb-go-jump-drift-allowance",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Gateway's jump rule allows 1000 times less drift",
+      "file": "apps/object_fps_pvp/gateway/clock_sync.go",
+      "find": "int64(span/(1_000_000/clockJumpAllowancePpm))",
+      "replace": "int64(span/(1_000_000_000/clockJumpAllowancePpm))",
+      "check": "go",
+      "expect": "drift allowance"
+    },
+    {
+      "id": "v71hb-go-transmit-zero",
+      "batch": "v71-heartbeat-sync",
+      "what": "The Gateway takes a first peer transmit of 0",
+      "file": "apps/object_fps_pvp/gateway/clock_sync.go",
+      "find": "\tif peer.transmit < 1 || peer.transmit >= clockMaxTimeUs",
+      "replace": "\tif peer.transmit >= clockMaxTimeUs",
+      "check": "go",
+      "expect": "transmit 0 taken"
     }
   ]
 }

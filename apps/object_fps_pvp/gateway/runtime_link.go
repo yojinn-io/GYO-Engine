@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -57,7 +58,27 @@ type runtimeLink struct {
 	writerStarted bool
 	writerExited  chan struct{}
 	writerOnce    sync.Once
+	// Diagnostics only (pv7 §2, §3). The single diagnostic slot (newest
+	// wins), written by the writer on its own wake-up: it never touches the
+	// data lanes, l.wake or the action timer. clock is the sampling with the
+	// Match, under its own leaf lock (after s.mu and l.mu).
+	diagnostic     *runtime.RuntimeEnvelope
+	diagnosticWake chan struct{}
+	clockMu        sync.Mutex
+	clock          *clockSync
+	// now is the reader's clock for liveness; tests replace it.
+	now func() time.Time
+	// Diagnostics only: write passes taken; a diagnostic write takes none.
+	takes uint64
 }
+
+// runtimeLiveness: the reader fails the link when no Snapshot, JoinResult,
+// Evicted or Error arrived for this long (pv7 §2). Tests shorten it.
+var runtimeLiveness = 5 * time.Second
+
+// writerIdleWait is how long the writer sleeps with no action deadline; tests
+// lengthen it to count the passes something else caused.
+var writerIdleWait = actionSendInterval
 
 // The write of one runtime frame. Tests replace it to block or fail a write
 // the writer goroutine is in.
@@ -91,7 +112,8 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{})}, ready, nil
+	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{}),
+		diagnosticWake: make(chan struct{}, 1), clock: newClockSync(gatewayMicros(time.Now())), now: time.Now}, ready, nil
 }
 
 // decodeRuntime checks the version before the content (pv7 contract §1). Field
@@ -504,6 +526,7 @@ type linkWrite struct {
 func (l *runtimeLink) take() []linkWrite {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.takes++
 	writes := make([]linkWrite, 0, len(l.controls)+len(l.inputs)+len(l.rejected))
 	for _, message := range l.controls {
 		writes = append(writes, linkWrite{message: message})
@@ -660,7 +683,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 		// batches keep a strict ActionSendRate interval from each completed
 		// write; this timer wakes the loop at the earliest such deadline, so a
 		// resend neither waits for an unrelated wake nor rides every wake.
-		timer := time.NewTimer(actionSendInterval)
+		timer := time.NewTimer(writerIdleWait)
 		defer timer.Stop()
 		for {
 			select {
@@ -670,6 +693,14 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				return
 			case <-l.wake:
 			case <-timer.C:
+			case <-l.diagnosticWake:
+				// Only the diagnostic slot: no take(), no timer reset (pv7 §2).
+				if err := l.writeDiagnostic(); err != nil {
+					stopped()
+					fail(err)
+					return
+				}
+				continue
 			}
 			if err := l.write(l.take()); err != nil {
 				// This goroutine counts nothing more. The failure reaches
@@ -678,7 +709,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				fail(err)
 				return
 			}
-			wait := actionSendInterval
+			wait := writerIdleWait
 			l.mu.Lock()
 			if deadline, ok := l.nextActionDeadline(); ok {
 				wait = max(time.Until(deadline), 0)
@@ -687,9 +718,23 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			timer.Reset(wait)
 		}
 	}()
+	// Liveness counts from run, not from when the reader goroutine starts.
+	live := l.now()
 	go func() {
 		for {
-			payload, err := l.conn.Read(5 * time.Second)
+			// Only Snapshot, JoinResult, Evicted and Error refresh liveness
+			// (pv7 §2): results and clock replies are sent by the Match's IPC
+			// thread, which answers even when the simulation is stuck.
+			remaining := runtimeLiveness - l.now().Sub(live)
+			if remaining <= 0 {
+				// A timeout of zero or less would cancel the read deadline
+				// (framing), so the link fails here as a timed-out read does.
+				if ctx.Err() == nil {
+					fail(fmt.Errorf("runtime liveness: %w", os.ErrDeadlineExceeded))
+				}
+				return
+			}
+			payload, err := l.conn.Read(remaining)
 			var message runtime.RuntimeEnvelope
 			if err == nil {
 				var version uint64
@@ -707,15 +752,94 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				return
 			}
 			switch message.Message.(type) {
-			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error, *runtime.RuntimeEnvelope_ActionResults,
-				*runtime.RuntimeEnvelope_Evicted:
+			case *runtime.RuntimeEnvelope_JoinResult, *runtime.RuntimeEnvelope_Snapshot, *runtime.RuntimeEnvelope_Error, *runtime.RuntimeEnvelope_Evicted:
+				live = l.now()
 				receive(&message)
+			case *runtime.RuntimeEnvelope_ActionResults:
+				receive(&message)
+			case *runtime.RuntimeEnvelope_Clock:
+				l.observeClock(message.GetClock(), time.Now())
 			default:
 				fail(errors.New("unexpected runtime message"))
 				return
 			}
 		}
 	}()
+}
+
+// heartbeat queues the runtime link heartbeat built now (the Server's 1 Hz
+// diagnostic timer, pv7 §3) and closes the clock window when it is due; the
+// window is returned for the log. Diagnostics only.
+func (l *runtimeLink) heartbeat(now time.Time) (clockWindow, bool) {
+	l.clockMu.Lock()
+	sample := &runtime.ClockSample{}
+	if origin, receive, ok := l.clock.echo(); ok {
+		sample.OriginUs, sample.ReceiveUs = &origin, &receive
+	}
+	window, rolled := l.clock.roll(gatewayMicros(now), false)
+	l.clockMu.Unlock()
+	l.queueDiagnostic(&runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion, Message: &runtime.RuntimeEnvelope_Clock{Clock: sample}})
+	return window, rolled
+}
+
+// finalClockWindow closes the clock window with the link.
+func (l *runtimeLink) finalClockWindow(now time.Time) clockWindow {
+	l.clockMu.Lock()
+	defer l.clockMu.Unlock()
+	window, _ := l.clock.roll(gatewayMicros(now), true)
+	return window
+}
+
+// queueDiagnostic puts a diagnostic envelope in the single slot (newest wins,
+// a replaced one is counted) and wakes the writer on its own channel only.
+func (l *runtimeLink) queueDiagnostic(message *runtime.RuntimeEnvelope) {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	replaced := l.diagnostic != nil
+	l.diagnostic = message
+	l.mu.Unlock()
+	if replaced {
+		l.clockMu.Lock()
+		l.clock.noteReplaced()
+		l.clockMu.Unlock()
+	}
+	select {
+	case l.diagnosticWake <- struct{}{}:
+	default:
+	}
+}
+
+// writeDiagnostic writes the slot's envelope, if any. A heartbeat's transmit
+// is stamped here, when it is serialized (pv7 §3).
+func (l *runtimeLink) writeDiagnostic() error {
+	l.mu.Lock()
+	message := l.diagnostic
+	l.diagnostic = nil
+	l.mu.Unlock()
+	if message == nil {
+		return nil
+	}
+	if sample := message.GetClock(); sample != nil {
+		l.clockMu.Lock()
+		sample.TransmitUs = l.clock.stamp(gatewayMicros(time.Now()))
+		l.clockMu.Unlock()
+	}
+	payload, err := proto.Marshal(message)
+	if err == nil {
+		err = runtimeWrite(l.conn, payload, 3*time.Second)
+	}
+	return err
+}
+
+// observeClock measures a Match clock reply read at receivedAt. Diagnostics
+// only: nothing here refreshes liveness or reaches a decision.
+func (l *runtimeLink) observeClock(sample *runtime.ClockSample, receivedAt time.Time) {
+	l.clockMu.Lock()
+	defer l.clockMu.Unlock()
+	l.clock.observe(clockStamp{origin: sample.OriginUs, receive: sample.ReceiveUs, transmit: sample.TransmitUs}, gatewayMicros(receivedAt))
 }
 
 func (l *runtimeLink) writerExitedLocked() chan struct{} {
@@ -746,6 +870,7 @@ func (l *runtimeLink) close() {
 	l.closed = true
 	close(l.done)
 	l.controls = nil
+	l.diagnostic = nil
 	for id, in := range l.inputs {
 		l.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))
 	}
