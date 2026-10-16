@@ -24,10 +24,12 @@
 | `fwd_rejected_lane_input_packets`（＝`fwd_routed_epoch_mismatch_inputs`） | 4140 | backpressure、downstream-1000ms、respawn | 依副本判斷 epoch 不符，走拒絕線 |
 | `drop_invalid_actions_*`（A3） | 42 | duplicate-reorder-conflict | Gateway 依帳本副本丟掉動作 |
 | `drop_stale_sequence_actions_packets` | 436 | network0／20／40、08c session | 舊序號的 Actions 被丟 |
-| `fwd_written_duplicate_commands` | 約 201 萬（每個 clean 跑次約 1.15 萬） | 所有案例 | Gateway 擋掉的重複命令（不是損失）。(a) 之後改由 Match 處理 |
+| `fwd_written_duplicate_commands` | 約 201 萬（每個 clean-60 跑次約 3.84k；更正見下） | 所有案例 | Gateway 擋掉的重複命令（不是損失）。(a) 之後改由 Match 處理 |
 | `drop_old_tick_snapshots`、`drop_regressed_snapshots`（D1、D2） | 0 | — | (a) 下可以移除的 snapshot 守衛 |
 
-結論：有狀態的出口在實際跑次中會發生，其中一部分是 Match 不知道的丟棄。評審提出的「全部為 0 就改選 (c)」條件不成立。另一方面，(a) 會讓 Match 多處理每個 clean 跑次約 1.15 萬個重複命令，負載要在 `edge-input-passthrough` 的 L2 實測。
+結論：有狀態的出口在實際跑次中會發生，其中一部分是 Match 不知道的丟棄。評審提出的「全部為 0 就改選 (c)」條件不成立。另一方面，(a) 會讓 Match 多處理這些重複命令（每個 clean-60 跑次約 3.84k、quad 約 7.8k、30 分鐘 soak 約 43 萬），負載要在 `edge-input-passthrough` 的 L2 實測。
+
+更正（2026-10-16，`edge-input-passthrough` 的 L2 準備）：原本寫「每個 clean 跑次約 1.15 萬」，是把總數除錯了跑次數；總數 2,015,166 經重算逐位相同。這個數字只用來提醒負載要實測，不是 D-8 的依據；更正後 (a) 的代價比原估小，結論不變。以 L2 的預測 P1、P2 與實測為準。
 
 ## 三個方向
 

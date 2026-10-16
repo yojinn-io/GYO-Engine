@@ -120,6 +120,8 @@ public:
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
+    // A snapshot of the given tick; the next Snapshot follows it.
+    void SnapshotAt(std::uint64_t at,std::uint64_t resolved){tick=at-1;Snapshot(resolved);}
     // A snapshot of the given number of players (ids 1..count), player 1 first.
     void Crowded(unsigned count) {
         pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
@@ -313,6 +315,16 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto beforeEpoch=connection.State().actionTransport;
     ++gateway.epoch;gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().snapshot->players.at(0).movementEpoch==gateway.epoch;});
+    {   // pv7 §2a (D-12): a newer tick whose movement epoch goes back is never applied, not
+        // even until the next snapshot (the mock answers each Hello with one).
+        const auto keptTick=connection.State().snapshot->tick;
+        --gateway.epoch;gateway.SnapshotAt(keptTick+1,0);++gateway.epoch;
+        bool applied=false;
+        const auto until=Clock::now()+60ms;
+        gateway.Until([&]{applied=applied || connection.State().snapshot->players.at(0).movementEpoch<gateway.epoch;
+            return Clock::now()>=until;});
+        Require(!applied,"the Client applied an old, repeated or regressed snapshot");
+    }
     Require(connection.State().actionTransport.retained==beforeEpoch.retained &&
         connection.State().actionTransport.unconsumed==31,"movement epoch erased action results");
     for(unsigned n=0;n<MaxReceivedSnapshots+16;++n)gateway.Snapshot(0);
@@ -451,6 +463,17 @@ int main() {
         gateway.Snapshot(6);
         gateway.Until([&]{const auto state=connection.State();
             return state.snapshot && state.snapshot->tick==fullTick+2 && state.snapshot->players.size()==1;});
+        // pv7 §2a (D-12): the Gateway no longer drops an old or regressed
+        // snapshot; the Client keeps only a newer tick with no cursor going back.
+        const auto keptTick=connection.State().snapshot->tick;
+        gateway.SnapshotAt(keptTick,6);     // the same tick again
+        gateway.SnapshotAt(keptTick-1,6);   // an older tick
+        gateway.SnapshotAt(keptTick+1,5);   // newer, but the cursor goes back
+        gateway.UntilTime(Clock::now()+60ms);
+        Require(connection.State().snapshot->tick==keptTick && Acknowledged(connection,6),
+            "the Client applied an old, repeated or regressed snapshot");
+        gateway.SnapshotAt(keptTick+2,6);
+        gateway.Until([&]{const auto state=connection.State();return state.snapshot && state.snapshot->tick==keptTick+2;});
         gateway.autoAck=true;
         const auto sixtyBegin=gateway.attempts.size();
         const auto frameStart=Clock::now();

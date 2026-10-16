@@ -164,7 +164,7 @@ func TestEveryReportedCounterReachesTheNextReport(t *testing.T) {
 		}
 	}
 	l := &runtimeLink{drops: newDropLedger()}
-	l.countLocked(5, playerDropResolvedTrimCommands, 3)
+	l.countLocked(5, playerDropDiscardedOnLeaveActionsShots, 3)
 	l.countLocked(5, playerDropClearedOnCloseCommands, 2) // logged only
 	if r := l.drops.report(5, time.Now()); r == nil || len(r.Counts) != 1 || r.Counts[0].Total != 3 {
 		t.Fatalf("link counters: %v", r)
@@ -247,7 +247,7 @@ func TestReplacedSnapshotIsCountedForThePlayersStillToServe(t *testing.T) {
 		link: &runtimeLink{drops: newDropLedger()}}
 	for id := uint64(1); id <= 4; id++ {
 		peer := newActiveSession(t, id)
-		s.players[id] = &reservation{lifeGeneration: 1, playerID: id, session: peer, phase: active}
+		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
 	}
 	frame := snapshotFrame{payload: []byte{1}, tick: 5}
 	players := []uint64{1, 2, 3, 4}

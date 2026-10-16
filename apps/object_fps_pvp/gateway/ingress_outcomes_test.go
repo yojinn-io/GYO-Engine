@@ -13,7 +13,6 @@ import (
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
 	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // ingressTake is what the Server and its link hand over, per player and
@@ -184,7 +183,7 @@ func reservePlayer8(t *testing.T, f *outcomeFixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &reservation{playerID: 8, phase: reserved, session: peer, movementEpoch: 1, lifeGeneration: 1, commands: map[uint64]*runtime.MovementCommand{}}
+	p := &reservation{playerID: 8, phase: reserved, session: peer}
 	f.s.players[8], f.s.sessions[peer.ID] = p, p
 	f.p = p
 	f.endpoint = netip.MustParseAddrPort("127.0.0.1:29008")
@@ -218,7 +217,7 @@ func outcomeCases() []outcomeCase {
 		// The runtime link fails on the datagram: dropped as for an unavailable room.
 		{name: "link_closed/input", setup: closeLink, fatal: true, gateway: gatewayDropRoomUnavailableDatagrams,
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 1))) })},
-		{name: "link_closed/rejected_lane", setup: closeLink, fatal: true, gateway: gatewayDropRoomUnavailableDatagrams,
+		{name: "link_closed/input_epoch", setup: closeLink, fatal: true, gateway: gatewayDropRoomUnavailableDatagrams,
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(2, moves(1, 1))) })},
 		{name: "link_closed/actions", setup: closeLink, fatal: true, gateway: gatewayDropRoomUnavailableDatagrams,
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 2, shotsMessage(1)) })},
@@ -309,35 +308,37 @@ func outcomeCases() []outcomeCase {
 		// Input.
 		{name: "main/input", player: one(playerFwdMainInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 2))) })},
-		{name: "rejected_lane/input_epoch", player: one(playerFwdRejectedLaneInputPackets),
+		// Since pv7 §2a every decoded window goes as it came: another epoch, a
+		// far future, a conflict and a copy are main forwards too.
+		{name: "main/input_epoch", player: one(playerFwdMainInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(2, moves(1, 1))) })},
-		{name: "rejected_lane/input_future", player: one(playerFwdRejectedLaneInputPackets),
+		{name: "main/input_future", player: one(playerFwdMainInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(1, moves(40, 40))) })},
-		{name: "rejected_lane/input_conflict", player: one(playerFwdRejectedLaneInputPackets),
+		{name: "main/input_conflict", player: one(playerFwdMainInputPackets),
 			setup: func(t *testing.T, f *outcomeFixture) {
 				f.send(t, f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 1))))
 			},
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 3, inputMessage(1, conflicting)) })},
-		{name: "rejected_lane/input_link_refused", player: one(playerFwdRejectedLaneInputPackets),
+		{name: "main/input_resolved_conflict", player: one(playerFwdMainInputPackets),
 			setup: func(t *testing.T, f *outcomeFixture) {
 				f.send(t, f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 2))))
 				sequences(f.s.link)
 				resolve(f.s, 10, 2)
 			},
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 3, inputMessage(1, conflicting)) })},
-		{name: "written_duplicate/input", player: one(playerFwdWrittenDuplicateInputPackets),
+		{name: "main/input_copy", player: one(playerFwdMainInputPackets),
 			setup: func(t *testing.T, f *outcomeFixture) {
 				f.send(t, f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 2))))
 				sequences(f.s.link)
 			},
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 3, inputMessage(1, moves(1, 2))) })},
-		// ★ A stale sequence counts only as stale, on any lane (D55 ③). The
-		// commands were never written, or dedup would hide a drop.
+		// ★ A stale sequence counts only as stale, whatever the window holds
+		// (D55 ③).
 		{name: "stale_sequence/input_main", setup: stale, player: one(playerFwdStaleSequenceInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 4, inputMessage(1, moves(2, 2))) })},
-		{name: "stale_sequence/input_rejected_lane", setup: stale, player: one(playerFwdStaleSequenceInputPackets),
+		{name: "stale_sequence/input_epoch", setup: stale, player: one(playerFwdStaleSequenceInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 4, inputMessage(2, moves(1, 1))) })},
-		{name: "stale_sequence/input_written_duplicate", setup: stale, player: one(playerFwdStaleSequenceInputPackets),
+		{name: "stale_sequence/input_copy", setup: stale, player: one(playerFwdStaleSequenceInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 4, inputMessage(1, moves(3, 3))) })},
 		{name: "malformed/input_stale", setup: stale, player: one(playerDropMalformedInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.raw(adapter.Input, 4, garbage) })},
@@ -504,29 +505,6 @@ func TestRateLimitedDropsSumToTheLimiterCount(t *testing.T) {
 	checkIngressConservation(t, "two players", total, s.rateRejectedPackets.Load())
 }
 
-// D1 and D2 (D55 ②): a snapshot whose tick is not after the last one, or
-// in which a player's cursor goes back, is refused and counted.
-func TestGatewayCountsRefusedSnapshots(t *testing.T) {
-	s, _, _, _ := actionFixture(t)
-	resolve(s, 10, 2)
-	resolve(s, 10, 3) // same tick
-	resolve(s, 9, 3)  // older tick
-	resolve(s, 11, 1) // cursor 2 goes back to 1
-	resolve(s, 12, 3)
-	_, gateway := s.takeIngress()
-	if gateway[gatewayDropOldTickSnapshots] != 2 || gateway[gatewayDropRegressedSnapshots] != 1 {
-		t.Fatalf("refused snapshots counted %s", countedNames(gateway[:], gatewayIngressKeys[:], gatewayReceivedDatagrams))
-	}
-	if s.lastSnapshot != 12 {
-		t.Fatalf("snapshot after the refused ones not accepted: last tick %d", s.lastSnapshot)
-	} // The same entry reports them (pv7 §4, 43 and 44), each with its tick.
-	r := s.link.drops.report(0, time.Now())
-	if r == nil || totalsOf(r)[runtime.DropReason_DROP_OLD_TICK_SNAPSHOTS] != 2 || totalsOf(r)[runtime.DropReason_DROP_REGRESSED_SNAPSHOTS] != 1 ||
-		r.Samples[0].SnapshotTick != 10 || r.Samples[1].SnapshotTick != 9 || r.Samples[2].SnapshotTick != 11 {
-		t.Fatalf("refused snapshots reported %v", r)
-	}
-}
-
 // A player's counters outlive its reservation until taken: a Leave or a
 // runtime failure loses none of its outcomes.
 func TestPlayerIngressOutlivesTheReservation(t *testing.T) {
@@ -539,27 +517,5 @@ func TestPlayerIngressOutlivesTheReservation(t *testing.T) {
 	players, _ := s.takeIngress()
 	if c := players[7]; c == nil || c[playerReceivedDatagrams] != 1 || c[playerFwdMainInputPackets] != 1 {
 		t.Fatalf("removed player's outcomes were lost: %v", players[7])
-	}
-}
-
-// The link tells the Server when a window held only written copies: its
-// datagram is then a written duplicate, not a main-lane forward.
-func TestRuntimeLinkReportsAWholeCopy(t *testing.T) {
-	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1)}
-	for i, c := range []struct {
-		first, last uint64
-		copies      bool
-	}{{1, 2, false}, {1, 2, true}, {1, 3, false}} {
-		var copies bool
-		if err := l.inputWindow(linkWindow(1, 1, c.first, c.last), &copies); err != nil {
-			t.Fatal(err)
-		}
-		if copies && !c.copies {
-			t.Fatalf("window %d: link reported a partial copy as whole", i)
-		}
-		if !copies && c.copies {
-			t.Fatalf("window %d: link did not report a whole copy", i)
-		}
-		sequences(l)
 	}
 }

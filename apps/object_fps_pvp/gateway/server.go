@@ -40,19 +40,15 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
-	actions        *actionWindow
-	packetWindow   time.Time
-	packetCount    uint64
-	session        *session.Session
-	playerID       uint64
-	requestID      string
-	phase          phase
-	joinStarted    time.Time
-	lastResolved   uint64
-	movementEpoch  uint64
-	lifeGeneration uint64
-	commands       map[uint64]*runtime.MovementCommand
-	outSequence    uint32
+	actions      *actionWindow
+	packetWindow time.Time
+	packetCount  uint64
+	session      *session.Session
+	playerID     uint64
+	requestID    string
+	phase        phase
+	joinStarted  time.Time
+	outSequence  uint32
 	// Diagnostics only: datagrams of this session and the last arrival, and
 	// the intervals between this session's writes to its Client.
 	received     uint64
@@ -88,8 +84,6 @@ type Server struct {
 	sessions             map[uint64]*reservation
 	requests             map[string]*reservation
 	nextPlayer           uint64
-	lastSnapshot         uint64
-	hasSnapshot          bool
 	http                 *http.Server
 	listener             net.Listener
 	udp                  *net.UDPConn
@@ -347,8 +341,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1, lifeGeneration: 1,
-		commands: make(map[uint64]*runtime.MovementCommand)}
+	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
 	s.requests[request.RequestID] = player
@@ -649,40 +642,9 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			s.mu.Unlock()
 			return
 		}
-		if s.hasSnapshot && out.Tick <= s.lastSnapshot {
-			s.countGatewayLocked(gatewayDropOldTickSnapshots, dropEvent{at: time.Now(), tick: out.Tick})
-			s.mu.Unlock()
-			return
-		}
-		for _, state := range out.Players {
-			if p := s.players[state.PlayerId]; p != nil &&
-				(state.LifeGeneration < p.lifeGeneration || state.MovementEpoch < p.movementEpoch ||
-					(state.LifeGeneration > p.lifeGeneration && state.MovementEpoch <= p.movementEpoch) ||
-					(state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
-				s.countGatewayLocked(gatewayDropRegressedSnapshots, dropEvent{at: time.Now(), tick: out.Tick})
-				s.mu.Unlock()
-				return
-			}
-		}
-		s.lastSnapshot = out.Tick
-		s.hasSnapshot = true
-		for _, state := range out.Players {
-			if p := s.players[state.PlayerId]; p != nil &&
-				(state.LifeGeneration > p.lifeGeneration || state.MovementEpoch > p.movementEpoch || state.LastResolvedCommand > p.lastResolved) {
-				if state.MovementEpoch > p.movementEpoch || state.LifeGeneration > p.lifeGeneration {
-					clear(p.commands)
-				}
-				p.movementEpoch = state.MovementEpoch
-				p.lifeGeneration = state.LifeGeneration
-				p.lastResolved = state.LastResolvedCommand
-				for sequence := range p.commands {
-					if sequence <= p.lastResolved {
-						delete(p.commands, sequence)
-					}
-				}
-				s.link.acknowledge(p.playerID, p.movementEpoch, p.lifeGeneration, p.lastResolved)
-			}
-		}
+		// No tick or cursor guard (D1, D2 removed, pv7 §2a D-12): the IPC is
+		// ordered and the Client applies only a newer tick. The Gateway keeps
+		// no copy of the Match's cursors.
 		s.mu.Unlock()
 		payload, err := proto.Marshal(out)
 		if err != nil {
@@ -1086,64 +1048,37 @@ func (s *Server) runtimeFailed(err error) {
 	s.flushFinal()
 }
 
-// forwardInput hands a decoded window to the Match (D49: the Match decides what
-// is stale, resolved or conflicting). The main lane merges windows and keeps
-// resolved commands, whose late arrival the Match measures. A window the Match
-// may refuse as a whole goes unmerged through the rejected lane, so it cannot
-// make the Match refuse a merge with valid commands: another epoch or life,
-// beyond the future bound, a conflict, or a window the link refused.
+// forwardInput hands a decoded window to the Match as it came, one IPC message
+// per datagram (pv7 §2a): the Match decides what is resolved, stale, copied
+// or conflicting (D49). Decoding succeeded, so the sequence and liveness are
+// committed first (D-11), unless the sequence is stale.
 //
-// The datagram's one outcome (IG) is the lane it took: the main lane, the
-// rejected lane, or neither when every command was a written copy; a stale
-// sequence is its own outcome on any of them (D55 ③). A failed link counts
-// none (receivePacket counts the datagram for the unavailable room).
-func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) (err error) {
-	outcome := playerFwdRejectedLaneInputPackets
-	defer func() {
-		if err != nil {
-			return
-		}
-		if stale {
-			outcome = playerFwdStaleSequenceInputPackets
-		}
-		s.countIngress(p, outcome, 1)
-	}()
-	if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
-		return s.link.reject(in, playerFwdRoutedEpochMismatchInputs)
-	}
-	// Validate the whole batch before committing the sequence. Unresolved
-	// steps are immutable across packets; the bound counts only steps after
-	// the cursor (a resolved step must not underflow it).
-	for _, command := range in.Commands {
-		if command.Sequence > p.lastResolved && command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
-			return s.link.reject(in, playerFwdRoutedFutureLimitInputs)
-		}
-		if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
-			return s.link.reject(in, playerFwdRoutedConflictInputs)
-		}
-	}
-	// A stale sequence is never committed. Admit and CommitSequence both run
-	// under s.mu and Admit found this sequence fresh, so the commit cannot
-	// fail. A window the link refuses below is routed after the commit, as
-	// before 08c.
+// The datagram's one outcome (IG) is fwd_main_input_packets, or its stale
+// sequence (D55 ③). A failed link counts none (receivePacket counts the
+// datagram for the unavailable room).
+func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) error {
+	// Admit and CommitSequence both run under s.mu and Admit found this
+	// sequence fresh, so the commit cannot fail.
 	if !stale {
 		_ = p.session.CommitSequence(sequence, now)
 	}
-	var copies bool
-	if err := s.link.inputWindow(in, &copies); err != nil {
+	e := s.datagram
+	e.epoch, e.life = in.MovementEpoch, in.LifeGeneration
+	e.firstCommand, e.lastCommand = in.Commands[0].Sequence, in.Commands[len(in.Commands)-1].Sequence
+	e.items = uint32(len(in.Commands))
+	if err := s.link.input(in, e); err != nil {
 		if errors.Is(err, adapter.ErrInput) {
-			return s.link.reject(in, linkRefusalReason(err))
+			// Unreachable after DecodeInput (same bounds); a window the link
+			// refuses is a malformed packet, never a failed room.
+			s.countIngress(p, playerDropMalformedInputPackets, 1)
+			return nil
 		}
 		return err
 	}
-	outcome = playerFwdMainInputPackets
-	if copies {
-		outcome = playerFwdWrittenDuplicateInputPackets
+	outcome := playerFwdMainInputPackets
+	if stale {
+		outcome = playerFwdStaleSequenceInputPackets
 	}
-	for _, command := range in.Commands {
-		if command.Sequence > p.lastResolved {
-			p.commands[command.Sequence] = command
-		}
-	}
+	s.countIngress(p, outcome, 1)
 	return nil
 }

@@ -29,7 +29,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		if err := peer.Hello(peer.Token, endpoint, 1, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		s.players[id] = &reservation{lifeGeneration: 1, playerID: id, session: peer, phase: active}
+		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
 	}
 	decode := func(packet outbound) (framing.Header, uint64) {
 		t.Helper()
@@ -164,7 +164,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
 		t.Run(pause.String(), func(t *testing.T) {
-			link := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
+			link := &runtimeLink{wake: make(chan struct{}, 1)}
 			for player := uint64(1); player <= 2; player++ {
 				e := envelope()
 				e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: player}}
@@ -177,19 +177,16 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 			for time.Now().Before(deadline) {
 				generated++
 				for player := uint64(1); player <= 2; player++ {
-					sequence := (generated-1)%adapter.MaxFutureCommands + 1
-					in := &runtime.PlayerInput{LifeGeneration: 1, PlayerId: player, MovementEpoch: 1, Commands: []*runtime.MovementCommand{{Sequence: sequence, MoveForward: 1}}}
-					if err := link.input(in); err != nil {
+					in := &runtime.PlayerInput{LifeGeneration: 1, PlayerId: player, MovementEpoch: 1, Commands: []*runtime.MovementCommand{{Sequence: generated, MoveForward: 1}}}
+					if err := link.input(in, dropEvent{}); err != nil {
 						t.Fatal(err)
 					}
 				}
-				if len(link.inputs) > 2 || len(link.controls) > 64 {
-					t.Fatal("mailbox capacity exceeded")
-				}
-				for _, input := range link.inputs {
-					if len(input.Commands) > adapter.MaxFutureCommands {
-						t.Fatal("future window capacity exceeded")
-					}
+				link.mu.Lock()
+				over := len(link.queue) > 2+2*maxQueuedInputs || link.queuedInputs[1] > maxQueuedInputs || link.queuedInputs[2] > maxQueuedInputs
+				link.mu.Unlock()
+				if over {
+					t.Fatal("queue capacity exceeded")
 				}
 				time.Sleep(time.Second / adapter.InputSendRate)
 			}
@@ -198,22 +195,19 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 			if len(batch) < 4 || batch[0].GetJoin() == nil || batch[1].GetJoin() == nil {
 				t.Fatal("lifecycle order lost under backpressure")
 			}
-			counts := make(map[uint64]int)
+			// Each player's newest windows, in order, none omitted or doubled
+			// among them; the older ones overflowed (pv7 §2a).
+			kept := min(generated, maxQueuedInputs)
+			next := map[uint64]uint64{1: generated - kept + 1, 2: generated - kept + 1}
 			for _, message := range batch[2:] {
 				in := message.GetInput()
-				if in == nil || len(in.Commands) > adapter.MaxPendingCommands {
-					t.Fatal("invalid IPC input chunk")
+				if in == nil || len(in.Commands) != 1 || in.Commands[0].Sequence != next[in.PlayerId] {
+					t.Fatalf("window omitted, doubled or out of order while blocked: %v", in)
 				}
-				for _, command := range in.Commands {
-					counts[in.PlayerId]++
-					if command.Sequence != uint64(counts[in.PlayerId]) {
-						t.Fatal("command omitted or duplicated while blocked")
-					}
-				}
+				next[in.PlayerId]++
 			}
-			expected := int(min(generated, uint64(adapter.MaxFutureCommands)))
-			if counts[1] != expected || counts[2] != expected {
-				t.Fatalf("window mismatch: %v expected %d", counts, expected)
+			if next[1] != generated+1 || next[2] != generated+1 {
+				t.Fatalf("windows mismatch: next %v after %d generated", next, generated)
 			}
 			for time.Since(released) < 250*time.Millisecond {
 				if len(link.batch()) != 0 {

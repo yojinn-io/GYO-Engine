@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -17,36 +17,28 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
-// This queue is product-owned: ordered lifecycle requests and bounded command
-// windows intentionally have different semantics. Neither lane blocks the World.
+// This queue is product-owned: lifecycle requests are never dropped, input
+// windows are bounded per player (pv7 §2a). Neither blocks the World.
 var errRuntimeDisconnected = errors.New("runtime disconnected")
 
 type runtimeLink struct {
-	actionWindows   map[uint64]*actionWindow
-	conn            *framing.TCPConnection
-	mu              sync.Mutex
-	controls        []*runtime.RuntimeEnvelope
-	inputs          map[uint64]*runtime.PlayerInput
-	epochs          map[uint64]uint64 // Advanced only by authoritative snapshots.
-	lives           map[uint64]uint64
-	wake            chan struct{}
-	done            chan struct{}
-	closed          bool
-	once            sync.Once
-	coalescedInputs uint64
-	maxWriteAge     time.Duration
-	// The Match decides what is resolved, stale or conflicting (D49), so the
-	// link forwards every window it is handed. resolved is the authority cursor
-	// last acknowledged, used only to bound the merged main window; rejected is
-	// the lane of windows the Match may refuse as a whole, never merged.
-	resolved map[uint64]uint64
-	rejected map[uint64][]*runtime.PlayerInput
-	// written is a transport fact, not a judgment: the main-lane commands this
-	// link took for the TCP writer in the current epoch/life, by sequence. A
-	// copy with the same identity and content carries nothing new for the
-	// Match (it only uses the first arrival), so it is not written again.
-	written       map[uint64]map[uint64]*runtime.MovementCommand
-	newestWritten map[uint64]uint64
+	actionWindows map[uint64]*actionWindow
+	conn          *framing.TCPConnection
+	mu            sync.Mutex
+	wake          chan struct{}
+	done          chan struct{}
+	closed        bool
+	once          sync.Once
+	maxWriteAge   time.Duration
+	// pv7 §2a: controls and input windows in arrival order, so a Leave never
+	// overtakes the player's queued inputs. The Match decides what is
+	// resolved, stale, copied or conflicting (D49); the link forwards each
+	// Client datagram's window as it came. Controls are never dropped (more
+	// than maxQueuedControls fail the link); each player keeps at most
+	// maxQueuedInputs windows, the oldest dropped and reported beyond that.
+	queue          []queuedMessage
+	queuedControls int
+	queuedInputs   map[uint64]int
 	// Per-player I0 counters since the last takeIngress; kept across forget
 	// and close so the commands those discard stay accounted for.
 	ingress map[uint64]*playerIngressCounts
@@ -123,7 +115,7 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64), lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{}),
+	return &runtimeLink{conn: conn, wake: make(chan struct{}, 1), done: make(chan struct{}),
 		diagnosticWake: make(chan struct{}, 1), clock: newClockSync(gatewayMicros(time.Now())), now: time.Now, drops: newDropLedger()}, ready, nil
 }
 
@@ -172,6 +164,23 @@ func unknownRuntimeMessage(message *runtime.RuntimeEnvelope) error {
 	return fmt.Errorf("unknown runtime message fields=%v", fields)
 }
 
+// One queued control or input window. An input keeps the identity its
+// overflow is reported with (pv7 §4, reason 32).
+type queuedMessage struct {
+	message  *runtime.RuntimeEnvelope
+	input    bool
+	player   uint64
+	commands uint64
+	event    dropEvent
+}
+
+const (
+	maxQueuedControls = 64
+	// Not less than 64 windows per player (pv7 §2a); pv6 bounded 32 resolved
+	// commands.
+	maxQueuedInputs = 64
+)
+
 func envelope() *runtime.RuntimeEnvelope {
 	return &runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion}
 }
@@ -182,22 +191,24 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 	if l.closed {
 		return errRuntimeDisconnected
 	}
-	if len(l.controls) >= 64 {
+	if l.queuedControls >= maxQueuedControls {
 		return errors.New("runtime lifecycle queue full")
 	}
 	if leave := message.GetLeave(); leave != nil {
 		l.forgetLocked(leave.PlayerId)
 	}
-	l.controls = append(l.controls, message)
+	l.queue = append(l.queue, queuedMessage{message: message})
+	l.queuedControls++
 	l.notify()
 	return nil
 }
 
-// forget drops a player's pending link state: input window, epoch, life and
-// action window. A Leave does it before queuing the control; an eviction sends
-// no Leave (the Match already removed the player), so the Gateway calls it.
-// The commands, and the action requests and acknowledgement no write pass
-// took, are counted into the player's ingress counters, which outlive it.
+// forget drops a player's action window. Its queued input windows stay: they
+// go to the Match in arrival order, which counts what comes after the player
+// left (pv7 §2a). A Leave does it before queuing the control; an eviction
+// sends no Leave (the Match already removed the player), so the Gateway calls
+// it. The action requests and acknowledgement no write pass took are counted
+// into the player's ingress counters, which outlive it.
 func (l *runtimeLink) forget(player uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -205,73 +216,22 @@ func (l *runtimeLink) forget(player uint64) {
 }
 
 func (l *runtimeLink) forgetLocked(player uint64) {
-	discarded := uint64(0)
-	if in := l.inputs[player]; in != nil {
-		discarded += uint64(len(in.Commands))
-	}
-	for _, in := range l.rejected[player] {
-		discarded += uint64(len(in.Commands))
-	}
-	l.countLocked(player, playerDropDiscardedOnLeaveCommands, discarded)
 	if w := l.actionWindows[player]; w != nil {
 		shots, acks := w.untaken()
 		l.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)
 		l.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)
 	}
-	delete(l.inputs, player)
-	delete(l.resolved, player)
-	delete(l.rejected, player)
-	delete(l.written, player)
-	delete(l.newestWritten, player)
-	delete(l.epochs, player)
-	delete(l.lives, player)
 	delete(l.actionWindows, player)
 	delete(l.actionStats, player)
 }
 
-// Why input() refused a window. Each wraps adapter.ErrInput; the Server then
-// hands the window to the rejected lane, unmerged, for the Match to judge.
-var (
-	errLinkEpoch           = fmt.Errorf("%w: window of another movement epoch or life", adapter.ErrInput)
-	errLinkConflict        = fmt.Errorf("%w: command conflicts with the pending window", adapter.ErrInput)
-	errLinkWrittenConflict = fmt.Errorf("%w: command conflicts with a written command", adapter.ErrInput)
-	errLinkCap             = fmt.Errorf("%w: merged window exceeds the unresolved command bound", adapter.ErrInput)
-)
-
-// linkRefusalReason names the routing attribute of a window input() refused.
-// An epoch refusal is the link disagreeing with the Server, which routes
-// windows of another epoch itself, so it has its own reason; any other
-// refusal is a schema error.
-func linkRefusalReason(err error) playerIngressCounter {
-	switch {
-	case errors.Is(err, errLinkEpoch):
-		return playerFwdRoutedLinkEpochMismatchInputs
-	case errors.Is(err, errLinkConflict):
-		return playerFwdRoutedConflictInputs
-	case errors.Is(err, errLinkWrittenConflict):
-		return playerFwdRoutedWrittenConflictInputs
-	case errors.Is(err, errLinkCap):
-		return playerFwdRoutedLinkCapInputs
-	}
-	return playerFwdRoutedMalformedInputs
+func (l *runtimeLink) countLocked(player uint64, counter playerIngressCounter, n uint64) {
+	l.countEventLocked(player, counter, n, dropEvent{at: time.Now()})
 }
 
-// writtenRetention covers the Match ingress ledger (600 sequences) plus the
-// future bound: a written sequence is at most MaxFutureCommands ahead of the
-// Match cursor, so a copy older than this is already aged there and is
-// forwarded again for the Match to classify. Measured from the newest
-// sequence this link wrote, never from the Gateway's copy of the cursor.
-const writtenRetention = 600 + adapter.MaxFutureCommands
-
-// The two drops the link still executes, bounded and counted per player: a
-// stalled writer can overflow the rejected lane or the resolved part of the
-// merged main window.
-const (
-	maxRejectedWindows  = 4
-	maxRetainedResolved = adapter.MaxFutureCommands
-)
-
-func (l *runtimeLink) countLocked(player uint64, counter playerIngressCounter, n uint64) {
+// countEventLocked is countLocked with the identity a reported discard is
+// sampled with.
+func (l *runtimeLink) countEventLocked(player uint64, counter playerIngressCounter, n uint64, e dropEvent) {
 	if n == 0 {
 		return
 	}
@@ -285,7 +245,7 @@ func (l *runtimeLink) countLocked(player uint64, counter playerIngressCounter, n
 	}
 	counts[counter] += n
 	// The same entry counts the reported discards cumulatively (pv7 §4).
-	l.countDrop(player, counter, n, dropEvent{at: time.Now()})
+	l.countDrop(player, counter, n, e)
 }
 
 // takeIngress hands over each player's link counters accumulated since the
@@ -299,208 +259,40 @@ func (l *runtimeLink) takeIngress() map[uint64]*playerIngressCounts {
 	return taken
 }
 
-// input merges a window into the player's main lane. Commands this link
-// already wrote with the same content are dropped and counted; a refused
-// window changes nothing, and the caller routes it to the rejected lane.
-func (l *runtimeLink) input(in *runtime.PlayerInput) error {
-	return l.inputWindow(in, new(bool))
-}
-
-// inputWindow is input that also sets *copies when every command of the
-// window was a written copy: nothing was merged, the packet's outcome is a
-// written duplicate.
-func (l *runtimeLink) inputWindow(in *runtime.PlayerInput, copies *bool) error {
+// input queues one Client datagram's window as it came (pv7 §2a): one IPC
+// message per datagram, behind everything queued before it. Beyond
+// maxQueuedInputs windows of the player, its oldest queued window is dropped
+// and reported with its identity; e is this window's.
+func (l *runtimeLink) input(in *runtime.PlayerInput, e dropEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
 		return errRuntimeDisconnected
 	}
-	if in == nil || in.PlayerId == 0 || in.MovementEpoch == 0 || in.LifeGeneration == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
+	if in == nil || in.PlayerId == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
 		return adapter.ErrInput
 	}
-	epoch := l.epochs[in.PlayerId]
-	if epoch == 0 {
-		epoch = 1
+	if l.queuedInputs == nil {
+		l.queuedInputs = make(map[uint64]int)
 	}
-	life := l.lives[in.PlayerId]
-	if life == 0 {
-		life = 1
-	}
-	// Old and future epochs alike: the Match judges them on the rejected lane.
-	if in.MovementEpoch != epoch || in.LifeGeneration != life {
-		return errLinkEpoch
-	}
-	var previous uint64
-	for _, command := range in.Commands {
-		if command == nil || command.Sequence <= previous {
-			return adapter.ErrInput
-		}
-		previous = command.Sequence
-	}
-	written, newest := l.written[in.PlayerId], l.newestWritten[in.PlayerId]
-	fresh := make([]*runtime.MovementCommand, 0, len(in.Commands))
-	var expired uint64
-	for _, command := range in.Commands {
-		if existing := written[command.Sequence]; existing != nil {
-			if !adapter.EqualCommand(existing, command) {
-				return errLinkWrittenConflict
+	if l.queuedInputs[in.PlayerId] >= maxQueuedInputs {
+		for i, q := range l.queue {
+			if q.input && q.player == in.PlayerId {
+				l.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)
+				l.countLocked(q.player, playerDropIpcQueueOverflowInputCommands, q.commands)
+				l.queue = slices.Delete(l.queue, i, i+1)
+				l.queuedInputs[in.PlayerId]--
+				break
 			}
-			continue
-		}
-		if command.Sequence+writtenRetention <= newest {
-			expired++
-		}
-		fresh = append(fresh, command)
-	}
-	duplicates := uint64(len(in.Commands) - len(fresh))
-	old := l.inputs[in.PlayerId]
-	if len(fresh) == 0 {
-		// Nothing new for the Match. A pending window still reports the newest
-		// snapshot this packet observed, as merging the copy used to.
-		if old != nil {
-			old.ObservedAuthorityTick = max(old.ObservedAuthorityTick, in.ObservedAuthorityTick)
-		}
-		*copies = true
-		l.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))
-		l.countLocked(in.PlayerId, playerFwdWrittenDuplicateCommands, duplicates)
-		return nil
-	}
-	if old == nil && len(l.inputs) >= adapter.MaxPlayers {
-		return errors.New("runtime input slots full")
-	}
-	merged := make(map[uint64]*runtime.MovementCommand)
-	if old != nil {
-		for _, command := range old.Commands {
-			merged[command.Sequence] = command
 		}
 	}
-	var mergedDuplicates uint64
-	for _, command := range fresh {
-		if existing := merged[command.Sequence]; existing != nil {
-			if !adapter.EqualCommand(existing, command) {
-				return errLinkConflict
-			}
-			mergedDuplicates++
-			continue
-		}
-		merged[command.Sequence] = command
-	}
-	// Resolved commands stay in the window (the Match measures how late they
-	// arrived); only the unresolved part is bounded.
-	resolved := l.resolved[in.PlayerId]
-	unresolved := 0
-	for sequence := range merged {
-		if sequence > resolved {
-			unresolved++
-		}
-	}
-	if unresolved > adapter.MaxFutureCommands {
-		return errLinkCap
-	}
-	// A merged window reports the newest snapshot any of its parts observed.
-	observed := in.ObservedAuthorityTick
-	if old != nil && old.ObservedAuthorityTick > observed {
-		observed = old.ObservedAuthorityTick
-	}
-	window := &runtime.PlayerInput{PlayerId: in.PlayerId, MovementEpoch: epoch, LifeGeneration: life, ObservedAuthorityTick: observed}
-	for _, command := range merged {
-		window.Commands = append(window.Commands, proto.Clone(command).(*runtime.MovementCommand))
-	}
-	sort.Slice(window.Commands, func(i, j int) bool { return window.Commands[i].Sequence < window.Commands[j].Sequence })
-	// Keep the newest resolved commands; the oldest beyond the bound are a
-	// drop the Gateway executes. Never marked written, a later copy of them is
-	// forwarded again.
-	var trimmed uint64
-	if first := sort.Search(len(window.Commands), func(i int) bool { return window.Commands[i].Sequence > resolved }); first > maxRetainedResolved {
-		trimmed = uint64(first - maxRetainedResolved)
-		window.Commands = window.Commands[trimmed:]
-	}
-	l.inputs[in.PlayerId] = window
-	if old != nil {
-		l.coalescedInputs++
-	}
+	message := envelope()
+	message.Message = &runtime.RuntimeEnvelope_Input{Input: in}
+	l.queue = append(l.queue, queuedMessage{message: message, input: true, player: in.PlayerId, commands: uint64(len(in.Commands)), event: e})
+	l.queuedInputs[in.PlayerId]++
 	l.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))
-	l.countLocked(in.PlayerId, playerFwdWrittenDuplicateCommands, duplicates)
-	l.countLocked(in.PlayerId, playerFwdMergedDuplicateCommands, mergedDuplicates)
-	l.countLocked(in.PlayerId, playerDropResolvedTrimCommands, trimmed)
-	l.countLocked(in.PlayerId, playerFwdRetentionExpiredCommands, expired)
 	l.notify()
 	return nil
-}
-
-// reject queues a window the Match may refuse as a whole (old or future
-// epoch/life, a conflict, beyond the bound): unmerged, unmarked, written after
-// the player's main window. reason is the routing attribute it is counted by.
-func (l *runtimeLink) reject(in *runtime.PlayerInput, reason playerIngressCounter) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.closed {
-		return errRuntimeDisconnected
-	}
-	if in == nil || in.PlayerId == 0 || len(in.Commands) == 0 {
-		return adapter.ErrInput
-	}
-	l.countLocked(in.PlayerId, playerFwdHandedRejectedLaneCommands, uint64(len(in.Commands)))
-	l.countLocked(in.PlayerId, reason, 1)
-	l.rejectLocked(proto.Clone(in).(*runtime.PlayerInput))
-	l.notify()
-	return nil
-}
-
-// rejectLocked appends to the rejected lane; beyond maxRejectedWindows the
-// oldest window is dropped and counted.
-func (l *runtimeLink) rejectLocked(in *runtime.PlayerInput) {
-	if l.rejected == nil {
-		l.rejected = make(map[uint64][]*runtime.PlayerInput)
-	}
-	lane := append(l.rejected[in.PlayerId], in)
-	if len(lane) > maxRejectedWindows {
-		l.countLocked(in.PlayerId, playerDropRejectedLaneOverflowCommands, uint64(len(lane[0].Commands)))
-		lane = lane[1:]
-	}
-	l.rejected[in.PlayerId] = lane
-}
-
-func (l *runtimeLink) acknowledge(playerID, epoch, life, sequence uint64) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	previous := l.epochs[playerID]
-	if previous == 0 {
-		previous = 1
-	}
-	previousLife := l.lives[playerID]
-	if previousLife == 0 {
-		previousLife = 1
-	}
-	if life == 0 || epoch < previous || life < previousLife || (life > previousLife && epoch <= previous) {
-		return
-	}
-	if l.epochs == nil {
-		l.epochs = make(map[uint64]uint64)
-	}
-	l.epochs[playerID] = epoch
-	if l.lives == nil {
-		l.lives = make(map[uint64]uint64)
-	}
-	l.lives[playerID] = life
-	if epoch > previous || life > previousLife {
-		// The pending window of the old epoch/life goes to the Match unmerged,
-		// for it to refuse. Sequences restart at 1 in the new epoch, so the
-		// written set must be cleared or the new epoch's first commands would
-		// be swallowed as copies.
-		if in := l.inputs[playerID]; in != nil {
-			l.countLocked(playerID, playerFwdRoutedRotationInputs, 1)
-			l.rejectLocked(in)
-		}
-		delete(l.inputs, playerID)
-		delete(l.written, playerID)
-		delete(l.newestWritten, playerID)
-	}
-	// Resolved commands stay until written: the Match measures late arrivals.
-	if l.resolved == nil {
-		l.resolved = make(map[uint64]uint64)
-	}
-	l.resolved[playerID] = sequence
 }
 
 func (l *runtimeLink) notify() {
@@ -513,9 +305,8 @@ func (l *runtimeLink) notify() {
 type inputLane uint8
 
 const (
-	noLane inputLane = iota // controls and action batches
-	mainLane
-	rejectedLane
+	noLane   inputLane = iota // controls and action batches
+	mainLane                  // input windows
 )
 
 // linkWrite is one message taken for the writer and what its write accounts
@@ -525,110 +316,32 @@ type linkWrite struct {
 	lane     inputLane
 	player   uint64
 	commands uint64
-	resolved uint64 // main-lane commands at or below the resolved cursor when taken
 	// An ActionBatch: the shots and the acknowledgement no earlier pass took.
 	shots, acks uint64
 }
 
-// take empties the queues for one write pass: controls in order, then per
-// player (ascending id) the main window followed by the rejected lane, then
-// the due action batches. Only the main window is marked written, here, in
-// the same critical section that takes it; trimmed or overflowed commands
-// were removed before and are never marked. The action requests and the
-// acknowledgement a batch carries are marked taken the same way.
+// take empties the queue for one write pass, in arrival order, then the due
+// action batches. The action requests and the acknowledgement a batch carries
+// are marked taken in the same critical section that takes them.
 func (l *runtimeLink) take() []linkWrite {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.takes++
-	writes := make([]linkWrite, 0, len(l.controls)+len(l.inputs)+len(l.rejected))
-	for _, message := range l.controls {
-		writes = append(writes, linkWrite{message: message})
-	}
-	l.controls = nil
-	ids := make([]uint64, 0, len(l.inputs)+len(l.rejected))
-	for id := range l.inputs {
-		ids = append(ids, id)
-	}
-	for id := range l.rejected {
-		if l.inputs[id] == nil {
-			ids = append(ids, id)
+	writes := make([]linkWrite, 0, len(l.queue))
+	for _, q := range l.queue {
+		if q.input {
+			writes = append(writes, linkWrite{message: q.message, lane: mainLane, player: q.player, commands: q.commands})
+		} else {
+			writes = append(writes, linkWrite{message: q.message})
 		}
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	for _, id := range ids {
-		if in := l.inputs[id]; in != nil {
-			l.markWrittenLocked(in)
-			writes = appendWindow(writes, in, mainLane, l.resolved[id])
-		}
-		for _, in := range l.rejected[id] {
-			writes = appendWindow(writes, in, rejectedLane, 0)
-		}
-		delete(l.inputs, id)
-		delete(l.rejected, id)
-	}
+	l.queue = nil
+	l.queuedControls = 0
+	clear(l.queuedInputs)
 	for _, message := range l.actionBatch(time.Now()) {
 		writes = append(writes, l.takeActionsLocked(message))
 	}
 	return writes
-}
-
-// appendWindow keeps each IPC input within the 12-command bound the Match
-// enforces (IpcHost drops a larger input whole); a merge can exceed it. The
-// main lane is cut at the resolved cursor first, so the resolved prefix does
-// not shift the 12-command boundaries of the unresolved part: as many IPC
-// inputs carry new commands as before 08c (each samples the reference age).
-func appendWindow(writes []linkWrite, in *runtime.PlayerInput, lane inputLane, resolved uint64) []linkWrite {
-	if lane == mainLane {
-		first := sort.Search(len(in.Commands), func(i int) bool { return in.Commands[i].Sequence > resolved })
-		writes = appendChunks(writes, in, in.Commands[:first], lane, resolved)
-		return appendChunks(writes, in, in.Commands[first:], lane, resolved)
-	}
-	return appendChunks(writes, in, in.Commands, lane, resolved)
-}
-
-func appendChunks(writes []linkWrite, in *runtime.PlayerInput, commands []*runtime.MovementCommand, lane inputLane, resolved uint64) []linkWrite {
-	for len(commands) > 0 {
-		count := min(len(commands), adapter.MaxPendingCommands)
-		e := envelope()
-		e.Message = &runtime.RuntimeEnvelope_Input{Input: &runtime.PlayerInput{PlayerId: in.PlayerId, Commands: commands[:count], MovementEpoch: in.MovementEpoch,
-			LifeGeneration: in.LifeGeneration, ObservedAuthorityTick: in.ObservedAuthorityTick}}
-		w := linkWrite{message: e, lane: lane, player: in.PlayerId, commands: uint64(count)}
-		if lane == mainLane {
-			for _, command := range commands[:count] {
-				if command.Sequence <= resolved {
-					w.resolved++
-				}
-			}
-		}
-		writes = append(writes, w)
-		commands = commands[count:]
-	}
-	return writes
-}
-
-// markWrittenLocked records a main window taken for the writer and expires
-// what is writtenRetention behind the newest written sequence.
-func (l *runtimeLink) markWrittenLocked(in *runtime.PlayerInput) {
-	if l.written == nil {
-		l.written = make(map[uint64]map[uint64]*runtime.MovementCommand)
-		l.newestWritten = make(map[uint64]uint64)
-	}
-	set := l.written[in.PlayerId]
-	if set == nil {
-		set = make(map[uint64]*runtime.MovementCommand)
-		l.written[in.PlayerId] = set
-	}
-	newest := l.newestWritten[in.PlayerId]
-	for _, command := range in.Commands {
-		set[command.Sequence] = command
-		newest = max(newest, command.Sequence)
-	}
-	l.newestWritten[in.PlayerId] = newest
-	for sequence := range set {
-		if sequence+writtenRetention <= newest {
-			delete(set, sequence)
-		}
-	}
 }
 
 // wroteLocked counts a message whose l.conn.Write succeeded.
@@ -636,9 +349,6 @@ func (l *runtimeLink) wroteLocked(w linkWrite) {
 	switch w.lane {
 	case mainLane:
 		l.countLocked(w.player, playerFwdLinkWrittenMainCommands, w.commands)
-		l.countLocked(w.player, playerFwdResolvedAtWriteCommands, w.resolved)
-	case rejectedLane:
-		l.countLocked(w.player, playerFwdLinkWrittenRejectedLaneCommands, w.commands)
 	}
 	// The shot requests this pass first took (D59); a resent one was counted
 	// by the pass that first took it.
@@ -952,23 +662,15 @@ func (l *runtimeLink) shutdown(graceful bool) {
 	}
 	l.closed = true
 	close(l.done)
-	l.controls = nil
 	l.diagnostic = nil
-	for id, in := range l.inputs {
-		l.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))
-	}
-	for id, lane := range l.rejected {
-		for _, in := range lane {
-			l.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))
+	for _, q := range l.queue {
+		if q.input {
+			l.countLocked(q.player, playerDropClearedOnCloseCommands, q.commands)
 		}
 	}
-	clear(l.inputs)
-	clear(l.resolved)
-	clear(l.rejected)
-	clear(l.written)
-	clear(l.newestWritten)
-	clear(l.epochs)
-	clear(l.lives)
+	l.queue = nil
+	l.queuedControls = 0
+	clear(l.queuedInputs)
 	for id, w := range l.actionWindows {
 		shots, acks := w.untaken()
 		l.countLocked(id, playerDropClearedOnCloseActionsShots, shots)
@@ -976,7 +678,8 @@ func (l *runtimeLink) shutdown(graceful bool) {
 	}
 	clear(l.actionWindows)
 	clear(l.actionStats)
-	log.Printf("runtime transport coalesced_input_windows=%d max_write_age_us=%d", l.coalescedInputs, l.maxWriteAge.Microseconds())
+	// The link no longer merges windows (pv7 §2a); the key stays, always 0.
+	log.Printf("runtime transport coalesced_input_windows=0 max_write_age_us=%d", l.maxWriteAge.Microseconds())
 	l.mu.Unlock()
 	if graceful {
 		// The writer stops at its next frame (done is closed); a write in

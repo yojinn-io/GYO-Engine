@@ -427,7 +427,7 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 - **ingress 鍵的對應**（從 `edge-input-passthrough` 起適用，`edge-analyzers` 重新凍結）：
   - 直通的轉送沿用 `fwd_main_input_packets`、`fwd_handed_main_commands`、`fwd_link_written_main_commands`，IG 與 I1 照常成立。
   - 被刪路徑的 v1 鍵照原順序輸出 0；`fwd_handed_actions_shots`（D59 的「不同的請求」）與 ACK 類鍵輸出 0，另加逐批的新鍵（行尾）。
-  - 事前宣告的例外：I3（Match 的副本數每個跑次上萬，對照的 Gateway 鍵是 0）、I0（只在有佇列溢出時）、`link_shots`。
+  - 事前宣告的例外：I3（Match 的副本數：clean-60 每個跑次約 3.8k、quad 約 7.8k，對照的 Gateway 鍵是 0；原寫「上萬」，見 gateway-direction 的更正）、I0（只在有佇列溢出時）、`link_shots`。
 - 每批的測試清單見 [pv7-design](plans/v7.1/pv7-design.md)。
 
 ## 10. 不在 pv7 的項目（D-7）

@@ -386,7 +386,7 @@ func TestResultDeadlineAgreesWithSelection(t *testing.T) {
 		clear(s.players)
 		clear(s.sessions)
 		for id := uint64(1); id < uint64(len(sessions)); id++ {
-			p := &reservation{playerID: id, phase: phase(rng.IntN(3)), session: sessions[id], movementEpoch: 1, lifeGeneration: 1, commands: map[uint64]*runtime.MovementCommand{}}
+			p := &reservation{playerID: id, phase: phase(rng.IntN(3)), session: sessions[id]}
 			if rng.IntN(5) != 0 {
 				w := newActionWindow()
 				w.retired = uint64(rng.IntN(3))

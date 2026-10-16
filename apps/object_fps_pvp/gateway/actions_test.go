@@ -32,8 +32,8 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 	if peer.Hello(peer.Token, endpoint, 1, now) != nil {
 		t.Fatal("hello")
 	}
-	p := &reservation{lifeGeneration: 1, playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
-	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1), drops: newDropLedger()}
+	p := &reservation{playerID: 7, phase: active, session: peer, actions: newActionWindow()}
+	l := &runtimeLink{wake: make(chan struct{}, 1), drops: newDropLedger()}
 	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan snapshotFrame, 1), resultWake: make(chan struct{}, 1)}
 	return s, p, endpoint, now
 }
@@ -96,7 +96,7 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 2, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 7, MovementEpoch: 2}}, Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}}}
 	s.runtimeMessage(e)
-	if p.actions.retired != 2 || p.movementEpoch != 2 {
+	if p.actions.retired != 2 {
 		t.Fatal("movement reset cleared action lifecycle")
 	}
 }
@@ -379,7 +379,6 @@ func TestEvictionForgetsTheRuntimeLinkState(t *testing.T) {
 	s, p, _, _ := actionFixture(t)
 	l := s.link
 	l.actionWindows = map[uint64]*actionWindow{}
-	l.lives = map[uint64]uint64{}
 	if err := l.actions(&runtime.ActionBatch{PlayerId: p.playerID, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {
 		t.Fatal(err)
 	}
@@ -389,9 +388,6 @@ func TestEvictionForgetsTheRuntimeLinkState(t *testing.T) {
 	s.runtimeMessage(e)
 	if _, kept := l.actionWindows[p.playerID]; kept {
 		t.Fatal("evicted player's action window kept")
-	}
-	if _, kept := l.epochs[p.playerID]; kept {
-		t.Fatal("evicted player's epoch kept")
 	}
 	for id := uint64(100); id < 100+adapter.MaxPlayers; id++ {
 		if err := l.actions(&runtime.ActionBatch{PlayerId: id, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {

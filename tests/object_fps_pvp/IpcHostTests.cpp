@@ -961,6 +961,8 @@ struct DecisionOutcome {
     std::string snapshot;                      // the last one written
     std::uint64_t clockReplies{};
     std::uint64_t clockSamples{}; // measured by the Match, from its logged windows
+    std::uint64_t copies{};       // commands the host classified as copies
+    std::uint64_t otherLife{};    // inputs the host refused for another life
 };
 
 pb::RuntimeEnvelope MovementInput(PlayerId player, std::uint64_t sequence, float forward, std::uint64_t observedTick) {
@@ -1001,7 +1003,10 @@ pb::RuntimeEnvelope Shot(PlayerId player, ActionId id, std::uint64_t observedTic
 // absent player, whose log line shows the IPC thread handed them to the host
 // before the step. Clock samples carry extreme values: other-domain times
 // 10 s apart, jumps, repeats, unmatched origins and a receive after transmit.
-DecisionOutcome RunDecisionScenario(bool clockSamples) {
+// copies: every input window also arrives again, with a window that repeats
+// the previous (resolved) command, and one of a future life: what a Gateway
+// forwarding each Client datagram as it came hands the Match (pv7 §2a).
+DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false) {
     ClogCapture log;
     auto now = Clock::time_point{} + 1000s;
     MatchRuntimeHost host{IpcArena(), [&now] { return now; }};
@@ -1070,7 +1075,27 @@ DecisionOutcome RunDecisionScenario(bool clockSamples) {
         if (k == 0) frames = {Join(1), Join(2)};
         else {
             const auto observed = static_cast<std::uint64_t>(k);
-            frames = {MovementInput(1, observed, 1.0f, observed - 1), MovementInput(2, observed, 0.0f, observed - 1)};
+            // Player 1 alternates its stride, so a lost or replaced command moves it elsewhere.
+            const auto stride = [](std::uint64_t sequence) { return sequence % 2 ? 1.0f : 0.5f; };
+            frames = {MovementInput(1, observed, stride(observed), observed - 1), MovementInput(2, observed, 0.0f, observed - 1)};
+            if (copies) {
+                for (const auto player : {PlayerId{1}, PlayerId{2}}) {
+                    const auto forward = [&](std::uint64_t sequence) { return player == 1 ? stride(sequence) : 0.0f; };
+                    frames.push_back(MovementInput(player, observed, forward(observed), observed - 1));
+                    auto pair = MovementInput(player, observed, forward(observed), observed - 1);
+                    if (k > 1) {
+                        auto* previous = pair.mutable_input()->mutable_commands()->Add();
+                        previous->set_sequence(observed - 1);
+                        previous->set_move_forward(forward(observed - 1));
+                        std::swap(*pair.mutable_input()->mutable_commands(0), *pair.mutable_input()->mutable_commands(1));
+                    }
+                    frames.push_back(pair);
+                    // Another life, other content: refused, it must change nothing.
+                    auto future = MovementInput(player, observed, -1.0f, observed - 1);
+                    future.mutable_input()->set_life_generation(2);
+                    frames.push_back(future);
+                }
+            }
             if (k == 20 || k == 30 || k == 40) frames.push_back(Shot(2, static_cast<ActionId>(k / 10 - 1), observed));
             if (k == 45) frames.push_back(Shot(2, 4, 1)); // an old reference: expired
             if (k == 50) frames.push_back(Shot(2, 5, observed, true));
@@ -1096,9 +1121,31 @@ DecisionOutcome RunDecisionScenario(bool clockSamples) {
     REQUIRE(log.Shows("final=1"));
     outcome.clockSamples = LoggedClockCount(log, "samples");
     ipc.Stop();
+    for (const auto& [player, counts] : host.TakeIngressStatistics(true)) {
+        static_cast<void>(player);
+        for (const auto copy : {IngressCommandClass::PendingCopy, IngressCommandClass::LateCopy, IngressCommandClass::ResolvedCopy})
+            outcome.copies += counts.classified[IngressIndex(copy)];
+        outcome.otherLife += counts.rejected[IngressIndex(IngressInputRejection::LifeFuture)].inputs;
+    }
     return outcome;
 }
 } // namespace
+
+// pv7 §2a (edge-input-passthrough): the Match keeps the first arrival of each
+// command and refuses what does not fit, so copies, resolved commands and a
+// future life change no decision, join result or final snapshot.
+TEST_CASE("PvP IPC decisions do not depend on input copies") {
+    const auto once = RunDecisionScenario(false);
+    const auto copied = RunDecisionScenario(false, true);
+    REQUIRE(once.decisions.size() == 5);
+    // The copies reached the host and were classified, not lost on the way.
+    CHECK(once.copies == 0);
+    CHECK(copied.copies > 100);
+    CHECK(copied.otherLife > 100);
+    CHECK(once.joins == copied.joins);
+    CHECK(once.snapshot == copied.snapshot);
+    CHECK(once.decisions == copied.decisions);
+}
 
 // D32 (pv7 §2): clock samples never reach a decision. The same frames give
 // the same decisions, join results and final snapshot (positions, combat,

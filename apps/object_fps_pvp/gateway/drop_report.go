@@ -55,9 +55,6 @@ var dropReasons = []struct {
 	{runtime.DropReason_DROP_ADMISSION_UNKNOWN_PACKETS, playerIngressKeys[playerDropAdmissionUnknownPackets], dropPlayerScope},
 	{runtime.DropReason_DROP_INVALID_ACTIONS_SHOTS, playerIngressKeys[playerDropInvalidActionsShots], dropPlayerScope},
 	{runtime.DropReason_DROP_LINK_REJECTED_ACTIONS_SHOTS, playerIngressKeys[playerDropLinkRejectedActionsShots], dropPlayerScope},
-	{runtime.DropReason_DROP_RESOLVED_TRIM_COMMANDS, playerIngressKeys[playerDropResolvedTrimCommands], dropPlayerScope},
-	{runtime.DropReason_DROP_REJECTED_LANE_OVERFLOW_COMMANDS, playerIngressKeys[playerDropRejectedLaneOverflowCommands], dropPlayerScope},
-	{runtime.DropReason_DROP_DISCARDED_ON_LEAVE_COMMANDS, playerIngressKeys[playerDropDiscardedOnLeaveCommands], dropPlayerScope},
 	{runtime.DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS, playerIngressKeys[playerDropDiscardedOnLeaveActionsShots], dropPlayerScope},
 	{runtime.DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS, playerIngressKeys[playerDropDiscardedOnLeaveActionsAcks], dropPlayerScope},
 	{runtime.DropReason_DROP_WRITE_FAILED_SNAPSHOT_PACKETS, playerIngressKeys[playerDropWriteFailedSnapshotPackets], dropPlayerScope},
@@ -66,14 +63,12 @@ var dropReasons = []struct {
 	{runtime.DropReason_DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS, playerIngressKeys[playerDropControlQueueFullControlPackets], dropPlayerScope},
 	{runtime.DropReason_DROP_REPLACED_SNAPSHOT_PACKETS, playerIngressKeys[playerDropReplacedSnapshotPackets], dropPlayerScope},
 	// The §2a queues of the edge batches: the words are defined, the exits come with them.
-	{runtime.DropReason_DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS, ingressKey{ingressDropped, reasonIpcQueueOverflow, ingressInput, unitPackets}, dropPlayerScope},
+	{runtime.DropReason_DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS, playerIngressKeys[playerDropIpcQueueOverflowInputPackets], dropPlayerScope},
 	{runtime.DropReason_DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS, ingressKey{ingressDropped, reasonIpcQueueOverflow, ingressActions, unitPackets}, dropPlayerScope},
 	{runtime.DropReason_DROP_RESULTS_OVER_RATE_PACKETS, ingressKey{ingressDropped, reasonResultsOverRate, ingressAnyKind, unitPackets}, dropPlayerScope},
 	{runtime.DropReason_DROP_UNDECODABLE_DATAGRAMS, gatewayIngressKeys[gatewayDropUndecodableDatagrams], dropGatewayScope},
 	{runtime.DropReason_DROP_OTHER_VERSION_DATAGRAMS, gatewayIngressKeys[gatewayDropOtherVersionDatagrams], dropGatewayScope},
 	{runtime.DropReason_DROP_UNKNOWN_SESSION_DATAGRAMS, gatewayIngressKeys[gatewayDropUnknownSessionDatagrams], dropGatewayScope},
-	{runtime.DropReason_DROP_OLD_TICK_SNAPSHOTS, gatewayIngressKeys[gatewayDropOldTickSnapshots], dropGatewayScope},
-	{runtime.DropReason_DROP_REGRESSED_SNAPSHOTS, gatewayIngressKeys[gatewayDropRegressedSnapshots], dropGatewayScope},
 	{runtime.DropReason_DROP_COALESCED_SNAPSHOTS, gatewayIngressKeys[gatewayDropCoalescedSnapshots], dropGatewayScope},
 }
 

@@ -981,216 +981,6 @@
       "expect": "CHECK\\( idleIterations < 600 \\) is NOT correct"
     },
     {
-      "id": "v7-flow-fwd-filters-resolved",
-      "batch": "v7-flow",
-      "what": "Gateway drops resolved commands again (per command, the pre-08c filter)",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n",
-      "replace": "\tkept := in.Commands[:0:0]\n\tfor _, command := range in.Commands {\n\t\tif command.Sequence > p.lastResolved {\n\t\t\tkept = append(kept, command)\n\t\t}\n\t}\n\tin.Commands = kept\n\tif len(in.Commands) == 0 {\n\t\treturn nil\n\t}\n\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n",
-      "check": "go",
-      "expect": "resolved command did not reach the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-skips-all-resolved",
-      "batch": "v7-flow",
-      "what": "Gateway forwards no window whose commands are all resolved",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n",
-      "replace": "\tif in.Commands[len(in.Commands)-1].Sequence <= p.lastResolved {\n\t\treturn nil\n\t}\n\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n",
-      "check": "go",
-      "expect": "all-resolved window was not forwarded"
-    },
-    {
-      "id": "v7-flow-fwd-future-bound-underflow",
-      "batch": "v7-flow",
-      "what": "Future bound subtracts the cursor from a resolved sequence (uint64 underflow)",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "if command.Sequence > p.lastResolved && command.Sequence-p.lastResolved > adapter.MaxFutureCommands {",
-      "replace": "if command.Sequence-p.lastResolved > adapter.MaxFutureCommands {",
-      "check": "go",
-      "expect": "resolved sequence underflowed the future bound"
-    },
-    {
-      "id": "v7-flow-fwd-link-prunes-before-write",
-      "batch": "v7-flow",
-      "what": "Link prunes resolved commands at acknowledge, before the write",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.resolved[playerID] = sequence\n",
-      "replace": "\tl.resolved[playerID] = sequence\n\tif in := l.inputs[playerID]; in != nil {\n\t\tfirst := sort.Search(len(in.Commands), func(i int) bool { return in.Commands[i].Sequence > sequence })\n\t\tin.Commands = in.Commands[first:]\n\t\tif len(in.Commands) == 0 {\n\t\t\tdelete(l.inputs, playerID)\n\t\t}\n\t}\n",
-      "check": "go",
-      "expect": "acknowledge pruned a resolved command before the write"
-    },
-    {
-      "id": "v7-flow-fwd-link-cap-counts-resolved",
-      "batch": "v7-flow",
-      "what": "Link merge cap counts resolved commands",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tif sequence > resolved {\n\t\t\tunresolved++\n\t\t}\n",
-      "replace": "\t\t_ = sequence\n\t\tunresolved++\n",
-      "check": "go",
-      "expect": "link cap counted resolved commands"
-    },
-    {
-      "id": "v7-flow-fwd-link-cap-loosened",
-      "batch": "v7-flow",
-      "what": "Link merge cap no longer bounds unresolved commands",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tif unresolved > adapter.MaxFutureCommands {\n",
-      "replace": "\tif unresolved > 2*adapter.MaxFutureCommands {\n",
-      "check": "go",
-      "expect": "link admitted 33 unresolved commands"
-    },
-    {
-      "id": "v7-flow-fwd-epoch-window-deleted",
-      "batch": "v7-flow",
-      "what": "Epoch/life change deletes the pending main window instead of moving it to the rejected lane",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tl.rejectLocked(in)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "epoch change dropped the pending window"
-    },
-    {
-      "id": "v7-flow-fwd-rotation-uncounted",
-      "batch": "v7-flow",
-      "what": "A pending window moved by an epoch/life change is not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tl.countLocked(playerID, playerFwdRoutedRotationInputs, 1)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "rotated window was not counted"
-    },
-    {
-      "id": "v7-flow-fwd-epoch-mismatch-dropped",
-      "batch": "v7-flow",
-      "what": "Gateway drops a window of another epoch/life",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\treturn s.link.reject(in, playerFwdRoutedEpochMismatchInputs)\n",
-      "replace": "\t\treturn nil\n",
-      "check": "go",
-      "expect": "stale epoch window did not reach the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-future-dropped",
-      "batch": "v7-flow",
-      "what": "Gateway drops a window beyond 32 future commands",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\treturn s.link.reject(in, playerFwdRoutedFutureLimitInputs)\n",
-      "replace": "\t\t\treturn nil\n",
-      "check": "go",
-      "expect": "far-future window did not reach the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-conflict-dropped",
-      "batch": "v7-flow",
-      "what": "Gateway drops a conflicting window",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\treturn s.link.reject(in, playerFwdRoutedConflictInputs)\n",
-      "replace": "\t\t\treturn nil\n",
-      "check": "go",
-      "expect": "conflicting window did not reach the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-link-cap-dropped",
-      "batch": "v7-flow",
-      "what": "Gateway drops a window the link refuses",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\treturn s.link.reject(in, linkRefusalReason(err))\n",
-      "replace": "\t\t\treturn nil\n",
-      "check": "go",
-      "expect": "link-cap window did not reach the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-written-conflict-reason",
-      "batch": "v7-flow",
-      "what": "A written conflict is attributed to the link cap",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tcase errors.Is(err, errLinkWrittenConflict):\n\t\treturn playerFwdRoutedWrittenConflictInputs\n",
-      "replace": "",
-      "check": "go",
-      "expect": "written conflict was not counted"
-    },
-    {
-      "id": "v7-flow-fwd-link-stale-inert",
-      "batch": "v7-flow",
-      "what": "Link silently accepts an older epoch/life (pre-08c nil)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tif in.MovementEpoch != epoch || in.LifeGeneration != life {\n\t\treturn errLinkEpoch\n\t}\n",
-      "replace": "\tif in.MovementEpoch < epoch || in.LifeGeneration < life {\n\t\treturn nil\n\t}\n\tif in.MovementEpoch != epoch || in.LifeGeneration != life {\n\t\treturn errLinkEpoch\n\t}\n",
-      "check": "go",
-      "expect": "link silently accepted a stale epoch"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-lane-unchunked",
-      "batch": "v7-flow",
-      "what": "Rejected lane writes a window over 12 commands (IpcHost drops it whole)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tfor _, in := range l.rejected[id] {\n\t\t\twrites = appendWindow(writes, in, rejectedLane, 0)\n\t\t}\n",
-      "replace": "\t\tfor _, in := range l.rejected[id] {\n\t\t\te := envelope()\n\t\t\te.Message = &runtime.RuntimeEnvelope_Input{Input: in}\n\t\t\twrites = append(writes, linkWrite{message: e, lane: rejectedLane, player: id, commands: uint64(len(in.Commands))})\n\t\t}\n",
-      "check": "go",
-      "expect": "rejected lane IPC exceeds 12 commands"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-before-main",
-      "batch": "v7-flow",
-      "what": "Rejected lane is written before the player's main window",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tif in := l.inputs[id]; in != nil {\n\t\t\tl.markWrittenLocked(in)\n\t\t\twrites = appendWindow(writes, in, mainLane, l.resolved[id])\n\t\t}\n\t\tfor _, in := range l.rejected[id] {\n\t\t\twrites = appendWindow(writes, in, rejectedLane, 0)\n\t\t}\n",
-      "replace": "\t\tfor _, in := range l.rejected[id] {\n\t\t\twrites = appendWindow(writes, in, rejectedLane, 0)\n\t\t}\n\t\tif in := l.inputs[id]; in != nil {\n\t\t\tl.markWrittenLocked(in)\n\t\t\twrites = appendWindow(writes, in, mainLane, l.resolved[id])\n\t\t}\n",
-      "check": "go",
-      "expect": "rejected window overtook the main window"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-lane-lifo",
-      "batch": "v7-flow",
-      "what": "Rejected lane overflow drops the newest window instead of the oldest",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tlane = lane[1:]\n",
-      "replace": "\t\tlane = lane[:maxRejectedWindows]\n",
-      "check": "go",
-      "expect": "rejected lane overflow dropped the wrong window"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-overflow-uncounted",
-      "batch": "v7-flow",
-      "what": "Rejected lane overflow is not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tl.countLocked(in.PlayerId, playerDropRejectedLaneOverflowCommands, uint64(len(lane[0].Commands)))\n",
-      "replace": "",
-      "check": "go",
-      "expect": "rejected lane overflow was not counted"
-    },
-    {
-      "id": "v7-flow-fwd-resolved-trim-uncounted",
-      "batch": "v7-flow",
-      "what": "Trimming the resolved part of the main window is not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(in.PlayerId, playerDropResolvedTrimCommands, trimmed)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "resolved trim was not counted"
-    },
-    {
-      "id": "v7-flow-fwd-resolved-uncounted",
-      "batch": "v7-flow",
-      "what": "Resolved commands written on the main lane are not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tl.countLocked(w.player, playerFwdResolvedAtWriteCommands, w.resolved)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "resolved forwarding was not counted"
-    },
-    {
-      "id": "v7-flow-fwd-resolved-recorded-pending",
-      "batch": "v7-flow",
-      "what": "Gateway records resolved commands in its pending table",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\tif command.Sequence > p.lastResolved {\n\t\t\tp.commands[command.Sequence] = command\n\t\t}\n",
-      "replace": "\t\tp.commands[command.Sequence] = command\n",
-      "check": "go",
-      "expect": "acknowledged commands retained"
-    },
-    {
       "id": "v7-flow-fwd-written-uncounted",
       "batch": "v7-flow",
       "what": "Main-lane commands written to the Match are not counted (I0)",
@@ -1198,17 +988,7 @@
       "find": "\t\tl.countLocked(w.player, playerFwdLinkWrittenMainCommands, w.commands)\n",
       "replace": "",
       "check": "go",
-      "expect": "link written commands were not counted"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-written-uncounted",
-      "batch": "v7-flow",
-      "what": "Only the main lane counts written commands (I0)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tcase rejectedLane:\n\t\tl.countLocked(w.player, playerFwdLinkWrittenRejectedLaneCommands, w.commands)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "rejected-lane written commands were not counted"
+      "expect": "handed and written commands"
     },
     {
       "id": "v7-flow-fwd-written-counted-before-write",
@@ -1218,35 +998,15 @@
       "find": "\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n",
       "replace": "\t\t\tl.wroteLocked(w)\n",
       "check": "go",
-      "expect": "written commands were counted before the write succeeded"
-    },
-    {
-      "id": "v7-flow-fwd-merge-dup-uncounted",
-      "batch": "v7-flow",
-      "what": "Commands merged into the pending window as duplicates are not counted (I0)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(in.PlayerId, playerFwdMergedDuplicateCommands, mergedDuplicates)\n",
-      "replace": "\t_ = mergedDuplicates\n",
-      "check": "go",
-      "expect": "merged duplicate commands were not counted"
-    },
-    {
-      "id": "v7-flow-fwd-leave-discard-uncounted",
-      "batch": "v7-flow",
-      "what": "Commands a Leave/eviction discards are not counted (I0)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(player, playerDropDiscardedOnLeaveCommands, discarded)\n",
-      "replace": "\t_ = discarded\n",
-      "check": "go",
-      "expect": "leave discarded commands were not counted"
+      "expect": "abandoned commands: "
     },
     {
       "id": "v7-flow-fwd-close-discard-uncounted",
       "batch": "v7-flow",
-      "what": "Pending main windows cleared by close are not counted (I0)",
+      "what": "Input windows queued at close are not counted (I0)",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tfor id, in := range l.inputs {\n\t\tl.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))\n\t}\n",
-      "replace": "",
+      "find": "\t\tif q.input {\n\t\t\tl.countLocked(q.player, playerDropClearedOnCloseCommands, q.commands)\n\t\t}\n",
+      "replace": "\t\t_ = q\n",
       "check": "go",
       "expect": "close cleared commands were not counted"
     },
@@ -1258,7 +1018,7 @@
       "find": "\t\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseCommands, abandoned.commands)\n",
       "replace": "",
       "check": "go",
-      "expect": "abandoned commands were not counted"
+      "expect": "abandoned commands: "
     },
     {
       "id": "v7-flow-fwd-abandoned-only-failed",
@@ -1268,7 +1028,7 @@
       "find": "\t\t\tfor _, abandoned := range writes[i:] {\n",
       "replace": "\t\t\tfor _, abandoned := range writes[i : i+1] {\n",
       "check": "go",
-      "expect": "the rest of a failed pass was not abandoned"
+      "expect": "abandoned commands: "
     },
     {
       "id": "v7-flow-fwd-stale-input-dropped",
@@ -1291,136 +1051,6 @@
       "expect": "unauthorized input reached the runtime"
     },
     {
-      "id": "v7-flow-fwd-rejected-commits",
-      "batch": "v7-flow",
-      "what": "Rejected-lane windows commit the transport sequence before routing",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tif in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {\n\t\treturn s.link.reject(",
-      "replace": "\tif !stale {\n\t\t_ = p.session.CommitSequence(sequence, now)\n\t}\n\tif in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {\n\t\treturn s.link.reject(",
-      "check": "go",
-      "expect": "rejected-lane epoch input committed the sequence"
-    },
-    {
-      "id": "v7-flow-dedup-identity-only",
-      "batch": "v7-flow",
-      "what": "Written-set dedup compares identity only, dropping a copy whose content changed",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tif !adapter.EqualCommand(existing, command) {\n\t\t\t\treturn errLinkWrittenConflict\n\t\t\t}\n",
-      "replace": "",
-      "check": "go",
-      "expect": "changed content of a written command was not refused"
-    },
-    {
-      "id": "v7-flow-dedup-mark-on-merge",
-      "batch": "v7-flow",
-      "what": "Commands are marked written when merged into the pending window instead of when take() hands it to the writer",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.inputs[in.PlayerId] = window\n",
-      "replace": "\tl.inputs[in.PlayerId] = window\n\tl.markWrittenLocked(in)\n",
-      "check": "go",
-      "expect": "trimmed command was treated as written"
-    },
-    {
-      "id": "v7-flow-dedup-marks-rejected-lane",
-      "batch": "v7-flow",
-      "what": "Rejected-lane windows are marked written although the Match may refuse them whole",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tfor _, in := range l.rejected[id] {\n\t\t\twrites = appendWindow(writes, in, rejectedLane, 0)\n",
-      "replace": "\t\tfor _, in := range l.rejected[id] {\n\t\t\tl.markWrittenLocked(in)\n\t\t\twrites = appendWindow(writes, in, rejectedLane, 0)\n",
-      "check": "go",
-      "expect": "rejected-lane window was treated as written"
-    },
-    {
-      "id": "v7-flow-dedup-retention-short",
-      "batch": "v7-flow",
-      "what": "Written-set retention shorter than the Match ledger (64 instead of 600 + 32)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "const writtenRetention = 600 + adapter.MaxFutureCommands\n",
-      "replace": "const writtenRetention = 64\n",
-      "check": "go",
-      "expect": "copy within the ledger retention was forwarded again"
-    },
-    {
-      "id": "v7-flow-dedup-retention-unbounded",
-      "batch": "v7-flow",
-      "what": "Written set never expires, so an aged copy is never classified by the Match",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tif sequence+writtenRetention <= newest {\n\t\t\tdelete(set, sequence)\n",
-      "replace": "\t\tif false && sequence+writtenRetention <= newest {\n\t\t\tdelete(set, sequence)\n",
-      "check": "go",
-      "expect": "expired copy was not forwarded again"
-    },
-    {
-      "id": "v7-flow-dedup-expired-uncounted",
-      "batch": "v7-flow",
-      "what": "Copies forwarded again after the retention are not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(in.PlayerId, playerFwdRetentionExpiredCommands, expired)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "expired copy was not counted"
-    },
-    {
-      "id": "v7-flow-dedup-rotation-kept",
-      "batch": "v7-flow",
-      "what": "Epoch/life rotation keeps the written set (sequences restart at 1)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tdelete(l.inputs, playerID)\n\t\tdelete(l.written, playerID)\n",
-      "replace": "\t\tdelete(l.inputs, playerID)\n",
-      "check": "go",
-      "expect": "rotation kept the written set"
-    },
-    {
-      "id": "v7-flow-dedup-uncounted",
-      "batch": "v7-flow",
-      "what": "Dropped copies of written commands are not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(in.PlayerId, playerFwdWrittenDuplicateCommands, duplicates)\n\tl.countLocked(in.PlayerId, playerFwdMergedDuplicateCommands",
-      "replace": "\tl.countLocked(in.PlayerId, playerFwdMergedDuplicateCommands",
-      "check": "go",
-      "expect": "written duplicates were not counted"
-    },
-    {
-      "id": "v7-flow-dedup-whole-packet-uncounted",
-      "batch": "v7-flow",
-      "what": "A packet whose commands were all written is not counted",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tl.countLocked(in.PlayerId, playerFwdWrittenDuplicateCommands, duplicates)\n\t\treturn nil\n",
-      "replace": "\t\treturn nil\n",
-      "check": "go",
-      "expect": "whole deduplicated packet was not counted"
-    },
-    {
-      "id": "v7-flow-dedup-disabled",
-      "batch": "v7-flow",
-      "what": "No written-set dedup: copies of written commands reach the Match again",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tif existing := written[command.Sequence]; existing != nil {\n",
-      "replace": "\t\tif existing := written[command.Sequence]; false && existing != nil {\n",
-      "check": "go",
-      "expect": "written duplicate reached the runtime"
-    },
-    {
-      "id": "v7-flow-dedup-forget-kept",
-      "batch": "v7-flow",
-      "what": "Leave/eviction keeps the written set",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tdelete(l.written, player)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "forget kept the written set"
-    },
-    {
-      "id": "v7-flow-dedup-observed-not-folded",
-      "batch": "v7-flow",
-      "what": "A deduplicated packet's observed tick is not folded into the pending window",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\told.ObservedAuthorityTick = max(old.ObservedAuthorityTick, in.ObservedAuthorityTick)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "observed tick of a deduplicated packet was not folded"
-    },
-    {
       "id": "v7-flow-fwd-stale-forwards-rate-limited",
       "batch": "v7-flow",
       "what": "A rate-limited Input is forwarded like a stale one",
@@ -1429,76 +1059,6 @@
       "replace": "\t\tstale := errors.Is(admission, session.ErrStale) || errors.Is(admission, session.ErrRateLimit)\n",
       "check": "go",
       "expect": "rate-limited input reached the runtime"
-    },
-    {
-      "id": "v7-flow-fwd-commit-before-future-conflict",
-      "batch": "v7-flow",
-      "what": "The sequence commits after the epoch check but before the future and conflict checks",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t// Validate the whole batch before committing the sequence. Unresolved\n",
-      "replace": "\tif !stale {\n\t\t_ = p.session.CommitSequence(sequence, now)\n\t\tstale = true\n\t}\n\t// Validate the whole batch before committing the sequence. Unresolved\n",
-      "check": "go",
-      "expect": "rejected-lane (future|conflict) input committed the sequence"
-    },
-    {
-      "id": "v7-flow-fwd-commit-only-on-link-success",
-      "batch": "v7-flow",
-      "what": "The sequence commits only after the link accepted the window, so a link-refused window extends no liveness",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tif !stale {\n\t\t_ = p.session.CommitSequence(sequence, now)\n\t}\n\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n\t\tif errors.Is(err, adapter.ErrInput) {\n\t\t\treturn s.link.reject(in, linkRefusalReason(err))\n\t\t}\n\t\treturn err\n\t}\n",
-      "replace": "\tvar copies bool\n\tif err := s.link.inputWindow(in, &copies); err != nil {\n\t\tif errors.Is(err, adapter.ErrInput) {\n\t\t\treturn s.link.reject(in, linkRefusalReason(err))\n\t\t}\n\t\treturn err\n\t}\n\tif !stale {\n\t\t_ = p.session.CommitSequence(sequence, now)\n\t}\n",
-      "check": "go",
-      "expect": "link-refused input did not commit the sequence"
-    },
-    {
-      "id": "v7-flow-fwd-link-epoch-reason-shared",
-      "batch": "v7-flow",
-      "what": "A link epoch refusal is counted as the Server's ordinary epoch routing",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tcase errors.Is(err, errLinkEpoch):\n\t\treturn playerFwdRoutedLinkEpochMismatchInputs\n",
-      "replace": "\tcase errors.Is(err, errLinkEpoch):\n\t\treturn playerFwdRoutedEpochMismatchInputs\n",
-      "check": "go",
-      "expect": "counted as fwd_routed_epoch_mismatch_inputs"
-    },
-    {
-      "id": "v7-flow-fwd-malformed-as-link-cap",
-      "batch": "v7-flow",
-      "what": "A schema refusal of the link is counted as the link cap",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tcase errors.Is(err, errLinkCap):\n\t\treturn playerFwdRoutedLinkCapInputs\n\t}\n\treturn playerFwdRoutedMalformedInputs\n",
-      "replace": "\t}\n\treturn playerFwdRoutedLinkCapInputs\n",
-      "check": "go",
-      "expect": "counted as fwd_routed_link_cap_inputs"
-    },
-    {
-      "id": "v7-flow-fwd-chunk-ignores-resolved",
-      "batch": "v7-flow",
-      "what": "The main window is cut every 12 commands from its resolved prefix, so more IPC inputs carry new commands than before 08c",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tif lane == mainLane {\n\t\tfirst := sort.Search(len(in.Commands), func(i int) bool { return in.Commands[i].Sequence > resolved })\n\t\twrites = appendChunks(writes, in, in.Commands[:first], lane, resolved)\n\t\treturn appendChunks(writes, in, in.Commands[first:], lane, resolved)\n\t}\n",
-      "replace": "",
-      "check": "go",
-      "expect": "resolved prefix shifted the chunk boundaries"
-    },
-    {
-      "id": "v7-flow-dedup-resolved-unmarked",
-      "batch": "v7-flow",
-      "what": "Only unresolved commands are marked written, so copies of written resolved commands reach the Match again",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tl.markWrittenLocked(in)\n\t\t\twrites = appendWindow(writes, in, mainLane, l.resolved[id])\n",
-      "replace": "\t\t\tl.markWrittenLocked(&runtime.PlayerInput{PlayerId: id, Commands: in.Commands[sort.Search(len(in.Commands), func(i int) bool { return in.Commands[i].Sequence > l.resolved[id] }):]})\n\t\t\twrites = appendWindow(writes, in, mainLane, l.resolved[id])\n",
-      "check": "go",
-      "expect": "written resolved command was not marked"
-    },
-    {
-      "id": "v7-flow-dedup-rotation-kept-newest",
-      "batch": "v7-flow",
-      "what": "Epoch/life rotation keeps the newest written sequence, so the new epoch's commands expire as soon as they are written",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tdelete(l.newestWritten, playerID)\n\t}\n",
-      "replace": "\t}\n",
-      "check": "go",
-      "expect": "rotation kept the newest written sequence"
     },
     {
       "id": "v7-flow-ledger-epoch-old-silent",
@@ -1775,10 +1335,10 @@
       "batch": "v7-flow",
       "what": "A window the closed link refused still counts a forwarding outcome",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\tif err != nil {\n\t\t\treturn\n\t\t}\n\t\tif stale {\n",
-      "replace": "\t\tif stale {\n",
+      "find": "\tif err := s.link.input(in, e); err != nil {\n\t\tif errors.Is(err, adapter.ErrInput) {\n",
+      "replace": "\tif err := s.link.input(in, e); err != nil && false {\n\t\tif errors.Is(err, adapter.ErrInput) {\n",
       "check": "go",
-      "expect": "case link_closed/rejected_lane: counted fwd_rejected_lane_input_packets=1"
+      "expect": "case link_closed/input(_epoch)?: error <nil>"
     },
     {
       "id": "v7-flow-gw-undecodable-uncounted",
@@ -1875,8 +1435,8 @@
       "batch": "v7-flow",
       "what": "An admitted Input that fails to decode is not counted",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\ts.countIngress(p, playerDropMalformedInputPackets, 1)\n",
-      "replace": "",
+      "find": "\t\tif err != nil {\n\t\t\ts.countIngress(p, playerDropMalformedInputPackets, 1)\n",
+      "replace": "\t\tif err != nil {\n",
       "check": "go",
       "expect": "case malformed/input: counted none"
     },
@@ -2043,9 +1603,9 @@
     {
       "id": "v7-flow-fwd-stale-not-exclusive",
       "batch": "v7-flow",
-      "what": "A stale-sequence Input is counted by its lane, not as stale (D55 ③)",
+      "what": "A stale-sequence Input is counted as a main forward, not as stale (D55 ③)",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\tif stale {\n\t\t\toutcome = playerFwdStaleSequenceInputPackets\n\t\t}\n",
+      "find": "\tif stale {\n\t\toutcome = playerFwdStaleSequenceInputPackets\n\t}\n",
       "replace": "",
       "check": "go",
       "expect": "(?m)case stale_sequence/input_main: counted fwd_main_input_packets=1$"
@@ -2055,70 +1615,20 @@
       "batch": "v7-flow",
       "what": "A stale-sequence Input is counted as stale and by its lane",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\tif stale {\n\t\t\toutcome = playerFwdStaleSequenceInputPackets\n\t\t}\n",
-      "replace": "\t\tif stale {\n\t\t\ts.countIngress(p, playerFwdStaleSequenceInputPackets, 1)\n\t\t}\n",
+      "find": "\tif stale {\n\t\toutcome = playerFwdStaleSequenceInputPackets\n\t}\n",
+      "replace": "\tif stale {\n\t\ts.countIngress(p, playerFwdStaleSequenceInputPackets, 1)\n\t}\n",
       "check": "go",
       "expect": "case stale_sequence/input_main: counted fwd_main_input_packets=1 fwd_stale_sequence_input_packets=1"
-    },
-    {
-      "id": "v7-flow-fwd-whole-copy-as-main",
-      "batch": "v7-flow",
-      "what": "A packet of written copies is counted as a main-lane forward",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tif copies {\n\t\toutcome = playerFwdWrittenDuplicateInputPackets\n\t}\n",
-      "replace": "",
-      "check": "go",
-      "expect": "case written_duplicate/input: counted fwd_main_input_packets=1"
-    },
-    {
-      "id": "v7-flow-fwd-link-hides-whole-copy",
-      "batch": "v7-flow",
-      "what": "The link does not report a window of written copies",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t*copies = true\n",
-      "replace": "",
-      "check": "go",
-      "expect": "link did not report a whole copy"
-    },
-    {
-      "id": "v7-flow-fwd-rejected-as-main",
-      "batch": "v7-flow",
-      "what": "A rejected-lane window is counted as a main-lane forward",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\toutcome := playerFwdRejectedLaneInputPackets\n",
-      "replace": "\toutcome := playerFwdMainInputPackets\n",
-      "check": "go",
-      "expect": "case rejected_lane/input_epoch: counted fwd_main_input_packets=1"
     },
     {
       "id": "v7-flow-fwd-input-outcome-uncounted",
       "batch": "v7-flow",
       "what": "A forwarded Input counts no outcome",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.countIngress(p, outcome, 1)\n",
-      "replace": "\t\t_ = outcome\n",
+      "find": "\ts.countIngress(p, outcome, 1)\n\treturn nil\n",
+      "replace": "\t_ = outcome\n\treturn nil\n",
       "check": "go",
       "expect": "case main/input: counted none"
-    },
-    {
-      "id": "v7-flow-snapshot-old-tick-uncounted",
-      "batch": "v7-flow",
-      "what": "A snapshot whose tick is not after the last one is refused uncounted (D1)",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\ts.countGatewayLocked(gatewayDropOldTickSnapshots, dropEvent{at: time.Now(), tick: out.Tick})\n",
-      "replace": "",
-      "check": "go",
-      "expect": "refused snapshots counted drop_regressed_snapshots=1"
-    },
-    {
-      "id": "v7-flow-snapshot-regressed-uncounted",
-      "batch": "v7-flow",
-      "what": "A snapshot in which a player's cursor goes back is refused uncounted (D2)",
-      "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\t\t\ts.countGatewayLocked(gatewayDropRegressedSnapshots, dropEvent{at: time.Now(), tick: out.Tick})\n",
-      "replace": "",
-      "check": "go",
-      "expect": "(?m)refused snapshots counted drop_old_tick_snapshots=2( drop_coalesced_snapshots=[0-9]+)?$"
     },
     {
       "id": "v7-flow-snapshot-key-renamed",
@@ -2519,16 +2029,6 @@
       "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
       "check": "go",
       "expect": "write_failure: player \\d+: link settled 6 of 3 handed commands"
-    },
-    {
-      "id": "v7-flow-final-close-rejected-uncounted",
-      "batch": "v7-flow",
-      "what": "Rejected-lane windows cleared by close are not counted (I0)",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tfor _, in := range lane {\n\t\t\tl.countLocked(id, playerDropClearedOnCloseCommands, uint64(len(in.Commands)))\n",
-      "replace": "\t\tfor _, in := range lane {\n\t\t\t_, _ = id, in\n",
-      "check": "go",
-      "expect": "blocked_writer: player \\d+: link settled 5 of 7 handed commands"
     },
     {
       "id": "v7-flow-final-abandoned-skips-failed",
@@ -3043,10 +2543,10 @@
     {
       "id": "v7-flow-cross-ipc-drops-input-silently",
       "batch": "v7-flow",
-      "what": "the Match's IPC drops one input in fifty unseen (I1, across the processes, notices it)",
+      "what": "the Match's IPC drops the windows starting at every fiftieth command unseen (I1, across the processes, notices it)",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
       "find": "                static_cast<void>(host.SubmitInput(window));\n",
-      "replace": "                if(p.commands_size()!=1 || p.commands(0).sequence()%50!=0) static_cast<void>(host.SubmitInput(window));\n",
+      "replace": "                if(p.commands(0).sequence()%50!=0) static_cast<void>(host.SubmitInput(window));\n",
       "check": "ingress_cross",
       "expect": "I1 is failed"
     },
@@ -3114,8 +2614,8 @@
       "id": "v7-flow-d56-forget-loses-counts",
       "batch": "v7-flow",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n\tdelete(l.inputs, player)\n\tdelete(l.resolved, player)\n\tdelete(l.rejected, player)\n\tdelete(l.written, player)\n\tdelete(l.newestWritten, player)\n\tdelete(l.epochs, player)\n\tdelete(l.lives, player)\n\tdelete(l.actionWindows, player)\n",
-      "replace": "\tdelete(l.inputs, player)\n\tdelete(l.resolved, player)\n\tdelete(l.rejected, player)\n\tdelete(l.written, player)\n\tdelete(l.newestWritten, player)\n\tdelete(l.epochs, player)\n\tdelete(l.lives, player)\n\tdelete(l.actionWindows, player)\n\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n",
+      "find": "\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n\tdelete(l.actionWindows, player)\n",
+      "replace": "\tdelete(l.actionWindows, player)\n\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n",
       "check": "go",
       "expect": "player 7 \\(left\\) windows \\[\\{0 0\\} \\{0 0\\}\\], want \\[\\{2 0\\} \\{0 0\\}\\]",
       "what": "forget drops the action window before counting it: the Leave never reaches the window or final lines"
@@ -3915,7 +3415,7 @@
       "batch": "v71-drop-report",
       "what": "The link counts a reported discard into its 10 s line only",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countDrop(player, counter, n, dropEvent{at: time.Now()})\n",
+      "find": "\tl.countDrop(player, counter, n, e)\n",
       "replace": "",
       "check": "go",
       "expect": "link counters"
@@ -4181,6 +3681,116 @@
       "expect": "adjacent_find|cycled\\.size\\(\\) == decisions - 4"
     },
     {
+      "id": "v71ip-leave-first",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A control overtakes the queued inputs (a Leave written before the player's earlier inputs)",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.queue = append(l.queue, queuedMessage{message: message})\n",
+      "replace": "\tl.queue = append([]queuedMessage{{message: message}}, l.queue...)\n",
+      "check": "go",
+      "expect": "written \\[.*\\], want \\[input 1/1 join 3"
+    },
+    {
+      "id": "v71ip-drop-newest",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A full input queue drops the arriving window instead of the oldest",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tl.queue = slices.Delete(l.queue, i, i+1)\n\t\t\t\tl.queuedInputs[in.PlayerId]--\n\t\t\t\tbreak\n",
+      "replace": "\t\t\t\t_ = slices.Index(l.queue, q)\n\t\t\t\t_ = i\n\t\t\t\treturn nil\n",
+      "check": "go",
+      "expect": "written \\[.*\\], want the newest|the Match read \\[.*\\], want"
+    },
+    {
+      "id": "v71ip-commit-before-decode",
+      "batch": "v71-edge-input-passthrough",
+      "what": "An input datagram commits its sequence and liveness before it decoded",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tin, err := adapter.DecodeInput(payload, p.playerID)\n",
+      "replace": "\t\tif !stale {\n\t\t\t_ = p.session.CommitSequence(h.Sequence, now)\n\t\t}\n\t\tin, err := adapter.DecodeInput(payload, p.playerID)\n",
+      "check": "go",
+      "expect": "a malformed input (refreshed liveness|committed its sequence)"
+    },
+    {
+      "id": "v71ip-overflow-uncounted",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A window dropped from a full input queue is not counted or reported",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "overflowed windows counted 0, want 2"
+    },
+    {
+      "id": "v71ip-overflow-wrong-identity",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A dropped window is reported with the arriving window's identity",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)\n",
+      "replace": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, e)\n",
+      "check": "go",
+      "expect": "does not carry the dropped window"
+    },
+    {
+      "id": "v71ip-queue-bound-32",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The per-player input queue holds 32 windows, fewer than the contract's 64",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tmaxQueuedInputs = 64\n",
+      "replace": "\tmaxQueuedInputs = 32\n",
+      "check": "go",
+      "expect": "the input queue holds 32 windows, fewer than 64"
+    },
+    {
+      "id": "v71ip-forget-drops-queued",
+      "batch": "v71-edge-input-passthrough",
+      "what": "An eviction (forget) drops the player's queued inputs",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tdelete(l.actionWindows, player)\n\tdelete(l.actionStats, player)\n}\n",
+      "replace": "\tdelete(l.actionWindows, player)\n\tdelete(l.actionStats, player)\n\tl.queue = slices.DeleteFunc(l.queue, func(q queuedMessage) bool { return q.input && q.player == player })\n}\n",
+      "check": "go",
+      "expect": "written \\[.*\\], want \\[input 1/1 join 3"
+    },
+    {
+      "id": "v71ip-handed-uncounted",
+      "batch": "v71-edge-input-passthrough",
+      "what": "Input windows handed to the link are not counted (I0)",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))\n",
+      "replace": "",
+      "check": "go",
+      "expect": "handed and written commands"
+    },
+    {
+      "id": "v71ip-client-applies-old-tick",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Client applies a snapshot whose tick is not newer (the Gateway's D1 is gone)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(self && (!state.snapshot || snapshot.tick>state.snapshot->tick)) {\n",
+      "replace": "                if(self) {\n",
+      "check": "worker",
+      "expect": "the Client applied an old, repeated or regressed snapshot"
+    },
+    {
+      "id": "v71ip-client-applies-regressed",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Client applies a snapshot whose cursor goes back (the Gateway's D2 is gone)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": " ||\n                                     (player.movementEpoch==previous.movementEpoch && player.lastResolvedCommand<previous.lastResolvedCommand)))valid=false;\n",
+      "replace": "))valid=false;\n",
+      "check": "worker",
+      "expect": "the Client applied an old, repeated or regressed snapshot"
+    },
+    {
+      "id": "v71ip-match-takes-another-life",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Match admits a window of another life, which the Gateway no longer routes away: it replaces the staged commands",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (input.lifeGeneration != life)\n        return input.lifeGeneration < life ? InputAdmission::LifeOld : InputAdmission::LifeFuture;\n",
+      "replace": "    static_cast<void>(life);\n",
+      "check": "ipc",
+      "expect": "CHECK\\( once\\.(snapshot|decisions) == copied\\.(snapshot|decisions) \\) is NOT correct"
+    },
+    {
       "id": "v71ip-input-wait-unrecorded",
       "batch": "v71-edge-input-passthrough",
       "what": "SubmitInput's wait for the host mutex is not recorded",
@@ -4209,6 +3819,76 @@
       "replace": "    static_cast<void>(waiting);\n",
       "check": "cpu",
       "expect": "lockWaits\\.step\\.Count\\(\\) == 1"
+    },
+    {
+      "id": "v71ip-client-applies-older-epoch",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Client applies a snapshot whose movement epoch or life goes back (the Gateway's D2 is gone)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                                    (player.lifeGeneration<previous.lifeGeneration || player.movementEpoch<previous.movementEpoch ||\n",
+      "replace": "                                    (\n",
+      "check": "worker",
+      "expect": "the Client applied an old, repeated or regressed snapshot"
+    },
+    {
+      "id": "v71ip-control-count-kept",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A write pass does not reset the pending control count: the link fails after 64 lifecycle requests in all",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.queue = nil\n\tl.queuedControls = 0\n\tclear(l.queuedInputs)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
+      "replace": "\tl.queue = nil\n\tclear(l.queuedInputs)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
+      "check": "go",
+      "expect": "round 1: control 1 refused"
+    },
+    {
+      "id": "v71ip-overflow-any-player",
+      "batch": "v71-edge-input-passthrough",
+      "what": "A full input queue drops another player's oldest window",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tif q.input && q.player == in.PlayerId {\n",
+      "replace": "\t\t\tif q.input {\n",
+      "check": "go",
+      "expect": "overflowed windows counted 1, want 2|player 2 lost|want player 2's window"
+    },
+    {
+      "id": "v71ip-input-no-wake",
+      "batch": "v71-edge-input-passthrough",
+      "what": "An input does not wake the writer: it waits for the idle timer",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tl.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))\n\tl.notify()\n",
+      "replace": "\tl.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))\n",
+      "check": "go",
+      "expect": "an input waited for the writer's idle timer"
+    },
+    {
+      "id": "v71ip-sample-not-the-datagram",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Server samples a dropped window without the datagram's receipt and GYOP sequence",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\te := s.datagram\n\te.epoch, e.life = in.MovementEpoch, in.LifeGeneration\n",
+      "replace": "\te := dropEvent{at: now}\n\te.epoch, e.life = in.MovementEpoch, in.LifeGeneration\n",
+      "check": "go",
+      "expect": "the first dropped datagram's sample"
+    },
+    {
+      "id": "v71ip-sample-identity-wrong",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Server samples a dropped window with its epoch and life swapped and one command",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\te.epoch, e.life = in.MovementEpoch, in.LifeGeneration\n\te.firstCommand, e.lastCommand = in.Commands[0].Sequence, in.Commands[len(in.Commands)-1].Sequence\n\te.items = uint32(len(in.Commands))\n",
+      "replace": "\te.epoch, e.life = in.LifeGeneration, in.MovementEpoch\n\te.firstCommand, e.lastCommand = in.Commands[0].Sequence, in.Commands[0].Sequence\n\te.items = 1\n",
+      "check": "go",
+      "expect": "the first dropped datagram's sample"
+    },
+    {
+      "id": "v71ip-other-life-lost-in-ipc",
+      "batch": "v71-edge-input-passthrough",
+      "what": "The Match's IPC drops every input of another life: the differential no longer exercises the host's life refusal",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                static_cast<void>(host.SubmitInput(window));\n",
+      "replace": "                if(p.life_generation()==1) static_cast<void>(host.SubmitInput(window));\n",
+      "check": "ipc",
+      "expect": "CHECK\\( copied\\.otherLife > 100 \\)"
     }
   ]
 }

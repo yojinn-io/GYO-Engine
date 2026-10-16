@@ -147,27 +147,6 @@
     "exit": true
   },
   {
-    "value": 22,
-    "name": "DROP_RESOLVED_TRIM_COMMANDS",
-    "key": "drop_resolved_trim_commands",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 23,
-    "name": "DROP_REJECTED_LANE_OVERFLOW_COMMANDS",
-    "key": "drop_rejected_lane_overflow_commands",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 24,
-    "name": "DROP_DISCARDED_ON_LEAVE_COMMANDS",
-    "key": "drop_discarded_on_leave_commands",
-    "scope": "player",
-    "exit": true
-  },
-  {
     "value": 25,
     "name": "DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS",
     "key": "drop_discarded_on_leave_actions_shots",
@@ -221,7 +200,7 @@
     "name": "DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS",
     "key": "drop_ipc_queue_overflow_input_packets",
     "scope": "player",
-    "exit": false
+    "exit": true
   },
   {
     "value": 33,
@@ -255,20 +234,6 @@
     "value": 42,
     "name": "DROP_UNKNOWN_SESSION_DATAGRAMS",
     "key": "drop_unknown_session_datagrams",
-    "scope": "gateway",
-    "exit": true
-  },
-  {
-    "value": 43,
-    "name": "DROP_OLD_TICK_SNAPSHOTS",
-    "key": "drop_old_tick_snapshots",
-    "scope": "gateway",
-    "exit": true
-  },
-  {
-    "value": 44,
-    "name": "DROP_REGRESSED_SNAPSHOTS",
-    "key": "drop_regressed_snapshots",
     "scope": "gateway",
     "exit": true
   },

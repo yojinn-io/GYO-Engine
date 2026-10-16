@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -348,10 +347,12 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 {
 		t.Fatalf("bad input %v", in)
 	}
-	// Redundant batches remain valid after the mailbox drains. Their commands
-	// were written already, so the link drops the copy instead of writing it.
+	// Redundant batches remain valid after the mailbox drains, and reach the
+	// Match as they came (pv7 §2a); it keeps the first arrival.
 	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
-	f.quiet(t)
+	if in := f.nextInput(t, "redundant window did not reach the runtime"); in == nil || len(in.Commands) != 2 {
+		t.Fatalf("redundant window: %v", in)
+	}
 	// A conflict reaches the Match unmerged, which rejects the entire batch,
 	// including its new command.
 	sendPacket(t, p, c, 7, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: -1}, {Sequence: 4}}})
@@ -408,22 +409,6 @@ func TestMatchEvictionRemovesPlayerAndTellsClient(t *testing.T) {
 	f.quiet(t)
 }
 
-func TestRuntimeMailboxCarriesNewestObservedTick(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	for _, window := range []*runtime.PlayerInput{
-		{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 1, ObservedAuthorityTick: 40, Commands: []*runtime.MovementCommand{{Sequence: 1}}},
-		{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 1, ObservedAuthorityTick: 38, Commands: []*runtime.MovementCommand{{Sequence: 2}}},
-	} {
-		if err := l.input(window); err != nil {
-			t.Fatal(err)
-		}
-	}
-	batch := l.batch()
-	if len(batch) != 1 || batch[0].GetInput().ObservedAuthorityTick != 40 || len(batch[0].GetInput().Commands) != 2 {
-		t.Fatalf("merged window lost the newest observed tick: %v", batch)
-	}
-}
-
 func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {
 	s, f := newTestServer(t)
 	status, _ := post(t, s, "/rooms", map[string]any{})
@@ -468,32 +453,6 @@ func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {
 	}
 }
 
-func TestRuntimeMailboxPreservesControlAndCoalescesInput(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	join := envelope()
-	join.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: 1}}
-	if err := l.control(join); err != nil {
-		t.Fatal(err)
-	}
-	for _, seq := range []uint64{10, 12, 11} {
-		if err := l.input(&runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: seq}}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	batch := l.batch()
-	if len(batch) != 2 || batch[0].GetJoin() == nil || len(batch[1].GetInput().Commands) != 3 || batch[1].GetInput().Commands[0].Sequence != 10 || batch[1].GetInput().Commands[1].Sequence != 11 || batch[1].GetInput().Commands[2].Sequence != 12 {
-		t.Fatalf("batch %v", batch)
-	}
-	_ = l.input(&runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1, Commands: []*runtime.MovementCommand{{Sequence: 13}}})
-	leave := envelope()
-	leave.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: 1}}
-	_ = l.control(leave)
-	batch = l.batch()
-	if len(batch) != 1 || batch[0].GetLeave() == nil {
-		t.Fatalf("leave retained stale input %v", batch)
-	}
-}
-
 func TestSnapshotsFollowRuntimePublicationsForBothPeers(t *testing.T) {
 	s, f := newTestServer(t)
 	status, _ := post(t, s, "/rooms", map[string]any{})
@@ -523,12 +482,18 @@ func TestSnapshotsFollowRuntimePublicationsForBothPeers(t *testing.T) {
 	if err := proto.Unmarshal(first, &snapshot); err != nil || len(snapshot.Players) != 2 || snapshot.Tick != 3 {
 		t.Fatalf("full snapshot: %v %v", &snapshot, err)
 	}
-	// No producer clock in Gateway: neither elapsed time nor a repeated old
-	// publication causes another datagram.
+	// No producer clock in Gateway: elapsed time causes no datagram. A
+	// repeated publication is forwarded as it came (D1 removed, pv7 §2a); the
+	// Client applies only a newer tick.
 	f.send(e)
+	for _, p := range []*net.UDPConn{pa, pb} {
+		if repeat := receivePacket(t, p, adapter.Snapshot); !bytes.Equal(repeat, first) {
+			t.Fatal("the repeated publication changed")
+		}
+	}
 	_ = pa.SetReadDeadline(time.Now().Add(120 * time.Millisecond))
 	if _, _, err := pa.ReadFromUDP(make([]byte, framing.MaxDatagram)); err == nil {
-		t.Fatal("gateway repeated a snapshot without a new authoritative publication")
+		t.Fatal("gateway sent a snapshot without an authoritative publication")
 	} else if timeout, ok := err.(net.Error); !ok || !timeout.Timeout() {
 		t.Fatal(err)
 	}
@@ -649,70 +614,10 @@ func TestRoomsAndJoinForwardTheArenaDigest(t *testing.T) {
 	reserve(t, s, "digest")
 }
 
-func TestRuntimeMailboxMergesWindowsAtomicallyAndBoundsStorage(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	window := func(first, last uint64) *runtime.PlayerInput {
-		in := &runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, PlayerId: 1}
-		for sequence := first; sequence <= last; sequence++ {
-			in.Commands = append(in.Commands, &runtime.MovementCommand{Sequence: sequence, MoveForward: 1})
-		}
-		return in
-	}
-	original := window(1, 12)
-	if err := l.input(original); err != nil {
-		t.Fatal(err)
-	}
-	// Mailbox owns a copy; the caller cannot modify an accepted command.
-	original.Commands[0].MoveForward = -1
-	if err := l.input(window(8, 19)); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.input(window(20, 31)); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.input(window(32, 32)); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.input(window(33, 33)); err == nil {
-		t.Fatal("future window exceeded 32")
-	}
-	conflict := window(31, 32)
-	conflict.Commands[0].MoveForward = -1
-	if err := l.input(conflict); err == nil {
-		t.Fatal("conflicting command accepted")
-	}
-	batch := l.batch()
-	var commands []*runtime.MovementCommand
-	for _, message := range batch {
-		if len(message.GetInput().Commands) > adapter.MaxPendingCommands {
-			t.Fatal("IPC batch exceeds12")
-		}
-		commands = append(commands, message.GetInput().Commands...)
-	}
-	if len(batch) != 3 || len(commands) != 32 {
-		t.Fatalf("lost commands %v", batch)
-	}
-	for i, command := range commands {
-		if command.Sequence != uint64(i+1) || command.MoveForward != 1 {
-			t.Fatalf("mutated or missing command %d: %v", i, command)
-		}
-	}
-	// Resolved commands stay until written: the Match measures late arrivals.
-	if err := l.input(window(33, 35)); err != nil {
-		t.Fatal(err)
-	}
-	l.acknowledge(1, 1, 1, 34)
-	batch = l.batch()
-	commands = commands[:0]
-	for _, message := range batch {
-		commands = append(commands, message.GetInput().Commands...)
-	}
-	if len(commands) != 3 || commands[0].Sequence != 33 {
-		t.Fatalf("acknowledge pruned a resolved command before the write: %v", batch)
-	}
-}
-
-func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
+// pv7 §2a end to end: every input datagram reaches the Match as it came, a
+// repeat, a mutation, a reordered packet and a resolved copy alike; the Match
+// keeps the first arrival and refuses what conflicts (D49).
+func TestGatewayForwardsEveryInputDatagramToTheRuntime(t *testing.T) {
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
 	c, p := reserve(t, s, "movement"), peer(t)
@@ -720,39 +625,27 @@ func TestGatewayKeepsStopAndRejectsMutationAfterMailboxDrains(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 	first := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1}, {Sequence: 2}}}
-	sendPacket(t, p, c, 2, adapter.Input, first)
-	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 2 || in.Commands[1].MoveForward != 0 {
-		t.Fatalf("stop command lost: %v", in)
+	mutated := &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}}
+	for _, c2 := range []struct {
+		name     string
+		sequence uint32
+		in       *client.PlayerInput
+	}{{"first", 2, first}, {"repeat", 3, first}, {"mutation", 4, mutated}, {"reordered", 2, first}} {
+		sendPacket(t, p, c, c2.sequence, adapter.Input, c2.in)
+		in := f.nextInput(t, c2.name+" did not reach the runtime")
+		if in == nil || len(in.Commands) != len(c2.in.Commands) || in.Commands[0].Sequence != c2.in.Commands[0].Sequence ||
+			in.Commands[0].MoveForward != c2.in.Commands[0].MoveForward {
+			t.Fatalf("%s reached the runtime changed: %v", c2.name, in)
+		}
 	}
-	// Packet sequence increases; command sequences can repeat and overlap. A
-	// repeat is no error; its commands were written, so the link drops it.
-	sendPacket(t, p, c, 3, adapter.Input, first)
-	f.quiet(t)
-	// A mutation reaches the Match unmerged, for it to refuse.
-	sendPacket(t, p, c, 4, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
-	if in := f.nextInput(t, "mutated window did not reach the runtime unmerged"); in == nil || len(in.Commands) != 2 || in.Commands[0].MoveForward != 1 {
-		t.Fatalf("mutated window did not reach the runtime unmerged: %v", in)
-	}
-	// A reordered transport packet is forwarded without committing its
-	// sequence, but its commands were written: it must not resurrect movement.
-	sendPacket(t, p, c, 2, adapter.Input, first)
-	f.quiet(t)
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 9, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: c.PlayerID, LastResolvedCommand: 2}}}}
 	f.send(e)
 	receivePacket(t, p, adapter.Snapshot)
-	// Resolved and written already: the copy is dropped, and never recorded.
+	// Resolved by the Match: the copy still goes, the Match measures it.
 	sendPacket(t, p, c, 5, adapter.Input, first)
-	f.quiet(t)
-	s.mu.Lock()
-	pstate := s.players[c.PlayerID]
-	if len(pstate.commands) != 0 || pstate.lastResolved != 2 {
-		t.Error("acknowledged commands retained")
-	}
-	s.mu.Unlock()
-	sendPacket(t, p, c, 6, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 3}}})
-	if in := f.next(t).GetInput(); in == nil || len(in.Commands) != 1 || in.Commands[0].Sequence != 3 {
-		t.Fatalf("new command missing: %v", in)
+	if in := f.nextInput(t, "resolved copy did not reach the runtime"); in == nil || len(in.Commands) != 2 {
+		t.Fatalf("resolved copy: %v", in)
 	}
 }
 
@@ -783,94 +676,6 @@ func TestActiveHelloKeepsSessionAliveWithoutRefreshingGameplay(t *testing.T) {
 	s.expireAt(start.Add(10 * time.Second))
 	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID {
 		t.Fatal("silent session did not expire normally")
-	}
-}
-
-func TestRuntimeMailboxEpochOnlyAdvancesFromAuthority(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	input := func(epoch uint64, forward float32) *runtime.PlayerInput {
-		return &runtime.PlayerInput{LifeGeneration: 1, PlayerId: 1, MovementEpoch: epoch, Commands: []*runtime.MovementCommand{{Sequence: 1, MoveForward: forward}}}
-	}
-	if err := l.input(input(1, 1)); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.input(input(2, -1)); err == nil {
-		t.Fatal("input advanced epoch")
-	}
-	// The old epoch's pending window reaches the Match unmerged, to refuse.
-	l.acknowledge(1, 2, 1, 0)
-	if batch := l.batch(); len(batch) != 1 || batch[0].GetInput().MovementEpoch != 1 {
-		t.Fatalf("epoch change dropped the pending window: %v", batch)
-	}
-	if err := l.input(input(1, 1)); !errors.Is(err, adapter.ErrInput) {
-		t.Fatal("link silently accepted a stale epoch")
-	}
-	if len(l.batch()) != 0 {
-		t.Fatal("old epoch reactivated command")
-	}
-	if err := l.input(input(3, -1)); err == nil {
-		t.Fatal("future epoch accepted")
-	}
-	if err := l.input(input(2, -1)); err != nil {
-		t.Fatal(err)
-	}
-	l.acknowledge(1, 1, 1, 99)
-	batch := l.batch()
-	if len(batch) != 1 || batch[0].GetInput().MovementEpoch != 2 || batch[0].GetInput().Commands[0].MoveForward != -1 {
-		t.Fatalf("authority epoch changed incorrectly: %v", batch)
-	}
-}
-
-func TestGatewayEpochResetRejectsOldAndFutureInput(t *testing.T) {
-	s, f := newTestServer(t)
-	post(t, s, "/rooms", map[string]any{})
-	c, p := reserve(t, s, "epochs"), peer(t)
-	sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
-	accept(t, f, c)
-	receivePacket(t, p, adapter.Welcome)
-	input := func(epoch uint64, forward float32) *client.PlayerInput {
-		return &client.PlayerInput{LifeGeneration: 1, MovementEpoch: epoch, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: forward}}}
-	}
-	sendPacket(t, p, c, 2, adapter.Input, input(1, 1))
-	if in := f.next(t).GetInput(); in == nil || in.MovementEpoch != 1 {
-		t.Fatalf("initial epoch: %v", in)
-	}
-	e := envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 7, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: c.PlayerID, MovementEpoch: 2, ContiguousPendingCommands: 0}}}}
-	f.send(e)
-	var snapshot client.WorldSnapshot
-	if err := proto.Unmarshal(receivePacket(t, p, adapter.Snapshot), &snapshot); err != nil || snapshot.Players[0].MovementEpoch != 2 || snapshot.Players[0].LastResolvedCommand != 0 {
-		t.Fatalf("reset snapshot %v %v", &snapshot, err)
-	}
-	// Old and future epochs reach the Match unmerged; it refuses them.
-	sendPacket(t, p, c, 3, adapter.Input, input(1, 1))
-	if in := f.nextInput(t, "stale epoch window did not reach the runtime"); in == nil || in.MovementEpoch != 1 {
-		t.Fatalf("stale epoch window did not reach the runtime: %v", in)
-	}
-	sendPacket(t, p, c, 4, adapter.Input, input(3, -1))
-	if in := f.nextInput(t, "future epoch window did not reach the runtime"); in == nil || in.MovementEpoch != 3 {
-		t.Fatalf("future epoch window did not reach the runtime: %v", in)
-	}
-	sendPacket(t, p, c, 5, adapter.Input, input(2, -1))
-	if in := f.next(t).GetInput(); in == nil || in.MovementEpoch != 2 || in.Commands[0].MoveForward != -1 {
-		t.Fatalf("fresh epoch could not restart sequence1: %v", in)
-	}
-	sendPacket(t, p, c, 6, adapter.Input, input(2, 1))
-	if in := f.nextInput(t, "conflicting epoch window did not reach the runtime"); in == nil || in.Commands[0].MoveForward != 1 {
-		t.Fatalf("conflicting epoch window did not reach the runtime: %v", in)
-	}
-	// A delayed old epoch can carry a numerically larger ACK and even an
-	// otherwise newer tick. It must not prune the replacement epoch's window.
-	stale := envelope()
-	stale.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 8, Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: c.PlayerID, Hp: 100}},
-		Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: c.PlayerID, MovementEpoch: 1, LastResolvedCommand: 999}}}}
-	s.runtimeMessage(stale)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	player := s.players[c.PlayerID]
-	if player.movementEpoch != 2 || player.lastResolved != 0 || len(player.commands) != 1 ||
-		s.lastSnapshot != 7 || player.commands[1].MoveForward != -1 {
-		t.Fatal("packet changed authority epoch/cursor")
 	}
 }
 

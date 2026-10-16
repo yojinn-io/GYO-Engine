@@ -231,9 +231,11 @@ const (
 	playerDropAdmissionUnknownPackets
 	playerDropInvalidActionsShots
 	playerDropLinkRejectedActionsShots
-	// I0: the handed commands (counted once, when input() or reject() returns
-	// nil; a move between lanes is not counted again) equal the sum of the
-	// nine counters after them.
+	// I0: the handed commands (counted once, when input() returns nil) equal
+	// the sum of the nine counters after them. Since pv7 §2a the link
+	// forwards each window as it came: the rejected lane, the written and
+	// merged copies, the trim and the Leave discard stay in the line, always
+	// 0, as do the routing attributes below.
 	playerFwdHandedMainCommands
 	playerFwdHandedRejectedLaneCommands
 	playerFwdLinkWrittenMainCommands // after l.conn.Write succeeded
@@ -286,6 +288,11 @@ const (
 	playerDropWriteFailedControlPackets
 	playerDropControlQueueFullControlPackets
 	playerDropReplacedSnapshotPackets
+	// Appended (pv7 §2a): input windows dropped from the link's per-player
+	// FIFO, oldest first, and the commands they carried (an attribute outside
+	// I0, so edge-analyzers can restate I0; only the packets are reported).
+	playerDropIpcQueueOverflowInputPackets
+	playerDropIpcQueueOverflowInputCommands
 	playerIngressCounterCount
 )
 
@@ -352,6 +359,8 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerDropWriteFailedControlPackets:      {ingressDropped, reasonWriteFailed, ingressControl, unitPackets},
 	playerDropControlQueueFullControlPackets: {ingressDropped, reasonControlQueueFull, ingressControl, unitPackets},
 	playerDropReplacedSnapshotPackets:        {ingressDropped, reasonReplaced, ingressSnapshot, unitPackets},
+	playerDropIpcQueueOverflowInputPackets:   {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitPackets},
+	playerDropIpcQueueOverflowInputCommands:  {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitCommands},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64

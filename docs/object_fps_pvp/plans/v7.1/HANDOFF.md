@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-resend` 完成；下一批 `edge-input-passthrough`，等你說開始。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 進行中。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D107 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D108 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-input-passthrough`（照 README 順序，說「開始」才啟動）。這批是行為改變：依 AGENTS.md §14.1，L2 的事前宣告（門檻、試行次數、重試規則）要在看結果之前經你核准。
+- **下一步**：本批拆成兩個 commit（B：鎖等待；A：原樣轉送），建兩棵樹、寫 L2 工具並乾跑，然後停下來等你核准[事前宣告](edge-input-passthrough-l2.md)。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16，D107（§9 的 `edge-results-resend` 驗收措辭）。
+- **最後更新**：2026-10-16 22:46，`edge-input-passthrough` 實作、L1、xhigh 檢查完成；L2 宣告第 2 版待工具乾跑後送核准。
 
 ## 閱讀入口
 
@@ -77,6 +77,7 @@
 | D105 | （2026-10-16）核准 `heartbeat-sync`、`time-echo`、`drop-report` 新增的 Gateway 欄位為診斷狀態（D-14 的 Architecture Delta）。條件：`edge-contract` 的白名單分三類——診斷狀態（判定路徑不得讀取）、單次呼叫的脈絡（`datagram`，不得跨資料包保留）、測試縫隙（正式路徑只用預設值）；分類先寫進 protocol-v7 §2a | 使用者：「2a（含條件）」；`drop-report` 的 xhigh should-4 |
 | D106 | （2026-10-16）開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh，估 7～8 h） | 使用者：「開始 edge-results-resend」 |
 | D107 | （2026-10-16）protocol-v7 §9 的 `edge-results-resend` 驗收改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照。量測：無損模型 8 個種子，369 個裁決中 63 個晚到，最多晚 33 ms；未確認超過 8 筆時新 id 要等循環槽位（推論最晚約 7 個間隔），條文以括號註明 | 使用者：「§9 照 (a)」；`edge-results-resend` 的 xhigh should-1 |
+| D108 | （2026-10-16）開始 `edge-input-passthrough`（檔位 high，局部 xhigh，估 20～26 h）。行為改變：L2 的事前宣告（門檻、試行次數、重試規則）在看結果之前經使用者核准（AGENTS.md §14.1），宣告前做門檻來源的對抗式檢查（D45） | 使用者：「開始」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -262,7 +263,25 @@
   - 實際約 1 h（17:25～18:19，含 xhigh 檢查約 13 分；估 7～8 h）。
 - 2026-10-16：同步 master（`497c138`，PR #79、#80）。只有 AGENTS.md 與 network-architecture 的標題改變，沒有衝突。之後照新的 AGENTS.md 做：§3 的 `Design Invariants`（含 `Replacement Criteria`）與「状態の権威」、§14 Test and Defect Handling（改既有測試的判定要寫理由；受入判定與 Design Invariants 守衛的判定要經你核准；事前宣告的門檻要在看結果之前核准）。本批改動既有測試判定的理由已寫在上面的紀錄與 commit 訊息。
 
+- 2026-10-16 20:09：`edge-input-passthrough` 開始（D108，檔位 high，局部 xhigh，估 20～26 h）。`edge-results-resend`（`5c0d8f5`）的四平台 L1 是 run 38879679708（手動觸發）。
+
+- 2026-10-16：`edge-input-passthrough` 實作與 L1（進行中，記錄器）。
+  - Gateway：`runtime_link.go` 的輸入改成依到達順序的單一佇列（controls 與輸入窗口同一個 FIFO；controls 不丟、超過 64 則 link 失效；每位玩家至多 64 則輸入窗口，滿了丟最舊，計入 `drop_ipc_queue_overflow_input_packets`（回報 32，樣本帶被丟資料包的身分）與行尾的新屬性鍵 `drop_ipc_queue_overflow_input_commands`）。刪除 `lastResolved` 副本、命令表、epoch／life、拒絕線、已寫出去重、合併、截短、D1、D2；Leave 與逐出不再丟佇列中的輸入。解碼成功就提交序號與活性（D-11）。
+  - 丟棄原因 22～24、43、44 在 proto 改成 reserved；golden 重產（35 個原因）。被刪路徑的 ingress v1 鍵照樣輸出 0。
+  - Match：host mutex 的鎖等待直方圖（SubmitInput 與 step 各一，`network statistics` 行尾的 `host_lock_*` 鍵；只記錄，D32 守衛加一項）。protocol-v7 §9 寫「IpcHost 層」，實作在 `MatchRuntimeHost`（鎖在那裡），用語差異記在未結事項。
+  - 測試：Go 的原樣轉送、到達順序、Leave 不超車、FIFO 丟最舊與回報、寫出卡住時的佇列深度、控制訊息上限、輸入立刻喚醒 writer、解碼後才提交、無 snapshot 守衛、I0；C++ 的副本差分（每個窗口送兩次並夾帶已解析命令與另一個 life 的窗口，判定與最終 snapshot 逐位元相同，並斷言 host 確實計到副本）、鎖等待的記錄；worker probe 的「Client 拒收舊、重複、倒退的 snapshot」。
+  - 改了既有檢查的判定（AGENTS.md §14.4，理由）：`ingress_cross_check.py` 只接受 I3 以 protocol-v7 §9 宣告的形狀失敗（Gateway 副本 0、Match 副本 > 0）；其他形狀照樣失敗。舊的去重、路由、拒絕線測試隨程式刪除（`dedup_test.go` 整檔）。
+  - 突變：舊的 50 個（去重、路由、拒絕線、截短、D1、D2）隨程式刪除；7 個改成新寫法；本批新增。第一輪 214 個中 205 個殺死，其餘是新程式下的寫法或期望值問題，修正後殺死（其中 `v71ip-match-takes-another-life` 讓副本差分的未來 life 窗口改帶不同內容才抓得到）。
+  - 局部 xhigh 檢查（程式，1 位，約 27 分）：must 0、should 5、note 11。should 全部補測試與突變（控制訊息上限與歸零、另一位玩家的佇列、Server 組的樣本身分、輸入喚醒、溢出命令數）；note 處理了 link 拒收不再讓房間失效、Client 的 epoch 倒退、副本差分的計數斷言、測試持鎖 100 ms、過時註解；其餘記在未結事項。
+  - D45 門檻來源檢查（L2 草稿第 1 版，1 位 xhigh，約 17 分）：送核准前必須修正 7、應修正 8；改寫成 [第 2 版](edge-input-passthrough-l2.md)，對應表在其第 11 節。也發現 clean 時 B 本來就是一包一則 IPC，D-8 擔心的負載主要在故障情境。
+  - 時間：22:46 時，實作、L1、兩次 xhigh 檢查完成；接著是兩個 commit、L2 工具與乾跑，然後停下來等你核准宣告。
+
 ## 未結事項
+
+- **`edge-input-passthrough` 的 xhigh note**（記錄）：
+  - N3：佇列項目攜帶收包時刻與 GYOP 序號（回報 32 的 dwell 起點），字面上和 D105「單次呼叫的脈絡不得跨資料包保留」衝突。建議 `edge-contract` 把它歸類為「隨佇列項目攜帶的診斷狀態」，由你決定。
+  - N5：protocol-v7 §9 寫鎖等待直方圖在「IpcHost 層」，實作在 `MatchRuntimeHost`；`network_statistics.py` 不彙總 `host_lock_*`，L2 的 judge 直接讀。
+  - N10：`fwd_main_input_packets` 現在是「交給 link」，溢出的資料包同時算它和回報 32；`edge-analyzers` 照這個語意定義 I0。
 
 - **`edge-results-resend` 的 xhigh note**（記錄，之後的批次處理）：
   - N1：這批 Match 的「ACK-only 補送退役」只在競態下觸發（link 只在 ACK 超前退役時才送 ACK-only），Client 漏收退役仍由 Gateway session 補送；`edge-results-passthrough` 讓 link 原樣轉送 ACK-only 後才真的用到。

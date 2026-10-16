@@ -295,7 +295,8 @@ func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
 // tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
 // 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
 // (16, 17, 20-26, 43, 44) exist only in pv7-line's intermediate commits: the
-// edge batches delete them with their exits, and they become reserved.
+// edge batches delete them with their exits, and they become reserved (22-24,
+// 43 and 44 already are). A reserved value is never reused.
 type DropReason int32
 
 const (
@@ -321,9 +322,6 @@ const (
 	DropReason_DROP_ADMISSION_UNKNOWN_PACKETS          DropReason = 19
 	DropReason_DROP_INVALID_ACTIONS_SHOTS              DropReason = 20 // transitional (A3)
 	DropReason_DROP_LINK_REJECTED_ACTIONS_SHOTS        DropReason = 21 // transitional (A5)
-	DropReason_DROP_RESOLVED_TRIM_COMMANDS             DropReason = 22 // transitional
-	DropReason_DROP_REJECTED_LANE_OVERFLOW_COMMANDS    DropReason = 23 // transitional
-	DropReason_DROP_DISCARDED_ON_LEAVE_COMMANDS        DropReason = 24 // transitional
 	DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS   DropReason = 25 // transitional
 	DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS    DropReason = 26 // transitional
 	DropReason_DROP_WRITE_FAILED_SNAPSHOT_PACKETS      DropReason = 27
@@ -337,8 +335,6 @@ const (
 	DropReason_DROP_UNDECODABLE_DATAGRAMS              DropReason = 40
 	DropReason_DROP_OTHER_VERSION_DATAGRAMS            DropReason = 41
 	DropReason_DROP_UNKNOWN_SESSION_DATAGRAMS          DropReason = 42
-	DropReason_DROP_OLD_TICK_SNAPSHOTS                 DropReason = 43 // transitional (D1)
-	DropReason_DROP_REGRESSED_SNAPSHOTS                DropReason = 44 // transitional (D2)
 	DropReason_DROP_COALESCED_SNAPSHOTS                DropReason = 45
 )
 
@@ -367,9 +363,6 @@ var (
 		19: "DROP_ADMISSION_UNKNOWN_PACKETS",
 		20: "DROP_INVALID_ACTIONS_SHOTS",
 		21: "DROP_LINK_REJECTED_ACTIONS_SHOTS",
-		22: "DROP_RESOLVED_TRIM_COMMANDS",
-		23: "DROP_REJECTED_LANE_OVERFLOW_COMMANDS",
-		24: "DROP_DISCARDED_ON_LEAVE_COMMANDS",
 		25: "DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS",
 		26: "DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS",
 		27: "DROP_WRITE_FAILED_SNAPSHOT_PACKETS",
@@ -383,8 +376,6 @@ var (
 		40: "DROP_UNDECODABLE_DATAGRAMS",
 		41: "DROP_OTHER_VERSION_DATAGRAMS",
 		42: "DROP_UNKNOWN_SESSION_DATAGRAMS",
-		43: "DROP_OLD_TICK_SNAPSHOTS",
-		44: "DROP_REGRESSED_SNAPSHOTS",
 		45: "DROP_COALESCED_SNAPSHOTS",
 	}
 	DropReason_value = map[string]int32{
@@ -410,9 +401,6 @@ var (
 		"DROP_ADMISSION_UNKNOWN_PACKETS":          19,
 		"DROP_INVALID_ACTIONS_SHOTS":              20,
 		"DROP_LINK_REJECTED_ACTIONS_SHOTS":        21,
-		"DROP_RESOLVED_TRIM_COMMANDS":             22,
-		"DROP_REJECTED_LANE_OVERFLOW_COMMANDS":    23,
-		"DROP_DISCARDED_ON_LEAVE_COMMANDS":        24,
 		"DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS":   25,
 		"DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS":    26,
 		"DROP_WRITE_FAILED_SNAPSHOT_PACKETS":      27,
@@ -426,8 +414,6 @@ var (
 		"DROP_UNDECODABLE_DATAGRAMS":              40,
 		"DROP_OTHER_VERSION_DATAGRAMS":            41,
 		"DROP_UNKNOWN_SESSION_DATAGRAMS":          42,
-		"DROP_OLD_TICK_SNAPSHOTS":                 43,
-		"DROP_REGRESSED_SNAPSHOTS":                44,
 		"DROP_COALESCED_SNAPSHOTS":                45,
 	}
 )
@@ -2642,7 +2628,8 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02*\xec\v\n" +
+	"HIT_PLAYER\x10\x02*\xd2\n" +
+	"\n" +
 	"\n" +
 	"DropReason\x12\x1b\n" +
 	"\x17DROP_REASON_UNSPECIFIED\x10\x00\x12#\n" +
@@ -2667,10 +2654,7 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x19DROP_UNKNOWN_KIND_PACKETS\x10\x12\x12\"\n" +
 	"\x1eDROP_ADMISSION_UNKNOWN_PACKETS\x10\x13\x12\x1e\n" +
 	"\x1aDROP_INVALID_ACTIONS_SHOTS\x10\x14\x12$\n" +
-	" DROP_LINK_REJECTED_ACTIONS_SHOTS\x10\x15\x12\x1f\n" +
-	"\x1bDROP_RESOLVED_TRIM_COMMANDS\x10\x16\x12(\n" +
-	"$DROP_REJECTED_LANE_OVERFLOW_COMMANDS\x10\x17\x12$\n" +
-	" DROP_DISCARDED_ON_LEAVE_COMMANDS\x10\x18\x12)\n" +
+	" DROP_LINK_REJECTED_ACTIONS_SHOTS\x10\x15\x12)\n" +
 	"%DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS\x10\x19\x12(\n" +
 	"$DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS\x10\x1a\x12&\n" +
 	"\"DROP_WRITE_FAILED_SNAPSHOT_PACKETS\x10\x1b\x12%\n" +
@@ -2683,10 +2667,8 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x1eDROP_RESULTS_OVER_RATE_PACKETS\x10\"\x12\x1e\n" +
 	"\x1aDROP_UNDECODABLE_DATAGRAMS\x10(\x12 \n" +
 	"\x1cDROP_OTHER_VERSION_DATAGRAMS\x10)\x12\"\n" +
-	"\x1eDROP_UNKNOWN_SESSION_DATAGRAMS\x10*\x12\x1b\n" +
-	"\x17DROP_OLD_TICK_SNAPSHOTS\x10+\x12\x1c\n" +
-	"\x18DROP_REGRESSED_SNAPSHOTS\x10,\x12\x1c\n" +
-	"\x18DROP_COALESCED_SNAPSHOTS\x10-B-Z+gyo.local/object_fps_pvp/protocol/runtimev7b\x06proto3"
+	"\x1eDROP_UNKNOWN_SESSION_DATAGRAMS\x10*\x12\x1c\n" +
+	"\x18DROP_COALESCED_SNAPSHOTS\x10-\"\x04\b\x16\x10\x18\"\x04\b+\x10+\"\x04\b,\x10,B-Z+gyo.local/object_fps_pvp/protocol/runtimev7b\x06proto3"
 
 var (
 	file_runtime_v7_proto_rawDescOnce sync.Once
