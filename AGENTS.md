@@ -148,6 +148,11 @@ Architecture Delta は禁止事項ではない。
 * 一般原則（「Ownership の変更は提出する」）だけでは、
   個々の変更がその Ownership 変更に当たるかを判断できない。
   判断できる形で書かれた約束だけが、局所的に妥当な修正の積み重ねによる Drift を止められる。
+* 新しい Component を作るとき、または既存の Component に大きな責務を加えるときは、
+  その Component を置き換える条件を、`Design Invariants` 節の中に `Replacement Criteria` として書く
+  （例：Feature を追加するたびに同じ検証をやり直す必要がある、Design Invariants を保てない）。
+  条件は、その Component に機能を積み上げる前に書く。積み上げた後では、失うものを惜しんで判断が歪むためである。
+* 条件を満たしたときは、修正を続けずに、置き換えるか修正を続けるかをユーザーに提案する。
 
 ### 状態の権威（State Authority）
 
