@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <streambuf>
@@ -518,27 +519,136 @@ TEST_CASE("PvP IPC stops promptly while waiting for and while serving a Gateway"
     CHECK_FALSE(busy.host.Error());
 }
 
-// The action lane (Match -> Gateway over TCP) writes only new content, once:
-// a decision it has not sent, or a retirement beyond the one it sent. These are
+// The action lane (Match -> Gateway over TCP) resends every unacknowledged
+// decision at most once per action interval until the ACK retires it, and
+// sends a retirement once when it advances or when asked (pv7 §2a). These are
 // real-time tests, so they assert counts and order, never exact times.
-TEST_CASE("PvP IPC sends each action decision and each retirement once, then writes no results") {
+TEST_CASE("PvP IPC resends an unacknowledged decision at most once per action interval until it is retired") {
     Server server;
     Gateway gateway(server.address);
     JoinPlayer(gateway, 5);
     gateway.Send(Actions(5, {1}, 0));
-    // Before the ACK the decision stays in the Match; it still travels once.
+    // Before the ACK the decision stays in the Match and travels again each
+    // interval: 400 ms hold at most ceil(400 ms / I) + 1 = 13 frames. The
+    // lower bound only catches a lane that stopped resending.
     const auto beforeAck = ReceiveUntil(gateway, Clock::now() + 400ms);
     const auto decisionFrames = std::count_if(beforeAck.begin(), beforeAck.end(),
         [](const auto& frame) { return Carries(frame.message, 1); });
-    CHECK(decisionFrames == 1);
-    CHECK(CountResults(beforeAck) == 1);
+    MESSAGE("frames carrying the unacknowledged decision in 400 ms: " << decisionFrames);
+    CHECK(decisionFrames >= 4);
+    CHECK(decisionFrames <= 13);
+    CHECK(static_cast<std::size_t>(decisionFrames) == CountResults(beforeAck));
     gateway.Send(Actions(5, {}, 1));
-    const auto retired = ReceiveFirst(gateway, [](const auto& message) { return message.has_action_results(); });
-    CHECK(retired.action_results().retired_through() == 1);
+    const auto retired = ReceiveFirst(gateway, [](const auto& message) {
+        return message.has_action_results() && message.action_results().retired_through() == 1;
+    });
     CHECK(retired.action_results().decisions_size() == 0);
-    // Nothing new: no retired-only repeats.
+    // Nothing unacknowledged: no retired-only repeats.
     const auto resultsWhileIdle = CountResults(ReceiveUntil(gateway, Clock::now() + 500ms));
     CHECK(resultsWhileIdle == 0);
+}
+
+// Reads whole results frames for 500 ms once `decisions` reloads (ids 1..n)
+// are all decided and none acknowledged.
+std::vector<std::vector<ActionId>> UnacknowledgedFrames(ActionId decisions) {
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 5);
+    for (ActionId first = 1; first <= decisions; first += MaxActionBatch) {
+        std::vector<ActionId> ids;
+        for (auto id = first; id <= std::min<ActionId>(decisions, first + MaxActionBatch - 1); ++id) ids.push_back(id);
+        gateway.Send(Actions(5, ids, 0));
+    }
+    static_cast<void>(ReceiveFirst(gateway, [&](const auto& message) { return Carries(message, decisions); }));
+    std::vector<std::vector<ActionId>> frames;
+    for (const auto& frame : ReceiveUntil(gateway, Clock::now() + 500ms)) {
+        if (!frame.message.has_action_results()) continue;
+        std::vector<ActionId> ids;
+        for (const auto& decision : frame.message.action_results().decisions()) ids.push_back(decision.action_id());
+        frames.push_back(std::move(ids));
+    }
+    return frames;
+}
+
+TEST_CASE("PvP IPC puts the smallest unacknowledged ids in every results frame and cycles the rest") {
+    // Twelve cycle evenly through four slots; ten wrap inside a frame.
+    for (const ActionId decisions : {ActionId{16}, ActionId{14}}) {
+        CAPTURE(decisions);
+        const auto frames = UnacknowledgedFrames(decisions);
+        REQUIRE(frames.size() >= 4);
+        for (const auto& ids : frames) {
+            REQUIRE(ids.size() == MaxActionBatch);
+            // Strictly increasing: the Client refuses a frame repeating an id.
+            CHECK(std::adjacent_find(ids.begin(), ids.end(), std::greater_equal<>()) == ids.end());
+            // The Client acknowledges contiguously: the smallest never starve.
+            CHECK(std::vector<ActionId>(ids.begin(), ids.begin() + 4) == std::vector<ActionId>{1, 2, 3, 4});
+        }
+        // Four cycling slots: any three frames in a row carry all the rest.
+        for (std::size_t first = 0; first + 3 <= frames.size(); ++first) {
+            std::set<ActionId> cycled;
+            for (std::size_t k = first; k < first + 3; ++k) cycled.insert(frames[k].begin() + 4, frames[k].end());
+            CAPTURE(first);
+            CHECK(cycled.size() == decisions - 4);
+        }
+    }
+}
+
+TEST_CASE("PvP IPC sends the retirement once more when an ACK-only batch shows it was missed") {
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 5);
+    ActAndRetire(gateway, 5, 1);
+    CHECK(CountResults(ReceiveUntil(gateway, Clock::now() + 300ms)) == 0);
+    // An ACK no further than the retirement: the Client did not see it.
+    gateway.Send(Actions(5, {}, 1));
+    const auto again = ReceiveUntil(gateway, Clock::now() + 400ms);
+    REQUIRE(CountResults(again) == 1);
+    const auto repeat = std::find_if(again.begin(), again.end(), [](const auto& frame) { return frame.message.has_action_results(); });
+    CHECK(repeat->message.action_results().retired_through() == 1);
+    CHECK(repeat->message.action_results().decisions_size() == 0);
+}
+
+TEST_CASE("PvP IPC keeps a lane asked again and again to one results frame per action interval") {
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 5);
+    ActAndRetire(gateway, 5, 1);
+    static_cast<void>(ReceiveUntil(gateway, Clock::now() + 100ms));
+    // A refused batch every 5 ms for 300 ms: at most ceil(300 ms / I) + 1 = 10
+    // frames, read for 50 ms more so a late tail counts too.
+    std::size_t frames = 0;
+    const auto end = Clock::now() + 300ms;
+    while (Clock::now() < end) {
+        gateway.Send(Actions(5, {}, 99));
+        frames += CountResults(ReceiveUntil(gateway, Clock::now() + 5ms));
+    }
+    frames += CountResults(ReceiveUntil(gateway, Clock::now() + 50ms));
+    MESSAGE("results frames for 60 refused batches in 300 ms: " << frames);
+    CHECK(frames <= 11);
+    CHECK(frames >= 3);
+}
+
+TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 5);
+    ActAndRetire(gateway, 5, 1);
+    CHECK(CountResults(ReceiveUntil(gateway, Clock::now() + 300ms)) == 0);
+    auto malformed = Actions(5, {2}, 1);
+    malformed.mutable_actions()->mutable_shots(0)->set_life_generation(0);
+    std::vector<ActionId> over(MaxActionBatch + 1);
+    std::iota(over.begin(), over.end(), ActionId{2});
+    // The host refuses this one: it acknowledges what was never decided.
+    const auto refusals = {malformed, Actions(5, over, 1), Actions(5, {}, 99)};
+    for (const auto& refused : refusals) {
+        CAPTURE(refused.DebugString());
+        gateway.Send(refused);
+        const auto answer = ReceiveUntil(gateway, Clock::now() + 300ms);
+        REQUIRE(CountResults(answer) == 1);
+        const auto frame = std::find_if(answer.begin(), answer.end(), [](const auto& f) { return f.message.has_action_results(); });
+        CHECK(frame->message.action_results().retired_through() == 1);
+        CHECK(frame->message.action_results().decisions_size() == 0);
+    }
 }
 
 TEST_CASE("PvP IPC writes a decision before the snapshot of its tick when the lane was idle") {
@@ -617,9 +727,9 @@ TEST_CASE("PvP IPC does not spin while its action lanes are idle") {
     CHECK(idleIterations < 600);
 }
 
-// Arms the lane timer: decision `id` was written at t1 and its retirement
-// becomes new content one step later, before t1 + 1/30 s. Returns once the
-// snapshot of that step has been read, with t1.
+// Arms the lane timer: decision `id` was written at t1 and is due again at
+// t1 + 1/30 s (a resend, or its retirement one step later). Returns once the
+// snapshot of the retiring step has been read, with t1.
 Clock::time_point ArmLaneTimer(Gateway& gateway, PlayerId player, ActionId id) {
     gateway.Send(Actions(player, {id}, id - 1));
     const auto decision = ReceiveFirst(gateway, [&](const auto& message) { return Carries(message, id); });
@@ -918,6 +1028,15 @@ DecisionOutcome RunDecisionScenario(bool clockSamples) {
         }
     };
     Gateway gateway(address);
+    // Reads what is there now; a Match that never falls quiet (an unpaced
+    // lane) fails here instead of hanging the test.
+    const auto drain = [&] {
+        const auto giveUp = Clock::now() + 2s;
+        while (const auto message = gateway.Receive(1ms)) {
+            take(*message);
+            REQUIRE_MESSAGE(Clock::now() < giveUp, "the Match wrote without pause for 2 s");
+        }
+    };
     // The accept's reset completes on a step (the Match restarts at tick 0),
     // then Ready comes; no step runs between the reset and Ready.
     std::optional<pb::RuntimeEnvelope> ready;
@@ -960,11 +1079,11 @@ DecisionOutcome RunDecisionScenario(bool clockSamples) {
         gateway.Send(Leave(99));
         REQUIRE(log.ShowsTimes("leave player=99", ++fences));
         step();
-        while (const auto message = gateway.Receive(1ms)) take(*message);
+        drain();
     }
     for (int k = 0; k < 30; ++k) {
         step();
-        while (const auto message = gateway.Receive(1ms)) take(*message);
+        drain();
     }
     // No more steps: what is left arrives, the last snapshot last. Bounded,
     // as results resent until acknowledged would never fall quiet.

@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-results-resend`。
+**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-input-passthrough`。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -28,7 +28,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── heartbeat-sync ✓             「high（時鐘域局部 xhigh）｜P2：心跳對時」
 │   ├── time-echo ✓                   「high｜P3：時間回聲」
 │   ├── drop-report ✓◆                「high（列舉與上限局部 xhigh）｜P4：丟棄回報，先照現行出口」
-│   ├── edge-results-resend           「high（通道計時局部 xhigh）｜Match 在 ACK 前重送結果」
+│   ├── edge-results-resend ✓         「high（通道計時局部 xhigh）｜Match 在 ACK 前重送結果」
 │   ├── edge-input-passthrough ◆      「high（局部 xhigh）｜★輸入原樣轉送，刪副本與拒絕線」
 │   ├── edge-results-passthrough      「high｜★結果原樣轉送，刪 Gateway 帳本與 A3」
 │   ├── edge-actions-passthrough      「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有」
@@ -86,7 +86,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | edge-results-passthrough | ★結果原樣轉送給 Client；刪除 session 帳本、retiredSent、retirementAsked、結果節拍與 A3；Gateway 只記每位玩家上次送出結果的時刻，守 30 Hz | Go 測試、突變／事前宣告＋D45：裁決到 Client 的延遲、送出間隔 ≤30 Hz（含 host-ipc 停頓案例）、射擊時序與權威 Cooldown＝0／— | 12～16 | 排在動作直通之前，避免帳本在沒有 A3 時合併請求 |
 | edge-actions-passthrough | ★動作批原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | Go 測試、突變／事前宣告＋D45：射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數／— | 14～17 | FireGate 的 spread 在這批到 A1 之間會變得過度保守 |
 | edge-analyzers | 改寫 ingress 分析器的 Gateway 守恆式並重新凍結；同步突變目錄 | 新舊各分析一次／—／— | 5～6 | |
-| edge-contract | 把無狀態邊緣的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」與 protocol-v7；Go 狀態欄位的白名單守衛（遞迴走訪型別、掃描套件變數）與突變 | Go 測試、突變、digest 不變／—／— | 4 | 取代 `gateway-duties`。依內容的判斷靠審查，並由 AGENTS.md 連到條文（事故行動 4，文件會話） |
+| edge-contract | 把無狀態邊緣的約束寫進 `network-architecture.zh-Hant.md` 的 `Design Invariants` 節與 protocol-v7；Go 狀態欄位的白名單守衛（遞迴走訪型別、掃描套件變數）與突變 | Go 測試、突變、digest 不變／—／— | 4 | 取代 `gateway-duties`。依內容的判斷靠審查，並由 AGENTS.md 連到條文（事故行動 4，文件會話） |
 | cause-records | dwell（一對一）、Client 的 GYOP 序號（只作診斷，D96）、snapshot 的兩段停留、動作拒收回覆（ActionResults）、Leave 原因 | 測試、突變、digest 不變／只記錄／— | 8～9 | 有了對時與回聲才能判斷原因 |
 | hitbox-fields | 命中部位一律填 Body；射手看到的時刻由 Client 照實填；加 A1 的 E、S 與影子紀錄（D-2）；Match 驗證並記錄，不改判定 | 編解碼與驗證測試、digest 不變／只記錄／— | 8 | |
 | pv7-checkpoint | A1 前的整體回歸：四平台 L1、digest；先扣掉三個 edge 批事前宣告的差異帶，再用凍結 pv7 工具和 v7 基準比較；產出 K 與 S 取法的影子資料 | 全量／事前宣告＋D45／— | 8 | |

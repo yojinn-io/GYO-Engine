@@ -418,9 +418,8 @@ func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
 	// resend later. Before its join completes the Match has none: only an
 	// active player's actions are forwarded. A removal is final: phases only
 	// move forward, player ids are never reused and the runtime link never
-	// reconnects. The Match sends each result once, so a rejoin under the same
-	// id, or a link reconnect, would also need the Match to resend every
-	// unretired result once the player is active again.
+	// reconnects. The Match resends every unretired result until the
+	// Client's ACK (pv7 §2a); a copy merges as nothing new and wakes no send.
 	if p == nil || p.phase != active {
 		return nil
 	}

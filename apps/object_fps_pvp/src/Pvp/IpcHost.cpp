@@ -18,8 +18,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <optional>
-#include <set>
 #include <sstream>
 #include <string_view>
 #include <syncstream>
@@ -138,44 +138,66 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
     }
     return message;
 }
-// A lane writes only new content: decisions it has not sent and a retirement
-// beyond the one it sent. TCP delivers each once, and a lane never outlives its
-// connection (each accept starts a new Session), so nothing is resent. That
-// relies on the Gateway dropping results only for a removed player, which
-// never comes back under the same id.
+// pv7 §2a: a lane resends every unacknowledged decision, at most once per
+// ActionInterval, until the Client's ACK retires it; the Gateway or a lost
+// datagram may drop any frame, and results are idempotent. A frame carries the
+// retirement and up to MaxActionBatch decisions: the ResendFirstSlots smallest
+// ids first (the Client acknowledges only contiguously, so the smallest must
+// never starve), the other slots cycling through the rest. The retirement goes
+// once when it advances, and once more when asked (an ACK-only batch
+// acknowledging no more than it: the Client missed it) or when a batch is
+// refused (D-6).
 // The host wakes Pump only on a step that publishes; with a snapshot every
 // tick, a decision is seen on the tick that makes it.
 static_assert(SnapshotIntervalTicks==1,"Action lanes rely on a publish every tick");
 constexpr auto ActionInterval=std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+constexpr std::size_t ResendFirstSlots=4;
+static_assert(ResendFirstSlots<MaxActionBatch,"Some slots must cycle, or ids above the first ones starve");
 struct ActionLane {
     std::optional<std::chrono::steady_clock::time_point> lastSend;
     ActionId sentRetired{};
-    // Sent decision ids above sentRetired; at most MaxActionWindow.
-    std::set<ActionId> sent;
+    // The last id a cycling slot carried; the next cycle starts above it.
+    ActionId cursor{};
+    // One send even with nothing unacknowledged and no new retirement.
+    bool asked{};
 };
-// The one test for new content: ScheduleWrite's deadline and Write's choice
-// must agree, or a due lane with nothing to choose would wake writes forever.
+// The one test for something to send: ScheduleWrite's deadline and Write's
+// choice must agree, or a due lane with nothing to choose would wake writes
+// forever.
 bool LanePending(const ActionResults& results, const ActionLane& lane) {
-    return results.retiredThrough>lane.sentRetired || std::any_of(results.decisions.begin(),results.decisions.end(),
-        [&](const auto& decision){return !lane.sent.contains(decision.actionId);});
+    return !results.decisions.empty() || results.retiredThrough>lane.sentRetired || lane.asked;
 }
 // At most one choice per ActionInterval; the first may go at once.
 std::chrono::steady_clock::time_point LaneDue(const ActionLane& lane, std::chrono::steady_clock::time_point now) {
     return lane.lastSend?*lane.lastSend+ActionInterval:now;
 }
-// Chooses the retirement and up to MaxActionBatch unsent decisions in id order
-// (decisions arrive sorted by id) and records them as sent at `now`.
+// Chooses the retirement and up to MaxActionBatch unacknowledged decisions
+// (they arrive sorted by id): the smallest first, then the cycling slots above
+// the cursor, wrapping to the lowest of the rest. Written in id order.
 pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane, std::chrono::steady_clock::time_point now) {
     pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
     auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
     out->set_retired_through(results.retiredThrough);
     lane.lastSend=now;
     lane.sentRetired=results.retiredThrough;
-    lane.sent.erase(lane.sent.begin(),lane.sent.upper_bound(results.retiredThrough));
-    for(const auto& decision:results.decisions) {
-        if(static_cast<std::size_t>(out->decisions_size())==MaxActionBatch) break;
-        if(lane.sent.contains(decision.actionId)) continue;
-        lane.sent.insert(decision.actionId);
+    lane.asked=false;
+    const auto& decisions=results.decisions;
+    const auto first=std::min(decisions.size(),ResendFirstSlots);
+    std::vector<std::size_t> chosen(first);
+    std::iota(chosen.begin(),chosen.end(),std::size_t{0});
+    const auto rest=decisions.size()-first;
+    const auto cycling=std::min(rest,MaxActionBatch-first);
+    const auto above=std::upper_bound(decisions.begin()+static_cast<std::ptrdiff_t>(first),decisions.end(),lane.cursor,
+        [](ActionId cursor,const auto& decision){return cursor<decision.actionId;});
+    const auto start=static_cast<std::size_t>(above-decisions.begin())-first;
+    for(std::size_t k=0;k<cycling;++k) {
+        const auto index=first+(start+k)%rest;
+        chosen.push_back(index);
+        lane.cursor=decisions[index].actionId;
+    }
+    std::sort(chosen.begin(),chosen.end());
+    for(const auto index:chosen) {
+        const auto& decision=decisions[index];
         auto* value=out->add_decisions();value->set_action_id(decision.actionId);
         value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
         value->set_rejection(RejectionForWire(decision.rejection));
@@ -407,6 +429,9 @@ struct IpcHost::Impl {
             if(current==connection && phase==Phase::Connected) StartRead();
         });
     }
+    void AskLane(PlayerId player) {
+        if(const auto lane=session.actionLanes.find(player);lane!=session.actionLanes.end()) lane->second.asked=true;
+    }
     // Names a message this side does not take: a known one sent the wrong way,
     // field numbers this version does not know, or an envelope with none.
     static std::string UnknownMessage(const pb::RuntimeEnvelope& message) {
@@ -457,7 +482,11 @@ struct IpcHost::Impl {
             } else if(message.has_actions()) {
                 const auto& value=message.actions();
                 const auto shots=static_cast<std::size_t>(value.shots_size());
-                if(shots>MaxActionBatch) {host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);continue;}
+                if(shots>MaxActionBatch) {
+                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);
+                    AskLane(value.player_id());
+                    continue;
+                }
                 ActionBatch batch{value.player_id(),{}};
                 bool valid=true;
                 for(const auto& shot:value.shots()) {
@@ -469,11 +498,24 @@ struct IpcHost::Impl {
                     batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
                         shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
                 }
-                if(!valid) {host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);continue;}
+                if(!valid) {
+                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);
+                    AskLane(value.player_id());
+                    continue;
+                }
                 // Admission is distinct from a terminal shot decision. The
                 // immutable request remains with the sender for retry. The
                 // host counts the admission by reason.
-                static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
+                // An ACK-only batch acknowledging no more than the retirement
+                // shows the Client missed it; a refusal answers with what the
+                // lane holds (D-6). Either asks the lane for one more send.
+                const auto acknowledged=value.acknowledged_through();
+                const bool missed=!shots && acknowledged>0 && [&] {
+                    const auto retired=host.GetActionResults(value.player_id());
+                    return retired && acknowledged<=retired->retiredThrough;
+                }();
+                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)
+                    AskLane(value.player_id());
             } else if(message.has_drop_report()) {
                 session.drops.Read(message.drop_report()); // diagnostics only: logged, checked, never answered
             } else if(message.has_clock()) {
@@ -546,8 +588,8 @@ struct IpcHost::Impl {
     }
 
     // Waits for the socket to become writable when there is something to
-    // write; otherwise arms the lane timer for the earliest lane with new
-    // content. The frame is chosen only when the socket is writable.
+    // write; otherwise arms the lane timer for the earliest lane with
+    // something to send. The frame is chosen only when the socket is writable.
     void ScheduleWrite() {
         if(phase!=Phase::Connected || waitingWrite) return;
         const auto now=Clock::now();
@@ -601,8 +643,8 @@ struct IpcHost::Impl {
             } else {
                 // Results stay in Match until Client ACK. Only choose a batch
                 // when a write slot is free; a blocked socket cannot accumulate
-                // or overwrite a separate decision queue. A lane without new
-                // content keeps its anchor: new content may go at once.
+                // or overwrite a separate decision queue. A lane with nothing
+                // to send keeps its anchor: the next send may go at once.
                 const auto now=Clock::now();
                 for(auto it=s.actionLanes.begin();it!=s.actionLanes.end();) {
                     auto& [playerId,lane]=*it;

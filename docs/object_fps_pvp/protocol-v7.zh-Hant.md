@@ -72,7 +72,7 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 ### 診斷訊框的計時與佇列
 
-- **Gateway**：由 Server 擁有的 1 Hz 診斷 goroutine 組裝 ClockSample 與 GatewayDropReport，鎖順序固定為先 `s.mu` 再 `l.mu`。組好的 envelope 放進 link 的單槽診斷佇列（不是 `l.controls`；新蓋舊時，把舊回報的樣本數併進 `samples_omitted`）。link 的 writer 只多一個分支：取這個槽並寫出。這個分支不改變資料 FIFO 的順序與上限（§2a），不動 `l.wake` 與輸入 token；在 `edge-actions-passthrough` 之前，也不動 action 的 nextSend 與 timer。
+- **Gateway**：由 Server 擁有的 1 Hz 診斷 goroutine 組裝 ClockSample，鎖順序固定為先 `s.mu` 再 `l.mu`。組好的 envelope 放進 link 的單槽診斷佇列（不是 `l.controls`；新蓋舊時計數）。GatewayDropReport 不經過這個槽：計時器只標記「該送一輪」（距離上一輪不到 1 秒就延後），writer 在寫出前一刻才從丟棄帳本（葉鎖）組每條串流的回報，所以 `report_sequence`、樣本與 dwell 的終點都在寫出時決定，不會有被取代的回報，也不會有序號空洞（D104）。link 的 writer 只多一個分支：取診斷槽與這一輪的回報並寫出。這個分支不改變資料 FIFO 的順序與上限（§2a），不動 `l.wake` 與輸入 token；在 `edge-actions-passthrough` 之前，也不動 action 的 nextSend 與 timer。
 - **Match**：ClockSample 回覆用獨立的有界槽（1 則，新蓋舊），不進 `session.controls`（超過 64 會關閉連線）；寫出優先順序排在 controls、action lane、snapshot 之後；診斷槽有內容時也要觸發寫出排程；transmit 在選中框架時才蓋。動作拒收回覆依 D-6 搭在既有的 ActionResults 上，不另設訊框。
 - 被新蓋舊取代的診斷訊框要計數（D57：沒有無聲的出口）。
 
@@ -133,10 +133,14 @@ runtime proto 的 `ActionBatch`／`ActionResults` 要寫入送達註解：批可
 - 解碼成功就提交序號與活性（呼叫公共層 Session 的既有介面），不看內容；舊序號照現行規則不提交。
 - Gateway 不再依內容路由，所以 snapshot 的兩個守衛（D1 tick 單調、D2 倒退檢查）移除（D-12）：IPC 本來就有序，Client 也只接受更新的 tick（`ClientConnection.cpp:533-535`）。v7 的 L2 語料中，兩者的計數都是 0。
 
-### Gateway 的約束（D-14；由 `edge-contract` 寫進 network-architecture 的「不可破壞的契約」）
+### Gateway 的約束（D-14；由 `edge-contract` 寫進 network-architecture 的 `Design Invariants`）
 
 - **允許**（可以重建、不參與遊戲判定的軟狀態）：連線與 session（token、endpoint、傳輸序號、速率、活性、生命週期）、房間與保留、Ready 的設定副本、有界的外送與 IPC 佇列（溢出要計數並回報）、每位玩家上次送出結果的時刻與至多 1 則待送的結果框架、診斷計數與時鐘樣本。對每則訊息只做翻譯，以及單則訊息內的版本、格式、範圍與授權檢查。依傳輸序號、速率與 session 生命週期的跨訊息判斷（例如舊序號、未認證、非 active）是允許的。
 - **禁止**：Match 決策狀態的副本（游標、epoch、life、命令表、動作帳本、裁決、退役）；**依遊戲項目的身分或內容做的跨訊息判斷**（去重、合併、過時、衝突）；排程重送。
+- **白名單的分類**（D105）：診斷用的欄位分三類，各有限制。
+  - 診斷狀態（時鐘同步、回聲、丟棄帳本與其觸發）：允許；判定路徑不得讀取（§2「診斷不進判定」）。
+  - 單次呼叫的脈絡（處理一個資料包期間記下的收包時刻與序號）：不得跨資料包保留。
+  - 測試縫隙（套件變數與注入的時鐘）：正式路徑只用預設值。
 - 判斷準則：這個 Gateway 欄位或判斷，是否要知道「Match 已經有什麼」才能做對？是的話，它屬於 Match。新增任何 Gateway 狀態欄位都是 Architecture Delta，要經使用者同意。
 - 守衛：Go 測試遞迴走訪 Gateway 狀態型別的欄位（含 map、slice 的元素、具名型別與 any／interface 欄位），並用 `go/ast` 掃描套件層級的變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對；配一個「新增未分類欄位」的突變。依內容的判斷測不到，靠審查，並從 AGENTS.md 連到這份約束（設計事故行動 4）。
 
@@ -443,7 +447,7 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 
 ## 附錄：Architecture Delta
 
-- **Gateway 的 Ownership 改變**（v7.1 D94）：可靠送達與去重從 Gateway 移到端點（Match 的 IpcHost 與 Host、Client）；Gateway 刪除 Match 決策狀態的副本（`lastResolved`、命令表、動作帳本、結果帳本、拒絕線、已寫出去重、截短、D1、D2）。約束寫進 network-architecture 的「不可破壞的契約」，並由白名單測試守住（`edge-contract`）。
+- **Gateway 的 Ownership 改變**（v7.1 D94）：可靠送達與去重從 Gateway 移到端點（Match 的 IpcHost 與 Host、Client）；Gateway 刪除 Match 決策狀態的副本（`lastResolved`、命令表、動作帳本、結果帳本、拒絕線、已寫出去重、截短、D1、D2）。約束寫進 network-architecture 的 `Design Invariants`，並由白名單測試守住（`edge-contract`）。
 - **runtime Data Contract 的送達語意改變**（§2a）：PlayerInput、ActionBatch 原樣轉送且可能重複；ActionResults 由 Match 重送。
 - 新增的產品內 Data Contract：IPC oneof 20～21、ActionResults 的拒收欄位（D-6）、PlayerInput／ActionBatch 的 dwell 與 Client 的 GYOP 序號、Hello／Welcome 的 clock、ShotRequest／ShotDecision／CombatState／CombatRules 的新欄位、HTTP 409 body 的鍵。
 - Build Graph：proto、Go 套件、CMake target 改名（`proto-rename-v7`，單獨一個 commit）。

@@ -1587,6 +1587,9 @@ func (x *ClockSample) GetTransmitUs() uint64 {
 	return 0
 }
 
+// May repeat a batch the Match already took. An ACK-only batch whose
+// acknowledged_through is no more than the Match's retirement asks for that
+// retirement again (pv7 §2a).
 type ActionBatch struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1647,6 +1650,8 @@ func (x *ActionBatch) GetAcknowledgedThrough() uint64 {
 	return 0
 }
 
+// Resent by the Match, at most ActionSendRate per player, until the Client's
+// ACK retires each decision; idempotent: a copy changes nothing (pv7 §2a).
 type ActionResults struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`

@@ -77,8 +77,8 @@ v7.1 的 `pv7-design` 把 pv7-line 重估為約 111 h 之後，使用者質疑�
 |---|---|---|---|
 | 1 | 在 pv7 的 wire 定稿之前，評估 Gateway 的方向並交使用者決定。候選：(a) 回到無狀態邊緣，內部協議保留身分與冪等性（命令序號、action id），Gateway 原樣轉送，Match 用自己的狀態去重，Gateway 只留連線與 session 的軟狀態；(b) 控制面（大廳、session 發放）留在 Go，遊戲 UDP 直接到 Match；(c) 維持現狀 | v7.1 規劃會話 | 完成（2026-10-16，D94：選 (a)） |
 | 2 | 依第 1 項的結果，重新評估 v7.1 的計畫：pv7-design 的 D-1～D-7、pv7-line 的批次與工時、事故後遺症的處置 | v7.1 規劃會話 | 完成（2026-10-16，D95；pv7-line 約 170～179 h） |
-| 3 | 把 Gateway 的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」。草案：Gateway 只能持有連線與 session 的軟狀態，不得持有 Match 決策狀態的副本，只檢查格式、不依內容做決定 | 依第 1 項 | 排定：v7.1 的 `edge-contract`（條文見 protocol-v7 草案 §2a） |
-| 4 | 建議（流程）：在 AGENTS.md 加入各元件的設計約束（或從 AGENTS.md 明確連到寫有約束的契約文件），並把「在邊緣元件加入遊戲決策狀態」列為 Architecture Delta 的一種 | 使用者決定是否交給文件會話 | 交給文件會話（2026-10-16，使用者決定）。完成：`80d2d28`，PR #79 已合併到 master（`23457e1`，四平台 L1 通過）。AGENTS.md §3 不點名產品，用 `git grep -n "不可破壞的契約" -- docs` 找各元件的約束，所以第 3 項寫條文時，標題文字要逐字保持不變 |
+| 3 | 把 Gateway 的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」（標題已改為 `Design Invariants`，見第 4 項）。草案：Gateway 只能持有連線與 session 的軟狀態，不得持有 Match 決策狀態的副本，只檢查格式、不依內容做決定 | 依第 1 項 | 排定：v7.1 的 `edge-contract`（條文見 protocol-v7 草案 §2a） |
+| 4 | 建議（流程）：在 AGENTS.md 加入各元件的設計約束（或從 AGENTS.md 明確連到寫有約束的契約文件），並把「在邊緣元件加入遊戲決策狀態」列為 Architecture Delta 的一種 | 使用者決定是否交給文件會話 | 交給文件會話（2026-10-16，使用者決定）。完成：`80d2d28`，PR #79 已合併到 master（`23457e1`，四平台 L1 通過）。AGENTS.md §3 不點名產品，用 `git grep -n "不可破壞的契約" -- docs` 找各元件的約束，所以第 3 項寫條文時，標題文字要逐字保持不變。更正（2026-10-16，使用者決定，文件會話 PR #80）：標題一律用英文 `Design Invariants`，不隨文件語言翻譯 |
 
 ## 9. 學到的事
 

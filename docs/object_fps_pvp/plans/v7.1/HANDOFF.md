@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`drop-report` 完成，等你決定三件事。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-resend` 完成，等你決定一件事。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D103 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D106 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -38,17 +38,15 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：
-  1. **§2 的條文與 `drop-report` 的做法不同**（xhigh should-3）。§2「診斷訊框的計時與佇列」寫的是：1 Hz goroutine 組好 GatewayDropReport 放進單槽，新蓋舊時把舊回報的樣本數併進 samples_omitted。實作是：計時器只標記「該送一輪」，writer 在寫出前一刻才從帳本組每條串流的回報，不經過單槽。好處：report_sequence 與 dwell 終點都在寫出時決定，不會有被蓋掉的回報與序號空洞，符合 §2 的 dwell 定義。wire 不變。選項：(a) 修改 §2 的措辭配合實作（建議）；(b) 改回單槽。
-  2. **Gateway 新增的診斷狀態欄位**（§2a D-14：新增狀態欄位就是 Architecture Delta，要經你同意；xhigh should-4）。`heartbeat-sync`、`time-echo` 加的欄位當時也沒有申報，這次一起列：
-     - 診斷狀態（不參與判定、可重建）：link 的 `diagnostic`、`diagnosticWake`、`clockMu`、`clock`（heartbeat-sync），`drops`、`dropPass`、`lastDropPass`（drop-report）；Server 的 `diagnosticsOnce`（heartbeat-sync）；reservation 的 `echo`（time-echo）；帳本 `dropLedger`（其中 `ended` 依移除的玩家數只增不減）。
-     - 單次呼叫的脈絡：Server 的 `datagram`（處理一個資料包期間有效）。
-     - 測試縫隙：link 的 `now`、`takes`；套件變數 `runtimeLiveness`、`writerIdleWait`、`diagnosticInterval`、`udpWrite`。
-     - 選項：(a) 核准為診斷狀態，`edge-contract` 的白名單照此分類（建議）；(b) 要求先縮減。
-  3. 開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh）。
+  1. **§9 對 `edge-results-resend` 的驗收說法太強**（xhigh should-1）。
+     - §9 寫「Client 看到的不變」。實際上 Client 收到的內容不變，但時序會變：只要還有較舊的裁決沒退役，Match 的通道每 1/30 秒重送一次，新裁決要等下一個時段。這個中間 commit 有兩層 30 Hz 排程疊在一起（Match 的通道、Gateway 的帳本）。
+     - 量測（無損模型，8 個種子，`results_resend_test.go`）：369 個裁決中 63 個（17%）比「立刻送」晚到，最多晚 33 ms（1 個間隔）。未確認超過 8 筆時，新 id 只能靠循環槽位，最晚約 7 個間隔（約 233 ms，推論；在射擊冷卻下很少見）。
+     - `edge-results-passthrough` 刪掉 Gateway 帳本後只剩 Match 一層排程，和現在 Gateway 帳本對 Client 的重送節奏同一類。
+     - 選項：(a) §9 改成「Client 收到的內容不變；新裁決最多晚 1 個間隔」，並把這個延遲列進 `edge-results-passthrough` 事前宣告的 L2 對照（建議）；(b) 循環槽位優先放從沒送過的 id，可消除超過 8 筆時的延遲，但偏離 §2a「其餘槽位循環」的字面，要改契約；(c) 要求時序完全不變：在每間隔一框的上限下做不到，除非讓重送少於每間隔一次（也偏離 §2a）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：等你決定上面三件事；之後 `edge-results-resend`。
+- **下一步**：同步 master（PR #80 的 `Design Invariants`、AGENTS.md 新 §14）；之後等你決定上面一件事，再開始 `edge-input-passthrough`（照 README 順序）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-16 17:40，`drop-report` 完成並 commit，四平台 L1 已觸發。
+- **最後更新**：2026-10-16 18:19，`edge-results-resend` 完成並 commit，四平台 L1 已觸發。
 
 ## 閱讀入口
 
@@ -80,6 +78,9 @@
 | D101 | （2026-10-16）會話的 ultracode 開關不覆蓋計畫的檔位：每批照 README 樹狀總覽標的檔位做；標 ultracode 的批才用，標「ultracode（先問）」的到了先問一次；其餘不逐批確認，也不因為開關另開 workflow | 使用者（經分叉會話）：「一開始計劃裡有檔位規劃，以那個為準，計劃太多了，我沒法每一個都確認。」起因：`version-errors` 在開關打開後，事前沒問就跑了審查 workflow |
 | D102 | （2026-10-16）開始 `time-echo`（檔位 high，估 4 h）；`heartbeat-sync` 的睡眠那段 L2 等之後的 L2 一起做 | 使用者：「開始 time-echo。睡眠那段 L2 等之後的 L2 一起做。」 |
 | D103 | （2026-10-16）開始 `drop-report`（檔位 high，列舉與上限局部 xhigh，估 13～16 h） | 使用者：「開始 drop-report。」 |
+| D104 | （2026-10-16）protocol-v7 §2「診斷訊框的計時與佇列」改成配合實作：GatewayDropReport 不經過單槽，計時器只標記一輪，writer 寫出前一刻才組回報（序號、樣本、dwell 終點在寫出時決定）。wire 與 Match 的檢查不變 | 使用者：「1a」；`drop-report` 的 xhigh should-3 |
+| D105 | （2026-10-16）核准 `heartbeat-sync`、`time-echo`、`drop-report` 新增的 Gateway 欄位為診斷狀態（D-14 的 Architecture Delta）。條件：`edge-contract` 的白名單分三類——診斷狀態（判定路徑不得讀取）、單次呼叫的脈絡（`datagram`，不得跨資料包保留）、測試縫隙（正式路徑只用預設值）；分類先寫進 protocol-v7 §2a | 使用者：「2a（含條件）」；`drop-report` 的 xhigh should-4 |
+| D106 | （2026-10-16）開始 `edge-results-resend`（檔位 high，通道計時局部 xhigh，估 7～8 h） | 使用者：「開始 edge-results-resend」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -239,13 +240,40 @@
       - Go：執行中的 Server 有變化才送、離開後恰好一則 final；關閉時已回報過的串流與延後中的 final 也送；不先取消 ctx 的 Close；生產路徑的下行出口（Welcome、snapshot）帶 Gateway 序號與 tick；43、44 帶 tick；上行樣本帶 GYOP 序號、dwell 從收包起算；dwell 夾在 10 秒；每秒最多一輪；上限對照契約值；排序用 7 個原因；log 行格式釘死（C++ 測試用同一字串）。
       - C++：補齊各類違規（merged_streams、samples_omitted 倒退、超過 4 個樣本、counts 亂序／重複／為 0、counts 消失、dwell 範圍）。
       - 測試改用 `setForTest`（`t.Cleanup` 還原全域變數），避免 race detector 抓到的「還原早於背景 goroutine 結束」。
-    - should-3、should-4：動到定稿契約與架構，記在「等你決定」。
+    - should-3、should-4：動到定稿契約與架構，由使用者決定（D104、D105）。
     - note：拿掉沒人讀的 `Violations()`；更正 IG 的註解（新增的下行 `_packets` 不在 IG 內）。其餘記在未結事項。
   - 證據：`build/target/_build/test/logs/pvp-v71-drop-report-20261016/`。
-  - Architecture Delta：Gateway 新增的診斷狀態欄位，等你核准（現況第 2 項）。其餘在產品內：Gateway 多 `drop_report.go`；`Server.Close` 的收尾改成先寫 final；ipc 測試多連結 nlohmann_json（讀 golden）。
-  - 實際約 3 h（14:41～17:40，含 xhigh 檢查約 38 分、突變約 1 h；估 13～16 h）。
+  - Architecture Delta：Gateway 新增的診斷狀態欄位，已核准（D105）。其餘在產品內：Gateway 多 `drop_report.go`；`Server.Close` 的收尾改成先寫 final；ipc 測試多連結 nlohmann_json（讀 golden）。
+  - 實際約 2.7 h（14:41～17:21，含 xhigh 檢查約 38 分、突變約 1 h；估 13～16 h）。
+
+- 2026-10-16 17:25：`edge-results-resend` 開始（D106，檔位 high，通道計時局部 xhigh，估 7～8 h）。`drop-report`（`598b609`）的四平台 L1 是 run 38873139138（手動觸發）。D104 的 §2 措辭與 D105 的白名單分類已寫進 protocol-v7。
+- 2026-10-16：`edge-results-resend` 實作與驗收。
+  - Match（`IpcHost` 的 `ActionLane`）：由「每個裁決只送一次」改成 §2a 的重送。Client ACK 之前每位玩家每 1/30 秒最多一框；每框是退役值加至多 8 筆裁決：最小的 4 筆未確認 id 每框都有，其餘 4 個槽位用游標循環，框內依 id 遞增。退役前進時送一次；ACK-only 而且 0 < ack ≤ 退役值，或批被拒收（Host 拒收、超過 8 筆、格式錯誤）時，再送一次（`asked`，仍守每間隔一框）。
+  - Gateway：行為不變，仍以帳本冪等合併副本；只更正過時的註解。runtime proto 的 `ActionBatch`／`ActionResults` 加上送達註解（Go 綁定重產，差異只有註解）。
+  - 測試：
+    - IpcHost：改寫原本「每個裁決只送一次」的測試（現在是重送次數的上下限與退役後停止），新增最小 4 筆與循環（16 筆、14 筆兩種，後者在框內繞回）、ACK-only 補送退役、三種拒收各回一框、連續 60 次拒收仍守每間隔一框。
+    - Go：副本在 Gateway 不改變任何東西（「只送一次」與「加上副本」兩種 IPC 輸入，假時鐘下 Client 的資料包逐則相同，含遺失與 ACK-only）；另用忠實的通道模型和「立刻送」比較 Client 第一次收到每個裁決的時刻（見「等你決定」）。
+  - 突變：本批 12 個（`v71-edge-results-resend`）加上受影響的 v7-08b 與 `v7-flow-ledger-ipc-*` 共 31 個，全部殺死。`v7-08b-lane-no-sent-tracking` 刪除（它描述的「重送到 ACK 為止」就是現在要的行為）；`v7-08b-lane-repeat`、兩個 `v7-flow-ledger-ipc-*-silent` 改成新寫法。第一輪有 2 個是錯誤訊息不符：`v7-08b-lane-unpaced` 讓差分測試的讀取迴圈停不下來（重送不設節奏時 Match 一直在寫），整個 ipc 測試逾時；讀取迴圈加上 2 秒期限後，用預期的訊息失敗。`v71rr-cursor-stuck` 讓 id 14／16 永遠送不出去，在等那一個裁決時就失敗，期望值加上這個訊息。
+  - 驗收（L1，本機）：`test` preset 全量 CTest 72／72；`go vet`、`go test -race -count=3`；權威 digest 同機兩樹比較 scale 1、3 各 35 情境 0 差異（IpcHost 不在 digest 的路徑上，只作確認）。
+  - 局部 xhigh 檢查（通道計時，1 位，約 13 分）：must 0、should 3、note 8。
+    - should-1：新裁決可能晚到，§9「Client 看到的不變」的說法太強。量測與選項記在「等你決定」。
+    - should-2（已補）：連續觸發時的速率上限測試，與「被觸發的通道立即到期」突變。
+    - should-3（已補）：循環槽位在框內繞回的情形、框內嚴格遞增（Client 會整框拒收重複 id），與「不排序」「不繞回」兩個突變。
+    - note（已處理）：只有 ACK-only 批才讀 Host 的結果；補「超過 8 筆的拒收不回覆」突變；更正兩處註解。
+    - note（記錄）：見未結事項。
+  - 證據：`build/target/_build/test/logs/pvp-v71-edge-results-resend-20261016/`。
+  - Architecture Delta：無（Match 的通道狀態多 `cursor`、`asked`，少了 `sent`；屬 IpcHost 內部）。
+  - 實際約 1 h（17:25～18:19，含 xhigh 檢查約 13 分；估 7～8 h）。
 
 ## 未結事項
+
+- **`edge-results-resend` 的 xhigh note**（記錄，之後的批次處理）：
+  - N1：這批 Match 的「ACK-only 補送退役」只在競態下觸發（link 只在 ACK 超前退役時才送 ACK-only），Client 漏收退役仍由 Gateway session 補送；`edge-results-passthrough` 讓 link 原樣轉送 ACK-only 後才真的用到。
+  - N2：link 對每個副本都 `notify()` 一次，每位玩家約 30 Hz 多一次 writer 檢查，不影響時序；可改成合併有變化時才喚醒。
+  - N3：link 對無法裁決的被拒請求照舊 30 Hz 重送，現在 Match 每次都回一框；L2 的流量數字會看到雙向 30 Hz。
+  - N4：重送的副本排在 snapshot 前面；只有 TCP 低於約 120 框／秒才有影響（推論，loopback 可忽略）。
+
+- **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
 
 - **保留的 worktree 與本機分支**：
   - `GYO-Engine-v7final`（`6d3f287`）、`GYO-Engine-c2-after`（`d685d1e`）：v7 的基準與凍結工具副本，保留到 `d44-regression-pv7` 完成。
@@ -270,4 +298,7 @@
   - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
   - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。
   - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。
-- **`edge-contract` 的約束**（文件會話，設計事故行動 4，PR #79 已合併到 master `23457e1`）：AGENTS.md 不點名產品，而是用 `git grep -n "不可破壞的契約" -- docs` 找各元件的設計約束。把 Gateway 的正式條文寫進 network-architecture 時，「不可破壞的契約」的標題文字要逐字保持不變。
+- **`edge-contract` 的約束**（文件會話，設計事故行動 4）：契約節的標題改成英文 `Design Invariants`，不隨文件語言翻譯（使用者的決定，文件會話 PR #80，2026-10-16 通知時尚未合併；這更正了 PR #79 時「標題逐字保持『不可破壞的契約』」的要求）。
+  - `edge-contract` 把 Gateway 的正式條文寫在 `network-architecture.zh-Hant.md` 的 `### Design Invariants` 節下。PR #80 已合併到 master（`8f2f3fe`，四平台 L1 通過）；本分支在 `edge-results-resend` commit 之後同步 master，不自行改名。master 的 AGENTS.md 另新增 §14 Test and Defect Handling（原 §14、§15 往後移），同步後照新規則做。
+  - AGENTS.md §3 改成一般規則「状態の権威（State Authority）」，不再列 Gateway 的細節；Gateway 的允許／禁止清單（protocol-v7 §2a）只放在 Design Invariants 節。
+  - 同節新增 `Replacement Criteria`：新建元件或加大既有元件的責務之前，先在 Design Invariants 寫下「什麼情況就換掉它」。`edge-contract` 時提案 Gateway 的 Replacement Criteria，由你決定。

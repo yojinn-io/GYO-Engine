@@ -137,11 +137,16 @@ message ClockSample {
   uint64 transmit_us = 3;
 }
 
+// May repeat a batch the Match already took. An ACK-only batch whose
+// acknowledged_through is no more than the Match's retirement asks for that
+// retirement again (pv7 §2a).
 message ActionBatch {
   uint64 player_id = 1;
   repeated ShotRequest shots = 2;
   uint64 acknowledged_through = 3;
 }
+// Resent by the Match, at most ActionSendRate per player, until the Client's
+// ACK retires each decision; idempotent: a copy changes nothing (pv7 §2a).
 message ActionResults {
   uint64 player_id = 1;
   uint64 retired_through = 2;

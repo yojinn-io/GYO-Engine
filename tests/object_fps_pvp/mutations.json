@@ -943,10 +943,10 @@
     {
       "id": "v7-08b-lane-repeat",
       "batch": "v7-08b",
-      "what": "The Match lane counts any unretired decision or nonzero retirement as content again: retired-only repeats every 1/30 s",
+      "what": "The Match lane counts a nonzero retirement as something to send again: retired-only repeats every 1/30 s",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "    return results.retiredThrough>lane.sentRetired || std::any_of(results.decisions.begin(),results.decisions.end(),\n        [&](const auto& decision){return !lane.sent.contains(decision.actionId);});\n",
-      "replace": "    static_cast<void>(lane);\n    return !results.decisions.empty() || results.retiredThrough!=0;\n",
+      "find": "    return !results.decisions.empty() || results.retiredThrough>lane.sentRetired || lane.asked;\n",
+      "replace": "    return !results.decisions.empty() || results.retiredThrough!=0 || lane.asked;\n",
       "check": "ipc",
       "expect": "CHECK\\( resultsWhileIdle == 0 \\) is NOT correct"
     },
@@ -979,16 +979,6 @@
       "replace": "",
       "check": "ipc",
       "expect": "CHECK\\( idleIterations < 600 \\) is NOT correct"
-    },
-    {
-      "id": "v7-08b-lane-no-sent-tracking",
-      "batch": "v7-08b",
-      "what": "The Match lane does not record sent decisions, so it resends each until the ACK",
-      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "        lane.sent.insert(decision.actionId);\n",
-      "replace": "",
-      "check": "ipc",
-      "expect": "CHECK\\( decisionFrames == 1 \\) is NOT correct"
     },
     {
       "id": "v7-flow-fwd-filters-resolved",
@@ -1665,8 +1655,8 @@
       "batch": "v7-flow",
       "what": "The IPC drops a malformed action batch without telling the host",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "if(!valid) {host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);continue;}",
-      "replace": "if(!valid) continue;",
+      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);\n",
+      "replace": "",
       "check": "ipc",
       "expect": "CHECK\\( ipcMalformedActions == 1 \\) is NOT correct"
     },
@@ -1675,8 +1665,8 @@
       "batch": "v7-flow",
       "what": "The IPC drops an oversized action batch without telling the host",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "if(shots>MaxActionBatch) {host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);continue;}",
-      "replace": "if(shots>MaxActionBatch) continue;",
+      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);\n",
+      "replace": "",
       "check": "ipc",
       "expect": "CHECK\\( ipcOverBatchShots == MaxActionBatch \\+ 1 \\) is NOT correct"
     },
@@ -4069,6 +4059,126 @@
       "replace": "                session.drops.Read(message.drop_report()); static_cast<void>(host.QueueLeave(++requestSequence,message.drop_report().player_id()));\n",
       "check": "ipc",
       "expect": "without\\.(decisions|joins|snapshot) == with\\."
+    },
+    {
+      "id": "v71rr-no-smallest-first",
+      "batch": "v71-edge-results-resend",
+      "what": "Every results slot cycles: the smallest unacknowledged ids are not in every frame",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "constexpr std::size_t ResendFirstSlots=4;\n",
+      "replace": "constexpr std::size_t ResendFirstSlots=0;\n",
+      "check": "ipc",
+      "expect": "ids\\.begin\\(\\) \\+ 4\\) == std::vector<ActionId>\\{1, 2, 3, 4\\} \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-no-resend",
+      "batch": "v71-edge-results-resend",
+      "what": "The Match lane sends unacknowledged decisions only with a new retirement or when asked",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    return !results.decisions.empty() || results.retiredThrough>lane.sentRetired || lane.asked;\n",
+      "replace": "    return results.retiredThrough>lane.sentRetired || lane.asked;\n",
+      "check": "ipc",
+      "expect": "CHECK\\( decisionFrames >= 4 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-cursor-stuck",
+      "batch": "v71-edge-results-resend",
+      "what": "The cycling slots never advance: ids above the first eight starve",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        lane.cursor=decisions[index].actionId;\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CHECK\\( cycled\\.size\\(\\) == decisions - 4 \\) is NOT correct|the expected frame did not arrive within 2 s\\s+logged: decisions := 1[46]"
+    },
+    {
+      "id": "v71rr-ack-only-ignored",
+      "batch": "v71-edge-results-resend",
+      "what": "An ACK-only batch behind the retirement does not ask for it again",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)\n",
+      "replace": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted)\n",
+      "check": "ipc",
+      "expect": "CountResults\\(again\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-refusal-ignored",
+      "batch": "v71-edge-results-resend",
+      "what": "A batch the host refuses is not answered with a results frame",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)\n",
+      "replace": "                if(static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through())),missed)\n",
+      "check": "ipc",
+      "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-malformed-refusal-ignored",
+      "batch": "v71-edge-results-resend",
+      "what": "A malformed batch is not answered with a results frame",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);\n                    AskLane(value.player_id());\n",
+      "replace": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);\n",
+      "check": "ipc",
+      "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-asked-sticks",
+      "batch": "v71-edge-results-resend",
+      "what": "A lane asked once keeps resending its retirement every interval",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    lane.asked=false;\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CountResults\\(again\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-gateway-repeat-as-poke",
+      "batch": "v71-edge-results-resend",
+      "what": "The Gateway takes a resent retirement as the Client asking for it: Match resends change what the Client receives",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tfresh := in.RetiredThrough > w.retired\n",
+      "replace": "\tfresh := in.RetiredThrough > w.retired\n\tw.retirementAsked = w.retirementAsked || (in.RetiredThrough == w.retired && w.retired > 0)\n",
+      "check": "go",
+      "expect": "datagram \\d+ differs|datagrams with each result sent once"
+    },
+    {
+      "id": "v71rr-over-batch-refusal-ignored",
+      "batch": "v71-edge-results-resend",
+      "what": "An over-long batch is not answered with a results frame",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);\n                    AskLane(value.player_id());\n",
+      "replace": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);\n",
+      "check": "ipc",
+      "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-asked-skips-pacing",
+      "batch": "v71-edge-results-resend",
+      "what": "An asked lane is due at once: repeated asks or refusals write a results frame each, unpaced",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    return lane.lastSend?*lane.lastSend+ActionInterval:now;\n",
+      "replace": "    return lane.lastSend && !lane.asked?*lane.lastSend+ActionInterval:now;\n",
+      "check": "ipc",
+      "expect": "CHECK\\( frames <= 11 \\) is NOT correct"
+    },
+    {
+      "id": "v71rr-unsorted-frame",
+      "batch": "v71-edge-results-resend",
+      "what": "A results frame keeps its selection order: the cycling slots wrap out of id order",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "    std::sort(chosen.begin(),chosen.end());\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "adjacent_find"
+    },
+    {
+      "id": "v71rr-cycle-no-wrap",
+      "batch": "v71-edge-results-resend",
+      "what": "The cycling slots run past the end instead of wrapping to the lowest of the rest",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        const auto index=first+(start+k)%rest;\n",
+      "replace": "        const auto index=std::min(first+start%rest+k,decisions.size()-1);\n",
+      "check": "ipc",
+      "expect": "adjacent_find|cycled\\.size\\(\\) == decisions - 4"
     }
   ]
 }
