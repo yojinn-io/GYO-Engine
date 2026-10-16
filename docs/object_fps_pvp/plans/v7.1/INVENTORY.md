@@ -21,14 +21,14 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | 處置 | 項數 |
 |---|---|
 | pv7-line | 20 |
-| after-pv7 | 27 |
+| after-pv7 | 29 |
 | re-evaluate | 12 |
-| re-evaluate 之後 | 34 |
+| re-evaluate 之後 | 35 |
 | plan-sync-docs | 3 |
 | 取消 | 10 |
 | 已解決 | 3 |
 | 已被取代 | 3 |
-| 合計 | 112 |
+| 合計 | 115 |
 
 ## P. pv7 與相關任務
 
@@ -121,7 +121,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | F4 | D30 門檻可能被逐漸變長的發布間隔逐級放大 | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp:54-65`<br>`apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:55-58、:66-70` | 否 | 否 | re-evaluate 之後 |
 | F5 | 期限前自旋（忙等） | 未解決 | `engine/time/include/engine/time/Waiter.hpp:53-65`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:458` | 否 | 否 | re-evaluate 之後 |
 | F6 | App Nap（Spaces、縮小時的斷線） | 未解決 | `docs/object_fps_pvp/plans/v7/05-30fps-comparison.md:107、:161`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:136、:197` | 否 | 否 | re-evaluate 之後 |
-| F7 | Windows Match 的 Tick 與 IPC 精度 | 未解決 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:499-510`<br>`engine/time/include/engine/time/Waiter.hpp:27-29、:60-65` | 否 | 否 | re-evaluate 之後 |
+| F7 | Windows Match 的 Tick 與 IPC 精度。2026-10-16 的全 Windows LAN 臨時測試有第一份實機數據：主機上沒開 Client 時晚醒 ≥2 ms 佔 1.67%（9632 Tick 中 161 個，最大 14.7 ms），開著時 0（33707 Tick，最大 1.6 ms）〔推論：本機 GPU 程式改變了計時器解析度或省電狀態；樣本只有 16 個窗口〕 | 未解決 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:499-510`<br>`engine/time/include/engine/time/Waiter.hpp:27-29、:60-65`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/` | 否 | 否 | re-evaluate 之後 |
 
 ## G. 文件
 
@@ -173,6 +173,9 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | N-silent-branches-assert | 推論走不到的無聲分支改成 assert（Programmer Error） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:491`<br>`apps/object_fps_pvp/gateway/server.go:638-641` | 否 | 否 | re-evaluate 之後 |
 | N-09b-followup-measures | 09b §5 裡沒有對應使用者代號的量測與方法項 | 未解決 | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1373`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1376` | 否 | 否 | re-evaluate |
 | N-phase-1-7-items-3-6 | 09b 1-7 節的第 3、6 項已知限制（B6 沒涵蓋） | 未解決 | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1176`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1179` | 否 | 否 | re-evaluate |
+| N-summary-counter-wrap | Client 重新加入後，每秒摘要行的武器計數器下溢（例：`actions_submitted=18446744073709551466`）：離開 Playing 時基準值沒有歸零。只影響日誌（2026-10-16 全 Windows LAN 臨時測試） | 未解決 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:712-717、:737-741`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientB_logs/client-20261016-105531.log:337` | 否 | 否 | log-contract |
+| N-hit-feedback-not-logged | 受擊效果（紅色閃光）沒有寫進日誌，Client 的 HP 只有每秒取樣；使用者回報 Main Client 有一次受擊沒閃紅，時間不記得，無法定位。設計上致命一擊、同一 Snapshot 內致死的連續傷害、新生命的第一個狀態都不閃 | 未解決 | `apps/object_fps_pvp/src/Pvp/HitFeedback.cpp:78-100`<br>`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:357-366` | 否 | 否 | log-contract |
+| N-windows-max-path | Windows 發行包的 shader 路徑很深（檔名是 64 字元的雜湊），解壓到較深的資料夾就超過 MAX_PATH（260），Client 開不了 shader。CI 的驗收路徑較短，所以沒抓到 | 未解決 | 2026-10-16 實例：271 字元，`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientA/logs/client-20261016-104011.log:2` | 否 | 否 | re-evaluate 之後 |
 | N-firegate-unmeasured-residuals | FireGate 的盲點：GUI 取不到 earliest、spread 的假設沒量過 | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:165`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:182-184` | 否 | 否 | 取消（D90：FireGate 退役） |
 | N-trace-overwrite-on-restart | 重新啟動 Match 會覆寫前一段的 movement trace 與 ingress 細節檔 | 未解決 | `docs/object_fps_pvp/plans/v7/LAN_TEST.md:94` | 否 | 否 | observability-tools |
 | N-v8-wire-pv8 | v8 需要改 wire 的候選（排 pv8，v7.1 不預留） | 未解決 | `docs/object_fps_pvp/plans/v8/README.md:41`<br>`docs/object_fps_pvp/plans/v8/README.md:43` | 否 | 否 | 已被取代（D87：pv7 只支持 hitbox） |

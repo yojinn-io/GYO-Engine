@@ -42,6 +42,7 @@
   2. 開始 `time-echo`（檔位 high，估 4 h）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`time-echo`。
+- **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-16 13:30，`heartbeat-sync` 完成並推送。
 
 ## 閱讀入口
@@ -175,6 +176,15 @@
   - 證據：`build/target/_build/test/logs/pvp-v71-heartbeat-sync-20261016/`。
   - Architecture Delta：無。新的依賴只在產品內：ipc 函式庫多一個原始檔 `ClockSync.cpp`；Gateway 多 `clock_sync.go`、`diagnostics.go`。Engine 與共通層（`services/gyo_gateway`）沒有改。wire 新增 `ClockSample`（契約 §3 已定）。
   - 實際約 3.1 h（10:22～13:30，含 xhigh 檢查約 30 分、突變約 1 h、soak 兩次各 30 分；估 9 h）。
+
+- 2026-10-16：全 Windows LAN 臨時測試（使用者要求，不是批次；只記錄）。產物：Package trial run 38833224220（`16216ff`，即 `version-errors` 完成時，`heartbeat-sync` 之前）。構成：Main Client（i7-8750H、GTX 1060）同時跑 Match、Gateway 與 Client，Client A（Core 7 240H、RTX 5050）、Client B（i7-12700H、RTX 4060）連線；三台都是 Wi-Fi、JST，連線都用 192.168.50.x。三人同時在場約 4 分 47 秒（10:55:53～11:00:40），Gateway 從 10:49:11 運作到 11:01:13。方案 A 健康報告（檔位 high，約 1.5 h）：
+  - 結論：可以穩定遊玩。斷線、逐出、版本錯誤都是 0，Gateway 的 `drop_*` 與限流也都是 0。
+  - 替代命令：p1（A）233／42129 晚到（0.55%），p3（B）64／17154（0.37%），p2（Main）0。九成集中在 4 波（A：10:52:17、10:52:47、10:55:17～28；B：10:57:38～48），和 Client 端的 Snapshot 年齡尖峰（A 最大 124.2 ms）、`connection quality failed_windows=1 of 3` 同時出現。同一窗口 Gateway 收到的封包數不變（每秒約 61），重複命令與寫出時已解決的命令暴增，代表是延遲後一次擠過來，不是遺失。〔推論〕來源是各 Client 那一段 Wi-Fi：10:57 那一波兩人同時在場，只有 B 受影響；Main 用自己的 LAN IP 連線，封包不經過無線電。
+  - Windows Match 的 Tick（F7 的第一份實機數據）：主機上沒開 Client 時（10:49:11～10:51:50）晚醒 ≥2 ms 佔 1.67%（9632 Tick 中 161 個，最大 14.7 ms），開著時（10:51:50～11:01:13）0（33707 Tick，最大 1.6 ms）。〔推論〕本機的 GPU 程式改變了計時器解析度或省電狀態；樣本只有 16 個窗口。
+  - Client A 在 11:00:51～11:01:03 只有 13～43 FPS（最長幀約 90 ms），Snapshot 年齡正常，是本機畫面的問題，原因不明。
+  - 新發現記到 INVENTORY：`N-summary-counter-wrap`、`N-hit-feedback-not-logged`（使用者回報 Main 有一次受擊沒閃紅，時間不記得，日誌無法定位）、`N-windows-max-path`；F7 加上這次的數據。
+  - 端到端延遲和凍結分析器的 trace 分析（方案 B）沒有做。
+  - 證據：`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/`（`logs/`、`Info.txt`、分析腳本 `scripts/`；10/08 的舊日誌已排除）。
 
 ## 未結事項
 
