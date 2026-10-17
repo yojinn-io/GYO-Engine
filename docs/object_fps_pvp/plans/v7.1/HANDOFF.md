@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：`edge-actions-passthrough` 的 B 樹 rapid 開發跑次（6 格各 1 次、約 3 分鐘，會開 GUI 視窗並注入點擊；跑的時候不碰滑鼠與鍵盤）什麼時候跑。跑完才能乾跑、再請你核准 L2 宣告。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 19:04，`edge-actions-passthrough` 的 xhigh 審查已修正（輸入與動作分開計數等），突變重跑中；L2 宣告第 2 版與工具已寫好，待 A 樹、rapid 開發跑次與乾跑。
+- **最後更新**：2026-10-17 19:20，`edge-actions-passthrough` 審查修正已提交（`5b4d626`，L1 run 39025534085）；A 樹已建置；等 rapid 開發跑次。
 
 ## 閱讀入口
 
