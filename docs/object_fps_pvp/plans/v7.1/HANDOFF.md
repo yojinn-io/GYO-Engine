@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D115 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D116 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -85,6 +85,7 @@
 | D113 | （2026-10-17）核准 `edge-results-passthrough` 的 L2 事前宣告第 3 版；R3（下行延遲上限）只在沒受干擾的跑次停下，受干擾的只記錄；在使用者不用電腦的時段跑 | 使用者：「核准 edge-results-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…在我不用電腦的時段跑。」 |
 | D114 | （2026-10-17）開始 `edge-actions-passthrough`（檔位 high，估 14～17 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查 | 使用者：「開始 edge-actions-passthrough。」 |
 | D115 | （2026-10-17）核准 `edge-actions-passthrough` 的 L2 事前宣告第 3 版（[edge-actions-passthrough-l2.md](edge-actions-passthrough-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-actions-passthrough 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
+| D116 | （2026-10-18）使用者去睡覺期間，edge 系列照順序做完：`edge-actions-passthrough` 的 L2 判定 → `edge-analyzers` → `edge-contract`。照常在關卡停下（L2 不成立、需要使用者同意的 Design Invariants 條文等） | 使用者：「我想去睡覺了，期間edge系列按順序執行完吧。」 |
 
 ## 規劃紀錄（記錄器）
 
