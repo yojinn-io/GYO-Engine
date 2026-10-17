@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-actions-passthrough` 的 B 樹 rapid 開發跑次（6 格各 1 次、約 3 分鐘，會開 GUI 視窗並注入點擊；跑的時候不碰滑鼠與鍵盤）什麼時候跑。跑完才能乾跑、再請你核准 L2 宣告。
+- **等你決定**：核准 [edge-actions-passthrough 的 L2 事前宣告第 3 版](edge-actions-passthrough-l2.md)（第 10 節：核准、什麼時候跑）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 19:20，`edge-actions-passthrough` 審查修正已提交（`5b4d626`，L1 run 39025534085）；A 樹已建置；等 rapid 開發跑次。
+- **最後更新**：2026-10-17 19:45，`edge-actions-passthrough` 的 L2 宣告第 3 版（工具、乾跑、B 的 rapid 開發跑次完成），等你核准。
 
 ## 閱讀入口
 
@@ -343,6 +343,8 @@
     - should（已修）：33 的 ACK-only 樣本把 ACK 值填進 action id 欄位，契約沒有定義。改成 id 為 0（ledger 照共通規則把那一批記成 1 筆）。
     - 測試缺口（已補）：輸入與動作混合溢出、同一玩家跨種類的到達順序、離開後寫出不重建統計、`checkIngressConservation` 加上動作批的守恆；新突變 3 個。審查提到的「被丟的那則依新來那則的種類歸類」在修正後是等價突變（被丟的一定與新來的同種類），不加。
     - 修正後重跑：兩個被改檔案上的突變與本批全部，69／69 殺死（加入時的等價突變 1 個已刪除）；`go test -race -count=2` 通過。
+  - 修正提交 `5b4d626`（CTest 72／72、preset 外 4／4），四平台 L1 是 run 39025534085。A 樹 `../GYO-Engine-ap-after` 建在 `5b4d626`。
+  - L2 宣告第 3 版：B 的 rapid 開發跑次 6 次（使用者在場、不碰滑鼠，全部 class P、Cooldown 0）；乾跑 82 列、驅動檢查、5 個模擬 session 全部符合預期，B 語料 66 跑次 0 誤停；preflight 通過。等使用者核准。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項

@@ -1,6 +1,8 @@
-# edge-actions-passthrough 的 L2 事前宣告（第 2 版草稿）
+# edge-actions-passthrough 的 L2 事前宣告（第 3 版草稿）
 
-- 狀態：**草稿**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 3、應修正 6、記錄 8，對應表在第 11 節。接下來寫工具並乾跑，之後才請使用者核准（§14.1：核准前不看 A 的結果；核准後不放寬）。
+- 狀態：**草稿，等你核准**（§14.1：核准前不看 A 的結果；核准後不放寬）。
+  - 第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 3、應修正 6、記錄 8，對應表在第 11 節。
+  - 第 3 版：工具寫好並乾跑（82 種逐跑次情況、驅動檢查、5 個模擬 session 全部符合預期；真實的 B 語料 66 跑次判成 B 沒有任何停止；A 沒有跑過任何項目）。B 的 rapid 開發跑次 6 次（第 5 節）。工具目錄 `build/target/_build/test/logs/pvp-v71-edge-actions-l2-prep-20261017/`（`commands.txt`、`dryrun.md`、`prep-files.sha256` `c73ed715…`）。第 2 版到第 3 版的改動在第 12 節。
 - 依據：D94、D96、D107、D114；protocol-v7 §2a、§4、§9；README `edge-actions-passthrough` 列（「射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數」）。
 - 先例：[edge-results-passthrough 的 L2 事前宣告](edge-results-passthrough-l2.md)（D113）與 [edge-input-passthrough 的](edge-input-passthrough-l2.md)（D109、D110）。主機、凍結、雜湊核對、受干擾的處置沿用它們，下面只寫不同之處。rapid 項目的量法與分類沿用 v7 第 09 批 C2-B（`pvp-v7-09-c2-prep-20261014/judge_c2.py` 的 `classify_rapid`、`rapid_cooldown`）。
 - 數字沒有標「實測」的，是程式推導或推論。「本次 B」的參考值取自上一次 L2 的 A 樹跑次（`pvp-v71-edge-results-l2-20261017b/runs/*-A`；它的 Match、Gateway 與本次的 B 逐位元相同，工具階段核對）。**門檻裡的「B 的範圍」一律用本 session 的 B 跑次計算**，參考值只用來說明門檻的大小。rapid 在 v7.1 沒有基準：乾跑時先在 B 跑開發跑次；B 的開發跑次若出現權威 Cooldown 拒收，就停下、在核准前回報。
@@ -26,14 +28,23 @@ L2 **判定**：權威 Cooldown＝0（遊戲情境與經過產品 FireGate 的�
 | 樹 | commit | worktree |
 |---|---|---|
 | before（B） | `f79bb10`（之後的 commit 只改文件） | `../GYO-Engine-rp-after`（已建置、乾淨） |
-| after（A） | 本批的 commit（工具階段填入） | `../GYO-Engine-ap-after`（新建） |
+| after（A） | `5b4d626`（xhigh 程式碼審查的修正之後；之後的 commit 只改文件） | `../GYO-Engine-ap-after`（已建置、乾淨） |
 
 - B→A 的程式差分：Gateway（`gateway/*.go`）、`runtime_v7.proto` 的 reserved 17、21、25、26（重產的 enum：Match 的 `DropReason_IsValid` 對它們判 `reason_range`；Match 的其他程式不變；兩棵樹的 Match 雜湊都記下）、測試、突變與文件。Client 不變（工具階段以 `git diff` 核對 `apps/object_fps_pvp/src`、`include` 只有生成碼的差異）。
 - gameplay、timing、network、quad probe 與 arena 一律用 `../GYO-Engine-ip-before` 的建置（上兩次 L2 的那一支）。rapid 的 GUI probe 用 B 樹的建置，兩棵樹共用。
 
 ## 3. 工具
 
-沿用上一次的 `run_l2.py`、`judge_l2.py` 改寫（加 rapid 項目與第 6 節的新判定），`judge_c2.py` 以宣告的雜湊引用（`classify_rapid`、`rapid_cooldown`）。雜湊在乾跑後寫進第 3 版。凍結清單同上一次（`frozen-pv7.sha256`），加 `run_action_short.py` 與 GUI probe 的雜湊。
+| 工具 | 雜湊 |
+|---|---|
+| `run_l2.py`（改寫） | `91b2d7462c2d5bd3e39a320e2b66262cb05a28b2ed5292d63c8eb729ff2f41d3` |
+| `judge_l2.py`（改寫） | `42708b4c93e641cfbc8efad4aa8444400e988efa254805909bddfb49f57a6023` |
+| `artifacts.sha256`（B、A 的 Match 與 Gateway；ip-before 的 4 個 probe 與 arena；B 的 GUI probe） | `ee153ca0fb6df40de46ef250e8e35ba2549d8d946d69ca19b4a454833538e8bc` |
+| `frozen-pv7.sha256` | `b4a8963001883160d5bb7642b7da89afd343c686d29752874461762e17a291c2` |
+| `run_action_short.py` | `3a4e39a24de49684dd3474dab810b41737083f57530c345a333d7ae1f893d5e2` |
+| `judge_16.py`、`judge_c2.py`、`compare_reports.py`、`sleeper.py` | 同上一次（`29258be1…`、`5d2ed0f3…`、`36e65f3a…`、`98105dbf…`） |
+
+B 的 Match `1bd67b4e…`、Gateway `b81c6278…`（與上一次 L2 的 A 逐位元相同）；A 的 Match `77e83f91…`、Gateway `82f9da97…`；GUI probe `b1a9b53a…`；兩棵樹的 Gateway `vcs.revision` 等於各自的 HEAD、`vcs.modified=false`。B→A 在 `apps/object_fps_pvp/src`、`include` 與 `build/acceptance` 沒有差異（已核對）。
 
 ## 4. 主機
 
@@ -56,7 +67,9 @@ B、A 交錯，每個情境輪流先跑；每個項目 1 輪；soak 排在最後
 | rapid-interval12、rapid-edge × 30／60／144 FPS | `run_action_short.py --case rapid-…` | 每格 4（共 24） | 經過產品 FireGate 的連射：Cooldown（主要的檢出力）、被擋下的點擊 |
 | soak-long | `run_gameplay_soak.py --soak --fps 60` | 1 | 長跑次 |
 
-共 168 個項目（每棵樹 84）。估計：上一次 session 約 2 h 20 分，加 rapid 48 個 × 約 30 秒（v7 第 09 批實測每跑次 20～28 秒）約 25 分，共約 2 h 45 分加閒置門檻。rapid 的輸出巢狀是 `runs/<項目名>/<case>/action-short-matrix.json`（沒有 `match-commands.jsonl`、`match-ingress.jsonl`），工具階段照實際輸出寫進 judge。
+共 168 個項目（每棵樹 84）。估計約 2 h 46 分加閒置門檻（`run_l2.py --list-only`；rapid 以每項 32 秒計，B 的開發跑次實測 14～21 秒加兩次 sleeper）。
+
+B 的 rapid 開發跑次（2026-10-17，各 1 次）：全部 class P、權威 Cooldown 0、sleeper 約 4 ms。interval12 在 30／60／144 FPS 都是 44 次點擊全部送出、擋下 0，`submit_to_verdict` 的 p50 34.0／17.2／14.5 ms；edge 送出 31／31／32 發、擋下 114／255／635 次，p50 34.0／17.7／14.7 ms。L4 的 40 發在 edge 格要 2 個跑次，排了 4 個。rapid 的輸出巢狀是 `runs/<項目名>/<case>/action-short-matrix.json`（沒有 `match-commands.jsonl`、`match-ingress.jsonl`），工具階段照實際輸出寫進 judge。
 
 ## 6. 判定
 
@@ -115,8 +128,8 @@ R2r、R9、L1 是這批行為的主要判定；R6a～R6c 驗帳目。
 
 ## 10. 等你決定
 
-1. **核准本宣告**（乾跑之後的第 3 版）。
-2. **什麼時候跑**：約 2 h 45 分加閒置門檻；rapid 需要顯示器亮著、不碰滑鼠。
+1. **核准本宣告第 3 版**。
+2. **什麼時候跑**：約 2 h 46 分加閒置門檻，需要機器閒置（插電、不使用）；rapid 需要顯示器亮著、不碰滑鼠與鍵盤。上兩次的經驗：白天的干擾（Chrome 等）容易累計到 3 次就停，建議在你不使用電腦的時段跑，開始前結束 Chrome，Auto-fix 在 session 期間暫停。
 
 ## 11. D45 檢查的修正對應（第 1 版 → 第 2 版）
 
@@ -139,3 +152,13 @@ R2r、R9、L1 是這批行為的主要判定；R6a～R6c 驗帳目。
 | N6 FireGate 註解過時 | 第 1 節記錄，HANDOFF 給 A1 |
 | N7 to_tick 的對象 | 第 6 節改成「rejection＝0 的裁決（射擊與換彈）」 |
 | N8 network-impairments 兩個 Gateway | R6a 逐檔判 |
+
+## 12. 工具與乾跑帶來的改動（第 2 版 → 第 3 版）
+
+| # | 改動 |
+|---|---|
+| 1 | 第 1 節：FIFO 改成「與輸入同一個佇列、分開計數，各 64 則，滿了丟同種類最舊的」（xhigh 程式碼審查的必須修正，`5b4d626`；§2a 的「每位玩家不少於 64 則輸入窗口」） |
+| 2 | 第 2 節：A＝`5b4d626`；第 3 節填入雜湊；Client 沒有差異的核對 |
+| 3 | R6b：Match 在判斷 reset 與玩家之前就計入收到數（`MatchRuntimeHost.cpp:263-270`），刪掉「D110 的 reset 競態只記錄」 |
+| 4 | 第 5 節：B 的 rapid 開發跑次結果與估計時間 |
+| 5 | 33 的 ACK-only 樣本：action id 為 0（審查的應修正），不影響判定 |
