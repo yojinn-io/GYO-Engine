@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 實作完成，L2 宣告等你核准。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 的 L2 宣告已核准，等可以跑的時段。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D111 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D113 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,15 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**（[edge-results-passthrough 的 L2 事前宣告第 3 版](edge-results-passthrough-l2.md)第 10 節）：
-  1. 核准宣告。
-  2. D112：protocol-v7 §9 的送達界限改成 ≤2⌈n/8⌉＋2（建議；實測 n＝16、24、32 為 6、8、10 則）或改設計（wire 變更）。
-  3. R3（下行延遲上限）遇到主機干擾：建議只在沒受干擾的跑次停下，受干擾的只記錄。
-  4. 什麼時候跑（約 2 h 20 分，要機器閒置）：建議你不用電腦的時段。
+- **等你決定**：無。等你告訴我開始不用電腦的時段，就跑 L2 session（約 2 h 20 分加閒置門檻；插電、不移動、不使用）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：依你的決定改 judge（R3）、§9（D112），然後跑 L2 session。
+- **下一步**：你不用電腦時跑 L2 session（D113）；之後把 `results_resend_test.go` 註解裡的「pending D112」改成已決定（session 期間主 checkout 只能有文件變更，所以留到之後）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 14:21，`edge-results-passthrough` 的 L2 宣告第 3 版與工具乾跑完成；等你決定 4 件事。
+- **最後更新**：2026-10-17 15:03，D112、D113；L2 準備完成，等你不用電腦的時段。
 
 ## 閱讀入口
 
@@ -85,6 +81,8 @@
 | D109 | （2026-10-16）核准 `edge-input-passthrough` 的 L2 事前宣告第 3 版；第 10 節照建議：J4a 1.5 倍、跑 soak-long、heartbeat-sync 的睡眠那段在本 session 結束後接著做、次數照第 5 節（98 個項目）。確認 `ingress_cross_check.py` 只接受 protocol-v7 §9 宣告形狀的 I3 失敗（AGENTS.md §14.4） | 使用者：「核准 edge-input-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…ingress_cross_check 的 I3 例外也確認。」 |
 | D110 | （2026-10-17）L2 第 1 次 session 在第 58 項停下（B 樹 clean-60 的 I1 undetermined：關閉時被 reset，已知的競態）。依 §14.1 回報後選 (a)：只改 I1 的規則（任何情境，只有 `eof_before_final` 不成立、其他前提成立的 undetermined 只記錄），整個 session 重跑；第 1 次保留為證據 | 使用者：「照 (a)」 |
 | D111 | （2026-10-17）開始 `edge-results-passthrough`（檔位 high，估 12～16 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查；休眠重連記為體驗優化，之後調整 | 使用者：「開始 edge-results-passthrough。」「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」 |
+| D112 | （2026-10-17）protocol-v7 §9 的「每隔一則丟一則時送達」界限改成 ≤2⌈n/8⌉＋2（原寫 ≤2⌈n/8⌉）。契約行為不變；原因：Client 只能連續 ACK，有缺口時 Match 不知道 Client 已有哪些較大的 id | 使用者：「D112 選 (a) 把 §9 改成 ≤2⌈n/8⌉＋2」 |
+| D113 | （2026-10-17）核准 `edge-results-passthrough` 的 L2 事前宣告第 3 版；R3（下行延遲上限）只在沒受干擾的跑次停下，受干擾的只記錄；在使用者不用電腦的時段跑 | 使用者：「核准 edge-results-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…在我不用電腦的時段跑。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -307,7 +305,7 @@
   - link：ACK-only 批即使 ACK 不超過退役值也會寫出（window 的 `asked`），讓 Match 收得到補送退役的要求；ACK 的帳目（D56）仍由 window 記。一開始用「ACK-only 走到達順序佇列」的做法，會讓 Leave 之後仍寫出的 ACK 被算成丟棄（`TestLinkConservesActionRequestsAcrossEveryExit` 抓到），改成這個做法。
   - 丟棄原因 16、20（A3）改成 reserved；golden 重產（33 個原因）。
   - 測試：單槽放出、到達間隔 ±0.5 ms 時 0 取代、Client 每隔一則丟一則時的送達（見下）、退役遺失後 2 個間隔內補到、非 active 玩家的結果只計數；改寫依 Gateway 帳本重送的舊測試（G5、G6 刪除，喚醒與 1 kHz 到達的節拍改寫）；上一批的 `results_resend_test.go`（Gateway 帳本合併副本）改寫成這些端到端測試。
-  - **D112（等你決定）**：protocol-v7 §9 寫「每隔一則丟一則時，未確認 16 或 32 筆在 ≤2⌈n/8⌉ 則內送達」。照 §2a 的設計實測只能 ≤2⌈n/8⌉＋2（n＝16：6；24：8；32：10）。原因：Client 只能連續 ACK，有缺口時 Match 不知道 Client 已有哪些較大的 id，循環槽位會在一個收到的框架裡重送它已有的 id。測試暫時以實測的界限釘住。
+  - **D112（已決定，2026-10-17）**：protocol-v7 §9 寫「每隔一則丟一則時，未確認 16 或 32 筆在 ≤2⌈n/8⌉ 則內送達」。照 §2a 的設計實測只能 ≤2⌈n/8⌉＋2（n＝16：6；24：8；32：10）。原因：Client 只能連續 ACK，有缺口時 Match 不知道 Client 已有哪些較大的 id，循環槽位會在一個收到的框架裡重送它已有的 id。測試暫時以實測的界限釘住。
   - 突變：舊的 6 個（Gateway 帳本的重送、補送、A3、上一批的 Gateway 合併）隨程式刪除；12 個改成新寫法；本批新增 5 個（含計畫要求的「到達即丟、門檻＝I」）。168 個中 166 個第一輪殺死，2 個是判讀問題（測試的空指標、期望值），修正後殺死。
   - 驗收（L1，本機）：CTest 72／72 與 preset 外的 4 個；`go test -race -count=2`。
   - Architecture Delta（D-14）：Gateway 新增狀態欄位 reservation 的 `results resultSlot`（§2a 允許：至多 1 則待送的結果框架與上次送出時刻）、Server 的 `resultsForInactive`（診斷計數）；link window 的 `asked`（隨 window 在 `edge-actions-passthrough` 刪除）；刪除 reservation 的 `actions`（session 帳本）。
