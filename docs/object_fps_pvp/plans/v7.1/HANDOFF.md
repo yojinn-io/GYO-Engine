@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-actions-passthrough` 的 L2 第 1 次 session 在第 29 項停下（rapid runner 收尾的競態，見規劃紀錄 2026-10-18 01:18 條目）：選 (a)／(b)／(c) 之後重跑。D116 的 edge 系列在這個關卡停住。
+- **等你決定**：`edge-actions-passthrough` 的 L2 停止（rapid 收尾競態）的處理方案：修 Match 的 `IpcHost::Stop()` 與 rapid runner 的停止順序，宣告第 4 版（門檻不變）後重跑——是否核准、是否預先核准今晚重跑。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -354,6 +354,11 @@
       - (a)（建議）照 D110 的先例修宣告：rapid 項目的 I1，在 Match 日誌沒有「ipc closed」行、而 `no_ipc_pause` 成立時，允許 undetermined（只記錄）；有那一行時照舊判 passed。judge 改一處、重算雜湊、乾跑加一列，整個 session 換新目錄重跑（第 1 次保留）。
       - (b) 改 runner 的收尾順序（先停 Gateway、等 Match 讀到 EOF，再停 Match）：要改凍結的 `run_action_short.py`（v7 第 09 批 C2-B 也用它），新雜湊、B 的開發跑次重跑。
       - (c) rapid 不判 I1（rapid 的用途是 Cooldown；I1 由 gameplay 項目判）。
+    - 使用者（2026-10-18）：「我不想要改動小，我想要能稍微精確定位問題和處理掉的方案。」→ 不放寬，改成定位並修掉。
+    - 定位（重現實驗，`scratchpad/rp/stoporder`）：用 B 的執行檔起 Match＋Gateway，先停 Match 的 3 次都沒有「ipc closed」與 clock sync final 行（final ingress 行有）；先停 Gateway 並等它結束的 3 次都有 `reason=eof`。和停下的跑次的日誌特徵相同。兩個缺陷：
+      - Match：`IpcHost::Stop()`（`IpcHost.cpp:721-730`）直接關 socket，繞過自稱「結束 session 的唯一路徑」的 `Close()`（`:395-400`），還開著的 session 不寫最後的 clock 視窗與「ipc closed」。
+      - rapid runner：`run_action_short.py:260-268` 一次對所有行程送 SIGTERM（競態）；gameplay runner（`action_probe.py:590-591`）是先停 Gateway、等它結束再停 Match。
+    - 提出的處理：Match 的 `Stop()` 經 `Close("stopped")` 結束 session（先寫失敗的 IPC 測試）；rapid runner 改成 GUI → Gateway → Match 的順序；宣告第 4 版只換 A 的 commit 與雜湊（門檻不變）、B 的 rapid 開發跑次與乾跑後換新目錄重跑。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
