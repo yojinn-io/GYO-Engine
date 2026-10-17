@@ -1505,8 +1505,8 @@
       "batch": "v7-flow",
       "what": "Handed actions are counted only when the sequence commits",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\te := s.datagram\n",
-      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\te := s.datagram\n",
+      "find": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\t// The overflow sample",
+      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\t// The overflow sample",
       "check": "go",
       "expect": "case handed/actions_commit_failed: counted none"
     },
@@ -3485,7 +3485,7 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A full input queue drops the arriving window instead of the oldest",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\tl.queue = slices.Delete(l.queue, i, i+1)\n\t\t\t\tl.queuedData[q.player]--\n\t\t\t\tbreak\n",
+      "find": "\t\t\t\tl.queue = slices.Delete(l.queue, i, i+1)\n\t\t\t\tl.queuedData[key]--\n\t\t\t\tbreak\n",
       "replace": "\t\t\t\t_ = slices.Index(l.queue, old)\n\t\t\t\t_ = i\n\t\t\t\treturn\n",
       "check": "go",
       "expect": "written \\[.*\\], want the newest|the Match read \\[.*\\], want"
@@ -3635,8 +3635,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A full input queue drops another player's oldest window",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player {\n",
-      "replace": "\t\t\tif old.input || old.actions {\n",
+      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player && old.actions == q.actions {\n",
+      "replace": "\t\t\tif (old.input || old.actions) && old.actions == q.actions {\n",
       "check": "go",
       "expect": "overflowed windows counted 1, want 2|player 2 lost|want player 2's window"
     },
@@ -3745,10 +3745,10 @@
       "batch": "v71-edge-actions-passthrough",
       "what": "Action batches are never dropped from the FIFO: the player's queue grows past its bound",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player {\n",
-      "replace": "\t\t\tif old.input && old.player == q.player {\n",
+      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player && old.actions == q.actions {\n",
+      "replace": "\t\t\tif old.input && old.player == q.player && old.actions == q.actions {\n",
       "check": "go",
-      "expect": "exit 1 was non-zero|overflowed batches counted 0"
+      "expect": "exit 1 was non-zero|overflowed batches counted 0|action batches 0 \\(want 2\\)"
     },
     {
       "id": "v71ap-written-uncounted",
@@ -3813,10 +3813,10 @@
     {
       "id": "v71ap-ack-only-sample",
       "batch": "v71-edge-actions-passthrough",
-      "what": "An ACK-only batch's drop sample carries no acknowledgement",
+      "what": "An ACK-only batch's drop sample carries its acknowledgement as action ids",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\te.firstAction, e.lastAction, e.items = in.AcknowledgedThrough, in.AcknowledgedThrough, 1\n",
-      "replace": "",
+      "find": "\te := s.datagram\n\te.items = uint32(len(in.Shots))\n",
+      "replace": "\te := s.datagram\n\te.items = uint32(len(in.Shots))\n\tif len(in.Shots) == 0 {\n\t\te.firstAction, e.lastAction = in.AcknowledgedThrough, in.AcknowledgedThrough\n\t}\n",
       "check": "go",
       "expect": "does not carry the dropped batch"
     },
@@ -3825,8 +3825,8 @@
       "batch": "v71-edge-actions-passthrough",
       "what": "A dropped batch's sample carries the first and last shot, not the id bounds",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tif e.firstAction == 0 || shot.ActionId < e.firstAction {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = max(e.lastAction, shot.ActionId)\n\t}\n\tif len(in.Shots) == 0 { // an ACK-only",
-      "replace": "\t\tif e.firstAction == 0 {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = shot.ActionId\n\t}\n\tif len(in.Shots) == 0 { // an ACK-only",
+      "find": "\t\tif e.firstAction == 0 || shot.ActionId < e.firstAction {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = max(e.lastAction, shot.ActionId)\n\t}\n\tif err := s.link.actions(in, e); err != nil {",
+      "replace": "\t\tif e.firstAction == 0 {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = shot.ActionId\n\t}\n\tif err := s.link.actions(in, e); err != nil {",
       "check": "go",
       "expect": "does not carry the dropped batch"
     },
@@ -3845,10 +3845,40 @@
       "batch": "v71-edge-actions-passthrough",
       "what": "A queued action batch does not wake the writer: it waits for the idle timer or the next input",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tl.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})\n\tl.notify()\n",
-      "replace": "\tl.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})\n",
+      "find": "\t\tl.actionStats[in.PlayerId] = &intervalStats{}\n\t}\n\tl.notify()\n",
+      "replace": "\t\tl.actionStats[in.PlayerId] = &intervalStats{}\n\t}\n",
       "check": "go",
       "expect": "an action waited for the writer's idle timer"
+    },
+    {
+      "id": "v71ap-overflow-any-kind",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A full queue of one kind drops the player's oldest message of either kind",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player && old.actions == q.actions {\n",
+      "replace": "\t\t\tif (old.input || old.actions) && old.player == q.player {\n",
+      "check": "go",
+      "expect": "overflowed input windows \\d+ \\(want 3\\)|want the newest of each kind"
+    },
+    {
+      "id": "v71ap-actions-after-others",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A write pass sends the action batches after every other message",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n",
+      "replace": "\t\t} else if q.actions {\n\t\t\tdefer func(q queuedMessage) {\n\t\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n\t\t\t}(q)\n",
+      "check": "go",
+      "expect": "want the arrival order"
+    },
+    {
+      "id": "v71ap-stats-recreated",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A batch written after forget recreates the player's send statistics",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tif stats := l.actionStats[playerID]; stats != nil {\n\t\tstats.record(now)\n\t}\n",
+      "replace": "\tif l.actionStats == nil {\n\t\tl.actionStats = map[uint64]*intervalStats{}\n\t}\n\tif l.actionStats[playerID] == nil {\n\t\tl.actionStats[playerID] = &intervalStats{}\n\t}\n\tl.actionStats[playerID].record(now)\n",
+      "check": "go",
+      "expect": "statistics recreated after forget"
     }
   ]
 }

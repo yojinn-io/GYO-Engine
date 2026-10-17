@@ -187,7 +187,7 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 					}
 				}
 				link.mu.Lock()
-				over := len(link.queue) > 2+2*maxQueuedInputs || link.queuedData[1] > maxQueuedInputs || link.queuedData[2] > maxQueuedInputs
+				over := len(link.queue) > 2+2*maxQueuedInputs || link.queuedData[dataKey{player: 1}] > maxQueuedInputs || link.queuedData[dataKey{player: 2}] > maxQueuedInputs
 				link.mu.Unlock()
 				if over {
 					t.Fatal("queue capacity exceeded")

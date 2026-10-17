@@ -63,6 +63,11 @@ func checkIngressConservation(t *testing.T, name string, total ingressTake, rate
 		if handed, accounted := i0(*c); handed != accounted {
 			t.Errorf("%s: player %d: link settled %d of %d handed commands", name, player, accounted, handed)
 		}
+		// pv7 §2a: every action batch handed to the link has exactly one exit.
+		if exits := c[playerFwdLinkWrittenActionsPackets] + c[playerDropIpcQueueOverflowActionsPackets] +
+			c[playerDropClearedOnCloseActionsPackets] + c[playerDropAbandonedOnCloseActionsPackets]; exits != c[playerFwdHandedActionsPackets] {
+			t.Errorf("%s: player %d: link settled %d of %d handed action batches", name, player, exits, c[playerFwdHandedActionsPackets])
+		}
 		received += c[playerReceivedDatagrams]
 		rate += sumIngress(c[:], playerDropRateLimitedHelloPackets, playerDropRateLimitedOtherPackets)
 	}

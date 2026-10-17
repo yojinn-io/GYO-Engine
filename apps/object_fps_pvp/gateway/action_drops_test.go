@@ -243,14 +243,13 @@ func TestActionDropsReachTheWindowAndFinalLines(t *testing.T) {
 	}
 }
 
-// pv7 §2a, §4 (33): beyond maxQueuedInputs queued messages of the player, its
-// oldest action batch is dropped and reported with its datagram's identity:
-// the bounds of its action ids and their count, or for an ACK-only batch its
-// acknowledgement (one item).
+// pv7 §2a, §4 (33): beyond maxQueuedActions queued action batches of the
+// player, its oldest is dropped and reported with its datagram's identity:
+// the bounds of its action ids (0 for an ACK-only batch) and their count.
 func TestActionQueueOverflowReportsTheDroppedBatches(t *testing.T) {
 	s, p, endpoint, now := actionFixture(t)
 	sent := []*client.ActionBatch{{AcknowledgedThrough: 5}, shotsMessage(3, 1, 2)}
-	for k := range maxQueuedInputs {
+	for k := range maxQueuedActions {
 		sent = append(sent, shotsMessage(uint64(10+k)))
 	}
 	for k, b := range sent {
@@ -260,12 +259,14 @@ func TestActionQueueOverflowReportsTheDroppedBatches(t *testing.T) {
 	if overflow != 2 {
 		t.Fatalf("overflowed batches counted %d, want 2", overflow)
 	}
-	if batch := s.link.batch(); len(batch) != maxQueuedInputs || len(batch[0].GetActions().GetShots()) == 0 ||
+	if batch := s.link.batch(); len(batch) != maxQueuedActions || len(batch[0].GetActions().GetShots()) == 0 ||
 		batch[0].GetActions().GetShots()[0].ActionId != 10 {
-		t.Fatalf("%d batches kept, want the newest %d", len(batch), maxQueuedInputs)
+		t.Fatalf("%d batches kept, want the newest %d", len(batch), maxQueuedActions)
 	}
 	report := s.link.drops.report(7, now.Add(time.Minute))
-	want := [][4]uint64{{2, 5, 5, 1}, {3, 1, 3, 3}} // transport sequence, first id, last id, items
+	// transport sequence, first id, last id, items; an ACK-only batch has no id
+	// and the ledger counts the batch itself as its one item
+	want := [][4]uint64{{2, 0, 0, 1}, {3, 1, 3, 3}}
 	if report == nil || len(report.Samples) != len(want) {
 		t.Fatalf("overflow report %v", report)
 	}
@@ -304,5 +305,101 @@ func TestRuntimeLinkWritesAnActionAtOnce(t *testing.T) {
 	case <-written:
 	case <-time.After(time.Second):
 		t.Fatal("an action waited for the writer's idle timer")
+	}
+}
+
+// pv7 §2a, §4: input windows and action batches are bounded apart, each
+// dropping the oldest of its own kind (32, 33): a player keeps 64 input
+// windows however many action batches wait, and the reverse.
+func TestQueueBoundsInputsAndActionsApart(t *testing.T) {
+	l := dialedLink(t)
+	l.drops = newDropLedger()
+	for k := uint64(1); k <= 10; k++ {
+		if err := l.actions(shotBatch(1, 0, k), dropEvent{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for k := uint64(1); k <= maxQueuedInputs+3; k++ {
+		if err := l.input(linkWindow(1, 1, k, k), dropEvent{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for k := uint64(11); k <= maxQueuedActions+2; k++ {
+		if err := l.actions(shotBatch(1, 0, k), dropEvent{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	totals := linkTotals{}.take(l).of(1)
+	if totals[playerDropIpcQueueOverflowInputPackets] != 3 || totals[playerDropIpcQueueOverflowActionsPackets] != 2 {
+		t.Fatalf("overflowed input windows %d (want 3), action batches %d (want 2)",
+			totals[playerDropIpcQueueOverflowInputPackets], totals[playerDropIpcQueueOverflowActionsPackets])
+	}
+	var inputs, actions []uint64
+	for _, e := range l.batch() {
+		if in := e.GetInput(); in != nil {
+			inputs = append(inputs, in.Commands[0].Sequence)
+		} else if a := e.GetActions(); a != nil {
+			actions = append(actions, a.Shots[0].ActionId)
+		}
+	}
+	if len(inputs) != maxQueuedInputs || inputs[0] != 4 || len(actions) != maxQueuedActions || actions[0] != 3 {
+		t.Fatalf("kept %d input windows from %v and %d action batches from %v; want the newest of each kind",
+			len(inputs), inputs[:min(1, len(inputs))], len(actions), actions[:min(1, len(actions))])
+	}
+}
+
+// One write pass keeps each player's input windows and action batches in the
+// order they arrived (pv7 §2a), interleaved with other players' and controls.
+func TestPlayerDataKeepsArrivalOrderAcrossKinds(t *testing.T) {
+	l := dialedLink(t)
+	var want []string
+	add := func(player uint64, kind string, n uint64) {
+		var err error
+		if kind == "input" {
+			err = l.input(linkWindow(player, 1, n, n), dropEvent{})
+		} else {
+			err = l.actions(shotBatch(player, 0, n), dropEvent{})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = append(want, fmt.Sprintf("%d/%s/%d", player, kind, n))
+	}
+	add(1, "input", 1)
+	add(1, "actions", 1)
+	add(2, "actions", 1)
+	add(1, "input", 2)
+	add(2, "input", 1)
+	add(1, "actions", 2)
+	var got []string
+	for _, e := range l.batch() {
+		if in := e.GetInput(); in != nil {
+			got = append(got, fmt.Sprintf("%d/input/%d", in.PlayerId, in.Commands[0].Sequence))
+		} else if a := e.GetActions(); a != nil {
+			got = append(got, fmt.Sprintf("%d/actions/%d", a.PlayerId, a.Shots[0].ActionId))
+		}
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("written %v, want the arrival order %v", got, want)
+	}
+}
+
+// A batch queued before the player left is still written, but records no
+// send statistics: forget's removal stays final.
+func TestBatchWrittenAfterLeaveKeepsNoStatistics(t *testing.T) {
+	wire := replaceActionWire(t)
+	l := dialedLink(t)
+	if err := l.actions(shotBatch(1, 0, 1), dropEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	l.forget(1)
+	if err := l.write(l.take()); err != nil {
+		t.Fatal(err)
+	}
+	l.mu.Lock()
+	_, kept := l.actionStats[1]
+	l.mu.Unlock()
+	if wire.written[1] != 1 || kept {
+		t.Fatalf("written %d (want 1); statistics recreated after forget: %v", wire.written[1], kept)
 	}
 }

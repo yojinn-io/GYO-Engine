@@ -49,6 +49,10 @@ func TestSendStatisticsLineKeepsEveryKey(t *testing.T) {
 
 func TestSendStatisticsRecordCompletedWritesPerPlayerAndChannel(t *testing.T) {
 	s, p, _, now := actionFixture(t)
+	// The link's entry exists from the player's first queued batch.
+	if err := s.link.actions(shotBatch(7, 0, 1), dropEvent{}); err != nil {
+		t.Fatal(err)
+	}
 	for i := range 3 {
 		at := now.Add(time.Duration(i) * 33 * time.Millisecond)
 		s.actionWritten(7, at)

@@ -18,7 +18,8 @@ import (
 )
 
 // This queue is product-owned: lifecycle requests are never dropped, input
-// windows are bounded per player (pv7 §2a). Neither blocks the World.
+// windows and action batches are bounded per player (pv7 §2a). Neither
+// blocks the World.
 var errRuntimeDisconnected = errors.New("runtime disconnected")
 
 type runtimeLink struct {
@@ -29,16 +30,16 @@ type runtimeLink struct {
 	closed      bool
 	once        sync.Once
 	maxWriteAge time.Duration
-	// pv7 §2a: controls and input windows in arrival order, so a Leave never
-	// overtakes the player's queued inputs. The Match decides what is
-	// resolved, stale, copied or conflicting (D49); the link forwards each
-	// Client datagram's window as it came. Controls are never dropped (more
-	// than maxQueuedControls fail the link); each player keeps at most
-	// maxQueuedInputs input windows, the oldest dropped and reported beyond
-	// that.
+	// pv7 §2a: controls, input windows and action batches in arrival order,
+	// so a Leave never overtakes the player's queued data. The Match decides
+	// what is resolved, stale, copied, repeated or conflicting (D49); the
+	// link forwards each Client datagram as it came. Controls are never
+	// dropped (more than maxQueuedControls fail the link); each player keeps
+	// at most maxQueuedInputs input windows and maxQueuedActions action
+	// batches, the oldest of the same kind dropped and reported beyond that.
 	queue          []queuedMessage
 	queuedControls int
-	queuedData     map[uint64]int
+	queuedData     map[dataKey]int
 	// Per-player I0 counters since the last takeIngress; kept across forget
 	// and close so the commands those discard stay accounted for.
 	ingress map[uint64]*playerIngressCounts
@@ -52,7 +53,7 @@ type runtimeLink struct {
 	writerOnce    sync.Once
 	// Diagnostics only (pv7 §2, §3). The single diagnostic slot (newest
 	// wins), written by the writer on its own wake-up: it never touches the
-	// data lanes, l.wake or the action timer. clock is the sampling with the
+	// data lanes, l.wake or the idle timer. clock is the sampling with the
 	// Match, under its own leaf lock (after s.mu and l.mu).
 	diagnostic     *runtime.RuntimeEnvelope
 	diagnosticWake chan struct{}
@@ -164,8 +165,8 @@ func unknownRuntimeMessage(message *runtime.RuntimeEnvelope) error {
 	return fmt.Errorf("unknown runtime message fields=%v", fields)
 }
 
-// One queued control or input window. An input keeps the identity its
-// overflow is reported with (pv7 §4, reason 32).
+// One queued control, input window or action batch. Data keeps the identity
+// its overflow is reported with (pv7 §4, reasons 32 and 33).
 type queuedMessage struct {
 	message  *runtime.RuntimeEnvelope
 	input    bool
@@ -180,7 +181,17 @@ const (
 	// Not less than 64 windows per player (pv7 §2a); pv6 bounded 32 resolved
 	// commands.
 	maxQueuedInputs = 64
+	// Counted apart from the inputs, so action batches never take an input
+	// window's place (or the reverse): about 2 s of the Client's 30 Hz
+	// batches, which it sends again until the Match's results arrive.
+	maxQueuedActions = 64
 )
+
+// The per-player, per-kind count of queued data messages.
+type dataKey struct {
+	player  uint64
+	actions bool
+}
 
 func envelope() *runtime.RuntimeEnvelope {
 	return &runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion}
@@ -274,16 +285,21 @@ func (l *runtimeLink) input(in *runtime.PlayerInput, e dropEvent) error {
 	return nil
 }
 
-// queueDataLocked appends an input window behind everything queued. Beyond
-// maxQueuedInputs windows of the player, its oldest is dropped and reported
-// with its identity (pv7 §4, 32).
+// queueDataLocked appends an input window or an action batch behind
+// everything queued. Beyond the bound of its kind for the player, the oldest
+// queued message of the same player and kind is dropped and reported with
+// its identity (pv7 §4: 32 for inputs, 33 for action batches).
 func (l *runtimeLink) queueDataLocked(q queuedMessage) {
 	if l.queuedData == nil {
-		l.queuedData = make(map[uint64]int)
+		l.queuedData = make(map[dataKey]int)
 	}
-	if l.queuedData[q.player] >= maxQueuedInputs {
+	key, limit := dataKey{q.player, q.actions}, maxQueuedInputs
+	if q.actions {
+		limit = maxQueuedActions
+	}
+	if l.queuedData[key] >= limit {
 		for i, old := range l.queue {
-			if (old.input || old.actions) && old.player == q.player {
+			if (old.input || old.actions) && old.player == q.player && old.actions == q.actions {
 				if old.input {
 					l.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)
 					l.countLocked(old.player, playerDropIpcQueueOverflowInputCommands, old.commands)
@@ -291,13 +307,13 @@ func (l *runtimeLink) queueDataLocked(q queuedMessage) {
 					l.countEventLocked(old.player, playerDropIpcQueueOverflowActionsPackets, 1, old.event)
 				}
 				l.queue = slices.Delete(l.queue, i, i+1)
-				l.queuedData[q.player]--
+				l.queuedData[key]--
 				break
 			}
 		}
 	}
 	l.queue = append(l.queue, q)
-	l.queuedData[q.player]++
+	l.queuedData[key]++
 }
 
 func (l *runtimeLink) notify() {
@@ -409,7 +425,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 	idle := writerIdleWait // read once: the writer may outlive a test's override
 	go func() {
 		defer stopped()
-		// Inputs, controls, actions and results wake the loop (l.wake); the
+		// Controls, inputs and action batches wake the loop (l.wake); the
 		// link holds nothing for later (pv7 §2a), so the timer only bounds an
 		// idle wait.
 		timer := time.NewTimer(idle)

@@ -41,7 +41,7 @@
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 18:45，`edge-actions-passthrough` 實作與突變完成，CTest 執行中；L2 宣告第 2 版與工具已寫好，待 A 樹、rapid 開發跑次與乾跑。
+- **最後更新**：2026-10-17 19:04，`edge-actions-passthrough` 的 xhigh 審查已修正（輸入與動作分開計數等），突變重跑中；L2 宣告第 2 版與工具已寫好，待 A 樹、rapid 開發跑次與乾跑。
 
 ## 閱讀入口
 
@@ -326,8 +326,8 @@
 - 2026-10-17 17:41：`edge-actions-passthrough` 開始（D114，檔位 high，估 14～17 h）。`edge-results-passthrough`（`f79bb10`）的四平台 L1 是 run 39002862931（工具鏈下載逾時重跑後通過）。
 
 - 2026-10-17：`edge-actions-passthrough` 實作（記錄器）。
-  - Gateway：刪除 link 的動作視窗（每位玩家的 requests、ACK 游標、退役、`asked`、30 Hz 持有與重送）與 A5（視窗驗證、玩家數上限）。每個解碼成功的動作 datagram 在 commit 序號之後（D-11），原樣成為一則 IPC 訊息，排進和輸入共用的每玩家 FIFO（上限 64 則）；重複、衝突、ACK-only、未知 ACK、遠在視窗外的 id 都照樣送到 Match，由 Match 判定（`PvpMatch.cpp` 的 Conflict／OutsideWindow／Full 與 `CombatHostTests.cpp`）。
-  - FIFO 滿時丟最舊的那則（輸入或動作），動作計入既有的鍵 `drop_ipc_queue_overflow_actions_packets`（回報 33，樣本帶該 datagram 的傳輸序號、action id 的最小／最大與筆數；ACK-only 帶它的 ACK、筆數 1）。Leave 與踢出不再丟動作：已排隊的照到達順序送到 Match。
+  - Gateway：刪除 link 的動作視窗（每位玩家的 requests、ACK 游標、退役、`asked`、30 Hz 持有與重送）與 A5（視窗驗證、玩家數上限）。每個解碼成功的動作 datagram 在 commit 序號之後（D-11），原樣成為一則 IPC 訊息，排進每位玩家的 FIFO（與輸入同一個佇列；審查後改成分開計數，各 64 則）；重複、衝突、ACK-only、未知 ACK、遠在視窗外的 id 都照樣送到 Match，由 Match 判定（`PvpMatch.cpp` 的 Conflict／OutsideWindow／Full 與 `CombatHostTests.cpp`）。
+  - FIFO 滿時丟同種類最舊的那則，動作計入既有的鍵 `drop_ipc_queue_overflow_actions_packets`（回報 33，樣本帶該 datagram 的傳輸序號、action id 的最小／最大與筆數；ACK-only 沒有 id，填 0、筆數 1，見下面的審查）。Leave 與踢出不再丟動作：已排隊的照到達順序送到 Match。
   - 新鍵（附加在行尾，D-14 的計數）：`fwd_link_written_actions_packets`、`drop_cleared_on_close_actions_packets`、`drop_abandoned_on_close_actions_packets`；守恆是 `fwd_handed_actions_packets`＝寫出＋溢出＋關閉時清掉＋寫出失敗放棄。D56／D59 的 shot、ACK 鍵保留、恆為 0（`ingress_evidence.py` 凍結，`link_shots` 從此是 0＝0）。
   - 丟棄原因 17、21、25、26 改成 reserved；golden 重產（29 個原因；33 改成 exit）。
   - writer 迴圈：沒有動作期限之後，計時器只是閒置等待；`writerIdleWait` 在啟動時讀一次（`-race` 抓到測試還原它時 writer 還在讀）。
@@ -336,6 +336,14 @@
   - 測試補了「動作入列立刻喚醒 writer」（`TestRuntimeLinkWritesAnActionAtOnce`）。
   - L2 事前宣告第 1 版（`edge-actions-passthrough-l2.md`）經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 3、應修正 6、記錄 8，全部改進第 2 版（第 11 節）。工具目錄 `build/target/_build/test/logs/pvp-v71-edge-actions-l2-prep-20261017/`（judge／run／fixture／乾跑改寫；B 的 8 種跑次判通過、沒有誤停）。
   - 記錄給 A1：`FireGate.hpp:31-32` 的註解「Gateway writes inputs before actions」已過時（現在照到達順序；Client 同一輪先送輸入，影響在微秒級）。
+  - 驗收（L1，本機）：`45bda2b` 時 CTest 72／72、preset 外 4／4、`go test -race -count=2`；四平台 L1 是 run 39022776414。
+  - xhigh 程式碼審查（約 7 分）：守恆、順序、喚醒沒有找到缺陷；State Authority 沒有新增 Match 權威狀態的副本。修正：
+    - must（已修）：輸入與動作共用每位玩家 64 則的上限，違反 §2a「每位玩家不少於 64 則輸入窗口」（writer 卡住時輸入約 0.71 秒就開始溢出，只有輸入時約 1.07 秒；也會被大量輸入擠掉動作）。改成同一個 FIFO 內兩種分開計數（`maxQueuedInputs`＝64、`maxQueuedActions`＝64），只丟同種類最舊的那則，與 §4 的 32、33 兩列「最舊的輸入窗口／動作批」一致，不改契約。
+    - should（已修）：玩家離開後，佇列裡的批寫出時會重建 `actionStats`、一直留著。改成入列時建立、寫出時只在存在時記錄。
+    - should（已修）：33 的 ACK-only 樣本把 ACK 值填進 action id 欄位，契約沒有定義。改成 id 為 0（ledger 照共通規則把那一批記成 1 筆）。
+    - 測試缺口（已補）：輸入與動作混合溢出、同一玩家跨種類的到達順序、離開後寫出不重建統計、`checkIngressConservation` 加上動作批的守恆；新突變 3 個。審查提到的「被丟的那則依新來那則的種類歸類」在修正後是等價突變（被丟的一定與新來的同種類），不加。
+    - 修正後重跑：兩個被改檔案上的突變與本批全部，69／69 殺死（加入時的等價突變 1 個已刪除）；`go test -race -count=2` 通過。
+    - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
 

@@ -15,8 +15,8 @@ import (
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate
 
 // actions queues one Client datagram's action batch as it came (pv7 §2a): one
-// IPC message per datagram, behind everything queued before it, in the
-// player's bounded data FIFO shared with input windows. The Match judges
+// IPC message per datagram, behind everything queued before it, bounded per
+// player apart from the input windows (maxQueuedActions). The Match judges
 // duplicates, conflicts, the window and the ACK (D-1 is moot); the link
 // neither merges, validates against a ledger, holds nor resends. e is the
 // datagram's identity for an overflow report (33).
@@ -32,6 +32,14 @@ func (l *runtimeLink) actions(in *runtime.ActionBatch, e dropEvent) error {
 	message := envelope()
 	message.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}
 	l.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})
+	// The send statistics entry lives from the first batch to forget: a
+	// batch written after the player left records nothing.
+	if l.actionStats == nil {
+		l.actionStats = map[uint64]*intervalStats{}
+	}
+	if l.actionStats[in.PlayerId] == nil {
+		l.actionStats[in.PlayerId] = &intervalStats{}
+	}
 	l.notify()
 	return nil
 }
@@ -111,6 +119,9 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 	// D-11: decoding succeeded, so the sequence and liveness commit (Admit
 	// found the sequence fresh; stale action packets were dropped there).
 	_ = p.session.CommitSequence(h.Sequence, now)
+	// The overflow sample (§4, 33) carries the bounds and count of the
+	// batch's action ids: an ACK-only batch has none (ids 0; the drop ledger
+	// counts the batch itself as its one item).
 	e := s.datagram
 	e.items = uint32(len(in.Shots))
 	for _, shot := range in.Shots {
@@ -118,9 +129,6 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 			e.firstAction = shot.ActionId
 		}
 		e.lastAction = max(e.lastAction, shot.ActionId)
-	}
-	if len(in.Shots) == 0 { // an ACK-only batch: its acknowledgement (§4 DropSample)
-		e.firstAction, e.lastAction, e.items = in.AcknowledgedThrough, in.AcknowledgedThrough, 1
 	}
 	if err := s.link.actions(in, e); err != nil {
 		if errors.Is(err, adapter.ErrActions) {
@@ -219,17 +227,14 @@ func (s *Server) trackAdmission(p *reservation, kind ingressKind, now time.Time,
 }
 
 // actionWritten records the interval between a player's action batches the
-// link wrote (send statistics only; the link no longer paces them).
+// link wrote (send statistics only; the link no longer paces them), while
+// the player's entry exists (from its first batch until forget).
 func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.actionStats == nil {
-		l.actionStats = map[uint64]*intervalStats{}
+	if stats := l.actionStats[playerID]; stats != nil {
+		stats.record(now)
 	}
-	if l.actionStats[playerID] == nil {
-		l.actionStats[playerID] = &intervalStats{}
-	}
-	l.actionStats[playerID].record(now)
 }
 func (s *Server) actionWritten(playerID uint64, now time.Time) {
 	s.mu.Lock()

@@ -7,7 +7,7 @@
 
 ## 1. 目的
 
-這批是行為改變：Gateway 不再保存動作視窗。每個解碼成功的動作 datagram 原樣成為一則 IPC 訊息，排進和輸入共用的每玩家 FIFO（64 則），照到達順序寫給 Match；link 不再持有到 30 Hz 時段、不再合併、不再重送，A5（視窗驗證、玩家數上限）刪除。重複、衝突、ACK-only、未知 ACK 都交給 Match 判定。
+這批是行為改變：Gateway 不再保存動作視窗。每個解碼成功的動作 datagram 原樣成為一則 IPC 訊息，排進每位玩家的 FIFO（與輸入同一個佇列、分開計數，各 64 則，滿了丟同種類最舊的），照到達順序寫給 Match；link 不再持有到 30 Hz 時段、不再合併、不再重送，A5（視窗驗證、玩家數上限）刪除。重複、衝突、ACK-only、未知 ACK 都交給 Match 判定。
 
 可能的影響與能看到它的情境：
 - link 的持有：Client 本身已用同一個期限節拍到 30 Hz（`ClientConnection.cpp:446-449`），本次 B 的 `link_action_interval` 最小 33.7 ms（實測），link 很少真的持有。預期射擊時序 A≈B。
