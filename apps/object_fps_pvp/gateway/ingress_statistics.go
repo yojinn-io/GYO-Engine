@@ -293,6 +293,9 @@ const (
 	// I0, so edge-analyzers can restate I0; only the packets are reported).
 	playerDropIpcQueueOverflowInputPackets
 	playerDropIpcQueueOverflowInputCommands
+	// Appended (pv7 §2a, edge-results-passthrough): results frames replaced in
+	// the player's single slot before their release (reported, 34).
+	playerDropResultsOverRatePackets
 	playerIngressCounterCount
 )
 
@@ -361,6 +364,7 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerDropReplacedSnapshotPackets:        {ingressDropped, reasonReplaced, ingressSnapshot, unitPackets},
 	playerDropIpcQueueOverflowInputPackets:   {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitPackets},
 	playerDropIpcQueueOverflowInputCommands:  {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitCommands},
+	playerDropResultsOverRatePackets:         {ingressDropped, reasonResultsOverRate, ingressAnyKind, unitPackets},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64

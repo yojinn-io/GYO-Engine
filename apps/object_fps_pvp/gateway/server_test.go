@@ -842,10 +842,10 @@ func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.
 		t.Fatal("a joining player's results reached its Client")
 	}
 	s.mu.Lock()
-	ledger := s.players[joiner.PlayerID].actions
+	held := s.players[joiner.PlayerID].results.pending
 	s.mu.Unlock()
-	if ledger != nil {
-		t.Fatal("a joining player's actions or results left a ledger")
+	if held != nil {
+		t.Fatal("a joining player's results were held for its Client")
 	}
 
 	// (b) Left.

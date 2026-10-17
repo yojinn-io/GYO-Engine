@@ -21,13 +21,13 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 2, Hp: 100, MagazineAmmo: 12}},
 	}}
 	s.runtimeMessage(e)
-	if len(p.actions.requests) != 1 || len(s.link.actionWindows[7].requests) != 1 {
+	if len(s.link.actionWindows[7].requests) != 1 {
 		t.Fatal("respawn did not isolate movement from action retention")
 	}
 	reload := &client.ShotRequest{ActionId: 2, ObservedAuthorityTick: 200, Kind: client.ActionKind_ACTION_RELOAD, LifeGeneration: 2}
 	future := &client.ShotRequest{ActionId: 3, ObservedAuthorityTick: 200, Kind: client.ActionKind_ACTION_RELOAD, LifeGeneration: 3}
 	deliverActions(t, s, p, endpoint, 3, &client.ActionBatch{Shots: []*client.ShotRequest{pending, reload, future}}, now)
-	if len(p.actions.requests) != 3 || len(s.link.actionWindows[7].requests) != 3 {
+	if len(s.link.actionWindows[7].requests) != 3 {
 		t.Fatal("old/future life actions were discarded before authority")
 	}
 	// Movement of any life reaches the Match as it came, which judges it
@@ -55,13 +55,13 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 		t.Fatal(err)
 	}
 	deliverActions(t, s, p, endpoint, 7, &client.ActionBatch{AcknowledgedThrough: 3}, now)
-	if p.actions.acknowledged != 3 || s.link.actionWindows[7].acknowledged != 3 {
+	if s.link.actionWindows[7].acknowledged != 3 {
 		t.Fatal("cross-life results could not close contiguous ACK")
 	}
 	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, RetiredThrough: 3}); err != nil {
 		t.Fatal(err)
 	}
-	if p.actions.retired != 3 || len(p.actions.requests) != 0 || len(s.link.actionWindows[7].requests) != 0 {
+	if s.link.actionWindows[7].retired != 3 || len(s.link.actionWindows[7].requests) != 0 {
 		t.Fatal("cross-life ledger failed to retire")
 	}
 }

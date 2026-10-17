@@ -267,103 +267,7 @@ func TestARetirementIsSentOnce(t *testing.T) {
 	}
 }
 
-// G5: an ACK-only batch acknowledging no more than the retirement already
-// sent shows the Client missed it: one retirement packet at the deadline. An
-// ACK ahead of the retirement, a batch with shots, or a duplicate sequence
-// asks for nothing.
-func TestAnACKOnlyBatchBehindTheRetirementPokesItOnce(t *testing.T) {
-	r := newResultLoop(t)
-	r.clientBatch(0, 1)
-	r.match(0, 1)
-	r.pass(0)
-	r.clientBatch(1)
-	r.match(1)
-	r.now = r.nextTimer()
-	r.pass(0) // The retirement, lost on its way.
-	last := r.now
-	r.now = last.Add(5 * time.Millisecond)
-	r.clientBatch(1)
-	if r.deadline, r.pending = r.s.resultDeadline(); !r.pending || !r.deadline.Equal(last.Add(actionSendInterval)) {
-		t.Fatal("ACK-only batch behind the retirement asked for nothing")
-	}
-	r.now = r.deadline.Add(-1)
-	if sent := r.pass(0); len(sent) != 0 {
-		t.Fatal("poke answered before the deadline")
-	}
-	r.now = last.Add(actionSendInterval)
-	if sent := r.pass(0); len(sent) != 1 || sent[0].RetiredThrough != 1 || len(sent[0].Decisions) != 0 {
-		t.Fatalf("poke answer %v", sent)
-	}
-	if r.pending {
-		t.Fatal("poke answered more than once")
-	}
-	// An ACK ahead of the retirement: the Client knows of nothing missing.
-	r.now = r.now.Add(time.Second)
-	r.clientBatch(1, 2)
-	r.match(1, 2)
-	r.pass(0)
-	r.clientBatch(2)
-	if _, pending := r.s.resultDeadline(); pending {
-		t.Fatal("ACK ahead of the retirement poked")
-	}
-	r.match(2)
-	r.now = r.nextTimer()
-	r.pass(0)
-	r.now = r.now.Add(time.Second)
-	// A batch with shots, even with an ACK behind the retirement.
-	r.clientBatch(2, 3)
-	if _, pending := r.s.resultDeadline(); pending {
-		t.Fatal("batch with shots poked")
-	}
-	// A duplicate sequence that CommitSequence rejects.
-	payload, _ := proto.Marshal(&client.ActionBatch{AcknowledgedThrough: 2})
-	r.s.mu.Lock()
-	err := r.s.receiveActions(r.p, framing.Header{Version: adapter.ClientVersion, Type: adapter.Actions, SessionID: r.p.session.ID, Sequence: r.seq}, payload, r.now)
-	r.s.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, pending := r.s.resultDeadline(); pending {
-		t.Fatal("rejected duplicate sequence poked")
-	}
-}
-
-// G6: unacknowledged decisions are resent every interval, more than eight in
-// rotation, until the Client's contiguous ACK.
-func TestUnacknowledgedDecisionsAreResentEachIntervalInRotation(t *testing.T) {
-	r := newResultLoop(t)
-	r.clientBatch(0, 1, 2, 3, 4, 5, 6, 7, 8)
-	r.clientBatch(0, 9, 10)
-	r.match(0, 1, 2, 3, 4, 5, 6, 7, 8)
-	r.match(0, 9, 10)
-	seen := map[uint64]bool{}
-	for k := 0; k < 3; k++ {
-		at := r.nextTimer()
-		if k > 0 && !at.Equal(r.written[k-1].Add(actionSendInterval)) {
-			t.Fatalf("resend %d due %v after the previous write", k, at.Sub(r.written[k-1]))
-		}
-		r.now = at
-		sent := r.pass(0)
-		if len(sent) != 1 || len(sent[0].Decisions) != adapter.MaxActionBatch {
-			t.Fatalf("resend %d: %v", k, sent)
-		}
-		for _, d := range sent[0].Decisions {
-			seen[d.ActionId] = true
-		}
-	}
-	if len(seen) != 10 {
-		t.Fatalf("rotation covered %d of 10 decisions", len(seen))
-	}
-	r.clientBatch(10)
-	for k := 0; k < 30; k++ {
-		r.now = r.nextTimer()
-		if sent := r.pass(0); len(sent) != 0 {
-			t.Fatal("acknowledged decisions resent")
-		}
-	}
-}
-
-// G7: for random ledgers, phases, availability and times, the reported
+// G7: for random slots, phases, availability and times, the reported
 // deadline and the selection agree: a deadline at or before now selects a
 // batch, a batch is only selected at or after a reported deadline, and
 // nothing due is left unselected. Players leave and are evicted in between.
@@ -388,17 +292,10 @@ func TestResultDeadlineAgreesWithSelection(t *testing.T) {
 		for id := uint64(1); id < uint64(len(sessions)); id++ {
 			p := &reservation{playerID: id, phase: phase(rng.IntN(3)), session: sessions[id]}
 			if rng.IntN(5) != 0 {
-				w := newActionWindow()
-				w.retired = uint64(rng.IntN(3))
-				decided := uint64(rng.IntN(4))
-				for k := uint64(1); k <= decided; k++ {
-					w.decisions[w.retired+k] = decision(w.retired + k)
+				if rng.IntN(3) != 0 {
+					p.results.pending = []byte{}
 				}
-				w.acknowledged = w.retired + uint64(rng.IntN(int(decided)+1))
-				w.retiredSent = uint64(rng.IntN(int(w.retired) + 1))
-				w.retirementAsked = rng.IntN(4) == 0
-				w.nextSend = base.Add(jitter(50 * time.Millisecond))
-				p.actions = w
+				p.results.nextSend = base.Add(jitter(50 * time.Millisecond))
 			}
 			s.players[id] = p
 			s.sessions[p.session.ID] = p
@@ -491,8 +388,8 @@ func TestOnlyNewResultContentWakesTheSendLoop(t *testing.T) {
 		t.Fatal("a new decision did not wake the send loop")
 	}
 	r.match(0, 1)
-	if woken() {
-		t.Fatal("a repeated decision woke the send loop")
+	if !woken() {
+		t.Fatal("a resent frame did not wake the send loop (it replaces the held one)")
 	}
 	r.clientBatch(1)
 	if woken() {
@@ -503,12 +400,12 @@ func TestOnlyNewResultContentWakesTheSendLoop(t *testing.T) {
 		t.Fatal("a retirement did not wake the send loop")
 	}
 	r.match(1)
-	if woken() {
-		t.Fatal("a repeated retirement woke the send loop")
+	if !woken() {
+		t.Fatal("a resent retirement did not wake the send loop")
 	}
 	r.clientBatch(1)
-	if !woken() {
-		t.Fatal("a poke did not wake the send loop")
+	if woken() {
+		t.Fatal("an ACK-only batch woke the send loop: the Match answers it, not the Gateway (pv7 §2a)")
 	}
 }
 
@@ -616,11 +513,10 @@ func TestSendLoopWakesForNewResultsAndIgnoresSpuriousWakes(t *testing.T) {
 	if slow > 1 {
 		t.Fatalf("%d of 16 new decisions waited more than 10 ms for the send loop", slow)
 	}
-	// An unacknowledged decision resends at the interval under spurious wakes.
+	// Frames arriving far faster than 30 Hz (the Match resends; here one per
+	// millisecond, each a wake) still leave at the interval: the slot keeps the
+	// newest and releases it one interval after the last send (pv7 §2a).
 	clientBatch(16, 17)
-	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, RetiredThrough: 16, Decisions: []*runtime.ShotDecision{decision(17)}}); err != nil {
-		t.Fatal(err)
-	}
 	stop := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(time.Millisecond)
@@ -630,13 +526,14 @@ func TestSendLoopWakesForNewResultsAndIgnoresSpuriousWakes(t *testing.T) {
 			case <-stop:
 				return
 			case <-ticker.C:
+				_ = s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, RetiredThrough: 16, Decisions: []*runtime.ShotDecision{decision(17)}})
 				s.wakeResults()
 			}
 		}
 	}()
 	got := resultArrivals(t, c, time.Now().Add(250*time.Millisecond), nil)
 	close(stop)
-	// 250 ms at 30 Hz is about 7 resends; one per wake would be about 250.
+	// 250 ms at 30 Hz is about 7 releases; one per frame would be about 250.
 	if len(got) < 5 || len(got) > 9 {
 		t.Fatalf("%d results in 250 ms of spurious wakes", len(got))
 	}

@@ -40,7 +40,7 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
-	actions      *actionWindow
+	results      resultSlot // at most one results frame waiting for its release (pv7 §2a)
 	packetWindow time.Time
 	packetCount  uint64
 	session      *session.Session
@@ -74,22 +74,25 @@ type snapshotFrame struct {
 }
 
 type Server struct {
-	config               Config
-	mu                   sync.Mutex
-	available            bool
-	created              bool
-	ready                *runtime.Ready
-	link                 *runtimeLink
-	players              map[uint64]*reservation
-	sessions             map[uint64]*reservation
-	requests             map[string]*reservation
-	nextPlayer           uint64
-	http                 *http.Server
-	listener             net.Listener
-	udp                  *net.UDPConn
-	controlOut           chan outbound
-	snapshotOut          chan snapshotFrame
-	resultWake           chan struct{}
+	config      Config
+	mu          sync.Mutex
+	available   bool
+	created     bool
+	ready       *runtime.Ready
+	link        *runtimeLink
+	players     map[uint64]*reservation
+	sessions    map[uint64]*reservation
+	requests    map[string]*reservation
+	nextPlayer  uint64
+	http        *http.Server
+	listener    net.Listener
+	udp         *net.UDPConn
+	controlOut  chan queuedControl
+	snapshotOut chan snapshotFrame
+	resultWake  chan struct{}
+	// Diagnostics only (under mu): results frames for a player that was not
+	// active, logged at close (pv7 §4 (d), not a loss).
+	resultsForInactive   uint64
 	closeOnce            sync.Once
 	diagnosticsOnce      sync.Once // the last diagnostic window is logged once
 	snapshotReplacements atomic.Uint64
@@ -147,7 +150,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
-		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan snapshotFrame, 1),
+		udp: udp, listener: listener, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1),
 		resultWake: make(chan struct{}, 1), ingressWindowStart: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rooms", s.listRooms)
@@ -192,7 +195,11 @@ func (s *Server) Close() {
 		_ = s.udp.Close()
 		_ = s.http.Close()
 		_ = s.listener.Close()
-		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
+		s.mu.Lock()
+		inactive := s.resultsForInactive
+		s.mu.Unlock()
+		// results_for_inactive_frames appended (pv7 §4 (d)): logged only.
+		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d results_for_inactive_frames=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load(), inactive)
 		s.flushDiagnostics()
 		s.flushFinal()
 	})
@@ -588,22 +595,41 @@ func (s *Server) welcome(p *reservation) {
 		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
 		Clock: s.welcomeSample(p, time.Now())})
 }
+
+// A control (Welcome, Error) waiting for the UDP writer, which assigns its
+// GYOP sequence right before the write (pv7 §2a: the Client drops a packet
+// whose sequence is not newer, so no sequence is taken before then). It keeps
+// its reservation: an Error may follow the player's removal.
+type queuedControl struct {
+	p       *reservation
+	kind    uint16
+	payload []byte
+	at      time.Time
+}
+
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
 	if err != nil {
 		return
 	}
-	p.outSequence++
-	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: kind, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
-	if err != nil {
-		return
-	}
 	select {
-	case s.controlOut <- outbound{peer: p.session.Endpoint(), packet: packet, player: p.playerID,
-		writeFailed: playerDropWriteFailedControlPackets, sequence: p.outSequence}:
+	case s.controlOut <- queuedControl{p: p, kind: kind, payload: payload, at: time.Now()}:
 	default:
-		s.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now(), transport: p.outSequence})
+		s.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now()})
 	}
+}
+
+// controlPacket sequences and encodes a queued control in the UDP writer.
+func (s *Server) controlPacket(c queuedControl) (outbound, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c.p.outSequence++
+	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: c.kind, SessionID: c.p.session.ID, Sequence: c.p.outSequence}, c.payload)
+	if err != nil {
+		return outbound{}, false
+	}
+	return outbound{peer: c.p.session.Endpoint(), packet: packet, player: c.p.playerID,
+		writeFailed: playerDropWriteFailedControlPackets, sequence: c.p.outSequence}, true
 }
 
 func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
@@ -699,8 +725,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 	}
 }
 
-// Wakes the send loop when a Client has something new: a decision, a
-// retirement, or a retirement its ACK-only batch showed it missed.
+// Wakes the send loop when a results frame arrived for a Client.
 func (s *Server) wakeResults() {
 	select {
 	case s.resultWake <- struct{}{}:
@@ -719,9 +744,10 @@ func resultWait(deadline time.Time, pending bool, now time.Time) time.Duration {
 }
 
 func (s *Server) sendUDP(ctx context.Context) {
-	// Results go out on a wake (something new for a Client) or at the earliest
-	// result deadline, a strict ActionSendRate interval from that player's last
-	// completed write: at once after an idle interval, never sooner.
+	// Results go out on a wake (a frame arrived) or at the earliest release, a
+	// strict ActionSendRate interval from that player's last completed write:
+	// at once after an idle interval, never sooner. This goroutine is the one
+	// UDP writer: every GYOP sequence is assigned here, right before its write.
 	timer := time.NewTimer(actionSendInterval)
 	defer timer.Stop()
 	results := func() {
@@ -744,8 +770,10 @@ func (s *Server) sendUDP(ctx context.Context) {
 			results()
 		case <-timer.C:
 			results()
-		case packet := <-s.controlOut:
-			s.writeUDP(packet)
+		case control := <-s.controlOut:
+			if packet, ok := s.controlPacket(control); ok {
+				s.writeUDP(packet)
+			}
 		case frame := <-s.snapshotOut:
 			s.mu.Lock()
 			players := make([]uint64, 0, len(s.players))

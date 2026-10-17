@@ -382,8 +382,7 @@ func TestActionDropsReachTheWindowAndFinalLines(t *testing.T) {
 	if second.Hello(second.Token, stayEndpoint, 1, now) != nil {
 		t.Fatal("hello")
 	}
-	stay := &reservation{playerID: 9, phase: active, session: second,
-		actions: newActionWindow()}
+	stay := &reservation{playerID: 9, phase: active, session: second}
 	s.mu.Lock()
 	s.players[9], s.sessions[second.ID] = stay, stay
 	s.mu.Unlock()

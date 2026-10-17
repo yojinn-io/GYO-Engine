@@ -35,10 +35,11 @@ type runtimeLink struct {
 	// resolved, stale, copied or conflicting (D49); the link forwards each
 	// Client datagram's window as it came. Controls are never dropped (more
 	// than maxQueuedControls fail the link); each player keeps at most
-	// maxQueuedInputs windows, the oldest dropped and reported beyond that.
+	// maxQueuedInputs input windows, the oldest dropped and reported beyond
+	// that.
 	queue          []queuedMessage
 	queuedControls int
-	queuedInputs   map[uint64]int
+	queuedData     map[uint64]int
 	// Per-player I0 counters since the last takeIngress; kept across forget
 	// and close so the commands those discard stay accounted for.
 	ingress map[uint64]*playerIngressCounts
@@ -272,27 +273,34 @@ func (l *runtimeLink) input(in *runtime.PlayerInput, e dropEvent) error {
 	if in == nil || in.PlayerId == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
 		return adapter.ErrInput
 	}
-	if l.queuedInputs == nil {
-		l.queuedInputs = make(map[uint64]int)
+	message := envelope()
+	message.Message = &runtime.RuntimeEnvelope_Input{Input: in}
+	l.queueDataLocked(queuedMessage{message: message, input: true, player: in.PlayerId, commands: uint64(len(in.Commands)), event: e})
+	l.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))
+	l.notify()
+	return nil
+}
+
+// queueDataLocked appends an input window behind everything queued. Beyond
+// maxQueuedInputs windows of the player, its oldest is dropped and reported
+// with its identity (pv7 §4, 32).
+func (l *runtimeLink) queueDataLocked(q queuedMessage) {
+	if l.queuedData == nil {
+		l.queuedData = make(map[uint64]int)
 	}
-	if l.queuedInputs[in.PlayerId] >= maxQueuedInputs {
-		for i, q := range l.queue {
-			if q.input && q.player == in.PlayerId {
-				l.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)
-				l.countLocked(q.player, playerDropIpcQueueOverflowInputCommands, q.commands)
+	if l.queuedData[q.player] >= maxQueuedInputs {
+		for i, old := range l.queue {
+			if old.input && old.player == q.player {
+				l.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)
+				l.countLocked(old.player, playerDropIpcQueueOverflowInputCommands, old.commands)
 				l.queue = slices.Delete(l.queue, i, i+1)
-				l.queuedInputs[in.PlayerId]--
+				l.queuedData[q.player]--
 				break
 			}
 		}
 	}
-	message := envelope()
-	message.Message = &runtime.RuntimeEnvelope_Input{Input: in}
-	l.queue = append(l.queue, queuedMessage{message: message, input: true, player: in.PlayerId, commands: uint64(len(in.Commands)), event: e})
-	l.queuedInputs[in.PlayerId]++
-	l.countLocked(in.PlayerId, playerFwdHandedMainCommands, uint64(len(in.Commands)))
-	l.notify()
-	return nil
+	l.queue = append(l.queue, q)
+	l.queuedData[q.player]++
 }
 
 func (l *runtimeLink) notify() {
@@ -337,7 +345,7 @@ func (l *runtimeLink) take() []linkWrite {
 	}
 	l.queue = nil
 	l.queuedControls = 0
-	clear(l.queuedInputs)
+	clear(l.queuedData)
 	for _, message := range l.actionBatch(time.Now()) {
 		writes = append(writes, l.takeActionsLocked(message))
 	}
@@ -670,7 +678,7 @@ func (l *runtimeLink) shutdown(graceful bool) {
 	}
 	l.queue = nil
 	l.queuedControls = 0
-	clear(l.queuedInputs)
+	clear(l.queuedData)
 	for id, w := range l.actionWindows {
 		shots, acks := w.untaken()
 		l.countLocked(id, playerDropClearedOnCloseActionsShots, shots)

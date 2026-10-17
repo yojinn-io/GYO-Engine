@@ -105,13 +105,6 @@
     "exit": true
   },
   {
-    "value": 16,
-    "name": "DROP_INVALID_ACTIONS_PACKETS",
-    "key": "drop_invalid_actions_packets",
-    "scope": "player",
-    "exit": true
-  },
-  {
     "value": 17,
     "name": "DROP_LINK_REJECTED_ACTIONS_PACKETS",
     "key": "drop_link_rejected_actions_packets",
@@ -129,13 +122,6 @@
     "value": 19,
     "name": "DROP_ADMISSION_UNKNOWN_PACKETS",
     "key": "drop_admission_unknown_packets",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 20,
-    "name": "DROP_INVALID_ACTIONS_SHOTS",
-    "key": "drop_invalid_actions_shots",
     "scope": "player",
     "exit": true
   },
@@ -214,7 +200,7 @@
     "name": "DROP_RESULTS_OVER_RATE_PACKETS",
     "key": "drop_results_over_rate_packets",
     "scope": "player",
-    "exit": false
+    "exit": true
   },
   {
     "value": 40,

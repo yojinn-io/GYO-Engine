@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-results-passthrough` 實作（Gateway 結果單槽、唯一寫出者、刪 session 帳本與 A3、link 原樣轉送 ACK-only 批），之後 L2 宣告。
+- **下一步**：L2 宣告（[草稿](edge-results-passthrough-l2.md)）的 D45 檢查、工具與乾跑，然後停下來等你核准宣告與 D112。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 11:57，D111；`edge-results-passthrough` 開始。
+- **最後更新**：2026-10-17 13:31，`edge-results-passthrough` 實作與 L1 完成；接著 L2 宣告的 D45 檢查與工具乾跑。
 
 ## 閱讀入口
 
@@ -296,6 +296,17 @@
   - Client 在醒來後約 1 秒斷線（`Gateway connection timed out`）：Client 用 C，看到約 27 秒沒有 Gateway 的封包，超過自己的逾時。兩位玩家因此 Leave，probe 以失敗結束。這是既有行為（筆電睡眠＝斷線），不是本批造成的；要不要在醒來後改成重連或延長逾時，是之後的功能題，記在未結事項。
 
 - 2026-10-17 11:57：`edge-results-passthrough` 開始（D111，檔位 high，估 12～16 h）。`edge-input-passthrough`（`42f6e88`、`6d9ecf5`）的四平台 L1 是 run 38914084925（通過）。
+
+- 2026-10-17：`edge-results-passthrough` 實作與 L1（記錄器）。
+  - Gateway：刪除 session 的結果帳本（requests、decisions、退役、`retiredSent`、`retirementAsked`、結果節拍、補送退役）與 A3（依帳本驗證動作批）。Match 寫來的結果框架逐則檢查後放進該玩家的單槽 `resultSlot`（latest-wins），在「上次寫出完成＋1/30 秒」時放出；被取代的計入新鍵 `drop_results_over_rate_packets`（回報 34，樣本帶被取代框架的 action id 範圍）。給非 active 玩家的結果只計數（`gateway transport` 行尾的 `results_for_inactive_frames`，§4 (d)）。
+  - 唯一寫出者：controls（Welcome、Error）改成在 UDP 寫出者（`sendUDP`）寫出前才指定 GYOP 序號。舊程式在入列時就編號，晚編號的 snapshot 或結果若先寫出，Client 會把序號較小的 control 當成舊封包丟掉；`backpressure_test` 原本把這個順序寫成期望值，已更正。
+  - link：ACK-only 批即使 ACK 不超過退役值也會寫出（window 的 `asked`），讓 Match 收得到補送退役的要求；ACK 的帳目（D56）仍由 window 記。一開始用「ACK-only 走到達順序佇列」的做法，會讓 Leave 之後仍寫出的 ACK 被算成丟棄（`TestLinkConservesActionRequestsAcrossEveryExit` 抓到），改成這個做法。
+  - 丟棄原因 16、20（A3）改成 reserved；golden 重產（33 個原因）。
+  - 測試：單槽放出、到達間隔 ±0.5 ms 時 0 取代、Client 每隔一則丟一則時的送達（見下）、退役遺失後 2 個間隔內補到、非 active 玩家的結果只計數；改寫依 Gateway 帳本重送的舊測試（G5、G6 刪除，喚醒與 1 kHz 到達的節拍改寫）；上一批的 `results_resend_test.go`（Gateway 帳本合併副本）改寫成這些端到端測試。
+  - **D112（等你決定）**：protocol-v7 §9 寫「每隔一則丟一則時，未確認 16 或 32 筆在 ≤2⌈n/8⌉ 則內送達」。照 §2a 的設計實測只能 ≤2⌈n/8⌉＋2（n＝16：6；24：8；32：10）。原因：Client 只能連續 ACK，有缺口時 Match 不知道 Client 已有哪些較大的 id，循環槽位會在一個收到的框架裡重送它已有的 id。測試暫時以實測的界限釘住。
+  - 突變：舊的 6 個（Gateway 帳本的重送、補送、A3、上一批的 Gateway 合併）隨程式刪除；12 個改成新寫法；本批新增 5 個（含計畫要求的「到達即丟、門檻＝I」）。168 個中 166 個第一輪殺死，2 個是判讀問題（測試的空指標、期望值），修正後殺死。
+  - 驗收（L1，本機）：CTest 72／72 與 preset 外的 4 個；`go test -race -count=2`。
+  - Architecture Delta（D-14）：Gateway 新增狀態欄位 reservation 的 `results resultSlot`（§2a 允許：至多 1 則待送的結果框架與上次送出時刻）、Server 的 `resultsForInactive`（診斷計數）；link window 的 `asked`（隨 window 在 `edge-actions-passthrough` 刪除）；刪除 reservation 的 `actions`（session 帳本）。
 
 ## 未結事項
 

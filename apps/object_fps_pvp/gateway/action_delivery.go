@@ -15,19 +15,18 @@ import (
 
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate
 
-// Each layer owns a bounded immutable action ledger. Movement acknowledgements
-// and snapshot replacement never touch this state.
+// The runtime link's bounded immutable action ledger (until
+// edge-actions-passthrough). Movement acknowledgements and snapshot
+// replacement never touch this state.
 type actionWindow struct {
 	requests                      map[uint64]*runtime.ShotRequest
 	decisions                     map[uint64]*runtime.ShotDecision
 	retired, acknowledged, cursor uint64
 	nextSend                      time.Time
-	// Session direction only (Gateway to Client); the runtime link's windows
-	// never use them: the retirement last sent to the Client, and whether an
-	// ACK-only batch showed that the Client missed it.
-	retiredSent     uint64
-	retirementAsked bool
-	// Runtime link direction only (D56): the requests a write pass took at
+	// An ACK-only batch arrived since the last pass: the next pass writes an
+	// ACK-only batch even if the ACK is not ahead of the retirement (pv7 §2a).
+	asked bool
+	// D56: the requests a write pass took at
 	// least once, and the highest acknowledgement a pass took. What no pass
 	// took is what the link drops unwritten on a Leave or a close.
 	taken    map[uint64]bool
@@ -208,6 +207,13 @@ func (l *runtimeLink) actions(in *runtime.ActionBatch) error {
 	// (drop_*_actions_shots), exactly one of the four.
 	l.countLocked(in.PlayerId, playerFwdHandedActionsShots, w.merge(in))
 	l.actionWindows[in.PlayerId] = w
+	if len(in.Shots) == 0 && in.AcknowledgedThrough > 0 {
+		// pv7 §2a: an ACK-only batch reaches the Match even when it
+		// acknowledges no more than the retirement: the Match answers that one
+		// with the retirement again (the Client missed it). The next pass
+		// writes it; the ACK stays accounted by the window (D56).
+		w.asked = true
+	}
 	l.notify()
 	return nil
 }
@@ -235,9 +241,10 @@ func (l *runtimeLink) actionBatch(now time.Time) []*runtime.RuntimeEnvelope {
 			}
 		}
 		ids = circularIDs(ids, w.cursor)
-		if len(ids) == 0 && w.acknowledged <= w.retired {
+		if len(ids) == 0 && w.acknowledged <= w.retired && !w.asked {
 			continue
 		}
+		w.asked = false
 		in := &runtime.ActionBatch{PlayerId: player, AcknowledgedThrough: w.acknowledged}
 		for _, id := range ids {
 			in.Shots = append(in.Shots, proto.Clone(w.requests[id]).(*runtime.ShotRequest))
@@ -258,7 +265,7 @@ func (l *runtimeLink) nextActionDeadline() (time.Time, bool) {
 	var next time.Time
 	found := false
 	for _, w := range l.actionWindows {
-		pending := w.acknowledged > w.retired
+		pending := w.acknowledged > w.retired || w.asked
 		for id := range w.requests {
 			if w.decisions[id] == nil {
 				pending = true
@@ -272,26 +279,20 @@ func (l *runtimeLink) nextActionDeadline() (time.Time, bool) {
 	return next, found
 }
 
-// Something new for the Client: a decision it has not acknowledged (resent
-// every interval until it does), a retirement not sent yet, or one that an
-// ACK-only batch showed it missed. Both the selection and the send loop's
-// deadline use this, so a due deadline always selects a batch.
-func (w *actionWindow) resultsPending() bool {
-	if w.retired > w.retiredSent || w.retirementAsked {
-		return true
-	}
-	for id := range w.decisions {
-		if id > w.acknowledged {
-			return true
-		}
-	}
-	return false
+// pv7 §2a: the Gateway holds at most one results frame per player, as the
+// Match wrote it (latest wins: the Match resends until the Client's ACK), and
+// releases it a strict interval after that player's last send. A frame
+// replaced before its release is counted and reported (§4, reason 34). The
+// Gateway keeps no ledger: it neither selects by content nor resends.
+type resultSlot struct {
+	pending  []byte // the Client ActionResults payload, nil when empty
+	event    dropEvent
+	nextSend time.Time
 }
 
-// Results bypass the lossy control and latest-snapshot queues. They remain in
-// the session ledger until the client's contiguous ACK retires them in Match.
-// A player is selected only with something pending, at a strict interval from
-// its last completed write. Also reports the earliest deadline left.
+// The due results frames, each encoded with its GYOP sequence here, in the one
+// UDP writer (sendUDP), right before its write. Also reports the earliest
+// deadline left.
 func (s *Server) actionPackets(now time.Time) ([]outbound, time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -300,34 +301,15 @@ func (s *Server) actionPackets(now time.Time) ([]outbound, time.Time, bool) {
 		return nil, time.Time{}, false
 	}
 	for _, p := range s.players {
-		w := p.actions
-		if p.phase != active || w == nil || now.Before(w.nextSend) || !w.resultsPending() {
+		slot := &p.results
+		if p.phase != active || slot.pending == nil || now.Before(slot.nextSend) {
 			continue
 		}
-		// Anchor before encoding: a batch that fails to encode must not leave
+		// Anchor before encoding: a frame that fails to encode must not leave
 		// a due deadline behind, or the send loop would wait zero time on it.
-		w.nextSend = now.Add(actionSendInterval)
-		w.retiredSent, w.retirementAsked = w.retired, false
-		ids := make([]uint64, 0, len(w.decisions))
-		for id := range w.decisions {
-			if id > w.acknowledged {
-				ids = append(ids, id)
-			}
-		}
-		ids = circularIDs(ids, w.cursor)
-		results := &runtime.ActionResults{PlayerId: p.playerID, RetiredThrough: w.retired}
-		for _, id := range ids {
-			results.Decisions = append(results.Decisions, w.decisions[id])
-			w.cursor = id
-		}
-		mapped, err := adapter.ResultsForClient(results, s.ready.CombatRules)
-		if err != nil {
-			continue
-		}
-		payload, err := proto.Marshal(mapped)
-		if err != nil {
-			continue
-		}
+		slot.nextSend = now.Add(actionSendInterval)
+		payload := slot.pending
+		slot.pending = nil
 		p.outSequence++
 		packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.ActionResults, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
 		if err != nil {
@@ -340,8 +322,8 @@ func (s *Server) actionPackets(now time.Time) ([]outbound, time.Time, bool) {
 	return packets, deadline, ok
 }
 
-// The earliest result deadline among active players with something pending,
-// so the send loop can wake at it. Called with s.mu held.
+// The earliest release among active players holding a frame, so the send loop
+// can wake at it. Called with s.mu held.
 func (s *Server) nextResultDeadline() (time.Time, bool) {
 	var next time.Time
 	found := false
@@ -349,11 +331,11 @@ func (s *Server) nextResultDeadline() (time.Time, bool) {
 		return next, false
 	}
 	for _, p := range s.players {
-		if p.phase != active || p.actions == nil || !p.actions.resultsPending() {
+		if p.phase != active || p.results.pending == nil {
 			continue
 		}
-		if !found || p.actions.nextSend.Before(next) {
-			next, found = p.actions.nextSend, true
+		if !found || p.results.nextSend.Before(next) {
+			next, found = p.results.nextSend, true
 		}
 	}
 	return next, found
@@ -369,16 +351,8 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 		s.countIngress(p, playerDropMalformedActionsPackets, 1)
 		return nil
 	}
-	if p.actions == nil {
-		p.actions = newActionWindow()
-	}
-	// The two semantic action drops (A3 here, A5 below) are only counted in
-	// P2 (D53 item 8): batches and their shots.
-	if p.actions.validate(in) != nil {
-		s.countIngress(p, playerDropInvalidActionsPackets, 1)
-		s.countIngress(p, playerDropInvalidActionsShots, uint64(len(in.Shots)))
-		return nil
-	}
+	// The Gateway keeps no action ledger (pv7 §2a): A3 is gone; the link's
+	// window (A5) admits the batch until edge-actions-passthrough.
 	// Link admission happens before committing the session's ledger or ACK. A
 	// rejected batch can be retried unchanged without losing any request/result.
 	if err = s.link.actions(in); err != nil {
@@ -393,55 +367,44 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 	// window first: a Leave, an eviction, a close or a failed write before a
 	// pass wrote it (counted by the link, drop_*_actions_shots and _acks).
 	s.countIngress(p, playerFwdHandedActionsPackets, 1)
-	if p.session.CommitSequence(h.Sequence, now) != nil {
-		return nil
-	}
-	p.actions.merge(in)
-	// The Client sends an ACK-only batch only while its ACK is ahead of the
-	// retirement it knows. One that acknowledges no more than the retirement
-	// already here shows the Client missed it: send it once more (a poke). A
-	// batch with shots does not tell which retirement the Client knows.
-	if len(in.Shots) == 0 && in.AcknowledgedThrough > 0 && in.AcknowledgedThrough <= p.actions.retired {
-		p.actions.retirementAsked = true
-		s.wakeResults()
-	}
+	_ = p.session.CommitSequence(h.Sequence, now)
 	return nil
 }
 func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
-	if _, err := adapter.ResultsForClient(in, s.ready.CombatRules); err != nil {
+	mapped, err := adapter.ResultsForClient(in, s.ready.CombatRules)
+	if err != nil {
+		return err
+	}
+	payload, err := proto.Marshal(mapped)
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.players[in.PlayerId]
-	// Dropping the results of a player that is not active loses nothing to
-	// resend later. Before its join completes the Match has none: only an
-	// active player's actions are forwarded. A removal is final: phases only
-	// move forward, player ids are never reused and the runtime link never
-	// reconnects. The Match resends every unretired result until the
-	// Client's ACK (pv7 §2a); a copy merges as nothing new and wakes no send.
+	// Results for a player that is not active are not a loss (§4 (d)): the
+	// Match resends until it reads the Leave, and a removal is final (phases
+	// only move forward, ids are never reused). Logged as a count only.
 	if p == nil || p.phase != active {
+		s.resultsForInactive++
 		return nil
 	}
-	if p.actions == nil {
-		p.actions = newActionWindow()
-	}
-	w := p.actions
-	if err := w.validateResults(in); err != nil {
-		return err
-	}
-	// Only new content (a decision or a retirement) wakes the send loop.
-	fresh := in.RetiredThrough > w.retired
+	e := dropEvent{at: time.Now(), items: uint32(len(in.Decisions))}
 	for _, d := range in.Decisions {
-		if d.ActionId > max(w.retired, in.RetiredThrough) && w.decisions[d.ActionId] == nil {
-			fresh = true
+		if e.firstAction == 0 || d.ActionId < e.firstAction {
+			e.firstAction = d.ActionId
 		}
+		e.lastAction = max(e.lastAction, d.ActionId)
 	}
-	w.mergeResults(in)
+	if p.results.pending != nil {
+		// Replaced before its release: the Match sends it again (§2a, 34).
+		s.countIngressAt(p.playerID, playerDropResultsOverRatePackets, 1, p.results.event)
+	}
+	p.results.pending, p.results.event = payload, e
+	// The link's action window (until edge-actions-passthrough) retires its
+	// requests by the results.
 	s.link.actionResults(in)
-	if fresh {
-		s.wakeResults()
-	}
+	s.wakeResults()
 	return nil
 }
 
@@ -514,8 +477,8 @@ func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
 func (s *Server) actionWritten(playerID uint64, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if p := s.players[playerID]; p != nil && p.actions != nil {
-		p.actions.nextSend = now.Add(actionSendInterval)
+	if p := s.players[playerID]; p != nil {
+		p.results.nextSend = now.Add(actionSendInterval)
 		p.sent.results.record(now)
 	}
 }

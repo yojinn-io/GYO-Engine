@@ -825,58 +825,28 @@
       "batch": "v7-08b",
       "what": "Results leave half an interval before their deadline again (the removed resultSendTolerance), so a wake can send early",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "w == nil || now.Before(w.nextSend)",
-      "replace": "w == nil || now.Add(actionSendInterval/2).Before(w.nextSend)",
+      "find": "\t\tif p.phase != active || slot.pending == nil || now.Before(slot.nextSend) {\n",
+      "replace": "\t\tif p.phase != active || slot.pending == nil || now.Add(actionSendInterval/2).Before(slot.nextSend) {\n",
       "check": "go",
       "expect": "before its deadline|results \\S+ apart \\(write"
-    },
-    {
-      "id": "v7-08b-results-repeat",
-      "batch": "v7-08b",
-      "what": "Every interval after the first retirement sends a retired-only repeat",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tif w.retired > w.retiredSent || w.retirementAsked {\n",
-      "replace": "\tif w.retired > 0 || w.retirementAsked {\n",
-      "check": "go",
-      "expect": "retired-only repeat after|retirement repeated"
-    },
-    {
-      "id": "v7-08b-results-no-poke",
-      "batch": "v7-08b",
-      "what": "An ACK-only batch behind the retirement does not ask for the retirement again",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tp.actions.retirementAsked = true\n",
-      "replace": "",
-      "check": "go",
-      "expect": "ACK-only batch behind the retirement asked for nothing"
     },
     {
       "id": "v7-08b-results-no-wake",
       "batch": "v7-08b",
       "what": "New Match results do not wake the send loop; they wait for its timer",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tif fresh {\n\t\ts.wakeResults()\n\t}\n",
-      "replace": "\t_ = fresh\n",
+      "find": "\ts.link.actionResults(in)\n\ts.wakeResults()\n\treturn nil\n",
+      "replace": "\ts.link.actionResults(in)\n\treturn nil\n",
       "check": "go",
       "expect": "a new decision did not wake the send loop"
-    },
-    {
-      "id": "v7-08b-results-no-resend",
-      "batch": "v7-08b",
-      "what": "An unacknowledged decision is sent once but never resent until the contiguous ACK",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tif id > w.acknowledged {\n\t\t\treturn true\n",
-      "replace": "\t\tif id > w.acknowledged && id > w.cursor {\n\t\t\treturn true\n",
-      "check": "go",
-      "expect": "--- FAIL: TestActionsRealUDPAndTCPResendUntilContiguousClientACK"
     },
     {
       "id": "v7-08b-results-deadline-ignores-phase",
       "batch": "v7-08b",
       "what": "The send loop's deadline counts players that are not active, which selection skips",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tif p.phase != active || p.actions == nil || !p.actions.resultsPending() {\n",
-      "replace": "\t\tif p.actions == nil || !p.actions.resultsPending() {\n",
+      "find": "\t\tif p.phase != active || p.results.pending == nil {\n",
+      "replace": "\t\tif p.results.pending == nil {\n",
       "check": "go",
       "expect": "but nothing was sent|left due after selection"
     },
@@ -885,7 +855,7 @@
       "batch": "v7-08b",
       "what": "A completed result write does not re-anchor the deadline, so a blocked write's release sends a catch-up",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tp.actions.nextSend = now.Add(actionSendInterval)\n\t\tp.sent.results.record(now)\n",
+      "find": "\t\tp.results.nextSend = now.Add(actionSendInterval)\n\t\tp.sent.results.record(now)\n",
       "replace": "\t\tp.sent.results.record(now)\n",
       "check": "go",
       "expect": "results \\S+ apart \\(write|released write sent a catch-up result"
@@ -915,10 +885,10 @@
       "batch": "v7-08b",
       "what": "Match results for a removed player fail the runtime instead of being dropped",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tif p == nil || p.phase != active {\n\t\treturn nil\n\t}\n\tif p.actions == nil {\n\t\tp.actions = newActionWindow()\n\t}\n\tw := p.actions\n",
-      "replace": "\tif p == nil {\n\t\treturn adapter.ErrActions\n\t}\n\tif p.phase != active {\n\t\treturn nil\n\t}\n\tif p.actions == nil {\n\t\tp.actions = newActionWindow()\n\t}\n\tw := p.actions\n",
+      "find": "\t\ts.resultsForInactive++\n\t\treturn nil\n",
+      "replace": "\t\treturn errors.New(\"results for a player that is not active\")\n",
       "check": "go",
-      "expect": "a removed player's results failed the room"
+      "expect": "a removed player's results failed the room|a joining player's results failed the room"
     },
     {
       "id": "v7-08b-nonactive-actions-forwarded",
@@ -1551,26 +1521,6 @@
       "expect": "case malformed/actions: counted none"
     },
     {
-      "id": "v7-flow-drop-invalid-actions-uncounted",
-      "batch": "v7-flow",
-      "what": "An action batch the ledger refuses (A3) is not counted",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\ts.countIngress(p, playerDropInvalidActionsPackets, 1)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "case invalid/actions: counted drop_invalid_actions_shots=2"
-    },
-    {
-      "id": "v7-flow-drop-invalid-shots-per-packet",
-      "batch": "v7-flow",
-      "what": "A refused action batch (A3) counts one shot instead of each",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\ts.countIngress(p, playerDropInvalidActionsShots, uint64(len(in.Shots)))\n",
-      "replace": "\t\ts.countIngress(p, playerDropInvalidActionsShots, 1)\n",
-      "check": "go",
-      "expect": "case invalid/actions: counted drop_invalid_actions_packets=1 drop_invalid_actions_shots=1"
-    },
-    {
       "id": "v7-flow-drop-link-rejected-actions-uncounted",
       "batch": "v7-flow",
       "what": "An action batch the link refuses (A5) is not counted",
@@ -1595,7 +1545,7 @@
       "batch": "v7-flow",
       "what": "Handed actions are counted only when the sequence commits",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n",
+      "find": "\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n\t_ = p.session.CommitSequence(h.Sequence, now)\n",
       "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n",
       "check": "go",
       "expect": "case handed/actions_commit_failed: counted none"
@@ -3435,7 +3385,7 @@
       "batch": "v71-drop-report",
       "what": "A full control queue drops a control uncounted",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\t\ts.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now(), transport: p.outSequence})\n",
+      "find": "\t\ts.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now()})\n",
       "replace": "",
       "check": "go",
       "expect": "control queue report"
@@ -3631,16 +3581,6 @@
       "expect": "CountResults\\(again\\) == 1 \\) is NOT correct"
     },
     {
-      "id": "v71rr-gateway-repeat-as-poke",
-      "batch": "v71-edge-results-resend",
-      "what": "The Gateway takes a resent retirement as the Client asking for it: Match resends change what the Client receives",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tfresh := in.RetiredThrough > w.retired\n",
-      "replace": "\tfresh := in.RetiredThrough > w.retired\n\tw.retirementAsked = w.retirementAsked || (in.RetiredThrough == w.retired && w.retired > 0)\n",
-      "check": "go",
-      "expect": "datagram \\d+ differs|datagrams with each result sent once"
-    },
-    {
       "id": "v71rr-over-batch-refusal-ignored",
       "batch": "v71-edge-results-resend",
       "what": "An over-long batch is not answered with a results frame",
@@ -3695,8 +3635,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A full input queue drops the arriving window instead of the oldest",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\tl.queue = slices.Delete(l.queue, i, i+1)\n\t\t\t\tl.queuedInputs[in.PlayerId]--\n\t\t\t\tbreak\n",
-      "replace": "\t\t\t\t_ = slices.Index(l.queue, q)\n\t\t\t\t_ = i\n\t\t\t\treturn nil\n",
+      "find": "\t\t\t\tl.queue = slices.Delete(l.queue, i, i+1)\n\t\t\t\tl.queuedData[q.player]--\n\t\t\t\tbreak\n",
+      "replace": "\t\t\t\t_ = slices.Index(l.queue, old)\n\t\t\t\t_ = i\n\t\t\t\treturn\n",
       "check": "go",
       "expect": "written \\[.*\\], want the newest|the Match read \\[.*\\], want"
     },
@@ -3715,7 +3655,7 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A window dropped from a full input queue is not counted or reported",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)\n",
+      "find": "\t\t\t\tl.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)\n",
       "replace": "",
       "check": "go",
       "expect": "overflowed windows counted 0, want 2"
@@ -3725,8 +3665,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A dropped window is reported with the arriving window's identity",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)\n",
-      "replace": "\t\t\t\tl.countEventLocked(q.player, playerDropIpcQueueOverflowInputPackets, 1, e)\n",
+      "find": "\t\t\t\tl.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)\n",
+      "replace": "\t\t\t\tl.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, q.event)\n",
       "check": "go",
       "expect": "does not carry the dropped window"
     },
@@ -3835,8 +3775,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A write pass does not reset the pending control count: the link fails after 64 lifecycle requests in all",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.queue = nil\n\tl.queuedControls = 0\n\tclear(l.queuedInputs)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
-      "replace": "\tl.queue = nil\n\tclear(l.queuedInputs)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
+      "find": "\tl.queue = nil\n\tl.queuedControls = 0\n\tclear(l.queuedData)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
+      "replace": "\tl.queue = nil\n\tclear(l.queuedData)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
       "check": "go",
       "expect": "round 1: control 1 refused"
     },
@@ -3845,8 +3785,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A full input queue drops another player's oldest window",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tif q.input && q.player == in.PlayerId {\n",
-      "replace": "\t\t\tif q.input {\n",
+      "find": "\t\t\tif old.input && old.player == q.player {\n",
+      "replace": "\t\t\tif old.input {\n",
       "check": "go",
       "expect": "overflowed windows counted 1, want 2|player 2 lost|want player 2's window"
     },
@@ -3889,6 +3829,56 @@
       "replace": "                if(p.life_generation()==1) static_cast<void>(host.SubmitInput(window));\n",
       "check": "ipc",
       "expect": "CHECK\\( copied\\.otherLife > 100 \\)"
+    },
+    {
+      "id": "v71rp-drop-on-arrival",
+      "batch": "v71-edge-results-passthrough",
+      "what": "A frame arriving within an interval of the last send is dropped instead of held (the rejected design, pv7 §2a)",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tif p.results.pending != nil {\n\t\t// Replaced before its release: the Match sends it again (§2a, 34).\n",
+      "replace": "\tif !time.Now().Before(p.results.nextSend) {\n\t} else if true {\n\t\ts.countIngressAt(p.playerID, playerDropResultsOverRatePackets, 1, e)\n\t\treturn nil\n\t}\n\tif p.results.pending != nil {\n\t\t// Replaced before its release: the Match sends it again (§2a, 34).\n",
+      "check": "go",
+      "expect": "frames, \\d+ released, \\d+ replaced"
+    },
+    {
+      "id": "v71rp-slot-keeps-oldest",
+      "batch": "v71-edge-results-passthrough",
+      "what": "The slot keeps the frame it holds and drops the newer one",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tp.results.pending, p.results.event = payload, e\n",
+      "replace": "\tif p.results.pending == nil {\n\t\tp.results.pending, p.results.event = payload, e\n\t}\n",
+      "check": "go",
+      "expect": "released frame|retirement lost at"
+    },
+    {
+      "id": "v71rp-replaced-uncounted",
+      "batch": "v71-edge-results-passthrough",
+      "what": "A frame replaced in the slot is not counted or reported (34)",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\ts.countIngressAt(p.playerID, playerDropResultsOverRatePackets, 1, p.results.event)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "replaced frames counted 0, want 3"
+    },
+    {
+      "id": "v71rp-control-reuses-sequence",
+      "batch": "v71-edge-results-passthrough",
+      "what": "A control written by the UDP writer does not take a new GYOP sequence",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tc.p.outSequence++\n",
+      "replace": "",
+      "check": "go",
+      "expect": "per-peer snapshot selection changed control queue order"
+    },
+    {
+      "id": "v71rp-ack-only-not-forwarded",
+      "batch": "v71-edge-results-passthrough",
+      "what": "An ACK-only batch acknowledging no more than the retirement does not reach the Match",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tw.asked = true\n",
+      "replace": "",
+      "check": "go",
+      "expect": "retirement lost at"
     }
   ]
 }

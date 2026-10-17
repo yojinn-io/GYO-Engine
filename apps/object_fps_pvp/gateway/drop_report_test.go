@@ -226,7 +226,7 @@ func TestDownlinkDiscardsAreCounted(t *testing.T) {
 		t.Fatalf("write failure report %v", r)
 	}
 	// No send loop drains this Server's control queue.
-	quiet := &Server{controlOut: make(chan outbound, 2), link: &runtimeLink{drops: newDropLedger()}}
+	quiet := &Server{controlOut: make(chan queuedControl, 2), link: &runtimeLink{drops: newDropLedger()}}
 	p := &reservation{playerID: 6, session: newActiveSession(t, 6), phase: active}
 	quiet.mu.Lock()
 	for i := 0; i < cap(quiet.controlOut)+3; i++ {
@@ -234,7 +234,9 @@ func TestDownlinkDiscardsAreCounted(t *testing.T) {
 	}
 	quiet.mu.Unlock()
 	r = quiet.link.drops.report(6, time.Now())
-	if r == nil || totalsOf(r)[runtime.DropReason_DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS] != 3 || r.Samples[0].TransportSequence != 3 {
+	// A queued control takes its sequence only when written (pv7 §2a): one
+	// that never got in has none.
+	if r == nil || totalsOf(r)[runtime.DropReason_DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS] != 3 || r.Samples[0].TransportSequence != 0 {
 		t.Fatalf("control queue report %v", r)
 	}
 }

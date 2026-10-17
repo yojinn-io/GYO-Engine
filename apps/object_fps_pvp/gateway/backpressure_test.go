@@ -19,7 +19,7 @@ import (
 // blocking switch or pretending an ordinary loopback UDP socket is saturated.
 func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing.T) {
 	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation),
-		controlOut: make(chan outbound, 64), snapshotOut: make(chan snapshotFrame, 1)}
+		controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1)}
 	for id := uint64(1); id <= 2; id++ {
 		peer, err := session.New(time.Now())
 		if err != nil {
@@ -59,12 +59,16 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 	}
 	frame, second := s.snapshotForPeer([]uint64{2}, frame)
 	secondHeader, secondTick := decode(second)
-	if secondTick != 3 || secondHeader.Sequence != 3 || secondHeader.SessionID != secondPeer.session.ID ||
+	// pv7 §2a: the two queued Welcomes took no sequence yet; the snapshot
+	// written first takes 1, they take 2 and 3 when written (before pv7 they
+	// took 1 and 2 at enqueue and the snapshot 3, so the Client dropped them).
+	if secondTick != 3 || secondHeader.Sequence != 1 || secondHeader.SessionID != secondPeer.session.ID ||
 		len(s.snapshotOut) != 0 || s.snapshotReplacements.Load() != 2 {
 		t.Fatal("unwritten second peer retained an obsolete publication or transport sequence")
 	}
-	for sequence := uint32(1); sequence <= 2; sequence++ {
-		header, _, err := framing.DecodeDatagram((<-s.controlOut).packet)
+	for sequence := uint32(2); sequence <= 3; sequence++ {
+		control, _ := s.controlPacket(<-s.controlOut)
+		header, _, err := framing.DecodeDatagram(control.packet)
 		if err != nil || header.Type != adapter.Welcome || header.Sequence != sequence {
 			t.Fatal("per-peer snapshot selection changed control queue order")
 		}
@@ -183,7 +187,7 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 					}
 				}
 				link.mu.Lock()
-				over := len(link.queue) > 2+2*maxQueuedInputs || link.queuedInputs[1] > maxQueuedInputs || link.queuedInputs[2] > maxQueuedInputs
+				over := len(link.queue) > 2+2*maxQueuedInputs || link.queuedData[1] > maxQueuedInputs || link.queuedData[2] > maxQueuedInputs
 				link.mu.Unlock()
 				if over {
 					t.Fatal("queue capacity exceeded")
