@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-input-passthrough` 完成（L2 通過）。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 進行中。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D110 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D111 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-results-passthrough`（說「開始」才啟動）。
+- **下一步**：`edge-results-passthrough` 實作（Gateway 結果單槽、唯一寫出者、刪 session 帳本與 A3、link 原樣轉送 ACK-only 批），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 11:48，heartbeat-sync 的睡眠那段完成（只記錄）。
+- **最後更新**：2026-10-17 11:57，D111；`edge-results-passthrough` 開始。
 
 ## 閱讀入口
 
@@ -80,6 +80,7 @@
 | D108 | （2026-10-16）開始 `edge-input-passthrough`（檔位 high，局部 xhigh，估 20～26 h）。行為改變：L2 的事前宣告（門檻、試行次數、重試規則）在看結果之前經使用者核准（AGENTS.md §14.1），宣告前做門檻來源的對抗式檢查（D45） | 使用者：「開始」 |
 | D109 | （2026-10-16）核准 `edge-input-passthrough` 的 L2 事前宣告第 3 版；第 10 節照建議：J4a 1.5 倍、跑 soak-long、heartbeat-sync 的睡眠那段在本 session 結束後接著做、次數照第 5 節（98 個項目）。確認 `ingress_cross_check.py` 只接受 protocol-v7 §9 宣告形狀的 I3 失敗（AGENTS.md §14.4） | 使用者：「核准 edge-input-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…ingress_cross_check 的 I3 例外也確認。」 |
 | D110 | （2026-10-17）L2 第 1 次 session 在第 58 項停下（B 樹 clean-60 的 I1 undetermined：關閉時被 reset，已知的競態）。依 §14.1 回報後選 (a)：只改 I1 的規則（任何情境，只有 `eof_before_final` 不成立、其他前提成立的 undetermined 只記錄），整個 session 重跑；第 1 次保留為證據 | 使用者：「照 (a)」 |
+| D111 | （2026-10-17）開始 `edge-results-passthrough`（檔位 high，估 12～16 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查；休眠重連記為體驗優化，之後調整 | 使用者：「開始 edge-results-passthrough。」「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -294,9 +295,11 @@
   - runtime link 撐過睡眠：Gateway 的活性用 G，看不到這段時間，沒有逾時；Match 到結束都沒有斷線（最後是正常的 EOF）。
   - Client 在醒來後約 1 秒斷線（`Gateway connection timed out`）：Client 用 C，看到約 27 秒沒有 Gateway 的封包，超過自己的逾時。兩位玩家因此 Leave，probe 以失敗結束。這是既有行為（筆電睡眠＝斷線），不是本批造成的；要不要在醒來後改成重連或延長逾時，是之後的功能題，記在未結事項。
 
+- 2026-10-17 11:57：`edge-results-passthrough` 開始（D111，檔位 high，估 12～16 h）。`edge-input-passthrough`（`42f6e88`、`6d9ecf5`）的四平台 L1 是 run 38914084925（通過）。
+
 ## 未結事項
 
-- **筆電睡眠後 Client 會斷線**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍；之後要不要處理（醒來後重連、或用不含睡眠的時鐘判逾時）由你決定。
+- **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
 
 - **`edge-input-passthrough` 的 xhigh note**（記錄）：
   - N3：佇列項目攜帶收包時刻與 GYOP 序號（回報 32 的 dwell 起點），字面上和 D105「單次呼叫的脈絡不得跨資料包保留」衝突。建議 `edge-contract` 把它歸類為「隨佇列項目攜帶的診斷狀態」，由你決定。
