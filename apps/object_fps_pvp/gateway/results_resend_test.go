@@ -89,10 +89,10 @@ func TestResultSlotReleasesFramesArrivingAtTheIntervalWithoutDrops(t *testing.T)
 // datagram (either phase) and acknowledges contiguously at once. n
 // unacknowledged decisions all arrive within 2⌈n/8⌉+2 datagrams.
 //
-// §9 states 2⌈n/8⌉; this design needs up to two more (measured: 16→6, 24→8,
-// 32→10 when the first datagram is lost; 24→7, 32→9 otherwise): with a gap the
+// The bound is §9's since D112 (it first said 2⌈n/8⌉): measured 16→6, 24→8,
+// 32→10 when the first datagram is lost, 24→7, 32→9 otherwise. With a gap the
 // Client's contiguous ACK hides which later ids it holds, so one received
-// frame cycles through ids it already has. Pending the user's decision (D112).
+// frame cycles through ids it already has.
 func TestUnacknowledgedDecisionsArriveDespiteEveryOtherDatagramLost(t *testing.T) {
 	for _, n := range []uint64{8, 16, 24, 32} {
 		for _, firstLost := range []bool{true, false} {
