@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。等你告訴我開始不用電腦的時段，就跑 L2 session（約 2 h 20 分加閒置門檻；插電、不移動、不使用）。
+- **等你決定**：L2 第 1 次 session 因主機干擾（Chrome）在第 12 項停下。建議：你回來後關掉 Chrome（或至少讓它沒有在動的分頁），再整個重跑（新目錄，第 1 次保留）。PR 的 Auto-fix 維持暫停，避免程式變更讓重跑的 preflight 不成立。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：你不用電腦時跑 L2 session（D113）；之後把 `results_resend_test.go` 註解裡的「pending D112」改成已決定（session 期間主 checkout 只能有文件變更，所以留到之後）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 15:03，D112、D113；L2 準備完成，等你不用電腦的時段。
+- **最後更新**：2026-10-17 15:20，L2 第 1 次 session 因主機干擾停下。
 
 ## 閱讀入口
 
@@ -309,6 +309,8 @@
   - 突變：舊的 6 個（Gateway 帳本的重送、補送、A3、上一批的 Gateway 合併）隨程式刪除；12 個改成新寫法；本批新增 5 個（含計畫要求的「到達即丟、門檻＝I」）。168 個中 166 個第一輪殺死，2 個是判讀問題（測試的空指標、期望值），修正後殺死。
   - 驗收（L1，本機）：CTest 72／72 與 preset 外的 4 個；`go test -race -count=2`。
   - Architecture Delta（D-14）：Gateway 新增狀態欄位 reservation 的 `results resultSlot`（§2a 允許：至多 1 則待送的結果框架與上次送出時刻）、Server 的 `resultsForInactive`（診斷計數）；link window 的 `asked`（隨 window 在 `edge-actions-passthrough` 刪除）；刪除 reservation 的 `actions`（session 帳本）。
+
+- 2026-10-17 15:07～15:14：`edge-results-passthrough` 的 L2 第 1 次 session（`build/target/_build/test/logs/pvp-v71-edge-results-l2-20261017/`）在第 12 項停下：受干擾的項目累計 3 個（loss-shot-r1-B 之後 38.5 ms、gateway-1000ms-r1-A 之前 24.4 ms、clean-60-r2-B 之前 26.3 ms；門檻 10 ms），照宣告第 8 節停止。CPU 前幾名是 Google Chrome 的 Helper（42～54%）、WindowServer（螢幕因 `caffeinate -d` 保持亮著）與 Claude app。完成的 11 項沒有任何判定不成立。不重跑，保留為證據，等你決定（§14.1）。
 
 ## 未結事項
 
