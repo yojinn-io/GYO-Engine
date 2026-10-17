@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：heartbeat-sync 的睡眠那段（D102、D109，要你讓機器睡眠）；之後 `edge-results-passthrough`（說「開始」才啟動）。
+- **下一步**：`edge-results-passthrough`（說「開始」才啟動）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 03:09，`edge-input-passthrough` 的 L2 通過；PR 的 Auto-fix 恢復。
+- **最後更新**：2026-10-17 11:48，heartbeat-sync 的睡眠那段完成（只記錄）。
 
 ## 閱讀入口
 
@@ -288,7 +288,15 @@
   - 差異帶（給 `pv7-checkpoint`，宣告第 9 節）：以上的 A−B。
   - 實際約 7 h（2026-10-16 20:09～10-17 03:15；含 xhigh 兩次、L2 工具、兩次 session 約 3.5 h；估 20～26 h）。
 
+- 2026-10-17：`heartbeat-sync` 的睡眠那段（D102、D109，只記錄）。A 樹（`6d9ecf5`）的 Match、Gateway 與兩個 Client 的 timing probe，跑次中由使用者從選單讓 Mac 睡眠。證據 `build/target/_build/test/logs/pvp-v71-heartbeat-sleep-20261017/`（`sleep_run.py`、`run/`、`clocks.jsonl`）。
+  - 睡眠：`pmset` 紀錄 11:42:40 進入、11:43:14 喚醒（34 秒）；腳本每秒的讀數顯示牆鐘過了 31 秒，`time.monotonic`（mach_absolute_time）與 `CLOCK_UPTIME_RAW` 只過了 4.2 秒，`CLOCK_MONOTONIC`／`_RAW` 過了 31 秒：實際暫停約 26.8 秒。
+  - 時鐘域：Go 的單調時鐘（G）睡眠時停止，C++ 的 `steady_clock`（M、C）繼續走。Match 的時鐘視窗在醒來後出現一次 offset 跳變約 26.73 秒（`jump=1`，跨睡眠的那個樣本 delay 約 26.7 秒）；Gateway 對兩個 Client 的回聲在跨睡眠的視窗各有 1 個 `negative_delay`。和事前的推論一致（未結事項的 heartbeat-sync 項）；protocol-v7 §2 的〔推論〕改成實測。
+  - runtime link 撐過睡眠：Gateway 的活性用 G，看不到這段時間，沒有逾時；Match 到結束都沒有斷線（最後是正常的 EOF）。
+  - Client 在醒來後約 1 秒斷線（`Gateway connection timed out`）：Client 用 C，看到約 27 秒沒有 Gateway 的封包，超過自己的逾時。兩位玩家因此 Leave，probe 以失敗結束。這是既有行為（筆電睡眠＝斷線），不是本批造成的；要不要在醒來後改成重連或延長逾時，是之後的功能題，記在未結事項。
+
 ## 未結事項
+
+- **筆電睡眠後 Client 會斷線**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍；之後要不要處理（醒來後重連、或用不含睡眠的時鐘判逾時）由你決定。
 
 - **`edge-input-passthrough` 的 xhigh note**（記錄）：
   - N3：佇列項目攜帶收包時刻與 GYOP 序號（回報 32 的 dwell 起點），字面上和 D105「單次呼叫的脈絡不得跨資料包保留」衝突。建議 `edge-contract` 把它歸類為「隨佇列項目攜帶的診斷狀態」，由你決定。

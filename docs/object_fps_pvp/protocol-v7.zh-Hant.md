@@ -86,7 +86,7 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 
 - SDL ticks 與牆鐘不得上 wire。
 - 跨時鐘域的時間戳只能被照抄回去（`ClockSample.origin_us`），或在四時間戳公式中和同域的值相減。其他時間一律用單一時鐘域內量的持續時間上 wire（µs、uint32、夾在 10 s）。接收端不拿對方的時間戳直接和自己的時鐘比，也不用固定偏移換算。
-- macOS 上 Go 的單調時鐘在系統睡眠時是否停止是〔推論〕；它影響解讀，不影響欄位定義，在 `heartbeat-sync` 的 L2 量測。
+- macOS 上系統睡眠時，Go 的單調時鐘（G）停止，Match 與 Client 的 `steady_clock`（M、C）繼續走（2026-10-17 實測，只記錄：睡了約 27 秒，Match 的時鐘視窗出現一次約 26.7 秒的 offset 跳變、`jump=1`；Gateway 對 Client 的回聲出現 `negative_delay`）。它影響解讀，不影響欄位定義。
 - Tick 與序號不是時鐘：Authority Tick、`view_tick_q16`（Tick×65536）、命令序號 (player, epoch, life, sequence)。
 
 ### dwell 只有一個定義
