@@ -1,6 +1,6 @@
-# edge-actions-passthrough 的 L2 事前宣告（第 3 版草稿）
+# edge-actions-passthrough 的 L2 事前宣告（第 3 版，2026-10-17 使用者核准，D115）
 
-- 狀態：**草稿，等你核准**（§14.1：核准前不看 A 的結果；核准後不放寬）。
+- 狀態：**定稿**（2026-10-17 使用者核准，D115；在使用者不用電腦的時段跑）。以下保留草稿的文字（§14.1：核准後不放寬）。
   - 第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 3、應修正 6、記錄 8，對應表在第 11 節。
   - 第 3 版：工具寫好並乾跑（82 種逐跑次情況、驅動檢查、5 個模擬 session 全部符合預期；真實的 B 語料 66 跑次判成 B 沒有任何停止；A 沒有跑過任何項目）。B 的 rapid 開發跑次 6 次（第 5 節）。工具目錄 `build/target/_build/test/logs/pvp-v71-edge-actions-l2-prep-20261017/`（`commands.txt`、`dryrun.md`、`prep-files.sha256` `c73ed715…`）。第 2 版到第 3 版的改動在第 12 節。
 - 依據：D94、D96、D107、D114；protocol-v7 §2a、§4、§9；README `edge-actions-passthrough` 列（「射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數」）。
