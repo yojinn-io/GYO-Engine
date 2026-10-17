@@ -476,6 +476,25 @@ TEST_CASE("PvP IPC gives no version hint once the Gateway sent a frame") {
     CHECK_FALSE(log.Shows("ipc hint", 0ms));
 }
 
+// Stopping the Match while a Gateway is connected ends that session through
+// the same log as any other end: its last clock window and the close reason
+// (no reset: the Match is going away). Without it a log cannot tell how its
+// last connection ended (an acceptance runner that stops the Match first).
+TEST_CASE("PvP IPC logs the close of a connected session when the Match stops") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    server.ipc.Stop();
+    CHECK(log.Shows("ipc closed reason=stopped"));
+    CHECK(log.Shows("clock sync"));
+    CHECK(log.Shows("final=1"));
+    CHECK_FALSE(log.Shows("ipc closed reason=eof", 0ms));
+    server.ipc.Stop(); // a second stop logs nothing more
+    const auto text = log.Text();
+    CHECK(text.find("ipc closed") == text.rfind("ipc closed"));
+}
+
 TEST_CASE("PvP IPC refuses an arena with fewer spawns than the room holds") {
     Arena small = IpcArena();
     small.spawns.resize(MaxPlayers - 1);

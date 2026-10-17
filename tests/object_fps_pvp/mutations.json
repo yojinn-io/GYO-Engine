@@ -67,6 +67,9 @@
         "gyo_object_fps_pvp_timing_probe"
       ],
       "ctest": "object_fps_pvp.ingress_cross"
+    },
+    "action_runner": {
+      "ctest": "object_fps_pvp.action_runner"
     }
   },
   "mutants": [
@@ -3879,6 +3882,36 @@
       "replace": "\tif l.actionStats == nil {\n\t\tl.actionStats = map[uint64]*intervalStats{}\n\t}\n\tif l.actionStats[playerID] == nil {\n\t\tl.actionStats[playerID] = &intervalStats{}\n\t}\n\tl.actionStats[playerID].record(now)\n",
       "check": "go",
       "expect": "statistics recreated after forget"
+    },
+    {
+      "id": "v71st-stop-skips-log",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "Stopping the Match ends a connected session without its log (last clock window, close reason)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            impl->LogEnd(\"stopped\");\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "log\\.Shows\\(\"ipc closed reason=stopped\"\\)"
+    },
+    {
+      "id": "v71st-runner-match-first",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "The rapid runner stops the Match before the Gateway",
+      "file": "build/acceptance/object_fps_pvp/run_action_short.py",
+      "find": "    if gateway is not None:\n        halt(gateway)\n",
+      "replace": "    if match is not None:\n        halt(match)\n    if gateway is not None:\n        halt(gateway)\n",
+      "check": "action_runner",
+      "expect": "Lists differ"
+    },
+    {
+      "id": "v71st-runner-no-close-wait",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "The rapid runner stops the Match right after the Gateway, before its log shows the session end",
+      "file": "build/acceptance/object_fps_pvp/run_action_short.py",
+      "find": "                if 'ipc closed reason=' in Path(match_log).read_text(errors='replace'):\n                    break\n",
+      "replace": "                break\n",
+      "check": "action_runner",
+      "expect": "Lists differ"
     }
   ]
 }

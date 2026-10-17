@@ -360,6 +360,10 @@
       - Match：`IpcHost::Stop()`（`IpcHost.cpp:721-730`）直接關 socket，繞過自稱「結束 session 的唯一路徑」的 `Close()`（`:395-400`），還開著的 session 不寫最後的 clock 視窗與「ipc closed」。
       - rapid runner：`run_action_short.py:260-268` 一次對所有行程送 SIGTERM（競態）；gameplay runner（`action_probe.py:590-591`）是先停 Gateway、等它結束再停 Match。
     - 提出的處理：Match 的 `Stop()` 經 `Close("stopped")` 結束 session（先寫失敗的 IPC 測試）；rapid runner 改成 GUI → Gateway → Match 的順序；宣告第 4 版只換 A 的 commit 與雜湊（門檻不變）、B 的 rapid 開發跑次與乾跑後換新目錄重跑。
+  - D117 的修正（2026-10-18）：
+    - Match：`IpcHost` 把 session 結束的記錄（最後的 clock 視窗與「ipc closed reason=…」）抽成 `LogEnd`，`Close()` 與 `Stop()` 共用；`Stop()` 在 IPC 執行緒上對還連著的 session 記 `reason=stopped`，不重設 Match（最多等 2 秒，IPC 執行緒已失效時記一行說明）。測試 `PvP IPC logs the close of a connected session when the Match stops` 先確認失敗（3 個檢查不成立）再修，修後 IPC 測試連跑 3 次通過。修正後的 Match 被先停時，I1 只有 `eof_before_final` 不成立（D110 的形狀）；修正前是兩個前提都判不出來。
+    - rapid runner：`stop_in_order()` 先停客戶端，再停 Gateway 並等它結束，等 Match 日誌出現 session 結束的行（上限 2 秒）才停 Match。測試用延遲 0.1 秒才出現 EOF 行的假 Match，驗證順序與等待。
+    - 突變新增 3 個（`v71st-*`：Stop 不記錄、runner 先停 Match、runner 不等那一行）；新增 check `action_runner`。連同兩個檔案上的既有突變 36／36 殺死；CTest 72／72、preset 外 4／4。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項

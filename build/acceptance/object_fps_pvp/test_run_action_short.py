@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 
 import run_action_short as runner
@@ -187,6 +188,46 @@ class RapidRecordTests(unittest.TestCase):
 
 class TimerBaselineIsNeverAVerdict(unittest.TestCase):
     """The empty-loop timer baseline is interpretation only: the analyzer may pass it through, never read it."""
+    def test_services_stop_after_the_clients_and_the_match_after_the_gateway_link_closed(self):
+        events = []
+
+        class Fake:
+            def __init__(self, name, on_terminate=None):
+                self.name, self.alive, self.on_terminate = name, True, on_terminate
+
+            def poll(self):
+                return None if self.alive else 0
+
+            def terminate(self):
+                events.append(self.name)
+                self.alive = False
+                if self.on_terminate:
+                    self.on_terminate()
+
+            def wait(self, timeout=None):
+                return 0
+
+            def kill(self):
+                self.alive = False
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'match.log'
+            log.write_text('[ObjectFPS/PvP Match] join player=1 accepted\n')
+            # The Match reads the Gateway's close a little after the Gateway exited.
+            def close_later():
+                events.append('eof')
+                log.write_text(log.read_text() + '[ObjectFPS/PvP Match] ipc closed reason=eof\n')
+            match = Fake('match')
+            gateway = Fake('gateway', lambda: threading.Timer(0.1, close_later).start())
+            runner.stop_in_order([match, gateway, Fake('create'), Fake('join')], gateway, match, log)
+            self.assertEqual(events, ['join', 'create', 'gateway', 'eof', 'match'])
+            # Without that line the Match is still stopped, after the bounded wait.
+            events.clear()
+            log.write_text('')
+            match, gateway = Fake('match'), Fake('gateway')
+            runner.stop_in_order([match, gateway], gateway, match, log, close_wait=0.05)
+            self.assertEqual(events, ['gateway', 'match'])
+
     def test_source_only_passes_the_timer_baseline_through(self):
         source = (Path(__file__).resolve().parent / 'run_action_short.py').read_text(encoding="utf-8")
         lines = [line.strip() for line in source.splitlines() if "timer" in line.lower()]

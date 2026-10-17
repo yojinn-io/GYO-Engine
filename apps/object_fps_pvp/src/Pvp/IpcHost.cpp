@@ -392,12 +392,18 @@ struct IpcHost::Impl {
         StartRead();
         Pump();
     }
-    // The single path that ends a session: log why, close, reset the Match,
-    // then accept the next connection once the reset completed.
-    void Close(const std::string& reason) {
-        if(phase!=Phase::Connected) return;
+    // The log every session end writes once: its last clock window and why
+    // it ended (Close, and Stop for a session still connected).
+    void LogEnd(const std::string& reason) {
         if(const auto window=session.clock.Roll(NowMicros(),true)) MatchEventLog::Line(ClockWindowLine(*window));
         MatchEventLog::Line("ipc closed reason="+reason);
+    }
+    // The single path that ends a session while the Match runs: log why,
+    // close, reset the Match, then accept the next connection once the reset
+    // completed.
+    void Close(const std::string& reason) {
+        if(phase!=Phase::Connected) return;
+        LogEnd(reason);
         // A Gateway of another version refuses Ready and closes without a
         // frame; a pv7 Gateway sends its version first (pv7 contract §1). An
         // idle Gateway of this version also sends nothing before it stops.
@@ -721,6 +727,20 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
 void IpcHost::Stop() {
     impl_->Detach();
     if(!impl_->role) return;
+    // A session still connected ends with the log every end writes, on the
+    // IPC thread that owns it; no reset (the Match is going away). Waited for
+    // a bounded time: an IPC thread that already failed runs nothing more.
+    auto ended=std::make_shared<std::promise<void>>();
+    auto done=ended->get_future();
+    asio::post(impl_->io,[impl=impl_.get(),ended] {
+        if(impl->phase==Impl::Phase::Connected) {
+            impl->LogEnd("stopped");
+            impl->phase=Impl::Phase::Idle;
+        }
+        ended->set_value();
+    });
+    if(done.wait_for(std::chrono::seconds(2))!=std::future_status::ready)
+        MatchEventLog::Line("ipc stop: the IPC thread did not end the session within 2 s");
     impl_->role->RequestStop();
     impl_->io.stop();
     impl_->role.reset();
