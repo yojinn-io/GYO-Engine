@@ -164,7 +164,7 @@ func TestEveryReportedCounterReachesTheNextReport(t *testing.T) {
 		}
 	}
 	l := &runtimeLink{drops: newDropLedger()}
-	l.countLocked(5, playerDropDiscardedOnLeaveActionsShots, 3)
+	l.countLocked(5, playerDropIpcQueueOverflowActionsPackets, 3)
 	l.countLocked(5, playerDropClearedOnCloseCommands, 2) // logged only
 	if r := l.drops.report(5, time.Now()); r == nil || len(r.Counts) != 1 || r.Counts[0].Total != 3 {
 		t.Fatalf("link counters: %v", r)

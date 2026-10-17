@@ -21,13 +21,13 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 2, Hp: 100, MagazineAmmo: 12}},
 	}}
 	s.runtimeMessage(e)
-	if len(s.link.actionWindows[7].requests) != 1 {
-		t.Fatal("respawn did not isolate movement from action retention")
+	if got := actionMessages(s.link.batch()); len(got) != 1 || len(got[0].Shots) != 1 {
+		t.Fatal("respawn did not isolate movement from the queued actions")
 	}
 	reload := &client.ShotRequest{ActionId: 2, ObservedAuthorityTick: 200, Kind: client.ActionKind_ACTION_RELOAD, LifeGeneration: 2}
 	future := &client.ShotRequest{ActionId: 3, ObservedAuthorityTick: 200, Kind: client.ActionKind_ACTION_RELOAD, LifeGeneration: 3}
 	deliverActions(t, s, p, endpoint, 3, &client.ActionBatch{Shots: []*client.ShotRequest{pending, reload, future}}, now)
-	if len(s.link.actionWindows[7].requests) != 3 {
+	if got := actionMessages(s.link.batch()); len(got) != 1 || len(got[0].Shots) != 3 {
 		t.Fatal("old/future life actions were discarded before authority")
 	}
 	// Movement of any life reaches the Match as it came, which judges it
@@ -54,46 +54,19 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{stale, accepted, invalid}}); err != nil {
 		t.Fatal(err)
 	}
+	// The cross-life ACK reaches the Match, which keeps the ledger (pv7 §2a).
 	deliverActions(t, s, p, endpoint, 7, &client.ActionBatch{AcknowledgedThrough: 3}, now)
-	if s.link.actionWindows[7].acknowledged != 3 {
-		t.Fatal("cross-life results could not close contiguous ACK")
-	}
-	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, RetiredThrough: 3}); err != nil {
-		t.Fatal(err)
-	}
-	if s.link.actionWindows[7].retired != 3 || len(s.link.actionWindows[7].requests) != 0 {
-		t.Fatal("cross-life ledger failed to retire")
+	if got := actionMessages(s.link.batch()); len(got) != 1 || got[0].AcknowledgedThrough != 3 {
+		t.Fatal("the cross-life ACK did not reach the Match")
 	}
 }
 
-func TestV5ActionConflictsAreAtomicAcrossLifeAndKind(t *testing.T) {
-	for _, edit := range []func(*runtime.ShotRequest){
-		func(s *runtime.ShotRequest) { s.LifeGeneration = 2 },
-		func(s *runtime.ShotRequest) { s.Kind = runtime.ActionKind_ACTION_RELOAD; s.Yaw = nil; s.Pitch = nil },
-	} {
-		w := newActionWindow()
-		original := shot(1)
-		w.merge(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{original}})
-		w.mergeResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}})
-		conflict := proto.Clone(original).(*runtime.ShotRequest)
-		edit(conflict)
-		if err := w.validate(&runtime.ActionBatch{PlayerId: 7, AcknowledgedThrough: 1, Shots: []*runtime.ShotRequest{shot(2), conflict}}); err == nil {
-			t.Fatal("changed kind/life admitted with ACK")
-		}
-		if w.acknowledged != 0 || len(w.requests) != 1 {
-			t.Fatal("conflicting batch mutated ledger")
+func actionMessages(batch []*runtime.RuntimeEnvelope) []*runtime.ActionBatch {
+	var out []*runtime.ActionBatch
+	for _, e := range batch {
+		if in := e.GetActions(); in != nil {
+			out = append(out, in)
 		}
 	}
-	w := newActionWindow()
-	w.merge(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(1)}})
-	for _, edit := range []func(*runtime.ShotDecision){
-		func(d *runtime.ShotDecision) { d.LifeGeneration++ },
-		func(d *runtime.ShotDecision) { d.Kind = runtime.ActionKind_ACTION_RELOAD },
-	} {
-		bad := decision(1)
-		edit(bad)
-		if err := w.validateResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{bad}}); err == nil {
-			t.Fatal("result identity disagreed with request")
-		}
-	}
+	return out
 }

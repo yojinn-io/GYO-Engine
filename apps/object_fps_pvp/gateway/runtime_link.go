@@ -22,14 +22,13 @@ import (
 var errRuntimeDisconnected = errors.New("runtime disconnected")
 
 type runtimeLink struct {
-	actionWindows map[uint64]*actionWindow
-	conn          *framing.TCPConnection
-	mu            sync.Mutex
-	wake          chan struct{}
-	done          chan struct{}
-	closed        bool
-	once          sync.Once
-	maxWriteAge   time.Duration
+	conn        *framing.TCPConnection
+	mu          sync.Mutex
+	wake        chan struct{}
+	done        chan struct{}
+	closed      bool
+	once        sync.Once
+	maxWriteAge time.Duration
 	// pv7 §2a: controls and input windows in arrival order, so a Leave never
 	// overtakes the player's queued inputs. The Match decides what is
 	// resolved, stale, copied or conflicting (D49); the link forwards each
@@ -80,7 +79,7 @@ var errLinkClosing = errors.New("runtime link closing")
 // Evicted or Error arrived for this long (pv7 §2). Tests shorten it.
 var runtimeLiveness = 5 * time.Second
 
-// writerIdleWait is how long the writer sleeps with no action deadline; tests
+// writerIdleWait is how long the writer sleeps with nothing to write; tests
 // lengthen it to count the passes something else caused.
 var writerIdleWait = actionSendInterval
 
@@ -170,6 +169,7 @@ func unknownRuntimeMessage(message *runtime.RuntimeEnvelope) error {
 type queuedMessage struct {
 	message  *runtime.RuntimeEnvelope
 	input    bool
+	actions  bool // a Client's action batch, as it came
 	player   uint64
 	commands uint64
 	event    dropEvent
@@ -204,12 +204,11 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 	return nil
 }
 
-// forget drops a player's action window. Its queued input windows stay: they
-// go to the Match in arrival order, which counts what comes after the player
-// left (pv7 §2a). A Leave does it before queuing the control; an eviction
-// sends no Leave (the Match already removed the player), so the Gateway calls
-// it. The action requests and acknowledgement no write pass took are counted
-// into the player's ingress counters, which outlive it.
+// forget drops a player's link statistics. Its queued input windows and
+// action batches stay: they go to the Match in arrival order, which counts
+// what comes after the player left (pv7 §2a). A Leave does it before queuing
+// the control; an eviction sends no Leave (the Match already removed the
+// player), so the Gateway calls it.
 func (l *runtimeLink) forget(player uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -217,12 +216,6 @@ func (l *runtimeLink) forget(player uint64) {
 }
 
 func (l *runtimeLink) forgetLocked(player uint64) {
-	if w := l.actionWindows[player]; w != nil {
-		shots, acks := w.untaken()
-		l.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)
-		l.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)
-	}
-	delete(l.actionWindows, player)
 	delete(l.actionStats, player)
 }
 
@@ -290,9 +283,13 @@ func (l *runtimeLink) queueDataLocked(q queuedMessage) {
 	}
 	if l.queuedData[q.player] >= maxQueuedInputs {
 		for i, old := range l.queue {
-			if old.input && old.player == q.player {
-				l.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)
-				l.countLocked(old.player, playerDropIpcQueueOverflowInputCommands, old.commands)
+			if (old.input || old.actions) && old.player == q.player {
+				if old.input {
+					l.countEventLocked(old.player, playerDropIpcQueueOverflowInputPackets, 1, old.event)
+					l.countLocked(old.player, playerDropIpcQueueOverflowInputCommands, old.commands)
+				} else {
+					l.countEventLocked(old.player, playerDropIpcQueueOverflowActionsPackets, 1, old.event)
+				}
 				l.queue = slices.Delete(l.queue, i, i+1)
 				l.queuedData[q.player]--
 				break
@@ -313,8 +310,9 @@ func (l *runtimeLink) notify() {
 type inputLane uint8
 
 const (
-	noLane   inputLane = iota // controls and action batches
-	mainLane                  // input windows
+	noLane      inputLane = iota // controls
+	mainLane                     // input windows
+	actionsLane                  // action batches
 )
 
 // linkWrite is one message taken for the writer and what its write accounts
@@ -324,13 +322,9 @@ type linkWrite struct {
 	lane     inputLane
 	player   uint64
 	commands uint64
-	// An ActionBatch: the shots and the acknowledgement no earlier pass took.
-	shots, acks uint64
 }
 
-// take empties the queue for one write pass, in arrival order, then the due
-// action batches. The action requests and the acknowledgement a batch carries
-// are marked taken in the same critical section that takes them.
+// take empties the queue for one write pass, in arrival order.
 func (l *runtimeLink) take() []linkWrite {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -339,6 +333,8 @@ func (l *runtimeLink) take() []linkWrite {
 	for _, q := range l.queue {
 		if q.input {
 			writes = append(writes, linkWrite{message: q.message, lane: mainLane, player: q.player, commands: q.commands})
+		} else if q.actions {
+			writes = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})
 		} else {
 			writes = append(writes, linkWrite{message: q.message})
 		}
@@ -346,9 +342,6 @@ func (l *runtimeLink) take() []linkWrite {
 	l.queue = nil
 	l.queuedControls = 0
 	clear(l.queuedData)
-	for _, message := range l.actionBatch(time.Now()) {
-		writes = append(writes, l.takeActionsLocked(message))
-	}
 	return writes
 }
 
@@ -357,10 +350,9 @@ func (l *runtimeLink) wroteLocked(w linkWrite) {
 	switch w.lane {
 	case mainLane:
 		l.countLocked(w.player, playerFwdLinkWrittenMainCommands, w.commands)
+	case actionsLane:
+		l.countLocked(w.player, playerFwdLinkWrittenActionsPackets, 1)
 	}
-	// The shot requests this pass first took (D59); a resent one was counted
-	// by the pass that first took it.
-	l.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)
 }
 
 // write sends one pass in order. A failed Marshal or Write fails the link;
@@ -393,11 +385,12 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 		if err != nil {
 			l.mu.Lock()
 			for _, abandoned := range writes[i:] {
-				if abandoned.lane != noLane {
+				switch abandoned.lane {
+				case mainLane:
 					l.countLocked(abandoned.player, playerDropAbandonedOnCloseCommands, abandoned.commands)
+				case actionsLane:
+					l.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsPackets, 1)
 				}
-				l.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsShots, abandoned.shots)
-				l.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsAcks, abandoned.acks)
 			}
 			l.mu.Unlock()
 			return err
@@ -413,13 +406,13 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 	exited := l.writerExitedLocked()
 	l.mu.Unlock()
 	stopped := func() { l.writerOnce.Do(func() { close(exited) }) }
+	idle := writerIdleWait // read once: the writer may outlive a test's override
 	go func() {
 		defer stopped()
-		// Inputs, controls, actions and results wake the loop (l.wake). Action
-		// batches keep a strict ActionSendRate interval from each completed
-		// write; this timer wakes the loop at the earliest such deadline, so a
-		// resend neither waits for an unrelated wake nor rides every wake.
-		timer := time.NewTimer(writerIdleWait)
+		// Inputs, controls, actions and results wake the loop (l.wake); the
+		// link holds nothing for later (pv7 §2a), so the timer only bounds an
+		// idle wait.
+		timer := time.NewTimer(idle)
 		defer timer.Stop()
 		for {
 			select {
@@ -449,13 +442,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				fail(err)
 				return
 			}
-			wait := writerIdleWait
-			l.mu.Lock()
-			if deadline, ok := l.nextActionDeadline(); ok {
-				wait = max(time.Until(deadline), 0)
-			}
-			l.mu.Unlock()
-			timer.Reset(wait)
+			timer.Reset(idle)
 		}
 	}()
 	// Liveness counts from run, not from when the reader goroutine starts.
@@ -672,19 +659,16 @@ func (l *runtimeLink) shutdown(graceful bool) {
 	close(l.done)
 	l.diagnostic = nil
 	for _, q := range l.queue {
-		if q.input {
+		switch {
+		case q.input:
 			l.countLocked(q.player, playerDropClearedOnCloseCommands, q.commands)
+		case q.actions:
+			l.countLocked(q.player, playerDropClearedOnCloseActionsPackets, 1)
 		}
 	}
 	l.queue = nil
 	l.queuedControls = 0
 	clear(l.queuedData)
-	for id, w := range l.actionWindows {
-		shots, acks := w.untaken()
-		l.countLocked(id, playerDropClearedOnCloseActionsShots, shots)
-		l.countLocked(id, playerDropClearedOnCloseActionsAcks, acks)
-	}
-	clear(l.actionWindows)
 	clear(l.actionStats)
 	// The link no longer merges windows (pv7 §2a); the key stays, always 0.
 	log.Printf("runtime transport coalesced_input_windows=0 max_write_age_us=%d", l.maxWriteAge.Microseconds())

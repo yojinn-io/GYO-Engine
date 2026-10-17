@@ -49,7 +49,6 @@ func TestSendStatisticsLineKeepsEveryKey(t *testing.T) {
 
 func TestSendStatisticsRecordCompletedWritesPerPlayerAndChannel(t *testing.T) {
 	s, p, _, now := actionFixture(t)
-	s.link.actionWindows = map[uint64]*actionWindow{7: newActionWindow()}
 	for i := range 3 {
 		at := now.Add(time.Duration(i) * 33 * time.Millisecond)
 		s.actionWritten(7, at)

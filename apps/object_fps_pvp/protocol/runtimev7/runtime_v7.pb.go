@@ -294,9 +294,9 @@ func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
 // once, in gateway/ingress_statistics.go, and checked against
 // tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
 // 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
-// (16, 17, 20-26, 43, 44) exist only in pv7-line's intermediate commits: the
-// edge batches delete them with their exits, and they become reserved (16, 20,
-// 22-24, 43 and 44 already are). A reserved value is never reused.
+// (16, 17, 20-26, 43, 44) existed only in pv7-line's intermediate commits; the
+// edge batches deleted them with their exits and they are reserved. A
+// reserved value is never reused.
 type DropReason int32
 
 const (
@@ -316,12 +316,8 @@ const (
 	DropReason_DROP_MALFORMED_ACTIONS_PACKETS          DropReason = 13
 	DropReason_DROP_INACTIVE_INPUT_PACKETS             DropReason = 14
 	DropReason_DROP_INACTIVE_ACTIONS_PACKETS           DropReason = 15
-	DropReason_DROP_LINK_REJECTED_ACTIONS_PACKETS      DropReason = 17 // transitional (A5)
 	DropReason_DROP_UNKNOWN_KIND_PACKETS               DropReason = 18
 	DropReason_DROP_ADMISSION_UNKNOWN_PACKETS          DropReason = 19
-	DropReason_DROP_LINK_REJECTED_ACTIONS_SHOTS        DropReason = 21 // transitional (A5)
-	DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS   DropReason = 25 // transitional
-	DropReason_DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS    DropReason = 26 // transitional
 	DropReason_DROP_WRITE_FAILED_SNAPSHOT_PACKETS      DropReason = 27
 	DropReason_DROP_WRITE_FAILED_RESULTS_PACKETS       DropReason = 28
 	DropReason_DROP_WRITE_FAILED_CONTROL_PACKETS       DropReason = 29
@@ -355,12 +351,8 @@ var (
 		13: "DROP_MALFORMED_ACTIONS_PACKETS",
 		14: "DROP_INACTIVE_INPUT_PACKETS",
 		15: "DROP_INACTIVE_ACTIONS_PACKETS",
-		17: "DROP_LINK_REJECTED_ACTIONS_PACKETS",
 		18: "DROP_UNKNOWN_KIND_PACKETS",
 		19: "DROP_ADMISSION_UNKNOWN_PACKETS",
-		21: "DROP_LINK_REJECTED_ACTIONS_SHOTS",
-		25: "DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS",
-		26: "DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS",
 		27: "DROP_WRITE_FAILED_SNAPSHOT_PACKETS",
 		28: "DROP_WRITE_FAILED_RESULTS_PACKETS",
 		29: "DROP_WRITE_FAILED_CONTROL_PACKETS",
@@ -391,12 +383,8 @@ var (
 		"DROP_MALFORMED_ACTIONS_PACKETS":          13,
 		"DROP_INACTIVE_INPUT_PACKETS":             14,
 		"DROP_INACTIVE_ACTIONS_PACKETS":           15,
-		"DROP_LINK_REJECTED_ACTIONS_PACKETS":      17,
 		"DROP_UNKNOWN_KIND_PACKETS":               18,
 		"DROP_ADMISSION_UNKNOWN_PACKETS":          19,
-		"DROP_LINK_REJECTED_ACTIONS_SHOTS":        21,
-		"DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS":   25,
-		"DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS":    26,
 		"DROP_WRITE_FAILED_SNAPSHOT_PACKETS":      27,
 		"DROP_WRITE_FAILED_RESULTS_PACKETS":       28,
 		"DROP_WRITE_FAILED_CONTROL_PACKETS":       29,
@@ -2622,8 +2610,7 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02*\x9c\n" +
-	"\n" +
+	"HIT_PLAYER\x10\x02*\x91\t\n" +
 	"\n" +
 	"DropReason\x12\x1b\n" +
 	"\x17DROP_REASON_UNSPECIFIED\x10\x00\x12#\n" +
@@ -2642,13 +2629,9 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x1cDROP_MALFORMED_INPUT_PACKETS\x10\f\x12\"\n" +
 	"\x1eDROP_MALFORMED_ACTIONS_PACKETS\x10\r\x12\x1f\n" +
 	"\x1bDROP_INACTIVE_INPUT_PACKETS\x10\x0e\x12!\n" +
-	"\x1dDROP_INACTIVE_ACTIONS_PACKETS\x10\x0f\x12&\n" +
-	"\"DROP_LINK_REJECTED_ACTIONS_PACKETS\x10\x11\x12\x1d\n" +
+	"\x1dDROP_INACTIVE_ACTIONS_PACKETS\x10\x0f\x12\x1d\n" +
 	"\x19DROP_UNKNOWN_KIND_PACKETS\x10\x12\x12\"\n" +
-	"\x1eDROP_ADMISSION_UNKNOWN_PACKETS\x10\x13\x12$\n" +
-	" DROP_LINK_REJECTED_ACTIONS_SHOTS\x10\x15\x12)\n" +
-	"%DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS\x10\x19\x12(\n" +
-	"$DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS\x10\x1a\x12&\n" +
+	"\x1eDROP_ADMISSION_UNKNOWN_PACKETS\x10\x13\x12&\n" +
 	"\"DROP_WRITE_FAILED_SNAPSHOT_PACKETS\x10\x1b\x12%\n" +
 	"!DROP_WRITE_FAILED_RESULTS_PACKETS\x10\x1c\x12%\n" +
 	"!DROP_WRITE_FAILED_CONTROL_PACKETS\x10\x1d\x12+\n" +
@@ -2660,7 +2643,7 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x1aDROP_UNDECODABLE_DATAGRAMS\x10(\x12 \n" +
 	"\x1cDROP_OTHER_VERSION_DATAGRAMS\x10)\x12\"\n" +
 	"\x1eDROP_UNKNOWN_SESSION_DATAGRAMS\x10*\x12\x1c\n" +
-	"\x18DROP_COALESCED_SNAPSHOTS\x10-\"\x04\b\x10\x10\x10\"\x04\b\x14\x10\x14\"\x04\b\x16\x10\x18\"\x04\b+\x10+\"\x04\b,\x10,B-Z+gyo.local/object_fps_pvp/protocol/runtimev7b\x06proto3"
+	"\x18DROP_COALESCED_SNAPSHOTS\x10-\"\x04\b\x10\x10\x10\"\x04\b\x11\x10\x11\"\x04\b\x14\x10\x14\"\x04\b\x15\x10\x15\"\x04\b\x16\x10\x18\"\x04\b\x19\x10\x19\"\x04\b\x1a\x10\x1a\"\x04\b+\x10+\"\x04\b,\x10,B-Z+gyo.local/object_fps_pvp/protocol/runtimev7b\x06proto3"
 
 var (
 	file_runtime_v7_proto_rawDescOnce sync.Once

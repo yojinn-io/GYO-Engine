@@ -142,8 +142,7 @@ func TestUnacknowledgedDecisionsArriveDespiteEveryOtherDatagramLost(t *testing.T
 
 // pv7 §9: the datagram with the last retirement is lost. The Client's next
 // ACK-only batch (its ACK is ahead of the retirement it knows) reaches the
-// Match through the link although it acknowledges no more than the
-// retirement; the Match answers it with the retirement again, and the Client
+// Match through the link's FIFO like any other batch (pv7 §2a); the Match answers it with the retirement again, and the Client
 // has it within two intervals of the loss.
 func TestALostRetirementReachesTheClientWithinTwoIntervals(t *testing.T) {
 	r := newResultLoop(t)
@@ -162,12 +161,7 @@ func TestALostRetirementReachesTheClientWithinTwoIntervals(t *testing.T) {
 			r.clientBatch(1)
 		}
 		// The link's pass: what it writes reaches the Match.
-		r.s.link.mu.Lock()
-		batches := r.s.link.actionBatch(r.now)
-		r.s.link.mu.Unlock()
-		for _, e := range batches {
-			in := e.GetActions()
-			r.s.link.actionWritten(7, r.now)
+		for _, in := range actionMessages(r.s.link.batch()) {
 			if len(in.Shots) == 0 && in.AcknowledgedThrough > 0 && in.AcknowledgedThrough <= retired {
 				m.asked = true // IpcHost: an ACK-only batch behind the retirement
 			}

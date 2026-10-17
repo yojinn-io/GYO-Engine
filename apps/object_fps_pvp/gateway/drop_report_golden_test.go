@@ -88,7 +88,8 @@ func TestDropReasonsMatchTheGoldenAndTheKeys(t *testing.T) {
 	}
 	// Logged only, never reported (pv7 §4).
 	for _, counter := range []playerIngressCounter{playerDropClearedOnCloseCommands, playerDropAbandonedOnCloseCommands,
-		playerDropClearedOnCloseActionsShots, playerDropClearedOnCloseActionsAcks, playerDropAbandonedOnCloseActionsShots, playerDropAbandonedOnCloseActionsAcks} {
+		playerDropClearedOnCloseActionsShots, playerDropClearedOnCloseActionsAcks, playerDropAbandonedOnCloseActionsShots, playerDropAbandonedOnCloseActionsAcks,
+		playerDropClearedOnCloseActionsPackets, playerDropAbandonedOnCloseActionsPackets} {
 		if playerDropReason[counter] != 0 {
 			t.Fatalf("%s is reported", ingressKeyName(playerIngressKeys[counter]))
 		}

@@ -105,13 +105,6 @@
     "exit": true
   },
   {
-    "value": 17,
-    "name": "DROP_LINK_REJECTED_ACTIONS_PACKETS",
-    "key": "drop_link_rejected_actions_packets",
-    "scope": "player",
-    "exit": true
-  },
-  {
     "value": 18,
     "name": "DROP_UNKNOWN_KIND_PACKETS",
     "key": "drop_unknown_kind_packets",
@@ -122,27 +115,6 @@
     "value": 19,
     "name": "DROP_ADMISSION_UNKNOWN_PACKETS",
     "key": "drop_admission_unknown_packets",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 21,
-    "name": "DROP_LINK_REJECTED_ACTIONS_SHOTS",
-    "key": "drop_link_rejected_actions_shots",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 25,
-    "name": "DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS",
-    "key": "drop_discarded_on_leave_actions_shots",
-    "scope": "player",
-    "exit": true
-  },
-  {
-    "value": 26,
-    "name": "DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS",
-    "key": "drop_discarded_on_leave_actions_acks",
     "scope": "player",
     "exit": true
   },
@@ -193,7 +165,7 @@
     "name": "DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS",
     "key": "drop_ipc_queue_overflow_actions_packets",
     "scope": "player",
-    "exit": false
+    "exit": true
   },
   {
     "value": 34,

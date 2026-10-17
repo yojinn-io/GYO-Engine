@@ -289,22 +289,19 @@ func outcomeCases() []outcomeCase {
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 2, shotsMessage(1)) })},
 		{name: "malformed/actions", player: one(playerDropMalformedActionsPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.raw(adapter.Actions, 2, garbage) })},
-		{name: "link_rejected/actions_unknown_ack", // A3 is gone (pv7 §2a); the link's window (A5) refuses it
-			player: map[playerIngressCounter]uint64{playerDropLinkRejectedActionsPackets: 1, playerDropLinkRejectedActionsShots: 2},
+		// D-11: a batch that fails to decode commits no sequence, so an
+		// earlier one still arrives.
+		{name: "handed/actions_after_malformed", player: one(playerFwdHandedActionsPackets),
+			setup:  func(t *testing.T, f *outcomeFixture) { f.send(t, f.raw(adapter.Actions, 4, garbage)) },
+			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 3, shotsMessage(1)) })},
+		// Since pv7 §2a the link has no action window (A5 is gone): an ACK of
+		// what was never decided goes to the Match, which judges it.
+		{name: "handed/actions_unknown_ack", player: one(playerFwdHandedActionsPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte {
 				b := shotsMessage(1, 2)
 				b.AcknowledgedThrough = 5
 				return f.datagram(adapter.Actions, 2, b)
 			})},
-		{name: "link_rejected/actions", // A5: the link's action windows are full
-			setup: func(_ *testing.T, f *outcomeFixture) {
-				f.s.link.actionWindows = map[uint64]*actionWindow{}
-				for player := uint64(100); player < 100+adapter.MaxPlayers; player++ {
-					f.s.link.actionWindows[player] = newActionWindow()
-				}
-			},
-			player: map[playerIngressCounter]uint64{playerDropLinkRejectedActionsPackets: 1, playerDropLinkRejectedActionsShots: 3},
-			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 2, shotsMessage(1, 2, 3)) })},
 		// Input.
 		{name: "main/input", player: one(playerFwdMainInputPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Input, 2, inputMessage(1, moves(1, 2))) })},

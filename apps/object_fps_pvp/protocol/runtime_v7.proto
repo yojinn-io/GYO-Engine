@@ -258,9 +258,9 @@ message DropSample {
 // once, in gateway/ingress_statistics.go, and checked against
 // tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
 // 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
-// (16, 17, 20-26, 43, 44) exist only in pv7-line's intermediate commits: the
-// edge batches delete them with their exits, and they become reserved (16, 20,
-// 22-24, 43 and 44 already are). A reserved value is never reused.
+// (16, 17, 20-26, 43, 44) existed only in pv7-line's intermediate commits; the
+// edge batches deleted them with their exits and they are reserved. A
+// reserved value is never reused.
 enum DropReason {
   DROP_REASON_UNSPECIFIED = 0;
   DROP_RATE_LIMITED_HELLO_PACKETS = 1;
@@ -279,14 +279,13 @@ enum DropReason {
   DROP_INACTIVE_INPUT_PACKETS = 14;
   DROP_INACTIVE_ACTIONS_PACKETS = 15;
   reserved 16;                                // edge-results-passthrough: A3
-  DROP_LINK_REJECTED_ACTIONS_PACKETS = 17;    // transitional (A5)
+  reserved 17;                                // edge-actions-passthrough: A5
   DROP_UNKNOWN_KIND_PACKETS = 18;
   DROP_ADMISSION_UNKNOWN_PACKETS = 19;
   reserved 20;                                // edge-results-passthrough: A3
-  DROP_LINK_REJECTED_ACTIONS_SHOTS = 21;      // transitional (A5)
+  reserved 21;                                // edge-actions-passthrough: A5
   reserved 22 to 24;                          // edge-input-passthrough: trim, rejected lane, Leave discard
-  DROP_DISCARDED_ON_LEAVE_ACTIONS_SHOTS = 25; // transitional
-  DROP_DISCARDED_ON_LEAVE_ACTIONS_ACKS = 26;  // transitional
+  reserved 25, 26;                            // edge-actions-passthrough: Leave discard of actions
   DROP_WRITE_FAILED_SNAPSHOT_PACKETS = 27;
   DROP_WRITE_FAILED_RESULTS_PACKETS = 28;
   DROP_WRITE_FAILED_CONTROL_PACKETS = 29;

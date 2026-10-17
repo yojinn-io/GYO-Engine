@@ -131,7 +131,8 @@ func TestIngressStatisticsLinesEqualTheGoldenWindows(t *testing.T) {
 		if settled := sumIngress(p[:], playerFwdLinkWrittenMainCommands, playerDropAbandonedOnCloseCommands); settled != handed {
 			t.Fatalf("window %d: link settled %d of %d handed commands", i, settled, handed)
 		}
-		// D59: the link's shot conservation.
+		// D59: the link's shot conservation (the golden windows predate pv7
+		// §2a, whose action-packet keys are appended after them).
 		if settled := p[playerFwdLinkWrittenActionsShots] + p[playerDropDiscardedOnLeaveActionsShots] +
 			p[playerDropClearedOnCloseActionsShots] + p[playerDropAbandonedOnCloseActionsShots]; settled != p[playerFwdHandedActionsShots] {
 			t.Fatalf("window %d: link settled %d of %d handed shots", i, settled, p[playerFwdHandedActionsShots])

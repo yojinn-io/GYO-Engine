@@ -262,7 +262,8 @@ const (
 	// DecodeInput). Both still reach the Match on the rejected lane.
 	playerFwdRoutedLinkEpochMismatchInputs
 	playerFwdRoutedMalformedInputs
-	// Appended (D56): what the runtime link's action window held for the Match
+	// Appended (D56; always 0 since edge-actions-passthrough, which removed
+	// the window): what the runtime link's action window held for the Match
 	// but never wrote, by exit. A shot request counts when no write pass ever
 	// took it (a pass that took it writes it, or counts it abandoned); an ACK
 	// counts once per pending acknowledgement cursor (advances merged before a
@@ -296,6 +297,14 @@ const (
 	// Appended (pv7 §2a, edge-results-passthrough): results frames replaced in
 	// the player's single slot before their release (reported, 34).
 	playerDropResultsOverRatePackets
+	// Appended (pv7 §2a, edge-actions-passthrough): each Client action batch
+	// goes to the Match as one IPC message. The handed packets
+	// (fwd_handed_actions_packets) equal the written ones plus the three
+	// exits after them; the D56/D59 shot and ACK keys above stay, always 0.
+	playerFwdLinkWrittenActionsPackets
+	playerDropIpcQueueOverflowActionsPackets
+	playerDropClearedOnCloseActionsPackets
+	playerDropAbandonedOnCloseActionsPackets
 	playerIngressCounterCount
 )
 
@@ -365,6 +374,10 @@ var playerIngressKeys = [playerIngressCounterCount]ingressKey{
 	playerDropIpcQueueOverflowInputPackets:   {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitPackets},
 	playerDropIpcQueueOverflowInputCommands:  {ingressDropped, reasonIpcQueueOverflow, ingressInput, unitCommands},
 	playerDropResultsOverRatePackets:         {ingressDropped, reasonResultsOverRate, ingressAnyKind, unitPackets},
+	playerFwdLinkWrittenActionsPackets:       {ingressForwarded, reasonLinkWritten, ingressActions, unitPackets},
+	playerDropIpcQueueOverflowActionsPackets: {ingressDropped, reasonIpcQueueOverflow, ingressActions, unitPackets},
+	playerDropClearedOnCloseActionsPackets:   {ingressDropped, reasonClearedOnClose, ingressActions, unitPackets},
+	playerDropAbandonedOnCloseActionsPackets: {ingressDropped, reasonAbandonedOnClose, ingressActions, unitPackets},
 }
 
 type playerIngressCounts [playerIngressCounterCount]uint64

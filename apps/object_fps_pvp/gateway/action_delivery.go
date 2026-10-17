@@ -3,7 +3,6 @@ package gateway
 import (
 	"errors"
 	"net/netip"
-	"sort"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -15,268 +14,26 @@ import (
 
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate
 
-// The runtime link's bounded immutable action ledger (until
-// edge-actions-passthrough). Movement acknowledgements and snapshot
-// replacement never touch this state.
-type actionWindow struct {
-	requests                      map[uint64]*runtime.ShotRequest
-	decisions                     map[uint64]*runtime.ShotDecision
-	retired, acknowledged, cursor uint64
-	nextSend                      time.Time
-	// An ACK-only batch arrived since the last pass: the next pass writes an
-	// ACK-only batch even if the ACK is not ahead of the retirement (pv7 §2a).
-	asked bool
-	// D56: the requests a write pass took at
-	// least once, and the highest acknowledgement a pass took. What no pass
-	// took is what the link drops unwritten on a Leave or a close.
-	taken    map[uint64]bool
-	ackTaken uint64
-}
-
-func newActionWindow() *actionWindow {
-	return &actionWindow{requests: map[uint64]*runtime.ShotRequest{}, decisions: map[uint64]*runtime.ShotDecision{}}
-}
-func (w *actionWindow) validate(in *runtime.ActionBatch) error {
-	if in == nil || in.PlayerId == 0 || len(in.Shots) > adapter.MaxActionBatch {
-		return adapter.ErrActions
-	}
-	if in.AcknowledgedThrough > w.acknowledged {
-		if in.AcknowledgedThrough-w.retired > adapter.MaxActions {
-			return adapter.ErrActions
-		}
-		for id := w.retired; id < in.AcknowledgedThrough; {
-			id++
-			if w.decisions[id] == nil {
-				return adapter.ErrActions
-			}
-		}
-	}
-	seen := map[uint64]*runtime.ShotRequest{}
-	additional := 0
-	for _, shot := range in.Shots {
-		if !adapter.ValidShot(shot) {
-			return adapter.ErrActions
-		}
-		if prior := seen[shot.ActionId]; prior != nil {
-			if !adapter.EqualShot(prior, shot) {
-				return adapter.ErrActions
-			}
-			continue
-		}
-		seen[shot.ActionId] = shot
-		if shot.ActionId <= w.retired {
-			continue
-		}
-		if shot.ActionId-w.retired > adapter.MaxActions {
-			return adapter.ErrActions
-		}
-		if old := w.requests[shot.ActionId]; old != nil {
-			if !adapter.EqualShot(old, shot) {
-				return adapter.ErrActions
-			}
-		} else {
-			additional++
-		}
-	}
-	if len(w.requests)+additional > adapter.MaxActions {
-		return adapter.ErrActions
-	}
-	return nil
-}
-func (w *actionWindow) merge(in *runtime.ActionBatch) (added uint64) {
-	// added: the requests the window holds for the first time; a copy, a
-	// request it holds and a retired id add none.
-	for _, shot := range in.Shots {
-		if shot.ActionId > w.retired && w.requests[shot.ActionId] == nil {
-			w.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)
-			added++
-		}
-	}
-	w.acknowledged = max(w.acknowledged, in.AcknowledgedThrough)
-	return added
-}
-func (w *actionWindow) validateResults(in *runtime.ActionResults) error {
-	if in.RetiredThrough > w.acknowledged {
-		return adapter.ErrActions
-	}
-	for _, d := range in.Decisions {
-		if d.ActionId <= w.retired {
-			continue
-		}
-		request := w.requests[d.ActionId]
-		if request == nil || d.ActionId-w.retired > adapter.MaxActions ||
-			d.Kind != request.Kind || d.LifeGeneration != request.LifeGeneration {
-			return adapter.ErrActions
-		}
-		if old := w.decisions[d.ActionId]; old != nil && !adapter.EqualDecision(old, d) {
-			return adapter.ErrActions
-		}
-	}
-	return nil
-}
-func (w *actionWindow) mergeResults(in *runtime.ActionResults) {
-	w.retired = max(w.retired, in.RetiredThrough)
-	for _, d := range in.Decisions {
-		if d.ActionId > w.retired {
-			w.decisions[d.ActionId] = proto.Clone(d).(*runtime.ShotDecision)
-		}
-	}
-	for id := range w.requests {
-		if id <= w.retired {
-			delete(w.requests, id)
-			delete(w.decisions, id)
-			delete(w.taken, id)
-		}
-	}
-}
-
-// takeActionsLocked marks what a write pass takes in one ActionBatch of the
-// link and returns the write: the shots no earlier pass took, and the
-// acknowledgement if no earlier pass took it and the Match has not retired
-// it. The pass then writes them, or counts them abandoned.
-func (l *runtimeLink) takeActionsLocked(message *runtime.RuntimeEnvelope) linkWrite {
-	in := message.GetActions()
-	write := linkWrite{message: message, player: in.GetPlayerId()}
-	w := l.actionWindows[write.player]
-	if w == nil {
-		return write
-	}
-	if w.taken == nil {
-		w.taken = map[uint64]bool{}
-	}
-	for _, shot := range in.Shots {
-		if !w.taken[shot.ActionId] {
-			w.taken[shot.ActionId] = true
-			write.shots++
-		}
-	}
-	if in.AcknowledgedThrough > max(w.retired, w.ackTaken) {
-		w.ackTaken = in.AcknowledgedThrough
-		write.acks = 1
-	}
-	return write
-}
-
-// untaken is what the link's window holds that no write pass took: the
-// requests, and 1 for a pending acknowledgement. Called with the link's
-// mutex held, before the window is dropped.
-func (w *actionWindow) untaken() (shots, acks uint64) {
-	for id := range w.requests {
-		if !w.taken[id] {
-			shots++
-		}
-	}
-	if w.acknowledged > max(w.retired, w.ackTaken) {
-		acks = 1
-	}
-	return shots, acks
-}
-func circularIDs(ids []uint64, cursor uint64) []uint64 {
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	if len(ids) == 0 {
-		return ids
-	}
-	first := sort.Search(len(ids), func(i int) bool { return ids[i] > cursor })
-	ordered := append(append(make([]uint64, 0, len(ids)), ids[first:]...), ids[:first]...)
-	return ordered[:min(len(ordered), adapter.MaxActionBatch)]
-}
-func (l *runtimeLink) actions(in *runtime.ActionBatch) error {
+// actions queues one Client datagram's action batch as it came (pv7 §2a): one
+// IPC message per datagram, behind everything queued before it, in the
+// player's bounded data FIFO shared with input windows. The Match judges
+// duplicates, conflicts, the window and the ACK (D-1 is moot); the link
+// neither merges, validates against a ledger, holds nor resends. e is the
+// datagram's identity for an overflow report (33).
+func (l *runtimeLink) actions(in *runtime.ActionBatch, e dropEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
 		return errRuntimeDisconnected
 	}
-	if in == nil || in.PlayerId == 0 {
+	if in == nil || in.PlayerId == 0 || len(in.Shots) > adapter.MaxActionBatch {
 		return adapter.ErrActions
 	}
-	if l.actionWindows == nil {
-		l.actionWindows = map[uint64]*actionWindow{}
-	}
-	w := l.actionWindows[in.PlayerId]
-	if w == nil {
-		if len(l.actionWindows) >= adapter.MaxPlayers {
-			return adapter.ErrActions
-		}
-		w = newActionWindow()
-	}
-	if err := w.validate(in); err != nil {
-		return err
-	}
-	// D59: each request once, when the link first holds it. It is then
-	// written (fwd_link_written_actions_shots) or dropped by an exit
-	// (drop_*_actions_shots), exactly one of the four.
-	l.countLocked(in.PlayerId, playerFwdHandedActionsShots, w.merge(in))
-	l.actionWindows[in.PlayerId] = w
-	if len(in.Shots) == 0 && in.AcknowledgedThrough > 0 {
-		// pv7 §2a: an ACK-only batch reaches the Match even when it
-		// acknowledges no more than the retirement: the Match answers that one
-		// with the retirement again (the Client missed it). The next pass
-		// writes it; the ACK stays accounted by the window (D56).
-		w.asked = true
-	}
+	message := envelope()
+	message.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}
+	l.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})
 	l.notify()
 	return nil
-}
-func (l *runtimeLink) actionResults(in *runtime.ActionResults) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if w := l.actionWindows[in.PlayerId]; w != nil {
-		w.mergeResults(in)
-	}
-	l.notify()
-}
-
-// Called with the writer's mutex held. Only one current batch is selected per
-// deadline; elapsed deadlines are never replayed after a blocked TCP write.
-func (l *runtimeLink) actionBatch(now time.Time) []*runtime.RuntimeEnvelope {
-	var out []*runtime.RuntimeEnvelope
-	for player, w := range l.actionWindows {
-		if now.Before(w.nextSend) {
-			continue
-		}
-		ids := make([]uint64, 0, len(w.requests))
-		for id := range w.requests {
-			if w.decisions[id] == nil {
-				ids = append(ids, id)
-			}
-		}
-		ids = circularIDs(ids, w.cursor)
-		if len(ids) == 0 && w.acknowledged <= w.retired && !w.asked {
-			continue
-		}
-		w.asked = false
-		in := &runtime.ActionBatch{PlayerId: player, AcknowledgedThrough: w.acknowledged}
-		for _, id := range ids {
-			in.Shots = append(in.Shots, proto.Clone(w.requests[id]).(*runtime.ShotRequest))
-			w.cursor = id
-		}
-		e := envelope()
-		e.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}
-		out = append(out, e)
-		w.nextSend = now.Add(actionSendInterval)
-	}
-	return out
-}
-
-// The earliest action deadline among players with something to send (an
-// undecided request, or an acknowledgement the Match has not retired), so the
-// link loop can wake at it. Called with the link's mutex held.
-func (l *runtimeLink) nextActionDeadline() (time.Time, bool) {
-	var next time.Time
-	found := false
-	for _, w := range l.actionWindows {
-		pending := w.acknowledged > w.retired || w.asked
-		for id := range w.requests {
-			if w.decisions[id] == nil {
-				pending = true
-				break
-			}
-		}
-		if pending && (!found || w.nextSend.Before(next)) {
-			next, found = w.nextSend, true
-		}
-	}
-	return next, found
 }
 
 // pv7 §2a: the Gateway holds at most one results frame per player, as the
@@ -351,23 +108,29 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 		s.countIngress(p, playerDropMalformedActionsPackets, 1)
 		return nil
 	}
-	// The Gateway keeps no action ledger (pv7 §2a): A3 is gone; the link's
-	// window (A5) admits the batch until edge-actions-passthrough.
-	// Link admission happens before committing the session's ledger or ACK. A
-	// rejected batch can be retried unchanged without losing any request/result.
-	if err = s.link.actions(in); err != nil {
-		if err == adapter.ErrActions {
-			s.countIngress(p, playerDropLinkRejectedActionsPackets, 1)
-			s.countIngress(p, playerDropLinkRejectedActionsShots, uint64(len(in.Shots)))
+	// D-11: decoding succeeded, so the sequence and liveness commit (Admit
+	// found the sequence fresh; stale action packets were dropped there).
+	_ = p.session.CommitSequence(h.Sequence, now)
+	e := s.datagram
+	e.items = uint32(len(in.Shots))
+	for _, shot := range in.Shots {
+		if e.firstAction == 0 || shot.ActionId < e.firstAction {
+			e.firstAction = shot.ActionId
+		}
+		e.lastAction = max(e.lastAction, shot.ActionId)
+	}
+	if len(in.Shots) == 0 { // an ACK-only batch: its acknowledgement (§4 DropSample)
+		e.firstAction, e.lastAction, e.items = in.AcknowledgedThrough, in.AcknowledgedThrough, 1
+	}
+	if err := s.link.actions(in, e); err != nil {
+		if errors.Is(err, adapter.ErrActions) {
+			// Unreachable after DecodeActions (same bounds): a malformed packet.
+			s.countIngress(p, playerDropMalformedActionsPackets, 1)
 			return nil
 		}
 		return err
 	}
-	// The link holds the batch. It reaches the Match unless the link drops the
-	// window first: a Leave, an eviction, a close or a failed write before a
-	// pass wrote it (counted by the link, drop_*_actions_shots and _acks).
 	s.countIngress(p, playerFwdHandedActionsPackets, 1)
-	_ = p.session.CommitSequence(h.Sequence, now)
 	return nil
 }
 func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
@@ -401,9 +164,6 @@ func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
 		s.countIngressAt(p.playerID, playerDropResultsOverRatePackets, 1, p.results.event)
 	}
 	p.results.pending, p.results.event = payload, e
-	// The link's action window (until edge-actions-passthrough) retires its
-	// requests by the results.
-	s.link.actionResults(in)
 	s.wakeResults()
 	return nil
 }
@@ -458,21 +218,18 @@ func (s *Server) trackAdmission(p *reservation, kind ingressKind, now time.Time,
 	}
 }
 
-// A selected frame may sit behind a blocked earlier write. Reanchor after its
-// completed write as well, so release never triggers an immediate catch-up send.
+// actionWritten records the interval between a player's action batches the
+// link wrote (send statistics only; the link no longer paces them).
 func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if w := l.actionWindows[playerID]; w != nil {
-		w.nextSend = now.Add(actionSendInterval)
-		if l.actionStats == nil {
-			l.actionStats = map[uint64]*intervalStats{}
-		}
-		if l.actionStats[playerID] == nil {
-			l.actionStats[playerID] = &intervalStats{}
-		}
-		l.actionStats[playerID].record(now)
+	if l.actionStats == nil {
+		l.actionStats = map[uint64]*intervalStats{}
 	}
+	if l.actionStats[playerID] == nil {
+		l.actionStats[playerID] = &intervalStats{}
+	}
+	l.actionStats[playerID].record(now)
 }
 func (s *Server) actionWritten(playerID uint64, now time.Time) {
 	s.mu.Lock()

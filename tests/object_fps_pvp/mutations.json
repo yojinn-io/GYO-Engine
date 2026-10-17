@@ -458,7 +458,7 @@
       "find": "\t\ts.link.forget(evicted.PlayerId)\n",
       "replace": "",
       "check": "go",
-      "expect": "evicted player's action window kept"
+      "expect": "evicted player's link statistics kept"
     },
     {
       "id": "16-observed-falls-back",
@@ -771,26 +771,6 @@
       "expect": "CHECK_FALSE\\( SnapshotHas\\(\\*message, 7\\) \\) is NOT correct"
     },
     {
-      "id": "v7-08-link-no-deadline-timer",
-      "batch": "v7-08",
-      "what": "The runtime link waits a fixed interval instead of its action deadline, so resends ride later wakes",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\twait = max(time.Until(deadline), 0)\n",
-      "replace": "\t\t\t\t_ = deadline\n",
-      "check": "go",
-      "expect": "runtime link sent"
-    },
-    {
-      "id": "v7-08-link-half-tolerance",
-      "batch": "v7-08",
-      "what": "Runtime link action batches leave half an interval early, so every wake can resend",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tif now.Before(w.nextSend) {\n\t\t\tcontinue\n\t\t}\n\t\tids := make([]uint64, 0, len(w.requests))\n",
-      "replace": "\t\tif now.Add(actionSendInterval / 2).Before(w.nextSend) {\n\t\t\tcontinue\n\t\t}\n\t\tids := make([]uint64, 0, len(w.requests))\n",
-      "check": "go",
-      "expect": "runtime link sent|action batches .* apart"
-    },
-    {
       "id": "v7-08-drain-no-wake",
       "batch": "v7-08",
       "what": "An ACK advanced by Drain does not wake the network worker",
@@ -835,8 +815,8 @@
       "batch": "v7-08b",
       "what": "New Match results do not wake the send loop; they wait for its timer",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\ts.link.actionResults(in)\n\ts.wakeResults()\n\treturn nil\n",
-      "replace": "\ts.link.actionResults(in)\n\treturn nil\n",
+      "find": "\tp.results.pending, p.results.event = payload, e\n\ts.wakeResults()\n",
+      "replace": "\tp.results.pending, p.results.event = payload, e\n",
       "check": "go",
       "expect": "a new decision did not wake the send loop"
     },
@@ -975,8 +955,8 @@
       "batch": "v7-flow",
       "what": "Input windows queued at close are not counted (I0)",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tif q.input {\n\t\t\tl.countLocked(q.player, playerDropClearedOnCloseCommands, q.commands)\n\t\t}\n",
-      "replace": "\t\t_ = q\n",
+      "find": "\t\tcase q.input:\n\t\t\tl.countLocked(q.player, playerDropClearedOnCloseCommands, q.commands)\n",
+      "replace": "\t\tcase q.input:\n",
       "check": "go",
       "expect": "close cleared commands were not counted"
     },
@@ -1515,38 +1495,18 @@
       "batch": "v7-flow",
       "what": "An admitted action batch that fails to decode is not counted",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\ts.countIngress(p, playerDropMalformedActionsPackets, 1)\n",
-      "replace": "",
+      "find": "\tif err != nil {\n\t\ts.countIngress(p, playerDropMalformedActionsPackets, 1)\n\t\treturn nil\n\t}\n\t// D-11",
+      "replace": "\tif err != nil {\n\t\treturn nil\n\t}\n\t// D-11",
       "check": "go",
       "expect": "case malformed/actions: counted none"
-    },
-    {
-      "id": "v7-flow-drop-link-rejected-actions-uncounted",
-      "batch": "v7-flow",
-      "what": "An action batch the link refuses (A5) is not counted",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\t\ts.countIngress(p, playerDropLinkRejectedActionsPackets, 1)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "case link_rejected/actions: counted drop_link_rejected_actions_shots=3"
-    },
-    {
-      "id": "v7-flow-drop-link-rejected-shots-uncounted",
-      "batch": "v7-flow",
-      "what": "The shots of an action batch the link refuses (A5) are not counted",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\t\ts.countIngress(p, playerDropLinkRejectedActionsShots, uint64(len(in.Shots)))\n",
-      "replace": "",
-      "check": "go",
-      "expect": "(?m)case link_rejected/actions: counted drop_link_rejected_actions_packets=1$"
     },
     {
       "id": "v7-flow-fwd-handed-actions-after-commit",
       "batch": "v7-flow",
       "what": "Handed actions are counted only when the sequence commits",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n\t_ = p.session.CommitSequence(h.Sequence, now)\n",
-      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n",
+      "find": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\te := s.datagram\n",
+      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\te := s.datagram\n",
       "check": "go",
       "expect": "case handed/actions_commit_failed: counted none"
     },
@@ -2501,76 +2461,6 @@
       "expect": "I1 is failed"
     },
     {
-      "id": "v7-flow-d56-leave-shots-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n",
-      "replace": "\t\t_ = shots\n",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 1 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
-      "what": "a Leave drops the shot requests no pass took without counting them"
-    },
-    {
-      "id": "v7-flow-d56-leave-acks-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n",
-      "replace": "\t\t_ = acks\n",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[1 0 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
-      "what": "a Leave drops the acknowledgement no pass took without counting it"
-    },
-    {
-      "id": "v7-flow-d56-written-counted-dropped",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tfor id := range w.requests {\n\t\tif !w.taken[id] {\n\t\t\tshots++\n",
-      "replace": "\tfor id := range w.requests {\n\t\tif w.taken[id] || true {\n\t\t\tshots++\n",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[3 1 0 0 0 0\\], want \\[1 1 0 0 0 0\\]",
-      "what": "a Leave or close also counts the requests a pass took (written, or counted abandoned): counted twice"
-    },
-    {
-      "id": "v7-flow-d56-resend-counted-abandoned",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tif !w.taken[shot.ActionId] {\n\t\t\tw.taken[shot.ActionId] = true\n",
-      "replace": "\t\tif true {\n\t\t\tw.taken[shot.ActionId] = true\n",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 0 0 2 0\\], want \\[0 0 0 0 0 0\\]",
-      "what": "a failed write counts the resent requests an earlier pass wrote as abandoned"
-    },
-    {
-      "id": "v7-flow-d56-close-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tfor id, w := range l.actionWindows {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(id, playerDropClearedOnCloseActionsShots, shots)\n\t\tl.countLocked(id, playerDropClearedOnCloseActionsAcks, acks)\n\t}\n",
-      "replace": "",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 0 0 0 0\\], want \\[0 0 2 1 0 0\\]",
-      "what": "close clears the action windows without counting what no pass took"
-    },
-    {
-      "id": "v7-flow-d56-write-failure-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsShots, abandoned.shots)\n\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsAcks, abandoned.acks)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "drops \\(leave shots, acks; close shots, acks; abandoned shots, acks\\) \\[0 0 1 1 0 0\\], want \\[0 0 1 1 2 1\\]",
-      "what": "a failed write abandons the action batches of its pass without counting them"
-    },
-    {
-      "id": "v7-flow-d56-forget-loses-counts",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n\tdelete(l.actionWindows, player)\n",
-      "replace": "\tdelete(l.actionWindows, player)\n\tif w := l.actionWindows[player]; w != nil {\n\t\tshots, acks := w.untaken()\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsShots, shots)\n\t\tl.countLocked(player, playerDropDiscardedOnLeaveActionsAcks, acks)\n\t}\n",
-      "check": "go",
-      "expect": "player 7 \\(left\\) windows \\[\\{0 0\\} \\{0 0\\}\\], want \\[\\{2 0\\} \\{0 0\\}\\]",
-      "what": "forget drops the action window before counting it: the Leave never reaches the window or final lines"
-    },
-    {
       "id": "v7-flow-d56-gateway-key-order",
       "batch": "v7-flow",
       "file": "apps/object_fps_pvp/gateway/ingress_statistics.go",
@@ -2619,46 +2509,6 @@
       "check": "ingress_evidence",
       "expect": "Tuples differ: \\(\\['drop_abandoned_on_close_actions_acks'",
       "what": "the analyzer keeps the D56 keys apart as unknown keys and reports them missing"
-    },
-    {
-      "id": "v7-flow-d59-handed-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\tl.countLocked(in.PlayerId, playerFwdHandedActionsShots, w.merge(in))\n",
-      "replace": "\tw.merge(in)\n",
-      "check": "go",
-      "expect": "link shots handed 0, written 2; want 3, 2",
-      "what": "the link stops counting the shot requests it is handed (fwd_handed_actions_shots)"
-    },
-    {
-      "id": "v7-flow-d59-written-uncounted",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n",
-      "replace": "",
-      "check": "go",
-      "expect": "link shots handed 3, written 0; want 3, 2",
-      "what": "the link stops counting the shot requests a successful write carried (fwd_link_written_actions_shots)"
-    },
-    {
-      "id": "v7-flow-d59-written-before-write",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t// The shot requests this pass first took (D59); a resent one was counted\n\t// by the pass that first took it.\n\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n}\n\n// write sends one pass in order. A failed Marshal or Write fails the link;\n// that message and the rest of the pass are abandoned and counted, because\n// the Match may not have received them.\nfunc (l *runtimeLink) write(writes []linkWrite) error {\n\tfor i, w := range writes {\n\t\tpayload, err := proto.Marshal(w.message)\n",
-      "replace": "}\n\n// write sends one pass in order. A failed Marshal or Write fails the link;\n// that message and the rest of the pass are abandoned and counted, because\n// the Match may not have received them.\nfunc (l *runtimeLink) write(writes []linkWrite) error {\n\tfor i, w := range writes {\n\t\tl.mu.Lock()\n\t\tl.countLocked(w.player, playerFwdLinkWrittenActionsShots, w.shots)\n\t\tl.mu.Unlock()\n\t\tpayload, err := proto.Marshal(w.message)\n",
-      "check": "go",
-      "expect": "link shots handed 4, written 3; want 4, 1",
-      "what": "the written shots are counted before l.conn.Write, so a failed write counts them written and abandoned"
-    },
-    {
-      "id": "v7-flow-d59-resend-counted-handed",
-      "batch": "v7-flow",
-      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\t\tw.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)\n\t\t\tadded++\n\t\t}\n",
-      "replace": "\t\t\tw.requests[shot.ActionId] = proto.Clone(shot).(*runtime.ShotRequest)\n\t\t}\n\t\tadded++\n",
-      "check": "go",
-      "expect": "link shots handed 4, written 2; want 3, 2",
-      "what": "a resent request, a copy within a batch or a retired id is counted handed again"
     },
     {
       "id": "v7-flow-d59-gateway-key-order",
@@ -3685,8 +3535,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "An eviction (forget) drops the player's queued inputs",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tdelete(l.actionWindows, player)\n\tdelete(l.actionStats, player)\n}\n",
-      "replace": "\tdelete(l.actionWindows, player)\n\tdelete(l.actionStats, player)\n\tl.queue = slices.DeleteFunc(l.queue, func(q queuedMessage) bool { return q.input && q.player == player })\n}\n",
+      "find": "\tdelete(l.actionStats, player)\n}\n",
+      "replace": "\tdelete(l.actionStats, player)\n\tl.queue = slices.DeleteFunc(l.queue, func(q queuedMessage) bool { return q.input && q.player == player })\n}\n",
       "check": "go",
       "expect": "written \\[.*\\], want \\[input 1/1 join 3"
     },
@@ -3775,8 +3625,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A write pass does not reset the pending control count: the link fails after 64 lifecycle requests in all",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\tl.queue = nil\n\tl.queuedControls = 0\n\tclear(l.queuedData)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
-      "replace": "\tl.queue = nil\n\tclear(l.queuedData)\n\tfor _, message := range l.actionBatch(time.Now()) {\n",
+      "find": "\tl.queue = nil\n\tl.queuedControls = 0\n\tclear(l.queuedData)\n\treturn writes\n",
+      "replace": "\tl.queue = nil\n\tclear(l.queuedData)\n\treturn writes\n",
       "check": "go",
       "expect": "round 1: control 1 refused"
     },
@@ -3785,8 +3635,8 @@
       "batch": "v71-edge-input-passthrough",
       "what": "A full input queue drops another player's oldest window",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tif old.input && old.player == q.player {\n",
-      "replace": "\t\t\tif old.input {\n",
+      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player {\n",
+      "replace": "\t\t\tif old.input || old.actions {\n",
       "check": "go",
       "expect": "overflowed windows counted 1, want 2|player 2 lost|want player 2's window"
     },
@@ -3875,10 +3725,130 @@
       "batch": "v71-edge-results-passthrough",
       "what": "An ACK-only batch acknowledging no more than the retirement does not reach the Match",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t\tw.asked = true\n",
-      "replace": "",
+      "find": "\tmessage.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}\n",
+      "replace": "\tif len(in.Shots) == 0 {\n\t\treturn nil\n\t}\n\tmessage.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}\n",
       "check": "go",
       "expect": "retirement lost at"
+    },
+    {
+      "id": "v71ap-overflow-uncounted",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "An action batch dropped from a full FIFO is not counted (33)",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\t} else {\n\t\t\t\t\tl.countEventLocked(old.player, playerDropIpcQueueOverflowActionsPackets, 1, old.event)\n\t\t\t\t}\n",
+      "replace": "\t\t\t\t}\n",
+      "check": "go",
+      "expect": "handed \\d+ != written"
+    },
+    {
+      "id": "v71ap-actions-unbounded",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "Action batches are never dropped from the FIFO: the player's queue grows past its bound",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\tif (old.input || old.actions) && old.player == q.player {\n",
+      "replace": "\t\t\tif old.input && old.player == q.player {\n",
+      "check": "go",
+      "expect": "exit 1 was non-zero|overflowed batches counted 0"
+    },
+    {
+      "id": "v71ap-written-uncounted",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A written action batch is not counted",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tcase actionsLane:\n\t\tl.countLocked(w.player, playerFwdLinkWrittenActionsPackets, 1)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "handed \\d+ != written"
+    },
+    {
+      "id": "v71ap-abandoned-uncounted",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "The action batches of a failed write pass are not counted abandoned",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t\t\tcase actionsLane:\n\t\t\t\t\tl.countLocked(abandoned.player, playerDropAbandonedOnCloseActionsPackets, 1)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "handed \\d+ != written"
+    },
+    {
+      "id": "v71ap-cleared-uncounted",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "Action batches still queued at close are not counted",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tcase q.actions:\n\t\t\tl.countLocked(q.player, playerDropClearedOnCloseActionsPackets, 1)\n",
+      "replace": "",
+      "check": "go",
+      "expect": "handed \\d+ != written|cleared on close"
+    },
+    {
+      "id": "v71ap-forget-drops-queued",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A Leave or an eviction drops the player's queued action batches",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tdelete(l.actionStats, player)\n}\n",
+      "replace": "\tdelete(l.actionStats, player)\n\tl.queue = slices.DeleteFunc(l.queue, func(q queuedMessage) bool { return q.actions && q.player == player })\n}\n",
+      "check": "go",
+      "expect": "handed \\d+ != written|did not go first|cleared on close"
+    },
+    {
+      "id": "v71ap-actions-as-controls",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "The write pass takes action batches as controls: written but not counted",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n",
+      "replace": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message})\n",
+      "check": "go",
+      "expect": "handed \\d+ != written"
+    },
+    {
+      "id": "v71ap-commit-before-decode",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "An action datagram that fails to decode commits its sequence (D-11)",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tin, err := adapter.DecodeActions(payload, p.playerID)\n\tif err != nil {\n",
+      "replace": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\tin, err := adapter.DecodeActions(payload, p.playerID)\n\tif err != nil {\n",
+      "check": "go",
+      "expect": "malformed"
+    },
+    {
+      "id": "v71ap-ack-only-sample",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "An ACK-only batch's drop sample carries no acknowledgement",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\te.firstAction, e.lastAction, e.items = in.AcknowledgedThrough, in.AcknowledgedThrough, 1\n",
+      "replace": "",
+      "check": "go",
+      "expect": "does not carry the dropped batch"
+    },
+    {
+      "id": "v71ap-sample-bounds",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A dropped batch's sample carries the first and last shot, not the id bounds",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\t\tif e.firstAction == 0 || shot.ActionId < e.firstAction {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = max(e.lastAction, shot.ActionId)\n\t}\n\tif len(in.Shots) == 0 { // an ACK-only",
+      "replace": "\t\tif e.firstAction == 0 {\n\t\t\te.firstAction = shot.ActionId\n\t\t}\n\t\te.lastAction = shot.ActionId\n\t}\n\tif len(in.Shots) == 0 { // an ACK-only",
+      "check": "go",
+      "expect": "does not carry the dropped batch"
+    },
+    {
+      "id": "v71ap-handed-uncounted",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "The Gateway does not count the action batches it hands to the link",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\ts.countIngress(p, playerFwdHandedActionsPackets, 1)\n\treturn nil\n",
+      "replace": "\treturn nil\n",
+      "check": "go",
+      "expect": "handed \\d+|counted none|datagram outcomes"
+    },
+    {
+      "id": "v71ap-actions-no-notify",
+      "batch": "v71-edge-actions-passthrough",
+      "what": "A queued action batch does not wake the writer: it waits for the idle timer or the next input",
+      "file": "apps/object_fps_pvp/gateway/action_delivery.go",
+      "find": "\tl.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})\n\tl.notify()\n",
+      "replace": "\tl.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})\n",
+      "check": "go",
+      "expect": "an action waited for the writer's idle timer"
     }
   ]
 }

@@ -714,8 +714,8 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		log.Printf("player evicted player=%d reason=%s reference_age_ms=%d substituted_permille=%d movement_resets=%d",
 			evicted.PlayerId, code, evicted.ReferenceAgeMs, evicted.SubstitutedPermille, evicted.MovementResets)
 		s.sendControl(p, adapter.Failure, &client.Error{Code: code, Message: message})
-		// Without this an evicted player's action window would keep a slot:
-		// a replacement could not deliver shots or reloads, silently.
+		// The link forgets the player's statistics; its queued batches still
+		// reach the Match (pv7 §2a).
 		s.link.forget(evicted.PlayerId)
 		s.remove(p)
 		return

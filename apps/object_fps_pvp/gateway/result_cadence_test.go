@@ -675,48 +675,29 @@ func TestRuntimeFailureStopsPendingResults(t *testing.T) {
 	}
 }
 
-// The real runtime link loop, woken by other events at 60 Hz (as inputs do),
-// resends an undecided request at ActionSendRate: not on every wake, and not
-// only on the wakes that happen to come after its deadline.
-func TestLinkResendsAnUndecidedRequestAtTheActionRateDespiteOtherWakes(t *testing.T) {
+// pv7 §2a: the real runtime link loop writes each action batch once, as soon
+// as it is handed over: no pacing to the action rate and no resend (the Client
+// resends until the Match's results arrive).
+func TestLinkWritesEachActionBatchOnceWithoutPacing(t *testing.T) {
 	s, f := newTestServer(t)
-	in := &runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(1)}}
-	if err := s.link.actions(in); err != nil {
-		t.Fatal(err)
-	}
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		ticker := time.NewTicker(time.Second / 60)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ticker.C:
-				s.link.notify()
-			}
+	start := time.Now()
+	for id := uint64(1); id <= 3; id++ {
+		if err := s.link.actions(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(id)}}, dropEvent{}); err != nil {
+			t.Fatal(err)
 		}
-	}()
-	var arrivals []time.Time
-	deadline := time.Now().Add(500 * time.Millisecond)
+	}
+	var arrivals []time.Duration
+	deadline := start.Add(300 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		select {
 		case e := <-f.got:
 			if e.GetActions() != nil {
-				arrivals = append(arrivals, time.Now())
+				arrivals = append(arrivals, time.Since(start))
 			}
 		case <-time.After(time.Until(deadline)):
 		}
 	}
-	// 500 ms at 30 Hz is 15 batches; a resend on every wake would be about 30,
-	// and one that waits for the next wake after its deadline about 10.
-	if len(arrivals) < 13 || len(arrivals) > 17 {
-		t.Fatalf("runtime link sent %d action batches in 500 ms", len(arrivals))
-	}
-	for i := 1; i < len(arrivals); i++ {
-		if gap := arrivals[i].Sub(arrivals[i-1]); gap < actionSendInterval-3*time.Millisecond {
-			t.Fatalf("action batches %v apart", gap)
-		}
+	if len(arrivals) != 3 || arrivals[2] >= actionSendInterval {
+		t.Fatalf("action batches arrived at %v; want 3 within %v and no resend", arrivals, actionSendInterval)
 	}
 }

@@ -872,10 +872,10 @@ func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.
 	available := s.available
 	s.mu.Unlock()
 	s.link.mu.Lock()
-	_, kept := s.link.actionWindows[leaver.PlayerID]
+	_, kept := s.link.actionStats[leaver.PlayerID]
 	s.link.mu.Unlock()
 	if !available || kept {
-		t.Fatalf("after a removed player's results: available=%v link window kept=%v", available, kept)
+		t.Fatalf("after a removed player's results: available=%v link statistics kept=%v", available, kept)
 	}
 
 	// (c) The same request id again.
