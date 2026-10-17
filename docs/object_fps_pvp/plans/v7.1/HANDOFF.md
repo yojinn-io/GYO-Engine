@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D116 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D117 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-actions-passthrough` 的 L2 停止（rapid 收尾競態）的處理方案：修 Match 的 `IpcHost::Stop()` 與 rapid runner 的停止順序，宣告第 4 版（門檻不變）後重跑——是否核准、是否預先核准今晚重跑。
+- **等你決定**：無（D117 進行中）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -86,6 +86,7 @@
 | D114 | （2026-10-17）開始 `edge-actions-passthrough`（檔位 high，估 14～17 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查 | 使用者：「開始 edge-actions-passthrough。」 |
 | D115 | （2026-10-17）核准 `edge-actions-passthrough` 的 L2 事前宣告第 3 版（[edge-actions-passthrough-l2.md](edge-actions-passthrough-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-actions-passthrough 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
 | D116 | （2026-10-18）使用者去睡覺期間，edge 系列照順序做完：`edge-actions-passthrough` 的 L2 判定 → `edge-analyzers` → `edge-contract`。照常在關卡停下（L2 不成立、需要使用者同意的 Design Invariants 條文等） | 使用者：「我想去睡覺了，期間edge系列按順序執行完吧。」 |
+| D117 | （2026-10-18）修 Match 的 `IpcHost::Stop()`（經 `Close` 結束 session）與 rapid runner 的停止順序；預先核准 L2 宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下 | 使用者：「核准：修 Match 的 IpcHost::Stop() 與 rapid runner 的停止順序；預先核准宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下。」 |
 
 ## 規劃紀錄（記錄器）
 
