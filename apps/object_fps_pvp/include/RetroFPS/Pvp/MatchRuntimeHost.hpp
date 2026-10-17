@@ -84,11 +84,14 @@ public:
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
     // Diagnostics only, since the previous call (or the start): how the
-    // simulation role's waits for the next tick ended, and how many published
-    // snapshots were replaced before the I/O layer took them. Resets the window.
+    // simulation role's waits for the next tick ended, how many published
+    // snapshots were replaced before the I/O layer took them, and how long
+    // SubmitInput and the simulation step waited for the host mutex (pv7 §2a:
+    // the Match now reads every Client datagram's window). Resets the window.
     struct Statistics final {
         TickWakeStatistics ticks;
         std::uint64_t snapshotOverwrites{};
+        HostLockWaits lockWaits;
     };
     [[nodiscard]] Statistics TakeStatistics();
     // Diagnostics only, since the previous call (or the start): what became

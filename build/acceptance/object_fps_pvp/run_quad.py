@@ -1,11 +1,14 @@
 """Room-capacity acceptance runner: full rooms, a GUI with bots and mixed-version refusals.
 
-Cases (pv6 contract §1, batch 16):
+Cases (pv6 contract §1, batch 16; mixed: pv7 contract §1):
   clean-60, clean-30  four headless Clients in one room for 16 s; a fifth join is refused.
                       clean-30 is recorded, not judged (D21).
   gui-bots            the GUI participant creates the room and three bots fill it.
-  mixed               an older Client, Gateway or Match against this one fails explicitly;
-                      needs the --base-* artifacts of the previous capacity.
+  mixed               a Client, Gateway or Match of the previous protocol version against this
+                      one fails explicitly; needs the --base-* artifacts of that version. The
+                      older-arena check of the capacity change (v6) is retired: pv7 keeps the
+                      arena, and IpcHostTests ("PvP IPC refuses an arena with fewer spawns
+                      than the room holds") covers the refusal.
 Every segment starts its own Match and Gateway and first asserts GET /rooms shows no player.
 The two-Client runners and analyzers are unchanged.
 """
@@ -151,7 +154,7 @@ def run_segment(args, case, output):
 
 
 def refused_client(args, output):
-    """A Client of the previous capacity loads its own arena; this Match's arena differs."""
+    """A Client of the previous protocol version is refused explicitly."""
     output.mkdir(parents=True, exist_ok=False)
     services = Services(output)
     start = services.start
@@ -167,14 +170,21 @@ def refused_client(args, output):
         code = exited(probe, 30)
         failure = output / 'client-failure.json'
         message = json.loads(failure.read_text()).get('error', '') if failure.exists() else ''
-        return {'name': 'older-client', 'passed': code not in (None, 0) and message.startswith('arena_content_mismatch'),
+        # pv7 §1: the Gateway refuses the version before anything else; a pv6
+        # Client reports the Gateway's error code as is.
+        explicit = message.startswith('protocol_version')
+        return {'name': 'older-client', 'passed': code not in (None, 0) and explicit,
                 'exit_code': code, 'error': message}
     finally:
         services.close()
 
 
-def refused_gateway(args, output, *, match_binary, match_arena, gateway_binary, name):
-    """A Gateway and a Match of different capacities: readiness fails and the Gateway exits."""
+def refused_gateway(args, output, *, match_binary, match_arena, gateway_binary, name, gateway_says, match_says=None):
+    """A Gateway and a Match of different protocol versions: readiness fails and the Gateway exits.
+
+    gateway_says and match_says are what the Gateway and the Match must log (pv7 contract §1). A Match that logs
+    a reset ('read: ...') instead of what it must log leaves the attempt undetermined: the peer's close raced a
+    write, which says nothing about the versions."""
     output.mkdir(parents=True, exist_ok=False)
     services = Services(output)
     start = services.start
@@ -186,24 +196,19 @@ def refused_gateway(args, output, *, match_binary, match_arena, gateway_binary, 
                                     '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])
         code = exited(gateway, STARTUP_SECONDS)
         log = (output / 'gateway.log').read_text(errors='replace')
-        return {'name': name, 'passed': code not in (None, 0) and 'runtime readiness contract mismatch' in log,
-                'exit_code': code}
+        match_logged = match_says is None
+        until = time.monotonic() + 2  # the Match logs the closed link after the Gateway exits
+        while not match_logged and time.monotonic() < until:
+            match_logged = match_says in (output / 'match.log').read_text(errors='replace')
+            time.sleep(.05)
+        reset = not match_logged and 'ipc closed reason=read:' in (output / 'match.log').read_text(errors='replace')
+        return {'name': name, 'exit_code': code, 'match_logged': match_logged, 'undetermined': reset,
+                'passed': code not in (None, 0) and gateway_says in log and match_logged}
     finally:
         services.close()
 
 
-def refused_arena(args, output):
-    """This Match refuses the previous arena: it has fewer spawns than the room holds."""
-    output.mkdir(parents=True, exist_ok=False)
-    services = Services(output)
-    try:
-        match = services.start('match', [args.match, '--arena', args.base_arena, '--listen', f'127.0.0.1:{free_port()}'])
-        code = exited(match, STARTUP_SECONDS)
-        log = (output / 'match.log').read_text(errors='replace')
-        return {'name': 'older-arena', 'exit_code': code,
-                'passed': code not in (None, 0) and f'a room of {MAX_PLAYERS} players needs at least that many' in log}
-    finally:
-        services.close()
+MIXED_ATTEMPTS = 3
 
 
 def run_mixed(args, output):
@@ -215,15 +220,27 @@ def run_mixed(args, output):
     checks = []
     for name, run in (
             ('older-client', lambda d: refused_client(args, d)),
-            ('older-match', lambda d: refused_gateway(args, d, match_binary=args.base_match, match_arena=args.base_arena,
-                                                      gateway_binary=args.gateway, name='older-match')),
-            ('older-gateway', lambda d: refused_gateway(args, d, match_binary=args.match, match_arena=args.arena,
-                                                        gateway_binary=args.base_gateway, name='older-gateway')),
-            ('older-arena', lambda d: refused_arena(args, d))):
-        try:
-            checks.append(run(output / name))
-        except Exception as failure:
-            checks.append({'name': name, 'passed': False, 'error': str(failure)})
+            # The older Match closes on this Gateway's version notice with its own (pv6) reason.
+            ('older-match', lambda d: refused_gateway(
+                args, d, match_binary=args.base_match, match_arena=args.base_arena, gateway_binary=args.gateway,
+                name='older-match', gateway_says=f'runtime readiness contract mismatch: protocol version expected '
+                                                 f'{PROTOCOL_VERSION}, received {PROTOCOL_VERSION - 1}',
+                match_says='ipc closed reason=frame parse or protocol version')),
+            ('older-gateway', lambda d: refused_gateway(
+                args, d, match_binary=args.match, match_arena=args.arena, gateway_binary=args.base_gateway,
+                name='older-gateway', gateway_says='runtime readiness contract mismatch',
+                match_says='ipc hint: the Gateway closed before sending any frame'))):
+        # An undetermined attempt is kept and the check runs again, at most MIXED_ATTEMPTS times.
+        for attempt in range(1, MIXED_ATTEMPTS + 1):
+            directory = output / (name if attempt == 1 else f'{name}-{attempt}')
+            try:
+                check = run(directory)
+            except Exception as failure:
+                check = {'name': name, 'passed': False, 'error': str(failure)}
+            check['attempt'] = attempt
+            if not check.get('undetermined') or attempt == MIXED_ATTEMPTS:
+                checks.append(check)
+                break
     result = {'case': 'mixed', 'judged': True, 'passed': all(check['passed'] for check in checks), 'checks': checks,
               'errors': [check['name'] for check in checks if not check['passed']]}
     (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -241,7 +258,7 @@ def main():
     parser.add_argument('--arena-root', type=Path)
     parser.add_argument('--gpu-driver', default='auto')
     for name in ('base-match', 'base-gateway', 'base-probe', 'base-arena'):
-        parser.add_argument('--' + name, type=Path, help='previous-capacity artifact (mixed case)')
+        parser.add_argument('--' + name, type=Path, help='previous-protocol-version artifact (mixed case)')
     args = parser.parse_args()
     needed = {'mixed': ('match', 'gateway', 'arena', 'base_match', 'base_gateway', 'base_probe', 'base_arena'),
               'gui-bots': ('match', 'gateway', 'arena', 'probe', 'gui_probe')}.get(args.case, ('match', 'gateway', 'arena', 'probe'))

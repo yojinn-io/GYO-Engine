@@ -10,8 +10,8 @@ acceptance. The version value has one definition per owner and language: C++
 `wire::ProtocolVersion`, Go `adapter.ProtocolVersion`, and the acceptance expected
 values; `object_fps_pvp.protocol_version` checks that they agree.
 
-`client_v6.proto` defines remote Client ↔ Gateway payloads.
-`runtime_v6.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
+`client_v7.proto` defines remote Client ↔ Gateway payloads.
+`runtime_v7.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
 These independent schemas import no shared gameplay schema. The product Adapter
 maps generated types; Match receives product C++ values. No shared Engine or
 Gateway codec owns game rules.
@@ -64,13 +64,13 @@ zero sentinel; adapters reject unknown values. Shot aim fields use proto3 option
 presence: both are required for Shot and both absent for Reload. C++ domain enums
 are explicitly mapped, since their numeric values differ from the wire enums.
 
-Generated Go bindings are checked in under `clientv6/` and `runtimev6/`. Regenerate
+Generated Go bindings are checked in under `clientv7/` and `runtimev7/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's
 pinned `google.golang.org/protobuf` module, from the product module root:
 
 ```sh
 protoc --proto_path=protocol --go_out=. --go_opt=module=gyo.local/object_fps_pvp \
-  protocol/client_v6.proto protocol/runtime_v6.proto
+  protocol/client_v7.proto protocol/runtime_v7.proto
 ```
 
 C++ generated files belong to the build tree. Do not hand-edit generated bindings

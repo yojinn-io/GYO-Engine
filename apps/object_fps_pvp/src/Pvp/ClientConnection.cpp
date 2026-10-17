@@ -1,10 +1,11 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "client_v6.pb.h"
+#include "client_v7.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -24,12 +25,16 @@
 #include <syncstream>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v6;
+namespace pb=object_fps_pvp::client::v7;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
 namespace {
 std::string Id(const Json& value) {return value.is_string()?value.get<std::string>():value.dump();}
+// The C clock domain of pv7 §2: steady_clock in microseconds.
+std::uint64_t MicrosNow() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+}
 std::string Hex64(std::uint64_t value) {
     char text[17];std::snprintf(text,sizeof text,"%016llx",static_cast<unsigned long long>(value));return text;
 }
@@ -40,11 +45,21 @@ std::string BaseUrl(std::string address) {
     while(address.ends_with('/'))address.pop_back();
     return address;
 }
+// Names both versions: every protocol_version key carries its sender's own
+// version (pv7 contract §1); a Gateway that sends none is "unknown".
+std::string VersionMismatch(const Json& gateway) {
+    const auto version=gateway.find("protocol_version");
+    return "protocol_version_mismatch: Client "+std::to_string(wire::ProtocolVersion)+", Gateway "+
+        (version!=gateway.end() && version->is_number_unsigned()?std::to_string(version->get<std::uint64_t>()):std::string("unknown"));
+}
 Json Response(const httplib::Result& result) {
     if(!result)throw std::runtime_error("Gateway HTTP request failed: "+std::string(httplib::to_string(result.error())));
     auto body=Json::parse(result->body);
-    if(result->status<200 || result->status>=300)
-        throw std::runtime_error(body.value("error",std::string("Gateway rejected request")));
+    if(result->status<200 || result->status>=300) {
+        // The error code decides, not the status: room_full is a 409 too.
+        const auto code=body.value("error",std::string("Gateway rejected request"));
+        throw std::runtime_error(code=="protocol_version"?VersionMismatch(body):code);
+    }
     return body;
 }
 std::unique_ptr<httplib::Client> Http(const std::string& base) {
@@ -130,6 +145,10 @@ struct ClientConnection::Impl {
     std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
+    // Diagnostics only (pv7 §3): the time echo with the Gateway on Hello and
+    // Welcome, per connection; nothing here reaches a decision (D32).
+    ClockSync clock;
+    bool clockActive{};
     // The worker is one asio io thread. Nothing polls: the socket becoming
     // readable, a post from another thread (a request, new input, a new action,
     // an ACK advance) and one timer at the earliest deadline wake it, and each
@@ -143,6 +162,7 @@ struct ClientConnection::Impl {
     Clock::time_point statisticsAt{};
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
+    std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
     Impl() {
@@ -180,6 +200,10 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
+        if(clockActive) {
+            if(const auto window=clock.Roll(MicrosNow(),true))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
+            clockActive=false;
+        }
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
@@ -333,9 +357,10 @@ struct ClientConnection::Impl {
         // Keep credentials even if cancelled so the next action releases its reservation.
         session=joined.at("session_id").get<std::uint64_t>();token=joined.at("session_token").get<std::string>();
         if(request.generation!=generation.load())return;
-        // Compare the full JSON value: a non-integer or wider value must not truncate to the version.
-        if(const auto& version=joined.at("protocol_version");!version.is_number_unsigned() ||
-           version.get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error("Client protocol mismatch");
+        // Compare the full JSON value: a non-integer or wider value must not truncate to the version;
+        // a reply without one is a mismatch with an unknown version too.
+        if(const auto version=joined.find("protocol_version");version==joined.end() || !version->is_number_unsigned() ||
+           version->get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error(VersionMismatch(joined));
         const auto digest=joined.find("arena_digest");
         CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>(),
             digest!=joined.end() && digest->is_number_unsigned() && digest->get<std::uint64_t>()!=0 ?
@@ -344,6 +369,7 @@ struct ClientConnection::Impl {
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
         connectedAt=receivedAt=Clock::now();helloAt={};
+        clock=ClockSync(MicrosNow());clockActive=true;
         std::scoped_lock lock(mutex);
         if(request.generation!=generation.load())return;
         activeGeneration=request.generation;
@@ -439,8 +465,13 @@ struct ClientConnection::Impl {
         // movement input: active Hello only receives another Welcome.
         const auto helloInterval=welcomed?std::chrono::milliseconds(1000):std::chrono::milliseconds(250);
         if(now-helloAt>=helloInterval) {
-            pb::Hello hello;hello.set_session_token(token);Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
+            pb::Hello hello;hello.set_session_token(token);
+            auto* echo=hello.mutable_clock();
+            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
+            echo->set_transmit_us(clock.Stamp(MicrosNow()));
+            Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
+        if(const auto window=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -449,10 +480,24 @@ struct ClientConnection::Impl {
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
             if(sender!=endpoint)continue;
-            const auto packet=wire::Decode(std::span(bytes).first(size));
-            if(!packet || packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
+            const auto datagram=std::span(bytes).first(size);
+            const auto packet=wire::Decode(datagram);
+            if(!packet) {
+                // Dropped silently as before; counted apart from malformed datagrams.
+                if(wire::OtherVersion(datagram))++otherVersionDatagrams;
+                continue;
+            }
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
+                if(message.has_clock()) { // diagnostics only, before and apart from every check
+                    const auto& sample=message.clock();
+                    ClockStamp peer{.transmitUs=sample.transmit_us()};
+                    if(sample.has_origin_us())peer.originUs=sample.origin_us();
+                    if(sample.has_receive_us())peer.receiveUs=sample.receive_us();
+                    static_cast<void>(clock.Observe(peer,static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::microseconds>(arrivedAt.time_since_epoch()).count())));
+                }
                 CheckArena(message.arena_id(),message.arena_version(),
                     message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
@@ -739,8 +784,9 @@ struct ClientConnection::Impl {
         const auto cpu=CurrentThreadCpuSeconds();
         PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
-            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
-        statisticsAt=now;cpuAt=cpu;wakes=0;
+            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
+            .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+        statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
     }
     void Run() {
         statisticsAt=Clock::now();

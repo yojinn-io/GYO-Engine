@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.36.2
-// source: runtime_v6.proto
+// source: runtime_v7.proto
 
-package runtimev6
+package runtimev7
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -54,11 +54,11 @@ func (x LifeState) String() string {
 }
 
 func (LifeState) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v6_proto_enumTypes[0].Descriptor()
+	return file_runtime_v7_proto_enumTypes[0].Descriptor()
 }
 
 func (LifeState) Type() protoreflect.EnumType {
-	return &file_runtime_v6_proto_enumTypes[0]
+	return &file_runtime_v7_proto_enumTypes[0]
 }
 
 func (x LifeState) Number() protoreflect.EnumNumber {
@@ -67,7 +67,7 @@ func (x LifeState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LifeState.Descriptor instead.
 func (LifeState) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{0}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{0}
 }
 
 // Match-initiated removal for sustained poor connection quality. The Gateway
@@ -105,11 +105,11 @@ func (x EvictionReason) String() string {
 }
 
 func (EvictionReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v6_proto_enumTypes[1].Descriptor()
+	return file_runtime_v7_proto_enumTypes[1].Descriptor()
 }
 
 func (EvictionReason) Type() protoreflect.EnumType {
-	return &file_runtime_v6_proto_enumTypes[1]
+	return &file_runtime_v7_proto_enumTypes[1]
 }
 
 func (x EvictionReason) Number() protoreflect.EnumNumber {
@@ -118,7 +118,7 @@ func (x EvictionReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvictionReason.Descriptor instead.
 func (EvictionReason) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{1}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{1}
 }
 
 // Historical names are retained; requests and decisions cover Shot and Reload.
@@ -155,11 +155,11 @@ func (x ActionKind) String() string {
 }
 
 func (ActionKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v6_proto_enumTypes[2].Descriptor()
+	return file_runtime_v7_proto_enumTypes[2].Descriptor()
 }
 
 func (ActionKind) Type() protoreflect.EnumType {
-	return &file_runtime_v6_proto_enumTypes[2]
+	return &file_runtime_v7_proto_enumTypes[2]
 }
 
 func (x ActionKind) Number() protoreflect.EnumNumber {
@@ -168,7 +168,7 @@ func (x ActionKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ActionKind.Descriptor instead.
 func (ActionKind) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{2}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{2}
 }
 
 type ShotRejection int32
@@ -225,11 +225,11 @@ func (x ShotRejection) String() string {
 }
 
 func (ShotRejection) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v6_proto_enumTypes[3].Descriptor()
+	return file_runtime_v7_proto_enumTypes[3].Descriptor()
 }
 
 func (ShotRejection) Type() protoreflect.EnumType {
-	return &file_runtime_v6_proto_enumTypes[3]
+	return &file_runtime_v7_proto_enumTypes[3]
 }
 
 func (x ShotRejection) Number() protoreflect.EnumNumber {
@@ -238,7 +238,7 @@ func (x ShotRejection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShotRejection.Descriptor instead.
 func (ShotRejection) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{3}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{3}
 }
 
 type ShotHitKind int32
@@ -274,11 +274,11 @@ func (x ShotHitKind) String() string {
 }
 
 func (ShotHitKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v6_proto_enumTypes[4].Descriptor()
+	return file_runtime_v7_proto_enumTypes[4].Descriptor()
 }
 
 func (ShotHitKind) Type() protoreflect.EnumType {
-	return &file_runtime_v6_proto_enumTypes[4]
+	return &file_runtime_v7_proto_enumTypes[4]
 }
 
 func (x ShotHitKind) Number() protoreflect.EnumNumber {
@@ -287,7 +287,144 @@ func (x ShotHitKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShotHitKind.Descriptor instead.
 func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{4}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{4}
+}
+
+// Each name is an ingress v1 drop_ key in upper case; the words are defined
+// once, in gateway/ingress_statistics.go, and checked against
+// tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
+// 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
+// (16, 17, 20-26, 43, 44) existed only in pv7-line's intermediate commits; the
+// edge batches deleted them with their exits and they are reserved. A
+// reserved value is never reused.
+type DropReason int32
+
+const (
+	DropReason_DROP_REASON_UNSPECIFIED                 DropReason = 0
+	DropReason_DROP_RATE_LIMITED_HELLO_PACKETS         DropReason = 1
+	DropReason_DROP_RATE_LIMITED_INPUT_PACKETS         DropReason = 2
+	DropReason_DROP_RATE_LIMITED_ACTIONS_PACKETS       DropReason = 3
+	DropReason_DROP_RATE_LIMITED_OTHER_PACKETS         DropReason = 4
+	DropReason_DROP_UNAUTHORIZED_HELLO_PACKETS         DropReason = 5
+	DropReason_DROP_UNAUTHORIZED_INPUT_PACKETS         DropReason = 6
+	DropReason_DROP_UNAUTHORIZED_ACTIONS_PACKETS       DropReason = 7
+	DropReason_DROP_UNAUTHORIZED_OTHER_PACKETS         DropReason = 8
+	DropReason_DROP_STALE_SEQUENCE_ACTIONS_PACKETS     DropReason = 9
+	DropReason_DROP_STALE_SEQUENCE_OTHER_PACKETS       DropReason = 10
+	DropReason_DROP_MALFORMED_HELLO_PACKETS            DropReason = 11
+	DropReason_DROP_MALFORMED_INPUT_PACKETS            DropReason = 12
+	DropReason_DROP_MALFORMED_ACTIONS_PACKETS          DropReason = 13
+	DropReason_DROP_INACTIVE_INPUT_PACKETS             DropReason = 14
+	DropReason_DROP_INACTIVE_ACTIONS_PACKETS           DropReason = 15
+	DropReason_DROP_UNKNOWN_KIND_PACKETS               DropReason = 18
+	DropReason_DROP_ADMISSION_UNKNOWN_PACKETS          DropReason = 19
+	DropReason_DROP_WRITE_FAILED_SNAPSHOT_PACKETS      DropReason = 27
+	DropReason_DROP_WRITE_FAILED_RESULTS_PACKETS       DropReason = 28
+	DropReason_DROP_WRITE_FAILED_CONTROL_PACKETS       DropReason = 29
+	DropReason_DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS DropReason = 30
+	DropReason_DROP_REPLACED_SNAPSHOT_PACKETS          DropReason = 31
+	DropReason_DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS   DropReason = 32
+	DropReason_DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS DropReason = 33
+	DropReason_DROP_RESULTS_OVER_RATE_PACKETS          DropReason = 34
+	DropReason_DROP_UNDECODABLE_DATAGRAMS              DropReason = 40
+	DropReason_DROP_OTHER_VERSION_DATAGRAMS            DropReason = 41
+	DropReason_DROP_UNKNOWN_SESSION_DATAGRAMS          DropReason = 42
+	DropReason_DROP_COALESCED_SNAPSHOTS                DropReason = 45
+)
+
+// Enum value maps for DropReason.
+var (
+	DropReason_name = map[int32]string{
+		0:  "DROP_REASON_UNSPECIFIED",
+		1:  "DROP_RATE_LIMITED_HELLO_PACKETS",
+		2:  "DROP_RATE_LIMITED_INPUT_PACKETS",
+		3:  "DROP_RATE_LIMITED_ACTIONS_PACKETS",
+		4:  "DROP_RATE_LIMITED_OTHER_PACKETS",
+		5:  "DROP_UNAUTHORIZED_HELLO_PACKETS",
+		6:  "DROP_UNAUTHORIZED_INPUT_PACKETS",
+		7:  "DROP_UNAUTHORIZED_ACTIONS_PACKETS",
+		8:  "DROP_UNAUTHORIZED_OTHER_PACKETS",
+		9:  "DROP_STALE_SEQUENCE_ACTIONS_PACKETS",
+		10: "DROP_STALE_SEQUENCE_OTHER_PACKETS",
+		11: "DROP_MALFORMED_HELLO_PACKETS",
+		12: "DROP_MALFORMED_INPUT_PACKETS",
+		13: "DROP_MALFORMED_ACTIONS_PACKETS",
+		14: "DROP_INACTIVE_INPUT_PACKETS",
+		15: "DROP_INACTIVE_ACTIONS_PACKETS",
+		18: "DROP_UNKNOWN_KIND_PACKETS",
+		19: "DROP_ADMISSION_UNKNOWN_PACKETS",
+		27: "DROP_WRITE_FAILED_SNAPSHOT_PACKETS",
+		28: "DROP_WRITE_FAILED_RESULTS_PACKETS",
+		29: "DROP_WRITE_FAILED_CONTROL_PACKETS",
+		30: "DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS",
+		31: "DROP_REPLACED_SNAPSHOT_PACKETS",
+		32: "DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS",
+		33: "DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS",
+		34: "DROP_RESULTS_OVER_RATE_PACKETS",
+		40: "DROP_UNDECODABLE_DATAGRAMS",
+		41: "DROP_OTHER_VERSION_DATAGRAMS",
+		42: "DROP_UNKNOWN_SESSION_DATAGRAMS",
+		45: "DROP_COALESCED_SNAPSHOTS",
+	}
+	DropReason_value = map[string]int32{
+		"DROP_REASON_UNSPECIFIED":                 0,
+		"DROP_RATE_LIMITED_HELLO_PACKETS":         1,
+		"DROP_RATE_LIMITED_INPUT_PACKETS":         2,
+		"DROP_RATE_LIMITED_ACTIONS_PACKETS":       3,
+		"DROP_RATE_LIMITED_OTHER_PACKETS":         4,
+		"DROP_UNAUTHORIZED_HELLO_PACKETS":         5,
+		"DROP_UNAUTHORIZED_INPUT_PACKETS":         6,
+		"DROP_UNAUTHORIZED_ACTIONS_PACKETS":       7,
+		"DROP_UNAUTHORIZED_OTHER_PACKETS":         8,
+		"DROP_STALE_SEQUENCE_ACTIONS_PACKETS":     9,
+		"DROP_STALE_SEQUENCE_OTHER_PACKETS":       10,
+		"DROP_MALFORMED_HELLO_PACKETS":            11,
+		"DROP_MALFORMED_INPUT_PACKETS":            12,
+		"DROP_MALFORMED_ACTIONS_PACKETS":          13,
+		"DROP_INACTIVE_INPUT_PACKETS":             14,
+		"DROP_INACTIVE_ACTIONS_PACKETS":           15,
+		"DROP_UNKNOWN_KIND_PACKETS":               18,
+		"DROP_ADMISSION_UNKNOWN_PACKETS":          19,
+		"DROP_WRITE_FAILED_SNAPSHOT_PACKETS":      27,
+		"DROP_WRITE_FAILED_RESULTS_PACKETS":       28,
+		"DROP_WRITE_FAILED_CONTROL_PACKETS":       29,
+		"DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS": 30,
+		"DROP_REPLACED_SNAPSHOT_PACKETS":          31,
+		"DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS":   32,
+		"DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS": 33,
+		"DROP_RESULTS_OVER_RATE_PACKETS":          34,
+		"DROP_UNDECODABLE_DATAGRAMS":              40,
+		"DROP_OTHER_VERSION_DATAGRAMS":            41,
+		"DROP_UNKNOWN_SESSION_DATAGRAMS":          42,
+		"DROP_COALESCED_SNAPSHOTS":                45,
+	}
+)
+
+func (x DropReason) Enum() *DropReason {
+	p := new(DropReason)
+	*p = x
+	return p
+}
+
+func (x DropReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DropReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_runtime_v7_proto_enumTypes[5].Descriptor()
+}
+
+func (DropReason) Type() protoreflect.EnumType {
+	return &file_runtime_v7_proto_enumTypes[5]
+}
+
+func (x DropReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DropReason.Descriptor instead.
+func (DropReason) EnumDescriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{5}
 }
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
@@ -310,7 +447,7 @@ type Ready struct {
 
 func (x *Ready) Reset() {
 	*x = Ready{}
-	mi := &file_runtime_v6_proto_msgTypes[0]
+	mi := &file_runtime_v7_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -322,7 +459,7 @@ func (x *Ready) String() string {
 func (*Ready) ProtoMessage() {}
 
 func (x *Ready) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[0]
+	mi := &file_runtime_v7_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -335,7 +472,7 @@ func (x *Ready) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ready.ProtoReflect.Descriptor instead.
 func (*Ready) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{0}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Ready) GetArenaId() string {
@@ -410,7 +547,7 @@ type PlayerJoin struct {
 
 func (x *PlayerJoin) Reset() {
 	*x = PlayerJoin{}
-	mi := &file_runtime_v6_proto_msgTypes[1]
+	mi := &file_runtime_v7_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -422,7 +559,7 @@ func (x *PlayerJoin) String() string {
 func (*PlayerJoin) ProtoMessage() {}
 
 func (x *PlayerJoin) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[1]
+	mi := &file_runtime_v7_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +572,7 @@ func (x *PlayerJoin) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerJoin.ProtoReflect.Descriptor instead.
 func (*PlayerJoin) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{1}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PlayerJoin) GetPlayerId() uint64 {
@@ -454,7 +591,7 @@ type PlayerLeave struct {
 
 func (x *PlayerLeave) Reset() {
 	*x = PlayerLeave{}
-	mi := &file_runtime_v6_proto_msgTypes[2]
+	mi := &file_runtime_v7_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -466,7 +603,7 @@ func (x *PlayerLeave) String() string {
 func (*PlayerLeave) ProtoMessage() {}
 
 func (x *PlayerLeave) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[2]
+	mi := &file_runtime_v7_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -479,7 +616,7 @@ func (x *PlayerLeave) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerLeave.ProtoReflect.Descriptor instead.
 func (*PlayerLeave) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{2}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlayerLeave) GetPlayerId() uint64 {
@@ -504,7 +641,7 @@ type MovementCommand struct {
 
 func (x *MovementCommand) Reset() {
 	*x = MovementCommand{}
-	mi := &file_runtime_v6_proto_msgTypes[3]
+	mi := &file_runtime_v7_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -516,7 +653,7 @@ func (x *MovementCommand) String() string {
 func (*MovementCommand) ProtoMessage() {}
 
 func (x *MovementCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[3]
+	mi := &file_runtime_v7_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -529,7 +666,7 @@ func (x *MovementCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MovementCommand.ProtoReflect.Descriptor instead.
 func (*MovementCommand) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{3}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MovementCommand) GetSequence() uint64 {
@@ -591,7 +728,7 @@ type PlayerInput struct {
 
 func (x *PlayerInput) Reset() {
 	*x = PlayerInput{}
-	mi := &file_runtime_v6_proto_msgTypes[4]
+	mi := &file_runtime_v7_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -603,7 +740,7 @@ func (x *PlayerInput) String() string {
 func (*PlayerInput) ProtoMessage() {}
 
 func (x *PlayerInput) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[4]
+	mi := &file_runtime_v7_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -616,7 +753,7 @@ func (x *PlayerInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInput.ProtoReflect.Descriptor instead.
 func (*PlayerInput) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{4}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PlayerInput) GetPlayerId() uint64 {
@@ -665,7 +802,7 @@ type JoinResult struct {
 
 func (x *JoinResult) Reset() {
 	*x = JoinResult{}
-	mi := &file_runtime_v6_proto_msgTypes[5]
+	mi := &file_runtime_v7_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -677,7 +814,7 @@ func (x *JoinResult) String() string {
 func (*JoinResult) ProtoMessage() {}
 
 func (x *JoinResult) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[5]
+	mi := &file_runtime_v7_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -690,7 +827,7 @@ func (x *JoinResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinResult.ProtoReflect.Descriptor instead.
 func (*JoinResult) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{5}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *JoinResult) GetPlayerId() uint64 {
@@ -728,7 +865,7 @@ type PlayerState struct {
 	VerticalVelocity          float32                `protobuf:"fixed32,10,opt,name=vertical_velocity,json=verticalVelocity,proto3" json:"vertical_velocity,omitempty"`
 	Grounded                  bool                   `protobuf:"varint,11,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	LifeGeneration            uint64                 `protobuf:"varint,12,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.runtime.v6.LifeState" json:"life_state,omitempty"`
+	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.runtime.v7.LifeState" json:"life_state,omitempty"`
 	LifeStateTick             uint64                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
 	RespawnTick               uint64                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
 	// Host timing observation, never simulation input: the smallest movement
@@ -749,7 +886,7 @@ type PlayerState struct {
 
 func (x *PlayerState) Reset() {
 	*x = PlayerState{}
-	mi := &file_runtime_v6_proto_msgTypes[6]
+	mi := &file_runtime_v7_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -761,7 +898,7 @@ func (x *PlayerState) String() string {
 func (*PlayerState) ProtoMessage() {}
 
 func (x *PlayerState) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[6]
+	mi := &file_runtime_v7_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +911,7 @@ func (x *PlayerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerState.ProtoReflect.Descriptor instead.
 func (*PlayerState) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{6}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PlayerState) GetPlayerId() uint64 {
@@ -914,7 +1051,7 @@ type WorldSnapshot struct {
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_runtime_v6_proto_msgTypes[7]
+	mi := &file_runtime_v7_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +1063,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[7]
+	mi := &file_runtime_v7_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +1076,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{7}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *WorldSnapshot) GetTick() uint64 {
@@ -966,7 +1103,7 @@ func (x *WorldSnapshot) GetCombat() []*CombatState {
 type PlayerEvicted struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Reason              EvictionReason         `protobuf:"varint,2,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v6.EvictionReason" json:"reason,omitempty"`
+	Reason              EvictionReason         `protobuf:"varint,2,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v7.EvictionReason" json:"reason,omitempty"`
 	ReferenceAgeMs      uint32                 `protobuf:"varint,3,opt,name=reference_age_ms,json=referenceAgeMs,proto3" json:"reference_age_ms,omitempty"`
 	SubstitutedPermille uint32                 `protobuf:"varint,4,opt,name=substituted_permille,json=substitutedPermille,proto3" json:"substituted_permille,omitempty"`
 	MovementResets      uint32                 `protobuf:"varint,5,opt,name=movement_resets,json=movementResets,proto3" json:"movement_resets,omitempty"`
@@ -976,7 +1113,7 @@ type PlayerEvicted struct {
 
 func (x *PlayerEvicted) Reset() {
 	*x = PlayerEvicted{}
-	mi := &file_runtime_v6_proto_msgTypes[8]
+	mi := &file_runtime_v7_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -988,7 +1125,7 @@ func (x *PlayerEvicted) String() string {
 func (*PlayerEvicted) ProtoMessage() {}
 
 func (x *PlayerEvicted) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[8]
+	mi := &file_runtime_v7_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1001,7 +1138,7 @@ func (x *PlayerEvicted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerEvicted.ProtoReflect.Descriptor instead.
 func (*PlayerEvicted) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{8}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PlayerEvicted) GetPlayerId() uint64 {
@@ -1050,7 +1187,7 @@ type RuntimeError struct {
 
 func (x *RuntimeError) Reset() {
 	*x = RuntimeError{}
-	mi := &file_runtime_v6_proto_msgTypes[9]
+	mi := &file_runtime_v7_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1062,7 +1199,7 @@ func (x *RuntimeError) String() string {
 func (*RuntimeError) ProtoMessage() {}
 
 func (x *RuntimeError) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[9]
+	mi := &file_runtime_v7_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1075,7 +1212,7 @@ func (x *RuntimeError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeError.ProtoReflect.Descriptor instead.
 func (*RuntimeError) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{9}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RuntimeError) GetPlayerId() uint64 {
@@ -1114,6 +1251,8 @@ type RuntimeEnvelope struct {
 	//	*RuntimeEnvelope_Actions
 	//	*RuntimeEnvelope_ActionResults
 	//	*RuntimeEnvelope_Evicted
+	//	*RuntimeEnvelope_Clock
+	//	*RuntimeEnvelope_DropReport
 	Message       isRuntimeEnvelope_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1121,7 +1260,7 @@ type RuntimeEnvelope struct {
 
 func (x *RuntimeEnvelope) Reset() {
 	*x = RuntimeEnvelope{}
-	mi := &file_runtime_v6_proto_msgTypes[10]
+	mi := &file_runtime_v7_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1133,7 +1272,7 @@ func (x *RuntimeEnvelope) String() string {
 func (*RuntimeEnvelope) ProtoMessage() {}
 
 func (x *RuntimeEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[10]
+	mi := &file_runtime_v7_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1146,7 +1285,7 @@ func (x *RuntimeEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeEnvelope.ProtoReflect.Descriptor instead.
 func (*RuntimeEnvelope) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{10}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RuntimeEnvelope) GetProtocolVersion() uint32 {
@@ -1253,6 +1392,24 @@ func (x *RuntimeEnvelope) GetEvicted() *PlayerEvicted {
 	return nil
 }
 
+func (x *RuntimeEnvelope) GetClock() *ClockSample {
+	if x != nil {
+		if x, ok := x.Message.(*RuntimeEnvelope_Clock); ok {
+			return x.Clock
+		}
+	}
+	return nil
+}
+
+func (x *RuntimeEnvelope) GetDropReport() *GatewayDropReport {
+	if x != nil {
+		if x, ok := x.Message.(*RuntimeEnvelope_DropReport); ok {
+			return x.DropReport
+		}
+	}
+	return nil
+}
+
 type isRuntimeEnvelope_Message interface {
 	isRuntimeEnvelope_Message()
 }
@@ -1297,6 +1454,14 @@ type RuntimeEnvelope_Evicted struct {
 	Evicted *PlayerEvicted `protobuf:"bytes,19,opt,name=evicted,proto3,oneof"`
 }
 
+type RuntimeEnvelope_Clock struct {
+	Clock *ClockSample `protobuf:"bytes,20,opt,name=clock,proto3,oneof"`
+}
+
+type RuntimeEnvelope_DropReport struct {
+	DropReport *GatewayDropReport `protobuf:"bytes,21,opt,name=drop_report,json=dropReport,proto3,oneof"`
+}
+
 func (*RuntimeEnvelope_Ready) isRuntimeEnvelope_Message() {}
 
 func (*RuntimeEnvelope_Join) isRuntimeEnvelope_Message() {}
@@ -1317,6 +1482,82 @@ func (*RuntimeEnvelope_ActionResults) isRuntimeEnvelope_Message() {}
 
 func (*RuntimeEnvelope_Evicted) isRuntimeEnvelope_Message() {}
 
+func (*RuntimeEnvelope_Clock) isRuntimeEnvelope_Message() {}
+
+func (*RuntimeEnvelope_DropReport) isRuntimeEnvelope_Message() {}
+
+// Diagnostics only (pv7 contract §2, §3): one four-timestamp clock sample.
+// Times are the sender's own monotonic clock in microseconds; a time of the
+// other side is only ever copied back (origin_us), never compared directly.
+// No value derived from it may reach a decision.
+type ClockSample struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The transmit_us of the peer's latest ClockSample this side read, as is;
+	// present exactly when receive_us is.
+	OriginUs *uint64 `protobuf:"varint,1,opt,name=origin_us,json=originUs,proto3,oneof" json:"origin_us,omitempty"`
+	// When this side read that sample; not after transmit_us.
+	ReceiveUs *uint64 `protobuf:"varint,2,opt,name=receive_us,json=receiveUs,proto3,oneof" json:"receive_us,omitempty"`
+	// When this side serialized this sample: at least 1 and strictly increasing
+	// per sender and stream.
+	TransmitUs    uint64 `protobuf:"varint,3,opt,name=transmit_us,json=transmitUs,proto3" json:"transmit_us,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClockSample) Reset() {
+	*x = ClockSample{}
+	mi := &file_runtime_v7_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClockSample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClockSample) ProtoMessage() {}
+
+func (x *ClockSample) ProtoReflect() protoreflect.Message {
+	mi := &file_runtime_v7_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClockSample.ProtoReflect.Descriptor instead.
+func (*ClockSample) Descriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ClockSample) GetOriginUs() uint64 {
+	if x != nil && x.OriginUs != nil {
+		return *x.OriginUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetReceiveUs() uint64 {
+	if x != nil && x.ReceiveUs != nil {
+		return *x.ReceiveUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetTransmitUs() uint64 {
+	if x != nil {
+		return x.TransmitUs
+	}
+	return 0
+}
+
+// May repeat a batch the Match already took. An ACK-only batch whose
+// acknowledged_through is no more than the Match's retirement asks for that
+// retirement again (pv7 §2a).
 type ActionBatch struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1328,7 +1569,7 @@ type ActionBatch struct {
 
 func (x *ActionBatch) Reset() {
 	*x = ActionBatch{}
-	mi := &file_runtime_v6_proto_msgTypes[11]
+	mi := &file_runtime_v7_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1340,7 +1581,7 @@ func (x *ActionBatch) String() string {
 func (*ActionBatch) ProtoMessage() {}
 
 func (x *ActionBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[11]
+	mi := &file_runtime_v7_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1353,7 +1594,7 @@ func (x *ActionBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionBatch.ProtoReflect.Descriptor instead.
 func (*ActionBatch) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{11}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ActionBatch) GetPlayerId() uint64 {
@@ -1377,6 +1618,8 @@ func (x *ActionBatch) GetAcknowledgedThrough() uint64 {
 	return 0
 }
 
+// Resent by the Match, at most ActionSendRate per player, until the Client's
+// ACK retires each decision; idempotent: a copy changes nothing (pv7 §2a).
 type ActionResults struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1388,7 +1631,7 @@ type ActionResults struct {
 
 func (x *ActionResults) Reset() {
 	*x = ActionResults{}
-	mi := &file_runtime_v6_proto_msgTypes[12]
+	mi := &file_runtime_v7_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1400,7 +1643,7 @@ func (x *ActionResults) String() string {
 func (*ActionResults) ProtoMessage() {}
 
 func (x *ActionResults) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[12]
+	mi := &file_runtime_v7_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1413,7 +1656,7 @@ func (x *ActionResults) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionResults.ProtoReflect.Descriptor instead.
 func (*ActionResults) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{12}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ActionResults) GetPlayerId() uint64 {
@@ -1453,7 +1696,7 @@ type CombatRules struct {
 
 func (x *CombatRules) Reset() {
 	*x = CombatRules{}
-	mi := &file_runtime_v6_proto_msgTypes[13]
+	mi := &file_runtime_v7_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1465,7 +1708,7 @@ func (x *CombatRules) String() string {
 func (*CombatRules) ProtoMessage() {}
 
 func (x *CombatRules) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[13]
+	mi := &file_runtime_v7_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1478,7 +1721,7 @@ func (x *CombatRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatRules.ProtoReflect.Descriptor instead.
 func (*CombatRules) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{13}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CombatRules) GetMaximumHp() uint32 {
@@ -1560,7 +1803,7 @@ type CombatState struct {
 
 func (x *CombatState) Reset() {
 	*x = CombatState{}
-	mi := &file_runtime_v6_proto_msgTypes[14]
+	mi := &file_runtime_v7_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1572,7 +1815,7 @@ func (x *CombatState) String() string {
 func (*CombatState) ProtoMessage() {}
 
 func (x *CombatState) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[14]
+	mi := &file_runtime_v7_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1585,7 +1828,7 @@ func (x *CombatState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatState.ProtoReflect.Descriptor instead.
 func (*CombatState) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{14}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CombatState) GetPlayerId() uint64 {
@@ -1685,7 +1928,7 @@ type ShotRequest struct {
 	ObservedAuthorityTick uint64                 `protobuf:"varint,2,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
 	Yaw                   *float32               `protobuf:"fixed32,3,opt,name=yaw,proto3,oneof" json:"yaw,omitempty"`
 	Pitch                 *float32               `protobuf:"fixed32,4,opt,name=pitch,proto3,oneof" json:"pitch,omitempty"`
-	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v6.ActionKind" json:"kind,omitempty"`
+	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration        uint64                 `protobuf:"varint,6,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
@@ -1693,7 +1936,7 @@ type ShotRequest struct {
 
 func (x *ShotRequest) Reset() {
 	*x = ShotRequest{}
-	mi := &file_runtime_v6_proto_msgTypes[15]
+	mi := &file_runtime_v7_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1705,7 +1948,7 @@ func (x *ShotRequest) String() string {
 func (*ShotRequest) ProtoMessage() {}
 
 func (x *ShotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[15]
+	mi := &file_runtime_v7_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1718,7 +1961,7 @@ func (x *ShotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotRequest.ProtoReflect.Descriptor instead.
 func (*ShotRequest) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{15}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ShotRequest) GetActionId() uint64 {
@@ -1768,11 +2011,11 @@ type ShotDecision struct {
 	ActionId             uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
 	ResolvedTick         uint64                 `protobuf:"varint,2,opt,name=resolved_tick,json=resolvedTick,proto3" json:"resolved_tick,omitempty"`
 	Accepted             bool                   `protobuf:"varint,3,opt,name=accepted,proto3" json:"accepted,omitempty"`
-	Rejection            ShotRejection          `protobuf:"varint,4,opt,name=rejection,proto3,enum=object_fps_pvp.runtime.v6.ShotRejection" json:"rejection,omitempty"`
-	HitKind              ShotHitKind            `protobuf:"varint,5,opt,name=hit_kind,json=hitKind,proto3,enum=object_fps_pvp.runtime.v6.ShotHitKind" json:"hit_kind,omitempty"`
+	Rejection            ShotRejection          `protobuf:"varint,4,opt,name=rejection,proto3,enum=object_fps_pvp.runtime.v7.ShotRejection" json:"rejection,omitempty"`
+	HitKind              ShotHitKind            `protobuf:"varint,5,opt,name=hit_kind,json=hitKind,proto3,enum=object_fps_pvp.runtime.v7.ShotHitKind" json:"hit_kind,omitempty"`
 	TargetId             uint64                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
 	Damage               uint32                 `protobuf:"varint,7,opt,name=damage,proto3" json:"damage,omitempty"`
-	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v6.ActionKind" json:"kind,omitempty"`
+	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration       uint64                 `protobuf:"varint,9,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	TargetLifeGeneration uint64                 `protobuf:"varint,10,opt,name=target_life_generation,json=targetLifeGeneration,proto3" json:"target_life_generation,omitempty"`
 	unknownFields        protoimpl.UnknownFields
@@ -1781,7 +2024,7 @@ type ShotDecision struct {
 
 func (x *ShotDecision) Reset() {
 	*x = ShotDecision{}
-	mi := &file_runtime_v6_proto_msgTypes[16]
+	mi := &file_runtime_v7_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1793,7 +2036,7 @@ func (x *ShotDecision) String() string {
 func (*ShotDecision) ProtoMessage() {}
 
 func (x *ShotDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_v6_proto_msgTypes[16]
+	mi := &file_runtime_v7_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1806,7 +2049,7 @@ func (x *ShotDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotDecision.ProtoReflect.Descriptor instead.
 func (*ShotDecision) Descriptor() ([]byte, []int) {
-	return file_runtime_v6_proto_rawDescGZIP(), []int{16}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ShotDecision) GetActionId() uint64 {
@@ -1879,11 +2122,283 @@ func (x *ShotDecision) GetTargetLifeGeneration() uint64 {
 	return 0
 }
 
-var File_runtime_v6_proto protoreflect.FileDescriptor
+// Diagnostics only (pv7 contract §4): the discards the Gateway executed, by
+// reason, per stream (a player, or the Gateway as player 0). Identity only,
+// never content; bounded; cumulative, so a lost or merged report loses no
+// count. No value of it may reach a decision (D32).
+type GatewayDropReport struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                   // 0: the Gateway's stream
+	ReportSequence uint64                 `protobuf:"varint,2,opt,name=report_sequence,json=reportSequence,proto3" json:"report_sequence,omitempty"` // from 1 per link and stream, assigned when written
+	Final          bool                   `protobuf:"varint,3,opt,name=final,proto3" json:"final,omitempty"`                                         // the stream's last report
+	Counts         []*DropCount           `protobuf:"bytes,4,rep,name=counts,proto3" json:"counts,omitempty"`                                        // every non-zero total, reasons ascending, never going back
+	Samples        []*DropSample          `protobuf:"bytes,5,rep,name=samples,proto3" json:"samples,omitempty"`                                      // the earliest events since the previous report, at most 4
+	SamplesOmitted uint64                 `protobuf:"varint,6,opt,name=samples_omitted,json=samplesOmitted,proto3" json:"samples_omitted,omitempty"` // cumulative: events not sampled
+	MergedStreams  uint64                 `protobuf:"varint,7,opt,name=merged_streams,json=mergedStreams,proto3" json:"merged_streams,omitempty"`    // Gateway stream only, cumulative: finals merged away
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
 
-const file_runtime_v6_proto_rawDesc = "" +
+func (x *GatewayDropReport) Reset() {
+	*x = GatewayDropReport{}
+	mi := &file_runtime_v7_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GatewayDropReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GatewayDropReport) ProtoMessage() {}
+
+func (x *GatewayDropReport) ProtoReflect() protoreflect.Message {
+	mi := &file_runtime_v7_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GatewayDropReport.ProtoReflect.Descriptor instead.
+func (*GatewayDropReport) Descriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GatewayDropReport) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GatewayDropReport) GetReportSequence() uint64 {
+	if x != nil {
+		return x.ReportSequence
+	}
+	return 0
+}
+
+func (x *GatewayDropReport) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
+func (x *GatewayDropReport) GetCounts() []*DropCount {
+	if x != nil {
+		return x.Counts
+	}
+	return nil
+}
+
+func (x *GatewayDropReport) GetSamples() []*DropSample {
+	if x != nil {
+		return x.Samples
+	}
+	return nil
+}
+
+func (x *GatewayDropReport) GetSamplesOmitted() uint64 {
+	if x != nil {
+		return x.SamplesOmitted
+	}
+	return 0
+}
+
+func (x *GatewayDropReport) GetMergedStreams() uint64 {
+	if x != nil {
+		return x.MergedStreams
+	}
+	return 0
+}
+
+type DropCount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        DropReason             `protobuf:"varint,1,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v7.DropReason" json:"reason,omitempty"`
+	Total         uint64                 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"` // the Gateway's cumulative drop_ count when written, at least 1
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DropCount) Reset() {
+	*x = DropCount{}
+	mi := &file_runtime_v7_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DropCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DropCount) ProtoMessage() {}
+
+func (x *DropCount) ProtoReflect() protoreflect.Message {
+	mi := &file_runtime_v7_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DropCount.ProtoReflect.Descriptor instead.
+func (*DropCount) Descriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *DropCount) GetReason() DropReason {
+	if x != nil {
+		return x.Reason
+	}
+	return DropReason_DROP_REASON_UNSPECIFIED
+}
+
+func (x *DropCount) GetTotal() uint64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type DropSample struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Reason               DropReason             `protobuf:"varint,1,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v7.DropReason" json:"reason,omitempty"`
+	DwellUs              uint32                 `protobuf:"varint,2,opt,name=dwell_us,json=dwellUs,proto3" json:"dwell_us,omitempty"`                                          // pv7 §2 dwell, clamped at 10,000,000
+	TransportSequence    uint32                 `protobuf:"varint,3,opt,name=transport_sequence,json=transportSequence,proto3" json:"transport_sequence,omitempty"`            // the uplink GYOP sequence or the Gateway's downlink one; 0 if none
+	MovementEpoch        uint64                 `protobuf:"varint,4,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`                        // command reasons; 0 otherwise
+	LifeGeneration       uint64                 `protobuf:"varint,5,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`                     // command reasons; 0 otherwise
+	FirstCommandSequence uint64                 `protobuf:"varint,6,opt,name=first_command_sequence,json=firstCommandSequence,proto3" json:"first_command_sequence,omitempty"` // command reasons: the bounds of the dropped commands
+	LastCommandSequence  uint64                 `protobuf:"varint,7,opt,name=last_command_sequence,json=lastCommandSequence,proto3" json:"last_command_sequence,omitempty"`
+	FirstActionId        uint64                 `protobuf:"varint,8,opt,name=first_action_id,json=firstActionId,proto3" json:"first_action_id,omitempty"` // action reasons: the bounds of the dropped ids; ACK reasons: both
+	LastActionId         uint64                 `protobuf:"varint,9,opt,name=last_action_id,json=lastActionId,proto3" json:"last_action_id,omitempty"`    //   are the dropped acknowledged_through
+	SnapshotTick         uint64                 `protobuf:"varint,10,opt,name=snapshot_tick,json=snapshotTick,proto3" json:"snapshot_tick,omitempty"`     // snapshot reasons; 0 otherwise
+	ItemCount            uint32                 `protobuf:"varint,11,opt,name=item_count,json=itemCount,proto3" json:"item_count,omitempty"`              // items the event dropped
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *DropSample) Reset() {
+	*x = DropSample{}
+	mi := &file_runtime_v7_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DropSample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DropSample) ProtoMessage() {}
+
+func (x *DropSample) ProtoReflect() protoreflect.Message {
+	mi := &file_runtime_v7_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DropSample.ProtoReflect.Descriptor instead.
+func (*DropSample) Descriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DropSample) GetReason() DropReason {
+	if x != nil {
+		return x.Reason
+	}
+	return DropReason_DROP_REASON_UNSPECIFIED
+}
+
+func (x *DropSample) GetDwellUs() uint32 {
+	if x != nil {
+		return x.DwellUs
+	}
+	return 0
+}
+
+func (x *DropSample) GetTransportSequence() uint32 {
+	if x != nil {
+		return x.TransportSequence
+	}
+	return 0
+}
+
+func (x *DropSample) GetMovementEpoch() uint64 {
+	if x != nil {
+		return x.MovementEpoch
+	}
+	return 0
+}
+
+func (x *DropSample) GetLifeGeneration() uint64 {
+	if x != nil {
+		return x.LifeGeneration
+	}
+	return 0
+}
+
+func (x *DropSample) GetFirstCommandSequence() uint64 {
+	if x != nil {
+		return x.FirstCommandSequence
+	}
+	return 0
+}
+
+func (x *DropSample) GetLastCommandSequence() uint64 {
+	if x != nil {
+		return x.LastCommandSequence
+	}
+	return 0
+}
+
+func (x *DropSample) GetFirstActionId() uint64 {
+	if x != nil {
+		return x.FirstActionId
+	}
+	return 0
+}
+
+func (x *DropSample) GetLastActionId() uint64 {
+	if x != nil {
+		return x.LastActionId
+	}
+	return 0
+}
+
+func (x *DropSample) GetSnapshotTick() uint64 {
+	if x != nil {
+		return x.SnapshotTick
+	}
+	return 0
+}
+
+func (x *DropSample) GetItemCount() uint32 {
+	if x != nil {
+		return x.ItemCount
+	}
+	return 0
+}
+
+var File_runtime_v7_proto protoreflect.FileDescriptor
+
+const file_runtime_v7_proto_rawDesc = "" +
 	"\n" +
-	"\x10runtime_v6.proto\x12\x19object_fps_pvp.runtime.v6\"\xe6\x02\n" +
+	"\x10runtime_v7.proto\x12\x19object_fps_pvp.runtime.v7\"\xe6\x02\n" +
 	"\x05Ready\x12\x19\n" +
 	"\barena_id\x18\x01 \x01(\tR\aarenaId\x12#\n" +
 	"\rarena_version\x18\x02 \x01(\rR\farenaVersion\x12\x1b\n" +
@@ -1891,7 +2406,7 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x17snapshot_interval_ticks\x18\x04 \x01(\rR\x15snapshotIntervalTicks\x12\x1f\n" +
 	"\vmax_players\x18\x05 \x01(\rR\n" +
 	"maxPlayers\x12I\n" +
-	"\fcombat_rules\x18\x06 \x01(\v2&.object_fps_pvp.runtime.v6.CombatRulesR\vcombatRules\x12\x1f\n" +
+	"\fcombat_rules\x18\x06 \x01(\v2&.object_fps_pvp.runtime.v7.CombatRulesR\vcombatRules\x12\x1f\n" +
 	"\vjump_height\x18\a \x01(\x02R\n" +
 	"jumpHeight\x12\x18\n" +
 	"\agravity\x18\b \x01(\x02R\agravity\x12!\n" +
@@ -1911,7 +2426,7 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\xfa\x01\n" +
 	"\vPlayerInput\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12F\n" +
-	"\bcommands\x18\x02 \x03(\v2*.object_fps_pvp.runtime.v6.MovementCommandR\bcommands\x12%\n" +
+	"\bcommands\x18\x02 \x03(\v2*.object_fps_pvp.runtime.v7.MovementCommandR\bcommands\x12%\n" +
 	"\x0emovement_epoch\x18\x03 \x01(\x04R\rmovementEpoch\x12'\n" +
 	"\x0flife_generation\x18\x04 \x01(\x04R\x0elifeGeneration\x126\n" +
 	"\x17observed_authority_tick\x18\x05 \x01(\x04R\x15observedAuthorityTick\"]\n" +
@@ -1935,7 +2450,7 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\bgrounded\x18\v \x01(\bR\bgrounded\x12'\n" +
 	"\x0flife_generation\x18\f \x01(\x04R\x0elifeGeneration\x12C\n" +
 	"\n" +
-	"life_state\x18\r \x01(\x0e2$.object_fps_pvp.runtime.v6.LifeStateR\tlifeState\x12&\n" +
+	"life_state\x18\r \x01(\x0e2$.object_fps_pvp.runtime.v7.LifeStateR\tlifeState\x12&\n" +
 	"\x0flife_state_tick\x18\x0e \x01(\x04R\rlifeStateTick\x12!\n" +
 	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x12;\n" +
 	"\x17movement_slack_sequence\x18\x11 \x01(\x04H\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
@@ -1945,41 +2460,53 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x12_movement_slack_usJ\x04\b\x10\x10\x11R\x13epoch_start_wait_us\"\xa5\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12@\n" +
-	"\aplayers\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v6.PlayerStateR\aplayers\x12>\n" +
-	"\x06combat\x18\x03 \x03(\v2&.object_fps_pvp.runtime.v6.CombatStateR\x06combat\"\xf5\x01\n" +
+	"\aplayers\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v7.PlayerStateR\aplayers\x12>\n" +
+	"\x06combat\x18\x03 \x03(\v2&.object_fps_pvp.runtime.v7.CombatStateR\x06combat\"\xf5\x01\n" +
 	"\rPlayerEvicted\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12A\n" +
-	"\x06reason\x18\x02 \x01(\x0e2).object_fps_pvp.runtime.v6.EvictionReasonR\x06reason\x12(\n" +
+	"\x06reason\x18\x02 \x01(\x0e2).object_fps_pvp.runtime.v7.EvictionReasonR\x06reason\x12(\n" +
 	"\x10reference_age_ms\x18\x03 \x01(\rR\x0ereferenceAgeMs\x121\n" +
 	"\x14substituted_permille\x18\x04 \x01(\rR\x13substitutedPermille\x12'\n" +
 	"\x0fmovement_resets\x18\x05 \x01(\rR\x0emovementResets\"Y\n" +
 	"\fRuntimeError\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xee\x05\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xff\x06\n" +
 	"\x0fRuntimeEnvelope\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x128\n" +
 	"\x05ready\x18\n" +
-	" \x01(\v2 .object_fps_pvp.runtime.v6.ReadyH\x00R\x05ready\x12;\n" +
-	"\x04join\x18\v \x01(\v2%.object_fps_pvp.runtime.v6.PlayerJoinH\x00R\x04join\x12>\n" +
-	"\x05leave\x18\f \x01(\v2&.object_fps_pvp.runtime.v6.PlayerLeaveH\x00R\x05leave\x12>\n" +
-	"\x05input\x18\r \x01(\v2&.object_fps_pvp.runtime.v6.PlayerInputH\x00R\x05input\x12H\n" +
-	"\vjoin_result\x18\x0e \x01(\v2%.object_fps_pvp.runtime.v6.JoinResultH\x00R\n" +
+	" \x01(\v2 .object_fps_pvp.runtime.v7.ReadyH\x00R\x05ready\x12;\n" +
+	"\x04join\x18\v \x01(\v2%.object_fps_pvp.runtime.v7.PlayerJoinH\x00R\x04join\x12>\n" +
+	"\x05leave\x18\f \x01(\v2&.object_fps_pvp.runtime.v7.PlayerLeaveH\x00R\x05leave\x12>\n" +
+	"\x05input\x18\r \x01(\v2&.object_fps_pvp.runtime.v7.PlayerInputH\x00R\x05input\x12H\n" +
+	"\vjoin_result\x18\x0e \x01(\v2%.object_fps_pvp.runtime.v7.JoinResultH\x00R\n" +
 	"joinResult\x12?\n" +
-	"\x05error\x18\x0f \x01(\v2'.object_fps_pvp.runtime.v6.RuntimeErrorH\x00R\x05error\x12F\n" +
-	"\bsnapshot\x18\x10 \x01(\v2(.object_fps_pvp.runtime.v6.WorldSnapshotH\x00R\bsnapshot\x12B\n" +
-	"\aactions\x18\x11 \x01(\v2&.object_fps_pvp.runtime.v6.ActionBatchH\x00R\aactions\x12Q\n" +
-	"\x0eaction_results\x18\x12 \x01(\v2(.object_fps_pvp.runtime.v6.ActionResultsH\x00R\ractionResults\x12D\n" +
-	"\aevicted\x18\x13 \x01(\v2(.object_fps_pvp.runtime.v6.PlayerEvictedH\x00R\aevictedB\t\n" +
-	"\amessage\"\x9b\x01\n" +
+	"\x05error\x18\x0f \x01(\v2'.object_fps_pvp.runtime.v7.RuntimeErrorH\x00R\x05error\x12F\n" +
+	"\bsnapshot\x18\x10 \x01(\v2(.object_fps_pvp.runtime.v7.WorldSnapshotH\x00R\bsnapshot\x12B\n" +
+	"\aactions\x18\x11 \x01(\v2&.object_fps_pvp.runtime.v7.ActionBatchH\x00R\aactions\x12Q\n" +
+	"\x0eaction_results\x18\x12 \x01(\v2(.object_fps_pvp.runtime.v7.ActionResultsH\x00R\ractionResults\x12D\n" +
+	"\aevicted\x18\x13 \x01(\v2(.object_fps_pvp.runtime.v7.PlayerEvictedH\x00R\aevicted\x12>\n" +
+	"\x05clock\x18\x14 \x01(\v2&.object_fps_pvp.runtime.v7.ClockSampleH\x00R\x05clock\x12O\n" +
+	"\vdrop_report\x18\x15 \x01(\v2,.object_fps_pvp.runtime.v7.GatewayDropReportH\x00R\n" +
+	"dropReportB\t\n" +
+	"\amessage\"\x91\x01\n" +
+	"\vClockSample\x12 \n" +
+	"\torigin_us\x18\x01 \x01(\x04H\x00R\boriginUs\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"receive_us\x18\x02 \x01(\x04H\x01R\treceiveUs\x88\x01\x01\x12\x1f\n" +
+	"\vtransmit_us\x18\x03 \x01(\x04R\n" +
+	"transmitUsB\f\n" +
+	"\n" +
+	"_origin_usB\r\n" +
+	"\v_receive_us\"\x9b\x01\n" +
 	"\vActionBatch\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12<\n" +
-	"\x05shots\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v6.ShotRequestR\x05shots\x121\n" +
+	"\x05shots\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v7.ShotRequestR\x05shots\x121\n" +
 	"\x14acknowledged_through\x18\x03 \x01(\x04R\x13acknowledgedThrough\"\x9c\x01\n" +
 	"\rActionResults\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
 	"\x0fretired_through\x18\x02 \x01(\x04R\x0eretiredThrough\x12E\n" +
-	"\tdecisions\x18\x03 \x03(\v2'.object_fps_pvp.runtime.v6.ShotDecisionR\tdecisions\"\xc1\x02\n" +
+	"\tdecisions\x18\x03 \x03(\v2'.object_fps_pvp.runtime.v7.ShotDecisionR\tdecisions\"\xc1\x02\n" +
 	"\vCombatRules\x12\x1d\n" +
 	"\n" +
 	"maximum_hp\x18\x01 \x01(\rR\tmaximumHp\x12\x1f\n" +
@@ -2012,7 +2539,7 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\x17observed_authority_tick\x18\x02 \x01(\x04R\x15observedAuthorityTick\x12\x15\n" +
 	"\x03yaw\x18\x03 \x01(\x02H\x00R\x03yaw\x88\x01\x01\x12\x19\n" +
 	"\x05pitch\x18\x04 \x01(\x02H\x01R\x05pitch\x88\x01\x01\x129\n" +
-	"\x04kind\x18\x05 \x01(\x0e2%.object_fps_pvp.runtime.v6.ActionKindR\x04kind\x12'\n" +
+	"\x04kind\x18\x05 \x01(\x0e2%.object_fps_pvp.runtime.v7.ActionKindR\x04kind\x12'\n" +
 	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGenerationB\x06\n" +
 	"\x04_yawB\b\n" +
 	"\x06_pitch\"\xc6\x03\n" +
@@ -2020,14 +2547,40 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x12#\n" +
 	"\rresolved_tick\x18\x02 \x01(\x04R\fresolvedTick\x12\x1a\n" +
 	"\baccepted\x18\x03 \x01(\bR\baccepted\x12F\n" +
-	"\trejection\x18\x04 \x01(\x0e2(.object_fps_pvp.runtime.v6.ShotRejectionR\trejection\x12A\n" +
-	"\bhit_kind\x18\x05 \x01(\x0e2&.object_fps_pvp.runtime.v6.ShotHitKindR\ahitKind\x12\x1b\n" +
+	"\trejection\x18\x04 \x01(\x0e2(.object_fps_pvp.runtime.v7.ShotRejectionR\trejection\x12A\n" +
+	"\bhit_kind\x18\x05 \x01(\x0e2&.object_fps_pvp.runtime.v7.ShotHitKindR\ahitKind\x12\x1b\n" +
 	"\ttarget_id\x18\x06 \x01(\x04R\btargetId\x12\x16\n" +
 	"\x06damage\x18\a \x01(\rR\x06damage\x129\n" +
-	"\x04kind\x18\b \x01(\x0e2%.object_fps_pvp.runtime.v6.ActionKindR\x04kind\x12'\n" +
+	"\x04kind\x18\b \x01(\x0e2%.object_fps_pvp.runtime.v7.ActionKindR\x04kind\x12'\n" +
 	"\x0flife_generation\x18\t \x01(\x04R\x0elifeGeneration\x124\n" +
 	"\x16target_life_generation\x18\n" +
-	" \x01(\x04R\x14targetLifeGeneration*@\n" +
+	" \x01(\x04R\x14targetLifeGeneration\"\xbe\x02\n" +
+	"\x11GatewayDropReport\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
+	"\x0freport_sequence\x18\x02 \x01(\x04R\x0ereportSequence\x12\x14\n" +
+	"\x05final\x18\x03 \x01(\bR\x05final\x12<\n" +
+	"\x06counts\x18\x04 \x03(\v2$.object_fps_pvp.runtime.v7.DropCountR\x06counts\x12?\n" +
+	"\asamples\x18\x05 \x03(\v2%.object_fps_pvp.runtime.v7.DropSampleR\asamples\x12'\n" +
+	"\x0fsamples_omitted\x18\x06 \x01(\x04R\x0esamplesOmitted\x12%\n" +
+	"\x0emerged_streams\x18\a \x01(\x04R\rmergedStreams\"`\n" +
+	"\tDropCount\x12=\n" +
+	"\x06reason\x18\x01 \x01(\x0e2%.object_fps_pvp.runtime.v7.DropReasonR\x06reason\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x04R\x05total\"\xe1\x03\n" +
+	"\n" +
+	"DropSample\x12=\n" +
+	"\x06reason\x18\x01 \x01(\x0e2%.object_fps_pvp.runtime.v7.DropReasonR\x06reason\x12\x19\n" +
+	"\bdwell_us\x18\x02 \x01(\rR\adwellUs\x12-\n" +
+	"\x12transport_sequence\x18\x03 \x01(\rR\x11transportSequence\x12%\n" +
+	"\x0emovement_epoch\x18\x04 \x01(\x04R\rmovementEpoch\x12'\n" +
+	"\x0flife_generation\x18\x05 \x01(\x04R\x0elifeGeneration\x124\n" +
+	"\x16first_command_sequence\x18\x06 \x01(\x04R\x14firstCommandSequence\x122\n" +
+	"\x15last_command_sequence\x18\a \x01(\x04R\x13lastCommandSequence\x12&\n" +
+	"\x0ffirst_action_id\x18\b \x01(\x04R\rfirstActionId\x12$\n" +
+	"\x0elast_action_id\x18\t \x01(\x04R\flastActionId\x12#\n" +
+	"\rsnapshot_tick\x18\n" +
+	" \x01(\x04R\fsnapshotTick\x12\x1d\n" +
+	"\n" +
+	"item_count\x18\v \x01(\rR\titemCount*@\n" +
 	"\tLifeState\x12\x14\n" +
 	"\x10LIFE_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
@@ -2057,83 +2610,127 @@ const file_runtime_v6_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02B-Z+gyo.local/object_fps_pvp/protocol/runtimev6b\x06proto3"
+	"HIT_PLAYER\x10\x02*\x91\t\n" +
+	"\n" +
+	"DropReason\x12\x1b\n" +
+	"\x17DROP_REASON_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fDROP_RATE_LIMITED_HELLO_PACKETS\x10\x01\x12#\n" +
+	"\x1fDROP_RATE_LIMITED_INPUT_PACKETS\x10\x02\x12%\n" +
+	"!DROP_RATE_LIMITED_ACTIONS_PACKETS\x10\x03\x12#\n" +
+	"\x1fDROP_RATE_LIMITED_OTHER_PACKETS\x10\x04\x12#\n" +
+	"\x1fDROP_UNAUTHORIZED_HELLO_PACKETS\x10\x05\x12#\n" +
+	"\x1fDROP_UNAUTHORIZED_INPUT_PACKETS\x10\x06\x12%\n" +
+	"!DROP_UNAUTHORIZED_ACTIONS_PACKETS\x10\a\x12#\n" +
+	"\x1fDROP_UNAUTHORIZED_OTHER_PACKETS\x10\b\x12'\n" +
+	"#DROP_STALE_SEQUENCE_ACTIONS_PACKETS\x10\t\x12%\n" +
+	"!DROP_STALE_SEQUENCE_OTHER_PACKETS\x10\n" +
+	"\x12 \n" +
+	"\x1cDROP_MALFORMED_HELLO_PACKETS\x10\v\x12 \n" +
+	"\x1cDROP_MALFORMED_INPUT_PACKETS\x10\f\x12\"\n" +
+	"\x1eDROP_MALFORMED_ACTIONS_PACKETS\x10\r\x12\x1f\n" +
+	"\x1bDROP_INACTIVE_INPUT_PACKETS\x10\x0e\x12!\n" +
+	"\x1dDROP_INACTIVE_ACTIONS_PACKETS\x10\x0f\x12\x1d\n" +
+	"\x19DROP_UNKNOWN_KIND_PACKETS\x10\x12\x12\"\n" +
+	"\x1eDROP_ADMISSION_UNKNOWN_PACKETS\x10\x13\x12&\n" +
+	"\"DROP_WRITE_FAILED_SNAPSHOT_PACKETS\x10\x1b\x12%\n" +
+	"!DROP_WRITE_FAILED_RESULTS_PACKETS\x10\x1c\x12%\n" +
+	"!DROP_WRITE_FAILED_CONTROL_PACKETS\x10\x1d\x12+\n" +
+	"'DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS\x10\x1e\x12\"\n" +
+	"\x1eDROP_REPLACED_SNAPSHOT_PACKETS\x10\x1f\x12)\n" +
+	"%DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS\x10 \x12+\n" +
+	"'DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS\x10!\x12\"\n" +
+	"\x1eDROP_RESULTS_OVER_RATE_PACKETS\x10\"\x12\x1e\n" +
+	"\x1aDROP_UNDECODABLE_DATAGRAMS\x10(\x12 \n" +
+	"\x1cDROP_OTHER_VERSION_DATAGRAMS\x10)\x12\"\n" +
+	"\x1eDROP_UNKNOWN_SESSION_DATAGRAMS\x10*\x12\x1c\n" +
+	"\x18DROP_COALESCED_SNAPSHOTS\x10-\"\x04\b\x10\x10\x10\"\x04\b\x11\x10\x11\"\x04\b\x14\x10\x14\"\x04\b\x15\x10\x15\"\x04\b\x16\x10\x18\"\x04\b\x19\x10\x19\"\x04\b\x1a\x10\x1a\"\x04\b+\x10+\"\x04\b,\x10,B-Z+gyo.local/object_fps_pvp/protocol/runtimev7b\x06proto3"
 
 var (
-	file_runtime_v6_proto_rawDescOnce sync.Once
-	file_runtime_v6_proto_rawDescData []byte
+	file_runtime_v7_proto_rawDescOnce sync.Once
+	file_runtime_v7_proto_rawDescData []byte
 )
 
-func file_runtime_v6_proto_rawDescGZIP() []byte {
-	file_runtime_v6_proto_rawDescOnce.Do(func() {
-		file_runtime_v6_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_runtime_v6_proto_rawDesc), len(file_runtime_v6_proto_rawDesc)))
+func file_runtime_v7_proto_rawDescGZIP() []byte {
+	file_runtime_v7_proto_rawDescOnce.Do(func() {
+		file_runtime_v7_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_runtime_v7_proto_rawDesc), len(file_runtime_v7_proto_rawDesc)))
 	})
-	return file_runtime_v6_proto_rawDescData
+	return file_runtime_v7_proto_rawDescData
 }
 
-var file_runtime_v6_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_runtime_v6_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
-var file_runtime_v6_proto_goTypes = []any{
-	(LifeState)(0),          // 0: object_fps_pvp.runtime.v6.LifeState
-	(EvictionReason)(0),     // 1: object_fps_pvp.runtime.v6.EvictionReason
-	(ActionKind)(0),         // 2: object_fps_pvp.runtime.v6.ActionKind
-	(ShotRejection)(0),      // 3: object_fps_pvp.runtime.v6.ShotRejection
-	(ShotHitKind)(0),        // 4: object_fps_pvp.runtime.v6.ShotHitKind
-	(*Ready)(nil),           // 5: object_fps_pvp.runtime.v6.Ready
-	(*PlayerJoin)(nil),      // 6: object_fps_pvp.runtime.v6.PlayerJoin
-	(*PlayerLeave)(nil),     // 7: object_fps_pvp.runtime.v6.PlayerLeave
-	(*MovementCommand)(nil), // 8: object_fps_pvp.runtime.v6.MovementCommand
-	(*PlayerInput)(nil),     // 9: object_fps_pvp.runtime.v6.PlayerInput
-	(*JoinResult)(nil),      // 10: object_fps_pvp.runtime.v6.JoinResult
-	(*PlayerState)(nil),     // 11: object_fps_pvp.runtime.v6.PlayerState
-	(*WorldSnapshot)(nil),   // 12: object_fps_pvp.runtime.v6.WorldSnapshot
-	(*PlayerEvicted)(nil),   // 13: object_fps_pvp.runtime.v6.PlayerEvicted
-	(*RuntimeError)(nil),    // 14: object_fps_pvp.runtime.v6.RuntimeError
-	(*RuntimeEnvelope)(nil), // 15: object_fps_pvp.runtime.v6.RuntimeEnvelope
-	(*ActionBatch)(nil),     // 16: object_fps_pvp.runtime.v6.ActionBatch
-	(*ActionResults)(nil),   // 17: object_fps_pvp.runtime.v6.ActionResults
-	(*CombatRules)(nil),     // 18: object_fps_pvp.runtime.v6.CombatRules
-	(*CombatState)(nil),     // 19: object_fps_pvp.runtime.v6.CombatState
-	(*ShotRequest)(nil),     // 20: object_fps_pvp.runtime.v6.ShotRequest
-	(*ShotDecision)(nil),    // 21: object_fps_pvp.runtime.v6.ShotDecision
+var file_runtime_v7_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_runtime_v7_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_runtime_v7_proto_goTypes = []any{
+	(LifeState)(0),            // 0: object_fps_pvp.runtime.v7.LifeState
+	(EvictionReason)(0),       // 1: object_fps_pvp.runtime.v7.EvictionReason
+	(ActionKind)(0),           // 2: object_fps_pvp.runtime.v7.ActionKind
+	(ShotRejection)(0),        // 3: object_fps_pvp.runtime.v7.ShotRejection
+	(ShotHitKind)(0),          // 4: object_fps_pvp.runtime.v7.ShotHitKind
+	(DropReason)(0),           // 5: object_fps_pvp.runtime.v7.DropReason
+	(*Ready)(nil),             // 6: object_fps_pvp.runtime.v7.Ready
+	(*PlayerJoin)(nil),        // 7: object_fps_pvp.runtime.v7.PlayerJoin
+	(*PlayerLeave)(nil),       // 8: object_fps_pvp.runtime.v7.PlayerLeave
+	(*MovementCommand)(nil),   // 9: object_fps_pvp.runtime.v7.MovementCommand
+	(*PlayerInput)(nil),       // 10: object_fps_pvp.runtime.v7.PlayerInput
+	(*JoinResult)(nil),        // 11: object_fps_pvp.runtime.v7.JoinResult
+	(*PlayerState)(nil),       // 12: object_fps_pvp.runtime.v7.PlayerState
+	(*WorldSnapshot)(nil),     // 13: object_fps_pvp.runtime.v7.WorldSnapshot
+	(*PlayerEvicted)(nil),     // 14: object_fps_pvp.runtime.v7.PlayerEvicted
+	(*RuntimeError)(nil),      // 15: object_fps_pvp.runtime.v7.RuntimeError
+	(*RuntimeEnvelope)(nil),   // 16: object_fps_pvp.runtime.v7.RuntimeEnvelope
+	(*ClockSample)(nil),       // 17: object_fps_pvp.runtime.v7.ClockSample
+	(*ActionBatch)(nil),       // 18: object_fps_pvp.runtime.v7.ActionBatch
+	(*ActionResults)(nil),     // 19: object_fps_pvp.runtime.v7.ActionResults
+	(*CombatRules)(nil),       // 20: object_fps_pvp.runtime.v7.CombatRules
+	(*CombatState)(nil),       // 21: object_fps_pvp.runtime.v7.CombatState
+	(*ShotRequest)(nil),       // 22: object_fps_pvp.runtime.v7.ShotRequest
+	(*ShotDecision)(nil),      // 23: object_fps_pvp.runtime.v7.ShotDecision
+	(*GatewayDropReport)(nil), // 24: object_fps_pvp.runtime.v7.GatewayDropReport
+	(*DropCount)(nil),         // 25: object_fps_pvp.runtime.v7.DropCount
+	(*DropSample)(nil),        // 26: object_fps_pvp.runtime.v7.DropSample
 }
-var file_runtime_v6_proto_depIdxs = []int32{
-	18, // 0: object_fps_pvp.runtime.v6.Ready.combat_rules:type_name -> object_fps_pvp.runtime.v6.CombatRules
-	8,  // 1: object_fps_pvp.runtime.v6.PlayerInput.commands:type_name -> object_fps_pvp.runtime.v6.MovementCommand
-	0,  // 2: object_fps_pvp.runtime.v6.PlayerState.life_state:type_name -> object_fps_pvp.runtime.v6.LifeState
-	11, // 3: object_fps_pvp.runtime.v6.WorldSnapshot.players:type_name -> object_fps_pvp.runtime.v6.PlayerState
-	19, // 4: object_fps_pvp.runtime.v6.WorldSnapshot.combat:type_name -> object_fps_pvp.runtime.v6.CombatState
-	1,  // 5: object_fps_pvp.runtime.v6.PlayerEvicted.reason:type_name -> object_fps_pvp.runtime.v6.EvictionReason
-	5,  // 6: object_fps_pvp.runtime.v6.RuntimeEnvelope.ready:type_name -> object_fps_pvp.runtime.v6.Ready
-	6,  // 7: object_fps_pvp.runtime.v6.RuntimeEnvelope.join:type_name -> object_fps_pvp.runtime.v6.PlayerJoin
-	7,  // 8: object_fps_pvp.runtime.v6.RuntimeEnvelope.leave:type_name -> object_fps_pvp.runtime.v6.PlayerLeave
-	9,  // 9: object_fps_pvp.runtime.v6.RuntimeEnvelope.input:type_name -> object_fps_pvp.runtime.v6.PlayerInput
-	10, // 10: object_fps_pvp.runtime.v6.RuntimeEnvelope.join_result:type_name -> object_fps_pvp.runtime.v6.JoinResult
-	14, // 11: object_fps_pvp.runtime.v6.RuntimeEnvelope.error:type_name -> object_fps_pvp.runtime.v6.RuntimeError
-	12, // 12: object_fps_pvp.runtime.v6.RuntimeEnvelope.snapshot:type_name -> object_fps_pvp.runtime.v6.WorldSnapshot
-	16, // 13: object_fps_pvp.runtime.v6.RuntimeEnvelope.actions:type_name -> object_fps_pvp.runtime.v6.ActionBatch
-	17, // 14: object_fps_pvp.runtime.v6.RuntimeEnvelope.action_results:type_name -> object_fps_pvp.runtime.v6.ActionResults
-	13, // 15: object_fps_pvp.runtime.v6.RuntimeEnvelope.evicted:type_name -> object_fps_pvp.runtime.v6.PlayerEvicted
-	20, // 16: object_fps_pvp.runtime.v6.ActionBatch.shots:type_name -> object_fps_pvp.runtime.v6.ShotRequest
-	21, // 17: object_fps_pvp.runtime.v6.ActionResults.decisions:type_name -> object_fps_pvp.runtime.v6.ShotDecision
-	2,  // 18: object_fps_pvp.runtime.v6.ShotRequest.kind:type_name -> object_fps_pvp.runtime.v6.ActionKind
-	3,  // 19: object_fps_pvp.runtime.v6.ShotDecision.rejection:type_name -> object_fps_pvp.runtime.v6.ShotRejection
-	4,  // 20: object_fps_pvp.runtime.v6.ShotDecision.hit_kind:type_name -> object_fps_pvp.runtime.v6.ShotHitKind
-	2,  // 21: object_fps_pvp.runtime.v6.ShotDecision.kind:type_name -> object_fps_pvp.runtime.v6.ActionKind
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+var file_runtime_v7_proto_depIdxs = []int32{
+	20, // 0: object_fps_pvp.runtime.v7.Ready.combat_rules:type_name -> object_fps_pvp.runtime.v7.CombatRules
+	9,  // 1: object_fps_pvp.runtime.v7.PlayerInput.commands:type_name -> object_fps_pvp.runtime.v7.MovementCommand
+	0,  // 2: object_fps_pvp.runtime.v7.PlayerState.life_state:type_name -> object_fps_pvp.runtime.v7.LifeState
+	12, // 3: object_fps_pvp.runtime.v7.WorldSnapshot.players:type_name -> object_fps_pvp.runtime.v7.PlayerState
+	21, // 4: object_fps_pvp.runtime.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.runtime.v7.CombatState
+	1,  // 5: object_fps_pvp.runtime.v7.PlayerEvicted.reason:type_name -> object_fps_pvp.runtime.v7.EvictionReason
+	6,  // 6: object_fps_pvp.runtime.v7.RuntimeEnvelope.ready:type_name -> object_fps_pvp.runtime.v7.Ready
+	7,  // 7: object_fps_pvp.runtime.v7.RuntimeEnvelope.join:type_name -> object_fps_pvp.runtime.v7.PlayerJoin
+	8,  // 8: object_fps_pvp.runtime.v7.RuntimeEnvelope.leave:type_name -> object_fps_pvp.runtime.v7.PlayerLeave
+	10, // 9: object_fps_pvp.runtime.v7.RuntimeEnvelope.input:type_name -> object_fps_pvp.runtime.v7.PlayerInput
+	11, // 10: object_fps_pvp.runtime.v7.RuntimeEnvelope.join_result:type_name -> object_fps_pvp.runtime.v7.JoinResult
+	15, // 11: object_fps_pvp.runtime.v7.RuntimeEnvelope.error:type_name -> object_fps_pvp.runtime.v7.RuntimeError
+	13, // 12: object_fps_pvp.runtime.v7.RuntimeEnvelope.snapshot:type_name -> object_fps_pvp.runtime.v7.WorldSnapshot
+	18, // 13: object_fps_pvp.runtime.v7.RuntimeEnvelope.actions:type_name -> object_fps_pvp.runtime.v7.ActionBatch
+	19, // 14: object_fps_pvp.runtime.v7.RuntimeEnvelope.action_results:type_name -> object_fps_pvp.runtime.v7.ActionResults
+	14, // 15: object_fps_pvp.runtime.v7.RuntimeEnvelope.evicted:type_name -> object_fps_pvp.runtime.v7.PlayerEvicted
+	17, // 16: object_fps_pvp.runtime.v7.RuntimeEnvelope.clock:type_name -> object_fps_pvp.runtime.v7.ClockSample
+	24, // 17: object_fps_pvp.runtime.v7.RuntimeEnvelope.drop_report:type_name -> object_fps_pvp.runtime.v7.GatewayDropReport
+	22, // 18: object_fps_pvp.runtime.v7.ActionBatch.shots:type_name -> object_fps_pvp.runtime.v7.ShotRequest
+	23, // 19: object_fps_pvp.runtime.v7.ActionResults.decisions:type_name -> object_fps_pvp.runtime.v7.ShotDecision
+	2,  // 20: object_fps_pvp.runtime.v7.ShotRequest.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
+	3,  // 21: object_fps_pvp.runtime.v7.ShotDecision.rejection:type_name -> object_fps_pvp.runtime.v7.ShotRejection
+	4,  // 22: object_fps_pvp.runtime.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.runtime.v7.ShotHitKind
+	2,  // 23: object_fps_pvp.runtime.v7.ShotDecision.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
+	25, // 24: object_fps_pvp.runtime.v7.GatewayDropReport.counts:type_name -> object_fps_pvp.runtime.v7.DropCount
+	26, // 25: object_fps_pvp.runtime.v7.GatewayDropReport.samples:type_name -> object_fps_pvp.runtime.v7.DropSample
+	5,  // 26: object_fps_pvp.runtime.v7.DropCount.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
+	5,  // 27: object_fps_pvp.runtime.v7.DropSample.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
-func init() { file_runtime_v6_proto_init() }
-func file_runtime_v6_proto_init() {
-	if File_runtime_v6_proto != nil {
+func init() { file_runtime_v7_proto_init() }
+func file_runtime_v7_proto_init() {
+	if File_runtime_v7_proto != nil {
 		return
 	}
-	file_runtime_v6_proto_msgTypes[6].OneofWrappers = []any{}
-	file_runtime_v6_proto_msgTypes[10].OneofWrappers = []any{
+	file_runtime_v7_proto_msgTypes[6].OneofWrappers = []any{}
+	file_runtime_v7_proto_msgTypes[10].OneofWrappers = []any{
 		(*RuntimeEnvelope_Ready)(nil),
 		(*RuntimeEnvelope_Join)(nil),
 		(*RuntimeEnvelope_Leave)(nil),
@@ -2144,24 +2741,27 @@ func file_runtime_v6_proto_init() {
 		(*RuntimeEnvelope_Actions)(nil),
 		(*RuntimeEnvelope_ActionResults)(nil),
 		(*RuntimeEnvelope_Evicted)(nil),
+		(*RuntimeEnvelope_Clock)(nil),
+		(*RuntimeEnvelope_DropReport)(nil),
 	}
-	file_runtime_v6_proto_msgTypes[15].OneofWrappers = []any{}
+	file_runtime_v7_proto_msgTypes[11].OneofWrappers = []any{}
+	file_runtime_v7_proto_msgTypes[16].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_runtime_v6_proto_rawDesc), len(file_runtime_v6_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   17,
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_runtime_v7_proto_rawDesc), len(file_runtime_v7_proto_rawDesc)),
+			NumEnums:      6,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_runtime_v6_proto_goTypes,
-		DependencyIndexes: file_runtime_v6_proto_depIdxs,
-		EnumInfos:         file_runtime_v6_proto_enumTypes,
-		MessageInfos:      file_runtime_v6_proto_msgTypes,
+		GoTypes:           file_runtime_v7_proto_goTypes,
+		DependencyIndexes: file_runtime_v7_proto_depIdxs,
+		EnumInfos:         file_runtime_v7_proto_enumTypes,
+		MessageInfos:      file_runtime_v7_proto_msgTypes,
 	}.Build()
-	File_runtime_v6_proto = out.File
-	file_runtime_v6_proto_goTypes = nil
-	file_runtime_v6_proto_depIdxs = nil
+	File_runtime_v7_proto = out.File
+	file_runtime_v7_proto_goTypes = nil
+	file_runtime_v7_proto_depIdxs = nil
 }

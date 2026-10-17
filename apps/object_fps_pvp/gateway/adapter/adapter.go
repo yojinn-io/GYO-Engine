@@ -8,13 +8,13 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
-// ProtocolVersion is the product wire version (pv6). ClientVersion (GYOP
+// ProtocolVersion is the product wire version (pv7). ClientVersion (GYOP
 // header) and RuntimeVersion (IPC envelope) are its typed forms.
-const ProtocolVersion = 6
+const ProtocolVersion = 7
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 4
@@ -258,6 +258,9 @@ func ReadyFitsWelcome(r *runtime.Ready) bool {
 	if r == nil || r.SnapshotIntervalTicks == 0 || !ValidRules(r.CombatRules) || !ValidMovementRules(r.JumpHeight, r.Gravity) {
 		return false
 	}
-	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity}
+	// The largest time echo counts too (pv7 §3): every ClockSample field at its maximum.
+	largest := uint64(math.MaxUint64)
+	clock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}
+	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

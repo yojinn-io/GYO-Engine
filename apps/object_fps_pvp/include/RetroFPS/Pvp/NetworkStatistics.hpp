@@ -29,6 +29,14 @@ struct TickWakeStatistics final {
     void Record(Engine::Time::TimePoint planned, Engine::Time::TimePoint woke, bool byNotification);
 };
 
+// How long callers waited to take the Match host's mutex, in the late-wake
+// bins (diagnostics only, D32): the I/O thread's SubmitInput and the
+// simulation thread's step.
+struct HostLockWaits final {
+    Engine::Time::LateWakeStats input;
+    Engine::Time::LateWakeStats step;
+};
+
 struct MatchStatisticsWindow final {
     double windowSeconds{};
     std::optional<double> cpuSeconds;      // process CPU during the window
@@ -36,6 +44,7 @@ struct MatchStatisticsWindow final {
     std::uint64_t ipcIterations{};
     TickWakeStatistics ticks;
     std::uint64_t snapshotOverwrites{}; // published snapshots replaced before the I/O layer took them
+    HostLockWaits lockWaits;
 };
 [[nodiscard]] std::string MatchStatisticsLine(const MatchStatisticsWindow& window);
 
@@ -44,6 +53,7 @@ struct WorkerStatisticsWindow final {
     double windowSeconds{};
     std::uint64_t wakes{};
     std::optional<double> cpuSeconds; // the worker thread's CPU during the window
+    std::uint64_t otherVersionDatagrams{}; // from the Gateway, well-formed but another protocol version (pv7)
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 

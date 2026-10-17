@@ -1,0 +1,205 @@
+[
+  {
+    "value": 1,
+    "name": "DROP_RATE_LIMITED_HELLO_PACKETS",
+    "key": "drop_rate_limited_hello_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 2,
+    "name": "DROP_RATE_LIMITED_INPUT_PACKETS",
+    "key": "drop_rate_limited_input_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 3,
+    "name": "DROP_RATE_LIMITED_ACTIONS_PACKETS",
+    "key": "drop_rate_limited_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 4,
+    "name": "DROP_RATE_LIMITED_OTHER_PACKETS",
+    "key": "drop_rate_limited_other_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 5,
+    "name": "DROP_UNAUTHORIZED_HELLO_PACKETS",
+    "key": "drop_unauthorized_hello_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 6,
+    "name": "DROP_UNAUTHORIZED_INPUT_PACKETS",
+    "key": "drop_unauthorized_input_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 7,
+    "name": "DROP_UNAUTHORIZED_ACTIONS_PACKETS",
+    "key": "drop_unauthorized_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 8,
+    "name": "DROP_UNAUTHORIZED_OTHER_PACKETS",
+    "key": "drop_unauthorized_other_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 9,
+    "name": "DROP_STALE_SEQUENCE_ACTIONS_PACKETS",
+    "key": "drop_stale_sequence_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 10,
+    "name": "DROP_STALE_SEQUENCE_OTHER_PACKETS",
+    "key": "drop_stale_sequence_other_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 11,
+    "name": "DROP_MALFORMED_HELLO_PACKETS",
+    "key": "drop_malformed_hello_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 12,
+    "name": "DROP_MALFORMED_INPUT_PACKETS",
+    "key": "drop_malformed_input_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 13,
+    "name": "DROP_MALFORMED_ACTIONS_PACKETS",
+    "key": "drop_malformed_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 14,
+    "name": "DROP_INACTIVE_INPUT_PACKETS",
+    "key": "drop_inactive_input_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 15,
+    "name": "DROP_INACTIVE_ACTIONS_PACKETS",
+    "key": "drop_inactive_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 18,
+    "name": "DROP_UNKNOWN_KIND_PACKETS",
+    "key": "drop_unknown_kind_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 19,
+    "name": "DROP_ADMISSION_UNKNOWN_PACKETS",
+    "key": "drop_admission_unknown_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 27,
+    "name": "DROP_WRITE_FAILED_SNAPSHOT_PACKETS",
+    "key": "drop_write_failed_snapshot_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 28,
+    "name": "DROP_WRITE_FAILED_RESULTS_PACKETS",
+    "key": "drop_write_failed_results_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 29,
+    "name": "DROP_WRITE_FAILED_CONTROL_PACKETS",
+    "key": "drop_write_failed_control_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 30,
+    "name": "DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS",
+    "key": "drop_control_queue_full_control_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 31,
+    "name": "DROP_REPLACED_SNAPSHOT_PACKETS",
+    "key": "drop_replaced_snapshot_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 32,
+    "name": "DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS",
+    "key": "drop_ipc_queue_overflow_input_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 33,
+    "name": "DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS",
+    "key": "drop_ipc_queue_overflow_actions_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 34,
+    "name": "DROP_RESULTS_OVER_RATE_PACKETS",
+    "key": "drop_results_over_rate_packets",
+    "scope": "player",
+    "exit": true
+  },
+  {
+    "value": 40,
+    "name": "DROP_UNDECODABLE_DATAGRAMS",
+    "key": "drop_undecodable_datagrams",
+    "scope": "gateway",
+    "exit": true
+  },
+  {
+    "value": 41,
+    "name": "DROP_OTHER_VERSION_DATAGRAMS",
+    "key": "drop_other_version_datagrams",
+    "scope": "gateway",
+    "exit": true
+  },
+  {
+    "value": 42,
+    "name": "DROP_UNKNOWN_SESSION_DATAGRAMS",
+    "key": "drop_unknown_session_datagrams",
+    "scope": "gateway",
+    "exit": true
+  },
+  {
+    "value": 45,
+    "name": "DROP_COALESCED_SNAPSHOTS",
+    "key": "drop_coalesced_snapshots",
+    "scope": "gateway",
+    "exit": true
+  }
+]

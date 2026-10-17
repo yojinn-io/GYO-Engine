@@ -1,24 +1,42 @@
 syntax = "proto3";
 
-package object_fps_pvp.runtime.v6;
-option go_package = "gyo.local/object_fps_pvp/protocol/runtimev6";
+package object_fps_pvp.client.v7;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv7";
 
-// The local IPC host decodes this into product data. Match never sees protobuf,
-// sessions, endpoints, or wire envelopes.
-message Ready {
-  string arena_id = 1;
-  uint32 arena_version = 2;
-  uint32 tick_rate = 3;
-  uint32 snapshot_interval_ticks = 4;
-  uint32 max_players = 5;
-  CombatRules combat_rules = 6;
-  float jump_height = 7;
-  float gravity = 8;
-  // Content digest of the served arena (pv6 contract §2); 0 means missing.
-  fixed64 arena_digest = 9;
+// This remote-client contract is independent of runtime_v7.proto.
+message Hello {
+  string session_token = 1;
+  // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
+  // after the Hello is authenticated, and never part of admission or liveness.
+  ClockSample clock = 2;
 }
-message PlayerJoin { uint64 player_id = 1; }
-message PlayerLeave { uint64 player_id = 1; }
+message Welcome {
+  uint64 player_id = 1;
+  uint64 match_id = 2;
+  uint32 tick_rate = 3;
+  uint32 snapshot_rate = 4;
+  string arena_id = 5;
+  uint32 arena_version = 6;
+  CombatRules combat_rules = 7;
+  float jump_height = 8;
+  float gravity = 9;
+  // Content digest of the served arena (pv6 contract §2), copied from Ready.
+  fixed64 arena_digest = 10;
+  // Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
+  ClockSample clock = 11;
+}
+// Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
+// runtime_v7.proto: times are the sender's own monotonic clock in
+// microseconds; a time of the other side is only ever copied back.
+message ClockSample {
+  // The transmit_us of the peer's latest ClockSample this side read, as is;
+  // present exactly when receive_us is.
+  optional uint64 origin_us = 1;
+  // When this side read that sample; not after transmit_us.
+  optional uint64 receive_us = 2;
+  // When this side serialized this sample: at least 1 and strictly increasing.
+  uint64 transmit_us = 3;
+}
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {
   uint64 sequence = 1;
@@ -28,21 +46,14 @@ message MovementCommand {
   float pitch = 5;
   bool jump_requested = 6;
 }
-// Commands this link has not written before for the current epoch/life,
-// strictly ordered, at most 12 per message. Merged and deduplicated by the
-// Gateway; the Match treats repeats as no-ops.
+// Entire unacknowledged window, strictly ordered, at most 12 commands.
 message PlayerInput {
-  uint64 player_id = 1;
-  repeated MovementCommand commands = 2;
-  uint64 movement_epoch = 3;
-  uint64 life_generation = 4;
-  // Latest snapshot tick the Client applied; merged windows carry the largest.
-  uint64 observed_authority_tick = 5;
-}
-message JoinResult {
-  uint64 player_id = 1;
-  bool accepted = 2;
-  string reason = 3;
+  repeated MovementCommand commands = 1;
+  uint64 movement_epoch = 2;
+  uint64 life_generation = 3;
+  // Tick of the latest snapshot the Client applied when it published this
+  // window (0 before any). The Match times connection quality with it.
+  uint64 observed_authority_tick = 4;
 }
 message PlayerState {
   uint64 player_id = 1;
@@ -85,50 +96,18 @@ message WorldSnapshot {
   repeated PlayerState players = 2;
   repeated CombatState combat = 3;
 }
-// Match-initiated removal for sustained poor connection quality. The Gateway
-// clears the player like a Leave and tells the Client why.
-enum EvictionReason {
-  EVICTION_UNSPECIFIED = 0;
-  EVICTION_HIGH_LATENCY = 1;
-  EVICTION_UNSTABLE_INPUT = 2;
-}
-message PlayerEvicted {
-  uint64 player_id = 1;
-  EvictionReason reason = 2;
-  uint32 reference_age_ms = 3;
-  uint32 substituted_permille = 4;
-  uint32 movement_resets = 5;
-}
-message RuntimeError {
-  uint64 player_id = 1;
-  string code = 2;
-  string message = 3;
-}
-message RuntimeEnvelope {
-  uint32 protocol_version = 1;
-  oneof message {
-    Ready ready = 10;
-    PlayerJoin join = 11;
-    PlayerLeave leave = 12;
-    PlayerInput input = 13;
-    JoinResult join_result = 14;
-    RuntimeError error = 15;
-    WorldSnapshot snapshot = 16;
-    ActionBatch actions = 17;
-    ActionResults action_results = 18;
-    PlayerEvicted evicted = 19;
-  }
+message Error {
+  string code = 1;
+  string message = 2;
 }
 
 message ActionBatch {
-  uint64 player_id = 1;
-  repeated ShotRequest shots = 2;
-  uint64 acknowledged_through = 3;
+  repeated ShotRequest shots = 1;
+  uint64 acknowledged_through = 2;
 }
 message ActionResults {
-  uint64 player_id = 1;
-  uint64 retired_through = 2;
-  repeated ShotDecision decisions = 3;
+  uint64 retired_through = 1;
+  repeated ShotDecision decisions = 2;
 }
 
 message CombatRules {

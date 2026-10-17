@@ -12,7 +12,7 @@
 namespace fps::pvp::wire {
 // The GYOP header and its transport checks are the engine's (Engine::Net);
 // the protocol version, the message types and the TCP frame stay here.
-inline constexpr std::uint16_t ProtocolVersion = 6;
+inline constexpr std::uint16_t ProtocolVersion = 7;
 inline constexpr std::size_t HeaderSize = Engine::Net::GyopHeaderSize, MaxDatagram = Engine::Net::GyopMaxDatagram,
     MaxFrame = 65536;
 enum class Type : std::uint16_t { Hello=1, Welcome=2, Input=3, Snapshot=4, Error=5, Actions=6, ActionResults=7 };
@@ -31,6 +31,12 @@ inline std::vector<std::uint8_t> Encode(const Packet& packet) {
         std::span(reinterpret_cast<const std::uint8_t*>(packet.payload.data()), packet.payload.size()));
     if (!encoded) throw std::length_error("UDP payload exceeds 1200 bytes");
     return *encoded;
+}
+// A well-formed GYOP datagram of another protocol version. Decode refuses it
+// like any other datagram; this lets a receiver count it separately.
+inline bool OtherVersion(std::span<const std::uint8_t> bytes) {
+    const auto decoded = Engine::Net::DecodeGyopDatagram(bytes);
+    return decoded && decoded->header.version != ProtocolVersion;
 }
 inline std::optional<Packet> Decode(std::span<const std::uint8_t> bytes) {
     const auto decoded = Engine::Net::DecodeGyopDatagram(bytes);

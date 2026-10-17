@@ -109,6 +109,14 @@ std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {
         line << (bin ? "," : "") << late.Bins()[bin];
     // Added after the first logs (v7 batch 07), so it comes last.
     line << " snapshot_overwrites=" << window.snapshotOverwrites;
+    // Added in pv7 (v7.1 edge-input-passthrough), so it comes last.
+    for (const auto& [name, waits] : {std::pair{"input", &window.lockWaits.input}, std::pair{"step", &window.lockWaits.step}}) {
+        line << " host_lock_" << name << "_waits=" << waits->Count() << " host_lock_" << name
+             << "_wait_p99_le_us=" << Micros(waits->QuantileUpperBound(0.99)) << " host_lock_" << name
+             << "_wait_max_us=" << Micros(waits->Max()) << " host_lock_" << name << "_wait_bins=";
+        for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
+            line << (bin ? "," : "") << waits->Bins()[bin];
+    }
     return line.str();
 }
 
@@ -120,6 +128,8 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
          << (window.windowSeconds > 0 ? static_cast<double>(window.wakes) / window.windowSeconds : 0.0)
          << " cpu_s=";
     Optional(line, window.cpuSeconds, 3);
+    // Added in pv7 (v7.1 version-errors), so it comes last.
+    line << " other_version_datagrams=" << window.otherVersionDatagrams;
     return line.str();
 }
 

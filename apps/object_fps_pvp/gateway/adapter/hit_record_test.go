@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // pv6 contract §2: the presentation-only hit record of the current life.

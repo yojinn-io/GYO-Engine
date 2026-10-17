@@ -176,6 +176,36 @@ def summarize_rapid(directory, scenario):
             'disturbed': [role for role, report in roles.items() if report.get('disturbed') is True]}
 
 
+def stop_in_order(processes, gateway, match, match_log, timeout=3, close_wait=2):
+    """Stops the clients first, then the Gateway, and the Match last once its log shows the IPC session ended (the
+    Gateway's close, read as EOF), at most close_wait seconds. A Match stopped while the Gateway is still connected
+    ends that session without reading the Gateway's last frames (action_probe.py stops the Gateway before the Match
+    too); stopping every process at once made that a race."""
+    def halt(process):
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=timeout)
+    for process in reversed(processes):
+        if process is not gateway and process is not match:
+            halt(process)
+    if gateway is not None:
+        halt(gateway)
+        deadline = time.monotonic() + close_wait
+        while match is not None and match.poll() is None and time.monotonic() < deadline:
+            try:
+                if 'ipc closed reason=' in Path(match_log).read_text(errors='replace'):
+                    break
+            except OSError:
+                pass
+            time.sleep(.02)
+    if match is not None:
+        halt(match)
+
+
 def run_case(args, name):
     directory = args.output / name
     directory.mkdir(parents=True, exist_ok=False)
@@ -192,7 +222,7 @@ def run_case(args, name):
     if rapid:
         result.update({'scenario': scenario, 'record_only': True, 'clean': scenario != 'pause'})
     pause_pending = bool(rapid) and scenario == 'pause'
-    gateway, stopped = None, False
+    match, gateway, stopped = None, None, False
 
     def start(label, command):
         commands.append(command)
@@ -257,15 +287,7 @@ def run_case(args, name):
     finally:
         if stopped and gateway.poll() is None:
             gateway.send_signal(signal.SIGCONT)
-        for process in reversed(processes):
-            if process.poll() is None:
-                process.terminate()
-        for process in reversed(processes):
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=3)
+        stop_in_order(processes, gateway, match, directory / 'match.log')
         for log in logs:
             log.close()
         result['artifacts'] = {str(path): digest(path) for path in

@@ -1,12 +1,15 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
+#include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "runtime_v6.pb.h"
+#include "runtime_v7.pb.h"
+#include <google/protobuf/unknown_field_set.h>
 #include <asio.hpp>
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <deque>
@@ -15,14 +18,14 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <optional>
-#include <set>
 #include <sstream>
 #include <string_view>
 #include <syncstream>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v6;
+namespace pb = object_fps_pvp::runtime::v7;
 using asio::ip::tcp;
 namespace {
 // Diagnostics only: lifecycle events and a statistics line every ten seconds
@@ -135,44 +138,66 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
     }
     return message;
 }
-// A lane writes only new content: decisions it has not sent and a retirement
-// beyond the one it sent. TCP delivers each once, and a lane never outlives its
-// connection (each accept starts a new Session), so nothing is resent. That
-// relies on the Gateway dropping results only for a removed player, which
-// never comes back under the same id.
+// pv7 §2a: a lane resends every unacknowledged decision, at most once per
+// ActionInterval, until the Client's ACK retires it; the Gateway or a lost
+// datagram may drop any frame, and results are idempotent. A frame carries the
+// retirement and up to MaxActionBatch decisions: the ResendFirstSlots smallest
+// ids first (the Client acknowledges only contiguously, so the smallest must
+// never starve), the other slots cycling through the rest. The retirement goes
+// once when it advances, and once more when asked (an ACK-only batch
+// acknowledging no more than it: the Client missed it) or when a batch is
+// refused (D-6).
 // The host wakes Pump only on a step that publishes; with a snapshot every
 // tick, a decision is seen on the tick that makes it.
 static_assert(SnapshotIntervalTicks==1,"Action lanes rely on a publish every tick");
 constexpr auto ActionInterval=std::chrono::nanoseconds((1'000'000'000+ActionSendRate-1)/ActionSendRate);
+constexpr std::size_t ResendFirstSlots=4;
+static_assert(ResendFirstSlots<MaxActionBatch,"Some slots must cycle, or ids above the first ones starve");
 struct ActionLane {
     std::optional<std::chrono::steady_clock::time_point> lastSend;
     ActionId sentRetired{};
-    // Sent decision ids above sentRetired; at most MaxActionWindow.
-    std::set<ActionId> sent;
+    // The last id a cycling slot carried; the next cycle starts above it.
+    ActionId cursor{};
+    // One send even with nothing unacknowledged and no new retirement.
+    bool asked{};
 };
-// The one test for new content: ScheduleWrite's deadline and Write's choice
-// must agree, or a due lane with nothing to choose would wake writes forever.
+// The one test for something to send: ScheduleWrite's deadline and Write's
+// choice must agree, or a due lane with nothing to choose would wake writes
+// forever.
 bool LanePending(const ActionResults& results, const ActionLane& lane) {
-    return results.retiredThrough>lane.sentRetired || std::any_of(results.decisions.begin(),results.decisions.end(),
-        [&](const auto& decision){return !lane.sent.contains(decision.actionId);});
+    return !results.decisions.empty() || results.retiredThrough>lane.sentRetired || lane.asked;
 }
 // At most one choice per ActionInterval; the first may go at once.
 std::chrono::steady_clock::time_point LaneDue(const ActionLane& lane, std::chrono::steady_clock::time_point now) {
     return lane.lastSend?*lane.lastSend+ActionInterval:now;
 }
-// Chooses the retirement and up to MaxActionBatch unsent decisions in id order
-// (decisions arrive sorted by id) and records them as sent at `now`.
+// Chooses the retirement and up to MaxActionBatch unacknowledged decisions
+// (they arrive sorted by id): the smallest first, then the cycling slots above
+// the cursor, wrapping to the lowest of the rest. Written in id order.
 pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane, std::chrono::steady_clock::time_point now) {
     pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
     auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
     out->set_retired_through(results.retiredThrough);
     lane.lastSend=now;
     lane.sentRetired=results.retiredThrough;
-    lane.sent.erase(lane.sent.begin(),lane.sent.upper_bound(results.retiredThrough));
-    for(const auto& decision:results.decisions) {
-        if(static_cast<std::size_t>(out->decisions_size())==MaxActionBatch) break;
-        if(lane.sent.contains(decision.actionId)) continue;
-        lane.sent.insert(decision.actionId);
+    lane.asked=false;
+    const auto& decisions=results.decisions;
+    const auto first=std::min(decisions.size(),ResendFirstSlots);
+    std::vector<std::size_t> chosen(first);
+    std::iota(chosen.begin(),chosen.end(),std::size_t{0});
+    const auto rest=decisions.size()-first;
+    const auto cycling=std::min(rest,MaxActionBatch-first);
+    const auto above=std::upper_bound(decisions.begin()+static_cast<std::ptrdiff_t>(first),decisions.end(),lane.cursor,
+        [](ActionId cursor,const auto& decision){return cursor<decision.actionId;});
+    const auto start=static_cast<std::size_t>(above-decisions.begin())-first;
+    for(std::size_t k=0;k<cycling;++k) {
+        const auto index=first+(start+k)%rest;
+        chosen.push_back(index);
+        lane.cursor=decisions[index].actionId;
+    }
+    std::sort(chosen.begin(),chosen.end());
+    for(const auto index:chosen) {
+        const auto& decision=decisions[index];
         auto* value=out->add_decisions();value->set_action_id(decision.actionId);
         value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
         value->set_rejection(RejectionForWire(decision.rejection));
@@ -184,6 +209,62 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
     return message;
 }
 }
+// Diagnostics only (pv7 §4): the Gateway's drop reports as the Match reads
+// them, per stream. A violation is logged, counted and ignored (D-5, no veto:
+// the link stays open); every report is logged as read, the same body the
+// Gateway logs as written, so L2 can compare them by report_sequence. Nothing
+// here reaches the host (D32).
+class DropReports {
+public:
+    void Read(const pb::GatewayDropReport& report) {
+        auto& stream=streams_[report.player_id()];
+        std::string body="player="+std::to_string(report.player_id())+" report_sequence="+std::to_string(report.report_sequence())+
+            " final="+(report.final()?"1":"0")+" samples="+std::to_string(report.samples_size())+
+            " samples_omitted="+std::to_string(report.samples_omitted())+" merged_streams="+std::to_string(report.merged_streams());
+        std::vector<std::string> problems;
+        if(stream.final) problems.push_back("after_final");
+        if(report.report_sequence()!=stream.sequence+1) problems.push_back("sequence");
+        if(report.merged_streams()<stream.merged || (report.player_id()!=0 && report.merged_streams()!=0)) problems.push_back("merged_streams");
+        if(report.samples_omitted()<stream.omitted) problems.push_back("samples_omitted");
+        std::map<int,std::uint64_t> totals;
+        int previous=0;
+        for(const auto& count:report.counts()) {
+            const int reason=count.reason();
+            body+=" "+Key(reason)+"="+std::to_string(count.total());
+            const bool inScope=report.player_id()==0?(reason>=40 && reason<=45):(reason>=1 && reason<=34);
+            if(!pb::DropReason_IsValid(reason) || !inScope) problems.push_back("reason_range");
+            if(reason<=previous || count.total()==0) problems.push_back("counts_order");
+            previous=reason;
+            totals[reason]=count.total();
+        }
+        for(const auto& [reason,total]:stream.totals)
+            if(const auto found=totals.find(reason);found==totals.end() || found->second<total) {problems.push_back("counts_regress");break;}
+        if(report.samples_size()>4) problems.push_back("samples_over_4");
+        for(const auto& sample:report.samples())
+            if(!totals.contains(sample.reason())) {problems.push_back("sample_reason");break;}
+        for(const auto& sample:report.samples())
+            if(sample.dwell_us()>10'000'000) {problems.push_back("dwell_range");break;} // pv7 §2 clamps it
+        MatchEventLog::Line("gw_drop report "+body);
+        for(const auto& problem:problems) {
+            MatchEventLog::Line("gw_drop violation player="+std::to_string(report.player_id())+" report_sequence="+
+                std::to_string(report.report_sequence())+" problem="+problem);
+        }
+        // The stream goes on from what was read, trusted or not.
+        stream.sequence=report.report_sequence();stream.totals=std::move(totals);stream.final=stream.final || report.final();
+        stream.omitted=std::max(stream.omitted,report.samples_omitted());
+        if(report.player_id()==0) stream.merged=std::max(stream.merged,report.merged_streams()); // only the Gateway stream merges
+    }
+private:
+    // The ingress key of a reason: its proto name in lower case (pv7 §4).
+    static std::string Key(int reason) {
+        std::string name=pb::DropReason_IsValid(reason)?pb::DropReason_Name(static_cast<pb::DropReason>(reason)):"drop_reason_"+std::to_string(reason);
+        for(auto& c:name) c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return name;
+    }
+    struct Stream {std::uint64_t sequence{},omitted{},merged{};std::map<int,std::uint64_t> totals;bool final{};};
+    std::map<std::uint64_t,Stream> streams_;
+};
+
 // One asio io thread (gyo-match-ipc) serves the single Gateway connection.
 // Nothing polls: the host's publish notification, the socket becoming
 // readable or writable and the action lanes' deadline timer wake it. Phases:
@@ -192,6 +273,10 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
 // publish notification wakes this thread to continue.
 struct IpcHost::Impl {
     using Clock=std::chrono::steady_clock;
+    // The M clock domain of pv7 §2: steady_clock, as the Match trace's time_ns.
+    static std::uint64_t NowMicros() {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+    }
     // The host notifies from its simulation role; Stop detaches this gate
     // first, so no notification reaches a stopped or destroyed IpcHost.
     struct WakeGate {std::mutex mutex;Impl* impl{};};
@@ -213,6 +298,13 @@ struct IpcHost::Impl {
         std::map<std::uint64_t,PlayerId> joins;
         MatchEventLog events;
         std::map<PlayerId,ActionLane> actionLanes;
+        std::uint64_t frames{}; // frames of this connection that passed the version check
+        // Diagnostics only (pv7 §2, §3): the clock sampling with the Gateway
+        // and the one reply to its latest heartbeat (newest wins), written
+        // after controls, action lanes and snapshots; never in controls.
+        ClockSync clock;
+        std::optional<pb::ClockSample> clockReply;
+        DropReports drops; // the Gateway's drop reports on this connection
     };
 
     MatchRuntimeHost& host;
@@ -282,6 +374,7 @@ struct IpcHost::Impl {
         socket.set_option(tcp::no_delay(true),error);
         if(!error) socket.non_blocking(true,error);
         session=Session{};
+        session.clock=ClockSync(NowMicros());
         phase=Phase::Connected;
         if(error) {Close("socket setup: "+error.message());return;}
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
@@ -299,11 +392,23 @@ struct IpcHost::Impl {
         StartRead();
         Pump();
     }
-    // The single path that ends a session: log why, close, reset the Match,
-    // then accept the next connection once the reset completed.
+    // The log every session end writes once: its last clock window and why
+    // it ended (Close, and Stop for a session still connected).
+    void LogEnd(const std::string& reason) {
+        if(const auto window=session.clock.Roll(NowMicros(),true)) MatchEventLog::Line(ClockWindowLine(*window));
+        MatchEventLog::Line("ipc closed reason="+reason);
+    }
+    // The single path that ends a session while the Match runs: log why,
+    // close, reset the Match, then accept the next connection once the reset
+    // completed.
     void Close(const std::string& reason) {
         if(phase!=Phase::Connected) return;
-        MatchEventLog::Line("ipc closed reason="+reason);
+        LogEnd(reason);
+        // A Gateway of another version refuses Ready and closes without a
+        // frame; a pv7 Gateway sends its version first (pv7 contract §1). An
+        // idle Gateway of this version also sends nothing before it stops.
+        if(reason=="eof" && session.frames==0)
+            MatchEventLog::Line("ipc hint: the Gateway closed before sending any frame; it was idle or speaks another protocol version");
         asio::error_code ignored;
         socket.close(ignored);
         laneTimer.cancel();
@@ -330,6 +435,20 @@ struct IpcHost::Impl {
             if(current==connection && phase==Phase::Connected) StartRead();
         });
     }
+    void AskLane(PlayerId player) {
+        if(const auto lane=session.actionLanes.find(player);lane!=session.actionLanes.end()) lane->second.asked=true;
+    }
+    // Names a message this side does not take: a known one sent the wrong way,
+    // field numbers this version does not know, or an envelope with none.
+    static std::string UnknownMessage(const pb::RuntimeEnvelope& message) {
+        if(message.message_case()!=pb::RuntimeEnvelope::MESSAGE_NOT_SET)
+            return "unknown message field="+std::to_string(static_cast<int>(message.message_case()));
+        const auto& unknown=message.GetReflection()->GetUnknownFields(message);
+        if(unknown.field_count()==0) return "unknown message: empty";
+        std::string fields;
+        for(int i=0;i<unknown.field_count();++i) fields+=(i?",":"")+std::to_string(unknown.field(i).number());
+        return "unknown message fields="+fields;
+    }
     // Parses complete frames; returns why the session must end, if it must.
     std::optional<std::string> Receive(std::size_t received) {
         auto& input=session.input;
@@ -340,8 +459,12 @@ struct IpcHost::Impl {
             if(!length || length>wire::MaxFrame) return "frame length";
             if(input.size()<length+4) break;
             pb::RuntimeEnvelope message;
-            if(!message.ParseFromArray(input.data()+4,static_cast<int>(length)) || message.protocol_version()!=wire::ProtocolVersion)
-                return "frame parse or protocol version";
+            if(!message.ParseFromArray(input.data()+4,static_cast<int>(length))) return "frame parse";
+            // The version is checked before the content (pv7 contract §1).
+            if(message.protocol_version()!=wire::ProtocolVersion)
+                return "protocol version mismatch: expected "+std::to_string(wire::ProtocolVersion)+", received "+
+                    std::to_string(message.protocol_version());
+            ++session.frames;
             input.erase(input.begin(),input.begin()+static_cast<std::ptrdiff_t>(length+4));
             if(message.has_join()) {
                 if(session.joins.size()>=64) return "pending joins over 64";
@@ -365,7 +488,11 @@ struct IpcHost::Impl {
             } else if(message.has_actions()) {
                 const auto& value=message.actions();
                 const auto shots=static_cast<std::size_t>(value.shots_size());
-                if(shots>MaxActionBatch) {host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);continue;}
+                if(shots>MaxActionBatch) {
+                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);
+                    AskLane(value.player_id());
+                    continue;
+                }
                 ActionBatch batch{value.player_id(),{}};
                 bool valid=true;
                 for(const auto& shot:value.shots()) {
@@ -377,12 +504,41 @@ struct IpcHost::Impl {
                     batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
                         shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
                 }
-                if(!valid) {host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);continue;}
+                if(!valid) {
+                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);
+                    AskLane(value.player_id());
+                    continue;
+                }
                 // Admission is distinct from a terminal shot decision. The
                 // immutable request remains with the sender for retry. The
                 // host counts the admission by reason.
-                static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through()));
-            } else return "unknown message";
+                // An ACK-only batch acknowledging no more than the retirement
+                // shows the Client missed it; a refusal answers with what the
+                // lane holds (D-6). Either asks the lane for one more send.
+                const auto acknowledged=value.acknowledged_through();
+                const bool missed=!shots && acknowledged>0 && [&] {
+                    const auto retired=host.GetActionResults(value.player_id());
+                    return retired && acknowledged<=retired->retiredThrough;
+                }();
+                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)
+                    AskLane(value.player_id());
+            } else if(message.has_drop_report()) {
+                session.drops.Read(message.drop_report()); // diagnostics only: logged, checked, never answered
+            } else if(message.has_clock()) {
+                // Diagnostics only: measured here and answered once; nothing
+                // reaches the host (D32). A semantic violation is counted and
+                // ignored (pv7 §2).
+                const auto& sample=message.clock();
+                ClockStamp peer{.transmitUs=sample.transmit_us()};
+                if(sample.has_origin_us()) peer.originUs=sample.origin_us();
+                if(sample.has_receive_us()) peer.receiveUs=sample.receive_us();
+                if(const auto echo=session.clock.Observe(peer,NowMicros())) {
+                    if(session.clockReply) session.clock.NoteReplaced();
+                    session.clockReply.emplace();
+                    session.clockReply->set_origin_us(echo->first);
+                    session.clockReply->set_receive_us(echo->second);
+                }
+            } else return UnknownMessage(message);
         }
         return std::nullopt;
     }
@@ -432,13 +588,14 @@ struct IpcHost::Impl {
                 for(const auto& player:snapshot->players) if(player.movementSlackSequence) samples.push_back(player.playerId);
                 session.latestSnapshot=SnapshotFrame{wire::Frame(SnapshotMessage(*snapshot).SerializeAsString()),snapshot->tick,Clock::now(),std::move(samples)};
             }
+            if(const auto window=session.clock.Roll(NowMicros())) MatchEventLog::Line(ClockWindowLine(*window));
             ScheduleWrite();
         } catch(const std::exception& failure) {Close(std::string("exception: ")+failure.what());}
     }
 
     // Waits for the socket to become writable when there is something to
-    // write; otherwise arms the lane timer for the earliest lane with new
-    // content. The frame is chosen only when the socket is writable.
+    // write; otherwise arms the lane timer for the earliest lane with
+    // something to send. The frame is chosen only when the socket is writable.
     void ScheduleWrite() {
         if(phase!=Phase::Connected || waitingWrite) return;
         const auto now=Clock::now();
@@ -452,7 +609,7 @@ struct IpcHost::Impl {
             ++it;
         }
         const bool laneDue=nextLane && *nextLane<=now;
-        if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue) {
+        if(!session.writing.empty() || !session.controls.empty() || session.latestSnapshot || laneDue || session.clockReply) {
             waitingWrite=true;
             socket.async_wait(tcp::socket::wait_write,[this,current=connection](const asio::error_code& error) {
                 iterations.fetch_add(1,std::memory_order_relaxed);
@@ -492,8 +649,8 @@ struct IpcHost::Impl {
             } else {
                 // Results stay in Match until Client ACK. Only choose a batch
                 // when a write slot is free; a blocked socket cannot accumulate
-                // or overwrite a separate decision queue. A lane without new
-                // content keeps its anchor: new content may go at once.
+                // or overwrite a separate decision queue. A lane with nothing
+                // to send keeps its anchor: the next send may go at once.
                 const auto now=Clock::now();
                 for(auto it=s.actionLanes.begin();it!=s.actionLanes.end();) {
                     auto& [playerId,lane]=*it;
@@ -510,6 +667,14 @@ struct IpcHost::Impl {
             if(s.writing.empty() && s.latestSnapshot) {
                 s.writing=std::move(s.latestSnapshot->bytes);s.writingTick=s.latestSnapshot->tick;
                 s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+            }
+            if(s.writing.empty() && s.clockReply) {
+                // Last in priority; transmit is stamped now, when the frame is chosen.
+                pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
+                *message.mutable_clock()=*s.clockReply;s.clockReply.reset();
+                message.mutable_clock()->set_transmit_us(s.clock.Stamp(NowMicros()));
+                s.writing=wire::Frame(message.SerializeAsString());
+                s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=Clock::now();s.writingSamples.clear();
             }
             s.writeOffset=0;
         }
@@ -562,6 +727,20 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
 void IpcHost::Stop() {
     impl_->Detach();
     if(!impl_->role) return;
+    // A session still connected ends with the log every end writes, on the
+    // IPC thread that owns it; no reset (the Match is going away). Waited for
+    // a bounded time: an IPC thread that already failed runs nothing more.
+    auto ended=std::make_shared<std::promise<void>>();
+    auto done=ended->get_future();
+    asio::post(impl_->io,[impl=impl_.get(),ended] {
+        if(impl->phase==Impl::Phase::Connected) {
+            impl->LogEnd("stopped");
+            impl->phase=Impl::Phase::Idle;
+        }
+        ended->set_value();
+    });
+    if(done.wait_for(std::chrono::seconds(2))!=std::future_status::ready)
+        MatchEventLog::Line("ipc stop: the IPC thread did not end the session within 2 s");
     impl_->role->RequestStop();
     impl_->io.stop();
     impl_->role.reset();

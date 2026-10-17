@@ -2,7 +2,7 @@
 // The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v6.pb.h"
+#include "client_v7.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include <asio.hpp>
@@ -17,17 +17,19 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v6;
+namespace pb=object_fps_pvp::client::v7;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
@@ -43,11 +45,15 @@ public:
         http.Get("/rooms",[](const auto&,auto& response){response.set_content(R"({"rooms":[]})","application/json");});
         http.Post("/rooms/1/join",[&](const auto& request,auto& response){
             const auto body=Json::parse(request.body);
-            if(body.value("protocol_version",0u)!=AcceptanceProtocolVersion) {
-                response.status=400;response.set_content(R"({"error":"protocol_version"})","application/json");return;
-            }
-            const Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
+            std::optional<std::pair<int,Json>> refused;
+            {std::scoped_lock lock(refusalMutex);refused=refusal;}
+            // A Client of another version is refused naming this version (pv7 contract §1).
+            if(!refused && body.value("protocol_version",0u)!=AcceptanceProtocolVersion)
+                refused={409,Json{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion}}};
+            if(refused) {response.status=refused->first;response.set_content(refused->second.dump(),"application/json");return;}
+            Json reply={{"session_id",1},{"session_token","worker-test"},{"player_id",1},{"protocol_version",protocolVersion.load()},
                 {"arena_id","worker-test"},{"arena_version",1},{"arena_digest",joinArenaDigest.load()},{"udp_ip","127.0.0.1"},{"udp_port",socket.local_endpoint().port()}};
+            if(replyWithoutVersion)reply.erase("protocol_version");
             response.set_content(reply.dump(),"application/json");
         });
         http.Post("/rooms/1/leave",[&](const auto&,auto& response){
@@ -77,6 +83,13 @@ public:
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
                     rules->set_magazine_capacity(7);rules->set_reload_ticks(88);rules->set_respawn_ticks(177);
                 }
+                // The time echo (pv7 §3): echo the Hello, stamp this Welcome. A bad
+                // echo (receive after transmit) must change nothing for the Client.
+                if(hello.has_clock())helloClocks.push_back(hello.clock());
+                auto* clock=welcome.mutable_clock();welcomeTransmit+=1000;
+                if(hello.has_clock()) {clock->set_origin_us(hello.clock().transmit_us());clock->set_receive_us(welcomeTransmit-(badWelcomeClock?0:1));}
+                if(badWelcomeClock)clock->set_receive_us(welcomeTransmit+1);
+                clock->set_transmit_us(welcomeTransmit);welcomeTransmits.push_back(welcomeTransmit);
                 Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
                 pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
@@ -107,6 +120,8 @@ public:
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
+    // A snapshot of the given tick; the next Snapshot follows it.
+    void SnapshotAt(std::uint64_t at,std::uint64_t resolved){tick=at-1;Snapshot(resolved);}
     // A snapshot of the given number of players (ids 1..count), player 1 first.
     void Crowded(unsigned count) {
         pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
@@ -133,7 +148,16 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
+    // The join route answers every join with this status and body until Accept().
+    void Refuse(int status,Json body){std::scoped_lock lock(refusalMutex);refusal.emplace(status,std::move(body));}
+    void Accept(){std::scoped_lock lock(refusalMutex);refusal.reset();}
     std::atomic<unsigned> protocolVersion{AcceptanceProtocolVersion};
+    std::atomic<bool> replyWithoutVersion{};
+    // The time echo seen on Hellos and the transmits of the Welcomes sent.
+    std::vector<pb::ClockSample> helloClocks;
+    std::vector<std::uint64_t> welcomeTransmits;
+    std::uint64_t welcomeTransmit{};
+    bool badWelcomeClock{};
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
@@ -148,6 +172,8 @@ private:
     std::jthread server;
     std::uint64_t ack{},tick{};
     std::uint32_t sequence{};
+    std::mutex refusalMutex;
+    std::optional<std::pair<int,Json>> refusal;
 };
 PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
@@ -289,6 +315,16 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto beforeEpoch=connection.State().actionTransport;
     ++gateway.epoch;gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().snapshot->players.at(0).movementEpoch==gateway.epoch;});
+    {   // pv7 §2a (D-12): a newer tick whose movement epoch goes back is never applied, not
+        // even until the next snapshot (the mock answers each Hello with one).
+        const auto keptTick=connection.State().snapshot->tick;
+        --gateway.epoch;gateway.SnapshotAt(keptTick+1,0);++gateway.epoch;
+        bool applied=false;
+        const auto until=Clock::now()+60ms;
+        gateway.Until([&]{applied=applied || connection.State().snapshot->players.at(0).movementEpoch<gateway.epoch;
+            return Clock::now()>=until;});
+        Require(!applied,"the Client applied an old, repeated or regressed snapshot");
+    }
     Require(connection.State().actionTransport.retained==beforeEpoch.retained &&
         connection.State().actionTransport.unconsumed==31,"movement epoch erased action results");
     for(unsigned n=0;n<MaxReceivedSnapshots+16;++n)gateway.Snapshot(0);
@@ -355,8 +391,21 @@ int main() {
         bool zeroDigestRejected=false;
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
-        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);connection.Join(gateway.address,"1");
+        connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        gateway.badWelcomeClock=true; // a bad echo on the first Welcome changes nothing
+        connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+        gateway.badWelcomeClock=false;
+        // Each Hello carries the echo of the latest Welcome (pv7 §3): origin is
+        // that Welcome's transmit, and its own transmit increases.
+        gateway.Until([&]{return gateway.helloClocks.size()>=3;},std::chrono::milliseconds(4000));
+        for(std::size_t i=1;i<gateway.helloClocks.size();++i) {
+            const auto& hello=gateway.helloClocks[i];
+            Require(hello.has_origin_us() && hello.has_receive_us() && hello.origin_us()==gateway.welcomeTransmits[i-1] &&
+                hello.transmit_us()>gateway.helloClocks[i-1].transmit_us() && hello.transmit_us()>=hello.receive_us(),
+                "a Hello did not echo the latest Welcome");
+        }
+        Require(!gateway.helloClocks.front().has_origin_us(),"the first Hello echoed a Welcome it never read");
         connection.SendInput(Input(1,2));
         gateway.Until([&]{return gateway.attempts.size()>=2;});
         const auto lastOldSend=gateway.attempts.back().at;
@@ -414,6 +463,17 @@ int main() {
         gateway.Snapshot(6);
         gateway.Until([&]{const auto state=connection.State();
             return state.snapshot && state.snapshot->tick==fullTick+2 && state.snapshot->players.size()==1;});
+        // pv7 §2a (D-12): the Gateway no longer drops an old or regressed
+        // snapshot; the Client keeps only a newer tick with no cursor going back.
+        const auto keptTick=connection.State().snapshot->tick;
+        gateway.SnapshotAt(keptTick,6);     // the same tick again
+        gateway.SnapshotAt(keptTick-1,6);   // an older tick
+        gateway.SnapshotAt(keptTick+1,5);   // newer, but the cursor goes back
+        gateway.UntilTime(Clock::now()+60ms);
+        Require(connection.State().snapshot->tick==keptTick && Acknowledged(connection,6),
+            "the Client applied an old, repeated or regressed snapshot");
+        gateway.SnapshotAt(keptTick+2,6);
+        gateway.Until([&]{const auto state=connection.State();return state.snapshot && state.snapshot->tick==keptTick+2;});
         gateway.autoAck=true;
         const auto sixtyBegin=gateway.attempts.size();
         const auto frameStart=Clock::now();
@@ -554,10 +614,37 @@ int main() {
             connection.State().actionTransport.allocatedThrough==0 && connection.Drain().decisions.empty(),"Leave retained action lifecycle state");
         gateway.epoch=1;
 
-        // The previous version must be refused as a legacy join.
-        gateway.protocolVersion=AcceptanceProtocolVersion-1;connection.Join(gateway.address,"1");
-        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
-        Require(connection.State().error.find("protocol mismatch")!=std::string::npos,"HTTP accepted the previous protocol version");
+        // Version refusals name both versions (pv7 contract §1); the error code
+        // decides, so a full room is not reported as a version mismatch.
+        const auto joinError=[&]{
+            connection.Join(gateway.address,"1");
+            gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
+            return connection.State().error;
+        };
+        const auto mismatch=[](const std::string& gatewayVersion){
+            return "protocol_version_mismatch: Client "+std::to_string(AcceptanceProtocolVersion)+", Gateway "+gatewayVersion;
+        };
+        const auto newer=std::to_string(AcceptanceProtocolVersion+1);
+        gateway.protocolVersion=AcceptanceProtocolVersion-1;
+        Require(joinError()==mismatch(std::to_string(AcceptanceProtocolVersion-1)),
+            "HTTP accepted the previous protocol version in the join reply");
+        gateway.protocolVersion=AcceptanceProtocolVersion;gateway.replyWithoutVersion=true;
+        Require(joinError()==mismatch("unknown"),"a join reply without a version was not a mismatch");
+        gateway.replyWithoutVersion=false;
+        gateway.Refuse(409,{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion+1}});
+        Require(joinError()==mismatch(newer),"a newer Gateway's refusal did not name both versions");
+        gateway.Refuse(409,{{"error","room_full"}});
+        Require(joinError()=="room_full","a full room was reported as something else");
+        gateway.Refuse(400,{{"error","protocol_version"},{"protocol_version",AcceptanceProtocolVersion+1}});
+        Require(joinError()==mismatch(newer),"a version refusal of status 400 was not a version mismatch");
+        // Only a JSON unsigned integer is a version.
+        for(const auto& unnamed:{Json(),Json(-1),Json("8"),Json(7.5)}) {
+            Json refusal={{"error","protocol_version"}};
+            if(!unnamed.is_null())refusal["protocol_version"]=unnamed;
+            gateway.Refuse(409,refusal);
+            Require(joinError()==mismatch("unknown"),"a refusal without an unsigned version did not say unknown");
+        }
+        gateway.Accept();
         gateway.protocolVersion=AcceptanceProtocolVersion;gateway.includeRules=false;connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && !connection.State().error.empty();});
         Require(connection.State().error.find("combat rules")!=std::string::npos,"Welcome accepted missing rules");

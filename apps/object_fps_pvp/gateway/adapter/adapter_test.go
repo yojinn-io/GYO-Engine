@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {

@@ -1,4 +1,4 @@
-"""Product-owned check that every protocol version definition agrees (pv6 contract §1).
+"""Product-owned check that every protocol version definition agrees (pv7 contract §1).
 
 The product C++ constant, the product Go adapter constant and the acceptance
 C++ and Python expected values are read as source text, so the check needs no

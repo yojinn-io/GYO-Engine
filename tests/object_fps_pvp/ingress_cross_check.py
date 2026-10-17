@@ -43,6 +43,13 @@ from run_network import free_port, wait_for_match_ready  # noqa: E402
 GATEWAY_MODULE = ROOT / "apps" / "object_fps_pvp"
 SKIPPED = 77
 REQUIRED = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "I1", "link_shots", "trace")
+# pv7 §9, declared before edge-input-passthrough: the Gateway forwards every
+# input window as it came, so the Match counts copies the Gateway no longer
+# does, and the frozen analyzer's I3 fails with exactly that shape until
+# edge-analyzers refreezes the conservations. Any other shape still fails.
+DECLARED_FAILURES = {
+    "I3": lambda check: check.get("gateway_copies") == 0 and check.get("match_copies", 0) > 0,
+}
 CLOSED_LINE = "[ObjectFPS/PvP Match] ipc closed reason="
 ATTEMPTS = 3
 
@@ -150,8 +157,14 @@ def run_once(args, gateway_executable, output):
         (output / "match-ingress.jsonl").read_text(encoding="utf-8", errors="replace"))
     (output / "ingress-evidence.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     failures = []
-    if result["status"] != "passed":
-        failures.append(f"status {result['status']}: {result.get('stops', '')}")
+    checks = result.get("checks", {})
+    undeclared = [name for name, check in checks.items() if check.get("status") == "failed"
+                  and not (name in DECLARED_FAILURES and DECLARED_FAILURES[name](check))]
+    if result["status"] != "passed" and (undeclared or result.get("stops")):
+        failures.append(f"status {result['status']}: {result.get('stops', '')} {undeclared}")
+    for name in sorted(set(checks) & set(DECLARED_FAILURES)):
+        if checks[name].get("status") == "failed" and not undeclared:
+            print(f"ingress cross check: {name} failed as declared (pv7 §9): {checks[name].get('inequality', '')}")
     for name in REQUIRED:
         status = result.get("checks", {}).get(name, {}).get("status")
         if status != "passed":

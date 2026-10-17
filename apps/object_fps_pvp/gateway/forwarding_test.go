@@ -2,17 +2,19 @@ package gateway
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net"
 	"net/netip"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // batch takes one write pass as if every Write succeeded: tests without a
@@ -131,8 +133,7 @@ func dialedLink(t *testing.T) *runtimeLink {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &runtimeLink{conn: conn, inputs: make(map[uint64]*runtime.PlayerInput), epochs: make(map[uint64]uint64),
-		lives: make(map[uint64]uint64), wake: make(chan struct{}, 1), done: make(chan struct{})}
+	return &runtimeLink{conn: conn, wake: make(chan struct{}, 1), done: make(chan struct{})}
 }
 
 func linkWindow(player, epoch, first, last uint64) *runtime.PlayerInput {
@@ -143,178 +144,224 @@ func linkWindow(player, epoch, first, last uint64) *runtime.PlayerInput {
 	return in
 }
 
-// D49/D51: the Match alone decides that a step is resolved and measures how
-// late a substituted step arrived, so the Gateway forwards resolved steps.
-func TestGatewayForwardsResolvedCommandsToTheMatch(t *testing.T) {
-	s, p, _, _ := actionFixture(t)
-	totals := linkTotals{}
-	sendMoves(t, s, p, 2, 1, moves(1, 2))
-	sequences(s.link)
-	resolve(s, 10, 3) // 3 was substituted: its first copy is late, never written.
-	sendMoves(t, s, p, 3, 1, moves(1, 4))
-	got := sequences(s.link)
-	totals.take(s.link)
-	if p.commands[4] == nil || len(p.commands) != 1 || totals.of(7)[playerFwdRoutedFutureLimitInputs] != 0 {
-		t.Fatalf("resolved sequence underflowed the future bound: %v %v", p.commands, got)
+// pv7 §2a: each Client datagram's window reaches the Match as one IPC
+// message, exactly as decoded: resolved commands, copies, another epoch or
+// life, a far future or a conflicting command alike. The Match decides (D49).
+func TestGatewayForwardsEachInputDatagramAsItCame(t *testing.T) {
+	s, p, _, now := actionFixture(t)
+	conflict := moves(2, 3)
+	conflict[0].MoveForward = -1
+	sent := []*client.PlayerInput{
+		{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(1, 3), ObservedAuthorityTick: 4},
+		{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(1, 3), ObservedAuthorityTick: 5}, // a copy
+		{MovementEpoch: 1, LifeGeneration: 1, Commands: conflict},
+		{MovementEpoch: 2, LifeGeneration: 1, Commands: moves(1, 1)},
+		{MovementEpoch: 1, LifeGeneration: 2, Commands: moves(1, 1)},
+		{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(500, 511)},
 	}
-	if len(got) != 2 || got[0] != 3 || got[1] != 4 {
-		t.Fatalf("resolved command did not reach the runtime: %v", got)
+	resolve(s, 3, 3) // the Match resolved 1..3: no Gateway cursor drops or trims them
+	for k, in := range sent {
+		sendInputAt(t, s, p, uint32(k+2), now.Add(time.Duration(k)*time.Millisecond), in)
 	}
-	resolve(s, 11, 6)
-	sendMoves(t, s, p, 4, 1, moves(5, 6))
-	if got := sequences(s.link); len(got) != 2 || got[0] != 5 {
-		t.Fatalf("all-resolved window was not forwarded: %v", got)
+	batch := s.link.batch()
+	if len(batch) != len(sent) {
+		t.Fatalf("%d IPC messages for %d datagrams", len(batch), len(sent))
 	}
-	if c := totals.take(s.link).of(7); c[playerFwdResolvedAtWriteCommands] != 3 {
-		t.Fatalf("resolved forwarding was not counted: %d", c[playerFwdResolvedAtWriteCommands])
+	for k, e := range batch {
+		got, want := e.GetInput(), sent[k]
+		if got == nil || got.PlayerId != 7 || got.MovementEpoch != want.MovementEpoch || got.LifeGeneration != want.LifeGeneration ||
+			got.ObservedAuthorityTick != want.ObservedAuthorityTick || len(got.Commands) != len(want.Commands) {
+			t.Fatalf("message %d is not datagram %d: %v", k, k, got)
+		}
+		for i, command := range got.Commands {
+			if command.Sequence != want.Commands[i].Sequence || command.MoveForward != want.Commands[i].MoveForward {
+				t.Fatalf("message %d command %d changed: %v", k, i, command)
+			}
+		}
+	}
+	counts := s.playerIngress[7]
+	if counts[playerFwdMainInputPackets] != uint64(len(sent)) || counts[playerFwdRejectedLaneInputPackets] != 0 ||
+		counts[playerFwdWrittenDuplicateInputPackets] != 0 {
+		t.Fatalf("datagram outcomes: %v", counts)
 	}
 }
 
-func TestGatewayRoutesFarFutureWindowsToTheMatch(t *testing.T) {
-	s, p, _, _ := actionFixture(t)
-	totals := linkTotals{}
-	sendMoves(t, s, p, 2, 1, moves(33, 33))
-	if got := sequences(s.link); len(got) != 1 || got[0] != 33 || len(p.commands) != 0 ||
-		totals.take(s.link).of(7)[playerFwdRoutedFutureLimitInputs] != 1 {
-		t.Fatalf("far-future window did not reach the runtime: %v", got)
-	}
-	// A crafted link state: the defensive cap still reaches the Match.
-	s.link.inputs[7] = &runtime.PlayerInput{PlayerId: 7, MovementEpoch: 1, LifeGeneration: 1}
-	for sequence := uint64(2); sequence <= 33; sequence++ {
-		s.link.inputs[7].Commands = append(s.link.inputs[7].Commands, &runtime.MovementCommand{Sequence: sequence, MoveForward: 1})
-	}
-	sendMoves(t, s, p, 3, 1, moves(1, 1))
-	if got := sequences(s.link); len(got) != 33 || totals.take(s.link).of(7)[playerFwdRoutedLinkCapInputs] != 1 {
-		t.Fatalf("link-cap window did not reach the runtime: %v", got)
-	}
-}
-
-func TestRuntimeLinkCapCountsOnlyUnresolvedAndTrimsCounted(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	l.acknowledge(1, 1, 1, 20)
-	for first := uint64(1); first <= 49; first += 12 {
-		if err := l.input(linkWindow(1, 1, first, min(first+11, 52))); err != nil {
-			t.Fatalf("link cap counted resolved commands: %v", err)
-		}
-	}
-	if err := l.input(linkWindow(1, 1, 53, 53)); !errors.Is(err, adapter.ErrInput) || linkRefusalReason(err) != playerFwdRoutedLinkCapInputs {
-		t.Fatal("link admitted 33 unresolved commands")
-	}
-	l.acknowledge(1, 1, 1, 52)
-	for first := uint64(53); first <= 77; first += 12 {
-		if err := l.input(linkWindow(1, 1, first, min(first+11, 84))); err != nil {
-			t.Fatal(err)
-		}
-	}
-	l.acknowledge(1, 1, 1, 100)
-	if err := l.input(linkWindow(1, 1, 101, 101)); err != nil {
-		t.Fatal(err)
-	}
-	if c := (linkTotals{}).take(l).of(1); c[playerDropResolvedTrimCommands] != 52 {
-		t.Fatalf("resolved trim was not counted: %d", c[playerDropResolvedTrimCommands])
-	}
-	batch := l.batch()
-	var got []uint64
-	for _, e := range batch {
-		if len(e.GetInput().Commands) > adapter.MaxPendingCommands {
-			t.Fatal("IPC batch exceeds12")
-		}
-		for _, command := range e.GetInput().Commands {
-			got = append(got, command.Sequence)
-		}
-	}
-	if len(got) != 33 || got[0] != 53 || got[32] != 101 {
-		t.Fatalf("resolved retention kept the wrong commands: %v", got)
-	}
-}
-
-// The rejected lane (xhigh): per player the main window is written first, then
-// the rejected windows in arrival order, each cut into IPC inputs of at most
-// 12 commands; beyond 4 windows the oldest is dropped and counted.
-func TestRuntimeLinkRejectedLaneIsOrderedChunkedBoundedAndCounted(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	for first := uint64(1); first <= 13; first += 12 {
-		if err := l.input(linkWindow(1, 1, first, first+11)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	l.acknowledge(1, 2, 1, 0) // The 24-command epoch-1 window moves to the rejected lane.
-	if err := l.input(linkWindow(1, 2, 1, 1)); err != nil {
-		t.Fatal(err)
-	}
-	batch := l.batch()
-	for _, e := range batch {
-		if len(e.GetInput().Commands) > adapter.MaxPendingCommands {
-			t.Fatal("rejected lane IPC exceeds 12 commands")
-		}
-	}
-	if len(batch) != 3 || batch[0].GetInput().MovementEpoch != 2 {
-		t.Fatalf("rejected window overtook the main window: %v", batch)
-	}
-	for i, e := range batch[1:] {
-		in := e.GetInput()
-		if in.MovementEpoch != 1 || len(in.Commands) != 12 || in.Commands[0].Sequence != uint64(12*i+1) {
-			t.Fatalf("rejected window was reordered or cut wrongly: %v", batch)
-		}
-	}
-	totals := linkTotals{}
-	if c := totals.take(l).of(1); c[playerFwdRoutedRotationInputs] != 1 {
-		t.Fatalf("rotated window was not counted: %d", c[playerFwdRoutedRotationInputs])
-	}
-	for i := uint64(1); i <= maxRejectedWindows+1; i++ {
-		if err := l.reject(linkWindow(1, 1, i, i+2), playerFwdRoutedEpochMismatchInputs); err != nil {
-			t.Fatal(err)
-		}
-	}
-	batch = l.batch()
-	if c := totals.take(l).of(1); c[playerDropRejectedLaneOverflowCommands] != 3 || len(batch) != maxRejectedWindows {
-		t.Fatalf("rejected lane overflow was not counted: %d", c[playerDropRejectedLaneOverflowCommands])
-	}
-	if batch[0].GetInput().Commands[0].Sequence != 2 || batch[maxRejectedWindows-1].GetInput().Commands[0].Sequence != maxRejectedWindows+1 {
-		t.Fatalf("rejected lane overflow dropped the wrong window: %v", batch)
-	}
-}
-
-// Order across players and lanes: controls first, then per player (ascending
-// id) its main window and its rejected lane, however they were queued.
-func TestRuntimeLinkWritesEachPlayersMainWindowBeforeItsRejectedLane(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	if err := l.reject(linkWindow(2, 3, 1, 1), playerFwdRoutedEpochMismatchInputs); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.reject(linkWindow(1, 3, 5, 5), playerFwdRoutedEpochMismatchInputs); err != nil {
-		t.Fatal(err)
-	}
-	for _, player := range []uint64{2, 1} {
-		if err := l.input(linkWindow(player, 1, 1, 1)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := l.reject(linkWindow(1, 3, 6, 6), playerFwdRoutedEpochMismatchInputs); err != nil {
-		t.Fatal(err)
-	}
+// pv7 §2a (D-10): the link writes in arrival order, controls and inputs alike:
+// a Leave never overtakes the player's queued inputs, and inputs queued
+// before an eviction (forget, no Leave) still reach the Match.
+func TestRuntimeLinkKeepsArrivalOrderAndALeaveDoesNotOvertake(t *testing.T) {
+	l := dialedLink(t)
+	leave := envelope()
+	leave.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: 1}}
 	join := envelope()
 	join.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: 3}}
-	if err := l.control(join); err != nil {
+	for _, step := range []func() error{
+		func() error { return l.input(linkWindow(1, 1, 1, 1), dropEvent{}) },
+		func() error { return l.control(join) },
+		func() error { return l.input(linkWindow(2, 1, 1, 1), dropEvent{}) },
+		func() error { return l.input(linkWindow(1, 1, 2, 2), dropEvent{}) },
+		func() error { return l.control(leave) },
+		func() error { return l.input(linkWindow(2, 1, 2, 2), dropEvent{}) },
+	} {
+		if err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l.forget(2) // an eviction: no Leave, the queued inputs stay
+	var order []string
+	for _, e := range l.batch() {
+		switch {
+		case e.GetInput() != nil:
+			order = append(order, fmt.Sprintf("input %d/%d", e.GetInput().PlayerId, e.GetInput().Commands[0].Sequence))
+		case e.GetLeave() != nil:
+			order = append(order, fmt.Sprintf("leave %d", e.GetLeave().PlayerId))
+		case e.GetJoin() != nil:
+			order = append(order, fmt.Sprintf("join %d", e.GetJoin().PlayerId))
+		}
+	}
+	want := []string{"input 1/1", "join 3", "input 2/1", "input 1/2", "leave 1", "input 2/2"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("written %v, want %v", order, want)
+	}
+}
+
+// pv7 §2a: each player's queue holds maxQueuedInputs windows (not less than
+// 64); beyond that the oldest is dropped, counted and reported with its
+// identity (§4, reason 32). Another player's queue is untouched.
+func TestRuntimeLinkInputQueueDropsTheOldestWindowAndReportsIt(t *testing.T) {
+	if maxQueuedInputs < 64 {
+		t.Fatalf("the input queue holds %d windows, fewer than 64", maxQueuedInputs)
+	}
+	l := dialedLink(t)
+	l.drops = newDropLedger()
+	start := time.Now()
+	// Player 2's window waits first: player 1's overflow must not take it.
+	if err := l.input(linkWindow(2, 1, 1, 1), dropEvent{}); err != nil {
 		t.Fatal(err)
 	}
-	type step struct{ player, epoch, first uint64 }
-	want := []step{{1, 1, 1}, {1, 3, 5}, {1, 3, 6}, {2, 1, 1}, {2, 3, 1}}
-	batch := l.batch()
-	if len(batch) != len(want)+1 || batch[0].GetJoin() == nil {
-		t.Fatalf("control did not lead the pass: %v", batch)
+	for k := uint64(1); k <= maxQueuedInputs+2; k++ {
+		e := dropEvent{at: start.Add(time.Duration(k) * time.Millisecond), transport: uint32(100 + k), epoch: 1, life: 1, firstCommand: k, lastCommand: k, items: 1}
+		if err := l.input(linkWindow(1, 1, k, k), e); err != nil {
+			t.Fatal(err)
+		}
 	}
-	for i, e := range batch[1:] {
-		in := e.GetInput()
-		if got := (step{in.PlayerId, in.MovementEpoch, in.Commands[0].Sequence}); got != want[i] {
-			t.Fatalf("rejected window overtook a main window: %d %v want %v", i, got, want[i])
+	totals := linkTotals{}.take(l)
+	if got := totals.of(1)[playerDropIpcQueueOverflowInputPackets]; got != 2 {
+		t.Fatalf("overflowed windows counted %d, want 2", got)
+	}
+	if got := totals.of(1)[playerDropIpcQueueOverflowInputCommands]; got != 2 {
+		t.Fatalf("overflowed commands counted %d, want 2", got)
+	}
+	if got := totals.of(2)[playerDropIpcQueueOverflowInputPackets]; got != 0 {
+		t.Fatalf("player 2 lost %d windows to player 1's overflow", got)
+	}
+	got := sequences(l)
+	want := []uint64{1}
+	for k := uint64(3); k <= maxQueuedInputs+2; k++ {
+		want = append(want, k)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("written %v, want player 2's window, then the newest %d of player 1", got, maxQueuedInputs)
+	}
+	report := l.drops.report(1, start.Add(time.Second))
+	if report == nil || len(report.Samples) != 2 {
+		t.Fatalf("overflow report %v", report)
+	}
+	for k, sample := range report.Samples {
+		id := uint64(k + 1)
+		if sample.Reason != runtime.DropReason_DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS || sample.TransportSequence != uint32(100+id) ||
+			sample.MovementEpoch != 1 || sample.LifeGeneration != 1 || sample.FirstCommandSequence != id || sample.LastCommandSequence != id || sample.ItemCount != 1 {
+			t.Fatalf("sample %d does not carry the dropped window: %v", k, sample)
 		}
 	}
 }
 
-// ★ (xhigh): a stale transport sequence carries a full payload. It is decoded
-// and forwarded, never committed: no liveness, no sequence movement, and the
-// rate limit counts it once, as before.
+// The queue depth holds while the writer is blocked in a runtime write: the
+// windows that arrive meanwhile wait, up to maxQueuedInputs per player, and
+// the Match then reads the newest of them in order.
+func TestRuntimeLinkQueuesWindowsBehindABlockedWrite(t *testing.T) {
+	block, entered := make(chan struct{}), make(chan struct{}, 1)
+	var mu sync.Mutex
+	var written []uint64
+	setForTest(t, &runtimeWrite, func(_ *framing.TCPConnection, payload []byte, _ time.Duration) error {
+		var e runtime.RuntimeEnvelope
+		if err := proto.Unmarshal(payload, &e); err != nil {
+			return err
+		}
+		if in := e.GetInput(); in != nil {
+			if in.Commands[0].Sequence == 1 {
+				entered <- struct{}{}
+				<-block
+			}
+			mu.Lock()
+			written = append(written, in.Commands[0].Sequence)
+			mu.Unlock()
+		}
+		return nil
+	})
+	l := dialedLink(t)
+	l.drops, l.now, l.diagnosticWake = newDropLedger(), time.Now, make(chan struct{}, 1)
+	l.clock = newClockSync(gatewayMicros(time.Now()))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l.run(ctx, func(*runtime.RuntimeEnvelope) {}, func(error) {})
+	defer l.close()
+	if err := l.input(linkWindow(1, 1, 1, 1), dropEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	const arrived = maxQueuedInputs + 10
+	for k := uint64(2); k <= arrived+1; k++ {
+		if err := l.input(linkWindow(1, 1, k, k), dropEvent{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	close(block)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		n := len(written)
+		mu.Unlock()
+		if n == maxQueuedInputs+1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := []uint64{1}
+	for k := uint64(arrived + 1 - maxQueuedInputs + 1); k <= arrived+1; k++ {
+		want = append(want, k)
+	}
+	if !slices.Equal(written, want) {
+		t.Fatalf("the Match read %v, want %v", written, want)
+	}
+	if got := (linkTotals{}).take(l).of(1)[playerDropIpcQueueOverflowInputPackets]; got != arrived-maxQueuedInputs {
+		t.Fatalf("overflow counted %d, want %d", got, arrived-maxQueuedInputs)
+	}
+}
+
+// D-11: decoding succeeded commits the sequence and liveness; a datagram that
+// does not decode commits nothing.
+func TestGatewayCommitsAnInputSequenceOnlyOnceItDecoded(t *testing.T) {
+	s, p, _, now := actionFixture(t)
+	malformed := &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(2, 1)} // empty: undecodable
+	sendInputAt(t, s, p, 5, now.Add(4*time.Second), malformed)
+	if len(s.link.batch()) != 0 || s.playerIngress[7][playerDropMalformedInputPackets] != 1 {
+		t.Fatal("a malformed input reached the Match or was not counted")
+	}
+	if !p.session.Expired(now.Add(6500*time.Millisecond), sessionTimeout) {
+		t.Fatal("a malformed input refreshed liveness")
+	}
+	if p.session.CommitSequence(5, now) != nil {
+		t.Fatal("a malformed input committed its sequence")
+	}
+	sendInputAt(t, s, p, 6, now.Add(4*time.Second), &client.PlayerInput{MovementEpoch: 9, LifeGeneration: 9, Commands: moves(1, 1)})
+	if p.session.Expired(now.Add(6500*time.Millisecond), sessionTimeout) {
+		t.Fatal("a decoded input of any epoch did not refresh liveness")
+	}
+}
+
 func TestGatewayForwardsStaleSequenceInputWithoutCommitting(t *testing.T) {
 	s, p, endpoint, now := actionFixture(t)
 	sendInputAt(t, s, p, 5, now.Add(time.Second), &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(3, 3)})
@@ -322,13 +369,15 @@ func TestGatewayForwardsStaleSequenceInputWithoutCommitting(t *testing.T) {
 		t.Fatalf("fresh input missing: %v", got)
 	}
 	accepted := s.rateAcceptedPackets.Load()
-	// Never written before: dedup cannot hide a dropped stale packet.
 	sendInputAt(t, s, p, 4, now.Add(4*time.Second), &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(2, 2)})
-	if got := sequences(s.link); len(got) != 1 || got[0] != 2 || p.commands[2] == nil {
+	if got := sequences(s.link); len(got) != 1 || got[0] != 2 {
 		t.Fatalf("stale-sequence input did not reach the runtime: %v", got)
 	}
 	if s.rateAcceptedPackets.Load() != accepted+1 {
 		t.Fatal("stale-sequence input changed the rate accounting")
+	}
+	if s.playerIngress[7][playerFwdStaleSequenceInputPackets] != 1 {
+		t.Fatalf("stale-sequence outcome: %v", s.playerIngress[7])
 	}
 	// Liveness is still the fresh packet's: 5.5 s after it, the session expires.
 	if !p.session.Expired(now.Add(6500*time.Millisecond), sessionTimeout) {
@@ -337,11 +386,6 @@ func TestGatewayForwardsStaleSequenceInputWithoutCommitting(t *testing.T) {
 	// The sequence did not move back: 5 is still stale, 6 commits.
 	if p.session.CommitSequence(5, now) == nil {
 		t.Fatal("stale-sequence input moved the sequence")
-	}
-	// A stale epoch on the rejected lane is forwarded the same way.
-	sendInputAt(t, s, p, 3, now.Add(4*time.Second), &client.PlayerInput{MovementEpoch: 2, LifeGeneration: 1, Commands: moves(1, 1)})
-	if got := sequences(s.link); len(got) != 1 {
-		t.Fatalf("stale-sequence rejected-lane input did not reach the runtime: %v", got)
 	}
 	// Only a stale sequence is forwarded: another endpoint is not the session.
 	payload, _ := proto.Marshal(&client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(4, 4)})
@@ -359,234 +403,168 @@ func TestGatewayForwardsStaleSequenceInputWithoutCommitting(t *testing.T) {
 	// carries a fresh sequence and a new command and must not reach the link.
 	second := now.Add(10 * time.Second)
 	for seq := uint32(10); seq < 130; seq++ {
-		sendInputAt(t, s, p, seq, second, &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(5, 5)})
+		first := uint64(seq) * 3
+		sendInputAt(t, s, p, seq, second, &client.PlayerInput{MovementEpoch: 2, LifeGeneration: 3, Commands: moves(first, first+2)})
 	}
-	if got := sequences(s.link); len(got) != 1 || got[0] != 5 {
-		t.Fatalf("admitted packets missing: %v", got)
+	// One player's queue holds maxQueuedInputs windows; the older admitted
+	// ones overflowed, counted.
+	if got := sequences(s.link); len(got) != 3*maxQueuedInputs {
+		t.Fatalf("admitted packets missing: %d commands", len(got))
+	}
+	if got := (linkTotals{}).take(s.link).of(7)[playerDropIpcQueueOverflowInputPackets]; got != 120-maxQueuedInputs {
+		t.Fatalf("overflowed %d, want %d", got, 120-maxQueuedInputs)
+	}
+	// The Server's sample of a dropped window is that datagram's: its GYOP
+	// sequence, receipt, identity and commands (pv7 §4, reason 32).
+	report := s.link.drops.report(7, second.Add(time.Second))
+	if report == nil {
+		t.Fatal("no overflow report")
+	}
+	var sample *runtime.DropSample // the earlier spoofed packet's sample comes first
+	for _, candidate := range report.Samples {
+		if candidate.Reason == runtime.DropReason_DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS {
+			sample = candidate
+			break
+		}
+	}
+	if sample == nil || sample.TransportSequence != 10 ||
+		sample.MovementEpoch != 2 || sample.LifeGeneration != 3 || sample.FirstCommandSequence != 30 ||
+		sample.LastCommandSequence != 32 || sample.ItemCount != 3 || sample.DwellUs < 900_000 {
+		t.Fatalf("the first dropped datagram's sample: %v", sample)
 	}
 	sendInputAt(t, s, p, 130, second, &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(6, 6)})
-	if got := sequences(s.link); len(got) != 0 || p.commands[6] != nil {
+	if got := sequences(s.link); len(got) != 0 {
 		t.Fatalf("rate-limited input reached the runtime: %v", got)
 	}
 }
 
-// Rejected-lane windows keep HEAD's commit timing: epoch, future and conflict
-// windows are routed before the sequence commits, so they extend no liveness.
-func TestGatewayRejectedLaneWindowsDoNotCommitTheSequence(t *testing.T) {
-	conflict := moves(1, 1)
-	conflict[0].MoveForward = -1
-	for _, c := range []struct {
-		name string
-		in   *client.PlayerInput
-	}{
-		{"epoch", &client.PlayerInput{MovementEpoch: 2, LifeGeneration: 1, Commands: moves(1, 1)}},
-		{"future", &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(40, 40)}},
-		{"conflict", &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: conflict}},
-	} {
-		s, p, _, now := actionFixture(t)
-		sendInputAt(t, s, p, 2, now.Add(time.Second), &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(1, 1)})
-		sendInputAt(t, s, p, 3, now.Add(4*time.Second), c.in)
-		if got := sequences(s.link); len(got) != 2 {
-			t.Fatalf("%s: windows missing: %v", c.name, got)
-		}
-		if !p.session.Expired(now.Add(6500*time.Millisecond), sessionTimeout) {
-			t.Fatalf("rejected-lane %s input committed the sequence", c.name)
-		}
+// D-12: the Gateway no longer refuses an old or regressed snapshot (the IPC
+// is ordered; the Client applies only a newer tick), and keeps no copy of the
+// Match's cursors.
+func TestGatewayForwardsEverySnapshotWithoutTickOrCursorGuards(t *testing.T) {
+	s, _, _, _ := actionFixture(t)
+	resolve(s, 10, 5)
+	<-s.snapshotOut
+	resolve(s, 9, 2) // an older tick, a regressed cursor
+	if frame := <-s.snapshotOut; frame.tick != 9 {
+		t.Fatalf("snapshot %d forwarded, want 9", frame.tick)
+	}
+	if s.ingress[gatewayDropOldTickSnapshots] != 0 || s.ingress[gatewayDropRegressedSnapshots] != 0 {
+		t.Fatalf("snapshot guards still count: %v", s.ingress)
 	}
 }
 
-// A window the link refuses was validated by the Server and committed before
-// the link saw it, as before 08c: it extends liveness on the rejected lane.
-func TestGatewayLinkRefusedWindowsCommitTheSequence(t *testing.T) {
-	s, p, _, now := actionFixture(t)
-	sendInputAt(t, s, p, 2, now.Add(time.Second), &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: moves(1, 2)})
-	sequences(s.link)
-	resolve(s, 10, 2)
-	changed := moves(1, 1)
-	changed[0].MoveForward = -1
-	sendInputAt(t, s, p, 3, now.Add(4*time.Second), &client.PlayerInput{MovementEpoch: 1, LifeGeneration: 1, Commands: changed})
-	if got := sequences(s.link); len(got) != 1 {
-		t.Fatalf("written conflict missing: %v", got)
-	}
-	if p.session.Expired(now.Add(6500*time.Millisecond), sessionTimeout) {
-		t.Fatal("link-refused input did not commit the sequence")
-	}
-}
-
-// Every link refusal has its own routing reason; a disagreement between the
-// Server's and the link's epoch is not the Server's ordinary epoch routing.
-func TestLinkRefusalReasonsAreDistinct(t *testing.T) {
-	for err, want := range map[error]playerIngressCounter{
-		errLinkEpoch:           playerFwdRoutedLinkEpochMismatchInputs,
-		errLinkConflict:        playerFwdRoutedConflictInputs,
-		errLinkWrittenConflict: playerFwdRoutedWrittenConflictInputs,
-		errLinkCap:             playerFwdRoutedLinkCapInputs,
-		adapter.ErrInput:       playerFwdRoutedMalformedInputs,
-	} {
-		if got := linkRefusalReason(err); got != want {
-			t.Fatalf("link refusal %v counted as %s", err, ingressKeyName(playerIngressKeys[got]))
-		}
-	}
-	s, p, _, _ := actionFixture(t)
-	s.link.epochs[7] = 2 // A crafted divergence: the Server still holds epoch 1.
-	sendMoves(t, s, p, 2, 1, moves(1, 1))
-	c := (linkTotals{}).take(s.link).of(7)
-	if got := sequences(s.link); len(got) != 1 || c[playerFwdRoutedLinkEpochMismatchInputs] != 1 || c[playerFwdRoutedEpochMismatchInputs] != 0 {
-		t.Fatalf("epoch divergence was not counted apart: %v %v", got, c)
-	}
-}
-
-// The resolved prefix of a main window is cut apart, so the unresolved part
-// keeps the 12-command boundaries it had before 08c.
-func TestRuntimeLinkCutsTheMainWindowAtTheResolvedCursor(t *testing.T) {
-	l := &runtimeLink{inputs: make(map[uint64]*runtime.PlayerInput), wake: make(chan struct{}, 1)}
-	if err := l.input(linkWindow(1, 1, 1, 5)); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.input(linkWindow(1, 1, 6, 13)); err != nil {
-		t.Fatal(err)
-	}
-	l.acknowledge(1, 1, 1, 5)
-	var withNew, total int
-	var mixed *runtime.PlayerInput
-	for _, e := range l.batch() {
-		in := e.GetInput()
-		total += len(in.Commands)
-		if in.Commands[len(in.Commands)-1].Sequence > 5 {
-			withNew++
-			if in.Commands[0].Sequence <= 5 {
-				mixed = in
-			}
-		}
-	}
-	if withNew != 1 || total != 13 {
-		t.Fatalf("resolved prefix shifted the chunk boundaries: %d inputs with new commands, %d commands", withNew, total)
-	}
-	if mixed != nil {
-		t.Fatalf("resolved and new commands share an IPC input: %v", mixed)
-	}
-}
-
-// A copy that changes a written command goes to the Match unmerged; only the
-// Gateway knows it conflicted (the Match skips resolved steps unread).
-func TestGatewayRoutesWrittenConflictsToTheRejectedLane(t *testing.T) {
-	s, p, _, _ := actionFixture(t)
-	sendMoves(t, s, p, 2, 1, moves(1, 2))
-	sequences(s.link)
-	resolve(s, 10, 2) // The Server no longer holds 1 and 2; only the link does.
-	changed := moves(1, 3)
-	changed[0].MoveForward = -1
-	sendMoves(t, s, p, 3, 1, changed)
-	batch := s.link.batch()
-	if len(batch) != 1 || len(batch[0].GetInput().Commands) != 3 || batch[0].GetInput().Commands[0].MoveForward != -1 || p.commands[3] != nil {
-		t.Fatalf("written conflict did not reach the runtime unmerged: %v", batch)
-	}
-	if c := (linkTotals{}).take(s.link).of(7); c[playerFwdRoutedWrittenConflictInputs] != 1 {
-		t.Fatalf("written conflict was not counted: %d", c[playerFwdRoutedWrittenConflictInputs])
-	}
-}
-
-// I0: every command handed to the link is written once or counted once as
-// removed; a move between lanes is not counted again.
+// I0 per player: the handed commands equal the written ones plus the counted
+// removals (closed, abandoned), as long as no window overflowed (the overflow
+// counts packets).
 func TestRuntimeLinkConservesHandedCommands(t *testing.T) {
 	l := dialedLink(t)
 	totals := linkTotals{}
 	read := func() playerIngressCounts { return totals.take(l).of(1) }
-	// I0 is checked whenever nothing is queued or in flight, after the
-	// stage's own assertions so that each names the term it lost.
 	balanced := func(stage string, c playerIngressCounts) {
 		t.Helper()
 		if handed, accounted := i0(c); handed != accounted {
 			t.Fatalf("%s: I0 handed %d != accounted %d: %v", stage, handed, accounted, c)
 		}
 	}
-	// Written (main), merged and written duplicates.
-	_ = l.input(linkWindow(1, 1, 1, 3))
-	_ = l.input(linkWindow(1, 1, 2, 4))
-	if err := l.write(l.take()); err != nil {
-		t.Fatal(err)
-	}
-	_ = l.input(linkWindow(1, 1, 3, 5))
-	_ = l.reject(linkWindow(1, 2, 1, 2), playerFwdRoutedEpochMismatchInputs)
+	_ = l.input(linkWindow(1, 1, 1, 3), dropEvent{})
+	_ = l.input(linkWindow(1, 1, 2, 4), dropEvent{}) // a copy is written again
 	if err := l.write(l.take()); err != nil {
 		t.Fatal(err)
 	}
 	c := read()
-	if c[playerFwdLinkWrittenMainCommands] != 5 {
-		t.Fatalf("link written commands were not counted: %v", c)
-	}
-	if c[playerFwdLinkWrittenRejectedLaneCommands] != 2 {
-		t.Fatalf("rejected-lane written commands were not counted: %v", c)
-	}
-	if c[playerFwdMergedDuplicateCommands] != 2 {
-		t.Fatalf("merged duplicate commands were not counted: %v", c)
-	}
-	if c[playerFwdWrittenDuplicateCommands] != 2 {
-		t.Fatalf("written duplicates were not counted: %v", c)
+	if c[playerFwdHandedMainCommands] != 6 || c[playerFwdLinkWrittenMainCommands] != 6 {
+		t.Fatalf("handed and written commands: %v", c)
 	}
 	balanced("written", c)
-	// Rotation moves the main window to the rejected lane without recounting;
-	// overflow and Leave remove what is pending.
-	_ = l.input(linkWindow(1, 1, 6, 7))
-	l.acknowledge(1, 2, 1, 0)
-	for i := uint64(1); i <= maxRejectedWindows; i++ {
-		_ = l.reject(linkWindow(1, 1, 10*i, 10*i), playerFwdRoutedEpochMismatchInputs)
-	}
-	_ = l.input(linkWindow(1, 2, 1, 1))
-	c = read()
-	if c[playerFwdHandedRejectedLaneCommands] != 2+maxRejectedWindows || c[playerFwdHandedMainCommands] != 12 {
-		t.Fatalf("rotation was recounted as handed: %v", c)
-	}
-	if c[playerDropRejectedLaneOverflowCommands] != 2 {
-		t.Fatalf("rejected lane overflow was not counted: %v", c)
-	}
+	// A Leave keeps the queued windows: they are written before it.
+	_ = l.input(linkWindow(1, 1, 5, 6), dropEvent{})
 	leave := envelope()
 	leave.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: 1}}
 	if err := l.control(leave); err != nil {
 		t.Fatal(err)
 	}
-	if c = read(); c[playerDropDiscardedOnLeaveCommands] != 1+maxRejectedWindows {
-		t.Fatalf("leave discarded commands were not counted: %v", c)
+	if batch := l.batch(); len(batch) != 2 || batch[0].GetInput() == nil || batch[1].GetLeave() == nil {
+		t.Fatalf("leave overtook or dropped the queued input: %v", batch)
+	}
+	if c = read(); c[playerDropDiscardedOnLeaveCommands] != 0 {
+		t.Fatalf("a Leave discarded commands: %v", c)
 	}
 	balanced("left", c)
-	if batch := l.batch(); len(batch) != 1 || batch[0].GetLeave() == nil {
-		t.Fatalf("leave missing: %v", batch)
-	}
-	// Resolved trim.
-	l.acknowledge(1, 2, 1, 100)
-	for first := uint64(1); first <= 37; first += 12 {
-		_ = l.input(linkWindow(1, 2, first, first+11))
-	}
-	if c = read(); c[playerDropResolvedTrimCommands] != 16 {
-		t.Fatalf("resolved trim was not counted: %v", c)
-	}
 	// A failed write abandons the whole pass; close clears what is queued.
-	_ = l.reject(linkWindow(1, 2, 200, 200), playerFwdRoutedFutureLimitInputs)
+	_ = l.input(linkWindow(1, 1, 7, 9), dropEvent{})
+	_ = l.input(linkWindow(1, 1, 8, 9), dropEvent{})
 	pass := l.take()
-	_ = l.input(linkWindow(1, 2, 101, 102))
-	_ = l.reject(linkWindow(1, 3, 1, 3), playerFwdRoutedEpochMismatchInputs)
+	_ = l.input(linkWindow(1, 1, 10, 14), dropEvent{})
 	_ = l.conn.Close()
 	written := read()[playerFwdLinkWrittenMainCommands]
 	if err := l.write(pass); err == nil {
 		t.Fatal("write on a closed connection succeeded")
 	}
 	c = read()
-	if c[playerFwdLinkWrittenMainCommands] != written {
-		t.Fatal("written commands were counted before the write succeeded")
-	}
-	if c[playerDropAbandonedOnCloseCommands] == 0 {
-		t.Fatalf("abandoned commands were not counted: %v", c)
-	}
-	if c[playerDropAbandonedOnCloseCommands] != 33 {
-		t.Fatalf("the rest of a failed pass was not abandoned: %v", c)
+	if c[playerFwdLinkWrittenMainCommands] != written || c[playerDropAbandonedOnCloseCommands] != 5 {
+		t.Fatalf("abandoned commands: %v", c)
 	}
 	l.close()
 	if c = read(); c[playerDropClearedOnCloseCommands] != 5 {
 		t.Fatalf("close cleared commands were not counted: %v", c)
 	}
 	balanced("closed", c)
-	if err := l.input(linkWindow(1, 2, 103, 103)); err == nil || l.reject(linkWindow(1, 2, 103, 103), playerFwdRoutedEpochMismatchInputs) == nil {
+	if err := l.input(linkWindow(1, 1, 15, 15), dropEvent{}); err == nil {
 		t.Fatal("closed link accepted a window")
 	}
 	balanced("after close", read())
+}
+
+// Controls are never dropped: the 65th pending one fails (the link then
+// fails), and a write pass frees the queue for the next 64.
+func TestRuntimeLinkBoundsPendingControlsPerPass(t *testing.T) {
+	l := dialedLink(t)
+	join := func(player uint64) *runtime.RuntimeEnvelope {
+		e := envelope()
+		e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: player}}
+		return e
+	}
+	for round := 0; round < 2; round++ {
+		for k := uint64(0); k < maxQueuedControls; k++ {
+			if err := l.control(join(k + 1)); err != nil {
+				t.Fatalf("round %d: control %d refused: %v", round, k+1, err)
+			}
+		}
+		if err := l.control(join(99)); err == nil {
+			t.Fatalf("round %d: control %d accepted", round, maxQueuedControls+1)
+		}
+		if got := len(l.batch()); got != maxQueuedControls {
+			t.Fatalf("round %d: %d controls written", round, got)
+		}
+	}
+}
+
+// An input wakes the writer at once: it does not wait for the idle timer.
+func TestRuntimeLinkWritesAnInputAtOnce(t *testing.T) {
+	setForTest(t, &writerIdleWait, 10*time.Second)
+	written := make(chan struct{}, 4)
+	setForTest(t, &runtimeWrite, func(_ *framing.TCPConnection, payload []byte, _ time.Duration) error {
+		var e runtime.RuntimeEnvelope
+		if proto.Unmarshal(payload, &e) == nil && e.GetInput() != nil {
+			written <- struct{}{}
+		}
+		return nil
+	})
+	l := dialedLink(t)
+	l.drops, l.now, l.diagnosticWake = newDropLedger(), time.Now, make(chan struct{}, 1)
+	l.clock = newClockSync(gatewayMicros(time.Now()))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l.run(ctx, func(*runtime.RuntimeEnvelope) {}, func(error) {})
+	defer l.close()
+	time.Sleep(20 * time.Millisecond) // the writer is idle, waiting on its timer
+	if err := l.input(linkWindow(1, 1, 1, 1), dropEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-written:
+	case <-time.After(time.Second):
+		t.Fatal("an input waited for the writer's idle timer")
+	}
 }
