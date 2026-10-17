@@ -344,7 +344,7 @@
     - should（已修）：33 的 ACK-only 樣本把 ACK 值填進 action id 欄位，契約沒有定義。改成 id 為 0（ledger 照共通規則把那一批記成 1 筆）。
     - 測試缺口（已補）：輸入與動作混合溢出、同一玩家跨種類的到達順序、離開後寫出不重建統計、`checkIngressConservation` 加上動作批的守恆；新突變 3 個。審查提到的「被丟的那則依新來那則的種類歸類」在修正後是等價突變（被丟的一定與新來的同種類），不加。
     - 修正後重跑：兩個被改檔案上的突變與本批全部，69／69 殺死（加入時的等價突變 1 個已刪除）；`go test -race -count=2` 通過。
-  - 修正提交 `5b4d626`（CTest 72／72、preset 外 4／4），四平台 L1 是 run 39025534085。A 樹 `../GYO-Engine-ap-after` 建在 `5b4d626`。
+  - 修正提交 `5b4d626`（CTest 72／72、preset 外 4／4），四平台 L1 是 run 39025534085：第一次 macos-arm64 的 72 個測試通過後，上傳 artifact 時 DNS 解析失敗（`ENOTFOUND`，環境），CI gate 跟著失敗；重跑失敗的 job。`45bda2b` 的 run 39022776414 通過。A 樹 `../GYO-Engine-ap-after` 建在 `5b4d626`。
   - L2 宣告第 3 版：B 的 rapid 開發跑次 6 次（使用者在場、不碰滑鼠，全部 class P、Cooldown 0）；乾跑 82 列、驅動檢查、5 個模擬 session 全部符合預期，B 語料 66 跑次 0 誤停；preflight 通過。等使用者核准。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
