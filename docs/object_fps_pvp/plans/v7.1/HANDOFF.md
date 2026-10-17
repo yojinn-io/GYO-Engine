@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 進行中。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 實作完成，L2 宣告等你核准。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,15 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**（[edge-results-passthrough 的 L2 事前宣告第 3 版](edge-results-passthrough-l2.md)第 10 節）：
+  1. 核准宣告。
+  2. D112：protocol-v7 §9 的送達界限改成 ≤2⌈n/8⌉＋2（建議；實測 n＝16、24、32 為 6、8、10 則）或改設計（wire 變更）。
+  3. R3（下行延遲上限）遇到主機干擾：建議只在沒受干擾的跑次停下，受干擾的只記錄。
+  4. 什麼時候跑（約 2 h 20 分，要機器閒置）：建議你不用電腦的時段。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：L2 宣告（[草稿](edge-results-passthrough-l2.md)）的 D45 檢查、工具與乾跑，然後停下來等你核准宣告與 D112。
+- **下一步**：依你的決定改 judge（R3）、§9（D112），然後跑 L2 session。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 13:31，`edge-results-passthrough` 實作與 L1 完成；接著 L2 宣告的 D45 檢查與工具乾跑。
+- **最後更新**：2026-10-17 14:21，`edge-results-passthrough` 的 L2 宣告第 3 版與工具乾跑完成；等你決定 4 件事。
 
 ## 閱讀入口
 
