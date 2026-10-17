@@ -41,7 +41,7 @@
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 06:40，L2 第 2 次 session 停在第 102 項（B 樹的 backlog 重設）；已定位到 epoch 3 的相位決策誤差，根因待查；Auto-fix 恢復。
+- **最後更新**：2026-10-18 06:03，L2 第 2 次 session 停在第 102 項（B 樹的 backlog 重設）；已定位到 epoch 3 的相位決策誤差，根因待查；Auto-fix 恢復。
 
 ## 閱讀入口
 
