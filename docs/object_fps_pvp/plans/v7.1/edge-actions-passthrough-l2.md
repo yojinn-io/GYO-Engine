@@ -1,6 +1,6 @@
-# edge-actions-passthrough 的 L2 事前宣告（第 3 版，2026-10-17 使用者核准，D115）
+# edge-actions-passthrough 的 L2 事前宣告（第 4 版，2026-10-18 使用者預先核准，D117）
 
-- 狀態：**定稿**（2026-10-17 使用者核准，D115；在使用者不用電腦的時段跑）。以下保留草稿的文字（§14.1：核准後不放寬）。
+- 狀態：**定稿，第 4 版**（D117：第 3 版＋Match 的 `IpcHost::Stop()` 與 rapid runner 停止順序兩個修正的 A commit 與雜湊，門檻與判定不變；使用者預先核准）。第 3 版（D115）的第 1 次 session 在第 29 項停下（rapid runner 收尾競態，HANDOFF 2026-10-18 條目），保留在 `pvp-v71-edge-actions-l2-20261017/`。第 4 版的改動在第 13 節。以下保留第 3 版的文字（§14.1：核准後不放寬）。
   - 第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 3、應修正 6、記錄 8，對應表在第 11 節。
   - 第 3 版：工具寫好並乾跑（82 種逐跑次情況、驅動檢查、5 個模擬 session 全部符合預期；真實的 B 語料 66 跑次判成 B 沒有任何停止；A 沒有跑過任何項目）。B 的 rapid 開發跑次 6 次（第 5 節）。工具目錄 `build/target/_build/test/logs/pvp-v71-edge-actions-l2-prep-20261017/`（`commands.txt`、`dryrun.md`、`prep-files.sha256` `c73ed715…`）。第 2 版到第 3 版的改動在第 12 節。
 - 依據：D94、D96、D107、D114；protocol-v7 §2a、§4、§9；README `edge-actions-passthrough` 列（「射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數」）。
@@ -162,3 +162,13 @@ R2r、R9、L1 是這批行為的主要判定；R6a～R6c 驗帳目。
 | 3 | R6b：Match 在判斷 reset 與玩家之前就計入收到數（`MatchRuntimeHost.cpp:263-270`），刪掉「D110 的 reset 競態只記錄」 |
 | 4 | 第 5 節：B 的 rapid 開發跑次結果與估計時間 |
 | 5 | 33 的 ACK-only 樣本：action id 為 0（審查的應修正），不影響判定 |
+
+## 13. 第 3 版 → 第 4 版（D117）
+
+| # | 改動 |
+|---|---|
+| 1 | A＝`67d7da7`：`5b4d626`＋Match 的 `IpcHost::Stop()` 對還連著的 session 記錄結束（`reason=stopped`，不重設 Match）＋rapid runner 的停止順序（客戶端 → Gateway，等 Match 記下 session 結束（上限 2 秒）→ Match）。A 的 Match `8961b8a0…`、Gateway `36009f47…`（程式同 `5b4d626`，`vcs.revision` 不同）；B 不變 |
+| 2 | `run_action_short.py` `89e54bb8b0850327d99f3fd721cd2d2d1511deea13312de6d91cc479b6aee74b`；凍結清單 `frozen-pv7-d117.sha256` `4ff8b52ba506b2c3d8f4f59d57e52e888fd2a2da69bd94ff7e03732725fac6c6`（＝`frozen-pv7.sha256` 只更新 `run_action_short.py` 與 `test_run_action_short.py` 兩行） |
+| 3 | 工具目錄 `build/target/_build/test/logs/pvp-v71-edge-actions-l2-prep-20261018/`：`run_l2.py` `843d272d70ff2dc2b9065fe1e41ef9acec4c5e94e1e37d102f5f868ef08f861e`、`judge_l2.py` `ccfb26c878a016a056416db3a5024fc79f857bbe540d042a15426a56e26e131e`（只改 A commit、runner 雜湊、凍結清單與版次字樣）、`artifacts.sha256` `7900e21b6d60381beb03af7c65ced581168e9ed1deee834150472382be7969fc`、`prep-files.sha256` `1a913829…` |
+| 4 | B 的 rapid 開發跑次（修正後的 runner）6 次：全部 class P、每次的 Match 日誌都以 `ipc closed reason=eof` 結束 session |
+| 5 | 乾跑：84 列（新增兩列：第 1 次 session 停下的形狀（沒有 session 結束行）→ 停；修正後的 `reason=stopped` 是 D110 的形狀 → 不停）、驅動檢查（含 preflight）、5 個模擬 session 全部符合預期；B 語料 66 跑次 0 誤停 |

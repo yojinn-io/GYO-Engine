@@ -364,6 +364,7 @@
     - Match：`IpcHost` 把 session 結束的記錄（最後的 clock 視窗與「ipc closed reason=…」）抽成 `LogEnd`，`Close()` 與 `Stop()` 共用；`Stop()` 在 IPC 執行緒上對還連著的 session 記 `reason=stopped`，不重設 Match（最多等 2 秒，IPC 執行緒已失效時記一行說明）。測試 `PvP IPC logs the close of a connected session when the Match stops` 先確認失敗（3 個檢查不成立）再修，修後 IPC 測試連跑 3 次通過。修正後的 Match 被先停時，I1 只有 `eof_before_final` 不成立（D110 的形狀）；修正前是兩個前提都判不出來。
     - rapid runner：`stop_in_order()` 先停客戶端，再停 Gateway 並等它結束，等 Match 日誌出現 session 結束的行（上限 2 秒）才停 Match。測試用延遲 0.1 秒才出現 EOF 行的假 Match，驗證順序與等待。
     - 突變新增 3 個（`v71st-*`：Stop 不記錄、runner 先停 Match、runner 不等那一行）；新增 check `action_runner`。連同兩個檔案上的既有突變 36／36 殺死；CTest 72／72、preset 外 4／4。
+    - 提交 `67d7da7`（L1 run 39064524202）；A 樹重建在 `67d7da7`。宣告第 4 版（工具目錄 `pvp-v71-edge-actions-l2-prep-20261018/`）：凍結清單換成只更新兩個 D117 檔案的 `frozen-pv7-d117.sha256`（第一次乾跑的 preflight 因原清單而不成立，預期之內）；B 的 rapid 開發跑次 6 次全部 P、都有 `reason=eof`；乾跑全部符合預期、B 語料 66 跑次 0 誤停、preflight 通過。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
