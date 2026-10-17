@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-results-passthrough` 完成（L2 通過）。**
+更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-actions-passthrough` 進行中。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D113 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D114 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-actions-passthrough`（說「開始」才啟動）。
+- **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-17 17:40，`edge-results-passthrough` 的 L2 通過；PR 的 Auto-fix 恢復。
+- **最後更新**：2026-10-17 17:41，D114；`edge-actions-passthrough` 開始。
 
 ## 閱讀入口
 
@@ -83,6 +83,7 @@
 | D111 | （2026-10-17）開始 `edge-results-passthrough`（檔位 high，估 12～16 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查；休眠重連記為體驗優化，之後調整 | 使用者：「開始 edge-results-passthrough。」「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」 |
 | D112 | （2026-10-17）protocol-v7 §9 的「每隔一則丟一則時送達」界限改成 ≤2⌈n/8⌉＋2（原寫 ≤2⌈n/8⌉）。契約行為不變；原因：Client 只能連續 ACK，有缺口時 Match 不知道 Client 已有哪些較大的 id | 使用者：「D112 選 (a) 把 §9 改成 ≤2⌈n/8⌉＋2」 |
 | D113 | （2026-10-17）核准 `edge-results-passthrough` 的 L2 事前宣告第 3 版；R3（下行延遲上限）只在沒受干擾的跑次停下，受干擾的只記錄；在使用者不用電腦的時段跑 | 使用者：「核准 edge-results-passthrough 的 L2 事前宣告第 3 版，第 10 節照建議…在我不用電腦的時段跑。」 |
+| D114 | （2026-10-17）開始 `edge-actions-passthrough`（檔位 high，估 14～17 h）。行為改變：L2 事前宣告在看結果之前經使用者核准（§14.1），宣告前做 D45 門檻來源檢查 | 使用者：「開始 edge-actions-passthrough。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -321,6 +322,8 @@
   - 差異帶（給 `pv7-checkpoint`）：以上的 A−B。
   - 第 1 次 session（15:07～15:14）因 Chrome 的干擾在第 12 項停下，保留在 `pvp-v71-edge-results-l2-20261017/`。
   - 實際約 6 h（2026-10-17 11:57～17:45；含 D45 檢查、L2 工具、兩次 session 約 2.5 h；估 12～16 h）。
+
+- 2026-10-17 17:41：`edge-actions-passthrough` 開始（D114，檔位 high，估 14～17 h）。`edge-results-passthrough`（`f79bb10`）的四平台 L1 是 run 39002862931（工具鏈下載逾時重跑後通過）。
 
 ## 未結事項
 
