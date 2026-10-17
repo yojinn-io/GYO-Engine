@@ -414,7 +414,7 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 | `drop-report` | oneof 21、GatewayDropReport、DropCount、DropSample、DropReason（先含過渡原因，§4） | 不變 |
 | `edge-results-resend` | ActionResults 的重送語意（欄位不變，最小 id 優先）；Gateway 這時仍有帳本，會冪等合併 | Client 收到的內容不變；新裁決最多晚 1 個間隔（未確認超過 8 筆時，新 id 要等循環槽位）（v7.1 D107）：IpcHost 測試，加上 Go 測試（Match 的副本在 Gateway 不改變任何東西：假時鐘下 Client 的資料包逐則相同；忠實的通道模型和「立刻送」比較 Client 第一次收到每個裁決的時刻） |
 | `edge-input-passthrough` | PlayerInput 原樣轉送（§2a）；FIFO、順序、活性（D-10、D-11）；移除 D1、D2；刪除對應的過渡原因 | **行為改變**：事前宣告，L2 前後對照（命令證據、替代率、連線品質與逐出、Match 的副本計數；IpcHost 層新增 host mutex 的鎖等待直方圖，門檻事前宣告）。宣告中要列出的次要變化：參考年齡的樣本權重（pv6 合併時只抽一次樣，pv7 每個帶新命令的資料包各抽一次）、LateFirst 的參考年齡改用該資料包自己的 tick、copy 類計數大增 |
-| `edge-results-passthrough` | 結果轉送，Gateway 的單槽持有與唯一寫出者（D-10）；刪除 session 帳本與 A3；**同一批讓 link 原樣轉送 ACK-only 批**（拿掉 link 對 ACK 的過濾，否則 Match 收不到補送退役的要求，最後一次退役遺失就不再送） | **行為改變**：事前宣告，L2 前後對照（裁決到 Client 的延遲，含 `edge-results-resend` 帶來的「新裁決最多晚 1 個間隔」（D107）；送出間隔 ≤30 Hz、射擊時序；中間 commit 也跑 loss 與 network 模式）。Go 測試：退役框架被丟後，Client 在 2 個間隔內收到退役；框架以 I±0.5 ms 到達時 0 丟棄；「每隔一則丟一則」時，未確認 16 或 32 筆都在 ≤2⌈n/8⌉ 則內送達 |
+| `edge-results-passthrough` | 結果轉送，Gateway 的單槽持有與唯一寫出者（D-10）；刪除 session 帳本與 A3；**同一批讓 link 原樣轉送 ACK-only 批**（拿掉 link 對 ACK 的過濾，否則 Match 收不到補送退役的要求，最後一次退役遺失就不再送） | **行為改變**：事前宣告，L2 前後對照（裁決到 Client 的延遲，含 `edge-results-resend` 帶來的「新裁決最多晚 1 個間隔」（D107）；送出間隔 ≤30 Hz、射擊時序；中間 commit 也跑 loss 與 network 模式）。Go 測試：退役框架被丟後，Client 在 2 個間隔內收到退役；框架以 I±0.5 ms 到達時 0 丟棄；「每隔一則丟一則」時，未確認 16 或 32 筆都在 ≤2⌈n/8⌉＋2 則內送達（D112：Client 只能連續 ACK，有缺口時循環槽位會重送 Client 已有的 id；原寫 ≤2⌈n/8⌉） |
 | `edge-actions-passthrough` | ActionBatch 原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | **行為改變**：事前宣告，L2 前後對照（射擊到達、權威 Cooldown＝0、Expired 率） |
 | `edge-analyzers` | 無 | 改寫並重新凍結 ingress 的守恆式（見下面的鍵對應） |
 | `edge-contract` | 無（約束條文與守衛，§2a） | 不變 |

@@ -1,6 +1,7 @@
-# edge-results-passthrough 的 L2 事前宣告（草稿第 3 版，送核准）
+# edge-results-passthrough 的 L2 事前宣告（第 3 版，2026-10-17 使用者核准，D113）
 
-- 狀態：**草稿，等使用者核准**（AGENTS.md §14.1）。
+- 狀態：**定稿**（2026-10-17 使用者核准，D113；第 10 節照建議：D112 選 (a)、R3 只在沒受干擾的跑次停下、在使用者不用電腦的時段跑）。以下保留草稿的文字（§14.1：核准後不放寬）。
+  - 核准後的唯一改動：照第 10 節第 3 項改 `judge_l2.py` 的 R3（受干擾的跑次只記錄 `R3_disturbed`），重算雜湊；乾跑加 1 列（同一個超標的裁決在受干擾的跑次只記錄），58 列全部符合預期（`dryrun-v4.log`）。
   - 第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 18 分）：必須修正 5、應修正 10、記錄 7；對應表在第 11 節。
   - 第 3 版：工具寫好並乾跑（57 種逐跑次情況、模擬 session、驅動檢查全部符合預期；A 沒有跑過任何項目；B 的開發跑次 9 個）。乾跑提出的 16 處措辭已寫進正文（第 12 節）。工具目錄 `build/target/_build/test/logs/pvp-v71-edge-results-l2-prep-20261017/`（`commands.txt`、`dryrun.md`、`prep-files.sha256` `5493e8df…`）。
 - 依據：D94、D95（D-10）、D96、D107、D110、D111；protocol-v7 §2a、§4、§9；README `edge-results-passthrough` 列。
@@ -30,7 +31,7 @@ L2 **判定**：遊戲行為與射擊時序沒有變差；結果的下行延遲�
 | 工具 | 雜湊 |
 |---|---|
 | `run_l2.py`（新寫） | `958469e89b0b48de5925f233d5f0b255d8b62017f57c4c1293b055cefd8744b3` |
-| `judge_l2.py`（新寫） | `7c186078751be1f64dead469fa2dea9f3144718d6d0a964bdc84a4f9414b39d5` |
+| `judge_l2.py`（新寫；D113 的 R3 規則） | `b3d203750986db46f2c2e2d626e5755da3c856e66f28f9397891d531c9df5da9`（核准前的版本 `7c186078…`） |
 | `artifacts.sha256`（B、A 的 Match 與 Gateway；ip-before 的 4 個 probe 與 arena） | `34dc17664335c93a3e3bbc19d72fff7b478ddb69b0d36686443c6d27d0f62b26` |
 | `frozen-pv7.sha256`（含 `action_latency_v7.py`、`ingress_evidence.py`、`gameplay_evidence.py`、`quad_evidence.py`、`backpressure_probe.py`） | `b4a8963001883160d5bb7642b7da89afd343c686d29752874461762e17a291c2` |
 | `judge_16.py` | `29258be1…` |
