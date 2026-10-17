@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（D117 進行中）。
+- **等你決定**：`edge-actions-passthrough` 的 L2 第 2 次 session 停在 `gateway-1000ms-r4-B`（B 樹的 backlog 重設，見規劃紀錄 2026-10-18 05:02 條目）：要不要先繼續定位根因（建議），再決定怎麼處理與重跑。D116 的 edge 系列停在這個關卡。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 05:02，`edge-actions-passthrough` 的 L2 第 2 次 session 開始（宣告第 4 版，`pvp-v71-edge-actions-l2-20261018/`，約 2 h 46 分；Chrome 未執行、Auto-fix 暫停）。
+- **最後更新**：2026-10-18 06:40，L2 第 2 次 session 停在第 102 項（B 樹的 backlog 重設）；已定位到 epoch 3 的相位決策誤差，根因待查；Auto-fix 恢復。
 
 ## 閱讀入口
 
@@ -365,6 +365,13 @@
     - rapid runner：`stop_in_order()` 先停客戶端，再停 Gateway 並等它結束，等 Match 日誌出現 session 結束的行（上限 2 秒）才停 Match。測試用延遲 0.1 秒才出現 EOF 行的假 Match，驗證順序與等待。
     - 突變新增 3 個（`v71st-*`：Stop 不記錄、runner 先停 Match、runner 不等那一行）；新增 check `action_runner`。連同兩個檔案上的既有突變 36／36 殺死；CTest 72／72、preset 外 4／4。
     - 提交 `67d7da7`（L1 run 39064524202）；A 樹重建在 `67d7da7`。宣告第 4 版（工具目錄 `pvp-v71-edge-actions-l2-prep-20261018/`）：凍結清單換成只更新兩個 D117 檔案的 `frozen-pv7-d117.sha256`（第一次乾跑的 preflight 因原清單而不成立，預期之內）；B 的 rapid 開發跑次 6 次全部 P、都有 `reason=eof`；乾跑全部符合預期、B 語料 66 跑次 0 誤停、preflight 通過。
+  - 2026-10-18 05:02～06:00：L2 第 2 次 session（宣告第 4 版，`pvp-v71-edge-actions-l2-20261018/`）在第 102 項 `gateway-1000ms-r4-B`（B 樹）停下：R1 的 D44 事件 E1＝1。完成的 101 項沒有其他停止（受干擾 1 項）；A 的 51 項全部通過。照 §14.1 不重跑、保留為證據。
+    - 現象：player 1 的重設序列（相對於 Gateway 停頓開始）：+525 ms starvation、+1942 ms starvation（釋放後 934 ms，在窗口內）、+2959 ms **backlog**（釋放後 1950 ms，超出「釋放後 1.5 秒」的窗口 450 ms）。backlog 的條件是 30 個 tick 的排隊命令總和 ≥105（`PvpMatch.cpp:454-455`）：第二次重設後 player 1 的排隊數從 6 降到 4 就停住（正常是 2），約 0.7 秒後觸發。
+    - 定位（到目前）：問題在第二次重設後（epoch 3）Client 的第一次相位決策。誤差是 tick 的整數倍（決策時 Match 已多排的步數），修正有上限，殘留的步數讓排隊數停在 3～4。
+      - 本次 session：B 的 4 次是 +49.7、+49.8、+16.3、+66.9 ms（排隊數停在 3、3、2、4）；A 的 4 次是 −0.2、+17.0、+16.5、+16.9 ms（都回到 2）。
+      - 上一場 L2（它的 A＝本次 B，同一批執行檔）10 次最多 +33.6 ms，都回到 2。
+      - 只出現在 player 1（唯一會開槍的玩家；player 2 沒有動作）。本次 session 的主機都在 8 ms 計時器狀態，但上一場也大多是 8 ms，不足以解釋。
+    - 根因未定位：B 在這一場為什麼在決策時多排了 3～4 步（B 的 link 動作視窗在停頓釋放後的行為？Client 端？），還要查。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
