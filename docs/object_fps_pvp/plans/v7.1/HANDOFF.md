@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-actions-passthrough` 的 L2 第 2 次 session 停在 `gateway-1000ms-r4-B`（B 樹的 backlog 重設，見規劃紀錄 2026-10-18 05:02 條目）：要不要先繼續定位根因（建議），再決定怎麼處理與重跑。D116 的 edge 系列停在這個關卡。
+- **等你決定**：L2 第 2 次 session 停下的根因已定位（Gateway 固定窗口限速在 Gateway 停頓後丟掉 player 1 的輸入，規劃紀錄 2026-10-18 05:02 條目）：處理方案 (a)／(b)／(c)，(a) 要改契約條文（`network-architecture.zh-Hant.md:950`）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 06:03，L2 第 2 次 session 停在第 102 項（B 樹的 backlog 重設）；已定位到 epoch 3 的相位決策誤差，根因待查；Auto-fix 恢復。
+- **最後更新**：2026-10-18 06:45，L2 第 2 次 session 停下的根因已定位（Gateway 限速），等你決定處理方案。
 
 ## 閱讀入口
 
@@ -371,7 +371,16 @@
       - 本次 session：B 的 4 次是 +49.7、+49.8、+16.3、+66.9 ms（排隊數停在 3、3、2、4）；A 的 4 次是 −0.2、+17.0、+16.5、+16.9 ms（都回到 2）。
       - 上一場 L2（它的 A＝本次 B，同一批執行檔）10 次最多 +33.6 ms，都回到 2。
       - 只出現在 player 1（唯一會開槍的玩家；player 2 沒有動作）。本次 session 的主機都在 8 ms 計時器狀態，但上一場也大多是 8 ms，不足以解釋。
-    - 根因未定位：B 在這一場為什麼在決策時多排了 3～4 步（B 的 link 動作視窗在停頓釋放後的行為？Client 端？），還要查。
+    - 根因（2026-10-18 定位，使用者：「繼續定位根因……定位完提出處理方案再停下」；工具在 `scratchpad/rp/rootcause/`）：
+      - 逐命令時間線（Client 送出 → Match 收進 → 執行）：新 epoch 的第一個輸入 datagram，r4-B 在 Client 送出後 67.5 ms 才被 Match 收進（r4-A 17.1 ms，之後的都約 0.6 ms）；這段時間 relay 照常轉送，Match 沒有拒收，player 2 的輸入也沒到（Match 為它代用命令）。Gateway 的寫出延遲整場最大約 0.2 ms：封包在 Gateway 交給 link 之前就沒了。
+      - Gateway 的計數：player 1 有 36 個輸入被 `drop_rate_limited_input_packets` 丟掉（A 33；player 2 是 4／3）。用 relay 的轉送時間重放 `session.go:118-123` 的限速（固定 1 秒窗口、超過 120 就拒；Gateway 停頓期間的封包在恢復時才讀到），**3 個跑次、兩位玩家、每一種封包的預測拒收數都和 Gateway 的計數完全相同**。
+      - 因果鏈：Gateway 停頓 1 秒，核心替它緩存了約 1 秒份的合法封包，恢復時一次讀進同一個窗口；player 1 平時每秒約 91 個（輸入 60＋動作約 30），約 0.4 秒後超過 120，窗口剩下約 0.6 秒的**每一個輸入**都被丟 → Match 讓它挨餓，在恢復後約 0.93～0.98 秒做 starvation 重設 → 新 epoch 的頭幾個輸入也落在同一個窗口被丟，Match 等窗口結束才開始執行 → Client 已多送了 1～4 步，相位修正補不回來，排隊數停在 3～4 → 約 1 秒後 backlog 重設，落在「恢復後 1.5 秒」的寬限之外。B 與 A 的差別只是重設離窗口結束多遠（67 對 17 ms），和樹無關；上一場同一個執行檔沒出事也是時機。
+      - 每一次 gateway-1000ms 的 player 1 都有第二次 starvation 重設（`starvation/in: 3` 的其中一次），也是這個限速造成的；一直存在，被 D61 的 1.5 秒寬限蓋住。
+      - 契約：固定窗口 120 包／秒寫在 `network-architecture.zh-Hant.md:950`（protocol-v5 也寫「既有 120 包／秒限制不變」），在通用層 `services/gyo_gateway/session/session.go`。
+    - 提出的處理（等使用者決定）：
+      - (a)（建議）改成 token bucket（每秒補 120、容量 120）：長期上限不變（任何 1 秒滑動窗口仍 ≤240，與固定窗口跨邊界時相同），但 Gateway 自己停頓 1 秒後讀進的緩存封包（約 91 個）用掉累積的 token，之後 91／秒 低於補充率，不再丟。改契約條文；先寫失敗的測試（用這次的到達序列重放，期望 0 拒收；洪水仍限在 120／秒）、突變。L2 兩棵樹都帶這個修正（B'＝`f79bb10`＋修正，A'＝`67d7da7`＋修正），比較仍只看這批的改動；宣告第 5 版加判定：gateway-1000ms 的限速丟棄 0、player 1 的 starvation 重設只剩停頓中那一次。
+      - (b) 只修 A，B 照舊：B 每次 gateway-1000ms 仍有這個時機風險（本場 4 次中 1 次），session 可能再停在 B。
+      - (c) 這批先不修，記為已知缺陷、照宣告重跑：根因不處理，結果靠時機。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
