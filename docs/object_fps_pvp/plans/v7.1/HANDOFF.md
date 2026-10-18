@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D121 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D122 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-rate-limit` L2 宣告第 2 版的 M1（凍結分析器的窗口計數檢查，[edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 6 節第 1 項）：(a) 改用拒收計數＝0（建議）／(b) 上限改 240／(c) judge 例外。
+- **等你決定**：無（D122 進行中：工具與乾跑）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -91,6 +91,7 @@
 | D119 | （2026-10-18）K1 的處理放在 `edge-contract` 之後，作為 edge 系列收尾的新批 `edge-rate-limit`：重新測試 K1、對照 Gateway 狀態白名單評估方案 (a)、需要就實作，並跑一次涵蓋 `edge-actions-passthrough` 與 K1 的 L2（新宣告，經使用者核准後才跑；不沿用第 4 版，也不加臨時的 K1 規則）。D118 的時間點從「發版前」提前到這裡。`edge-actions-passthrough` 標為實作與 L1 完成、L2 待 `edge-rate-limit` | 使用者：「嗯，放在 edge-contract 之後吧，作為 edge 系列收尾。到時候重新跑一次測試，和解決方案（a）的評估。」「OK，這個問題處理找建議。開始 edge-analyzers」 |
 | D120 | （2026-10-18）`edge-contract` 的條文照目前的內容核准：network-architecture §7「Gateway：無狀態邊緣」（四條原則、11 個允許類別、禁止項（D120 前改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步）、守衛與變更規則、Replacement Criteria），N3 照草稿列為獨立的允許類別；死欄位 `queuedControl.at` 刪除 | 使用者：「…死欄位 queuedControl.at 可以刪除。條文看完了。目前先這樣。」 |
 | D121 | （2026-10-18）K1 採用方案 (a)：通用層 session 的限速改為 token bucket（每秒補 120、容量 120），改 network-architecture 的契約條文；修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，停下等使用者核准宣告 | 使用者：「採用方案 (a)：token bucket，每秒補 120、容量 120；改通用層與 network-architecture:950 的契約條文。修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，再停下等我核准宣告。」 |
+| D122 | （2026-10-18）M1 照 (a)：凍結分析器三處的 Gateway 窗口計數檢查（`max_session_window_packets ≤120`）換成限速器自己的拒收計數 `rate_limited_packets`＝0，gateway 模式也判；窗口計數只記錄；補測試與突變、重新凍結，之後寫工具與乾跑，停下等使用者核准宣告 | 使用者：「照 (a)：三處的窗口計數檢查換成 rate_limited_packets＝0（gateway 模式也判），max_session_window_packets 只記錄；補測試與突變、重新凍結，然後寫工具與乾跑，再停下等我核准宣告。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -450,6 +451,7 @@
   - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩存的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
   - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。
   - 宣告第 1 版經 D45 檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，改進第 2 版（第 7 節）。M1 要使用者決定：凍結分析器 `gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 Gateway 的固定 1 秒窗口計數 `max_session_window_packets ≤120`；token bucket 下停頓後同一秒會放行約 170，兩棵樹都會在第一個 gateway-1000ms 停下。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判（K1 當年被當成預期行為接受）。建議 (a) 改用限速器自己的拒收計數＝0（gateway 模式也判）、窗口計數只記錄。A' 已建置；B' 建置中。
+  - D122 的修改：`gameplay_evidence.py` 新增 `gateway_limiter_problems()`（拒收＝0，所有模式；窗口計數只記錄），`gameplay_soak_evidence.py` 共用它；`action_probe.py` 的檢查改成所有模式都要拒收＝0、`rate_limit_acceptance_policy` 的說明同步。測試：`test_gameplay_evidence.py` 加 1 個、`test_action_evidence.py` 改 1 個並加 1 個（窗口 170 但沒有拒收時，限速檢查不出錯）。突變新增 4 個（拒收被忽略、窗口檢查回來 ×2、gateway 模式又被豁免），全部殺死；新增 check `gameplay_evidence`、`action_evidence`。重新凍結：`build/target/_build/test/logs/pvp-v71-edge-rate-limit-20261018/frozen-pv7-rl.sha256` `97ce9b53…`（＝`frozen-pv7-ea.sha256` 只更新這 5 個檔案）。soak 的呼叫點沒有突變覆蓋（`analyze_soak` 沒有可餵 Gateway 計數的測試 fixture），由共用函式的測試與 L2 的 soak 項目守。
 
 ## 未結事項
 

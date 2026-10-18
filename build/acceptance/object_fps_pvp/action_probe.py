@@ -348,14 +348,12 @@ def analyze(output, relay, fault, mode):
     check(client['passed'], 'Client did not consume/retire every submitted action')
     check(relay['relay_error'] is None, 'Relay failed: '+str(relay['relay_error']))
     gateway_counters = relay.get('gateway_counters')
-    rate_policy = 'zero rate-limit rejections; accepted fixed-window count <=120'
+    # v7.1 D122: the session limit is a token bucket (D121), so a stopped Gateway no longer refuses the datagrams that
+    # waited in its socket; zero refusals in every mode. The fixed-window count (max_session_window_packets) is
+    # recorded only: after such a stall those datagrams pass within one second.
+    rate_policy = 'zero rate-limit rejections in every mode, a stopped Gateway included; the fixed-window count recorded only'
     if gateway_counters is not None:
-        check(gateway_counters['max_session_window_packets'] <= 120, 'Gateway actual Session counting exceeded120')
-        if mode == 'gateway':
-            rate_policy = ('Intentionally stopped Gateway may reject queued arrival bursts; accepted fixed-window count <=120; '
-                           'all original decisions, effects and1.5s recovery requirements remain enforced')
-        else:
-            check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')
+        check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')
     check(max((e['bytes'] for e in relay['events']), default=0) <= 1200, 'UDP exceeds 1200 bytes')
     check(max(client['maximum_retained']) <= 32 and max(client['maximum_unconsumed']) <= 32, 'Action window exceeds32')
     if mode in ('upstream', 'downstream', 'socket-path', 'gateway', 'host-ipc', 'drain-stall'):

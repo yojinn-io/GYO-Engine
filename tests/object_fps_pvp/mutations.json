@@ -78,6 +78,12 @@
         "./session/..."
       ],
       "cwd": "services/gyo_gateway"
+    },
+    "gameplay_evidence": {
+      "ctest": "object_fps_pvp.gameplay_evidence"
+    },
+    "action_evidence": {
+      "ctest": "object_fps_pvp.action_evidence"
     }
   },
   "mutants": [
@@ -4100,6 +4106,46 @@
       "replace": "\trateBurst     = 60 * rateInterval // how far ahead of now the schedule may run\n",
       "check": "go",
       "expect": "refused on the rate limit after the Gateway's stall"
+    },
+    {
+      "id": "v71rl-gameplay-refusals-ignored",
+      "batch": "v71-edge-rate-limit",
+      "what": "The gameplay analyzer no longer fails on the Gateway's rate refusals",
+      "file": "build/acceptance/object_fps_pvp/gameplay_evidence.py",
+      "find": "    return [] if counters.get('rate_limited_packets', 1) == 0 else ['Actual Gateway rate rejection']\n",
+      "replace": "    return []\n",
+      "check": "gameplay_evidence",
+      "expect": "FAIL: test_the_gateway_limiter_check_is_its_refusals_in_every_mode"
+    },
+    {
+      "id": "v71rl-gameplay-window-check-back",
+      "batch": "v71-edge-rate-limit",
+      "what": "The gameplay analyzer judges the fixed-window count again",
+      "file": "build/acceptance/object_fps_pvp/gameplay_evidence.py",
+      "find": "    return [] if counters.get('rate_limited_packets', 1) == 0 else ['Actual Gateway rate rejection']\n",
+      "replace": "    if counters.get('max_session_window_packets', 121) > 120:\n        return ['Actual Gateway limiter exceeds120']\n    return [] if counters.get('rate_limited_packets', 1) == 0 else ['Actual Gateway rate rejection']\n",
+      "check": "gameplay_evidence",
+      "expect": "FAIL: test_the_gateway_limiter_check_is_its_refusals_in_every_mode"
+    },
+    {
+      "id": "v71rl-probe-gateway-exempt",
+      "batch": "v71-edge-rate-limit",
+      "what": "The action probe exempts a stopped Gateway from zero refusals again",
+      "file": "build/acceptance/object_fps_pvp/action_probe.py",
+      "find": "        check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')\n",
+      "replace": "        if mode != 'gateway':\n            check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')\n",
+      "check": "action_evidence",
+      "expect": "FAIL: test_gateway_pause_never_exempts_the_cap_or_required_fault_evidence"
+    },
+    {
+      "id": "v71rl-probe-window-check-back",
+      "batch": "v71-edge-rate-limit",
+      "what": "The action probe judges the fixed-window count again",
+      "file": "build/acceptance/object_fps_pvp/action_probe.py",
+      "find": "        check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')\n",
+      "replace": "        check(gateway_counters['max_session_window_packets'] <= 120, 'Gateway actual Session counting exceeded120')\n        check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')\n",
+      "check": "action_evidence",
+      "expect": "FAIL: test_a_window_count_over_120_without_refusals_passes_the_limiter_check"
     }
   ]
 }

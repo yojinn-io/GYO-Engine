@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+import gameplay_evidence
 from gameplay_evidence import combat_expected, life_reset_matches, validate_accepted_actions, client_disturbance, fault_expiry_exception, is_wire_send_event, start_phase_by_player
 from command_evidence import recovery_actual_intervals
 from action_probe import decision, encoded
@@ -158,6 +159,13 @@ class GameplayEvidenceTests(unittest.TestCase):
         self.assertEqual(result['7']['first_epoch_status'],'tracking')  # Counted beside the status, never rewriting it.
         self.assertEqual((result['8']['first_epoch_status'],result['8']['first_epoch']['stall_reseeds']),('tracking',0))
         self.assertEqual(result['8']['reseed_detection'],{'status':'recorded','source':'clients-commands.jsonl','reason':None})
+
+    def test_the_gateway_limiter_check_is_its_refusals_in_every_mode(self):
+        # v7.1 D122: zero refusals, a stopped Gateway included; the fixed-window count is recorded only
+        self.assertEqual(gameplay_evidence.gateway_limiter_problems({'rate_limited_packets': 0, 'max_session_window_packets': 170}), [])
+        self.assertEqual(gameplay_evidence.gateway_limiter_problems({'rate_limited_packets': 3, 'max_session_window_packets': 90}),
+                         ['Actual Gateway rate rejection'])
+        self.assertEqual(gameplay_evidence.gateway_limiter_problems({}), ['Actual Gateway rate rejection'])
 
     def test_gameplay_reader_does_not_depend_on_the_gui_latency_reader(self):
         code='import sys,gameplay_evidence;sys.exit(int("presentation_evidence" in sys.modules))'
