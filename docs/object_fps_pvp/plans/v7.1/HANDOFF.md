@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（D121 進行中）。
+- **等你決定**：`edge-rate-limit` L2 宣告第 2 版的 M1（凍結分析器的窗口計數檢查，[edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 6 節第 1 項）：(a) 改用拒收計數＝0（建議）／(b) 上限改 240／(c) judge 例外。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-rate-limit`：限速修正提交（`7bb1f84`），L2 宣告第 1 版草稿與 D45 檢查進行中。
+- **最後更新**：2026-10-18，`edge-rate-limit`：L2 宣告第 2 版（D45 修正），等你決定 M1。
 
 ## 閱讀入口
 
@@ -448,7 +448,8 @@
   - 突變：新增 4 個（`v71rl-*`：沒有 burst、閒置額度無上限、被拒仍扣額度、容量 61），全部殺死；新增 check `gateway_session`（通用層的 `go test ./session/...`）。突變目錄 402 個，沒有過時的 find。
   - 驗收（L1，本機）：通用層與產品層 `go test -race`、CTest 72／72、preset 外 4／4。通用層的測試在 CI 由 `go_checks.py` 對登記的 Go 模組執行。
   - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩存的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
-  - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。D45 檢查進行中。
+  - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。
+  - 宣告第 1 版經 D45 檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，改進第 2 版（第 7 節）。M1 要使用者決定：凍結分析器 `gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 Gateway 的固定 1 秒窗口計數 `max_session_window_packets ≤120`；token bucket 下停頓後同一秒會放行約 170，兩棵樹都會在第一個 gateway-1000ms 停下。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判（K1 當年被當成預期行為接受）。建議 (a) 改用限速器自己的拒收計數＝0（gateway 模式也判）、窗口計數只記錄。A' 已建置；B' 建置中。
 
 ## 未結事項
 
