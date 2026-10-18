@@ -36,8 +36,8 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── edge-contract ✓◆              「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛」
 │   ├── edge-rate-limit ✓             「high｜K1：限速改 token bucket（D121），跑 edge-actions-passthrough 的 L2」
 │   ├── cause-records ✓               「high｜E2、動作拒收回覆、Leave 原因」
-│   ├── hitbox-fields ▶               「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
-│   ├── pv7-checkpoint                「medium（分析 high）｜A1 前的整體回歸」
+│   ├── hitbox-fields ✓               「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
+│   ├── pv7-checkpoint ▶              「medium（分析 high）｜A1 前的整體回歸」
 │   ├── a1-shot-step                  「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
 │   └── pv7-merge                     「low｜四平台 L1 後合併，同步文件」
 ├── after-pv7
