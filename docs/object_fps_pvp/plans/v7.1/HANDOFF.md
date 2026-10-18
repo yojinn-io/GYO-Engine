@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D117 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D118 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：L2 第 2 次 session 停下的根因已定位（Gateway 固定窗口限速在 Gateway 停頓後丟掉 player 1 的輸入，規劃紀錄 2026-10-18 05:02 條目）：處理方案 (a)／(b)／(c)，(a) 要改契約條文（`network-architecture.zh-Hant.md:950`）。
+- **等你決定**：`edge-actions-passthrough` 的 L2 怎麼在已知缺陷 K1 存在時完成：宣告第 5 版加一條只認 K1 的窄規則（見規劃紀錄 2026-10-18 05:02 條目的提案），核准後換新目錄重跑。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-actions-passthrough` 實作（動作批原樣轉送、刪 link 動作視窗與 A5），之後 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 11:34，L2 第 2 次 session 停下的根因已定位（Gateway 限速），等你決定處理方案。
+- **最後更新**：2026-10-18，D118：K1（Gateway 限速）記為已知缺陷，發版前重新評估；等你核准 L2 宣告第 5 版的 K1 規則。
 
 ## 閱讀入口
 
@@ -87,6 +87,7 @@
 | D115 | （2026-10-17）核准 `edge-actions-passthrough` 的 L2 事前宣告第 3 版（[edge-actions-passthrough-l2.md](edge-actions-passthrough-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-actions-passthrough 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
 | D116 | （2026-10-18）使用者去睡覺期間，edge 系列照順序做完：`edge-actions-passthrough` 的 L2 判定 → `edge-analyzers` → `edge-contract`。照常在關卡停下（L2 不成立、需要使用者同意的 Design Invariants 條文等） | 使用者：「我想去睡覺了，期間edge系列按順序執行完吧。」 |
 | D117 | （2026-10-18）修 Match 的 `IpcHost::Stop()`（經 `Close` 結束 session）與 rapid runner 的停止順序；預先核准 L2 宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下 | 使用者：「核准：修 Match 的 IpcHost::Stop() 與 rapid runner 的停止順序；預先核准宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下。」 |
+| D118 | （2026-10-18）Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入的問題（K1）記為已知缺陷，先完成功能；v7.1 發版前重新測試，並在發版前重新評估方案 (a)（token bucket） | 使用者：「記住這個問題，標記為已知缺陷，先完成功能。在v7.1發版前，從重新測試（紀錄這個解決方案（a）在發版本前重新評估方案）。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -381,9 +382,20 @@
       - (a)（建議）改成 token bucket（每秒補 120、容量 120）：長期上限不變（任何 1 秒滑動窗口仍 ≤240，與固定窗口跨邊界時相同），但 Gateway 自己停頓 1 秒後讀進的緩存封包（約 91 個）用掉累積的 token，之後 91／秒 低於補充率，不再丟。改契約條文；先寫失敗的測試（用這次的到達序列重放，期望 0 拒收；洪水仍限在 120／秒）、突變。L2 兩棵樹都帶這個修正（B'＝`f79bb10`＋修正，A'＝`67d7da7`＋修正），比較仍只看這批的改動；宣告第 5 版加判定：gateway-1000ms 的限速丟棄 0、player 1 的 starvation 重設只剩停頓中那一次。
       - (b) 只修 A，B 照舊：B 每次 gateway-1000ms 仍有這個時機風險（本場 4 次中 1 次），session 可能再停在 B。
       - (c) 這批先不修，記為已知缺陷、照宣告重跑：根因不處理，結果靠時機。
+    - 使用者選擇（D118）：記為已知缺陷 K1，先完成功能，發版前重新測試與重新評估 (a)。
+    - L2 怎麼完成（提案，宣告第 5 版，等核准）：只在 gateway-1000ms，一個 E1（D61 窗口外的非重生重設）在下列全部成立時記為 K1、不停；任一不成立照舊停：
+      1. 它是 player p 的 backlog 重設；
+      2. 用 relay 的轉送時間重放 `session.go:118-123` 的限速，預測的拒收數與 Gateway 每位玩家、每種封包的 `drop_rate_limited_*` 計數完全相同；
+      3. player p 在恢復後有被限速丟掉的輸入，而且這個 backlog 之前的那次 starvation 重設落在被丟的時段內（第一個被丟的輸入到窗口結束）；
+      4. 那次 starvation 與這個 backlog 之間，p 沒有其他重設。
+      兩棵樹同一條規則；K1 的次數逐樹記錄（只記錄）。其他判定與門檻不變。乾跑用本次的 `gateway-1000ms-r4-B` 當真實 fixture（應記為 K1、不停），另做計數不符、starvation 不在丟棄時段內兩個變體（應停）。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
 
 ## 未結事項
+
+- **K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩存的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
+  - **v7.1 發版前（`pv7-merge` 之前）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
+  - 背景（使用者，2026-10-18）：網路在 v7.1 多次修改，很多是改網路機制；這可能是舊 Gateway 留下的痕跡。分析：限速本身是通用層的防洪機制（v5 以前就有），不是產品層的狀態副本；但它的兩個假設（Gateway 即時讀封包；流量遠低於 120）被 v7／v7.1 的修改侵蝕（30 Hz 動作批、時間回聲、09a 的 82 包輸入上限，開槍玩家平時已約 91 包／秒）。
 
 - **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
 

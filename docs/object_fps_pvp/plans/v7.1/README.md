@@ -91,7 +91,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | hitbox-fields | 命中部位一律填 Body；射手看到的時刻由 Client 照實填；加 A1 的 E、S 與影子紀錄（D-2）；Match 驗證並記錄，不改判定 | 編解碼與驗證測試、digest 不變／只記錄／— | 8 | |
 | pv7-checkpoint | A1 前的整體回歸：四平台 L1、digest；先扣掉三個 edge 批事前宣告的差異帶，再用凍結 pv7 工具和 v7 基準比較；產出 K 與 S 取法的影子資料 | 全量／事前宣告＋D45／— | 8 | |
 | a1-shot-step | ★Match 在命令步 T(S) 判定射擊，趕不上時有界退回到達判定；Client 改用序號閘門，刪除 FireGate；combat golden 依宣告重產；K 的值交使用者決定 | 測試、突變、golden 依宣告更新／事前宣告＋D45：clean 下權威 Cooldown＝0、退回率／使用者的連點手感 | 20 | Architecture Delta：FireGate 退役、射擊判定語意改變。命中回饋可能慢約 20～37 ms〔推論〕 |
-| pv7-merge | 四平台 L1 後合併；同步 HANDOFF、README | 四平台／—／— | 2 | |
+| pv7-merge | 四平台 L1 後合併；同步 HANDOFF、README | 四平台／—／— | 2 | 合併前：重新測試已知缺陷 K1（Gateway 停頓後的限速丟棄），重新評估方案 (a)（D118，HANDOFF 未結事項） |
 
 ## after-pv7 各批
 
