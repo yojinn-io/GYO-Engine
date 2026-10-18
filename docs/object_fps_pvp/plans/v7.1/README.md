@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入與結果原樣轉送、不再保存結果帳本；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-actions-passthrough`。
+**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入與結果原樣轉送、不再保存結果帳本；`edge-actions-passthrough` 實作與 L1 完成，L2 待 `edge-rate-limit`（已知缺陷 K1）處理後重跑；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-analyzers`。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -31,9 +31,10 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── edge-results-resend ✓         「high（通道計時局部 xhigh）｜Match 在 ACK 前重送結果」
 │   ├── edge-input-passthrough ✓◆     「high（局部 xhigh）｜★輸入原樣轉送，刪副本與拒絕線」
 │   ├── edge-results-passthrough ✓    「high｜★結果原樣轉送，刪 Gateway 帳本與 A3」
-│   ├── edge-actions-passthrough      「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有」
-│   ├── edge-analyzers                「medium（守恆式 high）｜改寫並重新凍結 ingress 守恆式」
+│   ├── edge-actions-passthrough ◐    「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有（L2 待 edge-rate-limit）」
+│   ├── edge-analyzers ▶              「medium（守恆式 high）｜改寫並重新凍結 ingress 守恆式」
 │   ├── edge-contract ◆               「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛」
+│   ├── edge-rate-limit               「high｜K1：重新測試、評估限速方案 (a)，跑 edge-actions-passthrough 的 L2」
 │   ├── cause-records                 「high｜E2、動作拒收回覆、Leave 原因」
 │   ├── hitbox-fields                 「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
 │   ├── pv7-checkpoint                「medium（分析 high）｜A1 前的整體回歸」
@@ -54,7 +55,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     └── docs-close                    「系列紀錄、STABLE_BASELINE v7.1」
 ```
 
-記號：✓ 完成、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
+記號：✓ 完成、◐ 實作與 L1 完成、L2 延後、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
 
 ## 工時
 
@@ -87,11 +88,12 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | edge-actions-passthrough | ★動作批原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | Go 測試、突變／事前宣告＋D45：射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數／— | 14～17 | FireGate 的 spread 在這批到 A1 之間會變得過度保守 |
 | edge-analyzers | 改寫 ingress 分析器的 Gateway 守恆式並重新凍結；同步突變目錄 | 新舊各分析一次／—／— | 5～6 | |
 | edge-contract | 把無狀態邊緣的約束寫進 `network-architecture.zh-Hant.md` 的 `Design Invariants` 節與 protocol-v7；Go 狀態欄位的白名單守衛（遞迴走訪型別、掃描套件變數）與突變 | Go 測試、突變、digest 不變／—／— | 4 | 取代 `gateway-duties`。依內容的判斷靠審查，並由 AGENTS.md 連到條文（事故行動 4，文件會話） |
+| edge-rate-limit | edge 系列收尾（D119）：重新測試 K1（Gateway 停頓後的固定窗口限速丟棄），對照 `edge-contract` 的 Gateway 狀態白名單評估方案 (a)（token bucket），採用就實作；然後跑一次涵蓋 `edge-actions-passthrough` 與 K1 的 L2（新宣告，兩棵樹帶同一個限速修正） | 重放測試、突變／事前宣告＋D45／— | 8～12 | K1 的證據在 HANDOFF 規劃紀錄 2026-10-18 05:02 條目 |
 | cause-records | dwell（一對一）、Client 的 GYOP 序號（只作診斷，D96）、snapshot 的兩段停留、動作拒收回覆（ActionResults）、Leave 原因 | 測試、突變、digest 不變／只記錄／— | 8～9 | 有了對時與回聲才能判斷原因 |
 | hitbox-fields | 命中部位一律填 Body；射手看到的時刻由 Client 照實填；加 A1 的 E、S 與影子紀錄（D-2）；Match 驗證並記錄，不改判定 | 編解碼與驗證測試、digest 不變／只記錄／— | 8 | |
 | pv7-checkpoint | A1 前的整體回歸：四平台 L1、digest；先扣掉三個 edge 批事前宣告的差異帶，再用凍結 pv7 工具和 v7 基準比較；產出 K 與 S 取法的影子資料 | 全量／事前宣告＋D45／— | 8 | |
 | a1-shot-step | ★Match 在命令步 T(S) 判定射擊，趕不上時有界退回到達判定；Client 改用序號閘門，刪除 FireGate；combat golden 依宣告重產；K 的值交使用者決定 | 測試、突變、golden 依宣告更新／事前宣告＋D45：clean 下權威 Cooldown＝0、退回率／使用者的連點手感 | 20 | Architecture Delta：FireGate 退役、射擊判定語意改變。命中回饋可能慢約 20～37 ms〔推論〕 |
-| pv7-merge | 四平台 L1 後合併；同步 HANDOFF、README | 四平台／—／— | 2 | 合併前：重新測試已知缺陷 K1（Gateway 停頓後的限速丟棄），重新評估方案 (a)（D118，HANDOFF 未結事項） |
+| pv7-merge | 四平台 L1 後合併；同步 HANDOFF、README | 四平台／—／— | 2 | |
 
 ## after-pv7 各批
 
