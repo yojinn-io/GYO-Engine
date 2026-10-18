@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：核准 [edge-rate-limit 的 L2 事前宣告第 3 版](edge-rate-limit-l2.md)（判定與門檻同第 2 版；工具、雜湊與乾跑在第 8 節）；以及什麼時候跑（約 2 h 46 分加閒置門檻；rapid 要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
+- **等你決定**：無。等你說要離開時開始 L2 session（D123；約 2 h 46 分加閒置門檻；rapid 要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：核准後在你不用電腦的時段跑 L2 session（`pvp-v71-edge-rate-limit-l2-20261018`，指令在工具目錄的 `commands.txt`），判定與記錄後完成 `edge-actions-passthrough` 與 edge 系列。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 15:10，`edge-rate-limit`：L2 工具與乾跑完成，宣告第 3 版等你核准。
+- **最後更新**：2026-10-18，`edge-rate-limit`：宣告第 3 版已核准（D123），等你說要離開時開始 session。
 
 ## 閱讀入口
 
@@ -92,6 +92,7 @@
 | D120 | （2026-10-18）`edge-contract` 的條文照目前的內容核准：network-architecture §7「Gateway：無狀態邊緣」（四條原則、11 個允許類別、禁止項（D120 前改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步）、守衛與變更規則、Replacement Criteria），N3 照草稿列為獨立的允許類別；死欄位 `queuedControl.at` 刪除 | 使用者：「…死欄位 queuedControl.at 可以刪除。條文看完了。目前先這樣。」 |
 | D121 | （2026-10-18）K1 採用方案 (a)：通用層 session 的限速改為 token bucket（每秒補 120、容量 120），改 network-architecture 的契約條文；修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，停下等使用者核准宣告 | 使用者：「採用方案 (a)：token bucket，每秒補 120、容量 120；改通用層與 network-architecture:950 的契約條文。修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，再停下等我核准宣告。」 |
 | D122 | （2026-10-18）M1 照 (a)：凍結分析器三處的 Gateway 窗口計數檢查（`max_session_window_packets ≤120`）換成限速器自己的拒收計數 `rate_limited_packets`＝0，gateway 模式也判；窗口計數只記錄；補測試與突變、重新凍結，之後寫工具與乾跑，停下等使用者核准宣告 | 使用者：「照 (a)：三處的窗口計數檢查換成 rate_limited_packets＝0（gateway 模式也判），max_session_window_packets 只記錄；補測試與突變、重新凍結，然後寫工具與乾跑，再停下等我核准宣告。」 |
+| D123 | （2026-10-18）核准 `edge-rate-limit` 的 L2 事前宣告第 3 版（[edge-rate-limit-l2.md](edge-rate-limit-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-rate-limit 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
 
 ## 規劃紀錄（記錄器）
 
