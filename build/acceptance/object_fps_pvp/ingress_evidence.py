@@ -18,7 +18,24 @@ docs/object_fps_pvp/plans/v7/08c-drop-report.md exactly:
   drops (fwd_handed_actions_shots == fwd_link_written_actions_shots + drop_{discarded_on_leave,cleared_on_close,
   abandoned_on_close}_actions_shots), exactly. The eight D56/D59 keys stay optional (D59 (11)): unless every player
   ingress line of the Gateway log carries them, link_shots is "undetermined" with the reason and does not decide
-  the run; "complete" gives the lines that carried them out of all player ingress lines.
+  the run; "complete" gives the lines that carried them out of all player ingress lines. A pv7 passthrough Gateway
+  (its lines carry the edge-actions-passthrough keys) has no action window: link_shots is "not applicable" there,
+  and link_actions judges the link instead.
+- pv7 passthrough (protocol-v7 §2a, §9 "ingress 鍵的對應"; refrozen by v7.1 edge-analyzers). Each check applies when
+  every player ingress line carries the group of keys it needs (the groups are appended in batch order):
+  - I0 adds drop_ipc_queue_overflow_input_commands (edge-input-passthrough: windows dropped from the link's FIFO)
+    to the exits, so it holds with an overflow too (N10).
+  - removed_paths: the keys of the paths a batch removed print 0 (edge-input: the rejected lane, the Gateway's
+    deduplication, trimming, retention, routing and the D1/D2 snapshot guards; edge-results: A3; edge-actions: A5
+    and the D56/D59 action window keys), exactly.
+  - I3 is "not applicable" once the Gateway forwards every input window (edge-input): copies are the Match's to
+    judge; the Match's copy counts are reported and removed_paths judges that the Gateway deduplicates nothing.
+  - link_actions (edge-actions): per player, fwd_handed_actions_packets == fwd_link_written_actions_packets +
+    drop_ipc_queue_overflow_actions_packets + drop_cleared_on_close_actions_packets +
+    drop_abandoned_on_close_actions_packets, exactly.
+  - I1a (edge-actions, conditional like I1): the Gateway's written action batches equal the Match's
+    received_actions_batches (whole link with the player=0 bucket, then per player); undetermined also when an
+    action batch was abandoned by a failed write (it may or may not have reached the Match).
 - action_drops (D56) is reported only: what the runtime link dropped of the actions before writing them, and the
   action acknowledgements the Match discarded on a Leave.
 - gateway_contentless_drops (D58) is reported only: the drops of the Gateway that the Match never sees content of
@@ -37,7 +54,7 @@ from pathlib import Path
 import re
 import sys
 
-ANALYZER_ID = "pvp-v7-ingress-2"
+ANALYZER_ID = "pvp-v71-ingress-3"
 INGRESS_VERSION = 1
 TRACE_SCHEMA = "object_fps_pvp.match_ingress"
 TRACE_VERSION = 1
@@ -96,7 +113,22 @@ GATEWAY_PLAYER_APPENDED = (
     "drop_cleared_on_close_actions_shots", "drop_cleared_on_close_actions_acks",
     "drop_abandoned_on_close_actions_shots", "drop_abandoned_on_close_actions_acks")
 GATEWAY_PLAYER_APPENDED_D59 = ("fwd_handed_actions_shots", "fwd_link_written_actions_shots")
-GATEWAY_PLAYER_GROUPS = (GATEWAY_PLAYER_APPENDED, GATEWAY_PLAYER_APPENDED_D59)
+# pv7 groups, in batch order (v7.1): drop-report's downlink discards, edge-input-passthrough's FIFO overflow,
+# edge-results-passthrough's results slot, edge-actions-passthrough's action batches.
+GATEWAY_PLAYER_APPENDED_DROP_REPORT = (
+    "drop_write_failed_snapshot_packets", "drop_write_failed_results_packets", "drop_write_failed_control_packets",
+    "drop_control_queue_full_control_packets", "drop_replaced_snapshot_packets")
+GATEWAY_PLAYER_APPENDED_INPUT = ("drop_ipc_queue_overflow_input_packets", "drop_ipc_queue_overflow_input_commands")
+GATEWAY_PLAYER_APPENDED_RESULTS = ("drop_results_over_rate_packets",)
+GATEWAY_PLAYER_APPENDED_ACTIONS = (
+    "fwd_link_written_actions_packets", "drop_ipc_queue_overflow_actions_packets",
+    "drop_cleared_on_close_actions_packets", "drop_abandoned_on_close_actions_packets")
+GATEWAY_PLAYER_GROUPS = (GATEWAY_PLAYER_APPENDED, GATEWAY_PLAYER_APPENDED_D59, GATEWAY_PLAYER_APPENDED_DROP_REPORT,
+                         GATEWAY_PLAYER_APPENDED_INPUT, GATEWAY_PLAYER_APPENDED_RESULTS,
+                         GATEWAY_PLAYER_APPENDED_ACTIONS)
+# The number of groups a line carries from which each pv7 batch's checks apply.
+GROUPS_INPUT, GROUPS_RESULTS, GROUPS_ACTIONS = 4, 5, 6
+GATEWAY_GLOBAL_APPENDED = ("drop_coalesced_snapshots",)   # drop-report (reported, 45)
 MATCH_APPENDED = ("leave_discarded_actions_acks",)
 
 # IG: every *_packets outcome from fwd_main_input_packets to drop_admission_unknown_packets.
@@ -109,6 +141,22 @@ I0_HANDED = ("fwd_handed_main_commands", "fwd_handed_rejected_lane_commands")
 I0_OUTCOMES = GATEWAY_PLAYER_KEYS[GATEWAY_PLAYER_KEYS.index("fwd_link_written_main_commands"):
                                   GATEWAY_PLAYER_KEYS.index("drop_abandoned_on_close_commands") + 1]
 LINK_WRITTEN = ("fwd_link_written_main_commands", "fwd_link_written_rejected_lane_commands")
+# I0's further exit on a passthrough Gateway (edge-input-passthrough, N10): the commands of the windows dropped from
+# the link's FIFO; fwd_handed_main_commands counted them when the window was handed.
+I0_OVERFLOW = ("drop_ipc_queue_overflow_input_commands",)
+# removed_paths: the keys of the removed paths, by the batch that removed them (protocol-v7 §9: they print 0).
+REMOVED_BY_INPUT = (
+    "fwd_rejected_lane_input_packets", "fwd_written_duplicate_input_packets", "fwd_handed_rejected_lane_commands",
+    "fwd_link_written_rejected_lane_commands", "fwd_merged_duplicate_commands", "fwd_written_duplicate_commands",
+    "drop_resolved_trim_commands", "drop_rejected_lane_overflow_commands", "drop_discarded_on_leave_commands",
+    "fwd_resolved_at_write_commands", "fwd_retention_expired_commands") + tuple(
+    key for key in GATEWAY_PLAYER_KEYS if key.startswith("fwd_routed_") and key.endswith("_inputs"))
+REMOVED_GLOBAL_BY_INPUT = ("drop_old_tick_snapshots", "drop_regressed_snapshots")
+REMOVED_BY_RESULTS = ("drop_invalid_actions_packets", "drop_invalid_actions_shots")
+REMOVED_BY_ACTIONS = ("drop_link_rejected_actions_packets", "drop_link_rejected_actions_shots") + \
+    GATEWAY_PLAYER_APPENDED + GATEWAY_PLAYER_APPENDED_D59
+# link_actions: fwd_handed_actions_packets == these four (edge-actions-passthrough).
+LINK_ACTION_EXITS = GATEWAY_PLAYER_APPENDED_ACTIONS
 # I3 is judged only when these Gateway attributes are 0 for the run (the plan's rejectFuture, rejectConflict,
 # rejectLinkCap and written_conflict, by their Gateway key names).
 I3_GATES = ("fwd_routed_future_limit_inputs", "fwd_routed_conflict_inputs", "fwd_routed_link_cap_inputs",
@@ -231,7 +279,8 @@ def read_gateway(text):
     """Windows, per-player and Gateway-wide totals and lifecycle facts of one Gateway log."""
     state = {"starts": 0, "runtime_address": None, "evicted": set(), "windows": 0, "final": False,
              "final_line": None, "gaps": [], "players": {}, "global": {}, "unknown_keys": set(),
-             "appended_lines": {"with": 0, "without": 0}, "link_lines": {"carried": 0, "lines": 0}}
+             "appended_lines": {"with": 0, "without": 0}, "link_lines": {"carried": 0, "lines": 0},
+             "groups_min": None}
     awaiting = None  # line of a "gateway statistics" line still waiting for its ingress window
     current = None  # {"window_ms", "final", "players": set}
     waiting_players = {}  # player -> line of its "player send statistics" line in the current window
@@ -255,7 +304,7 @@ def read_gateway(text):
             continue
         if match := GATEWAY_GLOBAL_LINE.search(line):
             head, counts, unknown = parse_line(match["fields"], ("version", "window_ms", "final"),
-                                               GATEWAY_GLOBAL_KEYS, number)
+                                               GATEWAY_GLOBAL_KEYS, number, (GATEWAY_GLOBAL_APPENDED,))
             state["unknown_keys"].update(unknown)
             if state["final"]:
                 window_problem(state, f"line {number}: an ingress window after the final one")
@@ -277,8 +326,10 @@ def read_gateway(text):
             state["unknown_keys"].update(unknown)
             state["appended_lines"]["with" if head["appended"] >= 1 else "without"] += 1
             state["link_lines"]["lines"] += 1
-            if head["appended"] == len(GATEWAY_PLAYER_GROUPS):
+            if head["appended"] >= 2:   # the D56 and D59 groups
                 state["link_lines"]["carried"] += 1
+            if state["groups_min"] is None or head["appended"] < state["groups_min"]:
+                state["groups_min"] = head["appended"]
             player = head["player"]
             if current is None:
                 window_problem(state, f"line {number}: a player ingress line before any Gateway ingress window")
@@ -432,7 +483,8 @@ def gateway_checks(gateway):
         "IG": per_bucket_check(players, lambda c: [equality(
             c.get("received_datagrams", 0), total(c, IG_OUTCOMES), "received_datagrams", "sum(outcome *_packets)")]),
         "I0": per_bucket_check(players, lambda c: [equality(
-            total(c, I0_HANDED), total(c, I0_OUTCOMES), "handed commands", "sum(written, deduplicated, dropped)")]),
+            total(c, I0_HANDED), total(c, I0_OUTCOMES + I0_OVERFLOW), "handed commands",
+            "sum(written, deduplicated, dropped, overflowed)")]),
     }
     received = glob.get("received_datagrams", 0)
     accounted = total(glob, GLOBAL_DROPS) + sum(c.get("received_datagrams", 0) for c in players.values())
@@ -518,6 +570,9 @@ def link_shots(gateway):
     reasons = completeness(gateway, "Gateway")
     if gateway is None:
         return undetermined(reasons)
+    if passthrough_groups(gateway) >= GROUPS_ACTIONS:
+        return {"status": "not applicable", "reason": "no action window on the link (edge-actions-passthrough): "
+                                                      "removed_paths judges its keys 0, link_actions the link"}
     lines = gateway["link_lines"]
     complete = {"carried": lines["carried"], "lines": lines["lines"]}
     if not lines["lines"]:
@@ -558,11 +613,44 @@ def contentless_drops(gateway):
             "incomplete": completeness(gateway, "Gateway")}
 
 
-def judge_i1(gateway, match):
-    """I1: the Gateway's written commands equal the Match's received_commands (whole link, then per player)."""
-    reasons = completeness(gateway, "Gateway") + completeness(match, "Match")
+def passthrough_groups(gateway):
+    """How many appended groups every player ingress line of the Gateway carries (0 without a player line)."""
+    return (gateway or {}).get("groups_min") or 0
+
+
+def removed_paths(gateway):
+    """Exact on a passthrough Gateway: the keys of the paths v7.1 removed print 0 (protocol-v7 §9)."""
+    groups = passthrough_groups(gateway)
+    if gateway is None or groups < GROUPS_INPUT:
+        return {"status": "not applicable", "reason": "not a passthrough Gateway (its lines lack the "
+                                                      "edge-input-passthrough keys)"}
+    reasons = completeness(gateway, "Gateway")
     if reasons:
         return undetermined(reasons)
+    keys = REMOVED_BY_INPUT + (REMOVED_BY_RESULTS if groups >= GROUPS_RESULTS else ()) + \
+        (REMOVED_BY_ACTIONS if groups >= GROUPS_ACTIONS else ())
+    nonzero = {key: sum(c.get(key, 0) for c in gateway["players"].values()) for key in keys}
+    nonzero.update({key: gateway["global"].get(key, 0) for key in REMOVED_GLOBAL_BY_INPUT})
+    nonzero = {key: value for key, value in nonzero.items() if value}
+    return {"status": "failed" if nonzero else "passed", "keys": len(keys) + len(REMOVED_GLOBAL_BY_INPUT),
+            "nonzero": nonzero}
+
+
+def link_actions(gateway):
+    """Exact per player on a Gateway with the edge-actions-passthrough keys: every action batch handed to the link
+    has exactly one exit (written, overflowed, cleared on close, abandoned)."""
+    if gateway is None or passthrough_groups(gateway) < GROUPS_ACTIONS:
+        return {"status": "not applicable", "reason": "the Gateway's lines lack the edge-actions-passthrough keys"}
+    reasons = completeness(gateway, "Gateway")
+    if reasons:
+        return undetermined(reasons)
+    return per_bucket_check(gateway["players"], lambda c: [equality(
+        c.get("fwd_handed_actions_packets", 0), total(c, LINK_ACTION_EXITS), "fwd_handed_actions_packets",
+        "written + overflowed + cleared on close + abandoned action batches")])
+
+
+def i1_preconditions(gateway, match):
+    """I1's three preconditions and the reasons of those that fail (shared with I1a)."""
     preconditions = {}
     final_line = match["final_line"]
     closes = match["ipc_closed"]
@@ -572,17 +660,55 @@ def judge_i1(gateway, match):
                                           and gateway["starts"] == 1 and not later_joins)
     preconditions["no_ipc_pause"] = (gateway["runtime_address"] is not None
                                      and gateway["runtime_address"] == match["listen_address"])
+    why = []
+    if not preconditions["eof_before_final"]:
+        why.append("match.log has no 'ipc closed reason=eof' before its final=1 window")
+    if not preconditions["single_connection"]:
+        why.append(f"not a single IPC connection: {len(closes)} ipc closed line(s), accept failed="
+                   f"{match['accept_failed']}, Gateway starts={gateway['starts']}, joins after the close="
+                   f"{later_joins}")
+    if not preconditions["no_ipc_pause"]:
+        why.append(f"the Gateway dialed {gateway['runtime_address']} but the Match listened on "
+                   f"{match['listen_address']} (a relay such as IpcPause sat between them)")
+    return preconditions, why
+
+
+def judge_i1a(gateway, match):
+    """I1a: the Gateway's written action batches equal the Match's received_actions_batches (whole link, then per
+    player), under I1's preconditions and without an abandoned batch."""
+    if gateway is None or passthrough_groups(gateway) < GROUPS_ACTIONS:
+        return {"status": "not applicable", "reason": "the Gateway's lines lack the edge-actions-passthrough keys"}
+    reasons = completeness(gateway, "Gateway") + completeness(match, "Match")
+    if reasons:
+        return undetermined(reasons)
+    preconditions, why = i1_preconditions(gateway, match)
+    abandoned = sum(c.get("drop_abandoned_on_close_actions_packets", 0) for c in gateway["players"].values())
+    preconditions["no_abandoned_batch"] = abandoned == 0
+    if not preconditions["no_abandoned_batch"]:
+        why.append(f"{abandoned} action batch(es) abandoned by a failed write may or may not have reached the Match")
     if not all(preconditions.values()):
-        why = []
-        if not preconditions["eof_before_final"]:
-            why.append("match.log has no 'ipc closed reason=eof' before its final=1 window")
-        if not preconditions["single_connection"]:
-            why.append(f"not a single IPC connection: {len(closes)} ipc closed line(s), accept failed="
-                       f"{match['accept_failed']}, Gateway starts={gateway['starts']}, joins after the close="
-                       f"{later_joins}")
-        if not preconditions["no_ipc_pause"]:
-            why.append(f"the Gateway dialed {gateway['runtime_address']} but the Match listened on "
-                       f"{match['listen_address']} (a relay such as IpcPause sat between them)")
+        return {"status": "undetermined", "reasons": why, "preconditions": preconditions}
+    written = {p: c.get("fwd_link_written_actions_packets", 0) for p, c in gateway["players"].items()}
+    received = {p: c.get("received_actions_batches", 0) for p, c in match["players"].items()}
+    link = equality(sum(written.values()), sum(received.values()), "sum(Gateway fwd_link_written_actions_packets)",
+                    "sum(Match received_actions_batches, player=0 included)")
+    excluded = sorted(gateway["evicted"] | match["evicted"])
+    players = {}
+    for player in sorted((set(written) | set(received)) - {0} - set(excluded)):
+        players[str(player)] = equality(written.get(player, 0), received.get(player, 0),
+                                        "Gateway written action batches", "Match received_actions_batches")
+    holds = link["holds"] and all(part["holds"] for part in players.values())
+    return {"status": "passed" if holds else "failed", "preconditions": preconditions, "link": link,
+            "players": players, "excluded_players": excluded}
+
+
+def judge_i1(gateway, match):
+    """I1: the Gateway's written commands equal the Match's received_commands (whole link, then per player)."""
+    reasons = completeness(gateway, "Gateway") + completeness(match, "Match")
+    if reasons:
+        return undetermined(reasons)
+    preconditions, why = i1_preconditions(gateway, match)
+    if not all(preconditions.values()):
         return {"status": "undetermined", "reasons": why, "preconditions": preconditions}
     written = {p: total(c, LINK_WRITTEN) for p, c in gateway["players"].items()}
     received = {p: c.get("received_commands", 0) for p, c in match["players"].items()}
@@ -599,6 +725,11 @@ def judge_i1(gateway, match):
 
 
 def judge_i3(gateway, match):
+    if gateway is not None and passthrough_groups(gateway) >= GROUPS_INPUT:
+        copies = sum(total(c, I3_MATCH_COPIES) for c in (match or {}).get("players", {}).values())
+        return {"status": "not applicable", "match_copies": copies,
+                "reason": "a passthrough Gateway forwards every input window: copies are the Match's to judge "
+                          "(removed_paths judges that the Gateway deduplicates nothing)"}
     reasons = completeness(gateway, "Gateway") + completeness(match, "Match")
     if reasons:
         return undetermined(reasons)
@@ -769,18 +900,22 @@ def analyze_text(gateway_text, match_text, trace_text=None, injection=False):
     checks.update(gateway_checks(gateway))
     checks.update(match_checks(match, injection))
     checks["I1"] = judge_i1(gateway, match)
+    checks["I1a"] = judge_i1a(gateway, match)
     checks["I3"] = judge_i3(gateway, match)
     checks["trace"] = trace_checks(trace, match) if trace_text is not None else {"status": "absent"}
     checks["link_shots"] = link_shots(gateway)
+    checks["removed_paths"] = removed_paths(gateway)
+    checks["link_actions"] = link_actions(gateway)
     checks["action_drops"] = action_drops(gateway, match)
     checks["gateway_contentless_drops"] = contentless_drops(gateway)
-    exact = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2")
-    statuses = [checks[name]["status"] for name in exact] + [checks["I1"]["status"], checks["I3"]["status"],
-                                                              checks["link_shots"]["status"], checks["trace"]["status"]]
+    exact = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "removed_paths", "link_actions")
+    conditional = ("I1", "I1a", "I3", "link_shots")
+    statuses = [checks[name]["status"] for name in exact + conditional] + [checks["trace"]["status"]]
     if "failed" in statuses:
         status = "failed"
     elif any(checks[name]["status"] == "undetermined" for name in exact) or checks["trace"]["status"] == "undetermined":
-        # I1, I3 and link_shots are conditional: their undetermined alone does not decide the run
+        # I1, I1a, I3 and link_shots are conditional: their undetermined alone does not decide the run;
+        # "not applicable" never decides it
         status = "undetermined"
     else:
         status = "passed"

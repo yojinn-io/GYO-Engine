@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-analyzers` 進行中；之後 `edge-contract`、`edge-rate-limit`（含 `edge-actions-passthrough` 的 L2）。
+- **下一步**：`edge-contract`（Design Invariants 條文需要你核准，做到草稿與守衛後停下）；之後 `edge-rate-limit`（含 `edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，D119；`edge-analyzers` 開始。
+- **最後更新**：2026-10-18，`edge-analyzers` 完成（分析器 `pvp-v71-ingress-3`、新舊對照 669 個目錄、突變 35／35）。
 
 ## 閱讀入口
 
@@ -391,6 +391,19 @@
       4. 那次 starvation 與這個 backlog 之間，p 沒有其他重設。
       兩棵樹同一條規則；K1 的次數逐樹記錄（只記錄）。其他判定與門檻不變。乾跑用本次的 `gateway-1000ms-r4-B` 當真實 fixture（應記為 K1、不停），另做計數不符、starvation 不在丟棄時段內兩個變體（應停）。
     - 記錄：連線關閉後送來的動作 datagram 由 `server.go:471-479` 改記到 `room_unavailable`，不會遺失；handed 與出口分在 Server 與 link 兩張表，都在 `s.mu` 下一起取，不會出現出口早於 handed 的視窗（將來若有路徑在 `s.mu` 之外呼叫 `link.actions`，就要重新確認）；`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:68,74` 的 D56／D59 說明留給 `edge-analyzers`。
+
+- 2026-10-18：`edge-analyzers`（D119 之後開始；檔位 medium、守恆式 high；估 5～6 h，實際約 1.5 h）。
+  - 分析器 `ingress_evidence.py` 改為 `pvp-v71-ingress-3`：認得 drop-report、edge-input、edge-results、edge-actions 四組 Gateway 附加鍵與全域的 `drop_coalesced_snapshots`（`unknown_keys` 清空）；每一行帶的組數（整個 log 取最小）決定哪些判定適用，舊日誌照舊判。
+    - I0 的出口加上 FIFO 溢出的命令（N10），有溢出時也精確成立。
+    - 新增 `removed_paths`（精確）：被刪路徑的鍵必須是 0（protocol-v7 §9「被刪路徑的 v1 鍵照原順序輸出 0」的直接檢查；edge-input 19 個＋全域 2 個，edge-results 加 A3 的 2 個，edge-actions 加 A5 的 2 個與 D56／D59 的 8 個）。
+    - 新增 `link_actions`（精確，取代直通後的 `link_shots`）與 I1a（條件判定：Gateway 寫出的動作批＝Match 收到的動作批，前提同 I1，另加沒有寫出失敗放棄的批）。
+    - 直通的 Gateway 上 I3 與 `link_shots` 為「不適用」（副本由 Match 判定；Gateway 不去重由 `removed_paths` 判）。
+  - `ingress_cross_check.py`：拿掉 I3 的宣告例外；必要檢查加上 `removed_paths`、`link_actions`、I1a，I3 與 `link_shots` 必須是不適用；I1a 和 I1 一樣在關閉競態時重試。
+  - 測試：分析器自測 52 → 60（直通：全部鍵組一致時通過、I0 含溢出、各個被刪路徑鍵、鍵組決定適用範圍、link_actions 各項、I1a 的不等與前提、全域附加鍵）。`link_actions` 的測試把出口鍵寫成字面值（突變縮短分析器的常數時，原本測試也跟著少測一項，見下）。
+  - 驗收（新舊各分析一次，`build/target/_build/test/logs/pvp-v71-edge-analyzers-20261018/`：`compare.py`、`compare.json`，舊版取自 git 的 `pvp-v7-ingress-2`）：v7.1 四場 L2 與 v7 第 16 批 L2 共 669 個案例目錄。差異全部是預期的：直通 Gateway 的 I3 由「失敗（宣告的形狀）」變「不適用」（328 個），直通動作的 A 由 `link_shots` 0＝0 變「不適用」；新判定在直通的跑次都通過（I1a 有 12 個 undetermined，和 I1 同樣卡在前提），直通前的 Gateway（含 pv6 的 282 個）一律不適用；IG、I0、I1、I2 等既有判定在 669 個目錄都和舊版相同。新版沒有任何目錄不通過。
+  - 重新凍結：`pvp-v71-edge-analyzers-20261018/frozen-pv7-ea.sha256` `77cb956b…`（＝`frozen-pv7-d117.sha256` 只更新 `ingress_evidence.py` `567198d6…` 與 `test_ingress_evidence.py` 兩行），給之後的 L2（`edge-rate-limit`）用。
+  - 突變：分析器與跨程序核對上的 35 個（既有 26 個中 2 個更新 find 字串，新增 9 個 `v71ea-*`）全部殺死；`v71ea-link-actions-term-missing` 第一次是錯誤訊息不符（被 I1a 的測試抓到，但期望的測試因為拿分析器的常數當迴圈清單而跟著少測），測試改成字面值後殺死。
+  - 驗收（L1，本機）：CTest 72／72、preset 外 4／4（`ingress_cross` 在新的必要檢查下通過、不再需要宣告例外）。
 
 ## 未結事項
 

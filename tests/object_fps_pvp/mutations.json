@@ -2547,8 +2547,8 @@
       "id": "v7-flow-l2p-d56-only-complete",
       "batch": "v7-flow",
       "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
-      "find": "            if head[\"appended\"] == len(GATEWAY_PLAYER_GROUPS):\n",
-      "replace": "            if head[\"appended\"] >= 1:\n",
+      "find": "            if head[\"appended\"] >= 2:   # the D56 and D59 groups\n",
+      "replace": "            if head[\"appended\"] >= 1:   # the D56 and D59 groups\n",
       "check": "ingress_evidence",
       "expect": "FAIL: test_a_partial_log_is_undetermined_even_when_its_sums_break",
       "what": "a line with the D56 keys but not the D59 ones counts as carrying all eight"
@@ -2557,8 +2557,8 @@
       "id": "v7-flow-l2p-link-not-deciding",
       "batch": "v7-flow",
       "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
-      "find": "                                                              checks[\"link_shots\"][\"status\"], checks[\"trace\"][\"status\"]]\n",
-      "replace": "                                                              checks[\"trace\"][\"status\"]]\n",
+      "find": "    conditional = (\"I1\", \"I1a\", \"I3\", \"link_shots\")\n",
+      "replace": "    conditional = (\"I1\", \"I1a\", \"I3\")\n",
       "check": "ingress_evidence",
       "expect": "FAIL: test_each_term_breaks_it",
       "what": "a failed link_shots does not fail the run"
@@ -3912,6 +3912,96 @@
       "replace": "                break\n",
       "check": "action_runner",
       "expect": "Lists differ"
+    },
+    {
+      "id": "v71ea-i0-overflow-missing",
+      "batch": "v71-edge-analyzers",
+      "what": "I0 leaves the commands of the windows dropped from the FIFO out of the exits",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "total(c, I0_OUTCOMES + I0_OVERFLOW)",
+      "replace": "total(c, I0_OUTCOMES)",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_a_passthrough_run_passes"
+    },
+    {
+      "id": "v71ea-removed-results-unjudged",
+      "batch": "v71-edge-analyzers",
+      "what": "removed_paths leaves the A3 keys out on a Gateway with the edge-results keys",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "(REMOVED_BY_RESULTS if groups >= GROUPS_RESULTS else ())",
+      "replace": "()",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_each_removed_path_key_fails_it"
+    },
+    {
+      "id": "v71ea-removed-global-missing",
+      "batch": "v71-edge-analyzers",
+      "what": "removed_paths leaves the D1/D2 snapshot guards' Gateway-wide keys out",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    nonzero.update({key: gateway[\"global\"].get(key, 0) for key in REMOVED_GLOBAL_BY_INPUT})\n",
+      "replace": "",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_each_removed_path_key_fails_it"
+    },
+    {
+      "id": "v71ea-removed-not-deciding",
+      "batch": "v71-edge-analyzers",
+      "what": "a failed removed_paths does not fail the run",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    exact = (\"IG\", \"gateway_global\", \"I0\", \"T3\", \"I2\", \"J5a\", \"S1\", \"S2\", \"removed_paths\", \"link_actions\")\n",
+      "replace": "    exact = (\"IG\", \"gateway_global\", \"I0\", \"T3\", \"I2\", \"J5a\", \"S1\", \"S2\", \"link_actions\")\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_each_removed_path_key_fails_it"
+    },
+    {
+      "id": "v71ea-link-actions-term-missing",
+      "batch": "v71-edge-analyzers",
+      "what": "link_actions leaves the abandoned action batches out of the exits",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "LINK_ACTION_EXITS = GATEWAY_PLAYER_APPENDED_ACTIONS",
+      "replace": "LINK_ACTION_EXITS = GATEWAY_PLAYER_APPENDED_ACTIONS[:3]",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_each_link_action_term_breaks_it"
+    },
+    {
+      "id": "v71ea-i1a-player-zero-left-out",
+      "batch": "v71-edge-analyzers",
+      "what": "I1a's link total leaves out the Match's player=0 bucket",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    received = {p: c.get(\"received_actions_batches\", 0) for p, c in match[\"players\"].items()}\n",
+      "replace": "    received = {p: c.get(\"received_actions_batches\", 0) for p, c in match[\"players\"].items() if p != 0}\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1a_compares_written_and_received_action_batches"
+    },
+    {
+      "id": "v71ea-i1a-abandoned-ignored",
+      "batch": "v71-edge-analyzers",
+      "what": "I1a is judged although an action batch was abandoned by a failed write",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    preconditions[\"no_abandoned_batch\"] = abandoned == 0\n",
+      "replace": "    preconditions[\"no_abandoned_batch\"] = True\n",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_i1a_is_undetermined_without_its_preconditions"
+    },
+    {
+      "id": "v71ea-i3-judged-on-passthrough",
+      "batch": "v71-edge-analyzers",
+      "what": "I3's inequality is judged on a passthrough Gateway",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "    if gateway is not None and passthrough_groups(gateway) >= GROUPS_INPUT:\n        copies",
+      "replace": "    if False:\n        copies",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_(a_passthrough_run_passes|removed_paths_follow_the_groups_the_lines_carry)"
+    },
+    {
+      "id": "v71ea-global-group-unknown",
+      "batch": "v71-edge-analyzers",
+      "what": "the Gateway-wide drop_coalesced_snapshots is kept apart as an unknown key",
+      "file": "build/acceptance/object_fps_pvp/ingress_evidence.py",
+      "find": "GATEWAY_GLOBAL_KEYS, number, (GATEWAY_GLOBAL_APPENDED,))",
+      "replace": "GATEWAY_GLOBAL_KEYS, number)",
+      "check": "ingress_evidence",
+      "expect": "FAIL: test_the_global_appended_key_is_known"
     }
   ]
 }
