@@ -271,7 +271,8 @@ void MatchRuntimeHost::NoteWireRejection(PlayerId playerId, IngressActionRejecti
     refused.shots += shots;
 }
 
-ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough) {
+ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough,
+    IngressActionRejection* refusal) {
     std::lock_guard lock(mutex_);
     // Every return below is counted exactly once: received = accepted + refused.
     auto& ingress = IngressBucket(batch.playerId);
@@ -281,6 +282,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
         auto& refused = ingress.rejectedActions[IngressIndex(reason)];
         ++refused.batches;
         refused.shots += batch.shots.size();
+        if (refusal) *refusal = reason;
         return admission;
     };
     if (pendingReset_) return refuse(IngressActionRejection::Resetting, ActionAdmission::InvalidPlayer);
@@ -546,12 +548,22 @@ IngressRecords MatchRuntimeHost::DrainIngressRecords() {
     return records_.Drain();
 }
 
-std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
+std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot(std::chrono::steady_clock::time_point* publishedAt) {
     std::lock_guard lock(mutex_);
     auto result = std::move(snapshot_);
     snapshot_.reset();
     if (result) CountSlackSamples(*result, &MatchIngressCounts::slackTakenSamples);
+    if (result && publishedAt) {
+        // The newest reference is the snapshot's own publication.
+        const auto reference = std::find_if(publishedReferences_.rbegin(), publishedReferences_.rend(),
+            [&](const auto& value) { return value.tick == result->tick; });
+        if (reference != publishedReferences_.rend()) *publishedAt = reference->publishedAt;
+    }
     return result;
+}
+
+std::chrono::steady_clock::time_point MatchRuntimeHost::Now() const {
+    return now_();
 }
 
 std::vector<ControlResult> MatchRuntimeHost::TakeControlResults() {

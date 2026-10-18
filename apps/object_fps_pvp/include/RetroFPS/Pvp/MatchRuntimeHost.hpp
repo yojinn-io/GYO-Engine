@@ -73,13 +73,22 @@ public:
     // I/O validates and stages immutable requests; only Advance mutates Match.
     [[nodiscard]] ActionAdmission SubmitActions(const ActionBatch& batch);
     // Requests (Shot/Reload) and ACK validate together; rejection queues neither.
-    [[nodiscard]] ActionAdmission SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough);
+    // refusal, if given, receives the reason of a refusal as counted (a reset
+    // in progress is told apart from an unknown player only there); the I/O
+    // layer answers it to the Client (pv7 §5, D-6).
+    [[nodiscard]] ActionAdmission SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough,
+        IngressActionRejection* refusal = nullptr);
     [[nodiscard]] bool QueueActionAcknowledgement(PlayerId playerId, ActionId through);
     // Owning, non-destructive results survive reads until a validated ACK retires them.
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
 
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Advance(double elapsedSeconds);
-    [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot();
+    // publishedAt, if given, receives when the step published the snapshot,
+    // on the host's clock (the start of its reference age).
+    [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot(std::chrono::steady_clock::time_point* publishedAt = nullptr);
+    // The host's clock (injected for tests), for the I/O layer's durations
+    // that start at a publication.
+    [[nodiscard]] std::chrono::steady_clock::time_point Now() const;
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();

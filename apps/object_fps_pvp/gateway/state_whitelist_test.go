@@ -77,7 +77,7 @@ var fieldClasses = map[string]string{
 	"outbound.actionPlayer": classPerCall, "outbound.peer": classPerCall, "outbound.packet": classPerCall,
 	"outbound.player": classPerCall, "outbound.writeFailed": classPerCall, "outbound.sequence": classPerCall,
 	"outbound.tick":         classPerCall,
-	"snapshotFrame.payload": classQueue, "snapshotFrame.tick": classQueue,
+	"snapshotFrame.snapshot": classQueue, "snapshotFrame.read": classItemDiag, "snapshotFrame.tick": classQueue,
 	"queuedControl.p": classQueue, "queuedControl.kind": classQueue, "queuedControl.payload": classQueue,
 	"playerIngressLine.player": classDiagnostic, "playerIngressLine.line": classDiagnostic,
 	"joinRequest.RequestID": classPerCall, "joinRequest.ProtocolVersion": classPerCall,
@@ -95,7 +95,7 @@ var fieldClasses = map[string]string{
 	"queuedMessage.message": classQueue, "queuedMessage.input": classQueue, "queuedMessage.actions": classQueue,
 	"queuedMessage.player": classQueue, "queuedMessage.commands": classQueue, "queuedMessage.event": classItemDiag,
 	"linkWrite.message": classQueue, "linkWrite.lane": classQueue, "linkWrite.player": classQueue,
-	"linkWrite.commands": classQueue,
+	"linkWrite.commands": classQueue, "linkWrite.received": classItemDiag,
 	"dataKey.player":     classQueue, "dataKey.actions": classQueue,
 	"resultSlot.pending": classResultSlot, "resultSlot.nextSend": classResultSlot, "resultSlot.event": classItemDiag,
 

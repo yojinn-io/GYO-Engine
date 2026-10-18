@@ -370,8 +370,9 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if status != 200 {
 		t.Fatal(status)
 	}
-	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID {
-		t.Fatal("leave missing")
+	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID ||
+		leave.Reason != runtime.LeaveReason_LEAVE_REASON_CLIENT_REQUEST {
+		t.Fatalf("leave missing or without the client request reason: %v", leave)
 	}
 	sendPacket(t, p, c, 8, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 4, MoveForward: 1}}})
 	f.quiet(t)
@@ -434,8 +435,9 @@ func TestCapacityExpiryAndRuntimeFailure(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 	s.expireAt(time.Now().Add(6 * time.Second))
-	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID {
-		t.Fatal("expiry leave missing")
+	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID ||
+		leave.Reason != runtime.LeaveReason_LEAVE_REASON_SESSION_TIMEOUT {
+		t.Fatalf("expiry leave missing or without the session timeout reason: %v", leave)
 	}
 	f.mu.Lock()
 	_ = f.conn.Close()
@@ -475,7 +477,7 @@ func TestSnapshotsFollowRuntimePublicationsForBothPeers(t *testing.T) {
 	}}}
 	f.send(e)
 	first, second := receivePacket(t, pa, adapter.Snapshot), receivePacket(t, pb, adapter.Snapshot)
-	if !bytes.Equal(first, second) {
+	if !sameWorld(t, first, second) {
 		t.Fatal("peers observed different world payloads")
 	}
 	var snapshot client.WorldSnapshot
@@ -487,7 +489,7 @@ func TestSnapshotsFollowRuntimePublicationsForBothPeers(t *testing.T) {
 	// Client applies only a newer tick.
 	f.send(e)
 	for _, p := range []*net.UDPConn{pa, pb} {
-		if repeat := receivePacket(t, p, adapter.Snapshot); !bytes.Equal(repeat, first) {
+		if repeat := receivePacket(t, p, adapter.Snapshot); !sameWorld(t, repeat, first) {
 			t.Fatal("the repeated publication changed")
 		}
 	}
@@ -519,8 +521,9 @@ func TestPendingJoinTimeoutCannotResurrectSession(t *testing.T) {
 		t.Fatal("missing join")
 	}
 	s.expireAt(time.Now().Add(4 * time.Second))
-	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID {
-		t.Fatal("pending timeout must send ordered leave")
+	if leave := f.next(t).GetLeave(); leave == nil || leave.PlayerId != c.PlayerID ||
+		leave.Reason != runtime.LeaveReason_LEAVE_REASON_JOIN_TIMEOUT {
+		t.Fatalf("pending timeout must send ordered leave with the join timeout reason: %v", leave)
 	}
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_JoinResult{JoinResult: &runtime.JoinResult{PlayerId: c.PlayerID, Accepted: true}}
@@ -773,7 +776,7 @@ func TestSnapshotsReachEveryPeerOfAFullRoom(t *testing.T) {
 	f.send(e)
 	first := receivePacket(t, peers[0].p, adapter.Snapshot)
 	for _, other := range peers[1:] {
-		if !bytes.Equal(first, receivePacket(t, other.p, adapter.Snapshot)) {
+		if !sameWorld(t, first, receivePacket(t, other.p, adapter.Snapshot)) {
 			t.Fatal("peers observed different world payloads")
 		}
 	}
@@ -882,4 +885,16 @@ func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.
 	if again := reserve(t, s, "g10-leaver"); again.PlayerID == leaver.PlayerID || again.PlayerID <= joiner.PlayerID {
 		t.Fatalf("a removed player's id was reused: %d after %d", again.PlayerID, leaver.PlayerID)
 	}
+}
+
+// sameWorld compares two peers' snapshot payloads apart from gateway_hold_us,
+// which each write fills for its own peer (pv7 §5); both must carry it.
+func sameWorld(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var x, y client.WorldSnapshot
+	if proto.Unmarshal(a, &x) != nil || proto.Unmarshal(b, &y) != nil || x.GatewayHoldUs == nil || y.GatewayHoldUs == nil {
+		return false
+	}
+	x.GatewayHoldUs, y.GatewayHoldUs = nil, nil
+	return proto.Equal(&x, &y)
 }

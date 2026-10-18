@@ -40,11 +40,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		}
 		return header, snapshot.Tick
 	}
-	payload, err := proto.Marshal(&client.WorldSnapshot{Tick: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	frame, first := s.snapshotForPeer([]uint64{1, 2}, snapshotFrame{payload: payload, tick: 1})
+	frame, first := s.snapshotForPeer([]uint64{1, 2}, snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 1}, read: time.Now(), tick: 1})
 	firstHeader, firstTick := decode(first)
 	if firstTick != 1 || firstHeader.Sequence != 1 || firstHeader.SessionID != s.players[1].session.ID {
 		t.Fatal("first peer did not receive the initial publication")
@@ -114,11 +110,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 			receive := func() uint64 {
 				select {
 				case frame := <-s.snapshotOut:
-					var snapshot client.WorldSnapshot
-					if err := proto.Unmarshal(frame.payload, &snapshot); err != nil {
-						t.Fatal(err)
-					}
-					return snapshot.Tick
+					return frame.snapshot.Tick
 				case <-time.After(5 * time.Second):
 					t.Fatal("no snapshot was pending for the consumer")
 				}

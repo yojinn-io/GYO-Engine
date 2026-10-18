@@ -22,6 +22,7 @@
 #include <map>
 #include <limits>
 #include <random>
+#include <cctype>
 #include <syncstream>
 
 namespace fps::pvp {
@@ -34,6 +35,13 @@ std::string Id(const Json& value) {return value.is_string()?value.get<std::strin
 // The C clock domain of pv7 §2: steady_clock in microseconds.
 std::uint64_t MicrosNow() {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+}
+// The lower-case name of a refusal reason in the cause records line.
+std::string RefusalName(int value) {
+    if(!pb::ActionRefusal_IsValid(value)) return "unknown_"+std::to_string(value);
+    std::string name=pb::ActionRefusal_Name(static_cast<pb::ActionRefusal>(value)).substr(sizeof("ACTION_REFUSAL_")-1);
+    for(auto& c:name) c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return name;
 }
 std::string Hex64(std::uint64_t value) {
     char text[17];std::snprintf(text,sizeof text,"%016llx",static_cast<unsigned long long>(value));return text;
@@ -163,6 +171,7 @@ struct ClientConnection::Impl {
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
+    ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
     Impl() {
@@ -521,6 +530,8 @@ struct ClientConnection::Impl {
                 if(!welcomed)continue;
                 pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
                     message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
+                causes.Snapshot(message.has_match_hold_us()?std::optional(message.match_hold_us()):std::nullopt,
+                    message.has_gateway_hold_us()?std::optional(message.gateway_hold_us()):std::nullopt);
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
                 PlayerId own;std::uint32_t maximumHp{},magazineCapacity{};{
                     std::scoped_lock lock(mutex);
@@ -625,6 +636,7 @@ struct ClientConnection::Impl {
                 if(!welcomed)continue;
                 pb::ActionResults message;
                 const bool parsed=message.ParseFromString(packet->payload);
+                if(parsed) causes.Results(message.refused_batches(),RefusalName(static_cast<int>(message.last_refusal())));
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
                 if(!parsed || !AcceptResults(message,arrivedAt)){++actionTransport.rejectedResultBatches;continue;}
@@ -786,6 +798,7 @@ struct ClientConnection::Impl {
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
             .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+        std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
     }
     void Run() {

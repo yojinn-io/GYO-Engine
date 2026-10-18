@@ -29,6 +29,9 @@ func (l *runtimeLink) actions(in *runtime.ActionBatch, e dropEvent) error {
 	if in == nil || in.PlayerId == 0 || len(in.Shots) > adapter.MaxActionBatch {
 		return adapter.ErrActions
 	}
+	if e.transport != 0 { // diagnostics only (D96): never deduplicates or orders
+		in.ClientTransportSequence = &e.transport
+	}
 	message := envelope()
 	message.Message = &runtime.RuntimeEnvelope_Actions{Actions: in}
 	l.queueDataLocked(queuedMessage{message: message, actions: true, player: in.PlayerId, event: e})

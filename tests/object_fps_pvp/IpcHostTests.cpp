@@ -9,6 +9,7 @@
 #include <asio.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -659,6 +660,10 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
     std::iota(over.begin(), over.end(), ActionId{2});
     // The host refuses this one: it acknowledges what was never decided.
     const auto refusals = {malformed, Actions(5, over, 1), Actions(5, {}, 99)};
+    // pv7 §5 (D-6): each answer counts the refusal and names its reason.
+    const auto reasons = {object_fps_pvp::runtime::v7::ACTION_REFUSAL_MALFORMED, object_fps_pvp::runtime::v7::ACTION_REFUSAL_OVER_BATCH, object_fps_pvp::runtime::v7::ACTION_REFUSAL_INVALID_BATCH};
+    auto reason = reasons.begin();
+    std::uint64_t refusedSoFar = 0;
     for (const auto& refused : refusals) {
         CAPTURE(refused.DebugString());
         gateway.Send(refused);
@@ -667,7 +672,14 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
         const auto frame = std::find_if(answer.begin(), answer.end(), [](const auto& f) { return f.message.has_action_results(); });
         CHECK(frame->message.action_results().retired_through() == 1);
         CHECK(frame->message.action_results().decisions_size() == 0);
+        CHECK(frame->message.action_results().refused_batches() == ++refusedSoFar);
+        CHECK(frame->message.action_results().last_refusal() == *reason++);
     }
+    // An accepted batch counts nothing more; the latest reason stays.
+    gateway.Send(Actions(5, {2}, 1));
+    const auto accepted = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 2); });
+    CHECK(accepted.action_results().refused_batches() == 3);
+    CHECK(accepted.action_results().last_refusal() == object_fps_pvp::runtime::v7::ACTION_REFUSAL_INVALID_BATCH);
 }
 
 TEST_CASE("PvP IPC writes a decision before the snapshot of its tick when the lane was idle") {
@@ -982,6 +994,8 @@ struct DecisionOutcome {
     std::uint64_t clockSamples{}; // measured by the Match, from its logged windows
     std::uint64_t copies{};       // commands the host classified as copies
     std::uint64_t otherLife{};    // inputs the host refused for another life
+    std::vector<std::int64_t> holds; // every written snapshot's match_hold_us, -1 when absent
+    std::string log;                 // the Match's log of the run
 };
 
 pb::RuntimeEnvelope MovementInput(PlayerId player, std::uint64_t sequence, float forward, std::uint64_t observedTick) {
@@ -1025,7 +1039,10 @@ pb::RuntimeEnvelope Shot(PlayerId player, ActionId id, std::uint64_t observedTic
 // copies: every input window also arrives again, with a window that repeats
 // the previous (resolved) command, and one of a future life: what a Gateway
 // forwarding each Client datagram as it came hands the Match (pv7 §2a).
-DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false) {
+// causes: every input and action batch carries extreme cause records (pv7
+// §5): a dwell at the 10 s clamp, beyond it or absent, and Client sequences
+// that jump, repeat and are zero; the fences' Leaves carry every reason.
+DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false, bool causes = false) {
     ClogCapture log;
     auto now = Clock::time_point{} + 1000s;
     MatchRuntimeHost host{IpcArena(), [&now] { return now; }};
@@ -1045,7 +1062,13 @@ DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false) {
             for (const auto& decision : message.action_results().decisions())
                 outcome.decisions.emplace(decision.action_id(), decision.SerializeAsString());
         if (message.has_join_result()) outcome.joins.push_back(message.join_result().SerializeAsString());
-        if (message.has_snapshot()) outcome.snapshot = message.snapshot().SerializeAsString();
+        if (message.has_snapshot()) {
+            // The hold is a time, not a decision: compared without it.
+            auto snapshot = message.snapshot();
+            outcome.holds.push_back(snapshot.has_match_hold_us() ? std::int64_t{snapshot.match_hold_us()} : -1);
+            snapshot.clear_match_hold_us();
+            outcome.snapshot = snapshot.SerializeAsString();
+        }
         if (message.has_clock()) {
             ++outcome.clockReplies;
             lastReply = message.clock().transmit_us();
@@ -1119,8 +1142,27 @@ DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false) {
             if (k == 45) frames.push_back(Shot(2, 4, 1)); // an old reference: expired
             if (k == 50) frames.push_back(Shot(2, 5, observed, true));
         }
-        for (const auto& frame : frames) gateway.Send(frame);
-        gateway.Send(Leave(99));
+        std::uint32_t frameIndex = 0;
+        for (auto& frame : frames) {
+            if (causes) {
+                const auto variant = (static_cast<std::uint32_t>(k) + frameIndex++) % 4;
+                const std::optional<std::uint32_t> dwell = variant == 0 ? std::optional<std::uint32_t>(10'000'000)
+                    : variant == 1 ? std::optional<std::uint32_t>(4'000'000'000u) : variant == 2 ? std::optional<std::uint32_t>(0) : std::nullopt;
+                const std::uint32_t sequence = variant == 3 ? 0 : 1'000'000'000u - static_cast<std::uint32_t>(k) * 7u * (variant % 2 ? 1u : 0u)
+                    + static_cast<std::uint32_t>(k) * 13u;
+                if (frame.has_input()) {
+                    if (dwell) frame.mutable_input()->set_gateway_dwell_us(*dwell);
+                    frame.mutable_input()->set_client_transport_sequence(sequence);
+                } else if (frame.has_actions()) {
+                    if (dwell) frame.mutable_actions()->set_gateway_dwell_us(*dwell);
+                    frame.mutable_actions()->set_client_transport_sequence(sequence);
+                }
+            }
+            gateway.Send(frame);
+        }
+        auto fence = Leave(99);
+        if (causes) fence.mutable_leave()->set_reason(static_cast<pb::LeaveReason>(k % 5)); // 4 is unknown
+        gateway.Send(fence);
         REQUIRE(log.ShowsTimes("leave player=99", ++fences));
         step();
         drain();
@@ -1140,6 +1182,7 @@ DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false) {
     REQUIRE(log.Shows("final=1"));
     outcome.clockSamples = LoggedClockCount(log, "samples");
     ipc.Stop();
+    outcome.log = log.Text();
     for (const auto& [player, counts] : host.TakeIngressStatistics(true)) {
         static_cast<void>(player);
         for (const auto copy : {IngressCommandClass::PendingCopy, IngressCommandClass::LateCopy, IngressCommandClass::ResolvedCopy})
@@ -1169,6 +1212,35 @@ TEST_CASE("PvP IPC decisions do not depend on input copies") {
 // D32 (pv7 §2): clock samples never reach a decision. The same frames give
 // the same decisions, join results and final snapshot (positions, combat,
 // slack sample) bit for bit, with no samples and with extreme ones.
+// D32 (pv7 §2, §5): the cause records never reach a decision. Extreme dwell
+// and Client sequences and every Leave reason give the same decisions, join
+// results and final snapshot bit for bit; the Match still measured them.
+TEST_CASE("PvP IPC decisions do not depend on cause records") {
+    const auto without = RunDecisionScenario(false);
+    const auto with = RunDecisionScenario(false, false, true);
+    REQUIRE(without.decisions.size() == 5);
+    CHECK(without.joins == with.joins);
+    CHECK(without.snapshot == with.snapshot);
+    CHECK(without.decisions == with.decisions);
+    // The records were read, not lost on the way.
+    CHECK(with.log.find("dwell_range=0") == std::string::npos);
+    CHECK(with.log.find("sequence_missing=0") == std::string::npos);
+    CHECK(with.log.find("leave player=99 reason=session_timeout") != std::string::npos);
+    CHECK(without.log.find("dwell_samples=0") != std::string::npos);
+}
+
+// pv7 §5 (D-4): every written snapshot carries the Match hold, measured on the
+// host's (here fake) clock from the publication: at most a few ticks, and a
+// whole tick once the test advanced the clock before the IPC thread chose the
+// frame. Another clock (the IPC's real one) would clamp it at 10 s.
+TEST_CASE("PvP IPC snapshots carry the Match hold from the publication on the host's clock") {
+    const auto outcome = RunDecisionScenario(false);
+    REQUIRE(outcome.holds.size() > 60);
+    const auto tick = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(MovementTickSeconds)).count();
+    CHECK(std::all_of(outcome.holds.begin(), outcome.holds.end(), [](auto hold) { return hold >= 0 && hold < 1'000'000; }));
+    CHECK(std::any_of(outcome.holds.begin(), outcome.holds.end(), [&](auto hold) { return hold >= tick - 1; }));
+}
+
 TEST_CASE("PvP IPC decisions do not depend on clock samples") {
     const auto without = RunDecisionScenario(false);
     const auto with = RunDecisionScenario(true);
@@ -1300,5 +1372,77 @@ TEST_CASE("PvP IPC drop reasons match the shared golden") {
     for (int value = 1; value < 128; ++value) {
         CAPTURE(value);
         CHECK(DropReasonValid(value) == values.contains(value));
+    }
+}
+
+// pv7 §5: the Leave reason is logged; a missing or unknown one is counted as a
+// violation, and every Leave removes the player the same way.
+TEST_CASE("PvP IPC logs each Leave reason and removes the player for any") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 7);
+    for (const PlayerId player : {PlayerId{8}, PlayerId{9}}) {
+        gateway.Send(Join(player));
+        static_cast<void>(ReceiveFirst(gateway, [&](const auto& message) {
+            return message.has_join_result() && message.join_result().player_id() == player;
+        }));
+    }
+    const std::vector<std::pair<PlayerId, int>> leaves{{7, object_fps_pvp::runtime::v7::LEAVE_REASON_CLIENT_REQUEST}, {8, 0}, {9, 77}};
+    for (const auto& [player, reason] : leaves) {
+        auto leave = Leave(player);
+        leave.mutable_leave()->set_reason(static_cast<object_fps_pvp::runtime::v7::LeaveReason>(reason));
+        gateway.Send(leave);
+    }
+    CHECK(log.Shows("leave player=7 reason=client_request"));
+    CHECK(log.Shows("leave player=8 reason=unspecified"));
+    CHECK(log.Shows("leave violation player=8 value=0 count=1"));
+    CHECK(log.Shows("leave player=9 reason=unspecified"));
+    CHECK(log.Shows("leave violation player=9 value=77 count=2"));
+    CHECK_FALSE(log.Text().find("leave violation player=7") != std::string::npos);
+    // All three are gone from the snapshots that follow.
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) {
+        return message.has_snapshot() && !SnapshotHas(message, 7) && !SnapshotHas(message, 8) && !SnapshotHas(message, 9);
+    }));
+}
+
+// pv7 §2, §5: the Client sequence and the dwell each forwarded message carries
+// are counted per player and logged at the session end; out-of-range and
+// missing values are counted and ignored, the session stays open.
+TEST_CASE("PvP IPC counts the Client sequence gaps and the dwell it was handed") {
+    ClogCapture log;
+    Server server;
+    Gateway gateway(server.address);
+    JoinPlayer(gateway, 3);
+    struct Sent { std::optional<std::uint32_t> sequence, dwell; bool actions; };
+    const std::vector<Sent> sent{
+        {1, 100, false}, {2, 300, true}, {5, 10'000'000, false}, {4, 10'000'001, false}, {std::nullopt, std::nullopt, true},
+        {0, 50, false}, {9, 200, false}};
+    std::uint64_t command = 1;
+    for (const auto& s : sent) {
+        auto message = s.actions ? Actions(3, {}, 0) : InputWindow(3, command, command);
+        if (!s.actions) ++command;
+        auto set = [&](auto* value) {
+            if (s.sequence) value->set_client_transport_sequence(*s.sequence);
+            if (s.dwell) value->set_gateway_dwell_us(*s.dwell);
+        };
+        if (s.actions) set(message.mutable_actions()); else set(message.mutable_input());
+        gateway.Send(message);
+    }
+    gateway.Finish();
+    // Gaps: 2 to 5 skips 2, 5 to 9 skips 3; 4 is late; 0 and none are missing.
+    CHECK(log.Shows("gw_transport player=3 window_ms="));
+    CHECK(log.Shows("final=1 messages=7 sequence_missing=2 sequence_gaps=5 sequence_late=1 largest_sequence=9 "
+                    "dwell_samples=5 dwell_missing=1 dwell_range=1 dwell_max_us=10000000 dwell_mean_us=2000130"));
+    CHECK_FALSE(log.Text().find("ipc closed reason=eof") == std::string::npos);
+}
+
+// pv7 §5 (D-6): the refusal names are the host's, value for value.
+TEST_CASE("PvP IPC refusal names are the host's rejection names") {
+    for (std::size_t index = 0; index < IngressIndex(IngressActionRejection::Count); ++index) {
+        const auto rejection = static_cast<IngressActionRejection>(index);
+        std::string name(IngressName(rejection));
+        for (auto& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        CHECK(object_fps_pvp::runtime::v7::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v7::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
     }
 }

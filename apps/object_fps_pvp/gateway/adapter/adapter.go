@@ -77,7 +77,8 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 	if in == nil || len(in.Players) > MaxPlayers || len(in.Combat) != len(in.Players) || (len(in.Combat) > 0 && !ValidRules(rules)) {
 		return nil, errors.New("invalid runtime snapshot")
 	}
-	out := &client.WorldSnapshot{Tick: in.Tick}
+	// match_hold_us is diagnostics only (pv7 §5, D-4): copied as is, never checked (D-5).
+	out := &client.WorldSnapshot{Tick: in.Tick, MatchHoldUs: in.MatchHoldUs}
 	seen := make(map[uint64]*runtime.PlayerState, len(in.Players))
 	for _, p := range in.Players {
 		if p == nil || p.PlayerId == 0 || seen[p.PlayerId] != nil || !finite(p.X) || !finite(p.Y) ||
@@ -228,7 +229,10 @@ func ResultsForClient(in *runtime.ActionResults, rules *runtime.CombatRules) (*c
 	if in == nil || in.PlayerId == 0 || len(in.Decisions) > MaxActionBatch || !ValidRules(rules) {
 		return nil, ErrActions
 	}
-	out := &client.ActionResults{RetiredThrough: in.RetiredThrough}
+	// The refusal fields are diagnostics only (pv7 §5, D-6): copied as is, an
+	// unknown reason included (D-5).
+	out := &client.ActionResults{RetiredThrough: in.RetiredThrough, RefusedBatches: in.RefusedBatches,
+		LastRefusal: client.ActionRefusal(in.LastRefusal)}
 	seen := map[uint64]bool{}
 	for _, d := range in.Decisions {
 		if d == nil || d.ActionId == 0 || d.ResolvedTick == 0 || d.LifeGeneration == 0 || seen[d.ActionId] || d.Rejection < runtime.ShotRejection_REJECTION_NONE || d.Rejection > runtime.ShotRejection_REJECTION_MAGAZINE_FULL || d.HitKind < runtime.ShotHitKind_HIT_MISS || d.HitKind > runtime.ShotHitKind_HIT_PLAYER || d.Damage > rules.ShotDamage || (d.Kind != runtime.ActionKind_ACTION_SHOT && d.Kind != runtime.ActionKind_ACTION_RELOAD) {

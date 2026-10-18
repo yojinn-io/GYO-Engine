@@ -254,8 +254,7 @@ func (d *dropLedger) report(player uint64, now time.Time) *runtime.GatewayDropRe
 		r.Counts = append(r.Counts, &runtime.DropCount{Reason: reason, Total: s.totals[reason]})
 	}
 	for _, e := range s.samples {
-		dwell := min(max(now.Sub(e.at), 0), dropMaximumDwell)
-		r.Samples = append(r.Samples, &runtime.DropSample{Reason: e.reason, DwellUs: uint32(dwell / time.Microsecond),
+		r.Samples = append(r.Samples, &runtime.DropSample{Reason: e.reason, DwellUs: dwellMicros(e.at, now),
 			TransportSequence: e.transport, MovementEpoch: e.epoch, LifeGeneration: e.life,
 			FirstCommandSequence: e.firstCommand, LastCommandSequence: e.lastCommand,
 			FirstActionId: e.firstAction, LastActionId: e.lastAction, SnapshotTick: e.tick, ItemCount: e.items})
@@ -332,4 +331,11 @@ func (l *runtimeLink) ledger() *dropLedger {
 		return nil
 	}
 	return l.drops
+}
+
+// dwellMicros is the pv7 §2 dwell from an item's start to now in microseconds,
+// clamped at dropMaximumDwell: the one definition behind DropSample.dwell_us
+// and the gateway_dwell_us of the IPC input and action messages.
+func dwellMicros(start, now time.Time) uint32 {
+	return uint32(min(max(now.Sub(start), 0), dropMaximumDwell) / time.Microsecond)
 }

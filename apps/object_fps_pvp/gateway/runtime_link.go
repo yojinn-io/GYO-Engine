@@ -277,6 +277,9 @@ func (l *runtimeLink) input(in *runtime.PlayerInput, e dropEvent) error {
 	if in == nil || in.PlayerId == 0 || len(in.Commands) == 0 || len(in.Commands) > adapter.MaxPendingCommands {
 		return adapter.ErrInput
 	}
+	if e.transport != 0 { // diagnostics only (D96): never deduplicates or orders
+		in.ClientTransportSequence = &e.transport
+	}
 	message := envelope()
 	message.Message = &runtime.RuntimeEnvelope_Input{Input: in}
 	l.queueDataLocked(queuedMessage{message: message, input: true, player: in.PlayerId, commands: uint64(len(in.Commands)), event: e})
@@ -338,6 +341,9 @@ type linkWrite struct {
 	lane     inputLane
 	player   uint64
 	commands uint64
+	// The carrying Client datagram's receipt (the queue item's), for the
+	// message's gateway_dwell_us when its write starts; zero for a control.
+	received time.Time
 }
 
 // take empties the queue for one write pass, in arrival order.
@@ -348,9 +354,10 @@ func (l *runtimeLink) take() []linkWrite {
 	writes := make([]linkWrite, 0, len(l.queue))
 	for _, q := range l.queue {
 		if q.input {
-			writes = append(writes, linkWrite{message: q.message, lane: mainLane, player: q.player, commands: q.commands})
+			writes = append(writes, linkWrite{message: q.message, lane: mainLane, player: q.player, commands: q.commands,
+				received: q.event.at})
 		} else if q.actions {
-			writes = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})
+			writes = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player, received: q.event.at})
 		} else {
 			writes = append(writes, linkWrite{message: q.message})
 		}
@@ -376,6 +383,7 @@ func (l *runtimeLink) wroteLocked(w linkWrite) {
 // the Match may not have received them.
 func (l *runtimeLink) write(writes []linkWrite) error {
 	for i, w := range writes {
+		stampDwell(w)
 		payload, err := proto.Marshal(w.message)
 		select {
 		case <-l.done: // closing: the rest is abandoned, not written
@@ -413,6 +421,21 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 		}
 	}
 	return nil
+}
+
+// stampDwell sets a data message's gateway_dwell_us (pv7 §2, §5) as its write
+// starts: from the carrying datagram's receipt to now. Diagnostics only (D32):
+// nothing in the Gateway reads it back.
+func stampDwell(w linkWrite) {
+	if w.received.IsZero() {
+		return
+	}
+	dwell := dwellMicros(w.received, time.Now())
+	if input := w.message.GetInput(); input != nil {
+		input.GatewayDwellUs = &dwell
+	} else if actions := w.message.GetActions(); actions != nil {
+		actions.GatewayDwellUs = &dwell
+	}
 }
 
 func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnvelope), failed func(error)) {

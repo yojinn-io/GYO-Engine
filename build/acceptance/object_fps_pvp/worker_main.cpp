@@ -210,6 +210,7 @@ std::size_t CheckMaximumDatagrams() {
     }
     check(wire::Type::Input,movement);
     pb::WorldSnapshot snapshot;snapshot.set_tick(max64);
+    snapshot.set_match_hold_us(10000000);snapshot.set_gateway_hold_us(10000000); // pv7 §5 holds at their clamp
     for(unsigned n=0;n<AcceptanceMaxPlayers;++n) {
         auto* p=snapshot.add_players();p->set_player_id(max64-n);
         p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
@@ -223,7 +224,7 @@ std::size_t CheckMaximumDatagrams() {
     }
     check(wire::Type::Snapshot,snapshot);
     // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
-    Require(largest==1055,"maximum-field full-room snapshot is not 1055 bytes");
+    Require(largest==1065,"maximum-field full-room snapshot is not 1065 bytes");
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {

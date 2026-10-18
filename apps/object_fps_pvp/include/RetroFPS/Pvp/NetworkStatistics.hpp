@@ -57,4 +57,28 @@ struct WorkerStatisticsWindow final {
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 
+// Diagnostics only (pv7 §5; D32): per statistics window, the two holds the
+// Client's snapshots carried (the Match's and the Gateway's, D-4) and the
+// Match's latest refusal reply (D-6), as one cause records line. A missing or
+// out-of-range hold (pv7 §2 clamps a duration at 10 s) is counted and ignored
+// (D-5). Nothing reads it back.
+class ClientCauseRecords final {
+public:
+    void Snapshot(std::optional<std::uint32_t> matchHoldUs, std::optional<std::uint32_t> gatewayHoldUs);
+    // refusal: the reason's lower-case name as the line shows it.
+    void Results(std::uint64_t refusedBatches, std::string refusal);
+    // The line of the window that ends now; starts the next one (the refusal
+    // reply is the latest, so it carries over).
+    [[nodiscard]] std::string Line(std::uint64_t player, double windowSeconds);
+
+private:
+    struct Hold final {
+        std::uint64_t samples{}, missing{}, range{}, sum{}, maximum{};
+        void Add(std::optional<std::uint32_t> value);
+    };
+    std::uint64_t snapshots_{}, refused_{};
+    std::string refusal_{"unspecified"};
+    Hold match_, gateway_;
+};
+
 } // namespace fps::pvp

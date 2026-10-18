@@ -3342,8 +3342,8 @@
       "batch": "v71-drop-report",
       "what": "A sample's dwell is not clamped at 10 s",
       "file": "apps/object_fps_pvp/gateway/drop_report.go",
-      "find": "\t\tdwell := min(max(now.Sub(e.at), 0), dropMaximumDwell)\n",
-      "replace": "\t\tdwell := max(now.Sub(e.at), 0)\n",
+      "find": "\treturn uint32(min(max(now.Sub(start), 0), dropMaximumDwell) / time.Microsecond)\n",
+      "replace": "\treturn uint32(max(now.Sub(start), 0) / time.Microsecond)\n",
       "check": "go",
       "expect": "TestDropSampleDwellIsClamped"
     },
@@ -3412,8 +3412,8 @@
       "batch": "v71-edge-results-resend",
       "what": "An ACK-only batch behind the retirement does not ask for it again",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)\n",
-      "replace": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted)\n",
+      "find": "                else if(missed) AskLane(value.player_id());\n",
+      "replace": "",
       "check": "ipc",
       "expect": "CountResults\\(again\\) == 1 \\) is NOT correct"
     },
@@ -3422,8 +3422,8 @@
       "batch": "v71-edge-results-resend",
       "what": "A batch the host refuses is not answered with a results frame",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "                if(host.SubmitActionBatch(batch,value.acknowledged_through())!=ActionAdmission::Accepted || missed)\n",
-      "replace": "                if(static_cast<void>(host.SubmitActionBatch(batch,value.acknowledged_through())),missed)\n",
+      "find": "                    Refused(value.player_id(),refusal);\n",
+      "replace": "                    static_cast<void>(refusal);\n",
       "check": "ipc",
       "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
     },
@@ -3432,8 +3432,8 @@
       "batch": "v71-edge-results-resend",
       "what": "A malformed batch is not answered with a results frame",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);\n                    AskLane(value.player_id());\n",
-      "replace": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);\n",
+      "find": "                    Refused(value.player_id(),IngressActionRejection::Malformed);\n",
+      "replace": "",
       "check": "ipc",
       "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
     },
@@ -3452,8 +3452,8 @@
       "batch": "v71-edge-results-resend",
       "what": "An over-long batch is not answered with a results frame",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);\n                    AskLane(value.player_id());\n",
-      "replace": "                    host.NoteWireRejection(value.player_id(),IngressActionRejection::OverBatch,shots);\n",
+      "find": "                    Refused(value.player_id(),IngressActionRejection::OverBatch);\n",
+      "replace": "",
       "check": "ipc",
       "expect": "CountResults\\(answer\\) == 1 \\) is NOT correct"
     },
@@ -3812,7 +3812,7 @@
       "batch": "v71-edge-actions-passthrough",
       "what": "The write pass takes action batches as controls: written but not counted",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n",
+      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player, received: q.event.at})\n",
       "replace": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message})\n",
       "check": "go",
       "expect": "handed \\d+ != written"
@@ -3882,8 +3882,8 @@
       "batch": "v71-edge-actions-passthrough",
       "what": "A write pass sends the action batches after every other message",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n",
-      "replace": "\t\t} else if q.actions {\n\t\t\tdefer func(q queuedMessage) {\n\t\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player})\n\t\t\t}(q)\n",
+      "find": "\t\t} else if q.actions {\n\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player, received: q.event.at})\n",
+      "replace": "\t\t} else if q.actions {\n\t\t\tdefer func(q queuedMessage) {\n\t\t\t\twrites = append(writes, linkWrite{message: q.message, lane: actionsLane, player: q.player, received: q.event.at})\n\t\t\t}(q)\n",
       "check": "go",
       "expect": "want the arrival order"
     },
@@ -4146,6 +4146,186 @@
       "replace": "        check(gateway_counters['max_session_window_packets'] <= 120, 'Gateway actual Session counting exceeded120')\n        check(gateway_counters['rate_limited_packets'] == 0, 'Gateway actual Session rate limiter discarded packets')\n",
       "check": "action_evidence",
       "expect": "FAIL: test_a_window_count_over_120_without_refusals_passes_the_limiter_check"
+    },
+    {
+      "id": "v71cr-dwell-at-pass-start",
+      "batch": "v71-cause-records",
+      "what": "Every message of a write pass gets its dwell when the pass starts, not when its own write starts",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tfor i, w := range writes {\n\t\tstampDwell(w)\n",
+      "replace": "\tfor _, w := range writes {\n\t\tstampDwell(w)\n\t}\n\tfor i, w := range writes {\n",
+      "check": "go",
+      "expect": "does not include the first write's 500 ms"
+    },
+    {
+      "id": "v71cr-input-sequence-dropped",
+      "batch": "v71-cause-records",
+      "what": "An input message does not carry its datagram's GYOP sequence",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\tin.ClientTransportSequence = &e.transport\n\t}\n\tmessage := envelope()\n\tmessage.Message = &runtime.RuntimeEnvelope_Input{Input: in}",
+      "replace": "\t}\n\tmessage := envelope()\n\tmessage.Message = &runtime.RuntimeEnvelope_Input{Input: in}",
+      "check": "go",
+      "expect": "first input: dwell"
+    },
+    {
+      "id": "v71cr-actions-dwell-dropped",
+      "batch": "v71-cause-records",
+      "what": "An action batch is written without its dwell",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t} else if actions := w.message.GetActions(); actions != nil {\n\t\tactions.GatewayDwellUs = &dwell\n\t}",
+      "replace": "\t}",
+      "check": "go",
+      "expect": "actions: dwell"
+    },
+    {
+      "id": "v71cr-gateway-hold-at-read",
+      "batch": "v71-cause-records",
+      "what": "The Gateway hold is measured to the reading, not to each player's write",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\thold := dwellMicros(frame.read, time.Now())\n",
+      "replace": "\thold := dwellMicros(frame.read, frame.read)\n",
+      "check": "go",
+      "expect": "holds .* then"
+    },
+    {
+      "id": "v71cr-match-hold-not-copied",
+      "batch": "v71-cause-records",
+      "what": "The adapter drops the Match hold",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tout := &client.WorldSnapshot{Tick: in.Tick, MatchHoldUs: in.MatchHoldUs}\n",
+      "replace": "\tout := &client.WorldSnapshot{Tick: in.Tick}\n",
+      "check": "go",
+      "expect": "became"
+    },
+    {
+      "id": "v71cr-refusal-not-copied",
+      "batch": "v71-cause-records",
+      "what": "The adapter drops the refusal reply",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tout := &client.ActionResults{RetiredThrough: in.RetiredThrough, RefusedBatches: in.RefusedBatches,\n\t\tLastRefusal: client.ActionRefusal(in.LastRefusal)}\n",
+      "replace": "\tout := &client.ActionResults{RetiredThrough: in.RetiredThrough}\n",
+      "check": "go",
+      "expect": "refusal .* became"
+    },
+    {
+      "id": "v71cr-leave-client-request-unnamed",
+      "batch": "v71-cause-records",
+      "what": "The HTTP leave sends no reason",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\te.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID,\n\t\t\tReason: runtime.LeaveReason_LEAVE_REASON_CLIENT_REQUEST}}\n",
+      "replace": "\t\te.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}\n",
+      "check": "go",
+      "expect": "without the client request reason"
+    },
+    {
+      "id": "v71cr-join-timeout-as-session",
+      "batch": "v71-cause-records",
+      "what": "A join timeout's Leave names a session timeout",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t\treason, leave = \"join_timeout\", runtime.LeaveReason_LEAVE_REASON_JOIN_TIMEOUT\n",
+      "replace": "\t\t\t\treason = \"join_timeout\"\n",
+      "check": "go",
+      "expect": "join timeout reason"
+    },
+    {
+      "id": "v71cr-match-hold-ipc-clock",
+      "batch": "v71-cause-records",
+      "what": "The Match hold ends on the IPC's real clock, not the host's",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "host.Now()-*frame.publishedAt",
+      "replace": "Clock::now()-*frame.publishedAt",
+      "check": "ipc",
+      "expect": "all_of\\(outcome\\.holds"
+    },
+    {
+      "id": "v71cr-match-hold-unset",
+      "batch": "v71-cause-records",
+      "what": "A written snapshot carries no Match hold",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            frame.message.mutable_snapshot()->set_match_hold_us(",
+      "replace": "            static_cast<void>(",
+      "check": "ipc",
+      "expect": "all_of\\(outcome\\.holds"
+    },
+    {
+      "id": "v71cr-match-hold-at-take",
+      "batch": "v71-cause-records",
+      "what": "The Match hold starts when the IPC took the snapshot, not at its publication",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    published==Clock::time_point::min()?std::nullopt:std::optional(published)};",
+      "replace": "                    published==Clock::time_point::min()?std::nullopt:std::optional(host.Now())};",
+      "check": "ipc",
+      "expect": "any_of\\(outcome\\.holds"
+    },
+    {
+      "id": "v71cr-refusal-uncounted",
+      "batch": "v71-cause-records",
+      "what": "A refused batch is not counted for the Client",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            ++lane->second.refused;lane->second.lastRefusal=RefusalForWire(reason);lane->second.asked=true;",
+      "replace": "            lane->second.lastRefusal=RefusalForWire(reason);lane->second.asked=true;",
+      "check": "ipc",
+      "expect": "refused_batches\\(\\) == \\+\\+refusedSoFar"
+    },
+    {
+      "id": "v71cr-refusal-unnamed",
+      "batch": "v71-cause-records",
+      "what": "A refused batch's reason is not named",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            ++lane->second.refused;lane->second.lastRefusal=RefusalForWire(reason);lane->second.asked=true;",
+      "replace": "            ++lane->second.refused;lane->second.asked=true;",
+      "check": "ipc",
+      "expect": "last_refusal\\(\\) == \\*reason"
+    },
+    {
+      "id": "v71cr-unspecified-leave-kept",
+      "batch": "v71-cause-records",
+      "what": "A Leave without a known reason does not remove the player",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                if(!host.QueueLeave(++requestSequence,message.leave().player_id())) return \"leave refused by the Match queue\";",
+      "replace": "                if(name!=\"unspecified\" && !host.QueueLeave(++requestSequence,message.leave().player_id())) return \"leave refused by the Match queue\";",
+      "check": "ipc",
+      "expect": "the expected frame did not arrive"
+    },
+    {
+      "id": "v71cr-dwell-veto",
+      "batch": "v71-cause-records",
+      "what": "The Match drops an input whose dwell is out of range (a diagnostic with a veto, D-5)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                const auto& p=message.input();\n",
+      "replace": "                const auto& p=message.input();\n                if(p.gateway_dwell_us()>10'000'000) continue;\n",
+      "check": "ipc",
+      "expect": "without\\.(snapshot|decisions|joins) == with"
+    },
+    {
+      "id": "v71cr-sequence-gap-off-by-one",
+      "batch": "v71-cause-records",
+      "what": "A sequence gap counts the arriving sequence too",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "            if(p.largest) p.sequenceGaps+=*sequence-p.largest-1;",
+      "replace": "            if(p.largest) p.sequenceGaps+=*sequence-p.largest;",
+      "check": "ipc",
+      "expect": "sequence_gaps=5"
+    },
+    {
+      "id": "v71cr-dwell-range-accepted",
+      "batch": "v71-cause-records",
+      "what": "An out-of-range dwell is counted as a sample",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        else if(*dwell>10'000'000) ++p.dwellRange; // pv7 §2 clamps it\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "dwell_range=1"
+    },
+    {
+      "id": "v71cr-client-hold-range-accepted",
+      "batch": "v71-cause-records",
+      "what": "The Client counts an out-of-range hold as a sample",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "    else if (*value > 10'000'000) ++range;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "gateway_hold_range=1"
     }
   ]
 }

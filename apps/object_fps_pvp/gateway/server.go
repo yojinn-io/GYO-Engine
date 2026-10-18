@@ -67,10 +67,13 @@ type outbound struct {
 	tick        uint64
 }
 
-// snapshotFrame is a Client snapshot waiting for the send loop, with its tick.
+// snapshotFrame is a Client snapshot waiting for the send loop, with its tick
+// and when the Gateway read its IPC frame: each player's write encodes it with
+// that player's gateway_hold_us (pv7 §5, D-4; diagnostics only).
 type snapshotFrame struct {
-	payload []byte
-	tick    uint64
+	snapshot *client.WorldSnapshot
+	read     time.Time
+	tick     uint64
 }
 
 type Server struct {
@@ -390,7 +393,8 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	var failure error
 	if p.phase != reserved {
 		e := envelope()
-		e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}
+		e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID,
+			Reason: runtime.LeaveReason_LEAVE_REASON_CLIENT_REQUEST}}
 		failure = s.link.control(e)
 	}
 	log.Printf("player left player=%d", p.playerID)
@@ -671,7 +675,12 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		// ordered and the Client applies only a newer tick. The Gateway keeps
 		// no copy of the Match's cursors.
 		s.mu.Unlock()
+		read := time.Now()
+		// The bound with the largest hold any write can give it.
+		widest := uint32(dropMaximumDwell / time.Microsecond)
+		out.GatewayHoldUs = &widest
 		payload, err := proto.Marshal(out)
+		out.GatewayHoldUs = nil
 		if err != nil {
 			s.runtimeFailed(err)
 			return
@@ -680,7 +689,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			s.runtimeFailed(errors.New("snapshot exceeds datagram limit"))
 			return
 		}
-		frame := snapshotFrame{payload: payload, tick: out.Tick}
+		frame := snapshotFrame{snapshot: out, read: read, tick: out.Tick}
 		select {
 		case s.snapshotOut <- frame:
 		default:
@@ -824,8 +833,15 @@ func (s *Server) snapshotForPeer(remaining []uint64, frame snapshotFrame) (snaps
 	if !s.available || p == nil || p.phase != active {
 		return frame, outbound{}
 	}
+	// This player's hold: from reading the IPC frame to this write (pv7 §5).
+	hold := dwellMicros(frame.read, time.Now())
+	frame.snapshot.GatewayHoldUs = &hold
+	payload, err := proto.Marshal(frame.snapshot)
+	if err != nil {
+		return frame, outbound{}
+	}
 	p.outSequence++
-	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, frame.payload)
+	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
 	if err != nil {
 		return frame, outbound{}
 	}
@@ -870,14 +886,14 @@ func (s *Server) expireAt(now time.Time) {
 		sessionExpired := p.session.Expired(now, sessionTimeout)
 		joinExpired := p.phase == joining && now.Sub(p.joinStarted) >= joinTimeout
 		if sessionExpired || joinExpired {
-			reason := "session_timeout"
+			reason, leave := "session_timeout", runtime.LeaveReason_LEAVE_REASON_SESSION_TIMEOUT
 			if joinExpired {
-				reason = "join_timeout"
+				reason, leave = "join_timeout", runtime.LeaveReason_LEAVE_REASON_JOIN_TIMEOUT
 			}
 			log.Printf("player expired player=%d reason=%s", p.playerID, reason)
 			if p.phase != reserved {
 				e := envelope()
-				e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}
+				e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID, Reason: leave}}
 				if err := s.link.control(e); err != nil {
 					failure = err
 				}

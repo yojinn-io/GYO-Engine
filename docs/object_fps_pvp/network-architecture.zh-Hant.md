@@ -747,7 +747,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - results slot：每位玩家上次送出結果的時刻與至多 1 則待送的結果框架（latest-wins）。
 - synchronization：mutex 與喚醒用的 channel。
 - diagnostic state：時鐘同步、回聲、丟棄帳本、統計；判定路徑不得讀取（protocol-v7 §2「診斷不進判定」）。
-- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍），只在它被丟棄時拿來回報。它隨項目進出佇列，不被任何判定讀取，項目離開佇列就消失；所以和 D105「單次呼叫的脈絡不得跨資料包保留」不衝突，是獨立的允許類別（N3，D120）。
+- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍；snapshot 讀到 IPC 框架的時刻），在它被丟棄時拿來回報，或在寫出時算成 dwell、hold 填進同一則訊息（`cause-records`，D125）；都不被判定讀取。它隨項目進出佇列，項目離開佇列就消失；所以和 D105「單次呼叫的脈絡不得跨資料包保留」不衝突，是獨立的允許類別（N3，D120）。
 - per-call context：處理一個 datagram、frame 或請求期間記下的值（例如 `Server.datagram`、讀取緩衝區）；不得被下一個 datagram 的判斷讀取。
 - test seam：套件變數與注入的時鐘；正式路徑只用預設值。
 - immutable table：鍵清單、原因表、sentinel error。

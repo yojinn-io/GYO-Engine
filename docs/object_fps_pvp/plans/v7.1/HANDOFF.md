@@ -39,9 +39,9 @@
 
 - **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`cause-records`（E2、動作拒收回覆、Leave 原因），等你說開始。
+- **下一步**：`cause-records` 實作完成，等四平台 L1；之後是 `hitbox-fields`，等你說開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-rate-limit` 的 L2 通過（168 項、無停止、L1～L4 成立），`edge-actions-passthrough` 與 edge 系列完成；K1 已處理。
+- **最後更新**：2026-10-18，`cause-records` 實作、測試與突變完成（本機 CTest 72／72、突變 18／18），已推送並觸發 L1。
 
 ## 閱讀入口
 
@@ -93,6 +93,8 @@
 | D121 | （2026-10-18）K1 採用方案 (a)：通用層 session 的限速改為 token bucket（每秒補 120、容量 120），改 network-architecture 的契約條文；修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，停下等使用者核准宣告 | 使用者：「採用方案 (a)：token bucket，每秒補 120、容量 120；改通用層與 network-architecture:950 的契約條文。修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，再停下等我核准宣告。」 |
 | D122 | （2026-10-18）M1 照 (a)：凍結分析器三處的 Gateway 窗口計數檢查（`max_session_window_packets ≤120`）換成限速器自己的拒收計數 `rate_limited_packets`＝0，gateway 模式也判；窗口計數只記錄；補測試與突變、重新凍結，之後寫工具與乾跑，停下等使用者核准宣告 | 使用者：「照 (a)：三處的窗口計數檢查換成 rate_limited_packets＝0（gateway 模式也判），max_session_window_packets 只記錄；補測試與突變、重新凍結，然後寫工具與乾跑，再停下等我核准宣告。」 |
 | D123 | （2026-10-18）核准 `edge-rate-limit` 的 L2 事前宣告第 3 版（[edge-rate-limit-l2.md](edge-rate-limit-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-rate-limit 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
+| D124 | （2026-10-18）開始 `cause-records`（檔位 high，估 8～9 h）：protocol-v7 §5 的 dwell、Client 的 GYOP 序號（D96）、snapshot 的兩段停留（D-4）、動作拒收回覆（D-6）、Leave 原因；行為不變（§9），以測試、突變、差分測試證明 | 使用者：「開始」 |
+| D125 | （2026-10-18）核准 `cause-records` 的 Gateway Architecture Delta：`linkWrite` 加 `received`（照抄佇列項目的收包時刻，寫出時算 dwell）；`snapshotFrame` 加讀取 IPC 框架的時刻與解碼後的 client snapshot（每位玩家寫出前填 `gateway_hold_us` 重新編碼）；network-architecture §7「diagnostics carried with a queue item」的「只在它被丟棄時拿來回報」改成「被丟棄時回報，或在寫出時算成 dwell 填進同一則 IPC 訊息；都不被判定讀取」 | 使用者：「同意：linkWrite 加 received、snapshotFrame 加讀取時刻與解碼後的 snapshot（每位玩家重新編碼），並改 network-architecture §7 那一句條文。繼續 cause-records。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -457,6 +459,18 @@
   - L1（`ed3481c`，run 39102188643）：windows-x64、linux-x64、macos-arm64 通過；**macos-x64 不通過**，`object_fps_pvp.cpu` 的「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」（`MovementRecoveryTests.cpp:456`，product 路徑 fps 30、RTT 0、bootstrap gap 108、worker 4000、authority 6000：`unexpectedRejections` 1）。`ed3481c` 對 `c82ecc5` 只改 Python；同樣的 C++ 在 `7bb1f84`（run 39100385472）的 macos-x64 通過，兩次的 runner 映像相同（macos-15-arm64 上以 Rosetta 2 跑 x64）。測試用注入的時鐘與固定種子，原則上是決定性的；本機（Intel x64）單案例 200 次、整個執行檔 20 次都 0 失敗。原因未切分（實作的非決定性、測試，或 Rosetta 環境），已只重跑失敗的 job；原本的失敗保留記錄（§14.1）。重跑（attempt 2）macos-x64 與 CI gate 通過：同一份程式碼結果會變，原因仍未切分，列入未結事項 `N-movement-recovery-flake`。
 
 - 2026-10-18：`edge-rate-limit` 的 L2 session（D123；`build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-20261018/`）。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix；跑後重新打開。168 項全部跑完、沒有停止、完整性問題 0，判定通過（L1～L4 成立）。K1a 168 項全部 0 拒收；K1b gateway-1000ms 10 跑次全部成立（停頓中每位玩家恰好 1 次 starvation，恢復後 0 次）。L2 的 gateway-1000ms Expired B [2,3,3,3,3]、A [2,3,2,3,3]；P7 gateway-1000ms 156～160、backpressure 的 Gateway 層 120～122（只記錄）。受干擾 2 項。結果寫在宣告第 9 節。`edge-actions-passthrough` 與 `edge-rate-limit` 完成，edge 系列完成；README 同步。
+
+- 2026-10-18：`cause-records` 開始（D124；檔位 high；估 8～9 h）。範圍與測試清單照 protocol-v7 §5、§2、§9 與 pv7-design 的測試清單。
+
+- 2026-10-18：`cause-records` 的實作（D124、D125；19:00 開始，19:52 本機驗收完成，約 1 h，估 8～9 h 之內）。
+  - proto：runtime `PlayerInput` 6、7、`ActionBatch` 4、5（dwell、Client 的 GYOP 序號），`WorldSnapshot` 4（`match_hold_us`），`ActionResults` 4、5（`refused_batches`、`last_refusal`），`PlayerLeave` 2（`LeaveReason`）；client `WorldSnapshot` 4、5，`ActionResults` 3、4；`ActionRefusal` 兩份同號。Go 產生碼以 build 的 protoc 36.2 與 module 固定的 protoc-gen-go v1.36.11 重新產生（schema 不變時重新產生無差異，已先確認）。
+  - Gateway：`stampDwell`（writer 開始 Marshal 時）、`dwellMicros`（與 DropSample 共用的唯一定義）、交給 link 時填 Client 序號；`snapshotFrame` 改存解碼後的 snapshot 與讀取時刻，送給每位玩家前填 `gateway_hold_us` 重新編碼，讀取端的大小檢查以 hold 上限計算；adapter 照抄 `match_hold_us` 與拒收兩欄；三條 Leave 路徑帶原因。白名單測試：`linkWrite.received`、`snapshotFrame.read`（diagnostics carried with a queue item）、`snapshotFrame.snapshot`（queue），`snapshotFrame.payload` 刪除。network-architecture §7 的類別說明照 D125 改寫（另加上 snapshot 的讀取時刻與 hold，同屬 D125 核准的範圍）。
+  - Match：Host 的 `SubmitActionBatch` 以輸出參數交出拒收原因、`TakeSnapshot` 帶回發布時刻、`Now()` 提供 Host 的時鐘（判定不變；呼叫點不需改）；IpcHost 在選中 snapshot 時才編碼並填 `match_hold_us`，動作 lane 累計拒收與最後原因，`gw_transport` 行族（每 10 秒與結束時），Leave 行尾加 `reason=` 與違規行。Client：`ClientCauseRecords`（`NetworkStatistics`），每個統計窗口一行 cause records。日誌形狀寫進 protocol-v7 §5「實作與紀錄」。
+  - 最大的 4 人 snapshot datagram 1055 → 1065 B（兩段停留在 10 s 上限時各 5 B；pv7-design 估的是 18 B）。Go 的 capacity 測試與 worker probe（`worker_main.cpp`，不在凍結清單）同步。
+  - 測試：Go 新增 `cause_records_test.go`（dwell 一對一與序號、10 s 上限、同一輪裡前一則寫出阻塞 500 ms 時後一則的 dwell、每位玩家各自的 hold 與中途取代、大小上限、D32 的符號守衛涵蓋 session 套件與 admission／逾時／路由函式）、adapter 的照抄與兩份列舉一致；既有 3 個 Leave 測試加原因檢查；2 個 snapshot 測試的 3 處位元組比對改成忽略各自的 hold（§14.4：因為每位玩家的位元組本來就不同）。C++：差分測試（極端 dwell、序號、所有 Leave 原因：決定、join 結果與最後的 snapshot 逐位元相同）、Match hold（每份都有、在 Host 時鐘上 <1 s、至少一份 ≥1 tick）、拒收累計與原因、Leave 原因與違規、序號缺口與 dwell 統計、拒收名稱與 Host 一致、Host 交出 Resetting 與發布時刻、Client 行的格式。D32 原始碼守衛加入這批的符號。
+  - 突變：新增 18 個（`v71cr-*`，Gateway 8、Match 9、Client 1）全部殺死；7 個既有突變的 find 跟著程式碼更新（意圖不變）。`v71cr-match-hold-at-take` 與對應測試的「至少一份 ≥1 tick」依賴 IPC 執行緒在測試推進假時鐘之後才選框（實務上幾乎必然，理論上非決定性）。
+  - 沒有測到的：讀取端「snapshot 超過 datagram 上限」在合法的 4 人 snapshot 下到不了（最大 1065 B），hold 上限計入大小檢查的程式沒有突變。
+  - 驗收（L1，本機）：CTest 72／72、Go `-race`、突變 18／18。
 
 ## 未結事項
 

@@ -299,6 +299,14 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 - `PlayerLeave.reason`（runtime，2，LeaveReason）：`LEAVE_REASON_UNSPECIFIED` 0、`CLIENT_REQUEST` 1（Client 經 HTTP leave 離開，包括 Welcome 時 arena 不符後的釋放）、`SESSION_TIMEOUT` 2、`JOIN_TIMEOUT` 3。逐出、join 被拒、runtime 失效本來就不送 Leave。
 - Match 收到 UNSPECIFIED 或未知值時照常移除玩家，記為 unspecified 並計一次違規。Match 處理 Leave 的方式不因原因不同而改變。
 
+### 實作與紀錄（`cause-records`，2026-10-18）
+
+- proto 列舉名稱一律帶前綴：`LEAVE_REASON_*`、`ACTION_REFUSAL_*`（上面的簡寫是同一組值）。`ActionRefusal` 的值是 `IngressActionRejection` 的索引加 1，由 IpcHost 的 `static_assert` 逐值守住。
+- Gateway：dwell 在 link 的 writer 開始 Marshal 這則訊息時填（`stampDwell`，與 `DropSample.dwell_us` 共用 `dwellMicros`）；Client 的 GYOP 序號在交給 link 時從資料包的 header 填；`gateway_hold_us` 在送給每位玩家前填並重新編碼；snapshot 的大小檢查以 hold 的上限（10 s）計算。`match_hold_us`、拒收兩欄由 adapter 原樣照抄（不檢查，D-5）。
+- Match：Host 的 `TakeSnapshot` 帶回發布時刻，`Now()` 提供 Host 的時鐘；IpcHost 選中 snapshot 要寫出時才編碼並填 `match_hold_us`。`SubmitActionBatch` 以輸出參數交出拒收原因（Resetting 只在這裡分得出來）。Host 的判定與介面上的判定參數不變。
+- 日誌（只加鍵或新行族）：Match 的 `leave player=<id>` 行尾加 `reason=<client_request|session_timeout|join_timeout|unspecified>`；缺少或未知時另寫 `leave violation player=<id> value=<n> count=<累計>`。Match 新行族 `gw_transport player=<id> window_ms final messages sequence_missing sequence_gaps sequence_late largest_sequence dwell_samples dwell_missing dwell_range dwell_max_us dwell_mean_us`（每 10 秒與 session 結束時；序號缺口是原始值，扣掉 Hello 與回報的丟棄要配合 Gateway 的計數離線做）。Client 新行族 `[ObjectFPS/PvP] cause records player window_s snapshots match_hold_{samples,missing,range,max_us,mean_us} gateway_hold_{…} refused_batches last_refusal`（每個統計窗口）。
+- 4 人 snapshot 的最大 datagram 由 1055 B 變成 1065 B（兩段停留都在 10 s 上限時各 5 B；Go 的 capacity 測試與 worker probe 同步）。
+
 ## 6. 射擊照命令步判定（A1）
 
 判定語意只在 `a1-shot-step` 生效；欄位依 D-2 在 `hitbox-fields` 加入，先做影子量測。

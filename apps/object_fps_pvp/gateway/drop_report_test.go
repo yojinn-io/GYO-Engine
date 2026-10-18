@@ -251,10 +251,10 @@ func TestReplacedSnapshotIsCountedForThePlayersStillToServe(t *testing.T) {
 		peer := newActiveSession(t, id)
 		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
 	}
-	frame := snapshotFrame{payload: []byte{1}, tick: 5}
+	frame := snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 5}, read: time.Now(), tick: 5}
 	players := []uint64{1, 2, 3, 4}
 	frame, _ = s.snapshotForPeer(players, frame) // player 1 gets tick 5
-	s.snapshotOut <- snapshotFrame{payload: []byte{2}, tick: 6}
+	s.snapshotOut <- snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 6}, read: time.Now(), tick: 6}
 	for i := 1; i < len(players); i++ {
 		frame, _ = s.snapshotForPeer(players[i:], frame)
 	}

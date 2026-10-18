@@ -286,3 +286,42 @@ TEST_CASE("PvP host records each wait for its mutex") {
     CHECK(statistics.lockWaits.step.Count() == 1);
     CHECK(statistics.lockWaits.input.Max() >= 10ms);
 }
+
+// pv7 §5 (D-6): the I/O layer learns why the host refused a batch, as the
+// host counts it; a reset in progress is Resetting, not an unknown player.
+TEST_CASE("PvP combat host tells the I/O layer the reason of each refused batch") {
+    CombatHostFixture fixture;
+    auto reason = IngressActionRejection::Count;
+    CHECK(fixture.host.SubmitActionBatch(Shot(1, 1, 9), 0, &reason) == ActionAdmission::InvalidPlayer);
+    CHECK(reason == IngressActionRejection::InvalidPlayer);
+    CHECK(fixture.host.SubmitActionBatch(Shot(1), 5, &reason) == ActionAdmission::InvalidBatch);
+    CHECK(reason == IngressActionRejection::InvalidBatch);
+    reason = IngressActionRejection::Count;
+    CHECK(fixture.host.SubmitActionBatch(Shot(1), 0, &reason) == ActionAdmission::Accepted);
+    CHECK(reason == IngressActionRejection::Count); // an accepted batch leaves it untouched
+    CHECK(fixture.host.SubmitActionBatch(Shot(1, 2), 0, &reason) == ActionAdmission::Conflict);
+    CHECK(reason == IngressActionRejection::Conflict);
+    auto cleared = fixture.host.RequestReset();
+    CHECK(fixture.host.SubmitActionBatch(Shot(2), 0, &reason) == ActionAdmission::InvalidPlayer);
+    CHECK(reason == IngressActionRejection::Resetting);
+    CHECK(fixture.host.SubmitActionBatch(Shot(3), 0) == ActionAdmission::InvalidPlayer); // without the out-parameter
+    static_cast<void>(fixture.host.Advance(MovementTickSeconds));
+    REQUIRE(cleared.wait_for(0s) == std::future_status::ready);
+}
+
+// pv7 §5 (D-4): the host hands over a snapshot with its publication time on
+// the host's clock, the start of both its reference age and the Match hold.
+TEST_CASE("PvP combat host hands over each snapshot with its publication time") {
+    CombatHostFixture fixture;
+    static_cast<void>(fixture.host.TakeSnapshot());
+    fixture.now += 3s;
+    const auto published = fixture.now;
+    fixture.Step();
+    fixture.now += 40ms; // taken later: the publication time stays
+    CHECK(fixture.host.Now() == fixture.now);
+    auto at = std::chrono::steady_clock::time_point::min();
+    const auto snapshot = fixture.host.TakeSnapshot(&at);
+    REQUIRE(snapshot);
+    CHECK(at == published);
+    CHECK_FALSE(fixture.host.TakeSnapshot(&at)); // nothing new: at is not read
+}

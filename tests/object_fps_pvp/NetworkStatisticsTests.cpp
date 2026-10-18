@@ -75,6 +75,27 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
           " cpu_s=na other_version_datagrams=3"));
 }
 
+// pv7 §5: the Client's cause records line counts each hold's samples, missing
+// and out-of-range values apart, keeps the latest refusal reply across
+// windows and starts each window empty.
+TEST_CASE("The Client's cause records line counts the holds and keeps the latest refusal") {
+    ClientCauseRecords records;
+    CHECK(records.Line(0, 10.0) ==
+          "[ObjectFPS/PvP] cause records player=0 window_s=10.000 snapshots=0 match_hold_samples=0 match_hold_missing=0 "
+          "match_hold_range=0 match_hold_max_us=0 match_hold_mean_us=0 gateway_hold_samples=0 gateway_hold_missing=0 "
+          "gateway_hold_range=0 gateway_hold_max_us=0 gateway_hold_mean_us=0 refused_batches=0 last_refusal=unspecified");
+    records.Snapshot(100, 10'000'000);
+    records.Snapshot(300, 10'000'001);
+    records.Snapshot(std::nullopt, 50);
+    records.Results(3, "resetting");
+    CHECK(records.Line(4, 9.5) ==
+          "[ObjectFPS/PvP] cause records player=4 window_s=9.500 snapshots=3 match_hold_samples=2 match_hold_missing=1 "
+          "match_hold_range=0 match_hold_max_us=300 match_hold_mean_us=200 gateway_hold_samples=2 gateway_hold_missing=0 "
+          "gateway_hold_range=1 gateway_hold_max_us=10000000 gateway_hold_mean_us=5000025 refused_batches=3 "
+          "last_refusal=resetting");
+    CHECK(records.Line(4, 10.0).ends_with(" gateway_hold_mean_us=0 refused_batches=3 last_refusal=resetting"));
+}
+
 TEST_CASE("CPU time readings never decrease and grow with work on the calling thread") {
     const auto process = ProcessCpuSeconds();
     const auto thread = CurrentThreadCpuSeconds();

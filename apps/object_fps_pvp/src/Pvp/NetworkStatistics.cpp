@@ -1,9 +1,11 @@
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <locale>
 #include <sstream>
+#include <utility>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -130,6 +132,44 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
     Optional(line, window.cpuSeconds, 3);
     // Added in pv7 (v7.1 version-errors), so it comes last.
     line << " other_version_datagrams=" << window.otherVersionDatagrams;
+    return line.str();
+}
+
+void ClientCauseRecords::Hold::Add(const std::optional<std::uint32_t> value) {
+    if (!value) ++missing;
+    else if (*value > 10'000'000) ++range;
+    else {
+        ++samples;
+        sum += *value;
+        maximum = std::max<std::uint64_t>(maximum, *value);
+    }
+}
+
+void ClientCauseRecords::Snapshot(const std::optional<std::uint32_t> matchHoldUs,
+                                  const std::optional<std::uint32_t> gatewayHoldUs) {
+    ++snapshots_;
+    match_.Add(matchHoldUs);
+    gateway_.Add(gatewayHoldUs);
+}
+
+void ClientCauseRecords::Results(const std::uint64_t refusedBatches, std::string refusal) {
+    refused_ = refusedBatches;
+    refusal_ = std::move(refusal);
+}
+
+std::string ClientCauseRecords::Line(const std::uint64_t player, const double windowSeconds) {
+    auto line = LineStream();
+    line << "[ObjectFPS/PvP] cause records player=" << player << " window_s=" << std::fixed << std::setprecision(3)
+         << windowSeconds << " snapshots=" << snapshots_;
+    for (const auto& [name, hold] : {std::pair{"match_hold", &match_}, std::pair{"gateway_hold", &gateway_}}) {
+        line << ' ' << name << "_samples=" << hold->samples << ' ' << name << "_missing=" << hold->missing << ' ' << name
+             << "_range=" << hold->range << ' ' << name << "_max_us=" << hold->maximum << ' ' << name
+             << "_mean_us=" << (hold->samples ? hold->sum / hold->samples : 0);
+    }
+    line << " refused_batches=" << refused_ << " last_refusal=" << refusal_;
+    snapshots_ = 0;
+    match_ = {};
+    gateway_ = {};
     return line.str();
 }
 

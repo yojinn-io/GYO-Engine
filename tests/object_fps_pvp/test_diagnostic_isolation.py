@@ -25,6 +25,10 @@ DECIDING = [
 DIAGNOSTIC_SYMBOLS = [
     'ClockSync', 'ClockSample', 'ClockStamp', 'ClockWindow', 'has_clock', 'mutable_clock', '.clock()',
     'GatewayDropReport', 'DropReason', 'DropReports', 'drop_report',
+    # cause-records (pv7 §5): dwell, the Client's sequence, both holds, the
+    # refusal reply and the Leave reason.
+    'gateway_dwell_us', 'client_transport_sequence', 'match_hold_us', 'gateway_hold_us', 'refused_batches',
+    'last_refusal', 'ActionRefusal', 'LeaveReason', 'CauseRecords',
 ]
 
 
