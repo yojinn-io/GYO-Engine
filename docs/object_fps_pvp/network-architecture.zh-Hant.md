@@ -774,7 +774,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 
 **目前的已知項目**（只記錄）：
 
-- K1（v7.1 D118、D119）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。限速屬於允許的 session 類，算法在 `edge-rate-limit` 重新評估。
+- K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
 
 ### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
 
@@ -995,7 +995,7 @@ Client game thread                          Client worker
                  movement 60 Hz + action/ACK <=30 Hz + Hello ~1 Hz
                                                        v
 Product Gateway / Adapter
-  authenticated Session -> PlayerId; fixed-window cap 120 packets/s
+  authenticated Session -> PlayerId; token bucket 120 packets/s, 120 deep (v7.1 D121; was a fixed window)
   bounded request/result ledgers; rotate <=8 entries; never ACK for Client
                                                        | TCP runtime v4
                                                        v
@@ -1011,7 +1011,7 @@ Product Host: atomic shots + ACK handoff -> Authority Tick
                                      Gateway -> Client worker -> Drain
 ```
 
-Gateway 每個 Session 每秒 120 包的固定窗口上限照舊；第 08c 批起被限制的包依玩家與種類
+Gateway 每個 Session 的封包上限是每秒 120 包（v7.1 D121 起改為 token bucket：每秒補 120、容量 120，任何長度 T 的區間最多 120T＋120 包；原為固定 1 秒窗口，Gateway 自己停頓後會把緩存的合法封包算進同一窗口而丟掉，K1）；第 08c 批起被限制的包依玩家與種類
 （含 Hello）計數，各玩家的總和等於全 Gateway 的 `rate_limited_packets`。
 
 Network Snapshot 是可替換狀態，ActionResults 是必須保存到連續消費確認的終局答案。

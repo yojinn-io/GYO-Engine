@@ -70,6 +70,14 @@
     },
     "action_runner": {
       "ctest": "object_fps_pvp.action_runner"
+    },
+    "gateway_session": {
+      "command": [
+        "{go}",
+        "test",
+        "./session/..."
+      ],
+      "cwd": "services/gyo_gateway"
     }
   },
   "mutants": [
@@ -4052,6 +4060,46 @@
       "replace": "\tresultWake  chan struct{}\n\tcache       any\n",
       "check": "go",
       "expect": "field Server\\.cache is an interface"
+    },
+    {
+      "id": "v71rl-no-burst",
+      "batch": "v71-edge-rate-limit",
+      "what": "The limit has no burst: a second packet in the same instant is refused",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\trateBurst     = (ratePerSecond - 1) * rateInterval // how far ahead of now the schedule may run\n",
+      "replace": "\trateBurst     = 0 // how far ahead of now the schedule may run\n",
+      "check": "gateway_session",
+      "expect": "packet rate limit exceeded"
+    },
+    {
+      "id": "v71rl-credit-unbounded",
+      "batch": "v71-edge-rate-limit",
+      "what": "Idle time earns unbounded credit: the schedule is not brought up to now",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tif due.Before(now) {\n\t\tdue = now // credit does not build up beyond the burst\n\t}\n",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "after 10 s of silence an instant flood admitted"
+    },
+    {
+      "id": "v71rl-refusal-spends",
+      "batch": "v71-edge-rate-limit",
+      "what": "A refused packet still advances the schedule, so a flood locks the peer out",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tif due.Sub(now) > rateBurst {\n\t\treturn ErrRateLimit\n\t}\n",
+      "replace": "\tif due.Sub(now) > rateBurst {\n\t\ts.schedule = due.Add(rateInterval)\n\t\treturn ErrRateLimit\n\t}\n",
+      "check": "gateway_session",
+      "expect": "flood for 3 s admitted"
+    },
+    {
+      "id": "v71rl-small-burst",
+      "batch": "v71-edge-rate-limit",
+      "what": "The burst holds 61 packets: the datagrams a firing player sent during a 1 s Gateway stall no longer fit",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\trateBurst     = (ratePerSecond - 1) * rateInterval // how far ahead of now the schedule may run\n",
+      "replace": "\trateBurst     = 60 * rateInterval // how far ahead of now the schedule may run\n",
+      "check": "go",
+      "expect": "refused on the rate limit after the Gateway's stall"
     }
   ]
 }

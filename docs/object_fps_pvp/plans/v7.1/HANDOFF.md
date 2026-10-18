@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D120 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D121 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-rate-limit` 的限速方案：採用 (a)（token bucket，每秒補 120、容量 120；改通用層與 `network-architecture.zh-Hant.md:950`），或替代做法（規劃紀錄 2026-10-18 `edge-rate-limit` 條目）。
+- **等你決定**：無（D121 進行中）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -90,6 +90,7 @@
 | D118 | （2026-10-18）Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入的問題（K1）記為已知缺陷，先完成功能；v7.1 發版前重新測試，並在發版前重新評估方案 (a)（token bucket） | 使用者：「記住這個問題，標記為已知缺陷，先完成功能。在v7.1發版前，從重新測試（紀錄這個解決方案（a）在發版本前重新評估方案）。」 |
 | D119 | （2026-10-18）K1 的處理放在 `edge-contract` 之後，作為 edge 系列收尾的新批 `edge-rate-limit`：重新測試 K1、對照 Gateway 狀態白名單評估方案 (a)、需要就實作，並跑一次涵蓋 `edge-actions-passthrough` 與 K1 的 L2（新宣告，經使用者核准後才跑；不沿用第 4 版，也不加臨時的 K1 規則）。D118 的時間點從「發版前」提前到這裡。`edge-actions-passthrough` 標為實作與 L1 完成、L2 待 `edge-rate-limit` | 使用者：「嗯，放在 edge-contract 之後吧，作為 edge 系列收尾。到時候重新跑一次測試，和解決方案（a）的評估。」「OK，這個問題處理找建議。開始 edge-analyzers」 |
 | D120 | （2026-10-18）`edge-contract` 的條文照目前的內容核准：network-architecture §7「Gateway：無狀態邊緣」（四條原則、11 個允許類別、禁止項（D120 前改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步）、守衛與變更規則、Replacement Criteria），N3 照草稿列為獨立的允許類別；死欄位 `queuedControl.at` 刪除 | 使用者：「…死欄位 queuedControl.at 可以刪除。條文看完了。目前先這樣。」 |
+| D121 | （2026-10-18）K1 採用方案 (a)：通用層 session 的限速改為 token bucket（每秒補 120、容量 120），改 network-architecture 的契約條文；修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，停下等使用者核准宣告 | 使用者：「採用方案 (a)：token bucket，每秒補 120、容量 120；改通用層與 network-architecture:950 的契約條文。修到兩個 Red 測試轉綠、突變與 CTest 通過後，起草 L2 宣告並做 D45、乾跑，再停下等我核准宣告。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -439,6 +440,14 @@
     - 限制：容量 120 約等於開槍玩家 1.3 秒份的封包；Gateway 停頓超過約 1.3 秒時仍會拒收（2 秒停頓 63 個）。驗收裡最長的 Gateway 停頓是 1 秒。
     - 影響範圍：通用層 `services/gyo_gateway/session` 的使用者只有 `object_fps_pvp`；契約條文 `network-architecture.zh-Hant.md:950`（fixed-window cap 120 packets/s）要改；產品層的診斷 `max_session_window_packets`（`reservation.packetWindow／packetCount`，固定 1 秒窗口的計數）意義不再等於限速器的窗口，只記錄。
   - 替代做法：(a′) 容量加大到 240（停頓約 2.6 秒內不拒收；但任何 1 秒滑動區間最多 360，比現行寬）；(b) 固定窗口提高上限（同樣放寬洪水上限，停頓更長時仍會拒收）；(c) 用 Client 送出時刻計速（要上 wire，protocol-v7 §10 第 3 項，不在 pv7）；(d) 偵測 Gateway 自己的停頓並豁免（Gateway 端的特例，違反 Replacement Criteria 的精神）。
+
+- 2026-10-18：`edge-rate-limit` 的限速修正（D121）。
+  - 通用層 `services/gyo_gateway/session/session.go`：固定 1 秒窗口改成 token bucket（每秒補 120、容量 120），以 GCRA（虛擬排程時刻）整數時間實作；被拒的封包不扣額度，閒置的額度不超過容量。`Session` 的 `window`、`packets` 兩個欄位換成一個 `schedule`。
+  - Red → Green：產品層真實重放 53 → 0、通用層合成 62 → 0；既有的限速測試（同一瞬間第 121 個被拒、下一秒恢復、被拒的 payload 仍扣額度）不變；新增「閒置 10 秒後瞬間洪水只放行 120」。
+  - 契約：`network-architecture.zh-Hant.md` 的 Gateway 圖（998 行，原 950 行）與第 08c 批的說明（1014 行）改成 token bucket，K1 的已知項目改成已處理。
+  - 突變：新增 4 個（`v71rl-*`：沒有 burst、閒置額度無上限、被拒仍扣額度、容量 61），全部殺死；新增 check `gateway_session`（通用層的 `go test ./session/...`）。突變目錄 402 個，沒有過時的 find。
+  - 驗收（L1，本機）：通用層與產品層 `go test -race`、CTest 72／72、preset 外 4／4。通用層的測試在 CI 由 `go_checks.py` 對登記的 Go 模組執行。
+  - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩存的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
 
 ## 未結事項
 
