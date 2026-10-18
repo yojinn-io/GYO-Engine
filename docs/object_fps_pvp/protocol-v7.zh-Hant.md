@@ -145,7 +145,7 @@ runtime proto 的 `ActionBatch`／`ActionResults` 要寫入送達註解：批可
   - 單次呼叫的脈絡（處理一個資料包期間記下的收包時刻與序號）：不得跨資料包保留。
   - 測試縫隙（套件變數與注入的時鐘）：正式路徑只用預設值。
 - 判斷準則：這個 Gateway 欄位或判斷，是否要知道「Match 已經有什麼」才能做對？是的話，它屬於 Match。新增任何 Gateway 狀態欄位都是 Architecture Delta，要經使用者同意。
-- 守衛：Go 測試遞迴走訪 Gateway 狀態型別的欄位（含 map、slice 的元素、具名型別與 any／interface 欄位），並用 `go/ast` 掃描套件層級的變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對；配一個「新增未分類欄位」的突變。依內容的判斷測不到，靠審查，並從 AGENTS.md 連到這份約束（設計事故行動 4）。實作在 `apps/object_fps_pvp/gateway/state_whitelist_test.go`（v7.1 `edge-contract`），條文在 network-architecture §7 的「Gateway：無狀態邊緣」（草稿，待使用者核准）。
+- 守衛：Go 測試遞迴走訪 Gateway 狀態型別的欄位（含 map、slice 的元素、具名型別與 any／interface 欄位），並用 `go/ast` 掃描套件層級的變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對；配一個「新增未分類欄位」的突變。依內容的判斷測不到，靠審查，並從 AGENTS.md 連到這份約束（設計事故行動 4）。實作在 `apps/object_fps_pvp/gateway/state_whitelist_test.go`（v7.1 `edge-contract`），條文在 network-architecture §7 的「Gateway：無狀態邊緣」（D120 核准）。
 
 ### 兩份 proto（D-15）
 

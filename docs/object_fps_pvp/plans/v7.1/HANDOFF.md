@@ -9,7 +9,7 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D119 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D120 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`edge-contract` 的 Design Invariants 條文草稿（network-architecture §7「Gateway：無狀態邊緣」）：條文本身、N3 的分類、`queuedControl.at` 要不要刪（規劃紀錄 2026-10-18 `edge-contract` 條目）。
+- **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-contract`（Design Invariants 條文需要你核准，做到草稿與守衛後停下）；之後 `edge-rate-limit`（含 `edge-actions-passthrough` 的 L2）。
+- **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-contract` 的條文草稿與白名單守衛完成（突變 5／5），等你核准條文。
+- **最後更新**：2026-10-18，D120：`edge-contract` 條文核准、`queuedControl.at` 刪除；edge 系列剩 `edge-rate-limit`。
 
 ## 閱讀入口
 
@@ -89,6 +89,7 @@
 | D117 | （2026-10-18）修 Match 的 `IpcHost::Stop()`（經 `Close` 結束 session）與 rapid runner 的停止順序；預先核准 L2 宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下 | 使用者：「核准：修 Match 的 IpcHost::Stop() 與 rapid runner 的停止順序；預先核准宣告第 4 版（＝第 3 版＋這兩個修正的 A commit 與雜湊，門檻不變）。乾跑全部符合預期就換新目錄重跑 session，通過後繼續 edge 系列；有任何不符就停下。」 |
 | D118 | （2026-10-18）Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入的問題（K1）記為已知缺陷，先完成功能；v7.1 發版前重新測試，並在發版前重新評估方案 (a)（token bucket） | 使用者：「記住這個問題，標記為已知缺陷，先完成功能。在v7.1發版前，從重新測試（紀錄這個解決方案（a）在發版本前重新評估方案）。」 |
 | D119 | （2026-10-18）K1 的處理放在 `edge-contract` 之後，作為 edge 系列收尾的新批 `edge-rate-limit`：重新測試 K1、對照 Gateway 狀態白名單評估方案 (a)、需要就實作，並跑一次涵蓋 `edge-actions-passthrough` 與 K1 的 L2（新宣告，經使用者核准後才跑；不沿用第 4 版，也不加臨時的 K1 規則）。D118 的時間點從「發版前」提前到這裡。`edge-actions-passthrough` 標為實作與 L1 完成、L2 待 `edge-rate-limit` | 使用者：「嗯，放在 edge-contract 之後吧，作為 edge 系列收尾。到時候重新跑一次測試，和解決方案（a）的評估。」「OK，這個問題處理找建議。開始 edge-analyzers」 |
+| D120 | （2026-10-18）`edge-contract` 的條文照目前的內容核准：network-architecture §7「Gateway：無狀態邊緣」（四條原則、11 個允許類別、禁止項（D120 前改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步）、守衛與變更規則、Replacement Criteria），N3 照草稿列為獨立的允許類別；死欄位 `queuedControl.at` 刪除 | 使用者：「…死欄位 queuedControl.at 可以刪除。條文看完了。目前先這樣。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -419,6 +420,7 @@
     1. 條文本身（四條原則、11 個類別、Replacement Criteria）。
     2. N3：佇列項目帶著的診斷身分（`queuedMessage.event`、`resultSlot.event`）和 D105「單次呼叫的脈絡不得跨資料包保留」字面衝突；草稿列為獨立的允許類別「diagnostics carried with a queue item」。
     3. `queuedControl.at` 要不要刪。
+  - D120（使用者核准）：條文照目前的內容（禁止項先改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步），N3 照草稿；`queuedControl.at` 刪除（白名單同步移除）。
 
 ## 未結事項
 

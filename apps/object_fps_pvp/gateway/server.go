@@ -604,7 +604,6 @@ type queuedControl struct {
 	p       *reservation
 	kind    uint16
 	payload []byte
-	at      time.Time
 }
 
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
@@ -613,7 +612,7 @@ func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message)
 		return
 	}
 	select {
-	case s.controlOut <- queuedControl{p: p, kind: kind, payload: payload, at: time.Now()}:
+	case s.controlOut <- queuedControl{p: p, kind: kind, payload: payload}:
 	default:
 		s.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now()})
 	}

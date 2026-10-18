@@ -727,7 +727,7 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 結束時間作保守上界。Presented 才能形成呈現樣本；缺未來快照不等於正在移動的
 角色真的停住，靜止角色更不能算作時間線停頓。
 
-#### Gateway：無狀態邊緣（v7.1 `edge-contract`；**草稿，待使用者核准**）
+#### Gateway：無狀態邊緣（v7.1 `edge-contract`；2026-10-18 使用者核准，D120）
 
 Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送達只由端點（Match 與 Client）負責（protocol-v7 §2a，v7.1 D94、D-14、D105）。
 
@@ -747,7 +747,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - results slot：每位玩家上次送出結果的時刻與至多 1 則待送的結果框架（latest-wins）。
 - synchronization：mutex 與喚醒用的 channel。
 - diagnostic state：時鐘同步、回聲、丟棄帳本、統計；判定路徑不得讀取（protocol-v7 §2「診斷不進判定」）。
-- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍），只在它被丟棄時拿來回報。**【等你決定，N3】** 這和 D105「單次呼叫的脈絡不得跨資料包保留」字面衝突；草稿把它列為獨立的允許類別：它隨項目進出佇列，不被任何判定讀取，項目離開佇列就消失。
+- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍），只在它被丟棄時拿來回報。它隨項目進出佇列，不被任何判定讀取，項目離開佇列就消失；所以和 D105「單次呼叫的脈絡不得跨資料包保留」不衝突，是獨立的允許類別（N3，D120）。
 - per-call context：處理一個 datagram、frame 或請求期間記下的值（例如 `Server.datagram`、讀取緩衝區）；不得被下一個 datagram 的判斷讀取。
 - test seam：套件變數與注入的時鐘；正式路徑只用預設值。
 - immutable table：鍵清單、原因表、sentinel error。
@@ -775,7 +775,6 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 **目前的已知項目**（只記錄）：
 
 - K1（v7.1 D118、D119）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。限速屬於允許的 session 類，算法在 `edge-rate-limit` 重新評估。
-- `queuedControl.at`：入列時寫入、沒有任何地方讀取（死欄位）。草稿照 diagnostics carried with a queue item 分類；要不要刪由使用者決定。
 
 ### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
 
@@ -788,7 +787,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - **根因**：外部是有損、重複送的 UDP，內部協議是「每個命令恰好一次」的可靠串流；
   在兩種送達語意之間轉換必然要去重，去重就需要 Match 的狀態。
 - **狀態**：v7.1 的 edge 系列已把 Gateway 改回無狀態邊緣（輸入、動作、結果原樣轉送，刪除 Match
-  決策狀態的副本）；約束寫在上面的「Gateway：無狀態邊緣」（草稿，待使用者核准），由白名單測試守住。完整紀錄見
+  決策狀態的副本）；約束寫在上面的「Gateway：無狀態邊緣」（D120 核准），由白名單測試守住。完整紀錄見
   [設計事故紀錄](plans/v7.1/Incident/2026-10-15-gateway-state-drift.md)。
 
 ### 修改入口與 Ownership

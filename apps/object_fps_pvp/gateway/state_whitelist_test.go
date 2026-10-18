@@ -79,7 +79,6 @@ var fieldClasses = map[string]string{
 	"outbound.tick":         classPerCall,
 	"snapshotFrame.payload": classQueue, "snapshotFrame.tick": classQueue,
 	"queuedControl.p": classQueue, "queuedControl.kind": classQueue, "queuedControl.payload": classQueue,
-	"queuedControl.at":         classItemDiag,
 	"playerIngressLine.player": classDiagnostic, "playerIngressLine.line": classDiagnostic,
 	"joinRequest.RequestID": classPerCall, "joinRequest.ProtocolVersion": classPerCall,
 

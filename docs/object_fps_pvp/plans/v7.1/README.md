@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入與結果原樣轉送、不再保存結果帳本；`edge-actions-passthrough` 實作與 L1 完成，L2 待 `edge-rate-limit`（已知缺陷 K1）處理後重跑；ingress 分析器已為直通重新凍結；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-contract`。
+**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入與結果原樣轉送、不再保存結果帳本；`edge-actions-passthrough` 實作與 L1 完成，L2 待 `edge-rate-limit`（已知缺陷 K1）處理後重跑；ingress 分析器已為直通重新凍結；其餘欄位照 pv7-line 分批實作，合併前不生效。下一批是 `edge-rate-limit`。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -33,7 +33,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── edge-results-passthrough ✓    「high｜★結果原樣轉送，刪 Gateway 帳本與 A3」
 │   ├── edge-actions-passthrough ◐    「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有（L2 待 edge-rate-limit）」
 │   ├── edge-analyzers ✓              「medium（守恆式 high）｜改寫並重新凍結 ingress 守恆式」
-│   ├── edge-contract ◆⏸              「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛（條文待核准）」
+│   ├── edge-contract ✓◆              「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛」
 │   ├── edge-rate-limit               「high｜K1：重新測試、評估限速方案 (a)，跑 edge-actions-passthrough 的 L2」
 │   ├── cause-records                 「high｜E2、動作拒收回覆、Leave 原因」
 │   ├── hitbox-fields                 「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
