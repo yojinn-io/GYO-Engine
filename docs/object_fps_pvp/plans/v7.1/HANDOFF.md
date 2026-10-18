@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：`edge-rate-limit` 的限速方案：採用 (a)（token bucket，每秒補 120、容量 120；改通用層與 `network-architecture.zh-Hant.md:950`），或替代做法（規劃紀錄 2026-10-18 `edge-rate-limit` 條目）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，D120：`edge-contract` 條文核准、`queuedControl.at` 刪除；edge 系列剩 `edge-rate-limit`。
+- **最後更新**：2026-10-18，`edge-rate-limit`：K1 以失敗的測試重新確認（重放拒收 53），方案 (a) 評估完成，等你決定。
 
 ## 閱讀入口
 
@@ -421,6 +421,24 @@
     2. N3：佇列項目帶著的診斷身分（`queuedMessage.event`、`resultSlot.event`）和 D105「單次呼叫的脈絡不得跨資料包保留」字面衝突；草稿列為獨立的允許類別「diagnostics carried with a queue item」。
     3. `queuedControl.at` 要不要刪。
   - D120（使用者核准）：條文照目前的內容（禁止項先改寫成「Gateway 不得…（負責方）」，protocol-v7 §2a 同步），N3 照草稿；`queuedControl.at` 刪除（白名單同步移除）。
+
+- 2026-10-18：`edge-rate-limit` 開始（D119；檔位 high；估 8～12 h，含 L2）。第一個關卡「要不要採用方案 (a)」會改通用層與契約，先做重新測試與評估，停下等使用者決定。
+  - 重新測試 K1（兩個失敗的測試，Red，尚未提交）：
+    - 產品層 `apps/object_fps_pvp/gateway/rate_limit_replay_test.go`：把 r4-B 那次 player 1 的真實到達序列（`testdata/k1-arrivals.txt`，1089 個，由 relay 的轉送時間與停頓區間產生）重放給 `session.Admit`，期望 0 拒收；目前拒收 **53**，和那次 Gateway 的計數相同。
+    - 通用層 `services/gyo_gateway/session/session_test.go`：合成資料（每 11 ms 一個、讀取端停頓 1 秒），期望 0 拒收；目前拒收 62。另加洪水上限測試（任何長度 T 的區間放行 ≤120T＋120），現行與方案 (a) 都成立。
+  - 評估（模擬，未改程式）：
+    | 情形 | 固定窗口（現行）拒收 | token bucket（每秒補 120、容量 120）拒收 |
+    |---|---|---|
+    | 重放 r4-B player 1（停頓 1 秒） | 53 | 0 |
+    | 合成：91／秒、停頓 1 秒 | 62 | 0 |
+    | 停頓 1.5 秒 | 108 | 18 |
+    | 停頓 2 秒 | 153 | 63 |
+    | 洪水 300／秒 × 3 秒，放行數 | 360 | 479（上限 480 之內） |
+    - 對照白名單（D120）：token bucket 的狀態（剩餘額度、上次補充時刻）留在通用層 `session.Session`，屬於 connection and session 類（速率），可以重建、不參與遊戲判定、不是 Match 狀態；產品層 Gateway 不新增欄位。符合條文。
+    - 上限：長期速率不變（120／秒）；任何 1 秒滑動區間最多 240，和固定窗口跨邊界時相同。差別是最初的 120 額度可以一次用掉（洪水 3 秒多放行 119）。
+    - 限制：容量 120 約等於開槍玩家 1.3 秒份的封包；Gateway 停頓超過約 1.3 秒時仍會拒收（2 秒停頓 63 個）。驗收裡最長的 Gateway 停頓是 1 秒。
+    - 影響範圍：通用層 `services/gyo_gateway/session` 的使用者只有 `object_fps_pvp`；契約條文 `network-architecture.zh-Hant.md:950`（fixed-window cap 120 packets/s）要改；產品層的診斷 `max_session_window_packets`（`reservation.packetWindow／packetCount`，固定 1 秒窗口的計數）意義不再等於限速器的窗口，只記錄。
+  - 替代做法：(a′) 容量加大到 240（停頓約 2.6 秒內不拒收；但任何 1 秒滑動區間最多 360，比現行寬）；(b) 固定窗口提高上限（同樣放寬洪水上限，停頓更長時仍會拒收）；(c) 用 Client 送出時刻計速（要上 wire，protocol-v7 §10 第 3 項，不在 pv7）；(d) 偵測 Gateway 自己的停頓並豁免（Gateway 端的特例，違反 Replacement Criteria 的精神）。
 
 ## 未結事項
 

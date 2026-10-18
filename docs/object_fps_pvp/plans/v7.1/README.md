@@ -34,7 +34,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── edge-actions-passthrough ◐    「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有（L2 待 edge-rate-limit）」
 │   ├── edge-analyzers ✓              「medium（守恆式 high）｜改寫並重新凍結 ingress 守恆式」
 │   ├── edge-contract ✓◆              「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛」
-│   ├── edge-rate-limit               「high｜K1：重新測試、評估限速方案 (a)，跑 edge-actions-passthrough 的 L2」
+│   ├── edge-rate-limit ⏸             「high｜K1：重新測試、評估限速方案 (a)，跑 edge-actions-passthrough 的 L2」
 │   ├── cause-records                 「high｜E2、動作拒收回覆、Leave 原因」
 │   ├── hitbox-fields                 「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
 │   ├── pv7-checkpoint                「medium（分析 high）｜A1 前的整體回歸」
