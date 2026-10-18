@@ -458,7 +458,7 @@
 
 ## 未結事項
 
-- `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。
+- `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。
 
 - **K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩存的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
   - **edge 系列收尾的 `edge-rate-limit`（D119；原為發版前，D118）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
