@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`pv7-checkpoint` 的 L2 事前宣告第 3 版（[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md) 第 10 節的雜湊）要不要核准，以及什麼時候跑（約 2.5 h 加閒置門檻；G 與連點要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
+- **等你決定**：無（`pv7-checkpoint` 的 L2 session 進行中，D133）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`pv7-checkpoint` 進行中（D129；檔位 medium、分析 high；估 8 h，超過約 12 h 停下回報）：宣告、工具、開發跑次與乾跑完成，等你核准後跑 session。`hitbox-fields`（`6f3c1a0`）的四平台 L1 是 run 39126662308。`cause-records` 的四平台 L1（run 39120964812）全部通過。
+- **下一步**：`pv7-checkpoint` 進行中（D129；檔位 medium、分析 high；估 8 h，超過約 12 h 停下回報）：L2 session 執行中（D133，約 2.5 h），結束後判定並記錄；PR #78 的 Auto-fix 暫停中，跑完重新打開。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 23:55，`pv7-checkpoint` 宣告第 3 版：工具、A 的開發跑次 45 項（全部 P、0 停止）、乾跑全部如預期；停下等你核准。
+- **最後更新**：2026-10-19，`pv7-checkpoint` 宣告第 3 版核准（D133），session 開始。
 
 ## 閱讀入口
 
@@ -102,6 +102,7 @@
 | D130 | （2026-10-18）`pv7-checkpoint` 的比較照 (b)：同一 session 兩棵樹交錯，v7 基準樹 `../GYO-Engine-v7final`（`6d3f287`）用 16-L2 的凍結工具判，現在的樹用凍結 pv7 工具判；門檻用本 session 的 v7 範圍；edge 類指標不和 v7 比。K 的影子資料照 (i)：只用已會寫 trace 的 runner（clean、network20／40、upstream、Gateway→Match 延遲注入），不重新凍結 `run_action_short.py` | 使用者：「照推薦，繼續」 |
 | D131 | （2026-10-18）`pv7-checkpoint` 的影子資料照 (A)＋(B)：重新凍結 `run_action_short.py` 傳 `--movement-trace`（連點也產生影子紀錄）；action／network／quad probe 照 Client 規則填 E、S；補測試後再起草宣告。取代 D130 的 (i) | 使用者：「照 (A)＋(B)：重新凍結 run_action_short.py 傳 --movement-trace，並讓 action／network／quad probe 照 Client 規則填 E、S；補測試後再起草宣告。」 |
 | D132 | （2026-10-18）`pv7-checkpoint` 宣告第 2 版第 8 節全照建議：故障情境的 D61 即時規則立旗標並計數、同一棵樹累計 ≥3 才停；on_time 對不上時先找產品行為的解釋，有解釋的只記錄（改寫 `protocol-v7.zh-Hant.md` §6 的 D127 那一句）；合法射擊 P95（C4、C5）只記錄；核准前在 A 上把沒跑過的項目各跑 1 次開發跑次（只看分類、鍵與 trace 完整性）。之後寫工具與乾跑 | 使用者：「第 8 節的 4 項全照建議：待定 1 選 (a)、待定 2 同意並改 protocol-v7 §6 那一句、待定 3 選 (a)、核准前在 A 上跑開發跑次（只看分類、鍵與 trace 完整性）。繼續寫工具與乾跑。」 |
+| D133 | （2026-10-19）核准 `pv7-checkpoint` 的 L2 事前宣告第 3 版（[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md) 第 10 節的雜湊：driver `35c7e8a3…`、judge `b3472772…`、artifacts `ab6005fc…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 pv7-checkpoint 宣告第 3 版（第 10 節的雜湊），現在開始跑 session。」 |
 
 ## 規劃紀錄（記錄器）
 
