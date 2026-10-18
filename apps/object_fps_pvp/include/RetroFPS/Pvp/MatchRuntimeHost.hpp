@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
 #include "RetroFPS/Pvp/MatchIngressTrace.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -119,6 +120,10 @@ public:
     // window, substitutions are added as their records close; the rest is
     // counted as suppressed or dropped. Survives Leave and resets until taken.
     [[nodiscard]] IngressRecords DrainIngressRecords();
+    // Diagnostics only, since the previous call: the shadow record of every
+    // action decision (match-shots.jsonl, MatchShotTrace.hpp). No decision
+    // reads them; they record what A1 would do with E and S (pv7 §6, D-2).
+    [[nodiscard]] ShotRecords DrainShotRecords();
     // The I/O layer replaced a taken snapshot (latest wins) before writing
     // it; these players' slack samples in it never reach the Gateway.
     void NoteCoalescedSlackSamples(std::span<const PlayerId> players);
@@ -224,6 +229,7 @@ private:
     MatchIngressLedger ledger_;
     // match-ingress.jsonl records waiting for DrainIngressRecords.
     MatchIngressRecordBuffer records_;
+    ShotShadowTrack shotShadow_;
     std::optional<std::string> error_;
     std::function<void()> publishListener_;
     std::atomic<bool> running_{};

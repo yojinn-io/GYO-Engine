@@ -40,6 +40,18 @@ class DiagnosticIsolationTest(unittest.TestCase):
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D32)')
 
+    def test_no_decision_reads_the_a1_request_fields_before_a1_shot_step(self):
+        # hitbox-fields (pv7 §6, §7, D-2): S and the view tick are request content
+        # the host only records (MatchShotTrace.hpp). E shares its name with the
+        # player's movementEpoch, so the host's differential test and the
+        # authority digest guard it instead.
+        for path in [SOURCE / 'PvpMatch.cpp', SOURCE / 'MatchRuntimeHost.cpp', INCLUDE / 'MatchRuntimeHost.hpp',
+                     SOURCE / 'FireGate.cpp', SOURCE / 'LocalPlayerPrediction.cpp', INCLUDE / 'SnapshotTimeline.hpp']:
+            text = path.read_text(encoding='utf-8')
+            for symbol in ('commandSequence', 'viewTickQ16', 'command_sequence', 'view_tick'):
+                with self.subTest(file=path.name, symbol=symbol):
+                    self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D-2)')
+
     def test_the_estimator_stays_in_the_io_layer(self):
         users = sorted(path.name for path in [*SOURCE.glob('*.cpp'), *INCLUDE.glob('*.hpp')]
                        if 'ClockSync' in path.read_text(encoding='utf-8'))

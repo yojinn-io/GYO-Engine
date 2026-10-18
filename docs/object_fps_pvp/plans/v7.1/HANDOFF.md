@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：`hitbox-fields` 影子紀錄的「命令 S 的來源（Actual／Held／Neutral）與是否之後才到」：(a) 維持離線對上 `match-commands.jsonl`／`match-ingress.jsonl`（現況）；(b) 改成 Host 直接記錄（要讓 PvpMatch 對外提供每個 Tick 的解析來源）。見規劃紀錄 2026-10-18 `hitbox-fields` 條目。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`cause-records` 實作完成，等四平台 L1；之後是 `hitbox-fields`，等你說開始。
+- **下一步**：`hitbox-fields` 實作完成、已推送，等四平台 L1 與上面的決定；之後是 `pv7-checkpoint`。`cause-records` 的四平台 L1（run 39120964812）全部通過。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`cause-records` 實作、測試與突變完成（本機 CTest 72／72、突變 18／18），已推送並觸發 L1。
+- **最後更新**：2026-10-18 20:36，`hitbox-fields` 實作、測試與突變完成（本機 CTest 72／72、突變 22／22、權威 digest 兩樹 0 差異），已推送並觸發 L1；有一項等你決定。
 
 ## 閱讀入口
 
@@ -95,6 +95,7 @@
 | D123 | （2026-10-18）核准 `edge-rate-limit` 的 L2 事前宣告第 3 版（[edge-rate-limit-l2.md](edge-rate-limit-l2.md)）；在使用者不用電腦的時段跑，等使用者說要離開時再開始 | 使用者：「核准 edge-rate-limit 的 L2 事前宣告第 3 版。在我不用電腦的時段跑，等我說要離開時再開始。」 |
 | D124 | （2026-10-18）開始 `cause-records`（檔位 high，估 8～9 h）：protocol-v7 §5 的 dwell、Client 的 GYOP 序號（D96）、snapshot 的兩段停留（D-4）、動作拒收回覆（D-6）、Leave 原因；行為不變（§9），以測試、突變、差分測試證明 | 使用者：「開始」 |
 | D125 | （2026-10-18）核准 `cause-records` 的 Gateway Architecture Delta：`linkWrite` 加 `received`（照抄佇列項目的收包時刻，寫出時算 dwell）；`snapshotFrame` 加讀取 IPC 框架的時刻與解碼後的 client snapshot（每位玩家寫出前填 `gateway_hold_us` 重新編碼）；network-architecture §7「diagnostics carried with a queue item」的「只在它被丟棄時拿來回報」改成「被丟棄時回報，或在寫出時算成 dwell 填進同一則 IPC 訊息；都不被判定讀取」 | 使用者：「同意：linkWrite 加 received、snapshotFrame 加讀取時刻與解碼後的 snapshot（每位玩家重新編碼），並改 network-architecture §7 那一句條文。繼續 cause-records。」 |
+| D126 | （2026-10-18）開始 `hitbox-fields`（檔位 high，驗證窗口局部 xhigh，估 8 h）：protocol-v7 §7 的 HitPart、`hit_part`、`last_hit_part`、`view_tick_q16`、`maximum_shot_damage`，§6 的 E、S 與影子紀錄（D-2）；判定與 digest 不變 | 使用者：「開始」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -471,6 +472,20 @@
   - 突變：新增 18 個（`v71cr-*`，Gateway 8、Match 9、Client 1）全部殺死；7 個既有突變的 find 跟著程式碼更新（意圖不變）。`v71cr-match-hold-at-take` 與對應測試的「至少一份 ≥1 tick」依賴 IPC 執行緒在測試推進假時鐘之後才選框（實務上幾乎必然，理論上非決定性）。
   - 沒有測到的：讀取端「snapshot 超過 datagram 上限」在合法的 4 人 snapshot 下到不了（最大 1065 B），hold 上限計入大小檢查的程式沒有突變。
   - 驗收（L1，本機）：CTest 72／72、Go `-race`、突變 18／18。
+
+- 2026-10-18：`hitbox-fields` 開始（D126；20:0x）。範圍照 `protocol-v7.zh-Hant.md` §6「欄位」「影子量測」、§7、§8 與 `pv7-design.md` 的測試清單。影子紀錄照 `match-ingress.jsonl` 的先例，另開一個由 `--movement-trace` 推出路徑、有版本號的明細檔（不在 `commands.jsonl` 加事件種類）。
+
+- 2026-10-18：`hitbox-fields` 的實作（D126；19:58 開始，20:35 本機驗收完成，估 8 h 之內）。
+  - proto（兩份同號）：`ShotRequest` 7、8、9（E、S、`view_tick_q16`），`ShotDecision.hit_part` 11、`CombatState.last_hit_part` 14、`CombatRules.maximum_shot_damage` 9，`HitPart` 列舉。Go 產生碼重新產生。
+  - Domain：`ShotRequest` 加 E、S、view tick（`operator==` 是 default，自動包含）；`ShotDecision.hitPart`、`CombatState.lastHitPart`、`CombatRules.maximumShotDamage`（25）；`ValidDamageRecord` 擴成四欄；共用的 `ValidDecisionHitPart`、`ValidShotDamageBounds`。PvpMatch 命中玩家時填 Body（裁決與受擊紀錄），重生時整個 `CombatState` 重建所以一起歸零。權威 digest 是逐欄列出的，新欄位不進 digest。
+  - Gateway（adapter）：E、S、view tick 照抄不驗證並進 `EqualShot`；`hit_part` 的規則、damage 上限改成 `maximum_shot_damage`、`ValidRules` 的三條規則、`last_hit_part` 進受擊紀錄檢查；`EqualDecision` 含 `hit_part`。Gateway 沒有新增狀態欄位。
+  - Client：`ReadRules`、`AcceptResults`、snapshot 解碼帶新欄位與規則；送出時帶 E、S、view tick（`ActionContext`，取自同一份 `ClientPresented`）；view tick 用 `SnapshotTimeline::GlobalCursor()`，每幀抽樣遠端後換算，Presented 時記下（`PvpApplication`）。
+  - Match：IpcHost 編解碼新欄位（HitPart 的值由 `static_assert` 守住）；Host 在交接時留請求副本、裁決的 Tick 寫影子紀錄（`MatchShotTrace.hpp` 的 `ShotShadowTrack`），`match_main` 寫 `match-shots.jsonl`（格式寫在 `protocol-v7.zh-Hant.md` §6「影子量測」）。紀錄性的 view tick 檢查與 view_lag 在影子紀錄裡，不加在 Match 的 ingress 統計行（凍結的 ingress 分析器對那一行的鍵順序嚴格）。
+  - 大小：4 人 snapshot 的最大 datagram 1065 → 1073 B（`last_hit_part` 為 HEAD 時每人 2 B，等於 `protocol-v7.zh-Hant.md` §8 的契約最大值）；ActionBatch、ActionResults 的最大值測試帶入新欄位的最大值。
+  - 權威不變：`compare_authority_trees.py`（基準 `../GYO-Engine-ap-after` 的 `ed3481c`，含 cause-records 之前），scale 1、3 各 35 個情境 0 差異（`build/target/_build/test/logs/pvp-v71-hitbox-fields-20261018/digest/`）；golden 的 CTest `object_fps_pvp.authority_digest` 通過。
+  - 測試：Go 的 HitPart 正反例、三條規則與 damage 上限、E／S／view tick 照抄與 `EqualShot`；受擊紀錄四欄（Go 與 C++）；Match 只產生 Body、受擊紀錄的 Body 與重生歸零；`operator==`；路徑分類、view tick 檢查、紀錄行與路徑；Host 的差分（E、S、view tick 不同時裁決與世界逐欄相同、invalid 計數）、view_lag、冷卻保留量；IPC 的 Ready 與 E、S、view tick 到 Host；Client 的 `ActionContext` 與全域游標（遠端換段的案例）。D32 原始碼守衛加一條：判定程式不讀 S 與 view tick（E 與玩家狀態同名，靠差分測試與 digest）。既有測試的資料補上新欄位：Go 的 `testRules`、最大值測試、受擊紀錄、`match_ingress_cli_check.cmake`（Match 在 trace 旁多寫 `-shots.jsonl`）。
+  - 突變：新增 22 個（`v71hf-*`，Gateway 7、Match 與 Domain 13、Client 2）全部殺死。
+  - **等你決定**：契約寫「Host 對每個裁決記錄……命令 S 的來源（Actual／Held／Neutral）與命令 S 是否之後才到」。這兩項只有在 T(S) 解析之後才知道；Host 的 `TrackSlack` 只知道「有沒有收據」，分不出 Held 與 Neutral（那是 PvpMatch 決定的）。目前的做法：影子紀錄記 A 側的欄位，來源與晚到由 (player, E, life, S) 離線對上 `match-commands.jsonl` 的 resolved 事件（帶 `source`）與 `match-ingress.jsonl` 的替代紀錄（第一份晚到的時刻）。(a) 維持這個做法，改寫契約的那一句（PvpMatch 不變；`pv7-checkpoint` 的分析器要做對接）；(b) 讓 PvpMatch 對外提供每個 Tick 的解析來源，Host 延後到 T(S) 才完成紀錄（動到判定檔的介面，約 1.5～2 h）。
 
 ## 未結事項
 

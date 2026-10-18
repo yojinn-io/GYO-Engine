@@ -12,11 +12,12 @@ import (
 func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
 	batch := &client.ActionBatch{AcknowledgedThrough: math.MaxUint64}
 	results := &runtime.ActionResults{PlayerId: math.MaxUint64, RetiredThrough: math.MaxUint64}
-	rules := &runtime.CombatRules{MagazineCapacity: math.MaxUint32, ReloadTicks: math.MaxUint64, RespawnTicks: math.MaxUint64, MaximumHp: math.MaxUint32, ShotDamage: math.MaxUint32, CooldownTicks: math.MaxUint64, ShotRange: math.MaxFloat32, MaximumReferenceAgeMs: math.MaxUint32}
+	rules := &runtime.CombatRules{MagazineCapacity: math.MaxUint32, ReloadTicks: math.MaxUint64, RespawnTicks: math.MaxUint64, MaximumHp: math.MaxUint32, ShotDamage: math.MaxUint32, MaximumShotDamage: math.MaxUint32, CooldownTicks: math.MaxUint64, ShotRange: math.MaxFloat32, MaximumReferenceAgeMs: math.MaxUint32}
 	for i := 0; i < MaxActionBatch; i++ {
 		id := uint64(math.MaxUint64) - uint64(i)
-		batch.Shots = append(batch.Shots, &client.ShotRequest{LifeGeneration: math.MaxUint64, Kind: client.ActionKind_ACTION_SHOT, ActionId: id, ObservedAuthorityTick: math.MaxUint64, Yaw: proto.Float32(1e6), Pitch: proto.Float32(-float32(math.Pi / 2))})
-		results.Decisions = append(results.Decisions, &runtime.ShotDecision{LifeGeneration: math.MaxUint64, Kind: runtime.ActionKind_ACTION_SHOT, TargetLifeGeneration: math.MaxUint64, ActionId: id, ResolvedTick: math.MaxUint64, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: math.MaxUint64, Damage: math.MaxUint32})
+		batch.Shots = append(batch.Shots, &client.ShotRequest{LifeGeneration: math.MaxUint64, Kind: client.ActionKind_ACTION_SHOT, ActionId: id, ObservedAuthorityTick: math.MaxUint64, Yaw: proto.Float32(1e6), Pitch: proto.Float32(-float32(math.Pi / 2)),
+			MovementEpoch: math.MaxUint64, CommandSequence: math.MaxUint64, ViewTickQ16: math.MaxUint64})
+		results.Decisions = append(results.Decisions, &runtime.ShotDecision{LifeGeneration: math.MaxUint64, Kind: runtime.ActionKind_ACTION_SHOT, TargetLifeGeneration: math.MaxUint64, ActionId: id, ResolvedTick: math.MaxUint64, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: math.MaxUint64, Damage: math.MaxUint32, HitPart: runtime.HitPart_HIT_PART_HEAD})
 	}
 	encoded, _ := proto.Marshal(batch)
 	mapped, err := DecodeActions(encoded, 77)
@@ -33,7 +34,7 @@ func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
 		snapshot.Players = append(snapshot.Players, &client.PlayerState{LifeGeneration: math.MaxUint64, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint64 - 100, VerticalVelocity: math.MaxFloat32, Grounded: true, PlayerId: math.MaxUint64 - i, X: -math.MaxFloat32, Y: -math.MaxFloat32, Z: -math.MaxFloat32, Yaw: 1e6, Pitch: -float32(math.Pi / 2), LastResolvedCommand: math.MaxUint64, MovementEpoch: math.MaxUint64, ContiguousPendingCommands: 32,
 			MovementSlackSequence: proto.Uint64(math.MaxUint64), MovementSlackUs: proto.Int32(-MaxMovementSlackUs),
 			ConnectionQualityFailures: ConnectionQualityFailedWindows - 1})
-		snapshot.Combat = append(snapshot.Combat, &client.CombatState{LifeGeneration: math.MaxUint64, MagazineAmmo: math.MaxUint32, PlayerId: math.MaxUint64 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint64, ReloadActionId: math.MaxUint64, ReloadStartTick: math.MaxUint64 - 90, ReloadEndTick: math.MaxUint64, LastShotActionId: math.MaxUint64, LastShotTick: math.MaxUint64 - 91, LastDamageTick: math.MaxUint64, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint64})
+		snapshot.Combat = append(snapshot.Combat, &client.CombatState{LifeGeneration: math.MaxUint64, MagazineAmmo: math.MaxUint32, PlayerId: math.MaxUint64 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint64, ReloadActionId: math.MaxUint64, ReloadStartTick: math.MaxUint64 - 90, ReloadEndTick: math.MaxUint64, LastShotActionId: math.MaxUint64, LastShotTick: math.MaxUint64 - 91, LastDamageTick: math.MaxUint64, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint64, LastHitPart: client.HitPart_HIT_PART_HEAD})
 	}
 	for _, message := range []proto.Message{batch, converted, welcome, snapshot} {
 		b, err := proto.Marshal(message)

@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -718,6 +719,8 @@ TEST_CASE("PvP hit record is written only by player hits and follows the victim'
     REQUIRE(match.SubmitActions({2, {{1, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
     CombatStep(match);
     REQUIRE(Decisions(match).back().hitKind == ShotHitKind::Miss);
+    CHECK(Decisions(match).back().hitPart == HitPart::Unspecified); // pv7 §7: only a player hit has a part
+    CHECK(Decisions(match, 2).back().hitPart == HitPart::Unspecified);
     REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match);
     REQUIRE(Decisions(match).back().rejection == ShotRejection::Cooldown);
@@ -732,11 +735,15 @@ TEST_CASE("PvP hit record is written only by player hits and follows the victim'
     const auto tick = match.TickCount();
     REQUIRE(Decisions(match).back().hitKind == ShotHitKind::Player);
     REQUIRE(Decisions(match, 2).back().hitKind == ShotHitKind::Player);
+    // pv7 §7: v7.1 has no hitbox, so every player hit is Body, never Head.
+    CHECK(Decisions(match).back().hitPart == HitPart::Body);
+    CHECK(Decisions(match, 2).back().hitPart == HitPart::Body);
     for (const auto& [victim, attacker] : {std::pair<PlayerId, PlayerId>{2, 1}, {1, 2}}) {
         const auto record = CombatPlayer(match, victim);
         CHECK(record.lastDamageTick == tick);
         CHECK(record.damageCount == 1);
         CHECK(record.lastAttackerId == attacker);
+        CHECK(record.lastHitPart == HitPart::Body);
         CHECK(record.hp == PvpCombatRules.maximumHp - PvpCombatRules.shotDamage);
     }
 
@@ -777,10 +784,13 @@ TEST_CASE("PvP lethal hit records the killer at the death tick and respawn clear
     CHECK(CombatPlayer(match, 2).lastDamageTick == 0);
     CHECK(CombatPlayer(match, 2).damageCount == 0);
     CHECK(CombatPlayer(match, 2).lastAttackerId == 0);
+    CHECK(CombatPlayer(match, 2).lastHitPart == HitPart::Unspecified); // the fourth field resets with the rest
 }
 
 TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
-    CombatState record{.playerId = 1, .hp = 50, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7};
+    // pv7 §7: four fields, the hit part being Body or Head when set.
+    CombatState record{.playerId = 1, .hp = 50, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7,
+                       .lastHitPart = HitPart::Body};
     CHECK(ValidDamageRecord(record, false, 10, 20, 100));
     CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100));
     auto bad = [&](auto edit, bool dead = false, std::uint64_t lifeStateTick = 10) {
@@ -791,6 +801,10 @@ TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 0; }));
     CHECK(bad([](CombatState& c) { c.damageCount = 0; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 0; }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = HitPart::Unspecified; }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(3); }));
+    CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1, .lastHitPart = HitPart::Body}; }));
+    CHECK_FALSE(bad([](CombatState& c) { c.lastHitPart = HitPart::Head; })); // v8's part, accepted already
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 9; }));
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 21; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 1; }));
@@ -967,4 +981,85 @@ TEST_CASE("PvP match names each input admission and CanSubmitInput agrees with i
     admits({2, {{1, 1, 0, 0, 0}, {MaxFutureCommands + 1, 0, 0, 0, 0}}, epoch, 2}, InputAdmission::ConflictQueued);
     admits({2, {{2, 0, 0, 0, 0}, {MaxFutureCommands + 1, 0, 0, 0, 0}}, epoch, 2}, InputAdmission::BeyondWindow);
     CHECK(named.size() == 9);
+}
+
+// pv7 §6, §7: E, S and the view tick are request content: they take part in
+// comparing a retransmission (operator==), like every other field.
+TEST_CASE("PvP shot request equality includes E, S and the view tick") {
+    const ShotRequest request{1, 5, 0, 0, ActionKind::Shot, 1, 2, 30, 7 * 65536};
+    for (auto edit : {+[](ShotRequest& r) { ++r.movementEpoch; }, +[](ShotRequest& r) { ++r.commandSequence; },
+                      +[](ShotRequest& r) { ++r.viewTickQ16; }}) {
+        auto other = request;
+        edit(other);
+        CHECK_FALSE(other == request);
+    }
+    CHECK(ShotRequest{request} == request);
+}
+
+// pv7 §7: the part a decision carries, and the three damage bounds.
+TEST_CASE("PvP hit part and maximum shot damage decode checks") {
+    for (const int part : {1, 2}) CHECK(ValidDecisionHitPart(ShotHitKind::Player, part));
+    for (const int part : {0, 3, -1}) CHECK_FALSE(ValidDecisionHitPart(ShotHitKind::Player, part));
+    for (const auto kind : {ShotHitKind::Miss, ShotHitKind::World}) {
+        CHECK(ValidDecisionHitPart(kind, 0));
+        for (const int part : {1, 2, 3}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
+    }
+    CHECK(ValidShotDamageBounds(25, 25, 100));
+    CHECK(ValidShotDamageBounds(25, 100, 100));
+    CHECK_FALSE(ValidShotDamageBounds(25, 24, 100));
+    CHECK_FALSE(ValidShotDamageBounds(25, 101, 100));
+    CHECK_FALSE(ValidShotDamageBounds(0, 25, 100));
+    CHECK(ValidShotDamageBounds(PvpCombatRules.shotDamage, PvpCombatRules.maximumShotDamage, PvpCombatRules.maximumHp));
+    CHECK(PvpCombatRules.maximumShotDamage == PvpCombatRules.shotDamage); // v7.1: no part multiplier
+}
+
+// pv7 §6: the path A1 would take at A, from E, S and the request's life
+// against the shooter's epoch, last resolved command and life after A.
+TEST_CASE("PvP shadow records classify the A1 path at the handoff tick") {
+    constexpr std::uint64_t a = 100;
+    CHECK(ClassifyShotStep(a, 3, 20, 1, 3, 15, 1).path == ShotStepPath::OnTime);
+    CHECK(ClassifyShotStep(a, 3, 20, 1, 3, 15, 1).tick == 105);
+    CHECK(ClassifyShotStep(a, 3, 15 + MaxShotStepLead - 1, 1, 3, 15, 1).path == ShotStepPath::OnTime);
+    CHECK(ClassifyShotStep(a, 3, 15 + MaxShotStepLead, 1, 3, 15, 1).path == ShotStepPath::HoldLimit);
+    CHECK(ClassifyShotStep(a, 3, 15 + MaxShotStepLead, 1, 3, 15, 1).tick == a + MaxShotStepLead);
+    CHECK(ClassifyShotStep(a, 3, 15, 1, 3, 15, 1).path == ShotStepPath::Late);
+    CHECK(ClassifyShotStep(a, 3, 0, 1, 3, 15, 1).tick == a);
+    CHECK(ClassifyShotStep(a, 2, 20, 1, 3, 15, 1).path == ShotStepPath::Epoch);
+    CHECK(ClassifyShotStep(a, 0, 0, 1, 3, 15, 1).path == ShotStepPath::Epoch); // no prediction: E = 0
+    CHECK(ClassifyShotStep(a, 3, 20, 1, 3, 15, 2).path == ShotStepPath::Life);
+    CHECK(ClassifyShotStep(a, 3, 1, 1, 3, 0, 1).path == ShotStepPath::HoldLimit); // the epoch resolved nothing yet
+    CHECK(MaxShotStepLead == 13);
+}
+
+// pv7 §7: a record-only check, never a rejection.
+TEST_CASE("PvP shadow records check the view tick without refusing anything") {
+    CHECK(ValidViewTick(ActionKind::Shot, 9, 0));
+    CHECK(ValidViewTick(ActionKind::Shot, 9, 65536));
+    CHECK(ValidViewTick(ActionKind::Shot, 9, 9 * 65536));
+    CHECK_FALSE(ValidViewTick(ActionKind::Shot, 9, 9 * 65536 + 1));
+    CHECK_FALSE(ValidViewTick(ActionKind::Shot, 9, 65535));
+    CHECK_FALSE(ValidViewTick(ActionKind::Shot, 0, 65536));
+    // observed x 65536 beyond 64 bits does not wrap into a refusal.
+    CHECK(ValidViewTick(ActionKind::Shot, std::numeric_limits<std::uint64_t>::max(), std::numeric_limits<std::uint64_t>::max()));
+    CHECK(ValidViewTick(ActionKind::Reload, 9, 0));
+    CHECK_FALSE(ValidViewTick(ActionKind::Reload, 9, 65536));
+}
+
+TEST_CASE("PvP shadow record lines and the shot trace path") {
+    const ShotShadowRecord record{.playerId = 2, .actionId = 9, .kind = ActionKind::Shot, .handoffTick = 100, .epoch = 3,
+        .sequence = 20, .requestLife = 1, .currentEpoch = 3, .lastResolved = 15, .life = 1,
+        .step = {ShotStepPath::OnTime, 105}, .cooldownHoldTicks = 4, .rejection = ShotRejection::Cooldown,
+        .viewTickQ16 = 98 * 65536 + 32768, .viewValid = true, .viewLagQ16 = 2 * 65536 - 32768};
+    CHECK(MatchShotRecordLine(record) ==
+          "{\"version\":1,\"kind\":\"decision\",\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
+          "\"s\":20,\"request_life\":1,\"epoch_at_a\":3,\"last_resolved_at_a\":15,\"life_at_a\":1,\"path\":\"on_time\","
+          "\"step_tick\":105,\"cooldown_hold_ticks\":4,\"rejection\":\"cooldown\",\"view_tick_q16\":6455296,"
+          "\"view_valid\":true,\"view_lag_q16\":98304}");
+    ShotShadowRecord reload{.kind = ActionKind::Reload, .viewTickQ16 = 5, .viewValid = false};
+    CHECK(MatchShotRecordLine(reload).find("\"cooldown_hold_ticks\":null") != std::string::npos);
+    CHECK(MatchShotRecordLine(reload).find("\"view_valid\":false,\"view_lag_q16\":null}") != std::string::npos);
+    CHECK(MatchShotTraceEndLine(4, 1, 2) == "{\"version\":1,\"kind\":\"trace_end\",\"records\":4,\"dropped\":1,\"view_tick_invalid\":2}");
+    CHECK(MatchShotTracePath("out/match-commands.jsonl") == std::filesystem::path("out/match-shots.jsonl"));
+    CHECK(MatchShotTracePath("out/trace.jsonl") == std::filesystem::path("out/trace.jsonl.shots.jsonl"));
+    CHECK(MatchShotTracePath({}).empty());
 }

@@ -330,11 +330,13 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
                 if (hit.kind == ShotHitKind::Player) {
                     auto& target = players_.at(hit.targetId);
                     decision.targetLifeGeneration = target.state.lifeGeneration;
+                    decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)
                     decision.damage = Engine::Math::Min(PvpCombatRules.shotDamage, target.combat.hp);
                     target.combat.hp -= decision.damage;
                     ++target.combat.damageCount;
                     target.combat.lastDamageTick = tick_;
                     target.combat.lastAttackerId = playerId;
+                    target.combat.lastHitPart = HitPart::Body;
                     if (target.combat.hp == 0) Kill(target);
                 }
             }

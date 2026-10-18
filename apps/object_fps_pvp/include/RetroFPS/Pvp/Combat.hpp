@@ -25,10 +25,15 @@ struct CombatRules final {
     std::uint32_t magazineCapacity{12};
     std::uint64_t reloadTicks{90};
     std::uint64_t respawnTicks{180};
+    // The most damage one decision may deal, part multipliers included (pv7
+    // §7); shotDamage stays the base (Body) damage. v7.1 has no multiplier.
+    std::uint32_t maximumShotDamage{25};
 };
 inline constexpr CombatRules PvpCombatRules{};
 
 enum class ActionKind { Shot = 0, Reload = 1 };
+// Where a shot hit a player (pv7 §7). v7.1's Match produces only Body.
+enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2 };
 
 // Historical Shot names also carry reload actions.
 struct ShotRequest final {
@@ -38,7 +43,23 @@ struct ShotRequest final {
     float pitch{};
     ActionKind kind{ActionKind::Shot};
     std::uint64_t lifeGeneration{1};
+    // Immutable request content (pv7 §6, §7): it takes part in comparing a
+    // retransmission, but no decision reads it before a1-shot-step; the host
+    // only records it (D-2). E and S of one Client simulation step, and the
+    // remote time the shooter saw (Tick x 65536; 0 without one).
+    std::uint64_t movementEpoch{};
+    std::uint64_t commandSequence{};
+    std::uint64_t viewTickQ16{};
     bool operator==(const ShotRequest&) const = default;
+};
+
+// The request content a Client takes from its presentation for a shot (pv7 §6,
+// §7): E and S of one simulation step, and the global view cursor (Tick x
+// 65536). All zero without prediction or without a presented remote player.
+struct ShotContext final {
+    std::uint64_t movementEpoch{};
+    std::uint64_t commandSequence{};
+    std::uint64_t viewTickQ16{};
 };
 
 struct ActionBatch final {
@@ -64,6 +85,7 @@ struct ShotDecision final {
     ActionKind kind{ActionKind::Shot};
     std::uint64_t lifeGeneration{1};
     std::uint64_t targetLifeGeneration{};
+    HitPart hitPart{HitPart::Unspecified}; // Body or Head exactly for a player hit
     bool operator==(const ShotDecision&) const = default;
 };
 
@@ -78,22 +100,39 @@ struct CombatState final {
     std::uint64_t reloadEndTick{};
     ActionId lastShotActionId{};
     std::uint64_t lastShotTick{};
-    // Presentation-only hit record of this life (pv6 contract §2): the tick of
-    // the last hit, hits taken and the last attacker. All zero before the first
-    // hit; a respawn resets them with the rest of the state. Match never reads them.
+    // Presentation-only hit record of this life (pv6 contract §2, pv7 §7): the
+    // tick of the last hit, hits taken, the last attacker and the part it hit.
+    // All zero before the first hit; a respawn resets them with the rest of the
+    // state. Match never reads them.
     std::uint64_t lastDamageTick{};
     std::uint32_t damageCount{};
     PlayerId lastAttackerId{};
+    HitPart lastHitPart{HitPart::Unspecified};
     bool operator==(const CombatState&) const = default;
 };
 
-// Decode check of the hit record (pv6 contract §2): all zero or all set; a hit
-// lies within the current life state and the snapshot, is not self-inflicted
-// and counts at most one per hit point; a dead player died of its last hit.
+// pv7 §7 decode checks shared by every reader of the wire values: a player
+// hit carries Body or Head (v8's Head accepted already), any other decision
+// Unspecified; and shot damage <= maximum shot damage <= maximum hp.
+[[nodiscard]] constexpr bool ValidDecisionHitPart(ShotHitKind kind, int part) noexcept {
+    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head);
+    return kind == ShotHitKind::Player ? playerPart : part == static_cast<int>(HitPart::Unspecified);
+}
+[[nodiscard]] constexpr bool ValidShotDamageBounds(std::uint32_t shotDamage, std::uint32_t maximumShotDamage,
+                                                   std::uint32_t maximumHp) noexcept {
+    return shotDamage > 0 && shotDamage <= maximumShotDamage && maximumShotDamage <= maximumHp;
+}
+
+// Decode check of the hit record (pv6 contract §2, four fields in pv7 §7):
+// all zero or all set, a set part being Body or Head; a hit lies within the
+// current life state and the snapshot, is not self-inflicted and counts at
+// most one per hit point; a dead player died of its last hit.
 [[nodiscard]] constexpr bool ValidDamageRecord(const CombatState& combat, bool dead, std::uint64_t lifeStateTick,
                                                std::uint64_t snapshotTick, std::uint32_t maximumHp) noexcept {
     const bool none = combat.lastDamageTick == 0;
     if ((combat.damageCount == 0) != none || (combat.lastAttackerId == 0) != none) return false;
+    if ((combat.lastHitPart == HitPart::Unspecified) != none ||
+        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;
     if (dead && (none || combat.lastDamageTick != lifeStateTick)) return false;
     return none || (lifeStateTick <= combat.lastDamageTick && combat.lastDamageTick <= snapshotTick &&
                     combat.lastAttackerId != combat.playerId && combat.damageCount <= maximumHp);

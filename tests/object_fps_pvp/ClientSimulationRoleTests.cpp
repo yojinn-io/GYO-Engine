@@ -626,3 +626,28 @@ TEST_CASE("PvP the simulation role thread runs, publishes and stops while waitin
     }
     CHECK(connection.State().phase == ConnectionPhase::Lobby);
 }
+
+// pv7 §6, §7: an action's E and S come from one presented simulation step; a
+// Shot also carries the last presentation's view tick, a Reload none. Without
+// an active prediction the action still goes, with E = S = 0 (a1-shot-step
+// changes that).
+TEST_CASE("PvP an action's E and S come from one presented step") {
+    ClientPresented presented;
+    presented.observation.active = true;
+    presented.observation.movementEpoch = 4;
+    presented.observation.latestCommand = 77;
+    presented.observation.lastResolvedCommand = 70;
+    const auto shot = ActionContext(presented, ActionKind::Shot, 123456);
+    CHECK(shot.movementEpoch == 4);
+    CHECK(shot.commandSequence == 77);
+    CHECK(shot.viewTickQ16 == 123456);
+    const auto reload = ActionContext(presented, ActionKind::Reload, 123456);
+    CHECK(reload.movementEpoch == 4);
+    CHECK(reload.commandSequence == 77);
+    CHECK(reload.viewTickQ16 == 0);
+    presented.observation.active = false;
+    const auto unpredicted = ActionContext(presented, ActionKind::Shot, 123456);
+    CHECK(unpredicted.movementEpoch == 0);
+    CHECK(unpredicted.commandSequence == 0);
+    CHECK(unpredicted.viewTickQ16 == 123456);
+}

@@ -120,5 +120,5 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, MaximumShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

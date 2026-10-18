@@ -413,6 +413,57 @@ func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
 	return file_runtime_v7_proto_rawDescGZIP(), []int{6}
 }
 
+// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
+// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+type HitPart int32
+
+const (
+	HitPart_HIT_PART_UNSPECIFIED HitPart = 0
+	HitPart_HIT_PART_BODY        HitPart = 1
+	HitPart_HIT_PART_HEAD        HitPart = 2
+)
+
+// Enum value maps for HitPart.
+var (
+	HitPart_name = map[int32]string{
+		0: "HIT_PART_UNSPECIFIED",
+		1: "HIT_PART_BODY",
+		2: "HIT_PART_HEAD",
+	}
+	HitPart_value = map[string]int32{
+		"HIT_PART_UNSPECIFIED": 0,
+		"HIT_PART_BODY":        1,
+		"HIT_PART_HEAD":        2,
+	}
+)
+
+func (x HitPart) Enum() *HitPart {
+	p := new(HitPart)
+	*p = x
+	return p
+}
+
+func (x HitPart) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HitPart) Descriptor() protoreflect.EnumDescriptor {
+	return file_runtime_v7_proto_enumTypes[7].Descriptor()
+}
+
+func (HitPart) Type() protoreflect.EnumType {
+	return &file_runtime_v7_proto_enumTypes[7]
+}
+
+func (x HitPart) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HitPart.Descriptor instead.
+func (HitPart) EnumDescriptor() ([]byte, []int) {
+	return file_runtime_v7_proto_rawDescGZIP(), []int{7}
+}
+
 // Each name is an ingress v1 drop_ key in upper case; the words are defined
 // once, in gateway/ingress_statistics.go, and checked against
 // tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
@@ -534,11 +585,11 @@ func (x DropReason) String() string {
 }
 
 func (DropReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_v7_proto_enumTypes[7].Descriptor()
+	return file_runtime_v7_proto_enumTypes[8].Descriptor()
 }
 
 func (DropReason) Type() protoreflect.EnumType {
-	return &file_runtime_v7_proto_enumTypes[7]
+	return &file_runtime_v7_proto_enumTypes[8]
 }
 
 func (x DropReason) Number() protoreflect.EnumNumber {
@@ -547,7 +598,7 @@ func (x DropReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DropReason.Descriptor instead.
 func (DropReason) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_v7_proto_rawDescGZIP(), []int{7}
+	return file_runtime_v7_proto_rawDescGZIP(), []int{8}
 }
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
@@ -1886,8 +1937,11 @@ type CombatRules struct {
 	MagazineCapacity      uint32                 `protobuf:"varint,6,opt,name=magazine_capacity,json=magazineCapacity,proto3" json:"magazine_capacity,omitempty"`
 	ReloadTicks           uint64                 `protobuf:"varint,7,opt,name=reload_ticks,json=reloadTicks,proto3" json:"reload_ticks,omitempty"`
 	RespawnTicks          uint64                 `protobuf:"varint,8,opt,name=respawn_ticks,json=respawnTicks,proto3" json:"respawn_ticks,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// The most damage one decision may deal, part multipliers included (pv7
+	// §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
+	MaximumShotDamage uint32 `protobuf:"varint,9,opt,name=maximum_shot_damage,json=maximumShotDamage,proto3" json:"maximum_shot_damage,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *CombatRules) Reset() {
@@ -1976,6 +2030,13 @@ func (x *CombatRules) GetRespawnTicks() uint64 {
 	return 0
 }
 
+func (x *CombatRules) GetMaximumShotDamage() uint32 {
+	if x != nil {
+		return x.MaximumShotDamage
+	}
+	return 0
+}
+
 type CombatState struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1993,8 +2054,11 @@ type CombatState struct {
 	LastDamageTick uint64 `protobuf:"varint,11,opt,name=last_damage_tick,json=lastDamageTick,proto3" json:"last_damage_tick,omitempty"`
 	DamageCount    uint32 `protobuf:"varint,12,opt,name=damage_count,json=damageCount,proto3" json:"damage_count,omitempty"`
 	LastAttackerId uint64 `protobuf:"varint,13,opt,name=last_attacker_id,json=lastAttackerId,proto3" json:"last_attacker_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// The hit record's fourth field (pv7 §7): set with the other three, BODY or
+	// HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
+	LastHitPart   HitPart `protobuf:"varint,14,opt,name=last_hit_part,json=lastHitPart,proto3,enum=object_fps_pvp.runtime.v7.HitPart" json:"last_hit_part,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CombatState) Reset() {
@@ -2118,6 +2182,13 @@ func (x *CombatState) GetLastAttackerId() uint64 {
 	return 0
 }
 
+func (x *CombatState) GetLastHitPart() HitPart {
+	if x != nil {
+		return x.LastHitPart
+	}
+	return HitPart_HIT_PART_UNSPECIFIED
+}
+
 type ShotRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	ActionId              uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
@@ -2126,8 +2197,16 @@ type ShotRequest struct {
 	Pitch                 *float32               `protobuf:"fixed32,4,opt,name=pitch,proto3,oneof" json:"pitch,omitempty"`
 	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration        uint64                 `protobuf:"varint,6,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Immutable request content (pv7 §6, §7), part of the request's identity
+	// for retransmission: the Client's predicted movement epoch (E) and its
+	// newest command of that epoch (S), from one simulation step, and the
+	// remote time the shooter saw (the presentation's global cursor, Tick x
+	// 65536, floored; 0 without one). v7.1 only records them (D-2).
+	MovementEpoch   uint64 `protobuf:"varint,7,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
+	CommandSequence uint64 `protobuf:"varint,8,opt,name=command_sequence,json=commandSequence,proto3" json:"command_sequence,omitempty"`
+	ViewTickQ16     uint64 `protobuf:"varint,9,opt,name=view_tick_q16,json=viewTickQ16,proto3" json:"view_tick_q16,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ShotRequest) Reset() {
@@ -2202,6 +2281,27 @@ func (x *ShotRequest) GetLifeGeneration() uint64 {
 	return 0
 }
 
+func (x *ShotRequest) GetMovementEpoch() uint64 {
+	if x != nil {
+		return x.MovementEpoch
+	}
+	return 0
+}
+
+func (x *ShotRequest) GetCommandSequence() uint64 {
+	if x != nil {
+		return x.CommandSequence
+	}
+	return 0
+}
+
+func (x *ShotRequest) GetViewTickQ16() uint64 {
+	if x != nil {
+		return x.ViewTickQ16
+	}
+	return 0
+}
+
 type ShotDecision struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	ActionId             uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
@@ -2214,6 +2314,7 @@ type ShotDecision struct {
 	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration       uint64                 `protobuf:"varint,9,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	TargetLifeGeneration uint64                 `protobuf:"varint,10,opt,name=target_life_generation,json=targetLifeGeneration,proto3" json:"target_life_generation,omitempty"`
+	HitPart              HitPart                `protobuf:"varint,11,opt,name=hit_part,json=hitPart,proto3,enum=object_fps_pvp.runtime.v7.HitPart" json:"hit_part,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -2316,6 +2417,13 @@ func (x *ShotDecision) GetTargetLifeGeneration() uint64 {
 		return x.TargetLifeGeneration
 	}
 	return 0
+}
+
+func (x *ShotDecision) GetHitPart() HitPart {
+	if x != nil {
+		return x.HitPart
+	}
+	return HitPart_HIT_PART_UNSPECIFIED
 }
 
 // Diagnostics only (pv7 contract §4): the discards the Gateway executed, by
@@ -2715,7 +2823,7 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x0fretired_through\x18\x02 \x01(\x04R\x0eretiredThrough\x12E\n" +
 	"\tdecisions\x18\x03 \x03(\v2'.object_fps_pvp.runtime.v7.ShotDecisionR\tdecisions\x12'\n" +
 	"\x0frefused_batches\x18\x04 \x01(\x04R\x0erefusedBatches\x12K\n" +
-	"\flast_refusal\x18\x05 \x01(\x0e2(.object_fps_pvp.runtime.v7.ActionRefusalR\vlastRefusal\"\xc1\x02\n" +
+	"\flast_refusal\x18\x05 \x01(\x0e2(.object_fps_pvp.runtime.v7.ActionRefusalR\vlastRefusal\"\xf1\x02\n" +
 	"\vCombatRules\x12\x1d\n" +
 	"\n" +
 	"maximum_hp\x18\x01 \x01(\rR\tmaximumHp\x12\x1f\n" +
@@ -2727,7 +2835,8 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x18maximum_reference_age_ms\x18\x05 \x01(\rR\x15maximumReferenceAgeMs\x12+\n" +
 	"\x11magazine_capacity\x18\x06 \x01(\rR\x10magazineCapacity\x12!\n" +
 	"\freload_ticks\x18\a \x01(\x04R\vreloadTicks\x12#\n" +
-	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\"\x87\x04\n" +
+	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\x12.\n" +
+	"\x13maximum_shot_damage\x18\t \x01(\rR\x11maximumShotDamage\"\xcf\x04\n" +
 	"\vCombatState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x0e\n" +
 	"\x02hp\x18\x02 \x01(\rR\x02hp\x123\n" +
@@ -2742,16 +2851,20 @@ const file_runtime_v7_proto_rawDesc = "" +
 	" \x01(\x04R\flastShotTick\x12(\n" +
 	"\x10last_damage_tick\x18\v \x01(\x04R\x0elastDamageTick\x12!\n" +
 	"\fdamage_count\x18\f \x01(\rR\vdamageCount\x12(\n" +
-	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\"\x8a\x02\n" +
+	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\x12F\n" +
+	"\rlast_hit_part\x18\x0e \x01(\x0e2\".object_fps_pvp.runtime.v7.HitPartR\vlastHitPart\"\x80\x03\n" +
 	"\vShotRequest\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x126\n" +
 	"\x17observed_authority_tick\x18\x02 \x01(\x04R\x15observedAuthorityTick\x12\x15\n" +
 	"\x03yaw\x18\x03 \x01(\x02H\x00R\x03yaw\x88\x01\x01\x12\x19\n" +
 	"\x05pitch\x18\x04 \x01(\x02H\x01R\x05pitch\x88\x01\x01\x129\n" +
 	"\x04kind\x18\x05 \x01(\x0e2%.object_fps_pvp.runtime.v7.ActionKindR\x04kind\x12'\n" +
-	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGenerationB\x06\n" +
+	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGeneration\x12%\n" +
+	"\x0emovement_epoch\x18\a \x01(\x04R\rmovementEpoch\x12)\n" +
+	"\x10command_sequence\x18\b \x01(\x04R\x0fcommandSequence\x12\"\n" +
+	"\rview_tick_q16\x18\t \x01(\x04R\vviewTickQ16B\x06\n" +
 	"\x04_yawB\b\n" +
-	"\x06_pitch\"\xc6\x03\n" +
+	"\x06_pitch\"\x85\x04\n" +
 	"\fShotDecision\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x12#\n" +
 	"\rresolved_tick\x18\x02 \x01(\x04R\fresolvedTick\x12\x1a\n" +
@@ -2763,7 +2876,8 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\x04kind\x18\b \x01(\x0e2%.object_fps_pvp.runtime.v7.ActionKindR\x04kind\x12'\n" +
 	"\x0flife_generation\x18\t \x01(\x04R\x0elifeGeneration\x124\n" +
 	"\x16target_life_generation\x18\n" +
-	" \x01(\x04R\x14targetLifeGeneration\"\xbe\x02\n" +
+	" \x01(\x04R\x14targetLifeGeneration\x12=\n" +
+	"\bhit_part\x18\v \x01(\x0e2\".object_fps_pvp.runtime.v7.HitPartR\ahitPart\"\xbe\x02\n" +
 	"\x11GatewayDropReport\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
 	"\x0freport_sequence\x18\x02 \x01(\x04R\x0ereportSequence\x12\x14\n" +
@@ -2834,7 +2948,11 @@ const file_runtime_v7_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02*\x91\t\n" +
+	"HIT_PLAYER\x10\x02*I\n" +
+	"\aHitPart\x12\x18\n" +
+	"\x14HIT_PART_UNSPECIFIED\x10\x00\x12\x11\n" +
+	"\rHIT_PART_BODY\x10\x01\x12\x11\n" +
+	"\rHIT_PART_HEAD\x10\x02*\x91\t\n" +
 	"\n" +
 	"DropReason\x12\x1b\n" +
 	"\x17DROP_REASON_UNSPECIFIED\x10\x00\x12#\n" +
@@ -2881,7 +2999,7 @@ func file_runtime_v7_proto_rawDescGZIP() []byte {
 	return file_runtime_v7_proto_rawDescData
 }
 
-var file_runtime_v7_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_runtime_v7_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
 var file_runtime_v7_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_runtime_v7_proto_goTypes = []any{
 	(LeaveReason)(0),          // 0: object_fps_pvp.runtime.v7.LeaveReason
@@ -2891,65 +3009,68 @@ var file_runtime_v7_proto_goTypes = []any{
 	(ActionKind)(0),           // 4: object_fps_pvp.runtime.v7.ActionKind
 	(ShotRejection)(0),        // 5: object_fps_pvp.runtime.v7.ShotRejection
 	(ShotHitKind)(0),          // 6: object_fps_pvp.runtime.v7.ShotHitKind
-	(DropReason)(0),           // 7: object_fps_pvp.runtime.v7.DropReason
-	(*Ready)(nil),             // 8: object_fps_pvp.runtime.v7.Ready
-	(*PlayerJoin)(nil),        // 9: object_fps_pvp.runtime.v7.PlayerJoin
-	(*PlayerLeave)(nil),       // 10: object_fps_pvp.runtime.v7.PlayerLeave
-	(*MovementCommand)(nil),   // 11: object_fps_pvp.runtime.v7.MovementCommand
-	(*PlayerInput)(nil),       // 12: object_fps_pvp.runtime.v7.PlayerInput
-	(*JoinResult)(nil),        // 13: object_fps_pvp.runtime.v7.JoinResult
-	(*PlayerState)(nil),       // 14: object_fps_pvp.runtime.v7.PlayerState
-	(*WorldSnapshot)(nil),     // 15: object_fps_pvp.runtime.v7.WorldSnapshot
-	(*PlayerEvicted)(nil),     // 16: object_fps_pvp.runtime.v7.PlayerEvicted
-	(*RuntimeError)(nil),      // 17: object_fps_pvp.runtime.v7.RuntimeError
-	(*RuntimeEnvelope)(nil),   // 18: object_fps_pvp.runtime.v7.RuntimeEnvelope
-	(*ClockSample)(nil),       // 19: object_fps_pvp.runtime.v7.ClockSample
-	(*ActionBatch)(nil),       // 20: object_fps_pvp.runtime.v7.ActionBatch
-	(*ActionResults)(nil),     // 21: object_fps_pvp.runtime.v7.ActionResults
-	(*CombatRules)(nil),       // 22: object_fps_pvp.runtime.v7.CombatRules
-	(*CombatState)(nil),       // 23: object_fps_pvp.runtime.v7.CombatState
-	(*ShotRequest)(nil),       // 24: object_fps_pvp.runtime.v7.ShotRequest
-	(*ShotDecision)(nil),      // 25: object_fps_pvp.runtime.v7.ShotDecision
-	(*GatewayDropReport)(nil), // 26: object_fps_pvp.runtime.v7.GatewayDropReport
-	(*DropCount)(nil),         // 27: object_fps_pvp.runtime.v7.DropCount
-	(*DropSample)(nil),        // 28: object_fps_pvp.runtime.v7.DropSample
+	(HitPart)(0),              // 7: object_fps_pvp.runtime.v7.HitPart
+	(DropReason)(0),           // 8: object_fps_pvp.runtime.v7.DropReason
+	(*Ready)(nil),             // 9: object_fps_pvp.runtime.v7.Ready
+	(*PlayerJoin)(nil),        // 10: object_fps_pvp.runtime.v7.PlayerJoin
+	(*PlayerLeave)(nil),       // 11: object_fps_pvp.runtime.v7.PlayerLeave
+	(*MovementCommand)(nil),   // 12: object_fps_pvp.runtime.v7.MovementCommand
+	(*PlayerInput)(nil),       // 13: object_fps_pvp.runtime.v7.PlayerInput
+	(*JoinResult)(nil),        // 14: object_fps_pvp.runtime.v7.JoinResult
+	(*PlayerState)(nil),       // 15: object_fps_pvp.runtime.v7.PlayerState
+	(*WorldSnapshot)(nil),     // 16: object_fps_pvp.runtime.v7.WorldSnapshot
+	(*PlayerEvicted)(nil),     // 17: object_fps_pvp.runtime.v7.PlayerEvicted
+	(*RuntimeError)(nil),      // 18: object_fps_pvp.runtime.v7.RuntimeError
+	(*RuntimeEnvelope)(nil),   // 19: object_fps_pvp.runtime.v7.RuntimeEnvelope
+	(*ClockSample)(nil),       // 20: object_fps_pvp.runtime.v7.ClockSample
+	(*ActionBatch)(nil),       // 21: object_fps_pvp.runtime.v7.ActionBatch
+	(*ActionResults)(nil),     // 22: object_fps_pvp.runtime.v7.ActionResults
+	(*CombatRules)(nil),       // 23: object_fps_pvp.runtime.v7.CombatRules
+	(*CombatState)(nil),       // 24: object_fps_pvp.runtime.v7.CombatState
+	(*ShotRequest)(nil),       // 25: object_fps_pvp.runtime.v7.ShotRequest
+	(*ShotDecision)(nil),      // 26: object_fps_pvp.runtime.v7.ShotDecision
+	(*GatewayDropReport)(nil), // 27: object_fps_pvp.runtime.v7.GatewayDropReport
+	(*DropCount)(nil),         // 28: object_fps_pvp.runtime.v7.DropCount
+	(*DropSample)(nil),        // 29: object_fps_pvp.runtime.v7.DropSample
 }
 var file_runtime_v7_proto_depIdxs = []int32{
-	22, // 0: object_fps_pvp.runtime.v7.Ready.combat_rules:type_name -> object_fps_pvp.runtime.v7.CombatRules
+	23, // 0: object_fps_pvp.runtime.v7.Ready.combat_rules:type_name -> object_fps_pvp.runtime.v7.CombatRules
 	0,  // 1: object_fps_pvp.runtime.v7.PlayerLeave.reason:type_name -> object_fps_pvp.runtime.v7.LeaveReason
-	11, // 2: object_fps_pvp.runtime.v7.PlayerInput.commands:type_name -> object_fps_pvp.runtime.v7.MovementCommand
+	12, // 2: object_fps_pvp.runtime.v7.PlayerInput.commands:type_name -> object_fps_pvp.runtime.v7.MovementCommand
 	1,  // 3: object_fps_pvp.runtime.v7.PlayerState.life_state:type_name -> object_fps_pvp.runtime.v7.LifeState
-	14, // 4: object_fps_pvp.runtime.v7.WorldSnapshot.players:type_name -> object_fps_pvp.runtime.v7.PlayerState
-	23, // 5: object_fps_pvp.runtime.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.runtime.v7.CombatState
+	15, // 4: object_fps_pvp.runtime.v7.WorldSnapshot.players:type_name -> object_fps_pvp.runtime.v7.PlayerState
+	24, // 5: object_fps_pvp.runtime.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.runtime.v7.CombatState
 	2,  // 6: object_fps_pvp.runtime.v7.PlayerEvicted.reason:type_name -> object_fps_pvp.runtime.v7.EvictionReason
-	8,  // 7: object_fps_pvp.runtime.v7.RuntimeEnvelope.ready:type_name -> object_fps_pvp.runtime.v7.Ready
-	9,  // 8: object_fps_pvp.runtime.v7.RuntimeEnvelope.join:type_name -> object_fps_pvp.runtime.v7.PlayerJoin
-	10, // 9: object_fps_pvp.runtime.v7.RuntimeEnvelope.leave:type_name -> object_fps_pvp.runtime.v7.PlayerLeave
-	12, // 10: object_fps_pvp.runtime.v7.RuntimeEnvelope.input:type_name -> object_fps_pvp.runtime.v7.PlayerInput
-	13, // 11: object_fps_pvp.runtime.v7.RuntimeEnvelope.join_result:type_name -> object_fps_pvp.runtime.v7.JoinResult
-	17, // 12: object_fps_pvp.runtime.v7.RuntimeEnvelope.error:type_name -> object_fps_pvp.runtime.v7.RuntimeError
-	15, // 13: object_fps_pvp.runtime.v7.RuntimeEnvelope.snapshot:type_name -> object_fps_pvp.runtime.v7.WorldSnapshot
-	20, // 14: object_fps_pvp.runtime.v7.RuntimeEnvelope.actions:type_name -> object_fps_pvp.runtime.v7.ActionBatch
-	21, // 15: object_fps_pvp.runtime.v7.RuntimeEnvelope.action_results:type_name -> object_fps_pvp.runtime.v7.ActionResults
-	16, // 16: object_fps_pvp.runtime.v7.RuntimeEnvelope.evicted:type_name -> object_fps_pvp.runtime.v7.PlayerEvicted
-	19, // 17: object_fps_pvp.runtime.v7.RuntimeEnvelope.clock:type_name -> object_fps_pvp.runtime.v7.ClockSample
-	26, // 18: object_fps_pvp.runtime.v7.RuntimeEnvelope.drop_report:type_name -> object_fps_pvp.runtime.v7.GatewayDropReport
-	24, // 19: object_fps_pvp.runtime.v7.ActionBatch.shots:type_name -> object_fps_pvp.runtime.v7.ShotRequest
-	25, // 20: object_fps_pvp.runtime.v7.ActionResults.decisions:type_name -> object_fps_pvp.runtime.v7.ShotDecision
+	9,  // 7: object_fps_pvp.runtime.v7.RuntimeEnvelope.ready:type_name -> object_fps_pvp.runtime.v7.Ready
+	10, // 8: object_fps_pvp.runtime.v7.RuntimeEnvelope.join:type_name -> object_fps_pvp.runtime.v7.PlayerJoin
+	11, // 9: object_fps_pvp.runtime.v7.RuntimeEnvelope.leave:type_name -> object_fps_pvp.runtime.v7.PlayerLeave
+	13, // 10: object_fps_pvp.runtime.v7.RuntimeEnvelope.input:type_name -> object_fps_pvp.runtime.v7.PlayerInput
+	14, // 11: object_fps_pvp.runtime.v7.RuntimeEnvelope.join_result:type_name -> object_fps_pvp.runtime.v7.JoinResult
+	18, // 12: object_fps_pvp.runtime.v7.RuntimeEnvelope.error:type_name -> object_fps_pvp.runtime.v7.RuntimeError
+	16, // 13: object_fps_pvp.runtime.v7.RuntimeEnvelope.snapshot:type_name -> object_fps_pvp.runtime.v7.WorldSnapshot
+	21, // 14: object_fps_pvp.runtime.v7.RuntimeEnvelope.actions:type_name -> object_fps_pvp.runtime.v7.ActionBatch
+	22, // 15: object_fps_pvp.runtime.v7.RuntimeEnvelope.action_results:type_name -> object_fps_pvp.runtime.v7.ActionResults
+	17, // 16: object_fps_pvp.runtime.v7.RuntimeEnvelope.evicted:type_name -> object_fps_pvp.runtime.v7.PlayerEvicted
+	20, // 17: object_fps_pvp.runtime.v7.RuntimeEnvelope.clock:type_name -> object_fps_pvp.runtime.v7.ClockSample
+	27, // 18: object_fps_pvp.runtime.v7.RuntimeEnvelope.drop_report:type_name -> object_fps_pvp.runtime.v7.GatewayDropReport
+	25, // 19: object_fps_pvp.runtime.v7.ActionBatch.shots:type_name -> object_fps_pvp.runtime.v7.ShotRequest
+	26, // 20: object_fps_pvp.runtime.v7.ActionResults.decisions:type_name -> object_fps_pvp.runtime.v7.ShotDecision
 	3,  // 21: object_fps_pvp.runtime.v7.ActionResults.last_refusal:type_name -> object_fps_pvp.runtime.v7.ActionRefusal
-	4,  // 22: object_fps_pvp.runtime.v7.ShotRequest.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
-	5,  // 23: object_fps_pvp.runtime.v7.ShotDecision.rejection:type_name -> object_fps_pvp.runtime.v7.ShotRejection
-	6,  // 24: object_fps_pvp.runtime.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.runtime.v7.ShotHitKind
-	4,  // 25: object_fps_pvp.runtime.v7.ShotDecision.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
-	27, // 26: object_fps_pvp.runtime.v7.GatewayDropReport.counts:type_name -> object_fps_pvp.runtime.v7.DropCount
-	28, // 27: object_fps_pvp.runtime.v7.GatewayDropReport.samples:type_name -> object_fps_pvp.runtime.v7.DropSample
-	7,  // 28: object_fps_pvp.runtime.v7.DropCount.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
-	7,  // 29: object_fps_pvp.runtime.v7.DropSample.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
-	30, // [30:30] is the sub-list for method output_type
-	30, // [30:30] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	7,  // 22: object_fps_pvp.runtime.v7.CombatState.last_hit_part:type_name -> object_fps_pvp.runtime.v7.HitPart
+	4,  // 23: object_fps_pvp.runtime.v7.ShotRequest.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
+	5,  // 24: object_fps_pvp.runtime.v7.ShotDecision.rejection:type_name -> object_fps_pvp.runtime.v7.ShotRejection
+	6,  // 25: object_fps_pvp.runtime.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.runtime.v7.ShotHitKind
+	4,  // 26: object_fps_pvp.runtime.v7.ShotDecision.kind:type_name -> object_fps_pvp.runtime.v7.ActionKind
+	7,  // 27: object_fps_pvp.runtime.v7.ShotDecision.hit_part:type_name -> object_fps_pvp.runtime.v7.HitPart
+	28, // 28: object_fps_pvp.runtime.v7.GatewayDropReport.counts:type_name -> object_fps_pvp.runtime.v7.DropCount
+	29, // 29: object_fps_pvp.runtime.v7.GatewayDropReport.samples:type_name -> object_fps_pvp.runtime.v7.DropSample
+	8,  // 30: object_fps_pvp.runtime.v7.DropCount.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
+	8,  // 31: object_fps_pvp.runtime.v7.DropSample.reason:type_name -> object_fps_pvp.runtime.v7.DropReason
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_runtime_v7_proto_init() }
@@ -2982,7 +3103,7 @@ func file_runtime_v7_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_runtime_v7_proto_rawDesc), len(file_runtime_v7_proto_rawDesc)),
-			NumEnums:      8,
+			NumEnums:      9,
 			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,

@@ -199,8 +199,10 @@ std::size_t CheckMaximumDatagrams() {
     for(std::size_t n=0;n<MaxActionBatch;++n) {
         auto* shot=batch.add_shots();shot->set_action_id(max64-n);shot->set_observed_authority_tick(max64);
         shot->set_yaw(3.0f);shot->set_pitch(1.5f);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(max64);
+        shot->set_movement_epoch(max64);shot->set_command_sequence(max64);shot->set_view_tick_q16(max64); // pv7 §6, §7
         auto* d=results.add_decisions();d->set_action_id(max64-n);d->set_resolved_tick(max64);
         d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(max64);d->set_target_life_generation(max64);
+        d->set_hit_part(pb::HIT_PART_HEAD);
     }
     check(wire::Type::Actions,batch);check(wire::Type::ActionResults,results);
     pb::PlayerInput movement;movement.set_movement_epoch(max64);movement.set_life_generation(max64);movement.set_observed_authority_tick(max64);
@@ -221,10 +223,11 @@ std::size_t CheckMaximumDatagrams() {
         auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
         c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
         c->set_last_damage_tick(max64);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max64);
+        c->set_last_hit_part(pb::HIT_PART_HEAD);
     }
     check(wire::Type::Snapshot,snapshot);
     // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
-    Require(largest==1065,"maximum-field full-room snapshot is not 1065 bytes");
+    Require(largest==1073,"maximum-field full-room snapshot is not 1073 bytes"); // pv7 §8
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {

@@ -1446,3 +1446,37 @@ TEST_CASE("PvP IPC refusal names are the host's rejection names") {
         CHECK(object_fps_pvp::runtime::v7::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v7::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
     }
 }
+
+// pv7 §6, §7: Ready carries maximum_shot_damage; an action's E, S and view
+// tick reach the host as the Gateway forwarded them (its shadow record shows
+// them), and a decision carries its hit part.
+TEST_CASE("PvP IPC carries the hitbox fields and E, S and the view tick") {
+    Server server;
+    Gateway gateway(server.address);
+    const auto ready = gateway.Receive();
+    REQUIRE(ready);
+    REQUIRE(ready->has_ready());
+    CHECK(ready->ready().combat_rules().maximum_shot_damage() == PvpCombatRules.maximumShotDamage);
+    CHECK(ready->ready().combat_rules().shot_damage() == PvpCombatRules.shotDamage);
+    gateway.Send(Join(4));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    auto action = Actions(4, {1}, 0);
+    auto* shot = action.mutable_actions()->mutable_shots(0);
+    shot->set_movement_epoch(9);
+    shot->set_command_sequence(41);
+    shot->set_view_tick_q16(3);
+    gateway.Send(action);
+    const auto decided = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 1); });
+    CHECK(decided.action_results().decisions(0).hit_part() == object_fps_pvp::runtime::v7::HIT_PART_UNSPECIFIED); // a reload
+    std::optional<ShotShadowRecord> record;
+    for (const auto giveUp = Clock::now() + 2s; !record && Clock::now() < giveUp;) {
+        for (const auto& r : server.host.DrainShotRecords().records)
+            if (r.playerId == 4 && r.actionId == 1) record = r;
+        if (!record) std::this_thread::sleep_for(10ms);
+    }
+    REQUIRE(record);
+    CHECK(record->epoch == 9);
+    CHECK(record->sequence == 41);
+    CHECK(record->viewTickQ16 == 3);
+    CHECK_FALSE(record->viewValid); // a reload's view tick is 0
+}

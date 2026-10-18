@@ -124,7 +124,8 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			NextAllowedShotTick: state.NextAllowedShotTick, LifeGeneration: state.LifeGeneration,
 			MagazineAmmo: state.MagazineAmmo, ReloadActionId: state.ReloadActionId, ReloadStartTick: state.ReloadStartTick,
 			ReloadEndTick: state.ReloadEndTick, LastShotActionId: state.LastShotActionId, LastShotTick: state.LastShotTick,
-			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId})
+			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId,
+			LastHitPart: client.HitPart(state.LastHitPart)})
 	}
 	return out, nil
 }
@@ -136,6 +137,10 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 func validDamageRecord(state *runtime.CombatState, player *runtime.PlayerState, tick uint64, rules *runtime.CombatRules) bool {
 	none := state.LastDamageTick == 0
 	if (state.DamageCount == 0) != none || (state.LastAttackerId == 0) != none {
+		return false
+	}
+	// pv7 §7: the hit part is the record's fourth field.
+	if (state.LastHitPart == runtime.HitPart_HIT_PART_UNSPECIFIED) != none || (!none && !playerPart(state.LastHitPart)) {
 		return false
 	}
 	if player.LifeState == runtime.LifeState_LIFE_DEAD && (none || state.LastDamageTick != player.LifeStateTick) {
@@ -157,12 +162,20 @@ func EvictionNotice(e *runtime.PlayerEvicted) (string, string) {
 
 func finite(v float32) bool { return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) }
 
+// playerPart: a part a shot can hit a player at (pv7 §7). HEAD is accepted
+// although v7.1's Match produces only BODY, so v8 needs no new check.
+func playerPart(part runtime.HitPart) bool {
+	return part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD
+}
+
 // Rules originate in Match. The adapter validates their contract, not policy defaults.
 func ValidRules(r *runtime.CombatRules) bool {
-	return r != nil && r.MaximumHp > 0 && r.ShotDamage > 0 && r.ShotDamage <= r.MaximumHp && r.CooldownTicks > 0 && finite(r.ShotRange) && r.ShotRange > 0 && r.MaximumReferenceAgeMs > 0 && r.MagazineCapacity > 0 && r.ReloadTicks > 0 && r.RespawnTicks > 0
+	// pv7 §7: shot_damage <= maximum_shot_damage <= maximum_hp.
+	return r != nil && r.MaximumHp > 0 && r.ShotDamage > 0 && r.ShotDamage <= r.MaximumShotDamage &&
+		r.MaximumShotDamage <= r.MaximumHp && r.CooldownTicks > 0 && finite(r.ShotRange) && r.ShotRange > 0 && r.MaximumReferenceAgeMs > 0 && r.MagazineCapacity > 0 && r.ReloadTicks > 0 && r.RespawnTicks > 0
 }
 func RulesForClient(r *runtime.CombatRules) *client.CombatRules {
-	return &client.CombatRules{MaximumHp: r.MaximumHp, ShotDamage: r.ShotDamage, CooldownTicks: r.CooldownTicks, ShotRange: r.ShotRange, MaximumReferenceAgeMs: r.MaximumReferenceAgeMs, MagazineCapacity: r.MagazineCapacity, ReloadTicks: r.ReloadTicks, RespawnTicks: r.RespawnTicks}
+	return &client.CombatRules{MaximumHp: r.MaximumHp, ShotDamage: r.ShotDamage, CooldownTicks: r.CooldownTicks, ShotRange: r.ShotRange, MaximumReferenceAgeMs: r.MaximumReferenceAgeMs, MagazineCapacity: r.MagazineCapacity, ReloadTicks: r.ReloadTicks, RespawnTicks: r.RespawnTicks, MaximumShotDamage: r.MaximumShotDamage}
 }
 func ValidMovementRules(jumpHeight, gravity float32) bool {
 	return finite(jumpHeight) && jumpHeight > 0 && finite(gravity) && gravity > 0 &&
@@ -187,7 +200,8 @@ func ValidShot(s *runtime.ShotRequest) bool {
 func EqualShot(a, b *runtime.ShotRequest) bool {
 	return a != nil && b != nil && a.ActionId == b.ActionId && a.ObservedAuthorityTick == b.ObservedAuthorityTick &&
 		a.Kind == b.Kind && a.LifeGeneration == b.LifeGeneration && (a.Yaw == nil) == (b.Yaw == nil) &&
-		(a.Pitch == nil) == (b.Pitch == nil) && a.GetYaw() == b.GetYaw() && a.GetPitch() == b.GetPitch()
+		(a.Pitch == nil) == (b.Pitch == nil) && a.GetYaw() == b.GetYaw() && a.GetPitch() == b.GetPitch() &&
+		a.MovementEpoch == b.MovementEpoch && a.CommandSequence == b.CommandSequence && a.ViewTickQ16 == b.ViewTickQ16
 }
 func DecodeActions(payload []byte, playerID uint64) (*runtime.ActionBatch, error) {
 	var in client.ActionBatch
@@ -209,8 +223,10 @@ func DecodeActions(payload []byte, playerID uint64) (*runtime.ActionBatch, error
 		default:
 			return nil, ErrActions
 		}
+		// E, S and view_tick_q16 are content, never validated here (pv7 §6, §7).
 		s := &runtime.ShotRequest{ActionId: shot.ActionId, ObservedAuthorityTick: shot.ObservedAuthorityTick,
-			Yaw: shot.Yaw, Pitch: shot.Pitch, Kind: kind, LifeGeneration: shot.LifeGeneration}
+			Yaw: shot.Yaw, Pitch: shot.Pitch, Kind: kind, LifeGeneration: shot.LifeGeneration,
+			MovementEpoch: shot.MovementEpoch, CommandSequence: shot.CommandSequence, ViewTickQ16: shot.ViewTickQ16}
 		if !ValidShot(s) {
 			return nil, ErrActions
 		}
@@ -235,7 +251,9 @@ func ResultsForClient(in *runtime.ActionResults, rules *runtime.CombatRules) (*c
 		LastRefusal: client.ActionRefusal(in.LastRefusal)}
 	seen := map[uint64]bool{}
 	for _, d := range in.Decisions {
-		if d == nil || d.ActionId == 0 || d.ResolvedTick == 0 || d.LifeGeneration == 0 || seen[d.ActionId] || d.Rejection < runtime.ShotRejection_REJECTION_NONE || d.Rejection > runtime.ShotRejection_REJECTION_MAGAZINE_FULL || d.HitKind < runtime.ShotHitKind_HIT_MISS || d.HitKind > runtime.ShotHitKind_HIT_PLAYER || d.Damage > rules.ShotDamage || (d.Kind != runtime.ActionKind_ACTION_SHOT && d.Kind != runtime.ActionKind_ACTION_RELOAD) {
+		if d == nil || d.ActionId == 0 || d.ResolvedTick == 0 || d.LifeGeneration == 0 || seen[d.ActionId] || d.Rejection < runtime.ShotRejection_REJECTION_NONE || d.Rejection > runtime.ShotRejection_REJECTION_MAGAZINE_FULL || d.HitKind < runtime.ShotHitKind_HIT_MISS || d.HitKind > runtime.ShotHitKind_HIT_PLAYER || d.Damage > rules.MaximumShotDamage ||
+			(d.HitKind == runtime.ShotHitKind_HIT_PLAYER) != playerPart(d.HitPart) ||
+			(d.HitKind != runtime.ShotHitKind_HIT_PLAYER && d.HitPart != runtime.HitPart_HIT_PART_UNSPECIFIED) || (d.Kind != runtime.ActionKind_ACTION_SHOT && d.Kind != runtime.ActionKind_ACTION_RELOAD) {
 			return nil, ErrActions
 		}
 		if d.Accepted != (d.Rejection == runtime.ShotRejection_REJECTION_NONE) || (!d.Accepted && (d.HitKind != runtime.ShotHitKind_HIT_MISS || d.Damage != 0 || d.TargetId != 0 || d.TargetLifeGeneration != 0)) || (d.HitKind == runtime.ShotHitKind_HIT_PLAYER && (d.TargetId == 0 || d.TargetLifeGeneration == 0)) || (d.HitKind != runtime.ShotHitKind_HIT_PLAYER && (d.TargetId != 0 || d.Damage != 0 || d.TargetLifeGeneration != 0)) || (d.Kind == runtime.ActionKind_ACTION_RELOAD && (d.HitKind != runtime.ShotHitKind_HIT_MISS || d.Rejection == runtime.ShotRejection_REJECTION_COOLDOWN || d.Rejection == runtime.ShotRejection_REJECTION_EMPTY_MAGAZINE)) || (d.Kind == runtime.ActionKind_ACTION_SHOT && d.Rejection == runtime.ShotRejection_REJECTION_MAGAZINE_FULL) {
@@ -246,13 +264,13 @@ func ResultsForClient(in *runtime.ActionResults, rules *runtime.CombatRules) (*c
 		if d.Kind == runtime.ActionKind_ACTION_RELOAD {
 			kind = client.ActionKind_ACTION_RELOAD
 		}
-		out.Decisions = append(out.Decisions, &client.ShotDecision{ActionId: d.ActionId, ResolvedTick: d.ResolvedTick, Accepted: d.Accepted, Rejection: client.ShotRejection(d.Rejection), HitKind: client.ShotHitKind(d.HitKind), TargetId: d.TargetId, Damage: d.Damage, Kind: kind, LifeGeneration: d.LifeGeneration, TargetLifeGeneration: d.TargetLifeGeneration})
+		out.Decisions = append(out.Decisions, &client.ShotDecision{ActionId: d.ActionId, ResolvedTick: d.ResolvedTick, Accepted: d.Accepted, Rejection: client.ShotRejection(d.Rejection), HitKind: client.ShotHitKind(d.HitKind), TargetId: d.TargetId, Damage: d.Damage, Kind: kind, LifeGeneration: d.LifeGeneration, TargetLifeGeneration: d.TargetLifeGeneration, HitPart: client.HitPart(d.HitPart)})
 	}
 	return out, nil
 }
 
 func EqualDecision(a, b *runtime.ShotDecision) bool {
-	return a != nil && b != nil && a.ActionId == b.ActionId && a.ResolvedTick == b.ResolvedTick && a.Accepted == b.Accepted && a.Rejection == b.Rejection && a.HitKind == b.HitKind && a.TargetId == b.TargetId && a.Damage == b.Damage && a.Kind == b.Kind && a.LifeGeneration == b.LifeGeneration && a.TargetLifeGeneration == b.TargetLifeGeneration
+	return a != nil && b != nil && a.ActionId == b.ActionId && a.ResolvedTick == b.ResolvedTick && a.Accepted == b.Accepted && a.Rejection == b.Rejection && a.HitKind == b.HitKind && a.TargetId == b.TargetId && a.Damage == b.Damage && a.Kind == b.Kind && a.LifeGeneration == b.LifeGeneration && a.TargetLifeGeneration == b.TargetLifeGeneration && a.HitPart == b.HitPart
 }
 
 // Bound the dynamic arena descriptor using the largest legal identity fields,

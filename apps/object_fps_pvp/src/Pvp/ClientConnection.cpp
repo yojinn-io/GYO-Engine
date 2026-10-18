@@ -78,13 +78,13 @@ std::unique_ptr<httplib::Client> Http(const std::string& base) {
 std::optional<CombatRules> ReadRules(const pb::Welcome& welcome) {
     if(!welcome.has_combat_rules())return {};
     const auto& rules=welcome.combat_rules();
-    if(!rules.maximum_hp() || !rules.shot_damage() || rules.shot_damage()>rules.maximum_hp() ||
+    if(!rules.maximum_hp() || !ValidShotDamageBounds(rules.shot_damage(),rules.maximum_shot_damage(),rules.maximum_hp()) ||
        !rules.cooldown_ticks() || !std::isfinite(rules.shot_range()) || rules.shot_range()<=0 ||
        !rules.maximum_reference_age_ms() || !rules.magazine_capacity() ||
        !rules.reload_ticks() || !rules.respawn_ticks())return {};
     return CombatRules{rules.maximum_hp(),rules.shot_damage(),rules.cooldown_ticks(),rules.shot_range(),
         std::chrono::milliseconds{rules.maximum_reference_age_ms()},
-        rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks()};
+        rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks(),rules.maximum_shot_damage()};
 }
 ShotRejection ReadRejection(pb::ShotRejection value) {
     switch(value) {
@@ -404,14 +404,15 @@ struct ClientConnection::Impl {
                (!value.accepted() && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())) ||
                (value.hit_kind()==pb::HIT_PLAYER && (!value.target_id() || value.target_id()==state.playerId)) ||
                (value.hit_kind()!=pb::HIT_PLAYER && (value.target_id() || value.damage())) ||
-               value.damage()>state.combatRules->shotDamage ||
+               value.damage()>state.combatRules->maximumShotDamage ||
+               !ValidDecisionHitPart(static_cast<ShotHitKind>(value.hit_kind()),static_cast<int>(value.hit_part())) ||
                (value.hit_kind()==pb::HIT_PLAYER && !value.target_life_generation()) ||
                (value.hit_kind()!=pb::HIT_PLAYER && value.target_life_generation()) ||
                (value.kind()==pb::ACTION_RELOAD && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())))return false;
             ShotDecision decision{value.action_id(),value.resolved_tick(),value.accepted(),
                 ReadRejection(value.rejection()),static_cast<ShotHitKind>(value.hit_kind()),
                 value.target_id(),value.damage(),value.kind()==pb::ACTION_SHOT?ActionKind::Shot:ActionKind::Reload,
-                value.life_generation(),value.target_life_generation()};
+                value.life_generation(),value.target_life_generation(),static_cast<HitPart>(value.hit_part())};
             if(std::any_of(decoded.begin(),decoded.end(),[&](const auto& d){return d.actionId==decision.actionId;}))return false;
             const auto found=actions.find(decision.actionId);
             if(decision.actionId>actionTransport.retiredThrough &&
@@ -446,6 +447,8 @@ struct ClientConnection::Impl {
                 shot->set_kind(entry.request.kind==ActionKind::Shot?pb::ACTION_SHOT:pb::ACTION_RELOAD);
                 shot->set_life_generation(entry.request.lifeGeneration);
                 if(entry.request.kind==ActionKind::Shot){shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);}
+                shot->set_movement_epoch(entry.request.movementEpoch);shot->set_command_sequence(entry.request.commandSequence);
+                shot->set_view_tick_q16(entry.request.viewTickQ16);
                 actionSendCursor=id;
             }
             if(message.shots().empty() && actionTransport.acknowledgedThrough<=actionTransport.retiredThrough)return;
@@ -578,7 +581,7 @@ struct ClientConnection::Impl {
                     const CombatState record{combat.player_id(),combat.hp(),combat.next_allowed_shot_tick(),combat.life_generation(),
                         combat.magazine_ammo(),combat.reload_action_id(),combat.reload_start_tick(),combat.reload_end_tick(),
                         combat.last_shot_action_id(),combat.last_shot_tick(),combat.last_damage_tick(),combat.damage_count(),
-                        combat.last_attacker_id()};
+                        combat.last_attacker_id(),static_cast<HitPart>(combat.last_hit_part())};
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
@@ -881,7 +884,7 @@ std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAutho
     return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch);
 }
 std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint64_t lifeGeneration,
-    std::uint64_t observedAuthorityTick,float yaw,float pitch){
+    std::uint64_t observedAuthorityTick,float yaw,float pitch,const ShotContext& context){
     std::scoped_lock lock(impl_->mutex);
     if(impl_->state.phase!=ConnectionPhase::Playing || !impl_->state.combatRules || !lifeGeneration ||
        (kind!=ActionKind::Shot && kind!=ActionKind::Reload) ||
@@ -892,7 +895,8 @@ std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint
     }
     const auto id=impl_->actionTransport.allocatedThrough+1;
     if(id<=impl_->actionTransport.retiredThrough || id-impl_->actionTransport.retiredThrough>MaxActionWindow)return {};
-    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration},{},false});
+    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration,
+        context.movementEpoch,context.commandSequence,context.viewTickQ16},{},false});
     impl_->actionTransport.allocatedThrough=id;
     // D36: an eligible action leaves now, not at the worker's next pass.
     impl_->PostService();

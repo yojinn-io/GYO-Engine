@@ -7,6 +7,7 @@
 #include "engine/time/MonotonicClock.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -90,6 +91,23 @@ struct ClientPresented final {
 
 [[nodiscard]] ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
                                         Engine::Time::TimePoint now);
+
+// The request content of an action clicked on this presentation (pv7 §6, §7):
+// E and S from its one simulation step (0 and 0 without an active prediction:
+// the action still goes until a1-shot-step), and for a Shot the view tick of
+// the last presented frame (a Reload carries none).
+[[nodiscard]] inline ShotContext ActionContext(const ClientPresented& presented, ActionKind kind,
+                                               std::uint64_t presentedViewTickQ16) noexcept {
+    const auto& step = presented.observation;
+    return {step.active ? step.movementEpoch : 0, step.active ? step.latestCommand : 0,
+            kind == ActionKind::Shot ? presentedViewTickQ16 : 0};
+}
+
+// The view tick of a frame (pv7 §7): the timeline's global cursor in Tick x
+// 65536, floored; 0 when the frame presented no remote player.
+[[nodiscard]] inline std::uint64_t ViewTickQ16(std::optional<double> globalCursor) noexcept {
+    return globalCursor && *globalCursor > 0 ? static_cast<std::uint64_t>(std::floor(*globalCursor * 65536.0)) : 0;
+}
 
 // One simulation step, independent of threads and of the real clock, so tests
 // drive it with injected times. Run takes the snapshots drained since the last

@@ -4326,6 +4326,226 @@
       "replace": "",
       "check": "cpu",
       "expect": "gateway_hold_range=1"
+    },
+    {
+      "id": "v71hf-equal-shot-ignores-e",
+      "batch": "v71-hitbox-fields",
+      "what": "EqualShot does not compare E",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.MovementEpoch == b.MovementEpoch && a.CommandSequence == b.CommandSequence && a.ViewTickQ16 == b.ViewTickQ16\n",
+      "replace": "\t\ta.CommandSequence == b.CommandSequence && a.ViewTickQ16 == b.ViewTickQ16\n",
+      "check": "go",
+      "expect": "EqualShot ignores E"
+    },
+    {
+      "id": "v71hf-decode-drops-view-tick",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway drops a request's view tick",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\tMovementEpoch: shot.MovementEpoch, CommandSequence: shot.CommandSequence, ViewTickQ16: shot.ViewTickQ16}",
+      "replace": "\t\t\tMovementEpoch: shot.MovementEpoch, CommandSequence: shot.CommandSequence}",
+      "check": "go",
+      "expect": "shot content changed"
+    },
+    {
+      "id": "v71hf-gateway-hit-part-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway accepts any hit part",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\t(d.HitKind == runtime.ShotHitKind_HIT_PLAYER) != playerPart(d.HitPart) ||\n\t\t\t(d.HitKind != runtime.ShotHitKind_HIT_PLAYER && d.HitPart != runtime.HitPart_HIT_PART_UNSPECIFIED) || ",
+      "replace": "\t\t\t",
+      "check": "go",
+      "expect": "TestResultsCheckTheHitPart"
+    },
+    {
+      "id": "v71hf-gateway-hit-part-not-copied",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway drops the hit part",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": ", TargetLifeGeneration: d.TargetLifeGeneration, HitPart: client.HitPart(d.HitPart)})",
+      "replace": ", TargetLifeGeneration: d.TargetLifeGeneration})",
+      "check": "go",
+      "expect": "TestResultsCheckTheHitPart"
+    },
+    {
+      "id": "v71hf-gateway-damage-bound-base",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway bounds a decision's damage by shot_damage",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "d.Damage > rules.MaximumShotDamage ||",
+      "replace": "d.Damage > rules.ShotDamage ||",
+      "check": "go",
+      "expect": "damage at maximum_shot_damage above shot_damage refused"
+    },
+    {
+      "id": "v71hf-gateway-rules-maximum-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway accepts a maximum_shot_damage below shot_damage",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "r.ShotDamage <= r.MaximumShotDamage &&",
+      "replace": "r.ShotDamage <= r.MaximumHp &&",
+      "check": "go",
+      "expect": "accepted"
+    },
+    {
+      "id": "v71hf-gateway-last-hit-part-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "The Gateway accepts a hit record without its part",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tif (state.LastHitPart == runtime.HitPart_HIT_PART_UNSPECIFIED) != none || (!none && !playerPart(state.LastHitPart)) {\n\t\treturn false\n\t}\n",
+      "replace": "",
+      "check": "go",
+      "expect": "TestHitRecordIsValidatedAndKeptVerbatim"
+    },
+    {
+      "id": "v71hf-match-head",
+      "batch": "v71-hitbox-fields",
+      "what": "The Match reports a Head hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "                    decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)\n",
+      "replace": "                    decision.hitPart = HitPart::Head;\n",
+      "check": "cpu",
+      "expect": "hitPart == HitPart::Body"
+    },
+    {
+      "id": "v71hf-match-last-hit-part-unset",
+      "batch": "v71-hitbox-fields",
+      "what": "The Match leaves the hit record's part unset",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "                    target.combat.lastHitPart = HitPart::Body;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "lastHitPart == HitPart::Body"
+    },
+    {
+      "id": "v71hf-decode-hit-record-part-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "The hit record decode check ignores the part",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    if ((combat.lastHitPart == HitPart::Unspecified) != none ||\n        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "HitPart::Unspecified; \\}"
+    },
+    {
+      "id": "v71hf-client-hit-part-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "Readers accept any part for a player hit",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return kind == ShotHitKind::Player ? playerPart : part == static_cast<int>(HitPart::Unspecified);\n",
+      "replace": "    return kind == ShotHitKind::Player || part == static_cast<int>(HitPart::Unspecified) || playerPart;\n",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( ValidDecisionHitPart"
+    },
+    {
+      "id": "v71hf-damage-bounds-maximum-unchecked",
+      "batch": "v71-hitbox-fields",
+      "what": "Readers accept a maximum shot damage above the maximum hp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return shotDamage > 0 && shotDamage <= maximumShotDamage && maximumShotDamage <= maximumHp;\n",
+      "replace": "    return shotDamage > 0 && shotDamage <= maximumShotDamage;\n",
+      "check": "cpu",
+      "expect": "ValidShotDamageBounds\\(25, 101, 100\\)"
+    },
+    {
+      "id": "v71hf-classify-late-boundary",
+      "batch": "v71-hitbox-fields",
+      "what": "S equal to L counts as on time",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "    if (sequence <= lastResolved) return {ShotStepPath::Late, a};\n",
+      "replace": "    if (sequence < lastResolved) return {ShotStepPath::Late, a};\n",
+      "check": "cpu",
+      "expect": "ShotStepPath::Late"
+    },
+    {
+      "id": "v71hf-classify-hold-boundary",
+      "batch": "v71-hitbox-fields",
+      "what": "An S exactly W ahead counts as on time",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "    if (sequence - lastResolved >= MaxShotStepLead) return {ShotStepPath::HoldLimit, a + MaxShotStepLead};\n",
+      "replace": "    if (sequence - lastResolved > MaxShotStepLead) return {ShotStepPath::HoldLimit, a + MaxShotStepLead};\n",
+      "check": "cpu",
+      "expect": "ShotStepPath::HoldLimit"
+    },
+    {
+      "id": "v71hf-view-tick-reload-accepted",
+      "batch": "v71-hitbox-fields",
+      "what": "A reload's nonzero view tick passes the check",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "    if (kind != ActionKind::Shot || viewTickQ16 < 65536) return false;\n",
+      "replace": "    if (viewTickQ16 < 65536) return false;\n",
+      "check": "cpu",
+      "expect": "ActionKind::Reload, 9, 65536"
+    },
+    {
+      "id": "v71hf-view-tick-unbounded",
+      "batch": "v71-hitbox-fields",
+      "what": "A view tick beyond the observed tick passes the check",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "    return observedTick > (std::numeric_limits<std::uint64_t>::max)() / 65536 || viewTickQ16 <= observedTick * 65536;\n",
+      "replace": "    return true;\n",
+      "check": "cpu",
+      "expect": "9 \\* 65536 \\+ 1"
+    },
+    {
+      "id": "v71hf-shadow-cooldown-ignored",
+      "batch": "v71-hitbox-fields",
+      "what": "The shadow record ignores the shooter's cooldown",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "            const auto next = before ? before->nextAllowedShotTick : 0;\n",
+      "replace": "            const auto next = std::uint64_t{0};\n",
+      "check": "cpu",
+      "expect": "cooldownHoldTicks == "
+    },
+    {
+      "id": "v71hf-shadow-not-handed",
+      "batch": "v71-hitbox-fields",
+      "what": "The host records no shadow of a handed request",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                for (const auto& shot : batch.shots) shotShadow_.Handed(playerId, shot);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "records.size\\(\\) == 2"
+    },
+    {
+      "id": "v71hf-ipc-view-tick-dropped",
+      "batch": "v71-hitbox-fields",
+      "what": "The Match drops an action's view tick on the IPC",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                        shot.movement_epoch(),shot.command_sequence(),shot.view_tick_q16()});",
+      "replace": "                        shot.movement_epoch(),shot.command_sequence(),0});",
+      "check": "ipc",
+      "expect": "viewTickQ16 == 3"
+    },
+    {
+      "id": "v71hf-ready-maximum-damage-missing",
+      "batch": "v71-hitbox-fields",
+      "what": "Ready carries no maximum shot damage",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        rules->set_maximum_shot_damage(PvpCombatRules.maximumShotDamage);\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "maximum_shot_damage\\(\\) == PvpCombatRules"
+    },
+    {
+      "id": "v71hf-action-context-reload-view",
+      "batch": "v71-hitbox-fields",
+      "what": "A reload carries the view tick",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp",
+      "find": "            kind == ActionKind::Shot ? presentedViewTickQ16 : 0};",
+      "replace": "            presentedViewTickQ16};",
+      "check": "cpu",
+      "expect": "reload.viewTickQ16 == 0"
+    },
+    {
+      "id": "v71hf-action-context-inactive",
+      "batch": "v71-hitbox-fields",
+      "what": "An action without an active prediction carries its stale E and S",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp",
+      "find": "    return {step.active ? step.movementEpoch : 0, step.active ? step.latestCommand : 0,",
+      "replace": "    return {step.movementEpoch, step.latestCommand,",
+      "check": "cpu",
+      "expect": "unpredicted.movementEpoch == 0"
     }
   ]
 }

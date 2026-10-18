@@ -135,6 +135,7 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_reload_end_tick(p.reloadEndTick);state->set_last_shot_action_id(p.lastShotActionId);
         state->set_last_shot_tick(p.lastShotTick);state->set_last_damage_tick(p.lastDamageTick);
         state->set_damage_count(p.damageCount);state->set_last_attacker_id(p.lastAttackerId);
+        state->set_last_hit_part(static_cast<pb::HitPart>(p.lastHitPart));
     }
     return message;
 }
@@ -165,6 +166,9 @@ struct ActionLane {
     std::uint64_t refused{};
     pb::ActionRefusal lastRefusal{pb::ACTION_REFUSAL_UNSPECIFIED};
 };
+// The hit part's wire value is the domain's (pv7 §7).
+static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
+              static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && pb::HitPart_ARRAYSIZE==3,"HitPart differs from the wire");
 // The wire name of each refusal: ActionRefusal is IngressActionRejection + 1,
 // value for value (pv7 §5: the names are the host's).
 constexpr pb::ActionRefusal RefusalForWire(IngressActionRejection reason) {
@@ -224,6 +228,7 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
         value->set_target_id(decision.targetId);value->set_damage(decision.damage);
         value->set_kind(KindForWire(decision.kind));value->set_life_generation(decision.lifeGeneration);
         value->set_target_life_generation(decision.targetLifeGeneration);
+        value->set_hit_part(static_cast<pb::HitPart>(decision.hitPart));
     }
     return message;
 }
@@ -469,6 +474,7 @@ struct IpcHost::Impl {
         rules->set_shot_range(PvpCombatRules.shotRange);
         rules->set_magazine_capacity(PvpCombatRules.magazineCapacity);rules->set_reload_ticks(PvpCombatRules.reloadTicks);
         rules->set_respawn_ticks(PvpCombatRules.respawnTicks);
+        rules->set_maximum_shot_damage(PvpCombatRules.maximumShotDamage);
         rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
         session.controls.push_back(wire::Frame(ready.SerializeAsString()));
@@ -613,7 +619,8 @@ struct IpcHost::Impl {
                        (shooting && (!shot.has_yaw() || !shot.has_pitch())) ||
                        (reloading && (shot.has_yaw() || shot.has_pitch()))) {valid=false;break;}
                     batch.shots.push_back({shot.action_id(),shot.observed_authority_tick(),shot.yaw(),shot.pitch(),
-                        shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation()});
+                        shooting?ActionKind::Shot:ActionKind::Reload,shot.life_generation(),
+                        shot.movement_epoch(),shot.command_sequence(),shot.view_tick_q16()});
                 }
                 if(!valid) {
                     host.NoteWireRejection(value.player_id(),IngressActionRejection::Malformed,shots);

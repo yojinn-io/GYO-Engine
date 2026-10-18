@@ -118,6 +118,10 @@ struct PvpApplication::Impl final {
     std::uint64_t jumpPresses{};
     ClientPresented presented;
     SnapshotTimeline timeline;
+    // The remote time the last presented frame showed (pv7 §7 view_tick_q16):
+    // the timeline's global cursor in Tick x 65536, 0 when that frame showed
+    // no remote player. A shot carries the value of the last presentation.
+    std::uint64_t frameViewTickQ16{}, presentedViewTickQ16{};
     std::uint64_t connectionGeneration{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
     std::optional<PlayerId> observedRemote;
@@ -293,6 +297,7 @@ struct PvpApplication::Impl final {
         if (connectionGeneration != received.generation) {
             connectionGeneration = received.generation;
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             viewPlayer = 0;
             ResetWeaponFeedback();
             if (players) players->ResetPlayers();
@@ -304,6 +309,7 @@ struct PvpApplication::Impl final {
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             remoteMovement.reset();
             viewPlayer = 0;
             renderedPlayer = 0;
@@ -316,6 +322,7 @@ struct PvpApplication::Impl final {
         }
         if (viewPlayer != state.playerId) {
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             view.Reset(self->yaw, self->pitch);
             hitFeedback.Reset();
             viewPlayer = state.playerId;
@@ -441,7 +448,8 @@ struct PvpApplication::Impl final {
         }
         const bool canAct = consumeInput && !pointerAcquiredThisFrame && !windowInteraction && weaponFeedback.inputCaptured;
         if (pendingReloadEdge && canAct && state.combatRules && !pendingReload && !weaponFeedback.reloading) {
-            if (const auto id = connection.SubmitAction(ActionKind::Reload, viewLife, state.snapshot->tick)) {
+            if (const auto id = connection.SubmitAction(ActionKind::Reload, viewLife, state.snapshot->tick, 0, 0,
+                    ActionContext(presented, ActionKind::Reload, presentedViewTickQ16))) {
                 pendingReload = *id;
                 weaponFeedback.lastActionId = *id;
                 weaponFeedback.lastActionKind = ActionKind::Reload;
@@ -461,7 +469,8 @@ struct PvpApplication::Impl final {
             if (combat != state.snapshot->combat.end() && !fireGate.Allows(shotTiming)) {
                 ++weaponFeedback.localCooldownBlocks;
             } else if (combat != state.snapshot->combat.end()) {
-                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, view.Input().yaw, view.Input().pitch)) {
+                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, view.Input().yaw,
+                        view.Input().pitch, ActionContext(presented, ActionKind::Shot, presentedViewTickQ16))) {
                     weaponFeedback.lastActionId = *id;
                     weaponFeedback.lastActionKind = ActionKind::Shot;
                     ++weaponFeedback.submittedActions;
@@ -591,9 +600,11 @@ struct PvpApplication::Impl final {
         const auto reanchorsBefore = characterPhaseReanchors;
         std::optional<std::uint64_t> reanchorsNow;
         const auto observed = ObservedRemotePlayer(*state.snapshot, state.playerId, observedRemote);
+        bool remoteSampled = false;
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
             const auto sampled = timeline.Sample(player.playerId, presentationTime);
+            remoteSampled = remoteSampled || sampled.has_value();
             const auto& presented = sampled ? sampled->player : player;
             const auto position = presented.position;
             // Diagnostics observe one remote player (ObservedRemotePlayer).
@@ -667,6 +678,7 @@ struct PvpApplication::Impl final {
             if (sampled) reanchorsNow = sampled->phaseReanchors;
         }
         if (reanchorsNow) characterPhaseReanchors = *reanchorsNow;
+        frameViewTickQ16 = ViewTickQ16(remoteSampled ? timeline.GlobalCursor() : std::nullopt);
         const auto characterStarted = Clock::now();
         if (!players->Submit(characterFrames, queue, lastError)) return false;
         remoteSubmitMilliseconds = Milliseconds(Clock::now(), characterStarted);
@@ -1119,6 +1131,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             rendered.value() == Engine::Render::PresentStatus::Presented);
     if (rendered.value() == Engine::Render::PresentStatus::Presented) {
         impl_->characterPresentationSkipped = false;
+        impl_->presentedViewTickQ16 = world ? impl_->frameViewTickQ16 : 0;
         impl_->renderedPlayer = world ? impl_->state.playerId : 0;
         if (world) {
             if (impl_->remoteMovement) {
