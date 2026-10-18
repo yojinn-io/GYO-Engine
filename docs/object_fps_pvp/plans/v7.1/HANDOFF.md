@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（D122 進行中：工具與乾跑）。
+- **等你決定**：核准 [edge-rate-limit 的 L2 事前宣告第 3 版](edge-rate-limit-l2.md)（判定與門檻同第 2 版；工具、雜湊與乾跑在第 8 節）；以及什麼時候跑（約 2 h 46 分加閒置門檻；rapid 要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
+- **下一步**：核准後在你不用電腦的時段跑 L2 session（`pvp-v71-edge-rate-limit-l2-20261018`，指令在工具目錄的 `commands.txt`），判定與記錄後完成 `edge-actions-passthrough` 與 edge 系列。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-rate-limit`：L2 宣告第 2 版（D45 修正），等你決定 M1。
+- **最後更新**：2026-10-18 15:10，`edge-rate-limit`：L2 工具與乾跑完成，宣告第 3 版等你核准。
 
 ## 閱讀入口
 
@@ -452,6 +452,8 @@
   - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。
   - 宣告第 1 版經 D45 檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，改進第 2 版（第 7 節）。M1 要使用者決定：凍結分析器 `gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 Gateway 的固定 1 秒窗口計數 `max_session_window_packets ≤120`；token bucket 下停頓後同一秒會放行約 170，兩棵樹都會在第一個 gateway-1000ms 停下。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判（K1 當年被當成預期行為接受）。建議 (a) 改用限速器自己的拒收計數＝0（gateway 模式也判）、窗口計數只記錄。A' 已建置；B' 建置中。
   - D122 的修改：`gameplay_evidence.py` 新增 `gateway_limiter_problems()`（拒收＝0，所有模式；窗口計數只記錄），`gameplay_soak_evidence.py` 共用它；`action_probe.py` 的檢查改成所有模式都要拒收＝0、`rate_limit_acceptance_policy` 的說明同步。測試：`test_gameplay_evidence.py` 加 1 個、`test_action_evidence.py` 改 1 個並加 1 個（窗口 170 但沒有拒收時，限速檢查不出錯）。突變新增 4 個（拒收被忽略、窗口檢查回來 ×2、gateway 模式又被豁免），全部殺死；新增 check `gameplay_evidence`、`action_evidence`。重新凍結：`build/target/_build/test/logs/pvp-v71-edge-rate-limit-20261018/frozen-pv7-rl.sha256` `09b5579b…`（＝`frozen-pv7-ea.sha256` 只更新 7 個檔案：上面 5 個，加上把 `action_probe.py` 的雜湊寫死在程式裡的 `run_client_delay.py`、`run_short_stall.py`）。**經過**：第一次提交（`c82ecc5`）時 CTest 有 1 項失敗（`client_delay_runner`：這兩個 runner 繼承 `action_probe` 的 relay，要求它的雜湊等於寫死的值），指令串沒有在失敗時中止，提交與推送照樣做了。修正：兩個 runner 的常數更新成新雜湊（`action_probe.py` 只改了限速判定，relay 沒動），凍結清單補上它們；之後 CTest 72／72、preset 外 4／4。soak 的呼叫點沒有突變覆蓋（`analyze_soak` 沒有可餵 Gateway 計數的測試 fixture），由共用函式的測試與 L2 的 soak 項目守。
+  - L2 的工具與乾跑（`build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-prep-20261018/`）：A' 移到 `ed3481c` 重建（`vcs.modified=false`），宣告的 A' commit 由 `7bb1f84` 改成 `ed3481c`。judge 由第 4 版的工具改：分析器期望表逐個 `gateway*.log` 判、I0 一律判、R6a／R6b 刪除、R6c 用自己的前提、新增 K1a、K1b、P6、P7。B' 開發跑次 4 個（gateway-1000ms ×2、clean-60、backpressure）全部 P、無停止：K1a 0 拒收；K1b 每位玩家停頓中恰好 1 次 starvation、恢復後 0 次；Expired 3、2；P7（固定窗口計數）gateway-1000ms 159、159，backpressure 的 Gateway 層 121（預測是約 170 與 ≤120，只記錄，預測不改）。用新 judge 重判之前兩次 session 的 131 項：停止只有修正前的 K1 與第 3 版的 rapid 收尾競態。乾跑 96 列、driver 10 項、模擬 session 5 個全部符合預期。Client 不變已核對（C++ 只改 Match 的 `IpcHost.cpp`）。宣告第 3 版：[edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 8 節。
+  - L1（`ed3481c`，run 39102188643）：windows-x64、linux-x64、macos-arm64 通過；**macos-x64 不通過**，`object_fps_pvp.cpu` 的「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」（`MovementRecoveryTests.cpp:456`，product 路徑 fps 30、RTT 0、bootstrap gap 108、worker 4000、authority 6000：`unexpectedRejections` 1）。`ed3481c` 對 `c82ecc5` 只改 Python；同樣的 C++ 在 `7bb1f84`（run 39100385472）的 macos-x64 通過，兩次的 runner 映像相同（macos-15-arm64 上以 Rosetta 2 跑 x64）。測試用注入的時鐘與固定種子，原則上是決定性的；本機（Intel x64）單案例 200 次、整個執行檔 20 次都 0 失敗。原因未切分（實作的非決定性、測試，或 Rosetta 環境），已只重跑失敗的 job；原本的失敗保留記錄（§14.1）。
 
 ## 未結事項
 

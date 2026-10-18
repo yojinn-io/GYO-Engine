@@ -1,7 +1,7 @@
-# edge-rate-limit 的 L2 事前宣告（第 2 版草稿）
+# edge-rate-limit 的 L2 事前宣告（第 3 版草稿）
 
-- 狀態：**草稿**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，對應表在第 7 節。M1（凍結分析器的窗口計數檢查）要先由使用者決定（第 6 節第 1 項），之後寫工具並乾跑，再請使用者核准（§14.1：核准前不看 A 的結果；核准後不放寬）。
-- 依據：D114、D117、D118、D119、D121；protocol-v7 §2a、§4、§9；README `edge-actions-passthrough` 與 `edge-rate-limit` 列。
+- 狀態：**草稿，等你核准**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，對應表在第 7 節。M1 已由 D122 決定（採 (a)，第 6 節第 1 項）。第 3 版＝第 2 版＋D122 之後的 A' commit、凍結清單、工具與乾跑的結果（第 8 節）；判定與門檻和第 2 版相同。§14.1：核准前不看 A' 的結果；核准後不放寬。
+- 依據：D114、D117、D118、D119、D121、D122；protocol-v7 §2a、§4、§9；README `edge-actions-passthrough` 與 `edge-rate-limit` 列。
 - 這份宣告取代 [edge-actions-passthrough 的 L2 事前宣告第 4 版](edge-actions-passthrough-l2.md)（D119：不沿用第 4 版，也不加臨時的 K1 規則）。第 3 版的 session 停在 `rapid-edge-30-r1-B`（rapid runner 收尾競態，`pvp-v71-edge-actions-l2-20261017/`），第 4 版的 session 停在 `gateway-1000ms-r4-B`（K1，`pvp-v71-edge-actions-l2-20261018/`），都保留。**以下沒有寫出的部分，照第 4 版**（含其第 11～13 節的 D45、乾跑與 D117 的修正）；改動只有第 1～5 節列出的地方。
 - 數字沒有標「實測」的，是程式推導或推論。門檻裡的「B 的範圍」一律用本 session 的 B' 跑次計算（第 4 版的 N1）。
 
@@ -17,9 +17,9 @@
 | 樹 | commit | worktree |
 |---|---|---|
 | before（B'） | `1802f08`＝`f79bb10`＋D121 的限速修正（本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送） | `../GYO-Engine-rl-before`（新建） |
-| after（A'） | `7bb1f84`（之後的 commit 只改文件） | `../GYO-Engine-ap-after` |
+| after（A'） | `ed3481c`（之後的 commit 只改文件） | `../GYO-Engine-ap-after` |
 
-- B'→A' 的程式差分：`edge-actions-passthrough`（含 xhigh 審查的修正）、D117 的 Match `IpcHost::Stop()` 記錄 session 結束、`queuedControl.at` 刪除（D120）、`runtime_v7.proto` 的 reserved 17、21、25、26、測試、突變與文件。Client 不變（工具階段核對）。
+- B'→A' 的程式差分：`edge-actions-passthrough`（含 xhigh 審查的修正）、D117 的 Match `IpcHost::Stop()` 記錄 session 結束、`queuedControl.at` 刪除（D120）、`runtime_v7.proto` 的 reserved 17、21、25、26、測試、突變與文件。runner 與分析器兩棵樹共用主 checkout 的凍結版本（3.2；D122 的修改在其中），不屬於樹的差分。Client 不變（工具階段已核對：C++ 只改 `src/Pvp/IpcHost.cpp`，它屬於 Match 的 `ipc` 程式庫，Client 不連結；`runtime_v7` 是 Gateway↔Match 的 IPC）。
 - probe 與 arena：同第 4 版（`../GYO-Engine-ip-before`）。rapid 的 GUI probe 用 B' 樹的建置。
 
 ## 3. 判定的改動
@@ -35,7 +35,7 @@ R1 的 D44 事件（E1：窗口外的非重生重設）照第 4 版，不放寬�
 
 ### 3.2 改用重新凍結的分析器（`edge-analyzers`）
 
-R6 的 ingress 判定改用 `pvp-v71-ingress-3`（凍結清單 `pvp-v71-edge-analyzers-20261018/frozen-pv7-ea.sha256`）。兩棵樹的期望：
+R6 的 ingress 判定改用 `pvp-v71-ingress-3`。凍結清單是 `pvp-v71-edge-rate-limit-20261018/frozen-pv7-rl.sha256`（＝`edge-analyzers` 的 `frozen-pv7-ea.sha256` 加上 D122 改的 7 個檔：`gameplay_evidence.py`、`gameplay_soak_evidence.py`、`action_probe.py` 的限速檢查改成拒收數＝0，以及固定 `action_probe.py` 雜湊的兩個 runner 和兩個測試）。兩棵樹的期望：
 
 | 檢查 | B'（`f79bb10` 的 Gateway：帶到 edge-results 的鍵組） | A'（帶到 edge-actions 的鍵組） |
 |---|---|---|
@@ -63,19 +63,19 @@ B' 的限速和第 4 版的 B 不同，gateway-1000ms 的參考值（Expired 3�
 | 代號 | 項目 | 預測 | 推翻條件 |
 |---|---|---|---|
 | P6 | gateway-1000ms 的 Expired | B'、A' 都不比修正前（第 3、4 版兩次 session 的 20 跑次都是 3～4，其中故障造成的 2～3）多；這只是預測用的參考，判定的門檻照 3.3 只用本 session 的 B' | 任一棵樹的中位數 > 4 |
-| P7 | `max_session_window_packets`（Gateway 的診斷，固定 1 秒窗口的計數） | gateway-1000ms 約 170（player 1；重放預測 168～173），其他情境 ≤120 | 只記錄（它的檢查怎麼處理見第 6 節第 1 項） |
+| P7 | `max_session_window_packets`（Gateway 的診斷，固定 1 秒窗口的計數） | gateway-1000ms 約 170（player 1；重放預測 168～173），其他情境 ≤120 | 只記錄（D122：凍結分析器不再判它）。B' 開發跑次的實測（第 8 節）：gateway-1000ms 159、159，backpressure 的 Gateway 層 121，都和預測不同；預測不改，照實記錄 |
 
 ## 5. 情境、次數、順序、停止規則
 
-同第 4 版第 5、8 節（168 項，約 2 h 46 分；受干擾累計 3 次就停；不重跑、不補跑）。乾跑前在 B' 跑開發跑次：gameplay gateway-1000ms 2 次（確認 K1a、K1b 在 B' 成立）、clean-60 1 次；rapid 的 fixture 沿用第 4 版的 B 開發跑次（Client 與動作路徑相同，限速在 rapid 不起作用，乾跑時核對）。B' 的開發跑次若 K1a 或 K1b 不成立，就停下、在核准前回報。
+同第 4 版第 5、8 節（168 項，約 2 h 46 分；受干擾累計 3 次就停；不重跑、不補跑）。乾跑前在 B' 跑開發跑次：gameplay gateway-1000ms 2 次（確認 K1a、K1b 在 B' 成立）、clean-60 1 次、backpressure 1 次（舊 corpus 的 backpressure 有修正前的限速丟棄，K1a 會判它不成立，fixture 改用 B' 的跑次）；rapid 的 fixture 沿用第 4 版的 B 開發跑次（Client 與動作路徑相同，限速在 rapid 不起作用，乾跑時核對）。B' 的開發跑次若 K1a 或 K1b 不成立，就停下、在核准前回報。
 
 ## 6. 等你決定
 
-1. **M1：凍結分析器的 Gateway 窗口計數檢查**（先決定，再寫工具）。`gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 `max_session_window_packets ≤120`（固定 1 秒窗口內 Gateway 讀到的封包數）。限速改成 token bucket 後，停頓時緩存的封包在恢復時同一秒放行，gameplay gateway-1000ms 的這個值會到約 170（重放：修正前 20 跑次全部會超過），R1 在兩棵樹的第一個 gateway-1000ms 就停。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判，`action_probe.py` 的說明寫「刻意停住的 Gateway 可能拒收排隊的到達突發」，也就是 K1 當年被當成預期行為接受。Client 自己的送出速率另有 `gameplay_evidence.py:205`（relay 的時間、每秒 ≤120）判定。選項：
+1. **M1：凍結分析器的 Gateway 窗口計數檢查**——**已決定（D122：採 (a)）**，以下保留當時的說明。`gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 `max_session_window_packets ≤120`（固定 1 秒窗口內 Gateway 讀到的封包數）。限速改成 token bucket 後，停頓時緩存的封包在恢復時同一秒放行，gameplay gateway-1000ms 的這個值會到約 170（重放：修正前 20 跑次全部會超過），R1 在兩棵樹的第一個 gateway-1000ms 就停。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判，`action_probe.py` 的說明寫「刻意停住的 Gateway 可能拒收排隊的到達突發」，也就是 K1 當年被當成預期行為接受。Client 自己的送出速率另有 `gameplay_evidence.py:205`（relay 的時間、每秒 ≤120）判定。選項：
    - (a)（建議）三處的窗口計數檢查換成限速器自己的拒收計數：`rate_limited_packets`＝0，**gateway 模式也判**（與 K1a 一致）；`max_session_window_packets` 改成只記錄。窗口計數原本的用意是「Gateway 的固定窗口沒有咬到」，在 token bucket 下直接的檢查就是拒收數；Client 的預算仍由 205 行判。改凍結的分析器，補測試、突變，重新凍結（§14.4：受入判定的變更要經你同意）。
    - (b) 三處的上限改成契約上限 240（120·1＋120）：仍是間接檢查，而且比現在寬。
    - (c) 分析器不動，judge 只在 gateway-1000ms 把「錯誤恰好只有這一條」記為預期：規則窄，但留下一條在新算法下沒有意義的檢查。
-2. **核准本宣告**（M1 處理、工具與乾跑之後的版本）。
+2. **核准本宣告**（第 3 版：M1 處理、工具與乾跑之後的版本；工具的雜湊在第 8 節）。
 3. **什麼時候跑**：約 2 h 46 分加閒置門檻；rapid 需要顯示器亮著、不碰滑鼠。
 
 ## 7. D45 檢查的修正對應（第 1 版 → 第 2 版）
@@ -96,3 +96,33 @@ B' 的限速和第 4 版的 B 不同，gateway-1000ms 的參考值（Expired 3�
 | N5 R6b 的「清掉＝0」前提 | 拿掉不算損失（3.2） |
 | N6 檢測力 | L2 只抓得到容量小於約 92 的退化；更小的由 L1 的 `v71rl-*` 覆蓋 |
 
+
+## 8. 工具與乾跑（第 3 版新增）
+
+工具在 `build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-prep-20261018/`（由第 4 版的工具複製後修改；確切指令在 `commands.txt`，檔案清單 `prep-files.sha256`）。
+
+| 項目 | sha256 |
+|---|---|
+| `run_l2.py` | `a7e3b63db2d3a1c9945845256da15439e1087a5e002a8bcdd044c0cad51a5312` |
+| `judge_l2.py` | `4244f6ac24890447877c86e51816d0d2c48aaed171f273c0912bcba52ebd72c2` |
+| 凍結清單 `frozen-pv7-rl.sha256` | `09b5579b4f5ad34ace567d0553af2ef7087b631540bf28fba63e62eef66a8693` |
+| `artifacts.sha256`（B'、A' 的 Match 與 Gateway；P 的 probe 與 arena；G＝B' 的 GUI probe） | `7bf29f7a827c84cd819b5e0d9a273a1a9eae6d97f19c9484b3300462b88e9f6b` |
+| `ingress_evidence.py`（`pvp-v71-ingress-3`） | `567198d660985d862e01b49b481a57c0393bf4511267fec1b6787de831008302` |
+| `run_action_short.py`（D117） | `89e54bb8b0850327d99f3fd721cd2d2d1511deea13312de6d91cc479b6aee74b` |
+
+judge 的改動（對照第 4 版的工具）：兩棵樹改成 B'、A'；3.2 的分析器期望表逐個 `gateway*.log` 判（各配同目錄的 `match.log` 與 trace），I0 一律判；R6a、R6b 刪除（由 `link_actions`、I1a 取代）；R6c 用自己的前提；新增 K1a（所有項目）、K1b（gateway-1000ms）；P6、P7 只記錄。
+
+**B' 的開發跑次**（`dev/`，只跑 B'）：
+
+| 跑次 | 結果 | K1a | K1b（每位玩家：停頓中、恢復後） | Expired | P7 |
+|---|---|---|---|---|---|
+| gateway-1000ms r1 | P，無停止 | 0 拒收 | 1、0（停頓中的在恢復前 472 ms） | 3 | 159 |
+| gateway-1000ms r2 | P，無停止 | 0 拒收 | 1、0（恢復前 479 ms） | 2 | 159 |
+| clean-60 r1 | P，無停止 | 0 拒收 | 不適用 | 0 | 70 |
+| backpressure r1 | P（2/2），無停止 | 0 拒收 | 不適用 | — | 121（Gateway 層） |
+
+rapid 的 fixture 沿用第 4 版的 6 個 f79bb10 開發跑次（K1a 0 拒收）。
+
+**用新 judge 重判之前兩次 session**（第 3 版 `pvp-v71-edge-actions-l2-20261017`、第 4 版 `-20261018`，共 131 項，修正前）：停止只有 gateway-1000ms 的 K1a、K1b，backpressure 的 K1a（都是修正前的限速丟棄），以及第 3 版 session 的 rapid 停止（D117 修正的收尾競態）。其他項目全部符合 3.2 的期望表，network-impairments 的兩個 Gateway 日誌都是。
+
+**乾跑**（`dryrun/matrix.json`）：逐項 96 列、driver 檢查 10 項（含 preflight）、模擬 session 5 個，**全部符合預期**。新增的列：`link_actions` 不一致、I1a 不一致、I1a 有放棄的批（允許）、R6c 前提不成立（只記錄）、B' 的 `link_shots` 不成立、只有 `gateway-reconnected.log` 不成立、K1a 拒收（B'、A'）與缺鍵、K1b 恢復後的 starvation、正向對照 0 次與 2 次、缺 fault，以及修正前的真實 gateway-1000ms 跑次（K1a、K1b 都停）。真實 B corpus（`pvp-v71-edge-results-l2-20261017b` 的 A＝f79bb10 共 60 跑次，加 10 個開發跑次）：停止只在修正前的 10 個 gateway-1000ms、backpressure 跑次（K1a、K1b），開發跑次 0 停止。
