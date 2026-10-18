@@ -4002,6 +4002,56 @@
       "replace": "GATEWAY_GLOBAL_KEYS, number)",
       "check": "ingress_evidence",
       "expect": "FAIL: test_the_global_appended_key_is_known"
+    },
+    {
+      "id": "v71ec-match-state-copy",
+      "batch": "v71-edge-contract",
+      "what": "The runtime link keeps a copy of the Match's resolved cursor (the 2026-10-10 incident's field)",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tqueuedData     map[dataKey]int\n",
+      "replace": "\tqueuedData     map[dataKey]int\n\tlastResolved   map[uint64]uint64\n",
+      "check": "go",
+      "expect": "field runtimeLink\\.lastResolved .* is not classified"
+    },
+    {
+      "id": "v71ec-anonymous-state",
+      "batch": "v71-edge-contract",
+      "what": "A reservation keeps per-player epochs and lives in a map of anonymous structs",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tresults      resultSlot // at most one results frame waiting for its release (pv7 §2a)\n",
+      "replace": "\tresults      resultSlot // at most one results frame waiting for its release (pv7 §2a)\n\tcursors      map[uint64]struct{ epoch, life uint64 }\n",
+      "check": "go",
+      "expect": "reservation\\.cursors"
+    },
+    {
+      "id": "v71ec-package-state",
+      "batch": "v71-edge-contract",
+      "what": "A package variable keeps state across sessions",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "var writerIdleWait = actionSendInterval\n",
+      "replace": "var writerIdleWait = actionSendInterval\n\nvar lastSeen = map[uint64]uint64{}\n",
+      "check": "go",
+      "expect": "package variable gateway\\.lastSeen is not classified"
+    },
+    {
+      "id": "v71ec-goroutine-state",
+      "batch": "v71-edge-contract",
+      "what": "The link writer goroutine keeps a map of its own",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\t\ttimer := time.NewTimer(idle)\n",
+      "replace": "\t\ttimer := time.NewTimer(idle)\n\t\tseen := map[uint64]bool{}\n\t\t_ = seen\n",
+      "check": "go",
+      "expect": "goroutine local run\\.seen"
+    },
+    {
+      "id": "v71ec-interface-state",
+      "batch": "v71-edge-contract",
+      "what": "The Server keeps an interface-typed field the guard cannot walk",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tresultWake  chan struct{}\n",
+      "replace": "\tresultWake  chan struct{}\n\tcache       any\n",
+      "check": "go",
+      "expect": "field Server\\.cache is an interface"
     }
   ]
 }

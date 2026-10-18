@@ -727,6 +727,52 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 結束時間作保守上界。Presented 才能形成呈現樣本；缺未來快照不等於正在移動的
 角色真的停住，靜止角色更不能算作時間線停頓。
 
+#### Gateway：無狀態邊緣（v7.1 `edge-contract`；**草稿，待使用者核准**）
+
+Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送達只由端點（Match 與 Client）負責（protocol-v7 §2a，v7.1 D94、D-14、D105）。
+
+| 原則 | 維持的性質 | 未來修改時要問的問題 |
+|---|---|---|
+| Gateway 只持有能重建、不參與遊戲判定的軟狀態 | Gateway 掛掉或換掉，不會改變任何遊戲結果；Match 的判定不依賴 Gateway 記得什麼 | 這個欄位或判斷，是否要知道「Match 已經有什麼」才能做對？是的話，它屬於 Match |
+| 不持有 Match 決策狀態的副本 | 去重、合併、過時、衝突、重送只在端點發生，不會在 Gateway 悄悄改變權威的輸入（2026-10-10 事故） | 是否記下了游標、epoch、life、命令表、動作帳本、裁決或退役？ |
+| 每則訊息獨立處理 | 依遊戲項目的身分或內容的判斷只在端點；Gateway 對每則訊息只翻譯，並檢查單則訊息內的版本、格式、範圍與授權 | 是否拿前一則訊息的內容來決定這一則？（依傳輸序號、速率與 session 生命週期的跨訊息判斷除外） |
+| 丟棄要有界、要回報 | 每個丟棄出口都計數並回報給 Match（§4 的 DropReason）；Gateway 執行，政策與真相在 Match（D49） | 新的丟棄出口是否有 DropReason、計數與回報？ |
+
+**允許的類別**（守衛 `gateway/state_whitelist_test.go` 的分類，名稱一致）：
+
+- connection and session：socket、runtime link、session（token、endpoint、傳輸序號、速率、活性）、保留（玩家與 session 的對應、id 配發）。
+- lifecycle：房間可用、建立、玩家階段、關閉與 once 旗標。
+- configuration copy：`Config` 與 Match 的 `Ready`。
+- bounded outbound or IPC queue：controls、snapshot 與 runtime link 的有界佇列（溢出要計數並回報）。
+- results slot：每位玩家上次送出結果的時刻與至多 1 則待送的結果框架（latest-wins）。
+- synchronization：mutex 與喚醒用的 channel。
+- diagnostic state：時鐘同步、回聲、丟棄帳本、統計；判定路徑不得讀取（protocol-v7 §2「診斷不進判定」）。
+- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍），只在它被丟棄時拿來回報。**【等你決定，N3】** 這和 D105「單次呼叫的脈絡不得跨資料包保留」字面衝突；草稿把它列為獨立的允許類別：它隨項目進出佇列，不被任何判定讀取，項目離開佇列就消失。
+- per-call context：處理一個 datagram、frame 或請求期間記下的值（例如 `Server.datagram`、讀取緩衝區）；不得被下一個 datagram 的判斷讀取。
+- test seam：套件變數與注入的時鐘；正式路徑只用預設值。
+- immutable table：鍵清單、原因表、sentinel error。
+
+**禁止**：Match 決策狀態的副本；依遊戲項目的身分或內容做的跨訊息判斷（去重、合併、過時、衝突）；排程重送。
+
+**守衛與變更規則**：
+
+- `gateway/state_whitelist_test.go` 遞迴走訪 Gateway 套件每個 struct 型別的欄位（含指標、map 的鍵與元素、slice、array、channel 與匿名 struct；介面欄位要明列它持有什麼），用 `go/ast` 掃描 `gateway` 與 `gateway/adapter` 的套件變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對。新增未分類的欄位、變數或 goroutine 區域狀態，測試就失敗；分類表裡沒有「Match 決策狀態」這個類別。
+- 新增任何 Gateway 狀態欄位（包括把它分進既有類別）都是 Architecture Delta，要經使用者同意（AGENTS.md §3 的 State Authority）。
+- 依內容的判斷（某個允許的欄位被拿來做遊戲判定）測不到，靠審查守。
+- 通用層 `services/gyo_gateway/session` 的狀態由它自己的 owner 管；產品層 Gateway 透過 `reservation.session` 持有它，歸在 connection and session。
+
+**Replacement Criteria**（出現時不再繼續修補，改向使用者提出「重建或修改」）：
+
+- 為了讓某個遊戲行為正確，需要 Gateway 記住 Match 已經知道的東西（判斷準則答「是」）。
+- 新的外部 Client 接口或新的訊息種類，必須在 Gateway 加跨訊息、依內容的判斷才能運作。
+- 同一類丟棄或延遲問題，需要第二次在 Gateway 加特例才能通過驗收（2026-10-10 事故與 v7.1 edge 系列之前的模式）。
+- 分類表的允許類別本身需要擴充（而不只是新增欄位）。
+
+**目前的已知項目**（只記錄）：
+
+- K1（v7.1 D118、D119）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。限速屬於允許的 session 類，算法在 `edge-rate-limit` 重新評估。
+- `queuedControl.at`：入列時寫入、沒有任何地方讀取（死欄位）。草稿照 diagnostics carried with a queue item 分類；要不要刪由使用者決定。
+
 ### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
 
 - **原始意圖**：Gateway 對各種外部 Client 各自提供接口，內部只用一套抽象協議和 Match
@@ -737,9 +783,8 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
   `lastResolved` 副本。
 - **根因**：外部是有損、重複送的 UDP，內部協議是「每個命令恰好一次」的可靠串流；
   在兩種送達語意之間轉換必然要去重，去重就需要 Match 的狀態。
-- **狀態**：處置中。v7.1 在 pv7 的 wire 定稿前評估方向；約束（Gateway 只持有連線與
-  session 的軟狀態，不持有 Match 決策狀態的副本，只檢查格式、不依內容做決定）依評估
-  結果寫進上表。完整紀錄見
+- **狀態**：v7.1 的 edge 系列已把 Gateway 改回無狀態邊緣（輸入、動作、結果原樣轉送，刪除 Match
+  決策狀態的副本）；約束寫在上面的「Gateway：無狀態邊緣」（草稿，待使用者核准），由白名單測試守住。完整紀錄見
   [設計事故紀錄](plans/v7.1/Incident/2026-10-15-gateway-state-drift.md)。
 
 ### 修改入口與 Ownership

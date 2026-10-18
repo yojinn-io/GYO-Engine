@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：`edge-contract` 的 Design Invariants 條文草稿（network-architecture §7「Gateway：無狀態邊緣」）：條文本身、N3 的分類、`queuedControl.at` 要不要刪（規劃紀錄 2026-10-18 `edge-contract` 條目）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-contract`（Design Invariants 條文需要你核准，做到草稿與守衛後停下）；之後 `edge-rate-limit`（含 `edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-analyzers` 完成（分析器 `pvp-v71-ingress-3`、新舊對照 669 個目錄、突變 35／35）。
+- **最後更新**：2026-10-18，`edge-contract` 的條文草稿與白名單守衛完成（突變 5／5），等你核准條文。
 
 ## 閱讀入口
 
@@ -404,6 +404,21 @@
   - 重新凍結：`pvp-v71-edge-analyzers-20261018/frozen-pv7-ea.sha256` `77cb956b…`（＝`frozen-pv7-d117.sha256` 只更新 `ingress_evidence.py` `567198d6…` 與 `test_ingress_evidence.py` 兩行），給之後的 L2（`edge-rate-limit`）用。
   - 突變：分析器與跨程序核對上的 35 個（既有 26 個中 2 個更新 find 字串，新增 9 個 `v71ea-*`）全部殺死；`v71ea-link-actions-term-missing` 第一次是錯誤訊息不符（被 I1a 的測試抓到，但期望的測試因為拿分析器的常數當迴圈清單而跟著少測），測試改成字面值後殺死。
   - 驗收（L1，本機）：CTest 72／72、preset 外 4／4（`ingress_cross` 在新的必要檢查下通過、不再需要宣告例外）。
+
+- 2026-10-18：`edge-contract`（檔位 medium、守衛 high；估 4 h）。條文做到草稿與守衛，停下等使用者核准（使用者：「開始 edge-contract。Design Invariants 的條文做到草稿與守衛後停下等我核准。」）。
+  - 條文草稿：`network-architecture.zh-Hant.md` §7 `Design Invariants` 之下新增「Gateway：無狀態邊緣」（標「草稿，待使用者核准」）：四條原則（只持有軟狀態、不持有 Match 決策狀態的副本、每則訊息獨立處理、丟棄有界並回報）、允許的 11 個類別（名稱和守衛一致）、禁止項、守衛與變更規則、Replacement Criteria、目前的已知項目（K1、`queuedControl.at`）。同一節的「Gateway 的設計意圖與漂移」狀態改成「edge 系列已改回無狀態邊緣」。protocol-v7 §2a 加上守衛與條文的位置。
+  - 守衛 `apps/object_fps_pvp/gateway/state_whitelist_test.go`（三個測試）：
+    - reflect 走訪 Gateway 套件每個 struct 型別（26 個；用 `go/ast` 確認清單不漏）的欄位，含指標、map 的鍵與元素、slice、array、channel 與匿名 struct；介面欄位要明列它持有什麼（目前只有 `Server.listener`，`net.Listener`）。
+    - `go/ast` 掃描 `gateway` 與 `gateway/adapter` 的套件變數（27 個）。
+    - `go/ast` 掃描以 `go` 啟動的函式與閉包裡的區域 map、slice（目前 2 個：`receiveUDP` 的讀取緩衝、`sendUDP` 每個 snapshot 的玩家清單，都是單次處理用）。
+    - 分類表沒有「Match 決策狀態」類別；未分類、分類表多出不存在的項目、或類別不在允許清單，測試都失敗。
+  - 盤點時發現：`queuedControl.at` 入列時寫入、沒有任何地方讀取（死欄位），沒有順手刪。
+  - 突變：新增 5 個（`v71ec-*`：runtime link 加 `lastResolved` 副本、保留加匿名 struct 的 map、套件變數、writer goroutine 的區域 map、`any` 欄位），全部殺死；會加欄位或區域 map 的既有 6 個突變重跑，仍以原本的訊息殺死。
+  - 驗收（L1，本機）：`go test -race`、CTest 72／72、preset 外 4／4。
+  - 等使用者決定（條文核准時一起）：
+    1. 條文本身（四條原則、11 個類別、Replacement Criteria）。
+    2. N3：佇列項目帶著的診斷身分（`queuedMessage.event`、`resultSlot.event`）和 D105「單次呼叫的脈絡不得跨資料包保留」字面衝突；草稿列為獨立的允許類別「diagnostics carried with a queue item」。
+    3. `queuedControl.at` 要不要刪。
 
 ## 未結事項
 
