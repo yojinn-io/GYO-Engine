@@ -1,6 +1,6 @@
-# pv7-checkpoint 的 L2 事前宣告（第 2 版草稿）
+# pv7-checkpoint 的 L2 事前宣告（第 2 版草稿，D132 後）
 
-- 狀態：**草稿**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 4、SHOULD-FIX 9、NOTE 9，對應表在第 9 節。標「待定」的 4 處要使用者決定（第 8 節），之後寫工具並乾跑，再請使用者核准（AGENTS.md §14.1：核准前不看 A 的回歸指標；核准後不放寬）。
+- 狀態：**草稿**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 4、SHOULD-FIX 9、NOTE 9，對應表在第 9 節。第 8 節的 4 項已決定（D132，全照建議）；接著寫工具並乾跑，再請使用者核准（AGENTS.md §14.1：核准前不看 A 的回歸指標；核准後不放寬）。
 - 依據：D129、D130、D131、D127、D128；README `pv7-checkpoint` 列；`pv7-design.md` 第 119～120 行（K 與 S 的資料）；`protocol-v7.zh-Hant.md` §6「影子量測」；v7 基準 [STABLE_BASELINE](../v7/STABLE_BASELINE.md) 與 16-L2 宣告（`build/target/_build/test/logs/pvp-v7-16-prep-20261014/declaration.md`）。
 - 數字沒有標「實測」的，是推導或推論。門檻裡的「B 的範圍」一律用本 session 的 B 跑次計算。
 
@@ -51,14 +51,14 @@ A1（`a1-shot-step`）之前的整體回歸，一次 session 做兩件事：
 | R1s | 延遲注入的 `run_case` 判定只記錄；分類看結束碼與 `injection_unproven`（edge-input 的寫法，D60） | S | `edge-input-passthrough-l2.md` J1e；D45 S9 |
 | R2 | clean 跑次的權威 Cooldown 拒絕＝0；A 的連點權威 Cooldown（`judge_c2.rapid_cooldown`）＝0；B 的連點 Cooldown 只記錄（v7 已知限制 2，FireGate 殘餘） | clean-30／60／144、長測短模式、quad；連點 | 16-L2 停止條件 2；C2-B；D45 S1 |
 | R3 | clean 跑次的非 respawn 重設＝0 | 25 案的 clean、長測短模式 | 16-L2 停止條件 3 |
-| R3f | **待定 1**：故障情境的 D61 即時規則（故障窗外的非 respawn 重設，＝D44 的 E1）。建議照 16-L2：每次立旗標並計數，兩棵樹各自累計 ≥3 才停（16-L2 停止條件 5）；B 的 gateway-1000ms 依 K1（D118）只記錄 | 25 案的故障情境 | 16-L2 停止條件 5、`edge-rate-limit-l2.md` §3.1；D45 S1 |
+| R3f | 故障情境的 D61 即時規則（故障窗外的非 respawn 重設，＝D44 的 E1）：每次立旗標並計數，同一棵樹累計 ≥3 才停（16-L2 停止條件 5；D132）；B 的 gateway-1000ms 依 K1（D118）只記錄 | 25 案的故障情境 | 16-L2 停止條件 5、`edge-rate-limit-l2.md` §3.1；D45 S1 |
 | R4 | relay 結果任一秒 ≤31；Gateway `results_min_interval_ms` 印出值 ≥33.3，每個需要的玩家至少 1 個有值的視窗（不得空判）。**A 不判 `link_action_min_interval_ms`**（pv7 已刪這條，`edge-actions-passthrough-l2.md:95`；實測 33.2）；B 照 16-L2 的 `judge_c2.r_record` 判 | 25 案 | `edge-results-passthrough-l2.md:75` R4 (a)(b)(c)；D45 S6 |
 | R8 | 逐出＝0；A 的 Match 動作批拒收＝0、每個送出的動作都有裁決（edge 系列 R8、R9）。A 第一次跑的情境（D45 S4 列的 16 案等）先只記錄 | 全部 | edge 系列；D45 N7 |
 | K1a | Gateway 的限速拒收＝0（每個 Gateway 日誌、每位玩家，四個 `drop_rate_limited_*_packets`） | A 的全部項目 | `edge-rate-limit-l2.md` §3.1 |
 | T1 | 三個 trace 都完整：`match-commands.jsonl`、`match-ingress.jsonl`、`match-shots.jsonl` 都有 `trace_end` 而且 `dropped`＝0（movement trace 兩次 drain 之間超過 8192 筆會丟，`MovementTrace.hpp:50-55`） | A 的所有傳 `--movement-trace` 的項目 | D45 S2 |
 | H1 | 影子紀錄涵蓋 Client 收到的每個裁決，以 (player, action_id) 對上。Client 端的來源逐 runner：遊戲案例、長測、延遲注入用 `actions.jsonl`；quad 與 gui-bots 用每輪 `quad-client.json` 的 `clients[].decisions`（沒有時間欄位，只對 id；每輪是一次 Match session）；連點用 `create-rapid*.json` 的 clicks；GUI timing、action／player short、網路不判（沒有逐裁決的 Client 檔，只記錄影子紀錄筆數） | A | D127 的精神；D45 S5 |
 | H2 | **對接（D127 (1)）**：session 邊界由 trace 推出（`snapshot_produced` 的 `authority_tick` 回落；影子紀錄的 `a` 回落），不用 `match.log`（它的行沒有時間戳，D45 M4）。在同一個 session 裡，每筆 `path`＝`on_time` 的紀錄以 (player, E, life, S) 對 `match-commands.jsonl` 的 resolved 事件：事件在紀錄之後、step_tick 的時刻之前加 1 秒的寬限〔寬限只防主機停頓，實測 on_time 的間隔約 1 Tick；窗口寬不會造成誤對〕，而且恰好 1 筆。`late` 紀錄對同一 session 內、紀錄之前最後一筆同鍵事件（只記錄來源）。`epoch`、`life` 的鍵預期沒有事件（請求的身分不是現在的），只記錄。`hold_limit` 只記錄 | A | D127、D128；D45 M3、M4、N6 |
-| H3 | **對接率（D127 (2)）**：每筆 on_time 紀錄都要依 H2 對到 resolved 事件；**待定 2**：對不到的，先在同一份 trace 找產品行為的解釋（該 (player, E) 在 T(S) 之前被重設、同鍵的 `lifecycle_cancelled`、或先到 `trace_end`），有解釋的記為「有解釋的未對上」並列出，找不到的才是工具無效 | A | D127；D45 S2 |
+| H3 | **對接率（D127 (2)，D132 修訂）**：每筆 on_time 紀錄都要依 H2 對到 resolved 事件；對不到的，先在同一份 trace 找產品行為的解釋（該 (player, E) 在 T(S) 之前被重設、同鍵的 `lifecycle_cancelled`、或先到 `trace_end`），有解釋的記為「有解釋的未對上」並列出，找不到的才是工具無效 | A | D127；D45 S2 |
 | D | 受干擾：sleeper 最大 ≥10 ms 或連點分類 D。停止規則：同一情境、同一棵樹受干擾 ≥2 次，或全部累計 ≥6 次（v7.1 五次 session 的受干擾率 7／517≈1.35%，232 項的期望約 3.1 次；edge 系列的「第 3 次就停」在這個項數下約有一半機會因環境停下，D45 S3）。受干擾的跑次不進第 5 節的帶 | 全部 | edge 系列；D45 S3 |
 
 ## 5. 結束時的判定（只在完整的 session 上判）
@@ -70,14 +70,14 @@ A1（`a1-shot-step`）之前的整體回歸，一次 session 做兩件事：
 | C1 | 移動「產生→Actual」P95 | 25 案中有移動的全部情境（網路類除外）、quad、長測短模式 | median A − median B ≤ max(range B, 1 ms)（判 A 變慢的方向）；另記雙側差 | 1 ms：edge 系列 L1 的下限。Actual 的時序由 Client 的模擬步決定，和 probe 幀的相位無關（v7 第 04、09b 批：產生在步邊界） |
 | C2 | 移動「產生→Actual」P50 | 同 C1 | 同 C1 | 同上 |
 | C3 | Actual 比例 | 故障情境（clean 由 R1 的凍結判定判 ≥99%） | median B − median A ≤ max(range B, 2000÷B 已解析命令數 ‰) | `edge-input-passthrough-l2.md:97` J2 的下限（一個 2 秒窗口的量化）；v7 的故障情境三輪幾乎是決定性的（例如 socket-path-1000ms 三輪都 0.9873，D45 M1）；B 的 gateway-1000ms 受 K1 影響（0.965），A 預期較高 |
-| C4 | 合法射擊 Match P95 | 有合法射擊的情境 | **待定 3**：(a) 只記錄（建議）；(b) 換成和相位無關的 Match 端「交接 Tick→裁決」；(c) 照判，下限 1 Tick | v7 D46⑦：probe 建置不同時這個量不能跨建置比較；A clean-60 的 10 跑次就有 9.7～16.0 ms（D45 M2） |
-| C5 | 合法射擊 Client P95 | 同 C4 | **待定 3** 同上；(c) 的下限是 1 個結果間隔 33.3 ms（D107：新裁決最多晚 1 個間隔） | 同上 |
+| C4 | 合法射擊 Match P95 | 有合法射擊的情境 | 只記錄（D132）；兩棵樹的值與差列在報告 | v7 D46⑦：probe 建置不同時這個量不能跨建置比較；A clean-60 的 10 跑次就有 9.7～16.0 ms（D45 M2）；延遲的判定交給 edge 系列在同一份 probe 下做過的 A−B |
+| C5 | 合法射擊 Client P95 | 同 C4 | 只記錄（D132） | 同上 |
 | C6 | 每案「每個 (player, action_id) 第一筆裁決的拒絕原因分布」 | 25 案、長測短模式 | A＝B（gateway-1000ms 依 K1 可以不同）；不相等時立旗標、列出 | 兩個協議的 `actions.jsonl` 格式相同（`judge_c2.gameplay_cooldowns` 兩邊都讀）；v7 三輪幾乎是決定性的（D45 S7） |
 | C7 | network0／20／40、upstream-*、network impairments、duplicate-reorder-conflict | — | 只記錄 | edge 系列 |
 | C8 | G 的 GUI 項目 | — | 兩棵都 P（R1）；可見交越、裁決抵達只記錄 | 16-L2 L2-6 |
 
 - C1～C3、C6 不成立時，報告列出該情境、兩棵樹的值與範圍，**不自動當成退步**：交使用者判斷是否在線內 commit 之間二分（`pv7-design.md:138`）。
-- 統計的讀法：每棵樹 3 次的中位數加上 B 的範圍，只在 v7 幾乎決定性的量（Actual、比例、拒絕分布）上有意義；延遲類的量在跑次之間變異大，3 對 3 只用 B 的範圍當帶時，沒有回歸也約有 8% 的情境會被標出（D45 M2 的模擬），所以 C4、C5 才列為待定。
+- 統計的讀法：每棵樹 3 次的中位數加上 B 的範圍，只在 v7 幾乎決定性的量（Actual、比例、拒絕分布）上有意義；延遲類的量在跑次之間變異大，3 對 3 只用 B 的範圍當帶時，沒有回歸也約有 8% 的情境會被標出（D45 M2 的模擬），所以 C4、C5 只記錄（D132）。
 - 只記錄：K1 的對照（B 的 gateway-1000ms 恢復後 starvation、A 沒有）；A 的 `max_session_window_packets`；兩棵樹的 Cooldown、重設原因；TimerBaseline 狀態。
 
 ## 6. 影子資料（只記錄，給 `a1-shot-step`）
@@ -101,14 +101,13 @@ A1（`a1-shot-step`）之前的整體回歸，一次 session 做兩件事：
 | P3 | A 的 clean 退回率（late＋epoch）為 0（開發跑次：clean-60 on_time 41／43，另 2 筆 life） | clean 有 late 或 epoch |
 | P4 | 時間約 2.5 小時 | 實測差 30% 以上 |
 
-## 8. 等你決定
+## 8. 已決定（D132）與等你決定
 
-1. **待定 1（R3f）**：故障情境的 D61 即時規則不成立時，(a)（建議）照 16-L2 立旗標並計數，同一棵樹累計 ≥3 才停；(b) 第 1 次就停。D44 的回歸屬於 `d44-regression-pv7`；v7 的觀測是 0／260，在約 150 個故障 case-run 裡出現 1 次並不罕見（D45 S1）。
-2. **待定 2（H3）**：on_time 對不上時，先找產品行為的解釋（被重設、被取消、先到結尾），有解釋的只記錄、沒有的才是工具無效。這會改到 `protocol-v7.zh-Hant.md` §6 那一句（D127 寫的是「對不到就是工具無效」），所以要你同意。
-3. **待定 3（C4、C5）**：(a)（建議）只記錄；(b) 改量 Match 端的交接→裁決；(c) 照判，下限 1 Tick 與 33.3 ms。
-4. **A 的開發跑次**：D45 S4 列出 pv7 從沒在 L2 跑過的項目（25 案中的 16 案、網路一般模式、長測短模式、quad 5 輪、背壓的 downstream 與 250 ms、G 的全部 7 項）。建議核准前在 A 上各跑 1 次，只看分類、鍵與 T1、H1～H3，不看第 5 節的指標（D131 的開發跑次同一個做法）。
-5. 核准本宣告（上面決定、工具與乾跑之後的版本）。
-6. 什麼時候跑：約 2.5 小時加閒置門檻；G 與連點要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix。
+- 待定 1：(a) 故障情境的 D61 即時規則立旗標並計數，同一棵樹累計 ≥3 才停（R3f）。
+- 待定 2：同意，on_time 對不上時先找產品行為的解釋（H3）；`protocol-v7.zh-Hant.md` §6 的那一句已改寫。
+- 待定 3：(a) C4、C5 只記錄。
+- 核准前在 A 上把 pv7 沒在 L2 跑過的項目各跑 1 次開發跑次，只看分類、鍵與 T1、H1～H3，不看第 5 節的指標。
+- 等你決定：核准本宣告（工具與乾跑之後的版本）；什麼時候跑（約 2.5 小時加閒置門檻；G 與連點要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
 
 ## 9. D45 檢查的修正對應（第 1 版 → 第 2 版）
 
