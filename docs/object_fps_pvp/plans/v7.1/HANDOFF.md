@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`pv7-checkpoint` 的影子資料來源（更正 D130 的 (i)）：probe 送射擊時不帶 E、S（全是 0），只有遊戲本體會填。(A) 重新凍結 `run_action_short.py` 傳 `--movement-trace`（連點）；(B) 讓 action／network／quad probe 照 Client 規則填 E、S；(A)＋(B)。
+- **等你決定**：無（`pv7-checkpoint`：先補影子資料的來源，D131）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`pv7-checkpoint` 進行中（D129；檔位 medium、分析 high；估 8 h，超過約 12 h 停下回報）：先起草 L2 事前宣告並做 D45，停下等你核准。`hitbox-fields`（`6f3c1a0`）的四平台 L1 是 run 39126662308。`cause-records` 的四平台 L1（run 39120964812）全部通過。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -100,6 +100,7 @@
 | D128 | （2026-10-18）`match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘 `MovementTraceNowNs`），補測試與突變；格式仍是版本 1（還沒有工具讀它） | 使用者：「現在補上：match-shots.jsonl 每筆加 time_ns（和 match-commands.jsonl 同一個時鐘），補測試與突變。」 |
 | D129 | （2026-10-18）開始 `pv7-checkpoint`（檔位 medium、分析 high，估 8 h）：A1 前的整體回歸（凍結 pv7 工具與 v7 基準比較，先扣掉三個 edge 批的差異帶）、K 與 S 取法的影子資料（D127 的兩項判定）。（更正：最初寫的「D44 事件回歸」是錯的，D44 回歸屬於之後的 `d44-regression-pv7`。）行為改變：L2 事前宣告在看結果之前經使用者核准，宣告前做 D45 | 使用者：「開始」 |
 | D130 | （2026-10-18）`pv7-checkpoint` 的比較照 (b)：同一 session 兩棵樹交錯，v7 基準樹 `../GYO-Engine-v7final`（`6d3f287`）用 16-L2 的凍結工具判，現在的樹用凍結 pv7 工具判；門檻用本 session 的 v7 範圍；edge 類指標不和 v7 比。K 的影子資料照 (i)：只用已會寫 trace 的 runner（clean、network20／40、upstream、Gateway→Match 延遲注入），不重新凍結 `run_action_short.py` | 使用者：「照推薦，繼續」 |
+| D131 | （2026-10-18）`pv7-checkpoint` 的影子資料照 (A)＋(B)：重新凍結 `run_action_short.py` 傳 `--movement-trace`（連點也產生影子紀錄）；action／network／quad probe 照 Client 規則填 E、S；補測試後再起草宣告。取代 D130 的 (i) | 使用者：「照 (A)＋(B)：重新凍結 run_action_short.py 傳 --movement-trace，並讓 action／network／quad probe 照 Client 規則填 E、S；補測試後再起草宣告。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -498,6 +499,7 @@
   - 照 README 的方法做不到的地方：edge 指標在 16-L2 沒有基準值（16-L2 的原始檔是 pv6，凍結 pv7 分析器不讀）；三個帶在不同 session、不同主機狀態下量，直接相加會膨脹；K1 修正在 B′、A′ 兩棵都有，不在任何帶裡；v7 到 edge 前的 8 個「行為不變」批沒有帶；很多項目（clean-30／144、upstream、downstream、GUI 等）沒有帶。凍結 pv7 工具涵蓋 16-L2 的全部項目（`frozen-pv7-rl.sha256` 54 個檔對現在的樹全部相符）。
   - 影子資料：`run_gameplay.py`、`backpressure_probe.py`、`run_network.py`、`run_quad.py`、`run_gameplay_soak.py`、`run_timing.py`、`run_short_stall.py` 會傳 `--movement-trace`（因此會寫 `match-shots.jsonl`）；連點的 `run_action_short.py`、`run_player_short.py`、`run_gameplay_gui.py` 不傳。upstream 有 `upstream-250ms`／`-1000ms` 案例，Gateway→Match 延遲注入有 `run_short_stall.py --delay-ms`。
   - 更正 D130 的 (i)：probe 送射擊時不帶 `ShotContext`（`action_main.cpp:186`、`network_main.cpp:182`、`quad_main.cpp:202`），E＝S＝0，影子紀錄全部走 epoch 路徑，不能拿來決定 K 與 S。會填 E、S 的只有遊戲本體（`PvpApplication`：GUI timing、連點、player 短測），其中只有 `run_timing.py` 傳 `--movement-trace`。等使用者重新決定影子資料的來源。
+  - D131 的實作：probe 照 Client 規則填 E、S、view tick，直接用 Client 的 `ActionContext`／`ViewTickQ16`（`ClientConnection::SubmitShot` 加預設為空的 `ShotContext` 參數）。改了 `gameplay_action.hpp`（`run_gameplay.py` 的預排動作；每位玩家這一幀的 `presented` 與遠端取樣的 view tick）、`action_main.cpp`、`quad_main.cpp`（bot 不呈現遠端，view tick 0）。network probe 只在模擬角色建立之前的清場分支開槍，照規則 E＝S＝0，不改。`run_action_short.py` 的 Match 命令列加 `--movement-trace`（`match_command()`，listen 位址留在呼叫處，凍結的 `test_service_startup.py` 用 AST 檢查它）。重新凍結：`pvp-v71-pv7-checkpoint-20261018/frozen-pv7-cp.sha256` `f036b2af…`（＝`frozen-pv7-rl.sha256` 只更新 `run_action_short.py` 與 `test_run_action_short.py`）。突變新增 1 個（`v71cp-rapid-without-trace`）殺死；probe 的 C++ 沒有單元測試，改以兩次工具驗證的開發跑次確認（只讀影子紀錄，不看回歸指標）：`run_gameplay.py` clean-60 43 筆裡 on_time 41、life 2（跨生命），S−L 都是 1，view 延遲約 1.7～1.8 Tick；`run_quad.py` clean-60 1 輪 54 筆全部 on_time。改之前同一個 clean-60 是 43 筆全部 epoch（E＝S＝0）。本機 CTest 72／72。
 
 ## 未結事項
 

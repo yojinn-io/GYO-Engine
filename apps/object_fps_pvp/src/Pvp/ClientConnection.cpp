@@ -875,13 +875,13 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     impl_->latestInput=std::move(input);
     impl_->PostService();
 }
-std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch){
+std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch,const ShotContext& context){
     const auto state=State();
     if(!state.snapshot)return {};
     const auto player=std::find_if(state.snapshot->players.begin(),state.snapshot->players.end(),
         [&](const auto& p){return p.playerId==state.playerId;});
     if(player==state.snapshot->players.end())return {};
-    return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch);
+    return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch,context);
 }
 std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint64_t lifeGeneration,
     std::uint64_t observedAuthorityTick,float yaw,float pitch,const ShotContext& context){

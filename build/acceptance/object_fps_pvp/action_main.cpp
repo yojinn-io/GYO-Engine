@@ -183,7 +183,10 @@ int main(int argc,char** argv){
                 if(shoot){
                     const auto& target=Player(*state.snapshot,ids[1-i]);
                     const float yaw=std::atan2(target.position.x-authority.position.x,target.position.z-authority.position.z);
-                    if(const auto id=clients[i].SubmitShot(state.snapshot->tick,yaw,0)){
+                    // The product's request content (pv7 §6, §7): E and S of this frame's
+                    // presented step, and the remote time this frame sampled.
+                    const auto context=ActionContext(presented,ActionKind::Shot,ViewTickQ16(remote?timelines[i].GlobalCursor():std::nullopt));
+                    if(const auto id=clients[i].SubmitShot(state.snapshot->tick,yaw,0,context)){
                         Json request={{"action_id",*id},{"observed_tick",state.snapshot->tick},{"yaw",yaw},{"pitch",0}};
                         submitted[i][*id]=request;
                         evidence.Push({{"kind","submitted"},{"time_ns",ns},{"player_id",ids[i]},{"request",request}});

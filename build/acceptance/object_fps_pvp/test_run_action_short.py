@@ -234,5 +234,14 @@ class TimerBaselineIsNeverAVerdict(unittest.TestCase):
         self.assertEqual(lines, [], "a check may have started reading the timer baseline")
 
 
+class ShadowRecordTests(unittest.TestCase):
+    # v7.1 D131: the GUI's real shots carry E, S and the view tick; the Match
+    # records their shadows only with a movement trace, next to it.
+    def test_the_match_writes_its_movement_trace_in_the_case_directory(self):
+        command = runner.match_command("/bin/match", "/a/arena.json", "127.0.0.1:4321", "/out/rapid-edge-30")
+        self.assertEqual(command[:5], ["/bin/match", "--arena", "/a/arena.json", "--listen", "127.0.0.1:4321"])
+        self.assertEqual(command[5:], ["--movement-trace", str(Path("/out/rapid-edge-30") / "match-commands.jsonl")])
+
+
 if __name__ == "__main__":
     unittest.main()

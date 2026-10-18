@@ -4566,6 +4566,16 @@
       "replace": ",\\\"kind\\\":\\\"decision\\\",\\\"player_id\\\":\" +",
       "check": "cpu",
       "expect": "time_ns"
+    },
+    {
+      "id": "v71cp-rapid-without-trace",
+      "batch": "v71-pv7-checkpoint",
+      "what": "The rapid runner starts the Match without a movement trace (no shadow records of the GUI's shots)",
+      "file": "build/acceptance/object_fps_pvp/run_action_short.py",
+      "find": "            '--movement-trace', str(Path(directory) / 'match-commands.jsonl')]\n",
+      "replace": "            ]\n",
+      "check": "action_runner",
+      "expect": "test_the_match_writes_its_movement_trace_in_the_case_directory"
     }
   ]
 }

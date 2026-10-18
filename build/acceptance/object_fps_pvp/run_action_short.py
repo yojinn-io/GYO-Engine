@@ -176,6 +176,15 @@ def summarize_rapid(directory, scenario):
             'disturbed': [role for role, report in roles.items() if report.get('disturbed') is True]}
 
 
+def match_command(match, arena, listen, directory):
+    """The Match's command line. Its movement trace makes the Match write the
+    shadow records of the GUI's real shots next to it (match-shots.jsonl, pv7
+    §6; v7.1 D131), with match-commands.jsonl and match-ingress.jsonl for the
+    offline join."""
+    return [str(match), '--arena', str(arena), '--listen', listen,
+            '--movement-trace', str(Path(directory) / 'match-commands.jsonl')]
+
+
 def stop_in_order(processes, gateway, match, match_log, timeout=3, close_wait=2):
     """Stops the clients first, then the Gateway, and the Match last once its log shows the IPC session ended (the
     Gateway's close, read as EOF), at most close_wait seconds. A Match stopped while the Gateway is still connected
@@ -232,7 +241,7 @@ def run_case(args, name):
         processes.append(process)
         return process
     try:
-        match = start('match', [str(args.match), '--arena', str(args.arena), '--listen', f'127.0.0.1:{ipc}'])
+        match = start('match', match_command(args.match, args.arena, f'127.0.0.1:{ipc}', directory))
         wait_for_match_ready(match, directory / 'match.log', f'127.0.0.1:{ipc}')
         gateway = start('gateway', [str(args.gateway), '--runtime', f'127.0.0.1:{ipc}', '--http', f'127.0.0.1:{http}',
                                     '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])
