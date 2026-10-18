@@ -10,7 +10,10 @@
 // (Actual, Held, Neutral) and whether it arrived later are not repeated here:
 // match-commands.jsonl (resolved, by player, epoch and sequence) and
 // match-ingress.jsonl (substitution records with their first late copy) hold
-// them, joined offline by (player, E, life, S).
+// them, joined offline by (player, E, life, S) in time order (D127): time_ns
+// is the clock of both files, MovementTraceNowNs, so a reconnection (the Match
+// resets, ticks and sequences start over) cannot pair a record with another
+// connection's events.
 //
 // Records are buffered under the host's lock up to MatchShotRecordCapacity
 // between drains; one that finds the buffer full is counted as dropped. The
@@ -83,6 +86,9 @@ struct ShotStep final {
 }
 
 struct ShotShadowRecord final {
+    // When the host recorded the decision (after tick A), on the movement
+    // trace's clock (MovementTraceNowNs), the order key of the offline join.
+    std::int64_t timeNs{};
     PlayerId playerId{};
     ActionId actionId{};
     ActionKind kind{ActionKind::Shot};
@@ -130,7 +136,8 @@ struct ShotRecords final {
 // One line of match-shots.jsonl, without the newline.
 [[nodiscard]] inline std::string MatchShotRecordLine(const ShotShadowRecord& r) {
     const auto optional = [](const auto& value) { return value ? std::to_string(*value) : std::string("null"); };
-    return "{\"version\":" + std::to_string(MatchShotTraceVersion) + ",\"kind\":\"decision\",\"player_id\":" +
+    return "{\"version\":" + std::to_string(MatchShotTraceVersion) + ",\"kind\":\"decision\",\"time_ns\":" +
+        std::to_string(r.timeNs) + ",\"player_id\":" +
         std::to_string(r.playerId) + ",\"action_id\":" + std::to_string(r.actionId) + ",\"action_kind\":\"" +
         (r.kind == ActionKind::Shot ? "shot" : "reload") + "\",\"a\":" + std::to_string(r.handoffTick) +
         ",\"e\":" + std::to_string(r.epoch) + ",\"s\":" + std::to_string(r.sequence) +
@@ -160,8 +167,10 @@ public:
 
     // After tick A: a record for every handed request the Match decided at A.
     // before is the state before the tick (for the shooter's cooldown), after
-    // the state after it (Ecur, L and life after A's movement).
-    void Decided(const PvpMatch& match, std::uint64_t a, const WorldSnapshot& before, const WorldSnapshot& after) {
+    // the state after it (Ecur, L and life after A's movement); timeNs the
+    // movement trace's clock now (MovementTraceNowNs).
+    void Decided(const PvpMatch& match, std::uint64_t a, const WorldSnapshot& before, const WorldSnapshot& after,
+                 std::int64_t timeNs) {
         for (auto player = requests_.begin(); player != requests_.end();) {
             const auto results = match.GetActionResults(player->first);
             const auto state = Find(after.players, player->first);
@@ -173,7 +182,7 @@ public:
             for (const auto& decision : results->decisions) {
                 const auto request = player->second.find(decision.actionId);
                 if (decision.resolvedTick != a || request == player->second.end()) continue;
-                Record(request->second, decision, a, *state, combat);
+                Record(request->second, decision, a, *state, combat, timeNs);
                 player->second.erase(request);
             }
             if (player->second.empty()) player = requests_.erase(player);
@@ -194,8 +203,8 @@ private:
         return nullptr;
     }
     void Record(const ShotRequest& request, const ShotDecision& decision, std::uint64_t a, const PlayerState& state,
-                const CombatState* before) {
-        ShotShadowRecord record{.playerId = state.playerId, .actionId = request.actionId, .kind = request.kind,
+                const CombatState* before, std::int64_t timeNs) {
+        ShotShadowRecord record{.timeNs = timeNs, .playerId = state.playerId, .actionId = request.actionId, .kind = request.kind,
             .handoffTick = a, .epoch = request.movementEpoch, .sequence = request.commandSequence,
             .requestLife = request.lifeGeneration, .currentEpoch = state.movementEpoch,
             .lastResolved = state.lastResolvedCommand, .life = state.lifeGeneration, .rejection = decision.rejection,

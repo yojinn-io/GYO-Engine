@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 
 #include <algorithm>
 
@@ -421,4 +422,26 @@ TEST_CASE("PvP combat host records the cooldown a shot inside it would hold") {
     REQUIRE(second.cooldownHoldTicks);
     CHECK(*second.cooldownHoldTicks == first.resolvedTick + PvpCombatRules.cooldownTicks - second.step.tick);
     CHECK(*second.cooldownHoldTicks == PvpCombatRules.cooldownTicks - 1);
+}
+
+// D127: each shadow record carries when the host recorded it, on the movement
+// trace's clock (MovementTraceNowNs, the time_ns of match-commands.jsonl), so
+// the offline join can order records and events across a reconnection.
+TEST_CASE("PvP combat host stamps each shadow record on the movement trace's clock") {
+    CombatHostFixture fixture;
+    std::vector<std::pair<std::int64_t, std::int64_t>> windows;
+    for (ActionId id = 1; id <= 3; ++id) {
+        REQUIRE(fixture.host.SubmitActions({1, {{id, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+        const auto before = MovementTraceNowNs();
+        fixture.Step();
+        windows.emplace_back(before, MovementTraceNowNs());
+    }
+    const auto records = fixture.host.DrainShotRecords().records;
+    REQUIRE(records.size() == 3);
+    for (std::size_t k = 0; k < records.size(); ++k) {
+        CAPTURE(k);
+        CHECK(records[k].timeNs >= windows[k].first);
+        CHECK(records[k].timeNs <= windows[k].second);
+        if (k) CHECK(records[k].timeNs >= records[k - 1].timeNs);
+    }
 }

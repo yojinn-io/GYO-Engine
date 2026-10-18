@@ -4546,6 +4546,26 @@
       "replace": "    return {step.movementEpoch, step.latestCommand,",
       "check": "cpu",
       "expect": "unpredicted.movementEpoch == 0"
+    },
+    {
+      "id": "v71hf-shadow-time-unset",
+      "batch": "v71-hitbox-fields",
+      "what": "The host records a shadow decision without its time",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, MovementTraceNowNs());",
+      "replace": "        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, 0);",
+      "check": "cpu",
+      "expect": "records\\[k\\]\\.timeNs >= windows"
+    },
+    {
+      "id": "v71hf-shadow-line-time-missing",
+      "batch": "v71-hitbox-fields",
+      "what": "A shadow record line leaves out its time",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": ",\\\"kind\\\":\\\"decision\\\",\\\"time_ns\\\":\" +\n        std::to_string(r.timeNs) + \",\\\"player_id\\\":\" +",
+      "replace": ",\\\"kind\\\":\\\"decision\\\",\\\"player_id\\\":\" +",
+      "check": "cpu",
+      "expect": "time_ns"
     }
   ]
 }

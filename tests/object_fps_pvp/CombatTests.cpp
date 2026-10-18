@@ -1046,12 +1046,12 @@ TEST_CASE("PvP shadow records check the view tick without refusing anything") {
 }
 
 TEST_CASE("PvP shadow record lines and the shot trace path") {
-    const ShotShadowRecord record{.playerId = 2, .actionId = 9, .kind = ActionKind::Shot, .handoffTick = 100, .epoch = 3,
+    const ShotShadowRecord record{.timeNs = 1234567, .playerId = 2, .actionId = 9, .kind = ActionKind::Shot, .handoffTick = 100, .epoch = 3,
         .sequence = 20, .requestLife = 1, .currentEpoch = 3, .lastResolved = 15, .life = 1,
         .step = {ShotStepPath::OnTime, 105}, .cooldownHoldTicks = 4, .rejection = ShotRejection::Cooldown,
         .viewTickQ16 = 98 * 65536 + 32768, .viewValid = true, .viewLagQ16 = 2 * 65536 - 32768};
     CHECK(MatchShotRecordLine(record) ==
-          "{\"version\":1,\"kind\":\"decision\",\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
+          "{\"version\":1,\"kind\":\"decision\",\"time_ns\":1234567,\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
           "\"s\":20,\"request_life\":1,\"epoch_at_a\":3,\"last_resolved_at_a\":15,\"life_at_a\":1,\"path\":\"on_time\","
           "\"step_tick\":105,\"cooldown_hold_ticks\":4,\"rejection\":\"cooldown\",\"view_tick_q16\":6455296,"
           "\"view_valid\":true,\"view_lag_q16\":98304}");

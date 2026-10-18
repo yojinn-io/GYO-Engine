@@ -436,7 +436,7 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
         });
         auto state = match_.Snapshot();
-        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state);
+        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, MovementTraceNowNs());
         TrackSlack(state, advancedAt);
         JudgeConnectionQuality(state);
         // Retaining only unresolved tuples supplies bounded duplicate identity
