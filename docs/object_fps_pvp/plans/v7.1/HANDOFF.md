@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`pv7-checkpoint`：寫工具與乾跑中，D132）。
+- **等你決定**：`pv7-checkpoint` 的 L2 事前宣告第 3 版（[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md) 第 10 節的雜湊）要不要核准，以及什麼時候跑（約 2.5 h 加閒置門檻；G 與連點要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`pv7-checkpoint` 進行中（D129；檔位 medium、分析 high；估 8 h，超過約 12 h 停下回報）：先起草 L2 事前宣告並做 D45，停下等你核准。`hitbox-fields`（`6f3c1a0`）的四平台 L1 是 run 39126662308。`cause-records` 的四平台 L1（run 39120964812）全部通過。
+- **下一步**：`pv7-checkpoint` 進行中（D129；檔位 medium、分析 high；估 8 h，超過約 12 h 停下回報）：宣告、工具、開發跑次與乾跑完成，等你核准後跑 session。`hitbox-fields`（`6f3c1a0`）的四平台 L1 是 run 39126662308。`cause-records` 的四平台 L1（run 39120964812）全部通過。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18 20:36，`hitbox-fields` 實作、測試與突變完成（本機 CTest 72／72、突變 22／22、權威 digest 兩樹 0 差異），已推送並觸發 L1；有一項等你決定。
+- **最後更新**：2026-10-18 23:55，`pv7-checkpoint` 宣告第 3 版：工具、A 的開發跑次 45 項（全部 P、0 停止）、乾跑全部如預期；停下等你核准。
 
 ## 閱讀入口
 
@@ -503,6 +503,13 @@
   - D131 的實作：probe 照 Client 規則填 E、S、view tick，直接用 Client 的 `ActionContext`／`ViewTickQ16`（`ClientConnection::SubmitShot` 加預設為空的 `ShotContext` 參數）。改了 `gameplay_action.hpp`（`run_gameplay.py` 的預排動作；每位玩家這一幀的 `presented` 與遠端取樣的 view tick）、`action_main.cpp`、`quad_main.cpp`（bot 不呈現遠端，view tick 0）。network probe 只在模擬角色建立之前的清場分支開槍，照規則 E＝S＝0，不改。`run_action_short.py` 的 Match 命令列加 `--movement-trace`（`match_command()`，listen 位址留在呼叫處，凍結的 `test_service_startup.py` 用 AST 檢查它）。重新凍結：`pvp-v71-pv7-checkpoint-20261018/frozen-pv7-cp.sha256` `f036b2af…`（＝`frozen-pv7-rl.sha256` 只更新 `run_action_short.py` 與 `test_run_action_short.py`）。突變新增 1 個（`v71cp-rapid-without-trace`）殺死；probe 的 C++ 沒有單元測試，改以兩次工具驗證的開發跑次確認（只讀影子紀錄，不看回歸指標）：`run_gameplay.py` clean-60 43 筆裡 on_time 41、life 2（跨生命），S−L 都是 1，view 延遲約 1.7～1.8 Tick；`run_quad.py` clean-60 1 輪 54 筆全部 on_time。改之前同一個 clean-60 是 43 筆全部 epoch（E＝S＝0）。本機 CTest 72／72。
   - 宣告第 1 版草稿：[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md)（兩棵樹各 106 項，加只在 A 的延遲注入 6 項，共 218 項，約 2.2 h；停止條件 R1～R4、K1a、H1～H3（D127 的兩項：對接鍵加時間順序與窗口、on_time 全部對得到）；結束時判定 C1～C5；影子資料只記錄）。D45（1 位 xhigh）進行中。
   - D45（1 位 xhigh，約 20 分）：MUST-FIX 4（C3 的 99% 套到故障情境一定不成立；C4、C5 的合法射擊 P95 依 v7 D46⑦ 不能跨建置比較；H2 要求每筆都對到之後的事件，late／life 會讓第一個 clean-60 就停；`match.log` 的 `ipc closed` 沒有時間戳，不能當 session 邊界）、SHOULD-FIX 9、NOTE 9。第 2 版逐項修正（對應表在宣告第 9 節），4 項待使用者決定。
+  - 工具（2026-10-18 22:50，D132 之後）：`build/target/_build/test/logs/pvp-v71-pv7-checkpoint-l2-prep-20261018/` 的 `judge_cp.py`（排程 232 項、第 4 節逐項判定、第 5 節結束判定）、`run_cp.py`（driver）、`shadow_cp.py`（T1、H1～H3、第 6 節）、`timing_v7_a.py`（16-L2b 的 v7 HUD 規則綁 A 的模組，另開行程）、`corpus.py`（B 的語料檢查）。A 的主 checkout 在 HEAD `12ebe2b` 重建：Gateway 的建置資訊原本是 `12e6faf`、modified＝true（D131 提交前建的），重建後 `12ebe2b`、false；`artifacts-A.sha256` `ab6005fc…`（41 行，arena 31 檔和 v7final 的 16-L1 逐檔相同）。預檢通過。
+  - B 的語料檢查：16-L2（168 項）、16-L2b（4 項）、C2 的 c2-after 連點，共 183 個 B 跑次當成 B 項目重判：182 個分類和當時的紀錄相同、0 個停止；唯一不同是 16-L2 的 `timing-gui-short`（凍結 F，v7 HUD 規則 P，符合 D83）。
+  - A 的開發跑次（D132，只看分類、鍵與 T1、H1～H3）發現一個工具錯誤：`upstream-1000ms` 有 1 筆 on_time 對不到事件，原因是 `reset` 事件記的是**新的** epoch（這筆在記錄後 33 ms 遇到 backlog 重設，epoch 2→3，在 T(S) 之前），工具卻用舊的 E 去找。已改成「同一 session、同一玩家、紀錄之後到窗口結束之間有 epoch 大於 E 的重設」，夾具改成真實的形狀。這正是 D45 預告的「on_time 之後接 backlog 重設」。另外 `duplicate-reorder-conflict` 的 Match 動作批拒收 6（conflict，情境本身的設計；R8 對第一次跑的情境只記錄）。
+  - 誤看：查 `result.json` 的鍵時，不小心印出了 A 開發跑次 clean-60 的合法射擊 P95（Match 13.8、Client 32.7 ms）。C4、C5 依 D132 只記錄、不判，不影響任何門檻；之後的工具只輸出分類、停止與旗標，不讀第 5 節的指標。
+  - 開發跑次完成（2026-10-18 23:30）：A 45 項（25 案、背壓、網路兩種、長測短模式、quad 5 輪、延遲注入兩個 T、G 7 項、連點 6 格）、B 6 項，全部分類 P（延遲注入為 R）、0 停止。影子對接：on_time 全部對上或有解釋（有解釋的 2 筆：`upstream-1000ms` 的 backlog 重設、`rapid-interval12-144` 最後一發時 trace 先結束）。中途改 `shadow_cp.py` 卻沒同步 `judge_cp.py` 釘的雜湊，19 項被拒絕而沒跑，同步後補跑（教訓：開發跑次進行中不改被釘住的檔）。
+  - 乾跑（`dryrun.py`）：逐項 89 列、突變 11 個全部殺死、driver 8 項、模擬 session 7 種、第 5 節合成資料 11 列，全部如預期。第一次乾跑的失敗都是夾具或預期寫錯（B 夾具的目錄結構不合 `r_record`、clean 的夾具插入重設本該停、合成數字的四捨五入、模擬 session 選錯項目），另外補了 H2 主機停頓的夾具（原本「H2 窗口沒有 1 秒寬限」的突變沒殺到）與 C3 恰好等於下限時的浮點容差 1e-9（宣告寫的是 ≤）。
+  - 宣告第 3 版：把工具的機械規則寫回第 2、4、5 節（B 的已知限制＝D44 型、R8 判的 11 個情境、T1 的目錄、H3 的重設解釋、C1／C3 的情境清單、C3 的 N、C6 的「A 的每跑次分布等於 B 某一跑次」），第 10 節是雜湊、開發跑次與乾跑。時間以開發跑次更正為 148.8 分加閒置門檻。
 
 ## 未結事項
 
