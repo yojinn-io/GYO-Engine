@@ -51,7 +51,8 @@ from run_network import steady_clock_ns
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 # D50 condition 3: the frozen files (equal to every list since C1; pvp-v7-batch09-s1-20261010/analyzers.sha256).
-FROZEN = {'action_probe.py': '59002b4339df7856d387b6872a7436c3cf55b817c1874bc9d812cacb65a77906',
+# action_probe.py refrozen by v7.1 D122 (its Gateway limiter check only; ActionRelay unchanged).
+FROZEN = {'action_probe.py': '1a63504b2c7970f866f1d143a1425632a4b4044103ce5ddd320cd466b75913b1',
           'backpressure_probe.py': 'c88ceb8908b74fc8909b41d01660ddc09efc485491ca5f27b07b4f7b19f3b7e9'}
 # Recorded in plan.json (not checked): the other modules run_case uses.
 RECORDED = ('run_short_stall.py', 'action_probe.py', 'backpressure_probe.py', 'gameplay_evidence.py',
