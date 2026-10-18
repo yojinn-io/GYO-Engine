@@ -126,3 +126,19 @@ rapid 的 fixture 沿用第 4 版的 6 個 f79bb10 開發跑次（K1a 0 拒收�
 **用新 judge 重判之前兩次 session**（第 3 版 `pvp-v71-edge-actions-l2-20261017`、第 4 版 `-20261018`，共 131 項，修正前）：停止只有 gateway-1000ms 的 K1a、K1b，backpressure 的 K1a（都是修正前的限速丟棄），以及第 3 版 session 的 rapid 停止（D117 修正的收尾競態）。其他項目全部符合 3.2 的期望表，network-impairments 的兩個 Gateway 日誌都是。
 
 **乾跑**（`dryrun/matrix.json`）：逐項 96 列、driver 檢查 10 項（含 preflight）、模擬 session 5 個，**全部符合預期**。新增的列：`link_actions` 不一致、I1a 不一致、I1a 有放棄的批（允許）、R6c 前提不成立（只記錄）、B' 的 `link_shots` 不成立、只有 `gateway-reconnected.log` 不成立、K1a 拒收（B'、A'）與缺鍵、K1b 恢復後的 starvation、正向對照 0 次與 2 次、缺 fault，以及修正前的真實 gateway-1000ms 跑次（K1a、K1b 都停）。真實 B corpus（`pvp-v71-edge-results-l2-20261017b` 的 A＝f79bb10 共 60 跑次，加 10 個開發跑次）：停止只在修正前的 10 個 gateway-1000ms、backpressure 跑次（K1a、K1b），開發跑次 0 停止。
+
+## 9. 結果（2026-10-18，D123 核准後）
+
+Session `build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-20261018/`（判定 `judgement.json`、`judgement.md`）：**168 項全部跑完，沒有停止，完整性問題 0，通過（L1～L4 都成立）**。受干擾的項目 2 個（`rapid-edge-144-r2-B`、`network40-r2-B`，未達累計 3 次）。
+
+| 判定 | 結果 |
+|---|---|
+| K1a | 168 項全部 0 拒收（兩棵樹） |
+| K1b | gateway-1000ms 10 跑次全部成立：每位玩家停頓中恰好 1 次 starvation（恢復前 474～484 ms），恢復後 0 次 |
+| R1～R9、R6 的分析器期望表、R6c | 逐項全部成立 |
+| L1（to_tick p95，A−B） | 全部成立；gateway-1000ms 0.480 ms（門檻 2.414，本 session 的 B' 範圍） |
+| L2（Expired） | clean-60、loss-*、soak 兩棵樹全部 0；host-ipc-1000ms B、A 都是 1×5；gateway-1000ms B [2,3,3,3,3]、A [2,3,2,3,3] |
+| L3 | B 32、A 35 項合格；A 的回報裡原因 33：未驗證（沒有發生） |
+| L4 | 12 格全部 4 次 P、送出 ≥123，Cooldown 0 |
+
+預測（只記錄）：P1～P4、P6 都沒有被推翻（P6：gateway-1000ms 的 Expired 中位數 B'、A' 都是 3）。P7：gateway-1000ms 156～160（預測約 170），backpressure 的 Gateway 層 120～122（預測 ≤120，有 9 次超過 1～2），和開發跑次一致；只記錄。

@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。等你說要離開時開始 L2 session（D123；約 2 h 46 分加閒置門檻；rapid 要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix）。
+- **等你決定**：無。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：核准後在你不用電腦的時段跑 L2 session（`pvp-v71-edge-rate-limit-l2-20261018`，指令在工具目錄的 `commands.txt`），判定與記錄後完成 `edge-actions-passthrough` 與 edge 系列。
+- **下一步**：`cause-records`（E2、動作拒收回覆、Leave 原因），等你說開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-rate-limit`：宣告第 3 版已核准（D123），等你說要離開時開始 session。
+- **最後更新**：2026-10-18，`edge-rate-limit` 的 L2 通過（168 項、無停止、L1～L4 成立），`edge-actions-passthrough` 與 edge 系列完成；K1 已處理。
 
 ## 閱讀入口
 
@@ -456,11 +456,13 @@
   - L2 的工具與乾跑（`build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-prep-20261018/`）：A' 移到 `ed3481c` 重建（`vcs.modified=false`），宣告的 A' commit 由 `7bb1f84` 改成 `ed3481c`。judge 由第 4 版的工具改：分析器期望表逐個 `gateway*.log` 判、I0 一律判、R6a／R6b 刪除、R6c 用自己的前提、新增 K1a、K1b、P6、P7。B' 開發跑次 4 個（gateway-1000ms ×2、clean-60、backpressure）全部 P、無停止：K1a 0 拒收；K1b 每位玩家停頓中恰好 1 次 starvation、恢復後 0 次；Expired 3、2；P7（固定窗口計數）gateway-1000ms 159、159，backpressure 的 Gateway 層 121（預測是約 170 與 ≤120，只記錄，預測不改）。用新 judge 重判之前兩次 session 的 131 項：停止只有修正前的 K1 與第 3 版的 rapid 收尾競態。乾跑 96 列、driver 10 項、模擬 session 5 個全部符合預期。Client 不變已核對（C++ 只改 Match 的 `IpcHost.cpp`）。宣告第 3 版：[edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 8 節。
   - L1（`ed3481c`，run 39102188643）：windows-x64、linux-x64、macos-arm64 通過；**macos-x64 不通過**，`object_fps_pvp.cpu` 的「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」（`MovementRecoveryTests.cpp:456`，product 路徑 fps 30、RTT 0、bootstrap gap 108、worker 4000、authority 6000：`unexpectedRejections` 1）。`ed3481c` 對 `c82ecc5` 只改 Python；同樣的 C++ 在 `7bb1f84`（run 39100385472）的 macos-x64 通過，兩次的 runner 映像相同（macos-15-arm64 上以 Rosetta 2 跑 x64）。測試用注入的時鐘與固定種子，原則上是決定性的；本機（Intel x64）單案例 200 次、整個執行檔 20 次都 0 失敗。原因未切分（實作的非決定性、測試，或 Rosetta 環境），已只重跑失敗的 job；原本的失敗保留記錄（§14.1）。重跑（attempt 2）macos-x64 與 CI gate 通過：同一份程式碼結果會變，原因仍未切分，列入未結事項 `N-movement-recovery-flake`。
 
+- 2026-10-18：`edge-rate-limit` 的 L2 session（D123；`build/target/_build/test/logs/pvp-v71-edge-rate-limit-l2-20261018/`）。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix；跑後重新打開。168 項全部跑完、沒有停止、完整性問題 0，判定通過（L1～L4 成立）。K1a 168 項全部 0 拒收；K1b gateway-1000ms 10 跑次全部成立（停頓中每位玩家恰好 1 次 starvation，恢復後 0 次）。L2 的 gateway-1000ms Expired B [2,3,3,3,3]、A [2,3,2,3,3]；P7 gateway-1000ms 156～160、backpressure 的 Gateway 層 120～122（只記錄）。受干擾 2 項。結果寫在宣告第 9 節。`edge-actions-passthrough` 與 `edge-rate-limit` 完成，edge 系列完成；README 同步。
+
 ## 未結事項
 
 - `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。
 
-- **K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩存的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
+- **（已處理：D121、`edge-rate-limit` 的 L2 通過）K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩存的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
   - **edge 系列收尾的 `edge-rate-limit`（D119；原為發版前，D118）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
   - 背景（使用者，2026-10-18）：網路在 v7.1 多次修改，很多是改網路機制；這可能是舊 Gateway 留下的痕跡。分析：限速本身是通用層的防洪機制（v5 以前就有），不是產品層的狀態副本；但它的兩個假設（Gateway 即時讀封包；流量遠低於 120）被 v7／v7.1 的修改侵蝕（30 Hz 動作批、時間回聲、09a 的 82 包輸入上限，開槍玩家平時已約 91 包／秒）。
 
