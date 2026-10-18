@@ -41,7 +41,7 @@
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：`edge-rate-limit`（K1 重新測試、評估方案 (a)、`edge-actions-passthrough` 的 L2）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-18，`edge-rate-limit`：K1 以失敗的測試重新確認（重放拒收 53），方案 (a) 評估完成，等你決定。
+- **最後更新**：2026-10-18，`edge-rate-limit`：限速修正提交（`7bb1f84`），L2 宣告第 1 版草稿與 D45 檢查進行中。
 
 ## 閱讀入口
 
@@ -448,6 +448,7 @@
   - 突變：新增 4 個（`v71rl-*`：沒有 burst、閒置額度無上限、被拒仍扣額度、容量 61），全部殺死；新增 check `gateway_session`（通用層的 `go test ./session/...`）。突變目錄 402 個，沒有過時的 find。
   - 驗收（L1，本機）：通用層與產品層 `go test -race`、CTest 72／72、preset 外 4／4。通用層的測試在 CI 由 `go_checks.py` 對登記的 Go 模組執行。
   - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩存的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
+  - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。D45 檢查進行中。
 
 ## 未結事項
 
