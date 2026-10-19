@@ -29,7 +29,11 @@ content, schemas, file names, end lines and what a lost line means for it.
 - `Close(endLine)` stops accepting, writes every accepted line, then the line `endLine(counts)` returns (if any),
   flushes and closes. `written` and `droppedFull` handed to `endLine` are final.
 - `FlushNow(timeout)` blocks until every line accepted before the call is written and flushed. It returns false on
-  the writer thread, after `Close`, or on timeout; it is meant for paths about to end the process.
+  the writer thread, after `Close`, after a failed write, or on timeout (including while another thread holds the
+  queue: it only try-locks, so a crash path on a thread that holds the queue cannot hang); it is meant for paths
+  about to end the process.
+- `flushEachLine` makes the writer flush after every line, so each line reaches the file in one write; for files
+  other processes may append to as well. The default flushes once per batch.
 - `Good()` is false once a write or flush failed; drops do not make it false (the consumer decides what a drop
   means, for example by also requiring `Counts().Dropped() == 0`).
 
@@ -37,7 +41,7 @@ content, schemas, file names, end lines and what a lost line means for it.
 
 1. A producer's `Push` does no file I/O and never waits for the writer thread; a full queue drops and counts.
 2. The writer thread is woken only by notification (Push into an empty queue, `FlushNow`, `Close`); it has no
-   polling timer.
+   polling timer. Its wait has no deadline, and a wake for any other reason fails a `GYO_ASSERT`.
 3. Conservation: once closed and no Push is running, pushes = `written` + `droppedFull` + `droppedClosed`. Every
    accepted line is written before the end line.
 4. The end line is the last line of the file; nothing is written after it.

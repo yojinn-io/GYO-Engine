@@ -119,4 +119,12 @@
   - 突變 5／5 killed（`tt2-drop-uncounted`、`tt2-accept-after-close`、`tt2-final-batch-unwritten`、`tt2-no-wake`、`tt2-flush-no-wait`）。`tt2-flush-no-wait` 第一版測試抓不到（寫檔跟得上生產者），改成先推一行 64 MB 讓寫檔執行緒忙著，再推標記行；之後連跑 3 次都 killed。
   - 消費端：CTest `cpu|shader` 73／73（含權威 digest 0 差異）。
 - 證據：`build/target/_build/test/logs/engine-tt2-20261020/`（`tsan.txt`）。
-
+- 2026-10-20：xhigh 審查（1 位，消費端 D139 的 T-4）：沒有 MUST-FIX。處理：
+  - [SHOULD] 消費端的測試在 `LogFile` 之後宣告被 Tee 的 stream（解構順序造成的 UB）→ 調換宣告順序。
+  - [SHOULD] 「不輪詢」沒有守衛 → 寫檔執行緒的等待加 `GYO_ASSERT(wake.reason == Notified)`，新增突變 `tt2-timer-wake`；喚醒測試在第二次 Push 前先閒置 20 ms。
+  - [SHOULD] 消費端的當機路徑、丟棄行、`Finish` 之後才到的事件沒有測試 → 補 3 個測試與 4 個突變（全部 killed）。
+  - [SHOULD] 多個程序 append 同一個檔案時，一行可能被批次寫出切開（舊版每行 flush）→ 新增 `flushEachLine`，消費端的日誌檔使用。
+  - [SHOULD] 生產者每筆建一個 `std::ostringstream`（MSVC 會取全域鎖）→ 消費端改用 `std::string`＋`%.17g`，位元組由 golden 測試確認不變。
+  - [NIT] 寫入失敗後 `FlushNow` 仍回 true → 改成同時要求沒有失敗。持有佇列鎖的執行緒進入 terminate 時 `FlushNow` 會自鎖 → 改成 try-lock 到期限。`tt2-final-batch-unwritten` 靠機率 → 新的確定性測試（先推 64 MB 讓寫檔執行緒忙著）。
+  - 未處理（記錄）：佇列上限的差一錯誤沒有確定性的測試（8 個生產者的測試只證明有上限、計數精確）；`~LogFile` 與另一條執行緒的當機處理同時發生的窗口（寫進消費端的介面註解：先停其他執行緒再解構）。
+  - 突變 6／6；TSan 3 輪乾淨；Trace 測試重複 20 次全過。

@@ -17,13 +17,16 @@ namespace fps::pvp {
 // are not synchronized: compare their logs by wall time only roughly.
 //
 // The timestamp is taken on the writing thread; the file I/O happens on the
-// Engine trace sink's writer thread, so no caller waits for the disk. A line
-// that finds the queue full is dropped and counted; if any was, the file ends
-// with a "[log] dropped_lines=" line.
+// Engine trace sink's writer thread, so no caller waits for the disk. Each line
+// is flushed on its own, as before, so Clients sharing a file never split a
+// line. A line that finds the queue full, or comes after the LogFile began to
+// close, is dropped and counted; if any was, the file ends with a
+// "[log] dropped_lines=" line.
 class LogFile final {
 public:
-    // Opens (appends to) the file; throws when it cannot.
-    explicit LogFile(const std::filesystem::path& path);
+    // Opens (appends to) the file; throws when it cannot. capacity: lines
+    // waiting for the writer before a Write is dropped.
+    explicit LogFile(const std::filesystem::path& path, std::size_t capacity = Capacity);
     ~LogFile();
     LogFile(const LogFile&) = delete;
     LogFile& operator=(const LogFile&) = delete;
@@ -38,11 +41,12 @@ public:
     // Until this object is destroyed, a failed GYO_ASSERT writes its failure
     // here and a std::terminate flushes the file before the previous handlers
     // run (the lines still queued would be lost otherwise). One LogFile per
-    // process; install before starting threads.
+    // process; install before starting threads, and destroy the LogFile only
+    // after the other threads stopped (a crash on another thread during the
+    // destruction would reach a closing file).
     void FlushOnCrash();
     [[nodiscard]] const std::filesystem::path& Path() const noexcept { return path_; }
 
-    // Lines waiting for the writer before a Write is dropped.
     static constexpr std::size_t Capacity = 65536;
 
 private:

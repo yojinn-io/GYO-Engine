@@ -40,6 +40,10 @@ struct TraceSinkOptions final {
     std::size_t capacity{8192};
     // The writer thread's name (Threads::RoleThreadOptions); non-empty.
     std::string threadName{"gyo-trace"};
+    // Flushes after every line instead of after every batch, so that each line
+    // reaches the file in one write: for a file other processes may append to
+    // as well. Costs the writer thread only.
+    bool flushEachLine{false};
 };
 
 // Every Push is counted exactly once: pushed = written + droppedFull +
@@ -84,8 +88,9 @@ public:
 
     // Blocks until every line accepted before the call is written and flushed,
     // for paths about to end the process (an assertion or terminate handler).
-    // False when that did not happen within timeout, when called on the writer
-    // thread, or after Close.
+    // False when that did not happen within timeout (also while another thread
+    // holds the queue), when called on the writer thread, after Close, or once
+    // a write failed.
     bool FlushNow(std::chrono::nanoseconds timeout = std::chrono::seconds{1});
 
     // Stops accepting lines, writes every accepted line, then the line

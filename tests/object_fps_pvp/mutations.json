@@ -4662,7 +4662,7 @@
       "batch": "v71-tt2-trace",
       "what": "The movement trace line loses its pending field",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
-      "find": "         << \",\\\"pending\\\":\" << e.pending\n",
+      "find": "    line.append(\",\\\"pending\\\":\").append(std::to_string(e.pending));\n",
       "replace": "",
       "check": "cpu",
       "expect": "CHECK\\( MovementTraceLine\\(events\\[k\\]\\) == GoldenLines\\[k\\] \\)"
@@ -4686,6 +4686,46 @@
       "replace": "",
       "check": "cpu",
       "expect": "REQUIRE\\( std::regex_match\\(lines\\[k \\+ 1\\], match, stamped\\) \\)"
+    },
+    {
+      "id": "tt2-log-crash-no-flush",
+      "batch": "v71-tt2-trace",
+      "what": "The assertion handler writes the failure but does not flush it",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        static_cast<void>(log->FlushNow());\n    }\n    (previousAssertionHandler",
+      "replace": "    }\n    (previousAssertionHandler",
+      "check": "cpu",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 2 \\)"
+    },
+    {
+      "id": "tt2-log-handler-not-restored",
+      "batch": "v71-tt2-trace",
+      "what": "The destructor leaves the crash handlers installed",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        std::set_terminate(previousTerminateHandler);\n        Engine::Base::SetAssertionHandler(previousAssertionHandler);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( std::get_terminate\\(\\) == terminate \\)"
+    },
+    {
+      "id": "tt2-log-drops-unreported",
+      "batch": "v71-tt2-trace",
+      "what": "Dropped log lines are never reported",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        if (counts.Dropped() == 0) return std::nullopt;",
+      "replace": "        if (counts.Dropped() < 1000000) return std::nullopt;",
+      "check": "cpu",
+      "expect": "REQUIRE\\( std::regex_match\\(lines.back\\(\\), match, dropped\\) \\)"
+    },
+    {
+      "id": "tt2-movement-late-uncounted",
+      "batch": "v71-tt2-trace",
+      "what": "Good ignores events recorded after Finish",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "        return !file_ || (file_->sink.Good() && file_->sink.Counts().Dropped() == 0);",
+      "replace": "        return !file_ || (file_->sink.Good() && file_->sink.Counts().droppedFull == 0);",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( writer.Good\\(\\) \\)"
     }
   ]
 }

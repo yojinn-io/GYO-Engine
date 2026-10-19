@@ -126,6 +126,7 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - 測試：`tests/object_fps_pvp/DiagnosticFileTests.cpp`（移動紀錄的 3 筆事件與整個檔案，對照改接前的寫檔器在 master `0fabb52` 產生的位元組；`LogFile` 的時間戳格式、順序、append、`FlushNow`）。
 - 本機：CTest `cpu|shader` 73／73（權威 digest 0 差異）；Engine 突變 5／5、產品突變 3／3（`tt2-movement-line-field`、`tt2-movement-end-uncounted`、`tt2-log-timestamp-space`）；Trace 測試重複 20 次全過、TSan 3 輪乾淨。
 - 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
+- xhigh 審查（T-4，1 位）：沒有 MUST-FIX；SHOULD 6 項、NIT 6 項，處理與未處理的項目記在 Engine 的 [TT HANDOFF](../../../architecture/plans/time-threads-trace/HANDOFF.md)「TT-2 紀錄」。和產品有關的處理：測試的 UB（被 Tee 的 stream 宣告順序）；`LogFile` 每行 flush（`flushEachLine`，多個 Client 同時啟動、寫到同名日誌檔時不切開一行，和舊版相同）；移動紀錄改用 `std::string`＋`%.17g` 組行（不在生產者上建 stream，MSVC 會取全域鎖）；當機路徑、丟棄行、`Finish` 之後才到的事件補測試。修正後產品突變 7／7（新增 `tt2-log-crash-no-flush`、`tt2-log-handler-not-restored`、`tt2-log-drops-unreported`、`tt2-movement-late-uncounted`）、Engine 突變 6／6（新增 `tt2-timer-wake`）、CTest `cpu|shader` 73／73。
 
 ## 11. L2 事前宣告（第 1 版草稿，D45 檢查前）
 

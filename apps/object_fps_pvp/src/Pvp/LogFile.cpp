@@ -125,10 +125,10 @@ private:
 };
 
 namespace {
-Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path) {
+Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path, std::size_t capacity) {
     if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path());
     auto sink = Engine::Trace::TraceSink::Open(
-        {.path = path, .append = true, .capacity = LogFile::Capacity, .threadName = "pvp-log"});
+        {.path = path, .append = true, .capacity = capacity, .threadName = "pvp-log", .flushEachLine = true});
     if (!sink) throw std::runtime_error("Cannot open log file: " + path.string() + " (" +
                                         Engine::Base::Describe(sink.error()) + ")");
     return std::move(*sink);
@@ -155,7 +155,8 @@ void FlushingAssertionHandler(const Engine::Base::AssertionFailure& failure) {
 }
 } // namespace
 
-LogFile::LogFile(const std::filesystem::path& path) : path_(path), sink_(OpenLogSink(path)) {}
+LogFile::LogFile(const std::filesystem::path& path, std::size_t capacity)
+    : path_(path), sink_(OpenLogSink(path, capacity)) {}
 
 LogFile::~LogFile() {
     for (auto it = restored_.rbegin(); it != restored_.rend(); ++it) it->first->rdbuf(it->second);
@@ -164,7 +165,8 @@ LogFile::~LogFile() {
         Engine::Base::SetAssertionHandler(previousAssertionHandler);
         crashLog.store(nullptr, std::memory_order_release);
     }
-    // Lines dropped for a full queue are reported once, as the last line.
+    // Dropped lines (a full queue, or a Write racing this destructor) are
+    // reported once, as the last line.
     static_cast<void>(sink_.Close([](const Engine::Trace::TraceCounts& counts) -> std::optional<std::string> {
         if (counts.Dropped() == 0) return std::nullopt;
         return LogTimestamp() + " [log] dropped_lines=" + std::to_string(counts.Dropped());

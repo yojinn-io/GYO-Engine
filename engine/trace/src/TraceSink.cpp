@@ -3,6 +3,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/threads/RoleThread.hpp"
 
+#include <chrono>
 #include <condition_variable>
 #include <fstream>
 #include <mutex>
@@ -16,6 +17,7 @@ namespace Engine::Trace {
 struct TraceSink::Impl final {
     std::ofstream file;
     std::size_t capacity{};
+    bool flushEachLine{};
 
     // The queue side, shared with every producer.
     mutable std::mutex queueMutex;
@@ -58,7 +60,10 @@ struct TraceSink::Impl final {
                 batch.swap(queue);
                 through = accepted;
             }
-            for (const auto& line : batch) file << line << '\n';
+            for (const auto& line : batch) {
+                file << line << '\n';
+                if (flushEachLine) file.flush();
+            }
             if (!batch.empty()) file.flush();
             if (!file) failed.store(true, std::memory_order_release);
             {
@@ -70,8 +75,10 @@ struct TraceSink::Impl final {
             batch.clear();
             if (stopping) break;
             // Only a Push into an empty queue, FlushNow or the stop wakes it; a
-            // notify latched while writing makes this return at once.
-            static_cast<void>(context.Wait());
+            // notify latched while writing makes this return at once. Never a
+            // timer (docs/architecture/trace.md, Design Invariant 2).
+            const Time::Wake wake = context.Wait();
+            GYO_ASSERT(wake.reason == Time::WakeReason::Notified);
         }
         {
             std::scoped_lock lock(progressMutex);
@@ -91,6 +98,7 @@ Base::Result<TraceSink, TraceError> TraceSink::Open(TraceSinkOptions options) {
     GYO_ASSERT(!options.threadName.empty());
     auto impl = std::make_unique<Impl>();
     impl->capacity = options.capacity;
+    impl->flushEachLine = options.flushEachLine;
     impl->file.open(options.path, options.append ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc);
     if (!impl->file)
         return Base::Err(TraceError::Make(TraceErrorCode::OpenFailed, "Cannot open trace file", options.path.string()));
@@ -136,17 +144,23 @@ bool TraceSink::Push(std::string line) {
 bool TraceSink::FlushNow(const std::chrono::nanoseconds timeout) {
     GYO_ASSERT(impl_);
     if (impl_->OnWriterThread()) return false;
-    std::uint64_t target{};
-    {
-        std::scoped_lock lock(impl_->queueMutex);
-        if (impl_->closed) return false;
-        target = impl_->accepted;
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    // try_lock: a crash path may run on a thread that already holds the queue
+    // (an exception escaping a Push into terminate); waiting would hang it.
+    std::unique_lock queue(impl_->queueMutex, std::try_to_lock);
+    while (!queue.owns_lock()) {
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        std::this_thread::yield();
+        static_cast<void>(queue.try_lock());
     }
+    if (impl_->closed) return false;
+    const std::uint64_t target = impl_->accepted;
+    queue.unlock();
     impl_->writer->Notify();
     std::unique_lock lock(impl_->progressMutex);
-    impl_->progressChanged.wait_for(lock, timeout,
+    impl_->progressChanged.wait_until(lock, deadline,
         [&] { return impl_->flushedThrough >= target || impl_->writerDone; });
-    return impl_->flushedThrough >= target;
+    return impl_->flushedThrough >= target && !impl_->failed.load(std::memory_order_acquire);
 }
 
 TraceCounts TraceSink::Close(const EndLine& endLine) {

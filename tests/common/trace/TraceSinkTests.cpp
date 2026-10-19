@@ -133,6 +133,31 @@ TEST_CASE("Trace producers racing Close keep the count and the end line last") {
     CHECK(final.written + final.Dropped() == pushed.load());
 }
 
+TEST_CASE("Trace Close writes the lines still waiting behind a busy writer before the end line") {
+    const auto path = TempPath("close-busy");
+    auto sink = OpenSink(path);
+    // The writer is busy with the first 64 MB line when Close starts (the pause
+    // lets it take that line alone), so the second one and the short lines are
+    // taken only after the stop is seen.
+    std::string first(std::size_t{64} << 20, 'b');
+    std::string second(std::size_t{64} << 20, 'c');
+    REQUIRE(sink.Push(std::move(first)));
+    std::this_thread::sleep_for(10ms);
+    REQUIRE(sink.Push(std::move(second)));
+    for (int i = 0; i < 5; ++i) REQUIRE(sink.Push("waiting " + std::to_string(i)));
+    const auto counts = sink.Close(EndLine);
+    CHECK(counts.written == 7);
+    std::ifstream input(path, std::ios::binary);
+    std::string line;
+    std::vector<std::string> tail;
+    while (std::getline(input, line)) if (line.size() < 64) tail.push_back(line);
+    REQUIRE(tail.size() == 6);
+    for (int i = 0; i < 5; ++i) CHECK(tail[static_cast<std::size_t>(i)] == "waiting " + std::to_string(i));
+    CHECK(tail.back() == "end written=7 dropped=0");
+    input.close();
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Trace refuses and counts a line after Close, and Close is idempotent") {
     const auto path = TempPath("closed");
     auto sink = OpenSink(path);
@@ -163,7 +188,8 @@ TEST_CASE("Trace a pushed line wakes the writer without any flush request") {
         if (!seen) std::this_thread::sleep_for(1ms);
     }
     CHECK(seen);
-    // A second burst, after the writer went back to waiting, wakes it again.
+    // A second burst, after the writer has been waiting for a while, wakes it again.
+    std::this_thread::sleep_for(20ms);
     CHECK(sink.Push("again"));
     seen = false;
     while (!seen && std::chrono::steady_clock::now() < deadline) {

@@ -1,9 +1,13 @@
 #include <doctest/doctest.h>
 
+#include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 
 #include <chrono>
+#include <exception>
+#include <memory>
+#include <mutex>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -88,8 +92,9 @@ TEST_CASE("PvP log file lines keep their timestamp format and order, appended") 
     const auto path = DiagnosticPath("log");
     { std::ofstream(path) << "earlier run\n"; }
     {
-        LogFile log(path);
+        // Declared first: the LogFile restores its buffer when destroyed.
         std::ostringstream console;
+        LogFile log(path);
         log.Tee(console);
         log.Write("first");
         console << "second\nthird" << std::endl;
@@ -109,4 +114,78 @@ TEST_CASE("PvP log file lines keep their timestamp format and order, appended") 
         REQUIRE(std::regex_match(lines[k + 1], match, stamped));
         CHECK(match[1].str() == texts[k]);
     }
+}
+
+TEST_CASE("PvP movement trace counts an event a producer records after Finish") {
+    const auto path = DiagnosticPath("movement-late");
+    MovementTraceWriter writer(path);
+    // A producer that took the sink just before Finish records just after it.
+    std::shared_ptr<MovementTraceSink> held;
+    {
+        std::lock_guard lock(movementTraceSinkMutex);
+        held = movementTraceSink;
+    }
+    REQUIRE(held);
+    TraceMovement(GoldenEvents().front());
+    writer.Finish();
+    CHECK(writer.Good());
+    held->Record(GoldenEvents().back());
+    CHECK_FALSE(writer.Good());
+    const auto lines = ReadLines(path);
+    REQUIRE(lines.size() == 2);
+    CHECK(lines.back() == R"({"schema_version":2,"kind":"trace_end","events":1,"dropped":0})");
+}
+
+TEST_CASE("PvP log file ends with the count of dropped lines") {
+    const auto path = DiagnosticPath("log-dropped");
+    std::size_t kept = 0;
+    {
+        LogFile log(path, 1);
+        // A 64 MB line keeps the writer busy; with one waiting line allowed,
+        // all but the first of the short lines after it are dropped.
+        log.Write(std::string(std::size_t{64} << 20, 'd'));
+        for (int i = 0; i < 10; ++i) log.Write("short " + std::to_string(i));
+    }
+    const auto lines = ReadLines(path);
+    REQUIRE(!lines.empty());
+    for (const auto& line : lines) kept += line.find(" short ") != std::string::npos;
+    const std::regex dropped(R"(^.* mono_ns=\d+ \[log\] dropped_lines=(\d+)$)");
+    std::smatch match;
+    REQUIRE(std::regex_match(lines.back(), match, dropped));
+    CHECK(std::stoul(match[1].str()) >= 8);
+    CHECK(std::stoul(match[1].str()) + kept == 10);
+}
+
+TEST_CASE("PvP log file writes a failed assertion before the previous handler runs, then restores it") {
+    const auto path = DiagnosticPath("log-assert");
+    Engine::Test::ScopedAssertionHandler throwing;
+    const auto terminate = std::get_terminate();
+    {
+        LogFile log(path);
+        log.FlushOnCrash();
+        CHECK(std::get_terminate() != terminate);
+        // Keeps the writer busy, so the failure line is in the file only if
+        // the handler waited for it.
+        log.Write(std::string(std::size_t{64} << 20, 'w'));
+        bool thrown = false;
+        try {
+            GYO_ASSERT(false);
+        } catch (const Engine::Base::AssertionFailure&) {
+            thrown = true;
+        }
+        CHECK(thrown);
+        // In the file already: the handler flushed it before the previous one threw.
+        const auto lines = ReadLines(path);
+        REQUIRE(lines.size() == 2);
+        CHECK(lines[1].find("GYO_ASSERT failed: false at ") != std::string::npos);
+    }
+    CHECK(std::get_terminate() == terminate);
+    bool rethrown = false;
+    try {
+        GYO_ASSERT(false);
+    } catch (const Engine::Base::AssertionFailure&) {
+        rethrown = true;
+    }
+    CHECK(rethrown);
+    CHECK(ReadLines(path).size() == 2);
 }
