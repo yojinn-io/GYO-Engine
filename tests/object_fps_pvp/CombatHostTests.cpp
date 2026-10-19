@@ -336,19 +336,19 @@ std::vector<ShotDecision> HostDecisions(const MatchRuntimeHost& host, PlayerId p
 }
 }
 
-// pv7 §6, §7 (D-2): E, S and the view tick never reach a decision. The same
-// requests with other E, S and view ticks (an invalid one included) give the
-// same decisions and the same world; the host only records them, one shadow
-// record per decision, and counts the invalid view tick.
-TEST_CASE("PvP combat host records E, S and the view tick without deciding by them") {
+// pv7 §7: the view tick never reaches a decision (E and S do since A1). The
+// same requests with other view ticks (an invalid one included) give the same
+// decisions and the same world; the host only records them, one record per
+// decision, and counts the invalid view tick.
+TEST_CASE("PvP combat host records the view tick without deciding by it") {
     CombatHostFixture plain, carrying;
-    const auto shot = [](ActionId id, std::uint64_t epoch, std::uint64_t sequence, std::uint64_t view) {
-        return ShotRequest{id, 1, 0, 0, ActionKind::Shot, 1, epoch, sequence, view};
+    const auto shot = [](ActionId id, std::uint64_t view) {
+        return ShotRequest{id, 1, 0, 0, ActionKind::Shot, 1, 7, 40, view};
     };
-    REQUIRE(plain.host.SubmitActions({1, {shot(1, 0, 0, 0)}}) == ActionAdmission::Accepted);
-    REQUIRE(carrying.host.SubmitActions({1, {shot(1, 7, 40, 900 * 65536)}}) == ActionAdmission::Accepted); // beyond observed: invalid
+    REQUIRE(plain.host.SubmitActions({1, {shot(1, 0)}}) == ActionAdmission::Accepted);
+    REQUIRE(carrying.host.SubmitActions({1, {shot(1, 900 * 65536)}}) == ActionAdmission::Accepted); // beyond observed: invalid
     REQUIRE(plain.host.SubmitActions({2, {{1, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
-    REQUIRE(carrying.host.SubmitActions({2, {{1, 1, 0, 0, ActionKind::Reload, 1, 1, 0, 65536}}}) == ActionAdmission::Accepted);
+    REQUIRE(carrying.host.SubmitActions({2, {{1, 1, 0, 0, ActionKind::Reload, 1, 0, 0, 65536}}}) == ActionAdmission::Accepted);
     plain.Step();
     carrying.Step();
     for (const PlayerId player : {PlayerId{1}, PlayerId{2}}) {
@@ -368,14 +368,17 @@ TEST_CASE("PvP combat host records E, S and the view tick without deciding by th
     const auto decision = HostDecisions(carrying.host, 1).front();
     CHECK(shooter->actionId == 1);
     CHECK(shooter->handoffTick == decision.resolvedTick);
+    CHECK(shooter->dueTick == decision.resolvedTick);
+    CHECK(shooter->resolvedTick == decision.resolvedTick);
     CHECK(shooter->epoch == 7);
     CHECK(shooter->sequence == 40);
-    CHECK(shooter->step.path == ShotStepPath::Epoch); // E = 7 is not the shooter's epoch
+    CHECK(shooter->step.path == ShotStepPath::Epoch); // E = 7 is not the shooter's epoch: decided at A
     CHECK(shooter->rejection == decision.rejection);
     CHECK_FALSE(shooter->viewValid);
     CHECK_FALSE(shooter->viewLagQ16);
     REQUIRE(shooter->cooldownHoldTicks);
-    CHECK(*shooter->cooldownHoldTicks == 0); // nothing fired before it
+    CHECK(*shooter->cooldownHoldTicks == 0);
+    CHECK_FALSE(shooter->held);
     const auto reloader = std::find_if(with.records.begin(), with.records.end(), [](const auto& r) { return r.playerId == 2; });
     REQUIRE(reloader != with.records.end());
     CHECK(reloader->kind == ActionKind::Reload);
@@ -403,25 +406,34 @@ TEST_CASE("PvP combat host records the view lag of a valid view tick") {
     CHECK(records.viewTickInvalid == 0);
 }
 
-// The cooldown A1 would hold: the shooter's next allowed tick before the
-// decision, minus the tick A1 would decide at (here A: E = 0 is another epoch).
-TEST_CASE("PvP combat host records the cooldown a shot inside it would hold") {
+// A shot two ticks inside the cooldown is held to its boundary (A1, D136):
+// the record keeps A, the first due tick D (here A: E = 0 is another epoch)
+// and the decision tick J = D + 2, written when the decision comes.
+TEST_CASE("PvP combat host records a held shot when it is decided") {
     CombatHostFixture fixture;
     REQUIRE(fixture.host.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
     fixture.Step();
     const auto first = HostDecisions(fixture.host, 1).front();
     REQUIRE(first.accepted);
+    for (unsigned k = 0; k < PvpCombatRules.cooldownTicks - 3; ++k) fixture.Step();
     REQUIRE(fixture.host.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    fixture.Step(); // A: two ticks before the boundary
+    CHECK(fixture.host.DrainShotRecords().records.size() == 1); // only the first
+    fixture.Step();
+    CHECK(fixture.host.DrainShotRecords().records.empty());
     fixture.Step();
     const auto records = fixture.host.DrainShotRecords();
-    REQUIRE(records.records.size() == 2);
-    const auto& second = records.records.back();
+    REQUIRE(records.records.size() == 1);
+    const auto& second = records.records.front();
     REQUIRE(second.actionId == 2);
-    CHECK(second.rejection == ShotRejection::Cooldown);
+    CHECK(second.rejection == ShotRejection::None);
     CHECK(second.step.path == ShotStepPath::Epoch);
+    CHECK(second.dueTick == second.handoffTick);
+    CHECK(second.resolvedTick == first.resolvedTick + PvpCombatRules.cooldownTicks);
+    CHECK(second.resolvedTick == second.dueTick + 2);
+    CHECK(second.held);
     REQUIRE(second.cooldownHoldTicks);
-    CHECK(*second.cooldownHoldTicks == first.resolvedTick + PvpCombatRules.cooldownTicks - second.step.tick);
-    CHECK(*second.cooldownHoldTicks == PvpCombatRules.cooldownTicks - 1);
+    CHECK(*second.cooldownHoldTicks == 2);
 }
 
 // D127: each shadow record carries when the host recorded it, on the movement

@@ -2,7 +2,7 @@
 
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
-#include "RetroFPS/Pvp/FireGate.hpp"
+#include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
 #include <algorithm>
@@ -567,7 +567,7 @@ TEST_CASE("PvP the simulation role takes one phase sample per own snapshot of a 
     CHECK(batches > 20);
 }
 
-TEST_CASE("PvP a presentation placed at a later time advances interpolation and shot timing only") {
+TEST_CASE("PvP a presentation placed at a later time advances interpolation only") {
     const auto run = RunRole({Every(1.0 / 60.0), Moving});
     const std::vector<Arena> arenas{RoleArena()};
     std::size_t checked{}, gateChecked{};
@@ -583,24 +583,10 @@ TEST_CASE("PvP a presentation placed at a later time advances interpolation and 
         const auto later = PresentAt(arenas, step.presentation, step.presentation.steppedAt + After(0.004));
         CHECK(later.observation.latestCommand == step.observation.latestCommand);
         CHECK(later.observation.interpolationAlpha >= own.observation.interpolationAlpha);
-        REQUIRE(later.shotTiming.has_value() == step.presentation.shotTiming.has_value());
-        if (later.shotTiming)
-            CHECK(later.shotTiming->secondsSinceStep == doctest::Approx(step.presentation.shotTiming->secondsSinceStep + 0.004));
+        // The gate view counts steps, not time: placing it later changes nothing.
+        CHECK(later.shotGate == step.presentation.shotGate);
         ++checked;
-        // Placed at the next step's time, the previous step's shot timing bounds
-        // the same authority tick as the next step's own timing, when that step
-        // took one fixed step past the previous newest command.
-        const auto& previous = run.steps[n - 1];
-        const auto newest = [](const FireGateTiming& timing) {
-            return timing.authorityTick + (timing.latestCommand - timing.lastResolvedCommand);
-        };
-        if (!previous.presentation.shotTiming || !step.presentation.shotTiming ||
-            previous.presentation.shotTiming->phaseShiftSeconds != 0 || step.presentation.shotTiming->phaseShiftSeconds != 0 ||
-            previous.observation.movementEpoch != step.observation.movementEpoch ||
-            newest(*step.presentation.shotTiming) != newest(*previous.presentation.shotTiming) + 1) continue;
-        const auto carried = PresentAt(arenas, previous.presentation, step.presentation.steppedAt);
-        CHECK(EarliestShotResolveTick(*carried.shotTiming) == EarliestShotResolveTick(*step.presentation.shotTiming));
-        ++gateChecked;
+        if (step.presentation.shotGate) ++gateChecked;
     }
     CHECK(checked > 150);
     CHECK(gateChecked > 20);

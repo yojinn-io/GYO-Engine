@@ -309,7 +309,7 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 
 ## 6. 射擊照命令步判定（A1）
 
-判定語意只在 `a1-shot-step` 生效；欄位依 D-2 在 `hitbox-fields` 加入，先做影子量測。
+判定語意在 `a1-shot-step` 生效（v7.1 D137）；欄位依 D-2 在 `hitbox-fields` 加入，先做影子量測（下面「影子量測」一節是 `hitbox-fields` 到 `pv7-checkpoint` 的歷史）。實作：判定在 `PvpMatch::ResolveActions`（到期 `ActionDue`、保留與重判 `Decide`），Client 規則在 `ShotGate.hpp`（`LocalShotGate`）。
 
 ### 欄位
 
@@ -372,6 +372,7 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 - 用途：`pv7-checkpoint` 產出 K 與 S 取法所需的資料。
 - 實作（`hitbox-fields`，2026-10-18）：影子紀錄寫在 `match-shots.jsonl`（版本 1；由 `--movement-trace` 推出路徑：`-commands.jsonl` → `-shots.jsonl`，同 `match-ingress.jsonl` 的先例；`MatchShotTrace.hpp`）。每個裁決一行 `kind=decision`：`time_ns`（Host 記錄的時刻，和 `match-commands.jsonl` 同一個時鐘 `MovementTraceNowNs`；D128）、`player_id`、`action_id`、`action_kind`、`a`、`e`、`s`、`request_life`、`epoch_at_a`、`last_resolved_at_a`、`life_at_a`、`path`（on_time／late／epoch／life／hold_limit）、`step_tick`（A1 會判定的 Tick：on_time 為 T(S)＝A＋(S−L)，late、epoch、life 為 A，hold_limit 為 A＋W）、`cooldown_hold_ticks`（Shot：判定前的 nextAllowedShotTick−step_tick，不足為 0；Reload 為 null）、`rejection`、`view_tick_q16`、`view_valid`、`view_lag_q16`（A×65536−view，有效且非 0 時）。結尾 `kind=trace_end` 帶 `records`、`dropped`、`view_tick_invalid`。`epoch_at_a` 尚未解析任何命令（L＝0）時記為 hold_limit（「epoch 還沒開始」）。
 - 命令 S 的來源與是否之後才到：照上面的離線對接（D127）。
+- 版本 2（`a1-shot-step`，2026-10-19）：判定改照本節的 A1 規則之後，同一個檔案記錄實際的判定。A 時先記 Ecur(A)、L(A)、life(A) 與 A 時的路徑分類（`path`、`step_tick` 不變），判定發生時（Tick J）才寫一行，多三個欄位：`due_tick`（第一個到期的 Tick D）、`resolved_tick`（J）、`held`（Shot 是否因冷卻保留）；`cooldown_hold_ticks` 改成實際保留的 Tick 數（held 時 J−D，否則 0；Reload 為 null）。`time_ns` 是寫出時（J 之後）的時刻。`path` 只是 A 時的分類：例如 S＝0、L(A)＝0 記為 hold_limit，但依 due 規則在 A 就判定。
 
 ## 7. 骨骼 hitbox 的契約支持
 

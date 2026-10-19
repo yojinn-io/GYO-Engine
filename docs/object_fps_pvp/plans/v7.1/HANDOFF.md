@@ -37,14 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**（`a1-shot-step` 的計畫與事前宣告第 2 版：[a1-shot-step.md](a1-shot-step.md) 第 8 節）：
-  1. 核准計畫與第 3 節的宣告：權威 digest 的 `combat-magazine/corridor`（scale 1、3）**預期有差異**（冷卻保留不分路徑，那個情境每 4 Tick 開一槍，phase 8 的那一發差 2 Tick 會被保留），附契約手算表並重產該筆 golden、保留舊檔；其餘 34 個情境與 29 個 golden 維持 0 差異，有其他差異就停。
-  2. `PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`）：讓「K＝min(2, cooldown)」能用冷卻 1、2 的規則端到端驗證，也是武器資料驅動的入口；屬於既有介面的小擴充。不做的話，宣告「K 固定 2」的突變在 `PvpMatch` 呼叫處會存活。
-  3. 第 6 節（L2）是草稿；工具與乾跑之後出第 3 版再核准門檻。
+- **等你決定**：無（`a1-shot-step` 實作中，D137）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：你核准後實作 `a1-shot-step`（high、局部 xhigh，估 20 h，超過約 30 h 停下回報）：切片 `a1-match` → `a1-trace` → `a1-client-gate` → `a1-retire-firegate` → `a1-digest` → `a1-docs`，L1 後寫 L2 工具與乾跑，出宣告第 3 版。之後 `pv7-merge`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 的計畫與事前宣告第 2 版（D45 後）；三項等你決定。
+- **最後更新**：2026-10-19，`a1-shot-step` 實作完成大半（判定、影子紀錄 v2、序號閘門、digest），兩樹比較的 base 建置中。
 
 ## 閱讀入口
 
@@ -109,6 +106,7 @@
 | D134 | （2026-10-19）計畫裡標了 ultracode 的批（含「ultracode（先問）」）直接開，不必再問；產出碰到契約、架構或 L2 宣告的關卡照樣停。另外交代：今晚把 pv7-line 往前推，做到下一個要使用者決定的關卡就停 | 使用者：「我先去睡覺了，今晚把pv7-line都跑完吧。」「對了，如果計劃裡要開ultracode你直接開就行。」 |
 | D135 | （2026-10-19）`pv7-checkpoint` 以標籤修正後的診斷（`judgement-relabelled.json`：C1、C2、C3 全部成立，逐項 0 停止）為判定，結案。凍結的 `judge_cp.py` 不改；它的標籤錯誤（`schedule()` 兩棵樹共用 `extra`）記為工具缺陷。C6 的 `socket-path-1000ms` 旗標只記錄、不追查 | 使用者：「採用 (a)：pv7-checkpoint 以修正標籤後的診斷結果為判定。C6 的旗標只記錄。K 與 S 我另外回覆。」 |
 | D136 | （2026-10-19）`a1-shot-step` 的冷卻保留上限改成 **K＝min(K_max, cooldownTicks)、K_max＝2 Tick**（射速將來是資料驅動，固定的 K 可能超過某把武器的冷卻），Client 的 S 取 **N**。改寫 `protocol-v7.zh-Hant.md` §6 的 K 條文；演算法與 Design Invariants 記進 `network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」；`pv7-design.md` 的設定表與 v8 README 的多武器候選（權威在 Match、射速以 Tick 存）同步。盲區：沒有量到「退回＋壓著冷卻邊緣連射」，全自動武器上線時重評 K_max | 使用者：「嗯，就這麼定。核准，記得把這個算法紀錄到設計文檔中。」（前文：「但是，我的武器想做成資料驅動，射速是會放在本地參數中的。」） |
+| D137 | （2026-10-19）核准 `a1-shot-step` 的計畫第 2 版（[a1-shot-step.md](a1-shot-step.md)）：權威 digest 的 `combat-magazine/corridor` 預期差異與該筆 golden 重產（舊檔保留）、其餘 34 個情境與 29 個 golden 0 差異為停止條件；`PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`，既有介面擴充）。開始實作 | 使用者：「核准 a1-shot-step 計畫第 2 版：combat-magazine 的預期差異與 golden 重產、PvpMatch 加 CombatRules 參數都同意。開始實作。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -525,9 +523,11 @@
 - 2026-10-19：`a1-shot-step` 開始（D136：K＝min(2, cooldownTicks)、S＝N）。使用者問到資料驅動與連射武器（P90、MP5 約 4 Tick 冷卻）：固定的 K 會在冷卻比 K 短的武器上違反 0≤K≤cooldownTicks，所以改成跟著武器的冷卻走。另從 session 補量：late 的晚到量 d＝L(A)−S 為 0:23、1:26、2:2、3:10、4:3、5:11、6:1、9:1、11:3、14:8、15:1、19:3、20:3、28:3（98 筆）；連續兩發的間隔，故障情境的 probe 多為 15 Tick（比冷卻多 5），壓著冷卻邊緣的只有 clean 下的連點，所以「退回後下一發落在冷卻內」0 次只反映測試設計。
   - 計畫與事前宣告第 1 版草稿：[a1-shot-step.md](a1-shot-step.md)。讀程式時確認：權威 digest 的射擊沒有填 E、S（`AuthorityDigest.cpp:314`），E＝0 走 pv6 的到達判定；凍結分析器盤點（Expired 例外的方向安全、合法性重播一致、GUI 裁決抵達 P95 實測約 33 ms 對 150 ms 門檻）；action short 的冷卻注入（E＝0）靠「同玩家依 ActionId」仍在第一發之後判定。
   - D45（1 位 xhigh，約 14 分）：MUST-FIX 2（M1：冷卻保留不分路徑，`combat-magazine/corridor` 每 4 Tick 開一槍、冷卻 10，A1 一定有差，「現有 digest 0 差異」不成立；M2：L2 的 Part I 拿掉了動作路徑的故障情境，R8 的 11 個情境與重送去重、life／epoch 退回都沒人跑）、SHOULD-FIX 7（A1-1 不是契約不變式、C9 範圍、A1-2 把 D 與 J 混在一起、新情境缺 6 項、盤點漏 `cooldownRemainingSeconds`／兩個延遲門檻／`quad_evidence.py:33`、「K 固定 2」的突變殺不到、B 的二進位會被 A' 的建置覆蓋）、NOTE 7。檢查者用 A1 規則重放 checkpoint 的影子資料（`sim_a1.py`，近似）：故障情境 A1 造成的 Cooldown 0，保留只有 upstream-1000ms 3 次（gap 2）；連點在 FireGate 時代的送出時刻下 rapid-edge-60 會保留 28 次、edge-144 19 次。我核對了 M1（`AuthorityDigest.cpp:418`）。第 2 版逐項修正（宣告第 9 節）。
+- 2026-10-19：`a1-shot-step` 實作（D137；細節在 [a1-shot-step.md](a1-shot-step.md) 第 10 節）。`PvpMatch` 改照 A1 判定（到期、保留一次、同玩家依 ActionId、參考年齡在 A 量）、`CombatRules` 參數；影子紀錄版本 2；`ShotGate`（序號閘門）取代 FireGate。本機：`cpu|shader` 範圍的 CTest 只有 digest 依宣告不符；`combat-magazine/corridor` 的逐筆判定和手算表完全相同後重產該筆 golden（舊檔保留）；A1 的突變 19 個全部殺死，FireGate 的 10 個退役。發現：「K＝min(2, 冷卻)」與「K＝2」在行為上等價（gap 不會超過冷卻），D45 S6 的突變是等價突變；`CombatRules` 參數改用來測冷卻 2、4 與一發致死的情境。同機兩樹比較的 base（`7a5e0ea`）在新 worktree `../GYO-Engine-a1-before` 建置中，L2 的 B 樹也用它。
 
 ## 未結事項
 
+- `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 
 - `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。

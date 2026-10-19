@@ -80,9 +80,9 @@ Client A / Client B (each process; v7 batch 04: three roles)
   Main thread (SDL events + render; PvpApplication)
     keys / mouse -> PublishIntent(latest intent: axes, absolute yaw/pitch,
                     jump presses, owner)          -- never waits for the role
-    PresentAt(now) <- local pose + FireGateTiming (copy published by the role)
+    PresentAt(now) <- local pose + ShotGateView (copy published by the role)
     Drain() -> HUD, action results, SnapshotTimeline -> remote pose
-    click -> LocalFireGate -> SubmitAction / SubmitShot -> wakes worker
+    click -> LocalShotGate -> SubmitAction / SubmitShot -> wakes worker
          |                                  ^
          | intent mailbox (latest wins)     | presentation copy
          v                                  |
@@ -139,7 +139,7 @@ Gateway reader → `sendUDP` → `gyo-client-net` 收進歷史 → 模擬角色�
 
 ```text
 Client 程序（產品 CMake 庫，apps/object_fps_pvp/CMakeLists.txt）
-    app_support：PvpApplication（SDL 輸入 / Lobby / GYO Render）、LocalFireGate、呈現
+    app_support：PvpApplication（SDL 輸入 / Lobby / GYO Render）、LocalShotGate、呈現
         │ PublishIntent / PresentAt
         ▼
     client_simulation：ClientSimulationRole → ClientSimulationLoop → ClientSimulation
@@ -791,6 +791,7 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 ```
 
 - 受影響的只有「上一發的裁決回到 Client 之前就送出的射擊」：Client 收到裁決後，序號閘門改用它的 `resolved_tick＋cooldown` 重新對齊。連射武器（例如冷卻 4 Tick）在 RTT 50～100 ms 時約 1～2 發；d≤K 的延後 d 個 Tick 判定，d>K 的被拒（不扣彈、不造成傷害），之後恢復準時。
+- 「取 min」不改變行為：gap＝nextAllowed−D，而 nextAllowed＝上一發的 J＋冷卻、D≥J，所以 gap 不會超過冷卻，K＝min(K_max, 冷卻) 與 K＝K_max 的判定結果永遠相同。min 的作用是讓契約條文 0≤K≤cooldownTicks 對任何武器資料都成立（實作 `Combat.hpp` 的 `ShotHoldLimit`；測試以冷卻 2、4 的規則端到端驗證保留與拒絕）。
 - K_max＝2 的依據與盲區：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境，全自動武器上線時重新評估 K_max（v8「多武器與本機射擊閘」）。
 
 | 原則 | 維持的性質 | 未來修改時要問的問題 |
@@ -831,7 +832,7 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 | ACK、重播、窗口、相位追蹤與本機顯示校正 | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp` |
 | 命令產生路徑（產品與無頭 probe 共用）：elapsed 取樣、每份 snapshot 的樣本 | `apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp` |
 | Client 模擬角色：固定步期限、意圖信箱與過期（D30）、呈現副本 | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp`、`include/RetroFPS/Pvp/ClientSimulationRole.hpp` |
-| 本機射擊閘（FireGate 常數） | `apps/object_fps_pvp/src/Pvp/FireGate.cpp`、`include/RetroFPS/Pvp/FireGate.hpp` |
+| 本機射擊閘（序號閘門；v7.1 `a1-shot-step` 取代 FireGate） | `apps/object_fps_pvp/src/Pvp/ShotGate.cpp`、`include/RetroFPS/Pvp/ShotGate.hpp` |
 | 玩家游標、替代輸入、epoch | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp` |
 | Match 模擬角色、絕對 Tick 期限、owning 交接、ingress 統計 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp` |
 | Match IPC（asio）：讀寫、latest-wins Snapshot、action lane | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp` |

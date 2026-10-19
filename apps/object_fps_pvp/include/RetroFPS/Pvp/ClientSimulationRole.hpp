@@ -66,11 +66,11 @@ inline constexpr double ClientIntentMinimumStaleSeconds = ClientIntentStaleInter
 inline constexpr std::size_t ClientIntentRecentIntervals = 4;
 
 // What a simulation step publishes for the main thread: the observation, the
-// state that places the local player at a later render time, and the shot timing.
+// state that places the local player at a later render time, and the shot gate view.
 struct ClientPresentation final {
     LocalMovementObservation observation;
     LocalPresentationState presentation;
-    std::optional<FireGateTiming> shotTiming;
+    std::optional<ShotGateView> shotGate;
     Engine::Time::TimePoint steppedAt{};
     std::size_t arenaIndex{};
     // The sample time of the intent the step used, and the connection
@@ -79,10 +79,10 @@ struct ClientPresentation final {
     std::uint64_t generation{};
 };
 
-// A presentation placed at a render time, with the shot timing advanced to it.
+// A presentation placed at a render time; the shot gate view counts steps, not time, and stays.
 struct ClientPresented final {
     LocalMovementObservation observation;
-    std::optional<FireGateTiming> shotTiming;
+    std::optional<ShotGateView> shotGate;
     Engine::Time::TimePoint intentSampledAt{};
     std::uint64_t generation{};
     // When the simulation took the step this presentation comes from.

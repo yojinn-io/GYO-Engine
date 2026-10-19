@@ -92,7 +92,7 @@
       "batch": "09",
       "what": "Match stops counting hits",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "                    ++target.combat.damageCount;\n",
+      "find": "            ++target.combat.damageCount;\n",
       "replace": "",
       "check": "cpu",
       "expect": "hit record"
@@ -102,7 +102,7 @@
       "batch": "09",
       "what": "Match stops recording the attacker",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "                    target.combat.lastAttackerId = playerId;\n",
+      "find": "            target.combat.lastAttackerId = playerId;\n",
       "replace": "",
       "check": "cpu",
       "expect": "hit record"
@@ -206,56 +206,6 @@
       "replace": "\nPROTOCOL_VERSION = 6\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
-    },
-    {
-      "id": "12-earliest-plus-one",
-      "batch": "12",
-      "what": "The gate expects a shot to resolve one tick later than it can",
-      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
-      "find": "    const auto earliest = newest - static_cast<std::int64_t>(InitialCommandLead) + steps;\n",
-      "replace": "    const auto earliest = newest - static_cast<std::int64_t>(InitialCommandLead) + steps + 1;\n",
-      "check": "cpu",
-      "expect": "the gate's bounds hold"
-    },
-    {
-      "id": "12-no-guard",
-      "batch": "12",
-      "what": "The earliest tick drops the phase-error guard",
-      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
-      "find": "MovementPhaseTargetSeconds - FireGateGuardSeconds -",
-      "replace": "MovementPhaseTargetSeconds -",
-      "check": "cpu",
-      "expect": "follows the newest command less the lead"
-    },
-    {
-      "id": "12-shift-ignored",
-      "batch": "12",
-      "what": "A slewing correction that delays the phase is ignored",
-      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
-      "find": " -\n        Engine::Math::Max(0.0, timing.phaseShiftSeconds);",
-      "replace": ";",
-      "check": "cpu",
-      "expect": "follows the newest command less the lead"
-    },
-    {
-      "id": "12-no-pending-spread",
-      "batch": "12",
-      "what": "A pending shot is assumed to resolve at its earliest tick",
-      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
-      "find": "*earliest + FireGatePendingSpreadTicks + cooldownTicks",
-      "replace": "*earliest + cooldownTicks",
-      "check": "cpu",
-      "expect": "holds a pending shot"
-    },
-    {
-      "id": "12-decision-ignored",
-      "batch": "12",
-      "what": "An accepted decision does not set the cooldown",
-      "file": "apps/object_fps_pvp/src/Pvp/FireGate.cpp",
-      "find": "        decidedNextAllowed_ = Engine::Math::Max(decidedNextAllowed_, decision.resolvedTick + cooldownTicks);\n",
-      "replace": "",
-      "check": "cpu",
-      "expect": "waits for every known cooldown"
     },
     {
       "id": "11-pitch-ignored",
@@ -412,8 +362,8 @@
       "batch": "16",
       "what": "The hit record keeps the first attacker instead of the last",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "                    target.combat.lastAttackerId = playerId;",
-      "replace": "                    if (!target.combat.lastAttackerId) target.combat.lastAttackerId = playerId;",
+      "find": "            target.combat.lastAttackerId = playerId;",
+      "replace": "            if (!target.combat.lastAttackerId) target.combat.lastAttackerId = playerId;",
       "check": "cpu",
       "expect": "PvP same tick shots from two and three players all hit and the record keeps the last attacker"
     },
@@ -2818,56 +2768,6 @@
       "expect": "PvP a sustained delay beyond one late correction and the lead's slack still chains late corrections"
     },
     {
-      "id": "v7-09-guard-minus-half-ms",
-      "batch": "v7-09",
-      "what": "The guard is half a millisecond below the frozen 2 ms",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
-      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
-      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds - 0.0005;",
-      "check": "cpu",
-      "expect": "The fire gate constants keep their frozen values"
-    },
-    {
-      "id": "v7-09-guard-plus-2ms",
-      "batch": "v7-09",
-      "what": "The guard is 2 ms above the frozen 2 ms",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
-      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
-      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds + 0.002;",
-      "check": "cpu",
-      "expect": "The fire gate constants keep their frozen values"
-    },
-    {
-      "id": "v7-09-spread-6",
-      "batch": "v7-09",
-      "what": "The pending spread is 6 ticks instead of the frozen 7",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
-      "find": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 7;",
-      "replace": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 6;",
-      "check": "cpu",
-      "expect": "The fire gate constants keep their frozen values"
-    },
-    {
-      "id": "v7-09-spread-10",
-      "batch": "v7-09",
-      "what": "The pending spread is 10 ticks instead of the frozen 7",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
-      "find": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 7;",
-      "replace": "inline constexpr std::uint64_t FireGatePendingSpreadTicks = 10;",
-      "check": "cpu",
-      "expect": "The fire gate constants keep their frozen values"
-    },
-    {
-      "id": "v7-09-guard-plus-50us",
-      "batch": "v7-09",
-      "what": "The guard is 0.05 ms above the frozen 2 ms, inside the earliest-tick test's 0.1 ms boundary step, so only the literal pin catches it",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/FireGate.hpp",
-      "find": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds;",
-      "replace": "inline constexpr double FireGateGuardSeconds = MovementPhaseDeadbandSeconds + 0.00005;",
-      "check": "cpu",
-      "expect": "The fire gate constants keep their frozen values"
-    },
-    {
       "id": "v71ve-client-dispatch-on-409",
       "batch": "v71-version-errors",
       "what": "The Client takes any 409 for a version refusal, so a full room reads as a version mismatch",
@@ -4402,8 +4302,8 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match reports a Head hit",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "                    decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)\n",
-      "replace": "                    decision.hitPart = HitPart::Head;\n",
+      "find": "            decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)\n",
+      "replace": "            decision.hitPart = HitPart::Head;\n",
       "check": "cpu",
       "expect": "hitPart == HitPart::Body"
     },
@@ -4412,7 +4312,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match leaves the hit record's part unset",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "                    target.combat.lastHitPart = HitPart::Body;\n",
+      "find": "            target.combat.lastHitPart = HitPart::Body;\n",
       "replace": "",
       "check": "cpu",
       "expect": "lastHitPart == HitPart::Body"
@@ -4488,14 +4388,14 @@
       "expect": "9 \\* 65536 \\+ 1"
     },
     {
-      "id": "v71hf-shadow-cooldown-ignored",
-      "batch": "v71-hitbox-fields",
-      "what": "The shadow record ignores the shooter's cooldown",
+      "id": "v71a1-trace-hold-ignored",
+      "batch": "v71-a1-shot-step",
+      "what": "The record leaves out the cooldown hold the Match applied (rewritten from v71hf-shadow-cooldown-ignored for record v2)",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
-      "find": "            const auto next = before ? before->nextAllowedShotTick : 0;\n",
-      "replace": "            const auto next = std::uint64_t{0};\n",
+      "find": "            .held = timing && timing->held, .rejection = decision.rejection, .viewTickQ16 = request.viewTickQ16};\n",
+      "replace": "            .held = false, .rejection = decision.rejection, .viewTickQ16 = request.viewTickQ16};\n",
       "check": "cpu",
-      "expect": "cooldownHoldTicks == "
+      "expect": "second.held"
     },
     {
       "id": "v71hf-shadow-not-handed",
@@ -4552,8 +4452,8 @@
       "batch": "v71-hitbox-fields",
       "what": "The host records a shadow decision without its time",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, MovementTraceNowNs());",
-      "replace": "        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, 0);",
+      "find": "        if (!shotShadow_.Empty()) shotShadow_.Decided(match_, state.tick, state, MovementTraceNowNs());",
+      "replace": "        if (!shotShadow_.Empty()) shotShadow_.Decided(match_, state.tick, state, 0);",
       "check": "cpu",
       "expect": "records\\[k\\]\\.timeNs >= windows"
     },
@@ -4576,6 +4476,186 @@
       "replace": "            ]\n",
       "check": "action_runner",
       "expect": "test_the_match_writes_its_movement_trace_in_the_case_directory"
+    },
+    {
+      "id": "v71a1-due-at-handoff",
+      "batch": "v71-a1-shot-step",
+      "what": "Every action is due at its hand-off tick (pv6 arrival judgement)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    return tick_ >= entry.acceptedTick && (shot.movementEpoch != player.state.movementEpoch ||\n",
+      "replace": "    return tick_ >= entry.acceptedTick || (shot.movementEpoch != player.state.movementEpoch ||\n",
+      "check": "cpu",
+      "expect": "PvP A1 decides an on-time shot"
+    },
+    {
+      "id": "v71a1-hold-unbounded",
+      "batch": "v71-a1-shot-step",
+      "what": "A shot is held for any gap up to the whole cooldown, not K",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "replace": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= rules_.cooldownTicks) {\n",
+      "check": "cpu",
+      "expect": "PvP A1 holds a shot"
+    },
+    {
+      "id": "v71a1-hold-twice",
+      "batch": "v71-a1-shot-step",
+      "what": "A held shot may be held again when judged once more",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "replace": "        if (player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "check": "cpu",
+      "expect": "PvP A1 never holds a shot twice"
+    },
+    {
+      "id": "v71a1-reference-at-decision",
+      "batch": "v71-a1-shot-step",
+      "what": "The reference age is measured again on every tick until the decision",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (!entry.referenceMeasured) {\n",
+      "replace": "            if (true) {\n",
+      "check": "cpu",
+      "expect": "PvP A1 measures the reference age once"
+    },
+    {
+      "id": "v71a1-ignore-id-order",
+      "batch": "v71-a1-shot-step",
+      "what": "One player's actions keep their hand-off order instead of ascending ActionId",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        const auto actionId = ascending.at(playerId)[next[playerId]++];\n",
+      "replace": "        const auto actionId = (static_cast<void>(next[playerId]++), slot);\n",
+      "check": "cpu",
+      "expect": "PvP A1 judges a held shot again in full"
+    },
+    {
+      "id": "v71a1-no-waiting",
+      "batch": "v71-a1-shot-step",
+      "what": "A larger ActionId is decided while a smaller one still waits",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        if (waiting.contains(playerId)) continue;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP A1 keeps one player's actions in ActionId order"
+    },
+    {
+      "id": "v71a1-order-ignores-a",
+      "batch": "v71-a1-shot-step",
+      "what": "Across players the order ignores the hand-off tick",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            order.emplace_back(entry.acceptedTick, playerId, actionId);\n",
+      "replace": "            order.emplace_back(0, playerId, actionId);\n",
+      "check": "cpu",
+      "expect": "PvP A1 orders one tick's decisions across players"
+    },
+    {
+      "id": "v71a1-hold-limit-without-w",
+      "batch": "v71-a1-shot-step",
+      "what": "No lead bound: an action waits for its step however far",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        tick_ - entry.acceptedTick >= MaxShotStepLead);\n",
+      "replace": "        false);\n",
+      "check": "cpu",
+      "expect": "PvP A1 waits at most W ticks"
+    },
+    {
+      "id": "v71a1-s0-waits",
+      "batch": "v71-a1-shot-step",
+      "what": "S = 0 with L = 0 waits instead of being due at A",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        player.state.lastResolvedCommand >= shot.commandSequence ||\n",
+      "replace": "        (player.state.lastResolvedCommand >= shot.commandSequence && player.state.lastResolvedCommand != 0) ||\n",
+      "check": "cpu",
+      "expect": "PvP A1 waits at most W ticks"
+    },
+    {
+      "id": "v71a1-rules-ignored",
+      "batch": "v71-a1-shot-step",
+      "what": "The Match ignores the rules it is given",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(rules) {\n",
+      "replace": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(PvpCombatRules) {\n",
+      "check": "cpu",
+      "expect": "PvP A1"
+    },
+    {
+      "id": "v71a1-trace-classify-at-decision",
+      "batch": "v71-a1-shot-step",
+      "what": "The record takes A, the cursor and the path from the decision tick instead of the hand-off tick",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "                if (pending.classified) continue;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "second.dueTick == second.handoffTick"
+    },
+    {
+      "id": "v71a1-gate-estimate-plus-one",
+      "batch": "v71-a1-shot-step",
+      "what": "The gate expects a shot one tick later than its command step (replaces 12-earliest-plus-one)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ShotGate.hpp",
+      "find": "    return view.snapshotTick + (view.sequence - view.snapshotLastResolved);\n",
+      "replace": "    return view.snapshotTick + (view.sequence - view.snapshotLastResolved) + 1;\n",
+      "check": "cpu",
+      "expect": "PvP shot gate estimates T\\(S\\)"
+    },
+    {
+      "id": "v71a1-gate-other-epoch",
+      "batch": "v71-a1-shot-step",
+      "what": "A click of another epoch is estimated in sequence space",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ShotGate.hpp",
+      "find": "    if (view.epoch != view.snapshotEpoch || view.sequence <= view.snapshotLastResolved) return view.snapshotTick;\n",
+      "replace": "    if (view.sequence <= view.snapshotLastResolved) return view.snapshotTick;\n",
+      "check": "cpu",
+      "expect": "PvP shot gate estimates T\\(S\\)"
+    },
+    {
+      "id": "v71a1-gate-decision-ignored",
+      "batch": "v71-a1-shot-step",
+      "what": "An accepted decision does not set the cooldown (replaces 12-decision-ignored)",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotGate.cpp",
+      "find": "        decidedNextAllowed_ = Engine::Math::Max(decidedNextAllowed_, decision.resolvedTick + cooldownTicks);\n",
+      "replace": "        decidedNextAllowed_ = decidedNextAllowed_;\n",
+      "check": "cpu",
+      "expect": "PvP shot gate reaches every cooldown"
+    },
+    {
+      "id": "v71a1-gate-pending-ignored",
+      "batch": "v71-a1-shot-step",
+      "what": "A sent shot awaiting its decision does not count (replaces 12-no-pending-spread)",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotGate.cpp",
+      "find": "    pendingNextAllowed_ = Engine::Math::Max(pendingNextAllowed_, EstimatedShotTick(view) + cooldownTicks);\n",
+      "replace": "    pendingNextAllowed_ = Engine::Math::Max(pendingNextAllowed_, EstimatedShotTick(view));\n",
+      "check": "cpu",
+      "expect": "PvP shot gate reaches every cooldown"
+    },
+    {
+      "id": "v71a1-gate-snapshot-ignored",
+      "batch": "v71-a1-shot-step",
+      "what": "The snapshot's next allowed tick does not count",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotGate.cpp",
+      "find": "    snapshotNextAllowed_ = combat.nextAllowedShotTick;\n",
+      "replace": "    snapshotNextAllowed_ = 0;\n",
+      "check": "cpu",
+      "expect": "PvP shot gate reaches every cooldown"
+    },
+    {
+      "id": "v71a1-gate-no-view-zero-wait",
+      "batch": "v71-a1-shot-step",
+      "what": "Without a prediction the gate reports no wait",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotGate.cpp",
+      "find": "    if (!view) return Engine::Math::Max<std::uint64_t>(required > snapshotTick_ ? required - snapshotTick_ : 0, 1);\n",
+      "replace": "    if (!view) return required > snapshotTick_ ? required - snapshotTick_ : 0;\n",
+      "check": "cpu",
+      "expect": "PvP shot gate sends nothing without"
+    },
+    {
+      "id": "v71a1-gate-frozen-sends",
+      "batch": "v71-a1-shot-step",
+      "what": "A frozen prediction still gives the gate a view, so a click is sent",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {\n    if (!observation_.active || observation_.frozen) return std::nullopt;",
+      "replace": "std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {\n    if (!observation_.active) return std::nullopt;",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( client\\.ShotGate\\(\\) \\)"
     }
   ]
 }

@@ -20,7 +20,7 @@ DECIDING = [
     INCLUDE / 'MatchRuntimeHost.hpp',
     INCLUDE / 'SnapshotTimeline.hpp',
     SOURCE / 'PvpApplication.cpp',
-    SOURCE / 'FireGate.cpp',  # until a1-shot-step retires it
+    SOURCE / 'ShotGate.cpp',
 ]
 DIAGNOSTIC_SYMBOLS = [
     'ClockSync', 'ClockSample', 'ClockStamp', 'ClockWindow', 'has_clock', 'mutable_clock', '.clock()',
@@ -40,15 +40,14 @@ class DiagnosticIsolationTest(unittest.TestCase):
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D32)')
 
-    def test_no_decision_reads_the_a1_request_fields_before_a1_shot_step(self):
-        # hitbox-fields (pv7 §6, §7, D-2): S and the view tick are request content
-        # the host only records (MatchShotTrace.hpp). E shares its name with the
-        # player's movementEpoch, so the host's differential test and the
-        # authority digest guard it instead.
+    def test_no_decision_reads_the_view_tick(self):
+        # pv7 §7: the view tick is request content the host only records
+        # (MatchShotTrace.hpp). E and S became decision inputs in a1-shot-step
+        # (pv7 §6, A1), so they left this list.
         for path in [SOURCE / 'PvpMatch.cpp', SOURCE / 'MatchRuntimeHost.cpp', INCLUDE / 'MatchRuntimeHost.hpp',
-                     SOURCE / 'FireGate.cpp', SOURCE / 'LocalPlayerPrediction.cpp', INCLUDE / 'SnapshotTimeline.hpp']:
+                     SOURCE / 'ShotGate.cpp', SOURCE / 'LocalPlayerPrediction.cpp', INCLUDE / 'SnapshotTimeline.hpp']:
             text = path.read_text(encoding='utf-8')
-            for symbol in ('commandSequence', 'viewTickQ16', 'command_sequence', 'view_tick'):
+            for symbol in ('viewTickQ16', 'view_tick'):
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D-2)')
 

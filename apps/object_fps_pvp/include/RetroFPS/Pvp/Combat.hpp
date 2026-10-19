@@ -31,6 +31,16 @@ struct CombatRules final {
 };
 inline constexpr CombatRules PvpCombatRules{};
 
+// A1 (pv7 §6): W, the furthest step a request may claim ahead of the
+// shooter's last resolved command, and the cooldown hold bound. K follows the
+// weapon's cooldown, so it never exceeds it whatever the rules say (v7.1 D136,
+// network-architecture §7).
+inline constexpr std::uint64_t MaxShotStepLead = MaxPendingCommands + 1;
+inline constexpr std::uint64_t MaxShotHoldTicks = 2;
+[[nodiscard]] constexpr std::uint64_t ShotHoldLimit(std::uint64_t cooldownTicks) noexcept {
+    return cooldownTicks < MaxShotHoldTicks ? cooldownTicks : MaxShotHoldTicks;
+}
+
 enum class ActionKind { Shot = 0, Reload = 1 };
 // Where a shot hit a player (pv7 §7). v7.1's Match produces only Body.
 enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2 };
@@ -44,9 +54,9 @@ struct ShotRequest final {
     ActionKind kind{ActionKind::Shot};
     std::uint64_t lifeGeneration{1};
     // Immutable request content (pv7 §6, §7): it takes part in comparing a
-    // retransmission, but no decision reads it before a1-shot-step; the host
-    // only records it (D-2). E and S of one Client simulation step, and the
-    // remote time the shooter saw (Tick x 65536; 0 without one).
+    // retransmission. E and S of one Client simulation step decide when the
+    // authority judges the action (A1); the remote time the shooter saw (Tick x
+    // 65536; 0 without one) stays a recorded diagnostic.
     std::uint64_t movementEpoch{};
     std::uint64_t commandSequence{};
     std::uint64_t viewTickQ16{};

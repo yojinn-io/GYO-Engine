@@ -245,8 +245,12 @@ TEST_CASE("PvP prediction seeds only neutral commands and bounds a stalled ackno
     const auto arena = PredictionArena();
     LocalPlayerPrediction client(arena);
     CHECK_FALSE(client.Advance(1, 1, 0, 0, 0));
+    CHECK_FALSE(client.ShotGate()); // pv7 §6: no prediction, no shot
     client.Reconcile({1, {2, 0, 2}, 0, 0, 0}, 30);
     CHECK(client.Observation().pendingCommands == InitialCommandLead);
+    REQUIRE(client.ShotGate());
+    CHECK(client.ShotGate()->snapshotTick == 30);
+    CHECK(client.ShotGate()->sequence == client.Observation().latestCommand);
     CHECK_FALSE(client.Advance(0, 1, 0, 0, 0));
     for (const auto& command : client.PendingInput().commands) {
         CHECK(command.moveForward == 0);
@@ -255,6 +259,7 @@ TEST_CASE("PvP prediction seeds only neutral commands and bounds a stalled ackno
     for (std::size_t frame = 0; frame < MaxPendingCommands - InitialCommandLead; ++frame)
         static_cast<void>(client.Advance(MovementTickSeconds, 1, 0, 0, 0));
     CHECK(client.Observation().frozen);
+    CHECK_FALSE(client.ShotGate()); // pv7 §6: a frozen prediction sends no shot
     CHECK(client.Observation().pendingCommands == MaxPendingCommands);
     CHECK(client.Observation().predictedPosition.z == doctest::Approx(
         2 + (MaxPendingCommands - InitialCommandLead) * arena.movementSpeed * MovementTickSeconds));
@@ -282,6 +287,7 @@ TEST_CASE("PvP prediction seeds only neutral commands and bounds a stalled ackno
     SamePosition(client.Observation().renderPosition, frozen);
     client.Reconcile({1, {2, 0, 2}, 0, 0, InitialCommandLead}, 33);
     CHECK_FALSE(client.Observation().frozen);
+    CHECK(client.ShotGate());
     static_cast<void>(client.Advance(MovementTickSeconds, 0, 1, 1.2F, 0.4F));
     CHECK(client.PendingInput().commands.back().yaw == 1.2F);
     CHECK(client.PendingInput().commands.back().sequence == MaxPendingCommands + 1);
@@ -1144,10 +1150,9 @@ struct LaggedHost {
     std::size_t lag;
     std::vector<Published> published;
 };
-// The shot gate keeps the phase it decided while tracking reacquires.
+// Phase tracking keeps the phase it decided while it reacquires.
 bool GateDecided(const LocalPlayerPrediction& client) {
-    const auto timing = client.ShotTiming();
-    return timing && timing->phaseDecided;
+    return client.PhaseDecided();
 }
 } // namespace
 

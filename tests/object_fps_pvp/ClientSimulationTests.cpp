@@ -49,7 +49,7 @@ public:
             return prediction_.PendingInput();
         return std::nullopt;
     }
-    std::optional<FireGateTiming> ShotTiming() const noexcept { return prediction_.ShotTiming(); }
+    std::optional<ShotGateView> ShotGate() const noexcept { return prediction_.ShotGate(); }
     const LocalMovementObservation& Observation() const noexcept { return prediction_.Observation(); }
 
 private:
@@ -76,7 +76,7 @@ struct FrameRecord final {
     std::size_t distinctSlack{};
     std::optional<PlayerInput> published;
     LocalMovementObservation observation;
-    std::optional<FireGateTiming> shotTiming;
+    std::optional<ShotGateView> shotGate;
 };
 
 struct Scenario final {
@@ -177,7 +177,7 @@ std::vector<FrameRecord> Run(const Scenario& scenario) {
         record.published = client.Frame(at, InputAt(now));
         if (record.published) published = *record.published;
         record.observation = client.Observation();
-        record.shotTiming = client.ShotTiming();
+        record.shotGate = client.ShotGate();
         records.push_back(std::move(record));
     }
     return records;
@@ -222,21 +222,14 @@ void SameObservation(const LocalMovementObservation& actual, const LocalMovement
     CHECK(actual.phaseSampleSequence == expected.phaseSampleSequence);
 }
 
-void SameTiming(const std::optional<FireGateTiming>& actual, const std::optional<FireGateTiming>& expected) {
-    REQUIRE(actual.has_value() == expected.has_value());
-    if (!expected) return;
-    CHECK(actual->authorityTick == expected->authorityTick);
-    CHECK(actual->lastResolvedCommand == expected->lastResolvedCommand);
-    CHECK(actual->latestCommand == expected->latestCommand);
-    CHECK(actual->secondsSinceStep == expected->secondsSinceStep);
-    CHECK(actual->phaseShiftSeconds == expected->phaseShiftSeconds);
-    CHECK(actual->phaseDecided == expected->phaseDecided);
+void SameGate(const std::optional<ShotGateView>& actual, const std::optional<ShotGateView>& expected) {
+    CHECK(actual == expected);
 }
 
 void SameFrame(const FrameRecord& actual, const FrameRecord& expected) {
     SameInput(actual.published, expected.published);
     SameObservation(actual.observation, expected.observation);
-    SameTiming(actual.shotTiming, expected.shotTiming);
+    SameGate(actual.shotGate, expected.shotGate);
 }
 
 // One snapshot per frame: phase tracking sees exactly what v6 saw.

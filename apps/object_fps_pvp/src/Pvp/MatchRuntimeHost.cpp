@@ -426,9 +426,6 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             pending.stagedSequences.clear();
             pending.dirty = false;
         }
-        // The shadow records (diagnostics only) read the shooter's cooldown as it
-        // was before the tick, only while a handed request awaits its decision.
-        const auto beforeShots = shotShadow_.Empty() ? std::nullopt : std::optional<WorldSnapshot>(match_.Snapshot());
         match_.Tick(tick, [this](std::uint64_t observedTick) -> std::optional<std::chrono::nanoseconds> {
             const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
                 [&](const auto& entry) { return entry.tick == observedTick; });
@@ -436,7 +433,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
         });
         auto state = match_.Snapshot();
-        if (beforeShots) shotShadow_.Decided(match_, state.tick, *beforeShots, state, MovementTraceNowNs());
+        // Diagnostics only, while a handed request awaits its decision.
+        if (!shotShadow_.Empty()) shotShadow_.Decided(match_, state.tick, state, MovementTraceNowNs());
         TrackSlack(state, advancedAt);
         JudgeConnectionQuality(state);
         // Retaining only unresolved tuples supplies bounded duplicate identity

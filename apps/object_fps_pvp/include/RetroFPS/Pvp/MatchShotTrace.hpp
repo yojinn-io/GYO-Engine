@@ -1,12 +1,13 @@
 #pragma once
 
 // Product-owned diagnostics (v7.1 hitbox-fields, pv7 §6 "影子量測", D-2): the
-// Match's shadow record of every action decision, match-shots.jsonl version 1.
-// Header-only, like MatchIngressTrace.hpp. Before a1-shot-step no decision
-// reads E, S or the view tick: the host hands each request's copy to this
-// track, and for each decision the track writes what A1 would have done with
-// it (its path and step tick, the cooldown it would have to hold) and the
-// recorded view tick check (pv7 §7). Which command the step tick resolved
+// Match's record of every action decision, match-shots.jsonl version 2
+// (a1-shot-step). Header-only, like MatchIngressTrace.hpp. The host hands each
+// request's copy to this track; at the hand-off tick A the track keeps the
+// shooter's epoch, cursor and life and the path pv7 §6 gives at A, and when
+// the decision comes (tick J) it writes them with the Match's first due tick D,
+// J and the cooldown hold (PvpMatch::GetActionTiming), and the recorded view
+// tick check (pv7 §7). The view tick never reaches a decision. Which command the step tick resolved
 // (Actual, Held, Neutral) and whether it arrived later are not repeated here:
 // match-commands.jsonl (resolved, by player, epoch and sequence) and
 // match-ingress.jsonl (substitution records with their first late copy) hold
@@ -38,12 +39,12 @@
 
 namespace fps::pvp {
 
-inline constexpr int MatchShotTraceVersion = 1;
+inline constexpr int MatchShotTraceVersion = 2;
 inline constexpr std::size_t MatchShotRecordCapacity = 4096;
-// W of pv7 §6: the furthest step a request may claim, MaxPendingCommands + 1.
-inline constexpr std::uint64_t MaxShotStepLead = MaxPendingCommands + 1;
 
-// The path A1 would take for a request at its handoff tick A (pv7 §6).
+// The path of a request as pv7 §6 sees it at its hand-off tick A. A record of
+// what A gives; the Match decides by PvpMatch::ActionDue, tick by tick (an S of
+// 0 with L = 0, for one, is already due at A although this says hold_limit).
 enum class ShotStepPath : std::uint8_t { OnTime, Late, Epoch, Life, HoldLimit };
 
 [[nodiscard]] inline constexpr std::string_view ShotStepPathName(ShotStepPath path) noexcept {
@@ -92,16 +93,18 @@ struct ShotShadowRecord final {
     PlayerId playerId{};
     ActionId actionId{};
     ActionKind kind{ActionKind::Shot};
-    std::uint64_t handoffTick{};  // A: the decision's tick in v7.1
+    std::uint64_t handoffTick{};  // A
     std::uint64_t epoch{};        // E
     std::uint64_t sequence{};     // S
     std::uint64_t requestLife{};
     std::uint64_t currentEpoch{}; // Ecur(A)
     std::uint64_t lastResolved{}; // L(A)
     std::uint64_t life{};         // life(A)
-    ShotStep step{};
-    // Shot only: ticks A1 would hold for the cooldown, nextAllowedShotTick
-    // before this decision minus D (0 when none).
+    ShotStep step{};              // the path and tick pv7 §6 gives at A
+    std::uint64_t dueTick{};      // D, the Match's first due tick
+    std::uint64_t resolvedTick{}; // J, the decision's tick
+    bool held{};                  // a Shot held for its cooldown
+    // Shot only: ticks held for the cooldown, J - D when held (0 when not).
     std::optional<std::uint64_t> cooldownHoldTicks;
     ShotRejection rejection{ShotRejection::None};
     std::uint64_t viewTickQ16{};
@@ -144,6 +147,8 @@ struct ShotRecords final {
         ",\"request_life\":" + std::to_string(r.requestLife) + ",\"epoch_at_a\":" + std::to_string(r.currentEpoch) +
         ",\"last_resolved_at_a\":" + std::to_string(r.lastResolved) + ",\"life_at_a\":" + std::to_string(r.life) +
         ",\"path\":\"" + std::string(ShotStepPathName(r.step.path)) + "\",\"step_tick\":" + std::to_string(r.step.tick) +
+        ",\"due_tick\":" + std::to_string(r.dueTick) + ",\"resolved_tick\":" + std::to_string(r.resolvedTick) +
+        ",\"held\":" + (r.held ? "true" : "false") +
         ",\"cooldown_hold_ticks\":" + optional(r.cooldownHoldTicks) + ",\"rejection\":\"" +
         std::string(ShotRejectionName(r.rejection)) + "\",\"view_tick_q16\":" + std::to_string(r.viewTickQ16) +
         ",\"view_valid\":" + (r.viewValid ? "true" : "false") + ",\"view_lag_q16\":" + optional(r.viewLagQ16) + "}";
@@ -160,17 +165,19 @@ struct ShotRecords final {
 // decision. Under the host's lock; bounded by the Match's action window.
 class ShotShadowTrack final {
 public:
-    void Handed(PlayerId playerId, const ShotRequest& request) { requests_[playerId][request.actionId] = request; }
+    void Handed(PlayerId playerId, const ShotRequest& request) {
+        requests_[playerId].try_emplace(request.actionId, Pending{request});
+    }
     [[nodiscard]] bool Empty() const noexcept { return requests_.empty(); }
     void Remove(PlayerId playerId) { requests_.erase(playerId); }
     void Clear() noexcept { requests_.clear(); }
 
-    // After tick A: a record for every handed request the Match decided at A.
-    // before is the state before the tick (for the shooter's cooldown), after
-    // the state after it (Ecur, L and life after A's movement); timeNs the
+    // After each tick while a handed request awaits its decision: the first
+    // tick after the hand-off is A, whose state (after A's movement) gives the
+    // shooter's epoch, cursor and life; a decision of this tick is written
+    // with its timing. after is the Match's state after the tick; timeNs the
     // movement trace's clock now (MovementTraceNowNs).
-    void Decided(const PvpMatch& match, std::uint64_t a, const WorldSnapshot& before, const WorldSnapshot& after,
-                 std::int64_t timeNs) {
+    void Decided(const PvpMatch& match, std::uint64_t tick, const WorldSnapshot& after, std::int64_t timeNs) {
         for (auto player = requests_.begin(); player != requests_.end();) {
             const auto results = match.GetActionResults(player->first);
             const auto state = Find(after.players, player->first);
@@ -178,13 +185,27 @@ public:
                 player = requests_.erase(player);
                 continue;
             }
-            const auto combat = Find(before.combat, player->first);
-            for (const auto& decision : results->decisions) {
-                const auto request = player->second.find(decision.actionId);
-                if (decision.resolvedTick != a || request == player->second.end()) continue;
-                Record(request->second, decision, a, *state, combat, timeNs);
-                player->second.erase(request);
+            for (auto& [id, pending] : player->second) {
+                static_cast<void>(id);
+                if (pending.classified) continue;
+                const auto& request = pending.request;
+                pending.classified = true;
+                pending.a = tick;
+                pending.currentEpoch = state->movementEpoch;
+                pending.lastResolved = state->lastResolvedCommand;
+                pending.life = state->lifeGeneration;
+                pending.step = ClassifyShotStep(tick, request.movementEpoch, request.commandSequence,
+                    request.lifeGeneration, state->movementEpoch, state->lastResolvedCommand, state->lifeGeneration);
             }
+            for (const auto& decision : results->decisions) {
+                const auto pending = player->second.find(decision.actionId);
+                if (pending == player->second.end()) continue;
+                // A copy handed again after its decision is a retransmission: nothing to record.
+                if (decision.resolvedTick == tick) Record(pending->second, decision, match.GetActionTiming(
+                    player->first, decision.actionId), state->playerId, timeNs);
+                player->second.erase(pending);
+            }
+            std::erase_if(player->second, [&](const auto& item) { return item.first <= results->retiredThrough; });
             if (player->second.empty()) player = requests_.erase(player);
             else ++player;
         }
@@ -196,33 +217,36 @@ public:
     }
 
 private:
+    struct Pending final {
+        ShotRequest request;
+        bool classified{};
+        std::uint64_t a{}, currentEpoch{}, lastResolved{}, life{};
+        ShotStep step{};
+    };
     template <class T>
     [[nodiscard]] static const T* Find(const std::vector<T>& values, PlayerId playerId) {
         for (const auto& value : values)
             if (value.playerId == playerId) return &value;
         return nullptr;
     }
-    void Record(const ShotRequest& request, const ShotDecision& decision, std::uint64_t a, const PlayerState& state,
-                const CombatState* before, std::int64_t timeNs) {
-        ShotShadowRecord record{.timeNs = timeNs, .playerId = state.playerId, .actionId = request.actionId, .kind = request.kind,
-            .handoffTick = a, .epoch = request.movementEpoch, .sequence = request.commandSequence,
-            .requestLife = request.lifeGeneration, .currentEpoch = state.movementEpoch,
-            .lastResolved = state.lastResolvedCommand, .life = state.lifeGeneration, .rejection = decision.rejection,
-            .viewTickQ16 = request.viewTickQ16};
-        record.step = ClassifyShotStep(a, request.movementEpoch, request.commandSequence, request.lifeGeneration,
-                                       state.movementEpoch, state.lastResolvedCommand, state.lifeGeneration);
-        if (request.kind == ActionKind::Shot) {
-            const auto next = before ? before->nextAllowedShotTick : 0;
-            record.cooldownHoldTicks = next > record.step.tick ? next - record.step.tick : 0;
-        }
+    void Record(const Pending& pending, const ShotDecision& decision, const std::optional<ActionTiming>& timing,
+                PlayerId playerId, std::int64_t timeNs) {
+        const auto& request = pending.request;
+        ShotShadowRecord record{.timeNs = timeNs, .playerId = playerId, .actionId = request.actionId, .kind = request.kind,
+            .handoffTick = pending.a, .epoch = request.movementEpoch, .sequence = request.commandSequence,
+            .requestLife = request.lifeGeneration, .currentEpoch = pending.currentEpoch,
+            .lastResolved = pending.lastResolved, .life = pending.life, .step = pending.step,
+            .dueTick = timing ? timing->dueTick : decision.resolvedTick, .resolvedTick = decision.resolvedTick,
+            .held = timing && timing->held, .rejection = decision.rejection, .viewTickQ16 = request.viewTickQ16};
+        if (request.kind == ActionKind::Shot) record.cooldownHoldTicks = record.held ? record.resolvedTick - record.dueTick : 0;
         record.viewValid = ValidViewTick(request.kind, request.observedAuthorityTick, request.viewTickQ16);
         if (!record.viewValid) ++buffer_.viewTickInvalid;
         else if (request.viewTickQ16)
-            record.viewLagQ16 = static_cast<std::int64_t>(a * 65536) - static_cast<std::int64_t>(request.viewTickQ16);
+            record.viewLagQ16 = static_cast<std::int64_t>(pending.a * 65536) - static_cast<std::int64_t>(request.viewTickQ16);
         if (buffer_.records.size() >= MatchShotRecordCapacity) ++buffer_.dropped;
         else buffer_.records.push_back(record);
     }
-    std::map<PlayerId, std::map<ActionId, ShotRequest>> requests_;
+    std::map<PlayerId, std::map<ActionId, Pending>> requests_;
     ShotRecords buffer_;
 };
 

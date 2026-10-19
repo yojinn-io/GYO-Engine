@@ -101,15 +101,19 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
 
     for (unsigned repeat = 0; repeat < 40; ++repeat)
         REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
-    CombatStep(match, 8);
+    // A1 (pv7 §6, D136): a shot only K = 2 ticks or less inside the cooldown is
+    // held to the boundary, so the rejection is checked three ticks inside.
+    CombatStep(match, 6);
     REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match); // Tick 11 remains inside cooldown.
+    CombatStep(match); // Tick 9 remains three ticks inside cooldown.
     auto decisions = Decisions(match);
     REQUIRE(decisions.size() == 2);
     CHECK(decisions.front() == original);
     CHECK_FALSE(decisions.back().accepted);
     CHECK(decisions.back().rejection == ShotRejection::Cooldown);
+    CHECK(decisions.back().resolvedTick == 9);
     CHECK(CombatPlayer(match, 2).hp == 75);
+    CombatStep(match, 2);
     REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match); // Tick 12 is permitted, including after a rejection.
     CHECK(Decisions(match).back().accepted);
@@ -1048,18 +1052,357 @@ TEST_CASE("PvP shadow records check the view tick without refusing anything") {
 TEST_CASE("PvP shadow record lines and the shot trace path") {
     const ShotShadowRecord record{.timeNs = 1234567, .playerId = 2, .actionId = 9, .kind = ActionKind::Shot, .handoffTick = 100, .epoch = 3,
         .sequence = 20, .requestLife = 1, .currentEpoch = 3, .lastResolved = 15, .life = 1,
-        .step = {ShotStepPath::OnTime, 105}, .cooldownHoldTicks = 4, .rejection = ShotRejection::Cooldown,
+        .step = {ShotStepPath::OnTime, 105}, .dueTick = 105, .resolvedTick = 107, .held = true,
+        .cooldownHoldTicks = 2, .rejection = ShotRejection::None,
         .viewTickQ16 = 98 * 65536 + 32768, .viewValid = true, .viewLagQ16 = 2 * 65536 - 32768};
     CHECK(MatchShotRecordLine(record) ==
-          "{\"version\":1,\"kind\":\"decision\",\"time_ns\":1234567,\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
+          "{\"version\":2,\"kind\":\"decision\",\"time_ns\":1234567,\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
           "\"s\":20,\"request_life\":1,\"epoch_at_a\":3,\"last_resolved_at_a\":15,\"life_at_a\":1,\"path\":\"on_time\","
-          "\"step_tick\":105,\"cooldown_hold_ticks\":4,\"rejection\":\"cooldown\",\"view_tick_q16\":6455296,"
-          "\"view_valid\":true,\"view_lag_q16\":98304}");
+          "\"step_tick\":105,\"due_tick\":105,\"resolved_tick\":107,\"held\":true,\"cooldown_hold_ticks\":2,"
+          "\"rejection\":\"none\",\"view_tick_q16\":6455296,\"view_valid\":true,\"view_lag_q16\":98304}");
     ShotShadowRecord reload{.kind = ActionKind::Reload, .viewTickQ16 = 5, .viewValid = false};
     CHECK(MatchShotRecordLine(reload).find("\"cooldown_hold_ticks\":null") != std::string::npos);
     CHECK(MatchShotRecordLine(reload).find("\"view_valid\":false,\"view_lag_q16\":null}") != std::string::npos);
-    CHECK(MatchShotTraceEndLine(4, 1, 2) == "{\"version\":1,\"kind\":\"trace_end\",\"records\":4,\"dropped\":1,\"view_tick_invalid\":2}");
+    CHECK(MatchShotTraceEndLine(4, 1, 2) == "{\"version\":2,\"kind\":\"trace_end\",\"records\":4,\"dropped\":1,\"view_tick_invalid\":2}");
     CHECK(MatchShotTracePath("out/match-commands.jsonl") == std::filesystem::path("out/match-shots.jsonl"));
     CHECK(MatchShotTracePath("out/trace.jsonl") == std::filesystem::path("out/trace.jsonl.shots.jsonl"));
     CHECK(MatchShotTracePath({}).empty());
+}
+
+// ---- A1: shots decided at their command step (pv7 §6, v7.1 a1-shot-step) ----
+namespace {
+// Rules where one hit kills: the order of two shots decides who dies.
+constexpr CombatRules OneHitRules{.shotDamage = 100, .maximumShotDamage = 100};
+
+// One command per mover per tick, so each mover's cursor L moves one step per tick.
+void StepMovers(PvpMatch& match, unsigned count = 1, std::initializer_list<PlayerId> movers = {1, 2},
+    const ShotReferenceAge& age = [](std::uint64_t tick) -> std::optional<std::chrono::nanoseconds> {
+        return tick == 1 ? std::optional{0ns} : std::nullopt;
+    }) {
+    for (unsigned index = 0; index < count; ++index) {
+        for (const auto id : movers) MoveCombatPlayer(match, id);
+        CombatStep(match, 1, age);
+    }
+}
+
+// A shot claiming the command `lead` steps after the shooter's current cursor:
+// the next tick resolves cursor + 1, so it is due lead - 1 ticks after A.
+ShotRequest StepShot(const PvpMatch& match, ActionId id, std::uint64_t lead, PlayerId shooter = 1, float yaw = 0) {
+    const auto state = LifePlayer(match, shooter);
+    return {id, 1, yaw, 0, ActionKind::Shot, state.lifeGeneration, state.movementEpoch,
+        state.lastResolvedCommand + lead};
+}
+
+ShotDecision DecisionOf(const PvpMatch& match, ActionId id, PlayerId playerId = 1) {
+    for (const auto& decision : Decisions(match, playerId))
+        if (decision.actionId == id) return decision;
+    FAIL("no decision for action " << id);
+    return {};
+}
+
+std::optional<ShotDecision> MaybeDecision(const PvpMatch& match, ActionId id, PlayerId playerId = 1) {
+    for (const auto& decision : Decisions(match, playerId))
+        if (decision.actionId == id) return decision;
+    return std::nullopt;
+}
+
+PvpMatch A1Match(const CombatRules& rules = PvpCombatRules) {
+    PvpMatch match(CombatArena(), rules);
+    JoinCombatPlayers(match);
+    CombatStep(match);
+    return match;
+}
+} // namespace
+
+TEST_CASE("PvP A1 cooldown hold bound follows the cooldown (D136)") {
+    CHECK(MaxShotStepLead == 13);
+    CHECK(MaxShotHoldTicks == 2);
+    CHECK(ShotHoldLimit(0) == 0);
+    CHECK(ShotHoldLimit(1) == 1);
+    CHECK(ShotHoldLimit(2) == 2);
+    CHECK(ShotHoldLimit(3) == 2);
+    CHECK(ShotHoldLimit(10) == 2);
+}
+
+TEST_CASE("PvP A1 decides an on-time shot at its command step and a late or other-epoch one at hand-off") {
+    for (const std::uint64_t lead : {2u, 3u, 13u}) {
+        auto match = A1Match();
+        StepMovers(match, 5);
+        const auto a = match.TickCount() + 1;
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, lead)}}) == ActionAdmission::Accepted);
+        StepMovers(match, static_cast<unsigned>(lead - 1));
+        if (lead > 2) CHECK_FALSE(MaybeDecision(match, 1));
+        StepMovers(match);
+        const auto decision = DecisionOf(match, 1);
+        CHECK(decision.accepted);
+        CHECK(decision.resolvedTick == a + lead - 1); // T(S) = A + (S - L(A))
+        const auto timing = match.GetActionTiming(1, 1);
+        REQUIRE(timing);
+        CHECK(timing->handoffTick == a);
+        CHECK(timing->dueTick == a + lead - 1);
+        CHECK(timing->resolvedTick == a + lead - 1);
+        CHECK_FALSE(timing->held);
+    }
+    for (const std::uint64_t lead : {0u, 1u}) { // S <= L(A): late, decided at A
+        auto match = A1Match();
+        StepMovers(match, 5);
+        const auto a = match.TickCount() + 1;
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, lead)}}) == ActionAdmission::Accepted);
+        StepMovers(match);
+        CHECK(DecisionOf(match, 1).resolvedTick == a);
+    }
+    { // E = 0 and an old epoch: decided at A as in pv6
+        auto match = A1Match();
+        StepMovers(match, 5);
+        auto shot = StepShot(match, 1, 5);
+        shot.movementEpoch = 0;
+        auto old = StepShot(match, 2, 5);
+        old.movementEpoch = LifePlayer(match, 1).movementEpoch + 1; // not the current epoch either
+        REQUIRE(match.SubmitActions({1, {shot}}) == ActionAdmission::Accepted);
+        const auto a = match.TickCount() + 1;
+        StepMovers(match);
+        CHECK(DecisionOf(match, 1).resolvedTick == a);
+        CHECK(DecisionOf(match, 1).accepted);
+        StepMovers(match, 12);
+        REQUIRE(match.SubmitActions({1, {old}}) == ActionAdmission::Accepted);
+        StepMovers(match);
+        CHECK(DecisionOf(match, 2).resolvedTick == match.TickCount());
+    }
+}
+
+TEST_CASE("PvP A1 waits at most W ticks for a step that does not come") {
+    { // the epoch resolved nothing yet and never starts: A + W
+        auto match = A1Match();
+        const auto a = match.TickCount() + 1;
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 3)}}) == ActionAdmission::Accepted);
+        CombatStep(match, static_cast<unsigned>(MaxShotStepLead));
+        CHECK_FALSE(MaybeDecision(match, 1));
+        CombatStep(match);
+        CHECK(DecisionOf(match, 1).resolvedTick == a + MaxShotStepLead);
+    }
+    { // the epoch starts before A + W: the due rule wins over the bound, D = T(S)
+        auto match = A1Match();
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 3)}}) == ActionAdmission::Accepted); // S = 3
+        CombatStep(match, 2);
+        StepMovers(match, 2, {1});
+        CHECK_FALSE(MaybeDecision(match, 1));
+        StepMovers(match, 1, {1}); // command 3 resolves now
+        CHECK(DecisionOf(match, 1).resolvedTick == match.TickCount());
+        CHECK(LifePlayer(match, 1).lastResolvedCommand == 3);
+    }
+    { // S = 0 with L = 0: L >= S already, decided at A (not the hold bound)
+        auto match = A1Match();
+        const auto a = match.TickCount() + 1;
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 0)}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        CHECK(DecisionOf(match, 1).resolvedTick == a);
+    }
+    { // a claim at least W ahead of L(A): A + W
+        auto match = A1Match();
+        StepMovers(match, 5);
+        const auto a = match.TickCount() + 1;
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 21)}}) == ActionAdmission::Accepted);
+        StepMovers(match, static_cast<unsigned>(MaxShotStepLead));
+        CHECK_FALSE(MaybeDecision(match, 1));
+        StepMovers(match);
+        CHECK(DecisionOf(match, 1).resolvedTick == a + MaxShotStepLead);
+    }
+}
+
+TEST_CASE("PvP A1 decides when the shooter's epoch resets before the command step") {
+    auto match = A1Match();
+    StepMovers(match, 1, {1}); // player 1 starts, then sends nothing: a starvation reset follows
+    auto probe = match;
+    const auto epoch = LifePlayer(match, 1).movementEpoch;
+    std::uint64_t reset{};
+    for (unsigned t = 0; t < 200 && !reset; ++t) {
+        CombatStep(probe);
+        if (LifePlayer(probe, 1).movementEpoch != epoch) reset = probe.TickCount();
+    }
+    REQUIRE(reset != 0);
+    while (match.TickCount() + 3 < reset) CombatStep(match);
+    const auto a = match.TickCount() + 1; // reset - 2
+    REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 6)}}) == ActionAdmission::Accepted); // T(S) = A + 5
+    CombatStep(match, 2);
+    CHECK_FALSE(MaybeDecision(match, 1));
+    CombatStep(match);
+    CHECK(match.TickCount() == reset);
+    CHECK(DecisionOf(match, 1).resolvedTick == reset);
+    CHECK(match.GetActionTiming(1, 1)->dueTick == reset);
+    CHECK(match.GetActionTiming(1, 1)->handoffTick == a);
+}
+
+TEST_CASE("PvP A1 holds a shot at most K ticks inside the cooldown and judges it once more") {
+    for (const std::uint64_t gap : {1u, 2u, 3u}) {
+        auto match = A1Match();
+        REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // accepted at 2, next allowed 12
+        CombatStep(match, static_cast<unsigned>(12 - gap - 3));
+        REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        const auto a = match.TickCount() + 1;
+        REQUIRE(a == 12 - gap);
+        CombatStep(match);
+        if (gap > ShotHoldLimit(PvpCombatRules.cooldownTicks)) {
+            CHECK(DecisionOf(match, 2).rejection == ShotRejection::Cooldown);
+            CHECK(DecisionOf(match, 2).resolvedTick == a);
+            continue;
+        }
+        CHECK_FALSE(MaybeDecision(match, 2));
+        for (unsigned repeat = 0; repeat < 3; ++repeat) // a retransmission while held is a duplicate
+            REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match, static_cast<unsigned>(gap));
+        const auto decision = DecisionOf(match, 2);
+        CHECK(decision.accepted);
+        CHECK(decision.resolvedTick == 12);
+        CHECK(Decisions(match).size() == 2);
+        CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 22);
+        const auto timing = match.GetActionTiming(1, 2);
+        REQUIRE(timing);
+        CHECK(timing->held);
+        CHECK(timing->dueTick == a);
+        CHECK(timing->resolvedTick == 12);
+    }
+    { // a fast weapon (cooldown 4): gap 3 is refused, gap 2 is held
+        constexpr CombatRules Fast{.cooldownTicks = 4};
+        auto match = A1Match(Fast);
+        REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // accepted at 2, next allowed 6
+        REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // A = 3, gap 3
+        CHECK(DecisionOf(match, 2).rejection == ShotRejection::Cooldown);
+        REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // A = 4, gap 2
+        CHECK_FALSE(MaybeDecision(match, 3));
+        CombatStep(match, 2);
+        CHECK(DecisionOf(match, 3).accepted);
+        CHECK(DecisionOf(match, 3).resolvedTick == 6);
+    }
+}
+
+TEST_CASE("PvP A1 judges a held shot again in full and never holds it twice") {
+    { // the shooter dies during the hold: Dead
+        auto match = A1Match(OneHitRules);
+        constexpr float away = 1.5F; // a wall shot: nobody is hit
+        REQUIRE(match.SubmitActions({1, {{1, 1, away, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // accepted at 2, next allowed 12
+        REQUIRE(DecisionOf(match, 1).hitKind != ShotHitKind::Player);
+        CombatStep(match, 7);
+        REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // A = 10, gap 2: held to 12
+        REQUIRE_FALSE(MaybeDecision(match, 2));
+        REQUIRE(match.SubmitActions({2, {{1, 1, 3.14159F, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // player 2 kills player 1 at 11
+        REQUIRE(LifePlayer(match, 1).lifeState == LifeState::Dead);
+        CombatStep(match);
+        CHECK(DecisionOf(match, 2).rejection == ShotRejection::Dead);
+        CHECK(DecisionOf(match, 2).resolvedTick == 12);
+    }
+    { // a smaller ActionId arrives during the hold and fires the last round: EmptyMagazine
+        constexpr CombatRules Two{.magazineCapacity = 2};
+        auto match = A1Match(Two);
+        constexpr float away = 1.5F;
+        REQUIRE(match.SubmitActions({1, {{1, 1, away, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // accepted at 2: one round left, next allowed 12
+        CombatStep(match, 7);
+        REQUIRE(match.SubmitActions({1, {{3, 1, away, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // A = 10, gap 2: held to 12
+        REQUIRE(match.SubmitActions({1, {{2, 1, away, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match); // A = 11: the smaller id goes first and is held to 12 as well
+        CHECK_FALSE(MaybeDecision(match, 2));
+        CHECK_FALSE(MaybeDecision(match, 3));
+        CombatStep(match);
+        CHECK(DecisionOf(match, 2).accepted);
+        CHECK(DecisionOf(match, 3).rejection == ShotRejection::EmptyMagazine);
+        CHECK(DecisionOf(match, 3).resolvedTick == 12);
+    }
+}
+
+TEST_CASE("PvP A1 never holds a shot twice") {
+    // Cooldown 2 (K = 2): a held shot judged again right behind a smaller id
+    // that fired at its boundary is still 2 ticks inside; it is refused.
+    constexpr CombatRules Short{.cooldownTicks = 2};
+    auto match = A1Match(Short);
+    constexpr float away = 1.5F;
+    REQUIRE(match.SubmitActions({1, {{1, 1, away, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // accepted at 2, next allowed 4
+    REQUIRE(match.SubmitActions({1, {{3, 1, away, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // A = 3, gap 1: held to 4
+    REQUIRE(match.SubmitActions({1, {{2, 1, away, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // A = 4: id 2 fires first (next allowed 6), id 3 is 2 inside again
+    CHECK(DecisionOf(match, 2).accepted);
+    CHECK(DecisionOf(match, 3).rejection == ShotRejection::Cooldown);
+    CHECK(DecisionOf(match, 3).resolvedTick == 4);
+}
+
+TEST_CASE("PvP A1 keeps one player's actions in ActionId order behind a waiting one") {
+    auto match = A1Match();
+    constexpr float away = 1.5F;
+    REQUIRE(match.SubmitActions({1, {{1, 1, away, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // accepted at 2, next allowed 12
+    CombatStep(match, 7);
+    REQUIRE(match.SubmitActions({1, {{2, 1, away, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // A = 10: held to 12
+    REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0, ActionKind::Reload}}}) == ActionAdmission::Accepted);
+    CombatStep(match); // A = 11: the reload is due but waits behind the held shot
+    CHECK_FALSE(MaybeDecision(match, 3));
+    CombatStep(match);
+    CHECK(DecisionOf(match, 2).accepted);
+    CHECK(DecisionOf(match, 2).resolvedTick == 12);
+    CHECK(DecisionOf(match, 3).accepted);
+    CHECK(DecisionOf(match, 3).resolvedTick == 12);
+    CHECK(CombatPlayer(match, 1).reloadActionId == 3);
+}
+
+TEST_CASE("PvP A1 orders one tick's decisions across players by hand-off tick first") {
+    auto match = A1Match(OneHitRules);
+    StepMovers(match, 5);
+    // Player 2 hands its shot off first (A = t + 1, D = t + 3); player 1 one tick
+    // later (A = t + 2) with the same D. Player 2 decides first and kills player 1.
+    const auto t = match.TickCount();
+    REQUIRE(match.SubmitActions({2, {StepShot(match, 1, 3, 2, 3.14159F)}}) == ActionAdmission::Accepted);
+    StepMovers(match);
+    REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 2, 1, 0)}}) == ActionAdmission::Accepted);
+    StepMovers(match, 2);
+    REQUIRE(match.TickCount() == t + 3);
+    const auto two = DecisionOf(match, 1, 2);
+    const auto one = DecisionOf(match, 1, 1);
+    CHECK(two.resolvedTick == t + 3);
+    CHECK(one.resolvedTick == t + 3);
+    CHECK(two.accepted);
+    CHECK(two.targetId == 1);
+    CHECK(one.rejection == ShotRejection::Dead);
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Alive);
+}
+
+TEST_CASE("PvP A1 measures the reference age once at hand-off") {
+    { // 200 ms at A, 300 ms later: accepted
+        auto match = A1Match();
+        StepMovers(match, 5);
+        unsigned calls{};
+        const ShotReferenceAge age = [&](std::uint64_t) -> std::optional<std::chrono::nanoseconds> {
+            return ++calls == 1 ? 200ms : 300ms;
+        };
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 4)}}) == ActionAdmission::Accepted);
+        StepMovers(match, 4, {1, 2}, age);
+        CHECK(calls == 1);
+        CHECK(DecisionOf(match, 1).accepted);
+    }
+    { // already over 250 ms at A: Expired, decided at D
+        auto match = A1Match();
+        StepMovers(match, 5);
+        const auto a = match.TickCount() + 1;
+        const ShotReferenceAge age = [](std::uint64_t) -> std::optional<std::chrono::nanoseconds> { return 300ms; };
+        REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 4)}}) == ActionAdmission::Accepted);
+        StepMovers(match, 4, {1, 2}, age);
+        CHECK(DecisionOf(match, 1).rejection == ShotRejection::Expired);
+        CHECK(DecisionOf(match, 1).resolvedTick == a + 3);
+    }
+}
+
+TEST_CASE("PvP A1 rejects invalid combat rules") {
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 0}), std::invalid_argument);
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 30}), std::invalid_argument); // > maximum 25
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.magazineCapacity = 0}), std::invalid_argument);
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotRange = -1}), std::invalid_argument);
+    CHECK_NOTHROW(PvpMatch(CombatArena(), OneHitRules));
 }

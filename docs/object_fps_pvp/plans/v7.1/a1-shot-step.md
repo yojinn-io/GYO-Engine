@@ -89,7 +89,9 @@
   - 預測未啟用或凍結時，點擊不送也不排隊，`cooldownRemainingSeconds`＞0。
   - Client 序號閘門的三個上界各自起作用（next_allowed、已接受裁決、未決射擊），跨 epoch 的保守退回。
   - action short 的冷卻注入（`action_short.hpp:445-452`，E＝0）：靠「同玩家依 ActionId」仍在第一發之後判定並得 Cooldown（凍結分析器 `authority_cooldown_wall_and_hit` 的前提）。
-- 突變（每個都要被殺）：到期改回「一律在 A」；保留不限 K；保留第二次；K 不取 min（固定 2，由冷卻 1 的情境殺）；參考年齡改在 J 量；忽略同玩家的 ActionId 順序；排序忽略 A；hold_limit 不加 W；S＝0、L＝0 走 hold_limit；序號閘門少任一個上界；預測凍結時仍送。
+- 突變（每個都要被殺）：到期改回「一律在 A」；保留不限 K；保留第二次；參考年齡改在 J 量；忽略同玩家的 ActionId 順序；排序忽略 A；hold_limit 不加 W；S＝0、L＝0 走 hold_limit；序號閘門少任一個上界；預測凍結時仍送。
+
+- 等價突變（實作時發現，第 10 節）：「K 不取 min、固定 2」在行為上和 min(2, 冷卻) 相同，殺不到，不列入。
 
 ## 5. 凍結分析器的影響（盤點）
 
@@ -158,6 +160,16 @@ L3：使用者實際連點的手感（30／60／144 FPS），和 v7 的 L3-3 同
 1. 核准本計畫與第 3 節的宣告（`combat-magazine/corridor` 的預期差異與 golden 重產；其他 0 差異是停止條件）。
 2. `PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`）：讓「K 取 min」可以用冷卻 1、2 的規則端到端驗證，也是武器資料驅動的入口。這是 `PvpMatch` 公開介面的小擴充（Architecture Delta 的「Existing Interface Extension」）。不做的話，「K 固定 2」的突變只能在 `ShotHoldLimit` 的單元測試裡被殺，在 `PvpMatch` 的呼叫處寫錯會漏掉（事前宣告它存活）。
 3. 第 6 節是草稿：工具寫好、乾跑之後出第 3 版，門檻的字面值在那時交你核准。
+
+## 10. 實作紀錄（2026-10-19，D137 之後）
+
+- `a1-match`：`Combat.hpp` 加 `MaxShotStepLead`（W，從診斷檔移來）、`MaxShotHoldTicks`、`ShotHoldLimit`；`PvpMatch` 加 `CombatRules` 參數（並檢查 ValidShotDamageBounds、彈匣 >0、射程、參考年齡上限）、`ActionDue`、`Decide`、`GetActionTiming`；`ResolveActions` 依 (A, PlayerId, ActionId) 排序，一位玩家的動作依 ActionId 填進自己的位置，等待中（未到期或保留中）的動作讓較大的 id 一起等。參考年齡在 `Tick` 第一次看到動作時（A）用既有的 callback 量一次（D45 N3）。
+- **等價突變**：gap＝nextAllowed−D，nextAllowed＝上一發的 J＋冷卻、D≥J，所以 gap≤冷卻，K＝min(2, 冷卻) 和 K＝2 的判定永遠相同；D45 S6 的「K 固定 2」突變殺不到，不列入。`CombatRules` 參數改用來端到端測冷卻 2、4（快武器）的保留與拒絕、一發致死的跨玩家順序、彈匣 2 的保留中打空。設計文件與契約同步寫明（`network-architecture.zh-Hant.md` §7）。
+- 改寫的既有測試（AGENTS.md §14.4）：`CombatTests`「exact cooldown boundary」原本在冷卻內 1 Tick 開槍並預期 Cooldown，A1 會保留到邊界接受，改成在冷卻內 3 Tick（>K）預期 Cooldown，保留另有新測試；`CombatHostTests`「E、S 不影響判定」改成「view tick 不影響判定」（E、S 已是判定輸入；原寫法在 A1 下會因 E 不符而空洞地通過，D45 N5）；「影子紀錄的冷卻保留量」改成「保留的射擊在判定時記錄」；`test_diagnostic_isolation.py` 移除 S 的檢查（view tick 保留）。
+- `a1-trace`：`match-shots.jsonl` 版本 2（`protocol-v7.zh-Hant.md` §6）。
+- `a1-client-gate`、`a1-retire-firegate`：`ShotGate.hpp`／`.cpp`（`EstimatedShotTick`、`LocalShotGate`）取代 `FireGate.*`；`LocalPlayerPrediction::ShotGate()` 在預測未啟用或凍結時回 nullopt；`ClientPresented` 的 `shotTiming` 改為 `shotGate`；`WeaponFeedback.cooldownRemainingSeconds` 改讀序號閘門，沒有 view 時至少 1 Tick。`ShotGateTests.cpp` 取代 `FireGateTests.cpp`，含與真實 `PvpMatch` 的閉環測試：每 Tick 點擊、Client 看到前一 Tick 的 snapshot，到達晚 0～2 Tick 時 113 發權威 Cooldown 0；冷卻 4、裁決晚 6 Tick 時，一發晚 2 Tick 讓下一發保留、晚 3 Tick 讓下一發 Cooldown（N7 的邊界）。
+- 突變：`v71-a1-shot-step` 19 個（新增 18 個，加上由 `v71hf-shadow-cooldown-ignored` 改寫的 1 個），另外更新 `v71hf-shadow-time-unset` 的定位、更新定位 5 個（縮排）；退役 FireGate 的 10 個（`12-earliest-plus-one`、`12-no-guard`、`12-shift-ignored`、`12-no-pending-spread`、`12-decision-ignored`、`v7-09-guard-minus-half-ms`、`v7-09-guard-plus-2ms`、`v7-09-spread-6`、`v7-09-spread-10`、`v7-09-guard-plus-50us`：所測的常數與估計已不存在，對應的序號閘門突變取代其中能對應的）。新增與改寫的全部殺死。
+- `a1-digest`：A1 下 `combat-magazine/corridor` 的逐筆判定（`--dump`，scale 1 與 3 的每個週期）和第 3 節的手算表完全相同；golden 只改這一行，舊檔為 `authority_golden.pv7-checkpoint.txt`。
 
 ## 9. D45 檢查的修正對應（第 1 版 → 第 2 版）
 
