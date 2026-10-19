@@ -39,9 +39,9 @@
 
 - **等你決定**：無（`a1-shot-step` 實作中，D137）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：你核准後實作 `a1-shot-step`（high、局部 xhigh，估 20 h，超過約 30 h 停下回報）：切片 `a1-match` → `a1-trace` → `a1-client-gate` → `a1-retire-firegate` → `a1-digest` → `a1-docs`，L1 後寫 L2 工具與乾跑，出宣告第 3 版。之後 `pv7-merge`。
+- **下一步**：`a1-shot-step` 的四平台 L1（本次推送後觸發）；L1 通過後寫 L2 工具（B＝`../GYO-Engine-a1-before`）、開發跑次與乾跑，出宣告第 3 版停下等你核准門檻；L2 後是 L3（你的連點手感），再 `pv7-merge`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 實作完成大半（判定、影子紀錄 v2、序號閘門、digest），兩樹比較的 base 建置中。
+- **最後更新**：2026-10-19，`a1-shot-step` 實作與本機驗證完成（digest 依宣告、兩樹比較、突變 19／19、CTest 72／72），推送並觸發 L1。
 
 ## 閱讀入口
 
@@ -524,6 +524,7 @@
   - 計畫與事前宣告第 1 版草稿：[a1-shot-step.md](a1-shot-step.md)。讀程式時確認：權威 digest 的射擊沒有填 E、S（`AuthorityDigest.cpp:314`），E＝0 走 pv6 的到達判定；凍結分析器盤點（Expired 例外的方向安全、合法性重播一致、GUI 裁決抵達 P95 實測約 33 ms 對 150 ms 門檻）；action short 的冷卻注入（E＝0）靠「同玩家依 ActionId」仍在第一發之後判定。
   - D45（1 位 xhigh，約 14 分）：MUST-FIX 2（M1：冷卻保留不分路徑，`combat-magazine/corridor` 每 4 Tick 開一槍、冷卻 10，A1 一定有差，「現有 digest 0 差異」不成立；M2：L2 的 Part I 拿掉了動作路徑的故障情境，R8 的 11 個情境與重送去重、life／epoch 退回都沒人跑）、SHOULD-FIX 7（A1-1 不是契約不變式、C9 範圍、A1-2 把 D 與 J 混在一起、新情境缺 6 項、盤點漏 `cooldownRemainingSeconds`／兩個延遲門檻／`quad_evidence.py:33`、「K 固定 2」的突變殺不到、B 的二進位會被 A' 的建置覆蓋）、NOTE 7。檢查者用 A1 規則重放 checkpoint 的影子資料（`sim_a1.py`，近似）：故障情境 A1 造成的 Cooldown 0，保留只有 upstream-1000ms 3 次（gap 2）；連點在 FireGate 時代的送出時刻下 rapid-edge-60 會保留 28 次、edge-144 19 次。我核對了 M1（`AuthorityDigest.cpp:418`）。第 2 版逐項修正（宣告第 9 節）。
 - 2026-10-19：`a1-shot-step` 實作（D137；細節在 [a1-shot-step.md](a1-shot-step.md) 第 10 節）。`PvpMatch` 改照 A1 判定（到期、保留一次、同玩家依 ActionId、參考年齡在 A 量）、`CombatRules` 參數；影子紀錄版本 2；`ShotGate`（序號閘門）取代 FireGate。本機：`cpu|shader` 範圍的 CTest 只有 digest 依宣告不符；`combat-magazine/corridor` 的逐筆判定和手算表完全相同後重產該筆 golden（舊檔保留）；A1 的突變 19 個全部殺死，FireGate 的 10 個退役。發現：「K＝min(2, 冷卻)」與「K＝2」在行為上等價（gap 不會超過冷卻），D45 S6 的突變是等價突變；`CombatRules` 參數改用來測冷卻 2、4 與一發致死的情境。同機兩樹比較的 base（`7a5e0ea`）在新 worktree `../GYO-Engine-a1-before` 建置中，L2 的 B 樹也用它。
+  - 補上計畫第 3 節的 digest 情境 `combat-step/corridor`（我原本只用單元測試涵蓋新情境表，和核准的計畫不符，補做）：11 個判定和手算表逐筆相同，進 golden。同機兩樹比較（base `7a5e0ea`）：scale 1、3 各 36 個情境，只有 `combat-magazine/corridor` 不同，新情境只在 branch；其餘 34 個 0 差分。本機 `cpu|shader` 72／72。突變完整重跑時 4 個因 base 同時建置、cpu 測試超過 60 秒而 `wrong_failure`，空閒時重跑全部殺死（環境，不是程式）。
 
 ## 未結事項
 

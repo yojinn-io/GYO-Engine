@@ -3,6 +3,7 @@
 # one batch allowed to change authority results (v6 batch 10), with the old file kept in that batch's evidence.
 # v7.1 a1-shot-step (D137) changed combat-magazine/corridor as pre-declared (plans/v7.1/a1-shot-step.md section 3:
 # a shot two ticks inside the cooldown is held to its boundary); the file before it is authority_golden.pv7-checkpoint.txt.
+# combat-step/corridor (A1 command steps) was added by the same batch, checked against its hand-written table.
 move-axial/contract 3da537ff73b2d89579bd419c027dadc27060ce5ac0412029e5095625f192f100
 move-diagonal/contract e02b01251f0711f72b7780c285aa961b5f6fcd128eb930469bc07a633525b80e
 move-jump/contract 33341f025f4f9091de35d5f6f905c1378d41802897c66662d645d2ef376eaf89
@@ -23,6 +24,7 @@ combat-kill-respawn/corridor 538fcbd07bddef01acd88cee3a74bb965b91b994e4e7e35acab
 combat-occluded/pillar b4ab7ee4a6edfaaa67d310e785094b2bc70a74de43a391ad2948d4bb6561cb7e
 combat-magazine/corridor f297390e57f8fc81b4a6d62745102f35e0847740a8cf10b11c8ce36ecee306cf
 combat-cross-life/corridor 7c5188ab8d3b29d9670f4298e5acebd9ceb8ebeb54e347f2ea2941a8d3610c1b
+combat-step/corridor 512d8aea8e30d17c6a0d2ee184d4724d7d539c83d48fb8546c9e2ee93dc243a6
 combat-rejoin/corridor 49f8e96644f7153c9d5ea953b2eae8ce395d58a0073eaa495f5ab2d3356ccc93
 prediction-rtt0/contract e546dc2dcd85a31c2748ddb95c48dcf04e31af6b7f11297b3f886ec39a2c54dd
 prediction-rtt40/contract cdfb97e43f1fbc3116d699495a6bdac9759560d5d832c14fe64d373199a4aa80

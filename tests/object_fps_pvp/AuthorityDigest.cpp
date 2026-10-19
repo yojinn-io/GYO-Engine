@@ -315,6 +315,20 @@ public:
             life.value_or(State(id).lifeGeneration)};
         static_cast<void>(match_.SubmitActions({id, {request}}));
     }
+    // A1 (pv7 §6): a request claiming the command `lead` steps after the
+    // shooter's cursor now (the next Tick resolves cursor + 1), E its epoch.
+    void ActStep(PlayerId id, ActionKind kind, std::uint64_t lead) {
+        Refresh();
+        if (kind == ActionKind::Shot) {
+            digest_.Angle(0, "shot yaw");
+            digest_.Angle(0, "shot pitch");
+        }
+        const auto& state = State(id);
+        auto& driver = drivers_[id];
+        const ShotRequest request{++driver.action, snapshot_.tick, 0, 0, kind, state.lifeGeneration,
+            state.movementEpoch, state.lastResolvedCommand + lead};
+        static_cast<void>(match_.SubmitActions({id, {request}}));
+    }
     // Aim from one player's eye at the other's body centre.
     std::pair<float, float> Aim(PlayerId from, PlayerId to) {
         Refresh();
@@ -420,6 +434,47 @@ void RunMagazine(unsigned scale, Digest& digest) {
         if (phase == 175) duel.Act(1, ActionKind::Shot);                         // reloading
         if (phase == 180) duel.Act(1, ActionKind::Reload);                       // already reloading
         if (phase == 300) duel.Act(1, ActionKind::Reload);                       // magazine full
+        duel.Tick();
+    }
+}
+
+// A1 (v7.1 a1-shot-step, plans/v7.1/a1-shot-step.md section 3): shots that
+// claim command steps. Every phase p below is its hand-off tick A (the Act
+// comes right before the Tick); player 1 resolves one command per Tick, so a
+// lead of n from the cursor gives D = A + n - 1. Expected per 400-tick cycle,
+// from the contract (pv7 §6, K = 2):
+//   p   0 lead 3          D=J=2   accepted (next allowed 12)
+//   p  20 lead 13         D=J=32  accepted (S - L(A) = 12 < W; next 42)
+//   p  50 lead 20         D=J=63  accepted (S - L(A) = 19 >= W: A + 13; next 73)
+//   p  80 lead 1          D=J=80  accepted (S = L(A): due at A; next 90)
+//   p  82 lead 3          D=J=84  Cooldown (gap 6 > K)
+//   p  86 lead 3          D=88    held, J=90 accepted (gap 2; next 100)
+//   p  87 reload (E = 0)  D=87    waits behind the held shot, J=90 accepted (ends 180)
+//   p 200 shot (E = 0)    D=J=200 accepted (next 210)
+//   p 205 shot (E = 0)    D=J=205 Cooldown (gap 5)
+//   p 208 shot (E = 0)    D=208   held, J=210 accepted (next 220)
+//   p 209 lead 2          D=J=210 Cooldown (decided after the held smaller id: gap 10)
+void RunCommandSteps(unsigned scale, Digest& digest) {
+    Duel duel(NamedArena("corridor"), digest, {1, 2});
+    // Player 2 steps aside so every shot misses into the far wall.
+    for (unsigned t = 0; t < 30; ++t) { duel.Move(2, {0, 1}); duel.Move(1, {}); duel.Tick(); }
+    for (unsigned t = 0; t < 400 * scale; ++t) {
+        duel.Move(1, {});
+        duel.Move(2, {});
+        switch (t % 400) {
+        case 0: duel.ActStep(1, ActionKind::Shot, 3); break;
+        case 20: duel.ActStep(1, ActionKind::Shot, 13); break;
+        case 50: duel.ActStep(1, ActionKind::Shot, 20); break;
+        case 80: duel.ActStep(1, ActionKind::Shot, 1); break;
+        case 82: duel.ActStep(1, ActionKind::Shot, 3); break;
+        case 86: duel.ActStep(1, ActionKind::Shot, 3); break;
+        case 87: duel.Act(1, ActionKind::Reload); break;
+        case 200: duel.Act(1, ActionKind::Shot); break;
+        case 205: duel.Act(1, ActionKind::Shot); break;
+        case 208: duel.Act(1, ActionKind::Shot); break;
+        case 209: duel.ActStep(1, ActionKind::Shot, 2); break;
+        default: break;
+        }
         duel.Tick();
     }
 }
@@ -675,6 +730,7 @@ std::vector<Scenario> Scenarios() {
     list.push_back({"combat-occluded/pillar", true, [](unsigned s, Digest& d) { RunDuelToKill("pillar", false, s, d); }});
     list.push_back({"combat-magazine/corridor", true, [](unsigned s, Digest& d) { RunMagazine(s, d); }});
     list.push_back({"combat-cross-life/corridor", true, [](unsigned s, Digest& d) { RunCrossLife(s, d); }});
+    list.push_back({"combat-step/corridor", true, [](unsigned s, Digest& d) { RunCommandSteps(s, d); }});
     list.push_back({"combat-graze/corridor", false, [](unsigned s, Digest& d) { RunGraze(s, d); }});
     list.push_back({"combat-rejoin/corridor", true, [](unsigned s, Digest& d) { RunRejoin(s, d); }});
     for (const auto& [name, options] : std::vector<std::pair<std::string, LinkOptions>>{

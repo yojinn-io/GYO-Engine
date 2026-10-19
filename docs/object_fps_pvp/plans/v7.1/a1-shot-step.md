@@ -169,7 +169,9 @@ L3：使用者實際連點的手感（30／60／144 FPS），和 v7 的 L3-3 同
 - `a1-trace`：`match-shots.jsonl` 版本 2（`protocol-v7.zh-Hant.md` §6）。
 - `a1-client-gate`、`a1-retire-firegate`：`ShotGate.hpp`／`.cpp`（`EstimatedShotTick`、`LocalShotGate`）取代 `FireGate.*`；`LocalPlayerPrediction::ShotGate()` 在預測未啟用或凍結時回 nullopt；`ClientPresented` 的 `shotTiming` 改為 `shotGate`；`WeaponFeedback.cooldownRemainingSeconds` 改讀序號閘門，沒有 view 時至少 1 Tick。`ShotGateTests.cpp` 取代 `FireGateTests.cpp`，含與真實 `PvpMatch` 的閉環測試：每 Tick 點擊、Client 看到前一 Tick 的 snapshot，到達晚 0～2 Tick 時 113 發權威 Cooldown 0；冷卻 4、裁決晚 6 Tick 時，一發晚 2 Tick 讓下一發保留、晚 3 Tick 讓下一發 Cooldown（N7 的邊界）。
 - 突變：`v71-a1-shot-step` 19 個（新增 18 個，加上由 `v71hf-shadow-cooldown-ignored` 改寫的 1 個），另外更新 `v71hf-shadow-time-unset` 的定位、更新定位 5 個（縮排）；退役 FireGate 的 10 個（`12-earliest-plus-one`、`12-no-guard`、`12-shift-ignored`、`12-no-pending-spread`、`12-decision-ignored`、`v7-09-guard-minus-half-ms`、`v7-09-guard-plus-2ms`、`v7-09-spread-6`、`v7-09-spread-10`、`v7-09-guard-plus-50us`：所測的常數與估計已不存在，對應的序號閘門突變取代其中能對應的）。新增與改寫的全部殺死。
-- `a1-digest`：A1 下 `combat-magazine/corridor` 的逐筆判定（`--dump`，scale 1 與 3 的每個週期）和第 3 節的手算表完全相同；golden 只改這一行，舊檔為 `authority_golden.pv7-checkpoint.txt`。
+- `a1-digest`：A1 下 `combat-magazine/corridor` 的逐筆判定（`--dump`，scale 1 與 3 的每個週期）和第 3 節的手算表完全相同；golden 只改這一行，舊檔為 `authority_golden.pv7-checkpoint.txt`。第 3 節的新情境表由 `CombatTests` 的 A1 案例逐項涵蓋（契約手算的 D、J）；另加 digest 情境 `combat-step/corridor`（零角度、進 golden，四平台逐位元比對）：準時 lead 3、13、超過 W、S＝L(A)、gap 6 拒絕、gap 2 保留、Reload 排在保留中的射擊後、E＝0 的保留、同 Tick 在保留的較小 id 之後判定，11 個判定和情境旁的手算表逐筆相同（scale 3 每個週期相同）。
+- 同機兩樹比較（base＝`7a5e0ea`，新 worktree `../GYO-Engine-a1-before`）：scale 1、3 各 36 個情境，只有 `combat-magazine/corridor` 不同；`combat-step/corridor` 只在 branch（base 沒有）。其餘 34 個 0 差分，P1 成立。證據在 `build/target/_build/test/logs/pvp-v71-a1-shot-step-20261019/`。
+- 突變的完整重跑：19 個中 15 個殺死、4 個 `wrong_failure`，原因都是 cpu 測試超過 CTest 的 60 秒逾時（當時 base 樹在同機完整建置）；機器空閒時重跑這 4 個全部殺死。
 
 ## 9. D45 檢查的修正對應（第 1 版 → 第 2 版）
 
