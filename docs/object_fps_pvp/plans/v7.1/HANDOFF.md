@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`a1-shot-step` 的 L3（你的連點手感，30／60／144 FPS）什麼時候做；L2 已通過（[a1-shot-step.md](a1-shot-step.md) 第 12 節）。
+- **等你決定**：`a1-shot-step` 的 L3 手感評語（客觀紀錄已整理在 [a1-shot-step.md](a1-shot-step.md) 第 13 節）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：L3 通過後 `a1-shot-step` 結案（README 標 ✓），接著 `pv7-merge`（四平台 L1 後合併，同步文件）。PR #78 的 Auto-fix 已重新打開。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 的 L2 通過（238／238、0 停止，C1～C3、C9 成立），等 L3。
+- **最後更新**：2026-10-19，`a1-shot-step` 的 L3 跑完（4 人房，兩位使用者 113 發全部準時、權威 Cooldown 0），等你的手感評語。
 
 ## 閱讀入口
 

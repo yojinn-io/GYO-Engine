@@ -241,3 +241,9 @@ caffeinate -dims python3 -I -B run_a1.py --output ../pvp-v71-a1-l2-<日期> \
 - C11（只記錄）：連點每次送出 31～32 發，interval12 三格都是 44／44；edge 格 A' 比 B 多送 0～1 發。
 - 下一步：L3（使用者的連點手感，30／60／144 FPS）。
 
+## 13. L3（2026-10-19）
+
+- 方式照 v7 16-L3：agent 在背景開 A' 的 Match 與 Gateway（`pvp_corners`），使用者開兩個產品 Client，agent 再開 2 個 bot 補成 4 人房。紀錄在 `build/target/_build/test/logs/pvp-v71-a1-l3-20261019-233447/`（啟動腳本在 `pvp-v71-a1-l3-prep/`）。產品 Client 沒有 FPS 選項（移到 v8），所以以螢幕的更新率進行；30／60／144 由 L2 的自動化連點涵蓋。
+- 客觀紀錄：紀錄版本 2 完整（219 筆、dropped 0）；兩位使用者的射擊 67、46 發全部 on_time、J−A 全為 1 Tick、保留 0、權威 Cooldown 0（1 發 Dead：死亡時開槍）；Client 端的本機擋下 0；逐出 0；重設除了 life_respawn，只有停止 bot 後 2.5 秒內 bot 的 2 次 starvation（停止順序造成）。Client 結束時的「shutdown cleanup failed」是 Gateway 先停了（停止順序），不是產品問題。
+- 使用者評語：（待補）
+
