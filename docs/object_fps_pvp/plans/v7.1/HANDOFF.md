@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`a1-shot-step` 的 L2 事前宣告第 3 版（[a1-shot-step.md](a1-shot-step.md) 第 6 節，雜湊在第 11 節）要不要核准，以及什麼時候跑（約 2.5 h 加閒置門檻；G 與連點要顯示器亮著、不碰滑鼠；跑前關 Chrome、暫停 PR 的 Auto-fix；session 中我不呼叫工具，避免干擾量測）。
+- **等你決定**：無（`a1-shot-step` 的 L2 session 進行中，D138）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
 - **下一步**：你核准後跑 `a1-shot-step` 的 L2 session，判定並記錄；之後 L3（你的連點手感，30／60／144 FPS），再 `pv7-merge`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 的四平台 L1 通過（run 39234431732），L2 工具、開發跑次 50 項與乾跑完成，宣告第 3 版等你核准。
+- **最後更新**：2026-10-19，`a1-shot-step` 的 L2 宣告第 3 版核准（D138），session 開始；PR #78 的 Auto-fix 暫停中。
 
 ## 閱讀入口
 
@@ -107,6 +107,7 @@
 | D135 | （2026-10-19）`pv7-checkpoint` 以標籤修正後的診斷（`judgement-relabelled.json`：C1、C2、C3 全部成立，逐項 0 停止）為判定，結案。凍結的 `judge_cp.py` 不改；它的標籤錯誤（`schedule()` 兩棵樹共用 `extra`）記為工具缺陷。C6 的 `socket-path-1000ms` 旗標只記錄、不追查 | 使用者：「採用 (a)：pv7-checkpoint 以修正標籤後的診斷結果為判定。C6 的旗標只記錄。K 與 S 我另外回覆。」 |
 | D136 | （2026-10-19）`a1-shot-step` 的冷卻保留上限改成 **K＝min(K_max, cooldownTicks)、K_max＝2 Tick**（射速將來是資料驅動，固定的 K 可能超過某把武器的冷卻），Client 的 S 取 **N**。改寫 `protocol-v7.zh-Hant.md` §6 的 K 條文；演算法與 Design Invariants 記進 `network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」；`pv7-design.md` 的設定表與 v8 README 的多武器候選（權威在 Match、射速以 Tick 存）同步。盲區：沒有量到「退回＋壓著冷卻邊緣連射」，全自動武器上線時重評 K_max | 使用者：「嗯，就這麼定。核准，記得把這個算法紀錄到設計文檔中。」（前文：「但是，我的武器想做成資料驅動，射速是會放在本地參數中的。」） |
 | D137 | （2026-10-19）核准 `a1-shot-step` 的計畫第 2 版（[a1-shot-step.md](a1-shot-step.md)）：權威 digest 的 `combat-magazine/corridor` 預期差異與該筆 golden 重產（舊檔保留）、其餘 34 個情境與 29 個 golden 0 差異為停止條件；`PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`，既有介面擴充）。開始實作 | 使用者：「核准 a1-shot-step 計畫第 2 版：combat-magazine 的預期差異與 golden 重產、PvpMatch 加 CombatRules 參數都同意。開始實作。」 |
+| D138 | （2026-10-19）核准 `a1-shot-step` 的 L2 事前宣告第 3 版（[a1-shot-step.md](a1-shot-step.md) 第 11 節的雜湊：driver `dbd7e999…`、judge `f967e651…`、artifacts `034a16ee…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 a1-shot-step 的 L2 宣告第 3 版（第 11 節的雜湊），現在跑 session。」 |
 
 ## 規劃紀錄（記錄器）
 
