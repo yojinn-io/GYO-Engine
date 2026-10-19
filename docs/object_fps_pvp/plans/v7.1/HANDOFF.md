@@ -37,14 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**（`pv7-checkpoint` 的 session 跑完了，見規劃紀錄 2026-10-19 條目）：
-  1. **判定要不要採用標籤修正後的結果**：凍結的 `judge_cp.py` 有一個標籤錯誤（`schedule()` 的 `add()` 用 `extra.pop("scenario")`，兩棵樹共用同一個 dict，第二棵樹的 quad clean-60 與 G 項目被標成 case 名），所以 quad 的 C1／C2 只有 B 有值、判成 None，正式判定 `passed`＝false；C6 clean-60 也混進了 A 的 quad 跑次。逐項的停止判定不受影響（R8 判的情境、T1、H1 都不看這個標籤；修正後重放仍是 0 停止）。修正標籤的診斷（`relabel_diagnostic.py`，凍結檔不改）：C1、C2、C3 全部成立，quad clean-60 的 P95 A−B＝0.203 ms、P50 0.065 ms（下限 1 ms）。(a) 採用診斷結果當 `pv7-checkpoint` 的判定（資料、門檻都不變，只改標籤）；(b) 修工具、重新凍結，只補跑 quad clean-60 的 B／A 一對；(c) 修工具後整個 session 重跑（約 2.5 h）。建議 (a)：錯誤只在把同一筆資料分到哪個情境，門檻與資料都沒有動。依 AGENTS.md §14.4 要你核准。
-  2. **C6 的旗標（只立旗標、不自動當成退步）**：`socket-path-1000ms` 有 1 個 A 跑次的第一筆裁決少 1 個 Expired、多 1 個接受（A 其他 2 次和 B 的 3 次都是 Expired 5）。要不要追查，還是只記錄？
-  3. **`a1-shot-step` 的 K（冷卻保留的上限，D-3 (a)）與 Client 的 S 取法**：影子資料（A 的 119 項）——「前一發走退回、這一發落在冷卻內」0 次；冷卻保留只出現 1 次（probe 的 action short，8 Tick）；遊戲本體（連點 18 項、GUI timing、gui-bots）全部 on_time、退回率 0；clean 的退回率 0，準時餘裕 S−L 多半 1 Tick、30 FPS 與 GUI 有時 2 Tick、從沒有 0；故障情境的 late 路徑 1.6～15.5%（network20 最高）。K 的選項：K＝0（等同 D-3 (c)，最簡單；這次資料沒有需要保留的情況）、K＝2 Tick（蓋過相位誤差與 guard 等級的邊緣）、K＝8 Tick（蓋過觀察到的唯一一筆）。S：資料支持 N（clean 0 退回、餘裕 ≥1 Tick）。`a1-shot-step` 照依賴排在整體回歸被接受之後，所以先停在這裡。
+- **等你決定**：**`a1-shot-step` 的 K（冷卻保留的上限，D-3 (a)）與 Client 的 S 取法**：影子資料（A 的 119 項）——「前一發走退回、這一發落在冷卻內」0 次；冷卻保留只出現 1 次（probe 的 action short，8 Tick）；遊戲本體（連點 18 項、GUI timing、gui-bots）全部 on_time、退回率 0；clean 的退回率 0，準時餘裕 S−L 多半 1 Tick、30 FPS 與 GUI 有時 2 Tick、從沒有 0；故障情境的 late 路徑 1.6～15.5%（network20 最高）。K 的選項：K＝0（等同 D-3 (c)，最簡單；這次資料沒有需要保留的情況）、K＝2 Tick（蓋過相位誤差與 guard 等級的邊緣）、K＝8 Tick（蓋過觀察到的唯一一筆）。S：資料支持 N（clean 0 退回、餘裕 ≥1 Tick）。整體回歸已接受（D135），K 與 S 定了就開始 `a1-shot-step`。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：你決定上面三項之後：`pv7-checkpoint` 結案（README 標 ✓）→ `a1-shot-step`（high、局部 xhigh，估 20 h；先寫宣告與測試清單，K 依你的決定）→ `pv7-merge`。PR #78 的 Auto-fix 已重新打開。
+- **下一步**：你回覆 K 與 S 之後開始 `a1-shot-step`（high、局部 xhigh，估 20 h；先寫 L2 事前宣告與測試清單並做 D45，停下等你核准）→ `pv7-merge`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19 02:45，`pv7-checkpoint` 的 L2 session 跑完（232／232、0 停止）；判定工具的標籤錯誤讓正式判定 `passed`＝false，修正標籤的診斷全部成立；三項等你決定。
+- **最後更新**：2026-10-19，`pv7-checkpoint` 結案（D135，採用標籤修正後的判定）；等你回覆 `a1-shot-step` 的 K 與 S。
 
 ## 閱讀入口
 
@@ -107,6 +104,7 @@
 | D132 | （2026-10-18）`pv7-checkpoint` 宣告第 2 版第 8 節全照建議：故障情境的 D61 即時規則立旗標並計數、同一棵樹累計 ≥3 才停；on_time 對不上時先找產品行為的解釋，有解釋的只記錄（改寫 `protocol-v7.zh-Hant.md` §6 的 D127 那一句）；合法射擊 P95（C4、C5）只記錄；核准前在 A 上把沒跑過的項目各跑 1 次開發跑次（只看分類、鍵與 trace 完整性）。之後寫工具與乾跑 | 使用者：「第 8 節的 4 項全照建議：待定 1 選 (a)、待定 2 同意並改 protocol-v7 §6 那一句、待定 3 選 (a)、核准前在 A 上跑開發跑次（只看分類、鍵與 trace 完整性）。繼續寫工具與乾跑。」 |
 | D133 | （2026-10-19）核准 `pv7-checkpoint` 的 L2 事前宣告第 3 版（[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md) 第 10 節的雜湊：driver `35c7e8a3…`、judge `b3472772…`、artifacts `ab6005fc…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 pv7-checkpoint 宣告第 3 版（第 10 節的雜湊），現在開始跑 session。」 |
 | D134 | （2026-10-19）計畫裡標了 ultracode 的批（含「ultracode（先問）」）直接開，不必再問；產出碰到契約、架構或 L2 宣告的關卡照樣停。另外交代：今晚把 pv7-line 往前推，做到下一個要使用者決定的關卡就停 | 使用者：「我先去睡覺了，今晚把pv7-line都跑完吧。」「對了，如果計劃裡要開ultracode你直接開就行。」 |
+| D135 | （2026-10-19）`pv7-checkpoint` 以標籤修正後的診斷（`judgement-relabelled.json`：C1、C2、C3 全部成立，逐項 0 停止）為判定，結案。凍結的 `judge_cp.py` 不改；它的標籤錯誤（`schedule()` 兩棵樹共用 `extra`）記為工具缺陷。C6 的 `socket-path-1000ms` 旗標只記錄、不追查 | 使用者：「採用 (a)：pv7-checkpoint 以修正標籤後的診斷結果為判定。C6 的旗標只記錄。K 與 S 我另外回覆。」 |
 
 ## 規劃紀錄（記錄器）
 
