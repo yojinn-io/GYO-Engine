@@ -25,7 +25,7 @@ foreach(contract client_v7 runtime_v7)
 endforeach()
 
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time
+    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 # Apple libc++ hides std::jthread/std::stop_token behind its experimental gate.
 # Every product target reaches the domain library, so the flag stays product-local.

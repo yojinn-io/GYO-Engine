@@ -57,7 +57,7 @@ int main(int argc,char** argv) {
         const auto ingressTracePath=fps::pvp::MatchIngressTracePath(movementTrace,ingressTraceOverride,usage);
         if(!usage.empty()){std::cerr<<usage<<'\n';return 2;}
         std::optional<fps::pvp::LogFile> log;
-        if(!logPath.empty()) {log.emplace(logPath);log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
+        if(!logPath.empty()) {log.emplace(logPath);log->FlushOnCrash();log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
         // Without --arena the Match hosts the release arena; tests and acceptance name theirs.
         const auto arenaPath=explicitArena ? *explicitArena
             : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_corners.json";

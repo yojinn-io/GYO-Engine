@@ -3,6 +3,8 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "gyo/AppConfig.hpp"
 
+#include "engine/base/Log.hpp"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <chrono>
@@ -33,6 +35,20 @@ void ForwardSdlLog(void*, int category, SDL_LogPriority priority, const char* me
     if (sdlLog.file) sdlLog.file->Write(std::string("[") + (index >= 0 && index < 8 ? names[index] : "log") + "] " + message);
 }
 
+// Engine diagnostics (Engine::Base::Log) go through SDL's log like the
+// Client's own lines, so they reach the console and the log file as before.
+void ForwardEngineLog(const Engine::Base::LogMessage& message) noexcept {
+    SDL_LogPriority priority = SDL_LOG_PRIORITY_INFO;
+    switch (message.level) {
+    case Engine::Base::LogLevel::Debug: priority = SDL_LOG_PRIORITY_DEBUG; break;
+    case Engine::Base::LogLevel::Info: priority = SDL_LOG_PRIORITY_INFO; break;
+    case Engine::Base::LogLevel::Warning: priority = SDL_LOG_PRIORITY_WARN; break;
+    case Engine::Base::LogLevel::Error: priority = SDL_LOG_PRIORITY_ERROR; break;
+    }
+    SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, priority, "%.*s %.*s", static_cast<int>(message.category.size()),
+                   message.category.data(), static_cast<int>(message.text.size()), message.text.data());
+}
+
 // Without --log the Client writes logs/client-<local time>.log next to its executable.
 std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
     const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -49,6 +65,7 @@ std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    Engine::Base::SetLogHandler(&ForwardEngineLog);
     fps::pvp::PvpApplicationOptions options;
     options.title = Gyo::AppConfig::DisplayName;
     options.gpuDriver = GYO_DEFAULT_GPU_DRIVER;
@@ -89,6 +106,7 @@ int main(int argc, char* argv[]) {
     } restoreSdlLog;
     try {
         log.emplace(logPath.empty() ? DefaultLogPath(base) : logPath);
+        log->FlushOnCrash();
         log->Tee(std::clog);
         log->Tee(std::cerr);
         SDL_GetLogOutputFunction(&sdlLog.original, &sdlLog.originalData);

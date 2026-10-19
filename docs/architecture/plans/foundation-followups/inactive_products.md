@@ -126,3 +126,11 @@ TT 計畫的批次完成時，由該批更新本節。
 - 連結：`GYO::Engine` 多了 PUBLIC 依賴 `GYO::Time`（只依賴 Base 與 OS 函式庫）；未啟用產品不需要改 CMake。
 - 選用：未啟用產品若要等待或開角色執行緒，使用 `Engine::Time::Waiter` 與 `Engine::Threads::RoleThread`，不要直接用 `SDL_Delay` 或手寫 cv。
 
+### TT-2 Trace
+
+狀態：TT-2 實作與本機 L1 完成（2026-10-20），未合併。
+
+- 破損：無。新增的 `GYO::Trace` 與 `Log.hpp` 都是新介面；SdlGpu 的慢 acquire 日誌從 `SDL_Log` 改為 `Engine::Base::Log`，預設輸出到 `std::cerr`（文字為 `[SDL_GPU] info: slow swapchain acquire …`）。依賴 SDL 日誌輸出這一行的未啟用產品，安裝自己的 handler 轉給 SDL 即可。
+- 連結：只有用到 `GYO::Trace` 的目標需要連結它；`GYO::Engine` 不依賴它。
+- 選用：未啟用產品若要背景寫紀錄檔，使用 `Engine::Trace::TraceSink`，不要自己開執行緒輪詢。
+

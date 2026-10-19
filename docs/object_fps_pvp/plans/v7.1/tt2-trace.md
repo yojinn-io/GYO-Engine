@@ -1,6 +1,6 @@
 # tt2-trace：Engine 的 Trace 與產品寫檔改接（計畫，第 1 版）
 
-- 狀態：**計畫第 1 版，等核准**（第 8 節）。核准後才實作；L2 的事前宣告在實作與工具完成後另出一版，宣告前做 D45 的門檻來源對抗式檢查。
+- 狀態：計畫第 1 版已核准（D139，第 8 節照建議），實作中。L2 的事前宣告在實作與工具完成後另出一版，宣告前做 D45 的門檻來源對抗式檢查。
 - 依據：Engine 計畫 [time-threads-trace](../../../architecture/plans/time-threads-trace/PLAN.md) 的 TT-2（範圍、驗收、Architecture Delta、停止條件）、README 的 `tt2-trace` 列、INVENTORY 的 TT2-B10、F2（`LogFile` 非同步化）。
 - 檔位：high；關閉與 flush 的順序、丟棄計數、生產者與關閉的競爭（第 2 節 `trace-core` 的 `Close`／`Push`）局部 xhigh。估 14 h（README 原估 10 h，差額見第 7 節），超過約 21 h 停下回報。
 - file:line 以 master `0fabb52` 為準。
@@ -92,7 +92,7 @@ README 的驗收：寫檔不進熱路徑，射擊的 P99 增量 ≤1 ms。照 `a
 
 - `MovementTraceWriter::Finish` 先 `SetMovementTrace({})` 再停寫檔執行緒；已經取得舊指標的生產者若在最後一次 Drain 之後 Record，那筆紀錄不會寫出也不會計數（`MovementTraceWriter.hpp:39-42`、`MovementTrace.hpp:51-56`）。本批改接後由 `Close` 的拒絕計數涵蓋；屬於本批的範圍（同一段程式），不另開項目。
 - 三種寫出方式（`TraceSink`、主執行緒的視窗寫出、Gateway 的 Go 寫出）在本批之後仍並存；`match-shots.jsonl`、`match-ingress.jsonl` 是否改接，在 `log-contract` 和格式一起決定。
-- facade 的預設輸出到 stderr：產品的 `LogFile` Tee 了 `std::cerr`，所以 SdlGpu 的慢 acquire 行會出現在 Client 的日誌檔（現在 `SDL_Log` 不經 `std::cerr`，不會進檔）。這是日誌多一種行，不是既有行的格式改變；`log-contract` 時一起登錄。
+- ~~facade 的預設輸出到 stderr，SdlGpu 的慢 acquire 行會多出現在 Client 的日誌檔~~（實作時更正：Client 原本就把 SDL 日誌轉進日誌檔，這一行已經是 `[info] SDL_GPU slow swapchain acquire …`。為了位元組不變，Client 安裝 facade 的 handler，照原樣轉給 `SDL_LogMessage`，見第 10 節）。
 
 ## 7. 工時
 
@@ -113,3 +113,55 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - **T-2 紀錄的形式**：照 Engine 計畫，生產者預先序列化成一行（Engine 不知道 schema；代價是格式化在生產者的執行緒，移動紀錄每筆約 1～2 µs〔推論〕，由 L2 的射擊 P99 量）。另一個做法是 Engine 存固定大小的二進位內容加格式化函式，在寫檔執行緒格式化，介面較複雜。建議照 Engine 計畫。
 - **T-3 日誌在當機時的完整性**：現在 `LogFile` 每行 flush，程序異常結束前寫的行都在檔案中；改成背景寫檔後，佇列中還沒寫出的行會遺失。建議：斷言處理與 `std::set_terminate` 先 `FlushNow()`；被訊號殺掉（SIGKILL、SIGSEGV）時遺失最後一批，接受。另一個做法：錯誤等級的行同步寫。
 - **T-4 審查**：Engine 的公開介面（`TraceSink`、`Log.hpp`）與關閉順序，交 1 位 xhigh 審查 agent 檢查一次（比照 TT-1，高於主對話的檔位，需要你同意）。
+
+## 10. 實作紀錄（2026-10-20，D139 之後）
+
+- Engine：`GYO::Trace`（`engine/trace`）、`engine/base/include/engine/base/Log.hpp`、SdlGpu 改走 facade（等級 Info、文字不變）。Design Invariants 與 Replacement Criteria 寫在 Engine 的 [docs/architecture/trace.md](../../../architecture/trace.md)（第 3 節的草案，英文）。和 Engine 計畫的差異（紀錄只有內容行、沒有批次門檻、加 `FlushNow`、結束行可以不給）記在 Engine 的 PLAN。
+- 產品：
+  - `MovementTrace.hpp`：新增介面 `MovementTraceSink`；記憶體的 `MovementTrace`（測試與 probe 讀回用）實作它；時間戳改在 `TraceMovement` 取（原本在 `MovementTrace::Record`）。
+  - `MovementTraceWriter.hpp`：`MovementTraceLine`（序列化移到生產者的執行緒）、`MovementTraceEndLine`（`dropped`＝佇列滿＋`Finish` 之後才到的事件）；寫檔交給 `TraceSink`，刪除 `std::jthread` 與 20 ms 輪詢。`Good()`＝沒有寫入失敗且沒有遺失。
+  - `LogFile`：時間戳仍在呼叫端取，寫檔交給 `TraceSink`（上限 65536 行）；有丟棄時，檔案最後多一行 `[log] dropped_lines=N`（沒有丟棄時位元組不變）。`FlushOnCrash()`：斷言處理先把失敗寫進日誌並 `FlushNow()`，再交給原本的處理；terminate 處理先 `FlushNow()`。Client 與 Match（有 `--log` 時）都安裝。
+  - Client：`Engine::Base::SetLogHandler` 轉給 `SDL_LogMessage`（`"<category> <text>"`），所以慢 acquire 行在主控台與日誌檔都和改接前相同。
+  - CMake：產品的 domain 函式庫與權威 digest 的 -O0 目標連結 `GYO::Trace`。
+- 測試：`tests/object_fps_pvp/DiagnosticFileTests.cpp`（移動紀錄的 3 筆事件與整個檔案，對照改接前的寫檔器在 master `0fabb52` 產生的位元組；`LogFile` 的時間戳格式、順序、append、`FlushNow`）。
+- 本機：CTest `cpu|shader` 73／73（權威 digest 0 差異）；Engine 突變 5／5、產品突變 3／3（`tt2-movement-line-field`、`tt2-movement-end-uncounted`、`tt2-log-timestamp-space`）；Trace 測試重複 20 次全過、TSan 3 輪乾淨。
+- 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
+
+## 11. L2 事前宣告（第 1 版草稿，D45 檢查前）
+
+### 11.1 要回答的問題與門檻的來源
+
+README 的驗收寫「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」。實作後確認兩件事，所以本宣告不直接用射擊延遲判定：
+
+- 合法射擊的延遲受 probe 幀相對 Match Tick 的相位影響，建置不同時相位會系統性移動，不能跨建置比較（v7 D46⑦，`pv7-checkpoint-l2.md` 第 2 節）。B 與 A 是兩個建置。
+- 改接後多出來的成本在生產者的執行緒上：移動紀錄的格式化（原本在寫檔執行緒）與佇列的 Notify。Match 上，`Resolved`、`Reset`（`PvpMatch.cpp:435`、`:491`）在 step 持有 host 鎖時記錄，`HostAccepted`（`MatchRuntimeHost.cpp:245`）在輸入路徑持鎖時記錄；所以「熱路徑變慢」在 Match 上直接表現為 host 鎖的等待（`host_lock_input_wait`：IPC 送輸入時等 step 放鎖；`host_lock_step_wait`：step 等輸入放鎖），這兩個量在 Match 的統計行裡，和 probe 相位無關。
+- 「1 ms」沿用 README 的增量上限；比較規則沿用 `a1-shot-step` 的 C1、C2：median A − median B ≤ max(range B, 1 ms)。
+
+### 11.2 兩棵樹與項目
+
+- B＝master `0fabb52`（`../GYO-Engine-a1-before` 切到 `0fabb52` 從零建置；pv7、A1 之後）。A＝主 checkout（本批最後一個改程式的 commit；之後只改文件）。兩棵樹的 Match、Gateway、probe、arena 寫進 `artifacts.sha256`；`build/acceptance` 兩棵樹相同，以凍結清單核對。
+- 交錯（奇數輪 B 先、偶數輪 A 先）、閒置閘門、sleeper、受干擾規則沿用 `a1-shot-step`。
+- 項目（每棵樹各 3 輪）：clean-30、clean-60、clean-144、soak-short、quad clean-60、backpressure、rapid-edge-60、rapid-edge-144。所有項目的 Match 都開移動紀錄；action、quad、rapid 的 probe 也寫自己的移動紀錄（`clients-commands.jsonl`）。估 48 項、約 45 分鐘（工具完成後以 `--list-only` 實算）。
+
+### 11.3 每項的停止條件
+
+| 代號 | 條件 |
+|---|---|
+| R1 等 | 沿用 `a1-shot-step` 的 R1、R1s、R3、R4、T1、H1、D（runner 判定、執行檔身分、受干擾）；兩棵樹都判 |
+| T2-1 | 每個移動紀錄檔（Match 的 `match-commands.jsonl`、probe 的 `clients-commands.jsonl`）都以 `trace_end` 結尾，`dropped`＝0，`events`＝檔案中事件行的數目；兩棵樹都判 |
+| T2-2 | A 的移動紀錄可由凍結分析器讀取（runner 的判定本來就讀它；判定失敗就是 R1） |
+
+### 11.4 結束時的判定（只在完整 session 上判）
+
+| 代號 | 指標 | 規則 |
+|---|---|---|
+| T2-3 | Match 的 `host_lock_input_wait` P99（每項把所有統計視窗的 bins 加總後取 P99 的上界） | 每個情境：median A − median B ≤ max(range B, 1 ms) |
+| T2-4 | Match 的 `host_lock_step_wait` P99（同上） | 同 T2-3 |
+| T2-5 | 移動「產生→Actual」P95、P50（`a1-shot-step` 的 C1、C2） | 同 C1、C2 |
+| T2-6 | Match 的 Tick 晚醒 P99（`tick_late` 的 bins 加總） | 只記錄（Waiter 量的是醒來時刻，對 step 的工作量不敏感） |
+| T2-7 | 合法射擊的 Match 端與 Client 端延遲 P95、P99 | 只記錄（D46⑦） |
+
+- 解析度：鎖等待與晚醒的 bins 是 `LateWakeStats` 的固定邊界（250 µs、500 µs、1 ms、2 ms、4 ms…），P99 只能落在這些值上。T2-3、T2-4 的「1 ms」因此等於「P99 最多往上跳一格（在 1 ms 以下的格子之間，或 1 ms→2 ms）」；另外只記錄每個情境 ≥250 µs 的等待比例，作為較細的參考。
+
+不成立時照 AGENTS.md §14.1 停下回報，不重跑、不放寬。
+

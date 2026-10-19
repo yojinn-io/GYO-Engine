@@ -1,6 +1,6 @@
 # 時間、執行緒與 Trace：交接
 
-更新：2026-10-09。**狀態：TT-1 完成**（實作、L1、xhigh 審查與修正、L2（只記錄）；和消費端的第一個使用者同一個 PR #71 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 未開始**。2026-10-08 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-09。**狀態：TT-1 完成**（實作、L1、xhigh 審查與修正、L2（只記錄）；和消費端的第一個使用者同一個 PR #71 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 實作中**（2026-10-20）。2026-10-08 由提出需求的消費端在其規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 D12 匿名。
 
 ## 閱讀入口
@@ -107,4 +107,16 @@
   - 方向規則兩種情境都成立；「P99 ≤1 ms」兩種情境都成立。
 - 證據：`build/target/_build/test/logs/tt1-l2-20261009/`（`meta.txt` 含程式雜湊、`cli.json`、`window.json`、sleeper）。
 - 2026-10-09：消費端的第一個使用者的 PR #71 合併（`660310e`），**TT-1 完成**。L2 的量測程式仍在上述本機分支。
+
+## TT-2 紀錄（記錄器）
+
+- 2026-10-20：開始（消費端 D139；主對話 high，關閉順序與計數局部 xhigh；1 位 xhigh 審查 agent 經使用者同意）。範圍：`GYO::Trace`、Base 的日誌 facade、SdlGpu 的慢 acquire 日誌改走 facade；消費端同一個 PR 把兩個寫出器改接（位元組不變）。
+- 2026-10-20：實作與本機 L1。
+  - `engine/trace`（`GYO::Trace`，只連 `GYO::Threads`）：`TraceSink`（`Open`／`Push`／`FlushNow`／`Close`／`Good`／`Counts`）。`engine/base/include/engine/base/Log.hpp`：`LogLevel`、`SetLogHandler`、`Log`，預設 `std::cerr`。
+  - SdlGpu：慢 acquire 改用 `Base::Log(Info, "SDL_GPU", …)`，文字不變。
+  - 和計畫的差異：見 [PLAN](PLAN.md) TT-2 的「實作時的調整」。
+  - `gyo_trace_tests` 10 個案例（8 個生產者的守恆式、關閉競爭、關閉後拒絕、由 Push 喚醒、`FlushNow`、append、開檔失敗、Linux 上的寫入失敗、handler 的並行替換、預設輸出）；configure 時的依賴檢查；本機重複 20 次全部通過；TSan 3 輪乾淨。
+  - 突變 5／5 killed（`tt2-drop-uncounted`、`tt2-accept-after-close`、`tt2-final-batch-unwritten`、`tt2-no-wake`、`tt2-flush-no-wait`）。`tt2-flush-no-wait` 第一版測試抓不到（寫檔跟得上生產者），改成先推一行 64 MB 讓寫檔執行緒忙著，再推標記行；之後連跑 3 次都 killed。
+  - 消費端：CTest `cpu|shader` 73／73（含權威 digest 0 差異）。
+- 證據：`build/target/_build/test/logs/engine-tt2-20261020/`（`tsan.txt`）。
 

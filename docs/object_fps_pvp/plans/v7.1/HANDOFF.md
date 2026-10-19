@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：pv7-line 已合併（PR #78，`0fabb52`），pv7 生效；after-pv7 的 `tt2-trace` 計畫第 1 版等核准（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `tt2-trace` 實作中（D139；詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[tt2-trace](tt2-trace.md) 計畫第 1 版（第 8 節 T-1～T-4：產品改接的範圍、紀錄的形式、當機時日誌的完整性、xhigh 審查）。
-- **進行中**：after-pv7 的 PR 線（分支 `claude/pvp-v71-after-pv7`，從 master `0fabb52` 開）。draft PR 的 L1 照舊手動觸發。
+- **等你決定**：無（`tt2-trace` 實作中，D139）。
+- **進行中**：`tt2-trace` 實作完成、本機 L1 通過；xhigh 審查與 L2 宣告的 D45 檢查進行中（PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)，draft；L1 照舊手動觸發）。
 - **下一步**：計畫核准後實作 `tt2-trace`（Engine 的 `GYO::Trace`＋產品寫檔改接，位元組不變），再出 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，PR #78 合併（`0fabb52`，四平台 L1 run 39271741788 通過）；`tt2-trace` 計畫第 1 版。
@@ -108,6 +108,7 @@
 | D136 | （2026-10-19）`a1-shot-step` 的冷卻保留上限改成 **K＝min(K_max, cooldownTicks)、K_max＝2 Tick**（射速將來是資料驅動，固定的 K 可能超過某把武器的冷卻），Client 的 S 取 **N**。改寫 `protocol-v7.zh-Hant.md` §6 的 K 條文；演算法與 Design Invariants 記進 `network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」；`pv7-design.md` 的設定表與 v8 README 的多武器候選（權威在 Match、射速以 Tick 存）同步。盲區：沒有量到「退回＋壓著冷卻邊緣連射」，全自動武器上線時重評 K_max | 使用者：「嗯，就這麼定。核准，記得把這個算法紀錄到設計文檔中。」（前文：「但是，我的武器想做成資料驅動，射速是會放在本地參數中的。」） |
 | D137 | （2026-10-19）核准 `a1-shot-step` 的計畫第 2 版（[a1-shot-step.md](a1-shot-step.md)）：權威 digest 的 `combat-magazine/corridor` 預期差異與該筆 golden 重產（舊檔保留）、其餘 34 個情境與 29 個 golden 0 差異為停止條件；`PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`，既有介面擴充）。開始實作 | 使用者：「核准 a1-shot-step 計畫第 2 版：combat-magazine 的預期差異與 golden 重產、PvpMatch 加 CombatRules 參數都同意。開始實作。」 |
 | D138 | （2026-10-19）核准 `a1-shot-step` 的 L2 事前宣告第 3 版（[a1-shot-step.md](a1-shot-step.md) 第 11 節的雜湊：driver `dbd7e999…`、judge `f967e651…`、artifacts `034a16ee…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 a1-shot-step 的 L2 宣告第 3 版（第 11 節的雜湊），現在跑 session。」 |
+| D139 | （2026-10-20）核准 `tt2-trace` 計畫第 1 版（[tt2-trace.md](tt2-trace.md)），第 8 節照建議：T-1 選 (a)（本批改接移動紀錄與 `LogFile`，位元組不變；`match-shots.jsonl`、`match-ingress.jsonl` 留給 `log-contract`）；T-2 照 Engine 計畫（生產者預先序列化）；T-3 由斷言與 terminate 處理先 `FlushNow()`，被訊號殺掉時遺失最後一批；T-4 同意 1 位 xhigh 審查 agent 檢查公開介面與關閉順序。開始實作 | 使用者：「核准 tt2-trace 計畫第 1 版，第 8 節照建議：T-1 選 (a)、T-2 照 Engine 計畫、T-3 由斷言與 terminate 處理先 FlushNow、T-4 同意 1 位 xhigh 審查。開始實作。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -533,6 +534,7 @@
 - 2026-10-19：`pv7-merge` 開始（使用者：「開始 pv7-merge：PR #78 轉 ready，四平台 L1 通過後用 gh pr merge --merge 合併，同步文件。」）。合併前同步文件：`protocol-v7.zh-Hant.md` 標為生效，v4～v6 契約的「現行 wire」註記改成 pv7；README 的 `pv7-merge` 標 ✓。PR 轉 ready 後由四平台 L1 決定合併。
 - 2026-10-20：PR #78 轉 ready 後四平台 L1 通過（run 39271741788，`af29796`；同時被取消的 synchronize run 39271740271 的 CI gate 失敗是取消造成），以 `gh pr merge --merge` 合併（`0fabb52`）。**pv7-line 完成。**
 - 2026-10-20：after-pv7 開始（使用者：「開始 after-pv7：從 master 開新分支，先做 tt2-trace 的計畫，交我核准再實作。」）。分支 `claude/pvp-v71-after-pv7`。`tt2-trace` 計畫第 1 版：[tt2-trace.md](tt2-trace.md)。讀程式時確認：產品有四種寫出器（移動紀錄每 20 ms 輪詢、`LogFile` 在呼叫端每行 flush、射擊與 ingress 紀錄在主執行緒每秒寫）；`MovementTraceWriter::Finish` 有一個不計數的遺失窗口（計畫第 6 節）；估 14 h（README 原估 10 h 沒含產品改接與 L2 工具）。
+- 2026-10-20：`tt2-trace` 實作（D139；細節在 [tt2-trace.md](tt2-trace.md) 第 10 節）。Engine 的 `GYO::Trace`（`TraceSink`）與 `Log.hpp`；產品的移動紀錄與 `LogFile` 改接，位元組不變（對照 `0fabb52` 的寫檔器產生的 golden）。本機：CTest `cpu|shader` 73／73（權威 digest 0 差異）、Engine 突變 5／5、產品突變 3／3、TSan 乾淨。實作時更正計畫第 6 節：Client 原本就把 SDL 日誌轉進日誌檔，所以 Client 裝一個 facade handler 轉給 SDL，慢 acquire 行的位元組不變。xhigh 審查（T-4）與 L2 宣告第 1 版草稿的 D45 檢查進行中；L2 的 B 樹＝`../GYO-Engine-a1-before` 切到 `0fabb52` 重建。
 
 ## 未結事項
 

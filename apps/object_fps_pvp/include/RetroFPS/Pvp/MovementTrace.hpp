@@ -45,11 +45,22 @@ inline std::int64_t MovementTraceNowNs() noexcept {
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-class MovementTrace final {
+// Where TraceMovement sends events: the in-memory buffer below (tests and
+// probes read it back) or the file of MovementTraceWriter.hpp.
+class MovementTraceSink {
+public:
+    MovementTraceSink() = default;
+    MovementTraceSink(const MovementTraceSink&) = delete;
+    MovementTraceSink& operator=(const MovementTraceSink&) = delete;
+    virtual ~MovementTraceSink() = default;
+    // Any thread; timeNs is already set.
+    virtual void Record(const MovementTraceEvent& event) = 0;
+};
+
+class MovementTrace final : public MovementTraceSink {
 public:
     static constexpr std::size_t Capacity = 8192;
-    void Record(MovementTraceEvent event) {
-        if (!event.timeNs) event.timeNs = MovementTraceNowNs();
+    void Record(const MovementTraceEvent& event) override {
         std::lock_guard lock(mutex_);
         if (events_.size() == Capacity) { ++dropped_; return; }
         events_.push_back(event);
@@ -74,21 +85,23 @@ private:
 // start; guarded publication also makes shutdown/diagnostic probes safe.
 // A mutex is used instead of std::atomic<std::shared_ptr>, which Apple libc++ lacks.
 inline std::mutex movementTraceSinkMutex;
-inline std::shared_ptr<MovementTrace> movementTraceSink;
-inline void SetMovementTrace(std::shared_ptr<MovementTrace> trace) noexcept {
-    std::shared_ptr<MovementTrace> previous;
+inline std::shared_ptr<MovementTraceSink> movementTraceSink;
+inline void SetMovementTrace(std::shared_ptr<MovementTraceSink> trace) noexcept {
+    std::shared_ptr<MovementTraceSink> previous;
     {
         std::lock_guard lock(movementTraceSinkMutex);
         previous = std::exchange(movementTraceSink, std::move(trace));
     }
 }
 inline void TraceMovement(MovementTraceEvent event) {
-    std::shared_ptr<MovementTrace> trace;
+    std::shared_ptr<MovementTraceSink> trace;
     {
         std::lock_guard lock(movementTraceSinkMutex);
         trace = movementTraceSink;
     }
-    if (trace) trace->Record(event);
+    if (!trace) return;
+    if (!event.timeNs) event.timeNs = MovementTraceNowNs();
+    trace->Record(event);
 }
 inline constexpr std::string_view TraceKindName(MovementTraceKind kind) noexcept {
     switch (kind) {

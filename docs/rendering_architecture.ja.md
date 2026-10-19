@@ -155,7 +155,7 @@ Overlay / HUD → Present
 モデルと材質は共有でき、動的頂点と mesh handle は実例ごとに管理します。
 製品がこれらの機能をどう利用するかは、各製品のアーキテクチャとデータ契約の文書に記録します。
 
-最小化中の `AcquireFrame` は frame なしを返せます。取得できた token は `SubmitFrame` または `AbandonFrame` で一度だけ消費します。送信時の CPU データは呼び出し中に消費し、GPU がまだ使うリソースの保護はバックエンドが担当します。画面サイズ変更時は render target を再生成し、終了時は Renderer の device リソースを解放してから device を破棄します。SDL_GPU バックエンドの swapchain 取得は引き続きブロッキングです。取得に 50 ms 以上かかった場合は、fence 待ちと drawable 待ちの時間を分けた診断ログ（`SDL_GPU slow swapchain acquire`）を 1 行出力します。
+最小化中の `AcquireFrame` は frame なしを返せます。取得できた token は `SubmitFrame` または `AbandonFrame` で一度だけ消費します。送信時の CPU データは呼び出し中に消費し、GPU がまだ使うリソースの保護はバックエンドが担当します。画面サイズ変更時は render target を再生成し、終了時は Renderer の device リソースを解放してから device を破棄します。SDL_GPU バックエンドの swapchain 取得は引き続きブロッキングです。取得に 50 ms 以上かかった場合は、fence 待ちと drawable 待ちの時間を分けた診断ログを Engine のログ facade（`Engine::Base::Log`、カテゴリ `SDL_GPU`、本文 `slow swapchain acquire …`）で 1 行出力します。
 
 アニメーションは固定サイズの頂点内容を更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は WorldOverlay と武器を含みますが、exposure／gamma／画面 Overlay／HUD より前のシーンであり、最終スクリーンショットではありません。
 

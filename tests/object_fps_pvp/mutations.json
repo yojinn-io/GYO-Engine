@@ -4656,6 +4656,36 @@
       "replace": "std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {\n    if (!observation_.active) return std::nullopt;",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( client\\.ShotGate\\(\\) \\)"
+    },
+    {
+      "id": "tt2-movement-line-field",
+      "batch": "v71-tt2-trace",
+      "what": "The movement trace line loses its pending field",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "         << \",\\\"pending\\\":\" << e.pending\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( MovementTraceLine\\(events\\[k\\]\\) == GoldenLines\\[k\\] \\)"
+    },
+    {
+      "id": "tt2-movement-end-uncounted",
+      "batch": "v71-tt2-trace",
+      "what": "Finish ends the movement trace without the trace_end line",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "        static_cast<void>(file_->sink.Close(MovementTraceEndLine));",
+      "replace": "        static_cast<void>(file_->sink.Close());",
+      "check": "cpu",
+      "expect": "CHECK\\( ReadFile\\(path\\) == expected \\)"
+    },
+    {
+      "id": "tt2-log-timestamp-space",
+      "batch": "v71-tt2-trace",
+      "what": "A log line loses the space after its timestamp",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "    text.push_back(' ');\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "REQUIRE\\( std::regex_match\\(lines\\[k \\+ 1\\], match, stamped\\) \\)"
     }
   ]
 }

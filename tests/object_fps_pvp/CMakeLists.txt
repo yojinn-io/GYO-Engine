@@ -5,7 +5,8 @@ set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
-    NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp)
+    NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
+    DiagnosticFileTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -257,7 +258,7 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads nlohmann_json::nlohmann_json)
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>
     $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
