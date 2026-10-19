@@ -38,8 +38,8 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── cause-records ✓               「high｜E2、動作拒收回覆、Leave 原因」
 │   ├── hitbox-fields ✓               「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
 │   ├── pv7-checkpoint ✓              「medium（分析 high）｜A1 前的整體回歸」
-│   ├── a1-shot-step ▶                「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
-│   └── pv7-merge                     「low｜四平台 L1 後合併，同步文件」
+│   ├── a1-shot-step ✓                「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
+│   └── pv7-merge ▶                   「low｜四平台 L1 後合併，同步文件」
 ├── after-pv7
 │   ├── tt2-trace                     「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」
 │   ├── log-contract ⏸                「ultracode（先問）＋high｜日誌 Data Contract（含原第 10 批、D58）」
