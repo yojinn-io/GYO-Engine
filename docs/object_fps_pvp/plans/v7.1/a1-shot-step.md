@@ -1,6 +1,6 @@
-# a1-shot-step：射擊照命令步判定（計畫與事前宣告，第 2 版草稿）
+# a1-shot-step：射擊照命令步判定（計畫與事前宣告，第 3 版）
 
-- 狀態：**草稿，等使用者核准**。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 2、SHOULD-FIX 7、NOTE 7，第 2 版逐項修正（對應表在第 9 節）。核准前不改產品程式。
+- 狀態：計畫與第 3 節的宣告已核准（D137），實作完成（第 10 節）。**第 6 節（L2）第 3 版等核准**：工具、開發跑次與乾跑在第 11 節；核准後不放寬（AGENTS.md §14.1）。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 2、SHOULD-FIX 7、NOTE 7，第 2 版逐項修正（對應表在第 9 節）。
 - 依據：`protocol-v7.zh-Hant.md` §6（A1 的判定語意、Client 規則）、`pv7-design.md` D-3 與「各批的測試清單」的 `a1-shot-step` 列、`network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」、HANDOFF D136（K＝min(K_max＝2, cooldownTicks)、S＝N）、`pv7-checkpoint` 的影子資料（`pv7-checkpoint-l2.md` 第 6 節、HANDOFF 2026-10-19）。
 - 檔位：high；判定的到期、保留與順序（第 2 節 `a1-match`）局部 xhigh。估 20 h，超過約 30 h 停下回報。
 - 數字沒有標「實測」的，是推導或推論。「模擬」指 D45 檢查者用 A1 規則重放 `pv7-checkpoint` 的 `match-shots.jsonl`（近似：假設冷卻以外的檢查結果不變、沿用 B 的送出時刻；`sim_a1.py` 在本 session 的 scratchpad）。
@@ -109,11 +109,12 @@
 
 凍結工具清單（`frozen-pv7-cp.sha256`）預期**不需要重新凍結**；若開發跑次顯示需要，停下回報再決定。
 
-## 6. L2 事前宣告（草稿；工具與乾跑之後出第 3 版）
+## 6. L2 事前宣告（第 3 版，等核准）
 
-- 兩棵樹：B＝`pv7-checkpoint` 的 A 程式（`7a5e0ea`）。主 checkout 的 `build/target` 會在建 A' 時被覆蓋，所以 B 在另一個 worktree（`../GYO-Engine-a1-before`，`7a5e0ea`）重建並在工具階段宣告新的 artifacts 雜湊，判定工具同 `pv7-checkpoint`（D45 S7）。A'＝`a1-shot-step` 的最後一個程式 commit（主 checkout，工具階段重建、寫 artifacts）。兩棵樹的 probe 各自建置；A' 的 probe 走序號閘門。
+- 兩棵樹（都是 pv7）：B＝`../GYO-Engine-a1-before` 的 `7a5e0ea`（`pv7-checkpoint` 的 A 程式；從零建置，Gateway 建置資訊 `7a5e0ea`、modified＝false，D45 S7）；A'＝主 checkout 的 `43a8617`（之後只能改文件；Gateway 建置資訊 `43a8617`、false）。兩棵樹的 Match、Gateway、Client、6 個 probe 與 arena 寫在一份 `artifacts.sha256`（82 行；兩棵樹的 31 個資產檔逐檔相同）。兩棵樹的 `build/acceptance` 是同一份檔案，都以 `frozen-pv7-cp.sha256`（`f036b2af…`）核對。
 - 交錯、閒置門檻、sleeper、受干擾規則沿用 `pv7-checkpoint-l2.md`（「同一情境同一樹 2 次或累計 6 次」）。
-- 判定工具：`pv7-checkpoint` 的 `judge_cp.py` 修掉 `schedule()` 的標籤錯誤（D135）後，改成兩棵 pv7 樹的版本，乾跑重做。
+- 判定工具：`pv7-checkpoint` 的 `judge_cp.py` 修掉 `schedule()` 的標籤錯誤（D135）後改成兩棵 pv7 樹的版本（`judge_a1.py`）。兩棵樹都用 pv7 的檢查（R4 的結果間隔、K1a、R8、T1、H1、執行檔身分）；凍結判定的 F 兩棵樹都停（沒有「B 基準的已知限制」）；timing 兩棵樹都用 v7 HUD 規則（`timing_v7_a.py`）。延遲注入兩棵樹都跑。
+- 每棵樹 119 項，共 238 項；時間約 2.5 小時（`run_a1.py --list-only`：152.0 分加閒置門檻）。
 
 | 部分 | 項目 | 每棵樹的次數 |
 |---|---|---|
@@ -125,12 +126,12 @@
 | G | 7 個 GUI 項目（同 `pv7-checkpoint`） | 各 1 |
 | G | 連點 6 格（interval12、edge × 30／60／144） | 各 3 |
 
-**每項的停止條件**：`pv7-checkpoint` 的 R1～R8、K1a、T1、H1、D 照舊（R8 判的 11 個情境都在清單內）；H2、H3 改判影子紀錄 v2 的實際判定（下表 A1-2）。另加：
+**每項的停止條件**：`pv7-checkpoint` 的 R1、R1s、R3、R3f、R4、R8、K1a、T1、H1、D 照舊，兩棵樹都判（R8 判的 11 個情境都在清單內）；R2（clean 與連點的權威 Cooldown＝0）只判 B，A' 改判 A1-1；B 的影子紀錄（版本 1）照 `pv7-checkpoint` 判 H2、H3，A' 的紀錄（版本 2）判 A1-2；紀錄版本不符是工具無效。另加：
 
 | 代號 | 條件 | 來源 |
 |---|---|---|
-| A1-1 | A' 的 clean 項目（clean-30／60／144、長測短模式、quad clean-60、連點 6 格、timing、quad-gui-bots）：權威 Cooldown＝0，下列有解釋的除外、只記錄：(i) 同玩家前一發 late 或 epoch 且 d＞K；(ii) A 到 T(S) 之間 epoch 重設；(iii) 冷卻注入（`cooldown_injection_action_id`，action short 與 bots2-action60）。其他的停 | 實測：`pv7-checkpoint` 的這些項目 late＋epoch＝0（注入除外）；契約本身允許 d＞K 的 Cooldown（`network-architecture.zh-Hant.md` §7） |
-| A1-2 | A' 的影子紀錄 v2：D∈[A, A＋W]，on_time 的 D＝T(S)（以 `match-commands.jsonl` 的 resolved 事件對接，鍵、窗口與 H3 的解釋照 `pv7-checkpoint`）；J∈[D, D＋K] 或等待同玩家較小 id；J−A≤W＋K | `protocol-v7.zh-Hant.md` §6 的上界 |
+| A1-1 | A' 的 clean 項目（clean-30／60／144、長測短模式、quad clean-60、連點 6 格、timing 兩項、quad-gui-bots；action short 與 bots2-action60 的冷卻注入不在清單）：每筆 `rejection`＝cooldown 的射擊紀錄都要有解釋，否則停。解釋（機械定義，依 J 排序的同一玩家）：(i) 前一發射擊不是 on_time 路徑；(ii) 這一發是 on_time 但 D 不等於 A 時預計的 step_tick（A 到 T(S) 之間 epoch 重設）。有解釋的記為 A1-3 | 實測：`pv7-checkpoint` 的這些項目 late＋epoch＝0（注入除外）；契約本身允許 d＞K 的 Cooldown（`network-architecture.zh-Hant.md` §7） |
+| A1-2 | A' 的紀錄（版本 2，`shadow_a1.analyze_v2`）：D∈[A, A＋W]；on_time 的 D 是 T(S)：同一 session（tick 回落切分，同 H2）內 (player, E, life, S) 的 resolved 事件的 `authority_tick` 等於 D；不等時要有解釋（同一玩家在 [A, D] 內有 epoch 大於 E 的 reset、同鍵的 `lifecycle_cancelled`、或 trace 在 D 之前結束），否則停；J∈[D, D＋K]，或 J＞D＋K 時同一玩家有較小 id 在 J 判定；J−A≤W＋K | `protocol-v7.zh-Hant.md` §6 的上界 |
 | A1-3 | A' 的保留次數、「gap＞K 的 Cooldown」次數只記錄 | D136 |
 
 **結束時的判定**（只在完整 session 上判）：
@@ -140,7 +141,7 @@
 | C1、C2 | 移動「產生→Actual」P95、P50 | 照 `pv7-checkpoint`：median A' − median B ≤ max(range B, 1 ms)（A1 不改移動） |
 | C3 | 故障情境 Actual 比例 | 照 `pv7-checkpoint` |
 | C6 | 每案第一筆裁決的拒絕原因分布 | 照 `pv7-checkpoint`（A' 的每跑次分布等於 B 某一跑次），允許的差異事前列出、只記錄：保留後改判接受（Cooldown 少、接受多）、A1-1 (i)～(iii) 的 Cooldown；預測來源：模擬的故障情境 A1 Cooldown 0、保留只有 upstream-1000ms 3 次（gap 2） |
-| C9 | clean 的退回率（late＋epoch）／全部（不含冷卻注入的 id） | A'＝0（`pv7-checkpoint` 的 A 實測 0） |
+| C9 | A' 的 clean 項目（A1-1 的清單）的退回率（late＋epoch）／全部紀錄 | 每個有紀錄的 clean 情境都是 0（`pv7-checkpoint` 的 A 實測 0）；沒有任何 clean 紀錄時不成立 |
 | C10 | 每發的 J−A（影子紀錄 v2）；合法射擊 Match 端延遲 P95 | 只記錄；預測 clean 的 J−A 多為 1 Tick（`pv7-checkpoint`：clean-60、144 的 S−L(A) 全為 1，clean-30 有 88% 為 1）。合法射擊 P95 不能跨建置比較（`pv7-checkpoint-l2.md` 第 2 節），只列兩棵樹的值（D45 N1） |
 | C11 | 連點的本機擋下數、送出數 | 只記錄（FireGate 退役後的手感資料） |
 
@@ -193,3 +194,39 @@ L3：使用者實際連點的手感（30／60／144 FPS），和 v7 的 L3-3 同
 | N5 `CombatHostTests.cpp:343` 會空洞地通過 | 改寫並列入變更說明 |
 | N6 新情境在兩樹比較裡是 missing | 寫明比較範圍是 35 個共同情境 |
 | N7 不變式只證明 d≤K | 補 d＝K＋1 的邊界案例 |
+
+## 11. 工具、開發跑次與乾跑（第 3 版）
+
+工具在 `build/target/_build/test/logs/pvp-v71-a1-l2-prep-20261019/`（不進版本庫）。session 的命令（核准後照這行跑）：
+
+```
+caffeinate -dims python3 -I -B run_a1.py --output ../pvp-v71-a1-l2-<日期> \
+  --driver-sha dbd7e999123495c062e38ad6e659a0354bc25505003f3a468781068f42b9a73a \
+  --judge-sha f967e6513450c82e6564c6caf144158f1ab438f1e8081f316475f34a1303e925 \
+  --artifacts-sha 034a16ee5f22c86de30a862e181fc8b42bebe29ca9d61f30fcf3f8812671651e
+```
+
+| 檔案 | sha256 | 內容 |
+|---|---|---|
+| `run_a1.py` | `dbd7e999…` | driver（`pv7-checkpoint` 的 `run_cp.py` 改兩棵 pv7 樹） |
+| `judge_a1.py` | `f967e651…` | 排程（238 項）、逐項判定（A1-1 在內）、結束判定（C9 在內） |
+| `shadow_a1.py` | `be6af78f…` | 版本 1 的 H2、H3（附版本檢查）與版本 2 的 A1-2（`judge_a1.py` 釘住） |
+| `timing_v7_a.py` | `f48d3783…` | 同 `pv7-checkpoint`（兩棵樹的驗收模組是同一份） |
+| `artifacts.sha256` | `034a16ee…` | 兩棵樹的程式與資產 |
+| `commands.txt` | `2326f5ac…` | 90 種項目的完整命令 |
+| `prep-files.sha256` | `7a6f27fb…` | 以上與 `make_fixtures.py`、`dryrun.py`、`sleeper.py`、`dryrun-stdout.json` |
+
+匯入與 `pv7-checkpoint` 相同（`judge_16b.py`、`judge_16.py`、`judge_c2.py`、edge-rate-limit 的 `judge_l2.py`、`sleeper.py`，各自核對雜湊）。
+
+**開發跑次**（只看分類、停止、旗標，不看第 6 節的指標）：A' 45 種項目各 1 次（25 案、背壓、網路兩種、長測短模式、quad 5 輪、延遲注入兩個 T、G 7 項、連點 6 格），B 5 種（clean-60、延遲注入 2.0、quad、連點 edge-60、timing）。全部分類 P（延遲注入為 R），沒有停止；只有 `duplicate-reorder-conflict` 的 conflict 拒收旗標（情境設計）。A' 的 clean-60：版本 2 的紀錄 43 筆，on_time 41 筆的 D 全部等於 resolved 事件的 Tick。
+
+**乾跑**（`dryrun.py`，`dryrun-stdout.json`）：
+
+| 部分 | 列數 | 結果 |
+|---|---|---|
+| 逐項：開發跑次 50、B 的夾具 30（`pv7-checkpoint` 的同一批，改成 B 樹的項目）、A' 的夾具 9（A1-2：D 超出範圍、on_time 的 D 不是 S 的 Tick、有重設解釋、J 超過 D＋K、J 等較小 id；A1-1：沒有解釋、前一發 late 的解釋；版本 1 的紀錄放在 A'；只改 `actions.jsonl` 的 Cooldown 不影響 A'）、交叉 2（B 的紀錄判成 A' → 版本不符；A' 的紀錄判成 B → 版本不符）、受干擾一次、執行檔身分 | 93 | 全部如預期 |
+| 突變：H2 不分 session、T1 忽略 dropped、H1 不判、A1-2 沒有 D 的範圍、A1-2 用任意 Tick 對接、A1-2 的 J 不認較小 id、A1-2 沒有 J 的範圍、A1-1 一律有解釋、B 的 R2 不判、A' 用版本 1 判、K1a 不判、clean 不判 R3 | 12 | 全部殺死 |
+| driver：每項命令只用自己那棵樹的路徑、延遲注入／連點／quad 的參數、拒絕重寫 artifacts、錯的 driver 字面值預檢不過、正確的預檢通過、開發跑次拒絕已存在的輸出 | 8 | 全部如預期 |
+| 模擬 session（連到兩棵樹的開發跑次）：完整、停下、不完整、順序錯、受干擾 2 次、累計 6 次、B 的 R3f 第 3 項 | 7 | 全部如預期 |
+| 第 5 節（合成數字）：C1、C3、C6 同 `pv7-checkpoint`；C9 的成立、clean 有 late 時不成立、沒有 clean 紀錄時不成立 | 14 | 全部如預期 |
+
