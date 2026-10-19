@@ -2,7 +2,7 @@
 
 更新：2026-10-14：輸入送出與相位追蹤的修訂註記（v7 第 09a／09b 批，D68）。2026-10-11：Runtime 輸入流的修訂（v7 第 08c 批，D53）。2026-10-08（升格，第 14b 批，D26）。2026-10-07：房間容量 4 人的修訂（第 16 批，D22／D23）。Owner：`object_fps_pvp`。
 本文件的版本條款（§1 的版本、拒絕 v1～v5、標頭與 envelope 的值）中，vN 指網路協議版本 pvN；計畫、交接、升格與玩法語意（例如 v5 測試名稱）中的 vN 指遊戲版本（[v6 交接](plans/v6/HANDOFF.md) D20）。程式名稱 `client_v6`／`runtime_v6`／`clientv6`／`runtimev6` 指 pv6。
-**wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併（PR #57，`5da939f`）起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值。現行 wire 是 pv6（v7 也停在 pv6，pv7 在 v7.1）。
+**wire 條款由 [第 09 批](plans/v6/09-protocol-v6.md) 定稿。** 第 09 批合併（PR #57，`5da939f`）起，Client、Gateway、Match 共同使用 6，拒絕 v1～v5 與其他值。v7 也停在 pv6。後續：v7.1 的 `pv7-merge`（PR #78）起，現行 wire 是 [pv7](protocol-v7.zh-Hant.md)；pv7 沒有改寫的本文件條款仍然適用。
 第 09 批是 v6 唯一的 wire 變更（D11①），權威結果不變。權威判定的唯一變更在 [第 10 批](plans/v6/10-collision-authority.md)，不改 wire。
 §4、§6 中屬於第 10～13 批的項目原標「待定，由第 NN 批決定」，已依各批的結果補上。
 v6 於 2026-10-08 第 14b 批（縮減範圍，D26）升格為穩定基線，見 [STABLE_BASELINE](plans/v6/STABLE_BASELINE.md)。v5 契約中沒有在此改寫的條款，v6 原樣沿用；v5 的文件與證據保留，不被覆寫。進度見 [v6 計畫](plans/v6/README.md)。

@@ -1,7 +1,7 @@
 # PvP Protocol v7：檢測、無狀態邊緣、丟棄回報、射擊步序與 hitbox 的契約支持
 
-更新：2026-10-16（定稿，D96；§1 兩處條文依 D99 修改）；初稿 2026-10-15。**狀態：定稿，尚未生效。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94～D96；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定，§2a 已做 xhigh 對抗式檢查。定稿之後，任何 wire 的新增、刪除、改號、改型別或改語意，都要先徵求使用者同意。
-本文件的 vN 指網路協議版本 pvN。現行 wire 仍是 pv6（[protocol-v6](protocol-v6.zh-Hant.md)）；本契約在 v7.1 的 pv7-line 分批實作，`pv7-merge` 時一次生效。
+更新：2026-10-16（定稿，D96；§1 兩處條文依 D99 修改）；初稿 2026-10-15。**狀態：生效（v7.1 的 `pv7-merge`，PR #78 合併起）。** 由 v7.1 的 `pv7-design` 產出（[v7.1 交接](plans/v7.1/HANDOFF.md) D92、D94～D96；設計紀錄見 [pv7-design](plans/v7.1/pv7-design.md)，Gateway 方向見 [gateway-direction](plans/v7.1/gateway-direction.md)）。D-1～D-15 都已決定，§2a 已做 xhigh 對抗式檢查。定稿之後，任何 wire 的新增、刪除、改號、改型別或改語意，都要先徵求使用者同意。
+本文件的 vN 指網路協議版本 pvN。現行 wire 是 pv7：本契約在 v7.1 的 pv7-line 分批實作，`pv7-merge`（PR #78）合併時一次生效，取代 [protocol-v6](protocol-v6.zh-Hant.md)。
 pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標明原出處。程式行號以 `95bac31` 為準。
 
 ## 0. 原則

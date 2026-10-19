@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：`a1-shot-step` 完成，等 `pv7-merge` 的合併決定（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：pv7-line 完成，PR #78 合併到 master（`pv7-merge`），pv7 生效；下一批是 after-pv7 的 `tt2-trace`（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`pv7-merge`——PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78) 轉成 ready、四平台 L1 通過後以 `gh pr merge --merge` 合併到 master。
-- **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：`pv7-merge`（四平台 L1 後合併，同步 HANDOFF、README）。PR #78 的 Auto-fix 已重新打開。
+- **等你決定**：after-pv7 的開工（`tt2-trace` 起，新的 PR 線）。
+- **進行中**：無。PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（pv7-line）轉成 ready，四平台 L1 通過後以 `gh pr merge --merge` 合併（`pv7-merge`）。
+- **下一步**：after-pv7 的 `tt2-trace`（Engine Trace，日誌契約的前提），開新的 PR 線。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 的 L3 通過（使用者：沒有黏滯感、連點比較平均），結案；等 `pv7-merge` 的合併決定。
+- **最後更新**：2026-10-19，`pv7-merge`：pv7-line 合併到 master，protocol-v7 生效（v4～v6 的「現行 wire」註記同步）。
 
 ## 閱讀入口
 
@@ -530,6 +530,7 @@
   - L2 工具（`build/target/_build/test/logs/pvp-v71-a1-l2-prep-20261019/`）：`pv7-checkpoint` 的工具改成兩棵 pv7 樹（B＝`../GYO-Engine-a1-before` 的 `7a5e0ea`、A'＝主 checkout 的 `43a8617`），修掉 D135 的標籤錯誤；版本 2 紀錄的 A1-2 改用判定 Tick 對接；A' 的 clean Cooldown 改判 A1-1（有解釋的只記錄）。開發跑次 A' 45 種、B 5 種全部 P、0 停止。乾跑：逐項 93、突變 12（全殺）、driver 8、模擬 session 7、第 5 節合成 14，全部如預期（第一次乾跑的 4 個失敗都是工具或夾具：合成紀錄放在檔尾被讀成新 session、A1-1 讀到版本 1 紀錄時崩潰、預檢訊息的舊檔名；已修）。宣告第 3 版：[a1-shot-step.md](a1-shot-step.md) 第 6、11 節。
   - L2 session（D138；`build/target/_build/test/logs/pvp-v71-a1-l2-20261019/`，145.4 分）：238／238、0 停止、0 受干擾，`passed`＝true。C1／C2 的 A'−B 最大 +0.213／+0.149 ms；C3、C9 成立；A' 的 clean 項目權威 Cooldown 0、保留 0；保留只在 upstream-1000ms 3 次（和 D45 的模擬預測相同）。合法射擊 P95（只記錄）：Match 端約 +17 ms（1 Tick），Client 端 +14～33 ms。C6 旗標 2 個（Expired 少 1、接受多 1）。細節在 [a1-shot-step.md](a1-shot-step.md) 第 12 節。
   - L3（[a1-shot-step.md](a1-shot-step.md) 第 13 節；`build/target/_build/test/logs/pvp-v71-a1-l3-20261019-233447/`）：兩個產品 Client＋2 個 bot 的 4 人房；兩位使用者 113 發全部準時、J−A＝1、保留 0、權威 Cooldown 0，Client 本機擋下 0。使用者：「比之前好了好多，沒有那種黏滯感了。而且連點都比較平均」。`a1-shot-step` 結案。
+- 2026-10-19：`pv7-merge` 開始（使用者：「開始 pv7-merge：PR #78 轉 ready，四平台 L1 通過後用 gh pr merge --merge 合併，同步文件。」）。合併前同步文件：`protocol-v7.zh-Hant.md` 標為生效，v4～v6 契約的「現行 wire」註記改成 pv7；README 的 `pv7-merge` 標 ✓。PR 轉 ready 後由四平台 L1 決定合併。
 
 ## 未結事項
 
