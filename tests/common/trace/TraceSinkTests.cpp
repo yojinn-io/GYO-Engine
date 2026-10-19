@@ -12,6 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -27,6 +28,14 @@ std::filesystem::path TempPath(const std::string& name) {
     std::filesystem::remove(path);
     return path;
 }
+
+// The sink writes in text mode, like the writers it replaced: a newline is
+// "\r\n" on Windows.
+#if defined(_WIN32)
+constexpr std::string_view Newline = "\r\n";
+#else
+constexpr std::string_view Newline = "\n";
+#endif
 
 std::vector<std::string> ReadLines(const std::filesystem::path& path) {
     std::ifstream input(path);
@@ -147,7 +156,7 @@ TEST_CASE("Trace Close writes the lines still waiting behind a busy writer befor
     for (int i = 0; i < 5; ++i) REQUIRE(sink.Push("waiting " + std::to_string(i)));
     const auto counts = sink.Close(EndLine);
     CHECK(counts.written == 7);
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path);
     std::string line;
     std::vector<std::string> tail;
     while (std::getline(input, line)) if (line.size() < 64) tail.push_back(line);
@@ -210,12 +219,13 @@ TEST_CASE("Trace FlushNow returns with every earlier line in the file") {
     REQUIRE(sink.Push("marker"));
     CHECK(sink.FlushNow(60s));
     const auto size = std::filesystem::file_size(path);
-    CHECK(size == busy.size() + 1 + 7);
+    const std::string marker = "marker" + std::string(Newline);
+    CHECK(size == busy.size() + Newline.size() + marker.size());
     std::ifstream input(path, std::ios::binary);
-    input.seekg(-7, std::ios::end);
-    std::string tail(7, '\0');
-    input.read(tail.data(), 7);
-    CHECK(tail == "marker\n");
+    input.seekg(-static_cast<std::streamoff>(marker.size()), std::ios::end);
+    std::string tail(marker.size(), '\0');
+    input.read(tail.data(), static_cast<std::streamsize>(tail.size()));
+    CHECK(tail == marker);
     input.close();
     static_cast<void>(sink.Close());
     std::filesystem::remove(path);

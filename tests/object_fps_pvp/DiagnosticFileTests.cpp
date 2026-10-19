@@ -27,8 +27,10 @@ std::filesystem::path DiagnosticPath(const std::string& name) {
     return path;
 }
 
+// Text mode, as the writers write: the file has "\r\n" on Windows, before
+// and after the move onto the trace sink.
 std::string ReadFile(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 

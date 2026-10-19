@@ -124,7 +124,7 @@
       "replace": "    impl_->writer->Notify();\n    return true;",
       "target": "gyo_trace_tests",
       "cases": "*FlushNow returns*",
-      "expect": "CHECK\\( size == busy.size\\(\\) \\+ 1 \\+ 7 \\) is NOT correct"
+      "expect": "CHECK\\( size == busy.size\\(\\) \\+ Newline.size\\(\\) \\+ marker.size\\(\\) \\) is NOT correct"
     },
     {
       "id": "tt2-timer-wake",
