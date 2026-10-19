@@ -128,41 +128,83 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
 - xhigh 審查（T-4，1 位）：沒有 MUST-FIX；SHOULD 6 項、NIT 6 項，處理與未處理的項目記在 Engine 的 [TT HANDOFF](../../../architecture/plans/time-threads-trace/HANDOFF.md)「TT-2 紀錄」。和產品有關的處理：測試的 UB（被 Tee 的 stream 宣告順序）；`LogFile` 每行 flush（`flushEachLine`，多個 Client 同時啟動、寫到同名日誌檔時不切開一行，和舊版相同）；移動紀錄改用 `std::string`＋`%.17g` 組行（不在生產者上建 stream，MSVC 會取全域鎖）；當機路徑、丟棄行、`Finish` 之後才到的事件補測試。修正後產品突變 7／7（新增 `tt2-log-crash-no-flush`、`tt2-log-handler-not-restored`、`tt2-log-drops-unreported`、`tt2-movement-late-uncounted`）、Engine 突變 6／6（新增 `tt2-timer-wake`）、CTest `cpu|shader` 73／73。
 
-## 11. L2 事前宣告（第 1 版草稿，D45 檢查前）
+## 11. L2 事前宣告（第 2 版，等你決定 11.7）
+
+第 1 版草稿經 D45 的門檻來源對抗式檢查（1 位 xhigh，2026-10-20）：MUST-FIX 5、SHOULD-FIX 4；對應見第 12 節。本版只改宣告內容；工具、開發跑次與乾跑在 11.6 決定之後做，雜湊在第 3 版寫入。
 
 ### 11.1 要回答的問題與門檻的來源
 
-README 的驗收寫「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」。實作後確認兩件事，所以本宣告不直接用射擊延遲判定：
+README 的驗收「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」不能照字面量：
 
-- 合法射擊的延遲受 probe 幀相對 Match Tick 的相位影響，建置不同時相位會系統性移動，不能跨建置比較（v7 D46⑦，`pv7-checkpoint-l2.md` 第 2 節）。B 與 A 是兩個建置。
-- 改接後多出來的成本在生產者的執行緒上：移動紀錄的格式化（原本在寫檔執行緒）與佇列的 Notify。Match 上，`Resolved`、`Reset`（`PvpMatch.cpp:435`、`:491`）在 step 持有 host 鎖時記錄，`HostAccepted`（`MatchRuntimeHost.cpp:245`）在輸入路徑持鎖時記錄；所以「熱路徑變慢」在 Match 上直接表現為 host 鎖的等待（`host_lock_input_wait`：IPC 送輸入時等 step 放鎖；`host_lock_step_wait`：step 等輸入放鎖），這兩個量在 Match 的統計行裡，和 probe 相位無關。
-- 「1 ms」沿用 README 的增量上限；比較規則沿用 `a1-shot-step` 的 C1、C2：median A − median B ≤ max(range B, 1 ms)。
+- 射擊延遲受 probe 幀相對 Match Tick 的相位影響，建置不同就會系統性移動，不能跨建置比較（v7 D46⑦：`plans/v7/HANDOFF.md:91`、`:441`；`pv7-checkpoint-l2.md:23`；`plans/v7/STABLE_BASELINE.md:199`）。B 與 A 是兩個建置。
+- 這次多出來的成本在生產者執行緒上（每筆事件的組行＋佇列＋佇列由空變非空時的一次 Notify）。Match 上，在 host 鎖內記錄的有 Reset（`PvpMatch.cpp:435`）、Resolved（`:491`）、HostAccepted（`MatchRuntimeHost.cpp:245`）、LifecycleCancelled（`:411`）、SnapshotProduced（`:462`）、RuntimeGap（`:492`）。
+- Match 統計行的 `host_lock_*_wait` 太粗：A1 session（本批同樣的 8 個情境、兩棵樹共 44 項）的 P99 全部落在第一格（250 µs），≥250 µs 的等待 0 筆；每次 step 多持鎖數十 µs 時，輸入撞上的機率約 0.24%，P99 不會動。它只能當「≥1% 的鎖等待 ≥1 ms」的粗閘門。
+
+所以本版把「1 ms」換算到每筆事件的成本：A1 session 的移動紀錄裡，4 人房（quad clean-60）每個 Tick 在鎖內記錄的事件最多 8 筆、2 人房最多 4 筆（`pvp-v71-a1-l2-20261019/runs/quad-clean-60-r1-A/clean-60-3/match-commands.jsonl` 等）。step 因紀錄多持鎖的時間 ≤ 8 × 每筆成本；要 ≤1 ms，每筆的 P99 要 ≤125 µs。這個換算只對「每 Tick 一次持鎖」成立；1 ms 本身沿用 README，沒有另外的推導。
 
 ### 11.2 兩棵樹與項目
 
-- B＝master `0fabb52`（`../GYO-Engine-a1-before` 切到 `0fabb52` 從零建置；pv7、A1 之後）。A＝主 checkout（本批最後一個改程式的 commit；之後只改文件）。兩棵樹的 Match、Gateway、probe、arena 寫進 `artifacts.sha256`；`build/acceptance` 兩棵樹相同，以凍結清單核對。
-- 交錯（奇數輪 B 先、偶數輪 A 先）、閒置閘門、sleeper、受干擾規則沿用 `a1-shot-step`。
-- 項目（每棵樹各 3 輪）：clean-30、clean-60、clean-144、soak-short、quad clean-60、backpressure、rapid-edge-60、rapid-edge-144。所有項目的 Match 都開移動紀錄；action、quad、rapid 的 probe 也寫自己的移動紀錄（`clients-commands.jsonl`）。估 48 項、約 45 分鐘（工具完成後以 `--list-only` 實算）。
+- B＝master `0fabb52`、A＝本批最後一個改程式的 commit（之後只改文件）。兩棵樹都先刪掉 `build/target` 再從零建置；Gateway 建置資訊 B＝`0fabb52`、A＝A commit，modified＝false；之後才寫 `artifacts.sha256`（D45 M4）。`build/acceptance` 兩棵樹相同，以凍結清單核對。B 用 `../GYO-Engine-a1-before`（已切到 `0fabb52`，要再從零建一次）。
+- 交錯、閒置閘門、sleeper、受干擾規則沿用 `a1-shot-step`。
+- 項目（每棵樹各 3 輪）：clean-30、clean-60、clean-144、soak-short、quad clean-60、backpressure、rapid-edge-60、rapid-edge-144。Match 每項都寫移動紀錄；probe 寫移動紀錄的是 clean-30／60／144（`gameplay_action.hpp:87`）、soak、quad（`quad_main.cpp:65`）、backpressure（`timing_main.cpp:54`）；rapid 只有 Match 的（D45 S1）。
+- `LogFile` 不在 L2：凍結的 runner 不傳 `--log`，probe 不用 `LogFile`。它由 L1（`DiagnosticFileTests`）與 L3（Client 預設就寫日誌，`main.cpp`）涵蓋；README 的「寫檔不進熱路徑」對 `LogFile` 這一部分，L2 不驗證（D45 M3）。
 
 ### 11.3 每項的停止條件
 
 | 代號 | 條件 |
 |---|---|
-| R1 等 | 沿用 `a1-shot-step` 的 R1、R1s、R3、R4、T1、H1、D（runner 判定、執行檔身分、受干擾）；兩棵樹都判 |
-| T2-1 | 每個移動紀錄檔（Match 的 `match-commands.jsonl`、probe 的 `clients-commands.jsonl`）都以 `trace_end` 結尾，`dropped`＝0，`events`＝檔案中事件行的數目；兩棵樹都判 |
-| T2-2 | A 的移動紀錄可由凍結分析器讀取（runner 的判定本來就讀它；判定失敗就是 R1） |
+| R1 等 | 沿用 `a1-shot-step` 的 R1、R1s、R3、R4、T1、H1、D；兩棵樹都判。Match 與 probe 在移動紀錄 `!Good()` 時本來就以失敗結束（`match_main.cpp:128`；`gameplay_action.hpp:195` 等），所以「有遺失」由 R1 停下。A 的 R1 若是遺失，回報時註明可能是停止順序（`Finish` 之後才到的事件在 A 會計數，在 B 是靜默遺失，第 6 節），不自動當成熱路徑退步（D45 S2） |
+| T2-1 | 每個移動紀錄檔都以 `trace_end` 結尾，`events`＝檔中事件行數；兩棵樹都判 |
 
 ### 11.4 結束時的判定（只在完整 session 上判）
 
+彙總單位：quad 每輪（5 份 `match.log`）、backpressure 每個 case 各取一個值，不跨輪或跨 case 合併（同 `pv7-checkpoint-l2.md` 第 5 節，D45 S3）。
+
 | 代號 | 指標 | 規則 |
 |---|---|---|
-| T2-3 | Match 的 `host_lock_input_wait` P99（每項把所有統計視窗的 bins 加總後取 P99 的上界） | 每個情境：median A − median B ≤ max(range B, 1 ms) |
-| T2-4 | Match 的 `host_lock_step_wait` P99（同上） | 同 T2-3 |
-| T2-5 | 移動「產生→Actual」P95、P50（`a1-shot-step` 的 C1、C2） | 同 C1、C2 |
-| T2-6 | Match 的 Tick 晚醒 P99（`tick_late` 的 bins 加總） | 只記錄（Waiter 量的是醒來時刻，對 step 的工作量不敏感） |
+| T2-3、T2-4 | Match 的 `host_lock_input_wait`、`host_lock_step_wait` 的 P99（每個值把該單位所有統計視窗的 bins 加總） | 粗閘門：median A − median B ≤ max(range B, 1 ms)。B 的歷史值全部是 250 µs（A1 session），所以實際上是「A 的中位數 ≤ 1000 µs」；只抓得到 ≥1% 的鎖等待 ≥1 ms 這種退步 |
+| T2-5 | 移動「產生→Actual」P95、P50（`a1-shot-step` 的 C1、C2） | 同 C1、C2。A1 的 range B 0.13～0.56 ms |
+| T2-9 | 每筆事件的生產者成本 P99 × 8 | ≤ 1 ms（等於每筆 P99 ≤ 125 µs）。量法：A 的建置上，一支開發用程式在 sink 存活、寫檔執行緒閒置的狀態下，對 Resolved 形狀的事件呼叫 `TraceMovement` 10 萬次（每次都讓佇列由空變非空，所以每次都含 Notify），取每次耗時的 P99。只在本機 macOS 量（Windows 見 11.5） |
+| T2-8 | 移動「產生→送出」P95（`send_p95_ms`，`gameplay_evidence.py:294`；clean-30／60／144、soak） | 只記錄。預測：median A − median B ≤ 0.05 ms（A1 的 B 值 0.176～0.223 ms、跑次間差 ≤0.05 ms）；超過時回報（D45 M2） |
+| T2-6 | Match 的 Tick 晚醒 P99、`cpu_s`、鎖等待的 max 與 ≥250 µs 的筆數 | 只記錄。預測：≥250 µs 的筆數 A＝0 |
 | T2-7 | 合法射擊的 Match 端與 Client 端延遲 P95、P99 | 只記錄（D46⑦） |
 
-- 解析度：鎖等待與晚醒的 bins 是 `LateWakeStats` 的固定邊界（250 µs、500 µs、1 ms、2 ms、4 ms…），P99 只能落在這些值上。T2-3、T2-4 的「1 ms」因此等於「P99 最多往上跳一格（在 1 ms 以下的格子之間，或 1 ms→2 ms）」；另外只記錄每個情境 ≥250 µs 的等待比例，作為較細的參考。
-
 不成立時照 AGENTS.md §14.1 停下回報，不重跑、不放寬。
+
+### 11.5 量不到的部分
+
+- Windows（主要平台）：本機無法量；`std::ostringstream` 已從生產者路徑移除（審查 S6），每筆的 Notify 是 `SetEvent`。Windows 上的成本留給 `lan15-windows` 或之後的 LAN 場次（只記錄）。
+- Client 端熱路徑：只由 T2-8（只記錄）與 L3 的手感涵蓋。
+
+### 11.6 開發量測（不算判定，2026-10-20）
+
+T2-9 的量法先在本機跑過一次（Intel Mac、`-O2`、`producer_bench.cpp` 在 `build/target/_build/test/logs/engine-tt2-20261020/`；同一支程式分別對 B 的標頭與 A 的標頭編譯，B、A 交錯各 2 次，兩次結果相近）：
+
+| 每筆 `TraceMovement` 的耗時 | B（mutex＋deque，寫檔執行緒 20 ms 輪詢） | A（組行＋sink） |
+|---|---|---|
+| 寫檔執行緒閒置（每筆都 Notify），P50／P99／max | 0.30／1.55／51 µs | 3.9／25～28／54～63 µs |
+| 8 筆一組（像 4 人房的一個 Tick），P50／P99／max | 0.17～0.20／1.4～1.6／80～84 µs | 1.8／20／66～102 µs |
+
+- 換算：8 × P99 ≈ 0.2 ms，在 1 ms 內（每筆的上限 125 µs，A 約 25 µs）。T2-9 照這個量法會成立。
+- 但生產者的成本是原本的約 10 倍：組行（字串＋三個 `%.17g`）約 1.5 µs，佇列由空變非空時的 Notify（macOS 是 `kevent`）約 2 µs，P99 的 20 µs 多半是寫檔執行緒醒來時和生產者搶 CPU 與佇列鎖。改成在寫檔執行緒組行（計畫 T-2 的另一個做法）可以把組行的 1.5 µs 移出熱路徑，Notify 仍在。
+- 這不是判定（宣告還沒核准），只供 11.7 參考。
+
+### 11.7 等你決定
+
+- **L2-2 生產者成本**（11.6）：(a) 接受：在 1 ms 的預算內，照現在的做法（建議；量得到的影響由 L2 的 T2-5、T2-8 觀察）；(b) 改回「寫檔執行緒組行」（T-2 的另一個做法：Engine 存固定大小的內容＋格式化函式），預估約 2 h，L1 重做一輪。
+- **L2-1 驗收的換算**：README 的「射擊 P99 增量 ≤1 ms」改成本節的判定（T2-1、T2-3／4 粗閘門、T2-5、T2-9，其餘只記錄），README 的 `tt2-trace` 列同步改寫（AGENTS.md §14.4：換驗收判定要你核准）。(a) 照本版（建議）；(b) 另外在 Match 的統計行加「step 持鎖時間」的直方圖，讓熱路徑有一個靈敏的判定量（統計行是日誌格式，要動 log-contract 的範圍，本批會延後約 2 h）；(c) 不做 L2，只靠 L1、T2-9 的本機量測與 L3。
+
+## 12. D45 檢查的對應（第 1 版 → 第 2 版）
+
+| 項目 | 指出的問題 | 對應 |
+|---|---|---|
+| M1 | T2-3／4 卡在第一格，對這次的成本不敏感；「最多跳一格」的說法錯 | 改成粗閘門並寫明解析度；新增 T2-9（換算到每筆成本）；鎖等待的 max 與 ≥250 µs 筆數只記錄 |
+| M2 | Client 與 IPC 執行緒的生產者沒人量 | 新增 T2-8（`send_p95_ms`，只記錄，附預測）；11.5 寫明 |
+| M3 | `LogFile` 在 L2 沒有被執行 | 11.2 寫明不在 L2，由 L1 與 L3 涵蓋 |
+| M4 | 兩棵樹不是從零建置、Gateway 建置資訊不符、A commit 未定 | 11.2：兩棵樹都刪 `build/target` 從零建置，之後才寫 artifacts |
+| M5 | 換驗收判定要你核准；1 ms 套到鎖等待沒有推導 | 11.1 寫明 1 ms 的來源與換算；11.6 列為等你決定 |
+| S1 | probe 寫移動紀錄的項目列錯（rapid 沒有） | 11.2 更正 |
+| S2 | dropped＝0 已由 R1 涵蓋；A 獨有的停止原因 | T2-1 改判 events；R1 的回報註明 |
+| S3 | 彙總單位沒寫 | 11.4 開頭 |
+| S4 | 引用寫反、漏列 | 11.1 更正 |
 

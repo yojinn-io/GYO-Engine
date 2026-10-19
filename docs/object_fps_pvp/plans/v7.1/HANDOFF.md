@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `tt2-trace` 實作中（D139；詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `tt2-trace` 實作完成，L2 宣告第 2 版等你決定（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`tt2-trace` 實作中，D139）。
-- **進行中**：`tt2-trace` 實作完成、本機 L1 通過；xhigh 審查與 L2 宣告的 D45 檢查進行中（PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)，draft；L1 照舊手動觸發）。
+- **等你決定**：[tt2-trace](tt2-trace.md) 第 11.7 節：L2-1（README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定，AGENTS §14.4）、L2-2（生產者成本約為原本的 10 倍，仍在 1 ms 預算內：接受或改成在寫檔執行緒組行）。決定後才做 L2 工具、開發跑次與乾跑。
+- **進行中**：`tt2-trace` 實作、xhigh 審查的修正、本機 L1 完成；四平台 L1 在 `d30da3f` 重跑中（run 39285479124；`cd41c70` 那一輪 Windows 的 Trace 測試因換行失敗，已修）。L2 宣告第 2 版等你決定（PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)，draft）。
 - **下一步**：計畫核准後實作 `tt2-trace`（Engine 的 `GYO::Trace`＋產品寫檔改接，位元組不變），再出 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，PR #78 合併（`0fabb52`，四平台 L1 run 39271741788 通過）；`tt2-trace` 計畫第 1 版。
+- **最後更新**：2026-10-20，`tt2-trace` 實作與審查修正完成（本機 CTest 73／73、突變 Engine 6／6 與產品 7／7、TSan 乾淨）；L2 宣告第 2 版經 D45 檢查改寫，等你決定 L2-1、L2-2。
 
 ## 閱讀入口
 
@@ -535,6 +535,8 @@
 - 2026-10-20：PR #78 轉 ready 後四平台 L1 通過（run 39271741788，`af29796`；同時被取消的 synchronize run 39271740271 的 CI gate 失敗是取消造成），以 `gh pr merge --merge` 合併（`0fabb52`）。**pv7-line 完成。**
 - 2026-10-20：after-pv7 開始（使用者：「開始 after-pv7：從 master 開新分支，先做 tt2-trace 的計畫，交我核准再實作。」）。分支 `claude/pvp-v71-after-pv7`。`tt2-trace` 計畫第 1 版：[tt2-trace.md](tt2-trace.md)。讀程式時確認：產品有四種寫出器（移動紀錄每 20 ms 輪詢、`LogFile` 在呼叫端每行 flush、射擊與 ingress 紀錄在主執行緒每秒寫）；`MovementTraceWriter::Finish` 有一個不計數的遺失窗口（計畫第 6 節）；估 14 h（README 原估 10 h 沒含產品改接與 L2 工具）。
 - 2026-10-20：`tt2-trace` 實作（D139；細節在 [tt2-trace.md](tt2-trace.md) 第 10 節）。Engine 的 `GYO::Trace`（`TraceSink`）與 `Log.hpp`；產品的移動紀錄與 `LogFile` 改接，位元組不變（對照 `0fabb52` 的寫檔器產生的 golden）。本機：CTest `cpu|shader` 73／73（權威 digest 0 差異）、Engine 突變 5／5、產品突變 3／3、TSan 乾淨。實作時更正計畫第 6 節：Client 原本就把 SDL 日誌轉進日誌檔，所以 Client 裝一個 facade handler 轉給 SDL，慢 acquire 行的位元組不變。xhigh 審查（T-4）與 L2 宣告第 1 版草稿的 D45 檢查進行中；L2 的 B 樹＝`../GYO-Engine-a1-before` 切到 `0fabb52` 重建。
+- 2026-10-20：xhigh 審查（T-4）：沒有 MUST-FIX；SHOULD 6、NIT 6，處理記在 [tt2-trace.md](tt2-trace.md) 第 10 節與 Engine 的 TT HANDOFF。四平台 L1 第一輪（`cd41c70`，run 39281009934）Windows 的 Trace 測試失敗：sink 以文字模式寫檔（和被取代的寫出器相同，Windows 是 `\r\n`），測試寫死了 `\n`；改測試後重跑（`d30da3f`，run 39285479124）。我在還原一個突變時誤用 `git checkout`，把 `TraceSink.cpp` 未提交的審查修正一起還原，已重新套用並重跑全部測試與突變。
+- 2026-10-20：L2 宣告第 1 版的 D45 檢查（1 位 xhigh）：MUST-FIX 5（鎖等待 P99 卡在第一格、Client 端沒人量、`LogFile` 不在 L2、兩棵樹要從零建置、換驗收判定要你核准）、SHOULD-FIX 4；第 2 版的對應在 [tt2-trace.md](tt2-trace.md) 第 12 節。開發量測：A 每筆移動事件在生產者上的成本約為 B 的 10 倍（P99 約 25 µs 對 1.5 µs），8 筆一個 Tick 仍在 1 ms 內（第 11.6 節）。
 
 ## 未結事項
 
