@@ -28,9 +28,23 @@ type Session struct {
 	lastSeen    time.Time
 	sequence    uint32
 	hasSequence bool
-	window      time.Time
-	packets     uint32
+	// The rate limit's virtual schedule (GCRA): when the session's next packet
+	// is due at the limit's pace; zero before the first packet.
+	schedule time.Time
 }
+
+// The packet rate limit: a token bucket of ratePerSecond packets a second,
+// rateBurst deep, kept as the generic cell rate algorithm (GCRA) on integer
+// time. Over any interval T at most ratePerSecond*T + ratePerSecond packets
+// pass (the most a fixed one-second window also passes across its boundary).
+// Unlike a fixed window it measures the peer's pace, not the reader's: the
+// datagrams that waited in the socket while the reader stalled spend the
+// credit their sender earned meanwhile (v7.1 K1, D121).
+const (
+	ratePerSecond = 120
+	rateInterval  = time.Second / ratePerSecond
+	rateBurst     = (ratePerSecond - 1) * rateInterval // how far ahead of now the schedule may run
+)
 
 func New(now time.Time) (*Session, error) {
 	var random [40]byte
@@ -41,7 +55,7 @@ func New(now time.Time) (*Session, error) {
 	if id == 0 {
 		id = 1
 	}
-	return &Session{ID: id, Token: hex.EncodeToString(random[8:]), lastSeen: now, window: now}, nil
+	return &Session{ID: id, Token: hex.EncodeToString(random[8:]), lastSeen: now}, nil
 }
 
 func (s *Session) MatchesToken(token string) bool {
@@ -114,13 +128,15 @@ func (s *Session) Expired(now time.Time, timeout time.Duration) bool {
 	return now.Sub(s.lastSeen) >= timeout
 }
 
+// rate admits one packet at now, or refuses it without spending credit.
 func (s *Session) rate(now time.Time) error {
-	if now.Sub(s.window) >= time.Second {
-		s.window, s.packets = now, 0
+	due := s.schedule
+	if due.Before(now) {
+		due = now // credit does not build up beyond the burst
 	}
-	s.packets++
-	if s.packets > 120 {
+	if due.Sub(now) > rateBurst {
 		return ErrRateLimit
 	}
+	s.schedule = due.Add(rateInterval)
 	return nil
 }

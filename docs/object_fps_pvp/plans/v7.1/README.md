@@ -1,122 +1,160 @@
-# PvP v7.1 重構版（未規劃）
+# PvP v7.1 hotfix 分批計畫
 
-更新：2026-10-14（建立種子文件，[v7 交接](../v7/HANDOFF.md) D73，批次代號 pv7-to-v71；同日加入 M0，D75，批次代號 m0-to-v71；同日加入 TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批，D76，批次代號 v7-scope-cut）。Owner：`object_fps_pvp`。
-**狀態：未規劃；v7 完成後用 ultracode 規劃。** 本文件只收集從 v7 移入的項目與重構候選，還沒有分批、契約或檔位。
+更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
+**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough`、`edge-actions-passthrough`、`edge-analyzers`、`edge-contract`、`edge-rate-limit` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入、結果與動作原樣轉送、不再保存帳本與動作視窗，無狀態邊緣的約束與守衛已寫成條文；通用層的限速改成 token bucket（K1 已處理，L2 通過）；ingress 分析器已為直通重新凍結；其餘欄位照 pv7-line 分批實作，合併前不生效。`cause-records` 完成，`hitbox-fields` 進行中。
 
-版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6、不改 wire；**pv7 在 v7.1**。
-
-本目錄和 `v5`、`v6`、`v7`、`v8` 同層，是計畫文件，不是新的 Architecture Concept（不新增 top-level directory、subsystem 或 module）。
+版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
+本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
+盤點與每一項的處置見 [清單核對結果](INVENTORY.md)。2026-10-14 的種子清單（從 v7 移入的 13 項與重構候選 A～G）已逐項併入該文件；原文見 git 歷史 `c742836`。
 
 ## 定位
 
-- v7 之後、v8 之前的重構版。v7 處理執行緒、時間與網路路徑；v7.1 在 v7 的結果上整理 Gateway／Match 的職責與相位追蹤，再做唯一的一次 wire 變更；v8 處理玩法（[v8](../v8/README.md)）。
-- **pv7 是 v7.1 唯一的一次 wire 變更**。要放進 wire 的東西，在契約批一次定完；Client、Gateway、Match 三個角色同一個 PR，嚴格版本相等、舊程序重新啟動（沿用 v7 D32、v6 D11①）。
-- 為什麼移過來（D73，使用者原話）：「我要把pv7和相關任務從v7裡面拔掉，然後合併到v7.1裡面去。否則pv7會經歷2次架構調整沒有必要。」白話：v7.1 的重構會動到 Gateway 的職責（D49）、late 修正與 backlog，甚至射擊的送法。如果 pv7 先在 v7 定案，這些重構會讓 wire 再改一次；一起設計，wire 只改一次。
-- 補充（2026-10-14，D76）：v7 縮小成只交付任務 1～3；Trace 與日誌的 Data Contract（TT-2＋第 10 批）、產品去 SDL（IP-3、IP-4＋第 12 批）、Windows LAN 場次（第 15 批）也移到 v7.1（下表第 11～13 項）。音效與解析度的選擇移到 [v8](../v8/README.md)。
+- **v7.1 是 hotfix**（D90）。事故後遺症、檢測功能、遺留功能混在一起，形成一個死循環：沒有正確的檢測數據，就無法評估事故和故障；評估不了，事故怎麼計算都解決不了。所以**先檢測、再評估**：版本與資訊分離、對時、回聲做在前面，丟棄回報接著做，其餘修正等有了數據再重新評估。
+- **目的**（D87）：做功能之前，先把架構與契約穩定下來；v8 只做功能和 editor。v8 目前看得到的契約需求只有**骨骼 hitbox**，pv7 只給它契約支持，實作在 v8。
+- **pv7 是唯一一次 wire 變更**（做法 (a)，D90）：所有 wire 欄位在 `pv7-design` 一次定完，照下面的順序在同一條 PR 線分批實作，最後一次合併。v7.1 的情況特殊，分次升版沒有意義。
+- **Gateway 回到無狀態邊緣**（D94，[設計事故 2026-10-15](Incident/2026-10-15-gateway-state-drift.md)、[方向評估](gateway-direction.md)）：Gateway 只翻譯、逐則檢查、原樣轉送；內部訊息保留身分並冪等，去重、帳本與結果重送由 Match 負責。這是設計前提的改變，排在檢測（P1～P4）之後、A1 之前，以三個行為批分別完成。
+- **推導順序**照 AGENTS.md §2「Feature → Contract → Architecture」：契約和架構的工作都要說出它支撐的功能。
 
-## 從 v7 移入的項目
+## 樹狀總覽
 
-| # | 項目 | v7 的出處 |
+```
+v71-plan                              「v7.1 hotfix：先檢測、再評估；wire 一次設計、一次合併」
+├── prep
+│   └── plan-sync-docs ✓              「low｜同步 master（PR #75～77），寫 plans/v7.1」
+├── pv7-line                          「同一條 PR 線，三角色，最後一次合併」
+│   ├── pv7-design ✓                  「high＋xhigh 檢查｜所有 wire 欄位與 IPC 送達語意一次定完」
+│   ├── proto-rename-v7 ✓             「low｜proto 與套件改名為 v7，版本值仍是 6」
+│   ├── version-errors ✓              「high｜P1：版本 6→7、明確錯誤、凍結 pv7 版分析器」
+│   ├── heartbeat-sync ✓             「high（時鐘域局部 xhigh）｜P2：心跳對時」
+│   ├── time-echo ✓                   「high｜P3：時間回聲」
+│   ├── drop-report ✓◆                「high（列舉與上限局部 xhigh）｜P4：丟棄回報，先照現行出口」
+│   ├── edge-results-resend ✓         「high（通道計時局部 xhigh）｜Match 在 ACK 前重送結果」
+│   ├── edge-input-passthrough ✓◆     「high（局部 xhigh）｜★輸入原樣轉送，刪副本與拒絕線」
+│   ├── edge-results-passthrough ✓    「high｜★結果原樣轉送，刪 Gateway 帳本與 A3」
+│   ├── edge-actions-passthrough ✓    「high｜★動作原樣轉送，刪 link 視窗、A5、30 Hz 持有（L2 在 edge-rate-limit 一起跑）」
+│   ├── edge-analyzers ✓              「medium（守恆式 high）｜改寫並重新凍結 ingress 守恆式」
+│   ├── edge-contract ✓◆              「medium（守衛 high）｜P5：無狀態邊緣的約束與守衛」
+│   ├── edge-rate-limit ✓             「high｜K1：限速改 token bucket（D121），跑 edge-actions-passthrough 的 L2」
+│   ├── cause-records ✓               「high｜E2、動作拒收回覆、Leave 原因」
+│   ├── hitbox-fields ✓               「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
+│   ├── pv7-checkpoint ✓              「medium（分析 high）｜A1 前的整體回歸」
+│   ├── a1-shot-step ✓                「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
+│   └── pv7-merge ✓                   「low｜四平台 L1 後合併，同步文件」
+├── after-pv7
+│   ├── tt2-trace                     「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」
+│   ├── log-contract ⏸                「ultracode（先問）＋high｜日誌 Data Contract（含原第 10 批、D58）」
+│   ├── dead-letter-position          「medium｜P6：確認 D57」
+│   ├── d44-regression-pv7 ◆          「medium（分析 high）｜丟棄回報上線後的 D44 回歸」
+│   ├── incident-close ◆              「medium｜事故紀錄結案」
+│   ├── observability-tools           「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
+│   └── re-evaluate ⏸                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
+└── after-re-evaluate ⏸               「內容不變，評估後和結果一起排」
+    ├── architecture                  「SDL 隔離、-fexperimental-library、code smell、分析器收斂、相位追蹤 golden」
+    ├── measurement                   「Windows LAN、其餘觀測工具」
+    ├── platform                      「關閉阻塞、LogFile、AssetWatcher、SIGINT、不穩的測試等」
+    └── docs-close                    「系列紀錄、STABLE_BASELINE v7.1」
+```
+
+記號：✓ 完成、◐ 實作與 L1 完成、L2 延後、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
+
+## 工時
+
+估計沿用規劃草稿各批的數字（單位和 v7 各批的估計相同，例如 08c 估 20～25 h）。
+
+| 區塊 | 工時 |
+|---|---|
+| prep | 約 3 h |
+| pv7-line | 約 178～193 h〔推論〕（README 初版估 91 h；pv7-design 重估 111 h；D94 改為無狀態邊緣後為 170～179 h；§2a 的 xhigh 檢查後為 177～191 h，使用者已接受（D96）；再加 GYOP 序號欄位的 1～2 h） |
+| after-pv7 | 約 54～64 h |
+| after-re-evaluate | 約 91～101 h，另加 re-evaluate 決定的修正（未估） |
+
+停止規則：每批開始前寫出估計；實際超過 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
+
+## pv7-line 各批
+
+同一條 PR 線，Client、Gateway、Match 三個角色在同一個 PR；每批是獨立 commit、各自驗收，最後一次合併。檔位見樹狀總覽。
+
+| 代號 | 範圍 | 驗收（L1／L2／L3） | 工時 | 備註 |
+|---|---|---|---|---|
+| pv7-design | 一次定完所有 wire 欄位與語意，包括 §2a 的 IPC 送達語意（D94）；產出 `protocol-v7.zh-Hant.md` 草案；IPC 送達語意做 1 次 xhigh 對抗式檢查 | 只改文件／—／使用者核准草案 | 19～20 | 哪個欄位需要新量測才能決定，就停下問使用者。之後再改 wire 要先徵求同意 |
+| proto-rename-v7 | `client_v6`／`runtime_v6` 改名為 v7（proto、Go 套件、CMake target、include），版本值仍是 6；照 v6 的先例（`708e877`→`f255bf1`） | 全量 CTest＋Go、digest 不變／—／— | 3 | Architecture Delta：Build Graph 的 target 名稱 |
+| version-errors | ProtocolVersion 6→7；版本不符時寫出期望值與收到值（HTTP、IPC、Client）；驗收工具與突變升 pv7；凍結 pv7 版分析器（ingress 的部分守恆式列為事前宣告的例外，到 `edge-analyzers` 重新凍結） | 版本與不符測試、突變、digest 兩樹比較與 golden／短跑次確認新工具重現 v7 基準（只記錄）／— | 12 | 從這批起，凍結的 pv6 工具讀不了新跑次 |
+| heartbeat-sync | runtime link 每秒心跳，用獨立計時器；偏移、RTT 最小值、漂移每 10 秒寫進兩端日誌；活性規則（診斷訊框不刷新）；D32 的結構隔離與差分測試 | 測試、突變、digest 不變／同機長跑次，只記錄（含睡眠後的跳變）／— | 9 | 新增 RuntimeEnvelope 訊息 |
+| time-echo | Client↔Gateway 的往返時間戳（搭在 Hello／Welcome），RTT 最小值濾波，兩端日誌 | 測試、digest 不變／只記錄／跨機器在 Windows LAN 場次量 | 4 | |
+| drop-report | Gateway 依原因累計丟棄數回報 Match；**先照現行出口實作**（含之後會刪除的過渡原因），edge 批刪掉對應程式時一起縮減；優雅關閉送 final、回報日誌 | 測試、golden、突變、digest 不變／注入跑次：Match 收到的回報與 Gateway 寫出的回報依 report_sequence 逐則相等（事前宣告）／— | 13～16 | D49 第二階段。排在 edge 批之前（守住 D90），edge 批的前後對照因此有丟棄回報可用 |
+| edge-results-resend | Match 的結果通道改成在 Client ACK 之前以 ≤30 Hz 重送（循環游標），退役補送，拒收觸發送出；Gateway 這時仍有帳本、會冪等合併 | IpcHost 測試（改寫 08b 的「每個裁決只送一次」）、digest 不變／—／— | 7～8 | Client 看到的不變 |
+| edge-input-passthrough | ★輸入一個資料包對一則 IPC 訊息、原樣轉送；刪除 `lastResolved` 副本、命令表、路由、拒絕線、已寫出去重、截短、D1、D2；link 改成依到達順序的有界 FIFO；解碼成功就提交活性 | Go 測試、突變；被刪路徑的 ingress v1 鍵照樣輸出 0／事前宣告＋D45：命令證據、替代率、連線品質與逐出（含 Gateway→Match 延遲注入）、Match 的副本計數與負載（host mutex 等待、Tick 晚醒）／— | 20～26 | 事故根因元件在這批刪除。Match 每個 clean-60 跑次要多處理約 3.84k 個重複命令（原寫 1.15 萬是除錯了跑次數，見 gateway-direction），負載上升就停下重評 |
+| edge-results-passthrough | ★結果原樣轉送給 Client；刪除 session 帳本、retiredSent、retirementAsked、結果節拍與 A3；Gateway 只記每位玩家上次送出結果的時刻，守 30 Hz | Go 測試、突變／事前宣告＋D45：裁決到 Client 的延遲（含 `edge-results-resend` 的「新裁決最多晚 1 個間隔」，D107）、送出間隔 ≤30 Hz（含 host-ipc 停頓案例）、射擊時序與權威 Cooldown＝0／— | 12～16 | 排在動作直通之前，避免帳本在沒有 A3 時合併請求 |
+| edge-actions-passthrough | ★動作批原樣轉送；刪除 link 動作視窗、A5、30 Hz 持有與重送 | Go 測試、突變／事前宣告＋D45：射擊到達與 action_latency、權威 Cooldown＝0、Expired 率、被閘門擋下的點擊數／— | 14～17 | FireGate 的 spread 在這批到 A1 之間會變得過度保守 |
+| edge-analyzers | 改寫 ingress 分析器的 Gateway 守恆式並重新凍結；同步突變目錄 | 新舊各分析一次／—／— | 5～6 | |
+| edge-contract | 把無狀態邊緣的約束寫進 `network-architecture.zh-Hant.md` 的 `Design Invariants` 節與 protocol-v7；Go 狀態欄位的白名單守衛（遞迴走訪型別、掃描套件變數）與突變 | Go 測試、突變、digest 不變／—／— | 4 | 取代 `gateway-duties`。依內容的判斷靠審查，並由 AGENTS.md 連到條文（事故行動 4，文件會話） |
+| edge-rate-limit | edge 系列收尾（D119）：重新測試 K1（Gateway 停頓後的固定窗口限速丟棄），對照 `edge-contract` 的 Gateway 狀態白名單評估方案 (a)（token bucket），採用就實作；然後跑一次涵蓋 `edge-actions-passthrough` 與 K1 的 L2（新宣告，兩棵樹帶同一個限速修正） | 重放測試、突變／事前宣告＋D45／— | 8～12 | K1 的證據在 HANDOFF 規劃紀錄 2026-10-18 05:02 條目 |
+| cause-records | dwell（一對一）、Client 的 GYOP 序號（只作診斷，D96）、snapshot 的兩段停留、動作拒收回覆（ActionResults）、Leave 原因 | 測試、突變、digest 不變／只記錄／— | 8～9 | 有了對時與回聲才能判斷原因 |
+| hitbox-fields | 命中部位一律填 Body；射手看到的時刻由 Client 照實填；加 A1 的 E、S 與影子紀錄（D-2）；Match 驗證並記錄，不改判定 | 編解碼與驗證測試、digest 不變／只記錄／— | 8 | |
+| pv7-checkpoint | A1 前的整體回歸：四平台 L1、digest；先扣掉三個 edge 批事前宣告的差異帶，再用凍結 pv7 工具和 v7 基準比較；產出 K 與 S 取法的影子資料 | 全量／事前宣告＋D45／— | 8 | 宣告必須把影子紀錄的對接寫成判定（D127）：對接鍵在 (player, E, life, S) 之外加上連線或時間順序，處理重連；對接率：每個 on_time 路徑的裁決都要對得到 resolved 事件，對不到就是工具無效 |
+| a1-shot-step | ★Match 在命令步 T(S) 判定射擊，趕不上時有界退回到達判定；Client 改用序號閘門，刪除 FireGate；combat golden 依宣告重產；K 的值交使用者決定 | 測試、突變、golden 依宣告更新／事前宣告＋D45：clean 下權威 Cooldown＝0、退回率／使用者的連點手感 | 20 | Architecture Delta：FireGate 退役、射擊判定語意改變。命中回饋可能慢約 20～37 ms〔推論〕 |
+| pv7-merge | 四平台 L1 後合併；同步 HANDOFF、README | 四平台／—／— | 2 | |
+
+## after-pv7 各批
+
+順序是使用者排的（D90、D91）：日誌契約先做，D44 回歸與觀測工具放在 re-evaluate 之前，因為評估要靠它們產生的數據。
+
+| 代號 | 範圍 | 驗收（L1／L2／L3） | 工時 | 備註 |
+|---|---|---|---|---|
+| tt2-trace | Engine 的 `GYO::Trace`：有上限的紀錄 sink、通知喚醒的背景寫檔、Base 的日誌 facade（[Engine 計畫](../../../architecture/plans/time-threads-trace/README.md) TT-2） | Engine 測試、突變、digest 不變／寫檔不進熱路徑（射擊 P99 增量 ≤1 ms，宣告前做 D45 檢查）／— | 10 | Engine 子系統和第一個消費端（`log-contract`）同一個 PR |
+| log-contract | 日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等） | 跨語言 golden、凍結分析器仍可讀／只記錄／— | 16 | 紙上 6 h＋實作 10 h。日誌格式是 Data Contract |
+| dead-letter-position | 確認 D57 是否仍成立：ingress 日誌和丟棄回報維持兩份契約、對齊同一套原則，或合成一份 | 只改文件／—／使用者決定 | 2 | |
+| d44-regression-pv7 | pv7 上線後的 D44 回歸，範圍涵蓋丟棄回報、三個 edge 行為批與 A1；加入持續延遲（x1、ramp）的樣本 | —／事前宣告＋D45 檢查／— | 10～14 | 事故後遺症 |
+| incident-close | 兩份事故紀錄（2026-10-10 悄悄丟命令、2026-10-15 Gateway 狀態漂移）的行動項目表更新、狀態改為結案 | 只改文件／—／— | 3～5 | 在 `drop-report`、`edge-contract`、`d44-regression-pv7` 之後，而且設計事故的行動 4（AGENTS.md）已由文件會話處理 |
+| observability-tools | 相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式 | 工具的單元測試、新舊各分析一次／—／— | 10～13 | re-evaluate 的前提 |
+| re-evaluate | 用 pv7 之後的數據重新評估：相位追蹤（B6～B9）、延遲位移（A4）、偶發 epoch 重設（A5）、連線品質的參考年齡等；交出建議，由使用者排序 | —／—／使用者排序 | 3 | 缺工具時直接告訴使用者 |
+
+## after-re-evaluate（內容不變，評估後再排）
+
+| 代號（暫定） | 內容 | 工時 | 依賴、備註 |
+|---|---|---|---|
+| phase-tracking-golden | 相位追蹤的閉環 golden（B10） | 約 7 | 只要 re-evaluate 決定修正相位追蹤，就排在那些修正批之前 |
+| sdl-isolation | IP-3、IP-4＋原第 12 批：產品、probe、產品測試不直接呼叫 SDL（不是移除 SDL） | 26～34 | 依賴 `tt2-trace`；IP-3 的公開介面要 1 次 xhigh 審查（v7 D39）；v8 的音效依賴 IP-3 |
+| cxx-flag-removal | 移除 `-fexperimental-library`（`std::jthread`、`std::osyncstream`） | 4 | 依賴 `tt2-trace` |
+| smell-cleanup | token 規則三份拷貝、被替代的序號存兩份、第 04 批審查遺留（「衝突檢查重疊」隨 edge 批刪除 Gateway 的衝突檢查而消失） | 約 16 | 哪個修正批直接需要（例如改 token 規則），就在那一批做（AGENTS.md §1） |
+| analyzer-converge | `quad_evidence.py`、`command_evidence.py` 收斂成 N 人版 | 5 | 用既有的 pv6 語料新舊各分析一次 |
+| lan15-windows | Windows LAN 場次；跨機器偏移與漂移（≥15 分鐘）；Windows 的晚醒、Tick 精度、App Nap 等 | 7～8 | 依賴 `time-echo`；要排朋友的時間 |
+| observability-rest | 量測時間基準統一、probe 起點的幀相位、HUD 來源 tick 等 | 約 3 | |
+| platform-fixes | 關閉時阻塞約 3 秒、`LogFile` 非同步、`AssetWatcher` 的時間基準、背景 Client 忽略 SIGINT、Gateway 測試在高負載下不穩 | 13～15 | `AssetWatcher` 未估；`LogFile` 和 `tt2-trace` 一起 |
+| docs-close | 「時鐘到網路路徑」系列紀錄（第 ⑤ 集要等 `time-echo`）；STABLE_BASELINE v7.1；v7 略過的驗收要不要補 | 約 8＋未估 | |
+
+## 跨分支依賴
+
+樹狀總覽只表達層級；下面是跨分支的依賴。
+
+- `version-errors` → pv7-line 之後所有的 L2（凍結 pv7 版分析器）
+- `pv7-checkpoint` → `a1-shot-step`（行為改變排在整體回歸之後）
+- `drop-report` → `d44-regression-pv7`（pv7 合併之後）
+- `drop-report` → 三個 edge 行為批（edge 批的前後對照要有丟棄回報可用）
+- `edge-results-resend` → `edge-results-passthrough` → `edge-actions-passthrough`（結果先、動作後）
+- `drop-report`、`edge-contract`、`d44-regression-pv7`、事故行動 4（文件會話）→ `incident-close`
+- `tt2-trace` → `log-contract` 的實作、`sdl-isolation`（IP-3 用到日誌 facade）、`cxx-flag-removal`
+- `d44-regression-pv7`、`observability-tools`、`log-contract` → `re-evaluate`
+- `time-echo` → `lan15-windows`、系列紀錄第 ⑤ 集
+- `re-evaluate` 決定修正相位追蹤 → 先做 `phase-tracking-golden`
+
+## 取消的項目
+
+| 項目 | 決策 | 理由 |
 |---|---|---|
-| 1 | 原第 11 批整批：pv7 契約（`protocol-v7.zh-Hant.md`）、ProtocolVersion 6→7（ClientVersion 與 RuntimeVersion 由它導出）、版本不一致的明確錯誤、驗收工具升 pv7；runtime link 心跳對時（任務 4、D32）；Client↔Gateway 時間回聲（D35） | [v7 README](../v7/README.md) 任務表第 4 列、批次表第 11 列；[v7 交接](../v7/HANDOFF.md)「P3：診斷與 pv7」的第 11 批、D32、D35 |
-| 2 | `GatewayDropReport`（D49 第二階段）：Gateway 拿不到內容的丟棄以累計值回報給 Match；原因列舉一次定完整，dwell 的定義只有一個 | [08c](../v7/08c-drop-report.md)「先讀這一段」(G)、「已知缺口」、「對既有順序的影響」的第 11 批；規格草案 `pvp-v7-infoflow-plan-20261010/batch2/design3-counts-pv7.md` B；L2 的數量（D58、D62④） |
-| 3 | 依 D49 重新檢視 Gateway 持有的狀態與 `lastResolved` 副本（上限、清理、通知、epoch），以及第 06、08、08b 批加進 Gateway 的狀態；是否轉送 A3／A5 | [08c](../v7/08c-drop-report.md)「Architecture Delta」第 6 項；[v7 交接](../v7/HANDOFF.md)第 11 批的「依 D49 的判斷規則重新檢視」、未結事項「重複過濾」的已解決 |
-| 4 | `network-architecture.zh-Hant.md`「Gateway 職責」一節的正式條文（以 PEP／PDP 的名詞寫） | [v7 交接](../v7/HANDOFF.md) D49；[08c](../v7/08c-drop-report.md)「契約與文件」的末項 |
-| 5 | ingress v1 與 `GatewayDropReport` 是否統一成一個死信 Data Contract（第 11 批的那一半；第 10 批的 log 契約留在 v7）。補充（2026-10-14，D76）：第 10 批也移到 v7.1（第 11 項），log 契約和死信契約在這裡一起決定，不再分兩半 | [08c](../v7/08c-drop-report.md)「對既有順序的影響」的第 10、11 批共通；[v7 交接](../v7/HANDOFF.md) D57、未結事項「死信隊列」 |
-| 6 | `network-architecture.zh-Hant.md:230-233` 的條文歧義 | [事故紀錄](../v7/Incident/2026-10-10-gateway-silent-drop.md)的後續表 |
-| 7 | 第 15 批拿掉的量測：Mac Gateway↔Windows Client 的偏移與漂移（≥15 分鐘，需要時間回聲）。補充（2026-10-14，D76）：第 15 批整批移到 v7.1（第 13 項），這項在那個場次一起量 | [v7 交接](../v7/HANDOFF.md)「P7」第 15 批；[v7 README](../v7/README.md) 平台表 |
-| 8 | 第 16 批之後的 D44 再回歸：v7 第 16 批的整體回歸不含 D49 第二階段；v7.1 做完 pv7 後再回歸一次 | [v7 交接](../v7/HANDOFF.md) D44、未結事項 D44 的子項 |
-| 9 | FireGate 重推條件 4（心跳對時、時間回聲）與 11（D49 第二階段）在 v7.1 觸發 | [09-firegate-c2](../v7/09-firegate-c2.md)「重推條件」；08c 對條件 11 的改寫建議（[08c](../v7/08c-drop-report.md)「對既有順序的影響」，未核准） |
-| 10 | M0 影子量測與 FireGate 常數的完整推導（`09-firegate-c2.md`「合成時間線」1～10 項的改寫）。輸入：M0 宣告草案 v2（`build/target/_build/test/logs/pvp-v7-09-m0-plan-20261014/draft-v2.md`）；M0 probe（worktree `../GYO-Engine-m0`，本機 commit `5ef8a89`，分支 `m0-probe-5ef8a89`，未推送；xhigh 審查中止、未完成，使用前先完成）；v7 D74 的 U1～U9；09-M0-plan 的發現：30／60 FPS 的每段起點偏移無效→改每發忙等控制 s、延遲下降後的領先＞2（Wdrop）、撤回後殘餘。**若採用 [A1](#a-架構與協議)，兩個常數廢棄，M0 不必做**；[B1](#b-相位追蹤)、[B6](#b-相位追蹤) 會改變 M0 要量的對象，M0 排在它們之後。v7 只做縮小版凍結（S4-lite，值不變）與 C2；C2 的 clean 案例出現權威 Cooldown 拒絕時，M0 在 v7 補做 | [v7 交接](../v7/HANDOFF.md) D75、D74；[09-firegate-c2](../v7/09-firegate-c2.md) 步驟 S3、S4、「合成時間線」；[09b](../v7/09b-phase-tracking.md) 4-3 節、L2 宣告第 12 節 |
-| 11 | P3＝TT-2（Engine 的 `GYO::Trace`：有界 sink、通知喚醒的背景寫檔、Base 日誌 facade）＋原第 10 批（任務 8 的紀錄：拒絕原因、`--gateway` 提示、snapshot 年齡、Match 的動作裁決與結束紀錄、runtime link 關閉紀錄、Held／Neutral、Gateway 的收包間隔與 control lane 丟棄等；日誌格式定為產品 Data Contract，帶版本與驗證規則）；連同觀測缺口清單 1～7、`-fexperimental-library` 的移除（候選 C5）。理由（D76）：日誌格式會成為 Data Contract，而 v7.1 要一起統一死信契約、Gateway 職責與 pv7 的資料；在 v7 定，等於定兩次。規劃沿用 v7 D45（ultracode，日誌格式是 Data Contract） | [v7 交接](../v7/HANDOFF.md) D76、D45、D57、「P3：診斷與 pv7」的 TT-2 與第 10 批；[v7 README](../v7/README.md) 任務表第 8 列、「v6 LAN 聯機測試的觀察」的日誌缺口表；Engine 計畫 [時間、執行緒與 Trace](../../../architecture/plans/time-threads-trace/README.md) 的 TT-2 |
-| 12 | P4＝IP-3、IP-4（Engine：後端公開標頭去掉 SDL 型別、日誌轉送、進入點、文字輸入與剪貼簿、事件時間戳換算；測試用事件注入與觀測、視窗查詢；SDL3 改為 PRIVATE 連結）＋原第 12 批（產品、probe、產品測試不再直接使用 SDL；符號守衛 CTest；任務 7、D33）。理由（D76）：行為不變的結構重構，符合 v7.1 重構版的定位；網路重構不會推翻它，但放在 v7 會拉長 v7。注意：IP-3 依賴 TT-2 的日誌 facade | [v7 交接](../v7/HANDOFF.md) D76、D33、「P4：SDL 隔離」；[v7 README](../v7/README.md) 任務表第 7 列；Engine 計畫 [輸入與呈現](../../../architecture/plans/input-and-present/README.md) 的 IP-3、IP-4 |
-| 13 | 原第 15 批（v7 LAN 場次）：Windows 實機的模擬步晚醒（含縮小與遮住）、Windows 切換視窗時的 Held、Gateway 各通道在真實網路下的分布、任務 8 的清單（只看日誌能否回答 v6 LAN 的問題）、朋友能主持時加測 Windows Match；加上第 7 項的偏移與漂移。理由（D76）：pv7 之後才有時間回聲，一次 LAN 場次量到最多；在 v7 跑，v7.1 之後還要再跑一次。相關：FireGate 重推條件 6（Windows／LAN）、候選 F5、F7 | [v7 交接](../v7/HANDOFF.md) D76、D34、「P7」的第 15 批；[v7 README](../v7/README.md) 平台表 |
+| A1 的手感盲測 | D91 | 使用者：不用測 |
+| M0、earliest 估晚修正（B11）、權威端早到就延後、FireGate 重推條件 1～11 | D90 | 採用 A1，FireGate 退役 |
+| 輸入防偽造 | D90 | 還沒到那個規模 |
+| v7 的 3 人 LAN 測試（pv6） | D91 | 先處理完問題 |
+| v7 發行 `object_fps_pvp-v1.2.0` | D91 | 發行需要的 Windows 實機證據來自上一項；下一次發行在 v7.1 之後 |
 
-## 設計上的連動
+## PR 線
 
-- 讓 Match 看見 Client→Gateway 的遲到之後，late 修正會變多，D44（偶發 epoch 重設）的風險上升。所以 `GatewayDropReport` 必須和 late 修正、backlog 門檻 105 一起設計，不能單獨改（[v7 交接](../v7/HANDOFF.md)第 11 批的「提醒」；D51 ④）。
-- 08c 已經讓已解析命令照常轉送（D49 第二階段中提前的部分），v7 的量測涵蓋它；`GatewayDropReport` 處理的是 Gateway 拿不到內容的那幾類。
+| PR 線 | 內容 |
+|---|---|
+| 規劃 | 本目錄、同步 master、v8 README 的備註更正 |
+| pv7-line | `pv7-design`～`pv7-merge`，三個角色同一個 PR |
+| after-pv7 | `tt2-trace`～`re-evaluate`；Engine 的 TT-2 和它的第一個消費端同一個 PR |
+| after-re-evaluate | 評估之後再定 |
 
-## 重構候選清單（v7 完成時要逐項重新核對；已解決的標 commit）
-
-### A. 架構與協議
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| A1 | 射擊併入輸入命令、照命令步序判定，讓 FireGate 的 guard／spread 不再需要；替代做法是權威端早到就延後、不拒絕。**這項要改 wire，必須在 pv7 契約定案前決定放進 pv7 或延到 pv8** | 2026-10-14 使用者（D73）；guard／spread 的背景見 [v7 README](../v7/README.md)「本機射擊閘的兩個常數」與 [09-firegate-c2](../v7/09-firegate-c2.md) |
-| A2 | 延遲位移：產生→執行約 38 ms、比 v6 多 1 幀，backlog 餘裕從 75 降為 45；候選是把追蹤用的領先拆成 1 | [09b](../v7/09b-phase-tracking.md)「延遲位移：不是缺陷，是設計造成的結果」；[v7 交接](../v7/HANDOFF.md)未結事項「C1 之後要決定的事」 |
-| A3 | D44 偶發 epoch 重設（嚴重度高）：重推 backlog 門檻 105（D51 ④）；延遲 300 ms 左右消失時的重設；延遲消失時的快速正向回收 | [v7 交接](../v7/HANDOFF.md) D44、D51 ④；[09b](../v7/09b-phase-tracking.md) 1-6 節、1-7 節第 5 項、「5. 之後再評估」第 4 項 |
-
-### B. 相位追蹤
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| B1 | 重新擷取的樣本邊界 S／M，目標是一起消掉 1-7 節的三個已知限制（撤回少 3.3 ms、撤回後約 4 秒超過 guard、δ＞70.6 ms 串接，D71） | [09b](../v7/09b-phase-tracking.md)「5. 之後再評估」第 1 項、1-7 節第 1、2、4 項；D71 |
-| B2 | Match 在命令到達時就發布 slack 樣本 | [09b](../v7/09b-phase-tracking.md)「5. 之後再評估」第 2 項 |
-| B3 | late 修正的幅度依遲到量決定，或改「連續 N 次」 | [09b](../v7/09b-phase-tracking.md)「5. 之後再評估」第 3 項 |
-| B4 | 停頓後的 reseed 用過時的 snapshot 播種，領先實際歸零 | [09b](../v7/09b-phase-tracking.md)「其他發現」第 1 項 |
-| B5 | 權威 digest 不保護相位追蹤（RunLink 不經 TrackSlack），要補 golden | [09b](../v7/09b-phase-tracking.md)「其他發現」第 2 項 |
-| B6 | `FireGate.cpp` 的 earliest 寫死減 2，領先跳升時估晚 | [09-firegate-c2](../v7/09-firegate-c2.md)「領先跳升」（`FireGate.cpp:22`）；[09b](../v7/09b-phase-tracking.md)「延遲位移」的選項 |
-
-### C. Code smell（行為不變）
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| C1 | token 規則三份拷貝，抽成純函式 | [09a](../v7/09a-input-send-pinning.md)「需要決定的事」第 5 項（本批不做）；[09b](../v7/09b-phase-tracking.md)「5. 之後再評估」第 7 項 |
-| C2 | 被替代的序號存兩份：`substituted`（64）和帳本（600） | [08c](../v7/08c-drop-report.md)「Architecture Delta」第 6 項 |
-| C3 | `p.commands` 的衝突檢查和 link 的內容比對重疊 | [08c](../v7/08c-drop-report.md)「Architecture Delta」第 6 項 |
-| C4 | `quad_evidence.py` 和 `command_evidence.py` 收斂成 N 人版（v6 第 16 批） | [v7 README](../v7/README.md)「候選」；[v7 交接](../v7/HANDOFF.md)未結事項 |
-| C5 | `-fexperimental-library`（若 v7 仍未移除）。補充（2026-10-14，D76）：P3 移到 v7.1，v7 不移除，所以這項確定在 v7.1（和第 11 項一起） | [v7 交接](../v7/HANDOFF.md)「P3」末項（預計在 P3 移除） |
-| C6 | 第 04 批 xhigh 審查只記錄的項目 | [第 04 批](../v7/04-client-roles.md)「xhigh 審查」；[v7 交接](../v7/HANDOFF.md)未結事項 |
-
-### D. 暫定決定
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| D-1 | D58 的 (1)(3)(4)(5)(8)（(3)(4)(5) 在 D60 附條件照建議接受，v7 完成時一起核對） | [v7 交接](../v7/HANDOFF.md) D58、D60、「現況」的「等你決定」 |
-| D-2 | 08c log 行族 v1（若第 10 批沒有定案）。補充（2026-10-14，D76）：第 10 批移到 v7.1，v7 不定案，這項確定在 v7.1（第 11 項） | [v7 交接](../v7/HANDOFF.md) D53 第 3 項；[08c](../v7/08c-drop-report.md)「對既有順序的影響」的第 10 批 |
-
-（D-1、D-2 是本表的列號；使用者清單中這一類的代號是 D，為了和決策編號 Dxx 區分加了連字號。）
-
-### E. 量測與可觀測性
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| E1 | 第 10 批之後仍未解決的觀測缺口。補充（2026-10-14，D76）：第 10 批移到 v7.1（第 11 項），清單整份在 v7.1 處理 | [v7 交接](../v7/HANDOFF.md)第 10 批的「輸入：觀測缺口清單」 |
-| E2 | 需要 wire 資料的紀錄（原本「併入第 11 批」） | [v7 交接](../v7/HANDOFF.md)第 11 批（D73 的加註） |
-| E3 | 量測工具時間基準統一（t_frame 與 t_c） | [09b](../v7/09b-phase-tracking.md)「09b-plan」的用語表（t_frame）與修正對照表第 5 列、1-7 節 |
-| E4 | network 案例的遺失種子（固定種子） | [08c](../v7/08c-drop-report.md)「L2 的結果」；[09b](../v7/09b-phase-tracking.md)「5. 之後再評估」第 6 項；v7 D63 ④ |
-| E5 | probe 起點的幀相位 | [v7 交接](../v7/HANDOFF.md)未結事項「probe 幀格點的相位」（D46 ⑦） |
-
-### F. 平台與雜項
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| F1 | `ClientConnection` 關閉時阻塞約 3 秒（httplib） | [v7 交接](../v7/HANDOFF.md)未結事項；[v7 README](../v7/README.md)「候選」 |
-| F2 | `LogFile` 非同步化 | [v7 README](../v7/README.md)「候選」 |
-| F3 | `AssetWatcher` 的 `detectedNs` 改用 Engine 的時間基準 | [v7 README](../v7/README.md)「候選」 |
-| F4 | D30 門檻可能被逐級放大 | [v7 交接](../v7/HANDOFF.md) D30、未結事項「C1 之後要決定的事」；[第 04 批](../v7/04-client-roles.md) |
-| F5 | 期限前自旋 | [v7 交接](../v7/HANDOFF.md)未結事項「自旋」 |
-| F6 | App Nap | [v7 交接](../v7/HANDOFF.md)未結事項「Spaces、縮小時的斷線」；[v7 README](../v7/README.md)「v6 L3 的觀察」 |
-| F7 | Windows Match Tick 精度（若第 15 批沒有量到）。補充（2026-10-14，D76）：第 15 批移到 v7.1（第 13 項），在那個場次量 | [v7 交接](../v7/HANDOFF.md)未結事項「Windows Match 的 Tick 與 IPC 精度」 |
-
-### G. 文件
-
-| 代號 | 候選 | v7 的出處 |
-|---|---|---|
-| G1 | v5／v6 缺陷版要不要重新發佈（v7 D69：不重新發佈、開頭標明「缺陷版」） | [v7 交接](../v7/HANDOFF.md) D62 ③、D69；[事故紀錄](../v7/Incident/2026-10-10-gateway-silent-drop.md) |
-| G2 | 「時鐘到網路路徑」系列紀錄（第 ⑤ 集「跨機器的時間」等 pv7） | [v7 交接](../v7/HANDOFF.md)未結事項「時鐘到網路路徑」 |
-
-## 規劃方式（屆時）
-
-- 用 ultracode 規劃（約 3 個方案、1 位評審、1 次對抗式檢查）；pv7 契約批另做 1 次 xhigh 對抗式檢查。開始前先問使用者（v7 D45 的做法）。
-- 順序：
-  1. 先做行為不變的重構和 golden（例如 C 類、B5）。
-  2. 需要 pv6 凍結分析器的新舊對比，排在 pv7 之前。
-  3. pv7 契約定稿後才實作（A1 要在定稿前決定放進 pv7 或延到 pv8）。
-  4. 之後重推 FireGate（重推條件 4、11）、重跑 M0 型量測和 D44 回歸。（補充，2026-10-14，D75：v7 沒有做 M0，這裡是第一次完整的 M0 與常數推導，見「從 v7 移入的項目」第 10 項；A1 採用時改為確認常數已廢棄。）
-- 補充（2026-10-14，D76）：v7 移入項目（第 11～13 項）和 pv7 的相對順序：
-  - 第 11 項（TT-2＋第 10 批）的日誌 Data Contract 和死信契約（第 5 項）、`GatewayDropReport`（第 2 項）一起設計，在 pv7 契約定稿時一起定；需要 wire 資料的紀錄（候選 E2）放進 pv7。TT-2（Engine）本身不依賴 pv7，可以先做。
-  - 第 12 項（IP-3、IP-4＋第 12 批）是行為不變的重構，屬上面第 1 步；IP-3 的日誌轉送依賴 TT-2，所以排在 TT-2 之後。
-  - 第 13 項（第 15 批 LAN 場次）排在 pv7 之後（需要時間回聲）。
-- 範圍、門檻或 ownership 的變更照 AGENTS.md 處理：觀測到的壓力才改架構，Architecture Delta 要明寫。
+PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四平台 L1，用 `gh pr merge --merge`。

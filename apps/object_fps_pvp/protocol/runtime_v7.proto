@@ -1,0 +1,364 @@
+syntax = "proto3";
+
+package object_fps_pvp.runtime.v7;
+option go_package = "gyo.local/object_fps_pvp/protocol/runtimev7";
+
+// The local IPC host decodes this into product data. Match never sees protobuf,
+// sessions, endpoints, or wire envelopes.
+message Ready {
+  string arena_id = 1;
+  uint32 arena_version = 2;
+  uint32 tick_rate = 3;
+  uint32 snapshot_interval_ticks = 4;
+  uint32 max_players = 5;
+  CombatRules combat_rules = 6;
+  float jump_height = 7;
+  float gravity = 8;
+  // Content digest of the served arena (pv6 contract §2); 0 means missing.
+  fixed64 arena_digest = 9;
+}
+message PlayerJoin { uint64 player_id = 1; }
+// Why the Gateway sent the Leave (pv7 §5). Diagnostics only: the Match removes
+// the player the same way for every reason.
+enum LeaveReason {
+  LEAVE_REASON_UNSPECIFIED = 0;
+  LEAVE_REASON_CLIENT_REQUEST = 1;  // HTTP leave, including the release after an arena mismatch
+  LEAVE_REASON_SESSION_TIMEOUT = 2;
+  LEAVE_REASON_JOIN_TIMEOUT = 3;
+}
+message PlayerLeave {
+  uint64 player_id = 1;
+  LeaveReason reason = 2;
+}
+// A single immutable 1/60-second movement step. No client time or position.
+message MovementCommand {
+  uint64 sequence = 1;
+  float move_forward = 2;
+  float move_right = 3;
+  float yaw = 4;
+  float pitch = 5;
+  bool jump_requested = 6;
+}
+// Commands this link has not written before for the current epoch/life,
+// strictly ordered, at most 12 per message. Merged and deduplicated by the
+// Gateway; the Match treats repeats as no-ops.
+message PlayerInput {
+  uint64 player_id = 1;
+  repeated MovementCommand commands = 2;
+  uint64 movement_epoch = 3;
+  uint64 life_generation = 4;
+  // Latest snapshot tick the Client applied; merged windows carry the largest.
+  uint64 observed_authority_tick = 5;
+  // Diagnostics only (pv7 §2, §5; D32): the carrying Client datagram's pv7 §2
+  // dwell in the Gateway (clamped at 10,000,000) and its GYOP sequence. Never
+  // used for deduplication or ordering.
+  optional uint32 gateway_dwell_us = 6;
+  optional uint32 client_transport_sequence = 7;
+}
+message JoinResult {
+  uint64 player_id = 1;
+  bool accepted = 2;
+  string reason = 3;
+}
+message PlayerState {
+  uint64 player_id = 1;
+  float x = 2;
+  float y = 3;
+  float z = 4;
+  float yaw = 5;
+  float pitch = 6;
+  uint64 last_resolved_command = 7;
+  uint64 movement_epoch = 8;
+  uint32 contiguous_pending_commands = 9;
+  float vertical_velocity = 10;
+  bool grounded = 11;
+  uint64 life_generation = 12;
+  LifeState life_state = 13;
+  uint64 life_state_tick = 14;
+  uint64 respawn_tick = 15;
+  reserved 16;
+  reserved "epoch_start_wait_us";
+  // Host timing observation, never simulation input: the smallest movement
+  // slack since the previous published snapshot and its command sequence.
+  // Slack is the executing tick minus the command's first receipt, or minus
+  // the receipt of a command that arrived after its sequence was substituted
+  // (negative). Both or neither; |slack| <= 1,000,000 and
+  // 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
+  // reads it.
+  optional uint64 movement_slack_sequence = 17;
+  optional sint32 movement_slack_us = 18;
+  // Consecutive failed 10-second connection-quality windows (0-2). At 3 the
+  // Match evicts the player; the HUD warns while this is non-zero.
+  uint32 connection_quality_failures = 19;
+}
+enum LifeState {
+  LIFE_UNSPECIFIED = 0;
+  LIFE_ALIVE = 1;
+  LIFE_DEAD = 2;
+}
+message WorldSnapshot {
+  uint64 tick = 1;
+  repeated PlayerState players = 2;
+  repeated CombatState combat = 3;
+  // Diagnostics only (pv7 §5, D-4): from the Host's publication of this tick to
+  // the start of the IPC write that carries it, on the Host's clock. Absent on
+  // a snapshot replaced before it was written.
+  optional uint32 match_hold_us = 4;
+}
+// Match-initiated removal for sustained poor connection quality. The Gateway
+// clears the player like a Leave and tells the Client why.
+enum EvictionReason {
+  EVICTION_UNSPECIFIED = 0;
+  EVICTION_HIGH_LATENCY = 1;
+  EVICTION_UNSTABLE_INPUT = 2;
+}
+message PlayerEvicted {
+  uint64 player_id = 1;
+  EvictionReason reason = 2;
+  uint32 reference_age_ms = 3;
+  uint32 substituted_permille = 4;
+  uint32 movement_resets = 5;
+}
+message RuntimeError {
+  uint64 player_id = 1;
+  string code = 2;
+  string message = 3;
+}
+message RuntimeEnvelope {
+  uint32 protocol_version = 1;
+  oneof message {
+    Ready ready = 10;
+    PlayerJoin join = 11;
+    PlayerLeave leave = 12;
+    PlayerInput input = 13;
+    JoinResult join_result = 14;
+    RuntimeError error = 15;
+    WorldSnapshot snapshot = 16;
+    ActionBatch actions = 17;
+    ActionResults action_results = 18;
+    PlayerEvicted evicted = 19;
+    ClockSample clock = 20;
+    GatewayDropReport drop_report = 21;
+  }
+}
+
+// Diagnostics only (pv7 contract §2, §3): one four-timestamp clock sample.
+// Times are the sender's own monotonic clock in microseconds; a time of the
+// other side is only ever copied back (origin_us), never compared directly.
+// No value derived from it may reach a decision.
+message ClockSample {
+  // The transmit_us of the peer's latest ClockSample this side read, as is;
+  // present exactly when receive_us is.
+  optional uint64 origin_us = 1;
+  // When this side read that sample; not after transmit_us.
+  optional uint64 receive_us = 2;
+  // When this side serialized this sample: at least 1 and strictly increasing
+  // per sender and stream.
+  uint64 transmit_us = 3;
+}
+
+// May repeat a batch the Match already took. An ACK-only batch whose
+// acknowledged_through is no more than the Match's retirement asks for that
+// retirement again (pv7 §2a).
+message ActionBatch {
+  uint64 player_id = 1;
+  repeated ShotRequest shots = 2;
+  uint64 acknowledged_through = 3;
+  // Diagnostics only, as PlayerInput's 6 and 7.
+  optional uint32 gateway_dwell_us = 4;
+  optional uint32 client_transport_sequence = 5;
+}
+// Resent by the Match, at most ActionSendRate per player, until the Client's
+// ACK retires each decision; idempotent: a copy changes nothing (pv7 §2a).
+message ActionResults {
+  uint64 player_id = 1;
+  uint64 retired_through = 2;
+  repeated ShotDecision decisions = 3;
+  // Diagnostics only (pv7 §5, D-6): the whole batches the Match refused for
+  // this player since the link was established, and the latest reason.
+  uint64 refused_batches = 4;
+  ActionRefusal last_refusal = 5;
+}
+// Why the Match refused a whole action batch (pv7 §5, D-6): the names of
+// the Match's IngressActionRejection. Diagnostics only (D32).
+enum ActionRefusal {
+  ACTION_REFUSAL_UNSPECIFIED = 0;
+  ACTION_REFUSAL_OVER_BATCH = 1;
+  ACTION_REFUSAL_MALFORMED = 2;
+  ACTION_REFUSAL_RESETTING = 3;
+  ACTION_REFUSAL_INVALID_PLAYER = 4;
+  ACTION_REFUSAL_INVALID_BATCH = 5;
+  ACTION_REFUSAL_CONFLICT = 6;
+  ACTION_REFUSAL_OUTSIDE_WINDOW = 7;
+  ACTION_REFUSAL_FULL = 8;
+}
+
+message CombatRules {
+  uint32 maximum_hp = 1;
+  uint32 shot_damage = 2;
+  uint64 cooldown_ticks = 3;
+  float shot_range = 4;
+  uint32 maximum_reference_age_ms = 5;
+  uint32 magazine_capacity = 6;
+  uint64 reload_ticks = 7;
+  uint64 respawn_ticks = 8;
+  // The most damage one decision may deal, part multipliers included (pv7
+  // §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
+  uint32 maximum_shot_damage = 9;
+}
+message CombatState {
+  uint64 player_id = 1;
+  uint32 hp = 2;
+  uint64 next_allowed_shot_tick = 3;
+  uint64 life_generation = 4;
+  uint32 magazine_ammo = 5;
+  uint64 reload_action_id = 6;
+  uint64 reload_start_tick = 7;
+  uint64 reload_end_tick = 8;
+  uint64 last_shot_action_id = 9;
+  uint64 last_shot_tick = 10;
+  // Presentation-only hit record of the current life (pv6 contract §2): all
+  // three are zero before the first hit and reset on respawn.
+  uint64 last_damage_tick = 11;
+  uint32 damage_count = 12;
+  uint64 last_attacker_id = 13;
+  // The hit record's fourth field (pv7 §7): set with the other three, BODY or
+  // HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
+  HitPart last_hit_part = 14;
+}
+// Historical names are retained; requests and decisions cover Shot and Reload.
+enum ActionKind {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_SHOT = 1;
+  ACTION_RELOAD = 2;
+}
+message ShotRequest {
+  uint64 action_id = 1;
+  uint64 observed_authority_tick = 2;
+  optional float yaw = 3;
+  optional float pitch = 4;
+  ActionKind kind = 5;
+  uint64 life_generation = 6;
+  // Immutable request content (pv7 §6, §7), part of the request's identity
+  // for retransmission: the Client's predicted movement epoch (E) and its
+  // newest command of that epoch (S), from one simulation step, and the
+  // remote time the shooter saw (the presentation's global cursor, Tick x
+  // 65536, floored; 0 without one). v7.1 only records them (D-2).
+  uint64 movement_epoch = 7;
+  uint64 command_sequence = 8;
+  uint64 view_tick_q16 = 9;
+}
+enum ShotRejection {
+  REJECTION_NONE = 0;
+  REJECTION_INVALID_REFERENCE = 1;
+  REJECTION_EXPIRED = 2;
+  REJECTION_COOLDOWN = 3;
+  REJECTION_STALE_LIFE = 4;
+  REJECTION_INVALID_LIFE = 5;
+  REJECTION_DEAD = 6;
+  REJECTION_RELOADING = 7;
+  REJECTION_EMPTY_MAGAZINE = 8;
+  REJECTION_MAGAZINE_FULL = 9;
+}
+enum ShotHitKind {
+  HIT_MISS = 0;
+  HIT_WORLD = 1;
+  HIT_PLAYER = 2;
+}
+message ShotDecision {
+  uint64 action_id = 1;
+  uint64 resolved_tick = 2;
+  bool accepted = 3;
+  ShotRejection rejection = 4;
+  ShotHitKind hit_kind = 5;
+  uint64 target_id = 6;
+  uint32 damage = 7;
+  ActionKind kind = 8;
+  uint64 life_generation = 9;
+  uint64 target_life_generation = 10;
+  HitPart hit_part = 11;
+}
+// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
+// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+enum HitPart {
+  HIT_PART_UNSPECIFIED = 0;
+  HIT_PART_BODY = 1;
+  HIT_PART_HEAD = 2;
+}
+
+// Diagnostics only (pv7 contract §4): the discards the Gateway executed, by
+// reason, per stream (a player, or the Gateway as player 0). Identity only,
+// never content; bounded; cumulative, so a lost or merged report loses no
+// count. No value of it may reach a decision (D32).
+message GatewayDropReport {
+  uint64 player_id = 1;           // 0: the Gateway's stream
+  uint64 report_sequence = 2;     // from 1 per link and stream, assigned when written
+  bool final = 3;                 // the stream's last report
+  repeated DropCount counts = 4;  // every non-zero total, reasons ascending, never going back
+  repeated DropSample samples = 5;  // the earliest events since the previous report, at most 4
+  uint64 samples_omitted = 6;     // cumulative: events not sampled
+  uint64 merged_streams = 7;      // Gateway stream only, cumulative: finals merged away
+}
+message DropCount {
+  DropReason reason = 1;
+  uint64 total = 2;  // the Gateway's cumulative drop_ count when written, at least 1
+}
+message DropSample {
+  DropReason reason = 1;
+  uint32 dwell_us = 2;               // pv7 §2 dwell, clamped at 10,000,000
+  uint32 transport_sequence = 3;     // the uplink GYOP sequence or the Gateway's downlink one; 0 if none
+  uint64 movement_epoch = 4;         // command reasons; 0 otherwise
+  uint64 life_generation = 5;        // command reasons; 0 otherwise
+  uint64 first_command_sequence = 6; // command reasons: the bounds of the dropped commands
+  uint64 last_command_sequence = 7;
+  uint64 first_action_id = 8;        // action reasons: the bounds of the dropped ids; ACK reasons: both
+  uint64 last_action_id = 9;         //   are the dropped acknowledged_through
+  uint64 snapshot_tick = 10;         // snapshot reasons; 0 otherwise
+  uint32 item_count = 11;            // items the event dropped
+}
+// Each name is an ingress v1 drop_ key in upper case; the words are defined
+// once, in gateway/ingress_statistics.go, and checked against
+// tests/object_fps_pvp/fixtures/drop_reasons.json in Go, C++ and Python.
+// 1-34 are player reasons, 40-45 Gateway reasons. The transitional reasons
+// (16, 17, 20-26, 43, 44) existed only in pv7-line's intermediate commits; the
+// edge batches deleted them with their exits and they are reserved. A
+// reserved value is never reused.
+enum DropReason {
+  DROP_REASON_UNSPECIFIED = 0;
+  DROP_RATE_LIMITED_HELLO_PACKETS = 1;
+  DROP_RATE_LIMITED_INPUT_PACKETS = 2;
+  DROP_RATE_LIMITED_ACTIONS_PACKETS = 3;
+  DROP_RATE_LIMITED_OTHER_PACKETS = 4;
+  DROP_UNAUTHORIZED_HELLO_PACKETS = 5;
+  DROP_UNAUTHORIZED_INPUT_PACKETS = 6;
+  DROP_UNAUTHORIZED_ACTIONS_PACKETS = 7;
+  DROP_UNAUTHORIZED_OTHER_PACKETS = 8;
+  DROP_STALE_SEQUENCE_ACTIONS_PACKETS = 9;
+  DROP_STALE_SEQUENCE_OTHER_PACKETS = 10;
+  DROP_MALFORMED_HELLO_PACKETS = 11;
+  DROP_MALFORMED_INPUT_PACKETS = 12;
+  DROP_MALFORMED_ACTIONS_PACKETS = 13;
+  DROP_INACTIVE_INPUT_PACKETS = 14;
+  DROP_INACTIVE_ACTIONS_PACKETS = 15;
+  reserved 16;                                // edge-results-passthrough: A3
+  reserved 17;                                // edge-actions-passthrough: A5
+  DROP_UNKNOWN_KIND_PACKETS = 18;
+  DROP_ADMISSION_UNKNOWN_PACKETS = 19;
+  reserved 20;                                // edge-results-passthrough: A3
+  reserved 21;                                // edge-actions-passthrough: A5
+  reserved 22 to 24;                          // edge-input-passthrough: trim, rejected lane, Leave discard
+  reserved 25, 26;                            // edge-actions-passthrough: Leave discard of actions
+  DROP_WRITE_FAILED_SNAPSHOT_PACKETS = 27;
+  DROP_WRITE_FAILED_RESULTS_PACKETS = 28;
+  DROP_WRITE_FAILED_CONTROL_PACKETS = 29;
+  DROP_CONTROL_QUEUE_FULL_CONTROL_PACKETS = 30;
+  DROP_REPLACED_SNAPSHOT_PACKETS = 31;
+  DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS = 32;
+  DROP_IPC_QUEUE_OVERFLOW_ACTIONS_PACKETS = 33;
+  DROP_RESULTS_OVER_RATE_PACKETS = 34;
+  DROP_UNDECODABLE_DATAGRAMS = 40;
+  DROP_OTHER_VERSION_DATAGRAMS = 41;
+  DROP_UNKNOWN_SESSION_DATAGRAMS = 42;
+  reserved 43, 44;                            // edge-input-passthrough: D1, D2
+  DROP_COALESCED_SNAPSHOTS = 45;
+}

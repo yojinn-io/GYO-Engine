@@ -1,7 +1,7 @@
 # PvP Protocol v4：時間、動作與權威射擊契約
 
 狀態：2026-09-28 第01–05批與追加完整驗收已完成，**v4升格為穩定基線**。
-後續：v4 已由 [protocol v5](protocol-v5.zh-Hant.md) 與 [protocol v6](protocol-v6.zh-Hant.md) 取代，現行 wire 是 pv6；本文件保留為歷史契約。
+後續：v4 已由 [protocol v5](protocol-v5.zh-Hant.md) 與 [protocol v6](protocol-v6.zh-Hant.md) 取代，之後由 [protocol v7](protocol-v7.zh-Hant.md) 取代，現行 wire 是 pv7；本文件保留為歷史契約。
 驗證範圍為Linux／X11／Vulkan、同機雙玩家及受控網路。Client／Gateway／Match
 一起使用v4並拒絕v1–v3；Mark23單發、權威HP、動作確認與既有移動政策維持不變。
 三輪GUI移動／射擊／HP、60／144Hz各30分鐘與原生桌面操作已通過。

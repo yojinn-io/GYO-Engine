@@ -2,6 +2,7 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MatchIngressTrace.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "gyo/AppConfig.hpp"
@@ -40,6 +41,7 @@ int main(int argc,char** argv) {
             if(argument=="--help") {
                 std::cout<<"Match runtime: [--arena path (default: the release arena pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
                            "  [--movement-trace path [--ingress-trace path (default: next to it, -commands.jsonl -> -ingress.jsonl)]]\n"
+                           "  (with a movement trace, the shadow records go next to it: -commands.jsonl -> -shots.jsonl)\n"
                            "  [--log path (also append console output, timestamped)]\n";return 0;
             }
             if(index+1>=argc){std::cerr<<"Missing argument\n";return 2;}
@@ -68,6 +70,8 @@ int main(int argc,char** argv) {
         fps::pvp::MovementTraceWriter trace(movementTrace);
         std::optional<fps::pvp::MatchIngressTraceFile> ingressTrace;
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);
+        std::optional<fps::pvp::MatchShotTraceFile> shotTrace;
+        if(const auto path=fps::pvp::MatchShotTracePath(movementTrace);!path.empty()) shotTrace.emplace(path);
         fps::pvp::MatchRuntimeHost runtime(*arena);
         fps::pvp::IpcHost ipc(runtime,*arena);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
@@ -98,10 +102,12 @@ int main(int argc,char** argv) {
             std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
-                .snapshotOverwrites=host.snapshotOverwrites})<<'\n';
+                .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits)})<<'\n';
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
             if(ingressTrace) ingressTrace->Write(records);
+            const auto shots=runtime.DrainShotRecords();
+            if(shotTrace) shotTrace->Write(shots);
             windowStart=now;cpuAtStart=cpu;ipcAtStart=iterations;
         }
         // I/O first: it stops calling into the host before the host's role stops.
@@ -117,6 +123,7 @@ int main(int argc,char** argv) {
         if(failed) std::cerr<<"Match simulation failed: "<<*failed<<'\n';
         // Ends the file with trace_end; throws (exit 1) if any of its writes failed.
         if(ingressTrace) ingressTrace->Finish(lastRecords);
+        if(shotTrace) shotTrace->Finish(runtime.DrainShotRecords());
         if(failed) return 1;
         if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

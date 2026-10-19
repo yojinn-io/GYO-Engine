@@ -10,12 +10,12 @@ also writes match-ingress.jsonl), the Gateway directly on the Match's IPC port, 
 an 8-second run, so the Gateway (10-second windows) also writes one window before its final one. The ending is ordered so that I1's preconditions hold by construction: the probe leaves, the
 Gateway stops (its final=1 lines follow the link's close), the Match logs its 'ipc closed' line, and only then
 does the Match stop. ingress_evidence.py must judge IG, the Gateway-wide conservation, I0, T3, I2, J5a, S1, S2,
-I1, link_shots (the Gateway of this tree writes the D56/D59 keys on every line) and the trace as passed, on
-non-trivial counts.
+I1, removed_paths, link_actions, I1a (the Gateway of this tree forwards every datagram as it came, v7.1
+edge-*-passthrough) and the trace as passed, on non-trivial counts; I3 and link_shots are not applicable to it.
 
 The Gateway closes its runtime link with a plain Close while Match snapshots may still sit unread in its socket;
 the kernel then resets the connection and the Match logs 'ipc closed reason=read: ...' instead of eof (seen in
-about 1 of 13 development runs). I1 is then undetermined by its own precondition, never failed. Such an attempt
+about 1 of 13 development runs). I1 and I1a are then undetermined by their own precondition, never failed. Such an attempt
 is kept (attemptN/) and the run is repeated, at most ATTEMPTS times; every other judgement must pass on every
 attempt.
 
@@ -42,7 +42,11 @@ from run_network import free_port, wait_for_match_ready  # noqa: E402
 
 GATEWAY_MODULE = ROOT / "apps" / "object_fps_pvp"
 SKIPPED = 77
-REQUIRED = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "I1", "link_shots", "trace")
+REQUIRED = ("IG", "gateway_global", "I0", "T3", "I2", "J5a", "S1", "S2", "I1", "removed_paths", "link_actions", "I1a",
+            "trace")
+NOT_APPLICABLE = ("I3", "link_shots")
+# v7.1 edge-analyzers refroze the conservations for the passthrough Gateway: no failure is declared any more.
+DECLARED_FAILURES = {}
 CLOSED_LINE = "[ObjectFPS/PvP Match] ipc closed reason="
 ATTEMPTS = 3
 
@@ -150,12 +154,22 @@ def run_once(args, gateway_executable, output):
         (output / "match-ingress.jsonl").read_text(encoding="utf-8", errors="replace"))
     (output / "ingress-evidence.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     failures = []
-    if result["status"] != "passed":
-        failures.append(f"status {result['status']}: {result.get('stops', '')}")
+    checks = result.get("checks", {})
+    undeclared = [name for name, check in checks.items() if check.get("status") == "failed"
+                  and not (name in DECLARED_FAILURES and DECLARED_FAILURES[name](check))]
+    if result["status"] != "passed" and (undeclared or result.get("stops")):
+        failures.append(f"status {result['status']}: {result.get('stops', '')} {undeclared}")
+    for name in sorted(set(checks) & set(DECLARED_FAILURES)):
+        if checks[name].get("status") == "failed" and not undeclared:
+            print(f"ingress cross check: {name} failed as declared (pv7 §9): {checks[name].get('inequality', '')}")
     for name in REQUIRED:
         status = result.get("checks", {}).get(name, {}).get("status")
         if status != "passed":
             failures.append(f"{name} is {status}: {result.get('checks', {}).get(name)}")
+    for name in NOT_APPLICABLE:
+        status = result.get("checks", {}).get(name, {}).get("status")
+        if status != "not applicable":
+            failures.append(f"{name} is {status}, expected not applicable for a passthrough Gateway")
     if not failures:
         totals = result["totals"]
         written = sum(ingress_evidence.total(c, ingress_evidence.LINK_WRITTEN)
@@ -171,7 +185,7 @@ def run_once(args, gateway_executable, output):
     i1 = result.get("checks", {}).get("I1", {})
     reset = (i1.get("status") == "undetermined" and i1.get("preconditions", {}).get("eof_before_final") is False
              and all(v for k, v in i1["preconditions"].items() if k != "eof_before_final"))
-    others = [f for f in failures if not f.startswith("I1 is undetermined")]
+    others = [f for f in failures if not f.startswith(("I1 is undetermined", "I1a is undetermined"))]
     if reset and not others:
         closes = result["totals"]["match"]["ipc_closed"]
         print(f"ingress cross check: {output.name}: IPC closed with {closes}, not EOF; I1 undetermined, retrying")

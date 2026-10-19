@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
+#include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 
 #include <array>
 #include <numbers>
@@ -357,4 +358,28 @@ TEST_CASE("PvP remote samples report the planar speed of their bracketing author
     REQUIRE(held);
     CHECK(held->lowerTick == held->upperTick);
     CHECK(held->planarSpeed == 0);
+}
+
+// pv7 §7: the view tick is the timeline's global cursor, not one player's
+// clamped cursor. A remote player whose new segment (here a new epoch, as a
+// respawn) starts after the cursor is shown at its segment start, while the
+// shooter's view time stays the global cursor.
+TEST_CASE("PvP the view tick is the global cursor, not a respawned player's") {
+    SnapshotTimeline timeline;
+    CHECK_FALSE(timeline.GlobalCursor());
+    CHECK(ViewTickQ16(timeline.GlobalCursor()) == 0);
+    for (std::uint64_t tick = 1; tick <= 6; ++tick)
+        REQUIRE(timeline.Push(State(tick, tick == 6 ? 2 : 1), At(1 + static_cast<double>(tick - 1) * MovementTickSeconds)));
+    const auto now = At(1 + 5 * MovementTickSeconds);
+    const auto respawned = Presented(timeline, 1, now);
+    const auto steady = Presented(timeline, 2, now);
+    REQUIRE(respawned);
+    REQUIRE(steady);
+    const auto cursor = timeline.GlobalCursor();
+    REQUIRE(cursor);
+    CHECK(*cursor < 6);
+    CHECK(respawned->presentationTick == doctest::Approx(6)); // clamped to its new segment
+    CHECK(steady->presentationTick == doctest::Approx(*cursor));
+    CHECK(ViewTickQ16(cursor) == static_cast<std::uint64_t>(std::floor(*cursor * 65536.0)));
+    CHECK(ViewTickQ16(cursor) < 6 * 65536);
 }

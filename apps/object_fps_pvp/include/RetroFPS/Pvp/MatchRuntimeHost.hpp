@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
 #include "RetroFPS/Pvp/MatchIngressTrace.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -73,22 +74,34 @@ public:
     // I/O validates and stages immutable requests; only Advance mutates Match.
     [[nodiscard]] ActionAdmission SubmitActions(const ActionBatch& batch);
     // Requests (Shot/Reload) and ACK validate together; rejection queues neither.
-    [[nodiscard]] ActionAdmission SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough);
+    // refusal, if given, receives the reason of a refusal as counted (a reset
+    // in progress is told apart from an unknown player only there); the I/O
+    // layer answers it to the Client (pv7 §5, D-6).
+    [[nodiscard]] ActionAdmission SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough,
+        IngressActionRejection* refusal = nullptr);
     [[nodiscard]] bool QueueActionAcknowledgement(PlayerId playerId, ActionId through);
     // Owning, non-destructive results survive reads until a validated ACK retires them.
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
 
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Advance(double elapsedSeconds);
-    [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot();
+    // publishedAt, if given, receives when the step published the snapshot,
+    // on the host's clock (the start of its reference age).
+    [[nodiscard]] std::optional<WorldSnapshot> TakeSnapshot(std::chrono::steady_clock::time_point* publishedAt = nullptr);
+    // The host's clock (injected for tests), for the I/O layer's durations
+    // that start at a publication.
+    [[nodiscard]] std::chrono::steady_clock::time_point Now() const;
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
     // Diagnostics only, since the previous call (or the start): how the
-    // simulation role's waits for the next tick ended, and how many published
-    // snapshots were replaced before the I/O layer took them. Resets the window.
+    // simulation role's waits for the next tick ended, how many published
+    // snapshots were replaced before the I/O layer took them, and how long
+    // SubmitInput and the simulation step waited for the host mutex (pv7 §2a:
+    // the Match now reads every Client datagram's window). Resets the window.
     struct Statistics final {
         TickWakeStatistics ticks;
         std::uint64_t snapshotOverwrites{};
+        HostLockWaits lockWaits;
     };
     [[nodiscard]] Statistics TakeStatistics();
     // Diagnostics only, since the previous call (or the start): what became
@@ -107,6 +120,10 @@ public:
     // window, substitutions are added as their records close; the rest is
     // counted as suppressed or dropped. Survives Leave and resets until taken.
     [[nodiscard]] IngressRecords DrainIngressRecords();
+    // Diagnostics only, since the previous call: the shadow record of every
+    // action decision (match-shots.jsonl, MatchShotTrace.hpp). No decision
+    // reads them; they record what A1 would do with E and S (pv7 §6, D-2).
+    [[nodiscard]] ShotRecords DrainShotRecords();
     // The I/O layer replaced a taken snapshot (latest wins) before writing
     // it; these players' slack samples in it never reach the Gateway.
     void NoteCoalescedSlackSamples(std::span<const PlayerId> players);
@@ -212,6 +229,7 @@ private:
     MatchIngressLedger ledger_;
     // match-ingress.jsonl records waiting for DrainIngressRecords.
     MatchIngressRecordBuffer records_;
+    ShotShadowTrack shotShadow_;
     std::optional<std::string> error_;
     std::function<void()> publishListener_;
     std::atomic<bool> running_{};

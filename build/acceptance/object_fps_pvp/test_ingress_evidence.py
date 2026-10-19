@@ -622,6 +622,119 @@ GLOBAL_DATAGRAM_DROPS = ("drop_undecodable_datagrams", "drop_other_version_datag
                          "drop_room_unavailable_datagrams", "drop_unknown_session_datagrams")
 
 
+class PassthroughTests(unittest.TestCase):
+    """pv7 passthrough (v7.1 edge-analyzers): I0 with the FIFO overflow, removed_paths, link_actions, I1a, and I3 and
+    link_shots not applicable, judged from the appended key groups every player ingress line carries."""
+    WRITTEN = {1: 600, 2: 590}
+    ALL = evidence.GATEWAY_PLAYER_GROUPS
+
+    def logs(self, gateway=None, match=None, appended=ALL, windows=2, eof=True):
+        # player 1: 60 input packets, 30 action batches (28 written, 1 overflowed, 1 cleared on close);
+        # player 2: 59 input packets of which 1 overflowed with its 10 commands, no actions.
+        values = {1: {"received_datagrams": 90, "fwd_main_input_packets": 60, "fwd_handed_actions_packets": 30,
+                      "fwd_link_written_actions_packets": 28, "drop_ipc_queue_overflow_actions_packets": 1,
+                      "drop_cleared_on_close_actions_packets": 1},
+                  2: {"received_datagrams": 59, "fwd_main_input_packets": 59, "fwd_link_written_main_commands": 580,
+                      "drop_ipc_queue_overflow_input_packets": 1, "drop_ipc_queue_overflow_input_commands": 10},
+                  "global": {"received_datagrams": 149}}
+        for key, change in (gateway or {}).items():
+            values.setdefault(key, {}).update(change)
+        received = {1: {"received_actions_batches": 28, "accepted_actions_batches": 28}}
+        for key, change in (match or {}).items():
+            received.setdefault(key, {}).update(change)
+        return run_logs([1, 2], windows=windows, written=self.WRITTEN, match_received={1: 600, 2: 580},
+                        gateway_values=values, match_values=received, appended=appended, eof=eof)
+
+    def test_a_passthrough_run_passes(self):
+        result = evidence.analyze_text(*self.logs())
+        checks = result["checks"]
+        self.assertEqual(result["status"], "passed", json.dumps(checks, indent=1)[:4000])
+        for name in ("I0", "removed_paths", "link_actions", "I1", "I1a"):
+            self.assertEqual(checks[name]["status"], "passed", name)
+        self.assertEqual(checks["I3"]["status"], "not applicable")
+        self.assertEqual(checks["link_shots"]["status"], "not applicable")
+        self.assertEqual(checks["I1a"]["link"]["lhs"], 28)
+        self.assertEqual(result["totals"]["gateway"]["unknown_keys"], [])
+
+    def test_i0_counts_the_overflowed_commands(self):
+        gateway, match = self.logs()
+        result = evidence.analyze_text(corrupt(gateway, "player=2", "drop_ipc_queue_overflow_input_commands", -1),
+                                       match)
+        self.assertEqual(result["checks"]["I0"]["status"], "failed")
+        self.assertEqual(result["status"], "failed")
+
+    def test_each_removed_path_key_fails_it(self):
+        keys = (evidence.REMOVED_BY_INPUT[0], evidence.REMOVED_BY_INPUT[-1], evidence.REMOVED_BY_RESULTS[1],
+                evidence.REMOVED_BY_ACTIONS[0], "drop_discarded_on_leave_actions_acks", "fwd_handed_actions_shots")
+        for key in keys:
+            gateway, match = self.logs()
+            result = evidence.analyze_text(corrupt(gateway, "player=1", key, 1), match)
+            self.assertEqual(result["checks"]["removed_paths"]["status"], "failed", key)
+            self.assertIn(key, result["checks"]["removed_paths"]["nonzero"], key)
+            self.assertEqual(result["status"], "failed", key)
+        gateway, match = self.logs()
+        result = evidence.analyze_text(corrupt(gateway, "gateway ingress statistics", "drop_regressed_snapshots", 1),
+                                       match)
+        self.assertEqual(result["checks"]["removed_paths"]["nonzero"], {"drop_regressed_snapshots": 1})
+
+    def test_removed_paths_follow_the_groups_the_lines_carry(self):
+        # through edge-input only: A3, A5 and the action window keys are live there and not judged
+        gateway, match = self.logs(appended=self.ALL[:evidence.GROUPS_INPUT],
+                                  gateway={1: {"drop_invalid_actions_packets": 1, "received_datagrams": 91},
+                                           "global": {"received_datagrams": 150}})
+        checks = evidence.analyze_text(gateway, match)["checks"]
+        self.assertEqual(checks["removed_paths"]["status"], "passed", json.dumps(checks["removed_paths"]))
+        self.assertEqual(checks["I3"]["status"], "not applicable")
+        self.assertEqual(checks["link_actions"]["status"], "not applicable")
+        self.assertEqual(checks["I1a"]["status"], "not applicable")
+        # before the passthrough: removed_paths does not apply and I3 is judged
+        gateway, match = self.logs(appended=self.ALL[:2])
+        checks = evidence.analyze_text(gateway, match)["checks"]
+        self.assertEqual(checks["removed_paths"]["status"], "not applicable")
+        self.assertNotEqual(checks["I3"]["status"], "not applicable")
+
+    def test_each_link_action_term_breaks_it(self):
+        # spelled out here, not taken from the analyzer: a shortened exit list must not shorten the test
+        for key in ("fwd_handed_actions_packets", "fwd_link_written_actions_packets",
+                    "drop_ipc_queue_overflow_actions_packets", "drop_cleared_on_close_actions_packets",
+                    "drop_abandoned_on_close_actions_packets"):
+            gateway, match = self.logs()
+            delta = 1 if key == "fwd_handed_actions_packets" else -1 if key != "drop_abandoned_on_close_actions_packets" else 1
+            result = evidence.analyze_text(corrupt(gateway, "player=1", key, delta), match)
+            self.assertEqual(result["checks"]["link_actions"]["status"], "failed", key)
+            self.assertEqual(result["status"], "failed", key)
+
+    def test_i1a_compares_written_and_received_action_batches(self):
+        gateway, match = self.logs(match={1: {"received_actions_batches": 29, "accepted_actions_batches": 29}})
+        result = evidence.analyze_text(gateway, match)
+        self.assertEqual(result["checks"]["I1a"]["status"], "failed")
+        self.assertEqual(result["status"], "failed")
+        # the player=0 bucket counts in the link total, not for player 1
+        gateway, match = self.logs(match={0: {"received_actions_batches": 1, "invalid_player_actions_batches": 1},
+                                         1: {"received_actions_batches": 27, "accepted_actions_batches": 27}})
+        i1a = evidence.analyze_text(gateway, match)["checks"]["I1a"]
+        self.assertTrue(i1a["link"]["holds"])
+        self.assertEqual(i1a["status"], "failed")
+
+    def test_i1a_is_undetermined_without_its_preconditions(self):
+        gateway, match = self.logs(gateway={1: {"drop_cleared_on_close_actions_packets": 0,
+                                               "drop_abandoned_on_close_actions_packets": 1}})
+        result = evidence.analyze_text(gateway, match)
+        self.assertEqual(result["checks"]["I1a"]["status"], "undetermined")
+        self.assertFalse(result["checks"]["I1a"]["preconditions"]["no_abandoned_batch"])
+        self.assertEqual(result["status"], "passed")   # conditional: its undetermined alone decides nothing
+        gateway, match = self.logs(eof=False)
+        self.assertEqual(evidence.analyze_text(gateway, match)["checks"]["I1a"]["status"], "undetermined")
+
+    def test_the_global_appended_key_is_known(self):
+        gateway, match = self.logs()
+        gateway = "\n".join(line + " drop_coalesced_snapshots=0" if "gateway ingress statistics" in line else line
+                            for line in gateway.splitlines()) + "\n"
+        result = evidence.analyze_text(gateway, match)
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["totals"]["gateway"]["unknown_keys"], [])
+
+
 class ContentlessDropsTests(unittest.TestCase):
     """D58: reported only, by reason and kind, per player, with the Gateway-wide datagram drops."""
 

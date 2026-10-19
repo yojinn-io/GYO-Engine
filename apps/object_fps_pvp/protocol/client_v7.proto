@@ -1,10 +1,15 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v6;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv6";
+package object_fps_pvp.client.v7;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv7";
 
-// This remote-client contract is independent of runtime_v6.proto.
-message Hello { string session_token = 1; }
+// This remote-client contract is independent of runtime_v7.proto.
+message Hello {
+  string session_token = 1;
+  // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
+  // after the Hello is authenticated, and never part of admission or liveness.
+  ClockSample clock = 2;
+}
 message Welcome {
   uint64 player_id = 1;
   uint64 match_id = 2;
@@ -17,6 +22,20 @@ message Welcome {
   float gravity = 9;
   // Content digest of the served arena (pv6 contract §2), copied from Ready.
   fixed64 arena_digest = 10;
+  // Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
+  ClockSample clock = 11;
+}
+// Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
+// runtime_v7.proto: times are the sender's own monotonic clock in
+// microseconds; a time of the other side is only ever copied back.
+message ClockSample {
+  // The transmit_us of the peer's latest ClockSample this side read, as is;
+  // present exactly when receive_us is.
+  optional uint64 origin_us = 1;
+  // When this side read that sample; not after transmit_us.
+  optional uint64 receive_us = 2;
+  // When this side serialized this sample: at least 1 and strictly increasing.
+  uint64 transmit_us = 3;
 }
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {
@@ -76,6 +95,11 @@ message WorldSnapshot {
   uint64 tick = 1;
   repeated PlayerState players = 2;
   repeated CombatState combat = 3;
+  // Diagnostics only (pv7 §5, D-4): the Match's hold (Host publication to the
+  // IPC write) and the Gateway's (reading the IPC frame to the write to this
+  // Client), each a duration on its own clock, clamped at 10,000,000.
+  optional uint32 match_hold_us = 4;
+  optional uint32 gateway_hold_us = 5;
 }
 message Error {
   string code = 1;
@@ -89,6 +113,23 @@ message ActionBatch {
 message ActionResults {
   uint64 retired_through = 1;
   repeated ShotDecision decisions = 2;
+  // Diagnostics only (pv7 §5, D-6): as the Match sent them. The Client only
+  // records them; it does not change its resending.
+  uint64 refused_batches = 3;
+  ActionRefusal last_refusal = 4;
+}
+// Why the Match refused a whole action batch (pv7 §5, D-6): the names of
+// the Match's IngressActionRejection. Diagnostics only (D32).
+enum ActionRefusal {
+  ACTION_REFUSAL_UNSPECIFIED = 0;
+  ACTION_REFUSAL_OVER_BATCH = 1;
+  ACTION_REFUSAL_MALFORMED = 2;
+  ACTION_REFUSAL_RESETTING = 3;
+  ACTION_REFUSAL_INVALID_PLAYER = 4;
+  ACTION_REFUSAL_INVALID_BATCH = 5;
+  ACTION_REFUSAL_CONFLICT = 6;
+  ACTION_REFUSAL_OUTSIDE_WINDOW = 7;
+  ACTION_REFUSAL_FULL = 8;
 }
 
 message CombatRules {
@@ -100,6 +141,9 @@ message CombatRules {
   uint32 magazine_capacity = 6;
   uint64 reload_ticks = 7;
   uint64 respawn_ticks = 8;
+  // The most damage one decision may deal, part multipliers included (pv7
+  // §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
+  uint32 maximum_shot_damage = 9;
 }
 message CombatState {
   uint64 player_id = 1;
@@ -117,6 +161,9 @@ message CombatState {
   uint64 last_damage_tick = 11;
   uint32 damage_count = 12;
   uint64 last_attacker_id = 13;
+  // The hit record's fourth field (pv7 §7): set with the other three, BODY or
+  // HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
+  HitPart last_hit_part = 14;
 }
 // Historical names are retained; requests and decisions cover Shot and Reload.
 enum ActionKind {
@@ -131,6 +178,14 @@ message ShotRequest {
   optional float pitch = 4;
   ActionKind kind = 5;
   uint64 life_generation = 6;
+  // Immutable request content (pv7 §6, §7), part of the request's identity
+  // for retransmission: the Client's predicted movement epoch (E) and its
+  // newest command of that epoch (S), from one simulation step, and the
+  // remote time the shooter saw (the presentation's global cursor, Tick x
+  // 65536, floored; 0 without one). v7.1 only records them (D-2).
+  uint64 movement_epoch = 7;
+  uint64 command_sequence = 8;
+  uint64 view_tick_q16 = 9;
 }
 enum ShotRejection {
   REJECTION_NONE = 0;
@@ -160,4 +215,12 @@ message ShotDecision {
   ActionKind kind = 8;
   uint64 life_generation = 9;
   uint64 target_life_generation = 10;
+  HitPart hit_part = 11;
+}
+// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
+// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+enum HitPart {
+  HIT_PART_UNSPECIFIED = 0;
+  HIT_PART_BODY = 1;
+  HIT_PART_HEAD = 2;
 }

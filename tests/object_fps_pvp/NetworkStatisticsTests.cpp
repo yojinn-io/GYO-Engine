@@ -46,20 +46,54 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
     match.ticks.Record(planned, planned + 300us, false);
     match.ticks.Record(planned, planned + 5ms, false);
     match.ticks.Record(planned, planned, true);
+    match.lockWaits.input.Record(100us);
+    match.lockWaits.input.Record(3ms);
+    match.lockWaits.step.Record(600us);
     CHECK(MatchStatisticsLine(match) ==
           "[ObjectFPS/PvP Match] network statistics window_s=10.000 cpu_s=0.250 cpu_total_s=12.500 ipc_iterations=8123 "
           "ipc_iterations_per_s=812.3 tick_deadline_wakes=2 tick_notified=1 tick_early=0 tick_late_p50_le_us=500 "
-          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0 snapshot_overwrites=3");
+          "tick_late_p99_le_us=5000 tick_late_max_us=5000 tick_late_bins=0,1,0,0,0,1,0,0,0,0 snapshot_overwrites=3 "
+          "host_lock_input_waits=2 host_lock_input_wait_p99_le_us=3000 host_lock_input_wait_max_us=3000 "
+          "host_lock_input_wait_bins=1,0,0,0,1,0,0,0,0,0 host_lock_step_waits=1 host_lock_step_wait_p99_le_us=600 "
+          "host_lock_step_wait_max_us=600 host_lock_step_wait_bins=0,0,1,0,0,0,0,0,0,0");
 
     CHECK(MatchStatisticsLine({}) ==
           "[ObjectFPS/PvP Match] network statistics window_s=0.000 cpu_s=na cpu_total_s=na ipc_iterations=0 "
           "ipc_iterations_per_s=0.0 tick_deadline_wakes=0 tick_notified=0 tick_early=0 tick_late_p50_le_us=0 "
-          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0");
+          "tick_late_p99_le_us=0 tick_late_max_us=0 tick_late_bins=0,0,0,0,0,0,0,0,0,0 snapshot_overwrites=0 "
+          "host_lock_input_waits=0 host_lock_input_wait_p99_le_us=0 host_lock_input_wait_max_us=0 "
+          "host_lock_input_wait_bins=0,0,0,0,0,0,0,0,0,0 host_lock_step_waits=0 host_lock_step_wait_p99_le_us=0 "
+          "host_lock_step_wait_max_us=0 host_lock_step_wait_bins=0,0,0,0,0,0,0,0,0,0");
 
     CHECK(WorkerStatisticsLine({.player = 2, .windowSeconds = 10.0, .wakes = 4812, .cpuSeconds = 0.0514}) ==
-          "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051");
+          "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051 "
+          "other_version_datagrams=0");
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1}) ==
-          "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na");
+          "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na "
+          "other_version_datagrams=0");
+    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1, .otherVersionDatagrams = 3}).ends_with(
+          " cpu_s=na other_version_datagrams=3"));
+}
+
+// pv7 §5: the Client's cause records line counts each hold's samples, missing
+// and out-of-range values apart, keeps the latest refusal reply across
+// windows and starts each window empty.
+TEST_CASE("The Client's cause records line counts the holds and keeps the latest refusal") {
+    ClientCauseRecords records;
+    CHECK(records.Line(0, 10.0) ==
+          "[ObjectFPS/PvP] cause records player=0 window_s=10.000 snapshots=0 match_hold_samples=0 match_hold_missing=0 "
+          "match_hold_range=0 match_hold_max_us=0 match_hold_mean_us=0 gateway_hold_samples=0 gateway_hold_missing=0 "
+          "gateway_hold_range=0 gateway_hold_max_us=0 gateway_hold_mean_us=0 refused_batches=0 last_refusal=unspecified");
+    records.Snapshot(100, 10'000'000);
+    records.Snapshot(300, 10'000'001);
+    records.Snapshot(std::nullopt, 50);
+    records.Results(3, "resetting");
+    CHECK(records.Line(4, 9.5) ==
+          "[ObjectFPS/PvP] cause records player=4 window_s=9.500 snapshots=3 match_hold_samples=2 match_hold_missing=1 "
+          "match_hold_range=0 match_hold_max_us=300 match_hold_mean_us=200 gateway_hold_samples=2 gateway_hold_missing=0 "
+          "gateway_hold_range=1 gateway_hold_max_us=10000000 gateway_hold_mean_us=5000025 refused_batches=3 "
+          "last_refusal=resetting");
+    CHECK(records.Line(4, 10.0).ends_with(" gateway_hold_mean_us=0 refused_batches=3 last_refusal=resetting"));
 }
 
 TEST_CASE("CPU time readings never decrease and grow with work on the calling thread") {

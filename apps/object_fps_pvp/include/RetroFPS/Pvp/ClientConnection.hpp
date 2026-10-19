@@ -96,9 +96,12 @@ public:
     // Assigns a contiguous immutable ID only when the active player's bounded
     // window has room. Retries, decisions and ACKs stay alive across movement
     // epochs and stalled game frames. Nullopt never allocates/skips an ID.
-    [[nodiscard]] std::optional<ActionId> SubmitShot(std::uint64_t observedAuthorityTick, float yaw, float pitch);
+    [[nodiscard]] std::optional<ActionId> SubmitShot(std::uint64_t observedAuthorityTick, float yaw, float pitch,
+        const ShotContext& context = {});
+    // context: E, S and the view tick of the request (pv7 §6, §7), carried as
+    // they are; the Match only records them in v7.1.
     [[nodiscard]] std::optional<ActionId> SubmitAction(ActionKind kind, std::uint64_t lifeGeneration,
-        std::uint64_t observedAuthorityTick, float yaw = 0, float pitch = 0);
+        std::uint64_t observedAuthorityTick, float yaw = 0, float pitch = 0, const ShotContext& context = {});
     [[nodiscard]] ClientConnectionState State() const;
     // Atomically consumes receipt-stamped history with its matching state and
     // lifecycle generation. Overflow count is cumulative within this generation.

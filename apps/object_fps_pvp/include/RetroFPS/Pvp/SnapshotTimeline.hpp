@@ -40,6 +40,12 @@ public:
     static constexpr double DelaySeconds = MovementTickSeconds;
 
     void Reset() noexcept { *this = SnapshotTimeline{}; }
+    // The global interpolation cursor in ticks (the last Sample's, before any
+    // player's clamp), or nullopt before the first snapshot. Read-only.
+    [[nodiscard]] std::optional<double> GlobalCursor() const noexcept {
+        if (history_.empty()) return std::nullopt;
+        return static_cast<double>(baseTick_) + cursor_;
+    }
 
     [[nodiscard]] bool Push(const WorldSnapshot& snapshot, Clock::time_point receivedAt) {
         if (!snapshot.tick || (!history_.empty() && snapshot.tick <= history_.back().snapshot.tick)) return false;

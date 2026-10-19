@@ -4,21 +4,26 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
-// pv6 contract §2: the presentation-only hit record of the current life.
+// pv6 contract §2, four fields in pv7 §7: the presentation-only hit record of
+// the current life.
 func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 20,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7}},
+		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
+			LastHitPart: runtime.HitPart_HIT_PART_BODY}},
 	}
 	out, err := SnapshotForClient(in, testRules())
-	if err != nil || out.Combat[0].LastDamageTick != 15 || out.Combat[0].DamageCount != 2 || out.Combat[0].LastAttackerId != 7 {
+	if err != nil || out.Combat[0].LastDamageTick != 15 || out.Combat[0].DamageCount != 2 || out.Combat[0].LastAttackerId != 7 ||
+		out.Combat[0].LastHitPart != client.HitPart_HIT_PART_BODY {
 		t.Fatalf("hit record not kept: %v %v", out, err)
 	}
 	none := proto.Clone(in).(*runtime.WorldSnapshot)
 	none.Combat[0].LastDamageTick, none.Combat[0].DamageCount, none.Combat[0].LastAttackerId = 0, 0, 0
+	none.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED
 	if _, err := SnapshotForClient(none, testRules()); err != nil {
 		t.Fatalf("no hit rejected: %v", err)
 	}
@@ -26,6 +31,11 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 		"tick only zero":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastDamageTick = 0 },
 		"count only zero":    func(s *runtime.WorldSnapshot) { s.Combat[0].DamageCount = 0 },
 		"attacker only zero": func(s *runtime.WorldSnapshot) { s.Combat[0].LastAttackerId = 0 },
+		"part only zero":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED },
+		"unknown part":       func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = 99 },
+		"part without a hit": func(s *runtime.WorldSnapshot) {
+			s.Combat[0].LastDamageTick, s.Combat[0].DamageCount, s.Combat[0].LastAttackerId = 0, 0, 0
+		},
 		"before life state":  func(s *runtime.WorldSnapshot) { s.Combat[0].LastDamageTick = 9 },
 		"after snapshot":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastDamageTick = 21 },
 		"self attacker":      func(s *runtime.WorldSnapshot) { s.Combat[0].LastAttackerId = 1 },
@@ -33,6 +43,7 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 		"dead without hit": func(s *runtime.WorldSnapshot) {
 			kill(s)
 			s.Combat[0].LastDamageTick, s.Combat[0].DamageCount, s.Combat[0].LastAttackerId = 0, 0, 0
+			s.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED
 		},
 		"dead of an older hit": func(s *runtime.WorldSnapshot) { kill(s); s.Combat[0].LastDamageTick = 15 },
 	} {
@@ -46,6 +57,11 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	kill(dead)
 	if _, err := SnapshotForClient(dead, testRules()); err != nil {
 		t.Fatalf("lethal hit rejected: %v", err)
+	}
+	head := proto.Clone(in).(*runtime.WorldSnapshot) // v8's part: accepted already
+	head.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_HEAD
+	if out, err := SnapshotForClient(head, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_HEAD {
+		t.Fatalf("head rejected or changed: %v %v", out, err)
 	}
 	limit := proto.Clone(in).(*runtime.WorldSnapshot)
 	limit.Combat[0].DamageCount = testRules().MaximumHp

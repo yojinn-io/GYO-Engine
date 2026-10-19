@@ -88,23 +88,38 @@ func sumIngress[C ~uint8](counts []uint64, first, last C) (sum uint64) {
 	return sum
 }
 
+// The golden lines are the v1 keys the frozen analyzers pin; the keys pv7 §4
+// appended after them (drop-report) follow, at 0 in these windows.
+const (
+	goldenPlayerKeys  = int(playerDropWriteFailedSnapshotPackets)
+	goldenGatewayKeys = int(gatewayDropCoalescedSnapshots)
+)
+
+func appendedZeros(keys []ingressKey) string {
+	var b strings.Builder
+	for _, key := range keys {
+		b.WriteString(" " + ingressKeyName(key) + "=0")
+	}
+	return b.String()
+}
+
 func TestIngressStatisticsLinesEqualTheGoldenWindows(t *testing.T) {
 	players := readIngressGolden(t, "gateway-player.txt")
 	gateways := readIngressGolden(t, "gateway-global.txt")
 	for i := range players {
 		head, fields := splitIngressLine(t, players[i], "player ingress statistics", []string{"version", "player", "window_ms", "final"})
 		var p playerIngressCounts
-		fillIngressCounts(t, fields, playerIngressKeys[:], p[:])
+		fillIngressCounts(t, fields, playerIngressKeys[:goldenPlayerKeys], p[:goldenPlayerKeys])
 		if got := playerIngressStatisticsLine(head["player"], time.Duration(head["window_ms"])*time.Millisecond,
-			head["final"] == 1, &p); got != players[i] {
+			head["final"] == 1, &p); got != players[i]+appendedZeros(playerIngressKeys[goldenPlayerKeys:]) {
 			t.Fatalf("player window %d\n got %s\nwant %s", i, got, players[i])
 		}
 
 		head, fields = splitIngressLine(t, gateways[i], "gateway ingress statistics", []string{"version", "window_ms", "final"})
 		var g gatewayIngressCounts
-		fillIngressCounts(t, fields, gatewayIngressKeys[:], g[:])
+		fillIngressCounts(t, fields, gatewayIngressKeys[:goldenGatewayKeys], g[:goldenGatewayKeys])
 		if got := gatewayIngressStatisticsLine(time.Duration(head["window_ms"])*time.Millisecond, head["final"] == 1,
-			&g); got != gateways[i] {
+			&g); got != gateways[i]+appendedZeros(gatewayIngressKeys[goldenGatewayKeys:]) {
 			t.Fatalf("gateway window %d\n got %s\nwant %s", i, got, gateways[i])
 		}
 
@@ -116,7 +131,8 @@ func TestIngressStatisticsLinesEqualTheGoldenWindows(t *testing.T) {
 		if settled := sumIngress(p[:], playerFwdLinkWrittenMainCommands, playerDropAbandonedOnCloseCommands); settled != handed {
 			t.Fatalf("window %d: link settled %d of %d handed commands", i, settled, handed)
 		}
-		// D59: the link's shot conservation.
+		// D59: the link's shot conservation (the golden windows predate pv7
+		// §2a, whose action-packet keys are appended after them).
 		if settled := p[playerFwdLinkWrittenActionsShots] + p[playerDropDiscardedOnLeaveActionsShots] +
 			p[playerDropClearedOnCloseActionsShots] + p[playerDropAbandonedOnCloseActionsShots]; settled != p[playerFwdHandedActionsShots] {
 			t.Fatalf("window %d: link settled %d of %d handed shots", i, settled, p[playerFwdHandedActionsShots])

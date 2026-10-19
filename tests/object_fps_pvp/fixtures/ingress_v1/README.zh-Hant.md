@@ -77,6 +77,13 @@ gateway ingress statistics version=1 window_ms=<int> final=<0|1> <key>=<int> ...
   - 每個請求恰好落在四項之一，所以 link 關閉、writer 退出之後（`final=1` 之後）對每位玩家精確成立；單一視窗內可能有還在視窗裡的請求。Go 的決定性測試（`action_drops_test.go`）以這兩個鍵核對，分析器（`ingress_evidence.py` 的 `link_shots`）在每一行都帶齊 D56／D59 的八個鍵時精確判定；只有部分行帶齊（或都沒帶）的 log 記為未判定（D59 (11)：鍵維持可選）。
   - ACK 不在這條守恆之內（取走之前合併的多次前進只算一次）。
 - I1（Gateway 寫出數＝Match 的 `received_commands`）跨兩個程序，不在 golden 之內，判定條件見 `docs/object_fps_pvp/plans/v7/08c-drop-report.md`。
+- **pv7 直通 Gateway**（v7.1 `edge-input-passthrough`～`edge-actions-passthrough`；分析器 `pvp-v71-ingress-3`，v7.1 `edge-analyzers` 重新凍結）：
+  - Gateway 玩家行在 D56、D59 兩組之後依批次順序再附加四組：drop-report 的下行丟棄（`drop_write_failed_{snapshot,results,control}_packets`、`drop_control_queue_full_control_packets`、`drop_replaced_snapshot_packets`）、edge-input 的 FIFO 溢出（`drop_ipc_queue_overflow_input_packets`、`drop_ipc_queue_overflow_input_commands`）、edge-results 的結果單槽（`drop_results_over_rate_packets`）、edge-actions 的動作批（`fwd_link_written_actions_packets`、`drop_ipc_queue_overflow_actions_packets`、`drop_cleared_on_close_actions_packets`、`drop_abandoned_on_close_actions_packets`）。Gateway 全域行附加 drop-report 的 `drop_coalesced_snapshots`（只記錄）。每一行帶的組數決定哪些判定適用（取整個 log 的最小值）。
+  - I0：出口加上 `drop_ipc_queue_overflow_input_commands`（FIFO 丟掉的窗口所帶的命令；交給 link 時已計入 `fwd_handed_main_commands`），有溢出時也精確成立。
+  - `removed_paths`（帶 edge-input 組起）：被刪路徑的鍵必須是 0。edge-input 起：拒絕線、Gateway 的去重、截短、保留、路由（`fwd_rejected_lane_input_packets`、`fwd_written_duplicate_input_packets`、`fwd_handed_rejected_lane_commands`、`fwd_link_written_rejected_lane_commands`、`fwd_merged_duplicate_commands`、`fwd_written_duplicate_commands`、`drop_resolved_trim_commands`、`drop_rejected_lane_overflow_commands`、`drop_discarded_on_leave_commands`、`fwd_resolved_at_write_commands`、`fwd_retention_expired_commands`、八個 `fwd_routed_*_inputs`）與全域行的 `drop_old_tick_snapshots`、`drop_regressed_snapshots`；edge-results 起加 A3（`drop_invalid_actions_packets`、`_shots`）；edge-actions 起加 A5（`drop_link_rejected_actions_packets`、`_shots`）與上面 D56、D59 的八個鍵。
+  - I3（帶 edge-input 組起）：不適用。Gateway 照原樣轉送每個輸入窗口，副本由 Match 判定；分析器記錄 Match 的副本數，Gateway 不去重由 `removed_paths` 判定。
+  - `link_shots`（帶 edge-actions 組起）：不適用（link 沒有動作視窗）。改由 `link_actions` 判定：每位玩家 `fwd_handed_actions_packets`＝`fwd_link_written_actions_packets`＋`drop_ipc_queue_overflow_actions_packets`＋`drop_cleared_on_close_actions_packets`＋`drop_abandoned_on_close_actions_packets`。
+  - I1a（帶 edge-actions 組起，和 I1 一樣是條件判定）：Gateway 寫出的動作批＝Match 的 `received_actions_batches`（先比整條 link，含 player＝0 的桶，再比每位玩家）；前提是 I1 的三個前提，加上沒有寫出失敗時放棄的動作批（它可能到了 Match，也可能沒有）。
 
 ## `match-ingress.jsonl`
 

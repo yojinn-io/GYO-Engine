@@ -1,7 +1,7 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
-#include "RetroFPS/Pvp/FireGate.hpp"
+#include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/HitFeedback.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/PointerCapture.hpp"
@@ -109,7 +109,7 @@ struct PvpApplication::Impl final {
     WeaponFeedbackObservation weaponFeedback;
     fps::WeaponViewModelAction weaponAction{fps::WeaponViewModelAction::Idle};
     Clock::time_point weaponStartedAt{}, hitMarkerUntil{}, rejectionUntil{};
-    LocalFireGate fireGate;
+    LocalShotGate shotGate;
     ClientConnection connection;
     ClientConnectionState state;
     // The simulation role: declared after the connection so it stops first.
@@ -118,6 +118,10 @@ struct PvpApplication::Impl final {
     std::uint64_t jumpPresses{};
     ClientPresented presented;
     SnapshotTimeline timeline;
+    // The remote time the last presented frame showed (pv7 §7 view_tick_q16):
+    // the timeline's global cursor in Tick x 65536, 0 when that frame showed
+    // no remote player. A shot carries the value of the last presentation.
+    std::uint64_t frameViewTickQ16{}, presentedViewTickQ16{};
     std::uint64_t connectionGeneration{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
     std::optional<PlayerId> observedRemote;
@@ -293,6 +297,7 @@ struct PvpApplication::Impl final {
         if (connectionGeneration != received.generation) {
             connectionGeneration = received.generation;
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             viewPlayer = 0;
             ResetWeaponFeedback();
             if (players) players->ResetPlayers();
@@ -304,6 +309,7 @@ struct PvpApplication::Impl final {
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             remoteMovement.reset();
             viewPlayer = 0;
             renderedPlayer = 0;
@@ -316,6 +322,7 @@ struct PvpApplication::Impl final {
         }
         if (viewPlayer != state.playerId) {
             timeline.Reset();
+            frameViewTickQ16 = presentedViewTickQ16 = 0;
             view.Reset(self->yaw, self->pitch);
             hitFeedback.Reset();
             viewPlayer = state.playerId;
@@ -339,7 +346,7 @@ struct PvpApplication::Impl final {
             reloadAnchorStartTick = 0;
             weaponAction = fps::WeaponViewModelAction::Idle;
             weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
-            fireGate.Reset();
+            shotGate.Reset();
             ++weaponFeedback.animationRevision;
         }
         weaponFeedback.active = Alive();
@@ -356,7 +363,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.magazineCapacity = state.combatRules ? state.combatRules->magazineCapacity : 0;
         for (const auto& combat : state.snapshot->combat) {
             if (combat.playerId != state.playerId || combat.lifeGeneration != self->lifeGeneration) continue;
-            fireGate.ObserveSnapshot(state.snapshot->tick, combat);
+            shotGate.ObserveSnapshot(state.snapshot->tick, combat);
             // Both positions come from this snapshot; the attacker may be absent.
             std::optional<Engine::Math::Vec3> attacker;
             for (const auto& other : state.snapshot->players)
@@ -381,7 +388,7 @@ struct PvpApplication::Impl final {
             if (decision.rejection == ShotRejection::Cooldown) ++weaponFeedback.authorityCooldownRejections;
             // Drain/ACK includes old lives, but their cosmetic result cannot alter this life.
             if (decision.lifeGeneration != self->lifeGeneration) continue;
-            if (state.combatRules) fireGate.ObserveDecision(decision, state.combatRules->cooldownTicks);
+            if (state.combatRules) shotGate.ObserveDecision(decision, state.combatRules->cooldownTicks);
             if (decision.kind == ActionKind::Reload && pendingReload == decision.actionId) {
                 if (decision.accepted && state.combatRules)
                     acceptedReloadEndTick = decision.resolvedTick + state.combatRules->reloadTicks;
@@ -422,7 +429,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.ready = weapon != nullptr;
         weaponAction = fps::WeaponViewModelAction::Idle;
         weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
-        fireGate.Reset();
+        shotGate.Reset();
         pendingShotEdge = pendingReloadEdge = leftButtonDown = false;
         viewLife = 0;
         pendingReload.reset(); acceptedReloadEndTick = 0;
@@ -441,7 +448,8 @@ struct PvpApplication::Impl final {
         }
         const bool canAct = consumeInput && !pointerAcquiredThisFrame && !windowInteraction && weaponFeedback.inputCaptured;
         if (pendingReloadEdge && canAct && state.combatRules && !pendingReload && !weaponFeedback.reloading) {
-            if (const auto id = connection.SubmitAction(ActionKind::Reload, viewLife, state.snapshot->tick)) {
+            if (const auto id = connection.SubmitAction(ActionKind::Reload, viewLife, state.snapshot->tick, 0, 0,
+                    ActionContext(presented, ActionKind::Reload, presentedViewTickQ16))) {
                 pendingReload = *id;
                 weaponFeedback.lastActionId = *id;
                 weaponFeedback.lastActionKind = ActionKind::Reload;
@@ -449,19 +457,21 @@ struct PvpApplication::Impl final {
                 weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
             }
         }
-        // One gate decides a shot: the earliest authority tick that can resolve
-        // it must reach every known cooldown (FireGate.hpp). A blocked click is
-        // dropped, never queued.
-        const auto shotTiming = presented.shotTiming;
+        // One gate decides a shot: the tick that resolves its command S must
+        // reach every known cooldown (ShotGate.hpp, pv7 §6). A blocked click is
+        // dropped, never queued; without an active, unfrozen prediction it is
+        // blocked too.
+        const auto gateView = presented.shotGate;
         if (consumeInput && pendingShotEdge && !pendingReloadEdge && !pendingReload && !weaponFeedback.reloading &&
             weaponFeedback.magazineAmmo > 0 && !pointerAcquiredThisFrame && !windowInteraction &&
             weaponFeedback.inputCaptured && state.combatRules) {
             const auto combat = std::find_if(state.snapshot->combat.begin(), state.snapshot->combat.end(),
                 [this](const CombatState& value) { return value.playerId == state.playerId; });
-            if (combat != state.snapshot->combat.end() && !fireGate.Allows(shotTiming)) {
+            if (combat != state.snapshot->combat.end() && !shotGate.Allows(gateView)) {
                 ++weaponFeedback.localCooldownBlocks;
             } else if (combat != state.snapshot->combat.end()) {
-                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, view.Input().yaw, view.Input().pitch)) {
+                if (const auto id = connection.SubmitAction(ActionKind::Shot, viewLife, state.snapshot->tick, view.Input().yaw,
+                        view.Input().pitch, ActionContext(presented, ActionKind::Shot, presentedViewTickQ16))) {
                     weaponFeedback.lastActionId = *id;
                     weaponFeedback.lastActionKind = ActionKind::Shot;
                     ++weaponFeedback.submittedActions;
@@ -470,7 +480,7 @@ struct PvpApplication::Impl final {
                     weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
                     weaponAction = fps::WeaponViewModelAction::Shoot;
                     weaponStartedAt = now;
-                    fireGate.Submitted(*id, shotTiming, state.combatRules->cooldownTicks);
+                    shotGate.Submitted(*id, *gateView, state.combatRules->cooldownTicks);
                 }
             }
         }
@@ -517,7 +527,7 @@ struct PvpApplication::Impl final {
         weaponFeedback.reloadAnimating = weaponAction == fps::WeaponViewModelAction::Reload;
         weaponFeedback.hitMarkerVisible = now < hitMarkerUntil;
         weaponFeedback.cooldownRemainingSeconds = state.combatRules ?
-            static_cast<double>(fireGate.RemainingTicks(presented.shotTiming)) / AuthorityTickRate : 0;
+            static_cast<double>(shotGate.RemainingTicks(presented.shotGate)) / AuthorityTickRate : 0;
     }
 
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,
@@ -591,9 +601,11 @@ struct PvpApplication::Impl final {
         const auto reanchorsBefore = characterPhaseReanchors;
         std::optional<std::uint64_t> reanchorsNow;
         const auto observed = ObservedRemotePlayer(*state.snapshot, state.playerId, observedRemote);
+        bool remoteSampled = false;
         for (const auto& player : state.snapshot->players) {
             if (player.playerId == state.playerId) continue;
             const auto sampled = timeline.Sample(player.playerId, presentationTime);
+            remoteSampled = remoteSampled || sampled.has_value();
             const auto& presented = sampled ? sampled->player : player;
             const auto position = presented.position;
             // Diagnostics observe one remote player (ObservedRemotePlayer).
@@ -667,6 +679,7 @@ struct PvpApplication::Impl final {
             if (sampled) reanchorsNow = sampled->phaseReanchors;
         }
         if (reanchorsNow) characterPhaseReanchors = *reanchorsNow;
+        frameViewTickQ16 = ViewTickQ16(remoteSampled ? timeline.GlobalCursor() : std::nullopt);
         const auto characterStarted = Clock::now();
         if (!players->Submit(characterFrames, queue, lastError)) return false;
         remoteSubmitMilliseconds = Milliseconds(Clock::now(), characterStarted);
@@ -1119,6 +1132,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             rendered.value() == Engine::Render::PresentStatus::Presented);
     if (rendered.value() == Engine::Render::PresentStatus::Presented) {
         impl_->characterPresentationSkipped = false;
+        impl_->presentedViewTickQ16 = world ? impl_->frameViewTickQ16 : 0;
         impl_->renderedPlayer = world ? impl_->state.playerId : 0;
         if (world) {
             if (impl_->remoteMovement) {

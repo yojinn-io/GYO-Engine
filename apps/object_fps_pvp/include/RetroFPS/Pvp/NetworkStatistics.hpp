@@ -29,6 +29,14 @@ struct TickWakeStatistics final {
     void Record(Engine::Time::TimePoint planned, Engine::Time::TimePoint woke, bool byNotification);
 };
 
+// How long callers waited to take the Match host's mutex, in the late-wake
+// bins (diagnostics only, D32): the I/O thread's SubmitInput and the
+// simulation thread's step.
+struct HostLockWaits final {
+    Engine::Time::LateWakeStats input;
+    Engine::Time::LateWakeStats step;
+};
+
 struct MatchStatisticsWindow final {
     double windowSeconds{};
     std::optional<double> cpuSeconds;      // process CPU during the window
@@ -36,6 +44,7 @@ struct MatchStatisticsWindow final {
     std::uint64_t ipcIterations{};
     TickWakeStatistics ticks;
     std::uint64_t snapshotOverwrites{}; // published snapshots replaced before the I/O layer took them
+    HostLockWaits lockWaits;
 };
 [[nodiscard]] std::string MatchStatisticsLine(const MatchStatisticsWindow& window);
 
@@ -44,7 +53,32 @@ struct WorkerStatisticsWindow final {
     double windowSeconds{};
     std::uint64_t wakes{};
     std::optional<double> cpuSeconds; // the worker thread's CPU during the window
+    std::uint64_t otherVersionDatagrams{}; // from the Gateway, well-formed but another protocol version (pv7)
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
+
+// Diagnostics only (pv7 §5; D32): per statistics window, the two holds the
+// Client's snapshots carried (the Match's and the Gateway's, D-4) and the
+// Match's latest refusal reply (D-6), as one cause records line. A missing or
+// out-of-range hold (pv7 §2 clamps a duration at 10 s) is counted and ignored
+// (D-5). Nothing reads it back.
+class ClientCauseRecords final {
+public:
+    void Snapshot(std::optional<std::uint32_t> matchHoldUs, std::optional<std::uint32_t> gatewayHoldUs);
+    // refusal: the reason's lower-case name as the line shows it.
+    void Results(std::uint64_t refusedBatches, std::string refusal);
+    // The line of the window that ends now; starts the next one (the refusal
+    // reply is the latest, so it carries over).
+    [[nodiscard]] std::string Line(std::uint64_t player, double windowSeconds);
+
+private:
+    struct Hold final {
+        std::uint64_t samples{}, missing{}, range{}, sum{}, maximum{};
+        void Add(std::optional<std::uint32_t> value);
+    };
+    std::uint64_t snapshots_{}, refused_{};
+    std::string refusal_{"unspecified"};
+    Hold match_, gateway_;
+};
 
 } // namespace fps::pvp

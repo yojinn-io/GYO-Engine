@@ -13,7 +13,7 @@ if(NOT TARGET httplib::httplib)
 endif()
 set(protocol_output "${CMAKE_CURRENT_BINARY_DIR}/protocol")
 file(MAKE_DIRECTORY "${protocol_output}")
-foreach(contract client_v6 runtime_v6)
+foreach(contract client_v7 runtime_v7)
     add_custom_command(OUTPUT "${protocol_output}/${contract}.pb.cc" "${protocol_output}/${contract}.pb.h"
         COMMAND $<TARGET_FILE:protobuf::protoc> "--cpp_out=${protocol_output}"
             "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protocol" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/${contract}.proto"
@@ -34,10 +34,10 @@ gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHos
     PUBLIC_LIBRARIES ${domain} GYO::Threads)
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
     PUBLIC_LIBRARIES ${host} GYO::Net GYO::Threads
-    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v6")
+    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v7")
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Net
-    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json GYO::Threads "gyo_${GYO_APP_ID}_client_v6")
+    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json GYO::Threads "gyo_${GYO_APP_ID}_client_v7")
 # The one client command-generation path, shared by the application and the
 # headless acceptance probes so that measurements exercise product behaviour:
 # the simulation and the role thread that runs it at fixed-step deadlines.

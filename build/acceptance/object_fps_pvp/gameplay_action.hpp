@@ -117,6 +117,9 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         const bool stalled=drainStallMs>0&&age>=4&&age<4+drainStallMs/1000;
         Json frame={{"time_ns",ns},{"frame_seconds",elapsed},{"drain_stalled",stalled}};
         std::array<ClientConnectionState,2> states;
+        // This frame's presented step and sampled remote time per Client: a
+        // planned action carries them as the product does (pv7 §6, §7; D131).
+        std::array<ShotContext,2> contexts{};std::array<std::optional<ClientPresented>,2> presentedSteps;
         for(unsigned i=0;i<2;++i){
             auto& state=states[i];
             if(stalled)state=clients[i].State();else{
@@ -142,6 +145,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             const auto presented=simulation[i]->PresentAt(now);const auto& p=presented.observation;
             startPhase[i].Observe(frameIndex,ns,ids[i],&authority,p);
             const auto remote=timelines[i].Sample(ids[1-i],now);const std::string suffix=i?"_b":"_a";
+            presentedSteps[i]=presented;
+            contexts[i].viewTickQ16=ViewTickQ16(remote?timelines[i].GlobalCursor():std::nullopt);
             frame["pending"+suffix]=p.pendingCommands;frame["queued"+suffix]=authority.contiguousPendingCommands;
             frame["epoch"+suffix]=authority.movementEpoch;frame["remote_age"+suffix]=remote?remote->latestReceiveAgeSeconds:1e9;
             frame["resolved"+suffix]=authority.lastResolvedCommand;frame["frozen"+suffix]=p.frozen;
@@ -160,7 +165,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
             const auto& self=Player(*state.snapshot,ids[s.player]);const auto& target=Player(*state.snapshot,ids[1-s.player]);
             const float yaw=s.target?std::atan2(target.position.x-self.position.x,target.position.z-self.position.z):0;
             const float pitch=s.kind==ActionKind::Reload||s.target?0:1.3F;
-            const auto id=clients[s.player].SubmitAction(s.kind,s.life,state.snapshot->tick,yaw,pitch);
+            const auto context=presentedSteps[s.player]?ActionContext(*presentedSteps[s.player],s.kind,contexts[s.player].viewTickQ16):ShotContext{};
+            const auto id=clients[s.player].SubmitAction(s.kind,s.life,state.snapshot->tick,yaw,pitch,context);
             Require(id.has_value(),"Predeclared gameplay action could not allocate immutable ID");
             Json request={{"action_id",*id},{"observed_tick",state.snapshot->tick},{"yaw",yaw},{"pitch",pitch},
                 {"action_kind",static_cast<int>(s.kind)},{"life_generation",s.life}};

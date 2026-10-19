@@ -148,7 +148,9 @@ void MatchRuntimeHost::NoteCoalescedSlackSamples(std::span<const PlayerId> playe
 }
 
 bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
+    const auto waiting = std::chrono::steady_clock::now();
     std::lock_guard lock(mutex_);
+    statistics_.lockWaits.input.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only
     // Every return below is counted exactly once: received = accepted + refused.
     auto& ingress = IngressBucket(input.playerId);
     ++ingress.received.inputs;
@@ -269,7 +271,8 @@ void MatchRuntimeHost::NoteWireRejection(PlayerId playerId, IngressActionRejecti
     refused.shots += shots;
 }
 
-ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough) {
+ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, ActionId acknowledgedThrough,
+    IngressActionRejection* refusal) {
     std::lock_guard lock(mutex_);
     // Every return below is counted exactly once: received = accepted + refused.
     auto& ingress = IngressBucket(batch.playerId);
@@ -279,6 +282,7 @@ ActionAdmission MatchRuntimeHost::SubmitActionBatch(const ActionBatch& batch, Ac
         auto& refused = ingress.rejectedActions[IngressIndex(reason)];
         ++refused.batches;
         refused.shots += batch.shots.size();
+        if (refusal) *refusal = reason;
         return admission;
     };
     if (pendingReset_) return refuse(IngressActionRejection::Resetting, ActionAdmission::InvalidPlayer);
@@ -340,7 +344,9 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Advance(double elapsedSecond
 }
 
 Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, bool& published) {
+    const auto waiting = std::chrono::steady_clock::now();
     std::lock_guard lock(mutex_);
+    statistics_.lockWaits.step.Record(std::chrono::steady_clock::now() - waiting); // diagnostics only
     if (pendingReset_) {
         ClearState();
         elapsedSeconds = 0;
@@ -378,6 +384,7 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 const auto admission = match_.SubmitActions(batch);
                 if (admission != ActionAdmission::Accepted)
                     throw std::logic_error("Validated action handoff lost its reservation");
+                for (const auto& shot : batch.shots) shotShadow_.Handed(playerId, shot);
             }
         }
         pendingActions_.clear();
@@ -426,6 +433,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
         });
         auto state = match_.Snapshot();
+        // Diagnostics only, while a handed request awaits its decision.
+        if (!shotShadow_.Empty()) shotShadow_.Decided(match_, state.tick, state, MovementTraceNowNs());
         TrackSlack(state, advancedAt);
         JudgeConnectionQuality(state);
         // Retaining only unresolved tuples supplies bounded duplicate identity
@@ -542,12 +551,27 @@ IngressRecords MatchRuntimeHost::DrainIngressRecords() {
     return records_.Drain();
 }
 
-std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot() {
+ShotRecords MatchRuntimeHost::DrainShotRecords() {
+    std::lock_guard lock(mutex_);
+    return shotShadow_.Drain();
+}
+
+std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot(std::chrono::steady_clock::time_point* publishedAt) {
     std::lock_guard lock(mutex_);
     auto result = std::move(snapshot_);
     snapshot_.reset();
     if (result) CountSlackSamples(*result, &MatchIngressCounts::slackTakenSamples);
+    if (result && publishedAt) {
+        // The newest reference is the snapshot's own publication.
+        const auto reference = std::find_if(publishedReferences_.rbegin(), publishedReferences_.rend(),
+            [&](const auto& value) { return value.tick == result->tick; });
+        if (reference != publishedReferences_.rend()) *publishedAt = reference->publishedAt;
+    }
     return result;
+}
+
+std::chrono::steady_clock::time_point MatchRuntimeHost::Now() const {
+    return now_();
 }
 
 std::vector<ControlResult> MatchRuntimeHost::TakeControlResults() {
@@ -565,6 +589,7 @@ std::vector<Eviction> MatchRuntimeHost::TakeEvictions() {
 }
 
 void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough) {
+    shotShadow_.Remove(playerId);
     if (const auto pending = pendingInputs_.find(playerId); pending != pendingInputs_.end()) {
         const auto& commands = pending->second.commands;
         ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::LeaveDiscarded)] +=
@@ -700,6 +725,7 @@ std::future<void> MatchRuntimeHost::RequestReset() {
 }
 
 void MatchRuntimeHost::ClearState() {
+    shotShadow_.Clear();
     // Staging holds only unresolved commands of current identities here:
     // ingress admits the current identity and each tick prunes the rest.
     for (const auto& [playerId, pending] : pendingInputs_)

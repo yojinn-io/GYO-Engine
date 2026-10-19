@@ -3,6 +3,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,8 +23,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 const sessionTimeout = 5 * time.Second
@@ -39,52 +40,68 @@ const (
 
 type Config struct{ HTTPAddress, UDPAddress, RuntimeAddress, AdvertiseIP string }
 type reservation struct {
-	actions        *actionWindow
-	packetWindow   time.Time
-	packetCount    uint64
-	session        *session.Session
-	playerID       uint64
-	requestID      string
-	phase          phase
-	joinStarted    time.Time
-	lastResolved   uint64
-	movementEpoch  uint64
-	lifeGeneration uint64
-	commands       map[uint64]*runtime.MovementCommand
-	outSequence    uint32
+	results      resultSlot // at most one results frame waiting for its release (pv7 §2a)
+	packetWindow time.Time
+	packetCount  uint64
+	session      *session.Session
+	playerID     uint64
+	requestID    string
+	phase        phase
+	joinStarted  time.Time
+	outSequence  uint32
 	// Diagnostics only: datagrams of this session and the last arrival, and
 	// the intervals between this session's writes to its Client.
 	received     uint64
 	lastReceived time.Time
 	sent         sendStatistics
+	echo         sessionEcho // the time echo on Hello and Welcome (echo.go)
 }
 type outbound struct {
 	actionPlayer uint64
 	peer         netip.AddrPort
 	packet       []byte
+	// The discard a failed write is (pv7 §4), and its identity.
+	player      uint64
+	writeFailed playerIngressCounter
+	sequence    uint32
+	tick        uint64
+}
+
+// snapshotFrame is a Client snapshot waiting for the send loop, with its tick
+// and when the Gateway read its IPC frame: each player's write encodes it with
+// that player's gateway_hold_us (pv7 §5, D-4; diagnostics only).
+type snapshotFrame struct {
+	snapshot *client.WorldSnapshot
+	read     time.Time
+	tick     uint64
 }
 
 type Server struct {
-	config                  Config
-	mu                      sync.Mutex
-	available               bool
-	created                 bool
-	ready                   *runtime.Ready
-	link                    *runtimeLink
-	players                 map[uint64]*reservation
-	sessions                map[uint64]*reservation
-	requests                map[string]*reservation
-	nextPlayer              uint64
-	lastSnapshot            uint64
-	hasSnapshot             bool
-	http                    *http.Server
-	listener                net.Listener
-	udp                     *net.UDPConn
-	controlOut              chan outbound
-	snapshotOut             chan []byte
-	resultWake              chan struct{}
-	closeOnce               sync.Once
-	snapshotReplacements    atomic.Uint64
+	config      Config
+	mu          sync.Mutex
+	available   bool
+	created     bool
+	ready       *runtime.Ready
+	link        *runtimeLink
+	players     map[uint64]*reservation
+	sessions    map[uint64]*reservation
+	requests    map[string]*reservation
+	nextPlayer  uint64
+	http        *http.Server
+	listener    net.Listener
+	udp         *net.UDPConn
+	controlOut  chan queuedControl
+	snapshotOut chan snapshotFrame
+	resultWake  chan struct{}
+	// Diagnostics only (under mu): results frames for a player that was not
+	// active, logged at close (pv7 §4 (d), not a loss).
+	resultsForInactive   uint64
+	closeOnce            sync.Once
+	diagnosticsOnce      sync.Once // the last diagnostic window is logged once
+	snapshotReplacements atomic.Uint64
+	// The datagram receivePacket handles (under s.mu): when it was read and
+	// its GYOP sequence, the identity of a drop it ends in (pv7 §4).
+	datagram                dropEvent
 	rateAcceptedPackets     atomic.Uint64
 	rateRejectedPackets     atomic.Uint64
 	maxSessionWindowPackets atomic.Uint64
@@ -136,7 +153,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
-		udp: udp, listener: listener, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1),
+		udp: udp, listener: listener, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1),
 		resultWake: make(chan struct{}, 1), ingressWindowStart: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rooms", s.listRooms)
@@ -157,6 +174,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	defer cancel()
 	defer s.Close()
 	s.link.run(ctx, s.runtimeMessage, s.runtimeFailed)
+	go s.runDiagnostics(ctx)
 	go s.receiveUDP(ctx)
 	go s.sendUDP(ctx)
 	go s.expire(ctx)
@@ -176,11 +194,16 @@ func (s *Server) Serve(ctx context.Context) error {
 
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
-		s.link.close()
+		s.link.closeGracefully() // every stream's final drop report first (pv7 §4)
 		_ = s.udp.Close()
 		_ = s.http.Close()
 		_ = s.listener.Close()
-		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load())
+		s.mu.Lock()
+		inactive := s.resultsForInactive
+		s.mu.Unlock()
+		// results_for_inactive_frames appended (pv7 §4 (d)): logged only.
+		log.Printf("gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d max_session_window_packets=%d results_for_inactive_frames=%d", s.snapshotReplacements.Load(), s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load(), s.maxSessionWindowPackets.Load(), inactive)
+		s.flushDiagnostics()
 		s.flushFinal()
 	})
 }
@@ -237,7 +260,26 @@ type joinRequest struct {
 
 func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	decoder := json.NewDecoder(r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_join")
+		return
+	}
+	version, ok := joinVersion(body)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_join")
+		return
+	}
+	if version != adapter.ClientVersion {
+		// The version is read before the rest (pv7 contract §1): a Client of
+		// another version may send keys this version rejects. The Gateway
+		// states its own version so the Client can name both; every
+		// protocol_version key is the sender's.
+		log.Printf("join refused remote=%s code=protocol_version expected=%d received=%d", r.RemoteAddr, adapter.ClientVersion, version)
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "protocol_version", "protocol_version": adapter.ClientVersion})
+		return
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var request joinRequest
 	if err := decoder.Decode(&request); err != nil {
@@ -252,10 +294,6 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request_id")
 		return
 	}
-	if request.ProtocolVersion != adapter.ClientVersion {
-		writeError(w, http.StatusConflict, "protocol_version")
-		return
-	}
 	data, status, code := s.reserveSlot(request)
 	if code != "" {
 		log.Printf("join refused remote=%s code=%s", r.RemoteAddr, code)
@@ -265,6 +303,24 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	log.Printf("join reserved player=%v remote=%s", data["player_id"], r.RemoteAddr)
 	writeJSON(w, status, data)
 }
+
+// joinVersion reads only protocol_version from a join body that is one JSON
+// object: missing or null is 0, and anything but an integer in 0..65535 is not
+// a version (400 invalid_join).
+func joinVersion(body []byte) (uint16, bool) {
+	var peek struct {
+		ProtocolVersion json.RawMessage `json:"protocol_version"`
+	}
+	if err := json.Unmarshal(body, &peek); err != nil {
+		return 0, false
+	}
+	var version uint16
+	if len(peek.ProtocolVersion) > 0 && json.Unmarshal(peek.ProtocolVersion, &version) != nil {
+		return 0, false
+	}
+	return version, true
+}
+
 func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -295,8 +351,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID, movementEpoch: 1, lifeGeneration: 1,
-		commands: make(map[uint64]*runtime.MovementCommand)}
+	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
 	s.requests[request.RequestID] = player
@@ -338,7 +393,8 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	var failure error
 	if p.phase != reserved {
 		e := envelope()
-		e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}
+		e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID,
+			Reason: runtime.LeaveReason_LEAVE_REASON_CLIENT_REQUEST}}
 		failure = s.link.control(e)
 	}
 	log.Printf("player left player=%d", p.playerID)
@@ -383,7 +439,7 @@ func (s *Server) receiveDatagram(datagram []byte, peer netip.AddrPort, now time.
 	if err != nil {
 		s.mu.Lock()
 		s.ingress[gatewayReceivedDatagrams]++
-		s.ingress[gatewayDropUndecodableDatagrams]++
+		s.countGatewayLocked(gatewayDropUndecodableDatagrams, dropEvent{at: now})
 		s.mu.Unlock()
 		return nil
 	}
@@ -397,9 +453,11 @@ func (s *Server) receiveDatagram(datagram []byte, peer netip.AddrPort, now time.
 func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.AddrPort, now time.Time) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.datagram = dropEvent{at: now, transport: h.Sequence}
+	defer func() { s.datagram = dropEvent{} }()
 	s.ingress[gatewayReceivedDatagrams]++
 	if h.Version != adapter.ClientVersion {
-		s.ingress[gatewayDropOtherVersionDatagrams]++
+		s.countGatewayLocked(gatewayDropOtherVersionDatagrams, s.datagram)
 		return nil
 	}
 	if !s.available {
@@ -408,7 +466,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 	}
 	p := s.sessions[h.SessionID]
 	if p == nil {
-		s.ingress[gatewayDropUnknownSessionDatagrams]++
+		s.countGatewayLocked(gatewayDropUnknownSessionDatagrams, s.datagram)
 		return nil
 	}
 	p.received++
@@ -436,6 +494,7 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 		if admission != nil {
 			return nil
 		}
+		s.noteHello(p, &hello, now)
 		switch p.phase {
 		case reserved:
 			p.phase = joining
@@ -490,15 +549,35 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 // countIngress adds n to one of a player's ingress counters. Called with s.mu
 // held.
 func (s *Server) countIngress(p *reservation, counter playerIngressCounter, n uint64) {
+	e := s.datagram // a drop of the datagram being handled starts its dwell at its receipt
+	if e.at.IsZero() {
+		e.at = time.Now()
+	}
+	s.countIngressAt(p.playerID, counter, n, e)
+}
+
+// countIngressAt counts into the player's 10 s line and, from the same entry,
+// a reported discard into the cumulative ledger (pv7 §4). Under s.mu.
+func (s *Server) countIngressAt(player uint64, counter playerIngressCounter, n uint64, e dropEvent) {
 	if s.playerIngress == nil {
 		s.playerIngress = make(map[uint64]*playerIngressCounts)
 	}
-	counts := s.playerIngress[p.playerID]
+	counts := s.playerIngress[player]
 	if counts == nil {
 		counts = new(playerIngressCounts)
-		s.playerIngress[p.playerID] = counts
+		s.playerIngress[player] = counts
 	}
 	counts[counter] += n
+	s.link.countDrop(player, counter, n, e)
+}
+
+// countGatewayLocked counts one Gateway-wide item, the same way. Under s.mu.
+func (s *Server) countGatewayLocked(counter gatewayIngressCounter, e dropEvent) {
+	s.ingress[counter]++
+	if reason := gatewayDropReason[counter]; reason != runtime.DropReason_DROP_REASON_UNSPECIFIED {
+		e.reason = reason
+		s.link.ledger().add(0, 1, e)
+	}
 }
 
 // takeIngress hands over the Server's ingress counters accumulated since the
@@ -517,22 +596,43 @@ func (s *Server) takeIngressLocked() (map[uint64]*playerIngressCounts, gatewayIn
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity})
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
+		Clock: s.welcomeSample(p, time.Now())})
 }
+
+// A control (Welcome, Error) waiting for the UDP writer, which assigns its
+// GYOP sequence right before the write (pv7 §2a: the Client drops a packet
+// whose sequence is not newer, so no sequence is taken before then). It keeps
+// its reservation: an Error may follow the player's removal.
+type queuedControl struct {
+	p       *reservation
+	kind    uint16
+	payload []byte
+}
+
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
 	if err != nil {
 		return
 	}
-	p.outSequence++
-	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: kind, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
-	if err != nil {
-		return
-	}
 	select {
-	case s.controlOut <- outbound{peer: p.session.Endpoint(), packet: packet}:
+	case s.controlOut <- queuedControl{p: p, kind: kind, payload: payload}:
 	default:
+		s.countIngressAt(p.playerID, playerDropControlQueueFullControlPackets, 1, dropEvent{at: time.Now()})
 	}
+}
+
+// controlPacket sequences and encodes a queued control in the UDP writer.
+func (s *Server) controlPacket(c queuedControl) (outbound, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c.p.outSequence++
+	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: c.kind, SessionID: c.p.session.ID, Sequence: c.p.outSequence}, c.payload)
+	if err != nil {
+		return outbound{}, false
+	}
+	return outbound{peer: c.p.session.Endpoint(), packet: packet, player: c.p.playerID,
+		writeFailed: playerDropWriteFailedControlPackets, sequence: c.p.outSequence}, true
 }
 
 func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
@@ -571,42 +671,16 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			s.mu.Unlock()
 			return
 		}
-		if s.hasSnapshot && out.Tick <= s.lastSnapshot {
-			s.ingress[gatewayDropOldTickSnapshots]++
-			s.mu.Unlock()
-			return
-		}
-		for _, state := range out.Players {
-			if p := s.players[state.PlayerId]; p != nil &&
-				(state.LifeGeneration < p.lifeGeneration || state.MovementEpoch < p.movementEpoch ||
-					(state.LifeGeneration > p.lifeGeneration && state.MovementEpoch <= p.movementEpoch) ||
-					(state.MovementEpoch == p.movementEpoch && state.LastResolvedCommand < p.lastResolved)) {
-				s.ingress[gatewayDropRegressedSnapshots]++
-				s.mu.Unlock()
-				return
-			}
-		}
-		s.lastSnapshot = out.Tick
-		s.hasSnapshot = true
-		for _, state := range out.Players {
-			if p := s.players[state.PlayerId]; p != nil &&
-				(state.LifeGeneration > p.lifeGeneration || state.MovementEpoch > p.movementEpoch || state.LastResolvedCommand > p.lastResolved) {
-				if state.MovementEpoch > p.movementEpoch || state.LifeGeneration > p.lifeGeneration {
-					clear(p.commands)
-				}
-				p.movementEpoch = state.MovementEpoch
-				p.lifeGeneration = state.LifeGeneration
-				p.lastResolved = state.LastResolvedCommand
-				for sequence := range p.commands {
-					if sequence <= p.lastResolved {
-						delete(p.commands, sequence)
-					}
-				}
-				s.link.acknowledge(p.playerID, p.movementEpoch, p.lifeGeneration, p.lastResolved)
-			}
-		}
+		// No tick or cursor guard (D1, D2 removed, pv7 §2a D-12): the IPC is
+		// ordered and the Client applies only a newer tick. The Gateway keeps
+		// no copy of the Match's cursors.
 		s.mu.Unlock()
+		read := time.Now()
+		// The bound with the largest hold any write can give it.
+		widest := uint32(dropMaximumDwell / time.Microsecond)
+		out.GatewayHoldUs = &widest
 		payload, err := proto.Marshal(out)
+		out.GatewayHoldUs = nil
 		if err != nil {
 			s.runtimeFailed(err)
 			return
@@ -615,16 +689,21 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			s.runtimeFailed(errors.New("snapshot exceeds datagram limit"))
 			return
 		}
+		frame := snapshotFrame{snapshot: out, read: read, tick: out.Tick}
 		select {
-		case s.snapshotOut <- payload:
+		case s.snapshotOut <- frame:
 		default:
 			select {
-			case <-s.snapshotOut:
+			case replaced := <-s.snapshotOut:
+				// Sent to no Client (pv7 §4, 45).
 				s.snapshotReplacements.Add(1)
+				s.mu.Lock()
+				s.countGatewayLocked(gatewayDropCoalescedSnapshots, dropEvent{at: time.Now(), tick: replaced.tick})
+				s.mu.Unlock()
 			default:
 			}
 			select {
-			case s.snapshotOut <- payload:
+			case s.snapshotOut <- frame:
 			default:
 			}
 		}
@@ -643,8 +722,8 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		log.Printf("player evicted player=%d reason=%s reference_age_ms=%d substituted_permille=%d movement_resets=%d",
 			evicted.PlayerId, code, evicted.ReferenceAgeMs, evicted.SubstitutedPermille, evicted.MovementResets)
 		s.sendControl(p, adapter.Failure, &client.Error{Code: code, Message: message})
-		// Without this an evicted player's action window would keep a slot:
-		// a replacement could not deliver shots or reloads, silently.
+		// The link forgets the player's statistics; its queued batches still
+		// reach the Match (pv7 §2a).
 		s.link.forget(evicted.PlayerId)
 		s.remove(p)
 		return
@@ -654,8 +733,7 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 	}
 }
 
-// Wakes the send loop when a Client has something new: a decision, a
-// retirement, or a retirement its ACK-only batch showed it missed.
+// Wakes the send loop when a results frame arrived for a Client.
 func (s *Server) wakeResults() {
 	select {
 	case s.resultWake <- struct{}{}:
@@ -674,9 +752,10 @@ func resultWait(deadline time.Time, pending bool, now time.Time) time.Duration {
 }
 
 func (s *Server) sendUDP(ctx context.Context) {
-	// Results go out on a wake (something new for a Client) or at the earliest
-	// result deadline, a strict ActionSendRate interval from that player's last
-	// completed write: at once after an idle interval, never sooner.
+	// Results go out on a wake (a frame arrived) or at the earliest release, a
+	// strict ActionSendRate interval from that player's last completed write:
+	// at once after an idle interval, never sooner. This goroutine is the one
+	// UDP writer: every GYOP sequence is assigned here, right before its write.
 	timer := time.NewTimer(actionSendInterval)
 	defer timer.Stop()
 	results := func() {
@@ -699,9 +778,11 @@ func (s *Server) sendUDP(ctx context.Context) {
 			results()
 		case <-timer.C:
 			results()
-		case packet := <-s.controlOut:
-			s.writeUDP(packet)
-		case payload := <-s.snapshotOut:
+		case control := <-s.controlOut:
+			if packet, ok := s.controlPacket(control); ok {
+				s.writeUDP(packet)
+			}
+		case frame := <-s.snapshotOut:
 			s.mu.Lock()
 			players := make([]uint64, 0, len(s.players))
 			if s.available {
@@ -712,9 +793,9 @@ func (s *Server) sendUDP(ctx context.Context) {
 				}
 			}
 			s.mu.Unlock()
-			for _, playerID := range players {
+			for i, playerID := range players {
 				var packet outbound
-				payload, packet = s.snapshotForPeer(playerID, payload)
+				frame, packet = s.snapshotForPeer(players[i:], frame)
 				s.writeUDP(packet)
 				if packet.peer.IsValid() {
 					s.snapshotWritten(playerID, time.Now())
@@ -724,32 +805,65 @@ func (s *Server) sendUDP(ctx context.Context) {
 	}
 }
 
-func (s *Server) snapshotForPeer(playerID uint64, payload []byte) ([]byte, outbound) {
+// snapshotForPeer encodes the frame for the first of the players the loop has
+// still to serve (remaining).
+func (s *Server) snapshotForPeer(remaining []uint64, frame snapshotFrame) (snapshotFrame, outbound) {
 	// A previous peer's write may have blocked while a newer publication arrived.
 	// Replace this still-unwritten datagram before assigning its transport sequence.
+	replaced := false
+	var old snapshotFrame
 	select {
-	case payload = <-s.snapshotOut:
+	case newer := <-s.snapshotOut:
 		s.snapshotReplacements.Add(1)
+		old, frame, replaced = frame, newer, true
 	default:
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p := s.players[playerID]
+	if replaced {
+		// Every active player still to serve never gets the replaced one (pv7 §4, 31).
+		now := time.Now()
+		for _, id := range remaining {
+			if p := s.players[id]; s.available && p != nil && p.phase == active {
+				s.countIngressAt(id, playerDropReplacedSnapshotPackets, 1, dropEvent{at: now, tick: old.tick})
+			}
+		}
+	}
+	p := s.players[remaining[0]]
 	if !s.available || p == nil || p.phase != active {
-		return payload, outbound{}
+		return frame, outbound{}
+	}
+	// This player's hold: from reading the IPC frame to this write (pv7 §5).
+	hold := dwellMicros(frame.read, time.Now())
+	frame.snapshot.GatewayHoldUs = &hold
+	payload, err := proto.Marshal(frame.snapshot)
+	if err != nil {
+		return frame, outbound{}
 	}
 	p.outSequence++
 	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
 	if err != nil {
-		return payload, outbound{}
+		return frame, outbound{}
 	}
-	return payload, outbound{peer: p.session.Endpoint(), packet: packet}
+	return frame, outbound{peer: p.session.Endpoint(), packet: packet, player: p.playerID,
+		writeFailed: playerDropWriteFailedSnapshotPackets, sequence: p.outSequence, tick: frame.tick}
+}
+
+// udpWrite writes one datagram; tests replace it to fail a write.
+var udpWrite = func(s *Server, packet []byte, peer netip.AddrPort) error {
+	_ = s.udp.SetWriteDeadline(time.Now().Add(time.Second))
+	_, err := s.udp.WriteToUDPAddrPort(packet, peer)
+	return err
 }
 
 func (s *Server) writeUDP(packet outbound) {
 	if packet.peer.IsValid() {
-		_ = s.udp.SetWriteDeadline(time.Now().Add(time.Second))
-		_, _ = s.udp.WriteToUDPAddrPort(packet.packet, packet.peer)
+		if err := udpWrite(s, packet.packet, packet.peer); err != nil && packet.writeFailed != 0 {
+			// A failed write to this player is a discard (pv7 §4, D5).
+			s.mu.Lock()
+			s.countIngressAt(packet.player, packet.writeFailed, 1, dropEvent{at: time.Now(), transport: packet.sequence, tick: packet.tick})
+			s.mu.Unlock()
+		}
 	}
 }
 
@@ -772,14 +886,14 @@ func (s *Server) expireAt(now time.Time) {
 		sessionExpired := p.session.Expired(now, sessionTimeout)
 		joinExpired := p.phase == joining && now.Sub(p.joinStarted) >= joinTimeout
 		if sessionExpired || joinExpired {
-			reason := "session_timeout"
+			reason, leave := "session_timeout", runtime.LeaveReason_LEAVE_REASON_SESSION_TIMEOUT
 			if joinExpired {
-				reason = "join_timeout"
+				reason, leave = "join_timeout", runtime.LeaveReason_LEAVE_REASON_JOIN_TIMEOUT
 			}
 			log.Printf("player expired player=%d reason=%s", p.playerID, reason)
 			if p.phase != reserved {
 				e := envelope()
-				e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID}}
+				e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: p.playerID, Reason: leave}}
 				if err := s.link.control(e); err != nil {
 					failure = err
 				}
@@ -948,6 +1062,8 @@ func (s *Server) writeFinalIngress() {
 }
 
 func (s *Server) remove(p *reservation) {
+	s.endEcho(p, time.Now())
+	s.link.ledger().remove(p.playerID) // its stream ends with one final report
 	delete(s.players, p.playerID)
 	delete(s.sessions, p.session.ID)
 	delete(s.requests, p.requestID)
@@ -975,64 +1091,37 @@ func (s *Server) runtimeFailed(err error) {
 	s.flushFinal()
 }
 
-// forwardInput hands a decoded window to the Match (D49: the Match decides what
-// is stale, resolved or conflicting). The main lane merges windows and keeps
-// resolved commands, whose late arrival the Match measures. A window the Match
-// may refuse as a whole goes unmerged through the rejected lane, so it cannot
-// make the Match refuse a merge with valid commands: another epoch or life,
-// beyond the future bound, a conflict, or a window the link refused.
+// forwardInput hands a decoded window to the Match as it came, one IPC message
+// per datagram (pv7 §2a): the Match decides what is resolved, stale, copied
+// or conflicting (D49). Decoding succeeded, so the sequence and liveness are
+// committed first (D-11), unless the sequence is stale.
 //
-// The datagram's one outcome (IG) is the lane it took: the main lane, the
-// rejected lane, or neither when every command was a written copy; a stale
-// sequence is its own outcome on any of them (D55 ③). A failed link counts
-// none (receivePacket counts the datagram for the unavailable room).
-func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) (err error) {
-	outcome := playerFwdRejectedLaneInputPackets
-	defer func() {
-		if err != nil {
-			return
-		}
-		if stale {
-			outcome = playerFwdStaleSequenceInputPackets
-		}
-		s.countIngress(p, outcome, 1)
-	}()
-	if in.MovementEpoch != p.movementEpoch || in.LifeGeneration != p.lifeGeneration {
-		return s.link.reject(in, playerFwdRoutedEpochMismatchInputs)
-	}
-	// Validate the whole batch before committing the sequence. Unresolved
-	// steps are immutable across packets; the bound counts only steps after
-	// the cursor (a resolved step must not underflow it).
-	for _, command := range in.Commands {
-		if command.Sequence > p.lastResolved && command.Sequence-p.lastResolved > adapter.MaxFutureCommands {
-			return s.link.reject(in, playerFwdRoutedFutureLimitInputs)
-		}
-		if existing := p.commands[command.Sequence]; existing != nil && !adapter.EqualCommand(existing, command) {
-			return s.link.reject(in, playerFwdRoutedConflictInputs)
-		}
-	}
-	// A stale sequence is never committed. Admit and CommitSequence both run
-	// under s.mu and Admit found this sequence fresh, so the commit cannot
-	// fail. A window the link refuses below is routed after the commit, as
-	// before 08c.
+// The datagram's one outcome (IG) is fwd_main_input_packets, or its stale
+// sequence (D55 ③). A failed link counts none (receivePacket counts the
+// datagram for the unavailable room).
+func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence uint32, stale bool, now time.Time) error {
+	// Admit and CommitSequence both run under s.mu and Admit found this
+	// sequence fresh, so the commit cannot fail.
 	if !stale {
 		_ = p.session.CommitSequence(sequence, now)
 	}
-	var copies bool
-	if err := s.link.inputWindow(in, &copies); err != nil {
+	e := s.datagram
+	e.epoch, e.life = in.MovementEpoch, in.LifeGeneration
+	e.firstCommand, e.lastCommand = in.Commands[0].Sequence, in.Commands[len(in.Commands)-1].Sequence
+	e.items = uint32(len(in.Commands))
+	if err := s.link.input(in, e); err != nil {
 		if errors.Is(err, adapter.ErrInput) {
-			return s.link.reject(in, linkRefusalReason(err))
+			// Unreachable after DecodeInput (same bounds); a window the link
+			// refuses is a malformed packet, never a failed room.
+			s.countIngress(p, playerDropMalformedInputPackets, 1)
+			return nil
 		}
 		return err
 	}
-	outcome = playerFwdMainInputPackets
-	if copies {
-		outcome = playerFwdWrittenDuplicateInputPackets
+	outcome := playerFwdMainInputPackets
+	if stale {
+		outcome = playerFwdStaleSequenceInputPackets
 	}
-	for _, command := range in.Commands {
-		if command.Sequence > p.lastResolved {
-			p.commands[command.Sequence] = command
-		}
-	}
+	s.countIngress(p, outcome, 1)
 	return nil
 }

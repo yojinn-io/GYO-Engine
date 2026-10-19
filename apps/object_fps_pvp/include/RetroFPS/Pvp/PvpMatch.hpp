@@ -44,9 +44,22 @@ enum class InputAdmission : std::uint8_t {
 // placeable spawn when there is nobody else. Null when none fits.
 [[nodiscard]] const SpawnPoint* SelectSpawn(const Arena& arena, std::span<const Engine::Math::Vec3> living);
 
+// When the authority judged one action (pv7 §6; diagnostics only, never
+// gameplay input): its handoff tick A, its first due tick D and the tick J it
+// was decided at (J > D after a cooldown hold or while a smaller ActionId of
+// the same player was still waiting).
+struct ActionTiming final {
+    std::uint64_t handoffTick{};
+    std::uint64_t dueTick{};
+    std::uint64_t resolvedTick{};
+    bool held{};
+};
+
 class PvpMatch final {
 public:
-    explicit PvpMatch(Arena arena);
+    // rules defaults to the product policy; tests and future weapon data may
+    // pass others (v7.1 D137). Invalid rules throw invalid_argument.
+    explicit PvpMatch(Arena arena, const CombatRules& rules = PvpCombatRules);
     [[nodiscard]] bool Join(PlayerId playerId, std::string& error);
     [[nodiscard]] bool Leave(PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
@@ -61,6 +74,9 @@ public:
     [[nodiscard]] bool AcknowledgeActions(PlayerId playerId, ActionId through);
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
     [[nodiscard]] std::optional<MovementQuality> GetMovementQuality(PlayerId playerId) const;
+    // Timing of a decided action still held in the ledger; nullopt otherwise.
+    [[nodiscard]] std::optional<ActionTiming> GetActionTiming(PlayerId playerId, ActionId actionId) const;
+    [[nodiscard]] const CombatRules& Rules() const noexcept { return rules_; }
     void Tick(const Engine::Runtime::TickContext& tick, const ShotReferenceAge& referenceAge = {});
     void Reset() noexcept;
     [[nodiscard]] WorldSnapshot Snapshot() const;
@@ -72,8 +88,15 @@ public:
 private:
     struct ActionEntry final {
         ShotRequest request;
-        std::uint64_t acceptedTick{};
+        std::uint64_t acceptedTick{}; // A, the handoff tick
         std::optional<ShotDecision> decision;
+        // A1 (pv7 §6, D-3): the reference age measured once at A; the first
+        // due tick D (0 before); a Shot's one cooldown hold, until holdUntil.
+        bool referenceMeasured{};
+        std::optional<std::chrono::nanoseconds> referenceAge;
+        std::uint64_t dueTick{};
+        std::uint64_t holdUntil{};
+        bool held{};
     };
     struct Participant final {
         PlayerState state;
@@ -94,12 +117,16 @@ private:
         MovementQuality quality;
     };
     [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
+    [[nodiscard]] bool ActionDue(const Participant& player, const ActionEntry& entry) const noexcept;
+    // Decides one due action now, or starts its cooldown hold (returns false).
+    [[nodiscard]] bool Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry);
     void ResetMovementEpoch(Participant& player, MovementResetReason reason);
     void ResolveLifeBoundaries();
     [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
     void Kill(Participant& player);
     void ResolveActions(const ShotReferenceAge& referenceAge);
     Arena arena_;
+    CombatRules rules_;
     std::map<PlayerId, Participant> players_;
     std::uint64_t tick_{};
 };

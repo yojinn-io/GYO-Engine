@@ -1,10 +1,11 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "client_v6.pb.h"
+#include "client_v7.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -21,15 +22,27 @@
 #include <map>
 #include <limits>
 #include <random>
+#include <cctype>
 #include <syncstream>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v6;
+namespace pb=object_fps_pvp::client::v7;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
 namespace {
 std::string Id(const Json& value) {return value.is_string()?value.get<std::string>():value.dump();}
+// The C clock domain of pv7 §2: steady_clock in microseconds.
+std::uint64_t MicrosNow() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+}
+// The lower-case name of a refusal reason in the cause records line.
+std::string RefusalName(int value) {
+    if(!pb::ActionRefusal_IsValid(value)) return "unknown_"+std::to_string(value);
+    std::string name=pb::ActionRefusal_Name(static_cast<pb::ActionRefusal>(value)).substr(sizeof("ACTION_REFUSAL_")-1);
+    for(auto& c:name) c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return name;
+}
 std::string Hex64(std::uint64_t value) {
     char text[17];std::snprintf(text,sizeof text,"%016llx",static_cast<unsigned long long>(value));return text;
 }
@@ -40,11 +53,21 @@ std::string BaseUrl(std::string address) {
     while(address.ends_with('/'))address.pop_back();
     return address;
 }
+// Names both versions: every protocol_version key carries its sender's own
+// version (pv7 contract §1); a Gateway that sends none is "unknown".
+std::string VersionMismatch(const Json& gateway) {
+    const auto version=gateway.find("protocol_version");
+    return "protocol_version_mismatch: Client "+std::to_string(wire::ProtocolVersion)+", Gateway "+
+        (version!=gateway.end() && version->is_number_unsigned()?std::to_string(version->get<std::uint64_t>()):std::string("unknown"));
+}
 Json Response(const httplib::Result& result) {
     if(!result)throw std::runtime_error("Gateway HTTP request failed: "+std::string(httplib::to_string(result.error())));
     auto body=Json::parse(result->body);
-    if(result->status<200 || result->status>=300)
-        throw std::runtime_error(body.value("error",std::string("Gateway rejected request")));
+    if(result->status<200 || result->status>=300) {
+        // The error code decides, not the status: room_full is a 409 too.
+        const auto code=body.value("error",std::string("Gateway rejected request"));
+        throw std::runtime_error(code=="protocol_version"?VersionMismatch(body):code);
+    }
     return body;
 }
 std::unique_ptr<httplib::Client> Http(const std::string& base) {
@@ -55,13 +78,13 @@ std::unique_ptr<httplib::Client> Http(const std::string& base) {
 std::optional<CombatRules> ReadRules(const pb::Welcome& welcome) {
     if(!welcome.has_combat_rules())return {};
     const auto& rules=welcome.combat_rules();
-    if(!rules.maximum_hp() || !rules.shot_damage() || rules.shot_damage()>rules.maximum_hp() ||
+    if(!rules.maximum_hp() || !ValidShotDamageBounds(rules.shot_damage(),rules.maximum_shot_damage(),rules.maximum_hp()) ||
        !rules.cooldown_ticks() || !std::isfinite(rules.shot_range()) || rules.shot_range()<=0 ||
        !rules.maximum_reference_age_ms() || !rules.magazine_capacity() ||
        !rules.reload_ticks() || !rules.respawn_ticks())return {};
     return CombatRules{rules.maximum_hp(),rules.shot_damage(),rules.cooldown_ticks(),rules.shot_range(),
         std::chrono::milliseconds{rules.maximum_reference_age_ms()},
-        rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks()};
+        rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks(),rules.maximum_shot_damage()};
 }
 ShotRejection ReadRejection(pb::ShotRejection value) {
     switch(value) {
@@ -130,6 +153,10 @@ struct ClientConnection::Impl {
     std::uint64_t sentInputEpoch{},sentInputLife{},sentInputThrough{};
     bool roomRefreshFailed{}; // Guarded by mutex, like state.error.
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
+    // Diagnostics only (pv7 §3): the time echo with the Gateway on Hello and
+    // Welcome, per connection; nothing here reaches a decision (D32).
+    ClockSync clock;
+    bool clockActive{};
     // The worker is one asio io thread. Nothing polls: the socket becoming
     // readable, a post from another thread (a request, new input, a new action,
     // an ACK advance) and one timer at the earliest deadline wake it, and each
@@ -143,6 +170,8 @@ struct ClientConnection::Impl {
     Clock::time_point statisticsAt{};
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
+    std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
+    ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
     Impl() {
@@ -180,6 +209,10 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
+        if(clockActive) {
+            if(const auto window=clock.Roll(MicrosNow(),true))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
+            clockActive=false;
+        }
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
@@ -333,9 +366,10 @@ struct ClientConnection::Impl {
         // Keep credentials even if cancelled so the next action releases its reservation.
         session=joined.at("session_id").get<std::uint64_t>();token=joined.at("session_token").get<std::string>();
         if(request.generation!=generation.load())return;
-        // Compare the full JSON value: a non-integer or wider value must not truncate to the version.
-        if(const auto& version=joined.at("protocol_version");!version.is_number_unsigned() ||
-           version.get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error("Client protocol mismatch");
+        // Compare the full JSON value: a non-integer or wider value must not truncate to the version;
+        // a reply without one is a mismatch with an unknown version too.
+        if(const auto version=joined.find("protocol_version");version==joined.end() || !version->is_number_unsigned() ||
+           version->get<std::uint64_t>()!=wire::ProtocolVersion)throw std::runtime_error(VersionMismatch(joined));
         const auto digest=joined.find("arena_digest");
         CheckArena(joined.at("arena_id").get<std::string>(),joined.at("arena_version").get<std::uint32_t>(),
             digest!=joined.end() && digest->is_number_unsigned() && digest->get<std::uint64_t>()!=0 ?
@@ -344,6 +378,7 @@ struct ClientConnection::Impl {
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
         connectedAt=receivedAt=Clock::now();helloAt={};
+        clock=ClockSync(MicrosNow());clockActive=true;
         std::scoped_lock lock(mutex);
         if(request.generation!=generation.load())return;
         activeGeneration=request.generation;
@@ -369,14 +404,15 @@ struct ClientConnection::Impl {
                (!value.accepted() && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())) ||
                (value.hit_kind()==pb::HIT_PLAYER && (!value.target_id() || value.target_id()==state.playerId)) ||
                (value.hit_kind()!=pb::HIT_PLAYER && (value.target_id() || value.damage())) ||
-               value.damage()>state.combatRules->shotDamage ||
+               value.damage()>state.combatRules->maximumShotDamage ||
+               !ValidDecisionHitPart(static_cast<ShotHitKind>(value.hit_kind()),static_cast<int>(value.hit_part())) ||
                (value.hit_kind()==pb::HIT_PLAYER && !value.target_life_generation()) ||
                (value.hit_kind()!=pb::HIT_PLAYER && value.target_life_generation()) ||
                (value.kind()==pb::ACTION_RELOAD && (value.hit_kind()!=pb::HIT_MISS || value.target_id() || value.damage())))return false;
             ShotDecision decision{value.action_id(),value.resolved_tick(),value.accepted(),
                 ReadRejection(value.rejection()),static_cast<ShotHitKind>(value.hit_kind()),
                 value.target_id(),value.damage(),value.kind()==pb::ACTION_SHOT?ActionKind::Shot:ActionKind::Reload,
-                value.life_generation(),value.target_life_generation()};
+                value.life_generation(),value.target_life_generation(),static_cast<HitPart>(value.hit_part())};
             if(std::any_of(decoded.begin(),decoded.end(),[&](const auto& d){return d.actionId==decision.actionId;}))return false;
             const auto found=actions.find(decision.actionId);
             if(decision.actionId>actionTransport.retiredThrough &&
@@ -411,6 +447,8 @@ struct ClientConnection::Impl {
                 shot->set_kind(entry.request.kind==ActionKind::Shot?pb::ACTION_SHOT:pb::ACTION_RELOAD);
                 shot->set_life_generation(entry.request.lifeGeneration);
                 if(entry.request.kind==ActionKind::Shot){shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);}
+                shot->set_movement_epoch(entry.request.movementEpoch);shot->set_command_sequence(entry.request.commandSequence);
+                shot->set_view_tick_q16(entry.request.viewTickQ16);
                 actionSendCursor=id;
             }
             if(message.shots().empty() && actionTransport.acknowledgedThrough<=actionTransport.retiredThrough)return;
@@ -439,8 +477,13 @@ struct ClientConnection::Impl {
         // movement input: active Hello only receives another Welcome.
         const auto helloInterval=welcomed?std::chrono::milliseconds(1000):std::chrono::milliseconds(250);
         if(now-helloAt>=helloInterval) {
-            pb::Hello hello;hello.set_session_token(token);Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
+            pb::Hello hello;hello.set_session_token(token);
+            auto* echo=hello.mutable_clock();
+            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
+            echo->set_transmit_us(clock.Stamp(MicrosNow()));
+            Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
+        if(const auto window=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -449,10 +492,24 @@ struct ClientConnection::Impl {
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
             if(sender!=endpoint)continue;
-            const auto packet=wire::Decode(std::span(bytes).first(size));
-            if(!packet || packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
+            const auto datagram=std::span(bytes).first(size);
+            const auto packet=wire::Decode(datagram);
+            if(!packet) {
+                // Dropped silently as before; counted apart from malformed datagrams.
+                if(wire::OtherVersion(datagram))++otherVersionDatagrams;
+                continue;
+            }
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
+                if(message.has_clock()) { // diagnostics only, before and apart from every check
+                    const auto& sample=message.clock();
+                    ClockStamp peer{.transmitUs=sample.transmit_us()};
+                    if(sample.has_origin_us())peer.originUs=sample.origin_us();
+                    if(sample.has_receive_us())peer.receiveUs=sample.receive_us();
+                    static_cast<void>(clock.Observe(peer,static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::microseconds>(arrivedAt.time_since_epoch()).count())));
+                }
                 CheckArena(message.arena_id(),message.arena_version(),
                     message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
@@ -476,6 +533,8 @@ struct ClientConnection::Impl {
                 if(!welcomed)continue;
                 pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
                     message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
+                causes.Snapshot(message.has_match_hold_us()?std::optional(message.match_hold_us()):std::nullopt,
+                    message.has_gateway_hold_us()?std::optional(message.gateway_hold_us()):std::nullopt);
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
                 PlayerId own;std::uint32_t maximumHp{},magazineCapacity{};{
                     std::scoped_lock lock(mutex);
@@ -522,7 +581,7 @@ struct ClientConnection::Impl {
                     const CombatState record{combat.player_id(),combat.hp(),combat.next_allowed_shot_tick(),combat.life_generation(),
                         combat.magazine_ammo(),combat.reload_action_id(),combat.reload_start_tick(),combat.reload_end_tick(),
                         combat.last_shot_action_id(),combat.last_shot_tick(),combat.last_damage_tick(),combat.damage_count(),
-                        combat.last_attacker_id()};
+                        combat.last_attacker_id(),static_cast<HitPart>(combat.last_hit_part())};
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
@@ -580,6 +639,7 @@ struct ClientConnection::Impl {
                 if(!welcomed)continue;
                 pb::ActionResults message;
                 const bool parsed=message.ParseFromString(packet->payload);
+                if(parsed) causes.Results(message.refused_batches(),RefusalName(static_cast<int>(message.last_refusal())));
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
                 if(!parsed || !AcceptResults(message,arrivedAt)){++actionTransport.rejectedResultBatches;continue;}
@@ -739,8 +799,10 @@ struct ClientConnection::Impl {
         const auto cpu=CurrentThreadCpuSeconds();
         PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
-            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt})<<'\n';
-        statisticsAt=now;cpuAt=cpu;wakes=0;
+            .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
+            .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+        std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
+        statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
     }
     void Run() {
         statisticsAt=Clock::now();
@@ -813,16 +875,16 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     impl_->latestInput=std::move(input);
     impl_->PostService();
 }
-std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch){
+std::optional<ActionId> ClientConnection::SubmitShot(std::uint64_t observedAuthorityTick,float yaw,float pitch,const ShotContext& context){
     const auto state=State();
     if(!state.snapshot)return {};
     const auto player=std::find_if(state.snapshot->players.begin(),state.snapshot->players.end(),
         [&](const auto& p){return p.playerId==state.playerId;});
     if(player==state.snapshot->players.end())return {};
-    return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch);
+    return SubmitAction(ActionKind::Shot,player->lifeGeneration,observedAuthorityTick,yaw,pitch,context);
 }
 std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint64_t lifeGeneration,
-    std::uint64_t observedAuthorityTick,float yaw,float pitch){
+    std::uint64_t observedAuthorityTick,float yaw,float pitch,const ShotContext& context){
     std::scoped_lock lock(impl_->mutex);
     if(impl_->state.phase!=ConnectionPhase::Playing || !impl_->state.combatRules || !lifeGeneration ||
        (kind!=ActionKind::Shot && kind!=ActionKind::Reload) ||
@@ -833,7 +895,8 @@ std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint
     }
     const auto id=impl_->actionTransport.allocatedThrough+1;
     if(id<=impl_->actionTransport.retiredThrough || id-impl_->actionTransport.retiredThrough>MaxActionWindow)return {};
-    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration},{},false});
+    impl_->actions.emplace(id,Impl::ActionEntry{ShotRequest{id,observedAuthorityTick,yaw,pitch,kind,lifeGeneration,
+        context.movementEpoch,context.commandSequence,context.viewTickQ16},{},false});
     impl_->actionTransport.allocatedThrough=id;
     // D36: an eligible action leaves now, not at the worker's next pass.
     impl_->PostService();

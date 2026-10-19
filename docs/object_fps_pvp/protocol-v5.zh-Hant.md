@@ -3,7 +3,7 @@
 更新：2026-10-04（2026-10-14：§1 加 v7 第 09a／09b 批的契約修訂追記，D68）。Owner：`object_fps_pvp`。
 **v5自2026-10-03起為穩定基線**（[STABLE_BASELINE](plans/v5/STABLE_BASELINE.md)）：Client／Gateway／Match
 共同使用v5並拒絕v1–v4；第01–05批全部完成，完整驗收於macOS通過。
-後續：現行 wire 是 pv6（v6 第 09 批起，見 [protocol v6](protocol-v6.zh-Hant.md)；v7 也停在 pv6）。pv6 沒有改寫的本文件條款仍然適用。
+後續：v6 第 09 批起 wire 是 pv6（見 [protocol v6](protocol-v6.zh-Hant.md)；v7 也停在 pv6），v7.1 的 `pv7-merge` 起是 [pv7](protocol-v7.zh-Hant.md)。pv6 沒有改寫的本文件條款仍然適用。
 歷史：2026-10-01經使用者批准加入啟動相位對齊（方案A1），2026-10-02加入低幀率守門；同日經使用者核准，
 以「持續相位追蹤＋輸入worker token bucket」取代兩者，並加入連線品質移出（§1、§2、§7；
 依據見[fix/08](plans/v5/fix/08-a1-clock-drift.md)、[fix/10](plans/v5/fix/10-connection-quality-eviction.md)）。

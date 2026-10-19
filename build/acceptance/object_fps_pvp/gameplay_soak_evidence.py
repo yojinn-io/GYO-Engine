@@ -13,7 +13,7 @@ from pathlib import Path
 
 from action_evidence import records, frames
 from command_evidence import read_trace_events
-from gameplay_evidence import (client_disturbance, combat_expected, life_reset_matches, percentile,
+from gameplay_evidence import (gateway_limiter_problems, client_disturbance, combat_expected, life_reset_matches, percentile,
                                start_phase_by_player, validate_accepted_actions)
 from start_phase_evidence import reseed_evidence
 from acceptance_util import PROTOCOL_VERSION, STALL_RULE
@@ -373,8 +373,8 @@ def analyze_soak(output, gateway_counters, *, soak=False):
               'Action IDs did not remain contiguous and retire across lives')
         check(summary['maximum_datagram_bytes'] <= 1200 and summary['maximum_batch_shots'] <= 8,
               'Action batch/datagram exceeds8/1200')
-    check(gateway_counters.get('rate_limited_packets', 1) == 0, 'Actual Gateway rate rejection')
-    check(gateway_counters.get('max_session_window_packets', 121) <= 120, 'Actual Gateway limiter exceeds120')
+    for problem in gateway_limiter_problems(gateway_counters):   # v7.1 D122: refusals only, the window count recorded
+        check(False, problem)
 
     measured_seconds = cycles*cycle_seconds
     result = {

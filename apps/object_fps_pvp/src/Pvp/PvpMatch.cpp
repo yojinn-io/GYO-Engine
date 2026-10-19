@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -21,9 +22,13 @@ std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
     return tick + duration;
 }
 }
-PvpMatch::PvpMatch(Arena arena) : arena_(std::move(arena)) {
+PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(rules) {
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
+    if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
+        rules_.magazineCapacity == 0 || !std::isfinite(rules_.shotRange) || rules_.shotRange < 0 ||
+        rules_.maximumReferenceAge < std::chrono::nanoseconds::zero())
+        throw std::invalid_argument("Invalid combat rules");
 }
 
 bool PvpMatch::Join(PlayerId playerId, std::string& error) {
@@ -35,6 +40,8 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
         Participant player;
         player.state = {playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};
         player.combat.playerId = playerId;
+        player.combat.hp = rules_.maximumHp;
+        player.combat.magazineAmmo = rules_.magazineCapacity;
         players_.emplace(playerId, player);
         return true;
     }
@@ -190,6 +197,15 @@ std::optional<MovementQuality> PvpMatch::GetMovementQuality(PlayerId playerId) c
     return found->second.quality;
 }
 
+std::optional<ActionTiming> PvpMatch::GetActionTiming(PlayerId playerId, ActionId actionId) const {
+    const auto found = players_.find(playerId);
+    if (found == players_.end()) return std::nullopt;
+    const auto entry = found->second.actions.find(actionId);
+    if (entry == found->second.actions.end() || !entry->second.decision) return std::nullopt;
+    return ActionTiming{entry->second.acceptedTick, entry->second.dueTick, entry->second.decision->resolvedTick,
+        entry->second.held};
+}
+
 const SpawnPoint* SelectSpawn(const Arena& arena, const std::span<const Engine::Math::Vec3> living) {
     std::vector<Engine::Collision::VerticalCapsule> blockers;
     for (const auto& position : living) blockers.push_back({position, arena.bodyHeight, arena.radius});
@@ -223,7 +239,7 @@ const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
 }
 
 void PvpMatch::Kill(Participant& player) {
-    player.state.respawnTick = FutureTick(tick_, PvpCombatRules.respawnTicks);
+    player.state.respawnTick = FutureTick(tick_, rules_.respawnTicks);
     player.state.lifeState = LifeState::Dead;
     player.state.lifeStateTick = tick_;
     player.combat.reloadActionId = 0;
@@ -253,11 +269,13 @@ void PvpMatch::ResolveLifeBoundaries() {
             player.state.verticalVelocity = 0;
             player.state.grounded = true;
             player.combat = CombatState{id};
+            player.combat.hp = rules_.maximumHp;
+            player.combat.magazineAmmo = rules_.magazineCapacity;
             player.combat.lifeGeneration = player.state.lifeGeneration;
             // Movement resets never clear the session's action ledger or ACK floor.
             ResetMovementEpoch(player, MovementResetReason::LifeRespawn);
         } else if (player.combat.reloadActionId != 0 && tick_ >= player.combat.reloadEndTick) {
-            player.combat.magazineAmmo = PvpCombatRules.magazineCapacity;
+            player.combat.magazineAmmo = rules_.magazineCapacity;
             player.combat.reloadActionId = 0;
             player.combat.reloadStartTick = 0;
             player.combat.reloadEndTick = 0;
@@ -265,81 +283,122 @@ void PvpMatch::ResolveLifeBoundaries() {
     }
 }
 
-void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
-    std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> pending;
-    for (const auto& [playerId, player] : players_) {
-        for (const auto& [actionId, entry] : player.actions) {
-            if (!entry.decision) pending.emplace_back(entry.acceptedTick, playerId, actionId);
+bool PvpMatch::ActionDue(const Participant& player, const ActionEntry& entry) const noexcept {
+    // pv7 §6, after this tick's movement: another epoch (E = 0 included) or
+    // life, the claimed command S already resolved, or the lead bound W.
+    const auto& shot = entry.request;
+    return tick_ >= entry.acceptedTick && (shot.movementEpoch != player.state.movementEpoch ||
+        shot.lifeGeneration != player.state.lifeGeneration ||
+        player.state.lastResolvedCommand >= shot.commandSequence ||
+        tick_ - entry.acceptedTick >= MaxShotStepLead);
+}
+
+bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry) {
+    const auto& shot = entry.request;
+    ShotDecision decision{actionId, tick_};
+    decision.kind = shot.kind;
+    decision.lifeGeneration = shot.lifeGeneration;
+    const auto& age = entry.referenceAge;
+    if (shot.lifeGeneration != player.state.lifeGeneration) {
+        decision.rejection = shot.lifeGeneration < player.state.lifeGeneration ?
+            ShotRejection::StaleLife : ShotRejection::InvalidLife;
+    } else if (player.state.lifeState == LifeState::Dead) {
+        decision.rejection = ShotRejection::Dead;
+    } else if (!age || *age < std::chrono::nanoseconds::zero()) {
+        decision.rejection = ShotRejection::InvalidReference;
+    } else if (*age > rules_.maximumReferenceAge) {
+        decision.rejection = ShotRejection::Expired;
+    } else if (player.combat.reloadActionId != 0) {
+        decision.rejection = ShotRejection::Reloading;
+    } else if (shot.kind == ActionKind::Reload) {
+        if (player.combat.magazineAmmo == rules_.magazineCapacity) {
+            decision.rejection = ShotRejection::MagazineFull;
+        } else {
+            const auto endTick = FutureTick(tick_, rules_.reloadTicks);
+            player.combat.reloadActionId = actionId;
+            player.combat.reloadStartTick = tick_;
+            player.combat.reloadEndTick = endTick;
+            decision.accepted = true;
+        }
+    } else if (player.combat.magazineAmmo == 0) {
+        decision.rejection = ShotRejection::EmptyMagazine;
+    } else if (tick_ < player.combat.nextAllowedShotTick) {
+        // Only the cooldown is missing: hold once, up to K ticks, then judge
+        // everything again (pv7 §6, D-3; K = min(K_max, cooldown), D136).
+        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {
+            entry.held = true;
+            entry.holdUntil = player.combat.nextAllowedShotTick;
+            return false;
+        }
+        decision.rejection = ShotRejection::Cooldown;
+    } else {
+        const auto nextAllowedShotTick = FutureTick(tick_, rules_.cooldownTicks);
+        // Build this view for each action: a preceding lethal hit has
+        // already removed its target from the live hit population.
+        std::vector<PlayerState> targets;
+        for (const auto& [id, target] : players_) {
+            static_cast<void>(id);
+            if (target.state.lifeState == LifeState::Alive) targets.push_back(target.state);
+        }
+        const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch, targets, rules_.shotRange);
+        --player.combat.magazineAmmo;
+        player.combat.lastShotActionId = actionId;
+        player.combat.lastShotTick = tick_;
+        player.combat.nextAllowedShotTick = nextAllowedShotTick;
+        decision.accepted = true;
+        decision.hitKind = hit.kind;
+        decision.targetId = hit.targetId;
+        if (hit.kind == ShotHitKind::Player) {
+            auto& target = players_.at(hit.targetId);
+            decision.targetLifeGeneration = target.state.lifeGeneration;
+            decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)
+            decision.damage = Engine::Math::Min(rules_.shotDamage, target.combat.hp);
+            target.combat.hp -= decision.damage;
+            ++target.combat.damageCount;
+            target.combat.lastDamageTick = tick_;
+            target.combat.lastAttackerId = playerId;
+            target.combat.lastHitPart = HitPart::Body;
+            if (target.combat.hp == 0) Kill(target);
         }
     }
-    std::sort(pending.begin(), pending.end());
-    for (const auto& [acceptedTick, playerId, actionId] : pending) {
-        static_cast<void>(acceptedTick);
+    entry.decision = decision;
+    return true;
+}
+
+void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
+    std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> order;
+    std::map<PlayerId, std::vector<ActionId>> ascending;
+    for (auto& [playerId, player] : players_) {
+        for (auto& [actionId, entry] : player.actions) {
+            if (entry.decision) continue;
+            if (!entry.referenceMeasured) {
+                // D-3 (a): measured once, at A (the first tick that sees the
+                // action), and kept for the decision however late it comes.
+                const auto& shot = entry.request;
+                entry.referenceMeasured = true;
+                entry.referenceAge = referenceAge && shot.observedAuthorityTick != 0 &&
+                    shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
+            }
+            if (entry.dueTick == 0 && ActionDue(player, entry)) entry.dueTick = tick_;
+            order.emplace_back(entry.acceptedTick, playerId, actionId);
+            ascending[playerId].push_back(actionId); // std::map: ascending already
+        }
+    }
+    // Across players (A, PlayerId, ActionId); one player's actions take its
+    // slots in ascending ActionId, and one that cannot be decided yet (not due,
+    // or held) keeps every larger one waiting (pv7 §6 "順序與上界").
+    std::sort(order.begin(), order.end());
+    std::map<PlayerId, std::size_t> next;
+    std::set<PlayerId> waiting;
+    for (const auto& [handoff, playerId, slot] : order) {
+        static_cast<void>(handoff);
+        static_cast<void>(slot);
+        const auto actionId = ascending.at(playerId)[next[playerId]++];
+        if (waiting.contains(playerId)) continue;
         auto& player = players_.at(playerId);
         auto& entry = player.actions.at(actionId);
-        const auto& shot = entry.request;
-        ShotDecision decision{actionId, tick_};
-        decision.kind = shot.kind;
-        decision.lifeGeneration = shot.lifeGeneration;
-        if (shot.lifeGeneration != player.state.lifeGeneration) {
-            decision.rejection = shot.lifeGeneration < player.state.lifeGeneration ?
-                ShotRejection::StaleLife : ShotRejection::InvalidLife;
-        } else if (player.state.lifeState == LifeState::Dead) {
-            decision.rejection = ShotRejection::Dead;
-        } else {
-            const auto age = referenceAge && shot.observedAuthorityTick != 0 &&
-                shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
-            if (!age || *age < std::chrono::nanoseconds::zero()) {
-                decision.rejection = ShotRejection::InvalidReference;
-            } else if (*age > PvpCombatRules.maximumReferenceAge) {
-                decision.rejection = ShotRejection::Expired;
-            } else if (player.combat.reloadActionId != 0) {
-                decision.rejection = ShotRejection::Reloading;
-            } else if (shot.kind == ActionKind::Reload) {
-                if (player.combat.magazineAmmo == PvpCombatRules.magazineCapacity) {
-                    decision.rejection = ShotRejection::MagazineFull;
-                } else {
-                    const auto endTick = FutureTick(tick_, PvpCombatRules.reloadTicks);
-                    player.combat.reloadActionId = actionId;
-                    player.combat.reloadStartTick = tick_;
-                    player.combat.reloadEndTick = endTick;
-                    decision.accepted = true;
-                }
-            } else if (player.combat.magazineAmmo == 0) {
-                decision.rejection = ShotRejection::EmptyMagazine;
-            } else if (tick_ < player.combat.nextAllowedShotTick) {
-                decision.rejection = ShotRejection::Cooldown;
-            } else {
-                const auto nextAllowedShotTick = FutureTick(tick_, PvpCombatRules.cooldownTicks);
-                // Build this view for each action: a preceding lethal hit has
-                // already removed its target from the live hit population.
-                std::vector<PlayerState> targets;
-                for (const auto& [id, target] : players_) {
-                    static_cast<void>(id);
-                    if (target.state.lifeState == LifeState::Alive) targets.push_back(target.state);
-                }
-                const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch,
-                    targets, PvpCombatRules.shotRange);
-                --player.combat.magazineAmmo;
-                player.combat.lastShotActionId = actionId;
-                player.combat.lastShotTick = tick_;
-                player.combat.nextAllowedShotTick = nextAllowedShotTick;
-                decision.accepted = true;
-                decision.hitKind = hit.kind;
-                decision.targetId = hit.targetId;
-                if (hit.kind == ShotHitKind::Player) {
-                    auto& target = players_.at(hit.targetId);
-                    decision.targetLifeGeneration = target.state.lifeGeneration;
-                    decision.damage = Engine::Math::Min(PvpCombatRules.shotDamage, target.combat.hp);
-                    target.combat.hp -= decision.damage;
-                    ++target.combat.damageCount;
-                    target.combat.lastDamageTick = tick_;
-                    target.combat.lastAttackerId = playerId;
-                    if (target.combat.hp == 0) Kill(target);
-                }
-            }
-        }
-        entry.decision = decision;
+        const bool ready = entry.dueTick != 0 && tick_ >= entry.holdUntil;
+        if (!ready || !Decide(playerId, player, actionId, entry)) waiting.insert(playerId);
     }
 }
 

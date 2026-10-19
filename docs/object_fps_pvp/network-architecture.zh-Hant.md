@@ -80,9 +80,9 @@ Client A / Client B (each process; v7 batch 04: three roles)
   Main thread (SDL events + render; PvpApplication)
     keys / mouse -> PublishIntent(latest intent: axes, absolute yaw/pitch,
                     jump presses, owner)          -- never waits for the role
-    PresentAt(now) <- local pose + FireGateTiming (copy published by the role)
+    PresentAt(now) <- local pose + ShotGateView (copy published by the role)
     Drain() -> HUD, action results, SnapshotTimeline -> remote pose
-    click -> LocalFireGate -> SubmitAction / SubmitShot -> wakes worker
+    click -> LocalShotGate -> SubmitAction / SubmitShot -> wakes worker
          |                                  ^
          | intent mailbox (latest wins)     | presentation copy
          v                                  |
@@ -139,7 +139,7 @@ Gateway reader → `sendUDP` → `gyo-client-net` 收進歷史 → 模擬角色�
 
 ```text
 Client 程序（產品 CMake 庫，apps/object_fps_pvp/CMakeLists.txt）
-    app_support：PvpApplication（SDL 輸入 / Lobby / GYO Render）、LocalFireGate、呈現
+    app_support：PvpApplication（SDL 輸入 / Lobby / GYO Render）、LocalShotGate、呈現
         │ PublishIntent / PresentAt
         ▼
     client_simulation：ClientSimulationRole → ClientSimulationLoop → ClientSimulation
@@ -727,6 +727,100 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 結束時間作保守上界。Presented 才能形成呈現樣本；缺未來快照不等於正在移動的
 角色真的停住，靜止角色更不能算作時間線停頓。
 
+#### Gateway：無狀態邊緣（v7.1 `edge-contract`；2026-10-18 使用者核准，D120）
+
+Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送達只由端點（Match 與 Client）負責（protocol-v7 §2a，v7.1 D94、D-14、D105）。
+
+| 原則 | 維持的性質 | 未來修改時要問的問題 |
+|---|---|---|
+| Gateway 只持有能重建、不參與遊戲判定的軟狀態 | Gateway 掛掉或換掉，不會改變任何遊戲結果；Match 的判定不依賴 Gateway 記得什麼 | 這個欄位或判斷，是否要知道「Match 已經有什麼」才能做對？是的話，它屬於 Match |
+| 不持有 Match 決策狀態的副本 | 去重、合併、過時、衝突、重送只在端點發生，不會在 Gateway 悄悄改變權威的輸入（2026-10-10 事故） | 是否記下了游標、epoch、life、命令表、動作帳本、裁決或退役？ |
+| 每則訊息獨立處理 | 依遊戲項目的身分或內容的判斷只在端點；Gateway 對每則訊息只翻譯，並檢查單則訊息內的版本、格式、範圍與授權 | 是否拿前一則訊息的內容來決定這一則？（依傳輸序號、速率與 session 生命週期的跨訊息判斷除外） |
+| 丟棄要有界、要回報 | 每個丟棄出口都計數並回報給 Match（§4 的 DropReason）；Gateway 執行，政策與真相在 Match（D49） | 新的丟棄出口是否有 DropReason、計數與回報？ |
+
+**允許的類別**（守衛 `gateway/state_whitelist_test.go` 的分類，名稱一致）：
+
+- connection and session：socket、runtime link、session（token、endpoint、傳輸序號、速率、活性）、保留（玩家與 session 的對應、id 配發）。
+- lifecycle：房間可用、建立、玩家階段、關閉與 once 旗標。
+- configuration copy：`Config` 與 Match 的 `Ready`。
+- bounded outbound or IPC queue：controls、snapshot 與 runtime link 的有界佇列（溢出要計數並回報）。
+- results slot：每位玩家上次送出結果的時刻與至多 1 則待送的結果框架（latest-wins）。
+- synchronization：mutex 與喚醒用的 channel。
+- diagnostic state：時鐘同步、回聲、丟棄帳本、統計；判定路徑不得讀取（protocol-v7 §2「診斷不進判定」）。
+- diagnostics carried with a queue item：佇列項目帶著的身分（收包時刻、傳輸序號、命令或動作 id 的範圍；snapshot 讀到 IPC 框架的時刻），在它被丟棄時拿來回報，或在寫出時算成 dwell、hold 填進同一則訊息（`cause-records`，D125）；都不被判定讀取。它隨項目進出佇列，項目離開佇列就消失；所以和 D105「單次呼叫的脈絡不得跨資料包保留」不衝突，是獨立的允許類別（N3，D120）。
+- per-call context：處理一個 datagram、frame 或請求期間記下的值（例如 `Server.datagram`、讀取緩衝區）；不得被下一個 datagram 的判斷讀取。
+- test seam：套件變數與注入的時鐘；正式路徑只用預設值。
+- immutable table：鍵清單、原因表、sentinel error。
+
+**禁止**（Gateway 不得做的事；括號內是負責的一方）：
+
+- Gateway 不得持有 Match 決策狀態的副本，例如游標、epoch、life、命令表、動作帳本、裁決、退役（這些狀態的權威是 Match）。
+- Gateway 不得依遊戲項目的身分或內容做跨訊息的判斷，例如去重、合併、判定過時、解決衝突（由 Match 判定）。
+- Gateway 不得排程重送（可靠送達由端點負責：結果由 Match 重送到 Client 確認為止，輸入與動作由 Client 重送）。
+
+**守衛與變更規則**：
+
+- `gateway/state_whitelist_test.go` 遞迴走訪 Gateway 套件每個 struct 型別的欄位（含指標、map 的鍵與元素、slice、array、channel 與匿名 struct；介面欄位要明列它持有什麼），用 `go/ast` 掃描 `gateway` 與 `gateway/adapter` 的套件變數，以及以 `go` 啟動的函式與閉包裡的區域 map、slice，和分類表比對。新增未分類的欄位、變數或 goroutine 區域狀態，測試就失敗；分類表裡沒有「Match 決策狀態」這個類別。
+- 新增任何 Gateway 狀態欄位（包括把它分進既有類別）都是 Architecture Delta，要經使用者同意（AGENTS.md §3 的 State Authority）。
+- 依內容的判斷（某個允許的欄位被拿來做遊戲判定）測不到，靠審查守。
+- 通用層 `services/gyo_gateway/session` 的狀態由它自己的 owner 管；產品層 Gateway 透過 `reservation.session` 持有它，歸在 connection and session。
+
+**Replacement Criteria**（出現時不再繼續修補，改向使用者提出「重建或修改」）：
+
+- 為了讓某個遊戲行為正確，需要 Gateway 記住 Match 已經知道的東西（判斷準則答「是」）。
+- 新的外部 Client 接口或新的訊息種類，必須在 Gateway 加跨訊息、依內容的判斷才能運作。
+- 同一類丟棄或延遲問題，需要第二次在 Gateway 加特例才能通過驗收（2026-10-10 事故與 v7.1 edge 系列之前的模式）。
+- 分類表的允許類別本身需要擴充（而不只是新增欄位）。
+
+**目前的已知項目**（只記錄）：
+
+- K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
+
+#### 射擊判定的冷卻保留與命令步（v7.1 `a1-shot-step` 起生效；2026-10-19 使用者核准，D136）
+
+A1 把射擊判定移到命令步 T(S)（protocol-v7 §6）。上一發走退回路徑、晚了 d 個 Tick 判定時，冷卻結束點跟著後移 d；下一發若照命令步的節奏壓著冷卻邊緣，會差 d。冷卻保留就是處理這個差距：
+
+```text
+K = min(K_max, cooldownTicks)        K_max = 2 Tick（契約常數，不上 wire）
+                                     cooldownTicks = 射手當時武器的權威規則值（CombatRules）
+判定 Tick D 時只差冷卻：
+  gap = nextAllowedShotTick - D
+  gap <= K  -> 保留到 nextAllowedShotTick，在那個 Tick 完整重判一次（不再保留第二次）
+  gap >  K  -> REJECTION_COOLDOWN
+Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最新命令）
+```
+
+- 受影響的只有「上一發的裁決回到 Client 之前就送出的射擊」：Client 收到裁決後，序號閘門改用它的 `resolved_tick＋cooldown` 重新對齊。連射武器（例如冷卻 4 Tick）在 RTT 50～100 ms 時約 1～2 發；d≤K 的延後 d 個 Tick 判定，d>K 的被拒（不扣彈、不造成傷害），之後恢復準時。
+- 「取 min」不改變行為：gap＝nextAllowed−D，而 nextAllowed＝上一發的 J＋冷卻、D≥J，所以 gap 不會超過冷卻，K＝min(K_max, 冷卻) 與 K＝K_max 的判定結果永遠相同。min 的作用是讓契約條文 0≤K≤cooldownTicks 對任何武器資料都成立（實作 `Combat.hpp` 的 `ShotHoldLimit`；測試以冷卻 2、4 的規則端到端驗證保留與拒絕）。
+- K_max＝2 的依據與盲區：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境，全自動武器上線時重新評估 K_max（v8「多武器與本機射擊閘」）。
+
+| 原則 | 維持的性質 | 未來修改時要問的問題 |
+|---|---|---|
+| 射速相關的值只從權威規則推出 | 武器資料（射速、冷卻）改變時不必改程式或契約；Client 的序號閘門只用規則裡的冷卻值做加減 | 是否又寫死了由某個射速推導出來的常數（FireGate 的 guard 2 ms、spread 7 Tick 就是這樣退役的）？ |
+| K＝min(K_max, cooldownTicks) | 保留上限永遠不超過冷卻；判定最多延後 K_max 個 Tick；J−A≤W＋K | 新武器需要更大的保留時，是重評 K_max（要量測與使用者同意），不是讓 K 脫離冷卻 |
+| 射速的權威在 Match | Match 載入並驗證武器資料，經 `CombatRules` 告訴 Client；Client 的值只是副本 | 是否讓 Client 本機的資料決定射速或冷卻？ |
+| 冷卻以 Tick 為單位 | 60 Hz 下射速只能是 3600÷cooldownTicks 發／分；Match 與 Client 不會各自取整出不同值 | 資料若改存發／分，換算與取整規則是否寫進契約？ |
+| S＝N | 射線起點和玩家點擊時看到的自己一致 | 前搖或蓄力武器是否需要 S＝N＋k？k 的上限是 W－1＝12 |
+
+**Replacement Criteria**（出現時不再調 K_max，改向使用者提出重新設計）：
+
+- 為了讓某種武器在 clean 網路下權威 Cooldown＝0，需要依武器種類給不同的 K_max。
+- 連射武器在常見的網路抖動下，被拒的射擊多到需要第二次保留或排隊才能接受。
+
+### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
+
+- **原始意圖**：Gateway 對各種外部 Client 各自提供接口，內部只用一套抽象協議和 Match
+  對接，Gateway 本身無狀態。這個意圖當時沒有寫進上表的「不可破壞的契約」。
+- **漂移**：v3 起陸續加入 Match 決策狀態的副本與遊戲語意的處理（`lastResolved` 副本、
+  動作帳本與重送、30 Hz 節拍、結果退役、拒絕線與已寫出去重），都沒有被當成
+  Architecture Delta 提出。2026-10-10 的事故（Gateway 悄悄丟掉已解析的命令）直接來自
+  `lastResolved` 副本。
+- **根因**：外部是有損、重複送的 UDP，內部協議是「每個命令恰好一次」的可靠串流；
+  在兩種送達語意之間轉換必然要去重，去重就需要 Match 的狀態。
+- **狀態**：v7.1 的 edge 系列已把 Gateway 改回無狀態邊緣（輸入、動作、結果原樣轉送，刪除 Match
+  決策狀態的副本）；約束寫在上面的「Gateway：無狀態邊緣」（D120 核准），由白名單測試守住。完整紀錄見
+  [設計事故紀錄](plans/v7.1/Incident/2026-10-15-gateway-state-drift.md)。
+
 ### 修改入口與 Ownership
 
 下列路徑相對 repository root。它們是責任入口，不是新的抽象層：
@@ -738,7 +832,7 @@ send 保存開始／結束區間，不能用晚記錄的單點時間否定真實
 | ACK、重播、窗口、相位追蹤與本機顯示校正 | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp` |
 | 命令產生路徑（產品與無頭 probe 共用）：elapsed 取樣、每份 snapshot 的樣本 | `apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp` |
 | Client 模擬角色：固定步期限、意圖信箱與過期（D30）、呈現副本 | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp`、`include/RetroFPS/Pvp/ClientSimulationRole.hpp` |
-| 本機射擊閘（FireGate 常數） | `apps/object_fps_pvp/src/Pvp/FireGate.cpp`、`include/RetroFPS/Pvp/FireGate.hpp` |
+| 本機射擊閘（序號閘門；v7.1 `a1-shot-step` 取代 FireGate） | `apps/object_fps_pvp/src/Pvp/ShotGate.cpp`、`include/RetroFPS/Pvp/ShotGate.hpp` |
 | 玩家游標、替代輸入、epoch | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp` |
 | Match 模擬角色、絕對 Tick 期限、owning 交接、ingress 統計 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp` |
 | Match IPC（asio）：讀寫、latest-wins Snapshot、action lane | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp` |
@@ -932,7 +1026,7 @@ Client game thread                          Client worker
                  movement 60 Hz + action/ACK <=30 Hz + Hello ~1 Hz
                                                        v
 Product Gateway / Adapter
-  authenticated Session -> PlayerId; fixed-window cap 120 packets/s
+  authenticated Session -> PlayerId; token bucket 120 packets/s, 120 deep (v7.1 D121; was a fixed window)
   bounded request/result ledgers; rotate <=8 entries; never ACK for Client
                                                        | TCP runtime v4
                                                        v
@@ -948,7 +1042,7 @@ Product Host: atomic shots + ACK handoff -> Authority Tick
                                      Gateway -> Client worker -> Drain
 ```
 
-Gateway 每個 Session 每秒 120 包的固定窗口上限照舊；第 08c 批起被限制的包依玩家與種類
+Gateway 每個 Session 的封包上限是每秒 120 包（v7.1 D121 起改為 token bucket：每秒補 120、容量 120，任何長度 T 的區間最多 120T＋120 包；原為固定 1 秒窗口，Gateway 自己停頓後會把緩存的合法封包算進同一窗口而丟掉，K1）；第 08c 批起被限制的包依玩家與種類
 （含 Hello）計數，各玩家的總和等於全 Gateway 的 `rate_limited_packets`。
 
 Network Snapshot 是可替換狀態，ActionResults 是必須保存到連續消費確認的終局答案。

@@ -1,9 +1,7 @@
 package gateway
 
 import (
-	"math"
 	"net/netip"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,8 +9,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 func shot(id uint64) *runtime.ShotRequest {
@@ -32,9 +30,9 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 	if peer.Hello(peer.Token, endpoint, 1, now) != nil {
 		t.Fatal("hello")
 	}
-	p := &reservation{lifeGeneration: 1, playerID: 7, phase: active, session: peer, movementEpoch: 1, commands: map[uint64]*runtime.MovementCommand{}, actions: newActionWindow()}
-	l := &runtimeLink{inputs: map[uint64]*runtime.PlayerInput{}, epochs: map[uint64]uint64{}, wake: make(chan struct{}, 1)}
-	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan outbound, 64), snapshotOut: make(chan []byte, 1), resultWake: make(chan struct{}, 1)}
+	p := &reservation{playerID: 7, phase: active, session: peer}
+	l := &runtimeLink{wake: make(chan struct{}, 1), drops: newDropLedger()}
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1), resultWake: make(chan struct{}, 1)}
 	return s, p, endpoint, now
 }
 func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.AddrPort, seq uint32, b *client.ActionBatch, now time.Time) {
@@ -44,178 +42,58 @@ func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.Addr
 		t.Fatal(err)
 	}
 }
+
+// The Client has no trusted player field: the batch is forwarded under the
+// identity of its authenticated session, never another endpoint's, and an
+// unknown protobuf field cannot replace it. Its content is the Match's to
+// judge (pv7 §2a).
 func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 	s, p, endpoint, now := actionFixture(t)
-	// Client has no trusted player field. Even a protobuf unknown field cannot
-	// replace the identity selected from its authenticated session.
 	batch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
 	batch.ProtoReflect().SetUnknown([]byte{0x18, 99})
 	deliverActions(t, s, p, netip.MustParseAddrPort("127.0.0.1:29002"), 2, batch, now)
-	if len(p.actions.requests) != 0 {
-		t.Fatal("spoofed endpoint")
+	if got := s.link.batch(); len(got) != 0 {
+		t.Fatalf("spoofed endpoint reached the Match: %v", got)
 	}
 	deliverActions(t, s, p, endpoint, 2, batch, now)
-	if len(p.actions.requests) != 1 || s.link.actionWindows[7] == nil || s.link.actionWindows[99] != nil {
-		t.Fatal("identity mapping")
-	}
-	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(2)}}); err != nil {
-		t.Fatal(err)
-	}
-	deliverActions(t, s, p, endpoint, 3, &client.ActionBatch{AcknowledgedThrough: 2}, now)
-	if p.actions.acknowledged != 0 {
-		t.Fatal("ACK crossed missing decision1")
-	}
-	deliverActions(t, s, p, endpoint, 4, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}, {LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(1)}}}, now)
-	if len(p.actions.requests) != 1 || p.actions.requests[1] != nil {
-		t.Fatal("conflict partially admitted")
-	}
-	deliverActions(t, s, p, endpoint, 5, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}, {LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}, now)
-	if len(p.actions.requests) != 2 {
-		t.Fatal("identical duplicate rejected")
-	}
-	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}}); err != nil {
-		t.Fatal(err)
-	}
-	// A valid ACK paired with malformed/conflicting content must remain atomic.
-	deliverActions(t, s, p, endpoint, 6, &client.ActionBatch{AcknowledgedThrough: 2, Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 2, ObservedAuthorityTick: 1, Yaw: proto.Float32(1)}}}, now)
-	if p.actions.acknowledged != 0 {
-		t.Fatal("bad batch committed ACK")
-	}
-	deliverActions(t, s, p, endpoint, 7, &client.ActionBatch{AcknowledgedThrough: 2}, now)
-	if p.actions.acknowledged != 2 || s.link.actionWindows[7].acknowledged != 2 || len(p.actions.decisions) != 2 {
-		t.Fatal("ACK lost or retired before authority")
-	}
-	if err := s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, RetiredThrough: 2}); err != nil {
-		t.Fatal(err)
-	}
-	deliverActions(t, s, p, endpoint, 8, batch, now)
-	if p.actions.retired != 2 || len(p.actions.requests) != 0 || len(s.link.actionWindows[7].requests) != 0 {
-		t.Fatal("retired request revived")
-	}
-	// Movement resets do not clear decisions, requests, ACKs or the retirement floor.
-	e := envelope()
-	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 2, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 7, MovementEpoch: 2}}, Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}}}
-	s.runtimeMessage(e)
-	if p.actions.retired != 2 || p.movementEpoch != 2 {
-		t.Fatal("movement reset cleared action lifecycle")
+	got := s.link.batch()
+	if len(got) != 1 || got[0].GetActions().GetPlayerId() != 7 || len(got[0].GetActions().Shots) != 1 {
+		t.Fatalf("identity mapping: %v", got)
 	}
 }
-func TestActionWindowsBoundedCircularAndDeadlineRecovery(t *testing.T) {
-	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
-		t.Run(pause.String(), func(t *testing.T) {
-			s, p, _, now := actionFixture(t)
-			for start := uint64(1); start <= 32; start += 8 {
-				b := &runtime.ActionBatch{PlayerId: 7}
-				for id := start; id < start+8; id++ {
-					b.Shots = append(b.Shots, shot(id))
-				}
-				if p.actions.validate(b) != nil {
-					t.Fatal("valid window")
-				}
-				p.actions.merge(b)
-				if s.link.actions(b) != nil {
-					t.Fatal("runtime window")
-				}
-			}
-			if s.link.actions(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(33)}}) == nil {
-				t.Fatal("33rd pending action accepted")
-			}
-			// Withhold consumers while concurrent ingress repeats retained immutable data.
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				until := time.Now().Add(pause)
-				for time.Now().Before(until) {
-					_ = s.link.actions(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(1)}})
-					time.Sleep(time.Millisecond)
-				}
-			}()
-			time.Sleep(pause)
-			wg.Wait()
-			release := now.Add(pause)
-			seen := map[uint64]bool{}
-			for round := 0; round < 4; round++ {
-				s.link.mu.Lock()
-				frames := s.link.actionBatch(release.Add(time.Duration(round) * actionSendInterval))
-				s.link.mu.Unlock()
-				if len(frames) != 1 || len(frames[0].GetActions().Shots) != 8 {
-					t.Fatalf("runtime result chunks %v", frames)
-				}
-				for _, q := range frames[0].GetActions().Shots {
-					seen[q.ActionId] = true
-				}
-			}
-			if len(seen) != 32 {
-				t.Fatal("circular request coverage")
-			}
-			s.link.mu.Lock()
-			burst := s.link.actionBatch(release.Add(100 * time.Millisecond))
-			s.link.mu.Unlock()
-			if len(burst) != 0 {
-				t.Fatal("catch-up burst")
-			}
-			for start := uint64(1); start <= 32; start += 8 {
-				r := &runtime.ActionResults{PlayerId: 7}
-				for id := start; id < start+8; id++ {
-					r.Decisions = append(r.Decisions, decision(id))
-				}
-				if err := s.receiveActionResults(r); err != nil {
-					t.Fatal(err)
-				}
-			}
-			// Fill the existing lossy control queue and replace snapshots. Neither can
-			// drop a retained result; result delivery selects directly from its ledger.
-			for i := 0; i < 64; i++ {
-				s.controlOut <- outbound{}
-			}
-			seen = map[uint64]bool{}
-			for round := 0; round < 4; round++ {
-				packets, _, _ := s.actionPackets(release.Add(time.Duration(round) * actionSendInterval))
-				if len(packets) != 1 {
-					t.Fatal("missing result batch")
-				}
-				h, b, err := framing.DecodeDatagram(packets[0].packet)
-				var results client.ActionResults
-				if err != nil || h.Type != adapter.ActionResults || proto.Unmarshal(b, &results) != nil || len(results.Decisions) != 8 {
-					t.Fatal("bad result datagram")
-				}
-				for _, d := range results.Decisions {
-					seen[d.ActionId] = true
-				}
-			}
-			if len(seen) != 32 || len(p.actions.decisions) != 32 {
-				t.Fatal("result coverage/retention")
-			}
-			if packets, _, _ := s.actionPackets(release.Add(100 * time.Millisecond)); len(packets) != 0 {
-				t.Fatal("result burst")
-			}
-			// Leave is the cleanup boundary, regardless of movement epoch.
-			e := envelope()
-			e.Message = &runtime.RuntimeEnvelope_Leave{Leave: &runtime.PlayerLeave{PlayerId: 7}}
-			if err := s.link.control(e); err != nil {
-				t.Fatal(err)
-			}
-			if len(s.link.actionWindows) != 0 {
-				t.Fatal("leave retained actions")
-			}
-		})
+
+// pv7 §2a: the Gateway keeps one results frame per player, latest wins; the
+// three it replaced are counted (34), the Match sends them again.
+func TestResultSlotKeepsTheLatestFrame(t *testing.T) {
+	s, _, _, now := actionFixture(t)
+	for start := uint64(1); start <= 32; start += 8 {
+		r := &runtime.ActionResults{PlayerId: 7}
+		for id := start; id < start+8; id++ {
+			r.Decisions = append(r.Decisions, decision(id))
+		}
+		if err := s.receiveActionResults(r); err != nil {
+			t.Fatal(err)
+		}
 	}
-}
-func TestActionOverflowAndRetiredDuplicateConflict(t *testing.T) {
-	w := newActionWindow()
-	w.retired = math.MaxUint64 - 1
-	w.acknowledged = w.retired
-	b := &runtime.ActionBatch{PlayerId: 1, Shots: []*runtime.ShotRequest{shot(math.MaxUint64)}}
-	if w.validate(b) != nil {
-		t.Fatal("last action id rejected")
+	packets, _, _ := s.actionPackets(now)
+	if len(packets) != 1 {
+		t.Fatalf("%d results frames released", len(packets))
 	}
-	w.merge(b)
-	if w.validate(&runtime.ActionBatch{PlayerId: 1, Shots: []*runtime.ShotRequest{{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(1)}, {LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(2)}}}) == nil {
-		t.Fatal("conflicting duplicate retired contents")
+	h, b, err := framing.DecodeDatagram(packets[0].packet)
+	var results client.ActionResults
+	if err != nil || h.Type != adapter.ActionResults || proto.Unmarshal(b, &results) != nil || len(results.Decisions) != 8 ||
+		results.Decisions[0].ActionId != 25 {
+		t.Fatalf("released frame %v", &results)
 	}
-	if w.validate(&runtime.ActionBatch{PlayerId: 1, AcknowledgedThrough: math.MaxUint64}) == nil {
-		t.Fatal("overflow ACK crossed pending")
+	replaced := uint64(0)
+	if counts := s.playerIngress[7]; counts != nil {
+		replaced = counts[playerDropResultsOverRatePackets]
+	}
+	if replaced != 3 {
+		t.Fatalf("replaced frames counted %d, want 3", replaced)
+	}
+	if packets, _, _ := s.actionPackets(now.Add(100 * time.Millisecond)); len(packets) != 0 {
+		t.Fatal("result burst")
 	}
 }
 func TestMovementActionsHelloShareUnchanged120PacketBudget(t *testing.T) {
@@ -288,8 +166,10 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 	e.Message = &runtime.RuntimeEnvelope_ActionResults{ActionResults: &runtime.ActionResults{PlayerId: c.PlayerID, Decisions: []*runtime.ShotDecision{decision(1)}}}
 	f.send(e)
 	// Drop the first client result, then require a byte-equivalent decision from
-	// a later result packet, independent of any snapshot publication.
+	// a later result packet, independent of any snapshot publication. Since
+	// pv7 §2a the Match resends until the ACK; the Gateway forwards each frame.
 	first := receivePacket(t, p, adapter.ActionResults)
+	f.send(e)
 	second := receivePacket(t, p, adapter.ActionResults)
 	if string(first) != string(second) {
 		t.Fatal("decision changed after result loss")
@@ -298,8 +178,9 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 	if proto.Unmarshal(second, &result) != nil || len(result.Decisions) != 1 || result.Decisions[0].ActionId != 1 {
 		t.Fatal("result wire")
 	}
-	// Lost ACK is indistinguishable from never sending it. The retained result
-	// must still arrive after another deadline.
+	// Lost ACK is indistinguishable from never sending it. The Match's next
+	// resend still reaches the Client.
+	f.send(e)
 	receivePacket(t, p, adapter.ActionResults)
 	sendPacket(t, p, c, 3, adapter.Actions, &client.ActionBatch{AcknowledgedThrough: 1})
 	for {
@@ -333,29 +214,9 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 		t.Fatal("recovery changed identity")
 	}
 }
-
-func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
-	s, p, _, now := actionFixture(t)
-	in := &runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(1)}}
-	p.actions.merge(in)
-	if s.link.actions(in) != nil {
-		t.Fatal("admission")
-	}
-	s.link.mu.Lock()
-	first := s.link.actionBatch(now)
-	s.link.mu.Unlock()
-	if len(first) != 1 {
-		t.Fatal("first action")
-	}
+func TestCompletedBlockedWriteReanchorsTheResultDeadline(t *testing.T) {
+	s, _, _, now := actionFixture(t)
 	release := now.Add(time.Second)
-	s.link.actionWritten(7, release)
-	s.link.mu.Lock()
-	early := s.link.actionBatch(release.Add(actionSendInterval - 1))
-	due := s.link.actionBatch(release.Add(actionSendInterval))
-	s.link.mu.Unlock()
-	if len(early) != 0 || len(due) != 1 {
-		t.Fatal("TCP completion catch-up deadline")
-	}
 	if s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}}) != nil {
 		t.Fatal("result")
 	}
@@ -364,7 +225,11 @@ func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
 		t.Fatal("first result")
 	}
 	s.actionWritten(packets[0].actionPlayer, release)
-	// Results keep a strict interval from the completed write.
+	// Results keep a strict interval from the completed write: the next frame
+	// (the Match resends until the ACK) waits for it.
+	if s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}}) != nil {
+		t.Fatal("resent result")
+	}
 	earlyResults, _, _ := s.actionPackets(release.Add(actionSendInterval - 1))
 	dueResults, _, _ := s.actionPackets(release.Add(actionSendInterval))
 	if len(earlyResults) != 0 || len(dueResults) != 1 {
@@ -372,30 +237,33 @@ func TestCompletedBlockedWriteReanchorsActionDeadline(t *testing.T) {
 	}
 }
 
-// An eviction sends no Leave, so the Gateway forgets the evicted player's link
-// state itself: otherwise its action window keeps a slot and a replacement's
-// shots and reloads never reach the Match.
-func TestEvictionForgetsTheRuntimeLinkState(t *testing.T) {
+// An eviction sends no Leave: the Gateway forgets the player on the link, its
+// queued batches still reach the Match (which counts them for an unknown
+// player), and replacements are not limited by any per-player window.
+func TestEvictionKeepsQueuedActionsAndReplacementsDeliver(t *testing.T) {
 	s, p, _, _ := actionFixture(t)
 	l := s.link
-	l.actionWindows = map[uint64]*actionWindow{}
-	l.lives = map[uint64]uint64{}
-	if err := l.actions(&runtime.ActionBatch{PlayerId: p.playerID, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {
+	if err := l.actions(&runtime.ActionBatch{PlayerId: p.playerID, Shots: []*runtime.ShotRequest{shot(1)}}, dropEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: p.playerID,
 		Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 190}}
+	l.actionWritten(p.playerID, time.Now()) // the link's statistics of the player
 	s.runtimeMessage(e)
-	if _, kept := l.actionWindows[p.playerID]; kept {
-		t.Fatal("evicted player's action window kept")
+	l.mu.Lock()
+	_, kept := l.actionStats[p.playerID]
+	l.mu.Unlock()
+	if kept {
+		t.Fatal("the evicted player's link statistics kept")
 	}
-	if _, kept := l.epochs[p.playerID]; kept {
-		t.Fatal("evicted player's epoch kept")
-	}
-	for id := uint64(100); id < 100+adapter.MaxPlayers; id++ {
-		if err := l.actions(&runtime.ActionBatch{PlayerId: id, Shots: []*runtime.ShotRequest{shot(1)}}); err != nil {
+	for id := uint64(100); id < 100+2*adapter.MaxPlayers; id++ {
+		if err := l.actions(&runtime.ActionBatch{PlayerId: id, Shots: []*runtime.ShotRequest{shot(1)}}, dropEvent{}); err != nil {
 			t.Fatalf("replacement %d could not deliver actions: %v", id, err)
 		}
+	}
+	batch := l.batch()
+	if len(batch) != 1+2*adapter.MaxPlayers || batch[0].GetActions().GetPlayerId() != p.playerID {
+		t.Fatalf("the evicted player's queued batch did not go first: %d messages", len(batch))
 	}
 }

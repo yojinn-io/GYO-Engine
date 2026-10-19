@@ -79,9 +79,11 @@ class ActionEvidence(unittest.TestCase):
         self.assertEqual(fields(encoded(sample)), sample)
 
     def test_gateway_pause_never_exempts_the_cap_or_required_fault_evidence(self):
+        # v7.1 D122: a stopped Gateway is no exemption from zero refusals; the window count is recorded only.
         for mode, maximum, rejected, expected in (
             ('unit-fixture', 91, 1, 'rate limiter discarded'),
-            ('gateway', 121, 118, '120'),
+            ('gateway', 121, 118, 'rate limiter discarded'),
+            ('gateway', 170, 1, 'rate limiter discarded'),
             ('gateway', 120, 118, 'Requested fault was not applied'),
         ):
             with self.subTest(mode=mode, maximum=maximum), tempfile.TemporaryDirectory() as temporary:
@@ -92,6 +94,16 @@ class ActionEvidence(unittest.TestCase):
                 result = analyze(output, relay, {'start_ns': 0, 'release_ns': 0}, mode)
                 self.assertFalse(result['passed'])
                 self.assertTrue(any(expected in error for error in result['errors']), result['errors'])
+
+    def test_a_window_count_over_120_without_refusals_passes_the_limiter_check(self):
+        # after a Gateway stall the datagrams that waited pass within one second (v7.1 D121, D122)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            relay = self.fixture(output)
+            relay['gateway_counters'] = {'rate_accepted_packets': 911, 'rate_limited_packets': 0,
+                                         'max_session_window_packets': 170}
+            result = analyze(output, relay, {'start_ns': 0, 'release_ns': 0}, 'gateway')
+            self.assertFalse(any('rate limiter' in e or 'Session counting' in e for e in result['errors']), result['errors'])
 
     def test_streamed_evidence_rejects_truncation_loss_and_extra_records(self):
         for tail in ('', '{"kind":"evidence_end","records":2,"lost":0}\n',

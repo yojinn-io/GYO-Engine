@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.36.2
-// source: client_v6.proto
+// source: client_v7.proto
 
-package clientv6
+package clientv7
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -54,11 +54,11 @@ func (x LifeState) String() string {
 }
 
 func (LifeState) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v6_proto_enumTypes[0].Descriptor()
+	return file_client_v7_proto_enumTypes[0].Descriptor()
 }
 
 func (LifeState) Type() protoreflect.EnumType {
-	return &file_client_v6_proto_enumTypes[0]
+	return &file_client_v7_proto_enumTypes[0]
 }
 
 func (x LifeState) Number() protoreflect.EnumNumber {
@@ -67,7 +67,76 @@ func (x LifeState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LifeState.Descriptor instead.
 func (LifeState) EnumDescriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{0}
+	return file_client_v7_proto_rawDescGZIP(), []int{0}
+}
+
+// Why the Match refused a whole action batch (pv7 §5, D-6): the names of
+// the Match's IngressActionRejection. Diagnostics only (D32).
+type ActionRefusal int32
+
+const (
+	ActionRefusal_ACTION_REFUSAL_UNSPECIFIED    ActionRefusal = 0
+	ActionRefusal_ACTION_REFUSAL_OVER_BATCH     ActionRefusal = 1
+	ActionRefusal_ACTION_REFUSAL_MALFORMED      ActionRefusal = 2
+	ActionRefusal_ACTION_REFUSAL_RESETTING      ActionRefusal = 3
+	ActionRefusal_ACTION_REFUSAL_INVALID_PLAYER ActionRefusal = 4
+	ActionRefusal_ACTION_REFUSAL_INVALID_BATCH  ActionRefusal = 5
+	ActionRefusal_ACTION_REFUSAL_CONFLICT       ActionRefusal = 6
+	ActionRefusal_ACTION_REFUSAL_OUTSIDE_WINDOW ActionRefusal = 7
+	ActionRefusal_ACTION_REFUSAL_FULL           ActionRefusal = 8
+)
+
+// Enum value maps for ActionRefusal.
+var (
+	ActionRefusal_name = map[int32]string{
+		0: "ACTION_REFUSAL_UNSPECIFIED",
+		1: "ACTION_REFUSAL_OVER_BATCH",
+		2: "ACTION_REFUSAL_MALFORMED",
+		3: "ACTION_REFUSAL_RESETTING",
+		4: "ACTION_REFUSAL_INVALID_PLAYER",
+		5: "ACTION_REFUSAL_INVALID_BATCH",
+		6: "ACTION_REFUSAL_CONFLICT",
+		7: "ACTION_REFUSAL_OUTSIDE_WINDOW",
+		8: "ACTION_REFUSAL_FULL",
+	}
+	ActionRefusal_value = map[string]int32{
+		"ACTION_REFUSAL_UNSPECIFIED":    0,
+		"ACTION_REFUSAL_OVER_BATCH":     1,
+		"ACTION_REFUSAL_MALFORMED":      2,
+		"ACTION_REFUSAL_RESETTING":      3,
+		"ACTION_REFUSAL_INVALID_PLAYER": 4,
+		"ACTION_REFUSAL_INVALID_BATCH":  5,
+		"ACTION_REFUSAL_CONFLICT":       6,
+		"ACTION_REFUSAL_OUTSIDE_WINDOW": 7,
+		"ACTION_REFUSAL_FULL":           8,
+	}
+)
+
+func (x ActionRefusal) Enum() *ActionRefusal {
+	p := new(ActionRefusal)
+	*p = x
+	return p
+}
+
+func (x ActionRefusal) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ActionRefusal) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v7_proto_enumTypes[1].Descriptor()
+}
+
+func (ActionRefusal) Type() protoreflect.EnumType {
+	return &file_client_v7_proto_enumTypes[1]
+}
+
+func (x ActionRefusal) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ActionRefusal.Descriptor instead.
+func (ActionRefusal) EnumDescriptor() ([]byte, []int) {
+	return file_client_v7_proto_rawDescGZIP(), []int{1}
 }
 
 // Historical names are retained; requests and decisions cover Shot and Reload.
@@ -104,11 +173,11 @@ func (x ActionKind) String() string {
 }
 
 func (ActionKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v6_proto_enumTypes[1].Descriptor()
+	return file_client_v7_proto_enumTypes[2].Descriptor()
 }
 
 func (ActionKind) Type() protoreflect.EnumType {
-	return &file_client_v6_proto_enumTypes[1]
+	return &file_client_v7_proto_enumTypes[2]
 }
 
 func (x ActionKind) Number() protoreflect.EnumNumber {
@@ -117,7 +186,7 @@ func (x ActionKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ActionKind.Descriptor instead.
 func (ActionKind) EnumDescriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{1}
+	return file_client_v7_proto_rawDescGZIP(), []int{2}
 }
 
 type ShotRejection int32
@@ -174,11 +243,11 @@ func (x ShotRejection) String() string {
 }
 
 func (ShotRejection) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v6_proto_enumTypes[2].Descriptor()
+	return file_client_v7_proto_enumTypes[3].Descriptor()
 }
 
 func (ShotRejection) Type() protoreflect.EnumType {
-	return &file_client_v6_proto_enumTypes[2]
+	return &file_client_v7_proto_enumTypes[3]
 }
 
 func (x ShotRejection) Number() protoreflect.EnumNumber {
@@ -187,7 +256,7 @@ func (x ShotRejection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShotRejection.Descriptor instead.
 func (ShotRejection) EnumDescriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{2}
+	return file_client_v7_proto_rawDescGZIP(), []int{3}
 }
 
 type ShotHitKind int32
@@ -223,11 +292,11 @@ func (x ShotHitKind) String() string {
 }
 
 func (ShotHitKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v6_proto_enumTypes[3].Descriptor()
+	return file_client_v7_proto_enumTypes[4].Descriptor()
 }
 
 func (ShotHitKind) Type() protoreflect.EnumType {
-	return &file_client_v6_proto_enumTypes[3]
+	return &file_client_v7_proto_enumTypes[4]
 }
 
 func (x ShotHitKind) Number() protoreflect.EnumNumber {
@@ -236,20 +305,74 @@ func (x ShotHitKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShotHitKind.Descriptor instead.
 func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{3}
+	return file_client_v7_proto_rawDescGZIP(), []int{4}
 }
 
-// This remote-client contract is independent of runtime_v6.proto.
+// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
+// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+type HitPart int32
+
+const (
+	HitPart_HIT_PART_UNSPECIFIED HitPart = 0
+	HitPart_HIT_PART_BODY        HitPart = 1
+	HitPart_HIT_PART_HEAD        HitPart = 2
+)
+
+// Enum value maps for HitPart.
+var (
+	HitPart_name = map[int32]string{
+		0: "HIT_PART_UNSPECIFIED",
+		1: "HIT_PART_BODY",
+		2: "HIT_PART_HEAD",
+	}
+	HitPart_value = map[string]int32{
+		"HIT_PART_UNSPECIFIED": 0,
+		"HIT_PART_BODY":        1,
+		"HIT_PART_HEAD":        2,
+	}
+)
+
+func (x HitPart) Enum() *HitPart {
+	p := new(HitPart)
+	*p = x
+	return p
+}
+
+func (x HitPart) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HitPart) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v7_proto_enumTypes[5].Descriptor()
+}
+
+func (HitPart) Type() protoreflect.EnumType {
+	return &file_client_v7_proto_enumTypes[5]
+}
+
+func (x HitPart) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HitPart.Descriptor instead.
+func (HitPart) EnumDescriptor() ([]byte, []int) {
+	return file_client_v7_proto_rawDescGZIP(), []int{5}
+}
+
+// This remote-client contract is independent of runtime_v7.proto.
 type Hello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionToken  string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	SessionToken string                 `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	// Diagnostics only (pv7 §3): the time echo with the Gateway; read only
+	// after the Hello is authenticated, and never part of admission or liveness.
+	Clock         *ClockSample `protobuf:"bytes,2,opt,name=clock,proto3" json:"clock,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Hello) Reset() {
 	*x = Hello{}
-	mi := &file_client_v6_proto_msgTypes[0]
+	mi := &file_client_v7_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -261,7 +384,7 @@ func (x *Hello) String() string {
 func (*Hello) ProtoMessage() {}
 
 func (x *Hello) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[0]
+	mi := &file_client_v7_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -274,7 +397,7 @@ func (x *Hello) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hello.ProtoReflect.Descriptor instead.
 func (*Hello) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{0}
+	return file_client_v7_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Hello) GetSessionToken() string {
@@ -282,6 +405,13 @@ func (x *Hello) GetSessionToken() string {
 		return x.SessionToken
 	}
 	return ""
+}
+
+func (x *Hello) GetClock() *ClockSample {
+	if x != nil {
+		return x.Clock
+	}
+	return nil
 }
 
 type Welcome struct {
@@ -296,14 +426,16 @@ type Welcome struct {
 	JumpHeight   float32                `protobuf:"fixed32,8,opt,name=jump_height,json=jumpHeight,proto3" json:"jump_height,omitempty"`
 	Gravity      float32                `protobuf:"fixed32,9,opt,name=gravity,proto3" json:"gravity,omitempty"`
 	// Content digest of the served arena (pv6 contract §2), copied from Ready.
-	ArenaDigest   uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
+	ArenaDigest uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
+	// Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
+	Clock         *ClockSample `protobuf:"bytes,11,opt,name=clock,proto3" json:"clock,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_client_v6_proto_msgTypes[1]
+	mi := &file_client_v7_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +447,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[1]
+	mi := &file_client_v7_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +460,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{1}
+	return file_client_v7_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Welcome) GetPlayerId() uint64 {
@@ -401,6 +533,80 @@ func (x *Welcome) GetArenaDigest() uint64 {
 	return 0
 }
 
+func (x *Welcome) GetClock() *ClockSample {
+	if x != nil {
+		return x.Clock
+	}
+	return nil
+}
+
+// Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
+// runtime_v7.proto: times are the sender's own monotonic clock in
+// microseconds; a time of the other side is only ever copied back.
+type ClockSample struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The transmit_us of the peer's latest ClockSample this side read, as is;
+	// present exactly when receive_us is.
+	OriginUs *uint64 `protobuf:"varint,1,opt,name=origin_us,json=originUs,proto3,oneof" json:"origin_us,omitempty"`
+	// When this side read that sample; not after transmit_us.
+	ReceiveUs *uint64 `protobuf:"varint,2,opt,name=receive_us,json=receiveUs,proto3,oneof" json:"receive_us,omitempty"`
+	// When this side serialized this sample: at least 1 and strictly increasing.
+	TransmitUs    uint64 `protobuf:"varint,3,opt,name=transmit_us,json=transmitUs,proto3" json:"transmit_us,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClockSample) Reset() {
+	*x = ClockSample{}
+	mi := &file_client_v7_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClockSample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClockSample) ProtoMessage() {}
+
+func (x *ClockSample) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v7_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClockSample.ProtoReflect.Descriptor instead.
+func (*ClockSample) Descriptor() ([]byte, []int) {
+	return file_client_v7_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ClockSample) GetOriginUs() uint64 {
+	if x != nil && x.OriginUs != nil {
+		return *x.OriginUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetReceiveUs() uint64 {
+	if x != nil && x.ReceiveUs != nil {
+		return *x.ReceiveUs
+	}
+	return 0
+}
+
+func (x *ClockSample) GetTransmitUs() uint64 {
+	if x != nil {
+		return x.TransmitUs
+	}
+	return 0
+}
+
 // A single immutable 1/60-second movement step. No client time or position.
 type MovementCommand struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -416,7 +622,7 @@ type MovementCommand struct {
 
 func (x *MovementCommand) Reset() {
 	*x = MovementCommand{}
-	mi := &file_client_v6_proto_msgTypes[2]
+	mi := &file_client_v7_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -428,7 +634,7 @@ func (x *MovementCommand) String() string {
 func (*MovementCommand) ProtoMessage() {}
 
 func (x *MovementCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[2]
+	mi := &file_client_v7_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -441,7 +647,7 @@ func (x *MovementCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MovementCommand.ProtoReflect.Descriptor instead.
 func (*MovementCommand) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{2}
+	return file_client_v7_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MovementCommand) GetSequence() uint64 {
@@ -501,7 +707,7 @@ type PlayerInput struct {
 
 func (x *PlayerInput) Reset() {
 	*x = PlayerInput{}
-	mi := &file_client_v6_proto_msgTypes[3]
+	mi := &file_client_v7_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -513,7 +719,7 @@ func (x *PlayerInput) String() string {
 func (*PlayerInput) ProtoMessage() {}
 
 func (x *PlayerInput) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[3]
+	mi := &file_client_v7_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -526,7 +732,7 @@ func (x *PlayerInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInput.ProtoReflect.Descriptor instead.
 func (*PlayerInput) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{3}
+	return file_client_v7_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PlayerInput) GetCommands() []*MovementCommand {
@@ -571,7 +777,7 @@ type PlayerState struct {
 	VerticalVelocity          float32                `protobuf:"fixed32,10,opt,name=vertical_velocity,json=verticalVelocity,proto3" json:"vertical_velocity,omitempty"`
 	Grounded                  bool                   `protobuf:"varint,11,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	LifeGeneration            uint64                 `protobuf:"varint,12,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.client.v6.LifeState" json:"life_state,omitempty"`
+	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.client.v7.LifeState" json:"life_state,omitempty"`
 	LifeStateTick             uint64                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
 	RespawnTick               uint64                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
 	// Host timing observation, never simulation input: the smallest movement
@@ -592,7 +798,7 @@ type PlayerState struct {
 
 func (x *PlayerState) Reset() {
 	*x = PlayerState{}
-	mi := &file_client_v6_proto_msgTypes[4]
+	mi := &file_client_v7_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -604,7 +810,7 @@ func (x *PlayerState) String() string {
 func (*PlayerState) ProtoMessage() {}
 
 func (x *PlayerState) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[4]
+	mi := &file_client_v7_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -617,7 +823,7 @@ func (x *PlayerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerState.ProtoReflect.Descriptor instead.
 func (*PlayerState) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{4}
+	return file_client_v7_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PlayerState) GetPlayerId() uint64 {
@@ -747,17 +953,22 @@ func (x *PlayerState) GetConnectionQualityFailures() uint32 {
 }
 
 type WorldSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tick          uint64                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	Players       []*PlayerState         `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
-	Combat        []*CombatState         `protobuf:"bytes,3,rep,name=combat,proto3" json:"combat,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Tick    uint64                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	Players []*PlayerState         `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
+	Combat  []*CombatState         `protobuf:"bytes,3,rep,name=combat,proto3" json:"combat,omitempty"`
+	// Diagnostics only (pv7 §5, D-4): the Match's hold (Host publication to the
+	// IPC write) and the Gateway's (reading the IPC frame to the write to this
+	// Client), each a duration on its own clock, clamped at 10,000,000.
+	MatchHoldUs   *uint32 `protobuf:"varint,4,opt,name=match_hold_us,json=matchHoldUs,proto3,oneof" json:"match_hold_us,omitempty"`
+	GatewayHoldUs *uint32 `protobuf:"varint,5,opt,name=gateway_hold_us,json=gatewayHoldUs,proto3,oneof" json:"gateway_hold_us,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_client_v6_proto_msgTypes[5]
+	mi := &file_client_v7_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -769,7 +980,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[5]
+	mi := &file_client_v7_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -782,7 +993,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{5}
+	return file_client_v7_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WorldSnapshot) GetTick() uint64 {
@@ -806,6 +1017,20 @@ func (x *WorldSnapshot) GetCombat() []*CombatState {
 	return nil
 }
 
+func (x *WorldSnapshot) GetMatchHoldUs() uint32 {
+	if x != nil && x.MatchHoldUs != nil {
+		return *x.MatchHoldUs
+	}
+	return 0
+}
+
+func (x *WorldSnapshot) GetGatewayHoldUs() uint32 {
+	if x != nil && x.GatewayHoldUs != nil {
+		return *x.GatewayHoldUs
+	}
+	return 0
+}
+
 type Error struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
@@ -816,7 +1041,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_client_v6_proto_msgTypes[6]
+	mi := &file_client_v7_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -828,7 +1053,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[6]
+	mi := &file_client_v7_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -841,7 +1066,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{6}
+	return file_client_v7_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Error) GetCode() string {
@@ -868,7 +1093,7 @@ type ActionBatch struct {
 
 func (x *ActionBatch) Reset() {
 	*x = ActionBatch{}
-	mi := &file_client_v6_proto_msgTypes[7]
+	mi := &file_client_v7_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +1105,7 @@ func (x *ActionBatch) String() string {
 func (*ActionBatch) ProtoMessage() {}
 
 func (x *ActionBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[7]
+	mi := &file_client_v7_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +1118,7 @@ func (x *ActionBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionBatch.ProtoReflect.Descriptor instead.
 func (*ActionBatch) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{7}
+	return file_client_v7_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ActionBatch) GetShots() []*ShotRequest {
@@ -914,13 +1139,17 @@ type ActionResults struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	RetiredThrough uint64                 `protobuf:"varint,1,opt,name=retired_through,json=retiredThrough,proto3" json:"retired_through,omitempty"`
 	Decisions      []*ShotDecision        `protobuf:"bytes,2,rep,name=decisions,proto3" json:"decisions,omitempty"`
+	// Diagnostics only (pv7 §5, D-6): as the Match sent them. The Client only
+	// records them; it does not change its resending.
+	RefusedBatches uint64        `protobuf:"varint,3,opt,name=refused_batches,json=refusedBatches,proto3" json:"refused_batches,omitempty"`
+	LastRefusal    ActionRefusal `protobuf:"varint,4,opt,name=last_refusal,json=lastRefusal,proto3,enum=object_fps_pvp.client.v7.ActionRefusal" json:"last_refusal,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ActionResults) Reset() {
 	*x = ActionResults{}
-	mi := &file_client_v6_proto_msgTypes[8]
+	mi := &file_client_v7_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -932,7 +1161,7 @@ func (x *ActionResults) String() string {
 func (*ActionResults) ProtoMessage() {}
 
 func (x *ActionResults) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[8]
+	mi := &file_client_v7_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -945,7 +1174,7 @@ func (x *ActionResults) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionResults.ProtoReflect.Descriptor instead.
 func (*ActionResults) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{8}
+	return file_client_v7_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ActionResults) GetRetiredThrough() uint64 {
@@ -962,6 +1191,20 @@ func (x *ActionResults) GetDecisions() []*ShotDecision {
 	return nil
 }
 
+func (x *ActionResults) GetRefusedBatches() uint64 {
+	if x != nil {
+		return x.RefusedBatches
+	}
+	return 0
+}
+
+func (x *ActionResults) GetLastRefusal() ActionRefusal {
+	if x != nil {
+		return x.LastRefusal
+	}
+	return ActionRefusal_ACTION_REFUSAL_UNSPECIFIED
+}
+
 type CombatRules struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	MaximumHp             uint32                 `protobuf:"varint,1,opt,name=maximum_hp,json=maximumHp,proto3" json:"maximum_hp,omitempty"`
@@ -972,13 +1215,16 @@ type CombatRules struct {
 	MagazineCapacity      uint32                 `protobuf:"varint,6,opt,name=magazine_capacity,json=magazineCapacity,proto3" json:"magazine_capacity,omitempty"`
 	ReloadTicks           uint64                 `protobuf:"varint,7,opt,name=reload_ticks,json=reloadTicks,proto3" json:"reload_ticks,omitempty"`
 	RespawnTicks          uint64                 `protobuf:"varint,8,opt,name=respawn_ticks,json=respawnTicks,proto3" json:"respawn_ticks,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// The most damage one decision may deal, part multipliers included (pv7
+	// §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
+	MaximumShotDamage uint32 `protobuf:"varint,9,opt,name=maximum_shot_damage,json=maximumShotDamage,proto3" json:"maximum_shot_damage,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *CombatRules) Reset() {
 	*x = CombatRules{}
-	mi := &file_client_v6_proto_msgTypes[9]
+	mi := &file_client_v7_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -990,7 +1236,7 @@ func (x *CombatRules) String() string {
 func (*CombatRules) ProtoMessage() {}
 
 func (x *CombatRules) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[9]
+	mi := &file_client_v7_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1003,7 +1249,7 @@ func (x *CombatRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatRules.ProtoReflect.Descriptor instead.
 func (*CombatRules) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{9}
+	return file_client_v7_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CombatRules) GetMaximumHp() uint32 {
@@ -1062,6 +1308,13 @@ func (x *CombatRules) GetRespawnTicks() uint64 {
 	return 0
 }
 
+func (x *CombatRules) GetMaximumShotDamage() uint32 {
+	if x != nil {
+		return x.MaximumShotDamage
+	}
+	return 0
+}
+
 type CombatState struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1079,13 +1332,16 @@ type CombatState struct {
 	LastDamageTick uint64 `protobuf:"varint,11,opt,name=last_damage_tick,json=lastDamageTick,proto3" json:"last_damage_tick,omitempty"`
 	DamageCount    uint32 `protobuf:"varint,12,opt,name=damage_count,json=damageCount,proto3" json:"damage_count,omitempty"`
 	LastAttackerId uint64 `protobuf:"varint,13,opt,name=last_attacker_id,json=lastAttackerId,proto3" json:"last_attacker_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// The hit record's fourth field (pv7 §7): set with the other three, BODY or
+	// HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
+	LastHitPart   HitPart `protobuf:"varint,14,opt,name=last_hit_part,json=lastHitPart,proto3,enum=object_fps_pvp.client.v7.HitPart" json:"last_hit_part,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CombatState) Reset() {
 	*x = CombatState{}
-	mi := &file_client_v6_proto_msgTypes[10]
+	mi := &file_client_v7_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1097,7 +1353,7 @@ func (x *CombatState) String() string {
 func (*CombatState) ProtoMessage() {}
 
 func (x *CombatState) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[10]
+	mi := &file_client_v7_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1110,7 +1366,7 @@ func (x *CombatState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatState.ProtoReflect.Descriptor instead.
 func (*CombatState) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{10}
+	return file_client_v7_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CombatState) GetPlayerId() uint64 {
@@ -1204,21 +1460,36 @@ func (x *CombatState) GetLastAttackerId() uint64 {
 	return 0
 }
 
+func (x *CombatState) GetLastHitPart() HitPart {
+	if x != nil {
+		return x.LastHitPart
+	}
+	return HitPart_HIT_PART_UNSPECIFIED
+}
+
 type ShotRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	ActionId              uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
 	ObservedAuthorityTick uint64                 `protobuf:"varint,2,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
 	Yaw                   *float32               `protobuf:"fixed32,3,opt,name=yaw,proto3,oneof" json:"yaw,omitempty"`
 	Pitch                 *float32               `protobuf:"fixed32,4,opt,name=pitch,proto3,oneof" json:"pitch,omitempty"`
-	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.client.v6.ActionKind" json:"kind,omitempty"`
+	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.client.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration        uint64                 `protobuf:"varint,6,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Immutable request content (pv7 §6, §7), part of the request's identity
+	// for retransmission: the Client's predicted movement epoch (E) and its
+	// newest command of that epoch (S), from one simulation step, and the
+	// remote time the shooter saw (the presentation's global cursor, Tick x
+	// 65536, floored; 0 without one). v7.1 only records them (D-2).
+	MovementEpoch   uint64 `protobuf:"varint,7,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
+	CommandSequence uint64 `protobuf:"varint,8,opt,name=command_sequence,json=commandSequence,proto3" json:"command_sequence,omitempty"`
+	ViewTickQ16     uint64 `protobuf:"varint,9,opt,name=view_tick_q16,json=viewTickQ16,proto3" json:"view_tick_q16,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ShotRequest) Reset() {
 	*x = ShotRequest{}
-	mi := &file_client_v6_proto_msgTypes[11]
+	mi := &file_client_v7_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1230,7 +1501,7 @@ func (x *ShotRequest) String() string {
 func (*ShotRequest) ProtoMessage() {}
 
 func (x *ShotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[11]
+	mi := &file_client_v7_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1243,7 +1514,7 @@ func (x *ShotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotRequest.ProtoReflect.Descriptor instead.
 func (*ShotRequest) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{11}
+	return file_client_v7_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ShotRequest) GetActionId() uint64 {
@@ -1288,25 +1559,47 @@ func (x *ShotRequest) GetLifeGeneration() uint64 {
 	return 0
 }
 
+func (x *ShotRequest) GetMovementEpoch() uint64 {
+	if x != nil {
+		return x.MovementEpoch
+	}
+	return 0
+}
+
+func (x *ShotRequest) GetCommandSequence() uint64 {
+	if x != nil {
+		return x.CommandSequence
+	}
+	return 0
+}
+
+func (x *ShotRequest) GetViewTickQ16() uint64 {
+	if x != nil {
+		return x.ViewTickQ16
+	}
+	return 0
+}
+
 type ShotDecision struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	ActionId             uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
 	ResolvedTick         uint64                 `protobuf:"varint,2,opt,name=resolved_tick,json=resolvedTick,proto3" json:"resolved_tick,omitempty"`
 	Accepted             bool                   `protobuf:"varint,3,opt,name=accepted,proto3" json:"accepted,omitempty"`
-	Rejection            ShotRejection          `protobuf:"varint,4,opt,name=rejection,proto3,enum=object_fps_pvp.client.v6.ShotRejection" json:"rejection,omitempty"`
-	HitKind              ShotHitKind            `protobuf:"varint,5,opt,name=hit_kind,json=hitKind,proto3,enum=object_fps_pvp.client.v6.ShotHitKind" json:"hit_kind,omitempty"`
+	Rejection            ShotRejection          `protobuf:"varint,4,opt,name=rejection,proto3,enum=object_fps_pvp.client.v7.ShotRejection" json:"rejection,omitempty"`
+	HitKind              ShotHitKind            `protobuf:"varint,5,opt,name=hit_kind,json=hitKind,proto3,enum=object_fps_pvp.client.v7.ShotHitKind" json:"hit_kind,omitempty"`
 	TargetId             uint64                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
 	Damage               uint32                 `protobuf:"varint,7,opt,name=damage,proto3" json:"damage,omitempty"`
-	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.client.v6.ActionKind" json:"kind,omitempty"`
+	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.client.v7.ActionKind" json:"kind,omitempty"`
 	LifeGeneration       uint64                 `protobuf:"varint,9,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	TargetLifeGeneration uint64                 `protobuf:"varint,10,opt,name=target_life_generation,json=targetLifeGeneration,proto3" json:"target_life_generation,omitempty"`
+	HitPart              HitPart                `protobuf:"varint,11,opt,name=hit_part,json=hitPart,proto3,enum=object_fps_pvp.client.v7.HitPart" json:"hit_part,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ShotDecision) Reset() {
 	*x = ShotDecision{}
-	mi := &file_client_v6_proto_msgTypes[12]
+	mi := &file_client_v7_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1611,7 @@ func (x *ShotDecision) String() string {
 func (*ShotDecision) ProtoMessage() {}
 
 func (x *ShotDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v6_proto_msgTypes[12]
+	mi := &file_client_v7_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1624,7 @@ func (x *ShotDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShotDecision.ProtoReflect.Descriptor instead.
 func (*ShotDecision) Descriptor() ([]byte, []int) {
-	return file_client_v6_proto_rawDescGZIP(), []int{12}
+	return file_client_v7_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ShotDecision) GetActionId() uint64 {
@@ -1404,13 +1697,21 @@ func (x *ShotDecision) GetTargetLifeGeneration() uint64 {
 	return 0
 }
 
-var File_client_v6_proto protoreflect.FileDescriptor
+func (x *ShotDecision) GetHitPart() HitPart {
+	if x != nil {
+		return x.HitPart
+	}
+	return HitPart_HIT_PART_UNSPECIFIED
+}
 
-const file_client_v6_proto_rawDesc = "" +
+var File_client_v7_proto protoreflect.FileDescriptor
+
+const file_client_v7_proto_rawDesc = "" +
 	"\n" +
-	"\x0fclient_v6.proto\x12\x18object_fps_pvp.client.v6\",\n" +
+	"\x0fclient_v7.proto\x12\x18object_fps_pvp.client.v7\"i\n" +
 	"\x05Hello\x12#\n" +
-	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\"\xeb\x02\n" +
+	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12;\n" +
+	"\x05clock\x18\x02 \x01(\v2%.object_fps_pvp.client.v7.ClockSampleR\x05clock\"\xa8\x03\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x1b\n" +
@@ -1418,12 +1719,22 @@ const file_client_v6_proto_rawDesc = "" +
 	"\rsnapshot_rate\x18\x04 \x01(\rR\fsnapshotRate\x12\x19\n" +
 	"\barena_id\x18\x05 \x01(\tR\aarenaId\x12#\n" +
 	"\rarena_version\x18\x06 \x01(\rR\farenaVersion\x12H\n" +
-	"\fcombat_rules\x18\a \x01(\v2%.object_fps_pvp.client.v6.CombatRulesR\vcombatRules\x12\x1f\n" +
+	"\fcombat_rules\x18\a \x01(\v2%.object_fps_pvp.client.v7.CombatRulesR\vcombatRules\x12\x1f\n" +
 	"\vjump_height\x18\b \x01(\x02R\n" +
 	"jumpHeight\x12\x18\n" +
 	"\agravity\x18\t \x01(\x02R\agravity\x12!\n" +
 	"\farena_digest\x18\n" +
-	" \x01(\x06R\varenaDigest\"\xbe\x01\n" +
+	" \x01(\x06R\varenaDigest\x12;\n" +
+	"\x05clock\x18\v \x01(\v2%.object_fps_pvp.client.v7.ClockSampleR\x05clock\"\x91\x01\n" +
+	"\vClockSample\x12 \n" +
+	"\torigin_us\x18\x01 \x01(\x04H\x00R\boriginUs\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"receive_us\x18\x02 \x01(\x04H\x01R\treceiveUs\x88\x01\x01\x12\x1f\n" +
+	"\vtransmit_us\x18\x03 \x01(\x04R\n" +
+	"transmitUsB\f\n" +
+	"\n" +
+	"_origin_usB\r\n" +
+	"\v_receive_us\"\xbe\x01\n" +
 	"\x0fMovementCommand\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12!\n" +
 	"\fmove_forward\x18\x02 \x01(\x02R\vmoveForward\x12\x1d\n" +
@@ -1433,7 +1744,7 @@ const file_client_v6_proto_rawDesc = "" +
 	"\x05pitch\x18\x05 \x01(\x02R\x05pitch\x12%\n" +
 	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\xdc\x01\n" +
 	"\vPlayerInput\x12E\n" +
-	"\bcommands\x18\x01 \x03(\v2).object_fps_pvp.client.v6.MovementCommandR\bcommands\x12%\n" +
+	"\bcommands\x18\x01 \x03(\v2).object_fps_pvp.client.v7.MovementCommandR\bcommands\x12%\n" +
 	"\x0emovement_epoch\x18\x02 \x01(\x04R\rmovementEpoch\x12'\n" +
 	"\x0flife_generation\x18\x03 \x01(\x04R\x0elifeGeneration\x126\n" +
 	"\x17observed_authority_tick\x18\x04 \x01(\x04R\x15observedAuthorityTick\"\x93\x06\n" +
@@ -1452,27 +1763,33 @@ const file_client_v6_proto_rawDesc = "" +
 	"\bgrounded\x18\v \x01(\bR\bgrounded\x12'\n" +
 	"\x0flife_generation\x18\f \x01(\x04R\x0elifeGeneration\x12B\n" +
 	"\n" +
-	"life_state\x18\r \x01(\x0e2#.object_fps_pvp.client.v6.LifeStateR\tlifeState\x12&\n" +
+	"life_state\x18\r \x01(\x0e2#.object_fps_pvp.client.v7.LifeStateR\tlifeState\x12&\n" +
 	"\x0flife_state_tick\x18\x0e \x01(\x04R\rlifeStateTick\x12!\n" +
 	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x12;\n" +
 	"\x17movement_slack_sequence\x18\x11 \x01(\x04H\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
 	"\x11movement_slack_us\x18\x12 \x01(\x11H\x01R\x0fmovementSlackUs\x88\x01\x01\x12>\n" +
 	"\x1bconnection_quality_failures\x18\x13 \x01(\rR\x19connectionQualityFailuresB\x1a\n" +
 	"\x18_movement_slack_sequenceB\x14\n" +
-	"\x12_movement_slack_usJ\x04\b\x10\x10\x11R\x13epoch_start_wait_us\"\xa3\x01\n" +
+	"\x12_movement_slack_usJ\x04\b\x10\x10\x11R\x13epoch_start_wait_us\"\x9f\x02\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12?\n" +
-	"\aplayers\x18\x02 \x03(\v2%.object_fps_pvp.client.v6.PlayerStateR\aplayers\x12=\n" +
-	"\x06combat\x18\x03 \x03(\v2%.object_fps_pvp.client.v6.CombatStateR\x06combat\"5\n" +
+	"\aplayers\x18\x02 \x03(\v2%.object_fps_pvp.client.v7.PlayerStateR\aplayers\x12=\n" +
+	"\x06combat\x18\x03 \x03(\v2%.object_fps_pvp.client.v7.CombatStateR\x06combat\x12'\n" +
+	"\rmatch_hold_us\x18\x04 \x01(\rH\x00R\vmatchHoldUs\x88\x01\x01\x12+\n" +
+	"\x0fgateway_hold_us\x18\x05 \x01(\rH\x01R\rgatewayHoldUs\x88\x01\x01B\x10\n" +
+	"\x0e_match_hold_usB\x12\n" +
+	"\x10_gateway_hold_us\"5\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"}\n" +
 	"\vActionBatch\x12;\n" +
-	"\x05shots\x18\x01 \x03(\v2%.object_fps_pvp.client.v6.ShotRequestR\x05shots\x121\n" +
-	"\x14acknowledged_through\x18\x02 \x01(\x04R\x13acknowledgedThrough\"~\n" +
+	"\x05shots\x18\x01 \x03(\v2%.object_fps_pvp.client.v7.ShotRequestR\x05shots\x121\n" +
+	"\x14acknowledged_through\x18\x02 \x01(\x04R\x13acknowledgedThrough\"\xf3\x01\n" +
 	"\rActionResults\x12'\n" +
 	"\x0fretired_through\x18\x01 \x01(\x04R\x0eretiredThrough\x12D\n" +
-	"\tdecisions\x18\x02 \x03(\v2&.object_fps_pvp.client.v6.ShotDecisionR\tdecisions\"\xc1\x02\n" +
+	"\tdecisions\x18\x02 \x03(\v2&.object_fps_pvp.client.v7.ShotDecisionR\tdecisions\x12'\n" +
+	"\x0frefused_batches\x18\x03 \x01(\x04R\x0erefusedBatches\x12J\n" +
+	"\flast_refusal\x18\x04 \x01(\x0e2'.object_fps_pvp.client.v7.ActionRefusalR\vlastRefusal\"\xf1\x02\n" +
 	"\vCombatRules\x12\x1d\n" +
 	"\n" +
 	"maximum_hp\x18\x01 \x01(\rR\tmaximumHp\x12\x1f\n" +
@@ -1484,7 +1801,8 @@ const file_client_v6_proto_rawDesc = "" +
 	"\x18maximum_reference_age_ms\x18\x05 \x01(\rR\x15maximumReferenceAgeMs\x12+\n" +
 	"\x11magazine_capacity\x18\x06 \x01(\rR\x10magazineCapacity\x12!\n" +
 	"\freload_ticks\x18\a \x01(\x04R\vreloadTicks\x12#\n" +
-	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\"\x87\x04\n" +
+	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\x12.\n" +
+	"\x13maximum_shot_damage\x18\t \x01(\rR\x11maximumShotDamage\"\xce\x04\n" +
 	"\vCombatState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x0e\n" +
 	"\x02hp\x18\x02 \x01(\rR\x02hp\x123\n" +
@@ -1499,33 +1817,48 @@ const file_client_v6_proto_rawDesc = "" +
 	" \x01(\x04R\flastShotTick\x12(\n" +
 	"\x10last_damage_tick\x18\v \x01(\x04R\x0elastDamageTick\x12!\n" +
 	"\fdamage_count\x18\f \x01(\rR\vdamageCount\x12(\n" +
-	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\"\x89\x02\n" +
+	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\x12E\n" +
+	"\rlast_hit_part\x18\x0e \x01(\x0e2!.object_fps_pvp.client.v7.HitPartR\vlastHitPart\"\xff\x02\n" +
 	"\vShotRequest\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x126\n" +
 	"\x17observed_authority_tick\x18\x02 \x01(\x04R\x15observedAuthorityTick\x12\x15\n" +
 	"\x03yaw\x18\x03 \x01(\x02H\x00R\x03yaw\x88\x01\x01\x12\x19\n" +
 	"\x05pitch\x18\x04 \x01(\x02H\x01R\x05pitch\x88\x01\x01\x128\n" +
-	"\x04kind\x18\x05 \x01(\x0e2$.object_fps_pvp.client.v6.ActionKindR\x04kind\x12'\n" +
-	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGenerationB\x06\n" +
+	"\x04kind\x18\x05 \x01(\x0e2$.object_fps_pvp.client.v7.ActionKindR\x04kind\x12'\n" +
+	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGeneration\x12%\n" +
+	"\x0emovement_epoch\x18\a \x01(\x04R\rmovementEpoch\x12)\n" +
+	"\x10command_sequence\x18\b \x01(\x04R\x0fcommandSequence\x12\"\n" +
+	"\rview_tick_q16\x18\t \x01(\x04R\vviewTickQ16B\x06\n" +
 	"\x04_yawB\b\n" +
-	"\x06_pitch\"\xc3\x03\n" +
+	"\x06_pitch\"\x81\x04\n" +
 	"\fShotDecision\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\x04R\bactionId\x12#\n" +
 	"\rresolved_tick\x18\x02 \x01(\x04R\fresolvedTick\x12\x1a\n" +
 	"\baccepted\x18\x03 \x01(\bR\baccepted\x12E\n" +
-	"\trejection\x18\x04 \x01(\x0e2'.object_fps_pvp.client.v6.ShotRejectionR\trejection\x12@\n" +
-	"\bhit_kind\x18\x05 \x01(\x0e2%.object_fps_pvp.client.v6.ShotHitKindR\ahitKind\x12\x1b\n" +
+	"\trejection\x18\x04 \x01(\x0e2'.object_fps_pvp.client.v7.ShotRejectionR\trejection\x12@\n" +
+	"\bhit_kind\x18\x05 \x01(\x0e2%.object_fps_pvp.client.v7.ShotHitKindR\ahitKind\x12\x1b\n" +
 	"\ttarget_id\x18\x06 \x01(\x04R\btargetId\x12\x16\n" +
 	"\x06damage\x18\a \x01(\rR\x06damage\x128\n" +
-	"\x04kind\x18\b \x01(\x0e2$.object_fps_pvp.client.v6.ActionKindR\x04kind\x12'\n" +
+	"\x04kind\x18\b \x01(\x0e2$.object_fps_pvp.client.v7.ActionKindR\x04kind\x12'\n" +
 	"\x0flife_generation\x18\t \x01(\x04R\x0elifeGeneration\x124\n" +
 	"\x16target_life_generation\x18\n" +
-	" \x01(\x04R\x14targetLifeGeneration*@\n" +
+	" \x01(\x04R\x14targetLifeGeneration\x12<\n" +
+	"\bhit_part\x18\v \x01(\x0e2!.object_fps_pvp.client.v7.HitPartR\ahitPart*@\n" +
 	"\tLifeState\x12\x14\n" +
 	"\x10LIFE_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
 	"LIFE_ALIVE\x10\x01\x12\r\n" +
-	"\tLIFE_DEAD\x10\x02*H\n" +
+	"\tLIFE_DEAD\x10\x02*\xa8\x02\n" +
+	"\rActionRefusal\x12\x1e\n" +
+	"\x1aACTION_REFUSAL_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19ACTION_REFUSAL_OVER_BATCH\x10\x01\x12\x1c\n" +
+	"\x18ACTION_REFUSAL_MALFORMED\x10\x02\x12\x1c\n" +
+	"\x18ACTION_REFUSAL_RESETTING\x10\x03\x12!\n" +
+	"\x1dACTION_REFUSAL_INVALID_PLAYER\x10\x04\x12 \n" +
+	"\x1cACTION_REFUSAL_INVALID_BATCH\x10\x05\x12\x1b\n" +
+	"\x17ACTION_REFUSAL_CONFLICT\x10\x06\x12!\n" +
+	"\x1dACTION_REFUSAL_OUTSIDE_WINDOW\x10\a\x12\x17\n" +
+	"\x13ACTION_REFUSAL_FULL\x10\b*H\n" +
 	"\n" +
 	"ActionKind\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x0f\n" +
@@ -1546,83 +1879,97 @@ const file_client_v6_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02B,Z*gyo.local/object_fps_pvp/protocol/clientv6b\x06proto3"
+	"HIT_PLAYER\x10\x02*I\n" +
+	"\aHitPart\x12\x18\n" +
+	"\x14HIT_PART_UNSPECIFIED\x10\x00\x12\x11\n" +
+	"\rHIT_PART_BODY\x10\x01\x12\x11\n" +
+	"\rHIT_PART_HEAD\x10\x02B,Z*gyo.local/object_fps_pvp/protocol/clientv7b\x06proto3"
 
 var (
-	file_client_v6_proto_rawDescOnce sync.Once
-	file_client_v6_proto_rawDescData []byte
+	file_client_v7_proto_rawDescOnce sync.Once
+	file_client_v7_proto_rawDescData []byte
 )
 
-func file_client_v6_proto_rawDescGZIP() []byte {
-	file_client_v6_proto_rawDescOnce.Do(func() {
-		file_client_v6_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_client_v6_proto_rawDesc), len(file_client_v6_proto_rawDesc)))
+func file_client_v7_proto_rawDescGZIP() []byte {
+	file_client_v7_proto_rawDescOnce.Do(func() {
+		file_client_v7_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_client_v7_proto_rawDesc), len(file_client_v7_proto_rawDesc)))
 	})
-	return file_client_v6_proto_rawDescData
+	return file_client_v7_proto_rawDescData
 }
 
-var file_client_v6_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_client_v6_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
-var file_client_v6_proto_goTypes = []any{
-	(LifeState)(0),          // 0: object_fps_pvp.client.v6.LifeState
-	(ActionKind)(0),         // 1: object_fps_pvp.client.v6.ActionKind
-	(ShotRejection)(0),      // 2: object_fps_pvp.client.v6.ShotRejection
-	(ShotHitKind)(0),        // 3: object_fps_pvp.client.v6.ShotHitKind
-	(*Hello)(nil),           // 4: object_fps_pvp.client.v6.Hello
-	(*Welcome)(nil),         // 5: object_fps_pvp.client.v6.Welcome
-	(*MovementCommand)(nil), // 6: object_fps_pvp.client.v6.MovementCommand
-	(*PlayerInput)(nil),     // 7: object_fps_pvp.client.v6.PlayerInput
-	(*PlayerState)(nil),     // 8: object_fps_pvp.client.v6.PlayerState
-	(*WorldSnapshot)(nil),   // 9: object_fps_pvp.client.v6.WorldSnapshot
-	(*Error)(nil),           // 10: object_fps_pvp.client.v6.Error
-	(*ActionBatch)(nil),     // 11: object_fps_pvp.client.v6.ActionBatch
-	(*ActionResults)(nil),   // 12: object_fps_pvp.client.v6.ActionResults
-	(*CombatRules)(nil),     // 13: object_fps_pvp.client.v6.CombatRules
-	(*CombatState)(nil),     // 14: object_fps_pvp.client.v6.CombatState
-	(*ShotRequest)(nil),     // 15: object_fps_pvp.client.v6.ShotRequest
-	(*ShotDecision)(nil),    // 16: object_fps_pvp.client.v6.ShotDecision
+var file_client_v7_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_client_v7_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_client_v7_proto_goTypes = []any{
+	(LifeState)(0),          // 0: object_fps_pvp.client.v7.LifeState
+	(ActionRefusal)(0),      // 1: object_fps_pvp.client.v7.ActionRefusal
+	(ActionKind)(0),         // 2: object_fps_pvp.client.v7.ActionKind
+	(ShotRejection)(0),      // 3: object_fps_pvp.client.v7.ShotRejection
+	(ShotHitKind)(0),        // 4: object_fps_pvp.client.v7.ShotHitKind
+	(HitPart)(0),            // 5: object_fps_pvp.client.v7.HitPart
+	(*Hello)(nil),           // 6: object_fps_pvp.client.v7.Hello
+	(*Welcome)(nil),         // 7: object_fps_pvp.client.v7.Welcome
+	(*ClockSample)(nil),     // 8: object_fps_pvp.client.v7.ClockSample
+	(*MovementCommand)(nil), // 9: object_fps_pvp.client.v7.MovementCommand
+	(*PlayerInput)(nil),     // 10: object_fps_pvp.client.v7.PlayerInput
+	(*PlayerState)(nil),     // 11: object_fps_pvp.client.v7.PlayerState
+	(*WorldSnapshot)(nil),   // 12: object_fps_pvp.client.v7.WorldSnapshot
+	(*Error)(nil),           // 13: object_fps_pvp.client.v7.Error
+	(*ActionBatch)(nil),     // 14: object_fps_pvp.client.v7.ActionBatch
+	(*ActionResults)(nil),   // 15: object_fps_pvp.client.v7.ActionResults
+	(*CombatRules)(nil),     // 16: object_fps_pvp.client.v7.CombatRules
+	(*CombatState)(nil),     // 17: object_fps_pvp.client.v7.CombatState
+	(*ShotRequest)(nil),     // 18: object_fps_pvp.client.v7.ShotRequest
+	(*ShotDecision)(nil),    // 19: object_fps_pvp.client.v7.ShotDecision
 }
-var file_client_v6_proto_depIdxs = []int32{
-	13, // 0: object_fps_pvp.client.v6.Welcome.combat_rules:type_name -> object_fps_pvp.client.v6.CombatRules
-	6,  // 1: object_fps_pvp.client.v6.PlayerInput.commands:type_name -> object_fps_pvp.client.v6.MovementCommand
-	0,  // 2: object_fps_pvp.client.v6.PlayerState.life_state:type_name -> object_fps_pvp.client.v6.LifeState
-	8,  // 3: object_fps_pvp.client.v6.WorldSnapshot.players:type_name -> object_fps_pvp.client.v6.PlayerState
-	14, // 4: object_fps_pvp.client.v6.WorldSnapshot.combat:type_name -> object_fps_pvp.client.v6.CombatState
-	15, // 5: object_fps_pvp.client.v6.ActionBatch.shots:type_name -> object_fps_pvp.client.v6.ShotRequest
-	16, // 6: object_fps_pvp.client.v6.ActionResults.decisions:type_name -> object_fps_pvp.client.v6.ShotDecision
-	1,  // 7: object_fps_pvp.client.v6.ShotRequest.kind:type_name -> object_fps_pvp.client.v6.ActionKind
-	2,  // 8: object_fps_pvp.client.v6.ShotDecision.rejection:type_name -> object_fps_pvp.client.v6.ShotRejection
-	3,  // 9: object_fps_pvp.client.v6.ShotDecision.hit_kind:type_name -> object_fps_pvp.client.v6.ShotHitKind
-	1,  // 10: object_fps_pvp.client.v6.ShotDecision.kind:type_name -> object_fps_pvp.client.v6.ActionKind
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+var file_client_v7_proto_depIdxs = []int32{
+	8,  // 0: object_fps_pvp.client.v7.Hello.clock:type_name -> object_fps_pvp.client.v7.ClockSample
+	16, // 1: object_fps_pvp.client.v7.Welcome.combat_rules:type_name -> object_fps_pvp.client.v7.CombatRules
+	8,  // 2: object_fps_pvp.client.v7.Welcome.clock:type_name -> object_fps_pvp.client.v7.ClockSample
+	9,  // 3: object_fps_pvp.client.v7.PlayerInput.commands:type_name -> object_fps_pvp.client.v7.MovementCommand
+	0,  // 4: object_fps_pvp.client.v7.PlayerState.life_state:type_name -> object_fps_pvp.client.v7.LifeState
+	11, // 5: object_fps_pvp.client.v7.WorldSnapshot.players:type_name -> object_fps_pvp.client.v7.PlayerState
+	17, // 6: object_fps_pvp.client.v7.WorldSnapshot.combat:type_name -> object_fps_pvp.client.v7.CombatState
+	18, // 7: object_fps_pvp.client.v7.ActionBatch.shots:type_name -> object_fps_pvp.client.v7.ShotRequest
+	19, // 8: object_fps_pvp.client.v7.ActionResults.decisions:type_name -> object_fps_pvp.client.v7.ShotDecision
+	1,  // 9: object_fps_pvp.client.v7.ActionResults.last_refusal:type_name -> object_fps_pvp.client.v7.ActionRefusal
+	5,  // 10: object_fps_pvp.client.v7.CombatState.last_hit_part:type_name -> object_fps_pvp.client.v7.HitPart
+	2,  // 11: object_fps_pvp.client.v7.ShotRequest.kind:type_name -> object_fps_pvp.client.v7.ActionKind
+	3,  // 12: object_fps_pvp.client.v7.ShotDecision.rejection:type_name -> object_fps_pvp.client.v7.ShotRejection
+	4,  // 13: object_fps_pvp.client.v7.ShotDecision.hit_kind:type_name -> object_fps_pvp.client.v7.ShotHitKind
+	2,  // 14: object_fps_pvp.client.v7.ShotDecision.kind:type_name -> object_fps_pvp.client.v7.ActionKind
+	5,  // 15: object_fps_pvp.client.v7.ShotDecision.hit_part:type_name -> object_fps_pvp.client.v7.HitPart
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
-func init() { file_client_v6_proto_init() }
-func file_client_v6_proto_init() {
-	if File_client_v6_proto != nil {
+func init() { file_client_v7_proto_init() }
+func file_client_v7_proto_init() {
+	if File_client_v7_proto != nil {
 		return
 	}
-	file_client_v6_proto_msgTypes[4].OneofWrappers = []any{}
-	file_client_v6_proto_msgTypes[11].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[2].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[5].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[6].OneofWrappers = []any{}
+	file_client_v7_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v6_proto_rawDesc), len(file_client_v6_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   13,
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v7_proto_rawDesc), len(file_client_v7_proto_rawDesc)),
+			NumEnums:      6,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_client_v6_proto_goTypes,
-		DependencyIndexes: file_client_v6_proto_depIdxs,
-		EnumInfos:         file_client_v6_proto_enumTypes,
-		MessageInfos:      file_client_v6_proto_msgTypes,
+		GoTypes:           file_client_v7_proto_goTypes,
+		DependencyIndexes: file_client_v7_proto_depIdxs,
+		EnumInfos:         file_client_v7_proto_enumTypes,
+		MessageInfos:      file_client_v7_proto_msgTypes,
 	}.Build()
-	File_client_v6_proto = out.File
-	file_client_v6_proto_goTypes = nil
-	file_client_v6_proto_depIdxs = nil
+	File_client_v7_proto = out.File
+	file_client_v7_proto_goTypes = nil
+	file_client_v7_proto_depIdxs = nil
 }

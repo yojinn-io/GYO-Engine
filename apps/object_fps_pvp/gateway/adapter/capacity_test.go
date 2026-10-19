@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // A snapshot with more players than the room holds is a runtime fault (pv6 contract §1).
@@ -27,10 +27,12 @@ func TestSnapshotAboveCapacityIsInvalid(t *testing.T) {
 }
 
 // A full room's snapshot with every field at its largest encoding (pv6 contract §7,
-// 2026-10-07 revision: 35+255N bytes) still fits one datagram; the worker probe pins
+// 2026-10-07 revision: 35+255N bytes; with both pv7 §5 holds at their 10 s clamp
+// 45+255N; with last_hit_part at HEAD 45+257N, the contract maximum of pv7
+// §8) still fits one datagram; the worker probe pins
 // the same message at the same size.
 func TestFullRoomSnapshotDatagramSize(t *testing.T) {
-	snapshot := &client.WorldSnapshot{Tick: math.MaxUint64}
+	snapshot := &client.WorldSnapshot{Tick: math.MaxUint64, MatchHoldUs: proto.Uint32(10_000_000), GatewayHoldUs: proto.Uint32(10_000_000)}
 	for i := uint64(0); i < MaxPlayers; i++ {
 		snapshot.Players = append(snapshot.Players, &client.PlayerState{PlayerId: math.MaxUint64 - i, X: math.MaxFloat32, Y: math.MaxFloat32, Z: math.MaxFloat32, Yaw: 3, Pitch: 1.5,
 			LastResolvedCommand: math.MaxUint64, MovementEpoch: math.MaxUint64, ContiguousPendingCommands: MaxFutureCommands, VerticalVelocity: 4, Grounded: true,
@@ -38,9 +40,10 @@ func TestFullRoomSnapshotDatagramSize(t *testing.T) {
 			MovementSlackSequence: proto.Uint64(math.MaxUint64), MovementSlackUs: proto.Int32(-MaxMovementSlackUs), ConnectionQualityFailures: ConnectionQualityFailedWindows - 1})
 		snapshot.Combat = append(snapshot.Combat, &client.CombatState{PlayerId: math.MaxUint64 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint64, LifeGeneration: math.MaxUint64, MagazineAmmo: math.MaxUint32,
 			ReloadActionId: math.MaxUint64, ReloadStartTick: math.MaxUint64, ReloadEndTick: math.MaxUint64, LastShotActionId: math.MaxUint64, LastShotTick: math.MaxUint64,
-			LastDamageTick: math.MaxUint64, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint64})
+			LastDamageTick: math.MaxUint64, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint64,
+			LastHitPart: client.HitPart_HIT_PART_HEAD})
 	}
-	if size := proto.Size(snapshot) + framing.HeaderSize; size != 35+255*MaxPlayers || size > framing.MaxDatagram {
+	if size := proto.Size(snapshot) + framing.HeaderSize; size != 45+257*MaxPlayers || size > framing.MaxDatagram {
 		t.Fatalf("full room snapshot datagram %d bytes", size)
 	}
 }

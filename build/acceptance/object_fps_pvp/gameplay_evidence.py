@@ -128,6 +128,14 @@ def life_reset_matches(event, respawns):
         r['tick']==event['authority_tick'] for r in respawns)
 
 
+def gateway_limiter_problems(counters):
+    """The Gateway's session rate limit (v7.1 D122): its refusals (rate_limited_packets) must be 0 in every mode, a
+    stopped Gateway included, since the limit is a token bucket (D121) and a Gateway stall no longer turns the
+    datagrams that waited in the socket into refusals. The Gateway's fixed one-second window count
+    (max_session_window_packets) is recorded only: after such a stall those datagrams pass within one second."""
+    return [] if counters.get('rate_limited_packets', 1) == 0 else ['Actual Gateway rate rejection']
+
+
 def analyze(output, relay, fault, mode):
     # Local import avoids the relay module importing itself during startup.
     from action_probe import maximum_window
@@ -207,8 +215,7 @@ def analyze(output, relay, fault, mode):
         check(maximum_window([e['time_ns'] for e in received if e['kind']==6])<=31,'Action/ACK schedule exceeds30Hz')
         check(all(len(e.get('shots',[]))<=8 for e in received),'Action batch exceeds8')
     counters=relay.get('gateway_counters',{})
-    check(counters.get('max_session_window_packets',121)<=120,'Actual Gateway limiter exceeds120')
-    if mode!='gateway': check(counters.get('rate_limited_packets',1)==0,'Actual Gateway rate rejection')
+    for problem in gateway_limiter_problems(counters): check(False, problem)
     life_samples=defaultdict(list); hp_count=0; previous_time=0; max_frame=0; all_intervals=[]
     for frame in all_frames:
         t=frame['time_ns'];dt=frame['frame_seconds'];check(t>previous_time and math.isfinite(dt) and dt>=0,'Invalid/nonmonotonic frame timestamp');previous_time=t

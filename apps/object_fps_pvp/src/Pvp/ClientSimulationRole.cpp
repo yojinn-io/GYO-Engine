@@ -33,7 +33,7 @@ ClientIntentOwner IntentOwner(const ClientConnectionState& state) noexcept {
 
 ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
                           const TimePoint now) {
-    ClientPresented result{presentation.observation, presentation.shotTiming, presentation.intentSampledAt,
+    ClientPresented result{presentation.observation, presentation.shotGate, presentation.intentSampledAt,
         presentation.generation, presentation.steppedAt};
     if (!presentation.observation.active || presentation.arenaIndex >= arenas.size()) return result;
     const double since = std::max(0.0, Seconds(now - presentation.steppedAt));
@@ -41,9 +41,6 @@ ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresenta
     result.observation.renderPosition = sample.renderPosition;
     result.observation.correctionOffset = sample.correctionOffset;
     result.observation.interpolationAlpha = sample.interpolationAlpha;
-    // FireGate counts whole steps from the newest command; time past the next
-    // boundary that the simulation has not stepped yet counts the same way.
-    if (result.shotTiming) result.shotTiming->secondsSinceStep += since;
     return result;
 }
 
@@ -123,7 +120,7 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
     step.window = simulation_.Frame(now, input);
     const bool active = simulation_.Observation().active;
     step.nextDeadline = After(now, active ? simulation_.SecondsUntilNextStep() : MovementTickSeconds);
-    step.presentation = {simulation_.Observation(), simulation_.Presentation(), simulation_.ShotTiming(), now,
+    step.presentation = {simulation_.Observation(), simulation_.Presentation(), simulation_.ShotGate(), now,
         arenaIndex_, intent.sampledAt, drain.generation};
     return step;
 }

@@ -2,7 +2,7 @@
 
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
-#include "RetroFPS/Pvp/FireGate.hpp"
+#include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
 #include <algorithm>
@@ -567,7 +567,7 @@ TEST_CASE("PvP the simulation role takes one phase sample per own snapshot of a 
     CHECK(batches > 20);
 }
 
-TEST_CASE("PvP a presentation placed at a later time advances interpolation and shot timing only") {
+TEST_CASE("PvP a presentation placed at a later time advances interpolation only") {
     const auto run = RunRole({Every(1.0 / 60.0), Moving});
     const std::vector<Arena> arenas{RoleArena()};
     std::size_t checked{}, gateChecked{};
@@ -583,24 +583,10 @@ TEST_CASE("PvP a presentation placed at a later time advances interpolation and 
         const auto later = PresentAt(arenas, step.presentation, step.presentation.steppedAt + After(0.004));
         CHECK(later.observation.latestCommand == step.observation.latestCommand);
         CHECK(later.observation.interpolationAlpha >= own.observation.interpolationAlpha);
-        REQUIRE(later.shotTiming.has_value() == step.presentation.shotTiming.has_value());
-        if (later.shotTiming)
-            CHECK(later.shotTiming->secondsSinceStep == doctest::Approx(step.presentation.shotTiming->secondsSinceStep + 0.004));
+        // The gate view counts steps, not time: placing it later changes nothing.
+        CHECK(later.shotGate == step.presentation.shotGate);
         ++checked;
-        // Placed at the next step's time, the previous step's shot timing bounds
-        // the same authority tick as the next step's own timing, when that step
-        // took one fixed step past the previous newest command.
-        const auto& previous = run.steps[n - 1];
-        const auto newest = [](const FireGateTiming& timing) {
-            return timing.authorityTick + (timing.latestCommand - timing.lastResolvedCommand);
-        };
-        if (!previous.presentation.shotTiming || !step.presentation.shotTiming ||
-            previous.presentation.shotTiming->phaseShiftSeconds != 0 || step.presentation.shotTiming->phaseShiftSeconds != 0 ||
-            previous.observation.movementEpoch != step.observation.movementEpoch ||
-            newest(*step.presentation.shotTiming) != newest(*previous.presentation.shotTiming) + 1) continue;
-        const auto carried = PresentAt(arenas, previous.presentation, step.presentation.steppedAt);
-        CHECK(EarliestShotResolveTick(*carried.shotTiming) == EarliestShotResolveTick(*step.presentation.shotTiming));
-        ++gateChecked;
+        if (step.presentation.shotGate) ++gateChecked;
     }
     CHECK(checked > 150);
     CHECK(gateChecked > 20);
@@ -625,4 +611,29 @@ TEST_CASE("PvP the simulation role thread runs, publishes and stops while waitin
         // Destroyed while waiting for its next deadline.
     }
     CHECK(connection.State().phase == ConnectionPhase::Lobby);
+}
+
+// pv7 §6, §7: an action's E and S come from one presented simulation step; a
+// Shot also carries the last presentation's view tick, a Reload none. Without
+// an active prediction the action still goes, with E = S = 0 (a1-shot-step
+// changes that).
+TEST_CASE("PvP an action's E and S come from one presented step") {
+    ClientPresented presented;
+    presented.observation.active = true;
+    presented.observation.movementEpoch = 4;
+    presented.observation.latestCommand = 77;
+    presented.observation.lastResolvedCommand = 70;
+    const auto shot = ActionContext(presented, ActionKind::Shot, 123456);
+    CHECK(shot.movementEpoch == 4);
+    CHECK(shot.commandSequence == 77);
+    CHECK(shot.viewTickQ16 == 123456);
+    const auto reload = ActionContext(presented, ActionKind::Reload, 123456);
+    CHECK(reload.movementEpoch == 4);
+    CHECK(reload.commandSequence == 77);
+    CHECK(reload.viewTickQ16 == 0);
+    presented.observation.active = false;
+    const auto unpredicted = ActionContext(presented, ActionKind::Shot, 123456);
+    CHECK(unpredicted.movementEpoch == 0);
+    CHECK(unpredicted.commandSequence == 0);
+    CHECK(unpredicted.viewTickQ16 == 123456);
 }

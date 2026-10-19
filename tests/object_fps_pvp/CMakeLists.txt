@@ -4,7 +4,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
-    ArenaDigestTests.cpp FireGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
+    ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
@@ -26,9 +26,10 @@ set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pv
 # apart so the domain test target gains no transport dependency.
 gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
 set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
-add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp)
+add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
-target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v6" doctest::doctest)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v7" nlohmann_json::nlohmann_json doctest::doctest)
+target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json")
 if(WIN32)
     target_compile_definitions(${ipc_tests} PRIVATE NOMINMAX)
 endif()
@@ -36,7 +37,9 @@ if(MSVC)
     target_compile_options(${ipc_tests} PRIVATE /utf-8)
 endif()
 add_test(NAME "${GYO_CURRENT_APP}.ipc" COMMAND ${ipc_tests})
-set_tests_properties("${GYO_CURRENT_APP}.ipc" PROPERTIES LABELS "cpu;pvp;network" TIMEOUT 60)
+# Every case that waits for Ready waits its full deadline when the Match never
+# answers, so a broken IPC host still reports its failures within the timeout.
+set_tests_properties("${GYO_CURRENT_APP}.ipc" PROPERTIES LABELS "cpu;pvp;network" TIMEOUT 120)
 
 # The Match's command line for its ingress detail file (match-ingress.jsonl):
 # name derivation and refusal, and exit 1 when the file cannot be opened.
@@ -121,6 +124,12 @@ set_tests_properties("${GYO_CURRENT_APP}.probe_command_path" PROPERTIES LABELS "
 add_test(NAME "${GYO_CURRENT_APP}.protocol_version"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_protocol_version.py")
 set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.drop_reasons"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_drop_reasons.py")
+set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
+set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.max_players"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
 set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

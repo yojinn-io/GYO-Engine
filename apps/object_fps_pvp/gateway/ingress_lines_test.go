@@ -14,8 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv6"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev6"
+	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
 // ingressLog captures what the standard logger writes. Register it before the
@@ -371,6 +371,10 @@ func TestEveryEndPathWritesTheFinalWindowOnceAfterTheWriter(t *testing.T) {
 			e.close(t, "failure_racing_close")
 		}, want: expect{written: 3}},
 		{name: "blocked_writer", end: func(t *testing.T, e *endPathFixture, logs *ingressLog, entered <-chan struct{}, release chan<- struct{}, block, _ *atomic.Bool) {
+			// The writer outlasts the graceful close's wait: the close gives
+			// up its finals and aborts the write, and the final line still
+			// waits for the writer.
+			setForTest(t, &gracefulWriterWait, 20*time.Millisecond)
 			block.Store(true)
 			e.send(t, adapter.Input, inputMessage(1, moves(1, 3)))
 			select {

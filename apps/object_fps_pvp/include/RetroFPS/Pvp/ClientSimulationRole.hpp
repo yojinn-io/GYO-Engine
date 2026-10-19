@@ -7,6 +7,7 @@
 #include "engine/time/MonotonicClock.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -65,11 +66,11 @@ inline constexpr double ClientIntentMinimumStaleSeconds = ClientIntentStaleInter
 inline constexpr std::size_t ClientIntentRecentIntervals = 4;
 
 // What a simulation step publishes for the main thread: the observation, the
-// state that places the local player at a later render time, and the shot timing.
+// state that places the local player at a later render time, and the shot gate view.
 struct ClientPresentation final {
     LocalMovementObservation observation;
     LocalPresentationState presentation;
-    std::optional<FireGateTiming> shotTiming;
+    std::optional<ShotGateView> shotGate;
     Engine::Time::TimePoint steppedAt{};
     std::size_t arenaIndex{};
     // The sample time of the intent the step used, and the connection
@@ -78,10 +79,10 @@ struct ClientPresentation final {
     std::uint64_t generation{};
 };
 
-// A presentation placed at a render time, with the shot timing advanced to it.
+// A presentation placed at a render time; the shot gate view counts steps, not time, and stays.
 struct ClientPresented final {
     LocalMovementObservation observation;
-    std::optional<FireGateTiming> shotTiming;
+    std::optional<ShotGateView> shotGate;
     Engine::Time::TimePoint intentSampledAt{};
     std::uint64_t generation{};
     // When the simulation took the step this presentation comes from.
@@ -90,6 +91,23 @@ struct ClientPresented final {
 
 [[nodiscard]] ClientPresented PresentAt(const std::vector<Arena>& arenas, const ClientPresentation& presentation,
                                         Engine::Time::TimePoint now);
+
+// The request content of an action clicked on this presentation (pv7 §6, §7):
+// E and S from its one simulation step (0 and 0 without an active prediction:
+// the action still goes until a1-shot-step), and for a Shot the view tick of
+// the last presented frame (a Reload carries none).
+[[nodiscard]] inline ShotContext ActionContext(const ClientPresented& presented, ActionKind kind,
+                                               std::uint64_t presentedViewTickQ16) noexcept {
+    const auto& step = presented.observation;
+    return {step.active ? step.movementEpoch : 0, step.active ? step.latestCommand : 0,
+            kind == ActionKind::Shot ? presentedViewTickQ16 : 0};
+}
+
+// The view tick of a frame (pv7 §7): the timeline's global cursor in Tick x
+// 65536, floored; 0 when the frame presented no remote player.
+[[nodiscard]] inline std::uint64_t ViewTickQ16(std::optional<double> globalCursor) noexcept {
+    return globalCursor && *globalCursor > 0 ? static_cast<std::uint64_t>(std::floor(*globalCursor * 65536.0)) : 0;
+}
 
 // One simulation step, independent of threads and of the real clock, so tests
 // drive it with injected times. Run takes the snapshots drained since the last

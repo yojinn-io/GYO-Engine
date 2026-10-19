@@ -184,11 +184,14 @@ int main(int argc,char** argv){
                 if(b.reload&&b.decisions.contains(*b.reload)&&own->reloadActionId==*b.reload&&snapshot.tick>=own->reloadEndTick){
                     b.reload.reset();b.shotsThisMagazine=0;}
                 if(options.passive||age<b.nextAction||age>=options.duration-1)continue;
+                // The product's request content (pv7 §6, §7): E and S of the presented
+                // step; a bot presents no remote player, so its view tick is 0.
+                const auto presented=b.simulation->PresentAt(now);
                 b.nextAction+=BotActionSeconds;
                 if(self->lifeState!=LifeState::Alive||b.reload)continue;
                 const auto& rules=*state.combatRules;
                 if(b.shotsThisMagazine>=rules.magazineCapacity){
-                    const auto id=b.connection.SubmitAction(ActionKind::Reload,b.life,snapshot.tick);
+                    const auto id=b.connection.SubmitAction(ActionKind::Reload,b.life,snapshot.tick,0,0,ActionContext(presented,ActionKind::Reload,0));
                     Require(id.has_value(),"Reload could not allocate an action ID");
                     b.reload=*id;
                     b.submitted[*id]={{"action_id",*id},{"observed_tick",snapshot.tick},{"action_kind",static_cast<int>(ActionKind::Reload)},{"life_generation",b.life},{"time_ns",MovementTraceNowNs()}};
@@ -199,7 +202,7 @@ int main(int argc,char** argv){
                     if(d<nearest){nearest=d;target=&p;}}
                 if(!target)continue;
                 const float yaw=std::atan2(target->position.x-self->position.x,target->position.z-self->position.z);
-                const auto id=b.connection.SubmitAction(ActionKind::Shot,b.life,snapshot.tick,yaw,0);
+                const auto id=b.connection.SubmitAction(ActionKind::Shot,b.life,snapshot.tick,yaw,0,ActionContext(presented,ActionKind::Shot,0));
                 Require(id.has_value(),"Shot could not allocate an action ID");
                 ++b.shotsThisMagazine;
                 b.submitted[*id]={{"action_id",*id},{"observed_tick",snapshot.tick},{"action_kind",static_cast<int>(ActionKind::Shot)},

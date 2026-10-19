@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RetroFPS/Pvp/FireGate.hpp"
+#include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
@@ -104,7 +104,11 @@ public:
     [[nodiscard]] PlayerInput PendingInput() const;
     // Phase timing for the local shot gate; nullopt before the first snapshot
     // or while no command can be generated.
-    [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept;
+    // The shot gate's view of the newest step (ShotGate.hpp); nullopt while the
+    // prediction is inactive or frozen, when no shot may be sent.
+    [[nodiscard]] std::optional<ShotGateView> ShotGate() const noexcept;
+    // Phase tracking has decided since the latest seed (diagnostics and tests).
+    [[nodiscard]] bool PhaseDecided() const noexcept { return phaseDecided_; }
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
     [[nodiscard]] LocalPresentationState Presentation() const noexcept;
     // The aim of the newest predicted state: the last command's, or the seed's.
@@ -167,7 +171,7 @@ private:
     // less the send wait of the commands produced during the late slew (about
     // 3.3 ms) and only as far as the samples at that decision show it (known
     // limitation, v7 batch 09b).
-    // phaseDecided_ stays set: the shot gate keeps its timing meanwhile.
+    // phaseDecided_ stays set meanwhile.
     bool reacquiring_{};
     LocalMovementObservation observation_{};
 };

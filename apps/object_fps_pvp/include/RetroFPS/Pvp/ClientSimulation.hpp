@@ -54,7 +54,7 @@ public:
     [[nodiscard]] std::optional<PlayerInput> Frame(Clock::time_point now, const ClientInputSample& input);
 
     [[nodiscard]] PlayerInput PendingInput() const { return prediction_.PendingInput(); }
-    [[nodiscard]] std::optional<FireGateTiming> ShotTiming() const noexcept { return prediction_.ShotTiming(); }
+    [[nodiscard]] std::optional<ShotGateView> ShotGate() const noexcept { return prediction_.ShotGate(); }
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept { return prediction_.Observation(); }
     [[nodiscard]] LocalPresentationState Presentation() const noexcept { return prediction_.Presentation(); }
     [[nodiscard]] double SecondsUntilNextStep() const noexcept { return prediction_.SecondsUntilNextStep(); }
