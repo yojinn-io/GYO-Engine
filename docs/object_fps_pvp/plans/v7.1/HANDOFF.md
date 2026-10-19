@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`a1-shot-step` 的 L2 session 進行中，D138）。
+- **等你決定**：`a1-shot-step` 的 L3（你的連點手感，30／60／144 FPS）什麼時候做；L2 已通過（[a1-shot-step.md](a1-shot-step.md) 第 12 節）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：你核准後跑 `a1-shot-step` 的 L2 session，判定並記錄；之後 L3（你的連點手感，30／60／144 FPS），再 `pv7-merge`。
+- **下一步**：L3 通過後 `a1-shot-step` 結案（README 標 ✓），接著 `pv7-merge`（四平台 L1 後合併，同步文件）。PR #78 的 Auto-fix 已重新打開。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`a1-shot-step` 的 L2 宣告第 3 版核准（D138），session 開始；PR #78 的 Auto-fix 暫停中。
+- **最後更新**：2026-10-19，`a1-shot-step` 的 L2 通過（238／238、0 停止，C1～C3、C9 成立），等 L3。
 
 ## 閱讀入口
 
@@ -528,6 +528,7 @@
   - 補上計畫第 3 節的 digest 情境 `combat-step/corridor`（我原本只用單元測試涵蓋新情境表，和核准的計畫不符，補做）：11 個判定和手算表逐筆相同，進 golden。同機兩樹比較（base `7a5e0ea`）：scale 1、3 各 36 個情境，只有 `combat-magazine/corridor` 不同，新情境只在 branch；其餘 34 個 0 差分。本機 `cpu|shader` 72／72。突變完整重跑時 4 個因 base 同時建置、cpu 測試超過 60 秒而 `wrong_failure`，空閒時重跑全部殺死（環境，不是程式）。
   - 四平台 L1（`43a8617`，run 39234431732）全部通過：新 golden `combat-step/corridor` 在四個平台逐位元一致。
   - L2 工具（`build/target/_build/test/logs/pvp-v71-a1-l2-prep-20261019/`）：`pv7-checkpoint` 的工具改成兩棵 pv7 樹（B＝`../GYO-Engine-a1-before` 的 `7a5e0ea`、A'＝主 checkout 的 `43a8617`），修掉 D135 的標籤錯誤；版本 2 紀錄的 A1-2 改用判定 Tick 對接；A' 的 clean Cooldown 改判 A1-1（有解釋的只記錄）。開發跑次 A' 45 種、B 5 種全部 P、0 停止。乾跑：逐項 93、突變 12（全殺）、driver 8、模擬 session 7、第 5 節合成 14，全部如預期（第一次乾跑的 4 個失敗都是工具或夾具：合成紀錄放在檔尾被讀成新 session、A1-1 讀到版本 1 紀錄時崩潰、預檢訊息的舊檔名；已修）。宣告第 3 版：[a1-shot-step.md](a1-shot-step.md) 第 6、11 節。
+  - L2 session（D138；`build/target/_build/test/logs/pvp-v71-a1-l2-20261019/`，145.4 分）：238／238、0 停止、0 受干擾，`passed`＝true。C1／C2 的 A'−B 最大 +0.213／+0.149 ms；C3、C9 成立；A' 的 clean 項目權威 Cooldown 0、保留 0；保留只在 upstream-1000ms 3 次（和 D45 的模擬預測相同）。合法射擊 P95（只記錄）：Match 端約 +17 ms（1 Tick），Client 端 +14～33 ms。C6 旗標 2 個（Expired 少 1、接受多 1）。細節在 [a1-shot-step.md](a1-shot-step.md) 第 12 節。
 
 ## 未結事項
 

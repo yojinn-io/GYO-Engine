@@ -230,3 +230,14 @@ caffeinate -dims python3 -I -B run_a1.py --output ../pvp-v71-a1-l2-<日期> \
 | 模擬 session（連到兩棵樹的開發跑次）：完整、停下、不完整、順序錯、受干擾 2 次、累計 6 次、B 的 R3f 第 3 項 | 7 | 全部如預期 |
 | 第 5 節（合成數字）：C1、C3、C6 同 `pv7-checkpoint`；C9 的成立、clean 有 late 時不成立、沒有 clean 紀錄時不成立 | 14 | 全部如預期 |
 
+## 12. L2 結果（2026-10-19，D138）
+
+- session：`build/target/_build/test/logs/pvp-v71-a1-l2-20261019/`，238／238 完成、0 停止、0 受干擾、完整性問題 0，145.4 分（估 152 分）。判定（`judgement.json`）**`passed`＝true**：C1、C2、C3、C9 全部成立。
+- C1／C2：移動「產生→Actual」A'−B 最大 +0.213 ms／+0.149 ms（host-ipc-1000ms），下限 1 ms。C3：16 個故障情境都成立。C9：A' 的 14 個 clean 情境退回率都是 0。
+- A1-1：A' 的 clean 項目權威 Cooldown 0、保留 0（P2 成立）。保留只出現在 upstream-1000ms（3 次，gap 2），和 D45 檢查者用影子資料模擬的預測相同。action short 4 次、bots2-action60 1 次 Cooldown 是冷卻注入（不在 A1-1 的清單）。
+- A1-2：所有 A' 的紀錄 D∈[A, A＋W]、on_time 的 D＝T(S)、J 的上界都成立。J−A：clean-60、144 幾乎全為 1 Tick，clean-30、連點、quad 有 2 Tick；clean 項目 1376／1780 筆為 1（P3 成立）。
+- C6 旗標（只記錄）：downstream-1000ms、socket-path-1000ms 各有 1 個 A' 跑次的第一筆裁決少 1 個 Expired、多 1 個接受（`pv7-checkpoint` 的 A 在 socket-path-1000ms 也有同樣的旗標）。
+- C10（只記錄；合法射擊 P95 的中位數，不能跨建置比較）：Match 端 B 約 13.2～14.5 ms、A' 約 30.6～31.0 ms（約 +17 ms＝1 Tick）；Client 端 clean-60 19.6→52.7、clean-30 36.7→66.7、clean-144 22.3→36.2、長測短模式 22.9→38.6 ms。和計畫前的推論（命中回饋慢約 20～37 ms）一致。
+- C11（只記錄）：連點每次送出 31～32 發，interval12 三格都是 44／44；edge 格 A' 比 B 多送 0～1 發。
+- 下一步：L3（使用者的連點手感，30／60／144 FPS）。
+
