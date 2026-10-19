@@ -776,6 +776,36 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 
 - K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
 
+#### 射擊判定的冷卻保留與命令步（v7.1 `a1-shot-step` 起生效；2026-10-19 使用者核准，D136）
+
+A1 把射擊判定移到命令步 T(S)（protocol-v7 §6）。上一發走退回路徑、晚了 d 個 Tick 判定時，冷卻結束點跟著後移 d；下一發若照命令步的節奏壓著冷卻邊緣，會差 d。冷卻保留就是處理這個差距：
+
+```text
+K = min(K_max, cooldownTicks)        K_max = 2 Tick（契約常數，不上 wire）
+                                     cooldownTicks = 射手當時武器的權威規則值（CombatRules）
+判定 Tick D 時只差冷卻：
+  gap = nextAllowedShotTick - D
+  gap <= K  -> 保留到 nextAllowedShotTick，在那個 Tick 完整重判一次（不再保留第二次）
+  gap >  K  -> REJECTION_COOLDOWN
+Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最新命令）
+```
+
+- 受影響的只有「上一發的裁決回到 Client 之前就送出的射擊」：Client 收到裁決後，序號閘門改用它的 `resolved_tick＋cooldown` 重新對齊。連射武器（例如冷卻 4 Tick）在 RTT 50～100 ms 時約 1～2 發；d≤K 的延後 d 個 Tick 判定，d>K 的被拒（不扣彈、不造成傷害），之後恢復準時。
+- K_max＝2 的依據與盲區：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境，全自動武器上線時重新評估 K_max（v8「多武器與本機射擊閘」）。
+
+| 原則 | 維持的性質 | 未來修改時要問的問題 |
+|---|---|---|
+| 射速相關的值只從權威規則推出 | 武器資料（射速、冷卻）改變時不必改程式或契約；Client 的序號閘門只用規則裡的冷卻值做加減 | 是否又寫死了由某個射速推導出來的常數（FireGate 的 guard 2 ms、spread 7 Tick 就是這樣退役的）？ |
+| K＝min(K_max, cooldownTicks) | 保留上限永遠不超過冷卻；判定最多延後 K_max 個 Tick；J−A≤W＋K | 新武器需要更大的保留時，是重評 K_max（要量測與使用者同意），不是讓 K 脫離冷卻 |
+| 射速的權威在 Match | Match 載入並驗證武器資料，經 `CombatRules` 告訴 Client；Client 的值只是副本 | 是否讓 Client 本機的資料決定射速或冷卻？ |
+| 冷卻以 Tick 為單位 | 60 Hz 下射速只能是 3600÷cooldownTicks 發／分；Match 與 Client 不會各自取整出不同值 | 資料若改存發／分，換算與取整規則是否寫進契約？ |
+| S＝N | 射線起點和玩家點擊時看到的自己一致 | 前搖或蓄力武器是否需要 S＝N＋k？k 的上限是 W－1＝12 |
+
+**Replacement Criteria**（出現時不再調 K_max，改向使用者提出重新設計）：
+
+- 為了讓某種武器在 clean 網路下權威 Cooldown＝0，需要依武器種類給不同的 K_max。
+- 連射武器在常見的網路抖動下，被拒的射擊多到需要第二次保留或排隊才能接受。
+
 ### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
 
 - **原始意圖**：Gateway 對各種外部 Client 各自提供接口，內部只用一套抽象協議和 Match

@@ -339,7 +339,9 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 
 - 參考年齡在 A 量（和 pv6 同一個時點），存在帳本裡，判定時使用存下的值；保留期間不吃 250 ms。
 - 冷卻保留（只限 Shot）：D 時其他檢查都通過、只差冷卻，而且 nextAllowedShotTick−D≤K，保留到 nextAllowedShotTick，在該 Tick 完整重跑一次檢查，不再保留第二次；差距 >K 時回 `REJECTION_COOLDOWN`。
-- K 是契約常數，0≤K≤cooldownTicks，不上 wire。值依 `pv7-checkpoint` 的影子資料提案，**在 `a1-shot-step` 的宣告時交使用者決定**。
+- **K＝min(K_max, cooldownTicks)**（v7.1 D136）：K_max＝2 Tick 是契約常數，不上 wire；cooldownTicks 是射手當時武器的權威規則值（`CombatRules`）。所以 0≤K≤cooldownTicks 對任何武器資料都成立，射速改成資料驅動也不必改這條。
+  - 為什麼是 2：`pv7-checkpoint` 的影子資料裡，退回（late）的晚到量 d＝L(A)−S 有 52% 在 0～2 Tick（98 筆，故障情境才有更大的值）；判定最多因此延後約 33 ms。
+  - 已知的盲區（只記錄）：該次量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境；全自動武器上線時，用故障情境＋全自動的量測重新評估 K_max。
 - 冷卻仍在 Tick 空間，`next_allowed_shot_tick` 的語意不變。Client 的「冷卻中的點擊丟棄，不形成稍後自動射擊」（pv5）不變。
 
 ### 順序與上界
@@ -357,7 +359,7 @@ Gateway 不驗證動作內容，也不持有動作帳本（§2a）；動作批�
 
 ### Client 規則（改寫 pv5 的 Client 射擊閘門）
 
-- E＝處理點擊那一幀所用預測的 epoch；S＝該 epoch 已產生的最新命令 N；**E 與 S 必須取自同一個發布的模擬步**。還沒有命令時 S 填 0。
+- E＝處理點擊那一幀所用預測的 epoch；S＝該 epoch 已產生的最新命令 N（v7.1 D136 確定取 N：`pv7-checkpoint` 的 clean 退回率 0、準時餘裕 S−L(A) 至少 1 Tick）；**E 與 S 必須取自同一個發布的模擬步**。還沒有命令時 S 填 0。
 - 預測未啟用或凍結時不送，點擊不排隊（這是 `a1-shot-step` 的行為改變之一）。
 - 本機閘門改在序號空間：同一 epoch 內，T̂(S)＝snapshot.tick＋(S−snapshot 的 last_resolved_command)；放行條件是 T̂(S) ≥ max(next_allowed_shot_tick, 已收到的接受裁決的 resolved_tick＋cooldown, 未決射擊的 T̂＋cooldown)。跨 epoch 時保守退回用 snapshot 的 Tick 判斷。
 - FireGate 的 earliest、guard、spread 退役。改用 N＋1 屬於 Client 規則修訂，W 已經涵蓋。

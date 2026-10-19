@@ -20,7 +20,7 @@
 ```
 v71-plan                              「v7.1 hotfix：先檢測、再評估；wire 一次設計、一次合併」
 ├── prep
-│   └── plan-sync-docs ▶              「low｜同步 master（PR #75～77），寫 plans/v7.1」
+│   └── plan-sync-docs ✓              「low｜同步 master（PR #75～77），寫 plans/v7.1」
 ├── pv7-line                          「同一條 PR 線，三角色，最後一次合併」
 │   ├── pv7-design ✓                  「high＋xhigh 檢查｜所有 wire 欄位與 IPC 送達語意一次定完」
 │   ├── proto-rename-v7 ✓             「low｜proto 與套件改名為 v7，版本值仍是 6」
@@ -38,7 +38,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── cause-records ✓               「high｜E2、動作拒收回覆、Leave 原因」
 │   ├── hitbox-fields ✓               「high（驗證窗口局部 xhigh）｜hitbox 欄位＋E、S 影子紀錄」
 │   ├── pv7-checkpoint ✓              「medium（分析 high）｜A1 前的整體回歸」
-│   ├── a1-shot-step                  「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
+│   ├── a1-shot-step ▶                「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
 │   └── pv7-merge                     「low｜四平台 L1 後合併，同步文件」
 ├── after-pv7
 │   ├── tt2-trace                     「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」

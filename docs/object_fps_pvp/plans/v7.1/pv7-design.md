@@ -116,8 +116,8 @@
 
 | 設定 | 為什麼現在定不了 | 在哪裡量 |
 |---|---|---|
-| K（A1 冷卻保留的上限） | 取決於退回遲到的分布與「退回之後下一發落在冷卻內」的頻率，目前只有推論 | `pv7-checkpoint` 的 L2（clean、network20／40、upstream、Gateway→Match 延遲注入）；在 `a1-shot-step` 的宣告時交你決定 |
-| Client 的 S 取法（N 或 N＋1） | Client 的 33 ms 共用期限與 link 的 30 Hz 節拍可能讓射擊晚於 T(S)；W＝13 兩種都涵蓋 | 同一份影子資料：clean 的退回率（目標 0）與準時餘裕 |
+| K（A1 冷卻保留的上限） | 取決於退回遲到的分布與「退回之後下一發落在冷卻內」的頻率，目前只有推論 | **已定（v7.1 D136）**：K＝min(K_max, cooldownTicks)，K_max＝2 Tick（`protocol-v7.zh-Hant.md` §6；射速資料驅動時仍成立）。依據：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；連射＋退回的組合沒有量到，全自動武器上線時重評 K_max |
+| Client 的 S 取法（N 或 N＋1） | Client 的 33 ms 共用期限與 link 的 30 Hz 節拍可能讓射擊晚於 T(S)；W＝13 兩種都涵蓋 | **已定（v7.1 D136）**：N。`pv7-checkpoint` 的 clean 退回率 0、準時餘裕至少 1 Tick |
 | 時鐘跳變門檻、漂移回歸視窗、Gateway 時鐘在 macOS 睡眠時的行為 | 同機的抖動與睡眠後的跳變都沒有量過 | `heartbeat-sync` 的 L2（只記錄，中途做一次系統睡眠）；跨機器在 `lan15-windows` |
 
 ## 各批的測試清單

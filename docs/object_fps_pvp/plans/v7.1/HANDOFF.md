@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-16。Owner：`object_fps_pvp`。**狀態：`edge-actions-passthrough` 進行中。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：`a1-shot-step` 進行中（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：**`a1-shot-step` 的 K（冷卻保留的上限，D-3 (a)）與 Client 的 S 取法**：影子資料（A 的 119 項）——「前一發走退回、這一發落在冷卻內」0 次；冷卻保留只出現 1 次（probe 的 action short，8 Tick）；遊戲本體（連點 18 項、GUI timing、gui-bots）全部 on_time、退回率 0；clean 的退回率 0，準時餘裕 S−L 多半 1 Tick、30 FPS 與 GUI 有時 2 Tick、從沒有 0；故障情境的 late 路徑 1.6～15.5%（network20 最高）。K 的選項：K＝0（等同 D-3 (c)，最簡單；這次資料沒有需要保留的情況）、K＝2 Tick（蓋過相位誤差與 guard 等級的邊緣）、K＝8 Tick（蓋過觀察到的唯一一筆）。S：資料支持 N（clean 0 退回、餘裕 ≥1 Tick）。整體回歸已接受（D135），K 與 S 定了就開始 `a1-shot-step`。
+- **等你決定**：無（`a1-shot-step` 起草 L2 事前宣告中，D136）。
 - **進行中**：PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（draft，pv7-line，含計畫文件）。CI 對 draft PR 會跳過 L1（`build/ci/common/ci_scope.py` 的 `reason="draft"`），所以每批推送後手動觸發 Cross-platform CI 跑四平台 L1，PR 維持 draft。`proto-rename-v7`（`d5104a0`）是 run 38771828429，`version-errors`（`046a0fd`）是 run 38784720725，都全部通過。
-- **下一步**：你回覆 K 與 S 之後開始 `a1-shot-step`（high、局部 xhigh，估 20 h；先寫 L2 事前宣告與測試清單並做 D45，停下等你核准）→ `pv7-merge`。
+- **下一步**：`a1-shot-step`（high、局部 xhigh，估 20 h，超過約 30 h 停下回報）：先讀既有程式與契約，寫 L2 事前宣告與測試清單、做 D45，停下等你核准；核准後實作。之後 `pv7-merge`。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-19，`pv7-checkpoint` 結案（D135，採用標籤修正後的判定）；等你回覆 `a1-shot-step` 的 K 與 S。
+- **最後更新**：2026-10-19，K 與 S 定案（D136），演算法記進設計文件；`a1-shot-step` 開始。
 
 ## 閱讀入口
 
@@ -105,6 +105,7 @@
 | D133 | （2026-10-19）核准 `pv7-checkpoint` 的 L2 事前宣告第 3 版（[pv7-checkpoint-l2.md](pv7-checkpoint-l2.md) 第 10 節的雜湊：driver `35c7e8a3…`、judge `b3472772…`、artifacts `ab6005fc…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 pv7-checkpoint 宣告第 3 版（第 10 節的雜湊），現在開始跑 session。」 |
 | D134 | （2026-10-19）計畫裡標了 ultracode 的批（含「ultracode（先問）」）直接開，不必再問；產出碰到契約、架構或 L2 宣告的關卡照樣停。另外交代：今晚把 pv7-line 往前推，做到下一個要使用者決定的關卡就停 | 使用者：「我先去睡覺了，今晚把pv7-line都跑完吧。」「對了，如果計劃裡要開ultracode你直接開就行。」 |
 | D135 | （2026-10-19）`pv7-checkpoint` 以標籤修正後的診斷（`judgement-relabelled.json`：C1、C2、C3 全部成立，逐項 0 停止）為判定，結案。凍結的 `judge_cp.py` 不改；它的標籤錯誤（`schedule()` 兩棵樹共用 `extra`）記為工具缺陷。C6 的 `socket-path-1000ms` 旗標只記錄、不追查 | 使用者：「採用 (a)：pv7-checkpoint 以修正標籤後的診斷結果為判定。C6 的旗標只記錄。K 與 S 我另外回覆。」 |
+| D136 | （2026-10-19）`a1-shot-step` 的冷卻保留上限改成 **K＝min(K_max, cooldownTicks)、K_max＝2 Tick**（射速將來是資料驅動，固定的 K 可能超過某把武器的冷卻），Client 的 S 取 **N**。改寫 `protocol-v7.zh-Hant.md` §6 的 K 條文；演算法與 Design Invariants 記進 `network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」；`pv7-design.md` 的設定表與 v8 README 的多武器候選（權威在 Match、射速以 Tick 存）同步。盲區：沒有量到「退回＋壓著冷卻邊緣連射」，全自動武器上線時重評 K_max | 使用者：「嗯，就這麼定。核准，記得把這個算法紀錄到設計文檔中。」（前文：「但是，我的武器想做成資料驅動，射速是會放在本地參數中的。」） |
 
 ## 規劃紀錄（記錄器）
 
@@ -518,6 +519,7 @@
   - 預測：P1（C1、C2 成立）、P2（B 的 gateway-1000ms 三次都在恢復後 starvation，A 三次都沒有）、P3（clean 退回率 0）、P4（141.9 分，差 5%）都沒有被推翻。
   - 只記錄：C4／C5 合法射擊 P95（例：clean-60 Match B 11.6～15.8、A 14.5～15.3 ms；Client B 17.5～19.4、A 19.3～33.8 ms；依 D46⑦ 不能跨建置比較）；TimerBaseline 兩棵都是 4 ms 狀態。
   - 影子資料（第 6 節，給 `a1-shot-step`）：見現況第 3 項；網路兩種的 probe 照規則 E＝S＝0，全部走 epoch 路徑；有解釋的未對上 3 筆（都在 `upstream-1000ms`，backlog 重設）。
+- 2026-10-19：`a1-shot-step` 開始（D136：K＝min(2, cooldownTicks)、S＝N）。使用者問到資料驅動與連射武器（P90、MP5 約 4 Tick 冷卻）：固定的 K 會在冷卻比 K 短的武器上違反 0≤K≤cooldownTicks，所以改成跟著武器的冷卻走。另從 session 補量：late 的晚到量 d＝L(A)−S 為 0:23、1:26、2:2、3:10、4:3、5:11、6:1、9:1、11:3、14:8、15:1、19:3、20:3、28:3（98 筆）；連續兩發的間隔，故障情境的 probe 多為 15 Tick（比冷卻多 5），壓著冷卻邊緣的只有 clean 下的連點，所以「退回後下一發落在冷卻內」0 次只反映測試設計。
 
 ## 未結事項
 
