@@ -31,7 +31,7 @@ TT-2 的分工照 Engine 計畫：Engine 擁有傳輸（佇列、寫檔、丟棄
 
 **不改**
 
-- `match-shots.jsonl`、`match-ingress.jsonl` 的寫出：主執行緒每個統計視窗（1 秒）寫一次，紀錄在 host 的鎖下暫存（權威側的狀態）。它們不在熱路徑上，改接會碰到 host 的鎖與視窗語意；留給 `log-contract` 一起決定（第 6 節）。
+- `match-shots.jsonl`、`match-ingress.jsonl` 的寫出：主執行緒每個統計視窗（10 秒；原寫「1 秒」是錯的，`log-contract` 的規劃時更正，`match_main.cpp:91-112`、`NetworkStatistics.hpp:14`）寫一次，紀錄在 host 的鎖下暫存（權威側的狀態）。它們不在熱路徑上，改接會碰到 host 的鎖與視窗語意；留給 `log-contract` 一起決定（第 6 節）。
 - 任何檔案的格式、欄位、檔名與 schema 版本；凍結分析器。
 - Go 的 Gateway（不連結 Engine）。
 - `-fexperimental-library` 的移除（`cxx-flag-removal`；本批會少掉一個 `std::jthread` 的使用者，但 `std::osyncstream` 還在）。
