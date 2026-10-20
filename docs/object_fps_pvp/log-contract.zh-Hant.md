@@ -83,6 +83,22 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 - Client 對時行的 player id 是 worker 自己 session 的身分（加入時設定、關閉時清除，`ClientClockSession`），不是別人權威狀態的複本。
 - 死信三原則（D57，[network-architecture](network-architecture.zh-Hant.md) §7）：每則離開「待處理」的訊息只有執行或帶原因的死信兩種結果。日誌上對應為：每個死信原因都有計數鍵（ingress 的 `drop_*`、`gw_drop` 的原因鍵），能拿到內容時另寫細節紀錄（`match-ingress.jsonl`）。
 
+### 5.1 `drop_` 鍵與 `GatewayDropReport` 的對應（D145）
+
+ingress 日誌與 `GatewayDropReport` 維持兩份契約（讀者、單位、版本規則都不同：日誌給工具與人、照本契約演進；wire 給 Match、照 [protocol-v7](protocol-v7.zh-Hant.md) 演進），共用一套詞彙：原因字只在 `gateway/ingress_statistics.go` 的名稱表定義一次，`DropReason` 的值名＝ingress 鍵轉大寫。Gateway 的每個 `drop_` 鍵恰好屬於下表一類。
+
+| 類別 | 鍵 | 理由 | 守衛 |
+|---|---|---|---|
+| 上 wire（29 個） | `tests/object_fps_pvp/fixtures/drop_reasons.json` 列出的鍵，一鍵一值 | 可回報的丟棄（protocol-v7 §4 的 (b)） | `drop_reasons.json` 綁定值、名稱、鍵與範圍；Go（`drop_report_golden_test.go`）、C++（IPC 測試）、Python（`test_drop_reasons.py`）都讀它 |
+| 只寫日誌：link 已失效 | 玩家行 `drop_cleared_on_close_commands`、`drop_abandoned_on_close_commands`、`drop_{cleared,abandoned}_on_close_actions_{packets,shots,acks}`；全域行 `drop_room_unavailable_datagrams` | 發生時 link 已失效，結構上無法回報（protocol-v7 §4 的 (c)） | Go 測試（下述）。`_actions_shots`、`_actions_acks` 四個鍵自 edge-actions 起恆為 0，也在 `removed_paths` 裡 |
+| 只寫日誌：可導出的總和 | 全域行 `drop_rate_limited_packets` | 等於玩家行 `drop_rate_limited_*_packets` 的和，各項已上 wire | Go 測試 |
+| 已刪除的路徑 | 玩家行 `drop_resolved_trim_commands`、`drop_rejected_lane_overflow_commands`、`drop_discarded_on_leave_commands`（edge-input）、`drop_invalid_actions_{packets,shots}`（edge-results，A3）、`drop_link_rejected_actions_{packets,shots}`、`drop_discarded_on_leave_actions_{shots,acks}`（edge-actions）；全域行 `drop_old_tick_snapshots`、`drop_regressed_snapshots`（D-12） | pv7 刪除了這些出口；依 R1 鍵留在 v1，恆為 0 | Go 測試；L2 由分析器的 `removed_paths` 判定（`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md`） |
+| 另一個單位 | 玩家行 `drop_ipc_queue_overflow_input_commands` | 溢出的輸入窗口帶的命令數，是 I0 的屬性；同一事件以封包數上 wire（`DROP_IPC_QUEUE_OVERFLOW_INPUT_PACKETS`） | Go 測試 |
+
+Gateway 看不到的丟棄（kernel 接收緩衝溢出）沒有鍵。
+
+`drop_report_golden_test.go` 的 `TestDropReasonsMatchTheGoldenAndTheKeys` 雙向檢查：宣告為不上 wire 的計數器確實是沒有 `DropReason` 的丟棄；每個沒有 `DropReason` 的 `drop_` 計數器都在宣告裡。新增 Gateway 的丟棄出口時，要嘛加 `DropReason`（連同 proto、名稱表與 `drop_reasons.json`），要嘛在該測試與本表宣告類別；兩者都沒有就失敗（突變 `dlp-unclassified-drop-exit`）。
+
 ## 6. 定案的暫定事項（D142）
 
 - **D58(1)**：runtime link 失效時那個資料包計在全域的 `room_unavailable`（`server.go:474-482`）。

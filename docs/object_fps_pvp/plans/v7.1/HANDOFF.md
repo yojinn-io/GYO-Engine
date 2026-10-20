@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `dead-letter-position` 計畫第 1 版等你決定；`log-contract` 的四平台 L1 進行中（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `dead-letter-position` 實作完成，四平台 L1 進行中（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（D145：`dead-letter-position` (a+)，等 `log-contract` 的四平台 L1 通過後實作）。
-- **進行中**：`log-contract` 的四平台 L1（`71c9c76`，run 39428630663，計畫寫完時仍在跑）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
-- **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
+- **等你決定**：無。
+- **進行中**：`dead-letter-position` 的四平台 L1。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+- **下一步**：L1 通過後 `dead-letter-position` 結案；接著是 `d44-regression-pv7`（要你說開始）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`dead-letter-position` 計畫第 1 版：D57 仍成立（兩份契約已共用一張名稱表與 `drop_reasons.json`），缺口只有反方向的守衛。
+- **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
 ## 閱讀入口
 
@@ -552,6 +552,8 @@
 - 2026-10-20：`log-contract` records 實作（D143；[log-contract.md](log-contract.md) 第 12 節）。全部切片完成，突變全部 killed，CTest 74／74。開發跑次抓到：`action_late` 的定義錯（閒置 lane 的第一筆被算成晚了數秒，改成從開始有待送內容起算）、守衛的測試恆真（generator 的真假判定）、core 的樣本 `*.log` 被 gitignore（core 的四平台 L1 run 39422895712 因此失敗，已改 `.txt`）。`end` 行的 `authority_tick` 常是小值（房間清空時 Match 重設），只記錄。
 - 2026-10-20：`log-contract` 的只記錄 L2（D144；[log-contract.md](log-contract.md) 第 14 節；`build/target/_build/test/logs/pvp-v71-log-contract-l2-20261020/`）：8 個記錄項。受控停頓 53 ms 後 `tick_overrun` 39.7 ms、`tick_stalls` 2，和 trace 重算的間隔差 34 µs；同一 probe 程序的對時行 player 1～4 分得出；repo 版 `ingress_evidence` passed、未知鍵 0；d117 的舊版讀不了 pv7-line 的日誌（本批之前就是如此，只記錄）。
 - 2026-10-20：`dead-letter-position` 開始（使用者：「L1 通過後接著開始 dead-letter-position（P6：確認 D57），放在同一個 PR #82，先出計畫。」）。L1 仍在跑，先寫計畫（只讀）：[dead-letter-position.md](dead-letter-position.md)。發現：`drop_report_golden_test.go` 只檢查「每個 DropReason 對到一個 ingress 鍵」，沒有反方向（沒有 DropReason 的 `drop_` 計數器是否就是宣告的只寫日誌原因）。
+- 2026-10-20：`log-contract` 的四平台 L1 通過（run 39428630663，`71c9c76`）。**`log-contract` 結案**（只記錄的 L2 是 D144，README 沒有 L3）。
+- 2026-10-20：`dead-letter-position` 實作（D145；[dead-letter-position.md](dead-letter-position.md) 第 5 節）。反方向的 Go 守衛第一次執行就失敗：12 個沒有 `DropReason` 的 `drop_` 計數器不是只寫日誌，而是 pv7 刪除的路徑（11 個，恆為 0，依日誌 R1 保留鍵）與已回報丟棄的另一個單位（1 個）。計畫第 2 節把「沒有 `DropReason`」都當成「只寫日誌」，少看了這兩類；守衛改成三類宣告，對應表也列五類。突變 `dlp-unclassified-drop-exit` killed。
 
 ## 未結事項
 

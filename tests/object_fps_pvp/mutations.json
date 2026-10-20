@@ -4900,6 +4900,16 @@
       "replace": "        std::string reason=\"runtime_failed\";\n",
       "check": "ingress_cross",
       "expect": "the Match's end record is not one last line"
+    },
+    {
+      "id": "dlp-unclassified-drop-exit",
+      "batch": "v71-dead-letter-position",
+      "what": "A new Gateway drop exit (stale-sequence inputs dropped instead of forwarded) has neither a DropReason nor a declared reason to stay off the wire",
+      "file": "apps/object_fps_pvp/gateway/ingress_statistics.go",
+      "find": "\tplayerFwdStaleSequenceInputPackets:       {ingressForwarded, reasonStaleSequence, ingressInput, unitPackets},\n",
+      "replace": "\tplayerFwdStaleSequenceInputPackets:       {ingressDropped, reasonStaleSequence, ingressInput, unitPackets},\n",
+      "check": "go",
+      "expect": "player drop counter drop_stale_sequence_input_packets has no DropReason and is not declared unreported"
     }
   ]
 }

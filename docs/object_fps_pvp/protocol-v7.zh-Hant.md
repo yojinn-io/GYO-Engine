@@ -245,7 +245,7 @@ Gateway 執行了、但沒能轉送內容的丟棄，依原因回報給 Match（
 | 42 | `DROP_UNKNOWN_SESSION_DATAGRAMS` | Gateway 範圍：不屬於任何 session | 收包 |
 | 45 | `DROP_COALESCED_SNAPSHOTS` | Gateway 範圍：**只計讀取端**的新蓋舊（`server.go:618-630`），被取代的 snapshot 沒有送給任何 Client（新鍵；送出迴圈中途的取代計在 31） | 事件 |
 
-不上 wire、只寫 Gateway log：`room_unavailable`、`cleared_on_close_*`、`abandoned_on_close_*`（發生時 link 已失效，結構上無法回報）；Gateway 的 `drop_rate_limited_packets` 總和（可由玩家計數導出）；kernel 接收緩衝溢出（Gateway 看不到）。
+不上 wire、只寫 Gateway log：`room_unavailable`、`cleared_on_close_*`、`abandoned_on_close_*`（發生時 link 已失效，結構上無法回報）；Gateway 的 `drop_rate_limited_packets` 總和（可由玩家計數導出）；kernel 接收緩衝溢出（Gateway 看不到）。每個沒有 `DropReason` 的 `drop_` 鍵（包括已刪除路徑恆為 0 的鍵，以及以另一個單位記錄已回報丟棄的鍵）的分類見 [日誌 Data Contract](log-contract.zh-Hant.md) 第 5.1 節的對應表，由 Go 測試雙向守住（D145）。
 
 ### 串流的起訖與上限
 

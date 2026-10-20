@@ -86,17 +86,48 @@ func TestDropReasonsMatchTheGoldenAndTheKeys(t *testing.T) {
 		}
 		seen[reason] = true
 	}
-	// Logged only, never reported (pv7 §4).
-	for _, counter := range []playerIngressCounter{playerDropClearedOnCloseCommands, playerDropAbandonedOnCloseCommands,
-		playerDropClearedOnCloseActionsShots, playerDropClearedOnCloseActionsAcks, playerDropAbandonedOnCloseActionsShots, playerDropAbandonedOnCloseActionsAcks,
-		playerDropClearedOnCloseActionsPackets, playerDropAbandonedOnCloseActionsPackets} {
-		if playerDropReason[counter] != 0 {
-			t.Fatalf("%s is reported", ingressKeyName(playerIngressKeys[counter]))
+	// The drop counters without a DropReason, by why they stay off the wire
+	// (log-contract §5.1 lists them; dead-letter-position, D145).
+	const (
+		logOnly   = "logged only: the link has failed when they happen, or the key is a sum (pv7 §4)"
+		removed   = "a path pv7 removed: the key stays in log v1 (R1), always 0 (removed_paths)"
+		attribute = "a second unit of a reported drop: only its packets are reported"
+	)
+	playerUnreported := map[playerIngressCounter]string{
+		playerDropClearedOnCloseCommands: logOnly, playerDropAbandonedOnCloseCommands: logOnly,
+		playerDropClearedOnCloseActionsShots: logOnly, playerDropClearedOnCloseActionsAcks: logOnly,
+		playerDropAbandonedOnCloseActionsShots: logOnly, playerDropAbandonedOnCloseActionsAcks: logOnly,
+		playerDropClearedOnCloseActionsPackets: logOnly, playerDropAbandonedOnCloseActionsPackets: logOnly,
+		playerDropResolvedTrimCommands: removed, playerDropRejectedLaneOverflowCommands: removed,
+		playerDropDiscardedOnLeaveCommands: removed, playerDropInvalidActionsPackets: removed,
+		playerDropInvalidActionsShots: removed, playerDropLinkRejectedActionsPackets: removed,
+		playerDropLinkRejectedActionsShots: removed, playerDropDiscardedOnLeaveActionsShots: removed,
+		playerDropDiscardedOnLeaveActionsAcks:   removed,
+		playerDropIpcQueueOverflowInputCommands: attribute,
+	}
+	gatewayUnreported := map[gatewayIngressCounter]string{
+		gatewayDropRoomUnavailableDatagrams: logOnly, gatewayDropRateLimitedPackets: logOnly,
+		gatewayDropOldTickSnapshots: removed, gatewayDropRegressedSnapshots: removed,
+	}
+	// Both directions: a declared counter is not reported, and every drop
+	// counter is reported or declared, so a new Gateway exit cannot stay off
+	// the wire unclassified.
+	for counter := playerIngressCounter(0); counter < playerIngressCounterCount; counter++ {
+		key, why := playerIngressKeys[counter], playerUnreported[counter]
+		if why != "" && (key.outcome != ingressDropped || playerDropReason[counter] != 0) {
+			t.Errorf("player counter %s is declared unreported (%s) but is not an unreported drop", ingressKeyName(key), why)
+		}
+		if key.outcome == ingressDropped && playerDropReason[counter] == 0 && why == "" {
+			t.Errorf("player drop counter %s has no DropReason and is not declared unreported", ingressKeyName(key))
 		}
 	}
-	for _, counter := range []gatewayIngressCounter{gatewayDropRoomUnavailableDatagrams, gatewayDropRateLimitedPackets} {
-		if gatewayDropReason[counter] != 0 {
-			t.Fatalf("%s is reported", ingressKeyName(gatewayIngressKeys[counter]))
+	for counter := gatewayIngressCounter(0); counter < gatewayIngressCounterCount; counter++ {
+		key, why := gatewayIngressKeys[counter], gatewayUnreported[counter]
+		if why != "" && (key.outcome != ingressDropped || gatewayDropReason[counter] != 0) {
+			t.Errorf("Gateway counter %s is declared unreported (%s) but is not an unreported drop", ingressKeyName(key), why)
+		}
+		if key.outcome == ingressDropped && gatewayDropReason[counter] == 0 && why == "" {
+			t.Errorf("Gateway drop counter %s has no DropReason and is not declared unreported", ingressKeyName(key))
 		}
 	}
 }

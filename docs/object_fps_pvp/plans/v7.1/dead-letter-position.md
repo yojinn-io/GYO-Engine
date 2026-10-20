@@ -1,6 +1,6 @@
 # dead-letter-position：確認 D57（計畫，第 1 版）
 
-- 狀態：**計畫第 1 版，等你決定**（第 4 節）。
+- 狀態：**D145 選 (a+)，實作完成，等四平台 L1**（第 5 節）。
 - 依據：README 的 `dead-letter-position` 列（「確認 D57 是否仍成立：ingress 日誌和丟棄回報維持兩份契約、對齊同一套原則，或合成一份」；只改文件；估 2 h）、INVENTORY P6、`plans/v7/HANDOFF.md` D57（:102）、D73⑤（:118）、「死信隊列」評估 7～9（:492-494）、`network-architecture.zh-Hant.md:297`（死信原則）、`protocol-v7.zh-Hant.md` §4、`log-contract.zh-Hant.md` 第 5 節。
 - 檔位：medium（只讀與文件）。選 4 的 (a+) 時多一個小測試（high，約 0.5 h）。
 - file:line 以 `fdb94a4` 為準。
@@ -37,3 +37,15 @@ D57（2026-10-11）把死信定位成**設計原則**：每個出口只有「執
 - **(a) 維持 D57，只改文件**：`log-contract.zh-Hant.md` 第 5 節加一張對應表（ingress `drop_` 鍵 ↔ `DropReason` ↔ 上 wire 或只寫日誌，含理由），並指向 `drop_reasons.json` 與三種語言的測試；`network-architecture.zh-Hant.md:297` 的 D57 段落更新為「v7.1 已以同一張名稱表與 `drop_reasons.json` 對齊」；`protocol-v7.zh-Hant.md` §4 的只寫日誌清單連到該表；INVENTORY P6 結案。約 1 h。
 - **(a+) 同 (a)，再補反方向的守衛（建議）**：Go 測試斷言「沒有 `DropReason` 的 `drop_` 計數器」恰好等於宣告的只寫日誌集合；新增出口而沒有分類就失敗。另加 1 個突變（把一個上 wire 的原因改成 reason 0 → 測試失敗）。約 1.5 h，四平台 L1。
 - **(b) 合成一份死信 Data Contract**：日誌與 wire 共用一份文件與一套版本。不建議（理由見第 3 節）；若選它要重新規劃，估 6～10 h，並觸及 protocol-v7 的版本規則。
+
+## 5. 實作（D145，(a+)）
+
+- 使用者：「dead-letter-position 選 (a+)：維持 D57，文件加對應表，再補反方向的 Go 守衛與突變。L1 通過後實作。」`log-contract` 的四平台 L1（run 39428630663，`71c9c76`）通過後開始。
+- **守衛的第一次執行就抓到計畫沒列的類別**：照第 4 節寫成「沒有 `DropReason` 的 `drop_` 計數器＝只寫日誌集合」時，有 12 個計數器不在集合裡。對照分析器的 `removed_paths`（`tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md:83`）後分成兩類：
+  - 已刪除的路徑（11 個）：pv7 刪掉的出口（edge-input、edge-results 的 A3、edge-actions 的 A5 與 D56、D-12 的兩個 snapshot 守衛）。依日誌 R1 鍵留在 v1，恆為 0。
+  - 另一個單位（1 個）：`drop_ipc_queue_overflow_input_commands`，同一事件以封包數上 wire（32）。
+  兩類都不是新出口、不改 wire，也不改 D57 的結論；第 2 節「只有一個缺口」的判斷不變，只是第 2 節把「沒有 `DropReason`」都當成「只寫日誌」，少看了這兩類。守衛改成三類宣告。
+- 程式：`drop_report_golden_test.go` 的 `TestDropReasonsMatchTheGoldenAndTheKeys` 雙向檢查（宣告的計數器確實是沒有 `DropReason` 的丟棄；每個沒有 `DropReason` 的 `drop_` 計數器都有宣告類別）。原本只檢查只寫日誌的 10 個計數器沒有 `DropReason`，改寫後這個檢查保留，範圍擴大到三類。
+- 突變 `dlp-unclassified-drop-exit`（批次 `v71-dead-letter-position`，`go` 檢查）：把轉送的 `fwd_stale_sequence_input_packets` 改成丟棄（新出口沒有 `DropReason` 也沒有宣告）→ killed。
+- 文件：`log-contract.zh-Hant.md` 第 5.1 節（對應表，五類）；`protocol-v7.zh-Hant.md` §4 的「不上 wire」段落連到該表；`network-architecture.zh-Hant.md` 的 D57 段落加 v7.1 的補充；INVENTORY P6 已解決。
+- 驗證（本機）：`go test ./...`（gateway）通過；突變 1／1 killed；`test_run_mutations.py` 通過。四平台 L1 待跑。
