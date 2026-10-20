@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：`dead-letter-position` 的四平台 L1。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+- **進行中**：`dead-letter-position` 的四平台 L1（`572cc39`，run 39441359248，#492；同時出現的 #493 是 draft PR 的 pull_request 事件，會跳過 L1）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
 - **下一步**：L1 通過後 `dead-letter-position` 結案；接著是 `d44-regression-pv7`（要你說開始）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
