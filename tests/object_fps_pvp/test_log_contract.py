@@ -145,8 +145,8 @@ class FrozenReaders(unittest.TestCase):
         self.assertEqual(result['totals']['match']['unknown_keys'], [])
 
     def test_command_evidence_reads_the_movement_trace(self):
-        events = self.commands.read_trace_events(FIXTURES / 'sample-commands.jsonl')
-        self.assertTrue(events)
+        events = list(self.commands.read_trace_events(FIXTURES / 'sample-commands.jsonl'))
+        self.assertEqual(len(events), 200)
 
 
 class ReverseGuards(unittest.TestCase):

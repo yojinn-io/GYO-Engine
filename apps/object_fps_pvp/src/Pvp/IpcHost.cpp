@@ -166,6 +166,10 @@ struct ActionLane {
     // began (the player's join on this link) and the latest reason.
     std::uint64_t refused{};
     pb::ActionRefusal lastRefusal{pb::ACTION_REFUSAL_UNSPECIFIED};
+    // Diagnostics only (log-contract, E1-7): when this I/O thread first saw the
+    // lane with something to send since its last send. A send is late only
+    // beyond both this and the lane's due time (an idle lane may send at once).
+    std::optional<std::chrono::steady_clock::time_point> pendingSince;
 };
 // The hit part's wire value is the domain's (pv7 §7).
 static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
@@ -742,6 +746,7 @@ struct IpcHost::Impl {
             const auto results=host.GetActionResults(it->first);
             if(!results) {it=session.actionLanes.erase(it);continue;}
             if(!LanePending(*results,it->second)) {++it;continue;}
+            if(!it->second.pendingSince) it->second.pendingSince=now;
             const auto due=LaneDue(it->second,now);
             if(!nextLane || due<*nextLane) nextLane=due;
             ++it;
@@ -798,7 +803,8 @@ struct IpcHost::Impl {
                     if(!results) {it=s.actionLanes.erase(it);continue;}
                     ++it;
                     if(!LanePending(*results,lane)) continue;
-                    ActionChosen(LaneDue(lane,now),now);
+                    ActionChosen(std::max(LaneDue(lane,now),lane.pendingSince.value_or(now)),now);
+                    lane.pendingSince.reset();
                     s.writing=wire::Frame(ActionMessage(*results,lane,now).SerializeAsString());
                     s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;s.writingSamples.clear();
                     break;
