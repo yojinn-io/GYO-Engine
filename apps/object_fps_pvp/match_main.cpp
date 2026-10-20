@@ -103,6 +103,7 @@ int main(int argc,char** argv) {
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
                 .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits),.pace=std::move(host.pace)})<<'\n';
+            std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),window,false)<<'\n';
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
             if(ingressTrace) ingressTrace->Write(records);
@@ -118,6 +119,8 @@ int main(int argc,char** argv) {
         // after it puts them in the detail file before its trace_end.
         auto lastTaken=runtime.TakeIngressStatistics(true);
         const auto lastRecords=runtime.DrainIngressRecords();
+        std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),
+            std::chrono::duration<double>(stoppedAt-windowStart).count(),true)<<'\n';
         WriteIngress(ingress.Lines(std::move(lastTaken),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed) std::cerr<<"Match simulation failed: "<<*failed<<'\n';

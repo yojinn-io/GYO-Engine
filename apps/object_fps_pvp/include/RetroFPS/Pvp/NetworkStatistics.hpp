@@ -53,6 +53,18 @@ struct HostLockWaits final {
     Engine::Time::LateWakeStats step;
 };
 
+// The Match IPC lanes' pace (log-contract, E1-7), owned by IpcHost: how long a
+// published snapshot waited before its frame was chosen for writing, and how
+// late a due action-lane send went out (zero for a lane's first send).
+struct IpcLaneStatistics final {
+    std::uint64_t snapshotWrites{};
+    Engine::Time::LateWakeStats snapshotWait;
+    std::uint64_t actionWrites{};
+    Engine::Time::LateWakeStats actionLate;
+};
+// "[ObjectFPS/PvP Match] ipc statistics version=1 window_s= final= ..."
+[[nodiscard]] std::string IpcStatisticsLine(const IpcLaneStatistics& lanes, double windowSeconds, bool final);
+
 struct MatchStatisticsWindow final {
     double windowSeconds{};
     std::optional<double> cpuSeconds;      // process CPU during the window

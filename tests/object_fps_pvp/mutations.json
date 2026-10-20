@@ -4850,6 +4850,26 @@
       "replace": "",
       "check": "cpu",
       "expect": "tick_stalls=1"
+    },
+    {
+      "id": "lc-ipc-action-unrecorded",
+      "batch": "v71-log-contract",
+      "what": "An action-lane send is not recorded in the lane statistics (E1-7)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    ActionChosen(LaneDue(lane,now),now);\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CHECK\\( lanes.actionWrites >= static_cast<std::uint64_t>\\(decisionFrames\\) \\)"
+    },
+    {
+      "id": "lc-ipc-take-keeps",
+      "batch": "v71-log-contract",
+      "what": "Taking the lane statistics does not start a new window",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "return std::exchange(impl_->lanes,{});}",
+      "replace": "return impl_->lanes;}",
+      "check": "ipc",
+      "expect": "CHECK\\( server.ipc.TakeLaneStatistics\\(\\).actionWrites <= 1 \\)"
     }
   ]
 }

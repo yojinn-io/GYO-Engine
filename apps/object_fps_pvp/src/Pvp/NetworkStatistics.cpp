@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <tuple>
 #include <locale>
 #include <sstream>
 #include <utility>
@@ -99,6 +100,21 @@ void TickPaceStatistics::RecordInterval(const Engine::Time::Duration interval, c
 
 void TickPaceStatistics::RecordAdvance(const Engine::Time::Duration took) {
     advance.Record(took > Engine::Time::Duration::zero() ? took : Engine::Time::Duration::zero());
+}
+
+std::string IpcStatisticsLine(const IpcLaneStatistics& lanes, const double windowSeconds, const bool final) {
+    auto line = LineStream();
+    line << "[ObjectFPS/PvP Match] ipc statistics version=1 window_s=" << std::fixed << std::setprecision(3) << windowSeconds
+         << " final=" << (final ? 1 : 0);
+    for (const auto& [name, writes, stats] : {std::tuple{"snapshot_wait", lanes.snapshotWrites, &lanes.snapshotWait},
+                                              std::tuple{"action_late", lanes.actionWrites, &lanes.actionLate}}) {
+        line << " " << (stats == &lanes.snapshotWait ? "snapshot_writes=" : "action_writes=") << writes << " " << name
+             << "_p99_le_us=" << Micros(stats->QuantileUpperBound(0.99)) << " " << name << "_max_us=" << Micros(stats->Max())
+             << " " << name << "_bins=";
+        for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
+            line << (bin ? "," : "") << stats->Bins()[bin];
+    }
+    return line.str();
 }
 
 std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {

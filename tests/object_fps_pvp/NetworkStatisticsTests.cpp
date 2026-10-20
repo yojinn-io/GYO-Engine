@@ -150,3 +150,18 @@ TEST_CASE("The Match host reports its tick waits per window and resets them") {
     CHECK(last.notified == 1);
     CHECK(static_cast<double>(last.late.Count()) <= window.count() * 60.0 + 3.0);
 }
+
+TEST_CASE("Match IPC statistics line keeps its keys in a fixed order (log-contract, E1-7)") {
+    IpcLaneStatistics lanes;
+    lanes.snapshotWrites = 2;
+    lanes.snapshotWait.Record(100us);
+    lanes.snapshotWait.Record(700us);
+    lanes.actionWrites = 1;
+    lanes.actionLate.Record(0us);
+    CHECK(IpcStatisticsLine(lanes, 10.0004, false) ==
+          "[ObjectFPS/PvP Match] ipc statistics version=1 window_s=10.000 final=0 snapshot_writes=2 "
+          "snapshot_wait_p99_le_us=700 snapshot_wait_max_us=700 snapshot_wait_bins=1,0,1,0,0,0,0,0,0,0 action_writes=1 "
+          "action_late_p99_le_us=0 action_late_max_us=0 action_late_bins=1,0,0,0,0,0,0,0,0,0");
+    CHECK(IpcStatisticsLine({}, 2.5, true).starts_with("[ObjectFPS/PvP Match] ipc statistics version=1 window_s=2.500 final=1 "));
+}
+

@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string_view>
 #include <syncstream>
+#include <utility>
 
 namespace fps::pvp {
 namespace pb = object_fps_pvp::runtime::v7;
@@ -416,6 +417,20 @@ struct IpcHost::Impl {
     std::uint64_t requestSequence{};
     // Diagnostics only: io handler passes (accept, read, write, timer, pump).
     std::atomic<std::uint64_t> iterations{};
+    // Diagnostics only (E1-7): written on the io thread, taken by match_main
+    // at its statistics window; the mutex guards only these counts.
+    std::mutex laneMutex;
+    IpcLaneStatistics lanes;
+    void SnapshotChosen(Clock::time_point queuedAt, Clock::time_point now) {
+        std::scoped_lock lock(laneMutex);
+        ++lanes.snapshotWrites;
+        lanes.snapshotWait.Record(now > queuedAt ? now - queuedAt : Clock::duration::zero());
+    }
+    void ActionChosen(Clock::time_point due, Clock::time_point now) {
+        std::scoped_lock lock(laneMutex);
+        ++lanes.actionWrites;
+        lanes.actionLate.Record(now > due ? now - due : Clock::duration::zero());
+    }
     std::optional<Engine::Threads::RoleThread> role;
 
     Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
@@ -764,6 +779,7 @@ struct IpcHost::Impl {
             host.NoteCoalescedSlackSamples(s.writingSamples);
             s.writing=SnapshotBytes(*s.latestSnapshot);s.writingTick=s.latestSnapshot->tick;
             s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+            SnapshotChosen(s.writingQueuedAt,Clock::now());
             TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=s.writingTick,.count=s.coalescedSnapshots});
         }
         if(s.writing.empty()) {
@@ -782,6 +798,7 @@ struct IpcHost::Impl {
                     if(!results) {it=s.actionLanes.erase(it);continue;}
                     ++it;
                     if(!LanePending(*results,lane)) continue;
+                    ActionChosen(LaneDue(lane,now),now);
                     s.writing=wire::Frame(ActionMessage(*results,lane,now).SerializeAsString());
                     s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;s.writingSamples.clear();
                     break;
@@ -790,6 +807,7 @@ struct IpcHost::Impl {
             if(s.writing.empty() && s.latestSnapshot) {
                 s.writing=SnapshotBytes(*s.latestSnapshot);s.writingTick=s.latestSnapshot->tick;
                 s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+                SnapshotChosen(s.writingQueuedAt,Clock::now());
             }
             if(s.writing.empty() && s.clockReply) {
                 // Last in priority; transmit is stamped now, when the frame is chosen.
@@ -872,4 +890,5 @@ void IpcHost::Stop() {
     impl_->listener.close(ignored);
 }
 std::uint64_t IpcHost::Iterations() const noexcept{return impl_->iterations.load(std::memory_order_relaxed);}
+IpcLaneStatistics IpcHost::TakeLaneStatistics(){std::scoped_lock lock(impl_->laneMutex);return std::exchange(impl_->lanes,{});}
 }
