@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[dead-letter-position](dead-letter-position.md) 第 4 節：(a) 維持 D57 只改文件、(a+) 再補反方向的守衛（建議）、(b) 合成一份死信契約。
+- **等你決定**：無（D145：`dead-letter-position` (a+)，等 `log-contract` 的四平台 L1 通過後實作）。
 - **進行中**：`log-contract` 的四平台 L1（`71c9c76`，run 39428630663，計畫寫完時仍在跑）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -114,6 +114,7 @@
 | D142 | （2026-10-20）核准 `log-contract` 計畫第 1 版（[log-contract.md](log-contract.md)），第 9 節照建議：LC-1 (a) 拆成 core／records 兩個子批；LC-2 (a) `match-shots.jsonl`、`match-ingress.jsonl` 維持主執行緒每 10 秒寫出；LC-3 (a) 由 `log-contract.zh-Hant.md` 取代 protocol-v7 §1 的日誌規則；LC-4 照現狀定案 D58(1)(8)、D37，並明確確認 D58(3)(4)(5)；LC-5 (a) Engine `RoleThread::WaitBackend()`；LC-6 同意契約的 Design Invariants；LC-7 (a) 不加 Gateway 欄位、用導出的守恆式。檔位照寫，records 的 `tick_overrun` 局部 xhigh 同意。開始 core | 使用者：「核准 log-contract 計畫第 1 版，第 9 節照建議：LC-1 (a) 拆兩個子批、LC-2 (a)、LC-3 (a)、LC-4 照現狀定案並確認 D58(3)(4)(5)、LC-5 (a)、LC-6 同意 Design Invariants、LC-7 (a)；檔位照寫，tick_overrun 局部 xhigh 同意。開始 core。」 |
 | D143 | （2026-10-20）`log-contract` core 與 records 之間的關卡：LC-10 (a) 同意在 Gateway 套件新增 3 個哨兵錯誤（`errRuntimeLiveness`、`errRuntimeWriteTimeout`、`errRuntimeVersionMismatch`，immutable table）與錯誤型別 `protocolError`（欄位 per-call context），套用 patch（Gateway Design Invariants 的 Architecture Delta）；LC-8 四項（rotation 拆分、逐筆到達事件、樣本流失、週期性 IPC 寫出延遲）都移到 `observability-tools`；LC-9 (a) records 結束時跑只記錄的 L2。開始 records | 使用者：「照建議：LC-10 (a) 同意新增 3 個哨兵錯誤與 protocolError，套用 patch；LC-8 四項都移到 observability-tools；LC-9 (a) records 結束時跑只記錄的 L2。開始 records。」 |
 | D144 | （2026-10-20）核准 `log-contract` 只記錄 L2 的宣告第 1 版（[log-contract.md](log-contract.md) 第 13 節，工具 `60af302b…`），立即跑 | 使用者：「核准 log-contract 只記錄 L2 的宣告第 1 版（工具 60af302b…），現在跑。」 |
+| D145 | （2026-10-20）`dead-letter-position` 選 (a+)：維持 D57（兩份契約、一套詞彙、一套原則），`log-contract.zh-Hant.md` 加 `drop_` 鍵 ↔ `DropReason` 的對應表，再補反方向的 Go 守衛（沒有 `DropReason` 的 `drop_` 計數器＝宣告的只寫日誌集合）與突變。`log-contract` 的四平台 L1 通過後實作 | 使用者：「dead-letter-position 選 (a+)：維持 D57，文件加對應表，再補反方向的 Go 守衛與突變。L1 通過後實作。」 |
 
 ## 規劃紀錄（記錄器）
 
