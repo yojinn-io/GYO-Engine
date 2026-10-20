@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
+#include "RetroFPS/Pvp/SessionSummary.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
@@ -425,7 +426,7 @@ struct PvpApplication::Impl final {
     }
 
     void ResetWeaponFeedback() {
-        weaponFeedback = {};
+        RestartWeaponCounters(weaponFeedback, sessionLog.baseline);
         weaponFeedback.ready = weapon != nullptr;
         weaponAction = fps::WeaponViewModelAction::Idle;
         weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
@@ -699,7 +700,7 @@ struct PvpApplication::Impl final {
         Clock::time_point windowStart{}, lastSnapshotAt{};
         std::uint64_t frames{}, snapshots{};
         double longestFrameSeconds{};
-        std::uint64_t submitted{}, accepted{}, rejected{}, hits{}, localBlocks{};
+        SummaryBaseline baseline;
     } sessionLog;
 
     void LogSession(double frameSeconds) {
@@ -733,6 +734,7 @@ struct PvpApplication::Impl final {
         const double window = std::chrono::duration<double>(now - log.windowStart).count();
         if (window < 1) return;
         const auto& weapon = weaponFeedback;
+        const auto counts = log.baseline.Take(SummaryCountsOf(weapon));
         const double snapshotAge = log.lastSnapshotAt == Clock::time_point{} ? -1 :
             std::chrono::duration<double>(now - log.lastSnapshotAt).count() * 1000;
         SDL_Log("PvP summary player=%llu tick=%llu players=%zu fps=%.1f longest_frame_ms=%.1f snapshots_per_s=%.1f "
@@ -742,16 +744,9 @@ struct PvpApplication::Impl final {
                 state.snapshot->players.size(), log.frames / window, log.longestFrameSeconds * 1000, log.snapshots / window,
                 snapshotAge, static_cast<std::size_t>(presented.observation.pendingCommands), weapon.hp,
                 static_cast<unsigned long long>(self->lifeGeneration), self->lifeState == LifeState::Dead ? 1 : 0,
-                static_cast<unsigned long long>(weapon.submittedActions - log.submitted),
-                static_cast<unsigned long long>(weapon.acceptedDecisions - log.accepted),
-                static_cast<unsigned long long>(weapon.rejectedDecisions - log.rejected),
-                static_cast<unsigned long long>(weapon.hitDecisions - log.hits),
-                static_cast<unsigned long long>(weapon.localCooldownBlocks - log.localBlocks), state.actionTransport.pending);
-        log.submitted = weapon.submittedActions;
-        log.accepted = weapon.acceptedDecisions;
-        log.rejected = weapon.rejectedDecisions;
-        log.hits = weapon.hitDecisions;
-        log.localBlocks = weapon.localCooldownBlocks;
+                static_cast<unsigned long long>(counts.submitted), static_cast<unsigned long long>(counts.accepted),
+                static_cast<unsigned long long>(counts.rejected), static_cast<unsigned long long>(counts.hits),
+                static_cast<unsigned long long>(counts.localBlocks), state.actionTransport.pending);
         log.windowStart = now;
         log.frames = log.snapshots = 0;
         log.longestFrameSeconds = 0;

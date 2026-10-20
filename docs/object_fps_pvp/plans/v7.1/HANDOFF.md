@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract` 計畫第 1 版等核准（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：core 子批實作中（D142；詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[log-contract](log-contract.md) 計畫第 1 版，第 9 節 core 開始前的 LC-1～LC-7 與檔位（拆成 core／records 兩個子批，共約 23 h；records 的 LC-8、LC-9 在 core 結束時決定）。
+- **等你決定**：無（`log-contract` core 實作中；core 結束時停下，決定 LC-8、LC-9）。
 - **進行中**：無。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（after-pv7 線，draft）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -111,6 +111,7 @@
 | D139 | （2026-10-20）核准 `tt2-trace` 計畫第 1 版（[tt2-trace.md](tt2-trace.md)），第 8 節照建議：T-1 選 (a)（本批改接移動紀錄與 `LogFile`，位元組不變；`match-shots.jsonl`、`match-ingress.jsonl` 留給 `log-contract`）；T-2 照 Engine 計畫（生產者預先序列化）；T-3 由斷言與 terminate 處理先 `FlushNow()`，被訊號殺掉時遺失最後一批；T-4 同意 1 位 xhigh 審查 agent 檢查公開介面與關閉順序。開始實作 | 使用者：「核准 tt2-trace 計畫第 1 版，第 8 節照建議：T-1 選 (a)、T-2 照 Engine 計畫、T-3 由斷言與 terminate 處理先 FlushNow、T-4 同意 1 位 xhigh 審查。開始實作。」 |
 | D140 | （2026-10-20）核准 `tt2-trace` 的 L2 宣告第 2 版（[tt2-trace.md](tt2-trace.md) 第 11 節）：L2-1 選 (a)，README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定（T2-1、T2-3／4 粗閘門、T2-5、T2-9；其餘只記錄），README 同步改寫；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版 | 使用者：「核准 tt2-trace 的 L2 宣告第 2 版：L2-1 選 (a)，把 README 的射擊 P99 換成第 11 節的判定；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版。」 |
 | D141 | （2026-10-20）核准 `tt2-trace` 的 L2 事前宣告第 3 版（[tt2-trace.md](tt2-trace.md) 第 11、13 節：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`），立即跑 session | 使用者：「核准 tt2-trace 的 L2 宣告第 3 版（driver 00c8c13e…、judge 40aee8b1…、artifacts d5377b35…），現在跑 session。」 |
+| D142 | （2026-10-20）核准 `log-contract` 計畫第 1 版（[log-contract.md](log-contract.md)），第 9 節照建議：LC-1 (a) 拆成 core／records 兩個子批；LC-2 (a) `match-shots.jsonl`、`match-ingress.jsonl` 維持主執行緒每 10 秒寫出；LC-3 (a) 由 `log-contract.zh-Hant.md` 取代 protocol-v7 §1 的日誌規則；LC-4 照現狀定案 D58(1)(8)、D37，並明確確認 D58(3)(4)(5)；LC-5 (a) Engine `RoleThread::WaitBackend()`；LC-6 同意契約的 Design Invariants；LC-7 (a) 不加 Gateway 欄位、用導出的守恆式。檔位照寫，records 的 `tick_overrun` 局部 xhigh 同意。開始 core | 使用者：「核准 log-contract 計畫第 1 版，第 9 節照建議：LC-1 (a) 拆兩個子批、LC-2 (a)、LC-3 (a)、LC-4 照現狀定案並確認 D58(3)(4)(5)、LC-5 (a)、LC-6 同意 Design Invariants、LC-7 (a)；檔位照寫，tick_overrun 局部 xhigh 同意。開始 core。」 |
 
 ## 規劃紀錄（記錄器）
 

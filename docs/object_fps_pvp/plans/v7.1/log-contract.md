@@ -1,6 +1,6 @@
 # log-contract：日誌 Data Contract v1 與 README 指名的紀錄（計畫，第 1 版）
 
-- 狀態：**計畫第 1 版，等核准**（第 9 節）。核准後才實作。
+- 狀態：計畫第 1 版已核准（D142，第 9 節照建議）；core 子批實作中。
 - 依據：README 的 `log-contract` 列（「日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等）」；驗收「跨語言 golden、凍結分析器仍可讀／只記錄／—」；估 16 h）、INVENTORY 指向本批的項目、`plans/v7/HANDOFF.md:380-395`（原第 10 批與觀測缺口清單）、D58（`plans/v7/HANDOFF.md:103`）、`protocol-v7.zh-Hant.md` §1「日誌只加鍵」、`network-architecture.zh-Hant.md:295`（死信三原則 D57）、`tt2-trace.md`（D139 T-1 把 `match-shots.jsonl`、`match-ingress.jsonl` 留給本批）。
 - 規劃方法：ultracode（2026-10-20）。盤點 2 位（C++、Go 的行族與讀者）、方案 3 位（最小契約、讀者優先、觀測缺口優先）、評審合成 1 位，以上用 high；對抗式檢查 1 位用 xhigh：MUST-FIX 7、SHOULD-FIX 10、NOTE 5，全部的對應見第 10 節。各 agent 的完整輸出在本 session 的 workflow 紀錄。
 - 估時：**拆成兩個子批，共約 23 h**（README 原估 16 h，約 1.4 倍；原因見第 8 節）。每個子批各自以 1.5 倍停損；單一問題累計超過 2 h 就停下回報。

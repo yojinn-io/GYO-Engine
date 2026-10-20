@@ -4726,6 +4726,16 @@
       "replace": "        return !file_ || (file_->sink.Good() && file_->sink.Counts().droppedFull == 0);",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( writer.Good\\(\\) \\)"
+    },
+    {
+      "id": "lc-summary-baseline-kept",
+      "batch": "v71-log-contract",
+      "what": "The weapon counters restart but the summary baseline does not (N-summary-counter-wrap)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SessionSummary.hpp",
+      "find": "    weapon = {};\n    baseline.Restart();\n",
+      "replace": "    weapon = {};\n",
+      "check": "cpu",
+      "expect": "CHECK\\( baseline.Take\\(SummaryCountsOf\\(weapon\\)\\) == SummaryCounts\\{2, 1, 0, 0, 0\\} \\)"
     }
   ]
 }
