@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `d44-regression-pv7` 宣告第 1 版做 D45 檢查中（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `d44-regression-pv7` L2 宣告第 2 版等你核准（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：`d44-regression-pv7` 宣告第 1 版（[d44-regression-pv7.md](d44-regression-pv7.md) 第 8 節）的 D45 檢查（1 位 xhigh）；60 Hz 長測的開發跑次。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
-- **下一步**：吸收 D45 檢查 → 宣告第 2 版交你核准 → session（約 2.9 h）。
+- **等你決定**：`d44-regression-pv7` 的 L2 宣告第 2 版（[d44-regression-pv7.md](d44-regression-pv7.md) 第 8 節；宣告點 2 個：clean 跑次的逐出與限速拒絕列為使用者旗標而不停下、受干擾只記錄）。
+- **進行中**：無（等你核准宣告）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+- **下一步**：核准後跑 session（約 3.0 h，L2 期間不呼叫工具），再分析與記錄。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -559,6 +559,7 @@
 - 2026-10-21：`d44-regression-pv7` 開始（使用者：「開始」）。先寫計畫（只讀盤點）。
 - 2026-10-21：`d44-regression-pv7` 計畫第 1 版（[d44-regression-pv7.md](d44-regression-pv7.md)）。盤點：A1 的 L2 工具已用 `judge_16b` 把第 16 批的 E1～E3 接到 pv7 跑次上，`run_client_delay.py` 在 cp 凍結清單內（雜湊相同），所以不用新寫偵測器。A1 之後還有 13 個 commit，目前的建置沒有被 D44 型 L2 量過。建議：單樹＋第 16 批普查基準，母體照第 16 批 D 部分加 x1、ramp 各 15 次（session 約 3.3 h），短停頓只記錄；合計約 13 h。
 - 2026-10-21：`d44-regression-pv7` 的 L2 工具（D146；`logs/pvp-v71-d44-l2-prep-20261021/`）：`run_d44.py`、`judge_d44.py`（事件偵測沿用第 16 批的 `judge_16.py`／`judge_c2.py`，Cooldown 的解釋沿用 A1 的 A1-1）、`dryrun.py`。Gateway 在 `cf40497` 重建（原本是 `70ad10d` 的建置，不是 `572cc39` 的後代）。開發跑次 9 項沒有停止；x1 的窗內重設是 starvation 4＋backlog 1、窗外 0。乾跑 32／32 符合、突變 10／10 killed（第一次跑有 3 個乾跑工具自己的錯：開發跑次的 stdout 路徑、窗內樣本的時刻、impairments 樣本沒有失敗；另換掉 1 個沒有意義的突變）。宣告第 1 版寫在第 8 節，宣告點 4 個（Cooldown 改成「無法解釋」、逐出與限速拒絕只記錄、受干擾只記錄、沒有整合判定）。
+- 2026-10-21：`d44-regression-pv7` 宣告第 1 版的 D45 檢查（1 位 xhigh）：MUST-FIX 3（停止條件 4 對 D44 自己造成的 Cooldown 永遠不觸發；沒有 trace 完整性檢查，E1 與停止條件 3 可能是空檢查；停止條件 2 放寬卻少了 A1 的配套 C9）、SHOULD-FIX 6、NOTE。第 2 版：停止條件 2、4 回到「任何 Cooldown」、加 T1、窗內超出與 clean 的逐出／限速拒絕列為使用者旗標、核對 c2-after 模組、v7 基準改讀第 16 批 session 與 08c、長測逾時 1808＋900 秒、機器更正為 Intel x86_64。長測開發跑次 P（1968 秒）。乾跑 44／44、mock session 5／5、突變 18／18。產物清單寫入，preflight 通過。對應表在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 9 節。
 
 ## 未結事項
 
