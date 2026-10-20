@@ -128,7 +128,7 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
 - xhigh 審查（T-4，1 位）：沒有 MUST-FIX；SHOULD 6 項、NIT 6 項，處理與未處理的項目記在 Engine 的 [TT HANDOFF](../../../architecture/plans/time-threads-trace/HANDOFF.md)「TT-2 紀錄」。和產品有關的處理：測試的 UB（被 Tee 的 stream 宣告順序）；`LogFile` 每行 flush（`flushEachLine`，多個 Client 同時啟動、寫到同名日誌檔時不切開一行，和舊版相同）；移動紀錄改用 `std::string`＋`%.17g` 組行（不在生產者上建 stream，MSVC 會取全域鎖）；當機路徑、丟棄行、`Finish` 之後才到的事件補測試。修正後產品突變 7／7（新增 `tt2-log-crash-no-flush`、`tt2-log-handler-not-restored`、`tt2-log-drops-unreported`、`tt2-movement-late-uncounted`）、Engine 突變 6／6（新增 `tt2-timer-wake`）、CTest `cpu|shader` 73／73。
 
-## 11. L2 事前宣告（第 3 版，等核准）
+## 11. L2 事前宣告（第 3 版，D141 核准；結果在第 14 節）
 
 第 1 版草稿經 D45 的門檻來源對抗式檢查（1 位 xhigh，2026-10-20）：MUST-FIX 5、SHOULD-FIX 4；對應見第 12 節。第 2 版經 D140 核准（判定與門檻）。第 3 版加上工具、開發跑次、乾跑與雜湊（第 13 節），並把第 2 版寫得不夠具體的三處補明（11.2 的重建方式、11.3 沿用的停止條件、T2-7 只有 P95）；判定與門檻和第 2 版相同。
 
@@ -240,4 +240,23 @@ T2-9 的量法先在本機跑過一次（Intel Mac、`-O2`、`producer_bench.cpp
 - 乾跑（`dryrun.py`，`dryrun/`）：逐項 30 列（開發跑次 16、夾具 12、受干擾、執行檔身分）、合成判定 22 列（分位數的上界與進位、T2-3 的粗閘門、T2-5、T2-8 的預測、T2-9 的邊界與缺值）、判定工具的突變 15 個全部被抓到、driver 8 列（指令只用自己的樹、拒絕既有輸出與錯誤字面值、preflight）、模擬 session 7 種（完整、停止、未完、順序錯、沒有 T2-9、同一情境受干擾 2 次、累計 6 次），全部如預期。第一次乾跑有 1 列失敗：乾跑自己的合成數據（「rank 進位」那一列的數字設計錯，對應的突變因此沒被抓到）；改正合成數據後全部通過，第一次的輸出保留在 `dryrun-first/`。
 
 核准時請引用這三個字面值：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`。核准後不放寬（AGENTS.md §14.1）；session 期間我不呼叫工具。
+
+## 14. L2 結果（2026-10-20，D141）
+
+Session `build/target/_build/test/logs/pvp-v71-tt2-l2-20261020/`（`judge_tt2.py` 的輸出 `judgement.json`、`judgement.md`）：**48／48 完成、0 停止、0 受干擾、完整性問題 0，`passed`＝true。**
+
+| 判定 | 結果 |
+|---|---|
+| T2-1、R1 等每項條件 | 48 項全部成立（每個移動紀錄的 `trace_end` 都在最後、`events` 和事件行數相同） |
+| T2-3 `host_lock_input_wait` P99 | 13 個單位全部成立；兩棵樹的中位數都在 1～52 µs（被各自的最大值限住，沒有一筆 ≥250 µs） |
+| T2-4 `host_lock_step_wait` P99 | 13 個單位全部成立（中位數 0～19 µs） |
+| T2-5 移動「產生→Actual」P95／P50 | 5 個情境全部成立；A−B 在 −0.14～+0.22 ms（門檻 1 ms） |
+| T2-9 每筆生產者成本 | P99 27.6 µs × 8 = 0.22 ms ≤ 1 ms，紀錄沒有遺失 |
+
+只記錄：
+
+- T2-8 送出 P95：四個情境 A−B 都是 +0.04 ms 左右（+0.038～+0.044），在預測的 0.05 ms 內，沒有推翻；但四個情境方向一致，Client 端的產生→送出確實變慢了約 40 µs。
+- T2-6：鎖等待 ≥250 µs 的筆數兩棵樹都是 0（預測成立）；Tick 晚醒 P99 兩棵樹都在 146～250 µs。**Match 程序的 CPU 時間 A 比 B 多約 25～35%**（每 10 秒的視窗：clean-60 0.218→0.270 s、soak 0.713→0.968 s、quad 0.280→0.341 s）。推論是寫檔執行緒的喚醒：B 每 20 ms 醒一次，A 在每批事件的第一筆就被叫醒（Match 每 Tick 至少一批），加上生產者上的組行。量不大（單核約 2.7%→3.4%），但主平台的 Match 在 Linux，之後若在意，可以在 `observability-tools` 或 `re-evaluate` 量 Linux 上的數字。
+- T2-7 合法射擊 P95（Match 端／Client 端）：兩棵樹的範圍相同（clean-30 的 Client 端兩棵樹都有 66～67 ms 的跑次）；D46⑦，不比較。
+- 結論：寫檔沒有進熱路徑到能被量到的程度；`tt2-trace` 的 L2 通過。README 的這一批沒有 L3。
 

@@ -41,7 +41,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── a1-shot-step ✓                「high（局部 xhigh）｜★A1：射擊照命令步判定，FireGate 退役」
 │   └── pv7-merge ✓                   「low｜四平台 L1 後合併，同步文件」
 ├── after-pv7
-│   ├── tt2-trace ▶                   「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」
+│   ├── tt2-trace ✓                   「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」
 │   ├── log-contract ⏸                「ultracode（先問）＋high｜日誌 Data Contract（含原第 10 批、D58）」
 │   ├── dead-letter-position          「medium｜P6：確認 D57」
 │   ├── d44-regression-pv7 ◆          「medium（分析 high）｜丟棄回報上線後的 D44 回歸」
