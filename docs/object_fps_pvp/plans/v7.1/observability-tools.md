@@ -1,6 +1,6 @@
 # observability-tools：觀測工具（計畫，第 1 版）
 
-- 狀態：**計畫第 1 版。照 D148（「沒有問題就照建議走」）先做只動驗收工具的部分（OT-2～OT-5）；要你決定的事在第 5 節。**
+- 狀態：**OT-2～OT-5 實作完成（分支 `claude/pvp-v71-observability-tools`，尚未併回）；OT-1 與注入正式模式等你決定（第 5、7 節）。**
 - 依據：README 的 `observability-tools` 列（「相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式」；驗收「工具的單元測試、新舊各分析一次／—／—」；估 10～13 h）、INVENTORY 的 E1-3、`N-late-count-detector-increment`、`N-d44-network-detector-narrow`、E4、`N-injection-official-mode`，以及也指向本批、但 README 那一列沒寫的 E1-6、`N-trace-overwrite-on-restart`。
 - 檔位：high（實作與單元測試）；新舊分析 medium。
 - file:line 以 `df04ea3` 為準。
@@ -50,3 +50,52 @@ observability-tools
 - **OT-0a E1-3 的格式**：(a) commands.jsonl 加新 kind、升 schema 3，所有讀 `*-commands.jsonl` 的凍結讀者要重新凍結，也要檢查 `log-contract.zh-Hant.md` Replacement Criteria 第 3 條；(b) 另開一個 JSONL 檔（`{schema, version}`，既有讀者不受影響；建議）；(c) A 級日誌行（R4 說低頻事件應寫成日誌行，但每秒可能有數筆、要帶 `time_ns` 才能和 trace 對齊）。
 - **OT-0b 兩個未列在 README 的項目**：E1-6（TimerBaseline 只在 probe 連線前量一次 3 秒，改的是驗收用 C++）與 `N-trace-overwrite-on-restart`（重新啟動 Match 會覆寫前一段的 trace，改的是產品的檔名規則，屬日誌 Data Contract）。建議 E1-6 納入本批（OT-6，約 1.5 h），`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`（L2 的 runner 每次都開新目錄，不受影響；只影響 LAN 手動測試）。
 - **OT-0c 新的凍結清單從哪一次 L2 生效**：建議從 `d44-regression-pv7` 結案之後的第一個 L2 開始。
+
+## 6. 實作（2026-10-21，D148：照建議走）
+
+程式在分支 `claude/pvp-v71-observability-tools`（worktree `../GYO-Engine-obs`，`cbdc2b9`），還沒有併回 after-pv7 線；要等 `d44-regression-pv7` 結案（第 1 節第 1 點）。四平台 L1：run 39470556006（#503），結果見 HANDOFF。
+
+### OT-2 late-count-increment
+
+- `build/acceptance/object_fps_pvp/late_count.py`（新）：兩個來源各算一次，必須相等。
+  - start_phase：每段 (player, epoch, life) 最後計數的加總。
+  - action-frames：D48 P 式的增量；計數掉下來代表重設，從 0 重新算。
+  - 工具失效（不給數字）的情況：`dropped_observations>0`、frames 的 `evidence_end.lost>0`、兩個來源不相等。
+  - 舊的「取最大值」讀法不提供。
+- 單元測試 `test_late_count.py`，7 項：重設、兩來源一致、不一致、dropped、lost、單一來源、缺計數器。
+- 開發時發現 action-frames 的最後一行是 `evidence_end`（帶 `lost`），已處理，並把它的 `lost` 納入工具失效。
+
+### OT-3 network-reset-detector
+
+- `network_resets.py`（新）：掃整場 Match trace 的非 respawn 重設，以「每個探針階段 1 次 epoch 2 的 starvation」為預期，其他的列為候選事件。
+  - 候選的種類：其他原因、別的 epoch、同一玩家第二次、超過階段數的 starvation。
+  - 工具失效：trace 缺漏、沒有單一的結尾、`dropped>0`、預期的重設少於階段數。
+- 單元測試 `test_network_resets.py`，4 項。
+- 限制：唯一已知的 v7 網路 E3 實例（第 08 批 dev-network，`census.txt:9`）在 `run_network.py` 開始寫 Match trace 之前，沒有 trace 可讀。所以新偵測器的檢出力只由合成樣本支撐，沒有真實的陽性樣本。
+
+### OT-4 loss-seed（一半）
+
+- 遺失亂數的種子改成參數：`impaired_network.py`（`flow_generators`、`DEFAULT_LOSS_SEED`）、`action_probe.py`（`network_generator`）、`run_gameplay.py` 與 `run_network.py` 的 `--loss-seed`。
+  - 預設值重現原本的常數：`0x47594F＋2i`／`0x475950＋2i`，以及 `0x47594F＋i`。
+  - 種子寫進 evidence：`network-rtt-*.json` 的 `loss_seed`、`relay.json` 的 `network.loss_seed`。
+- 單元測試 `test_loss_seed.py`：預設值和舊常數的丟包位置相同；換種子後丟包位置不同；種子進 evidence。
+- `run_short_stall.py`、`run_client_delay.py` 的 `FROZEN`（D50 條件 3，替換模組屬性前核對的雜湊）已更新為新的 `action_probe.py`、`impaired_network.py` 雜湊。這不是改判定：釘住的強度不變，只是釘到新檔案。
+- `ActionRelay` 照舊用三個參數呼叫基底類別，種子在之後設定。原因是兩支延遲 runner 的測試替換了基底類別的建構子（第一次改成四個參數時，它們的測試全部失敗）。
+- 實跑（用主 checkout 的執行檔、本分支的 runner）：
+  - `run_gameplay.py --case network20`（預設種子 4675919＝0x47594F）通過，隨機丟包 58 個。
+  - `run_network.py --network-impairments --loss-seed 12345` 三個階段都通過，每個階段隨機丟包 70 個。三個階段用同一個基底種子，所以丟包數相同；舊常數下也一樣（第 16 批 D45 檢查 2：三個階段都是 77 個）。
+- 驗收工具的全部 `test_*.py` 都通過；`mutations.json` 指向這些檔案的 2 個錨點仍在。
+- **沒做的另一半：Gateway→Match 延遲注入的正式模式**。它要把 `run_short_stall.py` 的「替換 `IpcPause`」改成凍結工具裡的正式 case，等於改掉 D50 條件 3 的機制本身，是設計變更，留給你決定（第 7 節 OT-0d）。
+
+### OT-5 old-new-analysis（d44 第 1 次 session 的證據）
+
+| 項目 | 舊工具 | 新工具 | 結果 |
+|---|---|---|---|
+| late 修正（103 個有 action-frames 的目錄） | `judge_c2.late_corrections`：121 | `late_count`：start_phase 121、frames 121 | 每個目錄都相等，工具失效 0 |
+| 網路重設（network-r1～r7，開發跑次 network-r1、network-impaired-r1） | E3：0；`record_flags`：0 | 預期重設數都等於階段數（1、1、4），候選 0 | 一致 |
+| 遺失種子 | 固定常數 | 預設值 | 丟包位置相同（單元測試） |
+
+## 7. 等你決定（第 5 節之外，實作時新增）
+
+- **OT-0d 注入的正式模式**：(a) 把 `IpcDelay` 搬進 `backpressure_probe.py`，在 `action_probe.run_case` 加一個 `host-ipc-delay` case，`run_short_stall.py` 改呼叫它，不再替換模組屬性（D50 條件 3 就不再需要）；(b) 維持現狀（runner 替換＋雜湊釘住），等短停頓真的要升為計數母體時再做。建議 (b)：D146 DR-4 把短停頓設為只記錄，現在沒有常設回歸要用它。
+- **OT-0e 階段之間用不同種子**：要不要讓 impairments 的三個 RTT 階段用不同的種子（例如基底＋階段序號），目前三個階段的丟包位置相同。改了會讓預設行為不同於舊跑次，所以這次沒做。

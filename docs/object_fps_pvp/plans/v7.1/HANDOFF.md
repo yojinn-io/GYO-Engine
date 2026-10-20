@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 停在第 117 項（工具失效，環境），等你決定怎麼續；`observability-tools` 照 D148 進行中（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 停在第 117 項（工具失效，環境），等你決定怎麼續；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,8 +37,10 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`d44-regression-pv7` 的 session 怎麼續（[d44-regression-pv7.md](d44-regression-pv7.md) 第 11 節 DS-1～DS-4，建議 DS-1）。停下之前 116 項、151 個 case-run 都是 0 事件。
-- **進行中**：`observability-tools`（D148：照建議走；先寫計畫）。`incident-close` 依賴 `d44-regression-pv7`，等它結案。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+- **等你決定**：
+  1. `d44-regression-pv7` 的 session 怎麼續（[d44-regression-pv7.md](d44-regression-pv7.md) 第 11 節 DS-1～DS-4，建議 DS-1）。停下之前 116 項、151 個 case-run 都是 0 事件。
+  2. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
+- **進行中**：`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`，worktree `../GYO-Engine-obs`）的四平台 L1（run 39470556006，#503）。這個分支要等 `d44-regression-pv7` 結案後才併回 after-pv7 線，因為它改了 d44 session 凍結的工具。`incident-close` 依賴 `d44-regression-pv7`，也在等。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
 - **下一步**：你決定 DS 之後續跑 `d44-regression-pv7`；`re-evaluate` 由你看（D148）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -563,6 +565,8 @@
 - 2026-10-21：`d44-regression-pv7` 的 L2 工具（D146；`logs/pvp-v71-d44-l2-prep-20261021/`）：`run_d44.py`、`judge_d44.py`（事件偵測沿用第 16 批的 `judge_16.py`／`judge_c2.py`，Cooldown 的解釋沿用 A1 的 A1-1）、`dryrun.py`。Gateway 在 `cf40497` 重建（原本是 `70ad10d` 的建置，不是 `572cc39` 的後代）。開發跑次 9 項沒有停止；x1 的窗內重設是 starvation 4＋backlog 1、窗外 0。乾跑 32／32 符合、突變 10／10 killed（第一次跑有 3 個乾跑工具自己的錯：開發跑次的 stdout 路徑、窗內樣本的時刻、impairments 樣本沒有失敗；另換掉 1 個沒有意義的突變）。宣告第 1 版寫在第 8 節，宣告點 4 個（Cooldown 改成「無法解釋」、逐出與限速拒絕只記錄、受干擾只記錄、沒有整合判定）。
 - 2026-10-21：`d44-regression-pv7` 宣告第 1 版的 D45 檢查（1 位 xhigh）：MUST-FIX 3（停止條件 4 對 D44 自己造成的 Cooldown 永遠不觸發；沒有 trace 完整性檢查，E1 與停止條件 3 可能是空檢查；停止條件 2 放寬卻少了 A1 的配套 C9）、SHOULD-FIX 6、NOTE。第 2 版：停止條件 2、4 回到「任何 Cooldown」、加 T1、窗內超出與 clean 的逐出／限速拒絕列為使用者旗標、核對 c2-after 模組、v7 基準改讀第 16 批 session 與 08c、長測逾時 1808＋900 秒、機器更正為 Intel x86_64。長測開發跑次 P（1968 秒）。乾跑 44／44、mock session 5／5、突變 18／18。產物清單寫入，preflight 通過。對應表在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 9 節。
 - 2026-10-21：`d44-regression-pv7` 的 session 第 1 次（D147；01:34～02:41 JST）停在第 117／197 項 `ramp-r7`：停止條件 1，`run_client_delay.py` 的注入純度檢查不成立（relay 送出延遲 P99 22.3 ms，上限 10 ms；其他 47 次延遲跑次是 2.7～3.6 ms；前後睡眠探測正常）。切分為環境。前 116 項 0 事件、使用者旗標 0。照宣告不重跑；選項在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 11 節。
+- 2026-10-21：`observability-tools` 開始（D148）。盤點：late 計數在 v7.1 的判定上已經是增量（d44 證據 121＝121）；相位決策寫進 trace 會改 Data Contract（新 kind 要升版、凍結讀者會停），所以留給使用者決定格式；工具改動會碰 d44 session 凍結的檔案，所以放在另一個 worktree 分支。計畫：[observability-tools.md](observability-tools.md)。
+- 2026-10-21：`observability-tools` 的 OT-2～OT-5（[observability-tools.md](observability-tools.md) 第 6 節）：`late_count.py`、`network_resets.py`、遺失種子參數化（預設值重現舊常數），延遲 runner 的 D50 雜湊釘住改到新檔案；單元測試 3 本；新舊分析在 d44 證據上一致（late 121＝121、網路候選 0）；實跑 network20 與 impairments（種子 12345）都通過。注入正式模式（OT-4 的另一半）是改 D50 機制的設計變更，沒做。過程中的錯：第一次讓 `ActionRelay` 用四個參數呼叫基底類別，延遲 runner 的測試全部失敗，改回三個參數；第一次讀 action-frames 時沒處理結尾的 `evidence_end` 行，frames 的計數讀成缺漏。
 
 ## 未結事項
 
