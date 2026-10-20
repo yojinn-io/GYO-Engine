@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：records 子批實作中（D143；詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：records 完成，只記錄 L2 的宣告等核准（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`log-contract` records 實作中；結束時出只記錄 L2 的宣告）。
-- **進行中**：無。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
+- **等你決定**：[log-contract](log-contract.md) 第 13 節，只記錄 L2 的宣告第 1 版（工具 `60af302b…`；quad clean-60 一輪＋Match 受控停頓 50 ms；8 個記錄項，沒有判定）。
+- **進行中**：四平台 L1（`71c9c76`，run 39428630663）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`log-contract` core 完成（契約文件、A 級釘住與凍結讀者守衛、clock sync 共用 golden、摘要下溢修正、coalesced 守恆式）；Gateway 斷線分類存成 patch，等 LC-10。
+- **最後更新**：2026-10-20，`log-contract` records 完成（E1-5 Tick 超過與停頓、E1-7 IPC lane、受擊與拒絕原因、Client 流失計數、role 的計時器後端、Match 的 end 行、Gateway 斷線分類）；只記錄 L2 的宣告等你核准。
 
 ## 閱讀入口
 
@@ -547,6 +547,7 @@
 - 2026-10-20：`log-contract` 開始（使用者：「開始 log-contract：照計畫用 ultracode 規劃，先出計畫交我核准。」）。範圍：README 的列、INVENTORY 指向它的項目（D-LOG、D58-1／3／4／5／8、E1、E1-2／5／7、TT2-B10、N-* 7 項；原寫 9 項是數錯，D142 之後更正），加上本文件記下的兩種 i/o timeout 字串、兩個 `coalesced_snapshots`、暫定的 clock sync 行族，以及 `tt2-trace` 留下的 `match-shots.jsonl`、`match-ingress.jsonl` 寫出（D139 T-1）。
 - 2026-10-20：`log-contract` 的 ultracode 規劃完成（盤點 2、方案 3、評審合成 1 用 high；對抗式檢查 1 用 xhigh；7 個 agent 約 42 分鐘）。評審以「讀者優先」方案為底稿，接上「觀測缺口優先」的紀錄與「最小契約」的停損門檻，合成約 19 h 的草案；對抗式檢查 MUST-FIX 7（間隔用晚醒的 bins 量不出停頓、沒有版本鍵的凍結讀者升版時會靜默讀錯、i/o timeout 的處置和「統一」相反、新增 Gateway 欄位要你同意、改斷線行會打斷既有測試與突變、「被解析的行一定有 golden」當天不成立、和 protocol-v7 §1 的日誌規則衝突）、SHOULD-FIX 10、NOTE 5，全部吸收進計畫第 1 版（[log-contract.md](log-contract.md) 第 10 節），估時改為兩個子批共約 23 h。順帶更正 `tt2-trace.md` 第 1 節的「1 秒」（實際是 10 秒的統計視窗）。
 - 2026-10-20：`log-contract` core 實作（D142；[log-contract.md](log-contract.md) 第 11 節）：摘要下溢（先 Red 後 Green）、clock sync 共用 golden 與 Client 行的 player、coalesced 守恆式、A 級釘住（18 族）與凍結讀者守衛、共用禁用片語清單、契約文件 `log-contract.zh-Hant.md`（取代 protocol-v7 §1 的日誌規則）、INVENTORY 9 項結案。CTest 74／74、突變 9 個 killed。發現：Gateway 斷線分類要新增套件變數與錯誤型別，依 Gateway 的 Design Invariants 是要你同意的 Architecture Delta，計畫沒列，所以存成 patch、不提交（LC-10）。偏差：直接寫出的行改用原始碼層的鍵序列釘住；ingress 沒有新增逐字 golden。
+- 2026-10-20：`log-contract` records 實作（D143；[log-contract.md](log-contract.md) 第 12 節）。全部切片完成，突變全部 killed，CTest 74／74。開發跑次抓到：`action_late` 的定義錯（閒置 lane 的第一筆被算成晚了數秒，改成從開始有待送內容起算）、守衛的測試恆真（generator 的真假判定）、core 的樣本 `*.log` 被 gitignore（core 的四平台 L1 run 39422895712 因此失敗，已改 `.txt`）。`end` 行的 `authority_tick` 常是小值（房間清空時 Match 重設），只記錄。
 
 ## 未結事項
 

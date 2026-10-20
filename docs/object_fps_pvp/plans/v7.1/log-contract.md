@@ -1,6 +1,6 @@
 # log-contract：日誌 Data Contract v1 與 README 指名的紀錄（計畫，第 1 版）
 
-- 狀態：計畫第 1 版已核准（D142）。core 子批完成（第 11 節）；D143（LC-10 (a)、LC-8 全部移出、LC-9 (a)）之後 records 子批實作中。
+- 狀態：計畫第 1 版已核准（D142）。core 子批完成（第 11 節）；D143 之後 records 子批完成（第 12 節）。**只記錄 L2 的宣告第 1 版等核准**（第 13 節）。
 - 依據：README 的 `log-contract` 列（「日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等）」；驗收「跨語言 golden、凍結分析器仍可讀／只記錄／—」；估 16 h）、INVENTORY 指向本批的項目、`plans/v7/HANDOFF.md:380-395`（原第 10 批與觀測缺口清單）、D58（`plans/v7/HANDOFF.md:103`）、`protocol-v7.zh-Hant.md` §1「日誌只加鍵」、`network-architecture.zh-Hant.md:295`（死信三原則 D57）、`tt2-trace.md`（D139 T-1 把 `match-shots.jsonl`、`match-ingress.jsonl` 留給本批）。
 - 規劃方法：ultracode（2026-10-20）。盤點 2 位（C++、Go 的行族與讀者）、方案 3 位（最小契約、讀者優先、觀測缺口優先）、評審合成 1 位，以上用 high；對抗式檢查 1 位用 xhigh：MUST-FIX 7、SHOULD-FIX 10、NOTE 5，全部的對應見第 10 節。各 agent 的完整輸出在本 session 的 workflow 紀錄。
 - 估時：**拆成兩個子批，共約 23 h**（README 原估 16 h，約 1.4 倍；原因見第 8 節）。每個子批各自以 1.5 倍停損；單一問題累計超過 2 h 就停下回報。
@@ -241,4 +241,40 @@ core 結束時（records 開始前）：
 | 週期性 IPC 寫出延遲（原第 10 批） | Gateway 每 10 秒的 `link_write_age_*`；是 Gateway 的新欄位，同樣要你同意（LC-10 的同一條規則） | 約 1 h | `observability-tools` |
 
 建議全部移到 `observability-tools`（README 原估 10～13 h，加上這些約 19～23 h，到時候再拆）。
+
+## 12. records 的實作紀錄（2026-10-20，D143 之後）
+
+| 切片 | 結果 | commit |
+|---|---|---|
+| `gateway_disconnect`（core 遺留，D143） | patch 套用；突變：既有 3 個同語意更新、新 2 個，全部 killed | `a98bceb` |
+| `tick_overrun`（E1-5，取時點局部 xhigh） | `TickPaceStatistics`：前後兩次取樣的間隔超過名目 Tick 的量（`tick_overrun_*`）、`tick_stalls`（>1.5 Tick）、`advance_*`；network 行尾追加。兩個注入點的測試都用既有方法：publish listener 停頓（`tick_late` 與 overrun 都反映）、醒來之後被 I/O 側持鎖（只有 overrun 反映：`tick_late` 約 0.1 ms、overrun 約 31 ms）。L1 只判結構性下界（FF-2）。突變 2 個 killed | `17eb1d1` |
+| `ipc_lane`（E1-7） | 新行族 `ipc statistics version=1`：snapshot 從排入到開始寫出的等待、action lane 的晚送；IpcHost 持有、自己的小鎖、match_main 在視窗邊界交換取走。突變 2 個 killed | `3646b21`、`a3a1e59` |
+| `client_records` | `LocalHitFeedback::Observe` 回傳判斷結果，Client 寫 `PvP hit feedback version=1`；摘要行尾依原因的拒絕數（`ShotRejectionName` 移到 `Combat.hpp`）；worker 自己的視窗流失計數。突變：既有受擊 5 個與新 2 個 killed | `7477ce4` |
+| `role_started`、`match_end` | Engine `RoleThread::WaitBackend()`；四條 role 的 `role started version=1`；Match 最後一行 `end version=1`；Client 的 Gateway 指定元另寫一行；shots 檔關檔檢查。突變：Engine 1、產品 1 killed | `5692286` |
+
+開發跑次（`build/target/_build/test/logs/pvp-v71-log-contract-l2-prep-20261020/dev/`，第 13 節的工具）發現並修正的問題：
+
+- **`action_late` 的定義錯**：第 2 次跑次 action lane 的晚送最大 5.2 秒——閒置很久的 lane 保留上次送出的錨點，下一筆可以立刻送，從「到期」起算會把它算成晚。改成從「到期」與「這條 I/O 執行緒第一次看到它有待送內容」兩者較晚的時刻起算（`ActionLane::pendingSince`）；第 3 次最大 0.17 ms。
+- **守衛的測試是恆真的**：`test_log_contract.py` 對 `command_evidence.read_trace_events` 的結果（generator）做真假判定。改成數筆數之後，原本的合成樣本過不了讀者的界限檢查，改用真實移動紀錄的前 200 筆。另把 match／gateway／probe 的樣本換成 `ingress_cross` 的真實跑次（含本批的新鍵），凍結讀者照樣讀得到。
+- **樣本沒有進 repo**：`*.log` 被 `.gitignore` 排除，core 的四平台 L1（run 39422895712）全部在 `log_contract` 失敗；改成 `.txt`（`70ad10d`）。
+- 工具的錯（第 1 次）：`pgrep` 同時比對到 runner 的命令列，停住的是 runner 不是 Match；改成錨定在命令列開頭。
+
+本機：CTest `cpu|shader` 74／74、Go 全部通過、`test_run_mutations.py` 通過。
+
+## 13. 只記錄的 L2 宣告（第 1 版，等核准）
+
+沒有門檻、沒有通過或失敗的判定（所以不做 D45 的門檻來源檢查）；結果意外時交你決定，不在本批內修正後重跑（§14.1）。
+
+- 工具：`build/target/_build/test/logs/pvp-v71-log-contract-l2-prep-20261020/run_lc_l2.py`（SHA-256 `60af302b…`）。輸出目錄：`build/target/_build/test/logs/pvp-v71-log-contract-l2-<日期>/`（不存在才執行）。
+- 跑法：主 checkout 的建置，`run_quad.py --case clean-60 --rounds 1`（一個 probe 程序裡 4 個 Client）。Match 程序出現後 8 秒，對它 SIGSTOP、50 ms 後 SIGCONT（受控停頓）。clean 情境的 runner 判定可能因停頓而不成立（backlog 規則；開發跑次 2 不成立、3 成立），只記錄。只在本機 macOS 跑一次；Windows／Linux 的實機值留給 `lan15-windows` 與 `d44-regression-pv7`。
+- 記錄項：
+  1. 三份凍結清單（cp、rl、d117）與 `build/acceptance` 的逐檔核對。
+  2. 每個不同版本的凍結分析器讀新日誌：`ingress_evidence` 567198（cp、rl，與 repo 相同）與 95ec65（d117）的狀態、停止、未知鍵；`network_statistics` 的視窗數；`command_evidence` 的事件數；edge-rate-limit 的 `gateway_scan`。例外照記。
+  3. E1-5 的獨立來源對照：`tick_overrun_max_us`、`tick_stalls`、`tick_late_max_us`，對照 `match-commands.jsonl` 的 `snapshot_produced` 重算的間隔（最大、>1.5 Tick 的數目、停頓附近的間隔），以及「overrun＋1 Tick−trace 間隔」。
+  4. `ipc statistics` 的每一行。
+  5. 同一 probe 程序裡的 Client 對時行能否依 player 分開（出現的 player 集合）。
+  6. `PvP hit feedback` 行數（probe 沒有產品 Client，預期 0；由 L3／LAN 涵蓋）、`role started` 的 wait backend。
+  7. shots 與 ingress 的 `trace_end`、Match 的 `end` 行。
+  8. `[log] dropped_lines`（runner 不給 Match `--log`，預期沒有）。
+- 開發跑次 3 的值（工具驗證用，不是判定）：停頓後 `tick_overrun_max_us`＝50787、`tick_stalls`＝1、`tick_late_max_us`＝50801，trace 重算的間隔 67459 µs，差 −5.4 µs；對時行 player 1～4 都分得出；`ingress_evidence` 567198 passed、95ec65 failed（未知鍵：edge 系列加鍵之前的舊版，本批之前就讀不了 pv7-line 的日誌，只記錄）；`end` 行 `reason=signal exit_code=0`，`authority_tick=2`（房間清空時 Match 重設 Tick）。
 
