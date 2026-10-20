@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[tt2-trace](tt2-trace.md) 第 11.7 節：L2-1（README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定，AGENTS §14.4）、L2-2（生產者成本：單一生產者連續呼叫時約為原本的 10 倍，照實際節奏的多生產者量測反而比原本快，兩者都在 1 ms 預算內；接受或改成在寫檔執行緒組行）。決定後才做 L2 工具、開發跑次與乾跑。
+- **等你決定**：無（`tt2-trace` 的 L2 工具製作中，D140；完成後出宣告第 3 版等你核准）。
 - **進行中**：`tt2-trace` 實作、xhigh 審查的修正、本機 L1 完成；四平台 L1 在 `d30da3f` 重跑中（run 39285479124；`cd41c70` 那一輪 Windows 的 Trace 測試因換行失敗，已修）。L2 宣告第 2 版等你決定（PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)，draft）。
 - **下一步**：計畫核准後實作 `tt2-trace`（Engine 的 `GYO::Trace`＋產品寫檔改接，位元組不變），再出 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -109,6 +109,7 @@
 | D137 | （2026-10-19）核准 `a1-shot-step` 的計畫第 2 版（[a1-shot-step.md](a1-shot-step.md)）：權威 digest 的 `combat-magazine/corridor` 預期差異與該筆 golden 重產（舊檔保留）、其餘 34 個情境與 29 個 golden 0 差異為停止條件；`PvpMatch` 的建構子加 `CombatRules` 參數（預設 `PvpCombatRules`，既有介面擴充）。開始實作 | 使用者：「核准 a1-shot-step 計畫第 2 版：combat-magazine 的預期差異與 golden 重產、PvpMatch 加 CombatRules 參數都同意。開始實作。」 |
 | D138 | （2026-10-19）核准 `a1-shot-step` 的 L2 事前宣告第 3 版（[a1-shot-step.md](a1-shot-step.md) 第 11 節的雜湊：driver `dbd7e999…`、judge `f967e651…`、artifacts `034a16ee…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 a1-shot-step 的 L2 宣告第 3 版（第 11 節的雜湊），現在跑 session。」 |
 | D139 | （2026-10-20）核准 `tt2-trace` 計畫第 1 版（[tt2-trace.md](tt2-trace.md)），第 8 節照建議：T-1 選 (a)（本批改接移動紀錄與 `LogFile`，位元組不變；`match-shots.jsonl`、`match-ingress.jsonl` 留給 `log-contract`）；T-2 照 Engine 計畫（生產者預先序列化）；T-3 由斷言與 terminate 處理先 `FlushNow()`，被訊號殺掉時遺失最後一批；T-4 同意 1 位 xhigh 審查 agent 檢查公開介面與關閉順序。開始實作 | 使用者：「核准 tt2-trace 計畫第 1 版，第 8 節照建議：T-1 選 (a)、T-2 照 Engine 計畫、T-3 由斷言與 terminate 處理先 FlushNow、T-4 同意 1 位 xhigh 審查。開始實作。」 |
+| D140 | （2026-10-20）核准 `tt2-trace` 的 L2 宣告第 2 版（[tt2-trace.md](tt2-trace.md) 第 11 節）：L2-1 選 (a)，README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定（T2-1、T2-3／4 粗閘門、T2-5、T2-9；其餘只記錄），README 同步改寫；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版 | 使用者：「核准 tt2-trace 的 L2 宣告第 2 版：L2-1 選 (a)，把 README 的射擊 P99 換成第 11 節的判定；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版。」 |
 
 ## 規劃紀錄（記錄器）
 

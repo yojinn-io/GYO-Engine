@@ -101,7 +101,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 
 | 代號 | 範圍 | 驗收（L1／L2／L3） | 工時 | 備註 |
 |---|---|---|---|---|
-| tt2-trace | Engine 的 `GYO::Trace`：有上限的紀錄 sink、通知喚醒的背景寫檔、Base 的日誌 facade（[Engine 計畫](../../../architecture/plans/time-threads-trace/README.md) TT-2） | Engine 測試、突變、digest 不變／寫檔不進熱路徑（射擊 P99 增量 ≤1 ms，宣告前做 D45 檢查）／— | 10 | Engine 子系統和第一個消費端（`log-contract`）同一個 PR |
+| tt2-trace | Engine 的 `GYO::Trace`：有上限的紀錄 sink、通知喚醒的背景寫檔、Base 的日誌 facade（[Engine 計畫](../../../architecture/plans/time-threads-trace/README.md) TT-2） | Engine 測試、突變、digest 不變／寫檔不進熱路徑：每筆紀錄的生產者成本 P99 × 每 Tick 最多 8 筆 ≤1 ms、host 鎖等待的粗閘門、移動延遲不退步（D140；原本的「射擊 P99 增量 ≤1 ms」跨建置不能比較，見 [tt2-trace](tt2-trace.md) 第 11 節）／— | 10 | Engine 子系統和第一個消費端（`log-contract`）同一個 PR |
 | log-contract | 日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等） | 跨語言 golden、凍結分析器仍可讀／只記錄／— | 16 | 紙上 6 h＋實作 10 h。日誌格式是 Data Contract |
 | dead-letter-position | 確認 D57 是否仍成立：ingress 日誌和丟棄回報維持兩份契約、對齊同一套原則，或合成一份 | 只改文件／—／使用者決定 | 2 | |
 | d44-regression-pv7 | pv7 上線後的 D44 回歸，範圍涵蓋丟棄回報、三個 edge 行為批與 A1；加入持續延遲（x1、ramp）的樣本 | —／事前宣告＋D45 檢查／— | 10～14 | 事故後遺症 |

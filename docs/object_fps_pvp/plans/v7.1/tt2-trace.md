@@ -128,7 +128,7 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
 - xhigh 審查（T-4，1 位）：沒有 MUST-FIX；SHOULD 6 項、NIT 6 項，處理與未處理的項目記在 Engine 的 [TT HANDOFF](../../../architecture/plans/time-threads-trace/HANDOFF.md)「TT-2 紀錄」。和產品有關的處理：測試的 UB（被 Tee 的 stream 宣告順序）；`LogFile` 每行 flush（`flushEachLine`，多個 Client 同時啟動、寫到同名日誌檔時不切開一行，和舊版相同）；移動紀錄改用 `std::string`＋`%.17g` 組行（不在生產者上建 stream，MSVC 會取全域鎖）；當機路徑、丟棄行、`Finish` 之後才到的事件補測試。修正後產品突變 7／7（新增 `tt2-log-crash-no-flush`、`tt2-log-handler-not-restored`、`tt2-log-drops-unreported`、`tt2-movement-late-uncounted`）、Engine 突變 6／6（新增 `tt2-timer-wake`）、CTest `cpu|shader` 73／73。
 
-## 11. L2 事前宣告（第 2 版，等你決定 11.7）
+## 11. L2 事前宣告（第 2 版，D140 核准；第 3 版製作中）
 
 第 1 版草稿經 D45 的門檻來源對抗式檢查（1 位 xhigh，2026-10-20）：MUST-FIX 5、SHOULD-FIX 4；對應見第 12 節。本版只改宣告內容；工具、開發跑次與乾跑在 11.6 決定之後做，雜湊在第 3 版寫入。
 
