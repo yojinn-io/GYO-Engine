@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[tt2-trace](tt2-trace.md) 的 L2 事前宣告第 3 版（第 11、13 節；driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`）。核准後跑 session（約 45 分鐘，session 期間不呼叫工具）。
-- **進行中**：`tt2-trace` 的 L2 準備完成（兩棵樹乾淨重建、工具、開發跑次 16 項全 P、乾跑全部如預期）；等核准宣告第 3 版。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft；四平台 L1 在 `d30da3f` 通過，run 39285479124）。
+- **等你決定**：無（`tt2-trace` 的 L2 session 進行中，D141）。
+- **進行中**：`tt2-trace` 的 L2 session（D141；`build/target/_build/test/logs/pvp-v71-tt2-l2-20261020/`，約 45 分鐘）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
 - **下一步**：計畫核准後實作 `tt2-trace`（Engine 的 `GYO::Trace`＋產品寫檔改接，位元組不變），再出 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`tt2-trace` 的 L2 宣告第 3 版（工具與雜湊）完成，等你核准。
@@ -110,6 +110,7 @@
 | D138 | （2026-10-19）核准 `a1-shot-step` 的 L2 事前宣告第 3 版（[a1-shot-step.md](a1-shot-step.md) 第 11 節的雜湊：driver `dbd7e999…`、judge `f967e651…`、artifacts `034a16ee…`），立即跑 session。跑前確認 Chrome 沒有在跑、暫停 PR #78 的 Auto-fix | 使用者：「核准 a1-shot-step 的 L2 宣告第 3 版（第 11 節的雜湊），現在跑 session。」 |
 | D139 | （2026-10-20）核准 `tt2-trace` 計畫第 1 版（[tt2-trace.md](tt2-trace.md)），第 8 節照建議：T-1 選 (a)（本批改接移動紀錄與 `LogFile`，位元組不變；`match-shots.jsonl`、`match-ingress.jsonl` 留給 `log-contract`）；T-2 照 Engine 計畫（生產者預先序列化）；T-3 由斷言與 terminate 處理先 `FlushNow()`，被訊號殺掉時遺失最後一批；T-4 同意 1 位 xhigh 審查 agent 檢查公開介面與關閉順序。開始實作 | 使用者：「核准 tt2-trace 計畫第 1 版，第 8 節照建議：T-1 選 (a)、T-2 照 Engine 計畫、T-3 由斷言與 terminate 處理先 FlushNow、T-4 同意 1 位 xhigh 審查。開始實作。」 |
 | D140 | （2026-10-20）核准 `tt2-trace` 的 L2 宣告第 2 版（[tt2-trace.md](tt2-trace.md) 第 11 節）：L2-1 選 (a)，README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定（T2-1、T2-3／4 粗閘門、T2-5、T2-9；其餘只記錄），README 同步改寫；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版 | 使用者：「核准 tt2-trace 的 L2 宣告第 2 版：L2-1 選 (a)，把 README 的射擊 P99 換成第 11 節的判定；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版。」 |
+| D141 | （2026-10-20）核准 `tt2-trace` 的 L2 事前宣告第 3 版（[tt2-trace.md](tt2-trace.md) 第 11、13 節：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`），立即跑 session | 使用者：「核准 tt2-trace 的 L2 宣告第 3 版（driver 00c8c13e…、judge 40aee8b1…、artifacts d5377b35…），現在跑 session。」 |
 
 ## 規劃紀錄（記錄器）
 
