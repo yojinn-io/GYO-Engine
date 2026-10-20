@@ -1,6 +1,6 @@
 # dead-letter-position：確認 D57（計畫，第 1 版）
 
-- 狀態：**D145 選 (a+)，實作完成，等四平台 L1**（第 5 節）。
+- 狀態：**結案**（D145 選 (a+)；四平台 L1 通過，run 39441359248；第 5 節）。
 - 依據：README 的 `dead-letter-position` 列（「確認 D57 是否仍成立：ingress 日誌和丟棄回報維持兩份契約、對齊同一套原則，或合成一份」；只改文件；估 2 h）、INVENTORY P6、`plans/v7/HANDOFF.md` D57（:102）、D73⑤（:118）、「死信隊列」評估 7～9（:492-494）、`network-architecture.zh-Hant.md:297`（死信原則）、`protocol-v7.zh-Hant.md` §4、`log-contract.zh-Hant.md` 第 5 節。
 - 檔位：medium（只讀與文件）。選 4 的 (a+) 時多一個小測試（high，約 0.5 h）。
 - file:line 以 `fdb94a4` 為準。
@@ -48,4 +48,10 @@ D57（2026-10-11）把死信定位成**設計原則**：每個出口只有「執
 - 程式：`drop_report_golden_test.go` 的 `TestDropReasonsMatchTheGoldenAndTheKeys` 雙向檢查（宣告的計數器確實是沒有 `DropReason` 的丟棄；每個沒有 `DropReason` 的 `drop_` 計數器都有宣告類別）。原本只檢查只寫日誌的 10 個計數器沒有 `DropReason`，改寫後這個檢查保留，範圍擴大到三類。
 - 突變 `dlp-unclassified-drop-exit`（批次 `v71-dead-letter-position`，`go` 檢查）：把轉送的 `fwd_stale_sequence_input_packets` 改成丟棄（新出口沒有 `DropReason` 也沒有宣告）→ killed。
 - 文件：`log-contract.zh-Hant.md` 第 5.1 節（對應表，五類）；`protocol-v7.zh-Hant.md` §4 的「不上 wire」段落連到該表；`network-architecture.zh-Hant.md` 的 D57 段落加 v7.1 的補充；INVENTORY P6 已解決。
-- 驗證（本機）：`go test ./...`（gateway）通過；突變 1／1 killed；`test_run_mutations.py` 通過。四平台 L1 待跑。
+- 驗證（本機）：`go test ./...`（gateway）通過；突變 1／1 killed；`test_run_mutations.py` 通過。四平台 L1 通過（`572cc39`，run 39441359248）。
+- 判定變更的說明（AGENTS.md §14.4 的 1～5；這個測試不是 Design Invariants 的守衛，也不是驗收判定，照該節的精神事後報告）：
+  1. 守的性質：每個 `drop_` 計數器要嘛上 wire（有 `DropReason`），要嘛有宣告的理由不上 wire。
+  2. 放寬的面：無。舊判定失敗的情況（宣告只寫日誌的計數器帶了 `DropReason`）新判定仍失敗：手動讓 `drop_cleared_on_close_commands` 帶上原因，新判定報「declared unreported but is not an unreported drop」。沒有既有突變以這個測試的舊訊息為預期。
+  3. 收緊的面：沒有 `DropReason` 又沒有宣告的 `drop_` 計數器（新出口忘了分類）原本通過，現在失敗；宣告的計數器若不是丟棄鍵也失敗。舊判定用 `Fatalf` 停在第一個，新判定用 `Errorf` 列出全部。
+  4. 不適用（沒有放寬）。
+  5. 根據與證據：本節前面的 12 個計數器與 `removed_paths` 的對照；突變 `dlp-unclassified-drop-exit`。

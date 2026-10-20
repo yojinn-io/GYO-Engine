@@ -43,8 +43,8 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 ├── after-pv7
 │   ├── tt2-trace ✓                   「high（flush 與關閉局部 xhigh）｜Engine Trace，日誌契約的前提」
 │   ├── log-contract ✓                「ultracode（先問）＋high｜日誌 Data Contract（含原第 10 批、D58）」
-│   ├── dead-letter-position ▶        「medium｜P6：確認 D57」
-│   ├── d44-regression-pv7 ◆          「medium（分析 high）｜丟棄回報上線後的 D44 回歸」
+│   ├── dead-letter-position ✓        「medium｜P6：確認 D57」
+│   ├── d44-regression-pv7 ▶◆         「medium（分析 high）｜丟棄回報上線後的 D44 回歸」
 │   ├── incident-close ◆              「medium｜事故紀錄結案」
 │   ├── observability-tools           「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
 │   └── re-evaluate ⏸                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
