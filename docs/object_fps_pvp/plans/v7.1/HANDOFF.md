@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `dead-letter-position` 結案；`d44-regression-pv7` 計畫撰寫中（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `d44-regression-pv7` 計畫第 1 版等你決定（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：`d44-regression-pv7` 的計畫第 1 版（只讀盤點中）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
-- **下一步**：`d44-regression-pv7` 計畫第 1 版交你核准。
+- **等你決定**：`d44-regression-pv7` 計畫第 1 版的 DR-1～DR-9（[d44-regression-pv7.md](d44-regression-pv7.md) 第 7 節）。
+- **進行中**：無（等你決定）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+- **下一步**：核准後做工具（`run_d44.py`／`judge_d44.py`，由 A1 的 L2 工具改）、開發跑次與乾跑、宣告第 1 版＋D45 檢查。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -556,6 +556,7 @@
 - 2026-10-20：`dead-letter-position` 實作（D145；[dead-letter-position.md](dead-letter-position.md) 第 5 節）。反方向的 Go 守衛第一次執行就失敗：12 個沒有 `DropReason` 的 `drop_` 計數器不是只寫日誌，而是 pv7 刪除的路徑（11 個，恆為 0，依日誌 R1 保留鍵）與已回報丟棄的另一個單位（1 個）。計畫第 2 節把「沒有 `DropReason`」都當成「只寫日誌」，少看了這兩類；守衛改成三類宣告，對應表也列五類。突變 `dlp-unclassified-drop-exit` killed。
 - 2026-10-21：`dead-letter-position` 的四平台 L1 通過（`572cc39`，run 39441359248）。**`dead-letter-position` 結案**。依 AGENTS.md §14.4（新版）補記判定變更的 1～5（[dead-letter-position.md](dead-letter-position.md) 第 5 節）：只收緊，舊判定的失敗例手動確認新判定仍失敗。
 - 2026-10-21：`d44-regression-pv7` 開始（使用者：「開始」）。先寫計畫（只讀盤點）。
+- 2026-10-21：`d44-regression-pv7` 計畫第 1 版（[d44-regression-pv7.md](d44-regression-pv7.md)）。盤點：A1 的 L2 工具已用 `judge_16b` 把第 16 批的 E1～E3 接到 pv7 跑次上，`run_client_delay.py` 在 cp 凍結清單內（雜湊相同），所以不用新寫偵測器。A1 之後還有 13 個 commit，目前的建置沒有被 D44 型 L2 量過。建議：單樹＋第 16 批普查基準，母體照第 16 批 D 部分加 x1、ramp 各 15 次（session 約 3.3 h），短停頓只記錄；合計約 13 h。
 
 ## 未結事項
 
