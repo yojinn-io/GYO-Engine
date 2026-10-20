@@ -15,8 +15,8 @@
 
 | 行族 | 寫出端 | 錨點 | 版本 | 釘住 | 讀者（凍結的標 ※） |
 |---|---|---|---|---|---|
-| Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine` | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
-| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine` | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
+| Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine`（2026-10-20 起行尾有 `tick_overrun_*`、`tick_stalls`、`advance_*`，E1-5） | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
+| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
 | Match ingress statistics | `IngressStatistics.hpp` | `[ObjectFPS/PvP Match] ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/match.txt` | `ingress_evidence.py`※、08c 的判定工具 |
 | Gateway player／gateway ingress statistics | `ingress_statistics.go` | `player ingress statistics version=1 `、`gateway ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/gateway-*.txt` | `ingress_evidence.py`※、edge-rate-limit 的 `judge_l2.py` |
 | Gateway statistics | `server.go` | `gateway statistics players=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※（視窗配對） |
@@ -30,6 +30,10 @@
 | Match start／ready | `match_main.cpp` | `[ObjectFPS/PvP Match] start executable_sha256=`、`Object_FPS_PVP Match ready: ` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、各 runner 等待 ready |
 | Match ipc closed／hint／accept failed | `IpcHost.cpp` | `[ObjectFPS/PvP Match] ipc closed reason=`、`… ipc hint: `、`… ipc accept failed` | 隱含 1 | `IpcHostTests.cpp`＋`keys-v1.tsv` | `ingress_evidence.py`※、`run_quad.py`※、`run_action_short.py`※ |
 | Match join／evicted | `IpcHost.cpp` | `[ObjectFPS/PvP Match] join player=`、`… evicted player=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※ |
+| Match ipc statistics | `NetworkStatistics.cpp` `IpcStatisticsLine`（IpcHost 的 lane 計數，match_main 每個統計視窗與結束時寫） | `[ObjectFPS/PvP Match] ipc statistics version=1 ` | 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-20 新增，E1-7：snapshot 從排入到開始寫出的等待、action lane 比到期晚的送出） |
+| role started（Match 2 條、Client 2 條） | `NetworkStatistics.cpp` `RoleStartedLine`，由各 role 的 owner 在 Start 後寫 | `[ObjectFPS/PvP Match] role started version=1 `、`[ObjectFPS/PvP] role started version=1 ` | 1 | `NetworkStatisticsTests.cpp`＋`keys-v1.tsv` | `ingress_cross_check.py`（2026-10-20 新增：計時器後端） |
+| Match end | `match_main.cpp`（最後一行） | `[ObjectFPS/PvP Match] end version=1 ` | 1 | `keys-v1.tsv` | `ingress_cross_check.py`（被 Windows 的 TerminateProcess 結束時沒有這一行） |
+| Client hit feedback | `PvpApplication.cpp`（`LocalHitFeedback::Observe` 的結果） | `PvP hit feedback version=1 ` | 1 | `keys-v1.tsv`＋`HitFeedbackTests.cpp`（原因的判斷） | 目前沒有工具（2026-10-20 新增：每次受擊與不閃紅的原因 played／dead／new_life） |
 | clock sync（三端） | 本體 `ClockSync.hpp` `ClockWindowLine`、`clock_sync.go` `line()` | Match `[ObjectFPS/PvP Match] clock sync window_ms=`；Gateway runtime `clock sync window_ms=`；Gateway 每位 Client `client clock sync player=`；Client `[ObjectFPS/PvP] clock sync player=` | 隱含 1 | `fixtures/log_v1/clock-sync.tsv`（C++ 與 Go 讀同一份） | 目前沒有工具（2026-10-20 升 A 級：三端的對時是之後分析的輸入） |
 
 ### 1.2 A 級：JSONL 紀錄檔
@@ -44,7 +48,7 @@
 
 ### 1.3 B 級
 
-Client 的 `PvP summary`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
+Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
 
 ## 2. 版本與相容
 

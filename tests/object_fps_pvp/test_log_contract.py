@@ -127,9 +127,9 @@ class FrozenReaders(unittest.TestCase):
 
     def test_network_statistics_reads_every_window(self):
         s = self.statistics
-        for name, pattern, family in (('sample-match.log', s.MATCH, 'match_network_statistics'),
-                                      ('sample-gateway.log', s.GATEWAY, 'gateway_player_send_statistics'),
-                                      ('sample-probe.log', s.WORKER, 'client_worker_statistics')):
+        for name, pattern, family in (('sample-match.txt', s.MATCH, 'match_network_statistics'),
+                                      ('sample-gateway.txt', s.GATEWAY, 'gateway_player_send_statistics'),
+                                      ('sample-probe.txt', s.WORKER, 'client_worker_statistics')):
             rows = s.windows(self.text(name), pattern)
             self.assertTrue(rows, name)
             keys = next(r['keys'] for r in registry() if r['family'] == family)
@@ -137,7 +137,7 @@ class FrozenReaders(unittest.TestCase):
                 self.assertEqual(list(row)[:len(keys)], keys, name)
 
     def test_ingress_evidence_reads_without_a_contract_stop(self):
-        result = self.evidence.analyze_text(self.text('sample-gateway.log'), self.text('sample-match.log'),
+        result = self.evidence.analyze_text(self.text('sample-gateway.txt'), self.text('sample-match.txt'),
                                             self.text('sample-match-ingress.jsonl'))
         self.assertNotEqual(result.get('status'), 'stopped', result.get('stops'))
         self.assertTrue(result['passed'], {k: v.get('status') for k, v in result.get('checks', {}).items()})
@@ -157,23 +157,23 @@ class ReverseGuards(unittest.TestCase):
 
     def test_a_renamed_event_is_not_read_as_v1(self):
         # R2: a breaking change of a family without a version key takes a new event name, so v1 readers find nothing.
-        line = (FIXTURES / 'sample-match.log').read_text(encoding='utf-8').splitlines()
+        line = (FIXTURES / 'sample-match.txt').read_text(encoding='utf-8').splitlines()
         v2 = '\n'.join(x.replace('] network statistics ', '] network statistics.v2 ') for x in line)
         self.assertEqual(self.statistics.windows(v2, self.statistics.MATCH), [])
 
     def test_a_string_value_appended_to_a_worker_line_breaks_the_frozen_reader(self):
-        text = (FIXTURES / 'sample-probe.log').read_text(encoding='utf-8')
+        text = (FIXTURES / 'sample-probe.txt').read_text(encoding='utf-8')
         broken = text.replace('other_version_datagrams=0', 'other_version_datagrams=0 backend=kqueue', 1)
         self.assertNotEqual(broken, text)
         with self.assertRaises(ValueError):
             self.statistics.windows(broken, self.statistics.WORKER)
 
     def test_swapped_ingress_keys_stop_the_frozen_reader(self):
-        gateway = (FIXTURES / 'sample-gateway.log').read_text(encoding='utf-8')
+        gateway = (FIXTURES / 'sample-gateway.txt').read_text(encoding='utf-8')
         swapped = re.sub(r'(gateway ingress statistics version=1 window_ms=\d+ final=\d+ )(received_datagrams=\d+) (\S+)',
                          r'\1\3 \2', gateway, count=1)
         self.assertNotEqual(swapped, gateway)
-        result = self.evidence.analyze_text(swapped, (FIXTURES / 'sample-match.log').read_text(encoding='utf-8'))
+        result = self.evidence.analyze_text(swapped, (FIXTURES / 'sample-match.txt').read_text(encoding='utf-8'))
         self.assertEqual(result.get('status'), 'stopped')
 
 
