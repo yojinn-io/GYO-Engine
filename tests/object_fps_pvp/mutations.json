@@ -4856,7 +4856,7 @@
       "batch": "v71-log-contract",
       "what": "An action-lane send is not recorded in the lane statistics (E1-7)",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "                    ActionChosen(LaneDue(lane,now),now);\n",
+      "find": "                    ActionChosen(std::max(LaneDue(lane,now),lane.pendingSince.value_or(now)),now);\n",
       "replace": "",
       "check": "ipc",
       "expect": "CHECK\\( lanes.actionWrites >= static_cast<std::uint64_t>\\(decisionFrames\\) \\)"
