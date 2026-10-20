@@ -106,3 +106,83 @@ pv7-checkpoint 與 A1 的 L2 都只判了 clean 的非 respawn 重設（R3）與
 - **DR-7 Windows／Linux 的 E1-5 實機值**：(a) 交給 `lan15-windows`（建議）；(b) 本批另外安排。
 - **DR-8 舊 worktree**：v7final（`6d3f287`）與 c2-after（`d685d1e`）原本保留到本批結束。(a) 保留到 `re-evaluate` 結束（建議：評估可能要回看 v7 的跑次與工具）；(b) 本批結束後歸檔。
 - **DR-9 檔位**：宣告前的 D45 檢查 1 位 xhigh（照 v7.1 各批的先例）。
+
+## 8. L2 事前宣告（第 1 版，D45 檢查前的草稿）
+
+本節是 session 的判定規則，看結果之前定下。和第 3 節不同的地方都標「宣告點」，D45 檢查要逐一看。
+
+### 8.1 量測對象與工具
+
+- 樹：主 checkout，量測 commit `572cc39`（最後一個程式 commit；之後只有文件）。Gateway 在 `cf40497` 重建（`vcs.modified=false`，是 `572cc39` 只有文件的後代）；Match、probe 由 CMake 增量建置，和目前的原始碼一致。
+- 工具目錄：`build/target/_build/test/logs/pvp-v71-d44-l2-prep-20261021/`
+  - `run_d44.py`（driver，由 A1 的 `run_a1.py` 改成單樹，加 client-delay runner）。
+  - `judge_d44.py`（判定，事件偵測沿用第 16 批的 `judge_16.py`、`judge_c2.py`，以雜湊載入；Cooldown 的解釋沿用 A1 的 A1-1；記錄用的日誌掃描沿用 edge-rate-limit 的 `judge_l2.py`）。
+  - `dryrun.py`（乾跑）。
+  - 雜湊在宣告定稿時寫成字面值（第 1 版是草稿：`judge_d44.py` bd07d349…、`run_d44.py` 69e0b774…）。`artifacts.sha256` 在宣告定稿前寫一次。
+- 凍結清單：pv7-checkpoint 的 `frozen-pv7-cp.sha256`（f036b2af…），和目前的 `build/acceptance` 0 差異；`run_client_delay.py` 讀它加上 repo 路徑前綴的副本 `frozen-pv7-cp-rooted.sha256`（逐行核對）。
+- 每個項目之前，driver 檢查：STOP-REQUEST、主 checkout 只有文件的變更、Gateway 建置資訊、產物、凍結清單、NAMED 檔、自己與判定的雜湊；項目前後各跑一次 5 秒睡眠探測。開跑前的閒置閘門：連續 3 次睡眠探測最大值都 <10 ms，每 30 秒重試，最多 30 分鐘。
+
+### 8.2 項目（197 項，估計約 2.9 h）
+
+第 16 批 D 部分的區塊交錯（第 1 輪也在區塊裡，因為沒有 I 部分）。區塊 k＝1～30：網路 k；背壓（k≤20）；閒置 clean-30／clean-60 一對（k≤10，順序交替）；x1 與 ramp（k≤15，順序交替）；25 案（k≤3）。之後 impairments 15 次、短停頓 6 次（只記錄）、60 Hz 長測 1 次（30 分鐘）。
+
+| 母體 | case-run | 0 事件時的單側 95% 上限 | v7 普查基準（第 16 批） |
+|---|---|---|---|
+| 遊戲（故障 66、clean 29） | 95 | 3.1%（故障 4.4%、clean 9.8%） | 95，0 事件 |
+| 背壓 | 120 | 2.5% | 120，0 事件 |
+| 網路一般 | 30 | 9.5% | 30，0 事件 |
+| 網路 impairments | 15 | 18.1% | 15，0 事件 |
+| x1 | 15 | 18.1% | 無（v7.1 edge-input 5 次 0 事件，A1 之前的樹） |
+| ramp | 15 | 18.1% | 無（同上） |
+| 60 Hz 長測 | 1（另列） | — | 1，0 事件 |
+| 短停頓（只記錄） | 6，不計數 | — | 無 |
+
+時間的來源：本目錄的開發跑次（遊戲約 27 秒、背壓 82 秒、網路 30 秒、impairments 93 秒、x1／ramp／短停頓各 26 秒，含睡眠探測），`run_d44.py --list-only` 用 A1 的較保守值，合計 175 分。
+
+### 8.3 事件（沿用第 16 批，不新訂量法）
+
+- **E1**：遊戲案例、x1／ramp、長測：Match 的非 respawn 重設在故障窗 (start, release＋1.5 s] 之外，或在沒有故障窗的跑次（`judge_c2.d61_resets`）。x1／ramp 的故障窗是注入窗（`result.json` 的 `fault`；edge-input 的做法）。
+- **E2**：凍結分析器錯誤中的「Unexplained epoch reset」（遊戲、長測、背壓的 `command_evidence`）。
+- **E3**：`run_network.py` 的「an application stall reset the movement epoch」（兩種網路模式）。偵測範圍窄：只比較 6 秒停頓前後。
+- 單位：case-run（一個遊戲案例、一個背壓案例、一次網路跑次、一次 x1／ramp、長測）。有事件的 case-run 算 1，不論裡面有幾個事件。
+- 短停頓的事件照樣偵測、列出，不計數（D146 DR-4）。
+
+### 8.4 停止條件（立即停下、保留全部證據、不重跑）
+
+1. 任一項目的分類 E 或 A（工具失效，不是判定）；driver 的每項檢查不成立；runner 的程序群組有殘留。
+2. clean 跑次（閒置對、25 案中的 clean-60／30／144、長測）出現**無法解釋**的 Cooldown 拒絕。**宣告點**：第 16 批是「任何 Cooldown」；A1 之後，同一玩家前一發不是 on_time、或 on_time 的到期 Tick 不是步 Tick（A 到 T(S) 之間有 epoch 重設）時的 Cooldown 是設計結果，照 A1 的 A1-1 只記錄。
+3. clean 跑次出現非 respawn 重設，或 clean 跑次的 Match trace 缺漏。
+4. 同一跑次同時有 D44 事件與**無法解釋**的 Cooldown 拒絕（宣告點：理由同 2）。
+5. 有事件的 case-run 累計 ≥3（所有計數的母體，含 x1／ramp：D146 DR-5）。
+6. （第 16 批的整合判定，本批沒有。）
+7. 沒有事件的失敗（分類 F）累計 ≥3；impairments 的失敗只立旗標、不計數（第 16 批 D45 檢查 6）。
+8. `STOP-REQUEST` 檔、driver 自己的例外。
+
+### 8.5 只記錄（不影響讀法，報告列出）
+
+- x1／ramp 的窗內重設不是 starvation 4＋backlog 1（edge-input 的 pv7 跑次與本目錄的開發跑次都是 4＋1）。
+- 網路的非 respawn 重設不等於「每個探針階段 1 次」。
+- 已解釋的 Cooldown 拒絕。
+- 逐出行、Gateway session 的限速拒絕（edge-actions 的 D44 型事件就是限速造成的；D121 之後應為 0）、Match 的動作批拒絕。**宣告點**：A1 的 L2 把逐出與限速拒絕當停止條件；本批只記錄，因為它們不是 D44 事件的定義，而且有事件時正好是定位的線索。
+- 受干擾的項目（任一次睡眠探測 ≥10 ms）。**宣告點**：A1 的 L2 有「同一情境受干擾 2 次或總共 6 次」的停止；第 16 批沒有。本批照第 16 批只記錄；事件出在受干擾的項目時，報告並列。
+- 第 16 批的只記錄量（late 修正、領先跳升、被釘住的秒數、Tick 間隔、30 Tick 排隊合計最大值），由 `judge_c2` 的讀取器算；讀取器在 pv7 日誌上出錯時記下例外，不判定。
+
+### 8.6 結果的讀法（第 16 批的三分法）
+
+| 結果 | 意思 | 處理 |
+|---|---|---|
+| 全部 0 事件 | 在目前的程式上「未再現」（各母體上限見 8.2） | 記錄；D44 仍不結案（A5 的結構性途徑仍在，`re-evaluate`） |
+| 1～2 個有事件的 case-run，都不在 clean 跑次 | 「仍存在（低頻）」 | 記錄、保留 trace，做 ≤30 分的有限定位（凍結工具列重設前 30 Tick 的量）；修法在 `re-evaluate` |
+| 停止條件 2～5、7 | 可能是退步或結構問題 | 停下回報。選項：(a) 列為已知問題繼續；(b) 提前調查（ultracode，D45）；(c) 依「先完成穩定版本」標缺陷版並停下 |
+
+- session 沒有完成時，讀法前面一律加「INCOMPLETE session（N／197 項）」。
+- 各母體分開和第 16 批並列；合併的上限只在「每個 case-run 獨立」的前提下成立，只當參考（重複只抽樣主機時序，第 16 批 D45 檢查 2）。
+
+### 8.7 乾跑（本目錄 `dryrun/report.json`）
+
+- 開發跑次 9 項（每種 runner 至少 1 項）：全部沒有停止。偵測器在 x1 上讀到 starvation 4＋backlog 1、窗外 0。
+- 樣本 20 個（由開發跑次複製後改一處）：clean 的重設與 trace 缺漏 → 停止 3；無法解釋／已解釋的 Cooldown → 停止 2／只記錄；故障窗外的重設 → 事件，第 3 個 → 停止 5；事件＋無法解釋的 Cooldown → 停止 4；窗內的重設 → 不是事件；x1 窗內少一次 → 旗標；短停頓的事件 → 不計數；網路 E3、背壓 E2 → 事件；背壓與網路的失敗 → 停止 7 的計數，impairments 不計數；逐出 → 旗標；逾時 → 停止 1；受干擾 → 旗標。32／32 符合預期。
+- 突變 10 個（判定各拿掉一條規則）：10 個 killed。
+- driver：每種 runner 的命令列；輸出目錄已存在時拒絕（例外，exit 1）。
+- mock session（前 2 項）：重播沒有完整性問題，讀法前綴「INCOMPLETE session（2／197 項）」。
+- 60 Hz 長測的開發跑次：進行中。
