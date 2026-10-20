@@ -12,7 +12,7 @@ import tempfile
 import time
 import urllib.request
 
-from impaired_network import impaired_gateway
+from impaired_network import DEFAULT_LOSS_SEED, impaired_gateway
 from presentation_evidence import analyze_presentation
 
 
@@ -105,6 +105,9 @@ def main():
     parser.add_argument("--arena-root", type=Path)
     parser.add_argument("--network-impairments", action="store_true",
                         help="Repeat the real socket probe with LAN delay, jitter and packet loss")
+    parser.add_argument("--loss-seed", type=int, default=DEFAULT_LOSS_SEED,
+                        help="--network-impairments: the relay's loss generators' base seed (OT-4, E4); the default "
+                             "reproduces the earlier runs")
     args = parser.parse_args()
     for name in ("match", "gateway", "probe", "arena"):
         if not getattr(args, name).is_file():
@@ -203,7 +206,7 @@ def main():
                     case = None
                     proxy = None
                     try:
-                        with impaired_gateway(http, udp, rtt) as proxy:
+                        with impaired_gateway(http, udp, rtt, args.loss_seed) as proxy:
                             case = subprocess.run(
                                 [str(args.probe.resolve()), "--gateway", proxy.gateway,
                                  "--arena", str(args.arena.resolve())], cwd=isolated,
