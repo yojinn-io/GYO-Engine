@@ -96,11 +96,10 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 - 沒有資料包的事件（snapshot 類、下行 control 與 results）以事件發生的時刻為起點；各原因的起點寫在 §4 的列舉表。
 - 共用這個定義的欄位：`PlayerInput.gateway_dwell_us`、`ActionBatch.gateway_dwell_us`、`DropSample.dwell_us`。
 
-### 日誌只加鍵
+### 日誌
 
-- `version-errors` 凍結 pv7 版分析器之後，同一條線的批次只在既有行的行尾加鍵；新紀錄寫到新檔或新的行族；不在 `commands.jsonl` 加事件種類；不改既有的 close 原因字串。
+- 日誌與紀錄檔的格式、版本與相容規則由 [日誌 Data Contract v1](log-contract.zh-Hant.md) 規定（v7.1 `log-contract`，D142 取代本節原本的「日誌只加鍵」）。
 - Hello／Welcome 的回聲不改變 `received_datagrams` 的組成。
-- 日誌格式在 `log-contract` 之前都是暫定。
 
 ## 2a. IPC 送達語意（v7.1 D94、D95）
 

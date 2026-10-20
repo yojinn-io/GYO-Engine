@@ -1,6 +1,6 @@
 # log-contract：日誌 Data Contract v1 與 README 指名的紀錄（計畫，第 1 版）
 
-- 狀態：計畫第 1 版已核准（D142，第 9 節照建議）；core 子批實作中。
+- 狀態：計畫第 1 版已核准（D142）。**core 子批完成**（第 11 節），停在 core 與 records 之間的關卡：LC-8、LC-9，以及實作中發現的 LC-10（第 11 節）。
 - 依據：README 的 `log-contract` 列（「日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等）」；驗收「跨語言 golden、凍結分析器仍可讀／只記錄／—」；估 16 h）、INVENTORY 指向本批的項目、`plans/v7/HANDOFF.md:380-395`（原第 10 批與觀測缺口清單）、D58（`plans/v7/HANDOFF.md:103`）、`protocol-v7.zh-Hant.md` §1「日誌只加鍵」、`network-architecture.zh-Hant.md:295`（死信三原則 D57）、`tt2-trace.md`（D139 T-1 把 `match-shots.jsonl`、`match-ingress.jsonl` 留給本批）。
 - 規劃方法：ultracode（2026-10-20）。盤點 2 位（C++、Go 的行族與讀者）、方案 3 位（最小契約、讀者優先、觀測缺口優先）、評審合成 1 位，以上用 high；對抗式檢查 1 位用 xhigh：MUST-FIX 7、SHOULD-FIX 10、NOTE 5，全部的對應見第 10 節。各 agent 的完整輸出在本 session 的 workflow 紀錄。
 - 估時：**拆成兩個子批，共約 23 h**（README 原估 16 h，約 1.4 倍；原因見第 8 節）。每個子批各自以 1.5 倍停損；單一問題累計超過 2 h 就停下回報。
@@ -202,3 +202,32 @@ core 結束時（records 開始前）：
 | NOTE | clock-sync golden 只有一行 body | 多列樣本、共用輸入、非有限值 |
 | NOTE | Invariant 5 無法檢查；RC 和 R1 矛盾 | 改寫（2.6） |
 | NOTE | 盤點與敘述對齊（N-* 數目、D60、D58-8、connection failed、行號、D57） | `decision_record` 與 2.5 |
+
+## 11. core 的實作紀錄（2026-10-20，D142 之後）
+
+| 切片 | 結果 | commit |
+|---|---|---|
+| `summary_wrap` | 照 §14.3：接縫 `SessionSummary.hpp`（`SummaryBaseline`、`RestartWeaponCounters`）先以現行行為寫出，Red 測試重現「同一幀內連線世代改變、phase 仍是 Playing」時的下溢；修正是在 `ResetWeaponFeedback()` 同時歸零基準值，Green 後留作回歸。突變 `lc-summary-baseline-kept` killed | `108ca0d` |
+| `clock_sync_golden` | `fixtures/log_v1/clock-sync.tsv`（8 列：na、負 offset、四捨五入、`-0.000`、大值、nan、inf）由 C++ 與 Go 讀同一份；非有限的 drift 兩端都寫 `na`。Client 行改成 `[ObjectFPS/PvP] clock sync player=<id> `，id 取自 `ClientClockSession`（worker 自己 session 的身分），Leave 之後的最後一個視窗仍帶原 player。突變 3 個 killed | `63f67e3` |
+| `coalesced_identity` | 不加欄位；`backpressure_test.go` 斷言「transport 總數 − 全域 `drop_coalesced_snapshots` ＝ 送出迴圈中途的取代」。突變 killed | `ade1af5`、`72a4098` |
+| `a_grade_pins`、`frozen_read_guard` | `keys-v1.tsv`（18 族）＋`test_log_contract.py`（CTest `object_fps_pvp.log_contract`，9 個測試）；`prefixes.txt` 由 C++、Go、Python 共用；`ingress_cross_check.py` 也用 `network_statistics` 讀真實跑次。突變 3 個 killed | `4cc2ec6` |
+| `contract_doc` | `docs/object_fps_pvp/log-contract.zh-Hant.md`；`protocol-v7` §1 改成連結；讀者盤點（`build/acceptance`、`tests/object_fps_pvp`、各 L2 的判定工具）：每個被解析的行族都在 A 級表，B 級行族沒有讀者 | 本次 |
+| `decision_record` | INVENTORY：D-LOG、D58-1／3／4／5／8、N-d37、N-summary-counter-wrap、N-log-contract-vs-frozen-analyzers 結案，過時行號更正；`tt2-trace.md` 的「1 秒」更正 | 本次 |
+| `gateway_disconnect` | **未提交，等 LC-10**（下面） | — |
+
+本機：CTest `cpu|shader` 74／74、Go `./gateway/...` 全部通過、突變 `lc-*` 9 個全部 killed、`test_run_mutations.py` 通過。
+
+和計畫的偏差（照實記錄）：
+
+- **A 級釘住的語言**：計畫寫「寫出端的語言各有一個釘住測試」。直接以 `log.Printf`／串流寫出的行（Gateway 的 statistics、transport、evicted、start／HTTP，Match 的 start／ready／join／evicted／ipc）沒有可呼叫的組行函式，改由 Python 的 CTest 讀寫出端原始碼、抽出該敘述的鍵序列比對。它守得住改名、刪鍵、重排（突變證明），但不是執行期的輸出。
+- **ingress 的完整行 golden**：計畫寫「完整的 ingress 行由 Go 與 C++ 的寫出端逐字比對」。改成用真實跑次的樣本由凍結讀者讀（未知鍵 0），寫出端的鍵序列由既有的 ingress 測試（含 `appendedZeros`）守住；沒有新增逐字 golden。
+- 既有突變 `v71te-hello-without-echo` 的錨點因 `ClientClockSession` 的改寫而過時，照同一語意更新（它的 check 是 `worker`，那個測試本來就壞，`N-worker-probe-stale`）。
+
+### LC-10（實作中發現，需要你同意）
+
+`gateway_disconnect` 要用 `errors.Is` 分類斷線原因，需要在 Gateway 套件新增 3 個哨兵錯誤（套件變數，分在既有類別「immutable table」）與 1 個錯誤型別（`protocolError`，欄位分在「per-call context」）。`network-architecture.zh-Hant.md` §7 的 Gateway Design Invariants 規定：新增任何 Gateway 狀態欄位或套件變數，即使分進既有類別，都是要你同意的 Architecture Delta；計畫沒有列這一項。完整的實作（Go 測試全部通過，含 `state_whitelist_test.go` 的分類、`version_errors_test.go` 的期望改寫、分類的單元測試）存成 patch：`build/target/_build/test/logs/pvp-v71-log-contract-core-20261020/gateway-disconnect.patch`（另有新檔 `disconnect_reason_test.go`）。
+
+- (a) 同意：套用 patch，更新突變 `v7-flow-final-skips-runtime-failure` 的錨點並重跑（建議；哨兵錯誤是不可變的值，不是判定用的狀態）。
+- (b) 不加變數：以錯誤字串分類（脆弱，原計畫已否決）。
+- (c) 這一項移到 `records` 或之後的批次。
+

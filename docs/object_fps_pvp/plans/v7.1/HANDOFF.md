@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：core 子批實作中（D142；詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：core 完成，停在 records 之前的關卡（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`log-contract` core 實作中；core 結束時停下，決定 LC-8、LC-9）。
-- **進行中**：無。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（after-pv7 線，draft）。
+- **等你決定**：[log-contract](log-contract.md) 的 LC-10（Gateway 斷線分類要新增 3 個哨兵錯誤與 1 個錯誤型別，依 Gateway 的 Design Invariants 需要你同意；第 11 節）、LC-8（移出的範圍）、LC-9（records 結束時的只記錄 L2）。
+- **進行中**：無。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`log-contract` 計畫第 1 版（ultracode 規劃＋xhigh 對抗式檢查），等你核准。
+- **最後更新**：2026-10-20，`log-contract` core 完成（契約文件、A 級釘住與凍結讀者守衛、clock sync 共用 golden、摘要下溢修正、coalesced 守恆式）；Gateway 斷線分類存成 patch，等 LC-10。
 
 ## 閱讀入口
 
@@ -543,8 +543,9 @@
 - 2026-10-20：多生產者的開發量測（使用者在分支會話中同意，不算判定；[tt2-trace.md](tt2-trace.md) 第 11.6 節）：三條生產者照 Match／Client 的實際節奏同時記錄，B、A 交錯各 2 次。結果和單一生產者相反：A 每筆 P50 0.1～1.3 µs、P99 4～32 µs，B 3～20 µs、31～52 µs；Tick 的 8 筆合計 P99 A 約 40 µs、B 約 90～100 µs。推論是 CPU 省電狀態（B 的寫檔執行緒 20 ms 才醒一次），未驗證。兩種量法下都在 1 ms 的換算預算內。仍停在第 11.7 節的 L2-1、L2-2。
 - 2026-10-20：D140 之後做 L2 準備（[tt2-trace.md](tt2-trace.md) 第 13 節）。兩棵樹乾淨重建（`ninja clean`＋刪 stage 目錄；B 的 Gateway 先前是 `7a5e0ea` 的舊建置，這次以 Gateway 目標重建成 `0fabb52`；A 先提交文件 `1218a74` 讓 Gateway 不標 modified）。工具 `run_tt2.py`、`judge_tt2.py`、`producer_t29`；開發跑次 16 項全 P、T2-9 每筆 P99 29.5 µs；乾跑第一次有 1 列是乾跑自己的合成數據錯（已改、保留輸出），第二次全部如預期（突變 15／15）。宣告第 3 版補明重建方式（第 2 版的「刪掉 `build/target`」會連 logs 一起刪）、沿用的停止條件（R8、K1a、身分、A1-2 是漏列的既有條件；R1s 不適用）、T2-7 只有 P95。
 - 2026-10-20：`tt2-trace` 的 L2 session（D141；`build/target/_build/test/logs/pvp-v71-tt2-l2-20261020/`）：48／48、0 停止、0 受干擾、完整性問題 0，`passed`＝true。T2-3／4（鎖等待 P99）兩棵樹都在 52 µs 以下、≥250 µs 0 筆；T2-5 A−B −0.14～+0.22 ms；T2-9 每筆 P99 27.6 µs（×8＝0.22 ms）。只記錄：送出 P95 +0.04 ms（四個情境方向一致，在預測內）；Match 的 CPU 時間 +25～35%（寫檔執行緒每批被叫醒一次，B 是 20 ms 輪詢）。細節在 [tt2-trace.md](tt2-trace.md) 第 14 節。**`tt2-trace` 結案**（README 沒有 L3）。
-- 2026-10-20：`log-contract` 開始（使用者：「開始 log-contract：照計畫用 ultracode 規劃，先出計畫交我核准。」）。範圍：README 的列、INVENTORY 指向它的項目（D-LOG、D58-1／3／4／5／8、E1、E1-2／5／7、TT2-B10、N-* 9 項），加上本文件記下的兩種 i/o timeout 字串、兩個 `coalesced_snapshots`、暫定的 clock sync 行族，以及 `tt2-trace` 留下的 `match-shots.jsonl`、`match-ingress.jsonl` 寫出（D139 T-1）。
+- 2026-10-20：`log-contract` 開始（使用者：「開始 log-contract：照計畫用 ultracode 規劃，先出計畫交我核准。」）。範圍：README 的列、INVENTORY 指向它的項目（D-LOG、D58-1／3／4／5／8、E1、E1-2／5／7、TT2-B10、N-* 7 項；原寫 9 項是數錯，D142 之後更正），加上本文件記下的兩種 i/o timeout 字串、兩個 `coalesced_snapshots`、暫定的 clock sync 行族，以及 `tt2-trace` 留下的 `match-shots.jsonl`、`match-ingress.jsonl` 寫出（D139 T-1）。
 - 2026-10-20：`log-contract` 的 ultracode 規劃完成（盤點 2、方案 3、評審合成 1 用 high；對抗式檢查 1 用 xhigh；7 個 agent 約 42 分鐘）。評審以「讀者優先」方案為底稿，接上「觀測缺口優先」的紀錄與「最小契約」的停損門檻，合成約 19 h 的草案；對抗式檢查 MUST-FIX 7（間隔用晚醒的 bins 量不出停頓、沒有版本鍵的凍結讀者升版時會靜默讀錯、i/o timeout 的處置和「統一」相反、新增 Gateway 欄位要你同意、改斷線行會打斷既有測試與突變、「被解析的行一定有 golden」當天不成立、和 protocol-v7 §1 的日誌規則衝突）、SHOULD-FIX 10、NOTE 5，全部吸收進計畫第 1 版（[log-contract.md](log-contract.md) 第 10 節），估時改為兩個子批共約 23 h。順帶更正 `tt2-trace.md` 第 1 節的「1 秒」（實際是 10 秒的統計視窗）。
+- 2026-10-20：`log-contract` core 實作（D142；[log-contract.md](log-contract.md) 第 11 節）：摘要下溢（先 Red 後 Green）、clock sync 共用 golden 與 Client 行的 player、coalesced 守恆式、A 級釘住（18 族）與凍結讀者守衛、共用禁用片語清單、契約文件 `log-contract.zh-Hant.md`（取代 protocol-v7 §1 的日誌規則）、INVENTORY 9 項結案。CTest 74／74、突變 9 個 killed。發現：Gateway 斷線分類要新增套件變數與錯誤型別，依 Gateway 的 Design Invariants 是要你同意的 Architecture Delta，計畫沒列，所以存成 patch、不提交（LC-10）。偏差：直接寫出的行改用原始碼層的鍵序列釘住；ingress 沒有新增逐字 golden。
 
 ## 未結事項
 
