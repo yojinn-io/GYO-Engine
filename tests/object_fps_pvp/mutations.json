@@ -4766,6 +4766,16 @@
       "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, true);",
       "check": "ipc",
       "expect": "clock sync player=7 window_ms="
+    },
+    {
+      "id": "lc-coalesced-global-uncounted",
+      "batch": "v71-log-contract",
+      "what": "A publication replaced on arrival is not counted Gateway-wide, so the coalesced identity breaks",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t\ts.countGatewayLocked(gatewayDropCoalescedSnapshots, dropEvent{at: time.Now(), tick: replaced.tick})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "coalesced identity: transport 2, Gateway-wide 0"
     }
   ]
 }
