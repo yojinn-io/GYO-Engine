@@ -83,6 +83,13 @@ struct WorkerStatisticsWindow final {
     std::uint64_t wakes{};
     std::optional<double> cpuSeconds; // the worker thread's CPU during the window
     std::uint64_t otherVersionDatagrams{}; // from the Gateway, well-formed but another protocol version (pv7)
+    // log-contract (N-client-side-loss-counters), the worker's own window counts:
+    // datagrams read, and of them the ones from another sender, undecodable
+    // (exclusive of other_version), of another session or not newer; sends the
+    // socket refused for now; snapshots dropped from the full presentation and
+    // simulation queues.
+    std::uint64_t receivedDatagrams{}, foreignSenderDatagrams{}, undecodableDatagrams{}, staleDatagrams{};
+    std::uint64_t sendBlocked{}, snapshotOverflows{}, simulationOverflows{};
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 

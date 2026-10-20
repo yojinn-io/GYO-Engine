@@ -50,6 +50,19 @@ struct HitFeedbackSample final {
     float shakePitchRadians{}, shakeRollRadians{};
 };
 
+// What one Observe decided about new hits (log-contract: the Client's
+// "PvP hit feedback" line; the reason is this owner's own judgement).
+enum class HitFeedbackOutcome : std::uint8_t {
+    None,              // no new hit in this state
+    Played,            // new hits started the effect
+    SuppressedDead,    // new hits, but the player is dead: no effect
+    SuppressedNewLife, // the first state of a life (a join or a respawn) carries hits: never replayed
+};
+struct HitFeedbackObservation final {
+    HitFeedbackOutcome outcome{HitFeedbackOutcome::None};
+    std::uint32_t hits{}; // the damage count's increase this state brought (all of it for a new life)
+};
+
 class LocalHitFeedback final {
 public:
     void Reset() noexcept { *this = {}; }
@@ -60,8 +73,8 @@ public:
     // and a count that jumps several hits at once start one effect, and the
     // first state seen in a life (a join or a new life) never replays.
     // Death suppresses the effect.
-    void Observe(const CombatState& own, LifeState lifeState, Engine::Math::Vec3 ownPosition,
-                 std::optional<Engine::Math::Vec3> attackerPosition, double nowSeconds) noexcept;
+    HitFeedbackObservation Observe(const CombatState& own, LifeState lifeState, Engine::Math::Vec3 ownPosition,
+                                   std::optional<Engine::Math::Vec3> attackerPosition, double nowSeconds) noexcept;
     [[nodiscard]] HitFeedbackSample Sample(double nowSeconds, float viewYaw,
                                            const HitFeedbackSettings& settings) const noexcept;
 

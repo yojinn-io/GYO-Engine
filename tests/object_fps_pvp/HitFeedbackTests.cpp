@@ -107,6 +107,28 @@ TEST_CASE("Hit feedback is isolated per life and suppressed by death") {
     CHECK(dead.shakePitchRadians == 0);
 }
 
+// log-contract: the Client logs each Observe that saw new hits with the owner's
+// own reason, so a missing flash can be located in the log.
+TEST_CASE("Hit feedback reports what it did with new hits and why") {
+    LocalHitFeedback feedback;
+    using enum HitFeedbackOutcome;
+    // A join without hits, then one with earlier hits in a new life.
+    CHECK(feedback.Observe(Own(0, 1), LifeState::Alive, Self, std::nullopt, 1.0).outcome == None);
+    const auto newLife = feedback.Observe(Own(2, 2), LifeState::Alive, Self, EastAttacker, 2.0);
+    CHECK(newLife.outcome == SuppressedNewLife);
+    CHECK(newLife.hits == 2);
+    // New hits while alive play; the same count again is nothing new.
+    const auto played = feedback.Observe(Own(4, 2), LifeState::Alive, Self, EastAttacker, 3.0);
+    CHECK(played.outcome == Played);
+    CHECK(played.hits == 2);
+    CHECK(feedback.Observe(Own(4, 2), LifeState::Alive, Self, EastAttacker, 3.1).outcome == None);
+    // The fatal hit is suppressed by death.
+    const auto dead = feedback.Observe(Own(5, 2), LifeState::Dead, Self, EastAttacker, 4.0);
+    CHECK(dead.outcome == SuppressedDead);
+    CHECK(dead.hits == 1);
+    CHECK(feedback.Observe(Own(5, 2), LifeState::Dead, Self, EastAttacker, 4.1).outcome == None);
+}
+
 TEST_CASE("Hit direction points at the attacker from the same snapshot and turns with the view") {
     const auto settings = ProductSettings();
     LocalHitFeedback feedback;

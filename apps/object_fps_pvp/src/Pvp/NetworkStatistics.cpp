@@ -165,6 +165,11 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
     Optional(line, window.cpuSeconds, 3);
     // Added in pv7 (v7.1 version-errors), so it comes last.
     line << " other_version_datagrams=" << window.otherVersionDatagrams;
+    // Added in v7.1 log-contract, so they come last.
+    line << " received_datagrams=" << window.receivedDatagrams << " foreign_sender_datagrams=" << window.foreignSenderDatagrams
+         << " undecodable_datagrams=" << window.undecodableDatagrams << " stale_datagrams=" << window.staleDatagrams
+         << " send_blocked=" << window.sendBlocked << " snapshot_overflows=" << window.snapshotOverflows
+         << " simulation_overflows=" << window.simulationOverflows;
     return line.str();
 }
 

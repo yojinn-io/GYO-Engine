@@ -75,12 +75,20 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
 
     CHECK(WorkerStatisticsLine({.player = 2, .windowSeconds = 10.0, .wakes = 4812, .cpuSeconds = 0.0514}) ==
           "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051 "
-          "other_version_datagrams=0");
+          "other_version_datagrams=0 received_datagrams=0 foreign_sender_datagrams=0 undecodable_datagrams=0 "
+          "stale_datagrams=0 send_blocked=0 snapshot_overflows=0 simulation_overflows=0");
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1}) ==
           "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na "
-          "other_version_datagrams=0");
-    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1, .otherVersionDatagrams = 3}).ends_with(
-          " cpu_s=na other_version_datagrams=3"));
+          "other_version_datagrams=0 received_datagrams=0 foreign_sender_datagrams=0 undecodable_datagrams=0 "
+          "stale_datagrams=0 send_blocked=0 snapshot_overflows=0 simulation_overflows=0");
+    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1, .otherVersionDatagrams = 3}).find(
+          " cpu_s=na other_version_datagrams=3 ") != std::string::npos);
+    // log-contract: the worker's own loss counts, appended last in a fixed order.
+    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .receivedDatagrams = 900, .foreignSenderDatagrams = 1,
+                                .undecodableDatagrams = 2, .staleDatagrams = 3, .sendBlocked = 4,
+                                .snapshotOverflows = 5, .simulationOverflows = 6}).ends_with(
+          " other_version_datagrams=0 received_datagrams=900 foreign_sender_datagrams=1 undecodable_datagrams=2 "
+          "stale_datagrams=3 send_blocked=4 snapshot_overflows=5 simulation_overflows=6"));
 }
 
 // pv7 §5: the Client's cause records line counts each hold's samples, missing

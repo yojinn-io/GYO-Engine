@@ -120,22 +120,6 @@ struct ShotRecords final {
     std::uint64_t viewTickInvalid{};
 };
 
-[[nodiscard]] inline std::string_view ShotRejectionName(ShotRejection rejection) noexcept {
-    switch (rejection) {
-    case ShotRejection::None: return "none";
-    case ShotRejection::InvalidReference: return "invalid_reference";
-    case ShotRejection::Expired: return "expired";
-    case ShotRejection::Cooldown: return "cooldown";
-    case ShotRejection::Dead: return "dead";
-    case ShotRejection::StaleLife: return "stale_life";
-    case ShotRejection::InvalidLife: return "invalid_life";
-    case ShotRejection::Reloading: return "reloading";
-    case ShotRejection::EmptyMagazine: return "empty_magazine";
-    case ShotRejection::MagazineFull: return "magazine_full";
-    }
-    return "unknown";
-}
-
 // One line of match-shots.jsonl, without the newline.
 [[nodiscard]] inline std::string MatchShotRecordLine(const ShotShadowRecord& r) {
     const auto optional = [](const auto& value) { return value ? std::to_string(*value) : std::string("null"); };

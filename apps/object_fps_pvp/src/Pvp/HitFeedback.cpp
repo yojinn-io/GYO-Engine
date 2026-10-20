@@ -75,8 +75,10 @@ std::optional<HitFeedbackSettings> ParseHitFeedbackSettings(const std::string& t
     }
 }
 
-void LocalHitFeedback::Observe(const CombatState& own, const LifeState lifeState, const Engine::Math::Vec3 ownPosition,
-                               const std::optional<Engine::Math::Vec3> attackerPosition, const double nowSeconds) noexcept {
+HitFeedbackObservation LocalHitFeedback::Observe(const CombatState& own, const LifeState lifeState,
+                                                const Engine::Math::Vec3 ownPosition,
+                                                const std::optional<Engine::Math::Vec3> attackerPosition,
+                                                const double nowSeconds) noexcept {
     if (!seen_ || own.lifeGeneration != lifeGeneration_) {
         // A join or a new life: remember the state, play nothing old.
         seen_ = true;
@@ -84,14 +86,18 @@ void LocalHitFeedback::Observe(const CombatState& own, const LifeState lifeState
         damageCount_ = own.damageCount;
         active_ = false;
         attackerBearing_.reset();
-        return;
+        if (own.damageCount == 0) return {};
+        return {HitFeedbackOutcome::SuppressedNewLife, own.damageCount};
     }
     if (lifeState == LifeState::Dead) {
+        const auto hits = own.damageCount > damageCount_ ? own.damageCount - damageCount_ : 0U;
         damageCount_ = own.damageCount;
         active_ = false;
-        return;
+        if (hits == 0) return {};
+        return {HitFeedbackOutcome::SuppressedDead, hits};
     }
-    if (own.damageCount <= damageCount_) return;
+    if (own.damageCount <= damageCount_) return {};
+    const auto hits = own.damageCount - damageCount_;
     damageCount_ = own.damageCount;
     active_ = true;
     startSeconds_ = nowSeconds;
@@ -102,6 +108,7 @@ void LocalHitFeedback::Observe(const CombatState& own, const LifeState lifeState
         // Yaw turns +Z toward +X, so the bearing of (dx, dz) is atan2(dx, dz).
         if (dx * dx + dz * dz > 1e-6F) attackerBearing_ = std::atan2(dx, dz);
     }
+    return {HitFeedbackOutcome::Played, hits};
 }
 
 HitFeedbackSample LocalHitFeedback::Sample(const double nowSeconds, const float viewYaw,

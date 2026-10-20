@@ -316,8 +316,8 @@
       "batch": "13",
       "what": "A duplicate snapshot restarts the hit effect",
       "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
-      "find": "    if (own.damageCount <= damageCount_) return;\n",
-      "replace": "    if (own.damageCount < damageCount_) return;\n",
+      "find": "    if (own.damageCount <= damageCount_) return {};\n",
+      "replace": "    if (own.damageCount < damageCount_) return {};\n",
       "check": "cpu",
       "expect": "never replays old or late snapshots"
     },
@@ -4870,6 +4870,26 @@
       "replace": "return impl_->lanes;}",
       "check": "ipc",
       "expect": "CHECK\\( server.ipc.TakeLaneStatistics\\(\\).actionWrites <= 1 \\)"
+    },
+    {
+      "id": "lc-hit-dead-reported-played",
+      "batch": "v71-log-contract",
+      "what": "A hit while dead is reported as played",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "        return {HitFeedbackOutcome::SuppressedDead, hits};\n",
+      "replace": "        return {HitFeedbackOutcome::Played, hits};\n",
+      "check": "cpu",
+      "expect": "CHECK\\( dead.outcome == SuppressedDead \\)"
+    },
+    {
+      "id": "lc-summary-reason-kept",
+      "batch": "v71-log-contract",
+      "what": "The per-reason rejection counts do not take their window",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SessionSummary.hpp",
+      "find": "        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i] - baseline_.rejectedBy[i];\n",
+      "replace": "        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i];\n",
+      "check": "cpu",
+      "expect": "CHECK\\( second.rejectedBy\\[cooldown\\] == 0 \\)"
     }
   ]
 }

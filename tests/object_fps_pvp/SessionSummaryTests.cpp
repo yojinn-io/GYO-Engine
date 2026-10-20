@@ -2,12 +2,15 @@
 
 #include "RetroFPS/Pvp/SessionSummary.hpp"
 
+#include <array>
+
 using namespace fps::pvp;
 
 namespace {
 // The counter fields of WeaponFeedbackObservation (PvpApplication.hpp).
 struct Weapon final {
     std::uint64_t submittedActions{}, acceptedDecisions{}, rejectedDecisions{}, hitDecisions{}, localCooldownBlocks{};
+    std::array<std::uint64_t, ShotRejectionCount> rejectionsByReason{};
 };
 } // namespace
 
@@ -30,3 +33,23 @@ TEST_CASE("PvP summary counts restart with the weapon counters, also within one 
     CHECK(baseline.Take(SummaryCountsOf(weapon)) == SummaryCounts{2, 1, 0, 0, 0});
     CHECK(baseline.Take(SummaryCountsOf(weapon)) == SummaryCounts{});
 }
+
+// log-contract: the summary splits rejections by the Match's reason, with the
+// same window and restart rule as the totals.
+TEST_CASE("PvP summary counts rejections by reason per window") {
+    Weapon weapon;
+    SummaryBaseline baseline;
+    const auto cooldown = static_cast<std::size_t>(ShotRejection::Cooldown);
+    const auto dead = static_cast<std::size_t>(ShotRejection::Dead);
+    weapon.rejectionsByReason[cooldown] = 2;
+    CHECK(baseline.Take(SummaryCountsOf(weapon)).rejectedBy[cooldown] == 2);
+    weapon.rejectionsByReason[dead] = 1;
+    const auto second = baseline.Take(SummaryCountsOf(weapon));
+    CHECK(second.rejectedBy[cooldown] == 0);
+    CHECK(second.rejectedBy[dead] == 1);
+    RestartWeaponCounters(weapon, baseline);
+    weapon.rejectionsByReason[cooldown] = 1;
+    CHECK(baseline.Take(SummaryCountsOf(weapon)).rejectedBy[cooldown] == 1);
+    CHECK(ShotRejectionName(ShotRejection::EmptyMagazine) == "empty_magazine");
+}
+

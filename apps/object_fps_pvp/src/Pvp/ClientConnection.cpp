@@ -170,6 +170,8 @@ struct ClientConnection::Impl {
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
+    // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
+    std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
     ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
@@ -384,6 +386,7 @@ struct ClientConnection::Impl {
         const auto bytes=wire::Encode({type,session,++sentSequence,payload});
         asio::error_code error;socket.send_to(asio::buffer(bytes),endpoint,0,error);
         if(error && error!=asio::error::would_block && error!=asio::error::try_again)throw std::runtime_error(error.message());
+        if(error)++sendBlocked;
         return !error;
     }
     // Validate the complete batch before mutating either decisions or retirement.
@@ -487,15 +490,17 @@ struct ClientConnection::Impl {
             if(error==asio::error::would_block || error==asio::error::try_again)break;
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
-            if(sender!=endpoint)continue;
+            ++receivedDatagrams;
+            if(sender!=endpoint) {++foreignSenderDatagrams;continue;}
             const auto datagram=std::span(bytes).first(size);
             const auto packet=wire::Decode(datagram);
             if(!packet) {
                 // Dropped silently as before; counted apart from malformed datagrams.
                 if(wire::OtherVersion(datagram))++otherVersionDatagrams;
+                else ++undecodableDatagrams;
                 continue;
             }
-            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
@@ -615,7 +620,7 @@ struct ClientConnection::Impl {
                         }
                     }
                     if(receivedSnapshots.size()==MaxReceivedSnapshots) {
-                        receivedSnapshots.pop_front();snapshotOverflow=true;++snapshotOverflowCount;
+                        receivedSnapshots.pop_front();snapshotOverflow=true;++snapshotOverflowCount;++windowSnapshotOverflows;
                     }
                     for(const auto& player:snapshot.players)
                         TraceMovement({.kind=MovementTraceKind::SnapshotReceived,
@@ -625,7 +630,7 @@ struct ClientConnection::Impl {
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
                     if(simulationConsumer) {
                         if(simulationSnapshots.size()==MaxReceivedSnapshots) {
-                            simulationSnapshots.pop_front();++simulationOverflowCount;
+                            simulationSnapshots.pop_front();++simulationOverflowCount;++windowSimulationOverflows;
                         }
                         simulationSnapshots.push_back({snapshot,arrivedAt});
                     }
@@ -796,9 +801,13 @@ struct ClientConnection::Impl {
         PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
-            .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+            .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
+            .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
+            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows})<<'\n';
         std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
+        receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        windowSnapshotOverflows=windowSimulationOverflows=0;
     }
     void Run() {
         statisticsAt=Clock::now();

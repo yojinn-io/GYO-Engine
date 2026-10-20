@@ -1,5 +1,9 @@
 #pragma once
 
+#include "RetroFPS/Pvp/Combat.hpp"
+
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace fps::pvp {
@@ -8,6 +12,8 @@ namespace fps::pvp {
 // and the baseline each window subtracts. Diagnostics only.
 struct SummaryCounts final {
     std::uint64_t submitted{}, accepted{}, rejected{}, hits{}, localBlocks{};
+    // Rejections by the Match's reason (index: ShotRejection).
+    std::array<std::uint64_t, ShotRejectionCount> rejectedBy{};
     bool operator==(const SummaryCounts&) const = default;
 };
 
@@ -16,7 +22,7 @@ struct SummaryCounts final {
 template <class Weapon>
 [[nodiscard]] constexpr SummaryCounts SummaryCountsOf(const Weapon& weapon) noexcept {
     return {weapon.submittedActions, weapon.acceptedDecisions, weapon.rejectedDecisions, weapon.hitDecisions,
-            weapon.localCooldownBlocks};
+            weapon.localCooldownBlocks, weapon.rejectionsByReason};
 }
 
 class SummaryBaseline final {
@@ -25,9 +31,10 @@ public:
     void Restart() noexcept { baseline_ = {}; }
     // The counts since the previous window; the current counts become the baseline.
     [[nodiscard]] SummaryCounts Take(const SummaryCounts& current) noexcept {
-        const SummaryCounts delta{current.submitted - baseline_.submitted, current.accepted - baseline_.accepted,
-                                  current.rejected - baseline_.rejected, current.hits - baseline_.hits,
-                                  current.localBlocks - baseline_.localBlocks};
+        SummaryCounts delta{current.submitted - baseline_.submitted, current.accepted - baseline_.accepted,
+                            current.rejected - baseline_.rejected, current.hits - baseline_.hits,
+                            current.localBlocks - baseline_.localBlocks};
+        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i] - baseline_.rejectedBy[i];
         baseline_ = current;
         return delta;
     }
