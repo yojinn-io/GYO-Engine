@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：core 完成，停在 records 之前的關卡（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：records 子批實作中（D143；詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[log-contract](log-contract.md) 的 LC-10（Gateway 斷線分類要新增 3 個哨兵錯誤與 1 個錯誤型別，依 Gateway 的 Design Invariants 需要你同意；第 11 節）、LC-8（移出的範圍）、LC-9（records 結束時的只記錄 L2）。
+- **等你決定**：無（`log-contract` records 實作中；結束時出只記錄 L2 的宣告）。
 - **進行中**：無。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -112,6 +112,7 @@
 | D140 | （2026-10-20）核准 `tt2-trace` 的 L2 宣告第 2 版（[tt2-trace.md](tt2-trace.md) 第 11 節）：L2-1 選 (a)，README 的「射擊 P99 增量 ≤1 ms」換成第 11 節的判定（T2-1、T2-3／4 粗閘門、T2-5、T2-9；其餘只記錄），README 同步改寫；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版 | 使用者：「核准 tt2-trace 的 L2 宣告第 2 版：L2-1 選 (a)，把 README 的射擊 P99 換成第 11 節的判定；L2-2 選 (a)，接受目前的生產者成本。開始做 L2 工具、開發跑次與乾跑，完成後出第 3 版。」 |
 | D141 | （2026-10-20）核准 `tt2-trace` 的 L2 事前宣告第 3 版（[tt2-trace.md](tt2-trace.md) 第 11、13 節：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`），立即跑 session | 使用者：「核准 tt2-trace 的 L2 宣告第 3 版（driver 00c8c13e…、judge 40aee8b1…、artifacts d5377b35…），現在跑 session。」 |
 | D142 | （2026-10-20）核准 `log-contract` 計畫第 1 版（[log-contract.md](log-contract.md)），第 9 節照建議：LC-1 (a) 拆成 core／records 兩個子批；LC-2 (a) `match-shots.jsonl`、`match-ingress.jsonl` 維持主執行緒每 10 秒寫出；LC-3 (a) 由 `log-contract.zh-Hant.md` 取代 protocol-v7 §1 的日誌規則；LC-4 照現狀定案 D58(1)(8)、D37，並明確確認 D58(3)(4)(5)；LC-5 (a) Engine `RoleThread::WaitBackend()`；LC-6 同意契約的 Design Invariants；LC-7 (a) 不加 Gateway 欄位、用導出的守恆式。檔位照寫，records 的 `tick_overrun` 局部 xhigh 同意。開始 core | 使用者：「核准 log-contract 計畫第 1 版，第 9 節照建議：LC-1 (a) 拆兩個子批、LC-2 (a)、LC-3 (a)、LC-4 照現狀定案並確認 D58(3)(4)(5)、LC-5 (a)、LC-6 同意 Design Invariants、LC-7 (a)；檔位照寫，tick_overrun 局部 xhigh 同意。開始 core。」 |
+| D143 | （2026-10-20）`log-contract` core 與 records 之間的關卡：LC-10 (a) 同意在 Gateway 套件新增 3 個哨兵錯誤（`errRuntimeLiveness`、`errRuntimeWriteTimeout`、`errRuntimeVersionMismatch`，immutable table）與錯誤型別 `protocolError`（欄位 per-call context），套用 patch（Gateway Design Invariants 的 Architecture Delta）；LC-8 四項（rotation 拆分、逐筆到達事件、樣本流失、週期性 IPC 寫出延遲）都移到 `observability-tools`；LC-9 (a) records 結束時跑只記錄的 L2。開始 records | 使用者：「照建議：LC-10 (a) 同意新增 3 個哨兵錯誤與 protocolError，套用 patch；LC-8 四項都移到 observability-tools；LC-9 (a) records 結束時跑只記錄的 L2。開始 records。」 |
 
 ## 規劃紀錄（記錄器）
 

@@ -1846,8 +1846,8 @@
       "batch": "v7-flow",
       "what": "A runtime failure does not write the final window",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n\ts.flushFinal()\n",
-      "replace": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n",
+      "find": "\tlog.Printf(\"runtime disconnected reason=%s error=%q\", disconnectReason(err), err.Error())\n\ts.flushFinal()\n",
+      "replace": "\tlog.Printf(\"runtime disconnected reason=%s error=%q\", disconnectReason(err), err.Error())\n",
       "check": "go",
       "expect": "runtime_failure: no final line after the runtime failure"
     },
@@ -1906,8 +1906,8 @@
       "batch": "v7-flow",
       "what": "Written commands are counted before the frame is written, so a failed write counts them written",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
-      "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "find": "\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
       "check": "go",
       "expect": "write_failure: player \\d+: link settled 6 of 3 handed commands"
     },
@@ -2806,8 +2806,8 @@
       "batch": "v71-version-errors",
       "what": "An envelope of another version after Ready is reported like an empty one",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\t\terr = fmt.Errorf(\"runtime protocol version mismatch: expected %d, received %d\", adapter.RuntimeVersion, version)\n",
-      "replace": "\t\t\t\t\t_, err = version, errors.New(\"runtime protocol mismatch: empty message\")\n",
+      "find": "\t\t\t\t\terr = fmt.Errorf(\"%w: expected %d, received %d\", errRuntimeVersionMismatch, adapter.RuntimeVersion, version)\n",
+      "replace": "\t\t\t\t\t_, err = version, protocolError{errors.New(\"runtime protocol mismatch: empty message\")}\n",
       "check": "go",
       "expect": "runtime protocol version mismatch: expected"
     },
@@ -4810,6 +4810,26 @@
       "replace": "\" age_ms=\"",
       "check": "log_contract",
       "expect": "match_evicted: v1 keys"
+    },
+    {
+      "id": "lc-disconnect-liveness-unclassified",
+      "batch": "v71-log-contract",
+      "what": "The liveness deadline is not classified as such",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tcase errors.Is(err, errRuntimeLiveness):\n\t\treturn \"liveness_timeout\"\n",
+      "replace": "",
+      "check": "go",
+      "expect": "reason other, want liveness_timeout"
+    },
+    {
+      "id": "lc-disconnect-write-timeout-unmarked",
+      "batch": "v71-log-contract",
+      "what": "A write that ran out of its deadline is not marked",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tif errors.Is(err, os.ErrDeadlineExceeded) {\n\t\treturn fmt.Errorf(\"%w: %w\", errRuntimeWriteTimeout, err)\n\t}\n\treturn err\n",
+      "replace": "\treturn err\n",
+      "check": "go",
+      "expect": "write timeout: reason other, want write_timeout"
     }
   ]
 }

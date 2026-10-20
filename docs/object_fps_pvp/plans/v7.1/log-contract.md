@@ -1,6 +1,6 @@
 # log-contract：日誌 Data Contract v1 與 README 指名的紀錄（計畫，第 1 版）
 
-- 狀態：計畫第 1 版已核准（D142）。**core 子批完成**（第 11 節），停在 core 與 records 之間的關卡：LC-8、LC-9，以及實作中發現的 LC-10（第 11 節）。
+- 狀態：計畫第 1 版已核准（D142）。core 子批完成（第 11 節）；D143（LC-10 (a)、LC-8 全部移出、LC-9 (a)）之後 records 子批實作中。
 - 依據：README 的 `log-contract` 列（「日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等）」；驗收「跨語言 golden、凍結分析器仍可讀／只記錄／—」；估 16 h）、INVENTORY 指向本批的項目、`plans/v7/HANDOFF.md:380-395`（原第 10 批與觀測缺口清單）、D58（`plans/v7/HANDOFF.md:103`）、`protocol-v7.zh-Hant.md` §1「日誌只加鍵」、`network-architecture.zh-Hant.md:295`（死信三原則 D57）、`tt2-trace.md`（D139 T-1 把 `match-shots.jsonl`、`match-ingress.jsonl` 留給本批）。
 - 規劃方法：ultracode（2026-10-20）。盤點 2 位（C++、Go 的行族與讀者）、方案 3 位（最小契約、讀者優先、觀測缺口優先）、評審合成 1 位，以上用 high；對抗式檢查 1 位用 xhigh：MUST-FIX 7、SHOULD-FIX 10、NOTE 5，全部的對應見第 10 節。各 agent 的完整輸出在本 session 的 workflow 紀錄。
 - 估時：**拆成兩個子批，共約 23 h**（README 原估 16 h，約 1.4 倍；原因見第 8 節）。每個子批各自以 1.5 倍停損；單一問題累計超過 2 h 就停下回報。
@@ -213,7 +213,7 @@ core 結束時（records 開始前）：
 | `a_grade_pins`、`frozen_read_guard` | `keys-v1.tsv`（18 族）＋`test_log_contract.py`（CTest `object_fps_pvp.log_contract`，9 個測試）；`prefixes.txt` 由 C++、Go、Python 共用；`ingress_cross_check.py` 也用 `network_statistics` 讀真實跑次。突變 3 個 killed | `4cc2ec6` |
 | `contract_doc` | `docs/object_fps_pvp/log-contract.zh-Hant.md`；`protocol-v7` §1 改成連結；讀者盤點（`build/acceptance`、`tests/object_fps_pvp`、各 L2 的判定工具）：每個被解析的行族都在 A 級表，B 級行族沒有讀者 | 本次 |
 | `decision_record` | INVENTORY：D-LOG、D58-1／3／4／5／8、N-d37、N-summary-counter-wrap、N-log-contract-vs-frozen-analyzers 結案，過時行號更正；`tt2-trace.md` 的「1 秒」更正 | 本次 |
-| `gateway_disconnect` | **未提交，等 LC-10**（下面） | — |
+| `gateway_disconnect` | D143 後套用 patch：讀取端兩條路徑同一個哨兵（活性逾時）、寫出逾時另一個、版本不符、協定錯誤（`protocolError`）、EOF；行改成 `runtime disconnected reason=<…> error=%q`。`version_errors_test.go` 的期望改成比對 reason（AGENTS.md §14.4：格式改了，判定的內容不變）；突變 `v7-flow-final-skips-runtime-failure`、`v7-flow-final-written-before-write`、`v71ve-envelope-version-unnamed` 的錨點同語意更新並重跑 killed；新突變 2 個 killed | records 開始時 |
 
 本機：CTest `cpu|shader` 74／74、Go `./gateway/...` 全部通過、突變 `lc-*` 9 個全部 killed、`test_run_mutations.py` 通過。
 

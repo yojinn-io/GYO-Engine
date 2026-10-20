@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"slices"
@@ -21,6 +22,50 @@ import (
 // windows and action batches are bounded per player (pv7 §2a). Neither
 // blocks the World.
 var errRuntimeDisconnected = errors.New("runtime disconnected")
+
+// Why a runtime link failed (log-contract, family runtime_disconnected): the
+// classification wraps the original error and keeps its text.
+var (
+	// The liveness deadline passed, whether found before a read or during it.
+	errRuntimeLiveness = errors.New("runtime liveness")
+	// A write to the Match did not finish within its deadline.
+	errRuntimeWriteTimeout = errors.New("runtime write timeout")
+	// The Match speaks another protocol version.
+	errRuntimeVersionMismatch = errors.New("runtime protocol version mismatch")
+)
+
+// protocolError is a message this version cannot use; its text is the original.
+type protocolError struct{ err error }
+
+func (e protocolError) Error() string { return e.err.Error() }
+func (e protocolError) Unwrap() error { return e.err }
+
+// disconnectReason names a runtime link failure for the log line
+// "runtime disconnected reason=<reason> error=<quoted error>".
+func disconnectReason(err error) string {
+	var protocol protocolError
+	switch {
+	case errors.Is(err, errRuntimeLiveness):
+		return "liveness_timeout"
+	case errors.Is(err, errRuntimeWriteTimeout):
+		return "write_timeout"
+	case errors.Is(err, errRuntimeVersionMismatch):
+		return "version_mismatch"
+	case errors.As(err, &protocol):
+		return "protocol"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "eof"
+	}
+	return "other"
+}
+
+// runtimeWriteError marks a write that ran out of its deadline.
+func runtimeWriteError(err error) error {
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return fmt.Errorf("%w: %w", errRuntimeWriteTimeout, err)
+	}
+	return err
+}
 
 type runtimeLink struct {
 	conn        *framing.TCPConnection
@@ -392,7 +437,7 @@ func (l *runtimeLink) write(writes []linkWrite) error {
 		}
 		if err == nil {
 			started := time.Now()
-			err = runtimeWrite(l.conn, payload, 3*time.Second)
+			err = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))
 			elapsed := time.Since(started)
 			l.mu.Lock()
 			if elapsed > l.maxWriteAge {
@@ -496,7 +541,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				// A timeout of zero or less would cancel the read deadline
 				// (framing), so the link fails here as a timed-out read does.
 				if ctx.Err() == nil {
-					fail(fmt.Errorf("runtime liveness: %w", os.ErrDeadlineExceeded))
+					fail(fmt.Errorf("%w: %w", errRuntimeLiveness, os.ErrDeadlineExceeded))
 				}
 				return
 			}
@@ -506,10 +551,15 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 				var version uint64
 				var other bool
 				if version, other, err = decodeRuntime(payload, &message); other {
-					err = fmt.Errorf("runtime protocol version mismatch: expected %d, received %d", adapter.RuntimeVersion, version)
-				} else if err == nil && message.Message == nil {
-					err = unknownRuntimeMessage(&message)
+					err = fmt.Errorf("%w: expected %d, received %d", errRuntimeVersionMismatch, adapter.RuntimeVersion, version)
+				} else if err != nil {
+					err = protocolError{err}
+				} else if message.Message == nil {
+					err = protocolError{unknownRuntimeMessage(&message)}
 				}
+			} else if errors.Is(err, os.ErrDeadlineExceeded) {
+				// The read deadline is the liveness deadline.
+				err = fmt.Errorf("%w: %w", errRuntimeLiveness, err)
 			}
 			if err != nil {
 				if ctx.Err() == nil {
@@ -526,7 +576,7 @@ func (l *runtimeLink) run(ctx context.Context, receive func(*runtime.RuntimeEnve
 			case *runtime.RuntimeEnvelope_Clock:
 				l.observeClock(message.GetClock(), time.Now())
 			default:
-				fail(errors.New("unexpected runtime message"))
+				fail(protocolError{errors.New("unexpected runtime message")})
 				return
 			}
 		}
@@ -630,7 +680,7 @@ func (l *runtimeLink) wakeDiagnostic() {
 func (l *runtimeLink) writeEnvelope(message *runtime.RuntimeEnvelope) error {
 	payload, err := proto.Marshal(message)
 	if err == nil {
-		err = runtimeWrite(l.conn, payload, 3*time.Second)
+		err = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))
 	}
 	return err
 }
