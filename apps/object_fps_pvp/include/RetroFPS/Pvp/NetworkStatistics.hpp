@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/threads/RoleThread.hpp"
 #include "engine/time/LateWakeStats.hpp"
 #include "engine/time/MonotonicClock.hpp"
 
@@ -52,6 +53,11 @@ struct HostLockWaits final {
     Engine::Time::LateWakeStats input;
     Engine::Time::LateWakeStats step;
 };
+
+// "role started version=1 role=<name> wait_backend=<backend> name_applied=<0|1>
+// priority_applied=<0|1>" (log-contract, N-wait-backend-not-logged): written by
+// the role's owner after Start, with its own prefix.
+[[nodiscard]] std::string RoleStartedLine(const Engine::Threads::RoleThread& role);
 
 // The Match IPC lanes' pace (log-contract, E1-7), owned by IpcHost: how long a
 // published snapshot waited before its frame was chosen for writing, and how

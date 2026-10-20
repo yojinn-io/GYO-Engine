@@ -862,6 +862,7 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
             });
         if(!started) throw std::runtime_error(Engine::Base::Describe(started.error()));
         impl_->role.emplace(std::move(*started));
+        MatchEventLog::Line(RoleStartedLine(*impl_->role));
         return true;
     } catch(const std::exception& failure) {error=failure.what();return false;}
 }

@@ -70,6 +70,7 @@ int main(int argc, char* argv[]) {
     options.title = Gyo::AppConfig::DisplayName;
     options.gpuDriver = GYO_DEFAULT_GPU_DRIVER;
     std::filesystem::path movementTrace, logPath;
+    bool gatewayFromArgument = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
@@ -81,6 +82,7 @@ int main(int argc, char* argv[]) {
             options.gpuDriver = argv[++index];
         } else if (argument == "--gateway" && index + 1 < argc) {
             options.gateway = argv[++index];
+            gatewayFromArgument = true;
         } else if (argument == "--movement-trace" && index + 1 < argc) {
             movementTrace = argv[++index];
         } else if (argument == "--log" && index + 1 < argc) {
@@ -117,6 +119,9 @@ int main(int argc, char* argv[]) {
         SDL_Log("PvP client start executable_sha256=%s platform=%s gpu_driver=%s gateway=%s log=%s",
                 executable.c_str(), SDL_GetPlatform(), options.gpuDriver.c_str(), options.gateway.c_str(),
                 log->Path().string().c_str());
+        // log-contract (original batch 10): whether the Gateway address came from --gateway or the default.
+        SDL_Log("PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
+                options.gateway.c_str());
     } catch (const std::exception& error) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Client log unavailable: %s", error.what());
     }

@@ -105,6 +105,8 @@ public:
         TickPaceStatistics pace;
     };
     [[nodiscard]] Statistics TakeStatistics();
+    // Diagnostics only: the authority tick (the Match's end record).
+    [[nodiscard]] std::uint64_t TickCount() const;
     // Diagnostics only, since the previous call (or the start): what became
     // of every input and action batch the host received, per player. Inputs
     // and batches of a player the Match does not hold count under player 0.

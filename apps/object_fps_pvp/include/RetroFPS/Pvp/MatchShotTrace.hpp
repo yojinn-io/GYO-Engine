@@ -287,7 +287,12 @@ public:
         if (!file_) throw std::runtime_error("Cannot open shot trace: " + path.string());
     }
     void Write(const ShotRecords& drained) { writer_.Write(drained); }
-    void Finish(const ShotRecords& last) { writer_.Finish(last); }
+    // Ends the file with trace_end and closes it; throws when a write or the close failed.
+    void Finish(const ShotRecords& last) {
+        writer_.Finish(last);
+        file_.close();
+        if (file_.fail()) throw std::runtime_error("Shot trace failed to close");
+    }
 
 private:
     std::ofstream file_;

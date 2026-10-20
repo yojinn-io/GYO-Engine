@@ -6,6 +6,8 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
+#include <syncstream>
+#include <iostream>
 
 namespace fps::pvp {
 namespace {
@@ -61,6 +63,8 @@ bool MatchRuntimeHost::Start(std::string& error) {
         return false;
     }
     role_.emplace(std::move(*started));
+    // log-contract: the owner names the role's timer backend once it runs.
+    std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
     return true;
 }
 
@@ -528,6 +532,11 @@ void MatchRuntimeHost::Body(Engine::Threads::RoleContext& context) {
         std::lock_guard lock(mutex_);
         error_ = failure.what();
     }
+}
+
+std::uint64_t MatchRuntimeHost::TickCount() const {
+    std::lock_guard lock(mutex_);
+    return match_.TickCount();
 }
 
 MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {

@@ -136,6 +136,16 @@
       "cases": "*wakes the writer*",
       "timeout": 120,
       "expect": "GYO_ASSERT failed: wake.reason == Time::WakeReason::Notified"
+    },
+    {
+      "id": "tt2-role-backend-fixed",
+      "what": "A role reports a fixed backend instead of its own Waiter's",
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    return state_->waiter.Backend();\n",
+      "replace": "    return Time::WaitBackend::ConditionVariable;\n",
+      "target": "gyo_threads_tests",
+      "cases": "*backend of its own Waiter*",
+      "expect": "CHECK\\( role.WaitBackend\\(\\) == waiter->Backend\\(\\) \\) is NOT correct"
     }
   ]
 }

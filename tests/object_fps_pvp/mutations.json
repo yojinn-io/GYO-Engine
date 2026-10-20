@@ -4890,6 +4890,16 @@
       "replace": "        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i];\n",
       "check": "cpu",
       "expect": "CHECK\\( second.rejectedBy\\[cooldown\\] == 0 \\)"
+    },
+    {
+      "id": "lc-match-end-reason",
+      "batch": "v71-log-contract",
+      "what": "A normal stop is recorded as a runtime failure in the Match's end record",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "        std::string reason=failed ? \"runtime_failed\" : \"signal\";\n",
+      "replace": "        std::string reason=\"runtime_failed\";\n",
+      "check": "ingress_cross",
+      "expect": "the Match's end record is not one last line"
     }
   ]
 }

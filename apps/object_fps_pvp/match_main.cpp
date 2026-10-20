@@ -9,6 +9,7 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -32,6 +33,7 @@ void WriteIngress(const std::vector<std::string>& lines) {
 }
 
 int main(int argc,char** argv) {
+    const auto processStarted=std::chrono::steady_clock::now();
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena;
@@ -124,11 +126,20 @@ int main(int argc,char** argv) {
         WriteIngress(ingress.Lines(std::move(lastTaken),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed) std::cerr<<"Match simulation failed: "<<*failed<<'\n';
-        // Ends the file with trace_end; throws (exit 1) if any of its writes failed.
-        if(ingressTrace) ingressTrace->Finish(lastRecords);
-        if(shotTrace) shotTrace->Finish(runtime.DrainShotRecords());
-        if(failed) return 1;
-        if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
+        std::string reason=failed ? "runtime_failed" : "signal";
+        int code=failed ? 1 : 0;
+        try {
+            // Ends the file with trace_end; throws (exit 1) if any of its writes failed.
+            if(ingressTrace) ingressTrace->Finish(lastRecords);
+            if(shotTrace) shotTrace->Finish(runtime.DrainShotRecords());
+            if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
+        } catch(const std::exception& error) {std::cerr<<error.what()<<'\n';reason="exception";code=1;}
+        // log-contract: the Match's own end record, the last line (none when the process is killed,
+        // e.g. by TerminateProcess on Windows).
+        std::osyncstream(std::clog)<<"[ObjectFPS/PvP Match] end version=1 reason="<<reason<<" exit_code="<<code
+            <<" uptime_s="<<std::fixed<<std::setprecision(3)
+            <<std::chrono::duration<double>(std::chrono::steady_clock::now()-processStarted).count()
+            <<" authority_tick="<<runtime.TickCount()<<'\n';
+        return code;
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
-    return 0;
 }

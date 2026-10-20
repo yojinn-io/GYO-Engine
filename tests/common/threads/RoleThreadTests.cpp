@@ -8,6 +8,7 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <string>
 #include <thread>
 #include <utility>
 
@@ -118,3 +119,17 @@ TEST_CASE("Threads a role needs a name and a body") {
     GYO_CHECK_ASSERTS(RoleThread::Start({""}, [](RoleContext&) {}));
     GYO_CHECK_ASSERTS(RoleThread::Start({"gyo-test-empty"}, RoleThread::Body{}));
 }
+
+TEST_CASE("Threads a role reports the backend of its own Waiter") {
+    auto role = StartRole({"gyo-test-backend"}, [](RoleContext& context) {
+        while (!context.StopRequested()) static_cast<void>(context.Wait());
+    });
+    auto waiter = Engine::Time::Waiter::Create();
+    REQUIRE(waiter.has_value());
+    // The same platform selection as any Waiter created here.
+    CHECK(role.WaitBackend() == waiter->Backend());
+    CHECK(std::string(Engine::Time::ToString(role.WaitBackend())) != "Unknown");
+    role.RequestStop();
+    role.Join();
+}
+

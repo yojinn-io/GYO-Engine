@@ -180,6 +180,7 @@ struct ClientConnection::Impl {
             [this](Engine::Threads::RoleContext& context){role=&context;Run();});
         if(!started)throw std::runtime_error(Engine::Base::Describe(started.error()));
         worker.emplace(std::move(*started));
+        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
     }
     ~Impl(){
         if(!worker)return;

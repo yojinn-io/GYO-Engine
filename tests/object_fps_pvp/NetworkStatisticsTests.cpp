@@ -173,3 +173,16 @@ TEST_CASE("Match IPC statistics line keeps its keys in a fixed order (log-contra
     CHECK(IpcStatisticsLine({}, 2.5, true).starts_with("[ObjectFPS/PvP Match] ipc statistics version=1 window_s=2.500 final=1 "));
 }
 
+TEST_CASE("Role started line names the role's own timer backend (log-contract, N-wait-backend-not-logged)") {
+    auto role = Engine::Threads::RoleThread::Start({"gyo-test-role"}, [](Engine::Threads::RoleContext& context) {
+        while (!context.StopRequested()) static_cast<void>(context.Wait());
+    });
+    REQUIRE(role.has_value());
+    const auto line = RoleStartedLine(*role);
+    CHECK(line.starts_with(std::string("role started version=1 role=gyo-test-role wait_backend=") +
+                           Engine::Time::ToString(role->WaitBackend()) + " name_applied="));
+    CHECK(line.find(" priority_applied=") != std::string::npos);
+    role->RequestStop();
+    role->Join();
+}
+

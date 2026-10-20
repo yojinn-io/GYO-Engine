@@ -102,6 +102,11 @@ void TickPaceStatistics::RecordAdvance(const Engine::Time::Duration took) {
     advance.Record(took > Engine::Time::Duration::zero() ? took : Engine::Time::Duration::zero());
 }
 
+std::string RoleStartedLine(const Engine::Threads::RoleThread& role) {
+    return "role started version=1 role=" + role.Name() + " wait_backend=" + Engine::Time::ToString(role.WaitBackend()) +
+           " name_applied=" + (role.NameApplied() ? "1" : "0") + " priority_applied=" + (role.PriorityApplied() ? "1" : "0");
+}
+
 std::string IpcStatisticsLine(const IpcLaneStatistics& lanes, const double windowSeconds, const bool final) {
     auto line = LineStream();
     line << "[ObjectFPS/PvP Match] ipc statistics version=1 window_s=" << std::fixed << std::setprecision(3) << windowSeconds

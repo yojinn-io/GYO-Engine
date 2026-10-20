@@ -171,6 +171,14 @@ def run_once(args, gateway_executable, output):
         status = result.get("checks", {}).get(name, {}).get("status")
         if status != "not applicable":
             failures.append(f"{name} is {status}, expected not applicable for a passthrough Gateway")
+    # log-contract: the Match's role lines and its own end record (SIGTERM ends it normally: reason=signal).
+    match_text = (output / "match.log").read_text(encoding="utf-8", errors="replace")
+    for role in ("gyo-match-sim", "gyo-match-ipc"):
+        if f"[ObjectFPS/PvP Match] role started version=1 role={role} wait_backend=" not in match_text:
+            failures.append(f"no role started line for {role}")
+    ends = [line for line in match_text.splitlines() if "[ObjectFPS/PvP Match] end version=1 " in line]
+    if len(ends) != 1 or "reason=signal exit_code=0 " not in ends[0] or ends != [match_text.splitlines()[-1]]:
+        failures.append(f"the Match's end record is not one last line with reason=signal exit_code=0: {ends}")
     # log-contract: the frozen statistics reader also reads the real logs of this run (no ValueError, every window).
     try:
         statistics = network_statistics.collect(gateway=output / "gateway.log", match=output / "match.log")
