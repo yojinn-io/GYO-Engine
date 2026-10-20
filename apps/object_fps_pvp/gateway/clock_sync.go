@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -65,7 +66,7 @@ func boolDigit(value bool) string {
 // line is the "clock sync" line both ends log (pv7 §3).
 func (w clockWindow) line() string {
 	drift := "na"
-	if w.driftPpm != nil {
+	if w.driftPpm != nil && !math.IsNaN(*w.driftPpm) && !math.IsInf(*w.driftPpm, 0) {
 		drift = strconv.FormatFloat(*w.driftPpm, 'f', 3, 64)
 	}
 	return fmt.Sprintf("clock sync window_ms=%d samples=%d missing=%s invalid=%d negative_delay=%d replaced=%d offset_us=%s delay_min_us=%s delay_max_us=%s drift_ppm=%s jump=%s final=%s",

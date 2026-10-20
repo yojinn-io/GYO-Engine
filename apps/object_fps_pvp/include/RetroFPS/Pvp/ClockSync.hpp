@@ -7,6 +7,7 @@
 // one monotonic clock; the caller passes them, so tests use any clock.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -39,8 +40,12 @@ struct ClockWindow {
     bool final{}; // the window closed with the link, not after WindowUs
 };
 
-// "clock sync window_ms=... final=0": the line both ends log (pv7 §3).
+// "clock sync window_ms=... final=0": the line both ends log (pv7 §3; the body
+// of the clock_sync family in docs/object_fps_pvp/log-contract.zh-Hant.md). A
+// drift that is not finite is written as na.
 [[nodiscard]] inline std::string ClockWindowLine(const ClockWindow& window);
+// The Client's line: "[ObjectFPS/PvP] clock sync player=<id> window_ms=...".
+[[nodiscard]] inline std::string ClientClockSyncLine(std::uint64_t player, const ClockWindow& window);
 
 class ClockSync {
 public:
@@ -97,6 +102,40 @@ private:
     std::deque<Point> segment_; // one point per window with samples, since the last jump
 };
 
+// The Client worker's clock sync of one joined session. The player id is the
+// worker's own copy of its session identity, set at the join and cleared when
+// the session ends, so the last window (written when the transport closes,
+// after the game thread already cleared its state) still names the player.
+class ClientClockSession {
+public:
+    void Begin(std::uint64_t player, std::uint64_t nowUs) {
+        clock_ = ClockSync(nowUs);
+        player_ = player;
+        active_ = true;
+    }
+    [[nodiscard]] ClockSync& Clock() noexcept { return clock_; }
+    // The line of a window that finished by nowUs, if one did.
+    [[nodiscard]] std::optional<std::string> Roll(std::uint64_t nowUs) {
+        const auto window = clock_.Roll(nowUs);
+        return window ? std::optional<std::string>(ClientClockSyncLine(player_, *window)) : std::nullopt;
+    }
+    // The final window's line of an active session, which this ends.
+    [[nodiscard]] std::optional<std::string> End(std::uint64_t nowUs) {
+        if (!active_) return std::nullopt;
+        active_ = false;
+        const auto window = clock_.Roll(nowUs, true);
+        std::optional<std::string> line;
+        if (window) line = ClientClockSyncLine(player_, *window);
+        player_ = 0;
+        return line;
+    }
+
+private:
+    ClockSync clock_;
+    std::uint64_t player_{};
+    bool active_{};
+};
+
 // Implementation (inline: one header, two I/O libraries).
 
 namespace detail {
@@ -109,7 +148,7 @@ inline std::string Optional(const std::optional<std::int64_t>& value) {
 
 inline std::string ClockWindowLine(const ClockWindow& window) {
     std::string drift = "na";
-    if (window.driftPpm) {
+    if (window.driftPpm && std::isfinite(*window.driftPpm)) {
         char text[32];
         std::snprintf(text, sizeof text, "%.3f", *window.driftPpm);
         drift = text;
@@ -120,6 +159,11 @@ inline std::string ClockWindowLine(const ClockWindow& window) {
            " offset_us=" + detail::Optional(window.offsetUs) + " delay_min_us=" + detail::Optional(window.delayMinUs) +
            " delay_max_us=" + detail::Optional(window.delayMaxUs) + " drift_ppm=" + drift + " jump=" + (window.jump ? "1" : "0") +
            " final=" + (window.final ? "1" : "0");
+}
+
+inline std::string ClientClockSyncLine(std::uint64_t player, const ClockWindow& window) {
+    static constexpr std::size_t Event = sizeof("clock sync ") - 1;
+    return "[ObjectFPS/PvP] clock sync player=" + std::to_string(player) + " " + ClockWindowLine(window).substr(Event);
 }
 
 inline std::uint64_t ClockSync::Stamp(std::uint64_t nowUs) {

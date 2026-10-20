@@ -4736,6 +4736,36 @@
       "replace": "    weapon = {};\n",
       "check": "cpu",
       "expect": "CHECK\\( baseline.Take\\(SummaryCountsOf\\(weapon\\)\\) == SummaryCounts\\{2, 1, 0, 0, 0\\} \\)"
+    },
+    {
+      "id": "lc-clock-cpp-key",
+      "batch": "v71-log-contract",
+      "what": "The C++ clock sync body renames a key",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
+      "find": "\" negative_delay=\" + std::to_string(window.negativeDelay)",
+      "replace": "\" negative_delays=\" + std::to_string(window.negativeDelay)",
+      "check": "ipc",
+      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[11\\] \\)"
+    },
+    {
+      "id": "lc-clock-go-key",
+      "batch": "v71-log-contract",
+      "what": "The Go clock sync body renames a key",
+      "file": "apps/object_fps_pvp/gateway/clock_sync.go",
+      "find": "negative_delay=%d replaced=%d",
+      "replace": "negative_delays=%d replaced=%d",
+      "check": "go",
+      "expect": "TestClockWindowLineMatchesTheSharedGolden"
+    },
+    {
+      "id": "lc-clock-session-player-cleared",
+      "batch": "v71-log-contract",
+      "what": "The Client's final clock line loses the session's player",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
+      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, true);",
+      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, true);",
+      "check": "ipc",
+      "expect": "clock sync player=7 window_ms="
     }
   ]
 }

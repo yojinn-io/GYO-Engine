@@ -155,8 +155,7 @@ struct ClientConnection::Impl {
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
     // Diagnostics only (pv7 §3): the time echo with the Gateway on Hello and
     // Welcome, per connection; nothing here reaches a decision (D32).
-    ClockSync clock;
-    bool clockActive{};
+    ClientClockSession clock;
     // The worker is one asio io thread. Nothing polls: the socket becoming
     // readable, a post from another thread (a request, new input, a new action,
     // an ACK advance) and one timer at the earliest deadline wake it, and each
@@ -209,10 +208,7 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
-        if(clockActive) {
-            if(const auto window=clock.Roll(MicrosNow(),true))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
-            clockActive=false;
-        }
+        if(const auto line=clock.End(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
@@ -378,7 +374,7 @@ struct ClientConnection::Impl {
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
         connectedAt=receivedAt=Clock::now();helloAt={};
-        clock=ClockSync(MicrosNow());clockActive=true;
+        clock.Begin(joined.at("player_id").get<PlayerId>(),MicrosNow());
         std::scoped_lock lock(mutex);
         if(request.generation!=generation.load())return;
         activeGeneration=request.generation;
@@ -479,11 +475,11 @@ struct ClientConnection::Impl {
         if(now-helloAt>=helloInterval) {
             pb::Hello hello;hello.set_session_token(token);
             auto* echo=hello.mutable_clock();
-            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
-            echo->set_transmit_us(clock.Stamp(MicrosNow()));
+            if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
+            echo->set_transmit_us(clock.Clock().Stamp(MicrosNow()));
             Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
-        if(const auto window=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
+        if(const auto line=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -507,7 +503,7 @@ struct ClientConnection::Impl {
                     ClockStamp peer{.transmitUs=sample.transmit_us()};
                     if(sample.has_origin_us())peer.originUs=sample.origin_us();
                     if(sample.has_receive_us())peer.receiveUs=sample.receive_us();
-                    static_cast<void>(clock.Observe(peer,static_cast<std::uint64_t>(
+                    static_cast<void>(clock.Clock().Observe(peer,static_cast<std::uint64_t>(
                         std::chrono::duration_cast<std::chrono::microseconds>(arrivedAt.time_since_epoch()).count())));
                 }
                 CheckArena(message.arena_id(),message.arena_version(),
