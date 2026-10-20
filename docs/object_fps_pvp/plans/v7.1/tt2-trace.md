@@ -128,9 +128,9 @@ README 原估 10 h 沒有包含產品寫檔器的改接與 L2 的工具；這兩
 - 偏差：第 4 節的「寫入失敗」測試只在 Linux 跑（`/dev/full`），macOS 與 Windows 沒有可攜的做法。
 - xhigh 審查（T-4，1 位）：沒有 MUST-FIX；SHOULD 6 項、NIT 6 項，處理與未處理的項目記在 Engine 的 [TT HANDOFF](../../../architecture/plans/time-threads-trace/HANDOFF.md)「TT-2 紀錄」。和產品有關的處理：測試的 UB（被 Tee 的 stream 宣告順序）；`LogFile` 每行 flush（`flushEachLine`，多個 Client 同時啟動、寫到同名日誌檔時不切開一行，和舊版相同）；移動紀錄改用 `std::string`＋`%.17g` 組行（不在生產者上建 stream，MSVC 會取全域鎖）；當機路徑、丟棄行、`Finish` 之後才到的事件補測試。修正後產品突變 7／7（新增 `tt2-log-crash-no-flush`、`tt2-log-handler-not-restored`、`tt2-log-drops-unreported`、`tt2-movement-late-uncounted`）、Engine 突變 6／6（新增 `tt2-timer-wake`）、CTest `cpu|shader` 73／73。
 
-## 11. L2 事前宣告（第 2 版，D140 核准；第 3 版製作中）
+## 11. L2 事前宣告（第 3 版，等核准）
 
-第 1 版草稿經 D45 的門檻來源對抗式檢查（1 位 xhigh，2026-10-20）：MUST-FIX 5、SHOULD-FIX 4；對應見第 12 節。本版只改宣告內容；工具、開發跑次與乾跑在 11.6 決定之後做，雜湊在第 3 版寫入。
+第 1 版草稿經 D45 的門檻來源對抗式檢查（1 位 xhigh，2026-10-20）：MUST-FIX 5、SHOULD-FIX 4；對應見第 12 節。第 2 版經 D140 核准（判定與門檻）。第 3 版加上工具、開發跑次、乾跑與雜湊（第 13 節），並把第 2 版寫得不夠具體的三處補明（11.2 的重建方式、11.3 沿用的停止條件、T2-7 只有 P95）；判定與門檻和第 2 版相同。
 
 ### 11.1 要回答的問題與門檻的來源
 
@@ -144,7 +144,7 @@ README 的驗收「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」不能
 
 ### 11.2 兩棵樹與項目
 
-- B＝master `0fabb52`、A＝本批最後一個改程式的 commit（之後只改文件）。兩棵樹都先刪掉 `build/target` 再從零建置；Gateway 建置資訊 B＝`0fabb52`、A＝A commit，modified＝false；之後才寫 `artifacts.sha256`（D45 M4）。`build/acceptance` 兩棵樹相同，以凍結清單核對。B 用 `../GYO-Engine-a1-before`（已切到 `0fabb52`，要再從零建一次）。
+- B＝master `0fabb52`（`../GYO-Engine-a1-before`）、A＝`d30da3f`（本批最後一個改程式的 commit；主 checkout 之後只改文件）。兩棵樹都清除建置產物（`ninja clean`）並刪掉 stage 目錄（`build/target/object_fps_pvp`、`build/target/_services`）後重建，Gateway 另外以它的目標建置；第三方原始碼（`_deps`）與 logs 保留（刪掉整個 `build/target` 會連 logs 一起刪，第 2 版的寫法不可行）。Gateway 建置資訊 B＝`0fabb52`、A＝`1218a74`（`d30da3f` 之後只多文件），modified 都是 false；之後才寫 `artifacts.sha256`（D45 M4）。`build/acceptance` 兩棵樹相同，以凍結清單 `frozen-pv7-cp.sha256` 核對。
 - 交錯、閒置閘門、sleeper、受干擾規則沿用 `a1-shot-step`。
 - 項目（每棵樹各 3 輪）：clean-30、clean-60、clean-144、soak-short、quad clean-60、backpressure、rapid-edge-60、rapid-edge-144。Match 每項都寫移動紀錄；probe 寫移動紀錄的是 clean-30／60／144（`gameplay_action.hpp:87`）、soak、quad（`quad_main.cpp:65`）、backpressure（`timing_main.cpp:54`）；rapid 只有 Match 的（D45 S1）。
 - `LogFile` 不在 L2：凍結的 runner 不傳 `--log`，probe 不用 `LogFile`。它由 L1（`DiagnosticFileTests`）與 L3（Client 預設就寫日誌，`main.cpp`）涵蓋；README 的「寫檔不進熱路徑」對 `LogFile` 這一部分，L2 不驗證（D45 M3）。
@@ -153,7 +153,7 @@ README 的驗收「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」不能
 
 | 代號 | 條件 |
 |---|---|
-| R1 等 | 沿用 `a1-shot-step` 的 R1、R1s、R3、R4、T1、H1、D；兩棵樹都判。Match 與 probe 在移動紀錄 `!Good()` 時本來就以失敗結束（`match_main.cpp:128`；`gameplay_action.hpp:195` 等），所以「有遺失」由 R1 停下。A 的 R1 若是遺失，回報時註明可能是停止順序（`Finish` 之後才到的事件在 A 會計數，在 B 是靜默遺失，第 6 節），不自動當成熱路徑退步（D45 S2） |
+| R1 等 | 沿用 `a1-shot-step` 的 R1、R3（clean 與 soak 沒有非重生的重設）、R4（gameplay）、R8（逐出行；clean-60、quad clean-60、soak 的批次拒收與未裁決動作）、K1a、執行檔身分、T1 與 H1 與 A1-2（`shadow_a1.analyze_v2`：兩棵樹都在 A1 之後，紀錄都是版本 2）、D；兩棵樹都判。第 2 版列的 R1s 是停頓注入的規則，本批沒有那種項目，不適用；R8、K1a、執行檔身分、A1-2 是第 2 版漏列的既有條件。Match 與 probe 在移動紀錄 `!Good()` 時本來就以失敗結束（`match_main.cpp:128`；`gameplay_action.hpp:195` 等），所以「有遺失」由 R1 停下。A 的 R1 若是遺失，回報時註明可能是停止順序（`Finish` 之後才到的事件在 A 會計數，在 B 是靜默遺失，第 6 節），不自動當成熱路徑退步（D45 S2） |
 | T2-1 | 每個移動紀錄檔都以 `trace_end` 結尾，`events`＝檔中事件行數；兩棵樹都判 |
 
 ### 11.4 結束時的判定（只在完整 session 上判）
@@ -164,10 +164,10 @@ README 的驗收「寫檔不進熱路徑（射擊 P99 增量 ≤1 ms）」不能
 |---|---|---|
 | T2-3、T2-4 | Match 的 `host_lock_input_wait`、`host_lock_step_wait` 的 P99（每個值把該單位所有統計視窗的 bins 加總） | 粗閘門：median A − median B ≤ max(range B, 1 ms)。B 的歷史值全部是 250 µs（A1 session），所以實際上是「A 的中位數 ≤ 1000 µs」；只抓得到 ≥1% 的鎖等待 ≥1 ms 這種退步 |
 | T2-5 | 移動「產生→Actual」P95、P50（`a1-shot-step` 的 C1、C2） | 同 C1、C2。A1 的 range B 0.13～0.56 ms |
-| T2-9 | 每筆事件的生產者成本 P99 × 8 | ≤ 1 ms（等於每筆 P99 ≤ 125 µs）。量法：A 的建置上，一支開發用程式在 sink 存活、寫檔執行緒閒置的狀態下，對 Resolved 形狀的事件呼叫 `TraceMovement` 10 萬次（每次都讓佇列由空變非空，所以每次都含 Notify），取每次耗時的 P99。只在本機 macOS 量（Windows 見 11.5） |
+| T2-9 | 每筆事件的生產者成本 P99 × 8 | ≤ 1 ms（等於每筆 P99 ≤ 125 µs）。量法：`producer_t29`（以 A 的標頭與函式庫建置）在 sink 存活、每次呼叫前暫停 200 µs（寫檔執行緒閒置，每次都讓佇列由空變非空、含 Notify）的狀態下，對 Resolved 形狀的事件呼叫 `TraceMovement` 10 萬次，取每次耗時的 P99；而且紀錄沒有遺失（`good`）。session 中在閒置閘門之後、第一項之前跑一次。只在本機 macOS 量（Windows 見 11.5） |
 | T2-8 | 移動「產生→送出」P95（`send_p95_ms`，`gameplay_evidence.py:294`；clean-30／60／144、soak） | 只記錄。預測：median A − median B ≤ 0.05 ms（A1 的 B 值 0.176～0.223 ms、跑次間差 ≤0.05 ms）；超過時回報（D45 M2） |
 | T2-6 | Match 的 Tick 晚醒 P99、`cpu_s`、鎖等待的 max 與 ≥250 µs 的筆數 | 只記錄。預測：≥250 µs 的筆數 A＝0 |
-| T2-7 | 合法射擊的 Match 端與 Client 端延遲 P95、P99 | 只記錄（D46⑦） |
+| T2-7 | 合法射擊的 Match 端與 Client 端延遲 P95（runner 的 `result.json` 只有 P95，沒有 P99） | 只記錄（D46⑦） |
 
 不成立時照 AGENTS.md §14.1 停下回報，不重跑、不放寬。
 
@@ -220,4 +220,24 @@ T2-9 的量法先在本機跑過一次（Intel Mac、`-O2`、`producer_bench.cpp
 | S2 | dropped＝0 已由 R1 涵蓋；A 獨有的停止原因 | T2-1 改判 events；R1 的回報註明 |
 | S3 | 彙總單位沒寫 | 11.4 開頭 |
 | S4 | 引用寫反、漏列 | 11.1 更正 |
+
+## 13. 工具、開發跑次與乾跑（第 3 版）
+
+目錄：`build/target/_build/test/logs/pvp-v71-tt2-l2-prep-20261020/`（`prep-files.sha256` 的 SHA-256 `13502d6c…`）。
+
+| 檔案 | SHA-256 | 內容 |
+|---|---|---|
+| `run_tt2.py` | `00c8c13e…` | driver（`a1-shot-step` 的 `run_a1.py` 改兩棵樹、項目、T2-9 的一次執行） |
+| `judge_tt2.py` | `40aee8b1…` | 排程、每項檢查、結束時的判定（`judge_a1.py` 改寫；T2-1、T2-3／4／5／9 判定，T2-6／7／8 只記錄） |
+| `artifacts.sha256` | `d5377b35…` | 兩棵樹的 Match、Gateway、4 個 probe、arena 與 31 個資產檔（逐檔相同），加上 A 的 `producer_t29`；77 行 |
+| `producer_t29.cpp`、`producer_t29` | `3fcc322d…`、`000fecfe…` | T2-9 的程式與它的執行檔（建置指令在 `producer_t29.build.txt`：`-O2 -DNDEBUG`，和產品的 RelWithDebInfo 相同的最佳化） |
+| `commands.txt` | `de7a513a…` | 每種項目、每棵樹的指令 |
+
+- 匯入的凍結模組沿用 `a1-shot-step`（`judge_16b.py`、`judge_16.py`、`judge_c2.py`、edge-rate-limit 的 `judge_l2.py`、`sleeper.py`、`shadow_a1.py`），各自以雜湊核對。
+- 48 項（每棵樹 24），`--list-only` 實算約 45 分鐘（含閒置閘門與 T2-9）。
+- 兩棵樹乾淨重建後：A 的 CTest `cpu|shader` 73／73；preflight 通過（凍結清單兩棵樹相符、artifacts 相符、樹的狀態相符）。
+- 開發跑次（`dev/`，2026-10-20）：8 種項目 × 兩棵樹，16 項全部 P、0 停止、0 旗標（只看分類、停止與旗標，D132）。T2-9 的開發跑次印出了 A 的數值（每筆 P99 29.5 µs；門檻在第 2 版已核准，看到數值不改門檻）。各項的時間估計由這些跑次重算。
+- 乾跑（`dryrun.py`，`dryrun/`）：逐項 30 列（開發跑次 16、夾具 12、受干擾、執行檔身分）、合成判定 22 列（分位數的上界與進位、T2-3 的粗閘門、T2-5、T2-8 的預測、T2-9 的邊界與缺值）、判定工具的突變 15 個全部被抓到、driver 8 列（指令只用自己的樹、拒絕既有輸出與錯誤字面值、preflight）、模擬 session 7 種（完整、停止、未完、順序錯、沒有 T2-9、同一情境受干擾 2 次、累計 6 次），全部如預期。第一次乾跑有 1 列失敗：乾跑自己的合成數據（「rank 進位」那一列的數字設計錯，對應的突變因此沒被抓到）；改正合成數據後全部通過，第一次的輸出保留在 `dryrun-first/`。
+
+核准時請引用這三個字面值：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`。核准後不放寬（AGENTS.md §14.1）；session 期間我不呼叫工具。
 
