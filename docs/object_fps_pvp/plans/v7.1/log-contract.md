@@ -231,3 +231,14 @@ core 結束時（records 開始前）：
 - (b) 不加變數：以錯誤字串分類（脆弱，原計畫已否決）。
 - (c) 這一項移到 `records` 或之後的批次。
 
+### LC-8 的工時（records 開始前決定）
+
+| 項目 | 留在 records 的做法 | 估計 | 移出的去處 |
+|---|---|---|---|
+| rotation 拆分（N-rotation-discarded-detail） | `match-ingress.jsonl` 新增 kind，升 version 2；`ingress_evidence.py` 的 trace 讀取要改並重新凍結 | 約 4 h | `observability-tools`；d44 可以由移動紀錄的 HostAccepted−Resolved 推出，不擋 d44 |
+| 逐筆到達事件（E1-2 的剩餘） | 新的 JSONL 或新 kind（R4） | 約 3 h | `observability-tools` |
+| 樣本流失（N-client-side-loss-counters 的一部分） | slack 每次只帶最小值；要在 Client 端計丟掉的樣本數 | 約 1.5 h | `observability-tools` |
+| 週期性 IPC 寫出延遲（原第 10 批） | Gateway 每 10 秒的 `link_write_age_*`；是 Gateway 的新欄位，同樣要你同意（LC-10 的同一條規則） | 約 1 h | `observability-tools` |
+
+建議全部移到 `observability-tools`（README 原估 10～13 h，加上這些約 19～23 h，到時候再拆）。
+
