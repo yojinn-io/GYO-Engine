@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：records 完成，只記錄 L2 的宣告等核准（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `log-contract`：實作與只記錄 L2 完成，等四平台 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[log-contract](log-contract.md) 第 13 節，只記錄 L2 的宣告第 1 版（工具 `60af302b…`；quad clean-60 一輪＋Match 受控停頓 50 ms；8 個記錄項，沒有判定）。
+- **等你決定**：PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（`tt2-trace`＋`log-contract`，Engine 的 TT-2 和它的第一個消費端）是否在 L1 通過後合併，或繼續把 after-pv7 的下一批（`dead-letter-position`）放進同一個 PR。
 - **進行中**：四平台 L1（`71c9c76`，run 39428630663）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft）。
 - **下一步**：`log-contract`（Engine 的 TT-2 和它的第一個消費端同一個 PR，所以 PR #82 要等 `log-contract` 之後才合併）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`log-contract` records 完成（E1-5 Tick 超過與停頓、E1-7 IPC lane、受擊與拒絕原因、Client 流失計數、role 的計時器後端、Match 的 end 行、Gateway 斷線分類）；只記錄 L2 的宣告等你核准。
+- **最後更新**：2026-10-20，`log-contract` 的只記錄 L2（D144）：E1-5 兩種量法相差 34 µs、對時行依 player 分得出、凍結讀者 repo 版 passed；沒有本批造成的意外。
 
 ## 閱讀入口
 
@@ -113,6 +113,7 @@
 | D141 | （2026-10-20）核准 `tt2-trace` 的 L2 事前宣告第 3 版（[tt2-trace.md](tt2-trace.md) 第 11、13 節：driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`），立即跑 session | 使用者：「核准 tt2-trace 的 L2 宣告第 3 版（driver 00c8c13e…、judge 40aee8b1…、artifacts d5377b35…），現在跑 session。」 |
 | D142 | （2026-10-20）核准 `log-contract` 計畫第 1 版（[log-contract.md](log-contract.md)），第 9 節照建議：LC-1 (a) 拆成 core／records 兩個子批；LC-2 (a) `match-shots.jsonl`、`match-ingress.jsonl` 維持主執行緒每 10 秒寫出；LC-3 (a) 由 `log-contract.zh-Hant.md` 取代 protocol-v7 §1 的日誌規則；LC-4 照現狀定案 D58(1)(8)、D37，並明確確認 D58(3)(4)(5)；LC-5 (a) Engine `RoleThread::WaitBackend()`；LC-6 同意契約的 Design Invariants；LC-7 (a) 不加 Gateway 欄位、用導出的守恆式。檔位照寫，records 的 `tick_overrun` 局部 xhigh 同意。開始 core | 使用者：「核准 log-contract 計畫第 1 版，第 9 節照建議：LC-1 (a) 拆兩個子批、LC-2 (a)、LC-3 (a)、LC-4 照現狀定案並確認 D58(3)(4)(5)、LC-5 (a)、LC-6 同意 Design Invariants、LC-7 (a)；檔位照寫，tick_overrun 局部 xhigh 同意。開始 core。」 |
 | D143 | （2026-10-20）`log-contract` core 與 records 之間的關卡：LC-10 (a) 同意在 Gateway 套件新增 3 個哨兵錯誤（`errRuntimeLiveness`、`errRuntimeWriteTimeout`、`errRuntimeVersionMismatch`，immutable table）與錯誤型別 `protocolError`（欄位 per-call context），套用 patch（Gateway Design Invariants 的 Architecture Delta）；LC-8 四項（rotation 拆分、逐筆到達事件、樣本流失、週期性 IPC 寫出延遲）都移到 `observability-tools`；LC-9 (a) records 結束時跑只記錄的 L2。開始 records | 使用者：「照建議：LC-10 (a) 同意新增 3 個哨兵錯誤與 protocolError，套用 patch；LC-8 四項都移到 observability-tools；LC-9 (a) records 結束時跑只記錄的 L2。開始 records。」 |
+| D144 | （2026-10-20）核准 `log-contract` 只記錄 L2 的宣告第 1 版（[log-contract.md](log-contract.md) 第 13 節，工具 `60af302b…`），立即跑 | 使用者：「核准 log-contract 只記錄 L2 的宣告第 1 版（工具 60af302b…），現在跑。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -548,6 +549,7 @@
 - 2026-10-20：`log-contract` 的 ultracode 規劃完成（盤點 2、方案 3、評審合成 1 用 high；對抗式檢查 1 用 xhigh；7 個 agent 約 42 分鐘）。評審以「讀者優先」方案為底稿，接上「觀測缺口優先」的紀錄與「最小契約」的停損門檻，合成約 19 h 的草案；對抗式檢查 MUST-FIX 7（間隔用晚醒的 bins 量不出停頓、沒有版本鍵的凍結讀者升版時會靜默讀錯、i/o timeout 的處置和「統一」相反、新增 Gateway 欄位要你同意、改斷線行會打斷既有測試與突變、「被解析的行一定有 golden」當天不成立、和 protocol-v7 §1 的日誌規則衝突）、SHOULD-FIX 10、NOTE 5，全部吸收進計畫第 1 版（[log-contract.md](log-contract.md) 第 10 節），估時改為兩個子批共約 23 h。順帶更正 `tt2-trace.md` 第 1 節的「1 秒」（實際是 10 秒的統計視窗）。
 - 2026-10-20：`log-contract` core 實作（D142；[log-contract.md](log-contract.md) 第 11 節）：摘要下溢（先 Red 後 Green）、clock sync 共用 golden 與 Client 行的 player、coalesced 守恆式、A 級釘住（18 族）與凍結讀者守衛、共用禁用片語清單、契約文件 `log-contract.zh-Hant.md`（取代 protocol-v7 §1 的日誌規則）、INVENTORY 9 項結案。CTest 74／74、突變 9 個 killed。發現：Gateway 斷線分類要新增套件變數與錯誤型別，依 Gateway 的 Design Invariants 是要你同意的 Architecture Delta，計畫沒列，所以存成 patch、不提交（LC-10）。偏差：直接寫出的行改用原始碼層的鍵序列釘住；ingress 沒有新增逐字 golden。
 - 2026-10-20：`log-contract` records 實作（D143；[log-contract.md](log-contract.md) 第 12 節）。全部切片完成，突變全部 killed，CTest 74／74。開發跑次抓到：`action_late` 的定義錯（閒置 lane 的第一筆被算成晚了數秒，改成從開始有待送內容起算）、守衛的測試恆真（generator 的真假判定）、core 的樣本 `*.log` 被 gitignore（core 的四平台 L1 run 39422895712 因此失敗，已改 `.txt`）。`end` 行的 `authority_tick` 常是小值（房間清空時 Match 重設），只記錄。
+- 2026-10-20：`log-contract` 的只記錄 L2（D144；[log-contract.md](log-contract.md) 第 14 節；`build/target/_build/test/logs/pvp-v71-log-contract-l2-20261020/`）：8 個記錄項。受控停頓 53 ms 後 `tick_overrun` 39.7 ms、`tick_stalls` 2，和 trace 重算的間隔差 34 µs；同一 probe 程序的對時行 player 1～4 分得出；repo 版 `ingress_evidence` passed、未知鍵 0；d117 的舊版讀不了 pv7-line 的日誌（本批之前就是如此，只記錄）。
 
 ## 未結事項
 

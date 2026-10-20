@@ -1,6 +1,6 @@
 # log-contract：日誌 Data Contract v1 與 README 指名的紀錄（計畫，第 1 版）
 
-- 狀態：計畫第 1 版已核准（D142）。core 子批完成（第 11 節）；D143 之後 records 子批完成（第 12 節）。**只記錄 L2 的宣告第 1 版等核准**（第 13 節）。
+- 狀態：計畫第 1 版已核准（D142）。core 子批完成（第 11 節）；D143 之後 records 子批完成（第 12 節）。只記錄 L2 已跑（D144，第 14 節）；四平台 L1（run 39428630663）通過後結案。
 - 依據：README 的 `log-contract` 列（「日誌行的版本與驗證規則：08c 行族 v1 的去留、D58 暫定項的確認、原第 10 批的紀錄（拒絕原因、snapshot 年齡、Match 的裁決與結束紀錄等）」；驗收「跨語言 golden、凍結分析器仍可讀／只記錄／—」；估 16 h）、INVENTORY 指向本批的項目、`plans/v7/HANDOFF.md:380-395`（原第 10 批與觀測缺口清單）、D58（`plans/v7/HANDOFF.md:103`）、`protocol-v7.zh-Hant.md` §1「日誌只加鍵」、`network-architecture.zh-Hant.md:295`（死信三原則 D57）、`tt2-trace.md`（D139 T-1 把 `match-shots.jsonl`、`match-ingress.jsonl` 留給本批）。
 - 規劃方法：ultracode（2026-10-20）。盤點 2 位（C++、Go 的行族與讀者）、方案 3 位（最小契約、讀者優先、觀測缺口優先）、評審合成 1 位，以上用 high；對抗式檢查 1 位用 xhigh：MUST-FIX 7、SHOULD-FIX 10、NOTE 5，全部的對應見第 10 節。各 agent 的完整輸出在本 session 的 workflow 紀錄。
 - 估時：**拆成兩個子批，共約 23 h**（README 原估 16 h，約 1.4 倍；原因見第 8 節）。每個子批各自以 1.5 倍停損；單一問題累計超過 2 h 就停下回報。
@@ -261,7 +261,7 @@ core 結束時（records 開始前）：
 
 本機：CTest `cpu|shader` 74／74、Go 全部通過、`test_run_mutations.py` 通過。
 
-## 13. 只記錄的 L2 宣告（第 1 版，等核准）
+## 13. 只記錄的 L2 宣告（第 1 版，D144 核准）
 
 沒有門檻、沒有通過或失敗的判定（所以不做 D45 的門檻來源檢查）；結果意外時交你決定，不在本批內修正後重跑（§14.1）。
 
@@ -277,4 +277,21 @@ core 結束時（records 開始前）：
   7. shots 與 ingress 的 `trace_end`、Match 的 `end` 行。
   8. `[log] dropped_lines`（runner 不給 Match `--log`，預期沒有）。
 - 開發跑次 3 的值（工具驗證用，不是判定）：停頓後 `tick_overrun_max_us`＝50787、`tick_stalls`＝1、`tick_late_max_us`＝50801，trace 重算的間隔 67459 µs，差 −5.4 µs；對時行 player 1～4 都分得出；`ingress_evidence` 567198 passed、95ec65 failed（未知鍵：edge 系列加鍵之前的舊版，本批之前就讀不了 pv7-line 的日誌，只記錄）；`end` 行 `reason=signal exit_code=0`，`authority_tick=2`（房間清空時 Match 重設 Tick）。
+
+## 14. 只記錄的 L2 結果（2026-10-20，D144）
+
+目錄 `build/target/_build/test/logs/pvp-v71-log-contract-l2-20261020/`（`record.json`）。runner exit 0；受控停頓實際 53.0 ms。
+
+| 記錄項 | 結果 |
+|---|---|
+| 1. 凍結清單 | cp 與 `build/acceptance` 0 差異；rl 2 個檔（`run_action_short.py` 與其測試，之後的批次改過）；d117 11 個檔（舊清單）。都是本批之前的狀況 |
+| 2. 凍結分析器 | `ingress_evidence` 567198（cp、rl，與 repo 相同）passed、未知鍵 0；95ec65（d117）failed，未知鍵 13 個（edge 系列加的鍵，這份舊版本來就讀不了 pv7-line 的日誌）；`network_statistics` 讀到 Match 1、Gateway 4、worker 4 個視窗，沒有例外；`command_evidence` 讀到 Client 31370、Match 11783 筆事件；`gateway_scan` 8 行玩家行、沒有逐出 |
+| 3. E1-5 對照 | `tick_overrun_max_us`＝39705、`tick_stalls`＝2、`tick_late_max_us`＝39808；trace 重算：最大間隔 56337 µs、>1.5 Tick 的 2 個、停頓附近的間隔 56337 µs；overrun＋1 Tick−trace 間隔＝34.4 µs（1 Tick 內）。停頓之外還有 1 次 >1.5 Tick 的間隔，兩種量法都數到 |
+| 4. ipc statistics | 含停頓的視窗：snapshot 等待最大 4187 µs、action 晚送最大 18699 µs（停頓讓整個程序停住，IPC 也停了）；最後一個視窗：snapshot 等待最大 227 µs、action 晚送最大 190 µs |
+| 5. 對時行 | 同一 probe 程序裡 player 1～4 都分得出 |
+| 6. hit feedback／wait backend | hit feedback 0 行（probe 沒有產品 Client，如預期，由 L3／LAN 涵蓋）；`role started` 11 行，全部 `Kqueue` |
+| 7. trace_end／end | shots `records=57 dropped=0`、ingress `records=4 dropped=0`；`end version=1 reason=signal exit_code=0 uptime_s=19.632 authority_tick=3`（Tick 小，原因見第 12 節） |
+| 8. dropped_lines | 沒有（runner 不給 Match `--log`） |
+
+沒有本批造成的意外。只記錄的觀察：d117 的舊版 `ingress_evidence` 已經不能讀現在的日誌，之後的批次若要用它當基準，要先換成 cp／rl 的版本。
 
