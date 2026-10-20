@@ -132,6 +132,11 @@ set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pv
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# The log Data Contract v1 (docs/object_fps_pvp/log-contract.zh-Hant.md): writer pins, the frozen readers on
+# real samples, and the reverse guards.
+add_test(NAME "${GYO_CURRENT_APP}.log_contract"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_log_contract.py")
+set_tests_properties("${GYO_CURRENT_APP}.log_contract" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
 add_test(NAME "${GYO_CURRENT_APP}.max_players"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
 set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

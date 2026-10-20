@@ -84,6 +84,10 @@
     },
     "action_evidence": {
       "ctest": "object_fps_pvp.action_evidence"
+    },
+    "log_contract": {
+      "build": [],
+      "ctest": "object_fps_pvp.log_contract"
     }
   },
   "mutants": [
@@ -3092,7 +3096,7 @@
       "batch": "v71-time-echo",
       "what": "The Client's Hello does not echo the latest Welcome",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}\n",
+      "find": "            if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}\n",
       "replace": "",
       "check": "worker",
       "expect": "a Hello did not echo the latest Welcome"
@@ -4776,6 +4780,36 @@
       "replace": "\t\t\t\t_ = replaced\n",
       "check": "go",
       "expect": "coalesced identity: transport 2, Gateway-wide 0"
+    },
+    {
+      "id": "lc-pin-gateway-transport-reorder",
+      "batch": "v71-log-contract",
+      "what": "The Gateway transport line swaps two v1 keys",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d",
+      "replace": "gateway transport rate_accepted_packets=%d coalesced_snapshots=%d rate_limited_packets=%d",
+      "check": "log_contract",
+      "expect": "gateway_transport: v1 keys"
+    },
+    {
+      "id": "lc-pin-match-start-rename",
+      "batch": "v71-log-contract",
+      "what": "The Match start line renames arena_file",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "<<\" arena_file=\"<<",
+      "replace": "<<\" arena=\"<<",
+      "check": "log_contract",
+      "expect": "match_start: v1 keys"
+    },
+    {
+      "id": "lc-pin-evicted-drops-key",
+      "batch": "v71-log-contract",
+      "what": "The Match evicted line loses reference_age_ms",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "\" reference_age_ms=\"",
+      "replace": "\" age_ms=\"",
+      "check": "log_contract",
+      "expect": "match_evicted: v1 keys"
     }
   ]
 }

@@ -38,6 +38,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "build" / "acceptance" / "object_fps_pvp"))
 import ingress_evidence  # noqa: E402
+import network_statistics  # noqa: E402
 from run_network import free_port, wait_for_match_ready  # noqa: E402
 
 GATEWAY_MODULE = ROOT / "apps" / "object_fps_pvp"
@@ -170,6 +171,13 @@ def run_once(args, gateway_executable, output):
         status = result.get("checks", {}).get(name, {}).get("status")
         if status != "not applicable":
             failures.append(f"{name} is {status}, expected not applicable for a passthrough Gateway")
+    # log-contract: the frozen statistics reader also reads the real logs of this run (no ValueError, every window).
+    try:
+        statistics = network_statistics.collect(gateway=output / "gateway.log", match=output / "match.log")
+        if not statistics["gateway"]["windows"] or not statistics["match"]["windows"]:
+            failures.append("network_statistics read no window")
+    except ValueError as error:
+        failures.append(f"network_statistics cannot read this run's logs: {error}")
     if not failures:
         totals = result["totals"]
         written = sum(ingress_evidence.total(c, ingress_evidence.LINK_WRITTEN)

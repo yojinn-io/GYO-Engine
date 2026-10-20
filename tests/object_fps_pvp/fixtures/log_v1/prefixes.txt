@@ -1,0 +1,8 @@
+# Phrases a line of another family must not contain (log-contract, values and matching): what the frozen readers
+# search for (network_statistics.py:17-19, action_probe.py:594, run_gameplay_soak.py:29). Tab-separated: phrase (a
+# substring) or regex (Go RE2 and std::regex alike). Read by tests/object_fps_pvp/IngressStatisticsTests.cpp,
+# apps/object_fps_pvp/gateway/ingress_statistics_test.go and tests/object_fps_pvp/test_log_contract.py.
+phrase	player send statistics
+phrase	[ObjectFPS/PvP Match] network statistics
+phrase	[ObjectFPS/PvP] worker statistics
+regex	rate_accepted_packets=(\d+) rate_limited_packets=(\d+) max_session_window_packets=(\d+)
