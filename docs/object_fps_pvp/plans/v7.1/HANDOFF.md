@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `tt2-trace` 實作完成，L2 宣告第 2 版等你決定（詳見「現況」）。**
+更新：2026-10-19。Owner：`object_fps_pvp`。**狀態：after-pv7 的 `tt2-trace`：實作完成，L2 宣告第 3 版等核准（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,11 +37,11 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（`tt2-trace` 的 L2 工具製作中，D140；完成後出宣告第 3 版等你核准）。
-- **進行中**：`tt2-trace` 實作、xhigh 審查的修正、本機 L1 完成；四平台 L1 在 `d30da3f` 重跑中（run 39285479124；`cd41c70` 那一輪 Windows 的 Trace 測試因換行失敗，已修）。L2 宣告第 2 版等你決定（PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)，draft）。
+- **等你決定**：[tt2-trace](tt2-trace.md) 的 L2 事前宣告第 3 版（第 11、13 節；driver `00c8c13e…`、judge `40aee8b1…`、artifacts `d5377b35…`）。核准後跑 session（約 45 分鐘，session 期間不呼叫工具）。
+- **進行中**：`tt2-trace` 的 L2 準備完成（兩棵樹乾淨重建、工具、開發跑次 16 項全 P、乾跑全部如預期）；等核准宣告第 3 版。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft；四平台 L1 在 `d30da3f` 通過，run 39285479124）。
 - **下一步**：計畫核准後實作 `tt2-trace`（Engine 的 `GYO::Trace`＋產品寫檔改接，位元組不變），再出 L2 宣告。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`tt2-trace` 實作與審查修正完成（本機 CTest 73／73、突變 Engine 6／6 與產品 7／7、TSan 乾淨）；L2 宣告第 2 版經 D45 檢查改寫，等你決定 L2-1、L2-2。
+- **最後更新**：2026-10-20，`tt2-trace` 的 L2 宣告第 3 版（工具與雜湊）完成，等你核准。
 
 ## 閱讀入口
 
@@ -539,6 +539,7 @@
 - 2026-10-20：xhigh 審查（T-4）：沒有 MUST-FIX；SHOULD 6、NIT 6，處理記在 [tt2-trace.md](tt2-trace.md) 第 10 節與 Engine 的 TT HANDOFF。四平台 L1 第一輪（`cd41c70`，run 39281009934）Windows 的 Trace 測試失敗：sink 以文字模式寫檔（和被取代的寫出器相同，Windows 是 `\r\n`），測試寫死了 `\n`；改測試後重跑（`d30da3f`，run 39285479124）。我在還原一個突變時誤用 `git checkout`，把 `TraceSink.cpp` 未提交的審查修正一起還原，已重新套用並重跑全部測試與突變。
 - 2026-10-20：L2 宣告第 1 版的 D45 檢查（1 位 xhigh）：MUST-FIX 5（鎖等待 P99 卡在第一格、Client 端沒人量、`LogFile` 不在 L2、兩棵樹要從零建置、換驗收判定要你核准）、SHOULD-FIX 4；第 2 版的對應在 [tt2-trace.md](tt2-trace.md) 第 12 節。開發量測：A 每筆移動事件在生產者上的成本約為 B 的 10 倍（P99 約 25 µs 對 1.5 µs），8 筆一個 Tick 仍在 1 ms 內（第 11.6 節）。
 - 2026-10-20：多生產者的開發量測（使用者在分支會話中同意，不算判定；[tt2-trace.md](tt2-trace.md) 第 11.6 節）：三條生產者照 Match／Client 的實際節奏同時記錄，B、A 交錯各 2 次。結果和單一生產者相反：A 每筆 P50 0.1～1.3 µs、P99 4～32 µs，B 3～20 µs、31～52 µs；Tick 的 8 筆合計 P99 A 約 40 µs、B 約 90～100 µs。推論是 CPU 省電狀態（B 的寫檔執行緒 20 ms 才醒一次），未驗證。兩種量法下都在 1 ms 的換算預算內。仍停在第 11.7 節的 L2-1、L2-2。
+- 2026-10-20：D140 之後做 L2 準備（[tt2-trace.md](tt2-trace.md) 第 13 節）。兩棵樹乾淨重建（`ninja clean`＋刪 stage 目錄；B 的 Gateway 先前是 `7a5e0ea` 的舊建置，這次以 Gateway 目標重建成 `0fabb52`；A 先提交文件 `1218a74` 讓 Gateway 不標 modified）。工具 `run_tt2.py`、`judge_tt2.py`、`producer_t29`；開發跑次 16 項全 P、T2-9 每筆 P99 29.5 µs；乾跑第一次有 1 列是乾跑自己的合成數據錯（已改、保留輸出），第二次全部如預期（突變 15／15）。宣告第 3 版補明重建方式（第 2 版的「刪掉 `build/target`」會連 logs 一起刪）、沿用的停止條件（R8、K1a、身分、A1-2 是漏列的既有條件；R1s 不適用）、T2-7 只有 P95。
 
 ## 未結事項
 
