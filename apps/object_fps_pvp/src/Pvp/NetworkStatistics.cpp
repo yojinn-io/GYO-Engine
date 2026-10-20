@@ -92,6 +92,15 @@ void TickWakeStatistics::Record(const Engine::Time::TimePoint planned, const Eng
     late.Record(woke - planned);
 }
 
+void TickPaceStatistics::RecordInterval(const Engine::Time::Duration interval, const Engine::Time::Duration nominal) {
+    overrun.Record(interval > nominal ? interval - nominal : Engine::Time::Duration::zero());
+    if (interval * 2 > nominal * 3) ++stalls;
+}
+
+void TickPaceStatistics::RecordAdvance(const Engine::Time::Duration took) {
+    advance.Record(took > Engine::Time::Duration::zero() ? took : Engine::Time::Duration::zero());
+}
+
 std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {
     auto line = LineStream();
     const auto& late = window.ticks.late;
@@ -118,6 +127,14 @@ std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {
              << "_wait_max_us=" << Micros(waits->Max()) << " host_lock_" << name << "_wait_bins=";
         for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
             line << (bin ? "," : "") << waits->Bins()[bin];
+    }
+    // Added in v7.1 log-contract (E1-5), so it comes last.
+    for (const auto& [name, stats] : {std::pair{"tick_overrun", &window.pace.overrun}, std::pair{"advance", &window.pace.advance}}) {
+        line << " " << name << "_p99_le_us=" << Micros(stats->QuantileUpperBound(0.99)) << " " << name
+             << "_max_us=" << Micros(stats->Max()) << " " << name << "_bins=";
+        for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
+            line << (bin ? "," : "") << stats->Bins()[bin];
+        if (stats == &window.pace.overrun) line << " tick_stalls=" << window.pace.stalls;
     }
     return line.str();
 }

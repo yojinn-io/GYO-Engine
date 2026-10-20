@@ -29,6 +29,22 @@ struct TickWakeStatistics final {
     void Record(Engine::Time::TimePoint planned, Engine::Time::TimePoint woke, bool byNotification);
 };
 
+// The Match simulation thread's tick spacing (log-contract, E1-5). interval is
+// the time between two consecutive samples taken before Advance; a stall
+// anywhere in the loop (in Advance, in the wait, or after it) lengthens it,
+// while TickWakeStatistics sees only a late wake. The late-wake bins are fine
+// near zero, so the interval is recorded as its overrun beyond the nominal
+// tick; stalls counts the intervals longer than 1.5 nominal ticks. advance is
+// the time one Advance took.
+struct TickPaceStatistics final {
+    Engine::Time::LateWakeStats overrun; // max(0, interval - nominal)
+    std::uint64_t stalls{};
+    Engine::Time::LateWakeStats advance;
+
+    void RecordInterval(Engine::Time::Duration interval, Engine::Time::Duration nominal);
+    void RecordAdvance(Engine::Time::Duration took);
+};
+
 // How long callers waited to take the Match host's mutex, in the late-wake
 // bins (diagnostics only, D32): the I/O thread's SubmitInput and the
 // simulation thread's step.
@@ -45,6 +61,7 @@ struct MatchStatisticsWindow final {
     TickWakeStatistics ticks;
     std::uint64_t snapshotOverwrites{}; // published snapshots replaced before the I/O layer took them
     HostLockWaits lockWaits;
+    TickPaceStatistics pace;
 };
 [[nodiscard]] std::string MatchStatisticsLine(const MatchStatisticsWindow& window);
 

@@ -102,7 +102,7 @@ int main(int argc,char** argv) {
             std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
-                .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits)})<<'\n';
+                .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits),.pace=std::move(host.pace)})<<'\n';
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
             if(ingressTrace) ingressTrace->Write(records);

@@ -4830,6 +4830,26 @@
       "replace": "\treturn err\n",
       "check": "go",
       "expect": "write timeout: reason other, want write_timeout"
+    },
+    {
+      "id": "lc-tick-overrun-records-deadline",
+      "batch": "v71-log-contract",
+      "what": "The tick overrun records the wake lateness against the deadline instead of the tick interval (E1-5)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            statistics_.pace.RecordInterval(interval, nominal);\n",
+      "replace": "            statistics_.pace.RecordInterval(nominal + (wake.woke > deadline ? wake.woke - deadline : Engine::Time::Duration::zero()), nominal);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( statistics.pace.overrun.Max\\(\\) >= 15ms \\)"
+    },
+    {
+      "id": "lc-tick-stall-uncounted",
+      "batch": "v71-log-contract",
+      "what": "A tick interval longer than 1.5 ticks is not counted as a stall",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "    if (interval * 2 > nominal * 3) ++stalls;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "tick_stalls=1"
     }
   ]
 }

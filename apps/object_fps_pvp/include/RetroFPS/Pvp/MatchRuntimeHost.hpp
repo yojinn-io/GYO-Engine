@@ -102,6 +102,7 @@ public:
         TickWakeStatistics ticks;
         std::uint64_t snapshotOverwrites{};
         HostLockWaits lockWaits;
+        TickPaceStatistics pace;
     };
     [[nodiscard]] Statistics TakeStatistics();
     // Diagnostics only, since the previous call (or the start): what became

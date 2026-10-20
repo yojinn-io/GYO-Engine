@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -94,3 +96,81 @@ TEST_CASE("PvP Match role failures are reported, not thrown across threads") {
     host.Stop(); // idempotent
     CHECK_FALSE(host.Error());
 }
+
+// log-contract E1-5: a stall before the wait (here in the publish listener,
+// after Advance) shows in the wake lateness and in the tick overrun alike.
+TEST_CASE("PvP Match tick overrun shows a stall before the tick wait") {
+    MatchRuntimeHost host(RoleArena());
+    std::atomic<int> published{};
+    host.SetPublishListener([&] {
+        if (++published == 30) std::this_thread::sleep_for(40ms);
+    });
+    std::string error;
+    REQUIRE(host.Start(error));
+    REQUIRE(host.QueueJoin(1, 1));
+    const auto giveUp = std::chrono::steady_clock::now() + 10s;
+    while (published.load() < 40 && std::chrono::steady_clock::now() < giveUp) std::this_thread::sleep_for(5ms);
+    host.Stop();
+    const auto statistics = host.TakeStatistics();
+    // Structural lower bounds only (the injected 40 ms), no timing upper bound (FF-2).
+    CHECK(statistics.pace.advance.Max() >= 40ms);
+    CHECK(statistics.pace.overrun.Max() >= 15ms);
+    CHECK(statistics.pace.stalls >= 1);
+    CHECK(statistics.ticks.late.Max() >= 15ms);
+}
+
+namespace {
+// A movement trace whose first armed HostAccepted record sleeps: SubmitInput
+// records it while it holds the host mutex.
+struct StallingTrace final : MovementTraceSink {
+    std::atomic<bool> armed{false};
+    void Record(const MovementTraceEvent& event) override {
+        if (event.kind == MovementTraceKind::HostAccepted && armed.exchange(false)) std::this_thread::sleep_for(40ms);
+    }
+};
+} // namespace
+
+// log-contract E1-5: a stall after the wake (the host mutex held by the I/O
+// side when the simulation thread comes to record its wake) does not make the
+// wake late, but lengthens the next tick interval: only the overrun shows it.
+TEST_CASE("PvP Match tick overrun shows a stall after the tick wait") {
+    MatchRuntimeHost host(RoleArena());
+    std::atomic<int> published{};
+    std::promise<void> afterPublish;
+    auto stalled = afterPublish.get_future();
+    host.SetPublishListener([&] {
+        if (++published == 30) afterPublish.set_value();
+    });
+    auto trace = std::make_shared<StallingTrace>();
+    struct TraceScope final {
+        explicit TraceScope(std::shared_ptr<MovementTraceSink> sink) { SetMovementTrace(std::move(sink)); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } scope(trace);
+    std::string error;
+    REQUIRE(host.Start(error));
+    REQUIRE(host.QueueJoin(1, 1));
+    REQUIRE(stalled.wait_for(10s) == std::future_status::ready);
+    // Right after a publication the simulation thread is between Advance and its wait: the stall below holds the
+    // mutex across its next wake.
+    const auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const PlayerState* self = nullptr;
+    for (const auto& player : snapshot->players)
+        if (player.playerId == 1) self = &player;
+    REQUIRE(self);
+    trace->armed = true;
+    CHECK(host.SubmitInput({1, {{self->lastResolvedCommand + 1, 0, 0, 0, 0, false}}, self->movementEpoch,
+                            self->lifeGeneration}));
+    CHECK_FALSE(trace->armed.load());
+    const auto giveUp = std::chrono::steady_clock::now() + 10s;
+    while (published.load() < 40 && std::chrono::steady_clock::now() < giveUp) std::this_thread::sleep_for(5ms);
+    host.Stop();
+    const auto statistics = host.TakeStatistics();
+    CHECK(statistics.pace.overrun.Max() >= 15ms);
+    CHECK(statistics.pace.stalls >= 1);
+    // Recorded, not judged (a timing upper bound): the wakes themselves were on time.
+    MESSAGE("tick_late max " << std::chrono::duration_cast<std::chrono::microseconds>(statistics.ticks.late.Max()).count()
+            << " us, overrun max "
+            << std::chrono::duration_cast<std::chrono::microseconds>(statistics.pace.overrun.Max()).count() << " us");
+}
+
