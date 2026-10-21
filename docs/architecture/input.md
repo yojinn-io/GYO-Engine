@@ -2,8 +2,8 @@
 
 Owner: Engine (`engine/input` → `GYO::Input`, `engine/input/include/engine/input/PhysicalInputFrame.hpp`).
 Filled by a backend, today only the SDL one ([platform-sdl.md](platform-sdl.md)).
-Plan and record: [input-and-present](plans/input-and-present/README.md), batches IP-1 (done) and IP-3 (approved
-design, input-and-present D31, not yet implemented; the parts marked IP-3 below describe the approved design).
+Plan and record: [input-and-present](plans/input-and-present/README.md), batches IP-1 (done) and IP-3 (the parts
+marked IP-3 below: event timestamps landed in ip3c, text input in ip3d).
 
 ## What it is
 

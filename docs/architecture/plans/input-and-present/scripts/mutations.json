@@ -221,6 +221,56 @@
       "target": "platform_sdl_tests",
       "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
       "expect": "the pair reads Engine, then SDL, then Engine"
+    },
+    {
+      "id": "m7",
+      "what": "Typed text is collected while text input is off",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "event.text.text != nullptr &&\n            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {",
+      "replace": "event.text.text != nullptr) {",
+      "target": "input_sdl_tests",
+      "cases": "SDL text input collects text only while it is on",
+      "expect": "nothing is collected"
+    },
+    {
+      "id": "m8",
+      "what": "A key repeat becomes an input event",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "if (event.key.windowID == ownWindowId && !event.key.repeat) {",
+      "replace": "if (event.key.windowID == ownWindowId) {",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "a key repeat is not an input event"
+    },
+    {
+      "id": "m9",
+      "what": "Typed text is put before earlier entries",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "frame_.text.push_back({.kind = TextEvent::Kind::Text, .text = event.text.text});",
+      "replace": "frame_.text.insert(frame_.text.begin(), TextEvent{.kind = TextEvent::Kind::Text, .text = event.text.text});",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "text keeps its arrival order"
+    },
+    {
+      "id": "m-up",
+      "what": "A key release is recorded as a text key",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "if (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID == ownWindowId &&",
+      "replace": "if (event.key.windowID == ownWindowId &&",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "a release is never recorded as a text key"
+    },
+    {
+      "id": "m-layout",
+      "what": "The layout key is the physical key",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": ".layoutKey = LayoutKey(event.key.key),",
+      "replace": ".layoutKey = ToKey(event.key.scancode).value_or(Key::Count),",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys carry the layout key*",
+      "expect": "the layout key is the key the layout produces"
     }
   ]
 }

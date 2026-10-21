@@ -188,8 +188,8 @@ struct PvpApplication::Impl final {
 
     void EditAddress(bool value) {
         editing = value;
-        if (value) SDL_StartTextInput(Engine::Platform::Sdl::NativeWindow(*platform));
-        else SDL_StopTextInput(Engine::Platform::Sdl::NativeWindow(*platform));
+        // As before, a failure only leaves the field without typed text.
+        static_cast<void>(input->SetTextInput(value));
     }
 
     void AppendAddress(const char* value) {
@@ -233,22 +233,23 @@ struct PvpApplication::Impl final {
         }
     }
 
-    // Lobby address editing keeps native SDL text input and clipboard, which
-    // Engine input does not provide.
-    void HandleTextEditing(const SDL_Event& event) {
-        if (InWorld() || !editing) return;
-        if (event.type == SDL_EVENT_TEXT_INPUT) AppendAddress(event.text.text);
-        if (event.type != SDL_EVENT_KEY_DOWN) return;
-        if (event.key.key == SDLK_BACKSPACE && !address.empty()) address.pop_back();
-        if ((event.key.mod & SDL_KMOD_CTRL) != 0 && event.key.key == SDLK_A) address.clear();
-        if ((event.key.mod & SDL_KMOD_CTRL) != 0 && event.key.key == SDLK_V) {
-            char* clipboard = SDL_GetClipboardText();
-            AppendAddress(clipboard);
-            SDL_free(clipboard);
-        }
-        if (event.key.key == SDLK_RETURN || event.key.key == SDLK_ESCAPE) {
-            EditAddress(false);
-            suppressUiEnter = true;
+    // Lobby address editing: the frame's text in arrival order (presses and
+    // repeats; the editing policy below is this product's).
+    void HandleTextEditing(const std::vector<Engine::Input::TextEvent>& text) {
+        using Engine::Input::Key;
+        for (const auto& entry : text) {
+            if (InWorld() || !editing) return;
+            if (entry.kind == Engine::Input::TextEvent::Kind::Text) {
+                AppendAddress(entry.text.c_str());
+                continue;
+            }
+            if (entry.layoutKey == Key::Backspace && !address.empty()) address.pop_back();
+            if (entry.modifiers.ctrl && entry.layoutKey == Key::A) address.clear();
+            if (entry.modifiers.ctrl && entry.layoutKey == Key::V) AppendAddress(platform->ClipboardText().c_str());
+            if (entry.layoutKey == Key::Enter || entry.layoutKey == Key::Escape) {
+                EditAddress(false);
+                suppressUiEnter = true;
+            }
         }
     }
 
@@ -943,10 +944,16 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const Engine::Platform::Sdl::PlatformEvent& event) {
         const auto observed = Clock::now();
         impl_->input->HandleEvent(event);
-        impl_->HandleTextEditing(Engine::Platform::Sdl::NativeEvent(event));
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
+    {
+        // Text editing used to run per event inside the observer; it still
+        // counts as this product's event handling (observer_ms).
+        const auto edited = Clock::now();
+        impl_->HandleTextEditing(impl_->input->Snapshot().text);
+        observerMilliseconds += Milliseconds(Clock::now(), edited);
+    }
     impl_->ApplyInputEvents(focusedAtStart);
     const auto elapsed = Milliseconds(Clock::now(), started);
     // observer_ms is this product's event handling; the rest is SDL's polling,

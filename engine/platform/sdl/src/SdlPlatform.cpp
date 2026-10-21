@@ -184,6 +184,13 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const EventObserver& observer) {
     return control;
 }
 
+std::string SdlPlatform::ClipboardText() const {
+    char* text = SDL_GetClipboardText();
+    std::string result = text != nullptr ? text : "";
+    SDL_free(text);
+    return result;
+}
+
 SDL_Window* NativeAccess::Window(const SdlPlatform& platform) noexcept {
     return platform.impl_->window;
 }

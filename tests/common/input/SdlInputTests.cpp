@@ -275,3 +275,120 @@ TEST_CASE("SDL input events carry the time of the platform event that added them
     CHECK_MESSAGE(events[0].timestamp == pressedAt, "an input event carries its platform event's time");
     CHECK_MESSAGE(events[1].timestamp == focusAt, "an input event carries its platform event's time");
 }
+
+namespace {
+
+SDL_Event TextKey(const SDL_WindowID window, const SDL_Scancode scancode, const SDL_Keycode keycode,
+                  const bool down, const bool repeat = false, const SDL_Keymod mod = SDL_KMOD_NONE) {
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    event.key.windowID = window;
+    event.key.scancode = scancode;
+    event.key.key = keycode;
+    event.key.mod = mod;
+    event.key.down = down;
+    event.key.repeat = repeat;
+    return event;
+}
+
+SDL_Event TypedText(const SDL_WindowID window, const char* text) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.windowID = window;
+    event.text.text = text;
+    return event;
+}
+
+} // namespace
+
+TEST_CASE("SDL text input collects text only while it is on") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const Engine::Time::TimePoint at{};
+
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "x"), at);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true), at);
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "nothing is collected while text input is off");
+
+    REQUIRE(input.SetTextInput(true));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "ab"), at);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window + 1, "other window"), at);
+    REQUIRE(input.Snapshot().text.size() == 1);
+    CHECK(input.Snapshot().text[0].kind == TextEvent::Kind::Text);
+    CHECK(input.Snapshot().text[0].text == "ab");
+
+    input.BeginFrame();
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "BeginFrame clears the text");
+
+    REQUIRE(input.SetTextInput(false));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "y"), at);
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "nothing is collected after text input is turned off");
+}
+
+TEST_CASE("SDL text keys record presses and repeats in arrival order but never releases") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const Engine::Time::TimePoint at{};
+    REQUIRE(input.SetTextInput(true));
+
+    input.BeginFrame();
+    using Engine::Input::Backend::Sdl::HandleNativeEvent;
+    HandleNativeEvent(input, TypedText(window, "1"), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true, true), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, false), at);
+    HandleNativeEvent(input, TypedText(window, "2"), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_V, SDLK_V, true, false, SDL_KMOD_LCTRL), at);
+
+    const auto& text = input.Snapshot().text;
+    REQUIRE_MESSAGE(text.size() == 5, "a release is never recorded as a text key");
+    CHECK_MESSAGE((text[0].kind == TextEvent::Kind::Text && text[0].text == "1"), "text keeps its arrival order");
+    CHECK_MESSAGE((text[1].kind == TextEvent::Kind::Key && text[1].layoutKey == Key::Backspace && !text[1].repeat),
+                  "text keeps its arrival order");
+    CHECK_MESSAGE((text[2].kind == TextEvent::Kind::Key && text[2].repeat), "a key repeat is recorded as a text key");
+    CHECK_MESSAGE((text[3].kind == TextEvent::Kind::Text && text[3].text == "2"), "text keeps its arrival order");
+    CHECK_MESSAGE((text[4].layoutKey == Key::V && text[4].modifiers.ctrl && !text[4].modifiers.shift),
+                  "a text key carries its modifiers");
+
+    // The repeat is not an event (IP-1): one press and one release only.
+    const auto& events = input.Snapshot().events;
+    std::size_t backspaceEvents = 0;
+    for (const auto& event : events)
+        if (event.key == Key::Backspace) ++backspaceEvents;
+    CHECK_MESSAGE(backspaceEvents == 2, "a key repeat is not an input event");
+}
+
+TEST_CASE("SDL text keys carry the layout key apart from the physical key") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    REQUIRE(input.SetTextInput(true));
+
+    input.BeginFrame();
+    // AZERTY: the Q position produces 'a'.
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_Q, SDLK_A, true),
+                                                   Engine::Time::TimePoint{});
+    // A key without a character carries its scancode in the keycode.
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_KP_ENTER, SDLK_KP_ENTER, true),
+                                                   Engine::Time::TimePoint{});
+    const auto& text = input.Snapshot().text;
+    REQUIRE(text.size() == 2);
+    CHECK_MESSAGE((text[0].key == Key::Q && text[0].layoutKey == Key::A),
+                  "the layout key is the key the layout produces, apart from the position");
+    CHECK_MESSAGE(text[1].layoutKey == Key::Enter, "a keycode without a character maps through its scancode");
+}
+
+TEST_CASE("SdlPlatform reads the clipboard text") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    REQUIRE(SDL_SetClipboardText("127.0.0.1:7777"));
+    CHECK_MESSAGE(platform.value()->ClipboardText() == "127.0.0.1:7777", "the clipboard text is read back");
+    REQUIRE(SDL_ClearClipboardData());
+    CHECK(platform.value()->ClipboardText().empty());
+}

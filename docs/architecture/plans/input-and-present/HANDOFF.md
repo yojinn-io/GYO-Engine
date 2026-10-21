@@ -300,6 +300,13 @@
   - 宣告的更正（xhigh 審查第 7 點）：m2-int 由整合判定的上界殺掉（宣告寫下界）；m1 的實作是「每個程序取一次」而非「在 Create 取一次」。
   - 實際約 6 h（估 4～5 h，含審查與三輪核對；未超過 1.5 倍）。
   - 提交 `b56f59e`，推上 PR #85；四平台 L1 #550（run 39630112677）。同一次推送另外觸發 #551 與 Package trial #389。文件狀態行的同步在下一個只改文件的 commit（腳本中途失敗，`b56f59e` 只帶到 HANDOFF 的這段紀錄）。
+- 2026-10-22：ip3c 的 L1 #550（run 39630112677，`b56f59e`）四平台成功，含放寬後的判定第一次在 linux-x64、macos-arm64 上執行。
+- 2026-10-22：ip3d 實作與本機驗收（檔位 high）。
+  - 輸入幀加法擴充：`KeyModifiers`、`TextEvent{Text|Key}`、`PhysicalInputFrame::text`（`BeginFrame` 清空）。`SdlInput::SetTextInput`（新錯誤碼 `TextInputFailed`）；收集條件在事件到達時查 `SDL_TextInputActive`，不保存副本（DI 6）。`Kind::Key` 只記按下（含 repeat），repeat 不進 `events`。`layoutKey`：有字元的 keycode 查固定表，沒有字元的 keycode 經它帶的 scancode。`SdlPlatform::ClipboardText()` 回 `std::string`。
+  - 測試 4 個（`input_sdl_tests`）：關閉時不收集、只記按下且依到達順序、`layoutKey` 與實體鍵分開、剪貼簿（dummy driver 下可讀回）。
+  - 突變 m7、m8、m9、m-up、m-layout，5／5 killed（目錄共 27 個）。
+  - 消費端的位址輸入改用 `SetTextInput`、`text`、`ClipboardText`（消費端計畫的 ip3d 列）。`test` preset 78／78，SDL 相關 6 個通過。
+  - 消費端看得到的差異 1 項：`Key::Enter` 依 IP-1 同時代表 Return 與數字鍵盤的 Enter，所以數字鍵盤的 Enter 現在也會確認位址（以前只有 Return）。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

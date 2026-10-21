@@ -141,6 +141,46 @@ std::optional<Key> ToKey(const SDL_Scancode scancode) noexcept {
     return std::nullopt;
 }
 
+// The keys printable keycodes stand for, independent of the layout that
+// produced them (SDL keycodes of printable keys are their unshifted character).
+constexpr std::array<std::pair<SDL_Keycode, Key>, 53> CharacterKeys{{
+    {SDLK_A, Key::A}, {SDLK_B, Key::B}, {SDLK_C, Key::C}, {SDLK_D, Key::D}, {SDLK_E, Key::E},
+    {SDLK_F, Key::F}, {SDLK_G, Key::G}, {SDLK_H, Key::H}, {SDLK_I, Key::I}, {SDLK_J, Key::J},
+    {SDLK_K, Key::K}, {SDLK_L, Key::L}, {SDLK_M, Key::M}, {SDLK_N, Key::N}, {SDLK_O, Key::O},
+    {SDLK_P, Key::P}, {SDLK_Q, Key::Q}, {SDLK_R, Key::R}, {SDLK_S, Key::S}, {SDLK_T, Key::T},
+    {SDLK_U, Key::U}, {SDLK_V, Key::V}, {SDLK_W, Key::W}, {SDLK_X, Key::X}, {SDLK_Y, Key::Y},
+    {SDLK_Z, Key::Z},
+    {SDLK_0, Key::Digit0}, {SDLK_1, Key::Digit1}, {SDLK_2, Key::Digit2}, {SDLK_3, Key::Digit3},
+    {SDLK_4, Key::Digit4}, {SDLK_5, Key::Digit5}, {SDLK_6, Key::Digit6}, {SDLK_7, Key::Digit7},
+    {SDLK_8, Key::Digit8}, {SDLK_9, Key::Digit9},
+    {SDLK_RETURN, Key::Enter}, {SDLK_ESCAPE, Key::Escape}, {SDLK_BACKSPACE, Key::Backspace},
+    {SDLK_TAB, Key::Tab}, {SDLK_SPACE, Key::Space}, {SDLK_DELETE, Key::Delete},
+    {SDLK_MINUS, Key::Minus}, {SDLK_EQUALS, Key::Equals}, {SDLK_LEFTBRACKET, Key::LeftBracket},
+    {SDLK_RIGHTBRACKET, Key::RightBracket}, {SDLK_BACKSLASH, Key::Backslash},
+    {SDLK_SEMICOLON, Key::Semicolon}, {SDLK_APOSTROPHE, Key::Apostrophe}, {SDLK_GRAVE, Key::Grave},
+    {SDLK_COMMA, Key::Comma}, {SDLK_PERIOD, Key::Period}, {SDLK_SLASH, Key::Slash},
+}};
+
+// The key a keycode stands for: keycodes without a character (keypad, arrows,
+// function keys) carry their scancode; printable ones are looked up by
+// character. Count if none.
+Key LayoutKey(const SDL_Keycode keycode) noexcept {
+    for (const auto& [code, key] : CharacterKeys) {
+        if (code == keycode) return key;
+    }
+    if ((keycode & SDLK_SCANCODE_MASK) != 0) {
+        if (const auto key = ToKey(static_cast<SDL_Scancode>(keycode & ~SDLK_SCANCODE_MASK))) return *key;
+    }
+    return Key::Count;
+}
+
+KeyModifiers ToModifiers(const SDL_Keymod mod) noexcept {
+    return {.shift = (mod & SDL_KMOD_SHIFT) != 0,
+            .ctrl = (mod & SDL_KMOD_CTRL) != 0,
+            .alt = (mod & SDL_KMOD_ALT) != 0,
+            .gui = (mod & SDL_KMOD_GUI) != 0};
+}
+
 std::optional<MouseButton> ToMouseButton(const Uint8 button) noexcept {
     switch (button) {
     case SDL_BUTTON_LEFT:
@@ -192,6 +232,7 @@ void SdlInput::BeginFrame() noexcept {
     frame_.pointer.deltaX = 0.0f;
     frame_.pointer.deltaY = 0.0f;
     frame_.events.clear();
+    frame_.text.clear();
 }
 
 void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) noexcept {
@@ -249,8 +290,25 @@ void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) no
             frame_.events.push_back({.kind = InputEventKind::WindowRestored});
         }
         break;
+    case SDL_EVENT_TEXT_INPUT:
+        // Whether text input is on is read from SDL at arrival (it may be
+        // turned on or off by others, such as an editor's UI backend).
+        if (event.text.windowID == ownWindowId && event.text.text != nullptr &&
+            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+            frame_.text.push_back({.kind = TextEvent::Kind::Text, .text = event.text.text});
+        }
+        break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+        // Text keys: presses only, repeats included, while text input is on.
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID == ownWindowId &&
+            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+            frame_.text.push_back({.kind = TextEvent::Kind::Key,
+                                   .key = ToKey(event.key.scancode).value_or(Key::Count),
+                                   .layoutKey = LayoutKey(event.key.key),
+                                   .modifiers = ToModifiers(event.key.mod),
+                                   .repeat = event.key.repeat});
+        }
         if (event.key.windowID == ownWindowId && !event.key.repeat) {
             if (const auto key = ToKey(event.key.scancode)) {
                 const bool down = event.type == SDL_EVENT_KEY_DOWN;
@@ -305,6 +363,18 @@ void SdlInput::EndFrame() noexcept {
         frame_.pointer.deltaY = 0.0f;
     }
     suppressRelativeMotion_ = false;
+}
+
+Base::Result<void, SdlInputError>
+SdlInput::SetTextInput(const bool enabled) {
+    SDL_Window* window = Platform::Sdl::NativeWindow(*platform_);
+    if (!(enabled ? SDL_StartTextInput(window) : SDL_StopTextInput(window))) {
+        return Base::Err(SdlInputError::Make(
+            SdlInputErrorCode::TextInputFailed,
+            "SdlInput: unable to change text input",
+            SDL_GetError()));
+    }
+    return {};
 }
 
 Base::Result<void, SdlInputError>

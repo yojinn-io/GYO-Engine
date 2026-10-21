@@ -96,6 +96,10 @@ public:
     // itself. An empty handler turns this off, which is the default.
     void SetLiveFrameHandler(LiveFrameHandler handler);
 
+    // The clipboard's text; empty when there is none or reading failed (the
+    // platform does not tell the two apart). Main thread.
+    [[nodiscard]] std::string ClipboardText() const;
+
     // The native window is reachable only through the native layer:
     // NativeWindow() in SdlPlatformNative.hpp (target GYO::PlatformSDLNative).
 
