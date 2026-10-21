@@ -85,6 +85,9 @@
     "action_evidence": {
       "ctest": "object_fps_pvp.action_evidence"
     },
+    "client_delay_runner": {
+      "ctest": "object_fps_pvp.client_delay_runner"
+    },
     "log_contract": {
       "build": [],
       "ctest": "object_fps_pvp.log_contract"
@@ -4930,6 +4933,16 @@
       "replace": "    if (true)\n",
       "check": "cpu",
       "expect": "PvP phase decisions are written to the movement trace"
+    },
+    {
+      "id": "ot4-delay-relay-three-arguments",
+      "batch": "v71-observability-tools",
+      "what": "The client-delay relay keeps the three-argument constructor while run_case passes the loss seed (every real round a runner error)",
+      "file": "build/acceptance/object_fps_pvp/run_client_delay.py",
+      "find": "    def __init__(self, http, udp, mode, loss_seed=impaired_network.DEFAULT_LOSS_SEED):\n",
+      "replace": "    def __init__(self, http, udp, mode):\n",
+      "check": "client_delay_runner",
+      "expect": "test_the_delaying_relay_accepts_the_arguments_run_case_passes"
     }
   ]
 }

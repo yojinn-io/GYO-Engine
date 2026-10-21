@@ -159,3 +159,9 @@ observability-tools
   4. 不適用。
   5. 根據：E1-6，D152。
 - `run_short_stall.py`、`run_client_delay.py` 的 `FROZEN`（D50 條件 3）：釘到新的 `action_probe.py` 雜湊，強度不變。
+
+### 結案後發現的缺陷（2026-10-21，`re-evaluate` 補量時）
+
+- OT-4 讓 `run_case` 用 4 個參數建立 relay（加了 `loss_seed`），但 `run_client_delay.py` 替換進去的 `DelayRelay` 只收 3 個，每一次真實的延遲注入都是 runner error。單元測試替換了整個 `run_case`、L1 不跑真實注入，所以 OT-4 的驗證沒有抓到（第 6 節「實跑」只跑了 `run_gameplay.py` 與 `run_network.py`，沒有跑 `run_client_delay.py`）。
+- 修正：`DelayRelay` 接受並轉傳種子；回歸測試 `test_the_delaying_relay_accepts_the_arguments_run_case_passes`（Red → Green）；突變 `ot4-delay-relay-three-arguments` killed（新增 `client_delay_runner` 檢查）。之後的真實跑次 18/18 完成。
+

@@ -584,6 +584,7 @@
 - 2026-10-21：`re-evaluate` 開始。範圍是 INVENTORY 處置為 re-evaluate 的 12 項（A4、A5、B6～B9、N-phase-estimator-wan-noise、N-conflict-window-permanent-loss、N-09b-followup-measures、N-phase-1-7-items-3-6、N-quality-reference-age-sampling、N-respawn-reject-volume），加上今天交過來的 D44 歸因與 09b 重做的剩餘（R4、U6）。產出是建議清單，由使用者排序。
 - 2026-10-21：`re-evaluate` 建議第 1 版（[re-evaluate.md](re-evaluate.md)）。三組只讀評估：現在結案 6 項（respawn 的 epoch_old 已解釋、衝突窗口在 pv7 不再永久、B9、B8 的 N、N-phase-1-7 第 6 點、N-09b-followup）；小修 1 項（分析器寫死的 105）；已知限制 3 項（A5、B6、參考年齡）；延後 6 項（A4 → v8、B7 → pv8、門檻 105、B8 幅度、快速正向回收、WAN 雜訊）。順帶更正 `d44-regression-pv7.md` 第 15 節的兩處：排隊合計最大 294 出在 upstream-1000ms、backlog 重設在放出之後；late 修正 266 只算遊戲與 x1／ramp。
 - 2026-10-21：`re-evaluate` 第 2 版。使用者指出方向錯了：「re-evaluate 就是評估，這些case還是否需要繼續的，而不是評估要如何做的」。第 1 版寫了修法、工時與順序；第 2 版只判斷每項還需不需要，並附根據與重開條件。B7 由使用者先問（「我想的是B7，現在還有必要嗎？」），判斷為取消。
+- 2026-10-21：**OT-4 引入的缺陷**（`observability-tools` 結案之後，`re-evaluate` 補量時發現）：`run_case` 建立 relay 時多傳了 `loss_seed`，而 `run_client_delay.py` 替換進去的 `DelayRelay` 只收 3 個參數，所以每一次真實的延遲注入都是 runner error（補量第 1 次 18/18 失敗，證據 `logs/pvp-v71-reeval-map-20261021/runs-attempt1-runner-error/`）。單元測試把 `run_case` 整個替換掉，L1 也不跑真實的延遲注入，所以沒有抓到。照 §14.3：重現（真實跑次）→ 加測試 `test_the_delaying_relay_accepts_the_arguments_run_case_passes`（以 `run_case` 原始碼裡的呼叫參數數去綁定替換類別的建構子），Red 確認 → 修 `DelayRelay` 接受並轉傳種子 → Green；突變 `ot4-delay-relay-three-arguments` killed（新增 `client_delay_runner` 檢查：原本掛在 `cpu` 上時存活，因為 `cpu` 只跑 C++ doctest）。補量第 2 次 18/18 完成。日後談依使用者補上 B8、WAN 雜訊、參考年齡，B9 列為部分相關。
 
 ## 未結事項
 

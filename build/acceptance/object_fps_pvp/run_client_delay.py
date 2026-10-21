@@ -293,10 +293,11 @@ class DelayRelay(action_probe.ActionRelay):
     PROFILE = None
     CLOCK = staticmethod(time.monotonic)
 
-    def __init__(self, http, udp, mode):
+    def __init__(self, http, udp, mode, loss_seed=impaired_network.DEFAULT_LOSS_SEED):
         # Set before ActionRelay.__init__: _ImpairedGateway.__init__ starts the relay thread.
+        # run_case passes the loss seed (OT-4); this relay drops nothing at random, but takes the same call.
         self._setup_delay()
-        super().__init__(http, udp, mode)
+        super().__init__(http, udp, mode, loss_seed)
 
     def _setup_delay(self):
         self.line = DelayLine(self.PROFILE)
