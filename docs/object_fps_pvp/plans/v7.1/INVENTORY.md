@@ -22,13 +22,13 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 |---|---|
 | pv7-line | 20 |
 | after-pv7 | 28 |
-| re-evaluate | 9 |
+| re-evaluate | 5 |
 | re-evaluate 之後 | 37 |
 | plan-sync-docs | 3 |
-| 取消 | 10 |
+| 取消 | 12 |
 | 已解決 | 3 |
 | 已被取代 | 3 |
-| v8 | 2 |
+| v8 | 4 |
 | 合計 | 115 |
 
 ## P. pv7 與相關任務
@@ -56,14 +56,14 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 |---|---|---|---|---|---|---|
 | A1 | 射擊併入輸入命令、照命令步序判定（替代：權威端早到就延後、不拒絕） | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp:18`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:401,420-423` | 要 | 會 | pv7-design＋a1-shot-step |
 | A4 | 延遲位移：產生→執行約 38 ms，候選把追蹤用的領先拆成 1 | 未解決（re-evaluate，D154：還需要，手感取捨） | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp:53,62`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:144-145` | 否 | 否 | v8（D154） |
-| A5 | D44 偶發 epoch 重設：backlog 門檻 105、約 300 ms 延遲消失時的重設、快速正向回收 | 未解決（re-evaluate，D154：先補量再定） | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp:55-57`<br>`apps/object_fps_pvp/src/Pvp/PvpMatch.cpp:436-461` | 否 | 可能 | d44-regression-pv7＋re-evaluate |
+| A5 | D44 偶發 epoch 重設：backlog 門檻 105、約 300 ms 延遲消失時的重設、快速正向回收 | 取消（D155：照設計保留。300 ms 型在 pv7 仍會發生（補量 12/12），約 0.2～0.6 秒恢復、沒有 held；連同門檻 105 重推、快速正向回收。重開：玩家在真實網路下感受到這種重設，或它造成踢出） | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp:55-57`<br>`apps/object_fps_pvp/src/Pvp/PvpMatch.cpp:436-461` | 否 | 可能 | 取消（D155） |
 
 ## B. 相位追蹤
 
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
-| B6 | 重新擷取的樣本邊界 S／M（消掉 1-7 節的三個已知限制） | 未解決（re-evaluate，D154：先補量再定） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:135-150`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:155-158` | 否 | 否 | re-evaluate |
-| B7 | Match 在命令到達時就發布 slack 樣本。更正：採用就要改 movement_slack 的語意，算改 wire。 | 未解決（re-evaluate，D154：先補量再定） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:585-627`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:224-233` | 要 | 否 | re-evaluate |
+| B6 | 重新擷取的樣本邊界 S／M（消掉 1-7 節的三個已知限制） | 未解決（re-evaluate 補量，D155：150 ms 型的部分撤回留下約 +25 ms、約 4 秒；在 v8 重新規劃，不沿用 S／M） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:135-150`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:155-158` | 否 | 否 | v8（D155） |
+| B7 | Match 在命令到達時就發布 slack 樣本。更正：採用就要改 movement_slack 的語意，算改 wire。 | 取消（D155：要解的撤回邊界改由 B6 在 v8 重新規劃；Match 端看不出收益，而且要改 wire） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:585-627`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:224-233` | 要 | 否 | 取消（D155） |
 | B8 | late 修正的幅度依遲到量決定，或改「連續 N 次」 | 取消（re-evaluate，D154：N＝2 沒有誤觸發；x1 型由 backlog 重設回收，瓶頸不在幅度。重開：late 修正追不上又沒有 backlog 重設接手） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:149`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:155-158` | 否 | 否 | re-evaluate |
 | B9 | 停頓後的 reseed 用過時的 snapshot 播種，領先實際歸零 | 已解決（re-evaluate，D154：已知限制。背壓 120 次中 12 次領先不足，都在 0.25 s 內恢復、替代 0。重開：抖動網路下那 0.25 s 出現 held） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:218-223`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:67-97` | 否 | 可能 | re-evaluate |
 | B10 | 權威 digest 不保護相位追蹤：補一層相位追蹤的 golden | 未解決 | `tests/object_fps_pvp/AuthorityDigest.cpp:474-480`<br>`tests/object_fps_pvp/AuthorityDigest.cpp:572-575` | 否 | 會 | re-evaluate 之後（修正批之前） |
@@ -173,7 +173,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | N-conflict-window-permanent-loss | 衝突窗口併進主線造成的永久損失（protocol-v6 已知缺口 9） | 已解決（re-evaluate，D154：「永久」來自 Gateway 的併入與去重，pv7 已刪除；Match 整則拒收，游標越過後恢復） | `docs/object_fps_pvp/protocol-v6.zh-Hant.md:98`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:487` | 可選 | 否 | re-evaluate |
 | N-silent-branches-assert | 推論走不到的無聲分支改成 assert（Programmer Error） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:491`<br>`apps/object_fps_pvp/gateway/server.go:638-641` | 否 | 否 | re-evaluate 之後 |
 | N-09b-followup-measures | 09b §5 裡沒有對應使用者代號的量測與方法項 | 已解決（re-evaluate，D154：已拆到 D153、E3 與 B6） | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1373`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1376` | 否 | 否 | re-evaluate |
-| N-phase-1-7-items-3-6 | 09b 1-7 節的第 3、6 項已知限制（B6 沒涵蓋） | 部分（re-evaluate，D154：第 6 點已滿足，92/s 低於 120/s；第 3 點隨 B6 補量） | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1176`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1179` | 否 | 否 | re-evaluate |
+| N-phase-1-7-items-3-6 | 09b 1-7 節的第 3、6 項已知限制（B6 沒涵蓋） | 部分（D154：第 6 點已滿足；第 3 點隨 B6） | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1176`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1179` | 否 | 否 | v8（D155，隨 B6） |
 | N-summary-counter-wrap | Client 重新加入後，每秒摘要行的武器計數器下溢（例：`actions_submitted=18446744073709551466`）：離開 Playing 時基準值沒有歸零。只影響日誌（2026-10-16 全 Windows LAN 臨時測試） | 已解決（log-contract core，D142） | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:712-717、:737-741`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientB_logs/client-20261016-105531.log:337` | 否 | 否 | log-contract |
 | N-hit-feedback-not-logged | 受擊效果（紅色閃光）沒有寫進日誌，Client 的 HP 只有每秒取樣；使用者回報 Main Client 有一次受擊沒閃紅，時間不記得，無法定位。設計上致命一擊、同一 Snapshot 內致死的連續傷害、新生命的第一個狀態都不閃 | 未解決 | `apps/object_fps_pvp/src/Pvp/HitFeedback.cpp:78-100`<br>`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:357-366` | 否 | 否 | log-contract |
 | N-windows-max-path | Windows 發行包的 shader 路徑很深（檔名是 64 字元的雜湊），解壓到較深的資料夾就超過 MAX_PATH（260），Client 開不了 shader。CI 的驗收路徑較短，所以沒抓到 | 未解決 | 2026-10-16 實例：271 字元，`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientA/logs/client-20261016-104011.log:2` | 否 | 否 | re-evaluate 之後 |

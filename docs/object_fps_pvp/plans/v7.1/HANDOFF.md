@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7`（未再現）與 `incident-close` 結案；`observability-tools` 也結案；after-pv7 只剩 `re-evaluate`（詳見「現況」）。**
+更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：after-pv7 的 7 批全部結案（`re-evaluate` 也結案，D155）；PR #82 等你轉 ready 並合併（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`re-evaluate` 的 B6、B7、A5 是否繼續（[re-evaluate.md](re-evaluate.md) 第 4.3、4.4 節）。
-- **進行中**：無（等你決定 B6、B7、A5）。
-- **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
+- **等你決定**：PR #82（after-pv7 線）轉 ready 並合併。
+- **進行中**：無。after-pv7 的 7 批全部結案；最後一次程式變更的 L1 是 #532（`d5a4cec`，四平台通過），之後只有文件。
+- **下一步**：PR #82 轉 ready、合併（`gh pr merge --merge`）。v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -124,6 +124,7 @@
 | D152 | （2026-10-21）`observability-tools` 的決定：OT-0a 選 (a)，相位決策直接寫進 `*-commands.jsonl` 的新 kind、升 schema，凍結讀者一起改，不另開檔案、不留相容層（「目前沒有發佈，不需要背這個技術債」）；其他照建議：OT-0b E1-6 納入（OT-6）、`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`；OT-0c 新凍結清單從下一個 L2 生效；OT-0d 注入正式模式維持現狀；OT-0e 三個 RTT 階段維持同一個種子（沒有建議，照「預設行為不變」） | 使用者：「OT-0a 直接改就行，目前沒有也沒有發佈，不需要被這個技術債。其他的照建議執行。」 |
 | D153 | （2026-10-21）OT-0e（分支會話討論後由使用者決定，轉給主會話）：impairments 的三個 RTT 階段維持同一個種子，工具不改、不加「每個階段換種子」的選項（三個階段是只差 RTT 的受控對照）；下一個 L2 的宣告改成每次跑次用不同的基底種子（impairments 與遊戲的 network20／40，例如第 k 次 DEFAULT＋1000×k，事前宣告清單，宣告前逐一乾跑確認 `random_dropped`>0），讓重複跑次同時抽樣丟包型態。細節在 [observability-tools.md](observability-tools.md) 第 7 節 | 使用者（分支會話「btw: 這個你如何考慮？」，經該會話轉達）：「OK，轉給主會話」 |
 | D154 | （2026-10-21）`re-evaluate`：同意第 2 版的判斷，但 B6、B7、A5 先補量再定（門檻 105 重推、快速正向回收隨 A5；N-phase-1-7 第 3 點隨 B6）；其他可以證明的直接處理（結案：N-respawn-reject-volume、N-conflict-window-permanent-loss、B9、N-quality-reference-age-sampling、N-09b-followup-measures；取消：B8；N-phase-1-7 第 6 點）；還需要的 A4、N-analyzer-literal-105 交給 v8；N-phase-estimator-wan-noise 等 WAN 測試。事故紀錄加日後談，只收和事故相關的項目 | 使用者：「同意 re-evaluate 第 2 版的判斷。12 項照寫結案或取消，重開條件照寫。還需要的 2 項交給 v8。」「等等，你把取消理由給我看一下呀。。。」「B6、B7、A5先補量再定，其他可以證明的，就直接處理掉，順便給事故紀錄加一個日後談，這個目錄就是設計失敗後不停加補丁的傷疤。」「當然，要選取相關事項，不是事故中的就不加了。」 |
+| D155 | （2026-10-21）`re-evaluate` 補量之後：B6 交給 v8 重新規劃（不沿用 09b 的 S／M；09b 1-7 第 3 點隨它）；B7、A5 取消（A5 照設計保留，連同門檻 105 重推、快速正向回收）。**`re-evaluate` 結案** | 使用者：「OK，那是否需要重新規劃一下B6的計劃，如果直接沿用之前測方案，我怕達不到最好的效果。」「B6交給v8吧。B7、A5 取消就好。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -586,6 +587,7 @@
 - 2026-10-21：`re-evaluate` 第 2 版。使用者指出方向錯了：「re-evaluate 就是評估，這些case還是否需要繼續的，而不是評估要如何做的」。第 1 版寫了修法、工時與順序；第 2 版只判斷每項還需不需要，並附根據與重開條件。B7 由使用者先問（「我想的是B7，現在還有必要嗎？」），判斷為取消。
 - 2026-10-21：**OT-4 引入的缺陷**（`observability-tools` 結案之後，`re-evaluate` 補量時發現）：`run_case` 建立 relay 時多傳了 `loss_seed`，而 `run_client_delay.py` 替換進去的 `DelayRelay` 只收 3 個參數，所以每一次真實的延遲注入都是 runner error（補量第 1 次 18/18 失敗，證據 `logs/pvp-v71-reeval-map-20261021/runs-attempt1-runner-error/`）。單元測試把 `run_case` 整個替換掉，L1 也不跑真實的延遲注入，所以沒有抓到。照 §14.3：重現（真實跑次）→ 加測試 `test_the_delaying_relay_accepts_the_arguments_run_case_passes`（以 `run_case` 原始碼裡的呼叫參數數去綁定替換類別的建構子），Red 確認 → 修 `DelayRelay` 接受並轉傳種子 → Green；突變 `ot4-delay-relay-three-arguments` killed（新增 `client_delay_runner` 檢查：原本掛在 `cpu` 上時存活，因為 `cpu` 只跑 C++ doctest）。補量第 2 次 18/18 完成。日後談依使用者補上 B8、WAN 雜訊、參考年齡，B9 列為部分相關。
 - 2026-10-21：L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）與 #532（`d5a4cec`，OT-4 缺陷修正）都是四平台通過。`re-evaluate` 補量的結果（[re-evaluate.md](re-evaluate.md) 第 4.3 節）：分布和 v7 的 09ab L2 相同；A5 的 300 ms 型 12/12 backlog 重設；B6 在 100 ms 格是 +3 ms、約 4 秒，但 150 ms 格的部分撤回留下 +22～27 ms、約 4 秒（4/8 個單位），比第 1 版的判斷大。
+- 2026-10-21：使用者問 B6 的機制與為何仍成立。說明：B6 是相位追蹤自己的時序問題（late 修正後的重新擷取在 slew 結束時決定，用到延遲期間的樣本），09b 的量測本來就是在修好資訊流之後做的，所以不是事故的副作用；第 1 版把它說成「+3 ms」，是沒有區分 1-7 第 1 點與第 3 點。使用者擔心沿用舊方案效果不好，決定交給 v8 重新規劃（D155）；B7、A5 取消。**`re-evaluate` 結案**；after-pv7 的 7 批全部結案。
 
 ## 未結事項
 
