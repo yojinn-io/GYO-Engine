@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：after-pv7 的 7 批全部結案（`re-evaluate` 也結案，D155）；PR #82 等你轉 ready 並合併（詳見「現況」）。**
+更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：after-pv7 的 7 批全部結案（`re-evaluate` 也結案，D155）；PR #82 合併中（D156；詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：PR #82（after-pv7 線）轉 ready 並合併。
-- **進行中**：無。after-pv7 的 7 批全部結案；最後一次程式變更的 L1 是 #532（`d5a4cec`，四平台通過），之後只有文件。
-- **下一步**：PR #82 轉 ready、合併（`gh pr merge --merge`）。v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105）等你開始。
+- **等你決定**：無。
+- **進行中**：PR #82 轉 ready、合併（D156）。
+- **下一步**：合併之後，v7.1 剩 `after-re-evaluate`（處置為「re-evaluate 之後」的 37 項，由你排序）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -125,6 +125,7 @@
 | D153 | （2026-10-21）OT-0e（分支會話討論後由使用者決定，轉給主會話）：impairments 的三個 RTT 階段維持同一個種子，工具不改、不加「每個階段換種子」的選項（三個階段是只差 RTT 的受控對照）；下一個 L2 的宣告改成每次跑次用不同的基底種子（impairments 與遊戲的 network20／40，例如第 k 次 DEFAULT＋1000×k，事前宣告清單，宣告前逐一乾跑確認 `random_dropped`>0），讓重複跑次同時抽樣丟包型態。細節在 [observability-tools.md](observability-tools.md) 第 7 節 | 使用者（分支會話「btw: 這個你如何考慮？」，經該會話轉達）：「OK，轉給主會話」 |
 | D154 | （2026-10-21）`re-evaluate`：同意第 2 版的判斷，但 B6、B7、A5 先補量再定（門檻 105 重推、快速正向回收隨 A5；N-phase-1-7 第 3 點隨 B6）；其他可以證明的直接處理（結案：N-respawn-reject-volume、N-conflict-window-permanent-loss、B9、N-quality-reference-age-sampling、N-09b-followup-measures；取消：B8；N-phase-1-7 第 6 點）；還需要的 A4、N-analyzer-literal-105 交給 v8；N-phase-estimator-wan-noise 等 WAN 測試。事故紀錄加日後談，只收和事故相關的項目 | 使用者：「同意 re-evaluate 第 2 版的判斷。12 項照寫結案或取消，重開條件照寫。還需要的 2 項交給 v8。」「等等，你把取消理由給我看一下呀。。。」「B6、B7、A5先補量再定，其他可以證明的，就直接處理掉，順便給事故紀錄加一個日後談，這個目錄就是設計失敗後不停加補丁的傷疤。」「當然，要選取相關事項，不是事故中的就不加了。」 |
 | D155 | （2026-10-21）`re-evaluate` 補量之後：B6 交給 v8 重新規劃（不沿用 09b 的 S／M；09b 1-7 第 3 點隨它）；B7、A5 取消（A5 照設計保留，連同門檻 105 重推、快速正向回收）。**`re-evaluate` 結案** | 使用者：「OK，那是否需要重新規劃一下B6的計劃，如果直接沿用之前測方案，我怕達不到最好的效果。」「B6交給v8吧。B7、A5 取消就好。」 |
+| D156 | （2026-10-21）PR #82（after-pv7 線：`tt2-trace`、`log-contract`、`dead-letter-position`、`d44-regression-pv7`、`incident-close`、`observability-tools`、`re-evaluate`）轉 ready 並合併。最後一次程式變更的四平台 L1 是 #532（`d5a4cec`），之後只有文件 | 使用者：「那沒問題了。#82合併。」 |
 
 ## 規劃紀錄（記錄器）
 
