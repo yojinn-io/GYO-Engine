@@ -175,12 +175,15 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         }
         evidence.Push(std::move(frame),true);++frameIndex;deadline+=period;if(deadline<Clock::now())deadline=Clock::now();std::this_thread::sleep_until(deadline);
     }
+    // Interpretation only (E1-6): the same baseline after the run, the Clients still connected.
+    auto timerAfter=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
+    timerAfter.when="after the run, the Clients still connected";
     // Interpretation only: each Client's simulation deadline wakes over the run.
     Json wakes=Json::array();
     for(const auto& role:simulation)wakes.push_back(Json::parse(SimulationWakesJson(role->TakeWakeReport())));
     Json result={{"simulation_wakes",wakes},{"passed",nextStep==plan.size()},{"gameplay_v5",true},{"protocol",AcceptanceProtocolVersion},{"start_ns",startNs},{"end_ns",MovementTraceNowNs()},
         {"player_ids",ids},{"fps",fps},{"duration",duration},{"cycles",cycles},{"planned_actions",plan.size()},{"maximum_retained",maximumRetained},
-        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()},{"timer",timer.Json()}};
+        {"maximum_unconsumed",maximumUnconsumed},{"drain_stall_ms",drainStallMs},{"clients",Json::array()},{"timer",timer.Json()},{"timer_after",timerAfter.Json()}};
     for(unsigned i=0;i<2;++i){const auto state=clients[i].State();const auto& rules=*state.combatRules;
         result["clients"].push_back({{"player_id",ids[i]},{"submitted",submitted[i].size()},{"decisions",decisions[i].size()},
             {"retired_through",state.actionTransport.retiredThrough},{"retained",state.actionTransport.retained},

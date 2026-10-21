@@ -223,10 +223,13 @@ int main(int argc,char** argv){
                     b->decisions[d.actionId]=DecisionJson(d);}
                 done=done&&b->decisions.size()==b->submitted.size()&&drain.state.actionTransport.retained==0;}
             return done;},5,"Decisions or retained actions remained after the run");
+        // Interpretation only (E1-6): the same baseline after the run, the bots still connected.
+        auto timerAfter=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
+        timerAfter.when="after the run, the bots still connected";
         Json result={{"protocol",AcceptanceProtocolVersion},{"capacity",AcceptanceMaxPlayers},{"start_ns",startNs},{"end_ns",endNs},
             {"player_ids",ids},{"fps",options.fps},{"duration",options.duration},{"created_room",options.create},
             {"expect_players",options.expectPlayers},{"fifth",fifth},{"bot_action_seconds",BotActionSeconds},
-            {"frame_seconds",frameSeconds},{"frame_time_ns",frameTimes},{"timer",timer.Json()},{"clients",Json::array()}};
+            {"frame_seconds",frameSeconds},{"frame_time_ns",frameTimes},{"timer",timer.Json()},{"timer_after",timerAfter.Json()},{"clients",Json::array()}};
         const auto spawns=[&]{Json v=Json::array();for(const auto& s:arena->spawns)v.push_back({s.position.x,s.position.y,s.position.z});return v;}();
         result["arena"]={{"id",arena->id},{"radius",arena->radius},{"spawns",spawns}};
         for(const auto& b:bots){const auto s=b->connection.State();

@@ -343,6 +343,7 @@ def analyze(output, relay, fault, mode):
             check(sum(e['event']==label for e in relay['events'])==2,'Missing '+label)
     return {'passed':not errors,'errors':errors,'protocol':PROTOCOL_VERSION,'mode':mode,'fps':client['fps'],
             'timer_baseline':client.get('timer'),  # Interpretation only; no check reads it.
+            'timer_baseline_after':client.get('timer_after'),  # E1-6; interpretation only.
             'stall_rule':STALL_RULE,
            'scope':'16-second real-socket v5 gameplay and delivery, no long certification',
             'fault_expiry_reasons':fault_expiry_reasons,'planned_actions':len(plan['actions']),'delivered_actions':len(delivered),'verdicts':dict(verdicts),'deaths':deaths,'respawns':respawns,

@@ -147,6 +147,9 @@ class FrozenReaders(unittest.TestCase):
     def test_command_evidence_reads_the_movement_trace(self):
         events = list(self.commands.read_trace_events(FIXTURES / 'sample-commands.jsonl'))
         self.assertEqual(len(events), 200)
+        # schema 3 (D152): the real Client trace carries its phase decisions
+        self.assertEqual({e['schema_version'] for e in events}, {3})
+        self.assertEqual(sum(e['kind'] == 'phase_decision' for e in events), 2)
 
 
 class ReverseGuards(unittest.TestCase):

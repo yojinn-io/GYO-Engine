@@ -55,21 +55,28 @@ std::vector<MovementTraceEvent> GoldenEvents() {
     MovementTraceEvent c{};
     c.kind = MovementTraceKind::Sent; c.timeNs = 99; c.source = MovementInputSource::Actual; c.droppedSeconds = 0.016666666666666666;
     c.resetReason = MovementResetReason::SequenceExhausted;
-    return {a, b, c};
+    MovementTraceEvent d{};
+    d.kind = MovementTraceKind::PhaseDecision; d.timeNs = 7; d.playerId = 2; d.epoch = 3; d.sequence = 77; d.count = 30;
+    d.phasePath = MovementPhasePath::Window; d.phaseErrorSeconds = 0.0123; d.phaseShiftSeconds = 0.0123;
+    d.phaseDeadbandSeconds = 0.002;
+    return {a, b, c, d};
 }
 
 // Written by the movement trace writer before it moved onto the Engine trace
 // sink (master 0fabb52, std::ofstream with setprecision(17)): the file format
-// must not change with the transport.
+// must not change with the transport. Schema 3 (v7.1 D152): the same bytes with
+// the version number 3, plus the phase_decision kind, the only one with the
+// four phase_* keys after started_ns.
 const std::vector<std::string> GoldenLines{
-    R"G({"schema_version":2,"kind":"resolved","time_ns":123456789012345,"player_id":3,"life_generation":4,"epoch":7,"sequence":42,"authority_tick":9001,"source":"held","queued":2,"pending":5,"seeded_neutral":true,"dropped_seconds":0.10000000000000001,"frame_seconds":0.33333333333333331,"count":18446744073709551615,"age_seconds":1.0000000000000001e-09,"reset_reason":"starvation","started_ns":-5})G",
-    R"G({"schema_version":2,"kind":"lifecycle_cancelled","time_ns":1,"player_id":0,"life_generation":1,"epoch":1,"sequence":0,"authority_tick":0,"source":"neutral","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0,"frame_seconds":3,"count":0,"age_seconds":25000000000,"reset_reason":"life_respawn","started_ns":0})G",
-    R"G({"schema_version":2,"kind":"sent","time_ns":99,"player_id":0,"life_generation":1,"epoch":1,"sequence":0,"authority_tick":0,"source":"actual","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0.016666666666666666,"frame_seconds":0,"count":0,"age_seconds":0,"reset_reason":"sequence_exhausted","started_ns":0})G",
-    R"G({"schema_version":2,"kind":"trace_end","events":3,"dropped":0})G",
+    R"G({"schema_version":3,"kind":"resolved","time_ns":123456789012345,"player_id":3,"life_generation":4,"epoch":7,"sequence":42,"authority_tick":9001,"source":"held","queued":2,"pending":5,"seeded_neutral":true,"dropped_seconds":0.10000000000000001,"frame_seconds":0.33333333333333331,"count":18446744073709551615,"age_seconds":1.0000000000000001e-09,"reset_reason":"starvation","started_ns":-5})G",
+    R"G({"schema_version":3,"kind":"lifecycle_cancelled","time_ns":1,"player_id":0,"life_generation":1,"epoch":1,"sequence":0,"authority_tick":0,"source":"neutral","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0,"frame_seconds":3,"count":0,"age_seconds":25000000000,"reset_reason":"life_respawn","started_ns":0})G",
+    R"G({"schema_version":3,"kind":"sent","time_ns":99,"player_id":0,"life_generation":1,"epoch":1,"sequence":0,"authority_tick":0,"source":"actual","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0.016666666666666666,"frame_seconds":0,"count":0,"age_seconds":0,"reset_reason":"sequence_exhausted","started_ns":0})G",
+    R"G({"schema_version":3,"kind":"phase_decision","time_ns":7,"player_id":2,"life_generation":1,"epoch":3,"sequence":77,"authority_tick":0,"source":"none","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0,"frame_seconds":0,"count":30,"age_seconds":0,"reset_reason":"none","started_ns":0,"phase_path":"window","phase_error_seconds":0.0123,"phase_shift_seconds":0.0123,"phase_deadband_seconds":0.002})G",
+    R"G({"schema_version":3,"kind":"trace_end","events":4,"dropped":0})G",
 };
 } // namespace
 
-TEST_CASE("PvP movement trace lines keep the bytes of the schema version 2 writer") {
+TEST_CASE("PvP movement trace lines keep the bytes of the schema version 3 writer") {
     const auto events = GoldenEvents();
     REQUIRE(events.size() + 1 == GoldenLines.size());
     for (std::size_t k = 0; k < events.size(); ++k) CHECK(MovementTraceLine(events[k]) == GoldenLines[k]);
@@ -135,7 +142,7 @@ TEST_CASE("PvP movement trace counts an event a producer records after Finish") 
     CHECK_FALSE(writer.Good());
     const auto lines = ReadLines(path);
     REQUIRE(lines.size() == 2);
-    CHECK(lines.back() == R"({"schema_version":2,"kind":"trace_end","events":1,"dropped":0})");
+    CHECK(lines.back() == R"({"schema_version":3,"kind":"trace_end","events":1,"dropped":0})");
 }
 
 TEST_CASE("PvP log file ends with the count of dropped lines") {

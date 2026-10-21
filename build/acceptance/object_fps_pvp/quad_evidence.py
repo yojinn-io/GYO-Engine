@@ -402,7 +402,7 @@ def analyze_quad(directory, *, judged=True):
               'player_ids': ids, 'fifth': fifth, 'decisions': sum(len(entry['decisions']) for entry in client['clients']),
               'rejections': dict(rejections), 'snapshot_ticks': len(by_tick), 'shared_snapshot_ticks': shared,
               'respawns': respawns, 'deaths': len(respawns), 'transport': transport_statistics(directory / 'match-commands.jsonl'),
-              'timer': client.get('timer'), 'gui': gui_summary, 'command_evidence': commands}
+              'timer': client.get('timer'), 'timer_after': client.get('timer_after'), 'gui': gui_summary, 'command_evidence': commands}
     (directory / 'quad-evidence.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 

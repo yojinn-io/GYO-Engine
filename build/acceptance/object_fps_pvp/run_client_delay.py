@@ -69,7 +69,7 @@ MECHANISM = 'client-gateway-pure-delay'
 DIRECTION = 'client->gateway'
 # The files DelayRelay builds on; equal to analyzers sha256 lists since C1 (pvp-v7-batch09-s1-20261010).
 # action_probe.py refrozen by v7.1 D122 (its Gateway limiter check only; ActionRelay unchanged).
-FROZEN = {'action_probe.py': 'ca20501d840530990d1388fbccdc10fb2e2e99fa3e0603beadf62442900d23d4',
+FROZEN = {'action_probe.py': 'ccef0053629c60c2b2b51fcaceaf666e3911283e16462e64f19649c8734c657f',
           'impaired_network.py': '9720778bb4bf6c1c3455c0f26590021281aee9f070d10d14e071682a8446d131'}
 # Recorded in plan.json (not checked): this runner and the modules run_case uses.
 RECORDED = ('run_client_delay.py', 'action_probe.py', 'impaired_network.py', 'backpressure_probe.py',

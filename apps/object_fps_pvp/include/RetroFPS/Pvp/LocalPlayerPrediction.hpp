@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
 #include <array>
@@ -122,6 +123,7 @@ private:
     void SeedLead(const PlayerState& authority);
     void TrackPhase(const PlayerState& authority);
     void Correct(double error, bool late);
+    void TracePhaseDecision(MovementPhasePath path, double error, double deadband, std::size_t samples) const;
     void UpdatePresentation();
 
     // Steps one Advance may run; whole steps beyond them are dropped.

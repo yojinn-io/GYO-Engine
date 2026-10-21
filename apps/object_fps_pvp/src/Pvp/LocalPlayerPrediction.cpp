@@ -153,8 +153,11 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     // Commands arriving after their sequence was substituted: correct at once
     // from the latest of them instead of waiting for a window.
     if (lateSamples_ >= MovementPhaseLateSamples && phaseSamples_.size() >= lateSamples_) {
-        Correct(*std::min_element(phaseSamples_.end() - static_cast<std::ptrdiff_t>(lateSamples_), phaseSamples_.end()), true);
+        const double error = *std::min_element(phaseSamples_.end() - static_cast<std::ptrdiff_t>(lateSamples_), phaseSamples_.end());
+        const std::size_t used = lateSamples_;
+        Correct(error, true);
         phaseDecided_ = reacquiring_ = true;
+        TracePhaseDecision(MovementPhasePath::Late, error, 0, used);
         return;
     }
     if (frameEvidence_ < PhaseFrameEvidence) return;
@@ -167,7 +170,25 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
     reacquiring_ = false;
     observation_.phaseErrorSeconds = error;
     observation_.phaseTracking = PhaseTrackingState::Tracking;
-    if (std::abs(error) > deadband) Correct(error, false);
+    const auto used = phaseSamples_.size();
+    const bool corrects = std::abs(error) > deadband;
+    if (corrects) Correct(error, false);
+    // Every first decision, but only the window decisions that start a
+    // correction: once tracking, the window is decided again on every new
+    // sample (about 40 a second), almost always inside the deadband.
+    if (first || corrects)
+        TracePhaseDecision(first ? MovementPhasePath::First : MovementPhasePath::Window, error, deadband, used);
+}
+
+// Diagnostics only (E1-3, observability-tools OT-1): a decision TrackPhase
+// just made, after Correct (phaseShiftSeconds_ is the correction it started, 0
+// when the error stayed inside the deadband).
+void LocalPlayerPrediction::TracePhaseDecision(MovementPhasePath path, double error, double deadband,
+                                               std::size_t samples) const {
+    TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
+        .epoch = current_.movementEpoch, .sequence = observation_.phaseSampleSequence,
+        .count = static_cast<std::uint64_t>(samples), .lifeGeneration = current_.lifeGeneration, .phasePath = path,
+        .phaseErrorSeconds = error, .phaseShiftSeconds = phaseShiftSeconds_, .phaseDeadbandSeconds = deadband});
 }
 
 void LocalPlayerPrediction::ObservePhaseSample(const PlayerState& authority) {

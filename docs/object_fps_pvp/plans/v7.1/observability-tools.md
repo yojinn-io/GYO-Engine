@@ -1,6 +1,6 @@
 # observability-tools：觀測工具（計畫，第 1 版）
 
-- 狀態：**OT-2～OT-5 實作完成，已併回 after-pv7 線（merge `f34645c`；分支上的 L1 #503 通過，併回後的 L1 見 HANDOFF）；OT-1、E1-6 與注入正式模式等你決定（第 5、7 節）。**
+- 狀態：**全部實作完成（OT-1～OT-6；D152 決定 OT-0a～e），等四平台 L1**（第 8 節）。
 - 依據：README 的 `observability-tools` 列（「相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式」；驗收「工具的單元測試、新舊各分析一次／—／—」；估 10～13 h）、INVENTORY 的 E1-3、`N-late-count-detector-increment`、`N-d44-network-detector-narrow`、E4、`N-injection-official-mode`，以及也指向本批、但 README 那一列沒寫的 E1-6、`N-trace-overwrite-on-restart`。
 - 檔位：high（實作與單元測試）；新舊分析 medium。
 - file:line 以 `df04ea3` 為準。
@@ -99,3 +99,57 @@ observability-tools
 
 - **OT-0d 注入的正式模式**：(a) 把 `IpcDelay` 搬進 `backpressure_probe.py`，在 `action_probe.run_case` 加一個 `host-ipc-delay` case，`run_short_stall.py` 改呼叫它，不再替換模組屬性（D50 條件 3 就不再需要）；(b) 維持現狀（runner 替換＋雜湊釘住），等短停頓真的要升為計數母體時再做。建議 (b)：D146 DR-4 把短停頓設為只記錄，現在沒有常設回歸要用它。
 - **OT-0e 階段之間用不同種子**：要不要讓 impairments 的三個 RTT 階段用不同的種子（例如基底＋階段序號），目前三個階段的丟包位置相同。改了會讓預設行為不同於舊跑次，所以這次沒做。
+
+## 8. OT-1 與 OT-6（D152）
+
+使用者：「OT-0a 直接改就行，目前沒有也沒有發佈，不需要被這個技術債。其他的照建議執行。」所以：
+- OT-0a 選 (a)：相位決策直接寫進 `*-commands.jsonl` 的新 kind，schema 升到 3；凍結讀者一起改，不另開檔案、不留相容層。
+- OT-0b：E1-6 納入（OT-6）；`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`。
+- OT-0c：新的凍結清單從下一個 L2 生效。
+- OT-0d：注入的正式模式維持現狀。
+- OT-0e：三個 RTT 階段維持同一個種子（這一項沒有建議，照「預設行為不變」處理）。
+
+### OT-1 phase-decision-trace（E1-3）
+
+- 產品：
+  - `MovementTrace.hpp`：新增 `PhaseDecision` kind、`MovementPhasePath`（first／window／late）與四個欄位。
+  - `MovementTraceWriter.hpp`：schema 3。其他 kind 的位元組和版本 2 相同，只改版本號；只有 `phase_decision` 在 `started_ns` 之後多 `phase_path`、`phase_error_seconds`、`phase_shift_seconds`、`phase_deadband_seconds`。
+  - `LocalPlayerPrediction::TrackPhase`：決定之後寫一筆（`TracePhaseDecision`，const、只寫 trace）。
+- **寫哪些決定**：每個首次決定（含沒有修正的）、每個 late 修正、啟動修正的 window 決定。
+  - 第一版每個 window 決定都寫：實跑 clean-60 時，16 秒寫了 1177 筆，其中 1174 筆落在 deadband 內、沒有修正。原因是 window 滿了之後每個新樣本都重新判一次，每秒約 40 次。E1-3 要的是「首次決定、視窗修正、late 修正與幅度」，所以 deadband 內的 window 決定不寫。
+- 讀者：`command_evidence.read_trace_events` 接受 schema 1～3。
+  - `phase_decision` 只在 schema ≥3 合法；`phase_path` 必須是三種之一；三個秒數必須有限、deadband ≥0；`count` ≥1。
+  - 其他 kind 帶 `phase_*` 鍵就停。
+  - `quad_evidence` 用同一個讀者。
+- 日誌契約：`log-contract.zh-Hant.md` 的 §1.2 表格改成 schema 3；R4 加上這個例外（低頻但要和移動紀錄對齊時間，所以不寫成日誌行）。
+  - Replacement Criteria 第 3 條（一組鍵的變更要改 3 個以上分析器）：這次只改了 `command_evidence` 一個讀者（quad 共用），而且本來就是升版並重新凍結，不觸發。
+- 測試：
+  - `PredictionTests`「PvP phase decisions are written to the movement trace」：首次決定（修正與不修正）、啟動修正的 window 決定、late 修正都寫進 trace；deadband 內的 window 決定不寫（跑滿 `MovementPhaseWindowSamples`＋20 幀）。
+  - `DiagnosticFileTests` 的位元組 golden 改成 schema 3，加一行 `phase_decision`。
+  - `test_command_evidence` 加 schema 3 與驗證的案例。
+  - `fixtures/log_v1/sample-commands.jsonl` 換成新 writer 的真實片段（200 筆，含 2 筆 `phase_decision`）。
+- 突變：`ot1-late-decision-untraced`、`ot1-every-window-decision-traced` 都 killed。
+  - 第二個第一次存活：測試只跑 20 幀，到不了 window 決定（要 240 個樣本），那段檢查是空的。改成跑滿 window 之後 killed。
+  - 既有突變 `v7-09b-reacquire-on-window-correction` 的錨點照原意更新，仍 killed。
+- 實跑（新建置）：
+  - loss-shot 通過；trace 裡的修正次數 1，等於 start_phase 紀錄的修正次數 1；late 0，等於 `late_count` 的 0。兩個獨立來源一致。
+  - clean-60 通過。
+- digest 不動：只寫 trace，`test_diagnostic_isolation` 通過。
+
+### OT-6 timer-baseline-after（E1-6）
+
+- `timer_baseline.hpp` 加 `when`。`gameplay_action.hpp`、`quad_main.cpp` 在跑次結束後再量一次 3 秒（`timer_after`，Client 或 bot 仍連線），寫進 client JSON。
+- `gameplay_evidence`、`gameplay_soak_evidence`、`quad_evidence` 原樣轉出 `timer_baseline_after`／`timer_after`，只當解讀用，不進判定。
+- `action_probe.py` 等 probe 結束的上限從 25 秒改成 30 秒：16 秒的跑次，加 3 秒的跑次後基準與決定的排空。
+- 實跑：host-ipc-1000ms 通過，前後的 late P99 是 6.3／7.6 ms；quad clean-60 1 輪通過，7.1／7.8 ms。
+
+### 測試判定的變更（AGENTS.md §14.4）
+
+- `DiagnosticFileTests` 的 golden：Data Contract 的釘住，照使用者核准的契約變更（D152）改成 schema 3。其他 kind 的位元組只有版本號不同；新 kind 有自己的 golden 行。
+- `test_gameplay_evidence`、`test_gameplay_soak_evidence` 的「timer 只能原樣轉出」守衛：預期的行加上 `timer_baseline_after` 那一行。
+  1. 守的性質：analyzer 只轉出 timer 基準，不拿來判定。
+  2. 放寬的面：無。仍然只允許這兩行原樣轉出；任何其他含 timer 的行都會讓測試失敗。
+  3. 收緊的面：無。
+  4. 不適用。
+  5. 根據：E1-6，D152。
+- `run_short_stall.py`、`run_client_delay.py` 的 `FROZEN`（D50 條件 3）：釘到新的 `action_probe.py` 雜湊，強度不變。

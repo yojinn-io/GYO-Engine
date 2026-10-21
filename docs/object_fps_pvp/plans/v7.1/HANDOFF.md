@@ -37,10 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：
-  1. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
-- **進行中**：after-pv7 線（含 `observability-tools` 的併回）的四平台 L1（`499f625`，run 39553613313，#511）。
-- **下一步**：L1 通過後，`observability-tools` 剩下的 OT-0a～e 由你決定；`re-evaluate` 由你看（D148）。PR #82 在 `observability-tools` 收尾後可以轉 ready。
+- **等你決定**：無。
+- **進行中**：`observability-tools` 收尾的四平台 L1。
+- **下一步**：L1 通過後 `observability-tools` 結案；`re-evaluate` 由你看（D148）。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -122,6 +121,7 @@
 | D149 | （2026-10-21）`d44-regression-pv7` 照 DS-1：x1／ramp 的注入無效改成不計數、累計 3 次才停；先做 §14.4 的 1～5 與審查，交使用者核准，再整個重跑 | 使用者：「d44-regression-pv7 照 DS-1：x1/ramp 的注入無效改成不計數、累計 3 次才停，做 §14.4 的 1～5 與審查後交我核准，再整個重跑。」 |
 | D150 | （2026-10-21）核准 `d44-regression-pv7` 的 DS-1 宣告補遺（[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節；judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節；整個重跑 session | 使用者：「核准 d44-regression-pv7 的 DS-1 宣告補遺（judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節。現在整個重跑 session。」 |
 | D151 | （2026-10-21）session 第 2 次的停止原因：使用者在 Zed 裡 review 程式碼時切換了主 checkout 的分支，不知道會影響 agent。使用者：可以繼續。照建議 DR3-1：不改工具，原樣整個重跑（`pvp-v71-d44-l2-20261021c/`），期間不切換主 checkout | 使用者：「抱歉我在zed中review代碼，不知道會連動影響Agent，你可以繼續。」 |
+| D152 | （2026-10-21）`observability-tools` 的決定：OT-0a 選 (a)，相位決策直接寫進 `*-commands.jsonl` 的新 kind、升 schema，凍結讀者一起改，不另開檔案、不留相容層（「目前沒有發佈，不需要背這個技術債」）；其他照建議：OT-0b E1-6 納入（OT-6）、`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`；OT-0c 新凍結清單從下一個 L2 生效；OT-0d 注入正式模式維持現狀；OT-0e 三個 RTT 階段維持同一個種子（沒有建議，照「預設行為不變」） | 使用者：「OT-0a 直接改就行，目前沒有也沒有發佈，不需要被這個技術債。其他的照建議執行。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -576,6 +576,8 @@
 - 2026-10-21：`incident-close`（D148：照建議走；只改文件）。兩份事故紀錄改為已結案：2026-10-10 Gateway 悄悄丟命令（修正：08c、`drop-report`、edge 系列；重新量測：`d44-regression-pv7` 未再現；09b 重做的剩餘與 D44 歸因交給 `re-evaluate`；M0／FireGate 隨 A1 取消）；2026-10-15 Gateway 狀態漂移（行動 1～4 完成；log-contract 的 D143 是約束在運作的證據）。順帶處理 INVENTORY `N-netarch-ambiguity`：network-architecture 的舊段落仍描述 08c（pv6）的 Gateway 合併、游標副本、拒絕線與去重，加了補充指向 protocol-v7 §2a 與 Design Invariants，原文保留。**`incident-close` 結案**。
 - 2026-10-21：`observability-tools` 分支併回 after-pv7 線（merge `f34645c`，無衝突；併回後五本相關的單元測試在主 checkout 通過）。之後的 L2 要用新的凍結清單（`action_probe.py`、`impaired_network.py`、`run_gameplay.py`、`run_network.py`、`run_short_stall.py`、`run_client_delay.py` 都改了；OT-0c）。`observability-tools` 仍有 OT-0a～e 等使用者決定，所以 README 維持 ▶。
 - 2026-10-21：使用者的讀法：D44（解釋不了的 epoch 重設）是 Gateway 設計問題最早、最直接的徵兆。寫進 [d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節與兩份事故紀錄的偵測一節、時間線。主對話提議的規則（「被定義成解釋不了的現象，先找看不到的地方，而不是加偵測」）使用者不採用：這條規則在邏輯上是互鎖的。看不到，就需要先建立視野（偵測）；但規則要求先停下來找出看不到的地方，而停下來的時候還沒有視野，用原本的方法很難找到。
+- 2026-10-21：after-pv7 線（含 `observability-tools` 的併回，`499f625`）的四平台 L1 #511 通過。
+- 2026-10-21：`observability-tools` 的 OT-1 與 OT-6（D152；[observability-tools.md](observability-tools.md) 第 8 節）。OT-1：`phase_decision` 寫進移動紀錄（schema 3），讀者、golden、fixture、日誌契約一起改。第一版每個 window 決定都寫，實跑 16 秒 1177 筆，改成只寫首次、late 與啟動修正的 window 決定。突變第一次有 1 個存活：測試到不了 window 決定，是空檢查，已修。實跑 loss-shot：trace 的修正次數等於 start_phase 的修正次數。OT-6：跑次後再量一次計時器基準。CTest 77／77，相關突變 3／3 killed。
 
 ## 未結事項
 

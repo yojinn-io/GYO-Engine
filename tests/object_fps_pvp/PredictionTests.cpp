@@ -1280,6 +1280,74 @@ TEST_CASE("PvP two late slack samples correct the phase at once") {
     CHECK(far.tracked.Observation().phaseTracking == PhaseTrackingState::Settling);
 }
 
+// E1-3 (v7.1 observability-tools OT-1, D152): the decisions TrackPhase makes are
+// written to the movement trace as phase_decision events: every first decision
+// (with or without a correction), every late correction, and the window
+// decisions that start a correction. Diagnostics only: the twins' clocks above are the same
+// with or without a trace installed.
+TEST_CASE("PvP phase decisions are written to the movement trace") {
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } scope;
+    const auto decisions = [&] {
+        std::vector<MovementTraceEvent> out;
+        for (const auto& event : scope.trace->Drain())
+            if (event.kind == MovementTraceKind::PhaseDecision) out.push_back(event);
+        return out;
+    };
+    const auto arena = PredictionArena();
+    constexpr double T = MovementTickSeconds;
+    // A first decision outside the deadband starts a correction.
+    PhaseTwins corrected(arena);
+    REQUIRE(corrected.FramesUntilCorrections(1, 0.010, 12) == 8);
+    auto found = decisions();
+    REQUIRE(found.size() == 1);
+    const auto& observation = corrected.tracked.Observation();
+    CHECK(found[0].phasePath == MovementPhasePath::First);
+    CHECK(found[0].playerId == 1);
+    CHECK(found[0].epoch == observation.movementEpoch);
+    CHECK(found[0].lifeGeneration == observation.lifeGeneration);
+    CHECK(found[0].sequence == observation.phaseSampleSequence);
+    CHECK(found[0].count >= MovementPhaseFirstSamples);
+    CHECK(found[0].phaseErrorSeconds == doctest::Approx(*observation.phaseErrorSeconds));
+    CHECK(found[0].phaseShiftSeconds == doctest::Approx(*observation.phaseCorrectionSeconds));
+    CHECK(found[0].phaseDeadbandSeconds == MovementPhaseFirstDeadbandSeconds);
+    // A later window decision outside the deadband: the next correction.
+    REQUIRE(corrected.FramesUntilCorrections(2, 0.010, 400) > 0);
+    found = decisions();
+    REQUIRE(found.size() == 1);
+    CHECK(found[0].phasePath == MovementPhasePath::Window);
+    CHECK(found[0].count == MovementPhaseWindowSamples);
+    CHECK(found[0].phaseDeadbandSeconds == MovementPhaseDeadbandSeconds);
+    CHECK(found[0].phaseShiftSeconds == doctest::Approx(*observation.phaseCorrectionSeconds));
+    // A first decision inside the deadband is traced too, with no correction.
+    PhaseTwins steady(arena);
+    REQUIRE(steady.FramesUntilCorrections(1, 0.0, 12) == -1);
+    found = decisions();
+    REQUIRE(found.size() == 1);
+    CHECK(found[0].phasePath == MovementPhasePath::First);
+    CHECK(found[0].phaseShiftSeconds == 0);
+    CHECK(std::abs(found[0].phaseErrorSeconds) <= MovementPhaseFirstDeadbandSeconds);
+    // Later window decisions inside the deadband are not written (one per new
+    // sample once the window holds MovementPhaseWindowSamples samples).
+    for (std::size_t frame = 0; frame < MovementPhaseWindowSamples + 20; ++frame) static_cast<void>(steady.Frame(T, 0.0));
+    REQUIRE(steady.tracked.Observation().phaseCorrections == 0);
+    CHECK(decisions().empty());
+    // Two late samples in a row: a late correction from the latest of them.
+    static_cast<void>(steady.Frame(T, std::nullopt, -0.004));
+    static_cast<void>(steady.Frame(T, std::nullopt, -0.003));
+    REQUIRE(steady.tracked.Observation().phaseLateCorrections == 1);
+    found = decisions();
+    REQUIRE(found.size() == 1);
+    CHECK(found[0].phasePath == MovementPhasePath::Late);
+    CHECK(found[0].count == MovementPhaseLateSamples);
+    CHECK(found[0].phaseDeadbandSeconds == 0);
+    CHECK(found[0].phaseShiftSeconds == doctest::Approx(*steady.tracked.Observation().phaseCorrectionSeconds));
+    CHECK(found[0].phaseErrorSeconds < 0);
+}
+
 // Only for a correction that is not late: after a late correction the next
 // decision reacquires on every rebased sample of the seed (B2, below).
 TEST_CASE("PvP samples for commands generated before a correction that is not late settled do not count") {

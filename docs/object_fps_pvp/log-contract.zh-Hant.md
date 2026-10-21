@@ -40,7 +40,7 @@
 
 | 檔案 | 寫出端 | 檔頭 | 釘住 | 讀者 |
 |---|---|---|---|---|
-| 移動紀錄（`*-commands.jsonl`） | `MovementTraceWriter.hpp` | 每行 `schema_version: 2` | `DiagnosticFileTests.cpp`（位元組 golden） | `command_evidence.py`※ 等 |
+| 移動紀錄（`*-commands.jsonl`） | `MovementTraceWriter.hpp` | 每行 `schema_version: 3`（v7.1 D152：版本 2 加上 Client 相位追蹤的 `phase_decision`；版本 2 的其他 kind 位元組不變，只改版本號） | `DiagnosticFileTests.cpp`（位元組 golden） | `command_evidence.py`※ 等（讀版本 1～3） |
 | `match-ingress.jsonl` | `MatchIngressTrace.hpp` | 每行 `schema: object_fps_pvp.match_ingress`、`version: 1` | `fixtures/ingress_v1/match-ingress.jsonl` | `ingress_evidence.py`※ |
 | `match-shots.jsonl` | `MatchShotTrace.hpp` | 每行 `version: 2`（沒有 schema 欄） | `CombatTests.cpp` | 各 L2 的 `shadow_*.py` |
 
@@ -56,6 +56,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 - **R2**：沒有版本鍵的行族（隱含版本 1），破壞性變更一律**改用新的事件名或前綴**（例如 `network statistics.v2 `），讓 v1 讀者的錨點找不到行，凍結的工具因此大聲失敗（`network_statistics.py` 丟 `no statistics lines`）。不在既有行補寫 `version=1`：補寫本身就會改到凍結讀者解析的行。只有本來就帶 `version=` 且讀者會檢查的行族（ingress，以及之後新增的行族）用 `version=N` 升版。破壞性變更要在該批事前宣告新的凍結清單。
 - **R3（ingress，D-LOG）**：兩端維持 v1、只在行尾追加。讀者以組別推斷每段追加的鍵（`ingress_evidence.py:108-131`）：目前 Gateway 玩家行 6 組、全域行 1 組、Match 行 1 組。已刪除的路徑照寫 0（墓碑），不刪鍵。
 - **R4（JSONL）**：既有 kind 可以加欄位；新增 kind 要升版（`command_evidence.py`、`ingress_evidence.py` 遇到不認得的 kind 會停）。逐筆的高頻紀錄寫到另外的 JSONL；低頻事件與視窗彙總寫成日誌行。最後一行是 `trace_end`；寫出或關閉失敗時程序 exit 1。
+  - 例外（v7.1 D152）：Client 的相位決策（`phase_decision`：首次決定、啟動修正的 window 決定、late 修正；`phase_path`、`phase_error_seconds`、`phase_shift_seconds`、`phase_deadband_seconds`，`count` 是用到的樣本數）寫在移動紀錄裡，不寫成日誌行。它要和同一檔案的 generated／sent 事件對齊時間，屬於重播相位追蹤的輸入（E1-3）。只有這個 kind 帶 `phase_*` 鍵；讀者在其他 kind 看到它們就停。
 - **R5**：日誌不改變控制流程（權威 digest 守住）；診斷值不進判定（`test_diagnostic_isolation.py`）。
 
 ## 3. 值的文法

@@ -2726,8 +2726,8 @@
       "batch": "v7-09b",
       "what": "Every correction a decision starts (not only a late one) is followed by a reacquisition",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (std::abs(error) > deadband) Correct(error, false);\n",
-      "replace": "    if (std::abs(error) > deadband) { Correct(error, false); reacquiring_ = true; }\n",
+      "find": "    if (corrects) Correct(error, false);\n",
+      "replace": "    if (corrects) { Correct(error, false); reacquiring_ = true; }\n",
       "check": "cpu",
       "expect": "PvP the first full window after a correction holds no sample of the old phase"
     },
@@ -4910,6 +4910,26 @@
       "replace": "\tplayerFwdStaleSequenceInputPackets:       {ingressDropped, reasonStaleSequence, ingressInput, unitPackets},\n",
       "check": "go",
       "expect": "player drop counter drop_stale_sequence_input_packets has no DropReason and is not declared unreported"
+    },
+    {
+      "id": "ot1-late-decision-untraced",
+      "batch": "v71-observability-tools",
+      "what": "A late phase correction is not written to the movement trace",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        TracePhaseDecision(MovementPhasePath::Late, error, 0, used);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP phase decisions are written to the movement trace"
+    },
+    {
+      "id": "ot1-every-window-decision-traced",
+      "batch": "v71-observability-tools",
+      "what": "Every window decision is written, also inside the deadband (about 40 a second)",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (first || corrects)\n",
+      "replace": "    if (true)\n",
+      "check": "cpu",
+      "expect": "PvP phase decisions are written to the movement trace"
     }
   ]
 }

@@ -588,7 +588,8 @@ def run_case(args, mode, milliseconds=0):
                 fault = ipc_relay.evidence()
             else:
                 relay.arm(mode, milliseconds/1000)
-        if probe.wait(timeout=25):
+        # 16 s of run, then the after-run timer baseline (3 s, E1-6) and the decision drain.
+        if probe.wait(timeout=30):
             raise RuntimeError('Client action probe failed; see probe.log and client JSON')
         if mode == 'drain-stall':
             drain_at = 4 if getattr(args, 'gameplay_v5', False) else 1.5

@@ -21,9 +21,9 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | 處置 | 項數 |
 |---|---|
 | pv7-line | 20 |
-| after-pv7 | 29 |
+| after-pv7 | 28 |
 | re-evaluate | 12 |
-| re-evaluate 之後 | 35 |
+| re-evaluate 之後 | 36 |
 | plan-sync-docs | 3 |
 | 取消 | 10 |
 | 已解決 | 3 |
@@ -105,10 +105,10 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | E1 | 第 10 批「觀測缺口清單」1～7 在 v7 之後的剩餘 | 部分（a700b66、6abd35a、8a36855、d49ee1e、f535b81） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:385-392`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:763` | 可選 | 否 | log-contract＋observability-tools |
 | E1-1 | 觀測缺口 1：Gateway 的丟棄沒有計數或 log | 已解決（8a36855、a700b66、6abd35a） | `apps/object_fps_pvp/gateway/ingress_statistics.go:9-24`<br>`apps/object_fps_pvp/gateway/server.go:836、:859、:863` | 可選 | 否 | 已解決 |
 | E1-2 | 觀測缺口 2：Match 的 host_accepted 只記新收下的序號 | 部分（d49ee1e、f535b81） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:221-226`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:243` | 可選 | 否 | log-contract |
-| E1-3 | 觀測缺口 3：相位決策（首次決定、視窗修正、late 修正與幅度）不寫進 trace | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp:16-17、:93-105`<br>`build/acceptance/object_fps_pvp/command_evidence.py:117-119、:126-127、:136-137` | 否 | 否 | observability-tools |
+| E1-3 | 觀測缺口 3：相位決策（首次決定、視窗修正、late 修正與幅度）不寫進 trace | 已解決（observability-tools OT-1，D152：`phase_decision` 寫進移動紀錄，schema 3） | `apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp:16-17、:93-105`<br>`build/acceptance/object_fps_pvp/command_evidence.py:117-119、:126-127、:136-137` | 否 | 否 | observability-tools |
 | E1-4 | 觀測缺口 4：Gateway 丟掉非 active 玩家的結果，不寫 log | 已被取代 | `apps/object_fps_pvp/gateway/action_delivery.go:416-425`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:98` | 否 | 否 | 已被取代 |
 | E1-5 | 觀測缺口 5：match.log 的 tick_late 漏掉 Tick 間隔 | 未解決 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:507-510`<br>`apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp:96-111` | 否 | 否 | log-contract |
-| E1-6 | 觀測缺口 6：TimerBaseline 只在 probe 連線前量一次 3 秒 | 未解決 | `build/acceptance/object_fps_pvp/timer_baseline.hpp:3-5、:21`<br>`build/acceptance/object_fps_pvp/gameplay_action.hpp:75；quad_main.cpp:115` | 否 | 否 | observability-tools |
+| E1-6 | 觀測缺口 6：TimerBaseline 只在 probe 連線前量一次 3 秒 | 已解決（observability-tools OT-6：跑次後再量一次，`timer_after`） | `build/acceptance/object_fps_pvp/timer_baseline.hpp:3-5、:21`<br>`build/acceptance/object_fps_pvp/gameplay_action.hpp:75；quad_main.cpp:115` | 否 | 否 | observability-tools |
 | E1-7 | 觀測缺口 7：Match lane（IpcHost）的送出間隔沒有統計欄位 | 未解決 | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp:28、:58-61`<br>`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:145-161` | 否 | 否 | log-contract |
 
 ## F. 平台與雜項
@@ -177,7 +177,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | N-hit-feedback-not-logged | 受擊效果（紅色閃光）沒有寫進日誌，Client 的 HP 只有每秒取樣；使用者回報 Main Client 有一次受擊沒閃紅，時間不記得，無法定位。設計上致命一擊、同一 Snapshot 內致死的連續傷害、新生命的第一個狀態都不閃 | 未解決 | `apps/object_fps_pvp/src/Pvp/HitFeedback.cpp:78-100`<br>`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:357-366` | 否 | 否 | log-contract |
 | N-windows-max-path | Windows 發行包的 shader 路徑很深（檔名是 64 字元的雜湊），解壓到較深的資料夾就超過 MAX_PATH（260），Client 開不了 shader。CI 的驗收路徑較短，所以沒抓到 | 未解決 | 2026-10-16 實例：271 字元，`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientA/logs/client-20261016-104011.log:2` | 否 | 否 | re-evaluate 之後 |
 | N-firegate-unmeasured-residuals | FireGate 的盲點：GUI 取不到 earliest、spread 的假設沒量過 | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:165`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:182-184` | 否 | 否 | 取消（D90：FireGate 退役） |
-| N-trace-overwrite-on-restart | 重新啟動 Match 會覆寫前一段的 movement trace 與 ingress 細節檔 | 未解決 | `docs/object_fps_pvp/plans/v7/LAN_TEST.md:94` | 否 | 否 | observability-tools |
+| N-trace-overwrite-on-restart | 重新啟動 Match 會覆寫前一段的 movement trace 與 ingress 細節檔 | 未解決 | `docs/object_fps_pvp/plans/v7/LAN_TEST.md:94` | 否 | 否 | re-evaluate 之後（D152） |
 | N-v8-wire-pv8 | v8 需要改 wire 的候選（排 pv8，v7.1 不預留） | 未解決 | `docs/object_fps_pvp/plans/v8/README.md:41`<br>`docs/object_fps_pvp/plans/v8/README.md:43` | 否 | 否 | 已被取代（D87：pv7 只支持 hitbox） |
 | N-v8-deps-on-v71 | v8 依賴 v7.1 的項目：IP-3 與 A1 | 未解決 | `docs/object_fps_pvp/plans/v8/README.md:27`<br>`docs/object_fps_pvp/plans/v8/README.md:40` | 否 | 否 | re-evaluate 之後（IP-3） |
 | N-firegate-repush-other-conditions | FireGate 重推條件 1、2、3、5、6、9 也會被 v7.1 的其他批次觸發；條件 4 同時是心跳／時間回聲的設計約束（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/09-firegate-c2.md:127`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:128-129` | — | — | 取消（D90：FireGate 退役，條件 1～11 結案） |

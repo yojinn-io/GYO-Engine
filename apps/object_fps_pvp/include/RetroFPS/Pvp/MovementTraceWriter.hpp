@@ -24,11 +24,12 @@ inline void AppendTraceDouble(std::string& line, double value) {
 }
 } // namespace detail
 
-// One line of the movement trace (schema version 2), without the newline.
+// One line of the movement trace (schema version 3, v7.1 D152: version 2 plus
+// the phase_decision kind and its four keys), without the newline.
 [[nodiscard]] inline std::string MovementTraceLine(const MovementTraceEvent& e) {
     std::string line;
     line.reserve(420);
-    line.append("{\"schema_version\":2,\"kind\":\"").append(TraceKindName(e.kind));
+    line.append("{\"schema_version\":3,\"kind\":\"").append(TraceKindName(e.kind));
     line.append("\",\"time_ns\":").append(std::to_string(e.timeNs));
     line.append(",\"player_id\":").append(std::to_string(e.playerId));
     line.append(",\"life_generation\":").append(std::to_string(e.lifeGeneration));
@@ -47,14 +48,24 @@ inline void AppendTraceDouble(std::string& line, double value) {
     line.append(",\"age_seconds\":");
     detail::AppendTraceDouble(line, e.ageSeconds);
     line.append(",\"reset_reason\":\"").append(TraceResetReasonName(e.resetReason));
-    line.append("\",\"started_ns\":").append(std::to_string(e.startedNs)).append("}");
+    line.append("\",\"started_ns\":").append(std::to_string(e.startedNs));
+    if (e.kind == MovementTraceKind::PhaseDecision) {
+        line.append(",\"phase_path\":\"").append(TracePhasePathName(e.phasePath));
+        line.append("\",\"phase_error_seconds\":");
+        detail::AppendTraceDouble(line, e.phaseErrorSeconds);
+        line.append(",\"phase_shift_seconds\":");
+        detail::AppendTraceDouble(line, e.phaseShiftSeconds);
+        line.append(",\"phase_deadband_seconds\":");
+        detail::AppendTraceDouble(line, e.phaseDeadbandSeconds);
+    }
+    line.append("}");
     return line;
 }
 
 // The closing line: events written and events lost (a full queue, or a
 // producer still recording after Finish).
 [[nodiscard]] inline std::string MovementTraceEndLine(const Engine::Trace::TraceCounts& counts) {
-    return "{\"schema_version\":2,\"kind\":\"trace_end\",\"events\":" + std::to_string(counts.written) +
+    return "{\"schema_version\":3,\"kind\":\"trace_end\",\"events\":" + std::to_string(counts.written) +
            ",\"dropped\":" + std::to_string(counts.Dropped()) + "}";
 }
 
