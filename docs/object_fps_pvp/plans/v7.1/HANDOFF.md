@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無（B6、B7、A5 等補量的結果）。
-- **進行中**：`re-evaluate` 的 B6、B7、A5 補量（09R-map 的 9 格，D154）。
+- **進行中**：`re-evaluate` 的 B6、B7、A5 補量：18/18 跑完（`build/target/_build/test/logs/pvp-v71-reeval-map-20261021/runs/`），初步分析 `analysis.json`（腳本 `analyze.py`，同目錄）已產生，還沒寫進 [re-evaluate.md](re-evaluate.md) 第 4 節、也還沒對照 09ab L2。L1 #532（`d5a4cec`，OT-4 缺陷修正）結果未看。使用者要移動、電腦休眠，在這裡停下。
 - **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
