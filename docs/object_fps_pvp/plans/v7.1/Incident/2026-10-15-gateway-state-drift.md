@@ -101,6 +101,23 @@ v7.1 的 `pv7-design` 把 pv7-line 重估為約 111 h 之後，使用者質疑�
 
 ## 11. 後日談（2026-10-21，v7.1 `re-evaluate`）
 
+### 補丁有多少（四層總表）
+
+Gateway 設計失誤之後，各版本不停加上的補丁，依層次整理如下。下一段的表格是第 4 層的細目。
+
+| 層 | 內容 | 數量 | pv7 之後 | 證據 |
+|---|---|---|---|---|
+| 1. Gateway 自己長出來的狀態（漂移本身） | v3 `391ca00`：`lastResolved` 副本，截短、合併輸入窗口<br>v4 `edb6de4`：動作窗口的帳本、重送、30 Hz 節拍、用帳本副本驗證（A3）<br>v7 第 08b 批 `a954aa3`：結果退役（`retiredSent`、`retirementAsked`）<br>v7 第 08c 批 `8a36855`：拒絕線、已寫出去重（為修 2026-10-10 事故再加的一層） | 4 次、8 種機制 | pv7 的 edge 系列全部刪除 | 本紀錄第 4 節時間線 |
+| 2. 那些機制留下的計數與原因 | 計數鍵：edge-input 21 個（拒絕線、去重、截短、保留、8 個 `fwd_routed_*_inputs`、`drop_old_tick_snapshots`、`drop_regressed_snapshots`）、A3 2 個、A5 2 個、動作窗口（D56／D59）8 個<br>過渡 DropReason：16、17、20～26、43、44 | 33 個計數鍵、11 個過渡原因 | 計數鍵恆為 0，依日誌規則 R1 保留鍵名；過渡原因在 `drop-report` 先照當時的出口實作，edge 批刪除出口時一起縮減 | `tests/object_fps_pvp/fixtures/ingress_v1/README.zh-Hant.md` 的 `removed_paths`、[日誌契約](../../../log-contract.zh-Hant.md)第 5.1 節「已刪除的路徑」、`apps/object_fps_pvp/gateway/drop_report.go` 的 `dropReasons` 註解 |
+| 3. 建在被截斷資料上的推導（2026-10-10 事故） | FireGate 與其常數、M0<br>late 修正的常數（B8）<br>相位估計器的常數（N-phase-estimator-wan-noise） | 3 組 | FireGate、M0：隨 A1 退役（D90）<br>B8：取消<br>相位估計器：保留到有真實 WAN 測試時 | [v7.1 交接](../HANDOFF.md) D90、[re-evaluate](../re-evaluate.md) 第 2 節 |
+| 4. 待評估清單裡的傷疤 | 下表的 9 項（B9 部分相關） | 9 項 | 結案 5（N-conflict-window-permanent-loss、N-respawn-reject-volume、N-quality-reference-age-sampling、B9（部分）、D44 未再現）、取消 3（B6、B7、B8）、保留 1（N-phase-estimator-wan-noise） | [re-evaluate](../re-evaluate.md)、[v7.1 交接](../HANDOFF.md) D154、D155 |
+
+工時（本紀錄第 3 節）：丟棄回報約 16 h、Gateway 職責約 6 h，另有停留時間的窗口語意、A3／A5 的決定；pv7-line 一度重估到約 111 h（[pv7-design](../pv7-design.md)「重估的工時」）。
+
+總結：Gateway 上 8 種狀態機制，帶出 33 個計數鍵、11 個過渡原因、3 組在錯誤資料上推導的常數，以及待評估清單上的 9 項。修掉「邊緣持有不屬於它的狀態」這個前提之後，第 1、2 層直接刪除，第 3、4 層除了一項等 WAN 數據以外，都已結案或取消。
+
+### 第 4 層的細目
+
 使用者的讀法：v7.1 的待評估清單（INVENTORY 處置為 `re-evaluate` 的項目），本身就是設計失敗之後不停加補丁留下的傷疤。Gateway 回到無狀態邊緣、資訊流修好之後，用 pv7 的數據逐項問「還需不需要繼續」，和本事故有關的項目結果如下（只列和本事故或 2026-10-10 事故相關的項目，B9 是部分相關；A4 的延遲位移不在其中，2026-10-10 事故 3.4 已把它歸為不受截斷影響的 K11；其他項目見 [re-evaluate](../re-evaluate.md)）。
 
 | 項目 | 當初為什麼出現 | pv7 之後 |

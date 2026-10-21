@@ -589,6 +589,7 @@
 - 2026-10-21：**OT-4 引入的缺陷**（`observability-tools` 結案之後，`re-evaluate` 補量時發現）：`run_case` 建立 relay 時多傳了 `loss_seed`，而 `run_client_delay.py` 替換進去的 `DelayRelay` 只收 3 個參數，所以每一次真實的延遲注入都是 runner error（補量第 1 次 18/18 失敗，證據 `logs/pvp-v71-reeval-map-20261021/runs-attempt1-runner-error/`）。單元測試把 `run_case` 整個替換掉，L1 也不跑真實的延遲注入，所以沒有抓到。照 §14.3：重現（真實跑次）→ 加測試 `test_the_delaying_relay_accepts_the_arguments_run_case_passes`（以 `run_case` 原始碼裡的呼叫參數數去綁定替換類別的建構子），Red 確認 → 修 `DelayRelay` 接受並轉傳種子 → Green；突變 `ot4-delay-relay-three-arguments` killed（新增 `client_delay_runner` 檢查：原本掛在 `cpu` 上時存活，因為 `cpu` 只跑 C++ doctest）。補量第 2 次 18/18 完成。後日談依使用者補上 B8、WAN 雜訊、參考年齡，B9 列為部分相關。
 - 2026-10-21：L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）與 #532（`d5a4cec`，OT-4 缺陷修正）都是四平台通過。`re-evaluate` 補量的結果（[re-evaluate.md](re-evaluate.md) 第 4.3 節）：分布和 v7 的 09ab L2 相同；A5 的 300 ms 型 12/12 backlog 重設；B6 在 100 ms 格是 +3 ms、約 4 秒，但 150 ms 格的部分撤回留下 +22～27 ms、約 4 秒（4/8 個單位），比第 1 版的判斷大。
 - 2026-10-21：使用者問 B6 的機制與為何仍成立。說明：B6 是相位追蹤自己的時序問題（late 修正後的重新擷取在 slew 結束時決定，用到延遲期間的樣本），09b 的量測本來就是在修好資訊流之後做的，所以不是事故的副作用；第 1 版把它說成「+3 ms」，是沒有區分 1-7 第 1 點與第 3 點。使用者擔心沿用舊方案效果不好，決定交給 v8 重新規劃（D155）；B7、A5 取消。**`re-evaluate` 結案**；after-pv7 的 7 批全部結案。
+- 2026-10-21：使用者要求在 2026-10-15 設計事故紀錄第 11 節（後日談）開頭補「補丁有多少」的四層總表（Gateway 自己長出的狀態 8 種機制、留下的 33 個計數鍵與 11 個過渡原因、建在截斷資料上的 3 組推導、待評估清單的 9 項），原表保留為第 4 層細目；2026-10-10 事故紀錄第 7 節補充處加連結。由文件會話撰寫，併進 PR #82。
 
 ## 未結事項
 
