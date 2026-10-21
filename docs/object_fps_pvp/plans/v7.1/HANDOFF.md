@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`re-evaluate` 的建議清單排序（[re-evaluate.md](re-evaluate.md) 第 3 節）。
+- **等你決定**：`re-evaluate` 的判斷（[re-evaluate.md](re-evaluate.md) 第 3 節）：12 項不需要繼續、2 項還需要（A4、N-analyzer-literal-105）、1 項有條件。
 - **進行中**：無（等你排序）。L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）結果未看。
 - **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -582,6 +582,7 @@
 - 2026-10-21：`observability-tools` 的四平台 L1 #517（`3346379`）：第 1 次只有 macos-x64 不通過（`MovementRecoveryTests.cpp:429`，`N-movement-recovery-flake` 的第 2 個實例），使用者同意後重跑失敗的 job，通過。**`observability-tools` 結案**。
 - 2026-10-21：`re-evaluate` 開始。範圍是 INVENTORY 處置為 re-evaluate 的 12 項（A4、A5、B6～B9、N-phase-estimator-wan-noise、N-conflict-window-permanent-loss、N-09b-followup-measures、N-phase-1-7-items-3-6、N-quality-reference-age-sampling、N-respawn-reject-volume），加上今天交過來的 D44 歸因與 09b 重做的剩餘（R4、U6）。產出是建議清單，由使用者排序。
 - 2026-10-21：`re-evaluate` 建議第 1 版（[re-evaluate.md](re-evaluate.md)）。三組只讀評估：現在結案 6 項（respawn 的 epoch_old 已解釋、衝突窗口在 pv7 不再永久、B9、B8 的 N、N-phase-1-7 第 6 點、N-09b-followup）；小修 1 項（分析器寫死的 105）；已知限制 3 項（A5、B6、參考年齡）；延後 6 項（A4 → v8、B7 → pv8、門檻 105、B8 幅度、快速正向回收、WAN 雜訊）。順帶更正 `d44-regression-pv7.md` 第 15 節的兩處：排隊合計最大 294 出在 upstream-1000ms、backlog 重設在放出之後；late 修正 266 只算遊戲與 x1／ramp。
+- 2026-10-21：`re-evaluate` 第 2 版。使用者指出方向錯了：「re-evaluate 就是評估，這些case還是否需要繼續的，而不是評估要如何做的」。第 1 版寫了修法、工時與順序；第 2 版只判斷每項還需不需要，並附根據與重開條件。B7 由使用者先問（「我想的是B7，現在還有必要嗎？」），判斷為取消。
 
 ## 未結事項
 
