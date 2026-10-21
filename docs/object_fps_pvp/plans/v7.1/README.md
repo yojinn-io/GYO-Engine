@@ -121,7 +121,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | lan15-windows | Windows LAN 場次；跨機器偏移與漂移（≥15 分鐘）；Windows 的晚醒、Tick 精度、App Nap 等 | 7～8 | 依賴 `time-echo`；要排朋友的時間 |
 | observability-rest | 量測時間基準統一、probe 起點的幀相位、HUD 來源 tick 等 | 約 3 | |
 | platform-fixes | 關閉時阻塞約 3 秒、`LogFile` 非同步、`AssetWatcher` 的時間基準、背景 Client 忽略 SIGINT、Gateway 測試在高負載下不穩 | 13～15 | `AssetWatcher` 未估；`LogFile` 和 `tt2-trace` 一起 |
-| docs-close | 「時鐘到網路路徑」系列紀錄（第 ⑤ 集要等 `time-echo`）；STABLE_BASELINE v7.1；v7 略過的驗收要不要補 | 約 8＋未估 | |
+| docs-close | 「時鐘到網路路徑」系列紀錄（第 ⑤ 集要等 `time-echo`）；STABLE_BASELINE v7.1；v7 略過的驗收要不要補 | 約 8＋未估 | STABLE_BASELINE v7.1 已寫（[STABLE_BASELINE.md](STABLE_BASELINE.md)，D157）；v7 略過的驗收不補（D157）；系列紀錄未做 |
 
 ## 跨分支依賴
 
