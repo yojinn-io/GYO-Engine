@@ -575,7 +575,7 @@
 - 2026-10-21：`d44-regression-pv7` 的 session 第 3 次（D151；12:11～15:03 JST）完成：197／197 項，290 個 case-run 與 60 Hz 長測 0 個 D44 事件，沒有停止、沒有 I 項、使用者旗標 0；受干擾 9 項（都是 0 事件）。使用者搬動電腦與電源線鬆脫的兩段電池供電（13:03:18～13:06:06、13:54:15～13:55:00）和 6 個項目重疊，都是 P、0 事件、沒有受干擾，標記在 `power-intervals.json`。讀法：「未再現」；D44 不結案（A5 → `re-evaluate`）。**`d44-regression-pv7` 結案**（[d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節）。
 - 2026-10-21：`incident-close`（D148：照建議走；只改文件）。兩份事故紀錄改為已結案：2026-10-10 Gateway 悄悄丟命令（修正：08c、`drop-report`、edge 系列；重新量測：`d44-regression-pv7` 未再現；09b 重做的剩餘與 D44 歸因交給 `re-evaluate`；M0／FireGate 隨 A1 取消）；2026-10-15 Gateway 狀態漂移（行動 1～4 完成；log-contract 的 D143 是約束在運作的證據）。順帶處理 INVENTORY `N-netarch-ambiguity`：network-architecture 的舊段落仍描述 08c（pv6）的 Gateway 合併、游標副本、拒絕線與去重，加了補充指向 protocol-v7 §2a 與 Design Invariants，原文保留。**`incident-close` 結案**。
 - 2026-10-21：`observability-tools` 分支併回 after-pv7 線（merge `f34645c`，無衝突；併回後五本相關的單元測試在主 checkout 通過）。之後的 L2 要用新的凍結清單（`action_probe.py`、`impaired_network.py`、`run_gameplay.py`、`run_network.py`、`run_short_stall.py`、`run_client_delay.py` 都改了；OT-0c）。`observability-tools` 仍有 OT-0a～e 等使用者決定，所以 README 維持 ▶。
-- 2026-10-21：使用者的讀法：D44（解釋不了的 epoch 重設）是 Gateway 設計問題最早、最直接的徵兆。寫進 [d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節與兩份事故紀錄的偵測一節、時間線。主對話提議的規則（「被定義成解釋不了的現象，先找看不到的地方，而不是加偵測」）使用者不採用：這條規則在邏輯上是循環的。看不到，就需要先建立視野（偵測）；但規則要求先停下來找出看不到的地方，而停下來的時候還沒有視野，用原本的方法很難找到。
+- 2026-10-21：使用者的讀法：D44（解釋不了的 epoch 重設）是 Gateway 設計問題最早、最直接的徵兆。寫進 [d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節與兩份事故紀錄的偵測一節、時間線。主對話提議的規則（「被定義成解釋不了的現象，先找看不到的地方，而不是加偵測」）使用者不採用：這條規則在邏輯上是互鎖的。看不到，就需要先建立視野（偵測）；但規則要求先停下來找出看不到的地方，而停下來的時候還沒有視野，用原本的方法很難找到。
 
 ## 未結事項
 
