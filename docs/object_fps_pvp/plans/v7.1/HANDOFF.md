@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[after-re-evaluate.md](after-re-evaluate.md) 第 9 節的批次草案與三個決策點（A：substitution-single-store 的回歸守衛；B：sdl-isolation-plan 用 ultracode 還是 xhigh；C：worker-probe-repair 提前），以及 PR 線、G2。
-- **進行中**：`after-re-evaluate`（分支 `claude/pvp-v71-after-re-evaluate`，目前只改文件）：判斷已確定（D158），INVENTORY、README 已同步；批次草案等核准。
-- **下一步**：批次核准後從第一批開始；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
+- **等你決定**：無。
+- **進行中**：`worker-probe-repair`（after-re-evaluate 第 1 批，D159；分支 `claude/pvp-v71-after-re-evaluate`，檔位 high，估 2～4 h）：修好 `object_fps_pvp.worker`，重判 22 個 `worker` 突變。
+- **下一步**：`sdl-isolation-plan`（ultracode）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -128,6 +128,7 @@
 | D156 | （2026-10-21）PR #82（after-pv7 線：`tt2-trace`、`log-contract`、`dead-letter-position`、`d44-regression-pv7`、`incident-close`、`observability-tools`、`re-evaluate`）轉 ready 並合併。最後一次程式變更的四平台 L1 是 #532（`d5a4cec`），之後只有文件 | 使用者：「那沒問題了。#82合併。」 |
 | D157 | （2026-10-21）v7.1 的穩定基線：master 的 CI 通過之後，v7.1 成為穩定基線（v5、v6 是事故前的缺陷版本），寫正式的 `STABLE_BASELINE.md`（參照 v7）。`N-v7-skipped-acceptance`：v7 跳過的驗收不補做，照樣列為「跳過（使用者決定）」。LC-8 四項（D143 移到 `observability-tools`，計畫裡漏列）收尾：rotation 拆分取消、逐筆到達事件跟著 B6 交給 v8、樣本流失取消、週期性 IPC 寫出延遲取消；INVENTORY 另外更正 records 已做完的 4 列 | 使用者：「v5、v6在事故前是缺陷版本，v7.1 CI 過了就變成穩定基線。」「寫成正式的v7.1基線文件，。參照v7的STABLE_BASELINE.md」；N-v7-skipped-acceptance 選「不補，照樣列跳過」；「這些收尾處理了吧，你看要不要補？」「OK，就照這樣。」 |
 | D158 | （2026-10-21）`after-re-evaluate` 的判斷（[after-re-evaluate.md](after-re-evaluate.md) 第 2 版）：照第 1 版，另外 C12 併進 N-token-test-gaps，F4 取消並記成「沒有檢測手段」。還需要的 20 列依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排成 15 批的草案，等使用者核准；B10、N-correct-invariant-assert、E3、E5 跟 B6／A4 交給 v8。HANDOFF「未結事項」的 6 項補進 INVENTORY（N-worker-probe-stale、N-compare-reports-untracked、N-host-lock-keys-uncontracted、N-client-other-version-untested、N-sleep-reconnect、N-drop-ledger-growth）。G2 還沒決定 | 使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。用這個優先度來調整。」「C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。照這樣出第 2 版、同步 INVENTORY／README／HANDOFF，然後拆批給我看。」 |
+| D159 | （2026-10-21）核准 `after-re-evaluate` 的批次草案（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）：決策點 A 選 (a)，substitution-single-store 在批內先寫 slack 樣本的特性測試；B：sdl-isolation-plan 用 ultracode；C：worker-probe-repair 提到最前面；PR 分三條（sdl-isolation 兩批、系統其餘＋觀測＋測試、發行）；G2 先不做。從 worker-probe-repair 開始 | 使用者：「核准批次草案：A 選 (a) 批內特性測試；B 用 ultracode；C 把 worker-probe-repair 提到最前面；PR 分三條。G2 先不做。從 worker-probe-repair 開始。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -599,6 +600,8 @@
 - 2026-10-21：`after-re-evaluate` 判斷第 1 版（[after-re-evaluate.md](after-re-evaluate.md)）。共 47 項：還需要 16 項（系統與引擎 4、觀測工具 4、測試 4、發行 4）、交給 v8 隨 B6／A4 4 項、有條件 3 項、不需要繼續 21 列、不在四類 1 項（G2）、清單更正 1 項（N-v7-skipped-acceptance）。HANDOFF「未結事項」裡沒進 INVENTORY 的 6 項給了 `N-` 代號。順帶發現：產品直接呼叫 SDL 的次數在 tt2-trace 後變多（`ForwardEngineLog`）；`compare_reports.py` 只存在 git 忽略的目錄，卻是 log-contract 指定的讀者；worker probe 壞掉讓 22 個 `worker` 突變判不了。停下等使用者決定。
 
 - 2026-10-21：`after-re-evaluate` 第 2 版（D158）。拆批時發現兩個依賴：(1) `track.substituted` 產生負 slack 樣本，是 late 修正的輸入，可是相位追蹤沒有 golden（B10 在 v8），C13 那批改壞了不會有測試失敗；(2) 22 個 `worker` 突變中 20 個指向 `ClientConnection.cpp`，系統類的 cxx-flag-removal 會改到那個檔案，worker probe 壞著就判不了。兩者都列成決策點。INVENTORY 統計對過：121 列，表格逐列解析的結果與統計表一致。
+
+- 2026-10-21：`after-re-evaluate` 批次核准（D159）。`worker-probe-repair` 開始（檔位 high，估 2～4 h，超過 6 h 停下回報）。已知原因一：mock Welcome 沒填 `maximum_shot_damage`；原因二（補上後的 mock 等待逾時）未知，照 §14.3 先重現，查不出就加觀測再停。
 
 ## 未結事項
 

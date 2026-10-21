@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
 更新：2026-10-21（after-re-evaluate 的判斷與批次草案，D158；v7.1 成為穩定基線，D157）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：v7.1 完成並成為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)，D157）：pv7-line 以 PR #78 合併（`0fabb52`），after-pv7 以 PR #82 合併（`5ee499a`）；樹狀總覽的各批都已完成。剩下 `after-re-evaluate`：判斷已確定（D158，[after-re-evaluate.md](after-re-evaluate.md)），批次草案等使用者核准；docs-close 的系列紀錄（G2）還沒決定。
+**狀態：v7.1 完成並成為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)，D157）：pv7-line 以 PR #78 合併（`0fabb52`），after-pv7 以 PR #82 合併（`5ee499a`）；樹狀總覽的各批都已完成。剩下 `after-re-evaluate`：判斷已確定（D158，[after-re-evaluate.md](after-re-evaluate.md)），批次已核准（D159），進行中；docs-close 的系列紀錄（G2）還沒決定。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -48,7 +48,8 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── incident-close ✓◆             「medium｜事故紀錄結案」
 │   ├── observability-tools ✓         「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
 │   └── re-evaluate ✓                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
-└── after-re-evaluate ⏸               「D158 判斷還需要的項目；批次是草案，等使用者核准」
+└── after-re-evaluate ▶               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
+    ├── 0 worker-probe-repair ▶       「high｜修好 worker probe（決策點 C）」
     ├── 1 系統與引擎
     │   ├── sdl-isolation-plan        「xhigh 或 ultracode（先問）｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單」
     │   ├── sdl-isolation             「high｜產品、probe、產品測試不直接呼叫 SDL」
@@ -60,7 +61,6 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     │   ├── trace-no-overwrite        「high｜重啟 Match 不覆寫前一段 trace」
     │   └── analyzer-converge         「high｜兩個命令分析器收斂成 N 人版」
     ├── 3 測試
-    │   ├── worker-probe-repair       「high｜修好 worker probe」
     │   ├── token-tests               「high｜token 的存活突變、測試模型與產品連動」
     │   └── client-path-tests         「high｜世代檢查與他版計數的正向測試」
     └── 4 發行
@@ -81,7 +81,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | prep | 約 3 h |
 | pv7-line | 約 178～193 h〔推論〕（README 初版估 91 h；pv7-design 重估 111 h；D94 改為無狀態邊緣後為 170～179 h；§2a 的 xhigh 檢查後為 177～191 h，使用者已接受（D96）；再加 GYOP 序號欄位的 1～2 h） |
 | after-pv7 | 約 54～64 h |
-| after-re-evaluate | 約 73～102 h（D158 的批次草案，等核准） |
+| after-re-evaluate | 約 73～102 h（D158、D159） |
 
 停止規則：每批開始前寫出估計；實際超過 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
 
@@ -165,6 +165,6 @@ INVENTORY 處置為「re-evaluate 之後」的 37 項，加上 HANDOFF「未結�
 | 規劃 | 本目錄、同步 master、v8 README 的備註更正 |
 | pv7-line | `pv7-design`～`pv7-merge`，三個角色同一個 PR |
 | after-pv7 | `tt2-trace`～`re-evaluate`；Engine 的 TT-2 和它的第一個消費端同一個 PR |
-| after-re-evaluate | 草案：sdl-isolation 兩批一條、系統其餘＋觀測＋測試一條、發行一條（D158，等核准） |
+| after-re-evaluate | sdl-isolation 兩批一條、系統其餘＋觀測＋測試（含 worker-probe-repair）一條、發行一條（D159） |
 
 PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四平台 L1，用 `gh pr merge --merge`。

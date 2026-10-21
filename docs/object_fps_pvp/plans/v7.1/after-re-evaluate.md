@@ -1,6 +1,6 @@
 # after-re-evaluate：這些項目還需不需要繼續（判斷清單，第 2 版）
 
-- 狀態：**判斷已確定**（D158）；第 9 節的批次是草案，**等使用者核准**。
+- 狀態：**判斷已確定**（D158）；第 9 節的批次已核准（D159）：A 選 (a)、B 用 ultracode、C 把 worker-probe-repair 提到最前面、PR 分三條、G2 先不做。
 - 依據：使用者（2026-10-21）：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。」
 - 範圍：
   - INVENTORY 處置為「re-evaluate 之後」的 37 項；
@@ -167,7 +167,7 @@ after-re-evaluate
 - 第 1 節的判斷照第 1 版，另外兩處：C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。
 - INVENTORY、README、HANDOFF 已同步。G2 還沒決定，INVENTORY 維持「re-evaluate 之後」。
 
-## 9. 批次（草案，等你核准）
+## 9. 批次（D159 核准；worker-probe-repair 提到最前面）
 
 依使用者的優先序排：系統與引擎 → 觀測工具 → 測試 → 發行。類內依依賴排。
 
