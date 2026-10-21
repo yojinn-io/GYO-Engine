@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：基線文件的 PR（分支 `claude/pvp-v71-stable-baseline`，只改文件）。PR #82 已合併為 `5ee499a`，master 的 CI #541（run 39577489227）19 個 job 全 success。
-- **下一步**：基線文件的 PR 合併；`after-re-evaluate` 由你排序；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始；docs-close 的「時鐘到網路路徑」系列紀錄還沒做。
+- **等你決定**：[after-re-evaluate.md](after-re-evaluate.md) 第 1 版的判斷（第 8 節）。
+- **進行中**：`after-re-evaluate` 的評估（分支 `claude/pvp-v71-after-re-evaluate`，只改文件）：逐項判斷還需不需要，再依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排列，交使用者決定。
+- **下一步**：評估文件交你決定；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -592,6 +592,10 @@
 - 2026-10-21：使用者問 B6 的機制與為何仍成立。說明：B6 是相位追蹤自己的時序問題（late 修正後的重新擷取在 slew 結束時決定，用到延遲期間的樣本），09b 的量測本來就是在修好資訊流之後做的，所以不是事故的副作用；第 1 版把它說成「+3 ms」，是沒有區分 1-7 第 1 點與第 3 點。使用者擔心沿用舊方案效果不好，決定交給 v8 重新規劃（D155）；B7、A5 取消。**`re-evaluate` 結案**；after-pv7 的 7 批全部結案。
 - 2026-10-21：PR #82 合併（D156，`5ee499a`；轉 ready 後 head 經分支會話與文件會話各推一個只改文件的 commit：`111e3ad` 改「後日談」、`71f550e` 四層總表）。master 的 CI #541 全部通過，v7.1 成為穩定基線（D157）。寫 [STABLE_BASELINE.md](STABLE_BASELINE.md)（參照 v7；pv7-line 的事實由代理彙整、逐項附出處）。寫之前發現兩件事：`N-v7-skipped-acceptance` 標「STABLE_BASELINE v7.1 前決定」，使用者選不補；log-contract 的 LC-8 四項（D143 移到 `observability-tools`）在它的計畫裡漏列、結案時也沒核對，使用者同意照「還需不需要」收尾（D157）。INVENTORY 另外更正 records 已做完卻沒更新的 4 列。
 - 2026-10-21：使用者要求在 2026-10-15 設計事故紀錄第 11 節（後日談）開頭補「補丁有多少」的四層總表（Gateway 自己長出的狀態 8 種機制、留下的 33 個計數鍵與 11 個過渡原因、建在截斷資料上的 3 組推導、待評估清單的 9 項），原表保留為第 4 層細目；2026-10-10 事故紀錄第 7 節補充處加連結。由文件會話撰寫，併進 PR #82。
+
+- 2026-10-21：`after-re-evaluate` 開始（PR #83 合併為 `fa3f02d`、文件會話的 #84 合併為 `6fbb6a9` 之後）。使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。」範圍是 INVENTORY 處置為「re-evaluate 之後」的項目，加上本文件「未結事項」裡沒進 INVENTORY 的項目。做法同 `re-evaluate` 第 2 版：只判斷還需不需要（附根據與重開條件），再依優先序分組排列；不寫修法。證據收集由 4 個唯讀子 agent（檔位 medium）分組進行，判斷由主對話做。估約 2 h。
+
+- 2026-10-21：`after-re-evaluate` 判斷第 1 版（[after-re-evaluate.md](after-re-evaluate.md)）。共 47 項：還需要 16 項（系統與引擎 4、觀測工具 4、測試 4、發行 4）、交給 v8 隨 B6／A4 4 項、有條件 3 項、不需要繼續 21 列、不在四類 1 項（G2）、清單更正 1 項（N-v7-skipped-acceptance）。HANDOFF「未結事項」裡沒進 INVENTORY 的 6 項給了 `N-` 代號。順帶發現：產品直接呼叫 SDL 的次數在 tt2-trace 後變多（`ForwardEngineLog`）；`compare_reports.py` 只存在 git 忽略的目錄，卻是 log-contract 指定的讀者；worker probe 壞掉讓 22 個 `worker` 突變判不了。停下等使用者決定。
 
 ## 未結事項
 
