@@ -214,6 +214,18 @@ set_tests_properties("${GYO_CURRENT_APP}.action_runner" PROPERTIES LABELS "cpu;p
 add_test(NAME "${GYO_CURRENT_APP}.client_delay_runner"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_client_delay.py")
 set_tests_properties("${GYO_CURRENT_APP}.client_delay_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-2: late corrections counted as increments, the two sources cross-checked.
+add_test(NAME "${GYO_CURRENT_APP}.late_count"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_late_count.py")
+set_tests_properties("${GYO_CURRENT_APP}.late_count" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-3: every non-respawn reset of a run_network.py run, classified.
+add_test(NAME "${GYO_CURRENT_APP}.network_resets"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_resets.py")
+set_tests_properties("${GYO_CURRENT_APP}.network_resets" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-4 (E4): the network relays' loss seed, its default reproducing the former constants.
+add_test(NAME "${GYO_CURRENT_APP}.loss_seed"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_loss_seed.py")
+set_tests_properties("${GYO_CURRENT_APP}.loss_seed" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_soak"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_soak_evidence.py")

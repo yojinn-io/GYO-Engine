@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from action_probe import run_case
+from impaired_network import DEFAULT_LOSS_SEED
 from acceptance_util import PROTOCOL_VERSION
 
 
@@ -31,6 +32,8 @@ def main():
     for name in ('match','gateway','probe','arena','output'):parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--case',choices=[c['name'] for c in matrix()])
     parser.add_argument('--list-only',action='store_true')
+    # network0/20/40: the relay's loss generators' base seed (OT-4, E4); the default reproduces the earlier runs.
+    parser.add_argument('--loss-seed',type=int,default=DEFAULT_LOSS_SEED)
     args=parser.parse_args()
     cases=[c for c in matrix() if not args.case or c['name']==args.case]
     if args.list_only: print(json.dumps(cases,indent=2));return 0
