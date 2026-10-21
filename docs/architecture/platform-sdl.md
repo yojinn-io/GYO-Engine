@@ -80,8 +80,10 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 
 ### Pump, observers and watches
 
-- `PumpEvents` is not re-entrant. `Sync`, `SetWindow*` and `Raise` must not be called inside an observer or a live
-  frame.
+- `PumpEvents` may be nested (an observer may pump again, as IP-2 guarantees for live frames). Each pump, nested
+  or not, samples its own clock pair; when a nested pump returns, the outer pump's pair is restored, so the outer
+  pump's remaining events keep its pair. `Sync`, `SetWindow*` and `Raise` must not be called inside an observer or
+  a live frame.
 - Watch callbacks run on whichever thread pushes the event, inside SDL's global watcher lock (the live frame runs
   inside the same lock). They must not block or wait for another thread. Destroying an `EventWatch` waits for an
   in-flight callback; every `EventWatch` is destroyed before its `SdlPlatform`.
@@ -114,7 +116,8 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
    only after checking it is still installed, and is destroyed before `SDL_Quit`. Guards: mutants m10, m11. From
    ip3e.
 6. Window, display and text input state are read from SDL/the OS every time; no copy of them is kept for decisions.
-7. `PumpEvents` is not re-entrant; window operations are not called inside an observer or a live frame; watch
+7. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
+   mutant m-nest); window operations are not called inside an observer or a live frame; watch
    callbacks do not block; an `EventWatch` is destroyed before its `SdlPlatform`. Checked with `GYO_ASSERT`.
 8. Engine does not call the global `SDL_Init`/`SDL_Quit`; subsystems are reference-counted by their owners. No
    exception crosses SDL's or the OS's C stack (live frames and the entry point catch and report).

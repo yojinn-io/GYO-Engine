@@ -394,7 +394,7 @@ public:
     using EventObserver = std::function<void(const PlatformEvent&)>;
     using LiveFrameHandler = std::function<void()>;              // unchanged
     static Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError> Create(const SdlPlatformOptions& = {});
-    [[nodiscard]] Runtime::RuntimeControl PumpEvents(const EventObserver& = {});   // not re-entrant (GYO_ASSERT)
+    [[nodiscard]] Runtime::RuntimeControl PumpEvents(const EventObserver& = {});   // may nest; each pump has its own clock pair (D33)
     void SetLiveFrameHandler(LiveFrameHandler);
     [[nodiscard]] Base::Result<std::string, SdlPlatformError> ClipboardText() const;   // main thread; empty -> Ok("")
 private:
@@ -641,7 +641,7 @@ G1、G2、G3 生效；ui_editor 與 `tests/common` 經 Native 目標建置；突
 4. 測試注入只走 SDL 事件佇列或真正的視窗操作，不提供直接寫幀的後門；`injected` 旗標由 platform 擁有。守衛：m14、m15。
 5. 日誌橋只有消費端建立時才生效；沒有建立時，SDL 的輸出完全不變。橋存在期間，Base 的 LogHandler 不呼叫 SDL 日誌函式。橋不 throw、不遞迴、解構時確認後還原，並在 `SDL_Quit` 之前解構。守衛：m10、m11。
 6. 視窗、顯示器與文字輸入的狀態每次直接讀 SDL／OS，不保存拿來做判斷的副本。
-7. pump 不可重入；`Sync`／`SetWindow*`／`Raise` 不得在 observer 或 live frame 內呼叫（`GYO_ASSERT`）。watch 回呼不得阻塞或等待其他執行緒；`EventWatch` 先於 `SdlPlatform` 解構。
+7. pump 可以巢狀（IP-2 的保證）：每次 pump 各自取配對，巢狀的 pump 返回時還原外層的配對（D33，守衛 m-nest）；`Sync`／`SetWindow*`／`Raise` 不得在 observer 或 live frame 內呼叫（`GYO_ASSERT`）。watch 回呼不得阻塞或等待其他執行緒；`EventWatch` 先於 `SdlPlatform` 解構。
 8. Engine 不呼叫全域的 `SDL_Init`／`SDL_Quit`；子系統由 owner 以參考計數管理。進入點的例外不穿過 SDL 與 OS 的 C 堆疊。
 9. Engine 不帶擷取政策、文字編輯政策與產品知識。
 

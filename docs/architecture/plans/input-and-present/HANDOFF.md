@@ -40,6 +40,7 @@
 | 2026-10-21 | D30：IP-3／IP-4 的規劃用 ultracode（2 位盤點、3 個獨立方案、1 位評審合成），公開介面由 1 位 xhigh 審查（README 的 IP-3 列），另做 1 次對抗式檢查；依 D8 經使用者同意 | 使用者 |
 | 2026-10-21 | D31：核准 IP-3／IP-4 計畫（[PLAN](PLAN.md) 文末），U1～U10 全部照建議：接受約 2 倍的估時（各子批開始前重估，超過 1.5 倍就停）；ui_editor 做機械修改；README 以外新增的 6 項；時間戳型別用 `std::chrono::steady_clock::time_point` 並 `static_assert` 與 `Time::TimePoint` 相同（不新增 Input→Time 邊）；`NativeEventObserver` 由 `PlatformEvent` 承接；凍結 oracle 改 golden（走 §14.4 的核准流程）；X11 加中立查詢；新建英文的 `platform-sdl.md`；capture 放 GPU 後端；IP-4 的介面另做 1 次 xhigh 審查。另：設計提前在 ip3a 寫成架構文件（`docs/architecture/platform-sdl.md`、`input.md`） | 使用者（「照計劃執行，記得把這個設計落到架構文件中去」） |
 | 2026-10-21 | D32：核准 ip3a 的事前宣告（[ip3-declaration.md](ip3-declaration.md)）；之後不放寬。消費端的 A 級受擊回饋行改走 Base 的日誌 facade、位元組不變（消費端的決定）。開始 ip3b | 使用者 |
+| 2026-10-21 | D33：巢狀 `PumpEvents` 保留（IP-2 已保證並有測試）。時鐘配對隨 pump 範圍保存與還原：每次 pump（含巢狀）各自取配對，內層返回時還原外層的配對。修改 [platform-sdl.md](../../platform-sdl.md) 的 Design Invariant 7 與時間戳契約（使用者同意的 Design Invariants 變更）；事前宣告補一條判定與突變 m-nest（只收緊）。L1 通過後開始 ip3c | 使用者 |
 
 ## 正式項目清單
 
