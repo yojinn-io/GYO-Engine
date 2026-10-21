@@ -39,7 +39,7 @@
 
 - **等你決定**：
   1. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
-- **進行中**：after-pv7 線（含 `observability-tools` 的併回）的四平台 L1。
+- **進行中**：after-pv7 線（含 `observability-tools` 的併回）的四平台 L1（`499f625`，run 39553613313，#511）。
 - **下一步**：L1 通過後，`observability-tools` 剩下的 OT-0a～e 由你決定；`re-evaluate` 由你看（D148）。PR #82 在 `observability-tools` 收尾後可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
