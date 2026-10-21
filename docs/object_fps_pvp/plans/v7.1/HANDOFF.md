@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 停在第 117 項（工具失效，環境），等你決定怎麼續；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 DS-1 宣告補遺等你核准；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：
-  1. `d44-regression-pv7` 的 session 怎麼續（[d44-regression-pv7.md](d44-regression-pv7.md) 第 11 節 DS-1～DS-4，建議 DS-1）。停下之前 116 項、151 個 case-run 都是 0 事件。
+  1. `d44-regression-pv7` 的 DS-1 宣告補遺（[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節）：x1／ramp 只因 relay 送出延遲而注入無效時不計數、第 3 次才停；判定 de62a759…，driver 與產物不變；§14.4 的 1～5 已由別的審查者用資料核對。核准後整個重跑（約 3.0 h）。
   2. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
 - **進行中**：`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`，worktree `../GYO-Engine-obs`）的四平台 L1（run 39470556006，#503）。這個分支要等 `d44-regression-pv7` 結案後才併回 after-pv7 線，因為它改了 d44 session 凍結的工具。`incident-close` 依賴 `d44-regression-pv7`，也在等。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
 - **下一步**：你決定 DS 之後續跑 `d44-regression-pv7`；`re-evaluate` 由你看（D148）。
@@ -120,6 +120,7 @@
 | D146 | （2026-10-21）核准 `d44-regression-pv7` 計畫第 1 版（[d44-regression-pv7.md](d44-regression-pv7.md)），DR-1～DR-9 全部照建議：單樹＋第 16 批普查基準；母體照第 16 批 D 部分加 x1、ramp 各 15 次；沿用 E1～E3；Gateway→Match 短停頓只記錄；x1、ramp 計入停止條件 5；有事件時照第 16 批（≤30 分有限定位，達停止條件停下給 (a)／(b)／(c)）；Windows／Linux 的 E1-5 交給 `lan15-windows`；v7final、c2-after 保留到 `re-evaluate` 結束；D45 檢查 1 位 xhigh | 使用者：「核准 d44-regression-pv7 計畫第 1 版，DR-1～DR-9 全部照建議。開始做工具。」 |
 | D147 | （2026-10-21）核准 `d44-regression-pv7` 的 L2 宣告第 2 版（[d44-regression-pv7.md](d44-regression-pv7.md) 第 8 節；driver 9ad263fd…、judge d0610c61…、artifacts cf992c74…），兩個宣告點照寫（clean 跑次的逐出與限速拒絕列為使用者旗標、受干擾只記錄） | 使用者：「核准 d44-regression-pv7 的 L2 宣告第 2 版（driver 9ad263fd…、judge d0610c61…、artifacts cf992c74…），兩個宣告點照寫。現在跑 session。」 |
 | D148 | （2026-10-21）使用者睡前的指示：after-pv7 盡量在早上前跑完，沒有問題就照建議走；範圍是 `d44-regression-pv7` 結案、`incident-close`、`observability-tools`，`re-evaluate` 由使用者隔天自己看。session 停在停止條件時照宣告停下等使用者 | 使用者：「我去睡覺了，早上之前，盡量把after-pv7跑完。如果沒有問題，就直接找建議走就好。」「那你做1-4就好。5明天我自己看看。」 |
+| D149 | （2026-10-21）`d44-regression-pv7` 照 DS-1：x1／ramp 的注入無效改成不計數、累計 3 次才停；先做 §14.4 的 1～5 與審查，交使用者核准，再整個重跑 | 使用者：「d44-regression-pv7 照 DS-1：x1/ramp 的注入無效改成不計數、累計 3 次才停，做 §14.4 的 1～5 與審查後交我核准，再整個重跑。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -567,6 +568,7 @@
 - 2026-10-21：`d44-regression-pv7` 的 session 第 1 次（D147；01:34～02:41 JST）停在第 117／197 項 `ramp-r7`：停止條件 1，`run_client_delay.py` 的注入純度檢查不成立（relay 送出延遲 P99 22.3 ms，上限 10 ms；其他 47 次延遲跑次是 2.7～3.6 ms；前後睡眠探測正常）。切分為環境。前 116 項 0 事件、使用者旗標 0。照宣告不重跑；選項在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 11 節。
 - 2026-10-21：`observability-tools` 開始（D148）。盤點：late 計數在 v7.1 的判定上已經是增量（d44 證據 121＝121）；相位決策寫進 trace 會改 Data Contract（新 kind 要升版、凍結讀者會停），所以留給使用者決定格式；工具改動會碰 d44 session 凍結的檔案，所以放在另一個 worktree 分支。計畫：[observability-tools.md](observability-tools.md)。
 - 2026-10-21：`observability-tools` 的 OT-2～OT-5（[observability-tools.md](observability-tools.md) 第 6 節）：`late_count.py`、`network_resets.py`、遺失種子參數化（預設值重現舊常數），延遲 runner 的 D50 雜湊釘住改到新檔案；單元測試 3 本；新舊分析在 d44 證據上一致（late 121＝121、網路候選 0）；實跑 network20 與 impairments（種子 12345）都通過。注入正式模式（OT-4 的另一半）是改 D50 機制的設計變更，沒做。過程中的錯：第一次讓 `ActionRelay` 用四個參數呼叫基底類別，延遲 runner 的測試全部失敗，改回三個參數；第一次讀 action-frames 時沒處理結尾的 `evidence_end` 行，frames 的計數讀成缺漏。
+- 2026-10-21：`d44-regression-pv7` 的 DS-1 補遺（D149；[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節）。停止條件 1b：只有「量到的 relay 送出延遲超過上限」的注入無效才算 I（不計數，第 3 次停），其他注入無效仍是停止條件 1（限速拒絕是 D121 的訊號，不放寬）。§14.4 的 1～5 由 1 位審查者以資料核對：P1（p99 沒有量到也會被判成 I）已改程式；P2（範圍 2.6～3.6 ms）已更正。乾跑 51／51、突變 23／23，preflight 通過。第 2 版判定另存為 `judge_d44-v2.py`，用來重播第 1 次 session。
 
 ## 未結事項
 
