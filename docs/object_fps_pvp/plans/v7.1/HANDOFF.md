@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`sdl-isolation-plan` 的草案（分支 `claude/pvp-v71-sdl-isolation`，`b2024c3`）：Engine 的 [IP PLAN](../../../architecture/plans/input-and-present/PLAN.md) 文末 U1～U10，與產品側 `sdl-isolation.md`（該分支）的 S1、S2。最大的是 U1：估時約 56～73 h，原估 26～34 h 的約 2 倍。
-- **進行中**：`sdl-isolation-plan` 停在 ip3a 關卡前（草案待核准）。`worker-probe-repair` 已完成（`d2844a5`）。
+- **等你決定**：ip3a 關卡（分支 `claude/pvp-v71-sdl-isolation`，`7c2dc4d`）：Engine 的事前宣告 `ip3-declaration.md`（判定、16 個突變、機率性測試的試行規則），與產品側 `sdl-isolation.md` 的 S3（受擊回饋的 A 級日誌行怎麼改路徑）。
+- **進行中**：`sdl-isolation` 停在 ip3a 關卡（計畫已核准，D160）。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -129,6 +129,7 @@
 | D157 | （2026-10-21）v7.1 的穩定基線：master 的 CI 通過之後，v7.1 成為穩定基線（v5、v6 是事故前的缺陷版本），寫正式的 `STABLE_BASELINE.md`（參照 v7）。`N-v7-skipped-acceptance`：v7 跳過的驗收不補做，照樣列為「跳過（使用者決定）」。LC-8 四項（D143 移到 `observability-tools`，計畫裡漏列）收尾：rotation 拆分取消、逐筆到達事件跟著 B6 交給 v8、樣本流失取消、週期性 IPC 寫出延遲取消；INVENTORY 另外更正 records 已做完的 4 列 | 使用者：「v5、v6在事故前是缺陷版本，v7.1 CI 過了就變成穩定基線。」「寫成正式的v7.1基線文件，。參照v7的STABLE_BASELINE.md」；N-v7-skipped-acceptance 選「不補，照樣列跳過」；「這些收尾處理了吧，你看要不要補？」「OK，就照這樣。」 |
 | D158 | （2026-10-21）`after-re-evaluate` 的判斷（[after-re-evaluate.md](after-re-evaluate.md) 第 2 版）：照第 1 版，另外 C12 併進 N-token-test-gaps，F4 取消並記成「沒有檢測手段」。還需要的 20 列依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排成 15 批的草案，等使用者核准；B10、N-correct-invariant-assert、E3、E5 跟 B6／A4 交給 v8。HANDOFF「未結事項」的 6 項補進 INVENTORY（N-worker-probe-stale、N-compare-reports-untracked、N-host-lock-keys-uncontracted、N-client-other-version-untested、N-sleep-reconnect、N-drop-ledger-growth）。G2 還沒決定 | 使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。用這個優先度來調整。」「C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。照這樣出第 2 版、同步 INVENTORY／README／HANDOFF，然後拆批給我看。」 |
 | D159 | （2026-10-21）核准 `after-re-evaluate` 的批次草案（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）：決策點 A 選 (a)，substitution-single-store 在批內先寫 slack 樣本的特性測試；B：sdl-isolation-plan 用 ultracode；C：worker-probe-repair 提到最前面；PR 分三條（sdl-isolation 兩批、系統其餘＋觀測＋測試、發行）；G2 先不做。從 worker-probe-repair 開始 | 使用者：「核准批次草案：A 選 (a) 批內特性測試；B 用 ultracode；C 把 worker-probe-repair 提到最前面；PR 分三條。G2 先不做。從 worker-probe-repair 開始。」 |
+| D160 | （2026-10-21）核准 `sdl-isolation` 的計畫：Engine 側 IP-3／IP-4（IP 的 D31，U1～U10 照建議，含接受約 56～73 h 的估時、各子批開始前重估、超過 1.5 倍就停）；產品側 `sdl-isolation.md` 的 S1 選 (b)（保留 `Platform()`，只移除 `SdlGpuRenderDevice&` 的公開）、S2 選「base 與頭各用自己的 probe」。設計寫成架構文件 `docs/architecture/platform-sdl.md`、`input.md`（使用者要求） | 使用者：「OK，照計劃執行，記得把這個設計落到架構文件中去。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -618,6 +619,8 @@
   - 產出（`b2024c3`）：Engine 的 IP PLAN 文末的 IP-3／IP-4 草案（API、時間戳契約、日誌橋、子批 ip3a～f、ip4a～d、Design Invariants 與 Replacement Criteria、遷移清單、U1～U10）；IP 的 HANDOFF 的規劃紀錄與決策 D29、D30；產品側 `sdl-isolation.md`（工作清單、符號守衛、L2、估時、S1、S2）。
   - 估時：Engine 37～46.5 h＋產品 19～26 h，約 56～73 h；after-re-evaluate 第 9 節原估 26～34 h，約 2 倍。照時間盒規則停下，交你決定（Engine 的 U1）。
   - 實際約 1.5 h（估 4～6 h，含 ultracode 約 38 分鐘）。
+
+- 2026-10-21：`sdl-isolation` 計畫核准（D160）。ip3a 完成（約 1 h，估 3～4 h）：設計寫成架構文件 `platform-sdl.md`、`input.md`（標明已核准、尚未實作，每條寫出由哪個里程碑成立、由哪個守衛守住）；事前宣告；消費端日誌契約的核對發現 A 級的受擊回饋行經 SDL 寫出，列為 S3。停在關卡。
 
 ## 未結事項
 
