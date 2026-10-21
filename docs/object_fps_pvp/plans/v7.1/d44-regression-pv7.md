@@ -466,7 +466,7 @@ pv7-checkpoint 與 A1 的 L2 都只判了 clean 的非 respawn 重設（R3）與
   - x1／ramp 30 次的窗內重設都是 starvation 4＋backlog 1，窗外 0。
   - 網路的非 respawn 重設都等於「每個探針階段 1 次」。
   - 權威 Cooldown 0、逐出 0、Gateway session 的限速拒絕 0。
-  - 第 16 批的只記錄量：late 修正 266、領先跳升 0、被釘住 0 秒、Tick 間隔 22、30 Tick 排隊合計最大 294。最大值出現在 x1／ramp，是注入窗內的 backlog，也就是 A5 的機制。讀取器沒有出現任何例外。
+  - 第 16 批的只記錄量：late 修正 266、領先跳升 0、被釘住 0 秒、Tick 間隔 22、30 Tick 排隊合計最大 294。最大值出現在 upstream-1000ms（x1 最大 242、ramp 最大 281）；x1／ramp 的 backlog 重設發生在注入放出**之後**（x1 +366～370 ms、ramp +674～677 ms），觸發時刻由重設的 cooldown 決定，是延遲消失後留下的常駐領先被回收，也就是 A5 的機制（更正：原文寫成「最大值出現在 x1／ramp、注入窗內」；re-evaluate 的重算）。讀取器沒有出現任何例外。
   - 受干擾 9 項，都是 P、0 事件：`upstream-1000ms-r1`、`network20-r2`、`burst2-r2`、`loss-result-r2`、`gateway-1000ms-r3`、`x1-r4`、`network-r5`、`ramp-r11`、`stall-11.5-r1`；睡眠探測的最大值在 13～47 ms 之間。
 - **電池供電區間的標記**（使用者在 session 中途搬動電腦、電源線鬆脫；`pmset -g log`；標記檔 `power-intervals.json`，事後寫的，不在 `files.sha256` 與判定裡）：
 
