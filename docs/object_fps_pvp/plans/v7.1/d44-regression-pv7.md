@@ -1,6 +1,6 @@
 # d44-regression-pv7：pv7 上線後的 D44 回歸（計畫，第 1 版）
 
-- 狀態：**session 第 3 次進行中**（D151：DR3-1，原樣整個重跑；`logs/pvp-v71-d44-l2-20261021c/`）。
+- 狀態：**結案**：session 第 3 次完成，290 個 case-run＋60 Hz 長測 0 事件，「未再現」（第 15 節）。
 - 依據：README 的 `d44-regression-pv7` 列（「pv7 上線後的 D44 回歸，範圍涵蓋丟棄回報、三個 edge 行為批與 A1；加入持續延遲（x1、ramp）的樣本」；驗收「—／事前宣告＋D45 檢查／—」；估 10～14 h）、INVENTORY P8、A5、`plans/v7/HANDOFF.md` D44（:89）、D45（:90）、v7 第 16 批的整體回歸（`plans/v7/16-integration-acceptance.md`）。
 - 檔位：計畫與工具 medium；宣告、分析 high；D45 檢查 1 位 xhigh（第 7 節 DR-9）。
 - file:line 以 `8ecfe17` 為準；最後一個程式 commit 是 `572cc39`。
@@ -443,3 +443,42 @@ pv7-checkpoint 與 A1 的 L2 都只判了 clean 的非 respawn 重設（R3）與
 - **DR3-4**：接受部分結果（兩次各自只跑完前半，0 事件），缺的母體留給下一次 D44 回歸。
 
 `incident-close` 等本批結案。`observability-tools` 的分支（L1 #503 已四平台通過）改了本批凍結的工具，所以也等本批結案後才併回。
+
+## 15. session 第 3 次（D151，2026-10-21 12:11～15:03 JST）：完成，「未再現」
+
+- 證據：`build/target/_build/test/logs/pvp-v71-d44-l2-20261021c/`（`judgement.json`、`judgement.md`；判定 de62a759… 重播：完整、完整性問題 0、重播的停止 0）。
+- **197／197 項完成，沒有停止，沒有 I 項，使用者旗標 0**。
+- 讀法（宣告 8.6）：**在目前的程式上「未再現」**：290 個 case-run 與 60 Hz 長測都是 0 個 D44 事件。D44 仍不結案：A5 的結構性途徑（300 ms 型延遲消失重設、backlog 門檻 105）還在，交給 `re-evaluate`。
+
+| 母體 | case-run | 事件 | 0 事件時的單側 95% 上限 | v7 基準（第 16 批 session） |
+|---|---|---|---|---|
+| 遊戲（故障 66、clean 29） | 95 | 0 | 3.1%（故障 4.4%、clean 9.8%） | 95，0 事件 |
+| 背壓 | 120 | 0 | 2.5% | 120，0 事件 |
+| 網路一般 | 30 | 0 | 9.5% | 30，0 事件 |
+| 網路 impairments | 15 | 0 | 18.1% | 15，0 事件 |
+| x1 | 15 | 0 | 18.1% | 08c L2：x1 與 ramp 共 30 次，窗內 4＋1、窗外 0 |
+| ramp | 15 | 0 | 18.1% | 同上 |
+| 60 Hz 長測 | 1 | 0 | — | 1，0 事件 |
+| 短停頓（只記錄） | 6 | 0 | — | — |
+
+- 合併 290 個 case-run 的上限約 1.0%，只在「每個 case-run 互相獨立」的前提下成立，只當參考（8.6）。
+- **只記錄**：
+  - x1／ramp 30 次的窗內重設都是 starvation 4＋backlog 1，窗外 0。
+  - 網路的非 respawn 重設都等於「每個探針階段 1 次」。
+  - 權威 Cooldown 0、逐出 0、Gateway session 的限速拒絕 0。
+  - 第 16 批的只記錄量：late 修正 266、領先跳升 0、被釘住 0 秒、Tick 間隔 22、30 Tick 排隊合計最大 294。最大值出現在 x1／ramp，是注入窗內的 backlog，也就是 A5 的機制。讀取器沒有出現任何例外。
+  - 受干擾 9 項，都是 P、0 事件：`upstream-1000ms-r1`、`network20-r2`、`burst2-r2`、`loss-result-r2`、`gateway-1000ms-r3`、`x1-r4`、`network-r5`、`ramp-r11`、`stall-11.5-r1`；睡眠探測的最大值在 13～47 ms 之間。
+- **電池供電區間的標記**（使用者在 session 中途搬動電腦、電源線鬆脫；`pmset -g log`；標記檔 `power-intervals.json`，事後寫的，不在 `files.sha256` 與判定裡）：
+
+| 區間 | 時間（JST） | 重疊的項目 | 結果 |
+|---|---|---|---|
+| 搬動 | 13:03:18～13:06:06 | `network-r4`、`backpressure-r4`、`idle-clean-60-r4`、`idle-clean-30-r4` | 都是 P、0 事件、沒有受干擾（睡眠探測 4.1～4.3 ms） |
+| 電源線鬆脫（來回切換 4 次） | 13:54:15～13:55:00 | `backpressure-r19`、`network-r20` | 都是 P、0 事件、沒有受干擾（4.0～8.0 ms） |
+
+  - 網路不穩不影響本 session：所有連線都在 127.0.0.1。
+  - 標記的 6 項如果剔除，各母體仍是 0 事件，上限變化很小（例如背壓 120→108 個 case-run，上限 2.5%→2.7%）。
+- **三次 session 的關係**：第 1、2 次各自停在前半（工具失效：環境），保留為紀錄，不和第 3 次合併計數。第 3 次是唯一完整的 session，讀法只用它。
+- **結案**：`d44-regression-pv7` 完成。之後的事：
+  - A5 與 D44 的成因 → `re-evaluate`；
+  - STABLE_BASELINE 的 v7.1 補充 → `incident-close`；
+  - Windows／Linux 的 E1-5 → `lan15-windows`（D146 DR-7）。
