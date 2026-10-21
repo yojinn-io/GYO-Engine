@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
-更新：2026-10-16（Gateway 回到無狀態邊緣，D94、D95）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：`pv7-design`、`proto-rename-v7`、`version-errors`、`heartbeat-sync`、`time-echo`、`drop-report`、`edge-results-resend`、`edge-input-passthrough`、`edge-results-passthrough`、`edge-actions-passthrough`、`edge-analyzers`、`edge-contract`、`edge-rate-limit` 完成**：[protocol-v7](../../protocol-v7.zh-Hant.md) 定稿；分支上的版本值已是 7、版本不符有明確錯誤，runtime link 已有心跳對時、Client 與 Gateway 之間已有時間回聲，Gateway 會依原因回報丟棄數，Match 會在 Client ACK 之前重送結果，Gateway 把輸入、結果與動作原樣轉送、不再保存帳本與動作視窗，無狀態邊緣的約束與守衛已寫成條文；通用層的限速改成 token bucket（K1 已處理，L2 通過）；ingress 分析器已為直通重新凍結；其餘欄位照 pv7-line 分批實作，合併前不生效。`cause-records` 完成，`hitbox-fields` 進行中。
+更新：2026-10-21（v7.1 成為穩定基線，D157）；初版 2026-10-15。Owner：`object_fps_pvp`。
+**狀態：v7.1 完成並成為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)，D157）：pv7-line 以 PR #78 合併（`0fabb52`），after-pv7 以 PR #82 合併（`5ee499a`）；樹狀總覽的各批都已完成。剩下 `after-re-evaluate`（INVENTORY 處置為「re-evaluate 之後」的項目，由使用者排序）與 docs-close 的系列紀錄。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。

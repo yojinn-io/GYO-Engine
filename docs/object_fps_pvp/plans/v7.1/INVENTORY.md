@@ -1,6 +1,6 @@
 # PvP v7.1 清單核對結果
 
-更新：2026-10-16（P5 等項目的處置依 D94 改為 `edge-contract`）；初版 2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
+更新：2026-10-21（D157：re-evaluate 與 LC-8 的處置、records 已做完的 4 列；先前 2026-10-16：P5 等項目的處置依 D94 改為 `edge-contract`）；初版 2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
 
 v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法：5 位讀者分組對照程式與文件；2 位對抗式核對，提出的更正已套用；1 位完整性評審補列缺項。各 agent 的原始輸出留在規劃會話的工作檔，不放進 repo；本文件是核對後的結論。
 

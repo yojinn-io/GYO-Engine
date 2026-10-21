@@ -10,7 +10,7 @@
 一次 session 驗兩件事：
 
 1. **`edge-actions-passthrough`**（第 4 版第 1 節）：Gateway 不再保存動作視窗，每個動作 datagram 原樣成為一則 IPC 訊息。判定同第 4 版。
-2. **K1 的修正**（D121）：通用層 session 的限速由固定 1 秒窗口改成 token bucket（每秒補 120、容量 120）。Gateway 自己停頓 1 秒後，不再把緩存的合法封包當成超速而丟掉。兩棵樹都帶這個修正，所以它不進 A'−B' 的比較，而是以第 3 節的 K1a、K1b 在兩棵樹各自判定。
+2. **K1 的修正**（D121）：通用層 session 的限速由固定 1 秒窗口改成 token bucket（每秒補 120、容量 120）。Gateway 自己停頓 1 秒後，不再把緩衝的合法封包當成超速而丟掉。兩棵樹都帶這個修正，所以它不進 A'−B' 的比較，而是以第 3 節的 K1a、K1b 在兩棵樹各自判定。
 
 ## 2. 兩棵樹
 
@@ -71,7 +71,7 @@ B' 的限速和第 4 版的 B 不同，gateway-1000ms 的參考值（Expired 3�
 
 ## 6. 等你決定
 
-1. **M1：凍結分析器的 Gateway 窗口計數檢查**——**已決定（D122：採 (a)）**，以下保留當時的說明。`gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 `max_session_window_packets ≤120`（固定 1 秒窗口內 Gateway 讀到的封包數）。限速改成 token bucket 後，停頓時緩存的封包在恢復時同一秒放行，gameplay gateway-1000ms 的這個值會到約 170（重放：修正前 20 跑次全部會超過），R1 在兩棵樹的第一個 gateway-1000ms 就停。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判，`action_probe.py` 的說明寫「刻意停住的 Gateway 可能拒收排隊的到達突發」，也就是 K1 當年被當成預期行為接受。Client 自己的送出速率另有 `gameplay_evidence.py:205`（relay 的時間、每秒 ≤120）判定。選項：
+1. **M1：凍結分析器的 Gateway 窗口計數檢查**——**已決定（D122：採 (a)）**，以下保留當時的說明。`gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 `max_session_window_packets ≤120`（固定 1 秒窗口內 Gateway 讀到的封包數）。限速改成 token bucket 後，停頓時緩衝的封包在恢復時同一秒放行，gameplay gateway-1000ms 的這個值會到約 170（重放：修正前 20 跑次全部會超過），R1 在兩棵樹的第一個 gateway-1000ms 就停。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判，`action_probe.py` 的說明寫「刻意停住的 Gateway 可能拒收排隊的到達突發」，也就是 K1 當年被當成預期行為接受。Client 自己的送出速率另有 `gameplay_evidence.py:205`（relay 的時間、每秒 ≤120）判定。選項：
    - (a)（建議）三處的窗口計數檢查換成限速器自己的拒收計數：`rate_limited_packets`＝0，**gateway 模式也判**（與 K1a 一致）；`max_session_window_packets` 改成只記錄。窗口計數原本的用意是「Gateway 的固定窗口沒有咬到」，在 token bucket 下直接的檢查就是拒收數；Client 的預算仍由 205 行判。改凍結的分析器，補測試、突變，重新凍結（§14.4：受入判定的變更要經你同意）。
    - (b) 三處的上限改成契約上限 240（120·1＋120）：仍是間接檢查，而且比現在寬。
    - (c) 分析器不動，judge 只在 gateway-1000ms 把「錯誤恰好只有這一條」記為預期：規則窄，但留下一條在新算法下沒有意義的檢查。

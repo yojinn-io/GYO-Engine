@@ -1,6 +1,6 @@
 # a1-shot-step：射擊照命令步判定（計畫與事前宣告，第 3 版）
 
-- 狀態：計畫與第 3 節的宣告已核准（D137），實作完成（第 10 節）。**第 6 節（L2）第 3 版等核准**：工具、開發跑次與乾跑在第 11 節；核准後不放寬（AGENTS.md §14.1）。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 2、SHOULD-FIX 7、NOTE 7，第 2 版逐項修正（對應表在第 9 節）。
+- 狀態：**結案**（L2 238/238 通過、L3 通過；以 PR #78 合併）。以下保留當時的狀態：計畫與第 3 節的宣告已核准（D137），實作完成（第 10 節）。第 6 節（L2）第 3 版等核准：工具、開發跑次與乾跑在第 11 節；核准後不放寬（AGENTS.md §14.1）。第 1 版經 D45 的門檻來源對抗式檢查（1 位 xhigh）：MUST-FIX 2、SHOULD-FIX 7、NOTE 7，第 2 版逐項修正（對應表在第 9 節）。
 - 依據：`protocol-v7.zh-Hant.md` §6（A1 的判定語意、Client 規則）、`pv7-design.md` D-3 與「各批的測試清單」的 `a1-shot-step` 列、`network-architecture.zh-Hant.md` §7「射擊判定的冷卻保留與命令步」、HANDOFF D136（K＝min(K_max＝2, cooldownTicks)、S＝N）、`pv7-checkpoint` 的影子資料（`pv7-checkpoint-l2.md` 第 6 節、HANDOFF 2026-10-19）。
 - 檔位：high；判定的到期、保留與順序（第 2 節 `a1-match`）局部 xhigh。估 20 h，超過約 30 h 停下回報。
 - 數字沒有標「實測」的，是推導或推論。「模擬」指 D45 檢查者用 A1 規則重放 `pv7-checkpoint` 的 `match-shots.jsonl`（近似：假設冷卻以外的檢查結果不變、沿用 B 的送出時刻；`sim_a1.py` 在本 session 的 scratchpad）。
@@ -109,7 +109,7 @@
 
 凍結工具清單（`frozen-pv7-cp.sha256`）預期**不需要重新凍結**；若開發跑次顯示需要，停下回報再決定。
 
-## 6. L2 事前宣告（第 3 版，等核准）
+## 6. L2 事前宣告（第 3 版，已核准：D138）
 
 - 兩棵樹（都是 pv7）：B＝`../GYO-Engine-a1-before` 的 `7a5e0ea`（`pv7-checkpoint` 的 A 程式；從零建置，Gateway 建置資訊 `7a5e0ea`、modified＝false，D45 S7）；A'＝主 checkout 的 `43a8617`（之後只能改文件；Gateway 建置資訊 `43a8617`、false）。兩棵樹的 Match、Gateway、Client、6 個 probe 與 arena 寫在一份 `artifacts.sha256`（82 行；兩棵樹的 31 個資產檔逐檔相同）。兩棵樹的 `build/acceptance` 是同一份檔案，都以 `frozen-pv7-cp.sha256`（`f036b2af…`）核對。
 - 交錯、閒置門檻、sleeper、受干擾規則沿用 `pv7-checkpoint-l2.md`（「同一情境同一樹 2 次或累計 6 次」）。

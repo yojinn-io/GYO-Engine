@@ -1,6 +1,6 @@
 # tt2-trace：Engine 的 Trace 與產品寫檔改接（計畫，第 1 版）
 
-- 狀態：計畫第 1 版已核准（D139，第 8 節照建議），實作中。L2 的事前宣告在實作與工具完成後另出一版，宣告前做 D45 的門檻來源對抗式檢查。
+- 狀態：**結案**（L2 48/48、0 停止，第 14 節；以 PR #82 合併）。以下保留當時的狀態：計畫第 1 版已核准（D139，第 8 節照建議），實作中。L2 的事前宣告在實作與工具完成後另出一版，宣告前做 D45 的門檻來源對抗式檢查。
 - 依據：Engine 計畫 [time-threads-trace](../../../architecture/plans/time-threads-trace/PLAN.md) 的 TT-2（範圍、驗收、Architecture Delta、停止條件）、README 的 `tt2-trace` 列、INVENTORY 的 TT2-B10、F2（`LogFile` 非同步化）。
 - 檔位：high；關閉與 flush 的順序、丟棄計數、生產者與關閉的競爭（第 2 節 `trace-core` 的 `Close`／`Push`）局部 xhigh。估 14 h（README 原估 10 h，差額見第 7 節），超過約 21 h 停下回報。
 - file:line 以 master `0fabb52` 為準。
