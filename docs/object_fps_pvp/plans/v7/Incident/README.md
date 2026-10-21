@@ -10,4 +10,4 @@
 
 | 日期 | 標題 | 狀態 | 紀錄 |
 |---|---|---|---|
-| 2026-10-10 | Gateway 悄悄丟掉已解析的命令，Match 的遲到量測被截斷 | 處置中 | [2026-10-10-gateway-silent-drop.md](2026-10-10-gateway-silent-drop.md) |
+| 2026-10-10 | Gateway 悄悄丟掉已解析的命令，Match 的遲到量測被截斷 | 已結案（2026-10-21，v7.1 `incident-close`） | [2026-10-10-gateway-silent-drop.md](2026-10-10-gateway-silent-drop.md) |

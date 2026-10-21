@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 結案（未再現）；`incident-close` 進行中；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
+更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7`（未再現）與 `incident-close` 結案；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -39,7 +39,7 @@
 
 - **等你決定**：
   1. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
-- **進行中**：`incident-close`（只改文件）；之後把 `observability-tools` 分支併回 after-pv7 線並跑四平台 L1。
+- **進行中**：把 `observability-tools` 分支（`cbdc2b9`，L1 #503 通過）併回 after-pv7 線，再跑四平台 L1。
 - **下一步**：你決定 DS 之後續跑 `d44-regression-pv7`；`re-evaluate` 由你看（D148）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -573,6 +573,7 @@
 - 2026-10-21：`observability-tools` 分支的四平台 L1 #503（run 39470556006，`cbdc2b9`）通過。
 - 2026-10-21：`d44-regression-pv7` 的 session 第 2 次（D150；11:13～12:03 JST）在第 92 項之後停下：12:03 主 checkout 被切到 `master`（reflog；不是本會話，本會話期間沒有呼叫工具），凍結的驗收工具變成舊版，driver 依停止條件 1 停下。前 92 項 0 事件、0 個 I。使用者同意後切回 `claude/pvp-v71-after-pv7`，preflight 再次通過。選項在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 14 節。
 - 2026-10-21：`d44-regression-pv7` 的 session 第 3 次（D151；12:11～15:03 JST）完成：197／197 項，290 個 case-run 與 60 Hz 長測 0 個 D44 事件，沒有停止、沒有 I 項、使用者旗標 0；受干擾 9 項（都是 0 事件）。使用者搬動電腦與電源線鬆脫的兩段電池供電（13:03:18～13:06:06、13:54:15～13:55:00）和 6 個項目重疊，都是 P、0 事件、沒有受干擾，標記在 `power-intervals.json`。讀法：「未再現」；D44 不結案（A5 → `re-evaluate`）。**`d44-regression-pv7` 結案**（[d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節）。
+- 2026-10-21：`incident-close`（D148：照建議走；只改文件）。兩份事故紀錄改為已結案：2026-10-10 Gateway 悄悄丟命令（修正：08c、`drop-report`、edge 系列；重新量測：`d44-regression-pv7` 未再現；09b 重做的剩餘與 D44 歸因交給 `re-evaluate`；M0／FireGate 隨 A1 取消）；2026-10-15 Gateway 狀態漂移（行動 1～4 完成；log-contract 的 D143 是約束在運作的證據）。順帶處理 INVENTORY `N-netarch-ambiguity`：network-architecture 的舊段落仍描述 08c（pv6）的 Gateway 合併、游標副本、拒絕線與去重，加了補充指向 protocol-v7 §2a 與 Design Invariants，原文保留。**`incident-close` 結案**。
 
 ## 未結事項
 

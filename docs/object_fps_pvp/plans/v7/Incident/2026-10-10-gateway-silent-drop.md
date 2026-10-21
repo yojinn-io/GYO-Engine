@@ -6,7 +6,8 @@ Gateway 用權威狀態的延遲副本 `lastResolved` 判斷命令是否過時�
 
 ## 2. 狀態與嚴重度
 
-- **狀態：處置中。** 根因已確認並記入 D51（含 ⑨⑩）；丟棄回報機制的規劃第 1 批（事實核對）已完成，第 2 批等使用者決定；沒有實作；受影響的量測還沒重做。
+- **狀態：已結案（2026-10-21，v7.1 `incident-close`）。** 修正與重新量測都已完成：v7 第 08c 批轉送已解析的命令並計數丟棄（PR #73）；v7.1 的 pv7-line 讓 Gateway 依原因回報每一種丟棄（`drop-report`），並把輸入、結果、動作改成原樣轉送（edge 系列，PR #78）；在修好的資訊流上，v7.1 的 `d44-regression-pv7` 跑了 290 個 case-run 與 60 Hz 長測，D44 事件 0 次（含 Client→Gateway 的純延遲注入 x1／ramp 各 15 次）。還沒做完的分析（09b 的相位追蹤重做、D44 的歸因、A5）不是本事故的修正，已交給 v7.1 的 `re-evaluate`（第 8 節）。以下是當時的狀態，保留作為紀錄：
+- （當時）**狀態：處置中。** 根因已確認並記入 D51（含 ⑨⑩）；丟棄回報機制的規劃第 1 批（事實核對）已完成，第 2 批等使用者決定；沒有實作；受影響的量測還沒重做。
   - （補充，2026-10-11）第 08c 批（丟棄回報）已實作，L2 已通過（2026-10-11，114／114，J1～J7 成立；[08c 文件](../08c-drop-report.md)「L2 的結果」）。修正在 PR #73，尚未合併到 master，所以狀態仍是「處置中」。
 - **嚴重度：高（量測基準的完整性）。** 理由：
   - 被截斷的是權威（Match）做決定的輸入，不是某一次量測的雜訊。建在它上面的頻率類結論全部要在新基準上重做（見第 3 節）。
@@ -205,21 +206,21 @@ D51 的貼文寫 D48「跑了約 4 小時」，和上面的牆鐘時間對不上
 | D49 的 D51 加註仍寫「其他丟棄只計數、寫 log，正式回報仍留給第 10、11 批」，和 D51 ⑩ 矛盾 | Claude | 完成（本紀錄的同一個 commit 改寫） | HANDOFF D49 |
 | 「重複過濾」記成未結事項 | 使用者要求（12:23:17）；Claude 記錄 | 完成 | `e1fa218`；HANDOFF 未結事項 |
 | memory：時間上限（估計的 1.5 倍、單一問題 2 小時）與決策關卡 | Claude | 完成 | memory `time-box-and-decision-gate.md` |
-| 時間上限的套用：每次規劃開始前先檢查估計有沒有超過 2 小時，超過就先分批或先問（P9） | Claude | 進行中（丟棄回報的規劃已分三批） | 本紀錄 |
+| 時間上限的套用：每次規劃開始前先檢查估計有沒有超過 2 小時，超過就先分批或先問（P9） | Claude | 完成：成為常設規則（memory `time-box-and-decision-gate.md`；AGENTS.md §14「2 回変えても結論が出ない…見積もりを大きく超えた場合は…報告」） | 本紀錄 |
 | 受影響工作的盤點 | Claude（workflow） | 完成 | `pvp-v7-incident-20261010/inventory/from-workflow.md` |
 | 本事故紀錄 | Claude（workflow）；使用者核對 | 完成初版 | 本檔 |
-| 丟棄回報機制的規劃（只規劃）：第 1 批事實核對 → 第 2 批方案與評審（另評估第 6 項的去重）→ 第 3 批對抗式檢查，每批停下回報 | Claude（workflow／agent）；使用者在每批後決定 | 三批完成（D52、D53）；批次文件撰寫中 | HANDOFF D52、D53；`pvp-v7-infoflow-plan-20261010/` |
+| 丟棄回報機制的規劃（只規劃）：第 1 批事實核對 → 第 2 批方案與評審（另評估第 6 項的去重）→ 第 3 批對抗式檢查，每批停下回報 | Claude（workflow／agent）；使用者在每批後決定 | 完成（三批，D52、D53；批次文件 `08c-drop-report.md`） | HANDOFF D52、D53；`pvp-v7-infoflow-plan-20261010/` |
 | 依盤點回寫 D51 ⑨③ 的分類與 U1 的推論標記 | Claude；使用者核准（2026-10-10） | 完成 | HANDOFF D51 ⑨ 的更正 |
 | 加註建在截斷資訊流上的說法：`HANDOFF.md` 未結事項「重複過濾」的「平常無害」、`09b-phase-tracking.md` 的「意涵」與「意外的緩衝」 | Claude；使用者核准（2026-10-10） | 完成 | HANDOFF 未結事項；`09b-phase-tracking.md` |
-| `network-architecture.zh-Hant.md:230-233` 的條文歧義 | 丟棄回報計畫或第 11 批（補充，2026-10-14，D73：第 11 批移到 v7.1，本項改由 v7.1 處理） | 未開始（移到 v7.1） | 協議文件；[v7.1](../../v7.1/README.md) |
+| `network-architecture.zh-Hant.md:230-233` 的條文歧義 | 丟棄回報計畫或第 11 批（補充，2026-10-14，D73：第 11 批移到 v7.1，本項改由 v7.1 處理） | 完成（2026-10-21）：pv7 起 Gateway 不再依游標判斷，判斷全由 Match 做（protocol-v7 §2a、network-architecture 的 Design Invariants）；舊段落加了補充，指向現行條文（INVENTORY `N-netarch-ambiguity`） | 協議文件；[v7.1](../../v7.1/README.md) |
 | U4：用既有的 `match-commands.jsonl` 分出閒置主機的替代 | 使用者決定（2026-10-10）：不單獨做，併入重新量測 | 併入 | 丟棄回報計畫的 L2 |
-| 實作丟棄回報（轉送已解析的命令並處理 link 的剪除、合併上限與 `:424` 的下溢；每一種丟棄都讓 Match 知道；Match 記下自己的拒絕），加入「晚到的命令會送到 Match」的測試、丟棄計數與突變 | 使用者核准規劃後 | 未開始 | D51 ⑥⑩；P2 |
-| 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者在補完指示（20:32）中要求之後的注入用**純延遲型**（例如原型 x1，或 D48 第③步的 IPC 延遲那種不丟包的延遲），不用只保留最新一包的「擋住再放出」 | 實作後 | 未開始 | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
+| 實作丟棄回報（轉送已解析的命令並處理 link 的剪除、合併上限與 `:424` 的下溢；每一種丟棄都讓 Match 知道；Match 記下自己的拒絕），加入「晚到的命令會送到 Match」的測試、丟棄計數與突變 | 使用者核准規劃後 | 完成：v7 第 08c 批（轉送與計數，PR #73）；v7.1 `drop-report`（`GatewayDropReport`，每個 `drop_` 鍵都有回報或宣告的理由，`dead-letter-position` 雙向守住）；edge 系列刪掉 Gateway 的合併與剪除（PR #78） | D51 ⑥⑩；P2 |
+| 在完整的資料上重新量測（真實流量：network20／40、upstream 等既有案例），並依重推條件 11 加跑 Client→Gateway 短停頓的注入。注入的方式：使用者在補完指示（20:32）中要求之後的注入用**純延遲型**（例如原型 x1，或 D48 第③步的 IPC 延遲那種不丟包的延遲），不用只保留最新一包的「擋住再放出」 | 實作後 | 完成：08c L2（純延遲 x1／ramp）、v7.1 各 L2，以及 `d44-regression-pv7`（2026-10-21，290 個 case-run 與長測，D44 事件 0）。FireGate 的重推條件 11 隨 A1 取消（v7.1 D90，FireGate 退役） | D51 ⑤；`09-firegate-c2.md` 重推條件 11 |
 | 穩定基線（v5 `f97beb5`、v6 `c7d6dd3`／`fee92ff`／`object_fps_pvp-v1.1.0`）：先在 `STABLE_BASELINE.md` 加「已知問題」並連到本紀錄；要不要重新發佈，修好之後再決定 | 使用者決定（2026-10-10） | 「已知問題」完成；2026-10-14 使用者決定不重新發佈，在兩份 `STABLE_BASELINE.md` 開頭標明「缺陷版」（HANDOFF D69），已完成 | 3.5；`plans/v5/STABLE_BASELINE.md`、`plans/v6/STABLE_BASELINE.md` |
-| 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補 | 使用者決定（2026-10-10）：併入丟棄回報計畫的 L2（斜坡注入） | 併入 | 丟棄回報計畫的 L2；`build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，不改；新注入另寫分支） |
-| 09b 重做（R3、R4、R12；09a 與 B2 的順序 U6） | 重新量測後 | 未開始 | `09b-phase-tracking.md` |
-| M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 已決定（D51 ⑤） | D51 ⑤⑥；`09-firegate-c2.md` |
-| D44 的頻率與歸因重做（R2）；第 16 批的整體回歸照 D44 不變，但基準換成修好之後的資訊流 | 重新量測後；第 16 批 | 未開始 | HANDOFF D44、未結事項 |
+| 注入工具：「擋住再放出」只保留最新一包的行為要寫明，Client→Gateway 的純延遲注入要補 | 使用者決定（2026-10-10）：併入丟棄回報計畫的 L2（斜坡注入） | 完成（`run_client_delay.py` 的 x1／ramp 純延遲注入，附注入純度檢查） | 丟棄回報計畫的 L2；`build/acceptance/object_fps_pvp/action_probe.py:254` 的 relay（凍結檔，不改；新注入另寫分支） |
+| 09b 重做（R3、R4、R12；09a 與 B2 的順序 U6） | 重新量測後 | 移交：R3 的 A1 已實作（v7.1 `a1-shot-step`）；R12 的前提（修好後 D44 變多）在 `d44-regression-pv7` 未再現；R4、U6 與相位追蹤（B6～B9）交給 v7.1 `re-evaluate` | `09b-phase-tracking.md`；v7.1 INVENTORY |
+| M0 與 FireGate 常數凍結、C2，排在修資訊流與重新量測之後 | 使用者決定 | 取消（v7.1 D90：A1 讓 FireGate 退役，M0 不再需要） | D51 ⑤⑥；`09-firegate-c2.md` |
+| D44 的頻率與歸因重做（R2）；第 16 批的整體回歸照 D44 不變，但基準換成修好之後的資訊流 | 重新量測後；第 16 批 | 頻率完成：第 16 批（260 個 case-run，0 事件）與 v7.1 `d44-regression-pv7`（290 個 case-run＋長測，0 事件，「未再現」）；歸因（A5 的結構性途徑）交給 v7.1 `re-evaluate` | HANDOFF D44；v7.1 `d44-regression-pv7.md` 第 15 節 |
 
 ## 9. 學到的事
 

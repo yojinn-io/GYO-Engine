@@ -291,6 +291,11 @@ Match 不知道這些丟棄，是到 pv7 為止的已知缺口（[pv6 契約](pr
 §1「Runtime 輸入流」）。
 補充（2026-10-14，v7 D73）：pv7 移到 v7.1（[v7.1 計畫](plans/v7.1/README.md)），v7 停在 pv6，
 所以這個缺口在整個 v7 期間都存在。
+補充（2026-10-21，v7.1 `incident-close`）：上面兩段的 Gateway 行為（Gateway／Host 合併、游標副本、拒絕線、已寫出去重、
+已解析部分的截短）是 v7 第 08c 批（pv6）的狀態。pv7 起（PR #78）Gateway 原樣轉送每個輸入窗口：不合併、不持有游標副本、
+沒有拒絕線與已寫出去重；命令是否已完成、舊或未來 epoch、衝突與重複，都只由 Match 判定；Gateway 仍執行的丟棄依原因回報
+Match（`GatewayDropReport`）。現行的規則以 [protocol-v7](protocol-v7.zh-Hant.md) §2a 與本文件 Design Invariants 的
+Gateway 一節為準（INVENTORY `N-netarch-ambiguity`）。
 
 （日誌上的對應見 [日誌 Data Contract](log-contract.zh-Hant.md) 第 5 節。）
 

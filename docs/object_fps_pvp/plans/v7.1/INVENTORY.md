@@ -143,7 +143,7 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
-| N-netarch-ambiguity | network-architecture 原第 230-233 行的條文歧義（事故後續表）（合併：N-netarch-230-ambiguity） | 部分（082d4b6） | `docs/object_fps_pvp/network-architecture.zh-Hant.md:237-239`<br>`docs/object_fps_pvp/network-architecture.zh-Hant.md:240-248` | 否 | 否 | edge-contract |
+| N-netarch-ambiguity | network-architecture 原第 230-233 行的條文歧義（事故後續表）（合併：N-netarch-230-ambiguity） | 已解決（incident-close：pv7 的判斷全在 Match；舊段落加補充指向現行條文） | `docs/object_fps_pvp/network-architecture.zh-Hant.md:237-239`<br>`docs/object_fps_pvp/network-architecture.zh-Hant.md:240-248` | 否 | 否 | edge-contract |
 | N-dropreport-enum-drift | design3 B 的原因列舉早於 08c 定案，和 HEAD 的原因集合不一致 | 未解決 | `build/target/_build/test/logs/pvp-v7-infoflow-plan-20261010/batch2/design3-counts-pv7.md`<br>`apps/object_fps_pvp/gateway/ingress_statistics.go:120-170` | 要 | 否 | pv7-design＋drop-report |
 | N-leave-reason | Gateway 送給 Match 的 Leave 不帶原因 | 未解決 | `apps/object_fps_pvp/protocol/runtime_v6.proto:21`<br>`apps/object_fps_pvp/gateway/server.go:29-30` | 可選 | 否 | cause-records |
 | N-action-nack | Match 整批拒收動作時不回覆（沒有 NACK）（合併：N-action-reject-nack）。更正：pv6 已有 RuntimeError；要讓 Client 停止重送才需改 wire。 | 未解決 | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp:384`<br>`apps/object_fps_pvp/gateway/server.go:652-654` | 可選 | 否 | cause-records |

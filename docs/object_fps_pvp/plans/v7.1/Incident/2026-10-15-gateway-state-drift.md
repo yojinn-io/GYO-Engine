@@ -18,7 +18,8 @@ v3 起，為了迭代上的需求，Gateway 陸續加入 Match 決策狀態的�
 
 ## 2. 狀態與嚴重度
 
-- **狀態：處置中。** 2026-10-15 認定。2026-10-16 決定方向：Gateway 回到無狀態邊緣（[v7.1 交接](../HANDOFF.md) D94、D95；[方向評估](../gateway-direction.md)）。結案條件見 v7.1 README 的 `incident-close`。
+- **狀態：已結案（2026-10-21，`incident-close`）。** 行動 1～4 全部完成：Gateway 已回到無狀態邊緣（edge 系列，PR #78），約束寫進 `network-architecture.zh-Hant.md` 的 Design Invariants 並有 Go 白名單守衛（`edge-contract`），AGENTS.md 已加入各元件的設計約束（PR #79、#80）。之後的 `log-contract` 加 Gateway 欄位時，守衛與條文確實攔下並交使用者同意（D143），這是約束在運作的證據。以下是當時的狀態，保留作為紀錄：
+- （當時）**狀態：處置中。** 2026-10-15 認定。2026-10-16 決定方向：Gateway 回到無狀態邊緣（[v7.1 交接](../HANDOFF.md) D94、D95；[方向評估](../gateway-direction.md)）。結案條件見 v7.1 README 的 `incident-close`。
 - **嚴重度：高（設計前提）。** 理由：
   - 它關係到 Gateway 與 Match 的責任分工，也就是 D49「Gateway 執行，Match 決定」的前提。
   - 回到原意要同時改 Gateway、Match 與內部協議，而 pv7 是 v7.1 唯一一次 wire 變更：先照有狀態的 Gateway 定了 wire，之後再變薄，就等於第二次改 wire。
@@ -77,7 +78,7 @@ v7.1 的 `pv7-design` 把 pv7-line 重估為約 111 h 之後，使用者質疑�
 |---|---|---|---|
 | 1 | 在 pv7 的 wire 定稿之前，評估 Gateway 的方向並交使用者決定。候選：(a) 回到無狀態邊緣，內部協議保留身分與冪等性（命令序號、action id），Gateway 原樣轉送，Match 用自己的狀態去重，Gateway 只留連線與 session 的軟狀態；(b) 控制面（大廳、session 發放）留在 Go，遊戲 UDP 直接到 Match；(c) 維持現狀 | v7.1 規劃會話 | 完成（2026-10-16，D94：選 (a)） |
 | 2 | 依第 1 項的結果，重新評估 v7.1 的計畫：pv7-design 的 D-1～D-7、pv7-line 的批次與工時、事故後遺症的處置 | v7.1 規劃會話 | 完成（2026-10-16，D95；pv7-line 約 170～179 h） |
-| 3 | 把 Gateway 的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」（標題已改為 `Design Invariants`，見第 4 項）。草案：Gateway 只能持有連線與 session 的軟狀態，不得持有 Match 決策狀態的副本，只檢查格式、不依內容做決定 | 依第 1 項 | 排定：v7.1 的 `edge-contract`（條文見 protocol-v7 草案 §2a） |
+| 3 | 把 Gateway 的約束寫進 `network-architecture.zh-Hant.md` 的「不可破壞的契約」（標題已改為 `Design Invariants`，見第 4 項）。草案：Gateway 只能持有連線與 session 的軟狀態，不得持有 Match 決策狀態的副本，只檢查格式、不依內容做決定 | 依第 1 項 | 完成：v7.1 的 `edge-contract`（`network-architecture.zh-Hant.md` 的 Design Invariants「Gateway」一節；Go 狀態欄位的白名單守衛 `state_whitelist_test.go` 與突變） |
 | 4 | 建議（流程）：在 AGENTS.md 加入各元件的設計約束（或從 AGENTS.md 明確連到寫有約束的契約文件），並把「在邊緣元件加入遊戲決策狀態」列為 Architecture Delta 的一種 | 使用者決定是否交給文件會話 | 交給文件會話（2026-10-16，使用者決定）。完成：`80d2d28`，PR #79 已合併到 master（`23457e1`，四平台 L1 通過）。AGENTS.md §3 不點名產品，用 `git grep -n "不可破壞的契約" -- docs` 找各元件的約束，所以第 3 項寫條文時，標題文字要逐字保持不變。更正（2026-10-16，使用者決定，文件會話 PR #80）：標題一律用英文 `Design Invariants`，不隨文件語言翻譯 |
 
 ## 9. 學到的事
