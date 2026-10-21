@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 DS-1 宣告補遺等你核准；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 第 2 次進行中（D150）；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -38,9 +38,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：
-  1. `d44-regression-pv7` 的 DS-1 宣告補遺（[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節）：x1／ramp 只因 relay 送出延遲而注入無效時不計數、第 3 次才停；判定 de62a759…，driver 與產物不變；§14.4 的 1～5 已由別的審查者用資料核對。核准後整個重跑（約 3.0 h）。
-  2. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
-- **進行中**：`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`，worktree `../GYO-Engine-obs`）的四平台 L1（run 39470556006，#503）。這個分支要等 `d44-regression-pv7` 結案後才併回 after-pv7 線，因為它改了 d44 session 凍結的工具。`incident-close` 依賴 `d44-regression-pv7`，也在等。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。PR [#82](https://github.com/yojinn-io/GYO-Engine/pull/82)（draft，after-pv7 線）。
+  1. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
+- **進行中**：`d44-regression-pv7` 的 session 第 2 次（D150；`build/target/_build/test/logs/pvp-v71-d44-l2-20261021b/`，約 3.0 h，期間不呼叫工具）。`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`）的四平台 L1（run 39470556006，#503）結果未看；這個分支要等 d44 結案後才併回。`incident-close` 等 d44 結案。
 - **下一步**：你決定 DS 之後續跑 `d44-regression-pv7`；`re-evaluate` 由你看（D148）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -121,6 +120,7 @@
 | D147 | （2026-10-21）核准 `d44-regression-pv7` 的 L2 宣告第 2 版（[d44-regression-pv7.md](d44-regression-pv7.md) 第 8 節；driver 9ad263fd…、judge d0610c61…、artifacts cf992c74…），兩個宣告點照寫（clean 跑次的逐出與限速拒絕列為使用者旗標、受干擾只記錄） | 使用者：「核准 d44-regression-pv7 的 L2 宣告第 2 版（driver 9ad263fd…、judge d0610c61…、artifacts cf992c74…），兩個宣告點照寫。現在跑 session。」 |
 | D148 | （2026-10-21）使用者睡前的指示：after-pv7 盡量在早上前跑完，沒有問題就照建議走；範圍是 `d44-regression-pv7` 結案、`incident-close`、`observability-tools`，`re-evaluate` 由使用者隔天自己看。session 停在停止條件時照宣告停下等使用者 | 使用者：「我去睡覺了，早上之前，盡量把after-pv7跑完。如果沒有問題，就直接找建議走就好。」「那你做1-4就好。5明天我自己看看。」 |
 | D149 | （2026-10-21）`d44-regression-pv7` 照 DS-1：x1／ramp 的注入無效改成不計數、累計 3 次才停；先做 §14.4 的 1～5 與審查，交使用者核准，再整個重跑 | 使用者：「d44-regression-pv7 照 DS-1：x1/ramp 的注入無效改成不計數、累計 3 次才停，做 §14.4 的 1～5 與審查後交我核准，再整個重跑。」 |
+| D150 | （2026-10-21）核准 `d44-regression-pv7` 的 DS-1 宣告補遺（[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節；judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節；整個重跑 session | 使用者：「核准 d44-regression-pv7 的 DS-1 宣告補遺（judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節。現在整個重跑 session。」 |
 
 ## 規劃紀錄（記錄器）
 

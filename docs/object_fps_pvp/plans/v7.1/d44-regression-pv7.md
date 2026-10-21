@@ -1,6 +1,6 @@
 # d44-regression-pv7：pv7 上線後的 D44 回歸（計畫，第 1 版）
 
-- 狀態：**DS-1 的宣告補遺（第 12 節，判定 de62a759…）已審查，等你核准後整個重跑**。
+- 狀態：**DS-1 補遺核准（D150）；session 第 2 次進行中**（`logs/pvp-v71-d44-l2-20261021b/`）。
 - 依據：README 的 `d44-regression-pv7` 列（「pv7 上線後的 D44 回歸，範圍涵蓋丟棄回報、三個 edge 行為批與 A1；加入持續延遲（x1、ramp）的樣本」；驗收「—／事前宣告＋D45 檢查／—」；估 10～14 h）、INVENTORY P8、A5、`plans/v7/HANDOFF.md` D44（:89）、D45（:90）、v7 第 16 批的整體回歸（`plans/v7/16-integration-acceptance.md`）。
 - 檔位：計畫與工具 medium；宣告、分析 high；D45 檢查 1 位 xhigh（第 7 節 DR-9）。
 - file:line 以 `8ecfe17` 為準；最後一個程式 commit 是 `572cc39`。
