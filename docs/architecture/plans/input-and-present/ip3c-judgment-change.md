@@ -1,5 +1,7 @@
 # ip3c 判定變更提案（AGENTS §14.4 的 1～5，第 3 版，D34；獨立核對 3 輪後定稿）
 
+- 狀態：**已核准**（D35，2026-10-22）。
+
 對象：事前宣告 `ip3-declaration.md` 第 2 節 ip3c 的整合判定「`p0 − β/2 ≤ ts ≤ p1 + β/2`」（測試 `A pumped event carries the time it was pushed`，`tests/common/platform_sdl/EventTimeTests.cpp`）。這個測試殺掉 m2-int、m3-int，是 `platform-sdl.md` Design Invariant 3 的守衛 Test，所以不論有沒有放寬面都要使用者核准。
 
 新判定：push 之前由測試自己取一組配對 `P0 = SampleClockPair()`；pump 內讀該次 pump 的配對 `P1`（`CurrentClockPairForTesting`）。

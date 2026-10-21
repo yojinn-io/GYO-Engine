@@ -43,7 +43,7 @@ xhigh 審查的 F14 要求定義 `Sync()` 的 Err 與剪貼簿為空時的回傳
   1. `p0=Now()`；`SDL_PushEvent`（timestamp 0，由 SDL 補上）；`p1=Now()`。
   2. `Waiter` 等 5 ms。
   3. pump；β 由 `SampleClockPairForTesting()` 讀出。
-  4. 斷言 `p0 − β/2 ≤ ts ≤ p1 + β/2`；另一條斷言 `ts ≤ 交付時刻`。
+  4. 斷言 `p0 − β/2 ≤ ts ≤ p1 + β/2`；另一條斷言 `ts ≤ 交付時刻`。**（D35 改判定：容許改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns`，見 [ip3c-judgment-change.md](ip3c-judgment-change.md)；同時新增 `MakeClockPair`、`SampleClockPairWith`、取樣落在呼叫者讀取之間的 3 個測試。）**
 - 假配對在兩次 pump 之間跳 10 s，第二次 pump 的結果跟著跳 10 s（容許 ±β）。
 - 同一次 pump 內，SDL 時間不遞減的事件，結果不遞減。
 - 巢狀 pump（D33 補宣告，只收緊）：外層 pump 的 observer 在處理第一個事件時呼叫內層 pump；內層返回之後，外層後續事件的換算用的是外層的配對（以假配對注入：外層與內層的配對相差 10 s，外層後續事件的結果不會跳 10 s，容許 ±β）。
