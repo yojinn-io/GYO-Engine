@@ -6,8 +6,8 @@
       "id": "m6a-g1",
       "what": "SdlPlatform.hpp includes SDL again (G1 must report it)",
       "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
-      "find": "#include <string>\n\n#include \"engine/base/Error.hpp\"",
-      "replace": "#include <string>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "find": "#include <string_view>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string_view>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
       "target": "platform_sdl_header_tests",
       "cases": "SDL backend public headers do not reach any SDL header",
       "expect": "a non-native SDL backend header includes SDL"
@@ -16,8 +16,8 @@
       "id": "m6a-g2",
       "what": "SdlPlatform.hpp includes SDL again (G2 must report it)",
       "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
-      "find": "#include <string>\n\n#include \"engine/base/Error.hpp\"",
-      "replace": "#include <string>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "find": "#include <string_view>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string_view>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
       "target": "platform_sdl_header_tests",
       "cases": "Engine public headers outside the native layer name no SDL symbol",
       "expect": "SdlPlatform\\.hpp:\\d+ <SDL3/"
@@ -271,6 +271,96 @@
       "target": "input_sdl_tests",
       "cases": "SDL text keys carry the layout key*",
       "expect": "the layout key is the key the layout produces"
+    },
+    {
+      "id": "m10",
+      "what": "The bridge has no same-thread re-entry guard",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (forwarding) {",
+      "replace": "    if (false) {",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge sends a line logged from the Engine handler*",
+      "expect": "a line logged from the Engine handler"
+    },
+    {
+      "id": "m11",
+      "what": "The bridge does not restore SDL's previous output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge restores SDL*",
+      "expect": "SDL's previous output is back"
+    },
+    {
+      "id": "m-assert",
+      "what": "The bridge does not check that it is still SDL's output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    GYO_ASSERT(installed);\n",
+      "replace": "    static_cast<void>(installed);\n",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge fails a GYO_ASSERT*",
+      "expect": "destroying a replaced bridge fails a GYO_ASSERT"
+    },
+    {
+      "id": "m-tee",
+      "what": "The bridge drops SDL's previous output when teeing",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (bridge->keepSdlOutput && bridge->previous) bridge->previous(bridge->previousData, category, priority, message);",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge tees by default*",
+      "expect": "a teeing bridge keeps SDL"
+    },
+    {
+      "id": "m12",
+      "what": "main drops GyoMain's return value",
+      "file": "engine/platform/sdl/main/SdlMain.cpp",
+      "find": "    return Engine::Platform::Sdl::RunEntry(&GyoMain, argc, argv);",
+      "replace": "    static_cast<void>(Engine::Platform::Sdl::RunEntry(&GyoMain, argc, argv));\n    return 0;",
+      "target": "platform_sdl_tests",
+      "cases": "The entry point returns what GyoMain returns",
+      "expect": "the exit code is GyoMain"
+    },
+    {
+      "id": "m-throw",
+      "what": "An exception from GyoMain escapes the entry point",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    try {\n        return body(argc, argv);\n    } catch (const std::exception& error) {\n        // Two lines, so reporting allocates nothing in this noexcept function.\n        Base::Log(Base::LogLevel::Error, \"platform\", \"unhandled exception:\");\n        Base::Log(Base::LogLevel::Error, \"platform\", error.what());\n    } catch (...) {\n        Base::Log(Base::LogLevel::Error, \"platform\", \"unhandled exception\");\n    }\n    return 1;",
+      "replace": "    return body(argc, argv);",
+      "target": "platform_sdl_tests",
+      "cases": "The entry point turns an exception*",
+      "expect": "an exception from GyoMain exits with code 1"
+    },
+    {
+      "id": "m-race",
+      "what": "The guard is released before SDL's previous output is restored",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    bridged.store(false);\n    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge leaves SDL*",
+      "expect": "after every bridge is gone SDL's previous output is back"
+    },
+    {
+      "id": "m-userdata",
+      "what": "Restoring loses the previous output's userdata",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    if (installed) SDL_SetLogOutputFunction(state.previous, nullptr);\n    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge restores SDL*",
+      "expect": "SDL's previous output is back"
+    },
+    {
+      "id": "m-overwrite",
+      "what": "A replaced bridge restores over the other output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge fails a GYO_ASSERT*",
+      "expect": "a replaced bridge leaves the other output in place"
     }
   ]
 }

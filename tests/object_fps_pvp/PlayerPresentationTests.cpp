@@ -17,7 +17,7 @@
 #include "engine/model/Animation.hpp"
 #include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
 
-#include <SDL3/SDL_filesystem.h>
+#include "engine/platform/sdl/SdlPlatform.hpp"
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -41,9 +41,9 @@ using Engine::Math::Matrix4;
 using Engine::Math::Vec3;
 
 Engine::Asset::AssetCatalog LoadCatalog() {
-    const char* base = SDL_GetBasePath();
+    const auto base = Engine::Platform::Sdl::BaseDirectory();
     if (!base) throw std::runtime_error("Cannot locate the PvP test product directory");
-    const auto root = std::filesystem::path(base) / Gyo::AppConfig::Assets;
+    const auto root = base.value() / Gyo::AppConfig::Assets;
     const auto manifest = Engine::Asset::ContentManifest::Load(root);
     if (!manifest) throw std::runtime_error(manifest.error().message + " " + manifest.error().detail);
     auto catalog = manifest.value().LoadCatalogs(root);

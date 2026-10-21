@@ -1,8 +1,10 @@
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
@@ -16,6 +18,7 @@ enum class SdlPlatformErrorCode {
     InvalidWindowSize = 1,
     InitializationFailed,
     WindowCreationFailed,
+    BaseDirectoryUnavailable,
 };
 
 [[nodiscard]] constexpr const char* ToString(const SdlPlatformErrorCode code) noexcept {
@@ -23,6 +26,7 @@ enum class SdlPlatformErrorCode {
     case SdlPlatformErrorCode::InvalidWindowSize: return "InvalidWindowSize";
     case SdlPlatformErrorCode::InitializationFailed: return "InitializationFailed";
     case SdlPlatformErrorCode::WindowCreationFailed: return "WindowCreationFailed";
+    case SdlPlatformErrorCode::BaseDirectoryUnavailable: return "BaseDirectoryUnavailable";
     }
     return "Unknown";
 }
@@ -111,5 +115,24 @@ private:
 
     std::unique_ptr<Impl> impl_;
 };
+
+// The directory the platform loads the program's files from (SDL's base path:
+// the executable's directory, or Contents/Resources inside a macOS bundle).
+// Needs no initialization. Call it on the main thread, or before other threads
+// start: the platform caches it without a lock.
+[[nodiscard]] Base::Result<std::filesystem::path, SdlPlatformError> BaseDirectory();
+
+// A UTF-8 string as a path on every platform (on Windows a char string would be
+// read in the ANSI code page). Invalid UTF-8 may throw on Windows
+// (std::system_error) while other platforms keep the bytes.
+[[nodiscard]] std::filesystem::path PathFromUtf8(std::string_view utf8);
+
+// The platform's name, for diagnostics only: never branch on it.
+[[nodiscard]] std::string_view PlatformName() noexcept;
+
+// Runs a program body for the entry point (EntryPoint.hpp): returns what the
+// body returns; an exception is logged (Base log, category "platform") and
+// becomes exit code 1, so it never unwinds through the platform's C stack.
+[[nodiscard]] int RunEntry(int (*body)(int, char*[]), int argc, char* argv[]) noexcept;
 
 } // namespace Engine::Platform::Sdl

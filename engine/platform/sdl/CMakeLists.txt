@@ -1,4 +1,5 @@
 add_library(gyo_platform_sdl STATIC
+    src/SdlLogBridge.cpp
     src/SdlPlatform.cpp
 )
 
@@ -29,3 +30,11 @@ target_link_libraries(gyo_platform_sdl_native INTERFACE
     GYO::PlatformSDL
     SDL3::SDL3
 )
+
+# The program entry: main calls the product's GyoMain (EntryPoint.hpp). An
+# OBJECT library, so the main of a static library is never left out of a link.
+add_library(gyo_platform_sdl_main OBJECT main/SdlMain.cpp)
+add_library(GYO::PlatformSDLMain ALIAS gyo_platform_sdl_main)
+target_link_libraries(gyo_platform_sdl_main PUBLIC GYO::PlatformSDL)
+target_link_libraries(gyo_platform_sdl_main PRIVATE SDL3::SDL3)
+target_compile_features(gyo_platform_sdl_main PRIVATE cxx_std_20)

@@ -6,6 +6,8 @@
 // platform headers, which define their own guard (docs/architecture/platform-sdl.md,
 // Design Invariant 1). A leak is reported as a failing test, not a build error,
 // so a mutant that reintroduces an include is killed by its message.
+#include "engine/platform/sdl/EntryPoint.hpp"
+#include "engine/platform/sdl/SdlLogBridge.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #if defined(GYO_HYGIENE_SDL_INPUT)
 #include "engine/input/backend/sdl/SdlInput.hpp"

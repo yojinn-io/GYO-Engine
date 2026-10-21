@@ -3,11 +3,14 @@
 
 #include <chrono>
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 #include <exception>
 #include <optional>
 #include <utility>
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/Log.hpp"
 
 namespace Engine::Platform::Sdl {
 
@@ -182,6 +185,39 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const EventObserver& observer) {
     }
 
     return control;
+}
+
+Base::Result<std::filesystem::path, SdlPlatformError> BaseDirectory() {
+    const char* base = SDL_GetBasePath();
+    if (base == nullptr) {
+        return Base::Err(MakeSdlError(SdlPlatformErrorCode::BaseDirectoryUnavailable,
+                                      "SdlPlatform: the base directory is unavailable"));
+    }
+    return PathFromUtf8(base);
+}
+
+std::filesystem::path PathFromUtf8(const std::string_view utf8) {
+    std::u8string text;
+    text.reserve(utf8.size());
+    for (const char c : utf8) text.push_back(static_cast<char8_t>(c));
+    return std::filesystem::path(text);
+}
+
+std::string_view PlatformName() noexcept {
+    return SDL_GetPlatform();
+}
+
+int RunEntry(int (*body)(int, char*[]), const int argc, char* argv[]) noexcept {
+    try {
+        return body(argc, argv);
+    } catch (const std::exception& error) {
+        // Two lines, so reporting allocates nothing in this noexcept function.
+        Base::Log(Base::LogLevel::Error, "platform", "unhandled exception:");
+        Base::Log(Base::LogLevel::Error, "platform", error.what());
+    } catch (...) {
+        Base::Log(Base::LogLevel::Error, "platform", "unhandled exception");
+    }
+    return 1;
 }
 
 std::string SdlPlatform::ClipboardText() const {

@@ -2,10 +2,10 @@
 #include <utility>
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 
 #include "engine/base/Error.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
+#include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
 
@@ -83,7 +83,7 @@ private:
 
 } // namespace
 
-int main(int argc, char* argv[]) {
+int GyoMain(int argc, char* argv[]) {
     auto platformResult = SdlPlatform::Create();
     if (!platformResult) {
         LogError(platformResult.error());

@@ -307,6 +307,19 @@
   - 突變 m7、m8、m9、m-up、m-layout，5／5 killed（目錄共 27 個）。
   - 消費端的位址輸入改用 `SetTextInput`、`text`、`ClipboardText`（消費端計畫的 ip3d 列）。`test` preset 78／78，SDL 相關 6 個通過。
   - 消費端看得到的差異 1 項：`Key::Enter` 依 IP-1 同時代表 Return 與數字鍵盤的 Enter，所以數字鍵盤的 Enter 現在也會確認位址（以前只有 Return）。
+- 2026-10-22：ip3d 的 L1 #553（run 39633694569，`6ed2952`）四平台成功。使用者：「我去睡覺了。可以的話吧IP-3、IP-4跑完。」——照「無人時做到下一個關卡就停」進行：L3（要人在場）、消費端 L2 的門檻（§14.1）、§14.4 的放寬、計畫外的 Architecture Delta、停止條件，都停下來等使用者。
+- 2026-10-22：ip3e 實作（檔位 high，日誌橋局部 xhigh）。
+  - Engine：`EntryPoint.hpp`（`GyoMain`）、`GYO::PlatformSDLMain`（OBJECT，`main` 經 `RunEntry` 呼叫 `GyoMain`，例外記錄後回 1）、`BaseDirectory`、`PathFromUtf8`、`PlatformName`、`SdlLogBridge`（預設 tee，同執行緒重入只送原輸出）。`tests/common/runtime_sdl` 改用 `GyoMain`。
+  - xhigh 審查（有條件接受）：重現了一個競態——解構時先放開「一次一個」的旗標再還原輸出，另一條執行緒在空檔建橋會把橋自己當成原輸出，tee 模式下在 SDL 的日誌鎖內無限遞迴（卡死）。已修（先還原再放旗標），加「兩條執行緒輪流建橋」測試與突變 m-race。其他已修：斷言條件的副作用、先建立 SDL 的日誌鎖、`Forward` 不信任 userdata、`RunEntry` 的記錄不配置記憶體、`PathFromUtf8` 的空輸入、文件措辭（argv、鎖的順序）、測試缺口（userdata、被換掉的輸出保持原樣、分類表全部）。
+  - 並行測試獨立成 CTest `platform_sdl_log_bridge_concurrency`（60 秒，照宣告）；主執行檔維持 15 秒。
+  - 消費端：`main.cpp` 改為 `GyoMain`，執行檔目錄與平台名走 Engine，刪除 `ForwardEngineLog`／`ForwardSdlLog`，產品的 Base handler 以 `[level] text` 寫進日誌檔（Engine 的行前面帶分類，與以前經 SDL 時相同），再建立 `SdlLogBridge`；`PvpApplication.cpp` 的 `SDL_Log*` 改為 printf 風格的 `ClientLog`（S3：受擊回饋行位元組不變），`SDL_GetTicks` 改為程式啟動後的毫秒數，`SDL_Delay` 改為 `Waiter`；`PlayerPresentationTests` 改用 `BaseDirectory`、拿掉直接連 SDL3。
+  - 本機：全量建置（printf 格式檢查無警告）；`test` preset 79／79；SDL 相關 7 個；並行測試連跑 30 次 0 失敗。
+  - 突變目錄 36 個全部 killed（ip3e：m10、m11、m-assert、m-tee、m12、m-throw、m-race、m-userdata、m-overwrite；m12 的殺掉判定改由 probe 的結束碼 7／0，原本宣告的 runtime_sdl 結束碼殺不掉它，因為 smoke 本來就回 0；m-tee、m-assert 等是補加的，只收緊）。
+  - **暫停**（2026-10-22，使用者：「你跑完手頭上的任務就先暫停一下吧。」）。下一步：P1～P3 的決定、ip3e 的 L1、ip3f（L3 要使用者在場）。
+  - **待使用者決定**（實作照目前寫法，PR 不合併）：
+    - P1：解構子含 GYO_ASSERT 並標 `noexcept(false)`，違反 `docs/architecture/error-handling.md` 的「解構子與執行緒入口不含斷言」（計畫與該規則互相矛盾，xhigh 審查第 2 項）。選項：(a) 解構子回到 noexcept，以 death test 驗證中止，error-handling.md 加例外條款；(b) 改成記錄 Error 而非斷言（宣告的判定要變更，§14.4）。
+    - P2：`RunEntry` 的 `catch (...)` 與 error-handling.md 第 6 條「never catch (...)」字面衝突；進入點需要攔下所有例外（Design Invariant 8），建議在 error-handling.md 加例外條款。
+    - P3：宣告的「每一輪的行數守恆」在不暫停推送執行緒的情況下量不到；實作為「逐執行緒守恆」（比原本的總和更嚴，但字面上與宣告不同），照 §14.4 交使用者確認。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

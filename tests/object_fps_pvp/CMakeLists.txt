@@ -80,7 +80,7 @@ gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentati
 add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
-    SDL3::SDL3 nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
+    GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
 set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
