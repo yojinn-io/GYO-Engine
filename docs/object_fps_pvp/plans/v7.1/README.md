@@ -49,7 +49,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── observability-tools ✓         「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
 │   └── re-evaluate ✓                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
 └── after-re-evaluate ▶               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
-    ├── 0 worker-probe-repair ▶       「high｜修好 worker probe（決策點 C）」
+    ├── 0 worker-probe-repair ✓       「high｜修好 worker probe（決策點 C）」
     ├── 1 系統與引擎
     │   ├── sdl-isolation-plan        「xhigh 或 ultracode（先問）｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單」
     │   ├── sdl-isolation             「high｜產品、probe、產品測試不直接呼叫 SDL」

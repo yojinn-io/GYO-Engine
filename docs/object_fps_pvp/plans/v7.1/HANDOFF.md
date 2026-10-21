@@ -38,8 +38,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：`worker-probe-repair`（after-re-evaluate 第 1 批，D159；分支 `claude/pvp-v71-after-re-evaluate`，檔位 high，估 2～4 h）：修好 `object_fps_pvp.worker`，重判 22 個 `worker` 突變。
-- **下一步**：`sdl-isolation-plan`（ultracode）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
+- **進行中**：無。`worker-probe-repair` 已完成（`d2844a5`）。
+- **下一步**：`sdl-isolation-plan`（ultracode，D159）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -603,9 +603,19 @@
 
 - 2026-10-21：`after-re-evaluate` 批次核准（D159）。`worker-probe-repair` 開始（檔位 high，估 2～4 h，超過 6 h 停下回報）。已知原因一：mock Welcome 沒填 `maximum_shot_damage`；原因二（補上後的 mock 等待逾時）未知，照 §14.3 先重現，查不出就加觀測再停。
 
+- 2026-10-21：`worker-probe-repair` 完成（probe 修正 `d2844a5`，新突變 `5044702`）。
+  - 原因兩個，都是 hitbox-fields（`91b0264`）加了契約欄位、mock 沒跟上，不是產品缺陷（§14：先判斷哪一邊錯；Client 照 pv7 §7 拒收是對的）：
+    - mock Welcome 沒填 `maximum_shot_damage`，Client 判成「Invalid Match combat rules」。
+    - mock snapshot 的命中紀錄只填 3 欄、少了 `last_hit_part`；pv7 §7 要求 4 欄全 0 或全填，Client 把 snapshot **安靜丟掉**，所以只看到「等待逾時」。
+  - 找第二個原因的方法：讓 `Until` 的逾時訊息帶出等待的行號（`std::source_location`），定位到「等 Playing」那一步，再對照 Client 收 snapshot 的驗證。這個觀測留在 probe 裡。
+  - 判定只收緊：probe 另外確認 Client 收到的 `maximumShotDamage==111`、`lastHitPart==Body`。照 §14.4 事後報告：守的性質是「Client 照 Welcome／snapshot 的權威值保存，不自己補預設」；沒有放寬的面；收緊的面是 Client 把 `maximum_shot_damage` 抄成 `shot_damage`、或讀錯命中部位時會失敗；檢出力由新突變 `wpr-client-maximum-damage-from-shot-damage`、`wpr-client-body-hit-read-as-head` 證明（2／2 killed）。
+  - 驗收：本機 worker CTest 通過（6.3～6.8 秒，連跑 5 次 0 失敗）；22 個 `worker` 突變重判 22／22 killed；`object_fps_pvp.mutation_tool` 通過。四平台 L1 未跑（worker 不在 CI 範圍；這次只改 probe 與突變目錄）。
+  - 實際約 1 h（估 2～4 h）。
+  - Architecture Delta：無。
+
 ## 未結事項
 
-- **（已補進 INVENTORY，D158：after-re-evaluate 的 worker-probe-repair）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
+- **（已處理：`worker-probe-repair`，`d2844a5`）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 
 - `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。

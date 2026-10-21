@@ -204,7 +204,7 @@ after-re-evaluate（約 73～102 h）
 | contract-readers | N-compare-reports-untracked、N-host-lock-keys-uncontracted | 工具的單元測試；用 drop-report 的舊證據重跑，結果相同；log-contract 與 protocol-v7 的條文 | 3～4 | 收進工具目錄會改凍結清單（新增檔案） |
 | trace-no-overwrite | N-trace-overwrite-on-restart | 日誌 Data Contract 的變更（檔名或附加的規則）照版本規則處理，凍結讀者一起改；L1 | 4～6 | Data Contract 變更，照 AGENTS.md §3 報告 Architecture Delta |
 | analyzer-converge | C15 | 用既有的 pv6／pv7 語料新舊各分析一次，結果相同 | 5 | v8 的 N-analyzer-literal-105 會少 3 處要同步 |
-| worker-probe-repair | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定 | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
+| worker-probe-repair ✓ | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定（結果：通過、22／22 killed，新增 2 個突變 2／2 killed；`d2844a5`） | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
 | token-tests | N-token-test-gaps、C12 | 兩個存活突變登記並 killed；測試模型和產品的 token 規則不再各寫一份 | 4～6 | 依賴 worker-probe-repair |
 | client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair |
 | windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
