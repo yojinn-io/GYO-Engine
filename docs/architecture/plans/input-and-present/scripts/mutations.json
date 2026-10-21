@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of IP-3/IP-4 (ip3-declaration.md section 4). A mutant is killed only when its test run fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/input-and-present/scripts/mutations.json.",
+  "description": "Declared mutants of IP-3/IP-4 (ip3-declaration.md section 4). A mutant is killed only when its test run fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/input-and-present/scripts/mutations.json. Platform and input tests need SDL_VIDEODRIVER=dummy in the runner's environment (they inherit it).",
   "mutants": [
     {
       "id": "m6a-g1",
@@ -41,6 +41,186 @@
       "target": "platform_sdl_header_tests",
       "cases": "Engine public headers outside the native layer name no SDL symbol",
       "expect": "SdlInput\\.hpp:\\d+ <SDL3/"
+    },
+    {
+      "id": "m1",
+      "what": "The clock pair is sampled once per process and reused by every pump",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, SampleClockPair());",
+      "replace": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, [] { static const ClockPair once = SampleClockPair(); return once; }());",
+      "target": "platform_sdl_tests",
+      "cases": "Each pump converts with its own clock pair",
+      "expect": "the second pump samples a new pair"
+    },
+    {
+      "id": "m2-pure",
+      "what": "A negative SDL-to-pair difference becomes zero",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const std::chrono::nanoseconds since{static_cast<std::int64_t>(sdlNs - pair.sdlNs)};",
+      "replace": "const std::chrono::nanoseconds since{sdlNs >= pair.sdlNs ? static_cast<std::int64_t>(sdlNs - pair.sdlNs) : 0};",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp places an SDL time relative to the clock pair",
+      "expect": "an SDL time before the pair maps before"
+    },
+    {
+      "id": "m2-int",
+      "what": "A negative SDL-to-pair difference becomes zero (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const std::chrono::nanoseconds since{static_cast<std::int64_t>(sdlNs - pair.sdlNs)};",
+      "replace": "const std::chrono::nanoseconds since{sdlNs >= pair.sdlNs ? static_cast<std::int64_t>(sdlNs - pair.sdlNs) : 0};",
+      "target": "platform_sdl_tests",
+      "cases": "A pumped event carries the time it was pushed",
+      "expect": "the event time is not later than its push"
+    },
+    {
+      "id": "m3-pure",
+      "what": "The SDL-to-pair difference is applied with the wrong sign",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const Time::TimePoint converted = pair.engine + std::chrono::duration_cast<Time::Duration>(since);",
+      "replace": "const Time::TimePoint converted = pair.engine - std::chrono::duration_cast<Time::Duration>(since);",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp places an SDL time relative to the clock pair",
+      "expect": "an SDL time (before|after) the pair maps"
+    },
+    {
+      "id": "m3-int",
+      "what": "The SDL-to-pair difference is applied with the wrong sign (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const Time::TimePoint converted = pair.engine + std::chrono::duration_cast<Time::Duration>(since);",
+      "replace": "const Time::TimePoint converted = pair.engine - std::chrono::duration_cast<Time::Duration>(since);",
+      "target": "platform_sdl_tests",
+      "cases": "A pumped event carries the time it was pushed",
+      "expect": "the event time is not later than its push"
+    },
+    {
+      "id": "m4-pure",
+      "what": "The converted time is not clamped to the delivery time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "return converted < ceiling ? converted : ceiling;",
+      "replace": "return converted;",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp never returns a time later than the ceiling",
+      "expect": "a converted time later than the ceiling is the ceiling"
+    },
+    {
+      "id": "m4-int",
+      "what": "The converted time is not clamped to the delivery time (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "return converted < ceiling ? converted : ceiling;",
+      "replace": "return converted;",
+      "target": "platform_sdl_tests",
+      "cases": "An SDL time in the future is delivered no later than its delivery",
+      "expect": "a future SDL time is clamped to the delivery time"
+    },
+    {
+      "id": "m-zero",
+      "what": "SDL time 0 is converted like any other time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (sdlNs == 0) return ceiling;  // added without a time (SDL_PeepEvents)\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp maps a missing SDL time to the delivery time",
+      "expect": "SDL time 0 maps to the delivery time"
+    },
+    {
+      "id": "m-nest",
+      "what": "A nested pump does not restore the outer pump's clock pair",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    ~ValueScope() { *slot_ = std::move(previous_); }",
+      "replace": "    ~ValueScope() {}",
+      "target": "platform_sdl_tests",
+      "cases": "A nested pump samples its own clock pair*",
+      "expect": "after a nested pump the outer pump"
+    },
+    {
+      "id": "m-nest-reuse",
+      "what": "A nested pump reuses the outer pump's clock pair instead of sampling its own",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, SampleClockPair());",
+      "replace": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, impl_->pumpPair ? *impl_->pumpPair : SampleClockPair());",
+      "target": "platform_sdl_tests",
+      "cases": "A nested pump samples its own clock pair*",
+      "expect": "a nested pump samples its own pair"
+    },
+    {
+      "id": "m-fixed",
+      "what": "The pair is a fixed offset instead of a sample of both clocks",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return {Engine::Time::Now(), 0, {}};",
+      "target": "platform_sdl_tests",
+      "cases": "Each pump converts with its own clock pair",
+      "expect": "the second pump samples a new pair"
+    },
+    {
+      "id": "x-edge",
+      "what": "The pair takes the first engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
+      "replace": "    return {engineBefore, sdlNs, engineAfter - engineBefore};",
+      "target": "platform_sdl_tests",
+      "cases": "MakeClockPair puts the engine time at the midpoint*",
+      "expect": "the pair's engine time is the midpoint"
+    },
+    {
+      "id": "x-offset",
+      "what": "The pair carries a 1 us bias",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
+      "replace": "    return {engineBefore + (engineAfter - engineBefore) / 2 + std::chrono::microseconds(1), sdlNs, engineAfter - engineBefore};",
+      "target": "platform_sdl_tests",
+      "cases": "MakeClockPair puts the engine time at the midpoint*",
+      "expect": "the pair's engine time is the midpoint"
+    },
+    {
+      "id": "x-us",
+      "what": "The pair reads SDL time in microseconds",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "[] () noexcept -> std::uint64_t { return SDL_GetTicksNS(); },",
+      "replace": "[] () noexcept -> std::uint64_t { return SDL_GetTicksNS() / 1000; },",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPair reads both clocks*",
+      "expect": "the pair's SDL time lies between"
+    },
+    {
+      "id": "s-edge-bypass",
+      "what": "SampleClockPairWith takes the first engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return {before, sdl, after - before};",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "s-before",
+      "what": "SampleClockPairWith passes the first engine read twice",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return MakeClockPair(before, sdl, before);",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "s-after",
+      "what": "SampleClockPairWith passes the second engine read twice",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return MakeClockPair(after, sdl, after);",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "x-order",
+      "what": "The SDL read happens after both engine reads",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const std::uint64_t sdl = readers.sdl();\n    const Time::TimePoint after = readers.engine();",
+      "replace": "    const Time::TimePoint after = readers.engine();\n    const std::uint64_t sdl = readers.sdl();",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair reads Engine, then SDL, then Engine"
     }
   ]
 }

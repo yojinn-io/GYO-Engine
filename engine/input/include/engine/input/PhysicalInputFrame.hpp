@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -103,6 +104,11 @@ struct InputEvent final {
     int windowY{};
     int windowWidth{};                             // WindowResized: new size
     int windowHeight{};
+    // When the event happened, on the Engine time base (Engine::Time::TimePoint,
+    // the same type; GYO::Input does not depend on GYO::Time). Its meaning
+    // follows the backend's timestamp contract (for SDL,
+    // docs/architecture/platform-sdl.md).
+    std::chrono::steady_clock::time_point timestamp{};
 };
 
 struct PhysicalInputFrame final {

@@ -7,6 +7,7 @@
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/runtime/RuntimeControl.hpp"
+#include "engine/time/MonotonicClock.hpp"
 
 namespace Engine::Platform::Sdl {
 
@@ -49,13 +50,19 @@ public:
     PlatformEvent(PlatformEvent&&) = delete;
     PlatformEvent& operator=(PlatformEvent&&) = delete;
 
+    // When the event happened, on the Engine time base. Never later than its
+    // delivery; see the timestamp contract in docs/architecture/platform-sdl.md.
+    [[nodiscard]] Time::TimePoint Timestamp() const noexcept { return timestamp_; }
+
 private:
-    explicit PlatformEvent(const void* native) noexcept : native_(native) {}
+    PlatformEvent(const void* native, Time::TimePoint timestamp) noexcept
+        : native_(native), timestamp_(timestamp) {}
 
     friend class NativeAccess;
     friend class SdlPlatform;
 
     const void* native_{};
+    Time::TimePoint timestamp_{};
 };
 
 class SdlPlatform final {

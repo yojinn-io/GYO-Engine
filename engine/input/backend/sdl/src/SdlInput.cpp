@@ -5,9 +5,15 @@
 
 #include <array>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace Engine::Input::Backend::Sdl {
+
+// InputEvent::timestamp is declared with the standard type so that GYO::Input
+// needs no GYO::Time; it must stay the Engine time base.
+static_assert(std::is_same_v<decltype(InputEvent::timestamp), Time::TimePoint>);
+
 namespace {
 
 // Every SDL scancode the engine names. Return and keypad Enter both map to
@@ -191,6 +197,16 @@ void SdlInput::BeginFrame() noexcept {
 void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) noexcept {
     const SDL_Event& event = Platform::Sdl::NativeEvent(platformEvent);
     const SDL_WindowID ownWindowId = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    // Every InputEvent this platform event adds carries its time.
+    const std::size_t firstAdded = frame_.events.size();
+    struct StampAdded final {
+        std::vector<InputEvent>& events;
+        std::size_t first;
+        Time::TimePoint time;
+        ~StampAdded() {
+            for (std::size_t index = first; index < events.size(); ++index) events[index].timestamp = time;
+        }
+    } stamp{frame_.events, firstAdded, platformEvent.Timestamp()};
 
     switch (event.type) {
     case SDL_EVENT_WINDOW_FOCUS_GAINED:

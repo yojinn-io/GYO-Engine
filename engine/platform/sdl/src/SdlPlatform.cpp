@@ -1,7 +1,10 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 
+#include <chrono>
+#include <cstdint>
 #include <exception>
+#include <optional>
 #include <utility>
 
 #include "engine/base/Assert.hpp"
@@ -25,6 +28,22 @@ private:
     bool previous_;
 };
 
+// Installs a value for a scope and restores the previous one when the scope
+// ends, also when an observer throws (nested pumps, Design Invariant 7).
+template <class T>
+class ValueScope final {
+public:
+    ValueScope(T& slot, T value) noexcept : slot_(&slot), previous_(std::move(slot)) { *slot_ = std::move(value); }
+    ~ValueScope() { *slot_ = std::move(previous_); }
+
+    ValueScope(const ValueScope&) = delete;
+    ValueScope& operator=(const ValueScope&) = delete;
+
+private:
+    T* slot_;
+    T previous_;
+};
+
 SdlPlatformError MakeSdlError(
     SdlPlatformErrorCode code,
     std::string message) {
@@ -37,6 +56,9 @@ struct SdlPlatform::Impl final {
     static bool SDLCALL WatchEvent(void* userdata, SDL_Event* event);
 
     SDL_Window* window{};
+    // The pair of the innermost running pump (Design Invariant 3). A nested
+    // pump keeps its own and restores the outer one when it returns.
+    std::optional<ClockPair> pumpPair;
     LiveFrameHandler liveFrameHandler;
     std::exception_ptr liveFrameError;
     bool pumping{};
@@ -135,10 +157,12 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const EventObserver& observer) {
 
     // Live frames may run only from inside this function.
     const FlagScope pumping(impl_->pumping);
+    // One clock pair per pump; a nested pump's pair lives only while it runs.
+    const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, SampleClockPair());
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
         if (observer) {
-            const PlatformEvent view(&event);
+            const PlatformEvent view(&event, ConvertSdlTimestamp(event.common.timestamp, *impl_->pumpPair, Time::Now()));
             observer(view);
         }
 
@@ -162,6 +186,45 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const EventObserver& observer) {
 
 SDL_Window* NativeAccess::Window(const SdlPlatform& platform) noexcept {
     return platform.impl_->window;
+}
+
+ClockPair MakeClockPair(const Time::TimePoint engineBefore, const std::uint64_t sdlNs,
+                        const Time::TimePoint engineAfter) noexcept {
+    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};
+}
+
+ClockPair SampleClockPairWith(const ClockReaders& readers) noexcept {
+    // Separate statements: the three reads happen in this order.
+    const Time::TimePoint before = readers.engine();
+    const std::uint64_t sdl = readers.sdl();
+    const Time::TimePoint after = readers.engine();
+    return MakeClockPair(before, sdl, after);
+}
+
+ClockPair SampleClockPair() noexcept {
+    static constexpr ClockReaders real{
+        [] () noexcept { return Time::Now(); },
+        [] () noexcept -> std::uint64_t { return SDL_GetTicksNS(); },
+    };
+    return SampleClockPairWith(real);
+}
+
+Time::TimePoint ConvertSdlTimestamp(const std::uint64_t sdlNs, const ClockPair& pair,
+                                    const Time::TimePoint ceiling) noexcept {
+    if (sdlNs == 0) return ceiling;  // added without a time (SDL_PeepEvents)
+    // (int64)(sdlNs - pair.sdlNs): the unsigned difference converted modulo
+    // 2^64 (C++20), so an event before the pair maps before it, without UB.
+    const std::chrono::nanoseconds since{static_cast<std::int64_t>(sdlNs - pair.sdlNs)};
+    const Time::TimePoint converted = pair.engine + std::chrono::duration_cast<Time::Duration>(since);
+    return converted < ceiling ? converted : ceiling;
+}
+
+std::optional<ClockPair> NativeAccess::PumpPair(const SdlPlatform& platform) {
+    return platform.impl_->pumpPair;
+}
+
+std::optional<ClockPair> CurrentClockPairForTesting(const SdlPlatform& platform) {
+    return NativeAccess::PumpPair(platform);
 }
 
 } // namespace Engine::Platform::Sdl

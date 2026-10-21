@@ -52,11 +52,14 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 ### Event timestamps (IP-3, milestone ip3c)
 
 - On entering a pump the platform samples `e0 = Time::Now()`, `s = SDL_GetTicksNS()`, `e1 = Time::Now()` and uses
-  the pair `engine = mid(e0, e1)`, `bracket = e1 - e0`. Only `SdlPlatform` holds the pair.
+  the pair `engine = mid(e0, e1)`, `bracket = e1 - e0`. Only `SdlPlatform` holds the pair. The three reads and their
+  order are fixed in one function that takes the readers as parameters, so tests check the order and the midpoint
+  exactly with fake readers.
 - An event with SDL time `t` gets `min(engine + (int64)(t - s), Now() at delivery)`; `t == 0` (events added without a
   timestamp) gets the delivery time.
-- Guaranteed: (1) no timestamp is later than its delivery; (2) within one pump, events whose SDL times do not
-  decrease keep non-decreasing timestamps; (4) `t == 0` maps to the delivery time.
+- Guaranteed: (1) no timestamp is later than its delivery; (2) within one pump, events whose SDL times are nonzero
+  and do not decrease keep non-decreasing timestamps (an event with `t == 0` gets its delivery time, which may be
+  later than the next event's converted time); (4) `t == 0` maps to the delivery time.
 - Not guaranteed: (3) increasing order along `events`, or order across pumps. SDL mixes OS event times with push
   times, and the pair has an error of about ±bracket/2.
 - The watch path samples one pair per callback, keeping "when the event was queued" for observation.

@@ -1,6 +1,6 @@
 # 輸入與呈現：交接
 
-更新：2026-10-21（ip3a 核准，D32；ip3b 進行中）；2026-10-08。**狀態：IP-3 進行中（ip3b）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-22（ip3c 判定變更核准，D35）；2026-10-08。**狀態：IP-3 進行中（ip3b）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
 2026-10-05：消費端完成第3項的重現與阻塞取得下的量測基線（B0），摘要見第3項「消費端重現（B0）」；縮放時的停頓位置與先前的前提不同，見未結事項。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。
 
@@ -41,6 +41,8 @@
 | 2026-10-21 | D31：核准 IP-3／IP-4 計畫（[PLAN](PLAN.md) 文末），U1～U10 全部照建議：接受約 2 倍的估時（各子批開始前重估，超過 1.5 倍就停）；ui_editor 做機械修改；README 以外新增的 6 項；時間戳型別用 `std::chrono::steady_clock::time_point` 並 `static_assert` 與 `Time::TimePoint` 相同（不新增 Input→Time 邊）；`NativeEventObserver` 由 `PlatformEvent` 承接；凍結 oracle 改 golden（走 §14.4 的核准流程）；X11 加中立查詢；新建英文的 `platform-sdl.md`；capture 放 GPU 後端；IP-4 的介面另做 1 次 xhigh 審查。另：設計提前在 ip3a 寫成架構文件（`docs/architecture/platform-sdl.md`、`input.md`） | 使用者（「照計劃執行，記得把這個設計落到架構文件中去」） |
 | 2026-10-21 | D32：核准 ip3a 的事前宣告（[ip3-declaration.md](ip3-declaration.md)）；之後不放寬。消費端的 A 級受擊回饋行改走 Base 的日誌 facade、位元組不變（消費端的決定）。開始 ip3b | 使用者 |
 | 2026-10-21 | D33：巢狀 `PumpEvents` 保留（IP-2 已保證並有測試）。時鐘配對隨 pump 範圍保存與還原：每次 pump（含巢狀）各自取配對，內層返回時還原外層的配對。修改 [platform-sdl.md](../../platform-sdl.md) 的 Design Invariant 7 與時間戳契約（使用者同意的 Design Invariants 變更）；事前宣告補一條判定與突變 m-nest（只收緊）。L1 通過後開始 ip3c | 使用者 |
+| 2026-10-22 | D34：ip3c 的判定變更選 (b)：`SampleClockPair` 加讀取注入的接縫，用精確等式守住讀取順序與取中點，再照 τ（測試量到的走差＋兩組 bracket＋2 ns）放寬；照 §14.4 重做突變與獨立核對後交使用者核准。時間戳契約條文 (2) 改成「SDL 時間非零且不遞減的事件，換算後不遞減」（使用者同意的契約文字變更） | 使用者 |
+| 2026-10-22 | D35：核准 ip3c 的判定變更（[ip3c-judgment-change.md](ip3c-judgment-change.md) 第 3 版，§14.4 的 1～5，獨立核對 3 輪）：整合判定的容許由 `β/2` 改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns` | 使用者 |
 
 ## 正式項目清單
 
@@ -277,6 +279,26 @@
   - 本機：全量建置通過；`test` preset 78／78；`input_sdl_tests`、`platform_sdl_tests`、`object_fps_pvp.pointer_capture`、`runtime.sdl_smoke`、`render.sdl_gpu_mesh_smoke` 通過。`object_fps_pvp.worker` 失敗，原因與 master 相同（mock 缺 `maximum_shot_damage`，消費端另一條分支已修），與本批無關。
   - 同機兩樹的權威 digest（base＝master `6fbb6a9`）：scale 1、3 各 36 個情境，0 差異。
   - **發現（ip3c 前要決定）**：IP-2 的測試「SdlPlatform keeps running live frames after a nested PumpEvents」（`SdlPlatformTests.cpp`）明確支援巢狀 pump，和 [platform-sdl.md](../../platform-sdl.md) Design Invariant 7「`PumpEvents` 不可重入」與 PLAN 的 `GYO_ASSERT` 衝突。ip3b 不改 pump 行為；ip3c 每次 pump 取時鐘配對時，巢狀 pump 會蓋掉外層的配對，需要選：保留巢狀（配對隨 pump 範圍保存與還原，改 DI 7）或禁止巢狀（刪改 IP-2 的這個測試，屬放寬既有保證的判定變更）。
+- 2026-10-21：ip3b 的四平台 L1 #548（run 39603056923，`5e8b353`）成功。D33（巢狀 pump 保留）。消費端開 draft PR #85（IP-3、IP-4 與消費端遷移同一個 PR，D29）。
+- 2026-10-21：ip3c 實作與本機驗收（檔位 high，換算局部 xhigh）。
+  - `PlatformEvent::Timestamp()`；`InputEvent::timestamp`（`std::chrono::steady_clock::time_point`，後端 `static_assert` 與 `Time::TimePoint` 相同，`GYO::Input` 不新增依賴）；`SdlInput` 把 platform 事件的時間蓋到它新增的每個 `InputEvent`。
+  - Native 層：`ClockPair`、`SampleClockPair()`、純函式 `ConvertSdlTimestamp`；測試縫 `SetClockPairSourceForTesting`、`CurrentClockPairForTesting`（宣告寫的 `SampleClockPairForTesting` 改成：取樣函式本身公開為 `SampleClockPair()`，測試以可注入的來源包住它來讀 β）。`HandleNativeEvent` 必須帶時間，沒有預設值。
+  - 配對存在 `Impl::pumpPair`，由 `ValueScope` 隨 pump 範圍保存與還原（D33）。
+  - 測試：`tests/common/platform_sdl/EventTimeTests.cpp` 7 個（純函式 3、整合 4），另加輸入端 1 個。`platform_sdl_tests` 連跑 50 次 0 失敗。
+  - 突變：m1、m2（純函式／整合）、m3（純函式／整合）、m4（純函式／整合）、m-zero、m-nest，9／9 killed。執行時環境要 `SDL_VIDEODRIVER=dummy`。
+- 2026-10-21：ip3c 的 xhigh 審查（有條件接受）與後續，**停下等使用者決定**（工作樹未提交）。
+  - 審查：換算邏輯正確；但事前宣告的整合判定 `p0 − β/2 ≤ ts ≤ p1 + β/2` 在 Linux（Engine 讀 `CLOCK_MONOTONIC`、SDL 讀 `CLOCK_MONOTONIC_RAW`，速率不同）與 Apple Silicon（24 MHz 計數器的取整）上對正確實作也可能失敗；本機 Intel 不會發生，所以 50 次都通過。
+  - 已處理（只收緊或回到核准設計）：測試縫改回唯讀（拿掉可寫的配對來源，那是繞過 DI 3 的後門）；精確等式的整合測試改用讀出的配對；巢狀 pump 的內層也檢查自己的配對；`ConvertSdlTimestamp` 去掉理論上的 UB；配對的組成拆成純函式 `MakeClockPair` 並加測試；新增「取樣落在呼叫者讀取之間」的測試。突變目錄 18 個全部 killed（試過的 x-order 存活，移除並記為缺口）。
+  - 判定變更提案（放寬，§14.4）：容許改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns`（drift 由測試在 push 前自己取的配對與 pump 的配對量出）。獨立核對兩次：第 3 項（沒有收緊）成立；第 2、4 項指出 τ 有自我參照，`SampleClockPair` 內部怎麼用三次讀取（順序、取中點）偏差在約一個 bracket 以內的錯誤，舊判定殺得掉（例：29／40、40／40）、新判定殺不掉，是這次放寬新增的缺口。
+  - 依 §14「同一問題改了 2 次判定方法仍未收斂就回報」停下。待決：(a) 照提案放寬並接受該缺口；(b) 另加讀取注入的接縫，讓 `SampleClockPair` 的讀取順序與取中點可以用精確等式檢查，再放寬；契約條文 (2) 改成「SDL 時間非零且不遞減」。
+- 2026-10-22：ip3c 收尾（D34、D35）。
+  - D34 的接縫：`SampleClockPairWith(const ClockReaders&)` 依序讀 Engine、SDL、Engine 再交給 `MakeClockPair`；`SampleClockPair()` 傳真實時鐘。新增假讀取的精確等式測試。
+  - 判定變更（D35）照第 3 版：獨立核對 3 輪（第 1 輪：τ 有自我參照、取樣錯誤會撐大 τ；第 2 輪：`SampleClockPair` 內部的錯誤是放寬新增的缺口 → D34 的接縫；第 3 輪：可以交給使用者，兩處措辭已改）。
+  - 突變目錄 22 個全部 killed。第一次執行時 4 個顯示存活，原因是測試名稱含逗號，doctest 的 `-tc` 把逗號當分隔，篩選對到 0 個測試；改名後重跑 4／4 killed，並確認每個篩選剛好對到 1 個測試。突變工具的這個陷阱只會讓結果變成「存活」，不會誤判 killed。
+  - 守不住、記為已知缺口：正式路徑兩個讀取 lambda 偏差在一個 bracket 以內的錯誤（舊判定同樣守不住）。
+  - 契約條文 (2) 改成「SDL 時間非零且不遞減」（D34）。
+  - 宣告的更正（xhigh 審查第 7 點）：m2-int 由整合判定的上界殺掉（宣告寫下界）；m1 的實作是「每個程序取一次」而非「在 Create 取一次」。
+  - 實際約 6 h（估 4～5 h，含審查與三輪核對；未超過 1.5 倍）。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

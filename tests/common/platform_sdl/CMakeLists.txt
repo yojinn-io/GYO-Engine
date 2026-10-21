@@ -1,4 +1,4 @@
-add_executable(platform_sdl_tests SdlPlatformTests.cpp)
+add_executable(platform_sdl_tests SdlPlatformTests.cpp EventTimeTests.cpp)
 target_link_libraries(platform_sdl_tests PRIVATE
     GYO::PlatformSDLNative
     doctest::doctest

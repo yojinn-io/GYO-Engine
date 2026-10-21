@@ -11,9 +11,10 @@
 namespace Engine::Input::Backend::Sdl {
 
 // Hands an event the caller built itself to the input backend, as if
-// SdlPlatform::PumpEvents had delivered it.
-inline void HandleNativeEvent(SdlInput& input, const SDL_Event& event) noexcept {
-    input.HandleEvent(Platform::Sdl::NativeAccess::View(event));
+// SdlPlatform::PumpEvents had delivered it with the given time (Engine time
+// base). There is no default: the caller states the time.
+inline void HandleNativeEvent(SdlInput& input, const SDL_Event& event, Time::TimePoint timestamp) noexcept {
+    input.HandleEvent(Platform::Sdl::NativeAccess::View(event, timestamp));
 }
 
 } // namespace Engine::Input::Backend::Sdl

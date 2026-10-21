@@ -99,7 +99,7 @@ struct Harness {
         input->BeginFrame();
         const bool focusedAtStart = input->Snapshot().windowFocused;
         for (const auto& event : events) {
-            Engine::Input::Backend::Sdl::HandleNativeEvent(*input, event);
+            Engine::Input::Backend::Sdl::HandleNativeEvent(*input, event, Engine::Time::TimePoint{});
             OracleHandle(oracle, event, window, input->Snapshot().windowFocused);
         }
         input->EndFrame();
