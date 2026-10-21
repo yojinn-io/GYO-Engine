@@ -99,7 +99,7 @@ v7.1 的 `pv7-design` 把 pv7-line 重估為約 111 h 之後，使用者質疑�
 - 事故與原則：[2026-10-10 事故](../../v7/Incident/2026-10-10-gateway-silent-drop.md)；[v7 交接](../../v7/HANDOFF.md) D49、D51。
 - v7.1 的成本：[pv7-design](../pv7-design.md)「重估的工時」；[protocol-v7 草案](../../../protocol-v7.zh-Hant.md) §4。
 
-## 11. 日後談（2026-10-21，v7.1 `re-evaluate`）
+## 11. 後日談（2026-10-21，v7.1 `re-evaluate`）
 
 使用者的讀法：v7.1 的待評估清單（INVENTORY 處置為 `re-evaluate` 的項目），本身就是設計失敗之後不停加補丁留下的傷疤。Gateway 回到無狀態邊緣、資訊流修好之後，用 pv7 的數據逐項問「還需不需要繼續」，和本事故有關的項目結果如下（只列和本事故或 2026-10-10 事故相關的項目，B9 是部分相關；A4 的延遲位移不在其中，2026-10-10 事故 3.4 已把它歸為不受截斷影響的 K11；其他項目見 [re-evaluate](../re-evaluate.md)）。
 
