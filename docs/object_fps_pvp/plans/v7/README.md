@@ -3,7 +3,7 @@
 更新：2026-10-15。Owner：`object_fps_pvp`。
 **狀態（2026-10-15）：P1、P2 完成；第 16 批的機器驗收全部合格，[穩定基線](STABLE_BASELINE.md)升格完成（L3 部分項目由使用者略過）。** 白話：v7 最終程式（master `6d3f287`）上，全部測試、權威結果不變、產品移除、整合量測都通過；偶發的 epoch 重設在 260 次容易出事的跑次中一次都沒有出現（未再現，但還不能結案）。使用者親手操作的 L3 也做了：切換工作區、縮小、遮住都沒有斷線，拖動縮放沒有卡住，連點手感「好了很多」；略過的項目照實記錄。P7 的 PR [#74](https://github.com/yojinn-io/GYO-Engine/pull/74) 已合併（`0f0bc91`），v7 結束；下一步是 [v7.1](../v7.1/README.md) 的規劃。這次不正式發行（D80）；Windows 實機未驗證，3 人 LAN 測試改期（D83）。
 （先前：）**狀態：P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)：P2-log、第 06、07、08、08b、08c 批，以及第 09 批的 09a、09b 完成；下一步是第 09 批的縮小版凍結與 C2。2026-10-14 決定 M0 移到 v7.1，見 [HANDOFF](HANDOFF.md) D75）。
-後續（2026-10-21）：pv7 已在 v7.1 PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（`0fabb52`）合併；v7.1 進行中（[v7.1](../v7.1/README.md)），還沒有 v7.1 穩定基線。
+後續（2026-10-21）：pv7 已在 v7.1 PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（`0fabb52`）合併；v7.1 已於 2026-10-21 升格為穩定基線（[v7.1 穩定基線](../v7.1/STABLE_BASELINE.md)，目前最新）。
 **範圍變更（2026-10-14，D73）**：v7 停在 pv6、不改 wire。pv7 與相關任務（原第 11 批、任務 4、Gateway 丟棄回報的第二階段等）移到 [v7.1](../v7.1/README.md)（v7 之後、v8 之前的重構版），和 v7.1 的重構一起設計，wire 只改一次。
 **範圍縮小（2026-10-14，D76）**：v7 只留第 09 批的剩餘（縮小版凍結、連點、C2，之後合併 PR #73）與縮小版的第 16 批（整合驗收、STABLE_BASELINE v7、偶發 epoch 重設的整體回歸、是否發行）。Trace 與日誌補強（P3）、產品去 SDL（P4）、Windows LAN 場次（第 15 批）移到 [v7.1](../v7.1/README.md)；解析度與 FPS 的選擇（P5）、音效（P6）移到 [v8](../v8/README.md)。所以 v7 交付的是任務 1～3：三角色分離、命令在固定步邊界產生、網路路徑改為事件驅動，也就是「30 FPS 與網路時序」。
 

@@ -7,8 +7,8 @@
 2026-10-21：目前 wire 為 pv7（[v7.1](plans/v7.1/README.md) 的 `pv7-merge`，PR #78 合併起），規則見
 [protocol-v7](protocol-v7.zh-Hant.md)；沒有在其中改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與
 [v5 契約](protocol-v5.zh-Hant.md)。日誌的格式見 [日誌 Data Contract](log-contract.zh-Hant.md)。程序與執行緒結構以
-[v7 穩定基線](plans/v7/STABLE_BASELINE.md)（2026-10-15 升格）為準，加上 v7.1 的 pv7 變更（Gateway 回到無狀態邊緣、
-丟棄回報、對時與回聲），第 1 節依此繪製；v7.1 尚未結束，還沒有自己的穩定基線。各版變更見文末
+[v7.1 穩定基線](plans/v7.1/STABLE_BASELINE.md)（2026-10-21 升格；v7 的結構加上 pv7 變更：Gateway 回到無狀態邊緣、
+丟棄回報、對時與回聲）為準，第 1 節依此繪製。各版變更見文末
 「v6、v7、v7.1 的聯網架構變更」。第 0 節與第 6 節的 v3 量測／長測、第 8 節成本回顧、第 9 節 v4 記錄及
 v5 一節保留為歷史證據，不視為 v6／v7／v7.1 的驗收。Go Gateway 的建置平台宣告目前只有
 linux-x64／windows-x64；v7 驗收在 macOS 同機三角色執行，範圍見 v7 穩定基線。
@@ -71,7 +71,7 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 
 ### 程序、執行緒與雙向資料流
 
-v7 穩定基線的結構（master `0f0bc91`），加上 v7.1 的 pv7 變更（PR #78；Gateway 與 runtime link 依
+v7.1 穩定基線的結構（master `5ee499a`）：v7 的結構（`0f0bc91`）加上 pv7 的變更（PR #78；Gateway 與 runtime link 依
 [protocol-v7](protocol-v7.zh-Hant.md) §2a～§4 改繪）。Client A、B 是各自的程序，共用同一 Gateway／Match。
 箭頭表示資料流，不表示底層程式碼依賴上層。執行緒名稱是 `GYO::Threads` 的角色名稱
 （`engine/threads/include/engine/threads/RoleThread.hpp`）；固定步期限以 `GYO::Time` 的 Waiter
@@ -1300,10 +1300,9 @@ Renderer，公共Gateway及Engine無FPS分支。第04批才處理完整骨骼動
 - 入口：[v7 計畫](plans/v7/README.md)、[v7 交接](plans/v7/HANDOFF.md)、[v7 穩定基線](plans/v7/STABLE_BASELINE.md)、
   [v7.1](plans/v7.1/README.md)。
 
-### v7.1（進行中，pv7）
+### v7.1（pv7）
 
-hotfix：先檢測、再評估；wire 一次設計、一次合併（v7.1 D90）。**v7.1 尚未結束，還沒有穩定基線**（`docs-close` 的
-STABLE_BASELINE v7.1 未做，`after-re-evaluate` 等使用者決定）；現行 wire 已是 pv7。
+hotfix：先檢測、再評估；wire 一次設計、一次合併（v7.1 D90）。**2026-10-21 升格為穩定基線**（[v7.1 穩定基線](plans/v7.1/STABLE_BASELINE.md)，D157）；現行 wire 是 pv7。
 
 - PR #78（pv7-line，`pv7-merge`）：Client／Runtime 協議升為 pv7，見 [protocol-v7](protocol-v7.zh-Hant.md)。
   - Gateway 回到無狀態邊緣：輸入、動作、結果原樣轉送，刪除游標副本、拒絕線、已寫出去重、動作帳本與 30 Hz 持有；
