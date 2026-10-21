@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：無。`worker-probe-repair` 已完成（`d2844a5`）。
-- **下一步**：`sdl-isolation-plan`（ultracode，D159）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
+- **等你決定**：`sdl-isolation-plan` 的草案（分支 `claude/pvp-v71-sdl-isolation`，`b2024c3`）：Engine 的 [IP PLAN](../../../architecture/plans/input-and-present/PLAN.md) 文末 U1～U10，與產品側 `sdl-isolation.md`（該分支）的 S1、S2。最大的是 U1：估時約 56～73 h，原估 26～34 h 的約 2 倍。
+- **進行中**：`sdl-isolation-plan` 停在 ip3a 關卡前（草案待核准）。`worker-probe-repair` 已完成（`d2844a5`）。
+- **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -612,6 +612,12 @@
   - 驗收：本機 worker CTest 通過（6.3～6.8 秒，連跑 5 次 0 失敗）；22 個 `worker` 突變重判 22／22 killed；`object_fps_pvp.mutation_tool` 通過。四平台 L1 未跑（worker 不在 CI 範圍；這次只改 probe 與突變目錄）。
   - 實際約 1 h（估 2～4 h）。
   - Architecture Delta：無。
+
+- 2026-10-21：`sdl-isolation-plan`（D159，ultracode）。分支 `claude/pvp-v71-sdl-isolation`（從 master 開，`sdl-isolation` 的 PR 線）。8 個 agent：Engine 端與產品端各 1 位盤點（medium）、3 個獨立方案（high）、1 位評審合成（high）、1 位 xhigh 公開介面審查（v7 D39）、1 次對抗式檢查（high）；約 38 分鐘。
+  - xhigh 審查：有條件接受，三個設計前提成立，必修 6 項已併入草案。對抗式檢查的高嚴重度 3 項：時間戳的整合判定被 clamp 吸收（突變殺不掉）；PR 結構與 v7 P4「一起合併」衝突（照 P4 與 D159 改成一個 PR，Engine 側記為 IP 的 D29）；產品的符號守衛沒有範圍與突變（改成兩層並宣告突變）。產品的工作清單原本寫在 Engine 的 PLAN，屬 Ownership 漂移並違反 Engine 計畫的匿名規則，移到 `sdl-isolation.md`。
+  - 產出（`b2024c3`）：Engine 的 IP PLAN 文末的 IP-3／IP-4 草案（API、時間戳契約、日誌橋、子批 ip3a～f、ip4a～d、Design Invariants 與 Replacement Criteria、遷移清單、U1～U10）；IP 的 HANDOFF 的規劃紀錄與決策 D29、D30；產品側 `sdl-isolation.md`（工作清單、符號守衛、L2、估時、S1、S2）。
+  - 估時：Engine 37～46.5 h＋產品 19～26 h，約 56～73 h；after-re-evaluate 第 9 節原估 26～34 h，約 2 倍。照時間盒規則停下，交你決定（Engine 的 U1）。
+  - 實際約 1.5 h（估 4～6 h，含 ultracode 約 38 分鐘）。
 
 ## 未結事項
 

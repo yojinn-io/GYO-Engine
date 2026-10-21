@@ -51,7 +51,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 └── after-re-evaluate ▶               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
     ├── 0 worker-probe-repair ✓       「high｜修好 worker probe（決策點 C）」
     ├── 1 系統與引擎
-    │   ├── sdl-isolation-plan        「xhigh 或 ultracode（先問）｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單」
+    │   ├── sdl-isolation-plan ⏸      「ultracode｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單（草案待核准）」
     │   ├── sdl-isolation             「high｜產品、probe、產品測試不直接呼叫 SDL」
     │   ├── substitution-single-store 「high（判定局部 xhigh）｜被替代的序號只存一份」
     │   ├── silent-branch-asserts     「high｜無聲分支改成 assert 或計數」

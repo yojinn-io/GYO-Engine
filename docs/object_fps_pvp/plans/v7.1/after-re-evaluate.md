@@ -196,7 +196,7 @@ after-re-evaluate（約 73～102 h）
 
 | 代號 | 內容（INVENTORY） | 驗收 | 估時（h） | 依賴、決策點 |
 |---|---|---|---|---|
-| sdl-isolation-plan | IP34-B12、N-ip3-review-and-migration：寫 IP-3／IP-4 的 PLAN（`docs/architecture/plans/input-and-present/`），公開介面 1 次 xhigh 審查（D39），ui_editor、object_fps_preview 的遷移清單（D33） | 只改文件；審查紀錄；你核准 PLAN | 4～6 | 決策點 B：規劃用 ultracode 還是 xhigh |
+| sdl-isolation-plan ⏸ | IP34-B12、N-ip3-review-and-migration（2026-10-21 草案完成，`claude/pvp-v71-sdl-isolation` 的 `b2024c3`，等核准；新估時約 56～73 h）：寫 IP-3／IP-4 的 PLAN（`docs/architecture/plans/input-and-present/`），公開介面 1 次 xhigh 審查（D39），ui_editor、object_fps_preview 的遷移清單（D33） | 只改文件；審查紀錄；你核准 PLAN | 4～6 | 決策點 B：規劃用 ultracode 還是 xhigh |
 | sdl-isolation | 照 PLAN 實作 IP-3、IP-4，產品、probe、產品測試改用 Engine 的介面 | 四平台 L1；D33 的完成條件（產品、probe、產品測試的 SDL 符號為 0，用守衛檢查）；L3 手動遊玩（文字輸入、剪貼簿、視窗） | 22～28 | 依賴 sdl-isolation-plan；PLAN 可能再拆成多批 |
 | substitution-single-store | C13 | 先寫固定 slack 樣本的特性測試，再改；權威 digest 不變；突變；L1 | 4～6 | 決策點 A：相位追蹤沒有 golden（B10 在 v8） |
 | silent-branch-asserts | N-silent-branches-assert | 先對 HEAD 重新列點，逐點交你決定是 Assert 還是 Result（`docs/architecture/error-handling.md`）；突變；L1 | 4～6 | 列點後是一個關卡 |
