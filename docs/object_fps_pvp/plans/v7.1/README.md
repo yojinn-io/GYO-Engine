@@ -47,7 +47,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── d44-regression-pv7 ✓◆         「medium（分析 high）｜丟棄回報上線後的 D44 回歸」
 │   ├── incident-close ✓◆             「medium｜事故紀錄結案」
 │   ├── observability-tools ✓         「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
-│   └── re-evaluate ⏸                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
+│   └── re-evaluate ▶                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
 └── after-re-evaluate ⏸               「內容不變，評估後和結果一起排」
     ├── architecture                  「SDL 隔離、-fexperimental-library、code smell、分析器收斂、相位追蹤 golden」
     ├── measurement                   「Windows LAN、其餘觀測工具」
