@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
 
@@ -117,7 +118,7 @@ void Run(const Options& options) {
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
     auto& connection = application.Connection();
-    auto* window = application.Platform().NativeWindow();
+    auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
 
     std::uint64_t frameIndex = 0;
     auto previous = Clock::now();

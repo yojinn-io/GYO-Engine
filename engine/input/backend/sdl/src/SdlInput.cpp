@@ -1,4 +1,5 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -170,9 +171,9 @@ void ApplyTransition(ButtonState& state, const bool down) noexcept {
 
 SdlInput::SdlInput(Platform::Sdl::SdlPlatform& platform) noexcept
     : platform_(&platform) {
-    const SDL_WindowFlags flags = SDL_GetWindowFlags(platform.NativeWindow());
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(Platform::Sdl::NativeWindow(platform));
     frame_.windowFocused = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
-    frame_.pointer.relativeMode = SDL_GetWindowRelativeMouseMode(platform.NativeWindow());
+    frame_.pointer.relativeMode = SDL_GetWindowRelativeMouseMode(Platform::Sdl::NativeWindow(platform));
 }
 
 void SdlInput::BeginFrame() noexcept {
@@ -187,8 +188,9 @@ void SdlInput::BeginFrame() noexcept {
     frame_.events.clear();
 }
 
-void SdlInput::HandleEvent(const SDL_Event& event) noexcept {
-    const SDL_WindowID ownWindowId = SDL_GetWindowID(platform_->NativeWindow());
+void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) noexcept {
+    const SDL_Event& event = Platform::Sdl::NativeEvent(platformEvent);
+    const SDL_WindowID ownWindowId = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
 
     switch (event.type) {
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
@@ -251,7 +253,7 @@ void SdlInput::HandleEvent(const SDL_Event& event) noexcept {
                 const bool down = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
                 SetMouseButton(*button, down);
                 int width{}, height{};
-                SDL_GetWindowSize(platform_->NativeWindow(), &width, &height);
+                SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &width, &height);
                 const bool inside = event.button.x >= 0.0f && event.button.y >= 0.0f &&
                     event.button.x < static_cast<float>(width) && event.button.y < static_cast<float>(height);
                 frame_.events.push_back({.kind = down ? InputEventKind::MouseButtonPressed
@@ -295,7 +297,7 @@ SdlInput::SetRelativeMouseMode(const bool enabled) {
         return {};
     }
 
-    if (!SDL_SetWindowRelativeMouseMode(platform_->NativeWindow(), enabled)) {
+    if (!SDL_SetWindowRelativeMouseMode(Platform::Sdl::NativeWindow(*platform_), enabled)) {
         return Base::Err(SdlInputError::Make(
             SdlInputErrorCode::RelativeMouseModeFailed,
             "SdlInput: unable to change relative mouse mode",

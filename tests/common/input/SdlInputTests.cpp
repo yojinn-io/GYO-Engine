@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInputNative.hpp"
 #include "engine/input/InputActionMap.hpp"
 
 #include <array>
@@ -13,7 +14,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     const std::array bindings{
         std::pair{SDL_SCANCODE_SPACE, Key::Space},
         std::pair{SDL_SCANCODE_H, Key::H},
@@ -29,11 +30,11 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
         event.type = SDL_EVENT_KEY_DOWN;
         event.key.windowID = window + 1;
         event.key.scancode = scancode;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event);
         CHECK_FALSE(input.Snapshot().Get(key).held);
 
         event.key.windowID = window;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event);
         auto state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK(state.held);
         CHECK(state.pressed);
@@ -41,7 +42,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
 
         input.BeginFrame();
         event.key.repeat = true;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event);
         state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK(state.held);
         CHECK_FALSE(state.pressed);
@@ -49,7 +50,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
 
         event.key.repeat = false;
         event.type = SDL_EVENT_KEY_UP;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event);
         state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK_FALSE(state.held);
         CHECK_FALSE(state.pressed);
@@ -66,14 +67,14 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
         event.type = SDL_EVENT_KEY_DOWN;
         event.key.windowID = window;
         event.key.scancode = scancode;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event);
         REQUIRE(input.Snapshot().Get(key).held);
     }
     input.BeginFrame();
     SDL_Event lost{};
     lost.type = SDL_EVENT_WINDOW_FOCUS_LOST;
     lost.window.windowID = window;
-    input.HandleEvent(lost);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, lost);
     CHECK_FALSE(input.Snapshot().windowFocused);
     for (const auto& [scancode, key] : bindings) {
         static_cast<void>(scancode);
@@ -126,18 +127,18 @@ TEST_CASE("every engine key is reachable from an SDL scancode and the original k
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     std::array<int, static_cast<std::size_t>(Key::Count)> sources{};
     for (int code = 0; code < SDL_SCANCODE_COUNT; ++code) {
         input.BeginFrame();
-        input.HandleEvent(KeyEvent(window, static_cast<SDL_Scancode>(code), true));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, static_cast<SDL_Scancode>(code), true));
         const auto& events = input.Snapshot().events;
         if (events.empty()) continue;
         REQUIRE(events.size() == 1);
         CHECK(events[0].kind == InputEventKind::KeyPressed);
         REQUIRE(events[0].key != Key::Count);
         ++sources[static_cast<std::size_t>(events[0].key)];
-        input.HandleEvent(KeyEvent(window, static_cast<SDL_Scancode>(code), false));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, static_cast<SDL_Scancode>(code), false));
     }
     for (std::size_t key = 0; key < sources.size(); ++key) {
         CAPTURE(key);
@@ -156,9 +157,9 @@ TEST_CASE("every engine key is reachable from an SDL scancode and the original k
     };
     for (const auto& [scancode, key] : original) {
         input.BeginFrame();
-        input.HandleEvent(KeyEvent(window, scancode, true));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, scancode, true));
         CHECK(input.Snapshot().Get(key).held);
-        input.HandleEvent(KeyEvent(window, scancode, false));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, scancode, false));
     }
 }
 
@@ -166,15 +167,15 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     int width{}, height{};
-    REQUIRE(SDL_GetWindowSize(platform.value()->NativeWindow(), &width, &height));
+    REQUIRE(SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*platform.value()), &width, &height));
     REQUIRE(width > 2);
     REQUIRE(height > 2);
 
     input.BeginFrame();
-    input.HandleEvent(ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f));
-    input.HandleEvent(ButtonEvent(window, SDL_BUTTON_LEFT, false, 1.5f, 2.5f));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, false, 1.5f, 2.5f));
     const auto& frame = input.Snapshot();
     // Existing semantics are unchanged: the last transition wins.
     CHECK_FALSE(frame.Get(MouseButton::Left).held);
@@ -193,17 +194,17 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     CHECK(input.Snapshot().events.empty());
     for (const auto& [x, y] : {std::pair{-1.0f, 2.0f}, std::pair{2.0f, -0.5f},
                                std::pair{static_cast<float>(width), 2.0f}, std::pair{2.0f, static_cast<float>(height)}}) {
-        input.HandleEvent(ButtonEvent(window, SDL_BUTTON_RIGHT, true, x, y));
-        input.HandleEvent(ButtonEvent(window, SDL_BUTTON_RIGHT, false, x, y));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_RIGHT, true, x, y));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_RIGHT, false, x, y));
     }
     REQUIRE(input.Snapshot().events.size() == 8);
     for (const auto& event : input.Snapshot().events) CHECK_FALSE(event.insideWindow);
 
     // Keys alike, and repeats are not events.
     input.BeginFrame();
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, true));
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, true, true));
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, false));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true, true));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, false));
     REQUIRE(input.Snapshot().events.size() == 2);
     CHECK(input.Snapshot().events[0].kind == InputEventKind::KeyPressed);
     CHECK(input.Snapshot().events[0].key == Key::Tab);
@@ -215,18 +216,18 @@ TEST_CASE("window interaction events of this window are reported in order with t
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
 
     input.BeginFrame();
     for (const SDL_WindowID id : {window + 1, window}) {
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_MOVED, 40, 50));
-        input.HandleEvent(KeyEvent(id, SDL_SCANCODE_TAB, true));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_RESIZED, 800, 600));
-        input.HandleEvent(ButtonEvent(id, SDL_BUTTON_LEFT, true, 3.0f, 4.0f));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_MINIMIZED));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_RESTORED));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_LOST));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_GAINED));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_MOVED, 40, 50));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(id, SDL_SCANCODE_TAB, true));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_RESIZED, 800, 600));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(id, SDL_BUTTON_LEFT, true, 3.0f, 4.0f));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_MINIMIZED));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_RESTORED));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_LOST));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_GAINED));
     }
     // Only the second pass (this window) is reported.
     const auto& events = input.Snapshot().events;

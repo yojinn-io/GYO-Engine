@@ -10,6 +10,7 @@
 #include "RetroFPS/Pvp/PointerCapture.hpp"
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/input/backend/sdl/SdlInputNative.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -82,8 +83,8 @@ struct Harness {
         REQUIRE(created);
         platform = std::move(created.value());
         input = std::make_unique<Engine::Input::Backend::Sdl::SdlInput>(*platform);
-        window = SDL_GetWindowID(platform->NativeWindow());
-        REQUIRE(SDL_GetWindowSize(platform->NativeWindow(), &windowWidth, &windowHeight));
+        window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
+        REQUIRE(SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*platform), &windowWidth, &windowHeight));
         oracle.width = static_cast<float>(windowWidth);
         oracle.height = static_cast<float>(windowHeight);
     }
@@ -98,7 +99,7 @@ struct Harness {
         input->BeginFrame();
         const bool focusedAtStart = input->Snapshot().windowFocused;
         for (const auto& event : events) {
-            input->HandleEvent(event);
+            Engine::Input::Backend::Sdl::HandleNativeEvent(*input, event);
             OracleHandle(oracle, event, window, input->Snapshot().windowFocused);
         }
         input->EndFrame();
@@ -264,9 +265,9 @@ TEST_CASE("Pointer capture: declared difference 2, inside-window uses the size w
     const auto w = h.window;
     h.Frame({WindowEvent(SDL_EVENT_WINDOW_FOCUS_GAINED, w)});
     const float x = static_cast<float>(h.windowWidth) - 10.0f;  // inside the old size
-    REQUIRE(SDL_SetWindowSize(h.platform->NativeWindow(), h.windowWidth / 2, h.windowHeight / 2));
+    REQUIRE(SDL_SetWindowSize(Engine::Platform::Sdl::NativeWindow(*h.platform), h.windowWidth / 2, h.windowHeight / 2));
     int newWidth{}, newHeight{};
-    REQUIRE(SDL_GetWindowSize(h.platform->NativeWindow(), &newWidth, &newHeight));
+    REQUIRE(SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*h.platform), &newWidth, &newHeight));
     REQUIRE(static_cast<float>(newWidth) <= x);  // outside the new size
     const unsigned releases = h.Frame({Button(true, w, SDL_BUTTON_LEFT, x, 10)});
     CHECK(h.oracle.capture.inputCaptured);     // old: inside its stale size

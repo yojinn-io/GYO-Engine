@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "description": "Declared mutants of IP-3/IP-4 (ip3-declaration.md section 4). A mutant is killed only when its test run fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/input-and-present/scripts/mutations.json.",
+  "mutants": [
+    {
+      "id": "m6a-g1",
+      "what": "SdlPlatform.hpp includes SDL again (G1 must report it)",
+      "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
+      "find": "#include <string>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "target": "platform_sdl_header_tests",
+      "cases": "SDL backend public headers do not reach any SDL header",
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "m6a-g2",
+      "what": "SdlPlatform.hpp includes SDL again (G2 must report it)",
+      "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
+      "find": "#include <string>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "target": "platform_sdl_header_tests",
+      "cases": "Engine public headers outside the native layer name no SDL symbol",
+      "expect": "SdlPlatform\\.hpp:\\d+ <SDL3/"
+    },
+    {
+      "id": "m6b-g1",
+      "what": "SdlInput.hpp includes SDL_events.h again (G1 must report it)",
+      "file": "engine/input/backend/sdl/include/engine/input/backend/sdl/SdlInput.hpp",
+      "find": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n",
+      "replace": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n\n#include <SDL3/SDL_events.h>\n",
+      "target": "platform_sdl_header_tests",
+      "cases": "SDL backend public headers do not reach any SDL header",
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "m6b-g2",
+      "what": "SdlInput.hpp includes SDL_events.h again (G2 must report it)",
+      "file": "engine/input/backend/sdl/include/engine/input/backend/sdl/SdlInput.hpp",
+      "find": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n",
+      "replace": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n\n#include <SDL3/SDL_events.h>\n",
+      "target": "platform_sdl_header_tests",
+      "cases": "Engine public headers outside the native layer name no SDL symbol",
+      "expect": "SdlInput\\.hpp:\\d+ <SDL3/"
+    }
+  ]
+}

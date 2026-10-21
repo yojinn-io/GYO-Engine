@@ -1,6 +1,6 @@
 # 輸入與呈現：交接
 
-更新：2026-10-21（IP-3／IP-4 核准，D31；ip3a 進行中）；2026-10-08。**狀態：IP-3 進行中（ip3a）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-21（ip3a 核准，D32；ip3b 進行中）；2026-10-08。**狀態：IP-3 進行中（ip3b）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
 2026-10-05：消費端完成第3項的重現與阻塞取得下的量測基線（B0），摘要見第3項「消費端重現（B0）」；縮放時的停頓位置與先前的前提不同，見未結事項。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。
 
@@ -39,6 +39,7 @@
 | 2026-10-21 | D29：IP-3、IP-4 與提出需求的消費端的遷移同一個 PR，IP-3、IP-4 是 PR 內的里程碑（各自寫 dev_log）。依據：消費端既有的決定「標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併」，以及消費端 2026-10-21 核准的 PR 線；符合 D18 | 使用者（經消費端的規劃） |
 | 2026-10-21 | D30：IP-3／IP-4 的規劃用 ultracode（2 位盤點、3 個獨立方案、1 位評審合成），公開介面由 1 位 xhigh 審查（README 的 IP-3 列），另做 1 次對抗式檢查；依 D8 經使用者同意 | 使用者 |
 | 2026-10-21 | D31：核准 IP-3／IP-4 計畫（[PLAN](PLAN.md) 文末），U1～U10 全部照建議：接受約 2 倍的估時（各子批開始前重估，超過 1.5 倍就停）；ui_editor 做機械修改；README 以外新增的 6 項；時間戳型別用 `std::chrono::steady_clock::time_point` 並 `static_assert` 與 `Time::TimePoint` 相同（不新增 Input→Time 邊）；`NativeEventObserver` 由 `PlatformEvent` 承接；凍結 oracle 改 golden（走 §14.4 的核准流程）；X11 加中立查詢；新建英文的 `platform-sdl.md`；capture 放 GPU 後端；IP-4 的介面另做 1 次 xhigh 審查。另：設計提前在 ip3a 寫成架構文件（`docs/architecture/platform-sdl.md`、`input.md`） | 使用者（「照計劃執行，記得把這個設計落到架構文件中去」） |
+| 2026-10-21 | D32：核准 ip3a 的事前宣告（[ip3-declaration.md](ip3-declaration.md)）；之後不放寬。消費端的 A 級受擊回饋行改走 Base 的日誌 facade、位元組不變（消費端的決定）。開始 ip3b | 使用者 |
 
 ## 正式項目清單
 
@@ -266,6 +267,15 @@
   - 宣告：ip3b～ip3e 的判定（不用常數門檻）、突變 16 個（m6a、m6b、m1～m4、m-zero、m7～m9、m-up、m-layout、m10～m12、m-throw，逐項寫明由哪個判定殺掉）、機率性測試 2 個的試行規則（各 200 輪、60 秒、不重試）。
   - 消費端日誌契約的核對：A 級行中只有 1 個行族（受擊回饋行）經 SDL 寫出，ip3e 的停止條件會成立；處理方式交消費端，在本關卡一起決定。
   - 實際約 1 h（估 3～4 h）。
+- 2026-10-21：ip3a 核准（D32）。ip3b 開始（檔位 high，估 8～12 h，超過 18 h 停下）：G1／G2 先 Red、`SdlPlatform` 的 pimpl、`PlatformEvent`、三個 Native 目標、機械修改。`PlatformEvent::Timestamp()` 與 `HandleNativeEvent` 的時間參數在 ip3c 加入（同一個 PR）。
+- 2026-10-21：ip3b 實作與本機驗收。
+  - G1、G2（`tests/common/platform_sdl/HeaderHygieneTests.cpp`，CTest `platform_sdl_header_tests`，標籤 cpu）：先在現狀上 Red（G1 抓到 SDL 標頭；G2 列出 12 處，註解中的 SDL 正確略過），改完後 Green。兩者都以測試失敗呈現，不用 `#error`，讓突變以訊息判定。
+  - `SdlPlatform`、`SdlRenderer` 改 pimpl；新增 `PlatformEvent`（不可複製、移動）、`NativeAccess`；三個 Native 目標（`GYO::PlatformSDLNative`、`GYO::InputBackendSDLNative`、`GYO::RenderBackendSDLNative`，INTERFACE）；後端以 PRIVATE include 讀自己的 Native 標頭，input 與兩個 render 後端以 PRIVATE 連 `GYO::PlatformSDLNative`；`SdlGpuRenderDevice.hpp` 補 `<string>`。
+  - 機械修改：`tests/common`（`SdlInputTests`、`SdlPlatformTests`）、ui_editor、提出需求的消費端（產品、probe、pointer capture 測試；暫時改連 Native，IP-4 再移除）。共 52 處 `NativeWindow()` 呼叫改成自由函式。未啟用產品不改，寫進遷移清單（破損 3 處）。
+  - 突變：TT 的 `run_mutations.py` 加 `--catalog`（預設不變），新目錄 `scripts/mutations.json`；m6a、m6b 各對 G1、G2 兩次，4／4 killed。
+  - 本機：全量建置通過；`test` preset 78／78；`input_sdl_tests`、`platform_sdl_tests`、`object_fps_pvp.pointer_capture`、`runtime.sdl_smoke`、`render.sdl_gpu_mesh_smoke` 通過。`object_fps_pvp.worker` 失敗，原因與 master 相同（mock 缺 `maximum_shot_damage`，消費端另一條分支已修），與本批無關。
+  - 同機兩樹的權威 digest（base＝master `6fbb6a9`）：scale 1、3 各 36 個情境，0 差異。
+  - **發現（ip3c 前要決定）**：IP-2 的測試「SdlPlatform keeps running live frames after a nested PumpEvents」（`SdlPlatformTests.cpp`）明確支援巢狀 pump，和 [platform-sdl.md](../../platform-sdl.md) Design Invariant 7「`PumpEvents` 不可重入」與 PLAN 的 `GYO_ASSERT` 衝突。ip3b 不改 pump 行為；ip3c 每次 pump 取時鐘配對時，巢狀 pump 會蓋掉外層的配對，需要選：保留巢狀（配對隨 pump 範圍保存與還原，改 DI 7）或禁止巢狀（刪改 IP-2 的這個測試，屬放寬既有保證的判定變更）。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

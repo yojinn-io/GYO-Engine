@@ -140,7 +140,7 @@ void RunActionShort(const Options& options) {
         graphics.vsync = false;
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
-        auto* window = application.Platform().NativeWindow();
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
         evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
@@ -742,7 +742,7 @@ void RunActionRapid(const Options& options) {
         graphics.vsync = false;
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
-        auto* window = application.Platform().NativeWindow();
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
         evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);

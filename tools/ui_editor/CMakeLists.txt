@@ -70,10 +70,11 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     # PreviewAdapter calls Math functions directly (sRGB, Rect).
     target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math)
     target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp)
+    # The ImGui SDL3 backend needs the native window, renderer and events.
     target_link_libraries(gyo_ui_editor PRIVATE
         gyo_ui_editor_preview
-        GYO::PlatformSDL
-        GYO::RenderBackendSDL
+        GYO::PlatformSDLNative
+        GYO::RenderBackendSDLNative
         imgui::sdl3_sdlrenderer3
     )
     target_compile_definitions(gyo_ui_editor PRIVATE

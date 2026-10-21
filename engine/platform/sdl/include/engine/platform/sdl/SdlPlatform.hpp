@@ -1,11 +1,8 @@
 #pragma once
 
-#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
-
-#include <SDL3/SDL.h>
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
@@ -39,9 +36,31 @@ struct SdlPlatformOptions {
     bool resizable{true};
 };
 
+class NativeAccess; // defined only by the native layer (SdlPlatformNative.hpp)
+class SdlPlatform;
+
+// One event handed to a PumpEvents observer. It refers to the backend's event
+// and is valid only during the observer call: it cannot be copied, moved or
+// kept. Only the input backend and the native layer read what it carries.
+class PlatformEvent final {
+public:
+    PlatformEvent(const PlatformEvent&) = delete;
+    PlatformEvent& operator=(const PlatformEvent&) = delete;
+    PlatformEvent(PlatformEvent&&) = delete;
+    PlatformEvent& operator=(PlatformEvent&&) = delete;
+
+private:
+    explicit PlatformEvent(const void* native) noexcept : native_(native) {}
+
+    friend class NativeAccess;
+    friend class SdlPlatform;
+
+    const void* native_{};
+};
+
 class SdlPlatform final {
 public:
-    using NativeEventObserver = std::function<void(const SDL_Event&)>;
+    using EventObserver = std::function<void(const PlatformEvent&)>;
     using LiveFrameHandler = std::function<void()>;
 
     [[nodiscard]] static Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>
@@ -55,7 +74,7 @@ public:
     SdlPlatform& operator=(SdlPlatform&&) = delete;
 
     [[nodiscard]] Runtime::RuntimeControl PumpEvents(
-        const NativeEventObserver& observer = {});
+        const EventObserver& observer = {});
 
     // An OS modal loop can hold PumpEvents for as long as the user drags: a live
     // window resize on macOS, a window move or resize on Windows. SDL then asks
@@ -70,20 +89,16 @@ public:
     // itself. An empty handler turns this off, which is the default.
     void SetLiveFrameHandler(LiveFrameHandler handler);
 
-    // This native handle belongs only to the concrete SDL adapter layer. It is
-    // not part of GYO's backend-neutral runtime-facing API.
-    [[nodiscard]] SDL_Window* NativeWindow() const noexcept;
+    // The native window is reachable only through the native layer:
+    // NativeWindow() in SdlPlatformNative.hpp (target GYO::PlatformSDLNative).
 
 private:
-    explicit SdlPlatform(SDL_Window* window) noexcept;
+    struct Impl;
+    explicit SdlPlatform(std::unique_ptr<Impl> impl) noexcept;
 
-    static bool SDLCALL WatchEvent(void* userdata, SDL_Event* event);
+    friend class NativeAccess;
 
-    SDL_Window* window_{};
-    LiveFrameHandler liveFrameHandler_;
-    std::exception_ptr liveFrameError_;
-    bool pumping_{};
-    bool inLiveFrame_{};
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace Engine::Platform::Sdl

@@ -103,7 +103,7 @@ set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cp
 set(capture_tests "gyo_${GYO_CURRENT_APP}_pointer_capture_tests")
 add_executable(${capture_tests} PointerCaptureCharacterizationTests.cpp)
 target_compile_features(${capture_tests} PRIVATE cxx_std_20)
-target_link_libraries(${capture_tests} PRIVATE ${support} GYO::InputBackendSDL doctest::doctest)
+target_link_libraries(${capture_tests} PRIVATE ${support} GYO::InputBackendSDLNative doctest::doctest)
 if(WIN32)
     target_compile_definitions(${capture_tests} PRIVATE NOMINMAX)
 endif()

@@ -27,6 +27,9 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
+// Temporary (IP-3 ip3b): the native layer until text input and window queries
+// reach the neutral API (ip3d, IP-4).
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "engine/render/PrimitiveMesh.hpp"
 #include "engine/render/Renderer.hpp"
@@ -185,8 +188,8 @@ struct PvpApplication::Impl final {
 
     void EditAddress(bool value) {
         editing = value;
-        if (value) SDL_StartTextInput(platform->NativeWindow());
-        else SDL_StopTextInput(platform->NativeWindow());
+        if (value) SDL_StartTextInput(Engine::Platform::Sdl::NativeWindow(*platform));
+        else SDL_StopTextInput(Engine::Platform::Sdl::NativeWindow(*platform));
     }
 
     void AppendAddress(const char* value) {
@@ -937,10 +940,10 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     impl_->input->BeginFrame();
     const bool focusedAtStart = impl_->input->Snapshot().windowFocused;
     double observerMilliseconds = 0;
-    const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const SDL_Event& event) {
+    const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const Engine::Platform::Sdl::PlatformEvent& event) {
         const auto observed = Clock::now();
         impl_->input->HandleEvent(event);
-        impl_->HandleTextEditing(event);
+        impl_->HandleTextEditing(Engine::Platform::Sdl::NativeEvent(event));
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
@@ -1202,7 +1205,7 @@ int PvpApplication::Run() {
         // SDL applies a resize to the window before its queued event reaches
         // the pump, so live frames take the size from the window itself.
         int windowWidth{}, windowHeight{};
-        if (SDL_GetWindowSize(impl_->platform->NativeWindow(), &windowWidth, &windowHeight)) {
+        if (SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*impl_->platform), &windowWidth, &windowHeight)) {
             impl_->width = static_cast<float>(Engine::Math::Max(1, windowWidth));
             impl_->height = static_cast<float>(Engine::Math::Max(1, windowHeight));
         }

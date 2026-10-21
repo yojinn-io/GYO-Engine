@@ -1,6 +1,6 @@
 # IP-3 事前宣告（ip3a）
 
-- 狀態：**等使用者核准**（ip3a 關卡）。核准後，本文件的判定、突變與試行規則在 ip3b～ip3f 不再放寬（AGENTS §14.1）。
+- 狀態：**已核准**（D32，2026-10-21）。核准後，本文件的判定、突變與試行規則在 ip3b～ip3f 不再放寬（AGENTS §14.1）。
 - 依據：[PLAN](PLAN.md) 文末的 IP-3／IP-4（D31）；設計的正式條文在 [platform-sdl.md](../../platform-sdl.md)、[input.md](../../input.md)。
 - file:line 以 master `6fbb6a9` 為準。
 

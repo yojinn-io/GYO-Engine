@@ -114,6 +114,17 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
   - live frame 中，`Update`／`Render` 是在 `ProcessEvents` 尚未返回時被呼叫，沒有新的輸入；產品要確認不會重複消費輸入邊緣。
   - 提出需求的消費端的做法：live frame 中使用空的輸入幀。
 
+### IP-3 SDL 隔離核心
+
+狀態：進行中（2026-10-21，ip3b 完成；其餘子批完成時補本節）。
+
+- ui_editor（啟用中，依 D31 的 U2 只做機械修改）：`tools/ui_editor/src/ImGuiSdlRendererHost.cpp` 改用 Native 層的 `NativeWindow(platform)`、`NativeRenderer(renderer)`、`NativeEvent(event)`；`tools/ui_editor/CMakeLists.txt` 改連 `GYO::PlatformSDLNative`、`GYO::RenderBackendSDLNative`。破損：無（建置與 `editor` 標籤的測試通過）。
+- **破損（重新啟用時一定要遷移）**：
+  - `apps/object_fps{,_v2}/src/App/ObjectFpsRuntimeClient.cpp:233-234`：pump 的 observer 收 `const SDL_Event&`，而且只靠 Engine 標頭間接取得 SDL。改成 `const Engine::Platform::Sdl::PlatformEvent&`，交給 `SdlInput::HandleEvent`；需要 SDL 事件時用 `NativeEvent(event)` 並連 `GYO::PlatformSDLNative`。
+  - `tests/object_fps_v2/App/DebugRuntimeTests.cpp:53-85`：`NativeWindow()` 成員函式已移除，改用 `Engine::Platform::Sdl::NativeWindow(platform)`；合成的 SDL 事件改用 `HandleNativeEvent(input, event)`（`SdlInputNative.hpp`，連 `GYO::InputBackendSDLNative`）。
+  - `tools/object_fps_preview`：同上，pump 的 observer 與 `NativeWindow()`。
+- 變更摘要：後端的一般公開標頭（`SdlPlatform.hpp`、`SdlInput.hpp`、`SdlRenderer.hpp`）不再 include SDL；`NativeEventObserver` 改成 `EventObserver`（`const PlatformEvent&`）；`NativeWindow()`／`NativeRenderer()` 成員函式改成 Native 層的自由函式；`SdlInput::HandleEvent(const SDL_Event&)` 改成 `HandleEvent(const PlatformEvent&)`，自建事件用 `HandleNativeEvent`。
+
 ## 4. TT（時間、執行緒與 Trace 計畫）
 
 TT 計畫的批次完成時，由該批更新本節。

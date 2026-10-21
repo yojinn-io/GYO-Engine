@@ -1,4 +1,5 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
 
 #include <exception>
 #include <utility>
@@ -32,6 +33,16 @@ SdlPlatformError MakeSdlError(
 
 } // namespace
 
+struct SdlPlatform::Impl final {
+    static bool SDLCALL WatchEvent(void* userdata, SDL_Event* event);
+
+    SDL_Window* window{};
+    LiveFrameHandler liveFrameHandler;
+    std::exception_ptr liveFrameError;
+    bool pumping{};
+    bool inLiveFrame{};
+};
+
 Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>
 SdlPlatform::Create(const SdlPlatformOptions& options) {
 
@@ -62,70 +73,73 @@ SdlPlatform::Create(const SdlPlatformOptions& options) {
         return Base::Err(std::move(error));
     }
 
-    return std::unique_ptr<SdlPlatform>(new SdlPlatform(window));
+    auto impl = std::make_unique<Impl>();
+    impl->window = window;
+    return std::unique_ptr<SdlPlatform>(new SdlPlatform(std::move(impl)));
 }
 
-SdlPlatform::SdlPlatform(SDL_Window* window) noexcept
-    : window_(window) {}
+SdlPlatform::SdlPlatform(std::unique_ptr<Impl> impl) noexcept
+    : impl_(std::move(impl)) {}
 
 SdlPlatform::~SdlPlatform() {
-    SDL_RemoveEventWatch(&SdlPlatform::WatchEvent, this);
-    if (window_ != nullptr) {
-        SDL_DestroyWindow(window_);
-        window_ = nullptr;
+    SDL_RemoveEventWatch(&Impl::WatchEvent, impl_.get());
+    if (impl_->window != nullptr) {
+        SDL_DestroyWindow(impl_->window);
+        impl_->window = nullptr;
     }
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
 void SdlPlatform::SetLiveFrameHandler(LiveFrameHandler handler) {
     // Replacing the handler while it runs would destroy the running function.
-    GYO_ASSERT(!inLiveFrame_);
-    const bool wasSet = static_cast<bool>(liveFrameHandler_);
-    liveFrameHandler_ = std::move(handler);
-    const bool isSet = static_cast<bool>(liveFrameHandler_);
+    GYO_ASSERT(!impl_->inLiveFrame);
+    const bool wasSet = static_cast<bool>(impl_->liveFrameHandler);
+    impl_->liveFrameHandler = std::move(handler);
+    const bool isSet = static_cast<bool>(impl_->liveFrameHandler);
     // The watch exists only while a handler is set.
     if (isSet && !wasSet) {
-        SDL_AddEventWatch(&SdlPlatform::WatchEvent, this);
+        SDL_AddEventWatch(&Impl::WatchEvent, impl_.get());
     } else if (!isSet && wasSet) {
-        SDL_RemoveEventWatch(&SdlPlatform::WatchEvent, this);
+        SDL_RemoveEventWatch(&Impl::WatchEvent, impl_.get());
     }
 }
 
-bool SDLCALL SdlPlatform::WatchEvent(void* userdata, SDL_Event* event) {
+bool SDLCALL SdlPlatform::Impl::WatchEvent(void* userdata, SDL_Event* event) {
     // Watches run on whichever thread pushes an event, so the platform's state
     // is read only after the main-thread check.
     if (event->type != SDL_EVENT_WINDOW_EXPOSED || event->window.data1 != 1 ||
         !SDL_IsMainThread()) {
         return true;
     }
-    auto* platform = static_cast<SdlPlatform*>(userdata);
-    if (event->window.windowID != SDL_GetWindowID(platform->window_) ||
-        !platform->pumping_ || platform->inLiveFrame_ || !platform->liveFrameHandler_ ||
-        platform->liveFrameError_) {
+    auto* platform = static_cast<Impl*>(userdata);
+    if (event->window.windowID != SDL_GetWindowID(platform->window) ||
+        !platform->pumping || platform->inLiveFrame || !platform->liveFrameHandler ||
+        platform->liveFrameError) {
         return true;
     }
 
-    const FlagScope live(platform->inLiveFrame_);
+    const FlagScope live(platform->inLiveFrame);
     // An exception must not unwind through SDL and the OS modal loop: it is
     // kept and rethrown by PumpEvents once SDL returns.
     try {
-        platform->liveFrameHandler_();
+        platform->liveFrameHandler();
     } catch (...) {
-        if (!platform->liveFrameError_) platform->liveFrameError_ = std::current_exception();
+        if (!platform->liveFrameError) platform->liveFrameError = std::current_exception();
     }
     return true;
 }
 
-Runtime::RuntimeControl SdlPlatform::PumpEvents(const NativeEventObserver& observer) {
+Runtime::RuntimeControl SdlPlatform::PumpEvents(const EventObserver& observer) {
     Runtime::RuntimeControl control = Runtime::RuntimeControl::Continue;
-    const SDL_WindowID ownWindowId = SDL_GetWindowID(window_);
+    const SDL_WindowID ownWindowId = SDL_GetWindowID(impl_->window);
 
     // Live frames may run only from inside this function.
-    const FlagScope pumping(pumping_);
+    const FlagScope pumping(impl_->pumping);
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
         if (observer) {
-            observer(event);
+            const PlatformEvent view(&event);
+            observer(view);
         }
 
         if (event.type == SDL_EVENT_QUIT) {
@@ -139,15 +153,15 @@ Runtime::RuntimeControl SdlPlatform::PumpEvents(const NativeEventObserver& obser
     }
     // The pump finishes its pass first: leaving SDL_PollEvent early would leave
     // SDL's end-of-pass marker queued and cut the next pump short.
-    if (liveFrameError_) {
-        std::rethrow_exception(std::exchange(liveFrameError_, nullptr));
+    if (impl_->liveFrameError) {
+        std::rethrow_exception(std::exchange(impl_->liveFrameError, nullptr));
     }
 
     return control;
 }
 
-SDL_Window* SdlPlatform::NativeWindow() const noexcept {
-    return window_;
+SDL_Window* NativeAccess::Window(const SdlPlatform& platform) noexcept {
+    return platform.impl_->window;
 }
 
 } // namespace Engine::Platform::Sdl

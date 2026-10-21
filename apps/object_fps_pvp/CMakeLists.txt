@@ -53,6 +53,8 @@ gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplicatio
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
     COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
+# Temporary (IP-3 ip3b): removed once the product no longer needs SDL (sdl-isolation, IP-4).
+target_link_libraries(${support} PRIVATE GYO::PlatformSDLNative)
 gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc})
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)
 add_dependencies(${match} "gyo_${GYO_APP_ID}--content")

@@ -4,8 +4,8 @@ Owner: Engine (`engine/platform/sdl` → `GYO::PlatformSDL`, `engine/input/backe
 `engine/render/backend/sdl` → `GYO::RenderBackendSDL`, `engine/render/backend/sdl_gpu` → `GYO::RenderBackendSDLGPU`).
 Plan and record: [input-and-present](plans/input-and-present/README.md), batches IP-3 and IP-4.
 
-**Status (2026-10-21): approved design (input-and-present D31), not yet implemented.** The code still exposes SDL
-through the backend headers and links SDL3 PUBLIC. Each contract and invariant below names the milestone that
+**Status (2026-10-21): approved design (input-and-present D31), being implemented.** Milestone ip3b has landed:
+the neutral/native split and Design Invariant 1 with its guards. The backends still link SDL3 PUBLIC (until ip4c). Each contract and invariant below names the milestone that
 makes it true and the guard that keeps it true; until that milestone lands, the current code is the reference.
 The input frame the backend fills is specified in [input.md](input.md).
 

@@ -124,7 +124,7 @@ void RunPlayerShort(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         report["initialize_graphics_ms"] = Seconds(Clock::now(), preparing) * 1000;
         auto& connection = application.Connection();
-        auto* window = application.Platform().NativeWindow();
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
         report["platform"] = PlatformFingerprint::Capture(application, window).Json();
         inputWatch.Install(window);
         if (mover) connection.CreateAndJoin(options.gateway);

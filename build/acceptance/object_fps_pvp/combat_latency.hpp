@@ -84,7 +84,7 @@ public:
     static CombatStep StepAt(unsigned slot) { return CombatCycle[slot % CombatCycle.size()]; }
     void BeforeUpdate(double elapsed, fps::pvp::PvpApplication& application) {
         expected_.reset();
-        auto* window = application.Platform().NativeWindow();
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
         if (releaseMouse_) { PushMouse(window, false); releaseMouse_ = false; }
         if (releaseReload_) { PushKey(window, SDL_SCANCODE_R, false); releaseReload_ = false; }
         if (!mover_ || dispatched_ >= planned_ || elapsed < CombatSlotStart + dispatched_ * CombatSlotPeriod) return;

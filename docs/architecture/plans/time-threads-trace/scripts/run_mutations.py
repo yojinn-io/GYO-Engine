@@ -9,7 +9,9 @@ the same on Windows, Linux and macOS.
 
 Usage (from the repository root):
   python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
-      --build-dir build/target/_build/test [--cmake PATH] [--only ID ...]
+      --build-dir build/target/_build/test [--cmake PATH] [--only ID ...] [--catalog FILE]
+--catalog runs another Engine plan's catalog in the same format (default: the
+mutations.json next to this script).
 Exit status: 0 when every selected mutant is killed, 1 otherwise, 2 on a baseline error.
 """
 import argparse
@@ -57,9 +59,10 @@ def main():
     parser.add_argument("--build-dir", required=True)
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--only", nargs="*")
+    parser.add_argument("--catalog", default=str(CATALOG))
     args = parser.parse_args()
     build_dir = (REPOSITORY / args.build_dir).resolve()
-    mutants = json.loads(CATALOG.read_text(encoding="utf-8"))["mutants"]
+    mutants = json.loads((REPOSITORY / args.catalog).read_text(encoding="utf-8"))["mutants"]
     if args.only:
         mutants = [m for m in mutants if m["id"] in args.only]
     for mutant in {m["target"] + "|" + m.get("cases", ""): m for m in mutants}.values():

@@ -14,7 +14,7 @@ add_test(NAME input_tests COMMAND input_tests)
 if(TARGET GYO::InputBackendSDL)
     add_executable(input_sdl_tests SdlInputTests.cpp)
     target_link_libraries(input_sdl_tests PRIVATE
-        GYO::InputBackendSDL
+        GYO::InputBackendSDLNative
         doctest::doctest
     )
     gyo_copy_runtime_dlls(input_sdl_tests)

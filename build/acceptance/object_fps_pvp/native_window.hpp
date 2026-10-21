@@ -15,7 +15,7 @@ void RunNativeWindow(const Options& options) {
     graphics.height = 600;
     graphics.vsync = false;
     Require(application.InitializeGraphics(graphics, error), error);
-    auto* window = application.Platform().NativeWindow();
+    auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
     const auto nativeId = SDL_GetNumberProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
     Require(nativeId != 0, "Native acceptance requires an actual X11 window");
     auto& connection = application.Connection();

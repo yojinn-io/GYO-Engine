@@ -5,8 +5,6 @@
 #include "engine/input/PhysicalInputFrame.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 
-#include <SDL3/SDL_events.h>
-
 namespace Engine::Input::Backend::Sdl {
 
 // Zero is not a valid code; the numeric values are not a data contract.
@@ -29,7 +27,9 @@ public:
     explicit SdlInput(Platform::Sdl::SdlPlatform& platform) noexcept;
 
     void BeginFrame() noexcept;
-    void HandleEvent(const SDL_Event& event) noexcept;
+    // An event from SdlPlatform::PumpEvents. Code that builds native events
+    // itself uses HandleNativeEvent (SdlInputNative.hpp).
+    void HandleEvent(const Platform::Sdl::PlatformEvent& event) noexcept;
     void EndFrame() noexcept;
 
     [[nodiscard]] Base::Result<void, SdlInputError>
