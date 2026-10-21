@@ -8,12 +8,15 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
+#include <initializer_list>
 #include <limits>
 #include <map>
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -55,7 +58,31 @@ struct RecoveryResult {
     std::optional<Time> firstDecision;
     // Input packets the worker sent, and the most in any one second.
     unsigned inputPackets{}, maximumInputPacketsPerSecond{};
+    // Diagnostics only, for a run that fails where a local rerun passes: the
+    // Host's records of unexpected refusals, and a digest of every input
+    // decision, snapshot and simulation step, taken each half second of virtual
+    // time, so the first differing digest bounds where the runs diverged.
+    std::string rejections;
+    std::vector<std::uint64_t> digests;
 };
+
+// FNV-1a over the bytes of each value.
+void Fold(std::uint64_t& digest, std::initializer_list<std::uint64_t> values) {
+    for (const auto value : values)
+        for (int byte = 0; byte < 8; ++byte) {
+            digest ^= (value >> (8 * byte)) & 0xff;
+            digest *= 1099511628211ULL;
+        }
+}
+std::string Hex(const std::vector<std::uint64_t>& values) {
+    std::string text;
+    for (const auto value : values) {
+        char digits[17];
+        std::snprintf(digits, sizeof digits, "%016llx", static_cast<unsigned long long>(value));
+        text += (text.empty() ? "" : " ") + std::string(digits);
+    }
+    return text;
+}
 
 // Clock model. By default the worker is phase-locked: it wakes exactly at its
 // deadline. A product worker mirrors ClientConnection.cpp: each sleep wakes
@@ -189,16 +216,22 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
     unsigned actualRun{};
     Time actualRunStart{}, previousResolution{-Tick};
     std::map<std::pair<std::uint64_t, std::uint64_t>, Time> generatedAt;
+    std::uint64_t digest = 14695981039346656037ULL;
+    Time nextDigest = Units / 2;
     for (;;) {
         now = (std::min)({nextFrame, nextWorker, nextTick, nextSimulation});
         for (const auto& packet : inputs) now = (std::min)(now, packet.due);
+        for (; nextDigest <= (std::min)(now, runEnd); nextDigest += Units / 2) result.digests.push_back(digest);
         if (now > runEnd) break;
         for (auto packet = inputs.begin(); packet != inputs.end();) {
             if (packet->due > now) { ++packet; continue; }
             auto input = std::move(packet->input);
             packet = inputs.erase(packet);
             REQUIRE(authority);
-            if (host.SubmitInput(input)) {
+            const bool submitted = host.SubmitInput(input);
+            Fold(digest, {1, std::uint64_t(now), input.movementEpoch, input.commands.size(),
+                input.commands.empty() ? 0 : input.commands.back().sequence, submitted});
+            if (submitted) {
                 for (const auto& command : input.commands)
                     if (input.movementEpoch == authority->movementEpoch && command.sequence > authority->lastResolvedCommand)
                         accepted.try_emplace(std::pair{input.movementEpoch, command.sequence}, command);
@@ -206,6 +239,14 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 ++result.staleEpochRejections;
             } else {
                 ++result.unexpectedRejections;
+                for (const auto& record : host.DrainIngressRecords().records)
+                    if (const auto* refusal = std::get_if<IngressRejectionRecord>(&record))
+                        result.rejections += std::string(IngressName(refusal->reason)) + " at " + std::to_string(now) +
+                            " epoch " + std::to_string(refusal->epoch) + " sequences " +
+                            std::to_string(refusal->firstSequence.value_or(0)) + ".." +
+                            std::to_string(refusal->lastSequence.value_or(0)) + " cursor " +
+                            std::to_string(refusal->cursor) + " current epoch " +
+                            std::to_string(refusal->currentEpoch) + "; ";
             }
         }
         if (now == nextWorker) {
@@ -316,8 +357,12 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             }
         }
         if (now == nextSimulation) {
+            Fold(digest, {2, std::uint64_t(now), drained.size()});
             auto step = simulation.Run(clientTime(now), intent, {std::move(drained), 1, 1, {}, std::nullopt, 0});
             drained.clear();
+            Fold(digest, {std::uint64_t(step.nextDeadline.time_since_epoch().count()),
+                step.window ? step.window->commands.size() : 0,
+                step.window && !step.window->commands.empty() ? step.window->commands.back().sequence : 0});
             if (step.window) published = *step.window;
             for (const auto& command : pending().commands)
                 generatedAt.try_emplace({pending().movementEpoch, command.sequence}, now);
@@ -339,6 +384,8 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
             REQUIRE(snapshot->players.size() == 1);
             auto& state = snapshot->players.front();
             authority = state;
+            Fold(digest, {3, std::uint64_t(now), snapshot->tick, state.movementEpoch, state.lastResolvedCommand,
+                state.contiguousPendingCommands, std::uint64_t(state.movementSlackMicros.value_or(0))});
             if (!hostSamples) {
                 state.movementSlackSequence.reset();
                 state.movementSlackMicros.reset();
@@ -424,6 +471,11 @@ TEST_CASE("PvP exhausted lead recovers 108 ms 250 ms and six second render stall
                                 if (path == Path::Product && firstElapsed != 0.0) continue;
                                 const auto result = RunRecovery(fps, rtt, stall, impaired, worker, authority, firstElapsed,
                                     0, true, {}, path);
+                                // Diagnostics only (N-movement-recovery-flake, second instance on
+                                // CI macos-x64, 2026-10-21): shown with a failing check.
+                                const auto digests = Hex(result.digests);
+                                INFO("rejections: ", result.rejections);
+                                INFO("digests: ", digests);
                                 CHECK(result.maximumPending <= MaxPendingCommands);
                                 CHECK(result.maximumFuture <= MaxFutureCommands);
                                 CHECK(result.unexpectedRejections == 0);
@@ -451,6 +503,9 @@ TEST_CASE("PvP a delayed first rendered frame does not establish a persistent bo
                             if (path == Path::Product && firstElapsed != 0.0) continue;
                             const auto result = RunRecovery(fps, rtt, 0, false, worker, authority,
                                 firstElapsed, Time(gapMs) * Units / 1000, true, {}, path);
+                            const auto digests = Hex(result.digests);
+                            INFO("rejections: ", result.rejections);
+                            INFO("digests: ", digests);
                             CHECK(result.maximumPending <= MaxPendingCommands);
                             CHECK(result.maximumFuture <= MaxFutureCommands);
                             CHECK(result.unexpectedRejections == 0);
