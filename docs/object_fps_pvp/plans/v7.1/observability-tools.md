@@ -99,6 +99,12 @@ observability-tools
 
 - **OT-0d 注入的正式模式**：(a) 把 `IpcDelay` 搬進 `backpressure_probe.py`，在 `action_probe.run_case` 加一個 `host-ipc-delay` case，`run_short_stall.py` 改呼叫它，不再替換模組屬性（D50 條件 3 就不再需要）；(b) 維持現狀（runner 替換＋雜湊釘住），等短停頓真的要升為計數母體時再做。建議 (b)：D146 DR-4 把短停頓設為只記錄，現在沒有常設回歸要用它。
 - **OT-0e 階段之間用不同種子**：要不要讓 impairments 的三個 RTT 階段用不同的種子（例如基底＋階段序號），目前三個階段的丟包位置相同。改了會讓預設行為不同於舊跑次，所以這次沒做。
+  - **決定（D153，使用者在分支會話討論後決定，轉給主會話）**：
+    - 現況：`run_network.py` 在每個 RTT 階段開一個新的 relay（迴圈裡的 `impaired_gateway(http, udp, rtt, args.loss_seed)`），會話編號從 0 開始，所以三個階段的丟包位置相同（預設種子各 77 個，種子 12345 各 70 個）。
+    - 決定 1，工具不改：同一次跑次內三個階段維持同一個種子，也不加「每個階段換種子」的選項。三個階段是受控對照，只有 RTT 不同；換種子會把 RTT 和丟包位置混在一起。目前沒有實際需求，照 AGENTS.md §1 不先做一般化。
+    - 決定 2，交給下一個 L2 的宣告：impairments 與遊戲的 network20／40 案例，每次跑次用不同的基底種子（例如第 k 次用 DEFAULT＋1000×k），種子清單事前宣告；runner 已經把種子寫進 evidence。這解決第 16 批 D45 檢查 2 的限制：重複跑次只抽樣主機時序、不抽樣丟包型態，15 次 impairments 其實只有 1 組丟包位置。屬於 OT-0c（新凍結清單生效的那一次 L2）。
+    - 讀法：宣告要寫明，重複跑次現在同時抽樣主機時序與丟包型態，但仍然不是丟包型態的窮舉。
+    - 注意：`run_network.py` 的覆蓋條件（`dropped_first`≥2、`dropped_burst`≥4）是決定性的強制丟包，不受種子影響；`action_probe.py` 的 network 案例要求 `random_dropped`>0，換種子後理論上可能是 0。宣告前用要宣告的種子清單各跑一次乾跑確認。
 
 ## 8. OT-1 與 OT-6（D152）
 
@@ -107,7 +113,7 @@ observability-tools
 - OT-0b：E1-6 納入（OT-6）；`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`。
 - OT-0c：新的凍結清單從下一個 L2 生效。
 - OT-0d：注入的正式模式維持現狀。
-- OT-0e：三個 RTT 階段維持同一個種子（這一項沒有建議，照「預設行為不變」處理）。
+- OT-0e：三個 RTT 階段維持同一個種子（這一項沒有建議，照「預設行為不變」處理）。之後的 D153 確認這一點，並把「跑次之間換基底種子」交給下一個 L2 的宣告（第 7 節）。
 
 ### OT-1 phase-decision-trace（E1-3）
 

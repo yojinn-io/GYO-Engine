@@ -122,6 +122,7 @@
 | D150 | （2026-10-21）核准 `d44-regression-pv7` 的 DS-1 宣告補遺（[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節；judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節；整個重跑 session | 使用者：「核准 d44-regression-pv7 的 DS-1 宣告補遺（judge de62a759…、driver 9ad263fd…、artifacts cf992c74…），停止條件 1b 照第 12 節。現在整個重跑 session。」 |
 | D151 | （2026-10-21）session 第 2 次的停止原因：使用者在 Zed 裡 review 程式碼時切換了主 checkout 的分支，不知道會影響 agent。使用者：可以繼續。照建議 DR3-1：不改工具，原樣整個重跑（`pvp-v71-d44-l2-20261021c/`），期間不切換主 checkout | 使用者：「抱歉我在zed中review代碼，不知道會連動影響Agent，你可以繼續。」 |
 | D152 | （2026-10-21）`observability-tools` 的決定：OT-0a 選 (a)，相位決策直接寫進 `*-commands.jsonl` 的新 kind、升 schema，凍結讀者一起改，不另開檔案、不留相容層（「目前沒有發佈，不需要背這個技術債」）；其他照建議：OT-0b E1-6 納入（OT-6）、`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`；OT-0c 新凍結清單從下一個 L2 生效；OT-0d 注入正式模式維持現狀；OT-0e 三個 RTT 階段維持同一個種子（沒有建議，照「預設行為不變」） | 使用者：「OT-0a 直接改就行，目前沒有也沒有發佈，不需要被這個技術債。其他的照建議執行。」 |
+| D153 | （2026-10-21）OT-0e（分支會話討論後由使用者決定，轉給主會話）：impairments 的三個 RTT 階段維持同一個種子，工具不改、不加「每個階段換種子」的選項（三個階段是只差 RTT 的受控對照）；下一個 L2 的宣告改成每次跑次用不同的基底種子（impairments 與遊戲的 network20／40，例如第 k 次 DEFAULT＋1000×k，事前宣告清單，宣告前逐一乾跑確認 `random_dropped`>0），讓重複跑次同時抽樣丟包型態。細節在 [observability-tools.md](observability-tools.md) 第 7 節 | 使用者（分支會話「btw: 這個你如何考慮？」，經該會話轉達）：「OK，轉給主會話」 |
 
 ## 規劃紀錄（記錄器）
 
