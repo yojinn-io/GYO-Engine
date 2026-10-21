@@ -1,6 +1,6 @@
 # observability-tools：觀測工具（計畫，第 1 版）
 
-- 狀態：**OT-2～OT-5 實作完成（分支 `claude/pvp-v71-observability-tools`，尚未併回）；OT-1 與注入正式模式等你決定（第 5、7 節）。**
+- 狀態：**OT-2～OT-5 實作完成，已併回 after-pv7 線（merge `f34645c`；分支上的 L1 #503 通過，併回後的 L1 見 HANDOFF）；OT-1、E1-6 與注入正式模式等你決定（第 5、7 節）。**
 - 依據：README 的 `observability-tools` 列（「相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式」；驗收「工具的單元測試、新舊各分析一次／—／—」；估 10～13 h）、INVENTORY 的 E1-3、`N-late-count-detector-increment`、`N-d44-network-detector-narrow`、E4、`N-injection-official-mode`，以及也指向本批、但 README 那一列沒寫的 E1-6、`N-trace-overwrite-on-restart`。
 - 檔位：high（實作與單元測試）；新舊分析 medium。
 - file:line 以 `df04ea3` 為準。
