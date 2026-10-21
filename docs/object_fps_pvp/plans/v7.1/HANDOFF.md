@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：`observability-tools` 收尾的四平台 L1。
+- **進行中**：`observability-tools` 收尾的四平台 L1（`3346379`，run 39557685906，#517）。
 - **下一步**：L1 通過後 `observability-tools` 結案；`re-evaluate` 由你看（D148）。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
