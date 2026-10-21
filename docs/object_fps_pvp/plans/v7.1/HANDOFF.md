@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7`（未再現）與 `incident-close` 結案；`observability-tools` 的驗收工具部分已併回，四平台 L1 進行中；OT-1 等決定等你（詳見「現況」）。**
+更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7`（未再現）與 `incident-close` 結案；`observability-tools` 也結案；after-pv7 只剩 `re-evaluate`（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -38,8 +38,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：`observability-tools` 收尾的四平台 L1（`3346379`，run 39557685906，#517）：第 1 次只有 macos-x64 不通過（`N-movement-recovery-flake` 的第 2 個實例），使用者同意後重跑失敗的 job（attempt 2）；通過就結案。
-- **下一步**：L1 通過後 `observability-tools` 結案；`re-evaluate` 由你看（D148）。之後 PR #82 可以轉 ready。
+- **進行中**：無。
+- **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -579,6 +579,7 @@
 - 2026-10-21：使用者的讀法：D44（解釋不了的 epoch 重設）是 Gateway 設計問題最早、最直接的徵兆。寫進 [d44-regression-pv7.md](d44-regression-pv7.md) 第 15 節與兩份事故紀錄的偵測一節、時間線。主對話提議的規則（「被定義成解釋不了的現象，先找看不到的地方，而不是加偵測」）使用者不採用：這條規則在邏輯上是互鎖的。看不到，就需要先建立視野（偵測）；但規則要求先停下來找出看不到的地方，而停下來的時候還沒有視野，用原本的方法很難找到。
 - 2026-10-21：after-pv7 線（含 `observability-tools` 的併回，`499f625`）的四平台 L1 #511 通過。
 - 2026-10-21：`observability-tools` 的 OT-1 與 OT-6（D152；[observability-tools.md](observability-tools.md) 第 8 節）。OT-1：`phase_decision` 寫進移動紀錄（schema 3），讀者、golden、fixture、日誌契約一起改。第一版每個 window 決定都寫，實跑 16 秒 1177 筆，改成只寫首次、late 與啟動修正的 window 決定。突變第一次有 1 個存活：測試到不了 window 決定，是空檢查，已修。實跑 loss-shot：trace 的修正次數等於 start_phase 的修正次數。OT-6：跑次後再量一次計時器基準。CTest 77／77，相關突變 3／3 killed。
+- 2026-10-21：`observability-tools` 的四平台 L1 #517（`3346379`）：第 1 次只有 macos-x64 不通過（`MovementRecoveryTests.cpp:429`，`N-movement-recovery-flake` 的第 2 個實例），使用者同意後重跑失敗的 job，通過。**`observability-tools` 結案**。
 
 ## 未結事項
 

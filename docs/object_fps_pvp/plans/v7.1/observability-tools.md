@@ -1,6 +1,6 @@
 # observability-tools：觀測工具（計畫，第 1 版）
 
-- 狀態：**全部實作完成（OT-1～OT-6；D152 決定 OT-0a～e），等四平台 L1**（第 8 節）。
+- 狀態：**結案**（OT-1～OT-6；D152、D153；四平台 L1 #517 通過：第 1 次 macos-x64 是 `N-movement-recovery-flake` 的第 2 個實例，重跑通過）。
 - 依據：README 的 `observability-tools` 列（「相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式」；驗收「工具的單元測試、新舊各分析一次／—／—」；估 10～13 h）、INVENTORY 的 E1-3、`N-late-count-detector-increment`、`N-d44-network-detector-narrow`、E4、`N-injection-official-mode`，以及也指向本批、但 README 那一列沒寫的 E1-6、`N-trace-overwrite-on-restart`。
 - 檔位：high（實作與單元測試）；新舊分析 medium。
 - file:line 以 `df04ea3` 為準。
