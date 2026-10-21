@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 第 2 次進行中（D150）；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
+更新：2026-10-20。Owner：`object_fps_pvp`。**狀態：`d44-regression-pv7` 的 session 第 2 次因主 checkout 被切到 master 而停下（0 事件），等你決定第 3 次怎麼跑；`observability-tools` 的驗收工具部分完成，在另一個分支跑 L1（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -38,8 +38,9 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：
+  0. `d44-regression-pv7` 的 session 第 3 次怎麼跑（[d44-regression-pv7.md](d44-regression-pv7.md) 第 14 節 DR3-1～DR3-4，建議 DR3-1：原樣整個重跑，期間不切換主 checkout）。
   1. `observability-tools` 的 OT-0a（相位決策寫進 trace 的格式，建議另開一個 JSONL）、OT-0b（E1-6 納入、`N-trace-overwrite-on-restart` 移出）、OT-0c（新凍結清單的生效時點）、OT-0d（注入正式模式，建議維持現狀）、OT-0e（RTT 階段的種子）：[observability-tools.md](observability-tools.md) 第 5、7 節。
-- **進行中**：`d44-regression-pv7` 的 session 第 2 次（D150；`build/target/_build/test/logs/pvp-v71-d44-l2-20261021b/`，約 3.0 h，期間不呼叫工具）。`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`）的四平台 L1（run 39470556006，#503）結果未看；這個分支要等 d44 結案後才併回。`incident-close` 等 d44 結案。
+- **進行中**：無（等你決定 d44 的第 3 次）。`observability-tools` 分支 `claude/pvp-v71-observability-tools`（`cbdc2b9`）的四平台 L1 #503 通過；等 d44 結案後才併回。`incident-close` 等 d44 結案。
 - **下一步**：你決定 DS 之後續跑 `d44-regression-pv7`；`re-evaluate` 由你看（D148）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -569,6 +570,8 @@
 - 2026-10-21：`observability-tools` 開始（D148）。盤點：late 計數在 v7.1 的判定上已經是增量（d44 證據 121＝121）；相位決策寫進 trace 會改 Data Contract（新 kind 要升版、凍結讀者會停），所以留給使用者決定格式；工具改動會碰 d44 session 凍結的檔案，所以放在另一個 worktree 分支。計畫：[observability-tools.md](observability-tools.md)。
 - 2026-10-21：`observability-tools` 的 OT-2～OT-5（[observability-tools.md](observability-tools.md) 第 6 節）：`late_count.py`、`network_resets.py`、遺失種子參數化（預設值重現舊常數），延遲 runner 的 D50 雜湊釘住改到新檔案；單元測試 3 本；新舊分析在 d44 證據上一致（late 121＝121、網路候選 0）；實跑 network20 與 impairments（種子 12345）都通過。注入正式模式（OT-4 的另一半）是改 D50 機制的設計變更，沒做。過程中的錯：第一次讓 `ActionRelay` 用四個參數呼叫基底類別，延遲 runner 的測試全部失敗，改回三個參數；第一次讀 action-frames 時沒處理結尾的 `evidence_end` 行，frames 的計數讀成缺漏。
 - 2026-10-21：`d44-regression-pv7` 的 DS-1 補遺（D149；[d44-regression-pv7.md](d44-regression-pv7.md) 第 12 節）。停止條件 1b：只有「量到的 relay 送出延遲超過上限」的注入無效才算 I（不計數，第 3 次停），其他注入無效仍是停止條件 1（限速拒絕是 D121 的訊號，不放寬）。§14.4 的 1～5 由 1 位審查者以資料核對：P1（p99 沒有量到也會被判成 I）已改程式；P2（範圍 2.6～3.6 ms）已更正。乾跑 51／51、突變 23／23，preflight 通過。第 2 版判定另存為 `judge_d44-v2.py`，用來重播第 1 次 session。
+- 2026-10-21：`observability-tools` 分支的四平台 L1 #503（run 39470556006，`cbdc2b9`）通過。
+- 2026-10-21：`d44-regression-pv7` 的 session 第 2 次（D150；11:13～12:03 JST）在第 92 項之後停下：12:03 主 checkout 被切到 `master`（reflog；不是本會話，本會話期間沒有呼叫工具），凍結的驗收工具變成舊版，driver 依停止條件 1 停下。前 92 項 0 事件、0 個 I。使用者同意後切回 `claude/pvp-v71-after-pv7`，preflight 再次通過。選項在 [d44-regression-pv7.md](d44-regression-pv7.md) 第 14 節。
 
 ## 未結事項
 

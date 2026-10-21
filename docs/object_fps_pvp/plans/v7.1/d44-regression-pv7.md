@@ -1,6 +1,6 @@
 # d44-regression-pv7：pv7 上線後的 D44 回歸（計畫，第 1 版）
 
-- 狀態：**DS-1 補遺核准（D150）；session 第 2 次進行中**（`logs/pvp-v71-d44-l2-20261021b/`）。
+- 狀態：**session 第 2 次因主 checkout 被外部切換而停在第 92 項（0 事件）；等你決定第 3 次怎麼跑**（第 13、14 節）。
 - 依據：README 的 `d44-regression-pv7` 列（「pv7 上線後的 D44 回歸，範圍涵蓋丟棄回報、三個 edge 行為批與 A1；加入持續延遲（x1、ramp）的樣本」；驗收「—／事前宣告＋D45 檢查／—」；估 10～14 h）、INVENTORY P8、A5、`plans/v7/HANDOFF.md` D44（:89）、D45（:90）、v7 第 16 批的整體回歸（`plans/v7/16-integration-acceptance.md`）。
 - 檔位：計畫與工具 medium；宣告、分析 high；D45 檢查 1 位 xhigh（第 7 節 DR-9）。
 - file:line 以 `8ecfe17` 為準；最後一個程式 commit 是 `572cc39`。
@@ -414,3 +414,32 @@ pv7-checkpoint 與 A1 的 L2 都只判了 clean 的非 respawn 重設（R3）與
 | 6 | CONFIRMED（driver 會延續 I 的累計並照常往下跑）；`dryrun/report.json` 的逐列結果被計數蓋掉 | 改成 `rows` |
 
 - 沒採用的建議：I 項也算出 D44 事件、列為只記錄。注入不純的跑次，事件也不可靠，所以不算；I 項的證據照樣保留，需要時可以事後看。
+
+## 13. session 第 2 次（D150，2026-10-21 11:13～12:03 JST）：外部切換 checkout 而停下
+
+- 證據：`build/target/_build/test/logs/pvp-v71-d44-l2-20261021b/`（`judgement.json`、`judgement.md`；判定 de62a759… 重播：完整性問題 0，重播的停止 0）。
+- **停在第 92 項之後**：driver 在第 93 項之前的檢查發現凍結檔案和 cp 清單不同（`acceptance_util.py`、`action_probe.py`、`gameplay_evidence.py`、`gameplay_soak_evidence.py`、`ingress_evidence.py` 等），依停止條件 1 停下。
+  - 原因：12:03 JST 主 checkout 被切到 `master`（`ca3ba62`，2026-10-18 的 AGENTS 文件合併）。`git reflog`：`checkout: moving from claude/pvp-v71-after-pv7 to master`；檔案的修改時間也是 12:03。`master` 的 `build/acceptance` 是 pv7-line 合併前後的舊版，所以凍結檔案不符。
+  - 不是本會話做的：session 期間本會話沒有呼叫任何工具。切換來自使用者或別的會話（使用者事後同意切回）。
+  - 切分：**環境**（外部的 checkout 切換），不是實作，也不是判定。driver 的檢查照設計攔下了它；如果沒攔下，之後的項目會用錯的工具或錯的執行檔。
+- 停下之前的 92 項（107 個 case-run）：**0 個 D44 事件**，沒有 I 項、沒有其他停止，使用者旗標 0。只記錄：受干擾 1 項（`socket-path-1000ms-r2`，之前的睡眠探測 15.3 ms）。
+
+| 母體 | 已跑 case-run | 事件 |
+|---|---|---|
+| 遊戲（故障 65、clean 15） | 80 | 0 |
+| 背壓 | 18 | 0 |
+| 網路一般 | 3 | 0 |
+| x1 | 3 | 0 |
+| ramp | 3 | 0 |
+
+- 第 1、2 次 session 都是從頭跑的同一個排程：第 2 次的 92 項和第 1 次的前 92 項是同樣的項目，各跑了一次。兩次合計仍然沒有跑到 impairments、短停頓、長測，以及網路、背壓、x1／ramp 的後半。
+- 主 checkout 已切回 `claude/pvp-v71-after-pv7`（`15a485d`）；`--preflight` 再次通過。
+
+## 14. 等你決定：session 第 3 次怎麼跑
+
+- **DR3-1（建議）**：不改工具，原樣**整個重跑**（約 3.0 h，輸出目錄 `pvp-v71-d44-l2-20261021c/`），並在跑的期間**不要切換主 checkout**（包括其他會話）。driver 每項之前的檢查會照樣攔下任何外部變更。
+- **DR3-2**：改成在專用的量測 worktree 跑（像 v7final），不受主 checkout 的切換影響。要改 `judge_d44.py`／`run_d44.py` 的路徑、在 worktree 重新建置、重寫產物清單，然後重新凍結雜湊、做乾跑；工具變更要宣告補遺並由你核准。約多 1.5～2 h。
+- **DR3-3**：driver 加「從第 N 項接續」，只跑第 93 項之後的 105 項（約 2.0 h），計數延續第 2 次。要改 driver、重新凍結雜湊、補遺與核准。
+- **DR3-4**：接受部分結果（兩次各自只跑完前半，0 事件），缺的母體留給下一次 D44 回歸。
+
+`incident-close` 等本批結案。`observability-tools` 的分支（L1 #503 已四平台通過）改了本批凍結的工具，所以也等本批結案後才併回。
