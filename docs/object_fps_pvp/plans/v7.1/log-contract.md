@@ -242,6 +242,8 @@ core 結束時（records 開始前）：
 
 建議全部移到 `observability-tools`（README 原估 10～13 h，加上這些約 19～23 h，到時候再拆）。
 
+補充（2026-10-21，D157）：這四項移到 `observability-tools` 之後，在它的計畫裡漏列，結案時也沒有核對。發現後依「還需不需要」重新判斷：rotation 拆分取消（D44 未再現，需要時可由移動紀錄推出）；逐筆到達事件跟著 B6 交給 v8；樣本流失取消（主要用途 B7 已取消）；週期性 IPC 寫出延遲取消（要加 Gateway 欄位，Match 端的 lane 寫出超時已由 E1-7 記錄）。重開條件見 INVENTORY。
+
 ## 12. records 的實作紀錄（2026-10-20，D143 之後）
 
 | 切片 | 結果 | commit |

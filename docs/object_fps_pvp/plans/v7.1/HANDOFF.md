@@ -1,6 +1,6 @@
 # PvP v7.1 交接
 
-更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：after-pv7 的 7 批全部結案（`re-evaluate` 也結案，D155）；PR #82 合併中（D156；詳見「現況」）。**
+更新：2026-10-21。Owner：`object_fps_pvp`。**狀態：v7.1 成為穩定基線（master `5ee499a`、CI #541 通過；[STABLE_BASELINE](STABLE_BASELINE.md)，D157）。剩 `after-re-evaluate` 的 37 項等你排序（詳見「現況」）。**
 本文件是 v7.1 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)，盤點在 [清單核對結果](INVENTORY.md)。
 
 ## 代號對照
@@ -9,14 +9,14 @@
 
 | 代號 | 意思 | 出處 |
 |---|---|---|
-| D86～D122 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
+| D86～D157 | 使用者在 v7.1 的決定（接續 v7 的 D1～D85） | 本文件「決策紀錄」 |
 | P1～P8、A1、A4、A5、B6～B11、C12～C17、D58-*、D-LOG、E1～E5、F1～F7、G1、G2、M0、TT2-B10、IP34-B12、LAN15、HB、N-* | 盤點的項目代號（使用者的初始清單＋新發現） | [INVENTORY](INVENTORY.md) |
 | plan-sync-docs | 同步 master（PR #75～77），寫本目錄 | README「樹狀總覽」 |
 | pv7-line | pv7 的 PR 線：`pv7-design`～`pv7-merge`（含 `edge-*` 六批），三角色同一個 PR，最後一次合併 | README「pv7-line 各批」 |
 | pv7-design | 所有 wire 欄位與語意一次定完，產出 `protocol-v7.zh-Hant.md` 草案 | 同上 |
 | D-1～D-7 | `pv7-design` 的待決事項（決定後轉成 Dxx） | [pv7-design](pv7-design.md)「等你決定」 |
 | D-8～D-15 | Gateway 方向（D-8）與選 (a) 時接著要決定的事 | [gateway-direction](gateway-direction.md) |
-| edge-* | 選 (a) 時的 Gateway 批次：`edge-results-resend`、`edge-input-passthrough`、`edge-actions-passthrough`、`edge-results-passthrough`、`edge-analyzers`、`edge-contract` | [gateway-direction](gateway-direction.md) |
+| edge-* | 選 (a) 時的 Gateway 批次：`edge-results-resend`、`edge-input-passthrough`、`edge-actions-passthrough`、`edge-results-passthrough`、`edge-analyzers`、`edge-contract`、`edge-rate-limit`（K1 的修正，D119） | [gateway-direction](gateway-direction.md) |
 | proto-rename-v7 | proto、Go 套件、CMake target 改名為 v7，版本值仍是 6 | 同上 |
 | version-errors | P1：版本 6→7、版本不符的明確錯誤、凍結 pv7 版分析器 | 同上 |
 | heartbeat-sync | P2：runtime link 心跳對時（只作診斷） | 同上 |
@@ -38,8 +38,8 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：PR #82 轉 ready、合併（D156）。
-- **下一步**：合併之後，v7.1 剩 `after-re-evaluate`（處置為「re-evaluate 之後」的 37 項，由你排序）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105）等你開始。
+- **進行中**：基線文件的 PR（分支 `claude/pvp-v71-stable-baseline`，只改文件）。PR #82 已合併為 `5ee499a`，master 的 CI #541（run 39577489227）19 個 job 全 success。
+- **下一步**：基線文件的 PR 合併；`after-re-evaluate` 由你排序；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始；docs-close 的「時鐘到網路路徑」系列紀錄還沒做。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -126,6 +126,7 @@
 | D154 | （2026-10-21）`re-evaluate`：同意第 2 版的判斷，但 B6、B7、A5 先補量再定（門檻 105 重推、快速正向回收隨 A5；N-phase-1-7 第 3 點隨 B6）；其他可以證明的直接處理（結案：N-respawn-reject-volume、N-conflict-window-permanent-loss、B9、N-quality-reference-age-sampling、N-09b-followup-measures；取消：B8；N-phase-1-7 第 6 點）；還需要的 A4、N-analyzer-literal-105 交給 v8；N-phase-estimator-wan-noise 等 WAN 測試。事故紀錄加後日談，只收和事故相關的項目 | 使用者：「同意 re-evaluate 第 2 版的判斷。12 項照寫結案或取消，重開條件照寫。還需要的 2 項交給 v8。」「等等，你把取消理由給我看一下呀。。。」「B6、B7、A5先補量再定，其他可以證明的，就直接處理掉，順便給事故紀錄加一個日後談，這個目錄就是設計失敗後不停加補丁的傷疤。」「當然，要選取相關事項，不是事故中的就不加了。」 |
 | D155 | （2026-10-21）`re-evaluate` 補量之後：B6 交給 v8 重新規劃（不沿用 09b 的 S／M；09b 1-7 第 3 點隨它）；B7、A5 取消（A5 照設計保留，連同門檻 105 重推、快速正向回收）。**`re-evaluate` 結案** | 使用者：「OK，那是否需要重新規劃一下B6的計劃，如果直接沿用之前測方案，我怕達不到最好的效果。」「B6交給v8吧。B7、A5 取消就好。」 |
 | D156 | （2026-10-21）PR #82（after-pv7 線：`tt2-trace`、`log-contract`、`dead-letter-position`、`d44-regression-pv7`、`incident-close`、`observability-tools`、`re-evaluate`）轉 ready 並合併。最後一次程式變更的四平台 L1 是 #532（`d5a4cec`），之後只有文件 | 使用者：「那沒問題了。#82合併。」 |
+| D157 | （2026-10-21）v7.1 的穩定基線：master 的 CI 通過之後，v7.1 成為穩定基線（v5、v6 是事故前的缺陷版本），寫正式的 `STABLE_BASELINE.md`（參照 v7）。`N-v7-skipped-acceptance`：v7 跳過的驗收不補做，照樣列為「跳過（使用者決定）」。LC-8 四項（D143 移到 `observability-tools`，計畫裡漏列）收尾：rotation 拆分取消、逐筆到達事件跟著 B6 交給 v8、樣本流失取消、週期性 IPC 寫出延遲取消；INVENTORY 另外更正 records 已做完的 4 列 | 使用者：「v5、v6在事故前是缺陷版本，v7.1 CI 過了就變成穩定基線。」「寫成正式的v7.1基線文件，。參照v7的STABLE_BASELINE.md」；N-v7-skipped-acceptance 選「不補，照樣列跳過」；「這些收尾處理了吧，你看要不要補？」「OK，就照這樣。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -309,7 +310,7 @@
   - 證據：`build/target/_build/test/logs/pvp-v71-edge-results-resend-20261016/`。
   - Architecture Delta：無（Match 的通道狀態多 `cursor`、`asked`，少了 `sent`；屬 IpcHost 內部）。
   - 實際約 1 h（17:25～18:19，含 xhigh 檢查約 13 分；估 7～8 h）。
-- 2026-10-16：同步 master（`497c138`，PR #79、#80）。只有 AGENTS.md 與 network-architecture 的標題改變，沒有衝突。之後照新的 AGENTS.md 做：§3 的 `Design Invariants`（含 `Replacement Criteria`）與「状態の権威」、§14 Test and Defect Handling（改既有測試的判定要寫理由；受入判定與 Design Invariants 守衛的判定要經你核准；事前宣告的門檻要在看結果之前核准）。本批改動既有測試判定的理由已寫在上面的紀錄與 commit 訊息。
+- 2026-10-16：同步 master（`497c138`，PR #79、#80）。只有 AGENTS.md 與 network-architecture 的標題改變，沒有衝突。之後照新的 AGENTS.md 做：§3 的 `Design Invariants`（含 `Replacement Criteria`）與「状態の権威」、§14 Test and Defect Handling（改既有測試的判定要寫理由；驗收判定與 Design Invariants 守衛的判定要經你核准；事前宣告的門檻要在看結果之前核准）。本批改動既有測試判定的理由已寫在上面的紀錄與 commit 訊息。
 
 - 2026-10-16 20:09：`edge-input-passthrough` 開始（D108，檔位 high，局部 xhigh，估 20～26 h）。`edge-results-resend`（`5c0d8f5`）的四平台 L1 是 run 38879679708（手動觸發）。
 
@@ -413,11 +414,11 @@
     - 根因（2026-10-18 定位，使用者：「繼續定位根因……定位完提出處理方案再停下」；工具在 `scratchpad/rp/rootcause/`）：
       - 逐命令時間線（Client 送出 → Match 收進 → 執行）：新 epoch 的第一個輸入 datagram，r4-B 在 Client 送出後 67.5 ms 才被 Match 收進（r4-A 17.1 ms，之後的都約 0.6 ms）；這段時間 relay 照常轉送，Match 沒有拒收，player 2 的輸入也沒到（Match 為它代用命令）。Gateway 的寫出延遲整場最大約 0.2 ms：封包在 Gateway 交給 link 之前就沒了。
       - Gateway 的計數：player 1 有 36 個輸入被 `drop_rate_limited_input_packets` 丟掉（A 33；player 2 是 4／3）。用 relay 的轉送時間重放 `session.go:118-123` 的限速（固定 1 秒窗口、超過 120 就拒；Gateway 停頓期間的封包在恢復時才讀到），**3 個跑次、兩位玩家、每一種封包的預測拒收數都和 Gateway 的計數完全相同**。
-      - 因果鏈：Gateway 停頓 1 秒，核心替它緩存了約 1 秒份的合法封包，恢復時一次讀進同一個窗口；player 1 平時每秒約 91 個（輸入 60＋動作約 30），約 0.4 秒後超過 120，窗口剩下約 0.6 秒的**每一個輸入**都被丟 → Match 讓它挨餓，在恢復後約 0.93～0.98 秒做 starvation 重設 → 新 epoch 的頭幾個輸入也落在同一個窗口被丟，Match 等窗口結束才開始執行 → Client 已多送了 1～4 步，相位修正補不回來，排隊數停在 3～4 → 約 1 秒後 backlog 重設，落在「恢復後 1.5 秒」的寬限之外。B 與 A 的差別只是重設離窗口結束多遠（67 對 17 ms），和樹無關；上一場同一個執行檔沒出事也是時機。
+      - 因果鏈：Gateway 停頓 1 秒，核心替它緩衝了約 1 秒份的合法封包，恢復時一次讀進同一個窗口；player 1 平時每秒約 91 個（輸入 60＋動作約 30），約 0.4 秒後超過 120，窗口剩下約 0.6 秒的**每一個輸入**都被丟 → Match 讓它挨餓，在恢復後約 0.93～0.98 秒做 starvation 重設 → 新 epoch 的頭幾個輸入也落在同一個窗口被丟，Match 等窗口結束才開始執行 → Client 已多送了 1～4 步，相位修正補不回來，排隊數停在 3～4 → 約 1 秒後 backlog 重設，落在「恢復後 1.5 秒」的寬限之外。B 與 A 的差別只是重設離窗口結束多遠（67 對 17 ms），和樹無關；上一場同一個執行檔沒出事也是時機。
       - 每一次 gateway-1000ms 的 player 1 都有第二次 starvation 重設（`starvation/in: 3` 的其中一次），也是這個限速造成的；一直存在，被 D61 的 1.5 秒寬限蓋住。
       - 契約：固定窗口 120 包／秒寫在 `network-architecture.zh-Hant.md:950`（protocol-v5 也寫「既有 120 包／秒限制不變」），在通用層 `services/gyo_gateway/session/session.go`。
     - 提出的處理（等使用者決定）：
-      - (a)（建議）改成 token bucket（每秒補 120、容量 120）：長期上限不變（任何 1 秒滑動窗口仍 ≤240，與固定窗口跨邊界時相同），但 Gateway 自己停頓 1 秒後讀進的緩存封包（約 91 個）用掉累積的 token，之後 91／秒 低於補充率，不再丟。改契約條文；先寫失敗的測試（用這次的到達序列重放，期望 0 拒收；洪水仍限在 120／秒）、突變。L2 兩棵樹都帶這個修正（B'＝`f79bb10`＋修正，A'＝`67d7da7`＋修正），比較仍只看這批的改動；宣告第 5 版加判定：gateway-1000ms 的限速丟棄 0、player 1 的 starvation 重設只剩停頓中那一次。
+      - (a)（建議）改成 token bucket（每秒補 120、容量 120）：長期上限不變（任何 1 秒滑動窗口仍 ≤240，與固定窗口跨邊界時相同），但 Gateway 自己停頓 1 秒後讀進的緩衝封包（約 91 個）用掉累積的 token，之後 91／秒 低於補充率，不再丟。改契約條文；先寫失敗的測試（用這次的到達序列重放，期望 0 拒收；洪水仍限在 120／秒）、突變。L2 兩棵樹都帶這個修正（B'＝`f79bb10`＋修正，A'＝`67d7da7`＋修正），比較仍只看這批的改動；宣告第 5 版加判定：gateway-1000ms 的限速丟棄 0、player 1 的 starvation 重設只剩停頓中那一次。
       - (b) 只修 A，B 照舊：B 每次 gateway-1000ms 仍有這個時機風險（本場 4 次中 1 次），session 可能再停在 B。
       - (c) 這批先不修，記為已知缺陷、照宣告重跑：根因不處理，結果靠時機。
     - 使用者選擇（D118）：記為已知缺陷 K1，先完成功能，發版前重新測試與重新評估 (a)。
@@ -482,7 +483,7 @@
   - 契約：`network-architecture.zh-Hant.md` 的 Gateway 圖（998 行，原 950 行）與第 08c 批的說明（1014 行）改成 token bucket，K1 的已知項目改成已處理。
   - 突變：新增 4 個（`v71rl-*`：沒有 burst、閒置額度無上限、被拒仍扣額度、容量 61），全部殺死；新增 check `gateway_session`（通用層的 `go test ./session/...`）。突變目錄 402 個，沒有過時的 find。
   - 驗收（L1，本機）：通用層與產品層 `go test -race`、CTest 72／72、preset 外 4／4。通用層的測試在 CI 由 `go_checks.py` 對登記的 Go 模組執行。
-  - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩存的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
+  - Architecture Delta：engine owner 的通用層 `services/gyo_gateway/session` 的限速算法改變（行為：Gateway 自己停頓後不再把緩衝的合法封包當成超速）；上限的數字與介面不變，使用者只有 `object_fps_pvp`。依據是產品的 L2 證據（K1），但算法本身與產品無關。
   - L2 的兩棵樹：B'＝`1802f08`（`f79bb10`＋只套用這次的限速修正；本機分支 `claude/pvp-v71-l2-b-ratelimit`，不推送；`../GYO-Engine-rl-before`），A'＝`7bb1f84`（`../GYO-Engine-ap-after`）。宣告 [edge-rate-limit-l2.md](edge-rate-limit-l2.md) 第 1 版草稿（取代第 4 版；新增 K1a「gateway-1000ms 沒有限速丟棄」、K1b「Gateway 恢復後沒有 starvation 重設」，R6 改用 `pvp-v71-ingress-3`）。核對實測值時更正兩處：修正前每跑次 player 1 的限速丟棄合計 48～53（不只輸入），backpressure 也有 0～2。
   - 宣告第 1 版經 D45 檢查（1 位 xhigh，約 12 分）：必須修正 2、應修正 5、記錄 6，改進第 2 版（第 7 節）。M1 要使用者決定：凍結分析器 `gameplay_evidence.py:210`、`gameplay_soak_evidence.py:377`、`action_probe.py:353` 要求 Gateway 的固定 1 秒窗口計數 `max_session_window_packets ≤120`；token bucket 下停頓後同一秒會放行約 170，兩棵樹都會在第一個 gateway-1000ms 停下。來歷：同一處的「限速拒收＝0」在 gateway 模式刻意不判（K1 當年被當成預期行為接受）。建議 (a) 改用限速器自己的拒收計數＝0（gateway 模式也判）、窗口計數只記錄。A' 已建置；B' 建置中。
   - D122 的修改：`gameplay_evidence.py` 新增 `gateway_limiter_problems()`（拒收＝0，所有模式；窗口計數只記錄），`gameplay_soak_evidence.py` 共用它；`action_probe.py` 的檢查改成所有模式都要拒收＝0、`rate_limit_acceptance_policy` 的說明同步。測試：`test_gameplay_evidence.py` 加 1 個、`test_action_evidence.py` 改 1 個並加 1 個（窗口 170 但沒有拒收時，限速檢查不出錯）。突變新增 4 個（拒收被忽略、窗口檢查回來 ×2、gateway 模式又被豁免），全部殺死；新增 check `gameplay_evidence`、`action_evidence`。重新凍結：`build/target/_build/test/logs/pvp-v71-edge-rate-limit-20261018/frozen-pv7-rl.sha256` `09b5579b…`（＝`frozen-pv7-ea.sha256` 只更新 7 個檔案：上面 5 個，加上把 `action_probe.py` 的雜湊寫死在程式裡的 `run_client_delay.py`、`run_short_stall.py`）。**經過**：第一次提交（`c82ecc5`）時 CTest 有 1 項失敗（`client_delay_runner`：這兩個 runner 繼承 `action_probe` 的 relay，要求它的雜湊等於寫死的值），指令串沒有在失敗時中止，提交與推送照樣做了。修正：兩個 runner 的常數更新成新雜湊（`action_probe.py` 只改了限速判定，relay 沒動），凍結清單補上它們；之後 CTest 72／72、preset 外 4／4。soak 的呼叫點沒有突變覆蓋（`analyze_soak` 沒有可餵 Gateway 計數的測試 fixture），由共用函式的測試與 L2 的 soak 項目守。
@@ -589,6 +590,7 @@
 - 2026-10-21：**OT-4 引入的缺陷**（`observability-tools` 結案之後，`re-evaluate` 補量時發現）：`run_case` 建立 relay 時多傳了 `loss_seed`，而 `run_client_delay.py` 替換進去的 `DelayRelay` 只收 3 個參數，所以每一次真實的延遲注入都是 runner error（補量第 1 次 18/18 失敗，證據 `logs/pvp-v71-reeval-map-20261021/runs-attempt1-runner-error/`）。單元測試把 `run_case` 整個替換掉，L1 也不跑真實的延遲注入，所以沒有抓到。照 §14.3：重現（真實跑次）→ 加測試 `test_the_delaying_relay_accepts_the_arguments_run_case_passes`（以 `run_case` 原始碼裡的呼叫參數數去綁定替換類別的建構子），Red 確認 → 修 `DelayRelay` 接受並轉傳種子 → Green；突變 `ot4-delay-relay-three-arguments` killed（新增 `client_delay_runner` 檢查：原本掛在 `cpu` 上時存活，因為 `cpu` 只跑 C++ doctest）。補量第 2 次 18/18 完成。後日談依使用者補上 B8、WAN 雜訊、參考年齡，B9 列為部分相關。
 - 2026-10-21：L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）與 #532（`d5a4cec`，OT-4 缺陷修正）都是四平台通過。`re-evaluate` 補量的結果（[re-evaluate.md](re-evaluate.md) 第 4.3 節）：分布和 v7 的 09ab L2 相同；A5 的 300 ms 型 12/12 backlog 重設；B6 在 100 ms 格是 +3 ms、約 4 秒，但 150 ms 格的部分撤回留下 +22～27 ms、約 4 秒（4/8 個單位），比第 1 版的判斷大。
 - 2026-10-21：使用者問 B6 的機制與為何仍成立。說明：B6 是相位追蹤自己的時序問題（late 修正後的重新擷取在 slew 結束時決定，用到延遲期間的樣本），09b 的量測本來就是在修好資訊流之後做的，所以不是事故的副作用；第 1 版把它說成「+3 ms」，是沒有區分 1-7 第 1 點與第 3 點。使用者擔心沿用舊方案效果不好，決定交給 v8 重新規劃（D155）；B7、A5 取消。**`re-evaluate` 結案**；after-pv7 的 7 批全部結案。
+- 2026-10-21：PR #82 合併（D156，`5ee499a`；轉 ready 後 head 經分支會話與文件會話各推一個只改文件的 commit：`111e3ad` 改「後日談」、`71f550e` 四層總表）。master 的 CI #541 全部通過，v7.1 成為穩定基線（D157）。寫 [STABLE_BASELINE.md](STABLE_BASELINE.md)（參照 v7；pv7-line 的事實由代理彙整、逐項附出處）。寫之前發現兩件事：`N-v7-skipped-acceptance` 標「STABLE_BASELINE v7.1 前決定」，使用者選不補；log-contract 的 LC-8 四項（D143 移到 `observability-tools`）在它的計畫裡漏列、結案時也沒核對，使用者同意照「還需不需要」收尾（D157）。INVENTORY 另外更正 records 已做完卻沒更新的 4 列。
 - 2026-10-21：使用者要求在 2026-10-15 設計事故紀錄第 11 節（後日談）開頭補「補丁有多少」的四層總表（Gateway 自己長出的狀態 8 種機制、留下的 33 個計數鍵與 11 個過渡原因、建在截斷資料上的 3 組推導、待評估清單的 9 項），原表保留為第 4 層細目；2026-10-10 事故紀錄第 7 節補充處加連結。由文件會話撰寫，併進 PR #82。
 
 ## 未結事項
@@ -600,7 +602,7 @@
   - 第 2 個實例（2026-10-21，run 39557685906，L1 #517，`3346379`）：另一個案例 `MovementRecoveryTests.cpp:429`「PvP exhausted lead recovers 108 ms 250 ms and six second render stalls across LAN phases」（path v6、fps 144、RTT 20、stall 108、impaired、worker 8000、authority 6000：`unexpectedRejections` 1），同樣只在 macos-x64；windows-x64、linux-x64、macos-arm64 通過，本機 CTest 77／77。這次的推送改了 `LocalPlayerPrediction`（只多寫 trace；沒有安裝 sink 時只是取鎖後返回），所以不能完全排除和它有關；但失敗的種類（同檔、同斷言、只在 Rosetta）和 10-18 改動之前的那一次相同。照平台優先序只記錄。
   - 觀測併入（2026-10-21，使用者：「能加一個保險麼」，選「下次失敗留下證據」）：把 `923bd0e`（只在失敗時印出 Host 的拒絕記錄與每 0.5 秒虛擬時間的事件序列摘要值，判定不變）挑進 after-pv7 線，並在第 2 個實例的案例（:429 的 exhausted lead）也印出。下次 CI 再失敗時，用失敗那一組參數在本機重跑、比對第一個不同的摘要值，就能縮小分歧的區間。故意讓斷言失敗確認過輸出；本機 `object_fps_pvp.cpu` 通過（21 秒）。該 commit 當時已在本機 Intel x64 用 ASan＋UBSan、MallocPreScribble、`-ftrivial-auto-var-init=pattern` 跑過，事件序列全部一致（未初始化記憶體的假設在原生 x86 上是陰性）。
 
-- **（已處理：D121、`edge-rate-limit` 的 L2 通過）K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩存的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
+- **（已處理：D121、`edge-rate-limit` 的 L2 通過）K1：Gateway 固定窗口限速在 Gateway 停頓後丟掉合法輸入（已知缺陷，D118）**（2026-10-18，`edge-actions-passthrough` 的 L2 第 2 次 session 停下的根因）。`services/gyo_gateway/session/session.go:118-123` 的限速是「固定 1 秒窗口、超過 120 就拒」；Gateway 停頓時核心緩衝的合法封包在恢復時一次讀進同一窗口，開槍的玩家（約 91 包／秒）約 0.4 秒後超過 120，窗口剩下約 0.6 秒的輸入全部被丟，引發 starvation 重設、延後的新 epoch 與之後的 backlog 重設。每一次 gateway-1000ms 都有它造成的 starvation 重設（被 D61 的 1.5 秒寬限蓋住）；兩棵樹都有，與這批無關。證據與重放工具見規劃紀錄 2026-10-18 05:02 條目。
   - **edge 系列收尾的 `edge-rate-limit`（D119；原為發版前，D118）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
   - 背景（使用者，2026-10-18）：網路在 v7.1 多次修改，很多是改網路機制；這可能是舊 Gateway 留下的痕跡。分析：限速本身是通用層的防洪機制（v5 以前就有），不是產品層的狀態副本；但它的兩個假設（Gateway 即時讀封包；流量遠低於 120）被 v7／v7.1 的修改侵蝕（30 Hz 動作批、時間回聲、09a 的 82 包輸入上限，開槍玩家平時已約 91 包／秒）。
 
@@ -620,19 +622,19 @@
 - **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
 
 - **保留的 worktree 與本機分支**：
-  - `GYO-Engine-v7final`（`6d3f287`）、`GYO-Engine-c2-after`（`d685d1e`）：v7 的基準與凍結工具副本，保留到 `d44-regression-pv7` 完成。
+  - `GYO-Engine-v7final`（`6d3f287`）、`GYO-Engine-c2-after`（`d685d1e`）：v7 的基準與凍結工具副本，保留到 `d44-regression-pv7` 完成（D146 DR-8 延到 `re-evaluate` 結束）。**（已處理，2026-10-21）**：`re-evaluate` 已結束；worktree 的清理由使用者交給架構會話。
   - `GYO-Engine-m0`（`5ef8a89`，分支 `m0-probe-5ef8a89`，未推送）：M0 已取消（D90），經使用者同意後歸檔。
   - `tt1-l2-wake-record`（`a8f9535`）、`v6c2`（`1be1edd`）等其他未推送的 commit 與 worktree：列清單請使用者決定。
   - 任何刪除都要先經使用者同意。
-- **D58 (1)(8) 的暫定決定**：在 `log-contract` 一起確認。
+- **（已處理：D142）D58 (1)(8) 的暫定決定**：在 `log-contract` 一起確認。
 - **檔位**：`pv7-design`、`log-contract` 開始前先問 ultracode（v7 D45）；`pv7-design` 另做 1 次 xhigh 對抗式檢查；每次 L2 宣告前做門檻來源的對抗式檢查（D45）。
-- **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。
-- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。
+- **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。`re-evaluate` 已結束（D155），等使用者排序。
+- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。**（仍未補，2026-10-21）**：兩批都沒有處理。
 - **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note）：
   - Match 回覆「排在 controls、action lane、snapshot 之後」沒有可決定的測試（asio 下同一個 socket 可寫優先於可讀），只靠審查與 L2。
   - 差分測試不到 10 秒，所以視窗只在關閉時結算一次，跳變與漂移沒有在差分中算到（估計器另有單元測試，且結構上隔離）；也不跑滿品質視窗（600 tick × 3），逐出與 160 ms 門檻沒有在差分中判定。要延長會讓 CI 多數十秒。
   - Match 被 `Stop()`（不經過 `Close`）時沒有最後一個視窗的 log；runner 先停 Gateway，所以平常會走 `Close`。
-  - 活性逾時有兩種字串：Read 逾時是 `read tcp …: i/o timeout`，剩餘 ≤0 是 `runtime liveness: i/o timeout`，兩者都含 `i/o timeout`；在 `log-contract` 統一。
+  - 活性逾時有兩種字串：Read 逾時是 `read tcp …: i/o timeout`，剩餘 ≤0 是 `runtime liveness: i/o timeout`，兩者都含 `i/o timeout`；在 `log-contract` 統一。**（已處理：D143 的斷線哨兵錯誤）**
   - 只為測試存在的狀態：`runtimeLink.now`、`takes`，套件變數 `runtimeLiveness`、`writerIdleWait`、`diagnosticInterval`。`edge-contract` 的白名單（D-14）到時要分類。
   - 差分測試的結尾等 300 ms 沒有訊息，已改成整體截止 3 秒；`edge-results-resend` 之後 Match 會重送未確認的結果，到時再確認。
   - L2 的預期（xhigh 推導，〔推論〕）：Windows 上 Go 的單調時鐘解析度可能是 15.6 ms，Gateway 在 Windows 時會出現假的 `jump=1` 與 `negative_delay`（`lan15-windows` 要事前宣告）；macOS 上 Go 用 `mach_absolute_time`（睡眠時停），libc++ 的 steady_clock 可能睡眠時繼續走，所以睡眠那段兩端都預期出現一次約等於睡眠長度的跳變，不算失敗。
@@ -640,9 +642,9 @@
   - 記憶體只增不減：Gateway 帳本的 `ended` 與 Match 的串流表都依玩家 id 累積；惡意的 join／leave 推不高訊息數，但推得高記憶體。
   - 過渡原因的樣本身分不完整：16、17、20、21、28 沒有 action id 範圍；22～26 的 dwell 起點是計數時刻。edge 批刪除過渡原因時一併消失；28（結果寫出失敗）的 action id 範圍在 `edge-results-*` 補。
   - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
-  - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。
-  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。
+  - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。**（已處理：D142，鍵名不改，差額由 `backpressure_test.go` 守住）**
+  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21）**
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4）：契約節的標題改成英文 `Design Invariants`，不隨文件語言翻譯（使用者的決定，文件會話 PR #80，2026-10-16 通知時尚未合併；這更正了 PR #79 時「標題逐字保持『不可破壞的契約』」的要求）。
   - `edge-contract` 把 Gateway 的正式條文寫在 `network-architecture.zh-Hant.md` 的 `### Design Invariants` 節下。PR #80 已合併到 master（`8f2f3fe`，四平台 L1 通過）；本分支在 `edge-results-resend` commit 之後同步 master，不自行改名。master 的 AGENTS.md 另新增 §14 Test and Defect Handling（原 §14、§15 往後移），同步後照新規則做。
   - AGENTS.md §3 改成一般規則「状態の権威（State Authority）」，不再列 Gateway 的細節；Gateway 的允許／禁止清單（protocol-v7 §2a）只放在 Design Invariants 節。
-  - 同節新增 `Replacement Criteria`：新建元件或加大既有元件的責務之前，先在 Design Invariants 寫下「什麼情況就換掉它」。`edge-contract` 時提案 Gateway 的 Replacement Criteria，由你決定。
+  - 同節新增 `Replacement Criteria`：新建元件或加大既有元件的責務之前，先在 Design Invariants 寫下「什麼情況就換掉它」。`edge-contract` 時提案 Gateway 的 Replacement Criteria，由你決定（**已處理**：`network-architecture.zh-Hant.md` 的 Design Invariants「Gateway」一節已有 Replacement Criteria）。
