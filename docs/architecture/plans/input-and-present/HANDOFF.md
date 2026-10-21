@@ -1,6 +1,6 @@
 # 輸入與呈現：交接
 
-更新：2026-10-21（IP-3／IP-4 的規劃，草案待核准）；2026-10-08。**狀態：IP-3／IP-4 規劃中（[PLAN](PLAN.md) 文末的草案，等使用者在 ip3a 關卡前核准）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-21（IP-3／IP-4 核准，D31；ip3a 進行中）；2026-10-08。**狀態：IP-3 進行中（ip3a）；IP-2 完成（縮小交付），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）；IP-1 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）。** 2026-10-04 由提出需求的消費端在其規劃批次中建立。
 2026-10-05：消費端完成第3項的重現與阻塞取得下的量測基線（B0），摘要見第3項「消費端重現（B0）」；縮放時的停頓位置與先前的前提不同，見未結事項。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。
 
@@ -38,6 +38,7 @@
 | 2026-10-14 | 消費端 D76 的連帶：IP-3、IP-4 的第一個消費端（去 SDL 的遷移）移到消費端的下一個版本（重構版）；IP-5 的第一個消費端（以命令列選項選擇解析度、視窗模式與 FPS 上限）移到再下一個版本，和設定 UI 與保存（D41 的連帶）一起做。IP-3～IP-5 的範圍與檔位不變，不重新規劃；時點跟著第一個消費端。IP-3 仍依賴時間、執行緒與 Trace 計畫的 TT-2（它的消費端也移到同一個重構版） | 使用者 |
 | 2026-10-21 | D29：IP-3、IP-4 與提出需求的消費端的遷移同一個 PR，IP-3、IP-4 是 PR 內的里程碑（各自寫 dev_log）。依據：消費端既有的決定「標頭去 SDL、PRIVATE 連結與產品遷移必須一起合併」，以及消費端 2026-10-21 核准的 PR 線；符合 D18 | 使用者（經消費端的規劃） |
 | 2026-10-21 | D30：IP-3／IP-4 的規劃用 ultracode（2 位盤點、3 個獨立方案、1 位評審合成），公開介面由 1 位 xhigh 審查（README 的 IP-3 列），另做 1 次對抗式檢查；依 D8 經使用者同意 | 使用者 |
+| 2026-10-21 | D31：核准 IP-3／IP-4 計畫（[PLAN](PLAN.md) 文末），U1～U10 全部照建議：接受約 2 倍的估時（各子批開始前重估，超過 1.5 倍就停）；ui_editor 做機械修改；README 以外新增的 6 項；時間戳型別用 `std::chrono::steady_clock::time_point` 並 `static_assert` 與 `Time::TimePoint` 相同（不新增 Input→Time 邊）；`NativeEventObserver` 由 `PlatformEvent` 承接；凍結 oracle 改 golden（走 §14.4 的核准流程）；X11 加中立查詢；新建英文的 `platform-sdl.md`；capture 放 GPU 後端；IP-4 的介面另做 1 次 xhigh 審查。另：設計提前在 ip3a 寫成架構文件（`docs/architecture/platform-sdl.md`、`input.md`） | 使用者（「照計劃執行，記得把這個設計落到架構文件中去」） |
 
 ## 正式項目清單
 
@@ -259,6 +260,12 @@
     - 低：capture 的位置（U9）、X11（U7）、`TextEvent.timestamp` 沒有功能需要 → 拿掉、測試縫只在 Native 標頭、IP-4 的介面審查（U10）、Metal 長幀的未結事項不宣稱、L2 門檻的對抗式檢查、日誌行的 B 級核對（ip3a）。
   - 估時：Engine 37～46.5 h，加消費端約 19～26 h；原本估 26～34 h，約 2 倍（U1）。
   - 停在 ip3a 關卡前，等使用者核准草案與 U1～U10。
+- 2026-10-21：使用者核准（D31）。ip3a 開始（檔位 high，估 3～4 h）：設計寫成架構文件 `docs/architecture/platform-sdl.md`（SDL 後端的分層、契約、Design Invariants 9 條、Replacement Criteria 6 條）與 `input.md`（輸入幀的契約、Design Invariants 4 條、Replacement Criteria 3 條；對抗式檢查 M8：輸入幀的條文屬 `GYO::Input` 的 owner）。兩份都標明「已核准、尚未實作」，每條寫出由哪個里程碑成立、由哪個守衛守住。
+- 2026-10-21：ip3a 完成，停在關卡（[ip3-declaration.md](ip3-declaration.md)，等使用者核准）。
+  - 簽章定案的更正兩項（查 SDL 3.4.0 原始碼）：`ClipboardText()` 回 `std::string`（SDL 失敗時也回空字串，分不出來）；`Sync()` 回 `bool`（`SDL_SyncWindow` 只回 true／false）。新增錯誤碼 6 個。
+  - 宣告：ip3b～ip3e 的判定（不用常數門檻）、突變 16 個（m6a、m6b、m1～m4、m-zero、m7～m9、m-up、m-layout、m10～m12、m-throw，逐項寫明由哪個判定殺掉）、機率性測試 2 個的試行規則（各 200 輪、60 秒、不重試）。
+  - 消費端日誌契約的核對：A 級行中只有 1 個行族（受擊回饋行）經 SDL 寫出，ip3e 的停止條件會成立；處理方式交消費端，在本關卡一起決定。
+  - 實際約 1 h（估 3～4 h）。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

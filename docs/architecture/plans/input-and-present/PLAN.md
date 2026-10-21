@@ -1,6 +1,6 @@
 # 輸入與呈現：批次計畫
 
-更新：2026-10-21（IP-3／IP-4 草案，見文末）；2026-10-05。狀態：IP-1、IP-2 完成；IP-3／IP-4 規劃中（草案待核准）。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
+更新：2026-10-21（IP-3／IP-4 計畫核准，D31，見文末）；2026-10-05。狀態：IP-1、IP-2 完成；IP-3 進行中（ip3a）。先讀 [進度與執行規則](README.md)、[交接](HANDOFF.md)。
 
 本文件寫兩批的範圍、驗收、平台表與 Architecture Delta。現況與證據的完整敘述在 [HANDOFF](HANDOFF.md)「正式項目清單」。
 file:line 以 master `05042fa` 為準，批次開始時重新核對。
@@ -316,9 +316,9 @@ Fitness：Engine 不出現產品名；刪除提出需求的消費端後，新語
 
 ---
 
-# IP-3／IP-4（草案，2026-10-21；ip3a 關卡前，等使用者核准）
+# IP-3／IP-4（2026-10-21 核准，D31）
 
-**狀態：草案。** 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
+**狀態：核准（D31：U1～U10 照建議）；ip3a 完成，宣告見 [ip3-declaration.md](ip3-declaration.md)，等核准。** 設計已寫成架構文件 [platform-sdl.md](../../platform-sdl.md) 與 [input.md](../../input.md)（使用者要求，提前到 ip3a）。 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
 file:line 以 master `6fbb6a9` 為準，子批開始時重新核對。SDL 原始碼的引用以 SDL 3.4.0（`third_party/sdl3`）為準。
 
 ## 共通規則的補充（IP-3、IP-4）
@@ -423,7 +423,7 @@ struct TextEvent final {
     KeyModifiers modifiers{};
     bool repeat{};                    // Kind::Key records presses only (including repeats), never releases
 };
-struct InputEvent  { /* existing */ TimePoint timestamp{}; };        // type: U4
+struct InputEvent  { /* existing */ std::chrono::steady_clock::time_point timestamp{}; };   // U4: static_assert == Time::TimePoint in the backend; no Input->Time edge
 struct PhysicalInputFrame { /* existing */ std::vector<TextEvent> text; };   // BeginFrame clears it
 ```
 
@@ -486,12 +486,12 @@ IP-3
 
 | 代號 | 驗收點 | 估時（h） | 停止條件 |
 |---|---|---|---|
-| ip3a | 簽章與本節的契約定案；Design Invariants 草案；ip3c～ip3e 的判定、突變表、機率性測試的試行次數（§14.1）；核對改走 Base handler 的日誌行是否都屬消費端日誌契約的 B 級 | 3～4 | **必停**，交使用者核准 |
+| ip3a | 簽章與本節的契約定案；設計寫成架構文件（`docs/architecture/platform-sdl.md`、`input.md`，D31）；ip3c～ip3e 的判定、突變表、機率性測試的試行次數（§14.1）；核對改走 Base handler 的日誌行是否都屬消費端日誌契約的 B 級 | 3～4 | **必停**，交使用者核准 |
 | ip3b | G1：衛生 TU include 所有非 Native 的後端公開標頭，`#if defined(SDL_stdinc_h_) \|\| defined(SDL_h_) \|\| defined(SDL_platform_defines_h_)` 就 `#error`。G2：ratchet 掃描 `\bSDL_\w+\|\bSDLK_\w+\|\bSDLCALL\b\|<SDL3/`（先去掉註解），範圍 `engine/**/include`（排除 `native/`），allowlist 只減不增，本批結束時為空。兩者先 Red 後 Green；突變 m6a（放回 `SDL.h`）、m6b（放回 `SDL_events.h`）都要被抓到。IP-1 既有測試判定不變。L1 四平台。同機兩樹 digest | 8～12 | 出現計畫外的依賴邊；IP-1 測試的判定（期待值、條件）必須修改；ui_editor 的修改超出機械修改 |
 | ip3c | 純函式：signed delta、clamp、`sdlNs==0`。整合：`p0=Now()`；`SDL_PushEvent`（ts=0，由 SDL 補上）；`p1=Now()`；`Waiter` 等 ≥5 ms；pump；斷言 `p0−β/2 ≤ ts ≤ p1+β/2`（β 由測試縫讀出），另立「`ts ≤ 交付時刻`」。假配對在兩次 pump 之間跳 10 s，結果跟著跳。突變（逐項標明由純函式或整合判定殺掉）：m1 只在 `Create` 取一次配對、m2 負的 delta 歸零、m3 正負號反轉、m4 拿掉 clamp、m-zero 不特判 0 | 4～5 | 宣告的判定不成立時先報告，不重跑；兩種量法都無法定論就停 |
 | ip3d | `text` 只在文字輸入啟用期間有內容（收集條件在事件到達時查 SDL 的狀態，不保存副本）；`Kind::Key` 只記按下（含 repeat），repeat 不進 `events`；文字與按鍵在 `text` 內依到達順序；`layoutKey` 以 Native 構造 `scancode=Q, key='a'` 的事件驗證；剪貼簿 set→get（先確認 dummy driver 的行為）。突變：m7 停用時仍填、m8 repeat 進 `events`、m9 順序反轉、m-up 放開也記、m-layout `layoutKey=key` | 4 | 表示方式需要改既有欄位的語意 |
 | ip3e | 橋：等級對照；tee 與只轉送兩種模式的行數守恆（Base 收到推入數；原輸出收到推入數或 0）；同執行緒重入時原輸出恰好 1 行；並行建立與解構（試行次數在 ip3a 宣告）；解構檢查目前輸出。`BaseDirectory` 與 `SDL_GetBasePath` 一致，非 ASCII 的 UTF-8 在 windows CI round-trip。`tests/common/runtime_sdl` 改用 `GyoMain`，CI 四平台檢查結束碼。突變：m10 拿掉防重入、m11 不還原、m12 丟掉 `GyoMain` 的回傳值、m-throw 例外穿出 | 4～5 | Windows CI 拿不到 main；日誌行觸及消費端日誌契約的 A 級 |
-| ip3f | 突變全跑；L3（macOS Intel）：位址輸入、Ctrl+V、按住 Backspace、Ctrl+A、Return／Esc 與以前相同；live resize 正常；日誌檔裡的 SDL 行與以前相同；寫 `docs/architecture/platform-sdl.md` | 3～4 | — |
+| ip3f | 突變全跑；L3（macOS Intel）：位址輸入、Ctrl+V、按住 Backspace、Ctrl+A、Return／Esc 與以前相同；live resize 正常；日誌檔裡的 SDL 行與以前相同；架構文件的「Status」改成實作後的狀態 | 3～4 | — |
 
 **IP-3 合計 26～34 h（Engine 部分）。**
 
@@ -527,7 +527,7 @@ high。ip3c 局部 xhigh；ip3e 的日誌橋重入局部 xhigh。公開介面的
 2. **現在的問題**：SDL 經公開標頭傳出去（`SdlPlatform.hpp:8,44,75`、`SdlInput.hpp:8,32`、`SdlRenderer.hpp:6,63`）；事件沒有時間戳（`PhysicalInputFrame.hpp:95-106`）；消費端同時有兩個方向的日誌轉送（`main.cpp:24-50`）。
 3. **改變的邊界**：後端分成中立 API 與 `*Native` 兩層；`NativeEventObserver` 由 `PlatformEvent`＋`NativeEvent()` 承接（README 方針 3 的「保留」）；輸入幀以加法擴充；process 進入點的掛點由 Engine 擁有，本體由消費端擁有。
 4. **影響範圍**：`engine/platform/sdl`、`engine/input`、`engine/input/backend/sdl`、`engine/render/backend/{sdl,sdl_gpu}`、`tests/common`；提出需求的消費端；ui_editor（機械修改）；未啟用產品只寫遷移清單。
-5. **依賴方向**：新目標 3 個 `*Native`（INTERFACE）與 `GYO::PlatformSDLMain`（OBJECT）；`gyo_input_sdl` 與兩個 render 後端 PRIVATE 連 `GYO::PlatformSDLNative`；`GYO::Input` 是否新增 → `GYO::Time` 依 U4。沒有循環，方向仍是 Application／Editor → Engine。
+5. **依賴方向**：新目標 3 個 `*Native`（INTERFACE）與 `GYO::PlatformSDLMain`（OBJECT）；`gyo_input_sdl` 與兩個 render 後端 PRIVATE 連 `GYO::PlatformSDLNative`；`GYO::Input` 不新增 → `GYO::Time` 的邊（U4：時間戳用 `std::chrono::steady_clock::time_point`，後端 `static_assert` 與 `Time::TimePoint` 相同）。沒有循環，方向仍是 Application／Editor → Engine。
 6. **Ownership**：SDL 時鐘的換算由 platform 獨佔；文字的收集歸 input 後端；剪貼簿、日誌橋與注入旗標歸 platform；文字編輯政策歸消費端。
 7. **為什麼不能更小**：forward declaration 會讓 `SDL_*` 名稱留在標頭，消費端的符號判定過不了；只改 PRIVATE 而不拆 Native，ui_editor 與 `tests/common` 會編不過；把文字放進 `events` 會改變 IP-1 的契約（`PhysicalInputFrame.hpp:113-114`）。
 
@@ -633,7 +633,7 @@ IP-4
 
 G1、G2、G3 生效；ui_editor 與 `tests/common` 經 Native 目標建置；突變全殺；遷移清單、HANDOFF、README、dev_log 已更新。
 
-## Design Invariants（草案；正式條文在 ip3f 寫進 `docs/architecture/platform-sdl.md`，U8）
+## Design Invariants（正式條文在 `docs/architecture/platform-sdl.md` 與 `input.md`；本節是規劃時的摘要）
 
 1. SDL 後端的非 Native 公開標頭不直接、也不間接 include SDL，不出現 `SDL_` 符號。守衛：G1、G2。
 2. SDL 型別只能經 `*Native` 目標取得；連結 `*Native` 等於宣告直接使用 SDL。從 IP-4 起，後端以 PRIVATE 連 SDL3。守衛：G3。
@@ -682,7 +682,7 @@ G1、G2、G3 生效；ui_editor 與 `tests/common` 經 Native 目標建置；突
 - 連結：PRIVATE 之後，仍直接使用 SDL 的未啟用目標要自己連 `SDL3::SDL3` 或 `*Native`。
 - ui_editor：連 Native 目標。
 
-## 待使用者決定（ip3a 關卡前）
+## 使用者的決定（D31：全部照建議）
 
 | # | 問題 | 選項 | 建議 |
 |---|---|---|---|

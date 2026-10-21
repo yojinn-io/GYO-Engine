@@ -1,6 +1,6 @@
 # sdl-isolation：產品、probe、產品測試不直接呼叫 SDL（消費端計畫，草案）
 
-- 狀態：**草案，等使用者核准**（與 Engine 的 IP-3／IP-4 草案一起）。
+- 狀態：**核准**（D160；Engine 側為 IP 的 D31）。ip3a 完成，停在關卡：Engine 的事前宣告與本文件的 S3 等核准。
 - 依據：
   - [after-re-evaluate](after-re-evaluate.md) 第 9 節的 `sdl-isolation-plan`、`sdl-isolation`（D158、D159）；
   - v7 的 P4 與第 12 批（[v7 HANDOFF](../v7/HANDOFF.md) D33、P4 的原文；[v7 README](../v7/README.md) 的 PR 線表）。
@@ -66,5 +66,6 @@ after-re-evaluate 第 9 節原本估 `sdl-isolation-plan` 4～6 h、`sdl-isolati
 
 | # | 問題 | 選項 | 建議 |
 |---|---|---|---|
-| S1 | v7 第 12 批決定「移除 `SdlPlatform&`／`SdlGpuRenderDevice&` 的公開暴露」（`PvpApplication.hpp:129-130`），但 probe 要透過 `application.Platform()` 拿到查詢與注入器，兩者不能同時成立（對抗式檢查 M2） | (a) 維持移除：產品改公開一個只給 probe 用的窄介面（例如 `ProbeAccess`，只交出 `SdlPlatform&`）／(b) 修訂該決定：保留 `Platform()`，只移除 `SdlGpuRenderDevice&` 的公開暴露／(c) probe 自己建立 platform（不經產品） | (b)：`SdlPlatform` 去 SDL 之後已經是中立 API，公開它不再違反「不直接呼叫 SDL」；(c) 會讓 probe 和產品的初始化分岔 |
-| S2 | 凍結的 probe 與分析器：IP-4 會改 probe 的事件來源（注入、觀測）與標籤字串 | L2 的 base 用舊 probe、頭用新 probe，各自凍結／兩邊都用新 probe（base 要 cherry-pick） | 前者：base 與頭各用自己的樹，比較的是產品行為；差異由事前宣告列出 |
+| S1 | v7 第 12 批決定「移除 `SdlPlatform&`／`SdlGpuRenderDevice&` 的公開暴露」（`PvpApplication.hpp:129-130`），但 probe 要透過 `application.Platform()` 拿到查詢與注入器，兩者不能同時成立（對抗式檢查 M2） | (a) 維持移除：產品改公開一個只給 probe 用的窄介面（例如 `ProbeAccess`，只交出 `SdlPlatform&`）／(b) 修訂該決定：保留 `Platform()`，只移除 `SdlGpuRenderDevice&` 的公開暴露／(c) probe 自己建立 platform（不經產品） | (b)：`SdlPlatform` 去 SDL 之後已經是中立 API，公開它不再違反「不直接呼叫 SDL」；(c) 會讓 probe 和產品的初始化分岔。**決定：(b)（D160）** |
+| S2 | 凍結的 probe 與分析器：IP-4 會改 probe 的事件來源（注入、觀測）與標籤字串 | L2 的 base 用舊 probe、頭用新 probe，各自凍結／兩邊都用新 probe（base 要 cherry-pick） | 前者：base 與頭各用自己的樹，比較的是產品行為；差異由事前宣告列出。**決定：前者（D160）** |
+| S3 | Engine 的 ip3a 核對（[ip3-declaration.md](../../../architecture/plans/input-and-present/ip3-declaration.md) 第 5 節）：A 級的受擊回饋行（`PvpApplication.cpp:377`，`PvP hit feedback version=1`）現在經 `SDL_Log`→`ForwardSdlLog` 以 `[info] ` 開頭寫進日誌檔；釘住測試從寫出端原始碼讀鍵序列（`keys-v1.tsv:28`），沒有工具解析它。產品改走 Base 之後，這一行的寫出端與路徑都會改 | (a) 改成 `Base::Log`，產品的 Base handler 以和 `ForwardSdlLog` 相同的格式（`[info] ` 加內容）寫進日誌檔，日誌檔的位元組不變；釘住測試的讀取位置跟著寫出端改，鍵序列不變（判定等價，照 §14.4 事後報告 1～5，並以突變證明）／(b) 改用 `std::clog` 寫，和其他 A 級的 Client 行相同（但 `std::osyncstream` 正是 cxx-flag-removal 要去掉的）／(c) 維持 `SDL_Log`（違反完成條件，不可行） | (a)：位元組不變，路徑和其他產品日誌一致；這樣 ip3e 的停止條件不會在途中成立 |

@@ -1,6 +1,6 @@
 # 輸入與呈現：分批計畫與進度
 
-更新：2026-10-21（IP-3／IP-4 規劃，草案待核准）；2026-10-14。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；IP-5 原本另含 `engine/io` 的原子寫入，2026-10-09 延後；`engine/runtime` 只讀）。
+更新：2026-10-21（IP-3／IP-4 核准，D31；ip3a 進行中）；2026-10-14。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；IP-5 原本另含 `engine/io` 的原子寫入，2026-10-09 延後；`engine/runtime` 只讀）。
 **狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 完成（縮小交付，D19），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。
 2026-10-08：消費端的新版本規劃中，使用者修訂 D19（D27：多角色的執行緒由 [時間、執行緒與 Trace](../time-threads-trace/README.md) 提供，角色本身由消費端做），並決定 SDL 隔離與顯示接續在本計畫，編為 IP-3～IP-5（D28，未開始）。
 2026-10-14：消費端 D76 的連帶：IP-3、IP-4 的第一個消費端（消費端的去 SDL 遷移）移到消費端的下一個版本（重構版）；IP-5 的第一個消費端（玩家選擇解析度、視窗模式與 FPS 上限）移到再下一個版本，和設定 UI 一起做。本計畫的 IP-3～IP-5 範圍與檔位不變，不重新規劃；開始時點跟著第一個消費端。
@@ -39,8 +39,8 @@
 |---|---|---|---|
 | IP-1 輸入層：完整 scancode 與視窗互動事件 | high；公開介面以 ultracode 審查（開始時徵求同意） | 完成，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`）（未做 ultracode 審查，見 HANDOFF） | `Key` 以加法擴充為完整鍵盤 scancode；同一幀內的上升沿次數（或依序的事件清單）與點擊座標；視窗互動事件（含縮放的新寬高）與本視窗過濾；`tests/common/input` 測試（含同一幀按下再放開）；遷移清單加 preview 的數字鍵。不改任何消費端 |
 | IP-2 呈現不阻塞主迴圈（拖動＋縮放，D16） | high；取得、節流、`Skipped` 語意與 live frame 的重入局部 xhigh（1 個審查 agent，D17） | 完成（縮小交付：2b＋拆分診斷；2c 依 D19 延到分執行緒的計畫；PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）） | 先拆分量測；停頓在 fence 時改為不阻塞取得＋節流，Engine 層假 device 單元測試；停頓在 `nextDrawable` 時停下請使用者選擇。before 在本批 base commit 重量；L2 在合併前完成（D13）。不宣稱 Windows 已解決 |
-| IP-3 SDL 隔離核心 | high；SDL 事件時間戳→Engine 時間基準的換算局部 xhigh；公開介面由 1 位 xhigh 審查 agent 檢查（開始時徵求同意） | 規劃中：[PLAN](PLAN.md) 文末的草案（2026-10-21，D30），等核准；與 IP-4、消費端遷移同一個 PR（D29） | 後端的公開標頭去掉 SDL 型別，帶 SDL 型別的 API 移到 `*Native.hpp`；SDL 日誌轉送進 Base 的日誌 facade（消費端選擇啟用，或預設保留 SDL 原本的輸出）；執行檔目錄；進入點；文字輸入與剪貼簿（以加法加入 IP-1 的輸入幀）；SDL 事件時間戳在平台邊界換算到 Engine 時間基準，每次 pump 重新取樣一次配對。依賴時間、執行緒與 Trace 計畫的 TT-2（日誌 facade） |
-| IP-4 測試用事件注入與觀測、視窗查詢 | high | 規劃中：同 IP-3 | key／mouse／focus 走 `SDL_PushEvent` 的同一條佇列；move／resize 用真正的視窗操作；帶 Engine 時間戳的事件觀測 hook；視窗與顯示器的唯讀查詢、`SetWindowSize`／`SetWindowPosition`／`Raise`／`Sync`；capture 存檔工具；最後把 Engine SDL 後端改為 PRIVATE 連結 SDL3 |
+| IP-3 SDL 隔離核心 | high；SDL 事件時間戳→Engine 時間基準的換算局部 xhigh；公開介面由 1 位 xhigh 審查 agent 檢查（開始時徵求同意） | 進行中：ip3a 關卡（[宣告](ip3-declaration.md) 等核准；[PLAN](PLAN.md) 文末，D31 核准）；與 IP-4、消費端遷移同一個 PR（D29）；設計見 [platform-sdl.md](../../platform-sdl.md)、[input.md](../../input.md) | 後端的公開標頭去掉 SDL 型別，帶 SDL 型別的 API 移到 `*Native.hpp`；SDL 日誌轉送進 Base 的日誌 facade（消費端選擇啟用，或預設保留 SDL 原本的輸出）；執行檔目錄；進入點；文字輸入與剪貼簿（以加法加入 IP-1 的輸入幀）；SDL 事件時間戳在平台邊界換算到 Engine 時間基準，每次 pump 重新取樣一次配對。依賴時間、執行緒與 Trace 計畫的 TT-2（日誌 facade） |
+| IP-4 測試用事件注入與觀測、視窗查詢 | high | 計畫已核准（D31），未開始 | key／mouse／focus 走 `SDL_PushEvent` 的同一條佇列；move／resize 用真正的視窗操作；帶 Engine 時間戳的事件觀測 hook；視窗與顯示器的唯讀查詢、`SetWindowSize`／`SetWindowPosition`／`Raise`／`Sync`；capture 存檔工具；最後把 Engine SDL 後端改為 PRIVATE 連結 SDL3 |
 | IP-5 顯示與視窗模式 | high；非同步模式切換與 swapchain 的順序局部 xhigh | 未開始（2026-10-08 規劃；2026-10-09 縮小） | 顯示器與全螢幕模式的列舉、`SetWindowMode`（視窗、無邊框桌面全螢幕、獨佔全螢幕）、執行中改變大小、`highPixelDensity` 選項（預設關閉）、像素大小與密度。Engine 不知道任何設定的鍵。2026-10-09：消費端在這個版本只用命令列選項，設定的保存移到下一個版本，所以 `UserDataDirectory`（`SDL_GetPrefPath`）與 `engine/io` 的 `AtomicWriteFile` 延後到那時；其餘項目在開始時依「只有命令列選項」重新核對 |
 
 ```text
