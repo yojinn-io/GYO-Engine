@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：`re-evaluate`（使用者：「先提交一次CI L1，然後開始 re-evaluate」）：12 項分三組只讀評估（相位追蹤與延遲位移、Host 與 wire、A5）；L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）。
+- **等你決定**：`re-evaluate` 的建議清單排序（[re-evaluate.md](re-evaluate.md) 第 3 節）。
+- **進行中**：無（等你排序）。L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）結果未看。
 - **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -581,6 +581,7 @@
 - 2026-10-21：`observability-tools` 的 OT-1 與 OT-6（D152；[observability-tools.md](observability-tools.md) 第 8 節）。OT-1：`phase_decision` 寫進移動紀錄（schema 3），讀者、golden、fixture、日誌契約一起改。第一版每個 window 決定都寫，實跑 16 秒 1177 筆，改成只寫首次、late 與啟動修正的 window 決定。突變第一次有 1 個存活：測試到不了 window 決定，是空檢查，已修。實跑 loss-shot：trace 的修正次數等於 start_phase 的修正次數。OT-6：跑次後再量一次計時器基準。CTest 77／77，相關突變 3／3 killed。
 - 2026-10-21：`observability-tools` 的四平台 L1 #517（`3346379`）：第 1 次只有 macos-x64 不通過（`MovementRecoveryTests.cpp:429`，`N-movement-recovery-flake` 的第 2 個實例），使用者同意後重跑失敗的 job，通過。**`observability-tools` 結案**。
 - 2026-10-21：`re-evaluate` 開始。範圍是 INVENTORY 處置為 re-evaluate 的 12 項（A4、A5、B6～B9、N-phase-estimator-wan-noise、N-conflict-window-permanent-loss、N-09b-followup-measures、N-phase-1-7-items-3-6、N-quality-reference-age-sampling、N-respawn-reject-volume），加上今天交過來的 D44 歸因與 09b 重做的剩餘（R4、U6）。產出是建議清單，由使用者排序。
+- 2026-10-21：`re-evaluate` 建議第 1 版（[re-evaluate.md](re-evaluate.md)）。三組只讀評估：現在結案 6 項（respawn 的 epoch_old 已解釋、衝突窗口在 pv7 不再永久、B9、B8 的 N、N-phase-1-7 第 6 點、N-09b-followup）；小修 1 項（分析器寫死的 105）；已知限制 3 項（A5、B6、參考年齡）；延後 6 項（A4 → v8、B7 → pv8、門檻 105、B8 幅度、快速正向回收、WAN 雜訊）。順帶更正 `d44-regression-pv7.md` 第 15 節的兩處：排隊合計最大 294 出在 upstream-1000ms、backlog 重設在放出之後；late 修正 266 只算遊戲與 x1／ramp。
 
 ## 未結事項
 
