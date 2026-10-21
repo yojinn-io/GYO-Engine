@@ -1,6 +1,7 @@
 # PvP v7 交接
 
-更新：2026-10-14。Owner：`object_fps_pvp`。**狀態：v7 結束（2026-10-15，PR #74 `0f0bc91`）**；先前：**P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批實作中）。
+更新：2026-10-15。Owner：`object_fps_pvp`。**狀態：v7 結束（2026-10-15，PR #74 `0f0bc91`）**；先前：**P1a、P1b 完成**（PR [#70](https://github.com/yojinn-io/GYO-Engine/pull/70) `f3d176d`、PR [#71](https://github.com/yojinn-io/GYO-Engine/pull/71) `660310e` 已合併；第 01～05 批與 TT-1 完成）；**P2 進行中**（PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73)，分支 `claude/pvp-v7-p2`：P2-log 完成；P2-log 與第 06 批完成；P2-log、第 06、07 批完成；第 08 批實作中）。
+後續（2026-10-21）：pv7 已在 v7.1 PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78)（`0fabb52`）合併；v7.1 已於 2026-10-21 升格為穩定基線（[v7.1 穩定基線](../v7.1/STABLE_BASELINE.md)，目前最新）。
 **範圍縮小（2026-10-14，D76）**：v7 只留第 09 批的剩餘（S4-lite、S5～S8，PR #73 合併）與縮小版的第 16 批；P3、P4 與第 15 批移到 [v7.1](../v7.1/README.md)，P5、P6 移到 [v8](../v8/README.md)。v7 交付任務 1～3。
 本文件是 v7 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。
 數字未標「實機」的，是 CPU 模擬或靜態分析的結果。
@@ -45,7 +46,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄或進度記錄器，並從本節刪掉。長期的已知問題放「未結事項」，不在這裡重複。
 
-- **等你決定**：(1)(8) 維持暫定（D58；移到 v7.1 的 log-contract 一起確認）；其餘已決定（D56～D85）。
+- **等你決定**：(1)(8) 維持暫定（D58；移到 v7.1 的 log-contract 一起確認）；其餘已決定（D56～D85）。後續：已在 v7.1 log-contract 定案（D142，見 [v7.1 交接](../v7.1/HANDOFF.md)、[日誌契約](../../log-contract.zh-Hant.md) §6）。
 - **P2 完成**：PR [#73](https://github.com/yojinn-io/GYO-Engine/pull/73) 已合併（`6d3f287`，2026-10-14）。
 - **v7 結束**：第 16 批完成（D85），STABLE_BASELINE v7 升格完成（L3 部分略過）；P7 的 PR [#74](https://github.com/yojinn-io/GYO-Engine/pull/74) 已合併（`0f0bc91`，2026-10-15）。這次不發行（D80 U8，tag 候選 `object_fps_pvp-v1.2.0`）。3 人 LAN 測試（D83）在 v7.1 決定不跑（[v7.1 交接](../v7.1/HANDOFF.md) D91），所以 v7 不發行。下一步在 [v7.1 交接](../v7.1/HANDOFF.md)。
 - **v7-scope-cut**（2026-10-14，D76）：只改文件的範圍變更完成。v7 只留第 09 批的剩餘與縮小版的第 16 批；TT-2＋第 10 批、IP-3／IP-4＋第 12 批、第 15 批移到 [v7.1](../v7.1/README.md)；IP-5＋第 13 批、AU-1＋第 14 批移到 [v8](../v8/README.md)。

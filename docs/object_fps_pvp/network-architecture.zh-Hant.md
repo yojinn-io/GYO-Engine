@@ -4,12 +4,15 @@
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
 
-2026-10-15：目前 wire 為 pv6（v6 第 09 批，PR #57），變更見 [pv6 契約](protocol-v6.zh-Hant.md)，其餘條款沿用
-[v5 契約](protocol-v5.zh-Hant.md)。v7 停在 pv6，pv7 在 [v7.1](plans/v7.1/README.md)。程序與執行緒結構以
-[v7 穩定基線](plans/v7/STABLE_BASELINE.md)（2026-10-15 升格）為準，第 1 節依此繪製；各版變更見文末
-「v6、v7 的聯網架構變更」。第 0 節與第 6 節的 v3 量測／長測、第 8 節成本回顧、第 9 節 v4 記錄及
-v5 一節保留為歷史證據，不視為 v6／v7 的驗收。Go Gateway 的建置平台宣告目前只有
+2026-10-21：目前 wire 為 pv7（[v7.1](plans/v7.1/README.md) 的 `pv7-merge`，PR #78 合併起），規則見
+[protocol-v7](protocol-v7.zh-Hant.md)；沒有在其中改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與
+[v5 契約](protocol-v5.zh-Hant.md)。日誌的格式見 [日誌 Data Contract](log-contract.zh-Hant.md)。程序與執行緒結構以
+[v7.1 穩定基線](plans/v7.1/STABLE_BASELINE.md)（2026-10-21 升格；v7 的結構加上 pv7 變更：Gateway 回到無狀態邊緣、
+丟棄回報、對時與回聲）為準，第 1 節依此繪製。各版變更見文末
+「v6、v7、v7.1 的聯網架構變更」。第 0 節與第 6 節的 v3 量測／長測、第 8 節成本回顧、第 9 節 v4 記錄及
+v5 一節保留為歷史證據，不視為 v6／v7／v7.1 的驗收。Go Gateway 的建置平台宣告目前只有
 linux-x64／windows-x64；v7 驗收在 macOS 同機三角色執行，範圍見 v7 穩定基線。
+（歷史：v7 停在 pv6，pv7 移到 v7.1，v7 D73。）
 
 ## 0. 本次修復總結：做了什麼、證明了什麼
 
@@ -68,7 +71,8 @@ v3 每輪 120 秒、200 個預先安排事件，三輪獨立通過；實際平�
 
 ### 程序、執行緒與雙向資料流
 
-v7 穩定基線的結構（master `0f0bc91`）。Client A、B 是各自的程序，共用同一 Gateway／Match。
+v7.1 穩定基線的結構（master `5ee499a`）：v7 的結構（`0f0bc91`）加上 pv7 的變更（PR #78；Gateway 與 runtime link 依
+[protocol-v7](protocol-v7.zh-Hant.md) §2a～§4 改繪）。Client A、B 是各自的程序，共用同一 Gateway／Match。
 箭頭表示資料流，不表示底層程式碼依賴上層。執行緒名稱是 `GYO::Threads` 的角色名稱
 （`engine/threads/include/engine/threads/RoleThread.hpp`）；固定步期限以 `GYO::Time` 的 Waiter
 等待（`engine/time/include/engine/time/Waiter.hpp`），晚醒依 `LateWakeStats` 計數。
@@ -96,32 +100,39 @@ Client A / Client B (each process; v7 batch 04: three roles)
   gyo-client-net (ClientConnection worker; asio io_context, v7 batch 08)
     woken by: socket readable, SendInput / SubmitAction / ACK post,
               one timer at the earliest deadline (last 2 ms on the Waiter)
-    HTTP lifecycle (may block) + Hello keepalive + lobby poll
+    HTTP lifecycle (may block) + Hello keepalive (Hello.clock: time echo, pv7 §3) + lobby poll
     input: 60/s token bucket, burst 2; waited sends charged less, <= 80/s (09a)
-    actions + ACK: 30 Hz (ActionSendRate)
+    actions + ACK: 30 Hz (ActionSendRate); resent until the Match decides
     snapshot history <= 64 -> Drain() (main) / DrainSimulation() (sim role)
          |
          v
-  HTTP control / UDP Client Protocol pv6
+  HTTP control / UDP Client Protocol pv7 (client_v7.proto)
          |
          v
-  Product Go Gateway (goroutines; apps/object_fps_pvp/gateway)
-    receiveUDP: Session -> PlayerId, adapter, admission + ingress counts
+  Product Go Gateway (goroutines; apps/object_fps_pvp/gateway) -- stateless edge (pv7 §2a)
+    receiveUDP: Session -> PlayerId, adapter (one message at a time), admission
+      + session token bucket (120/s, 120 deep; services/gyo_gateway/session)
     runtime link writer: woken by input / control / action (wake chan)
-      + strict 30 Hz action timer; written-dedup; reject lane (08c)
-    runtime link reader: JoinResult / Snapshot / ActionResults / Evicted
-    sendUDP: latest snapshot per peer; results on wake or at
-      last send + 1/30 s (08b event-driven; 06 raised 15 -> 30 Hz)
-    expire, logStatistics (ingress / drop counts), HTTP serve
+      forwards each Client window / batch as it came: no merging, no dedup
+      controls in order, never dropped; data: per-player FIFO <= 64,
+      full -> drop oldest + count + GatewayDropReport (oneof 21, pv7 §4)
+      diagnostic slot: ClockSample heartbeat (oneof 20, 1 Hz, pv7 §3)
+    runtime link reader: JoinResult / Snapshot / ActionResults / Evicted / Clock
+    sendUDP (the one UDP writer): latest snapshot per peer;
+      results: one slot per player, released >= 1/30 s apart (latest-wins)
+    expire, logStatistics (ingress / drop counts), runDiagnostics, HTTP serve
          |
          v
-  loopback TCP / Runtime Protocol pv6
+  loopback TCP / Runtime Protocol pv7 (runtime_v7.proto)
          |
          v
   Match process (v7 batch 07)
     gyo-match-ipc (IpcHost; asio io_context)
-      accept / read / write; action lanes + laneTimer (30 Hz, 08b)
+      accept / read / write; action lanes + laneTimer (<= 30 Hz):
+        resend unacknowledged decisions until the Client ACKs (pv7 §2a)
+      clock reply (one slot); reads GatewayDropReport (diagnostics only)
       SubmitInput / SubmitActionBatch / QueueJoin -> bounded handoff
+        (Match alone dedups, judges stale / conflicting windows)
       Pump on publish listener -> latest-wins Snapshot, results, control
          ^ publish listener (post only)         | owning values
          |                                      v
@@ -145,18 +156,18 @@ Client 程序（產品 CMake 庫，apps/object_fps_pvp/CMakeLists.txt）
     client_simulation：ClientSimulationRole → ClientSimulationLoop → ClientSimulation
         │ SendInput / DrainSimulation          （GYO::Time、GYO::Threads）
         ▼
-    client_network：ClientConnection（asio、httplib、client_v6 Protobuf）
-    │ HTTP JSON 控制 / UDP Client Protocol pv6
+    client_network：ClientConnection（asio、httplib、client_v7 Protobuf）
+    │ HTTP JSON 控制 / UDP Client Protocol pv7
     ▼
-Object_FPS_PVP Go 組合層
+Object_FPS_PVP Go 組合層（無狀態邊緣，§7「Gateway：無狀態邊緣」）
     ├─ Room、容量、加入資格、Session → PlayerId
-    ├─ ObjectFPS Adapter：schema / version / 欄位轉換
-    ├─ runtime link：合併、已寫出去重、拒絕線、ingress／丟棄計數
-    └─ 使用 services/gyo_gateway 的 HTTP / Session / framing
-    │ Runtime Protocol pv6 / loopback TCP
+    ├─ ObjectFPS Adapter：schema / version / 欄位轉換（逐則檢查）
+    ├─ runtime link：原樣轉送、每位玩家有界 FIFO、ingress／丟棄計數與 GatewayDropReport、心跳對時
+    └─ 使用 services/gyo_gateway 的 HTTP / Session（含 token bucket 限速）/ framing
+    │ Runtime Protocol pv7 / loopback TCP
     ▼
 Match 程序
-    ipc：IpcHost（asio、runtime_v6 Protobuf）：讀寫、framing、action lane
+    ipc：IpcHost（asio、runtime_v7 Protobuf）：讀寫、framing、action lane（結果重送到 ACK）
         │ 有界控制佇列 / per-player command window / owning Snapshot / 發布通知
         ▼
     runtime_host：MatchRuntimeHost：模擬角色、絕對期限、停止與 reset（GYO::Threads）
@@ -439,34 +450,37 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol
 
-來源為產品的 `protocol/client_v6.proto` 與 `protocol/runtime_v6.proto`，彼此不 import。
-目前兩者版本都為 6（pv6，第 09 批），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本。Adapter 明確映射兩份生成型別，
-Match 核心只接收普通 C++ domain 值。
+來源為產品的 `protocol/client_v7.proto` 與 `protocol/runtime_v7.proto`（Go 套件 `clientv7`／`runtimev7`），彼此不 import。
+目前兩者版本都為 7（pv7，v7.1 `pv7-merge`，PR #78），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
+（C++ `wire::ProtocolVersion`、Go `adapter.ProtocolVersion`）。Adapter 明確映射兩份生成型別，
+Match 核心只接收普通 C++ domain 值。本節只列結構；送達語意、Gateway 的約束、對時與回聲、丟棄回報的細節見
+[protocol-v7](protocol-v7.zh-Hant.md) §2a～§4。
 
 Client Protocol 包含 Hello、Welcome、PlayerInput、WorldSnapshot、Error、ActionBatch、ActionResults。
 Hello 提交 session token；Welcome 回覆 PlayerId、MatchId、tick/snapshot rate 與
-arena identity 及 Match CombatRules。PlayerInput 包含 movement_epoch 及 commands，每個命令只有 sequence、移動軸、yaw／pitch，
+arena identity 及 Match CombatRules。pv7 起 Hello 與 Welcome 各帶一份 `ClockSample`，做 Client↔Gateway 的時間回聲（只供診斷）。PlayerInput 包含 movement_epoch 及 commands，每個命令只有 sequence、移動軸、yaw／pitch，
 沒有 Client 指定時間、位置、傷害或擊殺結果。Snapshot 包含 Authority Tick、完整玩家集合
 與每位玩家的 last_resolved_command、movement_epoch、contiguous_pending_commands，
 另有獨立 combat 集合。動作身分、裁決及消費確認見第 9 節。
 
 RuntimeEnvelope 包含獨立 `protocol_version` 和 oneof：Ready、PlayerJoin、
 PlayerLeave、PlayerInput、JoinResult、RuntimeError、WorldSnapshot、ActionBatch、ActionResults、
-PlayerEvicted（v5 連線品質移出，僅 Runtime）。
-Ready 宣告 arena identity、60 Hz、snapshot interval 1、容量 2 及 Match CombatRules。
+PlayerEvicted（v5 連線品質移出，僅 Runtime）、ClockSample（oneof 20，runtime link 心跳對時）、
+GatewayDropReport（oneof 21，Gateway 依原因回報自己執行的丟棄）；後兩者是 pv7 新增，只供診斷，不進判定。
+Ready 宣告 arena identity、60 Hz、snapshot interval 1、容量 4（`max_players`；v6 第 16 批起）及 Match CombatRules。
 Runtime PlayerInput 的 PlayerId 來自已驗證的 Session 映射，不信任 Client 任選 ID。
 
 Adapter 驗證 Protobuf、版本、finite 數值、移動軸範圍與線上欄位範圍；Match 自行
 裁定出生位置、速度、合法視角與碰撞。Arena identity 不符時 Client 拒絕加入。
 
-### UDP（pv6；標頭配置自 v5 起不變）
+### UDP（pv7；標頭配置自 v5 起不變）
 
 最大 datagram 為 1,200 bytes，包括以下 24-byte big-endian header：
 
 | Offset | Bytes | 欄位 |
 |---|---:|---|
 | 0 | 4 | ASCII `GYOP` |
-| 4 | 2 | Client protocol version，現為 6 |
+| 4 | 2 | Client protocol version，現為 7 |
 | 6 | 2 | message type：Hello 1、Welcome 2、Input 3、Snapshot 4、Error 5、Actions 6、ActionResults 7 |
 | 8 | 8 | Session ID |
 | 16 | 4 | UDP sequence |
@@ -478,7 +492,7 @@ Header 後面是對應 message 的 Protobuf payload。公共 framing 驗證長�
 多 channel、傳輸層 ACK／ack_bits 或 Reliable Ordered；動作層另有消費 ACK。UDP sequence 用半範圍比較處理 32-bit wrap。
 Hello 可重送，Welcome 可重發；完整 Snapshot 修復漏掉的加入／離開資訊。
 
-### IPC（pv6）
+### IPC（pv7）
 
 Match 僅監聽 loopback TCP，預設 `127.0.0.1:27016`。每個 Protobuf
 RuntimeEnvelope 前有四個 bytes 的 big-endian 長度；payload 必須為 1–65,536
@@ -486,6 +500,7 @@ bytes。讀取處理半包／黏包；截斷、錯版本、無效 frame 或控�
 連線失敗，不能靜默遺失 Join／Leave 後繼續假裝同步。移動輸入與動作批次被 Match
 略過或拒絕時連線不中斷，但每一筆都依原因計數（Match 的 ingress 統計行），不得無聲
 丟棄；有 `--movement-trace` 時，移動輸入的拒絕另在 `match-ingress.jsonl` 寫有界的細節。
+pv7 的各訊息送達語意（輸入與動作可能重複、結果由 Match 重送到 ACK、順序與背壓）見 [protocol-v7](protocol-v7.zh-Hant.md) §2a。
 
 ## 4. Room、Session 與失敗
 
@@ -503,12 +518,12 @@ Runtime Ready 後 `POST /rooms` 建立房間，重試回傳同一個房間。
 Join request 範例：
 
 ```json
-{"request_id":"a-client-generated-unique-id","protocol_version":5}
+{"request_id":"a-client-generated-unique-id","protocol_version":7}
 ```
 
 成功回覆包含 `match_id`、`player_id`、`session_id`、`session_token`、`udp_ip`、
 `udp_port`、`protocol_version`、`arena_id`、`arena_version`。同一有效 request_id
-重試回傳同一 reservation。保留與 joining 名額也計入最多兩人限制。
+重試回傳同一 reservation。保留與 joining 名額也計入最多四人限制（`MaxPlayers`＝4）。
 
 `player_id` 是這次加入的角色實例身分，不是固定席位或帳號。離開後重入會取得新 ID
 並重新出生，舊 ID 不重用；沒有角色保存／續玩。HUD 只顯示權威快照的在線人數，
@@ -621,7 +636,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --version  # 必須為 libprotoc 36.2；PATH 指向本次 CMake 建置的 protoc
 protoc --proto_path=apps/object_fps_pvp/protocol `
   --go_out=apps/object_fps_pvp --go_opt=module=gyo.local/object_fps_pvp `
-  apps/object_fps_pvp/protocol/client_v6.proto apps/object_fps_pvp/protocol/runtime_v6.proto
+  apps/object_fps_pvp/protocol/client_v7.proto apps/object_fps_pvp/protocol/runtime_v7.proto
 git diff -- apps/object_fps_pvp/protocol
 ```
 
@@ -775,13 +790,13 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 **Replacement Criteria**（出現時不再繼續修補，改向使用者提出「重建或修改」）：
 
 - 為了讓某個遊戲行為正確，需要 Gateway 記住 Match 已經知道的東西（判斷準則答「是」）。
-- 新的外部 Client 接口或新的訊息種類，必須在 Gateway 加跨訊息、依內容的判斷才能運作。
+- 新的外部 Client 介面或新的訊息種類，必須在 Gateway 加跨訊息、依內容的判斷才能運作。
 - 同一類丟棄或延遲問題，需要第二次在 Gateway 加特例才能通過驗收（2026-10-10 事故與 v7.1 edge 系列之前的模式）。
 - 分類表的允許類別本身需要擴充（而不只是新增欄位）。
 
 **目前的已知項目**（只記錄）：
 
-- K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩存的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
+- K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩衝中的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
 
 #### 射擊判定的冷卻保留與命令步（v7.1 `a1-shot-step` 起生效；2026-10-19 使用者核准，D136）
 
@@ -816,8 +831,8 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 
 ### Gateway 的設計意圖與漂移（設計事故，2026-10-15）
 
-- **原始意圖**：Gateway 對各種外部 Client 各自提供接口，內部只用一套抽象協議和 Match
-  對接，Gateway 本身無狀態。這個意圖當時沒有寫進上表的「不可破壞的契約」。
+- **原始意圖**：Gateway 對各種外部 Client 各自提供介面，內部只用一套抽象協議和 Match
+  對接，Gateway 本身無狀態。這個意圖當時沒有寫進上面的 `Design Invariants`。
 - **漂移**：v3 起陸續加入 Match 決策狀態的副本與遊戲語意的處理（`lastResolved` 副本、
   動作帳本與重送、30 Hz 節拍、結果退役、拒絕線與已寫出去重），都沒有被當成
   Architecture Delta 提出。2026-10-10 的事故（Gateway 悄悄丟掉已解析的命令）直接來自
@@ -842,16 +857,19 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 | 本機射擊閘（序號閘門；v7.1 `a1-shot-step` 取代 FireGate） | `apps/object_fps_pvp/src/Pvp/ShotGate.cpp`、`include/RetroFPS/Pvp/ShotGate.hpp` |
 | 玩家游標、替代輸入、epoch | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp` |
 | Match 模擬角色、絕對 Tick 期限、owning 交接、ingress 統計 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp` |
-| Match IPC（asio）：讀寫、latest-wins Snapshot、action lane | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp` |
+| Match IPC（asio）：讀寫、latest-wins Snapshot、action lane（結果重送到 ACK）、心跳回覆 | `apps/object_fps_pvp/src/Pvp/IpcHost.cpp` |
 | Client 網路 worker（asio）：token bucket、喚醒、保活、Drain／DrainSimulation | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp` |
 | 網路路徑的 10 秒統計 | `apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp` |
 | 遠端接收時間線 | `apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp` |
 | 意圖發布、呈現與唯讀觀測整合 | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp` |
 | Room／Session、Snapshot 與結果的轉送（`sendUDP`）、背壓 | `apps/object_fps_pvp/gateway/server.go`、`action_delivery.go`、`adapter/adapter.go` |
-| runtime link：合併、已寫出去重、拒絕線、動作節拍 | `apps/object_fps_pvp/gateway/runtime_link.go`、`action_delivery.go` |
+| runtime link（pv7）：原樣轉送、每位玩家有界 FIFO（溢出丟最舊）、心跳對時、`GatewayDropReport` | `apps/object_fps_pvp/gateway/runtime_link.go`、`action_delivery.go`、`clock_sync.go`、`drop_report.go` |
+| Client↔Gateway 時間回聲（Hello／Welcome 的 `ClockSample`） | `apps/object_fps_pvp/gateway/echo.go` |
+| 無狀態邊緣的守衛（狀態白名單） | `apps/object_fps_pvp/gateway/state_whitelist_test.go` |
 | Gateway ingress 與丟棄計數；送出間隔統計 | `apps/object_fps_pvp/gateway/ingress_statistics.go`；`send_statistics.go` |
 | 時間基準、Waiter、角色執行緒（Engine，不屬本產品） | `engine/time/include/engine/time/Waiter.hpp`、`engine/threads/include/engine/threads/RoleThread.hpp` |
-| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v6.proto`、`runtime_v6.proto`（規則見 [pv6 契約](protocol-v6.zh-Hant.md) 與它沿用的 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
+| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v7.proto`、`runtime_v7.proto`（規則見 [protocol-v7](protocol-v7.zh-Hant.md)，未改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
+| 日誌格式 | [日誌 Data Contract](log-contract.zh-Hant.md)；`drop_` 鍵的名稱表在 `apps/object_fps_pvp/gateway/ingress_statistics.go` |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 
 Architecture Delta 是 Client 增加預測／呈現責任、產品輸入從持續狀態變為可確認的
@@ -1049,7 +1067,7 @@ Product Host: atomic shots + ACK handoff -> Authority Tick
                                      Gateway -> Client worker -> Drain
 ```
 
-Gateway 每個 Session 的封包上限是每秒 120 包（v7.1 D121 起改為 token bucket：每秒補 120、容量 120，任何長度 T 的區間最多 120T＋120 包；原為固定 1 秒窗口，Gateway 自己停頓後會把緩存的合法封包算進同一窗口而丟掉，K1）；第 08c 批起被限制的包依玩家與種類
+Gateway 每個 Session 的封包上限是每秒 120 包（v7.1 D121 起改為 token bucket：每秒補 120、容量 120，任何長度 T 的區間最多 120T＋120 包；原為固定 1 秒窗口，Gateway 自己停頓後會把緩衝中的合法封包算進同一窗口而丟掉，K1）；第 08c 批起被限制的包依玩家與種類
 （含 Hello）計數，各玩家的總和等於全 Gateway 的 `rate_limited_packets`。
 
 Network Snapshot 是可替換狀態，ActionResults 是必須保存到連續消費確認的終局答案。
@@ -1247,7 +1265,7 @@ Renderer，公共Gateway及Engine無FPS分支。第04批才處理完整骨骼動
 三角色版本、短驗證結果與原始證據入口見
 [第03批dev_log](../dev_logs/2026_09_28_pvp_v5_batch03.zh-Hant.md)及[v5交接](plans/v5/HANDOFF.md)。
 
-## v6、v7 的聯網架構變更
+## v6、v7、v7.1 的聯網架構變更
 
 版本號：vN＝遊戲版本，pvN＝網路協議版本。只列與聯網架構有關的批次；完整進度見各版計畫。
 
@@ -1281,3 +1299,18 @@ Renderer，公共Gateway及Engine無FPS分支。第04批才處理完整骨骼動
 - 移到 v7.1：pv7（runtime link 心跳對時、`GatewayDropReport`）、日誌 Data Contract、產品去 SDL、Windows LAN 場次。
 - 入口：[v7 計畫](plans/v7/README.md)、[v7 交接](plans/v7/HANDOFF.md)、[v7 穩定基線](plans/v7/STABLE_BASELINE.md)、
   [v7.1](plans/v7.1/README.md)。
+
+### v7.1（pv7）
+
+hotfix：先檢測、再評估；wire 一次設計、一次合併（v7.1 D90）。**2026-10-21 升格為穩定基線**（[v7.1 穩定基線](plans/v7.1/STABLE_BASELINE.md)，D157）；現行 wire 是 pv7。
+
+- PR #78（pv7-line，`pv7-merge`）：Client／Runtime 協議升為 pv7，見 [protocol-v7](protocol-v7.zh-Hant.md)。
+  - Gateway 回到無狀態邊緣：輸入、動作、結果原樣轉送，刪除游標副本、拒絕線、已寫出去重、動作帳本與 30 Hz 持有；
+    去重與結果重送只由 Match 負責（§2a；約束見第 7 節「Gateway：無狀態邊緣」）。
+  - 丟棄回報：Gateway 執行的丟棄依原因以 `GatewayDropReport`（oneof 21）回報 Match（§4）。
+  - 對時與回聲：runtime link 的 `ClockSample` 心跳（oneof 20）、Client↔Gateway 的 Hello／Welcome 時間回聲（§3）。
+  - 限速：通用層 session 的固定窗口改為 token bucket（每秒 120、容量 120，K1，D121）。
+  - 射擊照命令步判定（A1，`a1-shot-step`），FireGate 退役（§6）；骨骼 hitbox 只有欄位（§7）。
+- PR #82（after-pv7）：[日誌 Data Contract](log-contract.zh-Hant.md)（與 `GatewayDropReport` 共用名稱表）、
+  Engine Trace、死信原則確認、事故紀錄結案、觀測工具、重新評估。
+- 入口：[v7.1 計畫](plans/v7.1/README.md)。

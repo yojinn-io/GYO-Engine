@@ -1,6 +1,6 @@
 # ingress v1 的 golden 樣本
 
-owner：object_fps_pvp。第 08c 批（Gateway 丟棄回報）的 log 行族與細節檔，暫定 v1；第 10 批決定沿用或改版。
+owner：object_fps_pvp。第 08c 批（Gateway 丟棄回報）的 log 行族與細節檔，原本暫定 v1、由第 10 批決定沿用或改版；第 10 批移到 v7.1 之後，由 v7.1 的[日誌契約](../../../../docs/object_fps_pvp/log-contract.zh-Hant.md)（D142）定案，版本維持 1。
 Go（Gateway）、C++（Match）與驗收工具（`ingress_evidence.py`，F3）解析同一份樣本。
 
 | 檔案 | 內容 | 產生者 |

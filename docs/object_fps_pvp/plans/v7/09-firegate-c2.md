@@ -5,7 +5,7 @@
 
 ## 起因與範圍
 
-- README「本機射擊閘的兩個常數」：`FireGateGuardSeconds`（v6：2 ms）與 `FireGatePendingSpreadTicks`（v6：7 Tick）是由 v6 的時序推導的，任務 1～3 改變了那些時序。做法：先量兩條通道再推導，更新合成時間線（`tests/object_fps_pvp/FireGateTests.cpp`），commit 並凍結；再以同一份事前宣告比較 v6 最終 tree 與 v7 tree（C2），加上 12 Tick 連點。
+- README「本機射擊閘的兩個常數」：`FireGateGuardSeconds`（v6：2 ms）與 `FireGatePendingSpreadTicks`（v6：7 Tick）是由 v6 的時序推導的，任務 1～3 改變了那些時序。做法：先量兩條通道再推導，更新合成時間線（`tests/object_fps_pvp/FireGateTests.cpp`（v7.1 已退役：D90 採 A1，`a1-shot-step` 以 `ShotGate` 取代，D137）），commit 並凍結；再以同一份事前宣告比較 v6 最終 tree 與 v7 tree（C2），加上 12 Tick 連點。
 - HANDOFF 第 09 批：C2 之後跑 25 案回歸；P2 頭另跑一次 30 FPS，只記錄，單獨顯示任務 3 的影響。
 - 輸入（使用者 2026-10-09、D46）：D44（是否要在常數推導前查清楚，或在什麼條件下要重推）；計時器鎖定；probe 幀相位（起點要不要隨機化）；已完成批次核對的更正。
 - 停止條件（P2）：權威 digest 改變；需要改 wire；常數必須比 v6 大；乾淨跑次出現權威 Cooldown 拒絕。

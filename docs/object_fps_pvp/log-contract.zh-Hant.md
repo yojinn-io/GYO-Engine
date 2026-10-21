@@ -18,15 +18,15 @@
 | Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine`（2026-10-20 起行尾有 `tick_overrun_*`、`tick_stalls`、`advance_*`，E1-5） | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
 | Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
 | Match ingress statistics | `IngressStatistics.hpp` | `[ObjectFPS/PvP Match] ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/match.txt` | `ingress_evidence.py`※、08c 的判定工具 |
-| Gateway player／gateway ingress statistics | `ingress_statistics.go` | `player ingress statistics version=1 `、`gateway ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/gateway-*.txt` | `ingress_evidence.py`※、edge-rate-limit 的 `judge_l2.py` |
+| Gateway player／gateway ingress statistics | `ingress_statistics.go` | `player ingress statistics version=1 `、`gateway ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/gateway-*.txt` | `ingress_evidence.py`※、edge-rate-limit 的 `judge_l2.py`（證據目錄） |
 | Gateway statistics | `server.go` | `gateway statistics players=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※（視窗配對） |
-| Gateway player send statistics | `send_statistics.go` `sendStatisticsLine` | `player send statistics ` | 隱含 1 | `keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※、`judge_l2.py` |
-| Gateway transport | `server.go`（Close） | `gateway transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（只取限速鍵） |
-| Gateway runtime transport | `runtime_link.go`（link 關閉） | `runtime transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py` |
-| Gateway drop report | `drop_report.go` `dropReportLine` | `drop report player=` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py` |
+| Gateway player send statistics | `send_statistics.go` `sendStatisticsLine` | `player send statistics ` | 隱含 1 | `keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※、`judge_l2.py`（各 L2 的證據目錄） |
+| Gateway transport | `server.go`（Close） | `gateway transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（證據目錄；只取限速鍵） |
+| Gateway runtime transport | `runtime_link.go`（link 關閉） | `runtime transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（各 L2 的證據目錄） |
+| Gateway drop report | `drop_report.go` `dropReportLine` | `drop report player=` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（各 L2 的證據目錄） |
 | Match gw_drop report／violation | `IpcHost.cpp` | `[ObjectFPS/PvP Match] gw_drop report `、`… gw_drop violation ` | 隱含 1 | `IpcHostTests.cpp` | `compare_reports.py`（drop-report 的證據目錄） |
-| Gateway player evicted | `server.go` | `player evicted player=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py` |
-| Gateway start／HTTP | `cmd/main.go` | `Object FPS Gateway start executable_sha256=`、`Object FPS Gateway HTTP=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py` |
+| Gateway player evicted | `server.go` | `player evicted player=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py`（各 L2 的證據目錄） |
+| Gateway start／HTTP | `cmd/main.go` | `Object FPS Gateway start executable_sha256=`、`Object FPS Gateway HTTP=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py`（各 L2 的證據目錄） |
 | Match start／ready | `match_main.cpp` | `[ObjectFPS/PvP Match] start executable_sha256=`、`Object_FPS_PVP Match ready: ` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、各 runner 等待 ready |
 | Match ipc closed／hint／accept failed | `IpcHost.cpp` | `[ObjectFPS/PvP Match] ipc closed reason=`、`… ipc hint: `、`… ipc accept failed` | 隱含 1 | `IpcHostTests.cpp`＋`keys-v1.tsv` | `ingress_evidence.py`※、`run_quad.py`※、`run_action_short.py`※ |
 | Match join／evicted | `IpcHost.cpp` | `[ObjectFPS/PvP Match] join player=`、`… evicted player=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※ |

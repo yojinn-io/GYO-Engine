@@ -128,7 +128,7 @@ TT 計畫的批次完成時，由該批更新本節。
 
 ### TT-2 Trace
 
-狀態：TT-2 實作與本機 L1 完成（2026-10-20），未合併。
+狀態：TT-2 實作與本機 L1 完成（2026-10-20），未合併。後續：2026-10-21 隨 PR #82 合併（`5ee499a`）。
 
 - 破損：無。新增的 `GYO::Trace` 與 `Log.hpp` 都是新介面；SdlGpu 的慢 acquire 日誌從 `SDL_Log` 改為 `Engine::Base::Log`，預設輸出到 `std::cerr`（文字為 `[SDL_GPU] info: slow swapchain acquire …`）。依賴 SDL 日誌輸出這一行的未啟用產品，安裝自己的 handler 轉給 SDL 即可。
 - 連結：只有用到 `GYO::Trace` 的目標需要連結它；`GYO::Engine` 不依賴它。
