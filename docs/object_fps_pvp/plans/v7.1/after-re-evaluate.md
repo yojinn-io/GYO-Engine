@@ -1,6 +1,6 @@
-# after-re-evaluate：這些項目還需不需要繼續（判斷清單，第 1 版）
+# after-re-evaluate：這些項目還需不需要繼續（判斷清單，第 2 版）
 
-- 狀態：**等使用者決定**。
+- 狀態：**判斷已確定**（D158）；第 9 節的批次是草案，**等使用者核准**。
 - 依據：使用者（2026-10-21）：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。」
 - 範圍：
   - INVENTORY 處置為「re-evaluate 之後」的 37 項；
@@ -9,6 +9,7 @@
   - 和 [re-evaluate](re-evaluate.md) 第 2 版相同：只判斷每項**還需不需要繼續**，附根據與重開條件，不寫修法與工時。
   - 證據由 4 個唯讀子 agent（檔位 medium）分組收集，判斷由主對話做。
   - 還需要的項目，依使用者的優先序分四類排列：系統與引擎 → 觀測工具 → 測試 → 發行。類內的順序只依依賴關係。
+- 第 2 版的更動（D158）：C12 併進 N-token-test-gaps；F4 照樣取消，但根據改成「沒有檢測手段」（第 1 版寫「沒有觀測到」，查過之後發現門檻與過期判定都沒有寫進任何 log，所以那不是根據）。
 - file:line 以 `6fbb6a9` 為準。
 
 ## 1. 判斷
@@ -28,7 +29,7 @@ after-re-evaluate
 │   │   └── C15                    「兩個分析器重複；含 105 的 6 處中有 3 處在這裡」
 │   ├── 3 測試
 │   │   ├── N-worker-probe-stale   「在 HEAD 會失敗；22 個 worker 突變因此判不了」
-│   │   ├── N-token-test-gaps（只留存活突變） 「≤61 已不是契約，那一半取消」
+│   │   ├── N-token-test-gaps（＋C12，只留存活突變）「測試另有一份 token 模型，突變因此存活；≤61 那一半取消」
 │   │   ├── C17-3                  「重連時的世代檢查沒有任何測試」
 │   │   └── N-client-other-version-untested「計數在契約 A 級行族，累加路徑沒有測試」
 │   └── 4 發行
@@ -53,9 +54,8 @@ after-re-evaluate
 │   ├── C17 總項、C17-4            「C17-4 的 FireGate 已退役；其餘各自判斷」
 │   ├── C17-1                      「產品只有一個發布者」
 │   ├── C17-2                      「v7 就決定只記錄，PvpMatchTests 有 L1」
-│   ├── C12                        「照 README：哪批改 token 規則就在那批做；目前沒有」
 │   ├── F3                         「產品沒有讀者，時間基準已寫在註解」
-│   ├── F4                         「v7 已列為已知限制，沒有觀測到」
+│   ├── F4                         「v7 已列為已知限制；沒有檢測手段」
 │   ├── F6                         「從未重現」
 │   ├── N-8ms-client-crosscheck    「動機是 FireGate 的常數，已隨 A1 消失」
 │   ├── N-sigint-background-client 「一直只記錄，SIGTERM 與 Esc 可替代」
@@ -94,8 +94,8 @@ after-re-evaluate
 
 | 項目 | 為什麼還需要 | 根據 |
 |---|---|---|
-| N-worker-probe-stale（新，原在 HANDOFF） | 本機實跑仍失敗（3.65 秒，`Invalid Match combat rules`，接著是 mock 等待逾時）。`mutations.json` 有 22 個突變用 `worker` 檢查，包括 token 的 4 個，目前都只能得到 wrong_failure。時間回聲的 probe 驗證也在這支測試裡。它不在 CI 的 `cpu|shader` 範圍，所以一直沒被發現 | `build/acceptance/object_fps_pvp/worker_main.cpp:82-84`；`ClientConnection.cpp:81`；`log-contract.md:224` |
-| N-token-test-gaps（只留存活突變那一半） | 拿掉折讓式中的兩項時，突變會存活，這兩個突變仍未登記。「每日曆秒 ≤61」在 09a 已不是契約保證，那一半取消。判定要等 worker probe 修好 | `ClientConnection.cpp:678-680`；`mutations.json:2588-2625`；`plans/v7/09a-input-send-pinning.md:99` |
+| N-worker-probe-stale（新，原在 HANDOFF） | 本機實跑仍失敗（3.65 秒，`Invalid Match combat rules`，接著是 mock 等待逾時）。`mutations.json` 有 22 個突變用 `worker` 檢查，包括 token 的 4 個，目前都只能得到 wrong_failure。時間回聲的 probe 驗證也在這支測試裡。它不在 CI 的 `cpu\|shader` 範圍，所以一直沒被發現 | `build/acceptance/object_fps_pvp/worker_main.cpp:82-84`；`ClientConnection.cpp:81`；`log-contract.md:224` |
+| N-token-test-gaps（只留存活突變那一半）＋C12（token 規則三份拷貝，D158 併入） | 拿掉折讓式中的兩項時，突變會存活，這兩個突變仍未登記。根因是 C12：產品裡寫了兩份 token 規則（送出路徑、喚醒期限），測試裡另有一份獨立模型，和產品不連動。「每日曆秒 ≤61」在 09a 已不是契約保證，那一半取消。判定要等 worker probe 修好 | `ClientConnection.cpp:659-685`、`:678-680`、`:754-761`；`MovementRecoveryTests.cpp:203`、`:280-289`；`mutations.json:2588-2625`；`plans/v7/09a-input-send-pinning.md:99` |
 | C17-3（`SendInput(input, generation)` 的世代檢查） | 重連後擋掉舊世代輸入的檢查，沒有任何測試或突變。重連是真實會發生的路徑（睡眠、斷線） | `ClientConnection.cpp:855-858`；`ClientSimulationRole.cpp:180` |
 | N-client-other-version-untested（新，原在 HANDOFF） | 計數在日誌契約的 A 級行族裡，但「收到他版 datagram → 加 1 → 寫進統計行」的累加路徑沒有測試，也沒有突變。只有判定函式與行格式有測試。Gateway 端有正向測試可對照 | `ClientConnection.cpp:500`；`WireTests.cpp:84-87`；`NetworkStatisticsTests.cpp:84-85`；`fixtures/log_v1/keys-v1.tsv:8` |
 
@@ -138,9 +138,8 @@ after-re-evaluate
 | C17 總項、C17-4 | 結案 | C17-4 的 `FireGate.cpp` 已在 `c6422c5` 刪除；C17-1～3 各自判斷 | — |
 | C17-1（時間倒退的意圖） | 取消 | 產品只有一個發布者（`PvpApplication.cpp:996`），觸發不了 | 新增第二個意圖發布者時 |
 | C17-2（網路 probe 的伺服器端輸入逾時） | 取消 | v7 第 04 批就決定只記錄，`PvpMatchTests` 有 L1（`plans/v7/04-client-roles.md:182`）；之後沒有新證據 | 伺服器端輸入逾時出現缺陷時 |
-| C12（token 規則三份拷貝） | 取消（照 README 的規則） | README 寫「哪個修正批直接需要（例如改 token 規則），就在那一批做」；目前沒有批次要改 token 規則。測試面的代價由 N-token-test-gaps 處理 | 有批次要改 token 規則時 |
 | F3（AssetWatcher 的時間基準） | 取消 | 產品沒有讀者；`detectedNs` 是 system_clock，已寫在註解（`AssetChange.hpp:34`） | 有程式拿 `detectedNs` 和 Engine 的時間比較時（例如量熱重載延遲） |
-| F4（D30 門檻逐級放大） | 取消（記為已知限制） | v7 STABLE_BASELINE 已列為低機率的已知限制；邏輯沒變（`ClientSimulationRole.cpp:55-73`），v7.1 沒有觀測到 | 觀測到發布間隔逐漸變長後，意圖過期判定失效 |
+| F4（D30 門檻逐級放大） | 取消（記為已知限制，**沒有檢測手段**） | v7 STABLE_BASELINE 已列為低機率的已知限制；邏輯沒變（`ClientSimulationRole.cpp:55-73`）。門檻值與過期判定（`intentStale`）都沒有寫進任何 log，只有單元測試讀它（`ClientSimulationRoleTests.cpp:183`），所以「v7.1 沒有觀測到」不能當根據。機率低，也說不出支持哪個功能（AGENTS.md §2），不為它補檢測 | 玩家回報幀率慢慢變差時移動不對，或之後有批次要改意圖過期的判定 |
 | F6（App Nap） | 取消 | 從未重現：v7 第 05 批 L3 與 v7 STABLE_BASELINE L3-1 都通過 | 切換 Spaces 或縮小視窗時斷線 |
 | N-8ms-client-crosscheck | 取消 | 它要回答的是 FireGate／C1 的常數在 8 ms 狀態下是否成立；FireGate 已隨 A1 退役（D90）。OT-6 的 `timer_after` 已能抓到跑次中途的狀態轉換 | 又有常數依賴主機的計時狀態時 |
 | N-sigint-background-client | 取消 | 一直標「只記錄」，有 SIGTERM 與 Esc 可替代；只影響腳本 | 腳本需要用 SIGINT 停 Client 時 |
@@ -163,8 +162,76 @@ after-re-evaluate
   - `smell-cleanup` 的「衝突檢查重疊」已經消失。
 - HANDOFF「未結事項」的 5 項（N-worker-probe-stale、compare_reports、Client 的他版計數、丟棄帳本、睡眠重連）和 note 裡的 N5，沒有進 INVENTORY。本文件給它們 `N-` 代號，決定之後補進 INVENTORY。
 
-## 8. 等你確認
+## 8. 決定（D158）
 
-- 第 1 節的判斷是否同意。特別是第 5 節的取消項（C12、F3、F4、F6、N-8ms-client-crosscheck、N-drop-ledger-growth），以及第 3 節交給 v8 的 4 項。
-- G2 要不要做、排在哪裡。
-- 決定之後，INVENTORY、README、HANDOFF 一起改。還需要的項目要拆成哪些批次，等你同意這份判斷之後再規劃。
+- 第 1 節的判斷照第 1 版，另外兩處：C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。
+- INVENTORY、README、HANDOFF 已同步。G2 還沒決定，INVENTORY 維持「re-evaluate 之後」。
+
+## 9. 批次（草案，等你核准）
+
+依使用者的優先序排：系統與引擎 → 觀測工具 → 測試 → 發行。類內依依賴排。
+
+```
+after-re-evaluate（約 73～102 h）
+├── 1 系統與引擎
+│   ├── sdl-isolation-plan         xhigh 或 ultracode（先問你）｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單
+│   ├── sdl-isolation              high｜產品、probe、產品測試不直接呼叫 SDL
+│   ├── substitution-single-store  high，判定的部分局部 xhigh｜被替代的序號只存一份
+│   ├── silent-branch-asserts      high｜無聲分支改成 assert 或計數
+│   └── cxx-flag-removal           high｜不再需要 experimental 程式庫
+├── 2 觀測工具
+│   ├── contract-readers           medium｜compare_reports 收進工具目錄；host_lock 鍵寫進日誌契約
+│   ├── trace-no-overwrite         high｜重啟 Match 不覆寫前一段的 trace
+│   └── analyzer-converge          high｜兩個命令分析器收斂成 N 人版
+├── 3 測試
+│   ├── worker-probe-repair        high｜修好 worker probe
+│   ├── token-tests                high｜token 的存活突變；測試模型和產品連動
+│   └── client-path-tests          high｜世代檢查與他版計數的正向測試
+└── 4 發行
+    ├── windows-long-path          high｜發行包解壓到深資料夾也能載入 shader
+    ├── quick-close                high｜關閉 Client 不再卡 3 秒
+    ├── wake-reconnect             high｜睡眠醒來不斷線（做法先交你決定）
+    └── lan15-windows              high，L2 宣告前做門檻來源的對抗式檢查｜Windows LAN 場次
+```
+
+| 代號 | 內容（INVENTORY） | 驗收 | 估時（h） | 依賴、決策點 |
+|---|---|---|---|---|
+| sdl-isolation-plan | IP34-B12、N-ip3-review-and-migration：寫 IP-3／IP-4 的 PLAN（`docs/architecture/plans/input-and-present/`），公開介面 1 次 xhigh 審查（D39），ui_editor、object_fps_preview 的遷移清單（D33） | 只改文件；審查紀錄；你核准 PLAN | 4～6 | 決策點 B：規劃用 ultracode 還是 xhigh |
+| sdl-isolation | 照 PLAN 實作 IP-3、IP-4，產品、probe、產品測試改用 Engine 的介面 | 四平台 L1；D33 的完成條件（產品、probe、產品測試的 SDL 符號為 0，用守衛檢查）；L3 手動遊玩（文字輸入、剪貼簿、視窗） | 22～28 | 依賴 sdl-isolation-plan；PLAN 可能再拆成多批 |
+| substitution-single-store | C13 | 先寫固定 slack 樣本的特性測試，再改；權威 digest 不變；突變；L1 | 4～6 | 決策點 A：相位追蹤沒有 golden（B10 在 v8） |
+| silent-branch-asserts | N-silent-branches-assert | 先對 HEAD 重新列點，逐點交你決定是 Assert 還是 Result（`docs/architecture/error-handling.md`）；突變；L1 | 4～6 | 列點後是一個關卡 |
+| cxx-flag-removal | C16、N-osyncstream-experimental | 四平台 L1（旗標只在 AppleClang）；日誌位元組不變（既有 golden） | 3～4 | 會改 `ClientConnection.cpp` 的 8 處（見決策點 C） |
+| contract-readers | N-compare-reports-untracked、N-host-lock-keys-uncontracted | 工具的單元測試；用 drop-report 的舊證據重跑，結果相同；log-contract 與 protocol-v7 的條文 | 3～4 | 收進工具目錄會改凍結清單（新增檔案） |
+| trace-no-overwrite | N-trace-overwrite-on-restart | 日誌 Data Contract 的變更（檔名或附加的規則）照版本規則處理，凍結讀者一起改；L1 | 4～6 | Data Contract 變更，照 AGENTS.md §3 報告 Architecture Delta |
+| analyzer-converge | C15 | 用既有的 pv6／pv7 語料新舊各分析一次，結果相同 | 5 | v8 的 N-analyzer-literal-105 會少 3 處要同步 |
+| worker-probe-repair | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定 | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
+| token-tests | N-token-test-gaps、C12 | 兩個存活突變登記並 killed；測試模型和產品的 token 規則不再各寫一份 | 4～6 | 依賴 worker-probe-repair |
+| client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair |
+| windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
+| quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
+| wake-reconnect | N-sleep-reconnect | 睡眠測試要你在場（D102）；L1 | 4～8 | 做法（醒來後重連，或改用不含睡眠的時鐘判逾時）先交你決定 |
+| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full` | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record |
+
+### 決策點
+
+- **A：substitution-single-store 沒有回歸守衛。**
+  - 問題：`track.substituted` 會產生負 slack 樣本，那是 late 修正的輸入（`MatchRuntimeHost.cpp:234-238`）。可是相位追蹤不在權威 digest 裡，B10（相位追蹤的 golden）已交給 v8，所以這批改壞了也沒有測試會失敗。
+  - 選項：
+    - (a) 批內先寫特性測試，固定「被替代的命令晚到時產生的 slack 樣本」，再改。範圍只到這一條路徑。
+    - (b) 把 B10 拉回 v7.1，排在這批之前（約 7 h）。
+    - (c) C13 跟著 B6 交給 v8，B6 會重新規劃同一區域。
+  - 建議 (a)：維持你的優先序，守衛只做這批需要的範圍；B10 仍是 v8 B6 的前置。
+- **B：sdl-isolation-plan 的檔位。**
+  - 這是公開介面與跨模組的規劃，照 `~/.claude/CLAUDE.md` 的換檔原則適合 ultracode（約 3 個方案、1 位評審、1 次對抗式檢查）或 xhigh。D39 的 1 次 xhigh 審查無論用哪個都要做。
+  - 建議 ultracode，等你同意。
+- **C：worker probe 擋住前面批次的突變驗收。**
+  - 22 個 `worker` 突變之中，有 20 個指向 `ClientConnection.cpp`。cxx-flag-removal（系統類）會改到這個檔案的 8 處；照「目標檔案被改過的既有突變都要重跑」，這 20 個只會得到 wrong_failure，判不了。
+  - 選項：
+    - (a) worker-probe-repair 提到最前面（2～4 h）。
+    - (b) 照優先序，前面批次的這些突變記成「判不了」，等測試類再補判。
+  - 建議 (a)：它很小，而且讓之後每一批的突變都判得了。
+- **PR 線**：約 73～102 h 放進一個 PR 太大。建議三條：
+  - sdl-isolation（Engine＋產品，兩批）；
+  - 系統其餘＋觀測＋測試；
+  - 發行。
+- **G2**：還沒決定，不在批次裡。

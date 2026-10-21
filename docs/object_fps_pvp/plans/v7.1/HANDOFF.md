@@ -37,9 +37,9 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：[after-re-evaluate.md](after-re-evaluate.md) 第 1 版的判斷（第 8 節）。
-- **進行中**：`after-re-evaluate` 的評估（分支 `claude/pvp-v71-after-re-evaluate`，只改文件）：逐項判斷還需不需要，再依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排列，交使用者決定。
-- **下一步**：評估文件交你決定；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
+- **等你決定**：[after-re-evaluate.md](after-re-evaluate.md) 第 9 節的批次草案與三個決策點（A：substitution-single-store 的回歸守衛；B：sdl-isolation-plan 用 ultracode 還是 xhigh；C：worker-probe-repair 提前），以及 PR 線、G2。
+- **進行中**：`after-re-evaluate`（分支 `claude/pvp-v71-after-re-evaluate`，目前只改文件）：判斷已確定（D158），INVENTORY、README 已同步；批次草案等核准。
+- **下一步**：批次核准後從第一批開始；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
 
@@ -127,6 +127,7 @@
 | D155 | （2026-10-21）`re-evaluate` 補量之後：B6 交給 v8 重新規劃（不沿用 09b 的 S／M；09b 1-7 第 3 點隨它）；B7、A5 取消（A5 照設計保留，連同門檻 105 重推、快速正向回收）。**`re-evaluate` 結案** | 使用者：「OK，那是否需要重新規劃一下B6的計劃，如果直接沿用之前測方案，我怕達不到最好的效果。」「B6交給v8吧。B7、A5 取消就好。」 |
 | D156 | （2026-10-21）PR #82（after-pv7 線：`tt2-trace`、`log-contract`、`dead-letter-position`、`d44-regression-pv7`、`incident-close`、`observability-tools`、`re-evaluate`）轉 ready 並合併。最後一次程式變更的四平台 L1 是 #532（`d5a4cec`），之後只有文件 | 使用者：「那沒問題了。#82合併。」 |
 | D157 | （2026-10-21）v7.1 的穩定基線：master 的 CI 通過之後，v7.1 成為穩定基線（v5、v6 是事故前的缺陷版本），寫正式的 `STABLE_BASELINE.md`（參照 v7）。`N-v7-skipped-acceptance`：v7 跳過的驗收不補做，照樣列為「跳過（使用者決定）」。LC-8 四項（D143 移到 `observability-tools`，計畫裡漏列）收尾：rotation 拆分取消、逐筆到達事件跟著 B6 交給 v8、樣本流失取消、週期性 IPC 寫出延遲取消；INVENTORY 另外更正 records 已做完的 4 列 | 使用者：「v5、v6在事故前是缺陷版本，v7.1 CI 過了就變成穩定基線。」「寫成正式的v7.1基線文件，。參照v7的STABLE_BASELINE.md」；N-v7-skipped-acceptance 選「不補，照樣列跳過」；「這些收尾處理了吧，你看要不要補？」「OK，就照這樣。」 |
+| D158 | （2026-10-21）`after-re-evaluate` 的判斷（[after-re-evaluate.md](after-re-evaluate.md) 第 2 版）：照第 1 版，另外 C12 併進 N-token-test-gaps，F4 取消並記成「沒有檢測手段」。還需要的 20 列依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排成 15 批的草案，等使用者核准；B10、N-correct-invariant-assert、E3、E5 跟 B6／A4 交給 v8。HANDOFF「未結事項」的 6 項補進 INVENTORY（N-worker-probe-stale、N-compare-reports-untracked、N-host-lock-keys-uncontracted、N-client-other-version-untested、N-sleep-reconnect、N-drop-ledger-growth）。G2 還沒決定 | 使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。用這個優先度來調整。」「C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。照這樣出第 2 版、同步 INVENTORY／README／HANDOFF，然後拆批給我看。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -597,9 +598,11 @@
 
 - 2026-10-21：`after-re-evaluate` 判斷第 1 版（[after-re-evaluate.md](after-re-evaluate.md)）。共 47 項：還需要 16 項（系統與引擎 4、觀測工具 4、測試 4、發行 4）、交給 v8 隨 B6／A4 4 項、有條件 3 項、不需要繼續 21 列、不在四類 1 項（G2）、清單更正 1 項（N-v7-skipped-acceptance）。HANDOFF「未結事項」裡沒進 INVENTORY 的 6 項給了 `N-` 代號。順帶發現：產品直接呼叫 SDL 的次數在 tt2-trace 後變多（`ForwardEngineLog`）；`compare_reports.py` 只存在 git 忽略的目錄，卻是 log-contract 指定的讀者；worker probe 壞掉讓 22 個 `worker` 突變判不了。停下等使用者決定。
 
+- 2026-10-21：`after-re-evaluate` 第 2 版（D158）。拆批時發現兩個依賴：(1) `track.substituted` 產生負 slack 樣本，是 late 修正的輸入，可是相位追蹤沒有 golden（B10 在 v8），C13 那批改壞了不會有測試失敗；(2) 22 個 `worker` 突變中 20 個指向 `ClientConnection.cpp`，系統類的 cxx-flag-removal 會改到那個檔案，worker probe 壞著就判不了。兩者都列成決策點。INVENTORY 統計對過：121 列，表格逐列解析的結果與統計表一致。
+
 ## 未結事項
 
-- `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
+- **（已補進 INVENTORY，D158：after-re-evaluate 的 worker-probe-repair）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 
 - `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。
@@ -610,20 +613,20 @@
   - **edge 系列收尾的 `edge-rate-limit`（D119；原為發版前，D118）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
   - 背景（使用者，2026-10-18）：網路在 v7.1 多次修改，很多是改網路機制；這可能是舊 Gateway 留下的痕跡。分析：限速本身是通用層的防洪機制（v5 以前就有），不是產品層的狀態副本；但它的兩個假設（Gateway 即時讀封包；流量遠低於 120）被 v7／v7.1 的修改侵蝕（30 Hz 動作批、時間回聲、09a 的 82 包輸入上限，開槍玩家平時已約 91 包／秒）。
 
-- **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
+- **（已補進 INVENTORY 為 N-sleep-reconnect，D158）** **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
 
-- **`edge-input-passthrough` 的 xhigh note**（記錄）：
+- **`edge-input-passthrough` 的 xhigh note**（記錄；D158：N3、N10 結案，N5 補進 INVENTORY 為 N-host-lock-keys-uncontracted）：
   - N3：佇列項目攜帶收包時刻與 GYOP 序號（回報 32 的 dwell 起點），字面上和 D105「單次呼叫的脈絡不得跨資料包保留」衝突。建議 `edge-contract` 把它歸類為「隨佇列項目攜帶的診斷狀態」，由你決定。
   - N5：protocol-v7 §9 寫鎖等待直方圖在「IpcHost 層」，實作在 `MatchRuntimeHost`；`network_statistics.py` 不彙總 `host_lock_*`，L2 的 judge 直接讀。
   - N10：`fwd_main_input_packets` 現在是「交給 link」，溢出的資料包同時算它和回報 32；`edge-analyzers` 照這個語意定義 I0。
 
-- **`edge-results-resend` 的 xhigh note**（記錄，之後的批次處理）：
+- **`edge-results-resend` 的 xhigh note**（記錄；D158：N1、N2 被取代，N3 前提消失，N4 只在 Match 與 Gateway 跨機器時重開）：
   - N1：這批 Match 的「ACK-only 補送退役」只在競態下觸發（link 只在 ACK 超前退役時才送 ACK-only），Client 漏收退役仍由 Gateway session 補送；`edge-results-passthrough` 讓 link 原樣轉送 ACK-only 後才真的用到。
   - N2：link 對每個副本都 `notify()` 一次，每位玩家約 30 Hz 多一次 writer 檢查，不影響時序；可改成合併有變化時才喚醒。
   - N3：link 對無法裁決的被拒請求照舊 30 Hz 重送，現在 Match 每次都回一框；L2 的流量數字會看到雙向 30 Hz。
   - N4：重送的副本排在 snapshot 前面；只有 TCP 低於約 120 框／秒才有影響（推論，loopback 可忽略）。
 
-- **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
+- **（已補進 INVENTORY 為 N-drop-ledger-growth，D158：取消）** **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
 
 - **保留的 worktree 與本機分支**：
   - `GYO-Engine-v7final`（`6d3f287`）、`GYO-Engine-c2-after`（`d685d1e`）：v7 的基準與凍結工具副本，保留到 `d44-regression-pv7` 完成（D146 DR-8 延到 `re-evaluate` 結束）。**（已處理，2026-10-21）**：`re-evaluate` 已結束；worktree 的清理由使用者交給架構會話。
@@ -632,9 +635,9 @@
   - 任何刪除都要先經使用者同意。
 - **（已處理：D142）D58 (1)(8) 的暫定決定**：在 `log-contract` 一起確認。
 - **檔位**：`pv7-design`、`log-contract` 開始前先問 ultracode（v7 D45）；`pv7-design` 另做 1 次 xhigh 對抗式檢查；每次 L2 宣告前做門檻來源的對抗式檢查（D45）。
-- **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。`re-evaluate` 已結束（D155），等使用者排序。
-- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。**（仍未補，2026-10-21）**：兩批都沒有處理。
-- **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note）：
+- **after-re-evaluate 的項目**：判斷已確定（D158），批次草案等核准（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）。
+- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。**（仍未補，2026-10-21）**：兩批都沒有處理。**（已補進 INVENTORY 為 N-client-other-version-untested，D158）**
+- **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note；D158：「只為測試存在的狀態」已由 edge-contract 分類，結案）：
   - Match 回覆「排在 controls、action lane、snapshot 之後」沒有可決定的測試（asio 下同一個 socket 可寫優先於可讀），只靠審查與 L2。
   - 差分測試不到 10 秒，所以視窗只在關閉時結算一次，跳變與漂移沒有在差分中算到（估計器另有單元測試，且結構上隔離）；也不跑滿品質視窗（600 tick × 3），逐出與 160 ms 門檻沒有在差分中判定。要延長會讓 CI 多數十秒。
   - Match 被 `Stop()`（不經過 `Close`）時沒有最後一個視窗的 log；runner 先停 Gateway，所以平常會走 `Close`。
@@ -647,7 +650,7 @@
   - 過渡原因的樣本身分不完整：16、17、20、21、28 沒有 action id 範圍；22～26 的 dwell 起點是計數時刻。edge 批刪除過渡原因時一併消失；28（結果寫出失敗）的 action id 範圍在 `edge-results-*` 補。
   - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
   - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。**（已處理：D142，鍵名不改，差額由 `backpressure_test.go` 守住）**
-  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21）**
+  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21；已補進 INVENTORY 為 N-compare-reports-untracked，D158）**
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4）：契約節的標題改成英文 `Design Invariants`，不隨文件語言翻譯（使用者的決定，文件會話 PR #80，2026-10-16 通知時尚未合併；這更正了 PR #79 時「標題逐字保持『不可破壞的契約』」的要求）。
   - `edge-contract` 把 Gateway 的正式條文寫在 `network-architecture.zh-Hant.md` 的 `### Design Invariants` 節下。PR #80 已合併到 master（`8f2f3fe`，四平台 L1 通過）；本分支在 `edge-results-resend` commit 之後同步 master，不自行改名。master 的 AGENTS.md 另新增 §14 Test and Defect Handling（原 §14、§15 往後移），同步後照新規則做。
   - AGENTS.md §3 改成一般規則「状態の権威（State Authority）」，不再列 Gateway 的細節；Gateway 的允許／禁止清單（protocol-v7 §2a）只放在 Design Invariants 節。
