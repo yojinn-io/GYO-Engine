@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：`re-evaluate` 的判斷（[re-evaluate.md](re-evaluate.md) 第 3 節）：12 項不需要繼續、2 項還需要（A4、N-analyzer-literal-105）、1 項有條件。
-- **進行中**：無（等你排序）。L1 #525（`3ca4e6a`，涵蓋 `98d3c45`）結果未看。
+- **等你決定**：無（B6、B7、A5 等補量的結果）。
+- **進行中**：`re-evaluate` 的 B6、B7、A5 補量（09R-map 的 9 格，D154）。
 - **下一步**：`re-evaluate` 由你看（D148）。`98d3c45`（分支會話：MovementRecoveryTests 的失敗時觀測，只改測試）還沒被 L1 涵蓋，下一次派 L1 時一起跑。之後 PR #82 可以轉 ready。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -123,6 +123,7 @@
 | D151 | （2026-10-21）session 第 2 次的停止原因：使用者在 Zed 裡 review 程式碼時切換了主 checkout 的分支，不知道會影響 agent。使用者：可以繼續。照建議 DR3-1：不改工具，原樣整個重跑（`pvp-v71-d44-l2-20261021c/`），期間不切換主 checkout | 使用者：「抱歉我在zed中review代碼，不知道會連動影響Agent，你可以繼續。」 |
 | D152 | （2026-10-21）`observability-tools` 的決定：OT-0a 選 (a)，相位決策直接寫進 `*-commands.jsonl` 的新 kind、升 schema，凍結讀者一起改，不另開檔案、不留相容層（「目前沒有發佈，不需要背這個技術債」）；其他照建議：OT-0b E1-6 納入（OT-6）、`N-trace-overwrite-on-restart` 移到 `re-evaluate 之後`；OT-0c 新凍結清單從下一個 L2 生效；OT-0d 注入正式模式維持現狀；OT-0e 三個 RTT 階段維持同一個種子（沒有建議，照「預設行為不變」） | 使用者：「OT-0a 直接改就行，目前沒有也沒有發佈，不需要被這個技術債。其他的照建議執行。」 |
 | D153 | （2026-10-21）OT-0e（分支會話討論後由使用者決定，轉給主會話）：impairments 的三個 RTT 階段維持同一個種子，工具不改、不加「每個階段換種子」的選項（三個階段是只差 RTT 的受控對照）；下一個 L2 的宣告改成每次跑次用不同的基底種子（impairments 與遊戲的 network20／40，例如第 k 次 DEFAULT＋1000×k，事前宣告清單，宣告前逐一乾跑確認 `random_dropped`>0），讓重複跑次同時抽樣丟包型態。細節在 [observability-tools.md](observability-tools.md) 第 7 節 | 使用者（分支會話「btw: 這個你如何考慮？」，經該會話轉達）：「OK，轉給主會話」 |
+| D154 | （2026-10-21）`re-evaluate`：同意第 2 版的判斷，但 B6、B7、A5 先補量再定（門檻 105 重推、快速正向回收隨 A5；N-phase-1-7 第 3 點隨 B6）；其他可以證明的直接處理（結案：N-respawn-reject-volume、N-conflict-window-permanent-loss、B9、N-quality-reference-age-sampling、N-09b-followup-measures；取消：B8；N-phase-1-7 第 6 點）；還需要的 A4、N-analyzer-literal-105 交給 v8；N-phase-estimator-wan-noise 等 WAN 測試。事故紀錄加日後談，只收和事故相關的項目 | 使用者：「同意 re-evaluate 第 2 版的判斷。12 項照寫結案或取消，重開條件照寫。還需要的 2 項交給 v8。」「等等，你把取消理由給我看一下呀。。。」「B6、B7、A5先補量再定，其他可以證明的，就直接處理掉，順便給事故紀錄加一個日後談，這個目錄就是設計失敗後不停加補丁的傷疤。」「當然，要選取相關事項，不是事故中的就不加了。」 |
 
 ## 規劃紀錄（記錄器）
 

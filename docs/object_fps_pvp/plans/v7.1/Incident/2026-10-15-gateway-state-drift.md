@@ -98,3 +98,18 @@ v7.1 的 `pv7-design` 把 pv7-line 重估為約 111 h 之後，使用者質疑�
 - Gateway 的狀態（`95bac31`）：`apps/object_fps_pvp/gateway/server.go:50`（`lastResolved`）、`:583-601`（依副本判斷）；`apps/object_fps_pvp/gateway/action_delivery.go:16`（`actionSendInterval`）、`:28-29`（`retiredSent`、`retirementAsked`）、`:225-252`（動作批次的節拍）。
 - 事故與原則：[2026-10-10 事故](../../v7/Incident/2026-10-10-gateway-silent-drop.md)；[v7 交接](../../v7/HANDOFF.md) D49、D51。
 - v7.1 的成本：[pv7-design](../pv7-design.md)「重估的工時」；[protocol-v7 草案](../../../protocol-v7.zh-Hant.md) §4。
+
+## 11. 日後談（2026-10-21，v7.1 `re-evaluate`）
+
+使用者的讀法：v7.1 的待評估清單（INVENTORY 處置為 `re-evaluate` 的項目），本身就是設計失敗之後不停加補丁留下的傷疤。Gateway 回到無狀態邊緣、資訊流修好之後，用 pv7 的數據逐項問「還需不需要繼續」，和本事故有關的項目結果如下（只列和本事故或 2026-10-10 事故直接相關的項目；其他項目見 [re-evaluate](../re-evaluate.md)）。
+
+| 項目 | 當初為什麼出現 | pv7 之後 |
+|---|---|---|
+| N-conflict-window-permanent-loss（pv6 缺口 9） | Gateway 把衝突窗口併進主線、標成已寫出，之後的副本被 Gateway 去重，損失變成永久 | 結案：Gateway 不再併入與去重，「永久」的機制不存在；197 項的衝突計數全是 0 |
+| N-respawn-reject-volume（828 對預測 147） | 預測值是在 pv6 的 Gateway 去重之後算的；Match 看到的數字和 Gateway 看到的不同，一直沒有核對 | 結案：計數點不同，不是錯誤。pv7 原樣轉送之後，Match 的計數就是 Client 實際送出的副本數 |
+| B6、B7（重新擷取的樣本邊界、slack 到達即發布） | 急迫性來自 FireGate guard：撤回後約 4 秒的相位誤差超過 guard。FireGate 的常數是在被截斷的資料上推導的（2026-10-10 事故） | FireGate 已隨 A1 退役，同一個殘餘現在只代表約 4 秒、+2～3 ms 的延遲；是否還需要，等補量後再定 |
+| D44 | 解釋不了的 epoch 重設：原因落在 Match 看不到的 Gateway 裡（第 7 節的補充） | `d44-regression-pv7` 290 個 case-run 加長測 0 次，未再現 |
+
+- 這些項目各自都是當時局部合理的處置：記為已知缺口、排進回歸、留待評估。它們真正的共同原因，是邊緣持有、或判斷了不屬於它的狀態。修掉這個前提之後，項目本身就不必再處理，或只剩看得到、解釋得了的部分。
+- 已在前面幾批移除、所以不在這張表上的同類補丁：FireGate 與 M0（A1 讓 FireGate 退役，D90）、拒絕線與已寫出去重（edge 系列）、丟棄回報的過渡原因（`drop-report` 隨 edge 批縮減）。
+
