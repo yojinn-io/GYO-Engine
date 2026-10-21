@@ -558,6 +558,14 @@ TEST_CASE("PvP IPC resends an unacknowledged decision at most once per action in
     CHECK(decisionFrames >= 4);
     CHECK(decisionFrames <= 13);
     CHECK(static_cast<std::size_t>(decisionFrames) == CountResults(beforeAck));
+    // log-contract E1-7: both lanes counted what they chose to write (the
+    // snapshots of 400 ms, the action sends above); no timing bound (FF-2).
+    const auto lanes = server.ipc.TakeLaneStatistics();
+    CHECK(lanes.snapshotWrites >= 10);
+    CHECK(lanes.snapshotWait.Count() == lanes.snapshotWrites);
+    CHECK(lanes.actionWrites >= static_cast<std::uint64_t>(decisionFrames));
+    CHECK(lanes.actionLate.Count() == lanes.actionWrites);
+    CHECK(server.ipc.TakeLaneStatistics().actionWrites <= 1); // taken: the next window starts empty
     gateway.Send(Actions(5, {}, 1));
     const auto retired = ReceiveFirst(gateway, [](const auto& message) {
         return message.has_action_results() && message.action_results().retired_through() == 1;

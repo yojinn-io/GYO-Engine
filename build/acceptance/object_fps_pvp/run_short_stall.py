@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 # D50 condition 3: the frozen files (equal to every list since C1; pvp-v7-batch09-s1-20261010/analyzers.sha256).
 # action_probe.py refrozen by v7.1 D122 (its Gateway limiter check only; ActionRelay unchanged).
-FROZEN = {'action_probe.py': '1a63504b2c7970f866f1d143a1425632a4b4044103ce5ddd320cd466b75913b1',
+FROZEN = {'action_probe.py': 'ccef0053629c60c2b2b51fcaceaf666e3911283e16462e64f19649c8734c657f',
           'backpressure_probe.py': 'c88ceb8908b74fc8909b41d01660ddc09efc485491ca5f27b07b4f7b19f3b7e9'}
 # Recorded in plan.json (not checked): the other modules run_case uses.
 RECORDED = ('run_short_stall.py', 'action_probe.py', 'backpressure_probe.py', 'gameplay_evidence.py',

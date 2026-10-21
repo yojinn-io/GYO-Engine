@@ -4,6 +4,13 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
 namespace {
 using namespace fps::pvp;
 
@@ -142,3 +149,55 @@ TEST_CASE("PvP clock checks come before anything is taken") {
     CHECK(window->negativeDelay == 0);
     CHECK(window->delayMinUs == 0);
 }
+
+// The clock_sync family's shared golden (log-contract): the same rows as the
+// Gateway's clock_sync_test.go, so the two writers cannot drift apart.
+TEST_CASE("PvP clock window line matches the shared golden") {
+    std::ifstream input(std::filesystem::path(PVP_LOG_FIXTURE_DIR) / "clock-sync.tsv");
+    REQUIRE(input);
+    int rows = 0;
+    for (std::string row; std::getline(input, row);) {
+        if (!row.empty() && row.back() == '\r') row.pop_back();
+        if (row.empty() || row.front() == '#') continue;
+        std::vector<std::string> f;
+        std::stringstream cells(row);
+        for (std::string cell; std::getline(cells, cell, '\t');) f.push_back(cell);
+        REQUIRE(f.size() == 12);
+        const auto optional = [&](int i) -> std::optional<std::int64_t> {
+            if (f[i] == "na") return std::nullopt;
+            return std::stoll(f[i]);
+        };
+        ClockWindow window{.windowUs = std::stoull(f[0]), .samples = std::stoull(f[1]), .invalid = std::stoull(f[2]),
+                           .negativeDelay = std::stoull(f[3]), .replaced = std::stoull(f[4]), .offsetUs = optional(5),
+                           .delayMinUs = optional(6), .delayMaxUs = optional(7), .jump = f[9] == "1", .final = f[10] == "1"};
+        if (f[8] == "nan") window.driftPpm = std::nan("");
+        else if (f[8] == "inf") window.driftPpm = INFINITY;
+        else if (f[8] != "na") window.driftPpm = std::stod(f[8]);
+        CAPTURE(row);
+        CHECK(ClockWindowLine(window) == f[11]);
+        ++rows;
+    }
+    CHECK(rows >= 8);
+}
+
+// The Client's last window is written when the transport closes, after the
+// game thread already cleared its player id: the line still names the player
+// of the session it closes.
+TEST_CASE("PvP Client clock lines name the session's player, also the final one") {
+    ClientClockSession session;
+    CHECK_FALSE(session.End(1));   // no session: no final line
+    session.Begin(7, 0);
+    const auto periodic = session.Roll(ClockSync::WindowUs);
+    REQUIRE(periodic);
+    CHECK(periodic->rfind("[ObjectFPS/PvP] clock sync player=7 window_ms=", 0) == 0);
+    const auto last = session.End(ClockSync::WindowUs + 5'000);
+    REQUIRE(last);
+    CHECK(last->rfind("[ObjectFPS/PvP] clock sync player=7 window_ms=", 0) == 0);
+    CHECK(last->find(" final=1") != std::string::npos);
+    CHECK_FALSE(session.End(ClockSync::WindowUs + 6'000));
+    session.Begin(9, 100'000'000);
+    const auto next = session.End(100'000'001);
+    REQUIRE(next);
+    CHECK(next->rfind("[ObjectFPS/PvP] clock sync player=9 ", 0) == 0);
+}
+

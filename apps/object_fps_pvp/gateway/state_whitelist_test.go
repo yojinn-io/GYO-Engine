@@ -44,12 +44,14 @@ var stateRoots = []any{
 	Config{}, Server{}, reservation{}, outbound{}, snapshotFrame{}, queuedControl{}, playerIngressLine{},
 	joinRequest{}, runtimeLink{}, queuedMessage{}, linkWrite{}, dataKey{}, resultSlot{}, dropEvent{},
 	dropLedger{}, dropStream{}, clockSync{}, clockPoint{}, clockStamp{}, clockWindow{}, sessionEcho{},
-	intervalStats{}, intervalWindow{}, sendStatistics{}, ingressKey{},
+	intervalStats{}, intervalWindow{}, sendStatistics{}, ingressKey{}, protocolError{},
 }
 
 // fieldClasses: "Type.field" for a field of a named type of this package, and
 // "Type.field<path>" for a field of an anonymous struct inside one.
 var fieldClasses = map[string]string{
+	"protocolError.err": classPerCall,
+
 	"Config.HTTPAddress": classConfig, "Config.UDPAddress": classConfig, "Config.RuntimeAddress": classConfig,
 	"Config.AdvertiseIP": classConfig,
 
@@ -76,7 +78,7 @@ var fieldClasses = map[string]string{
 
 	"outbound.actionPlayer": classPerCall, "outbound.peer": classPerCall, "outbound.packet": classPerCall,
 	"outbound.player": classPerCall, "outbound.writeFailed": classPerCall, "outbound.sequence": classPerCall,
-	"outbound.tick":         classPerCall,
+	"outbound.tick":          classPerCall,
 	"snapshotFrame.snapshot": classQueue, "snapshotFrame.read": classItemDiag, "snapshotFrame.tick": classQueue,
 	"queuedControl.p": classQueue, "queuedControl.kind": classQueue, "queuedControl.payload": classQueue,
 	"playerIngressLine.player": classDiagnostic, "playerIngressLine.line": classDiagnostic,
@@ -96,7 +98,7 @@ var fieldClasses = map[string]string{
 	"queuedMessage.player": classQueue, "queuedMessage.commands": classQueue, "queuedMessage.event": classItemDiag,
 	"linkWrite.message": classQueue, "linkWrite.lane": classQueue, "linkWrite.player": classQueue,
 	"linkWrite.commands": classQueue, "linkWrite.received": classItemDiag,
-	"dataKey.player":     classQueue, "dataKey.actions": classQueue,
+	"dataKey.player": classQueue, "dataKey.actions": classQueue,
 	"resultSlot.pending": classResultSlot, "resultSlot.nextSend": classResultSlot, "resultSlot.event": classItemDiag,
 
 	"dropEvent.reason": classDiagnostic, "dropEvent.at": classDiagnostic, "dropEvent.transport": classDiagnostic,
@@ -135,6 +137,7 @@ var fieldClasses = map[string]string{
 // cannot walk; each names what it holds.
 var interfaceFields = map[string]string{
 	"Server.listener": "the HTTP listener (net.Listener): a connection handle, no game state",
+	"protocolError.err": "the runtime link error it classifies (error): the failure of one read, no game state",
 }
 
 // packageVariables: every package-level variable of the Gateway's packages.
@@ -151,8 +154,9 @@ var packageVariables = map[string]string{
 	"gateway.ingressUnitNames": classTable, "gateway.noIntervals": classTable,
 	"gateway.rateLimitedPackets": classTable, "gateway.staleSequencePackets": classTable,
 	"gateway.unauthorizedPackets": classTable, "gateway.errLinkClosing": classTable,
-	"gateway.errRuntimeDisconnected": classTable,
-	"adapter.ErrActions":             classTable, "adapter.ErrInput": classTable,
+	"gateway.errRuntimeDisconnected": classTable, "gateway.errRuntimeLiveness": classTable,
+	"gateway.errRuntimeWriteTimeout": classTable, "gateway.errRuntimeVersionMismatch": classTable,
+	"adapter.ErrActions": classTable, "adapter.ErrInput": classTable,
 }
 
 // goroutineLocals: "function.variable" for a map or slice a function started

@@ -1,6 +1,10 @@
 package gateway
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -143,5 +147,59 @@ func TestClockChecksComeFirst(t *testing.T) {
 	c.observe(clockStamp{origin: u64(t1), receive: u64(150), transmit: 160}, 110) // delay 0
 	if w, _ := c.roll(clockWindowUs, false); w.samples != 1 || w.negativeDelay != 0 || *w.delayMinUs != 0 {
 		t.Fatalf("delay 0: %+v", w)
+	}
+}
+
+// The clock_sync family's shared golden (log-contract): the same rows as
+// tests/object_fps_pvp/ClockSyncTests.cpp.
+var clockSyncGolden = filepath.Join("..", "..", "..", "tests", "object_fps_pvp", "fixtures", "log_v1", "clock-sync.tsv")
+
+func TestClockWindowLineMatchesTheSharedGolden(t *testing.T) {
+	data, err := os.ReadFile(clockSyncGolden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := 0
+	for _, row := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if row == "" || strings.HasPrefix(row, "#") {
+			continue
+		}
+		f := strings.Split(row, "\t")
+		if len(f) != 12 {
+			t.Fatalf("row %q has %d columns", row, len(f))
+		}
+		u := func(i int) uint64 {
+			v, err := strconv.ParseUint(f[i], 10, 64)
+			if err != nil {
+				t.Fatalf("row %q column %d: %v", row, i, err)
+			}
+			return v
+		}
+		optional := func(i int) *int64 {
+			if f[i] == "na" {
+				return nil
+			}
+			v, err := strconv.ParseInt(f[i], 10, 64)
+			if err != nil {
+				t.Fatalf("row %q column %d: %v", row, i, err)
+			}
+			return &v
+		}
+		w := clockWindow{windowUs: u(0), samples: u(1), invalid: u(2), negativeDelay: u(3), replaced: u(4),
+			offsetUs: optional(5), delayMinUs: optional(6), delayMaxUs: optional(7), jump: f[9] == "1", final: f[10] == "1"}
+		if f[8] != "na" {
+			v, err := strconv.ParseFloat(f[8], 64)
+			if err != nil {
+				t.Fatalf("row %q drift: %v", row, err)
+			}
+			w.driftPpm = &v
+		}
+		if got := w.line(); got != f[11] {
+			t.Errorf("row %q:\n got  %q\n want %q", row, got, f[11])
+		}
+		rows++
+	}
+	if rows < 8 {
+		t.Fatalf("only %d golden rows", rows)
 	}
 }

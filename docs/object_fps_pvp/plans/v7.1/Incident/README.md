@@ -8,4 +8,4 @@
 
 | 日期 | 類型 | 標題 | 狀態 | 紀錄 |
 |---|---|---|---|---|
-| 2026-10-15 | 設計事故 | Gateway 由無狀態的邊緣漂移成持有 Match 決策狀態 | 處置中 | [2026-10-15-gateway-state-drift.md](2026-10-15-gateway-state-drift.md) |
+| 2026-10-15 | 設計事故 | Gateway 由無狀態的邊緣漂移成持有 Match 決策狀態 | 已結案（2026-10-21） | [2026-10-15-gateway-state-drift.md](2026-10-15-gateway-state-drift.md) |

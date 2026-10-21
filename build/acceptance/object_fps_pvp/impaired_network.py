@@ -18,12 +18,24 @@ import threading
 import time
 
 
+# The loss generators' base seed (observability-tools OT-4, INVENTORY E4). The default reproduces every run made
+# before the seed became a parameter: session index i used Random(0x47594F + 2i) for inputs and Random(0x475950 + 2i)
+# for snapshots.
+DEFAULT_LOSS_SEED = 0x47594F
+
+
+def flow_generators(loss_seed, index):
+    """The input and snapshot loss generators of the index-th session of a relay."""
+    return random.Random(loss_seed + index * 2), random.Random(loss_seed + 1 + index * 2)
+
+
 _HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
                 "te", "trailer", "transfer-encoding", "upgrade", "content-length", "host"}
 
 
 class _ImpairedGateway:
-    def __init__(self, http_port, udp_port, rtt_ms):
+    def __init__(self, http_port, udp_port, rtt_ms, loss_seed=DEFAULT_LOSS_SEED):
+        self.loss_seed = loss_seed
         self.upstream_http = http_port
         self.upstream_udp = ("127.0.0.1", udp_port)
         self.rtt_ms = rtt_ms
@@ -38,6 +50,7 @@ class _ImpairedGateway:
             "configured_rtt_ms": rtt_ms,
             "one_way_jitter_ms": 10,
             "random_loss_probability": 0.05,
+            "loss_seed": loss_seed,
             "forced_input_loss_batches_per_session": [1, 61, 62],
             "http_join_redirects": 0,
             "maximum_datagram_bytes": 0,
@@ -150,11 +163,11 @@ class _ImpairedGateway:
                 return
         else:
             if session not in self.clients:
-                index = len(self.clients)
+                input_random, snapshot_random = flow_generators(self.loss_seed, len(self.clients))
                 self.flows[session] = {
                     "input_count": 0,
-                    "input_random": random.Random(0x47594F + index * 2),
-                    "snapshot_random": random.Random(0x475950 + index * 2),
+                    "input_random": input_random,
+                    "snapshot_random": snapshot_random,
                 }
             self.clients[session] = source
             destination = self.upstream_udp
@@ -240,9 +253,9 @@ class _ImpairedGateway:
 
 
 @contextmanager
-def impaired_gateway(http_port, udp_port, rtt_ms):
+def impaired_gateway(http_port, udp_port, rtt_ms, loss_seed=DEFAULT_LOSS_SEED):
     """Yield a forwarding endpoint; close listeners and all workers on any exit."""
-    proxy = _ImpairedGateway(http_port, udp_port, rtt_ms)
+    proxy = _ImpairedGateway(http_port, udp_port, rtt_ms, loss_seed)
     try:
         yield proxy
     finally:

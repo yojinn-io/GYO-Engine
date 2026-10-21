@@ -9,6 +9,7 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -32,6 +33,7 @@ void WriteIngress(const std::vector<std::string>& lines) {
 }
 
 int main(int argc,char** argv) {
+    const auto processStarted=std::chrono::steady_clock::now();
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena;
@@ -57,7 +59,7 @@ int main(int argc,char** argv) {
         const auto ingressTracePath=fps::pvp::MatchIngressTracePath(movementTrace,ingressTraceOverride,usage);
         if(!usage.empty()){std::cerr<<usage<<'\n';return 2;}
         std::optional<fps::pvp::LogFile> log;
-        if(!logPath.empty()) {log.emplace(logPath);log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
+        if(!logPath.empty()) {log.emplace(logPath);log->FlushOnCrash();log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
         // Without --arena the Match hosts the release arena; tests and acceptance name theirs.
         const auto arenaPath=explicitArena ? *explicitArena
             : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_corners.json";
@@ -102,7 +104,8 @@ int main(int argc,char** argv) {
             std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
-                .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits)})<<'\n';
+                .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits),.pace=std::move(host.pace)})<<'\n';
+            std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),window,false)<<'\n';
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
             if(ingressTrace) ingressTrace->Write(records);
@@ -118,14 +121,25 @@ int main(int argc,char** argv) {
         // after it puts them in the detail file before its trace_end.
         auto lastTaken=runtime.TakeIngressStatistics(true);
         const auto lastRecords=runtime.DrainIngressRecords();
+        std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),
+            std::chrono::duration<double>(stoppedAt-windowStart).count(),true)<<'\n';
         WriteIngress(ingress.Lines(std::move(lastTaken),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed) std::cerr<<"Match simulation failed: "<<*failed<<'\n';
-        // Ends the file with trace_end; throws (exit 1) if any of its writes failed.
-        if(ingressTrace) ingressTrace->Finish(lastRecords);
-        if(shotTrace) shotTrace->Finish(runtime.DrainShotRecords());
-        if(failed) return 1;
-        if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
+        std::string reason=failed ? "runtime_failed" : "signal";
+        int code=failed ? 1 : 0;
+        try {
+            // Ends the file with trace_end; throws (exit 1) if any of its writes failed.
+            if(ingressTrace) ingressTrace->Finish(lastRecords);
+            if(shotTrace) shotTrace->Finish(runtime.DrainShotRecords());
+            if(!trace.Good()) throw std::runtime_error("Movement trace lost diagnostic data");
+        } catch(const std::exception& error) {std::cerr<<error.what()<<'\n';reason="exception";code=1;}
+        // log-contract: the Match's own end record, the last line (none when the process is killed,
+        // e.g. by TerminateProcess on Windows).
+        std::osyncstream(std::clog)<<"[ObjectFPS/PvP Match] end version=1 reason="<<reason<<" exit_code="<<code
+            <<" uptime_s="<<std::fixed<<std::setprecision(3)
+            <<std::chrono::duration<double>(std::chrono::steady_clock::now()-processStarted).count()
+            <<" authority_tick="<<runtime.TickCount()<<'\n';
+        return code;
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
-    return 0;
 }

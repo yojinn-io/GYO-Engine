@@ -14,6 +14,8 @@ public:
     void Stop();
     // Diagnostics only: passes of the connection and accept loops since Start.
     [[nodiscard]] std::uint64_t Iterations() const noexcept;
+    // Diagnostics only (log-contract, E1-7): the lanes' pace since the previous call.
+    [[nodiscard]] IpcLaneStatistics TakeLaneStatistics();
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

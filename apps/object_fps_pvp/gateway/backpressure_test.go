@@ -62,6 +62,13 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		len(s.snapshotOut) != 0 || s.snapshotReplacements.Load() != 2 {
 		t.Fatal("unwritten second peer retained an obsolete publication or transport sequence")
 	}
+	// log-contract, the coalesced_snapshots identity: the transport total counts
+	// both replacements; the Gateway-wide drop_coalesced_snapshots counts only
+	// the one made when tick 3 was published over tick 2; the send loop's own
+	// replacement (tick 1's peer took tick 3) is their difference.
+	if global := s.ingress[gatewayDropCoalescedSnapshots]; global != 1 || s.snapshotReplacements.Load()-global != 1 {
+		t.Fatalf("coalesced identity: transport %d, Gateway-wide %d", s.snapshotReplacements.Load(), global)
+	}
 	for sequence := uint32(2); sequence <= 3; sequence++ {
 		control, _ := s.controlPacket(<-s.controlOut)
 		header, _, err := framing.DecodeDatagram(control.packet)

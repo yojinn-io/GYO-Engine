@@ -14,9 +14,12 @@
 namespace fps::pvp {
 
 enum class MovementTraceKind { Generated, Sent, HostAccepted, Resolved, Reset,
-    SnapshotProduced, SnapshotReceived, Presentation, RuntimeGap, Transport, LifecycleCancelled };
+    SnapshotProduced, SnapshotReceived, Presentation, RuntimeGap, Transport, LifecycleCancelled, PhaseDecision };
 enum class MovementInputSource { None, Actual, Held, Neutral };
 enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation, LifeRespawn };
+// Which rule decided a PhaseDecision: the first decision after a seed (or after
+// a late correction), a later window decision, or late samples (schema 3).
+enum class MovementPhasePath { None, First, Window, Late };
 
 struct MovementTraceEvent final {
     MovementTraceKind kind{};
@@ -38,6 +41,14 @@ struct MovementTraceEvent final {
     // Successful Sent events span the nonblocking send call: start to timeNs.
     std::int64_t startedNs{};
     std::uint64_t lifeGeneration{1};
+    // PhaseDecision only (the Client's phase tracking, LocalPlayerPrediction):
+    // the decided error, the correction it started (0 when inside the
+    // deadband), the deadband (0 for a late correction). count is the samples
+    // the decision used; sequence the newest sample's command.
+    MovementPhasePath phasePath{MovementPhasePath::None};
+    double phaseErrorSeconds{};
+    double phaseShiftSeconds{};
+    double phaseDeadbandSeconds{};
 };
 
 inline std::int64_t MovementTraceNowNs() noexcept {
@@ -45,11 +56,22 @@ inline std::int64_t MovementTraceNowNs() noexcept {
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-class MovementTrace final {
+// Where TraceMovement sends events: the in-memory buffer below (tests and
+// probes read it back) or the file of MovementTraceWriter.hpp.
+class MovementTraceSink {
+public:
+    MovementTraceSink() = default;
+    MovementTraceSink(const MovementTraceSink&) = delete;
+    MovementTraceSink& operator=(const MovementTraceSink&) = delete;
+    virtual ~MovementTraceSink() = default;
+    // Any thread; timeNs is already set.
+    virtual void Record(const MovementTraceEvent& event) = 0;
+};
+
+class MovementTrace final : public MovementTraceSink {
 public:
     static constexpr std::size_t Capacity = 8192;
-    void Record(MovementTraceEvent event) {
-        if (!event.timeNs) event.timeNs = MovementTraceNowNs();
+    void Record(const MovementTraceEvent& event) override {
         std::lock_guard lock(mutex_);
         if (events_.size() == Capacity) { ++dropped_; return; }
         events_.push_back(event);
@@ -74,21 +96,23 @@ private:
 // start; guarded publication also makes shutdown/diagnostic probes safe.
 // A mutex is used instead of std::atomic<std::shared_ptr>, which Apple libc++ lacks.
 inline std::mutex movementTraceSinkMutex;
-inline std::shared_ptr<MovementTrace> movementTraceSink;
-inline void SetMovementTrace(std::shared_ptr<MovementTrace> trace) noexcept {
-    std::shared_ptr<MovementTrace> previous;
+inline std::shared_ptr<MovementTraceSink> movementTraceSink;
+inline void SetMovementTrace(std::shared_ptr<MovementTraceSink> trace) noexcept {
+    std::shared_ptr<MovementTraceSink> previous;
     {
         std::lock_guard lock(movementTraceSinkMutex);
         previous = std::exchange(movementTraceSink, std::move(trace));
     }
 }
 inline void TraceMovement(MovementTraceEvent event) {
-    std::shared_ptr<MovementTrace> trace;
+    std::shared_ptr<MovementTraceSink> trace;
     {
         std::lock_guard lock(movementTraceSinkMutex);
         trace = movementTraceSink;
     }
-    if (trace) trace->Record(event);
+    if (!trace) return;
+    if (!event.timeNs) event.timeNs = MovementTraceNowNs();
+    trace->Record(event);
 }
 inline constexpr std::string_view TraceKindName(MovementTraceKind kind) noexcept {
     switch (kind) {
@@ -103,6 +127,7 @@ inline constexpr std::string_view TraceKindName(MovementTraceKind kind) noexcept
     case MovementTraceKind::RuntimeGap: return "runtime_gap";
     case MovementTraceKind::Transport: return "transport";
     case MovementTraceKind::LifecycleCancelled: return "lifecycle_cancelled";
+    case MovementTraceKind::PhaseDecision: return "phase_decision";
     }
     return "invalid";
 }
@@ -112,6 +137,15 @@ inline constexpr std::string_view TraceSourceName(MovementInputSource source) no
     case MovementInputSource::Actual: return "actual";
     case MovementInputSource::Held: return "held";
     case MovementInputSource::Neutral: return "neutral";
+    }
+    return "invalid";
+}
+inline constexpr std::string_view TracePhasePathName(MovementPhasePath path) noexcept {
+    switch (path) {
+    case MovementPhasePath::None: return "none";
+    case MovementPhasePath::First: return "first";
+    case MovementPhasePath::Window: return "window";
+    case MovementPhasePath::Late: return "late";
     }
     return "invalid";
 }

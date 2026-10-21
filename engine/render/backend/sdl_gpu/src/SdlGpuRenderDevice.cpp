@@ -1,10 +1,12 @@
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/base/Log.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include <SDL3/SDL_gpu.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <thread>
@@ -947,9 +949,11 @@ struct SdlGpuRenderDevice::Impl final {
         }
         const std::int64_t acquired = Time::NowNs();
         if (acquired - waitStarted >= 50'000'000) {
-            SDL_Log("SDL_GPU slow swapchain acquire fence_wait_ms=%.1f drawable_ms=%.1f texture=%d",
+            char text[128];
+            std::snprintf(text, sizeof text, "slow swapchain acquire fence_wait_ms=%.1f drawable_ms=%.1f texture=%d",
                 static_cast<double>(acquireStarted - waitStarted) / 1.0e6,
                 static_cast<double>(acquired - acquireStarted) / 1.0e6, swapchain != nullptr);
+            Base::Log(Base::LogLevel::Info, "SDL_GPU", text);
         }
         if (!swapchain || !width || !height) {
             if (swapchain) static_cast<void>(SDL_SubmitGPUCommandBuffer(command));

@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
+#include "RetroFPS/Pvp/SessionSummary.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
@@ -368,8 +369,18 @@ struct PvpApplication::Impl final {
             std::optional<Engine::Math::Vec3> attacker;
             for (const auto& other : state.snapshot->players)
                 if (combat.lastAttackerId != 0 && other.playerId == combat.lastAttackerId) attacker = other.position;
-            hitFeedback.Observe(combat, self->lifeState, self->position, attacker,
+            const auto hit = hitFeedback.Observe(combat, self->lifeState, self->position, attacker,
                 std::chrono::duration<double>(Clock::now().time_since_epoch()).count());
+            if (hit.outcome != HitFeedbackOutcome::None) {
+                // log-contract: every hit the presentation saw, and why it did or did not flash.
+                static constexpr const char* reasons[] = {"none", "played", "dead", "new_life"};
+                SDL_Log("PvP hit feedback version=1 player=%llu life=%llu tick=%llu damage_count=%u hits=%u hp=%u "
+                        "attacker=%llu flash=%d reason=%s",
+                        static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(combat.lifeGeneration),
+                        static_cast<unsigned long long>(state.snapshot->tick), combat.damageCount, hit.hits, combat.hp,
+                        static_cast<unsigned long long>(combat.lastAttackerId), hit.outcome == HitFeedbackOutcome::Played ? 1 : 0,
+                        reasons[static_cast<int>(hit.outcome)]);
+            }
             weaponFeedback.hp = combat.hp;
             weaponFeedback.magazineAmmo = combat.magazineAmmo;
             weaponFeedback.reloadStartTick = combat.reloadStartTick;
@@ -384,7 +395,11 @@ struct PvpApplication::Impl final {
         for (const auto& decision : received.decisions) {
             ++weaponFeedback.decisionCount;
             if (decision.accepted) ++weaponFeedback.acceptedDecisions;
-            else ++weaponFeedback.rejectedDecisions;
+            else {
+                ++weaponFeedback.rejectedDecisions;
+                if (const auto reason = static_cast<std::size_t>(decision.rejection); reason < ShotRejectionCount)
+                    ++weaponFeedback.rejectionsByReason[reason];
+            }
             if (decision.rejection == ShotRejection::Cooldown) ++weaponFeedback.authorityCooldownRejections;
             // Drain/ACK includes old lives, but their cosmetic result cannot alter this life.
             if (decision.lifeGeneration != self->lifeGeneration) continue;
@@ -425,7 +440,7 @@ struct PvpApplication::Impl final {
     }
 
     void ResetWeaponFeedback() {
-        weaponFeedback = {};
+        RestartWeaponCounters(weaponFeedback, sessionLog.baseline);
         weaponFeedback.ready = weapon != nullptr;
         weaponAction = fps::WeaponViewModelAction::Idle;
         weaponStartedAt = hitMarkerUntil = rejectionUntil = {};
@@ -699,7 +714,7 @@ struct PvpApplication::Impl final {
         Clock::time_point windowStart{}, lastSnapshotAt{};
         std::uint64_t frames{}, snapshots{};
         double longestFrameSeconds{};
-        std::uint64_t submitted{}, accepted{}, rejected{}, hits{}, localBlocks{};
+        SummaryBaseline baseline;
     } sessionLog;
 
     void LogSession(double frameSeconds) {
@@ -733,25 +748,24 @@ struct PvpApplication::Impl final {
         const double window = std::chrono::duration<double>(now - log.windowStart).count();
         if (window < 1) return;
         const auto& weapon = weaponFeedback;
+        const auto counts = log.baseline.Take(SummaryCountsOf(weapon));
+        // log-contract: the rejections by the Match's reason, appended last (B-grade line).
+        std::string rejectedBy;
+        for (std::size_t reason = 1; reason < ShotRejectionCount; ++reason)
+            rejectedBy += " rejected_" + std::string(ShotRejectionName(static_cast<ShotRejection>(reason))) + "=" +
+                          std::to_string(counts.rejectedBy[reason]);
         const double snapshotAge = log.lastSnapshotAt == Clock::time_point{} ? -1 :
             std::chrono::duration<double>(now - log.lastSnapshotAt).count() * 1000;
         SDL_Log("PvP summary player=%llu tick=%llu players=%zu fps=%.1f longest_frame_ms=%.1f snapshots_per_s=%.1f "
                 "snapshot_age_ms=%.1f pending_commands=%zu hp=%u life=%llu dead=%d actions_submitted=%llu accepted=%llu "
-                "rejected=%llu hits=%llu local_cooldown_blocks=%llu actions_pending=%zu",
+                "rejected=%llu hits=%llu local_cooldown_blocks=%llu actions_pending=%zu%s",
                 static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(state.snapshot->tick),
                 state.snapshot->players.size(), log.frames / window, log.longestFrameSeconds * 1000, log.snapshots / window,
                 snapshotAge, static_cast<std::size_t>(presented.observation.pendingCommands), weapon.hp,
                 static_cast<unsigned long long>(self->lifeGeneration), self->lifeState == LifeState::Dead ? 1 : 0,
-                static_cast<unsigned long long>(weapon.submittedActions - log.submitted),
-                static_cast<unsigned long long>(weapon.acceptedDecisions - log.accepted),
-                static_cast<unsigned long long>(weapon.rejectedDecisions - log.rejected),
-                static_cast<unsigned long long>(weapon.hitDecisions - log.hits),
-                static_cast<unsigned long long>(weapon.localCooldownBlocks - log.localBlocks), state.actionTransport.pending);
-        log.submitted = weapon.submittedActions;
-        log.accepted = weapon.acceptedDecisions;
-        log.rejected = weapon.rejectedDecisions;
-        log.hits = weapon.hitDecisions;
-        log.localBlocks = weapon.localCooldownBlocks;
+                static_cast<unsigned long long>(counts.submitted), static_cast<unsigned long long>(counts.accepted),
+                static_cast<unsigned long long>(counts.rejected), static_cast<unsigned long long>(counts.hits),
+                static_cast<unsigned long long>(counts.localBlocks), state.actionTransport.pending, rejectedBy.c_str());
         log.windowStart = now;
         log.frames = log.snapshots = 0;
         log.longestFrameSeconds = 0;

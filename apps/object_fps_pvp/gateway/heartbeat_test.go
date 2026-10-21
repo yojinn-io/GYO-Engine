@@ -173,8 +173,8 @@ func TestOnlyAuthoritativeFramesRefreshRuntimeLiveness(t *testing.T) {
 				if c.refreshes {
 					t.Fatalf("%s did not refresh liveness: %v", c.name, err)
 				}
-				if !strings.Contains(err.Error(), "runtime liveness") {
-					t.Fatalf("failure %v", err)
+				if !strings.Contains(err.Error(), "runtime liveness") || disconnectReason(err) != "liveness_timeout" {
+					t.Fatalf("failure %v (reason %s)", err, disconnectReason(err))
 				}
 			case <-time.After(500 * time.Millisecond):
 				if !c.refreshes {

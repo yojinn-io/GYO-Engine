@@ -6,6 +6,8 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
+#include <syncstream>
+#include <iostream>
 
 namespace fps::pvp {
 namespace {
@@ -61,6 +63,8 @@ bool MatchRuntimeHost::Start(std::string& error) {
         return false;
     }
     role_.emplace(std::move(*started));
+    // log-contract: the owner names the role's timer backend once it runs.
+    std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
     return true;
 }
 
@@ -505,9 +509,13 @@ void MatchRuntimeHost::Body(Engine::Threads::RoleContext& context) {
     // Error() and exits visibly.
     try {
         auto previous = std::chrono::steady_clock::now();
+        const auto nominal = std::chrono::duration_cast<Engine::Time::Duration>(std::chrono::duration<double>(MovementTickSeconds));
         while (!context.StopRequested()) {
             const auto sampled = std::chrono::steady_clock::now();
-            const auto result = Advance(std::chrono::duration<double>(sampled - previous).count());
+            const auto interval = sampled - previous;
+            const auto result = Advance(std::chrono::duration<double>(interval).count());
+            // Diagnostics (E1-5): taken outside the mutex, recorded with the wake below.
+            const auto advanced = std::chrono::steady_clock::now();
             previous = sampled;
             // The next tick grid point, as an absolute deadline: the time
             // Advance took does not delay it. A reset request wakes it early.
@@ -517,11 +525,18 @@ void MatchRuntimeHost::Body(Engine::Threads::RoleContext& context) {
             if (context.StopRequested()) break;
             std::lock_guard lock(mutex_);
             statistics_.ticks.Record(deadline, wake.woke, wake.reason == Engine::Time::WakeReason::Notified);
+            statistics_.pace.RecordInterval(interval, nominal);
+            statistics_.pace.RecordAdvance(advanced - sampled);
         }
     } catch (const std::exception& failure) {
         std::lock_guard lock(mutex_);
         error_ = failure.what();
     }
+}
+
+std::uint64_t MatchRuntimeHost::TickCount() const {
+    std::lock_guard lock(mutex_);
+    return match_.TickCount();
 }
 
 MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {

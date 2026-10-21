@@ -5,6 +5,7 @@
 #include <chrono>
 #include <functional>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace fps::pvp {
@@ -83,6 +84,26 @@ enum class ShotRejection {
     None, InvalidReference, Expired, Cooldown,
     Dead, StaleLife, InvalidLife, Reloading, EmptyMagazine, MagazineFull
 };
+
+inline constexpr std::size_t ShotRejectionCount = static_cast<std::size_t>(ShotRejection::MagazineFull) + 1;
+
+// The shared spelling of a rejection in logs and records (match-shots.jsonl,
+// the Client's PvP summary).
+[[nodiscard]] inline std::string_view ShotRejectionName(ShotRejection rejection) noexcept {
+    switch (rejection) {
+    case ShotRejection::None: return "none";
+    case ShotRejection::InvalidReference: return "invalid_reference";
+    case ShotRejection::Expired: return "expired";
+    case ShotRejection::Cooldown: return "cooldown";
+    case ShotRejection::Dead: return "dead";
+    case ShotRejection::StaleLife: return "stale_life";
+    case ShotRejection::InvalidLife: return "invalid_life";
+    case ShotRejection::Reloading: return "reloading";
+    case ShotRejection::EmptyMagazine: return "empty_magazine";
+    case ShotRejection::MagazineFull: return "magazine_full";
+    }
+    return "unknown";
+}
 
 struct ShotDecision final {
     ActionId actionId{};

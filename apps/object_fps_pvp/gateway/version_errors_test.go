@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -190,12 +191,13 @@ func TestRuntimeEnvelopeFailuresAreDistinct(t *testing.T) {
 	cases := []struct {
 		name    string
 		payload []byte
+		reason  string
 		want    string
 	}{
-		{"version", marshal(&runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion + 1}), newer},
-		{"version, content this version cannot parse", otherVersionPayload(t, adapter.RuntimeVersion+1), newer},
-		{"unknown", unknown, "unknown runtime message fields=[99]"},
-		{"empty", marshal(envelope()), "runtime protocol mismatch: empty message"},
+		{"version", marshal(&runtime.RuntimeEnvelope{ProtocolVersion: adapter.RuntimeVersion + 1}), "version_mismatch", newer},
+		{"version, content this version cannot parse", otherVersionPayload(t, adapter.RuntimeVersion+1), "version_mismatch", newer},
+		{"unknown", unknown, "protocol", "unknown runtime message fields=[99]"},
+		{"empty", marshal(envelope()), "protocol", "runtime protocol mismatch: empty message"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -207,7 +209,8 @@ func TestRuntimeEnvelopeFailuresAreDistinct(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "runtime disconnected; room unavailable: " + c.want
+			// log-contract: the reason code first, the original error quoted last.
+			want := "runtime disconnected reason=" + c.reason + " error=" + strconv.Quote(c.want)
 			deadline := time.Now().Add(3 * time.Second)
 			for {
 				logs.mu.Lock()

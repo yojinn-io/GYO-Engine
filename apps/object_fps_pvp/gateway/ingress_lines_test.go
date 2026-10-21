@@ -56,15 +56,18 @@ func (c *ingressLog) lines(t *testing.T) []parsedIngressLine {
 	text := c.buf.String()
 	c.mu.Unlock()
 	var out []parsedIngressLine
+	phrases, patterns := frozenPhrases(t)
 	for _, line := range strings.Split(text, "\n") {
 		if strings.Contains(line, "ingress statistics ") {
-			for _, phrase := range frozenLinePhrases {
+			for _, phrase := range phrases {
 				if strings.Contains(line, phrase) {
 					t.Errorf("ingress line carries the frozen phrase %q: %s", phrase, line)
 				}
 			}
-			if frozenSessionCounters.MatchString(line) {
-				t.Errorf("ingress line carries the frozen session counters: %s", line)
+			for _, pattern := range patterns {
+				if pattern.MatchString(line) {
+					t.Errorf("ingress line carries the frozen pattern %s: %s", pattern, line)
+				}
 			}
 		}
 		if i := strings.Index(line, "player ingress statistics "); i >= 0 {

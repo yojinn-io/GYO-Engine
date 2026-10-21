@@ -117,6 +117,8 @@ def read_trace_events(path):
     file_schema = None
     allowed = {'generated', 'sent', 'host_accepted', 'resolved', 'reset', 'snapshot_produced',
                'snapshot_received', 'presentation', 'runtime_gap', 'transport', 'lifecycle_cancelled'}
+    # Schema 3 (v7.1 D152): schema 2 plus the Client's phase decisions (E1-3).
+    phase_paths = {'first', 'window', 'late'}
     with path.open() as stream:
         for line_number, line in enumerate(stream, 1):
             try:
@@ -124,7 +126,7 @@ def read_trace_events(path):
                 if ended:
                     raise ValueError('data after trace_end')
                 schema = event.get('schema_version', 1)
-                if not isinstance(schema, int) or isinstance(schema, bool) or schema not in (1, 2):
+                if not isinstance(schema, int) or isinstance(schema, bool) or schema not in (1, 2, 3):
                     raise ValueError('unsupported diagnostic schema')
                 if file_schema is not None and schema != file_schema:
                     raise ValueError('mixed diagnostic schemas')
@@ -134,13 +136,13 @@ def read_trace_events(path):
                     if event['events'] != count or event['dropped']:
                         raise ValueError('diagnostic count mismatch or loss')
                     continue
-                if event['kind'] not in allowed:
+                if event['kind'] not in allowed and not (schema >= 3 and event['kind'] == 'phase_decision'):
                     raise ValueError('unknown event kind')
                 count += 1
                 timestamp = event['time_ns']
                 if not isinstance(timestamp, int) or isinstance(timestamp, bool) or timestamp <= 0:
                     raise ValueError('invalid monotonic timestamp')
-                started = event['started_ns'] if schema == 2 else event.get('started_ns', 0)
+                started = event['started_ns'] if schema >= 2 else event.get('started_ns', 0)
                 if not isinstance(started, int) or isinstance(started, bool) or started < 0:
                     raise ValueError('invalid send-call start')
                 if event['kind'] == 'sent':
@@ -167,6 +169,17 @@ def read_trace_events(path):
                 if event['kind'] in ('generated', 'sent', 'host_accepted', 'resolved') and not all(
                         event[key] > 0 for key in ('player_id', 'epoch', 'sequence')):
                     raise ValueError('invalid command identity')
+                if event['kind'] == 'phase_decision':
+                    if event['phase_path'] not in phase_paths:
+                        raise ValueError('invalid phase decision path')
+                    for field in ('phase_error_seconds', 'phase_shift_seconds', 'phase_deadband_seconds'):
+                        value = event[field]
+                        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                            raise ValueError('invalid phase decision value')
+                    if event['phase_deadband_seconds'] < 0 or event['count'] < 1 or event['player_id'] < 1:
+                        raise ValueError('invalid phase decision bounds')
+                elif any(key.startswith('phase_') for key in event):
+                    raise ValueError('phase keys on a non-phase_decision event')
                 yield event
             except (ValueError, TypeError, KeyError) as exc:
                 raise ValueError(f'{path}:{line_number}: corrupt diagnostic record: {exc}') from exc

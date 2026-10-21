@@ -22,7 +22,7 @@ import urllib.request
 
 from backpressure_probe import IpcPause, analyze as analyze_recovery
 from command_evidence import analyze_commands
-from impaired_network import _ImpairedGateway
+from impaired_network import DEFAULT_LOSS_SEED, _ImpairedGateway
 from run_network import free_port, steady_clock_ns, wait_for_match_ready
 from action_evidence import frames as action_frames, records
 
@@ -107,8 +107,14 @@ def decision(payload):
     return result
 
 
+def network_generator(loss_seed, index):
+    """The loss and jitter generator of the index-th (session, direction) of a network* case (OT-4, E4); the default
+    seed reproduces the runs before the seed became a parameter."""
+    return random.Random(loss_seed+index)
+
+
 class ActionRelay(_ImpairedGateway):
-    def __init__(self, http, udp, mode):
+    def __init__(self, http, udp, mode, loss_seed=DEFAULT_LOSS_SEED):
         self.mode = mode
         self.events = []
         self.sequences = defaultdict(int)
@@ -129,6 +135,9 @@ class ActionRelay(_ImpairedGateway):
         self.fault = {'start_ns': 0, 'release_ns': 0, 'maximum_held_datagrams': 0,
                       'kernel_socket_saturation_proven': False}
         super().__init__(http, udp, 0)
+        # set after the base class: its own per-session loss generators are unused here (this relay overrides
+        # _receive), and its constructor keeps its three-argument form for the runners that replace it
+        self.loss_seed = loss_seed
 
     def arm(self, layer, duration):
         with self.lock:
@@ -227,7 +236,9 @@ class ActionRelay(_ImpairedGateway):
                     self.fault['start_ns'] = now
                 if time.monotonic() < self.network_until:
                     identity = (session, upstream)
-                    generator = self.network_random.setdefault(identity, random.Random(0x47594F+len(self.network_random)))
+                    if identity not in self.network_random:
+                        self.network_random[identity] = network_generator(self.loss_seed, len(self.network_random))
+                    generator = self.network_random[identity]
                     rtt = int(self.mode.removeprefix('network'))
                     if generator.random() < .05:
                         self.network_counts['random_dropped'] += 1
@@ -310,6 +321,7 @@ class ActionRelay(_ImpairedGateway):
                     'network': {'configured_rtt_ms': int(self.mode[7:]) if self.mode.startswith('network') else 0,
                         'one_way_jitter_ms': 10 if self.mode.startswith('network') else 0,
                         'random_loss_probability': .05 if self.mode.startswith('network') else 0,
+                        'loss_seed': self.loss_seed if self.mode.startswith('network') else None,
                         'maximum_scheduled_delay_ms': self.network_maximum_scheduled_delay_ms,
                         'random_dropped': self.network_counts['random_dropped'],
                         'random_dropped_by_kind': {str(kind): self.network_counts['random_dropped_kind_'+str(kind)] for kind in (3, 4, 6, 7)},
@@ -540,7 +552,7 @@ def run_case(args, mode, milliseconds=0):
                 if time.monotonic() >= until:
                     raise
                 time.sleep(.01)
-        relay = ActionRelay(http, udp, mode)
+        relay = ActionRelay(http, udp, mode, getattr(args, 'loss_seed', DEFAULT_LOSS_SEED))
         command = [args.probe, '--gateway', relay.gateway, '--arena', args.arena, '--output', output, '--duration', 6]
         if getattr(args, 'gameplay_v5', False):
             command += ['--gameplay-v5', 'true', '--fps', getattr(args, 'fps', 60)]
@@ -576,7 +588,8 @@ def run_case(args, mode, milliseconds=0):
                 fault = ipc_relay.evidence()
             else:
                 relay.arm(mode, milliseconds/1000)
-        if probe.wait(timeout=25):
+        # 16 s of run, then the after-run timer baseline (3 s, E1-6) and the decision drain.
+        if probe.wait(timeout=30):
             raise RuntimeError('Client action probe failed; see probe.log and client JSON')
         if mode == 'drain-stall':
             drain_at = 4 if getattr(args, 'gameplay_v5', False) else 1.5

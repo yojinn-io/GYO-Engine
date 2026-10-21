@@ -1,6 +1,6 @@
 # 時間、執行緒與 Trace：交接
 
-更新：2026-10-09。**狀態：TT-1 完成**（實作、L1、xhigh 審查與修正、L2（只記錄）；和消費端的第一個使用者同一個 PR #71 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 未開始**。2026-10-08 由提出需求的消費端在其規劃批次中建立。
+更新：2026-10-09。**狀態：TT-1 完成**（實作、L1、xhigh 審查與修正、L2（只記錄）；和消費端的第一個使用者同一個 PR #71 合併，`660310e`；L2 的量測程式留待之後的 PR）；**TT-2 實作中**（2026-10-20）。2026-10-08 由提出需求的消費端在其規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 D12 匿名。
 
 ## 閱讀入口
@@ -108,3 +108,25 @@
 - 證據：`build/target/_build/test/logs/tt1-l2-20261009/`（`meta.txt` 含程式雜湊、`cli.json`、`window.json`、sleeper）。
 - 2026-10-09：消費端的第一個使用者的 PR #71 合併（`660310e`），**TT-1 完成**。L2 的量測程式仍在上述本機分支。
 
+## TT-2 紀錄（記錄器）
+
+- 2026-10-20：開始（消費端 D139；主對話 high，關閉順序與計數局部 xhigh；1 位 xhigh 審查 agent 經使用者同意）。範圍：`GYO::Trace`、Base 的日誌 facade、SdlGpu 的慢 acquire 日誌改走 facade；消費端同一個 PR 把兩個寫出器改接（位元組不變）。
+- 2026-10-20：實作與本機 L1。
+  - `engine/trace`（`GYO::Trace`，只連 `GYO::Threads`）：`TraceSink`（`Open`／`Push`／`FlushNow`／`Close`／`Good`／`Counts`）。`engine/base/include/engine/base/Log.hpp`：`LogLevel`、`SetLogHandler`、`Log`，預設 `std::cerr`。
+  - SdlGpu：慢 acquire 改用 `Base::Log(Info, "SDL_GPU", …)`，文字不變。
+  - 和計畫的差異：見 [PLAN](PLAN.md) TT-2 的「實作時的調整」。
+  - `gyo_trace_tests` 10 個案例（8 個生產者的守恆式、關閉競爭、關閉後拒絕、由 Push 喚醒、`FlushNow`、append、開檔失敗、Linux 上的寫入失敗、handler 的並行替換、預設輸出）；configure 時的依賴檢查；本機重複 20 次全部通過；TSan 3 輪乾淨。
+  - 突變 5／5 killed（`tt2-drop-uncounted`、`tt2-accept-after-close`、`tt2-final-batch-unwritten`、`tt2-no-wake`、`tt2-flush-no-wait`）。`tt2-flush-no-wait` 第一版測試抓不到（寫檔跟得上生產者），改成先推一行 64 MB 讓寫檔執行緒忙著，再推標記行；之後連跑 3 次都 killed。
+  - 消費端：CTest `cpu|shader` 73／73（含權威 digest 0 差異）。
+- 證據：`build/target/_build/test/logs/engine-tt2-20261020/`（`tsan.txt`）。
+- 2026-10-20：xhigh 審查（1 位，消費端 D139 的 T-4）：沒有 MUST-FIX。處理：
+  - [SHOULD] 消費端的測試在 `LogFile` 之後宣告被 Tee 的 stream（解構順序造成的 UB）→ 調換宣告順序。
+  - [SHOULD] 「不輪詢」沒有守衛 → 寫檔執行緒的等待加 `GYO_ASSERT(wake.reason == Notified)`，新增突變 `tt2-timer-wake`；喚醒測試在第二次 Push 前先閒置 20 ms。
+  - [SHOULD] 消費端的當機路徑、丟棄行、`Finish` 之後才到的事件沒有測試 → 補 3 個測試與 4 個突變（全部 killed）。
+  - [SHOULD] 多個程序 append 同一個檔案時，一行可能被批次寫出切開（舊版每行 flush）→ 新增 `flushEachLine`，消費端的日誌檔使用。
+  - [SHOULD] 生產者每筆建一個 `std::ostringstream`（MSVC 會取全域鎖）→ 消費端改用 `std::string`＋`%.17g`，位元組由 golden 測試確認不變。
+  - [NIT] 寫入失敗後 `FlushNow` 仍回 true → 改成同時要求沒有失敗。持有佇列鎖的執行緒進入 terminate 時 `FlushNow` 會自鎖 → 改成 try-lock 到期限。`tt2-final-batch-unwritten` 靠機率 → 新的確定性測試（先推 64 MB 讓寫檔執行緒忙著）。
+  - 未處理（記錄）：佇列上限的差一錯誤沒有確定性的測試（8 個生產者的測試只證明有上限、計數精確）；`~LogFile` 與另一條執行緒的當機處理同時發生的窗口（寫進消費端的介面註解：先停其他執行緒再解構）。
+  - 突變 6／6；TSan 3 輪乾淨；Trace 測試重複 20 次全過。
+- 2026-10-20：第一次四平台 L1（`cd41c70`，run 39281009934）：Windows 的 `gyo_trace_tests` 失敗——sink 以文字模式寫檔，Windows 的換行是 `\r\n`，測試把位元組數寫成 `\n`。被取代的兩個寫出器同樣用文字模式，所以消費端檔案的位元組（含 Windows 的 `\r\n`）和以前相同；改的是測試（以平台的換行計算長度、以文字模式比較內容）。
+- 2026-10-20：消費端的 L2（消費端 D141，兩棵樹交錯 48 項）通過：生產者每筆成本 P99 27.6 µs（每 Tick 最多 8 筆，0.22 ms，預算 1 ms），host 鎖等待與移動延遲沒有退步。只記錄：消費端的伺服器程序 CPU 時間多約 25～35%（寫檔執行緒每批被叫醒一次，取代 20 ms 輪詢），Client 的產生→送出 P95 多約 0.04 ms。合併時點跟著第一個消費端（日誌契約）。

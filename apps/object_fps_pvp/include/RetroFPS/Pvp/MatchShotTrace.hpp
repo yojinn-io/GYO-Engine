@@ -120,22 +120,6 @@ struct ShotRecords final {
     std::uint64_t viewTickInvalid{};
 };
 
-[[nodiscard]] inline std::string_view ShotRejectionName(ShotRejection rejection) noexcept {
-    switch (rejection) {
-    case ShotRejection::None: return "none";
-    case ShotRejection::InvalidReference: return "invalid_reference";
-    case ShotRejection::Expired: return "expired";
-    case ShotRejection::Cooldown: return "cooldown";
-    case ShotRejection::Dead: return "dead";
-    case ShotRejection::StaleLife: return "stale_life";
-    case ShotRejection::InvalidLife: return "invalid_life";
-    case ShotRejection::Reloading: return "reloading";
-    case ShotRejection::EmptyMagazine: return "empty_magazine";
-    case ShotRejection::MagazineFull: return "magazine_full";
-    }
-    return "unknown";
-}
-
 // One line of match-shots.jsonl, without the newline.
 [[nodiscard]] inline std::string MatchShotRecordLine(const ShotShadowRecord& r) {
     const auto optional = [](const auto& value) { return value ? std::to_string(*value) : std::string("null"); };
@@ -303,7 +287,12 @@ public:
         if (!file_) throw std::runtime_error("Cannot open shot trace: " + path.string());
     }
     void Write(const ShotRecords& drained) { writer_.Write(drained); }
-    void Finish(const ShotRecords& last) { writer_.Finish(last); }
+    // Ends the file with trace_end and closes it; throws when a write or the close failed.
+    void Finish(const ShotRecords& last) {
+        writer_.Finish(last);
+        file_.close();
+        if (file_.fail()) throw std::runtime_error("Shot trace failed to close");
+    }
 
 private:
     std::ofstream file_;

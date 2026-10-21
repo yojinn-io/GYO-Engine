@@ -90,6 +90,9 @@ public:
     // Whether the platform accepted the name and the priority hint.
     [[nodiscard]] bool NameApplied() const;
     [[nodiscard]] bool PriorityApplied() const;
+    // The platform mechanism behind this role's own Waiter (for diagnostics:
+    // a high-resolution timer can fall back to a plain one on Windows).
+    [[nodiscard]] Time::WaitBackend WaitBackend() const;
 
 private:
     RoleThread(std::unique_ptr<RoleContext::State> state, std::thread thread) noexcept;

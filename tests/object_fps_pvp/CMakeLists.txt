@@ -5,7 +5,8 @@ set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
     CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
-    NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp)
+    NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
+    DiagnosticFileTests.cpp SessionSummaryTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -29,7 +30,8 @@ set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
 add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
 target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v7" nlohmann_json::nlohmann_json doctest::doctest)
-target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json")
+target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json"
+    PVP_LOG_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/log_v1")
 if(WIN32)
     target_compile_definitions(${ipc_tests} PRIVATE NOMINMAX)
 endif()
@@ -130,6 +132,11 @@ set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pv
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# The log Data Contract v1 (docs/object_fps_pvp/log-contract.zh-Hant.md): writer pins, the frozen readers on
+# real samples, and the reverse guards.
+add_test(NAME "${GYO_CURRENT_APP}.log_contract"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_log_contract.py")
+set_tests_properties("${GYO_CURRENT_APP}.log_contract" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
 add_test(NAME "${GYO_CURRENT_APP}.max_players"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
 set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
@@ -207,6 +214,18 @@ set_tests_properties("${GYO_CURRENT_APP}.action_runner" PROPERTIES LABELS "cpu;p
 add_test(NAME "${GYO_CURRENT_APP}.client_delay_runner"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_client_delay.py")
 set_tests_properties("${GYO_CURRENT_APP}.client_delay_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-2: late corrections counted as increments, the two sources cross-checked.
+add_test(NAME "${GYO_CURRENT_APP}.late_count"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_late_count.py")
+set_tests_properties("${GYO_CURRENT_APP}.late_count" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-3: every non-respawn reset of a run_network.py run, classified.
+add_test(NAME "${GYO_CURRENT_APP}.network_resets"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_resets.py")
+set_tests_properties("${GYO_CURRENT_APP}.network_resets" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# observability-tools OT-4 (E4): the network relays' loss seed, its default reproducing the former constants.
+add_test(NAME "${GYO_CURRENT_APP}.loss_seed"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_loss_seed.py")
+set_tests_properties("${GYO_CURRENT_APP}.loss_seed" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_soak"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_soak_evidence.py")
@@ -257,7 +276,7 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads nlohmann_json::nlohmann_json)
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>
     $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)

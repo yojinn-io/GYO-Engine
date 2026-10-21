@@ -120,6 +120,58 @@ class CommandEvidenceTests(unittest.TestCase):
                 self.write(directory, client, match, timing)
                 self.assert_error(evidence.analyze_commands(directory), 'corrupt diagnostic record')
 
+    @staticmethod
+    def phase_decision(time_ns, **changes):
+        record = {"schema_version": 3, "kind": "phase_decision", "time_ns": time_ns, "player_id": 1,
+                  "life_generation": 1, "epoch": 1, "sequence": 12, "authority_tick": 0, "source": "none",
+                  "queued": 0, "pending": 0, "seeded_neutral": False, "dropped_seconds": 0, "frame_seconds": 0,
+                  "count": 8, "age_seconds": 0, "reset_reason": "none", "started_ns": 0, "phase_path": "first",
+                  "phase_error_seconds": 0.004, "phase_shift_seconds": 0.004, "phase_deadband_seconds": 0.002}
+        record.update(changes)
+        return record
+
+    def test_schema_three_reads_phase_decisions(self):
+        # v7.1 D152 (E1-3): schema 3 is schema 2 plus the Client's phase_decision kind.
+        directory, client, match, timing = self.make_run()
+        self.with_send_intervals(client, match)
+        for record in client + match:
+            record['schema_version'] = 3
+        client.append(self.phase_decision(START + SECOND))
+        client.append(self.phase_decision(START + 2 * SECOND, phase_path="late", phase_error_seconds=-0.02,
+                                          phase_shift_seconds=-0.02, phase_deadband_seconds=0, count=2))
+        self.write(directory, client, match, timing)
+        result = evidence.analyze_commands(directory)
+        self.assertTrue(result['passed'], result['errors'])
+        events = list(evidence.read_trace_events(directory / "clients-commands.jsonl"))
+        self.assertEqual([e['phase_path'] for e in events if e['kind'] == 'phase_decision'], ['first', 'late'])
+
+    def test_phase_decision_is_validated(self):
+        cases = [({"phase_path": "slow"}, 3, 'invalid phase decision path'),
+                 ({"phase_error_seconds": "x"}, 3, 'invalid phase decision value'),
+                 ({"phase_deadband_seconds": -0.001}, 3, 'invalid phase decision bounds'),
+                 ({"count": 0}, 3, 'invalid phase decision bounds'),
+                 ({}, 2, 'unknown event kind')]   # a schema 2 file has no phase_decision kind
+        for changes, schema, message in cases:
+            with self.subTest(changes=changes, schema=schema):
+                directory, client, match, timing = self.make_run()
+                self.with_send_intervals(client, match)
+                for record in client + match:
+                    record['schema_version'] = schema
+                client.append(self.phase_decision(START + SECOND, schema_version=schema, **changes))
+                self.write(directory, client, match, timing)
+                with self.assertRaises(ValueError) as raised:
+                    list(evidence.read_trace_events(directory / "clients-commands.jsonl"))
+                self.assertIn(message, str(raised.exception))
+        directory, client, match, timing = self.make_run()
+        self.with_send_intervals(client, match)
+        for record in client + match:
+            record['schema_version'] = 3
+        next(r for r in client if r['kind'] == 'sent')['phase_path'] = 'first'
+        self.write(directory, client, match, timing)
+        with self.assertRaises(ValueError) as raised:
+            list(evidence.read_trace_events(directory / "clients-commands.jsonl"))
+        self.assertIn('phase keys on a non-phase_decision event', str(raised.exception))
+
     def assert_error(self, result, text):
         self.assertFalse(result["passed"])
         self.assertTrue(any(text in message for message in result["errors"]), result["errors"])

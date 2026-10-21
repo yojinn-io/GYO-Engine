@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string_view>
 #include <syncstream>
+#include <utility>
 
 namespace fps::pvp {
 namespace pb = object_fps_pvp::runtime::v7;
@@ -165,6 +166,10 @@ struct ActionLane {
     // began (the player's join on this link) and the latest reason.
     std::uint64_t refused{};
     pb::ActionRefusal lastRefusal{pb::ACTION_REFUSAL_UNSPECIFIED};
+    // Diagnostics only (log-contract, E1-7): when this I/O thread first saw the
+    // lane with something to send since its last send. A send is late only
+    // beyond both this and the lane's due time (an idle lane may send at once).
+    std::optional<std::chrono::steady_clock::time_point> pendingSince;
 };
 // The hit part's wire value is the domain's (pv7 §7).
 static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
@@ -416,6 +421,20 @@ struct IpcHost::Impl {
     std::uint64_t requestSequence{};
     // Diagnostics only: io handler passes (accept, read, write, timer, pump).
     std::atomic<std::uint64_t> iterations{};
+    // Diagnostics only (E1-7): written on the io thread, taken by match_main
+    // at its statistics window; the mutex guards only these counts.
+    std::mutex laneMutex;
+    IpcLaneStatistics lanes;
+    void SnapshotChosen(Clock::time_point queuedAt, Clock::time_point now) {
+        std::scoped_lock lock(laneMutex);
+        ++lanes.snapshotWrites;
+        lanes.snapshotWait.Record(now > queuedAt ? now - queuedAt : Clock::duration::zero());
+    }
+    void ActionChosen(Clock::time_point due, Clock::time_point now) {
+        std::scoped_lock lock(laneMutex);
+        ++lanes.actionWrites;
+        lanes.actionLate.Record(now > due ? now - due : Clock::duration::zero());
+    }
     std::optional<Engine::Threads::RoleThread> role;
 
     Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
@@ -727,6 +746,7 @@ struct IpcHost::Impl {
             const auto results=host.GetActionResults(it->first);
             if(!results) {it=session.actionLanes.erase(it);continue;}
             if(!LanePending(*results,it->second)) {++it;continue;}
+            if(!it->second.pendingSince) it->second.pendingSince=now;
             const auto due=LaneDue(it->second,now);
             if(!nextLane || due<*nextLane) nextLane=due;
             ++it;
@@ -764,6 +784,7 @@ struct IpcHost::Impl {
             host.NoteCoalescedSlackSamples(s.writingSamples);
             s.writing=SnapshotBytes(*s.latestSnapshot);s.writingTick=s.latestSnapshot->tick;
             s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+            SnapshotChosen(s.writingQueuedAt,Clock::now());
             TraceMovement({.kind=MovementTraceKind::Transport,.authorityTick=s.writingTick,.count=s.coalescedSnapshots});
         }
         if(s.writing.empty()) {
@@ -782,6 +803,8 @@ struct IpcHost::Impl {
                     if(!results) {it=s.actionLanes.erase(it);continue;}
                     ++it;
                     if(!LanePending(*results,lane)) continue;
+                    ActionChosen(std::max(LaneDue(lane,now),lane.pendingSince.value_or(now)),now);
+                    lane.pendingSince.reset();
                     s.writing=wire::Frame(ActionMessage(*results,lane,now).SerializeAsString());
                     s.writingSnapshot=false;s.writingTick=0;s.writingQueuedAt=now;s.writingSamples.clear();
                     break;
@@ -790,6 +813,7 @@ struct IpcHost::Impl {
             if(s.writing.empty() && s.latestSnapshot) {
                 s.writing=SnapshotBytes(*s.latestSnapshot);s.writingTick=s.latestSnapshot->tick;
                 s.writingQueuedAt=s.latestSnapshot->queuedAt;s.writingSnapshot=true;s.writingSamples=std::move(s.latestSnapshot->samples);s.latestSnapshot.reset();
+                SnapshotChosen(s.writingQueuedAt,Clock::now());
             }
             if(s.writing.empty() && s.clockReply) {
                 // Last in priority; transmit is stamped now, when the frame is chosen.
@@ -844,6 +868,7 @@ bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
             });
         if(!started) throw std::runtime_error(Engine::Base::Describe(started.error()));
         impl_->role.emplace(std::move(*started));
+        MatchEventLog::Line(RoleStartedLine(*impl_->role));
         return true;
     } catch(const std::exception& failure) {error=failure.what();return false;}
 }
@@ -872,4 +897,5 @@ void IpcHost::Stop() {
     impl_->listener.close(ignored);
 }
 std::uint64_t IpcHost::Iterations() const noexcept{return impl_->iterations.load(std::memory_order_relaxed);}
+IpcLaneStatistics IpcHost::TakeLaneStatistics(){std::scoped_lock lock(impl_->laneMutex);return std::exchange(impl_->lanes,{});}
 }

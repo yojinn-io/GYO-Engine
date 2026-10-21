@@ -147,21 +147,34 @@ TEST_CASE("Match ingress keys are unique, follow the naming rule and stay out of
         CHECK(seen.insert(key).second);
     }
 
-    // build/acceptance/object_fps_pvp/network_statistics.py:17-19 and action_probe.py:594.
-    const std::regex frozen[] = {
-        std::regex(R"(player send statistics (.*)$)"),
-        std::regex(R"(\[ObjectFPS/PvP Match\] network statistics (.*)$)"),
-        std::regex(R"(\[ObjectFPS/PvP\] worker statistics (.*)$)"),
-        std::regex(R"(rate_accepted_packets=(\d+) rate_limited_packets=(\d+) max_session_window_packets=(\d+))"),
-    };
+    // What the frozen readers search for: the log contract's shared list.
+    std::vector<std::string> phrases;
+    std::vector<std::regex> patterns;
+    {
+        std::ifstream list(Fixtures.parent_path() / "log_v1" / "prefixes.txt");
+        REQUIRE(list);
+        for (std::string row; std::getline(list, row);) {
+            if (!row.empty() && row.back() == '\r') row.pop_back();
+            if (row.empty() || row.front() == '#') continue;
+            const auto tab = row.find('\t');
+            REQUIRE(tab != std::string::npos);
+            if (row.substr(0, tab) == "phrase") phrases.push_back(row.substr(tab + 1));
+            else if (row.substr(0, tab) == "regex") patterns.emplace_back(row.substr(tab + 1));
+            else FAIL("prefixes.txt row " << row);
+        }
+    }
+    REQUIRE_FALSE(phrases.empty());
+    REQUIRE_FALSE(patterns.empty());
     MatchIngressWindow full{.player = 1, .windowMs = 10000, .final = true};
     std::uint64_t next = 1;
     ForEachMatchIngressField(full.counts, [&](const std::string&, std::uint64_t& value) { value = next++; });
     auto lines = ReadLines(Fixtures / "match.txt");
     lines.push_back(MatchIngressStatisticsLine(full));
     lines.push_back(MatchIngressStatisticsLine({}));
-    for (const auto& line : lines)
-        for (const auto& pattern : frozen) CHECK_FALSE(std::regex_search(line, pattern));
+    for (const auto& line : lines) {
+        for (const auto& phrase : phrases) CHECK(line.find(phrase) == std::string::npos);
+        for (const auto& pattern : patterns) CHECK_FALSE(std::regex_search(line, pattern));
+    }
 }
 
 TEST_CASE("The match-ingress.jsonl sample uses the shared vocabulary and ends with its trace_end") {

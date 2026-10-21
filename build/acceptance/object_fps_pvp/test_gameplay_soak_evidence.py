@@ -174,7 +174,10 @@ class TimerBaselineIsNeverAVerdict(unittest.TestCase):
     def test_source_only_passes_the_timer_baseline_through(self):
         source = (Path(__file__).resolve().parent / 'gameplay_soak_evidence.py').read_text(encoding="utf-8")
         lines = [line.strip() for line in source.splitlines() if "timer" in line.lower()]
-        self.assertEqual(lines, ["'timer_baseline': client.get('timer'),  # Interpretation only; no check reads it."], "a check may have started reading the timer baseline")
+        # E1-6 (v7.1): the after-run baseline is passed through the same way.
+        self.assertEqual(lines, ["'timer_baseline': client.get('timer'),  # Interpretation only; no check reads it.",
+                                 "'timer_baseline_after': client.get('timer_after'),  # E1-6; interpretation only."],
+                         "a check may have started reading the timer baseline")
 
 
 if __name__ == '__main__':

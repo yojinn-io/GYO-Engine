@@ -74,6 +74,78 @@
       "target": "gyo_time_tests",
       "cases": "*reports a passed deadline first*",
       "expect": "CHECK\\( passed.reason == WakeReason::Deadline \\) is NOT correct"
+    },
+    {
+      "id": "tt2-drop-uncounted",
+      "what": "A line refused for a full queue is not counted",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "        if (impl_->queue.size() >= impl_->capacity) {\n            ++impl_->droppedFull;\n            return false;",
+      "replace": "        if (impl_->queue.size() >= impl_->capacity) {\n            return false;",
+      "target": "gyo_trace_tests",
+      "cases": "*eight producers*",
+      "expect": "CHECK\\( counts.droppedFull > 0 \\) is NOT correct"
+    },
+    {
+      "id": "tt2-accept-after-close",
+      "what": "Push still accepts lines after Close",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "        if (impl_->closed) {\n            ++impl_->droppedClosed;\n            return false;\n        }\n",
+      "replace": "",
+      "target": "gyo_trace_tests",
+      "cases": "*after Close*",
+      "expect": "CHECK_FALSE\\( sink.Push\\(\"after\"\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt2-final-batch-unwritten",
+      "what": "The take after the stop is counted but never written, so the end line comes too early",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "                file << line << '\\n';\n",
+      "replace": "                if (!stopping) file << line << '\\n';\n",
+      "target": "gyo_trace_tests",
+      "cases": "*busy writer*",
+      "expect": "REQUIRE\\( tail.size\\(\\) == 6 \\) is NOT correct"
+    },
+    {
+      "id": "tt2-no-wake",
+      "what": "A Push into an empty queue does not wake the writer",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "    if (wake) impl_->writer->Notify();",
+      "replace": "    static_cast<void>(wake);",
+      "target": "gyo_trace_tests",
+      "cases": "*wakes the writer*",
+      "timeout": 120,
+      "expect": "CHECK\\( seen \\) is NOT correct"
+    },
+    {
+      "id": "tt2-flush-no-wait",
+      "what": "FlushNow returns without waiting for the writer",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "    impl_->writer->Notify();\n    std::unique_lock lock(impl_->progressMutex);\n    impl_->progressChanged.wait_until(lock, deadline,\n        [&] { return impl_->flushedThrough >= target || impl_->writerDone; });\n    return impl_->flushedThrough >= target && !impl_->failed.load(std::memory_order_acquire);",
+      "replace": "    impl_->writer->Notify();\n    return true;",
+      "target": "gyo_trace_tests",
+      "cases": "*FlushNow returns*",
+      "expect": "CHECK\\( size == busy.size\\(\\) \\+ Newline.size\\(\\) \\+ marker.size\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt2-timer-wake",
+      "what": "The writer also wakes on a timer (polling)",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "            const Time::Wake wake = context.Wait();",
+      "replace": "            const Time::Wake wake = context.WaitUntil(Time::Now() + std::chrono::milliseconds(1));",
+      "target": "gyo_trace_tests",
+      "cases": "*wakes the writer*",
+      "timeout": 120,
+      "expect": "GYO_ASSERT failed: wake.reason == Time::WakeReason::Notified"
+    },
+    {
+      "id": "tt2-role-backend-fixed",
+      "what": "A role reports a fixed backend instead of its own Waiter's",
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    return state_->waiter.Backend();\n",
+      "replace": "    return Time::WaitBackend::ConditionVariable;\n",
+      "target": "gyo_threads_tests",
+      "cases": "*backend of its own Waiter*",
+      "expect": "CHECK\\( role.WaitBackend\\(\\) == waiter->Backend\\(\\) \\) is NOT correct"
     }
   ]
 }

@@ -1087,7 +1087,7 @@ func (s *Server) runtimeFailed(err error) {
 	clear(s.requests)
 	s.mu.Unlock()
 	s.link.close()
-	log.Printf("runtime disconnected; room unavailable: %v", err)
+	log.Printf("runtime disconnected reason=%s error=%q", disconnectReason(err), err.Error())
 	s.flushFinal()
 }
 

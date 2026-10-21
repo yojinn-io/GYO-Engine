@@ -16,12 +16,37 @@ var ingressFixtures = filepath.Join("..", "..", "..", "tests", "object_fps_pvp",
 var (
 	ingressKeyRule = regexp.MustCompile(`^(fwd_|drop_)?[a-z]+(_[a-z]+)*_(datagrams|packets|inputs|commands|batches|shots|snapshots|acks)$`)
 	ingressValue   = regexp.MustCompile(`^\d+$`)
-	// build/acceptance/object_fps_pvp/action_probe.py:594 (and run_gameplay_soak.py:29) read the
-	// first match; network_statistics.py:17-19 parse the lines that carry these phrases.
-	frozenSessionCounters = regexp.MustCompile(`rate_accepted_packets=(\d+) rate_limited_packets=(\d+) max_session_window_packets=(\d+)`)
-	frozenLinePhrases     = []string{"player send statistics", "[ObjectFPS/PvP Match] network statistics",
-		"[ObjectFPS/PvP] worker statistics"}
+	// What the frozen readers search for: the shared list of the log contract.
+	frozenPhrasesFile = filepath.Join("..", "..", "..", "tests", "object_fps_pvp", "fixtures", "log_v1", "prefixes.txt")
 )
+
+// frozenPhrases reads the log contract's shared list: substrings and patterns
+// a line of another family must not contain.
+func frozenPhrases(t *testing.T) (phrases []string, patterns []*regexp.Regexp) {
+	t.Helper()
+	data, err := os.ReadFile(frozenPhrasesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if row == "" || strings.HasPrefix(row, "#") {
+			continue
+		}
+		kind, text, ok := strings.Cut(row, "\t")
+		switch {
+		case ok && kind == "phrase":
+			phrases = append(phrases, text)
+		case ok && kind == "regex":
+			patterns = append(patterns, regexp.MustCompile(text))
+		default:
+			t.Fatalf("prefixes.txt row %q", row)
+		}
+	}
+	if len(phrases) == 0 || len(patterns) == 0 {
+		t.Fatal("prefixes.txt names no phrase or no pattern")
+	}
+	return phrases, patterns
+}
 
 type ingressField struct{ key, value string }
 
@@ -192,14 +217,17 @@ func TestIngressLinesStayOutOfTheFrozenParsers(t *testing.T) {
 	}
 	lines = append(lines, readIngressGolden(t, "gateway-player.txt")...)
 	lines = append(lines, readIngressGolden(t, "gateway-global.txt")...)
+	phrases, patterns := frozenPhrases(t)
 	for _, line := range lines {
-		for _, phrase := range frozenLinePhrases {
+		for _, phrase := range phrases {
 			if strings.Contains(line, phrase) {
 				t.Fatalf("ingress line would be parsed as %s: %s", phrase, line)
 			}
 		}
-		if frozenSessionCounters.MatchString(line) {
-			t.Fatalf("ingress line matches the frozen Session counter pattern: %s", line)
+		for _, pattern := range patterns {
+			if pattern.MatchString(line) {
+				t.Fatalf("ingress line matches the frozen pattern %s: %s", pattern, line)
+			}
 		}
 		for _, word := range strings.Split(line, " ") {
 			if _, value, ok := strings.Cut(word, "="); ok && !ingressValue.MatchString(value) {

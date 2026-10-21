@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <tuple>
 #include <locale>
 #include <sstream>
 #include <utility>
@@ -92,6 +93,35 @@ void TickWakeStatistics::Record(const Engine::Time::TimePoint planned, const Eng
     late.Record(woke - planned);
 }
 
+void TickPaceStatistics::RecordInterval(const Engine::Time::Duration interval, const Engine::Time::Duration nominal) {
+    overrun.Record(interval > nominal ? interval - nominal : Engine::Time::Duration::zero());
+    if (interval * 2 > nominal * 3) ++stalls;
+}
+
+void TickPaceStatistics::RecordAdvance(const Engine::Time::Duration took) {
+    advance.Record(took > Engine::Time::Duration::zero() ? took : Engine::Time::Duration::zero());
+}
+
+std::string RoleStartedLine(const Engine::Threads::RoleThread& role) {
+    return "role started version=1 role=" + role.Name() + " wait_backend=" + Engine::Time::ToString(role.WaitBackend()) +
+           " name_applied=" + (role.NameApplied() ? "1" : "0") + " priority_applied=" + (role.PriorityApplied() ? "1" : "0");
+}
+
+std::string IpcStatisticsLine(const IpcLaneStatistics& lanes, const double windowSeconds, const bool final) {
+    auto line = LineStream();
+    line << "[ObjectFPS/PvP Match] ipc statistics version=1 window_s=" << std::fixed << std::setprecision(3) << windowSeconds
+         << " final=" << (final ? 1 : 0);
+    for (const auto& [name, writes, stats] : {std::tuple{"snapshot_wait", lanes.snapshotWrites, &lanes.snapshotWait},
+                                              std::tuple{"action_late", lanes.actionWrites, &lanes.actionLate}}) {
+        line << " " << (stats == &lanes.snapshotWait ? "snapshot_writes=" : "action_writes=") << writes << " " << name
+             << "_p99_le_us=" << Micros(stats->QuantileUpperBound(0.99)) << " " << name << "_max_us=" << Micros(stats->Max())
+             << " " << name << "_bins=";
+        for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
+            line << (bin ? "," : "") << stats->Bins()[bin];
+    }
+    return line.str();
+}
+
 std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {
     auto line = LineStream();
     const auto& late = window.ticks.late;
@@ -119,6 +149,14 @@ std::string MatchStatisticsLine(const MatchStatisticsWindow& window) {
         for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
             line << (bin ? "," : "") << waits->Bins()[bin];
     }
+    // Added in v7.1 log-contract (E1-5), so it comes last.
+    for (const auto& [name, stats] : {std::pair{"tick_overrun", &window.pace.overrun}, std::pair{"advance", &window.pace.advance}}) {
+        line << " " << name << "_p99_le_us=" << Micros(stats->QuantileUpperBound(0.99)) << " " << name
+             << "_max_us=" << Micros(stats->Max()) << " " << name << "_bins=";
+        for (std::size_t bin = 0; bin < Engine::Time::LateWakeStats::BinCount; ++bin)
+            line << (bin ? "," : "") << stats->Bins()[bin];
+        if (stats == &window.pace.overrun) line << " tick_stalls=" << window.pace.stalls;
+    }
     return line.str();
 }
 
@@ -132,6 +170,11 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
     Optional(line, window.cpuSeconds, 3);
     // Added in pv7 (v7.1 version-errors), so it comes last.
     line << " other_version_datagrams=" << window.otherVersionDatagrams;
+    // Added in v7.1 log-contract, so they come last.
+    line << " received_datagrams=" << window.receivedDatagrams << " foreign_sender_datagrams=" << window.foreignSenderDatagrams
+         << " undecodable_datagrams=" << window.undecodableDatagrams << " stale_datagrams=" << window.staleDatagrams
+         << " send_blocked=" << window.sendBlocked << " snapshot_overflows=" << window.snapshotOverflows
+         << " simulation_overflows=" << window.simulationOverflows;
     return line.str();
 }
 

@@ -96,11 +96,10 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 - 沒有資料包的事件（snapshot 類、下行 control 與 results）以事件發生的時刻為起點；各原因的起點寫在 §4 的列舉表。
 - 共用這個定義的欄位：`PlayerInput.gateway_dwell_us`、`ActionBatch.gateway_dwell_us`、`DropSample.dwell_us`。
 
-### 日誌只加鍵
+### 日誌
 
-- `version-errors` 凍結 pv7 版分析器之後，同一條線的批次只在既有行的行尾加鍵；新紀錄寫到新檔或新的行族；不在 `commands.jsonl` 加事件種類；不改既有的 close 原因字串。
+- 日誌與紀錄檔的格式、版本與相容規則由 [日誌 Data Contract v1](log-contract.zh-Hant.md) 規定（v7.1 `log-contract`，D142 取代本節原本的「日誌只加鍵」）。
 - Hello／Welcome 的回聲不改變 `received_datagrams` 的組成。
-- 日誌格式在 `log-contract` 之前都是暫定。
 
 ## 2a. IPC 送達語意（v7.1 D94、D95）
 
@@ -246,7 +245,7 @@ Gateway 執行了、但沒能轉送內容的丟棄，依原因回報給 Match（
 | 42 | `DROP_UNKNOWN_SESSION_DATAGRAMS` | Gateway 範圍：不屬於任何 session | 收包 |
 | 45 | `DROP_COALESCED_SNAPSHOTS` | Gateway 範圍：**只計讀取端**的新蓋舊（`server.go:618-630`），被取代的 snapshot 沒有送給任何 Client（新鍵；送出迴圈中途的取代計在 31） | 事件 |
 
-不上 wire、只寫 Gateway log：`room_unavailable`、`cleared_on_close_*`、`abandoned_on_close_*`（發生時 link 已失效，結構上無法回報）；Gateway 的 `drop_rate_limited_packets` 總和（可由玩家計數導出）；kernel 接收緩衝溢出（Gateway 看不到）。
+不上 wire、只寫 Gateway log：`room_unavailable`、`cleared_on_close_*`、`abandoned_on_close_*`（發生時 link 已失效，結構上無法回報）；Gateway 的 `drop_rate_limited_packets` 總和（可由玩家計數導出）；kernel 接收緩衝溢出（Gateway 看不到）。每個沒有 `DropReason` 的 `drop_` 鍵（包括已刪除路徑恆為 0 的鍵，以及以另一個單位記錄已回報丟棄的鍵）的分類見 [日誌 Data Contract](log-contract.zh-Hant.md) 第 5.1 節的對應表，由 Go 測試雙向守住（D145）。
 
 ### 串流的起訖與上限
 

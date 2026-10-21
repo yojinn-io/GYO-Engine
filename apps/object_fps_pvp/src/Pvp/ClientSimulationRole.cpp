@@ -1,9 +1,12 @@
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
+#include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <iostream>
 #include <stdexcept>
+#include <syncstream>
 #include <utility>
 
 namespace fps::pvp {
@@ -132,6 +135,7 @@ ClientSimulationRole::ClientSimulationRole(ClientConnection& connection, std::ve
         [this](Engine::Threads::RoleContext& context) { Body(context); });
     if (!started) throw std::runtime_error(Engine::Base::Describe(started.error()));
     thread_.emplace(std::move(*started));
+    std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << RoleStartedLine(*thread_) << '\n';
 }
 
 ClientSimulationRole::~ClientSimulationRole() = default;

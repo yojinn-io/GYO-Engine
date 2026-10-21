@@ -157,4 +157,9 @@ bool RoleThread::PriorityApplied() const {
     return state_->priorityApplied;
 }
 
+Time::WaitBackend RoleThread::WaitBackend() const {
+    GYO_ASSERT(state_ != nullptr);
+    return state_->waiter.Backend();
+}
+
 } // namespace Engine::Threads

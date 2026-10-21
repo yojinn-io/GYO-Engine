@@ -69,8 +69,8 @@ MECHANISM = 'client-gateway-pure-delay'
 DIRECTION = 'client->gateway'
 # The files DelayRelay builds on; equal to analyzers sha256 lists since C1 (pvp-v7-batch09-s1-20261010).
 # action_probe.py refrozen by v7.1 D122 (its Gateway limiter check only; ActionRelay unchanged).
-FROZEN = {'action_probe.py': '1a63504b2c7970f866f1d143a1425632a4b4044103ce5ddd320cd466b75913b1',
-          'impaired_network.py': 'abe496473659a5934001a90d8c5758046497b5c6c8607998bb1d39619a6bb607'}
+FROZEN = {'action_probe.py': 'ccef0053629c60c2b2b51fcaceaf666e3911283e16462e64f19649c8734c657f',
+          'impaired_network.py': '9720778bb4bf6c1c3455c0f26590021281aee9f070d10d14e071682a8446d131'}
 # Recorded in plan.json (not checked): this runner and the modules run_case uses.
 RECORDED = ('run_client_delay.py', 'action_probe.py', 'impaired_network.py', 'backpressure_probe.py',
             'gameplay_evidence.py', 'command_evidence.py', 'action_evidence.py', 'acceptance_util.py',
@@ -293,10 +293,11 @@ class DelayRelay(action_probe.ActionRelay):
     PROFILE = None
     CLOCK = staticmethod(time.monotonic)
 
-    def __init__(self, http, udp, mode):
+    def __init__(self, http, udp, mode, loss_seed=impaired_network.DEFAULT_LOSS_SEED):
         # Set before ActionRelay.__init__: _ImpairedGateway.__init__ starts the relay thread.
+        # run_case passes the loss seed (OT-4); this relay drops nothing at random, but takes the same call.
         self._setup_delay()
-        super().__init__(http, udp, mode)
+        super().__init__(http, udp, mode, loss_seed)
 
     def _setup_delay(self):
         self.line = DelayLine(self.PROFILE)

@@ -1,7 +1,8 @@
 #pragma once
 
 // Product acceptance only. Late-wake distribution of an empty 60 Hz loop that
-// sleeps the same way the probe does, measured once before a probe connects.
+// sleeps the same way the probe does, measured before a probe connects and
+// again after its run (v7.1 E1-6: the host's timer can change during a run).
 // It records how precisely this host wakes a sleeping thread, so a slow frame
 // can be read against the host's own timer behaviour. It is interpretation
 // only: no verdict, threshold or denominator may read it, and nothing branches
@@ -28,7 +29,7 @@ struct TimerBaseline final {
     // period measured from the start of the frame.
     enum class Schedule { Absolute, FrameRelative };
 
-    std::string sleeper, schedule;
+    std::string sleeper, schedule, when{"before the probe connects"};
     double seconds{};
     std::size_t samples{};
     double lateP50Ms{}, lateP99Ms{}, lateMaxMs{};
@@ -76,7 +77,7 @@ struct TimerBaseline final {
 
     nlohmann::json Json() const {
         return {{"use", "interpretation only; never a verdict, threshold or denominator"},
-            {"sleeper", sleeper}, {"schedule", schedule}, {"loop_hz", Hz}, {"seconds", seconds}, {"samples", samples},
+            {"sleeper", sleeper}, {"schedule", schedule}, {"when", when}, {"loop_hz", Hz}, {"seconds", seconds}, {"samples", samples},
             {"late_p50_ms", lateP50Ms}, {"late_p99_ms", lateP99Ms}, {"late_max_ms", lateMaxMs},
             {"interval_p50_ms", intervalP50Ms}, {"interval_p99_ms", intervalP99Ms}, {"interval_max_ms", intervalMaxMs},
             {"slow_interval_ms", SlowIntervalMilliseconds}, {"interval_over_slow_fraction", intervalOverSlowFraction}};

@@ -1,0 +1,28 @@
+# A-grade line families written without a line golden of their own (log-contract): the v1 key sequence, which
+# must stay a prefix of the keys the writer emits (only keys appended at the end within v1). Columns: family,
+# language (native: built over several statements and pinned verbatim by tests/object_fps_pvp/
+# NetworkStatisticsTests.cpp, so the source pin skips it), writer file, the literal the writer's statement starts with, the anchor readers match the line by,
+# the v1 keys. Read by tests/object_fps_pvp/test_log_contract.py. Families with a golden of their own:
+# ingress v1 (fixtures/ingress_v1), clock sync (clock-sync.tsv), the movement trace (DiagnosticFileTests.cpp).
+match_network_statistics	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	[ObjectFPS/PvP Match] network statistics window_s=	[ObjectFPS/PvP Match] network statistics 	window_s cpu_s cpu_total_s ipc_iterations ipc_iterations_per_s tick_deadline_wakes tick_notified tick_early tick_late_p50_le_us tick_late_p99_le_us tick_late_max_us tick_late_bins snapshot_overwrites
+client_worker_statistics	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	[ObjectFPS/PvP] worker statistics player=	[ObjectFPS/PvP] worker statistics 	player window_s wakes wakes_per_s cpu_s other_version_datagrams
+match_start	cpp	apps/object_fps_pvp/match_main.cpp	[ObjectFPS/PvP Match] start executable_sha256=	[ObjectFPS/PvP Match] start executable_sha256=	executable_sha256 arena_file
+match_ready	cpp	apps/object_fps_pvp/match_main.cpp	Object_FPS_PVP Match ready: 	Object_FPS_PVP Match ready: 	arena authority
+match_ipc_closed	cpp	apps/object_fps_pvp/src/Pvp/IpcHost.cpp	ipc closed reason=	[ObjectFPS/PvP Match] ipc closed reason=	reason
+match_ipc_hint	cpp	apps/object_fps_pvp/src/Pvp/IpcHost.cpp	ipc hint: the Gateway closed before sending any frame	[ObjectFPS/PvP Match] ipc hint: the Gateway closed before sending any frame	
+match_ipc_accept_failed	cpp	apps/object_fps_pvp/src/Pvp/IpcHost.cpp	ipc accept failed reason=	[ObjectFPS/PvP Match] ipc accept failed	reason
+match_join	cpp	apps/object_fps_pvp/src/Pvp/IpcHost.cpp	join player=	[ObjectFPS/PvP Match] join player=	player
+match_evicted	cpp	apps/object_fps_pvp/src/Pvp/IpcHost.cpp	evicted player=	[ObjectFPS/PvP Match] evicted player=	player reference_age_ms
+gateway_statistics	go	apps/object_fps_pvp/gateway/server.go	gateway statistics players=	gateway statistics players=	players rate_accepted_packets rate_limited_packets
+gateway_player_send_statistics	go	apps/object_fps_pvp/gateway/send_statistics.go	player send statistics player=	player send statistics 	player window_ms results results_interval_ms snapshots snapshot_interval_ms link_actions link_action_interval_ms results_min_interval_ms snapshot_min_interval_ms link_action_min_interval_ms
+gateway_transport	go	apps/object_fps_pvp/gateway/server.go	gateway transport 	gateway transport 	coalesced_snapshots rate_accepted_packets rate_limited_packets max_session_window_packets results_for_inactive_frames
+gateway_runtime_transport	go	apps/object_fps_pvp/gateway/runtime_link.go	runtime transport coalesced_input_windows=	runtime transport 	coalesced_input_windows max_write_age_us
+gateway_drop_report	go	apps/object_fps_pvp/gateway/drop_report.go	player=%d report_sequence=	drop report player=	player report_sequence final samples samples_omitted merged_streams
+gateway_player_evicted	go	apps/object_fps_pvp/gateway/server.go	player evicted player=	player evicted player=	player reason reference_age_ms substituted_permille movement_resets
+gateway_start	go	apps/object_fps_pvp/gateway/cmd/main.go	Object FPS Gateway start executable_sha256=	Object FPS Gateway start executable_sha256=	executable_sha256 go os time_zone utc_offset_s args
+gateway_http	go	apps/object_fps_pvp/gateway/cmd/main.go	Object FPS Gateway HTTP=	Object FPS Gateway HTTP=	HTTP UDP advertise runtime
+gateway_client_clock_sync	go	apps/object_fps_pvp/gateway/echo.go	client clock sync player=	client clock sync player=	player
+match_ipc_statistics	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	[ObjectFPS/PvP Match] ipc statistics version=1 window_s=	[ObjectFPS/PvP Match] ipc statistics version=1 	version window_s final snapshot_writes snapshot_wait_p99_le_us snapshot_wait_max_us snapshot_wait_bins action_writes action_late_p99_le_us action_late_max_us action_late_bins
+match_role_started	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	role started version=1 role=	[ObjectFPS/PvP Match] role started version=1 	version role wait_backend name_applied priority_applied
+match_end	cpp	apps/object_fps_pvp/match_main.cpp	[ObjectFPS/PvP Match] end version=1 reason=	[ObjectFPS/PvP Match] end version=1 	version reason exit_code uptime_s authority_tick
+client_hit_feedback	cpp	apps/object_fps_pvp/src/Pvp/PvpApplication.cpp	PvP hit feedback version=1 player=	PvP hit feedback version=1 	version player life tick damage_count hits hp attacker flash reason

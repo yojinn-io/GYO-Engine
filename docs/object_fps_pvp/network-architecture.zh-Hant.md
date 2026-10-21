@@ -291,8 +291,15 @@ Match 不知道這些丟棄，是到 pv7 為止的已知缺口（[pv6 契約](pr
 §1「Runtime 輸入流」）。
 補充（2026-10-14，v7 D73）：pv7 移到 v7.1（[v7.1 計畫](plans/v7.1/README.md)），v7 停在 pv6，
 所以這個缺口在整個 v7 期間都存在。
+補充（2026-10-21，v7.1 `incident-close`）：上面兩段的 Gateway 行為（Gateway／Host 合併、游標副本、拒絕線、已寫出去重、
+已解析部分的截短）是 v7 第 08c 批（pv6）的狀態。pv7 起（PR #78）Gateway 原樣轉送每個輸入窗口：不合併、不持有游標副本、
+沒有拒絕線與已寫出去重；命令是否已完成、舊或未來 epoch、衝突與重複，都只由 Match 判定；Gateway 仍執行的丟棄依原因回報
+Match（`GatewayDropReport`）。現行的規則以 [protocol-v7](protocol-v7.zh-Hant.md) §2a 與本文件 Design Invariants 的
+Gateway 一節為準（INVENTORY `N-netarch-ambiguity`）。
 
-死信原則（D57）：Client→Gateway→Match 的每一則訊息離開「待處理」時，只有兩種結果：執行，或帶原因的死信（至少依玩家與原因計數，能拿到內容時寫細節紀錄）；沒有第三種（無聲）。移動命令的序號連續、每 Tick 到期就替代，所以 Match 偵測得到缺號（替代紀錄就是缺號的死信）；每個收下的移動命令最多 32 Tick 內一定有結果。死信有界：細節紀錄與保留期都有上限，超過的只計數。死信只用來觀察與記帳，不可重放。新增出口、改丟棄路徑或審查時，依這三條檢查（Architecture Fitness）；第 10 批的 log 契約與第 11 批的 `GatewayDropReport` 以這些原則對齊，不另開死信的子系統或 Data Contract 概念。補充（2026-10-14，v7 D73）：第 11 批與 `GatewayDropReport` 移到 v7.1；本節之後要寫的「Gateway 職責」條文也在 v7.1 寫。補充（2026-10-14，v7 D76）：第 10 批的 log 契約也移到 v7.1。
+（日誌上的對應見 [日誌 Data Contract](log-contract.zh-Hant.md) 第 5 節。）
+
+死信原則（D57）：Client→Gateway→Match 的每一則訊息離開「待處理」時，只有兩種結果：執行，或帶原因的死信（至少依玩家與原因計數，能拿到內容時寫細節紀錄）；沒有第三種（無聲）。移動命令的序號連續、每 Tick 到期就替代，所以 Match 偵測得到缺號（替代紀錄就是缺號的死信）；每個收下的移動命令最多 32 Tick 內一定有結果。死信有界：細節紀錄與保留期都有上限，超過的只計數。死信只用來觀察與記帳，不可重放。新增出口、改丟棄路徑或審查時，依這三條檢查（Architecture Fitness）；第 10 批的 log 契約與第 11 批的 `GatewayDropReport` 以這些原則對齊，不另開死信的子系統或 Data Contract 概念。補充（2026-10-14，v7 D73）：第 11 批與 `GatewayDropReport` 移到 v7.1；本節之後要寫的「Gateway 職責」條文也在 v7.1 寫。補充（2026-10-14，v7 D76）：第 10 批的 log 契約也移到 v7.1。補充（2026-10-20，v7.1 D145）：兩份契約都已實作，維持分開（讀者、單位、版本規則不同）；兩者已用同一張名稱表（`gateway/ingress_statistics.go`）與跨語言 golden（`tests/object_fps_pvp/fixtures/drop_reasons.json`）對齊，沒有 `DropReason` 的 `drop_` 鍵由 Go 測試雙向檢查分類（對應表見 [日誌 Data Contract](log-contract.zh-Hant.md) 第 5.1 節）。
 
 Match 等到當前 epoch 的序號 1 後，每 Tick 恰好完成下一序號。缺命令時沿用最近
 **實際執行的真實命令**最多 15 Tick，之後中立移動。Actual／Held／Neutral 都推進

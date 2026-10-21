@@ -3,6 +3,8 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "gyo/AppConfig.hpp"
 
+#include "engine/base/Log.hpp"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <chrono>
@@ -33,6 +35,20 @@ void ForwardSdlLog(void*, int category, SDL_LogPriority priority, const char* me
     if (sdlLog.file) sdlLog.file->Write(std::string("[") + (index >= 0 && index < 8 ? names[index] : "log") + "] " + message);
 }
 
+// Engine diagnostics (Engine::Base::Log) go through SDL's log like the
+// Client's own lines, so they reach the console and the log file as before.
+void ForwardEngineLog(const Engine::Base::LogMessage& message) noexcept {
+    SDL_LogPriority priority = SDL_LOG_PRIORITY_INFO;
+    switch (message.level) {
+    case Engine::Base::LogLevel::Debug: priority = SDL_LOG_PRIORITY_DEBUG; break;
+    case Engine::Base::LogLevel::Info: priority = SDL_LOG_PRIORITY_INFO; break;
+    case Engine::Base::LogLevel::Warning: priority = SDL_LOG_PRIORITY_WARN; break;
+    case Engine::Base::LogLevel::Error: priority = SDL_LOG_PRIORITY_ERROR; break;
+    }
+    SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, priority, "%.*s %.*s", static_cast<int>(message.category.size()),
+                   message.category.data(), static_cast<int>(message.text.size()), message.text.data());
+}
+
 // Without --log the Client writes logs/client-<local time>.log next to its executable.
 std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
     const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -49,10 +65,12 @@ std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    Engine::Base::SetLogHandler(&ForwardEngineLog);
     fps::pvp::PvpApplicationOptions options;
     options.title = Gyo::AppConfig::DisplayName;
     options.gpuDriver = GYO_DEFAULT_GPU_DRIVER;
     std::filesystem::path movementTrace, logPath;
+    bool gatewayFromArgument = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
@@ -64,6 +82,7 @@ int main(int argc, char* argv[]) {
             options.gpuDriver = argv[++index];
         } else if (argument == "--gateway" && index + 1 < argc) {
             options.gateway = argv[++index];
+            gatewayFromArgument = true;
         } else if (argument == "--movement-trace" && index + 1 < argc) {
             movementTrace = argv[++index];
         } else if (argument == "--log" && index + 1 < argc) {
@@ -89,6 +108,7 @@ int main(int argc, char* argv[]) {
     } restoreSdlLog;
     try {
         log.emplace(logPath.empty() ? DefaultLogPath(base) : logPath);
+        log->FlushOnCrash();
         log->Tee(std::clog);
         log->Tee(std::cerr);
         SDL_GetLogOutputFunction(&sdlLog.original, &sdlLog.originalData);
@@ -99,6 +119,9 @@ int main(int argc, char* argv[]) {
         SDL_Log("PvP client start executable_sha256=%s platform=%s gpu_driver=%s gateway=%s log=%s",
                 executable.c_str(), SDL_GetPlatform(), options.gpuDriver.c_str(), options.gateway.c_str(),
                 log->Path().string().c_str());
+        // log-contract (original batch 10): whether the Gateway address came from --gateway or the default.
+        SDL_Log("PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
+                options.gateway.c_str());
     } catch (const std::exception& error) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Client log unavailable: %s", error.what());
     }

@@ -155,8 +155,7 @@ struct ClientConnection::Impl {
     Clock::time_point helloAt{},connectedAt{},receivedAt{},lobbyPollAt{},nextInputSendAt{};
     // Diagnostics only (pv7 §3): the time echo with the Gateway on Hello and
     // Welcome, per connection; nothing here reaches a decision (D32).
-    ClockSync clock;
-    bool clockActive{};
+    ClientClockSession clock;
     // The worker is one asio io thread. Nothing polls: the socket becoming
     // readable, a post from another thread (a request, new input, a new action,
     // an ACK advance) and one timer at the earliest deadline wake it, and each
@@ -171,6 +170,8 @@ struct ClientConnection::Impl {
     std::optional<double> cpuAt;
     std::uint64_t wakes{};
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
+    // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
+    std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
     ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
@@ -179,6 +180,7 @@ struct ClientConnection::Impl {
             [this](Engine::Threads::RoleContext& context){role=&context;Run();});
         if(!started)throw std::runtime_error(Engine::Base::Describe(started.error()));
         worker.emplace(std::move(*started));
+        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
     }
     ~Impl(){
         if(!worker)return;
@@ -209,10 +211,7 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
-        if(clockActive) {
-            if(const auto window=clock.Roll(MicrosNow(),true))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
-            clockActive=false;
-        }
+        if(const auto line=clock.End(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
         // them on a failed request can leave an old pawn occupying a room slot.
@@ -378,7 +377,7 @@ struct ClientConnection::Impl {
         const auto resolved=resolver.resolve(udp::v4(),joined.at("udp_ip").get<std::string>(),std::to_string(joined.at("udp_port").get<unsigned>()));
         endpoint=*resolved.begin();socket.open(endpoint.protocol());socket.bind(udp::endpoint(endpoint.protocol(),0));socket.non_blocking(true);
         connectedAt=receivedAt=Clock::now();helloAt={};
-        clock=ClockSync(MicrosNow());clockActive=true;
+        clock.Begin(joined.at("player_id").get<PlayerId>(),MicrosNow());
         std::scoped_lock lock(mutex);
         if(request.generation!=generation.load())return;
         activeGeneration=request.generation;
@@ -388,6 +387,7 @@ struct ClientConnection::Impl {
         const auto bytes=wire::Encode({type,session,++sentSequence,payload});
         asio::error_code error;socket.send_to(asio::buffer(bytes),endpoint,0,error);
         if(error && error!=asio::error::would_block && error!=asio::error::try_again)throw std::runtime_error(error.message());
+        if(error)++sendBlocked;
         return !error;
     }
     // Validate the complete batch before mutating either decisions or retirement.
@@ -479,11 +479,11 @@ struct ClientConnection::Impl {
         if(now-helloAt>=helloInterval) {
             pb::Hello hello;hello.set_session_token(token);
             auto* echo=hello.mutable_clock();
-            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
-            echo->set_transmit_us(clock.Stamp(MicrosNow()));
+            if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
+            echo->set_transmit_us(clock.Clock().Stamp(MicrosNow()));
             Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
-        if(const auto window=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<ClockWindowLine(*window)<<'\n';
+        if(const auto line=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -491,15 +491,17 @@ struct ClientConnection::Impl {
             if(error==asio::error::would_block || error==asio::error::try_again)break;
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
-            if(sender!=endpoint)continue;
+            ++receivedDatagrams;
+            if(sender!=endpoint) {++foreignSenderDatagrams;continue;}
             const auto datagram=std::span(bytes).first(size);
             const auto packet=wire::Decode(datagram);
             if(!packet) {
                 // Dropped silently as before; counted apart from malformed datagrams.
                 if(wire::OtherVersion(datagram))++otherVersionDatagrams;
+                else ++undecodableDatagrams;
                 continue;
             }
-            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence)))continue;
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
@@ -507,7 +509,7 @@ struct ClientConnection::Impl {
                     ClockStamp peer{.transmitUs=sample.transmit_us()};
                     if(sample.has_origin_us())peer.originUs=sample.origin_us();
                     if(sample.has_receive_us())peer.receiveUs=sample.receive_us();
-                    static_cast<void>(clock.Observe(peer,static_cast<std::uint64_t>(
+                    static_cast<void>(clock.Clock().Observe(peer,static_cast<std::uint64_t>(
                         std::chrono::duration_cast<std::chrono::microseconds>(arrivedAt.time_since_epoch()).count())));
                 }
                 CheckArena(message.arena_id(),message.arena_version(),
@@ -619,7 +621,7 @@ struct ClientConnection::Impl {
                         }
                     }
                     if(receivedSnapshots.size()==MaxReceivedSnapshots) {
-                        receivedSnapshots.pop_front();snapshotOverflow=true;++snapshotOverflowCount;
+                        receivedSnapshots.pop_front();snapshotOverflow=true;++snapshotOverflowCount;++windowSnapshotOverflows;
                     }
                     for(const auto& player:snapshot.players)
                         TraceMovement({.kind=MovementTraceKind::SnapshotReceived,
@@ -629,7 +631,7 @@ struct ClientConnection::Impl {
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
                     if(simulationConsumer) {
                         if(simulationSnapshots.size()==MaxReceivedSnapshots) {
-                            simulationSnapshots.pop_front();++simulationOverflowCount;
+                            simulationSnapshots.pop_front();++simulationOverflowCount;++windowSimulationOverflows;
                         }
                         simulationSnapshots.push_back({snapshot,arrivedAt});
                     }
@@ -800,9 +802,13 @@ struct ClientConnection::Impl {
         PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
-            .otherVersionDatagrams=otherVersionDatagrams})<<'\n';
+            .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
+            .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
+            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows})<<'\n';
         std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
+        receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        windowSnapshotOverflows=windowSimulationOverflows=0;
     }
     void Run() {
         statisticsAt=Clock::now();

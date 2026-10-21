@@ -1,15 +1,23 @@
 #include "RetroFPS/Pvp/LogFile.hpp"
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Sha256.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <exception>
+#include <fstream>
 #include <iterator>
+#include <mutex>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <streambuf>
+#include <string>
 #include <system_error>
+#include <utility>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -116,14 +124,53 @@ private:
     std::string pending_;
 };
 
-LogFile::LogFile(const std::filesystem::path& path) : path_(path) {
+namespace {
+Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path, std::size_t capacity) {
     if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path());
-    file_.open(path, std::ios::app);
-    if (!file_) throw std::runtime_error("Cannot open log file: " + path.string());
+    auto sink = Engine::Trace::TraceSink::Open(
+        {.path = path, .append = true, .capacity = capacity, .threadName = "pvp-log", .flushEachLine = true});
+    if (!sink) throw std::runtime_error("Cannot open log file: " + path.string() + " (" +
+                                        Engine::Base::Describe(sink.error()) + ")");
+    return std::move(*sink);
 }
+
+// The LogFile that FlushOnCrash installed, and the handlers it replaced.
+std::atomic<LogFile*> crashLog{nullptr};
+Engine::Base::AssertionHandler previousAssertionHandler{};
+std::terminate_handler previousTerminateHandler{};
+
+void FlushingAssertionHandler(const Engine::Base::AssertionFailure& failure) {
+    if (auto* log = crashLog.load(std::memory_order_acquire)) {
+        log->Write(std::string("GYO_ASSERT failed: ") + failure.expression + " at " + failure.location.file_name() +
+                   ":" + std::to_string(failure.location.line()) + " in " + failure.location.function_name());
+        static_cast<void>(log->FlushNow());
+    }
+    (previousAssertionHandler ? previousAssertionHandler : &Engine::Base::DefaultAssertionHandler)(failure);
+}
+
+[[noreturn]] void FlushingTerminateHandler() {
+    if (auto* log = crashLog.load(std::memory_order_acquire)) static_cast<void>(log->FlushNow());
+    if (previousTerminateHandler) previousTerminateHandler();
+    std::abort();
+}
+} // namespace
+
+LogFile::LogFile(const std::filesystem::path& path, std::size_t capacity)
+    : path_(path), sink_(OpenLogSink(path, capacity)) {}
 
 LogFile::~LogFile() {
     for (auto it = restored_.rbegin(); it != restored_.rend(); ++it) it->first->rdbuf(it->second);
+    if (crashFlush_) {
+        std::set_terminate(previousTerminateHandler);
+        Engine::Base::SetAssertionHandler(previousAssertionHandler);
+        crashLog.store(nullptr, std::memory_order_release);
+    }
+    // Dropped lines (a full queue, or a Write racing this destructor) are
+    // reported once, as the last line.
+    static_cast<void>(sink_.Close([](const Engine::Trace::TraceCounts& counts) -> std::optional<std::string> {
+        if (counts.Dropped() == 0) return std::nullopt;
+        return LogTimestamp() + " [log] dropped_lines=" + std::to_string(counts.Dropped());
+    }));
 }
 
 void LogFile::Tee(std::ostream& stream) {
@@ -132,10 +179,23 @@ void LogFile::Tee(std::ostream& stream) {
 }
 
 void LogFile::Write(std::string_view line) {
-    const auto stamp = LogTimestamp();
-    std::scoped_lock lock(mutex_);
-    file_ << stamp << ' ' << line << '\n';
-    file_.flush();
+    std::string text = LogTimestamp();
+    text.reserve(text.size() + 1 + line.size());
+    text.push_back(' ');
+    text.append(line);
+    static_cast<void>(sink_.Push(std::move(text)));
+}
+
+bool LogFile::FlushNow() { return sink_.FlushNow(); }
+
+void LogFile::FlushOnCrash() {
+    if (crashFlush_) return;
+    LogFile* expected = nullptr;
+    if (!crashLog.compare_exchange_strong(expected, this, std::memory_order_acq_rel))
+        throw std::logic_error("Another log file already flushes on crash");
+    previousAssertionHandler = Engine::Base::SetAssertionHandler(&FlushingAssertionHandler);
+    previousTerminateHandler = std::set_terminate(&FlushingTerminateHandler);
+    crashFlush_ = true;
 }
 
 } // namespace fps::pvp

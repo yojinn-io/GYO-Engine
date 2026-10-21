@@ -84,6 +84,13 @@
     },
     "action_evidence": {
       "ctest": "object_fps_pvp.action_evidence"
+    },
+    "client_delay_runner": {
+      "ctest": "object_fps_pvp.client_delay_runner"
+    },
+    "log_contract": {
+      "build": [],
+      "ctest": "object_fps_pvp.log_contract"
     }
   },
   "mutants": [
@@ -312,8 +319,8 @@
       "batch": "13",
       "what": "A duplicate snapshot restarts the hit effect",
       "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
-      "find": "    if (own.damageCount <= damageCount_) return;\n",
-      "replace": "    if (own.damageCount < damageCount_) return;\n",
+      "find": "    if (own.damageCount <= damageCount_) return {};\n",
+      "replace": "    if (own.damageCount < damageCount_) return {};\n",
       "check": "cpu",
       "expect": "never replays old or late snapshots"
     },
@@ -1842,8 +1849,8 @@
       "batch": "v7-flow",
       "what": "A runtime failure does not write the final window",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n\ts.flushFinal()\n",
-      "replace": "\tlog.Printf(\"runtime disconnected; room unavailable: %v\", err)\n",
+      "find": "\tlog.Printf(\"runtime disconnected reason=%s error=%q\", disconnectReason(err), err.Error())\n\ts.flushFinal()\n",
+      "replace": "\tlog.Printf(\"runtime disconnected reason=%s error=%q\", disconnectReason(err), err.Error())\n",
       "check": "go",
       "expect": "runtime_failure: no final line after the runtime failure"
     },
@@ -1902,8 +1909,8 @@
       "batch": "v7-flow",
       "what": "Written commands are counted before the frame is written, so a failed write counts them written",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
-      "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWrite(l.conn, payload, 3*time.Second)\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "find": "\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tif err == nil {\n\t\t\t\tl.wroteLocked(w)\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
+      "replace": "\t\t\tl.mu.Lock()\n\t\t\tl.wroteLocked(w)\n\t\t\tl.mu.Unlock()\n\t\t\tstarted := time.Now()\n\t\t\terr = runtimeWriteError(runtimeWrite(l.conn, payload, 3*time.Second))\n\t\t\telapsed := time.Since(started)\n\t\t\tl.mu.Lock()\n\t\t\tif elapsed > l.maxWriteAge {\n\t\t\t\tl.maxWriteAge = elapsed\n\t\t\t}\n\t\t\tl.mu.Unlock()\n",
       "check": "go",
       "expect": "write_failure: player \\d+: link settled 6 of 3 handed commands"
     },
@@ -2722,8 +2729,8 @@
       "batch": "v7-09b",
       "what": "Every correction a decision starts (not only a late one) is followed by a reacquisition",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (std::abs(error) > deadband) Correct(error, false);\n",
-      "replace": "    if (std::abs(error) > deadband) { Correct(error, false); reacquiring_ = true; }\n",
+      "find": "    if (corrects) Correct(error, false);\n",
+      "replace": "    if (corrects) { Correct(error, false); reacquiring_ = true; }\n",
       "check": "cpu",
       "expect": "PvP the first full window after a correction holds no sample of the old phase"
     },
@@ -2802,8 +2809,8 @@
       "batch": "v71-version-errors",
       "what": "An envelope of another version after Ready is reported like an empty one",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
-      "find": "\t\t\t\t\terr = fmt.Errorf(\"runtime protocol version mismatch: expected %d, received %d\", adapter.RuntimeVersion, version)\n",
-      "replace": "\t\t\t\t\t_, err = version, errors.New(\"runtime protocol mismatch: empty message\")\n",
+      "find": "\t\t\t\t\terr = fmt.Errorf(\"%w: expected %d, received %d\", errRuntimeVersionMismatch, adapter.RuntimeVersion, version)\n",
+      "replace": "\t\t\t\t\t_, err = version, protocolError{errors.New(\"runtime protocol mismatch: empty message\")}\n",
       "check": "go",
       "expect": "runtime protocol version mismatch: expected"
     },
@@ -3092,7 +3099,7 @@
       "batch": "v71-time-echo",
       "what": "The Client's Hello does not echo the latest Welcome",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            if(const auto latest=clock.Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}\n",
+      "find": "            if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}\n",
       "replace": "",
       "check": "worker",
       "expect": "a Hello did not echo the latest Welcome"
@@ -4656,6 +4663,286 @@
       "replace": "std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {\n    if (!observation_.active) return std::nullopt;",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( client\\.ShotGate\\(\\) \\)"
+    },
+    {
+      "id": "tt2-movement-line-field",
+      "batch": "v71-tt2-trace",
+      "what": "The movement trace line loses its pending field",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "    line.append(\",\\\"pending\\\":\").append(std::to_string(e.pending));\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( MovementTraceLine\\(events\\[k\\]\\) == GoldenLines\\[k\\] \\)"
+    },
+    {
+      "id": "tt2-movement-end-uncounted",
+      "batch": "v71-tt2-trace",
+      "what": "Finish ends the movement trace without the trace_end line",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "        static_cast<void>(file_->sink.Close(MovementTraceEndLine));",
+      "replace": "        static_cast<void>(file_->sink.Close());",
+      "check": "cpu",
+      "expect": "CHECK\\( ReadFile\\(path\\) == expected \\)"
+    },
+    {
+      "id": "tt2-log-timestamp-space",
+      "batch": "v71-tt2-trace",
+      "what": "A log line loses the space after its timestamp",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "    text.push_back(' ');\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "REQUIRE\\( std::regex_match\\(lines\\[k \\+ 1\\], match, stamped\\) \\)"
+    },
+    {
+      "id": "tt2-log-crash-no-flush",
+      "batch": "v71-tt2-trace",
+      "what": "The assertion handler writes the failure but does not flush it",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        static_cast<void>(log->FlushNow());\n    }\n    (previousAssertionHandler",
+      "replace": "    }\n    (previousAssertionHandler",
+      "check": "cpu",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 2 \\)"
+    },
+    {
+      "id": "tt2-log-handler-not-restored",
+      "batch": "v71-tt2-trace",
+      "what": "The destructor leaves the crash handlers installed",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        std::set_terminate(previousTerminateHandler);\n        Engine::Base::SetAssertionHandler(previousAssertionHandler);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "CHECK\\( std::get_terminate\\(\\) == terminate \\)"
+    },
+    {
+      "id": "tt2-log-drops-unreported",
+      "batch": "v71-tt2-trace",
+      "what": "Dropped log lines are never reported",
+      "file": "apps/object_fps_pvp/src/Pvp/LogFile.cpp",
+      "find": "        if (counts.Dropped() == 0) return std::nullopt;",
+      "replace": "        if (counts.Dropped() < 1000000) return std::nullopt;",
+      "check": "cpu",
+      "expect": "REQUIRE\\( std::regex_match\\(lines.back\\(\\), match, dropped\\) \\)"
+    },
+    {
+      "id": "tt2-movement-late-uncounted",
+      "batch": "v71-tt2-trace",
+      "what": "Good ignores events recorded after Finish",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp",
+      "find": "        return !file_ || (file_->sink.Good() && file_->sink.Counts().Dropped() == 0);",
+      "replace": "        return !file_ || (file_->sink.Good() && file_->sink.Counts().droppedFull == 0);",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( writer.Good\\(\\) \\)"
+    },
+    {
+      "id": "lc-summary-baseline-kept",
+      "batch": "v71-log-contract",
+      "what": "The weapon counters restart but the summary baseline does not (N-summary-counter-wrap)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SessionSummary.hpp",
+      "find": "    weapon = {};\n    baseline.Restart();\n",
+      "replace": "    weapon = {};\n",
+      "check": "cpu",
+      "expect": "CHECK\\( baseline.Take\\(SummaryCountsOf\\(weapon\\)\\) == SummaryCounts\\{2, 1, 0, 0, 0\\} \\)"
+    },
+    {
+      "id": "lc-clock-cpp-key",
+      "batch": "v71-log-contract",
+      "what": "The C++ clock sync body renames a key",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
+      "find": "\" negative_delay=\" + std::to_string(window.negativeDelay)",
+      "replace": "\" negative_delays=\" + std::to_string(window.negativeDelay)",
+      "check": "ipc",
+      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[11\\] \\)"
+    },
+    {
+      "id": "lc-clock-go-key",
+      "batch": "v71-log-contract",
+      "what": "The Go clock sync body renames a key",
+      "file": "apps/object_fps_pvp/gateway/clock_sync.go",
+      "find": "negative_delay=%d replaced=%d",
+      "replace": "negative_delays=%d replaced=%d",
+      "check": "go",
+      "expect": "TestClockWindowLineMatchesTheSharedGolden"
+    },
+    {
+      "id": "lc-clock-session-player-cleared",
+      "batch": "v71-log-contract",
+      "what": "The Client's final clock line loses the session's player",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
+      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, true);",
+      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, true);",
+      "check": "ipc",
+      "expect": "clock sync player=7 window_ms="
+    },
+    {
+      "id": "lc-coalesced-global-uncounted",
+      "batch": "v71-log-contract",
+      "what": "A publication replaced on arrival is not counted Gateway-wide, so the coalesced identity breaks",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t\ts.countGatewayLocked(gatewayDropCoalescedSnapshots, dropEvent{at: time.Now(), tick: replaced.tick})\n",
+      "replace": "\t\t\t\t_ = replaced\n",
+      "check": "go",
+      "expect": "coalesced identity: transport 2, Gateway-wide 0"
+    },
+    {
+      "id": "lc-pin-gateway-transport-reorder",
+      "batch": "v71-log-contract",
+      "what": "The Gateway transport line swaps two v1 keys",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "gateway transport coalesced_snapshots=%d rate_accepted_packets=%d rate_limited_packets=%d",
+      "replace": "gateway transport rate_accepted_packets=%d coalesced_snapshots=%d rate_limited_packets=%d",
+      "check": "log_contract",
+      "expect": "gateway_transport: v1 keys"
+    },
+    {
+      "id": "lc-pin-match-start-rename",
+      "batch": "v71-log-contract",
+      "what": "The Match start line renames arena_file",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "<<\" arena_file=\"<<",
+      "replace": "<<\" arena=\"<<",
+      "check": "log_contract",
+      "expect": "match_start: v1 keys"
+    },
+    {
+      "id": "lc-pin-evicted-drops-key",
+      "batch": "v71-log-contract",
+      "what": "The Match evicted line loses reference_age_ms",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "\" reference_age_ms=\"",
+      "replace": "\" age_ms=\"",
+      "check": "log_contract",
+      "expect": "match_evicted: v1 keys"
+    },
+    {
+      "id": "lc-disconnect-liveness-unclassified",
+      "batch": "v71-log-contract",
+      "what": "The liveness deadline is not classified as such",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tcase errors.Is(err, errRuntimeLiveness):\n\t\treturn \"liveness_timeout\"\n",
+      "replace": "",
+      "check": "go",
+      "expect": "reason other, want liveness_timeout"
+    },
+    {
+      "id": "lc-disconnect-write-timeout-unmarked",
+      "batch": "v71-log-contract",
+      "what": "A write that ran out of its deadline is not marked",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": "\tif errors.Is(err, os.ErrDeadlineExceeded) {\n\t\treturn fmt.Errorf(\"%w: %w\", errRuntimeWriteTimeout, err)\n\t}\n\treturn err\n",
+      "replace": "\treturn err\n",
+      "check": "go",
+      "expect": "write timeout: reason other, want write_timeout"
+    },
+    {
+      "id": "lc-tick-overrun-records-deadline",
+      "batch": "v71-log-contract",
+      "what": "The tick overrun records the wake lateness against the deadline instead of the tick interval (E1-5)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            statistics_.pace.RecordInterval(interval, nominal);\n",
+      "replace": "            statistics_.pace.RecordInterval(nominal + (wake.woke > deadline ? wake.woke - deadline : Engine::Time::Duration::zero()), nominal);\n",
+      "check": "cpu",
+      "expect": "CHECK\\( statistics.pace.overrun.Max\\(\\) >= 15ms \\)"
+    },
+    {
+      "id": "lc-tick-stall-uncounted",
+      "batch": "v71-log-contract",
+      "what": "A tick interval longer than 1.5 ticks is not counted as a stall",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "    if (interval * 2 > nominal * 3) ++stalls;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "tick_stalls=1"
+    },
+    {
+      "id": "lc-ipc-action-unrecorded",
+      "batch": "v71-log-contract",
+      "what": "An action-lane send is not recorded in the lane statistics (E1-7)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                    ActionChosen(std::max(LaneDue(lane,now),lane.pendingSince.value_or(now)),now);\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "CHECK\\( lanes.actionWrites >= static_cast<std::uint64_t>\\(decisionFrames\\) \\)"
+    },
+    {
+      "id": "lc-ipc-take-keeps",
+      "batch": "v71-log-contract",
+      "what": "Taking the lane statistics does not start a new window",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "return std::exchange(impl_->lanes,{});}",
+      "replace": "return impl_->lanes;}",
+      "check": "ipc",
+      "expect": "CHECK\\( server.ipc.TakeLaneStatistics\\(\\).actionWrites <= 1 \\)"
+    },
+    {
+      "id": "lc-hit-dead-reported-played",
+      "batch": "v71-log-contract",
+      "what": "A hit while dead is reported as played",
+      "file": "apps/object_fps_pvp/src/Pvp/HitFeedback.cpp",
+      "find": "        return {HitFeedbackOutcome::SuppressedDead, hits};\n",
+      "replace": "        return {HitFeedbackOutcome::Played, hits};\n",
+      "check": "cpu",
+      "expect": "CHECK\\( dead.outcome == SuppressedDead \\)"
+    },
+    {
+      "id": "lc-summary-reason-kept",
+      "batch": "v71-log-contract",
+      "what": "The per-reason rejection counts do not take their window",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SessionSummary.hpp",
+      "find": "        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i] - baseline_.rejectedBy[i];\n",
+      "replace": "        for (std::size_t i = 0; i < ShotRejectionCount; ++i) delta.rejectedBy[i] = current.rejectedBy[i];\n",
+      "check": "cpu",
+      "expect": "CHECK\\( second.rejectedBy\\[cooldown\\] == 0 \\)"
+    },
+    {
+      "id": "lc-match-end-reason",
+      "batch": "v71-log-contract",
+      "what": "A normal stop is recorded as a runtime failure in the Match's end record",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "        std::string reason=failed ? \"runtime_failed\" : \"signal\";\n",
+      "replace": "        std::string reason=\"runtime_failed\";\n",
+      "check": "ingress_cross",
+      "expect": "the Match's end record is not one last line"
+    },
+    {
+      "id": "dlp-unclassified-drop-exit",
+      "batch": "v71-dead-letter-position",
+      "what": "A new Gateway drop exit (stale-sequence inputs dropped instead of forwarded) has neither a DropReason nor a declared reason to stay off the wire",
+      "file": "apps/object_fps_pvp/gateway/ingress_statistics.go",
+      "find": "\tplayerFwdStaleSequenceInputPackets:       {ingressForwarded, reasonStaleSequence, ingressInput, unitPackets},\n",
+      "replace": "\tplayerFwdStaleSequenceInputPackets:       {ingressDropped, reasonStaleSequence, ingressInput, unitPackets},\n",
+      "check": "go",
+      "expect": "player drop counter drop_stale_sequence_input_packets has no DropReason and is not declared unreported"
+    },
+    {
+      "id": "ot1-late-decision-untraced",
+      "batch": "v71-observability-tools",
+      "what": "A late phase correction is not written to the movement trace",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        TracePhaseDecision(MovementPhasePath::Late, error, 0, used);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP phase decisions are written to the movement trace"
+    },
+    {
+      "id": "ot1-every-window-decision-traced",
+      "batch": "v71-observability-tools",
+      "what": "Every window decision is written, also inside the deadband (about 40 a second)",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (first || corrects)\n",
+      "replace": "    if (true)\n",
+      "check": "cpu",
+      "expect": "PvP phase decisions are written to the movement trace"
+    },
+    {
+      "id": "ot4-delay-relay-three-arguments",
+      "batch": "v71-observability-tools",
+      "what": "The client-delay relay keeps the three-argument constructor while run_case passes the loss seed (every real round a runner error)",
+      "file": "build/acceptance/object_fps_pvp/run_client_delay.py",
+      "find": "    def __init__(self, http, udp, mode, loss_seed=impaired_network.DEFAULT_LOSS_SEED):\n",
+      "replace": "    def __init__(self, http, udp, mode):\n",
+      "check": "client_delay_runner",
+      "expect": "test_the_delaying_relay_accepts_the_arguments_run_case_passes"
     }
   ]
 }

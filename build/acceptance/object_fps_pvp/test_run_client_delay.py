@@ -285,6 +285,19 @@ class RunnerTests(unittest.TestCase):
                                      repository=lambda: {'head': 'abc', 'tracked_changes': ''})
         return summary, calls
 
+    def test_the_delaying_relay_accepts_the_arguments_run_case_passes(self):
+        # run_case builds the relay with as many positional arguments as its call has (OT-4 added the loss
+        # seed); the replacement must accept that same call, or every real round is a runner error.
+        import ast
+        import inspect
+        tree = ast.parse(inspect.getsource(action_probe.run_case))
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name) and node.func.id == 'ActionRelay']
+        self.assertEqual(len(calls), 1)
+        arguments = [object()] * len(calls[0].args)
+        relay = runner.delaying_relay(runner.Profile('x1', delay_ms=200, window_ms=2000))
+        inspect.signature(relay.__init__).bind(object(), *arguments)
+
     def test_each_round_runs_run_case_with_the_delaying_relay_and_restores_it(self):
         profile = runner.Profile('x1', delay_ms=200, window_ms=2000)
         summary, calls = self.execute(['--fault-at', '8.0', '--rounds', '2'], [good_relay(profile)]*2)

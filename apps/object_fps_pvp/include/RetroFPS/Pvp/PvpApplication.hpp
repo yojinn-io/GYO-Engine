@@ -8,6 +8,7 @@
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
+#include <array>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -33,6 +34,8 @@ struct WeaponFeedbackObservation final {
     std::uint64_t reloadAnimationStarts{};
     // Shot clicks the local gate dropped, and authority Cooldown rejections.
     std::uint64_t localCooldownBlocks{}, authorityCooldownRejections{};
+    // Rejected decisions by the reason the Match gave (index: ShotRejection).
+    std::array<std::uint64_t, ShotRejectionCount> rejectionsByReason{};
     // The first-person hit feedback of the latest rendered frame (read-only).
     float hitFlashAlpha{};
     bool hitDirectionVisible{};
