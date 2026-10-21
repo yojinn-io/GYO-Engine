@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：ip3c 開始前，巢狀 `PumpEvents` 的去留（IP 的 HANDOFF「IP-3／IP-4 規劃紀錄」ip3b 條的發現）。
-- **進行中**：`sdl-isolation` 的 ip3b 完成（`5e8b353`，本機驗收通過），四平台 L1 #548（run 39603056923）執行中。`worker-probe-repair` 已完成（`d2844a5`）。
+- **等你決定**：無。
+- **進行中**：`sdl-isolation`（draft PR #85）：ip3a～ip3c 完成（ip3c `b56f59e`），四平台 L1 #550（run 39630112677）執行中；下一步 ip3d。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -131,6 +131,7 @@
 | D159 | （2026-10-21）核准 `after-re-evaluate` 的批次草案（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）：決策點 A 選 (a)，substitution-single-store 在批內先寫 slack 樣本的特性測試；B：sdl-isolation-plan 用 ultracode；C：worker-probe-repair 提到最前面；PR 分三條（sdl-isolation 兩批、系統其餘＋觀測＋測試、發行）；G2 先不做。從 worker-probe-repair 開始 | 使用者：「核准批次草案：A 選 (a) 批內特性測試；B 用 ultracode；C 把 worker-probe-repair 提到最前面；PR 分三條。G2 先不做。從 worker-probe-repair 開始。」 |
 | D160 | （2026-10-21）核准 `sdl-isolation` 的計畫：Engine 側 IP-3／IP-4（IP 的 D31，U1～U10 照建議，含接受約 56～73 h 的估時、各子批開始前重估、超過 1.5 倍就停）；產品側 `sdl-isolation.md` 的 S1 選 (b)（保留 `Platform()`，只移除 `SdlGpuRenderDevice&` 的公開）、S2 選「base 與頭各用自己的 probe」。設計寫成架構文件 `docs/architecture/platform-sdl.md`、`input.md`（使用者要求） | 使用者：「OK，照計劃執行，記得把這個設計落到架構文件中去。」 |
 | D161 | （2026-10-21）核准 ip3a 的事前宣告（IP 的 D32）；`sdl-isolation.md` 的 S3 選 (a)：受擊回饋的 A 級日誌行改走 `Base::Log`，日誌檔的位元組不變，釘住測試的讀取位置跟著改。開始 ip3b | 使用者：「核准 ip3a 的事前宣告；S3 選 (a)。開始 ip3b。」 |
+| D162 | （2026-10-21～22）`sdl-isolation` 的 ip3b、ip3c 期間的決定：巢狀 `PumpEvents` 保留（IP 的 D33）；`SampleClockPair` 加讀取注入的接縫、契約條文 (2) 修正（D34）；核准 ip3c 的判定變更（D35，§14.4，獨立核對 3 輪）。另：使用者要求開 PR，sdl-isolation 線開 draft PR #85（標題照 v7.1 的格式） | 使用者：「選 (a)：保留巢狀 PumpEvents…」「要不然你開一個PR吧。工作不少。」「版本還是用v7.1的」「選 (b)：SampleClockPair 加讀取注入的接縫…」「核准 ip3c 的判定變更（第 3 版）。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -624,6 +625,8 @@
 - 2026-10-21：`sdl-isolation` 計畫核准（D160）。ip3a 完成（約 1 h，估 3～4 h）：設計寫成架構文件 `platform-sdl.md`、`input.md`（標明已核准、尚未實作，每條寫出由哪個里程碑成立、由哪個守衛守住）；事前宣告；消費端日誌契約的核對發現 A 級的受擊回饋行經 SDL 寫出，列為 S3。停在關卡。
 
 - 2026-10-21：ip3b 完成（`5e8b353`，分支 `claude/pvp-v71-sdl-isolation` 已推送）。標頭去 SDL、Native 層、G1／G2（先 Red 後 Green）、機械修改 52 處；突變 4／4 killed；`test` preset 78／78；兩樹權威 digest scale 1、3 各 36 情境 0 差異。產品、probe 與 pointer capture 測試暫時改連 Native 目標（IP-4 移除）。發現：IP-2 的測試明確支援巢狀 pump，與架構文件 DI 7 衝突，ip3c 前交使用者決定。四平台 L1 #548 執行中。
+
+- 2026-10-21～22：ip3b 的 L1 #548 成功；draft PR #85。ip3c（事件時間換算到 Engine 時間基準）完成：xhigh 審查發現事前宣告的整合判定在 Linux 與 Apple Silicon 上會誤判正確實作，經 §14.4 與 3 輪獨立核對後改判定（D35），並補讀取注入的接縫（D34）；突變 22／22 killed。實際約 6 h（估 4～5 h）。L1 #550 執行中。
 
 ## 未結事項
 
