@@ -177,7 +177,7 @@ high。要讀懂兩條演算法路徑與兩套容差，才能設計擦邊與容�
 做：
 
 - 三份 64-bit FNV-1a 收為 `GYO::Base` 的一個公開 header（檔名在開始時決定）：
-  - `engine/asset/include/engine/asset/detail/Hash.hpp:11-27`（`Detail` 命名空間，被 `AssetId.hpp`、`AssetType.hpp` 使用）。
+  - `engine/asset/include/engine/asset/detail/Hash.hpp:11-27`（FF-3 後已刪除；`Detail` 命名空間，被 `AssetId.hpp`、`AssetType.hpp` 使用）。
   - `engine/input/src/InputActionMap.cpp:6-19`（空字串回傳 0，和標準 FNV 不同）。
   - `tools/ui_editor/src/FileService.cpp:21-28`。
 - `InputActionMap` 的「空字串→0」語意留在呼叫端。

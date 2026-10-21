@@ -1,6 +1,7 @@
 # PvP v6 交接
 
 更新：2026-10-15。Owner：`object_fps_pvp`。**v6 完成**：第 01～04、06～14、16、17 批完成並合併（最後是 LAN 結果 PR [#66](https://github.com/yojinn-io/GYO-Engine/pull/66)，`ff25ab4`），第 05 批不執行；**2026-10-08 升格**（[穩定基線](STABLE_BASELINE.md)，2026-10-14 標缺陷版，D69 見 v7）。現行 wire 是 pv6。後續：v7 於 2026-10-15 升格（[v7 穩定基線](../v7/STABLE_BASELINE.md)），v7 也停在 pv6。
+後續（2026-10-21）：現行 wire 已是 pv7（v7.1 PR [#78](https://github.com/yojinn-io/GYO-Engine/pull/78) 合併為 `0fabb52` 起生效）；上一行「現行 wire 是 pv6」是 2026-10-15 的狀態。
 （2026-10-05 時的狀態：）**第 01～03 批完成並合併**：PR [#39](https://github.com/yojinn-io/GYO-Engine/pull/39)（`a687663`）、[#40](https://github.com/yojinn-io/GYO-Engine/pull/40)（`a36b319`）、[#41](https://github.com/yojinn-io/GYO-Engine/pull/41)（`6381e9d`），2026-10-05 由使用者依序合併到 master。**第 04 批完成並合併**（分支 `claude/pvp-v6-batch04`，自 master `6381e9d`；PR [#42](https://github.com/yojinn-io/GYO-Engine/pull/42)，`30f87d5`）。**第 05 批不執行**（第 04 批未重現）。
 當時其餘批次都未開始，wire 與玩法仍是 v5（[v5 穩定基線](../v5/STABLE_BASELINE.md)、[v5 交接](../v5/HANDOFF.md)）。
 

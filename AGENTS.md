@@ -138,7 +138,7 @@ Architecture Delta は禁止事項ではない。
 複数の Agent と複数の版にまたがって守るべき設計意図は、
 思考や会話の中だけに置かず、検査できる約束として文書に書く。
 
-* 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下）に
+* 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、守衛となる Test も用意する。

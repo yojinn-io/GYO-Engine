@@ -2,7 +2,7 @@
 
 # GYO-Engine
 
-GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、Time、Threads、Net、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
+GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、Time、Threads、Trace、Net、Input、Collision、Model、Text、Render、UI の責務を分け、エンジンライブラリをゲームと設計ツールへ静的リンクします。ゲームのルールとコンテンツはゲーム側が所有し、エンジンは特定のゲームへ依存しません。
 
 ## ディレクトリと責務
 
@@ -14,8 +14,8 @@ GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、T
 | `tools/` | 設計支援。UI editor と本機専用のゲーム preview（現在は無効） |
 | `services/` | エンジンが所有する再利用可能な Go service 機構（`gyo_gateway`）。ゲーム固有の service は `apps/<game>/` に置く |
 | `tests/common`、`tests/<project>` | エンジン共通とプロジェクト固有の検証 |
-| `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受入検証の支援 |
-| `build/acceptance/` | 製品の外側から実行する共通およびプロジェクト固有の受入検証ツール |
+| `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受け入れ検証の支援 |
+| `build/acceptance/` | 製品の外側から実行する共通およびプロジェクト固有の受け入れ検証ツール |
 | `build/target/` | Git 管理外のビルドツリー、実行可能な製品、ログ |
 | `docs/`、`third_party/` | 設計文書と固定依存パッケージの wrapper |
 
@@ -68,6 +68,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [ツール登録・選択と旧 CMake 設定の移行](docs/tool_projects.md)
 - [数学基盤の契約](docs/architecture/math.md)
 - [エラー処理の契約（Result／Error／Assert）](docs/architecture/error-handling.md)
+- [トレース転送とログの契約](docs/architecture/trace.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [3D 資産とアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)
