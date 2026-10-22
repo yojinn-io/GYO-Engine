@@ -394,6 +394,7 @@
     - CMake 依賴圖的變化只有預期的那些：SDL3 由 PUBLIC 改 PRIVATE；render 後端多了 PRIVATE SDL3；`runtime_sdl` 測試多連 Native；header 測試多連 `SDL3::Headers`。
     - 沒有新的 owner 間依賴。
     - 未啟用產品直接 include SDL 的位置，重新啟用時要自己連 Native，已記在 `inactive_products.md` 的 IP-4 節。
+- 2026-10-22：ip4c 的 L1 #564（`98f5025`，手動觸發）四平台成功。下一步 ip4d：突變全跑、文件、L3（要使用者在場）。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
