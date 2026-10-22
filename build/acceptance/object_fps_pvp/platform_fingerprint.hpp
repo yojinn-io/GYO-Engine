@@ -6,13 +6,13 @@
 struct PlatformFingerprint final {
     std::string os, architecture, videoDriver, gpuDriver, input;
     float refreshHz{};
-    std::optional<SDL_Rect> usable;
+    std::optional<Engine::Platform::Sdl::Rect> usable;
     TimerBaseline timer;
 
-    static PlatformFingerprint Capture(fps::pvp::PvpApplication& application, SDL_Window* window,
-                                       std::string input = "sdl_injected") {
+    static PlatformFingerprint Capture(fps::pvp::PvpApplication& application, std::string input = "sdl_injected") {
         PlatformFingerprint result;
-        result.os = SDL_GetPlatform();
+        auto& platform = application.Platform();
+        result.os = Engine::Platform::Sdl::PlatformName();
 #if defined(__aarch64__) || defined(_M_ARM64)
         result.architecture = "arm64";
 #elif defined(__x86_64__) || defined(_M_X64)
@@ -20,12 +20,13 @@ struct PlatformFingerprint final {
 #else
         result.architecture = "other";
 #endif
-        if (const char* driver = SDL_GetCurrentVideoDriver()) result.videoDriver = driver;
-        result.gpuDriver = application.RenderDevice().GetInfo().driver;
-        if (const auto display = SDL_GetDisplayForWindow(window)) {
-            if (const auto* mode = SDL_GetCurrentDisplayMode(display)) result.refreshHz = mode->refresh_rate;
-            SDL_Rect bounds{};
-            if (SDL_GetDisplayUsableBounds(display, &bounds)) result.usable = bounds;
+        result.videoDriver = platform.VideoDriverName();
+        result.gpuDriver = application.RenderDeviceInfo().driver;
+        // Zero usable bounds mean the platform reported none (unavailable, as before).
+        if (const auto display = platform.QueryDisplay()) {
+            result.refreshHz = display.value().refreshRate;
+            const auto& bounds = display.value().usableBounds;
+            if (bounds.width > 0 && bounds.height > 0) result.usable = bounds;
         }
         result.input = std::move(input);
         // The GUI probes sleep the remainder of each frame with SDL_DelayNS.
@@ -45,7 +46,7 @@ struct PlatformFingerprint final {
         report << "platform_os=" << Known(os) << "\nplatform_architecture=" << architecture
                << "\nplatform_video_driver=" << Known(videoDriver) << "\nplatform_gpu_driver=" << Known(gpuDriver)
                << "\nplatform_refresh_hz=" << refreshHz << "\nplatform_usable_bounds=";
-        if (usable) report << usable->x << ',' << usable->y << ',' << usable->w << ',' << usable->h;
+        if (usable) report << usable->x << ',' << usable->y << ',' << usable->width << ',' << usable->height;
         else report << "unavailable";
         report << "\nplatform_input=" << input
                << "\nplatform_timer_sleeper=" << timer.sleeper << "\nplatform_timer_schedule=" << timer.schedule << "\nplatform_timer_samples=" << timer.samples
@@ -59,7 +60,7 @@ struct PlatformFingerprint final {
     nlohmann::json Json() const {
         nlohmann::json json{{"os", Known(os)}, {"architecture", architecture}, {"video_driver", Known(videoDriver)},
             {"gpu_driver", Known(gpuDriver)}, {"refresh_hz", refreshHz}, {"input", input}};
-        json["usable_bounds"] = usable ? nlohmann::json::array({usable->x, usable->y, usable->w, usable->h}) :
+        json["usable_bounds"] = usable ? nlohmann::json::array({usable->x, usable->y, usable->width, usable->height}) :
             nlohmann::json(nullptr);
         json["timer"] = timer.Json();
         return json;

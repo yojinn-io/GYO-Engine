@@ -141,7 +141,7 @@ void RunActionShort(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
         auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
-        evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
+        evidence["platform"] = PlatformFingerprint::Capture(application).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
 
@@ -242,7 +242,7 @@ void RunActionShort(const Options& options) {
                     Require(bool(start), "Cannot signal action start");
                     // The actor holds real OS focus; the target never raises,
                     // so no real focus loss interrupts the actor's capture.
-                    SDL_RaiseWindow(window);
+                    application.Platform().Raise();
                 }
             }
             if (!actor && !measurementStart && std::filesystem::exists(startPath)) {
@@ -367,7 +367,8 @@ void RunActionShort(const Options& options) {
                     PushMouse(window, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "resize") {
-                    Require(SDL_SetWindowSize(window, 1120, 630), SDL_GetError());
+                    const auto resized = application.Platform().SetWindowSize(1120, 630);
+                    Require(bool(resized), resized ? std::string() : resized.error().message + ": " + resized.error().detail);
                 } else if (event == "approach-wall") {
                     PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
                     PushKey(window, SDL_SCANCODE_W, true);
@@ -743,7 +744,7 @@ void RunActionRapid(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
         auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
-        evidence["platform"] = PlatformFingerprint::Capture(application, window).Json();
+        evidence["platform"] = PlatformFingerprint::Capture(application).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
 
@@ -802,7 +803,7 @@ void RunActionRapid(const Options& options) {
                     std::ofstream start(startPath);
                     start << std::setprecision(17) << *measurementStart;
                     Require(bool(start), "Cannot signal rapid start");
-                    SDL_RaiseWindow(window);
+                    application.Platform().Raise();
                 }
             }
             if (!actor && !measurementStart && std::filesystem::exists(startPath)) {

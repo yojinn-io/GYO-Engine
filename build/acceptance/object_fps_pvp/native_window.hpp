@@ -15,9 +15,10 @@ void RunNativeWindow(const Options& options) {
     graphics.height = 600;
     graphics.vsync = false;
     Require(application.InitializeGraphics(graphics, error), error);
-    auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
-    const auto nativeId = SDL_GetNumberProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
-    Require(nativeId != 0, "Native acceptance requires an actual X11 window");
+    auto& platform = application.Platform();
+    const auto x11Window = platform.X11WindowNumber();
+    Require(x11Window.has_value(), "Native acceptance requires an actual X11 window");
+    const auto nativeId = *x11Window;
     auto& connection = application.Connection();
     bool initialJoin = options.role == "create";
     if (initialJoin) connection.CreateAndJoin(options.gateway);
@@ -53,13 +54,13 @@ void RunNativeWindow(const Options& options) {
         Require(application.Update(frame) == Control::Continue, application.LastError());
         Require(application.Render(frame) == Control::Continue, application.LastError());
         state = connection.State();
-        int x{}, y{}, width{}, height{};
-        Require(SDL_GetWindowPosition(window, &x, &y) && SDL_GetWindowSize(window, &width, &height), SDL_GetError());
+        const auto window = platform.QueryWindow();
+        const auto x = window.rect.x, y = window.rect.y, width = window.rect.width, height = window.rect.height;
         const auto& local = application.LocalMovement();
         WeaponJson sample{{"seconds", Seconds(now, started)}, {"frame_seconds", frame.deltaSeconds},
             {"frame_id", frame.frameIndex}, {"window_id", nativeId}, {"title", graphics.title},
             {"phase", static_cast<int>(state.phase)}, {"player_id", state.playerId},
-            {"geometry", {x, y, width, height}}, {"focused", bool(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)},
+            {"geometry", {x, y, width, height}}, {"focused", window.flags.inputFocus},
             {"weapon", WeaponSample(application.WeaponFeedback())},
             {"local", {{"active", local.active}, {"predicted", {local.predictedPosition.x, local.predictedPosition.z}},
                 {"render", {local.renderPosition.x, local.renderPosition.z}},

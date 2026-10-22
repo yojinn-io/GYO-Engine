@@ -1,6 +1,7 @@
 # sdl-isolation 產品側 IP-4：分批與事前宣告（草案）
 
-- 狀態：**草案第 2 版，待使用者核准**。第 1 版的第 7 節經 D45 對抗式檢查後改寫（第 7.4 節）。核准之前不改 probe 與產品測試。
+- 狀態：**核准**（v7.1 D168，2026-10-23）。P1～P5 照建議：P1 Waiter、P2 中立的 `RenderDeviceInfo` 存取點、P3 golden 加 Engine 補 s06（J1 的 §14.4 核准在 capture_golden_guard 完成後另交）、P4 gui-probe 放進 L2、P5 第 7 節第 2 版。L2 的第 3 版（工具雜湊、開發跑次、乾跑）在頭完成後另交。第 1 版的第 7 節經 D45 對抗式檢查後改寫（第 7.4 節）。
+- 判定原則（使用者，D168）：**基準改變的量只記錄、不判定；和基準無關的量（產品行為、各樹各自的絕對門檻）照判。** 第 7 節的 G2～G6 依此分類：G3 的移動 Actual 和 probe 的節奏無關，照判；G4、G5 是基準改變的量，只記錄；G2、G6 是各樹自己的絕對判定。
 - 依據：
   - [sdl-isolation.md](sdl-isolation.md) 的第 2～4 節，以及 S1、S2；
   - Engine 的 IP-4（已完成）：[platform-sdl.md](../../../architecture/platform-sdl.md)、[ip4-declaration.md](../../../architecture/plans/input-and-present/ip4-declaration.md)。

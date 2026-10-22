@@ -77,7 +77,7 @@ struct WindowState final {
 };
 
 struct DisplayState final {
-    Rect usableBounds;      // the whole display where the platform reports no usable area
+    Rect usableBounds;      // zeros where the platform reports no usable area
     float refreshRate{};    // 0 when unknown
 };
 

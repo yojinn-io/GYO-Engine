@@ -1246,7 +1246,7 @@ std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, cons
 }
 ClientConnection& PvpApplication::Connection() { return impl_->connection; }
 Engine::Render::Renderer& PvpApplication::Renderer() { return impl_->renderer; }
-Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevice() { return *impl_->device; }
+Engine::Render::RenderDeviceInfo PvpApplication::RenderDeviceInfo() const { return impl_->device->GetInfo(); }
 Engine::Platform::Sdl::SdlPlatform& PvpApplication::Platform() { return *impl_->platform; }
 const LocalMovementObservation& PvpApplication::LocalMovement() const noexcept {
     return impl_->presented.observation;

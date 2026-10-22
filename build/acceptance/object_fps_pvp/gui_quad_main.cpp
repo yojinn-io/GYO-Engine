@@ -4,13 +4,13 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -236,7 +236,7 @@ void Run(const Options& options) {
 }
 } // namespace
 
-int main(int argc, char* argv[]) {
+int GyoMain(int argc, char* argv[]) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "PvP room-capacity GUI participant (run with quad probe bots joining)\n"
                   << "--arena-root <deployed assets> --gateway host:port --output <directory>\n"

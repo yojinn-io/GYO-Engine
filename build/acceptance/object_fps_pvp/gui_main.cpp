@@ -5,15 +5,15 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #define PVP_PROBE_MOVEMENT_TRACE 1
 #endif
+#include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
 #include "engine/render/Renderer.hpp"
-#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/render/backend/sdl_gpu/SceneCaptureFile.hpp"
 #include "acceptance_protocol.hpp"
 #include "timer_baseline.hpp"
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -141,13 +141,8 @@ void SaveCapture(Engine::Render::SceneCapture& capture, const std::filesystem::p
     Require(capture.width > 0 && capture.height > 0 &&
         capture.rgba8.size() == static_cast<std::size_t>(capture.width) * capture.height * 4,
         "Renderer returned an invalid capture");
-    SDL_Surface* surface = SDL_CreateSurfaceFrom(static_cast<int>(capture.width),
-        static_cast<int>(capture.height), SDL_PIXELFORMAT_RGBA32, capture.rgba8.data(),
-        static_cast<int>(capture.width * 4));
-    Require(surface != nullptr, SDL_GetError());
-    const bool saved = SDL_SaveBMP(surface, destination.string().c_str());
-    SDL_DestroySurface(surface);
-    Require(saved, SDL_GetError());
+    const auto saved = Engine::Render::Backend::SdlGpu::SaveCaptureBmp(capture, destination);
+    Require(bool(saved), saved ? std::string() : saved.error().message + ": " + saved.error().detail);
 }
 
 // Scripted events enter the same SDL adapter and 60 Hz sampling path as a user.
@@ -266,14 +261,15 @@ struct LatencyWindow {
         {SDL_EVENT_WINDOW_HIDDEN, "hidden"}, {SDL_EVENT_WINDOW_MINIMIZED, "minimized"},
         {SDL_EVENT_WINDOW_FOCUS_GAINED, "focus_gained"}, {SDL_EVENT_WINDOW_FOCUS_LOST, "focus_lost"},
         {SDL_EVENT_WINDOW_MOVED, "moved"}, {SDL_EVENT_WINDOW_RESIZED, "resized"}}};
+    Engine::Platform::Sdl::SdlPlatform& platform;
     SDL_Window* window{};
     SDL_WindowID id{};
     std::string placement{"platform_default"};
     std::string placementError;
-    std::optional<SDL_Rect> usable;
+    std::optional<Engine::Platform::Sdl::Rect> usable;
     std::optional<std::array<int, 2>> requested, afterSync;
     std::optional<bool> synced;
-    std::optional<SDL_WindowFlags> startFlags;
+    std::optional<Engine::Platform::Sdl::WindowFlags> startFlags;
     std::atomic<bool> measuring{}, synthetic{};
     std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
     std::atomic<unsigned> syntheticEvents{};
@@ -288,7 +284,8 @@ struct LatencyWindow {
     const Uint32 raiseCompletionType;
     std::atomic<bool> raiseCompletionPending{};
     std::atomic<unsigned> raiseCompletionEvents{};
-    LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)), raisesItself(mover),
+    LatencyWindow(Engine::Platform::Sdl::SdlPlatform& owner, bool mover) : platform(owner),
+        window(Engine::Platform::Sdl::NativeWindow(owner)), id(SDL_GetWindowID(window)), raisesItself(mover),
         raiseCompletionType(mover ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST) {
         // Both probes otherwise open at one platform-default spot and the mover
         // raises itself over the observer: macOS throttles a fully occluded
@@ -297,32 +294,36 @@ struct LatencyWindow {
         // platform that lets a program position its windows; the 1280x720
         // render size is unchanged. SDL positions name the client area, and the
         // reported borders (zero on macOS) keep the title bar on screen.
-        SDL_Rect bounds{};
-        const auto display = SDL_GetDisplayForWindow(window);
-        int width{}, height{}, top{}, left{}, bottom{}, right{};
-        if (display && SDL_GetDisplayUsableBounds(display, &bounds) && SDL_GetWindowSize(window, &width, &height)) {
-            SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right); // Zeros if unsupported.
-            const int x = mover ? bounds.x + left : std::max(bounds.x + left, bounds.x + bounds.w - right - width);
-            const int y = mover ? bounds.y + top : std::max(bounds.y + top, bounds.y + bounds.h - bottom - height);
+        // Zero usable bounds or window size: the platform reported none.
+        const auto display = platform.QueryDisplay();
+        const auto state = platform.QueryWindow();
+        const int width = state.rect.width, height = state.rect.height;
+        const auto& borders = state.borders; // Zeros if unsupported.
+        if (display && display.value().usableBounds.width > 0 && display.value().usableBounds.height > 0 && width > 0 &&
+            height > 0) {
+            const auto bounds = display.value().usableBounds;
+            const int x = mover ? bounds.x + borders.left :
+                std::max(bounds.x + borders.left, bounds.x + bounds.width - borders.right - width);
+            const int y = mover ? bounds.y + borders.top :
+                std::max(bounds.y + borders.top, bounds.y + bounds.height - borders.bottom - height);
             usable = bounds;
-            if (SDL_SetWindowPosition(window, x, y)) {
-                synced = SDL_SyncWindow(window); // False: timed out before the requested state.
-                int syncedX{}, syncedY{};
-                if (SDL_GetWindowPosition(window, &syncedX, &syncedY)) afterSync = std::array{syncedX, syncedY};
+            if (const auto placed = platform.SetWindowPosition(x, y)) {
+                synced = platform.Sync(); // False: timed out before the requested state.
+                const auto after = platform.QueryWindow().rect;
+                afterSync = std::array{after.x, after.y};
                 requested = std::array{x, y};
                 placement = mover ? "usable_bounds_top_left" : "usable_bounds_bottom_right";
             } else {
                 // Wayland does not let a client place its window: keep the default
                 // position and name why, so an overlap is attributable.
-                const char* reason = SDL_GetError();
-                placementError = reason && *reason ? reason : "SDL_SetWindowPosition failed";
+                placementError = placed.error().detail.empty() ? placed.error().message : placed.error().detail;
             }
         }
         Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
     }
     ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
     void ExpectRaiseCompletion() {
-        const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+        const bool focused = platform.QueryWindow().flags.inputFocus;
         raiseCompletionPending.store(raisesItself ? !focused : focused, std::memory_order_relaxed);
     }
     LatencyWindow(const LatencyWindow&) = delete;
@@ -347,16 +348,15 @@ struct LatencyWindow {
         return true;
     }
     void Report(std::ostream& report) const {
-        int x{}, y{}, width{}, height{}, top{}, left{}, bottom{}, right{};
-        SDL_GetWindowPosition(window, &x, &y);
-        SDL_GetWindowSize(window, &width, &height);
-        SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right);
-        const auto flags = [](std::optional<SDL_WindowFlags> value) -> std::string {
+        const auto state = platform.QueryWindow();
+        const auto& rect = state.rect;
+        const auto& borders = state.borders;
+        const auto flags = [](std::optional<Engine::Platform::Sdl::WindowFlags> value) -> std::string {
             if (!value) return "unobserved";
-            return "occluded:" + std::to_string(int(bool(*value & SDL_WINDOW_OCCLUDED))) + ",hidden:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_HIDDEN))) + ",minimized:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_MINIMIZED))) + ",input_focus:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_INPUT_FOCUS)));
+            return "occluded:" + std::to_string(int(value->occluded)) + ",hidden:" +
+                std::to_string(int(value->hidden)) + ",minimized:" +
+                std::to_string(int(value->minimized)) + ",input_focus:" +
+                std::to_string(int(value->inputFocus));
         };
         const auto counts = [](const auto& values) {
             std::string text;
@@ -367,16 +367,16 @@ struct LatencyWindow {
         report << "window_placement=" << placement;
         if (!placementError.empty()) report << "\nwindow_placement_error=" << placementError;
         report << "\nwindow_usable_bounds=";
-        if (usable) report << usable->x << ',' << usable->y << ',' << usable->w << ',' << usable->h; else report << "unavailable";
+        if (usable) report << usable->x << ',' << usable->y << ',' << usable->width << ',' << usable->height; else report << "unavailable";
         report << "\nwindow_requested_position=";
         if (requested) report << (*requested)[0] << ',' << (*requested)[1]; else report << "none";
         report << "\nwindow_sync=" << (!synced ? "not_requested" : *synced ? "succeeded" : "timed_out")
                << "\nwindow_position_after_sync=";
         if (afterSync) report << (*afterSync)[0] << ',' << (*afterSync)[1]; else report << "none";
-        report << "\nwindow_final_position=" << x << ',' << y << "\nwindow_size=" << width << ',' << height
-               << "\nwindow_borders=" << top << ',' << left << ',' << bottom << ',' << right
+        report << "\nwindow_final_position=" << rect.x << ',' << rect.y << "\nwindow_size=" << rect.width << ',' << rect.height
+               << "\nwindow_borders=" << borders.top << ',' << borders.left << ',' << borders.bottom << ',' << borders.right
                << "\nwindow_flags_at_measurement_start=" << flags(startFlags)
-               << "\nwindow_flags_at_end=" << flags(SDL_GetWindowFlags(window))
+               << "\nwindow_flags_at_end=" << flags(state.flags)
                << "\nwindow_os_events=" << counts(total) << "\nwindow_os_events_during_measurement=" << counts(during)
                << "\nwindow_synthetic_events=" << syntheticEvents.load()
                << "\nwindow_raise_completion_events=" << raiseCompletionEvents.load() << '\n';
@@ -411,8 +411,8 @@ void RunLatency(const Options& options) {
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
     // Placed before connecting: its MOVED event is drained while still in Lobby.
-    LatencyWindow windowEvidence(Engine::Platform::Sdl::NativeWindow(application.Platform()), mover);
-    const auto platform = PlatformFingerprint::Capture(application, Engine::Platform::Sdl::NativeWindow(application.Platform()));
+    LatencyWindow windowEvidence(application.Platform(), mover);
+    const auto platform = PlatformFingerprint::Capture(application);
     StartPhaseRecorder startPhase;
     if (mover) connection.CreateAndJoin(options.gateway);
     else connection.Refresh(options.gateway);
@@ -467,14 +467,14 @@ void RunLatency(const Options& options) {
                          << ',' << (event % 2 ? -1 : 1) << ",0.25," << options.duration << ',' << options.events << '\n';
                 plan.flush();
                 Require(bool(plan), "Cannot write predeclared latency event plan");
-                SDL_RaiseWindow(Engine::Platform::Sdl::NativeWindow(application.Platform()));
+                application.Platform().Raise();
             }
         }
         if (togetherSince) Require(both, "A GUI client left during latency measurement");
         if (both) finalTick = state.snapshot->tick;
         const double elapsed = measurementStart ? Seconds(now, *measurementStart) : -1;
         windowEvidence.measuring.store(elapsed >= 0 && elapsed <= options.duration + 2, std::memory_order_relaxed);
-        if (elapsed >= 0 && !windowEvidence.startFlags) windowEvidence.startFlags = SDL_GetWindowFlags(Engine::Platform::Sdl::NativeWindow(application.Platform()));
+        if (elapsed >= 0 && !windowEvidence.startFlags) windowEvidence.startFlags = application.Platform().QueryWindow().flags;
         if (mover && elapsed >= 0) {
             if (elapsed >= options.duration + 2) break;
             const auto event = static_cast<unsigned>(elapsed / period);
@@ -905,7 +905,7 @@ void Run(const Options& options) {
         if (options.move && beforeCaptured && !movementPressed && together >= .8) {
             // GPU readback can stall a frame past the original movement window.
             // Measure the hold from the actual injected press, not join time.
-            SDL_RaiseWindow(Engine::Platform::Sdl::NativeWindow(application.Platform()));
+            application.Platform().Raise();
             PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), true);
             movementPressed = true;
             movementStarted = now;
@@ -1121,7 +1121,7 @@ void Run(const Options& options) {
 }
 } // namespace
 
-int main(int argc, char* argv[]) {
+int GyoMain(int argc, char* argv[]) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "PvP GUI acceptance (run create and join in separate processes)\n"
                   << "--arena-root <deployed assets> --gateway host:port --role create|join\n"

@@ -125,7 +125,7 @@ void RunPlayerShort(const Options& options) {
         report["initialize_graphics_ms"] = Seconds(Clock::now(), preparing) * 1000;
         auto& connection = application.Connection();
         auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
-        report["platform"] = PlatformFingerprint::Capture(application, window).Json();
+        report["platform"] = PlatformFingerprint::Capture(application).Json();
         inputWatch.Install(window);
         if (mover) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
@@ -179,7 +179,7 @@ void RunPlayerShort(const Options& options) {
                     start << WeaponJson{{"host_steady_seconds", *startSeconds}, {"snapshot_hold_at_seconds", 8.2},
                         {"snapshot_hold_duration_seconds", .3}}.dump();
                     Require(bool(start), "Cannot publish player presentation start");
-                    SDL_RaiseWindow(window);
+                    application.Platform().Raise();
                 }
             }
             if (!mover && !startSeconds && std::filesystem::exists(startPath)) {
