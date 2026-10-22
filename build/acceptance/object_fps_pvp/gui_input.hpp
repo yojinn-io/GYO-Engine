@@ -4,27 +4,46 @@
 // the application.
 using WeaponJson = nlohmann::json;
 
-void PushMouse(SDL_Window* window, bool down) {
-    SDL_Event event{};
-    event.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
-    event.button.windowID = SDL_GetWindowID(window);
-    event.button.button = SDL_BUTTON_LEFT;
-    event.button.down = down;
-    Require(SDL_PushEvent(&event), "Cannot enqueue mouse edge");
+using Engine::Input::Key;
+// Scripted input enters SDL's event queue through Engine's injector, so the
+// product's SdlInput sees it like a user's (docs/architecture/platform-sdl.md).
+struct ProbeInput final {
+    Engine::Platform::Sdl::SdlPlatform& platform;
+    Engine::Input::Backend::Sdl::SdlInputInjector injector;
+    explicit ProbeInput(Engine::Platform::Sdl::SdlPlatform& owner) : platform(owner), injector(owner) {}
+};
+template <class Pushed> void RequirePushed(const Pushed& pushed, const char* what) {
+    Require(bool(pushed), pushed ? std::string() : std::string(what) + ": " + pushed.error().message);
 }
+void PushMouse(ProbeInput& input, bool down) {
+    RequirePushed(input.injector.PushMouseButton(Engine::Input::MouseButton::Left, down), "Cannot enqueue mouse edge");
+}
+void PushFocus(ProbeInput& input, bool gained) {
+    RequirePushed(input.injector.PushFocus(gained), "Cannot enqueue window focus event");
+}
+void PushKey(ProbeInput& input, Key key, bool held) {
+    RequirePushed(input.injector.PushKey(key, held), "Could not enqueue key");
+}
+void PushMovement(ProbeInput& input, bool held, Key direction = Key::W) {
+    if (held) {
+        PushFocus(input, true);
+        if (!input.platform.QueryWindow().flags.relativeMouseMode) {
+            PushMouse(input, true);
+            PushMouse(input, false);
+        }
+    }
+    PushKey(input, direction, held);
+}
+
+// Temporary until probe_window_move: the synthetic MOVED (sdl-isolation J2).
 void PushWindowEvent(SDL_Window* window, Uint32 type) {
     SDL_Event event{};
     event.type = type;
     event.window.windowID = SDL_GetWindowID(window);
     Require(SDL_PushEvent(&event), "Cannot enqueue window event");
 }
-void PushMotion(SDL_Window* window, float dx, float dy) {
-    SDL_Event event{};
-    event.type = SDL_EVENT_MOUSE_MOTION;
-    event.motion.windowID = SDL_GetWindowID(window);
-    event.motion.xrel = dx;
-    event.motion.yrel = dy;
-    Require(SDL_PushEvent(&event), "Cannot enqueue relative mouse motion");
+void PushMotion(ProbeInput& input, float dx, float dy) {
+    RequirePushed(input.injector.PushMouseMotion(dx, dy), "Cannot enqueue relative mouse motion");
 }
 
 WeaponJson WeaponSample(const fps::pvp::WeaponFeedbackObservation& w) {

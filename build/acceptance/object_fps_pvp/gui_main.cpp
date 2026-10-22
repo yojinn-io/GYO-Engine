@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #define PVP_PROBE_MOVEMENT_TRACE 1
 #endif
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
@@ -147,44 +148,6 @@ void SaveCapture(Engine::Render::SceneCapture& capture, const std::filesystem::p
 
 // Scripted events enter the same SDL adapter and 60 Hz sampling path as a user.
 // Keep each probe in a separate process: SdlPlatform drains SDL's global queue.
-void PushMovement(SDL_Window* window, bool held, SDL_Scancode direction = SDL_SCANCODE_W) {
-    const auto id = SDL_GetWindowID(window);
-    if (held) {
-        SDL_Event focus{};
-        focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-        focus.window.windowID = id;
-        Require(SDL_PushEvent(&focus), "Could not enqueue probe focus event");
-        if (!SDL_GetWindowRelativeMouseMode(window)) {
-            SDL_Event click{};
-            click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-            click.button.windowID = id;
-            click.button.button = SDL_BUTTON_LEFT;
-            click.button.down = true;
-            Require(SDL_PushEvent(&click), "Could not enqueue probe capture click");
-            click.type = SDL_EVENT_MOUSE_BUTTON_UP;
-            click.button.down = false;
-            Require(SDL_PushEvent(&click), "Could not enqueue probe capture release");
-        }
-    }
-    SDL_Event keyboard{};
-    keyboard.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    keyboard.key.windowID = id;
-    keyboard.key.scancode = direction;
-    keyboard.key.key = direction == SDL_SCANCODE_W ? SDLK_W : SDLK_S;
-    keyboard.key.down = held;
-    keyboard.key.repeat = false;
-    Require(SDL_PushEvent(&keyboard), "Could not enqueue probe movement event");
-}
-
-void PushKey(SDL_Window* window, SDL_Scancode key, bool held) {
-    SDL_Event event{};
-    event.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    event.key.windowID = SDL_GetWindowID(window);
-    event.key.scancode = key;
-    event.key.down = held;
-    Require(SDL_PushEvent(&event), "Could not enqueue Lobby key");
-}
-
 const fps::pvp::PlayerState* FindSelf(const fps::pvp::ClientConnectionState& state) {
     if (!state.snapshot) return nullptr;
     const auto found = std::find_if(state.snapshot->players.begin(), state.snapshot->players.end(),
@@ -408,6 +371,7 @@ void RunLatency(const Options& options) {
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
     // Placed before connecting: its MOVED event is drained while still in Lobby.
@@ -420,7 +384,7 @@ void RunLatency(const Options& options) {
     const auto started = Clock::now();
     auto previous = started, refreshed = started;
     std::optional<Clock::time_point> togetherSince, measurementStart;
-    std::optional<SDL_Scancode> held;
+    std::optional<Key> held;
     std::optional<unsigned> activeEvent;
     std::uint64_t frameIndex{}, presentedCount{}, firstTick{}, finalTick{};
     fps::pvp::PlayerId playerId{};
@@ -480,7 +444,7 @@ void RunLatency(const Options& options) {
             const auto event = static_cast<unsigned>(elapsed / period);
             const double phase = elapsed - event * period;
             if (held && (event != activeEvent || phase >= .3 || event >= options.events)) {
-                PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), false, *held);
+                PushMovement(input, false, *held);
                 held.reset();
             }
             if (event < options.events && activeEvent != event) {
@@ -495,9 +459,9 @@ void RunLatency(const Options& options) {
                     eventSamples.push_back({event, std::chrono::duration<double>(now.time_since_epoch()).count(),
                         state.playerId, EpochOf(local), local.latestCommand, local.renderPosition.x, local.renderPosition.z,
                         std::sin(self->yaw) * sign, std::cos(self->yaw) * sign});
-                    held = event % 2 ? SDL_SCANCODE_S : SDL_SCANCODE_W;
+                    held = event % 2 ? Key::S : Key::W;
                     windowEvidence.synthetic.store(true, std::memory_order_relaxed);
-                    PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), true, *held);
+                    PushMovement(input, true, *held);
                     windowEvidence.synthetic.store(false, std::memory_order_relaxed);
                 }
             }
@@ -531,7 +495,7 @@ void RunLatency(const Options& options) {
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
         if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
     }
-    if (held) PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), false, *held);
+    if (held) PushMovement(input, false, *held);
     if (options.combat) combat.Save(application);
     std::ofstream presentation(options.output / (options.role + "-presentation.csv"));
     Require(bool(presentation), "Cannot create latency presentation trace");
@@ -626,6 +590,7 @@ void RunPhaseStalls(const Options& options) {
     graphics.gpuDriver = options.gpu;
     graphics.vsync = options.fps <= 60;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
     if (mover) connection.CreateAndJoin(options.gateway); else connection.Refresh(options.gateway);
@@ -634,7 +599,7 @@ void RunPhaseStalls(const Options& options) {
     auto previous = started, refreshed = started;
     std::optional<Clock::time_point> togetherSince, previousUpdate, previousSteppedAt;
     std::optional<fps::pvp::LocalMovementObservation> previousMovement;
-    std::optional<SDL_Scancode> held;
+    std::optional<Key> held;
     unsigned nextFault{};
     std::optional<unsigned> activeFault;
     std::uint64_t frameIndex{}, presentedCount{}, measuredFrames{};
@@ -666,11 +631,11 @@ void RunPhaseStalls(const Options& options) {
         if (mover && together >= 21) break;
         if (mover && together >= 1) {
             // Alternate non-neutral inputs inside the same small area.
-            const auto direction = static_cast<int>(together * 2) % 2 ? SDL_SCANCODE_S : SDL_SCANCODE_W;
+            const auto direction = static_cast<int>(together * 2) % 2 ? Key::S : Key::W;
             if (!held || *held != direction) {
-                if (held) PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), false, *held);
+                if (held) PushMovement(input, false, *held);
                 held = direction;
-                PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), true, direction);
+                PushMovement(input, true, direction);
             }
         }
         const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
@@ -774,7 +739,7 @@ void RunPhaseStalls(const Options& options) {
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
         if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
     }
-    if (held) PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), false, *held);
+    if (held) PushMovement(input, false, *held);
     samples.flush(); Require(bool(samples), "Cannot write phase stall observations");
     if (mover) {
         Require(nextFault == faults.size(), "Not all predeclared phase stalls ran");
@@ -820,6 +785,7 @@ void Run(const Options& options) {
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     GuiRoom room(options.output, options.role, options.roomPlayers);
 
     auto& connection = application.Connection();
@@ -860,10 +826,10 @@ void Run(const Options& options) {
     fps::pvp::ClientConnectionState finalState;
     // The Lobby's initial focus is Refresh. Navigate the actual UI actions,
     // rather than calling the network connection's join methods directly.
-    std::deque<SDL_Scancode> lobbyKeys;
-    if (submittedJoin) lobbyKeys.push_back(SDL_SCANCODE_DOWN);
-    lobbyKeys.push_back(SDL_SCANCODE_RETURN);
-    std::optional<SDL_Scancode> releasedNextFrame;
+    std::deque<Key> lobbyKeys;
+    if (submittedJoin) lobbyKeys.push_back(Key::Down);
+    lobbyKeys.push_back(Key::Enter);
+    std::optional<Key> releasedNextFrame;
 
     for (;;) {
         const auto now = Clock::now();
@@ -874,10 +840,10 @@ void Run(const Options& options) {
         auto state = connection.State();
         if (!submittedJoin && lobbyKeys.empty() && state.phase == fps::pvp::ConnectionPhase::Lobby) {
             if (!state.rooms.empty()) {
-                lobbyKeys = {SDL_SCANCODE_DOWN, SDL_SCANCODE_DOWN, SDL_SCANCODE_RETURN};
+                lobbyKeys = {Key::Down, Key::Down, Key::Enter};
                 submittedJoin = true;
             } else if (Seconds(now, lastRefresh) >= .5) {
-                lobbyKeys.push_back(SDL_SCANCODE_RETURN);
+                lobbyKeys.push_back(Key::Enter);
                 lastRefresh = now;
             }
         }
@@ -906,7 +872,7 @@ void Run(const Options& options) {
             // GPU readback can stall a frame past the original movement window.
             // Measure the hold from the actual injected press, not join time.
             application.Platform().Raise();
-            PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), true);
+            PushMovement(input, true);
             movementPressed = true;
             movementStarted = now;
         }
@@ -923,13 +889,13 @@ void Run(const Options& options) {
         const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
         previous = now;
         if (releasedNextFrame) {
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), *releasedNextFrame, false);
+            PushKey(input, *releasedNextFrame, false);
             releasedNextFrame.reset();
         }
         if (!lobbyKeys.empty()) {
             const auto key = lobbyKeys.front();
             lobbyKeys.pop_front();
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), key, true);
+            PushKey(input, key, true);
             releasedNextFrame = key;
         }
         Require(application.ProcessEvents(frame) == Control::Continue, "Acceptance window was closed");
@@ -949,33 +915,29 @@ void Run(const Options& options) {
                                stoppedPrediction.z - pointerReleasePosition->z) < .01,
                 "Held W kept predicting movement after window move released capture");
             testedHeldInputRelease = true;
-            PushMovement(Engine::Platform::Sdl::NativeWindow(application.Platform()), false);
+            PushMovement(input, false);
             Require(!SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())),
                 "Moving the window retained gameplay mouse capture");
             Require(connection.State().phase == fps::pvp::ConnectionPhase::Playing,
                 "Releasing mouse capture left the match");
-            SDL_Event focus{};
-            focus.type = SDL_EVENT_WINDOW_FOCUS_LOST;
-            focus.window.windowID = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(application.Platform()));
-            Require(SDL_PushEvent(&focus), "Could not enqueue focus loss");
-            focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-            Require(SDL_PushEvent(&focus), "Could not enqueue focus regain");
+            PushFocus(input, false);
+            PushFocus(input, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Focus events failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
             Require(!SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())),
                 "Focus regain recaptured the pointer without a content click");
             // Tab resumes capture, then Tab releases it without leaving.
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_TAB, true);
+            PushKey(input, Key::Tab, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor toggle event failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())), "Tab did not resume capture");
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_TAB, false);
+            Require(application.Platform().QueryWindow().flags.relativeMouseMode, "Tab did not resume capture");
+            PushKey(input, Key::Tab, false);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor toggle release failed");
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_TAB, true);
+            PushKey(input, Key::Tab, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor release event failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(!SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())), "Tab did not release capture");
-            PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_TAB, false);
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode, "Tab did not release capture");
+            PushKey(input, Key::Tab, false);
             testedCursorToggle = true;
         }
         const auto observation = application.LocalMovement();
@@ -1093,14 +1055,14 @@ void Run(const Options& options) {
     Require(bool(presentation), "Cannot write presentation latency trace");
     trace.flush();
     Require(bool(trace), "Cannot write local movement trace");
-    PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_ESCAPE, true);
+    PushKey(input, Key::Escape, true);
     const Engine::Runtime::FrameContext leaveFrame{frameIndex++, 1.0 / 60.0};
     Require(application.ProcessEvents(leaveFrame) == Control::Continue, "ESC event failed");
     Require(application.Update(leaveFrame) == Control::Continue, application.LastError());
     Require(!connection.State().snapshot, "ESC retained the old world while leaving");
     Require(!application.LocalMovement().active && application.LocalMovement().pendingCommands == 0,
         "ESC retained prediction history");
-    PushKey(Engine::Platform::Sdl::NativeWindow(application.Platform()), SDL_SCANCODE_ESCAPE, false);
+    PushKey(input, Key::Escape, false);
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     for (;;) {
         const auto state = connection.State();

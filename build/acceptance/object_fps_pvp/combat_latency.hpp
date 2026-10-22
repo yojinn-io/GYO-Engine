@@ -84,17 +84,17 @@ public:
     static CombatStep StepAt(unsigned slot) { return CombatCycle[slot % CombatCycle.size()]; }
     void BeforeUpdate(double elapsed, fps::pvp::PvpApplication& application) {
         expected_.reset();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
-        if (releaseMouse_) { PushMouse(window, false); releaseMouse_ = false; }
-        if (releaseReload_) { PushKey(window, SDL_SCANCODE_R, false); releaseReload_ = false; }
+        ProbeInput input(application.Platform());
+        if (releaseMouse_) { PushMouse(input, false); releaseMouse_ = false; }
+        if (releaseReload_) { PushKey(input, Key::R, false); releaseReload_ = false; }
         if (!mover_ || dispatched_ >= planned_ || elapsed < CombatSlotStart + dispatched_ * CombatSlotPeriod) return;
         const double due = CombatSlotStart + dispatched_ * CombatSlotPeriod;
         const auto step = StepAt(dispatched_++);
         Check(elapsed < due + .2, "A predeclared combat slot missed its 200 ms dispatch window");
         if (elapsed >= due + .2) return; // Never catch up missed slots or remove them from the denominator.
         if (step == CombatStep::Idle) return;
-        if (step == CombatStep::Reload) { PushKey(window, SDL_SCANCODE_R, true); releaseReload_ = true; }
-        else { PushMouse(window, true); releaseMouse_ = true; }
+        if (step == CombatStep::Reload) { PushKey(input, Key::R, true); releaseReload_ = true; }
+        else { PushMouse(input, true); releaseMouse_ = true; }
         expected_ = step;
     }
     void AfterUpdate(std::uint64_t frame, const fps::pvp::WeaponFeedbackObservation& before,

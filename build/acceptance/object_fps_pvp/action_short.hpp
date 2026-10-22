@@ -140,7 +140,8 @@ void RunActionShort(const Options& options) {
         graphics.vsync = false;
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform()); // the synthetic MOVED, until probe_window_move
+        ProbeInput input(application.Platform());
         evidence["platform"] = PlatformFingerprint::Capture(application).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
@@ -287,36 +288,36 @@ void RunActionShort(const Options& options) {
                 waitingSince.reset();
                 schedule.pop_front();
                 if (event == "capture") {
-                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
-                    PushMouse(window, true);
+                    PushFocus(input, true);
+                    PushMouse(input, true);
                     silenceExpected = captureExpected = true;
-                } else if (event == "release") PushMouse(window, false);
+                } else if (event == "release") PushMouse(input, false);
                 else if (event == "key-up") {
-                    for (const auto key : {SDL_SCANCODE_R, SDL_SCANCODE_SPACE, SDL_SCANCODE_W, SDL_SCANCODE_S})
-                        PushKey(window, key, false);
+                    for (const auto key : {Key::R, Key::Space, Key::W, Key::S})
+                        PushKey(input, key, false);
                 } else if (event == "held-shot") {
                     heldBase = before.submittedActions;
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     shotExpected = true;
                 } else if (event == "held-release") {
                     Require(before.submittedActions == heldBase + 1 && before.animationStarts == heldBase + 1,
                         "Holding fire repeated a shot or animation");
                     evidence["checks"]["held_fire_one_shot"] = true;
-                    PushMouse(window, false);
+                    PushMouse(input, false);
                 } else if (event == "reload" || event == "reload-empty") {
-                    PushKey(window, SDL_SCANCODE_R, true);
+                    PushKey(input, Key::R, true);
                     reloadExpected = true;
                 } else if (event == "reload-shot" || event == "reload-again") {
                     Require(before.reloading || before.reloadPending, "Reload was not active for its suppression check");
-                    if (event == "reload-shot") PushMouse(window, true);
-                    else PushKey(window, SDL_SCANCODE_R, true);
+                    if (event == "reload-shot") PushMouse(input, true);
+                    else PushKey(input, Key::R, true);
                     silenceExpected = true;
                 } else if (event == "back-start") {
                     Require(before.reloading, "Authority reload had not started before the moving reload");
                     backStart = beforePosition;
-                    PushKey(window, SDL_SCANCODE_S, true);
+                    PushKey(input, Key::S, true);
                 } else if (event == "back-stop") {
-                    PushKey(window, SDL_SCANCODE_S, false);
+                    PushKey(input, Key::S, false);
                     backDisplacement = std::hypot(double(beforePosition.x - backStart.x), double(beforePosition.z - backStart.z));
                     Require(backDisplacement > .2 && before.reloading && reloadAnimatingSeen,
                         "Moving during the reload did not move, or the reload stopped or was never animated");
@@ -326,54 +327,54 @@ void RunActionShort(const Options& options) {
                         before.reloadAnimationStarts == 1 && !before.reloadAnimating,
                         "First reload did not complete with one authority-anchored animation");
                     evidence["checks"]["reload_completes_and_refills"] = true;
-                } else if (event == "jump") PushKey(window, SDL_SCANCODE_SPACE, true);
+                } else if (event == "jump") PushKey(input, Key::Space, true);
                 else if (event == "air-shot") {
                     Require(!before.grounded, "Authority still grounded at the airborne shot");
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     shotExpected = true;
                 } else if (event == "turn-wall") {
                     savedYaw = before.yaw;
-                    PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
+                    PushMotion(input, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
                 } else if (event == "turn-back") {
-                    PushMotion(window, static_cast<float>((savedYaw - before.yaw) / .0025), 0);
+                    PushMotion(input, static_cast<float>((savedYaw - before.yaw) / .0025), 0);
                 } else if (event == "combined-wall-shot") {
                     // Move, turn and shoot in one frame: the mouse delta is consumed exactly once.
                     beforeCombinedYaw = before.yaw;
                     beforeCombinedPitch = before.pitch;
                     beforeCombinedMouse = before.mouseDeltaConsumeCount;
-                    PushMotion(window, 4, 4);
-                    PushKey(window, SDL_SCANCODE_W, true);
-                    PushMouse(window, true);
+                    PushMotion(input, 4, 4);
+                    PushKey(input, Key::W, true);
+                    PushMouse(input, true);
                     shotExpected = true;
                 } else if (event == "combined-release") {
-                    PushMouse(window, false);
-                    PushKey(window, SDL_SCANCODE_W, false);
+                    PushMouse(input, false);
+                    PushKey(input, Key::W, false);
                 } else if (event == "focus-loss") {
-                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST);
-                    PushMouse(window, true);
+                    PushFocus(input, false);
+                    PushMouse(input, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "focus-gain-held") {
-                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
+                    PushFocus(input, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "tab-release") {
-                    PushKey(window, SDL_SCANCODE_TAB, true);
-                    PushMouse(window, true);
+                    PushKey(input, Key::Tab, true);
+                    PushMouse(input, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "tab-key-up") {
-                    PushKey(window, SDL_SCANCODE_TAB, false);
-                    PushMouse(window, false);
+                    PushKey(input, Key::Tab, false);
+                    PushMouse(input, false);
                 } else if (event == "drag") {
                     PushWindowEvent(window, SDL_EVENT_WINDOW_MOVED);
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "resize") {
                     const auto resized = application.Platform().SetWindowSize(1120, 630);
                     Require(bool(resized), resized ? std::string() : resized.error().message + ": " + resized.error().detail);
                 } else if (event == "approach-wall") {
-                    PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
-                    PushKey(window, SDL_SCANCODE_W, true);
+                    PushMotion(input, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
+                    PushKey(input, Key::W, true);
                 } else if (event == "stop") {
-                    PushKey(window, SDL_SCANCODE_W, false);
+                    PushKey(input, Key::W, false);
                 } else if (event == "escape") {
                     Require(before.hitDecisions >= 1 && hitMarkerSeen && wallDecision && cooldownDecision,
                         "Hit, hit marker, wall or authority cooldown outcome was not observed before leaving");
@@ -381,16 +382,16 @@ void RunActionShort(const Options& options) {
                     Require(allocatedBeforeEscape == before.submittedActions + injectedActions,
                         "Action IDs do not equal SDL submissions plus the explicit authority injection");
                     evidence["before_escape"] = WeaponSample(before);
-                    PushKey(window, SDL_SCANCODE_ESCAPE, true);
+                    PushKey(input, Key::Escape, true);
                     rejoining = true;
                 } else if (event == "escape-up") {
-                    PushKey(window, SDL_SCANCODE_ESCAPE, false);
+                    PushKey(input, Key::Escape, false);
                 } else if (event == "wall-shot") {
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     shotExpected = true;
                 } else if (event == "empty-shot") {
                     Require(before.magazineAmmo == 0, "Magazine was not empty for the empty-magazine check");
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     silenceExpected = true;
                 } else if (event == "reload-empty-done") {
                     Require(!before.reloading && before.magazineAmmo == before.magazineCapacity &&
@@ -398,15 +399,15 @@ void RunActionShort(const Options& options) {
                     evidence["checks"]["empty_magazine_reload"] = true;
                 } else if (event == "kill-shot") {
                     if (remote.death) evidence["checks"]["kill_shot_skipped_target_dead"] = true;
-                    else { PushMouse(window, true); shotExpected = true; }
+                    else { PushMouse(input, true); shotExpected = true; }
                 } else if (event == "dead-click") {
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     silenceExpected = true;
                 } else if (event == "dead-move") {
-                    for (const auto key : {SDL_SCANCODE_W, SDL_SCANCODE_SPACE, SDL_SCANCODE_R}) PushKey(window, key, true);
+                    for (const auto key : {Key::W, Key::Space, Key::R}) PushKey(input, key, true);
                     silenceExpected = true;
                 } else if (event == "dead-stop") {
-                    for (const auto key : {SDL_SCANCODE_W, SDL_SCANCODE_SPACE, SDL_SCANCODE_R}) PushKey(window, key, false);
+                    for (const auto key : {Key::W, Key::Space, Key::R}) PushKey(input, key, false);
                     const double moved = std::hypot(double(beforePosition.x - deathPosition.x),
                                                     double(beforePosition.z - deathPosition.z));
                     Require(before.dead && moved < .05 && beforeAllocated == allocatedAtDeath,
@@ -416,12 +417,12 @@ void RunActionShort(const Options& options) {
                     deadChecked = true;
                 } else if (event == "respawn-capture") {
                     if (!before.inputCaptured) {
-                        PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
-                        PushMouse(window, true);
+                        PushFocus(input, true);
+                        PushMouse(input, true);
                         silenceExpected = captureExpected = true;
                     }
                 } else if (event == "respawn-shot") {
-                    PushMouse(window, true);
+                    PushMouse(input, true);
                     shotExpected = true;
                 } else if (event.starts_with("capture-")) {
                     if (captureMode) pendingCapture = event;
@@ -743,7 +744,7 @@ void RunActionRapid(const Options& options) {
         graphics.vsync = false;
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
+        ProbeInput input(application.Platform());
         evidence["platform"] = PlatformFingerprint::Capture(application).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
@@ -825,15 +826,15 @@ void RunActionRapid(const Options& options) {
                 switch (phase) {
                 case Phase::Setup:
                     if (!setupCaptured && elapsed >= .10) {
-                        PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
-                        PushMouse(window, true);
+                        PushFocus(input, true);
+                        PushMouse(input, true);
                         setupCaptured = true; event = "capture";
                     } else if (setupCaptured && !setupReleased && elapsed >= .20) {
-                        PushMouse(window, false);
+                        PushMouse(input, false);
                         setupReleased = true; event = "release";
                     } else if (setupReleased && !setupTurned && elapsed >= .30) {
                         // The wall the action short's eleven wall shots hit.
-                        PushMotion(window, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
+                        PushMotion(input, static_cast<float>((std::atan2(5., 5.) - before.yaw) / .0025), 0);
                         setupTurned = true; event = "turn-wall";
                     } else if (setupTurned && elapsed >= .60) {
                         Require(before.active && before.inputCaptured && before.magazineAmmo == before.magazineCapacity,
@@ -879,8 +880,8 @@ void RunActionRapid(const Options& options) {
                             {"next_allowed_shot_tick", own ? ActionJson(own->nextAllowedShotTick) : ActionJson(nullptr)},
                             {"local_cooldown_remaining_seconds", before.cooldownRemainingSeconds},
                             {"previous_sent_action", previousSent ? ActionJson(previousSent) : ActionJson(nullptr)}};
-                        PushMouse(window, true);
-                        PushMouse(window, false);
+                        PushMouse(input, true);
+                        PushMouse(input, false);
                         ++segmentClicks;
                         event = "click";
                     }
@@ -889,13 +890,13 @@ void RunActionRapid(const Options& options) {
                 case Phase::AwaitLastDecision:
                     Require(waited <= MaximumWaitSeconds, "The segment's last shot decision did not arrive within 3 s");
                     if (decidedThrough >= lastSent && before.cooldownRemainingSeconds <= 0) {
-                        PushKey(window, SDL_SCANCODE_R, true);
+                        PushKey(input, Key::R, true);
                         enter(Phase::ReloadKey, elapsed);
                         event = "reload";
                     }
                     break;
                 case Phase::ReloadKey:
-                    PushKey(window, SDL_SCANCODE_R, false);
+                    PushKey(input, Key::R, false);
                     enter(Phase::Reloading, elapsed);
                     event = "reload-key-up";
                     break;

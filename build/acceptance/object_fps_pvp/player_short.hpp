@@ -124,7 +124,8 @@ void RunPlayerShort(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         report["initialize_graphics_ms"] = Seconds(Clock::now(), preparing) * 1000;
         auto& connection = application.Connection();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform());
+        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform()); // the input watch, until probe_watch_pacing
+        ProbeInput input(application.Platform());
         report["platform"] = PlatformFingerprint::Capture(application).Json();
         inputWatch.Install(window);
         if (mover) connection.CreateAndJoin(options.gateway);
@@ -196,32 +197,32 @@ void RunPlayerShort(const Options& options) {
                 event = schedule[nextEvent++].name;
                 inputWatch.Script(nextEvent);
                 if (event == "capture") {
-                    PushWindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED);
-                    PushMouse(window, true);
+                    PushFocus(input, true);
+                    PushMouse(input, true);
                     expectedCapture = true;
-                } else if (event == "release") PushMouse(window, false);
-                else if (event == "forward") PushKey(window, SDL_SCANCODE_W, true);
-                else if (event == "backward") PushKey(window, SDL_SCANCODE_S, true);
-                else if (event == "strafe") PushKey(window, SDL_SCANCODE_D, true);
-                else if (event == "diagonal") { PushKey(window, SDL_SCANCODE_W, true); PushKey(window, SDL_SCANCODE_A, true); }
+                } else if (event == "release") PushMouse(input, false);
+                else if (event == "forward") PushKey(input, Key::W, true);
+                else if (event == "backward") PushKey(input, Key::S, true);
+                else if (event == "strafe") PushKey(input, Key::D, true);
+                else if (event == "diagonal") { PushKey(input, Key::W, true); PushKey(input, Key::A, true); }
                 else if (event == "stop") {
-                    for (const auto key : {SDL_SCANCODE_W, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D}) PushKey(window, key, false);
+                    for (const auto key : {Key::W, Key::A, Key::S, Key::D}) PushKey(input, key, false);
                 } else if (event == "escape") {
-                    PushKey(window, SDL_SCANCODE_ESCAPE, true); leaving = true;
+                    PushKey(input, Key::Escape, true); leaving = true;
                     expectedCapture = false; expectedYaw = 0;
                 }
-                else if (event == "escape-up") PushKey(window, SDL_SCANCODE_ESCAPE, false);
+                else if (event == "escape-up") PushKey(input, Key::Escape, false);
                 else if (event == "look-up" || event == "look-down" || event == "look-level") {
                     // A positive pitch looks down; one mouse count turns 0.0025 rad.
                     expectedPitch = event == "look-up" ? -1.0471975511965976 : event == "look-down" ? 1.0471975511965976 : 0;
-                    PushMotion(window, 0, static_cast<float>((expectedPitch - application.WeaponFeedback().pitch) / .0025));
+                    PushMotion(input, 0, static_cast<float>((expectedPitch - application.WeaponFeedback().pitch) / .0025));
                 } else {
                     const double desired = event == "turn" || event == "hold-motion" ? 1.5707963267948966 :
                         event == "approach-wall" ? -1.5707963267948966 : 0;
                     expectedYaw = desired;
-                    PushMotion(window, static_cast<float>(std::remainder(desired - application.WeaponFeedback().yaw,
+                    PushMotion(input, static_cast<float>(std::remainder(desired - application.WeaponFeedback().yaw,
                         6.283185307179586) / .0025), 0);
-                    if (event == "approach-wall" || event == "hold-motion") PushKey(window, SDL_SCANCODE_W, true);
+                    if (event == "approach-wall" || event == "hold-motion") PushKey(input, Key::W, true);
                 }
                 inputWatch.Script(0);
             }
