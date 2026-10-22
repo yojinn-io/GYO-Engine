@@ -814,7 +814,7 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 
 - 受影響的只有「上一發的裁決回到 Client 之前就送出的射擊」：Client 收到裁決後，序號閘門改用它的 `resolved_tick＋cooldown` 重新對齊。連射武器（例如冷卻 4 Tick）在 RTT 50～100 ms 時約 1～2 發；d≤K 的延後 d 個 Tick 判定，d>K 的被拒（不扣彈、不造成傷害），之後恢復準時。
 - 「取 min」不改變行為：gap＝nextAllowed−D，而 nextAllowed＝上一發的 J＋冷卻、D≥J，所以 gap 不會超過冷卻，K＝min(K_max, 冷卻) 與 K＝K_max 的判定結果永遠相同。min 的作用是讓契約條文 0≤K≤cooldownTicks 對任何武器資料都成立（實作 `Combat.hpp` 的 `ShotHoldLimit`；測試以冷卻 2、4 的規則端到端驗證保留與拒絕）。
-- K_max＝2 的依據與盲區：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境，全自動武器上線時重新評估 K_max（v8「多武器與本機射擊閘」）。
+- K_max＝2 的依據與盲區：`pv7-checkpoint` 的退回晚到量 52% 在 0～2 Tick；量測沒有「退回」與「壓著冷卻邊緣連射」同時出現的情境，全自動武器上線時重新評估 K_max（v8「多武器與射速」）。
 
 | 原則 | 維持的性質 | 未來修改時要問的問題 |
 |---|---|---|
