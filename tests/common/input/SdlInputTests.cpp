@@ -213,6 +213,21 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     CHECK(input.Snapshot().Get(Key::Tab).released);
 }
 
+TEST_CASE("focus events of this window set and clear windowFocused") {
+    // The product's pointer capture reads windowFocused as focusedAtStart (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    CHECK_FALSE(input.Snapshot().windowFocused);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(input.Snapshot().windowFocused, "a focus gain sets windowFocused");
+    input.BeginFrame();
+    CHECK_MESSAGE(input.Snapshot().windowFocused, "focus carries over to the next frame");
+}
+
 TEST_CASE("a click is inside the window by the window size when the backend handles it") {
     // input.md (Contracts): insideWindow uses the size at handling, never an
     // earlier one; the product's pointer capture relies on it (sdl-isolation J1).

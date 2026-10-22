@@ -791,6 +791,16 @@
       "target": "input_sdl_tests",
       "cases": "a click is inside the window by the window size*",
       "expect": "a click outside the current size is outside"
+    },
+    {
+      "id": "m-focus-gain-state",
+      "what": "A focus gain does not set windowFocused",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "            frame_.windowFocused = true;\n",
+      "replace": "",
+      "target": "input_sdl_tests",
+      "cases": "focus events of this window set*",
+      "expect": "a focus gain sets windowFocused"
     }
   ]
 }
