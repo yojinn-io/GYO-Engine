@@ -395,6 +395,10 @@
     - 沒有新的 owner 間依賴。
     - 未啟用產品直接 include SDL 的位置，重新啟用時要自己連 Native，已記在 `inactive_products.md` 的 IP-4 節。
 - 2026-10-22：ip4c 的 L1 #564（`98f5025`，手動觸發）四平台成功。下一步 ip4d：突變全跑、文件、L3（要使用者在場）。
+- 2026-10-22：ip4d（檔位 medium）。
+  - 突變全跑一次、沒有重跑：IP 78／78，TT 14／14（突變工具改過，順便確認）。
+  - 文件：寫 IP-4 的 dev_log，更新 README、消費端 `sdl-isolation.md` 的狀態。
+  - L3 待使用者：macOS Intel 上 live resize 時大小正確。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
