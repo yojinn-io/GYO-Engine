@@ -19,6 +19,8 @@
 
 ことである。
 
+@agents/effort-gearbox.md
+
 ---
 
 ## 1. Core Principle
@@ -267,7 +269,7 @@ Product の追加・複製・削除によって検証する。
 
 * Engine から具体的な Game / Application を参照しない。
 * Engine から具体的な Editor を参照しない。
-* 公共層から具体的な Product 名を使って処理を分岐しない。
+* 公共層での具体的な Product 名による分岐の禁止は §9 を参照。
 * 暗黙の Product 間依存を作らない。
 * 循環依存を新しく作らない。
 
