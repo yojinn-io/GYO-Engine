@@ -1,6 +1,6 @@
 # A program on the entry point, run by EntryTests.cpp.
 add_executable(platform_sdl_entry_probe EntryProbe.cpp)
-target_link_libraries(platform_sdl_entry_probe PRIVATE GYO::PlatformSDLMain)
+target_link_libraries(platform_sdl_entry_probe PRIVATE GYO::PlatformSDLMain GYO::PlatformSDLNative)
 target_compile_features(platform_sdl_entry_probe PRIVATE cxx_std_20)
 gyo_copy_runtime_dlls(platform_sdl_entry_probe)
 

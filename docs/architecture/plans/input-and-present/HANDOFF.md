@@ -43,6 +43,7 @@
 | 2026-10-21 | D33：巢狀 `PumpEvents` 保留（IP-2 已保證並有測試）。時鐘配對隨 pump 範圍保存與還原：每次 pump（含巢狀）各自取配對，內層返回時還原外層的配對。修改 [platform-sdl.md](../../platform-sdl.md) 的 Design Invariant 7 與時間戳契約（使用者同意的 Design Invariants 變更）；事前宣告補一條判定與突變 m-nest（只收緊）。L1 通過後開始 ip3c | 使用者 |
 | 2026-10-22 | D34：ip3c 的判定變更選 (b)：`SampleClockPair` 加讀取注入的接縫，用精確等式守住讀取順序與取中點，再照 τ（測試量到的走差＋兩組 bracket＋2 ns）放寬；照 §14.4 重做突變與獨立核對後交使用者核准。時間戳契約條文 (2) 改成「SDL 時間非零且不遞減的事件，換算後不遞減」（使用者同意的契約文字變更） | 使用者 |
 | 2026-10-22 | D35：核准 ip3c 的判定變更（[ip3c-judgment-change.md](ip3c-judgment-change.md) 第 3 版，§14.4 的 1～5，獨立核對 3 輪）：整合判定的容許由 `β/2` 改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns` | 使用者 |
+| 2026-10-22 | D36：ip3e 的 P1～P3。P1、P2 合成一條：`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（兩條規則都是為了不讓程式錯誤在測試中消失；在 Engine 直接呼叫 C 函式庫的那一層照字面遵守反而會讓錯誤不可見或行為未定義），允許解構子以 GYO_ASSERT 檢查自己持有的 C 全域狀態（解構子維持 noexcept，以 death test 驗證），以及進入點與 C 回呼使用 `catch (...)`（必須記錄並轉成明確的結果）。P1 的實作：SdlLogBridge 解構子回到 noexcept，斷言的測試改 death test。P2：RunEntry 不改。P3：宣告的「每一輪守恆」改為「逐執行緒守恆」，§14.4 的 1～5 見 [ip3-declaration.md](ip3-declaration.md) 第 6 節 | 使用者（經分支會話轉達：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。（我的理解是，P1、P2主要是測試的問題。如果不改規則，會讓程式錯誤不可見，就無法測試。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」） |
 
 ## 正式項目清單
 
@@ -315,11 +316,13 @@
   - 消費端：`main.cpp` 改為 `GyoMain`，執行檔目錄與平台名走 Engine，刪除 `ForwardEngineLog`／`ForwardSdlLog`，產品的 Base handler 以 `[level] text` 寫進日誌檔（Engine 的行前面帶分類，與以前經 SDL 時相同），再建立 `SdlLogBridge`；`PvpApplication.cpp` 的 `SDL_Log*` 改為 printf 風格的 `ClientLog`（S3：受擊回饋行位元組不變），`SDL_GetTicks` 改為程式啟動後的毫秒數，`SDL_Delay` 改為 `Waiter`；`PlayerPresentationTests` 改用 `BaseDirectory`、拿掉直接連 SDL3。
   - 本機：全量建置（printf 格式檢查無警告）；`test` preset 79／79；SDL 相關 7 個；並行測試連跑 30 次 0 失敗。
   - 突變目錄 36 個全部 killed（ip3e：m10、m11、m-assert、m-tee、m12、m-throw、m-race、m-userdata、m-overwrite；m12 的殺掉判定改由 probe 的結束碼 7／0，原本宣告的 runtime_sdl 結束碼殺不掉它，因為 smoke 本來就回 0；m-tee、m-assert 等是補加的，只收緊）。
-  - **暫停**（2026-10-22，使用者：「你跑完手頭上的任務就先暫停一下吧。」）。下一步：P1～P3 的決定、ip3e 的 L1、ip3f（L3 要使用者在場）。
+  - 暫停（2026-10-22，使用者：「你跑完手頭上的任務就先暫停一下吧。」）；之後 P1～P3 經分支會話決定（D36）。
   - **待使用者決定**（實作照目前寫法，PR 不合併）：
     - P1：解構子含 GYO_ASSERT 並標 `noexcept(false)`，違反 `docs/architecture/error-handling.md` 的「解構子與執行緒入口不含斷言」（計畫與該規則互相矛盾，xhigh 審查第 2 項）。選項：(a) 解構子回到 noexcept，以 death test 驗證中止，error-handling.md 加例外條款；(b) 改成記錄 Error 而非斷言（宣告的判定要變更，§14.4）。
     - P2：`RunEntry` 的 `catch (...)` 與 error-handling.md 第 6 條「never catch (...)」字面衝突；進入點需要攔下所有例外（Design Invariant 8），建議在 error-handling.md 加例外條款。
     - P3：宣告的「每一輪的行數守恆」在不暫停推送執行緒的情況下量不到；實作為「逐執行緒守恆」（比原本的總和更嚴，但字面上與宣告不同），照 §14.4 交使用者確認。
+- 2026-10-22：ip3e 的 L1 #554（`97e2a22`）四平台成功。依 D36 處理 P1～P3：`error-handling.md` 加平台邊界的例外條款；SdlLogBridge 解構子回到 noexcept，斷言改以 death test（`platform_sdl_entry_probe replaced-bridge`，assertion handler 以結束碼 41／42 回報別人的輸出是否原封不動）；宣告改為逐執行緒守恆並記 §14.4 的 1～5（`ip3-declaration.md` 第 6 節）。m-race 在 noexcept 解構子下有時由橋自己的 GYO_ASSERT（測試的 throwing handler 下 terminate）抓到，預期訊息改為兩者擇一。
+- 2026-10-22：ip3f（檔位 medium）：突變目錄 36／36 killed；`test` preset 79／79，SDL 相關 6 個；寫 [dev_log](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)；`platform-sdl.md` 的狀態、遷移清單（ip3e 的選用遷移）、PLAN／README 的狀態。**IP-3 實作完成，L3 待使用者**（使用者：「處理完P1-P3後，處理ip3f，L3排最後。」）。下一步 IP-4：先做介面的 xhigh 審查（U10），再宣告 m13～m19。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

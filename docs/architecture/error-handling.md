@@ -41,6 +41,20 @@ Status: introduced by the [Assert/Result plan](plans/result-unification/README.m
 6. **Do not use exceptions to report failures from engine or tool APIs.** A module may throw internally (for example through a JSON library) only if it catches at its public boundary and returns a `Result`. Boundary catches name `std::exception`; never `catch (...)`, which would also swallow a test's `AssertionFailure`. A thread entry point that can meet a Runtime Error catches it itself.
 7. **Present Runtime Errors through one formatter**, `Base::Describe`, instead of per-module formatting helpers.
 
+### Exception at the platform boundary (2026-10-22, IP-3 ip3e)
+
+Two rules here, no `GYO_ASSERT` in destructors (below) and never `catch (...)` (rule 6), exist so that a Programmer Error cannot disappear in a test: an assertion in a destructor terminates when a test's handler throws, and `catch (...)` swallows the `AssertionFailure` that handler throws. Where the Engine calls a C library directly, following them literally makes errors invisible or the behaviour undefined instead:
+
+- An RAII object that holds C global state cannot know, and so no test can check, that someone else changed that state unless its destructor asserts.
+- An exception that is not caught at an entry point or a C callback unwinds through the C stack, which is undefined behaviour.
+
+So in that layer only:
+
+1. A destructor may check the C global state it holds with `GYO_ASSERT`. The destructor stays `noexcept`: a failure aborts, and tests check it with a death test (a child process), not with a throwing handler.
+2. Entry points and C callbacks may use `catch (...)`. What they catch must be logged and turned into an explicit result (exit code 1, or kept and rethrown once outside the C stack); it is never swallowed.
+
+The scope is the layer of an Engine platform backend that calls a C library directly (today `engine/platform/sdl`: the SDL log bridge, the entry point's `RunEntry`, the live-frame watch). Everything else follows the rules as written. Decision: input-and-present D36.
+
 ## Assert
 
 `GYO_ASSERT(condition)` is defined in `engine/base/include/engine/base/Assert.hpp` (target `GYO::Base`).

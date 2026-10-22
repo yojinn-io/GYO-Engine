@@ -6,7 +6,9 @@ Plan and record: [input-and-present](plans/input-and-present/README.md), batches
 
 **Status (2026-10-21): approved design (input-and-present D31), being implemented.** Milestones ip3b and ip3c have
 landed: the neutral/native split (Design Invariant 1) and event timestamps (Design Invariants 3 and 7). ip3d added
-text input and the clipboard. The backends still link SDL3 PUBLIC (until ip4c). Each contract and invariant below names the milestone that
+text input and the clipboard, ip3e the entry point, base directory and log bridge (Design Invariants 5 and 8). IP-3 is
+implemented (its manual check on macOS is pending); IP-4 (test injection, observation, queries, PRIVATE linking) is
+not. The backends still link SDL3 PUBLIC (until ip4c). Each contract and invariant below names the milestone that
 makes it true and the guard that keeps it true; until that milestone lands, the current code is the reference.
 The input frame the backend fills is specified in [input.md](input.md).
 

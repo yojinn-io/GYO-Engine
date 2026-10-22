@@ -299,7 +299,7 @@
       "find": "    GYO_ASSERT(installed);\n",
       "replace": "    static_cast<void>(installed);\n",
       "target": "platform_sdl_tests",
-      "cases": "SdlLogBridge fails a GYO_ASSERT*",
+      "cases": "A replaced log bridge fails its GYO_ASSERT*",
       "expect": "destroying a replaced bridge fails a GYO_ASSERT"
     },
     {
@@ -334,13 +334,13 @@
     },
     {
       "id": "m-race",
-      "what": "The guard is released before SDL's previous output is restored",
+      "what": "The guard is released before SDL's previous output is restored (detected either by the test or by the bridge's own GYO_ASSERT, which terminates under the test's throwing handler since the destructor is noexcept)",
       "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
       "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
       "replace": "    bridged.store(false);\n    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);",
       "target": "platform_sdl_tests",
       "cases": "SdlLogBridge leaves SDL*",
-      "expect": "after every bridge is gone SDL's previous output is back"
+      "expect": "after every bridge is gone SDL's previous output is back|uncaught exception of type Engine::Base::AssertionFailure"
     },
     {
       "id": "m-userdata",
@@ -359,7 +359,7 @@
       "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
       "replace": "    SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
       "target": "platform_sdl_tests",
-      "cases": "SdlLogBridge fails a GYO_ASSERT*",
+      "cases": "A replaced log bridge fails its GYO_ASSERT*",
       "expect": "a replaced bridge leaves the other output in place"
     }
   ]

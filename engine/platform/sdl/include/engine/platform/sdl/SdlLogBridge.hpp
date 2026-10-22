@@ -21,8 +21,10 @@ struct SdlLogBridgeOptions final {
 class SdlLogBridge final {
 public:
     explicit SdlLogBridge(SdlLogBridgeOptions options = {});
-    // Contains a GYO_ASSERT, so it is not noexcept (engine/base/Assert.hpp).
-    ~SdlLogBridge() noexcept(false);
+    // Checks with GYO_ASSERT that it is still SDL's output; it stays noexcept,
+    // so a failure aborts (the platform boundary exception of
+    // docs/architecture/error-handling.md; tests use a death test).
+    ~SdlLogBridge();
 
     SdlLogBridge(const SdlLogBridge&) = delete;
     SdlLogBridge& operator=(const SdlLogBridge&) = delete;

@@ -116,7 +116,7 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
 
 ### IP-3 SDL 隔離核心
 
-狀態：進行中（2026-10-22，ip3b～ip3d 完成；其餘子批完成時補本節）。
+狀態：實作完成（2026-10-22，ip3b～ip3f；L3 待使用者）。
 
 - ip3c、ip3d：`InputEvent` 多了 `timestamp`；輸入幀多了 `text`（`TextEvent`）與 `KeyModifiers`；`HandleNativeEvent` 必須帶時間。只有加法，未啟用產品不需改（`HandleNativeEvent` 的呼叫端除外，見下面的破損）。
 
@@ -125,6 +125,10 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
   - `apps/object_fps{,_v2}/src/App/ObjectFpsRuntimeClient.cpp:233-234`：pump 的 observer 收 `const SDL_Event&`，而且只靠 Engine 標頭間接取得 SDL。改成 `const Engine::Platform::Sdl::PlatformEvent&`，交給 `SdlInput::HandleEvent`；需要 SDL 事件時用 `NativeEvent(event)` 並連 `GYO::PlatformSDLNative`。
   - `tests/object_fps_v2/App/DebugRuntimeTests.cpp:53-85`：`NativeWindow()` 成員函式已移除，改用 `Engine::Platform::Sdl::NativeWindow(platform)`；合成的 SDL 事件改用 `HandleNativeEvent(input, event)`（`SdlInputNative.hpp`，連 `GYO::InputBackendSDLNative`）。
   - `tools/object_fps_preview`：同上，pump 的 observer 與 `NativeWindow()`。
+- ip3e（選用，重新啟用時建議遷移）：
+  - 進入點：`apps/object_fps{,_v2}/main.cpp`、`tools/object_fps_preview/main.cpp` 的 `#include <SDL3/SDL_main.h>` 與 `int main` 可以改為 `#include "engine/platform/sdl/EntryPoint.hpp"`、`int GyoMain`，並連 `GYO::PlatformSDLMain`（例外記錄後回 1；Windows 上 argv 轉成 UTF-8）。不改也能建置。
+  - 執行檔目錄：`SDL_GetBasePath()` 可以改為 `Engine::Platform::Sdl::BaseDirectory()`（回 `std::filesystem::path`，UTF-8 正確）。
+  - 日誌：SDL 的輸出要進 Engine 的日誌時，建立 `Engine::Platform::Sdl::SdlLogBridge`；Base 的 handler 不得呼叫 SDL 的日誌函式。
 - 變更摘要：後端的一般公開標頭（`SdlPlatform.hpp`、`SdlInput.hpp`、`SdlRenderer.hpp`）不再 include SDL；`NativeEventObserver` 改成 `EventObserver`（`const PlatformEvent&`）；`NativeWindow()`／`NativeRenderer()` 成員函式改成 Native 層的自由函式；`SdlInput::HandleEvent(const SDL_Event&)` 改成 `HandleEvent(const PlatformEvent&)`，自建事件用 `HandleNativeEvent`。
 
 ## 4. TT（時間、執行緒與 Trace 計畫）

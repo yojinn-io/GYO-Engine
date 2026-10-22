@@ -35,6 +35,14 @@ TEST_CASE("The entry point turns an exception from GyoMain into exit code 1") {
     CHECK_MESSAGE(ExitCodeOf("throw") == 1, "an exception from GyoMain exits with code 1");
 }
 
+TEST_CASE("A replaced log bridge fails its GYO_ASSERT and leaves the other output") {
+    // A death test: the bridge's destructor is noexcept, so its assertion ends
+    // the probe (error-handling.md, platform boundary exception).
+    const int code = ExitCodeOf("replaced-bridge");
+    CHECK_MESSAGE(code != 0, "destroying a replaced bridge fails a GYO_ASSERT");
+    CHECK_MESSAGE(code == 41, "a replaced bridge leaves the other output in place");
+}
+
 TEST_CASE("BaseDirectory is SDL's base path as a UTF-8 path") {
     const auto base = Engine::Platform::Sdl::BaseDirectory();
     REQUIRE(base);

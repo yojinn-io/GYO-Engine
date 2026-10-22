@@ -54,8 +54,6 @@ void SDLCALL Previous(void*, int, SDL_LogPriority, const char*) {
     ++threadPreviousLines;
 }
 
-void SDLCALL Other(void*, int, SDL_LogPriority, const char*) {}
-
 // Every test starts from a known SDL output, Engine handler and priorities.
 struct LogScope final {
     LogScope() {
@@ -143,27 +141,6 @@ TEST_CASE("SdlLogBridge sends a line logged from the Engine handler to SDL's pre
     }
     CHECK_MESSAGE(engineLines == 1, "a line logged from the Engine handler does not come back to it");
     CHECK_MESSAGE(previousLines == 1, "a line logged from the Engine handler reaches SDL's previous output exactly once");
-}
-
-TEST_CASE("SdlLogBridge fails a GYO_ASSERT when its output was replaced") {
-    const LogScope scope;
-    bool asserted = false;
-    {
-        const Engine::Test::ScopedAssertionHandler handler;
-        try {
-            const SdlLogBridge bridge;
-            SDL_SetLogOutputFunction(&Other, nullptr);
-        } catch (const Engine::Base::AssertionFailure&) {
-            asserted = true;
-        }
-    }
-    CHECK_MESSAGE(asserted, "destroying a replaced bridge fails a GYO_ASSERT");
-    SDL_LogOutputFunction current{};
-    void* data{};
-    SDL_GetLogOutputFunction(&current, &data);
-    CHECK_MESSAGE(current == &Other, "a replaced bridge leaves the other output in place");
-    // A new bridge can be created afterwards.
-    { const SdlLogBridge bridge; }
 }
 
 TEST_CASE("SdlLogBridge keeps every line under concurrent logging") {

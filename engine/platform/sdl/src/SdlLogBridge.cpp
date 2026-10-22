@@ -78,7 +78,7 @@ SdlLogBridge::SdlLogBridge(const SdlLogBridgeOptions options) {
     SDL_SetLogOutputFunction(&Forward, &state);
 }
 
-SdlLogBridge::~SdlLogBridge() noexcept(false) {
+SdlLogBridge::~SdlLogBridge() {
     // Restores only its own installation; finding another output means someone
     // replaced the bridge while it lived (a Programmer Error).
     // Restore before releasing the one-at-a-time guard: a bridge created on
