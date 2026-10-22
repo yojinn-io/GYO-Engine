@@ -725,4 +725,18 @@
   - timing-combat：凍結的分析器只因 HUD 判 F，依 D83／D84 改用 v7 HUD 規則判 P；移動 Actual 37.51／37.60 ms。
   - 第一次跑時，場地誤給 `pvp_corners.json`，頭與 base 以相同的方式失敗。這是操作錯誤（E 類），不是缺陷，證據已保留。之前的通過跑次都用 `pvp_arena.json`；batch 1 的 timing 短測也用錯了場地（判的是移動，仍通過），記為「場地不合慣例」。
   - 提交 `d5ecfa3`；手動觸發 L1。
+  - L1 #575（`d5ecfa3`）四平台成功。
+- 2026-10-23：`probe_window_move`（檔位 high，事件順序局部 xhigh）完成（`089c0b5`）：合成 MOVED 改成真的移動視窗（J2）。
+  - xhigh 審查：macOS 上 MOVED 在 `SetWindowPosition` 內就已排進佇列（實測 20／20），沒有誤判的路徑。修正 M1、m2～m4：寫入移動紀錄、改正註解、錯誤訊息帶 detail、drag 前要求擷取中。
+  - 本機 action60 4 次、gui-probe 2 次都通過，G8 三行都是 true，`Sync()` <1 ms。
+  - L1 #577 四平台成功。
+- 2026-10-23：`probe_watch_pacing`（檔位 high，watch 執行緒局部 xhigh）完成（`bbc716a`）：
+  - 兩個 watch 改用 `EventWatch`；13 處睡眠改用 `Waiter`；標籤改名；probe 拿掉 Native，沒有 SDL 的 include 路徑也能建置。
+  - xhigh 審查：沒有 critical 或 major。minor 5 項已修，測試缺口 T1～T4 記在宣告第 9 節。
+  - 本機：
+    - timing-short、timing-combat 都 P：synthetic 20／0，沒有受干擾，實測 FPS 59.8，符合 G5 的預測。
+    - player60、action60、gui-bots 都 P。
+    - phase-stalls 6／6 恢復，下限比 v6 低 1～2 ms。
+  - L1 #578 執行中。
+  - 下一批 `capture_golden_guard`：J1 的 §14.4 要使用者核准。實作與核對做完就停下，等核准。
 
