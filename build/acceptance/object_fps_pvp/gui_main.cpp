@@ -804,6 +804,7 @@ void Run(const Options& options) {
     bool movementPressed = false;
     bool movementReleased = false;
     bool testedWindowMove = false, testedCursorToggle = false, testedHeldInputRelease = false;
+    std::optional<WindowMoveRecord> windowMove;
     std::uint64_t frameIndex = 0;
     std::uint64_t firstTick = 0;
     std::uint64_t finalTick = 0;
@@ -879,10 +880,7 @@ void Run(const Options& options) {
         if (movementPressed && !movementReleased && Seconds(now, *movementStarted) >= .7) {
             pointerReleaseRequested = Clock::now();
             movementReleased = true;
-            SDL_Event moved{};
-            moved.type = SDL_EVENT_WINDOW_MOVED;
-            moved.window.windowID = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(application.Platform()));
-            Require(SDL_PushEvent(&moved), "Could not enqueue window move event");
+            windowMove = MoveWindow(input);
             testedWindowMove = true;
         }
 
@@ -916,7 +914,7 @@ void Run(const Options& options) {
                 "Held W kept predicting movement after window move released capture");
             testedHeldInputRelease = true;
             PushMovement(input, false);
-            Require(!SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())),
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode,
                 "Moving the window retained gameplay mouse capture");
             Require(connection.State().phase == fps::pvp::ConnectionPhase::Playing,
                 "Releasing mouse capture left the match");
@@ -924,7 +922,7 @@ void Run(const Options& options) {
             PushFocus(input, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Focus events failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(!SDL_GetWindowRelativeMouseMode(Engine::Platform::Sdl::NativeWindow(application.Platform())),
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode,
                 "Focus regain recaptured the pointer without a content click");
             // Tab resumes capture, then Tab releases it without leaving.
             PushKey(input, Key::Tab, true);
@@ -1032,6 +1030,7 @@ void Run(const Options& options) {
            << "local_movement_trace=" << options.role << "-movement.csv\n"
            << "scripted_sdl_movement=" << (options.move ? "true" : "false") << '\n'
            << "window_move_releases_capture=" << (testedWindowMove ? "true" : "not exercised") << '\n'
+           << "window_move=" << (windowMove ? windowMove->Json().dump() : std::string("not exercised")) << '\n'
            << "window_move_stops_held_input=" << (testedHeldInputRelease ? "true" : "not exercised") << '\n'
            << "tab_toggles_capture=" << (testedCursorToggle ? "true" : "not exercised") << '\n'
            << "join_via_lobby_keyboard=true\n"

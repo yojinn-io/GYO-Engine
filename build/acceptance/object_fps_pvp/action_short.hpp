@@ -140,7 +140,6 @@ void RunActionShort(const Options& options) {
         graphics.vsync = false;
         Require(application.InitializeGraphics(graphics, error), error);
         auto& connection = application.Connection();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform()); // the synthetic MOVED, until probe_window_move
         ProbeInput input(application.Platform());
         evidence["platform"] = PlatformFingerprint::Capture(application).Json();
         if (actor) connection.CreateAndJoin(options.gateway);
@@ -364,7 +363,9 @@ void RunActionShort(const Options& options) {
                     PushKey(input, Key::Tab, false);
                     PushMouse(input, false);
                 } else if (event == "drag") {
-                    PushWindowEvent(window, SDL_EVENT_WINDOW_MOVED);
+                    // Capture must be held, or "the move released it" holds vacuously.
+                    Require(before.inputCaptured, "Window move began without gameplay capture");
+                    evidence["window_move"] = MoveWindow(input).Json();
                     PushMouse(input, true);
                     silenceExpected = releaseExpected = true;
                 } else if (event == "resize") {

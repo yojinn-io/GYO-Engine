@@ -35,12 +35,43 @@ void PushMovement(ProbeInput& input, bool held, Key direction = Key::W) {
     PushKey(input, direction, held);
 }
 
-// Temporary until probe_window_move: the synthetic MOVED (sdl-isolation J2).
-void PushWindowEvent(SDL_Window* window, Uint32 type) {
-    SDL_Event event{};
-    event.type = type;
-    event.window.windowID = SDL_GetWindowID(window);
-    Require(SDL_PushEvent(&event), "Cannot enqueue window event");
+// A real window move (sdl-isolation J2, replacing the synthetic MOVED): the OS
+// moves the window by 32 pixels. What orders the MOVED before input injected
+// afterwards is that the platform reports the move while SetWindowPosition
+// runs (AppKit's windowDidMove:, Win32's WM_WINDOWPOSCHANGED) and SDL updates
+// the window's position only when it queues that MOVED; so the check that the
+// position changed is the guard, not Sync (on macOS it pumps once, on Windows
+// it does nothing; on X11 it waits for the new position). A platform that cannot
+// place windows (Wayland) fails here: the check that needs the move cannot run,
+// which is never a pass. The record is evidence only.
+struct WindowMoveRecord final {
+    int beforeX{}, requestedX{}, afterX{};
+    bool synced{};
+    double syncMs{};
+    WeaponJson Json() const {
+        return {{"before_x", beforeX}, {"requested_x", requestedX}, {"after_x", afterX}, {"synced", synced},
+            {"sync_ms", syncMs}};
+    }
+};
+WindowMoveRecord MoveWindow(ProbeInput& input) {
+    WindowMoveRecord record;
+    const auto before = input.platform.QueryWindow().rect;
+    record.beforeX = before.x;
+    record.requestedX = before.x + 32;
+    if (const auto display = input.platform.QueryDisplay()) {
+        const auto& bounds = display.value().usableBounds;
+        if (bounds.width > 0 && record.requestedX + before.width > bounds.x + bounds.width) record.requestedX = before.x - 32;
+    }
+    const auto moved = input.platform.SetWindowPosition(record.requestedX, before.y);
+    Require(bool(moved), moved ? std::string() : "Window move unavailable, so the window interaction check cannot run: " +
+        moved.error().message + ": " + moved.error().detail);
+    const auto syncing = std::chrono::steady_clock::now();
+    record.synced = input.platform.Sync();
+    record.syncMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - syncing).count();
+    Require(record.synced, "Window move did not complete before the scripted input (Sync failed or timed out)");
+    record.afterX = input.platform.QueryWindow().rect.x;
+    Require(record.afterX != before.x, "Window move left the window in place");
+    return record;
 }
 void PushMotion(ProbeInput& input, float dx, float dy) {
     RequirePushed(input.injector.PushMouseMotion(dx, dy), "Cannot enqueue relative mouse motion");
