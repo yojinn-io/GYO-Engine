@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：產品側 IP-4 的分批與事前宣告（`claude/pvp-v71-sdl-isolation` 的 `docs/object_fps_pvp/plans/v7.1/sdl-isolation-ip4-declaration.md`，`28e15d8`）。要決定的是 P1～P5：P1 節奏改用 Waiter、P2 GPU driver 的存取點、P3 pointer capture 改 golden（J1）、P4 gui-probe 放進 L2、P5 L2 的門檻與停止規則；L2 門檻已做 D45 對抗式檢查。核准前不動 probe。
+- **等你決定**：無。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -137,6 +137,7 @@
 | D165 | （2026-10-22）ip3f 的 L3 通過（附兩項觀察：輸入「:」時卡住，推論是輸入法組字；手感的停頓是 IP-2 已知的 drawable 取得停頓）。v8 加一個候選：大廳的按鈕與位址輸入框元件化，並修改 ui_editor | 使用者：「OK了，第一項輸入的時候。在輸入：的時候忽然卡住，我不知道是不是輸入法的問題。其他功能是正常的，但是感覺操作手感怪怪的。v8排一個任務，組件化這些按鈕和輸入框，順便修改uieditor。」 |
 | D166 | （2026-10-22）IP-4 介面審查（U10）後的修正（IP 的 D37）：Design Invariant 7 改寫（查詢類在 observer 與 live frame 內允許、操作類斷言、`EventWatch` 不參照 platform、分派深度的斷言）；回傳型別修正；刪除 ip4b 的「AddEventWatch 失敗路徑」驗收（§14.4）。之後宣告並做 ip4a | 使用者：「核准：DI 7 照建議改寫…；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
 | D167 | （2026-10-22）ip4b 的 xhigh 審查之後（IP 的 D38）：時間戳判定採方案 B（區間＋兩條精確等式；§14.4，獨立核對後）；Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（GYO_ASSERT＋death test）；Design Invariant 3 的守衛清單補上 watch 路徑。之後提交、推上 PR #85 | 使用者：「核准：F4 採方案 B（區間＋兩條精確等式）；F10 加 DI：EventWatch 只在主執行緒解構（GYO_ASSERT＋death test）；DI 3 守衛清單補上 watch 路徑。然後提交、推上 PR #85。」 |
+| D168 | （2026-10-23）產品側 IP-4 的分批與事前宣告（`sdl-isolation-ip4-declaration.md` 第 2 版）核准，P1～P5 照建議：P1 節奏改用 Waiter、P2 產品加中立的 `RenderDeviceInfo()` 存取點、P3 pointer capture 改 golden 並由 Engine 補 s06（J1 的 §14.4 核准之後另交）、P4 gui-probe 放進 L2、P5 L2 第 2 版。判定原則：基準改變的量只記錄、不判定；和基準無關的量（產品行為、各樹各自的絕對門檻）照判 | 使用者：「基準變了的量，只記錄不判定；跟基準無關的量（產品行為、各自的絕對門檻）照樣判定。照建議執行。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -711,3 +712,10 @@
 - 2026-10-22：ip4d 完成（`e455d98`、`18b6c03`）：突變全跑一次、沒有重跑，IP 78／78、TT 14／14；寫 IP-4 的 dev_log；L3（live resize）通過。**IP-4 的 Engine 側完成。** 主 checkout 的分支依文件會話轉達的使用者交代，合併 master（#87，`df0fefb`）。
 
 - 2026-10-22：產品側 IP-4 開始規劃（使用者：「開始產品側 IP-4 遷移：先整理工作分批、事前宣告（含 L2 門檻、U5／U6 的判定變更草案）給我核准，核准前不動 probe。」）。3 個唯讀子 agent 盤點：probe 的 SDL 使用 276 行（A 約 186、B 約 21、C 約 67）、L2 門檻來源、pointer capture 的 oracle。草案第 1 版的 L2 經 D45 對抗式檢查改寫為第 2 版（G8、G1、G9、停止規則重寫）。估時 19～25 h（含 L2）。
+
+- 2026-10-23：D168 核准後開始實作。`probe_queries_entry`（檔位 high）完成，提交 `5ef5e69`：
+  - probe 的進入點改成 `GyoMain`；查詢、操作、capture 改用 Engine API；產品加 `RenderDeviceInfo()`。
+  - `test` preset 80／80；GUI 短測 1 次 P。
+  - L1 #573 執行中。
+  - `object_fps_pvp.worker` 失敗：這是已知的 `N-worker-probe-stale`，修正 `d2844a5` 只在本分支，還沒進 sdl-isolation 分支。
+
