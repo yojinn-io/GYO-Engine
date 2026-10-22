@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功；下一步 ip4d（L3 要使用者在場）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
+- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -707,3 +707,5 @@
 
 - 2026-10-22：L1 #561 的 windows-x64 失敗。原因是測試自身：並行解構的測試缺握手。延後推送執行緒啟動可以在本機重現，加握手後通過；修正後重跑 #562，四平台成功。
 - 2026-10-22：ip4c 完成（`98f5025`）：後端的 SDL3 改成 PRIVATE，加上 G3，突變 78／78 殺掉。L1 #564 四平台成功。
+
+- 2026-10-22：ip4d 完成（`e455d98`、`18b6c03`）：突變全跑一次、沒有重跑，IP 78／78、TT 14／14；寫 IP-4 的 dev_log；L3（live resize）通過。**IP-4 的 Engine 側完成。** 主 checkout 的分支依文件會話轉達的使用者交代，合併 master（#87，`df0fefb`）。
