@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：產品側 IP-4 的 J1（pointer capture 改 golden）的 §14.4 判定變更，見 sdl-isolation 分支的 `docs/object_fps_pvp/plans/v7.1/sdl-isolation-j1-judgment-change.md`（尚未提交，在主 checkout 的工作樹）。另外要決定 v-s08～s10：Engine 要不要在契約裡寫明「不去重」，或記為已知缺口。核准前不提交舊 oracle 的刪除與守衛 (a)(b)。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -737,6 +737,10 @@
     - timing-short、timing-combat 都 P：synthetic 20／0，沒有受干擾，實測 FPS 59.8，符合 G5 的預測。
     - player60、action60、gui-bots 都 P。
     - phase-stalls 6／6 恢復，下限比 v6 低 1～2 ms。
-  - L1 #578 執行中。
+  - L1 #579（`bbc716a`）四平台成功（先前誤記為 #578）。
   - 下一批 `capture_golden_guard`：J1 的 §14.4 要使用者核准。實作與核對做完就停下，等核准。
+- 2026-10-23：`capture_golden_guard`（檔位 high）進行到 J1 的核准關卡，停下。
+  - Engine 側不需要核准的已提交：`8d7182e`（insideWindow 依處理時的大小）、`0e977cf`（取得焦點會設 windowFocused）。
+  - 工作樹裡已完成、尚未提交：golden（15014 幀，除時間戳以外的全欄位，0 不一致）、新測試、符號守衛 (a)(b)、產品突變工具的 `expect_build_failure`。突變：產品 34／34，Engine 2／2。
+  - 獨立核對：第 1、3 點成立，第 2、4、5 點部分成立。指出的 L5（欄位投影）與 v-s07 已處理；v-s08～s10 交使用者決定。
 
