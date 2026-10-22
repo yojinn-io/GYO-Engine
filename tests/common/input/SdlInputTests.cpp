@@ -213,6 +213,33 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     CHECK(input.Snapshot().Get(Key::Tab).released);
 }
 
+TEST_CASE("a click is inside the window by the window size when the backend handles it") {
+    // input.md (Contracts): insideWindow uses the size at handling, never an
+    // earlier one; the product's pointer capture relies on it (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const auto before = platform.value()->QueryWindow().rect;
+    REQUIRE(before.width > 40);
+    const float x = static_cast<float>(before.width) - 10.0f;  // inside the first size only
+
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, x, 2.0f), Engine::Time::TimePoint{});
+    REQUIRE(input.Snapshot().events.size() == 1);
+    CHECK(input.Snapshot().events[0].insideWindow);
+
+    REQUIRE(platform.value()->SetWindowSize(before.width / 2, before.height / 2));
+    const auto after = platform.value()->QueryWindow().rect;
+    REQUIRE(static_cast<float>(after.width) <= x);
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, false, x, 2.0f), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    REQUIRE(input.Snapshot().events.size() == 2);
+    CHECK_MESSAGE(!input.Snapshot().events[0].insideWindow, "a click outside the current size is outside");
+    CHECK(input.Snapshot().events[1].insideWindow);
+}
+
 TEST_CASE("window interaction events of this window are reported in order with their data") {
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);

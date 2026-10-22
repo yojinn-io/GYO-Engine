@@ -781,6 +781,16 @@
       "target": "platform_sdl_tests",
       "expect_build_failure": true,
       "expect": "G3: gyo_platform_sdl_main passes SDL3::SDL3 on to its users"
+    },
+    {
+      "id": "m-inside-stale",
+      "what": "insideWindow uses the first window size it saw",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &width, &height);\n",
+      "replace": "                static int cachedWidth = 0, cachedHeight = 0;\n                if (cachedWidth == 0) SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &cachedWidth, &cachedHeight);\n                width = cachedWidth;\n                height = cachedHeight;\n",
+      "target": "input_sdl_tests",
+      "cases": "a click is inside the window by the window size*",
+      "expect": "a click outside the current size is outside"
     }
   ]
 }

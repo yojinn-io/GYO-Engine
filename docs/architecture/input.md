@@ -37,6 +37,8 @@ grab or release the pointer) and text editing policy (what Ctrl+A means) belong 
   `key` is the physical position, `layoutKey` the key the current layout produces at that position (`Key::Count` if
   none); text and key entries keep their arrival order inside `text`; `BeginFrame` clears it. No ordering is
   promised between `text` and `events`.
+- Mouse button events: `insideWindow` compares the click position with the window's size when the backend handles
+  the event, never with a size seen earlier; a product's capture policy may rely on it (sdl-isolation J1).
 
 ## Design Invariants
 
