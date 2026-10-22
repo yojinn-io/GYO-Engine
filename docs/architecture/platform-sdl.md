@@ -88,11 +88,21 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 
 - `PumpEvents` may be nested (an observer may pump again, as IP-2 guarantees for live frames). Each pump, nested
   or not, samples its own clock pair; when a nested pump returns, the outer pump's pair is restored, so the outer
-  pump's remaining events keep its pair. `Sync`, `SetWindow*` and `Raise` must not be called inside an observer or
-  a live frame.
-- Watch callbacks run on whichever thread pushes the event, inside SDL's global watcher lock (the live frame runs
-  inside the same lock). They must not block or wait for another thread. Destroying an `EventWatch` waits for an
-  in-flight callback; every `EventWatch` is destroyed before its `SdlPlatform`.
+  pump's remaining events keep its pair.
+- Queries (`QueryWindow`, `QueryDisplay`, `VideoDriverName`, `X11WindowNumber`) read SDL's cached state; they run on
+  the main thread and may be called inside an observer and a live frame (a live frame reads the size SDL has
+  already applied).
+- Operations (`SetWindowSize`, `SetWindowPosition`, `Raise`, `Sync`) must not be called inside an observer, a live
+  frame or a watch callback. `AddEventWatch`, `EventWatch` destruction and injection must not be called inside a
+  live frame or a watch callback (SDL marks its watcher list as dispatching with a flag, not a depth). A
+  thread-local dispatch depth checks this with `GYO_ASSERT`.
+- Watch callbacks run on whichever thread pushes the event (on Windows in relative mode, SDL's raw input thread),
+  inside SDL's global watcher lock (the live frame runs inside the same lock). A callback must not wait for
+  anything that may be held during a platform call (pumping, injection, window operations, `EventWatch`
+  destruction); a short critical section under a lock never held across a platform call is fine.
+- An `EventWatch` keeps only the window ID, never the platform. Destroying it waits for an in-flight callback on
+  another thread. If the platform is destroyed first, the watch receives no more events of that window (apart from
+  the last window events SDL sends while destroying it), and destroying the watch afterwards is safe.
 - Injection uses only SDL's event queue or real window operations. An injected event does not update SDL's internal
   mouse, keyboard or modifier state and produces no text input; motion is accumulated only while focused.
 
@@ -122,7 +132,10 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
    only after checking it is still installed, and is destroyed before `SDL_Quit`. Guards: mutants m10, m11. From
    ip3e.
 6. Window, display and text input state are read from SDL/the OS every time; no copy of them is kept for decisions.
-7. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
+7. Queries may run inside an observer and a live frame; operations may not run inside an observer, a live frame or
+   a watch callback, and `AddEventWatch`, `EventWatch` destruction and injection may not run inside a live frame or
+   a watch callback (thread-local dispatch depth, `GYO_ASSERT`). An `EventWatch` never refers to the platform and may
+   outlive it. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
    mutant m-nest); window operations are not called inside an observer or a live frame; watch
    callbacks do not block; an `EventWatch` is destroyed before its `SdlPlatform`. Checked with `GYO_ASSERT`.
 8. Engine does not call the global `SDL_Init`/`SDL_Quit`; subsystems are reference-counted by their owners. No

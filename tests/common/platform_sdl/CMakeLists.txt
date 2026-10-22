@@ -4,7 +4,7 @@ target_link_libraries(platform_sdl_entry_probe PRIVATE GYO::PlatformSDLMain GYO:
 target_compile_features(platform_sdl_entry_probe PRIVATE cxx_std_20)
 gyo_copy_runtime_dlls(platform_sdl_entry_probe)
 
-add_executable(platform_sdl_tests SdlPlatformTests.cpp EventTimeTests.cpp LogBridgeTests.cpp EntryTests.cpp)
+add_executable(platform_sdl_tests SdlPlatformTests.cpp EventTimeTests.cpp LogBridgeTests.cpp EntryTests.cpp WindowTests.cpp)
 add_dependencies(platform_sdl_tests platform_sdl_entry_probe)
 target_compile_definitions(platform_sdl_tests PRIVATE GYO_ENTRY_PROBE="$<TARGET_FILE:platform_sdl_entry_probe>")
 target_link_libraries(platform_sdl_tests PRIVATE

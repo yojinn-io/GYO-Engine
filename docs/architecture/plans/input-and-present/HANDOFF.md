@@ -44,6 +44,7 @@
 | 2026-10-22 | D34：ip3c 的判定變更選 (b)：`SampleClockPair` 加讀取注入的接縫，用精確等式守住讀取順序與取中點，再照 τ（測試量到的走差＋兩組 bracket＋2 ns）放寬；照 §14.4 重做突變與獨立核對後交使用者核准。時間戳契約條文 (2) 改成「SDL 時間非零且不遞減的事件，換算後不遞減」（使用者同意的契約文字變更） | 使用者 |
 | 2026-10-22 | D35：核准 ip3c 的判定變更（[ip3c-judgment-change.md](ip3c-judgment-change.md) 第 3 版，§14.4 的 1～5，獨立核對 3 輪）：整合判定的容許由 `β/2` 改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns` | 使用者 |
 | 2026-10-22 | D36：ip3e 的 P1～P3。P1、P2 合成一條：`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（兩條規則都是為了不讓程式錯誤在測試中消失；在 Engine 直接呼叫 C 函式庫的那一層照字面遵守反而會讓錯誤不可見或行為未定義），允許解構子以 GYO_ASSERT 檢查自己持有的 C 全域狀態（解構子維持 noexcept，以 death test 驗證），以及進入點與 C 回呼使用 `catch (...)`（必須記錄並轉成明確的結果）。P1 的實作：SdlLogBridge 解構子回到 noexcept，斷言的測試改 death test。P2：RunEntry 不改。P3：宣告的「每一輪守恆」改為「逐執行緒守恆」，§14.4 的 1～5 見 [ip3-declaration.md](ip3-declaration.md) 第 6 節 | 使用者（經分支會話轉達：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。（我的理解是，P1、P2主要是測試的問題。如果不改規則，會讓程式錯誤不可見，就無法測試。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」） |
+| 2026-10-22 | D37：IP-4 介面審查（U10）後的修正。Design Invariant 7 改寫：查詢類（`QueryWindow` 等）在 observer 與 live frame 內允許；操作類在 observer、live frame、watch 回呼內斷言；`AddEventWatch`、`EventWatch` 解構、注入在 live frame 與 watch 回呼內斷言（thread_local 的分派深度）；`EventWatch` 只記 window ID、不參照 platform，可以比 platform 晚解構。回傳型別：`QueryWindow` 回 `WindowState`、`Raise` 回 void、`Sync` 回 bool、`AddEventWatch` 回 `EventWatch`（記憶體不足丟 bad_alloc）；刪除 ip4b 的「`AddEventWatch` 失敗路徑」驗收（§14.4 的放寬，使用者核准）。其餘審查意見（M3～M8）照主對話的處理 | 使用者：「核准：DI 7 照建議改寫（H1 查詢類／操作類分開、H2 watch 不參照 platform、M1 分派深度的斷言）；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
 
 ## 正式項目清單
 
@@ -330,6 +331,20 @@
   - 觀察 2：「操作手感怪怪的」。日誌有 9 次 `drawable_ms≈66` 的取得停頓（約 4 幀）；修改前的日誌也有，是 IP-2 已知、由執行緒分離處理的問題（D19、未結事項），不是本批造成的。
   - 使用者另外要求：v8 排一個任務，把這些按鈕和輸入框元件化，順便修改 ui_editor（記在消費端 v8 的候選）。
 - **IP-3 完成**（L1、突變、L3）。下一步 IP-4：先做介面的 xhigh 審查（U10）。
+- 2026-10-22：**IP-4 開始**（使用者：「開始 IP-4：先做介面的 xhigh 審查（U10），再宣告 m13～m19，然後做 ip4a。」）。檔位 high；介面審查 1 位 xhigh（U10，D31 核准）；ip4b 的 watch 執行緒與生命週期局部 xhigh。估 Engine 11～12.5 h。
+- 2026-10-22：IP-4 的介面 xhigh 審查（U10）：**接受，但需修改**；沒有讓 ip4c 的 PRIVATE 連結做不到的問題。ip4a 前必修 H1、H2、M1、M2、M3；ip4b 前 M5、M6、M8；ip4c 前 M7。審查也提出 ip4a～ip4c 的突變建議（約 30 個）。**停下等使用者**：
+  - H1：草案禁止在 observer 與 live frame 內呼叫任何 platform 成員，但產品的 live frame 要讀視窗大小（`PvpApplication.cpp:1218-1225`，消費端計畫要改成 `QueryWindow`）。照草案，第一次 live resize 就會中止。要把 DI 7 拆成查詢類（主執行緒，observer／live frame 內允許）與操作類（observer、live frame、watch 回呼內斷言）。
+  - H2：「EventWatch 先於 SdlPlatform 解構（GYO_ASSERT）」和 probe 的宣告順序衝突（`player_short.hpp:102` 的 watch 在 application 之外），例外路徑會中止、寫不出證據；斷言本身還要讓 watch 持有指回 platform 的參照（懸空的來源）。SDL 3.4 下 platform 先解構無害（events 子系統關閉時清空 watcher 清單）。建議 watch 只記 window ID、不參照 platform，DI 7 改成「platform 先解構時之後不再收到該視窗的事件；之後解構 watch 是安全的」。
+  - M1：SDL 的 `dispatching` 是 bool 不是深度，在回呼內或 live frame 內解構 watch 可能 use-after-free。契約：AddEventWatch、EventWatch 解構、注入不得在 watch 回呼或 live frame 內呼叫（thread_local 的分派深度做斷言）；「回呼不得阻塞」改成可判斷的規則。
+  - M2：QueryWindow、Raise、AddEventWatch 在 SDL 3.4 沒有 Runtime Error 的來源（錯誤碼會是死碼），建議改回傳值型別；PLAN 的 `Sync` 仍寫 `Result<bool>`（宣告已定為 bool）。刪除 ip4b 的「AddEventWatch 失敗路徑」驗收屬放寬（§14.4），要核准。
+- 2026-10-22：D37 套用到 PLAN 的 IP-4 草圖與 `platform-sdl.md`（DI 7、Pump／observers／watches 一節）；IP-4 的事前宣告 [ip4-declaration.md](ip4-declaration.md)（ip4a 完整；ip4b 的時間戳判定與並行解構、ip4c 的 G3 擴充先宣告）。
+- 2026-10-22：ip4a 實作與本機驗收（檔位 high）。
+  - platform：`Rect`、`WindowBorders`、`WindowFlags`（含相對滑鼠模式）、`WindowState`、`DisplayState`；查詢 `QueryWindow`、`QueryDisplay`（`DisplayUnavailable`）、`VideoDriverName`、`X11WindowNumber`；操作 `SetWindowSize`、`SetWindowPosition`（`WindowOperationFailed`）、`Raise`、`Sync`。操作在 observer、live frame、watch 回呼內斷言；thread_local 的分派深度（live frame 的 watch 內遞增）。Native：`PushInjectedEvent`（thread_local 的注入旗標，供 ip4b 的 watch 讀）。
+  - input 後端：`SdlInputInjector`（`SdlInputInjection.hpp`，`InjectionFailed`）：key（沿用 scancode 表反查，Enter 用 Return，keycode 取 `SDL_GetKeyFromScancode`）、滑鼠鍵、motion、focus。
+  - 測試：`input_sdl_tests` 6 個（只走 SDL 佇列、每個 Key 的往返、Enter→Return、方向、motion、live frame 內注入斷言）、`platform_sdl_tests` 5 個（查詢每次讀 SDL、操作、live frame 內查詢不斷言、observer 內操作斷言、顯示器與驅動）。測試先 pump 一幀清掉視窗建立時的事件。
+  - 突變 m13、m14、m-enter、m-table、m-motion、m-focus、m26、m28、m29、m-depth、m-x11，11／11 killed。
+  - 消費端：live frame 讀視窗大小改用 `QueryWindow`（H1 的情境）；產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號歸零，拿掉產品對 `GYO::PlatformSDLNative` 的暫時連結。probe 與 pointer capture 測試仍暫時連 Native（消費端 IP-4 遷移）。
+  - 本機：全量建置；`test` preset 79／79；SDL 相關 7 個；SDL 測試連跑 20 次 0 失敗。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

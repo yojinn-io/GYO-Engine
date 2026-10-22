@@ -12,9 +12,10 @@ target_compile_features(input_tests PRIVATE cxx_std_20)
 add_test(NAME input_tests COMMAND input_tests)
 
 if(TARGET GYO::InputBackendSDL)
-    add_executable(input_sdl_tests SdlInputTests.cpp)
+    add_executable(input_sdl_tests SdlInputTests.cpp SdlInputInjectionTests.cpp)
     target_link_libraries(input_sdl_tests PRIVATE
         GYO::InputBackendSDLNative
+        gyo_test_support
         doctest::doctest
     )
     gyo_copy_runtime_dlls(input_sdl_tests)

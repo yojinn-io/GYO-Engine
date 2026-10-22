@@ -318,7 +318,7 @@ Fitness：Engine 不出現產品名；刪除提出需求的消費端後，新語
 
 # IP-3／IP-4（2026-10-21 核准，D31）
 
-**狀態：核准（D31：U1～U10 照建議）；IP-3 完成（ip3a～ip3f，含 L3；宣告 D32，判定變更 D35、D36）；下一步 IP-4。** 設計已寫成架構文件 [platform-sdl.md](../../platform-sdl.md) 與 [input.md](../../input.md)（使用者要求，提前到 ip3a）。 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
+**狀態：核准（D31：U1～U10 照建議）；IP-3 完成（ip3a～ip3f，含 L3；宣告 D32，判定變更 D35、D36）；IP-4：介面審查與修正（D37）、[宣告](ip4-declaration.md)、ip4a 完成；下一步 ip4b。** 設計已寫成架構文件 [platform-sdl.md](../../platform-sdl.md) 與 [input.md](../../input.md)（使用者要求，提前到 ip3a）。 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
 file:line 以 master `6fbb6a9` 為準，子批開始時重新核對。SDL 原始碼的引用以 SDL 3.4.0（`third_party/sdl3`）為準。
 
 ## 共通規則的補充（IP-3、IP-4）
@@ -561,37 +561,49 @@ L1 全通過；G1／G2 生效，Engine 的 allowlist 為空；突變全殺；L3 
 
 不做：合成的 MOVED／RESIZED；`SetWindowTitle`（只有未啟用產品使用，只寫遷移清單）；Metal 長幀仍回報 `Presented` 的問題（未結事項，不宣稱）。
 
-### 公開 API 草圖
+### 公開 API 草圖（D37：U10 審查後修正）
 
 ```cpp
-// SdlPlatform (no SDL); main thread unless noted; none may be called inside an observer or a live frame (GYO_ASSERT)
-struct WindowRect { int x{}, y{}, width{}, height{}; };
+// SdlPlatform (no SDL), main thread.
+// Queries read SDL's cached state: allowed inside an observer and a live frame.
+// Operations, AddEventWatch, EventWatch destruction and injection fail a GYO_ASSERT inside an observer
+// (operations only), a live frame or a watch callback (a thread-local dispatch depth).
+struct Rect { int x{}, y{}, width{}, height{}; };
 struct WindowBorders { int top{}, left{}, bottom{}, right{}; };          // zeros if unsupported
 struct WindowFlags { bool occluded{}, hidden{}, minimized{}, inputFocus{}, relativeMouseMode{}; };
-struct WindowState { WindowRect rect; WindowBorders borders; WindowFlags flags; };
-struct DisplayState { WindowRect usableBounds; float refreshRate{}; };
-Base::Result<WindowState, SdlPlatformError>  QueryWindow() const;
-Base::Result<DisplayState, SdlPlatformError> QueryDisplay() const;
-std::string_view VideoDriverName() const noexcept;
-Base::Result<void, SdlPlatformError> SetWindowSize(int w, int h);
-Base::Result<void, SdlPlatformError> SetWindowPosition(int x, int y);    // Wayland: Err with SDL reason
-Base::Result<void, SdlPlatformError> Raise();
-Base::Result<bool, SdlPlatformError> Sync();                            // false = timed out; Err cases listed at ip4a
-// Observation: kinds and named fields follow InputEventKind / InputEvent; observation-only kinds get new names
+struct WindowState { Rect rect; WindowBorders borders; WindowFlags flags; };
+struct DisplayState { Rect usableBounds; float refreshRate{}; };         // refreshRate 0 = unknown
+[[nodiscard]] WindowState QueryWindow() const;                           // no Runtime Error in SDL 3.4
+[[nodiscard]] Base::Result<DisplayState, SdlPlatformError> QueryDisplay() const;   // DisplayUnavailable
+[[nodiscard]] std::string_view VideoDriverName() const;
+[[nodiscard]] std::optional<std::uint64_t> X11WindowNumber() const;      // nullopt unless X11 (U7)
+[[nodiscard]] Base::Result<void, SdlPlatformError> SetWindowSize(int w, int h);   // w, h <= 0: Programmer Error
+[[nodiscard]] Base::Result<void, SdlPlatformError> SetWindowPosition(int x, int y); // WindowOperationFailed (Wayland)
+void Raise();                                                            // a request; observe WindowFocusGained
+[[nodiscard]] bool Sync();                                               // false = timed out or unsupported
+// Observation (ip4b). Kinds follow InputEventKind where they exist; the platform cannot depend on GYO::Input, so
+// the names are repeated on purpose (AGENTS section 13): MouseMotion, MouseButtonPressed, MouseButtonReleased,
+// WindowFocusGained, WindowFocusLost, WindowMoved, WindowResized, WindowMinimized, WindowRestored,
+// WindowOccluded, WindowExposed, WindowHidden. Key events are not observed (no consumer needs them).
 struct ObservedEvent { ObservedEventKind kind{}; std::uint32_t sourceId{};   // platform-defined, observation only
-    float dx{}, dy{}; int windowX{}, windowY{}, windowWidth{}, windowHeight{};
-    bool injected{}; Time::TimePoint timestamp{}; Time::TimePoint observedAt{}; };
-using EventWatchCallback = void (*)(void* context, const ObservedEvent&) noexcept;  // any thread; must not block
-class EventWatch;   // RAII; destroyed before SdlPlatform (GYO_ASSERT); destruction waits for an in-flight callback
-[[nodiscard]] Base::Result<EventWatch, SdlPlatformError> AddEventWatch(EventWatchCallback, void* context);
-// SdlInputInjection.hpp in GYO::InputBackendSDL (no SDL); main thread; calls PushInjectedEvent only
+    float deltaX{}, deltaY{}; bool injected{}; Time::TimePoint timestamp{}; Time::TimePoint observedAt{}; };
+using EventWatchCallback = void (*)(void* context, const ObservedEvent&) noexcept;
+// RAII, movable. Keeps only the window ID, never the platform: it may outlive the SdlPlatform (no events after the
+// platform is gone). Destruction waits for an in-flight callback on another thread.
+class EventWatch;
+[[nodiscard]] EventWatch AddEventWatch(EventWatchCallback, void* context);   // out of memory: std::bad_alloc
+// SdlInputInjection.hpp in GYO::InputBackendSDL (no SDL); main thread; calls the platform's PushInjectedEvent only
 class SdlInputInjector final { public: explicit SdlInputInjector(Platform::Sdl::SdlPlatform&) noexcept;
     Base::Result<void, SdlInputError> PushKey(Key, bool down);          // Enter -> RETURN
     Base::Result<void, SdlInputError> PushMouseButton(MouseButton, bool down);
-    Base::Result<void, SdlInputError> PushMouseMotion(float dx, float dy);
+    Base::Result<void, SdlInputError> PushMouseMotion(float deltaX, float deltaY);
     Base::Result<void, SdlInputError> PushFocus(bool gained); };
 ```
 
+- 回呼的規則（M1）：可在任何執行緒、在 SDL 的 watcher 鎖內執行；不得等待任何可能在 platform 呼叫期間被持有的東西（pump、注入、視窗操作、EventWatch 解構）；不持跨 platform 呼叫的鎖時，短臨界區可以。Windows 相對模式下 motion 由 SDL 的 raw input 執行緒推入。
+- 注入器填的欄位（M8）：scancode（Enter 用 RETURN）、`key.key＝SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false)`、`mod＝0`、`down`、`repeat＝false`、`which＝0`、座標 0、本視窗的 windowID、timestamp 0（由 SDL 補上）。注入的 FOCUS_GAINED 不設 SDL 的輸入焦點旗標，所以 `QueryWindow().flags.inputFocus` 不跟著變；同一幀內 focus 之後的 motion 會被輸入後端壓制一次。
+- 真正的視窗操作所產生的事件在 OS 回報時才入列（M4）：要讓注入排在它之後，先 `Sync()`、再至少 pump 一次、再注入；移到目前位置不產生事件。dummy driver 的 `SetWindowPosition` 同步送出 MOVED。
+- capture（M5，ip4b）：`[[nodiscard]] Base::Result<void, RenderError> SaveCaptureBmp(const Render::SceneCapture&, const std::filesystem::path&)`，在 GPU 後端；路徑以 UTF-8 傳遞；不需要 SDL 初始化。新增的錯誤碼在 ip4b 列為 Architecture Delta（Render 的公開 enum）。
 - 觀測 hook 的時間戳：每次回呼自己取一個配對（保留 probe「入列時刻」的語意，`player_short.hpp:17-22`）；判定用與 ip3c 相同的夾住 push 的窗口，不用交付時刻當上緣。
 - `injected`：由 platform 的 `PushInjectedEvent` 在 push 前後設定與還原 thread_local；SDL 在 push 的同一執行緒同步呼叫 watcher（`SDL_events.c:1806`）。真正的視窗操作產生的事件 `injected=false`。
 - 注入的限制（寫進文件）：`SDL_PushEvent` 直接入列，不更新 SDL 內部的滑鼠、鍵盤、修飾鍵狀態，也不產生 TEXT_INPUT；非相對模式下 `EndFrame` 會用 `SDL_GetMouseState` 覆寫指標座標（`SdlInput.cpp:281-284`）；motion 不進 `events`，只在聚焦時累加到 `pointer.delta`（`SdlInput.cpp:266-274`）。
@@ -611,7 +623,7 @@ IP-4
 | 代號 | 驗收點 | 估時（h） | 停止條件 |
 |---|---|---|---|
 | ip4a | dummy driver 下：key、button、focus 的注入在下一次 pump 進入 `events`，而且是本視窗的事件；motion 在聚焦時進入 `pointer.delta`；setter 之後用 query 讀回；`SetWindowSize` 產生真的 RESIZED（dummy driver 下 `SetWindowPosition` 是否送 MOVED 先實測）。突變：m13 windowID 填 0、m14 注入直接寫幀 | 4 | dummy driver 不支援某項操作時，該項只在 L3 驗證並寫明理由 |
-| ip4b | 注入的事件 `injected=true`、真實事件 false；另一條執行緒持續 push 時解構，之後不再收到回呼（試行次數在 ip3a 宣告）；時間戳在夾住 push 的窗口內；只交出本視窗的事件；`AddEventWatch` 失敗路徑；BMP 與直接呼叫 SDL 的輸出位元組相同。突變：m15 不設 injected、m16 不過濾視窗、m17 解構時不移除、m18 用 BGRA | 3～4 | 回呼的生命週期無法用 SDL 的鎖語意證明 |
+| ip4b | 注入的事件 `injected=true`、真實事件 false；另一條執行緒持續 push 時解構，之後不再收到回呼（試行次數在 ip3a 宣告）；時間戳在夾住 push 的窗口內；只交出本視窗的事件；BMP 與直接呼叫 SDL 的輸出位元組相同（D37：刪除「`AddEventWatch` 失敗路徑」，SDL 3.4 只有記憶體不足會失敗）。突變：m15 不設 injected、m16 不過濾視窗、m17 解構時不移除、m18 用 BGRA | 3～4 | 回呼的生命週期無法用 SDL 的鎖語意證明 |
 | ip4c | G3：configure 時檢查兩類目標——四個後端與 `GYO::PlatformSDLMain` 的 `INTERFACE_LINK_LIBRARIES` 中 SDL3 只能以 `$<LINK_ONLY:>` 出現；三個 Native 目標允許 INTERFACE。既有的 `gyo_expect_links` 分不出 PUBLIC 與 PRIVATE（`tests/common/time/CMakeLists.txt:10-29`），另寫 `gyo_expect_private_link`。突變：m19 改回 PUBLIC。CMake 依賴圖的變化只有預期的那些；AGENTS §12 的 Fitness Check；L1 四平台 | 2.5～3 | 有啟用中的目標無法建置，而且修正超出機械修改 |
 | ip4d | 突變全跑；L3（macOS Intel）：live resize 時大小正確 | 1.5 | — |
 

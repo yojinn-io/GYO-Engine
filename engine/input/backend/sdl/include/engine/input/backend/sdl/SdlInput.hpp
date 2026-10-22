@@ -11,12 +11,14 @@ namespace Engine::Input::Backend::Sdl {
 enum class SdlInputErrorCode {
     RelativeMouseModeFailed = 1,
     TextInputFailed,
+    InjectionFailed,
 };
 
 [[nodiscard]] constexpr const char* ToString(const SdlInputErrorCode code) noexcept {
     switch (code) {
     case SdlInputErrorCode::RelativeMouseModeFailed: return "RelativeMouseModeFailed";
     case SdlInputErrorCode::TextInputFailed: return "TextInputFailed";
+    case SdlInputErrorCode::InjectionFailed: return "InjectionFailed";
     }
     return "Unknown";
 }

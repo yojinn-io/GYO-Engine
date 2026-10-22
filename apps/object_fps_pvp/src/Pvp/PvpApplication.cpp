@@ -28,9 +28,6 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
-// Temporary (IP-3 ip3b): the native layer until text input and window queries
-// reach the neutral API (ip3d, IP-4).
-#include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "engine/render/PrimitiveMesh.hpp"
 #include "engine/render/Renderer.hpp"
@@ -42,7 +39,6 @@
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -1218,11 +1214,10 @@ int PvpApplication::Run() {
     impl_->platform->SetLiveFrameHandler([this, &loop] {
         // SDL applies a resize to the window before its queued event reaches
         // the pump, so live frames take the size from the window itself.
-        int windowWidth{}, windowHeight{};
-        if (SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*impl_->platform), &windowWidth, &windowHeight)) {
-            impl_->width = static_cast<float>(Engine::Math::Max(1, windowWidth));
-            impl_->height = static_cast<float>(Engine::Math::Max(1, windowHeight));
-        }
+        // (A query: allowed inside a live frame, docs/architecture/platform-sdl.md.)
+        const auto window = impl_->platform->QueryWindow().rect;
+        impl_->width = static_cast<float>(Engine::Math::Max(1, window.width));
+        impl_->height = static_cast<float>(Engine::Math::Max(1, window.height));
         struct LiveScope {
             bool& live;
             explicit LiveScope(bool& value) : live(value) { live = true; }

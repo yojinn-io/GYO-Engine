@@ -62,6 +62,12 @@ public:
     }
 };
 
+// Pushes an event as injected test input (Design Invariant 4): through SDL's
+// event queue only, marked as injected for event watches on this thread. Main
+// thread; never inside a live frame or an event watch callback (GYO_ASSERT).
+// False when SDL did not queue it (for example a filter dropped it).
+[[nodiscard]] bool PushInjectedEvent(SdlPlatform& platform, SDL_Event& event);
+
 [[nodiscard]] inline SDL_Window* NativeWindow(const SdlPlatform& platform) noexcept {
     return NativeAccess::Window(platform);
 }

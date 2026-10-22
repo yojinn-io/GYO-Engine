@@ -1,5 +1,7 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
+#include "engine/base/Assert.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -179,6 +181,27 @@ KeyModifiers ToModifiers(const SDL_Keymod mod) noexcept {
             .ctrl = (mod & SDL_KMOD_CTRL) != 0,
             .alt = (mod & SDL_KMOD_ALT) != 0,
             .gui = (mod & SDL_KMOD_GUI) != 0};
+}
+
+// The scancode an injected key carries: the first table entry for the key
+// (Return for Enter).
+SDL_Scancode ToScancode(const Key key) noexcept {
+    for (const auto& [code, mapped] : ScancodeKeys) {
+        if (mapped == key) return code;
+    }
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+Uint8 ToSdlButton(const MouseButton button) noexcept {
+    switch (button) {
+    case MouseButton::Left: return SDL_BUTTON_LEFT;
+    case MouseButton::Right: return SDL_BUTTON_RIGHT;
+    case MouseButton::Middle: return SDL_BUTTON_MIDDLE;
+    case MouseButton::X1: return SDL_BUTTON_X1;
+    case MouseButton::X2: return SDL_BUTTON_X2;
+    case MouseButton::Count: break;
+    }
+    return 0;
 }
 
 std::optional<MouseButton> ToMouseButton(const Uint8 button) noexcept {
@@ -420,4 +443,61 @@ void SdlInput::ReleaseAll() noexcept {
     }
 }
 
+SdlInputInjector::SdlInputInjector(Platform::Sdl::SdlPlatform& platform) noexcept
+    : platform_(&platform) {}
+
+namespace {
+
+Base::Result<void, SdlInputError> Push(Platform::Sdl::SdlPlatform& platform, SDL_Event& event) {
+    if (!Platform::Sdl::PushInjectedEvent(platform, event)) {
+        return Base::Err(SdlInputError::Make(SdlInputErrorCode::InjectionFailed,
+                                             "SdlInputInjector: SDL did not queue the event", SDL_GetError()));
+    }
+    return {};
+}
+
+} // namespace
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushKey(const Key key, const bool down) {
+    GYO_ASSERT(key != Key::Count);
+    const SDL_Scancode scancode = ToScancode(key);
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    event.key.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.key.scancode = scancode;
+    event.key.key = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+    event.key.mod = SDL_KMOD_NONE;
+    event.key.down = down;
+    event.key.repeat = false;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushMouseButton(const MouseButton button, const bool down) {
+    GYO_ASSERT(button != MouseButton::Count);
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+    event.button.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.button.button = ToSdlButton(button);
+    event.button.down = down;
+    event.button.clicks = 1;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushMouseMotion(const float deltaX, const float deltaY) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.motion.xrel = deltaX;
+    event.motion.yrel = deltaY;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushFocus(const bool gained) {
+    SDL_Event event{};
+    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST;
+    event.window.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    return Push(*platform_, event);
+}
+
 } // namespace Engine::Input::Backend::Sdl
+

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -19,6 +21,8 @@ enum class SdlPlatformErrorCode {
     InitializationFailed,
     WindowCreationFailed,
     BaseDirectoryUnavailable,
+    DisplayUnavailable,
+    WindowOperationFailed,
 };
 
 [[nodiscard]] constexpr const char* ToString(const SdlPlatformErrorCode code) noexcept {
@@ -27,6 +31,8 @@ enum class SdlPlatformErrorCode {
     case SdlPlatformErrorCode::InitializationFailed: return "InitializationFailed";
     case SdlPlatformErrorCode::WindowCreationFailed: return "WindowCreationFailed";
     case SdlPlatformErrorCode::BaseDirectoryUnavailable: return "BaseDirectoryUnavailable";
+    case SdlPlatformErrorCode::DisplayUnavailable: return "DisplayUnavailable";
+    case SdlPlatformErrorCode::WindowOperationFailed: return "WindowOperationFailed";
     }
     return "Unknown";
 }
@@ -39,6 +45,40 @@ struct SdlPlatformOptions {
     int width{1280};
     int height{720};
     bool resizable{true};
+};
+
+struct Rect final {
+    int x{};
+    int y{};
+    int width{};
+    int height{};
+};
+
+// Zeros where the platform does not report borders.
+struct WindowBorders final {
+    int top{};
+    int left{};
+    int bottom{};
+    int right{};
+};
+
+struct WindowFlags final {
+    bool occluded{};
+    bool hidden{};
+    bool minimized{};
+    bool inputFocus{};
+    bool relativeMouseMode{};
+};
+
+struct WindowState final {
+    Rect rect;
+    WindowBorders borders;
+    WindowFlags flags;
+};
+
+struct DisplayState final {
+    Rect usableBounds;      // the whole display where the platform reports no usable area
+    float refreshRate{};    // 0 when unknown
 };
 
 class NativeAccess; // defined only by the native layer (SdlPlatformNative.hpp)
@@ -103,6 +143,26 @@ public:
     // The clipboard's text; empty when there is none or reading failed (the
     // platform does not tell the two apart). Main thread.
     [[nodiscard]] std::string ClipboardText() const;
+
+    // Queries (docs/architecture/platform-sdl.md, Design Invariant 7): main
+    // thread; they read SDL's state every time and keep no copy, and they may
+    // run inside an observer and a live frame.
+    [[nodiscard]] WindowState QueryWindow() const;
+    [[nodiscard]] Base::Result<DisplayState, SdlPlatformError> QueryDisplay() const;
+    [[nodiscard]] std::string_view VideoDriverName() const;
+    // The X11 window number; empty unless the window is an X11 window.
+    [[nodiscard]] std::optional<std::uint64_t> X11WindowNumber() const;
+
+    // Operations: main thread; never inside an observer, a live frame or an
+    // event watch callback (GYO_ASSERT). Real window operations: the events
+    // they cause are queued when the OS reports them (Sync, then pump).
+    [[nodiscard]] Base::Result<void, SdlPlatformError> SetWindowSize(int width, int height);
+    [[nodiscard]] Base::Result<void, SdlPlatformError> SetWindowPosition(int x, int y);
+    // A request; the result shows as WindowFocusGained.
+    void Raise();
+    // Waits for pending window operations; false when it timed out or the
+    // platform cannot tell.
+    [[nodiscard]] bool Sync();
 
     // The native window is reachable only through the native layer:
     // NativeWindow() in SdlPlatformNative.hpp (target GYO::PlatformSDLNative).

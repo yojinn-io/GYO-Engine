@@ -361,6 +361,116 @@
       "target": "platform_sdl_tests",
       "cases": "A replaced log bridge fails its GYO_ASSERT*",
       "expect": "a replaced bridge leaves the other output in place"
+    },
+    {
+      "id": "m13",
+      "what": "An injected key carries window ID 0",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.key.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));",
+      "replace": "    event.key.windowID = 0;",
+      "target": "input_sdl_tests",
+      "cases": "Every injected key*",
+      "expect": "an injected key reaches the next frame"
+    },
+    {
+      "id": "m14",
+      "what": "Injection bypasses SDL_PushEvent (no watcher sees it)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return SDL_PushEvent(&event);\n}",
+      "replace": "    return SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0) == 1;\n}",
+      "target": "input_sdl_tests",
+      "cases": "Injected input goes through*",
+      "expect": "each injection pushes exactly one SDL event"
+    },
+    {
+      "id": "m-enter",
+      "what": "Enter is injected as keypad Enter (the last table entry)",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    for (const auto& [code, mapped] : ScancodeKeys) {\n        if (mapped == key) return code;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "replace": "    for (auto entry = ScancodeKeys.rbegin(); entry != ScancodeKeys.rend(); ++entry) {\n        if (entry->second == key) return entry->first;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "target": "input_sdl_tests",
+      "cases": "An injected Enter carries*",
+      "expect": "Enter is injected as Return"
+    },
+    {
+      "id": "m-table",
+      "what": "The injected scancode is the next table entry",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    for (const auto& [code, mapped] : ScancodeKeys) {\n        if (mapped == key) return code;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "replace": "    for (std::size_t index = 0; index + 1 < ScancodeKeys.size(); ++index) {\n        if (ScancodeKeys[index].second == key) return ScancodeKeys[index + 1].first;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "target": "input_sdl_tests",
+      "cases": "Every injected key*",
+      "expect": "an injected key reaches the next frame"
+    },
+    {
+      "id": "m-motion",
+      "what": "Injected motion swaps x and y",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.motion.xrel = deltaX;\n    event.motion.yrel = deltaY;",
+      "replace": "    event.motion.xrel = deltaY;\n    event.motion.yrel = deltaX;",
+      "target": "input_sdl_tests",
+      "cases": "Injected motion*",
+      "expect": "an injected motion keeps its x and y"
+    },
+    {
+      "id": "m-focus",
+      "what": "Injected focus has the opposite direction",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST;",
+      "replace": "    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_LOST : SDL_EVENT_WINDOW_FOCUS_GAINED;",
+      "target": "input_sdl_tests",
+      "cases": "Injected mouse buttons and focus*",
+      "expect": "an injected focus keeps its direction"
+    },
+    {
+      "id": "m26",
+      "what": "QueryWindow keeps the size from its first read",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    static_cast<void>(SDL_GetWindowSize(window, &state.rect.width, &state.rect.height));",
+      "replace": "    static int cachedWidth = 0, cachedHeight = 0;\n    if (cachedWidth == 0) static_cast<void>(SDL_GetWindowSize(window, &cachedWidth, &cachedHeight));\n    state.rect.width = cachedWidth;\n    state.rect.height = cachedHeight;",
+      "target": "platform_sdl_tests",
+      "cases": "QueryWindow reads the window*",
+      "expect": "a query reads the size SDL has now"
+    },
+    {
+      "id": "m28",
+      "what": "Queries fail an assertion inside a live frame",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "WindowState SdlPlatform::QueryWindow() const {\n    SDL_Window* window = impl_->window;",
+      "replace": "WindowState SdlPlatform::QueryWindow() const {\n    GYO_ASSERT(!impl_->inLiveFrame);\n    SDL_Window* window = impl_->window;",
+      "target": "platform_sdl_tests",
+      "cases": "Queries may run inside a live frame",
+      "expect": "a query inside a live frame does not fail"
+    },
+    {
+      "id": "m29",
+      "what": "SetWindowSize has no observer check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(width > 0 && height > 0);\n    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);",
+      "replace": "    GYO_ASSERT(width > 0 && height > 0);",
+      "target": "platform_sdl_tests",
+      "cases": "Window operations fail a GYO_ASSERT*",
+      "expect": "expected GYO_ASSERT to fail: platform->SetWindowSize"
+    },
+    {
+      "id": "m-depth",
+      "what": "Injection has no dispatch depth check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    const FlagScope injected(injecting);",
+      "replace": "    const FlagScope injected(injecting);",
+      "target": "input_sdl_tests",
+      "cases": "Injection fails a GYO_ASSERT*",
+      "expect": "injection inside a live frame fails"
+    },
+    {
+      "id": "m-x11",
+      "what": "A window that is not an X11 window reports X11 number 0",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (number == 0) return std::nullopt;\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "Display and driver queries*",
+      "expect": "has no X11 number"
     }
   ]
 }

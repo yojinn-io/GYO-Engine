@@ -11,6 +11,7 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #if defined(GYO_HYGIENE_SDL_INPUT)
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #endif
 #if defined(GYO_HYGIENE_SDL_RENDERER)
 #include "engine/render/backend/sdl/SdlRenderer.hpp"

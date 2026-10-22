@@ -55,8 +55,6 @@ gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${sup
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
 # The entry point (GyoMain in main.cpp; IP-3).
 target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain)
-# Temporary (IP-3 ip3b): removed once the product no longer needs SDL (sdl-isolation, IP-4).
-target_link_libraries(${support} PRIVATE GYO::PlatformSDLNative)
 gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc})
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)
 add_dependencies(${match} "gyo_${GYO_APP_ID}--content")

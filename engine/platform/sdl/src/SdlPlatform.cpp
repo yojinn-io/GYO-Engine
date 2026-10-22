@@ -47,6 +47,24 @@ private:
     T previous_;
 };
 
+// Depth of SDL event watch callbacks on this thread (the live frame and event
+// watches). SDL marks its watcher list as dispatching with a flag, not a
+// depth, so adding or removing a watch, and pushing, inside a callback is
+// unsafe (Design Invariant 7).
+thread_local int dispatchDepth = 0;
+
+class DispatchScope final {
+public:
+    DispatchScope() noexcept { ++dispatchDepth; }
+    ~DispatchScope() { --dispatchDepth; }
+    DispatchScope(const DispatchScope&) = delete;
+    DispatchScope& operator=(const DispatchScope&) = delete;
+};
+
+// Set on this thread while an injected event is pushed (read by event watches,
+// which SDL calls on the pushing thread).
+thread_local bool injecting = false;
+
 SdlPlatformError MakeSdlError(
     SdlPlatformErrorCode code,
     std::string message) {
@@ -143,6 +161,7 @@ bool SDLCALL SdlPlatform::Impl::WatchEvent(void* userdata, SDL_Event* event) {
         return true;
     }
 
+    const DispatchScope dispatch;
     const FlagScope live(platform->inLiveFrame);
     // An exception must not unwind through SDL and the OS modal loop: it is
     // kept and rethrown by PumpEvents once SDL returns.
@@ -225,6 +244,90 @@ std::string SdlPlatform::ClipboardText() const {
     std::string result = text != nullptr ? text : "";
     SDL_free(text);
     return result;
+}
+
+WindowState SdlPlatform::QueryWindow() const {
+    SDL_Window* window = impl_->window;
+    WindowState state;
+    static_cast<void>(SDL_GetWindowPosition(window, &state.rect.x, &state.rect.y));
+    static_cast<void>(SDL_GetWindowSize(window, &state.rect.width, &state.rect.height));
+    // Platforms without border information report failure: zeros stay.
+    if (!SDL_GetWindowBordersSize(window, &state.borders.top, &state.borders.left, &state.borders.bottom,
+                                  &state.borders.right)) {
+        state.borders = {};
+    }
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
+    state.flags.occluded = (flags & SDL_WINDOW_OCCLUDED) != 0;
+    state.flags.hidden = (flags & SDL_WINDOW_HIDDEN) != 0;
+    state.flags.minimized = (flags & SDL_WINDOW_MINIMIZED) != 0;
+    state.flags.inputFocus = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
+    state.flags.relativeMouseMode = SDL_GetWindowRelativeMouseMode(window);
+    return state;
+}
+
+Base::Result<DisplayState, SdlPlatformError> SdlPlatform::QueryDisplay() const {
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(impl_->window);
+    if (display == 0) {
+        return Base::Err(MakeSdlError(SdlPlatformErrorCode::DisplayUnavailable,
+                                      "SdlPlatform: the window has no display"));
+    }
+    DisplayState state;
+    SDL_Rect bounds{};
+    if (SDL_GetDisplayUsableBounds(display, &bounds)) {
+        state.usableBounds = {bounds.x, bounds.y, bounds.w, bounds.h};
+    }
+    if (const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display)) {
+        state.refreshRate = mode->refresh_rate;
+    }
+    return state;
+}
+
+std::string_view SdlPlatform::VideoDriverName() const {
+    const char* name = SDL_GetCurrentVideoDriver();
+    return name != nullptr ? std::string_view(name) : std::string_view();
+}
+
+std::optional<std::uint64_t> SdlPlatform::X11WindowNumber() const {
+    const Sint64 number = SDL_GetNumberProperty(SDL_GetWindowProperties(impl_->window),
+                                                SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+    if (number == 0) return std::nullopt;
+    return static_cast<std::uint64_t>(number);
+}
+
+Base::Result<void, SdlPlatformError> SdlPlatform::SetWindowSize(const int width, const int height) {
+    GYO_ASSERT(width > 0 && height > 0);
+    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);
+    if (!SDL_SetWindowSize(impl_->window, width, height)) {
+        return Base::Err(MakeSdlError(SdlPlatformErrorCode::WindowOperationFailed,
+                                      "SdlPlatform: setting the window size failed"));
+    }
+    return {};
+}
+
+Base::Result<void, SdlPlatformError> SdlPlatform::SetWindowPosition(const int x, const int y) {
+    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);
+    if (!SDL_SetWindowPosition(impl_->window, x, y)) {
+        return Base::Err(MakeSdlError(SdlPlatformErrorCode::WindowOperationFailed,
+                                      "SdlPlatform: setting the window position failed"));
+    }
+    return {};
+}
+
+void SdlPlatform::Raise() {
+    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);
+    static_cast<void>(SDL_RaiseWindow(impl_->window));
+}
+
+bool SdlPlatform::Sync() {
+    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);
+    return SDL_SyncWindow(impl_->window);
+}
+
+bool PushInjectedEvent(SdlPlatform& platform, SDL_Event& event) {
+    static_cast<void>(platform);
+    GYO_ASSERT(dispatchDepth == 0);
+    const FlagScope injected(injecting);
+    return SDL_PushEvent(&event);
 }
 
 SDL_Window* NativeAccess::Window(const SdlPlatform& platform) noexcept {
