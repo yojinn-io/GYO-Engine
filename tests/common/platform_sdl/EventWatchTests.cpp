@@ -258,14 +258,21 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
     } flight;
     const SDL_WindowID window = WindowOf(*platform);
     std::atomic<bool> stop{false};
+    std::atomic<bool> pushing{false};
     std::thread pusher([&] {
         while (!stop.load()) {
             SDL_Event event{};
             event.type = SDL_EVENT_MOUSE_MOTION;
             event.motion.windowID = window;
             SDL_PushEvent(&event);
+            pushing = true;
         }
     });
+    // Start only once the other thread is pushing (its start can take longer
+    // than all the rounds; seen on windows-x64, L1 #561).
+    const auto waitUntil = std::chrono::steady_clock::now() + 5s;
+    while (!pushing.load() && std::chrono::steady_clock::now() < waitUntil) std::this_thread::yield();
+    REQUIRE(pushing.load());
     bool finishedInFlight = false;
     int overlappedRounds = 0;  // destruction started while a callback ran
     for (int round = 0; round < 200; ++round) {

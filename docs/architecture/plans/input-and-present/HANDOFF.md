@@ -370,6 +370,12 @@
     - platform／input／capture 測試連跑 10 次，0 失敗。
     - 紀錄：scratchpad 的 `mutants-ip4b-final.log`。
   - L1：推送觸發的 #560 只做範圍判斷（draft PR），L1 job 跳過；手動觸發 #561（`b3f6386`），涵蓋 ip3d～ip4b。
+  - L1 #561：macos-x64、macos-arm64、linux-x64 成功；windows-x64 失敗，失敗的是 `platform_sdl_concurrency`。
+    - 現象：`Destroying an event watch waits for a callback on another thread` 的 `overlappedRounds > 0`，200 輪沒有一次和回呼重疊。這條斷言是 xhigh 審查後加的，用來確認測試確實做到了重疊。
+    - 原因歸類：測試自身。測試缺少「等推送執行緒開始推」的握手；執行緒啟動慢時，200 輪在它推出第一個事件之前就跑完了。
+    - 本機重現：讓推送執行緒延後 50 ms 才開始推，3／3 失敗（Red）。
+    - 修正：加握手，和「每條執行緒各自標記」的測試相同。延後 50 ms 下 5／5 通過（Green）；移除延後後，platform 測試連跑 10 次 0 失敗；m-order 仍殺掉。
+    - 判定沒有改，只改測試的前置條件。修正後重跑 L1 #562。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
