@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
+- **等你決定**：產品側 IP-4 的分批與事前宣告（`claude/pvp-v71-sdl-isolation` 的 `docs/object_fps_pvp/plans/v7.1/sdl-isolation-ip4-declaration.md`，`28e15d8`）。要決定的是 P1～P5：P1 節奏改用 Waiter、P2 GPU driver 的存取點、P3 pointer capture 改 golden（J1）、P4 gui-probe 放進 L2、P5 L2 的門檻與停止規則；L2 門檻已做 D45 對抗式檢查。核准前不動 probe。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -709,3 +709,5 @@
 - 2026-10-22：ip4c 完成（`98f5025`）：後端的 SDL3 改成 PRIVATE，加上 G3，突變 78／78 殺掉。L1 #564 四平台成功。
 
 - 2026-10-22：ip4d 完成（`e455d98`、`18b6c03`）：突變全跑一次、沒有重跑，IP 78／78、TT 14／14；寫 IP-4 的 dev_log；L3（live resize）通過。**IP-4 的 Engine 側完成。** 主 checkout 的分支依文件會話轉達的使用者交代，合併 master（#87，`df0fefb`）。
+
+- 2026-10-22：產品側 IP-4 開始規劃（使用者：「開始產品側 IP-4 遷移：先整理工作分批、事前宣告（含 L2 門檻、U5／U6 的判定變更草案）給我核准，核准前不動 probe。」）。3 個唯讀子 agent 盤點：probe 的 SDL 使用 276 行（A 約 186、B 約 21、C 約 67）、L2 門檻來源、pointer capture 的 oracle。草案第 1 版的 L2 經 D45 對抗式檢查改寫為第 2 版（G8、G1、G9、停止規則重寫）。估時 19～25 h（含 L2）。
