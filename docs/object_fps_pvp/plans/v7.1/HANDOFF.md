@@ -37,8 +37,8 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：IP 的 HANDOFF 的 P1～P3（ip3e：解構子的斷言與 `error-handling.md` 的衝突、`RunEntry` 的 `catch (...)`、宣告的「逐輪守恆」改「逐執行緒守恆」）。
-- **進行中**：無（**暫停**，D163）。`sdl-isolation`（draft PR #85）：ip3a～ip3e 完成（ip3e `97e2a22`，推送時自動觸發 L1）；下一步是 P1～P3 的決定、ip3f（L3 要你在場）、IP-4。`worker-probe-repair` 已完成（`d2844a5`）。
+- **等你決定**：無。**要你在場的**：ip3f 的 L3（macOS Intel 手動確認：位址輸入、Ctrl+V、按住 Backspace、Ctrl+A、Return／Esc、live resize、日誌檔的 SDL 行）。
+- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 實作完成（ip3f `8f20e37`；ip3e 的 L1 #554 成功），L3 待你；下一步 IP-4（先做介面 xhigh 審查）。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -133,6 +133,7 @@
 | D161 | （2026-10-21）核准 ip3a 的事前宣告（IP 的 D32）；`sdl-isolation.md` 的 S3 選 (a)：受擊回饋的 A 級日誌行改走 `Base::Log`，日誌檔的位元組不變，釘住測試的讀取位置跟著改。開始 ip3b | 使用者：「核准 ip3a 的事前宣告；S3 選 (a)。開始 ip3b。」 |
 | D162 | （2026-10-21～22）`sdl-isolation` 的 ip3b、ip3c 期間的決定：巢狀 `PumpEvents` 保留（IP 的 D33）；`SampleClockPair` 加讀取注入的接縫、契約條文 (2) 修正（D34）；核准 ip3c 的判定變更（D35，§14.4，獨立核對 3 輪）。另：使用者要求開 PR，sdl-isolation 線開 draft PR #85（標題照 v7.1 的格式） | 使用者：「選 (a)：保留巢狀 PumpEvents…」「要不然你開一個PR吧。工作不少。」「版本還是用v7.1的」「選 (b)：SampleClockPair 加讀取注入的接縫…」「核准 ip3c 的判定變更（第 3 版）。」 |
 | D163 | （2026-10-22）ip3d 完成後繼續 ip3e，檔位照建議（high，日誌橋局部 xhigh）。使用者睡前指示「可以的話把 IP-3、IP-4 跑完」，之後指示「跑完手頭上的任務就先暫停」（Mac 需要休息）。ip3e 完成後暫停 | 使用者：「檔位照建議」「我去睡覺了。可以的話吧IP-3、IP-4跑完。」「你跑完手頭上的任務就先暫停一下吧。我的mac幾天沒休息了。」 |
+| D164 | （2026-10-22）ip3e 的 P1～P3（IP 的 D36）：P1、P2 合成一條，`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（照字面遵守會讓程式錯誤不可見，無法測試）；日誌橋的解構子回 noexcept、改 death test；`RunEntry` 不改；P3 改逐執行緒守恆。之後做 ip3f，L3 排最後 | 使用者（分支會話）：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -630,6 +631,8 @@
 - 2026-10-21～22：ip3b 的 L1 #548 成功；draft PR #85。ip3c（事件時間換算到 Engine 時間基準）完成：xhigh 審查發現事前宣告的整合判定在 Linux 與 Apple Silicon 上會誤判正確實作，經 §14.4 與 3 輪獨立核對後改判定（D35），並補讀取注入的接縫（D34）；突變 22／22 killed。實際約 6 h（估 4～5 h）。L1 #550 執行中。
 
 - 2026-10-22：ip3d（文字輸入與剪貼簿，`6ed2952`，L1 #553 成功；產品的位址輸入改用 Engine，差異：數字鍵盤的 Enter 也會確認）。ip3e（進入點、執行檔目錄、平台名、SDL 日誌橋，`97e2a22`；產品的日誌經 Base 寫檔、位元組不變）。xhigh 審查重現並修正日誌橋的競態；突變 36／36 killed。待決 P1～P3。依使用者指示暫停（D163）。
+
+- 2026-10-22：ip3e 的 P1～P3 依 D164 處理；ip3f 完成（突變 36／36，dev_log）。IP-3 的實作完成，只剩 L3。
 
 ## 未結事項
 
