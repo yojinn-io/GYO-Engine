@@ -310,7 +310,7 @@
   - 突變 m7、m8、m9、m-up、m-layout，5／5 killed（目錄共 27 個）。
   - 消費端的位址輸入改用 `SetTextInput`、`text`、`ClipboardText`（消費端計畫的 ip3d 列）。`test` preset 78／78，SDL 相關 6 個通過。
   - 消費端看得到的差異 1 項：`Key::Enter` 依 IP-1 同時代表 Return 與數字鍵盤的 Enter，所以數字鍵盤的 Enter 現在也會確認位址（以前只有 Return）。
-- 2026-10-22：ip3d 的 L1 #553（run 39633694569，`6ed2952`）四平台成功。使用者：「我去睡覺了。可以的話吧IP-3、IP-4跑完。」——照「無人時做到下一個關卡就停」進行：L3（要人在場）、消費端 L2 的門檻（§14.1）、§14.4 的放寬、計畫外的 Architecture Delta、停止條件，都停下來等使用者。
+- 2026-10-22：ip3d 的 L1 #553（run 39633694569，`6ed2952`）四平台成功（**更正**，2026-10-22：PR #85 是 draft，推送觸發的 run 只做範圍判斷，四平台的 L1 job 全部跳過；這裡原本寫的「四平台成功」不實。ip3d～ip4b 的 L1 由手動觸發的 #561（`b3f6386`）補跑）。使用者：「我去睡覺了。可以的話吧IP-3、IP-4跑完。」——照「無人時做到下一個關卡就停」進行：L3（要人在場）、消費端 L2 的門檻（§14.1）、§14.4 的放寬、計畫外的 Architecture Delta、停止條件，都停下來等使用者。
 - 2026-10-22：ip3e 實作（檔位 high，日誌橋局部 xhigh）。
   - Engine：`EntryPoint.hpp`（`GyoMain`）、`GYO::PlatformSDLMain`（OBJECT，`main` 經 `RunEntry` 呼叫 `GyoMain`，例外記錄後回 1）、`BaseDirectory`、`PathFromUtf8`、`PlatformName`、`SdlLogBridge`（預設 tee，同執行緒重入只送原輸出）。`tests/common/runtime_sdl` 改用 `GyoMain`。
   - xhigh 審查（有條件接受）：重現了一個競態——解構時先放開「一次一個」的旗標再還原輸出，另一條執行緒在空檔建橋會把橋自己當成原輸出，tee 模式下在 SDL 的日誌鎖內無限遞迴（卡死）。已修（先還原再放旗標），加「兩條執行緒輪流建橋」測試與突變 m-race。其他已修：斷言條件的副作用、先建立 SDL 的日誌鎖、`Forward` 不信任 userdata、`RunEntry` 的記錄不配置記憶體、`PathFromUtf8` 的空輸入、文件措辭（argv、鎖的順序）、測試缺口（userdata、被換掉的輸出保持原樣、分類表全部）。
@@ -323,7 +323,7 @@
     - P1：解構子含 GYO_ASSERT 並標 `noexcept(false)`，違反 `docs/architecture/error-handling.md` 的「解構子與執行緒入口不含斷言」（計畫與該規則互相矛盾，xhigh 審查第 2 項）。選項：(a) 解構子回到 noexcept，以 death test 驗證中止，error-handling.md 加例外條款；(b) 改成記錄 Error 而非斷言（宣告的判定要變更，§14.4）。
     - P2：`RunEntry` 的 `catch (...)` 與 error-handling.md 第 6 條「never catch (...)」字面衝突；進入點需要攔下所有例外（Design Invariant 8），建議在 error-handling.md 加例外條款。
     - P3：宣告的「每一輪的行數守恆」在不暫停推送執行緒的情況下量不到；實作為「逐執行緒守恆」（比原本的總和更嚴，但字面上與宣告不同），照 §14.4 交使用者確認。
-- 2026-10-22：ip3e 的 L1 #554（`97e2a22`）四平台成功。依 D36 處理 P1～P3：`error-handling.md` 加平台邊界的例外條款；SdlLogBridge 解構子回到 noexcept，斷言改以 death test（`platform_sdl_entry_probe replaced-bridge`，assertion handler 以結束碼 41／42 回報別人的輸出是否原封不動）；宣告改為逐執行緒守恆並記 §14.4 的 1～5（`ip3-declaration.md` 第 6 節）。m-race 在 noexcept 解構子下有時由橋自己的 GYO_ASSERT（測試的 throwing handler 下 terminate）抓到，預期訊息改為兩者擇一。
+- 2026-10-22：ip3e 的 L1 #554（`97e2a22`）四平台成功（**更正**，2026-10-22：PR #85 是 draft，推送觸發的 run 只做範圍判斷，四平台的 L1 job 全部跳過；這裡原本寫的「四平台成功」不實。ip3d～ip4b 的 L1 由手動觸發的 #561（`b3f6386`）補跑）。依 D36 處理 P1～P3：`error-handling.md` 加平台邊界的例外條款；SdlLogBridge 解構子回到 noexcept，斷言改以 death test（`platform_sdl_entry_probe replaced-bridge`，assertion handler 以結束碼 41／42 回報別人的輸出是否原封不動）；宣告改為逐執行緒守恆並記 §14.4 的 1～5（`ip3-declaration.md` 第 6 節）。m-race 在 noexcept 解構子下有時由橋自己的 GYO_ASSERT（測試的 throwing handler 下 terminate）抓到，預期訊息改為兩者擇一。
 - 2026-10-22：ip3f（檔位 medium）：突變目錄 36／36 killed；`test` preset 79／79，SDL 相關 6 個；寫 [dev_log](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)；`platform-sdl.md` 的狀態、遷移清單（ip3e 的選用遷移）、PLAN／README 的狀態。**IP-3 實作完成，L3 待使用者**（使用者：「處理完P1-P3後，處理ip3f，L3排最後。」）。下一步 IP-4：先做介面的 xhigh 審查（U10），再宣告 m13～m19。
 - 2026-10-22：ip3f 的 L3（macOS Intel，使用者操作；證據 `build/target/_build/test/logs/pvp-v71-ip3f-l3-20261022/client.log`）：**通過，附兩項觀察**。
   - 位址輸入（按住 Backspace、Ctrl+A、Ctrl+V、Return、Esc）、live resize、關閉都正常（使用者：「其他功能是正常的」）。
@@ -346,7 +346,7 @@
   - 突變 m13、m14、m-enter、m-table、m-motion、m-focus、m26、m28、m29、m-depth、m-x11，11／11 killed。
   - 消費端：live frame 讀視窗大小改用 `QueryWindow`（H1 的情境）；產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號歸零，拿掉產品對 `GYO::PlatformSDLNative` 的暫時連結。probe 與 pointer capture 測試仍暫時連 Native（消費端 IP-4 遷移）。
   - 本機：全量建置；`test` preset 79／79；SDL 相關 7 個；SDL 測試連跑 20 次 0 失敗。
-- 2026-10-22：ip4a 的 L1 #558（`d82364e`）四平台成功。
+- 2026-10-22：ip4a 的 L1 #558（`d82364e`）四平台成功（**更正**，2026-10-22：PR #85 是 draft，推送觸發的 run 只做範圍判斷，四平台的 L1 job 全部跳過；這裡原本寫的「四平台成功」不實。ip3d～ip4b 的 L1 由手動觸發的 #561（`b3f6386`）補跑）。
 - 2026-10-22：ip4b 實作與本機驗收（檔位 high，watch 的執行緒與生命週期局部 xhigh）。
   - `ObservedEventKind`（12 種）、`ObservedEvent`、`EventWatchCallback`、`EventWatch`（可搬移，以 `unique_ptr<Node>` 持有，只記 window ID）、`SdlPlatform::AddEventWatch`。回呼：先過濾種類與視窗，再取一個配對，`observedAt` 是第二次 Engine 讀取，`timestamp` 以它為上限；`injected` 讀 thread_local。解構在分派深度內斷言（D36 的平台邊界例外）。Native 的唯讀接縫 `LastWatchClockPairForTesting`。
   - capture：GPU 後端的 `SaveCaptureBmp`（路徑以 UTF-8 傳給 SDL）；Render 的公開錯誤碼加 `FileWriteFailed`（Architecture Delta，PLAN 已預告）。
@@ -369,6 +369,7 @@
     - `test` preset 80／80。
     - platform／input／capture 測試連跑 10 次，0 失敗。
     - 紀錄：scratchpad 的 `mutants-ip4b-final.log`。
+  - L1：推送觸發的 #560 只做範圍判斷（draft PR），L1 job 跳過；手動觸發 #561（`b3f6386`），涵蓋 ip3d～ip4b。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
