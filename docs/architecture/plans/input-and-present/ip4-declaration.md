@@ -55,3 +55,31 @@
 
 - G3（U10 的 M7 擴充）：四個後端與 `GYO::PlatformSDLMain` 的 `INTERFACE_LINK_LIBRARIES` 中，SDL3 只能以 `$<LINK_ONLY:>` 出現；任何非 `LINK_ONLY` 的 `*Native` 目標也不行；`INTERFACE_INCLUDE_DIRECTORIES` 不含任何 `native/include`。三個 Native 目標允許 INTERFACE。
 - 突變：m19（SDL3 改回 PUBLIC）、m19b（PUBLIC 連 `PlatformSDLNative`）、m19c（PUBLIC 的 `native/include`）、m19d（`PlatformSDLMain` 的 SDL3 改 PUBLIC）。
+
+## 4. 補記（ip4b 實作時，2026-10-22）
+
+- **時間戳判定的更正（在執行任何測試之前）**：第 2 節寫的「`timestamp` 在 `observedAt − 10 ms ± τ` 之內」漏掉 push 本身的耗時（測試讀 SDL 時間到回呼取樣之間，約數 µs），正確的實作也會失敗；而且和 PLAN 的寫法「與 ip3c 相同的夾住 push 的窗口」不一致。改成照 PLAN：測試在 push 前取配對 P0、以 `t = P0.sdl − 10 ms` 推入、push 後讀 `after`，斷言 `P0.engine − 10 ms − τ ≤ timestamp ≤ after − 10 ms + τ`，τ 照 ip3c（D35），以 P0 與回呼配對（`LastWatchClockPairForTesting`）計算。另斷言兩次回呼的配對不同（新配對）。這是判定的更正，不是看了結果之後放寬。
+- **突變**：
+  - m-flip 不適用（本實作不翻轉，沒有可改壞的翻轉）。m-stride 原本以為只能把 pitch 加大（會讀超出範圍），審查後改成 pitch 少 1（SDL 拒絕），見下面「xhigh 審查之後」。
+  - m-order 由該測試案例內的 SIGSEGV 偵測（另一條執行緒的回呼讀到已釋放的節點），預期訊息限定為該案例的 SIGSEGV。偵測依賴配置器在釋放後改寫或歸還記憶體；在 ASan 下會確定偵測（L1 沒有 ASan，記為已知限制）。
+  - m21 在兩個時鐘不漂移的主機上換算結果相同，所以以「新配對」的斷言殺掉。
+  - m-path（用 `path.string()`）只在 Windows 上殺得掉（其他平台 `string()` 就是 UTF-8），不列入本機目錄；Windows CI 由非 ASCII 檔名的測試涵蓋（mutants 不在 CI 跑）。
+
+### xhigh 審查之後（ip4b，2026-10-22）
+
+watch 的執行緒與生命週期做了局部 xhigh 審查（F1～F14）。照審查修改的地方：
+
+- **回呼取樣改用 `SampleClockPair()`**：回呼原本自己讀三次時鐘再組配對，現在改用固定讀取順序的唯一取樣函式（ip3c 的 D34）；`observedAt` 是它的第二次 Engine 讀取。測試加上「回呼的配對落在測試前後兩次讀取之間」（SDL 與 Engine 各一條）。
+- **injected 改成比對事件位址**：原本是執行緒區域的旗標，注入的 push 期間 SDL 在同一條執行緒排入的真實事件（例如 push 內跑的 live frame 造成的 RESIZED）也會被標成 injected。現在只有 `PushInjectedEvent` 正在推的那個事件本身才算。新增測試「只有注入的事件本身被標記」，以及「同一個事件物件之後再以一般 push 推入，不被標記」。
+- **註冊計數的唯讀接縫** `RegisteredEventWatchesForTesting`：搬移指派要先移除被取代的 watch；以計數確定性地檢查，不再依賴配置器。
+- **m-move、m-moved-from 其實適用**：前一版說「搬移不改變註冊的位址，所以沒有對應的突變」是錯的。搬移建構子沒清空來源、搬移指派沒移除被取代的 watch，都是可以寫出來的錯誤，現在分別由「moved-from 不再作用」與註冊計數殺掉。
+- **watch 可以比 platform 活得久**：拆成兩個測試。宣告的版本（platform 解構後 SDL 的事件系統一起結束）照舊；另加「還有其他 platform 讓 SDL 繼續運作」的版本：watch 仍在 SDL 上註冊，但其他視窗的事件不會回呼，解構時從 SDL 移除。SDL 不重複使用視窗 ID（`SDL_GetNextObjectID` 單調遞增），所以舊 ID 只可能由手動 push 出現，這種情況不在保證之內。
+- **capture 的測試移到 `tests/common/render/sdl_gpu`**（`render.sdl_gpu_capture_file`，cpu 標籤）：原本放在 platform 測試裡，讓 platform 測試連結了 GPU 後端。參考檔以 `u8string` 寫入；暫存目錄每次執行各自一個；`SceneCaptureFile.hpp` 註明位元組跟著 SDL 的 BMP 寫入器（`SDL_HINT_BMP_SAVE_LEGACY_FORMAT` 會改變它）。
+- **併發測試獨立成 `platform_sdl_concurrency`**（逾時 60 秒），主測試維持 15 秒。
+- **分派深度**：回呼內解構 watch 的 death test（`watch-in-callback`）。
+
+新增的突變：m-inject-pointer、m-moved-from、m-move、m-dispatch、m-watch-sdl、m-watch-engine、m-button、m-delta、m-focus-watch、m-source、m-stride（pitch 少 1，SDL 拒絕建立 surface）。m15b 改為「推完之後沒有清掉標記」；m15c（標記不分執行緒）在位址比對之下不會改變可觀察的結果（其他執行緒推的不是同一個事件物件），刪除，「每條執行緒各自標記」的測試保留。
+
+時間戳判定改成 [ip4b-judgment-change.md](ip4b-judgment-change.md) 的方案 B（D38）。方案 B 新增 m-watch-mid、m-watch-first、m-watch-late、m-watch-e1 四個突變。
+
+Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（D38），由 death test `watch-off-main` 與突變 m-main-thread 檢查。

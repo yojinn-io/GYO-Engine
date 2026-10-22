@@ -123,8 +123,9 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
    backends link SDL3 PRIVATE. Guard: G3 (configure-time link check). From ip4c.
 3. Every time the platform hands out is on the Engine time base and satisfies the timestamp contract above.
    Conversion always samples both clocks together and never uses a fixed offset; the pump path samples once per
-   pump, the watch path once per callback; only `SdlPlatform` holds the pair. Guards: mutants m1–m4 and m-zero.
-   From ip3c.
+   pump, the watch path once per callback; only `SdlPlatform` holds the pair. Guards: mutants m1–m4 and m-zero
+   (pump path, from ip3c); m20, m21, m22, m-watch-sdl, m-watch-engine, m-watch-mid, m-watch-first, m-watch-late and
+   m-watch-e1 (watch path, from ip4b, D38).
 4. Test injection goes only through SDL's event queue or real window operations; there is no back door that writes
    a frame. The `injected` flag is owned by the platform. Guards: mutants m14, m15. From ip4a.
 5. The log bridge is effective only while a consumer holds it; without it SDL's output is unchanged. While it
@@ -134,10 +135,11 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 6. Window, display and text input state are read from SDL/the OS every time; no copy of them is kept for decisions.
 7. Queries may run inside an observer and a live frame; operations may not run inside an observer, a live frame or
    a watch callback, and `AddEventWatch`, `EventWatch` destruction and injection may not run inside a live frame or
-   a watch callback (thread-local dispatch depth, `GYO_ASSERT`). An `EventWatch` never refers to the platform and may
-   outlive it. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
+   a watch callback (thread-local dispatch depth, `GYO_ASSERT`). An `EventWatch` is destroyed on the main thread only
+   (`GYO_ASSERT`, guard: mutant m-main-thread; SDL tears its watcher list down without its lock, D38). An `EventWatch` never refers to the
+   platform and may outlive it. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
    mutant m-nest); window operations are not called inside an observer or a live frame; watch
-   callbacks do not block; an `EventWatch` is destroyed before its `SdlPlatform`. Checked with `GYO_ASSERT`.
+   callbacks do not wait for anything held during a platform call. Checked with `GYO_ASSERT`.
 8. Engine does not call the global `SDL_Init`/`SDL_Quit`; subsystems are reference-counted by their owners. No
    exception crosses SDL's or the OS's C stack (live frames and the entry point catch and report).
 9. The backend carries no capture policy, no text editing policy and no product knowledge.

@@ -43,6 +43,19 @@ TEST_CASE("A replaced log bridge fails its GYO_ASSERT and leaves the other outpu
     CHECK_MESSAGE(code == 41, "a replaced bridge leaves the other output in place");
 }
 
+TEST_CASE("Destroying an event watch inside a live frame fails its GYO_ASSERT") {
+    // A death test (error-handling.md, platform boundary exception).
+    CHECK_MESSAGE(ExitCodeOf("watch-in-live-frame") == 43, "destroying an event watch inside a live frame fails a GYO_ASSERT");
+}
+
+TEST_CASE("Destroying an event watch inside a watch callback fails its GYO_ASSERT") {
+    CHECK_MESSAGE(ExitCodeOf("watch-in-callback") == 43, "destroying an event watch inside a watch callback fails a GYO_ASSERT");
+}
+
+TEST_CASE("Destroying an event watch off the main thread fails its GYO_ASSERT") {
+    CHECK_MESSAGE(ExitCodeOf("watch-off-main") == 43, "destroying an event watch off the main thread fails a GYO_ASSERT");
+}
+
 TEST_CASE("BaseDirectory is SDL's base path as a UTF-8 path") {
     const auto base = Engine::Platform::Sdl::BaseDirectory();
     REQUIRE(base);

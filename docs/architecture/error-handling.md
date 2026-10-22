@@ -53,7 +53,7 @@ So in that layer only:
 1. A destructor may check the C global state it holds with `GYO_ASSERT`. The destructor stays `noexcept`: a failure aborts, and tests check it with a death test (a child process), not with a throwing handler.
 2. Entry points and C callbacks may use `catch (...)`. What they catch must be logged and turned into an explicit result (exit code 1, or kept and rethrown once outside the C stack); it is never swallowed.
 
-The scope is the layer of an Engine platform backend that calls a C library directly (today `engine/platform/sdl`: the SDL log bridge, the entry point's `RunEntry`, the live-frame watch). Everything else follows the rules as written. Decision: input-and-present D36.
+The scope is the layer of an Engine platform backend that calls a C library directly (today `engine/platform/sdl`: the SDL log bridge, the entry point's `RunEntry`, the live-frame watch, the `EventWatch` destructor). Everything else follows the rules as written. Decision: input-and-present D36.
 
 ## Assert
 

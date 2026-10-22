@@ -1,4 +1,4 @@
-add_library(gyo_render_backend_sdl_gpu STATIC src/SdlGpuRenderDevice.cpp)
+add_library(gyo_render_backend_sdl_gpu STATIC src/SdlGpuRenderDevice.cpp src/SceneCaptureFile.cpp)
 add_library(GYO::RenderBackendSDLGPU ALIAS gyo_render_backend_sdl_gpu)
 target_include_directories(gyo_render_backend_sdl_gpu PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(gyo_render_backend_sdl_gpu PUBLIC GYO::Render GYO::PlatformSDL)

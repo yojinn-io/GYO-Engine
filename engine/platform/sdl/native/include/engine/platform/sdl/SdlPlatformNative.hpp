@@ -45,6 +45,11 @@ struct ClockReaders final {
 // innermost running pump, empty outside PumpEvents. Nothing can replace the
 // pair the platform samples (Design Invariant 3).
 [[nodiscard]] std::optional<ClockPair> CurrentClockPairForTesting(const SdlPlatform& platform);
+// The pair the last event watch callback on this thread sampled; empty before
+// the first one (read-only seam, release builds too).
+[[nodiscard]] std::optional<ClockPair> LastWatchClockPairForTesting() noexcept;
+// Event watches currently registered with SDL by the platform (read-only seam).
+[[nodiscard]] int RegisteredEventWatchesForTesting() noexcept;
 
 class NativeAccess final {
 public:

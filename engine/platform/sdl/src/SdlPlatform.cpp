@@ -1,11 +1,13 @@
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <exception>
+#include <new>
 #include <optional>
 #include <utility>
 
@@ -63,7 +65,12 @@ public:
 
 // Set on this thread while an injected event is pushed (read by event watches,
 // which SDL calls on the pushing thread).
-thread_local bool injecting = false;
+thread_local const SDL_Event* injectedEvent = nullptr;
+
+thread_local std::optional<ClockPair> lastWatchPair;
+
+// Event watches registered with SDL now (read-only test seam).
+std::atomic<int> registeredWatches{0};
 
 SdlPlatformError MakeSdlError(
     SdlPlatformErrorCode code,
@@ -323,10 +330,132 @@ bool SdlPlatform::Sync() {
     return SDL_SyncWindow(impl_->window);
 }
 
+struct EventWatch::Node final {
+    static bool SDLCALL Trampoline(void* userdata, SDL_Event* event);
+
+    EventWatchCallback callback{};
+    void* context{};
+    SDL_WindowID window{};
+};
+
+namespace {
+
+// The observed kind of an event of the given window; empty for any other.
+std::optional<ObservedEvent> Observe(const SDL_Event& event, const SDL_WindowID window) {
+    ObservedEvent observed;
+    SDL_WindowID from = 0;
+    switch (event.type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        observed.kind = ObservedEventKind::MouseMotion;
+        from = event.motion.windowID;
+        observed.sourceId = event.motion.which;
+        observed.deltaX = event.motion.xrel;
+        observed.deltaY = event.motion.yrel;
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        observed.kind = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? ObservedEventKind::MouseButtonPressed
+                                                                  : ObservedEventKind::MouseButtonReleased;
+        from = event.button.windowID;
+        observed.sourceId = event.button.which;
+        break;
+    case SDL_EVENT_WINDOW_FOCUS_GAINED: observed.kind = ObservedEventKind::WindowFocusGained; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_FOCUS_LOST: observed.kind = ObservedEventKind::WindowFocusLost; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_MOVED: observed.kind = ObservedEventKind::WindowMoved; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_RESIZED: observed.kind = ObservedEventKind::WindowResized; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_MINIMIZED: observed.kind = ObservedEventKind::WindowMinimized; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_RESTORED: observed.kind = ObservedEventKind::WindowRestored; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_OCCLUDED: observed.kind = ObservedEventKind::WindowOccluded; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_EXPOSED: observed.kind = ObservedEventKind::WindowExposed; from = event.window.windowID; break;
+    case SDL_EVENT_WINDOW_HIDDEN: observed.kind = ObservedEventKind::WindowHidden; from = event.window.windowID; break;
+    default: return std::nullopt;
+    }
+    if (from != window) return std::nullopt;
+    return observed;
+}
+
+} // namespace
+
+bool SDLCALL EventWatch::Node::Trampoline(void* userdata, SDL_Event* event) {
+    const auto* node = static_cast<const Node*>(userdata);
+    // Filter first: SDL also calls watchers for events without a time.
+    auto observed = Observe(*event, node->window);
+    if (!observed) return true;
+    const DispatchScope dispatch;
+    // One pair per callback (Design Invariant 3), sampled by the one function
+    // that fixes the reads and their order; its second Engine read (engine is
+    // the midpoint) is the observation time.
+    const ClockPair pair = SampleClockPair();
+    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2);
+    lastWatchPair = pair;
+    // The event PushInjectedEvent is pushing on this thread; real events SDL
+    // queues meanwhile (for example from a live frame inside the push) are not.
+    observed->injected = event == injectedEvent;
+    observed->observedAt = after;
+    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);
+    node->callback(node->context, *observed);
+    return true;
+}
+
+EventWatch::EventWatch() noexcept = default;
+
+EventWatch::EventWatch(std::unique_ptr<Node> node) noexcept : node_(std::move(node)) {}
+
+EventWatch::EventWatch(EventWatch&& other) noexcept : node_(std::move(other.node_)) {}
+
+EventWatch& EventWatch::operator=(EventWatch&& other) {
+    if (this != &other) {
+        Remove();
+        node_ = std::move(other.node_);
+    }
+    return *this;
+}
+
+EventWatch::~EventWatch() {
+    Remove();
+}
+
+void EventWatch::Remove() {
+    if (!node_) return;
+    // SDL marks its watcher list as dispatching with a flag, not a depth:
+    // removing from inside a callback or a live frame could free a node SDL
+    // still calls (Design Invariant 7).
+    GYO_ASSERT(dispatchDepth == 0);
+    // SDL destroys its watcher lock without taking it when the last platform
+    // quits the events subsystem; only the main thread, which owns that
+    // teardown, may remove (Design Invariant 7, D38).
+    GYO_ASSERT(SDL_IsMainThread());
+    // Waits for a callback running on another thread (SDL's watcher lock).
+    SDL_RemoveEventWatch(&Node::Trampoline, node_.get());
+    registeredWatches.fetch_sub(1);
+    node_.reset();
+}
+
+EventWatch SdlPlatform::AddEventWatch(const EventWatchCallback callback, void* context) {
+    GYO_ASSERT(callback != nullptr);
+    GYO_ASSERT(dispatchDepth == 0);
+    auto node = std::make_unique<EventWatch::Node>();
+    node->callback = callback;
+    node->context = context;
+    node->window = SDL_GetWindowID(impl_->window);
+    if (!SDL_AddEventWatch(&EventWatch::Node::Trampoline, node.get())) throw std::bad_alloc();
+    registeredWatches.fetch_add(1);
+    return EventWatch(std::move(node));
+}
+
+std::optional<ClockPair> LastWatchClockPairForTesting() noexcept {
+    return lastWatchPair;
+}
+
+int RegisteredEventWatchesForTesting() noexcept {
+    return registeredWatches.load();
+}
+
 bool PushInjectedEvent(SdlPlatform& platform, SDL_Event& event) {
     static_cast<void>(platform);
     GYO_ASSERT(dispatchDepth == 0);
-    const FlagScope injected(injecting);
+    // SDL hands the pushed event itself to the watchers, on this thread.
+    const ValueScope<const SDL_Event*> injected(injectedEvent, &event);
     return SDL_PushEvent(&event);
 }
 

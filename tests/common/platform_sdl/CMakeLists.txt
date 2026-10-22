@@ -4,7 +4,8 @@ target_link_libraries(platform_sdl_entry_probe PRIVATE GYO::PlatformSDLMain GYO:
 target_compile_features(platform_sdl_entry_probe PRIVATE cxx_std_20)
 gyo_copy_runtime_dlls(platform_sdl_entry_probe)
 
-add_executable(platform_sdl_tests SdlPlatformTests.cpp EventTimeTests.cpp LogBridgeTests.cpp EntryTests.cpp WindowTests.cpp)
+add_executable(platform_sdl_tests SdlPlatformTests.cpp EventTimeTests.cpp LogBridgeTests.cpp EntryTests.cpp WindowTests.cpp
+    EventWatchTests.cpp)
 add_dependencies(platform_sdl_tests platform_sdl_entry_probe)
 target_compile_definitions(platform_sdl_tests PRIVATE GYO_ENTRY_PROBE="$<TARGET_FILE:platform_sdl_entry_probe>")
 target_link_libraries(platform_sdl_tests PRIVATE
@@ -14,14 +15,15 @@ target_link_libraries(platform_sdl_tests PRIVATE
 )
 target_compile_features(platform_sdl_tests PRIVATE cxx_std_20)
 gyo_copy_runtime_dlls(platform_sdl_tests)
-add_test(NAME platform_sdl_tests COMMAND platform_sdl_tests "-tce=*concurrent*,*two threads*")
+add_test(NAME platform_sdl_tests COMMAND platform_sdl_tests "-tce=*concurrent*,*two threads*,*waits for a callback*")
 set_tests_properties(platform_sdl_tests PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy"
     TIMEOUT 15
 )
-# The log bridge's concurrency tests, declared with 60 s (ip3-declaration.md).
-add_test(NAME platform_sdl_log_bridge_concurrency COMMAND platform_sdl_tests "-tc=*concurrent*,*two threads*")
-set_tests_properties(platform_sdl_log_bridge_concurrency PROPERTIES
+# Concurrency tests declared with 60 s: the log bridge (ip3-declaration.md) and
+# event watch destruction (ip4-declaration.md).
+add_test(NAME platform_sdl_concurrency COMMAND platform_sdl_tests "-tc=*concurrent*,*two threads*,*waits for a callback*")
+set_tests_properties(platform_sdl_concurrency PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy"
     TIMEOUT 60
 )

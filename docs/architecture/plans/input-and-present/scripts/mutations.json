@@ -456,8 +456,8 @@
       "id": "m-depth",
       "what": "Injection has no dispatch depth check",
       "file": "engine/platform/sdl/src/SdlPlatform.cpp",
-      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    const FlagScope injected(injecting);",
-      "replace": "    const FlagScope injected(injecting);",
+      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    // SDL hands the pushed event itself",
+      "replace": "    // SDL hands the pushed event itself",
       "target": "input_sdl_tests",
       "cases": "Injection fails a GYO_ASSERT*",
       "expect": "injection inside a live frame fails"
@@ -471,6 +471,276 @@
       "target": "platform_sdl_tests",
       "cases": "Display and driver queries*",
       "expect": "has no X11 number"
+    },
+    {
+      "id": "m15",
+      "what": "Watched events are never marked injected",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->injected = event == injectedEvent;",
+      "replace": "    observed->injected = false;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch marks injected events only",
+      "expect": "an injected event is marked injected"
+    },
+    {
+      "id": "m15b",
+      "what": "The injected mark is not cleared after the push",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const ValueScope<const SDL_Event*> injected(injectedEvent, &event);",
+      "replace": "    injectedEvent = &event;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch marks injected events only",
+      "expect": "an event pushed after the injected push is not marked injected"
+    },
+    {
+      "id": "m16",
+      "what": "A watch does not filter by window",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (from != window) return std::nullopt;\n    return observed;",
+      "replace": "    return observed;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch hands out only*",
+      "expect": "another window's event is not handed out"
+    },
+    {
+      "id": "m-kind",
+      "what": "A watch hands out kinds that are not observed",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    default: return std::nullopt;\n    }\n    if (from != window)",
+      "replace": "    default: observed.kind = ObservedEventKind::WindowExposed; from = window; break;\n    }\n    if (from != window)",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch hands out only*",
+      "expect": "kinds that are not observed are not handed out"
+    },
+    {
+      "id": "m17",
+      "what": "Destroying a watch does not remove it from SDL",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    SDL_RemoveEventWatch(&Node::Trampoline, node_.get());\n    registeredWatches.fetch_sub(1);\n    node_.reset();",
+      "replace": "    static_cast<void>(node_.release());",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch stops*",
+      "expect": "a destroyed event watch receives nothing"
+    },
+    {
+      "id": "m-order",
+      "what": "The node is freed before it is removed from SDL (a callback running on another thread reads the freed node: the test case crashes with SIGSEGV, which is the detection)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    SDL_RemoveEventWatch(&Node::Trampoline, node_.get());\n    registeredWatches.fetch_sub(1);\n    node_.reset();",
+      "replace": "    Node* removed = node_.release();\n    delete removed;\n    SDL_RemoveEventWatch(&Node::Trampoline, removed);\n    registeredWatches.fetch_sub(1);",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch waits*",
+      "expect": "Destroying an event watch waits for a callback on another thread[\\s\\S]*CRASHED: SIGSEGV"
+    },
+    {
+      "id": "m20",
+      "what": "A watched event takes its observation time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = after;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "not later than its queue time"
+    },
+    {
+      "id": "m21",
+      "what": "A watch samples one clock pair per thread",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const ClockPair pair = SampleClockPair();\n    const Time::TimePoint after",
+      "replace": "    thread_local const ClockPair pair = SampleClockPair();\n    const Time::TimePoint after",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "each watch callback samples a new clock pair"
+    },
+    {
+      "id": "m22",
+      "what": "A watched event time is not capped at its observation",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, Time::TimePoint::max());",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch gives a future event*",
+      "expect": "never later than its observation"
+    },
+    {
+      "id": "m-depth-watch",
+      "what": "Destroying a watch has no dispatch depth check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    // SDL destroys its watcher lock",
+      "replace": "    // SDL destroys its watcher lock",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch inside a live frame*",
+      "expect": "destroying an event watch inside a live frame fails"
+    },
+    {
+      "id": "m18",
+      "what": "The capture is read as BGRA",
+      "file": "engine/render/backend/sdl_gpu/src/SceneCaptureFile.cpp",
+      "find": "                                                 SDL_PIXELFORMAT_RGBA32,",
+      "replace": "                                                 SDL_PIXELFORMAT_BGRA32,",
+      "target": "gyo_sdl_gpu_capture_tests",
+      "cases": "SaveCaptureBmp writes the bytes*",
+      "expect": "the capture file has the bytes SDL writes"
+    },
+    {
+      "id": "m-inject-pointer",
+      "what": "Every event pushed during an injected push is marked injected",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->injected = event == injectedEvent;",
+      "replace": "    observed->injected = injectedEvent != nullptr;",
+      "target": "platform_sdl_tests",
+      "cases": "Only the injected event itself*",
+      "expect": "an event queued during an injected push is not marked injected"
+    },
+    {
+      "id": "m-moved-from",
+      "what": "Move assignment does not remove the watch it replaces",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        Remove();\n        node_ = std::move(other.node_);",
+      "replace": "        node_ = std::move(other.node_);",
+      "target": "platform_sdl_tests",
+      "cases": "Move assignment releases*",
+      "expect": "move assignment removes the watch it replaces from SDL"
+    },
+    {
+      "id": "m-move",
+      "what": "The move constructor leaves its source active",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "EventWatch::EventWatch(EventWatch&& other) noexcept : node_(std::move(other.node_)) {}",
+      "replace": "EventWatch::EventWatch(EventWatch&& other) noexcept : node_(std::make_unique<Node>(*other.node_)) {}",
+      "target": "platform_sdl_tests",
+      "cases": "A moved event watch keeps observing",
+      "expect": "a moved-from watch is inactive"
+    },
+    {
+      "id": "m-dispatch",
+      "what": "A watch callback does not raise the dispatch depth",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const DispatchScope dispatch;\n    // One pair per callback",
+      "replace": "    // One pair per callback",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch inside a watch callback*",
+      "expect": "destroying an event watch inside a watch callback fails a GYO_ASSERT"
+    },
+    {
+      "id": "m-watch-sdl",
+      "what": "A watch takes a clock pair whose SDL time is 500 ms off",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    lastWatchPair = pair;\n    // The event PushInjectedEvent",
+      "replace": "    lastWatchPair = MakeClockPair(pair.engine, pair.sdlNs + 500000000ULL, pair.engine);\n    // The event PushInjectedEvent",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch samples SDL's clock while it runs"
+    },
+    {
+      "id": "m-watch-engine",
+      "what": "A watch observes 1 ms late",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2);",
+      "replace": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2) + std::chrono::milliseconds(1);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch observes the event while the push runs"
+    },
+    {
+      "id": "m-button",
+      "what": "Button press and release are swapped",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? ObservedEventKind::MouseButtonPressed",
+      "replace": "event.type == SDL_EVENT_MOUSE_BUTTON_UP ? ObservedEventKind::MouseButtonPressed",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a button press is reported with its source"
+    },
+    {
+      "id": "m-delta",
+      "what": "Motion deltas are swapped",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        observed.deltaX = event.motion.xrel;\n        observed.deltaY = event.motion.yrel;",
+      "replace": "        observed.deltaX = event.motion.yrel;\n        observed.deltaY = event.motion.xrel;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a motion is reported with its x and y"
+    },
+    {
+      "id": "m-focus-watch",
+      "what": "A watch reports focus gained as lost",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    case SDL_EVENT_WINDOW_FOCUS_GAINED: observed.kind = ObservedEventKind::WindowFocusGained;",
+      "replace": "    case SDL_EVENT_WINDOW_FOCUS_GAINED: observed.kind = ObservedEventKind::WindowFocusLost;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a focus change keeps its direction"
+    },
+    {
+      "id": "m-source",
+      "what": "A button event loses its source",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        observed.sourceId = event.button.which;",
+      "replace": "        observed.sourceId = 0;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a button press is reported with its source"
+    },
+    {
+      "id": "m-stride",
+      "what": "The capture rows are read with a short pitch (SDL rejects the surface)",
+      "file": "engine/render/backend/sdl_gpu/src/SceneCaptureFile.cpp",
+      "find": "static_cast<int>(capture.width * 4));",
+      "replace": "static_cast<int>(capture.width * 4) - 1);",
+      "target": "gyo_sdl_gpu_capture_tests",
+      "cases": "SaveCaptureBmp writes the bytes*",
+      "expect": "SaveCaptureBmp\\(capture, ours\\)"
+    },
+    {
+      "id": "m-watch-first",
+      "what": "A watch converts with the first pair of its thread but records the new one",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    thread_local const ClockPair first = pair;\n    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, first, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-watch-mid",
+      "what": "A watch observes at its pair midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2);",
+      "replace": "    const Time::TimePoint after = pair.engine;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch observes at its pair's second Engine read"
+    },
+    {
+      "id": "m-watch-late",
+      "what": "A watched event is converted 2 us late",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp + 2000, pair, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-watch-e1",
+      "what": "A watch converts against its second Engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, ClockPair{after, pair.sdlNs, pair.bracket}, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-main-thread",
+      "what": "Destroying a watch has no main thread check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(SDL_IsMainThread());\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch off the main thread*",
+      "expect": "destroying an event watch off the main thread fails a GYO_ASSERT"
     }
   ]
 }

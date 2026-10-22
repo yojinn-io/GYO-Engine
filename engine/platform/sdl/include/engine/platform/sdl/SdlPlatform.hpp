@@ -81,6 +81,68 @@ struct DisplayState final {
     float refreshRate{};    // 0 when unknown
 };
 
+// Observed events (IP-4 ip4b). Kinds follow InputEventKind where it has them;
+// the platform cannot depend on GYO::Input, so the names are repeated on
+// purpose. Key events are not observed.
+enum class ObservedEventKind : std::uint8_t {
+    MouseMotion,
+    MouseButtonPressed,
+    MouseButtonReleased,
+    WindowFocusGained,
+    WindowFocusLost,
+    WindowMoved,
+    WindowResized,
+    WindowMinimized,
+    WindowRestored,
+    WindowOccluded,
+    WindowExposed,
+    WindowHidden,
+};
+
+struct ObservedEvent final {
+    ObservedEventKind kind{};
+    std::uint32_t sourceId{};   // the device as the platform numbers it; for observation only
+    float deltaX{};             // MouseMotion
+    float deltaY{};
+    bool injected{};            // pushed by PushInjectedEvent on this thread
+    // When the event was queued, on the Engine time base, never later than
+    // observedAt (the watch samples one clock pair per callback).
+    Time::TimePoint timestamp{};
+    Time::TimePoint observedAt{};
+};
+
+// Runs on whichever thread pushes the event, inside the platform's watcher
+// lock. It must not wait for anything that may be held during a platform call.
+using EventWatchCallback = void (*)(void* context, const ObservedEvent& event) noexcept;
+
+// An observation of one window's events, from AddEventWatch. Movable. It keeps
+// only the window's ID, never the platform, so it may outlive the platform (it
+// then receives no more events: SDL never reuses a window ID). Destruction
+// waits for a callback running on another thread; it happens on the main
+// thread only, never inside a live frame or a watch callback (GYO_ASSERT; the
+// platform boundary exception of error-handling.md).
+class EventWatch final {
+public:
+    EventWatch() noexcept;  // inactive
+    EventWatch(EventWatch&& other) noexcept;
+    EventWatch& operator=(EventWatch&& other);
+    ~EventWatch();
+    EventWatch(const EventWatch&) = delete;
+    EventWatch& operator=(const EventWatch&) = delete;
+
+    [[nodiscard]] bool Active() const noexcept { return static_cast<bool>(node_); }
+
+    struct Node;  // defined by the platform
+
+private:
+    explicit EventWatch(std::unique_ptr<Node> node) noexcept;
+    void Remove();
+
+    friend class SdlPlatform;
+
+    std::unique_ptr<Node> node_;
+};
+
 class NativeAccess; // defined only by the native layer (SdlPlatformNative.hpp)
 class SdlPlatform;
 
@@ -163,6 +225,11 @@ public:
     // Waits for pending window operations; false when it timed out or the
     // platform cannot tell.
     [[nodiscard]] bool Sync();
+
+    // Observes this window's events (ObservedEventKind) as they are queued.
+    // Main thread; allowed inside an observer, never inside a live frame or a
+    // watch callback (GYO_ASSERT). Throws std::bad_alloc when out of memory.
+    [[nodiscard]] EventWatch AddEventWatch(EventWatchCallback callback, void* context);
 
     // The native window is reachable only through the native layer:
     // NativeWindow() in SdlPlatformNative.hpp (target GYO::PlatformSDLNative).

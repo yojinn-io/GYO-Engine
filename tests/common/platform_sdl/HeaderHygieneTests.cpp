@@ -17,6 +17,7 @@
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
 #endif
 #if defined(GYO_HYGIENE_SDL_GPU)
+#include "engine/render/backend/sdl_gpu/SceneCaptureFile.hpp"
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #endif
 

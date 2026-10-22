@@ -11,4 +11,12 @@ if(TARGET GYO::RenderBackendSDLGPU)
     gyo_copy_runtime_dlls(gyo_sdl_gpu_mesh_smoke)
     add_test(NAME render.sdl_gpu_mesh_smoke COMMAND gyo_sdl_gpu_mesh_smoke)
     set_tests_properties(render.sdl_gpu_mesh_smoke PROPERTIES TIMEOUT 30 LABELS "gpu")
+
+    # The capture file writer needs no GPU (IP-4 ip4b).
+    add_executable(gyo_sdl_gpu_capture_tests SceneCaptureFileTests.cpp)
+    target_link_libraries(gyo_sdl_gpu_capture_tests PRIVATE GYO::RenderBackendSDLGPU GYO::PlatformSDLNative doctest::doctest)
+    target_compile_features(gyo_sdl_gpu_capture_tests PRIVATE cxx_std_20)
+    gyo_copy_runtime_dlls(gyo_sdl_gpu_capture_tests)
+    add_test(NAME render.sdl_gpu_capture_file COMMAND gyo_sdl_gpu_capture_tests)
+    set_tests_properties(render.sdl_gpu_capture_file PROPERTIES TIMEOUT 15 LABELS "cpu")
 endif()

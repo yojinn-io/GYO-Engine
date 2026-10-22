@@ -45,6 +45,7 @@
 | 2026-10-22 | D35：核准 ip3c 的判定變更（[ip3c-judgment-change.md](ip3c-judgment-change.md) 第 3 版，§14.4 的 1～5，獨立核對 3 輪）：整合判定的容許由 `β/2` 改為 `τ = |drift| + P0.bracket + P1.bracket + 2 ns` | 使用者 |
 | 2026-10-22 | D36：ip3e 的 P1～P3。P1、P2 合成一條：`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（兩條規則都是為了不讓程式錯誤在測試中消失；在 Engine 直接呼叫 C 函式庫的那一層照字面遵守反而會讓錯誤不可見或行為未定義），允許解構子以 GYO_ASSERT 檢查自己持有的 C 全域狀態（解構子維持 noexcept，以 death test 驗證），以及進入點與 C 回呼使用 `catch (...)`（必須記錄並轉成明確的結果）。P1 的實作：SdlLogBridge 解構子回到 noexcept，斷言的測試改 death test。P2：RunEntry 不改。P3：宣告的「每一輪守恆」改為「逐執行緒守恆」，§14.4 的 1～5 見 [ip3-declaration.md](ip3-declaration.md) 第 6 節 | 使用者（經分支會話轉達：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。（我的理解是，P1、P2主要是測試的問題。如果不改規則，會讓程式錯誤不可見，就無法測試。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」） |
 | 2026-10-22 | D37：IP-4 介面審查（U10）後的修正。Design Invariant 7 改寫：查詢類（`QueryWindow` 等）在 observer 與 live frame 內允許；操作類在 observer、live frame、watch 回呼內斷言；`AddEventWatch`、`EventWatch` 解構、注入在 live frame 與 watch 回呼內斷言（thread_local 的分派深度）；`EventWatch` 只記 window ID、不參照 platform，可以比 platform 晚解構。回傳型別：`QueryWindow` 回 `WindowState`、`Raise` 回 void、`Sync` 回 bool、`AddEventWatch` 回 `EventWatch`（記憶體不足丟 bad_alloc）；刪除 ip4b 的「`AddEventWatch` 失敗路徑」驗收（§14.4 的放寬，使用者核准）。其餘審查意見（M3～M8）照主對話的處理 | 使用者：「核准：DI 7 照建議改寫（H1 查詢類／操作類分開、H2 watch 不參照 platform、M1 分派深度的斷言）；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
+| 2026-10-22 | D38：ip4b 的 xhigh 審查之後。F4：時間戳判定採 [ip4b-judgment-change.md](ip4b-judgment-change.md) 的方案 B（區間＋兩條精確等式；§14.4，獨立核對後）。F10：Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（`GYO_ASSERT(SDL_IsMainThread())`＋death test `watch-off-main`；SDL 結束事件子系統時不持鎖就銷毀 watcher 清單）。Design Invariant 3 的守衛清單補上 watch 路徑 | 使用者：「核准：F4 採方案 B（區間＋兩條精確等式）；F10 加 DI：EventWatch 只在主執行緒解構（GYO_ASSERT＋death test）；DI 3 守衛清單補上 watch 路徑。然後提交、推上 PR #85。」 |
 
 ## 正式項目清單
 
@@ -345,6 +346,34 @@
   - 突變 m13、m14、m-enter、m-table、m-motion、m-focus、m26、m28、m29、m-depth、m-x11，11／11 killed。
   - 消費端：live frame 讀視窗大小改用 `QueryWindow`（H1 的情境）；產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號歸零，拿掉產品對 `GYO::PlatformSDLNative` 的暫時連結。probe 與 pointer capture 測試仍暫時連 Native（消費端 IP-4 遷移）。
   - 本機：全量建置；`test` preset 79／79；SDL 相關 7 個；SDL 測試連跑 20 次 0 失敗。
+- 2026-10-22：ip4a 的 L1 #558（`d82364e`）四平台成功。
+- 2026-10-22：ip4b 實作與本機驗收（檔位 high，watch 的執行緒與生命週期局部 xhigh）。
+  - `ObservedEventKind`（12 種）、`ObservedEvent`、`EventWatchCallback`、`EventWatch`（可搬移，以 `unique_ptr<Node>` 持有，只記 window ID）、`SdlPlatform::AddEventWatch`。回呼：先過濾種類與視窗，再取一個配對，`observedAt` 是第二次 Engine 讀取，`timestamp` 以它為上限；`injected` 讀 thread_local。解構在分派深度內斷言（D36 的平台邊界例外）。Native 的唯讀接縫 `LastWatchClockPairForTesting`。
+  - capture：GPU 後端的 `SaveCaptureBmp`（路徑以 UTF-8 傳給 SDL）；Render 的公開錯誤碼加 `FileWriteFailed`（Architecture Delta，PLAN 已預告）。
+  - 測試 11 個（`EventWatchTests.cpp`）加 death test 1 個（probe 的 `watch-in-live-frame`）。宣告的時間戳判定在執行前更正（見 [ip4-declaration.md](ip4-declaration.md) 第 4 節）。連跑 30 次 0 失敗。
+  - 突變 12 個全部 killed（m15、m15b、m15c、m16、m-kind、m17、m-order、m20、m21、m22、m-depth-watch、m18）。
+  - 本機：全量建置；`test` preset 79／79；SDL 相關 7 個。
+- 2026-10-22：ip4b 的局部 xhigh 審查（F1～F14）與修正，詳見 [ip4-declaration.md](ip4-declaration.md) 第 4 節「xhigh 審查之後」。
+  - 主要修改：
+    - 回呼改用 `SampleClockPair()`；
+    - injected 改成比對事件位址：push 內 live frame 造成的真實事件不再被標記；
+    - 註冊計數的接縫：搬移指派確定性地檢查；
+    - capture 測試移到 `render.sdl_gpu_capture_file`（cpu），platform 測試不再連 GPU 後端；
+    - 併發測試獨立成 `platform_sdl_concurrency`；
+    - watch 比 platform 活得久拆成兩個測試；
+    - 回呼內解構的 death test。
+  - 突變目錄 69 個：第一次 67／69。m-depth 的 find 過時；m-watch-engine 存活，補「`observedAt` 落在 push 之內」後殺掉；兩者與時間戳相關的突變重跑，6／6 殺掉。
+  - 本機：`test` preset 80／80；SDL 相關 8 個連跑 3 次 0 失敗。
+  - D38 之後（方案 B 加上主執行緒斷言）：
+    - 突變目錄 74 個。第一次全跑 73／74：m-depth-watch 的 find 因為插入主執行緒的註解而過時；修正後與 m-main-thread 一起重跑，2／2 殺掉，合計 74／74。
+    - `test` preset 80／80。
+    - platform／input／capture 測試連跑 10 次，0 失敗。
+    - 紀錄：scratchpad 的 `mutants-ip4b-final.log`。
+  - 使用者核准 D38：
+    - F4 採方案 B；
+    - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
+    - DI 3 的守衛清單補上 watch 路徑。
+  - 另回報 F11：m-order 依賴配置器，ASan 下才確定。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）
