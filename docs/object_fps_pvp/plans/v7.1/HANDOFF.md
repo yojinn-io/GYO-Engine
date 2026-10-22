@@ -718,4 +718,11 @@
   - `test` preset 80／80；GUI 短測 1 次 P。
   - L1 #573 執行中。
   - `object_fps_pvp.worker` 失敗：這是已知的 `N-worker-probe-stale`，修正 `d2844a5` 只在本分支，還沒進 sdl-isolation 分支。
+  - L1 #573（`5ef5e69`）四平台成功。
+- 2026-10-23：`probe_injector`（檔位 high）完成：probe 的輸入改用 `SdlInputInjector`。本機 GUI 驗收（`pvp_arena`）：
+  - action60 P：事件 80、檢查 21／21、注入射擊 16，與 pv7-checkpoint 的通過跑次相同。
+  - capture P、player60 P、gui-bots P。
+  - timing-combat：凍結的分析器只因 HUD 判 F，依 D83／D84 改用 v7 HUD 規則判 P；移動 Actual 37.51／37.60 ms。
+  - 第一次跑時，場地誤給 `pvp_corners.json`，頭與 base 以相同的方式失敗。這是操作錯誤（E 類），不是缺陷，證據已保留。之前的通過跑次都用 `pvp_arena.json`；batch 1 的 timing 短測也用錯了場地（判的是移動，仍通過），記為「場地不合慣例」。
+  - 提交 `d5ecfa3`；手動觸發 L1。
 
