@@ -38,7 +38,7 @@
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
 - **等你決定**：無。
-- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`，推送時自動觸發 L1）；下一步 ip4b。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
+- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`，L1 #558 成功）、ip4b 完成（`b3f6386`，L1 #560 執行中；D167）；下一步 ip4c。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -136,6 +136,7 @@
 | D164 | （2026-10-22）ip3e 的 P1～P3（IP 的 D36）：P1、P2 合成一條，`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（照字面遵守會讓程式錯誤不可見，無法測試）；日誌橋的解構子回 noexcept、改 death test；`RunEntry` 不改；P3 改逐執行緒守恆。之後做 ip3f，L3 排最後 | 使用者（分支會話）：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」 |
 | D165 | （2026-10-22）ip3f 的 L3 通過（附兩項觀察：輸入「:」時卡住，推論是輸入法組字；手感的停頓是 IP-2 已知的 drawable 取得停頓）。v8 加一個候選：大廳的按鈕與位址輸入框元件化，並修改 ui_editor | 使用者：「OK了，第一項輸入的時候。在輸入：的時候忽然卡住，我不知道是不是輸入法的問題。其他功能是正常的，但是感覺操作手感怪怪的。v8排一個任務，組件化這些按鈕和輸入框，順便修改uieditor。」 |
 | D166 | （2026-10-22）IP-4 介面審查（U10）後的修正（IP 的 D37）：Design Invariant 7 改寫（查詢類在 observer 與 live frame 內允許、操作類斷言、`EventWatch` 不參照 platform、分派深度的斷言）；回傳型別修正；刪除 ip4b 的「AddEventWatch 失敗路徑」驗收（§14.4）。之後宣告並做 ip4a | 使用者：「核准：DI 7 照建議改寫…；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
+| D167 | （2026-10-22）ip4b 的 xhigh 審查之後（IP 的 D38）：時間戳判定採方案 B（區間＋兩條精確等式；§14.4，獨立核對後）；Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（GYO_ASSERT＋death test）；Design Invariant 3 的守衛清單補上 watch 路徑。之後提交、推上 PR #85 | 使用者：「核准：F4 採方案 B（區間＋兩條精確等式）；F10 加 DI：EventWatch 只在主執行緒解構（GYO_ASSERT＋death test）；DI 3 守衛清單補上 watch 路徑。然後提交、推上 PR #85。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -639,6 +640,12 @@
 - 2026-10-22：ip3f 的 L3 通過（D165）；**IP-3 完成**。v8 候選加「大廳 UI 的元件化（按鈕、位址輸入框）並修改 ui_editor」。
 
 - 2026-10-22：IP-4 介面審查（U10，接受但需修改，D166）；ip4a（查詢、操作、注入，突變 11／11）完成。產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號歸零，不再連 Native。
+
+- 2026-10-22：ip4b（觀測 hook、capture）完成。
+  - watch 的執行緒與生命週期做了局部 xhigh 審查（F1～F14）並修正。
+  - 時間戳判定變更與主執行緒規則（D167）。
+  - 突變 74／74 殺掉。
+  - 提交 `b3f6386`。
 
 ## 未結事項
 
