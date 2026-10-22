@@ -8,13 +8,12 @@
 #include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
-#include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
 #include "engine/render/Renderer.hpp"
 #include "engine/render/backend/sdl_gpu/SceneCaptureFile.hpp"
+#include "engine/time/Waiter.hpp"
 #include "acceptance_protocol.hpp"
 #include "timer_baseline.hpp"
 
-#include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -200,6 +199,19 @@ void WriteLatencyPresentation(std::ostream& stream,
     stream << ',' << local.predictedPosition.x << ',' << local.predictedPosition.z << '\n';
 }
 
+// Frame pacing and pauses of the probes on this (main) thread: Engine's Waiter
+// (sdl-isolation P1, D168), which on macOS wakes without timer coalescing.
+void SleepUntil(Clock::time_point deadline) {
+    static Engine::Time::Waiter waiter = [] {
+        auto created = Engine::Time::Waiter::Create();
+        Require(bool(created), "Cannot create the probe's Waiter");
+        return std::move(created.value());
+    }();
+    while (Clock::now() < deadline) static_cast<void>(waiter.WaitUntil(deadline));
+}
+void SleepFor(double seconds) {
+    SleepUntil(Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(seconds)));
+}
 #include "platform_fingerprint.hpp"
 #include "gui_room.hpp"
 #include "gui_input.hpp"
@@ -209,31 +221,30 @@ void WriteLatencyPresentation(std::ostream& stream,
 #include "combat_latency.hpp"
 #include "start_phase_record.hpp"
 
-// Latency-mode window evidence. SDL calls event watchers synchronously while it
-// queues an event, so OS window events are counted without a second drain of
-// the product's queue; the callback only increments counters. Probe-pushed
-// focus (PushMovement) is counted separately via the synthetic flag. Moved and
-// resized are counted because the product releases its pointer on them. The
-// watcher is added after placement: the placement's own MOVED (queued while
-// SDL_SyncWindow pumps events) and the window's creation events are never
+// Latency-mode window evidence. Engine's EventWatch reports an event while it
+// is queued, so OS window events are counted without a second drain of the
+// product's queue; the callback only increments counters. Probe-injected focus
+// (PushMovement) is counted separately: the platform marks the event it is
+// injecting. Moved and resized are counted because the product releases its
+// pointer on them. The watch is added after placement: the placement's own
+// MOVED (queued while Sync runs) and the window's creation events are never
 // counted; a MOVED that arrives later still lands in window_os_events, but only
 // counts as interference inside the measurement window.
 struct LatencyWindow {
-    static constexpr std::array<std::pair<Uint32, const char*>, 8> Kinds{{
-        {SDL_EVENT_WINDOW_OCCLUDED, "occluded"}, {SDL_EVENT_WINDOW_EXPOSED, "exposed"},
-        {SDL_EVENT_WINDOW_HIDDEN, "hidden"}, {SDL_EVENT_WINDOW_MINIMIZED, "minimized"},
-        {SDL_EVENT_WINDOW_FOCUS_GAINED, "focus_gained"}, {SDL_EVENT_WINDOW_FOCUS_LOST, "focus_lost"},
-        {SDL_EVENT_WINDOW_MOVED, "moved"}, {SDL_EVENT_WINDOW_RESIZED, "resized"}}};
+    using Kind = Engine::Platform::Sdl::ObservedEventKind;
+    static constexpr std::array<std::pair<Kind, const char*>, 8> Kinds{{
+        {Kind::WindowOccluded, "occluded"}, {Kind::WindowExposed, "exposed"},
+        {Kind::WindowHidden, "hidden"}, {Kind::WindowMinimized, "minimized"},
+        {Kind::WindowFocusGained, "focus_gained"}, {Kind::WindowFocusLost, "focus_lost"},
+        {Kind::WindowMoved, "moved"}, {Kind::WindowResized, "resized"}}};
     Engine::Platform::Sdl::SdlPlatform& platform;
-    SDL_Window* window{};
-    SDL_WindowID id{};
     std::string placement{"platform_default"};
     std::string placementError;
     std::optional<Engine::Platform::Sdl::Rect> usable;
     std::optional<std::array<int, 2>> requested, afterSync;
     std::optional<bool> synced;
     std::optional<Engine::Platform::Sdl::WindowFlags> startFlags;
-    std::atomic<bool> measuring{}, synthetic{};
+    std::atomic<bool> measuring{};
     std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
     std::atomic<unsigned> syntheticEvents{};
     // The mover raises itself once both players are present. That raise's own
@@ -244,12 +255,11 @@ struct LatencyWindow {
     // the raise says one is due (the mover lacked focus, or the observer had
     // it); otherwise nothing is set aside. Any further focus event still counts.
     const bool raisesItself;
-    const Uint32 raiseCompletionType;
+    const Kind raiseCompletionType;
     std::atomic<bool> raiseCompletionPending{};
     std::atomic<unsigned> raiseCompletionEvents{};
-    LatencyWindow(Engine::Platform::Sdl::SdlPlatform& owner, bool mover) : platform(owner),
-        window(Engine::Platform::Sdl::NativeWindow(owner)), id(SDL_GetWindowID(window)), raisesItself(mover),
-        raiseCompletionType(mover ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST) {
+    LatencyWindow(Engine::Platform::Sdl::SdlPlatform& owner, bool mover) : platform(owner), raisesItself(mover),
+        raiseCompletionType(mover ? Kind::WindowFocusGained : Kind::WindowFocusLost) {
         // Both probes otherwise open at one platform-default spot and the mover
         // raises itself over the observer: macOS throttles a fully occluded
         // window and a Wayland compositor may report it OCCLUDED. Opposite
@@ -282,33 +292,32 @@ struct LatencyWindow {
                 placementError = placed.error().detail.empty() ? placed.error().message : placed.error().detail;
             }
         }
-        Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
+        watch = platform.AddEventWatch(&Watch, this);
     }
-    ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
     void ExpectRaiseCompletion() {
         const bool focused = platform.QueryWindow().flags.inputFocus;
         raiseCompletionPending.store(raisesItself ? !focused : focused, std::memory_order_relaxed);
     }
     LatencyWindow(const LatencyWindow&) = delete;
     LatencyWindow& operator=(const LatencyWindow&) = delete;
-    static bool SDLCALL Watch(void* self, SDL_Event* event) {
+    // Runs on the pushing thread (the main thread, or SDL's raw input thread on
+    // Windows in relative mode, whose mouse events are ignored here); counters only.
+    static void Watch(void* self, const Engine::Platform::Sdl::ObservedEvent& event) noexcept {
         auto& evidence = *static_cast<LatencyWindow*>(self);
-        if (event->type < SDL_EVENT_WINDOW_FIRST || event->type > SDL_EVENT_WINDOW_LAST || event->window.windowID != evidence.id) return true;
-        if (event->type == evidence.raiseCompletionType && !evidence.synthetic.load(std::memory_order_relaxed) &&
+        if (event.kind == evidence.raiseCompletionType && !event.injected &&
             evidence.raiseCompletionPending.exchange(false, std::memory_order_relaxed)) {
             evidence.raiseCompletionEvents.fetch_add(1, std::memory_order_relaxed);
-            return true;
+            return;
         }
         for (std::size_t kind = 0; kind < Kinds.size(); ++kind) {
-            if (event->type != Kinds[kind].first) continue;
-            if (evidence.synthetic.load(std::memory_order_relaxed)) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
+            if (event.kind != Kinds[kind].first) continue;
+            if (event.injected) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
             else {
                 evidence.total[kind].fetch_add(1, std::memory_order_relaxed);
                 if (evidence.measuring.load(std::memory_order_relaxed)) evidence.during[kind].fetch_add(1, std::memory_order_relaxed);
             }
             break;
         }
-        return true;
     }
     void Report(std::ostream& report) const {
         const auto state = platform.QueryWindow();
@@ -344,6 +353,8 @@ struct LatencyWindow {
                << "\nwindow_synthetic_events=" << syntheticEvents.load()
                << "\nwindow_raise_completion_events=" << raiseCompletionEvents.load() << '\n';
     }
+    // Last, so it is removed before the counters it writes go away.
+    Engine::Platform::Sdl::EventWatch watch;
 };
 
 // Long latency runs use ordinary input/connection APIs and successful renderer
@@ -460,9 +471,7 @@ void RunLatency(const Options& options) {
                         state.playerId, EpochOf(local), local.latestCommand, local.renderPosition.x, local.renderPosition.z,
                         std::sin(self->yaw) * sign, std::cos(self->yaw) * sign});
                     held = event % 2 ? Key::S : Key::W;
-                    windowEvidence.synthetic.store(true, std::memory_order_relaxed);
                     PushMovement(input, true, *held);
-                    windowEvidence.synthetic.store(false, std::memory_order_relaxed);
                 }
             }
         }
@@ -493,7 +502,7 @@ void RunLatency(const Options& options) {
         }
         // Independent measurement pacing; never try to replay missed frames.
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
-        if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        if (remaining > 0) SleepFor(remaining);
     }
     if (held) PushMovement(input, false, *held);
     if (options.combat) combat.Save(application);
@@ -546,7 +555,7 @@ void RunLatency(const Options& options) {
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     while (connection.State().phase != fps::pvp::ConnectionPhase::Lobby) {
         Require(Clock::now() < leaveDeadline, "Latency client did not leave cleanly");
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(connection.State().error.empty(), "Latency leave cleanup failed");
 #ifdef PVP_PROBE_MOVEMENT_TRACE
@@ -569,7 +578,7 @@ void RunPhaseStalls(const Options& options) {
         std::uint32_t maxServerPending{};
         double recoverySeconds{};
         // Lower bound of the elapsed time the product itself sampled across the
-        // stalled frame: SDL_Delay can oversleep, so the nominal milliseconds
+        // stalled frame: the sleep can oversleep, so the nominal milliseconds
         // do not say whether the product really saw a stall of 100 ms or more.
         double productElapsedLowerBound{};
         bool recovered{};
@@ -652,7 +661,7 @@ void RunPhaseStalls(const Options& options) {
             injecting->stallReseeds = application.LocalMovement().stallReseeds;
         }
         if (injecting && injecting->beforeUpdate) {
-            SDL_Delay(injecting->milliseconds);
+            SleepFor(injecting->milliseconds / 1000.0);
             injecting->released = Clock::now();
         }
         const auto updateStarted = Clock::now();
@@ -692,7 +701,7 @@ void RunPhaseStalls(const Options& options) {
             previousMovement = local;
         } else { previousUpdate.reset(); previousSteppedAt.reset(); previousMovement.reset(); }
         if (injecting && !injecting->beforeUpdate) {
-            SDL_Delay(injecting->milliseconds);
+            SleepFor(injecting->milliseconds / 1000.0);
             injecting->released = Clock::now();
         }
         Require(application.Render(frame) == Control::Continue, application.LastError());
@@ -737,7 +746,7 @@ void RunPhaseStalls(const Options& options) {
                 Require(healthy, "Command queue accumulated again after phase stall recovery");
         }
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
-        if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        if (remaining > 0) SleepFor(remaining);
     }
     if (held) PushMovement(input, false, *held);
     samples.flush(); Require(bool(samples), "Cannot write phase stall observations");
@@ -765,7 +774,7 @@ void RunPhaseStalls(const Options& options) {
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     while (connection.State().phase != fps::pvp::ConnectionPhase::Lobby) {
         Require(Clock::now() < leaveDeadline, "Phase stall client did not leave cleanly");
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(connection.State().error.empty(), "Phase stall leave cleanup failed");
 #ifdef PVP_PROBE_MOVEMENT_TRACE
@@ -1004,7 +1013,7 @@ void Run(const Options& options) {
                 captureFinished = now;
             }
         }
-        SDL_Delay(1);
+        SleepFor(.001);
     }
 
     Require(finalTick > firstTick, "Authoritative simulation did not advance during GUI run");
@@ -1072,7 +1081,7 @@ void Run(const Options& options) {
         Require(application.ProcessEvents(waiting) == Control::Continue, "Leave event processing failed");
         Require(application.Update(waiting) == Control::Continue, application.LastError());
         Require(application.Render(waiting) == Control::Continue, application.LastError());
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(!connection.State().rooms.empty(), "ESC did not refresh the retained room list");
     report << "escape_returns_to_lobby=true\n" << "escape_clears_prediction=true\n"

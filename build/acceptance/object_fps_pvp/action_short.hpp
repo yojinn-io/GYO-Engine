@@ -616,7 +616,7 @@ void RunActionShort(const Options& options) {
             Require(frames.size() < frames.capacity(), "Bounded action frame buffer exhausted");
             frames.push_back(std::move(sample));
             const double remaining = 1 / options.fps - Seconds(Clock::now(), now);
-            if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+            if (remaining > 0) SleepFor(remaining);
         }
         evidence["presentation_frames"] = presentedCount;
         evidence["unscheduled_yaw_frames"] = unscheduledYawFrames;
@@ -1015,7 +1015,7 @@ void RunActionRapid(const Options& options) {
                 {"authority_cooldown_rejections", after.authorityCooldownRejections}, {"ammo", after.magazineAmmo},
                 {"captured", after.inputCaptured}, {"hp", after.hp}, {"dead", after.dead}});
             const double remaining = 1 / options.fps - Seconds(Clock::now(), now);
-            if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+            if (remaining > 0) SleepFor(remaining);
         }
         const auto last = application.WeaponFeedback();
         evidence["presentation_frames"] = presentedCount;

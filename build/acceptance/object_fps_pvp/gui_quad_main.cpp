@@ -7,11 +7,9 @@
 #include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
-#include "engine/platform/sdl/SdlPlatformNative.hpp" // temporary until IP-4 (sdl-isolation)
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
 
-#include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>

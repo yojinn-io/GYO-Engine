@@ -60,7 +60,7 @@
 
 | # | 問題 | 選項 | 建議 |
 |---|---|---|---|
-| P1 | probe 的節奏與停頓：`SDL_DelayNS`／`SDL_Delay` 換成什麼。共 10 處：`gui_main.cpp:532,690,730,775,1047`、`action_short.hpp:616,1015`、`player_short.hpp:309`、`native_window.hpp:107`、`platform_fingerprint.hpp:36` | **(a)** `Waiter`：v7 第 12 批的原文就是「SDL_Delay 改用 Waiter」。macOS 上 Waiter 用 kqueue 的 NOTE_CRITICAL，沒有計時器合併，probe 的幀節奏會更接近名目值，和 base 不同。**(b)** `std::this_thread::sleep_for`：macOS 與 Linux 上和 SDL 一樣是 nanosleep，Windows 則不同，節奏大致和 base 相同 | **(a)**。理由：第 7 節要判定的量（移動的 Actual、首次送出、逐筆判定、各樹各自的門檻）都不受 probe 相位影響；受影響的量（節奏、可見交越、回饋、裁決抵達、計時基線）在 pv7-checkpoint 起就只記錄（D132）。(b) 只能在兩個平台上和 base 等價，又違背第 12 批的原文。更正（D45）：可見交越、裁決抵達在各樹內**仍受絕對門檻判定**（G2），只有跨樹比較只記錄；17 輪的餘裕很大（可見 P95 38.4～41.5 ms，門檻 80；裁決抵達 P95 33～54 ms，門檻 150）。代價：(1) 計時基線（`platform_timer_*`）的 4／8 ms 主機狀態分類，兩樹之間不能比，主機狀態改用和兩樹無關的 session `sleeper.py` 判斷；(2) 節奏接近 60 時，幀與 60 Hz Tick 的拍頻降到約 0.1 Hz，20 個事件的相位抽樣變得相關，可見交越 P50 可能整體平移約 ±8 ms（仍遠低於 50 ms），而且 v7 的 HUD 規則沒在接近名目值的節奏下跑過，所以頭在 L2 前要先跑開發跑次（第 7.1 節） |
+| P1 | probe 的節奏與停頓：`SDL_DelayNS`／`SDL_Delay` 換成什麼。共 13 處：`gui_main.cpp:532,585,690,730,775,803,1047,1114`（585、803、1114 是離開迴圈裡的 `SDL_Delay(2)`，盤點時漏列，實作時一併改）、`action_short.hpp:616,1015`、`player_short.hpp:309`、`native_window.hpp:107`、`platform_fingerprint.hpp:36` | **(a)** `Waiter`：v7 第 12 批的原文就是「SDL_Delay 改用 Waiter」。macOS 上 Waiter 用 kqueue 的 NOTE_CRITICAL，沒有計時器合併，probe 的幀節奏會更接近名目值，和 base 不同。**(b)** `std::this_thread::sleep_for`：macOS 與 Linux 上和 SDL 一樣是 nanosleep，Windows 則不同，節奏大致和 base 相同 | **(a)**。理由：第 7 節要判定的量（移動的 Actual、首次送出、逐筆判定、各樹各自的門檻）都不受 probe 相位影響；受影響的量（節奏、可見交越、回饋、裁決抵達、計時基線）在 pv7-checkpoint 起就只記錄（D132）。(b) 只能在兩個平台上和 base 等價，又違背第 12 批的原文。更正（D45）：可見交越、裁決抵達在各樹內**仍受絕對門檻判定**（G2），只有跨樹比較只記錄；17 輪的餘裕很大（可見 P95 38.4～41.5 ms，門檻 80；裁決抵達 P95 33～54 ms，門檻 150）。代價：(1) 計時基線（`platform_timer_*`）的 4／8 ms 主機狀態分類，兩樹之間不能比，主機狀態改用和兩樹無關的 session `sleeper.py` 判斷；(2) 節奏接近 60 時，幀與 60 Hz Tick 的拍頻降到約 0.1 Hz，20 個事件的相位抽樣變得相關，可見交越 P50 可能整體平移約 ±8 ms（仍遠低於 50 ms），而且 v7 的 HUD 規則沒在接近名目值的節奏下跑過，所以頭在 L2 前要先跑開發跑次（第 7.1 節） |
 | P2 | S1(b) 的缺口：移除 `PvpApplication.hpp:129` 的 `SdlGpuRenderDevice&` 之後，`platform_fingerprint.hpp:24` 與 `gui_main.cpp:11` 還要讀 GPU driver 名 | **(a)** 產品加 `[[nodiscard]] Engine::Render::RenderDeviceInfo RenderDeviceInfo() const;`，這是 `IRenderDevice::GetInfo()` 的中立型別。**(b)** 回傳 `Engine::Render::IRenderDevice&`。**(c)** fingerprint 不再記 driver | **(a)**：只交出資訊，不交出裝置，範圍最小。這是產品公開介面的小改動，和 S1 的決定一起記錄 |
 | P3 | J1（pointer capture）走哪個選項 | A：golden 加 Engine 的 s06 守衛／B：保留，列為符號守衛的例外／C：退役／D：保留 oracle，改用注入器驅動 | **A**，理由見第 6 節 |
 | P4 | `run_network.py --gui-probe`（`Run --move`）要不要放進 L2。它的合成 MOVED 會改（J2），v7 與 v7.1 的 L2 項目清單都沒有它（v6 的 `MANUAL_ACCEPTANCE.md:119,124` 有） | 放進（每樹 1 次，判定見 G8）／不放，只在本機跑 | **放進**。J2 改的就是它的證據。但它現在「通過」不代表移動的檢查有做（`testedWindowMove` 在推出事件後就設為真），所以 G8 改判報告裡的三個子檢查 |
@@ -87,7 +87,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 1. **節奏與停頓**（P1）：幀間隔分布、實測 FPS、`skipped_frames`、player 85% 閘門的餘裕、hold 幀數、phase-stalls 的 `productElapsedLowerBound`／`recoverySeconds`、計時基線的全部欄位。
 2. **合成 MOVED 改成真正移動**（J2）。
 3. **LatencyWindow 的 injected 歸屬**：舊的做法是 probe 自己的時間窗旗標；新的是 Engine 以事件位址判定。預期計數相同（mover 20、join 0）。如果在舊旗標的時間窗內出現真實事件，以前算成 synthetic，現在算成 OS 事件；這種情況在既有的 11 輪裡沒有出現過。
-4. **PlayerInputWatch 的欄位**：`event_type` 改成 `ObservedEventKind` 的值；`sdl_timestamp_ns` 改成 Engine 的時間戳，鍵名改成 `timestamp_ns`；semantics 字串改寫。目前沒有分析器讀這些欄位。
+4. **PlayerInputWatch 的欄位**：鍵名 `event_type` 改成 `event_kind`，值從 SDL 的事件型別數值改成 `ObservedEventKind` 的名稱字串（例如 `mouse_motion`）；`sdl_timestamp_ns` 改成 Engine 的時間戳，鍵名改成 `timestamp_ns`；新增 `injected`；semantics 字串改寫。目前沒有分析器讀這些欄位（probe_watch_pacing 的 xhigh 審查確認）。
 5. **計時基線的標籤**（J3）。
 
 ## 6. 判定變更草案
@@ -214,7 +214,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 | G3 | timing 兩項（timing-gui-short、bots2-timing-gui-short）的移動 Actual P50、P95：`A − B ≤ 1 ms`。另記雙側的差。任一樹的該項受干擾（D）時，不判，記為「無法判定」。不成立時不自動當成退步，交使用者判斷（比照 `pv7-checkpoint-l2.md:79`） | **套用到 GUI 是新的。** 規則形式出自 `pv7-checkpoint-l2.md:70`（非 GUI、每樹 3 次的 `max(range B, 1 ms)`），每樹只跑 1 次時只剩 1 ms。推導：<br>(1) Actual 和 probe 的節奏無關：模擬在自己的 RoleThread 上，以 `WaitUntil` 對齊步邊界（`ClientSimulationRole.cpp:168-187`），`generated` 在模擬執行緒上打時間戳（`LocalPlayerPrediction.cpp:356`）；同一樹內 clean-30／60／144 的主迴圈 FPS 差 4.8 倍，Actual P50 只差 ≤0.17 ms。<br>(2) 17 輪的分布：P50 37.42～37.62、P95 37.55～37.75 ms，標準差約 0.06 ms；同一 session 內 A−B 的絕對值 ≤0.11 ms。<br>(3) 每個 epoch 的第一次相位有 0.5 ms 的死區（`Movement.hpp:75`），兩次跑最多可差約 1 ms 而沒有退步，所以不能再往下收 |
 | G4 | 可見交越、裁決抵達：跨樹比較只記錄，兩樹並列。各樹的絕對門檻仍由 G2 判定 | `pv7-checkpoint-l2.md:77`（C8，來源是 16-L2 的 L2-6） |
 | G5 | 節奏只記錄。預測：timing 兩項的 create 與 join，頭的 `measured_mean_fps` 都 ≥59.0，而且都高於同一項、同一角色的 base。任何一格不滿足，就推翻這個預測，記下來交你判斷。不影響 G1～G3 | **新的**。機制：`Waiter.hpp:60-65`（NOTE_CRITICAL）。base 的參考值：既有 17 輪 create 56.46～57.97、join 56.39～57.97 FPS（不是 base 樹跑的） |
-| G6 | mover 的 injected 視窗事件數：每一樹都 ＝實際觸發的事件數（`latency-events` 的列數）。join 為 0。不成立記為 A 類（工具），停下 | **新的**。40 輪（v5～v7.1）全部是 create 20、join 0。macOS 的 OS 視窗事件只在主執行緒 pump 時排入，舊的時間窗結構上進不來；新的事件位址判定也不會把真實事件算成 injected。頭的實作必須保留「raise completion 的判定排除 injected」（舊的是 `gui_main.cpp:333` 的 `!synthetic`），否則計數會變 19。G6 正好守住這一點 |
+| G6 | mover 的 injected 視窗事件數：每一樹都 ＝實際觸發的事件數（`latency-events` 的列數）。join 為 0。不成立記為 A 類（工具），停下 | **新的**。40 輪（v5～v7.1）全部是 create 20、join 0。macOS 的 OS 視窗事件只在主執行緒 pump 時排入，舊的時間窗結構上進不來；新的事件位址判定也不會把真實事件算成 injected。頭的實作必須保留「raise completion 的判定排除 injected」（舊的是 `gui_main.cpp:333` 的 `!synthetic`），否則計數會變 19。G6 只在「第一次注入時 raise completion 仍在等待」的跑次守得住這一點（probe_watch_pacing 的 xhigh 審查 T1：mover 原本有焦點、或真實的 FOCUS_GAINED 先到時，拿掉 `!injected` 的突變會存活）；這是已知的缺口，G6 仍照判 |
 | G7 | action 的 REQUIRED_CHECKS，包括 `drag_suppressed`，兩樹都為真（包含在 G1 的 P 裡）。J2 的風險見開發跑次 | `run_action_short.py:38-46,80-111` |
 | G8 | gui-probe：兩樹都要 P（網路階段照 `judge_16` 的分類）；而且 `gui/create-report.txt` 的 `window_move_releases_capture`、`window_move_stops_held_input`、`tab_toggles_capture` 三行都是 `true`。presentation 的部分（至少 3 個配對、中位數 ≤0.15 s）沒有視窗閘門；它不成立時先立旗標交你判斷，不直接停 | **新項目**（P4）。三個子檢查：`gui_main.cpp:948-978,1072-1074`。presentation 的門檻出自 v3 的 `bfeb047`（`presentation_evidence.py:15-16,162-165`）。fix06 第 47 行寫明 gui-probe 沒有閘門 |
 | G9 | 受干擾：每次呼叫前後的 `sleeper.py`，任一次 ≥10 ms，該次記為 D。D 不重跑；它對 G3、G5、G6 不判，只記錄。兩樹合計 20 次呼叫中，累計 ≥3 次 D 就停 | 10 ms 與前後的 sleeper：`pv7-checkpoint-l2.md:28,62`。**≥3 是新的**，論證：v7.1 的 13 個 session、1512 個跑次中受干擾 23 次（1.52%），n＝20 時 P(≥3) 約 0.3%；環境差的時候（d44c 是 4.6%），P(≥3) 約 6%；GUI 項目歷來約 0.5%（1/191） |
@@ -268,3 +268,13 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 - 沒有寫到 probe 的 CMake 與進入點的改動。
 - 沒有寫到 `test_presentation_evidence.py:722-734` 會讀 `gui_main.cpp` 的原始碼文字。
 - 連到 `after-re-evaluate.md` 的連結在本分支是斷的：該檔只在記錄器分支 `claude/pvp-v71-after-re-evaluate`。兩條線都合併之後才會恢復，先記下來。
+
+## 9. 實作中的補記
+
+- **probe_watch_pacing 的 xhigh 審查**（2026-10-23）：沒有 critical 或 major。已修正的 minor：B4 的鍵名改動補記到第 5 節；`event_kind` 改輸出名稱字串；過時註解；CMake 明確連 `GYO::Time`；P1 清單補上 3 處 `SDL_Delay(2)`。
+- **記下的測試缺口（不在本次範圍內修）**：
+  - T1：G6 是有條件的守衛，見 G6 列。
+  - T2：`PlayerInputWatch` 的種類集合沒有守衛。正常跑次不會出現 Restored、Minimized、Resized。
+  - T3：`watch` 成員的宣告順序沒有守衛。只在 Windows 的 raw input 執行緒恰好在解構時回呼時才會出事。
+  - T4：節奏沒有上限的閘門；「計時基線的睡法＝幀迴圈的睡法」也沒有守衛。
+

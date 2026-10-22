@@ -29,13 +29,9 @@ struct PlatformFingerprint final {
             if (bounds.width > 0 && bounds.height > 0) result.usable = bounds;
         }
         result.input = std::move(input);
-        // The GUI probes sleep the remainder of each frame with SDL_DelayNS.
-        result.timer = TimerBaseline::Measure("SDL_DelayNS remainder", TimerBaseline::Schedule::FrameRelative,
-            [](std::chrono::steady_clock::time_point deadline) {
-            const auto remaining = deadline - std::chrono::steady_clock::now();
-            if (remaining > std::chrono::steady_clock::duration::zero())
-                SDL_DelayNS(static_cast<Uint64>(std::chrono::duration_cast<std::chrono::nanoseconds>(remaining).count()));
-        });
+        // The GUI probes sleep the remainder of each frame with Engine's Waiter.
+        result.timer = TimerBaseline::Measure("Waiter remainder", TimerBaseline::Schedule::FrameRelative,
+            [](std::chrono::steady_clock::time_point deadline) { SleepUntil(deadline); });
         return result;
     }
     static const std::string& Known(const std::string& value) {

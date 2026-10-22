@@ -1,73 +1,82 @@
 // Product acceptance only. Input and snapshot impairment live outside the app.
 // Observation only: never filter, rewrite or recapture an OS input event.
 struct PlayerInputWatch final {
+    using Kind = Engine::Platform::Sdl::ObservedEventKind;
     struct Event {
-        Uint32 type{}, device{};
-        Uint64 sdlTimestamp{};
+        Kind kind{};
+        std::uint32_t device{};
+        std::int64_t timestampNs{};
         double hostSeconds{};
         float dx{}, dy{};
+        bool injected{};
         std::size_t scriptOrdinal{};
     };
     std::array<Event, 4096> events{};
     std::mutex mutex;
-    SDL_WindowID window{};
     std::size_t count{}, scriptOrdinal{};
-    bool overflow{}, installed{};
+    bool overflow{};
 
-    static bool SDLCALL Observe(void* userdata, SDL_Event* event) {
+    // Runs on the pushing thread; the mutex is never held across a platform call.
+    static void Observe(void* userdata, const Engine::Platform::Sdl::ObservedEvent& event) noexcept {
+        switch (event.kind) {
+        case Kind::MouseMotion: case Kind::MouseButtonPressed: case Kind::MouseButtonReleased:
+        case Kind::WindowFocusGained: case Kind::WindowFocusLost: case Kind::WindowMoved: case Kind::WindowResized:
+        case Kind::WindowMinimized: case Kind::WindowRestored:
+            break;
+        default: return; // the kinds this record has always kept
+        }
         auto& self = *static_cast<PlayerInputWatch*>(userdata);
         Event value;
-        value.type = event->type;
-        value.sdlTimestamp = event->common.timestamp;
-        value.hostSeconds = std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
-        SDL_WindowID id{};
-        switch (event->type) {
-        case SDL_EVENT_MOUSE_MOTION:
-            id = event->motion.windowID; value.device = event->motion.which;
-            value.dx = event->motion.xrel; value.dy = event->motion.yrel;
-            break;
-        case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:
-            id = event->button.windowID; value.device = event->button.which;
-            break;
-        case SDL_EVENT_WINDOW_FOCUS_GAINED: case SDL_EVENT_WINDOW_FOCUS_LOST:
-        case SDL_EVENT_WINDOW_MOVED: case SDL_EVENT_WINDOW_RESIZED:
-        case SDL_EVENT_WINDOW_MINIMIZED: case SDL_EVENT_WINDOW_RESTORED:
-            id = event->window.windowID;
-            break;
-        default: return true;
-        }
-        if (id != self.window) return true;
+        value.kind = event.kind;
+        value.device = event.sourceId;
+        value.timestampNs = std::chrono::duration_cast<std::chrono::nanoseconds>(event.timestamp.time_since_epoch()).count();
+        value.hostSeconds = std::chrono::duration<double>(event.observedAt.time_since_epoch()).count();
+        value.dx = event.deltaX;
+        value.dy = event.deltaY;
+        value.injected = event.injected;
         std::lock_guard lock(self.mutex);
         if (self.count == self.events.size()) self.overflow = true;
         else {
             value.scriptOrdinal = self.scriptOrdinal;
             self.events[self.count++] = value;
         }
-        return true;
     }
-    void Install(SDL_Window* value) {
-        window = SDL_GetWindowID(value);
-        Require(SDL_AddEventWatch(&Observe, this), "Cannot install acceptance-only input event observer");
-        installed = true;
-    }
-    void Remove() {
-        if (installed) { SDL_RemoveEventWatch(&Observe, this); installed = false; }
-    }
+    void Install(Engine::Platform::Sdl::SdlPlatform& platform) { watch = platform.AddEventWatch(&Observe, this); }
+    void Remove() { watch = Engine::Platform::Sdl::EventWatch(); }
     void Script(std::size_t value) { std::lock_guard lock(mutex); scriptOrdinal = value; }
     bool Overflowed() { std::lock_guard lock(mutex); return overflow; }
+    static const char* Name(Kind kind) {
+        switch (kind) {
+        case Kind::MouseMotion: return "mouse_motion";
+        case Kind::MouseButtonPressed: return "mouse_button_pressed";
+        case Kind::MouseButtonReleased: return "mouse_button_released";
+        case Kind::WindowFocusGained: return "focus_gained";
+        case Kind::WindowFocusLost: return "focus_lost";
+        case Kind::WindowMoved: return "moved";
+        case Kind::WindowResized: return "resized";
+        case Kind::WindowMinimized: return "minimized";
+        case Kind::WindowRestored: return "restored";
+        default: return "other";
+        }
+    }
     WeaponJson Evidence() {
         std::lock_guard lock(mutex);
         WeaponJson recorded = WeaponJson::array();
         for (std::size_t i = 0; i < count; ++i) {
             const auto& event = events[i];
-            recorded.push_back({{"event_type", event.type}, {"which", event.device},
-                {"sdl_timestamp_ns", event.sdlTimestamp}, {"host_steady_seconds", event.hostSeconds},
-                {"xrel", event.dx}, {"yrel", event.dy}, {"script_ordinal_during_push", event.scriptOrdinal}});
+            recorded.push_back({{"event_kind", Name(event.kind)}, {"which", event.device},
+                {"timestamp_ns", event.timestampNs}, {"host_steady_seconds", event.hostSeconds},
+                {"xrel", event.dx}, {"yrel", event.dy}, {"injected", event.injected},
+                {"script_ordinal_during_push", event.scriptOrdinal}});
         }
         return {{"capacity", events.size()}, {"overflow", overflow}, {"events", recorded},
-            {"semantics", "SDL_AddEventWatch only observes this owned window; no filtering or state changes. Ordinal zero means no script PushEvent call was active; device/source attribution remains observational."}};
+            {"semantics", "Engine EventWatch observes this owned window only; no filtering or state changes. event_kind is "
+                "Engine's ObservedEventKind by name; timestamp_ns is the queue time and host_steady_seconds the observation, "
+                "both on the steady clock. Ordinal zero means no script push was active; injected marks the event a "
+                "scripted push queued. Device/source attribution remains observational."}};
     }
-    ~PlayerInputWatch() { Remove(); }
+    // Last, so it is removed before the record it writes goes away.
+    Engine::Platform::Sdl::EventWatch watch;
 };
 
 WeaponJson CharacterSample(const fps::pvp::PlayerPresentationObservation& c) {
@@ -124,10 +133,9 @@ void RunPlayerShort(const Options& options) {
         Require(application.InitializeGraphics(graphics, error), error);
         report["initialize_graphics_ms"] = Seconds(Clock::now(), preparing) * 1000;
         auto& connection = application.Connection();
-        auto* window = Engine::Platform::Sdl::NativeWindow(application.Platform()); // the input watch, until probe_watch_pacing
         ProbeInput input(application.Platform());
         report["platform"] = PlatformFingerprint::Capture(application).Json();
-        inputWatch.Install(window);
+        inputWatch.Install(application.Platform());
         if (mover) connection.CreateAndJoin(options.gateway);
         else connection.Refresh(options.gateway);
         bool joined = mover, leaving{}, rejoinRequested{}, rejoined{};
@@ -307,7 +315,7 @@ void RunPlayerShort(const Options& options) {
             Require(frames.size() < frames.capacity(), "Player presentation frame buffer exhausted");
             frames.push_back(std::move(sample));
             const double remaining = 1 / options.fps - Seconds(Clock::now(), now);
-            if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+            if (remaining > 0) SleepFor(remaining);
         }
         Require(presentedCount > 20, "Insufficient actual player presentations");
         if (mover) Require(rejoined && nextEvent == schedule.size(), "Player lifecycle/movement schedule incomplete");

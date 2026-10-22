@@ -105,7 +105,7 @@ void RunNativeWindow(const Options& options) {
             published = now;
         }
         const double remaining = 1 / options.fps - Seconds(Clock::now(), now);
-        if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        if (remaining > 0) SleepFor(remaining);
     }
     connection.Leave();
     std::ofstream trace(options.output / (options.role + "-native-frames.jsonl"));
