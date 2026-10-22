@@ -323,6 +323,13 @@
     - P3：宣告的「每一輪的行數守恆」在不暫停推送執行緒的情況下量不到；實作為「逐執行緒守恆」（比原本的總和更嚴，但字面上與宣告不同），照 §14.4 交使用者確認。
 - 2026-10-22：ip3e 的 L1 #554（`97e2a22`）四平台成功。依 D36 處理 P1～P3：`error-handling.md` 加平台邊界的例外條款；SdlLogBridge 解構子回到 noexcept，斷言改以 death test（`platform_sdl_entry_probe replaced-bridge`，assertion handler 以結束碼 41／42 回報別人的輸出是否原封不動）；宣告改為逐執行緒守恆並記 §14.4 的 1～5（`ip3-declaration.md` 第 6 節）。m-race 在 noexcept 解構子下有時由橋自己的 GYO_ASSERT（測試的 throwing handler 下 terminate）抓到，預期訊息改為兩者擇一。
 - 2026-10-22：ip3f（檔位 medium）：突變目錄 36／36 killed；`test` preset 79／79，SDL 相關 6 個；寫 [dev_log](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)；`platform-sdl.md` 的狀態、遷移清單（ip3e 的選用遷移）、PLAN／README 的狀態。**IP-3 實作完成，L3 待使用者**（使用者：「處理完P1-P3後，處理ip3f，L3排最後。」）。下一步 IP-4：先做介面的 xhigh 審查（U10），再宣告 m13～m19。
+- 2026-10-22：ip3f 的 L3（macOS Intel，使用者操作；證據 `build/target/_build/test/logs/pvp-v71-ip3f-l3-20261022/client.log`）：**通過，附兩項觀察**。
+  - 位址輸入（按住 Backspace、Ctrl+A、Ctrl+V、Return、Esc）、live resize、關閉都正常（使用者：「其他功能是正常的」）。
+  - 日誌檔的格式與修改前（`pvp-v7-lan-kit-20261014/smoke/mac-client-logs/client-20261014-235210.log`）相同：`[info] PvP client start …`、`[info] PvP graphics ready …`、Engine 的 `[info] SDL_GPU slow swapchain acquire …`。
+  - 觀察 1：輸入「:」時忽然卡住（使用者：「不知道是不是輸入法的問題」）。日誌沒有對應的異常；推論是輸入法的組字（SDL 的 TEXT_EDITING 不顯示，以前也一樣），沒有重現，不當成缺陷。
+  - 觀察 2：「操作手感怪怪的」。日誌有 9 次 `drawable_ms≈66` 的取得停頓（約 4 幀）；修改前的日誌也有，是 IP-2 已知、由執行緒分離處理的問題（D19、未結事項），不是本批造成的。
+  - 使用者另外要求：v8 排一個任務，把這些按鈕和輸入框元件化，順便修改 ui_editor（記在消費端 v8 的候選）。
+- **IP-3 完成**（L1、突變、L3）。下一步 IP-4：先做介面的 xhigh 審查（U10）。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

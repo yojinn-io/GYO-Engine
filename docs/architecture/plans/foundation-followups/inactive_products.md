@@ -116,7 +116,7 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
 
 ### IP-3 SDL 隔離核心
 
-狀態：實作完成（2026-10-22，ip3b～ip3f；L3 待使用者）。
+狀態：完成（2026-10-22，ip3b～ip3f，含 L3）。
 
 - ip3c、ip3d：`InputEvent` 多了 `timestamp`；輸入幀多了 `text`（`TextEvent`）與 `KeyModifiers`；`HandleNativeEvent` 必須帶時間。只有加法，未啟用產品不需改（`HandleNativeEvent` 的呼叫端除外，見下面的破損）。
 

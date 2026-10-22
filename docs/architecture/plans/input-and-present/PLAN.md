@@ -318,7 +318,7 @@ Fitness：Engine 不出現產品名；刪除提出需求的消費端後，新語
 
 # IP-3／IP-4（2026-10-21 核准，D31）
 
-**狀態：核准（D31：U1～U10 照建議）；IP-3 實作完成（ip3a～ip3f；宣告 D32，判定變更 D35、D36），L3 待使用者；下一步 IP-4。** 設計已寫成架構文件 [platform-sdl.md](../../platform-sdl.md) 與 [input.md](../../input.md)（使用者要求，提前到 ip3a）。 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
+**狀態：核准（D31：U1～U10 照建議）；IP-3 完成（ip3a～ip3f，含 L3；宣告 D32，判定變更 D35、D36）；下一步 IP-4。** 設計已寫成架構文件 [platform-sdl.md](../../platform-sdl.md) 與 [input.md](../../input.md)（使用者要求，提前到 ip3a）。 2026-10-21 以 ultracode 規劃（2 位盤點、3 個獨立方案、1 位評審合成），再經 1 位 xhigh 公開介面審查（README 的 IP-3 列）與 1 次對抗式檢查。審查的必修項目已併入本節；各項的處理見 [HANDOFF](HANDOFF.md)「IP-3／IP-4 規劃紀錄」。待使用者決定的事列在本節最後。
 file:line 以 master `6fbb6a9` 為準，子批開始時重新核對。SDL 原始碼的引用以 SDL 3.4.0（`third_party/sdl3`）為準。
 
 ## 共通規則的補充（IP-3、IP-4）
