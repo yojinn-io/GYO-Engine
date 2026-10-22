@@ -376,6 +376,24 @@
     - 本機重現：讓推送執行緒延後 50 ms 才開始推，3／3 失敗（Red）。
     - 修正：加握手，和「每條執行緒各自標記」的測試相同。延後 50 ms 下 5／5 通過（Green）；移除延後後，platform 測試連跑 10 次 0 失敗；m-order 仍殺掉。
     - 判定沒有改，只改測試的前置條件。修正後重跑 L1 #562。
+- 2026-10-22：L1 #562（`19e32be`，手動觸發）四平台成功，補上 ip3d～ip4b 的 L1。
+- 2026-10-22：ip4c 實作與本機驗收（檔位 high）。內容照 [ip4-declaration.md](ip4-declaration.md) 第 3 節，細節見第 4 節的 ip4c。
+  - **PRIVATE 化**：platform、input 兩個後端的 SDL3 改成 PRIVATE；兩個 render 後端補上 PRIVATE 的 SDL3。
+  - **G3**：`gyo_expect_private_sdl`，整個專案 configure 完之後檢查。
+  - **斷掉的目標**：只有 `runtime_sdl` 的冒煙測試，它直接呼叫 `SDL_LogError`，改連 Native。
+  - **突變工具**：TT 的 `run_mutations.py` 加 `expect_build_failure`，預設行為不變。
+  - **header 衛生測試**：`platform_sdl_header_tests` 改連 `SDL3::Headers`（只取 include 路徑）。
+    - PRIVATE 化之後，ip3b 的 m6a／m6b 四個突變變成 build_failed：編譯器先停下，G1／G2 來不及回報。
+    - 給測試 SDL 的 include 路徑之後，仍由宣告的 G1／G2 訊息殺掉；判定不變。
+  - **突變**：
+    - IP 目錄 78 個。全跑時 74／78：m6 的四個是 build_failed。修正後重跑 m6，4／4 殺掉，合計 78／78。
+    - m19c 第一次是 wrong_failure：CMake 會把長訊息折行，預期訊息改成跨行比對。
+    - TT 目錄 14／14：工具改了，順便確認。
+  - **本機**：`test` preset 80／80；SDL 相關 8 個。
+  - **Fitness**：
+    - CMake 依賴圖的變化只有預期的那些：SDL3 由 PUBLIC 改 PRIVATE；render 後端多了 PRIVATE SDL3；`runtime_sdl` 測試多連 Native；header 測試多連 `SDL3::Headers`。
+    - 沒有新的 owner 間依賴。
+    - 未啟用產品直接 include SDL 的位置，重新啟用時要自己連 Native，已記在 `inactive_products.md` 的 IP-4 節。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；

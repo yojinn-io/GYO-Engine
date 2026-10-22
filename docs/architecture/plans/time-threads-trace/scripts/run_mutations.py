@@ -3,7 +3,9 @@
 Each mutant in mutations.json replaces one exact text in one source file, rebuilds
 its target, runs its test executable (optionally filtered to doctest test cases)
 and counts as killed only when the run fails AND its output matches the mutant's
-expected message. The unmutated tree must pass every used check first; every
+expected message. A mutant with "expect_build_failure": true is killed instead
+when its build fails with the expected message (a configure-time guard). The
+unmutated tree must pass every used check first; every
 file is restored afterwards. Python only, with subprocess timeouts, so it runs
 the same on Windows, Linux and macOS.
 
@@ -84,10 +86,11 @@ def main():
             status, output = check(mutant, build_dir, args.cmake)
         finally:
             path.write_bytes(original)
-        if status == "failed" and re.search(mutant["expect"], output):
+        detected = "build_failed" if mutant.get("expect_build_failure") else "failed"
+        if status == detected and re.search(mutant["expect"], output):
             outcome = "killed"
             killed += 1
-        elif status == "failed":
+        elif status == detected:
             outcome = "wrong_failure"
         else:
             outcome = status if status != "passed" else "survived"

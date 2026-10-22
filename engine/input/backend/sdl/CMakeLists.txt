@@ -11,9 +11,9 @@ target_include_directories(gyo_input_sdl PUBLIC
 target_link_libraries(gyo_input_sdl PUBLIC
     GYO::Input
     GYO::PlatformSDL
-    SDL3::SDL3
 )
-target_link_libraries(gyo_input_sdl PRIVATE GYO::PlatformSDLNative)
+# SDL stays behind the backend; GYO::InputBackendSDLNative passes it on (IP-4, G3).
+target_link_libraries(gyo_input_sdl PRIVATE GYO::PlatformSDLNative SDL3::SDL3)
 
 target_compile_features(gyo_input_sdl PUBLIC cxx_std_20)
 

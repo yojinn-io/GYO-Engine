@@ -741,6 +741,46 @@
       "target": "platform_sdl_tests",
       "cases": "Destroying an event watch off the main thread*",
       "expect": "destroying an event watch off the main thread fails a GYO_ASSERT"
+    },
+    {
+      "id": "m19",
+      "what": "The platform backend links SDL3 PUBLIC again",
+      "file": "engine/platform/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_platform_sdl PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_platform_sdl PUBLIC SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_platform_sdl passes SDL3::SDL3 on to its users"
+    },
+    {
+      "id": "m19b",
+      "what": "The input backend links GYO::PlatformSDLNative PUBLIC",
+      "file": "engine/input/backend/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_input_sdl PRIVATE GYO::PlatformSDLNative SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_input_sdl PUBLIC GYO::PlatformSDLNative)\ntarget_link_libraries(gyo_input_sdl PRIVATE SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_input_sdl passes GYO::PlatformSDLNative on to its users"
+    },
+    {
+      "id": "m19c",
+      "what": "The SDL renderer backend makes its native/include public",
+      "file": "engine/render/backend/sdl/CMakeLists.txt",
+      "find": "target_include_directories(gyo_render_backend_sdl PRIVATE\n    ${CMAKE_CURRENT_SOURCE_DIR}/native/include",
+      "replace": "target_include_directories(gyo_render_backend_sdl PUBLIC\n    ${CMAKE_CURRENT_SOURCE_DIR}/native/include",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_render_backend_sdl makes[\\s\\S]*native/include"
+    },
+    {
+      "id": "m19d",
+      "what": "The program entry links SDL3 PUBLIC",
+      "file": "engine/platform/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_platform_sdl_main PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_platform_sdl_main PUBLIC SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_platform_sdl_main passes SDL3::SDL3 on to its users"
     }
   ]
 }

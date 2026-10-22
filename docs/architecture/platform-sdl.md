@@ -7,8 +7,8 @@ Plan and record: [input-and-present](plans/input-and-present/README.md), batches
 **Status (2026-10-21): approved design (input-and-present D31), being implemented.** Milestones ip3b and ip3c have
 landed: the neutral/native split (Design Invariant 1) and event timestamps (Design Invariants 3 and 7). ip3d added
 text input and the clipboard, ip3e the entry point, base directory and log bridge (Design Invariants 5 and 8). IP-3 is
-complete; IP-4 (test injection, observation, queries, PRIVATE linking) is
-not. The backends still link SDL3 PUBLIC (until ip4c). Each contract and invariant below names the milestone that
+complete. IP-4 has landed ip4a (queries, operations, test injection), ip4b (event watches, capture) and ip4c
+(PRIVATE linking); ip4d (full mutation run, L3) remains. Each contract and invariant below names the milestone that
 makes it true and the guard that keeps it true; until that milestone lands, the current code is the reference.
 The input frame the backend fills is specified in [input.md](input.md).
 
@@ -110,6 +110,11 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 
 - The four backends and `GYO::PlatformSDLMain` link SDL3 PRIVATE: SDL3 may appear in their
   `INTERFACE_LINK_LIBRARIES` only as `$<LINK_ONLY:>`. Only the three `*Native` targets carry SDL3 as INTERFACE.
+  A `*Native` target in those interfaces may appear only as `$<LINK_ONLY:>` too, and no `native/include` directory
+  is public. G3 checks this once the whole project is configured (`tests/common/platform_sdl/CMakeLists.txt`,
+  `gyo_expect_private_sdl`), failing the configure step with a message naming the target.
+- A target that uses SDL directly links a `*Native` target (or `SDL3::SDL3`) itself; nothing reaches SDL through a
+  backend's ordinary target.
 - Engine never calls the global `SDL_Init`/`SDL_Quit`; each subsystem is initialized and quit by its owner with
   SDL's reference counting (`SdlPlatform` owns VIDEO).
 

@@ -13,10 +13,9 @@ target_include_directories(gyo_platform_sdl PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/native/include
 )
 
-target_link_libraries(gyo_platform_sdl PUBLIC
-    GYO::Engine
-    SDL3::SDL3
-)
+target_link_libraries(gyo_platform_sdl PUBLIC GYO::Engine)
+# SDL stays behind the backend; GYO::PlatformSDLNative passes it on (IP-4, G3).
+target_link_libraries(gyo_platform_sdl PRIVATE SDL3::SDL3)
 
 target_compile_features(gyo_platform_sdl PUBLIC cxx_std_20)
 

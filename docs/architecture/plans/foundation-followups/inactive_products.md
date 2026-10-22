@@ -131,6 +131,18 @@ IP 計畫的批次完成時，由該批更新本節（IP 夾不另建清單）�
   - 日誌：SDL 的輸出要進 Engine 的日誌時，建立 `Engine::Platform::Sdl::SdlLogBridge`；Base 的 handler 不得呼叫 SDL 的日誌函式。
 - 變更摘要：後端的一般公開標頭（`SdlPlatform.hpp`、`SdlInput.hpp`、`SdlRenderer.hpp`）不再 include SDL；`NativeEventObserver` 改成 `EventObserver`（`const PlatformEvent&`）；`NativeWindow()`／`NativeRenderer()` 成員函式改成 Native 層的自由函式；`SdlInput::HandleEvent(const SDL_Event&)` 改成 `HandleEvent(const PlatformEvent&)`，自建事件用 `HandleNativeEvent`。
 
+### IP-4 注入、觀測、查詢、PRIVATE 連結
+
+狀態：ip4a～ip4c 完成（2026-10-22）；ip4d（突變全跑、L3）待做。
+
+- ip4a、ip4b：只有加法。查詢、操作、注入、`EventWatch`、`SaveCaptureBmp` 都是新的 API，未啟用產品不需改。
+- **破損（ip4c，重新啟用時一定要處理）**：後端改成 PRIVATE 連 SDL3 之後，一般目標不再傳遞 SDL 的 include 路徑與連結。直接 include `<SDL3/...>` 的未啟用目標，要自己連 `GYO::PlatformSDLNative`（或其他 `*Native`，或 `SDL3::SDL3`），否則找不到 SDL 標頭。目前的位置：
+  - `apps/object_fps{,_v2}`：`main.cpp` 與 `src/App`；
+  - `tests/object_fps{,_v2}`；
+  - `tools/object_fps_preview`；
+  - `build/acceptance/object_fps{,_v2}`（含 diagnostics）。
+  連結 `*Native` 等於宣告直接使用 SDL（`platform-sdl.md` Design Invariant 2）。如果重新啟用時改用 Engine 的 API（`QueryWindow`、`SdlInputInjector`、`EventWatch`、進入點），可以不連。
+
 ## 4. TT（時間、執行緒與 Trace 計畫）
 
 TT 計畫的批次完成時，由該批更新本節。

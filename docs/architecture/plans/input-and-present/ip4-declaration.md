@@ -83,3 +83,14 @@ watch 的執行緒與生命週期做了局部 xhigh 審查（F1～F14）。照�
 時間戳判定改成 [ip4b-judgment-change.md](ip4b-judgment-change.md) 的方案 B（D38）。方案 B 新增 m-watch-mid、m-watch-first、m-watch-late、m-watch-e1 四個突變。
 
 Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（D38），由 death test `watch-off-main` 與突變 m-main-thread 檢查。
+
+### ip4c（2026-10-22）
+
+照第 3 節做：
+
+- **PRIVATE 化**：`gyo_platform_sdl`、`gyo_input_sdl` 的 SDL3 改成 PRIVATE；兩個 render 後端補上 PRIVATE 的 `SDL3::SDL3`。
+- **G3**：寫在 `tests/common/platform_sdl/CMakeLists.txt` 的 `gyo_expect_private_sdl`。整個專案 configure 完之後才檢查，失敗時 configure 停下，訊息寫出目標名。
+- **斷掉的目標**：只有 `tests/common/runtime_sdl`，因為它直接呼叫 `SDL_LogError`。改連 `GYO::PlatformSDLNative`，PLAN 已預告這一點。
+- **突變工具**：TT 的 `run_mutations.py` 加 `expect_build_failure`。G3 在 configure 時讓建置失敗，原本的工具只會把它記成 build_failed；有這個欄位時，建置失敗而且訊息符合，才算殺掉。不設這個欄位的突變，判定方式不變。
+- **m19c 的預期訊息**：CMake 會把長訊息折行，所以預期訊息改用 `[\s\S]*` 跨行比對。第一次執行時，它因為這個原因被判成 wrong_failure。
+

@@ -16,7 +16,7 @@ target_link_libraries(gyo_render_backend_sdl PUBLIC
     GYO::Engine
     GYO::PlatformSDL
 )
-target_link_libraries(gyo_render_backend_sdl PRIVATE GYO::PlatformSDLNative)
+target_link_libraries(gyo_render_backend_sdl PRIVATE GYO::PlatformSDLNative SDL3::SDL3)
 
 target_compile_features(gyo_render_backend_sdl PUBLIC cxx_std_20)
 
