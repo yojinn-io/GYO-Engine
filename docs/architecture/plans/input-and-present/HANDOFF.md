@@ -398,7 +398,8 @@
 - 2026-10-22：ip4d（檔位 medium）。
   - 突變全跑一次、沒有重跑：IP 78／78，TT 14／14（突變工具改過，順便確認）。
   - 文件：寫 IP-4 的 dev_log，更新 README、消費端 `sdl-isolation.md` 的狀態。
-  - L3 待使用者：macOS Intel 上 live resize 時大小正確。
+  - L3（macOS Intel，2026-10-22，使用者操作）：**通過**。拖動縮放（放大、縮小、快速來回、縮到接近最小）、全螢幕進出、移動視窗、關閉都正常，版面跟著視窗大小走。日誌（`build/target/_build/test/logs/pvp-v71-ip4d-l3-20261022/client.log`）沒有 error；`PvP slow event processing` 9 行都在縮放期間（OS 的縮放迴圈佔住 pump，期間 live frame 持續執行，最多 270 次），屬預期；drawable 取得停頓（最大約 399 ms）是 IP-2 的已知現象。
+  - **IP-4（Engine 側）完成。** 剩下消費端的 IP-4 遷移（probe 8 檔、符號守衛、L2），在產品計畫 `sdl-isolation.md`。
   - 使用者核准 D38：
     - F4 採方案 B；
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；

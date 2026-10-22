@@ -1,6 +1,6 @@
 # sdl-isolation：產品、probe、產品測試不直接呼叫 SDL（消費端計畫，草案）
 
-- 狀態：**核准**（D160；Engine 側為 IP 的 D31）。IP-3 完成（含 L3）；IP-4 的 Engine 側 ip4a～ip4c 完成（查詢、操作、注入、`EventWatch`、`SaveCaptureBmp`、SDL3 PRIVATE），ip4d 的 L3 待使用者；產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2）尚未開始。產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號已歸零，不再連 Native；probe 與 pointer capture 測試還暫時連 Native。產品側的 ip3b、ip3d 列已做（ip3d：位址輸入改用 Engine 的文字輸入與剪貼簿；差異：數字鍵盤的 Enter 也會確認位址）。
+- 狀態：**核准**（D160；Engine 側為 IP 的 D31）。IP-3 完成（含 L3）；IP-4 的 Engine 側完成（ip4a～ip4d，含 L3；查詢、操作、注入、`EventWatch`、`SaveCaptureBmp`、SDL3 PRIVATE）；產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2）尚未開始。產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號已歸零，不再連 Native；probe 與 pointer capture 測試還暫時連 Native。產品側的 ip3b、ip3d 列已做（ip3d：位址輸入改用 Engine 的文字輸入與剪貼簿；差異：數字鍵盤的 Enter 也會確認位址）。
 - 依據：
   - [after-re-evaluate](after-re-evaluate.md) 第 9 節的 `sdl-isolation-plan`、`sdl-isolation`（D158、D159）；
   - v7 的 P4 與第 12 批（[v7 HANDOFF](../v7/HANDOFF.md) D33、P4 的原文；[v7 README](../v7/README.md) 的 PR 線表）。
