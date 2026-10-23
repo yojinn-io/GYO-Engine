@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 待確認），下一批是 `single-store-refactor`。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 待確認），下一批是 `match-resync`。
 
 相關文件：
 
@@ -16,7 +16,8 @@
 | `plan-commit` | medium | 提交計畫草案第 2 版與本紀錄 | 只改文件 |
 | `outage-characterize`（`c200992` 等） | high | 用測試固定中斷與晚到的現狀：Host 側接上產品的 `LocalPlayerPrediction`，注入雙向、只上行、只下行、部分送達的中斷；Client 側 3 個；稀疏替代 1 個；語料唯讀掃描。產品程式不改 | cpu 測試 293／293；突變 4／4 killed；L1 run 39944311104 四平台成功；報告：[outage-characterize-report.md](../object_fps_pvp/plans/v7.1/outage-characterize-report.md) |
 | `resync-contract`（`02f4b6d`～`6859fd9`） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 3 輪（必須修訂 → 必須修訂 → 可送核准，全部處理）；`gate-contract` 核准（D174） |
-| `drop-counters`（`3a3e1b1`） | high | Host：被 ±1 s 夾限改變的發布樣本計 `slack_clamped_samples`，寫新的 A 級 `resync statistics` 行。Client：命令已離開 64 格環的相位樣本（死信）計 `phase_samples_unmatched`，模擬 role 在連線換代與停止時寫新的 A 級 `phase summary` 行。判定都不讀 | `ctest -L pvp` 44／45（唯一失敗是已知的 worker，見下）；突變 7／7 killed；突變目錄 559 個的 find 字串都仍唯一；L1 run 39956082177 |
+| `drop-counters`（`3a3e1b1`） | high | Host：被 ±1 s 夾限改變的發布樣本計 `slack_clamped_samples`，寫新的 A 級 `resync statistics` 行。Client：命令已離開 64 格環的相位樣本（死信）計 `phase_samples_unmatched`，模擬 role 在連線換代與停止時寫新的 A 級 `phase summary` 行。判定都不讀 | `ctest -L pvp` 44／45（唯一失敗是已知的 worker，見下）；突變 7／7 killed；突變目錄 559 個的 find 字串都仍唯一；L1 run 39956082177 四平台成功 |
+| `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 待確認 |
 
 ## 規劃
 
@@ -103,3 +104,28 @@
     5. 突變 `dc-unmatched-*`。
   - 新增 Host 夾限計數（晚到 10／59／61／180 Tick）、resync 行逐字、loop 的換代摘要。
 - **已知的失敗**：`object_fps_pvp.worker`（`Invalid Match combat rules`）。這是 `N-worker-probe-stale`，修正 `d2844a5` 只在記錄器分支、不在 master，和本批無關。
+
+## single-store-refactor
+
+- **結構**：
+  - 「被替代過、第一次是否已到」只由新元件 `MatchSubstitutionRecords`（`apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp`，MatchRuntimeHost 的 `substitutions_`）記錄。開啟、保留（600 序號）、容量、關閉原因、樣本資格都在這裡。
+  - 帳本 `MatchIngressLedger` 只讀每次到達的結果（`Classify`），並把關閉的紀錄做成細節紀錄（`Closed`）；它自己只留不參與判定的附欄（副本數、參考年齡、看著解析的範圍、溢出的序號）。
+  - SlackTrack 的 `substituted` 刪除；回看保險拆成 `kSlackLookbackSequences`（64）。
+  - 關閉原因的列舉搬到紀錄側的標頭，診斷側引用它，依賴方向變成「診斷 → 紀錄」。
+- **過渡規則**（到 `retention-600` 為止）：600 序號內，或屬於最新 64 個還沒到達的候選，就保留；候選老化之後成為「只供樣本」的紀錄，直到到達、被修剪，或 slack track 重來（`Unsample`）。
+- **方向守衛**：`test_diagnostic_isolation.py` 新增 `test_the_substitution_records_read_no_ledger`，紀錄的標頭列入 DECIDING。新突變 `v7-flow-ledger-drives-sample`（樣本改跟帳本的分類走）killed。
+- **測試**：
+  - 帳本的 4 個機制測試改成驅動「紀錄＋帳本」這一對。舊的 49 條斷言原文保留，只把常數名改成 `SubstitutionRetentionSequences`（xhigh 審查核對過）。
+  - 新增紀錄的單元測試 2 個、Leave 關閉時保留附欄的 Host 測試 1 個。
+- **突變**：
+  - 指向舊程式的 17 個改指新位置（意圖相同）；
+  - 變動檔案上的 79 個全部重新判定：79／79 killed；
+  - 審查找到的缺口新增 3 個：`ssr-unsample-empty`、`ssr-aged-noncandidate-kept`、`ssr-remove-ledger-first`，3／3 killed。
+- **xhigh 等價性審查**（紀錄身分與關閉順序）：
+  - 不變式推導，加上新舊兩版的差分 fuzz（1380 次執行，涵蓋 join／leave／evict／reset／respawn／epoch 輪替／最遠 1300 序號前的晚到），產品可達的所有觀測值 0 差異。
+  - 唯一的不等價是產品走不到的 API 路徑：`TakeIngressStatistics(final)` 之後繼續送輸入。舊版保留 slack 的候選，新版連同紀錄一起關閉。已在介面說明寫明「final 之後不再送輸入」。
+  - 其他產品不可達的差異（同一序號再次被替代、容量溢出時的候選）只記錄，並在程式註明前提。
+  - 缺口的突變之一「關閉後不刪附欄」在同一身分內不可觀測（序號不重複，換身分時整份重來），列為等價突變，不登記。
+- **經過**：
+  - 79 個突變的判定還在執行時，我誤以為它已經中斷，用 `git checkout` 還原了它正在套用的突變（`v7-flow-d56-match-key-order`）。那一次的 killed 不可信，之後單獨重跑，killed。其他突變不受影響：工具在每個突變之後都會自己還原。
+  - 條文 §7「被替代序號的單一紀錄」原本寫權威是「SlackTrack」。實作後權威的實體是 `MatchSubstitutionRecords`，所以照實作改正 owner 名稱，意圖不變。這是 Design Invariant 的文字變更，交使用者確認。

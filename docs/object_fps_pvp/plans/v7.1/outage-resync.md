@@ -37,6 +37,7 @@
 - 2026-10-23：第三輪 xhigh 複核：判定「可送核准」（Minor 7 項，已全部處理，第 13 節第 9 點）。
 - 2026-10-23：`gate-contract` 核准（D174）：條文照現狀（含三輪審查的修訂）。`drop-counters` 開始（high）。
 - 2026-10-23：`drop-counters` 完成（`3a3e1b1`）：`resync statistics` 行（`slack_clamped_samples`）、`phase summary` 行（`phase_samples_unmatched`）；突變 7／7；L1 run 39956082177 待確認。下一批 `single-store-refactor`（high，紀錄身分與關閉順序局部 xhigh）。
+- 2026-10-23：`drop-counters` 的 L1（run 39956082177）四平台成功。`single-store-refactor` 完成（`832eca4` 等）：被替代序號的紀錄只存一份（`MatchSubstitutionRecords`），行為逐位元不變（xhigh 等價性審查、差分 fuzz 0 差異）；突變 79／79＋4／4。§7 條文的 owner 名稱照實作改正，**等你確認**。L1 待確認。下一批 `match-resync`（xhigh，開始前問你）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -565,7 +566,8 @@ outage-resync（約 59～85 h）
    - epoch 相同、權威 < tip 時，領先量留到 Backlog 清掉，列為 P2 的第二個已知例外，交給 B6；
    - 游標＝tip 時 SeedLead；只重設擷取時取消未 slew 完的修正，清除 `settling_`、`reacquiring_`；旗標的 mutex 區段與換代清除；和 LifeRespawn 合併時的計數；過渡批次的判斷範圍；`phase summary` 的寫出端；Delta-2、Delta-3 就地修正。
 9. **第三輪審查（xhigh 複核，使用者要求）**：判定「可送核准」，只剩 Minor 7 項，送 `gate-contract` 之前全部處理：時鐘視窗重開只由通過驗證的資料包觸發（m1）；只有已綁定 endpoint 的 Hello 刷新最後驗證時刻（m2）；第一個 Welcome（m3）；`phase_path=resume_reset`（m4）；`phase summary` 只在有本機玩家的那一代寫（m5）；1 Hz Hello 的空窗寫進安全取捨，Hello 間隔在 `identity-rebind` 決定（m6）；有效 snapshot 的定義、Delta-2 的影響範圍（m7）。
-10. **其他**：
+10. **`single-store-refactor` 的實作（2026-10-23）**：權威的實體是新元件 `MatchSubstitutionRecords`（`substitutions_`），不是 SlackTrack 這個 struct 本身；SlackTrack 的 `substituted` 已刪除。§7 條文的 owner 名稱照實作改正（等你確認），意圖不變。帳本的附欄另外包含看著解析的範圍與溢出的序號（分類用，不參與判定）。
+11. **其他**：
    - 暫時性錯誤在連線與中斷狀態都適用。代價是 Gateway 程序死掉時，Client 要等 5 s 才回 Lobby。
    - T_int、T_max 兩端的值由共用 fixture 綁定。
    - 握手期的逾時寫法改正。
