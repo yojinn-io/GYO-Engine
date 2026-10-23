@@ -3,11 +3,16 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "gyo/AppConfig.hpp"
 
-#include "engine/base/Log.hpp"
+#include "RetroFPS/Pvp/ClientLog.hpp"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
+#include "engine/base/Log.hpp"
+#include "engine/platform/sdl/EntryPoint.hpp"
+#include "engine/platform/sdl/SdlLogBridge.hpp"
+#include "engine/platform/sdl/SdlPlatform.hpp"
+
+#include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <filesystem>
 #include <iostream>
@@ -20,33 +25,39 @@
 #endif
 
 namespace {
-// SDL's own output stays; every SDL log line is also written to the log file.
-struct SdlLogForward {
-    fps::pvp::LogFile* file{};
-    SDL_LogOutputFunction original{};
-    void* originalData{};
-};
-SdlLogForward sdlLog;
+using Engine::Base::LogLevel;
+using fps::pvp::ClientLog;
 
-void ForwardSdlLog(void*, int category, SDL_LogPriority priority, const char* message) {
-    if (sdlLog.original) sdlLog.original(sdlLog.originalData, category, priority, message);
-    static constexpr const char* names[] = {"invalid", "trace", "verbose", "debug", "info", "warn", "error", "critical"};
-    const auto index = static_cast<int>(priority);
-    if (sdlLog.file) sdlLog.file->Write(std::string("[") + (index >= 0 && index < 8 ? names[index] : "log") + "] " + message);
+// Every diagnostics line of the Client goes through the Engine log facade:
+// the Client's own lines (category "app"), Engine lines, and SDL's lines (the
+// bridge, categories "sdl.*"). In the log file each line reads as it did when
+// they all went through SDL's log: "[level] text", Engine lines with their
+// category before the text.
+std::atomic<fps::pvp::LogFile*> logFile{nullptr};
+
+std::string_view LevelName(const LogLevel level) noexcept {
+    switch (level) {
+    case LogLevel::Debug: return "debug";
+    case LogLevel::Info: return "info";
+    case LogLevel::Warning: return "warn";
+    case LogLevel::Error: return "error";
+    }
+    return "log";
 }
 
-// Engine diagnostics (Engine::Base::Log) go through SDL's log like the
-// Client's own lines, so they reach the console and the log file as before.
-void ForwardEngineLog(const Engine::Base::LogMessage& message) noexcept {
-    SDL_LogPriority priority = SDL_LOG_PRIORITY_INFO;
-    switch (message.level) {
-    case Engine::Base::LogLevel::Debug: priority = SDL_LOG_PRIORITY_DEBUG; break;
-    case Engine::Base::LogLevel::Info: priority = SDL_LOG_PRIORITY_INFO; break;
-    case Engine::Base::LogLevel::Warning: priority = SDL_LOG_PRIORITY_WARN; break;
-    case Engine::Base::LogLevel::Error: priority = SDL_LOG_PRIORITY_ERROR; break;
+void WriteClientLog(const Engine::Base::LogMessage& message) noexcept {
+    try {
+        const bool fromSdl = message.category.starts_with("sdl.");
+        std::string text;
+        if (message.category != "app" && !fromSdl) text.append(message.category).append(" ");
+        text.append(message.text);
+        if (auto* file = logFile.load()) file->Write(std::string("[") + std::string(LevelName(message.level)) + "] " + text);
+        // SDL's lines keep SDL's console output (the bridge tees); the others
+        // go to the console here (C stdio: the file does not copy it again).
+        if (!fromSdl) std::fprintf(stderr, "%s\n", text.c_str());
+    } catch (...) {
+        // A log line is never worth a failure.
     }
-    SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, priority, "%.*s %.*s", static_cast<int>(message.category.size()),
-                   message.category.data(), static_cast<int>(message.text.size()), message.text.data());
 }
 
 // Without --log the Client writes logs/client-<local time>.log next to its executable.
@@ -64,8 +75,8 @@ std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
 }
 } // namespace
 
-int main(int argc, char* argv[]) {
-    Engine::Base::SetLogHandler(&ForwardEngineLog);
+int GyoMain(int argc, char* argv[]) {
+    Engine::Base::SetLogHandler(&WriteClientLog);
     fps::pvp::PvpApplicationOptions options;
     options.title = Gyo::AppConfig::DisplayName;
     options.gpuDriver = GYO_DEFAULT_GPU_DRIVER;
@@ -74,7 +85,7 @@ int main(int argc, char* argv[]) {
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
-            SDL_Log("%s [--gpu-driver auto|d3d12|vulkan|metal] [--gateway host:port] [--movement-trace path] "
+            ClientLog(LogLevel::Info, "%s [--gpu-driver auto|d3d12|vulkan|metal] [--gateway host:port] [--movement-trace path] "
                     "[--log path (default: logs/client-<time>.log next to the executable)]", Gyo::AppConfig::DisplayName);
             return 0;
         }
@@ -84,46 +95,49 @@ int main(int argc, char* argv[]) {
             options.gateway = argv[++index];
             gatewayFromArgument = true;
         } else if (argument == "--movement-trace" && index + 1 < argc) {
-            movementTrace = argv[++index];
+            movementTrace = Engine::Platform::Sdl::PathFromUtf8(argv[++index]);
         } else if (argument == "--log" && index + 1 < argc) {
-            logPath = argv[++index];
+            logPath = Engine::Platform::Sdl::PathFromUtf8(argv[++index]);
         } else {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unknown or incomplete option: %s", argv[index]);
+            ClientLog(LogLevel::Error, "Unknown or incomplete option: %s", argv[index]);
             return 2;
         }
     }
-    const char* base = SDL_GetBasePath();
-    if (!base) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot locate executable directory");
+    const auto baseDirectory = Engine::Platform::Sdl::BaseDirectory();
+    if (!baseDirectory) {
+        ClientLog(LogLevel::Error, "Cannot locate executable directory");
         return 1;
     }
+    const std::filesystem::path& base = baseDirectory.value();
     // A Client started from a desktop has no console: its diagnostics go to the log file.
     std::optional<fps::pvp::LogFile> log;
-    // Declared after the log so SDL stops forwarding before the file closes.
-    struct RestoreSdlLog {
-        ~RestoreSdlLog() {
-            if (sdlLog.file) SDL_SetLogOutputFunction(sdlLog.original, sdlLog.originalData);
-            sdlLog.file = nullptr;
-        }
-    } restoreSdlLog;
+    // Declared after the log: the handler stops writing to the file, and the
+    // bridge stops forwarding SDL's lines, before the file closes.
+    struct DetachLog {
+        ~DetachLog() { logFile.store(nullptr); }
+    } detachLog;
     try {
         log.emplace(logPath.empty() ? DefaultLogPath(base) : logPath);
         log->FlushOnCrash();
         log->Tee(std::clog);
         log->Tee(std::cerr);
-        SDL_GetLogOutputFunction(&sdlLog.original, &sdlLog.originalData);
-        sdlLog.file = &*log;
-        SDL_SetLogOutputFunction(ForwardSdlLog, nullptr);
+        logFile.store(&*log);
+    } catch (const std::exception& error) {
+        ClientLog(LogLevel::Warning, "Client log unavailable: %s", error.what());
+    }
+    // SDL's own lines join the log (and keep SDL's console output). The
+    // handler above never calls SDL's log, as the bridge requires.
+    const Engine::Platform::Sdl::SdlLogBridge sdlLogBridge;
+    if (log) {
         std::string executable = "unavailable";
         try { executable = fps::pvp::FileSha256(fps::pvp::RunningExecutablePath()); } catch (const std::exception&) {}
-        SDL_Log("PvP client start executable_sha256=%s platform=%s gpu_driver=%s gateway=%s log=%s",
-                executable.c_str(), SDL_GetPlatform(), options.gpuDriver.c_str(), options.gateway.c_str(),
-                log->Path().string().c_str());
+        const std::string platform(Engine::Platform::Sdl::PlatformName());
+        ClientLog(LogLevel::Info, "PvP client start executable_sha256=%s platform=%s gpu_driver=%s gateway=%s log=%s",
+                  executable.c_str(), platform.c_str(), options.gpuDriver.c_str(), options.gateway.c_str(),
+                  log->Path().string().c_str());
         // log-contract (original batch 10): whether the Gateway address came from --gateway or the default.
-        SDL_Log("PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
-                options.gateway.c_str());
-    } catch (const std::exception& error) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Client log unavailable: %s", error.what());
+        ClientLog(LogLevel::Info, "PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
+                  options.gateway.c_str());
     }
     try {
         fps::pvp::MovementTraceWriter trace(movementTrace);
@@ -131,9 +145,9 @@ int main(int argc, char* argv[]) {
         {
             fps::pvp::PvpApplication application;
             std::string error;
-            if (!application.InitializeContent(std::filesystem::path(base) / Gyo::AppConfig::Assets, error) ||
+            if (!application.InitializeContent(base / Gyo::AppConfig::Assets, error) ||
                 !application.InitializeGraphics(options, error)) {
-                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", error.c_str());
+                ClientLog(LogLevel::Error, "%s", error.c_str());
                 return 1;
             }
             result = application.Run();
@@ -142,7 +156,7 @@ int main(int argc, char* argv[]) {
         trace.Finish();
         return trace.Good() ? result : 1;
     } catch (const std::exception& error) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", error.what());
+        ClientLog(LogLevel::Error, "%s", error.what());
         return 1;
     }
 }

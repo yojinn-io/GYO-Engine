@@ -4,12 +4,12 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
+#include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -68,41 +68,25 @@ Options Parse(int argc, char* argv[]) {
     return options;
 }
 
-// Scripted input enters the same SDL adapter as a user; one probe per process.
-void PushMovement(SDL_Window* window, bool held, SDL_Scancode direction) {
-    const auto id = SDL_GetWindowID(window);
-    if (held && !SDL_GetWindowRelativeMouseMode(window)) {
-        SDL_Event focus{};
-        focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-        focus.window.windowID = id;
-        Require(SDL_PushEvent(&focus), "Could not enqueue probe focus event");
-        SDL_Event click{};
-        click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        click.button.windowID = id;
-        click.button.button = SDL_BUTTON_LEFT;
-        click.button.down = true;
-        Require(SDL_PushEvent(&click), "Could not enqueue probe capture click");
-        click.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        click.button.down = false;
-        Require(SDL_PushEvent(&click), "Could not enqueue probe capture release");
+// Scripted input enters SDL's event queue through Engine's injector, the same
+// adapter as a user; one probe per process.
+using Engine::Input::Key;
+template <class Pushed> void RequirePushed(const Pushed& pushed, const char* what) {
+    Require(bool(pushed), pushed ? std::string() : std::string(what) + ": " + pushed.error().message);
+}
+void PushMovement(Engine::Platform::Sdl::SdlPlatform& platform, Engine::Input::Backend::Sdl::SdlInputInjector& input,
+                  bool held, Key direction) {
+    if (held && !platform.QueryWindow().flags.relativeMouseMode) {
+        RequirePushed(input.PushFocus(true), "Could not enqueue probe focus event");
+        RequirePushed(input.PushMouseButton(Engine::Input::MouseButton::Left, true), "Could not enqueue probe capture click");
+        RequirePushed(input.PushMouseButton(Engine::Input::MouseButton::Left, false),
+                      "Could not enqueue probe capture release");
     }
-    SDL_Event keyboard{};
-    keyboard.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    keyboard.key.windowID = id;
-    keyboard.key.scancode = direction;
-    keyboard.key.key = direction == SDL_SCANCODE_W ? SDLK_W : SDLK_S;
-    keyboard.key.down = held;
-    keyboard.key.repeat = false;
-    Require(SDL_PushEvent(&keyboard), "Could not enqueue probe movement event");
+    RequirePushed(input.PushKey(direction, held), "Could not enqueue probe movement event");
 }
 
-void PushKey(SDL_Window* window, SDL_Scancode key, bool held) {
-    SDL_Event event{};
-    event.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    event.key.windowID = SDL_GetWindowID(window);
-    event.key.scancode = key;
-    event.key.down = held;
-    Require(SDL_PushEvent(&event), "Could not enqueue key");
+void PushKey(Engine::Input::Backend::Sdl::SdlInputInjector& input, Key key, bool held) {
+    RequirePushed(input.PushKey(key, held), "Could not enqueue key");
 }
 
 void Run(const Options& options) {
@@ -117,7 +101,8 @@ void Run(const Options& options) {
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
     auto& connection = application.Connection();
-    auto* window = application.Platform().NativeWindow();
+    auto& platform = application.Platform();
+    Engine::Input::Backend::Sdl::SdlInputInjector input(platform);
 
     std::uint64_t frameIndex = 0;
     auto previous = Clock::now();
@@ -165,7 +150,7 @@ void Run(const Options& options) {
     bool wasDead = false;
     std::optional<std::uint64_t> lastPresentedFrame;
     bool held = false;
-    SDL_Scancode direction = SDL_SCANCODE_W;
+    Key direction = Key::W;
     double nextToggle = .5;
     // Plays while the room is full; the bots outlast --duration, then their
     // leaving ends the run. A room that empties earlier fails it.
@@ -176,9 +161,9 @@ void Run(const Options& options) {
         Require(age < options.duration + 30, "The bots did not leave after the run");
         if (age >= nextToggle) {
             // Walk forward and back in 0.8 s holds so the GUI player keeps moving among the bots.
-            if (held) PushMovement(window, false, direction);
-            direction = direction == SDL_SCANCODE_W ? SDL_SCANCODE_S : SDL_SCANCODE_W;
-            PushMovement(window, true, direction);
+            if (held) PushMovement(platform, input, false, direction);
+            direction = direction == Key::W ? Key::S : Key::W;
+            PushMovement(platform, input, true, direction);
             held = true;
             nextToggle += .8;
         }
@@ -212,11 +197,11 @@ void Run(const Options& options) {
         std::this_thread::sleep_until(deadline);
     }
     const auto endNs = fps::pvp::MovementTraceNowNs();
-    if (held) PushMovement(window, false, direction);
+    if (held) PushMovement(platform, input, false, direction);
 
-    PushKey(window, SDL_SCANCODE_ESCAPE, true);
+    PushKey(input, Key::Escape, true);
     step(Clock::now());
-    PushKey(window, SDL_SCANCODE_ESCAPE, false);
+    PushKey(input, Key::Escape, false);
     waitFor([](const auto& s) { return s.phase == fps::pvp::ConnectionPhase::Lobby; }, 5, "ESC did not leave the match");
     traceWriter.Finish();
     Require(traceWriter.Good(), "GUI diagnostics were incomplete");
@@ -235,7 +220,7 @@ void Run(const Options& options) {
 }
 } // namespace
 
-int main(int argc, char* argv[]) {
+int GyoMain(int argc, char* argv[]) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "PvP room-capacity GUI participant (run with quad probe bots joining)\n"
                   << "--arena-root <deployed assets> --gateway host:port --output <directory>\n"

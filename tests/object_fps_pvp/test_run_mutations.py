@@ -60,6 +60,15 @@ class RunMutantTests(unittest.TestCase):
         check = {'command': ['gyo-no-such-tool-for-mutation-tests']}
         self.assertEqual(self.run_one(check, expect='.*'), 'error')
 
+    def test_a_build_failure_kills_only_a_mutant_expecting_one(self):
+        # The "build" runs this Python with cmake's arguments, so it fails with Python's own message.
+        tools = run_mutations.Tools(self.root, cmake=sys.executable, go='go')
+        check = dict(python_check('pass'), build=['target'])
+        run = lambda **fields: run_mutations.run_mutant(self.mutant(**fields), {'c': check}, tools, root=self.root)
+        self.assertEqual(run(expect='(?i)unknown option', expect_build_failure=True)['status'], 'killed')
+        self.assertEqual(run(expect='another message', expect_build_failure=True)['status'], 'wrong_failure')
+        self.assertEqual(run(expect='(?i)unknown option')['status'], 'build_failed')
+
     def test_a_hanging_check_times_out(self):
         self.assertEqual(self.run_one(python_check('import time; time.sleep(30)', timeout=1), expect='.*'), 'timeout')
 

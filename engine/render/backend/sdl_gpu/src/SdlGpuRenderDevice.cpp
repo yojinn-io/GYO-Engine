@@ -1,4 +1,5 @@
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/base/Log.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include <SDL3/SDL_gpu.h>
@@ -246,7 +247,7 @@ struct SdlGpuRenderDevice::Impl final {
         const SdlGpuOptions& options) {
 
         platform = &sourcePlatform;
-        window = sourcePlatform.NativeWindow();
+        window = Platform::Sdl::NativeWindow(sourcePlatform);
         ownerThread = std::this_thread::get_id();
         debugMode = options.debugMode;
 

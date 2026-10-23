@@ -14,6 +14,7 @@ enum class RenderErrorCode {
     ResourceCreationFailed,
     SubmissionFailed,
     UnsupportedOperation,
+    FileWriteFailed,
 };
 
 [[nodiscard]] constexpr const char* ToString(const RenderErrorCode code) noexcept {
@@ -26,6 +27,7 @@ enum class RenderErrorCode {
     case RenderErrorCode::ResourceCreationFailed: return "ResourceCreationFailed";
     case RenderErrorCode::SubmissionFailed: return "SubmissionFailed";
     case RenderErrorCode::UnsupportedOperation: return "UnsupportedOperation";
+    case RenderErrorCode::FileWriteFailed: return "FileWriteFailed";
     }
     return "Unknown";
 }
