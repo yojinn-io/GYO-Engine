@@ -178,3 +178,46 @@ TEST_CASE("PvP ingress ledger vouches only for sequences it saw resolved") {
     CHECK(fixture.Arrive(1, 10, 10) == IngressCommandClass::ResolvedCopy);
     CHECK(fixture.clockReads == 0);
 }
+
+// v7.1 outage-resync single-store-refactor: the records' own slack candidacy
+// (until retention-600): only the newest candidates may give a sample; a
+// candidate that ages out stays one (sample-only) until it arrives, is pruned
+// or its track starts over; a record that ages out without candidacy is gone
+// and its copy reads no clock.
+TEST_CASE("PvP substitution records sample only the newest candidates and keep an aged candidate until it arrives") {
+    LedgerFixture fixture{MatchSubstitutionRecords{3, 10, 2}};
+    const auto arrive = [&](std::uint64_t sequence) {
+        return fixture.records.Arrive(1, 1, 1, sequence, [&] { ++fixture.clockReads; return fixture.now; });
+    };
+    fixture.Observe(1, 1, 1, 0);
+    fixture.Resolve(1, 1, 3, {1, 2, 3}); // candidates 2 and 3; 1 was pushed out
+    const auto pushedOut = arrive(1);
+    CHECK(pushedOut.open);
+    CHECK(pushedOut.first);
+    CHECK_FALSE(pushedOut.sample);
+    CHECK(fixture.clockReads == 1);
+    fixture.Resolve(1, 4, 7); // 1, 2 and 3 age out; 2 and 3 stay candidates
+    REQUIRE(fixture.closed.size() == 3);
+    const auto agedCandidate = arrive(2);
+    CHECK_FALSE(agedCandidate.open);
+    CHECK(agedCandidate.sample);
+    CHECK(fixture.clockReads == 2);
+    CHECK_FALSE(arrive(2).sample); // its first copy was the sample
+    CHECK(fixture.clockReads == 2);
+    fixture.records.Unsample(1); // the slack track started over
+    const auto unsampled = arrive(3);
+    CHECK_FALSE(unsampled.sample);
+    CHECK(fixture.clockReads == 2);
+}
+
+TEST_CASE("PvP substitution records forget a record that ages out without candidacy") {
+    LedgerFixture fixture{MatchSubstitutionRecords{3, 10, 1}};
+    fixture.Observe(1, 1, 1, 0);
+    fixture.Resolve(1, 1, 2, {1, 2}); // only 2 is a candidate
+    fixture.Resolve(1, 3, 6); // both age out
+    REQUIRE(fixture.closed.size() == 2);
+    const auto forgotten = fixture.records.Arrive(1, 1, 1, 1, [&] { ++fixture.clockReads; return fixture.now; });
+    CHECK_FALSE(forgotten.open);
+    CHECK_FALSE(forgotten.sample);
+    CHECK(fixture.clockReads == 0);
+}

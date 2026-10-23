@@ -117,6 +117,8 @@ public:
     // window, host stopped) first closes every open substitution record as end
     // and counts the slack samples still pending or unclaimed as such. Each
     // call also starts a new window for the detail file's rejection bound.
+    // Nothing is submitted after a final take (match_main stops the IPC and
+    // the host first): the records are gone, so a late copy gives no sample.
     [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics(bool final = false);
     // Diagnostics only, since the previous call: the bounded records of
     // match-ingress.jsonl (MatchIngressTrace.hpp). Rejections keep the first

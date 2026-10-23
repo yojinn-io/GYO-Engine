@@ -102,6 +102,8 @@ public:
         if (found == players_.end()) return;
         auto& player = found->second;
         if (substitutedAt) {
+            // One record per sequence: within an identity the cursor only
+            // advances, so a sequence is never substituted twice.
             player.open.insert_or_assign(sequence, SubstitutionRecord{.sequence = sequence,
                 .substitutedAt = *substitutedAt, .substitutedTick = tick});
             player.sampleOnly.erase(sequence);

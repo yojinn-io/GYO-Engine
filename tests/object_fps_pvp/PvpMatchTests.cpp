@@ -2025,3 +2025,31 @@ TEST_CASE("PvP host counts the published slack samples the clamp changed") {
         CHECK(counts.slackClampedSamples == clamped);
     }
 }
+
+// v7.1 outage-resync single-store-refactor: the ledger's annex (copies after
+// the first, reference age) reaches the detail record of a record that Leave
+// closes: the records close before the ledger forgets the player.
+TEST_CASE("PvP host keeps the copies of a record that Leave closes in its detail record") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Input(5, 1)));
+    REQUIRE(host.Advance(2.0 / 60).steps == 2); // 1 executed, 2 substituted
+    now += 5ms;
+    REQUIRE(host.SubmitInput(Input(5, 2)));
+    REQUIRE(host.SubmitInput(Input(5, 2)));
+    REQUIRE(host.QueueLeave(2, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    const auto drained = host.DrainIngressRecords();
+    std::optional<IngressSubstitution> removed;
+    for (const auto& record : drained.records)
+        if (const auto* substitution = std::get_if<IngressSubstitution>(&record); substitution && substitution->sequence == 2)
+            removed = *substitution;
+    REQUIRE(removed);
+    CHECK(removed->close == IngressSubstitutionClose::Removed);
+    CHECK(removed->LateMicros() == std::optional<std::int64_t>{5000});
+    CHECK(removed->copiesAfterFirst == 1);
+}

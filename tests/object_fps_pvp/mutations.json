@@ -5719,6 +5719,36 @@
       "replace": "        if (classified != IngressCommandClass::LateFirst) continue;\n",
       "check": "cpu",
       "expect": "(beyondSampleSequence|a sparse substitution is sampled at any age)"
+    },
+    {
+      "id": "ssr-unsample-empty",
+      "batch": "v71-single-store-refactor",
+      "what": "A started-over slack track keeps the records' sample candidates",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "    void Unsample(PlayerId playerId) {\n        const auto found = players_.find(playerId);\n        if (found == players_.end()) return;\n        found->second.candidates.clear();\n        found->second.sampleOnly.clear();\n    }\n\n",
+      "replace": "    void Unsample(PlayerId) {}\n\n",
+      "check": "cpu",
+      "expect": "substitution records sample only the newest candidates"
+    },
+    {
+      "id": "ssr-aged-noncandidate-kept",
+      "batch": "v71-single-store-refactor",
+      "what": "A record that ages out without candidacy is kept as sample-only",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "if (reason == IngressSubstitutionClose::Aged && !value.firstArrival && player.candidates.contains(value.sequence))",
+      "replace": "if (reason == IngressSubstitutionClose::Aged && !value.firstArrival)",
+      "check": "cpu",
+      "expect": "forget a record that ages out without candidacy"
+    },
+    {
+      "id": "ssr-remove-ledger-first",
+      "batch": "v71-single-store-refactor",
+      "what": "Leave forgets the ledger's annex before the records close",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n    ledger_.Remove(playerId);\n",
+      "replace": "    ledger_.Remove(playerId);\n    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
+      "check": "cpu",
+      "expect": "keeps the copies of a record that Leave closes"
     }
   ]
 }
