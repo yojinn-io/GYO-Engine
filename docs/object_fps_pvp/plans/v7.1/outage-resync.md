@@ -1,6 +1,6 @@
 # outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）
 
-- 狀態：**核准**（v7.1 D172，2026-10-23：第 8 節的 D-1～D-14 全部照建議）。D-4（T_int）、D-3 的 N_o 在 G1 依特性報告決定；D-13 在 L2 前另行宣告核准。
+- 狀態：**核准**（v7.1 D172，2026-10-23：第 8 節的 D-1～D-14 全部照建議）。G1（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)。D-13 在 L2 前另行宣告核准。
 - 分支：`claude/pvp-v71-outage-resync`，從 master `cdb9b07` 開出。這是新的 PR 線，與記錄器分支 `claude/pvp-v71-after-re-evaluate` 分開。
 - 規劃方式（D171）：ultracode。2 位偵察、3 份計畫（最小契約、契約先行、風險優先）、1 位評審綜合、1 次對抗式審查。審查判定「必須修訂」，本版已套用；對照見第 11 節。
 - 引用的 file:line 以 master `cdb9b07` 為準。
@@ -25,7 +25,8 @@
 
 - 2026-10-23：草案第 2 版提交，D172 全部照建議核准。
 - 2026-10-23：`outage-characterize` 開始（high，構造時序的部分局部 xhigh）。
-- 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。**等你在關卡 G1 決定**：D-4 T_int（建議 0.5 s）、D-3 的 N_o（建議 20 Tick）、新增的 D-15 只有上行中斷之後的領先量（建議 (a) 只記錄、交給 B6）。
+- 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。G1 的決定見下一行。
+- 2026-10-23：G1 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
