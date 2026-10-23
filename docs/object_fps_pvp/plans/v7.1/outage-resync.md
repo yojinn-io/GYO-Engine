@@ -25,6 +25,7 @@
 
 - 2026-10-23：草案第 2 版提交，D172 全部照建議核准。
 - 2026-10-23：`outage-characterize` 開始（high，構造時序的部分局部 xhigh）。
+- 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。**等你在關卡 G1 決定**：D-4 T_int（建議 0.5 s）、D-3 的 N_o（建議 20 Tick）、新增的 D-15 只有上行中斷之後的領先量（建議 (a) 只記錄、交給 B6）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
