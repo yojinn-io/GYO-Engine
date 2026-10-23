@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無（L2 第 3 版準備中，交出後才需要你）。
+- **等你決定**：sdl-isolation 的 L2 第 3 版（`sdl-isolation-ip4-declaration.md` 第 7.5、7.6 節，`3106b5b`）。要決定兩項照字面做不到的前置：語料重判改成 11 個 pv7 跑次，或拿掉；capture BMP 改用 Engine 的 `render.sdl_gpu_capture_file`，或另寫比對工具。核准後才能開跑 L2，跑的時候要你在場（勿擾、接電源、不碰滑鼠）。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -745,4 +745,9 @@
   - 工作樹裡已完成、尚未提交：golden（15014 幀，除時間戳以外的全欄位，0 不一致）、新測試、符號守衛 (a)(b)、產品突變工具的 `expect_build_failure`。突變：產品 34／34，Engine 2／2。
   - 獨立核對：第 1、3 點成立，第 2、4、5 點部分成立。指出的 L5（欄位投影）與 v-s07 已處理；v-s08～s10 交使用者決定。
 - 2026-10-23：D169。`capture_golden_guard` 完成：`e0de346`（Engine 不去重的契約、測試、突變 3／3）與 `7f7b704`（golden、新測試、守衛 (a)(b)、突變工具）。L1 #582 執行中。下一步 `l2_interleaved` 的第 3 版。
+- 2026-10-23：L1 #582（`7f7b704`）四平台成功。L2 第 3 版準備完成（`3106b5b`）：
+  - 兩樹 B `2307a56`、A `7f7b704` 都在專用 worktree 完整建置；權威 digest 0 差分。
+  - 工具 `run_si.py`／`judge_si.py` 等已寫好，乾跑 117／118（唯一不符的一項是 dryrun 受現況影響）。
+  - 開發跑次 12 次全部 P。
+  - 照字面做不到的兩項交使用者決定。
 
