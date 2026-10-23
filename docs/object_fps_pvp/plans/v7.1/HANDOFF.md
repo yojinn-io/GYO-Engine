@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：無。sdl-isolation 的 L2 可以開跑，等使用者在場（勿擾、接電源、不碰滑鼠，約 30～60 分鐘）。
+- **等你決定**：sdl-isolation（PR #85）的 Engine 側與產品側都完成了。PR 要不要轉成 ready、同步 master、合併，等使用者決定。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -770,4 +770,9 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 照字面做不到的兩項交使用者決定。
 - 2026-10-23：D170 已實作：語料重判 11／11（排除 6），頭的 capture 測試通過，乾跑 118／118，預檢通過。L2 等使用者在場時開跑。
 - 2026-10-23：sdl-isolation 產品側的 dev_log 已加上（`9e36d0b`），涵蓋已完成的 5 批；L2 完成後補寫。
+- 2026-10-23：`l2_interleaved` 完成。
+  - 第一次 session 依使用者的「先等等」，在第一項開始前停下（沒有項目跑過）。
+  - 第二次 session `pvp-v71-sdl-isolation-l2-20261023b`：**通過**。20／20 P，G1～G3、G6～G8、G10、G11 成立；G3 最大差 0.32 ms；G5 的預測成立；沒有受干擾。
+  - **產品側 IP-4 完成**：提交 `d51cbc1`，PR #85 的清單已更新。
+  - 記錄上的錯誤：`7ae0588` 的腳本把宣告清空後提交（先以寫入模式打開再讀取），D170 的修改一起遺失。已在 `d51cbc1` 從 `3106b5b` 還原並重新套用。
 
