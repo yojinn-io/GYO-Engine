@@ -43,8 +43,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
-- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D175）。已完成 `plan-commit`、`outage-characterize`、`resync-contract`、`drop-counters`、`single-store-refactor`；`match-resync`（xhigh）在 L1 通過後開始。本線的細節見該分支計畫的「現況」一節。
+- **等你決定**：`outage-resync` 的 `retention-600`：判定變更 J-A～J-C（§14.4，獨立核對已做）與 L2 不退步紀錄的宣告草案（本線分支的 `retention-600-judgment-change.md`）。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D175）。已完成到 `match-resync`；`retention-600` 的程式完成，等核准後跑 L1 與 L2。之後是 `client-interrupted`、`identity-rebind`、`resync-l2-l3`、`line-close`。本線的細節見該分支計畫的「現況」一節。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）。
@@ -812,3 +812,4 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 本線的現況與 dev_log 在本線分支（計畫的「現況」一節、`docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`）；本文件只在分線、決定、收尾時更新。
 
 - 2026-10-23：`outage-resync` 的關卡改名：G1 → `gate-characterize`、G2 → `gate-contract`。原因：和 INVENTORY 的項目代號 G1、G2 撞名，使用者從分支會話看到「等你決定」寫著 G2，誤以為和 D159「G2 先不做」有關。同時整理「現況」：刪掉過時的「下一步」（sdl-isolation 已合併）與「最後更新」（2026-10-20），加上任務線總覽。本線分支同步（`42b8e72`）。
+- 2026-10-24：`outage-resync` 完成 `single-store-refactor`、`match-resync`（L1 都四平台成功），`retention-600` 的程式完成，等使用者核准判定變更與 L2 宣告。使用者睡前指示「弄完或要確認的內容就等明天」，停在這裡。
