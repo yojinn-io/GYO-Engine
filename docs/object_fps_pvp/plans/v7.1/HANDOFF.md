@@ -43,8 +43,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`outage-resync` 的關卡 `gate-contract`（核准 `resync-contract` 的契約條文；xhigh 審查 3 輪，第 3 輪判定可送核准）。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
-- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D173）。已完成 `plan-commit`、`outage-characterize`（L1 run 39944311104 四平台成功）、`resync-contract` 的條文；`gate-contract` 核准後從 `drop-counters` 開始。本線的細節見該分支計畫的「現況」一節。
+- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D174）。已完成 `plan-commit`、`outage-characterize`、`resync-contract`（`gate-contract` 核准，D174）；`drop-counters` 進行中。本線的細節見該分支計畫的「現況」一節。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）。
@@ -156,6 +156,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D171 | （2026-10-23）`substitution-single-store`（C13）選 (b)：以 SlackTrack（行為紀錄）為唯一來源，帳本改讀它。保留範圍沿用帳本的 600 個序號，所以遲到 1～10 秒的命令也會產生 slack 樣本（行為改變）。斷線恢復時 Client 會收到很大的負 slack，這個問題用斷線重連（重新對時）處理；斷線偵測與重連只走 UDP（旁支會話轉達，記憶 udp-only-liveness）。新開 PR 線，規劃用 ultracode | 使用者：「選（b），合併後：遲到 1～10 秒的命令也會產生 slack 樣本，斷線恢復時，Client 會收到很大的負值的這個問題，用斷線重連的方式（重新對時？）來做。新開PR，用Ultracode來跑這個case的規劃」 |
 | D172 | （2026-10-23）`outage-resync` 計畫第 2 版的 D-1～D-14 全部照建議：完整範圍（約 59～85 h）；D-2 選 I-2（session 在靜默 ≥T_int 後可改綁 endpoint，wire 不變，I-3 記到 v8 候選）；D-3 選 M-B′（晚到 >N_o 換 epoch、Resync 不受冷卻限制）；D-4 T_int 與 N_o 在 G1 依特性報告決定；D-5 T_max 從最後一份 snapshot 起算；D-6 C13 (b) 的兩面一起核准（§14.4 的材料在 retention-600 交）；D-7 照列表；D-8 (b) `reason=resume`；D-9 (a) 中斷期間照常送；D-10 品質照算；D-11 T_max 維持 5 s、wake 選 (w1)；D-12 照 K5；D-13 的判定、門檻、次數在 L2 前另行宣告核准；D-14 同意 Delta-1～3、新 Invariant 與 Replacement Criteria、`ConnectionLiveness`、wire 留 pv7、after-re-evaluate 決策點 A 選 (a) | 使用者：「OK，照建議」 |
 | D173 | （2026-10-23）`outage-resync` 關卡 `gate-characterize`（舊稱 G1）：T_int＝0.5 s（clean 語料 snapshot 最大間隔 0.119 s）；N_o＝20 Tick（語料晚到最大 13.3 Tick，可抓到延遲 0.5 s 的部分送達）；D-15（只有上行中斷後的 12 命令領先量要 0.5～1 s 才由 Backlog 清掉）選 (a) 只記錄、交給 v8 B6，契約寫成 P2 的已知例外。特性報告：本線分支的 `outage-characterize-report.md` | 使用者：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」 |
+| D174 | （2026-10-23）`outage-resync` 關卡 `gate-contract` 核准：`resync-contract` 的條文照現狀（network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants、protocol-v7 §2、log-contract §1.4、ingress README；含 xhigh 審查 3 輪的修訂：恢復時權威 < tip 只重設相位擷取、N_o 以時間判斷與 `late_beyond_no`、最後驗證時刻、P2 的第二個例外等）。開始 `drop-counters` | 使用者：「gate-contract 核准目前的條文（含三輪審查的修訂）。開始 drop-counters。」 |
 
 ## 規劃紀錄（記錄器）
 
