@@ -254,6 +254,86 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 
 審查的一次性輸出在 scratchpad（`timing_summaries.txt`、`handoff.md`）。
 
+### 7.5 第 3 版：事實（2026-10-23，頭完成後）
+
+只補事實，不放寬 7.3 的判定。照字面做不到的兩項見 7.6，要你決定。
+
+工具目錄：`build/target/_build/test/logs/pvp-v71-sdl-isolation-l2-prep-20261023/`（建置目錄被 git 忽略；以下雜湊是核准用的字面值）。
+
+**樹**
+
+| 樹 | 位置 | commit |
+|---|---|---|
+| B | scratchpad 的 `wt-base` | `2307a56` |
+| A | scratchpad 的 `wt-head`（專用 worktree，不用主 checkout，D151） | `7f7b704` |
+
+- 兩樹都以 `test` preset 完整建置；兩份 artifacts 清單各 121 行。
+- 兩樹的資產有 31 個，內容完全相同。
+- Gateway：兩樹的 Go 原始碼相同（建置來源 `cf40497` 到兩個 commit 之間沒有 `.go`、`go.mod`、`go.sum` 的變更），而且 macOS 的 Gateway 不由 CMake 建置，所以兩樹共用 `build/target/_services/object_fps_pvp/bin/gyo_object_fps_pvp-gateway`（sha256 `89d949ce…`，`vcs.modified=false`）。驅動程式在每次呼叫前核對它。
+- 兩樹的分析器差異只有 `test_presentation_evidence.py` 的一行（J3 的標籤），和第 5 節宣告的一致。
+
+**前置（G10）**
+
+- 權威 digest：B 對 A，scale 1、3 各 36 個情境 0 差分（`authority/`）。
+- L1 #582（`7f7b704`）四平台成功。
+
+**工具與雜湊**
+
+| 檔案 | 內容 | sha256 |
+|---|---|---|
+| `run_si.py` | 驅動程式 | `fdeb6f8d509f27c1e00c9a2c95f8b7bc9d5f95840c54a1f9c641ceafe556639f` |
+| `judge_si.py` | 排程、逐項分類、G1～G11、停止規則 | `04ff8f07eb4e6404b762b9de6fd410cbac7d0678dde7224d3281e607a92ba557` |
+| `timing_v7_tree.py` | 各樹在自己的行程裡跑 v7 HUD 規則（兩樹分析器模組同名，不能共用一個直譯器） | `d35239a7248481f017cced9ce10fde66f05135bbaf14ce4e191c1342fcdb4d0c` |
+| `corpus_si.py` | 語料重判 | `fd49c2b6c9f21c07227f0299231ec6e10c9a18439b1aec4a4971d5832ffa4afd` |
+| `sleeper.py` | 16-L2 那份的逐位元組複製 | `98105dbf71a5818d20bb2c82083f7a3cbbdb9c236b43514537c45845442a9567` |
+| `artifacts-A.sha256` | 頭的產物清單 | `27c23e4dafe3e5b49125a4f0a8a1ec02efa91d4d1fdb5c29a09ec3471ff82657` |
+| `artifacts-B.sha256` | base 的產物清單 | `22a24a83632b97bcf268d53a65ed0e6ad271a766bc938c095efd337c14dcaf6f` |
+
+- 先例的 `judge_c2.py` 在 import 時要讀已刪除的 worktree `GYO-Engine-c2-after` 的兩個檔。這兩個檔以 `git archive d685d1e` 展開到 `c2-after-d685d1e/`（只讀 git 物件）；`judge_si.py` 先核對凍結的 `judge_c2.py` 的雜湊，再改用這個路徑。
+
+**實作上的讀法**（字面沒有寫死的地方；都不放寬判定）
+
+- 「B／A 逐項交替，第 1 項 B 先」：每一項輪流先跑，順序是 BA、AB、BA……，共 20 次。
+- rapid 的逾時：7.3 沒有列出，採先例的 300 s。
+- rapid 的 D：照先例計入 G9。
+- G2：另外把各樹的數值照宣告的門檻重讀一次。分析器判通過、數值卻不符時，只立旗標；這是只記錄的附加項。
+- G8 只有 presentation 失敗時：runner 會在網路階段之前拋出例外，judge_16 判 F。依 G8 的明文「先立旗標交你判斷，不直接停」，記為 FP（不停，G8 未定，結論是「交你判斷」）。G8 的專門條文優先於一般的「F 就停」。
+
+**乾跑**（`dryrun_si.py`，不跑任何 GUI）：118 項中 117 項符合預期。
+
+- 涵蓋：既有證據的分類、合成修改觸發每一條判定與停止規則、判定程式本身的突變 7／7、驅動程式的命令外形與排程、模擬 session。
+- 唯一不符的是「缺少 authority 會被當成問題」這一項：它假設 `authority/` 不存在，而權威比較已經跑完、目錄已經存在。這是 dryrun 受現況影響，判定本身照常。
+
+**開發跑次**（只看分類，D132）：12 次全部是 P。
+
+| 項目 | 次數 | 結果 |
+|---|---|---|
+| 頭的 timing-gui-short | 3 | P：凍結分析器只有 HUD 不符（19～21 幀），v7 規則判 P。其中 1 次開跑前的 sleeper 量到 32.7 ms，記為 D（環境） |
+| 頭的 action-short（4 案） | 3 | P：含 J2 真正移動視窗的 drag |
+| gui-probe | B、A 各 3 | P |
+
+### 7.6 照字面做不到的兩項（要你決定）
+
+1. **語料重判「17 個既有 timing 跑次，用頭的分析器重判，分類相同」**
+   - 其中 6 個是 pv6 的證據（combat protocol 6）：16-L2 1 個、16-L2b 2 個、pv7-checkpoint 的 B 2 個、它的開發跑次 1 個。兩樹都是 pv7，頭的 combat 分析器對這 6 個回報 unsupported schema，一定變成 F。
+   - 宣告時（D45）沒注意到 schema 的版本。
+   - 其餘 11 個 pv7 跑次，以兩層重判都和原本相同（暫定結果 `corpus-si-provisional.json`）：
+     - 只做分類（先例的做法）；
+     - 照 `run_timing` 的流程重新分析再分類（會用到頭的移動與 presentation 分析器，比先例深）。
+   - 選項：
+     - (a) 範圍改成 11 個 pv7 跑次，兩層都要相同；
+     - (b) 拿掉這一項。
+   - 建議 (a)：能用頭的分析器重判的證據都用上了。範圍縮小是放寬面，所以要你核准。
+2. **「L1 的 capture BMP 與 base 逐位元組相同」**
+   - 兩次渲染的畫面本來就不同，所以字面上做不到；`probe_queries_entry` 實際提出的證據也不是這個。
+   - 真正的等價證據是：頭的 Engine 測試 `render.sdl_gpu_capture_file`，以舊 probe 的 SDL 呼叫順序（`SDL_CreateSurfaceFrom` RGBA32 加 `SDL_SaveBMP`）作參考，比對 `SaveCaptureBmp` 寫出的位元組相同；L1 四平台都跑了這個測試。
+   - 選項：
+     - (a) 這項前置改成「頭的 `render.sdl_gpu_capture_file` 通過」，驅動程式拿掉 `--capture-bmp`；
+     - (b) 另寫小程式，在兩樹用同一張固定圖片各寫一次 BMP 再比對。
+   - 建議 (a)：檢查的是同一件事，不需要新工具。
+
+時間估計：session 約 20～40 分鐘（工具依先例估 17 分鐘，gui-probe 沒有先例的時間），加上閒置閘門。要開勿擾、接電源、不碰滑鼠、關 Chrome。
+
 ## 8. sdl-isolation.md 第 2 節的更正（核准後與本批一起改）
 
 - `PvpApplication.cpp:1205` 那兩列已完成，現在的位置是 `:1218`。
