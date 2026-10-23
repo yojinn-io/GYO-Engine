@@ -91,6 +91,9 @@
     "log_contract": {
       "build": [],
       "ctest": "object_fps_pvp.log_contract"
+    },
+    "black_frame": {
+      "ctest": "object_fps_pvp.black_frame"
     }
   },
   "mutants": [
@@ -4943,6 +4946,136 @@
       "replace": "    def __init__(self, http, udp, mode):\n",
       "check": "client_delay_runner",
       "expect": "test_the_delaying_relay_accepts_the_arguments_run_case_passes"
+    },
+    {
+      "id": "black-frame-black-threshold",
+      "batch": "v71-black-map-o1",
+      "what": "A pixel counts as black only at exactly zero, so the near-black warmup background is missed",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "BLACK_MAX = 8 ",
+      "replace": "BLACK_MAX = 0 ",
+      "check": "black_frame",
+      "expect": "test_near_black_still_counts_as_black"
+    },
+    {
+      "id": "black-frame-background-threshold",
+      "batch": "v71-black-map-o1",
+      "what": "A black background must fill 90 percent, so the warmup frame with its weapon and character is missed",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "BACKGROUND_BLACK = 0.5 ",
+      "replace": "BACKGROUND_BLACK = 0.9 ",
+      "check": "black_frame",
+      "expect": "test_warmup_frame_is_a_black_background_without_hud"
+    },
+    {
+      "id": "black-frame-hud-inverted",
+      "batch": "v71-black-map-o1",
+      "what": "HUD presence is inverted",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "hud = hud_ratio >= HUD_PRESENT",
+      "replace": "hud = hud_ratio < HUD_PRESENT",
+      "check": "black_frame",
+      "expect": "test_world_needs_the_hud_and_a_scene_background"
+    },
+    {
+      "id": "black-frame-no-title-crop",
+      "batch": "v71-black-map-o1",
+      "what": "The title bar rows are sampled as content",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "top = image.height - content",
+      "replace": "top = 0",
+      "check": "black_frame",
+      "expect": "test_title_bar_rows_are_not_content"
+    },
+    {
+      "id": "black-frame-no-all-black",
+      "batch": "v71-black-map-o1",
+      "what": "A window with nothing but black is not told apart from the warmup frame",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "if black_ratio >= ALL_BLACK:",
+      "replace": "if False:",
+      "check": "black_frame",
+      "expect": "test_nothing_but_black_and_a_blank_window"
+    },
+    {
+      "id": "black-frame-no-uniform",
+      "batch": "v71-black-map-o1",
+      "what": "A blank window of one colour is not told apart",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "elif dominant >= UNIFORM:",
+      "replace": "elif False:",
+      "check": "black_frame",
+      "expect": "test_nothing_but_black_and_a_blank_window"
+    },
+    {
+      "id": "black-frame-classes-swapped",
+      "batch": "v71-black-map-o1",
+      "what": "warmup_like and black_with_hud are swapped",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "\"black_with_hud\" if hud else \"warmup_like\"",
+      "replace": "\"warmup_like\" if hud else \"black_with_hud\"",
+      "check": "black_frame",
+      "expect": "test_warmup_frame_is_a_black_background_without_hud"
+    },
+    {
+      "id": "black-frame-clear-uncounted",
+      "batch": "v71-black-map-o1",
+      "what": "The clear colour is never counted",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "                clear += 1",
+      "replace": "                pass",
+      "check": "black_frame",
+      "expect": "test_screen_capture_of_the_world"
+    },
+    {
+      "id": "black-frame-hud-colour",
+      "batch": "v71-black-map-o1",
+      "what": "The HUD panel reference is the sky colour",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "HUD_PANEL, HUD_TOLERANCE = (43, 51, 62), 16",
+      "replace": "HUD_PANEL, HUD_TOLERANCE = (61, 73, 88), 16",
+      "check": "black_frame",
+      "expect": "test_screen_capture_of_the_world"
+    },
+    {
+      "id": "black-frame-paeth-tie",
+      "batch": "v71-black-map-o1",
+      "what": "The PNG Paeth predictor prefers upper-left over left on a tie",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255",
+      "replace": "line[i] = (line[i] + (a if pa <= pb and pa < pc else b if pb <= pc else c)) & 255",
+      "check": "black_frame",
+      "expect": "test_png_paeth_prefers_left_over_upper_left_on_a_tie"
+    },
+    {
+      "id": "black-frame-average-rounding",
+      "batch": "v71-black-map-o1",
+      "what": "The PNG Average filter rounds up",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "line[i] = (line[i] + ((left + previous[i]) >> 1)) & 255",
+      "replace": "line[i] = (line[i] + ((left + previous[i] + 1) >> 1)) & 255",
+      "check": "black_frame",
+      "expect": "test_png_every_filter_rgb_and_rgba"
+    },
+    {
+      "id": "black-frame-bmp-orientation",
+      "batch": "v71-black-map-o1",
+      "what": "Bottom-up BMP rows are read top-down",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "(y if top_down else height - 1 - y)",
+      "replace": "y",
+      "check": "black_frame",
+      "expect": "test_bmp_bottom_up_24_bit_with_row_padding"
+    },
+    {
+      "id": "black-frame-png-alpha",
+      "batch": "v71-black-map-o1",
+      "what": "RGBA PNG pixels are read as RGB",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "tuple(rows[y][channels * x:channels * x + 3])",
+      "replace": "tuple(rows[y][3 * x:3 * x + 3])",
+      "check": "black_frame",
+      "expect": "test_png_every_filter_rgb_and_rgba"
     }
   ]
 }
