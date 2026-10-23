@@ -1,8 +1,10 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace Engine::Input {
@@ -103,6 +105,35 @@ struct InputEvent final {
     int windowY{};
     int windowWidth{};                             // WindowResized: new size
     int windowHeight{};
+    // When the event happened, on the Engine time base (Engine::Time::TimePoint,
+    // the same type; GYO::Input does not depend on GYO::Time). Its meaning
+    // follows the backend's timestamp contract (for SDL,
+    // docs/architecture/platform-sdl.md).
+    std::chrono::steady_clock::time_point timestamp{};
+};
+
+// Modifier keys held when a text key was pressed (Gui is Command on macOS and
+// the Windows key elsewhere).
+struct KeyModifiers final {
+    bool shift{};
+    bool ctrl{};
+    bool alt{};
+    bool gui{};
+};
+
+// One text input entry, collected only while text input is on. Text carries
+// UTF-8 text; Key records a key press (repeats included, releases never) so a
+// consumer can edit the text. What the keys mean is the consumer's policy.
+struct TextEvent final {
+    enum class Kind : std::uint8_t { Text, Key };
+    Kind kind{};
+    std::string text;                              // Kind::Text
+    Key key{Key::Count};                           // Kind::Key: physical position
+    // Kind::Key: the key the current layout produces at that position
+    // (for example A on the position of Q in AZERTY); Count if none.
+    Key layoutKey{Key::Count};
+    KeyModifiers modifiers{};                      // Kind::Key
+    bool repeat{};                                 // Kind::Key: a key repeat
 };
 
 struct PhysicalInputFrame final {
@@ -113,6 +144,9 @@ struct PhysicalInputFrame final {
     // This frame's events of this window in arrival order. Key repeats are not
     // events; neither are the releases a focus loss applies to held buttons.
     std::vector<InputEvent> events;
+    // This frame's text input of this window in arrival order, only while text
+    // input is on. No order is promised between text and events.
+    std::vector<TextEvent> text;
 
     [[nodiscard]] const ButtonState& Get(Key key) const noexcept {
         return keys[static_cast<std::size_t>(key)];

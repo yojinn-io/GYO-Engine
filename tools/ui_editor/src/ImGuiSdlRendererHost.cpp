@@ -20,6 +20,8 @@
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
+#include "engine/render/backend/sdl/SdlRendererNative.hpp"
 
 namespace Gyo::Tools::UiEditor {
 namespace {
@@ -187,7 +189,7 @@ public:
         ImGui::StyleColorsDark();
 
         if (!ImGui_ImplSDL3_InitForSDLRenderer(
-                platform_.NativeWindow(), renderer_.NativeRenderer())) {
+                Engine::Platform::Sdl::NativeWindow(platform_), Engine::Render::Backend::Sdl::NativeRenderer(renderer_))) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
                 "ImGui SDL3 platform backend initialization failed");
@@ -195,7 +197,7 @@ public:
         }
         platformBackendInitialized_ = true;
 
-        if (!ImGui_ImplSDLRenderer3_Init(renderer_.NativeRenderer())) {
+        if (!ImGui_ImplSDLRenderer3_Init(Engine::Render::Backend::Sdl::NativeRenderer(renderer_))) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
                 "ImGui SDLRenderer backend initialization failed");
@@ -203,7 +205,7 @@ public:
         }
         rendererBackendInitialized_ = true;
 
-        if (const auto preview = previewAssets_.Initialize(*renderer_.NativeRenderer()); !preview) {
+        if (const auto preview = previewAssets_.Initialize(*Engine::Render::Backend::Sdl::NativeRenderer(renderer_)); !preview) {
             LogError("Asset preview initialization failed", preview.error());
             return false;
         }
@@ -215,7 +217,8 @@ public:
     }
 
     RuntimeControl ProcessEvents(const FrameContext&) override {
-        return platform_.PumpEvents([](const SDL_Event& event) {
+        return platform_.PumpEvents([](const Engine::Platform::Sdl::PlatformEvent& view_) {
+        const SDL_Event& event = Engine::Platform::Sdl::NativeEvent(view_);
             ImGui_ImplSDL3_ProcessEvent(&event);
         });
     }
@@ -246,7 +249,7 @@ public:
         }
 
         ImGui_ImplSDLRenderer3_RenderDrawData(
-            ImGui::GetDrawData(), renderer_.NativeRenderer());
+            ImGui::GetDrawData(), Engine::Render::Backend::Sdl::NativeRenderer(renderer_));
         auto presented = renderer_.Present();
         previewAssets_.EndFrame();
         if (!presented) {

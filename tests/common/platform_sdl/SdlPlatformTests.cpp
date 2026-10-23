@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "engine/platform/sdl/SdlPlatform.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
 
 #include <memory>
 #include <stdexcept>
@@ -32,7 +33,8 @@ void PushWhilePumping(SdlPlatform& platform, SDL_Event event) {
     trigger.type = SDL_EVENT_USER;
     REQUIRE(SDL_PushEvent(&trigger));
     bool pushed = false;
-    (void)platform.PumpEvents([&](const SDL_Event& seen) {
+    (void)platform.PumpEvents([&](const Engine::Platform::Sdl::PlatformEvent& view_) {
+        const SDL_Event& seen = Engine::Platform::Sdl::NativeEvent(view_);
         if (seen.type == SDL_EVENT_USER && !pushed) {
             pushed = true;
             SDL_PushEvent(&event);
@@ -45,7 +47,7 @@ void PushWhilePumping(SdlPlatform& platform, SDL_Event event) {
 
 TEST_CASE("SdlPlatform runs the live frame handler for this window's live-resize redraws") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int runs = 0;
     platform->SetLiveFrameHandler([&] { ++runs; });
 
@@ -83,7 +85,7 @@ TEST_CASE("SdlPlatform runs the live frame handler for this window's live-resize
 
 TEST_CASE("SdlPlatform never runs the live frame handler re-entrantly") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int runs = 0;
     int depth = 0;
     int deepest = 0;
@@ -104,11 +106,12 @@ TEST_CASE("SdlPlatform never runs the live frame handler re-entrantly") {
 
 TEST_CASE("SdlPlatform without a live frame handler pumps as before") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int seen = 0;
     SDL_Event event = Exposed(window, 1);
     REQUIRE(SDL_PushEvent(&event));
-    const auto control = platform->PumpEvents([&](const SDL_Event& e) {
+    const auto control = platform->PumpEvents([&](const Engine::Platform::Sdl::PlatformEvent& view_) {
+        const SDL_Event& e = Engine::Platform::Sdl::NativeEvent(view_);
         seen += e.type == SDL_EVENT_WINDOW_EXPOSED ? 1 : 0;
     });
     CHECK(control == Engine::Runtime::RuntimeControl::Continue);
@@ -117,7 +120,7 @@ TEST_CASE("SdlPlatform without a live frame handler pumps as before") {
 
 TEST_CASE("SdlPlatform rethrows a live frame handler's exception from PumpEvents") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int runs = 0;
     bool fail = true;
     platform->SetLiveFrameHandler([&] {
@@ -135,7 +138,7 @@ TEST_CASE("SdlPlatform rethrows a live frame handler's exception from PumpEvents
 
 TEST_CASE("SdlPlatform keeps running live frames after a nested PumpEvents") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int runs = 0;
     platform->SetLiveFrameHandler([&] { ++runs; });
 
@@ -143,7 +146,8 @@ TEST_CASE("SdlPlatform keeps running live frames after a nested PumpEvents") {
     trigger.type = SDL_EVENT_USER;
     REQUIRE(SDL_PushEvent(&trigger));
     bool done = false;
-    (void)platform->PumpEvents([&](const SDL_Event& seen) {
+    (void)platform->PumpEvents([&](const Engine::Platform::Sdl::PlatformEvent& view_) {
+        const SDL_Event& seen = Engine::Platform::Sdl::NativeEvent(view_);
         if (seen.type != SDL_EVENT_USER || done) return;
         done = true;
         (void)platform->PumpEvents();  // nested, then a request in the outer pump
@@ -156,7 +160,7 @@ TEST_CASE("SdlPlatform keeps running live frames after a nested PumpEvents") {
 
 TEST_CASE("SdlPlatform replacing one handler with another keeps a single watch") {
     auto platform = MakePlatform();
-    const SDL_WindowID window = SDL_GetWindowID(platform->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform));
     int first = 0, second = 0;
     platform->SetLiveFrameHandler([&] { ++first; });
     platform->SetLiveFrameHandler([&] { ++second; });

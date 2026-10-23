@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/render/RenderDeviceTypes.hpp"
 #include "engine/runtime/IRuntimeClient.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
@@ -15,10 +16,7 @@
 #include <string>
 
 namespace Engine::Platform::Sdl { class SdlPlatform; }
-namespace Engine::Render {
-class Renderer;
-namespace Backend::SdlGpu { class SdlGpuRenderDevice; }
-}
+namespace Engine::Render { class Renderer; }
 
 namespace fps::pvp {
 class ClientConnection;
@@ -126,7 +124,9 @@ public:
     void ObserveRemote(std::optional<PlayerId> playerId);
     [[nodiscard]] ClientConnection& Connection();
     [[nodiscard]] Engine::Render::Renderer& Renderer();
-    [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& RenderDevice();
+    // What the render device reports about itself (diagnostics; the device
+    // itself stays private, sdl-isolation S1(b), D168 P2).
+    [[nodiscard]] Engine::Render::RenderDeviceInfo RenderDeviceInfo() const;
     [[nodiscard]] Engine::Platform::Sdl::SdlPlatform& Platform();
     // The local movement placed at the latest Update's input sample, from the
     // simulation role's newest step; the sample time of the intent that step

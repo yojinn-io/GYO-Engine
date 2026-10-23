@@ -5,14 +5,15 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #define PVP_PROBE_MOVEMENT_TRACE 1
 #endif
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
+#include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/Renderer.hpp"
-#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
+#include "engine/render/backend/sdl_gpu/SceneCaptureFile.hpp"
+#include "engine/time/Waiter.hpp"
 #include "acceptance_protocol.hpp"
 #include "timer_baseline.hpp"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -140,55 +141,12 @@ void SaveCapture(Engine::Render::SceneCapture& capture, const std::filesystem::p
     Require(capture.width > 0 && capture.height > 0 &&
         capture.rgba8.size() == static_cast<std::size_t>(capture.width) * capture.height * 4,
         "Renderer returned an invalid capture");
-    SDL_Surface* surface = SDL_CreateSurfaceFrom(static_cast<int>(capture.width),
-        static_cast<int>(capture.height), SDL_PIXELFORMAT_RGBA32, capture.rgba8.data(),
-        static_cast<int>(capture.width * 4));
-    Require(surface != nullptr, SDL_GetError());
-    const bool saved = SDL_SaveBMP(surface, destination.string().c_str());
-    SDL_DestroySurface(surface);
-    Require(saved, SDL_GetError());
+    const auto saved = Engine::Render::Backend::SdlGpu::SaveCaptureBmp(capture, destination);
+    Require(bool(saved), saved ? std::string() : saved.error().message + ": " + saved.error().detail);
 }
 
 // Scripted events enter the same SDL adapter and 60 Hz sampling path as a user.
 // Keep each probe in a separate process: SdlPlatform drains SDL's global queue.
-void PushMovement(SDL_Window* window, bool held, SDL_Scancode direction = SDL_SCANCODE_W) {
-    const auto id = SDL_GetWindowID(window);
-    if (held) {
-        SDL_Event focus{};
-        focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-        focus.window.windowID = id;
-        Require(SDL_PushEvent(&focus), "Could not enqueue probe focus event");
-        if (!SDL_GetWindowRelativeMouseMode(window)) {
-            SDL_Event click{};
-            click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-            click.button.windowID = id;
-            click.button.button = SDL_BUTTON_LEFT;
-            click.button.down = true;
-            Require(SDL_PushEvent(&click), "Could not enqueue probe capture click");
-            click.type = SDL_EVENT_MOUSE_BUTTON_UP;
-            click.button.down = false;
-            Require(SDL_PushEvent(&click), "Could not enqueue probe capture release");
-        }
-    }
-    SDL_Event keyboard{};
-    keyboard.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    keyboard.key.windowID = id;
-    keyboard.key.scancode = direction;
-    keyboard.key.key = direction == SDL_SCANCODE_W ? SDLK_W : SDLK_S;
-    keyboard.key.down = held;
-    keyboard.key.repeat = false;
-    Require(SDL_PushEvent(&keyboard), "Could not enqueue probe movement event");
-}
-
-void PushKey(SDL_Window* window, SDL_Scancode key, bool held) {
-    SDL_Event event{};
-    event.type = held ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-    event.key.windowID = SDL_GetWindowID(window);
-    event.key.scancode = key;
-    event.key.down = held;
-    Require(SDL_PushEvent(&event), "Could not enqueue Lobby key");
-}
-
 const fps::pvp::PlayerState* FindSelf(const fps::pvp::ClientConnectionState& state) {
     if (!state.snapshot) return nullptr;
     const auto found = std::find_if(state.snapshot->players.begin(), state.snapshot->players.end(),
@@ -241,6 +199,19 @@ void WriteLatencyPresentation(std::ostream& stream,
     stream << ',' << local.predictedPosition.x << ',' << local.predictedPosition.z << '\n';
 }
 
+// Frame pacing and pauses of the probes on this (main) thread: Engine's Waiter
+// (sdl-isolation P1, D168), which on macOS wakes without timer coalescing.
+void SleepUntil(Clock::time_point deadline) {
+    static Engine::Time::Waiter waiter = [] {
+        auto created = Engine::Time::Waiter::Create();
+        Require(bool(created), "Cannot create the probe's Waiter");
+        return std::move(created.value());
+    }();
+    while (Clock::now() < deadline) static_cast<void>(waiter.WaitUntil(deadline));
+}
+void SleepFor(double seconds) {
+    SleepUntil(Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(seconds)));
+}
 #include "platform_fingerprint.hpp"
 #include "gui_room.hpp"
 #include "gui_input.hpp"
@@ -250,30 +221,30 @@ void WriteLatencyPresentation(std::ostream& stream,
 #include "combat_latency.hpp"
 #include "start_phase_record.hpp"
 
-// Latency-mode window evidence. SDL calls event watchers synchronously while it
-// queues an event, so OS window events are counted without a second drain of
-// the product's queue; the callback only increments counters. Probe-pushed
-// focus (PushMovement) is counted separately via the synthetic flag. Moved and
-// resized are counted because the product releases its pointer on them. The
-// watcher is added after placement: the placement's own MOVED (queued while
-// SDL_SyncWindow pumps events) and the window's creation events are never
+// Latency-mode window evidence. Engine's EventWatch reports an event while it
+// is queued, so OS window events are counted without a second drain of the
+// product's queue; the callback only increments counters. Probe-injected focus
+// (PushMovement) is counted separately: the platform marks the event it is
+// injecting. Moved and resized are counted because the product releases its
+// pointer on them. The watch is added after placement: the placement's own
+// MOVED (queued while Sync runs) and the window's creation events are never
 // counted; a MOVED that arrives later still lands in window_os_events, but only
 // counts as interference inside the measurement window.
 struct LatencyWindow {
-    static constexpr std::array<std::pair<Uint32, const char*>, 8> Kinds{{
-        {SDL_EVENT_WINDOW_OCCLUDED, "occluded"}, {SDL_EVENT_WINDOW_EXPOSED, "exposed"},
-        {SDL_EVENT_WINDOW_HIDDEN, "hidden"}, {SDL_EVENT_WINDOW_MINIMIZED, "minimized"},
-        {SDL_EVENT_WINDOW_FOCUS_GAINED, "focus_gained"}, {SDL_EVENT_WINDOW_FOCUS_LOST, "focus_lost"},
-        {SDL_EVENT_WINDOW_MOVED, "moved"}, {SDL_EVENT_WINDOW_RESIZED, "resized"}}};
-    SDL_Window* window{};
-    SDL_WindowID id{};
+    using Kind = Engine::Platform::Sdl::ObservedEventKind;
+    static constexpr std::array<std::pair<Kind, const char*>, 8> Kinds{{
+        {Kind::WindowOccluded, "occluded"}, {Kind::WindowExposed, "exposed"},
+        {Kind::WindowHidden, "hidden"}, {Kind::WindowMinimized, "minimized"},
+        {Kind::WindowFocusGained, "focus_gained"}, {Kind::WindowFocusLost, "focus_lost"},
+        {Kind::WindowMoved, "moved"}, {Kind::WindowResized, "resized"}}};
+    Engine::Platform::Sdl::SdlPlatform& platform;
     std::string placement{"platform_default"};
     std::string placementError;
-    std::optional<SDL_Rect> usable;
+    std::optional<Engine::Platform::Sdl::Rect> usable;
     std::optional<std::array<int, 2>> requested, afterSync;
     std::optional<bool> synced;
-    std::optional<SDL_WindowFlags> startFlags;
-    std::atomic<bool> measuring{}, synthetic{};
+    std::optional<Engine::Platform::Sdl::WindowFlags> startFlags;
+    std::atomic<bool> measuring{};
     std::array<std::atomic<unsigned>, Kinds.size()> total{}, during{};
     std::atomic<unsigned> syntheticEvents{};
     // The mover raises itself once both players are present. That raise's own
@@ -284,11 +255,11 @@ struct LatencyWindow {
     // the raise says one is due (the mover lacked focus, or the observer had
     // it); otherwise nothing is set aside. Any further focus event still counts.
     const bool raisesItself;
-    const Uint32 raiseCompletionType;
+    const Kind raiseCompletionType;
     std::atomic<bool> raiseCompletionPending{};
     std::atomic<unsigned> raiseCompletionEvents{};
-    LatencyWindow(SDL_Window* native, bool mover) : window(native), id(SDL_GetWindowID(native)), raisesItself(mover),
-        raiseCompletionType(mover ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST) {
+    LatencyWindow(Engine::Platform::Sdl::SdlPlatform& owner, bool mover) : platform(owner), raisesItself(mover),
+        raiseCompletionType(mover ? Kind::WindowFocusGained : Kind::WindowFocusLost) {
         // Both probes otherwise open at one platform-default spot and the mover
         // raises itself over the observer: macOS throttles a fully occluded
         // window and a Wayland compositor may report it OCCLUDED. Opposite
@@ -296,66 +267,68 @@ struct LatencyWindow {
         // platform that lets a program position its windows; the 1280x720
         // render size is unchanged. SDL positions name the client area, and the
         // reported borders (zero on macOS) keep the title bar on screen.
-        SDL_Rect bounds{};
-        const auto display = SDL_GetDisplayForWindow(window);
-        int width{}, height{}, top{}, left{}, bottom{}, right{};
-        if (display && SDL_GetDisplayUsableBounds(display, &bounds) && SDL_GetWindowSize(window, &width, &height)) {
-            SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right); // Zeros if unsupported.
-            const int x = mover ? bounds.x + left : std::max(bounds.x + left, bounds.x + bounds.w - right - width);
-            const int y = mover ? bounds.y + top : std::max(bounds.y + top, bounds.y + bounds.h - bottom - height);
+        // Zero usable bounds or window size: the platform reported none.
+        const auto display = platform.QueryDisplay();
+        const auto state = platform.QueryWindow();
+        const int width = state.rect.width, height = state.rect.height;
+        const auto& borders = state.borders; // Zeros if unsupported.
+        if (display && display.value().usableBounds.width > 0 && display.value().usableBounds.height > 0 && width > 0 &&
+            height > 0) {
+            const auto bounds = display.value().usableBounds;
+            const int x = mover ? bounds.x + borders.left :
+                std::max(bounds.x + borders.left, bounds.x + bounds.width - borders.right - width);
+            const int y = mover ? bounds.y + borders.top :
+                std::max(bounds.y + borders.top, bounds.y + bounds.height - borders.bottom - height);
             usable = bounds;
-            if (SDL_SetWindowPosition(window, x, y)) {
-                synced = SDL_SyncWindow(window); // False: timed out before the requested state.
-                int syncedX{}, syncedY{};
-                if (SDL_GetWindowPosition(window, &syncedX, &syncedY)) afterSync = std::array{syncedX, syncedY};
+            if (const auto placed = platform.SetWindowPosition(x, y)) {
+                synced = platform.Sync(); // False: timed out before the requested state.
+                const auto after = platform.QueryWindow().rect;
+                afterSync = std::array{after.x, after.y};
                 requested = std::array{x, y};
                 placement = mover ? "usable_bounds_top_left" : "usable_bounds_bottom_right";
             } else {
                 // Wayland does not let a client place its window: keep the default
                 // position and name why, so an overlap is attributable.
-                const char* reason = SDL_GetError();
-                placementError = reason && *reason ? reason : "SDL_SetWindowPosition failed";
+                placementError = placed.error().detail.empty() ? placed.error().message : placed.error().detail;
             }
         }
-        Require(SDL_AddEventWatch(&Watch, this), SDL_GetError());
+        watch = platform.AddEventWatch(&Watch, this);
     }
-    ~LatencyWindow() { SDL_RemoveEventWatch(&Watch, this); }
     void ExpectRaiseCompletion() {
-        const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+        const bool focused = platform.QueryWindow().flags.inputFocus;
         raiseCompletionPending.store(raisesItself ? !focused : focused, std::memory_order_relaxed);
     }
     LatencyWindow(const LatencyWindow&) = delete;
     LatencyWindow& operator=(const LatencyWindow&) = delete;
-    static bool SDLCALL Watch(void* self, SDL_Event* event) {
+    // Runs on the pushing thread (the main thread, or SDL's raw input thread on
+    // Windows in relative mode, whose mouse events are ignored here); counters only.
+    static void Watch(void* self, const Engine::Platform::Sdl::ObservedEvent& event) noexcept {
         auto& evidence = *static_cast<LatencyWindow*>(self);
-        if (event->type < SDL_EVENT_WINDOW_FIRST || event->type > SDL_EVENT_WINDOW_LAST || event->window.windowID != evidence.id) return true;
-        if (event->type == evidence.raiseCompletionType && !evidence.synthetic.load(std::memory_order_relaxed) &&
+        if (event.kind == evidence.raiseCompletionType && !event.injected &&
             evidence.raiseCompletionPending.exchange(false, std::memory_order_relaxed)) {
             evidence.raiseCompletionEvents.fetch_add(1, std::memory_order_relaxed);
-            return true;
+            return;
         }
         for (std::size_t kind = 0; kind < Kinds.size(); ++kind) {
-            if (event->type != Kinds[kind].first) continue;
-            if (evidence.synthetic.load(std::memory_order_relaxed)) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
+            if (event.kind != Kinds[kind].first) continue;
+            if (event.injected) evidence.syntheticEvents.fetch_add(1, std::memory_order_relaxed);
             else {
                 evidence.total[kind].fetch_add(1, std::memory_order_relaxed);
                 if (evidence.measuring.load(std::memory_order_relaxed)) evidence.during[kind].fetch_add(1, std::memory_order_relaxed);
             }
             break;
         }
-        return true;
     }
     void Report(std::ostream& report) const {
-        int x{}, y{}, width{}, height{}, top{}, left{}, bottom{}, right{};
-        SDL_GetWindowPosition(window, &x, &y);
-        SDL_GetWindowSize(window, &width, &height);
-        SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right);
-        const auto flags = [](std::optional<SDL_WindowFlags> value) -> std::string {
+        const auto state = platform.QueryWindow();
+        const auto& rect = state.rect;
+        const auto& borders = state.borders;
+        const auto flags = [](std::optional<Engine::Platform::Sdl::WindowFlags> value) -> std::string {
             if (!value) return "unobserved";
-            return "occluded:" + std::to_string(int(bool(*value & SDL_WINDOW_OCCLUDED))) + ",hidden:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_HIDDEN))) + ",minimized:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_MINIMIZED))) + ",input_focus:" +
-                std::to_string(int(bool(*value & SDL_WINDOW_INPUT_FOCUS)));
+            return "occluded:" + std::to_string(int(value->occluded)) + ",hidden:" +
+                std::to_string(int(value->hidden)) + ",minimized:" +
+                std::to_string(int(value->minimized)) + ",input_focus:" +
+                std::to_string(int(value->inputFocus));
         };
         const auto counts = [](const auto& values) {
             std::string text;
@@ -366,20 +339,22 @@ struct LatencyWindow {
         report << "window_placement=" << placement;
         if (!placementError.empty()) report << "\nwindow_placement_error=" << placementError;
         report << "\nwindow_usable_bounds=";
-        if (usable) report << usable->x << ',' << usable->y << ',' << usable->w << ',' << usable->h; else report << "unavailable";
+        if (usable) report << usable->x << ',' << usable->y << ',' << usable->width << ',' << usable->height; else report << "unavailable";
         report << "\nwindow_requested_position=";
         if (requested) report << (*requested)[0] << ',' << (*requested)[1]; else report << "none";
         report << "\nwindow_sync=" << (!synced ? "not_requested" : *synced ? "succeeded" : "timed_out")
                << "\nwindow_position_after_sync=";
         if (afterSync) report << (*afterSync)[0] << ',' << (*afterSync)[1]; else report << "none";
-        report << "\nwindow_final_position=" << x << ',' << y << "\nwindow_size=" << width << ',' << height
-               << "\nwindow_borders=" << top << ',' << left << ',' << bottom << ',' << right
+        report << "\nwindow_final_position=" << rect.x << ',' << rect.y << "\nwindow_size=" << rect.width << ',' << rect.height
+               << "\nwindow_borders=" << borders.top << ',' << borders.left << ',' << borders.bottom << ',' << borders.right
                << "\nwindow_flags_at_measurement_start=" << flags(startFlags)
-               << "\nwindow_flags_at_end=" << flags(SDL_GetWindowFlags(window))
+               << "\nwindow_flags_at_end=" << flags(state.flags)
                << "\nwindow_os_events=" << counts(total) << "\nwindow_os_events_during_measurement=" << counts(during)
                << "\nwindow_synthetic_events=" << syntheticEvents.load()
                << "\nwindow_raise_completion_events=" << raiseCompletionEvents.load() << '\n';
     }
+    // Last, so it is removed before the counters it writes go away.
+    Engine::Platform::Sdl::EventWatch watch;
 };
 
 // Long latency runs use ordinary input/connection APIs and successful renderer
@@ -407,11 +382,12 @@ void RunLatency(const Options& options) {
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
     // Placed before connecting: its MOVED event is drained while still in Lobby.
-    LatencyWindow windowEvidence(application.Platform().NativeWindow(), mover);
-    const auto platform = PlatformFingerprint::Capture(application, application.Platform().NativeWindow());
+    LatencyWindow windowEvidence(application.Platform(), mover);
+    const auto platform = PlatformFingerprint::Capture(application);
     StartPhaseRecorder startPhase;
     if (mover) connection.CreateAndJoin(options.gateway);
     else connection.Refresh(options.gateway);
@@ -419,7 +395,7 @@ void RunLatency(const Options& options) {
     const auto started = Clock::now();
     auto previous = started, refreshed = started;
     std::optional<Clock::time_point> togetherSince, measurementStart;
-    std::optional<SDL_Scancode> held;
+    std::optional<Key> held;
     std::optional<unsigned> activeEvent;
     std::uint64_t frameIndex{}, presentedCount{}, firstTick{}, finalTick{};
     fps::pvp::PlayerId playerId{};
@@ -466,20 +442,20 @@ void RunLatency(const Options& options) {
                          << ',' << (event % 2 ? -1 : 1) << ",0.25," << options.duration << ',' << options.events << '\n';
                 plan.flush();
                 Require(bool(plan), "Cannot write predeclared latency event plan");
-                SDL_RaiseWindow(application.Platform().NativeWindow());
+                application.Platform().Raise();
             }
         }
         if (togetherSince) Require(both, "A GUI client left during latency measurement");
         if (both) finalTick = state.snapshot->tick;
         const double elapsed = measurementStart ? Seconds(now, *measurementStart) : -1;
         windowEvidence.measuring.store(elapsed >= 0 && elapsed <= options.duration + 2, std::memory_order_relaxed);
-        if (elapsed >= 0 && !windowEvidence.startFlags) windowEvidence.startFlags = SDL_GetWindowFlags(application.Platform().NativeWindow());
+        if (elapsed >= 0 && !windowEvidence.startFlags) windowEvidence.startFlags = application.Platform().QueryWindow().flags;
         if (mover && elapsed >= 0) {
             if (elapsed >= options.duration + 2) break;
             const auto event = static_cast<unsigned>(elapsed / period);
             const double phase = elapsed - event * period;
             if (held && (event != activeEvent || phase >= .3 || event >= options.events)) {
-                PushMovement(application.Platform().NativeWindow(), false, *held);
+                PushMovement(input, false, *held);
                 held.reset();
             }
             if (event < options.events && activeEvent != event) {
@@ -494,10 +470,8 @@ void RunLatency(const Options& options) {
                     eventSamples.push_back({event, std::chrono::duration<double>(now.time_since_epoch()).count(),
                         state.playerId, EpochOf(local), local.latestCommand, local.renderPosition.x, local.renderPosition.z,
                         std::sin(self->yaw) * sign, std::cos(self->yaw) * sign});
-                    held = event % 2 ? SDL_SCANCODE_S : SDL_SCANCODE_W;
-                    windowEvidence.synthetic.store(true, std::memory_order_relaxed);
-                    PushMovement(application.Platform().NativeWindow(), true, *held);
-                    windowEvidence.synthetic.store(false, std::memory_order_relaxed);
+                    held = event % 2 ? Key::S : Key::W;
+                    PushMovement(input, true, *held);
                 }
             }
         }
@@ -528,9 +502,9 @@ void RunLatency(const Options& options) {
         }
         // Independent measurement pacing; never try to replay missed frames.
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
-        if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        if (remaining > 0) SleepFor(remaining);
     }
-    if (held) PushMovement(application.Platform().NativeWindow(), false, *held);
+    if (held) PushMovement(input, false, *held);
     if (options.combat) combat.Save(application);
     std::ofstream presentation(options.output / (options.role + "-presentation.csv"));
     Require(bool(presentation), "Cannot create latency presentation trace");
@@ -581,7 +555,7 @@ void RunLatency(const Options& options) {
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     while (connection.State().phase != fps::pvp::ConnectionPhase::Lobby) {
         Require(Clock::now() < leaveDeadline, "Latency client did not leave cleanly");
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(connection.State().error.empty(), "Latency leave cleanup failed");
 #ifdef PVP_PROBE_MOVEMENT_TRACE
@@ -604,7 +578,7 @@ void RunPhaseStalls(const Options& options) {
         std::uint32_t maxServerPending{};
         double recoverySeconds{};
         // Lower bound of the elapsed time the product itself sampled across the
-        // stalled frame: SDL_Delay can oversleep, so the nominal milliseconds
+        // stalled frame: the sleep can oversleep, so the nominal milliseconds
         // do not say whether the product really saw a stall of 100 ms or more.
         double productElapsedLowerBound{};
         bool recovered{};
@@ -625,6 +599,7 @@ void RunPhaseStalls(const Options& options) {
     graphics.gpuDriver = options.gpu;
     graphics.vsync = options.fps <= 60;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     auto& connection = application.Connection();
     const bool mover = options.role == "create";
     if (mover) connection.CreateAndJoin(options.gateway); else connection.Refresh(options.gateway);
@@ -633,7 +608,7 @@ void RunPhaseStalls(const Options& options) {
     auto previous = started, refreshed = started;
     std::optional<Clock::time_point> togetherSince, previousUpdate, previousSteppedAt;
     std::optional<fps::pvp::LocalMovementObservation> previousMovement;
-    std::optional<SDL_Scancode> held;
+    std::optional<Key> held;
     unsigned nextFault{};
     std::optional<unsigned> activeFault;
     std::uint64_t frameIndex{}, presentedCount{}, measuredFrames{};
@@ -665,11 +640,11 @@ void RunPhaseStalls(const Options& options) {
         if (mover && together >= 21) break;
         if (mover && together >= 1) {
             // Alternate non-neutral inputs inside the same small area.
-            const auto direction = static_cast<int>(together * 2) % 2 ? SDL_SCANCODE_S : SDL_SCANCODE_W;
+            const auto direction = static_cast<int>(together * 2) % 2 ? Key::S : Key::W;
             if (!held || *held != direction) {
-                if (held) PushMovement(application.Platform().NativeWindow(), false, *held);
+                if (held) PushMovement(input, false, *held);
                 held = direction;
-                PushMovement(application.Platform().NativeWindow(), true, direction);
+                PushMovement(input, true, direction);
             }
         }
         const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
@@ -686,7 +661,7 @@ void RunPhaseStalls(const Options& options) {
             injecting->stallReseeds = application.LocalMovement().stallReseeds;
         }
         if (injecting && injecting->beforeUpdate) {
-            SDL_Delay(injecting->milliseconds);
+            SleepFor(injecting->milliseconds / 1000.0);
             injecting->released = Clock::now();
         }
         const auto updateStarted = Clock::now();
@@ -726,7 +701,7 @@ void RunPhaseStalls(const Options& options) {
             previousMovement = local;
         } else { previousUpdate.reset(); previousSteppedAt.reset(); previousMovement.reset(); }
         if (injecting && !injecting->beforeUpdate) {
-            SDL_Delay(injecting->milliseconds);
+            SleepFor(injecting->milliseconds / 1000.0);
             injecting->released = Clock::now();
         }
         Require(application.Render(frame) == Control::Continue, application.LastError());
@@ -771,9 +746,9 @@ void RunPhaseStalls(const Options& options) {
                 Require(healthy, "Command queue accumulated again after phase stall recovery");
         }
         const auto remaining = 1.0 / options.fps - Seconds(Clock::now(), now);
-        if (remaining > 0) SDL_DelayNS(static_cast<Uint64>(remaining * 1e9));
+        if (remaining > 0) SleepFor(remaining);
     }
-    if (held) PushMovement(application.Platform().NativeWindow(), false, *held);
+    if (held) PushMovement(input, false, *held);
     samples.flush(); Require(bool(samples), "Cannot write phase stall observations");
     if (mover) {
         Require(nextFault == faults.size(), "Not all predeclared phase stalls ran");
@@ -799,7 +774,7 @@ void RunPhaseStalls(const Options& options) {
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     while (connection.State().phase != fps::pvp::ConnectionPhase::Lobby) {
         Require(Clock::now() < leaveDeadline, "Phase stall client did not leave cleanly");
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(connection.State().error.empty(), "Phase stall leave cleanup failed");
 #ifdef PVP_PROBE_MOVEMENT_TRACE
@@ -819,6 +794,7 @@ void Run(const Options& options) {
     graphics.gateway = options.gateway;
     graphics.gpuDriver = options.gpu;
     Require(application.InitializeGraphics(graphics, error), error);
+    ProbeInput input(application.Platform());
     GuiRoom room(options.output, options.role, options.roomPlayers);
 
     auto& connection = application.Connection();
@@ -837,6 +813,7 @@ void Run(const Options& options) {
     bool movementPressed = false;
     bool movementReleased = false;
     bool testedWindowMove = false, testedCursorToggle = false, testedHeldInputRelease = false;
+    std::optional<WindowMoveRecord> windowMove;
     std::uint64_t frameIndex = 0;
     std::uint64_t firstTick = 0;
     std::uint64_t finalTick = 0;
@@ -859,10 +836,10 @@ void Run(const Options& options) {
     fps::pvp::ClientConnectionState finalState;
     // The Lobby's initial focus is Refresh. Navigate the actual UI actions,
     // rather than calling the network connection's join methods directly.
-    std::deque<SDL_Scancode> lobbyKeys;
-    if (submittedJoin) lobbyKeys.push_back(SDL_SCANCODE_DOWN);
-    lobbyKeys.push_back(SDL_SCANCODE_RETURN);
-    std::optional<SDL_Scancode> releasedNextFrame;
+    std::deque<Key> lobbyKeys;
+    if (submittedJoin) lobbyKeys.push_back(Key::Down);
+    lobbyKeys.push_back(Key::Enter);
+    std::optional<Key> releasedNextFrame;
 
     for (;;) {
         const auto now = Clock::now();
@@ -873,10 +850,10 @@ void Run(const Options& options) {
         auto state = connection.State();
         if (!submittedJoin && lobbyKeys.empty() && state.phase == fps::pvp::ConnectionPhase::Lobby) {
             if (!state.rooms.empty()) {
-                lobbyKeys = {SDL_SCANCODE_DOWN, SDL_SCANCODE_DOWN, SDL_SCANCODE_RETURN};
+                lobbyKeys = {Key::Down, Key::Down, Key::Enter};
                 submittedJoin = true;
             } else if (Seconds(now, lastRefresh) >= .5) {
-                lobbyKeys.push_back(SDL_SCANCODE_RETURN);
+                lobbyKeys.push_back(Key::Enter);
                 lastRefresh = now;
             }
         }
@@ -904,31 +881,28 @@ void Run(const Options& options) {
         if (options.move && beforeCaptured && !movementPressed && together >= .8) {
             // GPU readback can stall a frame past the original movement window.
             // Measure the hold from the actual injected press, not join time.
-            SDL_RaiseWindow(application.Platform().NativeWindow());
-            PushMovement(application.Platform().NativeWindow(), true);
+            application.Platform().Raise();
+            PushMovement(input, true);
             movementPressed = true;
             movementStarted = now;
         }
         if (movementPressed && !movementReleased && Seconds(now, *movementStarted) >= .7) {
             pointerReleaseRequested = Clock::now();
             movementReleased = true;
-            SDL_Event moved{};
-            moved.type = SDL_EVENT_WINDOW_MOVED;
-            moved.window.windowID = SDL_GetWindowID(application.Platform().NativeWindow());
-            Require(SDL_PushEvent(&moved), "Could not enqueue window move event");
+            windowMove = MoveWindow(input);
             testedWindowMove = true;
         }
 
         const Engine::Runtime::FrameContext frame{frameIndex++, Seconds(now, previous)};
         previous = now;
         if (releasedNextFrame) {
-            PushKey(application.Platform().NativeWindow(), *releasedNextFrame, false);
+            PushKey(input, *releasedNextFrame, false);
             releasedNextFrame.reset();
         }
         if (!lobbyKeys.empty()) {
             const auto key = lobbyKeys.front();
             lobbyKeys.pop_front();
-            PushKey(application.Platform().NativeWindow(), key, true);
+            PushKey(input, key, true);
             releasedNextFrame = key;
         }
         Require(application.ProcessEvents(frame) == Control::Continue, "Acceptance window was closed");
@@ -948,33 +922,29 @@ void Run(const Options& options) {
                                stoppedPrediction.z - pointerReleasePosition->z) < .01,
                 "Held W kept predicting movement after window move released capture");
             testedHeldInputRelease = true;
-            PushMovement(application.Platform().NativeWindow(), false);
-            Require(!SDL_GetWindowRelativeMouseMode(application.Platform().NativeWindow()),
+            PushMovement(input, false);
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode,
                 "Moving the window retained gameplay mouse capture");
             Require(connection.State().phase == fps::pvp::ConnectionPhase::Playing,
                 "Releasing mouse capture left the match");
-            SDL_Event focus{};
-            focus.type = SDL_EVENT_WINDOW_FOCUS_LOST;
-            focus.window.windowID = SDL_GetWindowID(application.Platform().NativeWindow());
-            Require(SDL_PushEvent(&focus), "Could not enqueue focus loss");
-            focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-            Require(SDL_PushEvent(&focus), "Could not enqueue focus regain");
+            PushFocus(input, false);
+            PushFocus(input, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Focus events failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(!SDL_GetWindowRelativeMouseMode(application.Platform().NativeWindow()),
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode,
                 "Focus regain recaptured the pointer without a content click");
             // Tab resumes capture, then Tab releases it without leaving.
-            PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_TAB, true);
+            PushKey(input, Key::Tab, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor toggle event failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(SDL_GetWindowRelativeMouseMode(application.Platform().NativeWindow()), "Tab did not resume capture");
-            PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_TAB, false);
+            Require(application.Platform().QueryWindow().flags.relativeMouseMode, "Tab did not resume capture");
+            PushKey(input, Key::Tab, false);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor toggle release failed");
-            PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_TAB, true);
+            PushKey(input, Key::Tab, true);
             Require(application.ProcessEvents(frame) == Control::Continue, "Cursor release event failed");
             Require(application.Update({frame.frameIndex, 0}) == Control::Continue, application.LastError());
-            Require(!SDL_GetWindowRelativeMouseMode(application.Platform().NativeWindow()), "Tab did not release capture");
-            PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_TAB, false);
+            Require(!application.Platform().QueryWindow().flags.relativeMouseMode, "Tab did not release capture");
+            PushKey(input, Key::Tab, false);
             testedCursorToggle = true;
         }
         const auto observation = application.LocalMovement();
@@ -1043,7 +1013,7 @@ void Run(const Options& options) {
                 captureFinished = now;
             }
         }
-        SDL_Delay(1);
+        SleepFor(.001);
     }
 
     Require(finalTick > firstTick, "Authoritative simulation did not advance during GUI run");
@@ -1069,6 +1039,7 @@ void Run(const Options& options) {
            << "local_movement_trace=" << options.role << "-movement.csv\n"
            << "scripted_sdl_movement=" << (options.move ? "true" : "false") << '\n'
            << "window_move_releases_capture=" << (testedWindowMove ? "true" : "not exercised") << '\n'
+           << "window_move=" << (windowMove ? windowMove->Json().dump() : std::string("not exercised")) << '\n'
            << "window_move_stops_held_input=" << (testedHeldInputRelease ? "true" : "not exercised") << '\n'
            << "tab_toggles_capture=" << (testedCursorToggle ? "true" : "not exercised") << '\n'
            << "join_via_lobby_keyboard=true\n"
@@ -1092,14 +1063,14 @@ void Run(const Options& options) {
     Require(bool(presentation), "Cannot write presentation latency trace");
     trace.flush();
     Require(bool(trace), "Cannot write local movement trace");
-    PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_ESCAPE, true);
+    PushKey(input, Key::Escape, true);
     const Engine::Runtime::FrameContext leaveFrame{frameIndex++, 1.0 / 60.0};
     Require(application.ProcessEvents(leaveFrame) == Control::Continue, "ESC event failed");
     Require(application.Update(leaveFrame) == Control::Continue, application.LastError());
     Require(!connection.State().snapshot, "ESC retained the old world while leaving");
     Require(!application.LocalMovement().active && application.LocalMovement().pendingCommands == 0,
         "ESC retained prediction history");
-    PushKey(application.Platform().NativeWindow(), SDL_SCANCODE_ESCAPE, false);
+    PushKey(input, Key::Escape, false);
     const auto leaveDeadline = Clock::now() + std::chrono::seconds(5);
     for (;;) {
         const auto state = connection.State();
@@ -1110,7 +1081,7 @@ void Run(const Options& options) {
         Require(application.ProcessEvents(waiting) == Control::Continue, "Leave event processing failed");
         Require(application.Update(waiting) == Control::Continue, application.LastError());
         Require(application.Render(waiting) == Control::Continue, application.LastError());
-        SDL_Delay(2);
+        SleepFor(.002);
     }
     Require(!connection.State().rooms.empty(), "ESC did not refresh the retained room list");
     report << "escape_returns_to_lobby=true\n" << "escape_clears_prediction=true\n"
@@ -1120,7 +1091,7 @@ void Run(const Options& options) {
 }
 } // namespace
 
-int main(int argc, char* argv[]) {
+int GyoMain(int argc, char* argv[]) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "PvP GUI acceptance (run create and join in separate processes)\n"
                   << "--arena-root <deployed assets> --gateway host:port --role create|join\n"

@@ -80,7 +80,7 @@ gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentati
 add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
-    SDL3::SDL3 nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
+    GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
 set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
@@ -98,12 +98,14 @@ add_test(NAME "${GYO_CURRENT_APP}.presentation_cpu" COMMAND ${presentation_tests
 set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
-# Batch 06: the in-world pointer capture policy against the pre-batch native
-# SDL handling, through Engine SDL input on the dummy video driver.
+# The in-world pointer capture policy against its golden (batch 06's oracle,
+# recorded at the policy's own boundary; sdl-isolation J1, v7.1 D168).
 set(capture_tests "gyo_${GYO_CURRENT_APP}_pointer_capture_tests")
 add_executable(${capture_tests} PointerCaptureCharacterizationTests.cpp)
 target_compile_features(${capture_tests} PRIVATE cxx_std_20)
-target_link_libraries(${capture_tests} PRIVATE ${support} GYO::InputBackendSDL doctest::doctest)
+target_link_libraries(${capture_tests} PRIVATE ${support} GYO::Input doctest::doctest)
+target_compile_definitions(${capture_tests} PRIVATE
+    GYO_POINTER_CAPTURE_GOLDEN="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/pointer_capture_golden.tsv")
 if(WIN32)
     target_compile_definitions(${capture_tests} PRIVATE NOMINMAX)
 endif()
@@ -112,10 +114,49 @@ if(MSVC)
 endif()
 gyo_copy_runtime_dlls(${capture_tests})
 add_test(NAME "${GYO_CURRENT_APP}.pointer_capture" COMMAND ${capture_tests})
-set_tests_properties("${GYO_CURRENT_APP}.pointer_capture" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60
-    ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+set_tests_properties("${GYO_CURRENT_APP}.pointer_capture" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+# sdl-isolation completion guard (a): the product, its probes and its tests
+# call no SDL directly (docs/object_fps_pvp/plans/v7.1/sdl-isolation-ip4-declaration.md section 4).
+add_test(NAME "${GYO_CURRENT_APP}.sdl_symbol_guard"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/sdl_symbol_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+set_tests_properties("${GYO_CURRENT_APP}.sdl_symbol_guard" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# Guard (b): no target of this product links SDL, SDL_image or an Engine *Native
+# target itself (its own LINK_LIBRARIES; Engine backends' $<LINK_ONLY:> SDL is
+# theirs). Checked once the whole project is configured.
+function(gyo_pvp_collect_targets directory out)
+    get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
+    get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
+    foreach(child IN LISTS children)
+        gyo_pvp_collect_targets("${child}" nested)
+        list(APPEND targets ${nested})
+    endforeach()
+    set(${out} ${targets} PARENT_SCOPE)
+endfunction()
+function(gyo_pvp_expect_no_direct_sdl)
+    set(all)
+    foreach(directory IN ITEMS apps/object_fps_pvp build/acceptance/object_fps_pvp tests/object_fps_pvp)
+        if(EXISTS "${GYO_REPOSITORY_ROOT}/${directory}/CMakeLists.txt")
+            gyo_pvp_collect_targets("${GYO_REPOSITORY_ROOT}/${directory}" targets)
+            list(APPEND all ${targets})
+        endif()
+    endforeach()
+    foreach(target IN LISTS all)
+        get_target_property(type ${target} TYPE)
+        if(type STREQUAL "UTILITY")
+            continue()
+        endif()
+        get_target_property(links ${target} LINK_LIBRARIES)
+        foreach(entry IN LISTS links)
+            if(entry MATCHES "^SDL3(_image)?(::|-)" OR entry MATCHES "(Native|_native)$")
+                message(FATAL_ERROR "SDL link guard: ${target} links ${entry} itself; the product calls no SDL "
+                                    "directly (sdl-isolation, docs/object_fps_pvp/plans/v7.1/sdl-isolation-ip4-declaration.md)")
+            endif()
+        endforeach()
+    endforeach()
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_pvp_expect_no_direct_sdl)
 # Batch 08: catalog entries exist, asset files are listed, and every id is used.
 add_test(NAME "${GYO_CURRENT_APP}.asset_catalog"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_asset_catalog.py")

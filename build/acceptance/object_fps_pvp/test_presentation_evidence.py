@@ -523,7 +523,7 @@ class LatencyEvidenceTests(unittest.TestCase):
                 bad = self.window_directory({"create": broken})
                 self.assertEqual(evidence.platform_evidence(bad / "create-report.txt")["status"], "invalid")
 
-    TIMER_REPORT = ("platform_timer_sleeper=SDL_DelayNS remainder\nplatform_timer_schedule=frame_relative\n"
+    TIMER_REPORT = ("platform_timer_sleeper=Waiter remainder\nplatform_timer_schedule=frame_relative\n"
                     "platform_timer_samples=180\n"
                     "platform_timer_late_p50_ms=0.9\nplatform_timer_late_p99_ms=6.5\nplatform_timer_late_max_ms=8.1\n"
                     "platform_timer_interval_p50_ms=16.8\nplatform_timer_interval_p99_ms=20.5\n"
