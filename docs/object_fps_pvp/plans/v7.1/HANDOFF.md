@@ -44,7 +44,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
 - **等你決定**：無。sdl-isolation 已合併（PR #85，`054b08f`）。
-- **進行中**：無。`sdl-isolation`（PR #85）已合併進 master（`054b08f`），本分支已同步 master。GUI 偶發黑屏的觀測在另一個會話（PR #89）。
+- **進行中**：`substitution-single-store` 擴大為新的 PR 線（C13 選 (b)，加上 UDP 斷線重連＝重新對時，D171），ultracode 規劃中。完成後交使用者核准。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -146,6 +146,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D168 | （2026-10-23）產品側 IP-4 的分批與事前宣告（`sdl-isolation-ip4-declaration.md` 第 2 版）核准，P1～P5 照建議：P1 節奏改用 Waiter、P2 產品加中立的 `RenderDeviceInfo()` 存取點、P3 pointer capture 改 golden 並由 Engine 補 s06（J1 的 §14.4 核准之後另交）、P4 gui-probe 放進 L2、P5 L2 第 2 版。判定原則：基準改變的量只記錄、不判定；和基準無關的量（產品行為、各樹各自的絕對門檻）照判 | 使用者：「基準變了的量，只記錄不判定；跟基準無關的量（產品行為、各自的絕對門檻）照樣判定。照建議執行。」 |
 | D169 | （2026-10-23）sdl-isolation J1（pointer capture 的凍結 oracle 改 golden）的 §14.4 判定變更核准，採全欄位版 golden；v-s08～s10 選 (a)：Engine 在 `input.md` 的 Contracts 寫明本視窗的焦點喪失、按鍵、滑鼠鍵事件不去重，補 3 個測試與突變。之後提交、推上 PR #85、觸發 L1，接著準備 L2 第 3 版 | 使用者：「核准 J1 的判定變更（golden 全欄位版）；v-s08～s10 選 (a)：Engine 契約寫明不去重，補 3 個測試與突變。然後提交、推上 PR #85、觸發 L1，接著準備 L2 的第 3 版。」 |
 | D170 | （2026-10-23）sdl-isolation 的 L2 第 3 版核准。語料重判選 (a)：改成 11 個 pv7 跑次，兩層（分類、重新分析）都要相同，6 個 pv6 跑次排除。capture BMP 選 (a)：前置改成頭的 `render.sdl_gpu_capture_file` 通過，拿掉 `--capture-bmp`。改好後列出開跑前的準備 | 使用者：「核准 L2 第 3 版：語料重判選 (a)，改成 11 個 pv7 跑次、兩層都要相同；capture BMP 選 (a)，改用頭的 render.sdl_gpu_capture_file 通過，拿掉 --capture-bmp。改好後告訴我開跑 L2 前要準備什麼。」 |
+| D171 | （2026-10-23）`substitution-single-store`（C13）選 (b)：以 SlackTrack（行為紀錄）為唯一來源，帳本改讀它。保留範圍沿用帳本的 600 個序號，所以遲到 1～10 秒的命令也會產生 slack 樣本（行為改變）。斷線恢復時 Client 會收到很大的負 slack，這個問題用斷線重連（重新對時）處理；斷線偵測與重連只走 UDP（旁支會話轉達，記憶 udp-only-liveness）。新開 PR 線，規劃用 ultracode | 使用者：「選（b），合併後：遲到 1～10 秒的命令也會產生 slack 樣本，斷線恢復時，Client 會收到很大的負值的這個問題，用斷線重連的方式（重新對時？）來做。新開PR，用Ultracode來跑這個case的規劃」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -783,4 +784,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 合併前：同步 master（含 PR #88）、轉成 ready；L1 #592（手動觸發）與 #591（PR）都是四平台成功，PR 狀態 CLEAN。
   - 本分支同步 master 時，`tests/object_fps_pvp/mutations.json` 發生衝突：本分支的 worker-probe-repair 突變與 master 的 sdl-isolation 突變都加在目錄末尾。兩邊都保留（共 521 個，id 不重複），目錄測試 7／7 通過。
   - README「開發紀錄」裡 sdl-isolation 的連結，目標檔案現在已在本分支上。
+- 2026-10-23：`substitution-single-store` 開始（檔位 high）。
+  - 讀程式碼後停在關卡：兩份「被替代的序號」由同一個迴圈、同一次時鐘讀取寫入（`MatchRuntimeHost.cpp:647-657`），只差保留範圍（64／600）與用途（判定／診斷）。帳本不能驅動判定（`network-architecture.zh-Hant.md:771`）。
+  - 提了三個選項：(a) 只記錄並加守衛；(b) 以 SlackTrack 為唯一來源合併；(c) 以帳本為唯一來源合併（不可行）。
+  - 使用者選 (b)，並擴大範圍：見 D171。
 
