@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：規劃中**（草案第 2 版，等使用者核准）。
+**狀態：進行中**。計畫已核准（D172），`outage-characterize` 進行中。
 
 相關文件：
 
