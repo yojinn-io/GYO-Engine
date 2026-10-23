@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：無。下一個關卡是 `outage-resync` 的 G1（依特性報告決定 N_o、T_int）。
+- **等你決定**：無。下一個關卡是 `outage-resync` 的 G2（`resync-contract` 的契約條文）。
 - **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，D171、D172）。計畫全部照建議核准，`outage-characterize` 開始。本線的現況見計畫的「現況」一節。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -148,6 +148,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D170 | （2026-10-23）sdl-isolation 的 L2 第 3 版核准。語料重判選 (a)：改成 11 個 pv7 跑次，兩層（分類、重新分析）都要相同，6 個 pv6 跑次排除。capture BMP 選 (a)：前置改成頭的 `render.sdl_gpu_capture_file` 通過，拿掉 `--capture-bmp`。改好後列出開跑前的準備 | 使用者：「核准 L2 第 3 版：語料重判選 (a)，改成 11 個 pv7 跑次、兩層都要相同；capture BMP 選 (a)，改用頭的 render.sdl_gpu_capture_file 通過，拿掉 --capture-bmp。改好後告訴我開跑 L2 前要準備什麼。」 |
 | D171 | （2026-10-23）`substitution-single-store`（C13）選 (b)：以 SlackTrack（行為紀錄）為唯一來源，帳本改讀它。保留範圍沿用帳本的 600 個序號，所以遲到 1～10 秒的命令也會產生 slack 樣本（行為改變）。斷線恢復時 Client 會收到很大的負 slack，這個問題用斷線重連（重新對時）處理；斷線偵測與重連只走 UDP（旁支會話轉達，記憶 udp-only-liveness）。新開 PR 線，規劃用 ultracode | 使用者：「選（b），合併後：遲到 1～10 秒的命令也會產生 slack 樣本，斷線恢復時，Client 會收到很大的負值的這個問題，用斷線重連的方式（重新對時？）來做。新開PR，用Ultracode來跑這個case的規劃」 |
 | D172 | （2026-10-23）`outage-resync` 計畫第 2 版的 D-1～D-14 全部照建議：完整範圍（約 59～85 h）；D-2 選 I-2（session 在靜默 ≥T_int 後可改綁 endpoint，wire 不變，I-3 記到 v8 候選）；D-3 選 M-B′（晚到 >N_o 換 epoch、Resync 不受冷卻限制）；D-4 T_int 與 N_o 在 G1 依特性報告決定；D-5 T_max 從最後一份 snapshot 起算；D-6 C13 (b) 的兩面一起核准（§14.4 的材料在 retention-600 交）；D-7 照列表；D-8 (b) `reason=resume`；D-9 (a) 中斷期間照常送；D-10 品質照算；D-11 T_max 維持 5 s、wake 選 (w1)；D-12 照 K5；D-13 的判定、門檻、次數在 L2 前另行宣告核准；D-14 同意 Delta-1～3、新 Invariant 與 Replacement Criteria、`ConnectionLiveness`、wire 留 pv7、after-re-evaluate 決策點 A 選 (a) | 使用者：「OK，照建議」 |
+| D173 | （2026-10-23）`outage-resync` 關卡 G1：T_int＝0.5 s（clean 語料 snapshot 最大間隔 0.119 s）；N_o＝20 Tick（語料晚到最大 13.3 Tick，可抓到延遲 0.5 s 的部分送達）；D-15（只有上行中斷後的 12 命令領先量要 0.5～1 s 才由 Backlog 清掉）選 (a) 只記錄、交給 v8 B6，契約寫成 P2 的已知例外。特性報告：本線分支的 `outage-characterize-report.md` | 使用者：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」 |
 
 ## 規劃紀錄（記錄器）
 
