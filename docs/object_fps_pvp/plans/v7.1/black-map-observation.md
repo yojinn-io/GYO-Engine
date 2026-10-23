@@ -1,7 +1,7 @@
 # black-map-observation：GUI 測試偶發黑屏的觀測
 
 更新：2026-10-23。Owner：`object_fps_pvp`。對應未結事項 `N-gui-black-map-intermittent`（[v7.1 交接](HANDOFF.md)）。
-**狀態：O1、O2 完成，O3 未開始。**
+**狀態：O1～O3 完成；H1 在 timing 模式得到證實（第 2a 節），O4 未開始。**
 
 範圍：只查問題，也就是建觀測、驗證假說。不修正，也不改任何既有判定（AGENTS.md §14.3）。怎麼解決之後另外討論。
 觀測結果只記錄，不作為任何 L2 判定。
@@ -57,6 +57,38 @@
 - 黑屏只出現在每個 GUI 行程的前幾秒，從視窗出現開始，約 3 秒多；
 - 畫面分類是 `warmup_like`；
 - 只出現在 timing、action、player、rapid，不出現在 gui-probe、gui-bots。
+
+## 2a. O3 的結果：H1 修正後成立（2026-10-23）
+
+- **timing-gui-short（正常建置）**：
+  - create、join 兩個視窗從出現在螢幕上起，前 2.5～2.7 秒的截圖全部是 `warmup_like`（各 6 張），之後才換成大廳或世界畫面；
+  - 畫面是背景純黑（含天空）、暖機時放在前方的人物（背影）、手上的武器、沒有 HUD，和使用者描述的症狀一致；
+  - 真實樣本放在 `tests/object_fps_pvp/fixtures/black_frame/window-warmup.png`。
+- **player-short（正常建置，4 次啟動、8 個視窗）**：0 張 `warmup_like`。
+  - 視窗出現時，0.01～0.6 秒內就已經是大廳或世界。
+- **H1 測試（player-short 在量計時器基準之前多停 10 秒）**：
+  - 視窗出現在螢幕上的時刻跟著往後延（從 6.4 秒變成 15.0 秒）；
+  - 視窗一出現就是大廳或世界，0 張 `warmup_like`。
+  - 結論：在 player-short 裡，暖機、停頓、量計時器這段期間，視窗根本還不在螢幕上，要等迴圈開始處理事件才顯示。
+- **修正後的 H1**：
+  - 暖機幀露出來的條件是「視窗在停頓之前就已經顯示」；
+  - timing 模式在量計時器之前會先擺放視窗（`LatencyWindow` 的 `SetWindowPosition` 加 `Sync`），處理了事件，所以視窗提早顯示，接著停在暖機幀上約 3 秒；
+  - player-short、action-short 在暖機後直接量計時器，沒有處理事件，所以看不到。
+  - 程式碼位置：timing 是 `gui_main.cpp` 的 `RunLatency`；player 是 `player_short.hpp`；action 是 `action_short.hpp`。
+- **M3（世界幀背景純黑、HUD 照畫）**：
+  - 前 2.6 秒仍是 `warmup_like`（暖機幀沒改），之後 30 張 `black_with_hud`；
+  - 工具分得出暖機幀和其他的黑。另有 3 張不黑（6～7.5 秒），推測是交火時全螢幕的受擊閃光，未驗證，檔案已被精簡步驟刪除。
+- **工具本身**：
+  - 正常建置在迴圈開始之後，沒有任何一張背景黑或 `all_black`，所以沒有「截 Metal 視窗截到全黑」的問題；
+  - 校準值不需要調整：暖機幀黑的比例 0.92、世界畫面 ≤0.0002；M3 是 0.86～0.91；HUD 比例：世界 0.52～0.94，非世界 ≤0.41；大廳面板 0.46～0.47、世界 ≤0.085。
+- **還沒解釋的**：
+  - 「視野內沒有玩家的那一端整個黑」：O3 裡兩端的暖機幀相同，人物都在視野內；
+  - 使用者覺得是偶發。依 O3，timing 模式每次啟動都會露出；其他模式不會。使用者看到的是不是只在 timing 那幾個跑次，O4 會對照。
+
+**O4 的預測（看 O4 結果之前寫下）**：
+- 有 `warmup_like`：timing-gui-short、bots2-timing-gui-short；
+- 沒有 `warmup_like`：action-short、player-short、gui-bots、bots2-action60、bots2-player60、gui-probe、rapid-edge-60、rapid-edge-144；
+- 產品 Client 連續啟動 5 次：沒有 `warmup_like`（產品在暖機後直接進入迴圈）。
 
 ## 3. 方案（使用者 2026-10-23 核准第 3 版）
 
@@ -124,6 +156,7 @@
   - 暖機迴圈要等到真的送上螢幕才算成功（`weaponPresented`），所以暖機幀上螢幕是設計本身帶來的結果；
   - 程式停止 Render 時，視窗顯示最後送出的那一幀，這是作業系統的正常行為。
 - 判斷：機制正常，沒有違反契約。目前缺的是一條需求，也就是「預熱幀能不能讓使用者看到」沒有寫明。依 §14.3，這不算 Defect。
+- O3 補充：露出的時間是 timing probe 自己造成的。它在暖機後先擺放視窗、讓視窗顯示，然後停約 3 秒不 Render。產品在暖機後直接進入迴圈，O4 會量產品看不看得到。
 - 還沒排除、可能是真 bug 的部分：為什麼只是偶發；為什麼只有視野內沒有玩家的那一端整個黑。
 
 ## 6. 紀錄
@@ -150,3 +183,11 @@
   - 測試：`test_black_map_watch.py` 17 個（用假的系統跑完整主迴圈，不開 GUI），登記 CTest `object_fps_pvp.black_map_watch`；`test_black_frame.py` 加上 `lobby` 之後是 16 個。
   - 突變：批次 `v71-black-map-o2` 共 16 個（外掛 15 個、`lobby` 規則 1 個），16／16 killed；O1 的 13 個在改動之後重跑，仍然 13／13 killed。
   - 開發日誌見 [2026-10-23 O2](../../../dev_logs/2026_10_23_pvp_v71_black_map_o2.zh-Hant.md)。
+- 2026-10-23：O3 完成。
+  - 證據在 `pvp-v71-black-map-o3-20261023/`：`normal`、`h1-hold`、`timing-normal`、`m3`；每個案例都有 `patch.diff`、`head.txt`、`binaries.sha256`。
+  - 暫時改動都在本 worktree 改完、重建、跑完之後還原，沒有提交；最後一次完整重建之後，原始碼和 HEAD 相同。
+  - 一次無效的跑次：H1 測試第一次建置失敗（master 的 probe 沒有 `SleepFor`），但腳本照樣用舊的 probe 跑了。二進位的雜湊和 `normal` 相同，所以改名為 `h1-hold-invalid-build-failed-old-binary`，不計入。之後用 `SDL_Delay(10000)` 建置成功再跑。
+  - 同一份原始碼重建出來的 probe，雜湊和第一次不同（`ed1115eb…`、`f223a7df…`），建置不是逐位元組可重現的。
+  - 觀測跑次裡 runner 自己的結果不算數：player-short 全部 P；timing-gui-short 判 F，原因是 `combat-gui-evidence` 的 HUD HP／彈藥不符，和 sdl-isolation L2 裡凍結分析器的已知不符同類，與黑屏無關。
+  - fixtures 加上 `window-warmup.png`、`window-m3-black-with-hud.png`，測試加 2 個（共 18 個）。
+  - 開發日誌見 [2026-10-23 O3](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)。

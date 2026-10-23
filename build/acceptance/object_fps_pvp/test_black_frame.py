@@ -183,6 +183,17 @@ class CorpusTests(unittest.TestCase):
         self.assertGreater(record["panel_ratio"], .4)
         self.assertLess(record["black_ratio"], .01)
 
+    def test_real_warmup_frame_window(self):
+        # The Initialize warmup frame as the screen showed it (O3, timing-gui-short, normal build).
+        record = frame.measure(frame.read_image(FIXTURES / "window-warmup.png"))
+        self.assertEqual(record["class"], "warmup_like")
+        self.assertLess(record["black_ratio"], frame.ALL_BLACK)
+
+    def test_black_background_with_hud_window(self):
+        # O3 M3: in-world frames with a black clear colour and no floor or walls; the HUD is drawn.
+        self.assertEqual(frame.measure(frame.read_image(FIXTURES / "window-m3-black-with-hud.png"))["class"],
+                         "black_with_hud")
+
     def test_scene_readback_has_no_hud_and_no_black(self):
         record = frame.measure(frame.read_image(FIXTURES / "readback-world.png"))
         self.assertEqual(record["class"], "no_hud")
