@@ -43,8 +43,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`outage-resync` 的計畫草案第 2 版（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，分支 `claude/pvp-v71-outage-resync`，計畫第 8 節的 D-1～D-14；首要是 D-2 身分接回與 D-3 晚到過久就換 epoch）。sdl-isolation 已合併（PR #85，`054b08f`）。
-- **進行中**：`substitution-single-store` 擴大為新的 PR 線 `outage-resync`（D171）。ultracode 規劃與對抗式審查已完成，審查判定「必須修訂」，修訂後的第 2 版已提交（`1425c18`），等你核准，核准前不改程式。
+- **等你決定**：無。下一個關卡是 `outage-resync` 的 G1（依特性報告決定 N_o、T_int）。
+- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，D171、D172）。計畫全部照建議核准，`outage-characterize` 開始。本線的現況見計畫的「現況」一節。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -147,6 +147,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D169 | （2026-10-23）sdl-isolation J1（pointer capture 的凍結 oracle 改 golden）的 §14.4 判定變更核准，採全欄位版 golden；v-s08～s10 選 (a)：Engine 在 `input.md` 的 Contracts 寫明本視窗的焦點喪失、按鍵、滑鼠鍵事件不去重，補 3 個測試與突變。之後提交、推上 PR #85、觸發 L1，接著準備 L2 第 3 版 | 使用者：「核准 J1 的判定變更（golden 全欄位版）；v-s08～s10 選 (a)：Engine 契約寫明不去重，補 3 個測試與突變。然後提交、推上 PR #85、觸發 L1，接著準備 L2 的第 3 版。」 |
 | D170 | （2026-10-23）sdl-isolation 的 L2 第 3 版核准。語料重判選 (a)：改成 11 個 pv7 跑次，兩層（分類、重新分析）都要相同，6 個 pv6 跑次排除。capture BMP 選 (a)：前置改成頭的 `render.sdl_gpu_capture_file` 通過，拿掉 `--capture-bmp`。改好後列出開跑前的準備 | 使用者：「核准 L2 第 3 版：語料重判選 (a)，改成 11 個 pv7 跑次、兩層都要相同；capture BMP 選 (a)，改用頭的 render.sdl_gpu_capture_file 通過，拿掉 --capture-bmp。改好後告訴我開跑 L2 前要準備什麼。」 |
 | D171 | （2026-10-23）`substitution-single-store`（C13）選 (b)：以 SlackTrack（行為紀錄）為唯一來源，帳本改讀它。保留範圍沿用帳本的 600 個序號，所以遲到 1～10 秒的命令也會產生 slack 樣本（行為改變）。斷線恢復時 Client 會收到很大的負 slack，這個問題用斷線重連（重新對時）處理；斷線偵測與重連只走 UDP（旁支會話轉達，記憶 udp-only-liveness）。新開 PR 線，規劃用 ultracode | 使用者：「選（b），合併後：遲到 1～10 秒的命令也會產生 slack 樣本，斷線恢復時，Client 會收到很大的負值的這個問題，用斷線重連的方式（重新對時？）來做。新開PR，用Ultracode來跑這個case的規劃」 |
+| D172 | （2026-10-23）`outage-resync` 計畫第 2 版的 D-1～D-14 全部照建議：完整範圍（約 59～85 h）；D-2 選 I-2（session 在靜默 ≥T_int 後可改綁 endpoint，wire 不變，I-3 記到 v8 候選）；D-3 選 M-B′（晚到 >N_o 換 epoch、Resync 不受冷卻限制）；D-4 T_int 與 N_o 在 G1 依特性報告決定；D-5 T_max 從最後一份 snapshot 起算；D-6 C13 (b) 的兩面一起核准（§14.4 的材料在 retention-600 交）；D-7 照列表；D-8 (b) `reason=resume`；D-9 (a) 中斷期間照常送；D-10 品質照算；D-11 T_max 維持 5 s、wake 選 (w1)；D-12 照 K5；D-13 的判定、門檻、次數在 L2 前另行宣告核准；D-14 同意 Delta-1～3、新 Invariant 與 Replacement Criteria、`ConnectionLiveness`、wire 留 pv7、after-re-evaluate 決策點 A 選 (a) | 使用者：「OK，照建議」 |
 
 ## 規劃紀錄（記錄器）
 
