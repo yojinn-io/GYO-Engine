@@ -659,7 +659,7 @@
     - timing 短測跑次中對螢幕截圖（頭與 base 各 1 次，14、22、30 秒）地圖也都正常。
   - 證據：`build/target/_build/test/logs/pvp-v71-gui-black-map-20261023/`。
   - 現有的 GUI 判定只看延遲、命中、HUD，看不到地圖有沒有畫出來，所以發生時跑次照樣判 P。
-  - 跑次中截整個螢幕曾讓視窗失焦一次，該跑次判 `invalid_window_disturbed`（開發跑次，不計）。所以做觀測時，截圖要放在量測窗口之外，或只截遊戲視窗。
+  - 跑次中截圖時，頭那一次判 `invalid_window_disturbed`（開發跑次，不計）。原因是 `screencapture` 第一次執行時，macOS 跳出權限對話框，搶走了焦點（使用者確認）。做觀測時，要先取得權限，截圖也要放在量測窗口之外。
   - 方向：先建觀測（只記錄），再評估、再修正。排在 sdl-isolation 的 L2 之後，避免和 L2 同時佔用螢幕。和 sdl-isolation 無關。
 
 - **（已處理：`worker-probe-repair`，`d2844a5`）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
