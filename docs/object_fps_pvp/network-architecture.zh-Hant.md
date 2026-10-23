@@ -967,7 +967,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
   - 之前（到 `retention-600` 為止）：樣本只取最新 64 個還沒到達的紀錄。`single-store-refactor` 的過渡規則是「600 序號內或屬於最新 64 個就保留，樣本只給最新 64 個」，行為與當時逐位元相同。
 - **樣本與守恆（S3）**：每個序號只在第一次晚到時判斷一次：晚到 ≤ N_o 產生一個樣本（計 `slack_late`），晚到 > N_o 不產生樣本（計 `late_beyond_no`，`match-resync` 起）。
   - `retention-600` 之後，S3 是結構上的等式：`late_first == slack_late + late_beyond_no`；
-  - 之前兩個方向都不保證：稠密替代時 64 筆上限讓 `slack_late` 偏少（`outage-characterize` 量到 187 對 64）；稀疏替代、超過 600 序號時，過渡規則保留的紀錄在帳本裡是 `resolved_untracked`（0 對 1）。所以 S3 只在 `retention-600` 之後檢查。
+  - 之前不保證：`match-resync` 之前，稠密替代時 64 筆上限讓 `slack_late` 偏少（`outage-characterize` 量到 187 對 64）；`match-resync` 到 `retention-600` 之間，只剩稀疏替代、超過 600 序號時，過渡規則保留的紀錄在帳本裡是 `resolved_untracked`（0 對 1）。所以 S3 只在 `retention-600` 之後檢查。
   - 夾限仍在發布點。
 
 **Replacement Criteria**：

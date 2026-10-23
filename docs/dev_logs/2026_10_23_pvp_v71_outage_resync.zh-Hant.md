@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 待確認），下一批是 `retention-600`（xhigh）。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 的程式與 §14.4 材料完成，等使用者核准判定變更與 L2 宣告。
 
 相關文件：
 
@@ -18,7 +18,8 @@
 | `resync-contract`（`02f4b6d`～`6859fd9`） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 3 輪（必須修訂 → 必須修訂 → 可送核准，全部處理）；`gate-contract` 核准（D174） |
 | `drop-counters`（`3a3e1b1`） | high | Host：被 ±1 s 夾限改變的發布樣本計 `slack_clamped_samples`，寫新的 A 級 `resync statistics` 行。Client：命令已離開 64 格環的相位樣本（死信）計 `phase_samples_unmatched`，模擬 role 在連線換代與停止時寫新的 A 級 `phase summary` 行。判定都不讀 | `ctest -L pvp` 44／45（唯一失敗是已知的 worker，見下）；突變 7／7 killed；突變目錄 559 個的 find 字串都仍唯一；L1 run 39956082177 四平台成功 |
 | `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 run 39967478342 四平台成功 |
-| `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 待確認 |
+| `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 四平台成功 |
+| `retention-600`（`d1bcb47` 等） | xhigh（使用者同意） | 拿掉過渡規則：保留中每一筆紀錄的第一份副本判斷一次，600 序號以外關閉的紀錄不再判斷；S3 加進 C++ 守恆檢查 | CPU 測試全過；突變 84／84；§14.4 的 J-A～J-C 經獨立核對修正；**等使用者核准**（判定變更與 L2 宣告），L1 與 L2 未跑 |
 
 ## 規劃
 
@@ -176,3 +177,23 @@
   - `v7-flow-ledger-drives-sample` 在 N_o 以內變成等價（N_o 以內「帳本判成 late_first」和「是樣本候選」在產品裡相同）。因為它是 §7 列出的守衛，改成「晚到過久的判斷改跟帳本的分類走」，killed。
   - `oc-slack-track-retains-600` 退役：64 筆以外的候選一定已晚於 N_o，所以 64 這個上限在行為上看不出差別，而且 `retention-600` 會整段移除這段程式。
 - **已知**：持續的部分送達會反覆 Resync（例如每 4 個準時 1 個、延遲 1 s 時，5 s 內 4 次），品質視窗因此失敗，持續 3 個視窗就會被逐出。這是 D172 的 D-10「照算」。
+
+## retention-600
+
+- **match-resync 之後剩下的改變**：
+  - 樣本這一面不變：N_o 以內的晚到，比它新的被替代序號最多約 30 個，一定在最新 64 筆之內（獨立核對的計算）；
+  - 改變的是 600 序號以外的晚到：以前以「只供樣本」的紀錄保留，到達時算 `late_beyond_no` 並 Resync；現在紀錄已關閉，什麼都不判斷。
+  - 計畫原本預期 `:1363` 的判定會反轉，現在不會反轉，維持 CHECK_FALSE。
+- **程式**：`MatchSubstitutionRecords` 拿掉候選集合、只供樣本的紀錄、`PruneSamples`、`Unsample`，以及 `SlackSampleRecords`；Host 只看 `arrival.first`。
+- **S3**：`CheckSlackConservation` 加進每一個 `CheckSubstitutionConservation`。
+- **判定變更**：見 [retention-600-judgment-change.md](../object_fps_pvp/plans/v7.1/retention-600-judgment-change.md)。
+  - J-A：稀疏替代的守衛，610／700 Tick 不再 Resync；
+  - J-B：紀錄的單元測試，換成新規則；
+  - J-C：`v7-flow-ledger-drives-sample` 的改寫。
+  - 獨立核對（另一位審查者，只讀 commit）指出措辭錯誤與漏報（J-C、退役的記錄），都已修正。
+- **突變**：
+  - 退役 2 個：`ssr-unsample-empty`、`ssr-aged-noncandidate-kept`。它們改的程式已刪除；single-store-refactor 那一節寫的「3／3 killed」是當時的結果。
+  - 改寫：`v7-flow-ledger-late-copies-undercount`（find 改指新程式）、`v7-flow-ledger-drives-sample`（J-C；`expect` 先放寬，結果出來後收窄成實際殺掉它的 §7 守衛，killed）。
+  - 變動檔案上的 84 個：84／84 killed。
+- **補記**：match-resync 那一節對 `v7-flow-ledger-drives-sample` 的描述（「晚到過久的判斷改跟帳本的分類走」），是 match-resync 時的版本；retention-600 之後的版本見 J-C。
+- **未做**：L1（等核准後與 L2 一起）、L2 不退步紀錄（宣告草案在判定變更文件第 6 節）。
