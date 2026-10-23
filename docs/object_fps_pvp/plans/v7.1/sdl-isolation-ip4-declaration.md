@@ -92,7 +92,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 
 ## 6. 判定變更草案
 
-### J1：pointer capture 的凍結 oracle 改成 golden（P3＝A）
+### J1：pointer capture 的凍結 oracle 改成 golden（P3＝A；判定變更已核准，D169，見 [sdl-isolation-j1-judgment-change.md](sdl-isolation-j1-judgment-change.md)）
 
 現況：`PointerCaptureCharacterizationTests.cpp:35-71` 的 `OracleHandle`，是第 06 批之前 `HandleNativeEvent` 遊戲中分支的原樣複製，是一個可執行的參考實作。
 
@@ -104,7 +104,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
   - 輸入：同一批序列，但換成 policy 邊界上的 `InputEvent` 序列，加上每幀的 `focusedAtStart`；
   - 輸出：每幀的 6 個欄位、`releases`、`releasesWhileCaptured`。
 - **錄製**：在 `18b6c03` 以後的 HEAD 上，用一次性的產生器錄。產生器在同一次執行裡確認 oracle 與現行實作 0 不一致。產生器要用 Native，所以放在證據夾，不留在樹裡。
-- **存放**：`tests/object_fps_pvp/fixtures/pointer_capture_golden.txt`，檔頭比照 `authority_golden.txt`，寫明：
+- **存放**：`tests/object_fps_pvp/fixtures/pointer_capture_golden.tsv`，檔頭比照 `authority_golden.txt`，寫明：
   - 來源 commit；
   - oracle 0 不一致；
   - 只在事前宣告的政策變更時重產，並保留舊檔。
@@ -115,7 +115,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
 1. **守的性質**：產品的指標擷取政策（`PointerCapture.cpp`），與第 06 批之前的行為相同。另外，經 Engine 的 `SdlInput` 轉出的事件語意（insideWindow、焦點、本視窗過濾、按鍵重複）和舊 oracle 的假設一致。
 2. **放寬的面**：
    - L1：Engine 轉換層的錯誤（重複鍵、insideWindow 恆為真、其他視窗的按鍵或失焦）不再由本測試抓。
-   - L2：insideWindow 用了過期的視窗大小（突變 s06）。**目前只有本測試抓得到。**
+   - L2：insideWindow 用了過期的視窗大小（突變 s06）。宣告時只有本測試抓得到；本批已在 Engine 補守衛（`8d7182e`，`m-inside-stale`）。
    - L3：`SdlInput` 逐事件焦點語意的改變。
    - L4：參考的獨立性下降，從「與第 06 批之前的程式相等」變成「與錄製時的實作相同」。
 3. **收緊的面**：
@@ -130,7 +130,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
    - 子 agent 的突變結果：`PointerCapture.cpp` 30 個中殺 28 個。存活的是 p01（等價突變）與 p24（缺口，T2 處理）。`SdlInput` 的 s01～s06 結果如上。
    - 腳本：scratchpad 的 `mut/run.py`、`mut/mutants.json`。
    - 決定的由來：IP 的 U6（`PLAN.md:706`）、M7（IP HANDOFF）。
-   - 本批要把 p02～p30（p01 除外）與 s06 登記到 `tests/object_fps_pvp/mutations.json`，新增一個 `pointer_capture` check。
+   - 本批把 p02～p30（p01 除外）登記到 `tests/object_fps_pvp/mutations.json`（`pointer_capture` check）；s06 登記在 Engine 的目錄（`m-inside-stale`）。實作後的完整 §14.4 見 [sdl-isolation-j1-judgment-change.md](sdl-isolation-j1-judgment-change.md)。
 
 **其他選項的取捨**：
 

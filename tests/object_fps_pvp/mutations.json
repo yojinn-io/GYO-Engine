@@ -91,6 +91,25 @@
     "log_contract": {
       "build": [],
       "ctest": "object_fps_pvp.log_contract"
+    },
+    "pointer_capture": {
+      "build": [
+        "gyo_object_fps_pvp_pointer_capture_tests"
+      ],
+      "ctest": "object_fps_pvp.pointer_capture"
+    },
+    "sdl_symbol_guard": {
+      "ctest": "object_fps_pvp.sdl_symbol_guard"
+    },
+    "sdl_link_guard": {
+      "build": [
+        "gyo_object_fps_pvp"
+      ],
+      "command": [
+        "{python}",
+        "-c",
+        "pass"
+      ]
     }
   },
   "mutants": [
@@ -4943,6 +4962,347 @@
       "replace": "    def __init__(self, http, udp, mode):\n",
       "check": "client_delay_runner",
       "expect": "test_the_delaying_relay_accepts_the_arguments_run_case_passes"
+    },
+    {
+      "id": "sdl-j1-p02-focuslost-no-release",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p02-focuslost-no-release (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "            state.windowInteraction = true;\n            release();\n            break;\n        case InputEventKind::WindowMoved:",
+      "replace": "            state.windowInteraction = true;\n            break;\n        case InputEventKind::WindowMoved:",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p03-focuslost-no-interaction",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p03-focuslost-no-interaction (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "            focused = false;\n            // Losing focus, moving, resizing or minimizing the window must not\n            // keep the gameplay mouse lock.\n            state.windowInteraction = true;\n",
+      "replace": "            focused = false;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p04-moved-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p04-moved-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowMoved:\n",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p05-resized-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p05-resized-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowResized:\n",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p06-minimized-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p06-minimized-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowMinimized:\n",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p07-wm-no-interaction",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p07-wm-no-interaction (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowMinimized:\n            state.windowInteraction = true;\n",
+      "replace": "        case InputEventKind::WindowMinimized:\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p08-restored-releases",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p08-restored-releases (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowMinimized:\n",
+      "replace": "        case InputEventKind::WindowMinimized:\n        case InputEventKind::WindowRestored:\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p09-tab-ignores-focus",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p09-tab-ignores-focus (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "event.key == Key::Tab && focused &&",
+      "replace": "event.key == Key::Tab &&",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p10-tab-ignores-interaction",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p10-tab-ignores-interaction (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "event.key == Key::Tab && focused && !state.windowInteraction",
+      "replace": "event.key == Key::Tab && focused",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p11-tab-no-toggle-release",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p11-tab-no-toggle-release (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "                if (state.inputCaptured) {\n                    state.windowInteraction = true;\n                    release();\n                } else {",
+      "replace": "                if (state.inputCaptured) {\n                } else {",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p12-tab-release-no-interaction",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p12-tab-release-no-interaction (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "                if (state.inputCaptured) {\n                    state.windowInteraction = true;\n",
+      "replace": "                if (state.inputCaptured) {\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p13-tab-capture-no-acquired",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p13-tab-capture-no-acquired (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "                    state.inputCaptured = true;\n                    state.pointerAcquiredThisFrame = true;\n                }\n            }",
+      "replace": "                    state.inputCaptured = true;\n                }\n            }",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p14-other-key-toggles",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p14-other-key-toggles (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "event.key == Key::Tab &&",
+      "replace": "event.key != Key::Escape &&",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p15-click-ignores-inside",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p15-click-ignores-inside (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": " && event.insideWindow",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p16-click-ignores-focus",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p16-click-ignores-focus (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "event.button == MouseButton::Left && focused && !state.windowInteraction",
+      "replace": "event.button == MouseButton::Left && !state.windowInteraction",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p17-click-ignores-interaction",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p17-click-ignores-interaction (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "MouseButton::Left && focused && !state.windowInteraction && event.insideWindow",
+      "replace": "MouseButton::Left && focused && event.insideWindow",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p18-any-button-captures",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p18-any-button-captures (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "if (event.button == MouseButton::Left && focused",
+      "replace": "if (focused",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p19-shot-not-rising",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p19-shot-not-rising (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "} else if (rising && !state.pointerAcquiredThisFrame) {",
+      "replace": "} else if (!state.pointerAcquiredThisFrame) {",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p20-shot-on-acquire-frame",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p20-shot-on-acquire-frame (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "} else if (rising && !state.pointerAcquiredThisFrame) {",
+      "replace": "} else if (rising) {",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p21-click-capture-no-acquired",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p21-click-capture-no-acquired (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "                if (!state.inputCaptured) {\n                    state.inputCaptured = true;\n                    state.pointerAcquiredThisFrame = true;\n",
+      "replace": "                if (!state.inputCaptured) {\n                    state.inputCaptured = true;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p22-release-keeps-button",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p22-release-keeps-button (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        state.leftButtonDown = false;\n    };",
+      "replace": "    };",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p23-release-keeps-shot",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p23-release-keeps-shot (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        state.pendingShotEdge = state.pendingReloadEdge = false;\n",
+      "replace": "        state.pendingReloadEdge = false;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p24-release-keeps-reload",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p24-release-keeps-reload (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        state.pendingShotEdge = state.pendingReloadEdge = false;\n",
+      "replace": "        state.pendingShotEdge = false;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p25-buttonup-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p25-buttonup-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "            if (event.button == MouseButton::Left) state.leftButtonDown = false;\n",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p26-any-buttonup-clears",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p26-any-buttonup-clears (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "            if (event.button == MouseButton::Left) state.leftButtonDown = false;\n",
+      "replace": "            state.leftButtonDown = false;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p27-releases-not-counted",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p27-releases-not-counted (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        ++result.releases;\n",
+      "replace": "",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p28-while-captured-always",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p28-while-captured-always (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        if (state.inputCaptured) ++result.releasesWhileCaptured;\n",
+      "replace": "        ++result.releasesWhileCaptured;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p29-start-focus-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p29-start-focus-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "    bool focused = focusedAtStart;\n",
+      "replace": "    bool focused = true;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-j1-p30-focusgain-ignored",
+      "batch": "v71-sdl-isolation",
+      "what": "Pointer capture policy mutant p30-focusgain-ignored (sdl-isolation J1 golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "            focused = true;\n            break;\n",
+      "replace": "            break;\n",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "sdl-g1-product-sdl-call",
+      "batch": "v71-sdl-isolation",
+      "what": "The product calls SDL_GetTicks again",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpApplication.cpp",
+      "find": "Engine::Render::RenderDeviceInfo PvpApplication::RenderDeviceInfo() const { return impl_->device->GetInfo(); }",
+      "replace": "Engine::Render::RenderDeviceInfo PvpApplication::RenderDeviceInfo() const { static_cast<void>(SDL_GetTicks()); return impl_->device->GetInfo(); }",
+      "check": "sdl_symbol_guard",
+      "expect": "PvpApplication\\.cpp:\\d+: SDL_GetTicks"
+    },
+    {
+      "id": "sdl-g2-product-links-native",
+      "batch": "v71-sdl-isolation",
+      "what": "The product target links GYO::PlatformSDLNative",
+      "file": "apps/object_fps_pvp/CMakeLists.txt",
+      "find": "target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain)",
+      "replace": "target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain GYO::PlatformSDLNative)",
+      "check": "sdl_link_guard",
+      "expect_build_failure": true,
+      "expect": "SDL link guard: gyo_object_fps_pvp links GYO::PlatformSDLNative"
+    },
+    {
+      "id": "sdl-g3-probe-sdl-integer",
+      "batch": "v71-sdl-isolation",
+      "what": "A probe uses an SDL integer type again",
+      "file": "build/acceptance/object_fps_pvp/gui_input.hpp",
+      "find": "using Engine::Input::Key;\n",
+      "replace": "using Engine::Input::Key;\nusing ProbeTicks = Uint32;\n",
+      "check": "sdl_symbol_guard",
+      "expect": "gui_input\\.hpp:\\d+: Uint32"
+    },
+    {
+      "id": "sdl-g4-probe-native-window",
+      "batch": "v71-sdl-isolation",
+      "what": "A probe reaches the native window again",
+      "file": "build/acceptance/object_fps_pvp/combat_latency.hpp",
+      "find": "        ProbeInput input(application.Platform());\n",
+      "replace": "        ProbeInput input(application.Platform());\n        static_cast<void>(NativeWindow(application.Platform()));\n",
+      "check": "sdl_symbol_guard",
+      "expect": "combat_latency\\.hpp:\\d+: NativeWindow"
+    },
+    {
+      "id": "sdl-j1-v-p31",
+      "batch": "v71-sdl-isolation",
+      "what": "The policy ignores a move with a nonzero x (independent check L5: needs the full-field golden)",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "        case InputEventKind::WindowMoved:\n        case InputEventKind::WindowResized:",
+      "replace": "        case InputEventKind::WindowMoved:\n            if (event.windowX != 0) break;\n            [[fallthrough]];\n        case InputEventKind::WindowResized:",
+      "check": "pointer_capture",
+      "expect": "the policy differs from its golden"
     }
   ]
 }
