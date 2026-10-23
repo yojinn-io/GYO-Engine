@@ -1,7 +1,7 @@
 # black-map-observation：GUI 測試偶發黑屏的觀測
 
 更新：2026-10-23。Owner：`object_fps_pvp`。對應未結事項 `N-gui-black-map-intermittent`（[v7.1 交接](HANDOFF.md)）。
-**狀態：O1～O3 完成；H1 在 timing 模式得到證實（第 2a 節），O4 未開始。**
+**狀態：O1～O4 完成。黑屏是暖機幀，只在 timing 模式露出約 2.5 秒；是否露出取決於視窗是否在停頓期間顯示，原因未查（第 2b 節）。等使用者決定下一步。**
 
 範圍：只查問題，也就是建觀測、驗證假說。不修正，也不改任何既有判定（AGENTS.md §14.3）。怎麼解決之後另外討論。
 觀測結果只記錄，不作為任何 L2 判定。
@@ -89,6 +89,49 @@
 - 有 `warmup_like`：timing-gui-short、bots2-timing-gui-short；
 - 沒有 `warmup_like`：action-short、player-short、gui-bots、bots2-action60、bots2-player60、gui-probe、rapid-edge-60、rapid-edge-144；
 - 產品 Client 連續啟動 5 次：沒有 `warmup_like`（產品在暖機後直接進入迴圈）。
+
+## 2b. O4 的結果（2026-10-23）
+
+做法：
+- L2 的 10 個案例，用 `sdl-isolation-l2-prep` 的原命令、本 worktree 的建置，各跑 2 次（共 20 次）；接著產品 Client 連續啟動 5 次（每次 12 秒）。
+- 每次都由觀測外掛包住；runner 自己的結果不算數。
+- 證據：`pvp-v71-black-map-o4-20261023/`（`o4_drive.py`、`o4_summary.py`、`progress.jsonl`、`o4-summary.json`、`runs/`）。
+
+| 案例 | 有 `warmup_like` 的跑次 | 視窗數／跑次 | 預測 | 符合 |
+|---|---|---|---|---|
+| timing-gui-short | 1／2（第 2 次兩個視窗都有，到 2.55、2.61 秒） | 2 | 有 | **第 1 次不符** |
+| bots2-timing-gui-short | 2／2（到 2.51～2.66 秒） | 2 | 有 | 符合 |
+| action-short | 0／2 | 8 | 無 | 符合 |
+| player-short | 0／2 | 8 | 無 | 符合 |
+| gui-bots | 0／2 | 1 | 無 | 符合 |
+| bots2-action60 | 0／2 | 2 | 無 | 符合 |
+| bots2-player60 | 0／2 | 2 | 無 | 符合 |
+| gui-probe | 0／2 | 2 | 無 | 符合 |
+| rapid-edge-60 | 0／2 | 2 | 無 | 符合 |
+| rapid-edge-144 | 0／2 | 2 | 無 | 符合 |
+| 產品 Client | 0／5 | 1 | 無 | 符合 |
+
+- 全部 1423 張：`world` 1225、`lobby` 122、`no_hud` 38、`warmup_like` 36、`all_black` 1、`missing` 1；沒有 `black_with_hud`、`uniform`，也沒有在 `world` 之後才出現的 `warmup_like`。
+- **不符的那一次（timing-gui-short 第 1 次）**：
+  - 兩個視窗出現在螢幕上的時刻是命令開始後 5.46 秒；第 2 次是 1.43 秒，bots2 的兩次約 1.5 秒；
+  - 視窗出現時已經是大廳或世界，和 player-short 的情形相同。
+  - 所以「暖機幀會不會露出」取決於視窗是否在停頓期間就顯示出來。timing 模式大多會（O3、O4 共 6 次中 5 次），但不是每次。
+  - 為什麼這一次視窗晚了約 4 秒才顯示，沒有查。目前的觀測只看得到「視窗何時出現在螢幕上」，分不出是視窗建立得晚，還是建立了但顯示得晚。
+- **`all_black` 與 `missing` 各 1 張（rapid-edge-144 的兩次）**：
+  - 都是 join 視窗的最後一張截圖，離視窗消失約 0.5 秒；`all_black` 那張連標題列都沒有；
+  - 推論是視窗在拆除途中，不是症狀，未進一步驗證。
+- **截圖本身**：每張中位數 61～69 ms、最長 194 ms；沒有任何 `foreign_window`。
+
+**結論（只記錄，修正方式另議）**：
+- 使用者看到的黑屏就是 Initialize 的暖機幀：
+  - 只在 timing 類跑次（timing-gui-short、bots2-timing-gui-short）的開頭露出約 2.5 秒；
+  - 其他 8 種案例和產品 Client 都沒有露出。
+- 「偶發」的來源：
+  - L2 的 20 次呼叫裡只有 4 次是 timing 類；
+  - 這 4 次裡也不一定每次都露出（取決於視窗何時顯示）。
+- 還沒解釋的：
+  - 視窗顯示時機的差異（timing-gui-short 第 1 次）；
+  - 「視野內沒有玩家的那一端整個黑」：兩端的暖機幀相同，人物都在視野內。
 
 ## 3. 方案（使用者 2026-10-23 核准第 3 版）
 
@@ -191,3 +234,6 @@
   - 觀測跑次裡 runner 自己的結果不算數：player-short 全部 P；timing-gui-short 判 F，原因是 `combat-gui-evidence` 的 HUD HP／彈藥不符，和 sdl-isolation L2 裡凍結分析器的已知不符同類，與黑屏無關。
   - fixtures 加上 `window-warmup.png`、`window-m3-black-with-hud.png`，測試加 2 個（共 18 個）。
   - 開發日誌見 [2026-10-23 O3](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)。
+- 2026-10-23：O4 完成（第 2b 節）。
+  - 預測 11 項中 10 項符合；不符的 timing-gui-short 第 1 次照實記錄，預測不改。
+  - 開發日誌見 [2026-10-23 O4](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)。
