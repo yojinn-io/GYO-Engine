@@ -50,6 +50,22 @@
 
 Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
 
+### 1.4 規劃中的 A 級行族（v7.1 `outage-resync`，D172）
+
+下列行族在各批實作時加進 1.1 的表，附寫出端的釘住測試（`keys-v1.tsv` 與逐字測試），錨點加進 `prefixes.txt`。L2 要讀它們，所以一開始就是 A 級（Design Invariant 1）。都是新的事件名，帶 `version=1`（R2）。
+
+| 行族 | 寫出端（預定） | 錨點 | 鍵（依序） | 批次 |
+|---|---|---|---|---|
+| Client 連線中斷 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch` | `client-interrupted` |
+| Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after` | `client-interrupted` |
+| Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`、`phase_samples_unmatched` | `drop-counters`（最後一鍵）、`client-interrupted`（其餘） |
+| Match 重新對時統計 | `match_main.cpp`（每個統計視窗、每位玩家一行） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`resyncs`、`slack_clamped_samples`、`final` | `drop-counters`（`slack_clamped_samples`）、`match-resync`（`resyncs`） |
+| Gateway session 重新綁定 | 產品 Gateway | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（不記 token 與完整位址） | `identity-rebind` |
+
+- **不追加到 ingress 行**：ingress 已有 8 組（R3），再加會觸發 Replacement Criteria 1。
+- **clock sync 行（三端，A 級）**：Client 與 Gateway 的每位 Client 視窗，在恢復時提前結束再重開，漂移的回歸也從頭開始（不沿用中斷前的視窗）。每一行行尾追加 `reason=`（R1，D172 的 D-8 (b)），值是 `window`（10 s 到期）、`final`（連線結束，和 `final=1` 同時）或 `resume`（恢復時提前結束）。Match 的 clock sync 行量的是 Gateway↔Match，也追加同一個鍵，值只會是 `window` 或 `final`。釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
+- **死信**：Client 的 64 格命令環對不上的相位樣本，計 `phase_samples_unmatched`（第 5 節的死信原則；`outage-characterize` 確認它現在無聲丟棄）。
+
 ## 2. 版本與相容
 
 - **R1**：同一版內只能在行尾追加鍵。改名、刪除、重排、改意義、改前綴都是破壞性變更。
