@@ -43,8 +43,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：sdl-isolation（PR #85）的 Engine 側與產品側都完成了。PR 要不要轉成 ready、同步 master、合併，等使用者決定。
-- **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
+- **等你決定**：無。sdl-isolation 已合併（PR #85，`054b08f`）。
+- **進行中**：無。`sdl-isolation`（PR #85）已合併進 master（`054b08f`），本分支已同步 master。GUI 偶發黑屏的觀測在另一個會話（PR #89）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -775,4 +775,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 第二次 session `pvp-v71-sdl-isolation-l2-20261023b`：**通過**。20／20 P，G1～G3、G6～G8、G10、G11 成立；G3 最大差 0.32 ms；G5 的預測成立；沒有受干擾。
   - **產品側 IP-4 完成**：提交 `d51cbc1`，PR #85 的清單已更新。
   - 記錄上的錯誤：`7ae0588` 的腳本把宣告清空後提交（先以寫入模式打開再讀取），D170 的修改一起遺失。已在 `d51cbc1` 從 `3106b5b` 還原並重新套用。
+- 2026-10-23：PR #85（sdl-isolation：Engine IP-3／IP-4 與產品側 IP-4）合併，merge commit `054b08f`。
+  - 合併前：同步 master（含 PR #88）、轉成 ready；L1 #592（手動觸發）與 #591（PR）都是四平台成功，PR 狀態 CLEAN。
+  - 本分支同步 master 時，`tests/object_fps_pvp/mutations.json` 發生衝突：本分支的 worker-probe-repair 突變與 master 的 sdl-isolation 突變都加在目錄末尾。兩邊都保留（共 521 個，id 不重複），目錄測試 7／7 通過。
+  - README「開發紀錄」裡 sdl-isolation 的連結，目標檔案現在已在本分支上。
 

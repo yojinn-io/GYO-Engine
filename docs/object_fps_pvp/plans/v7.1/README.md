@@ -189,5 +189,5 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [observability-tools：相位決策寫進 trace、增量計數、加寬偵測器、遺失種子](../../../dev_logs/2026_10_21_pvp_v71_observability.zh-Hant.md)
 - [re-evaluate：用 pv7 之後的數據判斷相位追蹤與 D44 的項目還要不要繼續](../../../dev_logs/2026_10_21_pvp_v71_re_evaluate.zh-Hant.md)
 - [worker-probe-repair、sdl-isolation-plan：修好 worker probe，排定 SDL 隔離的計畫](../../../dev_logs/2026_10_21_pvp_v71_probe_sdl_plan.zh-Hant.md)
-- [sdl-isolation：產品、probe、產品測試不再直接呼叫 SDL（Engine IP-3／IP-4 與產品側 IP-4，L2 通過）](../../../dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md)（檔案隨 PR #85 進入 master；Engine 側見 [IP-3](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)、[IP-4](../../../dev_logs/2026_10_22_engine_ip4.zh-Hant.md)）
+- [sdl-isolation：產品、probe、產品測試不再直接呼叫 SDL（Engine IP-3／IP-4 與產品側 IP-4，L2 通過）](../../../dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md)（PR #85，`054b08f`；Engine 側見 [IP-3](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)、[IP-4](../../../dev_logs/2026_10_22_engine_ip4.zh-Hant.md)）
 
