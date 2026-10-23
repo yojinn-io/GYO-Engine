@@ -26,3 +26,5 @@ match_ipc_statistics	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	[O
 match_role_started	native	apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp	role started version=1 role=	[ObjectFPS/PvP Match] role started version=1 	version role wait_backend name_applied priority_applied
 match_end	cpp	apps/object_fps_pvp/match_main.cpp	[ObjectFPS/PvP Match] end version=1 reason=	[ObjectFPS/PvP Match] end version=1 	version reason exit_code uptime_s authority_tick
 client_hit_feedback	cpp	apps/object_fps_pvp/src/Pvp/PvpApplication.cpp	PvP hit feedback version=1 player=	PvP hit feedback version=1 	version player life tick damage_count hits hp attacker flash reason
+match_resync_statistics	cpp	apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp	[ObjectFPS/PvP Match] resync statistics version=1 player=	[ObjectFPS/PvP Match] resync statistics version=1 	version player final slack_clamped_samples
+client_phase_summary	cpp	apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp	phase summary version=1 player=	[ObjectFPS/PvP] phase summary version=1 	version player phase_samples_unmatched

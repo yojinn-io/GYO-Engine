@@ -59,6 +59,7 @@ public:
     [[nodiscard]] LocalPresentationState Presentation() const noexcept { return prediction_.Presentation(); }
     [[nodiscard]] double SecondsUntilNextStep() const noexcept { return prediction_.SecondsUntilNextStep(); }
     [[nodiscard]] std::pair<float, float> PredictedAim() const noexcept { return prediction_.PredictedAim(); }
+    [[nodiscard]] std::uint64_t TakeUnmatchedPhaseSamples() noexcept { return prediction_.TakeUnmatchedPhaseSamples(); }
 
 private:
     struct Sample final {

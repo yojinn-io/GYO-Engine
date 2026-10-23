@@ -34,6 +34,8 @@
 | role started（Match 2 條、Client 2 條） | `NetworkStatistics.cpp` `RoleStartedLine`，由各 role 的 owner 在 Start 後寫 | `[ObjectFPS/PvP Match] role started version=1 `、`[ObjectFPS/PvP] role started version=1 ` | 1 | `NetworkStatisticsTests.cpp`＋`keys-v1.tsv` | `ingress_cross_check.py`（2026-10-20 新增：計時器後端） |
 | Match end | `match_main.cpp`（最後一行） | `[ObjectFPS/PvP Match] end version=1 ` | 1 | `keys-v1.tsv` | `ingress_cross_check.py`（被 Windows 的 TerminateProcess 結束時沒有這一行；`authority_tick` 是結束時的 Tick，房間清空時 Match 會重設，所以常是很小的值） |
 | Client hit feedback | `PvpApplication.cpp`（`LocalHitFeedback::Observe` 的結果） | `PvP hit feedback version=1 ` | 1 | `keys-v1.tsv`＋`HitFeedbackTests.cpp`（原因的判斷） | 目前沒有工具（2026-10-20 新增：每次受擊與不閃紅的原因 played／dead／new_life） |
+| Match resync statistics | `IngressStatistics.hpp` `MatchResyncStatisticsLine`（`match_main.cpp` 每個統計視窗、每位玩家一行，沒有 player=0；最後一個視窗以 `final=1` 關閉寫過的每位玩家） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | 1 | `IngressStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，v7.1 `outage-resync` 的 `drop-counters`：`slack_clamped_samples`＝被 ±1 s 夾限改變的發布樣本，屬於 `slack_published_samples`；`match-resync` 起行尾追加 `resyncs`、`late_beyond_no_commands`） |
+| Client phase summary | `ClientSimulationRole.cpp` `PhaseSummaryLine`（模擬 role：連線換代或換玩家時、role 停止時各一行，只在那一代有本機玩家時寫） | `[ObjectFPS/PvP] phase summary version=1 ` | 1 | `ClientSimulationRoleTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，`drop-counters`：`phase_samples_unmatched`＝命令已離開 64 格命令環的 slack 樣本，第 5 節的死信） |
 | clock sync（三端） | 本體 `ClockSync.hpp` `ClockWindowLine`、`clock_sync.go` `line()` | Match `[ObjectFPS/PvP Match] clock sync window_ms=`；Gateway runtime `clock sync window_ms=`；Gateway 每位 Client `client clock sync player=`；Client `[ObjectFPS/PvP] clock sync player=` | 隱含 1 | `fixtures/log_v1/clock-sync.tsv`（C++ 與 Go 讀同一份） | 目前沒有工具（2026-10-20 升 A 級：三端的對時是之後分析的輸入） |
 
 ### 1.2 A 級：JSONL 紀錄檔
@@ -56,11 +58,11 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 
 | 行族 | 寫出端（預定） | 錨點 | 鍵（依序；括號是加入的批次） |
 |---|---|---|---|
-| Client 相位摘要 | 模擬端（`ClientSimulationRole`：每次連線換代、`simulation_.Reset()` 之前一行，role 停止時也寫一行，只在結束的那一代曾經有本機玩家時寫；計數放在 Reset 不會清掉的地方，是整個連線的累計） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
+| Client 相位摘要 | 已在 `drop-counters` 實作，見 1.1 | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
 | Client 連線中斷 | `ClientConnection.cpp`（網路 worker） | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch`（`client-interrupted`） |
 | Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
 | Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |
-| Match 重新對時統計 | `match_main.cpp`（每個統計視窗、每位玩家一行） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`final`、`slack_clamped_samples`（`drop-counters`）；`resyncs`、`late_beyond_no_commands`（`match-resync`） |
+| Match 重新對時統計 | 已在 `drop-counters` 實作前三鍵，見 1.1 | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`final`、`slack_clamped_samples`（`drop-counters`）；`resyncs`、`late_beyond_no_commands`（`match-resync`） |
 | Gateway session 重新綁定 | 產品 Gateway | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（`identity-rebind`；不記 token 與完整位址） |
 
 - **各端只記自己觀察到的事**（第 5 節）：`phase_samples_unmatched` 是模擬端的 64 格命令環觀察到的，所以由模擬端寫，不經網路 worker。

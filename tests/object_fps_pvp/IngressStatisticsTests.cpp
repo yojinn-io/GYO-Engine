@@ -436,3 +436,23 @@ TEST_CASE("The ingress record buffer keeps the first rejections of each player a
     CHECK(droppedRecords == 2);
     CHECK(drained.suppressed == 1);
 }
+
+// log-contract §1.1 (v7.1 outage-resync drop-counters): the resync statistics
+// line, verbatim, and its windows: no player=0 line, and the final window
+// closes every player written before.
+TEST_CASE("Match resync statistics lines are verbatim and the final window closes every player once") {
+    MatchResyncStatisticsWriter writer;
+    std::map<std::uint64_t, MatchIngressCounts> first;
+    first[0].slackClampedSamples = 9;
+    first[7].slackClampedSamples = 2;
+    const auto opening = writer.Lines(first, false);
+    REQUIRE(opening.size() == 1);
+    CHECK(opening[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=0 slack_clamped_samples=2");
+    CHECK(writer.Lines({}, false).empty());
+    std::map<std::uint64_t, MatchIngressCounts> last;
+    last[8].slackClampedSamples = 1;
+    const auto closing = writer.Lines(last, true);
+    REQUIRE(closing.size() == 2);
+    CHECK(closing[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=1 slack_clamped_samples=0");
+    CHECK(closing[1] == "[ObjectFPS/PvP Match] resync statistics version=1 player=8 final=1 slack_clamped_samples=1");
+}

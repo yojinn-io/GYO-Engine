@@ -72,6 +72,16 @@ void ClientSimulationLoop::TrackIntent(const ClientIntent& intent) {
     lastIntentSequence_ = intent.sequence;
 }
 
+std::optional<ClientPhaseSummary> ClientSimulationLoop::TakePhaseSummary() noexcept {
+    if (playerId_ == 0) return std::nullopt;
+    return ClientPhaseSummary{playerId_, std::exchange(unmatchedPhaseSamples_, 0)};
+}
+
+std::string PhaseSummaryLine(const ClientPhaseSummary& summary) {
+    return "phase summary version=1 player=" + std::to_string(summary.player) +
+        " phase_samples_unmatched=" + std::to_string(summary.unmatchedPhaseSamples);
+}
+
 bool ClientSimulationLoop::IntentStale(const TimePoint now) const noexcept {
     return lastIntentAt_ == TimePoint{} || Seconds(now - lastIntentAt_) > StaleLimitSeconds();
 }
@@ -80,7 +90,11 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
                                                      ClientSimulationDrain drain) {
     // A new connection generation is a new session, and a new player id a new
     // pawn: the prediction starts over before any of their snapshots.
-    if (!generation_ || *generation_ != drain.generation || playerId_ != drain.playerId) simulation_.Reset();
+    std::optional<ClientPhaseSummary> ended;
+    if (!generation_ || *generation_ != drain.generation || playerId_ != drain.playerId) {
+        ended = TakePhaseSummary();
+        simulation_.Reset();
+    }
     generation_ = drain.generation;
     playerId_ = drain.playerId;
     // The joined Match chose the arena: predict in that one.
@@ -103,6 +117,7 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
             simulation_.Observe(*self, newest->tick, drain.movementRules);
         else simulation_.Reset();
     }
+    unmatchedPhaseSamples_ += simulation_.TakeUnmatchedPhaseSamples();
 
     TrackIntent(intent);
     const bool stale = IntentStale(now);
@@ -119,6 +134,7 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
 
     Step step;
     step.intentStale = stale;
+    step.endedPhase = ended;
     step.generation = drain.generation;
     step.window = simulation_.Frame(now, input);
     const bool active = simulation_.Observation().active;
@@ -177,6 +193,7 @@ void ClientSimulationRole::Body(Engine::Threads::RoleContext& context) {
                 intent = intent_;
             }
             auto step = loop_.Run(now, intent, connection_.DrainSimulation());
+            if (step.endedPhase) std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << PhaseSummaryLine(*step.endedPhase) << '\n';
             if (step.window) connection_.SendInput(std::move(*step.window), step.generation);
             {
                 const std::lock_guard lock(mutex_);
@@ -187,6 +204,8 @@ void ClientSimulationRole::Body(Engine::Threads::RoleContext& context) {
             const std::lock_guard lock(mutex_);
             wakes_.late.Record(wake);
         }
+        if (const auto summary = loop_.TakePhaseSummary())
+            std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << PhaseSummaryLine(*summary) << '\n';
     } catch (const std::exception& error) {
         const std::lock_guard lock(mutex_);
         error_ = error.what();

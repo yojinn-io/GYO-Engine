@@ -1990,3 +1990,38 @@ TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any 
         CHECK(counts.slackLateSamples == 1);
     }
 }
+
+// v7.1 outage-resync drop-counters: a published sample the +-1 s clamp changed
+// is counted (resync statistics line); a sample inside the bound is not.
+TEST_CASE("PvP host counts the published slack samples the clamp changed") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    for (const auto& [lateTicks, clamped] : {std::pair{10u, 0u}, std::pair{59u, 0u}, std::pair{61u, 1u}, std::pair{180u, 1u}}) {
+        std::chrono::steady_clock::time_point now{};
+        MatchRuntimeHost host(TestArena(), [&] { return now; });
+        REQUIRE(host.QueueJoin(1, 5));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+        REQUIRE(host.Advance(2.0 / 60).steps == 2);
+        REQUIRE(host.SubmitInput(Window(5, 4, 5)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1); // 3 substituted, everything after it in time
+        for (std::uint64_t k = 0; k < lateTicks; ++k) {
+            REQUIRE(host.SubmitInput(Input(5, 6 + k)));
+            now += 16'667us;
+            REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        }
+        static_cast<void>(host.TakeSnapshot());
+        static_cast<void>(host.TakeIngressStatistics());
+        REQUIRE(host.SubmitInput(Input(5, 3)));
+        REQUIRE(host.SubmitInput(Input(5, 6 + lateTicks)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        INFO("late ticks " << lateTicks);
+        REQUIRE(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3});
+        const auto taken = host.TakeIngressStatistics();
+        const auto& counts = taken.at(5);
+        CHECK(counts.slackPublishedNegativeSamples == 1);
+        CHECK(counts.slackClampedSamples == clamped);
+    }
+}

@@ -89,6 +89,7 @@ int main(int argc,char** argv) {
         static_cast<void>(runtime.TakeStatistics());
         // Ingress lines share the window; nothing is taken before the first one.
         fps::pvp::MatchIngressStatisticsWriter ingress;
+        fps::pvp::MatchResyncStatisticsWriter resync;
         std::optional<std::string> failed;
         while(!stopping && !(failed=runtime.Error())) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -106,6 +107,7 @@ int main(int argc,char** argv) {
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
                 .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits),.pace=std::move(host.pace)})<<'\n';
             std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),window,false)<<'\n';
+            WriteIngress(resync.Lines(taken,false));
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
             if(ingressTrace) ingressTrace->Write(records);
@@ -123,6 +125,7 @@ int main(int argc,char** argv) {
         const auto lastRecords=runtime.DrainIngressRecords();
         std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),
             std::chrono::duration<double>(stoppedAt-windowStart).count(),true)<<'\n';
+        WriteIngress(resync.Lines(lastTaken,true));
         WriteIngress(ingress.Lines(std::move(lastTaken),WindowMillis(stoppedAt-windowStart),true));
         trace.Finish();
         if(failed) std::cerr<<"Match simulation failed: "<<*failed<<'\n';

@@ -5639,6 +5639,76 @@
       "replace": "constexpr std::size_t kMaximumSubstitutedSequences = 600;",
       "check": "cpu",
       "expect": "outage characterization: partial delivery"
+    },
+    {
+      "id": "dc-clamped-uncounted",
+      "batch": "v71-drop-counters",
+      "what": "A published sample the clamp changed is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                    ++counts.slackClampedSamples;",
+      "replace": "                    static_cast<void>(0);",
+      "check": "cpu",
+      "expect": "counts the published slack samples the clamp changed"
+    },
+    {
+      "id": "dc-clamped-wrong-branch",
+      "batch": "v71-drop-counters",
+      "what": "Every negative published sample counts as clamped",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "if (track.pending->second < -MaxMovementSlackMicros || track.pending->second > MaxMovementSlackMicros)",
+      "replace": "if (track.pending->second < 0)",
+      "check": "cpu",
+      "expect": "counts the published slack samples the clamp changed"
+    },
+    {
+      "id": "dc-resync-line-player-zero",
+      "batch": "v71-drop-counters",
+      "what": "The resync statistics writer also writes the player=0 bucket",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp",
+      "find": "            if (player != 0) lines.emplace(player, counts);",
+      "replace": "            lines.emplace(player, counts);",
+      "check": "cpu",
+      "expect": "resync statistics lines are verbatim"
+    },
+    {
+      "id": "dc-unmatched-uncounted",
+      "batch": "v71-drop-counters",
+      "what": "A slack sample whose command left the ring is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            ++unmatchedPhaseSamples_;",
+      "replace": "            static_cast<void>(0);",
+      "check": "cpu",
+      "expect": "dropped and counted as unmatched|reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-unmatched-wrong-branch",
+      "batch": "v71-drop-counters",
+      "what": "Matched samples are counted as unmatched",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;\n        } else {\n            ++unmatchedPhaseSamples_;\n        }",
+      "replace": "            lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;\n            ++unmatchedPhaseSamples_;\n        } else {\n        }",
+      "check": "cpu",
+      "expect": "dropped and counted as unmatched|reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-summary-lobby",
+      "batch": "v71-drop-counters",
+      "what": "A generation without a local player also reports a phase summary",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    if (playerId_ == 0) return std::nullopt;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-summary-not-summed",
+      "batch": "v71-drop-counters",
+      "what": "The loop keeps only the last step's unmatched samples",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    unmatchedPhaseSamples_ += simulation_.TakeUnmatchedPhaseSamples();",
+      "replace": "    unmatchedPhaseSamples_ = simulation_.TakeUnmatchedPhaseSamples();",
+      "check": "cpu",
+      "expect": "reports the unmatched phase samples"
     }
   ]
 }

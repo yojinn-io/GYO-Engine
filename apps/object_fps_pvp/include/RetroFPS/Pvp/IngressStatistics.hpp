@@ -198,6 +198,10 @@ struct MatchIngressCounts final {
     std::uint64_t slackCoalescedSamples{};
     // Published samples still waiting for the IPC at a reset or the end.
     std::uint64_t slackUnclaimedSamples{};
+    // Published samples the +-1 s clamp changed (part of slackPublishedSamples).
+    // Not on the ingress line (eight key groups, log-contract Replacement
+    // Criteria 1): the resync statistics line carries it (v7.1 outage-resync).
+    std::uint64_t slackClampedSamples{};
     // Appended key (D56): players whose pending action acknowledgement a
     // Leave or an eviction discarded before the tick handed it on.
     std::uint64_t leaveDiscardedActionAcks{};
@@ -295,6 +299,35 @@ public:
         for (const auto& [player, counts] : taken)
             lines.push_back(MatchIngressStatisticsLine({.player = player, .windowMs = windowMs, .final = final, .counts = counts}));
         return lines;
+    }
+
+private:
+    std::set<std::uint64_t> written_;
+};
+
+// log-contract §1.1 (v7.1 outage-resync drop-counters): the slack flow's line
+// for what the ingress line cannot carry. One line per player and window, no
+// player=0 line (a sample always has a player); the final window also closes
+// each player written before with a final=1 line, zero counts included.
+[[nodiscard]] inline std::string MatchResyncStatisticsLine(std::uint64_t player, bool final,
+                                                           const MatchIngressCounts& counts) {
+    return "[ObjectFPS/PvP Match] resync statistics version=1 player=" + std::to_string(player) + " final=" +
+        (final ? "1" : "0") + " slack_clamped_samples=" + std::to_string(counts.slackClampedSamples);
+}
+
+class MatchResyncStatisticsWriter final {
+public:
+    [[nodiscard]] std::vector<std::string> Lines(const std::map<std::uint64_t, MatchIngressCounts>& taken, bool final) {
+        std::map<std::uint64_t, MatchIngressCounts> lines;
+        for (const auto& [player, counts] : taken)
+            if (player != 0) lines.emplace(player, counts);
+        for (const auto& [player, counts] : lines) written_.insert(player);
+        if (final)
+            for (const auto player : written_) lines.try_emplace(player);
+        std::vector<std::string> result;
+        result.reserve(lines.size());
+        for (const auto& [player, counts] : lines) result.push_back(MatchResyncStatisticsLine(player, final, counts));
+        return result;
     }
 
 private:

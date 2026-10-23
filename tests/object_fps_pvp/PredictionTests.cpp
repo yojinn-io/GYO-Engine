@@ -2115,7 +2115,7 @@ TEST_CASE("PvP outage characterization: late samples of commands still in the ri
     CHECK(*twins.tracked.Observation().phaseCorrectionSeconds == doctest::Approx(-MovementPhaseMaximumCorrectionSeconds));
 }
 
-TEST_CASE("PvP outage characterization: a sample outside the 64-command ring is dropped without a count") {
+TEST_CASE("PvP outage characterization: a sample outside the 64-command ring is dropped and counted as unmatched") {
     const auto arena = PredictionArena();
     PhaseTwins twins(arena);
     REQUIRE(twins.FramesUntilCorrections(1, 0.0, 80) == -1);
@@ -2123,7 +2123,9 @@ TEST_CASE("PvP outage characterization: a sample outside the 64-command ring is 
     REQUIRE(tip > 70);
     const auto samplesBefore = twins.tracked.Observation().phaseSamples;
     // Older than the ring (64 slots), newer than the seed: its slot holds a
-    // newer command, so the sample is silently dropped (a dead letter today).
+    // newer command, so the sample is dropped. Since drop-counters (v7.1
+    // outage-resync) the dead letter is counted (phase summary line).
+    static_cast<void>(twins.tracked.TakeUnmatchedPhaseSamples());
     for (const auto sequence : {tip - 66, tip - 65}) {
         static_cast<void>(twins.tracked.Advance(MovementTickSeconds, 0, 0, 0, 0));
         const auto latest = twins.tracked.Observation().latestCommand;
@@ -2133,6 +2135,9 @@ TEST_CASE("PvP outage characterization: a sample outside the 64-command ring is 
     }
     const auto droppedSamples = twins.tracked.Observation().phaseSamples - samplesBefore;
     CHECK(droppedSamples == 0);
+    const auto unmatchedSamples = twins.tracked.TakeUnmatchedPhaseSamples();
+    CHECK(unmatchedSamples == 2);
+    CHECK(twins.tracked.TakeUnmatchedPhaseSamples() == 0);
     CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
 }
 

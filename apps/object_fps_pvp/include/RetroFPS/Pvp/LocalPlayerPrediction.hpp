@@ -110,6 +110,10 @@ public:
     [[nodiscard]] std::optional<ShotGateView> ShotGate() const noexcept;
     // Phase tracking has decided since the latest seed (diagnostics and tests).
     [[nodiscard]] bool PhaseDecided() const noexcept { return phaseDecided_; }
+    // Slack samples whose command had already left the command ring (dead
+    // letters of phase tracking) since the previous call. Reset keeps them;
+    // the simulation loop takes them every step (log-contract §1.1).
+    [[nodiscard]] std::uint64_t TakeUnmatchedPhaseSamples() noexcept { return std::exchange(unmatchedPhaseSamples_, 0); }
     [[nodiscard]] const LocalMovementObservation& Observation() const noexcept;
     [[nodiscard]] LocalPresentationState Presentation() const noexcept;
     // The aim of the newest predicted state: the last command's, or the seed's.
@@ -165,6 +169,7 @@ private:
     // reacquiring, every command of this seed counts, rebased.
     std::uint64_t settledAfter_{};
     std::uint64_t lastSlackSequence_{};
+    std::uint64_t unmatchedPhaseSamples_{};
     std::size_t lateSamples_{};
     bool settling_{};
     bool phaseDecided_{};

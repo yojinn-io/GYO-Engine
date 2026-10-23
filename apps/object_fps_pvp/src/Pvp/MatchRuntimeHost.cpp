@@ -488,6 +488,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 auto& counts = ingress_[playerId];
                 ++counts.slackPublishedSamples;
                 if (track.pending->second < 0) ++counts.slackPublishedNegativeSamples;
+                if (track.pending->second < -MaxMovementSlackMicros || track.pending->second > MaxMovementSlackMicros)
+                    ++counts.slackClampedSamples;
             }
             track.pending.reset();
         }

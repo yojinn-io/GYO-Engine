@@ -109,6 +109,16 @@ struct ClientPresented final {
     return globalCursor && *globalCursor > 0 ? static_cast<std::uint64_t>(std::floor(*globalCursor * 65536.0)) : 0;
 }
 
+// What phase tracking dropped while one local player of one connection
+// generation was predicted (log-contract §1.1, v7.1 outage-resync).
+struct ClientPhaseSummary final {
+    PlayerId player{};
+    std::uint64_t unmatchedPhaseSamples{};
+};
+// "phase summary version=1 player=... phase_samples_unmatched=...", without the
+// "[ObjectFPS/PvP] " prefix the role writes it with.
+[[nodiscard]] std::string PhaseSummaryLine(const ClientPhaseSummary& summary);
+
 // One simulation step, independent of threads and of the real clock, so tests
 // drive it with injected times. Run takes the snapshots drained since the last
 // step: a connection generation, player or arena change starts the prediction
@@ -125,12 +135,17 @@ public:
         Engine::Time::TimePoint nextDeadline{};
         ClientPresentation presentation;
         bool intentStale{};
+        // The summary of the generation or player this step ended, if it had a local player.
+        std::optional<ClientPhaseSummary> endedPhase;
     };
 
     // Throws std::invalid_argument without an installed arena.
     explicit ClientSimulationLoop(std::vector<Arena> installed);
 
     [[nodiscard]] Step Run(Engine::Time::TimePoint now, const ClientIntent& intent, ClientSimulationDrain drain);
+    // The summary of the current generation and player, if it has a local
+    // player, counted since the previous summary; the role takes it when it stops.
+    [[nodiscard]] std::optional<ClientPhaseSummary> TakePhaseSummary() noexcept;
 
     [[nodiscard]] const std::vector<Arena>& Arenas() const noexcept { return arenas_; }
     [[nodiscard]] const ClientSimulation& Simulation() const noexcept { return simulation_; }
@@ -145,6 +160,7 @@ private:
     ClientSimulation simulation_;
     std::optional<std::uint64_t> generation_;
     PlayerId playerId_{};
+    std::uint64_t unmatchedPhaseSamples_{};
     std::uint64_t consumedJumps_{};
     Engine::Time::TimePoint lastIntentAt_{};
     std::uint64_t lastIntentSequence_{};

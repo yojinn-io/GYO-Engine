@@ -147,6 +147,8 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
             observation_.phaseSampleSequence = sequence;
             if (phaseSamples_.size() > MovementPhaseWindowSamples) phaseSamples_.pop_front();
             lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;
+        } else {
+            ++unmatchedPhaseSamples_;
         }
     }
     if (settling_ || phaseShiftSeconds_ != 0) return;

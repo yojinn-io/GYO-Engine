@@ -6,3 +6,5 @@ phrase	player send statistics
 phrase	[ObjectFPS/PvP Match] network statistics
 phrase	[ObjectFPS/PvP] worker statistics
 regex	rate_accepted_packets=(\d+) rate_limited_packets=(\d+) max_session_window_packets=(\d+)
+phrase	[ObjectFPS/PvP Match] resync statistics
+phrase	[ObjectFPS/PvP] phase summary

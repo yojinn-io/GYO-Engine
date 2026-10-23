@@ -637,3 +637,45 @@ TEST_CASE("PvP an action's E and S come from one presented step") {
     CHECK(unpredicted.commandSequence == 0);
     CHECK(unpredicted.viewTickQ16 == 123456);
 }
+
+// v7.1 outage-resync drop-counters: the dead letters of phase tracking (samples
+// whose command left the 64-command ring) are summed over a generation and
+// reported once when it ends; a generation without a local player reports nothing.
+TEST_CASE("PvP the simulation loop reports the unmatched phase samples of a generation when it ends") {
+    ClientSimulationLoop loop({RoleArena()});
+    TimePoint now{};
+    std::uint64_t tick = 1;
+    const auto snapshotOf = [&](std::uint64_t resolved, std::optional<std::uint64_t> slackSequence) {
+        WorldSnapshot world;
+        world.tick = tick++;
+        PlayerState self{5, {2, 0, 2}, 0, 0, resolved};
+        if (slackSequence) {
+            self.movementSlackSequence = *slackSequence;
+            self.movementSlackMicros = -1'000;
+        }
+        world.players = {self};
+        return ReceivedSnapshot{world, {}};
+    };
+    auto step = loop.Run(now, {}, {{}, 1, 0});
+    CHECK_FALSE(step.endedPhase);
+    std::uint64_t latest{};
+    for (int frame = 0; frame < 90; ++frame) {
+        now += After(1.0 / 60.0);
+        step = loop.Run(now, {}, {{snapshotOf(latest > 2 ? latest - 2 : 0, std::nullopt)}, 2, 5});
+        CHECK_FALSE(step.endedPhase); // the lobby generation had no local player
+        latest = loop.Simulation().Observation().latestCommand;
+    }
+    REQUIRE(latest > 70);
+    for (const auto old : {latest - 66, latest - 65}) {
+        now += After(1.0 / 60.0);
+        step = loop.Run(now, {}, {{snapshotOf(latest - 2, old)}, 2, 5});
+        CHECK_FALSE(step.endedPhase);
+    }
+    now += After(1.0 / 60.0);
+    step = loop.Run(now, {}, {{}, 3, 0});
+    REQUIRE(step.endedPhase);
+    CHECK(step.endedPhase->player == 5);
+    CHECK(step.endedPhase->unmatchedPhaseSamples == 2);
+    CHECK(PhaseSummaryLine(*step.endedPhase) == "phase summary version=1 player=5 phase_samples_unmatched=2");
+    CHECK_FALSE(loop.TakePhaseSummary());
+}
