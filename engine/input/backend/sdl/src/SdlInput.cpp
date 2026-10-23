@@ -1,12 +1,21 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInputInjection.hpp"
+#include "engine/platform/sdl/SdlPlatformNative.hpp"
+#include "engine/base/Assert.hpp"
 
 #include <SDL3/SDL.h>
 
 #include <array>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace Engine::Input::Backend::Sdl {
+
+// InputEvent::timestamp is declared with the standard type so that GYO::Input
+// needs no GYO::Time; it must stay the Engine time base.
+static_assert(std::is_same_v<decltype(InputEvent::timestamp), Time::TimePoint>);
+
 namespace {
 
 // Every SDL scancode the engine names. Return and keypad Enter both map to
@@ -134,6 +143,67 @@ std::optional<Key> ToKey(const SDL_Scancode scancode) noexcept {
     return std::nullopt;
 }
 
+// The keys printable keycodes stand for, independent of the layout that
+// produced them (SDL keycodes of printable keys are their unshifted character).
+constexpr std::array<std::pair<SDL_Keycode, Key>, 53> CharacterKeys{{
+    {SDLK_A, Key::A}, {SDLK_B, Key::B}, {SDLK_C, Key::C}, {SDLK_D, Key::D}, {SDLK_E, Key::E},
+    {SDLK_F, Key::F}, {SDLK_G, Key::G}, {SDLK_H, Key::H}, {SDLK_I, Key::I}, {SDLK_J, Key::J},
+    {SDLK_K, Key::K}, {SDLK_L, Key::L}, {SDLK_M, Key::M}, {SDLK_N, Key::N}, {SDLK_O, Key::O},
+    {SDLK_P, Key::P}, {SDLK_Q, Key::Q}, {SDLK_R, Key::R}, {SDLK_S, Key::S}, {SDLK_T, Key::T},
+    {SDLK_U, Key::U}, {SDLK_V, Key::V}, {SDLK_W, Key::W}, {SDLK_X, Key::X}, {SDLK_Y, Key::Y},
+    {SDLK_Z, Key::Z},
+    {SDLK_0, Key::Digit0}, {SDLK_1, Key::Digit1}, {SDLK_2, Key::Digit2}, {SDLK_3, Key::Digit3},
+    {SDLK_4, Key::Digit4}, {SDLK_5, Key::Digit5}, {SDLK_6, Key::Digit6}, {SDLK_7, Key::Digit7},
+    {SDLK_8, Key::Digit8}, {SDLK_9, Key::Digit9},
+    {SDLK_RETURN, Key::Enter}, {SDLK_ESCAPE, Key::Escape}, {SDLK_BACKSPACE, Key::Backspace},
+    {SDLK_TAB, Key::Tab}, {SDLK_SPACE, Key::Space}, {SDLK_DELETE, Key::Delete},
+    {SDLK_MINUS, Key::Minus}, {SDLK_EQUALS, Key::Equals}, {SDLK_LEFTBRACKET, Key::LeftBracket},
+    {SDLK_RIGHTBRACKET, Key::RightBracket}, {SDLK_BACKSLASH, Key::Backslash},
+    {SDLK_SEMICOLON, Key::Semicolon}, {SDLK_APOSTROPHE, Key::Apostrophe}, {SDLK_GRAVE, Key::Grave},
+    {SDLK_COMMA, Key::Comma}, {SDLK_PERIOD, Key::Period}, {SDLK_SLASH, Key::Slash},
+}};
+
+// The key a keycode stands for: keycodes without a character (keypad, arrows,
+// function keys) carry their scancode; printable ones are looked up by
+// character. Count if none.
+Key LayoutKey(const SDL_Keycode keycode) noexcept {
+    for (const auto& [code, key] : CharacterKeys) {
+        if (code == keycode) return key;
+    }
+    if ((keycode & SDLK_SCANCODE_MASK) != 0) {
+        if (const auto key = ToKey(static_cast<SDL_Scancode>(keycode & ~SDLK_SCANCODE_MASK))) return *key;
+    }
+    return Key::Count;
+}
+
+KeyModifiers ToModifiers(const SDL_Keymod mod) noexcept {
+    return {.shift = (mod & SDL_KMOD_SHIFT) != 0,
+            .ctrl = (mod & SDL_KMOD_CTRL) != 0,
+            .alt = (mod & SDL_KMOD_ALT) != 0,
+            .gui = (mod & SDL_KMOD_GUI) != 0};
+}
+
+// The scancode an injected key carries: the first table entry for the key
+// (Return for Enter).
+SDL_Scancode ToScancode(const Key key) noexcept {
+    for (const auto& [code, mapped] : ScancodeKeys) {
+        if (mapped == key) return code;
+    }
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+Uint8 ToSdlButton(const MouseButton button) noexcept {
+    switch (button) {
+    case MouseButton::Left: return SDL_BUTTON_LEFT;
+    case MouseButton::Right: return SDL_BUTTON_RIGHT;
+    case MouseButton::Middle: return SDL_BUTTON_MIDDLE;
+    case MouseButton::X1: return SDL_BUTTON_X1;
+    case MouseButton::X2: return SDL_BUTTON_X2;
+    case MouseButton::Count: break;
+    }
+    return 0;
+}
+
 std::optional<MouseButton> ToMouseButton(const Uint8 button) noexcept {
     switch (button) {
     case SDL_BUTTON_LEFT:
@@ -170,9 +240,9 @@ void ApplyTransition(ButtonState& state, const bool down) noexcept {
 
 SdlInput::SdlInput(Platform::Sdl::SdlPlatform& platform) noexcept
     : platform_(&platform) {
-    const SDL_WindowFlags flags = SDL_GetWindowFlags(platform.NativeWindow());
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(Platform::Sdl::NativeWindow(platform));
     frame_.windowFocused = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
-    frame_.pointer.relativeMode = SDL_GetWindowRelativeMouseMode(platform.NativeWindow());
+    frame_.pointer.relativeMode = SDL_GetWindowRelativeMouseMode(Platform::Sdl::NativeWindow(platform));
 }
 
 void SdlInput::BeginFrame() noexcept {
@@ -185,10 +255,22 @@ void SdlInput::BeginFrame() noexcept {
     frame_.pointer.deltaX = 0.0f;
     frame_.pointer.deltaY = 0.0f;
     frame_.events.clear();
+    frame_.text.clear();
 }
 
-void SdlInput::HandleEvent(const SDL_Event& event) noexcept {
-    const SDL_WindowID ownWindowId = SDL_GetWindowID(platform_->NativeWindow());
+void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) noexcept {
+    const SDL_Event& event = Platform::Sdl::NativeEvent(platformEvent);
+    const SDL_WindowID ownWindowId = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    // Every InputEvent this platform event adds carries its time.
+    const std::size_t firstAdded = frame_.events.size();
+    struct StampAdded final {
+        std::vector<InputEvent>& events;
+        std::size_t first;
+        Time::TimePoint time;
+        ~StampAdded() {
+            for (std::size_t index = first; index < events.size(); ++index) events[index].timestamp = time;
+        }
+    } stamp{frame_.events, firstAdded, platformEvent.Timestamp()};
 
     switch (event.type) {
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
@@ -231,8 +313,25 @@ void SdlInput::HandleEvent(const SDL_Event& event) noexcept {
             frame_.events.push_back({.kind = InputEventKind::WindowRestored});
         }
         break;
+    case SDL_EVENT_TEXT_INPUT:
+        // Whether text input is on is read from SDL at arrival (it may be
+        // turned on or off by others, such as an editor's UI backend).
+        if (event.text.windowID == ownWindowId && event.text.text != nullptr &&
+            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+            frame_.text.push_back({.kind = TextEvent::Kind::Text, .text = event.text.text});
+        }
+        break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+        // Text keys: presses only, repeats included, while text input is on.
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID == ownWindowId &&
+            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+            frame_.text.push_back({.kind = TextEvent::Kind::Key,
+                                   .key = ToKey(event.key.scancode).value_or(Key::Count),
+                                   .layoutKey = LayoutKey(event.key.key),
+                                   .modifiers = ToModifiers(event.key.mod),
+                                   .repeat = event.key.repeat});
+        }
         if (event.key.windowID == ownWindowId && !event.key.repeat) {
             if (const auto key = ToKey(event.key.scancode)) {
                 const bool down = event.type == SDL_EVENT_KEY_DOWN;
@@ -251,7 +350,7 @@ void SdlInput::HandleEvent(const SDL_Event& event) noexcept {
                 const bool down = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
                 SetMouseButton(*button, down);
                 int width{}, height{};
-                SDL_GetWindowSize(platform_->NativeWindow(), &width, &height);
+                SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &width, &height);
                 const bool inside = event.button.x >= 0.0f && event.button.y >= 0.0f &&
                     event.button.x < static_cast<float>(width) && event.button.y < static_cast<float>(height);
                 frame_.events.push_back({.kind = down ? InputEventKind::MouseButtonPressed
@@ -290,12 +389,24 @@ void SdlInput::EndFrame() noexcept {
 }
 
 Base::Result<void, SdlInputError>
+SdlInput::SetTextInput(const bool enabled) {
+    SDL_Window* window = Platform::Sdl::NativeWindow(*platform_);
+    if (!(enabled ? SDL_StartTextInput(window) : SDL_StopTextInput(window))) {
+        return Base::Err(SdlInputError::Make(
+            SdlInputErrorCode::TextInputFailed,
+            "SdlInput: unable to change text input",
+            SDL_GetError()));
+    }
+    return {};
+}
+
+Base::Result<void, SdlInputError>
 SdlInput::SetRelativeMouseMode(const bool enabled) {
     if (frame_.pointer.relativeMode == enabled) {
         return {};
     }
 
-    if (!SDL_SetWindowRelativeMouseMode(platform_->NativeWindow(), enabled)) {
+    if (!SDL_SetWindowRelativeMouseMode(Platform::Sdl::NativeWindow(*platform_), enabled)) {
         return Base::Err(SdlInputError::Make(
             SdlInputErrorCode::RelativeMouseModeFailed,
             "SdlInput: unable to change relative mouse mode",
@@ -332,4 +443,61 @@ void SdlInput::ReleaseAll() noexcept {
     }
 }
 
+SdlInputInjector::SdlInputInjector(Platform::Sdl::SdlPlatform& platform) noexcept
+    : platform_(&platform) {}
+
+namespace {
+
+Base::Result<void, SdlInputError> Push(Platform::Sdl::SdlPlatform& platform, SDL_Event& event) {
+    if (!Platform::Sdl::PushInjectedEvent(platform, event)) {
+        return Base::Err(SdlInputError::Make(SdlInputErrorCode::InjectionFailed,
+                                             "SdlInputInjector: SDL did not queue the event", SDL_GetError()));
+    }
+    return {};
+}
+
+} // namespace
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushKey(const Key key, const bool down) {
+    GYO_ASSERT(key != Key::Count);
+    const SDL_Scancode scancode = ToScancode(key);
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    event.key.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.key.scancode = scancode;
+    event.key.key = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+    event.key.mod = SDL_KMOD_NONE;
+    event.key.down = down;
+    event.key.repeat = false;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushMouseButton(const MouseButton button, const bool down) {
+    GYO_ASSERT(button != MouseButton::Count);
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+    event.button.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.button.button = ToSdlButton(button);
+    event.button.down = down;
+    event.button.clicks = 1;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushMouseMotion(const float deltaX, const float deltaY) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    event.motion.xrel = deltaX;
+    event.motion.yrel = deltaY;
+    return Push(*platform_, event);
+}
+
+Base::Result<void, SdlInputError> SdlInputInjector::PushFocus(const bool gained) {
+    SDL_Event event{};
+    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST;
+    event.window.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));
+    return Push(*platform_, event);
+}
+
 } // namespace Engine::Input::Backend::Sdl
+

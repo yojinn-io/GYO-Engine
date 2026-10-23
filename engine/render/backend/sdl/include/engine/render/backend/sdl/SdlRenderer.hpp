@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <memory>
 
-#include <SDL3/SDL_render.h>
-
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -58,14 +56,17 @@ public:
     [[nodiscard]] Base::Result<void, SdlRendererError> Clear(Color color);
     [[nodiscard]] Base::Result<void, SdlRendererError> Present();
 
-    // Available only on this concrete backend for adapter integrations such as
-    // the optional Sandbox. It is not a public runtime resource handle.
-    [[nodiscard]] SDL_Renderer* NativeRenderer() const noexcept;
+    // The native renderer, for adapter integrations such as an editor's UI
+    // backend, is reachable only through the native layer: NativeRenderer() in
+    // SdlRendererNative.hpp (target GYO::RenderBackendSDLNative).
 
 private:
-    explicit SdlRenderer(SDL_Renderer* renderer) noexcept;
+    struct Impl;
+    explicit SdlRenderer(std::unique_ptr<Impl> impl) noexcept;
 
-    SDL_Renderer* renderer_{};
+    friend class RendererNativeAccess;
+
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace Engine::Render::Backend::Sdl

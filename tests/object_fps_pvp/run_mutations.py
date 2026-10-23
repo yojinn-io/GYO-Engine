@@ -7,6 +7,9 @@ Any other outcome is reported on its own: survived (the check passed), stale
 (the text is not found exactly once), build_failed, wrong_failure (the check
 failed for another reason, e.g. a missing tool) or timeout. The unmutated tree
 must pass every used check first, and every file is restored afterwards.
+A mutant with "expect_build_failure": true is killed instead when building its
+check fails with the expected message (a configure-time guard); a failing test
+is then a wrong_failure.
 
 Python only, with subprocess timeouts and no shell tools, so it runs the same
 on Windows, Linux and macOS. C++ checks run through ctest, which knows each
@@ -83,11 +86,12 @@ def run_mutant(mutant, checks, tools, root=REPOSITORY):
         status, output = run_check(checks[mutant['check']], tools)
     finally:
         path.write_bytes(original)
+    detected = 'build_failed' if mutant.get('expect_build_failure') else 'failed'
     if status == 'passed':
         result = 'survived'
-    elif status == 'failed' and re.search(mutant['expect'], output):
+    elif status == detected and re.search(mutant['expect'], output):
         result = 'killed'
-    elif status == 'failed':
+    elif status == detected or status == 'failed':
         result = 'wrong_failure'
     else:
         result = status  # build_failed, timeout or error

@@ -1,0 +1,836 @@
+{
+  "version": 1,
+  "description": "Declared mutants of IP-3/IP-4 (ip3-declaration.md section 4). A mutant is killed only when its test run fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/input-and-present/scripts/mutations.json. Platform and input tests need SDL_VIDEODRIVER=dummy in the runner's environment (they inherit it).",
+  "mutants": [
+    {
+      "id": "m6a-g1",
+      "what": "SdlPlatform.hpp includes SDL again (G1 must report it)",
+      "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
+      "find": "#include <string_view>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string_view>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "target": "platform_sdl_header_tests",
+      "cases": "SDL backend public headers do not reach any SDL header",
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "m6a-g2",
+      "what": "SdlPlatform.hpp includes SDL again (G2 must report it)",
+      "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
+      "find": "#include <string_view>\n\n#include \"engine/base/Error.hpp\"",
+      "replace": "#include <string_view>\n\n#include <SDL3/SDL.h>\n\n#include \"engine/base/Error.hpp\"",
+      "target": "platform_sdl_header_tests",
+      "cases": "Engine public headers outside the native layer name no SDL symbol",
+      "expect": "SdlPlatform\\.hpp:\\d+ <SDL3/"
+    },
+    {
+      "id": "m6b-g1",
+      "what": "SdlInput.hpp includes SDL_events.h again (G1 must report it)",
+      "file": "engine/input/backend/sdl/include/engine/input/backend/sdl/SdlInput.hpp",
+      "find": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n",
+      "replace": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n\n#include <SDL3/SDL_events.h>\n",
+      "target": "platform_sdl_header_tests",
+      "cases": "SDL backend public headers do not reach any SDL header",
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "m6b-g2",
+      "what": "SdlInput.hpp includes SDL_events.h again (G2 must report it)",
+      "file": "engine/input/backend/sdl/include/engine/input/backend/sdl/SdlInput.hpp",
+      "find": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n",
+      "replace": "#include \"engine/platform/sdl/SdlPlatform.hpp\"\n\n#include <SDL3/SDL_events.h>\n",
+      "target": "platform_sdl_header_tests",
+      "cases": "Engine public headers outside the native layer name no SDL symbol",
+      "expect": "SdlInput\\.hpp:\\d+ <SDL3/"
+    },
+    {
+      "id": "m1",
+      "what": "The clock pair is sampled once per process and reused by every pump",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, SampleClockPair());",
+      "replace": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, [] { static const ClockPair once = SampleClockPair(); return once; }());",
+      "target": "platform_sdl_tests",
+      "cases": "Each pump converts with its own clock pair",
+      "expect": "the second pump samples a new pair"
+    },
+    {
+      "id": "m2-pure",
+      "what": "A negative SDL-to-pair difference becomes zero",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const std::chrono::nanoseconds since{static_cast<std::int64_t>(sdlNs - pair.sdlNs)};",
+      "replace": "const std::chrono::nanoseconds since{sdlNs >= pair.sdlNs ? static_cast<std::int64_t>(sdlNs - pair.sdlNs) : 0};",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp places an SDL time relative to the clock pair",
+      "expect": "an SDL time before the pair maps before"
+    },
+    {
+      "id": "m2-int",
+      "what": "A negative SDL-to-pair difference becomes zero (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const std::chrono::nanoseconds since{static_cast<std::int64_t>(sdlNs - pair.sdlNs)};",
+      "replace": "const std::chrono::nanoseconds since{sdlNs >= pair.sdlNs ? static_cast<std::int64_t>(sdlNs - pair.sdlNs) : 0};",
+      "target": "platform_sdl_tests",
+      "cases": "A pumped event carries the time it was pushed",
+      "expect": "the event time is not later than its push"
+    },
+    {
+      "id": "m3-pure",
+      "what": "The SDL-to-pair difference is applied with the wrong sign",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const Time::TimePoint converted = pair.engine + std::chrono::duration_cast<Time::Duration>(since);",
+      "replace": "const Time::TimePoint converted = pair.engine - std::chrono::duration_cast<Time::Duration>(since);",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp places an SDL time relative to the clock pair",
+      "expect": "an SDL time (before|after) the pair maps"
+    },
+    {
+      "id": "m3-int",
+      "what": "The SDL-to-pair difference is applied with the wrong sign (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const Time::TimePoint converted = pair.engine + std::chrono::duration_cast<Time::Duration>(since);",
+      "replace": "const Time::TimePoint converted = pair.engine - std::chrono::duration_cast<Time::Duration>(since);",
+      "target": "platform_sdl_tests",
+      "cases": "A pumped event carries the time it was pushed",
+      "expect": "the event time is not later than its push"
+    },
+    {
+      "id": "m4-pure",
+      "what": "The converted time is not clamped to the delivery time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "return converted < ceiling ? converted : ceiling;",
+      "replace": "return converted;",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp never returns a time later than the ceiling",
+      "expect": "a converted time later than the ceiling is the ceiling"
+    },
+    {
+      "id": "m4-int",
+      "what": "The converted time is not clamped to the delivery time (integration)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "return converted < ceiling ? converted : ceiling;",
+      "replace": "return converted;",
+      "target": "platform_sdl_tests",
+      "cases": "An SDL time in the future is delivered no later than its delivery",
+      "expect": "a future SDL time is clamped to the delivery time"
+    },
+    {
+      "id": "m-zero",
+      "what": "SDL time 0 is converted like any other time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (sdlNs == 0) return ceiling;  // added without a time (SDL_PeepEvents)\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "ConvertSdlTimestamp maps a missing SDL time to the delivery time",
+      "expect": "SDL time 0 maps to the delivery time"
+    },
+    {
+      "id": "m-nest",
+      "what": "A nested pump does not restore the outer pump's clock pair",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    ~ValueScope() { *slot_ = std::move(previous_); }",
+      "replace": "    ~ValueScope() {}",
+      "target": "platform_sdl_tests",
+      "cases": "A nested pump samples its own clock pair*",
+      "expect": "after a nested pump the outer pump"
+    },
+    {
+      "id": "m-nest-reuse",
+      "what": "A nested pump reuses the outer pump's clock pair instead of sampling its own",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, SampleClockPair());",
+      "replace": "const ValueScope<std::optional<ClockPair>> pair(impl_->pumpPair, impl_->pumpPair ? *impl_->pumpPair : SampleClockPair());",
+      "target": "platform_sdl_tests",
+      "cases": "A nested pump samples its own clock pair*",
+      "expect": "a nested pump samples its own pair"
+    },
+    {
+      "id": "m-fixed",
+      "what": "The pair is a fixed offset instead of a sample of both clocks",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return {Engine::Time::Now(), 0, {}};",
+      "target": "platform_sdl_tests",
+      "cases": "Each pump converts with its own clock pair",
+      "expect": "the second pump samples a new pair"
+    },
+    {
+      "id": "x-edge",
+      "what": "The pair takes the first engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
+      "replace": "    return {engineBefore, sdlNs, engineAfter - engineBefore};",
+      "target": "platform_sdl_tests",
+      "cases": "MakeClockPair puts the engine time at the midpoint*",
+      "expect": "the pair's engine time is the midpoint"
+    },
+    {
+      "id": "x-offset",
+      "what": "The pair carries a 1 us bias",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
+      "replace": "    return {engineBefore + (engineAfter - engineBefore) / 2 + std::chrono::microseconds(1), sdlNs, engineAfter - engineBefore};",
+      "target": "platform_sdl_tests",
+      "cases": "MakeClockPair puts the engine time at the midpoint*",
+      "expect": "the pair's engine time is the midpoint"
+    },
+    {
+      "id": "x-us",
+      "what": "The pair reads SDL time in microseconds",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "[] () noexcept -> std::uint64_t { return SDL_GetTicksNS(); },",
+      "replace": "[] () noexcept -> std::uint64_t { return SDL_GetTicksNS() / 1000; },",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPair reads both clocks*",
+      "expect": "the pair's SDL time lies between"
+    },
+    {
+      "id": "s-edge-bypass",
+      "what": "SampleClockPairWith takes the first engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return {before, sdl, after - before};",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "s-before",
+      "what": "SampleClockPairWith passes the first engine read twice",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return MakeClockPair(before, sdl, before);",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "s-after",
+      "what": "SampleClockPairWith passes the second engine read twice",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return MakeClockPair(before, sdl, after);",
+      "replace": "    return MakeClockPair(after, sdl, after);",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair's engine time is the midpoint of its own reads"
+    },
+    {
+      "id": "x-order",
+      "what": "The SDL read happens after both engine reads",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const std::uint64_t sdl = readers.sdl();\n    const Time::TimePoint after = readers.engine();",
+      "replace": "    const Time::TimePoint after = readers.engine();\n    const std::uint64_t sdl = readers.sdl();",
+      "target": "platform_sdl_tests",
+      "cases": "SampleClockPairWith reads Engine then SDL then Engine*",
+      "expect": "the pair reads Engine, then SDL, then Engine"
+    },
+    {
+      "id": "m7",
+      "what": "Typed text is collected while text input is off",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "event.text.text != nullptr &&\n            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {",
+      "replace": "event.text.text != nullptr) {",
+      "target": "input_sdl_tests",
+      "cases": "SDL text input collects text only while it is on",
+      "expect": "nothing is collected"
+    },
+    {
+      "id": "m8",
+      "what": "A key repeat becomes an input event",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "if (event.key.windowID == ownWindowId && !event.key.repeat) {",
+      "replace": "if (event.key.windowID == ownWindowId) {",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "a key repeat is not an input event"
+    },
+    {
+      "id": "m9",
+      "what": "Typed text is put before earlier entries",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "frame_.text.push_back({.kind = TextEvent::Kind::Text, .text = event.text.text});",
+      "replace": "frame_.text.insert(frame_.text.begin(), TextEvent{.kind = TextEvent::Kind::Text, .text = event.text.text});",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "text keeps its arrival order"
+    },
+    {
+      "id": "m-up",
+      "what": "A key release is recorded as a text key",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "if (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID == ownWindowId &&",
+      "replace": "if (event.key.windowID == ownWindowId &&",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys record presses*",
+      "expect": "a release is never recorded as a text key"
+    },
+    {
+      "id": "m-layout",
+      "what": "The layout key is the physical key",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": ".layoutKey = LayoutKey(event.key.key),",
+      "replace": ".layoutKey = ToKey(event.key.scancode).value_or(Key::Count),",
+      "target": "input_sdl_tests",
+      "cases": "SDL text keys carry the layout key*",
+      "expect": "the layout key is the key the layout produces"
+    },
+    {
+      "id": "m10",
+      "what": "The bridge has no same-thread re-entry guard",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (forwarding) {",
+      "replace": "    if (false) {",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge sends a line logged from the Engine handler*",
+      "expect": "a line logged from the Engine handler"
+    },
+    {
+      "id": "m11",
+      "what": "The bridge does not restore SDL's previous output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge restores SDL*",
+      "expect": "SDL's previous output is back"
+    },
+    {
+      "id": "m-assert",
+      "what": "The bridge does not check that it is still SDL's output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    GYO_ASSERT(installed);\n",
+      "replace": "    static_cast<void>(installed);\n",
+      "target": "platform_sdl_tests",
+      "cases": "A replaced log bridge fails its GYO_ASSERT*",
+      "expect": "destroying a replaced bridge fails a GYO_ASSERT"
+    },
+    {
+      "id": "m-tee",
+      "what": "The bridge drops SDL's previous output when teeing",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (bridge->keepSdlOutput && bridge->previous) bridge->previous(bridge->previousData, category, priority, message);",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge tees by default*",
+      "expect": "a teeing bridge keeps SDL"
+    },
+    {
+      "id": "m12",
+      "what": "main drops GyoMain's return value",
+      "file": "engine/platform/sdl/main/SdlMain.cpp",
+      "find": "    return Engine::Platform::Sdl::RunEntry(&GyoMain, argc, argv);",
+      "replace": "    static_cast<void>(Engine::Platform::Sdl::RunEntry(&GyoMain, argc, argv));\n    return 0;",
+      "target": "platform_sdl_tests",
+      "cases": "The entry point returns what GyoMain returns",
+      "expect": "the exit code is GyoMain"
+    },
+    {
+      "id": "m-throw",
+      "what": "An exception from GyoMain escapes the entry point",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    try {\n        return body(argc, argv);\n    } catch (const std::exception& error) {\n        // Two lines, so reporting allocates nothing in this noexcept function.\n        Base::Log(Base::LogLevel::Error, \"platform\", \"unhandled exception:\");\n        Base::Log(Base::LogLevel::Error, \"platform\", error.what());\n    } catch (...) {\n        Base::Log(Base::LogLevel::Error, \"platform\", \"unhandled exception\");\n    }\n    return 1;",
+      "replace": "    return body(argc, argv);",
+      "target": "platform_sdl_tests",
+      "cases": "The entry point turns an exception*",
+      "expect": "an exception from GyoMain exits with code 1"
+    },
+    {
+      "id": "m-race",
+      "what": "The guard is released before SDL's previous output is restored (detected either by the test or by the bridge's own GYO_ASSERT, which terminates under the test's throwing handler since the destructor is noexcept)",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    bridged.store(false);\n    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge leaves SDL*",
+      "expect": "after every bridge is gone SDL's previous output is back|uncaught exception of type Engine::Base::AssertionFailure"
+    },
+    {
+      "id": "m-userdata",
+      "what": "Restoring loses the previous output's userdata",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    if (installed) SDL_SetLogOutputFunction(state.previous, nullptr);\n    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "SdlLogBridge restores SDL*",
+      "expect": "SDL's previous output is back"
+    },
+    {
+      "id": "m-overwrite",
+      "what": "A replaced bridge restores over the other output",
+      "file": "engine/platform/sdl/src/SdlLogBridge.cpp",
+      "find": "    if (installed) SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "replace": "    SDL_SetLogOutputFunction(state.previous, state.previousData);\n    bridged.store(false);",
+      "target": "platform_sdl_tests",
+      "cases": "A replaced log bridge fails its GYO_ASSERT*",
+      "expect": "a replaced bridge leaves the other output in place"
+    },
+    {
+      "id": "m13",
+      "what": "An injected key carries window ID 0",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.key.windowID = SDL_GetWindowID(Platform::Sdl::NativeWindow(*platform_));",
+      "replace": "    event.key.windowID = 0;",
+      "target": "input_sdl_tests",
+      "cases": "Every injected key*",
+      "expect": "an injected key reaches the next frame"
+    },
+    {
+      "id": "m14",
+      "what": "Injection bypasses SDL_PushEvent (no watcher sees it)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    return SDL_PushEvent(&event);\n}",
+      "replace": "    return SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0) == 1;\n}",
+      "target": "input_sdl_tests",
+      "cases": "Injected input goes through*",
+      "expect": "each injection pushes exactly one SDL event"
+    },
+    {
+      "id": "m-enter",
+      "what": "Enter is injected as keypad Enter (the last table entry)",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    for (const auto& [code, mapped] : ScancodeKeys) {\n        if (mapped == key) return code;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "replace": "    for (auto entry = ScancodeKeys.rbegin(); entry != ScancodeKeys.rend(); ++entry) {\n        if (entry->second == key) return entry->first;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "target": "input_sdl_tests",
+      "cases": "An injected Enter carries*",
+      "expect": "Enter is injected as Return"
+    },
+    {
+      "id": "m-table",
+      "what": "The injected scancode is the next table entry",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    for (const auto& [code, mapped] : ScancodeKeys) {\n        if (mapped == key) return code;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "replace": "    for (std::size_t index = 0; index + 1 < ScancodeKeys.size(); ++index) {\n        if (ScancodeKeys[index].second == key) return ScancodeKeys[index + 1].first;\n    }\n    return SDL_SCANCODE_UNKNOWN;",
+      "target": "input_sdl_tests",
+      "cases": "Every injected key*",
+      "expect": "an injected key reaches the next frame"
+    },
+    {
+      "id": "m-motion",
+      "what": "Injected motion swaps x and y",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.motion.xrel = deltaX;\n    event.motion.yrel = deltaY;",
+      "replace": "    event.motion.xrel = deltaY;\n    event.motion.yrel = deltaX;",
+      "target": "input_sdl_tests",
+      "cases": "Injected motion*",
+      "expect": "an injected motion keeps its x and y"
+    },
+    {
+      "id": "m-focus",
+      "what": "Injected focus has the opposite direction",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_GAINED : SDL_EVENT_WINDOW_FOCUS_LOST;",
+      "replace": "    event.type = gained ? SDL_EVENT_WINDOW_FOCUS_LOST : SDL_EVENT_WINDOW_FOCUS_GAINED;",
+      "target": "input_sdl_tests",
+      "cases": "Injected mouse buttons and focus*",
+      "expect": "an injected focus keeps its direction"
+    },
+    {
+      "id": "m26",
+      "what": "QueryWindow keeps the size from its first read",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    static_cast<void>(SDL_GetWindowSize(window, &state.rect.width, &state.rect.height));",
+      "replace": "    static int cachedWidth = 0, cachedHeight = 0;\n    if (cachedWidth == 0) static_cast<void>(SDL_GetWindowSize(window, &cachedWidth, &cachedHeight));\n    state.rect.width = cachedWidth;\n    state.rect.height = cachedHeight;",
+      "target": "platform_sdl_tests",
+      "cases": "QueryWindow reads the window*",
+      "expect": "a query reads the size SDL has now"
+    },
+    {
+      "id": "m28",
+      "what": "Queries fail an assertion inside a live frame",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "WindowState SdlPlatform::QueryWindow() const {\n    SDL_Window* window = impl_->window;",
+      "replace": "WindowState SdlPlatform::QueryWindow() const {\n    GYO_ASSERT(!impl_->inLiveFrame);\n    SDL_Window* window = impl_->window;",
+      "target": "platform_sdl_tests",
+      "cases": "Queries may run inside a live frame",
+      "expect": "a query inside a live frame does not fail"
+    },
+    {
+      "id": "m29",
+      "what": "SetWindowSize has no observer check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(width > 0 && height > 0);\n    GYO_ASSERT(!impl_->pumping && dispatchDepth == 0);",
+      "replace": "    GYO_ASSERT(width > 0 && height > 0);",
+      "target": "platform_sdl_tests",
+      "cases": "Window operations fail a GYO_ASSERT*",
+      "expect": "expected GYO_ASSERT to fail: platform->SetWindowSize"
+    },
+    {
+      "id": "m-depth",
+      "what": "Injection has no dispatch depth check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    // SDL hands the pushed event itself",
+      "replace": "    // SDL hands the pushed event itself",
+      "target": "input_sdl_tests",
+      "cases": "Injection fails a GYO_ASSERT*",
+      "expect": "injection inside a live frame fails"
+    },
+    {
+      "id": "m-x11",
+      "what": "A window that is not an X11 window reports X11 number 0",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (number == 0) return std::nullopt;\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "Display and driver queries*",
+      "expect": "has no X11 number"
+    },
+    {
+      "id": "m15",
+      "what": "Watched events are never marked injected",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->injected = event == injectedEvent;",
+      "replace": "    observed->injected = false;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch marks injected events only",
+      "expect": "an injected event is marked injected"
+    },
+    {
+      "id": "m15b",
+      "what": "The injected mark is not cleared after the push",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const ValueScope<const SDL_Event*> injected(injectedEvent, &event);",
+      "replace": "    injectedEvent = &event;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch marks injected events only",
+      "expect": "an event pushed after the injected push is not marked injected"
+    },
+    {
+      "id": "m16",
+      "what": "A watch does not filter by window",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (from != window) return std::nullopt;\n    return observed;",
+      "replace": "    return observed;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch hands out only*",
+      "expect": "another window's event is not handed out"
+    },
+    {
+      "id": "m-kind",
+      "what": "A watch hands out kinds that are not observed",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    default: return std::nullopt;\n    }\n    if (from != window)",
+      "replace": "    default: observed.kind = ObservedEventKind::WindowExposed; from = window; break;\n    }\n    if (from != window)",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch hands out only*",
+      "expect": "kinds that are not observed are not handed out"
+    },
+    {
+      "id": "m17",
+      "what": "Destroying a watch does not remove it from SDL",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    SDL_RemoveEventWatch(&Node::Trampoline, node_.get());\n    registeredWatches.fetch_sub(1);\n    node_.reset();",
+      "replace": "    static_cast<void>(node_.release());",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch stops*",
+      "expect": "a destroyed event watch receives nothing"
+    },
+    {
+      "id": "m-order",
+      "what": "The node is freed before it is removed from SDL (a callback running on another thread reads the freed node: the test case crashes with SIGSEGV, which is the detection)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    SDL_RemoveEventWatch(&Node::Trampoline, node_.get());\n    registeredWatches.fetch_sub(1);\n    node_.reset();",
+      "replace": "    Node* removed = node_.release();\n    delete removed;\n    SDL_RemoveEventWatch(&Node::Trampoline, removed);\n    registeredWatches.fetch_sub(1);",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch waits*",
+      "expect": "Destroying an event watch waits for a callback on another thread[\\s\\S]*CRASHED: SIGSEGV"
+    },
+    {
+      "id": "m20",
+      "what": "A watched event takes its observation time",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = after;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "not later than its queue time"
+    },
+    {
+      "id": "m21",
+      "what": "A watch samples one clock pair per thread",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const ClockPair pair = SampleClockPair();\n    const Time::TimePoint after",
+      "replace": "    thread_local const ClockPair pair = SampleClockPair();\n    const Time::TimePoint after",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "each watch callback samples a new clock pair"
+    },
+    {
+      "id": "m22",
+      "what": "A watched event time is not capped at its observation",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, Time::TimePoint::max());",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch gives a future event*",
+      "expect": "never later than its observation"
+    },
+    {
+      "id": "m-depth-watch",
+      "what": "Destroying a watch has no dispatch depth check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(dispatchDepth == 0);\n    // SDL destroys its watcher lock",
+      "replace": "    // SDL destroys its watcher lock",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch inside a live frame*",
+      "expect": "destroying an event watch inside a live frame fails"
+    },
+    {
+      "id": "m18",
+      "what": "The capture is read as BGRA",
+      "file": "engine/render/backend/sdl_gpu/src/SceneCaptureFile.cpp",
+      "find": "                                                 SDL_PIXELFORMAT_RGBA32,",
+      "replace": "                                                 SDL_PIXELFORMAT_BGRA32,",
+      "target": "gyo_sdl_gpu_capture_tests",
+      "cases": "SaveCaptureBmp writes the bytes*",
+      "expect": "the capture file has the bytes SDL writes"
+    },
+    {
+      "id": "m-inject-pointer",
+      "what": "Every event pushed during an injected push is marked injected",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->injected = event == injectedEvent;",
+      "replace": "    observed->injected = injectedEvent != nullptr;",
+      "target": "platform_sdl_tests",
+      "cases": "Only the injected event itself*",
+      "expect": "an event queued during an injected push is not marked injected"
+    },
+    {
+      "id": "m-moved-from",
+      "what": "Move assignment does not remove the watch it replaces",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        Remove();\n        node_ = std::move(other.node_);",
+      "replace": "        node_ = std::move(other.node_);",
+      "target": "platform_sdl_tests",
+      "cases": "Move assignment releases*",
+      "expect": "move assignment removes the watch it replaces from SDL"
+    },
+    {
+      "id": "m-move",
+      "what": "The move constructor leaves its source active",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "EventWatch::EventWatch(EventWatch&& other) noexcept : node_(std::move(other.node_)) {}",
+      "replace": "EventWatch::EventWatch(EventWatch&& other) noexcept : node_(std::make_unique<Node>(*other.node_)) {}",
+      "target": "platform_sdl_tests",
+      "cases": "A moved event watch keeps observing",
+      "expect": "a moved-from watch is inactive"
+    },
+    {
+      "id": "m-dispatch",
+      "what": "A watch callback does not raise the dispatch depth",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const DispatchScope dispatch;\n    // One pair per callback",
+      "replace": "    // One pair per callback",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch inside a watch callback*",
+      "expect": "destroying an event watch inside a watch callback fails a GYO_ASSERT"
+    },
+    {
+      "id": "m-watch-sdl",
+      "what": "A watch takes a clock pair whose SDL time is 500 ms off",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    lastWatchPair = pair;\n    // The event PushInjectedEvent",
+      "replace": "    lastWatchPair = MakeClockPair(pair.engine, pair.sdlNs + 500000000ULL, pair.engine);\n    // The event PushInjectedEvent",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch samples SDL's clock while it runs"
+    },
+    {
+      "id": "m-watch-engine",
+      "what": "A watch observes 1 ms late",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2);",
+      "replace": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2) + std::chrono::milliseconds(1);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch observes the event while the push runs"
+    },
+    {
+      "id": "m-button",
+      "what": "Button press and release are swapped",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? ObservedEventKind::MouseButtonPressed",
+      "replace": "event.type == SDL_EVENT_MOUSE_BUTTON_UP ? ObservedEventKind::MouseButtonPressed",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a button press is reported with its source"
+    },
+    {
+      "id": "m-delta",
+      "what": "Motion deltas are swapped",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        observed.deltaX = event.motion.xrel;\n        observed.deltaY = event.motion.yrel;",
+      "replace": "        observed.deltaX = event.motion.yrel;\n        observed.deltaY = event.motion.xrel;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a motion is reported with its x and y"
+    },
+    {
+      "id": "m-focus-watch",
+      "what": "A watch reports focus gained as lost",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    case SDL_EVENT_WINDOW_FOCUS_GAINED: observed.kind = ObservedEventKind::WindowFocusGained;",
+      "replace": "    case SDL_EVENT_WINDOW_FOCUS_GAINED: observed.kind = ObservedEventKind::WindowFocusLost;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a focus change keeps its direction"
+    },
+    {
+      "id": "m-source",
+      "what": "A button event loses its source",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        observed.sourceId = event.button.which;",
+      "replace": "        observed.sourceId = 0;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch reports each kind*",
+      "expect": "a button press is reported with its source"
+    },
+    {
+      "id": "m-stride",
+      "what": "The capture rows are read with a short pitch (SDL rejects the surface)",
+      "file": "engine/render/backend/sdl_gpu/src/SceneCaptureFile.cpp",
+      "find": "static_cast<int>(capture.width * 4));",
+      "replace": "static_cast<int>(capture.width * 4) - 1);",
+      "target": "gyo_sdl_gpu_capture_tests",
+      "cases": "SaveCaptureBmp writes the bytes*",
+      "expect": "SaveCaptureBmp\\(capture, ours\\)"
+    },
+    {
+      "id": "m-watch-first",
+      "what": "A watch converts with the first pair of its thread but records the new one",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    thread_local const ClockPair first = pair;\n    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, first, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-watch-mid",
+      "what": "A watch observes at its pair midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const Time::TimePoint after = pair.engine + (pair.bracket - pair.bracket / 2);",
+      "replace": "    const Time::TimePoint after = pair.engine;",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch observes at its pair's second Engine read"
+    },
+    {
+      "id": "m-watch-late",
+      "what": "A watched event is converted 2 us late",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp + 2000, pair, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-watch-e1",
+      "what": "A watch converts against its second Engine read instead of the midpoint",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, pair, after);",
+      "replace": "    observed->timestamp = ConvertSdlTimestamp(event->common.timestamp, ClockPair{after, pair.sdlNs, pair.bracket}, after);",
+      "target": "platform_sdl_tests",
+      "cases": "An event watch stamps each event*",
+      "expect": "a watch converts with the pair it sampled"
+    },
+    {
+      "id": "m-main-thread",
+      "what": "Destroying a watch has no main thread check",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(SDL_IsMainThread());\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "Destroying an event watch off the main thread*",
+      "expect": "destroying an event watch off the main thread fails a GYO_ASSERT"
+    },
+    {
+      "id": "m19",
+      "what": "The platform backend links SDL3 PUBLIC again",
+      "file": "engine/platform/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_platform_sdl PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_platform_sdl PUBLIC SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_platform_sdl passes SDL3::SDL3 on to its users"
+    },
+    {
+      "id": "m19b",
+      "what": "The input backend links GYO::PlatformSDLNative PUBLIC",
+      "file": "engine/input/backend/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_input_sdl PRIVATE GYO::PlatformSDLNative SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_input_sdl PUBLIC GYO::PlatformSDLNative)\ntarget_link_libraries(gyo_input_sdl PRIVATE SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_input_sdl passes GYO::PlatformSDLNative on to its users"
+    },
+    {
+      "id": "m19c",
+      "what": "The SDL renderer backend makes its native/include public",
+      "file": "engine/render/backend/sdl/CMakeLists.txt",
+      "find": "target_include_directories(gyo_render_backend_sdl PRIVATE\n    ${CMAKE_CURRENT_SOURCE_DIR}/native/include",
+      "replace": "target_include_directories(gyo_render_backend_sdl PUBLIC\n    ${CMAKE_CURRENT_SOURCE_DIR}/native/include",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_render_backend_sdl makes[\\s\\S]*native/include"
+    },
+    {
+      "id": "m19d",
+      "what": "The program entry links SDL3 PUBLIC",
+      "file": "engine/platform/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_platform_sdl_main PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_platform_sdl_main PUBLIC SDL3::SDL3)",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_platform_sdl_main passes SDL3::SDL3 on to its users"
+    },
+    {
+      "id": "m-inside-stale",
+      "what": "insideWindow uses the first window size it saw",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &width, &height);\n",
+      "replace": "                static int cachedWidth = 0, cachedHeight = 0;\n                if (cachedWidth == 0) SDL_GetWindowSize(Platform::Sdl::NativeWindow(*platform_), &cachedWidth, &cachedHeight);\n                width = cachedWidth;\n                height = cachedHeight;\n",
+      "target": "input_sdl_tests",
+      "cases": "a click is inside the window by the window size*",
+      "expect": "a click outside the current size is outside"
+    },
+    {
+      "id": "m-focus-gain-state",
+      "what": "A focus gain does not set windowFocused",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "            frame_.windowFocused = true;\n",
+      "replace": "",
+      "target": "input_sdl_tests",
+      "cases": "focus events of this window set*",
+      "expect": "a focus gain sets windowFocused"
+    },
+    {
+      "id": "m-dedup-focus-lost",
+      "what": "A focus loss while unfocused is dropped",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    case SDL_EVENT_WINDOW_FOCUS_LOST:\n        if (event.window.windowID == ownWindowId) {",
+      "replace": "    case SDL_EVENT_WINDOW_FOCUS_LOST:\n        if (event.window.windowID == ownWindowId && frame_.windowFocused) {",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a focus loss while unfocused is still an event"
+    },
+    {
+      "id": "m-dedup-key",
+      "what": "A key press is an event only on a state change",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SetKey(*key, down);\n                frame_.events.push_back(",
+      "replace": "                const bool changed = frame_.keys[static_cast<std::size_t>(*key)].held != down;\n                SetKey(*key, down);\n                if (changed) frame_.events.push_back(",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a second non-repeat key press is still an event"
+    },
+    {
+      "id": "m-dedup-button",
+      "what": "A mouse button press is an event only on a state change",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SetMouseButton(*button, down);\n",
+      "replace": "                const bool changed = frame_.mouseButtons[static_cast<std::size_t>(*button)].held != down;\n                SetMouseButton(*button, down);\n                if (!changed) break;\n",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a second mouse button press is still an event"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
+#include "RetroFPS/Pvp/ClientLog.hpp"
 #include "RetroFPS/Pvp/SessionSummary.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
@@ -38,7 +39,6 @@
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-#include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -54,6 +54,12 @@ using Clock = std::chrono::steady_clock;
 constexpr float WorldVerticalFovRadians = Engine::Math::DegreesToRadians(60.0F);
 double Milliseconds(Clock::time_point end, Clock::time_point begin) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+// Milliseconds since the program started (the SDL ticks the diagnostics used
+// before counted from SDL's initialization, early in the same start-up).
+const Clock::time_point applicationStart = Clock::now();
+std::uint64_t ApplicationMilliseconds() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - applicationStart).count());
 }
 template<class Error> std::string Explain(const Error& error) {
     return error.message + (error.detail.empty() ? "" : ": " + error.detail);
@@ -185,8 +191,8 @@ struct PvpApplication::Impl final {
 
     void EditAddress(bool value) {
         editing = value;
-        if (value) SDL_StartTextInput(platform->NativeWindow());
-        else SDL_StopTextInput(platform->NativeWindow());
+        // As before, a failure only leaves the field without typed text.
+        static_cast<void>(input->SetTextInput(value));
     }
 
     void AppendAddress(const char* value) {
@@ -220,8 +226,8 @@ struct PvpApplication::Impl final {
         pointerAcquiredThisFrame = capture.pointerAcquiredThisFrame;
         windowInteraction = capture.windowInteraction;
         if (result.releases == 0) return;
-        if (result.releasesWhileCaptured > 0) SDL_Log("PvP releasing pointer player=%llu application_ms=%llu",
-            static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(SDL_GetTicks()));
+        if (result.releasesWhileCaptured > 0) fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP releasing pointer player=%llu application_ms=%llu",
+            static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(ApplicationMilliseconds()));
         const auto released = input->SetRelativeMouseMode(false);
         if (!released) {
             lastError = Explain(released.error());
@@ -230,22 +236,23 @@ struct PvpApplication::Impl final {
         }
     }
 
-    // Lobby address editing keeps native SDL text input and clipboard, which
-    // Engine input does not provide.
-    void HandleTextEditing(const SDL_Event& event) {
-        if (InWorld() || !editing) return;
-        if (event.type == SDL_EVENT_TEXT_INPUT) AppendAddress(event.text.text);
-        if (event.type != SDL_EVENT_KEY_DOWN) return;
-        if (event.key.key == SDLK_BACKSPACE && !address.empty()) address.pop_back();
-        if ((event.key.mod & SDL_KMOD_CTRL) != 0 && event.key.key == SDLK_A) address.clear();
-        if ((event.key.mod & SDL_KMOD_CTRL) != 0 && event.key.key == SDLK_V) {
-            char* clipboard = SDL_GetClipboardText();
-            AppendAddress(clipboard);
-            SDL_free(clipboard);
-        }
-        if (event.key.key == SDLK_RETURN || event.key.key == SDLK_ESCAPE) {
-            EditAddress(false);
-            suppressUiEnter = true;
+    // Lobby address editing: the frame's text in arrival order (presses and
+    // repeats; the editing policy below is this product's).
+    void HandleTextEditing(const std::vector<Engine::Input::TextEvent>& text) {
+        using Engine::Input::Key;
+        for (const auto& entry : text) {
+            if (InWorld() || !editing) return;
+            if (entry.kind == Engine::Input::TextEvent::Kind::Text) {
+                AppendAddress(entry.text.c_str());
+                continue;
+            }
+            if (entry.layoutKey == Key::Backspace && !address.empty()) address.pop_back();
+            if (entry.modifiers.ctrl && entry.layoutKey == Key::A) address.clear();
+            if (entry.modifiers.ctrl && entry.layoutKey == Key::V) AppendAddress(platform->ClipboardText().c_str());
+            if (entry.layoutKey == Key::Enter || entry.layoutKey == Key::Escape) {
+                EditAddress(false);
+                suppressUiEnter = true;
+            }
         }
     }
 
@@ -374,7 +381,7 @@ struct PvpApplication::Impl final {
             if (hit.outcome != HitFeedbackOutcome::None) {
                 // log-contract: every hit the presentation saw, and why it did or did not flash.
                 static constexpr const char* reasons[] = {"none", "played", "dead", "new_life"};
-                SDL_Log("PvP hit feedback version=1 player=%llu life=%llu tick=%llu damage_count=%u hits=%u hp=%u "
+                fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP hit feedback version=1 player=%llu life=%llu tick=%llu damage_count=%u hits=%u hp=%u "
                         "attacker=%llu flash=%d reason=%s",
                         static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(combat.lifeGeneration),
                         static_cast<unsigned long long>(state.snapshot->tick), combat.damageCount, hit.hits, combat.hp,
@@ -705,7 +712,7 @@ struct PvpApplication::Impl final {
         return SubmitWeapon();
     }
 
-    // Diagnostics only (SDL_Log, which the Client log file records): connection
+    // Diagnostics only (ClientLog, which the Client log file records): connection
     // transitions, connection-quality warnings and one summary per second in a match.
     struct SessionLog {
         ConnectionPhase phase{ConnectionPhase::Lobby};
@@ -721,18 +728,18 @@ struct PvpApplication::Impl final {
         auto& log = sessionLog;
         static constexpr const char* phases[] = {"lobby", "requesting", "connecting", "playing"};
         if (state.phase != log.phase) {
-            SDL_Log("PvP connection phase=%s player=%llu arena=%s", phases[static_cast<int>(state.phase)],
+            fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP connection phase=%s player=%llu arena=%s", phases[static_cast<int>(state.phase)],
                     static_cast<unsigned long long>(state.playerId), state.arenaId.empty() ? "-" : state.arenaId.c_str());
             log.phase = state.phase;
         }
         if (state.error != log.error) {
-            if (!state.error.empty()) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP connection error=%s", state.error.c_str());
+            if (!state.error.empty()) fps::pvp::ClientLog(Engine::Base::LogLevel::Warning, "PvP connection error=%s", state.error.c_str());
             log.error = state.error;
         }
         const PlayerState* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         const std::uint32_t failures = self ? self->connectionQualityFailures : 0;
         if (failures != log.qualityFailures) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP connection quality failed_windows=%u of %u",
+            fps::pvp::ClientLog(Engine::Base::LogLevel::Warning, "PvP connection quality failed_windows=%u of %u",
                         failures, ConnectionQualityFailedWindows);
             log.qualityFailures = failures;
         }
@@ -756,7 +763,7 @@ struct PvpApplication::Impl final {
                           std::to_string(counts.rejectedBy[reason]);
         const double snapshotAge = log.lastSnapshotAt == Clock::time_point{} ? -1 :
             std::chrono::duration<double>(now - log.lastSnapshotAt).count() * 1000;
-        SDL_Log("PvP summary player=%llu tick=%llu players=%zu fps=%.1f longest_frame_ms=%.1f snapshots_per_s=%.1f "
+        fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP summary player=%llu tick=%llu players=%zu fps=%.1f longest_frame_ms=%.1f snapshots_per_s=%.1f "
                 "snapshot_age_ms=%.1f pending_commands=%zu hp=%u life=%llu dead=%d actions_submitted=%llu accepted=%llu "
                 "rejected=%llu hits=%llu local_cooldown_blocks=%llu actions_pending=%zu%s",
                 static_cast<unsigned long long>(state.playerId), static_cast<unsigned long long>(state.snapshot->tick),
@@ -776,7 +783,7 @@ struct PvpApplication::Impl final {
             if (installed.id != id) continue;
             // The simulation role selects the same arena from its own drain.
             arena = installed;
-            SDL_Log("PvP arena selected id=%s spawns=%zu", arena->id.c_str(), arena->spawns.size());
+            fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP arena selected id=%s spawns=%zu", arena->id.c_str(), arena->spawns.size());
             return;
         }
     }
@@ -911,7 +918,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
         const auto warmup = impl_->renderer.Render(impl_->queue);
         if (!warmup) { error = Explain(warmup.error()); return false; }
         weaponPresented = warmup.value() == Engine::Render::PresentStatus::Presented;
-        if (!weaponPresented) SDL_Delay(10);
+        if (!weaponPresented) fps::pvp::PauseMilliseconds(10);
     }
     if (!weaponPresented) { error = "Cannot prepare the player and weapon presentation surface"; return false; }
     impl_->players->ResetPlayers();
@@ -921,7 +928,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->height = static_cast<float>(options.height);
     impl_->address = options.gateway;
     impl_->initialized = true;
-    SDL_Log("PvP graphics ready driver=%s initialization_ms=%.1f",
+    fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP graphics ready driver=%s initialization_ms=%.1f",
         impl_->device->GetInfo().driver.c_str(), Milliseconds(Clock::now(), started));
     return true;
 }
@@ -937,18 +944,24 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     impl_->input->BeginFrame();
     const bool focusedAtStart = impl_->input->Snapshot().windowFocused;
     double observerMilliseconds = 0;
-    const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const SDL_Event& event) {
+    const auto control = impl_->platform->PumpEvents([this, &observerMilliseconds](const Engine::Platform::Sdl::PlatformEvent& event) {
         const auto observed = Clock::now();
         impl_->input->HandleEvent(event);
-        impl_->HandleTextEditing(event);
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
+    {
+        // Text editing used to run per event inside the observer; it still
+        // counts as this product's event handling (observer_ms).
+        const auto edited = Clock::now();
+        impl_->HandleTextEditing(impl_->input->Snapshot().text);
+        observerMilliseconds += Milliseconds(Clock::now(), edited);
+    }
     impl_->ApplyInputEvents(focusedAtStart);
     const auto elapsed = Milliseconds(Clock::now(), started);
     // observer_ms is this product's event handling; the rest is SDL's polling,
     // including any OS modal loop and the live frames run inside it.
-    if (elapsed >= 250) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+    if (elapsed >= 250) fps::pvp::ClientLog(Engine::Base::LogLevel::Warning,
         "PvP slow event processing elapsed_ms=%.1f observer_ms=%.1f live_frames=%llu",
         elapsed, observerMilliseconds, static_cast<unsigned long long>(impl_->liveFramesThisPump));
     return control;
@@ -1023,7 +1036,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
     impl_->LogSession(frame.deltaSeconds);
     const auto finished = Clock::now();
     if (Milliseconds(finished, started) >= 250)
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PvP slow update player=%llu elapsed_ms=%.1f mouse_mode_ms=%.1f frame_gap_ms=%.1f",
+        fps::pvp::ClientLog(Engine::Base::LogLevel::Warning, "PvP slow update player=%llu elapsed_ms=%.1f mouse_mode_ms=%.1f frame_gap_ms=%.1f",
             static_cast<unsigned long long>(impl_->state.playerId), Milliseconds(finished, started),
             Milliseconds(finished, mouseStarted), frame.deltaSeconds * 1000);
     return impl_->quit ? Control::Stop : Control::Continue;
@@ -1140,7 +1153,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
     if (!rendered) return impl_->Fail(Explain(rendered.error()));
     const auto finished = Clock::now();
     if (firstWorldFrame || Milliseconds(finished, started) >= 250 || context.deltaSeconds >= .25)
-        SDL_Log("PvP render player=%llu first_world_frame=%d frame_gap_ms=%.1f prepare_ms=%.1f ui_ms=%.1f render_ms=%.1f presented=%d",
+        fps::pvp::ClientLog(Engine::Base::LogLevel::Info, "PvP render player=%llu first_world_frame=%d frame_gap_ms=%.1f prepare_ms=%.1f ui_ms=%.1f render_ms=%.1f presented=%d",
             static_cast<unsigned long long>(impl_->state.playerId), firstWorldFrame, context.deltaSeconds * 1000,
             Milliseconds(prepared, started), Milliseconds(uiFinished, prepared), Milliseconds(finished, uiFinished),
             rendered.value() == Engine::Render::PresentStatus::Presented);
@@ -1186,7 +1199,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         impl_->characterPresentationSkipped = true;
         ++impl_->skippedPresentationFrames;
         // A minimized window has no swapchain wait to pace the runtime loop.
-        SDL_Delay(10);
+        fps::pvp::PauseMilliseconds(10);
     }
     return Control::Continue;
 }
@@ -1201,11 +1214,10 @@ int PvpApplication::Run() {
     impl_->platform->SetLiveFrameHandler([this, &loop] {
         // SDL applies a resize to the window before its queued event reaches
         // the pump, so live frames take the size from the window itself.
-        int windowWidth{}, windowHeight{};
-        if (SDL_GetWindowSize(impl_->platform->NativeWindow(), &windowWidth, &windowHeight)) {
-            impl_->width = static_cast<float>(Engine::Math::Max(1, windowWidth));
-            impl_->height = static_cast<float>(Engine::Math::Max(1, windowHeight));
-        }
+        // (A query: allowed inside a live frame, docs/architecture/platform-sdl.md.)
+        const auto window = impl_->platform->QueryWindow().rect;
+        impl_->width = static_cast<float>(Engine::Math::Max(1, window.width));
+        impl_->height = static_cast<float>(Engine::Math::Max(1, window.height));
         struct LiveScope {
             bool& live;
             explicit LiveScope(bool& value) : live(value) { live = true; }
@@ -1216,7 +1228,7 @@ int PvpApplication::Run() {
     loop.Run();
     impl_->connection.Leave();
     impl_->RefreshState();
-    if (!impl_->lastError.empty()) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", impl_->lastError.c_str());
+    if (!impl_->lastError.empty()) fps::pvp::ClientLog(Engine::Base::LogLevel::Error, "%s", impl_->lastError.c_str());
     return impl_->exitCode;
 }
 void PvpApplication::SetGatewayAddress(std::string address) { impl_->address = std::move(address); }
@@ -1234,7 +1246,7 @@ std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, cons
 }
 ClientConnection& PvpApplication::Connection() { return impl_->connection; }
 Engine::Render::Renderer& PvpApplication::Renderer() { return impl_->renderer; }
-Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& PvpApplication::RenderDevice() { return *impl_->device; }
+Engine::Render::RenderDeviceInfo PvpApplication::RenderDeviceInfo() const { return impl_->device->GetInfo(); }
 Engine::Platform::Sdl::SdlPlatform& PvpApplication::Platform() { return *impl_->platform; }
 const LocalMovementObservation& PvpApplication::LocalMovement() const noexcept {
     return impl_->presented.observation;

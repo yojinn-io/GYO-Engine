@@ -2,9 +2,11 @@
 #include <doctest/doctest.h>
 
 #include "engine/input/backend/sdl/SdlInput.hpp"
+#include "engine/input/backend/sdl/SdlInputNative.hpp"
 #include "engine/input/InputActionMap.hpp"
 
 #include <array>
+#include <chrono>
 #include <utility>
 
 using namespace Engine::Input;
@@ -13,7 +15,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     const std::array bindings{
         std::pair{SDL_SCANCODE_SPACE, Key::Space},
         std::pair{SDL_SCANCODE_H, Key::H},
@@ -29,11 +31,11 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
         event.type = SDL_EVENT_KEY_DOWN;
         event.key.windowID = window + 1;
         event.key.scancode = scancode;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event, Engine::Time::TimePoint{});
         CHECK_FALSE(input.Snapshot().Get(key).held);
 
         event.key.windowID = window;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event, Engine::Time::TimePoint{});
         auto state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK(state.held);
         CHECK(state.pressed);
@@ -41,7 +43,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
 
         input.BeginFrame();
         event.key.repeat = true;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event, Engine::Time::TimePoint{});
         state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK(state.held);
         CHECK_FALSE(state.pressed);
@@ -49,7 +51,7 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
 
         event.key.repeat = false;
         event.type = SDL_EVENT_KEY_UP;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event, Engine::Time::TimePoint{});
         state = actions.Evaluate(input.Snapshot()).Action(action);
         CHECK_FALSE(state.held);
         CHECK_FALSE(state.pressed);
@@ -66,14 +68,14 @@ TEST_CASE("SDL space H and F3 events retain press hold release and focus semanti
         event.type = SDL_EVENT_KEY_DOWN;
         event.key.windowID = window;
         event.key.scancode = scancode;
-        input.HandleEvent(event);
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, event, Engine::Time::TimePoint{});
         REQUIRE(input.Snapshot().Get(key).held);
     }
     input.BeginFrame();
     SDL_Event lost{};
     lost.type = SDL_EVENT_WINDOW_FOCUS_LOST;
     lost.window.windowID = window;
-    input.HandleEvent(lost);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, lost, Engine::Time::TimePoint{});
     CHECK_FALSE(input.Snapshot().windowFocused);
     for (const auto& [scancode, key] : bindings) {
         static_cast<void>(scancode);
@@ -126,18 +128,18 @@ TEST_CASE("every engine key is reachable from an SDL scancode and the original k
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     std::array<int, static_cast<std::size_t>(Key::Count)> sources{};
     for (int code = 0; code < SDL_SCANCODE_COUNT; ++code) {
         input.BeginFrame();
-        input.HandleEvent(KeyEvent(window, static_cast<SDL_Scancode>(code), true));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, static_cast<SDL_Scancode>(code), true), Engine::Time::TimePoint{});
         const auto& events = input.Snapshot().events;
         if (events.empty()) continue;
         REQUIRE(events.size() == 1);
         CHECK(events[0].kind == InputEventKind::KeyPressed);
         REQUIRE(events[0].key != Key::Count);
         ++sources[static_cast<std::size_t>(events[0].key)];
-        input.HandleEvent(KeyEvent(window, static_cast<SDL_Scancode>(code), false));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, static_cast<SDL_Scancode>(code), false), Engine::Time::TimePoint{});
     }
     for (std::size_t key = 0; key < sources.size(); ++key) {
         CAPTURE(key);
@@ -156,9 +158,9 @@ TEST_CASE("every engine key is reachable from an SDL scancode and the original k
     };
     for (const auto& [scancode, key] : original) {
         input.BeginFrame();
-        input.HandleEvent(KeyEvent(window, scancode, true));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, scancode, true), Engine::Time::TimePoint{});
         CHECK(input.Snapshot().Get(key).held);
-        input.HandleEvent(KeyEvent(window, scancode, false));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, scancode, false), Engine::Time::TimePoint{});
     }
 }
 
@@ -166,15 +168,15 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
     int width{}, height{};
-    REQUIRE(SDL_GetWindowSize(platform.value()->NativeWindow(), &width, &height));
+    REQUIRE(SDL_GetWindowSize(Engine::Platform::Sdl::NativeWindow(*platform.value()), &width, &height));
     REQUIRE(width > 2);
     REQUIRE(height > 2);
 
     input.BeginFrame();
-    input.HandleEvent(ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f));
-    input.HandleEvent(ButtonEvent(window, SDL_BUTTON_LEFT, false, 1.5f, 2.5f));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, false, 1.5f, 2.5f), Engine::Time::TimePoint{});
     const auto& frame = input.Snapshot();
     // Existing semantics are unchanged: the last transition wins.
     CHECK_FALSE(frame.Get(MouseButton::Left).held);
@@ -193,17 +195,17 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     CHECK(input.Snapshot().events.empty());
     for (const auto& [x, y] : {std::pair{-1.0f, 2.0f}, std::pair{2.0f, -0.5f},
                                std::pair{static_cast<float>(width), 2.0f}, std::pair{2.0f, static_cast<float>(height)}}) {
-        input.HandleEvent(ButtonEvent(window, SDL_BUTTON_RIGHT, true, x, y));
-        input.HandleEvent(ButtonEvent(window, SDL_BUTTON_RIGHT, false, x, y));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_RIGHT, true, x, y), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_RIGHT, false, x, y), Engine::Time::TimePoint{});
     }
     REQUIRE(input.Snapshot().events.size() == 8);
     for (const auto& event : input.Snapshot().events) CHECK_FALSE(event.insideWindow);
 
     // Keys alike, and repeats are not events.
     input.BeginFrame();
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, true));
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, true, true));
-    input.HandleEvent(KeyEvent(window, SDL_SCANCODE_TAB, false));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true, true), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, false), Engine::Time::TimePoint{});
     REQUIRE(input.Snapshot().events.size() == 2);
     CHECK(input.Snapshot().events[0].kind == InputEventKind::KeyPressed);
     CHECK(input.Snapshot().events[0].key == Key::Tab);
@@ -211,22 +213,91 @@ TEST_CASE("a press and release in one frame keep both transitions in order with 
     CHECK(input.Snapshot().Get(Key::Tab).released);
 }
 
+TEST_CASE("focus events of this window set and clear windowFocused") {
+    // The product's pointer capture reads windowFocused as focusedAtStart (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    CHECK_FALSE(input.Snapshot().windowFocused);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_GAINED), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(input.Snapshot().windowFocused, "a focus gain sets windowFocused");
+    input.BeginFrame();
+    CHECK_MESSAGE(input.Snapshot().windowFocused, "focus carries over to the next frame");
+}
+
+TEST_CASE("events of this window are not deduplicated when the state does not change") {
+    // input.md (Contracts): every focus loss, key press and mouse button event SDL reports for this window is an
+    // event even when the state does not change; only key repeats are dropped. The product's pointer capture
+    // relies on it (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const auto count = [&](InputEventKind kind) {
+        std::size_t n = 0;
+        for (const auto& event : input.Snapshot().events) n += event.kind == kind;
+        return n;
+    };
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::WindowFocusLost) == 2, "a focus loss while unfocused is still an event");
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::KeyPressed) == 2, "a second non-repeat key press is still an event");
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::MouseButtonPressed) == 2, "a second mouse button press is still an event");
+}
+
+TEST_CASE("a click is inside the window by the window size when the backend handles it") {
+    // input.md (Contracts): insideWindow uses the size at handling, never an
+    // earlier one; the product's pointer capture relies on it (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const auto before = platform.value()->QueryWindow().rect;
+    REQUIRE(before.width > 40);
+    const float x = static_cast<float>(before.width) - 10.0f;  // inside the first size only
+
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, x, 2.0f), Engine::Time::TimePoint{});
+    REQUIRE(input.Snapshot().events.size() == 1);
+    CHECK(input.Snapshot().events[0].insideWindow);
+
+    REQUIRE(platform.value()->SetWindowSize(before.width / 2, before.height / 2));
+    const auto after = platform.value()->QueryWindow().rect;
+    REQUIRE(static_cast<float>(after.width) <= x);
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, false, x, 2.0f), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    REQUIRE(input.Snapshot().events.size() == 2);
+    CHECK_MESSAGE(!input.Snapshot().events[0].insideWindow, "a click outside the current size is outside");
+    CHECK(input.Snapshot().events[1].insideWindow);
+}
+
 TEST_CASE("window interaction events of this window are reported in order with their data") {
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
     REQUIRE(platform);
     Backend::Sdl::SdlInput input(*platform.value());
-    const SDL_WindowID window = SDL_GetWindowID(platform.value()->NativeWindow());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
 
     input.BeginFrame();
     for (const SDL_WindowID id : {window + 1, window}) {
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_MOVED, 40, 50));
-        input.HandleEvent(KeyEvent(id, SDL_SCANCODE_TAB, true));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_RESIZED, 800, 600));
-        input.HandleEvent(ButtonEvent(id, SDL_BUTTON_LEFT, true, 3.0f, 4.0f));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_MINIMIZED));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_RESTORED));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_LOST));
-        input.HandleEvent(WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_GAINED));
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_MOVED, 40, 50), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(id, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_RESIZED, 800, 600), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(id, SDL_BUTTON_LEFT, true, 3.0f, 4.0f), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_MINIMIZED), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_RESTORED), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+        Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_GAINED), Engine::Time::TimePoint{});
     }
     // Only the second pass (this window) is reported.
     const auto& events = input.Snapshot().events;
@@ -247,4 +318,146 @@ TEST_CASE("window interaction events of this window are reported in order with t
     // state change, not an event.
     CHECK_FALSE(input.Snapshot().Get(Key::Tab).held);
     CHECK_FALSE(input.Snapshot().Get(MouseButton::Left).held);
+}
+
+TEST_CASE("SDL input events carry the time of the platform event that added them") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const Engine::Time::TimePoint pressedAt = Engine::Time::TimePoint{} + std::chrono::seconds(7);
+    const Engine::Time::TimePoint focusAt = pressedAt + std::chrono::milliseconds(3);
+
+    input.BeginFrame();
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.windowID = window;
+    key.key.scancode = SDL_SCANCODE_W;
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, key, pressedAt);
+    SDL_Event focus{};
+    focus.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+    focus.window.windowID = window;
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, focus, focusAt);
+
+    const auto& events = input.Snapshot().events;
+    REQUIRE(events.size() == 2);
+    CHECK_MESSAGE(events[0].timestamp == pressedAt, "an input event carries its platform event's time");
+    CHECK_MESSAGE(events[1].timestamp == focusAt, "an input event carries its platform event's time");
+}
+
+namespace {
+
+SDL_Event TextKey(const SDL_WindowID window, const SDL_Scancode scancode, const SDL_Keycode keycode,
+                  const bool down, const bool repeat = false, const SDL_Keymod mod = SDL_KMOD_NONE) {
+    SDL_Event event{};
+    event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    event.key.windowID = window;
+    event.key.scancode = scancode;
+    event.key.key = keycode;
+    event.key.mod = mod;
+    event.key.down = down;
+    event.key.repeat = repeat;
+    return event;
+}
+
+SDL_Event TypedText(const SDL_WindowID window, const char* text) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.windowID = window;
+    event.text.text = text;
+    return event;
+}
+
+} // namespace
+
+TEST_CASE("SDL text input collects text only while it is on") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const Engine::Time::TimePoint at{};
+
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "x"), at);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true), at);
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "nothing is collected while text input is off");
+
+    REQUIRE(input.SetTextInput(true));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "ab"), at);
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window + 1, "other window"), at);
+    REQUIRE(input.Snapshot().text.size() == 1);
+    CHECK(input.Snapshot().text[0].kind == TextEvent::Kind::Text);
+    CHECK(input.Snapshot().text[0].text == "ab");
+
+    input.BeginFrame();
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "BeginFrame clears the text");
+
+    REQUIRE(input.SetTextInput(false));
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TypedText(window, "y"), at);
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "nothing is collected after text input is turned off");
+}
+
+TEST_CASE("SDL text keys record presses and repeats in arrival order but never releases") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const Engine::Time::TimePoint at{};
+    REQUIRE(input.SetTextInput(true));
+
+    input.BeginFrame();
+    using Engine::Input::Backend::Sdl::HandleNativeEvent;
+    HandleNativeEvent(input, TypedText(window, "1"), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, true, true), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_BACKSPACE, SDLK_BACKSPACE, false), at);
+    HandleNativeEvent(input, TypedText(window, "2"), at);
+    HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_V, SDLK_V, true, false, SDL_KMOD_LCTRL), at);
+
+    const auto& text = input.Snapshot().text;
+    REQUIRE_MESSAGE(text.size() == 5, "a release is never recorded as a text key");
+    CHECK_MESSAGE((text[0].kind == TextEvent::Kind::Text && text[0].text == "1"), "text keeps its arrival order");
+    CHECK_MESSAGE((text[1].kind == TextEvent::Kind::Key && text[1].layoutKey == Key::Backspace && !text[1].repeat),
+                  "text keeps its arrival order");
+    CHECK_MESSAGE((text[2].kind == TextEvent::Kind::Key && text[2].repeat), "a key repeat is recorded as a text key");
+    CHECK_MESSAGE((text[3].kind == TextEvent::Kind::Text && text[3].text == "2"), "text keeps its arrival order");
+    CHECK_MESSAGE((text[4].layoutKey == Key::V && text[4].modifiers.ctrl && !text[4].modifiers.shift),
+                  "a text key carries its modifiers");
+
+    // The repeat is not an event (IP-1): one press and one release only.
+    const auto& events = input.Snapshot().events;
+    std::size_t backspaceEvents = 0;
+    for (const auto& event : events)
+        if (event.key == Key::Backspace) ++backspaceEvents;
+    CHECK_MESSAGE(backspaceEvents == 2, "a key repeat is not an input event");
+}
+
+TEST_CASE("SDL text keys carry the layout key apart from the physical key") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    REQUIRE(input.SetTextInput(true));
+
+    input.BeginFrame();
+    // AZERTY: the Q position produces 'a'.
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_Q, SDLK_A, true),
+                                                   Engine::Time::TimePoint{});
+    // A key without a character carries its scancode in the keycode.
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_KP_ENTER, SDLK_KP_ENTER, true),
+                                                   Engine::Time::TimePoint{});
+    const auto& text = input.Snapshot().text;
+    REQUIRE(text.size() == 2);
+    CHECK_MESSAGE((text[0].key == Key::Q && text[0].layoutKey == Key::A),
+                  "the layout key is the key the layout produces, apart from the position");
+    CHECK_MESSAGE(text[1].layoutKey == Key::Enter, "a keycode without a character maps through its scancode");
+}
+
+TEST_CASE("SdlPlatform reads the clipboard text") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    REQUIRE(SDL_SetClipboardText("127.0.0.1:7777"));
+    CHECK_MESSAGE(platform.value()->ClipboardText() == "127.0.0.1:7777", "the clipboard text is read back");
+    REQUIRE(SDL_ClearClipboardData());
+    CHECK(platform.value()->ClipboardText().empty());
 }
