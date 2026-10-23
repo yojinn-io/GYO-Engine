@@ -196,6 +196,14 @@ set_tests_properties("${GYO_CURRENT_APP}.action_evidence" PROPERTIES LABELS "cpu
 add_test(NAME "${GYO_CURRENT_APP}.presentation_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_presentation_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.presentation_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
+# N-gui-black-map-intermittent: the record-only window-image classifier (never a verdict).
+add_test(NAME "${GYO_CURRENT_APP}.black_frame"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_black_frame.py")
+set_tests_properties("${GYO_CURRENT_APP}.black_frame" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+# The macOS window watch around a GUI command, driven by a fake system (no GUI is started).
+add_test(NAME "${GYO_CURRENT_APP}.black_map_watch"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_black_map_watch.py")
+set_tests_properties("${GYO_CURRENT_APP}.black_map_watch" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 60)
 
 add_test(NAME "${GYO_CURRENT_APP}.command_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_command_evidence.py")
