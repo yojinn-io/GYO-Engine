@@ -27,6 +27,8 @@
 - 2026-10-23：`outage-characterize` 開始（high，構造時序的部分局部 xhigh）。
 - 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。G1 的決定見下一行。
 - 2026-10-23：G1 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
+- 2026-10-23：`outage-characterize` 的 L1（run 39944311104）四平台成功。`resync-contract` 開始（high）。
+- 2026-10-23：`resync-contract` 的條文寫完，xhigh 對抗式審查（1 次）判定「必須修訂」，已全部處理（第 13 節）。**等你在關卡 G2 核准條文。**
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -381,9 +383,9 @@ outage-resync（約 59～85 h）
 |---|---|---|---|
 | J-R1 | 中斷 ≤ T_int／2：中斷狀態 0 次，Starvation 與 Resync 換 epoch 0 次 | 全部 | T_int；J-R6 |
 | J-R2 | 中斷 2×T_int 與 T_max−2 s：Client Failure 0、Gateway expired 0、玩家留在對局；每次注入「中斷→恢復」恰好 1 次；原因為 Starvation 或 Resync 的換 epoch 恰好 1 次（LifeRespawn 不計） | 雙向、只上行 | K1、K2 |
-| J-R2d | 同上，但只有下行：換 epoch 0 次，恢復時 SeedLead 1 次 | 只下行 | 第 3.1 節第 2、3 步 |
+| J-R2d | 只有下行：短於約 0.7 s 時換 epoch 0 次、相位重新擷取 1 次；超過約 0.7 s（冷卻期外）時 Starvation 換 epoch 恰好 1 次（第 13 節修訂） | 只下行 | network-architecture §4 |
 | J-R3 | 中斷期間產生的序號沒有被 TrackPhase 採用，0 次容許 | 全部 | K2；`LocalPlayerPrediction.cpp:132-161` |
-| J-R4 | 發布的 slack 全部 ≥ −(N_o＋1) Tick 對應的 µs。因為 N_o 小於 1 s 的夾限，這條有鑑別力 | 全部，含部分送達 | K2 |
+| J-R4 | 發布的 slack 全部 ≥ −333,333 µs（N_o，時間；第 13 節修訂）。因為 N_o 小於 1 s 的夾限，這條有鑑別力 | 全部，含部分送達 | network-architecture §4 |
 | J-R5 | 中斷 T_max＋2 s：Client 在最後一份 snapshot 後 [T_max, T_max＋0.5] s 內 Failure；Gateway 在最後一個上行封包後同樣的區間內 Leave；Match 沒有殘留玩家 | 雙向 | `server.go:30`；K1、K3 |
 | J-R6 | clean 對照組：中斷 0 次 | 無 | snapshot 間隔分布 |
 | J-R7 | 所有跑次 S1、S2、J5a、S3 成立，runtimeFailed 為 0 | 全部 | `IngressStatistics.hpp:152-189` |
@@ -516,3 +518,36 @@ outage-resync（約 59～85 h）
 | minor 1～10 | 1：single-store-refactor。2：D-10。3：D-4。4：第 1、3.3 節。5：J-R2、J-R2d、J-R5。6：D-5。7：D-9。8：K4。9：D-14。10：第 3.1 節 |
 
 - **ultracode 的原始輸出**（git 忽略的 scratchpad，只作出處）：`wf_3c8b9349-036` 的 journal。
+
+## 13. resync-contract 的修訂（G2 之前，2026-10-23）
+
+契約條文寫在 [network-architecture](../../network-architecture.zh-Hant.md) §4「連線中斷與恢復」與 §7 的兩節 Design Invariants；條文和本計畫第 3～5 節不同時，以條文為準。xhigh 對抗式審查（1 次）判定「必須修訂」：Critical 2、Major 8、Minor 12，已全部處理。和本計畫不同的地方：
+
+1. **恢復時的相位重新擷取**（審查 C1）：
+   - epoch 相同、而且權威還沒追上 tip 時，不呼叫 SeedLead，只重設相位的擷取（樣本、命令年齡環、晚到計數、`settledAfter_`＝Client 的 tip）。
+   - 原因：SeedLead 會清空未確認的命令，再從權威游標重新產生，等於用不同內容改寫還在途中的序號，違反 §7「相同命令識別不可修改」。
+   - 第 3.1 節說的「只多一個呼叫點、不新增相位邏輯」撤回；`LocalPlayerPrediction` 會多一個「只重設擷取」的入口。
+   - 恢復事件經由網路 worker 交給模擬端那一批資料上的一次性旗標，在同一批的相位樣本之前生效（審查 M2）。
+2. **N_o 改用時間判斷**（審查 C2、M8）：
+   - 「晚到過久」＝第一次到達時「到達時刻 − 替代時刻 > 20 Tick（333,333 µs）」。值不變（D173），判斷方式從序號差改成時間，所以 Match 停頓時樣本的下限仍然成立。
+   - 晚到過久的第一次到達一律不產生樣本，計 `late_beyond_no`；每個 epoch 的第一次排程 Resync（下一個 Tick 邊界，和其他排定的換 epoch 合併，resets 只計一次）。
+   - S3 改成 `late_first == slack_late + late_beyond_no`，`retention-600` 之後才是等式。
+3. **Resync 的歸屬**（審查 M4）：Host（SlackTrack）量晚到時間，透過 PvpMatch 新增的公開介面要求換 epoch。這條 Host → PvpMatch 的依賴邊加進 Delta-2。保留範圍（600 個序號）因此成為遊戲規則的一部分。
+4. **只有下行中斷**（審查 M1）：未確認的窗口滿 12 就停，所以超過約 0.7 s 時 Starvation 會換 epoch。J-R2d 已改。
+5. **「一定換 epoch」改成可檢查的定義**（審查 M3）：冷卻期外的 Starvation，以及晚到過久的第一次到達。不換 epoch 的三種情況列為已知項目，由相位重新擷取處理。
+6. **日誌**（審查 M6、M7、minor 5、minor 9）：
+   - 鍵照批次順序排；
+   - `phase_samples_unmatched` 改由模擬端寫新的 `phase summary` 行；
+   - `late_beyond_no_commands` 加在 `resync statistics`；
+   - clock sync 的 `reason=` 加在每一行（`window`／`final`／`resume`），恢復時不重設漂移回歸，`drift_ppm` 的意義不變；
+   - schema 3 的 `reset_reason` 新增 `resync`。
+7. **重新綁定的「靜默」**（審查 minor 2、3、4）：
+   - 改用「原 endpoint 最後一個通過 token 驗證的資料包」的時刻，不論序號，避免以跳號製造靜默。這是通用層 session 的新欄位，加進 Delta-3。
+   - T_int 由產品以參數傳給通用層。
+   - Gateway 的時鐘視窗重開也用這個時刻判斷。
+8. **其他**：
+   - 暫時性錯誤在連線與中斷狀態都適用。代價是 Gateway 程序死掉時，Client 要等 5 s 才回 Lobby。
+   - T_int、T_max 兩端的值由共用 fixture 綁定。
+   - 握手期的逾時寫法改正。
+   - 特性測試升格為守衛之後，改判定照 §14.4。
+   - 睡眠時鐘只寫 macOS 的實測。

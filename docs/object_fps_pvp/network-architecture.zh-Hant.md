@@ -545,7 +545,7 @@ JoinResult 的上限為三秒。Network worker 每秒用既有 Hello／Welcome �
 60 Hz Input 也可保持連線存活。Hello 不延長遊戲移動期限。這些連線期限與
 十五個缺包 Authority Tick 的替代輸入期限 是不同契約。
 
-### 連線中斷與恢復（v7.1 `outage-resync`，D172、D173）
+### 連線中斷與恢復（v7.1 `outage-resync`，D172、D173；條文待 G2 核准）
 
 斷線偵測與恢復只走 UDP：snapshot 串流本身就是心跳，不另開 TCP 心跳或控制通道，
 wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時鐘、相位、命令序列重新對齊，
@@ -558,57 +558,78 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
 | 狀態 | 進入 | 期間的行為 | 離開 |
 |---|---|---|---|
 | 連線 | 進入 Playing；或恢復流程完成 | 現行行為 | 最後一份有效 snapshot 到達後 ≥ T_int → 中斷；非暫時性錯誤 → 斷線 |
-| 中斷 | 同上 | 見下方 | 收到有效 snapshot → 恢復流程 → 連線；最後一份 snapshot 後 ≥ T_max → 斷線；非暫時性錯誤 → 斷線 |
-| 斷線 | 同上；或 Gateway 的 Leave、Error | 既有的 Failure：關閉傳輸、回 Lobby、顯示原因 | 終點；重新加入走新的 join |
+| 中斷 | 連線狀態下，最後一份有效 snapshot 到達後 ≥ T_int | 見下方 | 收到有效 snapshot → 恢復流程 → 連線；最後一份 snapshot 後 ≥ T_max → 斷線；非暫時性錯誤 → 斷線 |
+| 斷線 | 中斷狀態下 ≥ T_max；任何狀態下的非暫時性錯誤或 Gateway 的 Error | 既有的 Failure：關閉傳輸、回 Lobby、顯示原因 | 終點；重新加入走新的 join |
 
+- Gateway 沒有送給 Client 的 UDP Leave 訊息。Gateway 讓 session 到期或移除玩家時，Client 看到的是自己從 snapshot 消失、收到 Error，或收不到封包（之後由 T_max 收斂）。
 - **T_int＝0.5 s**（D173）。只看有效 snapshot 的到達時刻，用收包當下的 `steady_clock`。
   - 來源：v7.1 語料中，沒有注入停頓的跑次 snapshot 最大間隔 0.119 s；注入 250 ms 停頓時最大 0.283 s。
 - **T_max＝5 s**（D172 的 D-11）。Playing 期間從最後一份有效 snapshot 起算；Welcome 與其他封包不延長它。
   - 所以 Gateway 活著、Match 卻不出 snapshot 時，「中斷」也有上限。
-  - Playing 之前（握手）仍照上一段，從任何有效封包起算。
+  - 收到 Welcome 之前（握手）照現行：從開始連線的時刻起算 5 s。
+- **常數只維護一處**：T_int、T_max 在 C++（`Movement.hpp`）與 Go 各有一份，由一份共用的 fixture 測試綁定兩端的值（比照 `drop_reasons.json`）。
 - **判定的輸入**：只有到達時刻與這兩個常數。ClockSync 的 offset、delay、時鐘回聲都不得進入判定（protocol-v7 §2）。
+- **暫時性 socket 錯誤**（連線與中斷狀態都適用）：connection_reset、refused、network_unreachable、host_unreachable、network_down 只計數，當作這次沒有資料；其他錯誤照舊走 Failure。
+  - **代價**：Gateway 程序死掉時，Client 以前收到 refused 立刻失敗，之後要等 T_max（5 s）才回 Lobby。
 - **中斷期間**：
   - socket、session 憑證、傳輸序號、動作帳本都保留：不關閉傳輸、不重設動作、傳輸序號不歸零、連線 generation 不變。
   - Hello 間隔從 1 s 改成 250 ms，作為探測。
-  - Input 與動作照常產生、照常送出（D172 的 D-9 (a)）。中斷期間的操作不保證生效：開槍可能因參考過舊而 Expired，被擊中照算。
-  - 暫時性的 socket 錯誤（connection_reset、refused、network_unreachable、host_unreachable、network_down）只計數，當作這次沒有資料；其他錯誤照舊走 Failure。
-  - HUD 顯示「連線中斷」。中斷狀態只供顯示，不進任何權威判定，Client 不推進 epoch。
+  - Input 與動作照現行規則產生、送出（D172 的 D-9 (a)）。未確認的窗口滿 12 個命令就停止產生，所以只有下行中斷時，Match 跑完窗口後就沒有輸入。中斷期間的操作不保證生效：開槍可能因參考過舊而 Expired，被擊中照算。
+  - HUD 顯示「連線中斷」。Client 不推進 epoch。
 - **恢復流程**（收到第一份有效 snapshot 時，依序執行）：
-  1. 時鐘：提前結束目前的 ClockSync 視窗（該行 `reason=resume`），再開新視窗，漂移的回歸從頭開始。時鐘值只供診斷，不進第 2、3 步。
-  2. 命令序列：snapshot 的 movement epoch 和中斷前不同時，走既有的換 epoch 路徑（清掉送出窗口、Reset＋SeedLead），舊命令已被 Match 以 `EpochOld` 丟掉。相同時代表 Match 的命令序列沒有中斷（例如只有下行中斷），沒有要丟的命令。
-  3. 相位：不論 epoch 是否不同，都呼叫既有的 SeedLead。中斷期間產生的序號不再成為相位樣本，下一次相位決定照「第一次決定」處理。
+  1. **時鐘**：提前結束目前的 ClockSync 視窗（該行 `reason=resume`、`final=0`），再開新視窗。漂移的回歸照現行（從上次跳變起算），不重新開始，`drift_ppm` 的意義不變。時鐘值只供診斷，不進第 2、3 步。
+  2. **命令序列**：snapshot 的 movement epoch 和中斷前不同時，走既有的換 epoch 路徑（清掉送出窗口、Reset＋SeedLead），舊命令已被 Match 以 `EpochOld` 丟掉。
+  3. **相位**：重新擷取，但不改寫還在途中的序號：
+     - epoch 不同（第 2 步），或權威的游標 ≥ Client 的 tip：照既有規則 SeedLead（stall reseed）。
+     - epoch 相同，而且權威的游標 < tip（例如 Match 自己停頓、只追趕了 5 步）：不呼叫 SeedLead，不動未確認的命令與預測狀態。只重設相位的擷取：清掉相位樣本、命令年齡環、連續晚到計數，`settledAfter_` 設成 Client 目前的 tip，下一次相位決定照「第一次決定」處理。
+     - SeedLead 會清空未確認的命令，再從權威游標＋1 重新產生；在權威還沒追上 tip 時呼叫它，會用不同內容改寫同一個序號，違反 §7「相同命令識別不可修改」（審查 C1）。
+     - **時點**：恢復事件在模擬端處理同一批 snapshot 的相位樣本（`ClientSimulation::Observe` 的 ObservePhaseSample）之前生效，所以中斷期間產生的序號不會成為樣本。
+     - **介面**：網路 worker 在交給模擬端的那一批資料上帶一個一次性的「恢復」旗標，這是相位追蹤知道中斷結束的唯一管道。相位追蹤不讀中斷狀態與時長，也不自己再判斷一次間隔。
   4. HUD 的中斷提示消失，寫 A 級的 `connection resumed` 行（log-contract §1.4）。
 
 **Match 的命令序列中斷（`match-resync` 起）**
 
-- epoch 只由 Match 推進。
-- **換 epoch 的原因**：
-  - Starvation 保險絲：現行規則，30 個沒有領先量的 Tick；
-  - **Resync**：命令到達時，它的序號已被替代、替代紀錄還在，而且「游標 − 序號 > N_o」。N_o＝20 Tick（D173）。
-- **Resync 的規則**：
-  - 不受 60 Tick 冷卻限制；
-  - 觸發的那筆命令不產生 slack 樣本；
-  - 之後到達的舊 epoch 命令一律 `EpochOld`，所以同一個 epoch 內最多一次。
+- epoch 只由 PvpMatch 推進。換 epoch 的原因與中斷有關的有三個：
+  - **Starvation** 保險絲：現行規則，30 個沒有領先量、有替代、佇列為空的 Tick；受 60 Tick 冷卻限制。
+  - **Backlog** 保險絲：現行規則，30 個 Tick 的佇列量總和 ≥ 105；受同一個冷卻限制。
+  - **Resync**（新增）：見下方。
+- **晚到過久**：一個被替代的序號，**第一次**到達時，晚到的時間（到達時刻 − 替代時刻，host 的時鐘，和 slack 樣本同一個讀數）超過 N_o。
+  - N_o＝20 Tick（333,333 µs，D173）。用時間而不是序號差判斷，所以 Match 停頓、追趕上限丟掉時間時，樣本的下限仍然成立（審查 M8）。
+  - 這次到達**不產生 slack 樣本**，計入 `late_beyond_no`。同一序號之後的副本不再判斷。
+  - 晚到判斷需要替代紀錄還在。紀錄的保留範圍（`retention-600` 起為 600 個序號，約 10 s）因此是遊戲規則的一部分：超出範圍的到達照「已解析的副本」處理，不產生樣本，也不觸發 Resync。
+- **Resync**：每個 epoch 的第一次「晚到過久」，排程在下一個 Tick 邊界換 epoch，和 Starvation／Backlog 的排程方式相同。
+  - 同一 Tick 已排定 Starvation、Backlog 或 LifeRespawn 時，只換一次 epoch，品質的 resets 只計一次。
+  - 不受 60 Tick 冷卻限制；換 epoch 時照現行設定冷卻起點。
+  - 已排程到換 epoch 之前，同一個 epoch 的其他「晚到過久」只計 `late_beyond_no`，不再排程。
+  - **判定的歸屬**：晚到時間由 MatchRuntimeHost 的 SlackTrack 量（它擁有替代紀錄與 host 的時鐘），Host 透過 PvpMatch 新增的公開介面要求在下一個 Tick 換 epoch；epoch 本身仍只由 PvpMatch 改變。這是新的依賴邊（Host → PvpMatch 的排程介面），列在計畫的 Delta-2。
 - **品質**：Resync 和 Starvation 一樣計入品質視窗的 resets（D172 的 D-10：不為重連另開分支）。
-- **只有下行中斷時**，Match 照常收到命令，不換 epoch，Client 恢復時走上面第 2 步的「相同」分支。
+- **一定換 epoch 的情況**（可檢查的定義）：
+  - 冷卻期外，Starvation 的條件成立；
+  - 任何時候，晚到過久的第一次到達。
+- **不換 epoch 的情況**（已知，交給恢復流程第 3 步的相位重新擷取）：
+  - 冷卻期內，中斷結束時 Starvation 還沒成立、也沒有晚到過久的到達（例如上行丟失 0.6 s：期間沒有命令到達，Client 只會 stall reseed）；
+  - 短於保險絲的中斷（例如雙向 0.3 s）；
+  - 只有下行、短於約 0.7 s 的中斷：Match 跑完窗口的 12 個命令後，沒有輸入的 30 個 Tick 還沒到。超過約 0.7 s（冷卻期外）時，Starvation 換 epoch，Client 走第 2 步。
 - **pv7 的限制**：Match 看不到 Client 的下行中斷，所以只保證「Match 看得到的中斷」會換 epoch。Client 的相位一律在恢復時重新擷取，不受這個限制。
 
 **Gateway（`client-interrupted`、`identity-rebind` 起）**
 
-- **活性與上限**：照現行。只有更新的傳輸序號刷新活性；session 期限 5 s 到期送 Leave（SESSION_TIMEOUT）。
-  - T_max 和 Client 是同一個值，但時鐘域不同：Gateway 從最後一個上行封包起算，Client 從最後一份 snapshot 起算。
-  - Gateway 和 Client 在同一台會睡眠的機器上時，Go 的單調時鐘在睡眠中停住，Client 的 `steady_clock` 繼續走（v7.1 HANDOFF 的睡眠實測）。
-- **時鐘**：某位 Client 的上行靜默 ≥ T_int 之後收到第一個封包時，結束並重開該 Client 的時鐘視窗。
-  - 這是依 session 生命週期的判斷（§7 Gateway 無狀態邊緣允許的跨訊息判斷），狀態屬於 diagnostic state。
+- **活性與上限**：照現行。只有更新的傳輸序號刷新活性（`lastSeen`）；session 期限 5 s 到期送 Leave（SESSION_TIMEOUT）給 Match。
+  - T_max 和 Client 是同一個值，但起算點不同：Gateway 從最後一個刷新活性的上行封包起算，Client 從最後一份 snapshot 起算。
+  - 在 macOS 上實測：機器睡眠時 Go 的單調時鐘停住，C++ 的 `steady_clock` 繼續走（v7.1 HANDOFF 的睡眠實測）。其他平台未實測。
+- **最後驗證時刻**：session 另外記「原 endpoint 最後一個通過 token 驗證的資料包」的時刻，不論序號新舊。這是通用層 session 的新欄位，屬於允許的活性類，但新增欄位本身是 Architecture Delta（計畫的 Delta-3）。
+- **時鐘**：某位 Client 的最後驗證時刻和新到的資料包相隔 ≥ T_int 時，結束並重開該 Client 的時鐘視窗。
+  - 判斷只用上面那個時刻，不用 Hello 之間的間隔；正常 1 s 一次的 Hello 不會觸發。
+  - 結果只進 diagnostic state（時鐘視窗），不進任何判定。
   - Match 的時鐘視窗量的是 Gateway↔Match，不受單一 Client 中斷影響。
 - **身分的重新綁定**：Hello 從新的 endpoint 到達時，下列條件全部成立才把 session 改綁到新 endpoint：
   - token 正確；
   - 傳輸序號比 session 記錄的新；
-  - 原 endpoint 已靜默 ≥ T_int；
+  - 原 endpoint 的最後驗證時刻已過 ≥ T_int（不論序號，所以單靠送一個跳號的封包製造不出「靜默」）；
   - session 還沒到期。
 
-  改綁之後，原 endpoint 的封包回 `ErrUnauthorized`；每次改綁寫一行 A 級的 `session rebound`。只用通用層 session 的軟狀態（token、endpoint、傳輸序號、活性），不需要知道 Match 的任何狀態。Client 中斷期間不換 token、不重設傳輸序號，所以 Client 端不需要新邏輯。
-  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token 的人可以在真正的玩家靜默時搶走 session，靜默條件把風險限縮在中斷期間，紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
+  T_int 由產品以參數傳給通用層（比照 `Expired(now, timeout)`），通用層不寫死產品常數。改綁之後，原 endpoint 的封包回 `ErrUnauthorized`；每次改綁寫一行 A 級的 `session rebound`。只用通用層 session 的軟狀態，不需要知道 Match 的任何狀態。Client 中斷期間不換 token、不重設傳輸序號，所以 Client 端不需要新邏輯。
+  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token、又能讓真正的玩家靜默 T_int 以上的人（例如在同一網段上），可以搶走 session。紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
 
 IPC 失聯使 Room unavailable 並撤銷 Session，Host 清場；Client 回 Lobby。
 Gateway 可繼續提供 HTTP 狀態，但本輪不透明重接或恢復世界。復原流程是重啟
@@ -863,9 +884,9 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 **目前的已知項目**（只記錄）：
 
 - K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩衝中的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
-- K2（v7.1 `outage-resync`，D172）：session 的 endpoint 重新綁定（§4「連線中斷與恢復」）用的是允許的 session 類狀態與 session 生命週期的跨訊息判斷，分類表不變。
+- K2（v7.1 `outage-resync`，D172）：session 的 endpoint 重新綁定與「最後驗證時刻」（§4「連線中斷與恢復」）屬於允許的 connection and session 類，判斷屬於 session 生命週期的跨訊息判斷，分類表的類別不變；新增的欄位本身照上面的變更規則提出。
 
-#### 連線中斷與重新對時（v7.1 `outage-resync`；2026-10-23 使用者核准方向 D172、數值 D173；條文待 G2 核准）
+#### 連線中斷與重新對時（v7.1 `outage-resync`；方向 D172、數值 D173；條文待 G2 核准）
 
 條文本體在 §4「連線中斷與恢復」。這裡寫的是不得改變的設計意圖，以及守住它們的測試。
 
@@ -873,38 +894,56 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 |---|---|---|
 | 存活判斷只走 UDP，snapshot 串流就是心跳 | 沒有第二條通道要同步、要判斷誰先失效 | 是否為了偵測斷線加了 TCP 心跳、控制通道或 wire 訊息？ |
 | 中斷判定只讀到達時刻與常數 | 診斷值（時鐘回聲、offset、delay）不會讓玩家被判成中斷或斷線 | 中斷或斷線的判斷，是否讀了 ClockSync 推導出的任何時刻？ |
-| epoch 只由 Match 推進；Match 看得到的命令序列中斷一定換 epoch | 中斷期間的舊命令不會被補算；Client 不會自己開新的命令序列 | 是否讓 Client 推進 epoch，或為了不扣品質分而抑制 Starvation／Resync？ |
-| 發布的 slack 不小於 −(N_o＋1) Tick | 「晚到 1～10 秒」不會以大負值進入 Client 的相位追蹤 | 是否加大 N_o、或讓觸發 Resync 的命令也產生樣本？ |
-| 恢復時 Client 一定重新擷取相位 | 中斷前與中斷期間的領先量不被沿用 | 恢復路徑是否又依賴「剛好發生 stall reseed」？ |
-| 中斷狀態只供顯示 | 中斷狀態不是任何權威狀態的副本，Match 與相位追蹤不讀它 | 是否讓 LocalPlayerPrediction、Match 或 Gateway 讀了 Client 的中斷狀態？ |
-| 身分的重新綁定只用 session 軟狀態 | Gateway 仍是無狀態邊緣；改綁有條件、有紀錄 | 改綁的條件是否需要知道 Match 的狀態，或在沒有靜默時也允許？ |
+| epoch 只由 PvpMatch 推進；冷卻期外的 Starvation 與「晚到過久」的第一次到達一定換 epoch | 中斷期間的舊命令不會被補算；Client 不會自己開新的命令序列 | 是否讓 Client 推進 epoch，或為了不扣品質分而抑制 Starvation／Resync？ |
+| 晚到超過 N_o（時間）的到達不產生樣本 | 發布的 slack 不小於 −N_o（−333,333 µs）；「晚到 1～10 秒」不會以大負值進入 Client 的相位追蹤 | 是否加大 N_o、改回用序號差判斷，或讓晚到過久的到達產生樣本？ |
+| 恢復時 Client 一定重新擷取相位，而且不改寫在途的序號 | 中斷前與中斷期間的領先量與樣本不被沿用；同一序號的命令內容不變 | 恢復路徑是否又依賴「剛好發生 stall reseed」，或在權威還沒追上 tip 時呼叫 SeedLead？ |
+| 相位追蹤只接收一次性的「恢復」旗標 | 中斷狀態歸 Client 的網路 worker，相位追蹤、Match、Gateway 都不讀它 | 是否讓 LocalPlayerPrediction 讀中斷狀態或時長，或在模擬端再判斷一次間隔？ |
+| 身分的重新綁定只用 session 軟狀態 | Gateway 仍是無狀態邊緣；改綁有條件、有紀錄 | 改綁的條件是否需要知道 Match 的狀態，或在原 endpoint 沒有靜默時也允許？ |
 
 **守衛**（各批實作時補上；第一行已存在）：
 
-- 特性測試（`outage-characterize`）：`PvpMatchTests.cpp` 的「PvP outage characterization: …」、`PredictionTests.cpp` 的 3 個。它們固定現狀；之後每一批改變其中的值時，都要寫明改了哪一個、為什麼。
-- `match-resync`：「Match 看得到的中斷一定換 epoch」與「slack ≥ −(N_o＋1) Tick」的守衛測試，由特性測試升格，名稱與註解指回本節。
-- `client-interrupted`：`ConnectionLiveness` 列入 `test_diagnostic_isolation.py` 的 DECIDING 清單；突變「用時鐘回聲的時刻餵 Liveness」；差分 oracle（診斷值為極端值時，中斷判定逐位元相同）；恢復時不呼叫 SeedLead 的突變。
-- `identity-rebind`：通用層 session 的 Go 測試（靜默不足、序號不新、token 錯、已到期時都拒絕改綁）；`state_whitelist_test.go` 不變。
+- **特性測試**（`outage-characterize`）：`PvpMatchTests.cpp` 的「PvP outage characterization: …」、`PredictionTests.cpp` 的 3 個。它們固定現狀；之後每一批改變其中的值時，都要寫明改了哪一個、為什麼。
+- **`match-resync`**：
+  - 「一定換 epoch」的兩種情況，由特性測試升格為守衛；
+  - 在只有上行、暫存 0.6 s、冷卻期內的情境（現在有 34 個晚到、約一半超過 20 Tick），斷言發布的最小 slack ≥ −333,333 µs，並以 `late_beyond_no` 斷言守恆；
+  - 突變「只壓掉觸發 Resync 的那一筆樣本」、「用序號差判斷」都要被殺掉。
+- **`client-interrupted`**：
+  - `ConnectionLiveness` 列入 `test_diagnostic_isolation.py` 的 DECIDING 清單；
+  - 突變「用時鐘回聲的時刻餵 Liveness」；
+  - 差分 oracle（診斷值為極端值時，中斷判定逐位元相同）；
+  - 新情境：Match 停頓超過追趕上限、epoch 相同、權威 < tip 時恢復，斷言未確認的命令與 worker 的窗口不變、沒有 `ConflictQueued`、沒有錯配的相位樣本；突變「恢復時一律 SeedLead」與「恢復時不重新擷取」都要被殺掉；
+  - T_int、T_max 兩端相同的 fixture 測試。
+- **`identity-rebind`**：
+  - 通用層 session 的 Go 測試：靜默不足、序號不新、token 錯、已到期時都拒絕改綁；
+  - 「以原 endpoint 送一個跳號的封包之後，T_int 內新 endpoint 仍不能改綁」；
+  - `state_whitelist_test.go` 不變。
+- **變更規則**：特性測試升格為守衛之後，改變它的判定照 AGENTS.md §14.4（寫出 1～5，取得使用者核准）。
 
 **已知項目**（只記錄）：
 
 - **P2 的例外（D173 的 D-15 (a)）**：只有上行中斷時，Client 在新 epoch 裡把窗口填到 12。上行恢復後，這 12 個命令的領先量要等 Backlog 保險絲清掉，最長約 1 s（中斷結束後約 31 Tick，或冷卻結束時）。修剪多餘的領先量交給 v8 B6。
 - **只有上行中斷時 Client 不顯示中斷**：Client 照常收到 snapshot，看到的是角色停住再起步。
+- **不換 epoch 的中斷**：§4 列出的三種，由相位重新擷取處理。
 - **pv7 的限制**：只保證 Match 看得到的中斷換 epoch（§4）。
 
 **Replacement Criteria**（出現時停止修補，向使用者提出修改或重建）：
 
 - 需要 Gateway 記住中斷階段（重新綁定所需的 session 軟狀態除外）。
 - 第二次需要在 Client 的連線狀態機加中斷特例，才能通過驗收。
-- 需要第四種換 epoch 原因（現有：Starvation、Backlog、Resync，加上不屬於中斷的 LifeRespawn 與 SequenceExhausted）。
+- 需要第四種和中斷有關的換 epoch 原因（現有：Starvation、Backlog、Resync；LifeRespawn 與 SequenceExhausted 不屬於中斷）。
 - 品質判定需要依「是否重連」分支。
 
 #### 被替代序號的單一紀錄（v7.1 `outage-resync` C13 (b)；D171、D172；`single-store-refactor` 起生效）
 
 - **權威**：「這個序號被替代過、第一次是否已到」只由 `MatchRuntimeHost` 的 SlackTrack 記錄。替代帳本（`MatchIngressLedger`）只讀它，或接收它的事件；帳本自己只保留不參與判定的附欄（副本數、參考年齡、關閉原因）。
 - **方向**：只允許「帳本 → SlackTrack」，不得反過來，因為診斷不進判定（protocol-v7 §2）。守衛：突變 `v7-flow-ledger-drives-sample`，以及 `test_diagnostic_isolation.py` 的方向檢查。
-- **保留範圍**：游標 − 序號 ≤ 600（`retention-600` 起；之前是最新 64 筆）。超出時照帳本既有的關閉規則關閉並計數，不得無聲丟棄。
-- **樣本**：每個序號只在第一次晚到時產生一個；晚到超過 N_o 的第一次到達改成觸發 Resync，不產生樣本（`match-resync` 起）。所以 S3 是結構上的等式：`late_first == slack_late + Resync 次數`。在 `match-resync` 之前是 `late_first == slack_late`。夾限仍在發布點。
+- **保留範圍**：
+  - `retention-600` 起：游標 − 序號 ≤ 600。超出時照帳本既有的關閉規則關閉並計數，不得無聲丟棄。這個範圍也決定「晚到過久」能否被判斷（§4），所以是遊戲規則的一部分。
+  - 之前：樣本只取最新 64 筆紀錄。`single-store-refactor` 的過渡規則是「600 序號內或屬於最新 64 筆就保留，樣本只給最新 64 筆」，行為與現行逐位元相同。
+- **樣本與守恆（S3）**：每個序號只在第一次晚到時判斷一次：晚到 ≤ N_o 產生一個樣本（計 `slack_late`），晚到 > N_o 不產生樣本（計 `late_beyond_no`，`match-resync` 起）。
+  - `retention-600` 之後，S3 是結構上的等式：`late_first == slack_late + late_beyond_no`；
+  - 之前只保證 `late_first ≥ slack_late + late_beyond_no`（64 筆上限，`outage-characterize` 量到 187 對 64）。
+  - 夾限仍在發布點。
 
 **Replacement Criteria**：
 

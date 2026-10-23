@@ -52,18 +52,28 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 
 ### 1.4 規劃中的 A 級行族（v7.1 `outage-resync`，D172）
 
-下列行族在各批實作時加進 1.1 的表，附寫出端的釘住測試（`keys-v1.tsv` 與逐字測試），錨點加進 `prefixes.txt`。L2 要讀它們，所以一開始就是 A 級（Design Invariant 1）。都是新的事件名，帶 `version=1`（R2）。
+下列行族在各批實作時加進 1.1 的表，附寫出端的釘住測試（`keys-v1.tsv` 與逐字測試），錨點加進 `prefixes.txt`。L2 要讀它們，所以一開始就是 A 級（Design Invariant 1）。都是新的事件名，帶 `version=1`（R2）。鍵照加入的批次排列：後面的批次只在行尾追加（R1、Design Invariant 2）。
 
-| 行族 | 寫出端（預定） | 錨點 | 鍵（依序） | 批次 |
-|---|---|---|---|---|
-| Client 連線中斷 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch` | `client-interrupted` |
-| Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after` | `client-interrupted` |
-| Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`、`phase_samples_unmatched` | `drop-counters`（最後一鍵）、`client-interrupted`（其餘） |
-| Match 重新對時統計 | `match_main.cpp`（每個統計視窗、每位玩家一行） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`resyncs`、`slack_clamped_samples`、`final` | `drop-counters`（`slack_clamped_samples`）、`match-resync`（`resyncs`） |
-| Gateway session 重新綁定 | 產品 Gateway | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（不記 token 與完整位址） | `identity-rebind` |
+| 行族 | 寫出端（預定） | 錨點 | 鍵（依序；括號是加入的批次） |
+|---|---|---|---|
+| Client 相位摘要 | 模擬端（`ClientSimulation`，連線結束時一行） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
+| Client 連線中斷 | `ClientConnection.cpp`（網路 worker） | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch`（`client-interrupted`） |
+| Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
+| Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |
+| Match 重新對時統計 | `match_main.cpp`（每個統計視窗、每位玩家一行） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`final`、`slack_clamped_samples`（`drop-counters`）；`resyncs`、`late_beyond_no_commands`（`match-resync`） |
+| Gateway session 重新綁定 | 產品 Gateway | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（`identity-rebind`；不記 token 與完整位址） |
 
+- **各端只記自己觀察到的事**（第 5 節）：`phase_samples_unmatched` 是模擬端的 64 格命令環觀察到的，所以由模擬端寫，不經網路 worker。
 - **不追加到 ingress 行**：ingress 已有 8 組（R3），再加會觸發 Replacement Criteria 1。
-- **clock sync 行（三端，A 級）**：Client 與 Gateway 的每位 Client 視窗，在恢復時提前結束再重開，漂移的回歸也從頭開始（不沿用中斷前的視窗）。每一行行尾追加 `reason=`（R1，D172 的 D-8 (b)），值是 `window`（10 s 到期）、`final`（連線結束，和 `final=1` 同時）或 `resume`（恢復時提前結束）。Match 的 clock sync 行量的是 Gateway↔Match，也追加同一個鍵，值只會是 `window` 或 `final`。釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
+- **clock sync 行（三端，A 級）**：
+  - 每一行行尾追加 `reason=`（R1，D172 的 D-8 (b)），值是：
+    - `window`：10 s 到期；
+    - `final`：連線結束，和 `final=1` 同時；
+    - `resume`：恢復時提前結束，`final=0`。
+  - Client 與 Gateway 的每位 Client 視窗可能出現 `resume`；Match 與 Gateway runtime 的 clock sync 行量的是 Gateway↔Match，值只會是 `window` 或 `final`。
+  - 漂移的回歸不因 `resume` 重新開始，`drift_ppm` 的意義不變。
+  - 釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
+- **移動紀錄**（schema 3）：`reset` 事件的 `reset_reason` 新增值 `resync`（`match-resync`）。這是既有 kind 的新列舉值，不加欄位、不升版；`command_evidence.py` 遇到未知的值會照字串保留（`command_evidence.py:325-329`）。凍結的讀者在該批先查。
 - **死信**：Client 的 64 格命令環對不上的相位樣本，計 `phase_samples_unmatched`（第 5 節的死信原則；`outage-characterize` 確認它現在無聲丟棄）。
 
 ## 2. 版本與相容
