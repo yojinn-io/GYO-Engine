@@ -110,6 +110,12 @@
         "-c",
         "pass"
       ]
+    },
+    "black_frame": {
+      "ctest": "object_fps_pvp.black_frame"
+    },
+    "black_map_watch": {
+      "ctest": "object_fps_pvp.black_map_watch"
     }
   },
   "mutants": [
@@ -5303,6 +5309,296 @@
       "replace": "        case InputEventKind::WindowMoved:\n            if (event.windowX != 0) break;\n            [[fallthrough]];\n        case InputEventKind::WindowResized:",
       "check": "pointer_capture",
       "expect": "the policy differs from its golden"
+    },
+    {
+      "id": "black-frame-black-threshold",
+      "batch": "v71-black-map-o1",
+      "what": "A pixel counts as black only at exactly zero, so the near-black warmup background is missed",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "BLACK_MAX = 8 ",
+      "replace": "BLACK_MAX = 0 ",
+      "check": "black_frame",
+      "expect": "test_near_black_still_counts_as_black"
+    },
+    {
+      "id": "black-frame-background-threshold",
+      "batch": "v71-black-map-o1",
+      "what": "A black background must fill 90 percent, so the warmup frame with its weapon and character is missed",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "BACKGROUND_BLACK = 0.5 ",
+      "replace": "BACKGROUND_BLACK = 0.9 ",
+      "check": "black_frame",
+      "expect": "test_warmup_frame_is_a_black_background_without_hud"
+    },
+    {
+      "id": "black-frame-hud-inverted",
+      "batch": "v71-black-map-o1",
+      "what": "HUD presence is inverted",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "hud = hud_ratio >= HUD_PRESENT",
+      "replace": "hud = hud_ratio < HUD_PRESENT",
+      "check": "black_frame",
+      "expect": "test_world_needs_the_hud_and_a_scene_background"
+    },
+    {
+      "id": "black-frame-no-title-crop",
+      "batch": "v71-black-map-o1",
+      "what": "The title bar rows are sampled as content",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "top = image.height - content",
+      "replace": "top = 0",
+      "check": "black_frame",
+      "expect": "test_title_bar_rows_are_not_content"
+    },
+    {
+      "id": "black-frame-no-all-black",
+      "batch": "v71-black-map-o1",
+      "what": "A window with nothing but black is not told apart from the warmup frame",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "if black_ratio >= ALL_BLACK:",
+      "replace": "if False:",
+      "check": "black_frame",
+      "expect": "test_nothing_but_black_and_a_blank_window"
+    },
+    {
+      "id": "black-frame-no-uniform",
+      "batch": "v71-black-map-o1",
+      "what": "A blank window of one colour is not told apart",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "elif dominant >= UNIFORM:",
+      "replace": "elif False:",
+      "check": "black_frame",
+      "expect": "test_nothing_but_black_and_a_blank_window"
+    },
+    {
+      "id": "black-frame-classes-swapped",
+      "batch": "v71-black-map-o1",
+      "what": "warmup_like and black_with_hud are swapped",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "\"black_with_hud\" if hud else \"warmup_like\"",
+      "replace": "\"warmup_like\" if hud else \"black_with_hud\"",
+      "check": "black_frame",
+      "expect": "test_warmup_frame_is_a_black_background_without_hud"
+    },
+    {
+      "id": "black-frame-clear-uncounted",
+      "batch": "v71-black-map-o1",
+      "what": "The clear colour is never counted",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "                clear += 1",
+      "replace": "                pass",
+      "check": "black_frame",
+      "expect": "test_screen_capture_of_the_world"
+    },
+    {
+      "id": "black-frame-hud-colour",
+      "batch": "v71-black-map-o1",
+      "what": "The HUD panel reference is the sky colour",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "HUD_PANEL, HUD_TOLERANCE = (43, 51, 62), 16",
+      "replace": "HUD_PANEL, HUD_TOLERANCE = (61, 73, 88), 16",
+      "check": "black_frame",
+      "expect": "test_screen_capture_of_the_world"
+    },
+    {
+      "id": "black-frame-paeth-tie",
+      "batch": "v71-black-map-o1",
+      "what": "The PNG Paeth predictor prefers upper-left over left on a tie",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255",
+      "replace": "line[i] = (line[i] + (a if pa <= pb and pa < pc else b if pb <= pc else c)) & 255",
+      "check": "black_frame",
+      "expect": "test_png_paeth_prefers_left_over_upper_left_on_a_tie"
+    },
+    {
+      "id": "black-frame-average-rounding",
+      "batch": "v71-black-map-o1",
+      "what": "The PNG Average filter rounds up",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "line[i] = (line[i] + ((left + previous[i]) >> 1)) & 255",
+      "replace": "line[i] = (line[i] + ((left + previous[i] + 1) >> 1)) & 255",
+      "check": "black_frame",
+      "expect": "test_png_every_filter_rgb_and_rgba"
+    },
+    {
+      "id": "black-frame-bmp-orientation",
+      "batch": "v71-black-map-o1",
+      "what": "Bottom-up BMP rows are read top-down",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "(y if top_down else height - 1 - y)",
+      "replace": "y",
+      "check": "black_frame",
+      "expect": "test_bmp_bottom_up_24_bit_with_row_padding"
+    },
+    {
+      "id": "black-frame-png-alpha",
+      "batch": "v71-black-map-o1",
+      "what": "RGBA PNG pixels are read as RGB",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "tuple(rows[y][channels * x:channels * x + 3])",
+      "replace": "tuple(rows[y][3 * x:3 * x + 3])",
+      "check": "black_frame",
+      "expect": "test_png_every_filter_rgb_and_rgba"
+    },
+    {
+      "id": "black-frame-no-lobby",
+      "batch": "v71-black-map-o2",
+      "what": "The lobby panel is taken for the in-world HUD, so the lobby counts as world",
+      "file": "build/acceptance/object_fps_pvp/black_frame.py",
+      "find": "    elif panel_ratio >= LOBBY_PANEL:\n",
+      "replace": "    elif False:\n",
+      "check": "black_frame",
+      "expect": "test_product_lobby_window"
+    },
+    {
+      "id": "black-map-watch-sparse-early",
+      "batch": "v71-black-map-o2",
+      "what": "The first ten seconds are captured every 5 s instead of every 0.5 s",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "        return index * EARLY_INTERVAL",
+      "replace": "        return index * LATE_INTERVAL",
+      "check": "black_map_watch",
+      "expect": "test_dense_then_sparse"
+    },
+    {
+      "id": "black-map-watch-burst",
+      "batch": "v71-black-map-o2",
+      "what": "A late loop captures every missed index instead of skipping to the latest",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "    while offset(index + 1) <= elapsed:",
+      "replace": "    while False:",
+      "check": "black_map_watch",
+      "expect": "test_a_late_loop_skips_to_the_latest_due_capture"
+    },
+    {
+      "id": "black-map-watch-children-only",
+      "batch": "v71-black-map-o2",
+      "what": "Only direct children of the command are watched, not grandchildren",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "            pending.extend(children.get(pid, ()))",
+      "replace": "            pending.extend(children.get(pid, ()) if pid == root else ())",
+      "check": "black_map_watch",
+      "expect": "test_process_family_and_role"
+    },
+    {
+      "id": "black-map-watch-foreign-unrecorded",
+      "batch": "v71-black-map-o2",
+      "what": "A window appearing from another process is not recorded",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "                self.record(self.foreign[identity])",
+      "replace": "                pass",
+      "check": "black_map_watch",
+      "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "black-map-watch-small-windows",
+      "batch": "v71-black-map-o2",
+      "what": "Small windows count: menus are captured as game windows, and the menu-bar capture indicator stops the preflight",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "    return window[\"bounds\"][2] >= MINIMUM_WINDOW and window[\"bounds\"][3] >= MINIMUM_WINDOW\n",
+      "replace": "    return True\n",
+      "check": "black_map_watch",
+      "expect": "test_the_menu_bar_capture_indicator_is_not_a_dialog"
+    },
+    {
+      "id": "black-map-watch-preflight-no-dialog-check",
+      "batch": "v71-black-map-o2",
+      "what": "The preflight does not wait for a dialog after its capture",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "        if appeared:",
+      "replace": "        if False:",
+      "check": "black_map_watch",
+      "expect": "test_a_window_appearing_after_the_capture_stops_the_watch"
+    },
+    {
+      "id": "black-map-watch-preflight-no-permission-check",
+      "batch": "v71-black-map-o2",
+      "what": "The preflight captures without asking for the permission first",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "    if not system.preflight():",
+      "replace": "    if False:",
+      "check": "black_map_watch",
+      "expect": "test_no_permission_never_captures"
+    },
+    {
+      "id": "black-map-watch-gone-captured",
+      "batch": "v71-black-map-o2",
+      "what": "A window that went away is still captured",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "            if identity not in present:",
+      "replace": "            if False:",
+      "check": "black_map_watch",
+      "expect": "test_a_window_that_goes_away_is_no_longer_captured"
+    },
+    {
+      "id": "black-map-watch-duration-ignored",
+      "batch": "v71-black-map-o2",
+      "what": "The duration never stops the command",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "        if duration is not None and not stopped and system.now() - watch.started >= duration:",
+      "replace": "        if False and duration is not None and not stopped and system.now() - watch.started >= duration:",
+      "check": "black_map_watch",
+      "expect": "test_duration_stops_the_command_once"
+    },
+    {
+      "id": "black-map-watch-after-world-inverted",
+      "batch": "v71-black-map-o2",
+      "what": "warmup_after_world looks before the first world capture",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "any(t > min(world) for t in times)",
+      "replace": "any(t < min(world) for t in times)",
+      "check": "black_map_watch",
+      "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "black-map-watch-exit-hidden",
+      "batch": "v71-black-map-o2",
+      "what": "The command exit status is replaced by success",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "    return exit_code\n",
+      "replace": "    return 0\n",
+      "check": "black_map_watch",
+      "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "black-map-watch-bgra-masks",
+      "batch": "v71-black-map-o2",
+      "what": "The usual window image (32-bit little, alpha first) is read with red and blue swapped",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "        masks = (0x00FF0000, 0x0000FF00, 0x000000FF) if little else (0x0000FF00, 0x00FF0000, 0xFF000000)\n",
+      "replace": "        masks = (0x000000FF, 0x0000FF00, 0x00FF0000) if little else (0x0000FF00, 0x00FF0000, 0xFF000000)\n",
+      "check": "black_map_watch",
+      "expect": "test_every_layout"
+    },
+    {
+      "id": "black-map-watch-row-padding",
+      "batch": "v71-black-map-o2",
+      "what": "Padded CGImage rows are written as they are, shearing the image",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "    body = pixels[:row * height] if row == width * 4 else b\"\".join(",
+      "replace": "    body = pixels[:row * height] if True else b\"\".join(",
+      "check": "black_map_watch",
+      "expect": "test_row_padding_is_dropped"
+    },
+    {
+      "id": "black-map-watch-prune-ends",
+      "batch": "v71-black-map-o2",
+      "what": "Pruning also deletes the first and last world capture of a window",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "            entry[\"kept\"] = (position in (0, len(entries) - 1) or entry[\"class\"] not in (\"world\", \"no_hud\"))",
+      "replace": "            entry[\"kept\"] = entry[\"class\"] not in (\"world\", \"no_hud\")",
+      "check": "black_map_watch",
+      "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "black-map-watch-prune-warmup",
+      "batch": "v71-black-map-o2",
+      "what": "Pruning deletes the warmup_like captures and keeps the world ones",
+      "file": "build/acceptance/object_fps_pvp/black_map_watch.py",
+      "find": "            entry[\"kept\"] = (position in (0, len(entries) - 1) or entry[\"class\"] not in (\"world\", \"no_hud\"))",
+      "replace": "            entry[\"kept\"] = (position in (0, len(entries) - 1) or entry[\"class\"] in (\"world\", \"no_hud\"))",
+      "check": "black_map_watch",
+      "expect": "test_the_command_window_is_captured_densely_and_classified"
     }
   ]
 }
