@@ -5623,12 +5623,12 @@
     {
       "id": "oc-client-samples-before-seed",
       "batch": "v71-outage-characterize",
-      "what": "The Client takes slack samples of commands from before its latest seed",
+      "what": "The Client takes slack samples of commands from before its latest seed (after an outage the seed also clears the command ring, so the outage test alone does not see this)",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
       "find": "(*authority.movementSlackSequence > settledAfter_ || reacquiring_)",
       "replace": "(true || reacquiring_)",
       "check": "cpu",
-      "expect": "outage characterization: (two-way outages|after an outage that let the authority pass the tip)"
+      "expect": "samples for commands generated before a correction that is not late settled do not count|leaves older sequences out of the repeat check"
     },
     {
       "id": "oc-slack-track-retains-600",
