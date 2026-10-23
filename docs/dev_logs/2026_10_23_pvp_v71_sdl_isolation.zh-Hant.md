@@ -2,7 +2,7 @@
 
 日期：2026-10-21～23。分支 `claude/pvp-v71-sdl-isolation`，和 Engine 的 IP-3／IP-4 在同一個 PR [#85](https://github.com/yojinn-io/GYO-Engine/pull/85)（D29）。PR 尚未合併。
 
-**狀態**：產品側 IP-4 的前 5 批已完成，L2（`l2_interleaved`）等使用者在場開跑。
+**狀態：完成**（產品側 IP-4 的 6 批，含 L2）。PR #85 尚未合併。
 
 相關文件：
 
@@ -30,7 +30,7 @@
 | `probe_window_move`（`089c0b5`） | high，順序邏輯局部 xhigh | 合成的 MOVED 改成真的移動視窗（J2）：`SetWindowPosition`、`Sync()`，再確認位置確實改變 | action60 4 次、gui-probe 2 次都通過；L1 #577 |
 | `probe_watch_pacing`（`bbc716a`） | high，watch 執行緒局部 xhigh | 兩個 watch 改用 `EventWatch`（injected 依事件位址判定）；13 處睡眠改用 `Waiter`（P1）；標籤改名（J3）；拿掉 Native | timing、player、action、gui-bots 都 P；phase-stalls 6／6 恢復；L1 #579 |
 | `capture_golden_guard`（`8d7182e`、`0e977cf`、`e0de346`、`7f7b704`） | high | pointer capture 的凍結 oracle 改成 golden（J1）；Engine 補 3 項守衛；完成條件的符號守衛 (a)(b) | 突變：產品 34／34、Engine 5／5；J1 獨立核對；L1 #582 |
-| `l2_interleaved` | medium | base 與頭交錯跑 GUI 短測（第 7 節） | 待使用者在場 |
+| `l2_interleaved` | medium | base `2307a56` 與頭 `7f7b704` 交錯跑 GUI 短測，共 20 次呼叫（第 7 節，第 3 版 D170） | **通過**：20／20 P，G1～G3、G6～G8、G10、G11 成立 |
 
 ## 遇到的問題
 
@@ -86,4 +86,10 @@
 - 產品、probe、產品測試直接呼叫 SDL：0 處。守衛 (a)(b) 生效，突變 g1～g4 都殺掉。
 - `test` preset 81／81；`ctest -L pvp` 42／43，唯一失敗的是已知的 worker。
 - L1：#573、#575、#577、#579、#582，都是四平台成功。
-- L2：見第 7 節（待補）。
+- L2（2026-10-23，session `pvp-v71-sdl-isolation-l2-20261023b`）：**通過**。
+  - 20 次呼叫全部 P，沒有受干擾，沒有旗標。
+  - G3：A − B 的差最大 0.32 ms（門檻 1 ms）。
+  - G5：頭的實測 FPS 59.75～59.87，base 56.90～57.88，預測成立。
+  - 詳細見宣告第 7.7 節。
+  - 第一次 session 依使用者要求，在第一項開始前停下，沒有任何項目跑過。
+- 記錄上的錯誤：`7ae0588` 的腳本把宣告清空後提交（先以寫入模式打開檔案再讀取），D170 的修改也一起遺失。之後的 commit 從 `3106b5b` 還原，並重新套用 D170 的修改。
