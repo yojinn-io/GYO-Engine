@@ -39,7 +39,6 @@ struct LedgerFixture final {
             records.Resolved(player, sequence, missing ? std::optional<TimePoint>{now} : std::nullopt, sequence, Closer());
             ledger.Resolved(player, sequence);
         }
-        records.PruneSamples(player);
     }
     IngressCommandClass Arrive(PlayerId player, std::uint64_t sequence, std::uint64_t cursor,
                                std::uint64_t epoch = 1, std::uint64_t life = 1, std::optional<std::int64_t> age = {}) {
@@ -179,45 +178,30 @@ TEST_CASE("PvP ingress ledger vouches only for sequences it saw resolved") {
     CHECK(fixture.clockReads == 0);
 }
 
-// v7.1 outage-resync single-store-refactor: the records' own slack candidacy
-// (until retention-600): only the newest candidates may give a sample; a
-// candidate that ages out stays one (sample-only) until it arrives, is pruned
-// or its track starts over; a record that ages out without candidacy is gone
-// and its copy reads no clock.
-TEST_CASE("PvP substitution records sample only the newest candidates and keep an aged candidate until it arrives") {
-    LedgerFixture fixture{MatchSubstitutionRecords{3, 10, 2}};
+// v7.1 outage-resync (since retention-600): the first copy of every open
+// record decides once (sample or Resync, by its lateness); a record that aged
+// out is gone, so its copy decides nothing and reads no clock. Until
+// retention-600 only the newest unarrived records could give a sample and an
+// aged candidate was kept (single-store-refactor's transitional rule).
+TEST_CASE("PvP substitution records let the first copy of every open record decide, once") {
+    LedgerFixture fixture{MatchSubstitutionRecords{3, 10}};
     const auto arrive = [&](std::uint64_t sequence) {
         return fixture.records.Arrive(1, 1, 1, sequence, [&] { ++fixture.clockReads; return fixture.now; });
     };
     fixture.Observe(1, 1, 1, 0);
-    fixture.Resolve(1, 1, 3, {1, 2, 3}); // candidates 2 and 3; 1 was pushed out
-    const auto pushedOut = arrive(1);
-    CHECK(pushedOut.open);
-    CHECK(pushedOut.first);
-    CHECK_FALSE(pushedOut.sample);
+    fixture.Resolve(1, 1, 3, {1, 2, 3});
+    const auto oldest = arrive(1);
+    CHECK(oldest.open);
+    CHECK(oldest.first);
     CHECK(fixture.clockReads == 1);
-    fixture.Resolve(1, 4, 7); // 1, 2 and 3 age out; 2 and 3 stay candidates
+    const auto copy = arrive(1);
+    CHECK(copy.open);
+    CHECK_FALSE(copy.first);
+    CHECK(fixture.clockReads == 1);
+    fixture.Resolve(1, 4, 7); // 1, 2 and 3 age out
     REQUIRE(fixture.closed.size() == 3);
-    const auto agedCandidate = arrive(2);
-    CHECK_FALSE(agedCandidate.open);
-    CHECK(agedCandidate.sample);
-    CHECK(fixture.clockReads == 2);
-    CHECK_FALSE(arrive(2).sample); // its first copy was the sample
-    CHECK(fixture.clockReads == 2);
-    fixture.records.Unsample(1); // the slack track started over
-    const auto unsampled = arrive(3);
-    CHECK_FALSE(unsampled.sample);
-    CHECK(fixture.clockReads == 2);
-}
-
-TEST_CASE("PvP substitution records forget a record that ages out without candidacy") {
-    LedgerFixture fixture{MatchSubstitutionRecords{3, 10, 1}};
-    fixture.Observe(1, 1, 1, 0);
-    fixture.Resolve(1, 1, 2, {1, 2}); // only 2 is a candidate
-    fixture.Resolve(1, 3, 6); // both age out
-    REQUIRE(fixture.closed.size() == 2);
-    const auto forgotten = fixture.records.Arrive(1, 1, 1, 1, [&] { ++fixture.clockReads; return fixture.now; });
-    CHECK_FALSE(forgotten.open);
-    CHECK_FALSE(forgotten.sample);
-    CHECK(fixture.clockReads == 0);
+    const auto aged = arrive(2);
+    CHECK_FALSE(aged.open);
+    CHECK_FALSE(aged.first);
+    CHECK(fixture.clockReads == 1);
 }

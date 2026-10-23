@@ -223,7 +223,6 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration) {
         DiscardSlack(input.playerId, track);
         track = {input.movementEpoch, input.lifeGeneration, cursor, {}, std::nullopt};
-        substitutions_.Unsample(input.playerId);
     }
     for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
     std::size_t lateCommands{};
@@ -237,8 +236,7 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         ++ingress.classified[IngressIndex(classified)];
         if (classified == IngressCommandClass::LateFirst || classified == IngressCommandClass::LateCopy) ++lateCommands;
         // The first copy of a record: later than N_o (network-architecture §4),
-        // no sample and a Resync epoch; otherwise a sample candidate reports
-        // how late it came.
+        // no sample and a Resync epoch; otherwise it reports how late it came.
         if (!arrival.first) continue;
         const auto late = Micros(at() - arrival.substitutedAt);
         if (late > MovementResyncLateMicros) {
@@ -246,7 +244,6 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
             static_cast<void>(match_.RequestMovementResync(input.playerId));
             continue;
         }
-        if (!arrival.sample) continue;
         const auto micros = -late;
         ++ingress.slackLateSamples;
         OfferSlackSample(input.playerId, track, command.sequence, micros);
@@ -651,7 +648,6 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
             if (found != slack_.end()) DiscardSlack(player.playerId, found->second);
             found = slack_.insert_or_assign(player.playerId, SlackTrack{player.movementEpoch, player.lifeGeneration,
                 player.lastResolvedCommand, {}, std::nullopt}).first;
-            substitutions_.Unsample(player.playerId);
         }
         auto& track = found->second;
         if (player.lastResolvedCommand > track.lastResolved + kSlackLookbackSequences)
@@ -678,7 +674,6 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
         track.lastResolved = Engine::Math::Max(track.lastResolved, player.lastResolvedCommand);
         while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
             track.receipts.erase(track.receipts.begin());
-        substitutions_.PruneSamples(player.playerId);
         if (track.pending) {
             player.movementSlackSequence = track.pending->first;
             player.movementSlackMicros = static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(
@@ -688,10 +683,7 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
     std::erase_if(slack_, [&](const auto& entry) {
         const bool gone = std::none_of(state.players.begin(), state.players.end(),
             [&](const auto& player) { return player.playerId == entry.first; });
-        if (gone) {
-            DiscardSlack(entry.first, entry.second);
-            substitutions_.Unsample(entry.first);
-        }
+        if (gone) DiscardSlack(entry.first, entry.second);
         return gone;
     });
 }

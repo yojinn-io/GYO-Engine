@@ -178,8 +178,9 @@ struct MatchIngressCounts final {
     std::uint64_t resetDiscardedActionAcks{};
     // Appended keys (batch 08c F2b-2): the movement slack samples of this
     // player on their way to the IPC (known gap 6, host side). A candidate is
-    // an executed sequence's first receipt or a late first arrival still in
-    // the 64-entry substitution track. Each publication carries only the
+    // an executed sequence's first receipt or the first copy of an open
+    // substitution record no later than N_o (v7.1 outage-resync; until
+    // retention-600, of the newest 64 such records). Each publication carries only the
     // smallest candidate since the previous one; the others are merged.
     //   S1: slackExecuted + slackLate == slackMerged + slackDiscarded + slackPublished
     //   S2: slackPublished == slackOverwritten + slackTaken + slackUnclaimed

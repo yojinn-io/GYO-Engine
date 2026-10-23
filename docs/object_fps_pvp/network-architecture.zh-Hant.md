@@ -963,8 +963,8 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - **權威**：「這個序號被替代過、第一次是否已到」只由 `MatchSubstitutionRecords` 記錄（`MatchRuntimeHost` 的 `substitutions_`，屬於 slack 樣本路徑的行為側；紀錄的開啟、保留與關閉原因都由它決定）。替代帳本（`MatchIngressLedger`）只讀每次到達的結果，並接收它關閉的紀錄；帳本自己只保留不參與判定的附欄：之後的副本數、第一份的參考年齡、看著解析的序號範圍、溢出的序號。
 - **方向**：只允許「帳本 → `MatchSubstitutionRecords`」，不得反過來，因為診斷不進判定（protocol-v7 §2）；關閉原因的列舉也在紀錄側的標頭，診斷側引用它。守衛：突變 `v7-flow-ledger-drives-sample`，以及 `test_diagnostic_isolation.py` 的方向檢查。
 - **保留範圍**：
-  - `retention-600` 起：游標 − 序號 ≤ 600。超出時照帳本既有的關閉規則關閉並計數，不得無聲丟棄。這個範圍也決定「晚到過久」能否被判斷（§4），所以是遊戲規則的一部分。
-  - 之前：樣本只取最新 64 筆紀錄。`single-store-refactor` 的過渡規則是「600 序號內或屬於最新 64 筆就保留，樣本只給最新 64 筆」，行為與現行逐位元相同。
+  - 游標 − 序號 ≤ 600（`retention-600` 起生效）。超出時照既有的關閉規則以 aged 關閉並計數，不得無聲丟棄；關閉之後的副本不產生樣本，也不觸發 Resync。這個範圍也決定「晚到過久」能否被判斷（§4），所以是遊戲規則的一部分。
+  - 之前（到 `retention-600` 為止）：樣本只取最新 64 個還沒到達的紀錄。`single-store-refactor` 的過渡規則是「600 序號內或屬於最新 64 個就保留，樣本只給最新 64 個」，行為與當時逐位元相同。
 - **樣本與守恆（S3）**：每個序號只在第一次晚到時判斷一次：晚到 ≤ N_o 產生一個樣本（計 `slack_late`），晚到 > N_o 不產生樣本（計 `late_beyond_no`，`match-resync` 起）。
   - `retention-600` 之後，S3 是結構上的等式：`late_first == slack_late + late_beyond_no`；
   - 之前兩個方向都不保證：稠密替代時 64 筆上限讓 `slack_late` 偏少（`outage-characterize` 量到 187 對 64）；稀疏替代、超過 600 序號時，過渡規則保留的紀錄在帳本裡是 `resolved_untracked`（0 對 1）。所以 S3 只在 `retention-600` 之後檢查。

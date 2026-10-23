@@ -78,9 +78,20 @@ void CheckIngressConservation(const fps::pvp::MatchIngressCounts& counts) {
     CHECK(hostSettledShots == counts.receivedActions.shots);
 }
 
+// S3 (v7.1 outage-resync, network-architecture §7 「被替代序號的單一紀錄」): the
+// first copy of every open record decides once, as a slack sample or as a
+// copy later than N_o.
+void CheckSlackConservation(const fps::pvp::MatchIngressCounts& counts) {
+    const auto lateFirst = counts.classified[fps::pvp::IngressIndex(fps::pvp::IngressCommandClass::LateFirst)];
+    const auto decided = counts.slackLateSamples + counts.lateBeyondNoCommands;
+    CHECK(lateFirst == decided);
+}
+
 // J5a for one bucket whose substitution records are all closed: every
 // substituted sequence either arrived once (late_first) or closed unarrived.
+// S3 holds with it.
 void CheckSubstitutionConservation(const fps::pvp::MatchIngressCounts& counts) {
+    CheckSlackConservation(counts);
     const auto substitutedRecords = counts.substitutedCommands;
     const auto lateFirstAndUnarrived = counts.classified[fps::pvp::IngressIndex(fps::pvp::IngressCommandClass::LateFirst)] +
         SumOf(counts.unarrived, [](auto value) { return value; });
@@ -1962,11 +1973,13 @@ TEST_CASE("PvP outage characterization: partial delivery") {
     }
 }
 
-// A single substituted sequence stays a sample candidate however old it grows
-// (until retention-600), but its copy, 100 to 700 ticks late, is later than
-// N_o: no sample, a late_beyond_no and a Resync. The ledger tracks it only 600
-// sequences: beyond that the same arrival is resolved_untracked. Before
-// match-resync it was published as -1 s at any age (the test's name).
+// A single substituted sequence keeps its record for 600 sequences: its copy,
+// 100 or 590 ticks late, is later than N_o: no sample, a late_beyond_no and a
+// Resync. Past the retention (610, 700) the record is gone: the copy is
+// resolved_untracked and decides nothing (network-architecture §4). Before
+// match-resync it was published as -1 s at any age (the test's name); between
+// match-resync and retention-600 the 610- and 700-tick copies also asked for
+// a Resync (the transitional sample-only record).
 TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any age") {
     using namespace fps::pvp;
     using namespace std::chrono_literals;
@@ -1993,13 +2006,14 @@ TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any 
         INFO("gap " << gap);
         const bool sampled = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3};
         CHECK_FALSE(sampled);
-        CHECK(snapshot->players[0].movementEpoch == 2);
+        CHECK(snapshot->players[0].movementEpoch == 1 + lateFirst);
         const auto taken = host.TakeIngressStatistics();
         const auto& counts = taken.at(5);
         CHECK(counts.classified[IngressIndex(IngressCommandClass::LateFirst)] == lateFirst);
         CHECK(counts.classified[IngressIndex(IngressCommandClass::ResolvedUntracked)] == 1 - lateFirst);
         CHECK(counts.slackLateSamples == 0);
-        CHECK(counts.lateBeyondNoCommands == 1);
+        CHECK(counts.lateBeyondNoCommands == lateFirst);
+        CheckSlackConservation(counts);
     }
 }
 
