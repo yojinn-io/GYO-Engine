@@ -37,7 +37,7 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：產品側 IP-4 的 J1（pointer capture 改 golden）的 §14.4 判定變更，見 sdl-isolation 分支的 `docs/object_fps_pvp/plans/v7.1/sdl-isolation-j1-judgment-change.md`（尚未提交，在主 checkout 的工作樹）。另外要決定 v-s08～s10：Engine 要不要在契約裡寫明「不去重」，或記為已知缺口。核准前不提交舊 oracle 的刪除與守衛 (a)(b)。
+- **等你決定**：無（L2 第 3 版準備中，交出後才需要你）。
 - **進行中**：無。`sdl-isolation`（draft PR #85）：IP-3 完成（含 L3，D165）；IP-4 的介面審查與修正（D166）、ip4a 完成（`d82364e`）、ip4b 完成（`b3f6386`，D167）、ip4c 完成（`98f5025`，SDL3 PRIVATE 與 G3）、ip4d 完成（突變 IP 78／78、TT 14／14，L3 通過）；L1：#562（ip3d～ip4b 補跑）與 #564（ip4c）四平台成功。**IP-4 的 Engine 側完成**；下一步是產品側的 IP-4 遷移（probe 8 檔、符號守衛、L2 門檻要你核准）。分支已合併 master（#87，`df0fefb`）。產品本體的 SDL 符號已歸零。`worker-probe-repair` 已完成（`d2844a5`）。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
@@ -138,6 +138,7 @@
 | D166 | （2026-10-22）IP-4 介面審查（U10）後的修正（IP 的 D37）：Design Invariant 7 改寫（查詢類在 observer 與 live frame 內允許、操作類斷言、`EventWatch` 不參照 platform、分派深度的斷言）；回傳型別修正；刪除 ip4b 的「AddEventWatch 失敗路徑」驗收（§14.4）。之後宣告並做 ip4a | 使用者：「核准：DI 7 照建議改寫…；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
 | D167 | （2026-10-22）ip4b 的 xhigh 審查之後（IP 的 D38）：時間戳判定採方案 B（區間＋兩條精確等式；§14.4，獨立核對後）；Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（GYO_ASSERT＋death test）；Design Invariant 3 的守衛清單補上 watch 路徑。之後提交、推上 PR #85 | 使用者：「核准：F4 採方案 B（區間＋兩條精確等式）；F10 加 DI：EventWatch 只在主執行緒解構（GYO_ASSERT＋death test）；DI 3 守衛清單補上 watch 路徑。然後提交、推上 PR #85。」 |
 | D168 | （2026-10-23）產品側 IP-4 的分批與事前宣告（`sdl-isolation-ip4-declaration.md` 第 2 版）核准，P1～P5 照建議：P1 節奏改用 Waiter、P2 產品加中立的 `RenderDeviceInfo()` 存取點、P3 pointer capture 改 golden 並由 Engine 補 s06（J1 的 §14.4 核准之後另交）、P4 gui-probe 放進 L2、P5 L2 第 2 版。判定原則：基準改變的量只記錄、不判定；和基準無關的量（產品行為、各樹各自的絕對門檻）照判 | 使用者：「基準變了的量，只記錄不判定；跟基準無關的量（產品行為、各自的絕對門檻）照樣判定。照建議執行。」 |
+| D169 | （2026-10-23）sdl-isolation J1（pointer capture 的凍結 oracle 改 golden）的 §14.4 判定變更核准，採全欄位版 golden；v-s08～s10 選 (a)：Engine 在 `input.md` 的 Contracts 寫明本視窗的焦點喪失、按鍵、滑鼠鍵事件不去重，補 3 個測試與突變。之後提交、推上 PR #85、觸發 L1，接著準備 L2 第 3 版 | 使用者：「核准 J1 的判定變更（golden 全欄位版）；v-s08～s10 選 (a)：Engine 契約寫明不去重，補 3 個測試與突變。然後提交、推上 PR #85、觸發 L1，接著準備 L2 的第 3 版。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -743,4 +744,5 @@
   - Engine 側不需要核准的已提交：`8d7182e`（insideWindow 依處理時的大小）、`0e977cf`（取得焦點會設 windowFocused）。
   - 工作樹裡已完成、尚未提交：golden（15014 幀，除時間戳以外的全欄位，0 不一致）、新測試、符號守衛 (a)(b)、產品突變工具的 `expect_build_failure`。突變：產品 34／34，Engine 2／2。
   - 獨立核對：第 1、3 點成立，第 2、4、5 點部分成立。指出的 L5（欄位投影）與 v-s07 已處理；v-s08～s10 交使用者決定。
+- 2026-10-23：D169。`capture_golden_guard` 完成：`e0de346`（Engine 不去重的契約、測試、突變 3／3）與 `7f7b704`（golden、新測試、守衛 (a)(b)、突變工具）。L1 #582 執行中。下一步 `l2_interleaved` 的第 3 版。
 
