@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 進行中。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 待確認），下一批是 `single-store-refactor`。
 
 相關文件：
 
@@ -15,7 +15,8 @@
 |---|---|---|---|
 | `plan-commit` | medium | 提交計畫草案第 2 版與本紀錄 | 只改文件 |
 | `outage-characterize`（`c200992` 等） | high | 用測試固定中斷與晚到的現狀：Host 側接上產品的 `LocalPlayerPrediction`，注入雙向、只上行、只下行、部分送達的中斷；Client 側 3 個；稀疏替代 1 個；語料唯讀掃描。產品程式不改 | cpu 測試 293／293；突變 4／4 killed；L1 run 39944311104 四平台成功；報告：[outage-characterize-report.md](../object_fps_pvp/plans/v7.1/outage-characterize-report.md) |
-| `resync-contract`（`02f4b6d`、本次） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 1 次（必須修訂 → 已處理）；`gate-contract` 等使用者核准 |
+| `resync-contract`（`02f4b6d`～`6859fd9`） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 3 輪（必須修訂 → 必須修訂 → 可送核准，全部處理）；`gate-contract` 核准（D174） |
+| `drop-counters`（`3a3e1b1`） | high | Host：被 ±1 s 夾限改變的發布樣本計 `slack_clamped_samples`，寫新的 A 級 `resync statistics` 行。Client：命令已離開 64 格環的相位樣本（死信）計 `phase_samples_unmatched`，模擬 role 在連線換代與停止時寫新的 A 級 `phase summary` 行。判定都不讀 | `ctest -L pvp` 44／45（唯一失敗是已知的 worker，見下）；突變 7／7 killed；突變目錄 559 個的 find 字串都仍唯一；L1 run 39956082177 |
 
 ## 規劃
 
@@ -82,3 +83,23 @@
   - Major：S3 在 `retention-600` 之前兩個方向都不保證；epoch 相同、權威 < tip 時，領先量留到 Backlog，列為 P2 的第二個例外。
   - Minor 8 項：見計畫第 13 節第 8 點。
 - **第三輪 xhigh 複核**（使用者要求）：判定「可送核准」。沒有 Critical 或 Major，Minor 7 項在送 `gate-contract` 之前全部處理。審查者建議先修的是 m1：照字面，從其他位址送來、帶同一個 session id 的封包也會觸發 Gateway 的時鐘視窗重開，可以被外部用來灌爆 A 級日誌。
+
+## drop-counters
+
+- **Host**：
+  - 計數放在既有的 slack 發布點，和 `slack_published` 同一處，每個發布的樣本最多計一次；
+  - 欄位在 `MatchIngressCounts`（slack 流的計數都在這裡），但不寫進 ingress 行（已有 8 組，log-contract 的 Replacement Criteria 1）；
+  - 新行由 `MatchResyncStatisticsWriter` 寫：每個統計視窗、每位玩家一行，沒有 player=0，最後一個視窗以 `final=1` 關閉。
+- **Client**：
+  - 計數放在 `LocalPlayerPrediction`，`Reset()` 不清除；
+  - 模擬 loop 每一步取走並累加。這樣做是因為 `ClientSimulation::SelectArena` 會整個換掉預測物件，計數不能只放在預測物件裡；
+  - 連線換代或換玩家時，以及 role 停止時，寫一行 `phase summary`。Lobby（player 0）不寫（第三輪審查 m5）。
+- **測試**：
+  - 特性測試「64 格環外的樣本」改名為「…dropped and counted as unmatched」，並加上計數 2 的檢查。原本的檢查都保留，只是收緊，照 §14.4 事後回報：
+    1. 守的性質：環外的樣本不進相位追蹤；
+    2. 放寬面：無；
+    3. 收緊面：環外的樣本現在必須被計數；
+    4. 不適用；
+    5. 突變 `dc-unmatched-*`。
+  - 新增 Host 夾限計數（晚到 10／59／61／180 Tick）、resync 行逐字、loop 的換代摘要。
+- **已知的失敗**：`object_fps_pvp.worker`（`Invalid Match combat rules`）。這是 `N-worker-probe-stale`，修正 `d2844a5` 只在記錄器分支、不在 master，和本批無關。

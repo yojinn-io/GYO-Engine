@@ -36,6 +36,7 @@
 - 2026-10-23：依你的要求做第二輪 xhigh 複核：判定「必須修訂」（Critical 1、Major 2、Minor 8），已全部處理（第 13 節第 8 點）。
 - 2026-10-23：第三輪 xhigh 複核：判定「可送核准」（Minor 7 項，已全部處理，第 13 節第 9 點）。
 - 2026-10-23：`gate-contract` 核准（D174）：條文照現狀（含三輪審查的修訂）。`drop-counters` 開始（high）。
+- 2026-10-23：`drop-counters` 完成（`3a3e1b1`）：`resync statistics` 行（`slack_clamped_samples`）、`phase summary` 行（`phase_samples_unmatched`）；突變 7／7；L1 run 39956082177 待確認。下一批 `single-store-refactor`（high，紀錄身分與關閉順序局部 xhigh）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
