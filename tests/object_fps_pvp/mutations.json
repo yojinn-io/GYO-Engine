@@ -5708,7 +5708,7 @@
       "find": "        if (!arrival.first) continue;\n",
       "replace": "        if (classified != IngressCommandClass::LateFirst && classified != IngressCommandClass::ResolvedCopy) continue;\n",
       "check": "cpu",
-      "expect": "outage characterization|Resync|N_o"
+      "expect": "outage characterization: ((two-way|one-way) outages|partial delivery)"
     },
     {
       "id": "ssr-remove-ledger-first",
