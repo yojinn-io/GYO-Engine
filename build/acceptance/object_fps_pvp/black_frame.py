@@ -113,10 +113,12 @@ CLEAR_COLOR, CLEAR_TOLERANCE = (58, 72, 88), 12
 HUD_PANEL, HUD_TOLERANCE = (43, 51, 62), 16
 HUD_RECT = (16 / 1280, 16 / 720, 696 / 1280, 130 / 720)   # PvpApplication::Render's top-left panel
 HUD_PRESENT = 0.4                 # fraction of HUD-rect samples with the panel colour
+LOBBY_PANEL = 0.25                # fraction of all samples with the panel colour: the lobby's large panel
+                                  # (0.47 on the product lobby; 0.08 with the in-world HUD; added in O2)
 BACKGROUND_BLACK = 0.5            # black fraction: the scene background is black
 ALL_BLACK = 0.97                  # nothing but black: not even the weapon or a character
 UNIFORM = 0.9                     # one non-black colour (5-bit bins) fills the window
-CLASSES = ("all_black", "uniform", "warmup_like", "black_with_hud", "world", "no_hud")
+CLASSES = ("all_black", "uniform", "warmup_like", "black_with_hud", "lobby", "world", "no_hud")
 
 
 def _near(colour, reference, tolerance):
@@ -129,7 +131,7 @@ def measure(image):
     content = min(image.height, round(width * CONTENT_ASPECT))
     top = image.height - content
     columns, rows = GRID
-    black = clear = hud_samples = hud_panel = 0
+    black = clear = panel = hud_samples = hud_panel = 0
     bins = {}
     total = columns * rows
     left, upper, right, lower = HUD_RECT
@@ -146,10 +148,12 @@ def measure(image):
                 bins[key] = bins.get(key, 0) + 1
             if _near(colour, CLEAR_COLOR, CLEAR_TOLERANCE):
                 clear += 1
+            near_panel = _near(colour, HUD_PANEL, HUD_TOLERANCE)
+            panel += near_panel
             if left <= fx <= right and upper <= fy <= lower:
                 hud_samples += 1
-                hud_panel += _near(colour, HUD_PANEL, HUD_TOLERANCE)
-    black_ratio, clear_ratio = black / total, clear / total
+                hud_panel += near_panel
+    black_ratio, clear_ratio, panel_ratio = black / total, clear / total, panel / total
     dominant = max(bins.values(), default=0) / total
     hud_ratio = hud_panel / hud_samples if hud_samples else 0.0
     hud = hud_ratio >= HUD_PRESENT
@@ -159,10 +163,13 @@ def measure(image):
         kind = "uniform"
     elif black_ratio >= BACKGROUND_BLACK:
         kind = "black_with_hud" if hud else "warmup_like"
+    elif panel_ratio >= LOBBY_PANEL:
+        kind = "lobby"
     else:
         kind = "world" if hud else "no_hud"
     return {"class": kind, "black_ratio": round(black_ratio, 4), "clear_ratio": round(clear_ratio, 4),
-            "hud_panel_ratio": round(hud_ratio, 4), "dominant_ratio": round(dominant, 4),
+            "hud_panel_ratio": round(hud_ratio, 4), "panel_ratio": round(panel_ratio, 4),
+            "dominant_ratio": round(dominant, 4),
             "width": width, "height": image.height, "content_top": top}
 
 

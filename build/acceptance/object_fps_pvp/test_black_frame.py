@@ -133,6 +133,10 @@ class ClassificationTests(unittest.TestCase):
     def test_world_needs_the_hud_and_a_scene_background(self):
         self.assertEqual(self.kind(scene(world_background, hud=True, blocks=WARMUP_BLOCKS)), "world")
 
+    def test_a_large_panel_is_the_lobby_not_the_world(self):
+        lobby = scene((23, 29, 40), blocks=(((.14, .13, .86, .92), PANEL),))
+        self.assertEqual(self.kind(lobby), "lobby")
+
     def test_scene_without_hud_is_no_hud(self):
         self.assertEqual(self.kind(scene(world_background, blocks=WARMUP_BLOCKS)), "no_hud")
 
@@ -172,6 +176,12 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(record["black_ratio"], 0)
         self.assertGreater(record["hud_panel_ratio"], .8)
         self.assertGreater(record["clear_ratio"], .2)
+
+    def test_product_lobby_window(self):
+        record = frame.measure(frame.read_image(FIXTURES / "window-lobby.png"))
+        self.assertEqual(record["class"], "lobby")
+        self.assertGreater(record["panel_ratio"], .4)
+        self.assertLess(record["black_ratio"], .01)
 
     def test_scene_readback_has_no_hud_and_no_black(self):
         record = frame.measure(frame.read_image(FIXTURES / "readback-world.png"))
