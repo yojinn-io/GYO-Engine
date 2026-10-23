@@ -28,7 +28,8 @@
 - 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。G1 的決定見下一行。
 - 2026-10-23：G1 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
 - 2026-10-23：`outage-characterize` 的 L1（run 39944311104）四平台成功。`resync-contract` 開始（high）。
-- 2026-10-23：`resync-contract` 的條文寫完，xhigh 對抗式審查（1 次）判定「必須修訂」，已全部處理（第 13 節）。**等你在關卡 G2 核准條文。**
+- 2026-10-23：`resync-contract` 的條文寫完，xhigh 對抗式審查（1 次）判定「必須修訂」，已全部處理（第 13 節）。
+- 2026-10-23：依你的要求做第二輪 xhigh 複核：判定「必須修訂」（Critical 1、Major 2、Minor 8），已全部處理（第 13 節第 8 點）。**等你在關卡 G2 核准條文。**
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -285,16 +286,18 @@
 3. **變化的邊界**：
    - Client 新增中斷子狀態，ConnectionPhase 的公開值不變，CopyState 輸出旗標與時長；
    - 新增 header-only 的 `ConnectionLiveness`；
-   - Match 新增「晚到過久」這個換 epoch 原因；
-   - 契約在 §4 與 §7。
+   - Match 新增「晚到過久」這個換 epoch 原因（Resync）；
+   - `LocalPlayerPrediction` 新增「只重設相位擷取」的入口；網路 worker 交給模擬端的批次帶一次性的「恢復」旗標；
+   - 契約在 §4 與 §7（第 13 節修訂）。
 4. **影響範圍**：
    - `ClientConnection.{hpp,cpp}`（突變 20 個）、`LocalPlayerPrediction.cpp`（17 個）、`PvpApplication.cpp`（HUD）；
    - `PvpMatch.cpp`、`MovementTrace.hpp:19`、`command_evidence.py`；
    - Gateway 的 per-client 時鐘視窗；
    - relay 工具。
-5. **依賴方向**：不變。
+5. **依賴方向**：新增一條邊，其餘不變。
+   - **新增**：MatchRuntimeHost（SlackTrack 量晚到時間）→ PvpMatch 的公開排程介面（要求在下一個 Tick 換 epoch）。方向和既有的 Host → PvpMatch 相同，epoch 仍只由 PvpMatch 改變。替代紀錄的保留範圍因此成為遊戲規則的一部分。
    - `ConnectionLiveness` 只收 `steady_clock` 的到達時刻與設定，不依賴 ClockSync；
-   - 中斷狀態不被 LocalPlayerPrediction 或 Match 讀取。
+   - 中斷狀態不被 LocalPlayerPrediction 或 Match 讀取；相位追蹤只接收一次性的「恢復」旗標。
 6. **Ownership**：
    - epoch 歸 Match；
    - 中斷狀態歸 Client，是 Client 自己的觀測，不是 Match 狀態的副本；
@@ -313,20 +316,23 @@
 
 - 需要 Gateway 記住中斷階段（重新綁定所需的 session 軟狀態除外）；
 - 第二次需要在 Client 狀態機加中斷特例，才能通過驗收；
-- 需要第四種換 epoch 原因；
+- 需要第四種和中斷有關的換 epoch 原因；
 - 品質判定需要依「是否重連」分支。
 
 ### Delta-3：session 的 endpoint 重新綁定（只有 D-2 選 I-2 時）
 
 1. **為什麼需要**：F5、P4。
 2. **現在的問題**：endpoint 一改，Hello 就回 `ErrUnauthorized`，只能等到期後回 Lobby。
-3. **變化的邊界**：通用 session 層（`services/gyo_gateway/session`）的 Hello 規則，以及契約 `:540`。
-4. **影響範圍**：`session.go`、`session_test.go`（現有的「endpoint hijack」測試改成「靜默不足時仍然拒絕」，並新增允許的情況），以及產品 Gateway 的日誌行。
+3. **變化的邊界**：
+   - 通用 session 層（`services/gyo_gateway/session`）的 Hello 規則，以及契約 `:540`；
+   - session 新增欄位「原 endpoint 最後一個通過 session 驗證的資料包的時刻」：Hello 的 token 比對或 `Admit` 的 endpoint 比對都刷新它，不論序號。產品 Gateway 的時鐘視窗重開也讀它；
+   - T_int 由產品以參數傳給通用層。
+4. **影響範圍**：`session.go`、`session_test.go`（現有的「endpoint hijack」測試改成「靜默不足時仍然拒絕」，並新增允許的情況），以及產品 Gateway 的日誌行與時鐘視窗。
 5. **依賴方向**：不變。這是通用層，不認識產品。
 6. **Ownership**：不變，endpoint 本來就屬於 session。
 7. **為什麼不能更小**：P4 要求接回；不改通用層就做不到。
 
-**安全取捨**：token 在 Hello 裡以原文傳送〔推論，實作批確認〕。拿到 token 的人在真正的玩家靜默時，可以搶走 session。條件「原 endpoint 已靜默 ≥ T_int」把風險限縮在中斷期間，重新綁定的 A 級行讓事後查得到。真正的證明（HMAC 等）需要改 wire，屬於 I-3。
+**安全取捨**：token 在 Hello 裡以原文傳送（`client_v7.proto:8`）。拿到 token、又能讓原 endpoint 的所有封包停止 T_int 以上的人，可以搶走 session。偽造原 endpoint 的封包只能阻止改綁，不能促成改綁。重新綁定的 A 級行讓事後查得到。真正的證明（HMAC 等）需要改 wire，屬於 I-3。
 
 ---
 
@@ -545,7 +551,12 @@ outage-resync（約 59～85 h）
    - 改用「原 endpoint 最後一個通過 token 驗證的資料包」的時刻，不論序號，避免以跳號製造靜默。這是通用層 session 的新欄位，加進 Delta-3。
    - T_int 由產品以參數傳給通用層。
    - Gateway 的時鐘視窗重開也用這個時刻判斷。
-8. **其他**：
+8. **第二輪審查（xhigh 複核，使用者要求）**：判定「必須修訂」，Critical 1、Major 2，已全部處理：
+   - 「最後驗證時刻」改成 Hello 的 token 比對或 `Admit` 的 endpoint 比對都刷新。只看 token 的話，正常遊玩中每秒約有一半時間會被判成靜默，可以被改綁，時鐘視窗也會一直重開；
+   - S3 在 `retention-600` 之前兩個方向都不保證（稀疏替代超過 600 序號時 0 對 1），只在之後檢查；
+   - epoch 相同、權威 < tip 時，領先量留到 Backlog 清掉，列為 P2 的第二個已知例外，交給 B6；
+   - 游標＝tip 時 SeedLead；只重設擷取時取消未 slew 完的修正，清除 `settling_`、`reacquiring_`；旗標的 mutex 區段與換代清除；和 LifeRespawn 合併時的計數；過渡批次的判斷範圍；`phase summary` 的寫出端；Delta-2、Delta-3 就地修正。
+9. **其他**：
    - 暫時性錯誤在連線與中斷狀態都適用。代價是 Gateway 程序死掉時，Client 要等 5 s 才回 Lobby。
    - T_int、T_max 兩端的值由共用 fixture 綁定。
    - 握手期的逾時寫法改正。

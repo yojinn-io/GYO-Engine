@@ -56,7 +56,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 
 | 行族 | 寫出端（預定） | 錨點 | 鍵（依序；括號是加入的批次） |
 |---|---|---|---|
-| Client 相位摘要 | 模擬端（`ClientSimulation`，連線結束時一行） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
+| Client 相位摘要 | 模擬端（`ClientSimulationRole`：每次連線換代、`simulation_.Reset()` 之前一行，role 停止時也寫一行；計數放在 Reset 不會清掉的地方，是整個連線的累計） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
 | Client 連線中斷 | `ClientConnection.cpp`（網路 worker） | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch`（`client-interrupted`） |
 | Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
 | Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |

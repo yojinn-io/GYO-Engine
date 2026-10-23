@@ -75,3 +75,9 @@
   - 冷卻期內暫存 0.6 s 的 slack 下限與 S3；
   - 以跳號製造靜默的改綁攻擊測試；
   - T_int／T_max 兩端相同的 fixture。
+- **第二輪 xhigh 複核**（使用者要求）：判定「必須修訂」。
+  - 上一輪的 C2、M1、M3、M6、M8 已解決，其餘部分解決。
+  - 新的 Critical：只有 Hello 帶 token（`client_v7.proto:8`），Input 與 Actions 只在 `Admit` 比對 endpoint（`session.go:97-105`）。所以「通過 token 驗證的最後時刻」在正常遊玩中，每個 1 s 的 Hello 週期裡約有一半時間會被判成靜默，可以被改綁。主會話對照程式，確認成立。
+  - 修正：改成 token 比對或 endpoint 比對都刷新。
+  - Major：S3 在 `retention-600` 之前兩個方向都不保證；epoch 相同、權威 < tip 時，領先量留到 Backlog，列為 P2 的第二個例外。
+  - Minor 8 項：見計畫第 13 節第 8 點。
