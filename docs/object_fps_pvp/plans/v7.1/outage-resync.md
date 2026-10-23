@@ -39,6 +39,7 @@
 - 2026-10-23：`drop-counters` 完成（`3a3e1b1`）：`resync statistics` 行（`slack_clamped_samples`）、`phase summary` 行（`phase_samples_unmatched`）；突變 7／7；L1 run 39956082177 待確認。下一批 `single-store-refactor`（high，紀錄身分與關閉順序局部 xhigh）。
 - 2026-10-23：`drop-counters` 的 L1（run 39956082177）四平台成功。`single-store-refactor` 完成（`832eca4` 等）：被替代序號的紀錄只存一份（`MatchSubstitutionRecords`），行為逐位元不變（xhigh 等價性審查、差分 fuzz 0 差異）；突變 79／79＋4／4。§7 條文的 owner 名稱照實作改正。L1 待確認。下一批 `match-resync`（xhigh，開始前問你）。
 - 2026-10-23：§7 的 owner 改名核准（D175）。`match-resync` 在 L1 通過後以 xhigh 開始（使用者同意 xhigh）。
+- 2026-10-24：`single-store-refactor` 的 L1（run 39967478342）四平台成功。`match-resync` 完成（`426aa4b` 等）：晚到超過 N_o 改成 Resync，發布的 slack 不再低於 −333,333 µs；特性測試升格為 §7 守衛；突變 10／10；L1 run 39974643016 待確認。下一批 `retention-600`（xhigh，開始前問你；§14.4 的材料交你核准）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 

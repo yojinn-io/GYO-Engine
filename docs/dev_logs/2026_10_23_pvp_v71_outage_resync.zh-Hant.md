@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 待確認），下一批是 `match-resync`。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 待確認），下一批是 `retention-600`（xhigh）。
 
 相關文件：
 
@@ -17,7 +17,8 @@
 | `outage-characterize`（`c200992` 等） | high | 用測試固定中斷與晚到的現狀：Host 側接上產品的 `LocalPlayerPrediction`，注入雙向、只上行、只下行、部分送達的中斷；Client 側 3 個；稀疏替代 1 個；語料唯讀掃描。產品程式不改 | cpu 測試 293／293；突變 4／4 killed；L1 run 39944311104 四平台成功；報告：[outage-characterize-report.md](../object_fps_pvp/plans/v7.1/outage-characterize-report.md) |
 | `resync-contract`（`02f4b6d`～`6859fd9`） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 3 輪（必須修訂 → 必須修訂 → 可送核准，全部處理）；`gate-contract` 核准（D174） |
 | `drop-counters`（`3a3e1b1`） | high | Host：被 ±1 s 夾限改變的發布樣本計 `slack_clamped_samples`，寫新的 A 級 `resync statistics` 行。Client：命令已離開 64 格環的相位樣本（死信）計 `phase_samples_unmatched`，模擬 role 在連線換代與停止時寫新的 A 級 `phase summary` 行。判定都不讀 | `ctest -L pvp` 44／45（唯一失敗是已知的 worker，見下）；突變 7／7 killed；突變目錄 559 個的 find 字串都仍唯一；L1 run 39956082177 四平台成功 |
-| `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 待確認 |
+| `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 run 39967478342 四平台成功 |
+| `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 待確認 |
 
 ## 規劃
 
@@ -129,3 +130,49 @@
 - **經過**：
   - 79 個突變的判定還在執行時，我誤以為它已經中斷，用 `git checkout` 還原了它正在套用的突變（`v7-flow-d56-match-key-order`）。那一次的 killed 不可信，之後單獨重跑，killed。其他突變不受影響：工具在每個突變之後都會自己還原。
   - 條文 §7「被替代序號的單一紀錄」原本寫權威是「SlackTrack」。實作後權威的實體是 `MatchSubstitutionRecords`，所以照實作改正 owner 名稱，意圖不變。這是 Design Invariant 的文字變更，使用者核准（D175）。
+
+## match-resync
+
+- **§14.3 的順序**：先加介面空殼（一律回 false 的 `RequestMovementResync`、`Resync` 列舉、計數欄位、常數），寫 6 個守衛測試，其中 4 個以斷言失敗（Red），再實作到 Green。合併相關的 2 個在空殼下本來就會通過，實作後才有實際意義（有突變守著）。
+- **實作**：
+  - Host：第一份副本的晚到用 Host 時鐘量（和 slack 樣本同一個讀數），超過 N_o 就不產生樣本，計 `late_beyond_no`，並向 PvpMatch 要求 Resync。
+  - PvpMatch：Resync 排在下一個 Tick 邊界；不受冷卻；已排定 Starvation／Backlog 時回 false（由已排定者代替）；同一邊界的 LifeRespawn 會清掉它；`resets` 與新的 `resyncs` 都計。
+  - Host 由品質的 `resyncs` 差分得到每個視窗的 Resync 數。
+- **特性測試的值改變了**（升格為 §7 守衛時寫明，這是 D172／D174 宣告的行為改變）：
+
+| 測試（情境） | 之前 | 之後 |
+|---|---|---|
+| two-way：冷卻期內暫存 0.6 s | 不換 epoch，最小 slack −566,678 µs，stall reseed 1 | 第 37 Tick Resync，沒有負樣本 |
+| one-way：只上行、冷卻期內暫存 0.6 s | 不換 epoch，−566,678 µs 一個 | 第 37 Tick Resync，沒有負樣本 |
+| partial：每 8 個準時 1 個、延遲 0.5 s | 第 68 Tick Backlog，Client 的 Late 決定 4 次 | 第 31、63 Tick Resync，Late 0 次 |
+| partial：每 8 個準時 1 個、延遲 3 s | 不換 epoch，−1 s，late_first 187／slack_late 64 | 第 181、365 Tick Resync，沒有負樣本，2／0 |
+| partial：每 4 個準時 1 個、延遲 1 s | 不換 epoch，75 個負樣本 | 4 次 Resync，沒有負樣本 |
+| sparse：100～700 Tick 晚到 | 每次 −1 s 樣本 | 沒有樣本，`late_beyond_no` 1，Resync |
+
+  其餘情境（雙向丟失、只下行、只上行丟失）不變。
+
+- **另外兩個既有測試的判定改變**（§14.4，都不是 Design Invariant 的守衛，也不是受入判定）：
+  - **`PvP host ledger keeps late arrivals beyond the slack sample bound…`（v7 08c）**：
+    - 為什麼改：晚 1.2 s 的副本現在會觸發 Resync，之後的副本變成 EpochOld；
+    - 怎麼改：把兩份副本的順序對調（先送 5 ms 晚的 140，再送 1.2 s 晚的 2）；
+    - 斷言變化：「最後一個視窗以 end 關閉 70 筆」改成「Resync 以 epoch 關閉 69 筆」（少跑一個 Tick，替代 71 筆、到達 2 筆）；
+    - 不變的部分：late_first 2、不產生樣本、J5a 守恆。
+    1. 守的性質：64 筆以外的晚到記成 late_first、不成為樣本，紀錄恰好關閉一次；
+    2. 放寬面：無，原本的性質都還在檢查；
+    3. 收緊面：新增 `late_beyond_no == 1` 與 epoch 改變；
+    4. 不適用；
+    5. 突變 `v7-flow-ledger-retention-64` killed。
+  - **`PvP host counts the published slack samples the clamp changed`（drop-counters）**：
+    - 為什麼改：晚到 61／180 Tick 現在超過 N_o，不產生樣本，負方向到不了夾限；
+    - 怎麼改：改用「Host 停頓 2 s」讓正方向的樣本被夾在 +1 s，計數 1；10 Tick 的負樣本照舊不計。
+    1. 守的性質：被夾限改變的發布樣本會被計數；
+    2. 放寬面：負方向的夾限不再測，因為產品裡已經到不了；
+    3. 收緊面：正方向的夾限首次被測到；
+    4. 計數這條性質，由正方向的情況繼續守著；
+    5. 突變 `dc-clamped-*`、`oc-slack-unclamped` killed。
+- **突變**：
+  - 本批 10／10 killed：觸發的仍產生樣本、只壓掉要求成功的那一筆、用序號差判斷、N_o 差一、受冷卻限制、覆蓋已排定的重設、不計入品質、respawn 之後還留著 Resync、Host 不計 resyncs、不計 late_beyond_no。
+  - 期待訊息指向被改測試的 10 個重判：6 個 killed；`v7-flow-ledger-end-not-closed` 與 `oc-slack-unclamped` 改指現在的判定後 killed。
+  - `v7-flow-ledger-drives-sample` 在 N_o 以內變成等價（N_o 以內「帳本判成 late_first」和「是樣本候選」在產品裡相同）。因為它是 §7 列出的守衛，改成「晚到過久的判斷改跟帳本的分類走」，killed。
+  - `oc-slack-track-retains-600` 退役：64 筆以外的候選一定已晚於 N_o，所以 64 這個上限在行為上看不出差別，而且 `retention-600` 會整段移除這段程式。
+- **已知**：持續的部分送達會反覆 Resync（例如每 4 個準時 1 個、延遲 1 s 時，5 s 內 4 次），品質視窗因此失敗，持續 3 個視窗就會被逐出。這是 D172 的 D-10「照算」。
