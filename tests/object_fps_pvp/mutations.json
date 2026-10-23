@@ -5599,6 +5599,46 @@
       "replace": "            entry[\"kept\"] = (position in (0, len(entries) - 1) or entry[\"class\"] in (\"world\", \"no_hud\"))",
       "check": "black_map_watch",
       "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "oc-slack-unclamped",
+      "batch": "v71-outage-characterize",
+      "what": "The published movement slack is no longer clamped to +-1 s",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(\n                track.pending->second, -MaxMovementSlackMicros, MaxMovementSlackMicros));",
+      "replace": "static_cast<std::int32_t>(\n                track.pending->second);",
+      "check": "cpu",
+      "expect": "outage characterization: (partial delivery|a sparse substitution)"
+    },
+    {
+      "id": "oc-fuse-never-starves",
+      "batch": "v71-outage-characterize",
+      "what": "The Starvation fuse never fires",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "const bool starved = player.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "replace": "const bool starved = false && player.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "check": "cpu",
+      "expect": "outage characterization: (two-way|one-way) outages"
+    },
+    {
+      "id": "oc-client-samples-before-seed",
+      "batch": "v71-outage-characterize",
+      "what": "The Client takes slack samples of commands from before its latest seed",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "(*authority.movementSlackSequence > settledAfter_ || reacquiring_)",
+      "replace": "(true || reacquiring_)",
+      "check": "cpu",
+      "expect": "outage characterization: (two-way outages|after an outage that let the authority pass the tip)"
+    },
+    {
+      "id": "oc-slack-track-retains-600",
+      "batch": "v71-outage-characterize",
+      "what": "The slack track keeps 600 substituted sequences instead of 64 (the change retention-600 will declare)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "constexpr std::size_t kMaximumSubstitutedSequences = 64;",
+      "replace": "constexpr std::size_t kMaximumSubstitutedSequences = 600;",
+      "check": "cpu",
+      "expect": "outage characterization: partial delivery"
     }
   ]
 }

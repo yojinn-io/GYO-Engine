@@ -2092,3 +2092,66 @@ TEST_CASE("PvP ULP-level authority differences never accumulate in Client correc
     CHECK(worst.back() <= worst.front() + 1e-6F);
     CHECK(client.Observation().active);
 }
+
+// outage-characterize (v7.1 outage-resync, D172): what the Client does today
+// with the slack samples of an outage. Pinned before the line changes it.
+TEST_CASE("PvP outage characterization: late samples of commands still in the ring correct the phase at once") {
+    // An uplink-only outage the Host fuse did not end (or partial delivery):
+    // the Client keeps receiving snapshots, its tip stays ahead of the
+    // authority and no seed happens, so samples of its own recent commands,
+    // however late, are evidence. Two in a row move the phase by the most a
+    // correction allows.
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    const auto reseedsBefore = twins.tracked.Observation().stallReseeds;
+    static_cast<void>(twins.Frame(MovementTickSeconds, std::nullopt, -1.0));
+    static_cast<void>(twins.Frame(MovementTickSeconds, std::nullopt, -1.0));
+    const auto stallReseeds = twins.tracked.Observation().stallReseeds;
+    CHECK(stallReseeds == reseedsBefore);
+    const auto lateCorrections = twins.tracked.Observation().phaseLateCorrections;
+    CHECK(lateCorrections == 1);
+    REQUIRE(twins.tracked.Observation().phaseCorrectionSeconds);
+    CHECK(*twins.tracked.Observation().phaseCorrectionSeconds == doctest::Approx(-MovementPhaseMaximumCorrectionSeconds));
+}
+
+TEST_CASE("PvP outage characterization: a sample outside the 64-command ring is dropped without a count") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 80) == -1);
+    const auto tip = twins.tracked.Observation().latestCommand;
+    REQUIRE(tip > 70);
+    const auto samplesBefore = twins.tracked.Observation().phaseSamples;
+    // Older than the ring (64 slots), newer than the seed: its slot holds a
+    // newer command, so the sample is silently dropped (a dead letter today).
+    for (const auto sequence : {tip - 66, tip - 65}) {
+        static_cast<void>(twins.tracked.Advance(MovementTickSeconds, 0, 0, 0, 0));
+        const auto latest = twins.tracked.Observation().latestCommand;
+        PlayerState authority{1, {2, 0, 2}, 0, 0, latest - InitialCommandLead};
+        SetSlack(authority, sequence, -1.0);
+        twins.tracked.Reconcile(authority, ++twins.tick);
+    }
+    const auto droppedSamples = twins.tracked.Observation().phaseSamples - samplesBefore;
+    CHECK(droppedSamples == 0);
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
+}
+
+TEST_CASE("PvP outage characterization: after an outage that let the authority pass the tip, old samples never count") {
+    // A two-way outage: the Client stalled with a full window while the Host
+    // substituted past its tip. The first snapshot after it reseeds the lead,
+    // and late samples of the commands from before the seed are not evidence.
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    const auto tip = twins.tracked.Observation().latestCommand;
+    PlayerState authority{1, {2, 0, 2}, 0, 0, tip + 60};
+    twins.tracked.Reconcile(authority, ++twins.tick);
+    CHECK(twins.tracked.Observation().stallReseeds == 1);
+    for (const auto sequence : {tip - 1, tip, tip + 30, tip + 60}) {
+        PlayerState late{1, {2, 0, 2}, 0, 0, tip + 60};
+        SetSlack(late, sequence, -1.0);
+        twins.tracked.Reconcile(late, ++twins.tick);
+    }
+    CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
+    CHECK(twins.tracked.Observation().phaseCorrections == 0);
+}

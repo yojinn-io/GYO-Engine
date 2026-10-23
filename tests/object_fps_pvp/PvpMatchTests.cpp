@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
@@ -7,14 +8,18 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <utility>
 #include <map>
+#include <memory>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <thread>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -1653,4 +1658,335 @@ TEST_CASE("PvP host discards the pending slack sample of a player who leaves") {
     CHECK(leaveDiscardedSamples == 1);
     CHECK(counts.slackExecutedSamples + counts.slackLateSamples ==
           counts.slackMergedSamples + counts.slackDiscardedSamples + counts.slackPublishedSamples);
+}
+
+
+// outage-characterize (v7.1 outage-resync, D172): what the Host and the
+// product's Client prediction do today when a Client's link goes away and
+// comes back. These tests pin the current behaviour before the line changes
+// it; each later change states which pinned value it moves.
+namespace {
+// LocalPlayerPrediction at one frame per authority tick, sending its whole
+// unacknowledged window every frame, behind a link that can lose, hold or
+// delay its packets and hide snapshots from it.
+struct OutageRig {
+    enum class Uplink { Deliver, Lose, Hold, Delay };
+    std::chrono::steady_clock::time_point now{};
+    std::shared_ptr<fps::pvp::MovementTrace> trace = std::make_shared<fps::pvp::MovementTrace>();
+    fps::pvp::Arena arena = TestArena();
+    fps::pvp::MatchRuntimeHost host;
+    fps::pvp::LocalPlayerPrediction client{arena};
+    std::vector<fps::pvp::PlayerInput> held;
+    // Delay: packets arrive `delay` frames after they were sent.
+    std::deque<std::pair<std::uint64_t, fps::pvp::PlayerInput>> delayed;
+    std::uint64_t frame{};
+    std::uint64_t delay{};
+    std::uint64_t lastPublishedEpoch{1};
+    // Since the last Measure(): the published slack, and the Client's stall
+    // reseeds (its observation restarts with every epoch).
+    std::optional<std::int32_t> minimumSlack;
+    std::uint64_t negativeSamples{};
+    std::uint64_t stallReseeds{};
+    std::uint64_t observedReseeds{};
+
+    OutageRig() : host(arena, [this] { return now; }) {
+        fps::pvp::SetMovementTrace(trace);
+        REQUIRE(host.QueueJoin(1, 5));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        client.Reconcile(snapshot->players.front(), snapshot->tick);
+    }
+    ~OutageRig() { fps::pvp::SetMovementTrace(nullptr); }
+    OutageRig(const OutageRig&) = delete;
+    OutageRig& operator=(const OutageRig&) = delete;
+
+    void Deliver(const fps::pvp::PlayerInput& input) { static_cast<void>(host.SubmitInput(input)); }
+    void Frame(Uplink uplink, bool downlink) {
+        now += std::chrono::microseconds(16'667);
+        ++frame;
+        while (!delayed.empty() && delayed.front().first <= frame) {
+            Deliver(delayed.front().second);
+            delayed.pop_front();
+        }
+        static_cast<void>(client.Advance(1.0 / 60, 1, 0, 0, 0));
+        const auto packet = client.PendingInput();
+        if (uplink == Uplink::Delay) {
+            if (!packet.commands.empty()) delayed.emplace_back(frame + delay, packet);
+        } else if (uplink == Uplink::Deliver) {
+            for (const auto& input : held) Deliver(input);
+            held.clear();
+            if (!packet.commands.empty()) Deliver(packet);
+        } else if (uplink == Uplink::Hold && !packet.commands.empty()) {
+            held.push_back(packet);
+        }
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        const auto& player = snapshot->players.front();
+        lastPublishedEpoch = player.movementEpoch;
+        if (player.movementSlackMicros) {
+            if (!minimumSlack || *player.movementSlackMicros < *minimumSlack) minimumSlack = player.movementSlackMicros;
+            if (*player.movementSlackMicros < 0) ++negativeSamples;
+        }
+        if (!downlink) return;
+        client.Reconcile(player, snapshot->tick);
+        const auto reseeds = client.Observation().stallReseeds;
+        stallReseeds += reseeds >= observedReseeds ? reseeds - observedReseeds : reseeds;
+        observedReseeds = reseeds;
+    }
+    void Frames(unsigned count, Uplink uplink, bool downlink) {
+        for (unsigned index = 0; index < count; ++index) Frame(uplink, downlink);
+    }
+};
+
+struct OutageOutcome {
+    // Starvation/Backlog resets of the player, ticks after the outage began.
+    std::vector<std::pair<std::uint64_t, fps::pvp::MovementResetReason>> resets;
+    std::optional<std::int32_t> minimumSlack;
+    std::uint64_t negativeSamples{};
+    std::uint64_t epochOldCommands{};
+    std::uint64_t lateFirst{};
+    std::uint64_t slackLate{};
+    std::uint64_t substituted{};
+    std::uint64_t clientLateDecisions{};
+    std::uint64_t clientStallReseeds{};
+};
+
+struct OutageScenario {
+    unsigned outage{};
+    OutageRig::Uplink uplink{OutageRig::Uplink::Lose};
+    bool downlink{};
+    bool inCooldown{};
+    // Partial delivery: within the outage, one packet in `period` arrives on
+    // time and the others `delay` frames late (period 0: none).
+    unsigned period{};
+    unsigned delay{};
+};
+
+// Steady play, an optional starvation reset ten frames before (so the outage
+// starts inside the reset cooldown), the outage, then steady play until every
+// delayed packet has arrived and three more seconds have passed.
+OutageOutcome RunOutage(const OutageScenario& scenario) {
+    using namespace fps::pvp;
+    using Uplink = OutageRig::Uplink;
+    OutageRig rig;
+    rig.Frames(120, Uplink::Deliver, true);
+    if (scenario.inCooldown) {
+        while (rig.lastPublishedEpoch == 1) rig.Frame(Uplink::Lose, false);
+        rig.Frames(10, Uplink::Deliver, true);
+    }
+    static_cast<void>(rig.trace->Drain());
+    static_cast<void>(rig.host.TakeIngressStatistics());
+    rig.minimumSlack.reset();
+    rig.negativeSamples = rig.stallReseeds = 0;
+    rig.delay = scenario.delay;
+    const auto start = rig.host.TickCount();
+    for (unsigned index = 0; index < scenario.outage; ++index) {
+        if (scenario.period != 0)
+            rig.Frame(index % scenario.period == scenario.period - 1 ? Uplink::Deliver : Uplink::Delay, true);
+        else
+            rig.Frame(scenario.uplink, scenario.downlink);
+    }
+    rig.Frames(scenario.delay + 180, Uplink::Deliver, true);
+    OutageOutcome outcome;
+    for (const auto& event : rig.trace->Drain()) {
+        if (event.playerId != 5) continue;
+        if (event.kind == MovementTraceKind::Reset &&
+            (event.resetReason == MovementResetReason::Starvation || event.resetReason == MovementResetReason::Backlog))
+            outcome.resets.emplace_back(event.authorityTick - start, event.resetReason);
+        if (event.kind == MovementTraceKind::PhaseDecision && event.phasePath == MovementPhasePath::Late)
+            ++outcome.clientLateDecisions;
+    }
+    outcome.minimumSlack = rig.minimumSlack;
+    outcome.negativeSamples = rig.negativeSamples;
+    outcome.clientStallReseeds = rig.stallReseeds;
+    const auto taken = rig.host.TakeIngressStatistics();
+    const auto& counts = taken.at(5);
+    outcome.epochOldCommands = counts.rejected[IngressIndex(IngressInputRejection::EpochOld)].commands;
+    outcome.lateFirst = counts.classified[IngressIndex(IngressCommandClass::LateFirst)];
+    outcome.slackLate = counts.slackLateSamples;
+    outcome.substituted = counts.substitutedCommands;
+    return outcome;
+}
+
+std::string Describe(const OutageOutcome& outcome) {
+    std::string text = "resets=[";
+    for (const auto& [tick, reason] : outcome.resets)
+        text += std::to_string(tick) + ":" + std::string(fps::pvp::TraceResetReasonName(reason)) + " ";
+    text += "] min_slack=" + (outcome.minimumSlack ? std::to_string(*outcome.minimumSlack) : std::string("none")) +
+        " negative=" + std::to_string(outcome.negativeSamples) +
+        " epoch_old=" + std::to_string(outcome.epochOldCommands) +
+        " late_first=" + std::to_string(outcome.lateFirst) +
+        " slack_late=" + std::to_string(outcome.slackLate) +
+        " substituted=" + std::to_string(outcome.substituted) +
+        " client_late=" + std::to_string(outcome.clientLateDecisions) +
+        " client_reseeds=" + std::to_string(outcome.clientStallReseeds);
+    return text;
+}
+} // namespace
+
+using OutageResets = std::vector<std::pair<std::uint64_t, fps::pvp::MovementResetReason>>;
+
+// Two-way outages. The fuse ends one at 32 ticks outside the reset cooldown
+// (30 starved ticks after the two-command lead) and at 61 ticks after the
+// previous reset inside it; the window the Client retransmits afterwards is
+// EpochOld. Shorter outages leave late samples as large as the outage, which
+// the Client's stall reseed keeps out of its phase tracking.
+TEST_CASE("PvP outage characterization: two-way outages") {
+    using namespace fps::pvp;
+    using Uplink = OutageRig::Uplink;
+    const auto starvation = MovementResetReason::Starvation;
+    {
+        const auto outcome = RunOutage({18, Uplink::Lose, false, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-266'672});
+        CHECK(outcome.lateFirst == 10);
+        CHECK(outcome.clientStallReseeds == 1);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+    for (const unsigned outage : {36u, 120u, 600u}) {
+        const auto outcome = RunOutage({outage, Uplink::Lose, false, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{32, starvation}});
+        CHECK(outcome.negativeSamples == 0);
+        CHECK(outcome.lateFirst == 0);
+        CHECK(outcome.epochOldCommands == MaxPendingCommands);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+    {
+        // Inside the cooldown 0.6 s rotates nothing and leaves a 0.57 s late sample.
+        const auto outcome = RunOutage({36, Uplink::Hold, false, true});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-566'678});
+        CHECK(outcome.lateFirst == 10);
+        CHECK(outcome.clientStallReseeds == 1);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+    {
+        const auto outcome = RunOutage({60, Uplink::Lose, false, true});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{51, starvation}});
+        CHECK(outcome.negativeSamples == 0);
+    }
+}
+
+// One-way outages. Uplink only: the Client sees the starvation epoch, seeds it
+// and fills its window while its packets are lost, so the window it carries
+// out of the outage is twelve commands deep until a Backlog reset 31 ticks
+// after the uplink returns (or when the cooldown ends). A held uplink inside
+// the cooldown arrives as one burst: one published late sample, no correction.
+// Downlink only: the Client stops at a full window and the fuse ends it at 42.
+TEST_CASE("PvP outage characterization: one-way outages") {
+    using namespace fps::pvp;
+    using Uplink = OutageRig::Uplink;
+    const auto starvation = MovementResetReason::Starvation;
+    const auto backlog = MovementResetReason::Backlog;
+    {
+        const auto outcome = RunOutage({36, Uplink::Lose, true, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{32, starvation}, {93, backlog}});
+    }
+    {
+        const auto outcome = RunOutage({120, Uplink::Lose, true, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{32, starvation}, {151, backlog}});
+    }
+    {
+        const auto outcome = RunOutage({36, Uplink::Hold, true, true});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-566'678});
+        CHECK(outcome.negativeSamples == 1);
+        CHECK(outcome.lateFirst == 34);
+        CHECK(outcome.clientStallReseeds == 0);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+    {
+        const auto outcome = RunOutage({36, Uplink::Deliver, false, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.negativeSamples == 0);
+        CHECK(outcome.clientStallReseeds == 1);
+    }
+    {
+        const auto outcome = RunOutage({60, Uplink::Deliver, false, false});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{42, starvation}});
+    }
+}
+
+// Partial delivery: commands keep arriving, so the fuse never fires. With one
+// packet in eight on time and the others 0.5 s late, consecutive late samples
+// reach the Client's phase tracking: Late corrections add lead until a Backlog
+// reset. Three seconds late, the published sample is clamped to -1 s, the
+// Client drops it (outside its 64-command ring) and the 64-entry slack track
+// keeps fewer samples than the ledger counts late firsts. One packet in four
+// on time spreads the late samples apart: no correction.
+TEST_CASE("PvP outage characterization: partial delivery") {
+    using namespace fps::pvp;
+    using Uplink = OutageRig::Uplink;
+    {
+        const auto outcome = RunOutage({60, Uplink::Deliver, true, false, 8, 30});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets == OutageResets{{68, MovementResetReason::Backlog}});
+        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-466'676});
+        CHECK(outcome.clientLateDecisions == 4);
+    }
+    {
+        const auto outcome = RunOutage({300, Uplink::Deliver, true, false, 8, 180});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-MaxMovementSlackMicros});
+        CHECK(outcome.lateFirst == 187);
+        CHECK(outcome.slackLate == 64);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+    {
+        const auto outcome = RunOutage({300, Uplink::Deliver, true, false, 4, 60});
+        INFO(Describe(outcome));
+        CHECK(outcome.resets.empty());
+        CHECK(outcome.negativeSamples == 75);
+        CHECK(outcome.clientLateDecisions == 0);
+    }
+}
+
+// A single substituted sequence stays in the 64-entry slack track however old
+// it grows: arriving 100 or 700 ticks late it is published as -1 s. The ledger
+// tracks it only 600 sequences: beyond that the same arrival is
+// resolved_untracked, not late_first, so slack_late exceeds late_first.
+TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any age") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    for (const auto& [gap, lateFirst] : {std::pair{100u, 1u}, std::pair{590u, 1u}, std::pair{610u, 0u}, std::pair{700u, 0u}}) {
+        std::chrono::steady_clock::time_point now{};
+        MatchRuntimeHost host(TestArena(), [&] { return now; });
+        REQUIRE(host.QueueJoin(1, 5));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+        REQUIRE(host.Advance(2.0 / 60).steps == 2);
+        REQUIRE(host.SubmitInput(Window(5, 4, 5)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1); // 3 substituted, everything after it in time
+        for (std::uint64_t k = 0; k < gap; ++k) {
+            REQUIRE(host.SubmitInput(Input(5, 6 + k)));
+            now += 16'667us;
+            REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        }
+        static_cast<void>(host.TakeSnapshot());
+        REQUIRE(host.SubmitInput(Input(5, 3)));
+        REQUIRE(host.SubmitInput(Input(5, 6 + gap)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        INFO("gap " << gap);
+        CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3});
+        CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{-MaxMovementSlackMicros});
+        const auto taken = host.TakeIngressStatistics();
+        const auto& counts = taken.at(5);
+        CHECK(counts.classified[IngressIndex(IngressCommandClass::LateFirst)] == lateFirst);
+        CHECK(counts.classified[IngressIndex(IngressCommandClass::ResolvedUntracked)] == 1 - lateFirst);
+        CHECK(counts.slackLateSamples == 1);
+    }
 }
