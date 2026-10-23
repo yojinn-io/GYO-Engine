@@ -5749,6 +5749,106 @@
       "replace": "    ledger_.Remove(playerId);\n    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
       "check": "cpu",
       "expect": "keeps the copies of a record that Leave closes"
+    },
+    {
+      "id": "mr-beyond-still-sampled",
+      "batch": "v71-match-resync",
+      "what": "A first copy later than N_o still gives a slack sample",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            static_cast<void>(match_.RequestMovementResync(input.playerId));\n            continue;\n",
+      "replace": "            static_cast<void>(match_.RequestMovementResync(input.playerId));\n",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|no sample for any first copy later than N_o"
+    },
+    {
+      "id": "mr-only-trigger-unsampled",
+      "batch": "v71-match-resync",
+      "what": "Only the first copy whose Resync request was taken gives no sample",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (late > MovementResyncLateMicros) {\n            ++ingress.lateBeyondNoCommands;\n            static_cast<void>(match_.RequestMovementResync(input.playerId));\n            continue;\n        }",
+      "replace": "        if (late > MovementResyncLateMicros) {\n            ++ingress.lateBeyondNoCommands;\n            if (match_.RequestMovementResync(input.playerId)) continue;\n        }",
+      "check": "cpu",
+      "expect": "no sample for any first copy later than N_o"
+    },
+    {
+      "id": "mr-sequence-distance",
+      "batch": "v71-match-resync",
+      "what": "N_o is judged by the sequence distance instead of the host clock",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (late > MovementResyncLateMicros) {",
+      "replace": "        if (cursor - command.sequence > 20) {",
+      "check": "cpu",
+      "expect": "measures N_o in time"
+    },
+    {
+      "id": "mr-no-off-by-one",
+      "batch": "v71-match-resync",
+      "what": "N_o is exceeded at 19 ticks",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp",
+      "find": "inline constexpr std::int64_t MovementResyncLateMicros = 20 * 1'000'000 / AuthorityTickRate;\nstatic_assert(MovementResyncLateMicros == 333'333);",
+      "replace": "inline constexpr std::int64_t MovementResyncLateMicros = 19 * 1'000'000 / AuthorityTickRate - 1;",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync"
+    },
+    {
+      "id": "mr-resync-held-by-cooldown",
+      "batch": "v71-match-resync",
+      "what": "A Resync waits for the reset cooldown",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
+      "replace": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n    if (found->second.lastMovementResetTick != 0 && tick_ - found->second.lastMovementResetTick < MovementResetCooldownTicks) return false;\n",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
+    },
+    {
+      "id": "mr-resync-overrides-scheduled",
+      "batch": "v71-match-resync",
+      "what": "A Resync replaces an already scheduled reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
+      "replace": "    if (found == players_.end()) return false;\n",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown|merges into it"
+    },
+    {
+      "id": "mr-resync-quality-uncounted",
+      "batch": "v71-match-resync",
+      "what": "A Resync epoch is not counted as a connection-quality reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        reason == MovementResetReason::Resync) ++player.quality.resets;",
+      "replace": "        false) ++player.quality.resets;",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
+    },
+    {
+      "id": "mr-respawn-keeps-resync",
+      "batch": "v71-match-resync",
+      "what": "A respawn leaves a requested Resync scheduled for the tick after it",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    player.movementResetScheduled = false;\n    player.movementResetReason = MovementResetReason::None;\n",
+      "replace": "    player.movementResetScheduled = reason == MovementResetReason::LifeRespawn && player.movementResetReason == MovementResetReason::Resync;\n    if (!player.movementResetScheduled) player.movementResetReason = MovementResetReason::None;\n",
+      "check": "cpu",
+      "expect": "merges into the respawn"
+    },
+    {
+      "id": "mr-host-resyncs-uncounted",
+      "batch": "v71-match-resync",
+      "what": "The host does not count the Match's Resync epochs",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        ingress_[playerId].resyncs += quality->resyncs - track.resyncs;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|asks for one Resync"
+    },
+    {
+      "id": "mr-late-beyond-uncounted",
+      "batch": "v71-match-resync",
+      "what": "A first copy later than N_o is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            ++ingress.lateBeyondNoCommands;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|asks for one Resync|a sparse substitution|measures N_o in time"
     }
   ]
 }
