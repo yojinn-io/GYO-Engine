@@ -662,15 +662,19 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 - **（已處理，2026-10-23）v7.1 README 的「開發紀錄」清單**：PR #88（`c31887f`）合併後，記錄器分支同步 master，並在 README 加上「開發紀錄」一節。sdl-isolation 那一項標為「進行中，隨 PR #85」，該分支合併後改成連結。
 
-- **`N-gui-black-map-intermittent`**（2026-10-23，使用者觀察，記錄）：GUI 測試時偶發「地圖不渲染」。人物照常出現，地圖是黑的；兩個 Client 都可能發生，視野內沒有玩家的那一端整個黑。使用者說以前也出現過，不是每次都會出，懷疑和 macOS 有關。
-  - 今天沒有重現：
-    - capture 的讀回截圖（頭 `7f7b704`、`d5ecfa3`，以及舊的 pv7-checkpoint）地圖都正常；
-    - timing 短測跑次中對螢幕截圖（頭與 base 各 1 次，14、22、30 秒）地圖也都正常。
-  - 證據：`build/target/_build/test/logs/pvp-v71-gui-black-map-20261023/`。
-  - 現有的 GUI 判定只看延遲、命中、HUD，看不到地圖有沒有畫出來，所以發生時跑次照樣判 P。
-  - 跑次中截圖時，頭那一次判 `invalid_window_disturbed`（開發跑次，不計）。原因是 `screencapture` 第一次執行時，macOS 跳出權限對話框，搶走了焦點（使用者確認）。做觀測時，要先取得權限，截圖也要放在量測窗口之外。
-  - 方向：先建觀測（只記錄），再評估、再修正。排在 sdl-isolation 的 L2 之後，避免和 L2 同時佔用螢幕。和 sdl-isolation 無關。
-
+- **（已結論，2026-10-23）`N-gui-black-map-intermittent`**：GUI 測試偶發的地圖黑屏。
+  - 原因：timing probe 的暖機幀。觀測見 [black-map-observation](black-map-observation.md)，PR #89（`cdb9b07`）。
+    - 產品在 `InitializeGraphics` 送出暖機幀：背景純黑、沒有地圖與 HUD、只有人物與武器。
+    - timing probe 的 `RunLatency` 先擺放視窗（`gui_main.cpp:389`），讓視窗顯示，接著量計時器基準約 3 秒不 Render（`:390`），所以螢幕停在暖機幀上約 2.5 秒。
+    - 只出現在 timing 類跑次（O3、O4 合計 6 次中 5 次），其他 8 種案例和產品 Client（連續啟動 5 次）都沒有。
+  - 使用者的決定（2026-10-23）：
+    - 只記錄，不改 probe，因為對測試的正確性影響不大；
+    - 「預熱幀不得讓玩家看到」是需求，放進 v8。大地圖之後，這個問題可能會被放大。
+    - 已加到 [v8 README](../v8/README.md) 的候選表，以及「預計壓力」第 8 項。
+  - 還沒解釋、只記錄的兩點：
+    - 「視野內沒有玩家的那一端整個黑」：兩端的暖機幀應該相同；
+    - timing 那 1 次視窗晚約 4 秒才顯示。
+    - 若之後還看得到，可以直接用 `black_map_watch.py` 追。
 - **（已處理：`worker-probe-repair`，`d2844a5`）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 

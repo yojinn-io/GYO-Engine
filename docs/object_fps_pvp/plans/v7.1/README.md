@@ -190,4 +190,8 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [re-evaluate：用 pv7 之後的數據判斷相位追蹤與 D44 的項目還要不要繼續](../../../dev_logs/2026_10_21_pvp_v71_re_evaluate.zh-Hant.md)
 - [worker-probe-repair、sdl-isolation-plan：修好 worker probe，排定 SDL 隔離的計畫](../../../dev_logs/2026_10_21_pvp_v71_probe_sdl_plan.zh-Hant.md)
 - [sdl-isolation：產品、probe、產品測試不再直接呼叫 SDL（Engine IP-3／IP-4 與產品側 IP-4，L2 通過）](../../../dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md)（PR #85，`054b08f`；Engine 側見 [IP-3](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)、[IP-4](../../../dev_logs/2026_10_22_engine_ip4.zh-Hant.md)）
+- [black-map-observation O1：黑屏分類工具 `black_frame.py`](../../../dev_logs/2026_10_23_pvp_v71_black_map_o1.zh-Hant.md)
+- [black-map-observation O2：視窗觀測外掛 `black_map_watch.py`](../../../dev_logs/2026_10_23_pvp_v71_black_map_o2.zh-Hant.md)
+- [black-map-observation O3：已知樣本確認觀測，假說 H1（暖機幀）修正後成立](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)
+- [black-map-observation O4：L2 的 10 種案例與產品 Client 的觀測跑次，黑屏只在 timing 類露出](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)
 
