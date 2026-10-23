@@ -10,6 +10,8 @@
 // player=0 holds unknown players and is written every window; final=1 marks
 // the last line. Keys are "<reason>[_<kind>]_<unit>" and new keys are only
 // ever appended. The golden lines live in tests/object_fps_pvp/fixtures/ingress_v1.
+#include "RetroFPS/Pvp/MatchSubstitutionRecords.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -48,8 +50,8 @@ enum class IngressStagedDiscard : std::uint8_t { HandoffRejected, RotationDiscar
 enum class IngressActionRejection : std::uint8_t {
     OverBatch, Malformed, Resetting, InvalidPlayer, InvalidBatch, Conflict, OutsideWindow, Full, Count
 };
-// How a substitution record closed (MatchIngressLedger.hpp).
-enum class IngressSubstitutionClose : std::uint8_t { Aged, Epoch, Life, Removed, Reset, Overflow, End, Count };
+// IngressSubstitutionClose (the close reasons of a substitution record) is the
+// substitution records' own vocabulary: MatchSubstitutionRecords.hpp.
 enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots, Acks, Samples };
 
 // The only spelling of each word, shared by the statistics line and the

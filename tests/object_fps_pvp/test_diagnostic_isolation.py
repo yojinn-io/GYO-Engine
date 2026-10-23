@@ -8,6 +8,7 @@ and MatchRuntimeHost's interface takes no diagnostic value. Each later pv7
 batch adds the symbols of its diagnostics here.
 """
 from pathlib import Path
+import re
 import unittest
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -18,6 +19,7 @@ DECIDING = [
     SOURCE / 'LocalPlayerPrediction.cpp',
     SOURCE / 'MatchRuntimeHost.cpp',
     INCLUDE / 'MatchRuntimeHost.hpp',
+    INCLUDE / 'MatchSubstitutionRecords.hpp',
     INCLUDE / 'SnapshotTimeline.hpp',
     SOURCE / 'PvpApplication.cpp',
     SOURCE / 'ShotGate.cpp',
@@ -67,6 +69,17 @@ class DiagnosticIsolationTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertRegex(line, r'^statistics_\.lockWaits\.(input|step)\.Record\(')
 
+
+    def test_the_substitution_records_read_no_ledger(self):
+        # v7.1 outage-resync (network-architecture §7 "被替代序號的單一紀錄"): the
+        # records decide slack samples; the ingress ledger only reads them, never
+        # the other way. The records' header names nothing of the ledger or of the
+        # ingress statistics, and does not include them.
+        text = (INCLUDE / 'MatchSubstitutionRecords.hpp').read_text(encoding='utf-8')
+        for pattern in (r'MatchIngressLedger', r'IngressStatistics\.hpp', r'IngressCommandClass', r'MatchIngressCounts',
+                        r'IngressName\b', r'IngressSubstitution(?!Close)', r'Classify\b', r'annex'):
+            with self.subTest(pattern=pattern):
+                self.assertIsNone(re.search(pattern, text), f'MatchSubstitutionRecords.hpp names {pattern!r}')
 
 if __name__ == '__main__':
     unittest.main()
