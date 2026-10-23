@@ -236,9 +236,18 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         const auto classified = ledger_.Classify(input.playerId, command.sequence, cursor, arrival, referenceAge);
         ++ingress.classified[IngressIndex(classified)];
         if (classified == IngressCommandClass::LateFirst || classified == IngressCommandClass::LateCopy) ++lateCommands;
-        // The first copy of a sample candidate reports how late it came.
+        // The first copy of a record: later than N_o (network-architecture §4),
+        // no sample and a Resync epoch; otherwise a sample candidate reports
+        // how late it came.
+        if (!arrival.first) continue;
+        const auto late = Micros(at() - arrival.substitutedAt);
+        if (late > MovementResyncLateMicros) {
+            ++ingress.lateBeyondNoCommands;
+            static_cast<void>(match_.RequestMovementResync(input.playerId));
+            continue;
+        }
         if (!arrival.sample) continue;
-        const auto micros = -Micros(at() - arrival.substitutedAt);
+        const auto micros = -late;
         ++ingress.slackLateSamples;
         OfferSlackSample(input.playerId, track, command.sequence, micros);
     }
@@ -693,6 +702,8 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
     for (auto& [playerId, track] : quality_) {
         const auto quality = match_.GetMovementQuality(playerId);
         if (!quality) continue;
+        ingress_[playerId].resyncs += quality->resyncs - track.resyncs;
+        track.resyncs = quality->resyncs;
         if (tick - track.windowStartTick >= ConnectionQualityWindowTicks) {
             if (track.judged) {
                 auto& ages = track.referenceAgesMicros;

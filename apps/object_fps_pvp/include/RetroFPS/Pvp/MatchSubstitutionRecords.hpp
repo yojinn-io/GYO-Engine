@@ -61,7 +61,9 @@ struct SubstitutionArrival final {
     // An open record: the first copy (first) or a later one.
     bool open{};
     bool first{};
-    // The first copy of a sample candidate: it reports how late it came.
+    // The first copy of a record (open or sample-only): its lateness decides.
+    // first and !open: a sample-only record's first copy.
+    // The first copy of a sample candidate: it may report how late it came.
     bool sample{};
     std::chrono::steady_clock::time_point substitutedAt;
 };
@@ -150,6 +152,7 @@ public:
             record->second.firstArrival = now();
         } else if (const auto only = player.sampleOnly.find(sequence); only != player.sampleOnly.end()) {
             arrival.substitutedAt = only->second.substitutedAt;
+            arrival.first = true;
             static_cast<void>(now());
             player.sampleOnly.erase(only);
         } else {

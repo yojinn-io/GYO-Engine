@@ -197,6 +197,16 @@ std::optional<MovementQuality> PvpMatch::GetMovementQuality(PlayerId playerId) c
     return found->second.quality;
 }
 
+bool PvpMatch::RequestMovementResync(PlayerId playerId) {
+    const auto found = players_.find(playerId);
+    if (found == players_.end() || found->second.movementResetScheduled) return false;
+    // Like the fuses' decisions, it rotates at the next tick boundary; unlike
+    // them, the reset cooldown does not hold it back.
+    found->second.movementResetScheduled = true;
+    found->second.movementResetReason = MovementResetReason::Resync;
+    return true;
+}
+
 std::optional<ActionTiming> PvpMatch::GetActionTiming(PlayerId playerId, ActionId actionId) const {
     const auto found = players_.find(playerId);
     if (found == players_.end()) return std::nullopt;
@@ -429,7 +439,9 @@ void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reaso
     player.fallbackSamples.clear();
     player.fallbackCount = 0;
     player.lastMovementResetTick = tick_;
-    if (reason == MovementResetReason::Starvation || reason == MovementResetReason::Backlog) ++player.quality.resets;
+    if (reason == MovementResetReason::Starvation || reason == MovementResetReason::Backlog ||
+        reason == MovementResetReason::Resync) ++player.quality.resets;
+    if (reason == MovementResetReason::Resync) ++player.quality.resyncs;
     player.movementResetScheduled = false;
     player.movementResetReason = MovementResetReason::None;
     TraceMovement({.kind = MovementTraceKind::Reset, .playerId = player.state.playerId,

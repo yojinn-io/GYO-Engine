@@ -1406,3 +1406,42 @@ TEST_CASE("PvP A1 rejects invalid combat rules") {
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotRange = -1}), std::invalid_argument);
     CHECK_NOTHROW(PvpMatch(CombatArena(), OneHitRules));
 }
+
+// v7.1 outage-resync match-resync: a Resync requested for the tick a respawn
+// resolves merges into the respawn: one epoch change, reason LifeRespawn, no
+// reset counted for connection quality and no Resync.
+TEST_CASE("PvP a Resync requested before a respawn boundary merges into the respawn") {
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } trace;
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    const auto due = LifePlayer(match, 2).respawnTick;
+    while (match.TickCount() < due - 1) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+    }
+    const auto before = LifePlayer(match, 2);
+    static_cast<void>(trace.trace->Drain());
+    CHECK(match.RequestMovementResync(2));
+    CombatStep(match);
+    const auto respawned = LifePlayer(match, 2);
+    CombatStep(match); // and nothing is left over for the tick after it
+    CHECK(LifePlayer(match, 2).movementEpoch == respawned.movementEpoch);
+    CHECK(respawned.lifeGeneration == before.lifeGeneration + 1);
+    CHECK(respawned.movementEpoch == before.movementEpoch + 1);
+    std::vector<MovementResetReason> reasons;
+    for (const auto& event : trace.trace->Drain())
+        if (event.kind == MovementTraceKind::Reset && event.playerId == 2) reasons.push_back(event.resetReason);
+    CHECK(reasons == std::vector<MovementResetReason>{MovementResetReason::LifeRespawn});
+    const auto quality = match.GetMovementQuality(2);
+    REQUIRE(quality);
+    CHECK(quality->resets == 0);
+    CHECK(quality->resyncs == 0);
+}

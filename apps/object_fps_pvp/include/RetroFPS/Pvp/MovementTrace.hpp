@@ -16,7 +16,7 @@ namespace fps::pvp {
 enum class MovementTraceKind { Generated, Sent, HostAccepted, Resolved, Reset,
     SnapshotProduced, SnapshotReceived, Presentation, RuntimeGap, Transport, LifecycleCancelled, PhaseDecision };
 enum class MovementInputSource { None, Actual, Held, Neutral };
-enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation, LifeRespawn };
+enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation, LifeRespawn, Resync };
 // Which rule decided a PhaseDecision: the first decision after a seed (or after
 // a late correction), a later window decision, or late samples (schema 3).
 enum class MovementPhasePath { None, First, Window, Late };
@@ -156,6 +156,7 @@ inline constexpr std::string_view TraceResetReasonName(MovementResetReason reaso
     case MovementResetReason::Starvation: return "starvation";
     case MovementResetReason::SequenceExhausted: return "sequence_exhausted";
     case MovementResetReason::LifeRespawn: return "life_respawn";
+    case MovementResetReason::Resync: return "resync";
     }
     return "invalid";
 }

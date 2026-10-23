@@ -77,6 +77,13 @@ inline constexpr double MovementPhaseDeadbandSeconds = 0.002;
 inline constexpr std::size_t MovementPhaseLateSamples = 2;
 inline constexpr double MovementPhaseMaximumCorrectionSeconds = 2 * MovementTickSeconds;
 inline constexpr std::int32_t MaxMovementSlackMicros = 1'000'000;
+// N_o (v7.1 outage-resync, D173; network-architecture §4): a substituted
+// command whose first copy arrives later than 20 ticks gives no slack sample;
+// its arrival asks the Match for a Resync epoch instead. Measured on the host
+// clock as the slack samples are, so a published sample is never below
+// -MovementResyncLateMicros.
+inline constexpr std::int64_t MovementResyncLateMicros = 20 * 1'000'000 / AuthorityTickRate;
+static_assert(MovementResyncLateMicros == 333'333);
 // Connection quality: the Match judges each 10-second window after the first
 // one following a join. A window fails when the median input reference age
 // (the age of the snapshot a window says the Client applied, about RTT plus

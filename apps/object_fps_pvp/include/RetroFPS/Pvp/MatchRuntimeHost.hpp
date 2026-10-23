@@ -180,6 +180,8 @@ private:
         std::vector<std::uint32_t> referenceAgesMicros;
         bool judged{};
         std::uint32_t failures{};
+        // The Match's Resync count already added to the ingress counts.
+        std::uint64_t resyncs{};
     };
     struct PublishedReference final {
         std::uint64_t tick{};

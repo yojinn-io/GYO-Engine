@@ -204,6 +204,10 @@ struct MatchIngressCounts final {
     // Not on the ingress line (eight key groups, log-contract Replacement
     // Criteria 1): the resync statistics line carries it (v7.1 outage-resync).
     std::uint64_t slackClampedSamples{};
+    // v7.1 outage-resync (resync statistics line too): first copies later
+    // than N_o, which give no sample, and the Resync epochs the Match made.
+    std::uint64_t lateBeyondNoCommands{};
+    std::uint64_t resyncs{};
     // Appended key (D56): players whose pending action acknowledgement a
     // Leave or an eviction discarded before the tick handed it on.
     std::uint64_t leaveDiscardedActionAcks{};
@@ -314,7 +318,8 @@ private:
 [[nodiscard]] inline std::string MatchResyncStatisticsLine(std::uint64_t player, bool final,
                                                            const MatchIngressCounts& counts) {
     return "[ObjectFPS/PvP Match] resync statistics version=1 player=" + std::to_string(player) + " final=" +
-        (final ? "1" : "0") + " slack_clamped_samples=" + std::to_string(counts.slackClampedSamples);
+        (final ? "1" : "0") + " slack_clamped_samples=" + std::to_string(counts.slackClampedSamples) +
+        " resyncs=" + std::to_string(counts.resyncs) + " late_beyond_no_commands=" + std::to_string(counts.lateBeyondNoCommands);
 }
 
 class MatchResyncStatisticsWriter final {

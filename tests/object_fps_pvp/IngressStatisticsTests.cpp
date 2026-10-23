@@ -445,14 +445,19 @@ TEST_CASE("Match resync statistics lines are verbatim and the final window close
     std::map<std::uint64_t, MatchIngressCounts> first;
     first[0].slackClampedSamples = 9;
     first[7].slackClampedSamples = 2;
+    first[7].resyncs = 1;
+    first[7].lateBeyondNoCommands = 3;
     const auto opening = writer.Lines(first, false);
     REQUIRE(opening.size() == 1);
-    CHECK(opening[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=0 slack_clamped_samples=2");
+    CHECK(opening[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=0 slack_clamped_samples=2 "
+                         "resyncs=1 late_beyond_no_commands=3");
     CHECK(writer.Lines({}, false).empty());
     std::map<std::uint64_t, MatchIngressCounts> last;
     last[8].slackClampedSamples = 1;
     const auto closing = writer.Lines(last, true);
     REQUIRE(closing.size() == 2);
-    CHECK(closing[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=1 slack_clamped_samples=0");
-    CHECK(closing[1] == "[ObjectFPS/PvP Match] resync statistics version=1 player=8 final=1 slack_clamped_samples=1");
+    CHECK(closing[0] == "[ObjectFPS/PvP Match] resync statistics version=1 player=7 final=1 slack_clamped_samples=0 "
+                         "resyncs=0 late_beyond_no_commands=0");
+    CHECK(closing[1] == "[ObjectFPS/PvP Match] resync statistics version=1 player=8 final=1 slack_clamped_samples=1 "
+                         "resyncs=0 late_beyond_no_commands=0");
 }

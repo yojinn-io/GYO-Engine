@@ -27,8 +27,10 @@ struct MovementQuality final {
     std::uint64_t resolved{};
     // Steps resolved with a Held or Neutral substitute instead of the command.
     std::uint64_t substituted{};
-    // Starvation and Backlog epoch resets (not respawns or exhaustion).
+    // Starvation, Backlog and Resync epoch resets (not respawns or exhaustion).
     std::uint64_t resets{};
+    // The Resync ones among them (v7.1 outage-resync).
+    std::uint64_t resyncs{};
 };
 
 // Why the authority would refuse a whole input window (Accepted admits it):
@@ -74,6 +76,11 @@ public:
     [[nodiscard]] bool AcknowledgeActions(PlayerId playerId, ActionId through);
     [[nodiscard]] std::optional<ActionResults> GetActionResults(PlayerId playerId) const;
     [[nodiscard]] std::optional<MovementQuality> GetMovementQuality(PlayerId playerId) const;
+    // The host saw a first copy later than N_o (network-architecture §4): a
+    // Resync epoch at the next tick boundary, without the reset cooldown.
+    // False when the player is unknown or a reset is already scheduled (it
+    // stands in for this one); a respawn at that boundary also does.
+    [[nodiscard]] bool RequestMovementResync(PlayerId playerId);
     // Timing of a decided action still held in the ledger; nullopt otherwise.
     [[nodiscard]] std::optional<ActionTiming> GetActionTiming(PlayerId playerId, ActionId actionId) const;
     [[nodiscard]] const CombatRules& Rules() const noexcept { return rules_; }

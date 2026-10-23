@@ -1360,30 +1360,33 @@ TEST_CASE("PvP host ledger keeps late arrivals beyond the slack sample bound wit
     REQUIRE(snapshot->players[0].movementEpoch == 1);
     REQUIRE(snapshot->players[0].lastResolvedCommand == 141);
     now += 5ms;
+    // Within both (5 ms late): a sample. Since match-resync (v7.1 outage-resync)
+    // it comes first: the copy of 2 below, 1.2 s late, is later than N_o and
+    // rotates the epoch, which would refuse a later copy of 140 as epoch_old.
+    REQUIRE(host.SubmitInput(Input(5, 140)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const auto withinSampleSequence = snapshot->players[0].movementSlackSequence;
+    CHECK(withinSampleSequence == std::optional<std::uint64_t>{140});
     REQUIRE(host.SubmitInput(Input(5, 2))); // beyond the sample track, within the ledger
     REQUIRE(host.Advance(1.0 / 60).steps == 1);
     snapshot = host.TakeSnapshot();
     REQUIRE(snapshot);
     const bool beyondSampleSequence = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{2};
     CHECK_FALSE(beyondSampleSequence);
-    REQUIRE(host.SubmitInput(Input(5, 140))); // within both
-    REQUIRE(host.Advance(1.0 / 60).steps == 1);
-    snapshot = host.TakeSnapshot();
-    REQUIRE(snapshot);
-    const auto withinSampleSequence = snapshot->players[0].movementSlackSequence;
-    CHECK(withinSampleSequence == std::optional<std::uint64_t>{140});
+    CHECK(snapshot->players[0].movementEpoch == 2);
 
     auto taken = host.TakeIngressStatistics();
     const auto beyondSampleLate = taken.at(5).classified[IngressIndex(IngressCommandClass::LateFirst)];
     CHECK(beyondSampleLate == 2);
-    // The last window closes every record still open as end.
-    const auto finalWindow = host.TakeIngressStatistics(true);
-    auto total = taken.at(5);
-    const auto& last = finalWindow.at(5);
-    total.unarrived[IngressIndex(IngressSubstitutionClose::End)] += last.unarrived[IngressIndex(IngressSubstitutionClose::End)];
-    const auto endClosedUnarrived = last.unarrived[IngressIndex(IngressSubstitutionClose::End)];
-    CHECK(endClosedUnarrived == 70);
-    CheckSubstitutionConservation(total);
+    CHECK(taken.at(5).lateBeyondNoCommands == 1);
+    // The Resync closed every record still open as epoch: 71 substituted (2 to
+    // 140, and 142 in the tick after the copy of 140), 2 arrived. Before
+    // match-resync the last window closed 70 of 72 as end (one more tick).
+    const auto epochClosedUnarrived = taken.at(5).unarrived[IngressIndex(IngressSubstitutionClose::Epoch)];
+    CHECK(epochClosedUnarrived == 69);
+    CheckSubstitutionConservation(taken.at(5));
 }
 
 TEST_CASE("PvP host ledger closes the records of a rotated epoch") {
@@ -1662,9 +1665,12 @@ TEST_CASE("PvP host discards the pending slack sample of a player who leaves") {
 
 
 // outage-characterize (v7.1 outage-resync, D172): what the Host and the
-// product's Client prediction do today when a Client's link goes away and
-// comes back. These tests pin the current behaviour before the line changes
-// it; each later change states which pinned value it moves.
+// product's Client prediction do when a Client's link goes away and comes
+// back. Pinned before the line changed it; since match-resync they guard the
+// Design Invariants of network-architecture §7 「連線中斷與重新對時」 (a change
+// of their judgments follows AGENTS.md §14.4). match-resync moved the values
+// of the held, partial and sparse cases: a first copy later than N_o gives no
+// sample and a Resync epoch instead (dev_log outage-resync, match-resync).
 namespace {
 // LocalPlayerPrediction at one frame per authority tick, sending its whole
 // unacknowledged window every frame, behind a link that can lose, hold or
@@ -1741,7 +1747,7 @@ struct OutageRig {
 };
 
 struct OutageOutcome {
-    // Starvation/Backlog resets of the player, ticks after the outage began.
+    // Starvation/Backlog/Resync resets of the player, ticks after the outage began.
     std::vector<std::pair<std::uint64_t, fps::pvp::MovementResetReason>> resets;
     std::optional<std::int32_t> minimumSlack;
     std::uint64_t negativeSamples{};
@@ -1793,7 +1799,8 @@ OutageOutcome RunOutage(const OutageScenario& scenario) {
     for (const auto& event : rig.trace->Drain()) {
         if (event.playerId != 5) continue;
         if (event.kind == MovementTraceKind::Reset &&
-            (event.resetReason == MovementResetReason::Starvation || event.resetReason == MovementResetReason::Backlog))
+            (event.resetReason == MovementResetReason::Starvation || event.resetReason == MovementResetReason::Backlog ||
+             event.resetReason == MovementResetReason::Resync))
             outcome.resets.emplace_back(event.authorityTick - start, event.resetReason);
         if (event.kind == MovementTraceKind::PhaseDecision && event.phasePath == MovementPhasePath::Late)
             ++outcome.clientLateDecisions;
@@ -1856,13 +1863,14 @@ TEST_CASE("PvP outage characterization: two-way outages") {
         CHECK(outcome.clientLateDecisions == 0);
     }
     {
-        // Inside the cooldown 0.6 s rotates nothing and leaves a 0.57 s late sample.
+        // Inside the cooldown the fuse cannot end 0.6 s; the held copies, up to
+        // 0.6 s late, ask for a Resync (before match-resync: no rotation and a
+        // -566,678 us sample, which the Client's stall reseed kept out).
         const auto outcome = RunOutage({36, Uplink::Hold, false, true});
         INFO(Describe(outcome));
-        CHECK(outcome.resets.empty());
-        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-566'678});
+        CHECK(outcome.resets == OutageResets{{37, MovementResetReason::Resync}});
+        CHECK(outcome.negativeSamples == 0);
         CHECK(outcome.lateFirst == 10);
-        CHECK(outcome.clientStallReseeds == 1);
         CHECK(outcome.clientLateDecisions == 0);
     }
     {
@@ -1876,9 +1884,10 @@ TEST_CASE("PvP outage characterization: two-way outages") {
 // One-way outages. Uplink only: the Client sees the starvation epoch, seeds it
 // and fills its window while its packets are lost, so the window it carries
 // out of the outage is twelve commands deep until a Backlog reset 31 ticks
-// after the uplink returns (or when the cooldown ends). A held uplink inside
-// the cooldown arrives as one burst: one published late sample, no correction.
-// Downlink only: the Client stops at a full window and the fuse ends it at 42.
+// after the uplink returns (or when the cooldown ends; P2's first known
+// exception, D173 D-15 (a)). A held uplink inside the cooldown arrives as one
+// burst whose oldest copies are later than N_o: a Resync. Downlink only: the
+// Client stops at a full window and the fuse ends it at 42.
 TEST_CASE("PvP outage characterization: one-way outages") {
     using namespace fps::pvp;
     using Uplink = OutageRig::Uplink;
@@ -1895,11 +1904,11 @@ TEST_CASE("PvP outage characterization: one-way outages") {
         CHECK(outcome.resets == OutageResets{{32, starvation}, {151, backlog}});
     }
     {
+        // Before match-resync: no rotation and one -566,678 us sample.
         const auto outcome = RunOutage({36, Uplink::Hold, true, true});
         INFO(Describe(outcome));
-        CHECK(outcome.resets.empty());
-        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-566'678});
-        CHECK(outcome.negativeSamples == 1);
+        CHECK(outcome.resets == OutageResets{{37, MovementResetReason::Resync}});
+        CHECK(outcome.negativeSamples == 0);
         CHECK(outcome.lateFirst == 34);
         CHECK(outcome.clientStallReseeds == 0);
         CHECK(outcome.clientLateDecisions == 0);
@@ -1918,45 +1927,46 @@ TEST_CASE("PvP outage characterization: one-way outages") {
     }
 }
 
-// Partial delivery: commands keep arriving, so the fuse never fires. With one
-// packet in eight on time and the others 0.5 s late, consecutive late samples
-// reach the Client's phase tracking: Late corrections add lead until a Backlog
-// reset. Three seconds late, the published sample is clamped to -1 s, the
-// Client drops it (outside its 64-command ring) and the 64-entry slack track
-// keeps fewer samples than the ledger counts late firsts. One packet in four
-// on time spreads the late samples apart: no correction.
+// Partial delivery: commands keep arriving, so the fuse never fires. Every
+// copy that arrives later than N_o asks for a Resync, so no late sample
+// reaches the Client's phase tracking. Before match-resync: with one packet in
+// eight on time and the others 0.5 s late, four Late corrections added lead
+// until a Backlog reset (68); three seconds late, samples clamped to -1 s
+// (187 late firsts, 64 samples); one packet in four on time, 75 late samples.
 TEST_CASE("PvP outage characterization: partial delivery") {
     using namespace fps::pvp;
     using Uplink = OutageRig::Uplink;
+    const auto resync = MovementResetReason::Resync;
     {
         const auto outcome = RunOutage({60, Uplink::Deliver, true, false, 8, 30});
         INFO(Describe(outcome));
-        CHECK(outcome.resets == OutageResets{{68, MovementResetReason::Backlog}});
-        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-466'676});
-        CHECK(outcome.clientLateDecisions == 4);
+        CHECK(outcome.resets == OutageResets{{31, resync}, {63, resync}});
+        CHECK(outcome.negativeSamples == 0);
+        CHECK(outcome.clientLateDecisions == 0);
     }
     {
         const auto outcome = RunOutage({300, Uplink::Deliver, true, false, 8, 180});
         INFO(Describe(outcome));
-        CHECK(outcome.resets.empty());
-        CHECK(outcome.minimumSlack == std::optional<std::int32_t>{-MaxMovementSlackMicros});
-        CHECK(outcome.lateFirst == 187);
-        CHECK(outcome.slackLate == 64);
+        CHECK(outcome.resets == OutageResets{{181, resync}, {365, resync}});
+        CHECK(outcome.negativeSamples == 0);
+        CHECK(outcome.lateFirst == 2);
+        CHECK(outcome.slackLate == 0);
         CHECK(outcome.clientLateDecisions == 0);
     }
     {
         const auto outcome = RunOutage({300, Uplink::Deliver, true, false, 4, 60});
         INFO(Describe(outcome));
-        CHECK(outcome.resets.empty());
-        CHECK(outcome.negativeSamples == 75);
+        CHECK(outcome.resets == OutageResets{{61, resync}, {141, resync}, {221, resync}, {301, resync}});
+        CHECK(outcome.negativeSamples == 0);
         CHECK(outcome.clientLateDecisions == 0);
     }
 }
 
-// A single substituted sequence stays in the 64-entry slack track however old
-// it grows: arriving 100 or 700 ticks late it is published as -1 s. The ledger
-// tracks it only 600 sequences: beyond that the same arrival is
-// resolved_untracked, not late_first, so slack_late exceeds late_first.
+// A single substituted sequence stays a sample candidate however old it grows
+// (until retention-600), but its copy, 100 to 700 ticks late, is later than
+// N_o: no sample, a late_beyond_no and a Resync. The ledger tracks it only 600
+// sequences: beyond that the same arrival is resolved_untracked. Before
+// match-resync it was published as -1 s at any age (the test's name).
 TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any age") {
     using namespace fps::pvp;
     using namespace std::chrono_literals;
@@ -1981,22 +1991,27 @@ TEST_CASE("PvP outage characterization: a sparse substitution is sampled at any 
         const auto snapshot = host.TakeSnapshot();
         REQUIRE(snapshot);
         INFO("gap " << gap);
-        CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3});
-        CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{-MaxMovementSlackMicros});
+        const bool sampled = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3};
+        CHECK_FALSE(sampled);
+        CHECK(snapshot->players[0].movementEpoch == 2);
         const auto taken = host.TakeIngressStatistics();
         const auto& counts = taken.at(5);
         CHECK(counts.classified[IngressIndex(IngressCommandClass::LateFirst)] == lateFirst);
         CHECK(counts.classified[IngressIndex(IngressCommandClass::ResolvedUntracked)] == 1 - lateFirst);
-        CHECK(counts.slackLateSamples == 1);
+        CHECK(counts.slackLateSamples == 0);
+        CHECK(counts.lateBeyondNoCommands == 1);
     }
 }
 
 // v7.1 outage-resync drop-counters: a published sample the +-1 s clamp changed
-// is counted (resync statistics line); a sample inside the bound is not.
+// is counted (resync statistics line); a sample inside the bound is not. Since
+// match-resync a late sample never passes -N_o, so only a positive slack can
+// reach the clamp: a command received a second before the host, stalled,
+// executes it (before match-resync this case used copies 61 and 180 ticks late).
 TEST_CASE("PvP host counts the published slack samples the clamp changed") {
     using namespace fps::pvp;
     using namespace std::chrono_literals;
-    for (const auto& [lateTicks, clamped] : {std::pair{10u, 0u}, std::pair{59u, 0u}, std::pair{61u, 1u}, std::pair{180u, 1u}}) {
+    {
         std::chrono::steady_clock::time_point now{};
         MatchRuntimeHost host(TestArena(), [&] { return now; });
         REQUIRE(host.QueueJoin(1, 5));
@@ -2005,7 +2020,7 @@ TEST_CASE("PvP host counts the published slack samples the clamp changed") {
         REQUIRE(host.Advance(2.0 / 60).steps == 2);
         REQUIRE(host.SubmitInput(Window(5, 4, 5)));
         REQUIRE(host.Advance(1.0 / 60).steps == 1); // 3 substituted, everything after it in time
-        for (std::uint64_t k = 0; k < lateTicks; ++k) {
+        for (std::uint64_t k = 0; k < 10; ++k) {
             REQUIRE(host.SubmitInput(Input(5, 6 + k)));
             now += 16'667us;
             REQUIRE(host.Advance(1.0 / 60).steps == 1);
@@ -2013,16 +2028,31 @@ TEST_CASE("PvP host counts the published slack samples the clamp changed") {
         static_cast<void>(host.TakeSnapshot());
         static_cast<void>(host.TakeIngressStatistics());
         REQUIRE(host.SubmitInput(Input(5, 3)));
-        REQUIRE(host.SubmitInput(Input(5, 6 + lateTicks)));
+        REQUIRE(host.SubmitInput(Input(5, 16)));
         REQUIRE(host.Advance(1.0 / 60).steps == 1);
         const auto snapshot = host.TakeSnapshot();
         REQUIRE(snapshot);
-        INFO("late ticks " << lateTicks);
         REQUIRE(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3});
         const auto taken = host.TakeIngressStatistics();
-        const auto& counts = taken.at(5);
-        CHECK(counts.slackPublishedNegativeSamples == 1);
-        CHECK(counts.slackClampedSamples == clamped);
+        CHECK(taken.at(5).slackPublishedNegativeSamples == 1);
+        CHECK(taken.at(5).slackClampedSamples == 0);
+    }
+    {
+        std::chrono::steady_clock::time_point now{};
+        MatchRuntimeHost host(TestArena(), [&] { return now; });
+        REQUIRE(host.QueueJoin(1, 5));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        static_cast<void>(host.TakeIngressStatistics());
+        REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+        now += 2s; // the host stalls with the commands received
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        const auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        CHECK(snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{1});
+        CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{MaxMovementSlackMicros});
+        const auto taken = host.TakeIngressStatistics();
+        CHECK(taken.at(5).slackPublishedNegativeSamples == 0);
+        CHECK(taken.at(5).slackClampedSamples == 1);
     }
 }
 
@@ -2052,4 +2082,189 @@ TEST_CASE("PvP host keeps the copies of a record that Leave closes in its detail
     CHECK(removed->close == IngressSubstitutionClose::Removed);
     CHECK(removed->LateMicros() == std::optional<std::int64_t>{5000});
     CHECK(removed->copiesAfterFirst == 1);
+}
+
+// v7.1 outage-resync match-resync (network-architecture §4 「Match 的命令序列中斷」,
+// §7 Design Invariants 「連線中斷與重新對時」): guards of the Resync epoch.
+TEST_CASE("PvP Resync rotates the epoch at the next tick inside the reset cooldown, once, and counts as a reset") {
+    using namespace fps::pvp;
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } scope;
+    PvpMatch match(TestArena());
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    REQUIRE(match.Join(2, error));
+    for (unsigned tick = 1; tick <= MovementBacklogSampleTicks + 1; ++tick) {
+        REQUIRE(match.SubmitInput(Input(2, tick, 0)));
+        if (tick == 1) REQUIRE(match.SubmitInput(Input(1, 1)));
+        Step(match);
+    }
+    REQUIRE(match.Snapshot().players.front().movementEpoch == 2); // Starvation; the cooldown runs
+    CHECK_FALSE(match.RequestMovementResync(9));
+    CHECK(match.RequestMovementResync(1));
+    CHECK_FALSE(match.RequestMovementResync(1)); // one per epoch: already scheduled
+    Step(match);
+    const auto rotated = match.Snapshot().players.front();
+    CHECK(rotated.movementEpoch == 3);
+    CHECK(rotated.lastResolvedCommand == 0);
+    std::vector<MovementResetReason> reasons;
+    for (const auto& event : scope.trace->Drain())
+        if (event.kind == MovementTraceKind::Reset && event.playerId == 1) reasons.push_back(event.resetReason);
+    CHECK(reasons == std::vector<MovementResetReason>{MovementResetReason::Starvation, MovementResetReason::Resync});
+    const auto quality = match.GetMovementQuality(1);
+    REQUIRE(quality);
+    CHECK(quality->resets == 2);
+    CHECK(quality->resyncs == 1);
+    CHECK(TraceResetReasonName(MovementResetReason::Resync) == "resync");
+}
+
+TEST_CASE("PvP a Resync requested while a Starvation reset is scheduled merges into it") {
+    using namespace fps::pvp;
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } scope;
+    PvpMatch match(TestArena());
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    REQUIRE(match.Join(2, error));
+    for (unsigned tick = 1; tick <= MovementBacklogSampleTicks; ++tick) {
+        REQUIRE(match.SubmitInput(Input(1, 1)));
+        REQUIRE(match.SubmitInput(Input(2, tick, 0)));
+        Step(match);
+    }
+    REQUIRE(match.Snapshot().players.front().movementEpoch == 1); // Starvation scheduled for the next tick
+    CHECK_FALSE(match.RequestMovementResync(1));
+    Step(match);
+    CHECK(match.Snapshot().players.front().movementEpoch == 2);
+    unsigned resets{};
+    for (const auto& event : scope.trace->Drain())
+        if (event.kind == MovementTraceKind::Reset && event.playerId == 1) {
+            ++resets;
+            CHECK(event.resetReason == MovementResetReason::Starvation);
+        }
+    CHECK(resets == 1);
+    const auto quality = match.GetMovementQuality(1);
+    REQUIRE(quality);
+    CHECK(quality->resets == 1);
+    CHECK(quality->resyncs == 0);
+}
+
+// The host measures the lateness of a first copy on its own clock, as the
+// slack sample: up to N_o it is a sample; beyond, no sample, a late_beyond_no
+// and a Resync epoch at the next tick.
+TEST_CASE("PvP host turns a first copy later than N_o into a Resync instead of a slack sample") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    for (const auto& [lateTicks, beyond] : {std::pair{19u, false}, std::pair{21u, true}}) {
+        std::chrono::steady_clock::time_point now{};
+        MatchRuntimeHost host(TestArena(), [&] { return now; });
+        REQUIRE(host.QueueJoin(1, 5));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+        REQUIRE(host.Advance(2.0 / 60).steps == 2);
+        REQUIRE(host.SubmitInput(Window(5, 4, 5)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1); // 3 substituted, everything after it in time
+        for (std::uint64_t k = 0; k < lateTicks; ++k) {
+            REQUIRE(host.SubmitInput(Input(5, 6 + k)));
+            now += 16'667us;
+            REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        }
+        static_cast<void>(host.TakeSnapshot());
+        static_cast<void>(host.TakeIngressStatistics());
+        REQUIRE(host.SubmitInput(Input(5, 3)));
+        REQUIRE(host.SubmitInput(Input(5, 6 + lateTicks)));
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        auto snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        INFO("late ticks " << lateTicks);
+        const bool sampled = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3};
+        CHECK(sampled == !beyond);
+        if (beyond) CHECK(snapshot->players[0].movementEpoch == 2);
+        else CHECK(snapshot->players[0].movementSlackMicros == std::optional<std::int32_t>{-316'673});
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        CHECK(snapshot->players[0].movementEpoch == (beyond ? 2u : 1u));
+        const auto taken = host.TakeIngressStatistics();
+        const auto& counts = taken.at(5);
+        CHECK(counts.lateBeyondNoCommands == (beyond ? 1u : 0u));
+        CHECK(counts.resyncs == (beyond ? 1u : 0u));
+        CHECK(counts.slackLateSamples == (beyond ? 0u : 1u));
+    }
+}
+
+// The guard of 「發布的 slack 不小於 −N_o」 where the outage characterization
+// found the widest gap: a held uplink inside the reset cooldown (0.6 s) used
+// to publish -566,678 us without an epoch change.
+TEST_CASE("PvP no published slack sample is below -N_o after a held uplink inside the reset cooldown") {
+    using namespace fps::pvp;
+    const auto outcome = RunOutage({36, OutageRig::Uplink::Hold, true, true});
+    INFO(Describe(outcome));
+    REQUIRE(outcome.minimumSlack);
+    CHECK(*outcome.minimumSlack >= -MovementResyncLateMicros);
+    const bool resynced = std::any_of(outcome.resets.begin(), outcome.resets.end(),
+        [](const auto& reset) { return reset.second == MovementResetReason::Resync; });
+    CHECK(resynced);
+}
+
+
+// Every first copy later than N_o gives no sample, not only the one whose
+// Resync request was taken; one Resync for the epoch.
+TEST_CASE("PvP host gives no sample for any first copy later than N_o and asks for one Resync") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+    REQUIRE(host.Advance(2.0 / 60).steps == 2);
+    REQUIRE(host.SubmitInput(Window(5, 5, 6)));
+    REQUIRE(host.Advance(2.0 / 60).steps == 2); // 3 and 4 substituted
+    for (std::uint64_t k = 0; k < 30; ++k) {
+        REQUIRE(host.SubmitInput(Input(5, 7 + k)));
+        now += 16'667us;
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    }
+    static_cast<void>(host.TakeIngressStatistics());
+    REQUIRE(host.SubmitInput(Input(5, 3)));
+    REQUIRE(host.SubmitInput(Input(5, 4)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    const auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    CHECK(snapshot->players[0].movementEpoch == 2);
+    CHECK_FALSE(snapshot->players[0].movementSlackMicros.value_or(0) < 0);
+    const auto taken = host.TakeIngressStatistics();
+    const auto& counts = taken.at(5);
+    CHECK(counts.lateBeyondNoCommands == 2);
+    CHECK(counts.slackLateSamples == 0);
+    CHECK(counts.resyncs == 1);
+}
+
+// Lateness is time on the host clock, not the sequence distance: a host that
+// stalled (its catch-up drops time beyond five steps) resolves a sequence one
+// tick later but half a second later in time; that copy is later than N_o.
+TEST_CASE("PvP host measures N_o in time, so a host stall makes a copy late by time") {
+    using namespace fps::pvp;
+    using namespace std::chrono_literals;
+    std::chrono::steady_clock::time_point now{};
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    REQUIRE(host.SubmitInput(Window(5, 1, 2)));
+    REQUIRE(host.Advance(3.0 / 60).steps == 3); // 3 substituted
+    now += 500ms; // the host stalls
+    REQUIRE(host.SubmitInput(Input(5, 3)));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    const auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const bool sampled = snapshot->players[0].movementSlackSequence == std::optional<std::uint64_t>{3};
+    CHECK_FALSE(sampled);
+    CHECK(snapshot->players[0].movementEpoch == 2);
+    CHECK(host.TakeIngressStatistics().at(5).lateBeyondNoCommands == 1);
 }
