@@ -1,6 +1,6 @@
 # outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）
 
-- 狀態：**核准**（v7.1 D172，2026-10-23：第 8 節的 D-1～D-14 全部照建議）。G1（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)。D-13 在 L2 前另行宣告核准。
+- 狀態：**核准**（v7.1 D172，2026-10-23：第 8 節的 D-1～D-14 全部照建議）。`gate-characterize`（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)。D-13 在 L2 前另行宣告核准。
 - 分支：`claude/pvp-v71-outage-resync`，從 master `cdb9b07` 開出。這是新的 PR 線，與記錄器分支 `claude/pvp-v71-after-re-evaluate` 分開。
 - 規劃方式（D171）：ultracode。2 位偵察、3 份計畫（最小契約、契約先行、風險優先）、1 位評審綜合、1 次對抗式審查。審查判定「必須修訂」，本版已套用；對照見第 11 節。
 - 引用的 file:line 以 master `cdb9b07` 為準。
@@ -20,17 +20,21 @@
 | `identity-rebind` | 換了位址的同一個 session 能接回來 |
 | `resync-l2-l3` | 注入中斷的 L2，以及你在場的 L3 |
 | `line-close` | 收尾 |
+| `gate-characterize` | 關卡：依特性報告決定 T_int 與 N_o（舊稱 G1） |
+| `gate-contract` | 關卡：你核准契約條文，之後才改程式（舊稱 G2） |
+
+關卡原本叫 G1、G2，和 INVENTORY 的項目代號 G1、G2（例如 D159「G2 先不做」的「時鐘到網路路徑」系列紀錄）撞名，2026-10-23 改名。舊的 commit 訊息與 HANDOFF 決策紀錄裡的 G1、G2 指的是這兩個關卡時，照這張表讀。
 
 ## 現況
 
 - 2026-10-23：草案第 2 版提交，D172 全部照建議核准。
 - 2026-10-23：`outage-characterize` 開始（high，構造時序的部分局部 xhigh）。
-- 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。G1 的決定見下一行。
-- 2026-10-23：G1 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
+- 2026-10-23：`outage-characterize` 完成（[特性報告](outage-characterize-report.md)）。`gate-characterize` 的決定見下一行。
+- 2026-10-23：`gate-characterize` 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
 - 2026-10-23：`outage-characterize` 的 L1（run 39944311104）四平台成功。`resync-contract` 開始（high）。
 - 2026-10-23：`resync-contract` 的條文寫完，xhigh 對抗式審查（1 次）判定「必須修訂」，已全部處理（第 13 節）。
 - 2026-10-23：依你的要求做第二輪 xhigh 複核：判定「必須修訂」（Critical 1、Major 2、Minor 8），已全部處理（第 13 節第 8 點）。
-- 2026-10-23：第三輪 xhigh 複核：判定「可送核准」（Minor 7 項，已全部處理，第 13 節第 9 點）。**等你在關卡 G2 核准條文。**
+- 2026-10-23：第三輪 xhigh 複核：判定「可送核准」（Minor 7 項，已全部處理，第 13 節第 9 點）。**等你在關卡 `gate-contract` 核准條文。**
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -135,7 +139,7 @@
 - **T_int**（進入中斷）：只看 snapshot 的到達時刻，因為「snapshot 串流就是心跳」。
   - 候選 0.5、0.75、1 s。
   - 來源：`outage-characterize` 量既有 clean 語料的 snapshot 間隔分布。已知 Gateway 會停頓約 1.3 s（`network-architecture.zh-Hant.md:799`），所以 0.5 s 可能在 clean 跑次裡誤報。
-  - 在 G1 決定（D-4）。
+  - 在 `gate-characterize` 決定（D-4）。
 - **T_max**（真正斷線）：Playing 期間**從最後一份 snapshot 起算**。
   - 現在是從任何有效封包起算，而 Welcome 每秒都會到。如果 Gateway 活著、Match 卻不出 snapshot，「中斷」會沒有上限（審查 minor 6）。
   - 值見 D-11（建議維持 5 s）。
@@ -177,7 +181,7 @@
 - **冷卻**：
   - Resync 不受 60 Tick 冷卻限制，否則落在重生後冷卻期內的中斷就漏掉了；
   - 同一個 epoch 內最多一次 Resync：換 epoch 後，舊命令都是 `EpochOld`，不會再觸發。
-- **N_o 的來源**：既有語料的晚到分布，目前最大約 13 Tick（221,871 µs）。候選 30 Tick（0.5 s），在 G1 依特性報告決定（D-3）。
+- **N_o 的來源**：既有語料的晚到分布，目前最大約 13 Tick（221,871 µs）。候選 30 Tick（0.5 s），在 `gate-characterize` 依特性報告決定（D-3）。
 - **效果**：
   - 所有發布的 slack 都 ≥ −N_o Tick 對應的 µs，大負值在源頭消失；
   - 這也涵蓋部分送達、只有上行中斷、冷卻期內這三個缺口。
@@ -344,9 +348,9 @@
 outage-resync（約 59～85 h）
 ├── plan-commit             medium｜本計畫、dev_log、記錄器分支的分線紀錄
 ├── outage-characterize     high，構造時序局部 xhigh｜在 HEAD 上用測試釘住現況
-│   └── [關卡 G1]           D-3（N_o）、D-4（T_int）：依特性報告決定數值
+│   └── [gate-characterize] D-3（N_o）、D-4（T_int）：依特性報告決定數值
 ├── resync-contract         high，寫完做 1 次 xhigh 對抗式審查｜K1～K6 的條文
-│   └── [關卡 G2]           你核准條文，之後才改程式
+│   └── [gate-contract]     你核准條文，之後才改程式
 ├── drop-counters           high｜看不到的丟棄補計數，新的 A 級行族
 ├── single-store-refactor   high，紀錄身分與關閉順序局部 xhigh｜單一紀錄，行為逐位元不變
 ├── match-resync            xhigh｜晚到過久就換 epoch，Resync 不受冷卻限制
@@ -364,8 +368,8 @@ outage-resync（約 59～85 h）
 | 代號 | 內容 | 驗收 | 估時（h） | 決策點 |
 |---|---|---|---|---|
 | plan-commit | 本文件、dev_log；記錄器分支的 HANDOFF 記分線 | 只改文件 | 1～2 | D-1 |
-| outage-characterize | 只改測試，不改產品。用注入的時鐘構造：(a) 雙向完整中斷 0.3／0.6／1／2／5／10 s，分冷卻期內外；(b) 只有上行、只有下行；(c) 部分送達，加一個晚到 3 s 的版本；(d) 稀疏替代跨過 600 序號；(e) Client：stallReseed、64 格環丟棄、連續負樣本；(f) 夾限。另外唯讀掃描 clean 語料的 snapshot 間隔分布與晚到分布。新增突變：夾限移除、保險絲恆為 false | L1 四平台；新突變 killed（只在預期的測試失敗時算）。特性報告附 file:line：哪些情況大負值進入 TrackPhase、保險絲的實際觸發 Tick、snapshot 間隔分布、晚到分布 | 6～8 | G1：D-3、D-4；報告若推翻前提，停下回報 |
-| resync-contract | K1～K6 的文件條文；§7 的 Invariant 與 Replacement Criteria | 只改文件；1 次 xhigh 對抗式審查；你核准（G2） | 4～5 | D-5～D-12 |
+| outage-characterize | 只改測試，不改產品。用注入的時鐘構造：(a) 雙向完整中斷 0.3／0.6／1／2／5／10 s，分冷卻期內外；(b) 只有上行、只有下行；(c) 部分送達，加一個晚到 3 s 的版本；(d) 稀疏替代跨過 600 序號；(e) Client：stallReseed、64 格環丟棄、連續負樣本；(f) 夾限。另外唯讀掃描 clean 語料的 snapshot 間隔分布與晚到分布。新增突變：夾限移除、保險絲恆為 false | L1 四平台；新突變 killed（只在預期的測試失敗時算）。特性報告附 file:line：哪些情況大負值進入 TrackPhase、保險絲的實際觸發 Tick、snapshot 間隔分布、晚到分布 | 6～8 | `gate-characterize`：D-3、D-4；報告若推翻前提，停下回報 |
+| resync-contract | K1～K6 的文件條文；§7 的 Invariant 與 Replacement Criteria | 只改文件；1 次 xhigh 對抗式審查；你核准（`gate-contract`） | 4～5 | D-5～D-12 |
 | drop-counters | Client 的 `phase_samples_unmatched`、Host 的 `slack_clamped`；新的 A 級行族與釘住測試 | L1；突變「不計數」「計錯分支」killed；權威 digest 不變 | 3～4 | D-12 |
 | single-store-refactor | 照 Delta-1。暫時規則是聯集：600 序號內，或屬於最新 64 筆就保留，樣本只給最新 64 筆。每筆紀錄要有 eligible 旗標，才能逐位元模擬現在的裁切（審查 minor 1）。SubmitInput 端的重建與帳本關閉時刻要對齊 | L1；既有判定原樣通過（包括 `:1363`）；`match-ingress.jsonl` 位元組相同；73 個突變重新判定並登記 | 8～12 | 動手前你同意 Delta-1 |
 | match-resync | 照 §14.3，先 Red 後 Green：晚到 > N_o 換 epoch（Resync）、不受冷卻限制、同 epoch 至多一次、觸發的命令不產生樣本。schema 3 列舉、`command_evidence.py`、log-contract 同步 | L1；突變（N_o 差一、雙重換 epoch、受冷卻限制、觸發命令仍產生樣本）killed；權威 digest 的 35 個情境不變 | 7～10 | D-3 |
@@ -410,7 +414,7 @@ outage-resync（約 59～85 h）
 
 ## 8. 交給你的決策點
 
-照建議核准時，第 6 節的分批就是執行順序。G1、G2 兩個關卡會再停下來。
+照建議核准時，第 6 節的分批就是執行順序。`gate-characterize`、`gate-contract` 兩個關卡會再停下來。
 
 1. **D-1 核准本計畫、分批、檔位與範圍。**
    - 完整版約 59～85 h；縮小版（D-2 選 I-1）約 53～76 h。
@@ -422,13 +426,13 @@ outage-resync（約 59～85 h）
    - (I-3) 防竄改的證明（HMAC 等）：要改 wire，排到 v8 的 pv8。
    - **建議**：I-2，並把 I-3 記到 v8 的候選。
 
-3. **D-3 Match 端：晚到過久就換 epoch（第 3.2 節），N_o 在 G1 決定。**
+3. **D-3 Match 端：晚到過久就換 epoch（第 3.2 節），N_o 在 `gate-characterize` 決定。**
    - (M-B′) 照第 3.2 節：Starvation 加上「晚到 > N_o」，Resync 不受冷卻限制。
    - (M-A) 只把現有的 Starvation 升格為 Invariant。冷卻期內、部分送達、只有上行的大負值會留下，交給 B6。這偏離 P3，需要你修改原則。
    - **建議**：M-B′。N_o 候選 30 Tick，由晚到分布確認。
 
 4. **D-4 T_int：0.5、0.75 或 1 s。**
-   - **建議**：在 G1 看 snapshot 間隔分布再定；如果 1.3 s 的 Gateway 停頓在 clean 語料裡常見，取 1 s。
+   - **建議**：在 `gate-characterize` 看 snapshot 間隔分布再定；如果 1.3 s 的 Gateway 停頓在 clean 語料裡常見，取 1 s。
 
 5. **D-5 T_max 的起算點：最後一份 snapshot，還是任何有效封包。**
    - **建議**：Playing 期間從最後一份 snapshot 起算，讓「中斷」一定有上限。
@@ -480,7 +484,7 @@ outage-resync（約 59～85 h）
 
 ## 9. 風險
 
-1. **前提可能不準**：G1 是關卡，避免為了量不到的問題排修正（v7.1 估到 400 h 的教訓）。
+1. **前提可能不準**：`gate-characterize` 是關卡，避免為了量不到的問題排修正（v7.1 估到 400 h 的教訓）。
 2. **夾限是整個房間的單點故障**：夾限一壞，Gateway adapter 回錯誤（`adapter.go:91-93`），接著 runtimeFailed，整個房間停住。所以順序是先加突變（outage-characterize）、再加計數（drop-counters）、最後才改行為。
 3. **準時樣本被擠掉**：晚到樣本會贏得那次發布的最小值（`MatchRuntimeHost.cpp:133-138`）。在 M-B′ 下，晚到量上限是 N_o，影響變小。本線只記錄，屬於 B6 的輸入。
 4. **Host 有送、Client 丟掉**：Client 的環只有 64 格。本線只加計數，不擴大環，因為那會改到 TrackPhase 的規則（B6 的範圍）。
@@ -527,7 +531,7 @@ outage-resync（約 59～85 h）
 
 - **ultracode 的原始輸出**（git 忽略的 scratchpad，只作出處）：`wf_3c8b9349-036` 的 journal。
 
-## 13. resync-contract 的修訂（G2 之前，2026-10-23）
+## 13. resync-contract 的修訂（`gate-contract` 之前，2026-10-23）
 
 契約條文寫在 [network-architecture](../../network-architecture.zh-Hant.md) §4「連線中斷與恢復」與 §7 的兩節 Design Invariants；條文和本計畫第 3～5 節不同時，以條文為準。xhigh 對抗式審查（1 次）判定「必須修訂」：Critical 2、Major 8、Minor 12，已全部處理。和本計畫不同的地方：
 
@@ -558,7 +562,7 @@ outage-resync（約 59～85 h）
    - S3 在 `retention-600` 之前兩個方向都不保證（稀疏替代超過 600 序號時 0 對 1），只在之後檢查；
    - epoch 相同、權威 < tip 時，領先量留到 Backlog 清掉，列為 P2 的第二個已知例外，交給 B6；
    - 游標＝tip 時 SeedLead；只重設擷取時取消未 slew 完的修正，清除 `settling_`、`reacquiring_`；旗標的 mutex 區段與換代清除；和 LifeRespawn 合併時的計數；過渡批次的判斷範圍；`phase summary` 的寫出端；Delta-2、Delta-3 就地修正。
-9. **第三輪審查（xhigh 複核，使用者要求）**：判定「可送核准」，只剩 Minor 7 項，送 G2 之前全部處理：時鐘視窗重開只由通過驗證的資料包觸發（m1）；只有已綁定 endpoint 的 Hello 刷新最後驗證時刻（m2）；第一個 Welcome（m3）；`phase_path=resume_reset`（m4）；`phase summary` 只在有本機玩家的那一代寫（m5）；1 Hz Hello 的空窗寫進安全取捨，Hello 間隔在 `identity-rebind` 決定（m6）；有效 snapshot 的定義、Delta-2 的影響範圍（m7）。
+9. **第三輪審查（xhigh 複核，使用者要求）**：判定「可送核准」，只剩 Minor 7 項，送 `gate-contract` 之前全部處理：時鐘視窗重開只由通過驗證的資料包觸發（m1）；只有已綁定 endpoint 的 Hello 刷新最後驗證時刻（m2）；第一個 Welcome（m3）；`phase_path=resume_reset`（m4）；`phase summary` 只在有本機玩家的那一代寫（m5）；1 Hz Hello 的空窗寫進安全取捨，Hello 間隔在 `identity-rebind` 決定（m6）；有效 snapshot 的定義、Delta-2 的影響範圍（m7）。
 10. **其他**：
    - 暫時性錯誤在連線與中斷狀態都適用。代價是 Gateway 程序死掉時，Client 要等 5 s 才回 Lobby。
    - T_int、T_max 兩端的值由共用 fixture 綁定。

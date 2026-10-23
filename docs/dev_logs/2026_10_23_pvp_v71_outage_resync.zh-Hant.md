@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），G1 已決定（D173）。`resync-contract` 的條文寫完，等關卡 G2。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文寫完，等關卡 `gate-contract`。
 
 相關文件：
 
@@ -15,7 +15,7 @@
 |---|---|---|---|
 | `plan-commit` | medium | 提交計畫草案第 2 版與本紀錄 | 只改文件 |
 | `outage-characterize`（`c200992` 等） | high | 用測試固定中斷與晚到的現狀：Host 側接上產品的 `LocalPlayerPrediction`，注入雙向、只上行、只下行、部分送達的中斷；Client 側 3 個；稀疏替代 1 個；語料唯讀掃描。產品程式不改 | cpu 測試 293／293；突變 4／4 killed；L1 run 39944311104 四平台成功；報告：[outage-characterize-report.md](../object_fps_pvp/plans/v7.1/outage-characterize-report.md) |
-| `resync-contract`（`02f4b6d`、本次） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 1 次（必須修訂 → 已處理）；G2 等使用者核准 |
+| `resync-contract`（`02f4b6d`、本次） | high，審查 xhigh | network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants；protocol-v7 §2；log-contract §1.4；ingress README | 只改文件；xhigh 對抗式審查 1 次（必須修訂 → 已處理）；`gate-contract` 等使用者核准 |
 
 ## 規劃
 
@@ -62,7 +62,7 @@
 
 ## resync-contract
 
-- **決定**：G1 的決定（D173）：T_int 0.5 s、N_o 20 Tick、D-15 (a)。
+- **決定**：`gate-characterize` 的決定（D173）：T_int 0.5 s、N_o 20 Tick、D-15 (a)。
 - **第一版條文**（`02f4b6d`）把計畫第 3 節寫成 §4 的狀態與規則、§7 的不變式。
 - **xhigh 對抗式審查**：判定「必須修訂」（Critical 2、Major 8、Minor 12）。主會話對照程式，確認兩個 Critical 成立：
   - **C1**：`SeedLead` 會清空未確認的命令再重新產生（`LocalPlayerPrediction.cpp:72`）。在權威還沒追上 tip 時強制呼叫它，會用不同內容改寫還在途中的序號。這是計畫第 3.1 節第 3 步的設計錯誤：特性測試的 rig 每幀固定 1 Tick，沒有「Match 停頓、只追趕 5 步」的情境，所以沒有量到。
@@ -81,4 +81,4 @@
   - 修正：改成 token 比對或 endpoint 比對都刷新。
   - Major：S3 在 `retention-600` 之前兩個方向都不保證；epoch 相同、權威 < tip 時，領先量留到 Backlog，列為 P2 的第二個例外。
   - Minor 8 項：見計畫第 13 節第 8 點。
-- **第三輪 xhigh 複核**（使用者要求）：判定「可送核准」。沒有 Critical 或 Major，Minor 7 項在送 G2 之前全部處理。審查者建議先修的是 m1：照字面，從其他位址送來、帶同一個 session id 的封包也會觸發 Gateway 的時鐘視窗重開，可以被外部用來灌爆 A 級日誌。
+- **第三輪 xhigh 複核**（使用者要求）：判定「可送核准」。沒有 Critical 或 Major，Minor 7 項在送 `gate-contract` 之前全部處理。審查者建議先修的是 m1：照字面，從其他位址送來、帶同一個 session id 的封包也會觸發 Gateway 的時鐘視窗重開，可以被外部用來灌爆 A 級日誌。

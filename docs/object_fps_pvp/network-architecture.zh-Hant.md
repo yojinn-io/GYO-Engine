@@ -545,7 +545,7 @@ JoinResult 的上限為三秒。Network worker 每秒用既有 Hello／Welcome �
 60 Hz Input 也可保持連線存活。Hello 不延長遊戲移動期限。這些連線期限與
 十五個缺包 Authority Tick 的替代輸入期限 是不同契約。
 
-### 連線中斷與恢復（v7.1 `outage-resync`，D172、D173；條文待 G2 核准）
+### 連線中斷與恢復（v7.1 `outage-resync`，D172、D173；條文待 `gate-contract` 核准）
 
 斷線偵測與恢復只走 UDP：snapshot 串流本身就是心跳，不另開 TCP 心跳或控制通道，
 wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時鐘、相位、命令序列重新對齊，
@@ -904,7 +904,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - K1（v7.1 D118、D119、D121）：通用層的固定窗口限速（120 包／秒）在 Gateway 自己停頓後，把緩衝中的合法封包算進同一窗口而丟掉輸入。`edge-rate-limit` 改為 token bucket（每秒補 120、容量 120，狀態留在通用層的 session，屬於允許的 session 類）；Gateway 停頓約 1.3 秒以內不再丟（開槍玩家約 91 包／秒）。
 - K2（v7.1 `outage-resync`，D172）：session 的 endpoint 重新綁定與「最後驗證時刻」（§4「連線中斷與恢復」）屬於允許的 connection and session 類，判斷屬於 session 生命週期的跨訊息判斷，分類表的類別不變；新增的欄位本身照上面的變更規則提出。
 
-#### 連線中斷與重新對時（v7.1 `outage-resync`；方向 D172、數值 D173；條文待 G2 核准）
+#### 連線中斷與重新對時（v7.1 `outage-resync`；方向 D172、數值 D173；條文待 `gate-contract` 核准）
 
 條文本體在 §4「連線中斷與恢復」。這裡寫的是不得改變的設計意圖，以及守住它們的測試。
 

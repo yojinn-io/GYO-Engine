@@ -1,4 +1,4 @@
-# outage-characterize 特性報告（關卡 G1）
+# outage-characterize 特性報告（關卡 `gate-characterize`）
 
 - 計畫：[outage-resync.md](outage-resync.md) 的 `outage-characterize`（D172）。
 - 測試：
@@ -100,7 +100,7 @@
   - 只有下行：42 Tick；
   - 冷卻期內：距上一次換 epoch 61 Tick。
 
-## 4. 關卡 G1 要決定的
+## 4. 關卡 `gate-characterize` 要決定的
 
 1. **D-4 T_int（進入中斷）**
    - **選項**：0.5 s／0.75 s／1 s。
@@ -129,7 +129,7 @@
 
 ## 5. 決定（D173，2026-10-23）
 
-使用者：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」
+使用者（G1＝`gate-characterize`）：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」
 
 - T_int＝0.5 s。
 - N_o＝20 Tick。
