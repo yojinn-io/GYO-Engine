@@ -653,6 +653,15 @@
 
 ## 未結事項
 
+- **`N-gui-black-map-intermittent`**（2026-10-23，使用者觀察，記錄）：GUI 測試時偶發「地圖不渲染」。人物照常出現，地圖是黑的；兩個 Client 都可能發生，視野內沒有玩家的那一端整個黑。使用者說以前也出現過，不是每次都會出，懷疑和 macOS 有關。
+  - 今天沒有重現：
+    - capture 的讀回截圖（頭 `7f7b704`、`d5ecfa3`，以及舊的 pv7-checkpoint）地圖都正常；
+    - timing 短測跑次中對螢幕截圖（頭與 base 各 1 次，14、22、30 秒）地圖也都正常。
+  - 證據：`build/target/_build/test/logs/pvp-v71-gui-black-map-20261023/`。
+  - 現有的 GUI 判定只看延遲、命中、HUD，看不到地圖有沒有畫出來，所以發生時跑次照樣判 P。
+  - 跑次中截整個螢幕曾讓視窗失焦一次，該跑次判 `invalid_window_disturbed`（開發跑次，不計）。所以做觀測時，截圖要放在量測窗口之外，或只截遊戲視窗。
+  - 方向：先建觀測（只記錄），再評估、再修正。排在 sdl-isolation 的 L2 之後，避免和 L2 同時佔用螢幕。和 sdl-isolation 無關。
+
 - **（已處理：`worker-probe-repair`，`d2844a5`）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 
