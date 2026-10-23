@@ -228,6 +228,33 @@ TEST_CASE("focus events of this window set and clear windowFocused") {
     CHECK_MESSAGE(input.Snapshot().windowFocused, "focus carries over to the next frame");
 }
 
+TEST_CASE("events of this window are not deduplicated when the state does not change") {
+    // input.md (Contracts): every focus loss, key press and mouse button event SDL reports for this window is an
+    // event even when the state does not change; only key repeats are dropped. The product's pointer capture
+    // relies on it (sdl-isolation J1).
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    const auto count = [&](InputEventKind kind) {
+        std::size_t n = 0;
+        for (const auto& event : input.Snapshot().events) n += event.kind == kind;
+        return n;
+    };
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, WindowEvent(window, SDL_EVENT_WINDOW_FOCUS_LOST), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::WindowFocusLost) == 2, "a focus loss while unfocused is still an event");
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, KeyEvent(window, SDL_SCANCODE_TAB, true), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::KeyPressed) == 2, "a second non-repeat key press is still an event");
+    input.BeginFrame();
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    Engine::Input::Backend::Sdl::HandleNativeEvent(input, ButtonEvent(window, SDL_BUTTON_LEFT, true, 1.0f, 2.0f), Engine::Time::TimePoint{});
+    CHECK_MESSAGE(count(InputEventKind::MouseButtonPressed) == 2, "a second mouse button press is still an event");
+}
+
 TEST_CASE("a click is inside the window by the window size when the backend handles it") {
     // input.md (Contracts): insideWindow uses the size at handling, never an
     // earlier one; the product's pointer capture relies on it (sdl-isolation J1).

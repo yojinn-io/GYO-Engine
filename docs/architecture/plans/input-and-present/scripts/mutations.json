@@ -801,6 +801,36 @@
       "target": "input_sdl_tests",
       "cases": "focus events of this window set*",
       "expect": "a focus gain sets windowFocused"
+    },
+    {
+      "id": "m-dedup-focus-lost",
+      "what": "A focus loss while unfocused is dropped",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "    case SDL_EVENT_WINDOW_FOCUS_LOST:\n        if (event.window.windowID == ownWindowId) {",
+      "replace": "    case SDL_EVENT_WINDOW_FOCUS_LOST:\n        if (event.window.windowID == ownWindowId && frame_.windowFocused) {",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a focus loss while unfocused is still an event"
+    },
+    {
+      "id": "m-dedup-key",
+      "what": "A key press is an event only on a state change",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SetKey(*key, down);\n                frame_.events.push_back(",
+      "replace": "                const bool changed = frame_.keys[static_cast<std::size_t>(*key)].held != down;\n                SetKey(*key, down);\n                if (changed) frame_.events.push_back(",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a second non-repeat key press is still an event"
+    },
+    {
+      "id": "m-dedup-button",
+      "what": "A mouse button press is an event only on a state change",
+      "file": "engine/input/backend/sdl/src/SdlInput.cpp",
+      "find": "                SetMouseButton(*button, down);\n",
+      "replace": "                const bool changed = frame_.mouseButtons[static_cast<std::size_t>(*button)].held != down;\n                SetMouseButton(*button, down);\n                if (!changed) break;\n",
+      "target": "input_sdl_tests",
+      "cases": "events of this window are not deduplicated*",
+      "expect": "a second mouse button press is still an event"
     }
   ]
 }
