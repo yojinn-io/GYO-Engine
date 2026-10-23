@@ -168,3 +168,26 @@ INVENTORY 處置為「re-evaluate 之後」的 37 項，加上 HANDOFF「未結�
 | after-re-evaluate | sdl-isolation 兩批一條、系統其餘＋觀測＋測試（含 worker-probe-repair）一條、發行一條（D159） |
 
 PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四平台 L1，用 `gh pr merge --merge`。
+
+## 開發紀錄
+
+每批完成時，做那一批的會話把 dev_log 和該批放在同一個變更提交，並加進這份清單（AGENTS.md §15）。下列依批次順序；路徑相對於本目錄。
+
+- [pv7-design：pv7 的契約一次定完，Gateway 回到無狀態邊緣](../../../dev_logs/2026_10_16_pvp_v71_pv7_design.zh-Hant.md)
+- [proto-rename-v7、version-errors：協議改名為 v7，版本 6→7，版本不符時說清楚](../../../dev_logs/2026_10_16_pvp_v71_version.zh-Hant.md)
+- [heartbeat-sync、time-echo：Match↔Gateway 心跳對時，Client↔Gateway 時間回聲](../../../dev_logs/2026_10_17_pvp_v71_clock.zh-Hant.md)
+- [drop-report：Gateway 把丟了什麼、為什麼丟，回報給 Match](../../../dev_logs/2026_10_16_pvp_v71_drop_report.zh-Hant.md)
+- [edge-results-resend、edge-input-passthrough、edge-results-passthrough：Gateway 回到無狀態邊緣之一，Match 在 ACK 前重送結果、輸入與結果原樣轉送](../../../dev_logs/2026_10_17_pvp_v71_edge_input_results.zh-Hant.md)
+- [edge-actions-passthrough、edge-analyzers、edge-contract：動作原樣轉送、守恆分析器重新凍結、無狀態邊緣的約束與守衛](../../../dev_logs/2026_10_18_pvp_v71_edge_actions_contract.zh-Hant.md)
+- [edge-rate-limit：限速改成 token bucket（K1），並跑 edge-actions-passthrough 的 L2](../../../dev_logs/2026_10_18_pvp_v71_edge_rate_limit.zh-Hant.md)
+- [cause-records、hitbox-fields：原因紀錄（E2、動作拒收回覆、Leave 原因）與 hitbox 欄位、E 和 S 的影子紀錄](../../../dev_logs/2026_10_18_pvp_v71_cause_hitbox.zh-Hant.md)
+- [pv7-checkpoint：A1 之前的整體回歸，v7 基準對現在 232 項 0 停止](../../../dev_logs/2026_10_19_pvp_v71_pv7_checkpoint.zh-Hant.md)
+- [a1-shot-step＋pv7-merge：射擊照命令步判定，FireGate 退役，pv7-line 合併](../../../dev_logs/2026_10_20_pvp_v71_a1_merge.zh-Hant.md)
+- [log-contract：日誌 Data Contract v1，凍結分析器不會靜默讀錯](../../../dev_logs/2026_10_20_pvp_v71_log_contract.zh-Hant.md)（Engine 側的 tt2-trace 見 [Engine TT-2](../../../dev_logs/2026_10_20_engine_tt2.zh-Hant.md)）
+- [dead-letter-position＋incident-close：死信維持兩份契約，兩份事故紀錄結案](../../../dev_logs/2026_10_21_pvp_v71_dead_letter_incident.zh-Hant.md)
+- [d44-regression-pv7：pv7 上線後的 D44 回歸，290 個 case-run 加長測 0 次](../../../dev_logs/2026_10_21_pvp_v71_d44_regression.zh-Hant.md)
+- [observability-tools：相位決策寫進 trace、增量計數、加寬偵測器、遺失種子](../../../dev_logs/2026_10_21_pvp_v71_observability.zh-Hant.md)
+- [re-evaluate：用 pv7 之後的數據判斷相位追蹤與 D44 的項目還要不要繼續](../../../dev_logs/2026_10_21_pvp_v71_re_evaluate.zh-Hant.md)
+- [worker-probe-repair、sdl-isolation-plan：修好 worker probe，排定 SDL 隔離的計畫](../../../dev_logs/2026_10_21_pvp_v71_probe_sdl_plan.zh-Hant.md)
+- sdl-isolation：進行中，dev_log 隨 PR #85（`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`；該分支合併後改成連結）。
+

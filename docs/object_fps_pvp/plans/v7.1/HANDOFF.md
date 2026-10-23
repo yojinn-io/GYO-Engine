@@ -660,11 +660,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 ## 未結事項
 
-- **v7.1 README 的「開發紀錄」清單（待辦）**（2026-10-23，圖書管理員會話經旁支會話轉達）：
-  - 背景：圖書管理員已補寫 v7.1 的 16 份 dev_log（分支 `claude/docs-v71-devlogs`，等使用者同意後開 PR）。使用者決定，README 的清單由本會話加在自己的分支。
-  - 時機：等那個 PR 合併進 master、本分支同步 master 之後再加，否則連結是斷的。圖書管理員會告知 merge commit。
-  - 清單：依批次順序，從 pv7-design 到 worker-probe-repair 與 sdl-isolation-plan；sdl-isolation 標為「進行中，dev_log 隨 PR #85」。各項的標題與路徑以那個分支的 `docs/dev_logs/2026_10_1[6-9]_pvp_v71_*`、`2026_10_2[01]_pvp_v71_*` 為準。
-  - 補充：worker-probe-repair 與 sdl-isolation-plan 那一篇目前以反引號路徑標註，等它們的分支合併後再改成連結。
+- **（已處理，2026-10-23）v7.1 README 的「開發紀錄」清單**：PR #88（`c31887f`）合併後，記錄器分支同步 master，並在 README 加上「開發紀錄」一節。sdl-isolation 那一項標為「進行中，隨 PR #85」，該分支合併後改成連結。
 
 - **`N-gui-black-map-intermittent`**（2026-10-23，使用者觀察，記錄）：GUI 測試時偶發「地圖不渲染」。人物照常出現，地圖是黑的；兩個 Client 都可能發生，視野內沒有玩家的那一端整個黑。使用者說以前也出現過，不是每次都會出，懷疑和 macOS 有關。
   - 今天沒有重現：
