@@ -43,8 +43,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：無。sdl-isolation 已合併（PR #85，`054b08f`）。
-- **進行中**：`substitution-single-store` 擴大為新的 PR 線（C13 選 (b)，加上 UDP 斷線重連＝重新對時，D171），ultracode 規劃中。完成後交使用者核准。
+- **等你決定**：`outage-resync` 的計畫草案第 2 版（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，分支 `claude/pvp-v71-outage-resync`，計畫第 8 節的 D-1～D-14；首要是 D-2 身分接回與 D-3 晚到過久就換 epoch）。sdl-isolation 已合併（PR #85，`054b08f`）。
+- **進行中**：`substitution-single-store` 擴大為新的 PR 線 `outage-resync`（D171）。ultracode 規劃與對抗式審查已完成，審查判定「必須修訂」，修訂後的第 2 版已提交（`1425c18`），等你核准，核准前不改程式。
 - **下一步**：草案核准後從 ip3a 開始（`sdl-isolation` 的 PR 線，分支 `claude/pvp-v71-sdl-isolation`）；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
@@ -794,4 +794,9 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
     - 命令序列：用新的移動 epoch 重新起步，斷線期間的舊命令直接丟棄，不補算；
     - 身分：同一位玩家、同一個 session 要能接回來，這是 Gateway 無狀態原則要特別設計的部分。
     - 整體是 UDP 加應用層的存活判斷，重連時重新對時。要寫成明確的狀態與規則：偵測門檻、中斷期間的行為、恢復流程、真正斷線的上限。
+- 2026-10-23：`outage-resync` 分線。從 master `cdb9b07` 開出 `claude/pvp-v71-outage-resync`，draft PR #90。
+  - ultracode（workflow `wf_3c8b9349-036`）：2 位偵察、3 份計畫（最小契約 52、契約先行 53、風險優先 58，滿分 70）、評審綜合、對抗式審查。
+  - 審查判定「必須修訂」：草案漏讀上面的設計原則（身分接回被縮成同一 endpoint）；部分送達、只有上行、冷卻期內的大負值沒有處理；`slack_clamped` 追加到 ingress 行會觸發 log-contract 的 Replacement Criteria。主會話抽查程式，三點都成立。
+  - 第 2 版：狀態與規則寫成表；Match 端加「晚到過久就換 epoch」（N_o）；身分接回列為 D-2（建議 session 的 endpoint 重新綁定，wire 不變）；L2 讀的行改成新的 A 級行族。估時約 59～85 h（不做身分接回時約 53～76 h）。
+  - 本線的現況與 dev_log 在本線分支（計畫的「現況」一節、`docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`）；本文件只在分線、決定、收尾時更新。
 
