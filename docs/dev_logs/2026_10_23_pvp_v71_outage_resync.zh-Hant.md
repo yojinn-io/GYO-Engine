@@ -128,4 +128,4 @@
   - 缺口的突變之一「關閉後不刪附欄」在同一身分內不可觀測（序號不重複，換身分時整份重來），列為等價突變，不登記。
 - **經過**：
   - 79 個突變的判定還在執行時，我誤以為它已經中斷，用 `git checkout` 還原了它正在套用的突變（`v7-flow-d56-match-key-order`）。那一次的 killed 不可信，之後單獨重跑，killed。其他突變不受影響：工具在每個突變之後都會自己還原。
-  - 條文 §7「被替代序號的單一紀錄」原本寫權威是「SlackTrack」。實作後權威的實體是 `MatchSubstitutionRecords`，所以照實作改正 owner 名稱，意圖不變。這是 Design Invariant 的文字變更，交使用者確認。
+  - 條文 §7「被替代序號的單一紀錄」原本寫權威是「SlackTrack」。實作後權威的實體是 `MatchSubstitutionRecords`，所以照實作改正 owner 名稱，意圖不變。這是 Design Invariant 的文字變更，使用者核准（D175）。

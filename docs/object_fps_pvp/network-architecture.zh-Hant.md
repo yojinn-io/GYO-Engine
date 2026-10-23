@@ -958,7 +958,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 - 需要第四種和中斷有關的換 epoch 原因（現有：Starvation、Backlog、Resync；LifeRespawn 與 SequenceExhausted 不屬於中斷）。
 - 品質判定需要依「是否重連」分支。
 
-#### 被替代序號的單一紀錄（v7.1 `outage-resync` C13 (b)；D171、D172；`single-store-refactor` 起生效）
+#### 被替代序號的單一紀錄（v7.1 `outage-resync` C13 (b)；D171、D172；owner 名稱 D175；`single-store-refactor` 起生效）
 
 - **權威**：「這個序號被替代過、第一次是否已到」只由 `MatchSubstitutionRecords` 記錄（`MatchRuntimeHost` 的 `substitutions_`，屬於 slack 樣本路徑的行為側；紀錄的開啟、保留與關閉原因都由它決定）。替代帳本（`MatchIngressLedger`）只讀每次到達的結果，並接收它關閉的紀錄；帳本自己只保留不參與判定的附欄：之後的副本數、第一份的參考年齡、看著解析的序號範圍、溢出的序號。
 - **方向**：只允許「帳本 → `MatchSubstitutionRecords`」，不得反過來，因為診斷不進判定（protocol-v7 §2）；關閉原因的列舉也在紀錄側的標頭，診斷側引用它。守衛：突變 `v7-flow-ledger-drives-sample`，以及 `test_diagnostic_isolation.py` 的方向檢查。
