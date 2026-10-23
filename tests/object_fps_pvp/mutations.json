@@ -1737,7 +1737,7 @@
       "find": "        substitutions_.Clear(IngressSubstitutionClose::End, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
       "replace": "        static_cast<void>(final);\n",
       "check": "cpu",
-      "expect": "CHECK\\( endClosedUnarrived == 70 \\) is NOT correct"
+      "expect": "substitution records time a late arrival exactly as its published slack sample"
     },
     {
       "id": "v7-flow-ledger-closed-arrived-counted",
@@ -5608,7 +5608,7 @@
       "find": "static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(\n                track.pending->second, -MaxMovementSlackMicros, MaxMovementSlackMicros));",
       "replace": "static_cast<std::int32_t>(\n                track.pending->second);",
       "check": "cpu",
-      "expect": "outage characterization: (partial delivery|a sparse substitution)"
+      "expect": "counts the published slack samples the clamp changed"
     },
     {
       "id": "oc-fuse-never-starves",
@@ -5629,16 +5629,6 @@
       "replace": "(true || reacquiring_)",
       "check": "cpu",
       "expect": "samples for commands generated before a correction that is not late settled do not count|leaves older sequences out of the repeat check"
-    },
-    {
-      "id": "oc-slack-track-retains-600",
-      "batch": "v71-outage-characterize",
-      "what": "Slack samples come from 600 substitution records instead of the newest 64 (the change retention-600 will declare)",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
-      "find": "inline constexpr std::size_t SlackSampleRecords = 64;",
-      "replace": "inline constexpr std::size_t SlackSampleRecords = 600;",
-      "check": "cpu",
-      "expect": "outage characterization: partial delivery"
     },
     {
       "id": "dc-clamped-uncounted",
@@ -5713,12 +5703,12 @@
     {
       "id": "v7-flow-ledger-drives-sample",
       "batch": "v71-single-store-refactor",
-      "what": "The slack sample follows the ledger's late_first classification instead of the substitution records' candidacy (diagnostics drive a sample)",
+      "what": "The decision about a first copy later than N_o (Resync, late_beyond_no) follows the ledger's late_first classification instead of the substitution records (diagnostics drive a decision)",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        if (!arrival.sample) continue;\n",
+      "find": "        if (!arrival.first) continue;\n",
       "replace": "        if (classified != IngressCommandClass::LateFirst) continue;\n",
       "check": "cpu",
-      "expect": "(beyondSampleSequence|a sparse substitution is sampled at any age)"
+      "expect": "a sparse substitution is sampled at any age"
     },
     {
       "id": "ssr-unsample-empty",
