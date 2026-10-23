@@ -29,7 +29,8 @@
 - 2026-10-23：G1 決定（D173）：T_int＝0.5 s、N_o＝20 Tick、D-15＝(a)（只記錄，交給 B6）。L1 確認後開始 `resync-contract`。
 - 2026-10-23：`outage-characterize` 的 L1（run 39944311104）四平台成功。`resync-contract` 開始（high）。
 - 2026-10-23：`resync-contract` 的條文寫完，xhigh 對抗式審查（1 次）判定「必須修訂」，已全部處理（第 13 節）。
-- 2026-10-23：依你的要求做第二輪 xhigh 複核：判定「必須修訂」（Critical 1、Major 2、Minor 8），已全部處理（第 13 節第 8 點）。**等你在關卡 G2 核准條文。**
+- 2026-10-23：依你的要求做第二輪 xhigh 複核：判定「必須修訂」（Critical 1、Major 2、Minor 8），已全部處理（第 13 節第 8 點）。
+- 2026-10-23：第三輪 xhigh 複核：判定「可送核准」（Minor 7 項，已全部處理，第 13 節第 9 點）。**等你在關卡 G2 核准條文。**
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -293,6 +294,7 @@
    - `ClientConnection.{hpp,cpp}`（突變 20 個）、`LocalPlayerPrediction.cpp`（17 個）、`PvpApplication.cpp`（HUD）；
    - `PvpMatch.cpp`、`MovementTrace.hpp:19`、`command_evidence.py`；
    - Gateway 的 per-client 時鐘視窗；
+   - `ClientSimulation`／`ClientSimulationRole`（消費恢復旗標、寫 `phase summary`）、`MatchRuntimeHost`（量晚到時間）、`PvpMatch.hpp`（新的公開排程介面）；
    - relay 工具。
 5. **依賴方向**：新增一條邊，其餘不變。
    - **新增**：MatchRuntimeHost（SlackTrack 量晚到時間）→ PvpMatch 的公開排程介面（要求在下一個 Tick 換 epoch）。方向和既有的 Host → PvpMatch 相同，epoch 仍只由 PvpMatch 改變。替代紀錄的保留範圍因此成為遊戲規則的一部分。
@@ -556,7 +558,8 @@ outage-resync（約 59～85 h）
    - S3 在 `retention-600` 之前兩個方向都不保證（稀疏替代超過 600 序號時 0 對 1），只在之後檢查；
    - epoch 相同、權威 < tip 時，領先量留到 Backlog 清掉，列為 P2 的第二個已知例外，交給 B6；
    - 游標＝tip 時 SeedLead；只重設擷取時取消未 slew 完的修正，清除 `settling_`、`reacquiring_`；旗標的 mutex 區段與換代清除；和 LifeRespawn 合併時的計數；過渡批次的判斷範圍；`phase summary` 的寫出端；Delta-2、Delta-3 就地修正。
-9. **其他**：
+9. **第三輪審查（xhigh 複核，使用者要求）**：判定「可送核准」，只剩 Minor 7 項，送 G2 之前全部處理：時鐘視窗重開只由通過驗證的資料包觸發（m1）；只有已綁定 endpoint 的 Hello 刷新最後驗證時刻（m2）；第一個 Welcome（m3）；`phase_path=resume_reset`（m4）；`phase summary` 只在有本機玩家的那一代寫（m5）；1 Hz Hello 的空窗寫進安全取捨，Hello 間隔在 `identity-rebind` 決定（m6）；有效 snapshot 的定義、Delta-2 的影響範圍（m7）。
+10. **其他**：
    - 暫時性錯誤在連線與中斷狀態都適用。代價是 Gateway 程序死掉時，Client 要等 5 s 才回 Lobby。
    - T_int、T_max 兩端的值由共用 fixture 綁定。
    - 握手期的逾時寫法改正。

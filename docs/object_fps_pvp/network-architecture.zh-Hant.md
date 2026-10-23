@@ -562,11 +562,12 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
 | 斷線 | 中斷狀態下 ≥ T_max；任何狀態下的非暫時性錯誤或 Gateway 的 Error | 既有的 Failure：關閉傳輸、回 Lobby、顯示原因 | 終點；重新加入走新的 join |
 
 - Gateway 沒有送給 Client 的 UDP Leave 訊息。Gateway 讓 session 到期或移除玩家時，Client 看到的是自己從 snapshot 消失、收到 Error，或收不到封包（之後由 T_max 收斂）。
+- **有效 snapshot**：含本機玩家、而且 tick 比上一份新的 snapshot，也就是網路 worker 同時放進兩份歷史（呈現用與交給模擬端）的那一份。
 - **T_int＝0.5 s**（D173）。只看有效 snapshot 的到達時刻，用收包當下的 `steady_clock`。
   - 來源：v7.1 語料中，沒有注入停頓的跑次 snapshot 最大間隔 0.119 s；注入 250 ms 停頓時最大 0.283 s。
 - **T_max＝5 s**（D172 的 D-11）。Playing 期間從最後一份有效 snapshot 起算；Welcome 與其他封包不延長它。
   - 所以 Gateway 活著、Match 卻不出 snapshot 時，「中斷」也有上限。
-  - 收到 Welcome 之前（握手）照現行：從開始連線的時刻起算 5 s。收到 Welcome 之後、第一份 snapshot 之前，以 Welcome 的到達時刻當作「最後一份 snapshot」。
+  - 收到 Welcome 之前（握手）照現行：從開始連線的時刻起算 5 s。收到 Welcome 之後、第一份 snapshot 之前，以**第一個** Welcome 的到達時刻當作「最後一份 snapshot」（之後每秒的 Welcome 不延長它）。
 - **常數只維護一處**：T_int、T_max 在 C++（`Movement.hpp`）與 Go 各有一份，由一份共用的 fixture 測試綁定兩端的值（比照 `drop_reasons.json`）。
 - **判定的輸入**：只有到達時刻與這兩個常數。ClockSync 的 offset、delay、時鐘回聲都不得進入判定（protocol-v7 §2）。
 - **暫時性 socket 錯誤**（連線與中斷狀態都適用）：connection_reset、refused、network_unreachable、host_unreachable、network_down 只計數，當作這次沒有資料；其他錯誤照舊走 Failure。
@@ -586,7 +587,8 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
        - 清掉相位樣本、命令年齡環、連續晚到計數；
        - `settledAfter_` 設成 Client 目前的 tip；
        - 還沒 slew 完的修正，剩下的部分取消（和 SeedLead 相同）；`settling_`、`reacquiring_` 清除；
-       - 下一次相位決定照「第一次決定」處理。
+       - 下一次相位決定照「第一次決定」處理；
+       - 這個動作寫進移動紀錄（log-contract §1.4 的 `phase_path=resume_reset`）。
      - **為什麼不一律 SeedLead**：SeedLead 會清空未確認的命令，再從權威游標＋1 重新產生；權威還沒追上 tip 時呼叫它，會用不同內容改寫同一個序號，違反 §7「相同命令識別不可修改」（審查 C1）。
      - **代價**：游標 < tip 時，中斷期間累積的領先量會留到 Backlog 保險絲清掉（P2 的第二個已知例外，§7）。
      - **時點**：恢復事件在模擬端處理同一批 snapshot 的相位樣本（`ClientSimulation::Observe` 的 ObservePhaseSample）之前生效，所以中斷期間產生的序號不會成為樣本。
@@ -630,11 +632,11 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
   - T_max 和 Client 是同一個值，但起算點不同：Gateway 從最後一個刷新活性的上行封包起算，Client 從最後一份 snapshot 起算。
   - 在 macOS 上實測：機器睡眠時 Go 的單調時鐘停住，C++ 的 `steady_clock` 繼續走（v7.1 HANDOFF 的睡眠實測）。其他平台未實測。
 - **最後驗證時刻**：session 另外記「原 endpoint 最後一個通過 session 驗證的資料包」的時刻。
-  - 通過驗證：Hello 的 token 比對，或 Input、Actions 的 endpoint 比對（`Admit`）。只有 Hello 帶 token，所以只看 token 的話，正常遊玩中每個 1 s 的 Hello 週期裡約有一半時間會被判成靜默（第二輪審查 C1）。
+  - 通過驗證：**已綁定的 endpoint** 送來、token 相符的 Hello，或 Input、Actions 的 endpoint 比對（`Admit`）。新 endpoint 送來的 Hello 不刷新它；改綁的判斷在刷新之前做。只有 Hello 帶 token，所以只看 token 的話，正常遊玩中每個 1 s 的 Hello 週期裡約有一半時間會被判成靜默（第二輪審查 C1）。
   - 不論序號新舊、payload 是否有效、是否被限速：endpoint 比對在限速之前。
   - 偽造原 endpoint 的封包只能讓這個時刻變新，也就是只能阻止改綁，不能促成改綁。
   - 這是通用層 session 的新欄位，屬於允許的活性類，但新增欄位本身是 Architecture Delta（計畫的 Delta-3）。
-- **時鐘**：某位 Client 的最後驗證時刻和新到的資料包相隔 ≥ T_int 時，結束並重開該 Client 的時鐘視窗。
+- **時鐘**：某位 Client 新到、而且通過上面的 session 驗證的資料包，和刷新之前的最後驗證時刻相隔 ≥ T_int 時，結束並重開該 Client 的時鐘視窗。沒有通過驗證的資料包（例如從其他位址送來、帶同一個 session id 的封包）不觸發重開，所以外部無法用偽造的封包灌出 clock sync 行。
   - 判斷只用上面那個時刻。正常遊玩時 60 Hz 的 Input 會一直刷新它，不會觸發。
   - 結果只進 diagnostic state（時鐘視窗），不進任何判定。
   - Match 的時鐘視窗量的是 Gateway↔Match，不受單一 Client 中斷影響。
@@ -645,7 +647,7 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
   - session 還沒到期。
 
   T_int 由產品以參數傳給通用層（比照 `Expired(now, timeout)`），通用層不寫死產品常數。改綁之後，原 endpoint 的封包回 `ErrUnauthorized`；每次改綁寫一行 A 級的 `session rebound`。只用通用層 session 的軟狀態，不需要知道 Match 的任何狀態。Client 中斷期間不換 token、不重設傳輸序號，所以 Client 端不需要新邏輯。
-  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token、又能讓原 endpoint 的所有封包停止 T_int 以上的人（例如在同一網段上），可以搶走 session。紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
+  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token、又能讓原 endpoint 的所有封包停止 T_int 以上的人（例如在同一網段上），可以搶走 session。另外，Client 只送每秒一次 Hello 的期間（收到 Welcome 之後、第一份 snapshot 之前；模擬端沒有新命令、窗口全部確認時），最後驗證時刻有一半時間超過 T_int；Hello 間隔是否縮到 T_int／2 以下（速率預算 82＋4＋30＝116，低於 120）在 `identity-rebind` 批決定。紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
 
 IPC 失聯使 Room unavailable 並撤銷 Session，Host 清場；Client 回 Lobby。
 Gateway 可繼續提供 HTTP 狀態，但本輪不透明重接或恢復世界。復原流程是重啟
@@ -937,6 +939,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
   - 「以原 endpoint 送一個跳號的封包之後，T_int 內新 endpoint 仍不能改綁」；
   - 「原 endpoint 只送 Input、不送 Hello 0.6 s 時，新 endpoint 的 Hello 被拒絕」；
   - 「60 Hz Input 加上 1 s Hello 時，Gateway 的時鐘視窗不重開」；
+  - 「從其他 endpoint 送來、帶同一個 session id 的資料包，不重開時鐘視窗，也不刷新最後驗證時刻」；
   - `state_whitelist_test.go` 不變。
 - **變更規則**：特性測試升格為守衛之後，改變它的判定照 AGENTS.md §14.4（寫出 1～5，取得使用者核准）。
 

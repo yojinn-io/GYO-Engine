@@ -81,3 +81,4 @@
   - 修正：改成 token 比對或 endpoint 比對都刷新。
   - Major：S3 在 `retention-600` 之前兩個方向都不保證；epoch 相同、權威 < tip 時，領先量留到 Backlog，列為 P2 的第二個例外。
   - Minor 8 項：見計畫第 13 節第 8 點。
+- **第三輪 xhigh 複核**（使用者要求）：判定「可送核准」。沒有 Critical 或 Major，Minor 7 項在送 G2 之前全部處理。審查者建議先修的是 m1：照字面，從其他位址送來、帶同一個 session id 的封包也會觸發 Gateway 的時鐘視窗重開，可以被外部用來灌爆 A 級日誌。

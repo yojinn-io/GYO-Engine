@@ -56,7 +56,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 
 | 行族 | 寫出端（預定） | 錨點 | 鍵（依序；括號是加入的批次） |
 |---|---|---|---|
-| Client 相位摘要 | 模擬端（`ClientSimulationRole`：每次連線換代、`simulation_.Reset()` 之前一行，role 停止時也寫一行；計數放在 Reset 不會清掉的地方，是整個連線的累計） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
+| Client 相位摘要 | 模擬端（`ClientSimulationRole`：每次連線換代、`simulation_.Reset()` 之前一行，role 停止時也寫一行，只在結束的那一代曾經有本機玩家時寫；計數放在 Reset 不會清掉的地方，是整個連線的累計） | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
 | Client 連線中斷 | `ClientConnection.cpp`（網路 worker） | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch`（`client-interrupted`） |
 | Client 連線恢復 | `ClientConnection.cpp` | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
 | Client 連線摘要 | `ClientConnection.cpp`（連線結束時一行） | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |
@@ -74,6 +74,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
   - 漂移的回歸不因 `resume` 重新開始，`drift_ppm` 的意義不變。
   - 釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
 - **移動紀錄**（schema 3）：`reset` 事件的 `reset_reason` 新增值 `resync`（`match-resync`）。這是既有 kind 的新列舉值，不加欄位、不升版；`command_evidence.py` 遇到未知的值會照字串保留（`command_evidence.py:325-329`）。凍結的讀者在該批先查。
+- **移動紀錄的相位決策**（R4 的例外，`client-interrupted`）：恢復時「只重設相位擷取」寫一筆 `phase_decision`，`phase_path=resume_reset`、`count=0`、`phase_shift_seconds` 記被取消的剩餘修正量。之後的下一次決定照 `first` 記；`MovementTrace.hpp` 對 First 的定義加上「或只重設擷取之後」。和 `reset_reason=resync` 一樣是既有 kind 的新列舉值，不升版，凍結的讀者在該批先查。
 - **死信**：Client 的 64 格命令環對不上的相位樣本，計 `phase_samples_unmatched`（第 5 節的死信原則；`outage-characterize` 確認它現在無聲丟棄）。
 
 ## 2. 版本與相容
