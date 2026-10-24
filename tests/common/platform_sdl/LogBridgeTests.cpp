@@ -9,6 +9,7 @@
 #include <SDL3/SDL.h>
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -148,6 +149,7 @@ TEST_CASE("SdlLogBridge keeps every line under concurrent logging") {
     constexpr int Threads = 8;
     constexpr int Rounds = 200;
     std::atomic<bool> stop{false};
+    std::atomic<int> started{0};  // threads that have logged at least one line
     std::vector<int> pushedBy(Threads), engineBy(Threads), previousBy(Threads);
     std::vector<std::thread> loggers;
     for (int thread = 0; thread < Threads; ++thread) {
@@ -155,13 +157,19 @@ TEST_CASE("SdlLogBridge keeps every line under concurrent logging") {
             int pushed = 0;
             while (!stop.load()) {
                 SDL_Log("line");
-                ++pushed;
+                if (++pushed == 1) started.fetch_add(1);
             }
             pushedBy[thread] = pushed;
             engineBy[thread] = threadEngineLines;
             previousBy[thread] = threadPreviousLines;
         });
     }
+    // Start the rounds only once every thread is logging (thread starts can take
+    // longer than all the rounds; seen on windows-x64, run 40052105536). A CHECK,
+    // not a REQUIRE, so the threads are still stopped and joined on failure.
+    const auto waitUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (started.load() < Threads && std::chrono::steady_clock::now() < waitUntil) std::this_thread::yield();
+    CHECK_MESSAGE(started.load() == Threads, "every thread logs before the rounds start");
     for (int round = 0; round < Rounds; ++round) {
         const SdlLogBridge bridge(SdlLogBridgeOptions{.keepSdlOutput = false});
         std::this_thread::yield();

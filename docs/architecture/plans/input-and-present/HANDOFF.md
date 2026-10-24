@@ -405,6 +405,10 @@
     - F10 加入 DI 7 的主執行緒規則，以 death test `watch-off-main` 與突變 m-main-thread 檢查；
     - DI 3 的守衛清單補上 watch 路徑。
   - 另回報 F11：m-order 依賴配置器，ASan 下才確定。
+- 2026-10-24：PR #85 合併後的追記（檔位 high）。`platform_sdl_concurrency` 的「並行日誌橋」測試在別的產品分支的 L1（run 40052105536，windows-x64）失敗：8 條執行緒都 `pushedBy == 0`。
+  - 原因歸類：測試自身，和 #561 同類（缺少等執行緒開始的握手）。橋沒有遺失行。
+  - 本機注入 50 ms 延遲 3／3 Red；加握手後 20／20 Green；判定只收緊。
+  - 詳見 [dev_log](../../../dev_logs/2026_10_24_engine_ip3_log_bridge_handshake.zh-Hant.md)。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）

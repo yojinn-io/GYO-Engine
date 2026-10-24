@@ -131,4 +131,5 @@ IP-4 的 m13～m19 在 ip4a 開始前、介面審查（U10）之後宣告。
 
 - m12：殺掉它的是 probe 的結束碼（7、0）；宣告原本寫的 runtime_sdl 的結束碼殺不掉它，因為 smoke 本來就回 0。
 - 補加（只收緊）：m-assert、m-tee、m-race、m-userdata、m-overwrite。m-race 的預期訊息接受兩種：測試的斷言，或橋自己的 GYO_ASSERT（在測試的 throwing handler 下，noexcept 解構子會 terminate）。兩者都只出現在這個競態。
+- 2026-10-24（只收緊）：「並行日誌橋」測試加開始握手：8 條執行緒都寫出第一行之後才開始 200 輪，並檢查 5 秒內全部開始。原因是 windows-x64 上執行緒啟動慢，200 輪在第一行之前就跑完（run 40052105536，測試自身）。逐執行緒守恆與 `pushedBy > 0` 不變。§14.4 的 1～5 見 [dev_log](../../../dev_logs/2026_10_24_engine_ip3_log_bridge_handshake.zh-Hant.md)。
 
