@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
 #include "client_v7.pb.h"
@@ -563,7 +564,9 @@ struct ClientConnection::Impl {
                     std::scoped_lock lock(mutex);
                     if(activeGeneration!=generation.load())return;
                     own=state.playerId;
-                    if(!state.combatRules)continue;
+                    // welcomed and combatRules are set together; every reset of the
+                    // rules also clears welcomed or changes the generation (checked above).
+                    GYO_ASSERT(state.combatRules.has_value());
                     maximumHp=state.combatRules->maximumHp;magazineCapacity=state.combatRules->magazineCapacity;
                 }
                 for(const auto& p:message.players()) {

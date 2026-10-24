@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
 #include "runtime_v7.pb.h"
+#include "engine/base/Assert.hpp"
 #include <google/protobuf/unknown_field_set.h>
 #include <asio.hpp>
 #include <algorithm>
@@ -690,7 +691,12 @@ struct IpcHost::Impl {
         try {
             for(const auto& result:host.TakeControlResults()) {
                 const auto found=session.joins.find(result.requestId);
-                if(found==session.joins.end()) continue;
+                if(found==session.joins.end()) {
+                    // A Leave's result is not relayed. A Join's request was
+                    // recorded on this thread before the host could answer it.
+                    GYO_ASSERT(result.kind==ControlKind::Leave);
+                    continue;
+                }
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
                 auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
