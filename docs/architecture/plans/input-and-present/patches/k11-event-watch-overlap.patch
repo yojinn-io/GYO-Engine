@@ -1,0 +1,81 @@
+diff --git a/tests/common/platform_sdl/EventWatchTests.cpp b/tests/common/platform_sdl/EventWatchTests.cpp
+index 502a758..8e248cb 100644
+--- a/tests/common/platform_sdl/EventWatchTests.cpp
++++ b/tests/common/platform_sdl/EventWatchTests.cpp
+@@ -255,6 +255,7 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
+     auto platform = MakeWatchPlatform();
+     struct Flight final {
+         std::atomic<bool> inFlight{false};
++        std::atomic<bool> destroying{false};
+     } flight;
+     const SDL_WindowID window = WindowOf(*platform);
+     std::atomic<bool> stop{false};
+@@ -274,7 +275,9 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
+     while (!pushing.load() && std::chrono::steady_clock::now() < waitUntil) std::this_thread::yield();
+     REQUIRE(pushing.load());
+     bool finishedInFlight = false;
+-    int overlappedRounds = 0;  // destruction started while a callback ran
++    // Free-running rounds, as before: destruction at whatever moment, with a
++    // callback of about 100 us on the other thread (where a node freed before
++    // its removal is called: mutant m-order crashes here).
+     for (int round = 0; round < 200; ++round) {
+         {
+             const EventWatch watch = platform->AddEventWatch(
+@@ -288,16 +291,55 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
+                 },
+                 &flight);
+             std::this_thread::yield();
+-            if (flight.inFlight.load()) ++overlappedRounds;
+         }
+         if (flight.inFlight.load()) finishedInFlight = true;
+         if (round % 20 == 0) static_cast<void>(platform->PumpEvents());
+     }
++    // Every destruction starts while a callback runs: the callback holds until
++    // the main thread is destroying its watch (bounded, so a fault cannot hang
++    // the test), then lets the destruction reach SDL's lock before it returns.
++    // The overlap is arranged, not left to timing (v7.1 event-watch-overlap,
++    // K11: overlappedRounds was 0 once on a macos-arm64 runner).
++    constexpr int Rounds = 200;
++    int overlappedRounds = 0;  // destruction started while a callback ran
++    for (int round = 0; round < Rounds; ++round) {
++        flight.destroying = false;
++        {
++            const EventWatch watch = platform->AddEventWatch(
++                [](void* context, const ObservedEvent&) noexcept {
++                    auto* state = static_cast<Flight*>(context);
++                    state->inFlight = true;
++                    // Only the callback the main thread waited for holds; later
++                    // ones return at once, so the destruction gets SDL's lock.
++                    if (!state->destroying.load()) {
++                        const auto hold = std::chrono::steady_clock::now() + 200ms;
++                        while (!state->destroying.load() && std::chrono::steady_clock::now() < hold) {
++                        }
++                        const auto settle = std::chrono::steady_clock::now() + 200us;
++                        while (std::chrono::steady_clock::now() < settle) {
++                        }
++                    }
++                    state->inFlight = false;
++                },
++                &flight);
++            const auto runningBy = std::chrono::steady_clock::now() + 2s;
++            while (!flight.inFlight.load() && std::chrono::steady_clock::now() < runningBy) std::this_thread::yield();
++            const bool running = flight.inFlight.load();
++            if (running) ++overlappedRounds;
++            flight.destroying = true;
++            if (!running) break;  // a fault: stop rather than wait 2 s per round
++        }
++        if (flight.inFlight.load()) {
++            finishedInFlight = true;
++            break;  // a fault: a surviving watch would hold later rounds' callbacks
++        }
++        if (round % 20 == 0) static_cast<void>(platform->PumpEvents());
++    }
+     stop = true;
+     pusher.join();
+     static_cast<void>(platform->PumpEvents());
+     CHECK_MESSAGE(!finishedInFlight, "no callback runs after its watch's destruction returned");
+-    CHECK_MESSAGE(overlappedRounds > 0, "destruction overlapped a running callback at least once");
++    CHECK_MESSAGE(overlappedRounds == Rounds, "every destruction started while a callback ran");
+ }
+ 
+ TEST_CASE("An event watch may outlive its platform") {

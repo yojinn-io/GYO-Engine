@@ -17,7 +17,7 @@
 | `analyzer-converge` | high | 5 | 完成（D192；L1 run 40123957938） |
 | `token-tests` | high | 4～6 | 完成 |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | C17-3 與他版計數完成；K9 等使用者決定 |
-| `event-watch-overlap` | high | 1～2 | D186 新增（K11） |
+| `event-watch-overlap` | high | 1～2 | 改寫完成、未提交，判定變更等使用者核准（D186 新增，K11） |
 
 時間框：任一批超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
 
@@ -265,3 +265,23 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收與 cpu 測試通過。
 - **突變**：新增 2 個（他版資料包不計數、窗口的世代填 0），2／2 killed。
+
+## event-watch-overlap：Engine 事件監看的重疊測試不靠碰運氣（K11，等使用者核准）
+
+`tests/common/platform_sdl/EventWatchTests.cpp` 的「Destroying an event watch waits for a callback on another thread」。舊版的 200 輪任意時刻解構，以 `CHECK(overlappedRounds > 0)` 要求至少一輪剛好在回呼執行時解構，client-silent-checks 的 L1（run 40107059342，macos-arm64）出現過 0。
+
+### 經過
+
+- 第一版：只用握手輪次（回呼等主執行緒開始解構，有 200 ms 上限，再停 200 µs），每一輪都保證重疊。本機 30 次通過、16 個忙碌程序的負載下 30 次通過。但 Engine 突變目錄的 `m-order`（節點先釋放再從 SDL 移除）存活：主執行緒只在回呼執行時才解構，回呼返回後主執行緒先拿到 SDL 的鎖，「已釋放的節點被呼叫」的空檔不見了。舊版是在任意時刻解構的輪次裡當掉而殺死它。
+- 第二版（patch）：保留原本 200 輪任意時刻的輪次與它的 `!finishedInFlight`，只拿掉那一輪的重疊計數；另加 200 輪握手輪次，要求 `overlappedRounds == 200`。之後進來的回呼立刻返回，避免推送執行緒一直佔著鎖、讓解構搶不到（第一版的初稿每次要 7 秒）。
+- 本機 30 次連跑通過（每次約 2.6 秒）。Engine 突變目錄中以這個測試或監看解構為案例的 5 個（`m17`、`m-order`、`m-depth-watch`、`m-dispatch`、`m-main-thread`）5／5 killed。
+
+- 獨立核對（1 位審查者，在 patch 上實跑）後的修正：實作出錯時（回呼不被呼叫、解構不等），原版會一路跑到 CTest 的 60 秒逾時，不印任何訊息；改成握手輪次在第一次出錯時就 `break`，兩種故障都改為帶訊息失敗（審查者驗證：連跑 20 次通過，額外的 nocall、nowait 突變 killed）。描述握手輪次的註解原本放在第一段前面，移到第二段。
+
+### §14.4（要使用者核准；1、4 依獨立核對改寫）
+
+1. **守護的性質**：解構 `EventWatch` 時會等另一個執行緒上執行中的回呼（`platform-sdl.md`「Destroying it waits for an in-flight callback on another thread」；SDL 在整個分派期間持有 watcher 鎖，移除要取同一把鎖）。`overlappedRounds` 實際量到的是「發出解構訊號時有回呼在跑」；主執行緒在訊號後停頓超過 200 µs 才進入移除時，那一輪不會真的重疊，但仍會計入。審查者實測無負載與 16 個忙碌程序的負載下，每一輪都真的重疊。要把計數移到訊號之後、量得更嚴，會重新引入弱的時序依賴，這裡沒有做。
+2. **放寬的面**：任意時刻的輪次一輪都沒重疊的跑次（就是那次 CI 失敗），以前判失敗；現在只要握手輪次每輪都有回呼在跑，就判通過。審查者找不到其他「舊判定擋、新判定放行」的輸入。
+3. **收緊的面**：握手輪次 200 輪每一輪都要有回呼在跑；`!finishedInFlight` 多檢查 200 輪；出錯時帶訊息失敗。
+4. **被放寬的性質由什麼守**：「有做到重疊」由握手輪次的 `overlappedRounds == 200`（強度如第 1 點）守；「解構會等」由兩段的 `!finishedInFlight` 守。突變的證據：Engine 目錄裡真正跑這個測試的只有 `m-order`（killed）；另外 4 個（`m17`、`m-depth-watch`、`m-dispatch`、`m-main-thread`）跑的是別的案例，只代表沒有回歸。審查者另做的 nowait（解構不等）、nocall（回呼不被呼叫）在修正版下 killed。
+5. **證據**：修正版 patch（`docs/architecture/plans/input-and-present/patches/k11-event-watch-overlap.patch`）；本機連跑 30 次（第二版）與 5 次（修正版）；審查者的連跑 20 次與突變結果（額外突變目錄在會話的工作目錄）。
