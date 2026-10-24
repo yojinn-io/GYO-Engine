@@ -13,8 +13,8 @@
 | `cxx-flag-removal` | high | 3～4 | 完成（L1 run 40110961077 成功） |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | 完成（D181 併入 K7） |
-| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 實作完成，L1 待確認（D181 併入 K8；D191 T2） |
-| `analyzer-converge` | high | 5 | |
+| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2） |
+| `analyzer-converge` | high | 5 | 實作完成，L1 待確認（D192） |
 | `token-tests` | high | 4～6 | |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
 | `event-watch-overlap` | high | 1～2 | D186 新增（K11） |
@@ -205,3 +205,28 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 5. 依賴方向：不變（規則在產品內）。
 6. Ownership：不變（檔名規則屬於產品的 trace 輸出）。
 7. 更小的做法：T3（已存在就拒絕啟動）較小，但 LAN 場次中途重啟要操作者現場打新檔名；使用者選 T2。
+
+## analyzer-converge：命令分析器收斂成一份（C15，D192）
+
+### 做了什麼
+
+- `command_evidence.analyze_commands` 加上 `players`（預設 2）與 `write`（預設 True）。現有呼叫端不變，2 人時的輸出逐位元不變。
+  - `players=2`：2 人分析器的呼叫端，要求剛好 2 人與 2 人版的 Client trace 檔名（`clients`／`create`／`join`）。
+  - `players=None`：不寫死人數，由跑次宣告的 `player_ids` 決定；Match 以外的 trace 都算 Client trace（bots、GUI 參與者）；有故障恢復時拒絕（照 quad 原本的規則）。
+  - `frames.csv` 看所有 `remote_age_*` 欄。2 人的 frames.csv 只有 a、b 兩欄（語料 400 份全部如此），結果和原本的 `max(a, b)` 相同。
+- `quad_evidence`：刪掉 `command_metrics`（N 人副本，約 210 行）和交叉比對工具；`analyze_quad` 與 `run_timing.py` 的 bots 模式直接呼叫 `analyze_commands(players=None, write=False)`，再用 `room_shape` 投影成原本的鍵與順序（只排列，不計算；`players` 取自每位宣告玩家一筆的 production allowance）。
+- **D192 的補充驗收**（使用者在分叉的會話裡說，經規劃會話轉達，之後又更正）：收斂後不得退化回寫死 2 人。「支援 N 人」只指分析器不寫死人數；協議上限仍是 `MaxPlayers`＝4（`Movement.hpp:21`，Client 丟棄超過 4 人的 snapshot）。由 4 人合成跑次經 `players=None` 通過的測試釘住。
+
+### 驗證
+
+- **新舊語料比對**（D192 的驗收）：舊版從 git（`4c88491`）取出，新舊各在獨立程序分析同一批副本（分析器會寫檔，一律用副本）。語料從主 checkout 與本工作樹的證據目錄抽樣：2 人每個 session 最多 40 個、quad 最多 20 個，以固定間隔取；`pvp-v7-16-prep` 這類大目錄因此只取到一部分。
+  - 2 人 `analyze_commands`：772 個跑次（69 個 session，pv6、pv7、pv7.1；754 P、18 F），**新舊全部相同**。
+  - quad 的命令階段（舊 `command_metrics` 對新 `room_shape(analyze_commands(players=None))`）：317 個跑次（216 P、101 F），**全部相同**。
+  - 完整的 `analyze_quad`：317 個跑次（211 P、2 F、104 個例外：dry-run 目錄沒有 `quad-snapshots.jsonl`，新舊丟出同樣的例外），**全部相同**，鍵的順序也相同。
+  - 第一次比對顯示有差異，查證後全部是錯誤訊息裡夾帶的副本路徑（`two-old/` 對 `two-new/`），把值裡的路徑一起正規化後為 0。
+- **測試**：交叉比對改成「同一函式的兩種模式在每份 2 人語料上逐值相同（只有 both／every 的文言不同）」；room 形不寫檔；room 形拒絕故障恢復；4 人合成跑次在 quad 形下通過、鍵的順序是 `ROOM_KEYS`；room 形接受 `bots-commands.jsonl`；第二個 Client 的 `remote_age` 尖峰也算。command_evidence 43 個、quad 20 個；`ctest -L acceptance` 30／30。
+- **突變**：v7 第 16 批的 `16-quad-two-player-error` 改指選錯誤文言的那一行；新增 6 個（人數寫死回 2、room 形只認 2 人檔名、room 形寫檔、room 形接受故障恢復、`players` 取錯、只看第一個 remote_age 欄），加上 quad_evidence 的既有突變。第一輪 6／8，存活的 2 個是測試缺口（room 形的 Client 檔名、第二個 Client 的 remote_age），補測試後 8／8 killed。
+
+### 凍結工具
+
+`command_evidence.py` 是凍結的分析器，它的 sha256 改變了。列有它的凍結清單（例如 `frozen-resync.sha256`）在現在的樹上會被拒絕；要重跑舊 session，得用舊版本的檔案。下一個 L2（`lan15-windows`）要重新凍結（D192 的代價）。
