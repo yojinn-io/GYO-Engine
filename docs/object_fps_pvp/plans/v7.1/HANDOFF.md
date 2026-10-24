@@ -44,7 +44,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
-- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D177）。已完成到 `client-interrupted`（對抗式審查後補強，L1 run 40074065448）。之後是 `identity-rebind`（xhigh，使用者同意）、`resync-l2-l3`、`line-close`。使用者指示：照計畫做完、不再擴大，不嚴重的問題只記錄。本線的細節見該分支計畫的「現況」一節。
+- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D177）。已完成到 `identity-rebind`（L1 run 40077174310）。之後是 `resync-l2-l3`（L2 宣告待使用者核准）、`line-close`。使用者指示：照計畫做完、不再擴大，不嚴重的問題只記錄。本線的細節見該分支計畫的「現況」一節。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）。
@@ -818,3 +818,4 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - 2026-10-24：`outage-resync` 的 `retention-600` 完成：L2 9／9 P（session `pvp-v71-retention-600-l2-20261024`）。L1 的 Windows Quick acceptance 中 Engine 測試的競態，由另一個會話以 PR #91 修正並合併（master `253808a`）。
 - 2026-10-24：`outage-resync` 與 master 同步（帶進 PR #91）。`client-interrupted` 實作完成（`d0efbed` 等）：本機測試全過、突變 72 個全部 killed；本線也帶進本分支 `d2844a5` 的 worker probe 修正（`3547c05`），worker CTest 在本線恢復通過。
 - 2026-10-24：`client-interrupted` 的對抗式審查（xhigh 1 位）Major 2、Minor 6，使用者核准補強；補強完成，M2（差分 oracle）的 §14.4 1～5 使用者核准。Gateway 時鐘視窗的重開移到 `identity-rebind`（使用者核准）。
+- 2026-10-24：`client-interrupted` 補強後 L1（run 40074065448）四平台成功。`identity-rebind` 完成：通用層 session 的最後驗證時刻與有條件的改綁、Gateway 的 `session rebound` 行與時鐘視窗重開；突變 77 個全部 killed。Hello 間隔維持 1 s（只記錄）。
