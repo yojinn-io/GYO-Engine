@@ -15,8 +15,8 @@
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | 完成（D181 併入 K7） |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2；L1 run 40123957938） |
 | `analyzer-converge` | high | 5 | 完成（D192；L1 run 40123957938） |
-| `token-tests` | high | 4～6 | 實作完成，L1 待確認 |
-| `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
+| `token-tests` | high | 4～6 | 完成 |
+| `client-path-tests` | high | 3～4（K9 另加 2～3） | C17-3 與他版計數完成；K9 等使用者決定 |
 | `event-watch-overlap` | high | 1～2 | D186 新增（K11） |
 
 時間框：任一批超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
@@ -251,3 +251,17 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收連跑 2 次通過（送出時序的檢查都在裡面）。
 - **突變**（D184 的挑選）：v7 第 09a 批的 3 個（不折讓、每次都折、等待時刻不清除）的 find 改指新的呼叫處，仍由 worker 驗收判定；新增 5 個（沒有晚醒扣除項、沒有滿桶上限，這兩個就是 N-token-test-gaps 說的會存活的突變；補充不設上限、重送只等 1 個 token、換 life 不算新視窗），由單元測試判定。8／8 killed。
+
+## client-path-tests：重連後的世代檢查、他版資料包的計數（C17-3、N-client-other-version-untested）；K9 待決定
+
+### 做了什麼
+
+- **C17-3**：worker 驗收的 `CheckHelloCadence` 先取前一個 session（`CheckDroppedDatagrams` 剛離開的那個）的世代號，重新加入、進入 Playing 後，用那個世代送窗口，要求沒有送出；同一個窗口改用目前的世代，要求送出。role 測試（換世代的情境）加上「每個窗口都帶它的權威所屬的世代」（`step.generation`），100 個以上的窗口逐一核對。client-silent-checks 已有的捏造世代號（uint64 最大值）測試與計數保留。
+- **他版資料包**：MockGateway 新增 `SendOtherVersion`（版本 8 的合法 GYOP 資料包），`CheckDroppedDatagrams` 送一個，`RequireDroppedCounts` 要求第一行統計的 `other_version_datagrams` ≥1。
+- role 的執行緒把 `step.generation` 交給 `SendInput` 的那一行沒有確定性的測試：要在 drain 與送出之間剛好換世代才看得出差別；由 `SendInput` 的世代檢查與上面的測試間接守住。
+- **K9**：兩個分支在測試程序裡都造不出來（本機未連線的 UDP socket 收不到 ICMP 錯誤；worker 執行緒無法從外部暫停），需要在產品加測試掛鉤，或改成純函式的單元測試、或交給 L3。選項寫在 HANDOFF 的「等你決定」，等使用者決定。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收與 cpu 測試通過。
+- **突變**：新增 2 個（他版資料包不計數、窗口的世代填 0），2／2 killed。
