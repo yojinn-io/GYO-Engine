@@ -239,9 +239,13 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     const auto lastSnapshotAt=gateway.snapshotSentAt;
     const auto packetsBefore=gateway.packets.size();
     gateway.silent=true;
+    const auto silentAt=Clock::now();
     gateway.Until([&]{return connection.State().interrupted;},1500ms);
     outcome.interruptMs=MillisSince(lastSnapshotAt,Clock::now());
-    outcome.interruptedOnTime=OnTime(outcome.interruptMs,ConnectionInterruptedAfter);
+    // The first version's lower bound (from going silent, 5 ms early) is kept,
+    // so the judgment passes nothing that version failed (AGENTS §14.4).
+    outcome.interruptedOnTime=OnTime(outcome.interruptMs,ConnectionInterruptedAfter) &&
+        MillisSince(silentAt,Clock::now())>=static_cast<double>(ConnectionInterruptedAfter.count())-5;
     outcome.trackedLastSnapshot=std::abs(MillisSince(lastSnapshotAt,connection.State().interruptedSince))<=20;
     if(!outcome.interruptedOnTime || !outcome.trackedLastSnapshot)return outcome;
     // Interrupted: the session, its sequence and its actions stay; Hello probes every 250 ms.
@@ -261,8 +265,12 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     gateway.Until([&]{return !connection.State().interrupted;});
     outcome.resumed=connection.State().phase==ConnectionPhase::Playing;
     // The worker resends the same window after the resume (nothing acknowledged it).
+    // A window that stopped being sent is not kept either: wait a bounded time.
     const auto resumedAt=Clock::now();
-    gateway.Until([&]{return gateway.attempts.back().at>resumedAt;});
+    for(const auto deadline=resumedAt+500ms;gateway.attempts.back().at<=resumedAt && Clock::now()<deadline;) {
+        gateway.Pump();std::this_thread::sleep_for(100us);
+    }
+    if(gateway.attempts.back().at<=resumedAt)return outcome;
     const auto& resent=gateway.attempts.back().input;
     outcome.windowKept=resent.movement_epoch()==1 && resent.commands_size()==3;
     for(int index=0;outcome.windowKept && index<resent.commands_size();++index)
@@ -274,11 +282,13 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     gateway.snapshotOnHello=false;
     gateway.Snapshot(0);
     const auto finalSnapshotAt=gateway.snapshotSentAt;
+    const auto finalSentAfter=Clock::now();
     const auto welcomesFrom=gateway.welcomeTransmits.size();
     gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;},7000ms);
     outcome.timeoutMs=MillisSince(finalSnapshotAt,Clock::now());
     outcome.timedOutOnTime=connection.State().error=="Gateway connection timed out" &&
-        OnTime(outcome.timeoutMs,ConnectionTimeoutAfter) && gateway.welcomeTransmits.size()>welcomesFrom+10;
+        OnTime(outcome.timeoutMs,ConnectionTimeoutAfter) && gateway.welcomeTransmits.size()>welcomesFrom+10 &&
+        MillisSince(finalSentAfter,Clock::now())>=static_cast<double>(ConnectionTimeoutAfter.count())-5;
     gateway.snapshotOnHello=true;gateway.extremeWelcomeClock=false;
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
     return outcome;
