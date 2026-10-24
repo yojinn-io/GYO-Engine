@@ -45,17 +45,17 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows` 預定 2026-10-26 前後（含 outage-resync 的 L3，D179）。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。
-- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D178）。`resync-l2-l3` 的 L2 通過（33 輪全部 P）；`line-close` 已做（2026-10-24）。L3 移到 `lan15-windows`（D179），PR #90 在 L1 確認後合併。記錄器分支經 PR [#93](https://github.com/yojinn-io/GYO-Engine/pull/93) 合進 master（`489905d`），本線已同步 master。使用者指示：照計畫做完、不再擴大，不嚴重的問題只記錄。
+- **進行中**：無。`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
-  - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）。
-  - 進行中：outage-resync（PR #90），取代 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 仍在原批。
+  - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
+  - outage-resync（PR #90，已合併）取代了 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 仍在原批。
   - 未開始（after-re-evaluate，D159）：系統與引擎的 `silent-branch-asserts`、`cxx-flag-removal`；觀測工具的 `contract-readers`、`trace-no-overwrite`、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`；發行的 `windows-long-path`、`quick-close`、`wake-reconnect`、`lan15-windows`。D159 的 PR 分三條，其中「系統其餘＋觀測＋測試」與「發行」兩條還沒開。
   - 記錄器分支：2026-10-24 經 PR #93 合進 master（`489905d`），`worker-probe-repair` 的修正（`d2844a5`）也一起進了 master。之後本文件在 outage-resync 線上更新，隨 PR #90 合併。
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-24，outage-resync 的 `line-close`（不依賴 L3 的部分）。
+- **最後更新**：2026-10-24，outage-resync 合併（PR #90）。
 
 ## 閱讀入口
 
@@ -826,3 +826,4 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - 2026-10-24：使用者核准 `resync-l2-l3` 的 L2 宣告第 2 版（D178）；L2 33 輪全部 P（session `pvp-v71-resync-l2-20261024`）。記錄器分支開 PR #93（draft，L1 run 40086897377），並合進 outage-resync 線。
 - 2026-10-24：`outage-resync` 的 `line-close`（不依賴 L3 的部分）：本線同步 master（含 PR #93）；README、after-re-evaluate 的 `substitution-single-store` 與 `wake-reconnect` 處置；v8 README 的 B6 交接；Fitness Check（AGENTS.md §12）與 Architecture Report（§15）寫在本線 dev_log 的 line-close 一節。剩 L3。
 - 2026-10-24：D179：outage-resync 的 L3 移到 `lan15-windows`。PR #90 改成 ready，跑全量 L1。
+- 2026-10-24：PR #90（outage-resync）合併，merge commit `03453e2`。之後開 PR #94：CI 方針的單元測試 `test_go_checks.py` 故意觸發的 `::error::` 不再在「Select CI scope」留下紅色注記（使用者要求，在 #90 合併後另開）。

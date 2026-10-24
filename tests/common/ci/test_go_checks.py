@@ -1,5 +1,6 @@
 """Recorded Go module checks and service builds, on synthetic modules only."""
 
+from contextlib import redirect_stderr
 import hashlib
 import io
 import json
@@ -153,8 +154,16 @@ class GoCheckTests(unittest.TestCase):
             go_checks.check([], ["vet"], run=run)
 
     def test_a_ctest_module_check_cannot_mix_with_a_record_selection(self):
-        self.assertEqual(go_checks.main(["check", "--module", ".", "--product", "alpha"]), 1)
-        self.assertEqual(go_checks.main(["check"]), 1)
+        # The refusals print GitHub's "::error::" marker; captured here so the
+        # runner does not show this expected failure as an annotation.
+        for arguments, message in ((["check", "--module", ".", "--product", "alpha"],
+                                    "--module cannot be combined with --build-info or --product"),
+                                   (["check"], "--build-info is required")):
+            with self.subTest(arguments=arguments):
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    self.assertEqual(go_checks.main(arguments), 1)
+                self.assertEqual(stderr.getvalue(), f"::error::{message}\n")
 
 
 class GoServiceBuildTests(unittest.TestCase):
