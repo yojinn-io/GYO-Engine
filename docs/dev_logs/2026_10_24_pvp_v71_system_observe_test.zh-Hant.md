@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
 | `client-silent-checks` | high | 4～6 | 完成（D183） |
-| `cxx-flag-removal` | high | 3～4 | 進行中 |
+| `cxx-flag-removal` | high | 3～4 | 實作完成，L1 待確認 |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | D181 新增（K5、K6） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
@@ -97,3 +97,27 @@
   - run 40107059342（`3db1070`）失敗：Quick acceptance / toolchain / macos-arm64 的 Engine CTest `platform_sdl_concurrency`，`EventWatchTests.cpp:300`「Destroying an event watch waits for a callback on another thread」的 `CHECK(overlappedRounds > 0)`，實際 0。歸類：測試本身（靠時序碰運氣的斷言：200 輪中至少一次在回呼執行時解構），環境的時序是觸發條件；不是本線的實作，兩次 run 之間只差突變目錄與文件，Engine 沒有改動。同一個 CTest 先前在 L1 #561（windows-x64，`19e32be` 補了推送執行緒的握手）與 outage-resync 的 L1（windows-x64，`LogBridgeTests.cpp:172`）各失敗過一次。屬於 Engine（input-and-present）的範圍，本線不修，交使用者決定 → D186：列為 K11，新批 `event-watch-overlap`。
   - run 40108527438（`9f31da6`）四平台成功。
 - **K1、S3、S4 沒有突變**：K1 的 assert 在 App 端，cpu 測試跑不到；S3、S4 走不到，沒有能讓它們失敗的上游突變（和 D180 的 A4～A7 相同）。
+
+## cxx-flag-removal：不再需要 experimental 程式庫
+
+INVENTORY 的 C16 與 N-osyncstream-experimental。`-fexperimental-library` 只在 AppleClang 加，原本為了 `std::jthread`；`jthread` 在 tt2-trace 之後已從產品消失，只剩 `std::osyncstream`（22 處）需要它。旗標以 PUBLIC 掛在產品 domain 上，所有依賴的目標（測試、驗收 probe）都帶著它。
+
+### 做了什麼
+
+- **`ClogLine`**（新增 `RetroFPS/Pvp/ClogLine.hpp`，產品內、只有標頭）取代 `std::osyncstream`：先把文字組在自己的緩衝區，解構時在一把產品共用的鎖下，以一次 `sputn` 交給建構時 `std::clog` 的 streambuf。和 `osyncstream` 送出時相同：一次傳送、不要求 flush、預設格式（不沿用 `std::clog` 的旗標），支援 `std::fixed` 這類操作子。不經 `ClogLine` 的寫入不和它排序（`osyncstream` 也一樣）。
+  - 沒有改用 Engine 的日誌 facade：它的輸出格式是 `[category] level: text`，和產品寫進 `std::clog` 的位元組不同。
+- 22 處替換：`match_main.cpp`、`IpcHost.cpp`、`MatchRuntimeHost.cpp`、`ClientSimulationRole.cpp`、`ClientConnection.cpp`；移除 `<syncstream>`。
+- 刪除產品 domain 的 PUBLIC 旗標（`apps/object_fps_pvp/CMakeLists.txt`，連同過時的 jthread 註解），以及測試 `digest_o0` 另外加的旗標（`tests/object_fps_pvp/CMakeLists.txt`）。
+- **驗收 probe**：`worker_main.cpp`、`network_main.cpp` 還在用 `std::jthread`，以前靠 domain 傳過來的旗標才能在 AppleClang 編譯。改成 `std::thread` 加明確的 join（MockGateway 的解構、8 個 producer、LeaveFailureRelay 原本就有 join）。
+- 突變 `ci-resume-drops-window` 的 find 改成 `ClogLine()`。
+
+### 驗證
+
+- 本機（AppleClang，Intel Mac）：`build.ninja` 與 `compile_commands.json` 裡已沒有 `-fexperimental-library`；全部建置成功；`ctest -L "cpu|shader"` 84／84；`ctest -R object_fps_pvp -L "cpu|network|go"` 48／48；目錄、日誌契約、ingress_evidence、start_phase、platform_sdl 7／7。
+- **日誌位元組**：既有 golden 測的是組行函式，不受影響；新增 `ClogLine` 的單元測試（`NetworkStatisticsTests.cpp`）：4 個執行緒各寫 500 行，每一行完整、沒有混入別的行；`std::fixed`／`std::setprecision(3)` 生效。
+- **突變**（D184 的挑選）：4 個，4 killed。新增 2 個（`ClogLine` 不寫任何東西、忽略操作子）；find 落在改動範圍 1 個（`ci-resume-drops-window`）；斷言附近被改過 1 個（`worker_main.cpp` 的 producer 那段，`wpr-client-body-hit-read-as-head`）。
+- 四平台 L1：旗標只在 AppleClang，其他平台應不受影響，由 L1 確認。
+
+### Architecture
+
+- 沒有新的依賴邊；`ClogLine` 是產品內的標頭，取代標準程式庫的 experimental 部分。建置設定只少了一個編譯選項，模組結構不變。
