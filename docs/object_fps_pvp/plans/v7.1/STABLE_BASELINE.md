@@ -142,7 +142,7 @@ v7.1 的定位是 hotfix：2026-10-10 Gateway 悄悄丟命令的事故、2026-10
 5. **觀測的已知缺口**（D157 取消，附重開條件）：`rotation_discarded` 沒有逐筆紀錄；Client 端 slack 樣本的流失沒有計數；Gateway 沒有週期性的 IPC 寫出延遲（Match 端的 lane 寫出超時有記錄）。
 6. **測試**：
    - `N-movement-recovery-flake`：只在 CI 的 macos-x64（Rosetta）偶發，只記錄；失敗時會輸出觀測。
-   - `N-worker-probe-stale`：CTest `object_fps_pvp.worker`（label `network`，不在 CI 範圍）在 HEAD 失敗，mock Welcome 少了 `maximum_shot_damage`，另有一個等待逾時未查。
+   - `N-worker-probe-stale`：CTest `object_fps_pvp.worker`（label `network`，不在 CI 範圍）在 HEAD 失敗，mock Welcome 少了 `maximum_shot_damage`，另有一個等待逾時未查。**（基線之後由 `worker-probe-repair` 修好，`d2844a5`：等待逾時的原因是 mock snapshot 少了 `last_hit_part`；22 個 `worker` 突變重判全部 killed。）**
 7. **其他**：沿用 [HANDOFF](HANDOFF.md)「未結事項」與 INVENTORY 處置為「re-evaluate 之後」的 37 項。
 
 ## 發行

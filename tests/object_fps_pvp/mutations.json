@@ -4970,6 +4970,26 @@
       "expect": "test_the_delaying_relay_accepts_the_arguments_run_case_passes"
     },
     {
+      "id": "wpr-client-maximum-damage-from-shot-damage",
+      "batch": "v71-worker-probe-repair",
+      "what": "The Client keeps shot_damage as the maximum shot damage instead of the Welcome's maximum_shot_damage",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "rules.respawn_ticks(),rules.maximum_shot_damage()};",
+      "replace": "rules.respawn_ticks(),rules.shot_damage()};",
+      "check": "worker",
+      "expect": "client duplicated authoritative combat defaults"
+    },
+    {
+      "id": "wpr-client-body-hit-read-as-head",
+      "batch": "v71-worker-probe-repair",
+      "what": "The Client reads a Body hit record as Head",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "static_cast<HitPart>(combat.last_hit_part())};",
+      "replace": "combat.last_hit_part()==1?HitPart::Head:static_cast<HitPart>(combat.last_hit_part())};",
+      "check": "worker",
+      "expect": "snapshot lost the hit record"
+    },
+    {
       "id": "sdl-j1-p02-focuslost-no-release",
       "batch": "v71-sdl-isolation",
       "what": "Pointer capture policy mutant p02-focuslost-no-release (sdl-isolation J1 golden)",

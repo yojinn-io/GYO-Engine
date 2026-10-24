@@ -43,16 +43,22 @@
 | 受擊方向對多位攻擊者的處理 | v6 第 16 批的已知限制：只指向最後一位攻擊者 | 第 09 批的受擊欄位只有最後攻擊者；更多資訊需要改 wire |
 | PvP 骨骼 hitbox、爆頭倍率 | 列在 [v7 候選](../v7/README.md)（2026-10-07 使用者提出） | pv7 只做了 hitbox 的契約支持（命中部位、射手開槍時看到的遠端時刻等欄位，目前填等同現行的值；[v7.1 交接](../v7.1/HANDOFF.md) D87、D89）。hitbox 的實作在 v8，包括 Match 端權威姿勢與射擊回溯；玩法規則（部位倍率等）也在 v8 決定。骨骼對應的形狀與部位標記屬通用格式（Engine 計畫，Assets Editor 編輯），部位倍率等產品語意留在 PvP 的資料 |
 | 單機劇情＋聯機選項 | v6 交接（v7 之後的產品方向候選） | 規模大，可能另立計畫 |
+| 大廳 UI 的元件化：按鈕與位址輸入框做成元件，並修改 ui_editor | 使用者（2026-10-22，v7.1 `sdl-isolation` 的 ip3f L3）：輸入「:」時忽然卡住（「不知道是不是輸入法的問題」），「操作手感怪怪的」；「v8排一個任務，組件化這些按鈕和輸入框，順便修改uieditor」 | 現況：大廳的位址輸入在 `PvpApplication.cpp` 內手寫（`HandleTextEditing`、`AppendAddress`），按鈕也是產品自己處理。規劃時要定：(1) 元件放在哪個 owner（Engine 的 `engine/ui` 與 ui_editor 是共通層，不得帶產品知識；輸入框的編輯政策目前屬消費端，[input.md](../../../architecture/input.md) Design Invariant 4）；(2) 輸入法的組字（SDL 的 TEXT_EDITING，目前不顯示，推論是「:」卡住的原因，未重現）；(3) 手感的另一個來源是 IP-2 已知的 drawable 取得停頓（約 66 ms，修改前也有），屬執行緒分離，不在這個任務 |
+| 預熱幀不得讓玩家看到（需求） | 使用者（2026-10-23，v7.1 `black-map-observation` 之後）：「這個的確是需求，未來我建立大地圖之後，這個問題可能會被放大」；「預熱是需要的，問題在於它暴露給了使用者」 | 現況：`InitializeGraphics` 的暖機迴圈（`PvpApplication.cpp:912-923`）以一般的 `Renderer::Render` 取得、繪製並送上螢幕，暖機幀背景純黑（清除色 `{0,0,0,1}`）、沒有地圖與 HUD，只有人物與武器。產品在暖機後直接進入迴圈，實測（O4，每 0.5 s 截圖，連續啟動 5 次）看不到；GUI 測試的 timing probe 會讓它停在螢幕上約 2.5 s（v7.1 決定只記錄、不改 probe）。地圖變大、預熱變長之後，玩家看到的時間可能變長。規劃時要定：(1) 需求本身（可見的上限，例如 0 幀，或改成有意義的載入畫面）；(2) 修法（暖機用正常的清除色；第一個正常幀之前不顯示視窗——macOS 上不可見視窗的 drawable 取得可能卡住，IP-2 的已知風險；或顯示載入畫面）；(3) 驗收可以沿用 `black_map_watch.py` 與 `black_frame.py`。和下面「預計壓力」第 3 項（同步載入）、第 8 項相關 |
 
-## v7.1 交過來的項目（2026-10-21，v7.1 `re-evaluate`，D154、D155）
+## v7.1 交過來的項目（2026-10-21，v7.1 `re-evaluate`，D154、D155；`after-re-evaluate`，D158）
 
-v7.1 的 `re-evaluate` 用 pv7 的數據判斷為「還需要」、交給 v8 的項目。細節與證據在 [v7.1 re-evaluate](../v7.1/re-evaluate.md)。
+v7.1 的 `re-evaluate` 用 pv7 的數據判斷為「還需要」、交給 v8 的項目。細節與證據在 [v7.1 re-evaluate](../v7.1/re-evaluate.md) 與 [v7.1 after-re-evaluate](../v7.1/after-re-evaluate.md)（標 D158 的 4 列）。
 
 | 項目 | 為什麼還需要 | 規劃時要注意 |
 |---|---|---|
 | B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理 |
 | A4：延遲位移（產生→執行約 38 ms） | 玩家感受得到；A1 之後射擊也照命令步判定。手感上的取捨，不是缺陷 | 改領先會改 backlog 穩態（30 Tick 合計 60→30），碰到 D44 的停止條件；需要 WAN 資料與 phase-tracking-golden |
 | N-analyzer-literal-105 | backlog 門檻 105 與視窗 30 在 Match 與 4 個分析器的 6 處手動維持（AGENTS.md §9） | 改成共用常數，加從 `Movement.hpp` 解析並核對的測試；動到凍結分析器，下一個 L2 重新凍結 |
+| B10：相位追蹤的 golden（D158） | 權威 digest 的 `RunLink` 不經 TrackSlack，35 個情境的相位樣本都是 0，相位追蹤改壞了沒有測試會失敗 | 排在 B6 之前（即上面的 phase-tracking-golden） |
+| N-correct-invariant-assert（D158） | `Correct()` 的前提（前一次修正已 slew 完）只寫在註解，D68 ① 要不要改成 assert 一直沒決定 | B6 動到 late 修正之後的流程，動手前決定 |
+| E3：量測工具的時間基準統一（D158） | 09b 的「70～87 ms 邊界」用 t_frame 量，凍結的 `measure.py` 用 t_c，兩者差 13.7～24.1 ms | 只在 B6 要拿 09b 的數字對照時需要；只用 `phase_decision` 的時刻就不需要 |
+| E5：probe 起點的幀相位（D158） | probe 起點綁在 join 之後，不能跨建置比較 b、a＋b、`legal_*` | A4 改領先時做前後對照才需要 |
 
 v7.1 決定取消、不交給 v8 的：B7（slack 到達即發布）、A5（backlog 105 與 300 ms 型重設：照設計保留，連同門檻 105 重推與快速正向回收）。重開條件見 v7.1 `re-evaluate.md`。
 
@@ -124,6 +130,14 @@ v7.1 決定取消、不交給 v8 的：B7（slack 到達即發布）、A5（back
 - 代價：多一次拷貝，延遲可能多一幀；command buffer 能否跨執行緒錄製要先查證。
 - 開工前要收集的證據：第 2、3 項處理後，主執行緒仍有的長幀與其內容。
 - owner 的候選：Engine（Render）。
+
+### 8. 預熱與載入期間的畫面
+
+- 2026-10-23 使用者提出：大地圖之後，預熱幀被看見的問題可能會被放大（候選「預熱幀不得讓玩家看到」）。
+- 程式證據：暖機幀由 `InitializeGraphics` 送上螢幕（`PvpApplication.cpp:912-923`）；暖機之後若有長時間不 Render 的工作（同步載入大地圖、建構網格），螢幕會一直停在最後送出的那一幀，這是作業系統的正常行為。
+- 觀測：v7.1 `black-map-observation`（[計畫](../v7.1/black-map-observation.md)）證實 GUI 測試看到的黑屏就是暖機幀，產品目前看不到。
+- 開工前要收集的證據：大地圖的預熱與載入時間；暖機後到第一個正常幀的時間（`black_map_watch.py` 可直接量）。
+- owner 的候選：產品（何時、顯示什麼）；如果需要「先畫載入畫面再載入」的通用流程，可能牽涉 Engine 的 Runtime／Render。
 
 ### 未決事項（由使用者決定）
 
