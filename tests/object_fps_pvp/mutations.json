@@ -6598,6 +6598,26 @@
       "replace": "    return !haveSent || epoch != sentEpoch || (!empty && lastSequence > sentThrough);",
       "check": "cpu",
       "expect": "input token rule"
+    },
+    {
+      "id": "cpt-other-version-uncounted",
+      "batch": "v71-client-path-tests",
+      "what": "A datagram of another version is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "if(wire::OtherVersion(datagram))++otherVersionDatagrams;",
+      "replace": "if(wire::OtherVersion(datagram)){}",
+      "check": "worker",
+      "expect": "another protocol version was not counted"
+    },
+    {
+      "id": "cpt-step-generation-zero",
+      "batch": "v71-client-path-tests",
+      "what": "A window does not name its generation",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    step.generation = drain.generation;",
+      "replace": "    step.generation = 0;",
+      "check": "cpu",
+      "expect": "windowGeneration"
     }
   ]
 }

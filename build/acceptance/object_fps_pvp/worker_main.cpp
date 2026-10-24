@@ -185,6 +185,13 @@ public:
     bool silent{},snapshotOnHello{true};
     bool earlyBeforeWelcome{};
     void SendRaw(wire::Type type,const std::string& payload){Send(type,payload);}
+    // A well-formed GYOP datagram of another protocol version (client-path-tests).
+    void SendOtherVersion(wire::Type type) {
+        const auto bytes=Engine::Net::EncodeGyopDatagram({static_cast<std::uint16_t>(wire::ProtocolVersion+1),
+            static_cast<std::uint16_t>(type),1,++sequence,0},{});
+        Require(bytes.has_value(),"cannot encode another version");
+        socket.send_to(asio::buffer(*bytes),peer);
+    }
     Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
@@ -347,6 +354,7 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     connection.SendInput(Input(1,1),std::numeric_limits<std::uint64_t>::max());
     auto otherEpoch=Input(1,1);otherEpoch.movementEpoch=gateway.epoch+1;connection.SendInput(std::move(otherEpoch));
     for(const auto kind:{wire::Type::Hello,wire::Type::Input,wire::Type::Actions})gateway.SendRaw(kind,"");
+    gateway.SendOtherVersion(wire::Type::Snapshot); // N-client-other-version-untested
     gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().snapshot->tick>playing;});
     Require(connection.State().phase==ConnectionPhase::Playing && connection.State().error.empty(),
@@ -377,6 +385,8 @@ void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
             Require(gap>=200,std::string("Hellos came more often than every 250 ms ")+phase);
         }
     };
+    // The generation of the session CheckDroppedDatagrams left (C17-3).
+    const auto leftGeneration=connection.Drain().generation;
     // Welcomed, no snapshot yet: only Hellos reach the Gateway.
     gateway.snapshotOnHello=false;
     const auto welcomesBefore=gateway.welcomeTransmits.size();
@@ -388,6 +398,18 @@ void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
     gateway.snapshotOnHello=true;
     gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    // C17-3 (client-path-tests): after the rejoin, a window of the left generation is not sent; the same window
+    // with the current generation is.
+    {
+        const auto attempts=gateway.attempts.size();
+        connection.SendInput(Input(1,1),leftGeneration);
+        gateway.UntilTime(Clock::now()+50ms);
+        Require(gateway.attempts.size()==attempts,"a window of the generation before the rejoin was sent");
+        connection.SendInput(Input(1,1),connection.Drain().generation);
+        gateway.Until([&]{return gateway.attempts.size()>attempts;});
+        gateway.Snapshot(1);
+        gateway.Until([&]{return connection.State().snapshot->players.at(0).lastResolvedCommand==1;});
+    }
     // Inputs flow and their acknowledgement moves, two commands behind as with
     // a round trip in flight.
     std::uint64_t sequence=0;
@@ -464,6 +486,7 @@ void RequireDroppedCounts(const std::string& captured) {
     Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
     Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
     Require(count("stale_input_windows")>=2,"windows for a replaced authority were not counted");
+    Require(count("other_version_datagrams")>=1,"a datagram of another protocol version was not counted");
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();
