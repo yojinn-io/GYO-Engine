@@ -44,7 +44,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
-- **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。
+- **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
 - **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。`silent-branch-asserts` 實作完成（D180；突變 14／14 killed），L1 待確認；改動檔案上的既有突變重新判定中。下一批 `client-silent-checks`（D181）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
@@ -168,6 +168,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D182 | （2026-10-24）取消 `wake-reconnect`（N-sleep-reconnect）：睡眠超過 T_max 後不自動重新加入，照現行回 Lobby。理由：沒有需求，玩家讓電腦睡眠就是要離開；留在場上只會變成靶子。短於 T_max 的睡眠仍照 outage-resync 當中斷處理（D172 D-11 (w1)）。玩家離開後到 Gateway 判逾時（約 5 s）之間角色仍在場上，也不處理：不是正常退出時，本來就無法判定玩家的行為 | 使用者：「wake-reconnect 這個可以取消了，沒有需求，玩家睡眠就是要離開，但是離開了，人物在遊戲裡就是個靶子。」補充：「5s判超時不用處理，玩家本來就要離開了，如果不是退出。你無論如何都是沒有辦法判定玩家行為的。」 |
 | D183 | （2026-10-24）`client-silent-checks` 的守衛追蹤（[client-silent-checks.md](client-silent-checks.md)）全部照建議：K1（時間線 `Push`）assert；K2 選 (b)，`Reconcile` 回傳 `bool`、產品呼叫端 assert；K3（`SendInput`）的 r2、r3、r4、r7 assert，r1、r5 在 worker statistics 行尾計數，r6 保留；K4 的 S1、S2（Match 端）assert，S3、S4（Gateway）用 `invariantFailed` | 使用者：「K1～K4 照建議：K1 assert；K2 選 (b) Reconcile 回傳 bool、產品呼叫端 assert；K3 的 r2、r3、r4、r7 assert，r1、r5 計數，r6 保留；K4 的 S1、S2 assert，S3、S4 用 invariantFailed。」 |
 | D184 | （2026-10-24）突變的重跑範圍：每批只跑 (1) 新登記的突變、(2) find 落在本批改動範圍內的突變、(3) 負責殺死它的測試檔（以突變的 check 對應的測試來源判斷）被本批改動過、且所在檔案也被改動的突變；每條 PR 線合併前，在背景把改動檔案上的既有突變完整跑一次。取代 after-re-evaluate 決策點 C 引用的「目標檔案被改過的既有突變都要重跑」。原因：目錄已有 613 個，集中在幾個大檔，舊規則每批多 1～2 h；find 過時已由目錄測試檢查 | 使用者：「照建議改：每批只跑新突變、find 落在本批改動範圍的、以及殺死它的測試檔被改動的；每條 PR 線合併前在背景把改動檔案上的既有突變完整跑一次。」 |
+| D185 | （2026-10-24）發版時在本機背景跑完整突變目錄，發行線一開始就啟動。非 killed 的逐個分類：測試失去檢出力（擋發版，發版前修好）、突變過時或等價（更新或移出目錄並寫明理由）；只有前者擋發版。結果寫進發行線的 dev_log。v7.1 的 release 是第一次。目的：補上 D184 只看改動檔案的缺口（某條線改了共用測試，削弱了未改動產品檔上的突變），並定期清理目錄 | 使用者：「把剛才的建議，記成決定：發版時在本機背景跑完整突變目錄，發行線一開始就啟動；非 killed 逐個分類，只有「測試失去檢出力」擋發版；結果寫進發行線 dev_log。v7.1 的 release 是第一次。」 |
 
 ## 規劃紀錄（記錄器）
 

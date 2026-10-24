@@ -210,7 +210,7 @@ after-re-evaluate（約 73～102 h）
 | worker-probe-repair ✓ | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定（結果：通過、22／22 killed，新增 2 個突變 2／2 killed；`d2844a5`） | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
 | token-tests | N-token-test-gaps、C12 | 兩個存活突變登記並 killed；測試模型和產品的 token 規則不再各寫一份 | 4～6 | 依賴 worker-probe-repair |
 | client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair；D181 併入 K9：握手期的暫時性錯誤與直接超過 T_max 這兩個分支的執行期測試（+2～3 h） |
-| windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
+| windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 |；D185：發行線一開始就在本機背景跑完整突變目錄（約 4～6 h），非 killed 逐個分類，只有「測試失去檢出力」擋發版 |
 | quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
 | wake-reconnect ✗ | N-sleep-reconnect | — | — | **取消（D182）**：使用者「沒有需求，玩家睡眠就是要離開」。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 照現行回 Lobby，不做自動重新加入（w2） |
 | lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET，D172 D-7 的推論）與 endpoint 有沒有改變。預定 2026-10-26 前後。本列是 outage-resync L3 的唯一出處（[resync-l2-l3 宣告](resync-l2-l3-declaration.md)第 2 版改寫時漏掉了第 1 版的 L3 一節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的 windows-long-path、quick-close（wake-reconnect 已取消，D182）；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record；D181：K10（凍結的 run_case 在 probe 失敗後立刻關服務，看不到 Gateway 端的 session 到期）在本批的工具準備修；本批延到本線全部與 rebind-on-new-port、client-silent-checks 完成之後 |
