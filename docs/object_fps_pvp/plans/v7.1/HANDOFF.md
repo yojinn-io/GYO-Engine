@@ -172,6 +172,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D186 | （2026-10-25）K11 列入 `lan15-windows` 之前的已知問題：Engine 的 `platform_sdl_concurrency`（`EventWatchTests.cpp:300`，200 輪中至少一次在回呼執行時解構）靠時序碰運氣，client-silent-checks 的 L1 在 macos-arm64 失敗一次。新批 `event-watch-overlap`：改成用同步保證重疊，排在 `client-path-tests` 之後 | 使用者：「列進 lan15 前的已知問題（K11）：把 EventWatchTests 的重疊檢查改成用同步保證重疊、不靠碰運氣，放在 client-path-tests 之後做。先繼續 cxx-flag-removal。」 |
 | D187 | （2026-10-25）`rebind-on-new-port`（[rebind-on-new-port.md](rebind-on-new-port.md)）採 r1＋k3：Client 在 Welcome 之前、中斷期間、最近 250 ms 沒有送出 Input 或 Actions、或輸入已送出但確認滿 T_int 沒有前進時，Hello 每 250 ms，其他時候每 1 s。Gateway、wire、通用層 session、Design Invariants 不變；network-architecture §4 的 Hello 間隔與安全取捨條文跟著改；實作後做 1 次 xhigh 審查（使用者同意）；L2 宣告寫好後再交使用者核准 | 使用者：「照建議 r1＋k3：Client 在 Welcome 前、中斷期間、最近 250 ms 沒送 Input 或 Actions、或輸入確認滿 T_int 沒前進時，Hello 每 250 ms；契約條文跟著改；實作後做 1 次 xhigh 審查；L2 宣告之後再交我核准。」 |
 | D188 | （2026-10-25）`rebind-on-new-port` 的 xhigh 審查推翻 D187 條件 (b) 的前提（Match 收不到命令時用替代命令讓確認照樣前進）後，改選 P3：拿掉 (a)、(b)，Client 的 Hello 一律每 250 ms。取代 D187 的規則；契約條文與測試跟著改；舊證據的 Hello／Welcome 計數比較註明換了規則 | 使用者：「選 P3：拿掉 (a)、(b)，Hello 一律每 250 ms；契約條文與測試跟著改，舊證據的計數比較註明換了規則。」 |
+| D189 | （2026-10-25）核准 Design Invariants 守衛測試的判定變更：`test_diagnostic_isolation.py` 的 liveness 呼叫次數由 12 改成 11（D188 拿掉 Hello 間隔裡的 `Interrupted()` 讀取）。§14.4 的 1～5、突變檢查與獨立核對見 dev_log 的 rebind-on-new-port 一節。核對時發現的既有缺口（解析器看不到的呼叫）列為 K12 | 使用者：「核准把 test_diagnostic_isolation.py 的 liveness 呼叫次數從 12 改成 11。解析器看不到的呼叫那個既有缺口，列進 lan15 前的已知問題。」 |
 
 ## 規劃紀錄（記錄器）
 

@@ -85,7 +85,8 @@ class DiagnosticIsolationTest(unittest.TestCase):
                 depth += {'(': 1, ')': -1}.get(text[end], 0)
                 end += 1
             calls.append((match.group(1), text[match.end():end - 1]))
-        self.assertEqual(len(calls), 12)
+        # 11 since v7.1 D188: the Hello interval no longer reads Interrupted() (D189).
+        self.assertEqual(len(calls), 11)
         allowed = {'Begin': {'Clock::now()'}, 'Welcome': {'arrivedAt'}, 'Snapshot': {'arrivedAt'}, 'Poll': {'polledAt'},
                    'Interrupted': {''}, 'Playing': {''}, 'Since': {''}, 'NextDeadline': {''}}
         for method, argument in calls:
