@@ -140,7 +140,8 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 	}
 	if err := s.link.actions(in, e); err != nil {
 		if errors.Is(err, adapter.ErrActions) {
-			// Unreachable after DecodeActions (same bounds): a malformed packet.
+			// DecodeActions checked the same bounds (D183).
+			s.invariantFailed("a decoded actions batch was refused by the link: " + err.Error())
 			s.countIngress(p, playerDropMalformedActionsPackets, 1)
 			return nil
 		}

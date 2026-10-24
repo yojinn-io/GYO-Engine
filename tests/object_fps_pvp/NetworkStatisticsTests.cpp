@@ -77,12 +77,14 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
           "[ObjectFPS/PvP] worker statistics player=2 window_s=10.000 wakes=4812 wakes_per_s=481.2 cpu_s=0.051 "
           "other_version_datagrams=0 received_datagrams=0 foreign_sender_datagrams=0 undecodable_datagrams=0 "
           "stale_datagrams=0 send_blocked=0 snapshot_overflows=0 simulation_overflows=0 unparsed_datagrams=0 "
-          "early_datagrams=0 invalid_snapshot_datagrams=0 ignored_snapshot_datagrams=0 unexpected_kind_datagrams=0");
+          "early_datagrams=0 invalid_snapshot_datagrams=0 ignored_snapshot_datagrams=0 unexpected_kind_datagrams=0 "
+          "stale_input_windows=0");
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1}) ==
           "[ObjectFPS/PvP] worker statistics player=0 window_s=10.000 wakes=1 wakes_per_s=0.1 cpu_s=na "
           "other_version_datagrams=0 received_datagrams=0 foreign_sender_datagrams=0 undecodable_datagrams=0 "
           "stale_datagrams=0 send_blocked=0 snapshot_overflows=0 simulation_overflows=0 unparsed_datagrams=0 "
-          "early_datagrams=0 invalid_snapshot_datagrams=0 ignored_snapshot_datagrams=0 unexpected_kind_datagrams=0");
+          "early_datagrams=0 invalid_snapshot_datagrams=0 ignored_snapshot_datagrams=0 unexpected_kind_datagrams=0 "
+          "stale_input_windows=0");
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .wakes = 1, .otherVersionDatagrams = 3}).find(
           " cpu_s=na other_version_datagrams=3 ") != std::string::npos);
     // log-contract: the worker's own loss counts, appended last in a fixed order.
@@ -94,9 +96,12 @@ TEST_CASE("Match and worker statistics lines keep every key in a fixed order") {
     // v7.1 silent-branch-asserts (D180): the session's datagrams that change nothing, appended after them.
     CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .unparsedDatagrams = 7, .earlyDatagrams = 8,
                                 .invalidSnapshotDatagrams = 9, .ignoredSnapshotDatagrams = 10,
-                                .unexpectedKindDatagrams = 11}).ends_with(
+                                .unexpectedKindDatagrams = 11}).find(
           " simulation_overflows=0 unparsed_datagrams=7 early_datagrams=8 invalid_snapshot_datagrams=9 "
-          "ignored_snapshot_datagrams=10 unexpected_kind_datagrams=11"));
+          "ignored_snapshot_datagrams=10 unexpected_kind_datagrams=11 ") != std::string::npos);
+    // v7.1 client-silent-checks (D183): windows for a replaced authority, appended after them.
+    CHECK(WorkerStatisticsLine({.windowSeconds = 10.0, .staleInputWindows = 12}).ends_with(
+          " unexpected_kind_datagrams=0 stale_input_windows=12"));
 }
 
 // pv7 §5: the Client's cause records line counts each hold's samples, missing

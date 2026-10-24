@@ -2244,3 +2244,22 @@ TEST_CASE("PvP a resume at the tip seeds a new lead and one that reseeds anyway 
     CHECK(client.PendingInput().commands == seeded);
 }
 
+
+// v7.1 client-silent-checks (D183): Reconcile reports whether it used the
+// state; the product asserts it (ClientSimulation::Observe).
+TEST_CASE("PvP prediction reports an invalid or older authority state as ignored") {
+    const auto arena = PredictionArena();
+    LocalPlayerPrediction client(arena);
+    const PlayerState first{1, {2, 0, 2}, 0, 0, 0};
+    CHECK(client.Reconcile(first, 30));
+    CHECK_FALSE(client.Reconcile(first, 30)); // not newer
+    CHECK_FALSE(client.Reconcile(first, 29));
+    auto invalid = first;
+    invalid.movementEpoch = 0;
+    CHECK_FALSE(client.Reconcile(invalid, 31));
+    auto acknowledged = first;
+    acknowledged.lastResolvedCommand = 2;
+    CHECK(client.Reconcile(acknowledged, 31));
+    CHECK_FALSE(client.Reconcile(first, 32)); // its acknowledgement went back
+    CHECK(client.Observation().lastResolvedCommand == 2);
+}

@@ -27,6 +27,7 @@
 #include <random>
 #include <cctype>
 #include <syncstream>
+#include <utility>
 
 namespace fps::pvp {
 namespace pb=object_fps_pvp::client::v7;
@@ -184,6 +185,7 @@ struct ClientConnection::Impl {
     // The datagrams of this session that decode but change nothing (v7.1
     // silent-branch-asserts, D180): every drop below is counted.
     std::uint64_t unparsedDatagrams{},earlyDatagrams{},invalidSnapshotDatagrams{},ignoredSnapshotDatagrams{},unexpectedKindDatagrams{};
+    std::uint64_t staleInputWindows{}; // guarded by mutex: SendInput runs on the simulation thread
     ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
@@ -863,14 +865,16 @@ struct ClientConnection::Impl {
         const auto now=Clock::now();
         if(std::chrono::duration<double>(now-statisticsAt).count()<NetworkStatisticsSeconds)return;
         const auto cpu=CurrentThreadCpuSeconds();
-        PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
+        PlayerId player{};std::uint64_t staleWindows{};
+        {std::scoped_lock lock(mutex);player=state.playerId;staleWindows=std::exchange(staleInputWindows,0);}
         std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
             .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
             .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
             .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows,
             .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
-            .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams})<<'\n';
+            .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams,
+            .staleInputWindows=staleWindows})<<'\n';
         std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
@@ -943,9 +947,17 @@ void ClientConnection::SendInput(PlayerInput input){
 void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     // Generation changes happen under this mutex, so the check cannot race them.
     std::scoped_lock lock(impl_->mutex);
-    if(generation!=impl_->generation.load())return;
-    if((impl_->state.phase!=ConnectionPhase::Playing && impl_->state.phase!=ConnectionPhase::Connecting) ||
-       input.playerId!=impl_->state.playerId || !PvpMatch::ValidInput(input))return;
+    // A window of another generation: the caller's authority is gone (r1).
+    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}
+    // The simulation predicts only after a snapshot of this generation, which
+    // set Playing; within a generation the phase never goes back (a failure and
+    // a departure change the generation). Its player and commands are this
+    // generation's and valid (r2, r3, r4: API misuse).
+    const bool playing=impl_->state.phase==ConnectionPhase::Playing || impl_->state.phase==ConnectionPhase::Connecting;
+    GYO_ASSERT(playing);
+    GYO_ASSERT(input.playerId==impl_->state.playerId);
+    const bool valid=PvpMatch::ValidInput(input);
+    GYO_ASSERT(valid);
     std::uint64_t resolved{},epoch{1},life{1};
     if(impl_->state.snapshot) {
         for(const auto& player:impl_->state.snapshot->players)
@@ -953,7 +965,10 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     }
     // Only authority can advance an epoch. Neither a stale application frame
     // nor a caller-provided future epoch can repopulate the worker's window.
-    if(input.lifeGeneration!=life || input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch)return;
+    // The simulation built it from an older snapshot than the worker's newest (r5).
+    if(input.lifeGeneration!=life || input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch){
+        ++impl_->staleInputWindows;return;
+    }
     std::erase_if(input.commands,[&](const auto& command){return command.sequence<=resolved;});
     std::erase_if(impl_->submittedCommands,[&](const auto& command){return command.sequence<=resolved;});
     if(input.commands.empty())return;
@@ -963,7 +978,9 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     for(const auto& existing:impl_->submittedCommands) {
         const auto found=std::find_if(input.commands.begin(),input.commands.end(),
             [&](const auto& command){return command.sequence==existing.sequence;});
-        if(found==input.commands.end() || *found!=existing)return;
+        // One command identity, one content (network-architecture §7): the
+        // prediction never regenerates or drops an unacknowledged sequence (r7).
+        GYO_ASSERT(found!=input.commands.end() && *found==existing);
     }
     impl_->submittedCommands=input.commands;
     impl_->latestInput=std::move(input);

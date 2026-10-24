@@ -104,6 +104,10 @@ struct WorkerStatisticsWindow final {
     // Gateway does not send (Hello, Input, Actions).
     std::uint64_t unparsedDatagrams{}, earlyDatagrams{}, invalidSnapshotDatagrams{}, ignoredSnapshotDatagrams{};
     std::uint64_t unexpectedKindDatagrams{};
+    // v7.1 client-silent-checks (D183): complete windows the simulation sent
+    // for an authority the worker no longer has (another connection
+    // generation, or an epoch or life the worker's newest snapshot replaced).
+    std::uint64_t staleInputWindows{};
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 

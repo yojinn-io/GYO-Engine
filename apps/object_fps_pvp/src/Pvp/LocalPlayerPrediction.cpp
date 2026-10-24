@@ -229,17 +229,17 @@ bool LocalPlayerPrediction::Reseeds(const PlayerState& authority) const noexcept
         authority.lastResolvedCommand > current_.lastResolvedCommand;
 }
 
-void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
+bool LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
     if (authority.playerId == 0 || authority.movementEpoch == 0 || !authority.lifeGeneration ||
         !std::isfinite(authority.verticalVelocity) ||
         (authority.lifeState != LifeState::Alive && authority.lifeState != LifeState::Dead) ||
         authority.contiguousPendingCommands > MaxFutureCommands || !Engine::Math::IsFinite(authority.position) ||
-        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return;
+        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return false;
     const bool newPlayer = !observation_.active || current_.playerId != authority.playerId;
     if (!newPlayer && (authorityTick <= observation_.authorityTick ||
         authority.lifeGeneration < current_.lifeGeneration || authority.movementEpoch < current_.movementEpoch ||
         (authority.movementEpoch == current_.movementEpoch &&
-         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return;
+         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return false;
     if (newPlayer || authority.lifeGeneration != current_.lifeGeneration || authority.movementEpoch > current_.movementEpoch) {
         if (!newPlayer && authority.lifeGeneration != current_.lifeGeneration) {
             for (const auto& command : pending_)
@@ -306,6 +306,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
     observation_.movementEpoch = authority.movementEpoch;
     observation_.serverPendingCommands = authority.contiguousPendingCommands;
     UpdatePresentation();
+    return true;
 }
 
 bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float right,

@@ -338,11 +338,17 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
     gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
     gateway.SnapshotAt(playing,0); // not newer than the applied one
+    // Windows for an authority the worker no longer has (D183): another
+    // connection generation, and an epoch its newest snapshot does not carry.
+    const auto attemptsBefore=gateway.attempts.size();
+    connection.SendInput(Input(1,1),std::numeric_limits<std::uint64_t>::max());
+    auto otherEpoch=Input(1,1);otherEpoch.movementEpoch=gateway.epoch+1;connection.SendInput(std::move(otherEpoch));
     for(const auto kind:{wire::Type::Hello,wire::Type::Input,wire::Type::Actions})gateway.SendRaw(kind,"");
     gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().snapshot->tick>playing;});
     Require(connection.State().phase==ConnectionPhase::Playing && connection.State().error.empty(),
         "a dropped datagram changed the session");
+    Require(gateway.attempts.size()==attemptsBefore,"a window for a replaced authority was sent");
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
 }
 // The first worker statistics line counts at least what CheckDroppedDatagrams sent.
@@ -360,6 +366,7 @@ void RequireDroppedCounts(const std::string& captured) {
     Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
     Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
     Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
+    Require(count("stale_input_windows")>=2,"windows for a replaced authority were not counted");
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();

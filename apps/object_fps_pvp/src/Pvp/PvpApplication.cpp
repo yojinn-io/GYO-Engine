@@ -10,6 +10,7 @@
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/App/WeaponViewModel.hpp"
+#include "engine/base/Assert.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -443,8 +444,12 @@ struct PvpApplication::Impl final {
         // Consume the complete receipt-stamped batch before selecting this
         // frame's timeline bracket. Never play a stalled backlog one frame at a time.
         // The simulation role observes the same snapshots through its own drain.
-        for (const auto& sample : received.snapshots)
-            static_cast<void>(timeline.Push(sample.snapshot, sample.receivedAt));
+        // ClientConnection queues only validated snapshots, newer than the
+        // applied one, in arrival order; the timeline restarts with it.
+        for (const auto& sample : received.snapshots) {
+            const bool pushed = timeline.Push(sample.snapshot, sample.receivedAt);
+            GYO_ASSERT(pushed);
+        }
     }
 
     void ResetWeaponFeedback() {

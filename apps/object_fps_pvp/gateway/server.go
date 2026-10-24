@@ -1170,8 +1170,8 @@ func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence 
 	e.items = uint32(len(in.Commands))
 	if err := s.link.input(in, e); err != nil {
 		if errors.Is(err, adapter.ErrInput) {
-			// Unreachable after DecodeInput (same bounds); a window the link
-			// refuses is a malformed packet, never a failed room.
+			// DecodeInput checked the same bounds (D183).
+			s.invariantFailed("a decoded input window was refused by the link: " + err.Error())
 			s.countIngress(p, playerDropMalformedInputPackets, 1)
 			return nil
 		}

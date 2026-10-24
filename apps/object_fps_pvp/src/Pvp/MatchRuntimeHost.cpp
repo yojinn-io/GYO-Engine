@@ -201,9 +201,10 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         if (inserted) { newlyAccepted.push_back(command.sequence); merged.stagedSequences.insert(command.sequence); }
         else ++pendingCopies;
     }
-    // Should stay 0: admission already bounds each command to (cursor,
-    // cursor + MaxFutureCommands] and staging only keeps commands past the cursor.
-    if (merged.commands.size() > MaxFutureCommands) return refuse(IngressInputRejection::StagedOverWindow);
+    // Admission already bounds each command to (cursor, cursor +
+    // MaxFutureCommands] and staging only keeps commands past the cursor
+    // (D183: the staged_over_window key stays 0).
+    GYO_ASSERT(merged.commands.size() <= MaxFutureCommands);
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
     ++ingress.acceptedInputs;
@@ -416,31 +417,12 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             if (!pending.dirty) continue;
             PlayerInput input{playerId, {}, pending.movementEpoch, pending.lifeGeneration};
             const auto handoff = [&] {
-                // A snapshot may have advanced life after ingress validation.
-                // Recheck the complete identity at the simulation boundary.
-                if (!match_.CanSubmitInput(input)) {
-                    // Should stay 0: rotation below discards a stale identity
-                    // before the next handoff, and ingress checks the current one.
-                    // Were it not, these commands stay staged and a rotation
-                    // after this tick counts them again as rotation_discarded.
-                    ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::HandoffRejected)] +=
-                        static_cast<std::uint64_t>(std::count_if(input.commands.begin(), input.commands.end(),
-                            [&](const auto& command) { return pending.stagedSequences.contains(command.sequence); }));
-                    const auto current = match_.Snapshot();
-                    const auto player = std::find_if(current.players.begin(), current.players.end(),
-                        [&](const auto& p) { return p.playerId == playerId; });
-                    if (player != current.players.end() && player->lifeGeneration != pending.lifeGeneration) {
-                        for (const auto& command : input.commands)
-                            if (pending.stagedSequences.contains(command.sequence))
-                                TraceMovement({.kind = MovementTraceKind::LifecycleCancelled, .playerId = playerId,
-                                    .epoch = pending.movementEpoch, .sequence = command.sequence,
-                                    .authorityTick = match_.TickCount(), .lifeGeneration = pending.lifeGeneration});
-                    }
-                } else {
-                    // The same check under the same lock just passed.
-                    const bool submitted = match_.SubmitInput(input);
-                    GYO_ASSERT(submitted);
-                }
+                // Ingress checked the current identity, the window and the
+                // conflicts; the cursor only advances; Leave erases the staging,
+                // and the Tick that changes an identity discards the old one
+                // (Step below; D183: the handoff_rejected key stays 0).
+                const bool submitted = match_.SubmitInput(input);
+                GYO_ASSERT(submitted);
             };
             for (const auto& [sequence, command] : pending.commands) {
                 static_cast<void>(sequence);
