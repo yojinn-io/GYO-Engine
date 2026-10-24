@@ -9,7 +9,7 @@
 | 批次 | 檔位 | 估時（h） | 狀態 |
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
-| `client-silent-checks` | high | 4～6 | 實作完成，L1 待確認；1 個存活突變等使用者決定（D183） |
+| `client-silent-checks` | high | 4～6 | 實作完成，L1 待確認（D183） |
 | `cxx-flag-removal` | high | 3～4 | |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | D181 新增（K5、K6） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
@@ -87,8 +87,9 @@
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 48／48，沒有任何 assert 觸發；目錄、日誌契約、ingress_evidence 的測試通過；Go `./...` 與 `-race` 通過。
 - **worker 驗收**：在 `CheckDroppedDatagrams` 裡送一個別的世代、一個別的 epoch 的窗口，要求兩個都沒送出，且第一行 worker statistics 的 `stale_input_windows` ≥2。實測 2。
 - **單元測試**：`PredictionTests.cpp` 新增「無效或較舊的權威狀態回報為未採用」。
-- **突變**（D184 的挑選：新突變、find 落在本批改動範圍、斷言附近被改過；挑選腳本在會話的工作目錄）：16 個，15 killed，1 survived。
+- **突變**（D184 的挑選：新突變、find 落在本批改動範圍、斷言附近被改過；挑選腳本在會話的工作目錄）：16 個，15 killed，1 survived；存活的那個是等價突變，換成不等價的版本後 killed（見下）。
   - 新增 8 個（`batch` 是 `v71-client-silent-checks`）：K2 的上游前提被弄壞時 assert 觸發、`Reconcile` 把無效或較舊的狀態報成已採用（2 個）、r1／r5 不計數或照送（3 個）、統計行少一個鍵、S2 的上游前提被弄壞。
   - 既有 8 個：find 落在改動範圍 1 個；worker 驗收裡統計檢查那一段被改過，所以重跑 C3 的 7 個。
-  - **存活**：`csc-s2-rotation-keeps-old-life`（Tick 換生命時不清掉舊生命的暫存，S2 或 A1 的 assert 應該觸發）。原因是既有的測試缺口：Match 端「換 epoch 時丟棄暫存」有測試（`PvpMatchTests.cpp` 的 `RotationDiscarded`），「換生命時丟棄暫存」沒有；補測試需要主機層級的擊殺與重生情境，現有測試沒有這種工具。等使用者決定。
+  - **存活 → 等價突變**：`csc-s2-rotation-keeps-old-life`（Tick 換生命時不清掉舊生命的暫存）存活。使用者要求補主機層級的擊殺與重生測試（時限 2 小時）。查證後發現補測試也殺不死它：Match 唯一讓 life 加 1 的地方是重生（`PvpMatch.cpp:272`），同一個 Tick 內一定呼叫 `ResetMovementEpoch` 讓 epoch 加 1（`:286`），所以輪替條件裡「life 不同」永遠被「epoch 不同」蓋住。這是等價突變，移出目錄（照 outage-resync 的先例）；產品的 life 條件保留，它寫明意圖、成本為 0。
+  - **替換**：`csc-s2-rotation-keeps-old-epoch`（拿掉「epoch 不同」那一半），killed，由 S2 或 A1 的 assert 觸發，證明 assert 在上游前提壞掉時有作用。用時約 15 分鐘。
 - **K1、S3、S4 沒有突變**：K1 的 assert 在 App 端，cpu 測試跑不到；S3、S4 走不到，沒有能讓它們失敗的上游突變（和 D180 的 A4～A7 相同）。
