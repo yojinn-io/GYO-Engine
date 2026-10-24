@@ -207,12 +207,14 @@ class WorkflowGateTests(unittest.TestCase):
 
     def test_only_release_draft_and_snapshot_jobs_can_write_repository_contents(self):
         # Every permissions key of every workflow, exactly: contents is the only
-        # scope ever written; pull-requests: read and, for the CI scope, checks:
-        # read are the only extra scopes.
+        # repository scope ever written; pull-requests: read and, for the CI
+        # scope, checks: read are the only extra read scopes. The manual-run
+        # report alone writes statuses and pull request comments.
         read, pull_requests = {"contents": "read"}, {"contents": "read", "pull-requests": "read"}
+        report = {"actions": "read", "statuses": "write", "pull-requests": "write"}
         expected = {
             "cross-platform.yml": {"workflow": read, "scope": {**pull_requests, "checks": "read"},
-                                   "snapshot": {"contents": "write"}},
+                                   "dispatch_report": report, "snapshot": {"contents": "write"}},
             "prepare-release.yml": {"workflow": read, "draft": {"contents": "write"}},
             "build-and-validate.yml": {"workflow": read},
             "package-trial.yml": {"workflow": read, "select": pull_requests},
@@ -223,8 +225,10 @@ class WorkflowGateTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertEqual(permission_blocks(workflow), blocks)
                 self.assertNotRegex(workflow, r"write-all|read-all")
-        for workflow in (self.quick, self.trial):
-            self.assertNotRegex(workflow, r"pull-requests:\s*write|actions:\s*write")
+        dispatch_report = job_block(self.quick, "dispatch_report")
+        for workflow in (self.quick.replace(dispatch_report, ""), self.trial):
+            self.assertNotRegex(workflow, r"pull-requests:\s*write|statuses:\s*write|actions:\s*write")
+        self.assertNotRegex(dispatch_report, r"contents:|actions:\s*write")
         self.assertNotRegex(self.shared + self.trial, r"contents:\s*write")
         snapshot = job_block(self.quick, "snapshot")
         self.assertRegex(snapshot, r"(?m)^    permissions:\n      contents: write\n    strategy:$")
@@ -891,6 +895,108 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertNotIn("gyo-service-", job_block(self.quick, "l1"))
         self.assertNotIn("--revision", run_script(step_with(job_block(self.quick, "l1"), "id: go_services")))
         self.assertNotIn("--record", job_block(self.quick, "l1"))
+
+    def test_actual_dispatch_report_writes_only_for_manual_runs(self):
+        bash = find_bash()
+        if bash is None:
+            if os.name == "nt":
+                self.skipTest("Native Git Bash cannot execute in this Windows environment")
+            self.fail("Bash is required by the Ubuntu dispatch report job")
+        report = job_block(self.quick, "dispatch_report")
+        self.assertRegex(report, r"(?m)^    name: Report dispatched L1$")
+        self.assertRegex(report, r"(?m)^    needs: \[scope, l1\]$")
+        # Push and pull request runs never reach the writes; manual runs report
+        # even when L1 failed or was cancelled.
+        self.assertRegex(report, r"(?m)^    if: always\(\) && github\.event_name == 'workflow_dispatch'$")
+        self.assertNotIn("dispatch_report", job_block(self.quick, "gate"))
+        step = step_with(report, "statuses/")
+        self.assertEqual(env_block(step, 8), {
+            "GH_TOKEN": "${{ github.token }}",
+            "SCOPE_RESULT": "${{ needs.scope.result }}",
+            "L1_RESULT": "${{ needs.l1.result }}",
+            "HEAD_SHA": "${{ github.sha }}",
+            "REF_TYPE": "${{ github.ref_type }}",
+            "BRANCH": "${{ github.ref_name }}",
+            "RUN_URL": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+        })
+        script = run_script(step)
+        # The fake answers each lookup with its fixture and keeps every comment body it is sent.
+        prefix = '''gh() {
+  printf '%s\\n' "$*" >> gh-calls
+  case "$*" in
+    *statuses/*) [ "$STATUS_EXIT" = 0 ] || return "$STATUS_EXIT" ;;
+    *" repos/owner/repository/pulls "*) printf '%s' "$PULLS" ;;
+    */jobs\\?*) printf '%s' "$ROWS" ;;
+    */issues/*/comments\\?*) printf '%s' "$COMMENTS" ;;
+  esac
+  for argument in "$@"; do
+    case "$argument" in body=@*) cat "${argument#body=@}" >> sent-bodies ;; esac
+  done
+}
+'''
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        run = "https://github.com/owner/repository/actions/runs/9"
+        status = (f"api repos/owner/repository/statuses/{sha} -f state={{state}} -f context=L1 (dispatch) "
+                  f"-f target_url={run} -f description=L1 {{l1}} (scope {{scope}})")
+        pulls = "api -X GET repos/owner/repository/pulls -f state=open -f head=owner:feature/x --jq .[].number"
+        jobs = ("api --paginate repos/owner/repository/actions/runs/9/jobs?filter=latest&per_page=100 --jq "
+                '.jobs[] | select(.name | startswith("L1 / ")) | "| \\(.name | ltrimstr("L1 / ")) | '
+                '\\(.conclusion // .status) |"')
+        comments = ("api --paginate repos/owner/repository/issues/{pull}/comments?per_page=100 --jq "
+                    '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- gyo-l1-dispatch -->"))) | .id')
+        rows = "| linux-x64 | success |\n| windows-x64 | failure |"
+        for case in (
+            # (scope, l1, ref type, open pulls, existing comment ids, expected state, expected writes)
+            ("success", "success", "branch", "7", "", "success", ["create 7"]),
+            ("success", "failure", "branch", "7", "55\n66", "failure", ["update 55"]),
+            ("success", "cancelled", "branch", "7\n8", "", "failure", ["create 7", "create 8"]),
+            ("failure", "skipped", "branch", "", "", "failure", []),
+            ("success", "success", "tag", "7", "", "success", None),
+        ):
+            scope, l1, ref_type, open_pulls, existing, state, writes = case
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                environment = dict(os.environ, GITHUB_REPOSITORY="owner/repository", GITHUB_REPOSITORY_OWNER="owner",
+                                   GITHUB_RUN_ID="9", GITHUB_STEP_SUMMARY="summary", RUNNER_TEMP=temporary,
+                                   SCOPE_RESULT=scope, L1_RESULT=l1, HEAD_SHA=sha, REF_TYPE=ref_type,
+                                   BRANCH="feature/x", RUN_URL=run, STATUS_EXIT="0",
+                                   PULLS=open_pulls, ROWS=rows,
+                                   COMMENTS=existing)
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
+                                        cwd=root, env=environment, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = (root / "gh-calls").read_text().splitlines()
+                expected = [status.format(state=state, l1=l1, scope=scope)]
+                if writes is not None:
+                    expected.append(pulls)
+                if writes:
+                    expected.append(jobs)
+                body = str(root / "l1-dispatch-comment.md")
+                for pull in open_pulls.split("\n") if writes else ():
+                    expected.append(comments.format(pull=pull))
+                    if existing:
+                        expected.append(f"api -X PATCH repos/owner/repository/issues/comments/55 -F body=@{body}")
+                    else:
+                        expected.append(f"api repos/owner/repository/issues/{pull}/comments -F body=@{body}")
+                self.assertEqual(calls, expected)
+                if writes:
+                    sent = (root / "sent-bodies").read_text()
+                    self.assertTrue(sent.startswith("<!-- gyo-l1-dispatch -->\n"), sent)
+                    for text in (f"### L1 (dispatch): {state}", f"- Commit: `{sha}`", f"- Run: {run}",
+                                 "| linux-x64 | success |", "| windows-x64 | failure |"):
+                        self.assertIn(text, sent)
+                else:
+                    self.assertFalse((root / "sent-bodies").exists())
+        # A failed status write fails the report instead of passing silently.
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = dict(os.environ, GITHUB_REPOSITORY="owner/repository", GITHUB_REPOSITORY_OWNER="owner",
+                               GITHUB_RUN_ID="9", GITHUB_STEP_SUMMARY="summary", RUNNER_TEMP=temporary,
+                               SCOPE_RESULT="success", L1_RESULT="success", HEAD_SHA=sha, REF_TYPE="branch",
+                               BRANCH="feature/x", RUN_URL=run, STATUS_EXIT="1", PULLS="7", ROWS=rows, COMMENTS="")
+            result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
+                                    cwd=temporary, env=environment, capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(len((Path(temporary) / "gh-calls").read_text().splitlines()), 1)
 
     def test_snapshot_channel_publishes_only_after_a_passed_default_branch_push(self):
         plan = job_block(self.quick, "snapshot_plan")
