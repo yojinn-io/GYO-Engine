@@ -41,6 +41,7 @@
 - 2026-10-23：§7 的 owner 改名核准（D175）。`match-resync` 在 L1 通過後以 xhigh 開始（使用者同意 xhigh）。
 - 2026-10-24：`single-store-refactor` 的 L1（run 39967478342）四平台成功。`match-resync` 完成（`426aa4b` 等）：晚到超過 N_o 改成 Resync，發布的 slack 不再低於 −333,333 µs；特性測試升格為 §7 守衛；突變 10／10；L1 run 39974643016 待確認。下一批 `retention-600`（xhigh，開始前問你；§14.4 的材料交你核准）。
 - 2026-10-24：`match-resync` 的 L1（run 39974643016）四平台成功。`retention-600` 的程式完成（`d1bcb47` 等），突變 84／84。**等你核准**：[判定變更 J-A～J-C 與 L2 不退步紀錄的宣告草案](retention-600-judgment-change.md)。L1 與 L2 在核准後進行。
+- 2026-10-24：判定變更 J-A～J-C 與 L2 宣告草案核准（D176）。觸發 L1，準備 L2。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 

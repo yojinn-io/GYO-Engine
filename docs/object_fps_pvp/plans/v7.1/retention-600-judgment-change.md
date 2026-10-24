@@ -1,6 +1,6 @@
 # retention-600：判定變更（AGENTS §14.4 的 1～5）與 L2 不退步紀錄的宣告草案
 
-- **狀態**：等你核准，核准前不合併。程式已在分支上（`d1bcb47`）。
+- **狀態**：**核准**（v7.1 D176，2026-10-24：判定變更 J-A～J-C 與第 6 節 L2 不退步紀錄的宣告草案）。程式在分支上（`d1bcb47`）。
 - **計畫**：[outage-resync.md](outage-resync.md) 的 `retention-600`（D172 的 D-6：行為改變的兩面一起核准，§14.4 的材料在這批交給你）。
 - **條文**：[network-architecture](../../network-architecture.zh-Hant.md) §4「連線中斷與恢復」、§7「被替代序號的單一紀錄」。
 
