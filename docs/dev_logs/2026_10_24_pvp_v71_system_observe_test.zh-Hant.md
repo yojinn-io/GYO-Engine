@@ -8,7 +8,7 @@
 
 | 批次 | 檔位 | 估時（h） | 狀態 |
 |---|---|---|---|
-| `silent-branch-asserts` | high | 4～6 | 進行中：對 HEAD 重新列點，交使用者逐點決定 |
+| `silent-branch-asserts` | high | 4～6 | 列點完成（[silent-branch-asserts.md](../object_fps_pvp/plans/v7.1/silent-branch-asserts.md)），等使用者決定 Go 的機制與各點 |
 | `cxx-flag-removal` | high | 3～4 | |
 | `contract-readers` | medium | 3～4 | |
 | `trace-no-overwrite` | high | 4～6 | |
