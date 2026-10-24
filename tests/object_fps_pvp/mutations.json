@@ -6357,64 +6357,34 @@
       "expect": "uptime_s=1\\.500"
     },
     {
-      "id": "rnp-no-ack-stall",
+      "id": "rnp-hello-every-second",
       "batch": "v71-rebind-on-new-port",
-      "what": "A stalled acknowledgement does not speed up Hello",
+      "what": "Hello goes every second outside an interruption (the pre-D188 rule)",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "        if(unacknowledgedSince)fastFrom=std::min(fastFrom,*unacknowledgedSince+ConnectionInterruptedAfter);\n",
-      "replace": "",
+      "find": "    static constexpr auto HelloInterval=std::chrono::milliseconds(250);",
+      "replace": "    static constexpr auto HelloInterval=std::chrono::milliseconds(1000);",
       "check": "worker",
-      "expect": "Hellos were not every 250 ms while the acknowledgement did not move"
+      "expect": "Hellos were not every 250 ms"
     },
     {
-      "id": "rnp-no-idle-fast",
+      "id": "rnp-hello-unbounded",
       "batch": "v71-rebind-on-new-port",
-      "what": "Hello stays at 1 s while no Input or Actions go out",
+      "what": "Hello goes at every worker pass",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "        auto fastFrom=dataSentAt+Fast;",
-      "replace": "        auto fastFrom=helloAt+Slow;",
+      "find": "        if(now-helloAt>=HelloInterval) {",
+      "replace": "        if(true) {",
       "check": "worker",
-      "expect": "Hellos before the first snapshot were not every 250 ms"
+      "expect": "(Hellos came more often than every 250 ms|exceeded the actual 120-packet session budget)"
     },
     {
-      "id": "rnp-always-fast",
+      "id": "rnp-wake-late",
       "batch": "v71-rebind-on-new-port",
-      "what": "Hello is always every 250 ms",
+      "what": "The worker wakes for Hello a second after the last one",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "        return std::min(helloAt+Slow,std::max(helloAt+Fast,fastFrom));",
-      "replace": "        return helloAt+Fast;",
-      "check": "worker",
-      "expect": "Hellos were not every second while inputs flowed"
-    },
-    {
-      "id": "rnp-ack-move-ignored",
-      "batch": "v71-rebind-on-new-port",
-      "what": "An acknowledgement that moves does not restart the wait",
-      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                    else if(acknowledgementMoved && unacknowledgedSince)unacknowledgedSince=arrivedAt;\n",
-      "replace": "",
-      "check": "worker",
-      "expect": "Hellos were not every second while inputs flowed"
-    },
-    {
-      "id": "rnp-input-not-data",
-      "batch": "v71-rebind-on-new-port",
-      "what": "An Input send does not count as data sent",
-      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            if(sent){dataSentAt=sentAt;if(!unacknowledgedSince)unacknowledgedSince=sentAt;}",
-      "replace": "            if(sent){if(!unacknowledgedSince)unacknowledgedSince=sentAt;}",
-      "check": "worker",
-      "expect": "Hellos were not every second while inputs flowed"
-    },
-    {
-      "id": "rnp-wake-ignores-rule",
-      "batch": "v71-rebind-on-new-port",
-      "what": "The worker wakes for Hello by the old fixed intervals only",
-      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            consider(NextHelloAt());",
+      "find": "            consider(helloAt+HelloInterval);",
       "replace": "            consider(helloAt+std::chrono::milliseconds(1000));",
       "check": "worker",
-      "expect": "Hellos (before the first snapshot|were not every 250 ms)"
+      "expect": "Hellos were not every 250 ms"
     }
   ]
 }

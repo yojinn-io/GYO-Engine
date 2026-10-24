@@ -353,27 +353,28 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     Require(gateway.attempts.size()==attemptsBefore,"a window for a replaced authority was sent");
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
 }
-// network-architecture §4 (D187): the Hello interval. Every 250 ms after the
-// Welcome until the first snapshot, and while a sent command's acknowledgement
-// does not move for T_int although snapshots arrive (an uplink the Gateway may
-// not know: its Hello lets the session rebind); every second while inputs flow
-// and their acknowledgement moves.
+// network-architecture §4 (D188): a Hello every 250 ms in every phase: after
+// the Welcome until the first snapshot, while inputs flow and are acknowledged,
+// and while the acknowledgement stands still; never more often (the 120-packet
+// budget counts four a second).
 void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
-    const auto hellos=[&](Clock::time_point from,Clock::time_point to) {
-        std::vector<Clock::time_point> at;
-        for(const auto& packet:gateway.packets)
-            if(packet.type==wire::Type::Hello && packet.at>=from && packet.at<to)at.push_back(packet.at);
-        return at;
+    const auto gaps=[&](Clock::time_point from,Clock::time_point to) {
+        std::vector<double> ms;std::optional<Clock::time_point> previous;
+        for(const auto& packet:gateway.packets) {
+            if(packet.type!=wire::Type::Hello || packet.at<from || packet.at>=to)continue;
+            if(previous)ms.push_back(std::chrono::duration<double,std::milli>(packet.at-*previous).count());
+            previous=packet.at;
+        }
+        return ms;
     };
-    const auto widestGapMs=[](const std::vector<Clock::time_point>& at) {
-        double widest=0;
-        for(std::size_t i=1;i<at.size();++i)widest=std::max(widest,std::chrono::duration<double,std::milli>(at[i]-at[i-1]).count());
-        return widest;
-    };
-    const auto narrowestGapMs=[](const std::vector<Clock::time_point>& at) {
-        double narrowest=1e9;
-        for(std::size_t i=1;i<at.size();++i)narrowest=std::min(narrowest,std::chrono::duration<double,std::milli>(at[i]-at[i-1]).count());
-        return narrowest;
+    const auto every250=[&](Clock::time_point from,Clock::time_point to,const char* phase) {
+        const auto ms=gaps(from,to);
+        const auto expected=std::chrono::duration<double,std::milli>(to-from).count()/250.0;
+        Require(ms.size()+1>=static_cast<std::size_t>(expected)-1,std::string("Hellos were not every 250 ms ")+phase);
+        for(const auto gap:ms) {
+            Require(gap<=350,std::string("Hellos were not every 250 ms ")+phase);
+            Require(gap>=200,std::string("Hellos came more often than every 250 ms ")+phase);
+        }
     };
     // Welcomed, no snapshot yet: only Hellos reach the Gateway.
     gateway.snapshotOnHello=false;
@@ -382,13 +383,12 @@ void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
     gateway.Until([&]{return gateway.welcomeTransmits.size()>welcomesBefore;});
     const auto welcomedAt=Clock::now();
     gateway.UntilTime(welcomedAt+1100ms);
-    const auto beforeSnapshot=hellos(welcomedAt,Clock::now());
-    Require(beforeSnapshot.size()>=4 && widestGapMs(beforeSnapshot)<=350,"Hellos before the first snapshot were not every 250 ms");
+    every250(welcomedAt,Clock::now(),"before the first snapshot");
     gateway.snapshotOnHello=true;
     gateway.Snapshot(0);
     gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
     // Inputs flow and their acknowledgement moves, two commands behind as with
-    // a round trip in flight (the window never empties): a Hello every second.
+    // a round trip in flight.
     std::uint64_t sequence=0;
     const auto window=[&] {
         const auto state=connection.State();
@@ -397,21 +397,18 @@ void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
         connection.SendInput(Input(first,sequence));
     };
     const auto flowFrom=Clock::now();
-    while(Clock::now()<flowFrom+2500ms) {
+    while(Clock::now()<flowFrom+1600ms) {
         window();gateway.UntilTime(Clock::now()+8ms);
         gateway.Snapshot(sequence>2?sequence-2:0);gateway.UntilTime(Clock::now()+8ms);
     }
-    const auto flowing=hellos(flowFrom+300ms,Clock::now());
-    Require(!flowing.empty() && flowing.size()<=3 && (flowing.size()<2 || narrowestGapMs(flowing)>=900),
-        "Hellos were not every second while inputs flowed and were acknowledged");
-    // The acknowledgement stops moving while snapshots still arrive: after T_int, every 250 ms.
+    every250(flowFrom+300ms,Clock::now(),"while inputs flowed");
+    // The acknowledgement stands still while snapshots still arrive.
     window();
     const auto stalledFrom=Clock::now();
     const auto stalledAt=sequence>2?sequence-2:0;
-    while(Clock::now()<stalledFrom+1600ms){gateway.Snapshot(stalledAt);gateway.UntilTime(Clock::now()+16ms);}
-    const auto stalled=hellos(stalledFrom+ConnectionInterruptedAfter+300ms,Clock::now());
+    while(Clock::now()<stalledFrom+1300ms){gateway.Snapshot(stalledAt);gateway.UntilTime(Clock::now()+16ms);}
     Require(connection.State().phase==ConnectionPhase::Playing && !connection.State().interrupted,"the stalled acknowledgement interrupted the connection");
-    Require(stalled.size()>=3 && widestGapMs(stalled)<=350,"Hellos were not every 250 ms while the acknowledgement did not move");
+    every250(stalledFrom+300ms,Clock::now(),"while the acknowledgement stood still");
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
     gateway.ResetAck();
 }
@@ -552,8 +549,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     Require(maxPacketsInSecond<=120,"60+30+Hello exceeded the actual 120-packet session budget");
     // The window above carries resends of one window but no waiting new
     // commands, so the drained input rate is bounded here instead: draining
-    // sends, a full burst, actions with one resend, and Hello.
-    static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+2<=120,
+    // sends, a full burst, actions with one resend, and Hello (every 250 ms, D188).
+    static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+4<=120,
         "input drain rate exceeds the 120-packet session budget");
     // Reordered results leave an ID-1 hole. Invalid/conflicting batches cannot
     // partially publish ID 1 or retire data which the game has never consumed.
