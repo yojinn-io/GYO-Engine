@@ -337,6 +337,81 @@ jobs:
           done
           exit "$status"
 
+  # A manual run's checks attach to the commit, but a pull request lists only
+  # its own pull_request runs, where a draft skips L1, and Actions logs expire.
+  # Manual runs alone report L1 back as a commit status on the tested commit
+  # and one marked comment on each open pull request of the dispatched branch.
+  # Listing the run's L1 jobs reads Actions; push and pull request runs skip
+  # this job and never write statuses or comments.
+  dispatch_report:
+    name: Report dispatched L1
+    needs: [scope, l1]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      statuses: write
+      pull-requests: write
+    steps:
+      - name: Set the L1 commit status and update the pull request comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          L1_RESULT: ${{ needs.l1.result }}
+          HEAD_SHA: ${{ github.sha }}
+          REF_TYPE: ${{ github.ref_type }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- gyo-l1-dispatch -->'
+          if [ "$L1_RESULT" = success ]; then state=success; else state=failure; fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$state" -f context='L1 (dispatch)' \
+            -f target_url="$RUN_URL" -f description="L1 $L1_RESULT (scope $SCOPE_RESULT)" > /dev/null
+          echo "- Status \`L1 (dispatch)\` = $state on \`$HEAD_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$REF_TYPE" != branch ]; then
+            echo "- Not a branch ($REF_TYPE); no pull request comment." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pulls=$(gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" --jq '.[].number')
+          if [ -z "$pulls" ]; then
+            echo "- No open pull request from \`$BRANCH\`; status only." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          rows=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
+            --jq '.jobs[] | select(.name | startswith("L1 / ")) | "| \(.name | ltrimstr("L1 / ")) | \(.conclusion // .status) |"')
+          body="$RUNNER_TEMP/l1-dispatch-comment.md"
+          {
+            echo "$marker"
+            echo "### L1 (dispatch): $state"
+            echo
+            echo "- Commit: \`$HEAD_SHA\`"
+            echo "- Scope: $SCOPE_RESULT, L1: $L1_RESULT"
+            echo "- Run: $RUN_URL"
+            echo
+            if [ -n "$rows" ]; then
+              echo "| Platform | Conclusion |"
+              echo "| --- | --- |"
+              echo "$rows"
+            else
+              echo "No L1 platform job ran."
+            fi
+            echo
+            echo "The latest manual Cross-platform CI run on this branch rewrites this comment; each tested commit keeps its own \`L1 (dispatch)\` status."
+          } > "$body"
+          for pull in $pulls; do
+            comments=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$pull/comments?per_page=100" \
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
+            comment=${comments%%$'\n'*}
+            if [ -n "$comment" ]; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment" -F body=@"$body" > /dev/null
+              echo "- Updated the L1 comment on #$pull." >> "$GITHUB_STEP_SUMMARY"
+            else
+              gh api "repos/$GITHUB_REPOSITORY/issues/$pull/comments" -F body=@"$body" > /dev/null
+              echo "- Created the L1 comment on #$pull." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
   # Snapshot channel: a successful default-branch push publishes one snapshot
   # prerelease per release train from the Quick packages of this run. Pull
   # requests, forks and manual runs never publish.
