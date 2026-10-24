@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。下一批是 `client-interrupted`。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 實作完成，L1 進行中。
 
 相關文件：
 
@@ -20,6 +20,7 @@
 | `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 run 39967478342 四平台成功 |
 | `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 四平台成功 |
 | `retention-600`（`d1bcb47` 等） | xhigh（使用者同意） | 拿掉過渡規則：保留中每一筆紀錄的第一份副本判斷一次，600 序號以外關閉的紀錄不再判斷；S3 加進 C++ 守恆檢查 | CPU 測試全過；突變 84／84；§14.4 的 J-A～J-C 經獨立核對修正，使用者核准（D176）；L1 run 40052105536 四平台 L1 job 成功（Windows 的 toolchain Quick acceptance 因 Engine 測試的競態失敗，已由 PR #91 修正）；L2 9／9 P（D177） |
+| `client-interrupted`（`d0efbed` 等） | high，計時與恢復路徑局部 xhigh | Client 的連線中斷狀態（`ConnectionLiveness`）、暫時性錯誤、Hello 250 ms、T_max 從 snapshot 起算、恢復流程（clock `reason=resume`、一次性 `resumed` 旗標、`LocalPlayerPrediction::Resume`）、HUD、新的 A 級行 3 個、clock sync 三端 `reason=` | CPU 測試 316／316；`ctest -R object_fps_pvp -L "cpu\|network"` 45／45；Go 通過；突變 72 個全部 killed（見下）；L1 進行中 |
 
 ## 規劃
 
@@ -213,3 +214,51 @@
   - x1、ramp 的換 epoch 組合和語料相同。
   - 細節見判定變更文件第 7 節。
 - **Engine 測試的競態**：L1 Windows 失敗的 `SdlLogBridge keeps every line under concurrent logging`，由另一個會話以 PR #91 修正並合併進 master（`253808a`）：加上開始的交握；注入 50 ms 延遲 3／3 Red → 20／20 Green。本線之後和 master 同步時帶進來。
+
+## client-interrupted
+
+檔位：high，計時（`ConnectionLiveness`）與恢復路徑（`LocalPlayerPrediction::Resume`、旗標的 mutex 區段）局部 xhigh（使用者 2026-10-24 指定照計畫）。開始前把本線和 master 同步（`4d40ab8`，帶進 PR #91）。
+
+### 做了什麼
+
+照 network-architecture §4「連線中斷與恢復」的 Client 部分：
+
+- **`ConnectionLiveness.hpp`（新元件）**：只收到達時刻與 `Movement.hpp` 的兩個常數（T_int＝500 ms、T_max＝5000 ms）。
+  - 收到 Welcome 之前：從 join 起 T_max。
+  - 第一個 Welcome 之後、第一份 snapshot 之前：從第一個 Welcome 起 T_max，之後的 Welcome 不延長。
+  - Playing：最後一份有效 snapshot 起 T_int 進入中斷（只報一次）、T_max 斷線。
+  - 列入 `test_diagnostic_isolation.py` 的 DECIDING 清單。
+- **網路 worker（`ClientConnection.cpp`）**：
+  - 中斷期間保留 socket、憑證、傳輸序號、動作帳本，Hello 改成 250 ms；`ClientConnectionState` 帶 `interrupted`、`interruptedSince`（只供顯示）。
+  - 暫時性 socket 錯誤 5 種只計數，判斷寫成公開的 `TransientSocketError`（兩種 error category 都認得）。
+  - 恢復：先以 `reason=resume` 提前結束 clock sync 視窗，再走既有的 epoch 路徑；交給模擬端的一次性 `resumed` 旗標和那份 snapshot 在同一個 mutex 區段設定，連線換代的三個邊界清除。
+  - 新的 A 級行：`connection interrupted／resumed／summary version=1`。
+- **相位追蹤**：`LocalPlayerPrediction::Resume`。游標＝tip 時 SeedLead；游標＜tip 時不動未確認的命令，只重設擷取（`RestartPhaseAcquisition`，和 SeedLead 共用），寫 `phase_path=resume_reset`、`count=0`、`phase_shift_seconds`＝取消的剩餘修正。`ClientSimulation::Observe` 在處理同一批樣本之前呼叫它。
+- **clock sync 行（三端）**：行尾追加 `reason=window／final／resume`（`ClockWindowEnd`）；`clock-sync.tsv` 加一欄。Gateway 目前只會寫 window／final。
+- **HUD**：「CONNECTION INTERRUPTED - reconnecting (N.Ns)」。
+- **常數兩端綁定**：`fixtures/connection_timing.json`，C++（`ConnectionLivenessTests.cpp`）與 Go（`connection_timing_test.go`）都讀。Go 新增 `connectionInterruptedAfter`，給 `identity-rebind` 用。
+- **速率註解**（`Movement.hpp`）：82＋30＋4＝116，低於 Gateway 的 120。
+
+### 和計畫不同的地方
+
+- **Gateway 每位 Client 時鐘視窗的重開**移到 `identity-rebind`：條文規定它以「最後驗證時刻」判斷，而這個欄位是 Delta-3 的通用層新欄位；它的守衛也列在 `identity-rebind`。本批只在 Gateway 加 `reason=`。
+- **凍結讀者的先查結果**（log-contract §1.4 要求）：`command_evidence.py` 只接受 first／window／late，而且要求 `count ≥ 1`，條文的 `resume_reset`、`count=0` 會被當成損壞。repo 裡的讀者只多接受這一種組合（`resume_reset` 必須 `count=0`，其他路徑照舊 `≥1`），附反向測試與突變。先前各 L2 的凍結副本讀不到含 `resume_reset` 的紀錄，`resync-l2-l3` 宣告時要重新凍結。
+- **worker 測試不檢查 `resumed` 旗標**：既有守衛 `test_probe_command_path.py` 禁止 probe 呼叫 `DrainSimulation`，我不放寬它。旗標改用兩個靜態守衛：「相位追蹤的檔案不提中斷狀態」與「旗標和 snapshot 在同一個 lock 區段」（`test_diagnostic_isolation.py`）。旗標「只交一次、換代清除」沒有執行期的測試。
+- **§7 守衛清單的兩項，做法和字面不同**（Design Invariants 的守衛，待使用者確認）：
+  - 「差分 oracle（中斷判定逐位元相同）」：worker 是真實時間，事件時刻每次不同，做不到逐位元。改成比較每次中斷的 6 項結果（中斷、保留 session、探測、恢復、傳輸序號連續、T_max 斷線）必須相同；突變「用時鐘回聲平移 snapshot 到達時刻」被它殺掉。`ConnectionLiveness` 的介面本身不收任何時鐘值。
+  - 「競態：drain 落在放進 snapshot 與設定旗標之間」：沒有可注入停頓的接縫，改成靜態守衛（旗標在放進模擬端歷史的同一個 lock 區段內設定，中間沒有其他 lock）。
+- **暫時性錯誤的呼叫點**沒有執行期的測試：macOS／Linux 的未連線 UDP socket 不回報 ICMP 錯誤，造不出來。分類函式有單元測試與突變；Windows 的 WSAECONNRESET 照計畫在 L3 確認。
+
+### 驗證
+
+- 突變：本批新增 11 個、和 Client 端既有的 61 個（`ClientConnection.cpp`、`LocalPlayerPrediction.cpp`、`ClientSimulation*.cpp`、`ClockSync.hpp`）一起跑，72 個中 70 個 killed、2 個 wrong_failure：
+  - `lc-clock-cpp-key`：被 golden 測試抓到，但預期文字是 `f[11]`；fixture 加了一欄後是 `f[12]`，改預期文字。
+  - `ci-interrupt-resets-actions`：`ResetActions` 也清掉戰鬥規則，snapshot 全被丟掉，worker 測試在等恢復時逾時。改成中斷段的每項確認失敗時就回報，並把中斷段移到 worker 測試最前面（mock 只在要求時送 snapshot，後面的段落也會經過中斷）。
+  - 改完後 worker 類的 25 個全部重跑：25／25 killed。
+  - 移動位置的既有突變 3 個（`v7-09b-seedlead-partial-clear`、`v7-09b-seedlead-keeps-reacquiring`、`lc-clock-session-player-cleared`）只更新 find 字串，判定不變。
+  - 證據：`build/target/_build/test/logs/pvp-v71-client-interrupted-mutants-20261024/`、`-rerun-20261024/`、`-rerun2-20261024/`。
+
+- worker CTest（真實 socket＋mock Gateway）新增 `RunOutage`：雙向靜默 → T_int 中斷（保留 session、動作、傳輸序號連續、Hello 每秒 3～5 次）→ 恢復 → 只有 Welcome 時從最後一份 snapshot 起 5 s 斷線；同一段以極端時鐘回聲再跑一次，結果必須相同（差分 oracle）。worker CTest 的 TIMEOUT 25 → 60 s（這段約 13 s）。
+- 新的 cpu 測試：`ConnectionLivenessTests.cpp` 7 個、`PredictionTests.cpp` 2 個、`ClientSimulationTests.cpp` 1 個、`PvpMatchTests.cpp` 1 個（Match 停頓超過追趕上限、epoch 相同、權威＜tip 時恢復：在途命令不變、沒有 ConflictQueued／ConflictStaged、沒有恢復前命令的樣本）、`ClockSyncTests.cpp` 1 個。
+- 本機：cpu 測試 316／316；`ctest -R object_fps_pvp -L "cpu|network"` 45／45；Go `./...` 通過。
+- 本線先帶進記錄器分支 `d2844a5` 的 worker probe 修正（`3547c05`）：沒有它，worker CTest 在本線上會因 mock 的 Welcome 缺欄位而失敗（drop-counters 以來記錄的「已知的 worker」）。
