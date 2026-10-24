@@ -49,8 +49,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
-  - outage-resync（PR #90，已合併）取代了 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 仍在原批。
-  - 未開始（after-re-evaluate，D159）：系統與引擎的 `silent-branch-asserts`、`cxx-flag-removal`；觀測工具的 `contract-readers`、`trace-no-overwrite`、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`；發行的 `windows-long-path`、`quick-close`、`wake-reconnect`、`lan15-windows`。D159 的 PR 分三條，其中「系統其餘＋觀測＋測試」與「發行」兩條還沒開。
+  - outage-resync（PR #90，已合併）取代了 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 取消（D182）。
+  - 進行中與未開始（after-re-evaluate，D159、D181、D182）：系統與引擎的 `silent-branch-asserts`（PR #95，L1 待確認）、`client-silent-checks`、`cxx-flag-removal`、`rebind-on-new-port`；觀測工具的 `contract-readers`、`trace-no-overwrite`、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`；發行的 `windows-long-path`、`quick-close`、`lan15-windows`。D159 的三條 PR 線中，「系統其餘＋觀測＋測試」是 PR #95，「發行」還沒開。
   - 記錄器分支：2026-10-24 經 PR #93 合進 master（`489905d`），`worker-probe-repair` 的修正（`d2844a5`）也一起進了 master。之後本文件在 outage-resync 線上更新，隨 PR #90 合併。
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
@@ -165,6 +165,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D179 | （2026-10-24）`outage-resync` 的 L3（Windows 與 macOS 拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；`transient_socket_errors` 與 endpoint 的紀錄）移到 after-re-evaluate 的 `lan15-windows`，一起做。outage-resync 不等 L3，L1 確認後合併。Windows 的 WSAECONNRESET（D172 D-7 的推論）在那之前未經實機確認，列為已知項目 | 使用者：「L3需要放到 lan15-windows一起吧。」；說明暫時性 socket 錯誤的風險後：「確實可以放lan15-windows做。時間大概在26日。…在v7.1完結後需要發一個release」 |
 | D180 | （2026-10-24）`silent-branch-asserts` 的列點（[silent-branch-asserts.md](silent-branch-asserts.md)）：Go 端的 assert 用 (g2)「讓 runtime link 失敗」；A1～A12、C1、C2 照表；L1～L7 保留並修正 INVENTORY；C3 也做（Client 丟掉的封包計數，追加在 worker statistics 行尾）；U1～U3 與第 7 節「已計數、註解寫應為 0」的分支這一批不動。使用者補充：`lan15-windows` 之前要把已知問題全部處理掉，包括這些分支與 outage-resync 只記錄的問題（清單在本線整理後交使用者排序） | 使用者：「1、2 照建議。3、還是做吧，處理封包還是不留尾巴比較好。（那個問題列表，也是要v7.1的 lan15-windows前做的，只不過現在先不管）」 |
 | D181 | （2026-10-24）`lan15-windows` 之前的已知問題（K1～K10，清單見 [silent-branch-asserts.md](silent-branch-asserts.md) 第 8 節）照建議排：K1～K4 新批 `client-silent-checks`，接在 `silent-branch-asserts` 之後；K5～K6 新批 `rebind-on-new-port`（先開關卡）；K7 併入 `contract-readers`，K8 併入 `trace-no-overwrite`，K9 併入 `client-path-tests`；K10 在 `lan15-windows` 的工具準備修；`lan15-windows` 延到這些做完之後（不再是 2026-10-26 前後） | 使用者：「照建議排：K1～K4 新批 client-silent-checks 接在本批後，K5～K6 新批 rebind-on-new-port（先開關卡），K7 併 contract-readers，K8 併 trace-no-overwrite，K9 併 client-path-tests，K10 放 lan15 工具準備；lan15 延到這些做完之後。」 |
+| D182 | （2026-10-24）取消 `wake-reconnect`（N-sleep-reconnect）：睡眠超過 T_max 後不自動重新加入，照現行回 Lobby。理由：沒有需求，玩家讓電腦睡眠就是要離開；留在場上只會變成靶子。短於 T_max 的睡眠仍照 outage-resync 當中斷處理（D172 D-11 (w1)） | 使用者：「wake-reconnect 這個可以取消了，沒有需求，玩家睡眠就是要離開，但是離開了，人物在遊戲裡就是個靶子。」 |
 
 ## 規劃紀錄（記錄器）
 

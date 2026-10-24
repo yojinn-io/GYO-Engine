@@ -192,14 +192,13 @@ after-re-evaluate（約 73～102 h）
 └── 4 發行
     ├── windows-long-path          high｜發行包解壓到深資料夾也能載入 shader
     ├── quick-close                high｜關閉 Client 不再卡 3 秒
-    ├── wake-reconnect             high｜睡眠醒來不斷線（做法先交你決定）
     └── lan15-windows              high，L2 宣告前做門檻來源的對抗式檢查｜Windows LAN 場次
 ```
 
 | 代號 | 內容（INVENTORY） | 驗收 | 估時（h） | 依賴、決策點 |
 |---|---|---|---|---|
 | sdl-isolation-plan ✓ | IP34-B12、N-ip3-review-and-migration（2026-10-21 草案完成，`claude/pvp-v71-sdl-isolation` 的 `b2024c3`，等核准；新估時約 56～73 h）：寫 IP-3／IP-4 的 PLAN（`docs/architecture/plans/input-and-present/`），公開介面 1 次 xhigh 審查（D39），ui_editor、object_fps_preview 的遷移清單（D33） | 只改文件；審查紀錄；你核准 PLAN | 4～6 | 決策點 B：規劃用 ultracode 還是 xhigh |
-| sdl-isolation | 照 PLAN 實作 IP-3、IP-4，產品、probe、產品測試改用 Engine 的介面 | 四平台 L1；D33 的完成條件（產品、probe、產品測試的 SDL 符號為 0，用守衛檢查）；L3 手動遊玩（文字輸入、剪貼簿、視窗） | 22～28 | 依賴 sdl-isolation-plan；PLAN 可能再拆成多批 |
+| sdl-isolation ✓ | 照 PLAN 實作 IP-3、IP-4，產品、probe、產品測試改用 Engine 的介面 | 四平台 L1；D33 的完成條件（產品、probe、產品測試的 SDL 符號為 0，用守衛檢查）；L3 手動遊玩（文字輸入、剪貼簿、視窗） | 22～28 | 依賴 sdl-isolation-plan；PLAN 可能再拆成多批。PR #85 2026-10-23 合併（`054b08f`） |
 | substitution-single-store ✓ | C13 | 先寫固定 slack 樣本的特性測試，再改；權威 digest 不變；突變；L1 | 4～6 | 決策點 A 選 (a)（D172 D-14）。整批移到 outage-resync（PR #90）：`outage-characterize`（特性測試）、`single-store-refactor`、`retention-600` 完成 |
 | silent-branch-asserts | N-silent-branches-assert | 先對 HEAD 重新列點，逐點交你決定是 Assert 還是 Result（`docs/architecture/error-handling.md`）；突變；L1 | 4～6 | 列點後是一個關卡 |
 | client-silent-checks | silent-branch-asserts 的 U1～U3 與第 7 節（D181 的 K1～K4） | 每點先追守衛（約 0.5 h），再逐點交你決定 assert 或計數；突變；L1 | 4～6 | D181：接在 silent-branch-asserts 之後；第 7 節改成 assert 等於把計數換成讓 runtime 失敗，要你決定 |
@@ -213,8 +212,8 @@ after-re-evaluate（約 73～102 h）
 | client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair；D181 併入 K9：握手期的暫時性錯誤與直接超過 T_max 這兩個分支的執行期測試（+2～3 h） |
 | windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
 | quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
-| wake-reconnect | N-sleep-reconnect | 睡眠測試要你在場（D102）；L1 | 4～8 | 做法（醒來後重連，或改用不含睡眠的時鐘判逾時）先交你決定。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 的睡眠照現行回 Lobby，自動重新加入（w2）仍在本批 |
-| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET，D172 D-7 的推論）與 endpoint 有沒有改變。預定 2026-10-26 前後。本列是 outage-resync L3 的唯一出處（[resync-l2-l3 宣告](resync-l2-l3-declaration.md)第 2 版改寫時漏掉了第 1 版的 L3 一節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record；D181：K10（凍結的 run_case 在 probe 失敗後立刻關服務，看不到 Gateway 端的 session 到期）在本批的工具準備修；本批延到本線全部與 rebind-on-new-port、client-silent-checks 完成之後 |
+| wake-reconnect ✗ | N-sleep-reconnect | — | — | **取消（D182）**：使用者「沒有需求，玩家睡眠就是要離開」。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 照現行回 Lobby，不做自動重新加入（w2） |
+| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET，D172 D-7 的推論）與 endpoint 有沒有改變。預定 2026-10-26 前後。本列是 outage-resync L3 的唯一出處（[resync-l2-l3 宣告](resync-l2-l3-declaration.md)第 2 版改寫時漏掉了第 1 版的 L3 一節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的 windows-long-path、quick-close（wake-reconnect 已取消，D182）；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record；D181：K10（凍結的 run_case 在 probe 失敗後立刻關服務，看不到 Gateway 端的 session 到期）在本批的工具準備修；本批延到本線全部與 rebind-on-new-port、client-silent-checks 完成之後 |
 
 ### 決策點
 
