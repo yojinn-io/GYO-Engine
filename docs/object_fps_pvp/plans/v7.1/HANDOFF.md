@@ -45,7 +45,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）實作完成，L1 待確認。下一批 `analyzer-converge`。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）實作完成，L1 待確認。`analyzer-converge` 實作中（D192）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -175,6 +175,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D189 | （2026-10-25）核准 Design Invariants 守衛測試的判定變更：`test_diagnostic_isolation.py` 的 liveness 呼叫次數由 12 改成 11（D188 拿掉 Hello 間隔裡的 `Interrupted()` 讀取）。§14.4 的 1～5、突變檢查與獨立核對見 dev_log 的 rebind-on-new-port 一節。核對時發現的既有缺口（解析器看不到的呼叫）列為 K12 | 使用者：「核准把 test_diagnostic_isolation.py 的 liveness 呼叫次數從 12 改成 11。解析器看不到的呼叫那個既有缺口，列進 lan15 前的已知問題。」 |
 | D190 | （2026-10-25）核准 `rebind-on-new-port` 的 L2 宣告第 2 版（[rebind-on-new-port-l2-declaration.md](rebind-on-new-port-l2-declaration.md)；D45 檢查後改寫；含受入判定的變更 N9，§14.4 的 1～5 在宣告第 3 節），立即跑 | 使用者：「核准 rebind-on-new-port 的 L2 宣告第 2 版（含 N9 的判定變更），立即跑。」 |
 | D191 | （2026-10-25）`trace-no-overwrite` 採 T2：trace 檔已存在時，自動換下一個沒用過的名字（`match-commands.jsonl` → `match.2-commands.jsonl`），跟著它決定檔名的 `-ingress.jsonl`、`-shots.jsonl` 一起換；啟動時把實際檔名寫進 log；Client 同樣適用。讀者不改（一檔一段不變）。K8（tip 恢復時補寫 `phase_path=resume_reset`）照做 | 使用者：「用 T2：檔案已存在時自動換下一個沒用過的名字（match.2-commands.jsonl），其他兩個檔跟著換，啟動時把實際檔名寫進 log；Client 同樣適用。K8 照做。」 |
+| D192 | （2026-10-25）`analyzer-converge`（C15）採 a：`command_evidence.analyze_commands` 改成支援 N 人，刪掉 `quad_evidence.command_metrics`，`analyze_quad` 直接呼叫它；2 人時輸出逐位元不變；用 pv6／pv7 語料新舊各分析一次，結果相同。代價：凍結的 `command_evidence.py` 改變，現有凍結清單失效，lan15-windows 的 L2 要重新凍結 | 使用者：「用 a：analyze_commands 改成支援 N 人，刪掉 command_metrics，analyze_quad 直接呼叫它；2 人時輸出逐位元不變；用 pv6／pv7 語料新舊各分析一次，結果相同。」 |
 
 ## 規劃紀錄（記錄器）
 
