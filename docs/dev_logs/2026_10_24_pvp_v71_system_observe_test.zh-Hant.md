@@ -51,6 +51,9 @@
   - C3：每條丟棄路徑不計數各 1 個，加上統計行少一個鍵；
   - Go：C1、C2 的兩半、`invariantFailed` 變成無聲。
   - 既有突變 `v7-flow-fwd-handed-actions-after-commit` 的 find 改成新的程式碼，期望字串不變。
+  - **改動檔案上的既有突變重新判定**（當時的規則；之後由 D184 改成只跑相關的）：230 個，228 killed，2 個 wrong_failure（`v71ip-commit-before-decode`、`v71ap-commit-before-decode`）。
+    - 原因：這兩個突變在解碼前就提交序號，之後那次正常提交就會失敗。D180 之後那是 Gateway 不變量壞了，會讓 runtime 失敗；`actionFixture` 的 link 沒有連線和 `done` channel，關閉時 panic，整個測試程式在本來會報錯的測試之前就倒了。突變仍然被抓到，只是訊息不同。
+    - 修正：`actionFixture` 改用 `dialedLink`（`actions_test.go`），讓 fixture 的 link 能像真的一樣關閉。判定與期望字串都不變。重跑 2／2 killed。
 
 ### §14.4：提交失敗的測試搬家
 
