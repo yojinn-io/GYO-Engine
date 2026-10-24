@@ -9,7 +9,7 @@
 | 批次 | 檔位 | 估時（h） | 狀態 |
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
-| `client-silent-checks` | high | 4～6 | D181 新增（K1～K4） |
+| `client-silent-checks` | high | 4～6 | 實作中（D181 新增；D183 決定） |
 | `cxx-flag-removal` | high | 3～4 | |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | D181 新增（K5、K6） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |

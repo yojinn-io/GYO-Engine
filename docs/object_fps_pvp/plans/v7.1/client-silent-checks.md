@@ -1,4 +1,4 @@
-# client-silent-checks：Client 的再檢查與「應為 0」的分支（HEAD `831ccd9`；2026-10-24 追守衛，等使用者決定）
+# client-silent-checks：Client 的再檢查與「應為 0」的分支（HEAD `831ccd9`；2026-10-24 使用者決定，D183）
 
 日期：2026-10-24。D181 新增的批次，處理 [silent-branch-asserts.md](silent-branch-asserts.md) 第 8 節的 K1～K4。PR #95，分支 `claude/pvp-v71-system-observe-test`。
 
@@ -79,6 +79,10 @@
 - S1、S2 在 Match 端改成 assert，壞掉時 Match 程序中止。A1～A3 已經是同一個政策。
 - 它們的日誌鍵（`staged_over_window`、`handoff_rejected`、`drop_malformed_*`）照日誌契約 R1 不能刪，保留並一直為 0（`drop_malformed_*` 仍會被真正解析不了的封包計數）。
 
-## 5. 估時
+## 5. 決定（D183）
+
+全部照建議：K1 assert；K2 選 (b)；K3 的 r2、r3、r4、r7 assert，r1、r5 計數，r6 保留；K4 的 S1、S2 assert，S3、S4 用 `invariantFailed`。
+
+## 6. 估時
 
 追守衛約 1.5 h（本文件）。實作、突變、L1 約 3～4 h。合計在 D181 給的 4～6 h 內。
