@@ -541,7 +541,7 @@ Session 憑證隨機產生，UDP endpoint 不可用舊 session 靜默切換；�
 「連線中斷與恢復」的重新綁定，它有條件、有紀錄，不是靜默的。
 
 Reservation／有效 Session 的期限是 Gateway 單調 wall clock 五秒；等待 Runtime
-JoinResult 的上限為三秒。Network worker 每秒用既有 Hello／Welcome 保活，即使畫面停止產生 Input 仍可存活；
+JoinResult 的上限為三秒。Network worker 用既有 Hello／Welcome 保活（間隔見下面「連線中斷與恢復」的 Hello 間隔），即使畫面停止產生 Input 仍可存活；
 60 Hz Input 也可保持連線存活。Hello 不延長遊戲移動期限。這些連線期限與
 十五個缺包 Authority Tick 的替代輸入期限 是不同契約。
 
@@ -575,6 +575,12 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
 - **中斷期間**：
   - socket、session 憑證、傳輸序號、動作帳本都保留：不關閉傳輸、不重設動作、傳輸序號不歸零、連線 generation 不變。
   - Hello 間隔從 1 s 改成 250 ms，作為探測。
+- **Hello 間隔**（v7.1 `rebind-on-new-port` 起，D187）：下列任一成立時每 250 ms，否則每 1 s：
+  - 收到 Welcome 之前；
+  - 中斷期間；
+  - 最近 250 ms（T_int／2）內沒有送出 Input 或 Actions：只有 Hello 時，它讓 Gateway 的最後驗證時刻一直在 T_int 以內；
+  - 已送出的命令，確認滿 T_int 沒有前進（snapshot 仍在到）：上行可能從 Gateway 不認得的 endpoint 到達（例如有線、無線同時連著時，送出改走另一條，回程仍到舊位址），Hello 讓它能改綁。
+  - 正常遊玩時 Input 以 60 Hz 送出、確認每個 Tick 前進，維持每 1 s；速率最多每秒 4 個 Hello，在預算 82＋4＋30＝116 以內。條件只用 Client 網路 worker 自己的狀態，Gateway、wire 與改綁的條件都不變。
   - Input 與動作照現行規則產生、送出（D172 的 D-9 (a)）。未確認的窗口滿 12 個命令就停止產生，所以只有下行中斷時，Match 跑完窗口後就沒有輸入。中斷期間的操作不保證生效：開槍可能因參考過舊而 Expired，被擊中照算。
   - HUD 顯示「連線中斷」。Client 不推進 epoch。
 - **恢復流程**（收到第一份有效 snapshot 時，依序執行）：
@@ -647,7 +653,7 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
   - session 還沒到期。
 
   T_int 由產品以參數傳給通用層（比照 `Expired(now, timeout)`），通用層不寫死產品常數。改綁之後，原 endpoint 的封包回 `ErrUnauthorized`；每次改綁寫一行 A 級的 `session rebound`。只用通用層 session 的軟狀態，不需要知道 Match 的任何狀態。Client 中斷期間不換 token、不重設傳輸序號，所以 Client 端不需要新邏輯。
-  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token、又能讓原 endpoint 的所有封包停止 T_int 以上的人（例如在同一網段上），可以搶走 session。另外，Client 只送每秒一次 Hello 的期間（收到 Welcome 之後、第一份 snapshot 之前；模擬端沒有新命令、窗口全部確認時），最後驗證時刻有一半時間超過 T_int；Hello 間隔是否縮到 T_int／2 以下（速率預算 82＋4＋30＝116，低於 120）在 `identity-rebind` 批決定。紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
+  - **安全取捨**：token 在 Hello 裡以原文傳送。拿到 token、又能讓原 endpoint 的所有封包停止 T_int 以上的人（例如在同一網段上），可以搶走 session。只送 Hello 的期間，Hello 每 250 ms（上面的 Hello 間隔，D187），最後驗證時刻一直在 T_int 以內，所以搶 session 的人一定要先讓原 endpoint 靜默。紀錄讓事後查得到。防竄改的證明要改 wire，列入 v8 候選（D172 的 D-2 I-3）。
 
 IPC 失聯使 Room unavailable 並撤銷 Session，Host 清場；Client 回 Lobby。
 Gateway 可繼續提供 HTTP 狀態，但本輪不透明重接或恢復世界。復原流程是重啟
@@ -941,6 +947,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
   - 「60 Hz Input 加上 1 s Hello 時，Gateway 的時鐘視窗不重開」；
   - 「從其他 endpoint 送來、帶同一個 session id 的資料包，不重開時鐘視窗，也不刷新最後驗證時刻」；
   - `state_whitelist_test.go` 不變。
+- **`rebind-on-new-port`**（D187）：worker 驗收的 `CheckHelloCadence`：Welcome 之後、第一份 snapshot 之前每 250 ms；Input 流動、確認前進時每 1 s；確認不前進而 snapshot 仍到時，T_int 之後每 250 ms。
 - **變更規則**：特性測試升格為守衛之後，改變它的判定照 AGENTS.md §14.4（寫出 1～5，取得使用者核准）。
 
 **已知項目**（只記錄）：

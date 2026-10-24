@@ -149,6 +149,12 @@ struct ClientConnection::Impl {
     std::uint32_t sentSequence{},receivedSequence{};
     bool haveSequence{},welcomed{};
     bool haveSentInput{};
+    // D187 (network-architecture §4): when the worker last sent an Input or
+    // Actions datagram, and since when a sent command has waited without the
+    // acknowledgement moving (unset while no sent command waits). Both only
+    // pick the Hello interval (NextHelloAt). Worker-only.
+    Clock::time_point dataSentAt{};
+    std::optional<Clock::time_point> unacknowledgedSince;
     // Input token bucket (InputSendBurst) and what the last input send carried.
     double inputTokens{InputSendBurst};
     Clock::time_point inputTokensAt{};
@@ -233,6 +239,7 @@ struct ClientConnection::Impl {
         // them on a failed request can leave an old pawn occupying a room slot.
         welcomed=false;haveSequence=false;sentSequence=0;activeGeneration=0;
         haveSentInput=false;nextInputSendAt={};nextActionSendAt={};inputWaitSince.reset();
+        dataSentAt={};unacknowledgedSince.reset();
         readWaiting=false;++transport;
         inputTokens=InputSendBurst;inputTokensAt={};
     }
@@ -412,9 +419,21 @@ struct ClientConnection::Impl {
         if(error)++sendBlocked;
         return !error;
     }
-    // Hello probes every 250 ms before the Welcome and while interrupted.
-    Clock::duration HelloInterval() const {
-        return welcomed && !liveness.Interrupted()?std::chrono::milliseconds(1000):std::chrono::milliseconds(250);
+    // When the next Hello may go (network-architecture §4, D187). Every 250 ms
+    // before the Welcome, while interrupted, while no Input or Actions went
+    // out in the last 250 ms (only Hellos then keep the session's last verified
+    // time within T_int), and while a sent command's acknowledgement has not
+    // moved for T_int (the uplink may reach the Gateway from an endpoint it
+    // does not know, so a Hello lets it rebind); otherwise every second. A
+    // condition that becomes true later moves the second-long wait up to that
+    // moment, never before 250 ms after the last Hello.
+    Clock::time_point NextHelloAt() const {
+        constexpr auto Fast=std::chrono::milliseconds(250);
+        constexpr auto Slow=std::chrono::milliseconds(1000);
+        if(!welcomed || liveness.Interrupted())return helloAt+Fast;
+        auto fastFrom=dataSentAt+Fast;
+        if(unacknowledgedSince)fastFrom=std::min(fastFrom,*unacknowledgedSince+ConnectionInterruptedAfter);
+        return std::min(helloAt+Slow,std::max(helloAt+Fast,fastFrom));
     }
     // Validate the complete batch before mutating either decisions or retirement.
     // Snapshot replacement and the game thread never own the only result copy.
@@ -482,6 +501,7 @@ struct ClientConnection::Impl {
         }
         const auto payload=message.SerializeAsString();
         const bool sent=Send(wire::Type::Actions,payload);
+        if(sent)dataSentAt=Clock::now();
         // New requests, ACK-only packets and retransmissions share this deadline;
         // successful retirement never resets it and overdue slots are discarded.
         nextActionSendAt=Clock::now()+std::chrono::nanoseconds{(1'000'000'000+ActionSendRate-1)/ActionSendRate};
@@ -501,7 +521,7 @@ struct ClientConnection::Impl {
         // Session liveness belongs to the I/O worker. A busy render thread must
         // not disconnect a healthy socket, and a keepalive must not renew any
         // movement input: active Hello only receives another Welcome.
-        if(now-helloAt>=HelloInterval()) {
+        if(now>=NextHelloAt()) {
             pb::Hello hello;hello.set_session_token(token);
             auto* echo=hello.mutable_clock();
             if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
@@ -635,6 +655,13 @@ struct ClientConnection::Impl {
                     if(!valid){++invalidSnapshotDatagrams;continue;}
                     const auto& authority=*std::find_if(snapshot.players.begin(),snapshot.players.end(),
                         [&](const auto& player){return player.playerId==own;});
+                    // D187: whether this snapshot acknowledges more input than the applied one.
+                    bool acknowledgementMoved=true;
+                    if(state.snapshot)
+                        for(const auto& previous:state.snapshot->players)
+                            if(previous.playerId==own)
+                                acknowledgementMoved=authority.movementEpoch!=previous.movementEpoch ||
+                                    authority.lastResolvedCommand>previous.lastResolvedCommand;
                     // A valid snapshot: liveness, and the recovery flow when it
                     // ends an interruption (network-architecture §4): the clock
                     // window first; the epoch path below as for any snapshot; the
@@ -662,6 +689,8 @@ struct ClientConnection::Impl {
                             haveSentInput=false;nextInputSendAt={};inputWaitSince.reset();
                         }
                     }
+                    if(!latestInput)unacknowledgedSince.reset();
+                    else if(acknowledgementMoved && unacknowledgedSince)unacknowledgedSince=arrivedAt;
                     if(receivedSnapshots.size()==MaxReceivedSnapshots) {
                         receivedSnapshots.pop_front();snapshotOverflow=true;++snapshotOverflowCount;++windowSnapshotOverflows;
                     }
@@ -768,6 +797,7 @@ struct ClientConnection::Impl {
                         .playerId=input->playerId,.epoch=input->movementEpoch,
                         .sequence=command.sequence,.startedNs=sendStarted,.lifeGeneration=input->lifeGeneration});
             const auto sentAt=Clock::now();
+            if(sent){dataSentAt=sentAt;if(!unacknowledgedSince)unacknowledgedSince=sentAt;}
             const auto period=std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0/InputSendRate));
             // A missed send is skipped, never repaid by a packet burst.
             nextInputSendAt=sentAt+period;
@@ -811,7 +841,7 @@ struct ClientConnection::Impl {
             std::chrono::duration<double>(NetworkStatisticsSeconds));
         const auto consider=[&](Clock::time_point at){if(!next || at<*next)next=at;};
         if(live) {
-            consider(helloAt+HelloInterval());
+            consider(NextHelloAt());
             consider(liveness.NextDeadline());
             std::scoped_lock lock(mutex);
             if(welcomed && latestInput) {

@@ -142,6 +142,8 @@ public:
     }
     // A snapshot of the given tick; the next Snapshot follows it.
     void SnapshotAt(std::uint64_t at,std::uint64_t resolved){tick=at-1;Snapshot(resolved);}
+    // A later session's snapshots start from acknowledgement 0 again (nothing is sent).
+    void ResetAck(){ack=0;}
     // A snapshot of the given number of players (ids 1..count), player 1 first.
     void Crowded(unsigned count) {
         pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
@@ -350,6 +352,68 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
         "a dropped datagram changed the session");
     Require(gateway.attempts.size()==attemptsBefore,"a window for a replaced authority was sent");
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+}
+// network-architecture §4 (D187): the Hello interval. Every 250 ms after the
+// Welcome until the first snapshot, and while a sent command's acknowledgement
+// does not move for T_int although snapshots arrive (an uplink the Gateway may
+// not know: its Hello lets the session rebind); every second while inputs flow
+// and their acknowledgement moves.
+void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
+    const auto hellos=[&](Clock::time_point from,Clock::time_point to) {
+        std::vector<Clock::time_point> at;
+        for(const auto& packet:gateway.packets)
+            if(packet.type==wire::Type::Hello && packet.at>=from && packet.at<to)at.push_back(packet.at);
+        return at;
+    };
+    const auto widestGapMs=[](const std::vector<Clock::time_point>& at) {
+        double widest=0;
+        for(std::size_t i=1;i<at.size();++i)widest=std::max(widest,std::chrono::duration<double,std::milli>(at[i]-at[i-1]).count());
+        return widest;
+    };
+    const auto narrowestGapMs=[](const std::vector<Clock::time_point>& at) {
+        double narrowest=1e9;
+        for(std::size_t i=1;i<at.size();++i)narrowest=std::min(narrowest,std::chrono::duration<double,std::milli>(at[i]-at[i-1]).count());
+        return narrowest;
+    };
+    // Welcomed, no snapshot yet: only Hellos reach the Gateway.
+    gateway.snapshotOnHello=false;
+    const auto welcomesBefore=gateway.welcomeTransmits.size();
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return gateway.welcomeTransmits.size()>welcomesBefore;});
+    const auto welcomedAt=Clock::now();
+    gateway.UntilTime(welcomedAt+1100ms);
+    const auto beforeSnapshot=hellos(welcomedAt,Clock::now());
+    Require(beforeSnapshot.size()>=4 && widestGapMs(beforeSnapshot)<=350,"Hellos before the first snapshot were not every 250 ms");
+    gateway.snapshotOnHello=true;
+    gateway.Snapshot(0);
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    // Inputs flow and their acknowledgement moves, two commands behind as with
+    // a round trip in flight (the window never empties): a Hello every second.
+    std::uint64_t sequence=0;
+    const auto window=[&] {
+        const auto state=connection.State();
+        const auto first=state.snapshot->players.at(0).lastResolvedCommand+1;
+        sequence=std::max(sequence+1,first);
+        connection.SendInput(Input(first,sequence));
+    };
+    const auto flowFrom=Clock::now();
+    while(Clock::now()<flowFrom+2500ms) {
+        window();gateway.UntilTime(Clock::now()+8ms);
+        gateway.Snapshot(sequence>2?sequence-2:0);gateway.UntilTime(Clock::now()+8ms);
+    }
+    const auto flowing=hellos(flowFrom+300ms,Clock::now());
+    Require(!flowing.empty() && flowing.size()<=3 && (flowing.size()<2 || narrowestGapMs(flowing)>=900),
+        "Hellos were not every second while inputs flowed and were acknowledged");
+    // The acknowledgement stops moving while snapshots still arrive: after T_int, every 250 ms.
+    window();
+    const auto stalledFrom=Clock::now();
+    const auto stalledAt=sequence>2?sequence-2:0;
+    while(Clock::now()<stalledFrom+1600ms){gateway.Snapshot(stalledAt);gateway.UntilTime(Clock::now()+16ms);}
+    const auto stalled=hellos(stalledFrom+ConnectionInterruptedAfter+300ms,Clock::now());
+    Require(connection.State().phase==ConnectionPhase::Playing && !connection.State().interrupted,"the stalled acknowledgement interrupted the connection");
+    Require(stalled.size()>=3 && widestGapMs(stalled)<=350,"Hellos were not every 250 ms while the acknowledgement did not move");
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+    gateway.ResetAck();
 }
 // The first worker statistics line counts at least what CheckDroppedDatagrams sent.
 void RequireDroppedCounts(const std::string& captured) {
@@ -589,6 +653,7 @@ int main() {
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
         CheckDroppedDatagrams(gateway,connection);
+        CheckHelloCadence(gateway,connection);
         // Early too, so a mutant of the outage path fails on the check that guards it:
         // the mock sends snapshots only on demand, so the later sections pass
         // through interruptions too.
