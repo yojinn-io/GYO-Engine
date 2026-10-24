@@ -175,6 +175,11 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
          << " undecodable_datagrams=" << window.undecodableDatagrams << " stale_datagrams=" << window.staleDatagrams
          << " send_blocked=" << window.sendBlocked << " snapshot_overflows=" << window.snapshotOverflows
          << " simulation_overflows=" << window.simulationOverflows;
+    // Added in v7.1 silent-branch-asserts (D180), so they come last.
+    line << " unparsed_datagrams=" << window.unparsedDatagrams << " early_datagrams=" << window.earlyDatagrams
+         << " invalid_snapshot_datagrams=" << window.invalidSnapshotDatagrams
+         << " ignored_snapshot_datagrams=" << window.ignoredSnapshotDatagrams
+         << " unexpected_kind_datagrams=" << window.unexpectedKindDatagrams;
     return line.str();
 }
 

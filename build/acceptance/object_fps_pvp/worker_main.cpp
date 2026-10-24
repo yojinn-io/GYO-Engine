@@ -22,6 +22,8 @@
 #include <source_location>
 #include <iostream>
 #include <stdexcept>
+#include <streambuf>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -79,6 +81,8 @@ public:
             if(silent)continue; // an outage in both directions: seen, never answered
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
+                // A snapshot and a results frame before the first Welcome (CheckDroppedDatagrams).
+                if(std::exchange(earlyBeforeWelcome,false)) {Snapshot(ack);SendResults(pb::ActionResults{});}
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
                 if(includeRules) {
@@ -176,6 +180,8 @@ public:
     bool badWelcomeClock{},extremeWelcomeClock{};
     // CheckOutage: drop everything (silent), or answer a Hello with a Welcome only.
     bool silent{},snapshotOnHello{true};
+    bool earlyBeforeWelcome{};
+    void SendRaw(wire::Type type,const std::string& payload){Send(type,payload);}
     Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
@@ -292,6 +298,68 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     gateway.snapshotOnHello=true;gateway.extremeWelcomeClock=false;
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
     return outcome;
+}
+// Copies what the workers write to std::clog, still writing it through; the
+// statistics lines are read back at the end (CheckDroppedDatagrams).
+class ClogCapture final : public std::streambuf {
+public:
+    explicit ClogCapture(std::streambuf* through):through(through) {}
+    std::string Text(){std::scoped_lock lock(mutex);return text;}
+protected:
+    int overflow(int c) override {
+        if(c==traits_type::eof())return traits_type::not_eof(c);
+        std::scoped_lock lock(mutex);text.push_back(static_cast<char>(c));
+        return through->sputc(static_cast<char>(c));
+    }
+    std::streamsize xsputn(const char* data,std::streamsize size) override {
+        std::scoped_lock lock(mutex);text.append(data,static_cast<std::size_t>(size));
+        return through->sputn(data,size);
+    }
+    int sync() override {return through->pubsync();}
+private:
+    std::streambuf* through;
+    std::mutex mutex;
+    std::string text;
+};
+// v7.1 silent-branch-asserts (D180): datagrams of the session that decode but
+// change nothing are counted on the worker statistics line. Sent early, so the
+// first 10 s window (read at the end) holds them.
+void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
+    gateway.earlyBeforeWelcome=true;
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    const auto playing=connection.State().snapshot->tick;
+    const std::string garbage("\x0a\x7f",2);
+    gateway.SendRaw(wire::Type::Welcome,garbage);
+    gateway.SendRaw(wire::Type::Snapshot,garbage);
+    gateway.SendRaw(wire::Type::Error,garbage);
+    pb::WorldSnapshot zeroTick;zeroTick.set_tick(0);
+    gateway.SendRaw(wire::Type::Snapshot,zeroTick.SerializeAsString());
+    pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
+    gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
+    gateway.SnapshotAt(playing,0); // not newer than the applied one
+    for(const auto kind:{wire::Type::Hello,wire::Type::Input,wire::Type::Actions})gateway.SendRaw(kind,"");
+    gateway.Snapshot(0);
+    gateway.Until([&]{return connection.State().snapshot->tick>playing;});
+    Require(connection.State().phase==ConnectionPhase::Playing && connection.State().error.empty(),
+        "a dropped datagram changed the session");
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+}
+// The first worker statistics line counts at least what CheckDroppedDatagrams sent.
+void RequireDroppedCounts(const std::string& captured) {
+    const auto at=captured.find("[ObjectFPS/PvP] worker statistics ");
+    Require(at!=std::string::npos,"no worker statistics line was written");
+    const auto line=captured.substr(at,captured.find('\n',at)-at);
+    const auto count=[&](const std::string& key){
+        const auto found=line.find(" "+key+"=");
+        Require(found!=std::string::npos,"the worker statistics line lacks a dropped-datagram key");
+        return std::stoull(line.substr(found+key.size()+2));
+    };
+    Require(count("unparsed_datagrams")>=3,"unparsed datagrams were not counted");
+    Require(count("early_datagrams")>=2,"datagrams before the Welcome were not counted");
+    Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
+    Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
+    Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();
@@ -503,6 +571,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
 }
 }
 int main() {
+    ClogCapture capture(std::clog.rdbuf());
+    struct Restore{std::streambuf* previous;~Restore(){std::clog.rdbuf(previous);}} restore{std::clog.rdbuf(&capture)};
     try {
         const auto maximumDatagram=CheckMaximumDatagrams();
         MockGateway gateway;ClientConnection connection;
@@ -510,7 +580,8 @@ int main() {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
-        // First, so a mutant of the outage path fails on the check that guards it:
+        CheckDroppedDatagrams(gateway,connection);
+        // Early too, so a mutant of the outage path fails on the check that guards it:
         // the mock sends snapshots only on demand, so the later sections pass
         // through interruptions too.
         // An outage in both directions, then T_max with Welcomes only; the same
@@ -876,6 +947,7 @@ int main() {
             }
         }
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
+        RequireDroppedCounts(capture.Text());
         std::cout<<Json{{"passed",true},{"restart_ms",restartMs},{"completed_window_gap_ms",completedWindowGapMs},
             {"partial_ack_gap_ms",partialGapMs},{"unacknowledged_resends_1s",resends},{"fully_acknowledged_60fps_attempts",sixtyAttempts},
             {"token_debt_waits_ms",drainWaits},{"token_debt_publish_intervals_ms",drainIntervals},

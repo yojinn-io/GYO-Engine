@@ -181,6 +181,9 @@ struct ClientConnection::Impl {
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
     std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
+    // The datagrams of this session that decode but change nothing (v7.1
+    // silent-branch-asserts, D180): every drop below is counted.
+    std::uint64_t unparsedDatagrams{},earlyDatagrams{},invalidSnapshotDatagrams{},ignoredSnapshotDatagrams{},unexpectedKindDatagrams{};
     ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
@@ -525,7 +528,7 @@ struct ClientConnection::Impl {
             }
             if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
             if(packet->type==wire::Type::Welcome) {
-                pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
+                pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
                     const auto& sample=message.clock();
                     ClockStamp peer{.transmitUs=sample.transmit_us()};
@@ -554,9 +557,10 @@ struct ClientConnection::Impl {
                 state.combatRules=rules;
                 welcomed=true;liveness.Welcome(arrivedAt);
             } else if(packet->type==wire::Type::Snapshot) {
-                if(!welcomed)continue;
-                pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
-                    message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
+                if(!welcomed){++earlyDatagrams;continue;}
+                pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
+                if(message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) ||
+                   message.combat_size()!=message.players_size()){++invalidSnapshotDatagrams;continue;}
                 causes.Snapshot(message.has_match_hold_us()?std::optional(message.match_hold_us()):std::nullopt,
                     message.has_gateway_hold_us()?std::optional(message.gateway_hold_us()):std::nullopt);
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
@@ -611,7 +615,7 @@ struct ClientConnection::Impl {
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
-                if(!valid)continue;
+                if(!valid){++invalidSnapshotDatagrams;continue;}
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
                 if(!self && state.phase==ConnectionPhase::Playing &&
@@ -626,7 +630,7 @@ struct ClientConnection::Impl {
                                      (player.lifeGeneration>previous.lifeGeneration && player.movementEpoch<=previous.movementEpoch) ||
                                      (player.movementEpoch==previous.movementEpoch && player.lastResolvedCommand<previous.lastResolvedCommand)))valid=false;
                     }
-                    if(!valid)continue;
+                    if(!valid){++invalidSnapshotDatagrams;continue;}
                     const auto& authority=*std::find_if(snapshot.players.begin(),snapshot.players.end(),
                         [&](const auto& player){return player.playerId==own;});
                     // A valid snapshot: liveness, and the recovery flow when it
@@ -668,9 +672,13 @@ struct ClientConnection::Impl {
                     // The flag travels with this snapshot (§4 recovery step 3).
                     if(simulationHistory.Push({snapshot,arrivedAt},arrival.resumed))++windowSimulationOverflows;
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
+                } else {
+                    // Not newer than the applied one (pv7 §2a), or without the
+                    // local player before the first: valid, not applied.
+                    ++ignoredSnapshotDatagrams;
                 }
             } else if(packet->type==wire::Type::ActionResults) {
-                if(!welcomed)continue;
+                if(!welcomed){++earlyDatagrams;continue;}
                 pb::ActionResults message;
                 const bool parsed=message.ParseFromString(packet->payload);
                 if(parsed) causes.Results(message.refused_batches(),RefusalName(static_cast<int>(message.last_refusal())));
@@ -678,9 +686,12 @@ struct ClientConnection::Impl {
                 if(activeGeneration!=generation.load())return;
                 if(!parsed || !AcceptResults(message,arrivedAt)){++actionTransport.rejectedResultBatches;continue;}
             } else if(packet->type==wire::Type::Error) {
-                pb::Error message;if(!message.ParseFromString(packet->payload))continue;
+                pb::Error message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 throw std::runtime_error(message.message());
-            } else continue;
+            } else {
+                ++unexpectedKindDatagrams; // a Hello, Input or Actions from the Gateway's address
+                continue;
+            }
             receivedSequence=packet->sequence;haveSequence=true;
         }
         // Only valid snapshots keep a joined connection alive (T_max), and
@@ -857,10 +868,13 @@ struct ClientConnection::Impl {
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
             .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
             .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
-            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows})<<'\n';
+            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows,
+            .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
+            .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams})<<'\n';
         std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        unparsedDatagrams=earlyDatagrams=invalidSnapshotDatagrams=ignoredSnapshotDatagrams=unexpectedKindDatagrams=0;
         windowSnapshotOverflows=windowSimulationOverflows=0;
     }
     void Run() {
