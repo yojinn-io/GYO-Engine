@@ -6115,6 +6115,146 @@
       "replace": "\t\tif false && rebound.Previous.IsValid() {\n",
       "check": "go",
       "expect": "want one"
+    },
+    {
+      "id": "sb-a10-reference-not-pushed",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A step publishes a snapshot without its reference (A10 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        publishedReferences_.push_back({publication->tick, *advancedAt});\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: reference != publishedReferences_.rend\\(\\)"
+    },
+    {
+      "id": "sb-a11-leave-keeps-quality",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Leave keeps the player's quality track (A11 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    slack_.erase(playerId);\n    quality_.erase(playerId);\n}",
+      "replace": "    slack_.erase(playerId);\n}",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: quality.has_value\\(\\)"
+    },
+    {
+      "id": "sb-a12-join-not-recorded",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Join request is not recorded, so its result finds no join (A12 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                session.joins.emplace(request,message.join().player_id());\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "GYO_ASSERT failed: result.kind==ControlKind::Leave"
+    },
+    {
+      "id": "sb-c3-welcome-unparsed",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Welcome that does not parse is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}",
+      "replace": "pb::Welcome message;if(!message.ParseFromString(packet->payload)){continue;}",
+      "check": "worker",
+      "expect": "unparsed datagrams were not counted"
+    },
+    {
+      "id": "sb-c3-early-snapshot",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A snapshot before the Welcome is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(!welcomed){++earlyDatagrams;continue;}\n                pb::WorldSnapshot",
+      "replace": "                if(!welcomed){continue;}\n                pb::WorldSnapshot",
+      "check": "worker",
+      "expect": "datagrams before the Welcome were not counted"
+    },
+    {
+      "id": "sb-c3-early-results",
+      "batch": "v71-silent-branch-asserts",
+      "what": "Action results before the Welcome are not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(!welcomed){++earlyDatagrams;continue;}\n                pb::ActionResults",
+      "replace": "                if(!welcomed){continue;}\n                pb::ActionResults",
+      "check": "worker",
+      "expect": "datagrams before the Welcome were not counted"
+    },
+    {
+      "id": "sb-c3-snapshot-shape",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A snapshot of tick 0 or uneven lists is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "message.combat_size()!=message.players_size()){++invalidSnapshotDatagrams;continue;}",
+      "replace": "message.combat_size()!=message.players_size()){continue;}",
+      "check": "worker",
+      "expect": "invalid snapshots were not counted"
+    },
+    {
+      "id": "sb-c3-snapshot-not-newer",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A valid snapshot that is not newer is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    ++ignoredSnapshotDatagrams;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "snapshots that were not newer were not counted"
+    },
+    {
+      "id": "sb-c3-unexpected-kind",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A kind the Gateway does not send is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                ++unexpectedKindDatagrams; // a Hello",
+      "replace": "                 // a Hello",
+      "check": "worker",
+      "expect": "kinds the Gateway does not send were not counted"
+    },
+    {
+      "id": "sb-c3-line-drops-key",
+      "batch": "v71-silent-branch-asserts",
+      "what": "The worker statistics line leaves out the last dropped-datagram key",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "\n         << \" unexpected_kind_datagrams=\" << window.unexpectedKindDatagrams;",
+      "replace": ";",
+      "check": "cpu",
+      "expect": "unexpected_kind_datagrams"
+    },
+    {
+      "id": "sb-c1-no-reason-limit",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A join rejection too long for a datagram is relayed",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "Message: result.Reason}) > framing.MaxDatagram-framing.HeaderSize {",
+      "replace": "Message: result.Reason}) > framing.MaxDatagram-framing.HeaderSize && false {",
+      "check": "go",
+      "expect": "TestAJoinRejectionTooLongForADatagramFailsTheRuntime"
+    },
+    {
+      "id": "sb-c2-second-result-ignored",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A JoinResult for a player who is not joining is ignored",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\tgo s.runtimeFailed(protocolError{fmt.Errorf(\"join result for player %d, which is not joining\", p.playerID)})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "TestAJoinResultForAPlayerNotJoiningFailsTheRuntime"
+    },
+    {
+      "id": "sb-c2-left-player-fails",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A JoinResult for a player who left fails the runtime",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t// The player left or timed out while its Join was in flight.\n\t\t\treturn\n",
+      "replace": "\t\t\tgo s.runtimeFailed(protocolError{errors.New(\"left\")})\n\t\t\treturn\n",
+      "check": "go",
+      "expect": "TestAJoinResultForAPlayerThatLeftIsIgnored"
+    },
+    {
+      "id": "sb-g2-invariant-silent",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A broken Gateway invariant is dropped silently",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tgo s.runtimeFailed(fmt.Errorf(\"gateway invariant failed: %s\", what))\n",
+      "replace": "\t_ = what\n",
+      "check": "go",
+      "expect": "TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime"
     }
   ]
 }

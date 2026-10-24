@@ -16,7 +16,7 @@
 | 行族 | 寫出端 | 錨點 | 版本 | 釘住 | 讀者（凍結的標 ※） |
 |---|---|---|---|---|---|
 | Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine`（2026-10-20 起行尾有 `tick_overrun_*`、`tick_stalls`、`advance_*`，E1-5） | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
-| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
+| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數；2026-10-24 起再追加 Client 捨棄的封包計數 `unparsed_datagrams`、`early_datagrams`、`invalid_snapshot_datagrams`、`ignored_snapshot_datagrams`、`unexpected_kind_datagrams`，silent-branch-asserts C3） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
 | Match ingress statistics | `IngressStatistics.hpp` | `[ObjectFPS/PvP Match] ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/match.txt` | `ingress_evidence.py`※、08c 的判定工具 |
 | Gateway player／gateway ingress statistics | `ingress_statistics.go` | `player ingress statistics version=1 `、`gateway ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/gateway-*.txt` | `ingress_evidence.py`※、edge-rate-limit 的 `judge_l2.py`（證據目錄） |
 | Gateway statistics | `server.go` | `gateway statistics players=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※（視窗配對） |
