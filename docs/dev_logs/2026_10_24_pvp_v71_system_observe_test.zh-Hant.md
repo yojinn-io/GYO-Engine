@@ -11,7 +11,7 @@
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
 | `client-silent-checks` | high | 4～6 | 完成（D183） |
 | `cxx-flag-removal` | high | 3～4 | 實作完成，L1 待確認 |
-| `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 實作中（D181 新增；D187 決定 r1＋k3） |
+| `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 實作中（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
 | `analyzer-converge` | high | 5 | |

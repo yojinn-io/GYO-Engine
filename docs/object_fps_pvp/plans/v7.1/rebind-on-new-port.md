@@ -1,4 +1,4 @@
-# rebind-on-new-port：換埠後的改綁時機與 Hello 間隔（2026-10-25 使用者決定，D187）
+# rebind-on-new-port：換埠後的改綁時機與 Hello 間隔（2026-10-25 使用者決定，D187；審查後改為 D188：Hello 一律每 250 ms）
 
 日期：2026-10-25。D181 新增的批次，處理 [silent-branch-asserts.md](silent-branch-asserts.md) 第 8 節的 K5、K6。PR #95，分支 `claude/pvp-v71-system-observe-test`。
 
@@ -96,3 +96,5 @@ r1＋k3，照第 5 節的規則；契約條文跟著改；實作後做 1 次 xhi
 | P3 | 拿掉 (a)、(b)，Hello 一律每 250 ms（第 4 節的 r2） | 約 t0＋0.5～0.75 s（只看原 endpoint 的靜默） | Hello 與 Welcome 數量變 4 倍；速率預算 116 已包含每秒 4 個；邏輯與狀態都比現在少，沒有 §3 的判斷點；K6 的空窗一樣消失 |
 
 建議 P3：它不推論任何別人的狀態，兩個問題都解決，實作比 D187 更小。代價是計數基線；審查確認現行 L2 判定不讀 Hello／Welcome 的計數，舊證據的比較要註明換了規則。
+
+**D188**：選 P3。取代 D187 的規則（r1＋k3）。契約條文與測試跟著改；舊證據的 Hello／Welcome 計數比較，註明 D188 換了規則。
