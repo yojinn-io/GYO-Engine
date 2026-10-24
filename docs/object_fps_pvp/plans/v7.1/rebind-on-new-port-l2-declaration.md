@@ -1,4 +1,4 @@
-# rebind-on-new-port 的 L2 事前宣告（第 2 版，2026-10-25，等使用者核准；第 1 版經 D45 檢查後改寫，見第 7 節）
+# rebind-on-new-port 的 L2 事前宣告（第 2 版，2026-10-25 使用者核准，D190；第 1 版經 D45 檢查後改寫，見第 7 節）
 
 批次：`rebind-on-new-port`（D181、D187→D188）。被驗收的變更：Client 的 Hello 一律每 250 ms（`206d967`、`126edbe`）。關卡與經過見 [rebind-on-new-port.md](rebind-on-new-port.md)。
 

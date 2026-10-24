@@ -43,9 +43,9 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`rebind-on-new-port` 的 L2 宣告第 2 版（[rebind-on-new-port-l2-declaration.md](rebind-on-new-port-l2-declaration.md)；4 項 × 3 輪，約 12 分鐘；含受入判定的變更 N9）。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。`silent-branch-asserts` 完成（D180；L1 run 40096721896 四平台成功）。`client-silent-checks` 完成（D183；L1 run 40108527438 四平台成功，前一次 run 的失敗是 Engine 測試本身，列為 K11，D186）。`cxx-flag-removal` 實作完成（`std::osyncstream` 換成 `ClogLine`，旗標刪除），L1 待確認。`rebind-on-new-port` 實作中（D188：Hello 一律每 250 ms，取代 D187）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。`silent-branch-asserts` 完成（D180；L1 run 40096721896 四平台成功）。`client-silent-checks` 完成（D183；L1 run 40108527438 四平台成功，前一次 run 的失敗是 Engine 測試本身，列為 K11，D186）。`cxx-flag-removal` 實作完成（`std::osyncstream` 換成 `ClogLine`，旗標刪除），L1 待確認。`rebind-on-new-port` 的 L2 執行中（D190）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -173,6 +173,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D187 | （2026-10-25）`rebind-on-new-port`（[rebind-on-new-port.md](rebind-on-new-port.md)）採 r1＋k3：Client 在 Welcome 之前、中斷期間、最近 250 ms 沒有送出 Input 或 Actions、或輸入已送出但確認滿 T_int 沒有前進時，Hello 每 250 ms，其他時候每 1 s。Gateway、wire、通用層 session、Design Invariants 不變；network-architecture §4 的 Hello 間隔與安全取捨條文跟著改；實作後做 1 次 xhigh 審查（使用者同意）；L2 宣告寫好後再交使用者核准 | 使用者：「照建議 r1＋k3：Client 在 Welcome 前、中斷期間、最近 250 ms 沒送 Input 或 Actions、或輸入確認滿 T_int 沒前進時，Hello 每 250 ms；契約條文跟著改；實作後做 1 次 xhigh 審查；L2 宣告之後再交我核准。」 |
 | D188 | （2026-10-25）`rebind-on-new-port` 的 xhigh 審查推翻 D187 條件 (b) 的前提（Match 收不到命令時用替代命令讓確認照樣前進）後，改選 P3：拿掉 (a)、(b)，Client 的 Hello 一律每 250 ms。取代 D187 的規則；契約條文與測試跟著改；舊證據的 Hello／Welcome 計數比較註明換了規則 | 使用者：「選 P3：拿掉 (a)、(b)，Hello 一律每 250 ms；契約條文與測試跟著改，舊證據的計數比較註明換了規則。」 |
 | D189 | （2026-10-25）核准 Design Invariants 守衛測試的判定變更：`test_diagnostic_isolation.py` 的 liveness 呼叫次數由 12 改成 11（D188 拿掉 Hello 間隔裡的 `Interrupted()` 讀取）。§14.4 的 1～5、突變檢查與獨立核對見 dev_log 的 rebind-on-new-port 一節。核對時發現的既有缺口（解析器看不到的呼叫）列為 K12 | 使用者：「核准把 test_diagnostic_isolation.py 的 liveness 呼叫次數從 12 改成 11。解析器看不到的呼叫那個既有缺口，列進 lan15 前的已知問題。」 |
+| D190 | （2026-10-25）核准 `rebind-on-new-port` 的 L2 宣告第 2 版（[rebind-on-new-port-l2-declaration.md](rebind-on-new-port-l2-declaration.md)；D45 檢查後改寫；含受入判定的變更 N9，§14.4 的 1～5 在宣告第 3 節），立即跑 | 使用者：「核准 rebind-on-new-port 的 L2 宣告第 2 版（含 N9 的判定變更），立即跑。」 |
 
 ## 規劃紀錄（記錄器）
 
