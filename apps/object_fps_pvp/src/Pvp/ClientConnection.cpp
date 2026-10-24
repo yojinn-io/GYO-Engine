@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/ConnectionLiveness.hpp"
+#include "RetroFPS/Pvp/InputSendBudget.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
@@ -726,27 +727,18 @@ struct ClientConnection::Impl {
                 const auto now=Clock::now();
                 const auto period=std::chrono::duration<double>(1.0/InputSendRate);
                 if(inputTokensAt==Clock::time_point{})inputTokensAt=now;
-                inputTokens=Engine::Math::Min(InputSendBurst,inputTokens+std::chrono::duration<double>(now-inputTokensAt)/period);
+                inputTokens=RefilledInputTokens(inputTokens,std::chrono::duration<double>(now-inputTokensAt)/period);
                 inputTokensAt=now;
                 // A window with a command never sent goes now; an unchanged one
-                // waits for its deadline and leaves a token for the next command.
-                const bool fresh=!haveSentInput || latestInput->movementEpoch!=sentInputEpoch ||
-                    latestInput->lifeGeneration!=sentInputLife ||
-                    (!latestInput->commands.empty() && latestInput->commands.back().sequence>sentInputThrough);
-                if((fresh && inputTokens>=1) || (now>=nextInputSendAt && inputTokens>=InputSendBurst)) {
-                    // A new command that waited for its token pays less in
-                    // proportion to the wait (Movement.hpp, InputSendDrainRate):
-                    // without it the debt never drains, refill equalling production.
-                    // Only the wait until the token existed counts (a late wake
-                    // adds nothing), and never past a full bucket, so a send
-                    // leaves at most one token.
-                    double charge=1;
-                    if(fresh && inputWaitSince) {
-                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);
-                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,
-                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));
-                    }
-                    input=latestInput;inputTokens-=charge;inputWaitSince.reset();
+                // waits for its deadline and leaves a token for the next command
+                // (the rule and the charge: InputSendBudget.hpp).
+                const bool fresh=FreshInputWindow(haveSentInput,latestInput->movementEpoch,sentInputEpoch,
+                    latestInput->lifeGeneration,sentInputLife,latestInput->commands.empty(),
+                    latestInput->commands.empty()?0:latestInput->commands.back().sequence,sentInputThrough);
+                if(InputWindowSendsNow(fresh,inputTokens,now>=nextInputSendAt)) {
+                    const auto waited=inputWaitSince?std::optional<double>(std::chrono::duration<double>(now-*inputWaitSince)/period)
+                                                    :std::nullopt;
+                    input=latestInput;inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();
                 } else if(fresh && !inputWaitSince) {
                     inputWaitSince=now;
                 }
@@ -817,15 +809,15 @@ struct ClientConnection::Impl {
             std::scoped_lock lock(mutex);
             if(welcomed && latestInput) {
                 const auto period=std::chrono::duration<double>(1.0/InputSendRate);
-                // The same rule as Network: a window with a command never sent
-                // waits for one token; an unchanged one for its deadline with a
-                // full bucket.
-                const bool fresh=!haveSentInput || latestInput->movementEpoch!=sentInputEpoch ||
-                    latestInput->lifeGeneration!=sentInputLife ||
-                    (!latestInput->commands.empty() && latestInput->commands.back().sequence>sentInputThrough);
-                const auto refill=[&](double tokens){return inputTokensAt+std::chrono::duration_cast<Clock::duration>(
-                    period*Engine::Math::Max(0.0,tokens-inputTokens));};
-                consider(fresh?refill(1.0):std::max(nextInputSendAt,refill(InputSendBurst)));
+                // The same rule as Network (InputSendBudget.hpp): a window with a
+                // command never sent waits for one token; an unchanged one for its
+                // deadline with a full bucket.
+                const bool fresh=FreshInputWindow(haveSentInput,latestInput->movementEpoch,sentInputEpoch,
+                    latestInput->lifeGeneration,sentInputLife,latestInput->commands.empty(),
+                    latestInput->commands.empty()?0:latestInput->commands.back().sequence,sentInputThrough);
+                const auto refilled=inputTokensAt+std::chrono::duration_cast<Clock::duration>(
+                    period*InputSendWaitPeriods(fresh,inputTokens));
+                consider(fresh?refilled:std::max(nextInputSendAt,refilled));
             }
             if(welcomed && (std::any_of(actions.begin(),actions.end(),[](const auto& entry){return !entry.second.decision;}) ||
                             actionTransport.acknowledgedThrough>actionTransport.retiredThrough))

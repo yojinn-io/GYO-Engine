@@ -2623,8 +2623,8 @@
       "batch": "v7-09a",
       "what": "A send that waited is charged a whole token again (no discount)",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
-      "replace": "",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=1.0;inputWaitSince.reset();",
       "check": "worker",
       "expect": "did not drain"
     },
@@ -2633,8 +2633,8 @@
       "batch": "v7-09a",
       "what": "Every send is charged 60/R, waited or not",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
-      "replace": "                    charge-=1.0-InputSendRate/InputSendDrainRate;\n",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=InputSendRate/InputSendDrainRate;inputWaitSince.reset();",
       "check": "worker",
       "expect": "burst beyond two packets"
     },
@@ -2643,8 +2643,8 @@
       "batch": "v7-09a",
       "what": "The recorded wait is not cleared when its send goes",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "input=latestInput;inputTokens-=charge;inputWaitSince.reset();",
-      "replace": "input=latestInput;inputTokens-=charge;",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);",
       "check": "worker",
       "expect": "left more than one token"
     },
@@ -6548,6 +6548,56 @@
       "replace": "                if ages and ages[0]>=.1:",
       "check": "command_evidence",
       "expect": "remote|test_"
+    },
+    {
+      "id": "tok-no-late-deduction",
+      "batch": "v71-token-tests",
+      "what": "The charge counts a late wake as wait (N-token-test-gaps)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    const double waited = *waitedPeriods - (tokens - 1.0);",
+      "replace": "    const double waited = *waitedPeriods;",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-no-bucket-cap",
+      "batch": "v71-token-tests",
+      "what": "The charge discounts past a full bucket (N-token-test-gaps)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "(std::max)(0.0, (std::min)(waited, InputSendBurst - tokens)));",
+      "replace": "(std::max)(0.0, waited));",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-refill-uncapped",
+      "batch": "v71-token-tests",
+      "what": "Refill goes above a full bucket",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return (std::min)(InputSendBurst, tokens + elapsedPeriods);",
+      "replace": "    return tokens + elapsedPeriods;",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-resend-one-token",
+      "batch": "v71-token-tests",
+      "what": "A resend waits for one token only",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return (std::max)(0.0, (fresh ? 1.0 : InputSendBurst) - tokens);",
+      "replace": "    return (std::max)(0.0, 1.0 - tokens);",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-fresh-ignores-life",
+      "batch": "v71-token-tests",
+      "what": "Another life is not a fresh window",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return !haveSent || epoch != sentEpoch || life != sentLife || (!empty && lastSequence > sentThrough);",
+      "replace": "    return !haveSent || epoch != sentEpoch || (!empty && lastSequence > sentThrough);",
+      "check": "cpu",
+      "expect": "input token rule"
     }
   ]
 }
