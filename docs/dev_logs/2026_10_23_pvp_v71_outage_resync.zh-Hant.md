@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成，L1 進行中。下一批是 `resync-l2-l3`。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成（L1 run 40077174310 四平台成功）。`resync-l2-l3` 的 L2 宣告待使用者核准。
 
 相關文件：
 
@@ -21,7 +21,7 @@
 | `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 四平台成功 |
 | `retention-600`（`d1bcb47` 等） | xhigh（使用者同意） | 拿掉過渡規則：保留中每一筆紀錄的第一份副本判斷一次，600 序號以外關閉的紀錄不再判斷；S3 加進 C++ 守恆檢查 | CPU 測試全過；突變 84／84；§14.4 的 J-A～J-C 經獨立核對修正，使用者核准（D176）；L1 run 40052105536 四平台 L1 job 成功（Windows 的 toolchain Quick acceptance 因 Engine 測試的競態失敗，已由 PR #91 修正）；L2 9／9 P（D177） |
 | `client-interrupted`（`d0efbed` 等） | high，計時與恢復路徑局部 xhigh | Client 的連線中斷狀態（`ConnectionLiveness`）、暫時性錯誤、Hello 250 ms、T_max 從 snapshot 起算、恢復流程（clock `reason=resume`、一次性 `resumed` 旗標、`LocalPlayerPrediction::Resume`）、HUD、新的 A 級行 3 個、clock sync 三端 `reason=` | CPU 測試 319／319；`ctest -R object_fps_pvp -L "cpu\|network"` 45／45；Go 通過；突變 72＋7 個全部 killed（見下）；L1 run 40067465114 四平台成功（補強前），補強後 L1 run 40074065448 四平台成功；對抗式審查 1 次與補強（見下） |
-| `identity-rebind`（`3e2a242` 等） | xhigh（使用者同意） | 通用層 session 的最後驗證時刻與 `HelloRebinding`（四個條件都成立才改綁、舊 endpoint 隨即 `ErrUnauthorized`）；產品 Gateway 的 A 級 `session rebound` 行、驗證後靜默 ≥ T_int 時以 `reason=resume` 重開每位 Client 的時鐘視窗；`state_whitelist_test.go` 不變 | Go 全部通過；`ctest` 47／47；突變 77 個全部 killed（見下）；L1 進行中 |
+| `identity-rebind`（`3e2a242` 等） | xhigh（使用者同意） | 通用層 session 的最後驗證時刻與 `HelloRebinding`（四個條件都成立才改綁、舊 endpoint 隨即 `ErrUnauthorized`）；產品 Gateway 的 A 級 `session rebound` 行、驗證後靜默 ≥ T_int 時以 `reason=resume` 重開每位 Client 的時鐘視窗；`state_whitelist_test.go` 不變 | Go 全部通過；`ctest` 47／47；突變 77 個全部 killed（見下）；L1 run 40077174310 四平台成功 |
 
 ## 規劃
 
@@ -334,3 +334,22 @@
   - 既有的 `v71rl-credit-unbounded` 逾時：新測試「送到被限速為止」的迴圈沒有上限。改成最多 1000 次，送不到限速就失敗。
   - 這 5 個重跑 5／5 killed。證據：`pvp-v71-identity-rebind-mutants-20261024/`、`-rerun-20261024/`。
 - 本機：Go 兩個模組全部通過；`ctest -R object_fps_pvp -L "cpu|network|go"` 47／47。
+
+## resync-l2-l3（準備中）
+
+檔位：medium，工具 high；門檻來源的對抗式檢查用小規模 ultracode（計畫）。
+
+- **注入工具** `build/acceptance/object_fps_pvp/run_outage.py`（`11ed8a6`、`54c0022`）：
+  - 照 `run_client_delay.py` 的方式，凍結的 `action_probe.py`、`impaired_network.py` 原樣匯入，每一輪只在程序內替換 `ActionRelay`，既有情境的位元組不變。
+  - 種類：both、uplink、downlink、partial、port、none。
+  - 單元測試 9 個（CTest `outage_runner`）。
+- **驅動與判定**：`run_resync_l2.py`、`judge_outage.py`，放在 git 忽略的證據目錄（同 retention-600）。sha256 寫在宣告第 1 節。
+- **L2 宣告**：[resync-l2-l3-declaration.md](../object_fps_pvp/plans/v7.1/resync-l2-l3-declaration.md)。
+  - 第 1 版經 D45（`wf_603e73b4-cb9`：程式、證據、反駁各 1 位）判定「正確的程式也幾乎一定會停」：Critical 1（C8 造不出晚到過久）、Major 7、Minor 6。全部處置後成為第 2 版（宣告第 7 節）。
+  - 新增 J-R9（恢復後回到遊玩），J-R3 改成只記錄（L2 造不出 `resume_reset`）。
+- **乾跑**（不作判定）：11 項各 1 輪全部 P。途中修正驅動的相對路徑，以及判定工具裡太寬的重生前提。
+- **竄改檢查**：判定工具 10／10 判出預期的 F／E。
+- **探索紀錄**：工具開發期間的 17 輪（5 個工具版本），只用來確認注入有效。
+- **只記錄的觀察**：換來源埠時，Gateway 在改綁前仍把 snapshot 送往舊埠，Client 先恢復，改綁要等下一個每秒一次的 Hello（約 2 s）。
+- **下一步**：使用者核准宣告後開跑 L2（33 輪，約 30 分鐘）。L3 需要使用者在場。
+
