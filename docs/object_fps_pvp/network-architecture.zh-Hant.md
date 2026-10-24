@@ -575,14 +575,14 @@ wire 維持 pv7。恢復的意思是重新建立「時間上的對齊」：時�
 - **中斷期間**：
   - socket、session 憑證、傳輸序號、動作帳本都保留：不關閉傳輸、不重設動作、傳輸序號不歸零、連線 generation 不變。
   - Hello 間隔從 1 s 改成 250 ms，作為探測。
+  - Input 與動作照現行規則產生、送出（D172 的 D-9 (a)）。未確認的窗口滿 12 個命令就停止產生，所以只有下行中斷時，Match 跑完窗口後就沒有輸入。中斷期間的操作不保證生效：開槍可能因參考過舊而 Expired，被擊中照算。
+  - HUD 顯示「連線中斷」。Client 不推進 epoch。
 - **Hello 間隔**（v7.1 `rebind-on-new-port` 起，D187）：下列任一成立時每 250 ms，否則每 1 s：
   - 收到 Welcome 之前；
   - 中斷期間；
   - 最近 250 ms（T_int／2）內沒有送出 Input 或 Actions：只有 Hello 時，它讓 Gateway 的最後驗證時刻一直在 T_int 以內；
   - 已送出的命令，確認滿 T_int 沒有前進（snapshot 仍在到）：上行可能從 Gateway 不認得的 endpoint 到達（例如有線、無線同時連著時，送出改走另一條，回程仍到舊位址），Hello 讓它能改綁。
   - 正常遊玩時 Input 以 60 Hz 送出、確認每個 Tick 前進，維持每 1 s；速率最多每秒 4 個 Hello，在預算 82＋4＋30＝116 以內。條件只用 Client 網路 worker 自己的狀態，Gateway、wire 與改綁的條件都不變。
-  - Input 與動作照現行規則產生、送出（D172 的 D-9 (a)）。未確認的窗口滿 12 個命令就停止產生，所以只有下行中斷時，Match 跑完窗口後就沒有輸入。中斷期間的操作不保證生效：開槍可能因參考過舊而 Expired，被擊中照算。
-  - HUD 顯示「連線中斷」。Client 不推進 epoch。
 - **恢復流程**（收到第一份有效 snapshot 時，依序執行）：
   1. **時鐘**：提前結束目前的 ClockSync 視窗（該行 `reason=resume`、`final=0`），再開新視窗。漂移的回歸照現行（從上次跳變起算），不重新開始，`drift_ppm` 的意義不變。時鐘值只供診斷，不進第 2、3 步。
   2. **命令序列**：snapshot 的 movement epoch 和中斷前不同時，走既有的換 epoch 路徑（清掉送出窗口、Reset＋SeedLead），舊命令已被 Match 以 `EpochOld` 丟掉。
