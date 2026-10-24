@@ -122,6 +122,9 @@
     },
     "command_evidence": {
       "ctest": "object_fps_pvp.command_evidence"
+    },
+    "compare_reports": {
+      "ctest": "object_fps_pvp.compare_reports"
     }
   },
   "mutants": [
@@ -6385,6 +6388,66 @@
       "replace": "            consider(helloAt+std::chrono::milliseconds(1000));",
       "check": "worker",
       "expect": "Hellos were not every 250 ms"
+    },
+    {
+      "id": "cr-equal-always",
+      "batch": "v71-contract-readers",
+      "what": "compare_reports calls every run equal",
+      "file": "build/acceptance/object_fps_pvp/compare_reports.py",
+      "find": "            'equal': gateway == match,",
+      "replace": "            'equal': True,",
+      "check": "compare_reports",
+      "expect": "test_a_report"
+    },
+    {
+      "id": "cr-violations-ignored",
+      "batch": "v71-contract-readers",
+      "what": "compare_reports passes a run with violations",
+      "file": "build/acceptance/object_fps_pvp/compare_reports.py",
+      "find": "    return 0 if all(r['equal'] and not r['violations'] for r in results) else 1",
+      "replace": "    return 0 if all(r['equal'] for r in results) else 1",
+      "check": "compare_reports",
+      "expect": "test_a_violation_fails"
+    },
+    {
+      "id": "k7-no-interrupted-line",
+      "batch": "v71-contract-readers",
+      "what": "An interruption writes no line",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionInterruptedLine(state.playerId,",
+      "replace": "            if(false)ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionInterruptedLine(state.playerId,",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-no-resumed-line",
+      "batch": "v71-contract-readers",
+      "what": "A resume writes no line",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionResumedLine(own,arrival.gap,",
+      "replace": "                        if(false)ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionResumedLine(own,arrival.gap,",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-no-clock-resume-line",
+      "batch": "v71-contract-readers",
+      "what": "A resume does not end the clock window",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        if(const auto line=clock.Resume(MicrosNow()))ClogLine()<<*line<<'\\n';",
+      "replace": "",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-summary-uncounted",
+      "batch": "v71-contract-readers",
+      "what": "The summary does not count interruptions",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "the summary does not count the outage"
     }
   ]
 }

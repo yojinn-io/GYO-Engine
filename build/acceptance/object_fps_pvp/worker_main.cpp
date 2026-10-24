@@ -22,6 +22,7 @@
 #include <source_location>
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
 #include <streambuf>
 #include <string>
 #include <thread>
@@ -412,6 +413,41 @@ void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
     gateway.ResetAck();
 }
+// network-architecture §4 (v7.1 contract-readers, K7): the A-class lines one
+// RunOutage writes, from the call sites the session runs through (their
+// builders have goldens in ConnectionLivenessTests and ClockSyncTests): an
+// interruption at T_int, the clock window ended for the resume, the resume with
+// its gap and epochs, the second interruption, and at close the summary.
+void RequireOutageLines(const std::string& captured) {
+    std::vector<std::string> lines;
+    std::istringstream text(captured);
+    for(std::string line;std::getline(text,line);)
+        if(line.find("[ObjectFPS/PvP] connection ")!=std::string::npos || line.find("reason=resume")!=std::string::npos)
+            lines.push_back(line);
+    const auto value=[](const std::string& line,const std::string& key) {
+        const auto at=line.find(" "+key+"=");
+        Require(at!=std::string::npos,"an outage line lacks "+key+": "+line);
+        return line.substr(at+key.size()+2,line.find(' ',at+key.size()+2)-at-key.size()-2);
+    };
+    const auto is=[&](std::size_t index,const std::string& head) {
+        return index<lines.size() && lines[index].find(head)!=std::string::npos;
+    };
+    Require(lines.size()==6,"an outage did not write its six connection lines ("+std::to_string(lines.size())+")");
+    Require(is(0,"[ObjectFPS/PvP] connection interrupted version=1 player=1 ") && is(1,"clock sync player=1 ") &&
+        is(2,"[ObjectFPS/PvP] connection resumed version=1 player=1 ") && is(3,"[ObjectFPS/PvP] connection interrupted version=1 player=1 ") &&
+        is(4,"[ObjectFPS/PvP] connection summary version=1 player=1 ") && is(5,"[ObjectFPS/PvP] connection failed player=1 "),
+        "the outage lines are not interrupted, clock resume, resumed, interrupted, summary, failed");
+    for(const auto index:{std::size_t{0},std::size_t{3}}) {
+        const auto gap=std::stoi(value(lines[index],"gap_ms"));
+        Require(gap>=500 && gap<=520 && value(lines[index],"epoch")=="1","an interrupted line has the wrong gap or epoch: "+lines[index]);
+    }
+    Require(value(lines[1],"final")=="0","the resume did not end the clock window early: "+lines[1]);
+    const auto resumedGap=value(lines[2],"gap_ms");
+    Require(std::stoi(resumedGap)>=1000 && value(lines[2],"epoch_before")=="1" && value(lines[2],"epoch_after")=="1",
+        "the resumed line has the wrong gap or epochs: "+lines[2]);
+    Require(value(lines[4],"interruptions")=="2" && value(lines[4],"max_gap_ms")==resumedGap,
+        "the summary does not count the outage: "+lines[4]);
+}
 // The first worker statistics line counts at least what CheckDroppedDatagrams sent.
 void RequireDroppedCounts(const std::string& captured) {
     const auto at=captured.find("[ObjectFPS/PvP] worker statistics ");
@@ -656,7 +692,9 @@ int main() {
         // through interruptions too.
         // An outage in both directions, then T_max with Welcomes only; the same
         // with an extreme time echo must decide the same (differential oracle).
+        const auto outageFrom=capture.Text().size();
         const auto outage=RunOutage(gateway,connection,false);
+        const auto outageLines=capture.Text().substr(outageFrom);
         Require(outage.interruptedOnTime,"the connection was not interrupted at T_int after the last snapshot");
         Require(outage.trackedLastSnapshot,"the interruption did not count from the last snapshot's arrival");
         Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
@@ -665,7 +703,10 @@ int main() {
         Require(outage.windowKept,"the worker's window changed across an interruption");
         Require(outage.sequenceKept,"an interruption restarted the transport sequence");
         Require(outage.timedOutOnTime,"a connection without snapshots did not time out at T_max (a Welcome kept it?)");
+        RequireOutageLines(outageLines);
+        const auto extremeFrom=capture.Text().size();
         const auto extreme=RunOutage(gateway,connection,true);
+        RequireOutageLines(capture.Text().substr(extremeFrom));
         Require(extreme==outage && std::abs(extreme.interruptMs-outage.interruptMs)<=RunsToleranceMs &&
             std::abs(extreme.timeoutMs-outage.timeoutMs)<=RunsToleranceMs,"an extreme time echo changed a liveness decision");
         // The later sections read the mock's records from their own session on.
