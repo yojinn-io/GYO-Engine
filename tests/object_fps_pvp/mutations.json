@@ -6024,7 +6024,7 @@
       "find": "if rule.Silence <= 0 || !s.hasSequence || !framing.NewerSequence(sequence, s.sequence) ||",
       "replace": "if rule.Silence <= 0 ||",
       "check": "gateway_session",
-      "expect": "sequence not newer"
+      "expect": "sequence_not_newer"
     },
     {
       "id": "ir-no-token",
@@ -6044,7 +6044,7 @@
       "find": " || now.Sub(s.lastSeen) >= rule.Timeout",
       "replace": "",
       "check": "gateway_session",
-      "expect": "session expired"
+      "expect": "session_expired"
     },
     {
       "id": "ir-admit-verifies-nothing",
@@ -6054,7 +6054,7 @@
       "find": "\ts.lastVerified = now // the endpoint matched: verified, before the rate limit\n",
       "replace": "",
       "check": "gateway_session",
-      "expect": "a sequence jump from the old endpoint|only Input from the old endpoint|stale and rate-limited"
+      "expect": "rebound within Silence of the old endpoint|rebound while the old one sent Input|did not verify"
     },
     {
       "id": "ir-verify-after-rate",
@@ -6082,7 +6082,7 @@
       "what": "The clock window restarts on any datagram after a silence, verified or not",
       "file": "apps/object_fps_pvp/gateway/echo.go",
       "find": "!after.After(before) || after.Sub(before) < connectionInterruptedAfter",
-      "replace": "now.Sub(before) < connectionInterruptedAfter",
+      "replace": "after.IsZero() || now.Sub(before) < connectionInterruptedAfter",
       "check": "go",
       "expect": "a datagram from another endpoint restarted"
     },

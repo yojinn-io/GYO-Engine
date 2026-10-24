@@ -273,10 +273,13 @@ func TestTheBoundEndpointKeepsItsSessionByAnyVerifiedDatagram(t *testing.T) {
 		if !s.LastVerified().Equal(at) {
 			t.Fatal("a stale datagram from the bound endpoint did not verify")
 		}
-		limited := at
-		for err := error(nil); !errors.Is(err, ErrRateLimit); {
+		limited, refused := at, false
+		for n := 0; n < 1000 && !refused; n++ {
 			limited = limited.Add(time.Microsecond)
-			err = s.Admit(a, 1, limited)
+			refused = errors.Is(s.Admit(a, 1, limited), ErrRateLimit)
+		}
+		if !refused {
+			t.Fatal("a burst of datagrams never reached the rate limit")
 		}
 		if !s.LastVerified().Equal(limited) {
 			t.Fatal("a rate-limited datagram from the bound endpoint did not verify")
