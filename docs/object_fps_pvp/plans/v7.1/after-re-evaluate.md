@@ -210,7 +210,7 @@ after-re-evaluate（約 73～102 h）
 | windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
 | quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
 | wake-reconnect | N-sleep-reconnect | 睡眠測試要你在場（D102）；L1 | 4～8 | 做法（醒來後重連，或改用不含睡眠的時鐘判逾時）先交你決定。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 的睡眠照現行回 Lobby，自動重新加入（w2）仍在本批 |
-| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full` | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record |
+| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET）與 endpoint 有沒有改變（[宣告](resync-l2-l3-declaration.md)第 6 節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record |
 
 ### 決策點
 
